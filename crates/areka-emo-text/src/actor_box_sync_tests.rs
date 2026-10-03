@@ -433,3 +433,94 @@ fn box_child_index_is_right_after_the_slot() {
         "登録されていない箱"
     );
 }
+
+/// 折り返しの基準が範囲の外（95 > 右辺 80）で、`origin.x`（0）が範囲（10〜80）の外の箱 c。
+/// サーフェス 0 と 1 で置き場所が違う。
+const COARSE_BOX_SHELL: &str = "\
+balloon.c
+{
+size,100,50
+validrect.left,10
+validrect.right,-20
+wordwrappoint.x,-5
+origin.x,0
+}
+surface0
+{
+element1,balloon,c,0,0
+}
+surface1
+{
+element1,balloon,c,10,10
+}
+";
+
+/// 折り返しの基準の警告の文言（発行点と 1 文字も違わないこと）。
+const COARSE_MESSAGE: &str = "折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ）";
+
+/// 無視した書き出し位置の警告の文言（発行点と 1 文字も違わないこと）。
+const IGNORED_ORIGIN_MESSAGE: &str = "origin に指定した文字の書き始めの位置が、文字を描いてよい範囲（validrect）の外にある——指定は使わず、範囲の書き始めの角から書いた";
+
+/// 2 つの警告の（文言, 名前の欄, 成分の欄）。
+fn definition_warnings(events: &[CapturedEvent]) -> Vec<(&str, Option<&str>, Option<&str>)> {
+    events
+        .iter()
+        .filter(|e| e.message() == COARSE_MESSAGE || e.message() == IGNORED_ORIGIN_MESSAGE)
+        .map(|e| (e.message(), e.field_str("balloon"), e.field_str("key")))
+        .collect()
+}
+
+/// 箱の定義の 2 つの警告は、名前の欄が `balloon.*`ブレスの名前で（要件 3.11）、箱の名前ごとに
+/// 1 度だけ出る。登録し直し（拡大率の変化・置き場所の変化・名前が外れて戻る）では出さず、
+/// 箱の束を受け取り直す（読み込み直す）ともう一度出す。
+#[test]
+fn box_definition_warnings_name_the_brace_and_fire_once_per_box_name() {
+    let world = EmoWorld::build(&parse(COARSE_BOX_SHELL));
+    let (layout, report) = fold_boxes(&parse_boxes(COARSE_BOX_SHELL), &BTreeMap::new(), &world);
+    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
+    let mut f = fixture();
+    f.rt.set_box_layout(&mut f.world, layout.clone(), resolver(), vec![]);
+    f.layout = layout.clone();
+    f.rt.apply_cue(&emote("0", "0"));
+    f.rt.apply_cue(&text("0", "あ"));
+
+    let ((), events) = capture(|| f.sync(Some(1.0)));
+    assert_eq!(
+        definition_warnings(&events),
+        vec![
+            (COARSE_MESSAGE, Some("c"), None),
+            (IGNORED_ORIGIN_MESSAGE, Some("c"), Some("origin.x")),
+        ],
+        "最初の登録で 2 つの警告を、名前の欄をブレスの名前にして出す"
+    );
+
+    let ((), events) = capture(|| {
+        f.sync(Some(2.0));
+        f.rt.apply_cue(&emote("0", "1"));
+        f.sync(Some(2.0));
+        f.rt.apply_cue(&emote("0", "-1"));
+        f.sync(Some(2.0));
+        f.rt.apply_cue(&emote("0", "0"));
+        f.sync(Some(1.0));
+    });
+    assert_eq!(
+        messages(&events, REGISTER_MESSAGE),
+        3,
+        "登録し直しは起きている"
+    );
+    assert_eq!(
+        definition_warnings(&events),
+        vec![],
+        "登録し直しでは 2 度目を出さない"
+    );
+
+    f.rt.set_box_layout(&mut f.world, layout, resolver(), vec![]);
+    f.rt.apply_cue(&emote("0", "0"));
+    f.rt.apply_cue(&text("0", "あ"));
+    let ((), events) = capture(|| f.sync(Some(1.0)));
+    assert_eq!(
+        definition_warnings(&events).len(),
+        2,
+        "箱の束を受け取り直すと（読み込み 1 回につき）もう一度出す"
+    );
+}

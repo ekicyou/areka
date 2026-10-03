@@ -7,7 +7,7 @@ use areka_sakura::contract::ActorKey;
 use tracing::{debug, info, warn};
 
 use crate::place::PlaceKey;
-use crate::region::{BALLOON_NAME_PLACEHOLDER, TextRegion, inline_axis_name};
+use crate::region::{TextRegion, inline_axis_name};
 #[cfg(doc)]
 use crate::state::TextLayerState;
 
@@ -29,8 +29,9 @@ use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 /// 「読み込み（装着）1 回につき 1 件」という意味を持つのは actor の登録口である。ゆえに
 /// 解決からは粗さの記録を外し、記録は本関数が担う。文言と 4 つの欄（`balloon`・`axis`・
 /// `wrap_threshold`・`inline_limit`）は移動の前後で 1 文字も変えていない——実機走行の判定は
-/// この語を grep する（要件 14.3・手順書 §5.7）。バルーン名の代替値は解決側と同一の
-/// [`BALLOON_NAME_PLACEHOLDER`] を共有する。
+/// この語を grep する（要件 14.3・手順書 §5.7）。`balloon` の欄は場所の名前（普通のバルーンは
+/// 結線が入れた名前か `スコープ{番号}のバルーン`、箱は `balloon.*`ブレスの名前・shell-balloon
+/// 要件 3.11・3.12）で、呼び手が渡す。
 ///
 /// # 件数（要件 14.2）
 ///
@@ -42,15 +43,22 @@ use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 /// - binding だけが変わって領域が同値の再追従は、登録口に達しても **0 件**、
 /// - 領域の値が変わる再追従は **1 件**（新しい値で）。
 ///
+/// 箱の登録（`actor_box.rs` の `register_box`）は前の配置の入力を持たないので `None` を渡し、
+/// 箱の名前ごとに 1 度だけ呼ぶ。
+///
 /// 檻は `actor_region_warn_tests.rs`（装着 1 件・4 欄・3 回の同値再追従で 0 件・再構築するが
 /// 領域同値で 0 件・値の変わる再追従で 1 件・遠辺の内で 0 件・縦書きの軸欄）。
-fn warn_coarse_wrap_threshold(resolved: &ResolvedBalloonText, previous: Option<TextRegion>) {
+pub(super) fn warn_coarse_wrap_threshold(
+    balloon: &str,
+    resolved: &ResolvedBalloonText,
+    previous: Option<TextRegion>,
+) {
     let region = resolved.region;
     if region.wrap_threshold() <= region.inline_limit() || previous == Some(region) {
         return;
     }
     warn!(
-        balloon = BALLOON_NAME_PLACEHOLDER,
+        balloon,
         axis = inline_axis_name(resolved.mode),
         wrap_threshold = region.wrap_threshold(),
         inline_limit = region.inline_limit(),
@@ -83,8 +91,9 @@ impl TextLayerRuntime {
         // 前回の解決済み領域（未登録＝装着なら None＝「値が新しく決まった」側）と突き合わせる。
         let place = PlaceKey::balloon(&actor);
         let previous = self.layout_input.get(&place).map(|it| it.region);
-        warn_coarse_wrap_threshold(&resolved, previous);
-        decoration::warn_ignored_origin(&resolved, previous);
+        let label = self.balloon_label_of(&actor);
+        warn_coarse_wrap_threshold(&label, &resolved, previous);
+        decoration::warn_ignored_origin(&label, &resolved, previous);
         // 2 層（既定・無効表示・選択肢文字色）を純粋状態へ差し込む唯一の点（要件 3.1／4.6）。
         // 装着も再追従もここへ合流するので、`\f[default]`／`\f[disable]` の戻し先は
         // 常に「今装着されているバルーン定義」で解決した値になる。

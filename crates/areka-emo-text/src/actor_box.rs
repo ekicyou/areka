@@ -19,7 +19,9 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
 use tracing::{debug, warn};
 
-use super::{ResolvedBalloonText, SurfaceKeyResolver, TextLayerRuntime, TextSlotBinding};
+use super::{
+    ResolvedBalloonText, SurfaceKeyResolver, TextLayerRuntime, TextSlotBinding, attach, decoration,
+};
 use crate::choice::HitRectPx;
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, ResolvedFont};
 use crate::place::{PlaceKey, TextPlace};
@@ -62,6 +64,7 @@ impl TextLayerRuntime {
         self.choice_snapshot.retain(|k, _| !is_box(k));
         self.box_sites.clear();
         self.box_overflow_warned.clear();
+        self.box_definition_warned.clear();
         self.shown_boxes.clear();
 
         let index: BTreeMap<u32, Vec<BoxName>> = layout
@@ -361,7 +364,9 @@ impl TextLayerRuntime {
 
     /// 箱の場所を登録する。配置の入力は普通のバルーンと同じ式で、箱の大きさを画像の大きさとし、
     /// 背景は白を混色の相手とする（要件 3.1〜3.3）。はみ出す置き場所は採ったうえで、
-    /// （サーフェス番号, 名前）ごとに 1 度だけ警告する。
+    /// （サーフェス番号, 名前）ごとに 1 度だけ警告する。定義の 2 つの警告（折り返しの基準・無視した
+    /// 書き出し位置）は名前の欄を `balloon.*`ブレスの名前にして、箱の名前ごとに 1 度だけ出す
+    /// （登録し直しには前の配置の入力が無いので、毎回出さないよう名前で覚える・要件 3.11）。
     fn register_box(&mut self, key: PlaceKey, want: DesiredBox) {
         let Some(def) = self.box_layout.def(&want.site.name) else {
             // `desired_box` が定義の在る名前だけを通すので構造上起こらない。
@@ -376,6 +381,11 @@ impl TextLayerRuntime {
             def.size,
             DEFAULT_BALLOON_BACKGROUND,
         );
+        if self.box_definition_warned.insert(want.site.name.clone()) {
+            let name = want.site.name.as_str();
+            attach::warn_coarse_wrap_threshold(name, &resolved, None);
+            decoration::warn_ignored_origin(name, &resolved, None);
+        }
         let (w, h) = (i64::from(def.size.0), i64::from(def.size.1));
         let (sw, sh) = (
             i64::from(want.surface_size.0),

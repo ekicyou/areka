@@ -236,6 +236,10 @@ pub struct TextLayerRuntime {
     /// [`DEFAULT_BALLOON_BACKGROUND`]（白）。読み口は
     /// [`background_of`](Self::background_of)（`actor_decoration.rs`）。
     balloon_background: HashMap<ActorKey, (u8, u8, u8)>,
+    /// actor → 普通のバルーンの名前（結線が入れるバルーンのフォルダ名）。折り返しの基準と無視した
+    /// 書き出し位置の 2 つの警告の名前の欄に出す（未設定は `スコープ{番号}のバルーン`・要件 3.12）。
+    /// 入れる口は [`set_balloon_label`](Self::set_balloon_label)（`actor_decoration.rs`）。
+    balloon_label: HashMap<ActorKey, String>,
     /// `\s` の鍵の解決の閉包（始めは無し）。無いあいだは `Emote` を読まない＝行き先は常に
     /// 普通のバルーン（要件 5.4）。本番の差し込みは箱の束の受け取り（`actor_box.rs`）が行う。
     surface_resolver: Option<SurfaceKeyResolver>,
@@ -250,6 +254,9 @@ pub struct TextLayerRuntime {
     box_sites: HashMap<PlaceKey, BoxPlacement>,
     /// はみ出しを警告済みの（サーフェス番号, 箱の名前）。箱の束を差し替えると空に戻す。
     box_overflow_warned: BTreeSet<(u32, BoxName)>,
+    /// 定義の 2 つの警告（折り返しの基準・無視した書き出し位置）を出した箱の名前。箱の登録には
+    /// 前の配置の入力が毎回無いので、名前ごとに 1 度だけにする。箱の束を差し替えると空に戻す。
+    box_definition_warned: BTreeSet<BoxName>,
     /// スコープ → 最後に提示したフレームで文字が 1 字以上見えていた箱の四角（手前から・
     /// `actor_box.rs` の `shown_boxes`）。提示のたびに作り直し、出なくなった箱はその場で外す。
     shown_boxes: HashMap<ActorKey, Vec<ShownBox>>,
@@ -272,12 +279,14 @@ impl TextLayerRuntime {
             choice_snapshot: HashMap::new(),
             cursor_warn: CursorWarnGuard::default(),
             balloon_background: HashMap::new(),
+            balloon_label: HashMap::new(),
             surface_resolver: None,
             box_font_dirs: Vec::new(),
             hidden_boxes: BTreeSet::new(),
             box_layout: BoxLayout::default(),
             box_sites: HashMap::new(),
             box_overflow_warned: BTreeSet::new(),
+            box_definition_warned: BTreeSet::new(),
             shown_boxes: HashMap::new(),
         }
     }
