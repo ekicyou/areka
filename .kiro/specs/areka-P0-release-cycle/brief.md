@@ -33,7 +33,7 @@
 ## Scope
 
 - **In**: 繰り返しの手順（tasks.md の形）・版上げの道具（`cargo set-version` か手元の 1 行）・版とタグの決まり・見守りと赤のときの決まり・記録の形・初回の実行（`v0.0.2`）。
-- **Out**: workflow の中身（`release-ci-workflow` ほか）・マニフェストの形（`winget-manifest-submission`）・配布スクリプト（`release-package-versioned`）・大きい版の上げ方（0.1.0 や 1.0.0 は開発者がその場で決める＝本 spec は patch だけ）。
+- **Out**: workflow の中身（`release-ci-workflow` ほか）・マニフェストの形（`winget-manifest-submission`）・配布スクリプト（`release-package-versioned`）・大きい版の決め方（0.1.0 や 1.0.0 は開発者がその場で指示する＝本 spec は指示が無ければ patch・指示があればその版にするだけ）。
 
 ## Boundary Candidates
 
@@ -58,7 +58,7 @@
 
 - 触るのは本 spec の `tasks.md`・`Cargo.toml`（版の 1 行）・`Cargo.lock`・`dist/README.txt`（時点）・`roadmap.md`（記録 1 行）。コードには触らない。
 - 秘密を印字しない（`git remote -v` を手順に入れない）。
-- 1 回の実行で上げる版は patch（+0.0.1）だけ。
+- 1 回の実行で上げる版は、開発者の指示が無ければ patch（+0.0.1）。指示があればその版（10-03 開発者）。
 
 ## 想定
 
