@@ -4,7 +4,7 @@
 
 | ファイル | 種別 | 中のファイル数 | 大きさ |
 |---|---|---|---|
-| `emo2.nar` | ゴースト（同梱バルーン `emo2-kakukaku`） | 113 | 4,591,449 バイト |
+| `emo2.nar` | ゴースト（同梱バルーン `emo2-kakukaku`） | 114 | 4,603,965 バイト |
 | `R_POST_and_KOMAINU.nar` | ゴースト | 43 | 1,625,603 バイト |
 | `emo2-kakukaku-offsetdpi.nar` | バルーン | 20 | 35,788 バイト |
 | `emo2-kakukaku-wplimit.nar` | バルーン | 20 | 33,906 バイト |
@@ -116,7 +116,7 @@ git check-ignore --no-index crates/areka/dic09_Test.txt                         
 - **`install.txt` が書庫の最上位に在ること。** 包みフォルダ 1 段は黙って剥がさず拒否する（`<名>/install.txt` は最上位ではない）。手順 1 が「フォルダの直下に `install.txt`」と言っているのはこのためである。
 - 名前とその中身が `install.txt` の解釈どおりであること。展開先の写像（同梱バルーンをどこへ置くか）は `install.txt` の `directory`・`*.directory`・`*.source.directory` だけから決まり、登記表の綴りは使わない。
 
-ここで畳んだ 4 本（`R_POST_and_KOMAINU.nar`・`emo2-kakukaku-offsetdpi.nar`・`emo2-kakukaku-wplimit.nar`・`StayseeBalloon.nar`）は**全エントリが無圧縮（圧縮方式 0）**である（`konnoyayame.nar`・`claudia.nar` と、2026-09-20 に最新版へ差し替えた `emo2.nar` は全エントリが deflate 圧縮）。`fold_tree` が圧縮を掛けないためで、git 自身の zlib が既に同じ仕事をしているので掛ける利得がほとんど無い（実測で差は 3.2%）。読み手は方式 0 と方式 8（deflate）の両方を読めるので、外から貰った `.nar` をそのまま置く分には圧縮されていて構わない。
+ここで畳んだ 4 本（`R_POST_and_KOMAINU.nar`・`emo2-kakukaku-offsetdpi.nar`・`emo2-kakukaku-wplimit.nar`・`StayseeBalloon.nar`）は**全エントリが無圧縮（圧縮方式 0）**である（`konnoyayame.nar`・`claudia.nar` と、2026-10-03 に最新版へ差し替えた `emo2.nar` は全エントリが deflate 圧縮）。`fold_tree` が圧縮を掛けないためで、git 自身の zlib が既に同じ仕事をしているので掛ける利得がほとんど無い（実測で差は 3.2%）。読み手は方式 0 と方式 8（deflate）の両方を読めるので、外から貰った `.nar` をそのまま置く分には圧縮されていて構わない。
 
 同じ入力からは同じバイト列が出る。走査順を名前順に固定し、書庫に書く日時を 1980-01-01 00:00 に固定してあるので、畳み直しても `.nar` のハッシュは変わらない。
 

@@ -567,3 +567,7 @@ mod tests {
         assert_eq!(config.threshold, 3); // 祖先の 99 ではなく start の 3
     }
 }
+
+#[cfg(test)]
+#[path = "mouse_click_tests.rs"]
+mod mouse_click_tests;

@@ -87,6 +87,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 ### マルチアーキテクチャ・ターゲット（host-32 トラック）
 - 最終成果物は **x64＋arm64 ネイティブ両対応**、**i686 は 32bit SHIORI 駆動の helper のみ**（ターゲットは crate 境界で分離・`cfg` 分岐回避）
 - rustup targets: `i686-pc-windows-msvc`（helper）／`aarch64-pc-windows-msvc`（arm64。VS2022 の `Microsoft.VisualStudio.Component.VC.Tools.ARM64` が必須＝無いと最終リンクのみ落ちる）
+- **arm64 の配布 zip**（`tools/package.ps1 -Arch arm64`）に要る道具: rustup の `aarch64-pc-windows-msvc` と VS の `Microsoft.VisualStudio.Component.VC.Tools.ARM64`。部品の有無は `vswhere.exe` に問う（置き場は `%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe` で固定・PATH には載らない）。補助 exe（`shiori-host32-helper`）は arm64 の zip でも i686 のまま
 - **クロスターゲットのビルドは必ず PowerShell で**実行（Git Bash は GNU coreutils の `link.exe` が MSVC link を遮蔽しリンクエラー）
 - **32bit 可搬性制約の適用範囲＝host-32 系（`shiori-host32-*`／`shiori-abi`）のみ**。wintf/areka 本体（x64+arm64）の spec に i686 ビルド検証を課さない（`api.rs` の isize 契約で元々 i686 非対象）
 

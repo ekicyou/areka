@@ -21,11 +21,12 @@
 //!
 //! 上の 3 つはいずれも**親ファイルの名前**であって、走査面ではない。親は `#[path]` で
 //! 子モジュールを抱えており（`draw` は `draw_metrics`／`draw_line_store`／`draw_catalog`、
-//! `layout` は `layout_line_ops`／`layout_styled`、`state` は `state_decoration`、
-//! `viewbox_draw` は `viewbox_draw_plan`／`viewbox_draw_decoration`、`actor` は
-//! `actor_decoration`）、子は親と同じ層に属する。**層規律を実際に見張る走査面は
+//! `layout` は `layout_line_ops`／`layout_styled`／`layout_scan`（その子 `layout_scan_glyph`）、
+//! `state` は `state_decoration`、`viewbox` は `viewbox_diff`、`viewbox_draw` は
+//! `viewbox_draw_plan`／`viewbox_draw_decoration`／`viewbox_draw_render`、`actor` は
+//! `actor_decoration`／`actor_attach`／`actor_present`）、子は親と同じ層に属する。**層規律を実際に見張る走査面は
 //! `PURE_SOURCES` と `SOURCES_OUTSIDE_THE_PURE_SCAN` の 2 つの一覧**（本ファイル末尾の
-//! `#[cfg(test)] mod layer_discipline` 内）で、その和が `src/*.rs` の実ファイル集合と
+//! `#[cfg(test)] mod tests` 内）で、その和が `src/*.rs` の実ファイル集合と
 //! 一致することを `every_source_file_is_either_scanned_or_explicitly_excluded` が突き合わせる
 //! （この段落は列挙を数えるためのものではない——数える場所は 2 つの一覧の側にある）。
 //!
@@ -185,6 +186,8 @@ mod tests {
     /// 純粋層モジュールの走査面。[`pure_layer_modules_have_no_windows_imports`] と
     /// [`every_source_file_is_either_scanned_or_explicitly_excluded`] が共有する。
     const PURE_SOURCES: &[(&str, &str)] = &[
+        ("actor_attach.rs", include_str!("actor_attach.rs")),
+        ("actor_present.rs", include_str!("actor_present.rs")),
         ("balloon_overrides.rs", include_str!("balloon_overrides.rs")),
         (
             "balloon_overrides_tests.rs",
@@ -212,6 +215,7 @@ mod tests {
             include_str!("writing_decision_tests.rs"),
         ),
         ("region.rs", include_str!("region.rs")),
+        ("region_tests.rs", include_str!("region_tests.rs")),
         (
             "region_vertical_canon_tests.rs",
             include_str!("region_vertical_canon_tests.rs"),
@@ -260,6 +264,7 @@ mod tests {
         ),
         ("canvas.rs", include_str!("canvas.rs")),
         ("viewbox.rs", include_str!("viewbox.rs")),
+        ("viewbox_diff.rs", include_str!("viewbox_diff.rs")),
         ("wrap.rs", include_str!("wrap.rs")),
         // areka-P0-text-decoration-canon が新設した純粋モジュール 14 本
         // （`draw_metrics.rs`／`draw_line_store.rs` は COM 層なので載せない）。
@@ -285,6 +290,8 @@ mod tests {
             include_str!("state_decoration_reset_tests.rs"),
         ),
         ("layout_line_ops.rs", include_str!("layout_line_ops.rs")),
+        ("layout_scan.rs", include_str!("layout_scan.rs")),
+        ("layout_scan_glyph.rs", include_str!("layout_scan_glyph.rs")),
         ("layout_styled.rs", include_str!("layout_styled.rs")),
         (
             "layout_styled_tests.rs",
@@ -401,6 +408,7 @@ mod tests {
         "viewbox_draw_live_diff_tests.rs",
         "viewbox_draw_oracle_regression_tests.rs",
         "viewbox_draw_png_dump_tests.rs",
+        "viewbox_draw_render.rs",
         "viewbox_draw_scroll_retain_tests.rs",
         "viewbox_draw_test_support.rs",
     ];
@@ -412,7 +420,7 @@ mod tests {
     fn pure_layer_modules_have_no_windows_imports() {
         // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
         // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
-        assert_eq!(PURE_SOURCES.len(), 59, "走査する純粋層モジュールの母数");
+        assert_eq!(PURE_SOURCES.len(), 65, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",

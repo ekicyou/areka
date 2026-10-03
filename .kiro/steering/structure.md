@@ -15,7 +15,7 @@ updated_at: 2026-10-02
 **Location**: `/`  
 **Purpose**: Cargoワークスペース設定、横断ドキュメント、開発ルール  
 **Example**: `Cargo.toml`, `README.md`, `doc/`, `.kiro/steering/`
-**その他の最上位**: `tools/`＝開発用スクリプト（`test-all.ps1`＝フルテスト・完了ゲートの正本〔`tech.md` の Testing〕／`package-alpha.ps1`＝α の配布 zip を組んで中身と起動を確かめる／`perf/`＝性能改善ループ）・`vendors/`＝検体 `.nar`（`sample_ghost/`）と調査資料のサブモジュール（`pasta/`）・`assets/`＝UI 資産・`docs/`＝単発の技術メモ・`dist/`＝配布物へそのまま入れる文書（第三者向け `README.txt`）
+**その他の最上位**: `tools/`＝開発用スクリプト（`test-all.ps1`＝フルテスト・完了ゲートの正本〔`tech.md` の Testing〕／`package.ps1`＝配布物の zip（名前に版が入る）と SHA256 を x64 と arm64 で組んで中身を判定し、`-Check` で展開して起動を確かめる／`perf/`＝性能改善ループ）・`vendors/`＝検体 `.nar`（`sample_ghost/`）と調査資料のサブモジュール（`pasta/`）・`assets/`＝UI 資産・`docs/`＝単発の技術メモ・`dist/`＝配布物へそのまま入れる文書（第三者向け `README.txt`）
 
 ### Library Crate
 **Location**: `/crates/wintf/`  
@@ -323,12 +323,13 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 - **`areka-emo-present`（3/3・提示段）**: `ComposedSurface` を wintf の WUC 表示面へアップロード・提示し、当たり判定用 AlphaMask を供給。`presenter/show.rs` の `apply_show` が単一漏斗（k 導出・合成/キャッシュ・アップロード・マスク同期・可視化）。**`shell_target.rs` がシェルのフォルダの読み込みの権威**（`areka-P0-shell-implicit-surface` 2026-09-20）: `surface<数字>.png` の名前判定はバルーンの面と**同じ 1 つの実装**（`balloon::face_digits_of`）を接頭辞違いで呼ぶ。fs を触るのは `load_shell_target` だけで、核 `build_shell_target` はメモリ上で通せる。
 - **記録を出す場所の型（emo 三段共通）**: 純粋な核（名前判定・土台の決定・核の組み立て）は fs にも記録にも触れず、**事実を戻り値（`…Report`）に載せるだけ**。`info!`／`warn!`／`error!` を出すのは **fs を触る入口 1 か所**で、読み込み 1 回につき 1 度だけ出す。
 - **`areka-emo-text`（テキスト層）**: バルーン文字レンダリング（spec 名は `areka-P0-emo-text-layer`・atlas/compose/present の単一トークン命名に倣う）。
-  **主要ファイルと接続**（`areka-P0-text-decoration-canon` 2026-09-13 の分割後・接続はいずれも親ファイル内の `#[path = "…"] mod` 宣言＝`lib.rs` の `pub mod` は親だけを並べる）:
+  **主要ファイルと接続**（`areka-P0-text-decoration-canon` 2026-09-13 と `areka-P0-emo-text-file-split` 2026-10-03 の分割後・接続はいずれも親ファイル内の `#[path = "…"] mod` 宣言＝`lib.rs` の `pub mod` は親だけを並べる）:
   - `draw.rs`（COM 層のファサード＝`ResolvedFont`／`DirectionRecipe`／`create_text_format`）＋ `draw_metrics.rs`（文字送り幅の計測 `DWriteMetrics`）／`draw_line_store.rs`（行レイアウトの保持庫 `LineLayoutStore`）／`draw_catalog.rs`（フォント候補列の解決 `FontCatalog`）
-  - `layout.rs`（配置の本体 `LayoutEngine`）＋ `layout_line_ops.rs`（行を閉じる・区間の送り幅合計・カーソル座標の解決）／`layout_styled.rs`（装飾込みの配置の入口・行内最大の大きさ）
+  - `layout.rs`（配置の入口 `LayoutEngine`・公開の型・見える範囲 `visible_window`）＋ `layout_line_ops.rs`（行を閉じる・区間の送り幅合計・カーソル座標の解決）／`layout_styled.rs`（装飾込みの配置の入口・行内最大の大きさ）／`layout_scan.rs`（走査の本体 `layout_inner`・走査の状態 `Scan` と改行・`\_l`・最終行の腕・行を閉じる仕上げ）／`layout_scan_glyph.rs`（`layout_scan` の子・文字の配置の腕）
+  - `viewbox.rs`（送りの計画 `ScrollPlanner` と描き直しの型）＋ `viewbox_diff.rs`（描き直す範囲の導出）
   - `state.rs`（表示状態 `TextLayerState`・スコープの状態 `ActorTextState` の型定義）＋ `state_decoration.rs`（両者の装飾まわりの実装＝所有外キーの保持 `unowned_vocab`・戻す操作 `reset_decoration`）
-  - `viewbox_draw.rs`（描画実行 `ViewboxExecutor`）＋ `viewbox_draw_plan.rs`（縮退判定・全域更新・計画の不整合報告）／`viewbox_draw_decoration.rs`（装飾の区間切り出しと範囲指定 `apply_font_ranges`）
-  - `actor.rs`（アクターシェル）＋ `actor_decoration.rs`（背景色の受け口・2 層の差し込み）
+  - `viewbox_draw.rs`（描画実行 `ViewboxExecutor`）＋ `viewbox_draw_plan.rs`（縮退判定・全域更新・計画の不整合報告）／`viewbox_draw_decoration.rs`（装飾の区間切り出しと範囲指定 `apply_font_ranges`）／`viewbox_draw_render.rs`（装飾つきの描画 `render_styled` と描画の補助）
+  - `actor.rs`（アクターシェル＝型・指令の振り分け `apply_cue`・読み口・起動）＋ `actor_decoration.rs`（背景色の受け口・2 層の差し込み）／`actor_attach.rs`（登録と再追従）／`actor_present.rs`（1 コマの描画の流れ `present_frame`）
   - 新規の純粋モジュール `look.rs`（1 文字に効く見た目 `TextLook`・2 層 `LookLayers`・装飾の表・`\f` の値の状態機械）／`color.rs`（色指定の解析と無効表示の混色）
   - 純粋層の字面検査（`windows` 系 crate 非依存）の走査対象は `lib.rs` の `PURE_SOURCES`、`@` 前置禁止の走査対象は `draw_format_metrics_tests.rs` の `DRAW_FACADE_SOURCES`——どちらも手保守の一覧だが、**`src/*.rs` の実ファイル集合と突き合わせる検査が両方に付いている**（`lib.rs::every_source_file_is_either_scanned_or_explicitly_excluded` と `draw_format_metrics_tests.rs::draw_facade_sources_cover_every_draw_production_file`）。新設したファイルはどちらかの一覧（純粋層なら `PURE_SOURCES`、そうでなければ `SOURCES_OUTSIDE_THE_PURE_SCAN`）へ載せるまで赤になる。
 

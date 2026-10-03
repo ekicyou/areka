@@ -28,7 +28,7 @@
 
 ## Scope
 
-- **In**: 中継の exe・ポートの決め方・本体不在と異常応答のエラー・通知の扱い・`/api/mcp/help` への Desktop 用の設定例・配布スクリプト（`tools/package-alpha.ps1` の後継）への同梱・決定論テスト（ループバックの偽サーバで）・SSP の `mcp.exe` と同じ入力に同じ出力を返すことの突き合わせ（要件の段で 1 度）。
+- **In**: 中継の exe・ポートの決め方・本体不在と異常応答のエラー・通知の扱い・`/api/mcp/help` への Desktop 用の設定例・配布スクリプト（`tools/package.ps1`）への同梱・決定論テスト（ループバックの偽サーバで）・SSP の `mcp.exe` と同じ入力に同じ出力を返すことの突き合わせ（要件の段で 1 度）。
 - **Out**: 本体側のプロトコル（`mcp-server-core`）・ツール（M2 以降）・Desktop の拡張機能（`.mcpb`）の包み。
 
 ## Boundary Candidates
@@ -61,8 +61,8 @@
 ## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
 
 - 規模 S（7〜10 タスク）。`mcp-tool-entrances` と同じウェーブには置かない（help の文面のファイルと `Cargo.lock` が重なりうる）＝C3 以降。
-- 配布スクリプトは今も `tools/package-alpha.ps1`（「後継」は無い）。同梱には 3 か所を変える＝`$ALLOWED_EXECUTABLES`・ビルドの段・配置と CPU 種別の検査。**`release-package-versioned`（C1）が同じスクリプトを先に直す**。配布の zip は x64 だけ＝arm64 の中継は入らない。
-- **触るファイル**: 新規の bin クレート `crates/areka-mcp-bridge/**`（std::net で足りる）・`tools/package-alpha.ps1`・help の文面（`areka-mcp` の中）・必要なら `dist/README.txt`・`Cargo.lock`。
+- 配布スクリプトは `tools/package.ps1`。同梱には 3 か所を変える＝`$ALLOWED_EXECUTABLES`・ビルドの段・配置と CPU 種別の検査。**`release-package-versioned`（C1）が同じスクリプトを先に直す**（名前を改め、版入りの zip・SHA256・arm64 の zip を足す）。配布の zip は x64 と arm64 の 2 つになる（arm64 の zip に中継を入れるかは本 spec の議題で決める）。
+- **触るファイル**: 新規の bin クレート `crates/areka-mcp-bridge/**`（std::net で足りる）・`tools/package.ps1`・help の文面（`areka-mcp` の中）・必要なら `dist/README.txt`・`Cargo.lock`。
 - **議題**: exe の名前／ポートを引数でも渡せるか／写すだけか版のヘッダを解釈するか／arm64 版を配布物に入れるか。
 
 ## 2026-10-03 C4 の候補（10-03 の再編（開発者「MCP は複合 spec なので早めに着手したい」））

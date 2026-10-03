@@ -697,7 +697,7 @@ fn connect_balloon_text_resolves_text_with_the_background_at_attach_time() {
 /// ワークスペース root からの相対パス。`areka-emo-text` は上流 crate だが、走査点の不変式は
 /// この結線層が守るものなので見張りもここに置く。
 const ACTOR_SCAN_SITES: &[&str] = &[
-    "crates/areka-emo-text/src/actor.rs",
+    "crates/areka-emo-text/src/actor_present.rs",
     "crates/areka/src/emo2_boot/frame/scale_text.rs",
     "crates/areka/src/emo2_boot/hover_inject.rs",
 ];
