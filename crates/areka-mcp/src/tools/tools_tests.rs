@@ -280,3 +280,107 @@ fn tool_call_name_matches_definition_for_all_ten() {
 fn reply_wait_is_ten_seconds() {
     assert_eq!(REPLY_WAIT, std::time::Duration::from_secs(10));
 }
+
+// ---- 登録表と受け口（`entrances`） ----
+
+use std::time::Duration;
+
+use log_capture_kit::capture;
+use tracing::Level;
+
+use crate::{ToolHandler, ToolOutcome, ToolRegistry};
+
+/// 処理のフューチャをテストのスレッドの current_thread で回す。
+fn run_handler(handler: &ToolHandler, args: Value) -> ToolOutcome {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("tokio")
+        .block_on(handler(args))
+}
+
+fn names(registry: &ToolRegistry) -> Vec<String> {
+    registry
+        .entries()
+        .iter()
+        .map(|(spec, _)| spec.name.clone())
+        .collect()
+}
+
+/// (要件 1.1・1.3) 組んだ登録表は 10 本を SSP の並びで持ち、定義は表の行と同じ。
+#[test]
+fn entrances_registers_ten_in_ssp_order() {
+    let (registry, _rx) = entrances(REPLY_WAIT);
+    assert_eq!(registry.len(), 10);
+    let want: Vec<String> = TABLE
+        .iter()
+        .map(|(def, _)| spec_from_definition(def).unwrap().name)
+        .collect();
+    assert_eq!(names(&registry), want);
+    assert_eq!(want[0], "get_active_ghost_list");
+    for ((spec, _), (def, _)) in registry.entries().iter().zip(TABLE.iter()) {
+        assert_eq!(spec, &spec_from_definition(def).unwrap());
+    }
+}
+
+/// 10 本の処理を呼ぶと、受け口に型の付いた `ToolCall` が届き、受け手の返事が処理の結果になる。
+#[test]
+fn every_handler_delivers_typed_call_and_returns_the_answer() {
+    let (registry, rx) = entrances(REPLY_WAIT);
+    // 偽のアプリ本体: 届いた呼び出しを書き写して返す。
+    let answerer = std::thread::spawn(move || {
+        for request in rx {
+            let text = format!("{:?}", request.call);
+            request.reply.send(outcome::value(text));
+        }
+    });
+    let full = json!({
+        "property_name": "p", "script": "s", "event": "e", "target": "t",
+        "ghost_name": "emo2", "references": ["a"], "scope": 1,
+    });
+    for ((spec, handler), (_, parse)) in registry.entries().iter().zip(TABLE.iter()) {
+        let want = parse(&obj(full.clone()));
+        assert_eq!(
+            run_handler(handler, full.clone()),
+            outcome::value(format!("{want:?}")),
+            "{}",
+            spec.name
+        );
+    }
+    drop(registry);
+    answerer.join().unwrap();
+}
+
+/// 引数が object でない（handler の検査より前には起きない）ときは空の arguments として詰め替える。
+#[test]
+fn non_object_arguments_are_read_as_empty() {
+    let (registry, rx) = entrances(Duration::from_millis(1));
+    let (_, handler) = &registry.entries()[1];
+    let _ = run_handler(handler, Value::Null);
+    let request = rx.try_recv().expect("要求が届かない");
+    assert_eq!(
+        request.call,
+        ToolCall::GetStatus(get_status::Args { ghost_name: None })
+    );
+}
+
+/// (要件 6.5) 誰も汲まない間に届いた要求は受け口に溜まり、後から汲める。
+#[test]
+fn requests_queue_until_someone_drains() {
+    let (registry, rx) = entrances(Duration::from_millis(1));
+    let (_, handler) = &registry.entries()[0];
+    let got = run_handler(handler, json!({}));
+    assert!(got.is_error, "誰も答えないので上限で返る: {got:?}");
+    let request = rx.try_recv().expect("要求が溜まっていない");
+    assert_eq!(request.call, ToolCall::GetActiveGhostList);
+}
+
+/// 定義が読めない行は `error!` 1 件で登録しない（残りの行は登録する）。
+#[test]
+fn broken_definition_row_is_skipped_with_one_error() {
+    let rows: [(&str, Parse); 2] = [("not json", get_status::parse), TABLE[0]];
+    let ((registry, _rx), events) = capture(|| register_rows(&rows, REPLY_WAIT));
+    assert_eq!(names(&registry), vec!["get_active_ghost_list".to_owned()]);
+    assert_eq!(events.len(), 1, "記録は error 1 件だけ: {events:?}");
+    assert_eq!(events[0].level, Level::ERROR);
+}

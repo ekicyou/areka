@@ -19,12 +19,15 @@ pub mod raise_event;
 pub mod reload;
 pub mod sakurascript;
 
+use std::sync::Arc;
+use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
 use serde_json::{Map, Value};
+use tracing::error;
 
-use crate::ToolSpec;
 use crate::check::as_integer;
+use crate::{ToolFuture, ToolHandler, ToolRegistry, ToolSpec};
 
 /// 返事を待つ上限（本番の値）。
 pub const REPLY_WAIT: Duration = Duration::from_secs(10);
@@ -99,6 +102,42 @@ pub(crate) fn spec_from_definition(definition: &str) -> Result<ToolSpec, String>
             .cloned()
             .ok_or("definition has no inputSchema object")?,
     })
+}
+
+/// 10 本の登録表と、アプリ本体が汲む受け口を組む（要件 1.1・1.3・6.5）。
+///
+/// 受け口は呼び出し側が持つ。アプリ本体へ置くまでに届いた要求は受け口に溜まる。
+pub fn entrances(reply_wait: Duration) -> (ToolRegistry, Receiver<ToolRequest>) {
+    register_rows(&TABLE, reply_wait)
+}
+
+/// 表の行を順に登録する。定義が読めない行は `error!` 1 件で登録しない（本番の表では起きない）。
+pub(crate) fn register_rows(
+    rows: &[(&str, Parse)],
+    reply_wait: Duration,
+) -> (ToolRegistry, Receiver<ToolRequest>) {
+    let (tx, rx) = mpsc::channel();
+    let mut registry = ToolRegistry::default();
+    for &(definition, parse) in rows {
+        let spec = match spec_from_definition(definition) {
+            Ok(spec) => spec,
+            Err(reason) => {
+                error!(%reason, "MCP: ツールの定義が読めない。この行は登録しない");
+                continue;
+            }
+        };
+        let tx = tx.clone();
+        let handler: ToolHandler = Arc::new(move |args: Value| -> ToolFuture {
+            // object でない arguments は handler の検査が先に弾く。ここでは空として読む。
+            let args = match args {
+                Value::Object(map) => map,
+                _ => Map::new(),
+            };
+            Box::pin(bridge::call(tx.clone(), parse(&args), reply_wait))
+        });
+        registry.register(spec, handler);
+    }
+    (registry, rx)
 }
 
 // 以下は各ツールの `parse` が使う読み方。`parse` は検査（`check_arguments`）を通った後にしか呼ばれないので
