@@ -14,7 +14,7 @@
 - areka の裁定は既にこの形: 完了 `areka-P0-input-events` の DD-IE-1（話の最中のマウスも常に GET）・DD-IE-2（話の最中に届いた返事は置換・根拠は SSP 2.3.86 の通信記録と「`\t` が防ぐ側の opt-in であること自体が既定＝中断の証左」）。完了 `areka-P0-choice-select-events` 要件 4.3 も選択待ちを同じ単一 slot 調停に従わせる。
 - 置換の述語は `crates/areka-kanade/src/schedule/events.rs` の `value_replaces_active_talk`（`OnSecondChange` 以外は置換）、調停は `steady.rs` の `on_reply`。`OnSecondChange` は話の最中は NOTIFY・Reference3=0 で出て返事は捨てる（ukadoc どおり）。
 - **`\t` は未実装**: `areka-sakura` に `\t` を読む処理が無い。`crates/areka-kanade/src/status.rs` の `ExecutionState::TimeCritical` は語彙だけあり、出どころの無い差し替え口（常に無効）のまま。`\t` の区間でマウス系の通知を止める仕組みも無い。
-- 隣の `areka-P0-status-execution-states`（C1・バグ）の表に「timecritical | `\t` 区間中 | sakura 再生（`\t`）」の行があるが、受け持つのは `Status` に載せることだけで、出どころ（`\t` の区間）は「まだ無い」と書いている。
+- 隣の `areka-P0-status-execution-states`（C1・バグ）の表に「timecritical | `\t` 区間中 | sakura 再生（`\t`）」の行があるが、受け持つのは `Status` に載せることだけで、出どころ（`\t` の区間）は「まだ無い」と書いている。同 spec の完了時（2026-10-03）に、`\t`（ukadoc 網羅の台帳 `ukadoc:list_sakura_script:_5ct:1`）と `timecritical` の持ち主は本 spec へ付け替えた（同 spec 要件 6.3 の記録）。
 
 ## Desired Outcome
 

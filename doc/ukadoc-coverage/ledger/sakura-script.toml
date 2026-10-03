@@ -5420,7 +5420,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5ct:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-sakura-time-directives"
+owner = "areka-P0-sakura-time-critical"
 priority = "A1"
 values = ["掛け合い"]
 links = []

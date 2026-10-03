@@ -16109,7 +16109,7 @@ note = """
 いる。実際に導出するときの唯一の情報源はバルーンの表示状態の読み口とし、見えているかどうかの
 帳簿を第 2 に作らない。online・nouserbreak・balloon は areka-P0-status-execution-states で
 導出済み（balloon はバルーンの表示状態の読み口から導き、第 2 の帳簿を作っていない）。
-残り 5 状態の宛先: timecritical→areka-P0-sakura-time-directives／induction・passive→候補
+残り 5 状態の宛先: timecritical→areka-P0-sakura-time-critical／induction・passive→候補
 areka-P0-passive-mode-states／minimizing→候補 areka-P0-minimize-state／opening→候補
 areka-P0-inputbox-dialog・areka-P0-communicate-events（候補はどれもまだ起票していない）。
 根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request。

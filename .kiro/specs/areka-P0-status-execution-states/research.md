@@ -347,7 +347,7 @@ online を届ける道の比較（研究 4.2 の O1〜O4）: O1（窓口から�
 - **Selected**: `real_pasta_test.rs` に env ゲート（`HOST32_PASTA_DLL`）の 1 件を足す。`PROCESS` の guard を持ったまま起動の挨拶の完了を待ち、OnSecondChange を雑談の間隔を超える回数回して `Value` が 0 件であることを見る。`kick_force` が立たない場面（挨拶の後・他の入力なし）で見る。env が無ければ実機の観測（`RUST_LOG=kanade=trace` の `shiori_request`）で代える。
 
 #### 決定 9（7.1 の 9・記録の置き方）
-- **Selected**: `\t` の宛先は実在の `areka-P0-sakura-time-directives` へ移す（`owner_count` も合わせる）。候補名はフォルダが無く `owner` に書けないので、`\![enter,inductionmode]`・`\![enter,passivemode]` と `Status [SSP拡張]` の `note`、`roadmap.md` の本 spec の行に書く。`report/` は作り直す。候補の起票はしない。
+- **Selected**: `\t` の宛先は実在の `areka-P0-sakura-time-directives` へ移す（`owner_count` も合わせる）。→ 2026-10-03 の完了時に、同じ日に起票された専用の `areka-P0-sakura-time-critical` へ付け替えた。候補名はフォルダが無く `owner` に書けないので、`\![enter,inductionmode]`・`\![enter,passivemode]` と `Status [SSP拡張]` の `note`、`roadmap.md` の本 spec の行に書く。`report/` は作り直す。候補の起票はしない。
 
 ### 9.5 統合（synthesis）の結果
 

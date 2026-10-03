@@ -114,7 +114,7 @@
   - _Requirements: 4.1, 4.5, 4.7, 4.8, 5.2_
 
 - [x] 6. (P) 出どころの無い 5 状態の持ち主を記録する
-  - ukadoc 網羅の台帳で `\t` の持ち主を `areka-P0-sakura-time-directives` へ移し、計画の `owner_count` を本 spec と移し先の両方で合わせる（数は検査に判定させ、手書きの数を信じない）
+  - ukadoc 網羅の台帳で `\t` の持ち主を `areka-P0-sakura-time-critical` へ移し（2026-10-03・完了時に付け替え：初めは `areka-P0-sakura-time-directives` へ送ったが、同じ日に `\t` と `timecritical` を受け持つ専用の spec が起票されたため）、計画の `owner_count` を本 spec と移し先の両方で合わせる（数は検査に判定させ、手書きの数を信じない）
   - `\![enter,inductionmode]`・`\![enter,passivemode]` の注記に次の持ち主の候補を、`Status [SSP拡張]` の注記に導出済みの 3 状態と残り 5 状態の宛先を書く。候補の spec は起票しない
   - 網羅の報告を生成し直し、概要の手書きの行と件数を合わせる。ロードマップの本 spec の行と、移し先 spec の brief に宛先を 1 文ずつ足す
   - ukadoc 網羅の整合検査が、まだフォルダの無い候補名を含めて緑になる

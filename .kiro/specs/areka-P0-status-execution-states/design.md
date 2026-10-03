@@ -61,7 +61,7 @@
 - `State` に `external` の欄を足すので、`State { .. }` の構造体リテラルを持つ kanade の既存テスト（14 か所）に `external: ExternalStates::default()` を足す。
 - `KanadeConfig` に `online` の欄を足すので、`KanadeConfig::new` の既定（`&online::PROCESS`）。構成は全部 `KanadeConfig::new` を通る（構造体リテラルは本番にもテストにも無い）ので、呼び手は無改変。
 - `balloon_visibility_phase.rs` の冒頭の `use super::super::frame::{…}` に名前を足すので、同じ行を `emo-text-file-split` が触ると併合のときに文字の上の衝突が起きうる（研究 4.3）。併合のときに見るべき 1 行。
-- ukadoc 網羅の台帳で `\t` の宛先を `areka-P0-sakura-time-directives` へ移すので、同 spec の `[[spec]].owner_count`。
+- ukadoc 網羅の台帳で `\t` の宛先を `areka-P0-sakura-time-critical` へ移すので、同 spec の `[[spec]]`（無ければ足す）と `owner_count`（2026-10-03・完了時に付け替え：初めは `areka-P0-sakura-time-directives` へ送ったが、同じ日に `\t` と `timecritical` を受け持つ専用の spec が起票されたため）。
 
 ## Architecture
 
@@ -506,11 +506,11 @@ pub(in crate::emo2_boot) fn report_balloons(
 
 - 検査の規則（`crates/ukadoc-survey/tests/consistency/spec_checks.rs` の腕 b・c・f）: 台帳の `owner` は `roadmap-draft.md` の `[[spec]]` の名前か `briefing.md` の `[[owner_completed]]` の名前でなければならず、`[[spec]]` の名前はフォルダが実在しなければならない。**フォルダの無い候補名を `owner` に書くと赤になる**。
 - したがって:
-  - `\t`（`ledger/sakura-script.toml` の `_5ct:1`）: `owner` を実在の `areka-P0-sakura-time-directives` へ移す。`roadmap-draft.md` の `[[spec]]` の `owner_count` を本 spec 4→3、`sakura-time-directives` 11→12 に合わせる（数は `cargo test -p ukadoc-survey` が判定する。手で書いた数を信じず検査に通す）。
+  - `\t`（`ledger/sakura-script.toml` の `_5ct:1`）: `owner` を実在の `areka-P0-sakura-time-critical` へ移す（2026-10-03・完了時に付け替え：初めは `areka-P0-sakura-time-directives` へ送ったが、同じ日に `\t` と `timecritical` を受け持つ専用の spec が起票されたため）。`roadmap-draft.md` に同 spec の `[[spec]]`（束「会話」・波「C4 の候補」）を足し、`owner_count` を本 spec 4→3、`sakura-time-critical` 0→1 に合わせる（`sakura-time-directives` は 10 のまま）（数は `cargo test -p ukadoc-survey` が判定する。手で書いた数を信じず検査に通す）。
   - `\![enter,inductionmode]`・`\![enter,passivemode]`（同台帳）: `owner` は本 spec のまま（完了時に `[[owner_completed]]` へ移るのは完了手続きの既存の流れ）。`note` に「次の持ち主: 候補 `areka-P0-passive-mode-states`（`doc/ukadoc-coverage/roadmap-draft.md` 束 16・計画の波で起票）」を足す。
-  - `Status [SSP拡張]`（`ledger/shiori.toml`）: `note` の「追跡先は areka-P0-status-execution-states」を、「online・nouserbreak・balloon は本 spec で導出済み。残り: timecritical→`areka-P0-sakura-time-directives`／induction・passive→候補 `areka-P0-passive-mode-states`／minimizing→候補 `areka-P0-minimize-state`／opening→候補 `areka-P0-inputbox-dialog`・`areka-P0-communicate-events`」へ書き換える。
+  - `Status [SSP拡張]`（`ledger/shiori.toml`）: `note` の「追跡先は areka-P0-status-execution-states」を、「online・nouserbreak・balloon は本 spec で導出済み。残り: timecritical→`areka-P0-sakura-time-critical`／induction・passive→候補 `areka-P0-passive-mode-states`／minimizing→候補 `areka-P0-minimize-state`／opening→候補 `areka-P0-inputbox-dialog`・`areka-P0-communicate-events`」へ書き換える。
   - `doc/ukadoc-coverage/report/`（生成物）は `cargo run -p ukadoc-survey -- report`／`report-summary` で作り直す。`briefing-sakura-script.md` の本 spec の所有行（`\t` の行）と件数は手で合わせる。
-  - `.kiro/steering/roadmap.md` の本 spec の行に、同じ宛先の一覧を 1 文で足す。`areka-P0-sakura-time-directives` の brief に `\t` の所有を 1 行足す。
+  - `.kiro/steering/roadmap.md` の本 spec の行に、同じ宛先の一覧を 1 文で足す。移し先の `areka-P0-sakura-time-critical` の brief は `\t` と `timecritical` を自分の仕事として既に書いているので、本 spec の 6.3 の記録へ戻る 1 文だけを足す。
   - 記録したあと `cargo test -p ukadoc-survey` が緑であることを確かめる。候補の spec は起票しない。
 
 ## Data Models
