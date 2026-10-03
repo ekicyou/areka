@@ -51,7 +51,7 @@
   - 完了の姿: `bridge_tests.rs` で「`is_abandoned` は `Pending` が生きている間 false・落とすと true」「送らずに落とすと `try_answer` が `Dropped`」「`Pending` を落とした後の `send` は何も起こさない」が緑
   - _Requirements: 6.2, 6.4_
   - _Depends: 2.1, 2.3_
-- [ ] 3.2 送って待つ処理と上限・終了の途中・記録
+- [x] 3.2 送って待つ処理と上限・終了の途中・記録
   - 送り口へ要求を送り、上限のうちに合図が立つのを `.await` で待ってから、返事あり／上限（`NG:` ＋上限の文言・`warn!` 1 件）／手放し（`NG:areka is shutting down`・`warn!` 1 件）に分ける。送りが失敗したら待たずに手放しと同じ
   - どの枝でも最後に `debug!` を 1 件（ツール名・解決したゴーストの名前・`isError`・失敗の本文）。待つ間は合図の写しだけを持ち、フューチャを `Send` に保つ
   - 完了の姿: `bridge_tests.rs` でテストのスレッドの tokio を回し、⑴ 返事をしない受け手と上限 50 ms で上限の `NG:`・`warn!` 1 件・`debug!` 1 件、⑵ 受け口を落としてから呼ぶと長い上限を待たずに `NG:areka is shutting down`・`warn!` 1 件、⑶ 受けた要求を答えずに落としても同じ、⑷ 返事ありで `warn!` 0 件・`debug!` にゴーストの名前、⑸ 上限の後の送りは何も起こさない、⑹ `REPLY_WAIT` の文言が `areka did not respond within 10 seconds`、が緑

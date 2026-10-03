@@ -1,10 +1,14 @@
 //! アプリ本体へ届ける橋（送る・待つ・上限・終了の途中・記録）。
 
+use std::sync::mpsc::Sender;
+use std::time::Duration;
+
 use areka_actor::{ReplyError, ReplyReceiver, ReplySender, reply_channel};
 use tokio_util::sync::CancellationToken;
+use tracing::{debug, warn};
 
-use super::ToolCall;
-use crate::ToolOutcome;
+use super::{ToolCall, outcome};
+use crate::{ToolContent, ToolOutcome};
 
 /// アプリ本体へ届ける 1 件。
 pub struct ToolRequest {
@@ -106,6 +110,63 @@ impl Drop for Pending {
     fn drop(&mut self) {
         self.abandoned.cancel();
     }
+}
+
+/// 上限の文言（本番の 10 秒で "areka did not respond within 10 seconds"）。
+pub(crate) fn timeout_text(limit: Duration) -> String {
+    format!(
+        "areka did not respond within {} seconds",
+        limit.as_secs_f64()
+    )
+}
+
+/// 送って待つ（登録表の処理の中身）。
+///
+/// 待つ間は `Pending` への参照を `.await` をまたいで持たない（中の受け手は `Sync` で
+/// ないので、フューチャが `Send` でなくなる）。合図の写しを先に取り出して待つ。
+pub(crate) async fn call(tx: Sender<ToolRequest>, call: ToolCall, limit: Duration) -> ToolOutcome {
+    let tool = call.name();
+    let (request, pending) = ToolRequest::new(call);
+    let (ghost, result) = if tx.send(request).is_err() {
+        // 受け口が落ちている（終了の途中）。返ってきた要求ごと落とし、待たない。
+        (String::new(), shutting_down(tool))
+    } else {
+        let answered = pending.answered();
+        // 上限を過ぎたかどうかは下の `try_answer` が見分ける。
+        let _ = tokio::time::timeout(limit, answered.cancelled()).await;
+        match pending.try_answer() {
+            Ok(Some(answer)) => (answer.ghost, answer.outcome),
+            Ok(None) => {
+                warn!(
+                    tool,
+                    limit_ms = limit.as_millis() as u64,
+                    "MCP: areka が上限のうちに答えなかった"
+                );
+                (String::new(), outcome::ng(timeout_text(limit)))
+            }
+            Err(_) => (String::new(), shutting_down(tool)),
+        }
+    };
+    // ここで `Pending` が落ちる＝上限の後に届く返事は捨てられる。
+    drop(pending);
+    let text = match result.content.first() {
+        Some(ToolContent::Text(text)) if result.is_error => text.as_str(),
+        _ => "",
+    };
+    debug!(
+        tool,
+        ghost = ghost.as_str(),
+        is_error = result.is_error,
+        text,
+        "MCP: ツールに答えた"
+    );
+    result
+}
+
+/// 答えずに手放された（終了の途中）。
+fn shutting_down(tool: &str) -> ToolOutcome {
+    warn!(tool, "MCP: areka が終了の途中で答えなかった");
+    outcome::ng("areka is shutting down")
 }
 
 #[cfg(test)]
