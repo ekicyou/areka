@@ -138,6 +138,30 @@ fn unknown_method_is_jsonrpc_error_from_rmcp() {
     let (_server, addr) = serve(ToolRegistry::default());
     let error = error_of(&post_rpc(addr, &[], &rpc("no/such", Some(1), None)));
     assert_eq!(error["code"], -32601, "{error}");
+    // エラーの形（差の一覧へ）: `message` はメソッド名そのもの・`data` の欄は無い
+    // （SSP は `data` に `message` と同じ文字列を入れる）。
+    assert_eq!(
+        error,
+        json!({ "code": -32601, "message": "no/such" }),
+        "{error}"
+    );
+}
+
+/// (要件 3.8・5.1) バッチ（JSON の配列）は rmcp のまま 415・平文（1 件の形として読めない。
+/// JSON-RPC のエラーではない＝差の一覧へ。SSP は 400・`-32600`）。
+#[test]
+fn batch_array_body_is_415() {
+    let (_server, addr) = serve(ToolRegistry::default());
+    let response = post_rpc(
+        addr,
+        &[],
+        r#"[{"jsonrpc":"2.0","id":1,"method":"ping"},{"jsonrpc":"2.0","id":2,"method":"ping"}]"#,
+    );
+    assert_eq!(response.status, 415, "{response:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&response.body),
+        "fail to deserialize request body data did not match any variant of untagged enum JsonRpcMessage"
+    );
 }
 
 /// (要件 3.8) `Content-Type` が JSON でない本文は 415。

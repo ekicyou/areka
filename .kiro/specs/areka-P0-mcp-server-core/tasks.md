@@ -78,9 +78,9 @@
   - _Depends: 4.1_
   - _Boundary: server_tests_
 - [x] 4.3 (P) MCP の応答のテスト
-  - `server_protocol_tests.rs` に design.md の 18 本（旧式 4 版・`2026-07-28` が `2025-11-25` へ・未知の版・通知 202・tools/list 0 本・ping・tools/call の `-32602`・未知メソッドの `-32601` と 200・Content-Type 違いの 415・壊れた JSON の 415 と次の要求・セッション ID 無し・JSON 単発・GET の 405・`server/discover`・ヘッダの素通し・未知のヘッダ値の 4xx・Accept 無しの 406・本文 4 MiB 超の 413）を置く
+  - `server_protocol_tests.rs` に design.md の 19 本（旧式 4 版・`2026-07-28` が `2025-11-25` へ・未知の版・通知 202・tools/list 0 本・ping・tools/call の `-32602`・未知メソッドの `-32601` と 200・Content-Type 違いの 415・壊れた JSON の 415 と次の要求・セッション ID 無し・JSON 単発・GET の 405・`server/discover`・ヘッダの素通し・未知のヘッダ値の 4xx・Accept 無しの 406・本文 4 MiB 超の 413・バッチ（配列）の本文）を置く
   - 差の一覧に書く値（未知の版で返る版・未知のヘッダ値の状態・discover の欄）は、各テストの assert に具体の値で固定する（5.2 はテストの assert から写す・別の記録は作らない）
-  - 完了の姿: 18 本が緑
+  - 完了の姿: 19 本が緑
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 5.1, 9.2_
   - _Depends: 4.1_
   - _Boundary: server_protocol_tests_

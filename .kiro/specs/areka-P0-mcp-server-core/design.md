@@ -650,9 +650,10 @@ impl Drop for McpServer { /* 上記 */ }
 | `tools_list_is_empty` | `tools: []` | 3.4 |
 | `ping_returns_empty_object` | `result: {}` | 3.5 |
 | `tools_call_any_name_is_invalid_params` | `error.code == -32602`・`result` 無し | 3.6 |
-| `unknown_method_is_jsonrpc_error_from_rmcp` | `error.code` が `-32601`・HTTP 200（現物の読み。値を差の一覧へ） | 3.7 |
+| `unknown_method_is_jsonrpc_error_from_rmcp` | `error.code` が `-32601`・HTTP 200（現物の読み。値を差の一覧へ）。エラーの形は `{"code":-32601,"message":"no/such"}`＝`message` はメソッド名・`data` の欄は無い（差の一覧の「エラーの形」の行） | 3.7 |
 | `non_json_content_type_is_415` | `Content-Type: text/plain` → 415 | 3.8 |
 | `broken_json_body_is_415_and_next_request_works` | `{` → 415・同じサーバへ続けて `ping` が通る | 3.8 |
+| `batch_array_body_is_415` | `ping` 2 件の配列 → 415・平文 `fail to deserialize request body data did not match any variant of untagged enum JsonRpcMessage`（JSON-RPC のエラーではない。差の一覧の「バッチ」の行） | 3.8, 5.1 |
 | `ping_without_initialize_and_without_session_id` | `initialize` 無しの `ping`／`tools/list` が 200・応答に `Mcp-Session-Id` 無し | 3.9 |
 | `response_is_single_application_json` | `Content-Type` が `application/json`・本文が JSON 1 件・`text/event-stream` でない | 3.10 |
 | `get_v1_has_no_form` | `GET /api/mcp/v1` → 405（本文に `<form` 無し） | 3.11 |
