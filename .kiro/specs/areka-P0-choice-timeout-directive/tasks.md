@@ -58,7 +58,7 @@
   - `cargo test -p ukadoc-survey` が緑（証拠の行の検査は 2.1 の `// ukadoc:` 行を見る）
   - _Depends: 2.1_
   - _Requirements: 10.1, 10.2, 10.5_
-- [ ] 4.2 (P) 正典が黙っている点の裁量と、着地で古くなる記述を書き直す
+- [x] 4.2 (P) 正典が黙っている点の裁量と、着地で古くなる記述を書き直す
   - `doc/COMPAT_ARCHITECTURE.md` §8 に裁量の 1 行（最後が勝つ・他の負の値も時間切れなし・空欄は省略と同じ・読めない値は既定＋警告・終わりのタグの後ろは数えない）を足し、「compile 側時間指令 allowlist」の行に `set,choicetimeout` を実際に読むようになったことを書き足す
   - `doc/choice-cascade-compat.md` の行 5b（台本の指定が流れる）と行 5d（着いたときに飛ばす判定も選択の区切りには効かない、と構造にした）を書き直す
   - `briefing-sakura-script.md` の消費側の表・担当の突合表・「語彙の登記」の表の `set,choicetimeout` の行を直し、§8 の行を指す先が合っていることを見る
@@ -70,3 +70,7 @@
   - `tools/test-all.ps1` でワークスペース全体を回し、緑であること（クリック待ち・時間待ちの既存の檻・指定の無い台本の既存の檻を含む）
   - `git diff --stat main...HEAD` で、触らない場所と `Cargo.toml`・`Cargo.lock` が 0 ファイルであることを確かめる
   - _Requirements: 5.4, 9.5, 9.6, 10.2_
+
+## Implementation Notes
+
+- 4.2: 境界の外で古くなりうる記述が 2 つ。`.kiro/steering/roadmap.md` の本 spec の行（「効かず」の不具合表記）は完了処理で roadmap を直すときに更新する。`doc/emo2-conformance-scope.md` の「`\!` は move だけ本実装・他はスタブで可」は許容を述べた文で誤りではない。
