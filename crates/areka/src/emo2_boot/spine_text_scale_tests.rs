@@ -1,7 +1,7 @@
 use super::test_support::bump_balloon_window_dpi;
 use super::{
     BindSet, PatternState, PresentCommand, SpineHarness, balloon_target, capture_logs,
-    run_attach_phase, run_dpi_phase, run_text_scale_phase,
+    run_attach_phase, run_dpi_phase, run_text_phase, run_text_scale_phase, shell_target,
 };
 
 /// balloon target の適用 k（`applied_scale`）を読む短縮（`None`＝表示状態が未確立は前提違反ゆえ panic）。
@@ -55,7 +55,7 @@ fn spine_dpi_change_refreshes_balloon_text_scale_on_real_attach() {
     );
     // churn ガード（変化前）: k が動いていないフレームでは 1 件も再構築しない。
     assert!(
-        run_text_scale_phase(&mut harness.wiring).is_empty(),
+        run_text_scale_phase(&mut harness.wiring, &mut harness.world).is_empty(),
         "k 不変のフレームで文字層を組み直してはならない（R8.5）"
     );
 
@@ -70,13 +70,13 @@ fn spine_dpi_change_refreshes_balloon_text_scale_on_real_attach() {
 
     // 本題: 文字層 binding が新 k へ組み直される（当該 scope のみ・k 不変の scope1 は動かない）。
     assert_eq!(
-        run_text_scale_phase(&mut harness.wiring),
+        run_text_scale_phase(&mut harness.wiring, &mut harness.world),
         vec![0u32],
         "適用 k が変わった balloon scope の文字層 binding が新 k へ組み直される（R8.1・D11-4）"
     );
     // churn ガード（変化後）: 直後のフレームは同値 k ゆえ再構築ゼロ。
     assert!(
-        run_text_scale_phase(&mut harness.wiring).is_empty(),
+        run_text_scale_phase(&mut harness.wiring, &mut harness.world).is_empty(),
         "組み直した直後のフレームは同値 k ＝ no-op（毎フレーム再生成の禁止・R8.5）"
     );
 
@@ -111,7 +111,7 @@ fn spine_dpi_change_while_balloon_hidden_lands_on_next_show() {
     );
     let k_attached = balloon_applied_scale(&harness, 0);
     assert!(
-        run_text_scale_phase(&mut harness.wiring).is_empty(),
+        run_text_scale_phase(&mut harness.wiring, &mut harness.world).is_empty(),
         "前提: 装着直後は binding と適用 k が一致（再構築ゼロ）"
     );
 
@@ -133,7 +133,7 @@ fn spine_dpi_change_while_balloon_hidden_lands_on_next_show() {
         "前提: 不可視の target は再表示されず適用 k も更新されない（refresh_scale の可視ゲート）"
     );
     assert!(
-        run_text_scale_phase(&mut harness.wiring).is_empty(),
+        run_text_scale_phase(&mut harness.wiring, &mut harness.world).is_empty(),
         "不可視の間は文字層も動かない（適用 k がまだ旧値＝同値 k の no-op・R8.5）"
     );
 
@@ -156,13 +156,102 @@ fn spine_dpi_change_while_balloon_hidden_lands_on_next_show() {
 
     // (4) 本題: `Changed<DPI>` のエッジは既に消費済みでも、文字層は新 k へ着地する。
     assert_eq!(
-        run_text_scale_phase(&mut harness.wiring),
+        run_text_scale_phase(&mut harness.wiring, &mut harness.world),
         vec![0u32],
         "不可視中の DPI 変化でも、再表示後のフレームで文字層 binding が新 k へ着地する（R8.1）"
     );
     assert!(
-        run_text_scale_phase(&mut harness.wiring).is_empty(),
+        run_text_scale_phase(&mut harness.wiring, &mut harness.world).is_empty(),
         "着地後は同値 k ＝ no-op（R8.5）"
+    );
+
+    harness.shutdown_bounded();
+}
+
+/// **箱の同期の結線**（areka-P0-shell-balloon 要件 3.5・design.md「箱の束の結線」）: 文字の層の
+/// 拡大率の相が、シェルの窓の `text_slot_view` を集めて `sync_boxes` を呼ぶ。呼ばれなければ
+/// 箱の場所は登録されず、文字を持っていても面にならない（`shown_boxes` が空のまま）。
+///
+/// 面 0 に箱 `talk` を置いた束を渡し、`\s[0]` と文字を当てて、相 → 提示の順に 1 フレーム回す。
+#[test]
+fn text_scale_phase_syncs_boxes_on_the_shell_window() {
+    use areka_sakura::ActorKey;
+    use dola::cue::{CueCommand, TalkCue};
+
+    const SHELL: &str = "\
+balloon.talk
+{
+size,100,40
+}
+surface0
+{
+element1,balloon,talk,10,10
+}
+";
+    let mut harness = SpineHarness::boot(r"\s[0]\e");
+    run_attach_phase(&mut harness.wiring, &mut harness.world);
+    // 最初の `\s[0]` 相当（本番 adapter が組む指令と同型）でシェルの窓の表示を確立する。
+    harness.wiring.apply_present(
+        &mut harness.world,
+        PresentCommand::ShowSurface {
+            target: shell_target(0),
+            surface_id: 0,
+            binds: BindSet::default(),
+            pattern: PatternState::default(),
+            reply: None,
+        },
+    );
+    assert!(
+        harness
+            .wiring
+            .presenter()
+            .text_slot_view(shell_target(0))
+            .is_some(),
+        "前提: シェルの窓の文字の差し込み口が確立している"
+    );
+
+    let text_world = areka_emo_compose::EmoWorld::build(&areka_parsers::shell::parse(SHELL));
+    let (layout, _) = areka_emo_compose::fold_boxes(
+        &areka_parsers::shell::parse_boxes(SHELL),
+        &std::collections::BTreeMap::new(),
+        &text_world,
+    );
+    let bundle = crate::emo2_boot::shell_box_assets::ShellBoxAssets {
+        layout,
+        aliases: text_world.alias_snapshot(),
+        surface_ids: text_world.surface_ids().collect(),
+        font_dirs: Vec::new(),
+    };
+    let actor = ActorKey::from("0");
+    {
+        let mut runtime = harness.runtime.borrow_mut();
+        bundle.hand_to(&mut runtime, &mut harness.world);
+        for command in [
+            CueCommand::Emote { key: "0".into() },
+            CueCommand::Text("あ".into()),
+        ] {
+            runtime.apply_cue(&TalkCue {
+                at: 0.0,
+                actor: actor.clone(),
+                command,
+                duration: 0.0,
+            });
+        }
+    }
+
+    run_text_scale_phase(&mut harness.wiring, &mut harness.world);
+    run_text_phase(&mut harness.wiring, &mut harness.world, Some(10.0));
+    let shown: Vec<String> = harness
+        .runtime
+        .borrow()
+        .shown_boxes(&actor)
+        .iter()
+        .map(|b| b.name.as_str().to_owned())
+        .collect();
+    assert_eq!(
+        shown,
+        vec!["talk".to_owned()],
+        "拡大率の相が箱を同期し、提示が箱 talk を面にする"
     );
 
     harness.shutdown_bounded();

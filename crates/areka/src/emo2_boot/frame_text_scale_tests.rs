@@ -36,7 +36,7 @@ fn text_scale_phase_without_balloon_models_is_silent_noop() {
 
     let logs = capture_logs(|| {
         assert!(
-            run_text_scale_phase(&mut wiring).is_empty(),
+            run_text_scale_phase(&mut wiring, &mut World::new()).is_empty(),
             "balloon 未装着では再構築 scope なし"
         );
     });
@@ -72,7 +72,7 @@ fn text_scale_phase_warns_once_per_scope_when_view_unavailable() {
 
     let first = capture_logs(|| {
         assert!(
-            run_text_scale_phase(&mut wiring).is_empty(),
+            run_text_scale_phase(&mut wiring, &mut World::new()).is_empty(),
             "view None では再構築しない（縮退 skip・R8.6）"
         );
     });
@@ -84,8 +84,8 @@ fn text_scale_phase_warns_once_per_scope_when_view_unavailable() {
 
     // 2・3 フレーム目: 状態が変わっていない以上、同じ警告を鳴らし直さない（log spam の禁止）。
     let rest = capture_logs(|| {
-        run_text_scale_phase(&mut wiring);
-        run_text_scale_phase(&mut wiring);
+        run_text_scale_phase(&mut wiring, &mut World::new());
+        run_text_scale_phase(&mut wiring, &mut World::new());
     });
     assert_eq!(
         count_level(&rest, "WARN"),

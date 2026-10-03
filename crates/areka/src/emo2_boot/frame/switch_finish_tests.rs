@@ -15,14 +15,18 @@ use std::time::{Duration, Instant};
 
 use areka_actor::{ReplySender, reply_channel};
 use areka_emo_present::{PresentError, PresentOutcome, TargetId};
+use areka_emo_text::actor::{ResolvedBalloonText, TextSlotBinding};
+use areka_emo_text::place::TextPlace;
 use areka_ghost::BasewareRoot;
 use areka_kanade::{KanadeMsg, ShioriMethod};
+use areka_sakura::ActorKey;
 use areka_sylphya::persist::{FakePersistIo, PersistIo};
 use areka_sylphya::{
     PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope, save_scope,
     spawn_sylphya,
 };
 use bevy_ecs::world::World;
+use dola::cue::{CueCommand, TalkCue};
 use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
@@ -35,6 +39,7 @@ use crate::emo2_boot::shell_balloon_resolve::SkinCandidate;
 use crate::emo2_boot::shell_balloon_switch::{
     SkinKind, SkinSwitchInFlight, SkinSwitchStage, SwapFinish,
 };
+use crate::emo2_boot::shell_box_assets::ShellBoxAssets;
 use crate::emo2_boot::switch_assets::{SwapPayload, SwapSlot};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::placement::reseed::BalloonPlacementInputs;
@@ -116,6 +121,7 @@ fn shell_finish() -> SwapFinish {
             windowpositions: BTreeMap::new(),
         },
         restored: Vec::new(),
+        boxes: ShellBoxAssets::default(),
     }
 }
 
@@ -607,6 +613,7 @@ fn shell_finish_moves_char_windows_to_the_new_alignment() {
             windowpositions: BTreeMap::new(),
         },
         restored: Vec::new(),
+        boxes: ShellBoxAssets::default(),
     };
     let mut rig = rig_on(world, SkinKind::Shell, false, finish);
     answer(&mut rig, 0, Ok(()));
@@ -622,5 +629,161 @@ fn shell_finish_moves_char_windows_to_the_new_alignment() {
         (tops, xs.0 == xs.1, stage(&rig.world)),
         (vec![0, 0], true, None),
         "(キャラ窓の上端, 横位置は保つか, 印) 起動の位置={before:?}"
+    );
+}
+
+// ---------------------------------------------------------------- 箱の束（areka-P0-shell-balloon）
+
+/// 前のシェル: 面 10 に箱 `old`。
+const OLD_SHELL: &str = "\
+balloon.old
+{
+size,100,50
+}
+surface10
+{
+element1,balloon,old,0,0
+}
+";
+
+/// 新しいシェル: 同じ面 10 に箱 `new`（名前も位置も違う）。
+const NEW_SHELL: &str = "\
+balloon.new
+{
+size,80,40
+}
+surface10
+{
+element1,balloon,new,5,5
+}
+";
+
+/// テストの中の surfaces.txt の文面から箱の束を組む（本番と同じく別名の写しと面の表の番号を採る）。
+fn box_bundle(text: &str) -> ShellBoxAssets {
+    let world = areka_emo_compose::EmoWorld::build(&areka_parsers::shell::parse(text));
+    let (layout, report) = areka_emo_compose::fold_boxes(
+        &areka_parsers::shell::parse_boxes(text),
+        &BTreeMap::new(),
+        &world,
+    );
+    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
+    ShellBoxAssets {
+        layout,
+        aliases: world.alias_snapshot(),
+        surface_ids: world.surface_ids().collect(),
+        font_dirs: Vec::new(),
+    }
+}
+
+fn cue(actor: &ActorKey, command: CueCommand) -> TalkCue {
+    TalkCue {
+        at: 0.0,
+        actor: actor.clone(),
+        command,
+        duration: 0.0,
+    }
+}
+
+/// スコープの文字を持つ場所（場所の名前・文字の数）。普通のバルーンは `balloon`。
+fn texts(wiring: &Emo2Wiring, actor: &ActorKey) -> Vec<(String, usize)> {
+    let runtime = wiring.runtime.borrow();
+    runtime
+        .state()
+        .places()
+        .filter(|(key, state)| key.actor == *actor && !state.items().is_empty())
+        .map(|(key, state)| {
+            let name = match &key.place {
+                TextPlace::Balloon => "balloon".to_owned(),
+                TextPlace::Box(name) => name.as_str().to_owned(),
+            };
+            (name, state.items().len())
+        })
+        .collect()
+}
+
+/// シェルの切替は新しいシェルの箱の束を文字の層へ渡す（要件 6.8）: 前のシェルの箱の文字は
+/// 残らず、`\s` を書かない次の台詞は新しいシェルの同じ番号のサーフェス（面 10）の箱へ入る。
+#[test]
+fn shell_switch_hands_the_new_box_bundle_to_the_text_layer() {
+    let SwapFinish::Shell {
+        source,
+        balloon,
+        restored,
+        ..
+    } = shell_finish()
+    else {
+        unreachable!("shell_finish はシェルの残り")
+    };
+    let finish = SwapFinish::Shell {
+        source,
+        balloon,
+        restored,
+        boxes: box_bundle(NEW_SHELL),
+    };
+    let mut rig = rig_on(World::new(), SkinKind::Shell, false, finish);
+    // 起動の装着の相が渡した前のシェルの束と、面 10 の箱 `old` に出ている文字。
+    box_bundle(OLD_SHELL).hand_to(&mut rig.wiring.runtime.borrow_mut(), &mut rig.world);
+    let actor = ActorKey::from("0");
+    {
+        let mut runtime = rig.wiring.runtime.borrow_mut();
+        runtime.apply_cue(&cue(&actor, CueCommand::Emote { key: "10".into() }));
+        runtime.apply_cue(&cue(&actor, CueCommand::Text("古い".into())));
+    }
+    let before = texts(&rig.wiring, &actor);
+
+    answer(&mut rig, 0, Ok(()));
+    answer(&mut rig, 1, Ok(()));
+    frame(&mut rig);
+    let after_switch = texts(&rig.wiring, &actor);
+    rig.wiring
+        .runtime
+        .borrow_mut()
+        .apply_cue(&cue(&actor, CueCommand::Text("新しい".into())));
+    let next_talk = texts(&rig.wiring, &actor);
+
+    assert_eq!(
+        (before, after_switch, next_talk, stage(&rig.world)),
+        (
+            vec![("old".to_owned(), 2)],
+            Vec::new(),
+            vec![("new".to_owned(), 3)],
+            None,
+        ),
+        r"(切替の前, 切替の後, `\s` を書かない次の台詞, 印)"
+    );
+}
+
+/// バルーンの切替の後、普通のバルーンの警告の名前の欄は新しいバルーンのフォルダ名になる
+/// （要件 3.12）。前のバルーンの名前（ここでは未設定の `スコープ0のバルーン`）が残らない。
+#[test]
+fn balloon_switch_renames_the_balloon_warning_field() {
+    let mut rig = rig(SkinKind::Balloon, false);
+    rig.wiring
+        .runtime
+        .borrow_mut()
+        .set_balloon_label(&ActorKey::from("0"), "kaku".to_owned());
+    answer(&mut rig, 0, Ok(()));
+    answer(&mut rig, 1, Ok(()));
+    frame(&mut rig);
+
+    // 範囲外の `origin.x` を持つ定義で登録し直して警告を出させる（再追従と同じ口）。
+    let coarse = areka_parsers::balloon::parse_str("origin.x,9999\r\n", None);
+    let slot = rig.world.spawn_empty().id();
+    let (_, events) = capture(|| {
+        rig.wiring.runtime.borrow_mut().register_actor(
+            ActorKey::from("0"),
+            TextSlotBinding::new(slot, slot, 1.0, (200, 100), (200, 100)),
+            ResolvedBalloonText::resolve(&coarse, (200, 100)),
+        );
+    });
+    let names: Vec<Option<&str>> = events
+        .iter()
+        .filter(|e| e.level == Level::WARN)
+        .map(|e| e.field_str("balloon"))
+        .collect();
+    assert_eq!(
+        names,
+        vec![Some("fluffy")],
+        "警告の名前の欄は新しいバルーンのフォルダ名（前の名前 kaku が残らない）"
     );
 }
