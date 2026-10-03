@@ -22,7 +22,7 @@
 4. main の squash コミットに `v{版}` のタグを打って push する。これが Actions のきっかけ。
 5. 見守る: `release.yml` の緑・Release の公開・crates.io の各クレートの版・winget-pkgs への PR（`winget.yml`）。赤なら原因を直す spec を起票し、**同じ版で再実行しない**（zip の URL は版ごとに固定・crates.io は差し替え不可）＝直したら次の版で出す。
 6. 記録: `roadmap.md` の「完了サマリ」の下に「リリース」の 1 行（版・日付・Release の URL・winget の PR）。
-7. **初回（`v0.0.2`）だけの手順**: タグを打つ前に、`wintf`・`dola` に Trusted Publishing を設定する（`crates-io-publish` の手順書。10-03 同 spec の要件討議の議題 3 で crates.io へ出すのは `wintf`・`dola` だけになり、どちらも crates.io に在るので手元からの初回の公開は要らない）。版を上げるとき、出さない `areka` ほかが持つ `wintf = { version = "0.0.1", path = ... }` の版の指定も合わせる必要があるかは `crates-io-publish` の設計で決まる。winget の初回の手提出は `winget-manifest-submission`（Release の実在が要る＝初回の後のウェーブ）。
+7. **初回（`v0.0.2`）だけの手順**: タグを打つ前に、`wintf`・`dola` に Trusted Publishing を設定する（`crates-io-publish` の手順書。10-03 同 spec の要件討議の議題 3 で crates.io へ出すのは `wintf`・`dola` だけになり、どちらも crates.io に在るので手元からの初回の公開は要らない）。版を上げるときに書き換えるのは、根の `Cargo.toml` の 2 行（`[workspace.package]` の `version`・`[workspace.dependencies]` の `dola` の `version`）と `Cargo.lock` だけで、各クレートの `Cargo.toml` は動かさない（`crates-io-publish` の設計で、出さない `areka` ほかが持っていた `wintf` の版の指定は外した）。上げた後に `tools/crates-io.ps1 -Verify` を通す。手順 2 の `cargo set-version --workspace` で 2 行目（`dola` の `version`）も動くかは、この spec で確かめる。winget の初回の手提出は `winget-manifest-submission`（Release の実在が要る＝初回の後のウェーブ）。
 
 ## Approach
 

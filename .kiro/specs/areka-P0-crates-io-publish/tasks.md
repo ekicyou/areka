@@ -88,7 +88,7 @@
   - _Requirements: 5.6_
   - _Boundary: crates/wintf/README.md, crates/dola/README.md_
 
-- [ ] 5.4 (P) 開発者向けの決めごとに節を足し、`release-cycle` へ申し送る
+- [x] 5.4 (P) 開発者向けの決めごとに節を足し、`release-cycle` へ申し送る
   - `tech.md` の「Key Technical Decisions」の直前に「crates.io への公開」の節を足す: 出すのは汎用のライブラリだけ（今は `wintf`・`dola`）・出さないクレートは `publish = false # 理由`・新しいクレートは印と理由を必ず書く（書き忘れは全体テストが止める）・確認の実行の仕方・全体テストの段はネットを使わない・公開の段の動き方・版上げで動く根の 2 行・手順書の場所
   - Testing 節の「外部 CI は持たない」の段落には触らない
   - `areka-P0-release-cycle` の brief の「…必要があるかは `crates-io-publish` の設計で決まる」の文を、決定 2 の申し送り（版上げで動くのは根の 2 行と `Cargo.lock`・上げた後に `-Verify`）に改める
