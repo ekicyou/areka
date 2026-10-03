@@ -1,0 +1,23 @@
+{
+  "feature_name": "areka-P0-install-companion-canon",
+  "created_at": "2026-10-03T10:12:23Z",
+  "updated_at": "2026-10-03T12:00:00Z",
+  "language": "ja",
+  "phase": "rejected",
+  "approvals": {
+    "requirements": {
+      "generated": false,
+      "approved": false,
+      "note": "実施せず、3 本へ引き継いで閉じた（2026-10-03 開発者指示）。要件の段で、ukadoc「同時インストール」の「ゴーストやシェルに紐づくバルーンとして設定されるのは最初の1個だけである。」が areka に無い 2 つの機能（ゴーストの標準バルーン・シェルごとのバルーン）に触れると分かったため。引き継ぎ先: areka-P0-install-companion-reading（インストールの読み方 4 点・書きかけの要件 1〜4・6〜8）／areka-P0-ghost-standard-balloon（要件 5 の続き・descript の balloon と default.balloon.path）／areka-P0-shell-companion-balloon（シェルに紐づくバルーン）。requirements.md は書きかけのまま資料として残す。"
+    },
+    "design": {
+      "generated": false,
+      "approved": false
+    },
+    "tasks": {
+      "generated": false,
+      "approved": false
+    }
+  },
+  "ready_for_implementation": false
+}
