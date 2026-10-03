@@ -1,0 +1,2 @@
+cargo build --workspace: warning 行 0
+tools/test-all.ps1 のコンパイル出力: warning 行 0

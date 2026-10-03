@@ -1,0 +1,233 @@
+//! balloon_visibility の子: 待ち時間の設定（既定値と環境変数での短縮）と、会話の後の時間切れの判定。
+//! 足す予定の spec: balloon-lifecycle-events。
+
+use std::sync::OnceLock;
+
+use tracing::{info, warn};
+
+use super::{
+    BalloonVisibilityState, ContentDecisions, DEFAULT_BALLOON_TIMEOUT_SECS,
+    MeasurementDiscardReason, SuppressionKinds, TIMEOUT_ENV_KEY, TimeoutSource, VisibilityLogEvent,
+    VisibilityObservations, VisibilityTrigger,
+};
+
+/// 環境変数の値から短縮指定のミリ秒を読み取る純関数（環境変数へ触れない・単体テスト可能）。
+///
+/// - `None`／空／空白のみ → `None`（指定なし＝既定を使う。本番の既定経路なので無音）。
+/// - 周辺の空白を落とした**正の**整数 → `Some(ms)`。
+/// - `0`・負値・非数・`u64` の範囲超過 → `warn!` の上で `None`（既定へ縮退）。
+///
+/// `0` を受理しないのは、会話の表示終了と同時にバルーンが消えてしまい、実機サインオフで
+/// 「既定時間の経過で消える」ことを観測できなくなるためである（design 決定 D6 は正の整数
+/// ミリ秒と定めている）。`u64::from_str` が負号・小数点・非数字・範囲超過をいずれも `Err`
+/// にするため、それらは自然に不正側へ落ちる。
+pub(crate) fn parse_timeout_ms(value: Option<&str>) -> Option<u64> {
+    let trimmed = value.map(str::trim)?;
+    // 未設定と空白のみは同じ「指定なし」であり、誤りではないので警告を出さない。
+    if trimmed.is_empty() {
+        return None;
+    }
+    match trimmed.parse::<u64>() {
+        Ok(ms) if ms > 0 => Some(ms),
+        _ => {
+            warn!(
+                env = TIMEOUT_ENV_KEY,
+                value = trimmed,
+                "[balloon-visibility] 待ち時間の指定が不正（正の整数ミリ秒を要する）→ 既定へ縮退"
+            );
+            None
+        }
+    }
+}
+
+/// 採用する待ち時間とその供給源を決め、1 行記録して返す（環境変数へ触れない）。
+///
+/// 記録は採用値・供給源・既定値の 3 つを同じ 1 行に載せる。短縮して満了を観測している最中
+/// でも「短縮していない既定値が 30 秒であること」を同じ行から確かめられるようにするため
+/// である（Requirement 9.5）。
+pub(super) fn resolve_timeout_secs(value: Option<&str>) -> (f64, TimeoutSource) {
+    let (secs, source) = match parse_timeout_ms(value) {
+        Some(ms) => (ms as f64 / 1000.0, TimeoutSource::Env),
+        None => (DEFAULT_BALLOON_TIMEOUT_SECS, TimeoutSource::Default),
+    };
+    info!(
+        env = TIMEOUT_ENV_KEY,
+        timeout_secs = secs,
+        source = source.as_str(),
+        default_secs = DEFAULT_BALLOON_TIMEOUT_SECS,
+        "[balloon-visibility] バルーン非表示までの待ち時間を確定"
+    );
+    (secs, source)
+}
+
+/// 採用する待ち時間（秒）を返す。環境変数はプロセスで**一度だけ**読む（design 決定 D6）。
+///
+/// 記録もこの初回の解決 1 回きりで、毎フレームの呼び出しでは何も起きない
+/// （Requirement 8.6——常時出力でログを埋めない）。
+pub(crate) fn configured_timeout_secs() -> f64 {
+    static RESOLVED: OnceLock<f64> = OnceLock::new();
+    *RESOLVED.get_or_init(|| resolve_timeout_secs(std::env::var(TIMEOUT_ENV_KEY).ok().as_deref()).0)
+}
+
+/// タイムアウトの計測・抑止・満了を判定し、満了で非表示にする scope を返す
+/// （Requirements 4.3 / 4.5 / 4.6 / 4.8 / 4.9 / 5.1〜5.3 / 5.5 / 5.6）。
+pub(super) fn decide_timeout(
+    state: &mut BalloonVisibilityState,
+    obs: &VisibilityObservations,
+    now_talk_time: Option<f64>,
+    timeout_secs: f64,
+    broken: &[u32],
+    content: &ContentDecisions,
+    logs: &mut Vec<VisibilityLogEvent>,
+) -> Vec<u32> {
+    // 現在時刻が分からないフレームは計測に一切触れない（起点未確立）。抑止の持ち越しも
+    // 止めるため、時刻が戻ったフレームで解除エッジが改めて立つ——表示を保持する側の縮退。
+    let Some(now) = now_talk_time else {
+        return Vec::new();
+    };
+
+    // 本フレームの発行を反映した可視 scope。真実源はあくまで観測値で、そこへ本フレームに
+    // 発行した表示・非表示を重ねる（第 2 の可視性帳簿を作らない）。表示は最後の行動なので、
+    // 中断や全消去で隠した直後に出し直した scope は可視として数える。
+    let visible: Vec<u32> = obs
+        .scopes
+        .iter()
+        .filter(|(scope, observed)| {
+            if content.shown.contains(scope) {
+                true
+            } else if content.cleared.contains(scope) || broken.contains(scope) {
+                false
+            } else {
+                observed.visible
+            }
+        })
+        .map(|(&scope, _)| scope)
+        .collect();
+
+    let suppression = observe_suppression(obs, &visible);
+    let suppressed = suppression.any();
+
+    // 表示終了信号の欠落（Requirement 4.8）: 可視コンテンツが現れたのに信号が 1 件も無い。
+    // 本番では占有終端の信号が当の cue の配信時点で送られるため、コンテンツより先に届く
+    // （`talk_lifecycle.rs` の Ordering 契約）。ここへ来るのは信号が失われた場合である。
+    if state.display_end.is_none() && !content.shown.is_empty() && !state.signal_gap_warned {
+        state.signal_gap_warned = true;
+        logs.push(VisibilityLogEvent::DisplayEndSignalMissing);
+    }
+
+    // 消す対象が 1 つも無くなったら計測は意味を失う（満了で消した直後もここを通る）。
+    if visible.is_empty()
+        && let Some(deadline) = state.deadline.take()
+    {
+        logs.push(VisibilityLogEvent::MeasurementDiscarded {
+            reason: MeasurementDiscardReason::NoVisibleScope,
+            deadline,
+        });
+    }
+
+    // 計測が成り立つ条件: 占有終端が確立し、現在時刻がそこに達し、消す対象が居ること。
+    // 占有終端が未確立の間は計測を始めない＝表示を保持する（Requirement 4.8）。
+    let eligible_display_end = match state.display_end {
+        Some(end) if now >= end && !visible.is_empty() => Some(end),
+        _ => None,
+    };
+
+    let released = state.prev_suppressed && !suppressed;
+    state.prev_suppressed = suppressed;
+
+    if released {
+        // 抑止が全て解けた。ここからは既定時間を**現在時刻起点で改めて**計り直す
+        // （Requirement 5.3——抑止前の残り時間を再開しない）。
+        state.suppress_logged = false;
+        if eligible_display_end.is_some() {
+            let deadline = now + timeout_secs;
+            state.deadline = Some(deadline);
+            logs.push(VisibilityLogEvent::MeasurementRestarted { now, deadline });
+        }
+    } else if let Some(display_end) = eligible_display_end
+        && state.deadline.is_none()
+    {
+        // 初期確立の起点は**占有終端**である（Requirement 4.1 の正典起点「スクリプトの表示が
+        // 終わってから」）。「計測が成り立った最初のフレームの現在時刻 + 既定時間」ではない
+        // ——観測はフレーム単位で飛び飛びに入るため、そちらを採ると観測の遅れがそのまま
+        // 満了のずれになる。中断による終了（Requirement 4.6）も占有終端が起点で、中断のみを
+        // 理由とする即時非表示の経路はこの段には無い。利用者のダブルクリックによる中断だけは
+        // 例外で、[`decide`] の別の段（[`decide_user_break`]）が占有終端を待たずに隠す
+        // （areka-P0-balloon-break 要件 4.1）。
+        let deadline = display_end + timeout_secs;
+        state.deadline = Some(deadline);
+        logs.push(VisibilityLogEvent::MeasurementStarted {
+            display_end,
+            deadline,
+        });
+    }
+
+    let Some(deadline) = state.deadline else {
+        return Vec::new();
+    };
+    // 非数の現在時刻はどちらの比較も偽になり、満了しない側（表示を保持する側）へ倒れる。
+    let expired = now >= deadline;
+    if !expired {
+        return Vec::new();
+    }
+
+    if suppressed {
+        // 抑止中の超過は保留し続ける（Requirement 5.6）。満了予定は消さず、解除エッジで
+        // 取り直す。記録は 1 回の抑止につき 1 件（Requirement 8.3）。
+        if !state.suppress_logged {
+            state.suppress_logged = true;
+            logs.push(VisibilityLogEvent::TimeoutSuppressed {
+                kinds: suppression,
+                deadline,
+            });
+        }
+        return Vec::new();
+    }
+
+    // 満了。本フレームに表示したばかりの scope は対象から外す——出してすぐ消す行動の対を
+    // 同じフレームで作らないための縮退で、表示を保持する側へ倒れる。外した scope は占有終端が
+    // 据え置かれたままなら次フレームで計測が立ち直り、そこで改めて満了する（消えないまま
+    // 固着はしない）。なお本番では、コンテンツを運ぶ cue そのものが配信時点で占有終端を先へ
+    // 押し出すため、この分岐は信号を失ったときにしか通らない。
+    let targets: Vec<u32> = visible
+        .into_iter()
+        .filter(|scope| !content.shown.contains(scope))
+        .collect();
+    if targets.is_empty() {
+        return Vec::new();
+    }
+
+    state.deadline = None;
+    for &scope in &targets {
+        if let Some(previous) = state.per_scope.get_mut(&scope) {
+            previous.prev_visible = false;
+        }
+        logs.push(VisibilityLogEvent::Transition {
+            scope,
+            trigger: VisibilityTrigger::Timeout,
+            visible: false,
+        });
+    }
+    targets
+}
+
+/// 本フレームに成立している抑止条件を数える（design「可視性の判断フロー」の抑止の式）。
+///
+/// 観測が取れなかった条件（`None`）は成立しない側へ倒す（Requirement 5.5——消えないまま
+/// 固着する側へ倒さない）。ポインタの滞在は**可視である scope に限って**効かせる——不可視の
+/// 間は離脱の通知が届かず、滞在の記録が残ったままだと恒久的な抑止に固着するためである。
+fn observe_suppression(obs: &VisibilityObservations, visible: &[u32]) -> SuppressionKinds {
+    let mut kinds = SuppressionKinds {
+        dragging: obs.dragging,
+        ..SuppressionKinds::default()
+    };
+    for (scope, observed) in &obs.scopes {
+        if observed.hover == Some(true) && visible.contains(scope) {
+            kinds.hover = true;
+        }
+        if observed.choice_active == Some(true) {
+            kinds.choice = true;
+        }
+    }
+    kinds
+}
