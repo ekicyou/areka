@@ -6,5 +6,5 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-repository.workspace = true
 publish = false # テストだけが使う道具
+repository.workspace = true

@@ -120,3 +120,4 @@
 - `cargo package`（引数なし）は .crate を `package/`・`package/tmp-crate/`・`package/tmp-registry/` の 3 か所に、`--dry-run` は後の 2 か所に出す。判定は両方に在る `tmp-crate` を読む（2.2）
 - 子の `pwsh -File` では `Write-Host` が標準出力へ出る。`-Pending` の人が読む行は `[Console]::Error`（`Say`）へ。workflow は `2>&1` で混ぜず、`$LASTEXITCODE` を見てから標準出力の名前を使う（途中で落ちると名前が一部だけ出ていることがある）（2.3）
 - 完了時にその場で解決: 公開の段の「版の形」「Release の確認」「残りの判定」で `[Console]::OutputEncoding` を UTF-8 にし、ランナーで日本語のログが化けないようにした（レビューの軽微な指摘）
+- 完了時にその場で解決: 完了の全体テストで `cargo about generate` が落ちた（cargo-about 0.9.2 の `synthesize_manifest` が `[package]` の終わり近くへ行を差し込む位置を相対の値で取り違え、理由の日本語の途中に当たる。LF の作業木で 22 本・手元は 1.1 で LF になった 2 本が踏んだ）。`publish` の行を `repository.workspace = true` の前へ移し、`[package]` の最後の行を ASCII にした（27 本）。tech.md に置き場の注意を足した

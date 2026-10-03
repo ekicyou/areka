@@ -5,8 +5,8 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-repository.workspace = true
 publish = false # 試験用の DLL
+repository.workspace = true
 
 [lib]
 name = "shiori_loadu"           # 出力を shiori_loadu.dll にする（既存 fixture の shiori.dll と衝突させない）

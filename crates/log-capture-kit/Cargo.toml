@@ -6,8 +6,8 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-repository.workspace = true
 publish = false # テストだけが使う道具
+repository.workspace = true
 
 [dependencies]
 # 硬化機構そのものの土台。Subscriber 実装・Dispatch（常駐 probe）・
