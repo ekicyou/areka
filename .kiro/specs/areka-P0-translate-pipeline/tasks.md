@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. 土台: 前提の確かめと、振る舞いを変えない部品
-- [ ] 1.1 emo2 の pasta が `OnTranslate` に 204 を返すことを実機で確かめ、実装前の比べる記録を採る
+- [x] 1.1 emo2 の pasta が `OnTranslate` に 204 を返すことを実機で確かめ、実装前の比べる記録を採る
   - 既存の `crates/areka-kanade/tests/kanade/real_helper_test.rs` と同じ補助プロセス経由の読み込みを使う使い捨ての `#[ignore]` テストで、本物の pasta（emo2・絶対パス）へ `OnTranslate` の GET を正典の Reference0〜3 の形で送る。根はワークツリーの `target\` の下に置く
   - 続きを待っているシーンがある状態（雑談の途中）でも 204 で、そのシーンの進み方が変わらないことを見る
   - main の版のまま、emo2 で起動 → 雑談 → 選択肢 → 終了を 1 周し、台詞の記録を `target\` の下に採っておく（6.2 で比べる相手）

@@ -373,3 +373,46 @@
 - [トランスレータ](https://ssp.shillest.net/ukadoc/manual/manual_translator.html) — 翻訳の順序とタイミング
 - [OnTranslate](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnTranslate:1) — Reference0〜3・「OnTranslate 自身では再度発生しない」
 - [YAYA docs: OnTranslateの使い方](https://yaya-shiori.github.io/yaya-docs/tips/on-translate-usage/) — 標準の辞書が Reference0 だけを読む例
+
+### 9.8 実装の最初の確かめ（2026-10-03・タスク 1.1）
+
+結論: **emo2 の pasta は `OnTranslate` に 204 を返す**。続きを待っている雑談の途中でも 204 で、その雑談の続きは `OnTranslate` を挟まない場合と同じように出る。実装はこのまま進めてよい。
+
+#### 使ったもの（すべてワークツリーの `target\` の下・絶対パス）
+- 補助プロセス: `C:\home\maz\git\areka\.claude\worktrees\areka-p0-translate-pipeline-2cf68b\target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe`（32bit・`cargo build -p shiori-host32-helper --target i686-pc-windows-msvc`）
+- pasta: `C:\home\maz\git\areka\.claude\worktrees\areka-p0-translate-pipeline-2cf68b\target\nar-samples\manual\emo2\ghost\emo2\ghost\master\pasta.dll`（`cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2` で展開した emo2）
+- 読み込みの手順は `crates/areka-kanade/tests/kanade/real_helper_test.rs` と同じ（親の窓 → 補助プロセスの起動 → HELLO → LOAD）。要求は手で組んだ SHIORI/3.0 の文字列をそのまま送り、Reference1 は**行ごと出さない**形（正典どおりの欠番）で送れた。確かめのための `#[ignore]` テストは `real_helper_test.rs` に一時的に足し、走らせた後に `git checkout` で消した（リポジトリに残っていない）。
+
+#### 送った要求と応答（1 回の読み込みの中で上から順に）
+
+| # | ID | Reference | 応答 |
+|---|---|---|---|
+| 1 | `OnBoot` | 0=`master` | **200**・起動の台詞（`\p[0]…こんばんわー！…夜の部、開幕やー！…\p[1]…夜更かしはお肌に悪いよ。…\e`）＝ pasta の Lua が読めている対照 |
+| 2 | `OnTranslate` | 0=#1 の台詞そのもの・1=欠番・2=`OnBoot`・3=`master` | **204 No Content** |
+| 3 | `OnTranslate` | 0=`\0テスト\e`・1=空文字・2=`OnSecondChange`・3=`0`〜`0` を 0x01 で連結 | **204 No Content**（今の線の層の「空文字で送る」形でも同じ） |
+| 4 | `OnSecondChange` | 0=`0`・1=`0`・2=`0`・3=`1`・4=`0` | 204（時計の初期化） |
+| 5 | `季節07月`（emo2 の辞書でチェイントークを持つシーンを名前で直に呼ぶ） | なし | **200**・前半（`…七夕やー！…短冊に願い事書かな！…何をお願いするの？…ひ・み・つ♪…ふーん？…\e`）。シーンは続きを待つ状態になる |
+| 6 | `OnTranslate` | 0=#5 の台詞そのもの・1=欠番・2=`OnSecondChange`・3=#3 と同じ | **204 No Content**（雑談の途中） |
+| 7 | `OnSecondChange` を 1 秒ごと | #4 と同じ | 25 回は 204、26 秒後に **200**・後半（`…七夕は置いといて、…天神祭の奉納花火のほうが見たいな。…わかってるやん！…あれめっちゃ最高やねん！…\e`） |
+
+- 比べる相手として、#6 だけを抜いた同じ手順をもう 1 回、別の読み込みで走らせた。26 秒後に同じ後半（同じ文・同じ待ち）が出た。違ったのは表情の 1 か所（`\s[静観]` と `\s[通常]`）だけで、これは pasta が表情を毎回くじで選ぶためで、#1 の起動の台詞でも同じ揺れが出ている。
+- よって、雑談の途中に `OnTranslate` を挟んでも続きは捨てられず、同じように進む（research §9.2 の見込みのとおり）。後半が出るまでの秒数は pasta の雑談の間隔（くじ）で決まり、どちらも 26 秒だったのはたまたま。
+- どちらの回も最後は正規の終了（unload）で `Clean`。
+
+記録: `C:\home\maz\git\areka\.claude\worktrees\areka-p0-translate-pipeline-2cf68b\target\translate-baseline\probe-with-translate.txt`（#6 あり）・`…\target\translate-baseline\probe-control-no-translate.txt`（#6 なし）
+
+#### 本 spec の前の版で採った比べる記録（タスク 6.2 で比べる相手）
+- 版: この確かめの時点の HEAD（`11cb22ca`・翻訳の仕組みはまだ無い）の `cargo build -p areka`。`target\debug\shiori-host32-helper.exe` は 32bit の版で上書きしてから起動した（64bit のままだと pasta の読み込みが 0x800700C1 で落ちる）。
+- 起動: `RUST_LOG=info,kanade=trace,areka_kanade=trace`・`AREKA_APP_SMOKE_EXIT_MS=420000`（自動の終了より先に手で終了した）で、`target\debug\areka.exe <emo2 のゴーストの絶対パス> <emo2-kakukaku の絶対パス>`。終了コード 0。
+- 1 周の中身（いずれも実機で手で操作）:
+  1. 起動: `OnFirstBoot`（Reference0=`0`）が台詞を返し、起動の台詞を再生（`boot_talk` talk_id=1）。画面の台詞は「OK？ まあ、これから、よろしゅうに！」「ちがうよう。よろしくね。」
+  2. 雑談: `OnSecondChange` 由来の `steady_talk` が talk_id=2〜8 の 7 回。
+  3. 選択肢: キャラをダブルクリック → `OnMouseDoubleClick` の台詞（emo2 のメニュー・選択肢 3 つ・雑談を置き換えて talk_id=9）→「おしゃべり頻度」（`Onおしゃべり頻度メニュー`・talk_id=10・選択肢 4 つ）→「ほどよく」（`Onほどよくおしゃべり`・talk_id=11）→「もどる」（`Onメインメニュー`・talk_id=12）→「閉じる」（`Onメニュー閉じる`・talk_id=13）。続けて雑談 1 回（talk_id=14）、もう一度ダブルクリック（talk_id=15）→「閉じる」（talk_id=16）。
+  4. 終了: 右クリックのメニュー →「終了」→ `OnClose`（Reference0=`user`）→ 終了の台詞（`close_talk_start` talk_id=17・画面は「またね～。」）→ `talk_done_quit` → `unload_clean` → `app_exit`。
+- 置き場所:
+  - 全体の記録: `C:\home\maz\git\areka\.claude\worktrees\areka-p0-translate-pipeline-2cf68b\target\translate-baseline\baseline-run.log`（1,857 行）
+  - 台詞の記録（再生の開始・選択・終了の行と、毎秒の `OnSecondChange` を除いた `shiori_request` の行を順に抜いたもの）: `…\target\translate-baseline\talk-record.txt`（100 行）
+- 6.2 で比べるときの注意:
+  - **今の版は台詞の本文を記録に残さない**（`steady_talk` などの行は talk_id と元のイベントだけ）。比べられるのは「どのイベントが台詞を返し、どの順で再生が始まったか」の並びと、画面の目視（起動・メニュー・終了の台詞）である。
+  - 雑談の回数と中身はくじで毎回変わる。比べてよいのは、起動（ただし 2 回目以降の起動は `OnFirstBoot` でなく `OnBoot` になりうる）・ダブルクリックのメニュー → 選択肢の連なり（台詞を返すイベントの名前と選択肢の数）・終了の握手の並び。
+  - マウスを動かした分の `OnMouseMove` の行は操作で変わるので差に数えない。
