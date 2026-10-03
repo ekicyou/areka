@@ -16,7 +16,7 @@ name = "areka"
 path = "src/main.rs"
 
 [dependencies]
-wintf = { version = "0.0.1", path = "../wintf" }
+wintf = { path = "../wintf" }
 shiori-abi = { path = "../shiori-abi" }
 areka-ghost = { path = "../areka-ghost" }
 areka-kanade = { path = "../areka-kanade" }

@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. 出すクレートと出さないクレートを設定に書き分ける
-- [ ] 1.1 `dola` の版の指定を根へ集め、出さない 3 クレートの `wintf` の版の指定を外す
+- [x] 1.1 `dola` の版の指定を根へ集め、出さない 3 クレートの `wintf` の版の指定を外す
   - 根の設定から、どのクレートにも効いていない `[workspace.package]` の `publish = false` を消す（決定 3）
   - 根の `[workspace.dependencies]` に `dola` の版とパスを足し、`wintf` の通常の依存をそこから受ける形にする（決定 1）
   - `areka`・`areka-emo-present`・`areka-emo-text` の `wintf` への依存から版の指定を外し、パスだけにする（決定 2）。`dola` を引くほかのクレートの行は触らない
