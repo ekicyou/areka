@@ -10,6 +10,7 @@ use super::*;
 use crate::change::{BootOrigin, ChangedFrom, KanadeNotice};
 use crate::msg::ShioriCall;
 use crate::schedule::step;
+use crate::status::ExecutionSnapshot;
 
 fn cfg(first_boot: bool, boot_origin: BootOrigin) -> KanadeConfig {
     let mut c = KanadeConfig::new("master", "1.0.0");
@@ -105,14 +106,14 @@ fn boot_root_table_picks_one_root_per_origin() {
     ] {
         let c = cfg(true, origin);
         assert_eq!(
-            parts(boot_root(&c)),
+            parts(boot_root(&initial(), &c)),
             parts(Some(events::on_first_boot(snap, 0)))
         );
     }
     // 起動記録あり＋切替で来た → OnGhostChanged（要件 4.1）。
     let c = cfg(false, BootOrigin::ChangedFrom(from()));
     assert_eq!(
-        parts(boot_root(&c)),
+        parts(boot_root(&initial(), &c)),
         parts(Some(events::on_ghost_changed(
             &from(),
             &c.shell_folder,
@@ -121,18 +122,21 @@ fn boot_root_table_picks_one_root_per_origin() {
     );
     // 起動記録あり＋ネットワーク更新で読み直した → 渡した名前と Reference の GET（要件 5.5）。
     assert_eq!(
-        parts(boot_root(&cfg(false, updated()))),
+        parts(boot_root(&initial(), &cfg(false, updated()))),
         Some(("OnUpdateComplete".to_string(), update_refs()))
     );
     // 起動記録あり＋それ以外 → 根なし（OnBoot だけ）。
-    assert!(boot_root(&cfg(false, BootOrigin::Plain)).is_none());
+    assert!(boot_root(&initial(), &cfg(false, BootOrigin::Plain)).is_none());
     assert!(
-        boot_root(&cfg(
-            false,
-            BootOrigin::Halted {
-                ghost_name: "B".to_string()
-            }
-        ))
+        boot_root(
+            &initial(),
+            &cfg(
+                false,
+                BootOrigin::Halted {
+                    ghost_name: "B".to_string()
+                }
+            )
+        )
         .is_none()
     );
 }
@@ -200,10 +204,7 @@ fn changed_from_with_script_skips_on_boot() {
         "OnBoot は 0 件のはず（GET が出ていない）"
     );
     assert!(matches!(next[0], Action::StartTalk(_)));
-    assert_notify(
-        &next[1],
-        &events::baseware_version(&c, &snapshot_of(&s.phase)),
-    );
+    assert_notify(&next[1], &events::baseware_version(&c, &s.snapshot()));
 }
 
 #[test]
@@ -326,10 +327,7 @@ fn updated_204_goes_to_steady_without_on_boot() {
         "OnBoot は 0 件のはず"
     );
     assert_eq!(next.len(), 1, "[basewareversion] の 1 件");
-    assert_notify(
-        &next[0],
-        &events::baseware_version(&c, &snapshot_of(&s.phase)),
-    );
+    assert_notify(&next[0], &events::baseware_version(&c, &s.snapshot()));
     logged_once(&events, tracing::Level::INFO, "boot_update_no_content");
     // 定常到達の通知がちょうど 1 件。
     let (s, done) = reply(s, ShioriOutcome::Notified, &c);
@@ -354,10 +352,7 @@ fn updated_with_script_plays_it_and_skips_on_boot() {
         Action::StartTalk(t) => assert_eq!(t.script, r"\0更新したよ\e"),
         _ => panic!("StartTalk のはず"),
     }
-    assert_notify(
-        &next[1],
-        &events::baseware_version(&c, &snapshot_of(&s.phase)),
-    );
+    assert_notify(&next[1], &events::baseware_version(&c, &s.snapshot()));
 }
 
 #[test]

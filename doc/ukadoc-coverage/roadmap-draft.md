@@ -241,6 +241,17 @@ spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 
 （3 つとも数え直した値で、引き算では出していない）。`[briefs].count` はこの 40 に合わせ、`snapshot_on` は
 行の集合に最後に手を入れた日として **2026-10-03** にした。
 
+**2026-10-03 の追加（2 行目）**: `areka-P0-sakura-time-critical` の行を 1 行足した。`areka-P0-status-execution-states` の
+完了の手続き（同 spec 要件 6.3）で、台帳 `ledger/sakura-script.toml` の `\t`（`ukadoc:list_sakura_script:_5ct:1`）の
+宛先をこの spec へ移したからである。この項目は 6.3 の記録で一度 `areka-P0-sakura-time-directives` へ送ったが、
+同じ日に `\t` と `Status` の timecritical を受け持つ専用の spec が起票されたので付け替えた。このため
+`areka-P0-sakura-time-directives` の `owner_count` は 10 のまま、`areka-P0-status-execution-states` は 4 から 3 へ
+変わった。項目は束「会話」に属するので、束の欄には「会話」を書き、段階 A の表と節の「会話」の行にこの spec を
+件数付きで足した（1 件は ⑴ にも ⑵ にも当たらないので、候補 spec 名の案の欄は変えていない）。足した行の中身は
+`stage = "A"`・`bundle = "会話"`・`owner_count = 1`・`wave = "C4 の候補"` で、ウェーブは正本のロードマップの
+写しである。行数は **41 行**で、うち束を持つ行が **27 行**・`none = true` の行が **14 行**である（3 つとも
+数え直した値）。`[briefs].count` はこの 41 に合わせた。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -274,7 +285,7 @@ spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 
 
 ```toml
 [briefs]
-count = 40
+count = 41
 snapshot_on = "2026-10-03"
 ```
 
@@ -413,7 +424,7 @@ wave = "W16"
 name = "areka-P0-status-execution-states"
 stage = "A"
 bundle = "動作モードの出入り"
-owner_count = 4
+owner_count = 3
 wave = "W15"
 
 [[spec]]
@@ -597,6 +608,13 @@ stage = "A"
 bundle = "会話"
 owner_count = 1
 wave = "C1-②"
+
+[[spec]]
+name = "areka-P0-sakura-time-critical"
+stage = "A"
+bundle = "会話"
+owner_count = 1
+wave = "C4 の候補"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -609,7 +627,7 @@ spec 台帳で、この表はそれを写した写真である。
 
 | 順位 | 束 | 候補 spec 名の案 | 依存する既存 spec | 波の案 |
 | ---: | --- | --- | --- | --- |
-| 1 | 会話 | `areka-P0-talk-script-canon` | `areka-P0-balloon-canon-residue`（W14・5 件）／`areka-P0-sakura-time-directives`（W16・4 件）／`areka-P0-anchor-tag-canon`（W17・1 件）／`areka-P0-status-execution-states`（W15・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件）／`areka-P0-choice-timeout-directive`（C1-②・1 件） | 第 1 波（先頭ウェーブ） |
+| 1 | 会話 | `areka-P0-talk-script-canon` | `areka-P0-balloon-canon-residue`（W14・5 件）／`areka-P0-sakura-time-directives`（W16・4 件）／`areka-P0-anchor-tag-canon`（W17・1 件）／`areka-P0-sakura-time-critical`（C4 の候補・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件）／`areka-P0-choice-timeout-directive`（C1-②・1 件） | 第 1 波（先頭ウェーブ） |
 | 2 | 窓の配置と重なり | `areka-P0-window-placement-canon` | `areka-P0-currentghost-property-tree`（W15・16 件）／`areka-P0-surfaces-basepos`（W13 任意／W14・2 件）／`areka-P0-sakura-time-directives`（W16・2 件）／`areka-P0-zorder-property`（W15・1 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件）／`areka-P0-sylphya-set-ledger`（完了・1 件） | 第 1 波（先頭ウェーブ） |
 | 3 | 名前の記憶 | `areka-P0-user-name-memory` | `areka-P0-currentghost-property-tree`（W15・1 件）／`areka-P0-package-mount`（完了・2 件）／`areka-P0-sylphya`（完了・2 件）／`areka-P0-sakura-dialogue-tags`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件） | 第 1 波（先頭ウェーブ） |
 | 4 | 起動と挨拶 | `areka-P0-boot-greeting-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-package-mount`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・3 件） | 第 1 波（先頭ウェーブ） |
@@ -740,7 +758,7 @@ spec 台帳で、この表はそれを写した写真である。
 - 現状: 構成 46 件の状態は実装済み 16・未対応 18・語彙のみ 10・縮退 2 で、`briefing.md` 7-7 が数えた「一般化で壊れる」75 件のうち 14 件がこの束にある。
 - 何が変わるか: 里々製・ヤヤ製の雛形が書く会話の綴りが素通りせずに再生され、バルーンの寿命と選択の待ちが台本の指定で決まるようになる。
 
-**依存する既存 spec**: `areka-P0-balloon-canon-residue`（W14・5 件）／`areka-P0-sakura-time-directives`（W16・5 件）／`areka-P0-anchor-tag-canon`（W17・1 件）／`areka-P0-status-execution-states`（W15・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件）
+**依存する既存 spec**: `areka-P0-sakura-time-directives`（W16・5 件）／`areka-P0-balloon-canon-residue`（W14・5 件）／`areka-P0-anchor-tag-canon`（W17・1 件）／`areka-P0-sakura-time-critical`（C4 の候補・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件）
 
 **構成 id（全 46 件）**
 

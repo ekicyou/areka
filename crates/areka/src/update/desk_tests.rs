@@ -426,6 +426,27 @@ fn a_gone_worker_is_reported_and_dropped_and_the_stage_stays_idle() {
     assert!(rig.raised().is_empty());
 }
 
+/// 最初の依頼で起こす背景スレッドへ窓口の通信中の数を渡す: 標準の手続きの照会の返事待ちの間、
+/// 差し替えた数が立っている（要件 2.1・プロセスの数には触れない）。
+#[test]
+fn the_spawned_worker_counts_on_the_desk_online() {
+    static ONLINE: OnlineCounter = OnlineCounter::new();
+    let mut rig = Rig::new("areka-update-desk-online");
+    {
+        let mut desk = rig.world.non_send_mut::<UpdateDesk>();
+        desk.worker = None;
+        desk.online = &ONLINE;
+    }
+    assert_eq!(rig.submit(UpdateReason::Script), SubmitVerdict::Started);
+    match rig.kanade.recv().expect("背景スレッドの照会が届く") {
+        KanadeMsg::ResourceQuery { reply, .. } => {
+            assert!(ONLINE.is_online(), "窓口の数が立っている");
+            drop(reply);
+        }
+        _ => panic!("ResourceQuery のはず"),
+    }
+}
+
 /// 二重起動の断りの種別は要求の先頭の対象（シェルが先頭なら Reference3 が `shell`）。
 #[test]
 fn a_double_start_led_by_a_shell_reports_shell() {

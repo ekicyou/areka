@@ -369,6 +369,7 @@ fn handle_call_forwards_rendered_status_to_backend() {
             status: ExecutionStatus::derive(&ExecutionSnapshot {
                 talk_active: true,
                 choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
             }),
         },
     );

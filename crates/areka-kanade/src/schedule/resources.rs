@@ -75,7 +75,7 @@ pub fn is_allowed_resource_id(id: &str) -> bool {
 ///
 /// SHIORI Resource `username` への GET 照会を組み立てる純粋関数（副作用なし・Req4.1）。既存イベント
 /// 構築関数（`events::*`）と同じく `snapshot` から [`ExecutionStatus`] を導出し、送出時点の実行状態を
-/// wire 証跡へ載せる。boot prefetch 段は talk 非アクティブ（[`ExecutionSnapshot::INACTIVE`]）で呼ぶ。
+/// wire 証跡へ載せる。boot prefetch 段は会話なしの作り方（`State::snapshot_without_talk`）で呼ぶ。
 ///
 /// References は持たない（正典 Resource GET は Reference を要しない）。応答（200 Value／204／失敗）の
 /// [`ResourceOutcome`] への写像・[`ResourceSink`] 呼出・完了固定ログは prefetch 段（`boot.rs`）が担う。
@@ -296,6 +296,7 @@ mod tests {
         let snapshot = ExecutionSnapshot {
             talk_active: true,
             choice_active: false,
+            ..ExecutionSnapshot::INACTIVE
         };
         let folded = shape_of(resource_username(&snapshot));
         assert_eq!(
@@ -311,6 +312,7 @@ mod tests {
         let call = resource_username(&ExecutionSnapshot {
             talk_active: true,
             choice_active: false,
+            ..ExecutionSnapshot::INACTIVE
         });
         let status = match call {
             ShioriCall::Get { status, .. } => status.render(),

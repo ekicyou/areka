@@ -431,7 +431,7 @@ pub fn on_close(reason: CloseReason, snapshot: &ExecutionSnapshot) -> ShioriCall
 /// `ShioriCall` 構築の単一列挙点へ回復する。通常握手の [`on_close`] は **GET** を返すため
 /// force_quit には流用できず（force_quit は NOTIFY を要する）、NOTIFY 版を別に増設する。
 /// 通常握手と違い、利用者起因でもスコープ番号（Ref1／Ref2）は載せない（Ref0 のみ）。
-/// snapshot は Unloading へ遷移後の [`ExecutionSnapshot::INACTIVE`] を渡す（DD-IT-4）。
+/// snapshot は Unloading へ遷移後の会話なしの作り方（`State::snapshot_without_talk`）を渡す（DD-IT-4）。
 pub fn on_close_notify(reason: CloseReason, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Notify {
         id: EventId::Static("OnClose"),

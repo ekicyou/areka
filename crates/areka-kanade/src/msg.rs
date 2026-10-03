@@ -20,6 +20,7 @@
 //! 存在しないため、NOTIFY 応答から talk を生成できないことが構造的に保証される。
 
 use crate::change::BootOrigin;
+use crate::online::{self, OnlineCounter};
 use crate::schedule::resources::ResourceOutcome;
 use crate::status::ExecutionStatus;
 use crate::talk::EpilogueCommand;
@@ -239,6 +240,8 @@ pub enum KanadeMsg {
         /// 結果の返信端。
         reply: areka_actor::ReplySender<crate::change::TalkGap>,
     },
+    /// 外から届いた実行状態の知らせ（UI → kanade）。状態の写しを更新するだけで運行は変えない。
+    ExecutionState(crate::status::ExecutionStateUpdate),
 }
 
 /// shiori アクター inbox（real／mock が同一型を受ける＝Req 5.1 の差し替え面）。
@@ -454,6 +457,8 @@ pub struct KanadeConfig {
     pub boot_origin: BootOrigin,
     /// シェルのフォルダ名（`OnGhostChanged` の Ref7・既定は `shell_name` の写し）。
     pub shell_folder: String,
+    /// 殻が毎メッセージ読む通信中の数（既定 `&online::PROCESS`・テストは関数内の `static` へ差し替える）。
+    pub online: &'static OnlineCounter,
 }
 
 impl KanadeConfig {
@@ -475,6 +480,7 @@ impl KanadeConfig {
             first_boot_epilogue: Vec::new(),
             choice_timeout_default_ms: 30_000,
             boot_origin: BootOrigin::Plain,
+            online: &online::PROCESS,
         }
     }
 }
@@ -624,6 +630,8 @@ mod tests {
                 KanadeMsg::RaiseEvent { .. } => "RaiseEvent",
                 // 台詞の切れ目の口（additive・既存の判別結果を変えない）。
                 KanadeMsg::AwaitTalkGap { .. } => "AwaitTalkGap",
+                // 外から届いた実行状態の知らせ（additive・既存の判別結果を変えない）。
+                KanadeMsg::ExecutionState(_) => "ExecutionState",
             }
         }
         let existing = [

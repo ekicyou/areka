@@ -14,6 +14,7 @@ use std::sync::mpsc::Sender;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, SystemTime};
 
+use areka_kanade::online::OnlineCounter;
 use areka_update::{Fetch, FetchError, WinHttpFetch};
 
 use crate::install::{InstallOrigin, RawInstallRequest};
@@ -141,26 +142,33 @@ fn sweep_old(dir: &Path, now: SystemTime) -> usize {
 }
 
 /// 短命のスレッド `install-fetch` を起こし、落とし終えたら `RawInstallRequest { origin: Script }` を送る。
-/// スレッドは待たない（終了でも待たない）。
+/// スレッドは待たない（終了でも待たない）。取得の間はプロセスの通信中の数を立てる（要件 2.2）。
 pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>) {
     let make: MakeFetch = Box::new(|| Ok(Box::new(WinHttpFetch::new()?) as Box<dyn Fetch>));
     // 手放す＝待たない（要件 7.5）。
-    drop(spawn_download_with(url, tx, download_dir(), make));
+    drop(spawn_download_with(
+        url,
+        tx,
+        download_dir(),
+        make,
+        &areka_kanade::online::PROCESS,
+    ));
 }
 
-/// [`spawn_download`] の一時フォルダと取得口の作り方を差し替える口。起こせなければ
+/// [`spawn_download`] の一時フォルダと取得口の作り方と通信中の数を差し替える口。起こせなければ
 /// `error!(install_fetch_failed)` で `None`。
 pub(crate) fn spawn_download_with(
     url: String,
     tx: Sender<RawInstallRequest>,
     dir: PathBuf,
     make: MakeFetch,
+    online: &'static OnlineCounter,
 ) -> Option<JoinHandle<()>> {
     let spawned = thread::Builder::new()
         .name("install-fetch".to_owned())
         .spawn({
             let url = url.clone();
-            move || fetch_and_send(&url, make, &dir, SystemTime::now(), &tx)
+            move || fetch_and_send(&url, make, &dir, SystemTime::now(), &tx, online)
         });
     match spawned {
         Ok(handle) => Some(handle),
@@ -172,13 +180,16 @@ pub(crate) fn spawn_download_with(
 }
 
 /// スレッドの中身（取得口を作る → 落とす → 送る）。失敗は `error!` 1 件で依頼 0。
+/// 関数の間は `online` を立て、どの経路で抜けても戻す（要件 2.2・2.3）。
 pub(crate) fn fetch_and_send(
     url: &str,
     make: MakeFetch,
     dir: &Path,
     now: SystemTime,
     tx: &Sender<RawInstallRequest>,
+    online: &'static OnlineCounter,
 ) {
+    let _online = online.begin("install-fetch");
     tracing::info!(
         event = "install_fetch_begin",
         url,

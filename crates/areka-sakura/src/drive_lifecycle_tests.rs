@@ -737,3 +737,79 @@ fn talkdone_reason_is_compiled_end_while_firing_time_is_horizon_derived() {
     );
     handle.actor.join().expect("body は正常終了する");
 }
+
+// ── 受け口を落としてから終わりを知らせる（areka-P0-status-execution-states 要件 3.4） ──
+
+/// 落ちるときに印を 1 つ送る受け口（受け口の最後の合図＝落ちる時の送出を模す）。
+///
+/// 印を送る前に [`NEG_WINDOW`] だけ待つ。受け口を落とすのが `TalkDone` の後なら、その間に
+/// `TalkDone` が届いて印はまだ無い（赤）。前なら `TalkDone` は印より後にしか出ない（緑）。
+/// 偶然の速さで「落とすのが送出の直後」でも印が先に見えてしまう誤りの緑をこれで消す。
+struct DropMarkerSink {
+    tx: mpsc::Sender<()>,
+}
+
+impl CueSink for DropMarkerSink {
+    fn emit(&mut self, _cue: crate::contract::TalkCue) {}
+}
+
+impl Drop for DropMarkerSink {
+    fn drop(&mut self) {
+        std::thread::sleep(NEG_WINDOW);
+        let _ = self.tx.send(());
+    }
+}
+
+/// 受け口を 1 本だけ持つ talk を起こし、（done の受信端・印の受信端・ハンドル）を返す。
+fn spawn_with_drop_marker(
+    talk_id: TalkId,
+) -> (mpsc::Receiver<TalkNotice>, mpsc::Receiver<()>, TalkHandle) {
+    let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
+    let (marker_tx, marker_rx) = mpsc::channel::<()>();
+    let handle = spawn_talk(
+        StartTalk {
+            epilogue: Vec::new(),
+            script: r"\s[10]hello\_w[100]world\e".to_string(),
+            talk_id,
+        },
+        done_tx,
+        vec![Box::new(DropMarkerSink { tx: marker_tx })],
+        SystemVarSnapshot::default(),
+    );
+    (done_rx, marker_rx, handle)
+}
+
+/// 自然終端: `TalkDone` を受け取った時点で、受け口は既に落ちて最後の合図を送り終えている。
+///
+/// 配送は自然終端で合流を待たずに次のトークを起こすので、受け口の最後の合図（中断の旗の
+/// `TalkEnded`）が `TalkDone` より後に出ると、次のトークの合図を追い越されて旗を誤って下ろす。
+#[test]
+fn natural_end_drops_sinks_before_talk_done() {
+    let (done_rx, marker_rx, handle) = spawn_with_drop_marker(TalkId(201));
+    handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+    let done = recv_done(&done_rx, Duration::from_secs(5)).expect("自然終端の TalkDone");
+    assert_eq!(done.reason, TalkEndReason::Ended);
+    assert_eq!(
+        marker_rx.try_recv(),
+        Ok(()),
+        "TalkDone を受け取った時点で受け口は落ちている（最後の合図が TalkDone より前）"
+    );
+    handle.actor.join().expect("body は正常終了する");
+}
+
+/// 駆動中の中断: `TalkDone{Interrupted}` を受け取った時点で、受け口は既に落ちている。
+#[test]
+fn close_while_driving_drops_sinks_before_interrupted() {
+    let (done_rx, marker_rx, handle) = spawn_with_drop_marker(TalkId(202));
+    handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+    handle.inbox.send(SakuraMsg::Close).unwrap();
+    let done = recv_done(&done_rx, Duration::from_secs(5)).expect("中断の TalkDone");
+    assert_eq!(done.reason, TalkEndReason::Interrupted);
+    assert_eq!(
+        marker_rx.try_recv(),
+        Ok(()),
+        "Interrupted を受け取った時点で受け口は落ちている（最後の合図が中断の知らせより前）"
+    );
+    handle.actor.join().expect("body は正常終了する");
+}

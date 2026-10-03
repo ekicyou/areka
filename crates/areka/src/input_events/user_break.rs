@@ -10,7 +10,7 @@
 
 use std::sync::mpsc::{Receiver, Sender};
 
-use areka_kanade::KanadeMsg;
+use areka_kanade::{ExecutionStateUpdate, KanadeMsg};
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
 use wintf::ecs::Input;
@@ -27,6 +27,9 @@ pub(crate) struct UserBreakWiring {
     flag_rx: Receiver<NoUserBreakSignal>,
     /// 中断を禁じる旗（要件 5）。
     no_user_break: bool,
+    /// kanade へ最後に届けた旗（areka-P0-status-execution-states 要件 3.1・3.2）。送れなかった
+    /// 値は記録しない（次に合図が届いた取り出しで送り直す）。
+    reported_no_user_break: bool,
     /// 表示の合図の線の送出端の複製（「中断された」を送る）。
     lifecycle_tx: Sender<TalkLifecycleSignal>,
     /// 運行（kanade）への送出端の複製。
@@ -45,15 +48,15 @@ impl UserBreakWiring {
         Self {
             flag_rx,
             no_user_break: false,
+            reported_no_user_break: false,
             lifecycle_tx,
             kanade,
             prev_press_selected: false,
         }
     }
 
-    /// 旗の読み口（要件 5.7）。読む者はまだ居ないので、運行の側への通知は作っていない。
-    // 要件 5.7 が「開けておく」と定めた読み口で、本番にまだ読み手が無い。読むのは兄弟テストだけである。
-    #[allow(dead_code)]
+    /// 旗の読み口（要件 5.7）。読み手は [`drain_no_user_break_signals`] の送出で、畳んだ後の旗を
+    /// kanade へ届ける（areka-P0-status-execution-states 要件 3.1・3.2）。
     pub(crate) fn no_user_break(&self) -> bool {
         self.no_user_break
     }
@@ -119,13 +122,15 @@ pub(crate) fn judge_press(
 /// 中断を禁じる旗の畳み込み（純関数）。返り値は（次の旗, 区間外の「出る」だったか）。
 ///
 /// 入れ子は数えない——「入る」が重なっても旗は 1 本で、「出る」1 回で区間から出る
-/// （要件 5.5）。トークの始まりは閉じ忘れた区間を解く契機である（要件 5.4）。
+/// （要件 5.5）。トークの終わりで旗を下ろす（areka-P0-status-execution-states 要件 3.3・3.4）。
+/// トークの始まりでも閉じ忘れた区間を解く（要件 5.4・トークの終わりとの二重の守り）。
 /// 区間外の「出る」は旗を変えず、呼び手が記録できるように第 2 の返り値で伝える（要件 5.6）。
 pub(crate) fn fold_no_user_break(flag: bool, signal: NoUserBreakSignal) -> (bool, bool) {
     match signal {
         NoUserBreakSignal::Enter => (true, false),
         NoUserBreakSignal::Leave => (false, !flag),
         NoUserBreakSignal::TalkStarted => (false, false),
+        NoUserBreakSignal::TalkEnded => (false, false),
     }
 }
 
@@ -133,11 +138,18 @@ pub(crate) fn fold_no_user_break(flag: bool, signal: NoUserBreakSignal) -> (bool
 ///
 /// 旗が変わったときと、区間外の「出る」を記録する（要件 5.6・6.3）。持ち物が無い（結線前）は
 /// 取り出す線そのものが無いので、何もしない。
+///
+/// 全件畳んだ**後**の旗が kanade へ最後に届けた値と違えば、知らせを 1 件だけ送る（途中の値は
+/// 送らない・areka-P0-status-execution-states 要件 3.1〜3.4）。比べるのは合図が届いた巡だけで、
+/// 送れなかったときは error を記録し、最後に届けた値を変えない＝次に合図が届いた巡で送り直す
+/// （要件 7.1）。
 pub(crate) fn drain_no_user_break_signals(world: &mut World) {
     let Some(mut wiring) = world.get_non_send_mut::<UserBreakWiring>() else {
         return;
     };
+    let mut drained = false;
     while let Ok(signal) = wiring.flag_rx.try_recv() {
+        drained = true;
         let (value, leave_outside) = fold_no_user_break(wiring.no_user_break, signal);
         if value != wiring.no_user_break {
             wiring.no_user_break = value;
@@ -153,6 +165,20 @@ pub(crate) fn drain_no_user_break_signals(world: &mut World) {
                 "区間外の leave,nouserbreakmode: 旗は下りたまま"
             );
         }
+    }
+    let value = wiring.no_user_break();
+    if !drained || value == wiring.reported_no_user_break {
+        return;
+    }
+    let msg = KanadeMsg::ExecutionState(ExecutionStateUpdate::NoUserBreak(value));
+    if wiring.kanade.send(msg).is_ok() {
+        wiring.reported_no_user_break = value;
+    } else {
+        tracing::error!(
+            event = "no_user_break_send_failed",
+            value,
+            "運行の側へ中断の無効化モードの変化を渡せない（受け手が消えている）"
+        );
     }
 }
 

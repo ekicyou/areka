@@ -703,6 +703,36 @@ mod tests {
             "Status 値が Reference 行を汚染してはならない:\n{s}"
         );
     }
+
+    /// 複合した値 `talking,balloon(0=2/1=0)` が `Status:` 行にそのまま書かれ、行の位置が
+    /// 今までどおり `Sender` の直後・`ID` の直前であることを、リクエスト全文の逐語で固定する
+    /// （areka-P0-status-execution-states 要件 1.5・8.2）。
+    #[test]
+    fn build_compound_status_full_request_is_verbatim_in_place() {
+        let references = ["0".to_owned(), "0".to_owned()];
+        let req = ShioriRequest {
+            method: Method::Get,
+            id: "OnSecondChange",
+            references: &references,
+            sender: "areka",
+            status: Some("talking,balloon(0=2/1=0)"),
+            charset: Charset::UTF_8,
+        };
+        let bytes = build_request(&req).bytes;
+        let s = std::str::from_utf8(&bytes).expect("valid UTF-8");
+        assert_eq!(
+            s,
+            "GET SHIORI/3.0\r\n\
+             Charset: UTF-8\r\n\
+             Sender: areka\r\n\
+             Status: talking,balloon(0=2/1=0)\r\n\
+             ID: OnSecondChange\r\n\
+             Reference0: 0\r\n\
+             Reference1: 0\r\n\
+             SecurityLevel: local\r\n\
+             \r\n"
+        );
+    }
 }
 
 #[cfg(test)]

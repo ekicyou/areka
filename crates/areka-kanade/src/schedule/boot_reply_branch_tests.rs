@@ -1,6 +1,7 @@
 use super::test_support::{assert_get, assert_notify, config, initial};
 use super::*;
 use crate::schedule::{ActiveTalk, step};
+use crate::status::ExecutionSnapshot;
 
 // ========================================================================
 // タスク 6.2: username リソース照会 prefetch（OnInitialize 後・OnFirstBoot 前・R4.1/R9.3）
@@ -417,6 +418,7 @@ fn boot_greeting_talk_carries_epilogue() {
         change: None,
         pending_change: None,
         talk_gap: None,
+        external: Default::default(),
     };
     let (_, actions) = step(s, reply(ShioriOutcome::Value("greeting".to_string())), &cfg);
     let st = start_talk_of(&actions);
@@ -487,6 +489,7 @@ fn normal_204_with_empty_epilogue_emits_no_talk() {
         change: None,
         pending_change: None,
         talk_gap: None,
+        external: Default::default(),
     };
     let (s, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);
     assert!(
@@ -533,6 +536,7 @@ fn boot_active_talk_records_started_script() {
         change: None,
         pending_change: None,
         talk_gap: None,
+        external: Default::default(),
     };
     let (s, actions) = step(s, reply(ShioriOutcome::Value("greeting".to_string())), &cfg);
     assert_eq!(start_talk_of(&actions).script, "greeting");
@@ -554,6 +558,7 @@ fn boot_active_talk_records_started_script() {
         change: None,
         pending_change: None,
         talk_gap: None,
+        external: Default::default(),
     };
     let (s, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);
     assert_eq!(start_talk_of(&actions).script, "");

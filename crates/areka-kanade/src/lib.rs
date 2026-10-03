@@ -26,6 +26,7 @@ pub mod change;
 // 殻で答える複数件のリソース照会（`KanadeMsg::ResourceQuery`）。`actor.rs` を薄く保つための分室。
 mod actor_resources;
 pub mod msg;
+pub mod online;
 // schedule の消費者はランタイム層の actor.rs シェル（[`crate::actor::spawn_kanade`]）。
 // schedule 内には後続タスクが埋めるフェーズ分岐スタブが残り lib ビルドから未使用となるため、
 // クレート全体は `#[allow(dead_code)]` を付さず schedule 側の該当箇所に限局する（下記）。
@@ -45,11 +46,15 @@ pub use msg::{
     MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriCall, ShioriDownKind,
     ShioriFailure, ShioriFault, ShioriFaultKind, ShioriMsg, ShioriOutcome,
 };
+pub use online::{OnlineCounter, OnlineGuard};
 pub use shiori::{
     CutGuard, ShioriBackend, ShioriBusy, ShioriConnection, ShioriCut, ShioriProbe, ShioriUnblock,
     WaitBudget, spawn_shiori_actor,
 };
-pub use status::{ExecutionSnapshot, ExecutionState, ExecutionStatus};
+pub use status::{
+    BalloonBinding, ExecutionSnapshot, ExecutionState, ExecutionStateUpdate, ExecutionStatus,
+    ExternalStates,
+};
 pub use talk::{ChoiceWaiting, StartTalk, TalkCommand, TalkDone, TalkEndReason, TalkId};
 
 /// ukadoc Reference 表の実装正本（純粋関数群）を露出する公開ファサード（DD-9 例外）。

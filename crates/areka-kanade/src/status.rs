@@ -13,13 +13,14 @@
 //! パラメータ付き状態の下位書式は ukadoc 正典どおり内部区切りに `/` を用いる
 //! （`opening(communicate/input/teach/dialog)`／`balloon(0=2/1=0)`）。トップレベルの状態
 //! 連結は `,` であり、内部 `/` と分離されているため `,` 分割が曖昧にならない。実 SSP 2.3.86 は
-//! `balloon(0=2,1=0)` を送る差異があるが、M1 は両状態とも非アクティブ＝送出せず実害ゼロであり、
-//! 実導出の解禁時に消費側互換を台帳 spec（`areka-P0-status-execution-states`）で決着させる。
+//! `balloon(0=2,1=0)` を送る差異があるが、areka は ukadoc 正典の `/` を送る
+//! （`areka-P0-status-execution-states` で `balloon` を実導出・SSP 実測主義は取らない）。
 
 /// ukadoc `Status [SSP拡張]` の実行状態語彙（正典全10状態を第一級保持）。
 ///
-/// M1 で実導出するのは `Talking`（idle-talk）と `Choosing`（choice-select-events）の 2 状態。
-/// 残8状態は語彙に留め、非アクティブへ縮退する（Req2.5）。
+/// 実導出するのは `Talking`（idle-talk）・`Choosing`（choice-select-events）と、
+/// `NoUserBreak`・`Online`・`Balloon`（status-execution-states）の 5 状態。
+/// 残 5 状態は語彙に留め、非アクティブへ縮退する（status-execution-states Req6.1/6.2）。
 /// variant の宣言順は正典の語彙定義順（Data Model の正典順）そのものである。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecutionState {
@@ -117,8 +118,11 @@ impl OpeningKind {
 pub struct BalloonBindings(Vec<BalloonBinding>);
 
 impl BalloonBindings {
-    /// 束縛列から構成する。
-    pub fn new(bindings: Vec<BalloonBinding>) -> Self {
+    /// 束縛列から構成する。`character_id` 昇順へ安定整列し、同じ `character_id` は先頭だけ残す
+    /// （不変条件「昇順・重複なし」を構成の時点で保証する・`ExecutionStatus::from_states` と同じ流儀）。
+    pub fn new(mut bindings: Vec<BalloonBinding>) -> Self {
+        bindings.sort_by_key(|b| b.character_id);
+        bindings.dedup_by_key(|b| b.character_id);
         BalloonBindings(bindings)
     }
 
@@ -155,7 +159,7 @@ impl ExecutionStatus {
         ExecutionStatus { states }
     }
 
-    /// 単一の導出表（正典順の10行）。M1 は 2 行を実導出し、残8行は非アクティブ確定＋シーム注記。
+    /// 単一の導出表（正典順の10行）。5 行を実導出し、残 5 行は非アクティブ確定＋持ち主の注記。
     /// スナップショットのみに依存する純関数（時刻・IO・グローバル状態を読まない）。
     pub fn derive(snapshot: &ExecutionSnapshot) -> ExecutionStatus {
         let mut states: Vec<ExecutionState> = Vec::new();
@@ -172,14 +176,25 @@ impl ExecutionStatus {
         if snapshot.choice_active {
             states.push(ExecutionState::Choosing);
         }
-        //  2. minimizing   ← SEAM(Req2.5): 源 areka-P0-status-execution-states（台帳）。M1 非アクティブ確定。
-        //  3. induction    ← SEAM(Req2.5): 源 areka-P0-status-execution-states（台帳）。M1 非アクティブ確定。
-        //  4. passive      ← SEAM(Req2.5): 源 areka-P0-status-execution-states（台帳）。M1 非アクティブ確定。
-        //  5. timecritical ← SEAM(Req2.5): 源 areka-P0-status-execution-states（台帳）。M1 非アクティブ確定。
-        //  6. nouserbreak  ← SEAM(Req2.5): 源 areka-P0-status-execution-states（台帳）。M1 非アクティブ確定。
-        //  7. online       ← SEAM(Req2.5): 源 areka-P0-status-execution-states（台帳）。M1 非アクティブ確定。
-        //  8. opening       ← SEAM(Req2.5): 源 areka-P0-status-execution-states（台帳）。M1 非アクティブ確定。
-        //  9. balloon      ← SEAM(Req2.5): 源 areka-P0-status-execution-states（台帳）。M1 非アクティブ確定。
+        //  2. minimizing   ← SEAM(Req6.1/6.3): 出どころ未着地。持ち主＝要件 6.3 の宛先。非アクティブ確定。
+        //  3. induction    ← SEAM(Req6.1/6.3): 出どころ未着地。持ち主＝要件 6.3 の宛先。非アクティブ確定。
+        //  4. passive      ← SEAM(Req6.1/6.3): 出どころ未着地。持ち主＝要件 6.3 の宛先。非アクティブ確定。
+        //  5. timecritical ← SEAM(Req6.1/6.3): 出どころ未着地。持ち主＝要件 6.3 の宛先。非アクティブ確定。
+        //  6. nouserbreak  ← snapshot.no_user_break（実導出・areka-P0-status-execution-states Req3）
+        if snapshot.no_user_break {
+            states.push(ExecutionState::NoUserBreak);
+        }
+        //  7. online       ← snapshot.online（実導出・areka-P0-status-execution-states Req2）
+        if snapshot.online {
+            states.push(ExecutionState::Online);
+        }
+        //  8. opening      ← SEAM(Req6.1/6.3): 出どころ未着地。持ち主＝要件 6.3 の宛先。非アクティブ確定。
+        //  9. balloon      ← snapshot.balloons（実導出・Req4。空の組は行を出さない＝Req4.4）
+        if !snapshot.balloons.is_empty() {
+            states.push(ExecutionState::Balloon(BalloonBindings::new(
+                snapshot.balloons.clone(),
+            )));
+        }
 
         ExecutionStatus::from_states(states)
     }
@@ -203,7 +218,9 @@ impl ExecutionStatus {
 /// リクエスト送出時点のゴースト実行状態スナップショット。
 /// `Status` 実行状態集合と OnSecondChange の Reference 値の**共通の源**であり、
 /// 両者の不整合（例: Ref3="1" かつ `Status: talking`）を構造的に排除する（DD-IT-3）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// `balloons` が `Vec` を持つため `Copy` は持たない（`Clone` で複製する）。
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionSnapshot {
     /// トーク再生中か。源＝運行状態 `Phase::Steady{talk: Some(_)}`（Req2.4）。
     /// `Status: talking`（Req2.4/2.7）と Reference3（Req1.4/1.5）の双方を駆動する。
@@ -214,29 +231,76 @@ pub struct ExecutionSnapshot {
     /// `Status: choosing`（Req6.1/6.2）を駆動する。talk slot の占有は選択待ち中も継続する
     /// ため、`talk_active` と同時に真になり複合値 `talking,choosing` を成す（裁定 6）。
     pub choice_active: bool,
+    /// 再生中のトークが中断の無効化モード中か（`\![enter,nouserbreakmode]`〜`\![leave,…]`）。
+    /// 源＝kanade の写し（UI の中断を禁じる旗）。再生中でないときに真にしないのは作り手
+    /// （`State`）の責務であり、導出表は欄をそのまま写す。`Status: nouserbreak` を駆動する。
+    pub no_user_break: bool,
+    /// ネットワーク通信中か（更新の手続き・URL からのダウンロード）。源＝プロセスに 1 つの
+    /// 通信中の数を殻が写した値。`Status: online` を駆動する。
+    pub online: bool,
+    /// 見えているバルーンの組（`charID=balloonID`）。空なら `balloon` を出さない。
+    /// 源＝UI のバルーン可視性の相が差分で送る写し。`Status: balloon(…)` を駆動する。
+    pub balloons: Vec<BalloonBinding>,
     // SEAM(Req1.6): 見切れ／重なりの実測供給時に `offscreen`／`overlapping` を追加する。
     //   源＝窓 geometry（UI スレッド）・運搬＝Tick 付帯。所有＝将来増分（本 spec 外）。
-    // SEAM(Req2.5/2.6): 各実行状態の源が着地したらフィールドを 1 本追加し、導出表の該当行を差し替える。
-    //   balloon/minimizing/induction/passive/timecritical/nouserbreak/online/opening
-    //                   → areka-P0-status-execution-states（台帳）
+    // SEAM(Req6.3): minimizing/induction/passive/timecritical/opening は出どころが着地したら
+    //   フィールドを 1 本追加し、導出表の該当行を差し替える（持ち主＝要件 6.3 の宛先）。
     //
-    // NOTE(シームの実体＝「フィールド 1 本」では閉じない): 源が Phase の外にある状態
-    //   （窓 geometry・Tick 付帯で運ばれる minimizing/balloon/opening・Ref1/Ref2）は
-    //   `snapshot_of(&Phase)` の入力に届かないため、シーム発動時は**供給側の署名を広げる**
-    //   （将来形 `snapshot_of(&Phase, &TickExtras)`）ことがシームに含まれる。
-    //   Req1.6/2.6 が不変を保証するのは **wire 送出契約**（カンマ連結書式・ヘッダ位置・
-    //   空集合→行省略・Reference 連番）であって内部シグネチャではない。
-    //   `choice_active` はこの NOTE の**最初の実例**である: 源（選択帳簿）は `Phase` の外に
-    //   あるため、供給側は `State::snapshot(&self)`（`schedule/mod.rs`）へ広がった。
-    //   送出契約（連結順序・区切り・空集合→行省略）は無改変のままである（Req6.3）。
+    // NOTE(シームの実体＝「フィールド 1 本」では閉じない): 源が Phase の外にある状態は、
+    //   欄に加えて**作り手**（`schedule/mod.rs` の `State::snapshot`／`State::snapshot_without_talk`
+    //   ——本番のスナップショットはこの 2 つからしか作らない）へ材料を届ける運搬も要る。
+    //   `choice_active`（源＝選択帳簿）と、写し（`ExternalStates`）から作る `no_user_break`・
+    //   `online`・`balloons` がその実例である。不変を保証するのは **wire 送出契約**
+    //   （カンマ連結書式・ヘッダ位置・空集合→行省略・Reference 連番）であって内部シグネチャではない。
 }
 
 impl ExecutionSnapshot {
-    /// 全実行状態が非アクティブなスナップショット（boot 系列・close 系列・ForceQuit 後）。
+    /// 全実行状態が非アクティブなスナップショット（テストと構造体リテラルの既定値の継ぎ足し用）。
+    /// 本番の送出は `State::snapshot`／`State::snapshot_without_talk` から作り、これを直接渡さない。
     pub const INACTIVE: ExecutionSnapshot = ExecutionSnapshot {
         talk_active: false,
         choice_active: false,
+        no_user_break: false,
+        online: false,
+        balloons: Vec::new(),
     };
+}
+
+/// 外から届いた実行状態の写し（kanade の `State` が持つ・ゴーストごとに新品）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ExternalStates {
+    /// UI の中断を禁じる旗の写し（UI の旗を遅れて追う鏡。トークの境界で勝手に下ろさない）。
+    pub no_user_break: bool,
+    /// 通信中か（殻が `online::PROCESS` から毎メッセージ写す）。
+    pub online: bool,
+    /// 見えているバルーンの組（UI の可視性の相が差分で送る・`character_id` 昇順）。
+    pub balloons: Vec<BalloonBinding>,
+}
+
+/// UI から kanade への知らせ（`KanadeMsg::ExecutionState` の中身）。online は殻が読むので無い。
+/// 値は増分ではなく「今の状態」そのものであり、落ちても次の変化で正しくなる。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExecutionStateUpdate {
+    NoUserBreak(bool),
+    Balloons(Vec<BalloonBinding>),
+}
+
+impl ExternalStates {
+    /// 知らせを写しへ反映する（純関数・返り値は写しが変わったか）。
+    pub fn apply(&mut self, update: ExecutionStateUpdate) -> bool {
+        match update {
+            ExecutionStateUpdate::NoUserBreak(value) => {
+                std::mem::replace(&mut self.no_user_break, value) != value
+            }
+            ExecutionStateUpdate::Balloons(balloons) => {
+                if self.balloons == balloons {
+                    return false;
+                }
+                self.balloons = balloons;
+                true
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -324,6 +388,7 @@ mod tests {
         let talking = ExecutionStatus::derive(&ExecutionSnapshot {
             talk_active: true,
             choice_active: false,
+            ..ExecutionSnapshot::INACTIVE
         });
         assert_eq!(talking.render(), Some("talking".to_string()));
 
@@ -335,7 +400,8 @@ mod tests {
         assert_eq!(
             ExecutionStatus::derive(&ExecutionSnapshot {
                 talk_active: true,
-                choice_active: false
+                choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
             })
             .render(),
             Some("talking".to_string())
@@ -359,6 +425,7 @@ mod tests {
             let rendered = ExecutionStatus::derive(&ExecutionSnapshot {
                 talk_active,
                 choice_active,
+                ..ExecutionSnapshot::INACTIVE
             })
             .render();
             assert_eq!(
@@ -369,9 +436,82 @@ mod tests {
         }
     }
 
+    fn binding(character_id: u32, balloon_id: u32) -> BalloonBinding {
+        BalloonBinding {
+            character_id,
+            balloon_id,
+        }
+    }
+
+    /// 要件 1.1/4.3/4.4: nouserbreak・online・balloon の 3 行が欄をそのまま写し、
+    /// 正典順で連結され、空の組では `balloon` を出さない（全組み合わせは兄弟テストが固定する）。
+    #[test]
+    fn derive_maps_nouserbreak_online_and_balloon_rows() {
+        let all = ExecutionSnapshot {
+            talk_active: true,
+            choice_active: true,
+            no_user_break: true,
+            online: true,
+            balloons: vec![binding(0, 2), binding(1, 0)],
+        };
+        assert_eq!(
+            ExecutionStatus::derive(&all).render().as_deref(),
+            Some("talking,choosing,nouserbreak,online,balloon(0=2/1=0)")
+        );
+        let online_only = ExecutionSnapshot {
+            online: true,
+            ..ExecutionSnapshot::INACTIVE
+        };
+        assert_eq!(
+            ExecutionStatus::derive(&online_only).render().as_deref(),
+            Some("online")
+        );
+        // 空の組は `balloon()` を出さない（要件 4.4）。
+        let talking_no_balloon = ExecutionSnapshot {
+            talk_active: true,
+            balloons: Vec::new(),
+            ..ExecutionSnapshot::INACTIVE
+        };
+        assert_eq!(
+            ExecutionStatus::derive(&talking_no_balloon)
+                .render()
+                .as_deref(),
+            Some("talking")
+        );
+    }
+
+    /// 要件 4.3/1.3: 組は構成の時点で `character_id` 昇順・重複なし（先頭を残す）になる。
+    #[test]
+    fn balloon_bindings_sort_ascending_and_drop_duplicate_characters() {
+        let bindings = BalloonBindings::new(vec![binding(1, 0), binding(0, 2), binding(1, 5)]);
+        assert_eq!(bindings.render_inner(), "0=2/1=0");
+        let snapshot = ExecutionSnapshot {
+            balloons: vec![binding(1, 0), binding(0, 2)],
+            ..ExecutionSnapshot::INACTIVE
+        };
+        assert_eq!(
+            ExecutionStatus::derive(&snapshot).render().as_deref(),
+            Some("balloon(0=2/1=0)")
+        );
+    }
+
+    /// 写しへの知らせの反映は「変わったか」を返し、同じ値の知らせは変化なしとする。
+    #[test]
+    fn external_states_apply_reports_whether_the_copy_changed() {
+        let mut external = ExternalStates::default();
+        assert!(external.apply(ExecutionStateUpdate::NoUserBreak(true)));
+        assert!(!external.apply(ExecutionStateUpdate::NoUserBreak(true)));
+        assert!(external.no_user_break);
+        assert!(external.apply(ExecutionStateUpdate::Balloons(vec![binding(0, 0)])));
+        assert!(!external.apply(ExecutionStateUpdate::Balloons(vec![binding(0, 0)])));
+        assert!(external.apply(ExecutionStateUpdate::Balloons(Vec::new())));
+        assert!(external.apply(ExecutionStateUpdate::NoUserBreak(false)));
+        assert_eq!(external, ExternalStates::default());
+    }
+
     /// C5: `INACTIVE` は**全ての源が false**（choosing の源を足しても非アクティブのまま）。
-    /// boot 系列・close 系列・ForceQuit 後がこの定数で送出する以上、源の増設で
-    /// 既定値が汚れないことを固定する。
+    /// テストと構造体リテラルの既定値（`..ExecutionSnapshot::INACTIVE`）がこの定数に頼る以上、
+    /// 源の増設で既定値が汚れないことを固定する。
     #[test]
     fn inactive_snapshot_has_every_source_false() {
         // 網羅的な構造体リテラルとの比較で固定する——源が 1 本増えたときは本行が
@@ -381,6 +521,9 @@ mod tests {
             ExecutionSnapshot {
                 talk_active: false,
                 choice_active: false,
+                no_user_break: false,
+                online: false,
+                balloons: Vec::new(),
             }
         );
         assert_eq!(
@@ -389,3 +532,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "status_derive_tests.rs"]
+mod derive_tests;

@@ -387,6 +387,7 @@ fn mouse_input_in_steady_emits_get_via_crosscutting_arm() {
             &ExecutionSnapshot {
                 talk_active: true,
                 choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
             },
         ),
     );
@@ -727,7 +728,7 @@ fn state_snapshot_drops_choice_active_when_ledger_is_gone() {
     );
 }
 
-/// DD-IT-3: 供給側の署名を `State` 全体へ広げても **talk 軸は `snapshot_of(&Phase)` と同一**
+/// DD-IT-3: 供給側の署名を `State` 全体へ広げても **talk 軸は `talk_active_of(&Phase)` と同一**
 /// である（choice 軸の増設が既存の talk 導出を汚さない）。
 #[test]
 fn state_snapshot_preserves_the_talk_axis_of_phase() {
@@ -746,7 +747,7 @@ fn state_snapshot_preserves_the_talk_axis_of_phase() {
         steady_with_talk(TalkId(5)),
         Phase::Stopped,
     ] {
-        let expected = snapshot_of(&phase).talk_active;
+        let expected = talk_active_of(&phase);
         let s = state_in(phase);
         let snapshot = s.snapshot();
         assert_eq!(

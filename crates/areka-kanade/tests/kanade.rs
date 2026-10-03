@@ -11,6 +11,8 @@ mod choice_test;
 mod close_test;
 #[path = "kanade/common/mod.rs"]
 mod common;
+#[path = "kanade/external_status_test.rs"]
+mod external_status_test;
 #[path = "kanade/failure_test.rs"]
 mod failure_test;
 #[path = "kanade/full_run_test.rs"]

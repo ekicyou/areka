@@ -38,6 +38,7 @@ use crate::msg::{
     EventId, KanadeConfig, KanadeMsg, KanadeStopCause, KanadeStopped, ShioriCall, ShioriFailure,
     ShioriFault, ShioriMsg, ShioriOutcome,
 };
+use crate::online::OnlineCounter;
 use crate::schedule::resources::ResourceSink;
 use crate::schedule::{Action, Input, Phase, State, TermCause, step};
 use crate::talk::TalkCommand;
@@ -105,6 +106,8 @@ pub fn spawn_kanade_with_stop_sink(
         run_inbox::<KanadeMsg, Infallible>(rx, move |msg| {
             // 汎用の通知の入口の返信端と、返事の材料（名前・許可表に在るか）。運行表へ渡す前に控える。
             let mut raise_reply: Option<(ReplySender<RaiseOutcome>, String, bool)> = None;
+            // 通信中の数はどのメッセージの処理よりも先に写す（新しい kanade も Boot の前に読む＝要件 2.6・5.1）。
+            sync_online(config.online, &mut state);
             // 停止規約: Close は step を経ず即時 Break（積み残しは rx drop で破棄）。
             let input = match msg {
                 KanadeMsg::Close => {
@@ -161,6 +164,7 @@ pub fn spawn_kanade_with_stop_sink(
                     hold_gap_reply(&mut gap_reply, reply);
                     Input::AwaitTalkGap { raise }
                 }
+                KanadeMsg::ExecutionState(update) => Input::ExecutionState(update),
             };
             let (flow, first_reply) = drive(
                 &mut state,
@@ -250,6 +254,15 @@ fn drive(
                 return (Drive::Continue, first_reply);
             }
         }
+    }
+}
+
+/// 通信中の数を読み、運行状態の写しと違えば写す（運行表はグローバルを読まない・殻の 1 か所＝要件 2.5・2.6・5.2）。
+fn sync_online(online: &OnlineCounter, state: &mut State) {
+    let online = online.is_online();
+    if state.external.online != online {
+        tracing::debug!(target: "kanade", event = "online_changed", online, "通信中の写しを更新");
+        state.external.online = online;
     }
 }
 
@@ -705,3 +718,8 @@ mod raise_reply_tests;
 #[cfg(test)]
 #[path = "actor_talk_gap_tests.rs"]
 mod talk_gap_tests;
+
+// 殻が通信中の数を毎メッセージ読んで写しへ渡すことの檻（areka-P0-status-execution-states 要件 2.5・2.6・5.1）。
+#[cfg(test)]
+#[path = "actor_online_tests.rs"]
+mod online_tests;

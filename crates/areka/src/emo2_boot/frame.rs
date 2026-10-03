@@ -42,6 +42,7 @@ mod balloon_offset_follow;
 mod dpi;
 mod drain_resnap;
 mod scale_text;
+pub(in crate::emo2_boot) mod status_report;
 // シェル・バルーンの差し替えの相（areka-P0-shell-balloon-switch design「SwitchPhase」）。
 mod switch;
 mod wiring;

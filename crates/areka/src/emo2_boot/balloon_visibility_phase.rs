@@ -38,7 +38,7 @@ use wintf::ecs::{FrameTime, WindowDragging};
 use crate::input_events::balloon::BalloonWiring;
 use crate::placement::spawn::BalloonWindowMarker;
 
-use super::super::frame::{Emo2Wiring, resolve_talk_time};
+use super::super::frame::{Emo2Wiring, resolve_talk_time, status_report};
 use super::super::target_map::balloon_target;
 use super::{
     BalloonVisibilityState, GlyphObservation, ScopeObservation, TalkLifecycleSignal,
@@ -74,6 +74,7 @@ pub(in crate::emo2_boot) fn run_balloon_visibility_phase(
         presenter,
         lifecycle_rx,
         balloon_visibility: state,
+        balloon_status,
         balloon_models,
         clock,
         ..
@@ -118,6 +119,10 @@ pub(in crate::emo2_boot) fn run_balloon_visibility_phase(
 
     let issued = issue_actions(presenter, world, state, &observations, &decision.actions);
     hidden.extend(issued.hidden.iter().copied());
+
+    // 本フレームの表示・非表示が照会に反映された後で、見えている組の差分を kanade へ届ける
+    // （判断は持たない・areka-P0-status-execution-states 要件 4.1／4.5）。
+    status_report::report_balloons(presenter, world, balloon_status, &scopes);
 
     emit_visibility_logs(&decision.logs, &issued.not_shown);
     clear_hover_residency(world, &hidden);

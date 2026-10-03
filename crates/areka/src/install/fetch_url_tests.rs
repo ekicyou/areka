@@ -1,12 +1,16 @@
 //! `\![execute,install,url]` の取得の兄弟テスト（design「Testing Strategy / URL の取得」・要件 6.1・
 //! 6.4・6.6・9.11）。偽の取得口だけを差し、ネットワークへ出ない。一時フォルダは `temp-path-kit`。
+//! 通信中の数はテストごとの `static` を渡し、プロセスの数（`PROCESS`）には触れない。
 
 use std::fs::{self, File};
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, TryRecvError};
 use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use areka_kanade::online::OnlineCounter;
 use areka_update::FetchError;
 use log_capture_kit::capture;
 use temp_path_kit::TempPath;
@@ -23,6 +27,9 @@ const BODY: &[u8] = b"PK\x03\x04 nar body";
 const DAY: Duration = Duration::from_secs(24 * 60 * 60);
 /// スレッドの終わりを待つ上限（届けば即座に返る）。
 const BOUND: Duration = Duration::from_secs(30);
+
+/// 数を読まないテストへ渡す、誰も読まない通信中の数。
+static UNOBSERVED: OnlineCounter = OnlineCounter::new();
 
 fn make(fake: FakeFetch) -> MakeFetch {
     Box::new(move || Ok(Box::new(fake) as Box<dyn areka_update::Fetch>))
@@ -161,6 +168,7 @@ fn thread_round_sends_one_script_request() {
         tx,
         dir.clone(),
         make(FakeFetch::new().serve(URL, BODY)),
+        &UNOBSERVED,
     )
     .expect("install-fetch が起きる");
     let request = rx.recv_timeout(BOUND).expect("依頼が届く");
@@ -187,6 +195,7 @@ fn thread_round_failure_sends_nothing() {
         tx,
         dir.clone(),
         make(FakeFetch::new().fail(URL, FetchError::Status { code: 500 })),
+        &UNOBSERVED,
     )
     .expect("install-fetch が起きる");
     join_bounded(handle);
@@ -212,7 +221,8 @@ fn failure_logs_one_error_with_url_and_reason_and_sends_nothing() {
         let dir = tmp.child("download");
         let (tx, rx) = mpsc::channel::<RawInstallRequest>();
 
-        let ((), events) = capture(|| fetch_and_send(URL, maker, &dir, SystemTime::now(), &tx));
+        let ((), events) =
+            capture(|| fetch_and_send(URL, maker, &dir, SystemTime::now(), &tx, &UNOBSERVED));
 
         let errors: Vec<_> = events.iter().filter(|e| e.level == Level::ERROR).collect();
         let [error] = errors.as_slice() else {
@@ -246,6 +256,7 @@ fn success_logs_done_without_warnings() {
             &dir,
             SystemTime::now(),
             &tx,
+            &UNOBSERVED,
         )
     });
 
@@ -257,4 +268,75 @@ fn success_logs_done_without_warnings() {
         "{events:?}"
     );
     assert_eq!(rx.try_recv().map(|r| r.origin), Ok(InstallOrigin::Script));
+}
+
+/// 取得口を作る時点で通信中の数は立っていて、取得口を作れない・取得の失敗・書けない・送れない・
+/// 成功、のどの経路で抜けても 0 に戻る（要件 2.2・2.3）。経路を踏んだことは記録で確かめる。
+#[test]
+fn online_is_raised_during_the_fetch_and_restored_on_every_exit() {
+    static ONLINE: OnlineCounter = OnlineCounter::new();
+    let seen = Arc::new(AtomicBool::new(false));
+    // 取得口を作る閉包の中で数を読む（関数の冒頭で立っていれば真）。
+    let probe = |fake: Option<FakeFetch>| -> MakeFetch {
+        let seen = Arc::clone(&seen);
+        Box::new(move || {
+            seen.store(ONLINE.is_online(), Ordering::SeqCst);
+            match fake {
+                Some(fake) => Ok(Box::new(fake) as Box<dyn areka_update::Fetch>),
+                None => Err(FetchError::Other { code: 12007 }),
+            }
+        })
+    };
+    let served = || Some(FakeFetch::new().serve(URL, BODY));
+    let cases = [
+        ("unavailable", probe(None), false, "install_fetch_failed"),
+        (
+            "fetch",
+            probe(Some(FakeFetch::new().fail(URL, FetchError::Timeout))),
+            false,
+            "install_fetch_failed",
+        ),
+        ("unwritable", probe(served()), false, "install_fetch_failed"),
+        (
+            "unsendable",
+            probe(served()),
+            false,
+            "install_fetch_send_failed",
+        ),
+        ("success", probe(served()), true, "install_fetch_done"),
+    ];
+    for (label, maker, success, expected) in cases {
+        let tmp = TempPath::new("fetch-url-online");
+        let dir = tmp.child("download");
+        if label == "unwritable" {
+            // フォルダの場所にファイルを置く＝フォルダを作れない。
+            fs::write(&dir, b"not a dir").expect("書ける");
+        }
+        let (tx, rx) = mpsc::channel::<RawInstallRequest>();
+        // 成功の他は受信端を落とす（送るのは成功と「送れない」だけ＝送れない経路になる）。
+        let rx = success.then_some(rx);
+        seen.store(false, Ordering::SeqCst);
+
+        let ((), events) =
+            capture(|| fetch_and_send(URL, maker, &dir, SystemTime::now(), &tx, &ONLINE));
+
+        assert!(
+            seen.load(Ordering::SeqCst),
+            "{label}: 取得口を作る時点で数が立っている"
+        );
+        assert!(!ONLINE.is_online(), "{label}: 抜けたら数は 0");
+        assert!(
+            events
+                .iter()
+                .any(|e| e.field_str("event") == Some(expected)),
+            "{label}: {expected} の経路を踏む: {events:?}"
+        );
+        if let Some(rx) = rx {
+            assert_eq!(
+                rx.try_recv().map(|r| r.origin),
+                Ok(InstallOrigin::Script),
+                "{label}"
+            );
+        }
+    }
 }

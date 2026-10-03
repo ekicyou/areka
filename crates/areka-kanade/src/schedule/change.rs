@@ -25,7 +25,6 @@ use super::{
 };
 use crate::change::{CancelReason, ChangeRequest, KanadeNotice, ShioriMethod};
 use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, ShioriOutcome};
-use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
 /// 受理した切替の帳簿（[`super::State::change`]）。
@@ -167,7 +166,7 @@ fn begin_change(mut state: State, req: ChangeRequest) -> (State, Vec<Action>) {
         };
         return (state, vec![Action::ShioriUnload]);
     }
-    let call = events::on_ghost_changing(&req, &ExecutionSnapshot::INACTIVE);
+    let call = events::on_ghost_changing(&req, &state.snapshot_without_talk());
     state.change = Some(ChangeState { req, script: None });
     state.phase = Phase::ChangePending;
     (state, vec![Action::ShioriRequest(call)])
@@ -245,7 +244,7 @@ fn on_reply_wait(mut state: State, input: Input, config: &KanadeConfig) -> (Stat
         } => {
             tracing::info!(target: "kanade", event = "change_close_begin", "OnGhostChanging は応答なし（204）——続けて OnClose を送る");
             state.phase = Phase::ChangeClosePending;
-            let call = events::on_close(CloseReason::System, &ExecutionSnapshot::INACTIVE);
+            let call = events::on_close(CloseReason::System, &state.snapshot_without_talk());
             (state, vec![Action::ShioriRequest(call)])
         }
         Input::Tick { now } => {

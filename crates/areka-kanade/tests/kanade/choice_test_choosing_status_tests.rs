@@ -13,6 +13,7 @@ fn talking_only_snapshot() -> ExecutionSnapshot {
     ExecutionSnapshot {
         talk_active: true,
         choice_active: false,
+        ..ExecutionSnapshot::INACTIVE
     }
 }
 

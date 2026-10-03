@@ -546,7 +546,7 @@ brief が書いている綴りを 1 つずつ項目 id へ当てた。当たり�
 | `areka-P0-sakura-time-directives` | `\_q` | `\_q` | `ukadoc:list_sakura_script:_5c_q:1` | 例示 | この brief |
 | `areka-P0-status-execution-states` | `\![enter,inductionmode]` | `\![enter,inductionmode]` | `ukadoc:list_sakura_script:_5c_21_5benter_2cinductionmode_5d:1` | 所有 | この brief |
 | `areka-P0-status-execution-states` | `\![enter,passivemode]` | `\![enter,passivemode]` | `ukadoc:list_sakura_script:_5c_21_5benter_2cpassivemode_5d:1` | 所有 | この brief |
-| `areka-P0-status-execution-states` | `\t` | `\t` | `ukadoc:list_sakura_script:_5ct:1` | 所有 | この brief |
+| `areka-P0-status-execution-states` | `\t` | `\t` | `ukadoc:list_sakura_script:_5ct:1` | 所有 | `areka-P0-sakura-time-critical` |
 | `areka-P0-surfaces-basepos` | `\![move,...,base,base]` / `\![move]` | `\![move]` | `ukadoc:list_sakura_script:_5c_21_5bmove_5d:1` | 所有 | 空 |
 | `areka-P0-text-decoration-canon` | `\_l` | `\_l[x,y]` | `ukadoc:list_sakura_script:_5c_l_5bx_2cy_5d:1` | 所有 | `areka-P0-cursor-tag-canon` |
 | `areka-P0-text-decoration-canon` | `\f[align]` | `\f[align,寄せる側]` | `ukadoc:list_sakura_script:_5cf_5balign_2c_5bc4_305b_308b_5074_5d:1` | 所有 | この brief |
@@ -700,9 +700,10 @@ brief が挙げた件数と、台帳で担当になった件数は一致しな�
 | `areka-P0-property-query-channels` | 4 | 4 | 3 |
 | `areka-P0-sakura-dialogue-tags` | 0 | 0 | 1 |
 | `areka-P0-sakura-tag-word-boundary` | 11 | 0 | 0 |
+| `areka-P0-sakura-time-critical` | 0 | 0 | 1 |
 | `areka-P0-sakura-time-directives` | 10 | 9 | 10 |
 | `areka-P0-scope-zorder-pinning` | 0 | 0 | 2 |
-| `areka-P0-status-execution-states` | 3 | 3 | 3 |
+| `areka-P0-status-execution-states` | 3 | 3 | 2 |
 | `areka-P0-surfaces-basepos` | 1 | 1 | 0 |
 | `areka-P0-sylphya` | 0 | 0 | 2 |
 | `areka-P0-text-decoration-canon` | 20 | 20 | 17 |
@@ -722,6 +723,7 @@ brief が挙げた件数と、台帳で担当になった件数は一致しな�
 | `areka-P0-kero-balloon` | `\b[ID番号]` | 増える | brief が族の名前だけを挙げていて、族が小さいので中身の項目まで届いた |
 | `areka-P0-property-query-channels` | `\![embed,イベント名,r0,r1,r2...]` | 減る | 2 本以上が主張していて分担が未確定。担当は空にして裁定を待つ |
 | `areka-P0-sakura-dialogue-tags` | `%username` | 増える | §8 の行が担当を名指ししている |
+| `areka-P0-sakura-time-critical` | `\t` | 増える | 宛先を移した。`Status` の timecritical と同じく `areka-P0-sakura-time-critical` が担当（2026-10-03 開発者裁定・`areka-P0-status-execution-states` 要件 6.3。初めは `areka-P0-sakura-time-directives` へ送ったが、同じ日に専用の spec が起票されたので付け替えた） |
 | `areka-P0-sakura-time-directives` | `\![embed,イベント名,r0,r1,r2...]` | 減る | 2 本以上が主張していて分担が未確定。担当は空にして裁定を待つ |
 | `areka-P0-sakura-time-directives` | `\![move]` | 減る | 2 本以上が主張していて分担が未確定。担当は空にして裁定を待つ |
 | `areka-P0-sakura-time-directives` | `\![set,balloontimeout,時間]` | 減る | 2 本以上が主張していて分担が合意済み。作業が残っている `areka-P0-balloon-canon-residue` が担当 |
@@ -733,6 +735,7 @@ brief が挙げた件数と、台帳で担当になった件数は一致しな�
 | `areka-P0-sakura-time-directives` | `\_q` | 増える | §8 の行が担当を名指ししている |
 | `areka-P0-scope-zorder-pinning` | `\![reset,zorder]` | 増える | §8 の行が担当を名指ししている |
 | `areka-P0-scope-zorder-pinning` | `\![set,zorder,スコープID,スコープID,...]` | 増える | §8 の行が担当を名指ししている |
+| `areka-P0-status-execution-states` | `\t` | 減る | 宛先を移した。`Status` の timecritical と同じく `areka-P0-sakura-time-critical` が担当（2026-10-03 開発者裁定・`areka-P0-status-execution-states` 要件 6.3。初めは `areka-P0-sakura-time-directives` へ送ったが、同じ日に専用の spec が起票されたので付け替えた） |
 | `areka-P0-surfaces-basepos` | `\![move]` | 減る | 2 本以上が主張していて分担が未確定。担当は空にして裁定を待つ |
 | `areka-P0-sylphya` | `%keroname` | 増える | §8 の行が担当を名指ししている |
 | `areka-P0-sylphya` | `%selfname2` | 増える | §8 の行が担当を名指ししている |
@@ -748,6 +751,14 @@ brief が挙げた件数と、台帳で担当になった件数は一致しな�
 > **2026-09-05 の見直しで 1 件減った。** `\_V` が別名になったので、それまで担当だった
 > `areka-P0-sakura-time-directives` の件数が 11 から 10 へ、全体が 78 から 77 へ変わった。
 > 担当は根の `\![sound,wait]` の側で読む。
+
+> **2026-10-03 の見直しで宛先が 1 件動いた。** `\t` の担当を `areka-P0-status-execution-states` から
+> `areka-P0-sakura-time-critical` へ移した（`areka-P0-status-execution-states` 要件 6.3）。件数は
+> 前者が 3 から 2 へ、後者が 0 から 1 へ変わり、全体の 77 は変わらない。初めは時間の指令をまとめる
+> `areka-P0-sakura-time-directives` へ送ったが、同じ日に `\t` と `Status` の timecritical を受け持つ専用の
+> `areka-P0-sakura-time-critical` が起票されたので、`areka-P0-status-execution-states` の完了の手続きで
+> 付け替えた（`areka-P0-sakura-time-directives` の件数は 10 のまま）。表 ⑶-1 の「主張している brief」の列は
+> 写した時点の brief のままで、後から起票した brief は数えていない。
 
 > **2026-10-03 の追記**: `\![set,choicetimeout,時間]` の担当は、`areka-P0-sakura-time-directives` から
 > 切り出した `areka-P0-choice-timeout-directive` へ移り、同じ日に実装済みになった（表 ⑶-1 の該当行に

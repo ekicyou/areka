@@ -26,6 +26,7 @@
 
 use std::sync::mpsc::{self, Receiver};
 
+use areka_kanade::ExecutionStateUpdate;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::schedule::{InternedSystemSet, IntoSystemSet, NodeId, SystemSet};
 use tracing::Level;
@@ -172,6 +173,22 @@ fn talk_started_clears_flag() {
     assert_eq!(
         fold_no_user_break(false, NoUserBreakSignal::TalkStarted),
         (false, false)
+    );
+}
+
+/// トークが終わったら旗を下ろす——`\![leave,nouserbreakmode]` を書かずに終わったトークの旗を、
+/// 次のトークの立ち上がりまで残さない（areka-P0-status-execution-states 要件 3.3・3.4）。
+#[test]
+fn talk_ended_lowers_flag() {
+    assert_eq!(
+        fold_no_user_break(true, NoUserBreakSignal::TalkEnded),
+        (false, false),
+        "区間の中でトークが終わったら旗は下りる（区間外の「出る」扱いにはしない）"
+    );
+    assert_eq!(
+        fold_no_user_break(false, NoUserBreakSignal::TalkEnded),
+        (false, false),
+        "旗が下りているトークの終わりは何も変えない"
     );
 }
 
@@ -344,6 +361,7 @@ fn disabled_section_sends_nothing_until_left() {
     let mut lines = Lines::wired();
     lines.signal(NoUserBreakSignal::Enter);
     assert!(lines.flag(), "旗の読み口から区間に入ったことが読める");
+    lines.kanade(); // 旗の知らせ（「旗の変化の届け」の節で見る）を捨てる
 
     let (accepted, events) = capture_logs(|| lines.press(0, DoubleClick::Left, false));
     assert!(!accepted);
@@ -356,6 +374,7 @@ fn disabled_section_sends_nothing_until_left() {
     assert_eq!(rejected[0].field("scope"), Some("0"));
 
     lines.signal(NoUserBreakSignal::Leave);
+    lines.kanade(); // 旗の知らせを捨てる
     assert!(lines.press(0, DoubleClick::Left, false), "区間を出れば受理");
     assert_eq!(lines.lifecycle().len(), 1);
     assert_eq!(lines.kanade().len(), 1);
@@ -443,6 +462,89 @@ fn drain_without_wiring_does_nothing() {
     assert!(world.get_non_send::<UserBreakWiring>().is_none());
 }
 
+// ---------------------------------------------------------------- 旗の変化の届け（areka-P0-status-execution-states）
+
+/// 運行への線へ届いた分のうち、中断の無効化モードの知らせだけを値で取り出す。
+fn no_user_break_updates(msgs: &[KanadeMsg]) -> Vec<bool> {
+    msgs.iter()
+        .filter_map(|m| match m {
+            KanadeMsg::ExecutionState(ExecutionStateUpdate::NoUserBreak(v)) => Some(*v),
+            _ => None,
+        })
+        .collect()
+}
+
+/// 「入る」の後、kanade へ旗の知らせがちょうど 1 件届く。同じ巡に「入る」が重なっても 1 件
+/// （要件 3.1）。旗が変わらない巡は何も送らない。
+#[test]
+fn enter_sends_exactly_one_no_user_break_true_to_kanade() {
+    let mut lines = Lines::wired();
+    lines.flag_tx.send(NoUserBreakSignal::Enter).unwrap();
+    lines.flag_tx.send(NoUserBreakSignal::Enter).unwrap();
+    drain_no_user_break_signals(&mut lines.world);
+
+    let msgs = lines.kanade();
+    assert_eq!(msgs.len(), 1, "知らせはちょうど 1 件");
+    assert_eq!(no_user_break_updates(&msgs), vec![true]);
+
+    drain_no_user_break_signals(&mut lines.world);
+    lines.signal(NoUserBreakSignal::Enter);
+    assert!(lines.kanade().is_empty(), "旗が変わらなければ送らない");
+}
+
+/// 同じ巡に「入る」とトークの終わりが届けば、畳んだ後の旗は最後に送った値と同じなので
+/// 何も送らない（要件 3.1・3.3・全件畳んでから比べる）。
+#[test]
+fn enter_and_talk_ended_in_the_same_drain_send_nothing() {
+    let mut lines = Lines::wired();
+    lines.flag_tx.send(NoUserBreakSignal::Enter).unwrap();
+    lines.flag_tx.send(NoUserBreakSignal::TalkEnded).unwrap();
+    drain_no_user_break_signals(&mut lines.world);
+
+    assert!(lines.kanade().is_empty(), "途中の値は送らない");
+    assert!(!lines.flag());
+}
+
+/// `\![leave,nouserbreakmode]` を書かずにトークが終わっても、旗が下りたことが kanade へ届く
+/// （要件 3.2・3.3・3.4）。
+#[test]
+fn talk_ended_without_leave_sends_false_after_true() {
+    let mut lines = Lines::wired();
+    lines.signal(NoUserBreakSignal::Enter);
+    assert_eq!(no_user_break_updates(&lines.kanade()), vec![true]);
+
+    lines.signal(NoUserBreakSignal::TalkEnded);
+    let msgs = lines.kanade();
+    assert_eq!(msgs.len(), 1, "知らせはちょうど 1 件");
+    assert_eq!(no_user_break_updates(&msgs), vec![false]);
+}
+
+/// kanade の受け手が消えていれば error を 1 行記録し、最後に送った値は更新しない（要件 7.1）。
+/// 合図の届かない巡では送り直さない（記録が毎巡積もらない）。
+#[test]
+fn dropped_kanade_receiver_records_one_error_and_keeps_the_last_sent_value() {
+    let mut lines = Lines::wired();
+    lines.kanade_rx = None;
+    let (_, events) = capture_logs(|| {
+        lines.signal(NoUserBreakSignal::Enter);
+        drain_no_user_break_signals(&mut lines.world);
+    });
+
+    let failed = named(&events, "no_user_break_send_failed");
+    assert_eq!(failed.len(), 1, "渡せない旨が 1 行: {events:?}");
+    assert_eq!(failed[0].level, Level::ERROR);
+    assert_eq!(failed[0].field("value"), Some("true"));
+    let wiring = lines
+        .world
+        .get_non_send::<UserBreakWiring>()
+        .expect("結線済み");
+    assert!(wiring.no_user_break, "旗そのものは上がっている");
+    assert!(
+        !wiring.reported_no_user_break,
+        "送れなかった値は最後に送った値にしない"
+    );
+}
+
 // ---------------------------------------------------------------- 結線と取り出しの登録順
 
 /// 押下ハンドラの代役。バルーンが出ているものとして、届いた押下を入口の本体へそのまま渡す
@@ -523,7 +625,12 @@ fn signal_arriving_in_the_same_round_is_drained_before_the_press_is_judged() {
         "同じ巡の「入る」が押下の判定に効く: {events:?}"
     );
     assert!(lifecycle_rx.try_recv().is_err(), "隠さない");
-    assert!(kanade_rx.try_recv().is_err(), "止めない");
+    assert!(
+        !kanade_rx
+            .try_iter()
+            .any(|m| matches!(m, KanadeMsg::UserBreak { .. })),
+        "止めない（旗の知らせは別のテストで見る）"
+    );
 
     // 2 巡目: 「出る」と押下が同じ巡に届く → 受理。
     flag_tx.send(NoUserBreakSignal::Leave).unwrap();
@@ -533,7 +640,14 @@ fn signal_arriving_in_the_same_round_is_drained_before_the_press_is_judged() {
         lifecycle_rx.try_iter().collect::<Vec<_>>(),
         vec![TalkLifecycleSignal::UserBreak]
     );
-    assert_eq!(kanade_rx.try_iter().count(), 1, "止める要求はちょうど 1 件");
+    assert_eq!(
+        kanade_rx
+            .try_iter()
+            .filter(|m| matches!(m, KanadeMsg::UserBreak { .. }))
+            .count(),
+        1,
+        "止める要求はちょうど 1 件"
+    );
 }
 
 // ---------------------------------------------------------------- 登録と受信端（areka-P0-ghost-restart-unit 要件 2.1・2.4）

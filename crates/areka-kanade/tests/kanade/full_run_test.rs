@@ -103,6 +103,7 @@ fn drive_full_run() {
             &ExecutionSnapshot {
                 talk_active: true,
                 choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
             },
         )), // NOTIFY（Status: talking）
     ];

@@ -1,6 +1,7 @@
 use super::test_support::{assert_get, assert_notify, config, initial};
 use super::*;
 use crate::schedule::{ActiveTalk, step};
+use crate::status::ExecutionSnapshot;
 
 // --- Full happy path: Idle→…→Steady（各段の Phase＋Action を厳密検証） ---
 
@@ -227,6 +228,7 @@ fn boot_main_no_content_emits_no_talk() {
         change: None,
         pending_change: None,
         talk_gap: None,
+        external: Default::default(),
     };
     let (s, actions) = step(
         s,
@@ -271,6 +273,7 @@ fn boot_talk_ids_are_unique_and_monotonic() {
         change: None,
         pending_change: None,
         talk_gap: None,
+        external: Default::default(),
     };
     let (s1, actions1) = step(
         s1,
@@ -299,6 +302,7 @@ fn boot_talk_ids_are_unique_and_monotonic() {
         change: None,
         pending_change: None,
         talk_gap: None,
+        external: Default::default(),
     };
     let (s2, actions2) = step(
         s2,
@@ -340,6 +344,7 @@ fn close_request_during_boot_records_pending_only() {
             change: None,
             pending_change: None,
             talk_gap: None,
+            external: Default::default(),
         };
         let phase_before = std::mem::discriminant(&s.phase);
         let (s, actions) = step(
@@ -460,6 +465,7 @@ fn baseware_version_status_reflects_greeting_tracking() {
         change: None,
         pending_change: None,
         talk_gap: None,
+        external: Default::default(),
     };
     let (_, actions) = step(
         greeting,
@@ -487,6 +493,7 @@ fn baseware_version_status_reflects_greeting_tracking() {
         change: None,
         pending_change: None,
         talk_gap: None,
+        external: Default::default(),
     };
     let (_, actions) = step(
         no_greeting,

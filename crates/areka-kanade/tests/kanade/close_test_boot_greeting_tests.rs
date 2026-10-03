@@ -101,6 +101,7 @@ fn boot_greeting_active_tick_emits_notify_talking() {
         &ExecutionSnapshot {
             talk_active: true,
             choice_active: false,
+            ..ExecutionSnapshot::INACTIVE
         },
     ));
 
@@ -237,6 +238,7 @@ fn boot_greeting_talkdone_resumes_get_pump() {
         &ExecutionSnapshot {
             talk_active: true,
             choice_active: false,
+            ..ExecutionSnapshot::INACTIVE
         },
     ));
     assert!(
@@ -403,6 +405,7 @@ fn boot_greeting_close_during_greeting_uses_close_handshake() {
         &ExecutionSnapshot {
             talk_active: true,
             choice_active: false,
+            ..ExecutionSnapshot::INACTIVE
         },
     ));
     assert!(

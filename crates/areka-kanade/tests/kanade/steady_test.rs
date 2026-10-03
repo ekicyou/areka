@@ -339,6 +339,7 @@ fn sporadic_value_starts_unique_talk() {
             &ExecutionSnapshot {
                 talk_active: false,
                 choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
             },
         ) {
             areka_kanade::ShioriCall::Get { references, .. } => references,
@@ -461,6 +462,7 @@ fn active_talk_tick_emits_notify_ref3_zero() {
             &ExecutionSnapshot {
                 talk_active: true,
                 choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
             },
         ) {
             areka_kanade::ShioriCall::Notify { references, .. } => references,
@@ -616,6 +618,7 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
                 &ExecutionSnapshot {
                     talk_active: false,
                     choice_active: false,
+                    ..ExecutionSnapshot::INACTIVE
                 },
             ) {
                 areka_kanade::ShioriCall::Get { references, .. } => references,
@@ -647,6 +650,7 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
                 &ExecutionSnapshot {
                     talk_active: false,
                     choice_active: false,
+                    ..ExecutionSnapshot::INACTIVE
                 },
             ) {
                 areka_kanade::ShioriCall::Get { references, .. } => references,

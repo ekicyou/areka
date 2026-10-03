@@ -16,6 +16,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use areka_actor::ReplyReceiver;
 use areka_ghost::BasewareRoot;
 use areka_ghost::catalog::{descript_name, homeurl, list_balloons, list_shells};
+use areka_kanade::online::OnlineCounter;
 use areka_kanade::resources::ResourceOutcome;
 use areka_kanade::{ChangeOrigin, KanadeMsg, ShioriMethod};
 use bevy_ecs::world::World;
@@ -46,6 +47,8 @@ pub(crate) struct UpdateDesk {
     pub(super) worker: Option<Sender<UpdateJob>>,
     /// 背景スレッドへ渡す取得口の作り方（本番は [`winhttp_fetch`]・テストは起こす前に偽物へ差し替える）。
     pub(super) new_fetch: NewFetch,
+    /// 背景スレッドへ渡す通信中の数（本番はプロセスの数・テストは起こす前に自分の数へ差し替える）。
+    pub(super) online: &'static OnlineCounter,
     /// 手続きの段。
     pub(super) stage: Stage,
     /// 答え待ちの間に届いた要求の預かり（高々 1 件・対象はまだ解かない）。
@@ -72,6 +75,7 @@ impl UpdateDesk {
             asks_rx,
             worker: None,
             new_fetch: winhttp_fetch(),
+            online: default_online(),
             stage: Stage::Idle,
             held: None,
             gate,
@@ -80,6 +84,20 @@ impl UpdateDesk {
             after_switch: None,
         }
     }
+}
+
+/// 窓口の通信中の数の既定。本番はプロセスの数。テストのビルドでは、窓口を据えるだけの他のテスト
+/// （メニュー・台本の受け口・切替の土台）が背景スレッドを起こしてもプロセスの数に触れないよう、
+/// 誰も読まないテスト専用の数にする（読む側のテストは起こす前に自分の数へ差し替える）。
+#[cfg(not(test))]
+fn default_online() -> &'static OnlineCounter {
+    &areka_kanade::online::PROCESS
+}
+
+#[cfg(test)]
+fn default_online() -> &'static OnlineCounter {
+    static UNOBSERVED: OnlineCounter = OnlineCounter::new();
+    &UNOBSERVED
 }
 
 /// 手続きの段。`Idle`＝走っていない／`AwaitingExec`＝メニューの要求が `OnUpdateProcessExec` の答えを
@@ -389,6 +407,7 @@ pub(super) fn hand_over(world: &mut World, job: UpdateJob) -> SubmitVerdict {
             desk.asks_tx.clone(),
             desk.gate.clone(),
             desk.new_fetch.clone(),
+            desk.online,
         )
         .0
     });

@@ -46,10 +46,13 @@ const SELECTOR_NO_USER_BREAK: &str = "nouserbreakmode";
 
 /// talk スレッドから UI スレッドへ流れる、中断の無効化の合図（design「NoUserBreakCueSink」）。
 ///
-/// 3 値は同じ 1 本の線を流れ、1 つのトークの中では台本の順に並ぶ。トークをまたぐ順序は
-/// 配送が「古いトークのスレッドの合流 → 新しいトークの起動」を守ることで保たれる。
+/// 4 値は同じ 1 本の線を流れ、1 つのトークの中では台本の順に並ぶ。トークをまたぐ順序は、
+/// talk スレッドが受け口を落としてから終わり（`TalkDone`／中断の知らせ）を送ること
+/// （`areka-sakura` の `drive.rs`）と、置き換えでは配送が古いトークのスレッドを合流してから
+/// 新しいトークを起こすことで保たれる。
 ///
-/// 受け取った側（UI）が旗を畳む——入れ子は数えず、[`TalkStarted`](Self::TalkStarted) で解く。
+/// 受け取った側（UI）が旗を畳む——入れ子は数えず、[`TalkEnded`](Self::TalkEnded) で下ろし、
+/// [`TalkStarted`](Self::TalkStarted) でも解く（二重の守り）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NoUserBreakSignal {
     /// このトークの最初の指示が配られた（複製後の最初の `emit` で 1 回だけ）。
@@ -60,6 +63,8 @@ pub(crate) enum NoUserBreakSignal {
     Enter,
     /// `\![leave,nouserbreakmode]`——区間から出る（要件 5.2）。
     Leave,
+    /// このトークが終わった（合図を 1 つでも送ったトークごとの複製が落ちるときに 1 回だけ）。
+    TalkEnded,
 }
 
 /// 中断の無効化の合図を UI へ届ける受け口（`GhostBootOptions.sinks` の 7 本目）。
@@ -97,6 +102,26 @@ impl NoUserBreakCueSink {
 impl Clone for NoUserBreakCueSink {
     fn clone(&self) -> Self {
         Self::new(self.tx.clone())
+    }
+}
+
+/// **トークの終わりの合図**——そのトークの複製が落ちるときに [`NoUserBreakSignal::TalkEnded`] を送る
+/// （areka-P0-status-execution-states 要件 3.3・3.4）。
+///
+/// 複製はトークの再生が所有し、最後まで・中断・置き換えのどの終わり方でも落ちる。talk スレッドは
+/// 最後まで・駆動中の中断のどちらでも受け口を落としてから終わりを知らせ（`areka-sakura` の
+/// `drive.rs`）、置き換えでは配送が古いトークのスレッドを合流してから新しいトークを起こす。
+/// 次のトークは終わりの知らせの後にしか起きないので、`TalkEnded`（前）は `TalkStarted`（次）
+/// より前に同じ線へ並ぶ。`\![leave,nouserbreakmode]` を書かずに終わったトークの旗が、次のトークの
+/// 立ち上がりまで残って中断を断る区間をこれで無くす。
+///
+/// 送るのは合図を 1 つでも送った（`started` の）受け口だけである。登録済みの原本は一度も配られない
+/// ので、ゴーストの終了で落ちても何も送らない。送出の失敗は `send` の warn のまま panic しない。
+impl Drop for NoUserBreakCueSink {
+    fn drop(&mut self) {
+        if self.started {
+            self.send(NoUserBreakSignal::TalkEnded);
+        }
     }
 }
 
