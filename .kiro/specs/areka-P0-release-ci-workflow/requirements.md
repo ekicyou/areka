@@ -30,7 +30,7 @@
 - **In scope**: タグ `v*` だけで動くきっかけ／版とタグの一致の検査／配布スクリプトの呼び出しによる x64・arm64 の zip と SHA256／Release の公開（失敗したら残さない）／乾いた走り／秘密と権限の扱い／後段が見分けられる終わり方（後段への口）／マージ前に実行環境で 1 回通した証跡／`tech.md`・`structure.md` の改め。
 - **Out of scope**: テストの実行（門は手元のフルテスト `tools/test-all.ps1`）／配布スクリプトの中身（完了 `release-package-versioned`）／crates.io への公開（`areka-P0-crates-io-publish`・自分の workflow）／winget への提出（`areka-P0-winget-manifest-submission`）／署名（`areka-P0-release-code-signing`）／版を選ぶこと・版を上げること・タグを打つこと（`areka-P0-release-cycle`＝「指定が無ければ +0.0.1」の決まりも含めてリリースの手順の持ち物。リリース workflow は版を上げる入力を持たない）／zip の起動確認（窓を出すので手元）／初回の実走 `v0.0.2`（本仕様のマージの後に `release-cycle` の初回が起こし、見守る）／後段の workflow を呼ぶこと・合図を送ること。
 - **変更 0 と明記するもの**: `crates/` の下・`tools/` の下（`tools/package.ps1`・`tools/test-all.ps1` を含む）・各 `Cargo.toml`・`Cargo.lock`・`dist/README.txt`・既存のタグ `v0.0.1`。配布スクリプトに直しが要ると分かったら、本仕様の中で直さず、直す spec を起票して止める（`release-package-versioned` は完了済みのため）。
-- **Adjacent expectations**: `release-cycle` は、手元のフルテストと `-Check` を通し、版を上げる PR を squash マージし、main のそのコミットに `v{版}` のタグを打って押す。リリース workflow はそのタグを受けて動く。`crates-io-publish`・`winget-manifest-submission` の workflow は、リリース workflow の走りが終わったこと（`workflow_run`）を受け、「タグの push で始まった走り」かつ「結果が成功」のときだけ動く（乾いた走りと失敗した走りでは動かない）。リリース workflow は後段を呼ばず、合図も送らない。両 brief にある「`release: published` で動く」は、`GITHUB_TOKEN` で公開した Release では後段が起きないため、この `workflow_run` の形に置き換わる（両 brief の書き換えは本仕様の外）。
+- **Adjacent expectations**: `release-cycle` は、手元のフルテストと `-Check` を通し、版を上げる PR を squash マージし、main のそのコミットに `v{版}` のタグを打って押す。リリース workflow はそのタグを受けて動く。`crates-io-publish`・`winget-manifest-submission` の workflow は、リリース workflow の走りが終わったこと（`workflow_run`）を受け、「タグの push で始まった走り」かつ「結果が成功」のときだけ動く（乾いた走りと失敗した走りでは動かない）。リリース workflow は後段を呼ばず、合図も送らない。両 brief にある「`release: published` で動く」は、`GITHUB_TOKEN` で公開した Release では後段が起きないため、この `workflow_run` の形に置き換わる（`winget-manifest-submission` の brief は本仕様の枝で書き換え済み。`crates-io-publish` は別の枝で要件のフェーズにあるため、その枝が自分で書き換える＝開発者が申し送る）。
 
 ## Requirements
 
@@ -64,7 +64,7 @@
 1. When 版とタグの一致を確かめた, the リリース workflow shall 配布スクリプトを起動確認なしで x64 と arm64 の両方について呼び、`areka-{版}-x64.zip`・`areka-{版}-x64.zip.sha256`・`areka-{版}-arm64.zip`・`areka-{版}-arm64.zip.sha256` の 4 つのファイルを得る。
 2. If 配布スクリプトが 0 以外の終了コードで終わった、または 4 つのファイルのうち 1 つでも欠けた, the リリース workflow shall Release を作らずに失敗で終え、配布スクリプトが印字した失敗の段の名前を走りの記録に残す。
 3. The リリース workflow shall 配布スクリプトの起動確認（窓を出す自己検査 `-Check`）を呼ばない（起動確認は `release-cycle` の手順で開発者が手元で通す）。
-4. The リリース workflow shall 配布スクリプトが前提とする道具（ライセンス検査の道具・謝辞の生成の道具を、配布スクリプトが求める版で）と arm64 のリンクの道具を、配布スクリプトを呼ぶ前に揃え、2 回目以降の走りでは前の走りで用意した物を再利用して毎回ソースから入れ直さない。
+4. The リリース workflow shall 配布スクリプトが前提とする道具（ライセンス検査の道具・謝辞の生成の道具を、配布スクリプトが求める版で）と arm64 のリンクの道具を、配布スクリプトを呼ぶ前に揃え、毎回ソースから組み直さない（ビルド済みの物を使う。前の走りの残り物が読めることを前提にしない＝タグの走り同士は残り物を共有できないため）。
 5. If 実行環境に arm64 のリンクの道具が無く、揃えることもできなかった, the リリース workflow shall x64 だけで Release を作らず、失敗で終える（x64 と arm64 は必ず両方を揃えて出す）。
 
 ### Requirement 4: Release の公開
@@ -73,7 +73,7 @@
 
 #### Acceptance Criteria
 
-1. When 4 つのファイルが揃った, the リリース workflow shall タグ `v{版}` の Release を、そのタグの間の変更から自動で生成したリリースノートつきで、下書きでなく公開の状態で作り、4 つのファイルを添える。
+1. When 4 つのファイルが揃った, the リリース workflow shall タグ `v{版}` の Release を、一つ前の `v*` タグ（初回の `v0.0.2` では `v0.0.1`）からの変更で自動で生成したリリースノートつきで、下書きでなく公開の状態で作り、4 つのファイルを添える。
 2. The リリース workflow shall Release に添える zip と `.sha256` を、同じ走りで配布スクリプトが作った物そのものとする（作り直さない）。添えた `.sha256` の値は、添えた zip から計算した SHA256 と一致する。
 3. If Release の作成またはファイルの添付が途中で失敗した, the リリース workflow shall そのタグの Release を下書きとしても公開としても残さず、失敗で終える。
 4. The リリース workflow shall 4 つのファイルの一部だけを添えた Release を公開の状態にしない（公開された Release は常に 4 つを揃えて持つ）。
@@ -136,7 +136,7 @@
 
 要件生成中に上げた問いへの答え。いずれも上の条項に反映済み。
 
-- **後段の起こし方＝案 A（`workflow_run`）**: `GITHUB_TOKEN` で公開した Release は後段の workflow を起こさない（GitHub Actions の決まり）ため、後段（`crates-io.yml`・`winget.yml`）はリリース workflow の走りの終わり（`workflow_run`）を受け、「タグの push で始まった」かつ「成功」で絞る。本仕様は権限 `contents: write` だけのまま、後段を呼ばず合図も送らない。本仕様が後段へ約束するのは要件 8 の「成功で終わったら Release は揃って公開済み・乾いた走りと失敗は見分けられる」だけ。両 brief の「`release: published` で動く」の書き換えは本仕様の外（各 spec の持ち物）。退けた案: リリース workflow から後段へ合図を送る（`repository_dispatch`）／長生きするトークンで Release を作る（brief の決めごとに反する）。
+- **後段の起こし方＝案 A（`workflow_run`）**: `GITHUB_TOKEN` で公開した Release は後段の workflow を起こさない（GitHub Actions の決まり）ため、後段（`crates-io.yml`・`winget.yml`）はリリース workflow の走りの終わり（`workflow_run`）を受け、「タグの push で始まった」かつ「成功」で絞る。本仕様は権限 `contents: write` だけのまま、後段を呼ばず合図も送らない。本仕様が後段へ約束するのは要件 8 の「成功で終わったら Release は揃って公開済み・乾いた走りと失敗は見分けられる」だけ。両 brief の「`release: published` で動く」は、`winget-manifest-submission` を本仕様の枝で書き換え、`crates-io-publish`（別の枝で進行中）はその枝が書き換える。退けた案: リリース workflow から後段へ合図を送る（`repository_dispatch`）／長生きするトークンで Release を作る（brief の決めごとに反する）。
 - **初回の実走（`v0.0.2`）**: 初めての本当のリリースは `v0.0.2` でよいが、本仕様のマージの後に `release-cycle` の初回で起こる。本仕様の完了は要件 9.1 の 1 回の緑（と乾いた走りの形）で判定する（要件 9.3）。
 - **マージ前の実行環境での走り**: 実装中に作業の枝を GitHub へ押し、一時的なきっかけ（その枝への push）で 1 回通す。arm64 のリンクの道具の有無と、通しのビルドを測る。一時的なきっかけはマージ前に外す（要件 9.1・9.2）。**作業の枝を押すたびに、その時点で開発者の了承を得る**（手順の決まり・条項にはしない）。
 - **版の決め方**: リリース workflow は版を上げず、タグも打たない。本当のきっかけはタグの push だけで、版とタグの一致の検査は残す（要件 1.3・2）。「指定が無ければ +0.0.1」の決まりはリリースの手順（`release-cycle`）の持ち物で、リリース workflow に版を上げる入力は足さない。
