@@ -24,7 +24,7 @@
 | `crates/areka/src/emo2_boot/balloon_visibility.rs` | 923 | `shell-balloon`・`balloon-lifecycle-events` |
 | `crates/areka-emo-text/src/region.rs`（任意） | 977 | 本体 488 行＋内蔵テスト 482 行（489〜970 行目の `#[cfg(test)] mod tests { … }`）。`shell-balloon` は本体を変えずに済む見込み |
 
-> 注（要件定義時の再測定による是正）: brief は「`layout.rs` の 343〜765 行目が 1 本の関数 `layout_with_cursor_warn`（約 420 行）」と書くが、実際は公開の入口 `layout_with_cursor_warn`（343〜377 行目・約 35 行）と、私有の本体 `layout_inner`（378〜765 行目・約 388 行）の 2 本である。「その大きい関数を割るかどうか」は brief のとおり設計で決める（本書は割る・割らないのどちらにも中立）。
+> 注（要件定義時の再測定による是正）: brief は「`layout.rs` の 343〜765 行目が 1 本の関数 `layout_with_cursor_warn`（約 420 行）」と書くが、実際は公開の入口 `layout_with_cursor_warn`（343〜377 行目・約 35 行）と、私有の本体 `layout_inner`（関数は 378〜744 行目・367 行。745〜765 行目は次の `visible_window` の doc）の 2 本である。「その大きい関数を割るかどうか」は brief のとおり設計で決める（本書は割る・割らないのどちらにも中立）。
 
 要件定義の時点で、**ソースの字面を読んで判定する既存の構造テストが 4 つ**、この 6 本の中身を名指ししていることを確かめた（Requirement 5）。分割でコードが動くと、これらは赤になるか、黙って見る範囲が縮む。brief の「触るのは 6 本と新しいファイルとモジュールの宣言だけ」には含まれていないため、本書で扱いを定める。
 
@@ -45,9 +45,9 @@
 
 1. When 分割が終わったとき, the file-split 実装 shall 上の表の 6 本と、分割で新しく作ったファイルのそれぞれを 700 行以下を目安に収める。
 2. If 役割の切れ目を守るために 700 行を超えるファイルが残るとき, the file-split 実装 shall そのファイルの行数と、後続の spec が足す余地をどう確保したかを設計に記録する。どのファイルも 1,000 行の上限は超えない（目安の 700 行は強制値ではないが、上限の 1,000 行は強制値である）。
-3. The file-split 実装 shall 6 本を役割の単位で分け、行数を揃えるための機械的な切り方（同じ役割を行数の都合で 2 つに割る・違う役割を行数合わせで 1 つにまとめる）をしない。切れ目の出発点は brief の Approach（`actor.rs`＝実行時の状態／1 コマの描画の流れ／指令の振り分け、`layout.rs`＝配置の本体／見える範囲の計算／仕上げ、`viewbox.rs`・`viewbox_draw.rs`＝どこを描き直すかの計画／装飾つきの描画、`input_events/balloon.rs`＝選択肢のクリック／中断のダブルクリック／ドラッグ、`emo2_boot/balloon_visibility.rs`＝見える・隠すの判断／時間切れ／窓への反映）とし、最終的な切れ目は設計で確定する。
+3. The file-split 実装 shall 6 本を役割の単位で分け、行数を揃えるための機械的な切り方（同じ役割を行数の都合で 2 つに割る・違う役割を行数合わせで 1 つにまとめる）をしない。切れ目の出発点は brief の Approach（`actor.rs`＝実行時の状態／1 コマの描画の流れ／指令の振り分け、`layout.rs`＝配置の本体／見える範囲の計算／仕上げ、`viewbox.rs`・`viewbox_draw.rs`＝どこを描き直すかの計画／装飾つきの描画、`input_events/balloon.rs`＝選択肢のクリック／中断のダブルクリック／ドラッグ、`emo2_boot/balloon_visibility.rs`＝見える・隠すの判断／時間切れ／窓への反映）とし、最終的な切れ目は設計で確定する。ただし brief の名指しのうち次の 3 つは現物と合わない（ギャップ分析で確認）ので、現物の役割に読み替えて出発点とする——`actor.rs` の「指令の振り分け `dispatch_block`」は実在せず、相当は `TextLayerRuntime::apply_cue`／`input_events/balloon.rs` に「中断のダブルクリック」（`input_events/user_break.rs`）と「ドラッグ」（wintf と `placement`）の本体は無く、実在する役割は受け渡しの型・判定の純関数・ホバーの追従・クリック・離脱・結線の 6 つ／`balloon_visibility.rs` の「窓への反映」は既に子 `balloon_visibility_phase.rs`（変更 0 の対象）にあり、残る役割は待ち時間の設定・型・見える・隠すの判断・時間切れの 4 つ。
 4. The file-split 実装 shall 分割で新しく作ったモジュールそれぞれの doc に、そのモジュールの役割と、そこへ行を足す予定の後続の spec の名前を 1〜2 行で書く。spec は名前で書き、台帳の番号は使わない。
-5. When 分割が終わったとき, the file-split 実装 shall 子モジュールの一覧を述べている既存の doc（`crates/areka-emo-text/src/lib.rs` 冒頭の層規律の段落など）を、分けた後の実際の子モジュールと食い違わない状態にする。
+5. When 分割が終わったとき, the file-split 実装 shall 子モジュールの一覧を述べている既存の doc（`crates/areka-emo-text/src/lib.rs` 冒頭の層規律の段落、steering `.kiro/steering/structure.md` の emo-text の主要ファイルの列挙など）を、分けた後の実際の子モジュールと食い違わない状態にする。
 
 ### Requirement 2: 振る舞いを変えない
 
@@ -56,7 +56,7 @@
 #### Acceptance Criteria
 
 1. The file-split 実装 shall 分割の前後で、バルーンの文字の描画・選択肢のクリックとホバー・ダブルクリックでの中断・バルーンのドラッグ・バルーンの表示と非表示と時間切れの振る舞いを変えない。
-2. The file-split 実装 shall コードを項目（関数・型・定数・`impl` の塊）の単位で動かし、項目の中身を書き換えない。許す差分は、`use` とモジュールの宣言、移動に伴って必要になる crate の内側に閉じた可視性の付与、Requirement 1.4 の doc の行、意味の変わらない整形の折り返しだけとする。
+2. The file-split 実装 shall コードを項目（関数・型・定数・`impl` の塊）の単位で動かし、項目の中身を書き換えない。許す差分は、`use` とモジュールの宣言、移動に伴って必要になる crate の内側に閉じた可視性の付与、1 つの型の `impl` の塊を複数のファイルへ分けるための `impl X {`／`}` の行、Requirement 1.4 の doc の行、意味の変わらない整形の折り返しだけとする。
 3. Where 設計が `layout.rs` の大きい関数（公開の入口 `layout_with_cursor_warn` とその本体 `layout_inner`）を複数の関数へ割ると裁定したとき, the file-split 実装 shall Requirement 2.2 の例外をその関数だけに限り、割った理由を設計に記録し、割った後も既存のテストが Requirement 4 のとおり書き換えなしで緑であることで振る舞いが同じであることを示す。設計が割らないと裁定したときは、Requirement 2.2 の例外は 0 件である。
 4. The file-split 実装 shall ログの文言・レベル・出る条件を変えない。ログの発生元の名前（モジュールの道筋）は、移動に伴って元の名前を頭に持つ子の道筋へ変わることだけを許し、`RUST_LOG` の前置きの絞り込み（例 `areka_emo_text::actor=debug`）が分割前と同じ行を拾うことを保つ。
 5. If 発生元の名前の完全一致でログを判定している箇所が、移動するログの発生元に掛かっていると設計で分かったとき, the file-split 実装 shall そのログを出す項目を動かさずに元のモジュールへ残す。要件定義の時点で、6 本の発生元の名前を完全一致で判定する箇所は 0 件である。
@@ -69,7 +69,7 @@
 
 #### Acceptance Criteria
 
-1. When 分割が終わったとき, the file-split 実装 shall 6 本が分割前に `pub`・`pub(crate)`・`pub(super)` で公開していたすべての名前に、分割前と同じ道筋と同じ可視性で届く状態を保つ。動かした名前は、元のモジュールからの再輸出で今の道筋を残す。
+1. When 分割が終わったとき, the file-split 実装 shall 6 本が分割前に `pub`・`pub(crate)`・`pub(super)` で公開していたすべての名前に、分割前と同じ道筋と同じ可視性で届く状態を保つ。動かした名前は、元のモジュールからの再輸出で今の道筋を残す。ただし本番のビルドで元のモジュールの外から 1 か所も使われていない名前（テストからだけ引かれる名前）は、Requirement 2.7 の警告を増やさないために、テストのビルドでだけ束ね直す書き方を許す（書き方は設計で決める）。
 2. The file-split 実装 shall 分割で新しく作った子モジュールを、元のモジュールの外から見えない形で宣言し、新しい公開の道筋を 0 本に保つ。
 3. The file-split 実装 shall 名前を呼んでいる側の本番のコード（6 本と分けた先の新しいファイル以外のモジュール・他の crate）と、examples・統合テスト（`tests/` の下）の変更を 0 行にする。6 本に接続されている兄弟のテストファイルの `use` の付け替えは Requirement 4.3 が、構造テストの追随は Requirement 5 が扱う。
 4. The file-split 実装 shall `crates/areka/src/emo2_boot/balloon_visibility.rs` の子モジュール `balloon_visibility_phase.rs` が親から引いている名前に、分割前と同じ書き方で届く状態を保ち、`balloon_visibility_phase.rs` の変更を 0 行にする。
@@ -93,16 +93,17 @@
 
 #### Acceptance Criteria
 
-1. The file-split 実装 shall 要件定義の時点で確かめた次の 4 つの構造テストを、分割でコードが動いた後も同じ約束を判定する状態に保つ。
+1. The file-split 実装 shall 要件定義とギャップ分析の時点で確かめた次の構造テスト（4 つと、条件つきの 1 つ）を、分割でコードが動いた後も同じ約束を判定する状態に保つ。
    - `crates/areka-emo-text/src/lib.rs` の層規律の見張り（`windows` 依存が純粋層に無いことを、純粋層のファイルの一覧で読んで判定する。`src/*.rs` の実ファイルがどちらかの一覧に必ず載っていることも突き合わせる）
    - `crates/areka-emo-text/src/layout_cursor_overflow_tests.rs` の「行を閉じる入口の数」（`layout.rs` の字面で `finish_line(` と `finish_pending_line(` を数え、`finish_pending_line` が `layout.rs` の私有関数であることを判定する）
    - `crates/areka-emo-text/src/layout_styled_tests.rs` の「行送りの式へ届く点は 1 つだけ」（配置層の 3 ファイルの字面を読む）
    - `crates/areka/src/emo2_boot/frame_attach_tests.rs` の「状態表の走査点の登記」（`crates/areka-emo-text/src/actor.rs` を走査点の 1 つとして登記している）
+   - （条件つき）`crates/areka-emo-text/src/draw_format_metrics_tests.rs` の「`draw` で始まる本番ファイルの一覧」（新しいファイル名を `draw` で始めたときだけ反応する。ギャップ分析で確認）
 2. When 分割で動いたコードが、構造テストが読んでいたファイルから別のファイルへ移ったとき, the file-split 実装 shall そのテストの「読むファイルの一覧」（一覧そのもの・一覧の件数を固定する数・登記の道筋）を、移った先を含むように追随させ、分割後に読む範囲が分割前に読んでいたコードをすべて含むようにする。
 3. The file-split 実装 shall 構造テストの判定と期待値（数える回数・判定する性質）を変えない。
 4. If 追随させるには構造テストが保証する性質そのもの（例: 「`finish_pending_line` は `layout.rs` の私有関数で、呼び出し元が同じファイルに閉じている」）を変える必要があるとき, the file-split 実装 shall その項目を動かさずに元のファイルへ残す。
-5. When 分割で `crates/areka-emo-text/src/` に新しいファイルを足したとき, the file-split 実装 shall そのファイルを層規律の見張りの 2 つの一覧（純粋層として読む一覧・読まない一覧）のどちらかへ、親のモジュールと同じ層として載せる。
-6. The file-split 実装 shall 設計の時点で、上の 4 つ以外に 6 本（と任意の `region.rs`）の中身を字面や道筋で名指ししている見張りが無いかをリポジトリ全体で数え直し、見つかったものも Requirement 5.2〜5.4 と同じ扱いにする。
+5. When 分割で `crates/areka-emo-text/src/` に新しいファイルを足したとき, the file-split 実装 shall そのファイルを層規律の見張りの 2 つの一覧（純粋層として読む一覧・読まない一覧）のどちらかへ載せる。`windows` を使わないファイルは、親が COM・結線層でも純粋層の一覧へ載せる（見張りが強くなる側。先例 `viewbox_draw_plan.rs`）。`windows` を使うファイルだけを読まない一覧へ載せる。
+6. The file-split 実装 shall 設計の時点で、上の 5 つ以外に 6 本（と任意の `region.rs`）の中身を字面や道筋で名指ししている見張りが無いかをリポジトリ全体で数え直し、見つかったものも Requirement 5.2〜5.4 と同じ扱いにする。
 7. The file-split 実装 shall brief の「触るファイル」の外で変更したファイル（上の構造テストのファイルを含む）を設計に一覧で示し、その一覧に Boundary Context の「同じウェーブの他の spec が触る場所」が 1 つも含まれないことを示す。
 
 ### Requirement 6: 番人の例外の表と、触ってはいけない場所
