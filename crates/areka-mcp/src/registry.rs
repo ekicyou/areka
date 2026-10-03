@@ -4,16 +4,6 @@
 //! [`ToolRegistry::register`] で積み、`start` へ渡す。rmcp の `ToolRouter` への写しは
 //! `handler` が 1 度だけ行う。
 
-// 使い手（handler・lib の公開面）が繋がるのは task 3.3。それまでは dead_code を期待として置く
-// （テストのビルドでは registry_tests が使うので期待しない）。
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "handler・公開面からの使用（task 3.3）までは使い手が居ない"
-    )
-)]
-
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;

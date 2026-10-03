@@ -4,12 +4,6 @@
 //! このモジュールだけ。本文の上限は [`MAX_BODY_BYTES`] 1 つを、ここでの読み取りと
 //! rmcp の `with_max_request_body_bytes` の両方へ渡す（設計 B-7）。
 
-// 使い手（server の `start`・受付ループ）が繋がるのは task 3.3。
-#![expect(
-    dead_code,
-    reason = "server からの使用（task 3.3）までは使い手が居ない"
-)]
-
 use std::convert::Infallible;
 use std::sync::Arc;
 

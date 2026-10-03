@@ -19,3 +19,8 @@ mod registry;
 mod server;
 #[cfg(test)]
 mod testkit;
+
+// 公開面（rmcp・tokio・hyper の型は出さない）。
+pub use port::{DEFAULT_PORT, PORT_ENV, port_from_env_value, read_port_env};
+pub use registry::{ToolContent, ToolFuture, ToolHandler, ToolOutcome, ToolRegistry, ToolSpec};
+pub use server::{McpServer, SHUTDOWN_WAIT, start};

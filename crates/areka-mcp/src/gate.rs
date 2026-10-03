@@ -3,12 +3,6 @@
 //! 要求の型（hyper の `HeaderMap`）は受けず、ヘッダの値の文字列 2 つだけを受ける。
 //! 記録（`warn!`）は呼び出し側の `dispatch` が 1 か所で残す。
 
-// 使い手（dispatch）が繋がるのは task 3.3。それまでは dead_code を期待として置く。
-#![expect(
-    dead_code,
-    reason = "dispatch からの呼び出し（task 3.3）までは使い手が居ない"
-)]
-
 /// 拒んだ理由: どちらのヘッダが悪かったかと、その値（`warn!` に載せる）。
 #[derive(Debug, PartialEq, Eq)]
 pub enum Reject {

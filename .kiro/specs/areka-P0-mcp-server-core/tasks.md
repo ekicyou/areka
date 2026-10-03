@@ -40,7 +40,7 @@
   - _Depends: 1.1_
   - _Boundary: registry_
 
-- [ ] 3. MCP と HTTP の層
+- [x] 3. MCP と HTTP の層
 - [x] 3.1 rmcp の `ServerHandler` の実装
   - 登録口の内容を 1 度だけ rmcp の `ToolRouter` へ写し（`ToolRoute::new_dyn`）、一覧・呼び出し・定義の取得をそこへ委ねる（未登録の名前は `-32602`）
   - `get_info` は tools の能力だけ（resources・prompts なし）・`serverInfo` は `areka-mcp-server` と Cargo の版・英文 2 文の `instructions`。版の交渉は rmcp の既定に任せる
@@ -55,7 +55,7 @@
   - 完了の姿: `cargo build -p areka-mcp` が緑・`StatusCode` を綴るのがこのモジュールだけ（振る舞いは 4.3・4.4 で固定）
   - _Requirements: 3.3, 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14, 4.3, 6.3, 6.4, 6.5_
   - _Depends: 2.2, 2.3, 3.1_
-- [ ] 3.3 待受の起動と取っ手
+- [x] 3.3 待受の起動と取っ手
   - 呼び出し側のスレッドで同期に `127.0.0.1` へ束ね、`None` は `info!`（待ち受けない・理由）、失敗は `error!`（番号と OS の理由）で、どちらも待ち受けない取っ手を返す。成功は実番号を取り、`spawn_actor("mcp")` の中で current_thread の tokio と hyper http1 の受付ループを回し、`info!`（URL）で待受中の取っ手を返す
   - 受付の失敗は `warn!`＋100 ms 待って続ける・接続の失敗は `debug!`・ランタイムを作れなければ `error!` でスレッドを終える
   - 取っ手の `Drop`: 取り消し → 受付の口を落とす → 開いた接続を待たずにランタイムを畳む → 2 秒を上限に終わりを待つ → 閉じた `info!`（待ちきれたときだけ `warn!`）。待ち受けていない取っ手は何もしない

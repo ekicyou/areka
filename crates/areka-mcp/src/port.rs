@@ -4,13 +4,6 @@
 //! `areka::perf_thread_report::period_from_env_value`）、環境変数を読むのは
 //! [`read_port_env`] の 1 か所だけ。
 
-// 公開面（lib.rs の再輸出）は task 3.3 が出す。それまでは使い手が居ないので dead_code を
-// 期待として置く。expect なので、再輸出が入って警告が消えると逆に警告が出て外し忘れない。
-#![expect(
-    dead_code,
-    reason = "lib.rs からの再輸出（task 3.3）までは使い手が居ない"
-)]
-
 use std::env::VarError;
 
 use tracing::warn;

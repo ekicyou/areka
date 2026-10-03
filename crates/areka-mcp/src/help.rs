@@ -1,15 +1,5 @@
 //! 登録案内の HTML（日本語・5 項目）。
 
-// 使い手（dispatch）が繋がるのは task 3.3。それまでは dead_code を期待として置く
-// （テストのビルドでは help_tests が使うので期待しない）。
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "dispatch からの呼び出し（task 3.3）までは使い手が居ない"
-    )
-)]
-
 use crate::port::{DEFAULT_PORT, PORT_ENV};
 
 /// 登録手順の日本語 HTML を実際の番号 `port` で組む（要件 6.1・6.2）。

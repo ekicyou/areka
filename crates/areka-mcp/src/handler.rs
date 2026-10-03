@@ -4,12 +4,6 @@
 //! [`ArekaHandler::new`] が 1 度だけ `ToolRouter` へ写し、一覧・呼び出し・定義の取得は
 //! そこへ委ねる（未登録の名前は `ToolRouter::call` が `-32602` にする＝設計 B-6）。
 
-// 使い手（dispatch の `StreamableHttpService`・server の `start`）が繋がるのは task 3.2・3.3。
-#![expect(
-    dead_code,
-    reason = "dispatch・server からの使用（task 3.2・3.3）までは使い手が居ない"
-)]
-
 use std::borrow::Cow;
 use std::sync::Arc;
 
