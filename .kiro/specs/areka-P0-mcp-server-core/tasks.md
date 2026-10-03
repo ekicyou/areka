@@ -48,7 +48,7 @@
   - 完了の姿: `cargo build -p areka-mcp` が緑・rmcp の `ServerHandler`／`ToolRouter` を綴るのがこのモジュールだけ（振る舞いは 4.3・4.4 の実ソケットのテストで固定）
   - _Requirements: 3.1, 3.2, 3.4, 3.6, 7.1, 7.3_
   - _Depends: 2.4_
-- [ ] 3.2 要求 1 件の検査・振り分け・記録
+- [x] 3.2 要求 1 件の検査・振り分け・記録
   - rmcp の設定を 1 か所で組む（無状態・JSON 単発・本文の上限 4 MiB を 1 つの定数で両側へ・取り消しの合図・`allowed_hosts` 既定・`allowed_origins` 空）。3.1 の handler を包む
   - 検査をパスによらず最初に掛け、拒めば `warn!` 1 件（値つき）＋403 平文。次に `/api/mcp/v1` は method を問わず本文を上限まで集めて（超えたら 413）rmcp へ、`GET /api/mcp/help` は 200 の HTML、help の他 method は 405（`Allow: GET`）、他のパスは 404
   - 本文から method と id を寛容に覗き（読めなければ `-`）、応答が決まったら `debug!` 1 件（method・id・status・path）
