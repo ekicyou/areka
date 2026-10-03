@@ -19,7 +19,7 @@
 - SSTP・コミュニケート・プラグインなど新しい台詞の出所。Reference1 の出所の語彙。
 - `%(...)` の展開。新しい環境変数名への対応。
 - 再生側（`areka-sakura` の `compile`・`areka-ghost` の `dispatcher`）の振る舞いの変更。`areka-talk` の `StartTalk` の型の変更。
-- `ShioriBackend` の関数の形の変更（17 個の実装に触れない）。
+- `ShioriBackend` の関数の形の変更（16 個の実装に触れない）。
 
 ## Boundary Commitments
 
@@ -129,7 +129,7 @@ graph TB
 | 4 展開の置き場所 | 外から関数で渡す（`ScriptExpander`）。殻が `Action::Translate` の実行の中で呼ぶ。中身は `areka-ghost` が組む | **kanade が `areka-sakura` に依存する**: 運行が再生側の部品へ依存する向きが新しく生まれる。`Cargo.toml` を触る。値の源は結局外から要る。**運行表（`step`）の中で呼ぶ**: 値を読む関数なので運行表が純粋でなくなる。**kanade が `username` を自分で持つ**: `selfname` 等を拾えず要件 2.3 を満たさない |
 | 5 展開の字句の規則 | `areka-parsers` に公開の置き換え関数 `substitute_system_vars` を足す。字句解析の走査の本体を 1 本にして `lex` と共有する | **既知の名前の最長一致の文字列走査**（brief の案）: `%usernameabc` が今日は `%usernameabc` のまま、最長一致だと「太郎abc」になり要件 2.5 に反する。規則の写しを 2 か所に持つことにもなる |
 | 6 値に `\` や `%` があるとき | `\` を `\\`、`%` を `\%` にして埋める。加えて、埋めた結果の読みが元の読みと同じであることを照合し、違えばその台詞は展開せずに元のまま返す（警告を 1 件） | **そのまま埋める**: 再生時の字句解析が値をタグや環境変数として読み直し、今日と表示が変わる。**照合なし**: `\w%username`（値が数字で始まる）・`\n%username`（値が `[` で始まる）・`\_%username` などで、直前のタグが値の先頭を飲み込む |
-| 8 Reference1 の欠番 | 線の層に「欠番の印」を 1 つ決め、`build_request` がその位置の行を出さず番号を保つ | **Reference の型を「値か欠番か」に変える**: `ShioriBackend` の 17 個の実装と、記録した Reference を比べる多数のテストが変わる。`crates/areka/src/emo2_boot/spine.rs`（998 行・境界の外）の関数の形も変わる。**空文字で送る**: 要件 3.3 が求める「行そのものが無い」にならない |
+| 8 Reference1 の欠番 | 線の層に「欠番の印」を 1 つ決め、`build_request` がその位置の行を出さず番号を保つ | **Reference の型を「値か欠番か」に変える**: `ShioriBackend` の 16 個の実装と、記録した Reference を比べる多数のテストが変わる。`crates/areka/src/emo2_boot/spine.rs`（998 行・境界の外）の関数の形も変わる。**空文字で送る**: 要件 3.3 が求める「行そのものが無い」にならない |
 | 9 `OnTranslate` の Status | 捕まえた時点（腕が相を決めた後＝再生を始める時点）の `State::snapshot` から導く | **元のイベントを送った時点の値を写す**: 既存の決まり「Status は送る時点の運行の状態から導く」の例外になる。起動の挨拶では直後の `basewareversion` と食い違う |
 | 10 選択の後の `OnTranslate` の輸送路の失敗 | 故障（終了系列）にする。翻訳の結果は専用の入力で戻るので、選択の往復の例外（失敗を 204 と同じに扱う）の腕を通らない | **選択の例外に揃える**: 要件 4.5 が例外を禁じる |
 | 13 既存テストの扱い | 期待の列に `OnTranslate` を書き足す。偽の SHIORI は既定で 204 を返し、記録には残す | **比べる道具に「`OnTranslate` を除いて比べる」を足す**: 送っていることが既存テストから見えなくなり、往復の数（要件 5.6）の後退を見逃す |
@@ -248,13 +248,13 @@ flowchart TD
 | 2.3 | 今日と同じ規則・値の源・既定値 | SysVarExpander・TranslateWiring | `expand_system_vars`（`resolve_system_var` を使う） | — |
 | 2.4 | 値の無い名前は綴りのまま | SysVarExpander | `resolve` が `None` を返す名前は置き換えない | — |
 | 2.5 | 204 で今日と 1 文字も違わない | SysVarSubstitution・SysVarExpander | エスケープ＋同値の照合 | — |
-| 2.6 | 残った綴りは再生時に展開 | （変更なし） | `compile` の `SystemVar` の腕を残す | — |
+| 2.6 | 残った綴りは再生時に展開 | （変更なし） | `compile` の `SystemVar` の腕を残す。`crates/areka-ghost` のテストで確かめる | — |
 | 3.1 | GET を 1 回・空の 200 には送らない | TranslateLedger | `defer` の条件（中身が 1 文字以上） | — |
 | 3.2 | Reference0・2・3 | OnTranslateCall | `on_translate` | — |
 | 3.3 | Reference1 は欠番 | AbsentReference・OnTranslateCall | `ABSENT_REFERENCE`・`build_request` | — |
 | 3.4 | 許可表に加える | OnTranslateCall | `ALLOWED_EVENT_IDS` | — |
-| 3.5 | 切替の間の送り先 | （構造） | kanade と SHIORI はゴーストごとに 1 組 | — |
-| 3.6 | 他の GET と同じ見出し | OnTranslateCall | `ExecutionStatus::derive`・線の `SecurityLevel` | — |
+| 3.5 | 切替の間の送り先 | （構造） | kanade と SHIORI はゴーストごとに 1 組。`crates/areka-ghost` の切替のテストで確かめる | — |
+| 3.6 | 他の GET と同じ見出し | OnTranslateCall | `ExecutionStatus::derive`・線の `SecurityLevel`。`actor_translate_tests.rs` で確かめる | — |
 | 3.7 | URL の注記と台帳 | OnTranslateCall・文書 | 許可表の注記・`shiori.toml` | — |
 | 4.1 | 200 の台詞を MAKOTO の口へ | TranslateRunner・TranslateLedger | `read_reply` | 応答の読み方 |
 | 4.2 | 200 で空は空を採用 | TranslateLedger | `read_reply` | 同上 |
@@ -306,7 +306,8 @@ flowchart TD
 
 **Responsibilities & Constraints**
 - 相・採番・期限・選択の帳簿には触れない。各腕が決めた値をそのまま使う。
-- 捕まえる条件は 3 つすべて: ⑴ この `step` の入力が `Input::ShioriReply` で結果が `Value` ⑵ その台詞が 1 文字以上 ⑶ 返った行動の一括に `Action::StartTalk` がある。
+- 捕まえる条件は 4 つすべて: ⑴ この `step` の入力が `Input::ShioriReply` で結果が `Value` ⑵ その台詞が 1 文字以上 ⑶ 返った行動の一括に `Action::StartTalk` がある ⑷ 元のイベントの ID が `OnTranslate` でない。
+- 条件 ⑷ は、外から頼まれた `OnTranslate`（汎用の通知の入口 `change::on_raise_event` と台詞の切れ目の口 `talk_gap::begin`）の応答を再び翻訳しないためのもの（4.6）。当たったときは `debug!`（`translate_skipped_self`）を 1 件残して今日どおり再生する。
 - 条件 ⑴⑶ を満たすが台詞が 0 文字のときは捕まえず、`trace!`（`translate_skipped_empty`）を 1 件残して今日どおり進む。
 - 元のイベントが分からない（`reply_source` が空）ときは、`error!`（`translate_source_missing`）を残して翻訳せずに再生する（台詞を捨てない）。構造上は起きない。
 - 帳簿は高々 1 つ。帳簿が在る間に外からの入力は届かない（`drive` の中で完結する）。
@@ -357,7 +358,7 @@ pub(super) fn on_done(state: State, result: TranslateResult) -> (State, Vec<Acti
 - Preconditions: `after` は `route` の直後・`talk_gap::observe` の直前に 1 回だけ呼ぶ。
 - Postconditions（`after` が捕まえたとき）: 返る一括は `[Action::Translate]` だけ。`State::translate` は `Some`。相は腕が決めたまま。
 - Postconditions（`on_done` の `Ok(script)`）: 預けた一括の `StartTalk` の `script` を `script` に差し替えて返す（`epilogue` は触らない）。控えを書き換える（下の State Management）。`State::translate` は `None`。
-- Postconditions（`on_done` の `Err`）: `error!`（`translate_failed`）の上で預けた一括を捨て、`to_unloading_fault` と同じ遷移を返す。
+- Postconditions（`on_done` の `Err`）: `error!`（`translate_failed`）の上で預けた一括を捨て、`to_unloading_fault` と同じ遷移を返す。相が `ChangeTalkWait` で `talk_id` が帳簿と同じなら、その前に `ChangeState.script` を空にする（表示しなかった台詞を「切り替え時のスクリプト」として次のゴーストへ渡さない・6.2）。
 - Invariants: 入力が `Input::TranslateDone` の `step` では `after` は捕まえない（翻訳の結果を再び翻訳しない）。
 
 **`read_reply` の表**
@@ -412,7 +413,7 @@ pub fn on_translate(expanded: &str, source: &SourceEvent, status: ExecutionStatu
 - `SourceEvent` は `events.rs` に置く（公開の関数 `on_translate` の引数なので、`crate::events` の公開面に出る）。
 
 **Implementation Notes**
-- Risks: 許可表に載るので、汎用の通知の入口（`change::on_raise_event`）から `OnTranslate` を頼めるようになる。既に表にある `OnClose`・`OnFirstBoot` などと同じ扱いで、害は台詞が 1 つ流れるだけ。表を「送ってよい」と「外から頼める」に分ける仕組みは作らない。
+- Risks: 許可表に載るので、汎用の通知の入口（`change::on_raise_event`）と台詞の切れ目の口（`talk_gap::begin`）から `OnTranslate` を頼めるようになる。既に表にある `OnClose`・`OnFirstBoot` などと同じ扱いで、応答の台詞は 1 つ流れる。その台詞は出口の規則の条件 ⑷ で翻訳しない（`OnTranslate` の応答に `OnTranslate` を送らない）。表を「送ってよい」と「外から頼める」に分ける仕組みは作らない。
 
 ### kanade 殻
 
@@ -433,7 +434,7 @@ pub(crate) fn run_translate(
 ) -> TranslateResult;
 ```
 - 順序: ⑴ `(seams.expand)(&request.script)` ⑵ `events::on_translate` ⑶ 生の往復（許可表の検査と `shiori_request` の記録は今日の `round_trip_request` と同じ関数を通す・エラー応答の 204 への写しだけ通さない） ⑷ `translate::read_reply` ⑸ `Proceed(text)` なら `(seams.makoto)(&text, request.source.id.as_str())` を返す。`Failed` はそのまま返す。
-- `actor.rs` の変更: `execute_actions` の `Action::Translate` の腕が `run_translate` を呼び、結果をその一括の「入れ直すもの」にする。`drive` は入れ直すものが SHIORI の応答なら `Input::ShioriReply`、翻訳の結果なら `Input::TranslateDone` を入れる。汎用の通知の入口の返事（最初の一括の往復の結果）は今日のまま（翻訳は 2 つ目以降の一括にしか現れない）。
+- `actor.rs` の変更: `execute_actions` の `Action::Translate` の腕が `run_translate` を呼び、結果をその一括の「入れ直すもの」にする。`drive` は入れ直すものが SHIORI の応答なら `Input::ShioriReply`、翻訳の結果なら `Input::TranslateDone` を入れる。汎用の通知の入口の返事（最初の一括の往復の結果）は今日のまま（翻訳は 2 つ目以降の一括にしか現れない）。停止の原因と引き継ぎの控え（`stop_cause_of`・`handoff_of`）は、翻訳の結果を入れ直す枝でも SHIORI の応答の枝と同じに取る（輸送路の失敗で止まるとき原因を落とさない）。
 - `round_trip_request` は「検査して送って生の結果を返す関数」と、それを呼んでエラー応答を写す今日の関数に分ける。既存の呼び手の振る舞いは変えない。
 
 **Implementation Notes**
@@ -493,6 +494,7 @@ pub const ABSENT_REFERENCE: &str = "\u{0}";
 ```
 - `build_request` は Reference を番号つきで書く繰り返しの中で、値が `ABSENT_REFERENCE` と一致する位置を飛ばす（番号は詰めない）。他の値の書き方は 1 バイトも変えない。
 - 値に NUL 1 文字を選ぶ理由: 見出しの値として線に載せられない文字で、実際の Reference の値と重ならない。Reference3 の区切りのバイト値 1 とも重ならない（元のイベントの Reference が空文字 2 個のとき Reference3 は「バイト値 1 が 1 個」になるので、バイト値 1 は印に使えない）。
+- **印が外から紛れ込むのを止める**: 殻が往復を送る 1 か所（`round_trip_request` から分ける「検査して送って生の結果を返す関数」）で、Reference の値が印と一致する位置を調べ、`OnTranslate` の添字 1 以外なら `warn!`（`reference_absent_marker_replaced`・`id`・`index`）を 1 件残して空文字に置き換える。外から入る Reference（汎用の通知の入口・選択肢）や、`OnTranslate` の Reference3（元の Reference が NUL 1 個だけのとき）が印と同じ値でも、行が記録なしに消えることは無い。
 - kanade は `shiori/real.rs`（host32 との境界）から再輸出した名前で使う。偽の SHIORI は印をそのまま受け取るので、テストは「添字 1 が印と等しい」で欠番を確かめ、線の上の欠番は `shiori3` のテストで確かめる。
 
 ### 字句と値
@@ -591,6 +593,7 @@ pub(crate) fn split_source(source: SystemVarSource) -> (SystemVarSource, SystemV
 | GET では起きない結果（`Notified`・`Unloaded`） | 204 と同じ | `warn!` `translate_reply` `kind=unexpected` |
 | 元のイベントが分からない | 翻訳せずに再生する | `error!` `translate_source_missing` `talk_id` |
 | 帳簿が無いのに翻訳の結果が届いた | 捨てる | `warn!` `translate_done_unexpected` |
+| Reference の値が欠番の印と同じ（`OnTranslate` の添字 1 以外） | 空文字に置き換えて送る | `warn!` `reference_absent_marker_replaced` `id` `index` |
 | 展開で読みが変わる | その台詞は展開せずに翻訳へ渡す | `warn!` `sysvar_expand_fallback`（`areka-sakura`） |
 | 写しの源の排他が壊れている（`split_source`） | 空の写しで進む（`username` は既定値になる） | `error!` `translate_snapshot_poisoned`（`areka-ghost`） |
 
@@ -603,6 +606,7 @@ pub(crate) fn split_source(source: SystemVarSource) -> (SystemVarSource, SystemV
 | `translate_reply` | `info`（`replaced`・`empty`・`no_content`） | 応答を読んだとき | `source`・`kind` |
 | `translate_resume` | `debug` | 預けた一括を返したとき | `talk_id`・`changed`（最終の台詞が SHIORI の返した台詞と違うか） |
 | `translate_skipped_empty` | `trace` | 0 文字の台詞を翻訳せずに通したとき | `talk_id` |
+| `translate_skipped_self` | `debug` | 外から頼まれた `OnTranslate` の応答を翻訳せずに通したとき | `talk_id` |
 | `shiori_request` | `trace`（既存） | `OnTranslate` を送る直前 | 既存の欄 |
 
 本 spec が足す分岐は上の 2 つの表ですべてで、記録の無いまま進む経路は 0 本（8.4）。
@@ -616,22 +620,23 @@ pub(crate) fn split_source(source: SystemVarSource) -> (SystemVarSource, SystemV
 - 同: areka が作る台詞（起動で 204・起動の記録あり）は `[StartTalk, …]` がそのまま出ること。0 文字の `Value` も翻訳されないこと（⑼・3.1）。
 - 同: 再生を始めた後の相・期限・`talk_gap` の結果が、翻訳なしの今日の値と同じこと（5.5）。印のイベント（`OnShellChanging`）の台詞で見張りが「印の台詞」を追うこと。
 - 同: `TranslateDone(Ok)` の後、`ActiveTalk.script` と `ChangeState.script` が最終の台詞になり、`OnChoiceTimeout` の Reference0 と停止通知の切替の中身がその値になること。切替の `OnClose` の台詞では `ChangeState.script` が変わらないこと（⑻）。
-- `translate_tests.rs`: `read_reply` の表の全行（⑶・⑹）。`on_done` の `Err` で `Unloading{Fault}` になり預けた一括が出ないこと。選択の連鎖の後でも故障になること（論点 10）。翻訳の結果の `step` で `Translate` が出ないこと（⑷）。帳簿なしの `TranslateDone` が捨てられること。
+- `translate_tests.rs`: `read_reply` の表の全行（⑶・⑹）。`on_done` の `Err` で `Unloading{Fault}` になり預けた一括が出ないこと。選択の連鎖の後でも故障になること（論点 10）。翻訳の結果の `step` で `Translate` が出ないこと（⑷）。元のイベントが `OnTranslate` の `Value` は翻訳されず `StartTalk` がそのまま出ること（⑷・条件 ⑷）。切替の送り出しの翻訳が `Err` のとき `ChangeState.script` が空になること。帳簿なしの `TranslateDone` が捨てられること。
 - `events_tests.rs`: `on_translate` の Reference0〜3（Reference が 0 個・1 個・複数・空文字を含む・選択肢の任意名）と添字 1 の欠番の印（⑸）。許可表の数 46。
 - `shiori3` のテスト: 欠番の印の位置に `Reference1:` の行が無く、`Reference2:`・`Reference3:` の番号が保たれること。印を含まない要求のバイト列が変わらないこと（⑸）。
 - `lexer_substitute_tests.rs`: 貪欲な名前（`%usernameabc` は置き換えない）・タグの角括弧の中の `%`・`\%`・`\\`・未閉じの `[`・値の中の `\` と `%` のエスケープ・`resolve` が `None` の名前は 1 バイトも変わらないこと。
 - `sysvar_expand_tests.rs`: `%usernameさん` → `太郎さん`・既定値・`selfname` 等・値の無い名前は綴りのまま。読みが変わる並び（`\w%username` で値が数字始まり・`\n%username` で値が `[` 始まり・`\_%username`）で元の文字列が返ること。展開した文字列と元の文字列を `parse`・`compile` に通した結果の文字の並びが同じであること（2.5）。
 
 ### Integration Tests（殻・偽の SHIORI）
-- `actor_translate_tests.rs`: 展開の関数に「`%username` → 太郎」を渡し、偽の SHIORI が `OnTranslate` の Reference0 に `太郎さん` を受け取ること（⑵）。応答の行列（200 で置換・200 で空・204・エラー応答・輸送路の失敗）ごとに再生側へ届く台詞と停止の原因（⑶）。MAKOTO の口が応答の種類に依らず 1 回ずつ呼ばれ、引数が（台詞, 元のイベントの ID）であること（7.3）。台詞 1 つにつき `OnTranslate` が 1 回だけであること（⑷・5.6）。記録の語彙（⑹）。
+- `actor_translate_tests.rs`: 展開の関数に「`%username` → 太郎」を渡し、偽の SHIORI が `OnTranslate` の Reference0 に `太郎さん` を受け取ること（⑵）。応答の行列（200 で置換・200 で空・204・エラー応答・輸送路の失敗）ごとに再生側へ届く台詞と停止の原因（⑶）。MAKOTO の口が応答の種類に依らず 1 回ずつ呼ばれ、引数が（台詞, 元のイベントの ID）であること（7.3）。台詞 1 つにつき `OnTranslate` が 1 回だけであること（⑷・5.6）。記録の語彙（⑹）。`OnTranslate` の `Status` が再生を始める時点の状態（`talking` を含む）で届くこと（3.6）。外から入った Reference が欠番の印と同じ値のとき、空文字に置き換わって警告が 1 件出ること。輸送路の失敗で止まるとき停止の原因が今日の故障と同じであること。
 - 同: `OnTranslate` で止まる偽の SHIORI を使い、待ちの間にマウス・毎秒の時刻・終了の要求・切替の要求・外からの依頼を送る。止めている間は SHIORI へ何も送られず、放した後に `StartTalk` が先に出て、その後で各入力が今日の「再生中」の規則で処理されること（⑺）。
 - `crates/areka-kanade/tests/kanade/`: 既存の結合テストの期待の列に `OnTranslate` を書き足す（偽の SHIORI は未知の GET に 204 を返す既定のまま）。送った ID がすべて許可表にあるテストが通ること。
-- `crates/areka-ghost` のテスト: 本物の結線（sylphya の写し → `expand_system_vars`）で、`username` を持つゴーストの台詞 `%usernameさん` が `OnTranslate` に `太郎さん` で届き、204 のとき再生側の文字の並びが今日と同じこと（2.2・2.5）。`translate_wiring_tests.rs` で 2 つに分けた源が同じ値を返すこと。
+- `crates/areka-ghost` のテスト: 本物の結線（sylphya の写し → `expand_system_vars`）で、`username` を持つゴーストの台詞 `%usernameさん` が `OnTranslate` に `太郎さん` で届き、204 のとき再生側の文字の並びが今日と同じこと（2.2・2.5）。`translate_wiring_tests.rs` で 2 つに分けた源が同じ値を返すこと。偽の SHIORI が `OnTranslate` に `%usernameさん` を含む台詞を 200 で返したとき、再生側の文字の並びが `太郎さん` になること（2.6）。切替のテストで、前のゴーストの送り出しの台詞の `OnTranslate` が前のゴーストの SHIORI にだけ届き、次のゴーストの挨拶の `OnTranslate` が次のゴーストの SHIORI にだけ届くこと（3.5）。
 
 ### E2E
 - emo2 の e2e（`crates/areka/src/` の既存テスト）: 偽の SHIORI の既定の 204 で、表示される台詞が本 spec の前と同じであること。期待の列に `OnTranslate` を書き足す（8.2）。
 - 実機: emo2（pasta）で起動 → 雑談 → 選択肢 → 終了を 1 周し、`RUST_LOG` を `kanade=trace` にして `translate_reply` が `kind=no_content` で台詞ごとに 1 件出ること、台詞の記録が本 spec の前と同じであることを確かめる（8.2）。pasta の振り分け（`vendors/pasta` の `pasta_scripts/pasta/shiori/event/init.lua` の `EVENT.fire`）は、登録の無いイベントで同名のシーンも無ければ 204 を返し、続きを待っているシーンには触れない（設計の時点でソースを読んで確認。実機での確認は実装の最初に行う）。
 - 全体: `pwsh -NoProfile -File tools/test-all.ps1`（8.3）。
+- 行数: 1,000 行の上限はテストのファイルにも効く（`crates/log-capture-kit/tests/file_length_guard_test.rs`）。期待の列を書き足す先のうち `crates/areka-kanade/src/actor_tests.rs`（970 行）と `schedule/steady_flow_tests.rs`（925 行）は余裕が小さいので、タスクで行数を先に見積もり、あふれる分は新しい兄弟ファイルへ置く。
 
 ## Performance & Scalability
 - 台詞が返ったイベント 1 つにつき SHIORI の往復が 1 回増える（数ミリ秒）。毎秒のポンプは台詞が返ったときだけ。
@@ -661,6 +666,8 @@ pub(crate) fn split_source(source: SystemVarSource) -> (SystemVarSource, SystemV
 
 7. `OnTranslate` の Status は再生を始める時点の運行の状態から導く。
 8. 展開した値の中の `\` と `%` は文字として読まれる形（`\\`・`\%`）で Reference0 に入る。
-9. 展開すると台本の読みが変わる台詞は、翻訳の前には展開しない（Reference0 に `%名前` が残る）。
+9. 展開すると台本の読みが変わる台詞は、翻訳の前には展開しない（Reference0 に `%名前` が残る。要件 2.2 のただし書き）。
+10. 外から頼まれた `OnTranslate` の応答の台詞は翻訳しない。
+11. Reference の値が NUL 1 文字だけのときは空文字で送る（`OnTranslate` の Reference1 の欠番の印と区別するため）。
 
 既存の行「`%username` 既定値」には、展開が翻訳の前でも同じ定義点（`DEFAULT_USERNAME`）を使うことを書き足す。
