@@ -283,3 +283,8 @@
 - [rust-lang/crates-io-auth-action](https://github.com/rust-lang/crates-io-auth-action) — 鍵の受け取り
 - [crates.io の索引](https://index.crates.io/) — 版の有無の判定
 - 上の §8 の出典（きっかけの壁・速さの上限・`--workspace` と既に在る版）
+
+## 設計討議の追記（2026-10-03）
+
+- 検証の指摘 1（全体テストの新しい段がネットを要る）→ 包むだけの形を `cargo package --no-verify --allow-dirty --locked --offline` に改めた（`design.md` 決定 9）。版を 0.0.2 に上げた写しで、ネットを塞いでも終了コード 0。`cargo publish --dry-run` は同じ状態で終了コード 101。要件 2.11 の包むだけの形の範囲から 2.10 を外した。
+- 検証の指摘 2（やり直しの切り分け）→ 決定 6 と手順書の節に、workflow の誤り・スクリプトの誤り・記録だけ赤、の 3 つを書いた。

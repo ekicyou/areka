@@ -147,7 +147,9 @@ graph TB
 
 **決定 6: 公開の段に乾いた走りの口は作らない**
 
-- 公開の段は、上げる直前まで何も変えない読み取りだけの段でできている。初回（`v0.0.2`）で workflow の書き方に誤りがあっても、何も上がらずに止まる。workflow のファイルは既定の枝（main）の物が使われるので、main で直してから同じ版で手で起動し直せる（3.3・4.8）。
+- 公開の段は、上げる直前まで何も変えない読み取りだけの段でできている。初回（`v0.0.2`）で workflow の書き方に誤りがあっても、何も上がらずに止まる。workflow のファイルは既定の枝（main）の物が使われるので、workflow の誤りは main で直してから同じ版で手で起動し直せる（3.3・4.8）。
+- 直せるのは workflow のファイルだけ。`tools/crates-io.ps1` はタグのコミットの物が使われるので、スクリプトの誤りは main で直しても同じ版には効かない。そのときは同じ版を予備の手順（3.5）で出し、直したスクリプトは次の版から効く。この切り分けを手順書の「止まったときのやり直し」に書く。
+- 公開の段の中の判定「公開の段の形」が見るのは、タグのコミットに在る `crates-io.yml` の写し。実際に動く main の物は、全体テストが毎回見張る。
 
 **決定 7: Trusted Publishing の設定に GitHub の environment は使わない**
 
@@ -156,6 +158,13 @@ graph TB
 **決定 8: 確認の作業の置き場は `target\crates-io\`**
 
 - cargo の既定の置き場 `target\package\` は `tools/package.ps1` が自分の置き場として使っている。`--target-dir target/crates-io` で分ける。包んだ `.crate` は `target\crates-io\package\tmp-crate\{名前}-{版}.crate` に出る。
+
+**決定 9: 包むだけの形はネットを使わない（設計討議・検証の指摘 1）**
+
+- 包むだけの形は `cargo package --no-verify --allow-dirty --locked --offline` で包む。組み立てまでの形は `cargo publish --dry-run`（crates.io の索引を読む）のまま。
+- 理由: `tech.md` の Testing 節は「ネットへ出るテストは常時テストに入れない」と定める。`cargo publish --dry-run` は索引を読むので、ネットを塞ぐと終了コード 101 で落ちる（実測）。今の全体テストは、一度そろえた手元ではネットなしで緑になる。全体テストは `kiro-complete` の門なので、crates.io の都合でほかの spec の完了を止めない。
+- 実測（設計の変更を当て、版を 0.0.2 に上げた写し・ネットを塞いだ状態）: 終了コード 0 で `dola` 0.0.2・`wintf` 0.0.2 を包めた（`dola` 0.0.2 が crates.io に無くても、cargo の仮の置き場で `wintf` の依存が解ける＝2.2）。`dola` の版の指定を外すと「dependency `dola` does not specify a version」で終了コード 101（1.7 の漏れも見つかる）。
+- 手放すもの: 包むだけの形では「その版は既に在る」の表示（2.10）が出ない。この表示は組み立てまでの形と `-Pending` が持つ。要件 2.11 の包むだけの形の範囲から 2.10 を外した。
 
 ## File Structure Plan
 
@@ -243,9 +252,9 @@ flowchart TD
 | 2.7 | 終了コード | 確認スクリプト | 0／1 | − |
 | 2.8 | 追跡ファイルを書き換えない・`target\` の外に置かない | 確認スクリプト | `--locked`・`--target-dir target/crates-io` | − |
 | 2.9 | 完了時に両方の形で緑 | 確認スクリプト | Testing の「完了時の確認」 | − |
-| 2.10 | 既に在る版は失敗にしない | 確認スクリプト | cargo の警告（名前つき・終了コード 0） | − |
-| 2.11 | 2 つの形を引数で選ぶ | 確認スクリプト | `-Verify` | − |
-| 2.12 | 全体テストの段 | `test-all.ps1` | `Step` 1 行・`--allow-dirty` | − |
+| 2.10 | 既に在る版は失敗にしない | 確認スクリプト | `-Verify` の形での cargo の警告（名前つき・終了コード 0）・`-Pending` | − |
+| 2.11 | 2 つの形を引数で選ぶ | 確認スクリプト | `-Verify`・決定 9 | − |
+| 2.12 | 全体テストの段 | `test-all.ps1` | `Step` 1 行・`--allow-dirty`・`--offline` | − |
 | 2.13 | 手順書と公開の段は組み立てまで | 手順書・公開の段 | `-Verify` | 公開の段 |
 | 3.1 | 手順書の場所 | 手順書・`tech.md` | `doc/crates-io-publish.md` | − |
 | 3.2 | Trusted Publishing の設定 | 手順書 | 節「設定」 | − |
@@ -302,7 +311,7 @@ flowchart TD
 **Dependencies**
 
 - Inbound: 開発者・`test-all.ps1`・`crates-io.yml`（P0）
-- External: cargo（P0）・`https://index.crates.io/`（`-Pending` のときだけ・P1）
+- External: cargo（P0）・`https://index.crates.io/`（`-Pending` は自分で読む。`-Verify` は cargo が読む。引数なしの形は読まない・P1）
 
 **Contracts**: Service [x]
 
@@ -315,9 +324,9 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 
 | 引数 | 意味 |
 |---|---|
-| （なし） | 包むだけの形。組み立てを省く（`--no-verify`） |
-| `-Verify` | 組み立てまでの形 |
-| `-Version <版>` | ワークスペースの版がこの値と違えば、二つの版を示して失敗（4.3） |
+| （なし） | 包むだけの形。組み立てを省き、ネットを使わない（`cargo package --no-verify --offline`） |
+| `-Verify` | 組み立てまでの形（`cargo publish --dry-run`・crates.io の索引を読む） |
+| `-Version <版>` | ワークスペースの版がこの値と違えば、二つの版を示して失敗（4.3）。`-Pending` と一緒に渡したときも同じ（索引を読む前に失敗する） |
 | `-Pending` | 確認はせず、公開する一覧のうち、ワークスペースの版がまだ crates.io に無いクレートの名前を標準出力に 1 行ずつ出す。人が読む「在る・無い」の行は標準出力と別の流れ（`Write-Host`）に出す |
 
 終了コード: `0` 緑／`1` 失敗（どの判定・どのクレートかを 1 行で示す）。
@@ -330,9 +339,11 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 4. **判定「欄」**（1.3）: 公開する一覧の各クレートの説明・ライセンス・リポジトリが空でない。
 5. **判定「理由」**（1.2・5.5）: 出さない各クレートの設定ファイルに、行頭から `publish = false # 文字` の形の行がある。
 6. **判定「版」**（4.3・`-Version` のときだけ）: 公開する一覧の各クレートの版が渡された値と同じ。
-7. **判定「公開の段の形」**（4.2・4.6）: `.github/workflows/crates-io.yml` の `on:` の直下のきっかけが `workflow_dispatch` だけで、ファイルに `secrets.` の参照が無い。
-8. **包む**（2.1・2.2・2.6・2.10・1.7）: 前回の `.crate` を消してから `cargo publish --dry-run --allow-dirty --locked --target-dir target/crates-io -p dola -p wintf`（包むだけの形は `--no-verify` を足す）。cargo の出力はそのまま見せる。「その版は既に在る」は cargo が名前つきの警告で示し、終了コードは 0 のまま。
-9. **判定「大きさ」**（2.5）: `target\crates-io\package\tmp-crate\{名前}-{版}.crate` が在り、上限以下。超えたら名前と大きさを示す。
+7. **判定「公開の段の形」**（4.2・4.6）: `.github/workflows/crates-io.yml` の `on:` の直下のきっかけが `workflow_dispatch` だけで、ファイルに `secrets.` の参照が無い（workflow が `gh` に渡す鍵は `github.token` と書く）。
+8. **包む**（2.1・2.2・2.6・2.10・1.7）: 前回の `.crate` を消してから包む。cargo の出力はそのまま見せる。
+   - 包むだけの形: `cargo package --no-verify --allow-dirty --locked --offline --target-dir target/crates-io -p dola -p wintf`（決定 9）。
+   - 組み立てまでの形: `cargo publish --dry-run --allow-dirty --locked --target-dir target/crates-io -p dola -p wintf`。「その版は既に在る」は cargo が名前つきの警告で示し、終了コードは 0 のまま（2.10）。
+9. **判定「大きさ」**（2.5）: `target\crates-io\package\tmp-crate\{名前}-{版}.crate` が在り、上限以下（どちらの形でもここに出る・実測）。超えたら名前と大きさを示す。
 
 `-Pending` が行うこと（4.5・4.8・3.4）。
 
@@ -352,8 +363,8 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 
 #### 全体テストの段
 
-- `tools/test-all.ps1` に `Step` を 1 行。包むだけの形は実測で約 7 秒（索引の読み取りを含む）。
-- crates.io の索引を読むので、ネットにつながらないと赤になる。全体テストは既に `rustup target add` と cargo の取得でネットを使うので、新しい前提ではない。
+- `tools/test-all.ps1` に `Step` を 1 行。包むだけの形は数秒（索引を読む形の実測で約 7 秒・読まない形はそれ以下）。
+- ネットを使わない（決定 9）。依存のクレートは、前の段の組み立てで手元に取得済みの物を使う。
 
 ### CI
 
@@ -384,7 +395,7 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 | 残りの判定 | `tools/crates-io.ps1 -Pending -Version {版}` の出力を次の段へ渡す | 4.5, 4.8 |
 | 鍵 | 残りが在るときだけ `rust-lang/crates-io-auth-action@v1` | 4.6 |
 | 公開 | 残りが在るときだけ `cargo publish --locked --no-verify -p {残り…}`。鍵は `CARGO_REGISTRY_TOKEN` の環境変数で渡す | 4.7 |
-| 記録 | 必ず走る。`-Pending` をもう一度呼び、2 クレートの在る・無いを実行の要約へ書く。残りが 0 でなければ失敗 | 4.9 |
+| 記録 | 必ず走る。`-Pending` をもう一度呼び、2 クレートの在る・無いを実行の要約へ書く。残りが 0 でなければ失敗。取り出しより前で止まった回（スクリプトがまだ無い）は「取り出しより前で止まった・何も上げていない」とだけ書く | 4.9 |
 
 - **Idempotency & recovery**: 同じ版で何度起動してもよい。既に在るクレートは飛ばされ、残りが 0 なら何も上げずに成功で終わる。
 - **触らないもの**: Release・添付物・ほかの workflow（4.10）。Release は読むだけ。
@@ -392,7 +403,8 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 **Implementation Notes**
 
 - Integration: 既定の枝の workflow のファイルが使われ、コードとスクリプトはタグのコミットの物が使われる。`release.yml` からの呼び出しは `--ref` を付けても付けなくてもよい。
-- Risks: Trusted Publishing の受け渡しと実際の公開は、本 spec の中では試せない（初めての実走は `release-cycle` の `v0.0.2`）。誤りがあっても上げる前に止まり、main で直して同じ版で起動し直せる（決定 6）。使えないときは手順書の予備の手順。
+- Risks: Trusted Publishing の受け渡しと実際の公開は、本 spec の中では試せない（初めての実走は `release-cycle` の `v0.0.2`）。誤りがあっても上げる前に止まる。workflow の誤りは main で直して同じ版で起動し直し、スクリプトの誤りは予備の手順で出す（決定 6）。
+- Risks: 上げた直後は索引への反映が遅れることがある。「公開」が緑で「記録」だけが赤の回は反映待ちで、時間を置いて同じ版で起動し直せば、何も上げずに緑で終わる。
 
 ### 文書
 
@@ -404,7 +416,11 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 2. **Trusted Publishing の設定**（3.2）: crates.io の `wintf`・`dola` それぞれの設定の画面で、持ち主 `ekicyou`・リポジトリ `areka`・workflow のファイル名 `crates-io.yml`・environment は空。最初の自動の公開（`release-cycle` の初回のタグ）より前に済ませる。
 3. **いつもの流れ**: `release.yml` が Release の公開の後に公開の段を呼ぶ。開発者は見守るだけ。
 4. **出たことを確かめる**（3.4）: タグのコミットで `pwsh -NoProfile -File tools/crates-io.ps1 -Pending`。2 クレートとも「在る」で、標準出力が空なら出ている。
-5. **止まったときのやり直し**（3.3）: `gh workflow run crates-io.yml -f version={版}`。既に出たクレートは飛ばされる。
+5. **止まったときのやり直し**（3.3）: `gh workflow run crates-io.yml -f version={版}`。既に出たクレートは飛ばされる。止まり方ごとの切り分けを書く。
+   - workflow のファイルの誤り: main で直してから同じ版で起動し直す。
+   - `tools/crates-io.ps1` の誤り: タグのコミットの物が使われるので、同じ版は予備の手順で出す。直した物は次の版から効く。
+   - 「公開」が緑で「記録」だけが赤: 索引の反映待ち。時間を置いて `-Pending` を手元で走らせるか、同じ版で起動し直す。
+   - `release-cycle` の「赤なら同じ版で再実行しない」は Release を作る `release.yml` の話で、公開の段は同じ版で何度起動し直してもよい。
 6. **予備の手順**（3.5・3.6）: 必達は、全体テストが緑・`tools/crates-io.ps1 -Verify` が緑・作業木がきれいでタグのコミットに居ること。crates.io で、対象を `wintf`・`dola` に絞り期限を切った鍵を作る → `cargo login`（鍵は聞かれてから貼る・コマンドの行に書かない）→ `-Pending` が返したクレートだけを `cargo publish -p … -p …` で出す（順番は cargo が決める）→ `cargo logout` → crates.io で鍵を取り消す。鍵はリポジトリにも GitHub の秘密の置き場にも置かない。
 7. **してはいけない操作**（3.7）: `git remote -v`・`git config --get remote.origin.url`・`.git/config` の表示・cargo の認証のファイルの表示。
 
@@ -413,7 +429,7 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 - **`README.md` の「入手とインストール」**（5.1・5.3）: 入れ方を箇条書きにする（今は「GitHub Releases の zip を展開する」の 1 行。winget の行は後から同じ箇条書きに足せる）。続けて、crates.io に版を出しているのは `wintf`・`dola` だけ・`areka` は 0.0.1 の名前の確保だけで本体と部品は出していない・`cargo install areka` は入れ方ではない（32 ビットの補助 exe が付かない）と書く。
 - **`dist/README.txt` の「■ 入手のしかた」**（5.2・5.3）: 「・」の箇条書きで、入れ方は配布の zip であること、`cargo install areka` では使えないことを平易に書く。winget の行は後から同じ箇条書きに足せる。
 - **`crates/wintf/README.md`・`crates/dola/README.md` の Status 節**（5.6）: 「Version 0.0.1」の表記を外し（版ごとに古びるため）、「名前の確保のための公開」の文を「使える早期の版である・API はまだ安定していない」の文に改める（英語の節なので英語で）。
-- **`tech.md` の「crates.io への公開」**（5.4・5.5・3.1）: 出すのは areka の外でも使える汎用のライブラリだけ（今は `wintf`・`dola`）／出さないクレートは `publish = false # 理由`／新しいクレートを足すときは `publish` の行と理由を必ず書く（書き忘れは全体テストが止める）／確認は `tools/crates-io.ps1`（`-Verify` で組み立てまで）／公開の段は `crates-io.yml`・`workflow_dispatch`・Trusted Publishing／版を上げるときは根の `Cargo.toml` の 2 行／手順書は `doc/crates-io-publish.md`。
+- **`tech.md` の「crates.io への公開」**（5.4・5.5・3.1）: 出すのは areka の外でも使える汎用のライブラリだけ（今は `wintf`・`dola`）／出さないクレートは `publish = false # 理由`／新しいクレートを足すときは `publish` の行と理由を必ず書く（書き忘れは全体テストが止める）／確認は `tools/crates-io.ps1`（`-Verify` で組み立てまで）／全体テストの段はネットを使わない形で包む（Testing 節の「ネットへ出るテストは常時テストに入れない」のまま）／公開の段は `crates-io.yml`・`workflow_dispatch`・Trusted Publishing／版を上げるときは根の `Cargo.toml` の 2 行／手順書は `doc/crates-io-publish.md`。
 
 ## Error Handling
 
@@ -455,7 +471,8 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 
 ### 完了時の確認（2.9）
 
-- 完了のコミットで `tools/crates-io.ps1` と `tools/crates-io.ps1 -Verify` がともに終了コード 0。0.0.1 は既に在るので、cargo の「既に在る」の警告が 2 件出て緑になる（2.10）。
+- 完了のコミットで `tools/crates-io.ps1` と `tools/crates-io.ps1 -Verify` がともに終了コード 0。0.0.1 は既に在るので、`-Verify` の形では cargo の「既に在る」の警告が 2 件出て緑になる（2.10）。
+- ネットを塞いだ状態（届かない代理サーバーを環境変数で指定）で、引数なしの形が終了コード 0（決定 9）。
 - 走らせた前後で `git status --porcelain` が同じ（2.8）。
 
 ### 試せないもの
@@ -471,5 +488,5 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 
 ## Performance & Scalability
 
-- 包むだけの形: 約 7 秒（実測・全体テストに毎回足される分）。
+- 包むだけの形: 数秒（全体テストに毎回足される分・索引を読む形の実測で約 7 秒）。
 - 組み立てまでの形: 空の `target\crates-io\` から 1 分 41 秒（手元の実測）。2 回目からは cargo の差分の組み立てで短くなる。ランナーでは手元より長くなる見込みだが、鍵を受け取る前に済むので鍵の期限に関わらない。
