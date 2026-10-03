@@ -280,6 +280,47 @@ fn emit_barrier(scope: u32, offset: f64, kind: BarrierKind) -> Cue {
     }
 }
 
+/// `\![set,choicetimeout,時間]` の時間の欄の読み取りの結果（design `parse_choice_timeout`）。
+// 2.2 で汎用コマンドの腕から呼ぶまでは本番ビルドで未使用。2.2 の配線でこの許可は外す。
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum ChoiceTimeoutDirective {
+    /// 欄なし・空欄 → 既定へ戻す（区切りには `None` を書く）。
+    Default,
+    /// 整数で読めた → 秒（区切りには `Some(secs)` を書く）。`0`・負は無期限、正は期限。
+    Secs(f64),
+    /// 整数として読めない → 呼び手が警告を出し、既定として扱う（区切りには `None` を書く）。
+    Unreadable,
+}
+
+/// `set,choicetimeout` の `raw_args` から、選択待ちの区切りへ入れる秒の指令を決める純関数
+/// （no I/O・記録を出さない・要件 1.4/1.5/2.1〜2.3/6.1/8.1）。
+///
+/// `raw_args[0] == "choicetimeout"` は呼び手が確かめる。時間の欄は `raw_args[1]` だけを読み、
+/// 3 欄目以降は見ない。前後の空白は落としてから `i64` として読む（`+500` も受ける）。
+/// 桁あふれは正負それぞれ `i64::MAX`／`i64::MIN` ミリ秒へ飽和する。ミリ秒→秒の変換
+/// （`ms as f64 / 1000.0`）はここ 1 か所だけで、値の正規化（`-1` を `0.0` にそろえる等）はしない。
+/// `Secs(v)` の `v` は常に有限。
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn parse_choice_timeout(raw_args: &[String]) -> ChoiceTimeoutDirective {
+    use std::num::IntErrorKind;
+    // 欄なし・空欄（空白だけを含む）は省略と同じ＝既定へ戻す。
+    let field = match raw_args.get(1).map(|f| f.trim()) {
+        None | Some("") => return ChoiceTimeoutDirective::Default,
+        Some(field) => field,
+    };
+    let ms = match field.parse::<i64>() {
+        Ok(ms) => ms,
+        Err(e) => match e.kind() {
+            IntErrorKind::PosOverflow => i64::MAX,
+            IntErrorKind::NegOverflow => i64::MIN,
+            _ => return ChoiceTimeoutDirective::Unreadable,
+        },
+    };
+    ChoiceTimeoutDirective::Secs(ms as f64 / 1000.0)
+}
+
 /// [`compile`] 済み [`CueSheet`] の末尾へ epilogue を汎用キャリア cue として付加する
 /// （決定論・no I/O・design C12・R3.4）。
 ///
@@ -335,6 +376,9 @@ pub struct CompiledTalk {
 #[cfg(test)]
 #[path = "compile_arm_tests.rs"]
 mod arm_tests;
+#[cfg(test)]
+#[path = "compile_choice_timeout_tests.rs"]
+mod choice_timeout_tests;
 #[cfg(test)]
 #[path = "compile_font_tests.rs"]
 mod font_tests;
