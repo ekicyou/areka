@@ -35,6 +35,9 @@ pub mod shiori_wiring;
 pub mod sink;
 pub mod sylphya_wiring;
 pub mod ticker;
+// 起動の結線（task 4.2）が使うまでは使い手が無い。4.2 で `runtime.rs` から呼んだら外す。
+#[allow(dead_code)]
+mod translate_wiring;
 
 // Task 10.1: 固定ログイベント檻の共有基盤（捕捉窓は共有 crate `log-capture-kit` へ委譲し、
 // 並列負荷下の Interest::never 焼き付きを根絶・決定論檻・R9.3／R8.1）。`crate::sylphya_wiring` の

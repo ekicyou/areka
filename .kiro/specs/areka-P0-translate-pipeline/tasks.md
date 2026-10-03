@@ -102,7 +102,7 @@
   - _Requirements: 3.6, 4.5, 5.3, 5.4, 5.6, 8.1_
 
 - [ ] 4. ゴーストの結線
-- [ ] 4.1 写しの源から展開の関数を組む結線を足す
+- [x] 4.1 写しの源から展開の関数を組む結線を足す
   - 写しの源から展開の関数を組む関数と、注入された 1 つの源を翻訳用と再生用の 2 つに分ける関数を足す
   - 翻訳用の sylphya の読み口は、再生用の固定の記録を出さず、別の `debug!`（`translate snapshot from sylphya reader`）を出す。排他が壊れた源は `translate_snapshot_poisoned` を残して空の写しで進む
   - 完了の状態: 分けた 2 つの源が同じ値を返す・翻訳用の読み口が再生用の記録を出さない・排他が壊れたときの記録、のテストが緑
@@ -149,3 +149,4 @@
 - 3.3: 殻の本番の関数は `drive_translating`・`execute_batch` の名前になり、元の `drive`・`execute_actions` は素通しの口を渡す `#[cfg(test)]` の包みとして残した（既存テストを変えないため）。`actor.rs` は 876 行で、3.4 以降で殻に書き足す余地は 120 行ほど。翻訳の失敗で切替の台詞は `None`（下流は `unwrap_or_default()` で空文字）。設計の `translate_tests.rs` の行「選択の連鎖の後でも故障になること（論点 10）」はまだ無いので、3.5 で足す
 - 3.4: `crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` は本 spec の前から 1,129 行で長さの検査の例外表に載っている。期待の列に `OnTranslate` を 1 つ足して 1,135 行（検査は例外のファイルの行数を固定しないので緑・例外表は触らない）。`State` を手で組み `reply_source: None` のまま SHIORI の応答を入れる既存テストは、構造上は起きない `translate_source_missing`（error）の枝を通って今日どおり再生する（触っていない）。主な経路の通過は 3.5 で固定する。3.5 では「204 の応答の `step` で生まれる起動の記録だけの台詞（`StartTalk` あり）を捕まえない」も固定する（3.4 の `no_content_reply_is_not_captured` は `StartTalk` の無い一括しか見ていない）。4.2 で本物の展開を渡すと、`spine_conformance_script.rs` の `translated()` と areka-ghost の `expected_translate` の Reference0（今は展開の前の台詞）が変わる
 - 3.5: 「翻訳なしと同じ」の比べる相手 `translate_path_tests.rs` の `step_untranslated` は `step` の本体から `translate::before`／`after` を除いた写し。`step` の順序を変えたらこの写しも直す。停止通知の切替の中身は源（`State::change.script` が `Unloading` まで最終の台詞のまま）までしか見ていないので、停止通知そのものは 3.6 の殻の結合テストで確かめる。論点 10 のテストは `translate_path_tests.rs` に置いた
+- 4.1: `lib.rs` の `mod translate_wiring;` と `sylphya_wiring.rs` の `translate_snapshot_source` に一時の `#[allow(dead_code)]` がある。4.2 で `runtime.rs` から呼んだら外す

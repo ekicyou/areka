@@ -185,12 +185,37 @@ pub fn from_sylphya_provider(reader: SylphyaReader, asker: AskerId) -> SystemVar
             count = raw.len(),
             "talk snapshot from sylphya reader"
         );
-        let mut snapshot = SystemVarSnapshot::default();
-        for (name, value) in raw {
-            snapshot.insert(name, value);
-        }
-        snapshot
+        snapshot_from(raw)
     })
+}
+
+/// 翻訳用の写しの源を構築する（再生用の [`from_sylphya_provider`] と同じ読み口から読む）。
+///
+/// 再生用の固定の記録「talk snapshot from sylphya reader」は実機の確かめで数を数える記録
+/// なので、翻訳用はそれを出さず、別の記録「translate snapshot from sylphya reader」を出す。
+// 起動の結線（task 4.2）が使うまでは使い手が無い。4.2 で `runtime.rs` から呼んだら外す。
+#[allow(dead_code)]
+pub(crate) fn translate_snapshot_source(reader: SylphyaReader, asker: AskerId) -> SystemVarSource {
+    let ctx = AskerContext { asker };
+    Box::new(move || {
+        let raw = reader.talk_snapshot(&ctx);
+        tracing::debug!(
+            target: "areka_ghost",
+            asker = ctx.asker.as_str(),
+            count = raw.len(),
+            "translate snapshot from sylphya reader"
+        );
+        snapshot_from(raw)
+    })
+}
+
+/// 読み口の写し（名前→値）を sakura の [`SystemVarSnapshot`] へ写す。
+fn snapshot_from(raw: impl IntoIterator<Item = (String, String)>) -> SystemVarSnapshot {
+    let mut snapshot = SystemVarSnapshot::default();
+    for (name, value) in raw {
+        snapshot.insert(name, value);
+    }
+    snapshot
 }
 
 #[cfg(test)]
