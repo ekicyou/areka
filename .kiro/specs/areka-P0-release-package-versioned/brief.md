@@ -57,7 +57,7 @@
 
 ## Constraints
 
-- 触るのは `tools/package-alpha.ps1`（改名するなら新しい名前）・`crates/areka/src/boot_config.rs` とその兄弟テスト・`.kiro/steering/structure.md`・`tech.md`（arm64 の手順の追記）。**`dist/README.txt` には触らない**（同じウェーブ C1 の `install-live-target-hazards` が触る。zip の名前の変化は説明書の本文に出てこない）。`crates/areka/src/main.rs`・`emo2_boot/`・`install/`・`Cargo.toml` の依存には触らない。
+- 触るのは `tools/package-alpha.ps1`（改名するなら新しい名前）・`crates/areka/src/boot_config.rs` とその兄弟テスト・`.kiro/steering/structure.md`・`tech.md`（arm64 の手順の追記）。**`dist/README.txt` には触らない**（C2 の `crates-io-publish`・C3 の `winget-manifest-submission` が触る。zip の名前の変化は説明書の本文に出てこない）。`crates/areka/src/main.rs`・`emo2_boot/`・`install/`・`Cargo.toml` の依存には触らない。
 - 一時フォルダと実機の根はワークツリーの `target\` の下だけ。
 - 実機の確かめは x64。arm64 の zip は「作れて中身の検査が通る」まで（arm64 の実機は開発者の手元に無ければ利用者の報告待ち＝既知の制限に書く）。
 

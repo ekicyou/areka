@@ -46,7 +46,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: 完了 `crate-name-reservation`・`areka-P0-mcp-server-core`（C1・新しいクレート `areka-mcp` の `publish` を決める＝その後）。`release-ci-workflow` とは同じウェーブ C2（ファイルを共有しない・つながりは「Release の公開」というきっかけだけ）。
+- **Upstream**: 完了 `crate-name-reservation`・`areka-P0-release-package-versioned`（C1）。新しいクレート `areka-mcp` は10-03 の組み直し（開発者「1 バグ・2 リリース関係・バルーン関係・アニメーション画像関係・3 その他」）で C3 の `mcp-server-core` が作る＝そちらが自分の `publish` を決める（本 spec の前提ではない）。`release-ci-workflow` とは同じウェーブ C2（ファイルを共有しない・つながりは「Release の公開」というきっかけだけ）。
 - **Downstream**: `areka-P0-release-cycle` の初回（手元からの初回の公開）・`areka-P0-winget-manifest-submission`（README の同じ節に winget の行を足す）。
 
 ## Existing Spec Touchpoints

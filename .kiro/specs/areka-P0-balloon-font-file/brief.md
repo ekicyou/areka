@@ -62,3 +62,7 @@
 - 合っていた点: `.ttf`／`.otf`／`.ttc` は警告を出して読み飛ばしている（`draw_catalog.rs`）・`create_text_format` はフォント集に `None` を渡している（`draw.rs`）・DirectWrite の機能は既に有効＝`Cargo` の変更は要らない。
 - **抜け**: ⑴ 計測用の `CreateTextFormat` がもう 1 か所ある（`draw_metrics.rs`・書式からフォント集を読み直す所も）。⑵ `FontCatalog` はスコープごとに `actor_decoration.rs` の `build_actor_render` で作られ、`BalloonModel` はフォルダの場所を持たない＝探すフォルダの一覧を `emo2_boot`（`frame/attach.rs` か切替の流れ）から emo-text の実行時の状態へ運ぶ必要がある。⑶ **`THIRD-PARTY-NOTICES.md` は生成物**（`tools/test-all.ps1` が作り直す）＝試験用フォントのライセンスを手で書くと消える。検体の隣に置くか `about.hbs` で扱う。⑷ `communicatebox.*` はどこにも実装が無い＝「同じ読み手を通す」は読み手を公開するところまで。⑸ `viewbox_draw` 系も `create_text_format` を 2 か所で呼ぶ。
 - **議題**: フォルダの一覧をランタイムごとに渡すかスコープごとに渡すか／ライセンスの置き場所。
+
+## 2026-10-03 ウェーブ C3-②（予定・10-03 の組み直し（開発者「1 バグ・2 リリース関係・バルーン関係・アニメーション画像関係・3 その他」））
+
+- 段は「優先」。C3 は C2 の着地で brief が動くので、着手の前に同じウェーブの他の spec と触るファイルを照合し直す（`roadmap.md`「ウェーブ編成」の C3 の行）。

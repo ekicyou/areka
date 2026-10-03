@@ -103,7 +103,7 @@ surface1000
 
 ## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
 
-- **ウェーブ C2（`emo-text-file-split` の直後）・Fable 推奨**。規模 L（**分割を先に済ませて 15〜19 タスク**＝上限の内。切り分けはしない）。
+- **ウェーブ C2（`emo-text-file-split` と `status-execution-states`＝どちらも C1 の直後）・Fable 推奨**。規模 L（**分割を先に済ませて 15〜19 タスク**＝上限の内。切り分けはしない）。
 - 合っていた点: どの窓にも文字の層の差し込み口がある（`VisualMount::attach`）・`text_slot_view` は相手を問わない（定義は `presenter/read.rs`）・**拡大率の追い直しは「未確認」でなく確定**＝`emo2_boot/frame/scale_text.rs` は `balloon_target(scope)` しか組み直さない。
 - **brief の誤りと抜け（要件で必ず扱う）**:
   1. **差し込み口は 1 つの窓に 1 つ**で、`TextSurface::attach` はその entity に直に文字の面を挿す（`surface.rs`）＝1 つの窓に文字の面は 1 枚しか載らない。箱を 2 つ以上置くには差し込み口を箱の数だけ作るか子の entity を作る（触る先は emo-present の `mount.rs`・`presenter/read.rs` か emo-text の `surface.rs`）。

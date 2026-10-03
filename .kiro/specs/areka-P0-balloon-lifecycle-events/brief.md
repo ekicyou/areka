@@ -69,3 +69,7 @@ kanade（会話進行）と UI（表示寿命）の間に通知路を 1 本敷�
 - **項目 8 と 10 は今すぐ始められる**: 完了 `balloon-break` が `Input::UserBreak{scope}` と `schedule/user_break.rs` を入れたので、`OnBalloonBreak` へ届く道は既に在る。項目 7（`balloontimeout`）だけが `sakura-time-directives` を待つ＝**着手するときは 8 と 10 を先に、7 は切り離す**。
 - 変わっていない点: `BalloonLifecycleNotice` は予約のまま（`emo2_boot/talk_lifecycle.rs`・コメントの持ち主の名前は棚卸⑳で本 spec へ直した）・`OnBalloonClose`／`OnBalloonTimeout`／`OnBalloonBreak` は許可の表に無い。
 - **触るファイル**: kanade の `schedule/{steady.rs 935, events.rs}`・`crates/areka/src/emo2_boot/{talk_lifecycle.rs, balloon_visibility 系}`・`crates/areka/src/input_events/` のバルーン。大きいファイルの分割は `emo-text-file-split` と `translate-pipeline`（`steady.rs`）が先に済ませる。
+
+## 2026-10-03 ウェーブ C3-④（予定・10-03 の組み直し（開発者「1 バグ・2 リリース関係・バルーン関係・アニメーション画像関係・3 その他」））
+
+- 段は「優先」。C3 は C2 の着地で brief が動くので、着手の前に同じウェーブの他の spec と触るファイルを照合し直す（`roadmap.md`「ウェーブ編成」の C3 の行）。

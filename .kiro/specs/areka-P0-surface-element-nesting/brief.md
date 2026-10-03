@@ -114,3 +114,7 @@ surface100
 - **触るファイル**: `crates/areka-parsers/src/shell/{model.rs, decode.rs}`・`crates/areka-emo-atlas/src/manifest.rs`・`crates/areka-emo-compose/src/{plan.rs 730, atlas_bind.rs, hit.rs 714, fold.rs, pattern.rs}`・`crates/areka-seriko/src/{table.rs, looper.rs, actor.rs 645, state.rs}`・`crates/areka-emo-present/src/cache.rs`・検体・`doc/COMPAT_ARCHITECTURE.md` §8。テストは新しい兄弟ファイルへ（`plan_ops_tests.rs` 1374・`fold_tests.rs` 968・seriko の `bind.rs` 1043 は伸ばさない）。
 - **議題**: element の型を parser の enum にするか `ElementPath` のまま下流で読むか（`shell-balloon` との並びと接触面が決まる）／子の時計の持ち方／pattern が指すサーフェスの内側を動かすか／着せ替え（bind）を子へ持ち込むか。
 - **並べ方**: `shell-balloon` の後（同じ element の読み方とシェルのパーサを触る）。wintf の「兄弟の重なり順が描画と当たり判定で逆」（roadmap の覚え書き）は、子を初めて複数作る本 spec か `shell-balloon` の要件で裁定する。
+
+## 2026-10-03 ウェーブ C3-③（予定・10-03 の組み直し（開発者「1 バグ・2 リリース関係・バルーン関係・アニメーション画像関係・3 その他」））
+
+- 段は「優先」。C3 は C2 の着地で brief が動くので、着手の前に同じウェーブの他の spec と触るファイルを照合し直す（`roadmap.md`「ウェーブ編成」の C3 の行）。
