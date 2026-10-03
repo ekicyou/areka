@@ -15,7 +15,7 @@
 | ⑴ | `claude mcp add` で登録し、Claude Code から接続できる | **合**（`✔ Connected`・ツールの一覧の取得も通った） |
 | ⑵ | `curl` で `initialize`→`tools/list`→`ping` | **合** |
 | ⑶ | `AREKA_MCP_PORT=0` で接続できず `info!` が出る | **合** |
-| ⑷ | SSP が 9801 で動いている机で 9821 を同時に待ち受ける | **不合**（SSP が 9801 と 9821 の両方で待ち受けていた。areka は 9821 を束ねられず、`error!` 1 件で待ち受けずに動き続けた。下記） |
+| ⑷ | SSP が既定の番号を握っている机で areka が隣の番号で待ち受ける | **合**（走行 6・タスク 7.6。SSP が 9801 と 9821 を握る机で areka は 9802 で待ち受け、`ping` 200・help は 9802 を案内。下記）。裁定前の走行 5 は不合（9821 固定で束ねられなかった） |
 | 記録 | 要求ごとに `debug!` 1 件・悪い `Origin` に `warn!` 1 件 | **合** |
 | 記録 | 性能の報告に `actor:mcp` が出る | **合** |
 | 記録 | 待受の開始・閉じたときの `info!`、終了後に 9821 が閉じている | **合** |
@@ -230,7 +230,32 @@ ERROR areka_mcp::server: MCP: ポートを束ねられなかった（待ち受�
 
 - 束ねの失敗の扱いは要件 1.3 どおり（`error!` 1 件・番号と OS の理由・待ち受けない・アプリは動き続けて自動終了・終了コード 0・ERROR はこの 1 件だけ）。
 - しかし ⑷ の前提「SSP は 9801 を使い、9821 は空いている」がこの机では成り立たない。**既定のまま SSP と並べると、areka の MCP は待ち受けない。**
-- 既定の番号をどうするかは開発者の裁定待ち（要件 2.1・議題 1 で確定した 9821 を見直すかどうか）。
+- これを受けた開発者裁定（2026-10-03）: areka は SSP と同じベースウェアなので既定の番号で SSP と競合してよい（早い者勝ち）。既定は 9801 → 9821、どちらも使用中なら隣の 9802 → 9822 … 9810 → 9830（計 20 候補）の最初に束ねた 1 つ（要件 2・設計 B-13・タスク 7.1〜7.4）。
+
+### 走行 6（裁定の後・タスク 7.6）— 合
+
+- 版: コミット `0ca0b6b`（`tools/package-alpha.ps1` 全段 緑・`BUILD-INFO.txt` は `commit=0ca0b6b` `dirty=0`）。展開先 `target\signoff-mcp\c\`。
+- SSP（PID 32480）を利用者に起動してもらい、9801 と 9821 の両方で待ち受けていることを確かめてから areka を起こした（`AREKA_APP_SMOKE_EXIT_MS=30000`・`RUST_LOG=info,areka_mcp=debug`・PID 19032）。記録は `target\signoff-mcp\logs\run6-ssp-fallback.log`。
+
+```
+TCP    127.0.0.1:9801   0.0.0.0:0   LISTENING   32480   ← SSP
+TCP    127.0.0.1:9802   0.0.0.0:0   LISTENING   19032   ← areka
+TCP    127.0.0.1:9821   0.0.0.0:0   LISTENING   32480   ← SSP
+```
+
+```
+DEBUG areka_mcp::server: MCP: 候補のポートを束ねられなかった（次の候補へ） port=9801 error=… (os error 10048)
+DEBUG areka_mcp::server: MCP: 候補のポートを束ねられなかった（次の候補へ） port=9821 error=… (os error 10048)
+INFO  areka_mcp::server: MCP: 待受を始めた（先の候補が使用中なので移った） url=http://127.0.0.1:9802/api/mcp/v1 skipped=[9801, 9821]
+DEBUG actor{actor=mcp}: areka_mcp::dispatch: MCP: 要求に応えた method=ping id=1 status=200 path=/api/mcp/v1
+DEBUG actor{actor=mcp}: areka_mcp::dispatch: MCP: 要求に応えた method=- id=- status=200 path=/api/mcp/help
+INFO  actor{actor=emo-text}: areka_mcp::server: MCP: 待受を閉じた addr=127.0.0.1:9802
+```
+
+- `curl`（`Accept: application/json, text/event-stream`）で `POST http://127.0.0.1:9802/api/mcp/v1` の `ping` → `200`・`{"jsonrpc":"2.0","id":1,"result":{}}`。
+- `GET http://127.0.0.1:9802/api/mcp/help` → 200。URL・`claude mcp add` の登録コマンド・`mcpServers` の断片がどれも `http://127.0.0.1:9802/api/mcp/v1`。
+- 飛ばした 2 つの候補はそれぞれ `debug!` 1 件（番号と OS の理由）、移った旨は待受の `info!` の同じ 1 行（要件 1.2・1.10）。ERROR の段の行は 0 件。
+- 自動終了で終了コード 0。終了後は 9802 の待受が無い（SSP の 9801・9821 はそのまま）。
 
 ## リリースの `areka.exe` の増分
 
@@ -251,3 +276,7 @@ ERROR areka_mcp::server: MCP: ポートを束ねられなかった（待ち受�
 ## 確かめられなかったこと
 
 - `claude mcp list` での表示: 登録済みの他のサーバーへ接続を試すのを避けるため、直した後は `claude mcp get areka` だけで見た（`get` は同じ接続の確かめを 1 つのサーバーにだけ行う）。
+
+## 全体テスト（タスク 7.6）
+
+`pwsh -NoProfile -File tools/test-all.ps1 -Format -License` をコミット `0ca0b6bf`（未コミットはこの記録 1 件）で回し、全段 緑（x64 ワークスペース全テスト・i686・fmt・`cargo deny check`・`cargo about generate`。`THIRD-PARTY-NOTICES.md` の差分 0）。

@@ -115,13 +115,13 @@
   - _Depends: 1.1_
   - _Boundary: steering_
 
-- [ ] 6. 検証
+- [x] 6. 検証
 - [x] 6.1 ライセンスの門と全体テスト
   - `pwsh -NoProfile -File tools/test-all.ps1 -Format -License` を回し、`cargo deny check`・`cargo about generate` が緑で、`THIRD-PARTY-NOTICES.md` は道具が作り直したもの（手の差分 0 行）であることを確かめる
   - 全体テストで既存のテストが緑のまま・1,000 行の番人が緑・`log-capture-kit` が `[dependencies]` に無いことの見張りが緑
   - 完了の姿: `test-all.ps1 -Format -License` が終了コード 0・`deny.toml`／`about.toml`／根の `[workspace.dependencies]` の差分 0 行
   - _Requirements: 8.1, 8.3, 8.4, 8.6, 9.1_
-- [ ] 6.2 実機確認と signoff
+- [x] 6.2 実機確認と signoff
   - 配布形は `pwsh -NoProfile -File tools/package-alpha.ps1` で作る（出力はワークツリーの `target/alpha/`）。展開した `areka.exe` で ⑴ `claude mcp add --transport http areka http://127.0.0.1:9821/api/mcp/v1` と `claude mcp list` の接続、⑵ `curl`（`Accept` 付き）で initialize→tools/list→ping、⑶ `AREKA_MCP_PORT=0` で接続できず `info!`、⑷ SSP が 9801 の机で 9821 を同時に待ち受ける、を確かめる
   - `RUST_LOG=info,areka_mcp=debug` で要求ごとの `debug!` 1 件と、`Origin: http://evil.example` の `warn!` 1 件を確かめ、性能の報告に `actor:mcp` が出ることも見る。リリースの `areka.exe` の増分を測る
   - 実機の根・一時フォルダはワークツリーの `target\` の下だけ
@@ -129,7 +129,7 @@
   - ⑷ は 9821 決め打ちの前提が崩れて不合だった（SSP が 9801 と 9821 の両方で待ち受けていた）。開発者裁定（2026-10-03）を受けて、⑴〜⑶ を含めて 7.6 でやり直す
   - _Requirements: 9.5, 9.6_
 
-- [ ] 7. 既定ポートの早い者勝ちと隣への退避（開発者裁定 2026-10-03）
+- [x] 7. 既定ポートの早い者勝ちと隣への退避（開発者裁定 2026-10-03）
 - [x] 7.1 候補の列と環境変数の読み解き
   - `port.rs` の既定の番号 1 つ（`DEFAULT_PORT`）と「値 → 番号 1 つ」の判断を、design.md の契約どおり `DEFAULT_PORTS = [9801, 9821]`・`FALLBACK_STEPS = 9`・`candidates_from_env_value(Option<&str>) -> Vec<u16>`（純粋）・`read_port_candidates() -> Vec<u16>` へ置き換える。既定の列は 9801・9821・9802・9822・…・9810・9830 の 20 個で、組む場所はこの 1 か所
   - 未設定 → 既定の列・`0` → 空・1〜65535 → その 1 つだけ（空白許容・隣は足さない）・読めない値と非 UTF-8 → `warn!` 1 件＋既定の列（文面は「既定の候補で待ち受ける」）
@@ -167,7 +167,7 @@
   - _Requirements: 8.5_
   - _Depends: 7.2_
   - _Boundary: steering, 差の一覧_
-- [ ] 7.6 実機の ⑷ のやり直しと全体テスト
+- [x] 7.6 実機の ⑷ のやり直しと全体テスト
   - 配布形（`tools/package-alpha.ps1`・出力はワークツリーの `target/alpha/`）の `areka.exe` で、SSP が 9801 と 9821 で待ち受けている机のまま起動し、9802（またはその先の空いた候補）で待ち受けること・そこへの `curl` の `ping` が 200・help がその番号を示すこと・`info!` が移った旨と飛ばした候補を載せること・`RUST_LOG=info,areka_mcp=debug` で 9801・9821 を飛ばした `debug!` 2 件を確かめる。⑴ の登録（`claude mcp add` は実番号で）・⑵・⑶ も同じ版でやり直す
   - `pwsh -NoProfile -File tools/test-all.ps1 -Format -License` を回して緑を確かめる
   - 実機の根・一時フォルダはワークツリーの `target\` の下だけ
