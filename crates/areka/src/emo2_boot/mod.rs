@@ -526,6 +526,7 @@ pub fn wire_emo2_boot(
         loop_tables,
         shell_author_dpi,
         balloon_author_dpi,
+        boxes,
     } = assets;
     // SERIKO ループ構成（design「本番は実時間・実 entropy 接続」・R7.4）: シェル／バルーンの 2 表は
     // `BootAssets.loop_tables`（task 9.1 が `EmoWorld` スナップショットから `from_world` で構築）を
@@ -584,6 +585,8 @@ pub fn wire_emo2_boot(
         // 作者基準 DPI は搬送のみ（本相は値を解釈しない・attach への供給は task 4.2）。
         shell_author_dpi,
         balloon_author_dpi,
+        // 箱の束は装着の相が文字の層へ渡す（seriko は読まない）。
+        boxes,
     };
 
     // loop ticker 用の tick 送出端: SerikoSink を 1 本 clone して保持する（surface_sink 本体は下の

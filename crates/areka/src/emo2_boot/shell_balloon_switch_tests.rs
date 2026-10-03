@@ -98,6 +98,7 @@ fn headless_wiring() -> Emo2Wiring {
             },
             shell_author_dpi: 96,
             balloon_author_dpi: 96,
+            boxes: crate::emo2_boot::shell_box_assets::ShellBoxAssets::default(),
         },
     )
 }

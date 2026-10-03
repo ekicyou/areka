@@ -2,10 +2,13 @@ use crate::emo2_boot::assets::build_boot_assets;
 use crate::emo2_boot::sample_test_support::{emo2_balloon_root, emo2_root};
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use areka_emo_text::state::TextLayerConfig;
+use dola::cue::{CueCommand, TalkCue};
 use std::sync::{Arc, mpsc};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
-use super::test_support::{resnap_world, synth_assets, synth_assets_with_balloons, zero_clock};
+use super::test_support::{
+    capture_logs, resnap_world, synth_assets, synth_assets_with_balloons, zero_clock,
+};
 use super::*;
 
 /// DD-12 完全一致: `window_scopes == 資産 scope` → 計画件数＝窓数・missing/unused 空。
@@ -783,5 +786,107 @@ fn every_production_scan_of_the_actor_map_is_registered() {
         "`state.actors()` の本番走査点が変わった。新しい走査が供給面を割り当てるなら、\
          `present_frame` と同じ絞り（中身か供給面のどちらかがある）を通すこと。\
          読むだけなら ACTOR_SCAN_SITES に 1 行足すこと"
+    );
+}
+
+/// task 8.2（要件 3.10・3.12・4.1・6.8）: 起動の結線を箱のあるシェルで組むと、装着の相が
+/// 文字の層へ **箱の束**（置き場所の表・`\s` の解決の閉包・フォントを探す場所の順）と
+/// **普通のバルーンの名前**（バルーンのフォルダ名）を渡す。
+///
+/// 検体は `R_POST_and_KOMAINU`（面 0 は画像と当たり判定だけ）。写しの `surfaces.txt` に
+/// `balloon.talk`ブレスと、面 0 への `surface.append0` の element定義 `balloon` を足す。
+///
+/// - 探す場所の順はシェルのフォルダ → ゴーストのフォルダ（`ghost/master`）。
+/// - `\s[0]` で行き先が箱 `talk` になる（閉包と表が渡っていないと普通のバルーンのまま）。
+/// - 普通のバルーンの警告の名前の欄がバルーンのフォルダ名になる（未設定なら
+///   `スコープ0のバルーン`）。警告は範囲外の `origin.x` を持つ定義で再追従させて出す。
+#[test]
+fn attach_hands_the_box_bundle_and_the_balloon_folder_name_to_the_text_layer() {
+    use std::io::Write as _;
+
+    let (mut world, _gw) = gpu_attach_world();
+    let rpost =
+        sample_ghost_kit::SampleRoot::acquire("R_POST_and_KOMAINU").expect("登記済みの検体");
+    let shell_dir = rpost.folder().join("shell").join("master");
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(shell_dir.join("surfaces.txt"))
+        .and_then(|mut f| {
+            f.write_all(
+                b"\r\nballoon.talk\r\n{\r\nsize,100,40\r\n}\r\n\
+                  surface.append0\r\n{\r\nelement9,balloon,talk,10,10\r\n}\r\n",
+            )
+        })
+        .expect("写しの surfaces.txt へ箱を足せるはず");
+    let balloon_root = emo2_balloon_root();
+    let balloon_name = balloon_root
+        .file_name()
+        .and_then(|n| n.to_str())
+        .expect("バルーンのフォルダ名")
+        .to_owned();
+    let assets = build_boot_assets(rpost.folder(), &balloon_root, &[0, 1], 96, 96)
+        .expect("箱を足したシェルの BootAssets 組立は成功する");
+
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
+    let mut wiring = Emo2Wiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<MoveDirective>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
+        Rc::clone(&runtime),
+        zero_clock(),
+        assets,
+    );
+    run_attach_phase(&mut wiring, &mut world);
+    assert!(wiring.attached, "前提: ゲート成立で attach が走る");
+
+    // 探す場所の順（要件 3.10）。
+    assert_eq!(
+        runtime.borrow().box_font_dirs(),
+        [shell_dir, rpost.folder().join("ghost").join("master")],
+        "箱のフォントを探す場所はシェルのフォルダ → ゴーストのフォルダ"
+    );
+
+    // `\s[0]` で行き先が箱へ（要件 4.1）。
+    let actor = ActorKey::from("0");
+    runtime.borrow_mut().apply_cue(&TalkCue {
+        at: 0.0,
+        actor: actor.clone(),
+        command: CueCommand::Emote { key: "0".into() },
+        duration: 0.0,
+    });
+    let destination = runtime.borrow().state().destination(&actor);
+    assert!(
+        matches!(&destination, areka_emo_text::place::TextPlace::Box(name) if name.as_str() == "talk"),
+        "箱のある面 0 では行き先が箱 talk になる: {destination:?}"
+    );
+
+    // 普通のバルーンの警告の名前の欄（要件 3.12）。
+    let view = wiring
+        .presenter
+        .text_slot_view(balloon_target(0))
+        .expect("前提: 本体側バルーンの文字層スロットが成立する");
+    let coarse = areka_parsers::balloon::parse_str("origin.x,9999\r\n", None);
+    let logs = capture_logs(|| {
+        runtime
+            .borrow_mut()
+            .refresh_actor_scale(&actor, &view, &coarse);
+    });
+    let warned: Vec<&String> = logs
+        .iter()
+        .filter(|l| l.contains("level=WARN") && l.contains("origin.x"))
+        .collect();
+    assert!(
+        !warned.is_empty(),
+        "前提: 範囲外の origin.x で警告が出る（出ないと名前の欄を見られない）: {logs:?}"
+    );
+    assert!(
+        warned
+            .iter()
+            .all(|l| l.contains(&format!("balloon=\"{balloon_name}\""))),
+        "警告の名前の欄はバルーンのフォルダ名 {balloon_name}: {warned:?}"
     );
 }

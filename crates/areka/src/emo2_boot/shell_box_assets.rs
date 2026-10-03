@@ -7,12 +7,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use areka_emo_compose::BoxLayout;
+use areka_emo_text::actor::TextLayerRuntime;
 use areka_emo_text::state::SurfaceKeyOutcome;
 use areka_seriko::{SurfaceResolver, SurfaceTarget};
+use bevy_ecs::world::World;
 
-/// 文字の層へ渡す箱の束（シェル 1 つぶん）。
-// 組み立てと受け渡しは 8.2（起動・装着の相）と 8.3（シェルの切替）で使い始める。
-#[allow(dead_code)]
+/// 文字の層へ渡す箱の束（シェル 1 つぶん）。既定値は箱の無いシェル（空の表・探す場所なし）。
+#[derive(Default)]
 pub(crate) struct ShellBoxAssets {
     /// 箱の定義の表とサーフェス番号ごとの置き場所の表（`ShellTarget::boxes`）。
     pub layout: BoxLayout,
@@ -24,8 +25,27 @@ pub(crate) struct ShellBoxAssets {
     pub font_dirs: Vec<PathBuf>,
 }
 
+impl ShellBoxAssets {
+    /// 文字の層へ渡す（装着の相とシェルの切替が呼ぶ）。`\s` の解決の閉包は、別名の写しから
+    /// seriko と同じ解決器を組み、面の表に在る番号だけを通す（[`resolve_for_text`]）。
+    pub(crate) fn hand_to(self, runtime: &mut TextLayerRuntime, world: &mut World) {
+        let ShellBoxAssets {
+            layout,
+            aliases,
+            surface_ids,
+            font_dirs,
+        } = self;
+        let resolver = SurfaceResolver::new(aliases);
+        runtime.set_box_layout(
+            world,
+            layout,
+            Box::new(move |key| resolve_for_text(&resolver, &surface_ids, key)),
+            font_dirs,
+        );
+    }
+}
+
 /// 箱のフォントを探す場所の順（シェルのフォルダ、ゴーストのフォルダの順・要件 3.10）。
-#[allow(dead_code)] // 8.2 で使い始める
 pub(crate) fn box_font_search_dirs(shell_dir: &Path, ghost_dir: &Path) -> Vec<PathBuf> {
     vec![shell_dir.to_path_buf(), ghost_dir.to_path_buf()]
 }
@@ -35,7 +55,6 @@ pub(crate) fn box_font_search_dirs(shell_dir: &Path, ghost_dir: &Path) -> Vec<Pa
 ///
 /// 表示の層は面の表に無い番号へ切り替えられず前の表示を保つので、文字の層もそれに合わせて
 /// 何も変えない。記録は呼び手（seriko と文字の層）が出す。
-#[allow(dead_code)] // 8.2 で閉包に包んで使い始める
 pub(crate) fn resolve_for_text(
     resolver: &SurfaceResolver,
     surface_ids: &BTreeSet<u32>,
