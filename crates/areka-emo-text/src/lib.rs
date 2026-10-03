@@ -21,11 +21,12 @@
 //!
 //! 上の 3 つはいずれも**親ファイルの名前**であって、走査面ではない。親は `#[path]` で
 //! 子モジュールを抱えており（`draw` は `draw_metrics`／`draw_line_store`／`draw_catalog`、
-//! `layout` は `layout_line_ops`／`layout_styled`、`state` は `state_decoration`、
-//! `viewbox_draw` は `viewbox_draw_plan`／`viewbox_draw_decoration`、`actor` は
-//! `actor_decoration`）、子は親と同じ層に属する。**層規律を実際に見張る走査面は
+//! `layout` は `layout_line_ops`／`layout_styled`／`layout_scan`（その子 `layout_scan_glyph`）、
+//! `state` は `state_decoration`、`viewbox` は `viewbox_diff`、`viewbox_draw` は
+//! `viewbox_draw_plan`／`viewbox_draw_decoration`／`viewbox_draw_render`、`actor` は
+//! `actor_decoration`／`actor_attach`／`actor_present`）、子は親と同じ層に属する。**層規律を実際に見張る走査面は
 //! `PURE_SOURCES` と `SOURCES_OUTSIDE_THE_PURE_SCAN` の 2 つの一覧**（本ファイル末尾の
-//! `#[cfg(test)] mod layer_discipline` 内）で、その和が `src/*.rs` の実ファイル集合と
+//! `#[cfg(test)] mod tests` 内）で、その和が `src/*.rs` の実ファイル集合と
 //! 一致することを `every_source_file_is_either_scanned_or_explicitly_excluded` が突き合わせる
 //! （この段落は列挙を数えるためのものではない——数える場所は 2 つの一覧の側にある）。
 //!
