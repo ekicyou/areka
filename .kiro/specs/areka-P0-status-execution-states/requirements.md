@@ -28,7 +28,8 @@ areka は SSP の実測ではなく ukadoc の意味を採る。実 SSP は `bal
   - `Status` の語彙の構造と送り方の約束そのもの（`areka-P0-idle-talk` が確立したもの）。本 spec は変えずに使う。
   - `talking`（`areka-P0-idle-talk`）と `choosing`（`areka-P0-choice-select-events`）がいつ載るかの規則。
   - 出どころとなる仕組みの新設: 窓の最小化、`\![enter,inductionmode]`、`\![enter,passivemode]`、`\t`（タイムクリティカルセクション）、入力ボックス等（communicate／input／teach／dialog）。
-  - ネットワーク更新・URL からのインストール・中断の無効化モード・バルーン表示そのものの振る舞い（いつ始まりいつ終わるか）の変更。
+  - ネットワーク更新・URL からのインストール・中断の無効化モード・バルーン表示そのものの振る舞い（いつ始まりいつ終わるか）の変更。ただし要件 3.4 を満たすために、中断を断る印の下ろし方を直すこと（`\![leave,nouserbreakmode]` を書かずに終わったトークの印が、次のトークの立ち上がり直後まで残って中断を断ってしまう区間を無くすこと）は本 spec の範囲に含める。
+  - マウスのダブルクリックの応答による、再生中のトークの置き換え（中断の無効化モード中でも起きる）の扱いの変更。
   - MCP の `get_status` など、`Status` を読む他の消費者の新設。
 - **Adjacent expectations**:
   - ネットワーク更新（完了 `areka-P0-network-update`）、URL からのインストール、中断の無効化モード（完了 `areka-P0-balloon-break`）、バルーンの表示状態（完了 `areka-P0-balloon-visibility`）は、いま動いている振る舞いをそのまま出どころとして使う。バルーンの表示については、画面の表示状態を唯一の情報源とし、`Status` のために別の記録を作らない。
@@ -55,11 +56,12 @@ areka は SSP の実測ではなく ukadoc の意味を採る。実 SSP は `bal
 
 #### Acceptance Criteria
 
-1. While ネットワーク更新を実行している場合（更新の開始から終了まで）, the areka shall 送るリクエストの `Status` に `online` を含める
+1. While ネットワーク更新を実行している場合（更新の手続きを実際に始めてから終えるまで。始める前の、ゴーストの承諾を待つ間＝OnUpdateProcessExec の応答待ちは含まない）, the areka shall 送るリクエストの `Status` に `online` を含める
 2. While URL からのインストールのためにファイルをダウンロードしている場合, the areka shall 送るリクエストの `Status` に `online` を含める
 3. When ネットワーク更新またはダウンロードが終わった場合（成功・失敗・中止のいずれでも）, the areka shall その後に送るリクエストの `Status` に、ほかの通信が続いていない限り `online` を含めない
 4. While ネットワーク更新とダウンロードが同時に行われている場合, the areka shall `online` を 1 つだけ含める
 5. While ネットワーク通信をしていない場合, the areka shall `Status` に `online` を含めない
+6. While ゴーストの切替または再起動（ネットワーク更新の途中の読み直しを含む）をまたいでネットワーク通信が続いている場合, the areka shall 新しいゴーストへ送るリクエストの `Status` にも `online` を含める（通信はゴーストではなく areka のものなので、`nouserbreak`・`balloon` と違って持ち越す）
 
 ### Requirement 3: nouserbreak（中断の無効化モード中）
 
@@ -70,7 +72,7 @@ areka は SSP の実測ではなく ukadoc の意味を採る。実 SSP は `bal
 1. When 再生中のトークで `\![enter,nouserbreakmode]` が実行された場合, the areka shall その後そのトークの間に送るリクエストの `Status` に `nouserbreak` を含める
 2. When `\![leave,nouserbreakmode]` が実行された場合, the areka shall その後に送るリクエストの `Status` に `nouserbreak` を含めない
 3. When 中断の無効化モードに入ったトークが、`\![leave,nouserbreakmode]` を経ずに終わった、または中断された場合, the areka shall その後に送るリクエストの `Status` に `nouserbreak` を含めない
-4. While トークの再生中である場合, the areka shall `Status` の `nouserbreak` の有無を、利用者の操作によるトークの中断を areka が実際に受け付けない区間と一致させる（載っているのに中断できる、または載っていないのに中断できない、が起きない）
+4. While トークの再生中である場合, the areka shall `Status` の `nouserbreak` の有無を、利用者の操作によるトークの中断（バルーンの左ダブルクリックによる中断＝完了 `areka-P0-balloon-break` の定義）を areka が実際に受け付けない区間と一致させる（載っているのに中断できる、または載っていないのに中断できない、が起きない）。新しいトークの立ち上がり直後も例外としない
 5. When ゴーストを切り替えた、または再起動した場合, the areka shall 前のゴーストの中断の無効化モードを新しいゴーストへのリクエストの `Status` に持ち越さない
 
 ### Requirement 4: balloon(ID群)（バルーンの表示）
@@ -94,7 +96,7 @@ areka は SSP の実測ではなく ukadoc の意味を採る。実 SSP は `bal
 
 #### Acceptance Criteria
 
-1. The areka shall `online`・`nouserbreak`・`balloon` を、OnSecondChange に限らず、`Status` を載せるすべてのリクエストに同じ規則で載せる
+1. The areka shall `online`・`nouserbreak`・`balloon` を、OnSecondChange に限らず、`Status` を載せるすべてのリクエスト（起動・終了・切替のイベント＝OnInitialize・OnFirstBoot・OnBoot・OnGhostChanged・OnGhostChanging・OnClose などを含む）に同じ規則で載せる
 2. When `online`・`nouserbreak`・`balloon` のいずれかの状態が始まった、または終わった場合, the areka shall その変化を、変化から 1 秒（OnSecondChange の間隔）を超えて遅れずに、以後に送るリクエストの `Status` に反映する
 
 ### Requirement 6: 出どころがまだ無い 5 状態
