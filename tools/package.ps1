@@ -28,6 +28,8 @@
     SMOKE_EXIT_MS        = 10000    -Check の有界の自動終了（ミリ秒・-SmokeExitMs で上書き）
     WATCHDOG_MARGIN_SEC  = 60       自動終了の予定から番犬が子を止めるまでの猶予（秒）
     EXPAND_DIR_MAX_CHARS = 160      -Check の展開先のフルパスの長さの上限（文字）
+    ARM64_VS_COMPONENT              arm64 のリンクに要る VS の部品名（vswhere -requires に渡す）
+    VSWHERE_PATH                    vswhere.exe の固定の置き場（無ければ PATH の vswhere を試す）
     DLL_DENY_PREFIXES               取り込み表に在ってはならない DLL 名の前方一致（大文字小文字を区別しない）
     ALLOWED_EXECUTABLES             zip に入れてよい .exe／.dll の項目名
     LOG_MARKER_*                    -Check の記録の判定に使う目印の文言
@@ -37,8 +39,9 @@
   zip を組んだあと、短いパスへ展開して areka.exe を有界で起動し、記録を判定する。
 
 .PARAMETER CheckDir
-  -Check の展開先を作る親フォルダ（絶対パス）。省略時は一時フォルダ。
-  その下に areka-alpha-check-<HHmmss> を作る。そのフルパスが EXPAND_DIR_MAX_CHARS を超えると終了コード 3。
+  -Check の展開先を作る親フォルダ（絶対パス）。省略時は <リポジトリ>\target\package。
+  リポジトリの中なら <リポジトリ>\target\ の下だけ受け付ける。
+  その下に check-<HHmmss> と check-<HHmmss>-logs を作る。そのフルパスが EXPAND_DIR_MAX_CHARS を超えると終了コード 3。
 
 .PARAMETER SmokeExitMs
   -Check の有界の自動終了（ミリ秒・正の整数）。省略時は SMOKE_EXIT_MS。
@@ -87,6 +90,9 @@ $VERSION_PATTERN      = '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$'
 $SMOKE_EXIT_MS        = 10000   # 2026-09-26 実測: 挨拶はゲートから約 2.1 秒（release・展開直後の初回起動）。余裕 5 倍
 $WATCHDOG_MARGIN_SEC  = 60
 $EXPAND_DIR_MAX_CHARS = 160
+# arm64 のリンクに要る VS の部品と、それを問う vswhere.exe の固定の置き場（VS Installer 同梱・PATH には載らない）
+$ARM64_VS_COMPONENT   = 'Microsoft.VisualStudio.Component.VC.Tools.ARM64'
+$VSWHERE_PATH         = "$([Environment]::GetFolderPath('ProgramFilesX86'))\Microsoft Visual Studio\Installer\vswhere.exe"
 $DLL_DENY_PREFIXES    = @('vcruntime', 'msvcp', 'msvcr', 'api-ms-win-crt-', 'ucrtbase', 'concrt')
 $ALLOWED_EXECUTABLES  = @('areka.exe', 'shiori-host32-helper.exe', 'ghost/emo2/ghost/master/pasta.dll')
 $LOG_MARKER_SMOKE_GATE     = 'smoke 自動 close ゲート有効'          # crates/areka/src/main.rs の SMOKE_EXIT_ENV の info!
@@ -216,15 +222,21 @@ Step '前提の確認' {
     if ($CheckDir -and -not [IO.Path]::IsPathFullyQualified($CheckDir)) {
         Exit-Script $EXIT_BAD_ARGS "-CheckDir は絶対パスで指定する（受け取った値: '$CheckDir'）"
     }
-    $parent = if ($CheckDir) { $CheckDir } else { [IO.Path]::GetTempPath() }
-    $script:ExpandDir = Join-Path $parent ('areka-alpha-check-' + (Get-Date -Format 'HHmmss'))
-    if (($Check -or $CheckDir) -and $script:ExpandDir.Length -gt $EXPAND_DIR_MAX_CHARS) {
-        Exit-Script $EXIT_BAD_ARGS ("展開先が長すぎる（{0} 文字・上限 {1}）: {2} — -CheckDir に短いパスを指定する" -f $script:ExpandDir.Length, $EXPAND_DIR_MAX_CHARS, $script:ExpandDir)
-    }
-    # 展開先はリポジトリの外（要件 3.1）。中だと target/ の下は git status でも捕まらない
+    # リポジトリの中なら target\ の下だけ（一時フォルダは target\ の下に限る）。外は受け付ける
     $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')).TrimEnd('\') + '\'
-    if ($CheckDir -and ([IO.Path]::GetFullPath($script:ExpandDir) + '\').StartsWith($repoRoot, [StringComparison]::OrdinalIgnoreCase)) {
-        Exit-Script $EXIT_BAD_ARGS "-CheckDir はリポジトリの外を指定する: $CheckDir"
+    if ($CheckDir) {
+        $full = [IO.Path]::GetFullPath($CheckDir).TrimEnd('\') + '\'
+        if ($full.StartsWith($repoRoot, [StringComparison]::OrdinalIgnoreCase) -and
+            -not $full.StartsWith("${repoRoot}target\", [StringComparison]::OrdinalIgnoreCase)) {
+            Exit-Script $EXIT_BAD_ARGS "-CheckDir はリポジトリの中なら ${repoRoot}target\ の下を指定する（受け取った値: '$CheckDir'）"
+        }
+    }
+    # 既定の親はワークツリーの target\package（%TEMP% には何も作らない）
+    $parent = if ($CheckDir) { [IO.Path]::GetFullPath($CheckDir) } else { [IO.Path]::GetFullPath("$PSScriptRoot\..\target\package") }
+    $script:ExpandDir = Join-Path $parent ('check-' + (Get-Date -Format 'HHmmss'))
+    $script:LogDir = "$script:ExpandDir-logs"
+    if (($Check -or $CheckDir) -and $script:ExpandDir.Length -gt $EXPAND_DIR_MAX_CHARS) {
+        Exit-Script $EXIT_BAD_ARGS ("展開先が長すぎる（{0} 文字・上限 {1}）: {2} — -CheckDir に短いパス（リポジトリの外か ${repoRoot}target\ の下）を指定するか、ワークツリーを短いパスに置く" -f $script:ExpandDir.Length, $EXPAND_DIR_MAX_CHARS, $script:ExpandDir)
     }
 
     # git（コミットは 7 桁固定。--short だけだと曖昧なとき 8 桁以上を返す）
@@ -239,6 +251,15 @@ Step '前提の確認' {
     $null = cargo deny --version 2>&1
     if ($LASTEXITCODE) { Exit-Script $EXIT_BAD_ARGS 'cargo deny が無い（cargo install cargo-deny --version 0.20.2 --locked で入れる）' }
     if (-not (Test-Path -LiteralPath 'Cargo.lock')) { Exit-Script $EXIT_BAD_ARGS 'Cargo.lock が無い（追跡している Cargo.lock を git から戻す）' }
+    # arm64 のリンクに要る VS の部品（rustup のターゲットは欠けても後の段で足すので、ここでは見ない）
+    if ($script:BuildArchs -ccontains 'arm64') {
+        # vswhere.exe は PATH に載らないので固定の置き場を先に見る
+        $vswhere = if (Test-Path -LiteralPath $VSWHERE_PATH -PathType Leaf) { $VSWHERE_PATH }
+                   else { Get-Command vswhere -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source }
+        if (-not $vswhere) { Exit-Script $EXIT_BAD_ARGS "vswhere.exe が無い（探した場所: $VSWHERE_PATH と PATH。Visual Studio か Build Tools を入れる）" }
+        $vs = & $vswhere -latest -products '*' -requires $ARM64_VS_COMPONENT -property installationPath 2>$null
+        if ($LASTEXITCODE -or -not $vs) { Exit-Script $EXIT_BAD_ARGS "arm64 のリンクに要る VS の部品が無い（VS Installer で $ARM64_VS_COMPONENT を追加する・vswhere: $vswhere）" }
+    }
 
     # 版（正本は Cargo.toml の [workspace.package] version。areka パッケージ経由で読む）。3 で止まる検査の最後
     $out = @(cargo metadata --no-deps --locked --format-version 1 2>&1)
@@ -538,7 +559,6 @@ if ($Check) {
     Step '短いパスへ展開' {
         # 展開先の長さは「前提の確認」で確かめ済み
         if (Test-Path -LiteralPath $script:ExpandDir) { throw "展開先が既に在る: $script:ExpandDir" }
-        $script:LogDir = "$script:ExpandDir-logs"
         if (Test-Path -LiteralPath $script:LogDir) { throw "記録の置き場が既に在る: $script:LogDir" }
         [IO.Compression.ZipFile]::ExtractToDirectory($script:ZipFinal, $script:ExpandDir)
         $null = New-Item -ItemType Directory -Path $script:LogDir
