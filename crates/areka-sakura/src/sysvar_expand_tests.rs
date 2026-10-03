@@ -7,8 +7,6 @@
 use super::*;
 use crate::compile::compile;
 use dola::cue::{CueCommand, CuePayload};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// 名前→値の写しを作る。
 fn snapshot(pairs: &[(&str, &str)]) -> SystemVarSnapshot {
@@ -19,45 +17,17 @@ fn snapshot(pairs: &[(&str, &str)]) -> SystemVarSnapshot {
     vars
 }
 
-/// `warn!` の `event = "sysvar_expand_fallback"` だけを数える最小の subscriber。
-struct FallbackCounter(Arc<AtomicUsize>);
-
-impl tracing::Subscriber for FallbackCounter {
-    fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
-        true
-    }
-    fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-        tracing::span::Id::from_u64(1)
-    }
-    fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
-    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
-    fn event(&self, event: &tracing::Event<'_>) {
-        struct IsFallback(bool);
-        impl tracing::field::Visit for IsFallback {
-            fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-                if field.name() == "event" && value == "sysvar_expand_fallback" {
-                    self.0 = true;
-                }
-            }
-            fn record_debug(&mut self, _: &tracing::field::Field, _: &dyn std::fmt::Debug) {}
-        }
-        let mut seen = IsFallback(false);
-        event.record(&mut seen);
-        if seen.0 && *event.metadata().level() == tracing::Level::WARN {
-            self.0.fetch_add(1, Ordering::SeqCst);
-        }
-    }
-    fn enter(&self, _: &tracing::span::Id) {}
-    fn exit(&self, _: &tracing::span::Id) {}
-}
-
 /// 展開して、その間に出た `sysvar_expand_fallback` の警告の数と一緒に返す。
 fn expand_counting(script: &str, vars: &SystemVarSnapshot) -> (String, usize) {
-    let count = Arc::new(AtomicUsize::new(0));
-    let out = tracing::subscriber::with_default(FallbackCounter(count.clone()), || {
-        expand_system_vars(script, vars)
-    });
-    (out, count.load(Ordering::SeqCst))
+    let (out, events) = log_capture_kit::capture(|| expand_system_vars(script, vars));
+    let count = events
+        .iter()
+        .filter(|e| {
+            e.level == tracing::Level::WARN
+                && e.field_str("event") == Some("sysvar_expand_fallback")
+        })
+        .count();
+    (out, count)
 }
 
 /// 台本を今日の再生の経路（`parse` → `compile`）に通し、利用者に見える並びにする。

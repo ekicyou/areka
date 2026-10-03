@@ -151,3 +151,4 @@
 - 3.5: 「翻訳なしと同じ」の比べる相手 `translate_path_tests.rs` の `step_untranslated` は `step` の本体から `translate::before`／`after` を除いた写し。`step` の順序を変えたらこの写しも直す。停止通知の切替の中身は源（`State::change.script` が `Unloading` まで最終の台詞のまま）までしか見ていないので、停止通知そのものは 3.6 の殻の結合テストで確かめる。論点 10 のテストは `translate_path_tests.rs` に置いた
 - 4.1: `lib.rs` の `mod translate_wiring;` と `sylphya_wiring.rs` の `translate_snapshot_source` に一時の `#[allow(dead_code)]` がある。4.2 で `runtime.rs` から呼んだら外す
 - 4.3: areka-ghost には 2 体の切替のテストが無いので、切替の送り先のテストは areka の `SwitchRig` の上（`crates/areka/src/ghost_session_switch_translate_tests.rs`）に置いた。`ghost_session.rs` への変更は `#[cfg(test)]` のモジュール宣言 1 つだけ。204 の `OnGhostChanging` の後の切替の `OnClose` の送り先は見ていない
+- 6.1: 全体テストで `log-capture-kit` の番人（`with_default_guard_test`）が赤。1.4 のテストが手作りの subscriber で捕捉先を直接差していたため。共有の窓口 `log_capture_kit::capture` へ寄せ、`areka-sakura` の `[dev-dependencies]` に `log-capture-kit` を足した（他の 14 クレートと同じテスト専用の依存。設計の「`Cargo.toml` の変更 0」からは外れるが、製品の依存は 0 のまま・外部クレートの追加も 0）
