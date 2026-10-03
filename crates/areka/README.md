@@ -10,18 +10,19 @@ This crate is published for name reservation purposes. The API is not stable and
 
 ## About
 
-**areka** is a desktop mascot platform for Windows inspired by Ukagaka (伺か). It provides an interactive character system that runs on the desktop, built on the wintf UI framework.
+**areka** is Ukagaka (伺か) baseware for Windows: an alternative to SSP that follows [ukadoc](https://ssp.shillest.net/ukadoc/manual/) and runs existing ghosts, shells, and balloons. It is built on the wintf UI framework.
 
-Key features (planned):
-- Desktop mascot character support
-- Interactive dialogue system
-- Ukagaka-compatible architecture
-- Extensible plugin system
-- Windows desktop integration
+Implemented in the alpha (2026-10-02):
+- Ghost boot, dialogue, petting, right-click menu, and shutdown
+- 32-bit SHIORI DLLs hosted in a separate 32-bit helper process
+- `.nar` installation (menu or drag-and-drop) and network update
+- Switching ghosts, shells, and balloons; remembering the last selection
+
+The crate on crates.io is not the way to install areka for end users: the 32-bit helper executable is not built by `cargo install`. See the repository README for how to build the distribution zip.
 
 ## Usage
 
-Not recommended for production use at this stage. Please check back for future releases.
+See <https://github.com/ekicyou/areka>.
 
 ## License
 
