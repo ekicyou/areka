@@ -130,7 +130,7 @@
   - _Requirements: 9.5, 9.6_
 
 - [ ] 7. 既定ポートの早い者勝ちと隣への退避（開発者裁定 2026-10-03）
-- [ ] 7.1 候補の列と環境変数の読み解き
+- [x] 7.1 候補の列と環境変数の読み解き
   - `port.rs` の既定の番号 1 つ（`DEFAULT_PORT`）と「値 → 番号 1 つ」の判断を、design.md の契約どおり `DEFAULT_PORTS = [9801, 9821]`・`FALLBACK_STEPS = 9`・`candidates_from_env_value(Option<&str>) -> Vec<u16>`（純粋）・`read_port_candidates() -> Vec<u16>` へ置き換える。既定の列は 9801・9821・9802・9822・…・9810・9830 の 20 個で、組む場所はこの 1 か所
   - 未設定 → 既定の列・`0` → 空・1〜65535 → その 1 つだけ（空白許容・隣は足さない）・読めない値と非 UTF-8 → `warn!` 1 件＋既定の列（文面は「既定の候補で待ち受ける」）
   - `port_tests.rs` の表を新しい対応に書き換え（`candidates_from_env_value_fixed_table`・非 UTF-8 の 1 本）、20 個の並びを逐語で固定する `default_candidates_are_twenty_in_alternating_order` を足す
@@ -138,7 +138,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8_
   - _Depends: 2.1_
   - _Boundary: port_
-- [ ] 7.2 候補を順に束ねる起動と結線
+- [x] 7.2 候補を順に束ねる起動と結線
   - `start(candidates: &[u16], registry)` へ署名を変える: 空 → 待ち受けない `info!`。先頭から順に `127.0.0.1` へ束ね、失敗した候補ごとに `debug!` 1 件（番号・OS の理由）で次へ。全部だめなら `error!` 1 件（試した候補・最後の OS の理由）で待ち受けない取っ手。束ねたら `info!` 1 件（実番号の URL。先頭の候補でなければ同じ行に飛ばした候補と「先の候補が使用中なので移った」）。`set_nonblocking`／`local_addr` の失敗もその候補の失敗として次へ進む
   - `lib.rs` の公開面を `DEFAULT_PORTS`・`FALLBACK_STEPS`・`PORT_ENV`・`candidates_from_env_value`・`read_port_candidates` に替える（旧 `DEFAULT_PORT`・`port_from_env_value`・`read_port_env` は残さない）
   - `crates/areka/src/main.rs` の 1 行を `areka_mcp::start(&areka_mcp::read_port_candidates(), …)` に替える（コメントの意図は変えない・行は増やさない）
@@ -146,14 +146,14 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.10, 2.1, 2.3, 2.4_
   - _Depends: 7.1_
   - _Boundary: server, lib, areka の main の結線 1 行_
-- [ ] 7.3 (P) help の ⑷ を既定の順の説明へ
+- [x] 7.3 (P) help の ⑷ を既定の順の説明へ
   - ⑷ を「既定は 9801 → 9821 の早い者勝ち・どちらも使用中なら隣（9802・9822 … 9810・9830）へ・`AREKA_MCP_PORT` で 1 つを指定・`0` で待ち受けない」の文面にし、番号は `DEFAULT_PORTS`・`FALLBACK_STEPS` から組む（手で数を書かない）。URL・登録コマンド・`mcpServers` の断片は今までどおり引数の実番号
   - `help_tests.rs` の「`9821` がちょうど 1 回」の assert を置き換え、`help_html(12345)` の本文に `127.0.0.1:9801`・`127.0.0.1:9821` のどちらも無いこと・⑷ が既定の順（先頭 2 つと末尾 2 つ）を説明していることを確かめる
   - 完了の姿: `help_tests.rs` が緑
   - _Requirements: 6.1, 6.2_
   - _Depends: 7.1_
   - _Boundary: help_
-- [ ] 7.4 候補の飛ばしと全部だめの実ソケットのテスト
+- [x] 7.4 候補の飛ばしと全部だめの実ソケットのテスト
   - `server_tests.rs` に `default_candidates_skip_taken_port`（std `TcpListener` で空きポートを 1 つ占め、`start(&[占めた番号, 0])` → 占めた番号と違う番号で待受中・`debug!` 1 件・移った旨の `info!` 1 件・`error!` 0 件）と `all_candidates_taken_logs_one_error`（空きポートを 2 つ占めて候補に渡す → `error!` 1 件・`debug!` 2 件・待ち受けない）を足す。ログは `capture` で数える
   - 署名の変更で壊れる既存のテストを直す: `start(Some(0), …)` → `start(&[0], …)`・`start(None, …)` → `start(&[], …)`・束ねの失敗のテストは `start(&[占めた番号], …)`（`testkit.rs` の起こし口も同じ）。`server_protocol_tests.rs`・`server_gate_help_tests.rs` は署名が強いる行だけ触る。`server_gate_help_tests.rs` の「空きポートがたまたま 9821 なら固定の番号の検出を飛ばす」の守りは 9801 にも広げる
   - 完了の姿: `cargo test -p areka-mcp` が緑・固定の番号を束ねるテスト 0 本（9801・9821 を `bind` するテスト 0 本）

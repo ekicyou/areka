@@ -25,23 +25,37 @@ pub const SHUTDOWN_WAIT: Duration = Duration::from_secs(2);
 /// `accept` が失敗したとき次を試すまでの間（`warn!` の嵐と CPU の空回りにしない）。
 pub(crate) const ACCEPT_RETRY_WAIT: Duration = Duration::from_millis(100);
 
-/// 待受を立てる。失敗しない（束ねの失敗は `error!` と「待ち受けない取っ手」で表す）。
+/// 待受を立てる。失敗しない（候補が全部だめなら `error!` と「待ち受けない取っ手」で表す）。
 ///
-/// `port`: None＝待ち受けない（`AREKA_MCP_PORT=0`）。Some(0)＝OS に空きポートを割り当てさせる（テスト用）。
-pub fn start(port: Option<u16>, registry: ToolRegistry) -> McpServer {
-    let Some(port) = port else {
+/// `candidates`: 試す番号の列（先頭から順・最初に束ねた 1 つで待ち受ける＝設計判断 B-13）。
+/// 空＝待ち受けない（`AREKA_MCP_PORT=0`）。要素の `0`＝OS に空きポートを割り当てさせる（テスト用）。
+pub fn start(candidates: &[u16], registry: ToolRegistry) -> McpServer {
+    if candidates.is_empty() {
         info!("MCP: 待ち受けない（AREKA_MCP_PORT が 0）");
         return McpServer { listening: None };
-    };
-    let bound = std::net::TcpListener::bind(("127.0.0.1", port))
-        .and_then(|listener| listener.set_nonblocking(true).map(|()| listener))
-        .and_then(|listener| listener.local_addr().map(|addr| (listener, addr)));
-    let (listener, addr) = match bound {
-        Ok(bound) => bound,
-        Err(err) => {
-            error!(port, error = %err, "MCP: ポートを束ねられなかった（待ち受けない）");
-            return McpServer { listening: None };
+    }
+    let mut last_err = None;
+    let mut bound = None;
+    for (index, &port) in candidates.iter().enumerate() {
+        // `set_nonblocking`／`local_addr` の失敗もその候補の失敗として次へ進む（取った口はその場で落ちる）。
+        match std::net::TcpListener::bind(("127.0.0.1", port))
+            .and_then(|listener| listener.set_nonblocking(true).map(|()| listener))
+            .and_then(|listener| listener.local_addr().map(|addr| (listener, addr)))
+        {
+            Ok(ok) => {
+                bound = Some((ok, &candidates[..index]));
+                break;
+            }
+            Err(err) => {
+                debug!(port, error = %err, "MCP: 候補のポートを束ねられなかった（次の候補へ）");
+                last_err = Some(err);
+            }
         }
+    }
+    let Some(((listener, addr), skipped)) = bound else {
+        let err = last_err.map(|e| e.to_string()).unwrap_or_default();
+        error!(tried = ?candidates, error = %err, "MCP: どの候補のポートも束ねられなかった（待ち受けない）");
+        return McpServer { listening: None };
     };
     let token = CancellationToken::new();
     let state = Arc::new(State::new(
@@ -55,7 +69,12 @@ pub fn start(port: Option<u16>, registry: ToolRegistry) -> McpServer {
     let (inbox, thread) = spawn_actor::<(), _>("mcp", move |_inbox| {
         run(listener, thread_token, state, done_tx)
     });
-    info!(url = %format!("http://{addr}/api/mcp/v1"), "MCP: 待受を始めた");
+    let url = format!("http://{addr}/api/mcp/v1");
+    if skipped.is_empty() {
+        info!(url = %url, "MCP: 待受を始めた");
+    } else {
+        info!(url = %url, skipped = ?skipped, "MCP: 待受を始めた（先の候補が使用中なので移った）");
+    }
     McpServer {
         listening: Some(Listening {
             addr,

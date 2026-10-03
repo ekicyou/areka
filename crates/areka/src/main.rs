@@ -182,7 +182,7 @@ fn main() -> Result<()> {
     // 早い戻りを含む `main` のどの出口でも閉じる。`app` より先に宣言する＝`app` の後に落ちる。
     // 待受の失敗は `error!` に残すだけで終了コードには響かない（`start` は `Result` を返さない）。
     let _mcp = areka_mcp::start(
-        areka_mcp::read_port_env(),
+        &areka_mcp::read_port_candidates(),
         areka_mcp::ToolRegistry::default(),
     );
 

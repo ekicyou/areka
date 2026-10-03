@@ -21,6 +21,8 @@ mod server;
 mod testkit;
 
 // 公開面（rmcp・tokio・hyper の型は出さない）。
-pub use port::{DEFAULT_PORT, PORT_ENV, port_from_env_value, read_port_env};
+pub use port::{
+    DEFAULT_PORTS, FALLBACK_STEPS, PORT_ENV, candidates_from_env_value, read_port_candidates,
+};
 pub use registry::{ToolContent, ToolFuture, ToolHandler, ToolOutcome, ToolRegistry, ToolSpec};
 pub use server::{McpServer, SHUTDOWN_WAIT, start};

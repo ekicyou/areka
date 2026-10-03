@@ -1,4 +1,4 @@
-//! 実ソケットのテスト: 待受・束ねの失敗・終了（要件 1・2.4・9.3・9.4）。
+//! 実ソケットのテスト: 待受・候補の飛ばし・束ねの失敗・終了（要件 1・2.4・2.9・9.3・9.4）。
 //!
 //! ポートは毎回 OS に割り当てさせる（固定の番号は使わない＝要件 9.1）。
 //! 記録は `capture` で数える（`start` と `Drop` の記録は呼び出し側のスレッドで出る）。
@@ -25,9 +25,10 @@ fn assert_ping(addr: std::net::SocketAddr) {
 }
 
 /// (要件 1.1, 1.2) 待受を始めると info が 1 件・URL は `127.0.0.1` の実番号の `/api/mcp/v1`。
+/// 先頭の候補で束ねたので移った旨（`skipped`）は無く、debug も 0 件。
 #[test]
 fn listen_logs_info_with_url() {
-    let (server, events) = capture(|| start(Some(0), ToolRegistry::default()));
+    let (server, events) = capture(|| start(&[0], ToolRegistry::default()));
     let addr = server.local_addr().expect("空きポートで待ち受けている");
     assert!(addr.ip().is_loopback() && addr.is_ipv4(), "{addr}");
     let infos = of_level(&events, Level::INFO);
@@ -37,21 +38,29 @@ fn listen_logs_info_with_url() {
         Some(format!("http://127.0.0.1:{}/api/mcp/v1", addr.port()).as_str()),
         "{events:?}"
     );
+    assert_eq!(infos[0].field("skipped"), None, "{events:?}");
+    assert!(of_level(&events, Level::DEBUG).is_empty(), "{events:?}");
     assert!(of_level(&events, Level::ERROR).is_empty(), "{events:?}");
     assert!(of_level(&events, Level::WARN).is_empty(), "{events:?}");
 }
 
-/// (要件 1.3, 1.4, 9.3) 使用中の番号では error 1 件（番号と理由）・待ち受けない取っ手・処理は続く。
+/// (要件 1.3, 1.4, 1.10, 9.3) 候補が使用中の 1 つだけ（`AREKA_MCP_PORT` の指定と同じ形）では、
+/// 飛ばした debug 1 件と error 1 件（試した候補と理由）・待ち受けない取っ手・処理は続く。
 #[test]
 fn bind_failure_logs_error_and_returns_off() {
     // 先に std の受け口で空きポートを占める（固定の番号は使わない）。
     let occupied = TcpListener::bind("127.0.0.1:0").expect("空きポートを占める");
     let port = occupied.local_addr().unwrap().port();
 
-    let (server, events) = capture(|| start(Some(port), ToolRegistry::default()));
+    let (server, events) = capture(|| start(&[port], ToolRegistry::default()));
     let errors = of_level(&events, Level::ERROR);
     assert_eq!(errors.len(), 1, "{events:?}");
-    assert_eq!(errors[0].field("port"), Some(port.to_string().as_str()));
+    assert_eq!(
+        errors[0].field("tried"),
+        Some(format!("[{port}]").as_str()),
+        "{events:?}"
+    );
+    assert_eq!(of_level(&events, Level::DEBUG).len(), 1, "{events:?}");
     assert!(
         errors[0].field("error").is_some_and(|e| !e.is_empty()),
         "OS の理由が載っていない: {events:?}"
@@ -67,10 +76,87 @@ fn bind_failure_logs_error_and_returns_off() {
     drop(occupied);
 }
 
-/// (要件 2.4) `0`（None）では info 1 件・待ち受けない（落としても閉じる記録は出ない）。
+/// (要件 1.2, 1.10, 2.1, 2.9, 9.3) 使用中の候補を飛ばして次の候補（OS に任せる）で待ち受ける:
+/// 飛ばした debug 1 件（番号と理由）・info 1 件（実番号の URL と移った旨）・error 0 件。
+#[test]
+fn default_candidates_skip_taken_port() {
+    // 先に std の受け口で空きポートを占める（固定の番号は使わない）。
+    let occupied = TcpListener::bind("127.0.0.1:0").expect("空きポートを占める");
+    let taken = occupied.local_addr().unwrap().port();
+
+    let (server, events) = capture(|| start(&[taken, 0], ToolRegistry::default()));
+    let addr = server.local_addr().expect("次の候補で待ち受けている");
+    assert_ne!(addr.port(), taken, "占めた番号で待ち受けている");
+
+    let debugs = of_level(&events, Level::DEBUG);
+    assert_eq!(debugs.len(), 1, "{events:?}");
+    assert_eq!(debugs[0].field("port"), Some(taken.to_string().as_str()));
+    assert!(
+        debugs[0].field("error").is_some_and(|e| !e.is_empty()),
+        "OS の理由が載っていない: {events:?}"
+    );
+
+    let infos = of_level(&events, Level::INFO);
+    assert_eq!(infos.len(), 1, "{events:?}");
+    assert_eq!(
+        infos[0].field("url"),
+        Some(format!("http://127.0.0.1:{}/api/mcp/v1", addr.port()).as_str()),
+        "{events:?}"
+    );
+    assert_eq!(
+        infos[0].field("skipped"),
+        Some(format!("[{taken}]").as_str()),
+        "{events:?}"
+    );
+    assert!(infos[0].message().contains("使用中"), "{events:?}");
+    assert!(of_level(&events, Level::ERROR).is_empty(), "{events:?}");
+    assert!(of_level(&events, Level::WARN).is_empty(), "{events:?}");
+
+    assert_ping(addr);
+    drop(server);
+    drop(occupied);
+}
+
+/// (要件 1.3, 1.10, 2.9, 9.3) 候補がすべて使用中なら debug 2 件・error 1 件（試した候補と最後の理由）・待ち受けない。
+#[test]
+fn all_candidates_taken_logs_one_error() {
+    let first = TcpListener::bind("127.0.0.1:0").expect("空きポートを占める（1 つ目）");
+    let second = TcpListener::bind("127.0.0.1:0").expect("空きポートを占める（2 つ目）");
+    let taken = [
+        first.local_addr().unwrap().port(),
+        second.local_addr().unwrap().port(),
+    ];
+
+    let (server, events) = capture(|| start(&taken, ToolRegistry::default()));
+    assert!(server.local_addr().is_none());
+
+    let debugs = of_level(&events, Level::DEBUG);
+    assert_eq!(debugs.len(), 2, "{events:?}");
+    for (debug, port) in debugs.iter().zip(taken) {
+        assert_eq!(debug.field("port"), Some(port.to_string().as_str()));
+    }
+    let errors = of_level(&events, Level::ERROR);
+    assert_eq!(errors.len(), 1, "{events:?}");
+    assert_eq!(
+        errors[0].field("tried"),
+        Some(format!("{taken:?}").as_str()),
+        "{events:?}"
+    );
+    assert!(
+        errors[0].field("error").is_some_and(|e| !e.is_empty()),
+        "OS の理由が載っていない: {events:?}"
+    );
+    assert!(of_level(&events, Level::INFO).is_empty(), "{events:?}");
+
+    let ((), drop_events) = capture(|| drop(server));
+    assert!(drop_events.is_empty(), "{drop_events:?}");
+    drop((first, second));
+}
+
+/// (要件 2.4) 候補が空（`AREKA_MCP_PORT` が `0`）では info 1 件・待ち受けない（落としても閉じる記録は出ない）。
 #[test]
 fn disabled_port_logs_info_and_no_thread() {
-    let (server, events) = capture(|| start(None, ToolRegistry::default()));
+    let (server, events) = capture(|| start(&[], ToolRegistry::default()));
     assert_eq!(of_level(&events, Level::INFO).len(), 1, "{events:?}");
     assert_eq!(events.len(), 1, "{events:?}");
     // 理由（環境変数の名前）も載せる（要件 2.4）。

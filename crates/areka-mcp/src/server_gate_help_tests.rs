@@ -90,9 +90,11 @@ fn help_is_200_html_with_actual_port() {
         body.contains(&format!("claude mcp add --transport http areka {url}")),
         "{body}"
     );
-    // 空きポートがたまたま 9821 なら、固定の番号の検出はできない（実番号の在りかは上で確かめた）。
-    if addr.port() != 9821 {
-        assert!(!body.contains("127.0.0.1:9821"), "{body}");
+    // 空きポートがたまたま既定の番号（9801・9821）なら、その番号の固定の検出はできない（実番号の在りかは上で確かめた）。
+    for port in crate::DEFAULT_PORTS {
+        if addr.port() != port {
+            assert!(!body.contains(&format!("127.0.0.1:{port}")), "{body}");
+        }
     }
 }
 
