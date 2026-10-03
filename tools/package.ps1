@@ -539,17 +539,6 @@ foreach ($a in $script:BuildArchs) {
     }
 }
 
-Step '完成' {
-    foreach ($a in $script:BuildArchs) {
-        $n = Get-ArtifactNames $a
-        Move-Item -LiteralPath $n.ZipTmp -Destination $n.Zip -Force
-        Move-Item -LiteralPath $n.ShaTmp -Destination $n.Sha -Force
-        Write-Host "zip: $($n.Zip)"
-        Write-Host "sha256: $($n.Sha)"
-    }
-    Write-Host "コミット $script:Commit・未コミットの変更 $script:Dirty 件"
-}
-
 # 記録の判定（要件 3.3・3.5）。2 つの記録を連結した文字列・子の終了コード・番犬で止めたかを受け、
 # 条件ごとに { Name; Ok; Detail } を返す。全部見てから呼び手が 1 回主張する（1 つ目で止めない）。
 function Test-RunLog([AllowEmptyString()][string]$Text, [int]$ExitCode, [bool]$WatchdogKilled) {
@@ -589,7 +578,9 @@ if ($Check) {
         # 展開先の長さは「前提の確認」で確かめ済み
         if (Test-Path -LiteralPath $script:ExpandDir) { throw "展開先が既に在る: $script:ExpandDir" }
         if (Test-Path -LiteralPath $script:LogDir) { throw "記録の置き場が既に在る: $script:LogDir" }
-        [IO.Compression.ZipFile]::ExtractToDirectory((Get-ArtifactNames 'x64').Zip, $script:ExpandDir)
+        # 完成の改名より前なので x64 の仮の名前の zip を展開する（.tmp のままでも zip として読める）
+        [IO.Compression.ZipFile]::ExtractToDirectory((Get-ArtifactNames 'x64').ZipTmp, $script:ExpandDir)
+        if ($script:BuildArchs -ccontains 'arm64') { Write-Host 'arm64 の zip は作ったが起動確認はしていない（起動確認は x64 の zip だけ）' }
         $null = New-Item -ItemType Directory -Path $script:LogDir
         $script:RunLog = Join-Path $script:LogDir 'run.log'
         $script:RunErrLog = Join-Path $script:LogDir 'run.stderr.log'
@@ -636,6 +627,23 @@ if ($Check) {
             Exit-Script $EXIT_CHECK_FAILED ("起動確認の否（{0}）" -f (($failed | ForEach-Object Name) -join '・'))
         }
     }
+
+    # 判定の合格の後にだけ来る（否は上で 2 で終わり、木と記録を残す）。番犬の後なので自分の子は終わっている。
+    # 掴みが残る間（本体の終了に道連れの補助 exe など）は再試行で待つ。プロセスは止めない。
+    Step '後片付け' {
+        if ($KeepExpanded) {
+            Write-Host "展開した木を残した（-KeepExpanded）: $script:ExpandDir"
+        } else {
+            $last = $null
+            for ($i = 1; $i -le $REMOVE_RETRY; $i++) {
+                try { Remove-Item -LiteralPath $script:ExpandDir -Recurse -Force; $last = $null; break }
+                catch { $last = $_; if ($i -lt $REMOVE_RETRY) { Start-Sleep -Seconds $REMOVE_RETRY_WAIT_SEC } }
+            }
+            if ($last) { throw "展開した木を消せなかった（段「後片付け」・$REMOVE_RETRY 回試した）: $script:ExpandDir — $($last.Exception.Message)" }
+            Write-Host "展開した木を消した: $script:ExpandDir"
+        }
+        Write-Host "記録（残す）: $script:LogDir"
+    }
 }
 
 Step 'git status 不変の確認' {
@@ -645,6 +653,18 @@ Step 'git status 不変の確認' {
     $script:StatusBefore | Where-Object { $after -cnotcontains $_ } | ForEach-Object { Write-Host "消えた $_" }
     $after | Where-Object { $script:StatusBefore -cnotcontains $_ } | ForEach-Object { Write-Host "増えた $_" }
     throw 'git status --porcelain が始めと違う'
+}
+
+# 起動確認が仮の名前の zip を展開するので、改名は起動確認と git status の確認の後
+Step '完成' {
+    foreach ($a in $script:BuildArchs) {
+        $n = Get-ArtifactNames $a
+        Move-Item -LiteralPath $n.ZipTmp -Destination $n.Zip -Force
+        Move-Item -LiteralPath $n.ShaTmp -Destination $n.Sha -Force
+        Write-Host "zip: $($n.Zip)"
+        Write-Host "sha256: $($n.Sha)"
+    }
+    Write-Host "コミット $script:Commit・未コミットの変更 $script:Dirty 件"
 }
 
 Invoke-Cleanup
