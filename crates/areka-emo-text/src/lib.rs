@@ -287,6 +287,8 @@ mod tests {
             include_str!("state_decoration_reset_tests.rs"),
         ),
         ("layout_line_ops.rs", include_str!("layout_line_ops.rs")),
+        ("layout_scan.rs", include_str!("layout_scan.rs")),
+        ("layout_scan_glyph.rs", include_str!("layout_scan_glyph.rs")),
         ("layout_styled.rs", include_str!("layout_styled.rs")),
         (
             "layout_styled_tests.rs",
@@ -414,7 +416,7 @@ mod tests {
     fn pure_layer_modules_have_no_windows_imports() {
         // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
         // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
-        assert_eq!(PURE_SOURCES.len(), 61, "走査する純粋層モジュールの母数");
+        assert_eq!(PURE_SOURCES.len(), 63, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",
