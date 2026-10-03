@@ -64,7 +64,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.4_
   - _Depends: 2.1, 3.2_
 
-- [ ] 4. 実ソケットの決定論テスト
+- [x] 4. 実ソケットの決定論テスト
 - [x] 4.1 手書きの HTTP/1.1 クライアント
   - テスト専用の部品を `testkit.rs` 1 つにまとめる: 要求を送って状態・ヘッダ・本文を受ける手書きのクライアント（`winhttp_real_tests.rs` の `answer` の逆向き）・JSON-RPC の組み立て・`start(Some(0), …)` でサーバを起こして実番号を返す口。rmcp を呼ぶ要求は既定で `Accept: application/json, text/event-stream` を付ける
   - 完了の姿: `testkit.rs` の中の自己点検 1 本（空きポートで起こしたサーバへ `ping` を送り 200 と `result: {}` を受ける）が緑
@@ -84,7 +84,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 5.1, 9.2_
   - _Depends: 4.1_
   - _Boundary: server_protocol_tests_
-- [ ] 4.4 (P) 検査・help・登録口のテスト
+- [x] 4.4 (P) 検査・help・登録口のテスト
   - `server_gate_help_tests.rs` に design.md の 7 本（悪い Origin で initialize・ping・help の 3 つが 403・悪い Host の 403・help の 200 と実番号・未知のパスの 404・help への POST の 405・1 本登録の往復が逐語で出て content／isError がそのまま返る・登録済みサーバで別名の `-32602`）を置く
   - 完了の姿: 7 本が緑
   - _Requirements: 4.3, 4.4, 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4, 9.2_
@@ -135,3 +135,4 @@
 - 4.1: Windows では 413 を早く返して閉じると RST で未読の応答が捨てられうる。`body_over_limit_is_413` が揺れたらここ（4 MiB＋1 では 5/5 で届いた）
 - 4.2: 閉じたループバックのポートへの `connect` は Windows では SYN を再送して拒否まで約 2 秒かかる。「つながらない」の判定は `connect_timeout`（500 ms）で足りる
 - 4.3: `server/discover` が答えるのは無状態の送り方（`_meta` の protocolVersion＋ヘッダ `MCP-Protocol-Version: 2026-07-28`）のときだけ。`_meta` だけは 400（-32020）・どちらも無しは 200（-32601）。serverInfo は `_meta."io.modelcontextprotocol/serverInfo"` の下
+- 4.4: 悪い `Host` は `/api/mcp/v1` では rmcp の `allowed_hosts` も 403 を返すので、`gate` の Host 検査を固定できるのは rmcp を通らない help の経路だけ。`isError` は true／false の両方を往復させないと「常に error」の変異が通る
