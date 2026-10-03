@@ -229,3 +229,57 @@ docs.rs の `StreamableHttpServerConfig`・`StreamableHttpService`・`ServerHand
 | B-7 | 本文の上限 4 MiB を差の一覧に載せるか（任意） | 載せる（「違うが困らない」1 行） | 要件 5.1 の 15 行の外 |
 | R1〜R5 | §6 の調べ残し | 設計の最初のタスク（空の `areka-mcp`＋`initialize` 5 版→`ping` のテスト）で R2・R3・R4 を測る | — |
 - 設計の最初のタスクは「`areka-mcp` を空で建てて `cargo deny check` と `-License` を通し、`initialize`（5 版）→`ping` の決定論テストを 1 本緑にする」＝§6 の R2・R3 がここで同時に測れる。
+
+## 11. 設計の段の調べと決定（2026-10-03・`/kiro-spec-design`）
+
+### 11.1 調べの範囲
+- **軽い発見（Extension）**: 既存の前例の確認（§2 のとおり・変更なし）と、**rmcp 3.5.0 の現物**（手元の cargo レジストリ `rmcp-3.5.0`・`hyper-util-0.1.21` のソース）の読み直し。§3 は docs.rs の表示から書いたので「見込み」が 3 か所あった。現物で引き直した結果を下に書き、設計はこちらに従う。
+- Web の調べは行っていない（依存の版・ライセンスは §4 で実測済み。rmcp は現物で読めた）。
+
+### 11.2 §3 の「見込み」を現物で引き直した点（設計の根拠）
+
+| 項目 | §3 の記述 | 現物（`rmcp-3.5.0`） | 設計への含み |
+|---|---|---|---|
+| 未知のメソッド | 本文の読み解きで弾かれ **400＋`-32600`** の見込み | 知らないメソッド名は `ClientRequest::CustomRequest` として**読める**。`ServerHandler::on_custom_request` の既定が **`-32601`**（`handler/server.rs`）。旧式の経路では HTTP 200 | 要件 3.7 はそのまま満たす（SSP と同じ 200・`-32601`）。areka がメソッドの表を持つ必要は無い |
+| 壊れた JSON | 400＋`-32600` | `expect_json`（`transport/common/server_side_http.rs`）は `serde_json::from_slice` の失敗を **415**・平文 `fail to deserialize request body …` で返す（同ファイルのテスト `expect_json_returns_415_for_invalid_json_under_limit` が固定している）。`Content-Type` 違いも 415 | 要件 3.8 の括弧書き「400 と JSON-RPC のエラー」は現物と違う。主文「4xx で答え、落とさない」は満たす。**設計ディスカッションで要件 3.8 の括弧書きを 1 行直す**（設計の判断 B-10） |
+| JSON-RPC エラーのときの HTTP 状態 | `-32602` は 400・`-32601` は 404 | `jsonrpc_http_status` が効くのは `serve_negotiated_request_directly`（本文の `_meta` に版が入る **2026-07-28 の per-request 経路**と `server/discover`）だけ。旧式の 4 版の要求は `handle_post` の無状態の腕で `json_response` のとき **`StatusCode::OK` 固定** | 今の Claude Code・Cursor が使う経路では SSP と同じ 200。R1 の大半はここで解けた（残るのは 2026-07-28 の経路の 400／404＝差の一覧に書く） |
+| `Accept` ヘッダ（§3 に無かった事実） | — | `handle_post` の先頭で `Accept` に `application/json` **と** `text/event-stream` の両方が無ければ **406**。素の `curl`（`Accept: */*`）は 406 | 差の一覧に 1 行（違うが困らない）。signoff と差の一覧の `curl` 例は `-H "Accept: application/json, text/event-stream"` を付ける（設計の判断 B-8） |
+| 未知の版の交渉（R2） | 文書から読み切れず | `negotiate_protocol_version`（`service/server.rs`）: 要求の版が `initialize` を持ち（`2026-07-28` 未満）かつ対応表に在ればそれ、無ければ `get_info` の `protocol_version`（既定 `LATEST`＝`2026-07-28`＝`initialize` を持たない）→ `initialize` を持つ最新＝**`2025-11-25`** | SSP と同じ値になる見込み。テスト `initialize_unknown_version_falls_back` で測って差の一覧へ |
+| `server/discover` の形 | `ttlMs`・`cacheScope`・`resultType` は無い | `DiscoverResult::from_server_info` は `result_type: complete`・`ttl_ms: 0`・`cache_scope: private`・`_meta` に serverInfo を**載せる** | 差の一覧の行を「SSP は `ttlMs: 3600000`、areka は `0`」の形で書く（違うが困らない） |
+| `ToolRouter` の API | `new_dyn`・`add_route`・`list_all`・`call` | 同じ。`call` の未登録は `invalid_params("tool not found")`＝`-32602`。`new_dyn` の閉包は `Result<CallToolResponse, ErrorData>` を返し、`CallToolResult` は `From` で `CallToolResponse::Complete` へ写せる（`model/mrtr.rs`） | B-6 の裏付け |
+| `get_info` の型名 | `ServerInfo` | 3.5.0 では `ServerConfig`（`InitializeResult` の別名。`ServerInfo` は非推奨の別名） | 設計は `ServerConfig` で書いた |
+| `Service` の呼び方 | `TowerToHyperService` で包む | `StreamableHttpService` は `Clone` で `poll_ready` が常に Ready。`service_fn` の中で複製して `tower_service::Service::call` を直に呼べる（`hyper-util` の `service` 機能は要らない） | 直接の依存に `tower-service`（新しいクレートは増えない） |
+
+### 11.3 設計の判断（B-1〜B-7 の結論と、現物で増えた B-8〜B-10）
+
+| # | 判断 | 結論 |
+|---|---|---|
+| B-1 | `Origin`／`Host` の検査 | 自前の純粋関数 `gate::check` を振り分けの手前に 1 つ。rmcp の `Host` 既定は残し `allowed_origins` は空のまま（二重に鳴らない＝自前が先に拒む） |
+| B-2 | HTTP の土台 | hyper 1 を直に（http1 のみ・`TokioTimer` を設定・受付ループ＋3 分岐の `match`） |
+| B-3 | 畳み方 | 取っ手 `McpServer` の `Drop`。`fn main()` では `resolve_boot` の直後・`WinApp` 構築の前に `let _mcp = areka_mcp::start(…)` の 1 行 |
+| B-4 | 登録口の handler | 非同期（`Arc<dyn Fn(Value) -> Pin<Box<dyn Future<Output = ToolOutcome> + Send>> + Send + Sync>`） |
+| B-5 | rmcp の既定機能 | 切る（`server`＋`transport-streamable-http-server`） |
+| B-6 | `tools/call` の `-32602` | `ToolRouter::call` へ委ねる |
+| B-7 | 4 MiB | 差の一覧に 1 行。上限の定数は `MAX_BODY_BYTES` 1 つ（`dispatch` の読み取りと rmcp の設定の両方へ） |
+| B-8 | `Accept` の 406 | 直さない・差の一覧に 1 行・`curl` 例にヘッダを付ける |
+| B-9 | JSON-RPC エラーの HTTP 状態 | 旧式の経路は 200（同じ）・2026-07-28 の経路は 400／404（違うが困らない）と書き分ける |
+| B-10 | 要件 3.7・3.8 と現物 | 3.7 はそのまま（`-32601`）。3.8 の括弧書きは現物（415・平文）に合わせて設計し、要件の文面は設計ディスカッションで直す |
+
+### 11.4 統合の 3 つの見方（design-synthesis）
+- **一般化**: 「環境変数を読まない純粋な判断＋読む 1 か所」（port）と「生の値を使わない純粋な判断」（gate）は同じ型で、どちらも `period_from_env_value` の前例の写し。新しい抽象は作らない。
+- **作るか採るか**: プロトコル・無状態の経路・`Host` 検査・版の交渉・`ToolRouter` は rmcp を採る。自前で書くのは「受付ループ・3 分岐・`Origin`／`Host` の判断・ポートの読み解き・登録の包み・help の HTML」の 6 片（各 100 行未満）。axum（+8 クレート）・reqwest／ureq（テストの HTTP 用）は採らない。
+- **簡素化**: ルータの道具・走行中のツールの追加削除・設定の型（`McpConfig` のような構造体）・HTTP/2・`spawn_blocking` は入れない。`spawn_actor` の inbox は使わない（合図は `CancellationToken` 1 つ）。
+
+### 11.5 §6 の調べ残しの状態
+| # | 状態 |
+|---|---|
+| R1 | **大半は解けた**（11.2 の 3 行目）。残り＝2026-07-28 の per-request 経路で Claude Code が 400／404 をどう見せるか。本 spec の 4 操作には出ない。差の一覧に「未測」と書く |
+| R2 | 現物の読みで `2025-11-25` の見込み。テストで測る |
+| R3 | 未知メソッドは `-32601`（解けた）。`Origin` の `null`・host 無し・`localhost.evil.example` は自前の `gate` が拒む（rmcp は関与しない） |
+| R4 | 受付の口（listener）を `block_on` の直後に落とす設計で「終了直後の `connect` が失敗する」の判定を安定させる見込み。テスト `drop_closes_port` で確かめる |
+| R5 | 実装の段で測って signoff.md に書く |
+
+### 11.6 残るリスク
+- rmcp の無状態＋`json_response` の経路を**手元で動かすのは実装の最初のタスク**（空の `areka-mcp`＋`initialize` 5 版→`ping`）。ここで赤なら設定の組み方を直す（設計の形は変えない見込み）。
+- hyper の http1 のヘッダ読みの時間切れは `TokioTimer` を設定して有効にする（設定しないと時間切れが効かないか、版によっては失敗する）。
+- `Drop` の中の待ち（`SHUTDOWN_WAIT` 2 秒）は perf の `FINAL_WAIT` と同じ考え。待ちきれなければ `warn!` で切り離す。
