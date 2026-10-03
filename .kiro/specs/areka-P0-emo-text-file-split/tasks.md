@@ -94,4 +94,4 @@
 - 3.2: 型 `ContentDecisions` は兄弟 `wait` の `decide_timeout` も引数で受けて欄を読む。当初は子 `decision` に置いて `pub(super)` を 3 つ付けたが、子同士が引き合うので完了時に親 `balloon_visibility.rs` へ戻した（基準の字面のまま・`pub(super)` なし）。
 - 5.2（承認フローへの持ち越し）: 「選択を待っているメニューを、なでなで（`OnMouseMove`）のような軽いイベントの返事で上書きしてよいのか」——実機で観測（`verification/notes.md` §3 の「持ち越しの議題」）。分割とは無関係（kanade の単一 slot 置換・差分 0 行）。`/kiro-complete` の未解決問題の棚卸で、正典と照らして起票するかを決める。
 - 完了時にその場で解決（1 件）: `decision` と `wait` の相互参照を、`ContentDecisions` を親へ戻して解いた（`verification/notes.md` §4）。
-- 完了時の棚卸（2026-10-03）: その場で解決 1 件（上の `ContentDecisions`）・起票 1 件（`areka-P0-sakura-time-critical`＝`	` 未実装。メニューの上書きそのものは正典どおりと判定）。`frame_attach_tests.rs` の説明文の古い「`present_frame` は `actor.rs`」は要件 4.3（テストの注釈を書き換えない）のため直さない。
+- 完了時の棚卸（2026-10-03）: その場で解決 1 件（上の `ContentDecisions`）・起票 1 件（`areka-P0-sakura-time-critical`＝`\t` 未実装。メニューの上書きそのものは正典どおりと判定）。`frame_attach_tests.rs` の説明文の古い「`present_frame` は `actor.rs`」は要件 4.3（テストの注釈を書き換えない）のため直さない。

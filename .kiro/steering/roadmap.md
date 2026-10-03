@@ -166,7 +166,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 | `property-catalog-lists` | その他 | `system.*` と一覧（`ghostlist`・`balloonlist`＝列挙は α で実在）。**要件で 2 つに切る** | 20 超 → 切る | `emo2_boot` の列 | `currentghost-property-tree` | − |
 | `zorder-property` | その他 | `currentghost.seriko.zorder` の読み書き | S | 単独で取れる | 書く側は `property-query-channels` | − |
 | `sakura-time-directives` | その他 | 残りの時間の指令（`quicksection`・`balloonwait`・`balloontimeout`）。C・D 群は消費する者が現れるまで置く | 20 超 → 切る | コンパイルの列 | `choice-timeout-directive`・`talk-fast-forward` | ○ |
-| `sakura-time-critical`（**10-03 起票**・`emo-text-file-split` の実機の観測から） | その他 | 台本の `	`（タイムクリティカル）を読み、台本の終わりか中断・選択まで、マウス系などの通知を止めて `Status` に `timecritical` を載せる（今は読まない＝`	` を書いたメニューもなでなでの返事に置き換わる） | S〜M（6〜10） | コンパイルの列・kanade の列 | `status-execution-states` | ○ |
+| `sakura-time-critical`（**10-03 起票**・`emo-text-file-split` の実機の観測から） | その他 | 台本の `\t`（タイムクリティカル）を読み、台本の終わりか中断・選択まで、マウス系などの通知を止めて `Status` に `timecritical` を載せる（今は読まない＝`\t` を書いたメニューもなでなでの返事に置き換わる） | S〜M（6〜10） | コンパイルの列・kanade の列 | `status-execution-states` | ○ |
 | `makoto-dll-host` | その他 | MAKOTO/2.0 の DLL を掛ける。**要件で「ホストと鎖」と「load/unload/reload」に切る** | 20 超 → 切る | kanade の列 | `translate-pipeline` | ○ |
 | `mcp-stdio-bridge` | 優先 | Claude Desktop 用の stdio ⇔ HTTP 中継 exe | S（7〜10） | C4 の候補（依存の席を C3 の `animated-image-decode` が使う・`dist/README.txt` を C3 の winget と分け合う） | `mcp-server-core`・`package-check-temp-cleanup` | − |
 | `mcp-get-property` | 優先 | `get_property` | S | **C3-⑥**（予定） | `mcp-tool-entrances` | − |
@@ -238,7 +238,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 7. **失敗は既定ゴースト（emo2）の台詞で伝える**（`OnBoot` の Ref6＝`halt`・Ref7＝落ちたゴーストの名前）。メッセージボックスは出さない。**インストールと切り替えは別のイベント**（入れた後の切替を areka は主導しない）。
 8. **要件定義・設計のサブエージェントは起動中のモデルを継承し、上位へ上げない**（09-30）。Fable 列は「Fable で起動したセッションを勧める」だけ。
 9. **並走できる spec の紹介は「完全並走できるものだけ」・Fable 推奨を先頭に、名前＋一言＋コマンドの短い形**（09-26）。
-10. **話の最中（選択待ちを含む）に届いたマウス系の返事は今の話を置き換える＝正典どおり**（2026-10-03・`emo-text-file-split` の実機で「メニューがなでなでの返事に置き換わる」を観測して確かめた。正本は完了 `input-events` の DD-IE-1／DD-IE-2）。止めるのはゴーストの側（`Status` の `talking`／`choosing` を見て黙る）か台本の `	`。areka の穴は `	` を読まないことだけ＝`sakura-time-critical`。
+10. **話の最中（選択待ちを含む）に届いたマウス系の返事は今の話を置き換える＝正典どおり**（2026-10-03・`emo-text-file-split` の実機で「メニューがなでなでの返事に置き換わる」を観測して確かめた。正本は完了 `input-events` の DD-IE-1／DD-IE-2）。止めるのはゴーストの側（`Status` の `talking`／`choosing` を見て黙る）か台本の `\t`。areka の穴は `\t` を読まないことだけ＝`sakura-time-critical`。
 
 ## 棚卸⑳の裁定（2026-10-02・main `03e8d7d6`・開発者指示「main が進んだので棚卸＆深掘り＆徹底ブリーフィング。完了ロードマップの整理。バグ修正 → 優先度の高い機能」）
 
