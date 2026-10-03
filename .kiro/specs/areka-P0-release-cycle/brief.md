@@ -21,6 +21,7 @@
 3. 版上げの PR を出し、squash マージする（他の変更を混ぜない）。
 4. main の squash コミットに `v{版}` のタグを打って push する。これが Actions のきっかけ。
 5. 見守る: `release.yml` の緑・Release の公開・crates.io の各クレートの版・winget-pkgs への PR（`winget.yml`）。赤のときの決まり（10-03 開発者）: `release.yml` が赤で Release が残っておらず、タグを動かさずに済む原因（通信の失敗・時間切れ・取り消し）なら、同じ走りを「Re-run」でやり直してよい（まだ何も配られていない）。コミットの直しが要る赤と、Release の公開より後（crates.io・winget）の赤は、原因を直す spec を起票し、**同じ版で出し直さない**（zip の URL は版ごとに固定・crates.io は差し替え不可）＝タグを動かさず、直したら次の版で出す。
+   - 初回の実走で初めて動くもの（10-03 `release-ci-workflow` の完了時に申し送り・詳細は `.kiro/specs/completed/areka-P0-release-ci-workflow/verification/runner-trial.md` の「release-cycle への申し送り」）: Release の公開の段（4 つのファイル・公開の状態・自動のノートが一つ前のタグからの範囲）・後始末の段の消す経路（タグは残る）・下書きの Release が一時のトークンから見えるか・赤の走りの Re-run・マージ後の乾いた走り（main と `release.yml` を含むタグで始められるか。`v0.0.1` からは始められない）。どれも完了の条件ではなく、見守って赤なら直す spec を起票する。
 6. 記録: `roadmap.md` の「完了サマリ」の下に「リリース」の 1 行（版・日付・Release の URL・winget の PR）。
 7. **初回（`v0.0.2`）だけの手順**: タグを打つ前に、開発者が手元で `cargo publish --workspace` を実行して crates.io へ出し、各クレートに Trusted Publishing を設定する（`crates-io-publish` の手順）。winget の初回の手提出は `winget-manifest-submission`（Release の実在が要る＝初回の後のウェーブ）。
 

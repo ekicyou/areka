@@ -88,3 +88,4 @@
 
 - GitHub の pwsh の段は本文を `pwsh -command ". '{0}'"` で回し、`-Command` は 0 と 1 以外の終了コードを 1 に潰す。子の終了コードをそのまま段の結果にするには `$host.SetShouldExit($code); exit $code`（1.5 の S8）。
 - PowerShell の `-ceq` は文化に従う比べで、U+FEFF（BOM）や U+200B を無視する。字のとおりに比べるところは `[string]::Equals(a, b, [StringComparison]::Ordinal)`（1.5 で S4・S5・S9 を揃えた。S11 は S5 の探す行を 1 字違わず写す）。
+- 完了時にその場で解決（2 件）: brief の後段の行を、決まった形（`release.yml` は後段を呼ばない・winget は `workflow_run`・crates-io はタグの push で起きて `release` の走りを待つ）に改めた／`release-cycle` の brief の手順 5 に、初回の実走で初めて動くものの申し送りを足した。起票 0 件（残りはすべて `release-cycle` の初回の見守りが持つ）。
