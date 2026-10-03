@@ -98,3 +98,14 @@
   - 同じ形: `51:38.20` に始まった `OnSecondChange` の話を、`51:38.36` の体のダブルクリック（メニュー）が置き換えた。
   - 分割との関係: 無い。決めているのは運行（kanade）の「話の最中に新しい返事が来たら差し替える」（単一 slot 置換）で、`crates/areka-kanade/`・`OnMouseMove` を送る側（`input_events/mod.rs`・`input_events/throttle.rs`・`emo2_boot/hit_region.rs`）・`crates/areka-ghost/` の基準 `94e3ad78` からの差分は 0 行。
   - 次の一歩: 正典（ukadoc／SSP の話の最中・選択待ちの最中のイベントの扱い）と照らして、バグとして `/kiro-discovery` で起票するかを承認フローで決める。
+
+## 4. 機能全体の検証（`/kiro-validate-impl`・2026-10-03）
+
+- 判定: **GO**（Critical 0・Warning 0）。`9ba1f380` 以降はコードの差分 0 行（spec 文書だけ）なので、§2 の全体テストの緑は HEAD にそのまま当てはまる。実機は §3。
+- 横断の確認: `lib.rs` の 2 つの一覧（`PURE_SOURCES` 65 件・`SOURCES_OUTSIDE_THE_PURE_SCAN` 36 件）の和が `src/*.rs` の実ファイル 102 本と一致・重複 0。構造テスト 3 つの最終形は設計 §構造テストの追随 と一致。設計と違う箇所はすべて §2 の表と `tasks.md` の Implementation Notes に記録がある。
+
+### Info（完了を止めない・承認フローで扱う）
+
+- **`decision` と `wait` の相互参照**: `balloon_visibility_wait.rs` が `use super::decision::ContentDecisions;` で兄弟を引く（`decision` は `use super::wait::decide_timeout;`）。データは decision → wait の一方向で役割の切り方は壊れていないが、設計が型 `ContentDecisions` を子 `decision` に置いたため「定義は元・処理は子」から外れた。解くなら `ContentDecisions` を親 `balloon_visibility.rs` へ戻す（約 3 行）。後続の `balloon-lifecycle-events` か `shell-balloon` で拾うのが妥当。
+- **`region_tests.rs` に `//!` が無い**: 要件 7.3（字下げ以外 1 文字も変えない）を守るための意図した例外（設計の region の表に「足す予定の spec」の列が無く、タスク 4 も `region_tests` を除く）。要件 1.4 の例外であることをここに記す。
+- **`lib.rs` の doc の訂正**: 層規律の段落の「`#[cfg(test)] mod layer_discipline` 内」を実体の `mod tests` に直した（基準からの誤記・タスク 4 のコミット `9ba1f380`）。
