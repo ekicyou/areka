@@ -1,0 +1,128 @@
+# Implementation Plan
+
+> 設計の正本は design.md。ファイル・型・関数の名前は design.md の「File Structure Plan」と「Components and Interfaces」に従う。テストは実装の隣の `*_tests.rs`（`#[cfg(test)] #[path = "…"] mod …;`）。1 ファイル 1,000 行を超えない。常時テストはネットへ出ず、ポートは `127.0.0.1:0` で OS に割り当てさせる（9821 を使うテスト 0 本）。
+
+- [ ] 1. 土台: 新しい葉クレートと依存
+- [ ] 1.1 `areka-mcp` クレートを足し、依存とモジュール・テストの骨組みを置く
+  - `crates/areka-mcp` を作り、根の `members = ["crates/*"]` で拾われることを確かめる（根の `Cargo.toml` は変えない＝変える行 0）
+  - 依存は design.md「Allowed Dependencies」のとおり（rmcp を `=3.5.0`・`default-features = false`・`server`＋`transport-streamable-http-server`、tokio・tokio-util・hyper・hyper-util・http-body-util・tower-service・serde_json・tracing・`areka-actor`）。`log-capture-kit` は `[dev-dependencies]` だけ。`publish = false`・`version.workspace = true`
+  - `lib.rs` に全モジュール（port・gate・help・registry・handler・dispatch・server と `#[cfg(test)]` の testkit）の宣言を置き、crate doc に「tokio は mcp スレッドに閉じる」を書く
+  - テストの接続宣言もここで全部置く（port・gate・help・registry の各 `*_tests.rs` と、server の 3 つ `server_tests.rs`・`server_protocol_tests.rs`・`server_gate_help_tests.rs`）。実装もテストも中身が空のファイルで作り、以後の並走タスクが `lib.rs`・`server.rs` の宣言を取り合わないようにする
+  - 完了の姿: `cargo build -p areka-mcp` と `cargo test -p areka-mcp --no-run` が緑・`Cargo.lock` に rmcp 3.5.0 が載り、新しいクレートが研究の測定どおり 30 件・`cargo deny check licenses` が緑（表に足すもの 0）
+  - _Requirements: 8.2, 8.3, 8.6_
+
+- [ ] 2. 純粋な判断と登録口
+- [ ] 2.1 (P) ポートの読み解きと環境変数の読み口
+  - `AREKA_MCP_PORT` の値を「待ち受ける番号／待ち受けない（`0`）／`warn!` 1 件で既定 9821 へ倒す」へ写す、環境変数を読まない判断を作る（前例 `perf_thread_report.rs` の `period_from_env_value`）
+  - 環境変数を読む口は 1 か所で、UTF-8 でない値は `warn!` 1 件で既定へ倒す
+  - 完了の姿: 要件 2.6 の 9 値（未設定・`0`・`9821`・`65535`・`65536`・`-1`・`abc`・空・` 9000 `）の表と warn の件数、非 UTF-8 の 1 本が `port_tests.rs` で緑
+  - _Requirements: 2.1, 2.2, 2.3, 2.5, 2.6, 2.7_
+  - _Depends: 1.1_
+  - _Boundary: port_
+- [ ] 2.2 (P) `Origin`／`Host` の検査
+  - ヘッダ値 2 つ（無ければ無し）だけを受けて通す／拒む（どちらがどの値で悪いか）を返す純粋な判断を作る。自身は記録しない
+  - `Origin` は無し・ループバック 3 種（大小文字・ポートを問わない・http と https）を通し、`null`・host 無し・他の host（`localhost.evil.example` を含む）・他の scheme・読めない値を拒む。`Host` はループバック 3 種だけ通し、無しも拒む
+  - 完了の姿: 要件 4.5 の 8 値の表と `Host` の表（通す 3・拒む 2）が `gate_tests.rs` で緑
+  - _Requirements: 4.1, 4.2, 4.4, 4.5_
+  - _Depends: 1.1_
+  - _Boundary: gate_
+- [ ] 2.3 (P) 登録案内の HTML
+  - 実際のポート番号を引数に、日本語の HTML（`<meta charset="utf-8">`）で 5 項目（URL・`claude mcp add` の登録コマンド・Cursor の `mcpServers` の断片・`AREKA_MCP_PORT` の説明〔`0` で待ち受けない・既定 9821〕・Claude Desktop は中継が要る旨〔設定例なし〕）を組む
+  - 完了の姿: 既定でない番号（例 12345）で組んだ本文に 5 項目が在り `9821` が現れないことが `help_tests.rs` で緑
+  - _Requirements: 6.1, 6.2, 2.7_
+  - _Depends: 1.1_
+  - _Boundary: help_
+- [ ] 2.4 (P) ツールの登録口
+  - ツール定義（名前・title・description・inputSchema を逐語）・結果（text／image の content と is_error）・非同期の実装の型と、登録の列を作る。rmcp・tokio の型を一切含めない
+  - 同じ名前の 2 度目の登録は後勝ちで `warn!` 1 件（`register` は呼び出し側のスレッドで動くので `capture` で数えられる）
+  - 完了の姿: `registry_tests.rs` で「同じ名前を 2 度登録すると後勝ち・件数は 1・`warn!` 1 件」と「登録した定義が逐語で取り出せる」が緑
+  - _Requirements: 7.1, 7.4_
+  - _Depends: 1.1_
+  - _Boundary: registry_
+
+- [ ] 3. MCP と HTTP の層
+- [ ] 3.1 rmcp の `ServerHandler` の実装
+  - 登録口の内容を 1 度だけ rmcp の `ToolRouter` へ写し（`ToolRoute::new_dyn`）、一覧・呼び出し・定義の取得をそこへ委ねる（未登録の名前は `-32602`）
+  - `get_info` は tools の能力だけ（resources・prompts なし）・`serverInfo` は `areka-mcp-server` と Cargo の版・英文 2 文の `instructions`。版の交渉は rmcp の既定に任せる
+  - 結果の写し: text／image の content と is_error を rmcp の呼び出し結果へそのまま写す
+  - 完了の姿: `cargo build -p areka-mcp` が緑・rmcp の `ServerHandler`／`ToolRouter` を綴るのがこのモジュールだけ（振る舞いは 4.3・4.4 の実ソケットのテストで固定）
+  - _Requirements: 3.1, 3.2, 3.4, 3.6, 7.1, 7.3_
+  - _Depends: 2.4_
+- [ ] 3.2 要求 1 件の検査・振り分け・記録
+  - rmcp の設定を 1 か所で組む（無状態・JSON 単発・本文の上限 4 MiB を 1 つの定数で両側へ・取り消しの合図・`allowed_hosts` 既定・`allowed_origins` 空）。3.1 の handler を包む
+  - 検査をパスによらず最初に掛け、拒めば `warn!` 1 件（値つき）＋403 平文。次に `/api/mcp/v1` は method を問わず本文を上限まで集めて（超えたら 413）rmcp へ、`GET /api/mcp/help` は 200 の HTML、help の他 method は 405（`Allow: GET`）、他のパスは 404
+  - 本文から method と id を寛容に覗き（読めなければ `-`）、応答が決まったら `debug!` 1 件（method・id・status・path）
+  - 完了の姿: `cargo build -p areka-mcp` が緑・`StatusCode` を綴るのがこのモジュールだけ（振る舞いは 4.3・4.4 で固定）
+  - _Requirements: 3.3, 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14, 4.3, 6.3, 6.4, 6.5_
+  - _Depends: 2.2, 2.3, 3.1_
+- [ ] 3.3 待受の起動と取っ手
+  - 呼び出し側のスレッドで同期に `127.0.0.1` へ束ね、`None` は `info!`（待ち受けない・理由）、失敗は `error!`（番号と OS の理由）で、どちらも待ち受けない取っ手を返す。成功は実番号を取り、`spawn_actor("mcp")` の中で current_thread の tokio と hyper http1 の受付ループを回し、`info!`（URL）で待受中の取っ手を返す
+  - 受付の失敗は `warn!`＋100 ms 待って続ける・接続の失敗は `debug!`・ランタイムを作れなければ `error!` でスレッドを終える
+  - 取っ手の `Drop`: 取り消し → 受付の口を落とす → 開いた接続を待たずにランタイムを畳む → 2 秒を上限に終わりを待つ → 閉じた `info!`（待ちきれたときだけ `warn!`）。待ち受けていない取っ手は何もしない
+  - `lib.rs` に公開面（起動・取っ手・登録口の型・ポートの読み解き）を出し、rmcp・tokio・hyper の型を出さない
+  - 完了の姿: `cargo build -p areka-mcp` と `cargo clippy -p areka-mcp` が緑・公開面が design.md の契約どおり（振る舞いは 4.2 で固定）
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.4_
+  - _Depends: 2.1, 3.2_
+
+- [ ] 4. 実ソケットの決定論テスト
+- [ ] 4.1 手書きの HTTP/1.1 クライアント
+  - テスト専用の部品を `testkit.rs` 1 つにまとめる: 要求を送って状態・ヘッダ・本文を受ける手書きのクライアント（`winhttp_real_tests.rs` の `answer` の逆向き）・JSON-RPC の組み立て・`start(Some(0), …)` でサーバを起こして実番号を返す口。rmcp を呼ぶ要求は既定で `Accept: application/json, text/event-stream` を付ける
+  - 完了の姿: `testkit.rs` の中の自己点検 1 本（空きポートで起こしたサーバへ `ping` を送り 200 と `result: {}` を受ける）が緑
+  - _Requirements: 9.1_
+  - _Depends: 3.3_
+  - _Boundary: testkit_
+- [ ] 4.2 (P) 待受・束ねの失敗・終了のテスト
+  - `server_tests.rs` に design.md の 6 本（URL の info・束ねの失敗の error と待ち受けない取っ手・`0` の info・2 本の同時接続・畳んだ後に接続できない・接続を開いたまま畳んでも上限内に戻る）を置く。ログは `log_capture_kit::capture` で数える
+  - 完了の姿: 6 本が緑・固定のポート番号を使うテスト 0 本
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.7, 1.8, 1.9, 2.4, 9.1, 9.3, 9.4_
+  - _Depends: 4.1_
+  - _Boundary: server_tests_
+- [ ] 4.3 (P) MCP の応答のテスト
+  - `server_protocol_tests.rs` に design.md の 18 本（旧式 4 版・`2026-07-28` が `2025-11-25` へ・未知の版・通知 202・tools/list 0 本・ping・tools/call の `-32602`・未知メソッドの `-32601` と 200・Content-Type 違いの 415・壊れた JSON の 415 と次の要求・セッション ID 無し・JSON 単発・GET の 405・`server/discover`・ヘッダの素通し・未知のヘッダ値の 4xx・Accept 無しの 406・本文 4 MiB 超の 413）を置く
+  - 差の一覧に書く値（未知の版で返る版・未知のヘッダ値の状態・discover の欄）は、各テストの assert に具体の値で固定する（5.2 はテストの assert から写す・別の記録は作らない）
+  - 完了の姿: 18 本が緑
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 5.1, 9.2_
+  - _Depends: 4.1_
+  - _Boundary: server_protocol_tests_
+- [ ] 4.4 (P) 検査・help・登録口のテスト
+  - `server_gate_help_tests.rs` に design.md の 7 本（悪い Origin で initialize・ping・help の 3 つが 403・悪い Host の 403・help の 200 と実番号・未知のパスの 404・help への POST の 405・1 本登録の往復が逐語で出て content／isError がそのまま返る・登録済みサーバで別名の `-32602`）を置く
+  - 完了の姿: 7 本が緑
+  - _Requirements: 4.3, 4.4, 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4, 9.2_
+  - _Depends: 4.1_
+  - _Boundary: server_gate_help_tests_
+
+- [ ] 5. アプリへの結線と文書・登記
+- [ ] 5.1 (P) アプリ本体へ「立てる 1 行」を足す
+  - `crates/areka/Cargo.toml` に `areka-mcp` の path 依存を 1 行（外部依存は足さない）
+  - `fn main()` の `resolve_boot` の直後・`WinApp` の構築より前（`thread_roles` と `perf_thread_report` の起動より後）に、取っ手を `_mcp` で受ける 1 行と意図のコメント（`Drop` で畳む・`down?` の早い戻りを避ける・`app` より先に宣言）を置く。畳む行は書かない
+  - 完了の姿: `cargo build -p areka` が緑・`main.rs` が 1,000 行を超えない・終了コードは待受と無関係（`start` は `Result` を返さない）
+  - _Requirements: 1.1, 1.4, 1.7, 8.6_
+  - _Depends: 3.3_
+  - _Boundary: areka の main の結線_
+- [ ] 5.2 (P) SSP との輸送の差の一覧
+  - `doc/ssp-mcp/transport-diff-areka.md` を新しく書く: survey §2 の 14 行＋§1 のフォーム＝15 行に、本文の上限（4 MiB）と `Accept` の 2 行を足した 17 行。列は「項目／SSP／areka（rmcp 3.5.0）／判定／測ったテスト名」。先頭に測った rmcp の版と日付
+  - 判定は「同じ／違うが困らない／困るので直した」のどれか。物差し（Claude Code・Cursor が登録・initialize・tools/list・ping に失敗する差）に当たる行は 0（直した行 0）であることを明記する
+  - 完了の姿: 17 行すべてに判定とテスト名が入り空欄 0 行・`survey.md` の本文は変えていない
+  - _Requirements: 5.1, 5.2, 5.3, 5.4_
+  - _Depends: 4.3, 4.4_
+  - _Boundary: 差の一覧_
+- [ ] 5.3 (P) steering への登記
+  - `tech.md` の Key Libraries に rmcp・tokio（＋tokio-util）・hyper（＋hyper-util・http-body-util・tower-service）を用途・版・「tokio は MCP のスレッドに閉じる」とともに足す
+  - `structure.md` に「MCP Server Crate（areka-mcp）」の節（Location・Purpose・Modules・Dependencies・規律）を足す
+  - 完了の姿: 両ファイルに登記があり、design.md の依存の一覧と食い違わない
+  - _Requirements: 8.5_
+  - _Depends: 1.1_
+  - _Boundary: steering_
+
+- [ ] 6. 検証
+- [ ] 6.1 ライセンスの門と全体テスト
+  - `pwsh -NoProfile -File tools/test-all.ps1 -Format -License` を回し、`cargo deny check`・`cargo about generate` が緑で、`THIRD-PARTY-NOTICES.md` は道具が作り直したもの（手の差分 0 行）であることを確かめる
+  - 全体テストで既存のテストが緑のまま・1,000 行の番人が緑・`log-capture-kit` が `[dependencies]` に無いことの見張りが緑
+  - 完了の姿: `test-all.ps1 -Format -License` が終了コード 0・`deny.toml`／`about.toml`／根の `[workspace.dependencies]` の差分 0 行
+  - _Requirements: 8.1, 8.3, 8.4, 8.6, 9.1_
+- [ ] 6.2 実機確認と signoff
+  - 配布形は `pwsh -NoProfile -File tools/package-alpha.ps1` で作る（出力はワークツリーの `target/alpha/`）。展開した `areka.exe` で ⑴ `claude mcp add --transport http areka http://127.0.0.1:9821/api/mcp/v1` と `claude mcp list` の接続、⑵ `curl`（`Accept` 付き）で initialize→tools/list→ping、⑶ `AREKA_MCP_PORT=0` で接続できず `info!`、⑷ SSP が 9801 の机で 9821 を同時に待ち受ける、を確かめる
+  - `RUST_LOG=info,areka_mcp=debug` で要求ごとの `debug!` 1 件と、`Origin: http://evil.example` の `warn!` 1 件を確かめ、性能の報告に `actor:mcp` が出ることも見る。リリースの `areka.exe` の増分を測る
+  - 実機の根・一時フォルダはワークツリーの `target\` の下だけ
+  - 完了の姿: `.kiro/specs/areka-P0-mcp-server-core/verification/signoff.md` に 4 項目とログの確かめ・増分が記録されている
+  - _Requirements: 9.5, 9.6_

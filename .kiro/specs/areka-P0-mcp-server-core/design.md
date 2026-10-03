@@ -150,6 +150,7 @@ crates/areka-mcp/
     ├── help.rs                # help_html(port) -> String（日本語・5 項目）
     ├── help_tests.rs          # 要件 6.1・6.2 の 5 項目と番号
     ├── registry.rs            # ToolSpec・ToolContent・ToolOutcome・ToolHandler・ToolRegistry（rmcp の型を含まない）
+    ├── registry_tests.rs      # 同じ名前の 2 度目の登録は後勝ち・warn! 1 件／定義が逐語で取り出せる
     ├── handler.rs             # ArekaHandler: rmcp::ServerHandler（get_info・list_tools・call_tool・get_tool）。registry → ToolRouter の写し。INSTRUCTIONS・SERVER_NAME
     ├── dispatch.rs            # MAX_BODY_BYTES・State・handle(state, req) = gate → (method, path) の match → v1 は rmcp・help は help_html・他は 404/405 → debug! 1 件
     ├── server.rs              # start(port, registry) -> McpServer・McpServer（Drop で畳む）・accept ループ・SHUTDOWN_WAIT・ACCEPT_RETRY_WAIT
