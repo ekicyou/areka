@@ -35,7 +35,7 @@
 - 要求の種類の列挙 `ToolCall`（10 変種）と、各ツールの型の付いた引数 `Args`。
 - 橋: `ToolRequest`・`ReplyTo`・`Pending`・待ちの上限・終了の途中の扱い・答えの `debug!`。
 - 結果の 4 つの形を作る関数（`areka_mcp::tools::outcome`）。
-- アプリ本体側の受け口（`McpInbox`）・汲む系・振り分け・`ghost_name` の解決・`get_active_ghost_list` の処理・9 本のダミー。
+- アプリ本体側の受け口（`McpInbox`）・汲む系・振り分け・後から答える置き場（`later`）・`ghost_name` の解決・`get_active_ghost_list` の処理・9 本のダミー。
 - 3 段目の各 spec が触るファイルの表（本書「3 段目の spec が触るファイル」）と、roadmap の干渉台帳への転記。
 
 ### Out of Boundary
@@ -56,7 +56,7 @@
 
 ### Revalidation Triggers
 
-- `ToolCall` の変種・各 `Args` の欄・ツールの処理の関数の形（`handle` の引数）を変える → 3 段目の全 spec が照合し直す。
+- `ToolCall` の変種・各 `Args` の欄・ツールの処理の関数の形（`handle` の引数）・`mcp::later` の形を変える → 3 段目の全 spec が照合し直す。
 - `ReplyTo` が `Send` でなくなる → 返事を別スレッド（kanade など）から送る 3 段目の設計が崩れる。
 - rmcp の版を上げる → `ToolRouter::call` が `Err` をどう扱うか（`failed to deserialize parameters:` の前置きの規則）と `list_all` の並びを確かめ直し、`tools_socket_tests.rs` と `doc/ssp-mcp/transport-diff-areka.md` を測り直す。
 - tick の門を既定で有効にする（`tick-gate-adoption`）→ 汲む系の遅れが心拍まで伸びるので、送ったときに旗を立てるかを決め直す。
@@ -132,7 +132,8 @@ graph TB
 | 10 | 上限 | 橋を組むときの引数 1 つ。本番は `tools::REPLY_WAIT`（10 秒）、テストは短い値 | 要件の暫定の裁定 15 |
 | — | 定義を持つ場所 | 各ツールのファイルに Rust の生文字列 `DEFINITION`（保存した JSON のそのツールの 1 個ぶんを逐語で貼る）。並びは `tools/mod.rs` の表の並び | 要件 7.1（定義もツールごとのファイル）。写しの JSON ファイルを別に持たない |
 | — | 一覧の並び | `ArekaHandler` が登録順の `Vec<Tool>` を別に持ち、`list_tools` はそれを返す（`ToolRouter::list_all` を使わない） | `list_all` は辞書順 |
-| — | 処理が返事を持つ形 | アプリ本体側の処理は結果を戻り値で返さず、`ReplyTo` を受け取って送る | 3 段目の多くは別スレッドのアクター（kanade・SHIORI）に問うので、UI スレッドで待てない（6.6）。`ReplyTo` は `Send` で、後から・別スレッドから送れる |
+| — | 処理が返事を持つ形 | アプリ本体側の処理は結果を戻り値で返さず、`ReplyTo` を受け取って送る | 3 段目の多くは別スレッドのアクター（kanade・SHIORI）に問うので、UI スレッドで待てない（6.6） |
+| — | 後から答える置き場 | `mcp/mod.rs` に `later(world, reply, 覗く関数)` を持つ。積まれた組を汲む系が毎フレーム覗き、答えが出たら送って外す。`close` は置き場ごと落とす | kanade・sylphya の要求は `areka_actor::ReplySender<具体の型>` を受け（`crates/areka-kanade/src/msg.rs`）、`areka-mcp` を知らない＝アクターに `ReplyTo` は渡せない。処理は「`ReplyReceiver` を毎フレーム `try_recv` する」形になり、その系の登録先を共有ファイルの外に持てない。置き場を本 spec で持てば、3 段目は自分のファイルで `later` を呼ぶだけで済み、終了の途中も即座に答えられる。各ツールに空の `register` を 10 本置く案は、終了の途中の扱いが各ツールに散るので捨てた |
 
 ### Technology Stack
 
@@ -223,6 +224,7 @@ crates/areka/src/
 | `mcp-dump-images` | `dump_surface.rs`・`dump_balloon.rs` と各 `_tests.rs` | 同名の 2 ファイル | emo の読み戻し・base64 の符号化 |
 | `mcp-strict-errors` | `sakurascript.rs`・`raise_event.rs` と各 `_tests.rs` | 同名の 2 ファイル | エラーログ（`mcp-kanade-tools`・`mcp-log-history` の後＝直列） |
 
+- **後から答えるツール**（kanade・SHIORI・sylphya に問うもの）は、自分のファイルから `mcp::later` を呼ぶ。毎フレーム覗く系を自分で登録しない＝`mcp/mod.rs`・`ghost_session.rs` を触らない。
 - **3 段目が触らない共有ファイル**: `areka-mcp` の `handler.rs`・`registry.rs`・`check.rs`・`tools/mod.rs`・`tools/bridge.rs`・`tools/outcome.rs` と各テスト、`crates/areka` の `mcp/mod.rs`・`mcp/resolve.rs` と各テスト、`main.rs`・`ghost_session.rs`。触る要が出たら、その spec の要件に理由を書く。
 - **C3 の照合の要点**: `mcp-get-property`・`mcp-expression-table`・`mcp-log-history` の 3 本は、上の表でファイルの重なりが 0。重なりうるのは「自分のエンジン」の側だけ（例: `mcp-get-property` と `property-query-channels`）。
 - プロトコル側のファイルは定義と引数の型を本 spec で完成させるので、3 段目は多くの場合アプリ本体側だけを触れば足りる。値の範囲や列挙の検査（`NG:Unknown …`）は、アプリ本体側の処理が結果として返す。
@@ -299,9 +301,9 @@ sequenceDiagram
 | 6.1 | アプリ本体へ届けて返事で答える | bridge.rs・mcp/mod.rs | `call`・`drain` | 全体 |
 | 6.2 | 10 秒で `NG:`・`warn!` 1 件・遅れた返事は捨てる | bridge.rs | `Pending::wait`・`timeout_text`・`REPLY_WAIT` | 上限 |
 | 6.3 | 待ちの間も他の要求に答える | bridge.rs | `Pending::wait`（`.await`） | — |
-| 6.4 | 終了の途中は待たずに `NG:`・`warn!` 1 件 | bridge.rs・mcp/mod.rs・main.rs | `ReplyTo` の `Drop`・`mcp::close` | 終了の途中 |
+| 6.4 | 終了の途中は待たずに `NG:`・`warn!` 1 件 | bridge.rs・mcp/mod.rs・main.rs | `ReplyTo` の `Drop`・`mcp::close`（受け口と `later` の置き場を落とす） | 終了の途中 |
 | 6.5 | 準備の前の要求は準備の後に答える | tools/mod.rs・main.rs・mcp/mod.rs | `entrances` の受け口・`mcp::install` | 準備の前 |
-| 6.6 | UI スレッドで待たない | mcp/mod.rs・各 `handle` | `drain`（`try_iter`）・`ReplyTo`（後から送れる） | — |
+| 6.6 | UI スレッドで待たない | mcp/mod.rs・各 `handle` | `drain`（`try_iter`）・`later`（毎フレーム覗く） | — |
 | 6.7 | 答えるとき `debug!` 1 件 | bridge.rs | `call`（`tool`・`ghost`・`is_error`・`text`） | — |
 | 6.8 | 6.2〜6.5 のテスト | bridge_tests.rs・tools_socket_tests.rs・mcp_tests.rs | 上限を引数にする | — |
 | 7.1 | ツールごとのファイル・共有は本 spec で揃える | File Structure Plan | — | — |
@@ -478,6 +480,8 @@ impl ReplyTo {
     pub fn for_ghost(self, label: impl Into<String>) -> Self;
     /// 返事を 1 回だけ送る。受け手がもう居なければ（上限の後）黙って捨てる。
     pub fn send(self, outcome: crate::ToolOutcome);
+    /// 待つ側がもう居ない（上限を過ぎて `Pending` が落ちた）なら true。
+    pub fn is_abandoned(&self) -> bool;
 }
 
 /// 返事 1 件。
@@ -510,6 +514,7 @@ pub(crate) async fn call(
 
 - `ReplyTo` は `areka_actor::ReplySender<Answer>`（`Option`）・`CancellationToken`・`ghost: String` を持つ。`Pending` は `ReplyReceiver<Answer>` と同じ `CancellationToken` の写しを持つ。
 - `ReplyTo::send` は送り手を取り出して送る。`ReplyTo` の `Drop` は「**送り手を先に落としてから**合図を立てる」（順を逆にすると、待つ側が合図で起きたとき送り手がまだ生きていて、答えずに落ちたのか未着なのか見分けられない）。合図を立てるのは `Drop` の 1 か所だけ（`send` の後も `Drop` を通る）。
+- 逆向きの合図も 1 つ持つ: `Pending` の `Drop` が 2 つ目の `CancellationToken` を立て、`ReplyTo::is_abandoned` がそれを読む。後から答える置き場（`mcp::later`）が、上限を過ぎた組を捨てるのに使う。
 - 待つ側（`call` の中）: `tokio::time::timeout(limit, 合図.cancelled()).await` の後、`try_recv` で 3 つに分ける。
 
 | `try_recv` の結果 | 意味 | 返す結果 | 記録 |
@@ -525,7 +530,7 @@ pub(crate) async fn call(
 **Implementation Notes**
 - Validation: 記録の件数は実ソケットでは数えられない（MCP のスレッドで出る）。`bridge_tests.rs` はテストのスレッドで `tokio::runtime::Builder::new_current_thread().enable_time()` を作り、`capture(|| runtime.block_on(call(…)))` で数える。
 - Integration: 待つあいだ `Pending` 全体への参照を `.await` をまたいで持たない（中の `Receiver` は `Sync` でないので、フューチャが `Send` でなくなる）。合図の写しを先に取り出して待つ。登録する処理が握る `Sender<ToolRequest>` は `Send + Sync`（`ToolHandler` の約束を満たす）。
-- Risks: 処理が `ReplyTo` を送らずに持ち続けると上限まで待つ（上限で必ず返る）。処理が誤って落とすと「shutting down」と答える（文言は紛らわしいが、応答は必ず返る）。
+- Risks: 処理が `ReplyTo` を送らずに持ち続けると上限まで待つ（上限で必ず返る）。`mcp::later` を通せば、終了の途中は置き場ごと落ちて即座に返る。処理が誤って落とすと「shutting down」と答える（文言は紛らわしいが、応答は必ず返る）。
 
 #### tools/outcome.rs
 
@@ -573,9 +578,19 @@ pub(crate) fn close(world: &mut World);
 pub(crate) fn drain(world: &mut World);
 /// 1 件を振り分ける（テストは起動中のゴーストを作って直に呼ぶ）。
 pub(crate) fn dispatch(world: &mut World, active: Option<&ActiveGhost>, request: areka_mcp::tools::ToolRequest);
+
+/// その場で答えられない処理が、返事と「覗く関数」を預ける。
+/// 覗く関数は毎フレーム呼ばれ、`Some` を返したらその結果が送られて組は外れる。
+pub(crate) fn later(
+    world: &mut World,
+    reply: areka_mcp::tools::ReplyTo,
+    poll: impl FnMut(&mut World) -> Option<areka_mcp::ToolOutcome> + 'static,
+);
 ```
 
-- `drain`: 受け口を借りて `try_iter().collect()` し、借用を切ってから 1 件ずつ「`resolve::active(world)` → `dispatch`」。UI スレッドで待つ所は無い（6.6）。
+- `drain`: 受け口を借りて `try_iter().collect()` し、借用を切ってから 1 件ずつ「`resolve::active(world)` → `dispatch`」。**その後で**預かった組を全件覗く（同じフレームに預けた組も 1 度覗く＝すでに答えが出ていれば遅れ 0）。UI スレッドで待つ所は無い（6.6）。
+- 後から答える置き場: World の NonSend 資源 `McpLater(Vec<(覗く関数, ReplyTo)>)`。`install` が受け口と一緒に置く。覗くときは列を `std::mem::take` で World から取り出して回し（覗く関数が World を借りられる・覗く中で `later` が呼ばれても壊れない）、残った組を戻す。`ReplyTo::is_abandoned` が真の組（上限を過ぎた）は覗かずに捨てる。置き場が無いとき（`close` の後・`install` の前）の `later` は組をその場で落とす＝「shutting down」と答える。
+- 覗く関数の約束: 問い合わせ先が落ちていたら（`try_recv` が `Err(Dropped)`）`Some(outcome::ng(…))` を返す。`None` を返し続ける道を作らない。
 - `dispatch` の振り分け（この `match` が、ツールごとの `ghost_name` の扱いの正本）:
 
 | `ToolCall` | `ghost_name` の扱い | 呼ぶ処理 |
@@ -586,7 +601,7 @@ pub(crate) fn dispatch(world: &mut World, active: Option<&ActiveGhost>, request:
 | `GetLog` | 解決しない（3.7） | `get_log::handle(world, args, reply)` |
 
 - 解決に失敗したら `reply.send(outcome::ng(理由))` で終え、処理を呼ばない。成功したら `reply.for_ghost(listed_value(ghost))` を付けて処理へ渡す。
-- `close` は `world.remove_non_send::<McpInbox>()`。受け口が落ちると、溜まっていた `ToolRequest` の `ReplyTo` が落ち、MCP 側の送り口は以後 `send` に失敗する（6.4）。
+- `close` は `world.remove_non_send::<McpInbox>()` と `world.remove_non_send::<McpLater>()`。預かっていた組の `ReplyTo` も落ちるので、後から答える途中だった要求も上限を待たずに「shutting down」になる。受け口が落ちると、溜まっていた `ToolRequest` の `ReplyTo` が落ち、MCP 側の送り口は以後 `send` に失敗する（6.4）。
 
 #### mcp/resolve.rs
 
@@ -649,7 +664,7 @@ pub(super) fn handle(world: &mut World, args: areka_mcp::tools::get_log::Args, r
 pub(super) fn handle(active: Option<&ActiveGhost>, reply: ReplyTo);
 ```
 
-- **約束**: 処理は UI スレッドで待たない。その場で答えられるなら `reply.send(…)`、別スレッドのアクターに問うなら `ReplyTo` を持たせて後から送る。World に自分の要る資源が無いとき（窓の無い LogSink の起動・テストの空の World）も panic せず、`NG:` で答える。
+- **約束**: 処理は UI スレッドで待たない。その場で答えられるなら `reply.send(…)`、別スレッドのアクターに問うなら、問い合わせを送ってから `super::later(world, reply, 覗く関数)` に預ける（覗く関数は自分の `ReplyReceiver` を `try_recv` して結果へ詰め替える）。`ReplyTo` を自分の資源に抱えない（`close` で落ちなくなる）。World に自分の要る資源が無いとき（窓の無い LogSink の起動・テストの空の World）も panic せず、`NG:` で答える。
 - **`get_active_ghost_list`**: `reply.send(outcome::value(active.map(listed_value).unwrap_or_default()))`（1 行・末尾の改行なし・0 体なら空の本文）。
 - **ダミー 9 本**: 本体は `reply.send(outcome::ng("not implemented yet"))` の 1 文だけ（`world`・`ghost`・`args` は使わない＝ゴーストに何もさせない）。文言は各ファイルに直に書く（共有の定数にしない＝3 段目が中身を入れるたびに共有ファイルを触らずに済む）。
 
@@ -681,7 +696,7 @@ pub(super) fn handle(active: Option<&ActiveGhost>, reply: ReplyTo);
 - `check_tests.rs`（2.2〜2.5・2.8）: 10 本の定義（`tools` の `DEFINITION` から読む）それぞれについて、欄が全部ある（通る）・必須の欄が無い（拒む）・`null` の必須の欄（拒む）・欄ごとの型違い（拒む。`integer` は `1.5`・文字列・`i64` に収まらない数、`array` は配列でない値・文字列でない要素）・`null` の任意の欄（通る）・余計な欄（通る）・`get_expression_table` の `ghost_name` 無し（通る）・`1.0`（通る）。理由の文が `failed to deserialize parameters:` で始まらないこと。
 - `tools_tests.rs`（1.1・1.3・5.3）: 表が 10 行で先頭が `get_active_ghost_list`・10 本の `DEFINITION` が読めて `ToolSpec` になること・10 本の `parse` が欄を型の付いた引数へ詰め替えること（省略と `null` は `None`・`references` の省略は空の列）。
 - `outcome_tests.rs`（7.2）: 4 つの形と `ok("")` が `OK`。
-- `bridge_tests.rs`（6.2・6.4・6.7・6.8）: テストのスレッドの tokio で `call` を回す。⑴ 返事をしない受け手・上限 50 ms → `timeout_text` の本文・`isError`・`warn!` 1 件・`debug!` 1 件。⑵ 受け口を落としてから呼ぶ → 上限（長い値）を待たずに `NG:areka is shutting down`・`warn!` 1 件。⑶ 受けた要求を答えずに落とす → 同じ。⑷ 返事あり → その結果・`warn!` 0 件・`debug!` に `ghost` が載る。⑸ 上限の後に `ReplyTo::send` しても何も起きない。⑹ `timeout_text(REPLY_WAIT)` が `areka did not respond within 10 seconds`。
+- `bridge_tests.rs`（6.2・6.4・6.7・6.8）: テストのスレッドの tokio で `call` を回す。`ReplyTo::is_abandoned` は `Pending` が生きている間 false・落とすと true。⑴ 返事をしない受け手・上限 50 ms → `timeout_text` の本文・`isError`・`warn!` 1 件・`debug!` 1 件。⑵ 受け口を落としてから呼ぶ → 上限（長い値）を待たずに `NG:areka is shutting down`・`warn!` 1 件。⑶ 受けた要求を答えずに落とす → 同じ。⑷ 返事あり → その結果・`warn!` 0 件・`debug!` に `ghost` が載る。⑸ 上限の後に `ReplyTo::send` しても何も起きない。⑹ `timeout_text(REPLY_WAIT)` が `areka did not respond within 10 seconds`。
 - `resolve_tests.rs`（3.2〜3.6・3.9・4.2・4.4）: 要件 3.9 の全場合（名前の一致・大文字小文字だけ違う名前・フルパスの一致・大文字小文字と区切りと末尾の区切りの違うフルパス・フォルダ名だけ・相対パス・`sakura.name`・空の文字列・省略・0 体〔省略と名前あり〕・`Reject` の省略）と、`listed_value`（名前あり・`name` 無し）の値が `resolve` で同じゴーストへ戻ること。
 - `get_active_ghost_list_tests.rs`（4.1〜4.3・4.5）: 名前あり → その名前・`name` 無し → フルパス・0 体 → 空の本文、どれも `isError: false`。
 - 9 つの `<ツール>_tests.rs`（5.1・5.2・5.4）: 空の World（`World::new()`）と作った `ActiveGhost`・`Args` で `handle` を呼び、`Pending::try_answer` が `NG:not implemented yet`・`isError: true` を返すこと（空の World で答えられる＝ゴーストに何もさせていない）。
@@ -696,6 +711,8 @@ pub(super) fn handle(active: Option<&ActiveGhost>, reply: ReplyTo);
 - `mcp_tests.rs`（`crates/areka`・ソケット無し）:
   - 振り分け（3.1・3.4・3.5・3.7）: 0 体で 8 本 → `NG:Specified ghost is not active`（処理へ届かない）、1 体・省略で `get_expression_table` → 同じ `NG:`、1 体・名前違いで 8 本 → `NG:Cannot find active ghost from specified name`。逆向きは「解決の `NG:` が出ないこと」だけを見る: 0 体の `get_log`、1 体・省略の 7 本は、答えが解決の 2 つの文言のどちらでもない（まだ答えていなくてもよい）。処理の答えの中身は見ない＝3 段目が中身を入れても、返事を後から送る形にしても緑のまま。解決したゴーストの名前が記録に載ること（`for_ghost`）は、`bridge_tests.rs` の ⑷ と実機確認 ⑹ で見る。
   - `active`（3.8）: 置き場が空 → `None`、実行系の無い単位（`GhostSession::for_test`）→ `None`。
+  - 本物の単位で通す（3.8・4.1・6.1）: `emo2_boot/ghost_switch_test_support.rs` の `boot`（偽の SHIORI で実行系つきの単位を起こし、`register_systems` も通る）でゴーストを起こす → `install` → `ToolRequest::new(GetActiveGhostList)` を送る → 1 フレーム回す → 答えが descript の `name`・`isError: false`。LogSink へ倒れた単位（作り方は `ghost_session_strict_tests.rs` の前例）でも `active` が `Some` になること。
+  - 後から答える（6.4・6.6）: `later` に「1 度目は `None`・2 度目は `Some`」の関数を預ける → 預けたフレームでは未着・次の `drain` で答えが届く。すでに `Some` を返す関数は預けたフレームの `drain` で届く。預けたまま `close` → `try_answer` が `Dropped`。`Pending` を落とした組は次の `drain` で覗かれずに外れる（覗く関数の呼ばれた回数で見る）。`close` の後の `later` は即座に `Dropped`。
   - 準備の前（6.5）: 受け口を置く前に送った要求が、`install` の後の `drain` で答えられる。
   - 終了の途中（6.4）: 要求を溜めて `close` → `try_answer` が `Dropped`、以後の送りが失敗。
   - 受け口が無いときの `drain` は無操作。
@@ -705,7 +722,9 @@ pub(super) fn handle(active: Option<&ActiveGhost>, reply: ReplyTo);
 
 配布形の `areka.exe`（emo2）を `RUST_LOG=areka_mcp=debug` で起動し、Claude Code から要件 8.5 の ⑴〜⑹ を順に確かめて `verification/signoff.md` に残す。実機の根・一時フォルダはワークツリーの `target\` の下に置く。
 
+加えて 1 項目（要件 2 の狙いの確かめ）: 必須の欄 `script` を抜いた `sakurascript` を Claude Code から 1 回呼び、エージェントに見えた文をそのまま書き残す。Claude Code は無状態版の経路でつなぎ、その経路の `-32602` は HTTP 400 で返る。理由の文（`missing required argument: script`）がエージェントに見えなければ、差の一覧（`transport-diff-areka.md`）に書き、直すかどうかは別の spec で決める（本 spec では要件 2.7 のとおり rmcp の値のまま）。
+
 ## Performance & Scalability
 
-- 汲む系は要求が無いフレームでは `try_iter` 1 回だけ。返事の遅れは最大 1 フレーム（tick の門が有効なら心拍の約 0.5 秒まで）。
+- 汲む系は要求が無いフレームでは `try_iter` 1 回と、預かった組の数だけの `try_recv`（ふだんは 0 組）。返事の遅れは最大 1 フレーム（tick の門が有効なら心拍の約 0.5 秒まで）。
 - 待っている `tools/call` は、合図が立つか上限まで眠る（途中で起きない）。スレッドは増えない。
