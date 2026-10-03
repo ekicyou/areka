@@ -125,7 +125,7 @@
   - `tools/test-all.ps1` を通し、`Cargo.toml`（根・`crates/areka-mcp`・`crates/areka`）の差分 0 行、触ったファイルが design.md の範囲に収まること、`areka-mcp` の本番のコードがクレートの外のファイルを読まないことを確かめる
   - 完了の姿: `tools/test-all.ps1` が緑、`git diff main --stat -- '*Cargo.toml'` が空、触ったファイルの一覧が design.md「File Structure Plan」と一致
   - _Requirements: 7.4, 7.5, 7.6, 8.1, 8.2_
-- [ ] 7.3 実機確認
+- [x] 7.3 実機確認
   - 配布形の `areka.exe` を既定ゴースト（emo2）・`RUST_LOG=areka_mcp=debug` で起動し、Claude Code に `claude mcp add --transport http` で登録して要件 8.5 の ⑴〜⑹ を順に確かめる。実機の根・一時フォルダはワークツリーの `target\` の下に置く
   - 必須の欄 `script` を抜いた `sakurascript` を 1 回呼び、エージェントに見えた文をそのまま書き残す（理由の文が見えなければ差の一覧に書き、直すかは別の spec へ）
   - 完了の姿: `verification/signoff.md` に ⑴〜⑹ と追加の 1 項目の結果（記録の行の抜き書きを含む）が残る
