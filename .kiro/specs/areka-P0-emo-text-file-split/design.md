@@ -195,7 +195,7 @@ graph TB
 - brief の「中断のダブルクリック」は `user_break.rs`・「ドラッグ」は wintf と `placement` にあり本ファイルには無い（要件 1.3 の読み替え②）。実在する 6 つの役割のうち、処理の 3 つ（追従・クリック・離脱）を子へ出し、型・純関数・結線を元に残す。
 - 3 つのハンドラは元が `pub(crate) fn` なので、親で `pub(crate) use moved::on_balloon_pointer_moved;` のように同じ可視性で束ね直す（3.1）。親の結線（`attach_balloon_pointer_handlers`・`register_balloon_leave_system`）が本番で使うので未使用にならない。テストは `use super::*;` でその束縛を引く（0 行変更）。
 - `on_balloon_pointer_pressed` の本文にある `super::user_break::on_left_press` は、子では `super` が `balloon` を指すので、親に `use super::user_break;` を置いて本文を変えずに解く（structure.md「子は `super::sibling` で辿る」の形）。
-- 外から引かれる 5 つの名前（`BalloonWiring`・`ChoiceSelection`・`ChoiceSelectionInbox`・結線 3 本）はすべて元の定義のまま（設計時に消費者を実測: `ghost_session.rs`・`choice_drain.rs`・`balloon_visibility_phase.rs` ほか）。ハンドラ 3 本の消費者は本ファイルの木の中だけ。
+- 外から引かれる 6 つの名前（`BalloonWiring`・`ChoiceSelection`・`ChoiceSelectionInbox`・結線 3 本）はすべて元の定義のまま（設計時に消費者を実測: `ghost_session.rs`・`choice_drain.rs`・`balloon_visibility_phase.rs` ほか）。ハンドラ 3 本の消費者は本ファイルの木の中だけ。
 - 名前はモジュール名に Rust の予約語（`move`）を使えないため `moved`／`pressed`／`exit` とする。既存のテストの頭（`balloon_hover`・`balloon_leave`・`balloon_pass`・`balloon_pointer`・`balloon_pure`・`balloon_wiring`・`balloon_test`）と重ならない。
 
 **`crates/areka/src/emo2_boot/balloon_visibility.rs`（923 行）→ 3 本**
