@@ -57,10 +57,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use areka_emo_compose::{BoxName, FontFollow};
 use areka_sakura::contract::{ActorKey, FONT_TAG_CARRIER};
 
 use crate::look::{LookLayers, Note, Script, StyleId, TextLook, apply_font_tag};
-use crate::place::PlaceKey;
+use crate::place::{PlaceKey, TextPlace};
 
 use super::{ActorTextState, TextLayerState};
 
@@ -139,6 +140,34 @@ impl Default for Decoration {
 }
 
 impl Decoration {
+    /// 場所の既定（2 層）だけを持ち、台本の指定が空の装飾状態（箱の場所の生まれたとき）。
+    fn with_layers(layers: LookLayers) -> Decoration {
+        let current = layers.default.clone();
+        Decoration {
+            layers,
+            current,
+            ..Decoration::default()
+        }
+    }
+
+    /// 台本の指定（土台・当てた指定の列・所有外のキー・記録済みの値）が 1 つでもあるか。
+    fn has_script(&self) -> bool {
+        self.base != BaseLayer::Default
+            || !self.applied.is_empty()
+            || !self.unowned.is_empty()
+            || !self.warned.is_empty()
+    }
+
+    /// 台本の指定の 4 欄を `from` から写し、自分の場所の既定（`layers`）の上で当て直す
+    /// （要件 3.13・3.17）。場所の既定は動かさない。
+    fn take_script(&mut self, from: &Decoration) {
+        self.base = from.base;
+        self.applied = from.applied.clone();
+        self.unowned = from.unowned.clone();
+        self.warned = from.warned.clone();
+        self.rebase();
+    }
+
     /// いま土台にしている層の見た目。
     fn base_look(&self) -> TextLook {
         match self.base {
@@ -413,7 +442,105 @@ impl ActorTextState {
     }
 }
 
+/// 箱の名前ごとの既定の見た目（拡大率に依らない 2 層）と箱の種類（`font.follow`）。
+#[derive(Clone, Debug, PartialEq)]
+pub struct BoxTraits {
+    /// 箱の `balloon.*`ブレスから解決した 2 層（箱の場所の既定）。
+    pub looks: LookLayers,
+    /// 装飾の指定の行き先（スコープに従う／箱に閉じる）。
+    pub follow: FontFollow,
+}
+
 impl TextLayerState {
+    /// 箱の名前ごとの既定の見た目（拡大率に依らない 2 層）と種類を受け取る（要件 3.4・3.14・3.17）。
+    ///
+    /// 箱の場所の状態は作られるときにこの 2 層を受け取る（[`TextLayerState::place_entry`]）ので、
+    /// 文字が届く前に既定が決まっている。すでにある箱の場所は、装着と同じく新しい 2 層の上へ
+    /// 載せ直す（[`Decoration::rebase`]）。種類は行き先が替わるときの写しが引く
+    /// （[`TextLayerState::carry_script_decor`]）。表に無い名前の箱は ukadoc の既定の 2 層で、
+    /// スコープに従う。
+    pub fn set_box_traits(&mut self, traits: BTreeMap<BoxName, BoxTraits>) {
+        for (key, state) in self.actors.iter_mut() {
+            if let TextPlace::Box(name) = &key.place
+                && let Some(t) = traits.get(name)
+            {
+                state.decor.layers = t.looks.clone();
+                state.decor.rebase();
+            }
+        }
+        tracing::debug!(boxes = traits.len(), "箱の既定の見た目と種類を受け取った");
+        self.box_traits = traits;
+    }
+
+    /// 場所の状態を引く（無ければ作る）。箱の場所はその箱の既定の 2 層を持って生まれる。
+    pub(super) fn place_entry(&mut self, key: &PlaceKey) -> &mut ActorTextState {
+        let traits = &self.box_traits;
+        self.actors.entry(key.clone()).or_insert_with(|| {
+            let looks = match &key.place {
+                TextPlace::Box(name) => traits.get(name).map(|t| t.looks.clone()),
+                TextPlace::Balloon => None,
+            };
+            ActorTextState {
+                decor: looks.map(Decoration::with_layers).unwrap_or_default(),
+                ..ActorTextState::default()
+            }
+        })
+    }
+
+    /// 場所がスコープに従うか（普通のバルーンは常に従う・表に無い箱も従う）。
+    fn follows_scope(&self, place: &TextPlace) -> bool {
+        match place {
+            TextPlace::Balloon => true,
+            TextPlace::Box(name) => self
+                .box_traits
+                .get(name)
+                .is_none_or(|t| t.follow == FontFollow::Scope),
+        }
+    }
+
+    /// 行き先が `new` へ替わる瞬間の装飾の持ち運び（要件 3.13〜3.17・design.md「装飾の持ち運び」）。
+    ///
+    /// `new` がスコープに従う場所なら、スコープの指定を持つ場所（`shared`）の台本の指定を
+    /// `new` へ写して `new` を持ち主にする。箱に閉じる箱なら何も写さず持ち主も変えない
+    /// （その箱は自分の指定のまま）。前の行き先の種類は見ない。行き先そのものの書き換えは
+    /// 呼び手（`state_route.rs`）が行う。
+    pub(super) fn carry_script_decor(&mut self, actor: &ActorKey, new: &TextPlace) {
+        if !self.follows_scope(new) {
+            tracing::debug!(actor = %actor, dest = ?new, "箱に閉じる箱へ——\\f の指定を写さない");
+            return;
+        }
+        let route = self.routes.entry(actor.clone()).or_default();
+        let shared = std::mem::replace(&mut route.shared, new.clone());
+        if shared != *new {
+            self.copy_script(actor, &shared, new);
+        }
+    }
+
+    /// 台本の指定の 4 欄を `from` の場所から `to` の場所へ写す。
+    ///
+    /// `from` の状態がまだ無ければ空の指定を写す。写すものが空で `to` の状態もまだ無ければ、
+    /// 生まれたときの状態と同じなので作らない。
+    pub(super) fn copy_script(&mut self, actor: &ActorKey, from: &TextPlace, to: &TextPlace) {
+        let from_key = PlaceKey {
+            actor: actor.clone(),
+            place: from.clone(),
+        };
+        let to_key = PlaceKey {
+            actor: actor.clone(),
+            place: to.clone(),
+        };
+        let source = self
+            .actors
+            .get(&from_key)
+            .map(|state| state.decor.clone())
+            .unwrap_or_default();
+        if !source.has_script() && !self.actors.contains_key(&to_key) {
+            return;
+        }
+        tracing::debug!(actor = %actor, ?from, ?to, "スコープの \\f の指定を新しい行き先へ写す（要件 3.13）");
+        self.place_entry(&to_key).decor.take_script(&source);
+    }
+
     /// バルーンの装着で 2 層を差し込む（要件 4.1・結線層の 1 点から呼ぶ）。
     ///
     /// 2 層を差し替えたうえで、現在の見た目を新しい層の上へ**載せ直す**
@@ -454,7 +581,12 @@ impl TextLayerState {
                 // で器を作らない（`get_mut` で引く）。空の器を作っても `present_frame` の
                 // 走査は「中身か供給面のどちらかがある」で弾くので提示層には載らないが、
                 // 状態表に意味の無い項目を増やさない。
-                if let Some(state) = self.actors.get_mut(&PlaceKey::balloon(actor)) {
+                // 宛先はそのスコープの今の行き先の場所（箱の無い構成では普通のバルーン）。
+                let key = PlaceKey {
+                    actor: actor.clone(),
+                    place: self.destination(actor),
+                };
+                if let Some(state) = self.actors.get_mut(&key) {
                     state.reset_look();
                 }
             }

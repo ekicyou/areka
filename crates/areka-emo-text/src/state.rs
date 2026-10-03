@@ -51,8 +51,8 @@ use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use crate::look::{StyleId, StyleTable};
 use crate::place::{PlaceKey, TextPlace};
 
-pub use decoration::Decoration;
 use decoration::font_tag_tokens;
+pub use decoration::{BoxTraits, Decoration};
 pub use route::SurfaceKeyOutcome;
 
 /// テキスト層の調整値（design.md「TextLayerRuntime」の config 正本）。
@@ -402,6 +402,8 @@ pub struct TextLayerState {
     routes: BTreeMap<ActorKey, route::ScopeRoute>,
     /// サーフェス番号 → element番号の昇順の箱の名前（空なら行き先は常に普通のバルーン）。
     box_index: BTreeMap<u32, Vec<areka_emo_compose::BoxName>>,
+    /// 箱の名前 → 既定の見た目と種類（[`TextLayerState::set_box_traits`]・無ければ既定の層でスコープに従う）。
+    box_traits: BTreeMap<areka_emo_compose::BoxName, BoxTraits>,
 }
 
 impl TextLayerState {
@@ -439,7 +441,7 @@ impl TextLayerState {
                     0.0
                 };
                 tracing::debug!(actor = %cue.actor, len = glyph_count, at = cue.at, duration = cue.duration, interval, "Text cue 適用（追記＋配送 duration 由来のリビール時刻確定）");
-                let state = self.actors.entry(dest.clone()).or_default();
+                let state = self.place_entry(&dest);
                 state
                     .items
                     .extend(glyph_units.iter().map(|c| TextItem::glyph(c)));
@@ -449,7 +451,7 @@ impl TextLayerState {
             }
             CueCommand::NewLine { ratio } => {
                 tracing::debug!(actor = %cue.actor, ratio, "NewLine cue 適用（改行マーカー追記）");
-                let state = self.actors.entry(dest.clone()).or_default();
+                let state = self.place_entry(&dest);
                 state.items.push(TextItem::LineBreak { ratio: *ratio });
             }
             CueCommand::Clear => {
@@ -457,7 +459,7 @@ impl TextLayerState {
                 // 内容だけを消す（未リビールの文字も含めて破棄＝後出し優先・R2.3）。
                 // 装飾状態（現在の見た目・所有外キーの保持）は保つ——`\c` は装飾を戻さない
                 // （R3.7・`= ActorTextState::default()` に戻すと装飾まで消える）。
-                self.actors.entry(dest.clone()).or_default().clear_content();
+                self.place_entry(&dest).clear_content();
                 *self.clears.entry(dest.clone()).or_default() += 1;
             }
             CueCommand::ClearAll => {
@@ -499,7 +501,7 @@ impl TextLayerState {
                 } else {
                     0.0
                 };
-                let state = self.actors.entry(dest.clone()).or_default();
+                let state = self.place_entry(&dest);
                 // 序数空間は items のグリフ（`Glyph` のみ）＝`visible_glyphs`／reveal と同一。
                 let start = state
                     .items
@@ -535,7 +537,7 @@ impl TextLayerState {
                 let x = parse_cursor_coord(x);
                 let y = parse_cursor_coord(y);
                 tracing::debug!(actor = %cue.actor, ?x, ?y, "Cursor cue 適用（CursorMove 追記・グリフ/リビール不変）");
-                let state = self.actors.entry(dest.clone()).or_default();
+                let state = self.place_entry(&dest);
                 state.items.push(TextItem::CursorMove { x, y });
             }
             // `\f` 文字装飾の汎用キャリア（R2.4）は**名前で自己選別**して消費する。
@@ -544,10 +546,7 @@ impl TextLayerState {
             CueCommand::Custom { .. } => match font_tag_tokens(&cue.command) {
                 Some(tokens) => {
                     tracing::debug!(actor = %cue.actor, ?tokens, "\\f cue 適用（以降に追記される文字へ効く）");
-                    self.actors
-                        .entry(dest.clone())
-                        .or_default()
-                        .apply_font_args(&cue.actor, &tokens);
+                    self.place_entry(&dest).apply_font_args(&cue.actor, &tokens);
                 }
                 None => {
                     tracing::debug!(actor = %cue.actor, command = ?cue.command, "文字状態機械が消費しない cue を無視（上流 routing の対象外流入）");

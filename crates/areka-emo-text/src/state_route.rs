@@ -35,10 +35,9 @@ pub(super) struct ScopeRoute {
     /// 今の文字の行き先。
     dest: TextPlace,
     /// スコープの `\f` の指定を今持っている場所（スコープに従う場所だけ・始めは普通のバルーン）。
-    // 本タスクでは常に普通のバルーン。行き先が替わるときの写しと持ち主の移動は装飾の持ち運び
-    // （state_decoration.rs の carry_script_decor）が読み書きする。
-    #[allow(dead_code)]
-    shared: TextPlace,
+    /// 行き先が替わるときの写しと持ち主の移動は装飾の持ち運び（state_decoration.rs の
+    /// `carry_script_decor`）が読み書きする。
+    pub(super) shared: TextPlace,
 }
 
 impl Default for ScopeRoute {
@@ -55,8 +54,10 @@ impl TextLayerState {
     /// 箱の表（サーフェス番号 → element番号の昇順の箱の名前）を差し替える（シェルの切替）。
     ///
     /// 各スコープの今のサーフェス番号は保ち、行き先だけを新しい表での既定へ引き直す。
-    /// 箱の場所の文字は捨てる（要件 6.8）。普通のバルーンの場所には触れない。
+    /// 箱の場所の文字は捨てる（要件 6.8）。スコープの `\f` の指定を箱が持っていたら、捨てる前に
+    /// 普通のバルーンの場所へ写して持ち主を普通のバルーンにする（design.md「装飾の持ち運び」）。
     pub fn set_box_index(&mut self, index: BTreeMap<u32, Vec<BoxName>>) {
+        self.fold_shared_into_balloon();
         self.box_index = index;
         self.actors.retain(|key, _| key.place == TextPlace::Balloon);
         self.clears.retain(|key, _| key.place == TextPlace::Balloon);
@@ -85,9 +86,10 @@ impl TextLayerState {
             TextPlace::Balloon => false,
         };
         if !keep {
-            route.dest = default_dest(index, surface);
+            let dest = default_dest(index, surface);
+            self.set_dest(actor, dest);
         }
-        tracing::debug!(actor = %actor, ?surface, dest = ?route.dest, "\\s による行き先の決定");
+        tracing::debug!(actor = %actor, ?surface, dest = ?self.destination(actor), "\\s による行き先の決定");
     }
 
     /// 名前の形の `\b[名前]` で行き先を切り替える（要件 4.3・4.9）。
@@ -103,7 +105,7 @@ impl TextLayerState {
         match found {
             Some(name) => {
                 tracing::debug!(actor = %actor, name = name.as_str(), "\\b[名前] で行き先を箱へ切り替え");
-                self.routes.entry(actor.clone()).or_default().dest = TextPlace::Box(name);
+                self.set_dest(actor, TextPlace::Box(name));
             }
             None => {
                 let surface = surface.map_or_else(|| "非表示".to_owned(), |id| id.to_string());
@@ -129,12 +131,45 @@ impl TextLayerState {
         self.routes.get(actor).and_then(|route| route.surface)
     }
 
-    /// 台詞の頭: 全スコープの行き先を既定へ戻す（要件 4.10。サーフェス番号は変えない）。
+    /// 台詞の頭・シェルの切替: 全スコープの行き先を既定へ戻す（要件 4.10。サーフェス番号は変えない）。
+    ///
+    /// 持ち主を普通のバルーンへ戻してから、普通のバルーンを出発点に既定の行き先へ移す
+    /// （既定がスコープに従う箱なら、そこへ指定を写して持ち主にする）。台詞の頭では
+    /// どの場所の指定も空なので何も写らない（要件 3.19）。
     pub(super) fn reset_routes(&mut self) {
-        let index = &self.box_index;
-        for route in self.routes.values_mut() {
-            route.dest = default_dest(index, route.surface);
+        self.fold_shared_into_balloon();
+        let actors: Vec<ActorKey> = self.routes.keys().cloned().collect();
+        for actor in actors {
+            let Some(route) = self.routes.get_mut(&actor) else {
+                continue;
+            };
+            route.dest = TextPlace::Balloon;
+            let dest = default_dest(&self.box_index, route.surface);
+            self.set_dest(&actor, dest);
         }
+    }
+
+    /// スコープの指定を箱が持っていたら普通のバルーンの場所へ写し、持ち主を普通のバルーンにする。
+    fn fold_shared_into_balloon(&mut self) {
+        let actors: Vec<ActorKey> = self.routes.keys().cloned().collect();
+        for actor in actors {
+            let Some(route) = self.routes.get_mut(&actor) else {
+                continue;
+            };
+            let shared = std::mem::replace(&mut route.shared, TextPlace::Balloon);
+            if shared != TextPlace::Balloon {
+                self.copy_script(&actor, &shared, &TextPlace::Balloon);
+            }
+        }
+    }
+
+    /// 行き先を `dest` へ替える。替わる瞬間に `\f` の指定を持ち運ぶ（`carry_script_decor`）。
+    fn set_dest(&mut self, actor: &ActorKey, dest: TextPlace) {
+        if self.destination(actor) == dest {
+            return;
+        }
+        self.carry_script_decor(actor, &dest);
+        self.routes.entry(actor.clone()).or_default().dest = dest;
     }
 }
 
