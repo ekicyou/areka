@@ -17,12 +17,12 @@
 実行 1 回＝リリース 1 回。手順（タスク）は毎回同じで、終わったら `[ ]` に戻す。
 
 1. 前提の確認: main が最新・open PR 0 本（並走の spec が無い）・手元の全体テスト（`tools/test-all.ps1`）が緑・配布スクリプトの `-Check` が緑（x64）。1 つでも欠ければ止める。
-2. 版を上げる: `cargo set-version --bump patch --workspace`（cargo-edit）か同じことをする手元の 1 行。`Cargo.lock` も更新。`dist/README.txt` の「時点」の行を今日に。`crates-io-publish` の `--dry-run` を通す。
+2. 版を上げる: `cargo set-version --bump patch --workspace`（cargo-edit）か同じことをする手元の 1 行。`Cargo.lock` も更新。`dist/README.txt` の「時点」の行を今日に。`crates-io-publish` の公開前の確認（組み立てまでの形）を通す。
 3. 版上げの PR を出し、squash マージする（他の変更を混ぜない）。
 4. main の squash コミットに `v{版}` のタグを打って push する。これが Actions のきっかけ。
 5. 見守る: `release.yml` の緑・Release の公開・crates.io の各クレートの版・winget-pkgs への PR（`winget.yml`）。赤なら原因を直す spec を起票し、**同じ版で再実行しない**（zip の URL は版ごとに固定・crates.io は差し替え不可）＝直したら次の版で出す。
 6. 記録: `roadmap.md` の「完了サマリ」の下に「リリース」の 1 行（版・日付・Release の URL・winget の PR）。
-7. **初回（`v0.0.2`）だけの手順**: タグを打つ前に、開発者が手元で `cargo publish --workspace` を実行して crates.io へ出し、各クレートに Trusted Publishing を設定する（`crates-io-publish` の手順）。winget の初回の手提出は `winget-manifest-submission`（Release の実在が要る＝初回の後のウェーブ）。
+7. **初回（`v0.0.2`）だけの手順**: タグを打つ前に、`wintf`・`dola` に Trusted Publishing を設定する（`crates-io-publish` の手順書。10-03 同 spec の要件討議の議題 3 で crates.io へ出すのは `wintf`・`dola` だけになり、どちらも crates.io に在るので手元からの初回の公開は要らない）。版を上げるとき、出さない `areka` ほかが持つ `wintf = { version = "0.0.1", path = ... }` の版の指定も合わせる必要があるかは `crates-io-publish` の設計で決まる。winget の初回の手提出は `winget-manifest-submission`（Release の実在が要る＝初回の後のウェーブ）。
 
 ## Approach
 
