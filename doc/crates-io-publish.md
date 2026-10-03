@@ -37,13 +37,13 @@ environment を空にするのは、公開の段が GitHub の environment（人
 
 1. 版を上げる PR を squash マージし、`v{版}` のタグを打って push する。
 2. タグの push で、Release を作る workflow（`release.yml`）と公開の段（`crates-io.yml`）が同時に動き出す。`release.yml` は公開の段を呼ばない。公開の段がタグの push を自分で受ける。
-3. `release.yml` が、組み立て・zip・GitHub Release の公開を行う。その間、公開の段は段「release を待つ」で、同じタグの `release.yml` の回が緑で終わるのを待つ（30 秒ごとに見て、最長 45 分）。
+3. `release.yml` が、組み立て・zip・GitHub Release の公開を行う。その間、公開の段は段「release を待つ」で、同じタグの `release.yml` の回が緑で終わるのを待つ（30 秒ごとに見て、最長 120 分）。
 4. 公開の段が、次の段を上から順に行う。どれかが失敗したら、そこから先は「記録」以外を飛ばす。
 
 | 段 | すること |
 |---|---|
 | 版の形 | タグが `v` と数字 3 つの形か（手で起動したときは、入力 `version` が数字 3 つの形か）確かめる |
-| release を待つ | タグの push のときだけ。同じタグの `release.yml` の回が緑で終わるのを待つ。赤で終わった・45 分で緑にならない・`release.yml` が無いときは、何も上げずに止まる |
+| release を待つ | タグの push のときだけ。同じタグの `release.yml` の回が緑で終わるのを待つ。赤で終わった・120 分で緑にならない・`release.yml` が無いときは、何も上げずに止まる |
 | 取り出し | タグ `v{版}` のコミットを取り出す |
 | Release の確認 | その版の GitHub Release が在って、下書きでないことを確かめる（Release より先に crates.io へ出さない） |
 | 道具 | Rust を最新の安定版にする |
@@ -55,7 +55,7 @@ environment を空にするのは、公開の段が GitHub の environment（人
 
 開発者は見守るだけでよい。終わったら次の節で確かめる。
 
-`release.yml` が main に無い間（Release を作る workflow ができる前）は、タグの push で `release` の回が始まらないので、段「release を待つ」が 45 分待ってから「まだ始まっていない」と示して止まる（何も上げていない。`release.yml` が GitHub に一度も登録されていなければ「`release.yml` が無い」ですぐ止まる）。そのときは Release を手で公開してから、5 節の「Run workflow」で版を渡して起動する。
+`release.yml` が main に無い間（Release を作る workflow ができる前）は、タグの push で `release` の回が始まらないので、段「release を待つ」が 120 分待ってから「まだ始まっていない」と示して止まる（何も上げていない。`release.yml` が GitHub に一度も登録されていなければ「`release.yml` が無い」ですぐ止まる）。そのときは Release を手で公開してから、5 節の「Run workflow」で版を渡して起動する。
 
 ## 4. 出たことを確かめる
 
@@ -87,7 +87,7 @@ $left = pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version 0.0.2
 どこで止まったかは、GitHub の Actions の画面で、その回の段ごとの結果と実行の要約を見る。止まり方ごとに、次のとおり切り分ける。
 
 - **release が赤で止まった**（段「release を待つ」が「release が failure で終わった」などと示す）: 何も上がっていない。先に release を緑にする。緑になったら、止まった `crates-io` の回を「Re-run」する（段「release を待つ」がすぐ緑を読んで先へ進む）。「Run workflow」で同じ版を渡してもよい。release をその版でやり直さずに次の版で出すなら、この回は止まったままでよい。
-- **45 分待っても release が緑にならない**: release の回が終わるのを待ち、緑で終わったら、止まった `crates-io` の回を「Re-run」する。
+- **120 分待っても release が緑にならない**: release の回が終わるのを待ち、緑で終わったら、止まった `crates-io` の回を「Re-run」する。
 - **`release` の回が始まらない・`release.yml` が無い**: 3 節の末尾に従う。
 - **workflow のファイルの誤り**（段の書き方・権限・入力の扱いなど）: タグの push で動いた回と、その回の「Re-run」は、**タグのコミットに在る** workflow のファイルで動く。`main` で直しても「Re-run」には効かない。`main` で直してから、「Run workflow」（`main` から）で同じ版を渡す。
 - **`tools/crates-io.ps1` の誤り**: スクリプトは、取り出したタグのコミットの物が使われる。`main` で直しても、その版の起動し直しには効かない。その版は 6 節の予備の手順で出す。直したスクリプトは次の版から効く。ただし予備の手順でも、タグのコミットの同じスクリプト（`-Verify`・`-Pending`）を手元で走らせる。誤りが手元でも再現するなら、その版は予備の手順でも出せない。その場合は `main` で直して次の版で出す。

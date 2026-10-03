@@ -67,7 +67,7 @@ jobs:
         run: |
           [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)  # 日本語のログを化けさせない
           # 待つ長さ（変えるのはこの 2 行だけ）
-          $LIMIT_MINUTES = 45
+          $LIMIT_MINUTES = 120
           $POLL_SECONDS = 30
           $tag = "v$env:VERSION"
           $until = [DateTime]::UtcNow.AddMinutes($LIMIT_MINUTES)

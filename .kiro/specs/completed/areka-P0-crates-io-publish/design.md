@@ -220,9 +220,9 @@ doc/
 flowchart TD
     Start[タグ v版 の push または workflow_dispatch version] --> Shape{版の形は数字3つか}
     Shape -->|いいえ| Stop[何も上げずに失敗]
-    Shape -->|はい・タグの push| Wait{同じタグの release.yml の回が成功で終わったか 45分まで30秒ごと}
+    Shape -->|はい・タグの push| Wait{同じタグの release.yml の回が成功で終わったか 120 分まで30秒ごと}
     Shape -->|はい・手で起動| Checkout[タグ v版 を取り出す]
-    Wait -->|成功以外・45分超え・release.yml が無い| Stop
+    Wait -->|成功以外・120 分超え・release.yml が無い| Stop
     Wait -->|成功| Checkout
     Checkout --> Rel{その版の Release は公開済みか}
     Rel -->|いいえ| Stop
@@ -397,7 +397,7 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 | 段 | すること | 要件 |
 |---|---|---|
 | 版の形 | タグの push ではタグを `^v\d+\.\d+\.\d+$`、手での起動では入力を `^\d+\.\d+\.\d+$` で確かめ、合わなければ失敗。どちらも環境変数で受け（スクリプトの文に `${{ }}` を埋めない）、形を確かめた版だけを `GITHUB_ENV` で後の段へ渡す | 4.1 |
-| release を待つ | タグの push のときだけ（手での起動では飛ばし、次の「Release の確認」が同じことを確かめる）。`gh api` で `release.yml` の回の一覧（`event=push`・`head_sha` がタグのコミット）を 30 秒ごとに読み、`head_branch` がタグと同じ最新の回が成功で終われば先へ。成功以外で終わったら終わり方と版を、45 分（待つ長さの 2 つの値は段の冒頭の 1 か所）で成功に至らなければ最後の様子と版を示して失敗。`release.yml` が GitHub に一度も登録されていない（404）ならすぐ失敗（登録済みで main に無いだけなら回が現れず、上限で失敗）。まだ現れない回・一時的な読み取りの失敗は待つ側に数える。URL や鍵は印字しない。取り出しの前に置く: 待つのにリポジトリの中身は要らず、release が緑になる前にタグを取り出さない | 4.13, 4.11 |
+| release を待つ | タグの push のときだけ（手での起動では飛ばし、次の「Release の確認」が同じことを確かめる）。`gh api` で `release.yml` の回の一覧（`event=push`・`head_sha` がタグのコミット）を 30 秒ごとに読み、`head_branch` がタグと同じ最新の回が成功で終われば先へ。成功以外で終わったら終わり方と版を、120 分（待つ長さの 2 つの値は段の冒頭の 1 か所）で成功に至らなければ最後の様子と版を示して失敗。`release.yml` が GitHub に一度も登録されていない（404）ならすぐ失敗（登録済みで main に無いだけなら回が現れず、上限で失敗）。まだ現れない回・一時的な読み取りの失敗は待つ側に数える。URL や鍵は印字しない。取り出しの前に置く: 待つのにリポジトリの中身は要らず、release が緑になる前にタグを取り出さない | 4.13, 4.11 |
 | 取り出し | `actions/checkout`・`ref: refs/tags/v{版}`・`persist-credentials: false` | 4.3, 4.11 |
 | Release の確認 | `gh release view v{版} --json isDraft` が失敗、または下書きなら、版を示して失敗 | 4.12 |
 | 道具 | `rustup update stable --no-self-update` | − |
@@ -429,7 +429,7 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 4. **出たことを確かめる**（3.4）: タグのコミットで `pwsh -NoProfile -File tools/crates-io.ps1 -Pending`。2 クレートとも「在る」で、標準出力が空なら出ている。
 5. **止まったときのやり直し**（3.3）: 主な道は Actions の画面のボタン（その回の「Re-run」か、main の「Run workflow」に版を渡す）で、コマンドの行は要らない。既に出たクレートは飛ばされる。止まり方ごとの切り分けを書く。
    - workflow のファイルの誤り: main で直してから、main の「Run workflow」で同じ版を渡す（タグの push の回の Re-run はタグのコミットの workflow で動くので直らない）。
-   - release が赤・45 分で終わらない: release を緑にしてから、その回を「Re-run」する（または「Run workflow」で同じ版）。
+   - release が赤・120 分で終わらない: release を緑にしてから、その回を「Re-run」する（または「Run workflow」で同じ版）。
    - `tools/crates-io.ps1` の誤り: タグのコミットの物が使われるので、同じ版は予備の手順で出す。直した物は次の版から効く。
    - 「公開」が緑で「記録」だけが赤: 索引の反映待ち。時間を置いて `-Pending` を手元で走らせるか、同じ版で起動し直す。
    - `release-cycle` の「赤なら同じ版で再実行しない」は Release を作る `release.yml` の話で、公開の段は同じ版で何度起動し直してもよい。
@@ -452,7 +452,7 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 | 版の指定の無い・合わない依存 | cargo | cargo の文言（依存の名前つき） |
 | 包んだ大きさが上限超え | 判定「大きさ」 | 名前と大きさ |
 | 渡された版とワークスペースの版の不一致 | 判定「版」 | 二つの版 |
-| release の回が成功以外で終わる・45 分で成功に至らない・`release.yml` が無い | 段「release を待つ」 | 版と終わり方（または最後の様子） |
+| release の回が成功以外で終わる・120 分で成功に至らない・`release.yml` が無い | 段「release を待つ」 | 版と終わり方（または最後の様子） |
 | Release が無い・下書き | 段「Release の確認」 | 版 |
 | crates.io に 1 つも版が無いクレート | `-Pending` | 名前と予備の手順の案内 |
 | 途中まで上がって失敗 | 段「公開」→「記録」 | クレートごとの在る・無い |
