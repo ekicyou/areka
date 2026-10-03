@@ -29,7 +29,7 @@
   - _Requirements: 2.2, 2.3, 2.4, 2.5, 2.7_
   - _Depends: 1.1_
   - _Boundary: check.rs_
-- [ ] 2.3 10 本の定義の逐語・型の付いた引数・要求の種類の列挙
+- [x] 2.3 10 本の定義の逐語・型の付いた引数・要求の種類の列挙
   - 各ツールのファイルに、保存した JSON（`doc/ssp-mcp/tools-list-ssp-2.9.05.json`）のそのツールの 1 個ぶんを生文字列で逐語に貼り、design.md の表どおりの `Args` と、検査済みの引数を詰め替える関数を置く（省略と `null` は `None`・`references` の省略は空の列・`ghost_name` の空の文字列はそのまま渡す）
   - 表（`tools/mod.rs`）に 10 本を SSP の並び（先頭 `get_active_ghost_list`）で並べ、10 変種の `ToolCall` とツール名を返す関数、`REPLY_WAIT`（10 秒）を置く。表の行（定義の文字列と詰め替え）はクレートの中から読めるようにする（`check_tests.rs` が使う）
   - 本番のビルドはクレートの外のファイルを読まない（保存した JSON を読むのはテストだけ）
