@@ -41,7 +41,7 @@
   - _Boundary: registry_
 
 - [ ] 3. MCP と HTTP の層
-- [ ] 3.1 rmcp の `ServerHandler` の実装
+- [x] 3.1 rmcp の `ServerHandler` の実装
   - 登録口の内容を 1 度だけ rmcp の `ToolRouter` へ写し（`ToolRoute::new_dyn`）、一覧・呼び出し・定義の取得をそこへ委ねる（未登録の名前は `-32602`）
   - `get_info` は tools の能力だけ（resources・prompts なし）・`serverInfo` は `areka-mcp-server` と Cargo の版・英文 2 文の `instructions`。版の交渉は rmcp の既定に任せる
   - 結果の写し: text／image の content と is_error を rmcp の呼び出し結果へそのまま写す
@@ -131,3 +131,4 @@
 - 1.1: `Cargo.lock` に増える外部クレートは 38 件。研究の 30 件は `cargo tree -e normal`（この機械向け）の数で、全部入っている。残り 8 件（iana-time-zone 系・wasi・cc 等）は chrono・mio が他の OS 向けに引くもので x64 のビルドには 0 件。数え方の差であって増えたのではない
 - 2.1〜2.4: `mod` が非公開のあいだは各モジュール先頭の `#![expect(dead_code, reason = …)]` で clippy を緑に保つ。3.3 で公開面へ出したら満たされず赤になるので、そこで消す
 - 2.3: help の本文は既定の説明に `9821` を 1 回だけ載せる（要件 6.2 が禁じるのは URL とコマンド例の固定だけ）。design の Testing 行と tasks の完了の姿をこれに合わせて直した。テストのビルドで使われるモジュールは `#![cfg_attr(not(test), expect(dead_code, …))]` の形
+- 3.1: `list_resources`／`list_prompts` は能力に載せなくても rmcp の既定が空の Ok を返す（未知メソッドではない）。差の一覧（5.2）を書くときの観察材料
