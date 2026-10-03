@@ -3,7 +3,7 @@
 > 対象は `.github/workflows/release.yml`（新規）・`.kiro/steering/tech.md`・`.kiro/steering/structure.md`・`verification/runner-trial.md`（新規）だけ。`crates/`・`tools/`・各 `Cargo.toml`・`Cargo.lock`・`dist/README.txt` は変更 0。配布スクリプトに直しが要ると分かったら、本仕様では直さず開発者へ上げて止める。作業の枝を押すのは、そのたびに開発者の了承を得てから。
 
 - [ ] 1. リリース workflow を組む
-- [ ] 1.1 workflow の頭と用意の段（取り出し・Rust の固定）を置く
+- [x] 1.1 workflow の頭と用意の段（取り出し・Rust の固定）を置く
   - 名前 `release`、きっかけはタグ `v*` の push と入力なしの手で始める走りの 2 つだけ、権限は中身への書き込みだけ、同じ参照の走りを直列にする重なりの扱い（取り消さない）、job 1 つ・Windows の実行環境の名前を固定、job 全体の時間の上限を置く
   - 走りの種別（push かつ参照がタグのときだけ本番）と Rust の版を、頭の 1 か所ずつに書く
   - 改行の設定の段（元の値と出どころを印字してから手元と同じ値にする）、取り出しの段（資格情報を残さない・参照の指定なし）、Rust の固定の段（版を入れて既定にする・時間の上限つき）を置く

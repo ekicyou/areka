@@ -1,0 +1,47 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  RUST_TOOLCHAIN: 1.99.0
+
+jobs:
+  release:
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 150
+    env:
+      # 本番（Release を公開する）はタグの push のときだけ。それ以外は乾いた走り。
+      PUBLISH: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: 改行の設定
+        run: |
+          [Console]::OutputEncoding = [Text.Encoding]::UTF8
+          $origin = git config --show-origin --get core.autocrlf
+          if ($LASTEXITCODE -ne 0) { $origin = '(未設定)' }
+          Write-Host "core.autocrlf の元の値と出どころ: $origin"
+          git config --global core.autocrlf true
+
+      - name: 取り出し
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Rust の固定
+        timeout-minutes: 10
+        run: |
+          rustup toolchain install $env:RUST_TOOLCHAIN --profile minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup default $env:RUST_TOOLCHAIN
