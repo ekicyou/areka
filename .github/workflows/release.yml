@@ -262,3 +262,68 @@ jobs:
             Write-Host "作業ドライブの空き容量: 読めない（$_）"
           }
           exit 0
+
+      - name: Release を公開
+        if: env.PUBLISH == 'true'
+        timeout-minutes: 10
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PREV_TAG: ${{ steps.guard.outputs.prev_tag }}
+        run: |
+          [Console]::OutputEncoding = [Text.Encoding]::UTF8
+          # 入力は環境変数だけ（GITHUB_REPOSITORY・GH_TOKEN・VERSION・PREV_TAG）
+          # 渡すのは 4 つの確かめが見た同じ置き場の同じ 4 つ。タグは作らない（リモートに無ければ --verify-tag で gh が止まる）
+          # gh は下書きで作り、4 つを載せ終えてから公開し、途中で失敗したら自分の下書きを消す。この段が成功の経路の最後の段
+          $dir = Join-Path (Get-Location).Path 'target/package'
+          $tag = "v$env:VERSION"
+          $files = @(foreach ($z in @("areka-$env:VERSION-x64.zip", "areka-$env:VERSION-arm64.zip")) { Join-Path $dir $z; Join-Path $dir "$z.sha256" })
+          $opts = @('--repo', $env:GITHUB_REPOSITORY, '--verify-tag', '--generate-notes', '--title', $tag)
+          # ノートの始まりのタグは、一つ前のタグが在るときだけ渡す
+          if ($env:PREV_TAG) { $opts += @('--notes-start-tag', $env:PREV_TAG) }
+          gh release create $tag @files @opts
+          $code = $LASTEXITCODE
+          if ($code) { Write-Host "Release を公開できない（gh release create が終了コード $code）" }
+          # gh の終了コードをそのまま段の終了コードにする（-Command は 0 と 1 以外を 1 に潰すので先にホストへ渡す）
+          $host.SetShouldExit($code)
+          exit $code
+
+      - name: 後始末
+        if: (failure() || cancelled()) && env.PUBLISH == 'true' && steps.guard.outputs.absent == 'true'
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [Console]::OutputEncoding = [Text.Encoding]::UTF8
+          # 入力は環境変数だけ（GITHUB_REF_NAME・GITHUB_REPOSITORY・GH_TOKEN）
+          # 既存の Release の検査が「無い」と確かめた後に現れたこのタグの Release は、この走りの物（同じタグの走りは同時に 1 つ）
+          # 在れば下書きでも公開でも Release の番号を名指しして消す。タグは消さない
+          $tag = $env:GITHUB_REF_NAME
+          $where = "https://github.com/$env:GITHUB_REPOSITORY/releases"
+          $found = @(gh api --paginate "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | [.tag_name, .id, .html_url, .draft] | @tsv' | Where-Object { [string]::Equals($_.Split("`t")[0], $tag, [StringComparison]::Ordinal) })
+          if ($LASTEXITCODE) {
+            Write-Host "Release の一覧を取れない（gh api が終了コード $LASTEXITCODE）"
+            Write-Host "タグ '$tag' の Release が残っているおそれがある。手で確かめる先: Release の一覧 $where"
+            exit 1
+          }
+          if (-not $found.Count) {
+            Write-Host "タグ '$tag' の Release は残っていない（下書きを含めて 0 件）"
+            exit 0
+          }
+          $bad = 0
+          foreach ($row in $found) {
+            $f = $row.Split("`t")
+            gh api -X DELETE "repos/$env:GITHUB_REPOSITORY/releases/$($f[1])"
+            $code = $LASTEXITCODE
+            if ($code) {
+              Write-Host "Release を消せない（番号 $($f[1])・URL $($f[2])・下書き $($f[3])・gh api が終了コード $code）"
+              $bad++
+            } else {
+              Write-Host "Release を消した（番号 $($f[1])・URL $($f[2])・下書き $($f[3])）。タグ '$tag' は残す"
+            }
+          }
+          if ($bad) {
+            Write-Host "タグ '$tag' の Release が残っているおそれがある。手で確かめる先: Release の一覧 $where"
+            exit 1
+          }
+          exit 0

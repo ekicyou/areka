@@ -2,7 +2,7 @@
 
 > 対象は `.github/workflows/release.yml`（新規）・`.kiro/steering/tech.md`・`.kiro/steering/structure.md`・`verification/runner-trial.md`（新規）だけ。`crates/`・`tools/`・各 `Cargo.toml`・`Cargo.lock`・`dist/README.txt` は変更 0。配布スクリプトに直しが要ると分かったら、本仕様では直さず開発者へ上げて止める。作業の枝を押すのは、そのたびに開発者の了承を得てから。
 
-- [ ] 1. リリース workflow を組む
+- [x] 1. リリース workflow を組む
 - [x] 1.1 workflow の頭と用意の段（取り出し・Rust の固定）を置く
   - 名前 `release`、きっかけはタグ `v*` の push と入力なしの手で始める走りの 2 つだけ、権限は中身への書き込みだけ、同じ参照の走りを直列にする重なりの扱い（取り消さない）、job 1 つ・Windows の実行環境の名前を固定、job 全体の時間の上限を置く
   - 走りの種別（push かつ参照がタグのときだけ本番）と Rust の版を、頭の 1 か所ずつに書く
@@ -45,7 +45,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.5, 4.2, 5.4_
   - _Boundary: release.yml_
 
-- [ ] 1.6 Release の公開の段と後始末の段を置き、後始末を手元で回す
+- [x] 1.6 Release の公開の段と後始末の段を置き、後始末を手元で回す
   - 公開の段は本番のときだけ動き、4 つを渡して `--repo`・`--verify-tag`・`--generate-notes`・（`prev_tag` が在るときだけ）`--notes-start-tag`・`--title v{版}` を付け、`--draft`・`--target`・`--latest` を付けない。成功の経路で最後の段にする
   - 後始末の段は「失敗か取り消し・本番・`absent`」のときだけ動き、検査の段と 1 字違わぬ行でこのタグの Release を探し、在れば番号を名指しして消す（タグは残す）。無ければ「残っていない」と印字、自身が失敗したら残っているおそれと確かめる先を印字して失敗
   - 2 段とも、トークンをその段にだけ渡し、時間の上限を付ける
@@ -83,3 +83,8 @@
   - 証跡に、通っていない残り（公開の段・後始末の消す経路・下書きの見え方・Re-run・マージ後の乾いた走り）を `release-cycle` への申し送りとして書く
   - 完了の形: 最終の `release.yml` にきっかけの行が 0 件で、差の判定と残りの申し送りが証跡に在る
   - _Requirements: 1.4, 9.2, 9.3_
+
+## Implementation Notes
+
+- GitHub の pwsh の段は本文を `pwsh -command ". '{0}'"` で回し、`-Command` は 0 と 1 以外の終了コードを 1 に潰す。子の終了コードをそのまま段の結果にするには `$host.SetShouldExit($code); exit $code`（1.5 の S8）。
+- PowerShell の `-ceq` は文化に従う比べで、U+FEFF（BOM）や U+200B を無視する。字のとおりに比べるところは `[string]::Equals(a, b, [StringComparison]::Ordinal)`（1.5 で S4・S5・S9 を揃えた。S11 は S5 の探す行を 1 字違わず写す）。

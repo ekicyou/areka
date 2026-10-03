@@ -264,3 +264,81 @@ S8 の 2 回目が作った 4 つに対して:
 直した後の本文の場合（17 通り）はすべて PASS。直す前の本文と `-ceq` の写しの 4 通りは、どれも U+FEFF か U+200B を無視して通した（弱さの再現＝道具が違いを見分けられることの較正）。S4 の印字の中の U+200B は見えないまま出る（S4 の印字は字をそのまま出す）。
 
 直した後の `release.yml` への静的な確かめ（機械で判定）: ファイルの中の `-Check` が 0 件・配布スクリプトの呼び出しが 1 件で引数が `-Arch all` だけ・S4 と S9 の比べが Ordinal・S5 の探す行が Ordinal の 1 行・S9 に `-ceq` が無い・ファイルの中の U+FEFF と U+200B が 0 件・どの段の本文にも `${{` が無い・S8 の上限が 90 で S9 は上限なし・`GH_TOKEN` を持つ段が `既存の Release の検査` だけ。9 項目すべて PASS。YAML として読める。一時ファイルは確かめの後に消した。
+
+## 1.6 Release の公開の段（S10）と後始末の段（S11）
+
+回した日: 2026-10-03。`4 つの確かめ` の後ろに 2 段を足した。
+
+- `Release を公開`（S10）: 条件 `env.PUBLISH == 'true'`・`timeout-minutes: 10`・`env:` に `GH_TOKEN`・`VERSION`（S4 の版）・`PREV_TAG`（S5 の一つ前のタグ）。本文は `target/package` の 4 つ（x64 と arm64 の zip と `.sha256`）を `gh release create v{版}` に渡し、`--repo $env:GITHUB_REPOSITORY`・`--verify-tag`・`--generate-notes`・`--title v{版}` を付け、`PREV_TAG` が空でないときだけ `--notes-start-tag` を足す。gh の終了コードを `$host.SetShouldExit` を通してそのまま段の終了コードにする（gh は 0・1 のほかに 2・4 を返しうるため）。
+- `後始末`（S11）: 条件 `(failure() || cancelled()) && env.PUBLISH == 'true' && steps.guard.outputs.absent == 'true'`・`timeout-minutes: 5`・`env:` に `GH_TOKEN` だけ。タグは `GITHUB_REF_NAME`。Release を探す行は S5 の行を道具で 1 字違わず写した（手で打っていない）。一覧を取れなければ「残っているおそれ」と手で確かめる先（Release の一覧 `https://github.com/{リポジトリ}/releases`）を印字して 1、在れば Release の番号を名指しして `gh api -X DELETE repos/{リポジトリ}/releases/{番号}` で消す（タグは消さない・`gh release delete` は使わない）。消せないものが 1 つでもあれば同じ印字で 1、無ければ `タグ '…' の Release は残っていない（下書きを含めて 0 件）` と印字して 0。
+
+`gh release create --help`（手元の gh 2.102）で `--verify-tag`・`--notes-start-tag`・`--generate-notes`・`--title`・`--repo` の綴りを確かめた。
+
+### 静的な確かめ（機械で判定）
+
+Python と PyYAML で `release.yml` を読み、30 項目を判定させた。段を足す前に回すと 20 項目が FAIL（10/30 PASS・終了コード 1）で、足した後は 30/30 PASS（終了コード 0）。
+
+| 項目 | 足す前 | 足した後 |
+|---|---|---|
+| YAML として読める・U+FEFF と U+200B が 0 件・改行が LF だけ | PASS | PASS |
+| 最後の 2 段が `Release を公開`・`後始末` の順 | FAIL | PASS |
+| S10 の条件が `env.PUBLISH` を見る | FAIL | PASS |
+| S10 の本文に `gh release create`・`--verify-tag`・`--generate-notes`・`--notes-start-tag`・`--repo`・`--title` | FAIL×6 | PASS×6 |
+| ファイルの中の `--draft`・`--target`・`--latest` が 0 件 | PASS×3 | PASS×3 |
+| S11 の条件に `failure()`・`cancelled()`・`env.PUBLISH`・`steps.guard.outputs.absent` | FAIL×4 | PASS×4 |
+| `$found = @(gh api --paginate` で始まる行が S5 と S11 にちょうど 1 行ずつ | FAIL | PASS |
+| その 2 行が `==` で同じ | FAIL | PASS |
+| S11 が `gh api -X DELETE` で消し、`gh release delete` を持たない | FAIL | PASS |
+| `GH_TOKEN` を持つ段が S5・S10・S11 の 3 つだけ（ファイルの中の `GH_TOKEN:` も 3 件） | FAIL×2 | PASS×2 |
+| S10 の上限 10・S11 の上限 5 | FAIL×2 | PASS×2 |
+| 段の上限の合計が 130（S3 10・S5 5・S6 10・S8 90・S10 10・S11 5）で job の 150 より小さい | FAIL（115） | PASS（130） |
+| どの段の本文にも `${{` が無い | PASS | PASS |
+| `git push`・`git tag`・`git remote` が 0 件 | PASS | PASS |
+| `repository_dispatch`・`gh workflow run`・`workflow_call` が 0 件 | PASS | PASS |
+| `secrets.` が 0 件 | PASS | PASS |
+
+較正: `release.yml` の写しで S11 の探す行の `@tsv` を `@csv` に変えると、「2 行が同じ」だけが FAIL（29/30）になった。
+
+### S11 の本文を手元の `gh` で 1 回回す（読むだけ）
+
+先に `gh api repos/ekicyou/areka/releases --jq length` が `0`（Release が 0 件）であることを確かめ、消す経路が動きようのない状態で回した。本文の取り出し方と包み方は 1.2・1.3 と同じ（Python と PyYAML で `後始末` の段の本文を取り、先頭に `$ErrorActionPreference = 'stop'`、末尾に `if ((Test-Path -LiteralPath variable:\LASTEXITCODE)) { exit $LASTEXITCODE }` を付けて `pwsh -command ". '{一時ファイル}'"` で回す）。環境変数は `GITHUB_REF_NAME=v0.0.2`・`GITHUB_REPOSITORY=ekicyou/areka`。`GH_TOKEN` は設定せず手元の `gh` の認証で読んだ。
+
+| 印字 | 終了コード | 回した後の Release の数 |
+|---|---|---|
+| `タグ 'v0.0.2' の Release は残っていない（下書きを含めて 0 件）` | 0 | 0 |
+
+完了の形の「残っていない」と印字して終わった。何も消えていない。
+
+### S10・S11 の分かれ道を偽の `gh` で回す（GitHub に触れない）
+
+本文の前に PowerShell の関数 `gh` を置いて本物の gh を隠した（関数はアプリより先に引かれる）。偽物は受けた引数を 1 要素ずつ `target\rc16\` の記録ファイルへ書き、呼び方に応じて決めた行と終了コード（`$global:LASTEXITCODE`）を返す。本文と包み方は上と同じ。道具が終了コード・印字の字・記録した呼び出しを期待と比べて判定した。
+
+| 段 | 場合 | 期待 | 終了コード | 記録した呼び出し・印字（要点） | 判定 |
+|---|---|---|---|---|---|
+| S11 | 一覧に `v0.0.1`（番号 99）と `v0.0.2`（番号 111・下書き） | 111 だけ消して成功 | 0 | 一覧の 1 回の後に `api -X DELETE repos/ekicyou/areka/releases/111` の 1 回・`Release を消した（番号 111…）。タグ 'v0.0.2' は残す` | PASS |
+| S11 | `v0.0.2` が 2 件（111 下書き・112 公開）と `v0.0.1` | 2 件とも消して成功 | 0 | `…/releases/111`・`…/releases/112` の 2 回 | PASS |
+| S11 | 一覧に `v0.0.1` だけ | 消さずに成功 | 0 | 一覧の 1 回だけ・`残っていない` | PASS |
+| S11 | `v0.0.2`（111）が在り、消す呼び出しが終了コード 1 | 失敗 | 1 | `Release を消せない（番号 111…・gh api が終了コード 1）`・`タグ 'v0.0.2' の Release が残っているおそれがある。手で確かめる先: Release の一覧 https://github.com/ekicyou/areka/releases` | PASS |
+| S11 | 一覧の呼び出しが終了コード 1 | 失敗・消さない | 1 | 一覧の 1 回だけ・`Release の一覧を取れない（gh api が終了コード 1）`・同じ「残っているおそれ」の印字 | PASS |
+| S10 | `VERSION=0.0.2`・`PREV_TAG=v0.0.1`・gh が 0 | 成功 | 0 | `release create v0.0.2 {置き場}/areka-0.0.2-x64.zip {…}.zip.sha256 {…}/areka-0.0.2-arm64.zip {…}.zip.sha256 --repo ekicyou/areka --verify-tag --generate-notes --title v0.0.2 --notes-start-tag v0.0.1`（要素ごとに完全一致） | PASS |
+| S10 | `PREV_TAG` が空・gh が 0 | `--notes-start-tag` を付けない | 0 | 上から `--notes-start-tag v0.0.1` を除いた並びと完全一致 | PASS |
+| S10 | gh が 1 | 失敗 | 1 | `Release を公開できない（gh release create が終了コード 1）` | PASS |
+| S10 | gh が 4 | gh の値のまま | 4 | `…終了コード 4）` | PASS |
+
+9 通りすべて PASS。置き場は作業ツリーの根からの `target/package`（S9 と同じ）。
+
+較正（本文の写しだけを変え、`release.yml` は変えていない。どれも上の 9 通りの道具で FAIL が出た＝変異を見分けた）:
+
+| 写しへの変え方 | FAIL になった場合 |
+|---|---|
+| S10 の `if ($env:PREV_TAG)` を `if ($true)` に | `PREV_TAG` が空の場合 |
+| S10 の `$host.SetShouldExit($code)` を消す | gh が 4 の場合（段が 1 で終わった） |
+| S11 の消す番号を `$f[1]` から `$f[0]`（タグの名前）に | 見つかった 2 つの場合 |
+| S11 の一覧を取れないときの `exit 1` を `exit 0` に | 一覧の呼び出しが 1 の場合 |
+
+一時ファイル（判定の道具・本文の写し・偽の gh の記録・変えた `release.yml` の写し）は `target\rc16\` の下にだけ置き、確かめの後に消した。
+
+### 残り
+
+- S10 が実際に Release を公開すること（gh の下書き→4 つの添付→公開・`v0.0.1` からの自動のノート）と、S11 の消す経路（止められた gh の下書きや公開済みの Release を番号で消すこと・下書きがトークンから見えること）は、実行環境での走り（乾いた走り）でも通らない。初めて動くのは `release-cycle` の初回の実走で、そこへ申し送る。
+- 偽の `gh` は PowerShell の関数なので、本物の gh へ渡るときの引数の引用（Windows のコマンド行への組み立て）は確かめていない。渡す値はどれも空白や引用符を含まない（作業ツリーの絶対パス・`v0.0.2`・`ekicyou/areka` の形）。
