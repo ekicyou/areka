@@ -107,7 +107,12 @@ areka は SSP の実測ではなく ukadoc の意味を採る。実 SSP は `bal
 
 1. The areka shall `minimizing`・`induction`・`passive`・`timecritical`・`opening(種類)` を `Status` に載せない（areka にそれらの状態がまだ存在しないため）
 2. The areka shall この 5 状態の語彙と書式（`opening` の種類を `/` で区切る書式を含む）を、出どころができたときに載せられる形のまま保つ
-3. When 本 spec を完了する場合, the 開発の記録 shall この 5 状態と、関連するさくらスクリプト（`\![enter,inductionmode]`・`\![enter,passivemode]`・`\t`）および窓の最小化・入力ボックス等について、本 spec の後の持ち主をロードマップと ukadoc 網羅の対応表に記録する
+3. When 本 spec を完了する場合, the 開発の記録 shall この 5 状態と、関連するさくらスクリプト（`\![enter,inductionmode]`・`\![enter,passivemode]`・`\t`）および窓の最小化・入力ボックス等について、本 spec の後の持ち主をロードマップと ukadoc 網羅の対応表に記録する。持ち主は次のとおりとする（2026-10-03 開発者裁定）
+   - `timecritical`・`\t` → 実在の `areka-P0-sakura-time-directives`
+   - `induction`・`passive`・`\![enter,inductionmode]`・`\![enter,passivemode]` → 網羅の計画（`doc/ukadoc-coverage/roadmap-draft.md`）の候補 `areka-P0-passive-mode-states`
+   - `minimizing` → 同じく候補 `areka-P0-minimize-state`
+   - `opening(種類)`（入力ボックス等） → 同じく候補 `areka-P0-inputbox-dialog`・`areka-P0-communicate-events`
+   - 候補の spec は計画の波で起票し、本 spec の完了時には起票しない。記録したあと、担当の表を読む検査（ukadoc 網羅の整合検査）が、まだフォルダの無い候補名で赤くならないことを確かめる
 
 ### Requirement 7: 失敗の記録
 

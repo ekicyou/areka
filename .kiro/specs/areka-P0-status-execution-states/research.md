@@ -257,4 +257,4 @@
 | 4. online の区間の端 | 更新は要件 2.1 で「実際に始めてから終えるまで・承諾待ち（`AwaitingExec`）は含まない」と決着。`Stage::Running` か `run_order` の前後かと、URL 取得の終わりの印の作りは設計で決める |
 | 5. 起動・終了・切替のイベント | **要件で決着**: 要件 5.1 に起動・終了・切替のイベントも含むと明記。`INACTIVE` の改め方は設計で決める |
 | 6・7・8・10 | 設計で決める |
-| 9. 5 状態と関連タグの次の持ち主 | 開発者との議論（議題 1） |
+| 9. 5 状態と関連タグの次の持ち主 | **議題 1 で決着（開発者裁定）**: `\t`・timecritical → 実在の `sakura-time-directives`、induction・passive → 網羅の計画の候補 `passive-mode-states`、最小化 → 候補 `minimize-state`、opening → 候補 `inputbox-dialog`・`communicate-events`。候補は計画の波で起票（本 spec の完了時には起こさない）。完了時に網羅の整合検査が候補名で赤くならないことを確かめる（要件 6.3） |
