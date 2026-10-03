@@ -258,3 +258,113 @@
 | 5. 起動・終了・切替のイベント | **要件で決着**: 要件 5.1 に起動・終了・切替のイベントも含むと明記。`INACTIVE` の改め方は設計で決める |
 | 6・7・8・10 | 設計で決める |
 | 9. 5 状態と関連タグの次の持ち主 | **議題 1 で決着（開発者裁定）**: `\t`・timecritical → 実在の `sakura-time-directives`、induction・passive → 網羅の計画の候補 `passive-mode-states`、最小化 → 候補 `minimize-state`、opening → 候補 `inputbox-dialog`・`communicate-events`。候補は計画の波で起票（本 spec の完了時には起こさない）。完了時に網羅の整合検査が候補名で赤くならないことを確かめる（要件 6.3） |
+
+---
+
+## 9. 設計の調査と決定（2026-10-03・design.md の裏付け）
+
+### 9.1 要約
+
+- **Feature**: `areka-P0-status-execution-states`
+- **Discovery Scope**: Extension（既存の仕組みへの統合・外部の依存なし・調べものはコードの読み合わせだけ）
+- **Key Findings**:
+  - `GhostSlot` の入れ替えと新しい `Emo2Wiring`・`UserBreakWiring` の据え付けは `ghost_switch.rs` の `boot_into` が同じ関数で同期に行う（`boot_ghost_strict` → `commit_ghost_windows` → `insert_non_send(GhostSlot)`）。間にフレームは走らない。
+  - 一周の照合（`spine.rs`・`spine_conformance_*`）は `GhostSlot`・`UserBreakWiring`・`GhostSession` を 1 つも据えていない（`emo2_boot/spine*` を grep して 0 件）。
+  - ukadoc 網羅の整合検査（`crates/ukadoc-survey/tests/consistency/spec_checks.rs` の腕 b・c・f）は、台帳の `owner` が `roadmap-draft.md` の `[[spec]]` か `briefing.md` の `[[owner_completed]]` の名前であること、`[[spec]]` の名前のフォルダが実在すること、`owner_count` が台帳の件数と一致することを見る。候補名を `owner` に書くと赤になる。
+  - トークごとの受け口の複製は、トークの再生（`areka-sakura/src/drive.rs` の `TalkDriver` → `CuePlayer`）が所有し、終わり（自然終端・`on_close`）で落ちる。`dispatcher.rs` の `Start` は「既存のトークを Close→join してから複製・起動」なので、前のトークの複製の `Drop` は次のトークの最初の `emit` より前に起きる。
+
+### 9.2 調査の記録（7.2 の R1〜R4）
+
+#### R1: 切替の間のフレーム
+- **Context**: 新しい `Emo2Wiring` が据わってから `GhostSlot` が替わるまでにフレームが走ると、新しいゴーストの値を古い kanade へ送りうる。
+- **Sources Consulted**: `crates/areka/src/emo2_boot/ghost_switch.rs` の `fn take_down`・`fn boot_into`、`crates/areka/src/ghost_session.rs` の `fn boot_ghost_strict`・`fn boot_wired`。
+- **Findings**: `boot_into` は同期の関数で、`boot_ghost_strict`（結線の据え付け）→ `commit_ghost_windows` → `world.insert_non_send(GhostSlot(Some(session)))` を続けて行う。`take_down`（置き場を空にして降ろす）から `boot_into` までの間には窓を閉じる待ちがありフレームが走るが、その間は置き場が空で、古い `Emo2Wiring` の相は送る相手を持たない。
+- **Implications**: バルーンの届けは `GhostSlot` から kanade を引けばよい。置き場が空のときは送らず「最後に送った値」も更新しない（据わった最初のフレームで送る）。
+
+#### R2: 一周の照合の土台
+- **Context**: 一周の照合の期待値（`expected_statuses`）がバルーンの状態で変わるか。
+- **Sources Consulted**: `crates/areka/src/emo2_boot/spine.rs`・`spine_conformance_script.rs`・`spine_conformance_support.rs`（grep: `GhostSlot`・`UserBreakWiring`・`GhostSession`）。
+- **Findings**: 0 件。一周の照合は表示層を本物で動かすが、置き場も中断の持ち物も据えないので、本 spec の届けは走らない。
+- **Implications**: 期待値は変えない（要件 8.3 の対象は構造体リテラルの追随だけ）。送り口を通した観測（要件 8.2）は kanade のハーネス（`tests/kanade`）で行う。一周の照合に置き場を据えて `balloon(0=0)` を観測するのは、フレームと kanade の処理順に期待値が依存するため採らない。
+
+#### R3: 1,000 行の見張り
+- **Sources Consulted**: `crates/log-capture-kit/tests/file_length_guard_test.rs`（`LINE_LIMIT`＝1000・例外表は現に超過している 11 件だけ）。
+- **Findings**: 触るファイルの今の行数は `steady.rs` 935・`msg.rs` 894・`schedule/mod.rs` 859・`actor.rs` 707・`desk.rs` 684・`balloon_visibility_phase.rs` 605。
+- **Implications**: `steady.rs` は `INACTIVE` → `state.snapshot_without_talk()` の置換だけ（追記 0 行）。`msg.rs` は変種 1 つとラベルの腕（+25 行程度）、`schedule/mod.rs` は入力の変種・写しの欄・横断の腕・`snapshot_without_talk`（+40 行程度）で上限に届かない。テストは兄弟ファイルへ置く。
+
+#### R4: tick の門
+- **Sources Consulted**: `crates/areka/src/tick_gate_config.rs`（`AREKA_TICK_GATE`・既定は無効）。
+- **Findings**: 門が有効だと「見た目が変わらない画面更新」で入力の段とバルーンの相が走らない巡がある。旗の合図やバルーンの差分は tick を起こさない。
+- **Implications**: 既定の本番には影響しない。設計の Revalidation Triggers に「門が既定で有効になったら要件 5.2 を見直す」と記す。本 spec では門の起こしを足さない。
+
+### 9.3 形の比較
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| 案 A: 全部押し込み | 3 状態とも UI の持ち物が `KanadeMsg` で kanade へ | 既存の形・新しい部品が少ない | online を切替（読み直し）の後の新しい kanade へ再送する手当てが散り、起動途中のイベントには最初のフレームまで載らない（要件 2.6・5.1 を満たしにくい） | 不採用 |
+| 案 B: 共有の器を kanade が読む | 3 状態を器に集め、kanade が送るときに読む | 遅れがない | 器を起動の結線（`emo2_boot/mod.rs`・areka-ghost の起動入力）で配る必要があり C1 の約束に当たる。運行表が外の状態を読む | 不採用 |
+| **案 C: 混成** | nouserbreak・balloon は押し込み、online はプロセスの数を殻が読む | online は切替をまたぎ起動の最初のイベントから載る。失敗の終わりも RAII で拾う。運行表は純粋のまま | グローバルの数を持つ。テストの決定論のため持ち手は数を引数で受ける | **採用** |
+
+online を届ける道の比較（研究 4.2 の O1〜O4）: O1（窓口から押し込む）は取得の失敗時の終わりと切替後の再送が新設になる／O2（areka-ghost の起動入力で配る）は `emo2_boot/mod.rs` を通る／O3（背景スレッドから直接）は取得スレッドが kanade の送出端を持たず読み直し後の kanade は古い端の外／O4（UI が毎フレーム読んで押し込む）は起動途中に載らない。**殻が原子的な数を読む**（O2 の「殻で読んで入力に添える」の形）が、要件 2.6・5.1 と C1 の約束を同時に満たす唯一の道だった。
+
+### 9.4 設計の決定（7.1 のうち設計へ送られた項目）
+
+#### 決定 1（7.1 の 1・3.4 の直し方）: 旗はトークの終わりで下ろす
+- **Alternatives**: ⑴ kanade がトークの始まりで写しを下ろす（UI が旗を立てている間に「載っていないのに中断できない」が起きる）⑵ 合図にトークの番号を足す（`TalkCue` に番号が無く、dola まで広がる）⑶ 受け口の複製の `Drop` で `TalkEnded` を送る。
+- **Selected**: ⑶。複製はトークの再生が所有し終わりで落ちる（`drive.rs`）。`fold_no_user_break` に `TalkEnded => (false, false)` を足す。kanade の写しは UI の旗の鏡で、トークの境界で勝手に下ろさない。`nouserbreak` は `talk_active && 写し` で載せる。
+- **Rationale**: 前のトークの旗が次のトークの立ち上がりまで残る区間（研究 4.1 の表の 5 行目）が構造として消える。1 フレーム遅らせる解ではなく、旗の形を変える解である。
+- **Trade-offs**: 残るのは UI → kanade の運搬の間だけで、`talking`（`TalkDone` の運搬）と同じ種類の遅れ。取り出しの終わりに 1 回だけ送るので、同じ巡の `Enter`＋`TalkEnded` は差し引き 0 で送らない。
+- **Follow-up**: 複製の `Drop` が `TalkStarted(次)` より前に同じ線へ並ぶことを、受け口の兄弟テストと dispatcher の既存の順序で担保する。
+
+#### 決定 2（7.1 の 3）: online はプロセスの数を殻が読む
+- **Selected**: `areka_kanade::online::{OnlineCounter, OnlineGuard, PROCESS}`。殻（`actor.rs`）が受け取ったすべてのメッセージの前に数を読み `State.external.online` へ写す。持ち手は `KanadePorts::standard_started`（更新）と `fetch_and_send` の冒頭（取得）。
+- **Rationale**: 上の 9.3。
+- **Trade-offs**: グローバル。テストの決定論のため、持ち手は `&'static OnlineCounter` を引数で受け、areka の兄弟テストは関数内の `static` を渡す。`PROCESS` を立てるテストは「載っている」だけを見る。
+- **Follow-up**: `KanadePorts` に `Cell<Option<OnlineGuard>>` を持たせても `run_order(&dyn UpdatePorts)` の境界が `Sync` を求めないことを実装時に確かめる（求めるなら `Mutex<Option<_>>` へ）。
+
+#### 決定 3（7.1 の 4）: online の区間の端
+- **Selected**: 更新は `standard_started`（`OnUpdateProcessExec` の段を抜けた直後・台本の依頼も同じ所を通る）から `run_order` を抜けるまで（閉包が `drop(ports)` してから `OrderDone`）。取得は `fetch_and_send` の冒頭から関数を抜けるまで（取得口を作れない・落とせない・送れない、のどの経路でも戻る）。
+- **Rationale**: 要件 2.1（承諾待ちは含まない）と 2.3（どんな終わり方でも戻る）を 1 つの RAII で満たす。
+
+#### 決定 4（7.1 の 5）: `INACTIVE` の改め方
+- **Selected**: 本番の直渡しを 0 か所にし、`State::snapshot`（会話・選択あり）と `State::snapshot_without_talk`（会話も選択も無いと決めて送る場面）の 2 系統へ一本化する。`snapshot_of(&Phase)` は `talk_active_of(&Phase) -> bool` へ縮める。`INACTIVE` は const のまま残す（テストの既定値・`..ExecutionSnapshot::INACTIVE`）。
+- **Rationale**: 要件 5.1（起動・終了・切替のイベントにも同じ規則）。
+
+#### 決定 5（7.1 の 6）: スナップショットの形
+- **Selected**: `Copy` を外し `Clone` を残す。`balloons: Vec<BalloonBinding>`。47 か所の構造体リテラルは `..ExecutionSnapshot::INACTIVE` で吸収し、`inactive_snapshot_has_every_source_false` だけ網羅のリテラルを書き直す。昇順と重複なしは `BalloonBindings::new` が構成時に保証し、空なら載せないは導出表の 9 行目が持つ。
+- **Rationale**: 保証を 1 か所に置く（`from_states` と同じ流儀）。
+
+#### 決定 6（7.1 の 7）: 「最後に送った値」の置き場
+- **Selected**: `Emo2Wiring.balloon_status: BalloonStatusLedger`（`frame/wiring.rs`・ゴーストごとに新品）。型と配線は新しい `frame/status_report.rs`（`frame.rs` から `mod status_report;`）。`balloon_visibility.rs` には触らない。
+- **Rationale**: 相の判断を 1 つも増やさず、差分と送出を切り離す。
+
+#### 決定 7（7.1 の 8）: 見えているのに番号が取れない scope
+- **Selected**: `balloon_id = 0` で載せ、scope ごとに 1 回 `warn!(balloon_status_surface_unknown)`。
+- **Rationale**: 要件 4.7（見えているバルーンを落とさない）を優先し、記録の無い縮退を作らない。
+
+#### 決定 8（7.1 の 10）: 要件 8.4 の確かめ方
+- **Selected**: `real_pasta_test.rs` に env ゲート（`HOST32_PASTA_DLL`）の 1 件を足す。`PROCESS` の guard を持ったまま起動の挨拶の完了を待ち、OnSecondChange を雑談の間隔を超える回数回して `Value` が 0 件であることを見る。`kick_force` が立たない場面（挨拶の後・他の入力なし）で見る。env が無ければ実機の観測（`RUST_LOG=kanade=trace` の `shiori_request`）で代える。
+
+#### 決定 9（7.1 の 9・記録の置き方）
+- **Selected**: `\t` の宛先は実在の `areka-P0-sakura-time-directives` へ移す（`owner_count` も合わせる）。候補名はフォルダが無く `owner` に書けないので、`\![enter,inductionmode]`・`\![enter,passivemode]` と `Status [SSP拡張]` の `note`、`roadmap.md` の本 spec の行に書く。`report/` は作り直す。候補の起票はしない。
+
+### 9.5 統合（synthesis）の結果
+
+- **一般化**: nouserbreak と balloon の知らせは 1 つの `KanadeMsg::ExecutionState(ExecutionStateUpdate)` にまとめる（状態ごとに変種を増やさない。online は殻が読むので変種を持たない）。
+- **作る／採る**: 新しい依存は無い。原子的な数は `std::sync::atomic`、届けは既存の `mpsc`。
+- **簡素化**: kanade 側に「どのトークの旗か」を見分ける仕組みは作らない（写しは鏡・gating は `talk_active`）。バルーンの帳簿は「最後に送った値」だけで、表示の真実源は表示層のまま。
+
+### 9.6 リスクと手当て
+
+- 旗の運搬の遅れが「載っているのに中断できる」として実機で見えるか — 遅れは入力の段 1 巡＋受信箱で、`talking` と同じ種類。実機サインオフで `no_user_break_changed`・`shiori_request` の時刻を並べて確かめる。
+- `PROCESS` を立てる本番経路のテストが並列の他のテストを揺らす — 持ち手は数を引数で受け、兄弟テストは自分の `static` を渡す。`PROCESS` を使うテストは「載っている」だけを見る。
+- `ExecutionSnapshot` の `Copy` を外して広く赤になる — 47 か所は `..INACTIVE` で機械的に直る。
+- ukadoc 網羅の検査（`owner_count`・`report/` の一致）が記録の書き方で赤になる — 設計の「持ち主の記録」の手順どおりに `cargo test -p ukadoc-survey` で確かめる。
+
+### 9.7 参照
+
+- ukadoc `Status [SSP拡張]`: `ukadoc:spec_shiori3:Status_20_5bSSP_62e1_5f35_5d:1`
+- ukadoc `\![enter,nouserbreakmode]`: `ukadoc:list_sakura_script:_5c_21_5benter_2cnouserbreakmode_5d:1`
+- `crates/areka-kanade/src/status.rs`（語彙・書式・導出表）／`schedule/mod.rs`（`State::snapshot`）／`actor.rs`（殻）
+- `crates/areka/src/input_events/user_break.rs`・`emo2_boot/user_break_cue.rs`（旗）／`emo2_boot/balloon_visibility_phase.rs`（相）／`update/worker.rs`・`install/fetch_url.rs`（通信）
+- `crates/ukadoc-survey/tests/consistency/spec_checks.rs`（記録の検査の規則）
