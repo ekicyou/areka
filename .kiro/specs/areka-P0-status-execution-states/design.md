@@ -282,7 +282,7 @@ sequenceDiagram
 | 7.1 | 届けの失敗を error で | `no_user_break_send_failed`・`balloon_status_send_failed`（online は届ける線が無い＝失敗の経路が 0） | — | — |
 | 7.2 | 送った値をログで追える | `round_trip_request` の `trace!(event="shiori_request")`（無改変） | — | — |
 | 8.1 | 組み合わせの決定論テスト | `status_derive_tests.rs`（48 通り）・`external_state_tests.rs`（gating） | — | — |
-| 8.2 | 送り口を通した観測 | `tests/kanade/external_status_test.rs`・`shiori/real_tests.rs` の複合値 1 件 | — | — |
+| 8.2 | 送り口を通した観測 | `tests/kanade/external_status_test.rs`・host32 `build_request` の兄弟テスト（`shiori-host32-host/src/shiori3.rs`）の複合値 1 件 | — | — |
 | 8.3 | 既存の期待値の更新 | 構造体リテラルの追随。一周の照合（spine）は `GhostSlot` を据えないので期待値は変わらない（R2） | — | — |
 | 8.4 | emo2 が雑談しない | 別の実行ファイル `crates/areka-ghost/tests/real_pasta_online.rs` に env ゲートの 1 件（`PROCESS` の guard を持ったまま OnSecondChange を回す） | — | — |
 
@@ -570,7 +570,7 @@ pub(in crate::emo2_boot) fn report_balloons(
 ### Integration Tests
 
 - `tests/kanade/external_status_test.rs`（要件 8.2）: 既存のハーネス（`Fixture`・`spawn_harness_gated`・`RecordedCall`）で、`ExecutionState(Balloons([0=0]))`→Tick で `talking,balloon(0=0)`、トークなしで `Balloons([0=2,1=0])`→`balloon(0=2/1=0)`、トーク中に `NoUserBreak(true)`→`talking,nouserbreak`、`false` の後は `talking` だけ、が記録される。`online` は関数内の `static` を `KanadeConfig.online` で渡し、guard を持ったまま起こすと `Boot` の最初のリクエスト（OnInitialize）から `online` が載る（要件 2.6・5.1）、guard を落として次の Tick からは載らない（要件 2.3）、の両方を見る。`PROCESS` には触れない。
-- `shiori/real_tests.rs` の追加 1 件: 複合値 `talking,balloon(0=2/1=0)` が `Status:` 行にそのまま書かれ、位置が `Sender` の後・`ID` の前のまま。
+- host32 `build_request` の兄弟テスト（`crates/shiori-host32-host/src/shiori3.rs` の `mod tests`・`Status:` 行を書く唯一の口。`shiori/real_tests.rs` は文面を組み立てないので位置を見られない）の追加 1 件: 複合値 `talking,balloon(0=2/1=0)` が `Status:` 行にそのまま書かれ、位置が `Sender` の後・`ID` の前のまま。
 - 既存の一周の照合（`spine_conformance_script.rs` の `expected_statuses`）は、ハーネスが `GhostSlot`・`UserBreakWiring` を据えないため（R2）値が変わらない。追随は `spine_conformance_support.rs` の構造体リテラルだけ。
 
 ### E2E / 実機

@@ -60,7 +60,7 @@
   - 統合テストの束ねの入口に接続され、16 並列でも緑になる
   - _Requirements: 2.3, 2.6, 3.1, 3.2, 4.1, 5.1, 7.2, 8.2_
 
-- [ ] 2.6 (P) 複合した値が実際の送出の書式にそのまま書かれることを確かめる
+- [x] 2.6 (P) 複合した値が実際の送出の書式にそのまま書かれることを確かめる
   - 実際のリクエストを組み立てる口のテストに、`talking,balloon(0=2/1=0)` が `Status:` 行にそのまま書かれ、行の位置が今までどおりであることの 1 件を足す
   - 追加したテストが緑になる
   - _Requirements: 1.5, 8.2_
@@ -148,3 +148,4 @@
 - 1.1: `crates/areka` は bin crate なので兄弟テストは `cargo test -p areka --bins`（`--lib` は動かない）。`smoke_boot_loop_exit::argv_direction_boots_real_ghost_windows_and_exits_zero` は並走の負荷で揺れることがある（単独では緑）。
 - 1.1: `status.rs` の `ExecutionSnapshot` の NOTE（将来形 `snapshot_of(&Phase, &TickExtras)`）と `INACTIVE` の doc（「boot 系列・close 系列・ForceQuit 後」）は、2.2 で作り方を一本化した時点で古くなるので 2.2 で書き換える。
 - 2.4: 起動の根（OnFirstBoot・OnGhostChanged・更新）は `boot_root` の腕ごとに作り方を渡すので、根を 1 つだけ踏むテストでは他の腕の後退を捕まえられない。腕ごとに経路を持たせること。
+- 2.6: `Status:` 行を書く唯一の口は `shiori-host32-host/src/shiori3.rs` の `build_request`（x64 の in-process も同じ関数を呼ぶ）。`areka-kanade/src/shiori/real.rs` は文面を組み立てない。design の 8.2 の追跡と Testing Strategy をこれに合わせて直した。
