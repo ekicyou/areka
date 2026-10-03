@@ -137,3 +137,4 @@
 - 4.3: `server/discover` が答えるのは無状態の送り方（`_meta` の protocolVersion＋ヘッダ `MCP-Protocol-Version: 2026-07-28`）のときだけ。`_meta` だけは 400（-32020）・どちらも無しは 200（-32601）。serverInfo は `_meta."io.modelcontextprotocol/serverInfo"` の下
 - 4.4: 悪い `Host` は `/api/mcp/v1` では rmcp の `allowed_hosts` も 403 を返すので、`gate` の Host 検査を固定できるのは rmcp を通らない help の経路だけ。`isError` は true／false の両方を往復させないと「常に error」の変異が通る
 - 5.2: 差の一覧の値はすべてテストの assert から写す。survey の行に areka の測りが無ければ、文書に「未測定」と書く前にテストへ assert を足して測る（バッチ・エラーの形・無状態版の 3 つ・`Accept` の片方だけを 4.3 に追補した）
+- 6.2: Claude Code 2.1.283 は `initialize` を送らず 2026-07-28 の無状態版（`server/discover`→`tools/list`）でつなぐ。この版の list 結果は `ttlMs`・`cacheScope` が必須で、rmcp 3.5.0 は任意（`with_all_items` で欠ける）。後続 spec が `resources/list`・`prompts/list` を足すときも同じ 2 欄を付ける
