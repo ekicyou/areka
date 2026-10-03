@@ -75,10 +75,25 @@ fn initialize_returns_requested_version_for_each_of_four() {
 }
 
 /// (要件 3.1・設計 B-11) `initialize` を持たない `2026-07-28` は `2025-11-25` へ倒れる（成功・200）。
+/// 無状態版の形（`_meta`＋ヘッダ）で送っても同じ（差の一覧へ。SSP は 400）。
 #[test]
 fn initialize_with_no_initialize_version_falls_back_to_2025_11_25() {
     let (_server, addr) = serve(ToolRegistry::default());
     let result = result_of(&post_rpc(addr, &[], &initialize("2026-07-28")));
+    assert_eq!(result["protocolVersion"], "2025-11-25", "{result}");
+    // 無状態版の形（本文の `_meta` と `MCP-Protocol-Version: 2026-07-28`）で送っても、
+    // `initialize` は旧式の扱いで 200・`2025-11-25`（差の一覧へ。SSP は 400）。
+    let mut body: Value = serde_json::from_str(&initialize("2026-07-28")).unwrap();
+    body["params"]["_meta"] = json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientInfo": { "name": "areka-test", "version": "0" }
+    });
+    let result = result_of(&post_rpc(
+        addr,
+        &[("MCP-Protocol-Version", "2026-07-28")],
+        &body.to_string(),
+    ));
     assert_eq!(result["protocolVersion"], "2025-11-25", "{result}");
 }
 
@@ -235,7 +250,7 @@ fn get_v1_has_no_form() {
 /// (要件 3.12) 無状態版の `server/discover`（本文の `_meta` と `MCP-Protocol-Version: 2026-07-28`）。
 /// 測った欄（差の一覧へ）: `supportedVersions` は 5 版・`capabilities` は `tools` だけ・
 /// `instructions`・`ttlMs: 0`・`cacheScope: "private"`・`resultType: "complete"`・
-/// serverInfo は `_meta.io.modelcontextprotocol/serverInfo`。
+/// serverInfo は `_meta.io.modelcontextprotocol/serverInfo`。本文と食い違う `Mcp-Method` は 400・`-32020`。
 #[test]
 fn server_discover_stateless() {
     let (_server, addr) = serve(ToolRegistry::default());
@@ -250,7 +265,7 @@ fn server_discover_stateless() {
             ("MCP-Protocol-Version", "2026-07-28"),
             ("Mcp-Method", "server/discover"),
         ],
-        &rpc("server/discover", Some(1), Some(params)),
+        &rpc("server/discover", Some(1), Some(params.clone())),
     );
     let result = result_of(&response);
     assert_eq!(
@@ -271,6 +286,23 @@ fn server_discover_stateless() {
         result["_meta"]["io.modelcontextprotocol/serverInfo"],
         json!({ "name": "areka-mcp-server", "version": env!("CARGO_PKG_VERSION") }),
         "{result}"
+    );
+    // `Mcp-Method` が本文のメソッドと食い違うと 400・`-32020`（SSP と同じ番号・文言は違う）。
+    let response = post_rpc(
+        addr,
+        &[
+            ("MCP-Protocol-Version", "2026-07-28"),
+            ("Mcp-Method", "tools/list"),
+        ],
+        &rpc("server/discover", Some(2), Some(params)),
+    );
+    assert_eq!(response.status, 400, "{response:?}");
+    assert_eq!(
+        response.json(),
+        json!({ "jsonrpc": "2.0", "id": 2, "error": {
+            "code": -32020,
+            "message": "Mcp-Method header `tools/list` does not match body method `server/discover`"
+        } })
     );
 }
 
@@ -294,6 +326,8 @@ fn protocol_version_header_old_or_missing_is_passthrough() {
 }
 
 /// (要件 3.13) 5 版のどれでもないヘッダ値は rmcp のまま 400・平文（差の一覧へ）。
+/// `2026-07-28` で `_meta` の無い `ping` は 400・`-32020`（`Mcp-Method` 欠落）、
+/// `Mcp-Method` を付けると 400・`-32602`（`_meta` 欠落）。
 #[test]
 fn unknown_protocol_version_header_is_rejected() {
     let (_server, addr) = serve(ToolRegistry::default());
@@ -307,9 +341,37 @@ fn unknown_protocol_version_header_is_rejected() {
         String::from_utf8_lossy(&response.body),
         "Bad Request: Unsupported MCP-Protocol-Version: 1999-01-01"
     );
+    // `2026-07-28` のヘッダで `_meta` の無い `ping`（差の一覧へ。SSP は 400・`-32602`）。
+    // rmcp は `_meta` を見る前に `Mcp-Method` の欠落で 400・`-32020` を返す。
+    let response = post_rpc(
+        addr,
+        &[("MCP-Protocol-Version", "2026-07-28")],
+        &rpc("ping", Some(2), None),
+    );
+    assert_eq!(response.status, 400, "{response:?}");
+    assert_eq!(
+        response.json(),
+        json!({ "jsonrpc": "2.0", "id": 2, "error": {
+            "code": -32020, "message": "missing required Mcp-Method header" } })
+    );
+    // `Mcp-Method: ping` も付けると `_meta` の検査まで届き、400・`-32602`（SSP と同じ番号）。
+    let response = post_rpc(
+        addr,
+        &[
+            ("MCP-Protocol-Version", "2026-07-28"),
+            ("Mcp-Method", "ping"),
+        ],
+        &rpc("ping", Some(3), None),
+    );
+    assert_eq!(response.status, 400, "{response:?}");
+    assert_eq!(
+        response.json(),
+        json!({ "jsonrpc": "2.0", "id": 3, "error": { "code": -32602, "message": "Invalid params: request _meta is missing or has malformed required fields: io.modelcontextprotocol/protocolVersion, io.modelcontextprotocol/clientCapabilities" } })
+    );
 }
 
 /// (要件 5.1・設計 B-8) `Accept` の無い `ping` は rmcp が 406 で拒む（差の一覧へ）。
+/// 片方だけ（`application/json`／`text/event-stream`）でも 406・同じ平文。
 #[test]
 fn accept_header_missing_is_406() {
     let (_server, addr) = serve(ToolRegistry::default());
@@ -321,6 +383,21 @@ fn accept_header_missing_is_406() {
         rpc("ping", Some(1), None).as_bytes(),
     );
     assert_eq!(response.status, 406, "{response:?}");
+    for accept in ["application/json", "text/event-stream"] {
+        let response = request(
+            addr,
+            "POST",
+            MCP_V1,
+            &[("Content-Type", "application/json"), ("Accept", accept)],
+            rpc("ping", Some(1), None).as_bytes(),
+        );
+        assert_eq!(response.status, 406, "{accept}: {response:?}");
+        assert_eq!(
+            String::from_utf8_lossy(&response.body),
+            "Not Acceptable: Client must accept both application/json and text/event-stream",
+            "{accept}"
+        );
+    }
 }
 
 /// (要件 5.1・設計 B-7) 上限（4 MiB）を 1 バイト超えた本文は 413（差の一覧へ）。

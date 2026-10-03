@@ -644,7 +644,7 @@ impl Drop for McpServer { /* 上記 */ }
 | テスト | 固定すること | 要件 |
 |---|---|---|
 | `initialize_returns_requested_version_for_each_of_four` | 旧式の 4 版で `protocolVersion` が要求どおり・`capabilities.tools` 在り・`resources`／`prompts` 無し・`serverInfo` が `areka-mcp-server`／`CARGO_PKG_VERSION`・`instructions` が空でない | 3.1 |
-| `initialize_with_no_initialize_version_falls_back_to_2025_11_25` | `2026-07-28` を要求 → 成功・`protocolVersion` が `2025-11-25`（差の一覧の「版の交渉」の行） | 3.1 |
+| `initialize_with_no_initialize_version_falls_back_to_2025_11_25` | `2026-07-28` を要求 → 成功・`protocolVersion` が `2025-11-25`（差の一覧の「版の交渉」の行）。無状態版の形（`_meta`＋`MCP-Protocol-Version: 2026-07-28`）でも 200・`2025-11-25`（SSP は 400） | 3.1 |
 | `initialize_unknown_version_falls_back` | `1999-01-01` → 成功・`protocolVersion` が 5 版のどれか（値を差の一覧へ） | 3.2 |
 | `initialized_notification_is_202_without_body` | 202・本文 0 バイト | 3.3 |
 | `tools_list_is_empty` | `tools: []` | 3.4 |
@@ -657,10 +657,10 @@ impl Drop for McpServer { /* 上記 */ }
 | `ping_without_initialize_and_without_session_id` | `initialize` 無しの `ping`／`tools/list` が 200・応答に `Mcp-Session-Id` 無し | 3.9 |
 | `response_is_single_application_json` | `Content-Type` が `application/json`・本文が JSON 1 件・`text/event-stream` でない | 3.10 |
 | `get_v1_has_no_form` | `GET /api/mcp/v1` → 405（本文に `<form` 無し） | 3.11 |
-| `server_discover_stateless` | `server/discover` → `supportedVersions`（5 版）・`capabilities`・`instructions`・serverInfo | 3.12 |
+| `server_discover_stateless` | `server/discover` → `supportedVersions`（5 版）・`capabilities`・`instructions`・serverInfo。本文と食い違う `Mcp-Method: tools/list` → 400・`-32020`「Mcp-Method header \`tools/list\` does not match body method \`server/discover\`」 | 3.12 |
 | `protocol_version_header_old_or_missing_is_passthrough` | ヘッダ無し・4 旧版のそれぞれで `ping` が `{}` | 3.13 |
-| `unknown_protocol_version_header_is_rejected` | `MCP-Protocol-Version: 1999-01-01` → 4xx（400 の見込み） | 3.13 |
-| `accept_header_missing_is_406` | `Accept` 無しの `ping` → 406（差の一覧の行） | 5.1（B-8） |
+| `unknown_protocol_version_header_is_rejected` | `MCP-Protocol-Version: 1999-01-01` → 4xx（400 の見込み）。`2026-07-28` で `_meta` の無い `ping` → 400・`-32020`「missing required Mcp-Method header」、`Mcp-Method: ping` も付けると 400・`-32602`「Invalid params: request _meta is missing or has malformed required fields: …」 | 3.13 |
+| `accept_header_missing_is_406` | `Accept` 無しの `ping` → 406（差の一覧の行）。`Accept` が `application/json` だけ・`text/event-stream` だけでも 406・平文「Not Acceptable: Client must accept both application/json and text/event-stream」 | 5.1（B-8） |
 | `body_over_limit_is_413` | 4 MiB＋1 の本文 → 413（差の一覧の行） | 5.1（B-7） |
 
 **server_gate_help_tests.rs**（検査・help・登録口）
