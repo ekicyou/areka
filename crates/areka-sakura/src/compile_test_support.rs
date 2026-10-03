@@ -18,6 +18,15 @@ pub(super) fn command_of(cue: &Cue) -> &CueCommand {
     }
 }
 
+/// `Cue::payload` から `BarrierKind` を取り出すヘルパ（barrier 檻用・腕の檻と
+/// `set,choicetimeout` の檻で共有）。
+pub(super) fn barrier_of(cue: &Cue) -> &BarrierKind {
+    match &cue.payload {
+        CuePayload::Barrier(kind) => kind,
+        other => panic!("expected CuePayload::Barrier, got {other:?}"),
+    }
+}
+
 /// `Cue` 単位のフィールド等価（`Cue` は PartialEq 非導出のためフィールド比較）。
 /// `start_time`・`duration` は決定性の観測ゆえビット同一（`==`）を要求する（compile が
 /// テキスト cue へ焼き込む再生時間 D の回帰を素通しさせない・task 5.1 申し送り）。

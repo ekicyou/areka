@@ -11,12 +11,15 @@
 // =============================================================================
 
 use super::test_support::{
-    capture_logs, pos_of, resnap_world, settled_sizes, spawn_resnap_windows,
+    PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, capture_logs, count_level, pos_of, resnap_world,
+    settled_sizes, spawn_resnap_windows,
 };
 use super::*;
 
 use crate::app_exit::{WindowsEpoch, close_windows_for_restart};
-use crate::placement::chain_finalize::{ChainFinalizeStall, ChainFinalized};
+use crate::placement::chain_finalize::{
+    CHAIN_FINALIZE_STALL_FRAMES, ChainFinalizeStall, ChainFinalized,
+};
 use crate::placement::chain_realign::ChainRealignPending;
 use crate::placement::follow::MonitorSnapshot;
 use wintf::ecs::window::ZOrderChainPlan;
@@ -102,5 +105,127 @@ fn next_window_set_finalizes_once_like_first_boot() {
         resolved_lines(&first),
         resolved_lines(&second),
         "次の一式の再解決は初回と同じ from_x→to_x"
+    );
+}
+
+// -----------------------------------------------------------------------------
+// ゴースト待ちは見送りに数えない（areka-P0-restart-chain-finalize-stall 要件 1・2・3）
+//
+// 窓の一式が無い巡（閉じた後）と、窓は在るが相方のシェルがまだ一度も表示されていない巡は、
+// ゴーストの台本しだいで長さの決まる正常な待ちなので数えない。全スコープが表示された後に
+// areka 自身の理由で見送る巡だけを数え、今日と同じ 600 回目に WARN を 1 回出す。
+// -----------------------------------------------------------------------------
+
+/// 捕捉行のうち WARN の先頭 1 行（失敗のときに貼る）。
+fn first_warn(logs: &[String]) -> &str {
+    logs.iter()
+        .find(|l| l.contains("level=WARN"))
+        .map(String::as_str)
+        .unwrap_or("(無し)")
+}
+
+/// 窓を全部閉じた後の窓なしの巡は数えない。何巡回しても WARN は出ず、外した見送りの数の記録も
+/// 作り直さない（要件 1.1・1.3・3.1）。
+#[test]
+fn no_window_frames_after_close_are_not_counted() {
+    let (mut world, _gw) = resnap_world();
+    let _ = close_windows_for_restart(&mut world);
+
+    let logs = capture_logs(|| {
+        for _ in 0..CHAIN_FINALIZE_STALL_FRAMES {
+            finalize_chain_once_with(&settled_sizes(), &mut world);
+        }
+    });
+
+    assert_eq!(
+        (
+            count_level(&logs, "WARN"),
+            world
+                .get_resource::<ChainFinalizeStall>()
+                .map(|s| (s.deferrals, s.reported)),
+            world.contains_resource::<ChainFinalized>(),
+        ),
+        (0, None, false),
+        "(窓なしで {CHAIN_FINALIZE_STALL_FRAMES} 巡回した後の WARN の件数, \
+         見送りの数の記録 (数, 報告済み), 確定の印)・WARN の先頭: {}",
+        first_warn(&logs)
+    );
+}
+
+/// 閉じる → 窓なし → 新しい一式で相方が未表示 → 全スコープ表示済みで areka 自身の理由の見送り、
+/// を 1 本で歩く。数え始めは表示が揃ってからで、そこから 600 回目でちょうど 1 件の WARN が出て、
+/// それより前と後には出ない（要件 1.4・2.1〜2.3・3.5）。
+#[test]
+fn next_window_set_counts_only_areka_deferrals_after_all_shown() {
+    let (mut world, _gw) = resnap_world();
+    let _ = close_windows_for_restart(&mut world);
+
+    // 窓なしの巡（起こし直しで窓を外した直後）。
+    let no_window = capture_logs(|| {
+        for _ in 0..CHAIN_FINALIZE_STALL_FRAMES {
+            finalize_chain_once_with(&settled_sizes(), &mut world);
+        }
+    });
+
+    // 新しい一式。scope 0 は窓の寸どおりに表示済み・相方の scope 1 だけがまだ一度も表示されて
+    // いない（ゴーストが scope 1 へ最初の `\s` を出していない）。scope 0 の寸を食い違わせると
+    // 走査が scope 0 で先に止まり、この区間が areka 自身の待ちとして数えられてしまう。
+    let _gw2 = spawn_resnap_windows(&mut world);
+    let unshown = PerTargetSizes::new([(0, Some(SPAWN_SIZE_0)), (1, None)]);
+    let partner_unshown = capture_logs(|| {
+        for _ in 0..CHAIN_FINALIZE_STALL_FRAMES {
+            finalize_chain_once_with(&unshown, &mut world);
+        }
+    });
+
+    // 全スコープが表示された後、scope 0 の実表示寸（500x687）が窓の寸（434x687）と食い違った
+    // まま＝再アンカーが未 landing（areka 自身の待ち）。確定の処理は再スナップを呼ばないので、
+    // この食い違いは何巡回しても解けない。
+    let not_landed = PerTargetSizes::new([(0, Some((500, 687))), (1, Some(SPAWN_SIZE_1))]);
+    let before_threshold = capture_logs(|| {
+        for _ in 0..(CHAIN_FINALIZE_STALL_FRAMES - 1) {
+            finalize_chain_once_with(&not_landed, &mut world);
+        }
+    });
+    let at_threshold = capture_logs(|| finalize_chain_once_with(&not_landed, &mut world));
+    let after_threshold = capture_logs(|| {
+        for _ in 0..CHAIN_FINALIZE_STALL_FRAMES {
+            finalize_chain_once_with(&not_landed, &mut world);
+        }
+    });
+
+    assert_eq!(
+        (
+            count_level(&no_window, "WARN"),
+            count_level(&partner_unshown, "WARN"),
+            count_level(&before_threshold, "WARN"),
+            count_level(&at_threshold, "WARN"),
+            count_level(&after_threshold, "WARN"),
+        ),
+        (0, 0, 0, 1, 0),
+        "WARN の件数 (窓なしの {n} 巡, 相方が未表示の {n} 巡, 表示が揃ってから {m} 巡, \
+         表示が揃ってから {n} 回目, その後の {n} 巡)・最初の WARN: {}",
+        [
+            &no_window,
+            &partner_unshown,
+            &before_threshold,
+            &at_threshold,
+            &after_threshold
+        ]
+        .into_iter()
+        .map(|l| first_warn(l))
+        .find(|w| *w != "(無し)")
+        .unwrap_or("(無し)"),
+        n = CHAIN_FINALIZE_STALL_FRAMES,
+        m = CHAIN_FINALIZE_STALL_FRAMES - 1,
+    );
+    let diag = first_warn(&at_threshold);
+    assert!(
+        diag.contains("scope 0") && diag.contains("再アンカーが未 landing"),
+        "WARN は areka 自身の理由（scope 0 の再アンカーが未 landing）を名指しする: {diag}"
+    );
+    assert!(
+        !world.contains_resource::<ChainFinalized>(),
+        "停滞の間は確定させない"
     );
 }

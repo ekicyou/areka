@@ -552,6 +552,9 @@ where
 #[path = "drive_choice_tests.rs"]
 mod choice_tests;
 #[cfg(test)]
+#[path = "drive_choice_timeout_tests.rs"]
+mod choice_timeout_tests;
+#[cfg(test)]
 #[path = "drive_delivery_tests.rs"]
 mod delivery_tests;
 #[cfg(test)]

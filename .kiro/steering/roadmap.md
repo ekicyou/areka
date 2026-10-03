@@ -1,6 +1,6 @@
 ---
 inclusion: manual
-updated_at: 2026-10-02
+updated_at: 2026-10-03
 ---
 
 # Roadmap — areka（α 後・M3 へ向けた並べ直し）
@@ -81,8 +81,9 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 | B3〜B4（α） | 09-26〜09-28 | `alpha-package`（PR#190）・`pilot-dropfiles-on-wuc-window`（PR#191）・`ghost-shell-balloon-switch`（PR#192）・`ghost-change-name-resolution`（PR#194）・`session-mark-residue`（PR#195） | ゴースト切替・汎用の通知の入口 `KanadeMsg::RaiseEvent`・起動中の印（きれいに終わらなければ次は emo2 が `halt` を伝える）・配布 zip |
 | B5〜B6（α） | 09-28〜09-30 | `frame-phases-after-exit`（PR#197）・`ghost-install`（PR#198）・`file-drop`（PR#201）・`balloon-color-emoji`（PR#202） | メニューと台本と投げ込みからのインストール・カラー絵文字と書記素クラスタ |
 | B7〜B9（α） | 09-30〜10-02 | `network-update`（PR#203）・`shell-balloon-switch`（PR#205）・`balloon-reappear-short-talk`（PR#206）・`alpha-release-signoff`（PR#210・**α 完成宣言**） | ネットワーク更新・シェルとバルーンの切替・実機一周 13 項目 |
+| C1 | 10-03〜 | `restart-chain-finalize-stall`（PR#214）・`choice-timeout-directive`（PR#215）・`drag-click-without-move`（PR#216）・`emo-text-file-split`（PR#217）・`release-package-versioned`（PR#218）・`mcp-server-core`（PR#219） | 初期配置の確定の見送りはゴースト待ち〔窓が無い・まだ一度も表示されていない〕を数えず、areka 自身の待ちだけを数える（起こし直しの後の `deferrals=600` の空鳴りを止めた）・`\![set,choicetimeout,時間]` を compile が読んで選択待ちへ渡す（`0`・負の値で時間切れなし・最後の指定が勝つ・読めない値は既定＋WARN）。再生層 dola は選択待ちの区切りを値で飛ばしも解きもしない |・動かさないクリックで窓の位置を保存しない（wintf の累積器が開始を積んでいない終了を捨て、知らせの種を積んだ順の待ち行列で運ぶ。速いドラッグも開始 → 終了の順に届き、キャラクターは行き先へ置いてから保存）・文字とバルーンの 6 本と `region.rs` を振る舞いを変えずに役割で分けた（最大 571 行・新しい子 12 本＋`region_tests.rs`・`layout_inner` を分岐の種類ごとの関数へ・前後のテスト 9,371 本が名前も結果も一致・実機で 4 つの振る舞いを確認）・配布 zip を版入りの固定の名前（`areka-{版}-{x64\|arm64}.zip`）と隣の `.sha256` で x64・arm64 とも作る（`tools/package.ps1`＝旧名から改名・完成品は全段が緑のときだけ現れる・`-Check` の展開先は `target\package` の下で合格なら片付ける）・winget のリンク経由で起動しても exe の本当の場所から根・補助 exe・記憶の置き場を引く（`boot_config.rs` の `exe_location`・手元のマニフェストで実機確認）・新クレート `areka-mcp`（rmcp 3.5.0・無状態・JSON 単発・ツール 0 本・登録口・help・`Origin`／`Host` の検査）を `fn main()` の 1 行で立てる。既定の待受は 9801 → 9821 を SSP と早い者勝ち・使用中なら隣 +1〜+9（開発者裁定）。実機で Claude Code 2.1.283 が無状態版で `tools/list` を拒んだのを `ttlMs`／`cacheScope` で直した・SSP との差の一覧 18 行（直した 1）
 
-- 完了 spec 直下エントリ＝**214**（`.kiro/specs/completed/` 直下・2026-10-02 実数え＝フォルダ 213＋`graphics-rendering-stability.md` 1）。⚠ **引き算で導かず毎回実数えする**。
+- 完了 spec 直下エントリ＝**220**（`.kiro/specs/completed/` 直下・2026-10-03 実数え＝フォルダ 219＋`graphics-rendering-stability.md` 1）。⚠ **引き算で導かず毎回実数えする**。
 - M1 の持ち越しのうち残るのは `dpi-transition-two-tick-bounce`（開発者が許容）と `zorder-chain-residue` A-2（据え置き）だけ。M-dual は退役。
 - 個々の完了行の全文（種別・議題・完了時の所見）は history「2026-10-02 棚卸⑳退避」。
 
@@ -93,11 +94,11 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 
 | Wave | ユニット（優先順） | 開始コマンド | 編成根拠（触るファイル）|
 |---|---|---|---|
-| **C1**（7 本並走・**バグ 5 本＋優先 2 本**＝バルーンの列と MCP の先頭） | ① `drag-click-without-move`（バグ） ∥ ② `choice-timeout-directive`（バグ） ∥ ③ `restart-chain-finalize-stall`（バグ） ∥ ④ `status-execution-states`（バグ・潜在） ∥ ⑤ `release-package-versioned`（バグ＝道具の後片付けを合流・配布の列の先頭） ∥ ⑥ `emo-text-file-split`（文字とバルーンの列の先頭） ∥ ⑦ `mcp-server-core`（MCP の土台・依存を足す 1 本） | `/kiro-start areka-P0-<名>` | ①＝`crates/wintf/src/ecs/{window_proc,drag}/`・`crates/areka/src/placement/` のテスト。②＝`crates/areka-sakura/src/compile.rs`。③＝`crates/areka/src/emo2_boot/frame/drain_resnap.rs`。④＝`crates/areka-kanade/src/status.rs` と kanade への届け口・`crates/areka/src/emo2_boot/` の届け元（`user_break_cue.rs`・`balloon_visibility_phase.rs` など）・`crates/areka/src/update/desk.rs`。**④ は ⑥ の 6 本（`emo2_boot/balloon_visibility.rs`・`input_events/balloon.rs` ほか）・`emo2_boot/mod.rs`・`input_events/mod.rs`・③ の `drain_resnap.rs` に触らない**（要るなら止めて報告）。⑤＝`tools/package-alpha.ps1`・`crates/areka/src/boot_config.rs`。⑥＝`crates/areka-emo-text/src/{actor,layout,viewbox,viewbox_draw}.rs`・`input_events/balloon.rs`・`emo2_boot/balloon_visibility.rs` とモジュールの宣言。⑦＝新規 `crates/areka-mcp/`・`crates/areka/Cargo.toml`（1 行）・`crates/areka/src/main.rs`（`fn main()` の 2 か所）・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`（生成物）。④⑥は `main.rs` に触らない |
+| **C1**（7 本並走・**バグ 5 本＋優先 2 本**＝バルーンの列と MCP の先頭） | ① `drag-click-without-move`（バグ・✅ 10-03 完了） ∥ ② `choice-timeout-directive`（バグ・✅ 10-03 完了） ∥ ③ `restart-chain-finalize-stall`（バグ・✅ 10-03 完了） ∥ ④ `status-execution-states`（バグ・潜在） ∥ ⑤ `release-package-versioned`（バグ＝道具の後片付けを合流・配布の列の先頭・✅ 10-03 完了） ∥ ⑥ `emo-text-file-split`（文字とバルーンの列の先頭・✅ 10-03 完了） ∥ ⑦ `mcp-server-core`（MCP の土台・依存を足す 1 本・✅ 10-03 完了） | `/kiro-start areka-P0-<名>` | ①＝`crates/wintf/src/ecs/{window_proc,drag}/`・`crates/areka/src/placement/` のテスト。②＝`crates/areka-sakura/src/compile.rs`。③＝`crates/areka/src/emo2_boot/frame/drain_resnap.rs`。④＝`crates/areka-kanade/src/status.rs` と kanade への届け口・`crates/areka/src/emo2_boot/` の届け元（`user_break_cue.rs`・`balloon_visibility_phase.rs` など）・`crates/areka/src/update/desk.rs`。**④ は ⑥ の 6 本（`emo2_boot/balloon_visibility.rs`・`input_events/balloon.rs` ほか）・`emo2_boot/mod.rs`・`input_events/mod.rs`・③ の `drain_resnap.rs` に触らない**（要るなら止めて報告）。⑤＝`tools/package.ps1`・`crates/areka/src/boot_config.rs`。⑥＝`crates/areka-emo-text/src/{actor,layout,viewbox,viewbox_draw}.rs`・`input_events/balloon.rs`・`emo2_boot/balloon_visibility.rs` とモジュールの宣言。⑦＝新規 `crates/areka-mcp/`・`crates/areka/Cargo.toml`（1 行）・`crates/areka/src/main.rs`（`fn main()` の 2 か所）・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`（生成物）。④⑥は `main.rs` に触らない |
 | **C2**（6 本並走・C1 の後・**優先 4 本＋その他 2 本**） | ① `shell-balloon` ∥ ② `release-ci-workflow`（配布） ∥ ③ `crates-io-publish`（配布） ∥ ④ `mcp-tool-entrances`（MCP の入り口 10 本） ∥ ⑤ `translate-pipeline`（その他・C3 の `balloon-lifecycle-events` の前提） ∥ ⑥ `install-companion-canon`（その他） | `/kiro-start areka-P0-<名>` | ①＝シェルのパーサ・`areka-seriko/src/actor.rs`・emo-text・emo-present の差し込み口・`emo2_boot/`・`input_events/`。②＝`.github/workflows/release.yml`。③＝各 `Cargo.toml` の欄（依存は変えない・C1 で入った `areka-mcp` の `publish` も決める）・`.github/workflows/crates-io.yml`・`dist/README.txt`・`README.md`。④＝`crates/areka-mcp/src/tools/`・新規 `crates/areka/src/mcp/`・`ghost_session.rs`・`main.rs`。⑤＝`crates/areka-kanade/src/`（`schedule/steady.rs` の分割を含む）・`areka-sakura/src/sysvar.rs`。⑥＝`crates/areka-nar/src/`・`crates/areka/src/install/terms.rs`・`crates/areka-ghost/src/catalog.rs`・`crates/areka/src/boot_config.rs`。①は `emo-text-file-split` と `status-execution-states`（どちらも `emo2_boot`）の後、②③⑥は `release-package-versioned` の後、④は `mcp-server-core` の後。**④ は `Cargo.toml` を触らない**（③ と共有しないため・要るなら止めて報告）。`install-live-target-hazards` は ③ と `dist/README.txt` を分け合うので C4 の候補 |
 | **初回リリース**（C2 の後・spec でなく手順） | `release-cycle` の初回（`v0.0.2`）＝版を上げる PR → squash マージ → 手元で crates.io へ初回の公開と Trusted Publishing の設定 → タグ → Actions が x64／arm64 の zip と Release | `/kiro-impl areka-P0-release-cycle` | 初回だけは `/kiro-start areka-P0-release-cycle` で要件〜タスクを作ってから。以後は毎回 `/kiro-impl` |
 | **C3**（8 本・**予定**＝C2 の着地で brief が動くので、着手の前に触るファイルを照合し直す） | ① `winget-manifest-submission`（配布・初回の手提出＝Release の実在が要る） ∥ ② `balloon-font-file` ∥ ③ `surface-element-nesting` ∥ ④ `balloon-lifecycle-events` ∥ ⑤ `animated-image-decode`（動く画像の土台・依存を足す 1 本） ∥ ⑥ `mcp-get-property` ∥ ⑦ `mcp-expression-table` ∥ ⑧ `mcp-log-history` | `/kiro-start areka-P0-<名>` | ①＝`dist/winget/`・`.github/workflows/winget.yml`・`dist/README.txt`・`README.md`。②＝emo-text の `draw_catalog.rs`・`draw.rs`・`draw_metrics.rs`・`actor_decoration.rs`・`emo2_boot/frame/attach.rs`。③＝`crates/areka-parsers/src/shell/{model,decode}.rs`・`areka-emo-atlas/src/manifest.rs`・`areka-emo-compose`・`areka-seriko`・`areka-emo-present/src/cache.rs`。④＝kanade の `schedule/{steady,events}.rs`・`emo2_boot/{talk_lifecycle.rs, balloon_visibility 系}`・`input_events/` のバルーン。⑤＝`crates/areka-emo-atlas/src/{decode.rs,decode/,lib.rs,table.rs}`・`crates/areka-emo-atlas/Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`（生成物）＝**`AtlasKey` と `manifest.rs` を変えない設計で**（③ と共有 0）。⑥⑦⑧＝`mcp-tool-entrances` の設計が固定する「自分のツールのファイル」と、⑥ `areka-ghost/src/runtime.rs`・⑦ 表情の表・⑧ tracing の履歴。**照合の要点**＝②と④は同じ `emo2_boot` の中の別のファイル・②と③は emo-text と compose の境目・⑥〜⑧は `mcp-tool-entrances` の design の干渉台帳で確かめる。8 本が多ければ ⑥〜⑧ から C4 へ回す |
-| **C4 の候補**（次の棚卸で組む） | バグ＝C3 までに見つかったもの ／ 優先＝`animated-image-playback`（`animated-image-decode`＋`surface-element-nesting` の後）・`anchor-tag-canon` の働きの側（`balloon-font-file` と `choice-timeout-directive` の後）・`balloon-canon-residue`・`mcp-kanade-tools`・`mcp-dump-images`・`mcp-reload`・`mcp-stdio-bridge`（→ 最後に `mcp-strict-errors`） ／ その他＝`install-live-target-hazards`・`coverage-roadmap-refresh`・`property-query-channels`・`popup-menu-residue` | — | 同じ決まりで バグ → 優先 → その他 の順に席を埋める |
+| **C4 の候補**（次の棚卸で組む） | バグ＝C3 までに見つかったもの ／ 優先＝`animated-image-playback`（`animated-image-decode`＋`surface-element-nesting` の後）・`anchor-tag-canon` の働きの側（`balloon-font-file` と `choice-timeout-directive` の後）・`balloon-canon-residue`・`mcp-kanade-tools`・`mcp-dump-images`・`mcp-reload`・`mcp-stdio-bridge`（→ 最後に `mcp-strict-errors`） ／ その他＝`install-live-target-hazards`・`coverage-roadmap-refresh`・`property-query-channels`・`popup-menu-residue`・`sakura-time-critical`（`status-execution-states` の後） | — | 同じ決まりで バグ → 優先 → その他 の順に席を埋める |
 | **保留** | `tick-gate-adoption` | — | 「長い試行はしない」と両立する短い A/B の測り方を先に組む。計測を汚すので他と並べない |
 
 ### 直列の列（同じ列の spec は同時に走らせない・列が違えば並べられる）
@@ -106,11 +107,11 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 
 | 列 | 重なる場所 | 並び（先頭から） |
 |---|---|---|
-| **文字とバルーン** | `crates/areka-emo-text/src/`（`state.rs` の `CueCommand::Custom` の腕・実行時の状態の構造体）・`crates/areka-parsers/src/balloon/{model,parse}.rs`・`crates/areka/src/input_events/` のバルーン | `emo-text-file-split`（C1）→ `shell-balloon`（C2）→ `balloon-font-file`（C3）→ `anchor-tag-canon`（働きの側・優先度 高）→ `text-typesetting` → `talk-fast-forward` → `balloon-markers` → `text-ruby` → `text-reveal-fade` → `balloon-scroll-fade` → `text-align-shadow-canon` → `choice-marker-styling` → `anchor-tag-canon`（装飾）→ `text-reveal-dance`（夢） |
+| **文字とバルーン** | `crates/areka-emo-text/src/`（`state.rs` の `CueCommand::Custom` の腕・実行時の状態の構造体）・`crates/areka-parsers/src/balloon/{model,parse}.rs`・`crates/areka/src/input_events/` のバルーン | ~~`emo-text-file-split`（C1）~~ ✅ 10-03（分けた先と各子へ足す予定の spec は `completed/areka-P0-emo-text-file-split/design.md` の File Structure Plan と各子の先頭の doc。後続の brief の file:line は分割前の値なので、設計の前に読み替える）→ `shell-balloon`（C2）→ `balloon-font-file`（C3）→ `anchor-tag-canon`（働きの側・優先度 高）→ `text-typesetting` → `talk-fast-forward` → `balloon-markers` → `text-ruby` → `text-reveal-fade` → `balloon-scroll-fade` → `text-align-shadow-canon` → `choice-marker-styling` → `anchor-tag-canon`（装飾）→ `text-reveal-dance`（夢） |
 | **シェルの element** | `crates/areka-parsers/src/shell/{model,decode}.rs`・`crates/areka-emo-compose/`・`crates/areka-emo-atlas/src/manifest.rs` | `shell-balloon`（C2）→ `surface-element-nesting`（C3）→ `animated-image-playback`（`animated-image-decode`＝C1 も前提・C4 の候補）→ `balloon-element-order` → `surfaces-basepos`（据え置き） |
 | **kanade の進行** | `crates/areka-kanade/src/schedule/{steady,events,change}.rs`・`msg.rs` | `translate-pipeline`（C2）→ `balloon-lifecycle-events`（C3・項目 8・10＝優先の段なので前へ）→ `property-query-channels` → `network-update-canon-order` → `mcp-kanade-tools` → `makoto-dll-host` |
-| **台本のコンパイル** | `crates/areka-sakura/src/compile.rs` | `choice-timeout-directive`（C1）→ `anchor-tag-canon`（働きの側）→ `talk-fast-forward` → `sakura-time-directives`（残り） |
-| **配布と公開** | `tools/package-alpha.ps1`・`.github/workflows/`・`Cargo.toml` 群・`dist/README.txt`・`README.md` | `release-package-versioned`（C1）→ `release-ci-workflow` ∥ `crates-io-publish`（C2・workflow のファイルを分けて共有 0）→ `release-cycle` の初回（`v0.0.2`）→ `winget-manifest-submission`（C3）→ `release-code-signing`（任意）。**開発者「インストーラー関係は優先リリースしたい」（10-02）＝各ウェーブに 1〜2 本ずつ必ず入れる** |
+| **台本のコンパイル** | `crates/areka-sakura/src/compile.rs` | ~~`choice-timeout-directive`（C1）~~ ✅ 10-03 → `anchor-tag-canon`（働きの側）→ `talk-fast-forward` → `sakura-time-directives`（残り） |
+| **配布と公開** | `tools/package.ps1`・`.github/workflows/`・`Cargo.toml` 群・`dist/README.txt`・`README.md` | ~~`release-package-versioned`（C1）~~ ✅ 10-03 → `release-ci-workflow` ∥ `crates-io-publish`（C2・workflow のファイルを分けて共有 0）→ `release-cycle` の初回（`v0.0.2`）→ `winget-manifest-submission`（C3）→ `release-code-signing`（任意）。**開発者「インストーラー関係は優先リリースしたい」（10-02）＝各ウェーブに 1〜2 本ずつ必ず入れる** |
 | **`emo2_boot` の結線** | `crates/areka/src/emo2_boot/{mod,ghost_switch,consumer_ledger}.rs`・`frame/{attach,switch}.rs` | `status-execution-states`（C1・バグ）→ `shell-balloon`（C2）→ `balloon-canon-residue`（項目 2 から）→ `property-query-channels` → `currentghost-property-tree` → `property-catalog-lists` → `network-update-canon-order` |
 
 - **依存を足す spec は 1 ウェーブに 1 本**（`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md` が重なる）: `mcp-server-core`（C1）・`animated-image-decode`（C3）・`mcp-stdio-bridge`（C4 の候補）。
@@ -119,24 +120,19 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 
 **保存義務（据え置き）**: 既存の終了経路（右クリックメニューの「終了」→ `OnClose` の握手 → `ghost_quit`）の決定論テストを 1 本も落とさない。実機サインオフの「絶対パス起動」（argv 上書き）を残す。
 
-## spec 台帳（brief を持つ 57 本・2026-10-02 棚卸⑳）
+## spec 台帳（brief を持つ 54 本・2026-10-02 棚卸⑳の 57 本から完了 6 本を外し、10-03 に 3 本足した＝3 本目は `clippy-199-lints`）
 
 > **spec は名前で呼ぶ**（2026-09-26 開発者指示）: 報告・brief・コミット・PR で spec を指すときは spec 名（`areka-P0-` は省略してよい）を書く。「#数字」は `PR#185` の形の PR 番号にだけ使う。古い文書に台帳番号が出てきたら、その時点の表（history）で名前へ読み替える。
 > **段＝優先度の 3 段**（2026-10-03 開発者「1 バグ・2 リリース関係・バルーン関係・アニメーション画像関係・3 その他」）: **バグ**＝1 段目／**優先**＝2 段目（配布と公開・文字とバルーンの列・シェルの element の列・動く画像・バルーンのイベントと残件・**SSP MCP の移植 10 本**＝10-03 に開発者が追加）／**その他**＝3 段目（ゴーストのインストール・kanade・プロパティ・道具）／**据え置き**＝当面着手しない（理由は行に）／**保留**。どのウェーブに居るかは「並び」の列。完了した spec はこの表に置かない（完了サマリと history）。
-> **段の数え方**: `awk '/^\| spec（`areka-P0-` 省略）/{f=1;next} f&&/^\|/{print} f&&!/^\|/{f=0}' .kiro/steering/roadmap.md | awk -F'|' 'NR>1{gsub(/ /,"",$3);print $3}' | sort | uniq -c`（2026-10-03 の数え＝バグ 5・優先 32・その他 12・据え置き 7・保留 1 ＝ 57）
+> **段の数え方**: `awk '/^\| spec（`areka-P0-` 省略）/{f=1;next} f&&/^\|/{print} f&&!/^\|/{f=0}' .kiro/steering/roadmap.md | awk -F'|' 'NR>1{gsub(/ /,"",$3);print $3}' | sort | uniq -c`（2026-10-03 の数え＝バグ 2・優先 30・その他 14・据え置き 7・保留 1 ＝ 54・`restart-chain-finalize-stall`・`choice-timeout-directive`・`drag-click-without-move`・`emo-text-file-split`・`release-package-versioned` の完了で外し、`drag-cancel-borrow-miss`・`sakura-time-critical` の起票で足した）
 > **規模**は棚卸⑳の再測定の見立て（タスク数）。**上限は 1 spec 20 タスク**。「要件で切る」と書いた行は、着手のときに要件の段で切り出す（先に起票しない＝spec 工場の禁止）。**Fable**列＝要件定義を Fable で起動したセッションで進めることを勧める（○）か、Opus で足りる（−）か。各 brief の末尾「2026-10-02 棚卸⑳の再測定」が、崩れた前提・触るファイル・議題の正本。
 
 | spec（`areka-P0-` 省略） | 段 | 何をするか | 規模 | 並び | 前提（先に着地） | Fable |
 |---|---|---|---|---|---|---|
-| `drag-click-without-move` | バグ | キャラクターの絵を動かさずにクリックしただけで窓の位置が保存されるのを止める（wintf が動かし始める前でも終了を配る 5 か所を先例に揃える） | S（6〜9） | **C1-①** | なし | − |
-| `choice-timeout-directive`（**10-02 起票**・`sakura-time-directives` から切り出し） | バグ | `\![set,choicetimeout,時間]` が効かず、時間切れなしを指定したメニューが 30 秒で閉じるのを直す（compile が値を選択待ちへ焼く） | XS〜S（3〜5） | **C1-②** | なし | − |
-| `restart-chain-finalize-stall`（**10-02 起票**・覚え書きから格上げ） | バグ | ゴーストを起こし直した後に `deferrals=600` の WARN が鳴るのを止める（窓の無い巡を見送りに数えない） | XS（2〜3） | **C1-③** | なし | − |
+| `drag-cancel-borrow-miss`（**10-03 起票**・`drag-click-without-move` の完了時に発見） | バグ | wndproc のハンドラが World を借りられないとき、取り消しの終了を積まずに累積器の「ドラッグ中の対象」が残る穴を塞ぐ（再入の条件・実機は未観測） | S（4〜7） | C1 の後の空き席 | なし | − |
 | `status-execution-states` | バグ | SHIORI へ渡す `Status` に `online`・`nouserbreak`・`balloon` を載せる（今は載らず、更新中や割り込み禁止の区間に雑談が割り込みうる＝潜在）。出どころの無い残り 5 状態の宛先は timecritical・`\t`→`sakura-time-directives`／induction・passive・`\![enter,inductionmode]`・`\![enter,passivemode]`→候補 `passive-mode-states`／minimizing→候補 `minimize-state`／opening→候補 `inputbox-dialog`・`communicate-events`（候補は網羅の計画の波で起票） | S〜M（5〜8） | **C1-④** | なし（同じ C1 の `emo-text-file-split` の 6 本と `drain_resnap.rs` に触らない約束） | − |
-| `release-package-versioned`（**10-02 起票**・配布と公開・**`package-check-temp-cleanup` を合流**） | バグ | 先頭で `-Check` の展開先と記録を `target\` の下へ移して片付ける（道具のバグ）。続けて配布 zip を版入りの固定の名前（`areka-{版}-{x64\|arm64}.zip`）と SHA256 で作る・arm64 の zip・リンク経由の起動でも exe の本当の場所から根を引く | M（11〜17） | **C1-⑤** | なし | − |
 | `install-live-target-hazards` | その他 | 表示中のシェル・使用中のバルーンへの上書きと、起動中のゴーストへ入れる途中の Windows の終了を**実測してから**扱いを決める | S〜M（8〜14） | C4 の候補（`dist/README.txt` を C2・C3 の配布と分け合う） | なし | ○ |
 | `install-companion-canon` | その他 | 同梱インストールの `install.txt` の読み方を ukadoc に揃える 4 点＋起動時の同梱バルーンの問い | S〜M（8〜12） | **C2-⑥** | `release-package-versioned`（`boot_config.rs`） | ○ |
-| `emo-text-file-split`（**10-02 起票**） | 優先 | 文字まわりの上限に張り付いた 6 ファイルを、振る舞いを変えずに分ける（後続 10 本以上の「分割が先」をここで済ませる） | S（5〜8） | **C1-⑥** | なし | − |
-| `mcp-server-core` | 優先 | 新クレート `areka-mcp`＝公式 SDK `rmcp` で `127.0.0.1` の MCP サーバ（ツール 0 本・既定ポート 9821） | M（11〜14） | **C1-⑦** | なし | ○ |
 | `shell-balloon` | 優先 | シェルの絵の中に台詞を書く（areka 独自）。`balloon.名前`ブレス・element定義 `elementN,balloon,名前,X,Y`・行き先は「スコープ × 名前」 | L（15〜19） | **C2-①** | `emo-text-file-split` | ○ |
 | `translate-pipeline` | その他 | `OnTranslate` の往復（里々・YAYA の辞書が文を直す段）。今は直す前の文が出ている | M（14〜18） | **C2-⑤** | なし | ○ |
 | `mcp-tool-entrances` | 優先 | MCP のツール 10 本の定義を SSP と逐語一致・World への橋・9 本はダミー | M（13〜17） | **C2-④** | `mcp-server-core` | ○ |
@@ -166,6 +162,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 | `property-catalog-lists` | その他 | `system.*` と一覧（`ghostlist`・`balloonlist`＝列挙は α で実在）。**要件で 2 つに切る** | 20 超 → 切る | `emo2_boot` の列 | `currentghost-property-tree` | − |
 | `zorder-property` | その他 | `currentghost.seriko.zorder` の読み書き | S | 単独で取れる | 書く側は `property-query-channels` | − |
 | `sakura-time-directives` | その他 | 残りの時間の指令（`quicksection`・`balloonwait`・`balloontimeout`）。C・D 群は消費する者が現れるまで置く | 20 超 → 切る | コンパイルの列 | `choice-timeout-directive`・`talk-fast-forward` | ○ |
+| `sakura-time-critical`（**10-03 起票**・`emo-text-file-split` の実機の観測から） | その他 | 台本の `\t`（タイムクリティカル）を読み、台本の終わりか中断・選択まで、マウス系などの通知を止めて `Status` に `timecritical` を載せる（今は読まない＝`\t` を書いたメニューもなでなでの返事に置き換わる） | S〜M（6〜10） | コンパイルの列・kanade の列 | `status-execution-states` | ○ |
 | `makoto-dll-host` | その他 | MAKOTO/2.0 の DLL を掛ける。**要件で「ホストと鎖」と「load/unload/reload」に切る** | 20 超 → 切る | kanade の列 | `translate-pipeline` | ○ |
 | `mcp-stdio-bridge` | 優先 | Claude Desktop 用の stdio ⇔ HTTP 中継 exe | S（7〜10） | C4 の候補（依存の席を C3 の `animated-image-decode` が使う・`dist/README.txt` を C3 の winget と分け合う） | `mcp-server-core`・`package-check-temp-cleanup` | − |
 | `mcp-get-property` | 優先 | `get_property` | S | **C3-⑥**（予定） | `mcp-tool-entrances` | − |
@@ -177,6 +174,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 | `mcp-strict-errors` | 優先 | `strict`（不在の面・未知のタグなどをエラーログへ） | M | MCP の最後 | `mcp-log-history`・`mcp-kanade-tools` | ○ |
 | `coverage-roadmap-refresh`（**10-02 に覚え書き `ukadoc-coverage-custody` を合流**） | その他 | 網羅台帳の手書きの数と持ち主が黙って偽になるのを止める（検査が `completed/` を走査・128 行の持ち主の付け替え・実在しない仕様名 107 項目） | M（14〜18） | 単独で取れる（台帳を直す spec と同じウェーブに置かない） | なし | − |
 | `popup-menu-residue` | その他 | メニューの残件 4（記録の文言・テストの穴・World 借用中の `ShellExecuteW`）。次に `menu/` を触る spec へ相乗りが安い | S（6〜8） | 単独で取れる | なし | − |
+| `clippy-199-lints` | その他 | clippy 1.99 で既存のコードに出た lint（dola・emo-compose・kanade・shiori 系・areka の約 40＋19 か所）を、振る舞いを変えずに消して `cargo clippy --workspace --all-targets -- -D warnings` を緑にする。test-all に clippy の段を足すかは議題 | S〜M（8〜12） | クレート単位で空き席から（`placement/`・`emo2_boot/`・kanade は列が空いてから） | なし | − |
 | `surfaces-basepos` | 据え置き | surfaces.txt の `point.basepos`。宣言するシェルが要るまで始めない | S | シェルの element の列の最後 | — | − |
 | `property-ipc-transport` | 据え置き | 台本を通さないプロパティの読み取り。**最初の 1 段（調べて裁定）で終わる形へ縮める** | S（裁定まで） | — | — | ○ |
 | `dpi-transition-two-tick-bounce` | 据え置き | 拡大率の切替で位置と大きさが 1 コマずれる（開発者が許容）。着手するなら最初に測り直し、跳ねが無ければ取り下げ | S〜M | — | — | ○ |
@@ -237,6 +235,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 7. **失敗は既定ゴースト（emo2）の台詞で伝える**（`OnBoot` の Ref6＝`halt`・Ref7＝落ちたゴーストの名前）。メッセージボックスは出さない。**インストールと切り替えは別のイベント**（入れた後の切替を areka は主導しない）。
 8. **要件定義・設計のサブエージェントは起動中のモデルを継承し、上位へ上げない**（09-30）。Fable 列は「Fable で起動したセッションを勧める」だけ。
 9. **並走できる spec の紹介は「完全並走できるものだけ」・Fable 推奨を先頭に、名前＋一言＋コマンドの短い形**（09-26）。
+10. **話の最中（選択待ちを含む）に届いたマウス系の返事は今の話を置き換える＝正典どおり**（2026-10-03・`emo-text-file-split` の実機で「メニューがなでなでの返事に置き換わる」を観測して確かめた。正本は完了 `input-events` の DD-IE-1／DD-IE-2）。止めるのはゴーストの側（`Status` の `talking`／`choosing` を見て黙る）か台本の `\t`。areka の穴は `\t` を読まないことだけ＝`sakura-time-critical`。
 
 ## 棚卸⑳の裁定（2026-10-02・main `03e8d7d6`・開発者指示「main が進んだので棚卸＆深掘り＆徹底ブリーフィング。完了ロードマップの整理。バグ修正 → 優先度の高い機能」）
 
@@ -281,13 +280,13 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 
 > 開発者指示（2026-09-29）「ssp mcp tool の完全移植のための spec 群を立ち上げて。実装は α リリースの後。areka の 127.0.0.1 の適当なポートでサーバを開く形。基本実装 → 空のダミー関数を置いて入り口だけ全部整備 → 個別のコマンド実装。平行開発しやすいように spec 分割」。**事実の正本**は [doc/ssp-mcp/survey.md](../../doc/ssp-mcp/survey.md)（SSP 2.9.05 への実測・ツール定義の逐語は同フォルダの JSON）。ukadoc MCP には MCP の節が索引されていない＝出典は ukadoc の「その他の機能」と SSTP 仕様と実測。
 
-- **決めたこと（起票時・要件の段で開発者が覆してよい）**: ⑴ 本体が 127.0.0.1 で HTTP を待ち受け、Claude Code・Cursor は HTTP で直接つなぐ。**Claude Desktop 用に SSP の `mcp.exe` 相当の中継 exe を `mcp-stdio-bridge` で作る**（2026-09-29 開発者判断。Desktop の `claude_desktop_config.json` は `command` の欄が必須で `url` を書けない〔Desktop 2.9939.4.0 の検査関数で確認〕・コネクタは Anthropic のクラウドからつなぐので 127.0.0.1 へ届かない〔公式の案内〕）。⑵ 既定ポート 9821・`AREKA_MCP_PORT`（`0` で待ち受けない）・既定で有効（SSP と同じ）。9801 は SSP と同時に動かすと衝突し、将来の SSTP の口でもあるので避けた。⑶ SSP の欠陥 2 件（表情表の文字化け・script ログの JSON エスケープ漏れ）は移植しない。⑸ **MCP のプロトコルは自作せず公式 Rust SDK `rmcp` を使う・tokio 依存を入れてよい**（2026-09-29 開発者判断「tokio 依存は入れちゃってもよい。mcp を自作するのは避けた方がよさそう」）。MCP の新しい版への追随は rmcp の版上げで行い、SSP の輸送の癖（survey §2）は参考に格下げ＝ツールの名前・引数・結果の文字列だけを SSP と一致させる。中継 exe は写すだけなので rmcp を使わない。⑷ 分け方は開発者の 3 段（基本 → 入り口 → 個別）に、個別を「触るエンジン」で 6 本に割り、strict を 4 段目に出した。
+- **決めたこと（起票時・要件の段で開発者が覆してよい）**: ⑴ 本体が 127.0.0.1 で HTTP を待ち受け、Claude Code・Cursor は HTTP で直接つなぐ。**Claude Desktop 用に SSP の `mcp.exe` 相当の中継 exe を `mcp-stdio-bridge` で作る**（2026-09-29 開発者判断。Desktop の `claude_desktop_config.json` は `command` の欄が必須で `url` を書けない〔Desktop 2.9939.4.0 の検査関数で確認〕・コネクタは Anthropic のクラウドからつなぐので 127.0.0.1 へ届かない〔公式の案内〕）。⑵ 既定ポート 9821・`AREKA_MCP_PORT`（`0` で待ち受けない）・既定で有効（SSP と同じ）。9801 は SSP と同時に動かすと衝突し、将来の SSTP の口でもあるので避けた。⑶ SSP の欠陥 2 件（表情表の文字化け・script ログの JSON エスケープ漏れ）は移植しない。⑸ **MCP のプロトコルは自作せず公式 Rust SDK `rmcp` を使う・tokio 依存を入れてよい**（2026-09-29 開発者判断「tokio 依存は入れちゃってもよい。mcp を自作するのは避けた方がよさそう」）。MCP の新しい版への追随は rmcp の版上げで行い、SSP の輸送の癖（survey §2）は参考に格下げ＝ツールの名前・引数・結果の文字列だけを SSP と一致させる。中継 exe は写すだけなので rmcp を使わない。⑷ 分け方は開発者の 3 段（基本 → 入り口 → 個別）に、個別を「触るエンジン」で 6 本に割り、strict を 4 段目に出した。2026-10-03 の開発者裁定で ⑵ の既定ポートは覆った（SSP も 9821 で待ち受けていた）＝既定は 9801 → 9821 の早い者勝ち、どちらも使用中なら隣の 9802 → 9822 … 9810 → 9830（計 20 候補・最初に束ねた 1 つ）・`AREKA_MCP_PORT` の指定はその 1 つだけ（`mcp-server-core` の設計判断 B-13）。
 - **採らなかった分け方**: ツールごとに 1 spec（10 本）＝`get_status`・`sakurascript`・`raise_event` が kanade の同じ箇所を触り並走できず、`get_active_ghost_list` などは小さすぎる。基本と入り口を 1 本＝開発者の 3 段に反し、M3 の並走の土台（触るファイルの固定）が基本の検査と同じ spec に埋もれる。
 - **既存 spec の更新**: `makoto-dll-host`（brief へ「MCP の reload makoto の口を埋める」を追記済み）。`status-execution-states` は `get_status` の消費者が 1 つ増えるだけ（brief の更新なし）。
 
 #### Specs (dependency order)
 
-- [ ] areka-P0-mcp-server-core -- 127.0.0.1 の HTTP・JSON-RPC・MCP の版と検査（ツール 0 本）。Dependencies: α 完成宣言
+- [x] areka-P0-mcp-server-core -- 127.0.0.1 の HTTP・JSON-RPC・MCP の版と検査（ツール 0 本）。Dependencies: α 完成宣言
 - [ ] areka-P0-mcp-tool-entrances -- ツール 10 本の定義・引数検査・ghost_name の解決・World への橋・ダミー 9 本。Dependencies: areka-P0-mcp-server-core
 - [ ] areka-P0-mcp-stdio-bridge -- Claude Desktop 用の stdio ⇔ HTTP 中継 exe。Dependencies: areka-P0-mcp-server-core
 - [ ] areka-P0-mcp-get-property -- get_property。Dependencies: areka-P0-mcp-tool-entrances
@@ -365,7 +364,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 #### Specs (dependency order)
 
 - [ ] areka-P0-install-live-target-hazards -- 表示中のシェル・使用中のバルーンのフォルダへの上書きと、起動中のゴーストへ入れる途中の Windows の終了を実測し、扱いを決めて実装する。Dependencies: α 完成宣言
-- [ ] areka-P0-drag-click-without-move -- 動かさない左クリックで窓の位置を保存しない（バグ）。Dependencies: α 完成宣言
+- [x] areka-P0-drag-click-without-move -- 動かさない左クリックで窓の位置を保存しない（バグ）。Dependencies: α 完成宣言
 - [x] areka-P0-package-check-temp-cleanup -- **10-02 に `release-package-versioned` へ合流**（同じスクリプト・C1 の先頭のタスク）
 - [ ] areka-P0-install-companion-canon -- 同梱インストールの `install.txt` の読み方を ukadoc に揃える 4 点＋起動時の同梱バルーンの問い。Dependencies: α 完成宣言
 
@@ -373,7 +372,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 
 > 開発者指示（2026-10-02）「winget 対応インストーラーを作成したい。最終的には繰り返し spec を実行するたびに、バージョン番号を 0.0.1 加算しながらリリースを作るような運用。アーカイブの署名が必要なのか？無料で済ませたい」「とにかく無料でできる手段。CI 実行でよいが、PR のたびに実施されるとバージョン管理が変にならないか？リリースタイミングはこちらで決めたい」「可能なら crates.io へのリリースも組み込んで」。
 
-- **起票時の実測（main `76e17654`）**: 版は `Cargo.toml` の `[workspace.package] version = "0.0.1"` 1 か所（21 クレートが継承・SHIORI へ渡す版もここから）。配布は `tools/package-alpha.ps1` が手元で x64 の zip を日付とコミットの名前で作るだけ。GitHub Releases 0 件・`.github/` なし・SHA256 なし・署名なし。`/kiro-complete` は版にもタグにも触らない。crates.io には `areka`・`dola`・`wintf` の 0.0.1 だけ（名前の確保）。部品のクレートの名前（`areka-*`・`shiori-*`・`log-capture-kit`・`temp-path-kit`）はすべて空いている。
+- **起票時の実測（main `76e17654`）**: 版は `Cargo.toml` の `[workspace.package] version = "0.0.1"` 1 か所（21 クレートが継承・SHIORI へ渡す版もここから）。配布は配布スクリプト（今の `tools/package.ps1`）が手元で x64 の zip を日付とコミットの名前で作るだけ。GitHub Releases 0 件・`.github/` なし・SHA256 なし・署名なし。`/kiro-complete` は版にもタグにも触らない。crates.io には `areka`・`dola`・`wintf` の 0.0.1 だけ（名前の確保）。部品のクレートの名前（`areka-*`・`shiori-*`・`log-capture-kit`・`temp-path-kit`）はすべて空いている。
 - **調べた事実（2026-10-02・出典は `winget-manifest-submission`・`release-code-signing` の brief）**: winget の zip／portable に署名の義務は無い（MSIX だけ要る）。portable はスタートメニューのショートカットを作らない。PATH へ出すリンク経由の起動で隣の DLL を見失う既知の問題は `ArchiveBinariesDependOnPath: true` で避ける。初回の提出は手で（1 PR 1 版・人の承認・実例で 2 日）、以後は winget-releaser（Release の公開がきっかけ）。無料の署名は SignPath Foundation だけ（CI のビルドが前提）。Microsoft の Artifact Signing は日本の個人には使えない。crates.io は Trusted Publishing で長生きするトークン無しに出せる（新しいクレートの初回は手元から）。
 - **決めたこと（開発者確定・2026-10-02）**:
   1. **入れ物は zip のまま**（winget の `zip`＋`portable`）。アイコンが欲しくなったら後からインストーラーを別 spec で足す。
@@ -388,7 +387,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 
 #### Specs (dependency order)
 
-- [ ] areka-P0-release-package-versioned -- `-Check` の後片付け（合流）・版入りの固定の名前と SHA256・arm64 の zip・リンク経由の起動での場所の解決。Dependencies: none（C1）
+- [x] areka-P0-release-package-versioned -- `-Check` の後片付け（合流）・版入りの固定の名前と SHA256・arm64 の zip・リンク経由の起動での場所の解決。Dependencies: none（C1）
 - [ ] areka-P0-release-ci-workflow -- タグ `v*` で動く GitHub Actions（ビルド → zip → Release）。Dependencies: areka-P0-release-package-versioned
 - [ ] areka-P0-release-cycle -- 繰り返し spec。版 +0.0.1 → PR → squash マージ → タグ（初回は crates.io の手元公開を含む）。Dependencies: areka-P0-release-ci-workflow, areka-P0-crates-io-publish
 - [ ] areka-P0-winget-manifest-submission -- `Areka.Areka.Portable` のマニフェスト・初回の手提出・winget-releaser。Dependencies: areka-P0-release-cycle

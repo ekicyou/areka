@@ -178,6 +178,14 @@ fn main() -> Result<()> {
         }
     };
 
+    // MCP の待受（areka-P0-mcp-server-core 設計判断 B-3）。畳むのは取っ手の `Drop` で、`down?` の
+    // 早い戻りを含む `main` のどの出口でも閉じる。`app` より先に宣言する＝`app` の後に落ちる。
+    // 待受の失敗は `error!` に残すだけで終了コードには響かない（`start` は `Result` を返さない）。
+    let _mcp = areka_mcp::start(
+        &areka_mcp::read_port_candidates(),
+        areka_mcp::ToolRegistry::default(),
+    );
+
     // 実行ファイル隣接の 32bit SHIORI helper パスを一度だけ解決する（起動の文脈と起動入力の作り口が
     // 持ち、実 sink 結線経路と `LogSink` フォールバック boot 経路の双方が使う・DD-7）。
     let helper_exe = default_helper_exe_path();

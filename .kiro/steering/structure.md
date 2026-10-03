@@ -15,7 +15,7 @@ updated_at: 2026-10-02
 **Location**: `/`  
 **Purpose**: Cargoワークスペース設定、横断ドキュメント、開発ルール  
 **Example**: `Cargo.toml`, `README.md`, `doc/`, `.kiro/steering/`
-**その他の最上位**: `tools/`＝開発用スクリプト（`test-all.ps1`＝フルテスト・完了ゲートの正本〔`tech.md` の Testing〕／`package-alpha.ps1`＝α の配布 zip を組んで中身と起動を確かめる／`perf/`＝性能改善ループ）・`vendors/`＝検体 `.nar`（`sample_ghost/`）と調査資料のサブモジュール（`pasta/`）・`assets/`＝UI 資産・`docs/`＝単発の技術メモ・`dist/`＝配布物へそのまま入れる文書（第三者向け `README.txt`）
+**その他の最上位**: `tools/`＝開発用スクリプト（`test-all.ps1`＝フルテスト・完了ゲートの正本〔`tech.md` の Testing〕／`package.ps1`＝配布物の zip（名前に版が入る）と SHA256 を x64 と arm64 で組んで中身を判定し、`-Check` で展開して起動を確かめる／`perf/`＝性能改善ループ）・`vendors/`＝検体 `.nar`（`sample_ghost/`）と調査資料のサブモジュール（`pasta/`）・`assets/`＝UI 資産・`docs/`＝単発の技術メモ・`dist/`＝配布物へそのまま入れる文書（第三者向け `README.txt`）
 
 ### Library Crate
 **Location**: `/crates/wintf/`  
@@ -323,12 +323,13 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 - **`areka-emo-present`（3/3・提示段）**: `ComposedSurface` を wintf の WUC 表示面へアップロード・提示し、当たり判定用 AlphaMask を供給。`presenter/show.rs` の `apply_show` が単一漏斗（k 導出・合成/キャッシュ・アップロード・マスク同期・可視化）。**`shell_target.rs` がシェルのフォルダの読み込みの権威**（`areka-P0-shell-implicit-surface` 2026-09-20）: `surface<数字>.png` の名前判定はバルーンの面と**同じ 1 つの実装**（`balloon::face_digits_of`）を接頭辞違いで呼ぶ。fs を触るのは `load_shell_target` だけで、核 `build_shell_target` はメモリ上で通せる。
 - **記録を出す場所の型（emo 三段共通）**: 純粋な核（名前判定・土台の決定・核の組み立て）は fs にも記録にも触れず、**事実を戻り値（`…Report`）に載せるだけ**。`info!`／`warn!`／`error!` を出すのは **fs を触る入口 1 か所**で、読み込み 1 回につき 1 度だけ出す。
 - **`areka-emo-text`（テキスト層）**: バルーン文字レンダリング（spec 名は `areka-P0-emo-text-layer`・atlas/compose/present の単一トークン命名に倣う）。
-  **主要ファイルと接続**（`areka-P0-text-decoration-canon` 2026-09-13 の分割後・接続はいずれも親ファイル内の `#[path = "…"] mod` 宣言＝`lib.rs` の `pub mod` は親だけを並べる）:
+  **主要ファイルと接続**（`areka-P0-text-decoration-canon` 2026-09-13 と `areka-P0-emo-text-file-split` 2026-10-03 の分割後・接続はいずれも親ファイル内の `#[path = "…"] mod` 宣言＝`lib.rs` の `pub mod` は親だけを並べる）:
   - `draw.rs`（COM 層のファサード＝`ResolvedFont`／`DirectionRecipe`／`create_text_format`）＋ `draw_metrics.rs`（文字送り幅の計測 `DWriteMetrics`）／`draw_line_store.rs`（行レイアウトの保持庫 `LineLayoutStore`）／`draw_catalog.rs`（フォント候補列の解決 `FontCatalog`）
-  - `layout.rs`（配置の本体 `LayoutEngine`）＋ `layout_line_ops.rs`（行を閉じる・区間の送り幅合計・カーソル座標の解決）／`layout_styled.rs`（装飾込みの配置の入口・行内最大の大きさ）
+  - `layout.rs`（配置の入口 `LayoutEngine`・公開の型・見える範囲 `visible_window`）＋ `layout_line_ops.rs`（行を閉じる・区間の送り幅合計・カーソル座標の解決）／`layout_styled.rs`（装飾込みの配置の入口・行内最大の大きさ）／`layout_scan.rs`（走査の本体 `layout_inner`・走査の状態 `Scan` と改行・`\_l`・最終行の腕・行を閉じる仕上げ）／`layout_scan_glyph.rs`（`layout_scan` の子・文字の配置の腕）
+  - `viewbox.rs`（送りの計画 `ScrollPlanner` と描き直しの型）＋ `viewbox_diff.rs`（描き直す範囲の導出）
   - `state.rs`（表示状態 `TextLayerState`・スコープの状態 `ActorTextState` の型定義）＋ `state_decoration.rs`（両者の装飾まわりの実装＝所有外キーの保持 `unowned_vocab`・戻す操作 `reset_decoration`）
-  - `viewbox_draw.rs`（描画実行 `ViewboxExecutor`）＋ `viewbox_draw_plan.rs`（縮退判定・全域更新・計画の不整合報告）／`viewbox_draw_decoration.rs`（装飾の区間切り出しと範囲指定 `apply_font_ranges`）
-  - `actor.rs`（アクターシェル）＋ `actor_decoration.rs`（背景色の受け口・2 層の差し込み）
+  - `viewbox_draw.rs`（描画実行 `ViewboxExecutor`）＋ `viewbox_draw_plan.rs`（縮退判定・全域更新・計画の不整合報告）／`viewbox_draw_decoration.rs`（装飾の区間切り出しと範囲指定 `apply_font_ranges`）／`viewbox_draw_render.rs`（装飾つきの描画 `render_styled` と描画の補助）
+  - `actor.rs`（アクターシェル＝型・指令の振り分け `apply_cue`・読み口・起動）＋ `actor_decoration.rs`（背景色の受け口・2 層の差し込み）／`actor_attach.rs`（登録と再追従）／`actor_present.rs`（1 コマの描画の流れ `present_frame`）
   - 新規の純粋モジュール `look.rs`（1 文字に効く見た目 `TextLook`・2 層 `LookLayers`・装飾の表・`\f` の値の状態機械）／`color.rs`（色指定の解析と無効表示の混色）
   - 純粋層の字面検査（`windows` 系 crate 非依存）の走査対象は `lib.rs` の `PURE_SOURCES`、`@` 前置禁止の走査対象は `draw_format_metrics_tests.rs` の `DRAW_FACADE_SOURCES`——どちらも手保守の一覧だが、**`src/*.rs` の実ファイル集合と突き合わせる検査が両方に付いている**（`lib.rs::every_source_file_is_either_scanned_or_explicitly_excluded` と `draw_format_metrics_tests.rs::draw_facade_sources_cover_every_draw_production_file`）。新設したファイルはどちらかの一覧（純粋層なら `PURE_SOURCES`、そうでなければ `SOURCES_OUTSIDE_THE_PURE_SCAN`）へ載せるまで赤になる。
 
@@ -345,6 +346,13 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Modules**: `lib.rs`（入口と記録）／`error.rs`・`outcome.rs`（失敗と結果の語彙）／`fetch.rs`（取得口の trait）・`winhttp.rs`（その本物の実装）／`urlpath.rs`（パスのパーセント符号化の判定・復号・符号化）・`paths.rs`（定義の相対パスとローカルパスの橋渡し）／`md5.rs`（CNG で MD5）／`manifest.rs`（定義ファイルの読み手）・`diff.rs`（差分）／`work.rs`（作業フォルダ）・`commit.rs`（確定と戻し）・`delete.rs`（`delete.txt`）。テストは各ファイルの隣の `*_tests.rs`（`testkit.rs` はテスト専用の部品）
 **Dependencies**: `encoding_rs`・`thiserror`・`tracing`・`windows`（`Win32_Networking_WinHttp`・`Win32_Security_Cryptography` を自分の `Cargo.toml` で上乗せ）。外部クレートの追加は 0（`tech.md` の登記を参照）。`areka-nar` の部品は使わない（考え方と語彙だけを写す）
 **規律**: 本番ソースで記録（`tracing::`）を綴るのは `lib.rs` だけ・失敗の記録（`tracing::error!`）は 1 か所、WinHTTP の API を綴るのは `winhttp.rs` だけ、`unsafe` を綴るのは `winhttp.rs` と `md5.rs` だけ——`src/lib_tests.rs` が本番ソースの字面で見張る。本物のネットワークを通すテストは `#[ignore]`（`winhttp_real_tests.rs`）で、常時テストは偽の取得口で回す。
+
+### MCP Server Crate（areka-mcp）
+**Location**: `/crates/areka-mcp/`
+**Purpose**: MCP サーバの受け口の**本番**クレート（`areka-P0-mcp-server-core` 2026-10-03）。`127.0.0.1` の 1 ポート（環境変数 `AREKA_MCP_PORT`・未設定は 9801 → 9821 の早い者勝ち、どちらも使用中なら隣の 9802 → 9822 … 9810 → 9830 の計 20 候補で最初に束ねた 1 つ・番号を指定したらその 1 つだけ・`0` は待ち受けない）で Streamable HTTP（`/api/mcp/v1`）と登録案内（`/api/mcp/help`）を待ち受け、JSON-RPC の解釈は rmcp に任せる。areka が持つのは待受・`Origin`／`Host` の検査・振り分け・help・ツールの登録口だけ。`fn main()` が `areka_mcp::start(…)` の取っ手を持ち、`Drop` で畳む。
+**Modules**: `lib.rs`（公開面の re-export）／`port.rs`（ポートの候補の列＝`DEFAULT_PORTS`・`FALLBACK_STEPS`・`candidates_from_env_value`・`read_port_candidates`）／`gate.rs`（`Origin`／`Host` の検査・純粋）／`help.rs`（案内のページ）／`registry.rs`（ツールの登録口 `ToolRegistry`・rmcp の型を含まない）／`handler.rs`（rmcp の `ServerHandler`）／`dispatch.rs`（HTTP の振り分け）／`server.rs`（待受と取っ手 `McpServer`）。テストは隣の `*_tests.rs`（`port_tests.rs`・`gate_tests.rs`・`help_tests.rs`・`registry_tests.rs` と、実ソケットの `server_tests.rs`・`server_protocol_tests.rs`・`server_gate_help_tests.rs`）。`testkit.rs` はテスト専用の部品（手書きの HTTP/1.1 クライアント）
+**Dependencies**: `areka-actor`（ワークスペース内はこれだけ＝wintf・kanade・ghost を知らない葉）・`rmcp`・`tokio`・`tokio-util`・`hyper`・`hyper-util`・`http-body-util`・`tower-service`・`serde_json`・`tracing`（`tech.md` の登記を参照）。依存の向きは `areka` → `areka-mcp` だけ
+**規律**: 公開面（`lib.rs`）に rmcp・tokio・hyper の型を出さない。tokio は `spawn_actor("mcp", …)` のスレッドの中の `current_thread` 1 本だけ。rmcp の `ServerHandler`／`ToolRouter` を使うのは `handler.rs` だけ、HTTP の状態コード（`StatusCode`）と rmcp の `StreamableHttpService` を使うのは `dispatch.rs` だけ。ツールは後続の spec が `ToolRegistry` で足す（本 spec の本番の登録は 0 本）。`log-capture-kit` は `[dev-dependencies]` だけ。テストは OS が選んだ番号（`start(&[0], …)`・先に占めた番号の次に 0 を置く `start(&[taken, 0], …)`、または `127.0.0.1:0` で先に占めた番号）か空の列 `start(&[], …)` だけを使い、既定の 9801・9821（と隣の候補）を掴まない。
 
 ### SHIORI ABI Crate
 **Location**: `/crates/shiori-abi/`
@@ -377,7 +385,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Modules**: `probe.rs`（常駐の仕掛けの確立）／`capture.rs`（捕捉窓。窓の内側で対照イベントを発行し、その捕捉を要求して落ちる＝**不在主張が捕捉 0 件のまま静かに緑にならない**）／`event.rs`（正準イベント型と既存の文字列形の再現）／`filter.rs`（`env-filter` feature・濾過指示つき捕捉。有効にしてよいのは `wintf` のみ）／`global.rs`（全スレッド横断の一回限り捕捉。既定 API と混同させないため別窓口とし、両立条件を明記）
 **Tests（`tests/`）**: **ワークスペース全体の見張りの置き場である**（設計判断・ログ捕捉に限らない）。共有機構の迂回検知（`with_default_guard_test.rs`）・**1 ファイル 1,000 行の番人**（`file_length_guard_test.rs`。目安の正本は本文書 Test Naming Conventions の「1 ファイル 1,000 行以下の目安」の項）・**テスト用一時パスの窓口の迂回検知**（`temp_path_guard_test.rs`）・**検体ゴースト／バルーンの窓口の迂回検知**（`sample_path_guard_test.rs`。旧置き場・展開形の検体フォルダ・展開先の名前空間・同梱バルーンのパス組みの 4 形を、走査語を `sample-ghost-kit` の登記表 `SAMPLES` から組み立てて見張る。`sample-ghost-kit` が本番依存に現れないことも同じ見張りが判定する）の 4 本が、走査部品 `workspace_scan/mod.rs`（ファイル列挙・コメント除去・語の走査）を共有する。**見張りを別 crate へ分けると走査器が複製される**ため、crate 名がログ捕捉だけを名乗る点との食い違いを承知でこの配置を採っている。較正 `capture_calibration_test.rs` は**わざと硬化なしの直接呼出を使う**ので迂回検知の例外表に載る（外すと較正が空振りする）。各見張りは例外表の件数を別の定数に逐語で持ち、**項目の追加は複数箇所の明示的な編集としてのみ許す**（暗黙に増えない）。
 **Dependencies**: `tracing`（必須）＋ `tracing-subscriber`（`env-filter` feature 時のみの任意依存・既定 off）。**ワークスペース内 crate への依存は 0**（leaf・依存方向の規律＝`wintf` から引いても上位 crate を持ち込まない）・`publish = false`
-**Consumers**: テスト専用（`[dev-dependencies]` のパス依存 1 行）で 13 crate（`areka`・`wintf`・`areka-ghost`・`areka-kanade`・`areka-seriko`・`areka-sylphya`・`areka-emo-atlas`・`areka-emo-compose`・`areka-emo-present`・`areka-emo-text`・`areka-nar`・`areka-update`・`shiori-host32-host`）。**`[dependencies]` へは決して置かない**（製品側依存に現れたら `with_default_guard_test.rs` が赤にする）
+**Consumers**: テスト専用（`[dev-dependencies]` のパス依存 1 行）で 14 crate（`areka`・`wintf`・`areka-ghost`・`areka-kanade`・`areka-seriko`・`areka-sylphya`・`areka-emo-atlas`・`areka-emo-compose`・`areka-emo-present`・`areka-emo-text`・`areka-nar`・`areka-update`・`areka-mcp`・`shiori-host32-host`）。**`[dependencies]` へは決して置かない**（製品側依存に現れたら `with_default_guard_test.rs` が赤にする）
 
 ### Temp Path Kit Crate（temp-path-kit）
 **Location**: `/crates/temp-path-kit/`

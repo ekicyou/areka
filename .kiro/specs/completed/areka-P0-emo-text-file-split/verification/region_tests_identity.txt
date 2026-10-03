@@ -1,0 +1,27 @@
+region_tests.rs の本文の同一性（タスク 2.5・要件 7.3）
+基準 SHA: 94e3ad78220141e1ee4ed4d61b6ae94d82dabb3e
+移した範囲: 基準の crates/areka-emo-text/src/region.rs の `#[cfg(test)] mod tests {`（489〜490 行目）と閉じ括弧 `}`（970 行目）の間の 491〜969 行目（479 行）
+
+== 1. 前例の本文比較の道具 ==
+コマンド:
+pwsh -NoProfile -File .kiro/specs/completed/areka-P0-file-slimming/verification/Compare-RelocatedTests.ps1 -RepoRoot C:\home\maz\git\areka\.claude\worktrees\areka-p0-emo-text-split-dc4e04 -Commit 94e3ad78220141e1ee4ed4d61b6ae94d82dabb3e -OriginalPath crates/areka-emo-text/src/region.rs -RelocatedPath crates/areka-emo-text/src/region_tests.rs
+出力: 0 件（何も出力されない）
+終了コード: 0
+
+-ModuleName tests を足して比べる相手を `mod tests` 1 本に絞っても、出力 0 件・終了コード 0。
+
+道具の較正（当たりが出ることの確認）:
+region_tests.rs の写しで `(531.0, 289.0)` を `(531.0, 288.0)` に変えたもの（target/emo-text-file-split/mutated_region_tests.rs）を -RelocatedPath に渡すと、
+[TEST-BODY] で image_size_is_the_balloon_image_not_the_validrect_or_origin と
+image_size_is_unchanged_by_validrect_and_origin_declarations の 2 本の本文の不一致を報告し、終了コード 1。
+
+== 2. 補い: 空白を無視した比較（道具は `use` と行頭の `pub` を無視するため） ==
+コマンド:
+git show 94e3ad78220141e1ee4ed4d61b6ae94d82dabb3e:crates/areka-emo-text/src/region.rs | sed -n '491,969p' > target/emo-text-file-split/base_region_inline_tests_body.rs
+git diff --no-index -w --ignore-blank-lines --exit-code target/emo-text-file-split/base_region_inline_tests_body.rs crates/areka-emo-text/src/region_tests.rs
+結果: 差分なし（終了コード 0）
+
+== 3. 補い: 字下げを 4 字戻しただけであることの厳密な比較 ==
+コマンド:
+sed 's/^    //' target/emo-text-file-split/base_region_inline_tests_body.rs | cmp - <(tr -d '\r' < crates/areka-emo-text/src/region_tests.rs)
+結果: 一致（改行コード CRLF を除いて 1 バイトも違わない）

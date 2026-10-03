@@ -52,6 +52,9 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
     let mut cues: Vec<Cue> = Vec::new();
     // 終端命令なしで末尾到達なら通常終了（R6.3）。End/Quit 検出で確定・走査打切り。
     let mut end = TalkEndReason::Ended;
+    // `\![set,choicetimeout,時間]` の最後の値（`None`＝未指定）。読むたびに上書きし、走査後の
+    // 選択待ちの区切りへ 1 回だけ入れる（要件 3.1/3.2/6.2）。関数の外に状態を持たない（4.1/4.2）。
+    let mut last_choice_timeout: Option<f64> = None;
 
     for instruction in instructions {
         match instruction {
@@ -171,6 +174,10 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
             // 汎用 `\!` コマンド（move 以外・→汎用キャリア・R4.1/4.2/8.2）。name＋raw_args を
             // 解釈せず同一キャリアへ載せる（`\![*]` 単独形＝raw_args 空も第一級で台本に載る＝
             // R8.2 卒業）。空トークン・`--key=value` 形も素通し。消費はコマンド名レベル選別（R4.5）。瞬時。
+            //
+            // 転記の**後**に、`set,choicetimeout`（綴りは逐語）だけは時間の欄を読み、最後の値を
+            // 上書きする（要件 7.1〜7.3: 転記はそのまま・offset も cue も増やさない・他の名前は
+            // 読まない）。読めない値は既定として扱い、警告を 1 行残す（6.1）。
             Instruction::GenericCommand { name, raw_args } => {
                 cues.push(emit(
                     scope,
@@ -178,6 +185,20 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
                     0.0,
                     CueCommand::command_carrier(name.clone(), raw_args.clone()),
                 ));
+                if name == "set" && raw_args.first().is_some_and(|a| a == "choicetimeout") {
+                    last_choice_timeout = match parse_choice_timeout(raw_args) {
+                        ChoiceTimeoutDirective::Default => None,
+                        ChoiceTimeoutDirective::Secs(secs) => Some(secs),
+                        ChoiceTimeoutDirective::Unreadable => {
+                            tracing::warn!(
+                                event = "choice_timeout_unreadable",
+                                raw = %raw_args[1],
+                                "[compile] set,choicetimeout の時間が整数として読めないので既定として扱う"
+                            );
+                            None
+                        }
+                    };
+                }
             }
             // システム変数 `%username` 等（→Text・R7.1/7.2/7.4/7.5）。値源は所有せず、talk 起動時
             // 手渡しの凍結スナップショット `vars` を純粋展開（`resolve_system_var`・no I/O）。展開値
@@ -220,10 +241,11 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
     }
 
     // 選択待ち barrier 発行（R2.1/2.2/2.5/2.6）: 走査終了（End/Quit 切詰め後の出力）に対し、choice
-    // cue が 1 個以上あれば選択待ち barrier `WaitForChoice{timeout:None}`（`None`＝未指定＝下流の
-    // 既定値へ委譲する・DD-8。台本からの時間指定は追跡 spec の領分ゆえ本層は値を供給しない）を最終 offset へ
-    // ちょうど 1 個 append する。同一 at の FIFO 挿入により全 cue より後に配送される（全 choice cue の
-    // 後・R2.2）。`\q` の無い台本は barrier を発行せず既存完了挙動を変えない（R2.5）。barrier は
+    // cue が 1 個以上あれば選択待ち barrier `WaitForChoice{timeout:last_choice_timeout}`（走査で
+    // 最後に読んだ `\![set,choicetimeout,時間]` の秒。指定なし・省略・空欄・読めない値は `None`
+    // ＝未指定＝下流の既定値へ委譲する・DD-8。値の解釈は kanade だけが行う）を最終 offset へ
+    // ちょうど 1 個 append する。選択肢が無ければ barrier を出さず、読んだ値は捨てる（要件 3.4）。
+    // 同一 at の FIFO 挿入により全 cue より後に配送される（全 choice cue の後・R2.2）。`\q` の無い台本は barrier を発行せず既存完了挙動を変えない（R2.5）。barrier は
     // presentation でなく `emit`（CueCommand 専用）とは別の Barrier 用発行ヘルパで組む。
     let has_choice = cues
         .iter()
@@ -232,7 +254,9 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
         cues.push(emit_barrier(
             scope,
             offset,
-            BarrierKind::WaitForChoice { timeout: None },
+            BarrierKind::WaitForChoice {
+                timeout: last_choice_timeout,
+            },
         ));
     }
 
@@ -278,6 +302,44 @@ fn emit_barrier(scope: u32, offset: f64, kind: BarrierKind) -> Cue {
         payload: CuePayload::Barrier(kind),
         duration: 0.0,
     }
+}
+
+/// `\![set,choicetimeout,時間]` の時間の欄の読み取りの結果（design `parse_choice_timeout`）。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum ChoiceTimeoutDirective {
+    /// 欄なし・空欄 → 既定へ戻す（区切りには `None` を書く）。
+    Default,
+    /// 整数で読めた → 秒（区切りには `Some(secs)` を書く）。`0`・負は無期限、正は期限。
+    Secs(f64),
+    /// 整数として読めない → 呼び手が警告を出し、既定として扱う（区切りには `None` を書く）。
+    Unreadable,
+}
+
+/// `set,choicetimeout` の `raw_args` から、選択待ちの区切りへ入れる秒の指令を決める純関数
+/// （no I/O・記録を出さない・要件 1.4/1.5/2.1〜2.3/6.1/8.1）。
+///
+/// `raw_args[0] == "choicetimeout"` は呼び手が確かめる。時間の欄は `raw_args[1]` だけを読み、
+/// 3 欄目以降は見ない。前後の空白は落としてから `i64` として読む（`+500` も受ける）。
+/// 桁あふれは正負それぞれ `i64::MAX`／`i64::MIN` ミリ秒へ飽和する。ミリ秒→秒の変換
+/// （`ms as f64 / 1000.0`）はここ 1 か所だけで、値の正規化（`-1` を `0.0` にそろえる等）はしない。
+/// `Secs(v)` の `v` は常に有限。
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1
+pub(crate) fn parse_choice_timeout(raw_args: &[String]) -> ChoiceTimeoutDirective {
+    use std::num::IntErrorKind;
+    // 欄なし・空欄（空白だけを含む）は省略と同じ＝既定へ戻す。
+    let field = match raw_args.get(1).map(|f| f.trim()) {
+        None | Some("") => return ChoiceTimeoutDirective::Default,
+        Some(field) => field,
+    };
+    let ms = match field.parse::<i64>() {
+        Ok(ms) => ms,
+        Err(e) => match e.kind() {
+            IntErrorKind::PosOverflow => i64::MAX,
+            IntErrorKind::NegOverflow => i64::MIN,
+            _ => return ChoiceTimeoutDirective::Unreadable,
+        },
+    };
+    ChoiceTimeoutDirective::Secs(ms as f64 / 1000.0)
 }
 
 /// [`compile`] 済み [`CueSheet`] の末尾へ epilogue を汎用キャリア cue として付加する
@@ -335,6 +397,9 @@ pub struct CompiledTalk {
 #[cfg(test)]
 #[path = "compile_arm_tests.rs"]
 mod arm_tests;
+#[cfg(test)]
+#[path = "compile_choice_timeout_tests.rs"]
+mod choice_timeout_tests;
 #[cfg(test)]
 #[path = "compile_font_tests.rs"]
 mod font_tests;

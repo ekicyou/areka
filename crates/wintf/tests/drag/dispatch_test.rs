@@ -184,18 +184,21 @@ fn dispatch_ended_removes_state_marker_and_syncs_offset() {
                 offset: Offset { x: 0.0, y: 0.0 },
                 ..Default::default()
             },
-            WindowDragging, // ドラッグ中マーカー（Ended で除去されるはず）
         ))
         .id();
-    let target = world
-        .spawn((
-            ChildOf(window),
-            DraggingState {
-                drag_start_pos: PhysicalPoint::new(0, 0),
-                initial_inset: (0.0, 0.0),
-            },
-        ))
-        .id();
+    let target = world.spawn(ChildOf(window)).id();
+
+    // 開始を配ってドラッグ中の記録と印を入れる（Ended で外れるはず）
+    world
+        .resource::<DragAccumulatorResource>()
+        .set_transition(DragTransition::Started {
+            entity: target,
+            start_pos: PhysicalPoint::new(310, 410),
+            timestamp: Instant::now(),
+        });
+    dispatch_drag_events(&mut world);
+    assert!(world.get::<DraggingState>(target).is_some());
+    assert!(world.get::<WindowDragging>(window).is_some());
 
     world
         .resource::<DragAccumulatorResource>()
@@ -255,6 +258,15 @@ fn dispatch_ended_cancelled_propagates_flag() {
 
     world
         .resource::<DragAccumulatorResource>()
+        .set_transition(DragTransition::Started {
+            entity: target,
+            start_pos: PhysicalPoint::new(11, 21),
+            timestamp: Instant::now(),
+        });
+    dispatch_drag_events(&mut world);
+
+    world
+        .resource::<DragAccumulatorResource>()
         .set_transition(DragTransition::Ended {
             entity: target,
             end_pos: PhysicalPoint::new(11, 22),
@@ -277,6 +289,108 @@ fn dispatch_ended_cancelled_propagates_flag() {
         .expect("context が読めるべき");
     assert!(ctx.hwnd.is_none());
     assert!(!ctx.move_window);
+}
+
+// =============================================================================
+// dispatch_drag_events: 速いドラッグ（開始と終了が 1 回の配りに同居）
+// =============================================================================
+
+/// 受け手が受け取った知らせの並びを記録するリソース。
+#[derive(Resource, Default)]
+struct ReceivedOrder(Vec<&'static str>);
+
+fn record_start(
+    world: &mut World,
+    _sender: Entity,
+    _entity: Entity,
+    ev: &wintf::ecs::pointer::Phase<DragStartEvent>,
+) -> bool {
+    if let wintf::ecs::pointer::Phase::Bubble(_) = ev {
+        world.resource_mut::<ReceivedOrder>().0.push("start");
+    }
+    false
+}
+
+fn record_end(
+    world: &mut World,
+    _sender: Entity,
+    _entity: Entity,
+    ev: &wintf::ecs::pointer::Phase<DragEndEvent>,
+) -> bool {
+    if let wintf::ecs::pointer::Phase::Bubble(_) = ev {
+        world.resource_mut::<ReceivedOrder>().0.push("end");
+    }
+    false
+}
+
+/// 開始と終了の種を続けて積み、配る処理を 1 回呼ぶと、開始 → 終了の順に両方が届き、
+/// 配り終えた時点でドラッグ中の記録（DraggingState）と印（WindowDragging）が外れている。
+#[test]
+fn dispatch_started_and_ended_in_one_flush_delivers_both_in_order() {
+    use wintf::ecs::drag::{OnDragEnd, OnDragStart};
+
+    let mut world = make_world();
+    world.init_resource::<ReceivedOrder>();
+
+    let window = world
+        .spawn((
+            Window::default(),
+            WindowPos {
+                position: Some(Point { x: 100, y: 200 }),
+                size: Some(SizeI {
+                    width: 800,
+                    height: 600,
+                }),
+                ..Default::default()
+            },
+            Arrangement::default(),
+        ))
+        .id();
+    let target = world
+        .spawn((
+            ChildOf(window),
+            OnDragStart(record_start),
+            OnDragEnd(record_end),
+        ))
+        .id();
+
+    // 1 回の配りの間に開始と終了が続けて積まれる（速いドラッグ）
+    let acc = world.resource::<DragAccumulatorResource>();
+    acc.set_transition(DragTransition::Started {
+        entity: target,
+        start_pos: PhysicalPoint::new(110, 210),
+        timestamp: Instant::now(),
+    });
+    acc.set_transition(DragTransition::Ended {
+        entity: target,
+        end_pos: PhysicalPoint::new(160, 260),
+        cancelled: false,
+    });
+
+    dispatch_drag_events(&mut world);
+
+    let starts = drain_messages::<DragStartEvent>(&mut world);
+    assert_eq!(starts.len(), 1, "DragStartEvent は 1 件届くべき");
+    assert_eq!(starts[0].target, target);
+    let ends = drain_messages::<DragEndEvent>(&mut world);
+    assert_eq!(ends.len(), 1, "DragEndEvent は 1 件届くべき");
+    assert_eq!(ends[0].target, target);
+    assert!(!ends[0].cancelled);
+
+    assert_eq!(
+        world.resource::<ReceivedOrder>().0,
+        vec!["start", "end"],
+        "受け手には開始 → 終了の順に届くべき"
+    );
+
+    assert!(
+        world.get::<DraggingState>(target).is_none(),
+        "配り終えた時点で DraggingState は外れているべき"
+    );
+    assert!(
+        world.get::<WindowDragging>(window).is_none(),
+        "配り終えた時点で WindowDragging は外れているべき"
+    );
 }
 
 // =============================================================================

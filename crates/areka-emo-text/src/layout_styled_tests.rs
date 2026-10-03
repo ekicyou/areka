@@ -594,9 +594,11 @@ fn the_line_pitch_formula_is_reached_through_a_single_call_site() {
         ("layout.rs", include_str!("layout.rs")),
         ("layout_styled.rs", include_str!("layout_styled.rs")),
         ("layout_line_ops.rs", include_str!("layout_line_ops.rs")),
+        ("layout_scan.rs", include_str!("layout_scan.rs")),
+        ("layout_scan_glyph.rs", include_str!("layout_scan_glyph.rs")),
     ];
     // 走査面が空になると以降の判定が恒真になるので母数を先に固定する。
-    assert_eq!(SOURCES.len(), 3, "走査する配置層のファイル数");
+    assert_eq!(SOURCES.len(), 5, "走査する配置層のファイル数");
 
     let calls: usize = SOURCES
         .iter()
