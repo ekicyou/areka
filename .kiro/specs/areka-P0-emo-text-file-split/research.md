@@ -304,3 +304,50 @@
 
 - 本書の論点 1〜10 を要件の討議（`kiro-requirements-discussion`）で扱い、要件の改訂が要るもの（例: 要件 5.4 の読み、要件 3.1 と 2.7 の両立）を確定する。
 - その後 `/kiro-design areka-P0-emo-text-file-split` で切れ目・名前・可視性・証跡の採り方を設計に落とす。
+
+---
+
+## 10. 設計フェーズの調査と裁定（2026-10-03・基準 HEAD `71be5003`）
+
+### 10.1 調査の記録（8 章「調べもの」の答え）
+
+| 調べもの | 方法 | 結果 | 設計への影響 |
+|---|---|---|---|
+| `concat!(include_str!(…), include_str!(…))` で 2 本を 1 つの定数に読めるか | 一時フォルダで `rustc` により実測（2 本に分けた `finish_line(` を `.matches().count()` で数える） | 通る。出現数は 2 本の和になる | `layout_cursor_overflow_tests.rs` の `LAYOUT_SRC` を `layout_scan.rs`＋`layout_scan_glyph.rs` の連結へ追随できる（数 4／3 は不変） |
+| `layout_inner` の分岐ごとに通る既存のテスト | `layout_inner` を全文読み、`layout_*_tests.rs` 13 本と `layout_test_support.rs` を読んで分岐 19 本（文字 10・改行 2・`\_l` 4・最終行 1・装飾 1・警告 1）と突き合わせ。ログの文言「塊の途中」「両軸縮退」「完全 no-op」も grep | **19 本すべてに既存のテストが少なくとも 1 本ある**（design §Supporting References の表） | 要件 4.4 で足すテストは 0 本 |
+| 対象 6 本の `windows` 系の参照 | `lib.rs` の見張りと同じ 5 パターンで grep | `viewbox_draw.rs` 7 件・他 5 本（`actor`・`layout`・`viewbox`・`region` を含む）0 件 | `actor` の子 2 本・`layout` の子 2 本・`viewbox_diff`・`region_tests` は純粋層の一覧へ（59 → 65）、`viewbox_draw_render` は読まない一覧へ |
+| 本文の中の `super::`／`self::` | 6 本を grep | `balloon.rs` の `on_balloon_pointer_pressed` にある `super::user_break::on_left_press` の 1 か所と、`balloon_visibility.rs` の `use super::talk_lifecycle::TalkLifecycleSignal;` だけ | 親に `use super::user_break;` を置き、子の本文を変えない |
+| 外から引かれる名前 | `balloon.rs`・`balloon_visibility.rs` の `pub(crate)` の名前を `crates/areka/src` 全域で grep | `balloon.rs`: 外で使うのは `BalloonWiring`・`ChoiceSelection`・`ChoiceSelectionInbox`・結線 3 本。ハンドラ 3 本は本ファイルの木の中だけ。`balloon_visibility.rs`: 外（`frame/wiring.rs`・`menu/trigger.rs`）が使うのは `BalloonVisibilityState` と doc リンクの `decide` だけ。`parse_timeout_ms` の本番の消費者は `resolve_timeout_secs` だけ | 動かす項目は元に残る定義か親の束ね直しで届く。呼び出し側 0 行 |
+| ログの発生元を完全一致で判定する箇所 | `target == "…"`・`target = "…"` を全域で grep | 対象 6 本の発生元に掛かるものは 0 件（完全一致があるのは `kanade`・`areka::emo2_boot`・`wintf::transition`・`areka_emo_compose` など） | 要件 2.5 で元に残す項目は無し |
+| 子へ出す関数が呼ぶ親の私有の項目 | 各ファイルの呼び出し位置を grep（`warn_coarse_wrap_threshold`・`is_backward_shrink`・`line_fingerprint`・`none_err`／`device_err`・`decide_timeout`・`SuppressionKinds::any`・`TimeoutSource::as_str` ほか） | 親に残る私有の欄・私有のメソッド・私有の定数は子孫から見える。親や兄弟やテストが呼ぶ子の項目だけ `pub(super)` が要る（design §束ね直しの規則の 9 項目） | 可視性の付与は最小 |
+| `test_support` の名前との重なり（E0659 の芽） | 束ね直す名前を 3 本の `test_support` で grep | 重なり 0 | 明示の `use` への書き換えは不要の見込み |
+| 前後のテスト一覧の採り方 | `tools/test-all.ps1` と前例の `verification/` を読む | `test-all.ps1` は個々の名前と結果を出さないが、`cargo test … -- --list` と本走の `test X ... ok` 行で採れる。前例の `Compare-TestLists.ps1`（多重集合）と `Compare-RelocatedTests.ps1`（行頭空白を無視した本文一致）は `.kiro/specs/completed/areka-P0-file-slimming/verification/` にあり、パスで呼べる | design §検証の流れ |
+| 純移動の機械照合 | 前例の `RustParse.ps1` の性質を読む | 最上位の項目の単位で分解する道具で、`impl` の塊を分けた場合は塊の単位が合わない | 本 spec の純移動の判定は、テストの前後一致＋`git diff --color-moved` の「移動以外の差分」のレビューとする（新しい道具は作らない） |
+
+### 10.2 裁定（8 章の論点のうち設計へ持ち越したもの）
+
+| 論点 | 裁定 | 理由 |
+|---|---|---|
+| 1 の残り（割った関数群と仕上げ 4 本の置き場所） | `layout_scan.rs`（駆動・`Scan`・改行と `\_l` の腕・仕上げ 4 本）＋その子 `layout_scan_glyph.rs`（文字の腕）。`layout_cursor_overflow_tests.rs` は 2 本の連結を読む | 文字の腕（約 145 行）が後続 2 本（`text-typesetting`・`text-ruby`）の受け口で最も太るので 1 本に独立させる。仕上げ 4 本は呼び手（文字の腕・改行の腕・最終行）と同じモジュール木に置き、「門が私有関数に閉じている」性質を `scan` の私有として保つ。2 段目の子にするのは `Scan` の欄を私有のまま子から読むため |
+| 2（名前） | 既存のテストの頭とぶつからない名前を選ぶ（design §名前の制約の確認の表）。既存のテストの親を付け替えない | 付け替えるとテストの完全な名前が変わり、要件 4.1 の突き合わせに対応表が要る |
+| 3 の前半（型の定義の置き場所） | 型・定数は元に残し、`impl` の塊と関数を子へ（案 A） | 私有の欄をテストと子がそのまま読める。`impl X {` の行は要件 2.2 が許す |
+| 4（`present_frame`） | 子 `actor_present.rs` へ出す。`frame_attach_tests.rs` の登記を 1 件差し替える（`ACTOR_SCAN_SITES`） | brief の「1 コマの描画の流れ」を独立させ、`text-reveal-fade` の受け口にする。登記の差し替えは要件 5.2 が許す範囲 |
+| 5 の書き方 | テストからだけ引かれる名前は `#[cfg(test)] use child::X;`（先例 `plan_inconsistency`）。`#[allow(unused_imports)]` は使わない | 要件 3.1 のただし書きが許すので握り潰す理由が無い。対象は `line_fingerprint`・`resolve_timeout_secs`・`parse_timeout_ms` |
+| 7（余白） | 全ファイル 700 行以下・最大は `viewbox_draw_render.rs` 約 570 | 後続の本数が多い `actor`・`balloon.rs` は 3〜4 本に分けて 500 行前後まで下げた。`render_styled`（327 行・1 本）は割らない（本文の書き換えになる） |
+| 8（`region.rs`） | 内蔵テストを `region_tests.rs` へ移す | `text-typesetting` の brief が `region.rs` の注記（ぶら下げ未実装）を名指ししている＝触る後続が実在する。費用は前例の道具で小さい |
+| research A-1 の `spawn_emo_text` | 元に残す（`present` へは出さない） | 起動の結線であって描画の流れではない |
+| `balloon.rs` の子の数 | 3 本（追従・クリック・離脱） | 2 本のハンドラは 1 本の兄弟テスト（`balloon_pointer_handler_tests.rs`）が見るが、後続 5 本の受け口が偏る（クリック）ので役割ごとに分ける。親は約 430 行 |
+| `balloon_visibility.rs` の子の数 | 2 本（判断・待ち時間と時間切れ） | 設定の**型**は元に残し（`TimeoutSource::as_str` を私有のまま子から呼ぶため）、設定の**関数**は時間切れと同じ子へ |
+
+### 10.3 設計レビューの門（kiro-spec-design の review gate）
+
+- 機械の検査: 要件 ID 40 件（1.1〜8.3）がすべて design.md に現れる／Boundary の 4 節は空でない／File Structure Plan は実在のパスと新しいパスで具体化／Components の各項目は File Structure Plan に対応するファイルを持つ／File Structure Plan が Boundary の所有範囲を超えていない（brief の外で変えるのは構造テスト 3 本・`lib.rs`・`structure.md`・`verification/` だけで、他 spec の持ち場は 0）。
+- 判断の検査: 要件に矛盾や未定は見つからず（要件の討議で裁定済みの事項の範囲内）。修正の周回は 0 回で通過。
+
+### 10.4 リスクと備え
+
+- 束ね直しの漏れによる警告の増加 → 前後の `warning:` 件数の採取で捕まえ、`#[cfg(test)] use` へ直す。
+- `use super::*` と `use super::test_support::*` の重なり（E0659）→ 設計時の確認で重なり 0。出たら親で明示の `use`。
+- 構造テストの読む範囲が黙って縮む → 母数（65・5・3・4）の固定と `every_source_file_is_either_scanned_or_explicitly_excluded` で塞ぐ。
+- `layout_inner` の割り出しで振る舞いが変わる → 腕の本文は写すだけ（`self.` の付与のみ）・19 分岐の既存テスト・前後の結果一致・実機の確かめの 4 重。
+- 概算の行数が外れて 700 行を超える → 1.2 に従い `verification/notes.md` に記録。1,000 行を超える見込みは無い。
