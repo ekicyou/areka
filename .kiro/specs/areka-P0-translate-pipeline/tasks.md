@@ -86,7 +86,7 @@
   - 完了の状態: 運行のクレート・areka-ghost・areka 本体の全テストが緑で、許可表に無い ID を送らないテストも緑。emo2 の e2e の表示される台詞が本 spec の前と同じ。どのテストのファイルも 1,000 行未満
   - _Requirements: 1.1, 1.2, 1.3, 3.1, 3.6, 4.6, 5.1, 5.2, 5.6, 8.1, 8.2, 8.4_
 
-- [ ] 3.5 5 種類の経路ごとの通過と控えの書き換えをテストで固定する
+- [x] 3.5 5 種類の経路ごとの通過と控えの書き換えをテストで固定する
   - 表の 8 か所の腕を 1 本ずつ、最上位の `step` に元のイベントの台詞を入れて一括が翻訳の行動だけになり、結果を入れると預けた一括（起動は再生の開始＋バージョンの通知、選択の連鎖は選択の解決＋再生の開始の順）が返ることを確かめる。捕まえる規則を外すとどれも赤になる
   - areka が作る起動の記録だけの台詞・0 文字の台詞・外から頼まれた `OnTranslate` の応答が翻訳されないこと
   - 再生を始めた後の相・期限・台詞の切れ目の見張りの結果が翻訳なしと同じこと。印のイベントの台詞で見張りが印の台詞を追うこと
@@ -148,3 +148,4 @@
 - 3.2: `lib.rs` の `mod actor_translate;` に一時の `#[allow(dead_code)]` がある。3.3 で `execute_actions` の腕から `run_translate` を呼んだら外す。送出は `round_trip_raw`（検査・印の置き換え・`shiori_request`・往復）と、エラー応答を写す `round_trip_request` の 2 段。偽の SHIORI のスレッドは送り手を落としてから join しないと `recv` で止まる
 - 3.3: 殻の本番の関数は `drive_translating`・`execute_batch` の名前になり、元の `drive`・`execute_actions` は素通しの口を渡す `#[cfg(test)]` の包みとして残した（既存テストを変えないため）。`actor.rs` は 876 行で、3.4 以降で殻に書き足す余地は 120 行ほど。翻訳の失敗で切替の台詞は `None`（下流は `unwrap_or_default()` で空文字）。設計の `translate_tests.rs` の行「選択の連鎖の後でも故障になること（論点 10）」はまだ無いので、3.5 で足す
 - 3.4: `crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` は本 spec の前から 1,129 行で長さの検査の例外表に載っている。期待の列に `OnTranslate` を 1 つ足して 1,135 行（検査は例外のファイルの行数を固定しないので緑・例外表は触らない）。`State` を手で組み `reply_source: None` のまま SHIORI の応答を入れる既存テストは、構造上は起きない `translate_source_missing`（error）の枝を通って今日どおり再生する（触っていない）。主な経路の通過は 3.5 で固定する。3.5 では「204 の応答の `step` で生まれる起動の記録だけの台詞（`StartTalk` あり）を捕まえない」も固定する（3.4 の `no_content_reply_is_not_captured` は `StartTalk` の無い一括しか見ていない）。4.2 で本物の展開を渡すと、`spine_conformance_script.rs` の `translated()` と areka-ghost の `expected_translate` の Reference0（今は展開の前の台詞）が変わる
+- 3.5: 「翻訳なしと同じ」の比べる相手 `translate_path_tests.rs` の `step_untranslated` は `step` の本体から `translate::before`／`after` を除いた写し。`step` の順序を変えたらこの写しも直す。停止通知の切替の中身は源（`State::change.script` が `Unloading` まで最終の台詞のまま）までしか見ていないので、停止通知そのものは 3.6 の殻の結合テストで確かめる。論点 10 のテストは `translate_path_tests.rs` に置いた

@@ -930,3 +930,8 @@ mod external_state_tests;
 #[cfg(test)]
 #[path = "schedule_log_firing_tests.rs"]
 mod log_firing_tests;
+
+/// 翻訳の経路（SHIORI の台詞で再生を始める 8 か所の腕）を最上位の `step` から通すテスト。
+#[cfg(test)]
+#[path = "translate_path_tests.rs"]
+mod translate_path_tests;
