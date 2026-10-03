@@ -42,8 +42,8 @@
   - _Boundary: TranslateSeams_
   - _Depends: 1.1_
 
-- [ ] 2. `OnTranslate` の組み立て
-- [ ] 2.1 元のイベントの型と `OnTranslate` の組み立てを足し、許可表に加える
+- [x] 2. `OnTranslate` の組み立て
+- [x] 2.1 元のイベントの型と `OnTranslate` の組み立てを足し、許可表に加える
   - 元のイベント（ID は選択肢の任意名も逐語・Reference の並び）の型を足す
   - Reference0＝展開済みの台詞・Reference1＝欠番の印（線の層との境界から再輸出した名前で使う）・Reference2＝元のイベントの ID・Reference3＝元の Reference をバイト値 1 で連ねたもの（0 個なら空文字列）で組み立てる
   - 許可表に `OnTranslate` を ukadoc の URL の注記つきで足し、冒頭の Reference 表に 1 行足す。許可表の数の固定を 45 → 46 にする
@@ -143,3 +143,4 @@
 ## Implementation Notes
 - 1.1: emo2 の pasta は `OnTranslate` に 204（雑談の途中でも続きは変わらない）。比べる記録は `target\translate-baseline\`（`talk-record.txt`）。今の版は台詞の本文を記録に残さないので、6.2 は「どのイベントが台詞を返しどの順で再生が始まったか」の並びと画面の目視で比べる。Ctrl＋ダブルクリックの終了は 09-19 に撤去済みで、終了は右クリックのメニューの「終了」。`cargo build` の後は 32bit の helper を `target\debug\` へ写し直してから起動する
 - 1.2〜1.5: clippy は HEAD の時点で既に赤（`areka-kanade/src/shiori/real.rs` の `collapsible_if`・`dola` の 21 件・`areka-sakura/src/compile_arm_tests.rs` の doc の字下げ・`shiori-host32-host/tests` の `drop_non_drop`）。担当は `clippy-199-lints` で、本 spec では触らない。自分が触ったファイルに指摘が無いことだけを見る。`areka-sakura` には `log-capture-kit` が無いので、記録の数はテストの中の小さな `tracing::Subscriber` で数える
+- 2.1: 台帳 `shiori.toml` の `OnTranslate` の note は最終形の振る舞いで書いた。根拠の場所は今は `events.rs`・`shiori3.rs` だけなので、3.x で `schedule/translate.rs`・`actor_translate.rs` ができたら根拠の行に書き足す。台帳を変えたら `briefing.md` の barrier の数・`roadmap-draft.md` の `owner_count` も合わせ、`report/*.md` は手でなく `cargo run -p ukadoc-survey -- report`／`-- report-summary` で作り直す（改行だけ変わった報告ファイルはコミットに含めない）

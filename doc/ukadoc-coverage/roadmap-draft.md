@@ -452,7 +452,7 @@ wave = "W13 任意／W14"
 name = "areka-P0-translate-pipeline"
 stage = "E"
 bundle = "トランスレータ"
-owner_count = 1
+owner_count = 2
 wave = "W15"
 
 [[spec]]
@@ -720,7 +720,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 1 | 外部アプリ | `areka-P0-external-app-bridge` | **0 本** | 第 6 波 |
 | 2 | 開発者機能 | `areka-P0-developer-tools` | **0 本** | 第 6 波 |
 | 3 | ヘッドライン | `areka-P0-headline-host` | `areka-P0-property-catalog-lists`（W16・6 件） | 第 6 波 |
-| 4 | トランスレータ | `areka-P0-translator-canon`（残余） | `areka-P0-makoto-dll-host`（W16・4 件）／`areka-P0-translate-pipeline`（W15・1 件） | 第 6 波 |
+| 4 | トランスレータ | `areka-P0-translator-canon`（残余） | `areka-P0-makoto-dll-host`（W16・4 件）／`areka-P0-translate-pipeline`（W15・2 件） | 第 6 波 |
 | 5 | 薦める場所 | `areka-P0-recommend-sites` | **0 本** | 第 6 波 |
 | 6 | 作り付けの窓 | `areka-P0-baseware-windows` | `areka-P0-popup-menu-minimal`（A0・1 件） | 第 6 波 |
 | 6 | 読み上げと聞き取り | `areka-P0-voice-io` | **0 本** | 第 6 波 |

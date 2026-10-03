@@ -202,8 +202,9 @@ fn on_close_notify_is_notify_with_reason_and_derived_status() {
 /// 正典固定 ID・`OnUpdateCheck*`／`OnUpdateResultExplorer`／`OnUpdatedata*` は載せない）。
 /// シェル・バルーン切替の 3 語（OnShellChanging/OnShellChanged/OnBalloonChange）は
 /// shell-balloon-switch 1.1 で同じ前例に倣い足した（42→45・いずれも正典固定 ID）。
+/// 翻訳の `OnTranslate` は translate-pipeline 2.1 で同じ前例に倣い足した（45→46・正典固定 ID）。
 #[test]
-fn allowed_event_ids_are_exactly_the_forty_five_and_exclude_ontalk_onhour() {
+fn allowed_event_ids_are_exactly_the_forty_six_and_exclude_ontalk_onhour() {
     assert_eq!(
         ALLOWED_EVENT_IDS,
         &[
@@ -252,6 +253,7 @@ fn allowed_event_ids_are_exactly_the_forty_five_and_exclude_ontalk_onhour() {
             "OnShellChanging",
             "OnShellChanged",
             "OnBalloonChange",
+            "OnTranslate",
         ]
     );
     assert!(
@@ -695,4 +697,91 @@ fn choice_constructors_split_event_id_category_by_origin() {
             id.as_str()
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// `OnTranslate`（areka-P0-translate-pipeline 要件 3.2・3.3・3.4）
+// ---------------------------------------------------------------------------
+
+fn source(id: EventId, references: &[&str]) -> SourceEvent {
+    SourceEvent {
+        id,
+        references: references.iter().map(|r| r.to_string()).collect(),
+    }
+}
+
+/// `on_translate` の (id, references, status) を取り出す（NOTIFY なら panic）。
+fn translate(expanded: &str, src: &SourceEvent) -> (EventId, Vec<String>) {
+    match on_translate(
+        expanded,
+        src,
+        ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
+    ) {
+        ShioriCall::Get { id, references, .. } => (id, references),
+        ShioriCall::Notify { .. } => panic!("OnTranslate は GET で送る"),
+    }
+}
+
+/// Ref0＝展開済みの台詞・Ref1＝欠番の印・Ref2＝元のイベントの ID・Ref3＝元の Reference を
+/// バイト値 1 で連ねたもの。元の Reference の数ごとに確かめる。
+#[test]
+fn on_translate_builds_the_four_canonical_references() {
+    let cases: [(&[&str], &str); 4] = [
+        (&[], ""),
+        (&["master"], "master"),
+        (&["0", "1", "2"], "0\u{1}1\u{1}2"),
+        (&["", "halt", ""], "\u{1}halt\u{1}"),
+    ];
+    for (refs, joined) in cases {
+        let (id, references) =
+            translate("\\h太郎さん\\e", &source(EventId::Static("OnBoot"), refs));
+        assert_eq!(id, EventId::Static("OnTranslate"));
+        assert_eq!(
+            references,
+            vec![
+                "\\h太郎さん\\e".to_string(),
+                ABSENT_REFERENCE.to_string(),
+                "OnBoot".to_string(),
+                joined.to_string(),
+            ],
+            "元の Reference={refs:?}"
+        );
+    }
+}
+
+/// Ref1 は線の層の欠番の印そのもの（行が出ず番号だけ進む・要件 3.3）。
+#[test]
+fn on_translate_reference1_is_the_wire_absent_marker() {
+    let (_, references) = translate("\\e", &source(EventId::Static("OnClose"), &["user"]));
+    assert_eq!(references.len(), 4);
+    assert_eq!(references[1], shiori_host32_host::shiori3::ABSENT_REFERENCE);
+}
+
+/// 選択肢の任意名は Ref2 に逐語で載る（大小文字も綴りも変えない）。
+#[test]
+fn on_translate_carries_a_choice_name_verbatim_in_reference2() {
+    let (id, references) = translate(
+        "\\e",
+        &source(EventId::Choice("OnMenu_ほげ.x".to_string()), &["a"]),
+    );
+    assert_eq!(id, EventId::Static("OnTranslate"));
+    assert_eq!(references[2], "OnMenu_ほげ.x");
+    assert_eq!(references[3], "a");
+}
+
+/// Status は渡された値をそのまま載せ（他の GET と同じ見出し）、許可表を通る。
+#[test]
+fn on_translate_keeps_the_given_status_and_is_allowed() {
+    let snap = ExecutionSnapshot::INACTIVE;
+    let status = ExecutionStatus::derive(&snap);
+    let call = on_translate(
+        "\\e",
+        &source(EventId::Static("OnBoot"), &[]),
+        status.clone(),
+    );
+    match &call {
+        ShioriCall::Get { status: got, .. } => assert_eq!(got, &status),
+        ShioriCall::Notify { .. } => panic!("OnTranslate は GET で送る"),
+    }
+    assert!(is_allowed_event_id(event_id(&call).as_str()));
 }

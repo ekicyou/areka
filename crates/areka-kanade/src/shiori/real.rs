@@ -32,6 +32,10 @@ use shiori_host32_host::{
 use super::probe::{ShioriBusy, ShioriProbe, ShioriUnblock};
 use crate::msg::{KanadeMsg, ShioriCall, ShioriDownKind, ShioriFailure, ShioriMsg, ShioriOutcome};
 
+/// Reference の欠番の印（線の層の定義をそのまま再輸出する）。host32 の名前を運行表が
+/// 直接 import しないよう、境界の内側の名前として出す（`OnTranslate` の Reference1）。
+pub use shiori_host32_host::shiori3::ABSENT_REFERENCE;
+
 /// 接続済み SHIORI 一式（`!Send` 資材はスレッド内で connect が生成する）。
 ///
 /// `window`（[`ParentMessageWindow`]・`!Send`）と `helper`（[`HelperLifecycle`]）を所有し、
