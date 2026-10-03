@@ -78,8 +78,8 @@ pub fn dispatch_drag_events(world: &mut World) {
         return;
     };
 
-    // 状態遷移イベントを処理
-    if let Some(transition) = flush_result.transition {
+    // 状態遷移イベントを積んだ順にすべて処理
+    for transition in flush_result.transitions {
         match transition {
             crate::ecs::drag::DragTransition::Started {
                 entity,
