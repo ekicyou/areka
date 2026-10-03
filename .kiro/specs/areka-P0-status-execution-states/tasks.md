@@ -99,7 +99,7 @@
   - _Depends: 2.1, 4.1_
 
 - [ ] 5. areka: バルーンの表示の届け
-- [ ] 5.1 (P) 見えているバルーンの組を集め、差分だけ kanade へ送る部品を作る
+- [x] 5.1 (P) 見えているバルーンの組を集め、差分だけ kanade へ送る部品を作る
   - 表示層の照会 2 本（見えているか・番号）の観測列から組を作る純関数を作る。見えている scope だけを scope 昇順で並べ、番号が取れないものは 0 で載せて警告の対象として返す
   - 最後に送った組と警告済みの scope を持つゴーストごとの台帳と、照会 → 組 → 差分 → 置き場のゴーストの kanade へ送る → 記録、の配線を作る。置き場が空なら debug で見送り台帳を保つ。送れなければ error を記録し台帳は更新する。警告は scope ごとに 1 回で、番号が取れたら再武装する
   - 兄弟テストで、組の分岐（不可視・未装着・番号あり・番号なし）と、差分のときだけ送る・同じ組は送らない・置き場が空なら送らない・受け手を落とすと error 1 件、が緑になる
@@ -151,3 +151,4 @@
 - 2.6: `Status:` 行を書く唯一の口は `shiori-host32-host/src/shiori3.rs` の `build_request`（x64 の in-process も同じ関数を呼ぶ）。`areka-kanade/src/shiori/real.rs` は文面を組み立てない。design の 8.2 の追跡と Testing Strategy をこれに合わせて直した。
 - 3.1: areka の bin テストには既定の口のまま本物の背景スレッドや kanade を起こすものがあり（`menu/update_frame_tests.rs`・`emo2_boot/spine_conformance_support_tests.rs` は `KanadeConfig::new` 経由で `PROCESS` を読み `Status` を逐語照合する）、本番の既定が `PROCESS` を立てると並列実行で揺れる。そこで `UpdateDesk` の既定は `#[cfg(test)]` で読まれない数にした。3.2 の取得の本番の起こし方でも同じ危険が無いか確かめること。
 - 4.1: トークの終わりの合図 `TalkEnded` が次のトークの `TalkStarted` より前に並ぶ保証は、自然終端（`on_done`）と選択の取り消しで dispatcher が合流しないため、talk スレッド側（areka-sakura `drive.rs`）で受け口を落としてから `TalkDone`／`Interrupted` を送る形で持たせた（境界を広げた・C1 外）。
+- 5.1: `status_report.rs` 先頭の `#![cfg_attr(not(test), allow(dead_code))]` は 5.2 の結線までの仮置き。5.2 で必ず外す。headless の表示層では可視にできないので、照会が見えている状態を読む経路は 5.2 のテストで踏む。

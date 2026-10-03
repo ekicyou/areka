@@ -162,7 +162,7 @@ crates/areka/src/
 ├── input_events/user_break.rs     # 旗の変化を kanade へ 1 件（取り出しの終わりに 1 回）・reported の欄・TalkEnded の畳み込み
 ├── emo2_boot/user_break_cue.rs    # NoUserBreakSignal::TalkEnded・impl Drop
 ├── emo2_boot/balloon_visibility_phase.rs   # 相の終わりで status_report を呼ぶ（分解に欄を 1 つ足す）
-├── emo2_boot/frame.rs             # `mod status_report;` 1 行
+├── emo2_boot/frame.rs             # `pub(in crate::emo2_boot) mod status_report;` 1 行（呼ぶ相 `balloon_visibility_phase.rs` が frame の外にあるため）
 ├── emo2_boot/frame/wiring.rs      # Emo2Wiring.balloon_status（ゴーストごと・新品）
 ├── emo2_boot/frame/status_report.rs        # 新規: 組の収集（純関数）・差分・GhostSlot 経由の送出・記録
 └── emo2_boot/frame/status_report_tests.rs  # 新規
@@ -186,7 +186,7 @@ crates/areka/src/
 - `crates/areka/src/input_events/user_break.rs` — `fold_no_user_break` に `TalkEnded => (false, false)`、`UserBreakWiring.reported_no_user_break: bool`、`drain_no_user_break_signals` の末尾で「旗 ≠ 最後に送った値」なら `KanadeMsg::ExecutionState(NoUserBreak(旗))` を 1 件（失敗は `error!(no_user_break_send_failed)`）。
 - `crates/areka/src/emo2_boot/frame/wiring.rs` — `pub(in crate::emo2_boot) balloon_status: BalloonStatusLedger`（`new` で既定）。
 - `crates/areka/src/emo2_boot/balloon_visibility_phase.rs` — 分解に `balloon_status` を足し、`issue_actions` の後（`emit_visibility_logs` の前後どちらでもよい）で `status_report::report_balloons(presenter, world, balloon_status, &scopes)` を呼ぶ。
-- `crates/areka/src/emo2_boot/frame.rs` — `mod status_report;`。
+- `crates/areka/src/emo2_boot/frame.rs` — `pub(in crate::emo2_boot) mod status_report;`（呼ぶ相 `balloon_visibility_phase.rs` が frame の外にあるため）。
 - `doc/ukadoc-coverage/ledger/sakura-script.toml`・`ledger/shiori.toml`・`doc/ukadoc-coverage/roadmap-draft.md`・`doc/ukadoc-coverage/report/`（作り直し）・`.kiro/steering/roadmap.md` — 要件 6.3 の記録（後述）。
 - 既存テストの追随: `ExecutionSnapshot { .. }` の構造体リテラル（`crates/areka-kanade` と `crates/areka/src/emo2_boot/spine_conformance_support.rs` ほか）は `..ExecutionSnapshot::INACTIVE` で吸収。`status.rs` の `inactive_snapshot_has_every_source_false` だけは網羅のリテラルを 5 欄へ書き直す。`schedule_variant_tests.rs`（`Input` の変種の網羅）・`msg.rs` のラベル網羅に腕を足す。`update/worker_tests.rs`・`install/fetch_url_tests.rs`・`emo2_boot/install_cue_tests.rs`・`update/desk_*_tests.rs` は引数と欄の追随（テスト用の数を渡す）。
 
