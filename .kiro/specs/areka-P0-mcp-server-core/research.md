@@ -201,4 +201,26 @@ docs.rs の `StreamableHttpServerConfig`・`StreamableHttpService`・`ServerHand
 ## 9. 次の段へ
 
 - 要件ディスカッションで §7 の 1・2・4・5・7 を決める（3・6・8・9 は設計で決めてよい）。
+
+## 10. 要件ディスカッションの結果（2026-10-03）
+
+### 要件へ当てた自明な修正（§7 の 1・7・8 はここで片付いた）
+
+- §7-1（未知メソッドのコード）: 要件 3.7 を「JSON-RPC のエラー・コードは rmcp のまま・測った値を差の一覧に書く」へ緩めた。areka がメソッドの表を持つ案は取らない（brief「細部は rmcp に従う」のとおり）。
+- §7-7（`dist/README.txt`）: 要件 2.7 から外した。本 spec は help だけに載せ、`mcp-stdio-bridge` が README に書く（要件の Adjacent expectations にも書いた）。
+- §7-8（JSON でない本文）: 要件 3.8 を 415／400 の 2 段で書き、要件 9.2 のテストを 2 本に分けた。
+- ほか: rmcp のライセンスは MIT でなく **Apache-2.0**（要件の Introduction を直した）・`AREKA_MCP_PORT` の UTF-8 でない値を要件 2.5 に足した・`MCP-Protocol-Version` の未知の値（400）を要件 3.13 と 9.2 に足した。
+
+### 設計へ送る判断（`/kiro-spec-design` で決める）
+
+| # | 判断 | 本文書の推奨 | 要件側の縛り |
+|---|---|---|---|
+| B-1 | `Origin`／`Host` の検査を自前（B2）か rmcp の表（B1）か | B2（自前 1 つを両方のパスの手前に・rmcp の `Host` 既定は残す） | 要件 4.3（`warn!` に値）・4.5（純粋関数のテスト）・6.3（help にも同じ検査）を満たすこと |
+| B-2 | HTTP の土台（A1 hyper 直／A2 axum） | A1 | 要件 8（新しいクレートの数と告知の量が変わる） |
+| B-3 | 畳み方（D1 `Drop`／D2 閉包の明示） | D1 | 要件 1.7〜1.9・`main.rs` へ足すのは数行（brief） |
+| B-4 | 登録口の handler を同期にするか非同期にするか（E1） | 非同期の形で口を切り、本 spec のテストの 1 本は `ready()` | 要件 7.4（逐語で渡せる形）・1.5（他の接続を止めない）・後続 `mcp-tool-entrances` が従う |
+| B-5 | rmcp の既定機能 `macros`・`base64` を切るか | 切る（`server`＋`transport-streamable-http-server`） | 要件 8.2（版の固定） |
+| B-6 | `tools/call` の `-32602` は `ToolRouter` を通す形でだけ出る（既定の `call_tool` は `-32601`） | `ToolRouter` を通す | 要件 3.6・7.3 |
+| B-7 | 本文の上限 4 MiB を差の一覧に載せるか（任意） | 載せる（「違うが困らない」1 行） | 要件 5.1 の 15 行の外 |
+| R1〜R5 | §6 の調べ残し | 設計の最初のタスク（空の `areka-mcp`＋`initialize` 5 版→`ping` のテスト）で R2・R3・R4 を測る | — |
 - 設計の最初のタスクは「`areka-mcp` を空で建てて `cargo deny check` と `-License` を通し、`initialize`（5 版）→`ping` の決定論テストを 1 本緑にする」＝§6 の R2・R3 がここで同時に測れる。
