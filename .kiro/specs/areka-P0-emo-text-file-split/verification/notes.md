@@ -97,7 +97,7 @@
   - 観測（run2・`50:15.54`〜`50:16.07`）: 体のダブルクリックでメニューの話（`talk_id=8 origin="OnMouseDoubleClick"`）が始まった 0.5 秒後、体の上のマウスの動きで `OnMouseMove` の返事が届き、`event="steady_talk_replace" talk_id=9 origin="OnMouseMove"` でメニューが置き換わった。開発者には「メニューを出した後に後続のトークが止まってないときがある」と見えた。
   - 同じ形: `51:38.20` に始まった `OnSecondChange` の話を、`51:38.36` の体のダブルクリック（メニュー）が置き換えた。
   - 分割との関係: 無い。決めているのは運行（kanade）の「話の最中に新しい返事が来たら差し替える」（単一 slot 置換）で、`crates/areka-kanade/`・`OnMouseMove` を送る側（`input_events/mod.rs`・`input_events/throttle.rs`・`emo2_boot/hit_region.rs`）・`crates/areka-ghost/` の基準 `94e3ad78` からの差分は 0 行。
-  - 次の一歩: 正典（ukadoc／SSP の話の最中・選択待ちの最中のイベントの扱い）と照らして、バグとして `/kiro-discovery` で起票するかを承認フローで決める。
+  - **承認フローでの結論（2026-10-03）**: 正典どおりで areka の不具合ではない。ukadoc の `	` は「スクリプトブレーク…か\eまでの間、マウス系などのイベント通知を行わない」＝止めたい区間を台本で明示する作りで、既定では話の最中（選択待ちを含む）もマウス系は届き、返事は今の話を中断する（完了 `input-events` DD-IE-1／DD-IE-2 と同じ）。止めるのはゴーストの側（`Status` の `talking`／`choosing` を見て黙る）か台本の `	`。調べの途中で、areka が `	` を読まない穴が持ち主なしと分かったので、`/kiro-discovery` で `areka-P0-sakura-time-critical` を起票した（roadmap の台帳と「生きている決まり」10）。
 
 ## 4. 機能全体の検証（`/kiro-validate-impl`・2026-10-03）
 
