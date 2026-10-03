@@ -121,7 +121,7 @@
   - 完了の姿: 2 つの文書の差分に上の内容が載り、差の一覧の該当行に空欄が無い
   - _Requirements: 2.7, 7.3, 8.3_
   - _Depends: 4.3_
-- [ ] 7.2 全体の確認
+- [x] 7.2 全体の確認
   - `tools/test-all.ps1` を通し、`Cargo.toml`（根・`crates/areka-mcp`・`crates/areka`）の差分 0 行、触ったファイルが design.md の範囲に収まること、`areka-mcp` の本番のコードがクレートの外のファイルを読まないことを確かめる
   - 完了の姿: `tools/test-all.ps1` が緑、`git diff main --stat -- '*Cargo.toml'` が空、触ったファイルの一覧が design.md「File Structure Plan」と一致
   - _Requirements: 7.4, 7.5, 7.6, 8.1, 8.2_
