@@ -243,13 +243,14 @@ docs.rs の `StreamableHttpServerConfig`・`StreamableHttpService`・`ServerHand
 | 未知のメソッド | 本文の読み解きで弾かれ **400＋`-32600`** の見込み | 知らないメソッド名は `ClientRequest::CustomRequest` として**読める**。`ServerHandler::on_custom_request` の既定が **`-32601`**（`handler/server.rs`）。旧式の経路では HTTP 200 | 要件 3.7 はそのまま満たす（SSP と同じ 200・`-32601`）。areka がメソッドの表を持つ必要は無い |
 | 壊れた JSON | 400＋`-32600` | `expect_json`（`transport/common/server_side_http.rs`）は `serde_json::from_slice` の失敗を **415**・平文 `fail to deserialize request body …` で返す（同ファイルのテスト `expect_json_returns_415_for_invalid_json_under_limit` が固定している）。`Content-Type` 違いも 415 | 要件 3.8 の括弧書き「400 と JSON-RPC のエラー」は現物と違う。主文「4xx で答え、落とさない」は満たす。**設計ディスカッションで要件 3.8 の括弧書きを 1 行直す**（設計の判断 B-10） |
 | JSON-RPC エラーのときの HTTP 状態 | `-32602` は 400・`-32601` は 404 | `jsonrpc_http_status` が効くのは `serve_negotiated_request_directly`（本文の `_meta` に版が入る **2026-07-28 の per-request 経路**と `server/discover`）だけ。旧式の 4 版の要求は `handle_post` の無状態の腕で `json_response` のとき **`StatusCode::OK` 固定** | 今の Claude Code・Cursor が使う経路では SSP と同じ 200。R1 の大半はここで解けた（残るのは 2026-07-28 の経路の 400／404＝差の一覧に書く） |
-n> 2026-10-03 注記（実機確認 6.2）: 上の「今の Claude Code・Cursor が使う経路」は誤りだった。Claude Code 2.1.283 は 2026-07-28 の無状態版（`server/discover`→`tools/list`）でつなぐ。正しい扱いは requirements.md 3.15・design.md B-12。
 | `Accept` ヘッダ（§3 に無かった事実） | — | `handle_post` の先頭で `Accept` に `application/json` **と** `text/event-stream` の両方が無ければ **406**。素の `curl`（`Accept: */*`）は 406 | 差の一覧に 1 行（違うが困らない）。signoff と差の一覧の `curl` 例は `-H "Accept: application/json, text/event-stream"` を付ける（設計の判断 B-8） |
 | 未知の版の交渉（R2） | 文書から読み切れず | `negotiate_protocol_version`（`service/server.rs`）: 要求の版が `initialize` を持ち（`2026-07-28` 未満）かつ対応表に在ればそれ、無ければ `get_info` の `protocol_version`（既定 `LATEST`＝`2026-07-28`＝`initialize` を持たない）→ `initialize` を持つ最新＝**`2025-11-25`** | SSP と同じ値になる見込み。テスト `initialize_unknown_version_falls_back` で測って差の一覧へ |
 | `server/discover` の形 | `ttlMs`・`cacheScope`・`resultType` は無い | `DiscoverResult::from_server_info` は `result_type: complete`・`ttl_ms: 0`・`cache_scope: private`・`_meta` に serverInfo を**載せる** | 差の一覧の行を「SSP は `ttlMs: 3600000`、areka は `0`」の形で書く（違うが困らない） |
 | `ToolRouter` の API | `new_dyn`・`add_route`・`list_all`・`call` | 同じ。`call` の未登録は `invalid_params("tool not found")`＝`-32602`。`new_dyn` の閉包は `Result<CallToolResponse, ErrorData>` を返し、`CallToolResult` は `From` で `CallToolResponse::Complete` へ写せる（`model/mrtr.rs`） | B-6 の裏付け |
 | `get_info` の型名 | `ServerInfo` | 3.5.0 では `ServerConfig`（`InitializeResult` の別名。`ServerInfo` は非推奨の別名） | 設計は `ServerConfig` で書いた |
 | `Service` の呼び方 | `TowerToHyperService` で包む | `StreamableHttpService` は `Clone` で `poll_ready` が常に Ready。`service_fn` の中で複製して `tower_service::Service::call` を直に呼べる（`hyper-util` の `service` 機能は要らない） | 直接の依存に `tower-service`（新しいクレートは増えない） |
+
+> 2026-10-03 注記（実機確認 6.2）: 上の表の「JSON-RPC エラーのときの HTTP 状態」の行が言う「今の Claude Code・Cursor が使う経路」は誤りだった。Claude Code 2.1.283 は 2026-07-28 の無状態版（`server/discover`→`tools/list`）でつなぐ。正しい扱いは requirements.md 3.15・design.md B-12。
 
 ### 11.3 設計の判断（B-1〜B-7 の結論と、現物で増えた B-8〜B-10）
 
