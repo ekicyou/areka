@@ -60,3 +60,7 @@ MCP でいちばん使われるのは「台本を流して見る」（`sakurascr
 
 - 棚卸⑳では個別の再測定をしていない（`mcp-tool-entrances` が、各 spec の触るファイルを設計で固定する）。着手は `mcp-tool-entrances` の完了の後で、そのとき接触ファイルを照合する。
 - `raise_event` は kanade の許可の表（`ALLOWED_EVENT_IDS`・44 語）を通らない名前を起こす必要がある。`property-query-channels` の `\![get,property,<イベント名>]` も同じ迂回が要る＝先に着手した方が一度で設計する。`get_status` は `status-execution-states` が足す状態を読む。
+
+## 2026-10-03 C4 の候補（10-03 の再編（開発者「MCP は複合 spec なので早めに着手したい」））
+
+- 段は「優先」。C3 に入れなかった理由: C3 の `balloon-lifecycle-events` と kanade を分け合う。

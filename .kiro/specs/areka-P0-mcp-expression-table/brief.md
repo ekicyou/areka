@@ -54,3 +54,7 @@ AI エージェントが台本に `\s[n]` を書くには「どの番号がど�
 ## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
 
 - 棚卸⑳では個別の再測定をしていない（`mcp-tool-entrances` が、各 spec の触るファイルを設計で固定する）。着手は `mcp-tool-entrances` の完了の後で、そのとき接触ファイルを照合する。
+
+## 2026-10-03 ウェーブ C3-⑦（予定・10-03 の再編（開発者「MCP は複合 spec なので早めに着手したい」））
+
+- 段は「優先」。`mcp-tool-entrances`（C2）の design が固定した「自分のツールのファイル」と、同じ C3 の他の spec（`balloon-lifecycle-events` は kanade・`balloon-font-file` は emo-text）の触るファイルを、着手の前に照合する。

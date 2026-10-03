@@ -67,7 +67,7 @@
 
 ## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
 
-- **ウェーブ C1・Fable 推奨**。規模 S〜M（8〜14 タスク。測るだけで終われば 4〜5）。
+- **C4 の候補**（10-03 の組み直し（開発者「1 バグ・2 リリース関係・バルーン関係・アニメーション画像関係・3 その他」）で段は「その他」。`dist/README.txt` を C2 の `crates-io-publish`・C3 の `winget-manifest-submission` と分け合うので、その後）**・Fable 推奨**。規模 S〜M（8〜14 タスク。測るだけで終われば 4〜5）。
 - brief の記述はすべて実物と一致した。
 - **静的に分かったこと（⑴ 掴み・仮説）**: 絵は `crates/areka-emo-atlas/src/decode/wic_arm.rs` が `CreateDecoderFromFilename` → `CopyPixels` で自前の領域へ写し、関数の終わりで手放す。DirectWrite へフォントファイルを登録する API は使っていない。areka がシェル・バルーンのファイルを開いたまま持ち続ける道は静的には見当たらない（読み込みの最中の一瞬は在りうる）。**実機で確かめる価値は残る**（SHIORI の側が掴む道は別）。
 - **静的に分かったこと（⑵ 窓 0 枚・仮説）**: host-32 の結線が作る `ParentMessageWindow`（`crates/areka-ghost/src/shiori_wiring.rs`）は message-only の窓で、`WM_ENDSESSION` の一斉配信は届かない見込み＝窓 0 枚の区間に受け手は居ない。

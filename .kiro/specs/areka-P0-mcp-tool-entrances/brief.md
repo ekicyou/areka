@@ -62,7 +62,7 @@
 
 ## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
 
-- **ウェーブ C2・Fable 推奨**。規模 M（13〜17 タスク）。
+- **ウェーブ C2-④**（10-03 の再編（開発者「MCP は複合 spec なので早めに着手したい」）で段は「優先」・`mcp-server-core`＝C1 の後。**`Cargo.toml` は触らない**＝同じ C2 の `crates-io-publish` が全部の `Cargo.toml` を触る。要るなら止めて報告）**・Fable 推奨**。規模 M（13〜17 タスク）。
 - brief の記述は実物と一致（`ChangeRx`／`drain_change_requests`＝`emo2_boot/ghost_switch.rs`、`InstallDesk::drain`＝`install/desk.rs`、`GhostSlot`＝`ghost_session.rs`、汲む系の登録は `ghost_session.rs::register_systems`）。
 - **足りなかった事実**: 3 つ目の定石がある＝`areka_actor::spawn_ui`／`UiSender`（async-channel で UI スレッドへ即時に届ける。emo-text と placement の follow が使っている）。毎フレームの `try_iter` より返事が速い。⚠ `ReplyReceiver` は std の mpsc で、待つとスレッドを塞ぐ＝tokio の current_thread の中で `recv_timeout` を呼ぶとほかの要求まで止まる。`spawn_blocking` で包むか async の返事にする。
 - **触るファイル**: `crates/areka-mcp/src/tools/*.rs`（10 本）と定義の一致テスト・新規 `crates/areka/src/mcp/**`・`crates/areka/src/ghost_session.rs`（866 行・`register_systems` に 1 行）・`crates/areka/src/main.rs`（送り口を渡す）。
