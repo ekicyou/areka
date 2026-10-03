@@ -419,7 +419,10 @@ fn no_content_less_line_is_ever_emitted_and_line_closing_sites_are_pinned() {
     );
 
     // ⑵ 行を閉じる場所の数（⑴ を支える門の母集団）。
-    const LAYOUT_SRC: &str = include_str!("layout.rs");
+    const LAYOUT_SRC: &str = concat!(
+        include_str!("layout_scan.rs"),
+        include_str!("layout_scan_glyph.rs")
+    );
     // 定義 1 つ＋呼び出し 3 つ。
     assert_eq!(
         LAYOUT_SRC.matches("finish_line(").count(),
