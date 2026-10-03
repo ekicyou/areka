@@ -25,7 +25,7 @@
   - 完了の状態: 包む処理をまだつないでいない段階で、1 の変更を当てた作業木に引数なしで走らせると較正と 4 つの判定を通って終了コード 0 になり、`-Version 9.9.9` を渡すと二つの版を示して終了コード 1 になる
   - _Requirements: 1.1, 1.2, 1.3, 2.3, 2.4, 2.7, 4.3, 5.5_
 
-- [ ] 2.2 2 つの形で包み、大きさを判定する
+- [x] 2.2 2 つの形で包み、大きさを判定する
   - 引数なしは、ネットを使わずに組み立てを省いて包む形（`--offline`・`--no-verify`・`--allow-dirty`・`--locked`・置き場は `target\crates-io`・`-p dola -p wintf`）
   - `-Verify` は、`--dry-run` 付きで組み立てまで確かめる形。MSVC のリンカが見つかるよう全体テストと同じ PATH の手当てを持つ。`--dry-run` の無い公開は呼ばない
   - 包む前に前回の `.crate` を消し、包んだ後に各 `.crate` が在って上限以下かを判定する（上限ちょうどは通り、1 バイト超えは落ちる較正を持つ）。cargo の出力はそのまま見せる
@@ -117,3 +117,4 @@
 - Git Bash の `sed -i` は CRLF のファイルを LF に変える。Cargo.toml などの編集は Edit ツールか改行を保つ手段で行う（1.2）
 - `tools/crates-io.ps1` は `[Console]::OutputEncoding` を UTF-8 にしないと cp932 の端末で cargo metadata の JSON が化けて ConvertFrom-Json が落ちる（2.1）
 - `-Pending` は 2.1 では未宣言（渡すと引数の割り当てで exit 1）。2.3 で `param` に足す
+- `cargo package`（引数なし）は .crate を `package/`・`package/tmp-crate/`・`package/tmp-registry/` の 3 か所に、`--dry-run` は後の 2 か所に出す。判定は両方に在る `tmp-crate` を読む（2.2）

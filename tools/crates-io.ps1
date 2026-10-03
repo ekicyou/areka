@@ -11,6 +11,11 @@
     4. 判定「欄」: 公開する一覧の各クレートの説明・ライセンス・リポジトリが空でない
     5. 判定「理由」: 出さない各クレートの Cargo.toml に、行頭から「publish = false # 理由」の行がある
     6. 判定「版」（-Version のときだけ）: 公開する一覧の各クレートの版が渡された値と同じ
+    8. 包む: 前回の .crate を消してから、公開する一覧を包む（cargo の出力はそのまま見せる）
+         引数なし: cargo package --no-verify --allow-dirty --locked --offline（ネットを使わない）
+         -Verify : cargo publish --dry-run --allow-dirty --locked（索引を読み、組み立てまで）
+    9. 判定「大きさ」: WORK_DIR\package\tmp-crate\{名前}-{版}.crate が在り、MAX_CRATE 以下
+  --dry-run の無い cargo publish は呼ばない。作業の物は WORK_DIR の下だけ。
   環境変数は読まない（手元と CI で同じ動き）。呼ばれた場所によらずリポジトリの根へ移る。
   追跡されたファイルは書き換えない。
 
@@ -23,14 +28,16 @@
     WORK_DIR      作業の置き場（cargo の --target-dir）
 
 .PARAMETER Verify
-  組み立てまでの形を選ぶ。
+  組み立てまでの形を選ぶ（cargo publish --dry-run・crates.io の索引を読む）。
+  既に在る版は cargo が名前つきの警告で示し、失敗にしない。
+  MSVC のリンカが見つかるよう、test-all.ps1 と同じ PATH の手当てをする。
 
 .PARAMETER Version
   ワークスペースの版がこの値（v を付けない版・例 0.0.2）と違えば、二つの版を示して失敗する。
 
 .EXAMPLE
   pwsh -NoProfile -File tools/crates-io.ps1
-  pwsh -NoProfile -File tools/crates-io.ps1 -Version 0.0.2
+  pwsh -NoProfile -File tools/crates-io.ps1 -Verify -Version 0.0.2
 #>
 #Requires -Version 7
 # 知らない引数（綴り違いを含む）は黙って捨てずに断る
@@ -88,6 +95,15 @@ function Test-Version($Packages, [string[]]$Publish, [string]$Want) {
     }
 }
 
+# $Sizes は 名前 → 包んだ .crate のバイト数（無ければ $null）
+function Test-Size([hashtable]$Sizes, [long]$Max) {
+    foreach ($name in $Sizes.Keys | Sort-Object) {
+        $size = $Sizes[$name]
+        if ($null -eq $size) { "$name の .crate が無い" }
+        elseif ($size -gt $Max) { "$name の .crate が $size バイトで上限 $Max バイトを超える" }
+    }
+}
+
 # =============================================================================
 # 1. 判定の較正
 # =============================================================================
@@ -122,6 +138,9 @@ Calibrate '理由' 'コメントにした行' (Test-Reason 'areka' "[package]`r`
 Calibrate '理由' '中身の無いコメント' (Test-Reason 'areka' "[package]`r`npublish = false #`r`nname = `"areka`"`r`n") $false 'areka'
 Calibrate '版' '同じ版' (Test-Version $p $PUBLISH '0.0.1') $true
 Calibrate '版' '違う版' (Test-Version $p $PUBLISH '9.9.9') $false '0.0.1', '9.9.9'
+Calibrate '大きさ' '上限ちょうど' (Test-Size @{ dola = 1; wintf = $MAX_CRATE } $MAX_CRATE) $true
+Calibrate '大きさ' '上限を 1 バイト超え' (Test-Size @{ dola = 1; wintf = $MAX_CRATE + 1 } $MAX_CRATE) $false 'wintf', "$($MAX_CRATE + 1)"
+Calibrate '大きさ' '.crate が無い' (Test-Size @{ dola = $null; wintf = 1 } $MAX_CRATE) $false 'dola'
 
 # =============================================================================
 # 2〜6. 実物の判定
@@ -141,6 +160,33 @@ Check '理由' @($packages | Where-Object name -NotIn $PUBLISH | ForEach-Object 
         Test-Reason $_.name (Get-Content -Raw -LiteralPath $_.manifest_path)
     })
 if ($Version) { Check '版' (Test-Version $packages $PUBLISH $Version) }
+
+# =============================================================================
+# 8〜9. 包んで、大きさを判定する（.crate はどちらの形でも package\tmp-crate\ に出る）
+# =============================================================================
+$crateDir = "$WORK_DIR/package/tmp-crate"
+Remove-Item -Path "$crateDir/*.crate", "$WORK_DIR/package/*.crate" -Force -ErrorAction Ignore
+$pArgs = $PUBLISH | ForEach-Object { '-p', $_ }
+if ($Verify) {
+    # test-all.ps1 と同じ手当て: MSVC 以外の link.exe（Git Bash の coreutils）を PATH から外す
+    $env:PATH = ($env:PATH -split ';' | Where-Object {
+            -not $_ -or -not (Test-Path (Join-Path $_ 'link.exe')) -or (Test-Path (Join-Path $_ 'cl.exe'))
+        }) -join ';'
+    $step = 'cargo publish --dry-run'
+    cargo publish --dry-run --allow-dirty --locked --target-dir $WORK_DIR @pArgs
+} else {
+    $step = 'cargo package'
+    cargo package --no-verify --allow-dirty --locked --offline --target-dir $WORK_DIR @pArgs
+}
+if ($LASTEXITCODE) { Fail "包む: $step が終了コード $LASTEXITCODE（$($PUBLISH -join '・')）" }
+Write-Host "OK 包む（$step）" -ForegroundColor Green
+
+$sizes = @{}
+foreach ($pkg in @($packages | Where-Object name -In $PUBLISH)) {
+    $file = Get-Item -LiteralPath "$crateDir/$($pkg.name)-$($pkg.version).crate" -ErrorAction Ignore
+    $sizes[$pkg.name] = $file ? $file.Length : $null
+}
+Check '大きさ' (Test-Size $sizes $MAX_CRATE)
 
 Write-Host "緑（公開する一覧: $($PUBLISH -join '・')）" -ForegroundColor Green
 exit 0
