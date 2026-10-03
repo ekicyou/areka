@@ -3,7 +3,6 @@ name: release
 on:
   push:
     tags: ['v*']
-    branches: ['claude/areka-p0-release-ci-a887d8']
   workflow_dispatch:
 
 permissions:
