@@ -19,7 +19,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.5, 2.6, 2.7_
   - _Depends: 1.1_
   - _Boundary: port_
-- [ ] 2.2 (P) `Origin`／`Host` の検査
+- [x] 2.2 (P) `Origin`／`Host` の検査
   - ヘッダ値 2 つ（無ければ無し）だけを受けて通す／拒む（どちらがどの値で悪いか）を返す純粋な判断を作る。自身は記録しない
   - `Origin` は無し・ループバック 3 種（大小文字・ポートを問わない・http と https）を通し、`null`・host 無し・他の host（`localhost.evil.example` を含む）・他の scheme・読めない値を拒む。`Host` はループバック 3 種だけ通し、無しも拒む
   - 完了の姿: 要件 4.5 の 8 値の表と `Host` の表（通す 3・拒む 2）が `gate_tests.rs` で緑
