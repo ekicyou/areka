@@ -184,18 +184,21 @@ fn dispatch_ended_removes_state_marker_and_syncs_offset() {
                 offset: Offset { x: 0.0, y: 0.0 },
                 ..Default::default()
             },
-            WindowDragging, // ドラッグ中マーカー（Ended で除去されるはず）
         ))
         .id();
-    let target = world
-        .spawn((
-            ChildOf(window),
-            DraggingState {
-                drag_start_pos: PhysicalPoint::new(0, 0),
-                initial_inset: (0.0, 0.0),
-            },
-        ))
-        .id();
+    let target = world.spawn(ChildOf(window)).id();
+
+    // 開始を配ってドラッグ中の記録と印を入れる（Ended で外れるはず）
+    world
+        .resource::<DragAccumulatorResource>()
+        .set_transition(DragTransition::Started {
+            entity: target,
+            start_pos: PhysicalPoint::new(310, 410),
+            timestamp: Instant::now(),
+        });
+    dispatch_drag_events(&mut world);
+    assert!(world.get::<DraggingState>(target).is_some());
+    assert!(world.get::<WindowDragging>(window).is_some());
 
     world
         .resource::<DragAccumulatorResource>()
@@ -252,6 +255,15 @@ fn dispatch_ended_cancelled_propagates_flag() {
         ))
         .id();
     let target = world.spawn(ChildOf(window)).id();
+
+    world
+        .resource::<DragAccumulatorResource>()
+        .set_transition(DragTransition::Started {
+            entity: target,
+            start_pos: PhysicalPoint::new(11, 21),
+            timestamp: Instant::now(),
+        });
+    dispatch_drag_events(&mut world);
 
     world
         .resource::<DragAccumulatorResource>()
