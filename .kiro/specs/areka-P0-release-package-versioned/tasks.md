@@ -95,7 +95,7 @@
   - _Requirements: 8.3, 8.4, 8.5, 8.6_
   - _Boundary: .kiro/steering, .kiro/specs/*/brief.md_
 
-- [ ] 6. 実走による確かめ
+- [x] 6. 実走による確かめ
 - [x] 6.1 配布スクリプトの実走の表を回して記録する
   - 設計の「配布スクリプトの検査」の表の走り（`-Arch all -Check`・`-KeepExpanded` つき・不正な引数と版・160 字超・中身の判定をわざと落とす・前回の成果物が在る状態での途中の失敗・`-Check` なし）を回し、終了コードと印字の要点を記録する
   - 成功の走りでは `target/package/` に 2 組の zip と `.sha256`・仮の名前 0 件・`sha256sum -c` が両方 OK・`%TEMP%` に新しい物が無い・git status 不変を見る
@@ -104,7 +104,7 @@
   - _Depends: 3.3, 4.2_
   - _Requirements: 1.1, 1.4, 1.6, 1.9, 2.2, 2.4, 2.5, 2.6, 3.7, 5.1, 5.2_
 
-- [ ] 6.2 winget から入れてリンク経由で起動する実機の確かめを開発者と行う
+- [x] 6.2 winget から入れてリンク経由で起動する実機の確かめを開発者と行う
   - 4.2 の入った状態で `tools/package.ps1 -Check` を走らせ直して x64 の zip と `.sha256` を作り（6.1 の zip を流用しない）、`target\package\winget-local\<版>\` に手元のマニフェスト 3 ファイル（portable・zip の入れ子・`ArchiveBinariesDependOnPath` なし・ハッシュは `.sha256` の値）を作る
   - 開発者モードと `LocalManifestFiles` は開発者の手で切り替えてもらう（AI は変えない）。`target\package` を `127.0.0.1` の http で配り、普段の利用者の権限で `winget install --manifest` を走らせる
   - `areka` の解決先とリンクの種類、有界に起動した記録の `root=` と窓の行を記録し、`--purge` で外して配る口を止め、設定を元へ戻したことを開発者に確かめて記録する
@@ -117,3 +117,4 @@
 - 3.1: 合格の `-Check` で「後片付け」が 4 秒かかった（同じ木を手で消すと 0.65 秒）＝子の終了直後は補助 exe か Defender が掴んでいる。`REMOVE_RETRY`×`REMOVE_RETRY_WAIT_SEC`（5×1 秒）の予算ぎりぎりなので、6.1 の実走で後片付けの秒数を記録し、1 で落ちる走りが出たら設計の較正値を見直す。
 - 3.3: `-CheckDir` の既定の親は `"$PSScriptRoot\..\target\package"` の直書きで `OUT_DIR` を通っていない（値は同じ・設計 S1 は直書き・較正値の表は OUT_DIR に含める＝設計の内部で食い違い）。動きに差は無い。直すなら `Join-Path $PSScriptRoot "..\$OUT_DIR"` に寄せ、説明の欄の OUT_DIR の行に check-* を足す。
 - 6.1: 実走 11 回で「後片付け」はどれも 0 秒（1 回目で消えた）。3.1 で見た 4 秒は一度きり＝較正値（5×1 秒）は据え置く。
+- 6.2: 手元のマニフェストで入れた物は winget の ID が `ARP\User\X64\Areka.Areka.Portable__DefaultSource` になり、`winget uninstall --id Areka.Areka.Portable` では見つからない（その ID に `--exact --purge` で外した）。開発者モードがオフだと winget はリンクを作らず PATH を足す＝リンク経由の確かめには開発者モードが要る。
