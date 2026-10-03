@@ -77,7 +77,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.7, 1.8, 1.9, 2.4, 9.1, 9.3, 9.4_
   - _Depends: 4.1_
   - _Boundary: server_tests_
-- [ ] 4.3 (P) MCP の応答のテスト
+- [x] 4.3 (P) MCP の応答のテスト
   - `server_protocol_tests.rs` に design.md の 18 本（旧式 4 版・`2026-07-28` が `2025-11-25` へ・未知の版・通知 202・tools/list 0 本・ping・tools/call の `-32602`・未知メソッドの `-32601` と 200・Content-Type 違いの 415・壊れた JSON の 415 と次の要求・セッション ID 無し・JSON 単発・GET の 405・`server/discover`・ヘッダの素通し・未知のヘッダ値の 4xx・Accept 無しの 406・本文 4 MiB 超の 413）を置く
   - 差の一覧に書く値（未知の版で返る版・未知のヘッダ値の状態・discover の欄）は、各テストの assert に具体の値で固定する（5.2 はテストの assert から写す・別の記録は作らない）
   - 完了の姿: 18 本が緑
@@ -134,3 +134,4 @@
 - 3.1: `list_resources`／`list_prompts` は能力に載せなくても rmcp の既定が空の Ok を返す（未知メソッドではない）。差の一覧（5.2）を書くときの観察材料
 - 4.1: Windows では 413 を早く返して閉じると RST で未読の応答が捨てられうる。`body_over_limit_is_413` が揺れたらここ（4 MiB＋1 では 5/5 で届いた）
 - 4.2: 閉じたループバックのポートへの `connect` は Windows では SYN を再送して拒否まで約 2 秒かかる。「つながらない」の判定は `connect_timeout`（500 ms）で足りる
+- 4.3: `server/discover` が答えるのは無状態の送り方（`_meta` の protocolVersion＋ヘッダ `MCP-Protocol-Version: 2026-07-28`）のときだけ。`_meta` だけは 400（-32020）・どちらも無しは 200（-32601）。serverInfo は `_meta."io.modelcontextprotocol/serverInfo"` の下
