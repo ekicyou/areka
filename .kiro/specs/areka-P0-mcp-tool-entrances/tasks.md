@@ -15,7 +15,7 @@
   - _Requirements: 7.1, 7.4_
 
 - [ ] 2. プロトコル側の部品: 結果の形・検査・10 本の定義
-- [ ] 2.1 (P) 結果の 4 つの形を作る関数
+- [x] 2.1 (P) 結果の 4 つの形を作る関数
   - 素の値（`OK:` なし・`isError: false`）、成功（付言が空なら本文 `OK`、あれば `OK:<付言>`）、失敗（`NG:<理由>`・`isError: true`）、本文の後に base64 済みの PNG を 1 枚足す形（`mimeType: "image/png"`）
   - 完了の姿: `outcome_tests.rs` で 4 つの形と `ok("")` が `OK`（コロンなし）になることが緑
   - _Requirements: 7.2_
