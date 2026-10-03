@@ -864,3 +864,7 @@ mod shell_balloon_switch_session_abort_tests;
 #[cfg(test)]
 #[path = "shell_balloon_switch_session_update_tests.rs"]
 mod shell_balloon_switch_session_update_tests;
+
+#[cfg(test)]
+#[path = "ghost_session_switch_translate_tests.rs"]
+mod switch_translate_tests;

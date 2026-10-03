@@ -50,3 +50,7 @@ fn read_shared(shared: &Mutex<SystemVarSource>) -> SystemVarSnapshot {
 #[cfg(test)]
 #[path = "translate_wiring_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "translate_wiring_e2e_tests.rs"]
+mod e2e_tests;
