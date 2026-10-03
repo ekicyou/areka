@@ -6,6 +6,10 @@
 [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE-MIT)
 [![Windows](https://img.shields.io/badge/Platform-Windows_10%2F11_(x64%2Farm64)-0078D6?logo=windows)](https://www.microsoft.com/windows)
 
+<p align="center"><img src="doc/images/emo2-boot.png" alt="同梱のゴースト えも？？ が起動の挨拶をしているところ" width="560"></p>
+
+<p align="center"><sub>同梱のゴースト「えも？？」。シェル: \0 側「コンフィズリー」（ゆゆぴか）・\1 側「City-Pop'n」（大槻）／バルーン: emo2-kakukaku（素材: フキダシデザイン）。絵の利用条件はそれぞれの作者に従います（<a href="dist/README.txt">dist/README.txt</a> の「同梱物とライセンス」）。</sub></p>
+
 ---
 
 ## これは何か
@@ -49,7 +53,7 @@
 
 まだ GitHub Releases での配布はしていません。今は手元で配布物の zip を組みます（下の「ビルド」）。
 
-zip を短いパス（`C:\areka` など）へ展開して `areka.exe` を開けば、同梱の えも？？ が立ちます。起動・終了・メニュー・`.nar` の入れ方・更新・記憶の置き場は、利用者向けの説明書 [dist/README.txt](dist/README.txt) にまとめてあります。
+zip を展開して `areka.exe` を開けば、同梱の えも？？ が立ちます。起動・終了・メニュー・`.nar` の入れ方・更新・記憶の置き場は、利用者向けの説明書 [dist/README.txt](dist/README.txt) にまとめてあります。
 
 ---
 
