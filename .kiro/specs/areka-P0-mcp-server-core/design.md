@@ -54,7 +54,7 @@
 ### Revalidation Triggers
 - `ToolRegistry`／`ToolSpec`／`ToolOutcome` の形が変わる → `mcp-tool-entrances` と 3 段目の spec を見直す。
 - `start` の引数（ポート・登録表）や `McpServer` の畳み方が変わる → `main.rs` の結線と `mcp-stdio-bridge`（同じ `AREKA_MCP_PORT` を読む）を見直す。
-- rmcp の版を上げる → `server_tests.rs` の全部を回し、差の一覧の「測った版と日」を書き直す。
+- rmcp の版を上げる → `server_tests.rs`・`server_protocol_tests.rs`・`server_gate_help_tests.rs` の全部を回し、差の一覧の「測った版と日」を書き直す。
 - help の URL やパス（`/api/mcp/v1`・`/api/mcp/help`）が変わる → `mcp-stdio-bridge` の焼き込みと ukadoc 流の案内を見直す。
 
 ## Architecture
@@ -63,7 +63,7 @@
 - 本番にサーバ・非同期ランタイム・HTTP の土台は無い。前例は ⑴ 空きポートを OS に割り当てさせる偽サーバ（`crates/areka-update/src/winhttp_real_tests.rs` の `serve`）、⑵ 起動時に裏方を立てて終了直前に畳む取っ手（`crates/areka/src/perf_thread_report.rs` の `start`／`ReportHandle::stop_and_report_final`・待ちの上限 `FINAL_WAIT`）、⑶ 環境変数を読まない純粋な読み解き（同ファイルの `period_from_env_value`＝読めない値は `warn!`＋既定・非 UTF-8 は `read_period_env` が `warn!`＋未設定扱い）。本 spec は ⑴ をテストの型に、⑵⑶ を本番の型にそのまま写す。
 - `fn main()`（`crates/areka/src/main.rs`）は 946 行で 1,000 行の番人の射程。足せるのは数行。終了の閉包 `finish_after_run` の中には `down?` の早い戻りがあり、そこに畳む処理を置くと飛ぶ（本文のコメントが明記）。
 - スレッドの名簿: `areka_actor::spawn_actor(name, body)`（`crates/areka-actor/src/spawn.rs`）で起こしたスレッドは `thread_roles` のフックで `actor:<name>` として wintf の名簿に載る。載らないスレッドは性能の報告に `unregistered_rest` として出る。
-- ログの捕捉: `log_capture_kit::capture` は**呼び出しスレッドで同期に出た**イベントだけを集める。別スレッドのイベントは常時テストでは数えない（実機の `RUST_LOG` で確かめる）。
+- ログの捕捉: `log_capture_kit::capture` は**呼び出しスレッドで同期に出た**イベントだけを集める。別スレッドのイベントは常時テストでは数えない（実機の `RUST_LOG` で確かめる）。全スレッドを捕捉する `install_global_capture_all` も在るが、番人の例外表（`crates/log-capture-kit/tests/with_default_guard_test.rs`）への登記が要り、どの spec も例外表に触れない約束なので使わない。
 
 ### Architecture Pattern & Boundary Map
 
@@ -132,7 +132,8 @@ graph TB
 | B-7 | 本文の上限 4 MiB | **差の一覧に 1 行載せる**（「違うが困らない」）。上限の定数は `MAX_BODY_BYTES`（4 MiB）1 つを `dispatch` の読み取りと rmcp の `with_max_request_body_bytes` の両方へ渡す | 二重の限界値を持たない。超えたときの 413 は areka の読み取りが先に返す |
 | B-8（新） | `Accept` ヘッダ | rmcp は `Accept` に `application/json` と `text/event-stream` の**両方**が無い `POST` を **406** で拒む（`handle_post` の先頭）。**直さない**＝差の一覧に 1 行（「違うが困らない」）。signoff の `curl` 例と差の一覧の計測例は `-H "Accept: application/json, text/event-stream"` を付ける | Claude Code・Cursor（TS SDK）は両方を付けて送る。素の `curl`（`Accept: */*`）が 406 になるのは要件 5.2 の物差し（登録・`initialize`・`tools/list`・`ping` にクライアントが失敗する）に当たらない |
 | B-9（新） | JSON-RPC エラーのときの HTTP 状態 | rmcp の `jsonrpc_http_status`（`-32602`→400・`-32601`→404）が効くのは **2026-07-28 の per-request 経路**（本文の `_meta` に版が入る要求と `server/discover`）だけ。旧式の 4 版（今の Claude Code・Cursor が使う経路）では `-32602`・`-32601` とも **HTTP 200**＝SSP と同じ | `handle_post` の無状態の腕は `json_response` のとき `StatusCode::OK` 固定で返す（現物で確認）。研究の R1 の大半はここで解ける（残るのは 2026-07-28 の経路だけ＝差の一覧に書く） |
-| B-10（新） | 要件 3.7・3.8 の文面と現物 | 未知メソッドは `CustomRequest` として読まれ `on_custom_request` の既定が **`-32601`**（旧式の経路で 200）＝要件 3.7 はそのまま満たす。壊れた JSON は `expect_json` が **415**・本文は平文（JSON-RPC のエラーではない）＝要件 3.8 の「400 と JSON-RPC のエラー」の括弧書きは現物と違う。**設計は現物に合わせる**（テストは 415 を固定）。要件 3.8 の括弧書きは設計ディスカッションで 1 行直す（主文「HTTP の 4xx で答え、接続と待受を落とさない」は満たす） | 要件の主旨は「コードは rmcp のまま」。areka が JSON-RPC の形へ包み直すのは rmcp の外で本文を解釈することになり、要件 3.7 が禁じた「areka がメソッドの表を持つ」と同じ筋になる |
+| B-10（新） | 要件 3.7・3.8 の文面と現物 | 未知メソッドは `CustomRequest` として読まれ `on_custom_request` の既定が **`-32601`**（旧式の経路で 200）＝要件 3.7 を満たす。壊れた JSON は `expect_json` が **415**・本文は平文（JSON-RPC のエラーではない）。**設計は現物に合わせる**（テストは 415 を固定）。要件 3.8 の括弧書きは設計ディスカッション（2026-10-03）で 415・平文へ直した | 要件の主旨は「コードは rmcp のまま」。areka が JSON-RPC の形へ包み直すのは rmcp の外で本文を解釈することになり、要件 3.7 が禁じた「areka がメソッドの表を持つ」と同じ筋になる |
+| B-11（新・設計レビュー指摘 1） | `initialize` の版の交渉 | `2026-07-28` は `initialize` を持たない版（`ProtocolVersion::NO_INITIALIZE`）なので、`negotiate_protocol_version` は `initialize` を持つ最新の **`2025-11-25`** へ倒す。旧式の 4 版は要求どおり。**直さない**（rmcp に手を入れない・規格どおり）。要件 3.1 を設計ディスカッションで「旧式 4 版は要求どおり・`2026-07-28` は `2025-11-25`」へ直し、テストを 2 本に分けた。差の一覧の「版の交渉」の行に SSP（`2026-07-28` をそのまま返す）との差を書く | `rmcp-3.5.0/src/service/server.rs` の `negotiate_protocol_version`・`model.rs` の `has_initialize`。Claude Code・Cursor は旧式の版で `initialize` するので困らない |
 
 ## File Structure Plan
 
@@ -150,11 +151,15 @@ crates/areka-mcp/
     ├── help_tests.rs          # 要件 6.1・6.2 の 5 項目と番号
     ├── registry.rs            # ToolSpec・ToolContent・ToolOutcome・ToolHandler・ToolRegistry（rmcp の型を含まない）
     ├── handler.rs             # ArekaHandler: rmcp::ServerHandler（get_info・list_tools・call_tool・get_tool）。registry → ToolRouter の写し。INSTRUCTIONS・SERVER_NAME
-    ├── dispatch.rs            # MAX_BODY_BYTES・handle(req) = gate → (method, path) の match → v1 は rmcp・help は help_html・他は 404/405 → debug! 1 件
-    ├── server.rs              # start(port, registry) -> McpServer・McpServer（Drop で畳む）・accept ループ・SHUTDOWN_WAIT
+    ├── dispatch.rs            # MAX_BODY_BYTES・State・handle(state, req) = gate → (method, path) の match → v1 は rmcp・help は help_html・他は 404/405 → debug! 1 件
+    ├── server.rs              # start(port, registry) -> McpServer・McpServer（Drop で畳む）・accept ループ・SHUTDOWN_WAIT・ACCEPT_RETRY_WAIT
     ├── testkit.rs             # #[cfg(test)] 手書きの HTTP/1.1 クライアント（request/Response）・JSON-RPC の組み立て・サーバの起こし口
-    └── server_tests.rs        # 実ソケットの決定論テスト（要件 9.2〜9.4 の全部）
+    ├── server_tests.rs        # 実ソケット: 待受・束ねの失敗・終了（要件 1・2.4・9.3・9.4）
+    ├── server_protocol_tests.rs   # 実ソケット: initialize〜server/discover・Accept・本文の上限（要件 3・5）
+    └── server_gate_help_tests.rs  # 実ソケット: Origin／Host・help・404／405・登録 1 本の往復（要件 4・6・7）
 ```
+
+- 統合テストは 1 ファイルに集めると 1,000 行の番人（`crates/log-capture-kit/tests/file_length_guard_test.rs`・例外表はどの spec も触れない）の射程に入るので、最初から `structure.md` の `<stem>_<テーマ>.rs` の形で 3 つに分ける。接続宣言は `#[cfg(test)] #[path = "…"] mod …;`。共有の部品は `testkit.rs` 1 つ。
 
 ### Modified Files
 - `crates/areka/Cargo.toml` — `[dependencies]` に `areka-mcp = { path = "../areka-mcp" }` を 1 行（コメント付き・外部依存の追加はこの行ではなく `areka-mcp` 側）。
@@ -244,8 +249,8 @@ flowchart TD
 | 2.5 | 読めない値は `warn!` 1 件＋9821（非 UTF-8 も） | port | `port_from_env_value`・`read_port_env` | — |
 | 2.6 | 環境変数を読まない判断・9 値のテスト | port | `port_from_env_value` | — |
 | 2.7 | 環境変数の名前は 1 つ・README には書かない | port（`PORT_ENV`）・help | — | — |
-| 3.1 | `initialize` の 5 版・capabilities・serverInfo・instructions | handler | `ServerHandler::get_info`・`supported_protocol_versions` | 要求 1 件の流れ |
-| 3.2 | 未知の版は失敗にしない | handler（rmcp の `negotiate_protocol_version`） | — | — |
+| 3.1 | `initialize` の旧式 4 版は要求どおり・`2026-07-28` は `2025-11-25`・capabilities・serverInfo・instructions | handler（rmcp の `negotiate_protocol_version`・B-11） | `ServerHandler::get_info` | 要求 1 件の流れ |
+| 3.2 | 未知の版は失敗にしない（`2025-11-25` へ倒れる見込み） | handler（rmcp の `negotiate_protocol_version`） | — | — |
 | 3.3 | 通知は 202 | dispatch → rmcp | — | 要求 1 件の流れ |
 | 3.4 | `tools/list` は 0 本 | handler・registry | `ServerHandler::list_tools` | — |
 | 3.5 | `ping` は `{}` | rmcp 既定 | — | — |
@@ -455,7 +460,7 @@ impl ToolRegistry {
 **Responsibilities & Constraints**
 - `get_info` が返す `ServerConfig`（＝`InitializeResult`）: `capabilities = ServerCapabilities::builder().enable_tools().build()`（`resources`・`prompts` は載せない）、`server_info = Implementation::new(SERVER_NAME, env!("CARGO_PKG_VERSION"))`（`SERVER_NAME = "areka-mcp-server"`。版は `areka-mcp` の Cargo の版＝`version.workspace = true` で areka と同じ値になる。`from_build_env` は使わない＝名前が `areka_mcp` になるため）、`instructions = Some(INSTRUCTIONS)`、`protocol_version` は既定。
 - `INSTRUCTIONS`（英文・2 文）: `This server controls areka, a desktop mascot (Ukagaka-compatible baseware) running on this machine. Tools are added in later releases; this build registers none, so tools/list is empty.`
-- 版の交渉は rmcp に任せる（`initialize` の既定実装＝`negotiate_initialize` → `negotiate_protocol_version`）。未知の版は `2025-11-25` へ倒れる見込み（現物の読み: 既定の `protocol_version` が `2026-07-28`＝`initialize` を持たない版なので、`initialize` を持つ最新＝`2025-11-25` が選ばれる）。テスト `initialize_unknown_version_falls_back` で測り、差の一覧に書く。
+- 版の交渉は rmcp に任せる（`initialize` の既定実装＝`negotiate_initialize` → `negotiate_protocol_version`）。旧式の 4 版は要求どおり。`2026-07-28` は `initialize` を持たない版なので要求しても `2025-11-25` へ倒れる（B-11・要件 3.1）。未知の版も同じく `2025-11-25` へ倒れる見込み（既定の `protocol_version` が `2026-07-28`＝`initialize` を持たない版なので、`initialize` を持つ最新が選ばれる）。テスト `initialize_with_no_initialize_version_falls_back_to_2025_11_25`・`initialize_unknown_version_falls_back` で測り、差の一覧に書く。
 - `list_tools` → `ToolRouter::list_all`。`call_tool` → `ToolRouter::call`（未登録は `-32602`）。`get_tool` → `ToolRouter::get`（rmcp が `Mcp-Param-*` ヘッダの検査に使う）。
 - `ToolRegistry` から `ToolRouter<ArekaHandler>` への写しは `ArekaHandler::new(registry)` が 1 度だけ行う: `ToolRoute::new_dyn(Tool { name, title, description, input_schema: Arc<JsonObject>, .. }, |ctx| …)` で、閉包は `ctx.arguments` を `serde_json::Value::Object` にして `ToolHandler` を呼び、`ToolOutcome` を `CallToolResult`（`success`／`error`・`ContentBlock` の text／image）へ写して `CallToolResponse::Complete` で返す。
 - `Clone`（`Arc` の中身）。`StreamableHttpService::new` の `service_factory` は `move || Ok(handler.clone())`。
@@ -496,6 +501,22 @@ impl rmcp::ServerHandler for ArekaHandler {
 - 応答が決まったら `debug!` を 1 件（`method`・`id`・`status`・`path`）。拒否は `warn!` 1 件（`origin` か `host` の値）＋ `403`。
 - 応答の型は rmcp に合わせて `Response<BoxBody<Bytes, Infallible>>`（自前の応答は `Full::new(Bytes).boxed()`）。
 - 本文の上限・振り分けの表・記録の 1 行は `dispatch` 1 ファイルの中だけ（他で `StatusCode` を綴らない）。
+- 状態の渡し方: `server` が接続ごとに `Arc<State>` を複製して `service_fn(move |req| dispatch::handle(state.clone(), req))` で渡す。
+
+```rust
+pub(crate) const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
+
+/// 要求 1 件に共有する不変の状態（`start` が 1 度だけ組む）。
+pub(crate) struct State {
+    pub port: u16,                                   // help に載せる実番号
+    pub mcp: StreamableHttpService<ArekaHandler, NeverSessionManager>,  // Clone・poll_ready は常に Ready
+}
+
+pub(crate) async fn handle(
+    state: Arc<State>,
+    req: Request<Incoming>,
+) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible>;
+```
 
 **Contracts**: API [x]
 
@@ -519,10 +540,10 @@ impl rmcp::ServerHandler for ArekaHandler {
 
 **Responsibilities & Constraints**
 - `start(port, registry)`: `port == None` → `info!`（待ち受けない・理由は環境変数が `0`）で待ち受けない取っ手。`Some(p)` → 呼び出し側で `std::net::TcpListener::bind(("127.0.0.1", p))`。失敗 → `error!`（`port`・`error = %err`）で待ち受けない取っ手。成功 → `set_nonblocking(true)`・`local_addr()` で実番号を取り（`p == 0` のときも実番号）、`ArekaHandler::new(registry)` と `dispatch` の設定を組み、`spawn_actor::<()>("mcp", body)` を起こし、`info!`（`url = http://127.0.0.1:<実番号>/api/mcp/v1`）で待受中の取っ手を返す。
-- スレッドの body: `tokio::runtime::Builder::new_current_thread().enable_all().build()`（I/O と時計の両方。hyper の http1 はヘッダ読みの時間切れに時計を要る）→ `block_on(token.run_until_cancelled(accept_loop))`。`accept_loop` は `tokio::net::TcpListener::from_std(listener)` で受け、接続ごとに `tokio::spawn(hyper::server::conn::http1::Builder::new().timer(TokioTimer::new()).serve_connection(TokioIo::new(stream), service_fn(dispatch::handle)))`。`accept` の失敗は `warn!` を残して続ける（ループを殺さない）。
+- スレッドの body: `tokio::runtime::Builder::new_current_thread().enable_all().build()`（I/O と時計の両方。hyper の http1 はヘッダ読みの時間切れに時計を要る）→ `block_on(token.run_until_cancelled(accept_loop))`。`accept_loop` は `tokio::net::TcpListener::from_std(listener)` で受け、接続ごとに `tokio::spawn(hyper::server::conn::http1::Builder::new().timer(TokioTimer::new()).serve_connection(TokioIo::new(stream), service_fn(dispatch::handle)))`。`accept` の失敗は `warn!` を 1 件残し、`tokio::time::sleep(ACCEPT_RETRY_WAIT)`（100 ms）だけ待ってから続ける（ループを殺さない。持続する失敗で `warn!` の嵐と CPU の空回りにしない）。接続ごとの `serve_connection` が `Err` を返したとき（クライアントの切断・不正な HTTP）は `debug!` 1 件（`areka_mcp` の target・`error = %err`）で、`warn!`／`error!` にはしない（雑音にしない。ログ無しにもしない）。
 - 畳み: `block_on` が戻ったら listener を落とし（受付の口を OS へ返す）、`runtime.shutdown_background()`（開いた接続のタスクは待たずに捨てる）、`done_tx.send(())`。
-- ランタイムの作成に失敗したら `error!` を残してスレッドを終える（待受の口は閉じる。本体は止めない）。
-- `McpServer`: `local_addr() -> Option<SocketAddr>`（テストと help の番号）。`Drop`: 待受中なら `token.cancel()` → `done_rx.recv_timeout(SHUTDOWN_WAIT)` → `Ok` なら `info!`（閉じた）、`Err` なら `warn!`（待ちきれず切り離す）。待ち受けていない取っ手は何もしない。
+- ランタイムの作成に失敗したら `error!` を残してスレッドを終える（待受の口は閉じる。本体は止めない。`done_tx` はスレッドと一緒に落ちる）。
+- `McpServer`: `local_addr() -> Option<SocketAddr>`（テストと help の番号）。`Drop`: 待受中なら `token.cancel()` → `done_rx.recv_timeout(SHUTDOWN_WAIT)` → `Ok` または `Err(Disconnected)`（スレッドが既に終わっている＝ランタイム作成の失敗の後など）なら `info!`（閉じた）、`Err(Timeout)` だけ `warn!`（待ちきれず切り離す）。待ち受けていない取っ手は何もしない。
 - `spawn_actor` の inbox は使わない（`Sender<()>` は取っ手が持って落とすだけ）。
 
 **Contracts**: Service [x] / State [x]
@@ -530,6 +551,7 @@ impl rmcp::ServerHandler for ArekaHandler {
 ##### Service Interface
 ```rust
 pub const SHUTDOWN_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+pub(crate) const ACCEPT_RETRY_WAIT: std::time::Duration = std::time::Duration::from_millis(100);
 
 /// `port`: None＝待ち受けない（`AREKA_MCP_PORT=0`）。Some(0)＝OS に空きポートを割り当てさせる（テスト用）。
 /// 失敗しない（束ねの失敗は `error!` と「待ち受けない取っ手」で表す）。
@@ -562,7 +584,7 @@ impl Drop for McpServer { /* 上記 */ }
 
 #### 差の一覧 `doc/ssp-mcp/transport-diff-areka.md`（Summary-only）
 - survey §2 の 14 行＋§1 の手打ちフォーム＝15 行に、B-7（4 MiB）・B-8（`Accept`）の 2 行を足した 17 行。列は「項目／SSP／areka（rmcp 3.5.0）／判定（同じ・違うが困らない・困るので直した）／測ったテスト名」。先頭に測った版 `rmcp 3.5.0` と日付。本 spec で「困るので直した」行は **0**（物差し＝Claude Code／Cursor が登録・`initialize`・`tools/list`・`ping` に失敗する差は無い）。
-- 現物の読みから書ける行（テストで裏を取る）: 未知メソッド＝areka も `-32601`・旧式の経路では 200（同じ）／壊れた JSON＝areka は 415・平文（違うが困らない）／`Origin`＝areka は 403・平文（SSP は 403・`-32600`・違うが困らない）／`Host`＝areka は検査する（違うが困らない）／JSON-RPC エラーの HTTP 状態＝旧式の経路は 200（同じ）・2026-07-28 の per-request 経路は 400／404（違うが困らない）／`MCP-Protocol-Version` の未知の値＝areka は 400（SSP は無状態版の検査へ・違うが困らない）／`server/discover`＝areka は `ttlMs: 0`・`cacheScope: "private"`・`resultType: "complete"` と `_meta` の serverInfo（rmcp の `from_server_info`・違うが困らない）／`GET /api/mcp/v1`＝405（違うが困らない）／`serverInfo`＝`areka-mcp-server`・`0.0.1`（違うが困らない）／バッチ＝rmcp は 415（本文が 1 件の形でない・違うが困らない）。
+- 現物の読みから書ける行（テストで裏を取る）: 版の交渉＝旧式 4 版は要求どおり（同じ）・`2026-07-28` は areka が `2025-11-25` へ倒す（SSP はそのまま返す・違うが困らない）／未知メソッド＝areka も `-32601`・旧式の経路では 200（同じ）／壊れた JSON＝areka は 415・平文（違うが困らない）／`Origin`＝areka は 403・平文（SSP は 403・`-32600`・違うが困らない）／`Host`＝areka は検査する（違うが困らない）／JSON-RPC エラーの HTTP 状態＝旧式の経路は 200（同じ）・2026-07-28 の per-request 経路は 400／404（違うが困らない）／`MCP-Protocol-Version` の未知の値＝areka は 400（SSP は無状態版の検査へ・違うが困らない）／`server/discover`＝areka は `ttlMs: 0`・`cacheScope: "private"`・`resultType: "complete"` と `_meta` の serverInfo（rmcp の `from_server_info`・違うが困らない）／`GET /api/mcp/v1`＝405（違うが困らない）／`serverInfo`＝`areka-mcp-server`・`0.0.1`（違うが困らない）／バッチ＝rmcp は 415（本文が 1 件の形でない・違うが困らない）。
 
 ## Data Models
 
@@ -582,8 +604,8 @@ impl Drop for McpServer { /* 上記 */ }
 - **環境変数の読み損じ**: `warn!` 1 件（値）→ 既定 9821。非 UTF-8 も同じ。
 - **拒んだ要求**: `warn!` 1 件（`Origin`／`Host` の値）→ 403・平文。MCP の処理に入らない。
 - **壊れた要求**: rmcp のまま（406／415／400／413）。接続も待受も落とさない（hyper は接続ごと・要求ごとに応答を返して次へ進む）。
-- **スレッドの中の失敗**（ランタイムが作れない・`accept` の失敗）: `error!`／`warn!` を残す。`accept` の失敗はループを続ける（一時的な資源不足で口を閉じない）。
-- **畳みの待ちきれ**: `warn!` 1 件を残して切り離す（プロセスは直後に終わる）。
+- **スレッドの中の失敗**（ランタイムが作れない・`accept` の失敗・接続の `Err`）: ランタイムは `error!`、`accept` は `warn!`＋`ACCEPT_RETRY_WAIT` の間を置いて続ける（一時的な資源不足で口を閉じない）、接続の `Err` は `debug!`。
+- **畳みの待ちきれ**: `Timeout` だけ `warn!` 1 件を残して切り離す（プロセスは直後に終わる）。`Disconnected` は「閉じた」の `info!`。
 - panic はどこにも置かない（`spawn_actor` のスレッド生成失敗だけは既存の規約で panic）。
 
 ### Monitoring
@@ -600,12 +622,14 @@ impl Drop for McpServer { /* 上記 */ }
 | テスト（ファイル） | 固定すること | 要件 |
 |---|---|---|
 | `port_from_env_value_fixed_table`（port_tests.rs） | 未設定→9821／`0`→None／`9821`／`65535`／`65536`→9821＋warn／`-1`→9821＋warn／`abc`→9821＋warn／空→9821＋warn／` 9000 `→9000。warn の件数は `capture` で数える | 2.1〜2.3, 2.5, 2.6 |
-| `read_port_env_non_unicode_falls_back_with_warn`（port_tests.rs） | `OsString::from_wide(&[0xD800])` を設定して `read_port_env()` → Some(9821)・warn 1 件 | 2.5 |
+| `read_port_env_non_unicode_falls_back_with_warn`（port_tests.rs） | `OsString::from_wide(&[0xD800])` を設定して `read_port_env()` → Some(9821)・warn 1 件（edition 2024 の `set_var` は `unsafe`＝`perf_thread_report.rs` の同種のテストの書き方に合わせる） | 2.5 |
 | `gate_origin_table`（gate_tests.rs） | 要件 4.5 の 8 値（`Host` は `127.0.0.1:1`） | 4.1, 4.2, 4.3, 4.5 |
 | `gate_host_table`（gate_tests.rs） | `127.0.0.1:<port>`・`localhost:<port>`・`[::1]:<port>` 通す／`evil.example`・無し 拒む | 4.4 |
 | `help_html_lists_five_items_with_actual_port`（help_tests.rs） | `help_html(12345)` に URL・`claude mcp add`・`mcpServers`・`AREKA_MCP_PORT`・Desktop の 5 つが在り、`9821` が無い | 6.1, 6.2 |
 
-### Integration Tests（実ソケット・server_tests.rs）
+### Integration Tests（実ソケット・3 ファイル）
+
+**server_tests.rs**（待受・束ねの失敗・終了）
 | テスト | 固定すること | 要件 |
 |---|---|---|
 | `listen_logs_info_with_url` | `capture(|| start(Some(0), …))` で info 1 件・本文に `/api/mcp/v1` | 1.1, 1.2 |
@@ -614,21 +638,32 @@ impl Drop for McpServer { /* 上記 */ }
 | `two_connections_interleave` | 接続 A を開いたまま（何も送らない）、接続 B の `ping` が答えを得る | 1.5 |
 | `drop_closes_port` | `start` → `local_addr` → drop → `TcpStream::connect` が失敗 | 1.7, 9.4 |
 | `drop_with_open_connection_returns_within_bound` | 接続を開いたまま drop → `SHUTDOWN_WAIT` 以内に戻る・info 1 件 | 1.8, 1.9, 9.4 |
-| `initialize_returns_requested_version_for_each_of_five` | 5 版で `protocolVersion` が要求どおり・`capabilities.tools` 在り・`resources`／`prompts` 無し・`serverInfo` が `areka-mcp-server`／`CARGO_PKG_VERSION`・`instructions` が空でない | 3.1 |
+
+**server_protocol_tests.rs**（MCP の応答・差の一覧の計測）
+| テスト | 固定すること | 要件 |
+|---|---|---|
+| `initialize_returns_requested_version_for_each_of_four` | 旧式の 4 版で `protocolVersion` が要求どおり・`capabilities.tools` 在り・`resources`／`prompts` 無し・`serverInfo` が `areka-mcp-server`／`CARGO_PKG_VERSION`・`instructions` が空でない | 3.1 |
+| `initialize_with_no_initialize_version_falls_back_to_2025_11_25` | `2026-07-28` を要求 → 成功・`protocolVersion` が `2025-11-25`（差の一覧の「版の交渉」の行） | 3.1 |
 | `initialize_unknown_version_falls_back` | `1999-01-01` → 成功・`protocolVersion` が 5 版のどれか（値を差の一覧へ） | 3.2 |
 | `initialized_notification_is_202_without_body` | 202・本文 0 バイト | 3.3 |
 | `tools_list_is_empty` | `tools: []` | 3.4 |
 | `ping_returns_empty_object` | `result: {}` | 3.5 |
 | `tools_call_any_name_is_invalid_params` | `error.code == -32602`・`result` 無し | 3.6 |
-| `unknown_method_is_jsonrpc_error_from_rmcp` | `error.code` が `-32601` か `-32600`（値を差の一覧へ） | 3.7 |
+| `unknown_method_is_jsonrpc_error_from_rmcp` | `error.code` が `-32601`・HTTP 200（現物の読み。値を差の一覧へ） | 3.7 |
 | `non_json_content_type_is_415` | `Content-Type: text/plain` → 415 | 3.8 |
-| `broken_json_body_is_4xx_and_next_request_works` | `{` → 4xx（415 の見込み）・同じサーバへ続けて `ping` が通る | 3.8 |
+| `broken_json_body_is_415_and_next_request_works` | `{` → 415・同じサーバへ続けて `ping` が通る | 3.8 |
 | `ping_without_initialize_and_without_session_id` | `initialize` 無しの `ping`／`tools/list` が 200・応答に `Mcp-Session-Id` 無し | 3.9 |
 | `response_is_single_application_json` | `Content-Type` が `application/json`・本文が JSON 1 件・`text/event-stream` でない | 3.10 |
 | `get_v1_has_no_form` | `GET /api/mcp/v1` → 405（本文に `<form` 無し） | 3.11 |
 | `server_discover_stateless` | `server/discover` → `supportedVersions`（5 版）・`capabilities`・`instructions`・serverInfo | 3.12 |
 | `protocol_version_header_old_or_missing_is_passthrough` | ヘッダ無し・4 旧版のそれぞれで `ping` が `{}` | 3.13 |
 | `unknown_protocol_version_header_is_rejected` | `MCP-Protocol-Version: 1999-01-01` → 4xx（400 の見込み） | 3.13 |
+| `accept_header_missing_is_406` | `Accept` 無しの `ping` → 406（差の一覧の行） | 5.1（B-8） |
+| `body_over_limit_is_413` | 4 MiB＋1 の本文 → 413（差の一覧の行） | 5.1（B-7） |
+
+**server_gate_help_tests.rs**（検査・help・登録口）
+| テスト | 固定すること | 要件 |
+|---|---|---|
 | `bad_origin_is_403_before_mcp` | `Origin: http://evil.example` で `initialize`・`ping`・`GET /api/mcp/help` の 3 つが 403（`warn!` は別スレッドなので実機で確認） | 4.3, 6.3 |
 | `bad_host_is_403` | `Host: evil.example` → 403 | 4.4 |
 | `help_is_200_html_with_actual_port` | `GET /api/mcp/help` → 200・`text/html; charset=utf-8`・本文に実番号 | 6.1, 6.2 |
@@ -636,8 +671,6 @@ impl Drop for McpServer { /* 上記 */ }
 | `help_post_is_405` | `POST /api/mcp/help` → 405 | 6.5 |
 | `registered_tool_roundtrip` | 1 本登録 → `tools/list` に逐語で出る → `tools/call` が実装の `content`／`isError` をそのまま返す | 7.1, 7.2, 7.4 |
 | `unregistered_name_is_invalid_params` | 登録済みサーバで別名の `tools/call` → `-32602` | 7.3 |
-| `accept_header_missing_is_406` | `Accept` 無しの `ping` → 406（差の一覧の行） | 5.1（B-8） |
-| `body_over_limit_is_413` | 4 MiB＋1 の本文 → 413（差の一覧の行） | 5.1（B-7） |
 
 - 要件 3.14 の `debug!` と 4.3 の `warn!` は mcp スレッドで出るので常時テストでは数えず、実機確認（要件 9.6・`RUST_LOG`）で確かめる。
 - 差の一覧の 17 行は上の表のテスト名で裏を取り、テスト名を一覧に書く（要件 5.3 は「直した行」が 0 なので、一覧には測ったテスト名を書く）。

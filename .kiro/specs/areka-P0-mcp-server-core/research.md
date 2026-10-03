@@ -279,7 +279,17 @@ docs.rs の `StreamableHttpServerConfig`・`StreamableHttpService`・`ServerHand
 | R4 | 受付の口（listener）を `block_on` の直後に落とす設計で「終了直後の `connect` が失敗する」の判定を安定させる見込み。テスト `drop_closes_port` で確かめる |
 | R5 | 実装の段で測って signoff.md に書く |
 
-### 11.6 残るリスク
+### 11.6 設計ディスカッションの結果（2026-10-03・`/kiro-design`）
+
+設計レビュー（design-validation.md・判定 GO 条件つき）の重大 3 件とその他の指摘は、どれも brief「細部は rmcp に従う」と steering の決まりで勝者が明白だったので自明な修正として当てた。開発者へ上げた議題は **0 件**。
+
+- 指摘 1（版の交渉）: 要件 3.1 を「旧式 4 版は要求どおり・`2026-07-28` は `2025-11-25` へ倒れる」へ直し、要件 9.2 と設計のテストを 2 本（`…_for_each_of_four`・`…_falls_back_to_2025_11_25`）に分けた。設計の判断 B-11 に記録。
+- B-10（要件 3.8）: 括弧書きを「415・平文（rmcp のまま）」へ直した。要件の Introduction の rmcp の記述（未知メソッド `-32601`・壊れた JSON 415・HTTP 状態は旧式の経路で 200）も現物に合わせた。
+- 指摘 2（1,000 行）: 統合テストを `server_tests.rs`・`server_protocol_tests.rs`・`server_gate_help_tests.rs` の 3 つに最初から分ける。
+- 指摘 3（スレッドの中の失敗経路）: `accept` の失敗は `warn!`＋`ACCEPT_RETRY_WAIT`（100 ms）・接続の `Err` は `debug!`・`Drop` は `Disconnected` を「閉じた」の `info!` に倒し `Timeout` だけ `warn!`。
+- その他: `dispatch::handle(state: Arc<State>, req)` の署名と `State` を設計に載せた・`install_global_capture_all` を使わない理由（番人の例外表）を添えた・`set_var` の `unsafe` の注記。
+
+### 11.7 残るリスク
 - rmcp の無状態＋`json_response` の経路を**手元で動かすのは実装の最初のタスク**（空の `areka-mcp`＋`initialize` 5 版→`ping`）。ここで赤なら設定の組み方を直す（設計の形は変えない見込み）。
 - hyper の http1 のヘッダ読みの時間切れは `TokioTimer` を設定して有効にする（設定しないと時間切れが効かないか、版によっては失敗する）。
 - `Drop` の中の待ち（`SHUTDOWN_WAIT` 2 秒）は perf の `FINAL_WAIT` と同じ考え。待ちきれなければ `warn!` で切り離す。
