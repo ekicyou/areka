@@ -69,7 +69,7 @@
   - `instructions` を design.md の英文 3 文に改める
   - 完了の姿: `mcp-server-core` の既存テスト（`server_*_tests.rs`・`registry_tests.rs` ほか）が 0 行の変更のまま緑。検査の `-32602` と登録順の一覧の振る舞いは直後の 4.3 の実ソケットのテストで固定する
   - _Requirements: 1.3, 1.4, 1.5, 2.1, 2.2, 2.6, 2.7, 8.2, 8.4_
-- [ ] 4.3 実ソケットのテスト（一覧の一致・`-32602`・9 本の到達・待ちの間の `ping`）
+- [x] 4.3 実ソケットのテスト（一覧の一致・`-32602`・9 本の到達・待ちの間の `ping`）
   - 保存した JSON を `CARGO_MANIFEST_DIR` から読み、旧式と無状態版の両方の `tools/list` の `tools` と配列ごと一致させる（並び・欄の過不足を 1 度に見る）
   - 未知の名前・必須の欄の欠落・型違いの 3 本で `-32602`・`result` 無し・受け手への要求 0 件を確かめ、旧式と無状態版の HTTP の状態を測って固定する
   - 9 本それぞれを呼び、偽の受け手が受けた `ToolCall` が期待の型の付いた値と等しく、受け手が返した `NG:not implemented yet` がそのまま応答になる
@@ -135,3 +135,4 @@
 
 - 2.3: 変異の確認の後に `git checkout` で戻すと未コミットの実装まで巻き戻る（2.3 で一度起きて作り直した）。変異は Edit で戻し、git の巻き戻しは使わない
 - 2.2〜2.3: `check.rs`・`tools/` の呼び手は 4.1・4.2 で入るので、それまで非テストのビルドに dead_code 警告が出る（関門は無い）。4.2 の後に警告 0 を確かめる
+- 4.3: 測った値（rmcp 3.5.0・7.1 で差の一覧へ）: 3 本とも `{"code":-32602,"message":…}`（`data` 無し・`result` 無し）・旧式 HTTP 200・無状態版 HTTP 400。`message` は未知の名前 `tool not found`／欠落 `missing required argument: script`／型違い `argument strict must be boolean`。テスト名 `unknown_name_is_invalid_params`・`missing_required_is_invalid_params`・`wrong_type_is_invalid_params`（`tools_socket_tests.rs`）。無状態版の `tools/call` は `Mcp-Name` 見出しが要る
