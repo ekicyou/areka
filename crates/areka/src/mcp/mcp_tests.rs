@@ -294,3 +294,63 @@ fn drain_without_inbox_is_a_no_op() {
     assert!(world.get_non_send::<McpInbox>().is_none());
     assert!(world.get_non_send::<McpLater>().is_none());
 }
+
+// ---- 本物の単位で通す（3.8・4.1・6.1） ----
+
+/// 偽の SHIORI で実行系つきの単位を起こし（`register_systems` で汲む系も登録済み）、受け口を置いて
+/// `get_active_ghost_list` を送り、`Input` の段を 1 回回すと descript の `name` で答える。
+#[test]
+fn real_unit_answers_get_active_ghost_list_in_one_frame() {
+    use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+
+    let mut rig = SwitchRig::new(vec![(
+        "A",
+        FakeShiori::Scripted(Box::new(|| standard_script(r"\0A\e"))),
+    )]);
+    rig.boot("A");
+    let (tx, rx) = mpsc::channel();
+    install(&mut rig.world, rx);
+    let (request, pending) = ToolRequest::new(ToolCall::GetActiveGhostList);
+    tx.send(request).ok().expect("受け口は生きている");
+
+    rig.world.run_schedule(wintf::ecs::Input);
+    let answer = pending.try_answer().ok().flatten();
+    let active = resolve::active(&rig.world).map(|g| g.name);
+    let down = rig.shutdown();
+
+    let answer = answer.expect("1 フレームで答える");
+    assert_eq!(
+        (
+            answer.outcome.clone(),
+            answer.outcome.is_error,
+            active,
+            down
+        ),
+        (outcome::value("A"), false, Some(Some("A".to_owned())), true),
+        "（答え・isError・起動中のゴーストの名前・降ろせた）"
+    );
+}
+
+/// LogSink へ倒れた単位（バルーンの根だけが無い＝倒れた先は実行系つきで起きる）も起動中として読める。
+#[test]
+fn logsink_fallen_unit_is_active() {
+    use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig};
+    use crate::ghost_session::GhostSlot;
+
+    let mut rig = SwitchRig::new(vec![("A", FakeShiori::BalloonMissing)]);
+    rig.boot("A");
+    let fallen = rig
+        .world
+        .non_send::<GhostSlot>()
+        .0
+        .as_ref()
+        .map(|s| (s.logsink_fallback(), s.runtime().is_some()));
+    let active = resolve::active(&rig.world).map(|g| g.name);
+    let down = rig.shutdown();
+
+    assert_eq!(
+        (fallen, active, down),
+        (Some((true, true)), Some(Some("A".to_owned())), true),
+        "（倒れた旗と実行系・起動中のゴーストの名前・降ろせた）"
+    );
+}

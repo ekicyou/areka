@@ -98,7 +98,7 @@
   - 後から答える置き場: 組を World から取り出して回し、`Some` を返した組は送って外し、待つ側が居ない組は覗かずに捨てる。置き場が無いときに預けた組はその場で落ちる
   - 完了の姿: `mcp_tests.rs` で、振り分け（0 体で 8 本 → `NOT_ACTIVE`・1 体で `get_expression_table` の省略 → `NOT_ACTIVE`・名前違いで 8 本 → `CANNOT_FIND`・0 体の `get_log` と 1 体の省略の 7 本は解決の文言にならない）、後から答える（次のフレームで届く・預けたフレームで届く・預けたまま閉じると `Dropped`・`Pending` を落とした組は覗かれない・閉じた後の預けは即 `Dropped`）、準備の前に送った要求が置いた後に答えられる、閉じると溜まった要求が `Dropped` で以後の送りが失敗する、受け口が無いときの汲みが無操作、が緑
   - _Requirements: 3.1, 3.4, 3.5, 3.6, 3.7, 6.1, 6.4, 6.5, 6.6, 6.8_
-- [ ] 5.4 本物の単位で `get_active_ghost_list` を通すテスト
+- [x] 5.4 本物の単位で `get_active_ghost_list` を通すテスト
   - テスト用の起こし方（`emo2_boot/ghost_switch_test_support.rs` の `SwitchRig::new`＋`SwitchRig::boot`。`register_systems` を通るので 5.3 の汲む系も登録される）で実行系つきの単位を起こし、受け口を置いて `get_active_ghost_list` の要求を送り、1 フレーム回す（または汲む関数を直に呼ぶ）と答えが descript の `name`・`isError: false` になる
   - LogSink へ倒れた単位（作り方は `ghost_session_strict_tests.rs` の前例）でも起動中のゴーストとして読めること
   - `emo2_boot/` は 0 行（起こし方は `pub(crate)` で見える）。触る要が出たら止めて報告する
