@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use areka_actor::UiSpawnError;
+use areka_emo_compose::{BoxLayout, BoxName, BoxPlacement};
 use areka_emo_present::TextSlotView;
 use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
@@ -243,6 +244,12 @@ pub struct TextLayerRuntime {
     box_font_dirs: Vec<PathBuf>,
     /// 「箱を隠す印」の立っているスコープ（`actor_box.rs` の `hide_boxes`）。台詞の頭（`ClearAll`）で下ろす。
     hidden_boxes: BTreeSet<ActorKey>,
+    /// 今のシェルの箱の束の置き場所の表（箱の束の受け取りが入れ、毎フレームの箱の同期が引く）。
+    box_layout: BoxLayout,
+    /// 箱の場所 → 登録済みの置き場所（`routing`・`layout_input` と対・`actor_box.rs` の `sync_boxes`）。
+    box_sites: HashMap<PlaceKey, BoxPlacement>,
+    /// はみ出しを警告済みの（サーフェス番号, 箱の名前）。箱の束を差し替えると空に戻す。
+    box_overflow_warned: BTreeSet<(u32, BoxName)>,
 }
 
 impl TextLayerRuntime {
@@ -265,6 +272,9 @@ impl TextLayerRuntime {
             surface_resolver: None,
             box_font_dirs: Vec::new(),
             hidden_boxes: BTreeSet::new(),
+            box_layout: BoxLayout::default(),
+            box_sites: HashMap::new(),
+            box_overflow_warned: BTreeSet::new(),
         }
     }
 
@@ -514,6 +524,10 @@ mod route_tests;
 #[cfg(test)]
 #[path = "actor_box_tests.rs"]
 mod box_tests;
+
+#[cfg(test)]
+#[path = "actor_box_sync_tests.rs"]
+mod box_sync_tests;
 
 /// task 7.2: バルーン背景色の受け口（要件 4.6）。
 #[path = "actor_decoration.rs"]
