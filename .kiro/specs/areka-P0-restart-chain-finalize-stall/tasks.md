@@ -29,7 +29,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 3.3_
   - _Depends: 1.1, 1.2_
 
-- [ ] 3. 後退の無さを確かめる
+- [x] 3. 後退の無さを確かめる
   - areka クレートのテスト全体を回し、確定・起こし直し・遷移後の解き直しを含めて緑であることを確かめる
   - 本 spec の差分が設計の境界どおり 3 ファイル（仕分けの本番 1・テスト 2）と spec 文書に収まっていることを差分の一覧で確かめる
   - 完了の状態: areka クレートのテストが失敗 0 で通り、境界外のソースに差分が無い
@@ -45,3 +45,4 @@
 
 ## Implementation Notes
 - areka は bin のクレートなので、絞ったテストは `cargo test -p areka --bin areka <filter>` で回す（`--lib` は「no library targets found」で止まる）。
+- 全体テスト（`cargo test -p areka --bin areka`）の 1 回目で `ghost_session::switch_tests::fallback_tests::target_connect_fail_boots_default_with_halt_and_no_alert` が 1 度だけ赤（並列の負荷）。単独 3 回・全体の取り直し 1 回（2357 passed）はすべて緑で、本 spec の変更（初期配置の確定の見送りの仕分け）とは経路が重ならない。
