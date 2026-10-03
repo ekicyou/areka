@@ -83,3 +83,57 @@ jobs:
             Write-Host "タグが無いので比べを飛ばす（Cargo.toml の版 '$version'）"
           }
           "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: 既存の Release の検査
+        id: guard
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          [Console]::OutputEncoding = [Text.Encoding]::UTF8
+          # 入力は環境変数だけ（GITHUB_REF_TYPE・GITHUB_REF_NAME・GITHUB_REPOSITORY・PUBLISH・GH_TOKEN・VERSION）
+          # 読むだけ。リポジトリにも Release にも書かない
+          # 一つ前のタグを決める関数（API の呼び出しと分け、手元で並びを差し替えて回せるようにする）
+          # 版は [semver] で読み比べる（[version] は付記つきを読めない）。読めないタグは黙って飛ばす
+          function Get-PrevTag([string[]]$Names, [string]$Version) {
+            $current = [System.Management.Automation.SemanticVersion]::Parse($Version)
+            $best = $null
+            $bestName = ''
+            foreach ($name in $Names) {
+              if (-not $name.StartsWith('v', [StringComparison]::Ordinal)) { continue }
+              $v = $null
+              if (-not [System.Management.Automation.SemanticVersion]::TryParse($name.Substring(1), [ref]$v)) { continue }
+              if ($v -lt $current -and ($null -eq $best -or $v -gt $best)) {
+                $best = $v
+                $bestName = $name
+              }
+            }
+            return $bestName
+          }
+          $tag = if ($env:GITHUB_REF_TYPE -ceq 'tag') { $env:GITHUB_REF_NAME } else { "v$env:VERSION" }
+          # タグの名前で Release を探す行（後始末の段と 1 字違わず同じ）。下書きを含む一覧を全部取る
+          $found = @(gh api --paginate "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | [.tag_name, .id, .html_url, .draft] | @tsv' | Where-Object { $_.Split("`t")[0] -ceq $tag })
+          if ($LASTEXITCODE) {
+            Write-Host "Release の一覧を取れない（gh api が終了コード $LASTEXITCODE）"
+            exit 1
+          }
+          if ($found.Count) {
+            foreach ($row in $found) {
+              $f = $row.Split("`t")
+              Write-Host "タグ '$tag' の Release が既に在る（URL $($f[2])・下書き $($f[3])）"
+            }
+            if ($env:PUBLISH -ceq 'true') { exit 1 }
+            Write-Host '乾いた走りなので止めずに続ける'
+          } else {
+            Write-Host "タグ '$tag' の Release は無い（下書きを含めて 0 件）"
+            'absent=true' >> $env:GITHUB_OUTPUT
+          }
+          $names = @(gh api --paginate "repos/$env:GITHUB_REPOSITORY/tags?per_page=100" --jq '.[].name')
+          if ($LASTEXITCODE) {
+            Write-Host "タグの一覧を取れない（gh api が終了コード $LASTEXITCODE）"
+            exit 1
+          }
+          $prevTag = Get-PrevTag $names $env:VERSION
+          Write-Host "一つ前のタグ: '$prevTag'"
+          "prev_tag=$prevTag" >> $env:GITHUB_OUTPUT
