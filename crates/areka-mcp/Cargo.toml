@@ -7,7 +7,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false
+publish = false # areka 本体の部品・areka の中でしか意味を持たない
 
 # 依存はこのクレートと crates/areka/Cargo.toml（areka-mcp の 1 行）だけに書き、
 # 根の [workspace.dependencies] は変えない（要件 8.6）。

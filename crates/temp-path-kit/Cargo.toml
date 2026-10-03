@@ -7,4 +7,4 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false
+publish = false # テストだけが使う道具

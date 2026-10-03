@@ -7,7 +7,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false
+publish = false # 試験用の DLL
 
 # D-8: crate `shiori4-testdll` / [lib] name `shiori4_testdll` / 出力 `shiori4_testdll.dll`
 # （i686 `shiori.dll` と非衝突）。cdylib=境界横断の実ロード面／rlib=areka-ghost tests が

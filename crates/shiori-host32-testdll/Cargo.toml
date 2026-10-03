@@ -6,7 +6,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false
+publish = false # 試験用の DLL
 
 [lib]
 name = "shiori"                 # 出力を shiori.dll にする

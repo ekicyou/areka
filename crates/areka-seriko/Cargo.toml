@@ -7,7 +7,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false
+publish = false # areka 本体の部品・areka の中でしか意味を持たない
 
 [dependencies]
 # 単一の出力契約 `dola::cue::CueSink`（task 4.1）を実装するための workspace パス依存

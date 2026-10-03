@@ -7,7 +7,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false
+publish = false # 配布の zip に入れる 32 ビットの補助 exe
 
 [dependencies]
 shiori-host32-ipc = { path = "../shiori-host32-ipc" }

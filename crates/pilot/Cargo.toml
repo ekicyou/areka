@@ -7,7 +7,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false
+publish = false # 試し掘りの場
 
 # [dependencies] は空（最小依存）。先進坑が依存を要する場合のみ最小限追加し、
 # 葉ノード隔離（inbound ゼロ）と 32bit 可搬性を崩さないこと。
