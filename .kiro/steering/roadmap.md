@@ -215,14 +215,15 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 
 ## 直接修正候補（spec なし）
 
+> **2026-10-03 に直した**: 根の `README.md` の書き直し（開発者「README.md の現状乖離が激しい」・`/kiro-discovery` で Path B）＝α 後の姿・手書きの件数と版番号をやめて正本へリンク。`doc/CONSTITUTION.md` の §1・§4・§5 と切れた原典リンク、`crates/{areka,wintf,dola}/README.md` の誤り。2025 年の資料（`doc/spec/`・`ARCHITECTURE.md`・`WinVisual.md`・`DEVLOG_ORIGINAL_README.md`・`MIGRATION_SUMMARY.md`・`REORGANIZATION_SUMMARY.md`・`rune-persistence-guide.md`）は `doc/archive/` へ。
+>
 > **2026-10-02 棚卸⑳で直した**: 利用条件の文の切り詰めが絵文字の途中で切れる件（`crates/areka/src/install/terms.rs`・書記素クラスタで数える・テスト付き）／`completed/` が抜けて切れていたパス 8 か所／完了した spec を「後続」と書いていたコメント（`install/mod.rs`・`menu/mod.rs`・`doc/COMPAT_ARCHITECTURE.md` §8）／`talk_lifecycle.rs` の予約の持ち主の名前／steering の古い数と状態（`focus.md`・`product.md`・`structure.md`・`tech.md`）。
 
 残っている候補（どれも振る舞いを変えない掃除・**開発者の一声で着手**）:
 
-1. **根の `README.md`・`doc/ARCHITECTURE.md`・`doc/CONSTITUTION.md` の状態の記述が古い**。`areka *(予定)*`・DirectComposition（今は WUC）・`bevy_ecs 0.18`（今は 0.19）・`Taffy 0.9.2`（今は 0.13）・「アルファリリース目標: ぱすたさん」（α は「第三者が管理できる」で完了）・Phase A〜E の表・ツリーが 3 クレート（今は 29）。部分的に直すより状態の節を書き直す規模で、外から見える顔なので**書き直してよいかを開発者が決める**。
-2. **段階的な実装の名残のコメントと `#[allow(dead_code)]`**（`crates/areka/src/placement/{mod,persist,spawn,source,config}.rs`・`placement/follow/anchor.rs`・`emo2_boot/{mod,move_cue,spine,spine_conformance_script,hit_region}.rs`・`placement/transition_diag.rs` ほか約 25 か所）。「task N が結線するまで」と書いたまま、もう結線済み。allow を外せるかは `--force-warn dead_code` のビルドで確かめる（examples が `#[path]` で取り込むので要るものが残りうる）。
-3. **「M2」を先送り先として書いたコメント 52 行**（`areka-emo-text/src/{canvas,viewbox,writing}.rs` ほか）。M2 は 2026-09-18 に「α」へ決め直されて完了したので意味がずれている。置き換える語（「α 後」か「M3 以降」）は M3 のゴールが決まってからの方が手戻りが無い。
-4. **`tech.md` の主要な依存の一覧に無い本番の依存**（`budouy`・`rectangle-pack`・`bitflags`・`async-io`・`async-channel`・`human-panic`）。一覧は網羅を謳っていないので急がない。
+1. **段階的な実装の名残のコメントと `#[allow(dead_code)]`**（`crates/areka/src/placement/{mod,persist,spawn,source,config}.rs`・`placement/follow/anchor.rs`・`emo2_boot/{mod,move_cue,spine,spine_conformance_script,hit_region}.rs`・`placement/transition_diag.rs` ほか約 25 か所）。「task N が結線するまで」と書いたまま、もう結線済み。allow を外せるかは `--force-warn dead_code` のビルドで確かめる（examples が `#[path]` で取り込むので要るものが残りうる）。
+2. **「M2」を先送り先として書いたコメント 52 行**（`areka-emo-text/src/{canvas,viewbox,writing}.rs` ほか）。M2 は 2026-09-18 に「α」へ決め直されて完了したので意味がずれている。置き換える語（「α 後」か「M3 以降」）は M3 のゴールが決まってからの方が手戻りが無い。
+3. **`tech.md` の主要な依存の一覧に無い本番の依存**（`budouy`・`rectangle-pack`・`bitflags`・`async-io`・`async-channel`・`human-panic`）。一覧は網羅を謳っていないので急がない。
 
 取り下げた 1 件を再登記しないこと——判定器（`crates/areka/src/placement/transition_judge_verdict.rs`）の窓ごとの書込上限が見送り窓を除いていないのは**意図どおり**（`completed/areka-P0-dpi-transition-atomicity/mechanism-ledger.md` §13.1・2026-09-24 に開発者が再確認）。
 
@@ -257,7 +258,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 12a. **追記（同日・開発者「インストーラー関係は優先リリースしたい。なるべくウェーブに含める」）**: 配布と公開の 6 本を C1〜C3 へ組み込んだ。`package-check-temp-cleanup`（同じスクリプトの道具のバグ）を `release-package-versioned` へ合流して C1 へ前倒し（合流後 11〜17 タスク）、`boot_config.rs` を共有する `install-companion-canon` を C2 へ回した。`crates-io-publish` は自分の workflow を持たせて `release-ci-workflow` と C2 で並走させる。C2 の後に `release-cycle` の初回（`v0.0.2`）、C3 の先頭に `winget-manifest-submission`。
 12b. **優先度の 3 段で組み直した（2026-10-03・開発者「フェーズ優先度を 1 バグ・2 リリース関係・バルーン関係・アニメーション画像関係・3 その他に。ウェーブを見直して」）**: 台帳の段を 3 段へ改め（バグ 5・優先 22・その他 22・据え置き 7・保留 1 ＝ 57）、ウェーブを組み直した。C1＝バグ 5 本（`status-execution-states` を C3 の候補から前倒し＝同じ C1 の `emo-text-file-split` の 6 本と `drain_resnap.rs` に触らない約束つき）＋`emo-text-file-split`＋`animated-image-decode`（依存を足す席を `mcp-server-core` から譲り受けた）。C2＝`shell-balloon`・`release-ci-workflow`・`crates-io-publish`＋その他の `translate-pipeline`・`install-companion-canon`（どちらも優先の spec と触るファイルが重ならない空き席）。C3（予定）＝`winget-manifest-submission`・`balloon-font-file`・`surface-element-nesting`・`balloon-lifecycle-events`＋その他の `mcp-server-core`。その他の `install-live-target-hazards`・`mcp-tool-entrances` は C4 の候補へ下げた。`crates-io-publish` の前提から `mcp-server-core` を外した（`areka-mcp` の `publish` は後から入る `mcp-server-core` が自分で決める）。kanade の列は `balloon-lifecycle-events` を `property-query-channels` の前へ。文字とバルーンの列の全体（`text-typesetting` ほか）を「バルーン関係」に数えた。想定タスクの合計＝C1 43〜65・C2 51〜70。
 12c. **MCP を ② へ上げた（同日・開発者「MCP 関係って複合 spec だったから早めに着手入れてほしい」）**: SSP MCP の移植 10 本の段を「優先」へ。`mcp-server-core` を C1-⑦ へ戻し、依存を足す席を譲った `animated-image-decode` は C3 へ（`animated-image-playback` は `surface-element-nesting`＝C3 を待つので、動く画像の列は 1 段も遅れない）。`mcp-tool-entrances` は C2-④（`Cargo.toml` を触らない約束）。個別のツールのうち kanade と emo-text から遠い `mcp-get-property`・`mcp-expression-table`・`mcp-log-history` を C3 へ、`mcp-kanade-tools`・`mcp-dump-images`・`mcp-reload`・`mcp-stdio-bridge` を C4 の候補、`mcp-strict-errors` を最後に。`crates-io-publish` の前提に `mcp-server-core`（C1）を戻した（`areka-mcp` の `publish` を C2 で決める）。数え＝バグ 5・優先 32・その他 12・据え置き 7・保留 1 ＝ 57。
-12. **開発者に決めてほしいこと**: ⑴ M3 のゴール ⑵ 根の `README.md` ほかの状態の節を書き直してよいか（直接修正候補 1）。どちらも C1 の着手を止めない。
+12. **開発者に決めてほしいこと**: ⑴ M3 のゴール ⑵ ~~根の `README.md` ほかの状態の節を書き直してよいか~~（2026-10-03 に書き直した）。
 
 ## 着手手順
 
