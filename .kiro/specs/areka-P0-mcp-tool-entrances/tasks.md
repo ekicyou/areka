@@ -9,7 +9,7 @@
   - `tools/` の下に表・橋・結果の形・10 本のツールのファイルを空で作り、各テストファイル（`check_tests.rs`・`tools_tests.rs`・`tools_socket_tests.rs`・`bridge_tests.rs`・`outcome_tests.rs`）の接続も置く。以後の並走タスクが `lib.rs`・`tools/mod.rs` の宣言を取り合わないようにする
   - 完了の姿: `cargo build -p areka-mcp` と `cargo test -p areka-mcp --no-run` が緑で、`mcp-server-core` の既存テストが 0 行の変更のまま緑
   - _Requirements: 7.1, 8.2_
-- [ ] 1.2 アプリ本体側（`crates/areka`）に `mcp` モジュールの骨組みを置く
+- [x] 1.2 アプリ本体側（`crates/areka`）に `mcp` モジュールの骨組みを置く
   - `main.rs` に `mod mcp;` の 1 行だけを足し、`mcp/` の下に `mod.rs`・`resolve.rs`・10 本のツールのファイルとそれぞれの `_tests.rs`（`mcp_tests.rs`・`resolve_tests.rs` を含む）を空で作る
   - 完了の姿: `cargo build -p areka --bin areka` と `cargo test -p areka --bin areka --no-run` が緑（使われない項目の警告は後のタスクで消える）
   - _Requirements: 7.1, 7.4_
