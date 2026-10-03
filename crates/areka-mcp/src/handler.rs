@@ -10,8 +10,9 @@ use std::sync::Arc;
 use rmcp::handler::server::router::tool::{ToolRoute, ToolRouter};
 use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
-    ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
+    CacheScope, CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock,
+    Implementation, ListToolsResult, PaginatedRequestParams, ProtocolVersion, ServerCapabilities,
+    ServerConfig, Tool,
 };
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer, ServerHandler};
@@ -88,9 +89,19 @@ impl ServerHandler for ArekaHandler {
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParams>,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
-        Ok(ListToolsResult::with_all_items(self.router.list_all()))
+        let result = ListToolsResult::with_all_items(self.router.list_all());
+        // 2026-07-28 以降は `ttlMs`・`cacheScope` が必須（rmcp は欄を空のまま出す＝設計 B-12）。
+        // 無状態では list_changed を送れず、後の spec で道具が増えるので 0／private
+        // （`server/discover` の rmcp の既定と同じ）。旧式の版には付けない。
+        if context
+            .protocol_version()
+            .is_some_and(|v| v >= ProtocolVersion::V_2026_07_28)
+        {
+            return Ok(result.with_ttl_ms(0).with_cache_scope(CacheScope::Private));
+        }
+        Ok(result)
     }
 
     async fn call_tool(

@@ -33,6 +33,15 @@ fn initialize(version: &str) -> String {
     )
 }
 
+/// 無状態版（`2026-07-28`）の要求に付ける本文の `_meta`。
+fn stateless_meta() -> Value {
+    json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientInfo": { "name": "areka-test", "version": "0" }
+    })
+}
+
 /// 200 で JSON 1 件の応答を読み、`result` を返す（`error` があれば失敗）。
 fn result_of(response: &Response) -> Value {
     assert_eq!(response.status, 200, "{response:?}");
@@ -84,11 +93,7 @@ fn initialize_with_no_initialize_version_falls_back_to_2025_11_25() {
     // 無状態版の形（本文の `_meta` と `MCP-Protocol-Version: 2026-07-28`）で送っても、
     // `initialize` は旧式の扱いで 200・`2025-11-25`（差の一覧へ。SSP は 400）。
     let mut body: Value = serde_json::from_str(&initialize("2026-07-28")).unwrap();
-    body["params"]["_meta"] = json!({
-        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-        "io.modelcontextprotocol/clientCapabilities": {},
-        "io.modelcontextprotocol/clientInfo": { "name": "areka-test", "version": "0" }
-    });
+    body["params"]["_meta"] = stateless_meta();
     let result = result_of(&post_rpc(
         addr,
         &[("MCP-Protocol-Version", "2026-07-28")],
@@ -254,11 +259,7 @@ fn get_v1_has_no_form() {
 #[test]
 fn server_discover_stateless() {
     let (_server, addr) = serve(ToolRegistry::default());
-    let params = json!({ "_meta": {
-        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-        "io.modelcontextprotocol/clientCapabilities": {},
-        "io.modelcontextprotocol/clientInfo": { "name": "areka-test", "version": "0" }
-    }});
+    let params = json!({ "_meta": stateless_meta() });
     let response = post_rpc(
         addr,
         &[
@@ -304,6 +305,35 @@ fn server_discover_stateless() {
             "message": "Mcp-Method header `tools/list` does not match body method `server/discover`"
         } })
     );
+}
+
+/// (要件 3.15・設計 B-12) 無状態版の `tools/list` は `ttlMs: 0`・`cacheScope: "private"`・
+/// `resultType: "complete"` を付ける（2026-07-28 の必須欄。無いと Claude Code 2.1.283 が拒む）。
+/// 旧式（ヘッダも `_meta` も無い）の `tools/list` にはどちらの欄も無い（差の一覧へ）。
+#[test]
+fn tools_list_stateless_has_cache_hints() {
+    let (_server, addr) = serve(ToolRegistry::default());
+    let result = result_of(&post_rpc(
+        addr,
+        &[
+            ("MCP-Protocol-Version", "2026-07-28"),
+            ("Mcp-Method", "tools/list"),
+        ],
+        &rpc(
+            "tools/list",
+            Some(1),
+            Some(json!({ "_meta": stateless_meta() })),
+        ),
+    ));
+    assert_eq!(result["ttlMs"], 0, "{result}");
+    assert_eq!(result["cacheScope"], "private", "{result}");
+    assert_eq!(result["resultType"], "complete", "{result}");
+    assert_eq!(result["tools"], json!([]), "{result}");
+    // 旧式の形は従来どおり（欄を足さない）。
+    let legacy = result_of(&post_rpc(addr, &[], &rpc("tools/list", Some(2), None)));
+    assert!(legacy.get("ttlMs").is_none(), "{legacy}");
+    assert!(legacy.get("cacheScope").is_none(), "{legacy}");
+    assert_eq!(legacy["tools"], json!([]), "{legacy}");
 }
 
 /// (要件 3.13) `MCP-Protocol-Version` が無い・旧式の 4 版のどれでも、`ping`・`tools/list` は同じ答え。

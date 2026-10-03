@@ -78,10 +78,10 @@
   - _Depends: 4.1_
   - _Boundary: server_tests_
 - [x] 4.3 (P) MCP の応答のテスト
-  - `server_protocol_tests.rs` に design.md の 19 本（旧式 4 版・`2026-07-28` が `2025-11-25` へ・未知の版・通知 202・tools/list 0 本・ping・tools/call の `-32602`・未知メソッドの `-32601` と 200・Content-Type 違いの 415・壊れた JSON の 415 と次の要求・セッション ID 無し・JSON 単発・GET の 405・`server/discover`・ヘッダの素通し・未知のヘッダ値の 4xx・Accept 無しの 406・本文 4 MiB 超の 413・バッチ（配列）の本文）を置く
+  - `server_protocol_tests.rs` に design.md の 20 本（旧式 4 版・`2026-07-28` が `2025-11-25` へ・未知の版・通知 202・tools/list 0 本・ping・tools/call の `-32602`・未知メソッドの `-32601` と 200・Content-Type 違いの 415・壊れた JSON の 415 と次の要求・セッション ID 無し・JSON 単発・GET の 405・`server/discover`・ヘッダの素通し・未知のヘッダ値の 4xx・Accept 無しの 406・本文 4 MiB 超の 413・バッチ（配列）の本文・無状態版の `tools/list` の `ttlMs`／`cacheScope`〔`tools_list_stateless_has_cache_hints`〕）を置く
   - 差の一覧に書く値（未知の版で返る版・未知のヘッダ値の状態・discover の欄）は、各テストの assert に具体の値で固定する（5.2 はテストの assert から写す・別の記録は作らない）
-  - 完了の姿: 19 本が緑
-  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 5.1, 9.2_
+  - 完了の姿: 20 本が緑
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.15, 5.1, 9.2_
   - _Depends: 4.1_
   - _Boundary: server_protocol_tests_
 - [x] 4.4 (P) 検査・help・登録口のテスト
@@ -100,9 +100,9 @@
   - _Depends: 3.3_
   - _Boundary: areka の main の結線_
 - [x] 5.2 (P) SSP との輸送の差の一覧
-  - `doc/ssp-mcp/transport-diff-areka.md` を新しく書く: survey §2 の 14 行＋§1 のフォーム＝15 行に、本文の上限（4 MiB）と `Accept` の 2 行を足した 17 行。列は「項目／SSP／areka（rmcp 3.5.0）／判定／測ったテスト名」。先頭に測った rmcp の版と日付
-  - 判定は「同じ／違うが困らない／困るので直した」のどれか。物差し（Claude Code・Cursor が登録・initialize・tools/list・ping に失敗する差）に当たる行は 0（直した行 0）であることを明記する
-  - 完了の姿: 17 行すべてに判定とテスト名が入り空欄 0 行・`survey.md` の本文は変えていない
+  - `doc/ssp-mcp/transport-diff-areka.md` を新しく書く: survey §2 の 14 行＋§1 のフォーム＝15 行に、本文の上限（4 MiB）と `Accept` の 2 行と、実機確認 6.2 で見つかった無状態版の `tools/list` の 1 行を足した 18 行。列は「項目／SSP／areka（rmcp 3.5.0）／判定／測ったテスト名」。先頭に測った rmcp の版と日付
+  - 判定は「同じ／違うが困らない／困るので直した」のどれか。物差し（Claude Code・Cursor が登録・initialize〔無状態版では server/discover〕・tools/list・ping に失敗する差）に当たる行は直して「困るので直した」とし、その数を明記する（実機確認 6.2 の後で 1 行）
+  - 完了の姿: 18 行すべてに判定とテスト名が入り空欄 0 行・`survey.md` の本文は変えていない
   - _Requirements: 5.1, 5.2, 5.3, 5.4_
   - _Depends: 4.3, 4.4_
   - _Boundary: 差の一覧_
