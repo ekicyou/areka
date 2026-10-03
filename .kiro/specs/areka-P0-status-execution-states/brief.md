@@ -86,3 +86,8 @@ ukadoc `Status` 実行状態語彙の各状態が、それぞれの源サブシ�
 - **pasta の受け入れ条件は要らなくなった**: 固定している pasta（`48c42fc`）は `Status` を部分一致で調べる（`virtual_dispatcher.lua`）＝`talking,balloon(0)` のような複合の値でも安全。
 - 残る問い: `balloon(0=2/1=0)` か SSP の `balloon(0=2,1=0)` か（区切り）。
 - **触るファイル**: `crates/areka-kanade/src/status.rs`（391）と、UI スレッドから kanade の写しへ届ける配線（`crates/areka/src/emo2_boot/`）。`shell-balloon` など `emo2_boot` を触る spec とは同時に走らせない。
+
+## 2026-10-03 ウェーブ C1-④（10-03 の組み直し（開発者「1 バグ・2 リリース関係・バルーン関係・アニメーション画像関係・3 その他」））
+
+- 段はバグ（潜在）なので C3 の候補から C1 へ前倒しした。`shell-balloon`（C2）は本 spec の後。
+- **同じ C1 との約束（必ず守る）**: `emo-text-file-split` が分ける 6 本（`crates/areka/src/emo2_boot/balloon_visibility.rs`・`crates/areka/src/input_events/balloon.rs`・`crates/areka-emo-text/src/{actor,layout,viewbox,viewbox_draw}.rs`）と、モジュールの宣言の `emo2_boot/mod.rs`・`input_events/mod.rs`、`restart-chain-finalize-stall` の `emo2_boot/frame/drain_resnap.rs` には触らない。届け元は `user_break_cue.rs`・`balloon_visibility_phase.rs`・`crates/areka/src/update/desk.rs` など既存のファイルの中に置く。これらに及ぶと分かったら、そこで止めて報告する。

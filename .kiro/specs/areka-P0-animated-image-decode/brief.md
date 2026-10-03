@@ -85,3 +85,11 @@
 - **触るファイル（推す設計）**: `crates/areka-emo-atlas/src/{decode.rs, decode/wic_arm.rs, decode/<新規>.rs, lib.rs, table.rs}` と検体・`crates/areka-emo-atlas/Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`.kiro/steering/tech.md`。
 - **議題**: `image-webp` の動く WebP の透過の欠陥を版上げで待つか patch で固定するか／GIF の繰り返し回数のために `gif` を直に呼ぶか／コマ数と総画素の上限／コマの鍵の持ち方／16 bit の APNG。
 - **並べ方**: `mcp-server-core` と同じウェーブに置かない（依存の登記のファイルが重なる）。`surface-element-nesting` とは、両方が上の「推す設計」を守るときだけ共有 0。
+
+## 2026-10-03 ウェーブ C1-⑦（10-03 の組み直し（開発者「1 バグ・2 リリース関係・バルーン関係・アニメーション画像関係・3 その他」））
+
+- 段は「優先」（動く画像）。依存を足す席を `mcp-server-core`（C3 へ）から譲り受けた。**上の「推す設計」（`AtlasKey` と `manifest.rs` を変えない・動く絵の分岐は `WicDecoderArm` の中）で作る**＝C3 の `surface-element-nesting` と共有 0。
+
+## 2026-10-03 ウェーブ C3-⑤ へ（予定・10-03 の再編（開発者「MCP は複合 spec なので早めに着手したい」））
+
+- 依存を足す席を C1 の `mcp-server-core` へ返し、C3 へ移した。`animated-image-playback` は `surface-element-nesting`（C3）を待つので、動く画像の列は遅れない。上の「推す設計」（`AtlasKey` と `manifest.rs` を変えない）は変わらず必須＝同じ C3 の `surface-element-nesting` と共有 0。

@@ -109,4 +109,4 @@ ukadoc 網羅調査の文書（`doc/ukadoc-coverage/roadmap-draft.md`・`briefin
   6. 取り下げ予定の `emo-text-canon-residue` を `roadmap-draft.md` の `[[spec]]` の表から外し、フォルダを片付ける（残り 1 件は `shell-balloon` が引き取り済み）。
   7. 完了 `ghost-install` が申し送った「`assets.toml` の `manual_install` の束の行の語の食い違い」を引き取る。
 - **合流しない物**: 覚え書きの残り 3 つ（`present-write-coherence` の未達 40 件・正典語彙の孤児 2 件・配布物を束ねる／作る側の 3 件）は製品の穴で、台帳の番ではない＝roadmap の覚え書きに残す。
-- **並べ方**: 触るのは `doc/ukadoc-coverage/` と `crates/ukadoc-survey/` だけで製品のコードと共有 0。ただし**台帳を書き換える spec とは同じウェーブに置かない**（C1 の `choice-timeout-directive`・`install-companion-canon` は台帳の行を直す）。
+- **並べ方**: 触るのは `doc/ukadoc-coverage/` と `crates/ukadoc-survey/` だけで製品のコードと共有 0。ただし**台帳を書き換える spec とは同じウェーブに置かない**（`choice-timeout-directive`＝C1・`install-companion-canon`＝C2 は台帳の行を直す）。
