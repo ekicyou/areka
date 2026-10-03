@@ -62,3 +62,7 @@
 - 配布スクリプトは今も `tools/package-alpha.ps1`（「後継」は無い）。同梱には 3 か所を変える＝`$ALLOWED_EXECUTABLES`・ビルドの段・配置と CPU 種別の検査。**`release-package-versioned`（C1）が同じスクリプトを先に直す**。配布の zip は x64 だけ＝arm64 の中継は入らない。
 - **触るファイル**: 新規の bin クレート `crates/areka-mcp-bridge/**`（std::net で足りる）・`tools/package-alpha.ps1`・help の文面（`areka-mcp` の中）・必要なら `dist/README.txt`・`Cargo.lock`。
 - **議題**: exe の名前／ポートを引数でも渡せるか／写すだけか版のヘッダを解釈するか／arm64 版を配布物に入れるか。
+
+## 2026-10-03 C4 の候補（10-03 の再編（開発者「MCP は複合 spec なので早めに着手したい」））
+
+- 段は「優先」。C3 に入れなかった理由: 依存の席を C3 の `animated-image-decode` が使い、`dist/README.txt` を C3 の winget と分け合う。

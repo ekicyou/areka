@@ -89,3 +89,7 @@
 ## 2026-10-03 ウェーブ C1-⑦（10-03 の組み直し（開発者「1 バグ・2 リリース関係・バルーン関係・アニメーション画像関係・3 その他」））
 
 - 段は「優先」（動く画像）。依存を足す席を `mcp-server-core`（C3 へ）から譲り受けた。**上の「推す設計」（`AtlasKey` と `manifest.rs` を変えない・動く絵の分岐は `WicDecoderArm` の中）で作る**＝C3 の `surface-element-nesting` と共有 0。
+
+## 2026-10-03 ウェーブ C3-⑤ へ（予定・10-03 の再編（開発者「MCP は複合 spec なので早めに着手したい」））
+
+- 依存を足す席を C1 の `mcp-server-core` へ返し、C3 へ移した。`animated-image-playback` は `surface-element-nesting`（C3）を待つので、動く画像の列は遅れない。上の「推す設計」（`AtlasKey` と `manifest.rs` を変えない）は変わらず必須＝同じ C3 の `surface-element-nesting` と共有 0。
