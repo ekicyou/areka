@@ -30,6 +30,7 @@ compile の汎用キャリアアームへ allowlist 判定を追加（純関数�
 ## Scope
 
 - **In**: allowlist 8 コマンド族の compile 追加解釈・lowering・決定論檻（script 直入力→期待 cue/barrier/duration 列）。
+- **In（2026-10-03 追加）**: `\t`（タイムクリティカルセクション）と `Status` の `timecritical` の持ち主を `areka-P0-status-execution-states` から引き継いだ（同 spec 要件 6.3・ukadoc 網羅の台帳 `ukadoc:list_sakura_script:_5ct:1` の担当）。
 - **Out**: allowlist 外の compile 解釈（恒久禁止）／各コマンドの**消費側**実装（該当演者の領分）／SSTP 経由の文脈依存挙動。
 
 ## Upstream / Downstream

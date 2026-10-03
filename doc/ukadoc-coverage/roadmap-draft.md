@@ -355,7 +355,7 @@ wave = "A0"
 name = "areka-P0-sakura-time-directives"
 stage = "A"
 bundle = "会話"
-owner_count = 11
+owner_count = 12
 wave = "W16"
 
 [[spec]]
@@ -397,7 +397,7 @@ wave = "W16"
 name = "areka-P0-status-execution-states"
 stage = "A"
 bundle = "動作モードの出入り"
-owner_count = 4
+owner_count = 3
 wave = "W15"
 
 [[spec]]
@@ -586,7 +586,7 @@ spec 台帳で、この表はそれを写した写真である。
 
 | 順位 | 束 | 候補 spec 名の案 | 依存する既存 spec | 波の案 |
 | ---: | --- | --- | --- | --- |
-| 1 | 会話 | `areka-P0-talk-script-canon` | `areka-P0-balloon-canon-residue`（W14・5 件）／`areka-P0-sakura-time-directives`（W16・5 件）／`areka-P0-anchor-tag-canon`（W17・1 件）／`areka-P0-status-execution-states`（W15・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件） | 第 1 波（先頭ウェーブ） |
+| 1 | 会話 | `areka-P0-talk-script-canon` | `areka-P0-sakura-time-directives`（W16・6 件）／`areka-P0-balloon-canon-residue`（W14・5 件）／`areka-P0-anchor-tag-canon`（W17・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件） | 第 1 波（先頭ウェーブ） |
 | 2 | 窓の配置と重なり | `areka-P0-window-placement-canon` | `areka-P0-currentghost-property-tree`（W15・16 件）／`areka-P0-surfaces-basepos`（W13 任意／W14・2 件）／`areka-P0-sakura-time-directives`（W16・2 件）／`areka-P0-zorder-property`（W15・1 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件）／`areka-P0-sylphya-set-ledger`（完了・1 件） | 第 1 波（先頭ウェーブ） |
 | 3 | 名前の記憶 | `areka-P0-user-name-memory` | `areka-P0-currentghost-property-tree`（W15・1 件）／`areka-P0-package-mount`（完了・2 件）／`areka-P0-sylphya`（完了・2 件）／`areka-P0-sakura-dialogue-tags`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件） | 第 1 波（先頭ウェーブ） |
 | 4 | 起動と挨拶 | `areka-P0-boot-greeting-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-package-mount`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・3 件） | 第 1 波（先頭ウェーブ） |
@@ -717,7 +717,7 @@ spec 台帳で、この表はそれを写した写真である。
 - 現状: 構成 46 件の状態は実装済み 16・未対応 18・語彙のみ 10・縮退 2 で、`briefing.md` 7-7 が数えた「一般化で壊れる」75 件のうち 14 件がこの束にある。
 - 何が変わるか: 里々製・ヤヤ製の雛形が書く会話の綴りが素通りせずに再生され、バルーンの寿命と選択の待ちが台本の指定で決まるようになる。
 
-**依存する既存 spec**: `areka-P0-balloon-canon-residue`（W14・5 件）／`areka-P0-sakura-time-directives`（W16・5 件）／`areka-P0-anchor-tag-canon`（W17・1 件）／`areka-P0-status-execution-states`（W15・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件）
+**依存する既存 spec**: `areka-P0-sakura-time-directives`（W16・6 件）／`areka-P0-balloon-canon-residue`（W14・5 件）／`areka-P0-anchor-tag-canon`（W17・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件）
 
 **構成 id（全 46 件）**
 

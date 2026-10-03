@@ -16107,8 +16107,11 @@ note = """
 縮退の転記元 その 2: 同じ表の行「ukadoc Status [SSP拡張] の balloon（表示中のバルーン ID 群）の
 実導出・報告」。そこには M1 では導出せず、語彙だけを保ったまま使わない状態に置く、と記録されて
 いる。実際に導出するときの唯一の情報源はバルーンの表示状態の読み口とし、見えているかどうかの
-帳簿を第 2 に作らない。解禁の条件は残る状態の源が着地した時点で、追跡先は
-areka-P0-status-execution-states。
+帳簿を第 2 に作らない。online・nouserbreak・balloon は areka-P0-status-execution-states で
+導出済み（balloon はバルーンの表示状態の読み口から導き、第 2 の帳簿を作っていない）。
+残り 5 状態の宛先: timecritical→areka-P0-sakura-time-directives／induction・passive→候補
+areka-P0-passive-mode-states／minimizing→候補 areka-P0-minimize-state／opening→候補
+areka-P0-inputbox-dialog・areka-P0-communicate-events（候補はどれもまだ起票していない）。
 根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request。
 build_request は値を解釈せずそのまま書き出し、値が無いときは行ごと省く。実行状態の語彙は
 owner の areka-P0-status-execution-states が所有するので、本 spec は語彙の可否を判定しない。

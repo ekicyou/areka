@@ -1019,6 +1019,7 @@ note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、利用者を導く状態へ入れず、案内が始まらない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
 [運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[次の持ち主: 候補 areka-P0-passive-mode-states（doc/ukadoc-coverage/roadmap-draft.md 束 16・計画の波で起票）。areka-P0-status-execution-states は Status の induction・passive の行を空のまま残し、このタグを実装しない]
 [群: 動作モードの出入り]
 [頻度: 里々 1 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![enter。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -1073,6 +1074,7 @@ note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、受け身の状態へ入れず、自発的な話しかけが止まらない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
 [運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[次の持ち主: 候補 areka-P0-passive-mode-states（doc/ukadoc-coverage/roadmap-draft.md 束 16・計画の波で起票）。areka-P0-status-execution-states は Status の induction・passive の行を空のまま残し、このタグを実装しない]
 [群: 動作モードの出入り]
 [頻度: 里々 1 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![enter。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -5418,7 +5420,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5ct:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-status-execution-states"
+owner = "areka-P0-sakura-time-directives"
 priority = "A1"
 values = ["掛け合い"]
 links = []
