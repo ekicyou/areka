@@ -124,3 +124,37 @@ fn same_cue_sequence_yields_same_counts() {
         [3, 2, 2, 0]
     );
 }
+
+/// 文字の表と消去の数の表の鍵は場所の鍵（要件 4.6）。スコープで引く既存の読み口は
+/// 「普通のバルーンの場所」を引き、場所の鍵で普通のバルーンを引いた値と同じになる（要件 10.5）。
+#[test]
+fn scope_readers_read_the_ordinary_balloon_place() {
+    use crate::place::{PlaceKey, TextPlace};
+
+    let mut state = TextLayerState::default();
+    state.apply_cue(&cue("0", 0.0, CueCommand::Text("あい".into())));
+    state.apply_cue(&cue("0", 0.5, CueCommand::Clear));
+    state.apply_cue(&cue("0", 0.6, CueCommand::Text("う".into())));
+
+    let actor = ActorKey::from("0");
+    let key = PlaceKey::balloon(&actor);
+    assert_eq!(
+        key,
+        PlaceKey {
+            actor: actor.clone(),
+            place: TextPlace::Balloon
+        }
+    );
+    let by_place = state
+        .place_state(&key)
+        .expect("普通のバルーンの場所に文字がある");
+    assert_eq!(Some(by_place), state.actor_state(&actor));
+    assert_eq!(by_place.items(), &[TextItem::glyph("う")]);
+    assert_eq!(state.clear_count(&actor), 1);
+    // 状態の無いスコープは場所の鍵で引いても無い。
+    assert!(
+        state
+            .place_state(&PlaceKey::balloon(&ActorKey::from("1")))
+            .is_none()
+    );
+}

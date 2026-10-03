@@ -49,6 +49,7 @@ use areka_sakura::cluster::clusters;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
 use crate::look::{StyleId, StyleTable};
+use crate::place::{PlaceKey, TextPlace};
 
 pub use decoration::Decoration;
 use decoration::font_tag_tokens;
@@ -391,11 +392,11 @@ impl ActorTextState {
 /// actor 別テキスト状態の集約（cue→行/グリフ状態の純粋遷移・R1.6/R2.1–2.5/R10.5）。
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TextLayerState {
-    /// `ActorKey → ActorTextState`（決定論的順序のため BTreeMap・design.md 正本）。
-    actors: BTreeMap<ActorKey, ActorTextState>,
+    /// `PlaceKey → ActorTextState`（スコープと文字の場所の組ごと・決定論的順序のため BTreeMap）。
+    actors: BTreeMap<PlaceKey, ActorTextState>,
     /// scope ごとの内容が消された回数（`Clear`／`ClearAll` の累計・単調増加）。
     /// `ActorTextState` の欄にしないのは、内容の状態の形と等しさを変えないため。
-    clears: BTreeMap<ActorKey, u64>,
+    clears: BTreeMap<PlaceKey, u64>,
 }
 
 impl TextLayerState {
@@ -428,7 +429,10 @@ impl TextLayerState {
                     0.0
                 };
                 tracing::debug!(actor = %cue.actor, len = glyph_count, at = cue.at, duration = cue.duration, interval, "Text cue 適用（追記＋配送 duration 由来のリビール時刻確定）");
-                let state = self.actors.entry(cue.actor.clone()).or_default();
+                let state = self
+                    .actors
+                    .entry(PlaceKey::balloon(&cue.actor))
+                    .or_default();
                 state
                     .items
                     .extend(glyph_units.iter().map(|c| TextItem::glyph(c)));
@@ -438,7 +442,10 @@ impl TextLayerState {
             }
             CueCommand::NewLine { ratio } => {
                 tracing::debug!(actor = %cue.actor, ratio, "NewLine cue 適用（改行マーカー追記）");
-                let state = self.actors.entry(cue.actor.clone()).or_default();
+                let state = self
+                    .actors
+                    .entry(PlaceKey::balloon(&cue.actor))
+                    .or_default();
                 state.items.push(TextItem::LineBreak { ratio: *ratio });
             }
             CueCommand::Clear => {
@@ -447,10 +454,13 @@ impl TextLayerState {
                 // 装飾状態（現在の見た目・所有外キーの保持）は保つ——`\c` は装飾を戻さない
                 // （R3.7・`= ActorTextState::default()` に戻すと装飾まで消える）。
                 self.actors
-                    .entry(cue.actor.clone())
+                    .entry(PlaceKey::balloon(&cue.actor))
                     .or_default()
                     .clear_content();
-                *self.clears.entry(cue.actor.clone()).or_default() += 1;
+                *self
+                    .clears
+                    .entry(PlaceKey::balloon(&cue.actor))
+                    .or_default() += 1;
             }
             CueCommand::ClearAll => {
                 tracing::debug!(actor = %cue.actor, "ClearAll cue 適用（全スコープを未リビール分含め消去）");
@@ -467,10 +477,10 @@ impl TextLayerState {
                 // 装飾は台詞をまたいで残らない。記録済みの値も空にして、次の台詞では
                 // 同じ不正な指定がもう 1 度記録されるようにする（R13.4）。
                 // 回数を進めるのは既にある scope だけ（状態の無い scope は 0 のまま）。
-                for (actor, state) in self.actors.iter_mut() {
+                for (key, state) in self.actors.iter_mut() {
                     state.clear_content();
                     state.reset_for_new_talk();
-                    *self.clears.entry(actor.clone()).or_default() += 1;
+                    *self.clears.entry(key.clone()).or_default() += 1;
                 }
             }
             CueCommand::Choice {
@@ -489,7 +499,10 @@ impl TextLayerState {
                 } else {
                     0.0
                 };
-                let state = self.actors.entry(cue.actor.clone()).or_default();
+                let state = self
+                    .actors
+                    .entry(PlaceKey::balloon(&cue.actor))
+                    .or_default();
                 // 序数空間は items のグリフ（`Glyph` のみ）＝`visible_glyphs`／reveal と同一。
                 let start = state
                     .items
@@ -525,7 +538,10 @@ impl TextLayerState {
                 let x = parse_cursor_coord(x);
                 let y = parse_cursor_coord(y);
                 tracing::debug!(actor = %cue.actor, ?x, ?y, "Cursor cue 適用（CursorMove 追記・グリフ/リビール不変）");
-                let state = self.actors.entry(cue.actor.clone()).or_default();
+                let state = self
+                    .actors
+                    .entry(PlaceKey::balloon(&cue.actor))
+                    .or_default();
                 state.items.push(TextItem::CursorMove { x, y });
             }
             // `\f` 文字装飾の汎用キャリア（R2.4）は**名前で自己選別**して消費する。
@@ -535,7 +551,7 @@ impl TextLayerState {
                 Some(tokens) => {
                     tracing::debug!(actor = %cue.actor, ?tokens, "\\f cue 適用（以降に追記される文字へ効く）");
                     self.actors
-                        .entry(cue.actor.clone())
+                        .entry(PlaceKey::balloon(&cue.actor))
                         .or_default()
                         .apply_font_args(&cue.actor, &tokens);
                 }
@@ -565,25 +581,35 @@ impl TextLayerState {
     /// `visible(t) = |{ i : r_i <= t }|`（改行マーカーは数えない・グリフのみ）。
     /// 未生成の actor は 0。同一 cue 列＋同一注入時刻列→同一可視数（決定論檻）。
     pub fn visible_glyphs(&self, actor: &ActorKey, t: f64) -> usize {
-        self.actors
-            .get(actor)
+        self.actor_state(actor)
             .map_or(0, |state| state.reveal.visible(t))
     }
 
-    /// scope の内容が消された回数（`Clear` と `ClearAll` の累計）。
+    /// scope の内容が消された回数（`Clear` と `ClearAll` の累計・普通のバルーンの場所）。
     /// 一度も消されていない・状態の無い scope は 0。読むだけで状態を変えない。
     pub fn clear_count(&self, actor: &ActorKey) -> u64 {
-        self.clears.get(actor).copied().unwrap_or(0)
+        self.clears
+            .get(&PlaceKey::balloon(actor))
+            .copied()
+            .unwrap_or(0)
     }
 
-    /// actor のテキスト状態（未生成の actor は `None`）。
+    /// actor の普通のバルーンの場所のテキスト状態（未生成の actor は `None`）。
     pub fn actor_state(&self, actor: &ActorKey) -> Option<&ActorTextState> {
-        self.actors.get(actor)
+        self.place_state(&PlaceKey::balloon(actor))
     }
 
-    /// 全 actor のテキスト状態（`ActorKey` 昇順・決定論的順序）。
+    /// 場所の鍵で引くテキスト状態（未生成の場所は `None`）。
+    pub fn place_state(&self, key: &PlaceKey) -> Option<&ActorTextState> {
+        self.actors.get(key)
+    }
+
+    /// 全 actor の普通のバルーンの場所のテキスト状態（`ActorKey` 昇順・決定論的順序）。
     pub fn actors(&self) -> impl Iterator<Item = (&ActorKey, &ActorTextState)> {
-        self.actors.iter()
+        self.actors
+            .iter()
+            .filter(|(key, _)| key.place == TextPlace::Balloon)
+            .map(|(key, state)| (&key.actor, state))
     }
 }
 

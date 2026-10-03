@@ -11,7 +11,7 @@
 //!
 //! crate 内は次の一方向に層を分ける。逆流はレビューエラーとして扱う。
 //!
-//! 1. **純粋層**（[`state`]／[`writing`]／[`region`]／[`cursor_tag`]／[`layout`]／[`canvas`]／
+//! 1. **純粋層**（[`state`]／[`place`]／[`writing`]／[`region`]／[`cursor_tag`]／[`layout`]／[`canvas`]／
 //!    [`viewbox`]／[`look`]／[`color`]）——
 //!    `windows` 系 crate 非依存の決定論檻。純粋層モジュールに `windows` の import が
 //!    現れたらレビューエラー（本 crate のテストでも構造検証する）。
@@ -52,6 +52,7 @@ pub mod cursor_tag;
 pub mod draw;
 pub mod layout;
 pub mod look;
+pub mod place;
 pub mod region;
 pub mod segment;
 pub mod sink;
@@ -204,6 +205,7 @@ mod tests {
             include_str!("cursor_tag_test_support.rs"),
         ),
         ("cursor_tag_tests.rs", include_str!("cursor_tag_tests.rs")),
+        ("place.rs", include_str!("place.rs")),
         ("state.rs", include_str!("state.rs")),
         (
             "state_cursor_coord_parse_tests.rs",
@@ -420,7 +422,7 @@ mod tests {
     fn pure_layer_modules_have_no_windows_imports() {
         // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
         // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
-        assert_eq!(PURE_SOURCES.len(), 65, "走査する純粋層モジュールの母数");
+        assert_eq!(PURE_SOURCES.len(), 66, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",

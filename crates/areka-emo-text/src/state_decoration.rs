@@ -60,6 +60,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use areka_sakura::contract::{ActorKey, FONT_TAG_CARRIER};
 
 use crate::look::{LookLayers, Note, Script, StyleId, TextLook, apply_font_tag};
+use crate::place::PlaceKey;
 
 use super::{ActorTextState, TextLayerState};
 
@@ -431,7 +432,7 @@ impl TextLayerState {
     /// 再装着（k 再追従）でも同じ経路を通る——土台だけが新しい値へ移り、明示された指定は
     /// 保たれる。
     pub fn set_look_layers(&mut self, actor: &ActorKey, layers: LookLayers) {
-        let state = self.actors.entry(actor.clone()).or_default();
+        let state = self.actors.entry(PlaceKey::balloon(actor)).or_default();
         state.decor.layers = layers;
         state.decor.rebase();
     }
@@ -453,7 +454,7 @@ impl TextLayerState {
                 // で器を作らない（`get_mut` で引く）。空の器を作っても `present_frame` の
                 // 走査は「中身か供給面のどちらかがある」で弾くので提示層には載らないが、
                 // 状態表に意味の無い項目を増やさない。
-                if let Some(state) = self.actors.get_mut(actor) {
+                if let Some(state) = self.actors.get_mut(&PlaceKey::balloon(actor)) {
                     state.reset_look();
                 }
             }
