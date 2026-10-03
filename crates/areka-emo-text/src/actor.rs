@@ -10,6 +10,7 @@
 
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use areka_actor::UiSpawnError;
@@ -235,8 +236,13 @@ pub struct TextLayerRuntime {
     /// [`background_of`](Self::background_of)（`actor_decoration.rs`）。
     balloon_background: HashMap<ActorKey, (u8, u8, u8)>,
     /// `\s` の鍵の解決の閉包（始めは無し）。無いあいだは `Emote` を読まない＝行き先は常に
-    /// 普通のバルーン（要件 5.4）。本番の差し込みは箱の束の受け取りが行う。
+    /// 普通のバルーン（要件 5.4）。本番の差し込みは箱の束の受け取り（`actor_box.rs`）が行う。
     surface_resolver: Option<SurfaceKeyResolver>,
+    /// 箱の `font.name` のフォントファイルを探す場所の順（シェル → ゴースト・要件 3.10）。
+    /// 箱の束の受け取りが入れ、読み込む側（`balloon-font-file`）が読む。
+    box_font_dirs: Vec<PathBuf>,
+    /// 「箱を隠す印」の立っているスコープ（`actor_box.rs` の `hide_boxes`）。台詞の頭（`ClearAll`）で下ろす。
+    hidden_boxes: BTreeSet<ActorKey>,
 }
 
 impl TextLayerRuntime {
@@ -257,6 +263,8 @@ impl TextLayerRuntime {
             cursor_warn: CursorWarnGuard::default(),
             balloon_background: HashMap::new(),
             surface_resolver: None,
+            box_font_dirs: Vec::new(),
+            hidden_boxes: BTreeSet::new(),
         }
     }
 
@@ -305,6 +313,8 @@ impl TextLayerRuntime {
                 // actor の stale hover／snapshot も同時に消え、片方だけ古い状態が残らない（5.2）。
                 self.choice_hover.clear();
                 self.choice_snapshot.clear();
+                // 箱を隠す印は次の台詞の頭まで（design.md「箱を数に入れた表示の判断」）。
+                self.hidden_boxes.clear();
             }
             // `\s` は解決の閉包で番号に解いて行き先へ渡す（要件 4.1）。閉包が無いあいだは
             // 読まない＝行き先は普通のバルーンのまま（要件 5.4）。
@@ -412,7 +422,8 @@ impl TextLayerRuntime {
             .any(|(key, s)| key.actor == *actor && !s.choices().is_empty())
     }
 
-    /// `\s` の解決の閉包を差し込む（テスト専用の口・本番は箱の束の受け取りがこの欄へ入れる）。
+    /// `\s` の解決の閉包だけを差し込む（テスト専用の口・本番は箱の束の受け取り
+    /// `set_box_layout` が表と一緒にこの欄へ入れる）。
     #[cfg(test)]
     pub(super) fn set_surface_resolver(&mut self, resolve: SurfaceKeyResolver) {
         self.surface_resolver = Some(resolve);
@@ -456,6 +467,9 @@ pub fn spawn_emo_text(
 #[path = "actor_attach.rs"]
 mod attach;
 
+#[path = "actor_box.rs"]
+mod boxes;
+
 #[path = "actor_present.rs"]
 mod present;
 
@@ -496,6 +510,10 @@ mod scroll_retain_tests;
 #[cfg(test)]
 #[path = "actor_route_tests.rs"]
 mod route_tests;
+
+#[cfg(test)]
+#[path = "actor_box_tests.rs"]
+mod box_tests;
 
 /// task 7.2: バルーン背景色の受け口（要件 4.6）。
 #[path = "actor_decoration.rs"]

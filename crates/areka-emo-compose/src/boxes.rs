@@ -78,6 +78,11 @@ impl BoxLayout {
     pub fn placements(&self, surface_id: u32) -> &[BoxPlacement] {
         self.surfaces.get(&surface_id).map_or(&[], Vec::as_slice)
     }
+
+    /// 箱を持つサーフェス番号と、その置き場所の列（番号の昇順・置き場所は element番号の昇順）。
+    pub fn surfaces(&self) -> impl Iterator<Item = (u32, &[BoxPlacement])> {
+        self.surfaces.iter().map(|(id, p)| (*id, p.as_slice()))
+    }
 }
 
 /// 畳み込みの報告（読み捨てと断りの 1 件ごとに 1 つ）。記録の水準は入口が決める。

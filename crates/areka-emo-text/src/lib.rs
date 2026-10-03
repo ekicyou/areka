@@ -385,6 +385,8 @@ mod tests {
     /// 集合と突き合わせるので、どちらかへの明示的な編集が必ず要る）。
     const SOURCES_OUTSIDE_THE_PURE_SCAN: &[&str] = &[
         "actor.rs",
+        "actor_box.rs",
+        "actor_box_tests.rs",
         "actor_choice_contract_tests.rs",
         "actor_clear_atomicity_tests.rs",
         "actor_decoration.rs",
