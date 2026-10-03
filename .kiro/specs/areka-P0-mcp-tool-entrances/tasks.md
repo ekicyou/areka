@@ -107,7 +107,7 @@
   - _Depends: 5.3_
 
 - [ ] 6. アプリ本体への結線
-- [ ] 6.1 `fn main()` と系の登録に橋をつなぐ
+- [x] 6.1 `fn main()` と系の登録に橋をつなぐ
   - `areka_mcp::start` の前で 10 本の登録表と受け口を組んで登録表を渡し、`register_systems` の後で受け口を World に置き、`app.run()` の直後・`exit_wait::begin_close` の前で閉じる
   - 完了の姿: `cargo build -p areka --bin areka` が緑、`main.rs` の main からの増分が 1.2 の `mod mcp;` を含めコメント込みで 12 行以内（954 → 966 行以内）、`ghost_session.rs` の main からの増分が 1 行（5.3）、`exit_wait.rs`・`emo2_boot/` が 0 行
   - _Requirements: 6.1, 6.4, 6.5, 7.4_
