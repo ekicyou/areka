@@ -54,7 +54,7 @@
 
 次のどれかが変わったら、後段（`crates-io-publish`・`winget-manifest-submission`・`release-cycle`・`release-code-signing`）は自分の前提を確かめ直す。本 workflow 側は乾いた走りを 1 回通し直す。
 
-- workflow の名前 `release`・ファイル名 `release.yml`・きっかけの種類（後段は `workflow_run` でこの名前を名指しし、`event == 'push'` と `conclusion == 'success'` で絞る）。
+- workflow の名前 `release`・ファイル名 `release.yml`・きっかけの種類（後段はこの名前を名指しし、「`event == 'push'`」かつ「`conclusion == 'success'`」の走りだけを相手にする。受け方は winget が `workflow_run`、crates-io が「同じタグの push で起き、走りの一覧を読んで待つ」＝crates.io の Trusted Publishing が `workflow_run` を断るため・2026-10-03 改め）。
 - Release に添えるファイルの数・名前の形・`.sha256` の形（配布スクリプト側の変更も含む）。
 - 「成功 ⇔ 公開済み」の約束に触る変更（公開の段の後ろに段や後処理を持つ action を足す、job を分ける、など）。
 - 実行環境の名前・Rust の版・道具 2 つの版・action の SHA の更新（どれも証跡の走りの前提）。
