@@ -136,7 +136,7 @@
   - _Requirements: 8.4_
   - _Depends: 2.3_
 
-- [ ] 7.3 実機で 3 状態が送られていることを観測する
+- [x] 7.3 実機で 3 状態が送られていることを観測する
   - emo2 を判定の分岐まで開けたログで起こし、トーク中にバルーンが出ると `balloon(…)` が、`\![enter,nouserbreakmode]` の区間で `nouserbreak` が、URL からのインストールの最中に `online` が送られていることをリクエストのログで記録する
   - 中断の旗の変化と送ったリクエストの時刻を並べ、食い違いが運搬の間に収まっていることを確かめる
   - 実機の根と一時フォルダはワークツリーの `target\` の下だけに置く
@@ -156,3 +156,4 @@
 ar-samples\work` の下）に環境変数の DLL を上書きして起こす。手元の DLL は `target
 ar-samples\cachemo2-4591449-272a04b4\ghostmo2\ghost\master\pasta.dll`。雑談の間隔は emo2 の `pasta.toml` の `talk_interval_min=15`・`max=30`。走行は約 90 秒。
 - 7.1: `tools/test-all.ps1` 全段緑（検査したコミット 20d659e3・x64 全テスト 275 秒）。C1 の 9 本は実在し `main` との差分 0（較正: 変更した `status.rs` は差分ありと出る）。変更した .rs に 1,000 行超えは無い。
+- 7.3: 実機の観測は起動時の台本（`dic/boot.pasta`）を写しの上で書き換えて流した。URL インストールは `\![execute,install,url,…]`（`\![install,url,…]` は効かない）。区間内でバルーンを左ダブルクリックして中断が実際に断られるかの目視は未実施（手作業の確認項目）。
