@@ -319,7 +319,7 @@
 | 本文の中の `super::`／`self::` | 6 本を grep | `balloon.rs` の `on_balloon_pointer_pressed` にある `super::user_break::on_left_press` の 1 か所と、`balloon_visibility.rs` の `use super::talk_lifecycle::TalkLifecycleSignal;` だけ | 親に `use super::user_break;` を置き、子の本文を変えない |
 | 外から引かれる名前 | `balloon.rs`・`balloon_visibility.rs` の `pub(crate)` の名前を `crates/areka/src` 全域で grep | `balloon.rs`: 外で使うのは `BalloonWiring`・`ChoiceSelection`・`ChoiceSelectionInbox`・結線 3 本。ハンドラ 3 本は本ファイルの木の中だけ。`balloon_visibility.rs`: 外（`frame/wiring.rs`・`menu/trigger.rs`）が使うのは `BalloonVisibilityState` と doc リンクの `decide` だけ。`parse_timeout_ms` の本番の消費者は `resolve_timeout_secs` だけ | 動かす項目は元に残る定義か親の束ね直しで届く。呼び出し側 0 行 |
 | ログの発生元を完全一致で判定する箇所 | `target == "…"`・`target = "…"` を全域で grep | 対象 6 本の発生元に掛かるものは 0 件（完全一致があるのは `kanade`・`areka::emo2_boot`・`wintf::transition`・`areka_emo_compose` など） | 要件 2.5 で元に残す項目は無し |
-| 子へ出す関数が呼ぶ親の私有の項目 | 各ファイルの呼び出し位置を grep（`warn_coarse_wrap_threshold`・`is_backward_shrink`・`line_fingerprint`・`none_err`／`device_err`・`decide_timeout`・`SuppressionKinds::any`・`TimeoutSource::as_str` ほか） | 親に残る私有の欄・私有のメソッド・私有の定数は子孫から見える。親や兄弟やテストが呼ぶ子の項目だけ `pub(super)` が要る（design §束ね直しの規則の 9 項目） | 可視性の付与は最小 |
+| 子へ出す関数が呼ぶ親の私有の項目 | 各ファイルの呼び出し位置を grep（`warn_coarse_wrap_threshold`・`is_backward_shrink`・`line_fingerprint`・`none_err`／`device_err`・`decide_timeout`・`SuppressionKinds::any`・`TimeoutSource::as_str` ほか） | 親に残る私有の欄・私有のメソッド・私有の定数は子孫から見える。親や兄弟やテストが呼ぶ子の項目だけ `pub(super)` が要る（design §束ね直しの規則の 8 項目。設計の討議で `glyph` を足し、親に残る `none_err`／`device_err` を外した） | 可視性の付与は最小 |
 | `test_support` の名前との重なり（E0659 の芽） | 束ね直す名前を 3 本の `test_support` で grep | 重なり 0 | 明示の `use` への書き換えは不要の見込み |
 | 前後のテスト一覧の採り方 | `tools/test-all.ps1` と前例の `verification/` を読む | `test-all.ps1` は個々の名前と結果を出さないが、`cargo test … -- --list` と本走の `test X ... ok` 行で採れる。前例の `Compare-TestLists.ps1`（多重集合）と `Compare-RelocatedTests.ps1`（行頭空白を無視した本文一致）は `.kiro/specs/completed/areka-P0-file-slimming/verification/` にあり、パスで呼べる | design §検証の流れ |
 | 純移動の機械照合 | 前例の `RustParse.ps1` の性質を読む | 最上位の項目の単位で分解する道具で、`impl` の塊を分けた場合は塊の単位が合わない | 本 spec の純移動の判定は、テストの前後一致＋`git diff --color-moved` の「移動以外の差分」のレビューとする（新しい道具は作らない） |
@@ -333,7 +333,7 @@
 | 3 の前半（型の定義の置き場所） | 型・定数は元に残し、`impl` の塊と関数を子へ（案 A） | 私有の欄をテストと子がそのまま読める。`impl X {` の行は要件 2.2 が許す |
 | 4（`present_frame`） | 子 `actor_present.rs` へ出す。`frame_attach_tests.rs` の登記を 1 件差し替える（`ACTOR_SCAN_SITES`） | brief の「1 コマの描画の流れ」を独立させ、`text-reveal-fade` の受け口にする。登記の差し替えは要件 5.2 が許す範囲 |
 | 5 の書き方 | テストからだけ引かれる名前は `#[cfg(test)] use child::X;`（先例 `plan_inconsistency`）。`#[allow(unused_imports)]` は使わない | 要件 3.1 のただし書きが許すので握り潰す理由が無い。対象は `line_fingerprint`・`resolve_timeout_secs`・`parse_timeout_ms` |
-| 7（余白） | 全ファイル 700 行以下・最大は `viewbox_draw_render.rs` 約 570 | 後続の本数が多い `actor`・`balloon.rs` は 3〜4 本に分けて 500 行前後まで下げた。`render_styled`（327 行・1 本）は割らない（本文の書き換えになる） |
+| 7（余白） | 全ファイル 700 行以下・最大は `viewbox_draw_render.rs` 約 550 | 後続の本数が多い `actor`・`balloon.rs` は 3〜4 本に分けて 500 行前後まで下げた。`render_styled`（327 行・1 本）は割らない（本文の書き換えになる） |
 | 8（`region.rs`） | 内蔵テストを `region_tests.rs` へ移す | `text-typesetting` の brief が `region.rs` の注記（ぶら下げ未実装）を名指ししている＝触る後続が実在する。費用は前例の道具で小さい |
 | research A-1 の `spawn_emo_text` | 元に残す（`present` へは出さない） | 起動の結線であって描画の流れではない |
 | `balloon.rs` の子の数 | 3 本（追従・クリック・離脱） | 2 本のハンドラは 1 本の兄弟テスト（`balloon_pointer_handler_tests.rs`）が見るが、後続 5 本の受け口が偏る（クリック）ので役割ごとに分ける。親は約 430 行 |

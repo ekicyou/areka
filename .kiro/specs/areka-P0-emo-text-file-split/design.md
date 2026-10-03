@@ -10,7 +10,7 @@
 
 **Users**: `shell-balloon`・`balloon-font-file`・`text-typesetting`・`talk-fast-forward`・`text-ruby`・`balloon-markers`・`balloon-scroll-fade`・`text-reveal-fade`・`text-align-shadow-canon`・`choice-marker-styling`・`anchor-tag-canon`・`balloon-lifecycle-events` の実装者とレビュアー。各 brief の「分割が先」を本 spec が済ませる。
 
-**Impact**: 7 本（975／977／914／871／930／923／977 行）が、分割後はどれも 570 行以下になり（§File Structure Plan の表）、新しい子モジュール 12 本（＋`region_tests.rs`）が増える。公開している名前の道筋・依存・テストの中身・ログの文言は変わらない。受け入れの中心は 3 つ——**振る舞いが変わらない**・**既存のテストが書き換えなしで同じ本数・同じ結果**・**公開している名前の道筋が変わらない**——で、いずれも証跡（§検証の流れ）で示す。
+**Impact**: 7 本（975／977／914／871／930／923／977 行）が、分割後はどれも 550 行以下になり（§File Structure Plan の表）、新しい子モジュール 12 本（＋`region_tests.rs`）が増える。公開している名前の道筋・依存・テストの中身・ログの文言は変わらない。受け入れの中心は 3 つ——**振る舞いが変わらない**・**既存のテストが書き換えなしで同じ本数・同じ結果**・**公開している名前の道筋が変わらない**——で、いずれも証跡（§検証の流れ）で示す。
 
 ### Goals
 
@@ -53,7 +53,7 @@
 
 ### Allowed Dependencies
 
-- rustc／cargo のモジュール解決の決まり: `#[path]` で読んだファイルの子は**そのファイルのディレクトリ**を基準に解決する／私有の項目・私有の `use`・私有の欄・私有のメソッドは、定義したモジュールと**その子孫**から見える／`pub(super)` を子で付けると親とその子孫（兄弟の子・兄弟のテスト）から見える／`concat!(include_str!(…), include_str!(…))` は 1 つの文字列定数になる（設計時に実測・research 調べもの）
+- rustc／cargo のモジュール解決の決まり: `#[path]` で読んだファイルの子は**そのファイルのディレクトリ**を基準に解決する／私有の項目・私有の `use`・私有の欄・私有のメソッドは、定義したモジュールと**その子孫**から見える／`pub(super)` を子で付けると親とその子孫（兄弟の子・兄弟のテスト）から見える／`#[path]` で読まれた `mod.rs` でないファイルが、自分の子をさらに `#[path]` で宣言できる（既存の `balloon_visibility_phase.rs` が自身 `#[path]` で読まれながらテスト 5 本を `#[path]` で抱えている＝`layout_scan_glyph.rs` の前例）／`concat!(include_str!(…), include_str!(…))` は 1 つの文字列定数になる（設計時に実測・research 調べもの）
 - 前例 `completed/areka-P0-file-slimming` の流儀と道具（`verification/Compare-TestLists.ps1`・`Compare-RelocatedTests.ps1`）
 - `tools/test-all.ps1`（全体テストの正本・i686 の成果物を用意する既存の前提）
 - steering `structure.md` の命名規約（`<stem>_<モジュール名>.rs`・最長 stem 優先・前向きの衝突禁止）と、`lib.rs` の層規律の 2 つの一覧
@@ -125,7 +125,7 @@ graph TB
 - 選んだ型: 平らな兄弟＋`#[path]` の私有の子（emo-text の既存の流儀・structure.md「ファサード形式」の注意点に従う）。`layout_scan_glyph.rs` だけは `layout_scan.rs` の子（2 段目）で、走査の状態 `Scan` の欄を私有のまま子から読むため。
 - 役割の切れ目: brief の Approach を出発点に、現物の役割へ読み替えた（要件 1.3 の 3 つの読み替えを含む）。行数を揃えるための機械的な切り方はしない。
 - 既存の流儀の維持: 子は `use super::{…}` で親の名前を引く／親へ見せる項目は `pub(super)`／親は素の `use` で束ね直す／テストからだけ引かれる名前は `#[cfg(test)] use`（先例 `viewbox_draw.rs` の `plan_inconsistency`）。
-- 依存の向き: 子 → 親（`super::`）と crate 内の既存の層規律のみ。子同士は親を経由する（`balloon_pressed.rs` から `user_break` へは親の `use super::user_break;` を通る）。新しい公開の道筋は 0 本。
+- 依存の向き: 子 → 親（`super::`）と crate 内の既存の層規律のみ。子同士は親を経由する（`balloon_pressed.rs` から親の兄弟 `user_break` へは親の `use super::user_break;` を通り、`decision` から兄弟の子 `wait` へは `use super::wait::decide_timeout;` で辿る）。新しい公開の道筋は 0 本。
 - steering 準拠: `structure.md` の命名規約（最長 stem・前向きの衝突禁止）と、`lib.rs` の 2 つの一覧への登記。
 
 ### Technology Stack
@@ -176,10 +176,10 @@ graph TB
 
 | ファイル | 役割 | 概算 | 足す予定の spec |
 |---|---|---:|---|
-| `viewbox_draw.rs`（元） | `FormatKey`・`DrawStats`・`ViewboxExecutor` の定義と前半の `impl`（`new`・`new_shared`・描画の設定・テスト専用の失敗注入・`stats`・`scroll_state`・`request_clear`・`render`）・共有の失敗の補助 `none_err`／`device_err`・`mod` 宣言（`decoration`・`plan`・`render`）とテストの接続 | 約 375 | `balloon-font-file`（書式の鍵）・`text-reveal-fade`（統計・設定） |
-| `viewbox_draw_render.rs`（新・`mod render`） | 装飾つきの描画: `impl ViewboxExecutor { render_styled, line_layout_for, ensure_format }` と描画の補助（`LineDraw`・`ChoiceDraw`・`ChoiceHover`・`color_f`・`highlight_rect`・`expand_overhang_for_band`・`segment_text_range`） | 約 570 | `text-typesetting`（縦中横の塊）・`text-reveal-fade`・`choice-marker-styling`・`anchor-tag-canon`（強調の矩形・行の描画） |
+| `viewbox_draw.rs`（元） | `FormatKey`・`DrawStats`・`ViewboxExecutor` の定義と前半の `impl`（`new`・`new_shared`・描画の設定・テスト専用の失敗注入・`stats`・`scroll_state`・`request_clear`・`render`）・子が共有する補助 `none_err`／`device_err`／`color_f`・`mod` 宣言（`decoration`・`plan`・`render`）とテストの接続 | 約 395 | `balloon-font-file`（書式の鍵）・`text-reveal-fade`（統計・設定） |
+| `viewbox_draw_render.rs`（新・`mod render`） | 装飾つきの描画: `impl ViewboxExecutor { render_styled, line_layout_for, ensure_format }` と描画の補助（`LineDraw`・`ChoiceDraw`・`ChoiceHover`・`highlight_rect`・`expand_overhang_for_band`・`segment_text_range`） | 約 550 | `text-typesetting`（縦中横の塊）・`text-reveal-fade`・`choice-marker-styling`・`anchor-tag-canon`（強調の矩形・行の描画） |
 
-- `none_err`・`device_err` は両方の塊が使うので親に残して `pub(super)`。`line_layout_for`・`ensure_format` の呼び手は `render_styled` だけなので子へ（私有のまま）。
+- `none_err`・`device_err`・`color_f` は親に残し、私有のまま（`pub(super)` は付けない）。子孫は親の私有の関数をそのまま見えるので、子は `use super::{color_f, device_err, none_err};` で引く——既存の子 `viewbox_draw_decoration.rs` が `use super::{color_f, device_err};` で引いているのと同じ形。`color_f` を `render` へ出すと `decoration` のその行が壊れるので親に残す。`line_layout_for`・`ensure_format` の呼び手は `render_styled` だけなので子へ（私有のまま）。
 - 子は `windows` を使うので、`lib.rs` では読まない一覧（`SOURCES_OUTSIDE_THE_PURE_SCAN`）へ載せる（5.5）。
 - 名前は `draw` で始めない（`draw_format_metrics_tests.rs` の見張りが反応しない）。`viewbox_draw_render` は既存の `viewbox_draw_frame_render_tests.rs`（stem `viewbox_draw`＋`frame_render_tests`）の頭と重ならない。
 
@@ -193,7 +193,7 @@ graph TB
 | `balloon_exit.rs`（新・`mod exit`） | 窓の外へ出たときのホバー解除 `clear_balloon_hover_on_leave` | 約 195 | （予定なし） |
 
 - brief の「中断のダブルクリック」は `user_break.rs`・「ドラッグ」は wintf と `placement` にあり本ファイルには無い（要件 1.3 の読み替え②）。実在する 6 つの役割のうち、処理の 3 つ（追従・クリック・離脱）を子へ出し、型・純関数・結線を元に残す。
-- 3 つのハンドラは親の結線（`attach_balloon_pointer_handlers`・`register_balloon_leave_system`）が本番で使うので、親の素の `use moved::on_balloon_pointer_moved;` などは未使用にならない。テストは `use super::*;` でその束縛を引く（0 行変更）。
+- 3 つのハンドラは元が `pub(crate) fn` なので、親で `pub(crate) use moved::on_balloon_pointer_moved;` のように同じ可視性で束ね直す（3.1）。親の結線（`attach_balloon_pointer_handlers`・`register_balloon_leave_system`）が本番で使うので未使用にならない。テストは `use super::*;` でその束縛を引く（0 行変更）。
 - `on_balloon_pointer_pressed` の本文にある `super::user_break::on_left_press` は、子では `super` が `balloon` を指すので、親に `use super::user_break;` を置いて本文を変えずに解く（structure.md「子は `super::sibling` で辿る」の形）。
 - 外から引かれる 5 つの名前（`BalloonWiring`・`ChoiceSelection`・`ChoiceSelectionInbox`・結線 3 本）はすべて元の定義のまま（設計時に消費者を実測: `ghost_session.rs`・`choice_drain.rs`・`balloon_visibility_phase.rs` ほか）。ハンドラ 3 本の消費者は本ファイルの木の中だけ。
 - 名前はモジュール名に Rust の予約語（`move`）を使えないため `moved`／`pressed`／`exit` とする。既存のテストの頭（`balloon_hover`・`balloon_leave`・`balloon_pass`・`balloon_pointer`・`balloon_pure`・`balloon_wiring`・`balloon_test`）と重ならない。
@@ -330,7 +330,9 @@ impl Scan<'_, '_> {
 impl Scan<'_, '_> {
     /// 文字の腕（旧 `TextItem::Glyph { ref text }` の本文そのまま）。
     /// 可視の打ち切りで走査を止めるときだけ `ControlFlow::Break(())` を返す。
-    fn glyph(&mut self, text: &Arc<str>) -> std::ops::ControlFlow<()>;
+    /// 呼び手 `layout_inner` は親 `scan` にあるので `pub(super)`（メソッドの私有は
+    /// `impl` を書いたモジュールとその子孫にしか見えない）。
+    pub(super) fn glyph(&mut self, text: &Arc<str>) -> std::ops::ControlFlow<()>;
 }
 
 impl LayoutEngine {
@@ -368,6 +370,8 @@ impl LayoutEngine {
 - `layout_cursor_overflow_tests.rs` の「行を閉じる入口の数」は、`finish_line(` が定義 1＋呼び出し 3（`glyph` の腕・`finish`・`finish_pending_line` の中）、`finish_pending_line(` が定義 1＋呼び出し 2（`glyph` の腕・`line_break` の腕）で、分割前と同じ 4／3 になる。読む範囲を `layout_scan.rs`＋`layout_scan_glyph.rs` の連結（`concat!`・設計時に実測で確認）へ追随させる。`fn finish_pending_line(` は `layout_scan.rs` にある。「門が私有関数に閉じている」という性質は、仕上げ 4 本が `scan` モジュールの私有関数で、呼び手が `scan` とその子 `glyph` に閉じている形で保たれる（分割前は `layout` の全ての子から呼べたので、閉じ方はむしろ狭くなる）。失敗時の文言「`layout.rs` の私有関数」は書き換え禁止のため残るが、判定そのものは変えない（5.3）。
 - `layout_styled_tests.rs` の「行送りの式へ届く点は 1 つだけ」は、`metrics.line_pitch(` が `layout_styled.rs` の `line_pitch_of` にしか無い状態が続く（移した本文は `line_pitch_of(` を呼ぶだけ・`line_gap` を含まない）。走査面に 2 本を足し、母数 3 → 5。
 - `glyph` の腕が使う `glyph_style_advance`・`segment_advance_sum`・`line_pitch_of`・`LineHeights`（`layout_styled.rs`／`layout_line_ops.rs` の `pub(super)`）と、`cursor_move` が使う `resolve_cursor_component`・`CursorBasis`・`CursorAxis` は、親 `layout.rs` の私有の `use` を子孫が `use super::{…}` で引く。
+- 新しい子 2 本の doc と注釈には、`finish_line(`・`finish_pending_line(` を括弧つきで書かない。見張りは字面の出現数を数えるので、説明文に括弧つきで書くと数が狂う（`layout.rs` の既存の説明文が括弧なしの `[finish_pending_line]` の形で書かれているのと同じ理由）。
+- 旧 `layout_inner` の中にある制御は文字の腕の先頭の `break` 1 か所だけで、`continue`・`return` は無い（設計時に実測）。写すときに `return ControlFlow::Continue(())` へ置き換える箇所は無い。
 
 ### 要件 4.4 の分岐ごとのテストの一覧（設計時に調べた結果）
 
@@ -409,7 +413,7 @@ flowchart TB
 
 | Requirement | 要約 | 実現する設計要素 |
 |---|---|---|
-| 1.1 | 7 本と新しい子を 700 行以下に | §File Structure Plan の概算（最大は `viewbox_draw_render.rs` 約 570） |
+| 1.1 | 7 本と新しい子を 700 行以下に | §File Structure Plan の概算（最大は `viewbox_draw_render.rs` 約 550） |
 | 1.2 | 700 行を超えるときの記録 | 該当なし（全ファイル 700 行以下の見込み）。実装で超えたときは `verification/notes.md` に行数と余地の確保の仕方を記録する |
 | 1.3 | 役割で切る・brief の読み替え 3 つ | §File Structure Plan 各表（`dispatch_block`→`apply_cue`・balloon.rs の実在する役割・`balloon_visibility` の残る 4 役割） |
 | 1.4 | 子の doc に役割と後続 spec を 1〜2 行 | §File Structure Plan の「足す予定の spec」列を各子の `//!` に写す（spec は名前・台帳番号は使わない） |
@@ -472,11 +476,27 @@ flowchart TB
 | 元のモジュールの外の本番コード（`pub`／`pub(crate)` の名前） | `pub use child::X;`／`pub(crate) use child::X;` | 本番で使われるので未使用の警告は出ない。道筋と可視性は不変 |
 | 元のモジュールの中の本番コード（元に残った関数が呼ぶ） | 素の `use child::X;` | 元の本番コードが使う |
 | テストだけ（`use super::*;` や `use super::X` で引く） | `#[cfg(test)] use child::X;` | 本番のビルドでは束縛が消えるので警告が出ない（先例 `viewbox_draw.rs` の `plan_inconsistency`・要件 3.1 のただし書き） |
-| 子同士（兄弟の子が引く） | 子は `use super::X;`（親の束縛を経由） | structure.md「子から見た `super` は親」 |
+| 子同士（兄弟の子が引く） | 子は `use super::X;`（親の束縛を経由）か `use super::<兄弟>::X;`（兄弟の `pub(super)` を直接） | structure.md「子から見た `super` は親」。私有の `mod` は子孫から見える |
 | メソッド（`impl` の塊ごと子へ） | 束ね直し不要。親・兄弟・テストが呼ぶ私有メソッドだけ `pub(super)` | メソッドの可視性は `impl` の置き場所に依らない |
 | `#[allow(unused_imports)]` | 使わない | 要件 3.1 がテスト専用の束ね直しを許すので、握り潰す理由が無い |
 
-本 spec で `#[cfg(test)] use` になる名前: `viewbox.rs` の `line_fingerprint`・`balloon_visibility.rs` の `resolve_timeout_secs`・`parse_timeout_ms`。これらが `test_support` の名前と重ならないことは設計時に確認した（E0659 の芽は無い）。`pub(super)` を付ける項目: `register_actor_binding`・`refresh_actor_binding`・`layout_inner`・`is_backward_shrink`・`line_fingerprint`・`none_err`・`device_err`・`decide_timeout`・`resolve_timeout_secs`。
+本 spec で `#[cfg(test)] use` になる名前: `viewbox.rs` の `line_fingerprint`・`balloon_visibility.rs` の `resolve_timeout_secs`・`parse_timeout_ms`。これらが `test_support` の名前と重ならないことは設計時に確認した（E0659 の芽は無い）。
+
+`pub(super)` を付ける項目（8 つ・すべて子に置く項目）: `register_actor_binding`・`refresh_actor_binding`（`attach`・兄弟のテストが呼ぶ）／`layout_inner`（`scan`・親の入口 3 本が呼ぶ）／`glyph`（`scan::glyph`・親 `scan` の `layout_inner` が呼ぶ）／`is_backward_shrink`（`diff`・親の `plan_with_overhangs` が呼ぶ）／`line_fingerprint`（`diff`・兄弟のテストが呼ぶ）／`decide_timeout`（`wait`・兄弟 `decision` の `decide` が呼ぶ）／`resolve_timeout_secs`（`wait`・兄弟のテストが呼ぶ）。親に残る私有の項目（`none_err`・`device_err`・`color_f`・`TextLayerRuntime` の欄・`TimeoutSource::as_str`・`TIMEOUT_ENV_KEY` ほか）には付けない——子孫は親の私有の項目をそのまま見える。
+
+#### 親ファイルごとの束ね直しの全行（タスクとレビューが機械で突き合わせる一覧）
+
+| 親 | 親に足す行 | 理由 |
+|---|---|---|
+| `actor.rs` | `pub use present::present_frame;` | `pub fn` の自由関数。`emo2_boot/frame/wiring.rs`・`frame/scale_text.rs`・examples・`tests/` が `areka_emo_text::actor::present_frame` で呼ぶ（3.3・設計時に実測）。`pub use` は本番の道筋そのものなので未使用の警告は出ない |
+| `layout.rs` | なし | `layout_inner` はメソッド（`pub(super)`）で、入口 3 本の `Self::layout_inner(…)` は変わらない |
+| `viewbox.rs` | `#[cfg(test)] use diff::line_fingerprint;` | テスト 2 本（`viewbox_choice_marker_tests.rs`・`viewbox_style_fingerprint_tests.rs`）が `use super::{…, line_fingerprint}` で引く。`committed_lines`・`derive_dirty`・`derive_dirty_with_overhangs`・`is_backward_shrink` はメソッドなので不要 |
+| `viewbox_draw.rs` | なし | `render_styled` はメソッド。子 `render` は `use super::{color_f, device_err, none_err}; use super::{decoration, plan};` で親の私有を引く |
+| `input_events/balloon.rs` | `pub(crate) use moved::on_balloon_pointer_moved;`／`pub(crate) use pressed::on_balloon_pointer_pressed;`／`pub(crate) use exit::clear_balloon_hover_on_leave;`／`use super::user_break;` | ハンドラ 3 本は元が `pub(crate)`（同じ可視性で届ける・3.1）。親の結線が使うので未使用にならない。`user_break` は子 `pressed` の本文 `super::user_break::on_left_press` を変えずに解くため |
+| `emo2_boot/balloon_visibility.rs` | `pub(crate) use decision::decide;`／`pub(crate) use wait::configured_timeout_secs;`／`#[cfg(test)] use wait::{parse_timeout_ms, resolve_timeout_secs};` | `decide`・`configured_timeout_secs` は `phase` が `use super::{…}` で引く（3.4）。残り 2 つはテスト（`balloon_visibility_timeout_config_tests.rs`）だけが引く。`decide_timeout` は子 `decision` が `use super::wait::decide_timeout;` で兄弟から直接引く（私有の `mod wait` は子孫から見える・親には足さない） |
+| `region.rs` | なし | 接続の宣言 `#[cfg(test)] #[path = "region_tests.rs"] mod tests;` だけ |
+
+既存の子が `use super::{…}` で引いている名前（`actor_decoration.rs` の `ActorRender`・`ResolvedBalloonText`・`TextLayerRuntime`、`layout_styled.rs`・`layout_line_ops.rs` の `GlyphMetrics`・`LayoutEngine`・`PositionedLine`・`WrapPlan`、`viewbox_draw_decoration.rs` の `color_f`・`device_err`、`balloon_visibility_phase.rs` の 10 の名前）は、いずれも元に残るか上の表で束ね直されるので、既存の子は 0 行（設計時に実測）。
 
 ### ログの発生元（要件 2.4）
 
