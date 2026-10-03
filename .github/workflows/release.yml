@@ -137,3 +137,63 @@ jobs:
           $prevTag = Get-PrevTag $names $env:VERSION
           Write-Host "一つ前のタグ: '$prevTag'"
           "prev_tag=$prevTag" >> $env:GITHUB_OUTPUT
+
+      - name: 道具の用意
+        timeout-minutes: 10
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          # 版は tools/package.ps1 が求める版。ビルド済みが取れなければ失敗（ソースから組まない）
+          tool: cargo-about@0.9.2,cargo-deny@0.20.2
+          fallback: none
+
+      - name: 環境の記録
+        run: |
+          [Console]::OutputEncoding = [Text.Encoding]::UTF8
+          # 印字だけで合否は付けない（arm64 の道具が無いときに止めるのは配布スクリプトの終了コード 3）
+          # 無い物は「無い」と印字して続け、最後は必ず exit 0
+          $imageOs = if ($env:ImageOS) { $env:ImageOS } else { '(無い)' }
+          $imageVersion = if ($env:ImageVersion) { $env:ImageVersion } else { '(無い)' }
+          Write-Host "実行環境のイメージ: $imageOs・版 $imageVersion"
+          function Show-Version([string]$Label, [scriptblock]$Probe) {
+            try {
+              $out = @(& $Probe 2>&1 | ForEach-Object { "$_" })
+              $line = if ($LASTEXITCODE) { "(無い・終了コード $LASTEXITCODE)" } elseif ($out.Count) { $out[0] } else { '(無い・印字が空)' }
+            } catch {
+              $line = "(無い: $_)"
+            }
+            Write-Host "${Label}: $line"
+          }
+          Show-Version 'rustc' { rustc --version }
+          Show-Version 'cargo' { cargo --version }
+          Show-Version 'cargo about' { cargo about --version }
+          Show-Version 'cargo deny' { cargo deny --version }
+          Show-Version 'gh' { gh --version }
+          # arm64 のリンクの道具。問い方は tools/package.ps1 と同じ（ARM64_VS_COMPONENT・VSWHERE_PATH の値も同じ）
+          $ARM64_VS_COMPONENT = 'Microsoft.VisualStudio.Component.VC.Tools.ARM64'
+          $VSWHERE_PATH = "$([Environment]::GetFolderPath('ProgramFilesX86'))\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vswhere = if (Test-Path -LiteralPath $VSWHERE_PATH -PathType Leaf) { $VSWHERE_PATH }
+                     else { Get-Command vswhere -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source }
+          if (-not $vswhere) {
+            Write-Host "arm64 のリンクの道具: 無い（vswhere.exe が無い・探した場所: $VSWHERE_PATH と PATH）"
+          } else {
+            try {
+              $vs = & $vswhere -latest -products '*' -requires $ARM64_VS_COMPONENT -property installationPath 2>$null
+              $code = $LASTEXITCODE
+            } catch {
+              $vs = $null
+              $code = "($_)"
+            }
+            if ($code -or -not $vs) {
+              Write-Host "arm64 のリンクの道具: 無い（$ARM64_VS_COMPONENT・vswhere: $vswhere・終了コード $code）"
+            } else {
+              Write-Host "arm64 のリンクの道具: 在る（$vs）"
+            }
+          }
+          $root = if ($env:GITHUB_WORKSPACE) { $env:GITHUB_WORKSPACE } else { (Get-Location).Path }
+          try {
+            $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($root))
+            Write-Host ("作業ドライブ {0} の空き容量: {1:N1} GB" -f $drive.Name, ($drive.AvailableFreeSpace / 1GB))
+          } catch {
+            Write-Host "作業ドライブの空き容量: 読めない（$_）"
+          }
+          exit 0
