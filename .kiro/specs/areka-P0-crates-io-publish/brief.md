@@ -56,7 +56,7 @@
 
 ## Constraints
 
-- 触るのは各 `Cargo.toml`（約 23 本・欄だけ＝依存は変えない）・`.github/workflows/crates-io.yml`（新規）・`dist/README.txt`・`README.md`・`.kiro/steering/tech.md`。`crates/*/src/`・`.github/workflows/release.yml`・`Cargo.lock` には触らない（欄の変更では `Cargo.lock` は動かない＝動いたら止めて報告）。**同じウェーブ C2 で `Cargo.toml` を触る spec を置かない**。
+- 触るのは各 `Cargo.toml`（約 23 本・欄だけ＝依存は変えない）・`.github/workflows/crates-io.yml`（新規）・`dist/README.txt`・`README.md`・`.kiro/steering/tech.md`・`tools/`（公開前の確認のスクリプト・`test-all.ps1` に段を 1 つ＝10-03 要件討議の議題 2）。`crates/*/src/`・`.github/workflows/release.yml`・`Cargo.lock` には触らない（欄の変更では `Cargo.lock` は動かない＝動いたら止めて報告）。**同じウェーブ C2 で `Cargo.toml` を触る spec を置かない**。
 - 一度出した版は消せない。手元の `--dry-run` と全体テストの緑を、出す前の必達にする。
 - 秘密をリポジトリに置かない（Trusted Publishing・初回のトークンは手元の `cargo login` だけ）。
 
