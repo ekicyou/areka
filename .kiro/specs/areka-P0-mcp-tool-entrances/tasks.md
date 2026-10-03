@@ -63,7 +63,7 @@
   - 受け口は呼び出し側が持ち、アプリ本体へ置くまでの要求は溜まる
   - 完了の姿: `tools_tests.rs` で、組んだ登録表が 10 本を SSP の並びで持ち、その処理を呼ぶと受け口に型の付いた `ToolCall` が届くことが緑
   - _Requirements: 1.1, 1.3, 6.5_
-- [ ] 4.2 handler に検査・登録順の一覧・`instructions` を入れる
+- [x] 4.2 handler に検査・登録順の一覧・`instructions` を入れる
   - 写しの中で、`arguments`（無ければ空）を検査に通し、失敗は `debug!` 1 件を残して `-32602`（`invalid_params`）にする。通れば今までどおり登録した処理を呼ぶ
   - 登録順の定義の列を持ち、`tools/list` はそれを返す（無状態版の `ttlMs`・`cacheScope` の分岐はそのまま）。4 つの欄以外を付けない既存の写し方を保つ
   - `instructions` を design.md の英文 3 文に改める
