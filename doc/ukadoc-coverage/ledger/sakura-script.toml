@@ -3047,16 +3047,16 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = "areka-P0-sakura-time-directives"
+owner = "areka-P0-choice-timeout-directive"
 priority = "A1"
 values = ["交わり"]
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、選択肢の制限時間が変わらず、早押しのような時間仕掛けが成立しない）。
-ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
-語彙の登記: doc/COMPAT_ARCHITECTURE.md の「compile 側時間指令 allowlist」の行が、M1 は非実導出で語彙保持＋縮退のみと明記し、この綴りを逐語で名指ししている。
+壊れ方: 該当なし。compile の汎用 \\! コマンドの腕が今までどおり汎用のキャリアへ転記した後に、set,choicetimeout だけは時間の欄を parse_choice_timeout（crates/areka-sakura/src/compile.rs）で読み、ミリ秒を秒へ変えて最後の値を選択待ちの区切り（WaitForChoice の timeout）へ焼く。kanade の期限の判定（choice_deadline）が表示の終わり＋その時間で OnChoiceTimeout を出す。0 と負の値は時間切れにしない。時間の省略・空欄は既定（30 秒）へ戻す。同じ台本に複数あれば最後のものが勝ち、終わりのタグ（\\e・\\-）より後ろは数えない。効くのはその台本の中だけ。整数として読めない値は既定として扱う。dola の再生層は選択待ちの区切りをこの値で飛ばしも解きもしない。
+ログ: 出る（整数として読めない値のときだけ、warn! の記録 choice_timeout_unreadable を台本の値付きで 1 件残す。読めた値・省略では出ない。配送先の 3 つの受け口は今までどおり担当外の名前として debug! を残す）。
+語彙の登記: doc/COMPAT_ARCHITECTURE.md の「compile 側時間指令 allowlist」の行がこの綴りを逐語で名指ししており、compile が実際に読むのはこの綴りだけである（他の時間の指令は areka-P0-sakura-time-directives の担当のまま）。
 [テーマ: 選択肢の待ち時間を決められず、利用者が返事をする間合いを台本で作れない]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
 """

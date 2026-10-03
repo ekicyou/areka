@@ -208,7 +208,10 @@ impl<T: Clone + Debug> TimedSchedule<T> {
                     // タイムアウトチェック（Timeout は duration が必須タイムアウト）
                     let timeout_dur = match &kind {
                         BarrierKind::WaitForInput { timeout } => *timeout,
-                        BarrierKind::WaitForChoice { timeout } => *timeout,
+                        // 選択待ちの `timeout` は上位層（kanade の期限の判定）へ運ぶ指令で、
+                        // 再生層はこれで区切りを飛ばしも解きもしない。解けるのは外からの
+                        // `notify_barrier_resolved` だけ（areka-P0-choice-timeout-directive 要件 5.1〜5.3）。
+                        BarrierKind::WaitForChoice { .. } => None,
                         BarrierKind::Timeout { duration } => Some(*duration),
                     };
 
