@@ -65,7 +65,7 @@
   - _Depends: 2.1, 3.2_
 
 - [ ] 4. 実ソケットの決定論テスト
-- [ ] 4.1 手書きの HTTP/1.1 クライアント
+- [x] 4.1 手書きの HTTP/1.1 クライアント
   - テスト専用の部品を `testkit.rs` 1 つにまとめる: 要求を送って状態・ヘッダ・本文を受ける手書きのクライアント（`winhttp_real_tests.rs` の `answer` の逆向き）・JSON-RPC の組み立て・`start(Some(0), …)` でサーバを起こして実番号を返す口。rmcp を呼ぶ要求は既定で `Accept: application/json, text/event-stream` を付ける
   - 完了の姿: `testkit.rs` の中の自己点検 1 本（空きポートで起こしたサーバへ `ping` を送り 200 と `result: {}` を受ける）が緑
   - _Requirements: 9.1_
@@ -132,3 +132,4 @@
 - 2.1〜2.4: `mod` が非公開のあいだは各モジュール先頭の `#![expect(dead_code, reason = …)]` で clippy を緑に保つ。3.3 で公開面へ出したら満たされず赤になるので、そこで消す
 - 2.3: help の本文は既定の説明に `9821` を 1 回だけ載せる（要件 6.2 が禁じるのは URL とコマンド例の固定だけ）。design の Testing 行と tasks の完了の姿をこれに合わせて直した。テストのビルドで使われるモジュールは `#![cfg_attr(not(test), expect(dead_code, …))]` の形
 - 3.1: `list_resources`／`list_prompts` は能力に載せなくても rmcp の既定が空の Ok を返す（未知メソッドではない）。差の一覧（5.2）を書くときの観察材料
+- 4.1: Windows では 413 を早く返して閉じると RST で未読の応答が捨てられうる。`body_over_limit_is_413` が揺れたらここ（4 MiB＋1 では 5/5 で届いた）
