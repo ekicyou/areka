@@ -390,6 +390,8 @@ pub(crate) fn wire_balloon_choice(world: &mut World) {
     let (tx, rx) = channel::<ChoiceSelection>();
     world.insert_non_send(BalloonWiring::new(tx));
     world.insert_non_send(ChoiceSelectionInbox(rx));
+    // 箱の上の滞在（areka-P0-shell-balloon）もゴーストごとに入れ直す。
+    world.insert_non_send(super::shell_box::ShellBoxHover::default());
 }
 
 /// `clear_balloon_hover_on_leave` を Input スケジュール（`dispatch_pointer_events` 後）へ登録する
@@ -425,7 +427,7 @@ mod pointer_handler_tests;
 mod pure_core_tests;
 #[cfg(test)]
 #[path = "balloon_test_support.rs"]
-mod test_support;
+pub(super) mod test_support;
 #[cfg(test)]
 #[path = "balloon_wiring_tests.rs"]
 mod wiring_tests;

@@ -348,8 +348,6 @@ fn send_break(wiring: &UserBreakWiring, scope: usize) {
 /// 普通のバルーンの窓と同じ規則（直前の押下の記憶・中断を禁じる区間）で判断し、中断なら同じ
 /// 送り出し（[`send_break`]）を使う。「バルーンが出ているか」の照会は無い——箱に文字が出て
 /// いることは呼び手が `shown_boxes` で確かめている。持ち物が無い（結線前）は話していない扱い。
-// シェルの窓のハンドラ（task 11.2）が呼ぶまでは本番から到達しない。
-#[allow(dead_code)]
 pub(crate) fn on_box_press(
     world: &mut World,
     scope: usize,

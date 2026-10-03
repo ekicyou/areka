@@ -801,7 +801,7 @@ pub(crate) fn settle_box_hover(prev: Option<&BoxName>, shown: &[ShownBox]) -> Op
 
 **Implementation Notes**
 - Integration: 箱の四角の中で選択肢の行の上でない移動は、滞在を記録してから既存の道へ落とす（`OnMouseMove` は今までどおり送る・要件 9.1・9.7）。
-- Risks: `mod.rs` は 546 行。前段の本体は `shell_box.rs` に置き、`mod.rs` へ足すのは呼び出しの数行だけ。
+- Risks: `mod.rs` は 546 行。前段の本体（借用と送り出し・シェルの窓の離脱の系）は兄弟の `shell_box_handler.rs` に置き、判断の純関数は `shell_box.rs` に置く。`mod.rs` へ足すのは呼び出しの数行だけ。
 
 ### seriko の名前の形の腕
 

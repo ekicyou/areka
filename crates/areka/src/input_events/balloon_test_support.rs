@@ -28,7 +28,7 @@ use crate::placement::spawn::BalloonWindowMarker;
 
 /// 窓物理 px の行矩形を持つ `ChoiceHitRow` を組む（ordinal は入力順昇順を模す）。
 /// rect 以外のフィールドは 3.1 の判定に無関係——不透明転写の placeholder。
-pub(super) fn row(ordinal: usize, left: f32, top: f32, right: f32, bottom: f32) -> ChoiceHitRow {
+pub(crate) fn row(ordinal: usize, left: f32, top: f32, right: f32, bottom: f32) -> ChoiceHitRow {
     ChoiceHitRow {
         ordinal,
         id: format!("q{ordinal}"),
@@ -88,7 +88,7 @@ fn synth_boot_assets() -> BootAssets {
 ///
 /// ハンドラが `Emo2Wiring::runtime()` から借りる runtime を、テスト側が事前に populate した実体で
 /// 差し込むための最小結線（frame.rs の headless_wiring_with と同型）。
-pub(super) fn headless_emo2_wiring(runtime: Rc<RefCell<TextLayerRuntime>>) -> Emo2Wiring {
+pub(crate) fn headless_emo2_wiring(runtime: Rc<RefCell<TextLayerRuntime>>) -> Emo2Wiring {
     Emo2Wiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,

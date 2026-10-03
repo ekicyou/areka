@@ -38,15 +38,16 @@ use crate::{ConfigInputs, default_app_profile_dir, ghost_boot_options, is_benign
 /// - `Update` ← 毎フレームの相 → 停止通知の受け口（受け口 `KanadeNoticeRx` はプロセスに 1 つ
 ///   なので [`emo2_boot::wire_kanade_stop`] を分割せずそのまま呼ぶ）
 /// - `Input` ← 説明書 → 台本の切替要求 → 台本のシェル・バルーンの切替要求 → 中断 → メニュー →
-///   バルーンの離脱 → 選択肢の送り → インストールの窓口 → 更新の窓口（[`crate::install::register`]・
-///   [`crate::update::register`] は窓口と終了の待ちの門もここで 1 度だけ据え、シェル・バルーンの
-///   取り出しの登録は終了の片付けを終了の待ちへ登記する）
+///   バルーンの離脱 → シェルの窓の離脱（箱の上の滞在） → 選択肢の送り → インストールの窓口 →
+///   更新の窓口（[`crate::install::register`]・[`crate::update::register`] は窓口と終了の待ちの
+///   門もここで 1 度だけ据え、シェル・バルーンの取り出しの登録は終了の片付けを終了の待ちへ
+///   登記する）
 /// - `FrameFinalize` ← クリック透過 → OS の閉鎖要求 → 重なり順の対（状態がゴーストごとで
 ///   ないので `wire_zorder_pair` をそのまま呼ぶ）
 ///
 /// 各系の並び（`before`／`after`・`chain`）は各登録関数が持つ。ここは順に呼ぶだけ。
 ///
-/// 今日との差: `Input` の 9 系と `Update` の毎フレームの相（`emo2_frame_system`）は LogSink の
+/// 今日との差: `Input` の 10 系と `Update` の毎フレームの相（`emo2_frame_system`）は LogSink の
 /// 起動でも登録される。どれも状態（`NonSend`）が無ければ無操作で戻る（記録は `trace!` か無し）
 /// ので、見え方は変わらない（インストールと更新の窓口だけは登録と同時に据わるが、依頼が無ければ
 /// 何もしない）。バルーンの離脱の系だけは `BalloonWiring` 不在で
@@ -63,6 +64,7 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
     input_events::user_break::register_user_break_drain(world);
     menu::register_menu_poll(world);
     input_events::balloon::register_balloon_leave_system(world);
+    input_events::shell_box_handler::register_box_leave_system(world);
     input_events::choice_drain::register_choice_drain(world);
     crate::install::register(world);
     crate::update::register(world);
