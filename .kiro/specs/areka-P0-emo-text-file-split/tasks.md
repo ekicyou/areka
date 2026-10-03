@@ -34,7 +34,7 @@
   - 完了の状態: viewbox の既存テストが書き換えなしで緑、`cargo build` の警告が増えていない、2 本とも 700 行以下
   - _Requirements: 1.1, 1.3, 1.4, 2.2, 2.7, 3.1, 3.2, 4.3, 4.5, 5.5_
 
-- [ ] 2.4 viewbox_draw を「実行器の型と設定」と「装飾つきの描画」に分ける
+- [x] 2.4 viewbox_draw を「実行器の型と設定」と「装飾つきの描画」に分ける
   - 装飾つきの描画の `impl` の塊と描画の補助を子 `render` へ移す。子 `decoration` も使う共有の補助 3 本は親に私有のまま残し、子は `use super::{…}` で引く
   - 子の doc に役割と足す予定の spec を 1〜2 行で書く。子は `windows` を使うので、同じコミットで層規律の「読まない一覧」へ載せる
   - 完了の状態: viewbox_draw の既存テスト（GPU を使うものを含む）が書き換えなしで緑、既存の子 2 本の差分が 0 行、2 本とも 700 行以下
@@ -88,3 +88,4 @@
 
 - 2.1: `frame_attach_tests.rs` のテストの道筋は `emo2_boot::frame::attach_tests`（`cargo test -p areka frame::attach_tests`）。同ファイルの説明文に「`present_frame` は `actor.rs`」とある箇所は残す（テストの注釈は 4.3 で書き換え禁止）。
 - 2.1: 動かした doc コメントの内部リンクのため `#[cfg(doc)] use` を 2 行足した（rustdoc の警告を前と同じに保つ）。設計の Non-Goals のとおり必須ではなく、他のタスクで真似る必要はない。
+- 2.4: 子は本文が素の名前で呼ぶ関数を名前で引く（設計の `use super::{decoration, plan};` の字面より本文不変を優先）。子でテストの枝だけが使う親の私有関数は `#[cfg(test)] use super::…;`。
