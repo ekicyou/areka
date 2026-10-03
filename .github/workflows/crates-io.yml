@@ -1,0 +1,114 @@
+# 公開の段: 渡された版の wintf・dola を、確かめてから crates.io へ出す（認証は Trusted Publishing だけ）。
+# きっかけは手での起動（workflow_dispatch）だけ。release.yml が Release の公開の後に呼ぶか、手で起動する:
+#   gh workflow run crates-io.yml -f version=0.0.2
+# 同じ版で何度起動し直してもよい（既に出たクレートは飛ばす）。設定・やり直し・予備の手順は doc/crates-io-publish.md。
+# 判定は tools/crates-io.ps1（タグのコミットの物）に集め、ここは順に呼ぶ・止める・鍵を受け取るだけ。
+name: crates-io
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 出す版（v を付けない。例 0.0.2）
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: crates-io
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      # 入力はスクリプトの文に埋めず、環境変数で渡す
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: 版の形
+        run: |
+          if ($env:VERSION -cnotmatch '^[0-9]+\.[0-9]+\.[0-9]+\z') {
+            Write-Host "::error::入力 version $($env:VERSION | ConvertTo-Json) が数字 3 つの版の形でない（v を付けない・例 0.0.2）。何も上げていない"
+            exit 1
+          }
+
+      - name: 取り出し
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/v${{ inputs.version }}
+          persist-credentials: false
+
+      - name: Release の確認
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          $draft = gh release view "v$env:VERSION" --json isDraft --jq .isDraft
+          if ($LASTEXITCODE) {
+            Write-Host "::error::v$env:VERSION の GitHub Release が無い。Release を公開してから起動し直す。何も上げていない"
+            exit 1
+          }
+          if ($draft -ne 'false') {
+            Write-Host "::error::v$env:VERSION の GitHub Release が下書き。Release を公開してから起動し直す。何も上げていない"
+            exit 1
+          }
+
+      - name: 道具
+        run: rustup update stable --no-self-update
+
+      - name: 公開前の確認
+        run: pwsh -NoProfile -File tools/crates-io.ps1 -Verify -Version $env:VERSION
+
+      - name: 残りの判定
+        id: pending
+        run: |
+          # 標準出力はまだ出ていないクレートの名前だけ（人が読む行は標準エラー）。混ぜない
+          $names = @(pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version $env:VERSION)
+          # 途中で落ちると名前が一部だけ出ていることがあるので、終了コードを先に見る
+          if ($LASTEXITCODE) { exit 1 }
+          Write-Host "残り: $(if ($names) { $names -join ' ' } else { 'なし（すべて出ている）' })"
+          "names=$($names -join ' ')" >> $env:GITHUB_OUTPUT
+
+      - name: 鍵
+        id: auth
+        if: steps.pending.outputs.names != ''
+        uses: rust-lang/crates-io-auth-action@v1
+
+      - name: 公開
+        if: steps.pending.outputs.names != ''
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+          NAMES: ${{ steps.pending.outputs.names }}
+        run: |
+          # 依存の順は cargo が決める。組み立ては公開前の確認で済んでいる
+          $pArgs = @(-split $env:NAMES | ForEach-Object { '-p', $_ })
+          cargo publish --locked --no-verify @pArgs
+
+      - name: 記録
+        if: always()
+        env:
+          CHECKOUT: ${{ steps.checkout.outcome }}
+        run: |
+          if ($env:CHECKOUT -ne 'success') {
+            '取り出しより前で止まった・何も上げていない' >> $env:GITHUB_STEP_SUMMARY
+            exit 0
+          }
+          # 子の人が読む行（在る・無い）は UTF-8 で標準エラーへ出る。名前（標準出力）と分けて受け取る
+          [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+          $errFile = Join-Path $env:RUNNER_TEMP 'crates-io-pending.txt'
+          $names = @(pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version $env:VERSION 2> $errFile)
+          $code = $LASTEXITCODE
+          $lines = @(Get-Content -LiteralPath $errFile -Encoding utf8 -ErrorAction Ignore)
+          $summary = @("## crates.io v$env:VERSION", '') + @($lines | ForEach-Object { "- $_" }) + ''
+          if ($code) { $summary += "残りの判定が失敗した（終了コード $code）" }
+          elseif ($names) { $summary += "まだ出ていない: $($names -join ' ')" }
+          else { $summary += 'すべて出ている' }
+          $summary >> $env:GITHUB_STEP_SUMMARY
+          if ($code -or $names) { exit 1 }

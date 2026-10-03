@@ -41,7 +41,7 @@
   - _Requirements: 2.10, 3.4, 4.5, 4.8_
 
 - [ ] 3. 公開の段を作る
-- [ ] 3.1 `crates-io.yml` を書く
+- [x] 3.1 `crates-io.yml` を書く
   - きっかけは `workflow_dispatch` だけで、入力は必須の `version`（`v` を付けない版）。権限は `contents: read`・`id-token: write` だけ。`concurrency` で 1 本に絞り、走っている回は取り消さない。ランナーは `windows-latest`・`pwsh`・キャッシュなし
   - 段を設計の表の順に並べる: 版の形（入力は環境変数で受けて形を確かめる）→ タグ `v{版}` の取り出し（`persist-credentials: false`）→ Release の確認（`gh` に渡す鍵は `github.token`・無い／下書きなら版を示して失敗）→ `rustup update` → `-Verify -Version` → `-Pending -Version`
   - 残りが在るときだけ `crates-io-auth-action@v1` で鍵を受け取り、`CARGO_REGISTRY_TOKEN` の環境変数で渡して `cargo publish --locked --no-verify -p {残り}` を走らせる
