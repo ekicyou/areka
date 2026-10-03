@@ -187,3 +187,4 @@
 - 5.2: 差の一覧の値はすべてテストの assert から写す。survey の行に areka の測りが無ければ、文書に「未測定」と書く前にテストへ assert を足して測る（バッチ・エラーの形・無状態版の 3 つ・`Accept` の片方だけを 4.3 に追補した）
 - 6.2: Claude Code 2.1.283 は `initialize` を送らず 2026-07-28 の無状態版（`server/discover`→`tools/list`）でつなぐ。この版の list 結果は `ttlMs`・`cacheScope` が必須で、rmcp 3.5.0 は任意（`with_all_items` で欠ける）。後続 spec が `resources/list`・`prompts/list` を足すときも同じ 2 欄を付ける
 - 7: 2026-10-03 の開発者裁定（既定は 9801 → 9821 の早い者勝ち・隣の 20 候補・指定は 1 つだけ）で 2.3 の「`9821` を 1 回だけ」と 6.2 の ⑷ の前提が変わった。改める仕事はタスク 7（design.md B-13）
+- 完了時にその場で解決: `areka-P0-mcp-tool-entrances` の brief に、Claude Code の無状態版の接続・list 結果の `ttlMs`／`cacheScope`・既定ポートの早い者勝ちを日付つきで 1 段注記した
