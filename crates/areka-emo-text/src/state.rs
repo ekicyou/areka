@@ -53,6 +53,7 @@ use crate::place::{PlaceKey, TextPlace};
 
 pub use decoration::Decoration;
 use decoration::font_tag_tokens;
+pub use route::SurfaceKeyOutcome;
 
 /// テキスト層の調整値（design.md「TextLayerRuntime」の config 正本）。
 ///
@@ -397,6 +398,10 @@ pub struct TextLayerState {
     /// scope ごとの内容が消された回数（`Clear`／`ClearAll` の累計・単調増加）。
     /// `ActorTextState` の欄にしないのは、内容の状態の形と等しさを変えないため。
     clears: BTreeMap<PlaceKey, u64>,
+    /// スコープごとの今のサーフェス番号と文字の行き先（操作は [`route`]・要件 4.7）。
+    routes: BTreeMap<ActorKey, route::ScopeRoute>,
+    /// サーフェス番号 → element番号の昇順の箱の名前（空なら行き先は常に普通のバルーン）。
+    box_index: BTreeMap<u32, Vec<areka_emo_compose::BoxName>>,
 }
 
 impl TextLayerState {
@@ -416,6 +421,11 @@ impl TextLayerState {
     /// リビール中の後続 cue も即時適用される（R3.6）——本層は cue の `at`／`duration` を
     /// 読むだけで書き換えず、pacing が cue 時刻へ影響することはない（R10.2）。
     pub fn apply_cue(&mut self, cue: &TalkCue) {
+        // 文字・改行・`\_l`・選択肢・`\f`・`\c` の宛先＝届いた時点の今の行き先の場所（要件 4.1・4.3）。
+        let dest = PlaceKey {
+            actor: cue.actor.clone(),
+            place: self.destination(&cue.actor),
+        };
         match &cue.command {
             CueCommand::Text(text) => {
                 let glyph_units: Vec<&str> = clusters(text).collect();
@@ -429,10 +439,7 @@ impl TextLayerState {
                     0.0
                 };
                 tracing::debug!(actor = %cue.actor, len = glyph_count, at = cue.at, duration = cue.duration, interval, "Text cue 適用（追記＋配送 duration 由来のリビール時刻確定）");
-                let state = self
-                    .actors
-                    .entry(PlaceKey::balloon(&cue.actor))
-                    .or_default();
+                let state = self.actors.entry(dest.clone()).or_default();
                 state
                     .items
                     .extend(glyph_units.iter().map(|c| TextItem::glyph(c)));
@@ -442,10 +449,7 @@ impl TextLayerState {
             }
             CueCommand::NewLine { ratio } => {
                 tracing::debug!(actor = %cue.actor, ratio, "NewLine cue 適用（改行マーカー追記）");
-                let state = self
-                    .actors
-                    .entry(PlaceKey::balloon(&cue.actor))
-                    .or_default();
+                let state = self.actors.entry(dest.clone()).or_default();
                 state.items.push(TextItem::LineBreak { ratio: *ratio });
             }
             CueCommand::Clear => {
@@ -453,14 +457,8 @@ impl TextLayerState {
                 // 内容だけを消す（未リビールの文字も含めて破棄＝後出し優先・R2.3）。
                 // 装飾状態（現在の見た目・所有外キーの保持）は保つ——`\c` は装飾を戻さない
                 // （R3.7・`= ActorTextState::default()` に戻すと装飾まで消える）。
-                self.actors
-                    .entry(PlaceKey::balloon(&cue.actor))
-                    .or_default()
-                    .clear_content();
-                *self
-                    .clears
-                    .entry(PlaceKey::balloon(&cue.actor))
-                    .or_default() += 1;
+                self.actors.entry(dest.clone()).or_default().clear_content();
+                *self.clears.entry(dest.clone()).or_default() += 1;
             }
             CueCommand::ClearAll => {
                 tracing::debug!(actor = %cue.actor, "ClearAll cue 適用（全スコープを未リビール分含め消去）");
@@ -482,6 +480,8 @@ impl TextLayerState {
                     state.reset_for_new_talk();
                     *self.clears.entry(key.clone()).or_default() += 1;
                 }
+                // 全スコープの行き先を既定へ戻す（サーフェス番号は変えない・要件 4.10）。
+                self.reset_routes();
             }
             CueCommand::Choice {
                 id,
@@ -499,10 +499,7 @@ impl TextLayerState {
                 } else {
                     0.0
                 };
-                let state = self
-                    .actors
-                    .entry(PlaceKey::balloon(&cue.actor))
-                    .or_default();
+                let state = self.actors.entry(dest.clone()).or_default();
                 // 序数空間は items のグリフ（`Glyph` のみ）＝`visible_glyphs`／reveal と同一。
                 let start = state
                     .items
@@ -538,10 +535,7 @@ impl TextLayerState {
                 let x = parse_cursor_coord(x);
                 let y = parse_cursor_coord(y);
                 tracing::debug!(actor = %cue.actor, ?x, ?y, "Cursor cue 適用（CursorMove 追記・グリフ/リビール不変）");
-                let state = self
-                    .actors
-                    .entry(PlaceKey::balloon(&cue.actor))
-                    .or_default();
+                let state = self.actors.entry(dest.clone()).or_default();
                 state.items.push(TextItem::CursorMove { x, y });
             }
             // `\f` 文字装飾の汎用キャリア（R2.4）は**名前で自己選別**して消費する。
@@ -551,7 +545,7 @@ impl TextLayerState {
                 Some(tokens) => {
                     tracing::debug!(actor = %cue.actor, ?tokens, "\\f cue 適用（以降に追記される文字へ効く）");
                     self.actors
-                        .entry(PlaceKey::balloon(&cue.actor))
+                        .entry(dest.clone())
                         .or_default()
                         .apply_font_args(&cue.actor, &tokens);
                 }
@@ -559,9 +553,14 @@ impl TextLayerState {
                     tracing::debug!(actor = %cue.actor, command = ?cue.command, "文字状態機械が消費しない cue を無視（上流 routing の対象外流入）");
                 }
             },
+            // 名前の形の `\b[名前]`（鍵が整数として読めない）は行き先の切り替え（要件 4.3・4.4）。
+            // 整数の `\b[ID番号]` は普通のバルーンへの指定（seriko の担当）で、下の腕で読み飛ばす（要件 4.8）。
+            CueCommand::BalloonSurface { key } if key.parse::<i64>().is_err() => {
+                self.route_select(&cue.actor, key);
+            }
             // 文字状態機械が消費しない command（cue_target_of が Shell/None に分類）は本状態機械の
             // 対象外——演者側 relevance の責務。防御的に無視する（catch-all を置かず、dola の
-            // variant 追加時にコンパイラが再検討を強制する）。`BalloonSurface` は表示系
+            // variant 追加時にコンパイラが再検討を強制する）。整数の `BalloonSurface` は表示系
             // （seriko＝`cue_target_of` が Shell 分類）の消費対象＝文字状態機械へは動作させない防御面（R3.2）。
             // `Wait` は action を持たない純粋な待ち（cue_target_of が `None` 分類）＝
             // どの表現者の担当でもなく、本状態機械は状態を変えない。時間は envelope
@@ -616,6 +615,9 @@ impl TextLayerState {
 #[path = "state_decoration.rs"]
 mod decoration;
 
+#[path = "state_route.rs"]
+mod route;
+
 #[cfg(test)]
 #[path = "state_test_support.rs"]
 mod test_support;
@@ -639,3 +641,7 @@ mod cursor_coord_parse_tests;
 #[cfg(test)]
 #[path = "state_clear_count_tests.rs"]
 mod clear_count_tests;
+
+#[cfg(test)]
+#[path = "state_route_tests.rs"]
+mod route_tests;
