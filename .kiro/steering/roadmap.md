@@ -129,6 +129,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 | spec（`areka-P0-` 省略） | 段 | 何をするか | 規模 | 並び | 前提（先に着地） | Fable |
 |---|---|---|---|---|---|---|
 | `drag-click-without-move` | バグ | キャラクターの絵を動かさずにクリックしただけで窓の位置が保存されるのを止める（wintf が動かし始める前でも終了を配る 5 か所を先例に揃える） | S（6〜9） | **C1-①** | なし | − |
+| `drag-cancel-borrow-miss`（**10-03 起票**・`drag-click-without-move` の完了時に発見） | バグ | wndproc のハンドラが World を借りられないとき、取り消しの終了を積まずに累積器の「ドラッグ中の対象」が残る穴を塞ぐ（再入の条件・実機は未観測） | S（4〜7） | C1 の後の空き席 | なし | − |
 | `choice-timeout-directive`（**10-02 起票**・`sakura-time-directives` から切り出し） | バグ | `\![set,choicetimeout,時間]` が効かず、時間切れなしを指定したメニューが 30 秒で閉じるのを直す（compile が値を選択待ちへ焼く） | XS〜S（3〜5） | **C1-②** | なし | − |
 | `restart-chain-finalize-stall`（**10-02 起票**・覚え書きから格上げ） | バグ | ゴーストを起こし直した後に `deferrals=600` の WARN が鳴るのを止める（窓の無い巡を見送りに数えない） | XS（2〜3） | **C1-③** | なし | − |
 | `status-execution-states` | バグ | SHIORI へ渡す `Status` に `online`・`nouserbreak`・`balloon` を載せる（今は載らず、更新中や割り込み禁止の区間に雑談が割り込みうる＝潜在） | S〜M（5〜8） | **C1-④** | なし（同じ C1 の `emo-text-file-split` の 6 本と `drain_resnap.rs` に触らない約束） | − |
