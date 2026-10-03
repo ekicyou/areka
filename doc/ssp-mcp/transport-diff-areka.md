@@ -4,7 +4,7 @@ SSP 2.9.05 の振る舞い（[survey.md](survey.md) §1・§2）と、areka の 
 
 - **測った版と日**: rmcp 3.5.0・2026-10-03
 - **「困る」の物差し**: Claude Code（`claude mcp add --transport http`）または Cursor が、登録・`initialize`（無状態版では `server/discover`）・`tools/list`・`ping` のどれかに失敗する差。Claude Code 2.1.283 は `initialize` を送らず、無状態版（`2026-07-28`）の `server/discover`→`tools/list` でつなぐ（2026-10-03・実機確認 6.2）。Cursor の送り方は未確認
-- **判定の数**: 18 行のうち 同じ 5 行・違うが困らない 12 行・困るので直した **1 行**（無状態版の `tools/list`）
+- **判定の数**: 18 行のうち 同じ 4 行・違うが困らない 13 行・困るので直した **1 行**（無状態版の `tools/list`）
 
 | 項目 | SSP | areka（rmcp 3.5.0） | 判定 | 測ったテスト名 |
 |---|---|---|---|---|
@@ -18,7 +18,7 @@ SSP 2.9.05 の振る舞い（[survey.md](survey.md) §1・§2）と、areka の 
 | 未知メソッド | 200・`-32601`「Method not found」 | 200・`-32601`（`message` の中身は「エラーの形」の行） | 同じ | `unknown_method_is_jsonrpc_error_from_rmcp` |
 | JSON でない本文 | 400・`-32700`「Parse error」・`id: null` | 壊れた JSON は 415・平文（JSON-RPC のエラーでない）。`Content-Type: text/plain` も 415。続く `ping` は通る | 違うが困らない（クライアントは JSON 以外を送らない） | `broken_json_body_is_415_and_next_request_works`・`non_json_content_type_is_415` |
 | バッチ（配列） | 400・`-32600`「Invalid Request」 | 415・平文 `fail to deserialize request body data did not match any variant of untagged enum JsonRpcMessage`（JSON-RPC のエラーでない） | 違うが困らない（Claude Code・Cursor はバッチを送らない） | `batch_array_body_is_415` |
-| 未知のツール名・必須引数の欠落 | 200・`-32602`「Invalid params」（`isError` の結果でなく JSON-RPC エラー） | 未知のツール名は 200・`-32602`（`result` 無し）。登録 0 本でも 1 本でも同じ。必須引数の欠落は本 spec ではツールが 0 本で測れない（ツールを足す後続 spec で測る） | 同じ | `tools_call_any_name_is_invalid_params`・`unregistered_name_is_invalid_params` |
+| 未知のツール名・必須引数の欠落 | 200・`-32602`「Invalid params」（`isError` の結果でなく JSON-RPC エラー） | 未知のツール名・必須の欄の欠落・型違いの 3 つとも `{"code":-32602,"message":…}`（`data` 無し・`result` 無し・アプリ本体へ届かない）。HTTP の状態は旧式の経路が 200、無状態版（`2026-07-28`）の経路が 400。`message` は、未知のツール名が `tool not found`、必須の欄の欠落（`ghost_name` だけの `sakurascript`）が `missing required argument: script`、型違い（`strict: "yes"` の `sakurascript`）が `argument strict must be boolean`。未知のツール名は登録 0 本でも 1 本でも 200・`-32602`（旧式の経路） | 違うが困らない（番号は同じ。`message` の文と、無状態版の経路の HTTP 400 が違う。`tools/call` の失敗は「困る」の物差しの外。本 spec は rmcp の値のまま〔要件 2.7〕。実機確認〔mcp-tool-entrances の 7.3〕では、実機確認で使った Claude Code のセッション〔版未確認・2025-03-26 の形で接続〕は必須の欄の欠落を送る前に自分で inputSchema に照らして拒み〔`Input validation error`〕、要求は areka に届かなかった＝エージェントには Claude Code 自身の理由の文が見え、areka の 400 と `message` は見えない。Claude Code 2.1.283・無状態版の経路での見え方は未確認。Cursor は未確認） | `unknown_name_is_invalid_params`・`missing_required_is_invalid_params`・`wrong_type_is_invalid_params`・`tools_call_any_name_is_invalid_params`・`unregistered_name_is_invalid_params` |
 | エラーの形 | `{"code","message","data"}`・`data` は `message` と同じ文字列 | `{"code","message"}` だけ・`data` の欄は無い。未知メソッドでは `message` がメソッド名そのもの（`{"code":-32601,"message":"no/such"}`） | 違うが困らない（`data` が無い・`message` の文が違う） | `unknown_method_is_jsonrpc_error_from_rmcp` |
 | `Origin` | 無し・`http://localhost:*` は通す。`http://evil.example`・`null` は 403・`-32600`「Forbidden: invalid origin」 | 無し・`localhost`／`127.0.0.1`／`[::1]`（ポート・`http`／`https` を問わない）は通す。`http://evil.example`・`null`・`http://localhost.evil.example` は拒む。悪い `Origin` は `initialize`・`ping`・help のどれも 403・平文（MCP の処理に入らない） | 違うが困らない（拒む本文が JSON-RPC でない） | `bad_origin_is_403_before_mcp`・`gate_origin_table`・`gate_origin_loopback_variants_pass` |
 | `Host` | 検査しない（`Host: evil.example` でも 200） | `127.0.0.1`・`localhost`・`[::1]` だけ通す。`Host: evil.example` は 403・平文。`Host` 無しも拒む | 違うが困らない（クライアントは `127.0.0.1:<port>` へ送る） | `bad_host_is_403`・`gate_host_table` |
@@ -31,4 +31,4 @@ SSP 2.9.05 の振る舞い（[survey.md](survey.md) §1・§2）と、areka の 
 
 - `server/discover` を測った送り方は、本文の `params._meta` に `io.modelcontextprotocol/protocolVersion: 2026-07-28` と `clientCapabilities`・`clientInfo` を入れ、ヘッダ `MCP-Protocol-Version: 2026-07-28` と `Mcp-Method: server/discover` を付ける形。serverInfo は結果の直下でなく `_meta."io.modelcontextprotocol/serverInfo"` の下に入る。
 - ツールの結果の `isError` は、成功のときも `false` を省かずに書く（`registered_tool_roundtrip` で `true`／`false` の両方を確かめた）。
-- テスト名は `crates/areka-mcp/src/` の `server_protocol_tests.rs`・`server_gate_help_tests.rs`・`gate_tests.rs` のもの。
+- テスト名は `crates/areka-mcp/src/` の `server_protocol_tests.rs`・`server_gate_help_tests.rs`・`gate_tests.rs`・`tools/tools_socket_tests.rs` のもの。
