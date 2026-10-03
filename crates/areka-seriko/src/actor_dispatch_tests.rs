@@ -408,7 +408,7 @@ fn emit_after_actor_stopped_logs_no_panic() {
 //
 // 早期分岐（key 抽出 match の前段）は解決→適用→発行を arm 内で完結し値を返さないため、
 // 同期 `handle_message`＋`MockSurfaceOutput` の records 照合で発行を、`capture_logs_flow` で
-// NameForm=warn!／Invalid=error! の severity split を、いずれもテストスレッド上で決定論的に
+// NameForm=debug!（文字の層へ譲る）／Invalid=error! の severity split を、いずれもテストスレッド上で決定論的に
 // 檻化する（cross-thread log 問題を回避）。既存 `emote_cue` 経路（シェル面）は無改変。
 // ─────────────────────────────────────────────────────────────────────
 
@@ -476,13 +476,14 @@ fn balloon_minus_one_emits_hideballoon() {
     );
 }
 
-/// ケース8（4.5・severity split）: 名前形 key は warn! を 1 回だけ残し発行しない。
+/// ケース8（shell-balloon 4.8/4.9）: 名前形 key は文字の層が読むので、seriko は debug! だけを残し発行しない。
 ///
-/// `\b[バルーン１]` 相当の非数値 key は M-boot 未対応の**正当構文**＝`NameForm`。同期
-/// `handle_message`＋`capture_logs_flow` で warn! が**1 回だけ**・error! は**0 回**・発行なし・
-/// `Continue` を固定する。RED では catch-all の別文言 warn! に落ちるため文言 assert が落ちる。
+/// `\b[バルーン１]` 相当の非数値 key＝`NameForm` の行き先は文字の層（emo-text）が決め、名前形に
+/// ついての警告は文字の層だけが出す。同期 `handle_message`＋`capture_logs_flow` で warn! も
+/// error! も**0 回**・debug! は観測できる（silent 化でなく格下げ）・発行なし・`Continue` を固定する。
+/// RED では旧来の warn! が残るため WARN=0 が落ちる。
 #[test]
-fn balloon_name_form_warns_once_no_emit() {
+fn balloon_name_form_is_debug_only_no_emit() {
     let resolver = tiny_resolver();
     let mut states = fresh_states();
     let mut out = MockSurfaceOutput::new();
@@ -503,23 +504,23 @@ fn balloon_name_form_warns_once_no_emit() {
     assert_eq!(
         flow.1,
         ControlFlow::Continue(()),
-        "名前形は skip して処理継続（正当構文・4.5）"
+        "名前形は skip して処理継続（正当構文）"
     );
     assert_eq!(
         flow.0.matches("level=WARN").count(),
-        1,
-        "名前形は warn! を 1 回だけ残す（4.5）: {}",
+        0,
+        "名前形について seriko は warn! を残さない（警告は文字の層だけ・4.9）: {}",
         flow.0
     );
     assert_eq!(
         flow.0.matches("level=ERROR").count(),
         0,
-        "名前形は error! を残さない（NameForm=warn の severity split・4.5）: {}",
+        "名前形は error! を残さない: {}",
         flow.0
     );
     assert!(
-        flow.0.contains("名前解決できず"),
-        "バルーン面 key 固有の名前形メッセージであること（catch-all 汎用文言でない）: {}",
+        flow.0.contains("level=DEBUG") && flow.0.contains(r"名前の形の `\b` は文字の層が読む"),
+        "名前形は文字の層へ譲る旨の debug! として観測できる（silent 化でなく格下げ）: {}",
         flow.0
     );
     assert!(
@@ -529,7 +530,7 @@ fn balloon_name_form_warns_once_no_emit() {
     );
     assert!(
         records.lock().expect("records mutex poisoned").is_empty(),
-        "名前形では発行しない（発行なし・4.5）"
+        "名前形では発行しない"
     );
 }
 
@@ -697,7 +698,7 @@ fn shell_and_balloon_recorded_independently() {
 // 「正常な担当外受信」であり、action を無視しつつ duration を honor（＝新ローカル遅延を生まない・
 // seriko は自前 reveal/timeline を持たないので skip で自明に満たす）。ログは良性 debug! へ格下げ
 // （warn/error を出さない＝実害ない水準）。genuine anomaly（Unresolved=error/Invalid=error/
-// NameForm=warn/EntityRef=warn）は据え置き——本タスクで格下げしない。
+// EntityRef=warn）は据え置き——本タスクで格下げしない（NameForm は shell-balloon で debug! へ）。
 // ─────────────────────────────────────────────────────────────────────
 
 /// ケース12（6.2/2.3・broadcast honor）: 担当外（非 Shell＝Balloon 担当）の cue を broadcast

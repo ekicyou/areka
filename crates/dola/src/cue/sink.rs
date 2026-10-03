@@ -49,6 +49,10 @@ pub trait CueSink {
 /// [`CueTarget::Shell`] へ分類する。文字状態機械（`Balloon`＝emo-text）へ流すのは
 /// 誤配線。`Custom`／`Wait` を除き、全域写像で `None`（配送不能）へは落ちない。
 ///
+/// なお文字の層（emo-text）は `\s`（`Emote`）と名前の形の `\b`（数値として読めない
+/// `BalloonSurface`）を、行き先を決めるために読む（演じるのではない）。分類は `Shell` のまま
+/// で、演じるのは seriko だけ（areka-P0-shell-balloon）。
+///
 /// 明示的な variant ごとの match（catch-all を置かない）により、将来 variant を追加した
 /// 際にコンパイラが本関数の網羅性を強制的に再検討させる（分類漏れを型で塞ぐ）。
 pub fn cue_target_of(command: &CueCommand) -> Option<CueTarget> {

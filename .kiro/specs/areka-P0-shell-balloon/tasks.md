@@ -98,7 +98,7 @@
   - 完了の姿: 上の場面がすべて緑で、どれか 1 つの写しの規則を外す（写さない・持ち主を動かさない）と少なくとも 1 本が赤になる
   - _Requirements: 3.13, 3.14, 3.15, 3.16, 3.17, 3.19, 5.4, 10.5_
 
-- [ ] 6. (P) 名前の形の `\b` の警告を文字の層へ譲る
+- [x] 6. (P) 名前の形の `\b` の警告を文字の層へ譲る
   - `crates/areka-seriko/src/actor.rs` の名前の形のバルーンの鍵の腕を `warn!` から `debug!` へ下げ、文言を「名前の形の `\b` は文字の層が読む」に改める。発行しない・状態を変えないことは保つ
   - この腕の記録の水準を数えている seriko のテスト（`actor_dispatch_tests.rs`）だけを水準の変更に合わせて直し、正典の `\b[ID番号]` のテストは期待値を変えない
   - `crates/dola/src/cue/sink.rs` と `crates/areka-ghost/tests/ghost/spine_e2e_test_broadcast_relevance_partition.rs` のコメントを「文字の層は `\s` と名前の形の `\b` を、行き先を決めるために読む」に改める（期待値は変えない）
