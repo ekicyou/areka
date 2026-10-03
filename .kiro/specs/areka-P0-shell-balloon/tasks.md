@@ -8,7 +8,7 @@
 >
 > 呼び出しの形の変更に合わせた書き換えと、新しい欄に偽（`false`）を入れるだけの書き換えは、「既存のテストの期待値を変えた」には数えない。
 
-- [ ] 1. 箱を持つ試験用シェルの検体を用意する
+- [x] 1. 箱を持つ試験用シェルの検体を用意する
   - `crates/areka-emo-text/tests/fixtures/shell-balloon/surfaces.txt` を置く。中身: `balloon.*`ブレス 3 つ以上（縦書き `vertical,1` の箱、`font.follow` を書かない箱、`font.follow,scope` の箱、`font.follow,balloon` の箱。大きさの違う 2 つを含める）、箱を 2 つ持つサーフェス、同じ名前の箱を別の位置に置くサーフェス、箱の無いサーフェス、`surface.append*`ブレスで箱を足すサーフェス、画像の element定義（`overlay`）と箱の element定義が同居するサーフェス
   - 誤りのある定義の例は検体に入れず、各テストの中の文面で作る（検体は「正しく書いたシェル」の見本にする）
   - 検体を読むのは `areka-emo-present` の読み込みのテスト（4）と、読み手から文字の層までの通しのテスト（12.2）だけにする。下の層のクレート（`areka-parsers`・`areka-emo-compose`）のテストは、検体を読まずに自分のテストの中に surfaces.txt の文面を持つ（下の層が上の層のクレートの検体の在処に依存しない）
