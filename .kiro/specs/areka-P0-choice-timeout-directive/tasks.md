@@ -51,7 +51,7 @@
   - _Boundary: areka-kanade tests_
 
 - [ ] 4. 記録を実装に合わせる
-- [ ] 4.1 網羅台帳の行を実装済みへ替え、台帳の連鎖を満たす
+- [x] 4.1 網羅台帳の行を実装済みへ替え、台帳の連鎖を満たす
   - 台帳 `sakura-script.toml` の `\![set,choicetimeout,時間]` の項目を `implemented`・引受先を本 spec・注記を今の振る舞い（読めない値は既定＋WARN）へ
   - `roadmap-draft.md` に本 spec の行を足し、`areka-P0-sakura-time-directives` の受け持ちの数・brief の総数・段階ごとの表・「会話」の節の依存の欄を数え直した値で直し、追加の理由の段落と `snapshot_on` を書く
   - 報告 2 本を生成器（`report`・`report-summary`）で作り直す（手で数を直さない）。同じ C1 の `status-execution-states` が先に `main` へ着地していたら、取り込んでから作り直す
