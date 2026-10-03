@@ -218,6 +218,7 @@ mod tests {
             change: None,
             pending_change: None,
             talk_gap: None,
+            external: Default::default(),
         }
     }
 
@@ -239,6 +240,7 @@ mod tests {
             change: None,
             pending_change: None,
             talk_gap: None,
+            external: Default::default(),
         }
     }
 

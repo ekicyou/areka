@@ -239,6 +239,8 @@ pub enum KanadeMsg {
         /// 結果の返信端。
         reply: areka_actor::ReplySender<crate::change::TalkGap>,
     },
+    /// 外から届いた実行状態の知らせ（UI → kanade）。状態の写しを更新するだけで運行は変えない。
+    ExecutionState(crate::status::ExecutionStateUpdate),
 }
 
 /// shiori アクター inbox（real／mock が同一型を受ける＝Req 5.1 の差し替え面）。
@@ -624,6 +626,8 @@ mod tests {
                 KanadeMsg::RaiseEvent { .. } => "RaiseEvent",
                 // 台詞の切れ目の口（additive・既存の判別結果を変えない）。
                 KanadeMsg::AwaitTalkGap { .. } => "AwaitTalkGap",
+                // 外から届いた実行状態の知らせ（additive・既存の判別結果を変えない）。
+                KanadeMsg::ExecutionState(_) => "ExecutionState",
             }
         }
         let existing = [

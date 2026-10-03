@@ -20,6 +20,7 @@ fn state_in(phase: Phase) -> State {
         change: None,
         pending_change: None,
         talk_gap: None,
+        external: Default::default(),
     }
 }
 
@@ -117,6 +118,7 @@ fn error_close_deadline_exceeded_logs() {
         change: None,
         pending_change: None,
         talk_gap: None,
+        external: Default::default(),
     };
     let ev = capture(|| {
         let _ = step(

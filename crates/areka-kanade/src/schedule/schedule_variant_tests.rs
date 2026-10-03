@@ -107,6 +107,8 @@ fn input_variants_are_existing_eight_plus_choice_two() {
             Input::RaiseEvent { .. } => "RaiseEvent",
             // shell-balloon-switch で台詞の切れ目の口（`AwaitTalkGap`）の腕を足した。
             Input::AwaitTalkGap { .. } => "AwaitTalkGap",
+            // status-execution-states で外から届いた実行状態の知らせ（`ExecutionState`）の腕を足した。
+            Input::ExecutionState(_) => "ExecutionState",
         }
     }
     assert_eq!(tag(&Input::Boot), "Boot");

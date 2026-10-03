@@ -161,6 +161,7 @@ pub fn spawn_kanade_with_stop_sink(
                     hold_gap_reply(&mut gap_reply, reply);
                     Input::AwaitTalkGap { raise }
                 }
+                KanadeMsg::ExecutionState(update) => Input::ExecutionState(update),
             };
             let (flow, first_reply) = drive(
                 &mut state,

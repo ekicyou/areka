@@ -22,7 +22,7 @@ use crate::msg::{
     ChoiceInput, CloseReason, KanadeConfig, MonotonicMs, MouseInput, ShioriCall, ShioriFault,
     ShioriOutcome,
 };
-use crate::status::ExecutionSnapshot;
+use crate::status::{ExecutionSnapshot, ExecutionStateUpdate, ExternalStates};
 use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
 pub(crate) mod boot;
@@ -109,6 +109,9 @@ pub(crate) enum Input {
     AwaitTalkGap {
         raise: Option<crate::change::GapRaise>,
     },
+    /// 外から届いた実行状態の知らせ（UI → kanade）。相を問わず写し（[`State::external`]）を
+    /// 更新するだけで、運行は変えない（行動を返さない）。
+    ExecutionState(ExecutionStateUpdate),
 }
 
 /// 運行フェーズ（可視化は System Flows の状態機械図）。各待ち点は「直前に発行した
@@ -231,6 +234,8 @@ pub(crate) struct State {
     pub pending_change: Option<crate::change::ChangeRequest>,
     /// 台詞の切れ目の見張り（高々 1 つ・[`talk_gap`]）。
     pub talk_gap: Option<talk_gap::GapWatch>,
+    /// 外から届いた実行状態の写し（中断の旗・通信中・見えているバルーンの組）。ゴーストごとに新品。
+    pub external: ExternalStates,
 }
 
 impl State {
@@ -250,6 +255,7 @@ impl State {
             change: None,
             pending_change: None,
             talk_gap: None,
+            external: ExternalStates::default(),
         }
     }
 
@@ -510,6 +516,9 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
         // AwaitTalkGap: 始め方ごと talk_gap::begin へ渡す（結果は遷移の後の見極めが決める）。
         Input::AwaitTalkGap { raise } => talk_gap::begin(state, raise),
 
+        // ExecutionState: 相を問わず（終了中・停止後も）写しを更新するだけ（行動は返さない）。
+        Input::ExecutionState(update) => on_execution_state(state, update),
+
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 
         // Idle 以外での Boot は不整合（warn!＋現 Phase 維持・Req 6.2）。Idle のみ boot へ委譲。
@@ -527,6 +536,26 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
             dispatch_phase(state, Input::CloseRequest { reason }, config)
         }
     }
+}
+
+/// 外から届いた実行状態の知らせを写しへ反映する横断の腕（相を問わず受理・行動なし）。
+///
+/// 捨てる経路を持たない（終了中・停止後も写す）ので `warn!` は無く、変化の有無を `trace!` で残す。
+fn on_execution_state(mut state: State, update: ExecutionStateUpdate) -> (State, Vec<Action>) {
+    let kind = match update {
+        ExecutionStateUpdate::NoUserBreak(_) => "no_user_break",
+        ExecutionStateUpdate::Balloons(_) => "balloons",
+    };
+    let changed = state.external.apply(update);
+    tracing::trace!(
+        target: "kanade",
+        event = "execution_state_updated",
+        kind,
+        changed,
+        phase = phase_label(&state.phase),
+        "外から届いた実行状態を写しへ反映"
+    );
+    (state, Vec::new())
 }
 
 /// 送出時点の運行フェーズから実行状態スナップショットを導出する（DD-IT-3）。
@@ -845,6 +874,11 @@ mod tests;
 #[cfg(test)]
 #[path = "schedule_variant_tests.rs"]
 mod variant_tests;
+
+/// 外から届いた実行状態の写しの決定論テスト。
+#[cfg(test)]
+#[path = "external_state_tests.rs"]
+mod external_state_tests;
 
 /// タスク 6.1: 純粋 step 層の失敗・防御アームがログを発火することの実行可能検証。
 ///
