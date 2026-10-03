@@ -194,7 +194,7 @@ crates/
 │   ├── src/place.rs                  # 新設（純粋）: TextPlace・PlaceKey
 │   ├── src/state_route.rs            # 新設（純粋・state の子）: 行き先の状態と遷移・SurfaceKeyOutcome
 │   ├── src/actor_box.rs              # 新設（actor の子）: 箱の登録・sync_boxes・shown_boxes・hide_boxes
-│   ├── src/place_tests.rs ほか       # 新設: state_route_tests.rs・actor_box_tests.rs・state_place_tests.rs
+│   ├── src/place_tests.rs ほか       # 新設: state_route_tests.rs・actor_box_tests.rs・state_place_tests.rs・state_decoration_carry_tests.rs
 │   ├── tests/box_attach_test.rs      # 新設: 窓の子としての装着・重なり順・読み戻し（GPU・既存の attach_wiring_test.rs と同じ流儀）
 │   └── tests/fixtures/shell-balloon/surfaces.txt   # 新設: 箱を持つ試験用シェルの検体（要件 10.4）
 └── areka/src/
@@ -210,7 +210,7 @@ crates/
 - `crates/areka-emo-text/Cargo.toml` — `areka-emo-compose` を足す。
 - `crates/areka-emo-text/src/lib.rs` — `pub mod place;` と、走査の一覧（`PURE_SOURCES`・`SOURCES_OUTSIDE_THE_PURE_SCAN`）への新設ファイルの登記。
 - `crates/areka-emo-text/src/state.rs` — 表の鍵を `PlaceKey` へ。指令の宛先を「今の行き先」で引く。名前の形の `BalloonSurface` の腕。`ClearAll` で行き先を戻す。
-- `crates/areka-emo-text/src/state_decoration.rs` — 鍵の追随（装飾の状態は場所ごと）。
+- `crates/areka-emo-text/src/state_decoration.rs` — 鍵の追随。行き先が替わるときに台本の指定を新しい場所へ写す `carry_script_decor`、箱の名前ごとの 2 層を受け取る `set_box_looks`、`reset_decoration` の宛先を今の行き先にする（今 483 行。増えるのは 50 行程度で 1,000 行に届かない）。
 - `crates/areka-emo-text/src/actor.rs` — 表の鍵を `PlaceKey` へ。`apply_cue` が `Emote` を解決して行き先へ渡す。`choice_active` をスコープの全部の場所で見る。
 - `crates/areka-emo-text/src/actor_attach.rs`・`actor_decoration.rs` — 警告の名前の欄を場所の名前にする。`set_balloon_label`。
 - `crates/areka-emo-text/src/actor_present.rs` — 走査を場所ごとにする。箱の位置（X,Y）を面の位置と選択肢の当たり行へ足す。提示のたびに `shown_boxes` の写しを更新する。
@@ -325,7 +325,7 @@ graph TB
 | 3.1 | 箱の左上を (0,0) として読む | 箱の登録 | `TextRegion::resolve` に `BoxDef.size` を渡す | — |
 | 3.2 | `validrect` 無しは箱の全体 | 箱の登録 | 同上 | — |
 | 3.3 | `origin` 無しは書き出しの角 | 箱の登録 | 同上 | — |
-| 3.4 | 同じキーが同じ結果 | 場所ごとの描画 | `present_actor` の一連を場所ごとに通す | — |
+| 3.4 | 同じキーが同じ結果 | 場所ごとの描画・装飾の持ち運び | `present_actor` の一連を場所ごとに通す。`\f` の指定は行き先が替わっても残る | — |
 | 3.5 | 拡大率の追従 | 箱の同期 | `sync_boxes`（拡大率が変われば面を作り直す） | — |
 | 3.6 | ドラッグ中も同じ位置関係 | 箱の文字の面 | シェルの窓の子 | — |
 | 3.7 | 画像より手前 | 箱の文字の面 | `Children` の並び（絵の entity より前） | — |
@@ -334,6 +334,7 @@ graph TB
 | 3.10 | フォントの探す場所の順 | 箱の束 | `box_font_search_dirs`・`TextLayerRuntime::box_font_dirs` | — |
 | 3.11 | 箱の警告の名前の欄 | 箱の登録 | 場所の名前＝ブレスの名前 | — |
 | 3.12 | 普通のバルーンの警告の名前の欄 | 警告の名前 | `set_balloon_label`（未設定はスコープから導く） | — |
+| 3.13 | `\f` の指定はスコープごと・既定値は行き先の定義から | 装飾の持ち運び | `carry_script_decor`・`set_box_looks`・既存の `rebase` | 行き先の決まり方 |
 | 4.1 | 箱のあるサーフェスでは箱へ描く | 行き先の状態 | `ScopeRoute` | 行き先の決まり方 |
 | 4.2 | 既定は element番号最小 | 行き先の状態 | `BoxIndex` | 同上 |
 | 4.3 | `\b[名前]` で切り替え | 行き先の状態 | `route_select` | 同上 |
@@ -351,14 +352,14 @@ graph TB
 | 5.5 | `Status` に載せる | Status の届け | `BalloonObservation.box_showing` | — |
 | 5.6 | どちらも出ていなければ載せない | Status の届け | `collect_bindings` | — |
 | 6.1 | 同じ名前があれば続きを書く | 行き先の状態・箱の同期 | `route_surface`・`sync_boxes` | 行き先の決まり方 |
-| 6.2 | 無ければ持ったまま表示をやめる | 同上 | 同上 | 同上 |
+| 6.2 | 無ければ持ったまま表示をやめる | 同上・装飾の持ち運び | 同上。新しい行き先へ `\f` の指定を写す（`carry_script_decor`） | 同上 |
 | 6.3 | 戻れば再び表示 | 箱の同期 | `sync_boxes` | 同上 |
-| 6.4 | 箱が無ければ普通のバルーンへ | 行き先の状態・表示の判断の観測 | `route_surface`・`balloon_shown_glyphs` | 同上 |
+| 6.4 | 箱が無ければ普通のバルーンへ | 行き先の状態・表示の判断の観測・装飾の持ち運び | `route_surface`・`balloon_shown_glyphs`・`carry_script_decor` | 同上 |
 | 6.5 | 行き先でない箱の文字も表示 | 箱の同期 | 文字を持つ全部の箱を走査 | 同上 |
 | 6.6 | `\s[-1]` | 行き先の状態 | `SurfaceKeyOutcome::Hide` | 同上 |
 | 6.7 | 新しい台詞で全部消す | 場所ごとの文字の状態 | `ClearAll` が全部の場所を消す | 同上 |
 | 6.8 | シェル・ゴーストの切替で持ち越さない | 箱の束の結線 | シェル＝`set_box_layout`（番号は保つ）／ゴースト＝結線の作り直し | 行き先の決まり方 |
-| 6.9 | 普通のバルーン → 箱の向き | 行き先の状態・表示の判断の観測 | `route_surface`・`balloon_shown_glyphs` | 行き先の決まり方 |
+| 6.9 | 普通のバルーン → 箱の向き | 行き先の状態・表示の判断の観測・装飾の持ち運び | `route_surface`・`balloon_shown_glyphs`・`carry_script_decor` | 行き先の決まり方 |
 | 6.10 | 同じ待ち時間で箱の文字も消す | 表示の判断 | `decide_timeout`・`hide_boxes` | 箱を数に入れた表示の判断 |
 | 6.11 | 待ちを止める条件 | 表示の判断・箱の上の滞在 | `choice_active`（スコープ全体）・`ShellBoxHover`・`next_box_hover`・`settle_box_hover` | 同上 |
 | 7.1 | `\c` は行き先の箱だけ | 場所ごとの文字の状態 | `Clear` の宛先が今の行き先 | 行き先の決まり方 |
@@ -392,6 +393,7 @@ graph TB
 | シェルの読み込みの入口 | areka-emo-present | 箱の表を `ShellTarget` に載せ、報告を 1 度だけ記録 | 10.1, 10.2 | 箱の畳み込み（P0） | Service |
 | 場所の鍵 | areka-emo-text（純粋） | スコープと文字の場所の組 | 4.6 | — | State |
 | 行き先の状態 | areka-emo-text（純粋） | 指令の列から行き先を決める | 4.1〜4.5, 4.7〜4.10, 5.4, 6.1, 6.2, 6.4, 6.6, 6.7, 6.9, 7.1〜7.3 | `BoxIndex`（P0） | State |
+| 装飾の持ち運び | areka-emo-text（純粋・`state_decoration.rs`） | `\f` の指定を、行き先が替わっても同じスコープで保つ | 3.4, 3.13, 6.2, 6.4, 6.9 | 行き先の状態（P0） | State |
 | 箱の登録と同期 | areka-emo-text | 箱の位置・面・四角の照会・隠す印 | 1.6, 3.1〜3.7, 3.9〜3.11, 6.1〜6.3, 6.5, 6.8, 9.3, 9.4 | `TextSlotView`（P0）・wintf（P0） | Service, State |
 | 警告の名前 | areka-emo-text | 警告の名前の欄を場所の名前にする | 3.11, 3.12 | — | Service |
 | 箱の束の結線 | areka/emo2_boot | 箱の表・解決の閉包（シェルに在る番号だけを通す）・探す場所の順を文字の層へ渡す | 3.5, 3.10, 4.1, 5.1, 6.8 | `ShellTarget`・`SurfaceResolver`（P0） | Service |
@@ -534,7 +536,26 @@ impl PlaceKey { pub fn balloon(actor: &ActorKey) -> PlaceKey; }
 - `TextLayerState` の `actors`・`clears` と、`TextLayerRuntime` の `routing`・`layout_input`・`surfaces`・`choice_hover`・`choice_snapshot`・`unresolved_warned` の鍵を `PlaceKey` にする。`balloon_background` はスコープのまま（箱は使わない）。
 - `ActorKey` を取る既存の読み口（`visible_glyphs`・`clear_count`・`actor_state`・`choice_hit_rows`・`is_attached`・`surface`・`draw_stats`・`inject_choice_hover`・`register_actor`・`register_actor_view`・`refresh_actor_scale`・`set_balloon_background`）は名前も引数も変えず、`PlaceKey::balloon(actor)` を引く。意味は「普通のバルーンの場所」で、本 spec の前と同じ値を返す（要件 10.5）。
 - 例外は `choice_active(&ActorKey)` だけで、スコープのどの場所かに選択肢があれば真を返す（時間切れの待ちを止める条件と、kanade の選択待ちの単位がスコープだから）。箱の無いシェルでは値は変わらない。
-- 装飾の状態（`\f`）は場所ごとに持つ。行き先を別の箱へ切り替えると、その箱の定義の既定の見た目から始まる（正典に無い場面なので §8 に登記する）。
+- 装飾（`\f`）は「台本の指定」と「場所の既定」に分けて持つ（要件 3.13。2026-10-03 に SSP で、`\f` の指定がスコープごとで、同じスコープの中で `\b[2]` に替えても残ることを確かめた裁定）。持ち方は次の「装飾の持ち運び」に書く。
+
+##### 装飾の持ち運び（要件 3.13）
+
+今の `Decoration`（`state_decoration.rs`）は、すでに 2 つの部分に分かれている。
+
+| 部分 | 欄 | 意味 | 持ち主 |
+|---|---|---|---|
+| 場所の既定 | `layers`（既定・無効表示・選択肢の 2 層） | その場所の定義（`balloon.*`ブレス、または普通のバルーンの descript.txt）から解決した見た目 | 場所ごと |
+| 台本の指定 | `base`（既定／無効表示のどちらを土台にしているか）・`applied`（台本が `\f` で当てた指定の列）・`unowned`（所有外のキーの保持）・`warned`（記録済みの値） | 台本がそのスコープに対して書いたもの | スコープごと |
+| 今効いている見た目 | `current` | 場所の既定を土台に、台本の指定を順に当て直した結果（既存の `rebase`） | 導出値 |
+
+- `Decoration` の型と読み口（`current_look`・`look_layers`・`unowned_vocab`）は変えない。**台本の指定の正本は、そのスコープの「今の行き先の場所」の `Decoration`** とする。`\f` はいつも今の行き先の場所へ当たるので、正本は常に 1 つである。
+- 行き先が替わる瞬間（`route_surface`・`route_select` が行き先を変えたとき。`\b[名前]` でも `\s` に伴う自動の切り替えでも同じ）に、台本の指定の 4 欄を前の行き先の場所から新しい行き先の場所へ写し、新しい場所の `layers` の上で `rebase` する（新設の私有関数 `carry_script_decor`）。これで、指定した項目はそのまま残り、指定していない項目は新しい行き先の定義の既定値になる。
+- `\f[default]` は今までどおり `applied` を空にして土台を既定へ戻す（＝今の行き先の定義の既定値で表示する）。項目ごとの `default`（例 `\f[color,default]`）は `applied` の中の 1 件として残り、当て直すたびに「そのときの場所の既定」を引くので、行き先が替わればその項目は新しい場所の既定値になる。
+- 台詞の頭（`ClearAll`）は今までどおり全部の場所で `reset_for_new_talk` を呼ぶ（台本の指定は台詞をまたがない）。行き先を既定へ戻す処理（要件 4.10）はその後に行うので、写すものは空である。
+- 外からの「戻す操作」（`reset_decoration(Some(scope))`）は、そのスコープの今の行き先の場所を戻す。
+- すでに書いた文字は、書いたときの見た目の番号（`glyph_styles` と場所ごとの `StyleTable`）を持ち続ける。行き先でなくなった箱の文字も、隠れてから再び出た箱の文字も、書いたときの見た目で描き直される（後から替わった指定に染まらない）。
+- 箱の場所の `layers` は、文字が届く前に決まっていなければならない（見た目の番号は場所の既定との差として作られる＝`push_current_style`）。`set_box_layout` が箱の名前ごとの 2 層（`ResolvedBalloonText::resolve_with_background(&def.model, def.size, 白)` の `font.looks`。拡大率に依らない）を先に作って状態へ渡し（`set_box_looks`）、箱の場所の状態は作られるときにそれを受け取る。面の登録（`sync_boxes` → `register_actor`）が後から同じ値を差し込んでも結果は変わらない。
+- 箱の無いシェルでは行き先が替わらないので `carry_script_decor` は 1 度も走らず、普通のバルーンの場所の `Decoration` の動きは本 spec の前と同じである（要件 5.4・10.5）。
 
 #### 行き先の状態
 
@@ -771,6 +792,8 @@ pub(crate) fn settle_box_hover(prev: Option<&BoxName>, shown: &[ShownBox]) -> Op
 3. 箱の無いシェル（`BoxLayout::is_empty()`）では、行き先は常に普通のバルーンで、箱の場所は 1 つも生まれない。
 4. `ClearAll` の後、全部の場所の文字は空で、行き先は既定、隠す印は下りている。
 5. スコープの今のサーフェス番号を変えるのは、解決できて今のシェルに在る `\s` と `\s[-1]` だけである。シェルの切替（`set_box_layout`）でも `ClearAll` でも変わらない。
+6. 台本が `\f` で書いた指定の正本は、スコープごとに 1 つ（今の行き先の場所の `Decoration`）。行き先が替わると新しい場所へ写され、台詞の頭で全部の場所から消える。場所の既定（`layers`）は場所ごとで、行き先が替わっても動かない。
+7. すでに書いた文字の見た目は、書いたときに決まり、後の `\f` や行き先の切り替えで変わらない。
 
 ### Logical Data Model
 
@@ -818,7 +841,17 @@ erDiagram
 - `areka-parsers/src/shell/boxes_tests.rs`: ブレスの名前と本体の転記／`surface*`・`surface.append*` の両方の element定義／欄の欠け／箱の無い文面で `Brace` 0 件／同じ文面で `shell::parse` の結果が変わらないこと（1.1・1.7・2.1・2.8）。
 - `areka-emo-compose/src/boxes_tests.rs`: `BoxIssue` の 12 種類を 1 つずつ起こす（名前が空の `balloon.`ブレスを含む）／`size` と当てはまらないキーを抜いた表が `balloon::parse` へ渡ること／ブレスの置き換え／`surface.append*` の存在の条件（先に書かれた追記・面の画像だけの番号・範囲と除外）を `fold.rs` のテストと同じ検体で突き合わせる／同じ名前は element番号最小／昇順（1.2〜1.5・1.8・1.9・2.2〜2.7・3.8・10.2）。
 - `areka-emo-text/src/state_route_tests.rs`: 「行き先の決まり方」の表の 11 行を 1 行ずつ（`Unresolved` を受けたら番号も行き先も変わらない・`set_box_index` は番号を保って行き先だけを引き直す、を含む）／箱の表が空なら常に普通のバルーン（4.1〜4.4・4.8〜4.10・5.4・6.1・6.2・6.4・6.6・6.8・6.9）。
-- `areka-emo-text/src/state_place_tests.rs`: 行き先を切り替えても前の箱の文字が残る／`\0` と `\1` の同じ名前は別／`\c` は行き先だけ／`ClearAll` は全部／装飾は場所ごと／既存の読み口が普通のバルーンの値を返す（4.5〜4.7・6.7・7.1〜7.3・10.5）。
+- `areka-emo-text/src/state_place_tests.rs`: 行き先を切り替えても前の箱の文字が残る／`\0` と `\1` の同じ名前は別／`\c` は行き先だけ／`ClearAll` は全部／既存の読み口が普通のバルーンの値を返す（4.5〜4.7・6.7・7.1〜7.3・10.5）。
+- `areka-emo-text/src/state_decoration_carry_tests.rs`（新設・`state_decoration.rs` の兄弟）— 要件 3.13:
+  - `\f[color,…]` の後に `\b[名前]` で別の箱へ切り替えても、続きの文字の `current_look` の色が指定のまま。
+  - `\f[color,…]` の後に `\s` で行き先が自動で替わる 3 つの向き（箱 → 別の箱・箱 → 普通のバルーン・普通のバルーン → 箱）でも指定のまま（6.2・6.4・6.9）。
+  - 指定していない項目（例: 文字の大きさ）は、新しい行き先の定義の既定値になる（大きさの違う 2 つの `balloon.*`ブレスで確かめる）。
+  - `\f[default]` の後は、今の行き先の定義の既定値。項目ごとの `default`（`\f[color,default]`）は、行き先が替わると新しい場所の既定の色。
+  - `\f[disable]` の土台と所有外のキーの保持（`unowned_vocab`）も行き先と一緒に移る。
+  - 台詞の頭（`ClearAll`）の後は、どの場所にも指定が残らない。
+  - 行き先を切り替える前に書いた文字の `glyph_styles` は変わらない（後の `\f` に染まらない）。箱の場所は、文字が届く前に `set_box_looks` の 2 層を持っている。
+  - スコープごと: `\0` の指定は `\1` の行き先へ移らない。
+  - 箱の無い構成で、`\f` を含む既存の指令の列を当てた `TextLayerState` が本 spec の前と等しい（既存の `state_decoration_tests.rs` を期待値を変えずに通す・5.4・10.5）。
 - `areka/src/input_events/shell_box_tests.rs`:
   - `judge_box_press` の 6 つの分岐／`box_under_point` の重なり（手前を選ぶ）と四角の外／`fold_talking`（9.1・9.3・9.5〜9.8・3.9）。
   - `judge_box_move` の 3 つの結論（四角の外・選択肢の行の上・箱の中で行の上でない）と、重なる箱では手前の箱の行だけを見ること（8.2・9.1・9.2）。
@@ -859,4 +892,4 @@ erDiagram
 ## Supporting References
 
 - 設計の分かれ目の材料と、調べた項目（R-1〜R-8）の結論は `research.md` の 9 章。
-- 登記する独自の語（`doc/COMPAT_ARCHITECTURE.md` §8 に足す行）: `balloon.*`ブレス／`size`／描画メソッド `balloon`／`\b[名前]`／箱に対する `\c` の読み替え／装飾は場所ごと／箱の `\f[disable]` の混色の相手は白／`\b[名前,--fallback=…]` の `--fallback` は働かない／行き先を台詞の頭で既定へ戻す。
+- 登記する独自の語（`doc/COMPAT_ARCHITECTURE.md` §8 に足す行）: `balloon.*`ブレス／`size`／描画メソッド `balloon`／`\b[名前]`／箱に対する `\c` の読み替え／`\f` の指定はスコープごとに持ち、行き先が替わっても保つ。指定していない項目と `\f[default]` で戻した項目は、そのときの行き先の定義の既定値（要件 3.13・SSP で確かめた振る舞いに合わせた）／箱の `\f[disable]` の混色の相手は白／`\b[名前,--fallback=…]` の `--fallback` は働かない／行き先を台詞の頭で既定へ戻す。
