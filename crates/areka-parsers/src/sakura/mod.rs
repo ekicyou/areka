@@ -7,7 +7,8 @@
 //! - `parse`  : 公開 facade（`pub fn parse(input: &str) -> Vec<Instruction>`）
 //!
 //! 依存方向は `model ← lexer ← decode ← parse`。本 `mod.rs` は
-//! `parse` / `Instruction` / 値型を公開面へ `pub use` で集約する。
+//! `parse` / `Instruction` / 値型と、字句解析と同じ規則で環境変数を置き換える
+//! `substitute_system_vars` を公開面へ `pub use` で集約する。
 
 mod model;
 
@@ -32,5 +33,6 @@ mod parse_tests;
 #[cfg(test)]
 mod validation_tests;
 
+pub use lexer::substitute_system_vars;
 pub use model::{Choice, Instruction, MoveArgs, NewLineRatio, SurfaceArg};
 pub use parse::parse;

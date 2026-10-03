@@ -27,6 +27,11 @@
 //!
 //! 本モジュールの実体は `decode`（→ `parse`）から非テスト経路で到達される
 //! （依存方向 `model ← lexer ← decode ← parse`・タスク 5 で結線済み）。
+//!
+//! 走査の本体 `scan` は `lex` と環境変数の置き換え `substitute_system_vars`（公開）が
+//! 共有する。置き換えは `lex` が `%名前` と読む位置だけを書き換える。
+
+use std::ops::Range;
 
 /// 構文トークン（lexer 内部型・**非公開**）。
 ///
@@ -76,21 +81,66 @@ const SHORTHAND_WORDS: &[char] = &['w', 'b', 'p'];
 ///   `Raw` 吸収を解決する（タスク 3.2・要件 13.4-13.8/10.3）。解析は中断しない。
 pub(crate) fn lex(input: &str) -> Vec<Token> {
     let mut tokens: Vec<Token> = Vec::new();
-    // 蓄積中のテキストラン（タグ／sysvar の手前で flush する）。
+    scan(input, &mut |tok, _| tokens.push(tok));
+    tokens
+}
+
+/// `resolve` が `Some(値)` を返した名前の `%名前` を値に置き換えた文字列を返す。
+///
+/// 置き換える位置は `lex` が `Token::SysVar` と読む位置そのもの（走査の本体 `scan` を
+/// 共有し、規則の写しを持たない）。よって名前は貪欲に読まれ（`%usernameabc` の名前は
+/// `usernameabc`）、タグの角括弧の中・`\%`・未閉じの `[` が吸収した範囲は置き換えない。
+/// 値は台本の文字として読まれる形（`\` → `\\`、`%` → `\%`）にして埋める。
+/// `None` を返した名前と、環境変数でない部分は 1 バイトも変えない。
+pub fn substitute_system_vars(
+    input: &str,
+    resolve: &mut dyn FnMut(&str) -> Option<String>,
+) -> String {
+    let mut out = String::with_capacity(input.len());
+    // 入力のうち、まだ `out` へ写していない部分の先頭。
+    let mut copied = 0;
+    scan(input, &mut |tok, span| {
+        if let Token::SysVar(name) = tok
+            && let Some(value) = resolve(&name)
+        {
+            out.push_str(&input[copied..span.start]);
+            out.push_str(&value.replace('\\', "\\\\").replace('%', "\\%"));
+            copied = span.end;
+        }
+    });
+    out.push_str(&input[copied..]);
+    out
+}
+
+/// 字句解析の走査の本体（`lex` と `substitute_system_vars` が共有する）。
+///
+/// トークンを入力順に 1 つずつ `emit` へ渡す。2 つ目の引数はそのトークンが占める入力の
+/// バイト範囲（テキストのかたまりはエスケープ `\\`／`\%` の綴りを含む）。
+fn scan(input: &str, emit: &mut dyn FnMut(Token, Range<usize>)) {
+    // 蓄積中のテキストラン（タグ／sysvar の手前で flush する）と、その開始バイト。
     let mut text = String::new();
+    let mut text_start = 0;
     let chars: Vec<(usize, char)> = input.char_indices().collect();
+    // 添字 `k` の文字の開始バイト（末尾の次は入力の長さ）。
+    let byte_at = |k: usize| chars.get(k).map_or(input.len(), |&(b, _)| b);
     let mut i = 0;
 
     macro_rules! flush_text {
         () => {
             if !text.is_empty() {
-                tokens.push(Token::Text(std::mem::take(&mut text)));
+                emit(
+                    Token::Text(std::mem::take(&mut text)),
+                    text_start..byte_at(i),
+                );
             }
         };
     }
 
     while i < chars.len() {
-        let (_, c) = chars[i];
+        let (b, c) = chars[i];
+        if text.is_empty() {
+            text_start = b;
+        }
         match c {
             '\\' => {
                 // エスケープ `\\` / `\%`（要件 13.5/13.6）: タグ開始でなくリテラル
@@ -110,13 +160,13 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
                 }
                 flush_text!();
                 let (tok, next) = scan_tag(&chars, i);
-                tokens.push(tok);
+                emit(tok, b..byte_at(next));
                 i = next;
             }
             '%' => {
                 flush_text!();
                 let (tok, next) = scan_sysvar(&chars, i);
-                tokens.push(tok);
+                emit(tok, b..byte_at(next));
                 i = next;
             }
             other => {
@@ -126,7 +176,6 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
         }
     }
     flush_text!();
-    tokens
 }
 
 /// `\` で始まるタグを走査する。`i` は `\` の位置。次に読むべき添字を返す。
@@ -360,3 +409,7 @@ mod bare_tag_tests;
 #[cfg(test)]
 #[path = "lexer_word_boundary_tests.rs"]
 mod word_boundary_tests;
+
+#[cfg(test)]
+#[path = "lexer_substitute_tests.rs"]
+mod substitute_tests;
