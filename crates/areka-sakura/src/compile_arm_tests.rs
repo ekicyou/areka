@@ -1,4 +1,6 @@
-use super::test_support::{assert_clear_all_prefix_and_rest, command_of, compile, cue_eq};
+use super::test_support::{
+    assert_clear_all_prefix_and_rest, barrier_of, command_of, compile, cue_eq,
+};
 use super::*;
 use crate::duration::text_playback_duration;
 use crate::sysvar::SystemVarSnapshot;
@@ -360,14 +362,6 @@ fn cursor_double_empty_still_emits() {
 }
 
 // ── task 4.2: Move/GenericCommand/SystemVar アーム＋barrier 発行の behavioral 檻 ──
-
-/// `Cue::payload` から `BarrierKind` を取り出すヘルパ（barrier 檻用）。
-fn barrier_of(cue: &Cue) -> &BarrierKind {
-    match &cue.payload {
-        CuePayload::Barrier(kind) => kind,
-        other => panic!("expected CuePayload::Barrier, got {other:?}"),
-    }
-}
 
 /// `Move(MoveArgs)` は `command_carrier("move", args)` へ写像される（`\!` 全体が第一級で
 /// 台本に載る・R4.1/4.2）。空トークン（省略スロット）も欠落なく保持される。瞬時（duration 0）。

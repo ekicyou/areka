@@ -92,6 +92,8 @@ pub enum BarrierKind {
     /// クリック/キー入力待ち（旧 WaitForClick を統合）
     WaitForInput { timeout: Option<f64> },
     /// 選択肢待ち
+    ///
+    /// `timeout`（秒）は上位層へ運ぶ指令で、`TimedSchedule` はこれで区切りを飛ばしも解きもしない。
     WaitForChoice { timeout: Option<f64> },
     /// 指定時間経過待ち（新規）
     Timeout { duration: f64 },
