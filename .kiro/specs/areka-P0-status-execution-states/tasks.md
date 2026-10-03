@@ -156,3 +156,4 @@
 - 7.1: `tools/test-all.ps1` 全段緑（検査したコミット 20d659e3・x64 全テスト 275 秒）。C1 の 9 本は実在し `main` との差分 0（較正: 変更した `status.rs` は差分ありと出る）。変更した .rs に 1,000 行超えは無い。
 - 7.3: 実機の観測は起動時の台本（`dic/boot.pasta`）を写しの上で書き換えて流した。URL インストールは `\![execute,install,url,…]`（`\![install,url,…]` は効かない）。区間内でバルーンを左ダブルクリックして中断が断られることは開発者が目視で確かめた（10-03・`real-machine-observation.md`）。
 - 完了時にその場で解決: この Implementation Notes の 7.2 の行（シェルがバックスラッシュを改行・制御文字に化かしていたパス）を書き直した。design の要件対応表の 1.5 の行を、`Status:` 行を書く唯一の口（host32 の `build_request`）に合わせて直した。
+- 完了時にその場で解決: `main` の取り込み（`emo-text-file-split`・`choice-timeout-directive` ほか 7 本）で網羅の文書 3 本が衝突し、持ち主の数を両側の増減で合わせて解いた。`main` が同じ日に `\t` と `timecritical` の専用の spec `areka-P0-sakura-time-critical` を起票していたので、要件 6.3 の宛先をそちらへ付け替えた（`sakura-time-directives` の brief に足した 1 行は消した）。`balloon_visibility_phase.rs` の「併合で衝突しうる」注記は、衝突なく取り込めたので消した。
