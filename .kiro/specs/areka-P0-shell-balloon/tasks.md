@@ -275,4 +275,4 @@
 
 ## Implementation Notes
 
-- 5.2: `set_box_index`（シェルの切替）は箱の場所の文字と消去の数（`clears`）も捨てる。箱ごとの消去の数を読む後のタスクは、差し替えで 0 から数え直すことに注意。`ScopeRoute.shared` は 5.4 まで `#[allow(dead_code)]`。名前の形の `` は 6 が済むまで seriko と文字の層で警告が 2 行出る。
+- 5.2: `set_box_index`（シェルの切替）は箱の場所の文字と消去の数（`clears`）も捨てる。箱ごとの消去の数を読む後のタスクは、差し替えで 0 から数え直すことに注意。`ScopeRoute.shared` は 5.4 まで `#[allow(dead_code)]`。名前の形の `\b` は 6 が済むまで seriko と文字の層で警告が 2 行出る。
