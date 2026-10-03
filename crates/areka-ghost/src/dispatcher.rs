@@ -422,6 +422,9 @@ pub fn spawn_dispatcher(
 #[path = "dispatcher_choice_tests.rs"]
 mod choice_tests;
 #[cfg(test)]
+#[path = "dispatcher_choice_timeout_tests.rs"]
+mod choice_timeout_tests;
+#[cfg(test)]
 #[path = "dispatcher_slot_tests.rs"]
 mod slot_tests;
 #[cfg(test)]

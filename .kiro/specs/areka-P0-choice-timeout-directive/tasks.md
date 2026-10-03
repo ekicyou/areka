@@ -35,7 +35,7 @@
   - 新しい檻が緑で、既存の「選択待ちの知らせは 1 回だけ・指令は未指定」の檻も無改変で緑
   - _Depends: 1, 2.2_
   - _Requirements: 5.1, 5.2, 5.3, 9.3, 9.5, 9.6_
-- [ ] 3.2 警告の記録と、台本から kanade の入口までの値を ghost で確かめる
+- [x] 3.2 警告の記録と、台本から kanade の入口までの値を ghost で確かめる
   - ghost の兄弟テストの新しいファイル（接続宣言を dispatcher の親ファイルに 1 行・本体は無改変）で、記録の捕捉の窓の中で compile を呼び、読めない値 `abc` で WARN `choice_timeout_unreadable`（target は compile）が記録され、正しい値 `500` では同じ語彙が 0 件であることを確かめる
   - 同じファイルで、指定 `1234` の台本を dispatcher に流して注入の時刻を進め、kanade への選択待ちの知らせが表示の終わり `1_350`・指令 `Some(1.234)` で届くことを確かめる。テスト名は `script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive`。doc 注記に対になる kanade のテスト `choice_timeout_directive_1234_fires_exactly_at_display_end_plus_1234` と境の値 `1234` を書く
   - この檻は時計を区切り＋1.234 秒の先まで進めないので 1.1 に依らず緑になる（要件 5.2 の証拠は 1.1 と 3.1 が担う）
