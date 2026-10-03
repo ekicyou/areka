@@ -189,3 +189,69 @@
 - **§6 の 3・4（台帳の連鎖と古くなる記述）**: 要件 10.5・10.6 として要件へ書き足した。
 - **§6 の 2・5〜10**: 設計（`/kiro-spec-design`）で決める。§6 の 8 は、同じウェーブ C1 の `mcp-server-core` が `Cargo.lock` を触るので、`Cargo.toml`・`Cargo.lock` に触れない置き場（例: 道具を既に持つ `areka-ghost`）を先に検討する。
 - **複数回の指定（brief の議題）**: 「最後に書かれたものが勝つ」で要件 3.2 に確定した（台本は頭から順に実行されるので、表示の終わりの時点で効いているのは最後の指定、という読み）。
+
+## 9. 設計フェーズの調査と決定（2026-10-03・`/kiro-spec-design`）
+
+### 9.1 要約
+
+- **Feature**: `areka-P0-choice-timeout-directive`
+- **Discovery Scope**: Extension（既存の値の通り道に乗る拡張・light discovery）。外部の依存・新しいライブラリは無し。
+- **Key Findings**:
+  - `TimedSchedule` を `CuePlayer`（`crates/dola/src/cue/runtime.rs`）と `to_talk_schedule`（`sheet.rs`）以外から直接使う本番コードは無い（`crates/dola/src/runtime/facade.rs`・`areka-sakura/src/lib.rs`・`dola/src/cue/mod.rs` の言及は doc 注記だけ）。完了 `wintf-P0-cue-system` の要件は `WaitForInput` の時間切れだけを約束している（要件 4「WaitForInput に timeout が設定されており期限を超過した時」）。→ 案 A の前提が成り立つ。
+  - `ukadoc-survey` の証拠の走査（`evidence/candidates.rs`）は `_tests.rs`・`/tests/`・`#[cfg(test)]` の塊を候補から外す。証拠の `// ukadoc:` 行は `compile.rs` 本体の定義の箇所に置く。
+  - `ukadoc-survey` の副手続きの名前は `report`・`report-summary`・`check`（`cli/cli_tests.rs` が固定）。
+  - areka-ghost の `sink.rs` のテストが `areka_sakura::compile` をテストスレッドで呼んで `test_log_capture::capture` で捕まえている前例があり、`areka-sakura` に開発時依存を足さずに警告の檻を張れる。
+  - 同じウェーブ C1 の他の 6 本は `crates/areka-ghost/src/dispatcher.rs`・`crates/areka-sakura/src/`・`crates/dola/` に触らない（roadmap C1 の各「触る場所」）。`status-execution-states` は `crates/areka-kanade/src/status.rs` と届け口を触るが、`tests/kanade/choice_test.rs` の接続宣言 1 行の追加が重なりうる（重なっても隣接行の追加で解ける）。
+
+### 9.2 Design Decisions
+
+#### Decision: 要件 5 は dola の 1 腕で満たす（案 A）
+- **Context**: `TimedSchedule::tick` の `timeout_dur` が `WaitForChoice { timeout }` の値を「着いたら飛ばす／止まっている間に自分で解く」期限として扱うため、台本の値をそのまま区切りへ入れると `0`・`-1` は必ず飛ばされ、正の値も時計の進み方で飛ばされる（§2.3）。
+- **Alternatives Considered**: 案 A（dola の 1 腕）・案 B（区切りには `None`・値は `CompiledTalk` の別欄で drive.rs まで）・案 B'（NaN／∞ の綴り・不成立）・案 C（`BarrierKind` の形を変える）。
+- **Selected Approach**: `timeout_dur` の腕を `BarrierKind::WaitForChoice { .. } => None` にする。「着いたら飛ばす」と「止まっている間に自分で解く」の両方が同時に止まる（§6-2 は「両方」）。
+- **Rationale**: 1 腕の変更・既存テストの書き換え 0・値の正本が区切り 1 か所のまま（DD-8・`areka_talk::ChoiceWaiting` の注記と合う）・`doc/choice-cascade-compat.md` 行 5d「権威は kanade に一本化」を構造で強制できる・早送りで時計が飛んでも壊れない。境界の拡大は要件ディスカッションで了承済み（§8）。
+- **Trade-offs**: `WaitForInput` と非対称になる（注記で理由を残す）。`dola` は公開前（0.0.1 の名前確保のみ）なので後方互換の負担は小さいが、意味の変更として `command.rs` の doc と行 5d に残す。
+- **Follow-up**: `schedule_test.rs` に選択の区切りの檻（`Some(0.0)`・`Some(-0.001)`・`Some(0.5)` を一度に越える・止まっている間に解かない）。
+
+#### Decision: 読み取りは `GenericCommand` の腕の中・純関数 `parse_choice_timeout` に閉じる
+- **Context**: 台本全体の先読み（brief の想定）は要らない——`End`／`Quit` の `break` と「区切りは走査後に置く」既存の作りで 3.1・3.3 が成り立つ。
+- **Selected Approach**: 腕の先頭の転記は無改変。その後に `name == "set"` かつ `raw_args[0] == "choicetimeout"` のときだけ `parse_choice_timeout(raw_args)` を呼び、局所変数 `last_choice_timeout: Option<f64>` を上書きする。走査後の `emit_barrier` にその値を入れる。
+- **Rationale**: 変換 1 か所（8.1）・台本の文字列から直に檻を張れる（9.1）・後続の spec が同じ腕を触っても「転記 → 読み取り」の 2 段が崩れにくい。
+- **Trade-offs**: `compile` は talk_id を知らないので警告に talk_id は載らない（下記）。
+
+#### Decision: 時間の欄の読み方の細目（§6-5・§6-6）
+- 欄なし・空文字 → 既定（`None`）。前後の空白は `trim` してから読む。`+500` は受ける。余分な欄（3 欄目以降）は見ない。`i64` で読み、`PosOverflow` → `i64::MAX` ms・`NegOverflow` → `i64::MIN` ms へ飽和（1.5・2.2。`u64`／`i128` で読む案は 40 桁超でまた同じ問題になるので飽和を選ぶ）。それ以外の `Err`（`InvalidDigit`・小数・単位付き・全角数字）→ 読めない値。
+- 値の正規化はしない（`-1` → `Some(-0.001)`・`-5` → `Some(-0.005)` のまま）。kanade の写像はどれでも同じで、記録に台本の値がそのまま残る方が追いやすい。`Some(v)` の `v` は常に有限（serde で `null` に化ける値を区切りへ入れない）。
+- 裁量の記録（10.3）: 複数回は最後が勝つ・`-1` 以外の負の値も時間切れなし・空欄は省略と同じ・読めない値は既定として扱い警告・終わりのタグより後ろは数えない・前後の空白は切り落とす・余分な欄は無視・桁あふれは飽和。
+
+#### Decision: 警告は `compile` の中で `warn!`・診断を値で返さない（§6-7）
+- **Selected Approach**: `tracing::warn!(event = "choice_timeout_unreadable", raw = %欄, "[compile] …")`。読めない指定 1 回につき 1 行。選択肢の有無で出し分けない（走査中は分からない・読めない綴りは作者が直すべきもの。要件 3.4「誤りとしても扱わない」は「失敗にしない・振る舞いを変えない」の意味で、記録の 1 行はこれに反しない）。読めない指定の後に読める指定があっても読めない方の警告は出る（6.2 は値の決め方の話で、記録を消す理由にはならない）。
+- **Rationale**: talk_id を載せるために `compile` の署名を変え drive.rs を広げる価値が無い。drive.rs の既存 info（`choice barrier reached; notifying ChoiceWaiting`・talk_id 付き）と並べれば talk は特定できる。
+
+#### Decision: テストの置き場（§6-8・§6-9・§6-10）
+- 9.2（警告の捕捉）と 9.4 の前半（台本 → `KanadeMsg::ChoiceWaiting`）は areka-ghost の新しい兄弟テスト `dispatcher_choice_timeout_tests.rs`（接続宣言は `dispatcher.rs` に 1 行）。`log-capture-kit` と `spawn_dispatcher` を既に持ち、`Cargo.toml`・`Cargo.lock` に触れない。
+- 9.4 の後半（入口 → 期限）は kanade の外側の檻 `tests/kanade/choice_test_timeout_directive_tests.rs`（接続宣言は `choice_test.rs` に 1 行）。`schedule/` は 0 ファイルのまま。2 つの檻が同じ `N = 1234`・`Some(1.234)` を境の値として共有し、合わせて「通し」とみなす。
+- 9.3 は areka-sakura の新しい兄弟テスト `drive_choice_timeout_tests.rs`（接続宣言は `drive.rs` に 1 行・本体の改変 0）と dola の `schedule_test.rs` への追記。
+- 9.1 は `compile_choice_timeout_tests.rs`。`barrier_of` は `compile_arm_tests.rs` から `compile_test_support.rs` へ移す（共有ヘルパの集約規約）。
+
+### 9.3 Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|---|---|---|---|---|
+| 案 A（採用） | dola の 1 腕で選択の区切りの値を解かない | 正本 1 か所・既存テスト書き換え 0・早送りに強い | `WaitForInput` と非対称・dola の意味の変更 | 境界の拡大は要件で了承済み |
+| 案 B | 値を区切りの外（`CompiledTalk` の欄）で運ぶ | dola 無改変 | 正本 2 か所・DD-8 と注記が嘘になる・9.1 の文言と合わない・穴が残る | 却下 |
+| 案 B' | NaN／∞ の綴り | 無改変 | 正の値を救えない・serde で `null` に化ける | 不成立 |
+| 案 C | `BarrierKind` の形を変える | 意味が型で分かれる | 既存テスト 10 本超の書き換え（9.6 に反する） | 却下 |
+
+### 9.4 Risks & Mitigations
+
+- `status-execution-states`（C1）が `tests/kanade/choice_test.rs` に接続宣言を足すと隣接行で重なる — 先に着地した側の末尾へ 1 行足し直す（本体の衝突は無い）。
+- 同じウェーブの他 spec が台帳 4 本のどれかを動かすと `report/summary.md` が古くなる — 後から着地する側が生成器で作り直す（手で数を直さない）。
+- `roadmap-draft.md` の件数（`owner_count`・`[briefs].count`・段階ごとの表）を引き算で書くと整合テストが赤になる — 前例どおり数え直した値を書く。
+- `i64::MAX as f64 / 1000.0` の秒を kanade が `(v*1000).round() as u64` で戻すと 9.2e18（`u64::MAX` 未満）になり、`saturating_add` で落ちない（`choice_deadline_saturates_on_extreme_values` が既に極端値を固定している）。
+
+### 9.5 References
+- ukadoc `\![set,choicetimeout,時間]`: `https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1`
+- 完了 `areka-P0-choice-select-events` design（DD-8・F3）・`doc/choice-cascade-compat.md` 行 5a〜5d・10
+- 完了 `wintf-P0-cue-system` requirements（要件 4: `WaitForInput` の時間切れだけを約束）
+- `.kiro/steering/structure.md`「Unit Tests」（兄弟テストの接続規約・共有ヘルパの集約）・`logging.md`（`log-capture-kit` を通す）
