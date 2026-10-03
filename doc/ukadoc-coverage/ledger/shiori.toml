@@ -6224,11 +6224,14 @@ note = """
 元のイベントの ID〔選択肢の任意名も逐語〕・Ref3＝元のイベントの Reference をバイト値 1 で連ねた
 もの〔0 個なら空〕）。応答の台詞を最終の台詞にし、204 とエラー応答では元の台詞で進む。areka が自分で
 作る台詞・中身が空の 200・OnTranslate 自身の応答には送らない。MAKOTO の鎖を差し込む口は素通し。
-ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。応答を読むと info のログ
-（translate_reply・元のイベントの ID と応答の種類）が 1 行出る。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。応答を読むと translate_reply
+（元のイベントの ID と応答の種類）が 1 行出る。置換・空・204 は info、エラー応答は warn。
+輸送路の失敗では translate_reply は出ず、error のログ（translate_failed）が 1 行出る。
 根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
 組み立ては同じファイルの on_translate、欠番の印は crates/shiori-host32-host/src/shiori3.rs の
-ABSENT_REFERENCE。
+ABSENT_REFERENCE。台詞を出口で捕まえる規則（capture）と応答の読み（read_reply）は
+crates/areka-kanade/src/schedule/translate.rs、展開から MAKOTO の口までの往復の殻
+（run_translate）は crates/areka-kanade/src/actor_translate.rs。
 無いと失うもの: 台詞を最後にひと通し仕上げる口が無く、口調の統一や言葉の置き換えができない。
 """
 
