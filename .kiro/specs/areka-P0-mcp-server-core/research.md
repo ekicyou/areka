@@ -211,6 +211,11 @@ docs.rs の `StreamableHttpServerConfig`・`StreamableHttpService`・`ServerHand
 - §7-8（JSON でない本文）: 要件 3.8 を 415／400 の 2 段で書き、要件 9.2 のテストを 2 本に分けた。
 - ほか: rmcp のライセンスは MIT でなく **Apache-2.0**（要件の Introduction を直した）・`AREKA_MCP_PORT` の UTF-8 でない値を要件 2.5 に足した・`MCP-Protocol-Version` の未知の値（400）を要件 3.13 と 9.2 に足した。
 
+### 開発者が確定した議題（2 件）
+
+- 議題 1: 既定ポート **9821・既定で有効・待受の失敗は記録だけ**（別のポートは試さない）＝要件 2.1・2.2・1.3 のまま。
+- 議題 2: `serverInfo` の名前は **`areka-mcp-server`**・版は areka の Cargo の版＝要件 3.1 のまま。
+
 ### 設計へ送る判断（`/kiro-spec-design` で決める）
 
 | # | 判断 | 本文書の推奨 | 要件側の縛り |
