@@ -247,3 +247,57 @@
 - **R3: 左解放の当たり判定が取れた枝（#1）をテストで通す組み立て**。`hit_test_in_window`（`crates/wintf/src/ecs/layout/hit_test/mod.rs`）は窓に `WindowPos.position` が無ければ `None` を返すので、素の `EcsWorld` では予備の枝（#2）しか通らない。#1 を通すには配置の結果（`GlobalArrangement` など）を持つ entity が要る。案 B・C では両方の枝が同じ判断を通るので重さは下がるが、要件 5.2 の「閾値に届かないまま離したとき 0 件」をどちらの枝で示すかは決める。
 - **R4: 実機の `RUST_LOG`**。保存の行は target `areka::persist::save`（info）、受け手の debug 行は既定の target（`areka::placement::follow::drag_follow`）、wintf の debug 行は既定の target（`wintf::ecs::drag::…`・`wintf::ecs::window_proc::…`）と見込む。要件 3.5 の行の target と合わせて design で文字列を決める。実機の根と一時フォルダはワークツリーの `target\` の下に置く。
 - **気づいたこと（範囲の外）**: ESC（#3）と `WM_CANCELMODE`（#4）は、受け取った窓とドラッグ中の窓が同じかを確かめずに取り消す（左解放の枝は HWND か持ち主の窓で確かめている）。今回の症状には関わらないので範囲の外として記すだけにする。
+
+---
+
+## 7. 設計での決定（2026-10-03 `/kiro-spec-design`・調べ方は「拡張」の軽い手順）
+
+> 対象はこの日のワークツリー（`89a8d836`）の実物。§1〜§6 の事実は読み直して全部そのままだった。ここでは §5 の議題と §6 の調べ残しに答えを出し、根拠を残す。設計の本文は `design.md`。
+
+### 7.1 追加で調べた事実
+
+- **`update_dragging` は `JustEnded` では何もしない**（`state/mod.rs` の `update_dragging` の `_ => {}` の腕）。速いドラッグで開始と終了を同じ配りの中で続けて配るとき、開始の腕が最後に呼ぶ `update_dragging` は、状態が既に `JustEnded`（離したときに `end_dragging` が移した）なので空振りする。新しい分岐は要らない。
+- **開始の腕は `DraggingState` を Command でなく直接入れる**（`dispatch.rs` の `Started` の腕の `entity_mut.insert(DraggingState{..})`）。よって同じ `dispatch_drag_events` の呼び出しの中で続けて終了の腕が走れば、終了の受け手（`on_char_drag_end`）は `DraggingState` を読める。
+- **`FlushResult.transition` を読む所はワークスペースで 3 か所だけ**（`accumulator.rs` の中のテスト・`dispatch.rs`・`keyboard_tests.rs`）。`crates/wintf/tests/` の 2 ファイルは `set_transition` → `dispatch_drag_events` の形で、`FlushResult` を読まない。置き場を待ち行列にしても外へは響かない。
+- **`Started` を積まずに `Ended` を積むテストは §1.8 の 5 本で全部**（`DragTransition::Ended` を含むファイルをワークスペースで列挙: 製品 4・テスト 3 ファイル。`crates/wintf/tests/drag/` の他の 2 ファイルは `Ended` を使わない）。
+- **wndproc の左押下の予備の枝（当たり判定が取れないとき）は `start_preparing` を呼ばない**（`mouse_click.rs` の `handle_button_message` の `is_down` の予備の枝は `record_button_down` だけ）。テストで `Preparing` に入れるには `start_preparing` を直接呼ぶ（`keyboard_tests.rs` と同じ形）。
+- **左解放の `should_end`（`Preparing`／`JustStarted`）は `find_owner_window(world, entity) == Some(window_entity)` を見る**（`window/command.rs` の `find_owner_window` は自分か祖先の `Window` を返す）。テストの対象 entity は `Window` を持たせ、同じ entity を窓として `dispatch_window_message` へ渡せばよい。
+- **areka の受け手の `enqueue_window_set_pos` は `WindowHandle` が無いと `false` を返す**（`follow/window_move.rs` の `enqueue_window_set_pos` の「実在するが `WindowHandle` 未付与＝窓生成前」の分岐）。一方、配る所の開始の腕は `WindowHandle` が有ると `client_to_window_coords`（`AdjustWindowRectExForDpi`）で枠込みの座標へ直し、偽の HWND では失敗して `initial_window_pos` が `(0,0)` のまま残る。areka の決定論テストでは「初期の窓位置 = (0,0)」として `DraggingState.initial_inset` が入る＝行き先の期待値は `project_anchor(anchor, cursor − drag_start, size)` で求める（テストの組み立ての都合であり製品の振る舞いではない）。
+- **実機の記録の数え直し**（`C:\home\maz\lap-records\alpha-signoff-20261001\run-A*.log`・読むだけ）:
+
+  | 走行 | `[DragEndEvent] Dispatching` | `[DragStartEvent] Dispatching` | `Direct Arrangement.offset sync` | `DragEnd 保存` | `写像スキップ` |
+  |---|---|---|---|---|---|
+  | A1r | 1 | 0 | 0 | 1 | 1 |
+  | A2r | 2 | 0 | 0 | 2 | 2 |
+  | A3r（本物のドラッグ） | 1 | 1 | 0 | 1 | 0 |
+  | A2（前の zip・本物のドラッグ） | 1 | 1 | 0 | 1 | 0 |
+
+  「開始 0・終了 1・写像スキップ 1」が 3 件とも一致＝縮退を踏んだ 3 件はすべて「開始の無い終了」である（R1）。`Direct Arrangement.offset sync` は本物のドラッグでも 0 件＝終了の腕の同期は観測した走行のどれでも値を変えていない（R2）。
+
+### 7.2 議題への答え
+
+| 議題 | 決定 | 根拠（短く） |
+|---|---|---|
+| 1 どの層で止めるか | **案 C**: `DragAccumulator::set_transition` が「`Started` を積んでいない `Ended`」を置かない | 6 か所すべてが通る唯一の口・判断に使う値 `current_dragging_entity` が既に在る・areka の赤テストを修正前の HEAD でコンパイルできる。累積器は「wndproc → ECS へ運ぶ箱」だが、運ぶ物の並びの約束（終了は開始の後）を箱が守るのは箱の責務の内と読む |
+| 2 areka 側の赤テストの組み方 | 公開済みの `DragAccumulatorResource::set_transition`・`dispatch_drag_events`・`OnDragEnd(on_char_drag_end)` の結線だけで組む。保存の数は `FakePersistIo` の共有ストアを `load_scope` で読んで数える（既存の `on_balloon_drag_end_persists_balloon_offset_for_scope` と同じ） | 修正前にそのままコンパイルでき、`set_transition` の本物の判断を通る |
+| 3 速いドラッグ | **置き場を待ち行列（`Vec<DragTransition>`）にする**。`FlushResult.transition: Option<_>` → `transitions: Vec<_>`。配る所は積んだ順に全部を処理する。同じ配りの中で `DraggingState` は終了の受け手から見える（7.1） | 2 枠（開始用・終了用）だと「終了 → 次の開始」が同じ画面更新に重なったときの順序を別に持つ必要が出る。並びをそのまま運ぶ待ち行列が最も素直で、長さは実用上 3 を超えない |
+| 4 §8 への記録 | 要らない（要件ディスカッションで確定済み） | − |
+| 5 境界の外の 5 本 | **境界を `crates/wintf/tests/drag/dispatch_test.rs`・`crates/wintf/tests/layout/boxstyle_coordinate_separation_test/drag_lifecycle.rs` へ広げる**。直し方は「`Started` を積んで 1 度配ってから `Ended` を積む」（同ファイルの `test_window_dragging_full_lifecycle` と同じ形）。確かめる中身（終了の腕の働き）は変えない | C1 の他の 6 本は `crates/wintf/` に触らない（roadmap C1 の接触ファイル）。開発方針「根本が境界の外でも並走が無ければ境界を広げて直す」 |
+| 6 debug 行 | `DragAccumulator::set_transition` の中の 1 行。欄は `entity`（対象）と `cancelled`（離し＝false／取り消し＝true）。target は既定（`wintf::ecs::drag::accumulator`） | 止める判断がここにしか無いので行もここ 1 つ |
+
+### 7.3 調べ残しへの答え
+
+- **R1（多窓で `DraggingState` が先に落ちる本当の原因）**: 実機の記録では縮退を踏んだ 3 件すべてが「開始の無い終了」（7.1 の表）。`DraggingState` を外す製品の所は 2 つ（`dispatch.rs` の `Ended` の腕・`systems.rs` の `cleanup_drag_state`）で、どちらも終了の知らせの後に走る。静的にも実機の記録にも「開始を配った後に、終了より先に `DraggingState` が落ちる」経路は見つからなかった。結論: 観測された縮退は「動かさないクリック」か「速いドラッグの上書き」で、本 spec の 2 つの修正でどちらも入口で消える。縮退そのものは要件 2.4 で残す。実機の確かめ（要件 5.7）で修正後に `写像スキップ` が 1 件でも出たら、それは別の原因なので新しい spec として起票する。
+- **R2（`Arrangement.offset` の同期が動かさないクリックで走らなくなる影響）**: 観測した 4 走行で `Direct Arrangement.offset sync` は 0 件（値を変えたことが無い）。平時の同期は `window_pos_systems.rs` の `sync_window_arrangement_from_window_pos`（`Changed<WindowPos>`・`Without<WindowDragging>`）が受け持ち、スクリプトや追従で窓を動かす経路はすべて `WindowPos` を書くのでそこで揃う。クリックの同期に頼る経路は無い。
+- **R3（当たり判定が取れた枝をテストで通す組み立て）**: 案 C では止める判断が `set_transition` にあり、左解放の 2 つの枝は `should_end` の求め方が違うだけで、どちらも同じ `set_transition(Ended{cancelled:false})` を呼ぶ。wintf 側のテストは素の `EcsWorld` で通る予備の枝（当たり判定が取れない枝）で「終了の種 0 件」を示し、当たり判定が取れた枝は「同じ関数を同じ引数で呼ぶ」ことをコードの読みで押さえる（設計の責務表に明記）。
+- **R4（実機の `RUST_LOG`）**: 保存の行は target `areka::persist::save`（info・`drag_follow.rs` の 2 か所）。受け手の debug 行は既定 target `areka::placement::follow::drag_follow`。要件 3.6 の行は既定 target `wintf::ecs::drag::accumulator`。配る所の info 行は `wintf::ecs::drag::dispatch`。よって `RUST_LOG=info,areka=debug,wintf::ecs::drag=debug`（`areka=debug` は α の実機の一周と同じ）。
+
+### 7.4 設計のまとめ方（単純化）
+
+- 新しい型・新しいモジュール・新しい公開関数は作らない。変える製品のファイルは `accumulator.rs`（待ち行列＋入口の判断＋debug 行）と `dispatch.rs`（`for` で全部を処理）と、`accumulator.rs` の doc の 2 行（`current_dragging_entity` の意味）だけ。wndproc のハンドラ（`mouse_click.rs`・`keyboard.rs`）と areka の受け手は変えない。
+- 「2 枠」「終了だけを捨てる印」「receiver 側の印」はどれも待ち行列 1 本より部品が増えるので採らない。
+
+### 7.5 気づいたこと（範囲の外・起票は求められたときに）
+
+- 配る所の開始の腕は、`WindowHandle` が有って `client_to_window_coords` が失敗したとき `initial_window_pos` を `(0,0)` のまま使う（`dispatch.rs` の `Started` の腕）。製品では失敗しないが、失敗したときの縮退として `WindowPos.position` へ倒す方が筋がよい。本 spec では触らない。
+- §6 末尾の ESC と `WM_CANCELMODE` が窓の一致を確かめない件は、そのまま範囲の外。
