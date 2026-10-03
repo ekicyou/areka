@@ -139,3 +139,6 @@
   - `translate_reply` が `kind=no_content` で台詞ごとに 1 件出ること、台詞の記録が 1.1 で採った本 spec の前の記録と同じこと、記録の無い分岐が無いことを確かめる
   - 完了の状態: 実機の記録の抜粋で上の 3 点が確かめられ、台詞の記録（表示した台詞の並び）の差が 0（`translate_reply` と `OnTranslate` の `shiori_request` の行が増えるのは差に数えない）
   - _Requirements: 8.2, 8.4_
+
+## Implementation Notes
+- 1.1: emo2 の pasta は `OnTranslate` に 204（雑談の途中でも続きは変わらない）。比べる記録は `target\translate-baseline\`（`talk-record.txt`）。今の版は台詞の本文を記録に残さないので、6.2 は「どのイベントが台詞を返しどの順で再生が始まったか」の並びと画面の目視で比べる。Ctrl＋ダブルクリックの終了は 09-19 に撤去済みで、終了は右クリックのメニューの「終了」。`cargo build` の後は 32bit の helper を `target\debug\` へ写し直してから起動する
