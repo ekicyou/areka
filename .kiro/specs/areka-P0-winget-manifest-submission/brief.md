@@ -17,6 +17,7 @@
 
 1. マニフェスト 3 ファイル（version・defaultLocale・installer・ManifestVersion 1.12.0）の形が決まり、リポジトリの中（例 `dist/winget/`）に雛形として置かれる。x64 と arm64 の 2 項目・`ArchiveBinariesDependOnPath: true`・`NestedInstallerFiles` に `areka.exe`（`PortableCommandAlias: areka`）・License MIT・`ReleaseDate`・Tags（`ukagaka`・`desktop-mascot` など）。
 2. 手元で `winget install --manifest dist/winget/<版>/` を通し、`areka` と打って起動し、ゴーストが出ること。アンインストールで利用者のゴーストが残ること。これを実機の確認とする。
+   - 2026-10-03 の実測（`release-package-versioned` の実機の確かめ・`verification/winget-local-check.md`）: `--manifest` は管理者の `winget settings --enable LocalManifestFiles` が要る（終わったら戻す）。手元のマニフェストで入れた物は ID が `ARP\User\X64\<Id>__DefaultSource` になり、`winget uninstall --id <Id>` では見つからない（`winget list` で引いた ID に `--exact --purge`）。リンクを作る形（`ArchiveBinariesDependOnPath` なし）を確かめるときは、開発者モードがオフだと winget がリンクの代わりに PATH を足す。
 3. 初回の提出: 開発者が `komac new` か `wingetcreate new` で `v0.0.2`（最初の Release）を提出する手順が書かれ、実行される。自動検査（ウイルス対策・無人のインストールとアンインストール）で何か言われたら直す。
 4. 以後: `.github/workflows/winget.yml`（`release: published` で `winget-releaser`・`installers-regex: '\.zip$'`・`max-versions-to-keep` を決める）が PR を出す。要るトークン（classic PAT・`public_repo` と `workflow`）は開発者が secret に置く＝リポジトリには書かない。
 5. `dist/README.txt` の「入れ方」に winget の 1 行と、「スタートメニューにアイコンは出ない（コマンド名 `areka` か、インストール先のフォルダから）」「Smart App Control を有効にしている環境では未署名の exe が止まる」の既知の制限が入る。
