@@ -45,3 +45,41 @@ jobs:
           rustup toolchain install $env:RUST_TOOLCHAIN --profile minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           rustup default $env:RUST_TOOLCHAIN
+
+      - name: 版の検査
+        id: version
+        run: |
+          [Console]::OutputEncoding = [Text.Encoding]::UTF8
+          # 入力は環境変数だけ（GITHUB_REF_TYPE・GITHUB_REF_NAME）。手元でも差し替えて同じ本文を回せる
+          # 版の読み方は tools/package.ps1 と同じ（areka パッケージの version）
+          $out = @(cargo metadata --no-deps --locked --format-version 1 2>&1)
+          $code = $LASTEXITCODE
+          $err = @($out | Where-Object { $_ -is [Management.Automation.ErrorRecord] } | ForEach-Object { "$_" })
+          if ($code) {
+            Write-Host ("版を読めない（cargo metadata が終了コード {0}: {1}）" -f $code, ($err | Select-Object -Last 1))
+            exit 1
+          }
+          try {
+            $meta = ($out | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] }) -join "`n" | ConvertFrom-Json
+          } catch {
+            Write-Host "版を読めない（cargo metadata の出力が JSON として読めない: $_）"
+            exit 1
+          }
+          $pkg = @($meta.packages | Where-Object { $_.name -ceq 'areka' })
+          if ($pkg.Count -ne 1) {
+            Write-Host "版を読めない（cargo metadata に areka のパッケージが $($pkg.Count) 件）"
+            exit 1
+          }
+          $version = "$($pkg[0].version)"
+          if ($env:GITHUB_REF_TYPE -ceq 'tag') {
+            $tagVersion = $env:GITHUB_REF_NAME
+            if ($tagVersion.StartsWith('v', [StringComparison]::Ordinal)) { $tagVersion = $tagVersion.Substring(1) }
+            if (-not ($tagVersion -ceq $version)) {
+              Write-Host "タグの版と Cargo.toml の版が違う（タグの版 '$tagVersion'・Cargo.toml の版 '$version'）"
+              exit 1
+            }
+            Write-Host "タグの版と Cargo.toml の版が一致（'$version'）"
+          } else {
+            Write-Host "タグが無いので比べを飛ばす（Cargo.toml の版 '$version'）"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
