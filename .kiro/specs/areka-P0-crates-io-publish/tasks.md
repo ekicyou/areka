@@ -17,7 +17,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
 - [ ] 2. 公開前の確認のスクリプトを作る
-- [ ] 2.1 スクリプトの骨組みと、設定を読む 4 つの判定を作る
+- [x] 2.1 スクリプトの骨組みと、設定を読む 4 つの判定を作る
   - 冒頭の較正値の 1 か所に、公開する一覧・大きさの上限・索引の URL・作業の置き場を書く。環境変数は読まない。呼ばれた場所によらずリポジトリの根へ移る
   - 引数 `-Verify`・`-Version`・`-Pending` を受け、成功は 0・失敗は 1 の終了コードで返し、失敗はどの判定・どのクレートかを 1 行で示す
   - `cargo metadata --no-deps --locked` を読み、判定「一覧」（出せる集まりが一覧とちょうど同じ・余り欠けを名前で示す）・「欄」・「理由」（行頭の `publish = false # 文字`）・「版」（`-Version` のとき・二つの版を示す）を行う
@@ -111,3 +111,9 @@
   - 全体テスト（`tools/test-all.ps1`）が新しい段を含めて緑
   - 完了の状態: 上の 4 つがすべて緑で、走らせた前後で `git status --porcelain` と `Cargo.lock` が同じ
   - _Requirements: 1.6, 2.8, 2.9, 2.10, 2.11, 2.12, 3.4, 4.8_
+
+## Implementation Notes
+
+- Git Bash の `sed -i` は CRLF のファイルを LF に変える。Cargo.toml などの編集は Edit ツールか改行を保つ手段で行う（1.2）
+- `tools/crates-io.ps1` は `[Console]::OutputEncoding` を UTF-8 にしないと cp932 の端末で cargo metadata の JSON が化けて ConvertFrom-Json が落ちる（2.1）
+- `-Pending` は 2.1 では未宣言（渡すと引数の割り当てで exit 1）。2.3 で `param` に足す
