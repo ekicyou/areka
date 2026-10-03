@@ -338,26 +338,37 @@ function Get-DeniedImports([string[]]$Imports) {
 }
 
 Step 'i686 ターゲット導入' { rustup target add $I686 }
+# arm64 のターゲットは作るときだけ足す（-Arch x64 では道具の無い機械でも止まらない）
+if ($script:BuildArchs -ccontains 'arm64') {
+    Step 'arm64 ターゲット導入' { rustup target add $ARCHS['arm64'].Target }
+}
 
 # RUSTFLAGS を置き換え、CARGO_ENCODED_RUSTFLAGS・CARGO_BUILD_RUSTFLAGS を外す（在ると cargo が RUSTFLAGS を無視する）。
-# 差し替えはこの 2 段の間だけ。失敗時は Exit-Script の後始末が戻す。
+# 差し替えはビルドの段の間だけ。失敗時は Exit-Script の後始末が戻す。
 Set-EnvTemp 'RUSTFLAGS' $script:RustFlags
 Set-EnvTemp 'CARGO_ENCODED_RUSTFLAGS' $null
 Set-EnvTemp 'CARGO_BUILD_RUSTFLAGS' $null
-Step 'x64 本体ビルド' { cargo build --locked --release -p areka --target $X64 --target-dir $OUT_DIR }
 Step 'i686 helper ビルド' { cargo build --locked --release -p shiori-host32-helper --target $I686 --target-dir $OUT_DIR }
+foreach ($a in $script:BuildArchs) {
+    $t = $ARCHS[$a].Target
+    Step "$a 本体ビルド" { cargo build --locked --release -p areka --target $t --target-dir $OUT_DIR }
+}
 Restore-Env
 
 Step '静的リンクの確認' {
+    # 作った exe 全部（helper＋作る CPU 種別の本体）と、期待する機械種別
+    $exes = [ordered]@{ $script:HelperExe = $HELPER_MACHINE }
+    foreach ($a in $script:BuildArchs) { $exes["$OUT_DIR/$($ARCHS[$a].Target)/release/areka.exe"] = $ARCHS[$a].Machine }
     $bad = $false
-    foreach ($exe in @($script:AppExe, $script:HelperExe)) {
+    foreach ($exe in $exes.Keys) {
         if (-not (Test-Path -LiteralPath $exe)) { throw "ビルドの出力が無い: $exe" }
         $info = Read-PeInfo ([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $exe)))
         $denied = @(Get-DeniedImports $info.Imports)
-        Write-Host ('{0}: 機種 0x{1:x4}・取り込み {2}' -f $exe, $info.Machine, ($info.Imports -join ', '))
+        Write-Host ('{0}: 機種 0x{1:x4}（期待 0x{2:x4}）・取り込み {3}' -f $exe, $info.Machine, $exes[$exe], ($info.Imports -join ', '))
+        if ($info.Machine -ne $exes[$exe]) { Write-Host '  機種が違う'; $bad = $true }
         if ($denied.Count) { Write-Host "  拒否表に当たる: $($denied -join ', ')"; $bad = $true }
     }
-    if ($bad) { throw 'VC++ ランタイムの DLL を読んでいる（+crt-static が効いていない）' }
+    if ($bad) { throw '機種が違うか、VC++ ランタイムの DLL を読んでいる（+crt-static が効いていない）' }
 }
 
 Step 'ライセンス検査' { cargo deny --locked check licenses }
