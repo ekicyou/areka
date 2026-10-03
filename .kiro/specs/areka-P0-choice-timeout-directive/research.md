@@ -255,3 +255,11 @@
 - 完了 `areka-P0-choice-select-events` design（DD-8・F3）・`doc/choice-cascade-compat.md` 行 5a〜5d・10
 - 完了 `wintf-P0-cue-system` requirements（要件 4: `WaitForInput` の時間切れだけを約束）
 - `.kiro/steering/structure.md`「Unit Tests」（兄弟テストの接続規約・共有ヘルパの集約）・`logging.md`（`log-capture-kit` を通す）
+
+## 10. 設計ディスカッションでの扱い（2026-10-03）
+
+設計レビュー（`design-validation.md`・判定 GO）の 3 点はいずれも勝者が明白だったので、自明な修正として design.md へ反映し、開発者へ伺う議題は 0 件とした。
+
+- **指摘 1（要件 9.4 の満たし方）**: ghost のテストと kanade の外側のテストの 2 本の合成で満たすと確定。境の値 `1234` を共有し、両方の doc 注記に対になるテストの名前を書く。1 本で貫く案は `schedule/` 0 ファイル・`choice_deadline` が `pub(crate)` のため取れない。
+- **指摘 2（要件 3.4 と警告）**: 3.4「誤りとしても扱わない」は「失敗にしない・台本の振る舞いを変えない」の意味で、読めない値の警告は選択肢の有無に依らず出す（6.1 は無条件）。警告文にタグの綴り（バックスラッシュ＋感嘆符）は書かない（Rust の文字列で不正なエスケープになる）。
+- **指摘 3（文面と実物のずれ）**: `spawn_dispatcher` は `dispatcher.rs` の `pub fn`・kanade の `establish_choice_wait` は使わず注入列を自前で書く・`briefing-sakura-script.md` の「語彙の登記」の表の行も見る・報告 2 本は後から着地する側が作り直す、の 4 点を design.md へ転記した。

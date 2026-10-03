@@ -44,7 +44,7 @@
 ### Allowed Dependencies
 - 依存の向き: `areka-parsers` → `dola` → `areka-sakura` → `areka-ghost` → `areka-kanade`（本 spec は向きを変えず、新しい依存を 1 つも足さない。`Cargo.toml`・`Cargo.lock` に触れない）。
 - `compile` は `areka_parsers::sakura::Instruction` の `GenericCommand { name, raw_args }` を読み、`crate::contract::BarrierKind`（dola の再公開）を作る。
-- テストは既存の道具だけを使う: areka-sakura の `compile_test_support`／`drive_test_support`、areka-ghost の `test_log_capture`（`log-capture-kit` は areka-ghost の開発時依存に既にある）と `dispatcher_test_support`、kanade の `tests/kanade/choice_test_test_support.rs`、dola の `tests/cue/schedule_test.rs`。
+- テストは既存の道具だけを使う: areka-sakura の `compile_test_support`／`drive_test_support`、areka-ghost の `test_log_capture`（`log-capture-kit` は areka-ghost の開発時依存に既にある）と `dispatcher_test_support`（`spawn_dispatcher` は `dispatcher_test_support` ではなく `dispatcher.rs` の `pub fn`。兄弟テストからは `super::spawn_dispatcher`）、kanade の `tests/kanade/choice_test_test_support.rs`、dola の `tests/cue/schedule_test.rs`。
 - 文書の生成は `cargo run -p ukadoc-survey -- report` と `-- report-summary`（手で数を直さない）。
 
 ### Revalidation Triggers
@@ -124,10 +124,10 @@ graph LR
 ### Modified Files（文書・台帳）
 - `doc/ukadoc-coverage/ledger/sakura-script.toml` — `\![set,choicetimeout,時間]` の項目: `status = "implemented"`・`owner = "areka-P0-choice-timeout-directive"`・`note` を今の振る舞いへ（10.1）。
 - `doc/ukadoc-coverage/roadmap-draft.md` — `[[spec]]` に本 spec の行（`stage = "A"`・`bundle = "会話"`・`owner_count = 1`・`wave = "C1-②"`）、`areka-P0-sakura-time-directives` の `owner_count` 11 → 10、`[briefs].count` 39 → 40、段階ごとの表と「会話」の節の「依存する既存 spec」の欄（`sakura-time-directives` の件数を数え直し・本 spec を件数付きで足す）、追加の理由の段落（前例「2026-09-29 の 2 行目の追加」の型）、`snapshot_on`（10.5）。数はすべて数え直した値を書く（引き算で出さない）。
-- `doc/ukadoc-coverage/report/sakura-script.md`・`doc/ukadoc-coverage/report/summary.md` — 生成器で作り直す（10.5）。
+- `doc/ukadoc-coverage/report/sakura-script.md`・`doc/ukadoc-coverage/report/summary.md` — 生成器で作り直す（10.5）。同じ C1 の `status-execution-states` も `ledger/sakura-script.toml` に 3 項目を持つので、`main` へ後から着地する側が作り直す（手で数を直さない）。
 - `doc/COMPAT_ARCHITECTURE.md` §8 — 「compile 側時間指令 allowlist」の行に `set,choicetimeout` は本 spec で実際に読むようになったことを書き足し（10.4）、裁量の 1 行を足す（10.3）。
 - `doc/choice-cascade-compat.md` — 行 5b（既定値だけが流れる → 台本の指定が流れる）・行 5d（着いたときに飛ばす判定も選択の区切りには効かない、と本 spec で構造にした）（10.6）。
-- `doc/ukadoc-coverage/briefing-sakura-script.md` — ⑵ 消費側の表の `set,choicetimeout` の行（「消費されない」→ compile が読む）と ⑶ 担当の突合表の行（引受先を本 spec へ）（10.6）。
+- `doc/ukadoc-coverage/briefing-sakura-script.md` — ⑵ 消費側の表の `set,choicetimeout` の行（「消費されない」→ compile が読む）と ⑶ 担当の突合表の行（引受先を本 spec へ）、および「語彙の登記」の表の `set,choicetimeout` の行（`COMPAT_ARCHITECTURE.md` §8 の allowlist の行を指すので、§8 の行を書き足した後に指す先が合っているか見る）（10.6）。
 
 ### 触らない（0 と明記）
 - `crates/areka-kanade/src/`（`schedule/` を含む）・`crates/areka-parsers/`・`crates/areka-emo-text/`・`crates/areka/src/emo2_boot/`・`crates/areka/src/input_events/`・`crates/areka-talk/`・`crates/areka-ghost/src/dispatcher.rs` の本体・`crates/areka-sakura/src/drive.rs` の本体・各 `Cargo.toml`・`Cargo.lock`。
@@ -189,7 +189,7 @@ sequenceDiagram
 | 9.1 | 区切りの値の表のテスト | compile の兄弟テスト `compile_choice_timeout_tests.rs` | `test_support::compile`・`barrier_of` | Testing Strategy |
 | 9.2 | 警告の記録の捕捉 | ghost の兄弟テスト `dispatcher_choice_timeout_tests.rs` | `test_log_capture::capture`・`assert_logged_event` | Testing Strategy |
 | 9.3 | 時計を一度に進めても選択待ち | drive の兄弟テスト `drive_choice_timeout_tests.rs`・dola `schedule_test.rs` | `spawn_talk`・`TalkNotice` | Testing Strategy |
-| 9.4 | 台本から期限まで通し | ghost の檻（入口まで）＋ kanade の外側の檻（入口から期限まで） | `KanadeMsg::ChoiceWaiting`・`OnChoiceTimeout` | Testing Strategy |
+| 9.4 | 台本から期限まで通し | ghost のテスト（入口まで）＋ kanade の外側のテスト（入口から期限まで）の 2 本の合成・境の値 `1234` を共有し互いの名前を doc 注記に書く | `KanadeMsg::ChoiceWaiting`・`OnChoiceTimeout` | Testing Strategy |
 | 9.5 | 注入時刻・実機なし | 4 群すべて（注入 Tick・mock shiori） | — | — |
 | 9.6 | 既存の `None` の檻を書き換えずに通す | compile の既存檻 7 か所・drive の既存檻 1 本 | — | — |
 | 10.1 | 台帳の行を実装済みへ | `ledger/sakura-script.toml` | — | — |
@@ -266,7 +266,7 @@ pub(crate) fn parse_choice_timeout(raw_args: &[String]) -> ChoiceTimeoutDirectiv
 **Responsibilities & Constraints**
 - 腕の先頭の `cues.push(emit(.., command_carrier(name, raw_args)))` は無改変（7.1）。その**後**に、`name == "set"` かつ `raw_args.first() == Some("choicetimeout")`（綴りは逐語・小文字）のときだけ `parse_choice_timeout` を呼ぶ（7.3）。offset は進めず cue も足さない（7.2）。
 - 走査の局所変数 `last_choice_timeout: Option<f64>`（初期値 `None`＝未指定）。結果ごとに `Default → None`・`Secs(v) → Some(v)`・`Unreadable → None` で**上書き**する（3.2・6.2）。
-- `Unreadable` のとき、その場で `tracing::warn!(event = "choice_timeout_unreadable", raw = %欄の文字列, "[compile] \![set,choicetimeout,…] の時間が整数として読めないので既定として扱う")` を出す（6.1）。選択肢の有無で出し分けない（走査中はまだ分からない・読めない綴りは作者が直すべきもの）。読めない指定の後に読める指定があっても、読めない方の警告は出る（1 回の読めない指定につき 1 行）。
+- `Unreadable` のとき、その場で `tracing::warn!(event = "choice_timeout_unreadable", raw = %欄の文字列, "[compile] set,choicetimeout の時間が整数として読めないので既定として扱う")` を出す（6.1）。警告文にタグの綴り `\!` は書かない（Rust の文字列では不正なエスケープになる。`event` と `raw` の欄で何の話かは分かる）。選択肢の有無で出し分けない（走査中はまだ分からない・読めない綴りは作者が直すべきもの。要件 3.4「誤りとしても扱わない」は「失敗にしない・台本の振る舞いを変えない」の意味で、記録の 1 行はこれに反しない）。読めない指定の後に読める指定があっても、読めない方の警告は出る（1 回の読めない指定につき 1 行）。
 - 走査後の区切りは `emit_barrier(scope, offset, BarrierKind::WaitForChoice { timeout: last_choice_timeout })`。`has_choice` が偽なら区切りを出さず、値は捨てる（3.4）。
 
 ##### State Management
@@ -357,11 +357,11 @@ pub(crate) fn parse_choice_timeout(raw_args: &[String]) -> ChoiceTimeoutDirectiv
 2. **台本 → kanade の入口（9.4 前半）**: `spawn_dispatcher` に `\s[10]hello\_w[100]\q[選択A,targetA]\![set,choicetimeout,1234]\e` を `Start` → `Tick{1_000}`・`Tick{1_500}` → `KanadeMsg::ChoiceWaiting { display_end: MonotonicMs(1_350), timeout_directive_secs: Some(1.234), .. }`（前例 `menu_talk_choice_waiting_reaches_kanade_and_resolve_resumes_it_to_completion` の `None` を `Some(1.234)` に替えた形）。
 
 ### Integration Tests（kanade の外側・`crates/areka-kanade/tests/kanade/choice_test_timeout_directive_tests.rs`・9.4 後半）
-`choice_test_test_support` のハーネス（mock shiori・mock sakura・注入 Tick）で、`KanadeMsg::ChoiceWaiting { display_end: MonotonicMs(1_000), timeout_directive_secs: Some(1.234), .. }` を投函する（`establish_choice_wait` と同じ型で指令だけ `Some`）。
+`choice_test_test_support` のハーネス（mock shiori・mock sakura・注入 Tick）で、`KanadeMsg::ChoiceWaiting { display_end: MonotonicMs(1_000), timeout_directive_secs: Some(1.234), .. }` を投函する（`establish_choice_wait` は `timeout_directive_secs: None` を固定で送る補助関数なので使わず、同じ注入列を本テストの中に自前で書いて指令だけ `Some` にする）。
 1. `Tick{1_000 + 1_234 - 1}` では `OnChoiceTimeout` が出ず、`Tick{1_000 + 1_234}` で出る（期限が「表示の終わり＋N ミリ秒」ちょうど・1.1・1.4）。前例 `choice_timeout_fires_then_204_cancels_and_rejects_later_choice` の期限の両側の注入と同じ弁別。
 2. `Some(0.0)` と `Some(-0.001)` では `Tick{1_000 + 60_000}` でも `OnChoiceTimeout` が出ない（2.1・2.2。既定の 30 秒を越えても閉じない）。
 
-ghost の檻と kanade の檻は、同じ `N = 1234`・同じ `Some(1.234)` を境の値として共有し、合わせて「台本から期限まで通し」（9.4）を示す（kanade の `choice_deadline` は `pub(crate)` で `schedule/` は 0 ファイルの約束のため、1 本の檻で貫くことはできない）。
+ghost のテストと kanade のテストは、同じ `N = 1234`・同じ `Some(1.234)` を境の値として共有し、**2 本の合成**で「台本から期限まで通し」（9.4）を示す（kanade の `choice_deadline` は `pub(crate)` で `schedule/` は 0 ファイルの約束のため、1 本で貫くことはできない）。2 本は別クレートにあり定数を共有できないので、両方の doc 注記に「対になるテストは ○○（境の値 `1234`）」と互いの名前を書き、片方だけ値を変えたときに読み手が気付けるようにする。
 
 ### 文書・台帳の検査（10.2・10.5）
 - `cargo test -p ukadoc-survey`（整合の判定 ⑸ の腕 a・c・f と判定 ⑹・`check_evidence`）が緑。報告 2 本は生成器で作り直す。
