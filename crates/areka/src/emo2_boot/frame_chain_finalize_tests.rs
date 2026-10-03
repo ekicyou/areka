@@ -14,7 +14,9 @@ use super::test_support::{
 };
 use super::*;
 
-use crate::placement::chain_finalize::{CHAIN_FINALIZE_STALL_FRAMES, ChainFinalized};
+use crate::placement::chain_finalize::{
+    CHAIN_FINALIZE_STALL_FRAMES, ChainFinalizeStall, ChainFinalized,
+};
 
 use log_capture_kit::{LineFormat, capture_lines};
 use wintf::ecs::{Point, SizeI};
@@ -247,17 +249,77 @@ fn digest(lines: &[String]) -> String {
     )
 }
 
-/// 表示が永久に成立しない停滞では、閾値を超えた時点で診断が**ちょうど 1 回**出る。
+/// 相方のシェルが一度も表示されない間はゴースト待ちであり、見送りとして数えない。
 ///
-/// 閾値の手前は 1 行も出ない（毎フレームの見送りは無音）ことも同じ檻で押さえる——ここが緩むと
-/// 「起動中の正常な待ち」で毎フレーム警告が出る形へ退行する。
+/// ゴーストが scope 1 へ最初の `\s` を出すまでの時間はゴースト側の都合で、areka の停滞では
+/// ない。何巡待っても WARN は出ず、見送りの数の記録も作らない。巡ごとの記録は trace の 1 行
+/// だけで、既定の level（info）では 1 行も増えない（要件 1.2・1.6・3.2）。表示が揃えば確定は
+/// 初回の起動と同じく 1 回だけ行われ、相方は初回と同じ位置へ並ぶ（要件 1.5・3.6）。
+///
+/// TRACE の件数は、この経路にゴースト待ちの記録以外の記録が無いことに依る。別の `trace!` が
+/// 足されて件数で赤になったら、判定を緩めずに増えた記録を確かめる。
+#[test]
+fn never_shown_scope_is_a_ghost_wait_and_is_not_counted() {
+    let (mut world, gw) = resnap_world();
+    // scope 0 は窓の寸どおりに表示済み・scope 1 だけがまだ一度も表示されていない。
+    let unshown = PerTargetSizes::new([(0, Some(SPAWN_SIZE_0)), (1, None)]);
+    let frames = CHAIN_FINALIZE_STALL_FRAMES * 2;
+
+    let waiting = capture_logs(|| {
+        for _ in 0..frames {
+            finalize_chain_once_with(&unshown, &mut world);
+        }
+    });
+    assert_eq!(
+        (
+            lines_of_level(&waiting, "WARN").len(),
+            lines_of_level(&waiting, "INFO").len(),
+            lines_of_level(&waiting, "DEBUG").len(),
+            lines_of_level(&waiting, "TRACE").len(),
+            world
+                .get_resource::<ChainFinalizeStall>()
+                .map(|s| (s.deferrals, s.reported)),
+        ),
+        (0, 0, 0, frames as usize, None),
+        "(相方が未表示のまま {frames} 巡回した間の WARN・INFO・DEBUG・TRACE の件数, \
+         見送りの数の記録 (数, 報告済み))・WARN: {}",
+        digest(&lines_of_level(&waiting, "WARN"))
+    );
+
+    // 表示が揃った寸で 2 巡回す。確定は 1 回だけで、2 巡目は駆動しない。
+    let settled = capture_logs(|| {
+        for _ in 0..2 {
+            finalize_chain_once_with(&settled_sizes(), &mut world);
+        }
+    });
+    let count = |needle: &str| settled.iter().filter(|l| l.contains(needle)).count();
+    assert_eq!(
+        (
+            count("chain_finalize: 実表示寸で連鎖を再解決"),
+            count("chain_finalize: 初期配置を確定"),
+            world.contains_resource::<ChainFinalized>(),
+            pos_of(&world, gw.char_window(1).unwrap()).map(|p| p.x),
+        ),
+        (1, 1, true, Some(1205)),
+        "(表示が揃ってから 2 巡回した間の「実表示寸で連鎖を再解決」の件数, \
+         「初期配置を確定」の件数, 確定の印, scope 1 の x)・捕捉: {}",
+        digest(&settled)
+    );
+}
+
+/// areka 自身の理由（再アンカーが未 landing）で確定が見送られ続けると、しきい値を超えた時点で
+/// 診断が**ちょうど 1 回**出る（要件 2.1〜2.3・3.4）。
+///
+/// しきい値の手前は 1 行も出ない（毎フレームの見送りは無音）ことも同じテストで押さえる——ここが
+/// 緩むと「起動中の正常な待ち」で毎フレーム警告が出る形へ後退する。相方が表示されない形は
+/// ゴースト待ちで数えないので、停滞は scope 0 の実表示寸（500x687）と窓の寸（434x687）の
+/// 食い違いで作る（`finalize_defers_until_resnap_has_landed` と同じ fake）。
 #[test]
 fn stalled_finalize_reports_the_reason_exactly_once() {
     let (mut world, _gw) = resnap_world();
-    // scope1 が永久に表示されない（初回 ShowSurface が来ない）状態。
-    let stuck = PerTargetSizes::new([(0, Some(SPAWN_SIZE_0)), (1, None)]);
+    let stuck = PerTargetSizes::new([(0, Some((500, 687))), (1, Some(SPAWN_SIZE_1))]);
 
-    // 閾値の手前まで: 無音。
+    // しきい値の手前まで: 無音。
     let quiet = capture_logs(|| {
         for _ in 0..(CHAIN_FINALIZE_STALL_FRAMES - 1) {
             finalize_chain_once_with(&stuck, &mut world);
@@ -265,11 +327,11 @@ fn stalled_finalize_reports_the_reason_exactly_once() {
     });
     assert!(
         quiet.is_empty(),
-        "閾値内の見送りは無音であるべき（実際: {}）",
+        "しきい値の手前の見送りは無音であるべき（実際: {}）",
         digest(&quiet)
     );
 
-    // 閾値到達以降を大きく超えて回しても、診断は 1 行だけ。
+    // しきい値の到達以降を大きく超えて回しても、診断は 1 行だけ。
     let logs = capture_logs(|| {
         for _ in 0..(CHAIN_FINALIZE_STALL_FRAMES * 2) {
             finalize_chain_once_with(&stuck, &mut world);
@@ -284,11 +346,11 @@ fn stalled_finalize_reports_the_reason_exactly_once() {
     );
     let diag = &warns[0];
     assert!(
-        diag.contains("scope 1"),
+        diag.contains("scope 0"),
         "見送られたスコープを名指しする: {diag}"
     );
     assert!(
-        diag.contains("初回表示が未成立"),
+        diag.contains("再アンカーが未 landing"),
         "見送りの条件を名指しする: {diag}"
     );
     assert!(
@@ -297,16 +359,17 @@ fn stalled_finalize_reports_the_reason_exactly_once() {
     );
 }
 
-/// 閾値内に確定した起動では診断を出さない（正常系のログ量を増やさない）。
+/// しきい値の内に確定した起動では診断を出さない（正常系のログ量を増やさない）。
 ///
-/// 確定後は駆動自体が打ち切られるため、そのまま長時間回しても警告へ転じない。
+/// 確定後は駆動自体が打ち切られるため、そのまま長時間回しても警告へ転じない。待たせる理由は
+/// areka 自身の理由（再アンカーが未 landing）で、数えられる側の待ちでも内側なら無音であることを見る。
 #[test]
 fn finalize_within_the_bounded_wait_emits_no_diagnostic() {
     let (mut world, gw) = resnap_world();
-    let stuck = PerTargetSizes::new([(0, Some(SPAWN_SIZE_0)), (1, None)]);
+    let stuck = PerTargetSizes::new([(0, Some((500, 687))), (1, Some(SPAWN_SIZE_1))]);
 
     let logs = capture_logs(|| {
-        // 閾値の手前まで待たされてから表示が揃う（＝遅い起動）。
+        // しきい値の手前まで待たされてから寸が揃う（＝遅い起動）。
         for _ in 0..(CHAIN_FINALIZE_STALL_FRAMES - 1) {
             finalize_chain_once_with(&stuck, &mut world);
         }
