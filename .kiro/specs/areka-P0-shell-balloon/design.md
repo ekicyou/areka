@@ -98,9 +98,14 @@ HEAD のコードで確かめた事実（ファイルと定義の名前で示す
 
 行き先は「スコープごとの今のサーフェス番号」と「今の行き先」の 2 つの値として文字の状態の中に持つ。`\s` の指令を当てた時点で、サーフェス番号の解決（seriko と同じ `SurfaceResolver::resolve` を結線が閉包で渡す）と箱の置き場所の表（`BoxLayout`）から行き先が確定する。続く文字の指令はその行き先の場所へ入る。表示の層がサーフェスを実際に切り替えるのを待つ処理も、後から行き先を付け替える処理も無い。
 
-描画は毎フレーム、「行き先の状態」と「シェルの窓の今の拡大率」から箱の位置を導いて行う。シェルの絵の切り替え（`run_drain_phase`）と箱の文字の描画（`run_text_phase`）は同じフレームの中でこの順に走る（`areka/src/emo2_boot/frame.rs` の `emo2_frame_system` の並び）。
+描画は毎フレーム、「行き先の状態」と「シェルの窓の今の拡大率」から箱の位置を導いて行う。フレームの中では、表示の指令の適用（`run_drain_phase`）が箱の文字の描画（`run_text_phase`）より前に走る（`areka/src/emo2_boot/frame.rs` の `emo2_frame_system` の並び）。ただし seriko は別のスレッドで動くので、文字の層が `\s` を当てたフレームに、seriko からの表示の指令がまだ UI へ届いていないことはありうる。その 1 フレームは、前の絵の上に新しい置き場所で箱の文字が出る。行き先の決定には遅れが無いので設計は変えず、見え方を実機の確かめの項目にする。
 
-seriko が解決できなかった `\s`（別名が無いなど）では、seriko は表示を変えず、文字の層も同じ解決結果を受けて行き先を変えない。両者が同じ関数の結果を使うので、認識はずれない。
+**文字の層の「今のサーフェス番号」を、画面に出ているサーフェスからずらさない決まり**:
+
+- seriko が解決できなかった `\s`（別名が無いなど）では、seriko は表示を変えず、文字の層も同じ解決結果を受けて番号も行き先も変えない。
+- 番号としては読めるがシェルに無いサーフェス（例: `\s[9999]`）では、seriko は状態を進めて表示の指令を出すが、表示の層は失敗して前の表示を保つ（`areka-emo-compose` の `ComposeError::SurfaceNotFound`、`areka-emo-present/src/presenter/show.rs` の「表示不変」の腕）。文字の層は表示の層に合わせる: 結線が渡す解決の閉包が、解決した番号が今のシェルの面の表に在るかも見て、無ければ「解決できない」と同じ結果を返す。文字の層は番号も行き先も変えない。
+- シェルの切替では `\s` の指令は流れず、seriko は各スコープの今の番号のまま新しいシェルで出し直す（`areka-seriko/src/actor.rs` の `rebased`）。文字の層も今のサーフェス番号を保ち、行き先だけを新しい表での既定へ引き直す。
+- デバイスの失敗で表示が成立しなかった場合は予測できないので、対象外とする（表示の層が `error!` を残し、次の `\s` で揃う）。
 
 ### R-1・R-2 の扱い（未測定の振る舞いに頼らない）
 
@@ -209,7 +214,7 @@ crates/
 - `crates/areka-emo-text/src/actor.rs` — 表の鍵を `PlaceKey` へ。`apply_cue` が `Emote` を解決して行き先へ渡す。`choice_active` をスコープの全部の場所で見る。
 - `crates/areka-emo-text/src/actor_attach.rs`・`actor_decoration.rs` — 警告の名前の欄を場所の名前にする。`set_balloon_label`。
 - `crates/areka-emo-text/src/actor_present.rs` — 走査を場所ごとにする。箱の位置（X,Y）を面の位置と選択肢の当たり行へ足す。提示のたびに `shown_boxes` の写しを更新する。
-- `crates/areka-emo-text/src/surface.rs` — `TextSurface::attach_window_child`（窓の子として作り `Children` の指定位置へ挿す）と、作った entity の片付け。
+- `crates/areka-emo-text/src/surface.rs` — `TextSurface::attach_window_child`（窓の子として作り `Children` の指定位置へ挿す）と、作った entity の片付け。今 792 行なので、面の生成の手順を複製しない: 既存の `attach` の本体のうち「スワップチェーン・描画面・`SpriteVisual` を作る」部分を私有の関数 1 つへ括り出し、`attach` と `attach_window_child` は「どの entity へ挿すか」だけが違う薄い入口にする（増えるのは 60 行程度の見込みで 1,000 行に届かない）。それでも 900 行を超えるなら、窓の子の入口と片付けを兄弟ファイル `surface_window_child.rs`（`#[path]` で `surface.rs` の子）へ出す。
 - `crates/areka-emo-text/src/choice.rs` — `to_window_physical` に箱の位置の引数を足す（普通のバルーンは 0,0）。
 - `crates/areka-emo-text/src/region.rs` — `BALLOON_NAME_PLACEHOLDER` の撤去。
 - `crates/areka-seriko/src/actor.rs` — `BalloonResolve::NameForm` の腕を `debug!` へ下げる（警告は文字の層が出す）。
@@ -217,7 +222,7 @@ crates/
 - `crates/areka/src/emo2_boot/assets.rs`・`switch_assets.rs` — `ShellTarget` から箱の束（`shell_box_assets.rs`）を取り出して運ぶ。
 - `crates/areka/src/emo2_boot/frame/attach.rs` — 装着のときに文字の層へ箱の束と、普通のバルーンの名前（バルーンのフォルダ名）を渡す。
 - `crates/areka/src/emo2_boot/frame/scale_text.rs` — `run_text_scale_phase` がシェルの窓の `text_slot_view` を集めて `sync_boxes` を呼ぶ（`World` を受け取る）。
-- `crates/areka/src/emo2_boot/frame/switch.rs`・`ghost_switch.rs` — シェル・ゴーストの切替で箱の束を入れ替える。
+- `crates/areka/src/emo2_boot/frame/switch.rs` — シェルの切替で箱の束を入れ替える。ゴーストの切替（`ghost_switch.rs`）は変えない（結線ごと作り直され、装着の相が箱の束を渡す。「箱の束の結線」に確かめた内容）。
 - `crates/areka/src/emo2_boot/balloon_visibility.rs`・`balloon_visibility_decision.rs`・`balloon_visibility_wait.rs`・`balloon_visibility_phase.rs` — 観測の欄 `box_showing` を足し、中断と時間切れの対象に数える。文字の数の観測を `balloon_shown_glyphs` に替える。箱を隠す発行。
 - `crates/areka/src/emo2_boot/frame/status_report.rs` — 箱に文字が出ているスコープを載せる。
 - `crates/areka/src/input_events/mod.rs` — `on_char_pointer_moved`・`on_char_pointer_pressed` の先頭で `shell_box.rs` の前段を呼ぶ。シェルの窓から出たときの後始末。
@@ -254,6 +259,8 @@ graph LR
 | 同上 | 箱が 1 つも無い | 新しい番号 | 普通のバルーン | 6.4・5.2 |
 | `\s[-1]` | — | 非表示 | 普通のバルーン | 6.6 |
 | `\s`（解決できない） | — | 変えない | 変えない | — |
+| `\s`（番号は読めるが、今のシェルにそのサーフェスが無い） | 閉包が「解決できない」と同じ結果を返す | 変えない | 変えない | 4.1・5.1 |
+| シェルの切替（`set_box_layout`。指令ではない） | — | 変えない（保つ） | 全スコープを新しい表での既定へ。箱の場所の文字は捨てる | 6.8 |
 | `\b[名前]` | 今のサーフェスの箱の列にその名前がある | 変えない | その箱（警告なし） | 4.3・4.9 |
 | `\b[名前]` | 無い | 変えない | 変えない（`warn!`: 名前とサーフェス番号） | 4.4 |
 | `\b[整数]` | — | 変えない | 変えない（seriko の担当） | 4.8 |
@@ -350,17 +357,17 @@ graph TB
 | 6.5 | 行き先でない箱の文字も表示 | 箱の同期 | 文字を持つ全部の箱を走査 | 同上 |
 | 6.6 | `\s[-1]` | 行き先の状態 | `SurfaceKeyOutcome::Hide` | 同上 |
 | 6.7 | 新しい台詞で全部消す | 場所ごとの文字の状態 | `ClearAll` が全部の場所を消す | 同上 |
-| 6.8 | シェル・ゴーストの切替で持ち越さない | 箱の束の入れ替え | `set_box_layout` | — |
+| 6.8 | シェル・ゴーストの切替で持ち越さない | 箱の束の結線 | シェル＝`set_box_layout`（番号は保つ）／ゴースト＝結線の作り直し | 行き先の決まり方 |
 | 6.9 | 普通のバルーン → 箱の向き | 行き先の状態・表示の判断の観測 | `route_surface`・`balloon_shown_glyphs` | 行き先の決まり方 |
 | 6.10 | 同じ待ち時間で箱の文字も消す | 表示の判断 | `decide_timeout`・`hide_boxes` | 箱を数に入れた表示の判断 |
-| 6.11 | 待ちを止める条件 | 表示の判断・箱の上の滞在 | `choice_active`・`ShellBoxHover` | 同上 |
+| 6.11 | 待ちを止める条件 | 表示の判断・箱の上の滞在 | `choice_active`（スコープ全体）・`ShellBoxHover`・`next_box_hover`・`settle_box_hover` | 同上 |
 | 7.1 | `\c` は行き先の箱だけ | 場所ごとの文字の状態 | `Clear` の宛先が今の行き先 | 行き先の決まり方 |
 | 7.2 | 他の箱・他のスコープは消さない | 同上 | 同上 | 同上 |
 | 7.3 | 普通のバルーンでは前と同じ | 同上 | 行き先が普通のバルーンなら従来の鍵 | 同上 |
 | 8.1 | 選択肢を箱に出す | 場所ごとの描画 | `present_actor` の選択肢の流れ | — |
-| 8.2 | `cursor.*` の強調 | 箱のポインタの前段 | `inject_choice_hover_at` | 箱の上のポインタ操作 |
-| 8.3 | クリックで同じイベント | 箱のポインタの前段 | `click_selection`・`BalloonWiring::send_selection` | 同上 |
-| 8.4 | 選択肢の待ちの振る舞いは同じ | （変更なし） | `choice_drain.rs` の道をそのまま通る | — |
+| 8.2 | `cursor.*` の強調 | 箱のポインタの前段・箱の登録と同期 | `judge_box_move`・`inject_choice_hover_at`・箱の位置を足した当たり行 | 箱の上のポインタ操作 |
+| 8.3 | クリックで同じイベント | 箱のポインタの前段・箱の登録と同期 | `judge_box_click`・`click_selection`・`BalloonWiring::send_selection` | 同上 |
+| 8.4 | 選択肢の待ちの振る舞いは同じ | 場所の鍵 | `choice_active` をスコープ全体で見る。送った後は `choice_drain.rs` の道をそのまま通る | — |
 | 8.5 | 選択肢のクリックはシェルのクリックにしない | 箱のポインタの前段 | 前段が `true` を返して終わる | 箱の上のポインタ操作 |
 | 9.1 | 話していないあいだはシェルへの操作 | 箱の押下の判断 | `judge_box_press` → `ShellOp` | 同上 |
 | 9.2 | 箱の外は前と同じ | 箱のポインタの前段 | 四角の外は前段を素通り | 同上 |
@@ -387,7 +394,7 @@ graph TB
 | 行き先の状態 | areka-emo-text（純粋） | 指令の列から行き先を決める | 4.1〜4.5, 4.7〜4.10, 5.4, 6.1, 6.2, 6.4, 6.6, 6.7, 6.9, 7.1〜7.3 | `BoxIndex`（P0） | State |
 | 箱の登録と同期 | areka-emo-text | 箱の位置・面・四角の照会・隠す印 | 1.6, 3.1〜3.7, 3.9〜3.11, 6.1〜6.3, 6.5, 6.8, 9.3, 9.4 | `TextSlotView`（P0）・wintf（P0） | Service, State |
 | 警告の名前 | areka-emo-text | 警告の名前の欄を場所の名前にする | 3.11, 3.12 | — | Service |
-| 箱の束の結線 | areka/emo2_boot | 箱の表・解決の閉包・探す場所の順を文字の層へ渡す | 3.5, 3.10, 6.8 | `ShellTarget`・`SurfaceResolver`（P0） | Service |
+| 箱の束の結線 | areka/emo2_boot | 箱の表・解決の閉包（シェルに在る番号だけを通す）・探す場所の順を文字の層へ渡す | 3.5, 3.10, 4.1, 5.1, 6.8 | `ShellTarget`・`SurfaceResolver`（P0） | Service |
 | 箱を数に入れた表示の判断 | areka/emo2_boot | 窓を出さない・時間切れ・中断 | 5.1〜5.3, 6.4, 6.9〜6.11 | 箱の登録と同期（P0） | State |
 | Status の届け | areka/emo2_boot | 箱に文字が出ているスコープを載せる | 5.5, 5.6 | 同上（P0） | Service |
 | 箱のポインタの前段 | areka/input_events | 選択肢・中断・素通りの振り分け | 6.11, 8.2, 8.3, 8.5, 9.1〜9.3, 9.5〜9.8 | `shown_boxes`（P0）・`UserBreakWiring`（P0） | Service, State |
@@ -490,6 +497,7 @@ pub struct BoxReport { pub issues: Vec<BoxIssue> }
 
 | 種類 | 対象の欄 | 要件 |
 |---|---|---|
+| `BraceEmptyName` | 見出しの原文（`balloon.` の後ろが空）。そのブレスは採らない | 10.1 |
 | `BraceMissingSize` | ブレスの名前 | 1.4 |
 | `BraceBadSize` | ブレスの名前・値の原文 | 1.4 |
 | `BraceNumericName` | ブレスの名前 | 1.9 |
@@ -562,7 +570,7 @@ impl TextLayerState {
     pub fn places(&self) -> impl Iterator<Item = (&PlaceKey, &ActorTextState)>;
 }
 ```
-- Invariants: 行き先が `Box(n)` のとき、`n` は必ずそのスコープの今のサーフェスの箱の列にある。`set_box_index` は全スコープの行き先を、新しい表での既定へ引き直す。
+- Invariants: 行き先が `Box(n)` のとき、`n` は必ずそのスコープの今のサーフェスの箱の列にある。`set_box_index` は各スコープの今のサーフェス番号を保ったまま、全スコープの行き先を新しい表での既定へ引き直す（「文字の行き先の決まり方」の表の「シェルの切替」の行）。
 - `route_select` の警告は名前とサーフェス番号（非表示なら「非表示」）を欄に持つ。出すのはここだけ（要件 4.4・4.9・10.1）。
 
 **Implementation Notes**
@@ -577,16 +585,16 @@ impl TextLayerState {
 | Requirements | 1.6, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.9, 3.10, 3.11, 6.1, 6.2, 6.3, 6.5, 6.8, 9.3, 9.4 |
 
 **Responsibilities & Constraints**
-- `set_box_layout`: 箱の束を受け取る。前の箱の面を片付け、箱の場所の文字と行き先を捨て、新しい表を状態へ入れる（要件 6.8）。普通のバルーンの場所には触れない。
+- `set_box_layout`: 箱の束を受け取る。前の箱の面を片付け、箱の場所の文字を捨て、新しい表を状態へ入れる（要件 6.8）。各スコープの今のサーフェス番号は保ち、行き先は新しい表での既定へ引き直す（切替の後の最初の台詞が `\s` を書かなくても、出ているサーフェスの箱へ書ける）。普通のバルーンの場所には触れない。
 - `sync_boxes`（毎フレーム・結線が呼ぶ）: スコープごとのシェルの窓の `TextSlotView`（窓・差し込み口・拡大率）を受け取り、文字を持つ箱の場所すべてについて「あるべき置き場所」を導く。あるべき置き場所は、名前が今のサーフェスの箱の列にあり、箱を隠す印が立っておらず、シェルの窓が確立しているときだけ存在する。登録済みの置き場所と違えば、面を片付けて登録し直す（面は次の `present_frame` が作る。文字の進み具合は保つ）。同じなら何もしない。
 - 置き場所から配置の入力を作る式は普通のバルーンと同じ（`ResolvedBalloonText::resolve_with_background(&def.model, def.size, 背景色)`）。箱の大きさを「画像の大きさ」として渡すので、`validrect`・`origin`・負の値の読み方は既存の `TextRegion::resolve` のまま成り立つ（要件 3.1〜3.3）。背景色は既定（白）を使う（箱に背景の絵は無い。`\f[disable]` の混色の相手として §8 に登記）。
 - 面の位置は `(箱の X + 領域の左, 箱の Y + 領域の上) × 拡大率`、面の大きさは既存の式（`ScaleContract::physical_extent`）。選択肢の当たり行も同じ位置を足す。
 - 面の entity はシェルの窓の直接の子で、`Visual`＋`VisualGraphics`＋`Arrangement`（物理 px）＋`HitTest::none()` を持つ。`Children` の中の位置は「差し込み口の直後から、element番号の大きい順」。絵の entity より前なので、画像より手前に描かれる（要件 3.7・3.9）。
-- 箱がサーフェスの画像からはみ出す置き場所は採用し、最初に面にするときに 1 度だけ `warn!` する（サーフェス番号・名前・箱の四角・サーフェスの大きさ）。はみ出した部分は窓の端で切れる（窓の大きさは絵の大きさだけで決まる＝`frame/scale_text.rs` の `reconcile_reported_sizes`）。
+- 箱がサーフェスの画像からはみ出す置き場所は採用し、最初に面にするときに 1 度だけ `warn!` する（サーフェス番号・名前・箱の四角・サーフェスの大きさ）。はみ出した部分は窓の端で切れる見込みである（窓の大きさは絵の大きさだけで決まる＝`frame/scale_text.rs` の `reconcile_reported_sizes`）。**この見え方は測っていない**（要件ディスカッションの結論 7 の「実測して決める」は未了）。決め手は実機の確かめの「はみ出す定義」の項目で、そこで「窓の端で切れる・窓の大きさが変わらない」を確かめる。違っていた場合は、採用する・警告するは変えず、見え方の記述だけを直す。
 - `shown_boxes`: 最後に提示したフレームで文字が 1 字以上見えていた箱の四角を、手前から順に返す。行き先の変化・`\c`・`ClearAll`・`hide_boxes`・`set_box_layout` のときは、その場で写しから外す（選択肢の当たり行の写しと同じ規律）。
 
 **Dependencies**
-- Inbound: 結線（`frame/attach.rs`・`frame/scale_text.rs`・`frame/switch.rs`・`ghost_switch.rs`）（P0）、`input_events/shell_box.rs`（P0）、`balloon_visibility_phase.rs`・`status_report.rs`（P0）
+- Inbound: 結線（`frame/attach.rs`・`frame/scale_text.rs`・`frame/switch.rs`）（P0）、`input_events/shell_box.rs`（P0）、`balloon_visibility_phase.rs`・`status_report.rs`（P0）
 - Outbound: `areka_emo_present::TextSlotView`（P0）、wintf の `Visual`・`VisualGraphics`・`Arrangement`・`HitTest`（P0）
 
 **Contracts**: Service [x] / State [x]
@@ -633,10 +641,10 @@ impl TextLayerRuntime {
 
 #### 箱の束の結線
 
-- `shell_box_assets.rs` の `ShellBoxAssets { layout: BoxLayout, aliases: BTreeMap<String, Vec<u32>>, font_dirs: Vec<PathBuf> }` を、起動（`assets.rs`）とシェルの切替（`switch_assets.rs`）が `ShellTarget` と面の表から組む。
+- `shell_box_assets.rs` の `ShellBoxAssets { layout: BoxLayout, aliases: BTreeMap<String, Vec<u32>>, surface_ids: BTreeSet<u32>, font_dirs: Vec<PathBuf> }` を、起動（`assets.rs`）とシェルの切替（`switch_assets.rs`）が `ShellTarget` と面の表から組む。`surface_ids` は面の表に在るサーフェス番号（`EmoWorld::surface_ids`）。
 - `box_font_search_dirs(shell_dir, ghost_dir) -> Vec<PathBuf>` は順番を決める純関数（シェルのフォルダ、ゴーストのフォルダの順・要件 3.10）。
-- 解決の閉包は、同じ別名の写しから `areka_seriko::SurfaceResolver` を組み、`resolve` の結果を `SurfaceKeyOutcome` へ写す（seriko のアクターが持つ解決器と同じ入力・同じ関数）。
-- `frame/attach.rs`（起動）・`frame/switch.rs`（シェルの切替）・`ghost_switch.rs`（ゴーストの切替）が `set_box_layout` を呼ぶ。
+- 解決の閉包の中身は純関数 `resolve_for_text(resolver: &SurfaceResolver, surface_ids: &BTreeSet<u32>, key: &str) -> SurfaceKeyOutcome`: 同じ別名の写しから組んだ `areka_seriko::SurfaceResolver` の `resolve` の結果を写し、`Show(id)` で `id` が `surface_ids` に無ければ `Unresolved` を返す（`Hide` と `Unresolved` はそのまま）。
+- `set_box_layout` を呼ぶのは `frame/attach.rs`（装着の相）と `frame/switch.rs`（シェルの切替）の 2 か所。**ゴーストの切替（`ghost_switch.rs`）からは呼ばない**。コードで確かめた理由: ゴーストの切替は `ghost_switch.rs` の `boot_into` が窓を作り直して（`reopen_ghost_windows`）起動の結線をやり直し、`ghost_session.rs` が `wire_emo2_boot` を呼ぶ。`wire_emo2_boot`（`emo2_boot/mod.rs`）は `TextLayerRuntime::new` で文字の層を新しく作り、`Emo2Wiring` は `attached: false` から始まる（`frame/wiring.rs`）ので、装着の相がもう 1 度走って `set_box_layout` を呼ぶ。前のゴーストの箱の文字・行き先・サーフェス番号は古い `TextLayerRuntime` ごと落ち、箱の面の entity は古い窓ごと消える（要件 6.8 のゴーストの側）。
 - `frame/scale_text.rs` の `run_text_scale_phase` が毎フレーム、全スコープの `presenter.text_slot_view(shell_target(scope))` を集めて `sync_boxes` を呼ぶ。シェルの窓が未確立のスコープは `None` を渡す（最初の `\s` までは箱を面にしない）。
 
 #### 箱を数に入れた表示の判断
@@ -706,9 +714,39 @@ pub(crate) fn judge_box_press(
 - `judge_box_press` の順: ⑴ 選択の確定（この押下）→ `ConsumedBySelection`、⑵ 左ダブルクリックでない → `ShellOp`、⑶ 直前の押下が選択の確定 → `ConsumedBySelection`、⑷ 話していない → `ShellOp`、⑸ 中断を禁じる区間 → `Disabled`、⑹ それ以外 → `Break`。
 - `ShellOp` 以外は「処理した」で、シェルへのダブルクリックとしては通知しない。`Disabled` は `debug!` を 1 行残す。
 
+移動と選択の確定の側の判断も純関数にする（ハンドラの中へ判断を書かない）:
+
+```rust
+/// 移動 1 回の結論。
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum BoxMove {
+    Outside,                                  // 文字の出ている箱の四角の外 → 既存の道へ
+    OverChoice { name: BoxName, ordinal: usize }, // 選択肢の行の上 → 強調して、シェルへは送らない
+    OverBody { name: BoxName },               // 箱の中で行の上でない → 滞在だけ記録して既存の道へ
+}
+/// `rows` は当たった箱の `choice_hit_rows_at`（箱の位置を足した窓の物理 px）。
+pub(crate) fn judge_box_move(hit: Option<&ShownBox>, rows: &[ChoiceHitRow], x: f32, y: f32) -> BoxMove;
+
+/// 左押下が箱の選択肢の確定か（既存の `click_selection` へ渡すだけ。箱の外は必ず `None`）。
+pub(crate) fn judge_box_click(
+    hit: Option<&ShownBox>, active: bool, rows: &[ChoiceHitRow], x: f32, y: f32, scope: usize,
+) -> Option<ChoiceSelection>;
+
+/// 滞在の記録の次の値と、強調を外す箱（前に居た箱から出た・行から外れたとき）。
+pub(crate) fn next_box_hover(prev: Option<&BoxName>, mv: &BoxMove) -> (Option<BoxName>, Option<BoxName>);
+
+/// 毎フレームの整え: 滞在している箱が `shown_boxes` に無ければ `None` へ戻す。
+pub(crate) fn settle_box_hover(prev: Option<&BoxName>, shown: &[ShownBox]) -> Option<BoxName>;
+```
+
 ##### State Management
 - `UserBreakWiring` に `talking: bool` を足す。`drain_no_user_break_signals` が `TalkStarted` で真、`TalkEnded` で偽へ畳む（純関数 `fold_talking`）。
-- `ShellBoxHover`（NonSend）: スコープごとの「文字の出ている箱の上に居る」。移動のたびに更新し、シェルの窓から出たとき・箱の外へ出たときに偽へ戻す。そのとき箱の選択肢の強調も外す（`balloon_exit.rs` と同じ後始末）。
+- `ShellBoxHover`（NonSend）: スコープごとの「今ポインタが居る、文字の出ている箱の名前」（居なければ `None`）。値を変えるのは次の 4 つだけで、どれも上の純関数の結果を書き込む。
+  1. 箱へ入る・別の箱へ移る（移動のハンドラ → `next_box_hover`）。
+  2. 箱の外へ出る（移動のハンドラ → `next_box_hover` が `None` を返す。前の箱の選択肢の強調も外す）。
+  3. シェルの窓から出る（窓の離脱のハンドラ → `None`。強調も外す・`balloon_exit.rs` と同じ後始末）。
+  4. 箱の文字が消える（時間切れ・中断・`\c`・サーフェスの切替・次の台詞の頭）: ポインタが動かなくても、`balloon_visibility_phase.rs` の観測の直前に毎フレーム `settle_box_hover` を通して `None` へ戻す。
+- 時間切れの観測の `hover` には、整えた後の値が `Some` かどうかを入れる。4 が無いと、ポインタを置いたまま箱の文字が消えた後も印が残り、次に出た箱の文字が時間で消えなくなる（要件 6.11 の待ちが止まり続ける）。
 
 **Implementation Notes**
 - Integration: 箱の四角の中で選択肢の行の上でない移動は、滞在を記録してから既存の道へ落とす（`OnMouseMove` は今までどおり送る・要件 9.1・9.7）。
@@ -732,6 +770,7 @@ pub(crate) fn judge_box_press(
 2. 面を持つ箱の場所は、名前が今のサーフェスの箱の列にあり、隠す印が立っていない。
 3. 箱の無いシェル（`BoxLayout::is_empty()`）では、行き先は常に普通のバルーンで、箱の場所は 1 つも生まれない。
 4. `ClearAll` の後、全部の場所の文字は空で、行き先は既定、隠す印は下りている。
+5. スコープの今のサーフェス番号を変えるのは、解決できて今のシェルに在る `\s` と `\s[-1]` だけである。シェルの切替（`set_box_layout`）でも `ClearAll` でも変わらない。
 
 ### Logical Data Model
 
@@ -755,7 +794,7 @@ erDiagram
 
 | 場面 | 振る舞い | 記録 |
 |---|---|---|
-| `balloon.*`ブレスの誤り（`size` 無し・不正・整数の名前） | そのブレスを採らない | `warn!`（入口が 1 度・名前と原因） |
+| `balloon.*`ブレスの誤り（名前が空・`size` 無し・不正・整数の名前） | そのブレスを採らない | `warn!`（入口が 1 度・名前と原因） |
 | 当てはまらないキー | キーだけ捨てる | `warn!`（名前とキー） |
 | 同じ名前のブレスが 2 つ | 後のもので置き換え | `warn!`（名前） |
 | element定義の誤り（名前のブレスが無い・番号や X・Y が整数でない・同じ名前の重複・追記先が無い） | その element定義だけ捨てる | `warn!`（サーフェス番号・element番号・名前・原因） |
@@ -777,16 +816,22 @@ erDiagram
 ### Unit Tests
 
 - `areka-parsers/src/shell/boxes_tests.rs`: ブレスの名前と本体の転記／`surface*`・`surface.append*` の両方の element定義／欄の欠け／箱の無い文面で `Brace` 0 件／同じ文面で `shell::parse` の結果が変わらないこと（1.1・1.7・2.1・2.8）。
-- `areka-emo-compose/src/boxes_tests.rs`: `BoxIssue` の 11 種類を 1 つずつ起こす／`size` と当てはまらないキーを抜いた表が `balloon::parse` へ渡ること／ブレスの置き換え／`surface.append*` の存在の条件（先に書かれた追記・面の画像だけの番号・範囲と除外）を `fold.rs` のテストと同じ検体で突き合わせる／同じ名前は element番号最小／昇順（1.2〜1.5・1.8・1.9・2.2〜2.7・3.8・10.2）。
-- `areka-emo-text/src/state_route_tests.rs`: 「行き先の決まり方」の表の 9 行を 1 行ずつ／`set_box_index` での引き直し／箱の表が空なら常に普通のバルーン（4.1〜4.4・4.8〜4.10・5.4・6.1・6.2・6.4・6.6・6.9）。
+- `areka-emo-compose/src/boxes_tests.rs`: `BoxIssue` の 12 種類を 1 つずつ起こす（名前が空の `balloon.`ブレスを含む）／`size` と当てはまらないキーを抜いた表が `balloon::parse` へ渡ること／ブレスの置き換え／`surface.append*` の存在の条件（先に書かれた追記・面の画像だけの番号・範囲と除外）を `fold.rs` のテストと同じ検体で突き合わせる／同じ名前は element番号最小／昇順（1.2〜1.5・1.8・1.9・2.2〜2.7・3.8・10.2）。
+- `areka-emo-text/src/state_route_tests.rs`: 「行き先の決まり方」の表の 11 行を 1 行ずつ（`Unresolved` を受けたら番号も行き先も変わらない・`set_box_index` は番号を保って行き先だけを引き直す、を含む）／箱の表が空なら常に普通のバルーン（4.1〜4.4・4.8〜4.10・5.4・6.1・6.2・6.4・6.6・6.8・6.9）。
 - `areka-emo-text/src/state_place_tests.rs`: 行き先を切り替えても前の箱の文字が残る／`\0` と `\1` の同じ名前は別／`\c` は行き先だけ／`ClearAll` は全部／装飾は場所ごと／既存の読み口が普通のバルーンの値を返す（4.5〜4.7・6.7・7.1〜7.3・10.5）。
-- `areka/src/input_events/shell_box_tests.rs`: `judge_box_press` の 6 つの分岐／`box_under_point` の重なり（手前を選ぶ）と四角の外／`fold_talking`（9.1・9.3・9.5〜9.8・3.9）。
-- `areka/src/emo2_boot/` の兄弟テスト: `hide_reaches_boxes` の 3 つの契機／`decide_timeout`・`decide_user_break` が `box_showing` のスコープを対象にする／`box_showing` が偽なら既存の期待値のまま／`collect_bindings` が箱のスコープを載せる・どちらも出ていなければ載せない／`box_font_search_dirs` の順（5.5・5.6・6.10・6.11・3.10）。
+- `areka/src/input_events/shell_box_tests.rs`:
+  - `judge_box_press` の 6 つの分岐／`box_under_point` の重なり（手前を選ぶ）と四角の外／`fold_talking`（9.1・9.3・9.5〜9.8・3.9）。
+  - `judge_box_move` の 3 つの結論（四角の外・選択肢の行の上・箱の中で行の上でない）と、重なる箱では手前の箱の行だけを見ること（8.2・9.1・9.2）。
+  - `judge_box_click`: 行の上の左押下で、普通のバルーンと同じ中身の `ChoiceSelection`（スコープ・ID・表示・参照）が 1 つ返る／行の外・箱の外・選択肢が無いときは `None`（8.3・8.5）。
+  - `next_box_hover` の遷移: 入る・同じ箱の中で動く・別の箱へ移る・箱の外へ出る（前の箱の強調を外す）・行から行の外へ（強調を外す）（6.11・8.2）。
+  - `settle_box_hover`: 滞在している箱が `shown_boxes` から消えたら `None`・残っていればそのまま・もともと `None` なら `None`（6.11）。
+  - 印が残らないことの通し: 「箱へ入る → 箱の文字が消える（`shown_boxes` が空）→ 整える」の後、時間切れの観測の `hover` が偽になる。窓から出たときも偽になる（6.11）。
+- `areka/src/emo2_boot/` の兄弟テスト: `hide_reaches_boxes` の 3 つの契機／`decide_timeout`・`decide_user_break` が `box_showing` のスコープを対象にする／`box_showing` が偽なら既存の期待値のまま／`collect_bindings` が箱のスコープを載せる・どちらも出ていなければ載せない／`box_font_search_dirs` の順／`resolve_for_text`: 箱のある `surface1000` と、シェルに無い 9999 を持つ検体で、`"1000"` は `Show(1000)`・`"9999"` は `Unresolved`・別名は先頭の番号が在れば `Show`・無ければ `Unresolved`・`"-1"` は `Hide`・読めない鍵は `Unresolved`（4.1・5.1・5.5・5.6・6.10・6.11・3.10）。
 
 ### Integration Tests
 
 - `areka-emo-present` の `shell_target` のテスト: 検体の文面から `ShellTarget::boxes()` が引けること、報告の各件が 1 度ずつ記録されること、誤りのある検体でも読み込みが成功すること（10.1・10.2）。
-- `areka-emo-text/src/actor_box_tests.rs`: `sync_boxes` の分岐（同じ置き場所は何もしない・拡大率が変われば作り直し・名前が外れれば片付け・戻れば登録し直し・隠す印）／`shown_boxes` が `\c`・`ClearAll`・行き先の変化でその場で外れる／`balloon_shown_glyphs`／警告の名前の欄（箱＝ブレスの名前・普通のバルーン＝入れた名前・未設定＝スコープから）／はみ出しの警告が 1 度（3.5・3.11・3.12・5.1・6.2・6.3・6.5・9.3）。
+- `areka-emo-text/src/actor_box_tests.rs`: `sync_boxes` の分岐（同じ置き場所は何もしない・拡大率が変われば作り直し・名前が外れれば片付け・戻れば登録し直し・隠す印）／`shown_boxes` が `\c`・`ClearAll`・行き先の変化でその場で外れる／`balloon_shown_glyphs`／警告の名前の欄（箱＝ブレスの名前・普通のバルーン＝入れた名前・未設定＝スコープから）／はみ出しの警告が 1 度／`choice_active(&ActorKey)` が、箱の場所にだけ選択肢があるときも真・`\c` でその箱を消すと偽・箱の無い構成では本 spec の前と同じ値／箱の場所の選択肢の当たり行（`choice_hit_rows_at`）が、箱の位置（X,Y）と領域の左上を足して拡大率を掛けた窓の物理 px になっていること（普通のバルーンの場所では足す量が 0 で前と同じ値）／`set_box_layout` の後、今のサーフェス番号が保たれ、行き先が新しい表での既定になり、箱の場所の文字が空であること（3.5・3.11・3.12・5.1・6.2・6.3・6.5・6.8・6.11・8.2・8.3・8.4・9.3）。
 - `areka-emo-text/tests/box_attach_test.rs`（GPU）: 箱 2 つを持つスコープで、窓の `Children` が「差し込み口 → element番号の大きい箱 → 小さい箱 → 絵」に並ぶ／箱の面が当たり判定を持たない／読み戻しで文字が箱ごとに独立に描かれている／箱の位置が `(X + 領域の左) × 拡大率`／`set_box_layout` で entity が消える（1.6・3.1〜3.4・3.7・3.9・6.8・9.4）。
 - `areka-emo-text` の検体テスト: `tests/fixtures/shell-balloon/surfaces.txt` を読み手 → 畳み込み → 文字の層へ通し、台本（`\s`・`\b[名前]`・文字・`\c`・選択肢）を指令の列として当てて、場所ごとの文字と行き先を確かめる（10.4・要件 4・6・7・8.1 の通し）。
 - `areka/src/emo2_boot` の結線テスト（既存の `spine` 系と同じ偽の境界）: 箱のあるサーフェスでは普通のバルーンの窓を出す発行が 0 件／箱の無いサーフェスへ移ると出る／時間切れで `hide_boxes` が呼ばれる／`Status` へ届く組（5.1〜5.3・5.5・6.4・6.9・6.10）。
@@ -797,10 +842,13 @@ erDiagram
 - 縦書きの箱 2 つを持つシェルで、台詞が絵の中に出る・`\b[名前]` で書き分けられる・サーフェスを替えると文字が付いて回る。
 - 窓をドラッグしても、拡大率（モニタをまたぐ）を変えても、文字が絵とずれない（3.5・3.6）。
 - 箱を出し入れするときにシェルの絵がちらつかない（R-1 の残り）。
+- 箱の置き場所が違うサーフェスへ `\s` で替えた瞬間を見る: 前の絵の上に新しい置き場所で文字が出るフレームがあるか・あっても 1 フレームで収まるか・目に付くちらつきにならないか（seriko が別のスレッドなので、表示の指令が 1 フレーム後に届きうる）。目に付く場合は別途の課題として起票する（本 spec では遅らせて合わせる手当てはしない）。
+- 箱のあるサーフェスを出したまま、シェルに無い番号の `\s` を書いた台本で、箱の文字が出続け、普通のバルーンの窓が出ない。
+- 箱のあるサーフェスを出したままシェルを切り替え、`\s` を書かない台詞を流して、新しいシェルの同じ番号のサーフェスの箱へ文字が出る。
 - シェルの絵が透明な位置は、箱の四角の中でも下のアプリへクリックが抜ける（9.4）。
 - 箱の選択肢を選べる。話している最中に箱を左ダブルクリックすると止まる。話していないときは立ち絵のダブルクリックになる。
 - 台詞の後、普通のバルーンと同じ待ち時間で箱の文字が消える。ポインタを箱の上に置いているあいだは消えない。
-- 箱がサーフェスからはみ出す定義で、はみ出した部分が窓の端で切れ、警告が 1 行出る（R-3）。
+- 箱がサーフェスからはみ出す定義で、はみ出した部分が窓の端で切れ、窓の大きさが変わらず、警告が 1 行出る（R-3。未測定の見込みをここで確かめて確定する）。
 
 ## Performance & Scalability
 

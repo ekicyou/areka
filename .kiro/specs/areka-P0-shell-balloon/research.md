@@ -353,7 +353,20 @@
 - **作るか使うか**: ブレスの中身の読み取りは `balloon::parse`、見出しの展開は `expand_targets`、領域の解決は `TextRegion::resolve`、配置と描画は `present_actor`、選択の確定は `click_selection` と `send_selection`、中断の送り出しは `user_break.rs` を使う。新しく作るのは転記・畳み込み・行き先の状態・箱の同期・箱の押下の判断だけ。
 - **削ったもの**: 表示の層の差し込み口を増やす案、箱ごとのポインタのハンドラ、面を残して隠すだけの速い道、箱の背景色をシェルの絵から採る処理。どれも今の要件には要らない。
 
-### 9.7 残るリスク
+### 9.7 設計検証（`design-validation.md`）を受けた手直し（2026-10-03）
+
+9.2 の D と 9.3 の R-3・R-6 の記述を、次のとおり改める（決定の向きは変えない）。
+
+- **D の補い（シェルに無い番号）**: 「同じ解決の関数を使うので認識はずれない」は、番号として読めるがシェルに無いサーフェスでは成り立たない。seriko は状態を進めるが、表示の層は `ComposeError::SurfaceNotFound` で前の表示を保つ（`areka-emo-present/src/presenter/show.rs`）。文字の層は画面に合わせる: 結線の閉包（純関数 `resolve_for_text`）が、解決した番号が面の表に在るかも見て、無ければ「解決できない」と同じ結果を返す。
+- **R-6 の補い（シェルの切替）**: `set_box_layout` は各スコープの今のサーフェス番号を**保ち**、行き先だけを新しい表での既定へ引き直し、箱の場所の文字を捨てる。seriko が同じ番号のまま出し直す（`areka-seriko/src/actor.rs` の `rebased`）のと揃える。
+- **ゴーストの切替で `set_box_layout` を呼ぶ必要は無い**（コードで確認）: `areka/src/emo2_boot/ghost_switch.rs` の `boot_into` が窓を作り直し（`reopen_ghost_windows`）、`ghost_session.rs` が `wire_emo2_boot` を呼ぶ。`wire_emo2_boot`（`emo2_boot/mod.rs`）は `TextLayerRuntime::new` で文字の層を新しく作り、`Emo2Wiring` は `attached: false`（`frame/wiring.rs`）から始まるので、装着の相がもう 1 度走って箱の束を渡す。`TextLayerRuntime::new` の本番の呼び出しは `emo2_boot/mod.rs` の 1 か所だけ。
+- **同じフレームの記述の訂正**: 行き先の決定は 0 フレームだが、seriko は別のスレッドなので、表示の指令が 1 フレーム後に届くことはありうる。実機の確かめの項目に入れた。
+- **R-3 は未測定**: 「窓の端で切れる」は見込みで、実機の確かめの「はみ出す定義」の項目で確定する。
+- **テストの抜けの補い**: 移動の側の判断を純関数（`judge_box_move`・`judge_box_click`・`next_box_hover`・`settle_box_hover`）にし、滞在の印が残らないことを決定論のテストで確かめる。`choice_active` のスコープ全体化と、箱の位置を足した当たり行にもテストを足した。
+- **名前が空の `balloon.`ブレス**: `BoxIssue::BraceEmptyName` を足した（記録して採らない）。
+- `\f` の装飾の持ち方（場所ごと／スコープごと）は開発者の裁定待ちで、本手直しでは触れていない。
+
+### 9.8 残るリスク
 
 - 箱の出し入れのたびに窓の全部の子が挿し直される。ちらつきは実機で確かめる。
 - 存在の条件の追い方（`fold_boxes`）が画像の畳み込み（`fold.rs`）とずれること。同じ検体で突き合わせるテストで守る。
