@@ -208,7 +208,7 @@ crates/areka/src/
 - `crates/areka/src/ghost_session.rs` — `register_systems` に `crate::mcp::register(world);` の 1 行（`crate::update::register(world);` の次）。
 - `doc/ssp-mcp/transport-diff-areka.md` — 「未知のツール名・必須引数の欠落」の行を測り直して書き換える（8.3）。判定の数の行も合わせる。
 - `.kiro/steering/roadmap.md` — 干渉台帳に「3 段目の spec が触るファイル」の表を転記し、C3 の照合の要点（⑥⑦⑧ の共有ファイル 0）を書く（7.3）。
-- `.kiro/specs/areka-P0-mcp-tool-entrances/verification/signoff.md` — 新規。実機確認の結果（8.5）。
+- `.kiro/specs/completed/areka-P0-mcp-tool-entrances/verification/signoff.md` — 新規。実機確認の結果（8.5）。
 
 `registry.rs`・`server.rs`・`dispatch.rs`・`testkit.rs` と、`mcp-server-core` の既存テスト（`server_*_tests.rs`・`gate_tests.rs`・`port_tests.rs`・`registry_tests.rs`・`help_tests.rs`）は **0 行**変える（8.2）。
 
