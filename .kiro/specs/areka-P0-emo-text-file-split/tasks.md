@@ -10,7 +10,7 @@
   - 完了の状態: `verification/` に基準 SHA 入りの `notes.md` と before の 3 本がコミットされ、`test-all.ps1` の終了コードが 0 であることが記録されている
   - _Requirements: 4.1, 4.2, 2.7_
 
-- [ ] 2. emo-text の 4 本と `region.rs` を分ける
+- [x] 2. emo-text の 4 本と `region.rs` を分ける
 - [x] 2.1 actor を「型と指令の振り分け」「登録と再追従」「1 コマの描画の流れ」に分ける
   - 登録と再追従の `impl` の塊と粗いバルーン定義の警告の関数を子 `attach` へ、描画の流れ（公開の自由関数と私有の 1 体分の描画）を子 `present` へ、項目の中身を変えずに移す。型・`new`・指令の振り分け・読み口・起動の結線は元に残す
   - テストが呼ぶ私有メソッド 2 本だけに `pub(super)` を付け、元に `pub use present::present_frame;` を置いて公開の道筋を保つ。子は既存の子 `decoration` を `use super::decoration;` で引き、本文の綴りを変えない
@@ -40,7 +40,7 @@
   - 完了の状態: viewbox_draw の既存テスト（GPU を使うものを含む）が書き換えなしで緑、既存の子 2 本の差分が 0 行、2 本とも 700 行以下
   - _Requirements: 1.1, 1.3, 1.4, 2.2, 3.2, 4.3, 4.5, 5.5_
 
-- [ ] 2.5 region の内蔵テストを兄弟ファイルへ移す
+- [x] 2.5 region の内蔵テストを兄弟ファイルへ移す
   - 本体を 1 行も動かさず、内蔵テストのモジュールの中身だけを兄弟の `region_tests.rs` へ移し（字下げを 1 段戻すだけ）、元にはテストの接続の宣言だけを残す。モジュール名 `tests` を保ってテストの完全な名前を変えない
   - 同じコミットで層規律の純粋層の一覧へ 1 本を足して母数を 65 に合わせる
   - 前例の本文比較の道具（アーカイブ済みの `.kiro/specs/completed/areka-P0-file-slimming/verification/Compare-RelocatedTests.ps1`）を、既定の `-RepoRoot` がアーカイブ後の置き場所では 1 段ずれるため `-RepoRoot <ワークツリーの根> -Commit <基準 SHA> -OriginalPath crates/areka-emo-text/src/region.rs -RelocatedPath crates/areka-emo-text/src/region_tests.rs` を明示して呼び、出力を `verification/region_tests_identity.txt` へ。道具は `use` と行頭の `pub` を無視するので、補いに基準 SHA の内蔵テストの本文と移した先を空白を無視した `git diff` でも比べる
@@ -89,3 +89,4 @@
 - 2.1: `frame_attach_tests.rs` のテストの道筋は `emo2_boot::frame::attach_tests`（`cargo test -p areka frame::attach_tests`）。同ファイルの説明文に「`present_frame` は `actor.rs`」とある箇所は残す（テストの注釈は 4.3 で書き換え禁止）。
 - 2.1: 動かした doc コメントの内部リンクのため `#[cfg(doc)] use` を 2 行足した（rustdoc の警告を前と同じに保つ）。設計の Non-Goals のとおり必須ではなく、他のタスクで真似る必要はない。
 - 2.4: 子は本文が素の名前で呼ぶ関数を名前で引く（設計の `use super::{decoration, plan};` の字面より本文不変を優先）。子でテストの枝だけが使う親の私有関数は `#[cfg(test)] use super::…;`。
+- 2.5: `region.rs` の接続に `#[rustfmt::skip]` を足した。字下げを 1 段戻すと rustfmt が `count_warns(|| { … })` の波括弧を外したがり、整形すると要件 7.3（字下げ以外 1 文字も変えない）に反し、放置すると全体テストの fmt の段が赤になるため。後続の spec が中身を書き換えるときに外すかどうかはその spec が決める。
