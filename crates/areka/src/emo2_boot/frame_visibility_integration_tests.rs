@@ -441,3 +441,140 @@ fn text_slot_stays_invisible_after_the_text_layer_attaches_its_surface() {
         "改行だけでは可視コンテンツにならず、バルーンも不可視のまま（Requirement 2.3）"
     );
 }
+
+// ---------------------------------------------------------------------------
+// ⑸ 見えているバルーンの組を相の終わりに kanade へ届ける
+//    （areka-P0-status-execution-states task 5.2・要件 4.1／4.5／4.7／4.8／5.2）
+// ---------------------------------------------------------------------------
+//
+// headless の表示層は可視にできないので、照会が「見えている」を読む経路はここ（実 GPU・
+// 本番の相順）で踏む。置き場には kanade の送出端だけを持つゴーストを据え、受信端で数える。
+
+/// 置き場に kanade の送出端だけを持つゴーストを据え、その受信端を返す（切替は据え直しで表す）。
+fn seat_ghost(world: &mut World) -> mpsc::Receiver<areka_kanade::KanadeMsg> {
+    let (tx, rx) = mpsc::channel();
+    world.insert_non_send(crate::ghost_session::GhostSlot(Some(
+        crate::ghost_session::GhostSession::for_test(
+            Some(tx),
+            std::path::PathBuf::from("ghost/test"),
+        ),
+    )));
+    rx
+}
+
+/// 受信端に溜まったバルーンの組の知らせを `(character_id, balloon_id)` の列で取り出す
+/// （それ以外の知らせは失敗）。
+fn balloon_reports(rx: &mpsc::Receiver<areka_kanade::KanadeMsg>) -> Vec<Vec<(u32, u32)>> {
+    rx.try_iter()
+        .map(|msg| match msg {
+            areka_kanade::KanadeMsg::ExecutionState(
+                areka_kanade::ExecutionStateUpdate::Balloons(bindings),
+            ) => bindings
+                .iter()
+                .map(|b| (b.character_id, b.balloon_id))
+                .collect(),
+            _ => panic!("バルーンの組の知らせ以外が届いた"),
+        })
+        .collect()
+}
+
+/// 見えたフレームで組が 1 回だけ届き、見えている間は送り直さず、消えたフレームで空の組が届く。
+#[test]
+fn visible_balloon_is_reported_once_and_its_disappearance_as_an_empty_set() {
+    let (mut world, _gw) = gpu_frame_world();
+    let reports = seat_ghost(&mut world);
+    let (present_tx, present_rx) = mpsc::channel::<PresentCommand>();
+    let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
+    let mut wiring = boot_wiring(present_rx, lifecycle_rx);
+    wiring.clock.observe_cue(0.0);
+    world.insert_resource(FrameTime(0.5));
+
+    // 装着のフレーム: 何も見えていない＝空の組は「最後に届けた組」と同じなので送らない。
+    wiring = advance_frame(&mut world, wiring);
+    assert!(
+        balloon_reports(&reports).is_empty(),
+        "見えていない間は送らない"
+    );
+
+    // scope 0 が見えたフレームで 1 回だけ届く（番号は表示層の現サーフェス＝面 0）。
+    reveal_text(&wiring, 0, "あい");
+    world.insert_resource(FrameTime(1.0));
+    wiring = advance_frame(&mut world, wiring);
+    assert_eq!(
+        wiring.presenter.target_visible(balloon_target(0)),
+        Some(true),
+        "前提: scope 0 が実際に見えている"
+    );
+    assert_eq!(balloon_reports(&reports), vec![vec![(0, 0)]]);
+
+    // 見えたままのフレームでは送り直さない。
+    wiring = advance_frame(&mut world, wiring);
+    assert!(balloon_reports(&reports).is_empty(), "同じ組は送り直さない");
+
+    // 消えたフレームで空の組が届く。
+    present_tx
+        .send(PresentCommand::Hide {
+            target: balloon_target(0),
+            reply: None,
+        })
+        .expect("受信端は結線資源が保持している");
+    wiring = advance_frame(&mut world, wiring);
+    assert_eq!(
+        wiring.presenter.target_visible(balloon_target(0)),
+        Some(false),
+        "前提: scope 0 が実際に消えている"
+    );
+    assert_eq!(balloon_reports(&reports), vec![Vec::new()]);
+}
+
+/// 切替で据わる新しい結線状態の台帳は新品で、前のゴーストの組を持ち越さない（要件 4.8）。
+///
+/// 持ち越すと、新しいゴーストの最初のフレームで「前の組と違う」として空の組が飛び、
+/// 同じ組が見えたフレームでは「前の組と同じ」として知らせが落ちる——その両方を見る。
+#[test]
+fn new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch() {
+    // 前のゴースト: scope 0 が見えて組が届いた状態で降りる。
+    let (mut old_world, _old_gw) = gpu_frame_world();
+    let old_reports = seat_ghost(&mut old_world);
+    let (_old_present_tx, old_present_rx) = mpsc::channel::<PresentCommand>();
+    let (_old_lifecycle_tx, old_lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
+    let mut old_wiring = boot_wiring(old_present_rx, old_lifecycle_rx);
+    old_wiring.clock.observe_cue(0.0);
+    old_world.insert_resource(FrameTime(1.0));
+    old_wiring = advance_frame(&mut old_world, old_wiring);
+    reveal_text(&old_wiring, 0, "あい");
+    old_wiring = advance_frame(&mut old_world, old_wiring);
+    assert_eq!(
+        balloon_reports(&old_reports),
+        vec![vec![(0, 0)]],
+        "前提: 前のゴーストは組を届けている"
+    );
+    drop(old_wiring);
+
+    // 新しいゴースト: 新しい置き場と新しい結線状態（本番の切替と同じく `Emo2Wiring::new`）。
+    let (mut world, _gw) = gpu_frame_world();
+    let reports = seat_ghost(&mut world);
+    let (_present_tx, present_rx) = mpsc::channel::<PresentCommand>();
+    let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
+    let mut wiring = boot_wiring(present_rx, lifecycle_rx);
+    wiring.clock.observe_cue(0.0);
+    world.insert_resource(FrameTime(1.0));
+
+    wiring = advance_frame(&mut world, wiring);
+    assert!(
+        balloon_reports(&reports).is_empty(),
+        "最初のフレームに空の組は飛ばない（前の組を持ち越していない）"
+    );
+
+    reveal_text(&wiring, 0, "あい");
+    let _wiring = advance_frame(&mut world, wiring);
+    assert_eq!(
+        balloon_reports(&reports),
+        vec![vec![(0, 0)]],
+        "前と同じ組でも新しいゴーストへは届く"
+    );
+    assert!(
+        balloon_reports(&old_reports).is_empty(),
+        "前のゴーストへは何も届かない"
+    );
+}

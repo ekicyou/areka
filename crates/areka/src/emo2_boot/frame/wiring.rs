@@ -25,6 +25,7 @@ use super::super::balloon_visibility::BalloonVisibilityState;
 use super::super::switch_assets::SwapPayload;
 use super::super::talk_lifecycle::TalkLifecycleSignal;
 use super::super::zorder_cue::ZOrderDirective;
+use super::status_report::BalloonStatusLedger;
 use super::zorder_descript::{apply_descript_base, apply_descript_rebase};
 use super::{BootAssets, DpiChangedQuery, MoveDirective, TalkClock};
 use crate::placement::zorder_group_ledger::ZOrderGroupLedger;
@@ -46,8 +47,8 @@ use crate::placement::zorder_group_ledger::ZOrderGroupLedger;
 /// 大半のフィールドは `frame` 配下の相（attach／dpi／drain／text）だけが触るため `pub(super)`
 /// ＝`emo2_boot::frame` 内である。ただしバルーン可視性の相は design の File Structure Plan により
 /// **兄弟モジュール** `emo2_boot::balloon_visibility` に置かれる（判断中核と同居させるため）。
-/// その相が消費する 5 つ（`presenter`／`lifecycle_rx`／`balloon_visibility`／`balloon_models`／
-/// `clock`）だけを `pub(in crate::emo2_boot)` へ広げてある。相は 5 つを**同時に**可変借用するため
+/// その相が消費する 6 つ（`presenter`／`lifecycle_rx`／`balloon_visibility`／`balloon_status`／
+/// `balloon_models`／`clock`）だけを `pub(in crate::emo2_boot)` へ広げてある。相は 6 つを**同時に**可変借用するため
 /// （表示層へ発行しながら状態を更新する）、読み口メソッドを並べる形では組めない。広げた先は
 /// emo2_boot の内側どまりで、公開面は 1 つも増えない。
 pub struct Emo2Wiring {
@@ -104,6 +105,10 @@ pub struct Emo2Wiring {
     /// ため、フレームを跨いで生きる器がここに要る（`dpi_state` と同じ理由——相関数は排他 system
     /// から呼ばれる素の関数で `Local` を取れない）。UI スレッド専有で、可視性相以外は触らない。
     pub(in crate::emo2_boot) balloon_visibility: BalloonVisibilityState,
+    /// 最後に kanade へ届けた「見えているバルーンの組」の台帳（可視性の相の終わりの報告が使う・
+    /// areka-P0-status-execution-states 要件 4.1／4.8）。結線状態はゴーストごとに新しく作られる
+    /// ので、台帳も新品から始まり前のゴーストの組を持ち越さない。
+    pub(in crate::emo2_boot) balloon_status: BalloonStatusLedger,
     /// バルーン文字層ランタイム（`register_actor_view`／`present_frame` の所有・`!Send`）。
     pub(super) runtime: Rc<RefCell<TextLayerRuntime>>,
     /// scope → attach 相で装着に使った [`BalloonModel`]（文字層 k 再追従の再利用源・D11-3・R8.1）。
@@ -186,6 +191,8 @@ impl Emo2Wiring {
             zorder_ledger: ZOrderGroupLedger::default(),
             // 可視性の持ち越し状態は初期値（未観測・計測なし）から始める。
             balloon_visibility: BalloonVisibilityState::default(),
+            // 届けた組の台帳も新品（何も届けていない）から始める。
+            balloon_status: BalloonStatusLedger::default(),
             runtime,
             // attach 相が装着した scope ごとに埋める（D11-3）。
             balloon_models: HashMap::new(),

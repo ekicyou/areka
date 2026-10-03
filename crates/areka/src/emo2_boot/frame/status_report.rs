@@ -4,10 +4,8 @@
 //! 「見えているバルーンの組」を作り、最後に kanade へ送った組と違うときだけ置き場のゴーストの
 //! kanade へ `ExecutionState(Balloons(組))` を 1 件送る。表示の真実源は `EmoPresenter` のままで、
 //! 台帳が覚えるのは「最後に何を送ったか」と「番号が取れない旨を警告済みの scope」だけである。
-//!
-//! 可視性の相から呼ぶ結線は task 5.2 が足す。それまでは本番のビルド単位に呼び手が無いので、
-//! 未使用の警告だけを本番のビルド単位で抑える。
-#![cfg_attr(not(test), allow(dead_code))]
+//! 台帳は `Emo2Wiring::balloon_status`（ゴーストごとに新品）にあり、可視性の相
+//! （`balloon_visibility_phase.rs`）が表示・非表示の発行の後に [`report_balloons`] を呼ぶ。
 
 use std::collections::BTreeSet;
 
