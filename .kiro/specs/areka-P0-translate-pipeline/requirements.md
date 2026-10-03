@@ -29,11 +29,11 @@ SHIORI の台詞が再生へ渡る経路は次の 5 種類で、今日はすべ�
 
 ## Boundary Context
 - **In scope**: 上の経路すべての台詞の翻訳・展開を翻訳の前へ移すこと・`OnTranslate` の送出と応答の扱い・MAKOTO の鎖を差し込む口 1 つ（本 spec では素通し）・翻訳の待ちを「SHIORI との往復は一度に 1 つまで」の決まりの中で表すこと・控える台詞を翻訳後にすること・決定論テスト・`doc/COMPAT_ARCHITECTURE.md` §8（正典が沈黙する箇所の areka の裁量）への登記。
-- **Out of scope**: MAKOTO/2.0 DLL の読み込み・通信・文字コード・`\![load|unload|reload,makoto]`（→ `areka-P0-makoto-dll-host`）。SSTP・コミュニケート・プラグインなど新しい台詞の出所を作ること（よって Reference1 の出所の語彙・SSTP の `notranslate`・descript の `sstp.alwaystranslate` も範囲外）。`%(...)` の展開。`username` 以外の環境変数名を新たに展開できるようにすること。`OnTranslate` 以外の新しいイベント。`\![reload,shiori]`。再生側（台本の解釈・文字の表示）の振る舞いの変更。実装済みの証拠としての ukadoc の URL の注記（`areka-P0-ukadoc-survey-shiori` の仕事）。
+- **Out of scope**: MAKOTO/2.0 DLL の読み込み・通信・文字コード・`\![load|unload|reload,makoto]`（→ `areka-P0-makoto-dll-host`）。SSTP・コミュニケート・プラグインなど新しい台詞の出所を作ること（よって Reference1 の出所の語彙・SSTP の `notranslate`・descript の `sstp.alwaystranslate` も範囲外）。`%(...)` の展開。`username` 以外の環境変数名を新たに展開できるようにすること。`OnTranslate` 以外の新しいイベント。`\![reload,shiori]`。再生側（台本の解釈・文字の表示）の振る舞いの変更。
 - **Adjacent expectations**:
   - `areka-P0-makoto-dll-host` は、本 spec が用意する口へ「台詞と元のイベントの出所を受け取り、台詞を返す」形で MAKOTO の鎖を差し込む。本 spec はその口の向こうで何が起きるか（DLL・プロセス・文字コード）を一切持たない。
   - SHIORI の失敗の分類（エラー応答 400・500 は 204 と同じ扱いで会話を続ける・輸送路の失敗はそのゴーストの SHIORI の故障）は、完了 spec `areka-P0-shiori-fault-notice` の決まりをそのまま使い、`OnTranslate` のために例外を作らない。
-  - `areka-P0-property-query-channels`・`areka-P0-balloon-lifecycle-events`・`areka-P0-network-update-canon-order` は同じ運行の判断のファイルを触るので、本 spec と同時には進めない（本 spec が先）。`areka-P0-ukadoc-survey-shiori` は後から ukadoc の URL の注記を足す。
+  - `areka-P0-property-query-channels`・`areka-P0-balloon-lifecycle-events`・`areka-P0-network-update-canon-order` は同じ運行の判断のファイルを触るので、本 spec と同時には進めない（本 spec が先）。`areka-P0-ukadoc-survey-shiori` は完了済みのため、`OnTranslate` の ukadoc の URL の注記と台帳の更新は本 spec が行う（要件 3.7）。
 - **開発上の制約**: 1 ファイル 1,000 行未満を保つ（触るファイルが上限に近い場合は、振る舞いを変えずに先に分ける）。ファイルの長さの検査の例外表には触れない。areka 本体のクレートの `ghost_session.rs`・`main.rs`・`emo2_boot/` には触れない（同じウェーブの spec が触る）。
 
 ## Requirements
@@ -54,8 +54,8 @@ SHIORI の台詞が再生へ渡る経路は次の 5 種類で、今日はすべ�
 #### Acceptance Criteria
 1. The areka shall 翻訳の中の順序を「展開 → `OnTranslate` → MAKOTO の鎖の口 → 再生」とする。
 2. When 台詞に `%username` が含まれるとき, the areka shall `OnTranslate` の Reference0 に、利用者名を展開した後の台詞を入れる（例: 利用者名が「太郎」のとき `%usernameさん` は `太郎さん` として届く）。
-3. The areka shall 展開に、今日の再生時の展開と同じ名前の表・同じ値（その台詞の再生に使われるはずだった利用者名）・同じ既定値（利用者名が無いときの「ユーザーさん」）を使う。
-4. The areka shall 展開できない環境変数の名前（`username` 以外）を `%名前` の綴りのまま残す。
+3. The areka shall 展開に、今日の再生時の展開と同じ規則・同じ値の源（その台詞の再生に使われるはずだった値の写し。`username` のほか `selfname`・`selfname2`・`keroname` など写しに値がある名前はその値）・同じ既定値（`username` に値が無いときの「ユーザーさん」）を使う。
+4. The areka shall 値が無く既定値も無い環境変数の名前を `%名前` の綴りのまま残す（今日の再生時の展開と同じ）。
 5. When `OnTranslate` の応答が 204 で、MAKOTO の鎖が素通しのとき, the areka shall 利用者に表示される台詞を今日の表示と 1 文字も違わないものにする（`%` を含む台詞・タグの引数の中の `%`・エスケープされた `%` を含む台詞でも同じ）。
 6. If 翻訳の結果の台詞に環境変数の綴り（`%username` 等）が残っているとき, the areka shall 再生時に今日と同じ規則でそれを展開する（再生側の展開は残し、翻訳の前に展開済みの部分は再生側で変わらない）。
 
@@ -63,12 +63,13 @@ SHIORI の台詞が再生へ渡る経路は次の 5 種類で、今日はすべ�
 **Objective:** As a 里々・YAYA の辞書を持つゴースト, I want 正典どおりの Reference で `OnTranslate` を受け取りたい, so that 標準の辞書の `OnTranslate` がそのまま働く
 
 #### Acceptance Criteria
-1. When 翻訳を通す台詞があるとき, the areka shall その台詞を返した SHIORI へ `OnTranslate` を GET で 1 回送る。
+1. When 翻訳を通す台詞があるとき, the areka shall その台詞を返した SHIORI へ `OnTranslate` を GET で 1 回送る。ただし SHIORI が 200 で中身が空（0 文字）の台詞を返したときは、正典の「スクリプトが返却された場合」に当たらないものとして `OnTranslate` を送らず、今日と同じに進む。
 2. The areka shall `OnTranslate` の Reference0 を展開済みの台詞、Reference2 を元のイベントの ID、Reference3 を元のイベントの Reference の並びをバイト値 1 で区切って連ねたもの（元のイベントの Reference が 0 個のときは空文字列）とする。
 3. The areka shall Reference1 を欠番とする（areka にはコミュニケート・SSTP・プラグイン・トランスレートしない指定のどの出所も無いため。正典「該当がない場合欠番となる」）。
 4. The areka shall `OnTranslate` を、SHIORI へ送ってよいイベントの表に加える。
 5. While ゴーストを切り替えている間, the areka shall 送り出しの台詞（`OnGhostChanging` とそれに続く切替の `OnClose` の台詞）の `OnTranslate` を切替の前のゴーストの SHIORI へ送り、切替の後のゴーストの起動の挨拶（`OnGhostChanged` 等）の `OnTranslate` を切替の後のゴーストの SHIORI へ送る。
 6. The areka shall `OnTranslate` に、areka が他の GET に付けるのと同じ要求の見出し（`Status`・`SecurityLevel` 等）を付ける。
+7. The areka shall 送ってよいイベントの表の `OnTranslate` の行に、他の行と同じ形で ukadoc の URL の注記を付け、網羅の台帳（`doc/ukadoc-coverage/ledger/shiori.toml`）の `OnTranslate` の項目を実装済み（担当は本 spec）に改める（完了 spec `areka-P0-file-drop`・`areka-P0-network-update` と同じ手順。調査 spec `areka-P0-ukadoc-survey-shiori` は完了済みで、後から注記を足す担い手はいない）。
 
 ### Requirement 4: `OnTranslate` の応答の扱い
 **Objective:** As a 利用者, I want 翻訳がうまくいかないときでもゴーストが黙らずに元の台詞を話してほしい, so that 翻訳の不具合で会話が消えない
@@ -87,11 +88,11 @@ SHIORI の台詞が再生へ渡る経路は次の 5 種類で、今日はすべ�
 
 #### Acceptance Criteria
 1. The areka shall `OnTranslate` を、元のイベントの応答を受け取り終えた後にだけ送り、元のイベントの往復と同時に進めない。
-2. The areka shall 翻訳の待ちを運行の状態の 1 つとして表し、「同時に進行中の SHIORI 往復は 1 つまで」の決まりに新しい例外を作らない。
+2. The areka shall 翻訳の待ちを運行表（SHIORI の往復の順序を決める純粋な状態機械）の状態として表し、「同時に進行中の SHIORI 往復は 1 つまで」の決まりに新しい例外を作らない（運行表の外の殻の中で往復を足す形は取らない。状態を相として持つか、相の外の帳簿として持つかは設計で決める）。
 3. While 翻訳の応答を待っている間, the areka shall 他の SHIORI イベント（毎秒のポンプ・マウス・外から頼まれたイベント・終了や切替の握手のイベント）を送らない。
 4. When 翻訳の応答を待っている間にマウス・毎秒の時刻・終了の要求・切替の要求・外からのイベントの依頼が届いたとき, the areka shall それらを捨てず、翻訳の結果の台詞の再生が始まった後に、今日の「その台詞を再生している間」の規則で扱う。
 5. When 翻訳を終えて台詞の再生を始めるとき, the areka shall 再生の開始の時点の運行の状態（起動の途中・定常・選択肢の連鎖・終了の握手・切替の握手のいずれか）を、翻訳が無かった今日と同じにする。
-6. The areka shall 台詞が返ったイベント 1 つにつき SHIORI との往復を 1 回だけ増やし、台詞が返らなかった（204 等）イベントでは 0 回とする。
+6. The areka shall 台詞が返ったイベント 1 つにつき SHIORI との往復を 1 回だけ増やし、台詞が返らなかった（204 等）イベントと中身が空の 200 のイベントでは 0 回とする。
 
 ### Requirement 6: 控える台詞は翻訳の後
 **Objective:** As a ゴースト作者, I want 後のイベントの Reference に入る「前の台詞」が実際に表示された台詞であってほしい, so that 表示と食い違う台詞をゴーストが受け取らない
@@ -99,7 +100,8 @@ SHIORI の台詞が再生へ渡る経路は次の 5 種類で、今日はすべ�
 #### Acceptance Criteria
 1. The areka shall 再生中の台詞として控える台詞（`OnChoiceTimeout` の Reference0 の源）を、翻訳の後の台詞とする。
 2. The areka shall 切替の前のゴーストの「切り替え時のスクリプト」として控え、切替の後のゴーストの `OnGhostChanged` の Reference1 に入れる台詞を、翻訳の後の台詞とする。
-3. The areka shall 次の 5 点を正典が沈黙する箇所の areka の裁量として `doc/COMPAT_ARCHITECTURE.md` §8 に登記する: ⑴ 控える台詞は翻訳の後 ⑵ `OnGhostChanged` の Reference1 は翻訳の後 ⑶ Reference1 は常に欠番 ⑷ エラー応答のときは元の台詞で進む ⑸ 翻訳の結果に残った環境変数は再生時に展開する。
+3. The areka shall 次の 6 点を正典が沈黙する箇所の areka の裁量として `doc/COMPAT_ARCHITECTURE.md` §8 に登記する: ⑴ 控える台詞は翻訳の後 ⑵ `OnGhostChanged` の Reference1 は翻訳の後 ⑶ Reference1 は常に欠番 ⑷ エラー応答のときは元の台詞で進む ⑸ 翻訳の結果に残った環境変数は再生時に展開する ⑹ 中身が空の 200 には `OnTranslate` を送らない。
+4. The areka shall §8 の既存の行「`OnGhostChanged` の Ref1 に何を載せるか」（今は「`OnGhostChanging` が返した台本をそのまま載せる」）を、⑵ と食い違わない書き方に改める（新しい行を足すだけで既存の行を残さない）。
 
 ### Requirement 7: MAKOTO の鎖を差し込む口
 **Objective:** As a 後半の spec `areka-P0-makoto-dll-host` の実装者, I want MAKOTO の鎖を差し込む口が 1 つだけ決まっていてほしい, so that 翻訳の経路を作り直さずに MAKOTO の DLL を足せる
