@@ -38,7 +38,6 @@ use wintf::ecs::{FrameTime, WindowDragging};
 use crate::input_events::balloon::BalloonWiring;
 use crate::placement::spawn::BalloonWindowMarker;
 
-// 次の 1 行は `emo-text-file-split` と併合で衝突しうる（`status_report` を足した行）。
 use super::super::frame::{Emo2Wiring, resolve_talk_time, status_report};
 use super::super::target_map::balloon_target;
 use super::{
