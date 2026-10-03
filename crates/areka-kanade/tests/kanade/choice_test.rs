@@ -102,5 +102,8 @@ mod stage_failure_tests;
 #[path = "choice_test_test_support.rs"]
 mod test_support;
 #[cfg(test)]
+#[path = "choice_test_timeout_directive_tests.rs"]
+mod timeout_directive_tests;
+#[cfg(test)]
 #[path = "choice_test_timeout_tests.rs"]
 mod timeout_tests;

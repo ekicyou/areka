@@ -213,6 +213,12 @@
 運び役を開ける場所は areka の中に 5 つあるが、5 つ目は areka 自身の内部の名前を選ぶための
 もので、さくらスクリプトの名前ではない。だから経路は 4 つと数えている。
 
+> **2026-10-03 の追記**: この節の数は調査時点の写しで、数え直していない。`set,choicetimeout` は
+> 2026-10-03 に `areka-P0-choice-timeout-directive` が実装し、運び役の受け手ではなく compile が
+> 転記の後に時間の欄を読むようになった（`crates/areka-sakura/src/compile.rs` の `parse_choice_timeout`。
+> 下の表 B の該当行に書き添えた）。下の「既に引数の語彙を持っている場所」も、いまはこの時間の欄を
+> 読む場所を加えて 2 つである。いまの状態は台帳 `ledger/sakura-script.toml` が正本である。
+
 ### 表 A: 命令名ごと（52 行・全数）
 
 | 命令名 | 属する項目の数 | 選択子の異なり | 消費される組 | 受け手（定義の名前） | 消費されない項目の数 |
@@ -397,7 +403,7 @@
 | `set,balloonoffset` | 1 | 消費されない | — |
 | `set,balloontimeout` | 1 | 消費されない | — |
 | `set,balloonwait` | 1 | 消費されない | — |
-| `set,choicetimeout` | 1 | 消費されない | — |
+| `set,choicetimeout` | 1 | compile が読む（2026-10-03 に `areka-P0-choice-timeout-directive` が実装。運び役への転記はそのままで、受け手はいないが、compile が転記の後に時間の欄を読み、選択待ちの区切りへ秒で入れる。調査時点は消費されない） | `parse_choice_timeout` |
 | `set,otherghosttalk` | 1 | 消費されない | — |
 | `set,othersurfacechange` | 1 | 消費されない | — |
 | `set,position` | 1 | 消費されない | — |
@@ -533,7 +539,7 @@ brief が書いている綴りを 1 つずつ項目 id へ当てた。当たり�
 | `areka-P0-sakura-time-directives` | `\![set,alpha,--time/--wait]` | `\![set,alpha,数値,オプション]` | `ukadoc:list_sakura_script:_5c_21_5bset_2calpha_2c_6570_5024_2c_30aa_30d7_30b7_30e7_30f3_5d:1` | 所有 | この brief |
 | `areka-P0-sakura-time-directives` | `\![set,balloontimeout,時間]` / `\![set,balloontimeout]` | `\![set,balloontimeout,時間]` | `ukadoc:list_sakura_script:_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1` | 所有 | `areka-P0-balloon-canon-residue` |
 | `areka-P0-sakura-time-directives` | `\![set,balloonwait,倍率\|ms指定]` | `\![set,balloonwait,倍率]` | `ukadoc:list_sakura_script:_5c_21_5bset_2cballoonwait_2c_500d_7387_5d:1` | 所有 | この brief |
-| `areka-P0-sakura-time-directives` | `\![set,choicetimeout,時間]` | `\![set,choicetimeout,時間]` | `ukadoc:list_sakura_script:_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1` | 所有 | この brief |
+| `areka-P0-sakura-time-directives` | `\![set,choicetimeout,時間]` | `\![set,choicetimeout,時間]` | `ukadoc:list_sakura_script:_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1` | 所有 | `areka-P0-choice-timeout-directive`（2026-10-03 にこの brief から切り出した spec が引き受けて実装済みにした。調査時点はこの brief） |
 | `areka-P0-sakura-time-directives` | `\![sound,wait]` | `\![sound,wait]` | `ukadoc:list_sakura_script:_5c_21_5bsound_2cwait_5d:1` | 所有 | この brief |
 | `areka-P0-sakura-time-directives` | `\![wait,syncobject,名前,--timeout=]` | `\![wait,syncobject,同期オブジェクト名,オプション]` | `ukadoc:list_sakura_script:_5c_21_5bwait_2csyncobject_2c_540c_671f_30aa_30d6_30b8_30a7_30af_30c8_540d_2c_30aa_30d7_30b7_30e7_30f3_5d:1` | 所有 | この brief |
 | `areka-P0-sakura-time-directives` | `\_V` | `\_V` | `ukadoc:list_sakura_script:_5c_V:1` | 所有 | 空 |
@@ -655,7 +661,7 @@ brief が挙げた件数と台帳の担当の件数はその分だけずれる�
 | compile 側時間指令 allowlist（`quicksection`／`set,balloonwait`／`set,choiceti… | `move` | `ukadoc:list_sakura_script:_5c_21_5bmove_5d:1` | `\![move]` |
 | compile 側時間指令 allowlist（`quicksection`／`set,balloonwait`／`set,choiceti… | `set,balloontimeout` | `ukadoc:list_sakura_script:_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1` | `\![set,balloontimeout,時間]` |
 | compile 側時間指令 allowlist（`quicksection`／`set,balloonwait`／`set,choiceti… | `set,balloonwait` | `ukadoc:list_sakura_script:_5c_21_5bset_2cballoonwait_2c_500d_7387_5d:1` | `\![set,balloonwait,倍率]` |
-| compile 側時間指令 allowlist（`quicksection`／`set,balloonwait`／`set,choiceti… | `set,choicetimeout` | `ukadoc:list_sakura_script:_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1` | `\![set,choicetimeout,時間]` |
+| compile 側時間指令 allowlist（`quicksection`／`set,balloonwait`／`set,choiceti… | `set,choicetimeout` | `ukadoc:list_sakura_script:_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1` | `\![set,choicetimeout,時間]`（2026-10-03 に `areka-P0-choice-timeout-directive` が実装済み。§8 の同じ行に、compile がこの綴りだけを実際に読むようになったことを書き足した。正典が黙っている点の裁量は §8 の次の行） |
 | compile 側時間指令 allowlist（`quicksection`／`set,balloonwait`／`set,choiceti… | `sound,wait` | `ukadoc:list_sakura_script:_5c_21_5bsound_2cwait_5d:1` | `\![sound,wait]` |
 | compile 側時間指令 allowlist（`quicksection`／`set,balloonwait`／`set,choiceti… | `wait,syncobject` | `ukadoc:list_sakura_script:_5c_21_5bwait_2csyncobject_2c_540c_671f_30aa_30d6_30b8_30a7_30af_30c8_540d_2c_30aa_30d7_30b7_30e7_30f3_5d:1` | `\![wait,syncobject,同期オブジェクト名,オプション]` |
 | 角括弧なし `\_` タグ（2 文字形 `\_X`・3 文字形 `\__X`）の字句境界と意味 | `\_!` | `ukadoc:list_sakura_script:_5c__21:1` | `\_!` |
@@ -742,6 +748,12 @@ brief が挙げた件数と、台帳で担当になった件数は一致しな�
 > **2026-09-05 の見直しで 1 件減った。** `\_V` が別名になったので、それまで担当だった
 > `areka-P0-sakura-time-directives` の件数が 11 から 10 へ、全体が 78 から 77 へ変わった。
 > 担当は根の `\![sound,wait]` の側で読む。
+
+> **2026-10-03 の追記**: `\![set,choicetimeout,時間]` の担当は、`areka-P0-sakura-time-directives` から
+> 切り出した `areka-P0-choice-timeout-directive` へ移り、同じ日に実装済みになった（表 ⑶-1 の該当行に
+> 書き添えた）。表 ⑶-2 の「compile 側時間指令 allowlist」の行は §8 の主題を変えていないので指す先は
+> そのままで、§8 にはこの綴りの裁量を記録した行が 1 行増えた（表 ⑶-2 には足していない）。
+> 上の表 ⑶-3 と件数は調査時点の写しで、数え直していない。いまの担当は台帳 `ledger/sakura-script.toml` が正本である。
 
 ### 表 ⑶-4: どの項目にも当たらない綴り 20 種
 
