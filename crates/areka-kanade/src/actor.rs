@@ -41,6 +41,7 @@ use crate::msg::{
 use crate::online::OnlineCounter;
 use crate::schedule::resources::ResourceSink;
 use crate::schedule::{Action, Input, Phase, State, TermCause, step};
+use crate::shiori::real::ABSENT_REFERENCE;
 use crate::talk::TalkCommand;
 
 /// kanade アクターを起動する（areka-actor 規約: スレッド名 "kanade"）。
@@ -434,7 +435,51 @@ fn execute_actions(
 ///   `shiori_request`）で残して送出する（Req6.2）。往復失敗は error!＋`Failed(Ipc)` へ写像（宙吊りなし）。
 /// - SHIORI のエラー応答（`Failed(ShioriFailure::Shiori)`）は、GET なら `NoContent`、NOTIFY なら
 ///   `Notified` に写して返し、`warn!`（event=`shiori_error_response`）を 1 件残す（会話を続ける）。
+///
+/// 検査と送出は [`round_trip_raw`] が受け持ち、ここはエラー応答の写しだけを足す。
 pub(crate) fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -> ShioriOutcome {
+    // エラー応答の記録に載せるため、call を渡す前に種別と ID を控える（固定 ID なら複製は無料）。
+    let (method, event_id) = match &call {
+        ShioriCall::Get { id, .. } => ("GET", id.clone()),
+        ShioriCall::Notify { id, .. } => ("NOTIFY", id.clone()),
+    };
+    let outcome = round_trip_raw(shiori, call);
+
+    // エラー応答（400・500 など）は致命の失敗にせず「返事なし」に写す（shiori-fault-notice
+    // 要件 6.1・裁定 3）: GET は 204 相当の NoContent、NOTIFY は Notified として再投入する。
+    // 運行表は応答が GET か NOTIFY かを知らないので、種別を知るここで写す。回数の閾値は置かない。
+    // 他の 4 種（接続・期限切れ・通信・内部）は Failed のまま（Fault の判断は運行表のまま）。
+    match outcome {
+        ShioriOutcome::Failed(ShioriFailure::Shiori(e)) => {
+            tracing::warn!(
+                target: "kanade",
+                event = "shiori_error_response",
+                method,
+                id = %event_id.as_str(),
+                error = %e,
+                "SHIORI がエラー応答——返事なし（204）と同じ扱いで会話を続ける"
+            );
+            if method == "GET" {
+                ShioriOutcome::NoContent
+            } else {
+                ShioriOutcome::Notified
+            }
+        }
+        other => other,
+    }
+}
+
+/// 送出の檻を通して送り、SHIORI の結果を写さずに返す（エラー応答も `Failed` のまま）。
+///
+/// 許可表の検査・欠番の印の置き換え・`shiori_request` の記録・往復をここで行う。今日の呼び手は
+/// [`round_trip_request`] を通し、翻訳の往復（`actor_translate`）はエラー応答を自分で読むので
+/// これを直接呼ぶ（`shiori_error_response` を重ねて出さない）。
+///
+/// Reference の値が欠番の印（`ABSENT_REFERENCE`）と同じ位置は、`OnTranslate` の添字 1 を除き
+/// 空文字に置き換えて `warn!`（event=`reference_absent_marker_replaced`）を 1 件ずつ残す。外から
+/// 入った値が線の上で行ごと消えるのを止めるためで、送る 1 か所のここで全イベントに効かせる。
+pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -> ShioriOutcome {
+    replace_absent_markers(&mut call);
     // 送出しようとしているイベントの Method／ID（出所カテゴリ込み）／参照値／実行状態を取り出す。
     // `status.render()` は `None` ⇔ Status ヘッダ行なし（Req6.2・DD-IT-5 の kanade 層観測）。
     let (method, event_id, references, status_wire) = match &call {
@@ -491,39 +536,35 @@ pub(crate) fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -
         "SHIORI 送出"
     );
 
-    // エラー応答の記録に載せるため、call を渡す前に ID を控える（固定 ID なら複製は無料）。
-    let event_id = event_id.clone();
     let (reply_tx, reply_rx) = reply_channel::<ShioriOutcome>();
-    let outcome = round_trip(
+    round_trip(
         shiori,
         ShioriMsg::Request {
             call,
             reply: reply_tx,
         },
         reply_rx,
-    );
+    )
+}
 
-    // エラー応答（400・500 など）は致命の失敗にせず「返事なし」に写す（shiori-fault-notice
-    // 要件 6.1・裁定 3）: GET は 204 相当の NoContent、NOTIFY は Notified として再投入する。
-    // 運行表は応答が GET か NOTIFY かを知らないので、種別を知るここで写す。回数の閾値は置かない。
-    // 他の 4 種（接続・期限切れ・通信・内部）は Failed のまま（Fault の判断は運行表のまま）。
-    match outcome {
-        ShioriOutcome::Failed(ShioriFailure::Shiori(e)) => {
-            tracing::warn!(
-                target: "kanade",
-                event = "shiori_error_response",
-                method,
-                id = %event_id.as_str(),
-                error = %e,
-                "SHIORI がエラー応答——返事なし（204）と同じ扱いで会話を続ける"
-            );
-            if method == "GET" {
-                ShioriOutcome::NoContent
-            } else {
-                ShioriOutcome::Notified
-            }
+/// Reference のうち欠番の印と同じ値を空文字に置き換え、位置ごとに `warn!` を 1 件残す。
+///
+/// 印を正当に載せるのは `OnTranslate` の添字 1（[`crate::events::on_translate`] が置く欠番）だけ。
+fn replace_absent_markers(call: &mut ShioriCall) {
+    let (ShioriCall::Get { id, references, .. } | ShioriCall::Notify { id, references, .. }) = call;
+    for (index, value) in references.iter_mut().enumerate() {
+        if value != ABSENT_REFERENCE || (index == 1 && matches!(id, EventId::Static("OnTranslate")))
+        {
+            continue;
         }
-        other => other,
+        tracing::warn!(
+            target: "kanade",
+            event = "reference_absent_marker_replaced",
+            id = %id.as_str(),
+            index,
+            "Reference が欠番の印と同じ値——行が消えないよう空文字に置き換えて送る"
+        );
+        value.clear();
     }
 }
 

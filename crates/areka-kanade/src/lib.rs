@@ -25,6 +25,9 @@ pub mod actor;
 pub mod change;
 // 殻で答える複数件のリソース照会（`KanadeMsg::ResourceQuery`）。`actor.rs` を薄く保つための分室。
 mod actor_resources;
+// 殻が翻訳の依頼（`Action::Translate`）を実行する 1 関数。呼び手（`execute_actions` の腕）は次の段で足す。
+#[allow(dead_code)]
+mod actor_translate;
 pub mod msg;
 pub mod online;
 // schedule の消費者はランタイム層の actor.rs シェル（[`crate::actor::spawn_kanade`]）。

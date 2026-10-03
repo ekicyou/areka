@@ -62,7 +62,7 @@
   - 完了の状態: 応答の読みの表の全行と記録の語彙・レベルのテスト、元のイベントの控えのテストが緑
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.7, 8.1, 8.4_
 
-- [ ] 3.2 殻が翻訳の依頼を実行する関数を足す
+- [x] 3.2 殻が翻訳の依頼を実行する関数を足す
   - 順序は「展開 → `OnTranslate` の組み立て → 生の往復 → 応答の読み → MAKOTO の口」。Status は依頼に載った値を使う
   - 今日の往復の関数を「検査して送って生の結果を返す部分」と「エラー応答を 204 へ写す部分」に分け、既存の呼び手の振る舞いは変えない。エラー応答の警告は応答の読みの 1 件だけにする
   - 送る 1 か所で、Reference の値が欠番の印と同じ位置（`OnTranslate` の添字 1 以外）を空文字に替えて `reference_absent_marker_replaced` を 1 件残す
@@ -145,3 +145,4 @@
 - 1.2〜1.5: clippy は HEAD の時点で既に赤（`areka-kanade/src/shiori/real.rs` の `collapsible_if`・`dola` の 21 件・`areka-sakura/src/compile_arm_tests.rs` の doc の字下げ・`shiori-host32-host/tests` の `drop_non_drop`）。担当は `clippy-199-lints` で、本 spec では触らない。自分が触ったファイルに指摘が無いことだけを見る。`areka-sakura` には `log-capture-kit` が無いので、記録の数はテストの中の小さな `tracing::Subscriber` で数える
 - 2.1: 台帳 `shiori.toml` の `OnTranslate` の note は最終形の振る舞いで書いた。根拠の場所は今は `events.rs`・`shiori3.rs` だけなので、3.x で `schedule/translate.rs`・`actor_translate.rs` ができたら根拠の行に書き足す。台帳を変えたら `briefing.md` の barrier の数・`roadmap-draft.md` の `owner_count` も合わせ、`report/*.md` は手でなく `cargo run -p ukadoc-survey -- report`／`-- report-summary` で作り直す（改行だけ変わった報告ファイルはコミットに含めない）
 - 3.1: `translate::before` は `Option<SourceEvent>` を返し、`after` は `replied` を取らない形で入れた（使い手がまだ無いため）。3.4 で設計の `Replied` の形に広げ、`after` の控えの決まりに「最後の往復が `Action::Translate` なら空にする」を足す。輸送路の失敗は `read_reply` では記録せず、`on_done` の `translate_failed`（3.3）が受け持つ。`State` を `..` なしで組む既存テストは 14 か所で、`steady_flow_tests.rs` は `..base_state()` なので触っておらず 925 行のまま（3.4 の行数の見積もりは 925 から）
+- 3.2: `lib.rs` の `mod actor_translate;` に一時の `#[allow(dead_code)]` がある。3.3 で `execute_actions` の腕から `run_translate` を呼んだら外す。送出は `round_trip_raw`（検査・印の置き換え・`shiori_request`・往復）と、エラー応答を写す `round_trip_request` の 2 段。偽の SHIORI のスレッドは送り手を落としてから join しないと `recv` で止まる
