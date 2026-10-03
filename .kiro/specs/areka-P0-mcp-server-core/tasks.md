@@ -91,7 +91,7 @@
   - _Depends: 4.1_
   - _Boundary: server_gate_help_tests_
 
-- [ ] 5. アプリへの結線と文書・登記
+- [x] 5. アプリへの結線と文書・登記
 - [x] 5.1 (P) アプリ本体へ「立てる 1 行」を足す
   - `crates/areka/Cargo.toml` に `areka-mcp` の path 依存を 1 行（外部依存は足さない）
   - `fn main()` の `resolve_boot` の直後・`WinApp` の構築より前（`thread_roles` と `perf_thread_report` の起動より後）に、取っ手を `_mcp` で受ける 1 行と意図のコメント（`Drop` で畳む・`down?` の早い戻りを避ける・`app` より先に宣言）を置く。畳む行は書かない
@@ -106,7 +106,7 @@
   - _Requirements: 5.1, 5.2, 5.3, 5.4_
   - _Depends: 4.3, 4.4_
   - _Boundary: 差の一覧_
-- [ ] 5.3 (P) steering への登記
+- [x] 5.3 (P) steering への登記
   - `tech.md` の Key Libraries に rmcp・tokio（＋tokio-util）・hyper（＋hyper-util・http-body-util・tower-service）を用途・版・「tokio は MCP のスレッドに閉じる」とともに足す
   - `structure.md` に「MCP Server Crate（areka-mcp）」の節（Location・Purpose・Modules・Dependencies・規律）を足す
   - 完了の姿: 両ファイルに登記があり、design.md の依存の一覧と食い違わない
