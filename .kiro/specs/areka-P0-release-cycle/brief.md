@@ -20,7 +20,7 @@
 2. 版を上げる: `cargo set-version --bump patch --workspace`（cargo-edit）か同じことをする手元の 1 行。`Cargo.lock` も更新。`dist/README.txt` の「時点」の行を今日に。`crates-io-publish` の `--dry-run` を通す。
 3. 版上げの PR を出し、squash マージする（他の変更を混ぜない）。
 4. main の squash コミットに `v{版}` のタグを打って push する。これが Actions のきっかけ。
-5. 見守る: `release.yml` の緑・Release の公開・crates.io の各クレートの版・winget-pkgs への PR（`winget.yml`）。赤なら原因を直す spec を起票し、**同じ版で再実行しない**（zip の URL は版ごとに固定・crates.io は差し替え不可）＝直したら次の版で出す。
+5. 見守る: `release.yml` の緑・Release の公開・crates.io の各クレートの版・winget-pkgs への PR（`winget.yml`）。赤のときの決まり（10-03 開発者）: `release.yml` が赤で Release が残っておらず、タグを動かさずに済む原因（通信の失敗・時間切れ・取り消し）なら、同じ走りを「Re-run」でやり直してよい（まだ何も配られていない）。コミットの直しが要る赤と、Release の公開より後（crates.io・winget）の赤は、原因を直す spec を起票し、**同じ版で出し直さない**（zip の URL は版ごとに固定・crates.io は差し替え不可）＝タグを動かさず、直したら次の版で出す。
 6. 記録: `roadmap.md` の「完了サマリ」の下に「リリース」の 1 行（版・日付・Release の URL・winget の PR）。
 7. **初回（`v0.0.2`）だけの手順**: タグを打つ前に、開発者が手元で `cargo publish --workspace` を実行して crates.io へ出し、各クレートに Trusted Publishing を設定する（`crates-io-publish` の手順）。winget の初回の手提出は `winget-manifest-submission`（Release の実在が要る＝初回の後のウェーブ）。
 
