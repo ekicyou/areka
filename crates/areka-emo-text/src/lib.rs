@@ -262,6 +262,7 @@ mod tests {
         ),
         ("canvas.rs", include_str!("canvas.rs")),
         ("viewbox.rs", include_str!("viewbox.rs")),
+        ("viewbox_diff.rs", include_str!("viewbox_diff.rs")),
         ("wrap.rs", include_str!("wrap.rs")),
         // areka-P0-text-decoration-canon が新設した純粋モジュール 14 本
         // （`draw_metrics.rs`／`draw_line_store.rs` は COM 層なので載せない）。
@@ -416,7 +417,7 @@ mod tests {
     fn pure_layer_modules_have_no_windows_imports() {
         // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
         // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
-        assert_eq!(PURE_SOURCES.len(), 63, "走査する純粋層モジュールの母数");
+        assert_eq!(PURE_SOURCES.len(), 64, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",
