@@ -3,7 +3,7 @@
 > 設計の正本は design.md。ファイル・型・関数の名前は design.md の「File Structure Plan」と「Components and Interfaces」に従う。テストは実装の隣の `*_tests.rs`（`#[cfg(test)] #[path = "…"] mod …;`）。ツールごとのテストの接続はそのツールのファイル自身に書く（`mod.rs` に書かない）。1 ファイル 1,000 行を超えない。常時テストはネットへ出ず、ポートは OS に割り当てさせる（9801・9821 その他の固定の番号を束ねるテスト 0 本）。10 秒の上限を実際に待つテストは書かない（上限は引数で短くする）。
 > `Cargo.toml` は根・`crates/areka-mcp`・`crates/areka` のどれも 0 行。触るファイルは design.md「File Structure Plan」の範囲に限り、ほかを触る要が出たら止めて報告する。
 
-- [ ] 1. 土台: 両側のモジュールとテストの骨組み
+- [x] 1. 土台: 両側のモジュールとテストの骨組み
 - [x] 1.1 プロトコル側（`areka-mcp`）に検査とツールのモジュールの骨組みを置く
   - `lib.rs` に `mod check;` と `pub mod tools;` の 2 行を足す（既存の `pub use` は変えない）
   - `tools/` の下に表・橋・結果の形・10 本のツールのファイルを空で作り、各テストファイル（`check_tests.rs`・`tools_tests.rs`・`tools_socket_tests.rs`・`bridge_tests.rs`・`outcome_tests.rs`）の接続も置く。以後の並走タスクが `lib.rs`・`tools/mod.rs` の宣言を取り合わないようにする
@@ -14,7 +14,7 @@
   - 完了の姿: `cargo build -p areka --bin areka` と `cargo test -p areka --bin areka --no-run` が緑（使われない項目の警告は後のタスクで消える）
   - _Requirements: 7.1, 7.4_
 
-- [ ] 2. プロトコル側の部品: 結果の形・検査・10 本の定義
+- [x] 2. プロトコル側の部品: 結果の形・検査・10 本の定義
 - [x] 2.1 (P) 結果の 4 つの形を作る関数
   - 素の値（`OK:` なし・`isError: false`）、成功（付言が空なら本文 `OK`、あれば `OK:<付言>`）、失敗（`NG:<理由>`・`isError: true`）、本文の後に base64 済みの PNG を 1 枚足す形（`mimeType: "image/png"`）
   - 完了の姿: `outcome_tests.rs` で 4 つの形と `ok("")` が `OK`（コロンなし）になることが緑
@@ -43,7 +43,7 @@
   - 完了の姿: `check_tests.rs` の 10 本ぶんの表が緑で、どのツールでも理由の文が `failed to deserialize parameters:` で始まらない
   - _Requirements: 2.2, 2.3, 2.4, 2.5, 2.8_
 
-- [ ] 3. 橋: 届けて塞がずに待つ
+- [x] 3. 橋: 届けて塞がずに待つ
 - [x] 3.1 要求と返事の対（`ToolRequest`・`ReplyTo`・`Pending`・`Answer`）
   - `ToolRequest::new` が要求と返事を受ける側の対を作る（本番の橋もテストもこの関数で作る）。`ReplyTo` は `Send` で、記録用のゴーストの名前を添えられ、1 回だけ送れる。受け手がもう居なければ送りは黙って捨てられる
   - `ReplyTo` の `Drop` は送り手を先に落としてから合図を立てる（合図を立てるのはここ 1 か所）。`Pending` の `Drop` は逆向きの合図を立て、`ReplyTo::is_abandoned` がそれを読む
@@ -57,7 +57,7 @@
   - 完了の姿: `bridge_tests.rs` でテストのスレッドの tokio を回し、⑴ 返事をしない受け手と上限 50 ms で上限の `NG:`・`warn!` 1 件・`debug!` 1 件、⑵ 受け口を落としてから呼ぶと長い上限を待たずに `NG:areka is shutting down`・`warn!` 1 件、⑶ 受けた要求を答えずに落としても同じ、⑷ 返事ありで `warn!` 0 件・`debug!` にゴーストの名前、⑸ 上限の後の送りは何も起こさない、⑹ `REPLY_WAIT` の文言が `areka did not respond within 10 seconds`、が緑
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.7, 6.8_
 
-- [ ] 4. 登録表と handler（プロトコル側の結線）
+- [x] 4. 登録表と handler（プロトコル側の結線）
 - [x] 4.1 10 本の登録表と受け口を組む
   - 上限を引数に、表の各行の定義を `ToolSpec` にして「詰め替え → 送って待つ」を処理として登録し、登録表とアプリ本体が汲む受け口を返す。定義が読めない行は `error!` 1 件で登録しない
   - 受け口は呼び出し側が持ち、アプリ本体へ置くまでの要求は溜まる
@@ -77,7 +77,7 @@
   - 完了の姿: `tools_socket_tests.rs` の上の 4 群が緑（ループバックの空きポートだけ）
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.4, 2.7, 2.8, 5.1, 5.3, 5.4, 6.3, 6.8, 8.1_
 
-- [ ] 5. アプリ本体側: 解決・ツールの処理・汲む系
+- [x] 5. アプリ本体側: 解決・ツールの処理・汲む系
 - [x] 5.1 (P) 起動中のゴーストの読み取りと `ghost_name` の解決
   - World から起動中のゴースト 1 体（descript の `name`・絶対化したルートフォルダ）を読む。置き場が空・実行系が無ければ無し（LogSink へ倒れた単位も実行系があれば数える）
   - 解決の判断を純粋な関数にする: 省略・空は `Reject` なら `NOT_ACTIVE`、`UseActive` なら起動中の 1 体（0 体なら `NOT_ACTIVE`）。空でなければ `name` の完全一致か、ルートフォルダとの比較（大文字小文字・区切り・末尾の区切りの差を同じとみなす）で一致、どちらでもなければ `CANNOT_FIND`
@@ -106,7 +106,7 @@
   - _Requirements: 3.8, 4.1, 6.1_
   - _Depends: 5.3_
 
-- [ ] 6. アプリ本体への結線
+- [x] 6. アプリ本体への結線
 - [x] 6.1 `fn main()` と系の登録に橋をつなぐ
   - `areka_mcp::start` の前で 10 本の登録表と受け口を組んで登録表を渡し、`register_systems` の後で受け口を World に置き、`app.run()` の直後・`exit_wait::begin_close` の前で閉じる
   - 完了の姿: `cargo build -p areka --bin areka` が緑、`main.rs` の main からの増分が 1.2 の `mod mcp;` を含めコメント込みで 12 行以内（954 → 966 行以内）、`ghost_session.rs` の main からの増分が 1 行（5.3）、`exit_wait.rs`・`emo2_boot/` が 0 行
@@ -114,7 +114,7 @@
   - _Depends: 4.1, 5.3_
   - 汲む系の登録（`ghost_session.rs`）は 5.3 で済んでいる
 
-- [ ] 7. 差の一覧・台帳・全体の確認・実機
+- [x] 7. 差の一覧・台帳・全体の確認・実機
 - [x] 7.1 差の一覧と roadmap の干渉台帳
   - `doc/ssp-mcp/transport-diff-areka.md` の「未知のツール名・必須引数の欠落」の行を、4.3 で測った値（エラーの番号・`message`・旧式と無状態版の HTTP の状態）と測ったテストの名前で書き換え、判定と判定の数の行を合わせる（空欄 0）
   - `.kiro/steering/roadmap.md` の干渉台帳に design.md「3 段目の spec が触るファイル」の表と C3 の照合の要点を転記する
