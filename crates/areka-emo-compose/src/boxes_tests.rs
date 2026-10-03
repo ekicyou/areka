@@ -409,3 +409,380 @@ fn text_without_braces_folds_to_an_empty_layout_and_no_report() {
     assert_eq!(layout, BoxLayout::default());
     assert_eq!(report.issues, vec![]);
 }
+
+// ---- 箱の element定義をサーフェス番号ごとに配る（fold_boxes の置き場所の側・要件 2.1〜2.7・
+// 3.8・10.1・10.2）。文面はテストの中に持つ（検体は読まない）。
+
+/// 面の画像の対応を渡して畳む（画像の World も同じ文面と同じ対応から組む）。
+fn fold_images(text: &str, given: &[(u32, &str)]) -> (BoxLayout, BoxReport, EmoWorld) {
+    let images: BTreeMap<u32, String> = given.iter().map(|(id, f)| (*id, f.to_string())).collect();
+    let world = EmoWorld::build_with_images(&areka_parsers::shell::parse(text), &images);
+    let (layout, report) = fold_boxes(&parse_boxes(text), &images, &world);
+    (layout, report, world)
+}
+
+/// 見出しと本体の行から `surface*`ブレス（または `surface.append*`ブレス）の文面を作る。
+fn block(heading: &str, lines: &[&str]) -> String {
+    let mut text = format!("{heading}\n{{\n");
+    for line in lines {
+        text.push_str(line);
+        text.push('\n');
+    }
+    text.push_str("}\n");
+    text
+}
+
+/// 箱 `a`・`b` の定義（大きさの違う 2 つ）。
+fn two_braces() -> String {
+    [brace("a", &["size,100,50"]), brace("b", &["size,80,40"])].concat()
+}
+
+const NONE: &[BoxPlacement] = &[];
+
+#[test]
+fn box_text_folds_to_expected_table_in_ascending_element_order() {
+    // 要件 2.1・2.3・2.4: 箱を 2 つ持つ面・同じ名前を別の位置に置く面・箱の無い面。
+    // 列は element番号の昇順（書いた順ではない）・名前はすべて定義の表で引ける。
+    let text = [
+        two_braces(),
+        block(
+            "surface0",
+            &[
+                "element0,overlay,body.png,0,0",
+                "element1,balloon,a,10,20",
+                "element2,balloon,b,-5,30",
+            ],
+        ),
+        block(
+            "surface1",
+            &["element3,balloon,a,1,2", "element2,balloon,b,3,4"],
+        ),
+        block("surface2", &["element0,overlay,body.png,0,0"]),
+    ]
+    .concat();
+    let (layout, report, _) = fold_images(&text, &[]);
+    assert_eq!(report.issues, vec![]);
+    assert!(!layout.is_empty());
+    assert_eq!(
+        layout.placements(0),
+        &[place(1, "a", 10, 20), place(2, "b", -5, 30)]
+    );
+    assert_eq!(
+        layout.placements(1),
+        &[place(2, "b", 3, 4), place(3, "a", 1, 2)]
+    );
+    assert_eq!(layout.placements(2), NONE);
+    for id in [0, 1] {
+        for p in layout.placements(id) {
+            assert!(layout.def(&p.name).is_some(), "{id}: {}", p.name.as_str());
+        }
+    }
+}
+
+#[test]
+fn shared_header_gives_every_id_the_same_boxes() {
+    // 要件 2.1: 見出しの展開は画像と同じ規則（列挙・範囲・除外）。
+    let text = [
+        two_braces(),
+        block("surface0,2-4,!3", &["element1,balloon,a,7,8"]),
+    ]
+    .concat();
+    let (layout, report, _) = fold_images(&text, &[]);
+    assert_eq!(report.issues, vec![]);
+    for id in [0, 2, 4] {
+        assert_eq!(layout.placements(id), &[place(1, "a", 7, 8)], "{id}");
+    }
+    for id in [1, 3] {
+        assert_eq!(layout.placements(id), NONE, "{id}");
+    }
+}
+
+#[test]
+fn later_surface_brace_replaces_the_placements_wholesale() {
+    // 同じ番号の `surface*`ブレスは置き場所を丸ごと置き換える（画像の畳み込みと同じ後勝ち）。
+    let text = [
+        two_braces(),
+        block("surface0", &["element1,balloon,a,0,0"]),
+        block("surface.append0", &["element3,balloon,b,0,0"]),
+        block("surface0", &["element2,balloon,b,5,5"]),
+        block("surface1", &["element1,balloon,a,0,0"]),
+        block("surface1", &["element0,overlay,body.png,0,0"]),
+    ]
+    .concat();
+    let (layout, report, _) = fold_images(&text, &[]);
+    assert_eq!(report.issues, vec![]);
+    assert_eq!(layout.placements(0), &[place(2, "b", 5, 5)]);
+    assert_eq!(layout.placements(1), NONE);
+    assert!(!layout.is_empty());
+}
+
+#[test]
+fn append_adds_boxes_under_the_same_rules() {
+    // 要件 2.2: `surface.append*`ブレスの箱は `surface*`ブレスに書いた場合と同じ規則で置かれる。
+    let text = [
+        two_braces(),
+        block("surface0", &["element3,balloon,a,1,1"]),
+        block("surface.append0", &["element1,balloon,b,2,2"]),
+    ]
+    .concat();
+    let (layout, report, _) = fold_images(&text, &[]);
+    assert_eq!(report.issues, vec![]);
+    assert_eq!(
+        layout.placements(0),
+        &[place(1, "b", 2, 2), place(3, "a", 1, 1)]
+    );
+}
+
+#[test]
+fn element_with_an_unreadable_number_is_dropped_and_reported() {
+    // 要件 10.1: element番号が読めない element定義だけ捨てる。
+    let text = [
+        two_braces(),
+        block(
+            "surface0",
+            &["elementX,balloon,a,0,0", "element2,balloon,b,0,0"],
+        ),
+    ]
+    .concat();
+    let (layout, report, _) = fold_images(&text, &[]);
+    assert_eq!(
+        report.issues,
+        vec![BoxIssue::ElementBadNumber {
+            surface: 0,
+            element: "X".into(),
+        }]
+    );
+    assert_eq!(layout.placements(0), &[place(2, "b", 0, 0)]);
+}
+
+#[test]
+fn element_naming_a_missing_or_untaken_brace_is_dropped_and_reported() {
+    // 要件 2.5: 名前のブレスが無い・採られなかった（`size` 無し）element定義だけ捨て、他は採る。
+    let text = [
+        brace("a", &["size,100,50"]),
+        brace("nosize", &["origin.x,1"]),
+        block(
+            "surface0",
+            &[
+                "element1,balloon,ghost,0,0",
+                "element2,balloon,nosize,0,0",
+                "element3,balloon,a,4,4",
+            ],
+        ),
+    ]
+    .concat();
+    let (layout, report, _) = fold_images(&text, &[]);
+    assert_eq!(
+        report.issues,
+        vec![
+            BoxIssue::BraceMissingSize {
+                name: "nosize".into(),
+            },
+            BoxIssue::ElementUnknownBrace {
+                surface: 0,
+                element: 1,
+                name: "ghost".into(),
+            },
+            BoxIssue::ElementUnknownBrace {
+                surface: 0,
+                element: 2,
+                name: "nosize".into(),
+            },
+        ]
+    );
+    assert_eq!(layout.placements(0), &[place(3, "a", 4, 4)]);
+}
+
+#[test]
+fn element_with_a_non_integer_position_is_dropped_and_reported() {
+    // 要件 2.6: X か Y が整数として読めない（欠けを含む）element定義だけ捨てる。
+    let text = [
+        two_braces(),
+        block(
+            "surface0",
+            &[
+                "element1,balloon,a,1.5,0",
+                "element2,balloon,b,3",
+                "element3,balloon,a,-1,+2",
+            ],
+        ),
+    ]
+    .concat();
+    let (layout, report, _) = fold_images(&text, &[]);
+    assert_eq!(
+        report.issues,
+        vec![
+            BoxIssue::ElementBadPosition {
+                surface: 0,
+                element: 1,
+                name: "a".into(),
+                x: "1.5".into(),
+                y: "0".into(),
+            },
+            BoxIssue::ElementBadPosition {
+                surface: 0,
+                element: 2,
+                name: "b".into(),
+                x: "3".into(),
+                y: "".into(),
+            },
+        ]
+    );
+    assert_eq!(layout.placements(0), &[place(3, "a", -1, 2)]);
+}
+
+#[test]
+fn same_name_keeps_the_smallest_element_number_across_surface_and_append() {
+    // 要件 2.7: `surface*` と `surface.append*` の両方が同じ名前を置いても element番号最小を採る。
+    let text = [
+        two_braces(),
+        block(
+            "surface0",
+            &["element3,balloon,a,0,0", "element4,balloon,b,0,0"],
+        ),
+        block(
+            "surface.append0",
+            &["element1,balloon,a,9,9", "element5,balloon,a,1,1"],
+        ),
+    ]
+    .concat();
+    let (layout, report, _) = fold_images(&text, &[]);
+    assert_eq!(
+        report.issues,
+        vec![
+            BoxIssue::ElementDuplicateName {
+                surface: 0,
+                element: 3,
+                name: "a".into(),
+                kept: 1,
+            },
+            BoxIssue::ElementDuplicateName {
+                surface: 0,
+                element: 5,
+                name: "a".into(),
+                kept: 1,
+            },
+        ]
+    );
+    assert_eq!(
+        layout.placements(0),
+        &[place(1, "a", 9, 9), place(4, "b", 0, 0)]
+    );
+}
+
+#[test]
+fn box_below_an_image_element_is_kept_and_reported() {
+    // 要件 3.8: 画像の element の最大の番号より小さい番号の箱は採ったうえで断る。
+    let text = [
+        two_braces(),
+        block(
+            "surface0",
+            &[
+                "element1,balloon,a,0,0",
+                "element2,overlay,arm.png,0,0",
+                "element3,balloon,b,0,0",
+            ],
+        ),
+    ]
+    .concat();
+    let (layout, report, _) = fold_images(&text, &[]);
+    assert_eq!(
+        report.issues,
+        vec![BoxIssue::ElementBelowImage {
+            surface: 0,
+            element: 1,
+            name: "a".into(),
+            image_element: 2,
+        }]
+    );
+    assert_eq!(
+        layout.placements(0),
+        &[place(1, "a", 0, 0), place(3, "b", 0, 0)]
+    );
+}
+
+/// 追記の `deco.png`（画像）と箱 `a` が届いた番号を、画像の World と箱の表のそれぞれから引く。
+fn reached(layout: &BoxLayout, world: &EmoWorld) -> (Vec<u32>, Vec<u32>) {
+    let images = world
+        .surface_ids()
+        .filter(|id| {
+            world
+                .surface(*id)
+                .is_some_and(|m| m.elements.iter().any(|e| e.path.as_str() == "deco.png"))
+        })
+        .collect();
+    let boxes = (0..=20)
+        .filter(|id| layout.placements(*id).iter().any(|p| p.name == name("a")))
+        .collect();
+    (images, boxes)
+}
+
+/// 画像と箱を 1 つずつ持つ追記の本体（画像の畳み込みと箱の畳み込みを同じ行で突き合わせる）。
+const APPEND_BODY: &[&str] = &["element1,overlay,deco.png,0,0", "element2,balloon,a,0,0"];
+
+#[test]
+fn append_existence_matches_image_fold_for_forward_reference() {
+    // 先に書かれた追記は後で定義される番号へ遡及しない（fold_tests の前方参照と同じ形）。
+    let text = [
+        two_braces(),
+        block("surface.append3", APPEND_BODY),
+        block("surface3", &["element0,overlay,base.png,0,0"]),
+    ]
+    .concat();
+    let (layout, report, world) = fold_images(&text, &[]);
+    assert_eq!(reached(&layout, &world), (vec![], vec![]));
+    assert_eq!(
+        report.issues,
+        vec![BoxIssue::AppendTargetMissing {
+            surface: 3,
+            name: "a".into(),
+        }]
+    );
+}
+
+#[test]
+fn append_existence_matches_image_fold_for_image_only_faces() {
+    // 面の画像だけで在る番号にも追記は届く（base_image_tests の画像だけの面と同じ形）。先の追記が
+    // 届いた面へ後の追記も届く。宣言も画像も無い番号へは届かず報告に載る。後の `surface*`ブレスは
+    // 画像だけの面も丸ごと置き換える。
+    let text = [
+        two_braces(),
+        block("surface.append7,8,9", APPEND_BODY),
+        block("surface.append7", &["element4,balloon,b,0,0"]),
+        block("surface8", &["element0,overlay,base.png,0,0"]),
+    ]
+    .concat();
+    let (layout, report, world) = fold_images(&text, &[(7, "surface7.png"), (8, "surface8.png")]);
+    assert_eq!(reached(&layout, &world), (vec![7], vec![7]));
+    assert_eq!(
+        layout.placements(7),
+        &[place(2, "a", 0, 0), place(4, "b", 0, 0)]
+    );
+    assert_eq!(
+        report.issues,
+        vec![BoxIssue::AppendTargetMissing {
+            surface: 9,
+            name: "a".into(),
+        }]
+    );
+}
+
+#[test]
+fn append_existence_matches_image_fold_for_range_and_exclusion() {
+    // 範囲と除外（fold_tests の `!N` の減算と同じ形）: 1・2・4 に届き、3 は除外、5 は無い。
+    let text = [
+        two_braces(),
+        block("surface1-4", &["element0,overlay,base.png,0,0"]),
+        block("surface.append1-5,!3", APPEND_BODY),
+    ]
+    .concat();
+    let (layout, report, world) = fold_images(&text, &[]);
+    assert_eq!(reached(&layout, &world), (vec![1, 2, 4], vec![1, 2, 4]));
+    assert_eq!(
+        report.issues,
+        vec![BoxIssue::AppendTargetMissing {
+            surface: 5,
+            name: "a".into(),
+        }]
+    );
+}

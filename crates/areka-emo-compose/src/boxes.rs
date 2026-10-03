@@ -9,8 +9,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use areka_parsers::balloon::{self, BalloonModel};
-use areka_parsers::shell::{BoxBrace, BoxDefinition, ShellBoxes};
+use areka_parsers::shell::{BoxBrace, BoxDefinition, BoxElementLine, ShellBoxes};
 
+use crate::fold::expand_targets;
 use crate::world::EmoWorld;
 
 /// 箱の名前（`balloon.名前`ブレスの名前）。中身は文字列として読むだけ。
@@ -138,20 +139,153 @@ pub enum BoxIssue {
 
 /// 転記から箱の定義の表と置き場所の表を作り、読み捨てた事実を報告に載せる（純粋・失敗しない）。
 ///
-/// `images`（面の画像だけで在る番号）と `world`（画像の element番号）は element定義を
-/// 番号へ配る側が使う。本関数は fs にも記録にも触れない（記録の水準は入口が決める）。
+/// `images`（面の画像だけで在る番号）は `surface.append*`ブレスの存在の条件に、`world`（画像の
+/// element番号）は箱が画像より下に書かれたかの判定に使う。本関数は fs にも記録にも触れない
+/// （記録の水準は入口が決める）。
 pub fn fold_boxes(
     boxes: &ShellBoxes,
-    _images: &BTreeMap<u32, String>,
-    _world: &EmoWorld,
+    images: &BTreeMap<u32, String>,
+    world: &EmoWorld,
 ) -> (BoxLayout, BoxReport) {
     let mut issues = Vec::new();
     let defs = fold_braces(boxes, &mut issues);
-    let layout = BoxLayout {
-        defs,
-        surfaces: BTreeMap::new(),
-    };
-    (layout, BoxReport { issues })
+    let surfaces = distribute(boxes, images, &mut issues)
+        .into_iter()
+        .map(|(id, lines)| {
+            let placements = place(id, &lines, &defs, world, &mut issues);
+            (id, placements)
+        })
+        // 箱の無い番号は表に載せない（`placements` は無い番号に空の列を返す）。
+        .filter(|(_, placements)| !placements.is_empty())
+        .collect();
+    (BoxLayout { defs, surfaces }, BoxReport { issues })
+}
+
+/// 箱の element定義の行を、画像の element と同じ規則でサーフェス番号へ配る（要件 2.1・2.2）。
+///
+/// 見出しの展開は `fold.rs` と共用。`surface*`ブレスはその番号の行を丸ごと置き換え、
+/// `surface.append*`ブレスは「その時点で既にある番号（面の画像だけで在る番号を含む）」にだけ足す。
+/// 無い番号への追記は箱の行ごとに報告へ載せる。
+fn distribute<'a>(
+    boxes: &'a ShellBoxes,
+    images: &BTreeMap<u32, String>,
+    issues: &mut Vec<BoxIssue>,
+) -> BTreeMap<u32, Vec<&'a BoxElementLine>> {
+    let mut existing: BTreeSet<u32> = images.keys().copied().collect();
+    let mut lines: BTreeMap<u32, Vec<&BoxElementLine>> = BTreeMap::new();
+    for definition in &boxes.definitions {
+        match definition {
+            BoxDefinition::Surface(surface) => {
+                for id in expand_targets(&surface.targets) {
+                    existing.insert(id);
+                    lines.insert(id, surface.elements.iter().collect());
+                }
+            }
+            BoxDefinition::Append(append) => {
+                for id in expand_targets(&append.targets) {
+                    if existing.contains(&id) {
+                        lines.entry(id).or_default().extend(&append.elements);
+                    } else {
+                        issues.extend(append.elements.iter().map(|line| {
+                            BoxIssue::AppendTargetMissing {
+                                surface: id,
+                                name: line.name.clone(),
+                            }
+                        }));
+                    }
+                }
+            }
+            // ブレスは `fold_braces` が読む（`BoxDefinition` は `#[non_exhaustive]`）。
+            _ => {}
+        }
+    }
+    lines
+}
+
+/// 1 つの番号の行を置き場所の列にする（要件 2.5〜2.7・3.8・10.1）。
+///
+/// element番号の読み取り → 名前の解決 → X・Y の読み取り → 同じ名前の重複の整理（element番号が
+/// 一番小さいものを採る）→ element番号の昇順。捨てた行だけを報告へ載せる。画像の element の
+/// 最大の番号より小さい番号の箱は採ったうえで報告へ載せる（描画は常に画像より手前）。
+fn place(
+    surface: u32,
+    lines: &[&BoxElementLine],
+    defs: &BTreeMap<BoxName, BoxDef>,
+    world: &EmoWorld,
+    issues: &mut Vec<BoxIssue>,
+) -> Vec<BoxPlacement> {
+    let mut placements = Vec::new();
+    for line in lines {
+        let Ok(element) = line.element.parse::<u32>() else {
+            issues.push(BoxIssue::ElementBadNumber {
+                surface,
+                element: line.element.clone(),
+            });
+            continue;
+        };
+        let name = BoxName(line.name.clone());
+        if !defs.contains_key(&name) {
+            issues.push(BoxIssue::ElementUnknownBrace {
+                surface,
+                element,
+                name: line.name.clone(),
+            });
+            continue;
+        }
+        let (Ok(x), Ok(y)) = (line.x.parse::<i64>(), line.y.parse::<i64>()) else {
+            issues.push(BoxIssue::ElementBadPosition {
+                surface,
+                element,
+                name: line.name.clone(),
+                x: line.x.clone(),
+                y: line.y.clone(),
+            });
+            continue;
+        };
+        placements.push(BoxPlacement {
+            element,
+            name,
+            x,
+            y,
+        });
+    }
+
+    // 安定ソートなので、同じ element番号どうしは書いた順のまま（先のものを採る）。
+    placements.sort_by_key(|p| p.element);
+    let mut kept: BTreeMap<BoxName, u32> = BTreeMap::new();
+    placements.retain(|p| match kept.get(&p.name) {
+        Some(&first) => {
+            issues.push(BoxIssue::ElementDuplicateName {
+                surface,
+                element: p.element,
+                name: p.name.as_str().to_string(),
+                kept: first,
+            });
+            false
+        }
+        None => {
+            kept.insert(p.name.clone(), p.element);
+            true
+        }
+    });
+
+    let top_image = world
+        .surface(surface)
+        .and_then(|master| master.elements.iter().map(|e| e.layer).max());
+    if let Some(image_element) = top_image {
+        issues.extend(
+            placements
+                .iter()
+                .filter(|p| p.element < image_element)
+                .map(|p| BoxIssue::ElementBelowImage {
+                    surface,
+                    element: p.element,
+                    name: p.name.as_str().to_string(),
+                    image_element,
+                }),
+        );
+    }
+    placements
 }
 
 /// `balloon.*`ブレスを登場順に定義の表へ畳む（同じ名前は後のもので丸ごと置き換え・要件 1.8）。
