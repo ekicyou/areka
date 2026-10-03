@@ -48,7 +48,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: なし。
-- **Adjacent**: `areka-P0-package-check-temp-cleanup`（C1・`dist/README.txt` は触らない見込み）。
+- **Adjacent**: `areka-P0-crates-io-publish`（`dist/README.txt`・`README.md` に crates.io の 1 行を先に足す＝本 spec の前のウェーブ）。
 
 ## Constraints
 

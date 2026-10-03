@@ -22,6 +22,7 @@
 4. main の squash コミットに `v{版}` のタグを打って push する。これが Actions のきっかけ。
 5. 見守る: `release.yml` の緑・Release の公開・crates.io の各クレートの版・winget-pkgs への PR（`winget.yml`）。赤なら原因を直す spec を起票し、**同じ版で再実行しない**（zip の URL は版ごとに固定・crates.io は差し替え不可）＝直したら次の版で出す。
 6. 記録: `roadmap.md` の「完了サマリ」の下に「リリース」の 1 行（版・日付・Release の URL・winget の PR）。
+7. **初回（`v0.0.2`）だけの手順**: タグを打つ前に、開発者が手元で `cargo publish --workspace` を実行して crates.io へ出し、各クレートに Trusted Publishing を設定する（`crates-io-publish` の手順）。winget の初回の手提出は `winget-manifest-submission`（Release の実在が要る＝初回の後のウェーブ）。
 
 ## Approach
 

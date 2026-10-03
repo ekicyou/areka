@@ -19,8 +19,8 @@
 
 1. `areka` が依存する部品のクレートに `publish = true` と `description`（と要るなら `readme`）が付き、`cargo publish --workspace --dry-run` が手元で通る。
 2. 出さないクレートは明示的に `publish = false` のまま: 試験用の DLL（`shiori-host32-testdll`・`shiori-host32-testdll-loadu`・`shiori4-testdll`）・`pilot`・`sample-ghost-kit`・`ukadoc-survey`。理由をそれぞれの `Cargo.toml` のコメントに 1 行。
-3. 初回: 開発者が手元で `cargo publish --workspace` を実行して全部を同じ版で出す（名前の確保と初回の登録）。その後、各クレートに Trusted Publishing（リポジトリ `ekicyou/areka`・workflow `release.yml`）を設定する。
-4. 以後: `release.yml` の後段の job が、Release の公開の後に `cargo publish --workspace` を Trusted Publishing で実行する。失敗しても Release と winget の段は巻き戻さない（crates.io は一度出した版を差し替えられない＝**出す前の `--dry-run` を手元の手順と CI の両方に置く**）。
+3. 初回: **`release-cycle` の初回（`v0.0.2`）の中で**、開発者が手元で `cargo publish --workspace` を実行して全部を同じ版で出す（新しいクレートは crates.io に無いと Trusted Publishing を設定できない。`areka`・`dola`・`wintf` の 0.0.1 は既に在るので、初回は 0.0.2 で出す）。その後、各クレートに Trusted Publishing（リポジトリ `ekicyou/areka`・workflow `crates-io.yml`）を設定する。本 spec の完了は「`--dry-run` が緑・workflow と手順が揃った」まで。
+4. 以後: 自分の workflow `.github/workflows/crates-io.yml`（`release: published` で動く）が、Release の公開の後に `cargo publish --workspace` を Trusted Publishing で実行する。`release.yml`（`release-ci-workflow`）には触らない＝同じウェーブ C2 で並走できる。失敗しても Release と winget の段は巻き戻さない（crates.io は一度出した版を差し替えられない＝**出す前の `--dry-run` を手元の手順と CI の両方に置く**）。
 5. `dist/README.txt` と根の `README.md` に「crates.io は部品と本体の公開・名前の確保のため。`cargo install areka` では 32bit の補助 exe が付かないので、利用者は winget か zip で入れる」と書く。
 6. `tools/test-all.ps1` に `--dry-run` を足すかは議題（毎回 1〜2 分増える見込み）。
 
@@ -32,22 +32,22 @@
 
 ## Scope
 
-- **In**: `publish`・`description` ほかの欄の整備・出さないクレートの明示・`--dry-run` の手順・初回の手元からの公開（開発者が実行）・Trusted Publishing の設定（開発者が crates.io の画面で行う＝手順を書く）・`release.yml` の後段の job・README の説明。
+- **In**: `publish`・`description` ほかの欄の整備・出さないクレートの明示・`--dry-run` の手順・初回の手元からの公開の手順（実行は `release-cycle` の初回）・Trusted Publishing の設定の手順（開発者が crates.io の画面で行う）・`.github/workflows/crates-io.yml`・README の説明（`dist/README.txt`・`README.md` に「crates.io は部品の公開・利用者は winget か zip」の 1 行）。
 - **Out**: 版の決め方（workspace で 1 つ・`release-cycle`）／crates.io 以外の置き場／`cargo install` で動く形にすること（補助 exe の同梱は無理）／docs.rs の見た目の整備（出た後に必要なら）。
 
 ## Boundary Candidates
 
 - クレートの欄の整備（`Cargo.toml` 群）
-- 公開の段（`release.yml` の job）
+- 公開の段（`crates-io.yml`）
 
 ## Out of Boundary
 
-- `release.yml` の前段（ビルド・zip・Release）
+- `release.yml`（ビルド・zip・Release＝`release-ci-workflow`）
 
 ## Upstream / Downstream
 
-- **Upstream**: `areka-P0-release-ci-workflow`（後段の口）・完了 `crate-name-reservation`。
-- **Downstream**: なし。
+- **Upstream**: 完了 `crate-name-reservation`・`areka-P0-mcp-server-core`（C1・新しいクレート `areka-mcp` の `publish` を決める＝その後）。`release-ci-workflow` とは同じウェーブ C2（ファイルを共有しない・つながりは「Release の公開」というきっかけだけ）。
+- **Downstream**: `areka-P0-release-cycle` の初回（手元からの初回の公開）・`areka-P0-winget-manifest-submission`（README の同じ節に winget の行を足す）。
 
 ## Existing Spec Touchpoints
 
@@ -56,7 +56,7 @@
 
 ## Constraints
 
-- 触るのは各 `Cargo.toml`（約 23 本）・`Cargo.lock`（欄の変更で動くことがある）・`.github/workflows/release.yml`・`dist/README.txt`・`README.md`・`.kiro/steering/tech.md`。`crates/*/src/` には触らない。
+- 触るのは各 `Cargo.toml`（約 23 本・欄だけ＝依存は変えない）・`.github/workflows/crates-io.yml`（新規）・`dist/README.txt`・`README.md`・`.kiro/steering/tech.md`。`crates/*/src/`・`.github/workflows/release.yml`・`Cargo.lock` には触らない（欄の変更では `Cargo.lock` は動かない＝動いたら止めて報告）。**同じウェーブ C2 で `Cargo.toml` を触る spec を置かない**。
 - 一度出した版は消せない。手元の `--dry-run` と全体テストの緑を、出す前の必達にする。
 - 秘密をリポジトリに置かない（Trusted Publishing・初回のトークンは手元の `cargo login` だけ）。
 

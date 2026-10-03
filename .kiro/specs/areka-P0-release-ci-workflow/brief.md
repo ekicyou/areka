@@ -19,7 +19,7 @@
 2. 失敗したら Release を作らない（zip が 1 つでも作れなければ止める）。途中で止まった跡（下書きの Release）を残さない。
 3. 普通の PR・main への push では動かない。手で `workflow_dispatch` から同じ手順を乾いた走り（Release を作らない）で試せる。
 4. 配布スクリプトの `-Check`（窓を出す自己検査）は CI では省く。その代わり、開発者が手元で `-Check` を通してから版を上げる、を `release-cycle` の手順に置く。
-5. 後段の口を用意する: Release が公開された後に crates.io へ出す段（`crates-io-publish`）と、winget へ PR を出す段（`winget-manifest-submission`）が、この workflow の後ろに足せる形（job の分け方・`needs:`）。本 spec では空のまま。
+5. 後段は別の workflow が持つ: crates.io へ出す `crates-io.yml`（`crates-io-publish`・同じウェーブ C2）と winget へ PR を出す `winget.yml`（`winget-manifest-submission`）は、どちらも `release: published` で動く。本 spec は `release.yml` が Release を**公開**（下書きでない）で作ることだけを約束する。
 6. `tech.md` の「外部 CI は持たない」を「テストの門は手元・ビルドと配布は Actions」に改める。
 
 ## Approach
@@ -45,7 +45,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: `areka-P0-release-package-versioned`。
+- **Upstream**: `areka-P0-release-package-versioned`（C1）。同じウェーブ C2 に `crates-io-publish`（ファイルの共有 0）。
 - **Downstream**: `areka-P0-release-cycle`（タグを打つ）・`areka-P0-crates-io-publish`・`areka-P0-winget-manifest-submission`・`areka-P0-release-code-signing`。
 
 ## Existing Spec Touchpoints

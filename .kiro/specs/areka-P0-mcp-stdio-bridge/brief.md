@@ -59,6 +59,6 @@
 ## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
 
 - 規模 S（7〜10 タスク）。`mcp-tool-entrances` と同じウェーブには置かない（help の文面のファイルと `Cargo.lock` が重なりうる）＝C3 以降。
-- 配布スクリプトは今も `tools/package-alpha.ps1`（「後継」は無い）。同梱には 3 か所を変える＝`$ALLOWED_EXECUTABLES`・ビルドの段・配置と CPU 種別の検査。**`package-check-temp-cleanup`（C1）が同じスクリプトを先に直す**。配布の zip は x64 だけ＝arm64 の中継は入らない。
+- 配布スクリプトは今も `tools/package-alpha.ps1`（「後継」は無い）。同梱には 3 か所を変える＝`$ALLOWED_EXECUTABLES`・ビルドの段・配置と CPU 種別の検査。**`release-package-versioned`（C1）が同じスクリプトを先に直す**。配布の zip は x64 だけ＝arm64 の中継は入らない。
 - **触るファイル**: 新規の bin クレート `crates/areka-mcp-bridge/**`（std::net で足りる）・`tools/package-alpha.ps1`・help の文面（`areka-mcp` の中）・必要なら `dist/README.txt`・`Cargo.lock`。
 - **議題**: exe の名前／ポートを引数でも渡せるか／写すだけか版のヘッダを解釈するか／arm64 版を配布物に入れるか。
