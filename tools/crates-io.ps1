@@ -11,6 +11,8 @@
     4. 判定「欄」: 公開する一覧の各クレートの説明・ライセンス・リポジトリが空でない
     5. 判定「理由」: 出さない各クレートの Cargo.toml に、行頭から「publish = false # 理由」の行がある
     6. 判定「版」（-Version のときだけ）: 公開する一覧の各クレートの版が渡された値と同じ
+    7. 判定「公開の段の形」: WORKFLOW の on: の直下のきっかけが workflow_dispatch だけで、
+       ファイルに secrets. の参照が無い（ファイルが無ければ失敗）
     8. 包む: 前回の .crate を消してから、公開する一覧を包む（cargo の出力はそのまま見せる）
          引数なし: cargo package --no-verify --allow-dirty --locked --offline（ネットを使わない）
          -Verify : cargo publish --dry-run --allow-dirty --locked（索引を読み、組み立てまで）
@@ -26,6 +28,7 @@
     MAX_CRATE     1 クレートを包んだ大きさの上限（crates.io の上限・圧縮後 10 MB）
     INDEX_URL     crates.io の索引
     WORK_DIR      作業の置き場（cargo の --target-dir）
+    WORKFLOW      公開の段の workflow のファイル
 
 .PARAMETER Verify
   組み立てまでの形を選ぶ（cargo publish --dry-run・crates.io の索引を読む）。
@@ -37,7 +40,7 @@
   -Pending と一緒に渡したときも、索引を読む前に判定する。
 
 .PARAMETER Pending
-  確認（3〜5・8〜9）はせず、較正・読み取り・（-Version のときは）版の判定の後、公開する一覧の
+  確認（3〜5・7〜9）はせず、較正・読み取り・（-Version のときは）版の判定の後、公開する一覧の
   各クレートの索引（INDEX_URL{先頭2字}/{次の2字}/{名前}・4 文字以上の名前だけ）を 1 回読み、
   ワークスペースの版がまだ無いクレートの名前だけを標準出力へ 1 行ずつ出す。
   人が読む行（在る・無い・OK・失敗）は標準エラーへ。索引が 404（1 つも版が無い）・読めないときは名前つきで失敗する。
@@ -66,6 +69,7 @@ $PUBLISH   = @('dola', 'wintf')
 $MAX_CRATE = 10485760
 $INDEX_URL = 'https://index.crates.io/'
 $WORK_DIR  = 'target/crates-io'
+$WORKFLOW  = '.github/workflows/crates-io.yml'
 
 # 人が読む行。別のプロセスから呼ぶと Write-Host も標準出力へ出るので、-Pending（標準出力は残りの名前だけ）では標準エラーへ
 function Say([string]$Text, [ConsoleColor]$Color) {
@@ -129,6 +133,28 @@ function Test-Indexed([string]$Name, [string]$Want, [string]$Body) {
     if ($Want -notin $vers) { "$Name の $Want が crates.io に無い" }
 }
 
+# workflow のファイルの本文。YAML の読み手は使わず、行頭の on: とその直下（字下げの最も浅い行）のキーだけを見る
+function Test-Workflow([string]$Name, [string]$Text) {
+    if ($Text -match 'secrets\.') { "$Name が secrets. を参照している（鍵は Trusted Publishing と github.token だけ）" }
+    # 空行・コメントだけの行は読まない
+    $lines = @($Text -split '\r?\n' | Where-Object { $_ -notmatch '^\s*(#.*)?$' })
+    $at = @(for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -cmatch '^(on|"on"|''on'')[ \t]*:') { $i } })
+    if ($at.Count -eq 0) { return "$Name に行頭の on: が無い" }
+    $inline = ($lines[$at[0]] -replace '^[^:]*:', '' -replace '\s#.*$', '').Trim()
+    if ($inline) {
+        if ($inline -cne 'workflow_dispatch') { "$Name の on: のきっかけが workflow_dispatch だけでない: $inline" }
+        return
+    }
+    # 次の行頭の行までが on: の中
+    $children = @(for ($i = $at[0] + 1; $i -lt $lines.Count -and $lines[$i] -match '^\s'; $i++) { $lines[$i] })
+    if ($children.Count -eq 0) { return "$Name の on: の直下にきっかけが無い" }
+    $depth = ($children | ForEach-Object { ($_ -replace '\S.*$', '').Length } | Measure-Object -Minimum).Minimum
+    $keys = @($children | Where-Object { ($_ -replace '\S.*$', '').Length -eq $depth } |
+            ForEach-Object { $_.Trim() -replace '^-\s*', '' -replace '\s*:.*$', '' })
+    $other = @($keys | Where-Object { $_ -cne 'workflow_dispatch' })
+    if ($other.Count) { "$Name の on: の直下に workflow_dispatch 以外のきっかけ: $($other -join ', ')" }
+}
+
 # =============================================================================
 # 1. 判定の較正
 # =============================================================================
@@ -172,6 +198,15 @@ Calibrate '残り' 'その版が在る' @((Test-Index 'dola' 200) + (Test-Indexe
 Calibrate '残り' 'その版が無い' (Test-Indexed 'dola' '0.0.1' ($index -replace '0\.0\.1"', '0.0.10"')) $false 'dola', '0.0.1'
 Calibrate '残り' '索引が 404' (Test-Index 'dola' 404) $false 'dola', '1 つも版が無い', '予備の手順'
 Calibrate '残り' '索引が 500' (Test-Index 'dola' 500) $false 'dola', '500'
+# 実物の on: の形の写し。workflow_dispatch の下の inputs・version は、きっかけと読まない
+$flow = "# 説明`r`nname: crates-io`r`n`r`non:`r`n  workflow_dispatch:`r`n    inputs:`r`n      version:`r`n        required: true`r`n`r`n# 権限`r`npermissions:`r`n  contents: read`r`n  id-token: write`r`njobs:`r`n  publish:`r`n    env:`r`n      GH_TOKEN: `${{ github.token }}`r`n"
+Calibrate '公開の段の形' '正しい見本' (Test-Workflow 'w.yml' $flow) $true
+Calibrate '公開の段の形' 'on: が最初の行の見本' (Test-Workflow 'w.yml' $flow.Substring($flow.IndexOf("`non:") + 1)) $true
+Calibrate '公開の段の形' 'On: と書いた見本' (Test-Workflow 'w.yml' ($flow -creplace '(?m)^on:', 'On:')) $false 'w.yml', 'on:'
+Calibrate '公開の段の形' 'push を足した見本' (Test-Workflow 'w.yml' ($flow -replace '(?m)^  workflow_dispatch:', "  push:`r`n    tags: ['v*']`r`n  workflow_dispatch:")) $false 'w.yml', 'push'
+Calibrate '公開の段の形' 'on: を 1 行に書いた見本' (Test-Workflow 'w.yml' ($flow -replace '(?ms)^on:.*?(?=^# 権限)', "on: push`r`n")) $false 'w.yml', 'push'
+Calibrate '公開の段の形' 'on: が無い見本' (Test-Workflow 'w.yml' ($flow -replace '(?m)^on:', 'xon:')) $false 'w.yml', 'on:'
+Calibrate '公開の段の形' 'secrets. を含む見本' (Test-Workflow 'w.yml' ($flow -replace 'github\.token', 'secrets.GITHUB_TOKEN')) $false 'w.yml', 'secrets.'
 
 # =============================================================================
 # 2〜6. 実物の判定
@@ -226,6 +261,10 @@ if ($Pending) {
 # =============================================================================
 # 8〜9. 包んで、大きさを判定する（.crate はどちらの形でも package\tmp-crate\ に出る）
 # =============================================================================
+# 7. 公開の段の形（公開の段の中では、タグのコミットに在る写しを見る）
+if (-not (Test-Path -LiteralPath $WORKFLOW -PathType Leaf)) { Fail "判定「公開の段の形」: $WORKFLOW が無い" }
+Check '公開の段の形' (Test-Workflow $WORKFLOW (Get-Content -Raw -LiteralPath $WORKFLOW))
+
 $crateDir = "$WORK_DIR/package/tmp-crate"
 Remove-Item -Path "$crateDir/*.crate", "$WORK_DIR/package/*.crate" -Force -ErrorAction Ignore
 $pArgs = $PUBLISH | ForEach-Object { '-p', $_ }
