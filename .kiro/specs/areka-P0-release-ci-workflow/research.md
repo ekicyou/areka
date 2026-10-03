@@ -211,3 +211,147 @@ GitHub の「依存のキャッシュ」の説明より:
 - 道具 2 つのビルド済みの取り込み: https://github.com/taiki-e/install-action/blob/main/TOOLS.md
 - Rust の依存のキャッシュ: https://github.com/Swatinem/rust-cache
 - 手元の温まった状態での `-Arch all` の 38 秒: `.kiro/specs/completed/areka-P0-release-package-versioned/verification/package-runs.md` の走り 7 の行
+
+---
+
+# 設計で決めたこと（2026-10-03・`/kiro-spec-design`）
+
+> 基準コミット `2d2fbc81`。上のギャップ分析（1〜8 章）を入力に、7 章の 2〜6・8〜11 と 8 章の調べ物を仕分けた。結論は `design.md` に書き直してある。ここは経緯と、比べた案と、追加で確かめた事実の置き場。
+
+## Summary
+
+- **Feature**: `areka-P0-release-ci-workflow`
+- **Discovery Scope**: New Feature（外の仕組みとの結合が中心。ギャップ分析が外の事実をほぼ集めていたので、設計では決め手になる事実だけを公式の出どころで引き直した）
+- **Key Findings**:
+  - `actions/checkout` の後処理は失敗しても警告で終わる（走りを失敗にしない）。`taiki-e/install-action` は後処理を持たない。キャッシュの action を使わなければ、公開の後に走りを失敗にしうる物は残らない（要件 8.3）。
+  - `taiki-e/install-action` は `cargo-about`・`cargo-deny` の Windows のビルド済みを作者の GitHub Releases から取り、`fallback: none` でソースから組む経路を閉じられる（要件 3.4）。
+  - 実行環境の名前 `windows-2025-vs2026` は `windows-latest`・`windows-2025` と同じ物を指す名前として一覧に在る。名前で固定できる。
+  - Release の一覧の API は「取れたが無い」と「取れなかった」を終了コードで分けられる。`gh release view` を使わなければ見分けの問題は消える（要件 2.3）。
+
+## Research Log
+
+### action の後処理（要件 8.3）
+- **Context**: 公開の段を最後に置いても、action の後処理が後から走って失敗すると「Release が在るのに結果は失敗」になりうる。
+- **Sources Consulted**: `actions/checkout` の `src/main.ts`（`cleanup` 関数）・`taiki-e/install-action` の `action.yml`。
+- **Findings**: `actions/checkout` の後処理は例外を捕まえて警告にするだけ。`taiki-e/install-action` は複合の action で後処理を定義しない。入力は `tool`・`checksum`（既定で有効）・`fallback`（`none`／`cargo-binstall`／`cargo-install`・既定は `cargo-binstall`）。
+- **Implications**: action はこの 2 つだけにし、キャッシュの action を持たない。
+
+### 道具 2 つの取り込み（要件 3.4）
+- **Sources Consulted**: `taiki-e/install-action` の `TOOLS.md`。
+- **Findings**: `cargo-about`・`cargo-deny` とも一覧に在り、置き場は `$CARGO_HOME/bin`、出どころは EmbarkStudios の GitHub Releases、Windows に対応。
+- **Implications**: `tool: cargo-about@0.9.2,cargo-deny@0.20.2`・`fallback: none`。置き場が作業ツリーの外なので配布スクリプトの `git status` の確かめに触らない。
+
+### 実行環境の名前
+- **Sources Consulted**: runner-images の README の一覧。
+- **Findings**: Windows Server 2025 の名前は `windows-latest`・`windows-2025`・`windows-2025-vs2026` の 3 つ。`windows-2022` も在る。
+- **Implications**: `windows-2025-vs2026` で固定。Rust が Visual Studio 2026 のリンカを見つけられなかった場合の逃げ先の候補は `windows-2022`（開発者へ上げてから）。
+
+### `gh release create` の引数と流れ
+- **Sources Consulted**: gh の手引き（`gh release create`）。
+- **Findings**: `--verify-tag` はタグがリモートに無ければ止まる（付けないと既定の枝の最新からタグを作る）。`--generate-notes`・`--notes-start-tag` で始まりのタグを指定できる。ファイルを添えると下書きで作り、載せてから公開する。手引きは、公開した Release を変えられなくする設定（公開の後にだけ効く）にも触れている。
+- **Implications**: S10 の引数。S11 が公開済みの物を消す経路は、その設定が無効であることが前提（今は無効）。
+
+### 重なりと時間切れ
+- **Sources Consulted**: GitHub Actions の workflow の書き方の文書。
+- **Findings**: 同じ `concurrency` の組の走りは、動いている物が在る間は待ちになる。待ちが既に在るところへ新しい走りが来ると、古い待ちは取り消されて新しい方が待つ。権限は job ごとにも書ける。PowerShell の段は、GitHub が本文を一時の `.ps1` に書いて `pwsh -command` で読み込む形で呼ばれる。
+- **Implications**: タグごとの組・`cancel-in-progress: false`。同じタグで 3 つ以上が重なると真ん中の待ちは取り消されるが、Release の一貫性には影響しない。段ごとの上限を置き、時間切れを段の失敗として扱わせる（段の時間切れが段の失敗になることは、今回は文書の該当の節を引けておらず、広く知られた動きに頼っている。削除の経路と同じく実行環境では通せない残り）。
+
+### 手元で確かめた事実
+- `crates/areka/Cargo.toml` は `version.workspace = true`。`cargo metadata` の `areka` の版は `[workspace.package] version` と同じ値になる。
+- 配布スクリプトは冒頭で自分の `$ErrorActionPreference`・`Set-StrictMode`・`$PSNativeCommandUseErrorActionPreference` を決める。出力の文字コードは決めない（呼ぶ側の役目）。
+- 手元の Rust は `1.99.0`・`core.autocrlf` は `true`・根に `rust-toolchain.toml` と `.gitattributes` は無い。
+- 証跡の置き場の前例: 完了 `release-package-versioned` の `verification/`。
+
+## Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| 案 A: 1 job・gh に任せる | `gh release create` にファイルを渡して最後の段にする | 段が最少。下書き→添付→公開→失敗時の削除を gh が持つ | gh が止められたときの下書きは残る → 後始末の段で受ける | **採用** |
+| 案 B: 下書き→照らし合わせ→公開を自前 | 下書きで作り、載った物の SHA256 を照らしてから公開 | 公開の直前に確かめられる | 段が増える。消し漏れの経路が広い。載せる前に手元で照らせば得る物が少ない | 不採用 |
+| 案 C: job を分ける | Windows でビルド、別の job で公開 | 書き込みの権限を公開の job だけに絞れる | 成果物の上げ下ろし・実行環境が 2 本・要件 6.4 の読み方に解釈が要る | 不採用 |
+
+## Design Decisions
+
+### Decision: Release の作り方（7 章の 2）
+- **Selected Approach**: 案 A。公開の段（S10）を成功の経路の最後に置く。
+- **Rationale**: 要件 4.3・4.4 の大半を gh が既に持つ。要件 4.2 は載せる前の S9（SHA256 の計算し直し）で足りる。
+- **Trade-offs**: 載った後の照らし合わせは持たない。
+
+### Decision: 後始末の範囲と重なり（7 章の 3）
+- **Alternatives Considered**: 1. 下書きだけ消す／2. 下書きも公開も消す。
+- **Selected Approach**: 2。S5 が「無かった」の印を出した本番の走りが成功以外で終わるときだけ動き、Release の番号を名指しして消す。タグは残す。タグごとの `concurrency` で重なりを無くす。
+- **Rationale**: 要件 4.3 は「下書きとしても公開としても残さず」。成功以外の走りでは後段が動かないので、Release だけ残ると食い違いになる（要件 8.3）。
+- **Trade-offs**: 公開の直後の取り消しでは、公開済みの物が消える。
+- **Follow-up**: 削除の経路は実行環境での走りでは通せない。初回の実走を見守る `release-cycle` へ申し送る。
+
+### Decision: 時間の上限（7 章の 4）
+- **Selected Approach**: 段ごと（S8 は 90 分・S10 は 10 分ほか）＋ job 全体 150 分。段の合計（130）が job より小さい。
+- **Rationale**: 段の時間切れは段の失敗になり、後始末が普通の失敗の経路で動く。job 全体の時間切れのときに後の段が動くかどうかに頼らずに済む。
+- **Follow-up**: 実測で S8 が 45 分を超えたら改める。
+
+### Decision: Rust の版（7 章の 5）
+- **Alternatives Considered**: 1. 実行環境の版（1.98.1）のまま／2. `rustup update stable`／3. workflow に版を書いて固定。
+- **Selected Approach**: 3（`1.99.0`）。
+- **Rationale**: 手元で `-Check` を通した版と同じコンパイラで組む。証跡の走りと初回の実走の間に新しい安定版が出ても前提が変わらない。根に `rust-toolchain.toml` を足す案は手元の開発に効くので境界の外。
+- **Trade-offs**: 手元の版を上げたら、この 1 行も上げる手間が要る（乾いた走りで確かめる）。
+
+### Decision: 実行環境の名前（7 章の 6）
+- **Selected Approach**: `windows-2025-vs2026` で固定。
+- **Rationale**: `windows-latest` は指す先が年に何度か変わる。固定した名前が廃止されたときは走りが始まらずに失敗する＝何も公開しない安全な側へ倒れる。
+
+### Decision: 公開の後の後処理（7 章の 8）
+- **Selected Approach**: 後処理を持つ action は `actions/checkout` だけ（失敗しても警告）。キャッシュは持たない。
+- **Rationale**: タグの走り同士はキャッシュを共有できず効きが薄い。持たなければ後処理も容量の心配も無い。
+
+### Decision: 改行の扱い（7 章の 9）
+- **Selected Approach**: 取り出す前に `git config --global core.autocrlf true`（元の値は印字して証跡へ）。
+- **Rationale**: 手元と同じ設定に揃える 1 行。実行環境の既定に頼らない。根に `.gitattributes` を足す案は境界の外。
+
+### Decision: action の固定のしかた（7 章の 10）
+- **Selected Approach**: 2 つとも 40 桁の SHA で固定し、横に版の名前を注記。SHA は実装のときに引いて証跡に残す。
+- **Rationale**: 書き込みの権限を持つ走りで第三者のコードを動かすため。
+
+### Decision: 証跡の置き場と記録（7 章の 11）
+- **Selected Approach**: `verification/runner-trial.md`。環境の記録の段（S7）と 4 つの確かめの段（S9）の印字は本番にも残し、一時的に足すのはきっかけの行だけ。
+- **Rationale**: 走らせた定義と最終の定義の差を「きっかけの行だけ」にできる（要件 9.2 の確かめが `git diff` 1 回で済む）。
+
+### Decision: 版の読み方と既存の Release の調べ方
+- **Selected Approach**: 版は配布スクリプトと同じ `cargo metadata`。既存の Release は一覧の API を取って `tag_name` で探す。
+- **Rationale**: zip の名前に入る値と同じ物を比べられる。一覧の API は「無い」と「取れない」を終了コードで分けられる。
+
+### Decision: 一つ前のタグの決め方（要件 4.1）
+- **Selected Approach**: リモートの `v` で始まるタグのうち、版として読める物の中で、今の版より小さい最大の物。
+- **Rationale**: 取り出しは深さ 1 で履歴を持たないので、タグの一覧と版の大小で決める。初回は `v0.0.1` になる。乾いた走りでも求めて印字し、実行環境での走りで通しておく。
+
+### 総合（まとめ直し・採るか作るか・削った物）
+- **まとめ直し**: 本番と乾いた走りと一時的なきっかけの走りを、1 つの値（`PUBLISH`）で分ける同じ道にした。段は「版」だけを共通の入力にする。
+- **採る物**: ビルドは配布スクリプト、下書き→公開は gh、道具は `taiki-e/install-action`。自前で持つのは版の比べ・既存の Release の調べ・4 つの確かめ・後始末だけ。
+- **削った物**: Rust の依存のキャッシュ／arm64 の道具を足す段（実行環境に在る。無ければ配布スクリプトが止める）／job の分割／載った後の SHA256 の照らし合わせ／試し版の印づけ／失敗の知らせの仕組み。
+
+## 8 章の調べ物の仕分け
+
+| 調べ物 | 扱い |
+|---|---|
+| ログの文字化け | 呼ぶ側で出力の文字コードを UTF-8 にする設計。実行環境での走りで「段の名前が読める」を合格の線にする |
+| 時間切れ・取り消しのときの後始末 | 段ごとの上限で「段の失敗」にする設計で、job 全体の時間切れの動きに頼らない。削除の経路そのものは実行環境で通せない（Release を作らないため）＝残りとして証跡に明記 |
+| 「無い」と「調べられない」の見分け | 決着。一覧の API を使う |
+| 空き容量 | 実行環境での走りで始めと終わりを印字して測る |
+| Visual Studio 2026 と Rust のリンカ | 実行環境での走りで S8 が緑かで測る。赤なら開発者へ上げる |
+| `core.autocrlf` の既定 | 明示して揃える設計。元の値は印字して測る |
+| `cargo about generate` がネットへ出るか | 所要時間の実測に含めて見る。設計は変わらない |
+
+## Risks & Mitigations
+
+- 削除の経路（S11）と公開（S10）は初回の実走まで一度も動かない — 静的な確かめで判定し、残りを証跡と `release-cycle` への申し送りに明記する。
+- 下書きがトークンから見えない場合、止められた gh の下書きを後始末が見つけられない — 今は下書き 0 件。初回の実走で見守る。
+- 固定した名前（実行環境・Rust・action の SHA）が古びる — 失敗は公開の前に起きる。上げるときは乾いた走りを 1 回通す。
+- 実行環境での走りは押すたびに開発者の了承と数十分が要る — 一時的に足すのはきっかけの行だけにして、押す回数を減らす。
+
+## References
+
+- `actions/checkout` の後処理: https://github.com/actions/checkout/blob/main/src/main.ts
+- `taiki-e/install-action` の入力: https://github.com/taiki-e/install-action/blob/main/action.yml
+- `taiki-e/install-action` の対応する道具: https://github.com/taiki-e/install-action/blob/main/TOOLS.md
+- 実行環境の名前の一覧: https://github.com/actions/runner-images
+- `gh release create` の手引き: https://cli.github.com/manual/gh_release_create
+- workflow の書き方（`concurrency`・`timeout-minutes`・シェル・権限）: https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
