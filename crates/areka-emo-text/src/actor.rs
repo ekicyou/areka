@@ -381,9 +381,12 @@ impl TextLayerRuntime {
 
     /// 装着済み actor の供給面（readback 等の観測口・未装着は `None`）。
     pub fn surface(&self, actor: &ActorKey) -> Option<&TextSurface> {
-        self.surfaces
-            .get(&PlaceKey::balloon(actor))
-            .map(|render| &render.surface)
+        self.surface_at(&PlaceKey::balloon(actor))
+    }
+
+    /// 場所（普通のバルーンか箱）の供給面（readback 等の観測口・面が無ければ `None`）。
+    pub fn surface_at(&self, place: &PlaceKey) -> Option<&TextSurface> {
+        self.surfaces.get(place).map(|render| &render.surface)
     }
 
     /// 装着済み actor の決定論観測統計（[`ViewboxExecutor::stats`]・未装着は `None`）。
