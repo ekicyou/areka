@@ -17,6 +17,7 @@ Key features:
 - Multiple serialization formats (JSON, TOML, YAML via feature flags)
 - Easing function library (ease-in, ease-out, parametric curves)
 - Runtime playback state management
+- Cue sheets: absolute-time scripts broadcast to subscribers (the playback engine behind areka's Sakura Script runner)
 - Validation system for animation consistency
 
 ## Usage

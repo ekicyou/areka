@@ -32,7 +32,7 @@
 ## Scope
 
 - **In**: ⑴⑵ の実機の手順と記録・決定論のテスト・決めた扱いの実装・`dist/README.txt` の既知の制限の追随・`doc/COMPAT_ARCHITECTURE.md` §8 への登記（扱いが正典の沈黙に当たるなら）。
-- **Out**: `areka-nar` の確定の作り（`rename` 2 回）の作り直し・ネットワーク更新の背景の書き込み（同じ待ちの口を使うが、更新の側の危険は別に扱う）・同梱インストールの読み方（`install-companion-canon`）。
+- **Out**: `areka-nar` の確定の作り（`rename` 2 回）の作り直し・ネットワーク更新の背景の書き込み（同じ待ちの口を使うが、更新の側の危険は別に扱う）・同梱インストールの読み方（`install-companion-reading`）。
 
 ## Boundary Candidates
 
@@ -53,7 +53,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: なし（完了 `ghost-install` の Risk 1・2 を引き受ける。完了 spec の要件を上書きするなら `doc/COMPAT_ARCHITECTURE.md` §8 に記す）。
-- **Adjacent**: `install-companion-canon`（同じ `areka-nar` の読み方の側＝触るファイルを着手時に照合）・完了 `network-update`（終了で背景の仕事を待つ口を共有＝`ghost-install` 要件 8.10）・完了 `shell-balloon-switch`（装着の片付けの口）。
+- **Adjacent**: `install-companion-reading`（同じ `areka-nar` の読み方の側＝触るファイルを着手時に照合）・完了 `network-update`（終了で背景の仕事を待つ口を共有＝`ghost-install` 要件 8.10）・完了 `shell-balloon-switch`（装着の片付けの口）。
 
 ## Constraints
 
@@ -72,6 +72,6 @@
 - **静的に分かったこと（⑴ 掴み・仮説）**: 絵は `crates/areka-emo-atlas/src/decode/wic_arm.rs` が `CreateDecoderFromFilename` → `CopyPixels` で自前の領域へ写し、関数の終わりで手放す。DirectWrite へフォントファイルを登録する API は使っていない。areka がシェル・バルーンのファイルを開いたまま持ち続ける道は静的には見当たらない（読み込みの最中の一瞬は在りうる）。**実機で確かめる価値は残る**（SHIORI の側が掴む道は別）。
 - **静的に分かったこと（⑵ 窓 0 枚・仮説）**: host-32 の結線が作る `ParentMessageWindow`（`crates/areka-ghost/src/shiori_wiring.rs`）は message-only の窓で、`WM_ENDSESSION` の一斉配信は届かない見込み＝窓 0 枚の区間に受け手は居ない。
 - **触るファイル（測った結果で変わる）**: `crates/areka/src/install/{judge.rs, procedure.rs, overwrite.rs, desk.rs}`・`crates/areka/src/session_end.rs`・`crates/areka/src/app_exit.rs`・テスト（`install/desk_overwrite_tests.rs`・`session_end_tests.rs`・`session_end_deadline_tests.rs`）・`dist/README.txt`・`doc/COMPAT_ARCHITECTURE.md`。
-- **同じウェーブの他の spec との約束（必ず守る）**: `crates/areka-nar/`（`install-companion-canon`）・`crates/areka/src/install/terms.rs`（同）・`crates/areka/src/emo2_boot/frame/drain_resnap.rs`（`restart-chain-finalize-stall`）・`crates/areka/src/main.rs` と `ghost_session.rs`（`mcp-server-core` と、その次の `mcp-tool-entrances`）には触らない。扱いがこれらに及ぶと分かったら、そこで止めて報告する。
+- **同じウェーブの他の spec との約束（必ず守る）**: `crates/areka-nar/`（`install-companion-reading`）・`crates/areka/src/install/terms.rs`（同）・`crates/areka/src/emo2_boot/frame/drain_resnap.rs`（`restart-chain-finalize-stall`）・`crates/areka/src/main.rs` と `ghost_session.rs`（`mcp-server-core` と、その次の `mcp-tool-entrances`）には触らない。扱いがこれらに及ぶと分かったら、そこで止めて報告する。
 - **議題**: ⑴ 掴みを外して入れるか既知の制限にするか（測った後）／⑵ 窓 0 枚の区間に受け手（隠れたトップレベルの窓など）を残すか説明書に書くか／Windows を本当に終える実機の 1 回を開発者が行うか。
 - 関連: 起こし直しの後の `deferrals=600` の WARN は別 spec `restart-chain-finalize-stall` が直す（同じ場面の実機でこの WARN を見ても本 spec では追わない）。利用条件の文の切り詰めが絵文字を割る件は棚卸⑳で直した。
