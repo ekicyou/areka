@@ -50,7 +50,7 @@ crates.io に一度出した版は消すことも差し替えることもでき�
   - クレート間の依存の組み合わせの変更・各クレートのソースコードの変更。
   - テストの実行（テストの門は手元の全体テストのまま。公開の段はテストを回さない）。
 - **Adjacent expectations**:
-  - `release-ci-workflow` は、タグ `v{版}` のときに GitHub Release を**公開**の状態（下書きでない）で作る。公開の段はその公開を受けて動く。`release.yml` はリポジトリ既定の権限で Release を作る予定なので、公開の段はそうして作られた Release でも確実に動き出す必要がある（要件 4.1）。
+  - `release-ci-workflow` は、タグ `v{版}` のときに GitHub Release を**公開**の状態（下書きでない）で作る。そのうえで、Release の公開に成功した後に、公開の段を手で起動する口（`workflow_dispatch`）から版を渡して呼ぶ（要件討議の議題 1 で決定・`release-ci-workflow` の brief へ申し送り済み）。リポジトリ既定の権限（`GITHUB_TOKEN`）で作った Release は別の workflow の `release: published` を起こさず、`workflow_run` は crates.io の Trusted Publishing が受け付けないため、この呼び出しが公開の段の唯一の自動のきっかけになる。
   - `release-cycle` は版を +0.0.1 し、その中で公開前の確認を通す。初回（`v0.0.2`）は、タグを打つ前に本 spec の手順で手元から公開し、Trusted Publishing を設定する。
   - `winget-manifest-submission` は、`README.md`・`dist/README.txt` の本 spec が書く節に、winget での入れ方の行を後から足す。
   - 同じウェーブ C2 で `Cargo.toml` を触る spec は置かない（並走の約束）。
@@ -111,8 +111,8 @@ crates.io に一度出した版は消すことも差し替えることもでき�
 
 #### Acceptance Criteria
 
-1. When ある版の GitHub Release が公開される（`release-ci-workflow` の workflow がリポジトリ既定の権限で公開した場合を含む）, the 公開の段 shall その版で crates.io への公開を始める。
-2. If GitHub Release の公開でない出来事（普通の push・PR・下書きの Release の作成など）が起きる, then the 公開の段 shall 動き出さず、crates.io へ何も出さない。
+1. When `release-ci-workflow` の段が、ある版の GitHub Release を公開した後に公開の段をその版を渡して呼ぶ、または開発者が公開の段を版を指定して手で起動する, the 公開の段 shall その版で crates.io への公開を始める。
+2. If 公開の段を呼ぶ・手で起動する以外の出来事（普通の push・タグの push・PR・Release の作成など）が起きる, then the 公開の段 shall 動き出さず、crates.io へ何も出さない。
 3. If Release のタグが示す版と、そのコミットのワークスペースの版が一致しない, then the 公開の段 shall 何も上げずに止まり、二つの版を示す。
 4. The 公開の段 shall 上げ始める前に要件 2 と同じ公開前の確認を走らせ、それが失敗したら何も上げずに止まる。
 5. If 公開する一覧のどれかのクレートが crates.io にまだ 1 つの版も無い, then the 公開の段 shall 何も上げずに止まり、そのクレートの名前と「要件 3 の手元からの初回の手順で出す」ことを示す。
@@ -122,6 +122,7 @@ crates.io に一度出した版は消すことも差し替えることもでき�
 9. If 公開の段が途中で失敗する, then the 公開の段 shall 失敗として終わり、出せたクレートと出せなかったクレートの名前を実行の記録に残す。
 10. The 公開の段 shall GitHub Release とその添付物、および winget への提出の段に手を加えず、自分の失敗でそれらを取り消したり止めたりしない。
 11. The 公開の段 shall 認証の情報やリポジトリの接続先の URL を実行の記録へ印字しない。
+12. If 渡された版の GitHub Release が公開の状態で存在しない（下書き・未作成）, then the 公開の段 shall 何も上げずに止まり、その版を示す（Release より先に crates.io へ出さない）。
 
 ### Requirement 5: 説明の文書
 
