@@ -11,7 +11,7 @@
   - 完了の姿: `cargo build -p areka-mcp` と `cargo test -p areka-mcp --no-run` が緑・`Cargo.lock` に rmcp 3.5.0 が載り、新しいクレートが研究の測定どおり 30 件・`cargo deny check licenses` が緑（表に足すもの 0）
   - _Requirements: 8.2, 8.3, 8.6_
 
-- [ ] 2. 純粋な判断と登録口
+- [x] 2. 純粋な判断と登録口
 - [x] 2.1 (P) ポートの読み解きと環境変数の読み口
   - `AREKA_MCP_PORT` の値を「待ち受ける番号／待ち受けない（`0`）／`warn!` 1 件で既定 9821 へ倒す」へ写す、環境変数を読まない判断を作る（前例 `perf_thread_report.rs` の `period_from_env_value`）
   - 環境変数を読む口は 1 か所で、UTF-8 でない値は `warn!` 1 件で既定へ倒す
@@ -32,7 +32,7 @@
   - _Requirements: 6.1, 6.2, 2.7_
   - _Depends: 1.1_
   - _Boundary: help_
-- [ ] 2.4 (P) ツールの登録口
+- [x] 2.4 (P) ツールの登録口
   - ツール定義（名前・title・description・inputSchema を逐語）・結果（text／image の content と is_error）・非同期の実装の型と、登録の列を作る。rmcp・tokio の型を一切含めない
   - 同じ名前の 2 度目の登録は後勝ちで `warn!` 1 件（`register` は呼び出し側のスレッドで動くので `capture` で数えられる）
   - 完了の姿: `registry_tests.rs` で「同じ名前を 2 度登録すると後勝ち・件数は 1・`warn!` 1 件」と「登録した定義が逐語で取り出せる」が緑
