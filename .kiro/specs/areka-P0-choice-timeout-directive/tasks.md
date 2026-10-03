@@ -42,7 +42,7 @@
   - 2 本の檻が緑
   - _Depends: 2.2_
   - _Requirements: 6.1, 9.2, 9.4, 9.5_
-- [ ] 3.3 (P) kanade が指令どおりの期限で時間切れを出すことを外側から確かめる
+- [x] 3.3 (P) kanade が指令どおりの期限で時間切れを出すことを外側から確かめる
   - kanade の外側のテストの新しいファイル（選択肢のテストの親ファイルに接続宣言 1 行）で、既存のハーネスに選択待ちの知らせを自前の注入列で投函する（既存の待ちを作る補助関数は指令を未指定に固定するので使わない）
   - 指令 `Some(1.234)` では表示の終わり＋1233 ms で時間切れが出ず、＋1234 ms ちょうどで `OnChoiceTimeout` が出る。指令 `Some(0.0)`・`Some(-0.001)` では既定の 30 秒を越えた＋60,000 ms でも出ない
   - 期限の両側の檻のテスト名は `choice_timeout_directive_1234_fires_exactly_at_display_end_plus_1234`。doc 注記に対になる ghost のテスト `script_choice_timeout_1234_reaches_kanade_with_display_end_and_directive` と境の値 `1234` を書く。`crates/areka-kanade/src/` は 0 ファイル
