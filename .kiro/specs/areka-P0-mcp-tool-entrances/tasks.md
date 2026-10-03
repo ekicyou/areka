@@ -137,3 +137,4 @@
 - 2.2〜2.3: `check.rs`・`tools/` の呼び手は 4.1・4.2 で入るので、それまで非テストのビルドに dead_code 警告が出る（関門は無い）。4.2 の後に警告 0 を確かめる
 - 4.3: 測った値（rmcp 3.5.0・7.1 で差の一覧へ）: 3 本とも `{"code":-32602,"message":…}`（`data` 無し・`result` 無し）・旧式 HTTP 200・無状態版 HTTP 400。`message` は未知の名前 `tool not found`／欠落 `missing required argument: script`／型違い `argument strict must be boolean`。テスト名 `unknown_name_is_invalid_params`・`missing_required_is_invalid_params`・`wrong_type_is_invalid_params`（`tools_socket_tests.rs`）。無状態版の `tools/call` は `Mcp-Name` 見出しが要る
 - 5.3: `mcp::later` は 3 段目の spec が呼ぶまで非テストのビルドで dead_code になる。6.1 で `install`・`close` を結線したら、`later` に呼び手を名指す理由のコメント付きの `#[allow(dead_code)]` を付けて警告 0 にする（前例 `emo2_boot/hit_region.rs`）
+- 完了時にその場で解決: `check_tests.rs` の `clippy::type_complexity`（場合の組の型）を型の別名 `Case` にした（`cargo clippy -p areka-mcp --tests` の警告 1→0）

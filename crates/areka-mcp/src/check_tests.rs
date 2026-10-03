@@ -271,7 +271,9 @@ fn ten_definitions_table() {
             .iter()
             .map(|(k, p)| (k.clone(), valid_value(p)))
             .collect();
-        let mut cases: Vec<(String, Map<String, Value>, Result<(), String>)> = Vec::new();
+        // （場合の名前・引数・期待する検査の結果）
+        type Case = (String, Map<String, Value>, Result<(), String>);
+        let mut cases: Vec<Case> = Vec::new();
         let with = |k: &str, v: Value| {
             let mut a = full.clone();
             a.insert(k.to_owned(), v);
