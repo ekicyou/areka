@@ -86,7 +86,7 @@
   - 完了の姿: `cargo test -p areka` が緑・`cargo clippy -p areka --all-targets` が警告 0・`git diff --stat` に `main.rs` と `Cargo.toml` が無い
   - _Requirements: 6.1, 6.4, 6.6, 6.8_
 
-- [ ] 5. (P) steering と生きている文書を新しい名前へ追随させる
+- [x] 5. (P) steering と生きている文書を新しい名前へ追随させる
   - `structure.md` の `tools/` の説明に、新しい名前と役割（版入りの zip と SHA256・x64 と arm64・起動確認）を書く
   - `tech.md` に、arm64 の zip に要る道具（arm64 のビルドのターゲット・VS の ARM64 の部品・vswhere の固定の置き場）と、補助 exe は arm64 の zip でも i686 のままであることを書く
   - `roadmap.md`（3 か所）・`product.md`（1 か所）・まだ着手していない spec の brief 3 本（`mcp-stdio-bridge`・`mcp-server-core`・`release-ci-workflow`）の旧名を新しい名前へ直し、文意は変えない
