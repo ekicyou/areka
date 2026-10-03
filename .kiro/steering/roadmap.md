@@ -130,6 +130,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 
 | spec（`areka-P0-` 省略） | 段 | 何をするか | 規模 | 並び | 前提（先に着地） | Fable |
 |---|---|---|---|---|---|---|
+| `host32-testdll-marker-race`（**10-04 起票**・`translate-pipeline` の完了時に発見） | バグ | i686 の helper のテスト `testdll_drop_invokes_courtesy_unload` が揺れる穴を塞ぐ（プロセス全体の環境変数の印を、錠を取らずに test DLL を unload する別のテストが書く疑い・sleep なしで直す） | S（3〜6） | C1 の後の空き席 | なし | − |
 | `drag-cancel-borrow-miss`（**10-03 起票**・`drag-click-without-move` の完了時に発見） | バグ | wndproc のハンドラが World を借りられないとき、取り消しの終了を積まずに累積器の「ドラッグ中の対象」が残る穴を塞ぐ（再入の条件・実機は未観測） | S（4〜7） | C1 の後の空き席 | なし | − |
 | `install-live-target-hazards` | その他 | 表示中のシェル・使用中のバルーンへの上書きと、起動中のゴーストへ入れる途中の Windows の終了を**実測してから**扱いを決める | S〜M（8〜14） | C4 の候補（`dist/README.txt` を C2・C3 の配布と分け合う） | なし | ○ |
 | `install-companion-reading`（**10-03 起票**・`install-companion-canon` の分解 1/3） | その他 | 書庫を入れるときの `install.txt` の同梱の読み方を ukadoc に揃える 4 点（無印 → 0 → 1… で欠番で打ち切る・`*.source.directory` の階層・`*.directory` の区切りを `_` へ・`..` を取り除く）。知らせの並びも正典の順になる | S〜M（7〜11） | **C2-⑥** | なし | ○ |
