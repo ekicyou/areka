@@ -1,29 +1,51 @@
 <#
 .SYNOPSIS
-  α の配布物（zip）を今のソースから組み、中身を判定する（-Check で展開して起動も確かめる）。
+  配布物の zip（areka-{版}-{arch}.zip）と SHA256 の検証ファイル（areka-{版}-{arch}.zip.sha256）を
+  今のソースから target/package/ に組み、中身を判定する（-Check で展開して起動も確かめる）。
 
 .DESCRIPTION
-  段を名前つきで直列に回し、どれかの段が失敗したらその段の名前と外部コマンドの出力の末尾を
-  印字して、後始末（.zip.tmp の削除・差し替えた環境変数の復元）をしてから即終了する
-  （tools/test-all.ps1 の「最後まで回す」とは逆）。
-  最後の段「git status 不変の確認」で、始めと終わりの git status --porcelain が同じことを確かめる
+  作る物と置き場:
+    target/package/areka-{版}-{arch}.zip         配布物（{版} は Cargo.toml の [workspace.package] version）
+    target/package/areka-{版}-{arch}.zip.sha256  「SHA256（16 進 64 字）・空白 2 つ・zip のファイル名」の 1 行
+                                                  （sha256sum -c でそのまま検証できる形）
+    {arch} は CPU 種別で x64 と arm64（-Arch で選ぶ・既定は x64）。補助 exe と pasta.dll は arm64 の zip でも
+    32 ビット（i686）のまま。CI はこの 2 つの名前をこの置き場から拾う。
+    完成品の名前の zip と .sha256 は、全段が緑（終了コード 0）のときだけ現れる。途中の段は仮の名前
+    （.zip.tmp・.zip.sha256.tmp）で作り、最後の段「完成」で改名する。
+
+  段は名前つきで直列に回す:
+    前提の確認 → ターゲット導入 → ビルド（i686 の補助 exe・CPU 種別ごとの本体）→ 静的リンクの確認
+    → ライセンス検査 → 謝辞の生成 → 検体の展開
+    → CPU 種別ごとに「組み立て → 圧縮 → 中身の判定 → SHA256」
+    → （-Check のとき）短いパスへ展開 → 起動 → 番犬 → 記録の判定 → 後片付け
+    → git status 不変の確認 → 完成
+  どれかの段が失敗したらその段の名前と外部コマンドの出力の末尾を印字し、後始末をしてから即終了する
+  （tools/test-all.ps1 の「最後まで回す」とは逆）。後始末は、仮の名前の物を必ず消し、終了コードが 0 で
+  ないときは今回改名した完成品も消し、自分が起こした子だけを止め、差し替えた環境変数と PATH を戻す。
+  -Check の展開した木は失敗の経路では消さない（調べる手がかりとして残す）。
+  段「git status 不変の確認」で、始めと終わりの git status --porcelain が同じことを確かめる
   （追跡しているファイルを 1 つも書き換えない。zip と途中物は追跡外の target/package/ に置く）。
+
+  -Check は（-CheckDir を付けないとき）x64 の zip を target\package\check-<HHmmss> へ展開して areka.exe を有界で起動し、記録を
+  target\package\check-<HHmmss>-logs に書いて判定する。窓を出すので CI では付けない。
+  判定が合格なら展開した木を消し（-KeepExpanded で残す）、否なら木を残して置き場を印字する。記録はどちらでも残す。
+  -CheckDir を付けなければ %TEMP% などの target\ の外には何も作らない（-CheckDir にリポジトリの外を指定したときはそこに作る）。
 
   注意: 同じ検体で実機を回している最中に実行すると、その走行の展開した木を消す（target/nar-samples/manual/<検体>/）。
   検体の展開は nar-sample-path が同じ manual/<検体>/ を消してから作り直すため。実機の走行が終わってから実行すること。
 
   終了コード:
-    0 … 全段が緑
-    1 … 組む段の失敗（段の名前を印字する。git status が変わったときもここ）
-    2 … 起動確認（-Check）の否
-    3 … 引数・前提の不正（何を入れるか／どう直すかを 1 行で印字する）
+    0 … 全段が緑（CPU 種別ごとに zip と .sha256 の絶対パスと版を印字する）
+    1 … 段の失敗（段の名前を印字する。展開した木を消せなかった「後片付け」と、git status が変わったときもここ）
+    2 … 起動確認（-Check）の記録の判定の否（展開した木と記録を残し、置き場を印字する）
+    3 … 引数・前提の不正（版を読めない・道具が無いときも。何を入れるか／どう直すかを 1 行で印字する）
 
   較正値・調整値の一覧（変更するときはスクリプト冒頭の「較正値」の 1 か所だけを書き換える）:
     SCRIPT_VERSION                  本スクリプトの版（BUILD-INFO.txt の script= に書く）
-    OUT_DIR              = target/package  cargo の --target-dir・zip・.sha256 の置き場
+    OUT_DIR              = target/package  cargo の --target-dir・stage・zip・.sha256 の置き場
     ARCHS                           CPU 種別ごとのビルドのターゲットと機械種別（x64・arm64）
     HELPER_TARGET／HELPER_MACHINE   補助 exe と pasta.dll のターゲットと機械種別（i686・0x014c）
-    REMOVE_RETRY = 5／REMOVE_RETRY_WAIT_SEC = 1  消す処理の再試行の回数と間隔（秒）
+    REMOVE_RETRY = 5／REMOVE_RETRY_WAIT_SEC = 1  後片付けで展開した木を消す再試行の回数と間隔（秒）
     VERSION_PATTERN                 受け付ける版の形（+ の付記は受けない）
     SMOKE_EXIT_MS        = 10000    -Check の有界の自動終了（ミリ秒・-SmokeExitMs で上書き）
     WATCHDOG_MARGIN_SEC  = 60       自動終了の予定から番犬が子を止めるまでの猶予（秒）
@@ -35,23 +57,43 @@
     LOG_MARKER_*                    -Check の記録の判定に使う目印の文言
     OUTPUT_TAIL_LINES    = 40       段の失敗のときに印字する外部コマンドの出力の末尾の行数
 
+.PARAMETER Arch
+  作る CPU 種別。x64・arm64・all（両方）のどれか。既定は x64。
+  他の値は何もビルドせずに終了コード 3（受け付ける値を印字する）。
+  arm64 を作るには Visual Studio の ARM64 の道具（ARM64_VS_COMPONENT）が要る。無ければ終了コード 3。
+
 .PARAMETER Check
-  zip を組んだあと、短いパスへ展開して areka.exe を有界で起動し、記録を判定する。
+  zip を組んだあと、x64 の zip を展開して areka.exe を有界で起動し、記録を判定する。窓を出すので CI では付けない。
+  x64 の zip が要るので -Arch arm64 とは組み合わせられない（終了コード 3）。
 
 .PARAMETER CheckDir
-  -Check の展開先を作る親フォルダ（絶対パス）。省略時は <リポジトリ>\target\package。
-  リポジトリの中なら <リポジトリ>\target\ の下だけ受け付ける。
-  その下に check-<HHmmss> と check-<HHmmss>-logs を作る。そのフルパスが EXPAND_DIR_MAX_CHARS を超えると終了コード 3。
+  -Check の展開先 check-<HHmmss> と記録 check-<HHmmss>-logs を作る親フォルダ（絶対パス）。
+  省略時は <リポジトリ>\target\package。リポジトリの中なら <リポジトリ>\target\ の下だけ受け付ける。
+  展開先のフルパスが EXPAND_DIR_MAX_CHARS を超えると終了コード 3。
+
+.PARAMETER KeepExpanded
+  判定の合否にかかわらず、展開した木を消さずに置き場を印字する（-Check のとき）。
 
 .PARAMETER SmokeExitMs
-  -Check の有界の自動終了（ミリ秒・正の整数）。省略時は SMOKE_EXIT_MS。
+  -Check の有界の自動終了（ミリ秒・正の整数）。省略時は SMOKE_EXIT_MS。正の整数でなければ終了コード 3。
 
 .EXAMPLE
-  pwsh -NoProfile -File tools/package.ps1
+  pwsh -NoProfile -File tools/package.ps1 -Arch all
+
+  CI の形。x64 と arm64 の zip と .sha256 を target/package/ に作る（起動確認はしない）。
 
 .EXAMPLE
-  pwsh -NoProfile -File tools/package.ps1 -Check -CheckDir C:\t -SmokeExitMs 10000
+  pwsh -NoProfile -File tools/package.ps1 -Check
+
+  x64 の zip を作り、既定の置き場 target\package\check-<HHmmss> へ展開して起動を確かめる。
+  合格なら展開した木を消し、記録 target\package\check-<HHmmss>-logs は残す。
+
+.EXAMPLE
+  pwsh -NoProfile -File tools/package.ps1 -Check -KeepExpanded
+
+  起動確認の後も展開した木を残す（areka が書いた記憶などを見たいとき）。
 #>
+
 # 使い方の説明（上）は Get-Help がファイルの先頭でしか読まないので、#Requires はここに置く
 #Requires -Version 7
 param(
