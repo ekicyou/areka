@@ -92,7 +92,7 @@
   - 完了の姿: `get_active_ghost_list_tests.rs` で名前あり・`name` 無し・0 体がどれも `isError: false` で期待の本文、9 つの `_tests.rs` で空の World と作ったゴースト・引数から `try_answer` が `NG:not implemented yet`・`isError: true` を返すことが緑
   - _Requirements: 4.1, 4.2, 4.3, 4.5, 5.1, 5.2, 5.4_
   - _Depends: 2.1, 2.3, 3.1, 5.1_
-- [ ] 5.3 受け口・汲む系・振り分け・後から答える置き場・閉じる
+- [x] 5.3 受け口・汲む系・振り分け・後から答える置き場・閉じる
   - 受け口と後から答える置き場を NonSend 資源として置く関数、汲む系を Input 段（`dispatch_pointer_events` の後）へ登録する関数、両方を World から外す関数を作る。`ghost_session::register_systems` に汲む系の登録を 1 行足す（`crate::update::register(world);` の次・`ghost_session.rs` で触るのはこの 1 行だけ）
   - 汲む系は溜まった要求を全件取り出し、1 件ごとに起動中のゴーストを読み直して振り分け（design.md の表のとおり `ghost_name` の扱いを分け、失敗は `NG:` で終える。成功はゴーストの名前を添えて処理へ）、その後で預かった組を全件覗く。受け口が無ければ無操作
   - 後から答える置き場: 組を World から取り出して回し、`Some` を返した組は送って外し、待つ側が居ない組は覗かずに捨てる。置き場が無いときに預けた組はその場で落ちる
@@ -136,3 +136,4 @@
 - 2.3: 変異の確認の後に `git checkout` で戻すと未コミットの実装まで巻き戻る（2.3 で一度起きて作り直した）。変異は Edit で戻し、git の巻き戻しは使わない
 - 2.2〜2.3: `check.rs`・`tools/` の呼び手は 4.1・4.2 で入るので、それまで非テストのビルドに dead_code 警告が出る（関門は無い）。4.2 の後に警告 0 を確かめる
 - 4.3: 測った値（rmcp 3.5.0・7.1 で差の一覧へ）: 3 本とも `{"code":-32602,"message":…}`（`data` 無し・`result` 無し）・旧式 HTTP 200・無状態版 HTTP 400。`message` は未知の名前 `tool not found`／欠落 `missing required argument: script`／型違い `argument strict must be boolean`。テスト名 `unknown_name_is_invalid_params`・`missing_required_is_invalid_params`・`wrong_type_is_invalid_params`（`tools_socket_tests.rs`）。無状態版の `tools/call` は `Mcp-Name` 見出しが要る
+- 5.3: `mcp::later` は 3 段目の spec が呼ぶまで非テストのビルドで dead_code になる。6.1 で `install`・`close` を結線したら、`later` に呼び手を名指す理由のコメント付きの `#[allow(dead_code)]` を付けて警告 0 にする（前例 `emo2_boot/hit_region.rs`）
