@@ -9,7 +9,7 @@
 ## Current State
 
 - `.github/` は無い。GitHub Releases は 0 件。`.kiro/steering/tech.md` は「外部 CI は持たない（GUI・WUC・GPU のテストがホストのランナーで再現できない）」と書く＝**テストの門は手元のまま**で、ビルドと配布だけを CI に乗せる。この区別を `tech.md` に書き足す。
-- zip を作るのは `tools/package-alpha.ps1`（`release-package-versioned` が版入りの名前・SHA256・arm64・CI 向けの引数を足す）。
+- zip を作るのは `tools/package.ps1`（`release-package-versioned` が旧名から改め、版入りの名前・SHA256・arm64・CI 向けの引数を足す）。
 - タグは `v0.0.1` が 1 つ（完了 `crate-name-reservation` が crates.io の名前を押さえたとき）。
 - 署名の仕組みは無い（未署名で出す＝テーマの決めごと）。
 
