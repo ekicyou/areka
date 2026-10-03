@@ -246,7 +246,7 @@ crates/areka/src/emo2_boot/
 ├── balloon_visibility.rs        # 設定の型・状態の型・phase の接続（元）
 ├── balloon_visibility_decision.rs  # 見える・隠すの判断（新）
 └── balloon_visibility_wait.rs   # 待ち時間の関数と時間切れ（新）
-.kiro/specs/areka-P0-emo-text-file-split/verification/   # 証跡（§検証の流れ）
+.kiro/specs/completed/areka-P0-emo-text-file-split/verification/   # 証跡（§検証の流れ）
 ```
 
 子の宣言はすべて親ファイルの中の `#[path = "…"] mod …;`（私有）。`lib.rs`・`input_events/mod.rs`・`emo2_boot/mod.rs` の `mod` 宣言は変わらない。
@@ -274,7 +274,7 @@ crates/areka/src/emo2_boot/
 | `crates/areka-emo-text/src/layout_styled_tests.rs` | `SOURCES` に `("layout_scan.rs", …)`・`("layout_scan_glyph.rs", …)` を足し、母数 `3` → `5` | 5.1・5.2 |
 | `crates/areka/src/emo2_boot/frame_attach_tests.rs` | `ACTOR_SCAN_SITES` の `crates/areka-emo-text/src/actor.rs` を `crates/areka-emo-text/src/actor_present.rs` へ（登記の道筋の差し替え・件数 3 は不変） | 5.1・5.2 |
 | `.kiro/steering/structure.md` | emo-text の「主要ファイルと接続」の列挙に新しい子を足す（`actor` に `actor_attach`／`actor_present`、`layout` に `layout_scan`／`layout_scan_glyph`、`viewbox` の項を新設し `viewbox_diff`、`viewbox_draw` に `viewbox_draw_render`） | 1.5 |
-| `.kiro/specs/areka-P0-emo-text-file-split/verification/*` | 証跡（新規） | 4.2・8.1 |
+| `.kiro/specs/completed/areka-P0-emo-text-file-split/verification/*` | 証跡（新規） | 4.2・8.1 |
 
 **要件 5.7 の確認**: 上の一覧に Boundary Context の「同じウェーブの他の spec が触る場所」は 1 つも無い。`frame_attach_tests.rs` は `crates/areka/src/emo2_boot/` 直下で `frame/` の中ではない（同じ C1 で `frame/` を触る `restart-chain-finalize-stall` とは重ならない）。既存の兄弟テストの `use` の付け替えは 0 行の見込み（すべて親で束ね直す）。
 
@@ -516,7 +516,7 @@ flowchart TB
 
 ## 検証の流れ（要件 4.1・4.2・2.7・7.3・2.2 の証跡）
 
-置き場所は `.kiro/specs/areka-P0-emo-text-file-split/verification/`（前例と同じ・完了時にアーカイブへ同行する）。生のログは `target\emo-text-file-split\` の下に置き、抽出した一覧だけを `verification/` へコミットする。
+置き場所は `.kiro/specs/completed/areka-P0-emo-text-file-split/verification/`（前例と同じ・完了時にアーカイブへ同行する）。生のログは `target\emo-text-file-split\` の下に置き、抽出した一覧だけを `verification/` へコミットする。
 
 | 証跡 | 採り方 | 判定 |
 |---|---|---|
