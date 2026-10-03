@@ -51,9 +51,11 @@
 
 ## 入手と起動
 
-まだ GitHub Releases での配布はしていません。今は手元で配布物の zip を組みます（下の「ビルド」）。
+- 配布物の zip を展開する（まだ GitHub Releases での配布はしていないので、今は手元で zip を組みます。下の「ビルド」）
 
 zip を展開して `areka.exe` を開けば、同梱の えも？？ が立ちます。起動・終了・メニュー・`.nar` の入れ方・更新・記憶の置き場は、利用者向けの説明書 [dist/README.txt](dist/README.txt) にまとめてあります。
+
+crates.io に版を出しているのは、汎用のライブラリ `wintf`・`dola` だけです。crates.io の `areka` は名前を確保するための 0.0.1 だけで、本体と部品は出していません。`cargo install areka` は areka の入れ方ではありません（32 ビットの補助 exe が付きません）。
 
 ---
 

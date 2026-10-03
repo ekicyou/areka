@@ -4,9 +4,9 @@ Windows Tategaki Framework - Rust UI library with Japanese vertical text support
 
 ## Status
 
-⚠️ **Early Development - Version 0.0.1**
+⚠️ **Early Development**
 
-This crate is published for name reservation purposes. The API is not stable and may change significantly in future versions.
+This crate is usable, but it is still an early release. The API is not stable yet and may change significantly in future versions.
 
 ## About
 
