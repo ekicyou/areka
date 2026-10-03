@@ -198,3 +198,38 @@
 - 起こし直しを終えた巡から新しい窓の閉包が着く巡までの実際の巡数（作業プール → `Input` 段の着き方）。決定論テストで「窓なしの巡」を何巡回すかの根拠になる（テストは 600 巡回すので結論は変わらない）。
 - emo2 の入れ直しの後、scope 1 のシェルが初めて表示されるまでの時間と、その間の台詞の順（`OnGhostChanged` の 204 の後の扱い・`OnInstallComplete` の置き換え）。2.3 の見立ての確かめ。
 - 過去の実機の記録（`target\` の下の `run.log`）が残っていれば、`apply(ShowSurface)` の時刻から上の時間を測れる。
+
+## 7. 設計フェーズの記録（2026-10-03・`design.md` 生成時）
+
+### 7.1 調査の範囲と要点
+
+- 区分: **既存の仕組みの拡張（軽い調査）**。新しい依存・外部 API・新しい型は無く、変える本番ソースは 1 ファイルの `match` の腕 1 つ。サブエージェントは使わず、関係するコードを直接読んだ。
+- 読んだもの: `drain_resnap.rs`（`finalize_chain_once_with`・`collect_chain_states`・`defer_chain_finalize`）・`placement/chain_finalize.rs`（`ChainDeferReason` 9 種・`note_chain_deferral`・`CHAIN_FINALIZE_STALL_FRAMES`）・`placement/chain_realign.rs`（`realign_chain_once_with` が同じ走査の閉包を受け、自分の `defer_chain_realign` で数える）・`frame.rs`（`emo2_frame_system` の呼び順）・`frame/attach.rs`（シェルは最初の `\s` まで `ShowSurface` を出さない・装着の失敗は `warn!`／`error!`）・`emo2_boot/adapter.rs`（`PresentBridge` の失敗の記録）・`areka-emo-present/src/presenter.rs` の冒頭（全失敗分岐が `error!`／`warn!`）・兄弟テスト 2 ファイルと `frame_test_support.rs`（`PerTargetSizes`・`settled_sizes`・`capture_logs`・`count_level`・`spawn_resnap_windows`）・`log-capture-kit`（TRACE を含む全 level を捕捉）。
+- 要点:
+  1. 「数えるか」の判断は `finalize_chain_once_with` の `Err(reason)` の腕に無く、理由を区別せず `defer_chain_finalize` へ渡している。ここに仕分けを足せば、`init_resource` を含む数える側は 1 行も変えずに済む。
+  2. 遷移後の解き直し（`chain_realign.rs`）は同じ走査を使うが数える関数は別なので、確定側の腕だけを変えれば要件 2.4 は自動的に守られる。
+  3. 「areka 自身の待ち」を決定論で作る fake は既存の `finalize_defers_until_resnap_has_landed` が使う `PerTargetSizes::new([(0, Some((500, 687))), (1, Some(SPAWN_SIZE_1))])`（`ResnapNotLanded { scope: 0 }`）で足りる。確定の処理は再スナップを呼ばないので、この食い違いは何巡でも解けない。
+
+### 7.2 設計の判断（§6.1.3 の 7 項目の決着）
+
+| 項目 | 決めたこと | 理由 |
+|---|---|---|
+| 1 記録の形 | 毎巡 `trace!` 1 行（target `areka::emo2_boot::frame::drain_resnap`・項目 `scope`・`reason` は WARN と同じ） | 区間の始まりだけ `debug!` は状態が要り、1.1（資源を作り直さない）と置き場所がぶつかる。steering の割り当て（フレームごとの処理は `trace`）と合う。`drain_resnap.rs` に今日 `trace!` は無いので、この target を開けても増えるのは本 spec の行だけ |
+| 2 `NotShownYet` の中身 | 「`\s` 未到着」も「表示側が未装着」も同じく数えない | 走査からは見分けられず、見分けるには表示側の装着状態を問う口が要る（境界の外）。装着は数巡で終わり、失敗は `attach.rs` が自分で `warn!`／`error!` を出す |
+| 3 表示の経路の失敗の記録 | 確かめた・別 spec の登記は不要 | `PresentBridge`: 写像不能は `warn!`・配送先の drop（終了中）は `debug!`。`EmoPresenter::apply`: 全失敗分岐が `error!`／`warn!`（`presenter_display_failure_tests.rs` が固定）。装着: 項目 2 のとおり |
+| 4 `NoScopes` | ゴースト待ち（数えない） | 配置 0 件のときだけ起こり、説明文も「窓がまだ生えていない」。要件 1.1 の「窓の一式が無い」に含める |
+| 5 置き場所 | 案 A（`finalize_chain_once_with` の `Err` の腕・列挙子を網羅する `match`） | 「数えない」が確定の本体の字面に見える。`_` を書かないので、理由が増えたら足した側がコンパイルエラーで仕分けを決める |
+| 6 既存テストの更新 | `stalled_finalize_reports_the_reason_exactly_once`・`finalize_within_the_bounded_wait_emits_no_diagnostic` を `ResnapNotLanded` の形へ置き換え（本文の判定は `scope 0`・「再アンカーが未 landing」） | `(1, None)` は新しい振る舞いではゴースト待ち＝数えない。`finalize_defers_while_any_scope_has_not_shown_yet` は数えることを前提にしないので据え置く |
+| 7 対照の置き場所 | 3.4 は `frame_chain_finalize_tests.rs` の置き換え後の T4、3.5 は `frame_chain_finalize_restart_tests.rs` の T2（閉じる → 窓なし → 新しい一式 → 未表示 → 揃ってから areka 自身の待ち） | 既存の `next_window_set_finalizes_once_like_first_boot` が窓なしを挟まない形を固定済みなので、T2 は停滞の対照に専念させ、確定 1 回（1.5・3.6）は T3 の末尾で見る |
+
+### 7.3 まとめ方の検討（一般化・既製の採用・簡素化）
+
+- 一般化: 要件 1.1〜1.3 はすべて「見送りの理由を 2 種に仕分ける」1 つの判断に畳める。仕分けの表は `ChainDeferReason` の列挙子に対する `match` 1 つで、新しい型も関数も要らない。
+- 既製の採用: 記録は `tracing` のまま。見送りの数と一発フラグは既存の `ChainFinalizeStall`／`note_chain_deferral` をそのまま使う。
+- 簡素化: 「前の巡もゴースト待ちだったか」を覚える状態、`ChainFinalizeStall` に理由を持たせる案、仕分けを別関数（`is_ghost_wait`）へ出す案は、どれも本 spec の要件に対して増えるだけなので採らない。`match` の腕にそのまま書く。
+
+### 7.4 リスクと備え
+
+- 「`\s` は出たのに表示が着地しない」はこの WARN では拾えなくなる — 7.2 の項目 3 で、表示の経路がその場で記録していることを確かめた。
+- しきい値の前提（60Hz で約 10 秒）は 120Hz では約 5 秒のまま — 本 spec の境界の外（§6.1 議題 2）。areka 自身の待ちが 5 秒を超える場面では今日どおり鳴る。
+- 直す前の赤（3.3）を見ずに本番を先に直すと、テストが「初めから緑」で判定の力を失う — 実装の順序は T1〜T3 を先に書いて赤を見てから本番を直す（`design.md` Testing Strategy）。
