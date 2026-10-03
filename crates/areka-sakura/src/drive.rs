@@ -318,6 +318,10 @@ where
     ) -> ControlFlow<()> {
         if player.is_completed() {
             // 自然終端: player を drop（残り無し）。phase は Idle のまま。高々 1 回機構。
+            // 受け口は終わりを知らせる**前**に落とす——受け口が落ちる時に送る最後の合図（中断の旗の
+            // TalkEnded）を TalkDone より前に並べるため。配送は自然終端で合流を待たずに次のトークを
+            // 起こすので、後に回すと次のトークの合図に追い越される（areka-P0-status-execution-states 要件 3.4）。
+            drop(player);
             self.send_done(talk_id, end);
             ControlFlow::Break(())
         } else {
@@ -419,6 +423,8 @@ where
             } => {
                 // 残 entry を破棄（以降配送しない・R7.2）。interrupt-vs-natural の区別は本層が持つ。
                 player.stop();
+                // 受け口は中断の知らせの**前**に落とす（最後の合図を知らせより前に並べる・自然終端と同じ理由）。
+                drop(player);
                 self.send_interrupted(talk_id, end == TalkEndReason::Quit);
                 ControlFlow::Break(())
             }

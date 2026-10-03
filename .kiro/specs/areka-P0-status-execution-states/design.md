@@ -182,6 +182,7 @@ crates/areka/src/
 - `crates/areka/src/update/desk.rs` — `UpdateDesk.online: &'static OnlineCounter`（`new` で `default_online()`＝本番は `&areka_kanade::online::PROCESS`、テストのビルドでは誰も読まない数（既定の窓口のまま本物の背景スレッドを起こす境界外のテストが `PROCESS` を立てないため）・`pub(super)`・数を見るテストは起こす前に差し替え）、`hand_over` が `spawn_worker` へ渡す。
 - `crates/areka/src/install/fetch_url.rs` — `spawn_download` は `&PROCESS` を渡し、`spawn_download_with(url, tx, dir, make, online)`・`fetch_and_send(url, make, dir, now, tx, online)` の冒頭 `let _online = online.begin("install-fetch");`（関数を抜けるどの経路でも戻る）。
 - `crates/areka/src/emo2_boot/user_break_cue.rs` — `NoUserBreakSignal::TalkEnded`、`impl Drop for NoUserBreakCueSink`（`started` のときだけ送る）。
+- `crates/areka-sakura/src/drive.rs` — `settle_after_tick` の自然終端で `send_done` の前に、`on_close` の `Driving` の腕で `player.stop()` の後・`send_interrupted` の前に `drop(player)`（受け口の最後の合図 `TalkEnded` を終わりの知らせより前に並べる・要件 3.4）。兄弟テストは `drive_lifecycle_tests.rs`。
 - `crates/areka/src/input_events/user_break.rs` — `fold_no_user_break` に `TalkEnded => (false, false)`、`UserBreakWiring.reported_no_user_break: bool`、`drain_no_user_break_signals` の末尾で「旗 ≠ 最後に送った値」なら `KanadeMsg::ExecutionState(NoUserBreak(旗))` を 1 件（失敗は `error!(no_user_break_send_failed)`）。
 - `crates/areka/src/emo2_boot/frame/wiring.rs` — `pub(in crate::emo2_boot) balloon_status: BalloonStatusLedger`（`new` で既定）。
 - `crates/areka/src/emo2_boot/balloon_visibility_phase.rs` — 分解に `balloon_status` を足し、`issue_actions` の後（`emit_visibility_logs` の前後どちらでもよい）で `status_report::report_balloons(presenter, world, balloon_status, &scopes)` を呼ぶ。
@@ -446,7 +447,7 @@ pub static PROCESS: OnlineCounter = OnlineCounter::new();
 | Intent | 旗をトークの終わりで下ろし、旗の変化を kanade へ届ける |
 | Requirements | 3.1, 3.2, 3.3, 3.4, 3.5, 7.1 |
 
-- `NoUserBreakSignal::TalkEnded`: `NoUserBreakCueSink` に `impl Drop` を足し、`started` が真のときだけ `TalkEnded` を送る。配送はトークごとに受け口を複製し、その複製をトークの再生（`areka-sakura` の `TalkDriver`／`CuePlayer`）が所有して、終わり（最後まで・中断・置き換え）で落とす。`dispatcher` は「古いトークの合流 → 新しいトークの起動」を守るので、`TalkEnded(前)` は `TalkStarted(次)` より前に同じ線へ並ぶ。登録済みの原本は一度も `emit` されない（`started=false`）ので、ゴーストの終了で落ちても何も送らない。`TalkStarted` による解きは残す（複製の順序の二重の守り）。
+- `NoUserBreakSignal::TalkEnded`: `NoUserBreakCueSink` に `impl Drop` を足し、`started` が真のときだけ `TalkEnded` を送る。配送はトークごとに受け口を複製し、その複製をトークの再生（`areka-sakura` の `TalkDriver`／`CuePlayer`）が所有して、終わり（最後まで・中断・置き換え）で落とす。talk スレッド（`drive.rs`）は最後まで（`settle_after_tick`）と駆動中の中断（`on_close` の `Driving`）のどちらでも受け口（`CuePlayer`）を**落としてから** `TalkDone`／中断の知らせを送り、置き換えでは `dispatcher` が古いトークのスレッドを合流してから新しいトークを起こす。次のトークは終わりの知らせの後にしか起きないので、`TalkEnded(前)` は `TalkStarted(次)` より前に同じ線へ並ぶ（自然終端の `on_done`・選択の取り消しの `on_cancel_choice` は合流しないので、落とす順を talk スレッドの側で保証する）。登録済みの原本は一度も `emit` されない（`started=false`）ので、ゴーストの終了で落ちても何も送らない。`TalkStarted` による解きは残す（複製の順序の二重の守り）。
 - `fold_no_user_break`: `TalkEnded => (false, false)`。
 - `UserBreakWiring.reported_no_user_break: bool`（`new` で false）。`drain_no_user_break_signals` は全件畳んだ**後**に、`no_user_break != reported_no_user_break` なら `KanadeMsg::ExecutionState(ExecutionStateUpdate::NoUserBreak(no_user_break))` を 1 件送り、送れたら `reported_no_user_break` を更新。送れなければ `error!(event="no_user_break_send_failed", value, "運行の側へ中断の無効化モードの変化を渡せない（受け手が消えている）")`（`reported` は更新しない＝次の変化で再送）。既存の `no_user_break_changed`（`debug!`）は残す。
 - 要件 3.5: `UserBreakWiring` はゴーストごとに `wire_user_break` で新品、kanade の `State` も新品。

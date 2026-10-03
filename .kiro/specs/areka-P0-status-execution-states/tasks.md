@@ -84,7 +84,7 @@
   - _Depends: 1.3_
 
 - [ ] 4. areka: 中断の無効化モードの届け
-- [ ] 4.1 (P) トークの終わりで中断を禁じる旗を下ろす合図を作る
+- [x] 4.1 (P) トークの終わりで中断を禁じる旗を下ろす合図を作る
   - 旗の合図に「トークの終わり」を足し、トークごとの受け口の複製が落ちるときに、一度でも合図を送った複製だけがそれを送るようにする（登録済みの原本は送らない・送出の失敗は既存の warn のまま panic しない）
   - 旗の畳み込みで「トークの終わり」を旗なしへ戻す。トークの始まりによる解きは二重の守りとして残す
   - 兄弟テストで、合図を送った複製を落とすと「トークの終わり」が届き、原本を落としても何も届かないこと、畳み込みが旗を下ろすことが緑になる
@@ -150,3 +150,4 @@
 - 2.4: 起動の根（OnFirstBoot・OnGhostChanged・更新）は `boot_root` の腕ごとに作り方を渡すので、根を 1 つだけ踏むテストでは他の腕の後退を捕まえられない。腕ごとに経路を持たせること。
 - 2.6: `Status:` 行を書く唯一の口は `shiori-host32-host/src/shiori3.rs` の `build_request`（x64 の in-process も同じ関数を呼ぶ）。`areka-kanade/src/shiori/real.rs` は文面を組み立てない。design の 8.2 の追跡と Testing Strategy をこれに合わせて直した。
 - 3.1: areka の bin テストには既定の口のまま本物の背景スレッドや kanade を起こすものがあり（`menu/update_frame_tests.rs`・`emo2_boot/spine_conformance_support_tests.rs` は `KanadeConfig::new` 経由で `PROCESS` を読み `Status` を逐語照合する）、本番の既定が `PROCESS` を立てると並列実行で揺れる。そこで `UpdateDesk` の既定は `#[cfg(test)]` で読まれない数にした。3.2 の取得の本番の起こし方でも同じ危険が無いか確かめること。
+- 4.1: トークの終わりの合図 `TalkEnded` が次のトークの `TalkStarted` より前に並ぶ保証は、自然終端（`on_done`）と選択の取り消しで dispatcher が合流しないため、talk スレッド側（areka-sakura `drive.rs`）で受け口を落としてから `TalkDone`／`Interrupted` を送る形で持たせた（境界を広げた・C1 外）。

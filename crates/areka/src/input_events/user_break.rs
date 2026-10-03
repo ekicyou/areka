@@ -119,13 +119,15 @@ pub(crate) fn judge_press(
 /// 中断を禁じる旗の畳み込み（純関数）。返り値は（次の旗, 区間外の「出る」だったか）。
 ///
 /// 入れ子は数えない——「入る」が重なっても旗は 1 本で、「出る」1 回で区間から出る
-/// （要件 5.5）。トークの始まりは閉じ忘れた区間を解く契機である（要件 5.4）。
+/// （要件 5.5）。トークの終わりで旗を下ろす（areka-P0-status-execution-states 要件 3.3・3.4）。
+/// トークの始まりでも閉じ忘れた区間を解く（要件 5.4・トークの終わりとの二重の守り）。
 /// 区間外の「出る」は旗を変えず、呼び手が記録できるように第 2 の返り値で伝える（要件 5.6）。
 pub(crate) fn fold_no_user_break(flag: bool, signal: NoUserBreakSignal) -> (bool, bool) {
     match signal {
         NoUserBreakSignal::Enter => (true, false),
         NoUserBreakSignal::Leave => (false, !flag),
         NoUserBreakSignal::TalkStarted => (false, false),
+        NoUserBreakSignal::TalkEnded => (false, false),
     }
 }
 

@@ -233,3 +233,51 @@ fn dropped_receiver_is_logged_and_does_not_panic() {
         "TalkStarted と Enter の両方の送出の失敗が記録される: {logs:?}"
     );
 }
+
+// ---------------------------------------------------------------- トークの終わり
+
+/// 合図を送った複製（＝そのトークの受け口）を落とすと、最後に「トークが終わった」が 1 回届く
+/// （areka-P0-status-execution-states 要件 3.3・3.4）。
+#[test]
+fn dropping_a_clone_that_sent_delivers_talk_ended() {
+    let (registered, rx) = sink();
+    let mut talk = registered.clone();
+    talk.emit(carrier_cue("enter", &["nouserbreakmode"]));
+    drop(talk);
+    assert_eq!(
+        drain(&rx),
+        vec![
+            NoUserBreakSignal::TalkStarted,
+            NoUserBreakSignal::Enter,
+            NoUserBreakSignal::TalkEnded,
+        ],
+        "leave を書かずに終わったトークでも、複製が落ちれば TalkEnded が最後に届く"
+    );
+}
+
+/// 一度も配られていない受け口（登録済みの原本・何も送らなかった複製）を落としても何も届かない。
+#[test]
+fn dropping_a_sink_that_never_sent_delivers_nothing() {
+    let (registered, rx) = sink();
+    drop(registered.clone());
+    drop(registered);
+    assert_eq!(
+        drain(&rx),
+        vec![],
+        "始まりを送っていない受け口はトークの終わりも送らない"
+    );
+}
+
+/// 受信端が落ちていても、複製の落ちる時の送出の失敗は記録するだけで panic しない。
+#[test]
+fn dropping_a_clone_with_closed_receiver_is_logged_and_does_not_panic() {
+    let (mut sink, rx) = sink();
+    sink.emit(carrier_cue("enter", &["nouserbreakmode"]));
+    drop(rx);
+    let logs = capture_logs(|| drop(sink));
+    assert_eq!(
+        count_level(&logs, "WARN"),
+        1,
+        "TalkEnded の送出の失敗が 1 件記録される: {logs:?}"
+    );
+}

@@ -175,6 +175,22 @@ fn talk_started_clears_flag() {
     );
 }
 
+/// トークが終わったら旗を下ろす——`\![leave,nouserbreakmode]` を書かずに終わったトークの旗を、
+/// 次のトークの立ち上がりまで残さない（areka-P0-status-execution-states 要件 3.3・3.4）。
+#[test]
+fn talk_ended_lowers_flag() {
+    assert_eq!(
+        fold_no_user_break(true, NoUserBreakSignal::TalkEnded),
+        (false, false),
+        "区間の中でトークが終わったら旗は下りる（区間外の「出る」扱いにはしない）"
+    );
+    assert_eq!(
+        fold_no_user_break(false, NoUserBreakSignal::TalkEnded),
+        (false, false),
+        "旗が下りているトークの終わりは何も変えない"
+    );
+}
+
 /// 入れ子は数えない——「入る」2 回でも「出る」1 回で区間から出る（要件 5.5）。
 #[test]
 fn nesting_is_not_counted() {
