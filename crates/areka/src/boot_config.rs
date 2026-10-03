@@ -26,11 +26,10 @@ pub(crate) struct ConfigInputs {
 // ---------------------------------------------------------------------------
 // 起動した exe の本当の場所（areka-P0-release-package-versioned task 4.1）
 // ---------------------------------------------------------------------------
-// 判断だけを置く。実 I/O の口と、それを使う根・補助 exe・記憶の置き場の配線は task 4.2 が足す
-// （それまでは本体から使われないので dead_code を本体ビルドでだけ許す）。
+// 純粋な判断 `follow_exe_links` と、実 I/O の口 `probe_link`・1 回だけ解いて覚える口 `exe_location`
+// （task 4.2）。根・補助 exe・記憶の置き場の 3 関数が `exe_location` を使う。
 
 /// リンクを 1 段読んだ結果。I/O は呼び手（`probe_link`）か、テストの偽の口が返す。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) enum LinkProbe {
     /// リンクではない（普通のファイル）。
     NotALink,
@@ -41,7 +40,6 @@ pub(crate) enum LinkProbe {
 }
 
 /// 解けなかった理由（警告の行に載せる）。どの形でも起動した exe のパスをそのまま使う（要件 6.6）。
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ExeLinkWarning {
     /// `link` がリンクかどうか、または先を読めなかった（`reason` は読めなかった理由の文）。
@@ -59,7 +57,6 @@ pub(crate) enum ExeLinkWarning {
 }
 
 /// 辿る回数の上限（輪になったリンクで止まるため・Windows の再解析の上限 63 より小さい値）。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) const EXE_LINK_MAX_HOPS: usize = 32;
 
 /// 起動した exe のパス `exe` からリンクを辿って、根・補助 exe・記憶の置き場に使うパスを決める
@@ -75,7 +72,6 @@ pub(crate) const EXE_LINK_MAX_HOPS: usize = 32;
 ///
 /// I/O は `probe` だけ（`absolute` は文字列の操作）。`canonicalize` は使わない（要件 6.5）。
 /// 戻りの第 2 要素が `Some` のときは第 1 要素は `exe` そのもの（今のふるまいへ戻る・要件 6.6）。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn follow_exe_links(
     exe: &std::path::Path,
     probe: &mut dyn FnMut(&std::path::Path) -> LinkProbe,
@@ -130,6 +126,36 @@ pub(crate) fn follow_exe_links(
     }
 }
 
+/// `std::fs::symlink_metadata` と `std::fs::read_link` で 1 段読む本物の口（配線・テストは踏まない）。
+fn probe_link(path: &std::path::Path) -> LinkProbe {
+    match std::fs::symlink_metadata(path) {
+        Err(e) => LinkProbe::Unreadable(e.to_string()),
+        Ok(meta) if !meta.file_type().is_symlink() => LinkProbe::NotALink,
+        Ok(_) => match std::fs::read_link(path) {
+            Ok(target) => LinkProbe::Target(target),
+            Err(e) => LinkProbe::Unreadable(e.to_string()),
+        },
+    }
+}
+
+/// 起動した exe の本当の場所（プロセスで 1 回だけ解いて覚える）。`current_exe()` が失敗したときは `None`。
+///
+/// 解けなければ（`follow_exe_links` の警告が `Some`）初回に 1 度だけ `exe_link_unresolved` を
+/// `warn!` に出し、起動した exe のパスをそのまま使う（要件 6.6）。覚えるのは、何度も呼ばれる
+/// `default_app_profile_dir` で警告が繰り返されず、途中でリンクが張り替えられても置き場が変わらないため。
+pub(crate) fn exe_location() -> Option<&'static std::path::Path> {
+    static LOC: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+    LOC.get_or_init(|| {
+        let exe = std::env::current_exe().ok()?;
+        let (path, warning) = follow_exe_links(&exe, &mut probe_link);
+        if let Some(warning) = warning {
+            tracing::warn!(event = "exe_link_unresolved", exe = %exe.display(), reason = ?warning, "起動した exe のリンクの先を解けなかったので、起動した exe のパスをそのまま使います");
+        }
+        Some(path)
+    })
+    .as_deref()
+}
+
 // ---------------------------------------------------------------------------
 // ベースウェアの根（areka-P0-baseware-root-layout task 2.3）
 // ---------------------------------------------------------------------------
@@ -161,7 +187,7 @@ pub(crate) enum RootSource {
 /// - `env`: `AREKA_ROOT` の値（`None`＝未設定）。あれば `exe` は見ない（要件 1.3）。
 ///   空の値は `AREKA_PROFILE_DIR` と同じく「設定あり」として扱い、exe の隣へは倒さない
 ///   （空は絶対化できないので `NotADirectory { dir: "" }` になる＝黙らず告知へ届く）。
-/// - `exe`: `current_exe()` の結果（実行ファイルそのもののパス・`None`＝失敗）。根はその親。
+/// - `exe`: 起動した exe の本当の場所（`exe_location` の結果・実行ファイルそのもののパス・`None`＝失敗）。根はその親。
 ///   env も exe も無ければ `ExeLocationUnavailable`（`"."` へ倒さない・要件 1.4）。
 ///
 /// `Ok` のパスは絶対で `is_dir()` が真。相対の値はカレント基準で `std::path::absolute` により
@@ -190,11 +216,11 @@ pub(crate) fn resolve_root_from(
     }
 }
 
-/// env（`AREKA_ROOT`）と `current_exe()` を読んで [`resolve_root_from`] へ渡す薄い口。
+/// env（`AREKA_ROOT`）と起動した exe の本当の場所（`exe_location`）を読んで [`resolve_root_from`] へ渡す薄い口。
 pub(crate) fn resolve_root() -> Result<(std::path::PathBuf, RootSource), RootError> {
     resolve_root_from(
         std::env::var_os("AREKA_ROOT").map(std::path::PathBuf::from),
-        std::env::current_exe().ok(),
+        exe_location().map(std::path::Path::to_path_buf),
     )
 }
 
@@ -237,7 +263,7 @@ pub(crate) struct CurrentGhost {
     pub balloon: crate::boot_resolve::BalloonDecision,
 }
 
-/// env（`AREKA_ROOT`・`AREKA_PROFILE_DIR`）と `current_exe()` を読んで [`resolve_boot_from`] へ渡す薄い口。
+/// env（`AREKA_ROOT`・`AREKA_PROFILE_DIR`）と起動した exe の本当の場所（`exe_location`）を読んで [`resolve_boot_from`] へ渡す薄い口。
 pub(crate) fn resolve_boot(args: &[String]) -> Result<BootResolved, crate::alert::AlertScene> {
     resolve_boot_from(
         resolve_root(),
@@ -374,15 +400,14 @@ pub(crate) fn resolve_balloon_for_ghost(
 
 /// 実行ファイル隣接の 32bit SHIORI helper 実行ファイルパスを解決する（純粋・DD 準拠）。
 ///
-/// `std::env::current_exe()` の親ディレクトリへ `shiori-host32-helper.exe` を結合する。
+/// 起動した exe の本当の場所（`exe_location`）の親ディレクトリへ `shiori-host32-helper.exe` を結合する。
 /// `current_exe()` が失敗した場合（環境依存の稀な事象）は、この骨格の既存の寛容な
 /// （panic しない）流儀に倣い `"."` を親ディレクトリ扱いにフォールバックする——`boot` 呼び出し
 /// 自体はどのみち非致命として扱われるため、ここで panic/Err 伝播する必要はない。
 pub(crate) fn default_helper_exe_path() -> std::path::PathBuf {
-    let dir = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(std::path::Path::to_path_buf))
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let dir = exe_location()
+        .and_then(std::path::Path::parent)
+        .unwrap_or(std::path::Path::new("."));
     dir.join("shiori-host32-helper.exe")
 }
 
@@ -390,7 +415,7 @@ pub(crate) fn default_helper_exe_path() -> std::path::PathBuf {
 ///
 /// - 環境変数 `AREKA_PROFILE_DIR` が設定されていればそのパスを採用する（本番 env は `AREKA_`
 ///   名前空間・記憶 areka-runtime-env-naming）。
-/// - 未設定なら実行ファイル隣接の `profile/areka/`（`current_exe()` の親ディレクトリ／`current_exe()`
+/// - 未設定なら実行ファイル隣接の `profile/areka/`（起動した exe の本当の場所（`exe_location`）の親ディレクトリ／`current_exe()`
 ///   失敗時は `"."` へ寛容フォールバック——boot 呼び出し自体が非致命ゆえ panic/Err 伝播は不要）。
 ///
 /// App スコープはマウント解決に現れない（ghost/shell スコープは `<shiori.dir>`／`<shell.dir>` から
@@ -399,10 +424,9 @@ pub(crate) fn default_app_profile_dir() -> std::path::PathBuf {
     if let Some(dir) = std::env::var_os("AREKA_PROFILE_DIR") {
         return std::path::PathBuf::from(dir);
     }
-    let base = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(std::path::Path::to_path_buf))
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let base = exe_location()
+        .and_then(std::path::Path::parent)
+        .unwrap_or(std::path::Path::new("."));
     base.join("profile").join("areka")
 }
 
@@ -423,7 +447,7 @@ pub(crate) fn default_app_profile_dir() -> std::path::PathBuf {
 /// - `ticker`: `TickerMode::Real` を既定 `TickerConfig`（`base_interval=50ms`／
 ///   `kanade_interval=1000ms`／実クロック `GetTickCount64`）で駆動する。
 ///
-/// `app_profile_dir` の解決は env（`AREKA_PROFILE_DIR`）・`current_exe()` を読むため厳密には純粋
+/// `app_profile_dir` の解決は env（`AREKA_PROFILE_DIR`）・起動した exe の本当の場所（`exe_location`）を読むため厳密には純粋
 /// ではない（副作用のない read のみ）。他フィールドの決定は従来どおり引数からの写しに留まる。
 pub(crate) fn ghost_boot_options(
     ghost_root: std::path::PathBuf,
