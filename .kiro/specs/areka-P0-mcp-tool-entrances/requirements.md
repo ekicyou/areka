@@ -54,6 +54,8 @@
 | 11 | descript に `name` が無いゴースト | 一覧に**ルートフォルダのフルパス**を出す | 一覧は「`ghost_name` にそのまま渡せる値」の約束（description）なので、渡せる値を出す | 4.2 |
 | 12 | アプリ本体が終了の途中で答えられない | **上限を待たずに** `NG:areka is shutting down`（`isError: true`）と `warn!` 1 件 | 終了の途中で 10 秒待たせない | 6.4 |
 | 13 | `get_log` の `ghost_name` | **本 spec では解決しない**（型だけ検査して渡す） | 改めた点 4 | 3.7 |
+| 14 | LogSink の起動へ倒れたゴースト（窓なし・実行系あり） | **起動中に数える**（要件ディスカッションで確定） | SHIORI に問うツール（`get_property`・`raise_event` など）は答えられる。窓が要るツールは各 spec が `NG:` で返せば足り、一覧から消すと「起きているのに名前が引けない」ずれが出る | 3.8 |
+| 15 | 待ちの上限をツールごとに変える余地 | **持たない**（上限は橋を組むときの 1 つの値。テストでは短い値を渡す）（要件ディスカッションで確定） | 今ツールごとに変える理由が無い。要が出たら、その 3 段目の spec の要件で改める | 6.2・6.8 |
 
 ## Boundary Context
 
@@ -121,10 +123,10 @@
 2. When `ghost_name` が起動中のゴーストの descript の `name` と完全に一致する（大文字小文字も区別）, the areka shall そのゴーストへ解決する。
 3. When `ghost_name` が起動中のゴーストのルートフォルダ（`ghost/<フォルダ名>`）のフルパスと一致する（大文字小文字・区切り〔`\` と `/`〕・末尾の区切りの有無の差は同じとみなす）, the areka shall そのゴーストへ解決する。`sakura.name`・`kero.name` などの別名・フォルダ名だけ・相対パスでは解決しない。
 4. If `get_expression_table` の `ghost_name` が無い・空の文字列である, then the areka shall 本文 `NG:Specified ghost is not active`・`isError: true` の結果で答え、ツールの処理へ届けない。
-5. When `ghost_name` が任意のツール（3.1 のうち `get_expression_table` 以外の 7 本）で `ghost_name` が無い・空の文字列である, the areka shall 起動中のゴースト（1 体）へ解決する。ゴーストが起動していなければ、本文 `NG:Specified ghost is not active`・`isError: true` で答え、ツールの処理へ届けない。
+5. When `ghost_name` が任意のツール（3.1 のうち `get_expression_table` 以外の 7 本）の `ghost_name` が無い・空の文字列である, the areka shall 起動中のゴースト（1 体）へ解決する。ゴーストが起動していなければ、本文 `NG:Specified ghost is not active`・`isError: true` で答え、ツールの処理へ届けない。
 6. If `ghost_name` が空でなく、起動中のどのゴーストにも 3.2・3.3 のとおり一致しない（ゴーストが起動していない場合を含む）, then the areka shall 本文 `NG:Cannot find active ghost from specified name`・`isError: true` の結果で答え、ツールの処理へ届けない。
 7. The areka shall `get_log` の `ghost_name` を解決せず（3.4〜3.6 の `NG:` を出さない）、型を検査した値のままツールの処理へ届ける（意味は `mcp-log-history` が決める）。
-8. The areka shall 「起動中のゴースト」を、ゴーストの実行系が起きているあいだのゴーストとする。起動に失敗して既定ゴーストへも戻れなかったとき、切替の途中で前のゴーストを降ろし次のゴーストがまだ起きていないあいだは、起動中のゴーストは 0 体である。
+8. The areka shall 「起動中のゴースト」を、ゴーストの実行系が起きているあいだのゴーストとする。起動に失敗して既定ゴーストへも戻れなかったとき、切替の途中で前のゴーストを降ろし次のゴーストがまだ起きていないあいだは、起動中のゴーストは 0 体である。窓への結線が成立せず LogSink の起動へ倒れたゴーストも、実行系が起きていれば起動中に数える（SHIORI に問うツールは答えられる。窓が要るツールが窓の無いときにどう答えるかは、中身を書く 3 段目の各 spec が `NG:` で決める）。
 9. The areka shall 解決の判断を、ゴーストの名前とルートフォルダの値を受け取る（World や実行系を要しない）判断として持ち、次の各場合を決定論テストで固定する: 名前の一致・大文字小文字だけ違う名前（不一致）・フルパスの一致・大文字小文字と区切りと末尾の区切りの違うフルパス（一致）・フォルダ名だけ（不一致）・`sakura.name`（不一致）・空の文字列・省略・ゴーストが 0 体（省略と名前ありの両方）・`get_expression_table` の省略。
 
 ### Requirement 4: `get_active_ghost_list` が起動中のゴーストを返す
@@ -148,7 +150,7 @@
 1. When 検査（要件 2）と名前の解決（要件 3）を通った `get_status`・`get_expression_table`・`get_property`・`get_log`・`sakurascript`・`raise_event`・`reload`・`dump_surface`・`dump_balloon` の `tools/call` が届く, the areka shall アプリ本体のそのツールの処理へ届け、本文 `NG:not implemented yet`・`isError: true` の結果で答える。
 2. The areka shall ダミーの処理でゴーストに何もさせない（台本の再生・イベントの送出・読み直し・画像の取得は 0 回）。
 3. The areka shall ダミーの処理に、検査を通った引数（型の付いた値）と解決したゴーストを渡す（3 段目は処理の中身だけを書けばよい形）。
-4. The areka shall 9 本それぞれについて、実ソケットの `tools/call` が `NG:not implemented yet`・`isError: true` を返すことを決定論テストで固定する。
+4. The areka shall 9 本それぞれについて、`tools/call` が `NG:not implemented yet`・`isError: true` を返すことを決定論テストで固定する。経路の各区間を必ずどれかのテストが踏む形とし、1 本のテストで端から端まで通すことは求めない（例: `areka-mcp` 側は実ソケットから橋の送り口まで〔受け手はテストの偽物〕、`crates/areka` 側は登録した処理から橋・汲む系・ダミーまで〔ソケット無し〕。実ソケットの手書きクライアントは `areka-mcp` のテスト専用で `crates/areka` から使えないため）。
 
 ### Requirement 6: アプリ本体へ届けて返事を待つ
 
@@ -174,7 +176,7 @@
 1. The areka shall 10 本それぞれについて、プロトコル側（定義・引数の型）とアプリ本体側（処理）のファイルをツールごとに分け、表・検査・名前の解決・橋・要求の種類の列挙を本 spec で全 10 本ぶん揃える（3 段目がこれらを触らずに済む）。
 2. The areka shall 結果の共通の形を作る小さな関数を持ち、次の 4 つの形を作れるようにする: ⑴ 素の値（`OK:` なし・`isError: false`）、⑵ `OK:` ＋付言（`isError: false`）、⑶ `NG:` ＋理由（`isError: true`）、⑷ 本文の後に画像（`type: "image"`・base64 の PNG・`mimeType: "image/png"`）が続く形。4 つを決定論テストで固定する。
 3. The areka shall 設計の段で、3 段目の 6 spec（`mcp-get-property`・`mcp-kanade-tools`・`mcp-expression-table`・`mcp-log-history`・`mcp-reload`・`mcp-dump-images`）と `mcp-strict-errors` が触るファイルをツールごとに固定し、`.kiro/steering/roadmap.md` の干渉台帳（C3 の照合の要点を含む）に書く。
-4. The areka shall 本 spec で触るファイルを、`crates/areka-mcp/src/`（ツールのファイル・登録口と handler の改め・定義の一致のテスト）・新しい `crates/areka/src/mcp/` の下・`crates/areka/src/ghost_session.rs`（汲む仕組みの登録の 1 か所）・`crates/areka/src/main.rs`（登録表と送り口を渡す）・`doc/ssp-mcp/transport-diff-areka.md`・`.kiro/steering/roadmap.md` に限る（ほかを触る要が出たら止めて報告する）。
+4. The areka shall 本 spec で触るファイルを、`crates/areka-mcp/src/`（ツールのファイル・登録口と handler の改め・定義の一致のテスト）・新しい `crates/areka/src/mcp/` の下・`crates/areka/src/ghost_session.rs`（汲む仕組みの登録の 1 か所）・`crates/areka/src/main.rs`（登録表と送り口を渡す・終了を始めたところで受け口を閉じる〔要件 6.4〕）・`doc/ssp-mcp/transport-diff-areka.md`・`.kiro/steering/roadmap.md` に限る（ほかを触る要が出たら止めて報告する）。
 5. The areka shall `Cargo.toml`（根・`crates/areka-mcp`・`crates/areka` のいずれも）を変えない（変える行 0・新しい依存 0）。
 6. The areka shall `areka-mcp` の本番のビルドでクレートの外のファイルを読まない（保存した JSON を読むのはテストだけ）。
 
