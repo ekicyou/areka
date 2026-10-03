@@ -120,11 +120,12 @@ graph TB
 
 ### Modified Files（製品）
 
-- `crates/wintf/src/ecs/drag/accumulator.rs`（320 行） — `pending_transition: Option<DragTransition>` → `pending_transitions: Vec<DragTransition>`。`set_transition` に入口の判断（`Ended` かつ `current_dragging_entity.is_none()` なら置かずに debug 1 行）を足す。`FlushResult.transition` → `transitions: Vec<DragTransition>`（`flush` は `std::mem::take`）。`current_dragging_entity` の doc を「`Started` を積んでから `Ended` を積むまで `Some`」へ直す。中のテストを新しい形に合わせ、入口の判断と順序のテストを足す。
+- `crates/wintf/src/ecs/drag/accumulator.rs`（320 行） — `pending_transition: Option<DragTransition>` → `pending_transitions: Vec<DragTransition>`。`set_transition` に入口の判断（`Ended` かつ `current_dragging_entity.is_none()` なら置かずに debug 1 行）を足す。`FlushResult.transition` → `transitions: Vec<DragTransition>`（`flush` は `std::mem::take`）。`current_dragging_entity` の doc を「`Started` を積んでから `Ended` を積むまで `Some`」へ直す。中にある既存テスト 7 本は兄弟ファイル `accumulator_tests.rs` へ移し、末尾に `#[cfg(test)] #[path = "accumulator_tests.rs"] mod accumulator_tests;` を置く（要件 5.6・`keyboard.rs` の末尾と同じ形）。
 - `crates/wintf/src/ecs/drag/dispatch.rs`（382 行） — `if let Some(transition) = flush_result.transition` を `for transition in flush_result.transitions` に替える。腕の中身は変えない。
 
 ### New Files（テスト・すべて兄弟ファイル・1,000 行以下）
 
+- `crates/wintf/src/ecs/drag/accumulator_tests.rs` — `accumulator.rs` の中から移した既存 7 本（`transition` → `transitions` に合わせる）と、入口の判断・順序のテスト T1-1〜T1-3。形に依存するので修正と同じ変更で入れる。
 - `crates/wintf/src/ecs/window_proc/mouse_click_tests.rs` — 左解放を `dispatch_window_message` で配る決定論テスト（`Preparing` から離す → 種 0 件・状態は `JustEnded`／`JustStarted` から離す → 種は `Started`・`Ended` の 2 件がこの順）。`mouse_click.rs` の末尾に `#[cfg(test)] #[path = "mouse_click_tests.rs"] mod mouse_click_tests;` を足す（`keyboard.rs` の末尾と同じ形）。
 - `crates/areka/src/placement/follow_drag_end_gate_tests.rs` — 知らせの経路（`set_transition` → `dispatch_drag_events` → `OnDragEnd` の結線）から受け手の保存まで通す決定論テスト 6 本（§Testing Strategy）。`crates/areka/src/placement/follow.rs` の `#[cfg(test)] #[path = ...] mod ...;` の並びに 3 行を足す。1 本あたり 100〜150 行の見込みで 900 行を超えそうなら、速いドラッグと本物のドラッグの 3 本を `follow_drag_end_fast_drag_tests.rs` へ分ける。
 
@@ -298,7 +299,7 @@ pub struct FlushResult {
 
 **Implementation Notes**
 
-- Integration: `FlushResult.transition` を読む 3 か所（`accumulator.rs` の中のテスト・`dispatch.rs`・`keyboard_tests.rs`）を `transitions` に合わせる。
+- Integration: `FlushResult.transition` を読む 3 か所（`accumulator.rs` の中の既存テスト〔`accumulator_tests.rs` へ移す〕・`dispatch.rs`・`keyboard_tests.rs`）を `transitions` に合わせる。
 - Validation: C3 の T1・T2・T3。
 - Risks: 無し（置き場の形と入口の判断だけ。差分は数十行）。
 
@@ -318,7 +319,7 @@ pub struct FlushResult {
 **Dependencies**
 
 - Inbound: C1 `flush`（P0）
-- Outbound: `OnDragStart`／`OnDragEnd` の受け手（areka の `on_char_drag_end`・`on_balloon_drag_end`・`cleanup_drag_state`）（P0）
+- Outbound: `OnDragStart`／`OnDragEnd` の受け手（areka の `on_char_drag_end`・`on_balloon_drag_end`）と、`Messages<DragEndEvent>` を読む system（`systems.rs` の `cleanup_drag_state`）（P0）
 
 **Contracts**: Service [ ] / API [ ] / Event [x] / Batch [ ] / State [ ]
 
@@ -359,7 +360,7 @@ pub struct FlushResult {
 **Implementation Notes**
 
 - Validation: §Testing Strategy の T1〜T6。
-- Risks: `Window` の `on_add` フックは Command を積むだけで、素の `EcsWorld` でも `crates/wintf/tests/drag/dispatch_test.rs` が既に同じことをしている。
+- Risks: `Window` の `on_add` フック（`window/components.rs` の `on_window_add`）は Command を積むだけなので、テストの entity に `Window::default()` を付けても OS の窓は作られない（`crates/wintf/tests/drag/dispatch_test.rs` は素の `World::new()` で同じことをしている。`EcsWorld::new()` でも Command は Input スケジュールの前に流れないので同じ）。
 
 ### areka / placement
 
@@ -376,7 +377,7 @@ pub struct FlushResult {
 - キャラ窓 entity: `fake_handle`・`window_pos_sized`・`Anchored(Anchor::Bottom)`・`CharWindowMarker{scope}`・`BalloonFollow`・`OnDragEnd(on_char_drag_end)`。バルーン窓 entity: `fake_handle`・`window_pos_at`・`BalloonWindowMarker{scope}`・`OnDragEnd(on_balloon_drag_end)`。素材の確認にはキャラ窓へ `BalloonKeywordBase` を付けておく。
 - 駆動: `world.resource::<DragAccumulatorResource>().set_transition(..)` を wndproc の代わりに呼び、`dispatch_drag_events(&mut world)` を 1 回の画面更新として呼ぶ。実時間の待機は無い。
 - 数え方: `parts.publisher.barrier()` の後に `load_scope(PersistScope::Ghost, &roots, &FakePersistIo)` を読み、`PersistKey::WindowPos{scope,..}`・`PersistKey::BalloonOffset{scope,..}` の有無で 0／1 を言う。窓の位置は `position_of`、素材は `world.get::<BalloonKeywordBase>(char)`。
-- 速いドラッグの行き先の期待値: 偽の HWND では開始の腕の枠の座標変換が失敗し `DraggingState.initial_inset = (0,0)` になるので、期待値は `project_anchor(Anchor::Bottom, PointPx{x: cursor.x − drag_start.x, y: cursor.y − drag_start.y}, char_size, Some(&snapshot))`。これはテストの組み立ての都合で、製品では `WindowPos.position` の枠込みの値が入る（`research.md` §7.1）。修正前は `Started` が消えて `DraggingState` が入らず、窓は押す前の位置のまま・保存値も押す前の位置になるので赤。
+- 速いドラッグの行き先の期待値: 偽の HWND では開始の腕の枠の座標変換が失敗し `DraggingState.initial_inset = (0,0)` になるので、期待値は `project_anchor(Anchor::Bottom, PointPx{x: cursor.x − drag_start.x, y: cursor.y − drag_start.y}, char_size, Some(&snapshot))`。これはテストの組み立ての都合で、製品では `WindowPos.position` の枠込みの値が入る（`research.md` §7.1）。テストにはこの式が偽の HWND の座標変換の失敗に寄りかかることをコメントで書く。修正前は `Started` が消えて `DraggingState` が入らず、窓は押す前の位置のまま・保存値も押す前の位置になるので赤。
 - 1 ファイル 1,000 行以下。超えそうなら File Structure Plan のとおり 2 ファイルへ分ける。
 
 **Dependencies**
@@ -438,12 +439,12 @@ pub struct FlushResult {
 
 すべて注入した入力と画面更新の並びで駆動し、実時間の待機に依存しない。「赤 → 緑」は修正の前に失敗し修正の後に通るもの、「緑 → 緑」は前後とも通るもの。
 
-### wintf・累積器の中のテスト（`crates/wintf/src/ecs/drag/accumulator.rs`・形に依存するので修正と同じ変更に置く）
+### wintf・累積器のテスト（`crates/wintf/src/ecs/drag/accumulator_tests.rs`〔新・既存 7 本を移す〕・形に依存するので修正と同じ変更に置く）
 
 - T1-1 `ended_without_started_is_dropped`: `Ended` だけ積む → `flush().transitions` は空・`current_dragging_entity` は `None`（3.1/3.6）。`cancelled: true` でも同じ（3.2）。
 - T1-2 `started_then_ended_in_one_flush_keeps_both_in_order`: `Started` → `Ended` → `flush` → `transitions` は `[Started, Ended]`（3.4）。
 - T1-3 `ended_then_started_in_one_flush_keeps_order`: `Started` → `flush` → `Ended` → `Started` → `flush` → `[Ended, Started]`・`current_dragging_entity` は `Some`（順序の固定・3.4）。
-- 既存 7 本: `transition` → `transitions` へ合わせる（中身は変えない）。
+- 既存 7 本: `accumulator.rs` の中からこのファイルへ移し、`transition` → `transitions` へ合わせる（中身は変えない）。
 
 ### wintf・wndproc からの経路（`mouse_click_tests.rs`〔新〕・`keyboard_tests.rs`）
 
@@ -481,7 +482,7 @@ pub struct FlushResult {
 ### 実装の順序（赤を先に見せるため）
 
 1. 形に依存しないテストを先に書き、修正前の HEAD で赤を確かめる: T2-1・T2-2・T3-1〜T3-3（wintf・wndproc）、T5-1（wintf・配る所）、T7-1〜T7-3・T7-5（areka）。あわせて T3-4・T7-4・T7-6 が緑であることも見る。
-2. 修正（`accumulator.rs` の待ち行列＋入口の判断＋debug 行・`dispatch.rs` の `for`）と、形に依存する更新（`accumulator.rs` の中のテスト T1・`keyboard_tests.rs` の既存 1 本・`crates/wintf/tests/` の 5 本の直し）を同じ変更で入れ、全部が緑になることを見る。
+2. 修正（`accumulator.rs` の待ち行列＋入口の判断＋debug 行・`dispatch.rs` の `for`）と、形に依存する更新（`accumulator_tests.rs` の T1 と移す 7 本・`keyboard_tests.rs` の既存 1 本・`crates/wintf/tests/` の 5 本の直し）を同じ変更で入れ、全部が緑になることを見る。
 3. 実機（C5）→ 全体テスト（5.9）。
 
 ## Supporting References
