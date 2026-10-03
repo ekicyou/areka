@@ -82,7 +82,7 @@
   - _Requirements: 5.1, 5.2, 5.3_
   - _Boundary: README.md, dist/README.txt_
 
-- [ ] 5.3 (P) `wintf`・`dola` の README の Status 節を改める
+- [x] 5.3 (P) `wintf`・`dola` の README の Status 節を改める
   - 「Version 0.0.1」の表記と「名前の確保のための公開」の文を外し、使える早期の版で API はまだ安定していない旨を英語で書く
   - 完了の状態: 2 つの README から「name reservation」と「0.0.1」の語が消え、早期の版である旨の文が在る
   - _Requirements: 5.6_
