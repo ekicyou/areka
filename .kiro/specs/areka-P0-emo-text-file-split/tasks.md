@@ -2,7 +2,7 @@
 
 > 並列の印 `(P)` は付けない。7 本の分割はどれも同じワークスペースのビルドと全体テストを共有し、emo-text の 5 本は `lib.rs` の層規律の 2 つの一覧と母数を、`actor` は `frame_attach_tests.rs` を、`layout` は構造テスト 2 本を同じコミットで動かす。途中の赤が他のタスクの緑の判定を汚すため、1 ファイル（親＋その子）＝1 タスク＝1 コミットの直列で進める（設計 §System Flows）。
 
-- [ ] 1. 分割前の基準を採る
+- [x] 1. 分割前の基準を採る
   - 実装の最初のコミットの直前の HEAD を基準 SHA として、本 spec の `verification/notes.md` に採取日時とともに書く
   - 全体テストの一覧（x64 のワークスペース＋i686 の host-32 の 2 crate の `--list` を結合・序数で整列・重複は残す）を `before_list.txt` へ
   - 全体テスト（`tools/test-all.ps1`）を走らせ、生ログは `target\emo-text-file-split\` の下へ、各テストの成功・失敗・無視の行だけを序数で整列して `before_results.txt` へ
