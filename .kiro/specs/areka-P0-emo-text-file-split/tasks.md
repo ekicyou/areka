@@ -11,7 +11,7 @@
   - _Requirements: 4.1, 4.2, 2.7_
 
 - [ ] 2. emo-text の 4 本と `region.rs` を分ける
-- [ ] 2.1 actor を「型と指令の振り分け」「登録と再追従」「1 コマの描画の流れ」に分ける
+- [x] 2.1 actor を「型と指令の振り分け」「登録と再追従」「1 コマの描画の流れ」に分ける
   - 登録と再追従の `impl` の塊と粗いバルーン定義の警告の関数を子 `attach` へ、描画の流れ（公開の自由関数と私有の 1 体分の描画）を子 `present` へ、項目の中身を変えずに移す。型・`new`・指令の振り分け・読み口・起動の結線は元に残す
   - テストが呼ぶ私有メソッド 2 本だけに `pub(super)` を付け、元に `pub use present::present_frame;` を置いて公開の道筋を保つ。子は既存の子 `decoration` を `use super::decoration;` で引き、本文の綴りを変えない
   - 子 2 本の冒頭に、役割と足す予定の spec（名前で）を 1〜2 行の doc で書く
@@ -83,3 +83,8 @@
   - 子の道筋（`::present`・`::pressed`・`::wait` など）のログ行が前置きの絞り込みで拾えていることをログの grep で示す
   - 完了の状態: `notes.md` に 4 つの振る舞いが分割前と同じだった記録とログの抜粋がコミットされている。違いがあれば完了とせず、差分の中で原因を特定して直してから採り直す
   - _Requirements: 8.1, 8.2, 8.3, 2.1, 2.4_
+
+## Implementation Notes
+
+- 2.1: `frame_attach_tests.rs` のテストの道筋は `emo2_boot::frame::attach_tests`（`cargo test -p areka frame::attach_tests`）。同ファイルの説明文に「`present_frame` は `actor.rs`」とある箇所は残す（テストの注釈は 4.3 で書き換え禁止）。
+- 2.1: 動かした doc コメントの内部リンクのため `#[cfg(doc)] use` を 2 行足した（rustdoc の警告を前と同じに保つ）。設計の Non-Goals のとおり必須ではなく、他のタスクで真似る必要はない。

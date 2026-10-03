@@ -185,6 +185,8 @@ mod tests {
     /// 純粋層モジュールの走査面。[`pure_layer_modules_have_no_windows_imports`] と
     /// [`every_source_file_is_either_scanned_or_explicitly_excluded`] が共有する。
     const PURE_SOURCES: &[(&str, &str)] = &[
+        ("actor_attach.rs", include_str!("actor_attach.rs")),
+        ("actor_present.rs", include_str!("actor_present.rs")),
         ("balloon_overrides.rs", include_str!("balloon_overrides.rs")),
         (
             "balloon_overrides_tests.rs",
@@ -412,7 +414,7 @@ mod tests {
     fn pure_layer_modules_have_no_windows_imports() {
         // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
         // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
-        assert_eq!(PURE_SOURCES.len(), 59, "走査する純粋層モジュールの母数");
+        assert_eq!(PURE_SOURCES.len(), 61, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",
