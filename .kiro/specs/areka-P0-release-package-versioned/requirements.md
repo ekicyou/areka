@@ -143,8 +143,9 @@ brief が要件討議へ回した議題 3 件は、下の仮置きで要件を�
 1. When 本仕様の実装が終わる, the 開発者 shall 本仕様の配布スクリプトで作った x64 の zip を、手元のマニフェスト（portable・zip の入れ子）で `winget install --manifest` から入れ、PowerShell で `areka` と打って起動し、ゴーストが立つことを確かめる。
 2. The 実機の確かめ shall リンク経由の起動の経路を実際に通すため、手元のマニフェストに PATH へ入れ先のフォルダを足す指定（`ArchiveBinariesDependOnPath`）を付けずに行い、`areka` がリンク（`%LOCALAPPDATA%\Microsoft\WinGet\Links\` の下・`(Get-Command areka).Source` の `LinkType` が `SymbolicLink`）を指していたことと、起動の記録の根（要件 6.8 の `root=`）がリンクの先のフォルダであったことを、両方記録に残す。winget がリンクを作らずに入れ先のフォルダを PATH へ足した場合は、起動できても本要件の確かめは済んでいないものとして扱う（片方だけでは PATH 経由の起動と見分けられない）。
 3. The 実機の確かめ shall 手元のマニフェストと検体の置き場・記録をワークツリーの `target\` の下に置き、リポジトリで追跡しない（提出用のマニフェストは `winget-manifest-submission` の持ち物）。確かめの後に winget で入れたものは winget で外す。
-4. Where 手元のマニフェストを使うために winget の設定を変える必要がある, the 開発者 shall 自分の手でその設定を変え、何を変えたかと、確かめの後に元へ戻したかを記録に残す。
+4. Where 確かめのために winget や OS の設定を変える必要がある, the 開発者 shall 自分の手でその設定を変え、何を変えたかと、確かめの後に元へ戻したかを記録に残す（2026-10-03 要件討議の裁定＝確かめの間だけ OS の開発者モードをオンにし〔管理者でない利用者の権限でも winget がシンボリックリンクを作れるようにするため〕、管理者の手で winget の `LocalManifestFiles` をオンにし、`winget install` そのものは普段の利用者の権限で走らせる。終わったら両方を元へ戻す。AI はこれらの設定を変えない）。
 5. The 実機の確かめ shall arm64 の zip の起動を含めず、「arm64 の実機での起動は開発者の手元に機械が無ければ利用者の報告待ち」であることを既知の制限として記録に残す。
+6. The 実機の確かめ shall 手元のマニフェストへ渡す zip を、ローカルのファイルのパスでなく、`target\` の下の zip を配る `localhost` の http の URL で渡す（ローカルのパスを `InstallerUrl` に書くと期待どおり動かない既知の問題〔winget-cli #4358〕を避ける・配る道具は設計で決める）。
 
 ### Requirement 8: 使い方の説明と steering の追随
 
