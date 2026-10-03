@@ -68,6 +68,6 @@ pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
 pub use presenter::{ClientHit, EmoPresenter, TextSlotView};
 pub use scale::{DEFAULT_AUTHOR_DPI, ScalePolicy, derive_scale};
 pub use shell_target::{
-    ShellLoadError, ShellTarget, SurfaceImageSelection, build_shell_target, load_shell_target,
-    select_surface_images,
+    ShellLoadError, ShellTarget, SurfaceImageSelection, build_shell_target,
+    build_shell_target_with_boxes, load_shell_target, select_surface_images,
 };
