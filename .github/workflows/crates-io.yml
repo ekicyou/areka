@@ -52,7 +52,7 @@ jobs:
         run: |
           $draft = gh release view "v$env:VERSION" --json isDraft --jq .isDraft
           if ($LASTEXITCODE) {
-            Write-Host "::error::v$env:VERSION の GitHub Release が無い。Release を公開してから起動し直す。何も上げていない"
+            Write-Host "::error::v$env:VERSION の GitHub Release が無い（下書きは読めない権限なので、下書きのときもここで止まる）。Release を公開してから起動し直す。何も上げていない"
             exit 1
           }
           if ($draft -ne 'false') {
