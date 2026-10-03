@@ -4,9 +4,9 @@ Declarative Orchestration for Live Animation
 
 ## Status
 
-⚠️ **Early Development - Version 0.0.1**
+⚠️ **Early Development**
 
-This crate is published for name reservation purposes. The API is not stable and may change significantly in future versions.
+This crate is usable, but it is still an early release. The API is not stable yet and may change significantly in future versions.
 
 ## About
 
@@ -17,6 +17,7 @@ Key features:
 - Multiple serialization formats (JSON, TOML, YAML via feature flags)
 - Easing function library (ease-in, ease-out, parametric curves)
 - Runtime playback state management
+- Cue sheets: absolute-time scripts broadcast to subscribers (the playback engine behind areka's Sakura Script runner)
 - Validation system for animation consistency
 
 ## Usage

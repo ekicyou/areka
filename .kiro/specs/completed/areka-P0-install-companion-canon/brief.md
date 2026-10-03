@@ -1,5 +1,7 @@
 # Brief: areka-P0-install-companion-canon
 
+> **2026-10-03・実施せず、3 本へ引き継いで閉じた（書きかけ・未承認のまま残す資料）**。要件の段で、同梱の「最初の 1 個」が areka に無い 2 つの機能（ゴーストの標準バルーン・シェルごとのバルーン）に触れると分かったため、開発者指示で分けた。要件 1〜4・6〜8 は `areka-P0-install-companion-reading`、要件 5 は `areka-P0-ghost-standard-balloon`、シェルに紐づくバルーンは `areka-P0-shell-companion-balloon` が引き継ぐ。引き継ぎの経緯は `.kiro/steering/roadmap.md`「同梱バルーンの正典」節。
+
 > 2026-10-02 `/kiro-discovery` で起票（`alpha-release-signoff` の完了の手順の中・開発者指示「あ、起票はあとでやってくれますよね。「実装完了を承認」スキルは最後に実施しますし。その前提で、今は実装に戻ってください。」）。roadmap「alpha-release-signoff の持ち越し」節。出どころは `alpha-release-signoff` の完成判定 `verification/alpha-completion.md` §6 と受入記録 `verification/acceptance-record.md` §8.8（セッション「pasta棚卸」〔`pasta_check` の同梱バルーンの対応〕からの問い合わせで見つかった）。**正典（ukadoc）との違いを埋める spec**。本文のソースの指し先は起票時（`c430480d`）の実測＝着手時に引き直すこと。
 
 ## Problem

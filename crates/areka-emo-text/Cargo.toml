@@ -6,8 +6,8 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+publish = false # areka 本体の部品・areka の中でしか意味を持たない
 repository.workspace = true
-publish = false
 
 [dependencies]
 # 共通エラー型（TextLayerError）の derive。
@@ -28,7 +28,7 @@ areka-parsers = { path = "../areka-parsers" }
 # COM 層（surface.rs）の供給面ヘルパ（com/dxgi::create_composition_swap_chain・
 # com/wuc::CompositorInteropExt）と ECS コンポーネント（VisualGraphics/Arrangement）・
 # GraphicsCore（design.md Allowed Dependencies。テキスト widget 系 system は実行時依存にしない）。
-wintf = { version = "0.0.1", path = "../wintf" }
+wintf = { path = "../wintf" }
 # slot entity への装着（&mut World insert）・TextSlotBinding の Entity（design.md Allowed Dependencies）。
 bevy_ecs = { workspace = true }
 # 分かち書き境界の決定論計算（segment.rs 消費の唯一の場所・design.md Technology Stack・8.1）。

@@ -7,7 +7,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = true
+publish = false # crates.io の 0.0.1 は名前の確保だけ・利用者は配布の zip で入れる
 keywords = ["ukagaka", "desktop-mascot", "windows", "character", "interactive"]
 categories = ["gui", "games", "multimedia"]
 
@@ -16,7 +16,7 @@ name = "areka"
 path = "src/main.rs"
 
 [dependencies]
-wintf = { version = "0.0.1", path = "../wintf" }
+wintf = { path = "../wintf" }
 shiori-abi = { path = "../shiori-abi" }
 areka-ghost = { path = "../areka-ghost" }
 areka-kanade = { path = "../areka-kanade" }

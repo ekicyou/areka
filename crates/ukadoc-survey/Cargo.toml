@@ -6,8 +6,8 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+publish = false # 調査の道具
 repository.workspace = true
-publish = false
 
 [[bin]]
 name = "ukadoc-survey"

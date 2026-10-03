@@ -75,7 +75,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **重いビルドを同時に走らせない**: `-j 4`（ページング不足 os error 1455 の回避）。`cargo deny`／`cargo about` はテストと並べると rustc がメモリ不足で落ちるので最後に直列
 - 実物の SHIORI・実機サインオフ用のテストは環境変数（`AREKA_EMO2_REAL_RUN`・`HOST32_PASTA_DLL` など）が無ければ飛ばす＝フルテストの対象外。ネットへ出るテストは常時テストに入れない
 
-**外部 CI は持たない**（2026-09-24 に GitHub Actions への移管を検討し見送り）。テストの主役は実窓・WUC・GPU 描画の GUI 層で、ホスト型 runner で同じ水準を確かめられる見込みが薄いため（デバッグビルドの `GraphicsCore::new()` は D3D11 デバッグ層を必ず要求する等）。常設ゲートはローカルのフルテストである。
+**テストの門は手元のフルテスト（`tools/test-all.ps1`）のまま。ビルドと配布だけを GitHub Actions に乗せる**（タグ `v*` の push のときだけ・`.github/workflows/release.yml`。x64 と arm64 の zip と SHA256 を作って GitHub Release を公開する。手で始めて公開しない試しの走りもある）。zip の起動確認（配布スクリプトの `-Check`）は窓を出すので CI では回さず、手元で通す（`release-cycle` の手順）。テストを GitHub Actions へ移すことは 2026-09-24 に検討して見送った。テストの主役は実窓・WUC・GPU 描画の GUI 層で、ホスト型の実行環境で同じ水準を確かめられる見込みが薄いため（デバッグビルドの `GraphicsCore::new()` は D3D11 デバッグ層を必ず要求する等）。
 
 ## Development Environment
 
@@ -99,6 +99,16 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 # Test: cargo test
 # Full test (DoD gate・i686 の準備込み・PowerShell): pwsh -NoProfile -File tools/test-all.ps1 [-Format] [-License]
 ```
+
+## crates.io への公開
+
+- **出すのは areka の外でも使える汎用のライブラリだけ**（今は `wintf`・`dola`）。`areka` は crates.io の 0.0.1 が名前の確保だけで、本体と部品は出さない（利用者は配布の zip で入れる）
+- **出さないクレートは `publish = false # 理由`** と、印と理由を同じ行に書く。この行を `[package]` の最後の行に置かない（cargo-about 0.9.2 は `license` を受け継ぐクレートでその辺りへ 1 行を差し込み、日本語の途中に当たると落ちる。LF の作業木で起きる）。**新しいクレートを足すときは `publish` の行と理由を必ず書く**（書き忘れは全体テストの段が止める）
+- **確認は `tools/crates-io.ps1`**: 引数なし＝包むだけ（ネットを使わない）・`-Verify`＝組み立てまで（crates.io の索引を読む）・`-Pending`＝ワークスペースの版がまだ crates.io に無いクレートの名前だけを出す
+- **全体テストの段はネットを使わない形で包む**（Testing 節の「ネットへ出るテストは常時テストに入れない」のまま）。組み立てまでの形は手順書と公開の段が使う
+- **公開の段は `.github/workflows/crates-io.yml`**: タグ `v*` の push を自分で受け、同じタグの `release.yml` の回が緑で終わるのを待ってから出す（`release.yml` は呼ばない・`workflow_run` は crates.io の Trusted Publishing が断るので使わない）。やり直しは `workflow_dispatch`（Actions の画面の「Run workflow」に版を渡す）。crates.io への認証は Trusted Publishing だけ（長く使える鍵をリポジトリにも GitHub の秘密の置き場にも置かない）
+- **版を上げるときに動かすのは根の `Cargo.toml` の 2 行**（`[workspace.package]` の `version`・`[workspace.dependencies]` の `dola` の `version`）と `Cargo.lock`。各クレートの `Cargo.toml` は動かさない
+- 手順書（Trusted Publishing の設定・やり直し・手元から出す予備の手順）は `doc/crates-io-publish.md`
 
 ## Key Technical Decisions
 

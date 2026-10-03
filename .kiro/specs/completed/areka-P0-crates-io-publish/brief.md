@@ -2,6 +2,8 @@
 
 > 2026-10-02 `/kiro-discovery`（配布と公開＝winget・crates.io）で起票。開発者「可能なら crates.io へのリリースも組み込んでほしい」。file:line は起票時値（main `76e17654`）。
 
+> **2026-10-03 要件討議の議題 3 で範囲を改めた**: crates.io へ版を出し続けるのは汎用のライブラリ `wintf`・`dola` の 2 つだけ。`areka` は 0.0.1 の名前の確保のまま据え置き、本体と部品は出さず、部品の名前も確保しない（開発者「wintf と dola 以外の areka 系をリリースまでする意義があまりない」「areka だけで十分」）。手元からの初回の公開は要らなくなった（2 つとも crates.io に在る）。以下の本文は起票時の記述で、正本は requirements.md。
+
 ## Problem
 
 リリースのたびに、areka のクレート群を同じ版で crates.io へ出したい。今は `areka`・`dola`・`wintf` の 3 つが 0.0.1 で名前を押さえてあるだけで、`areka` が使う部品のクレートは `publish = false` のまま。crates.io は手元のパスだけの依存を受け付けないので、**`areka` を新しい版で出すには部品もすべて出ている必要がある**。
@@ -20,7 +22,7 @@
 1. `areka` が依存する部品のクレートに `publish = true` と `description`（と要るなら `readme`）が付き、`cargo publish --workspace --dry-run` が手元で通る。
 2. 出さないクレートは明示的に `publish = false` のまま: 試験用の DLL（`shiori-host32-testdll`・`shiori-host32-testdll-loadu`・`shiori4-testdll`）・`pilot`・`sample-ghost-kit`・`ukadoc-survey`。理由をそれぞれの `Cargo.toml` のコメントに 1 行。
 3. 初回: **`release-cycle` の初回（`v0.0.2`）の中で**、開発者が手元で `cargo publish --workspace` を実行して全部を同じ版で出す（新しいクレートは crates.io に無いと Trusted Publishing を設定できない。`areka`・`dola`・`wintf` の 0.0.1 は既に在るので、初回は 0.0.2 で出す）。その後、各クレートに Trusted Publishing（リポジトリ `ekicyou/areka`・workflow `crates-io.yml`）を設定する。本 spec の完了は「`--dry-run` が緑・workflow と手順が揃った」まで。
-4. 以後: 自分の workflow `.github/workflows/crates-io.yml`（`release: published` で動く）が、Release の公開の後に `cargo publish --workspace` を Trusted Publishing で実行する。`release.yml`（`release-ci-workflow`）には触らない＝同じウェーブ C2 で並走できる。失敗しても Release と winget の段は巻き戻さない（crates.io は一度出した版を差し替えられない＝**出す前の `--dry-run` を手元の手順と CI の両方に置く**）。
+4. 以後: 自分の workflow `.github/workflows/crates-io.yml`（`release: published` で動く ⇒ **10-03 要件討議の議題 1 で改め**: `release.yml` が Release の公開の後に `gh workflow run` で呼ぶ `workflow_dispatch`（⇒ **10-03 完了時に案 B で改め**: タグの push を自分で受け、同じタグの `release` の走りの成功を待つ。`workflow_run` は Trusted Publishing が断る）。`GITHUB_TOKEN` の Release は `release: published` を起こさず、`workflow_run` は Trusted Publishing が拒むため）が、Release の公開の後に `cargo publish --workspace` を Trusted Publishing で実行する。`release.yml`（`release-ci-workflow`）には触らない（呼び出しの 1 行は `release-ci-workflow` へ申し送り）＝同じウェーブ C2 で並走できる。失敗しても Release と winget の段は巻き戻さない（crates.io は一度出した版を差し替えられない＝**出す前の `--dry-run` を手元の手順と CI の両方に置く**）。
 5. `dist/README.txt` と根の `README.md` に「crates.io は部品と本体の公開・名前の確保のため。`cargo install areka` では 32bit の補助 exe が付かないので、利用者は winget か zip で入れる」と書く。
 6. `tools/test-all.ps1` に `--dry-run` を足すかは議題（毎回 1〜2 分増える見込み）。
 
@@ -56,7 +58,7 @@
 
 ## Constraints
 
-- 触るのは各 `Cargo.toml`（約 23 本・欄だけ＝依存は変えない）・`.github/workflows/crates-io.yml`（新規）・`dist/README.txt`・`README.md`・`.kiro/steering/tech.md`。`crates/*/src/`・`.github/workflows/release.yml`・`Cargo.lock` には触らない（欄の変更では `Cargo.lock` は動かない＝動いたら止めて報告）。**同じウェーブ C2 で `Cargo.toml` を触る spec を置かない**。
+- 触るのは各 `Cargo.toml`（約 23 本・欄だけ＝依存は変えない）・`.github/workflows/crates-io.yml`（新規）・`dist/README.txt`・`README.md`・`.kiro/steering/tech.md`・`tools/`（公開前の確認のスクリプト・`test-all.ps1` に段を 1 つ＝10-03 要件討議の議題 2）。`crates/*/src/`・`.github/workflows/release.yml`・`Cargo.lock` には触らない（欄の変更では `Cargo.lock` は動かない＝動いたら止めて報告）。**同じウェーブ C2 で `Cargo.toml` を触る spec を置かない**。
 - 一度出した版は消せない。手元の `--dry-run` と全体テストの緑を、出す前の必達にする。
 - 秘密をリポジトリに置かない（Trusted Publishing・初回のトークンは手元の `cargo login` だけ）。
 

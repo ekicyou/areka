@@ -10,6 +10,7 @@
 //! で起こした `mcp` スレッドの中だけで作って回す。公開面に tokio の型は出さず、
 //! 呼び出し側（`fn main()`）は同期のまま立てて、取っ手の `Drop` で畳む。
 
+mod check;
 mod dispatch;
 mod gate;
 mod handler;
@@ -19,6 +20,7 @@ mod registry;
 mod server;
 #[cfg(test)]
 mod testkit;
+pub mod tools;
 
 // 公開面（rmcp・tokio・hyper の型は出さない）。
 pub use port::{
