@@ -69,7 +69,7 @@
 
 ## Constraints
 
-- 触るのは上の 6 本（と `region.rs`）と、分けた先の新しいファイル、`crates/areka-emo-text/src/lib.rs`・`crates/areka/src/input_events/mod.rs`・`crates/areka/src/emo2_boot/mod.rs` のモジュールの宣言だけ。**`crates/areka/src/emo2_boot/frame/`・`crates/areka/src/placement/`・`crates/areka/src/install/`・`crates/areka/src/main.rs`・`crates/areka-sakura/`・`crates/wintf/` には触らない**（同じウェーブの他の spec が触る）。
+- 触るのは上の 6 本（と `region.rs`）と、分けた先の新しいファイル、`crates/areka-emo-text/src/lib.rs`・`crates/areka/src/input_events/mod.rs`・`crates/areka/src/emo2_boot/mod.rs` のモジュールの宣言だけ。**`crates/areka/src/emo2_boot/frame/`・`crates/areka/src/placement/`・`crates/areka/src/install/`・`crates/areka/src/main.rs`・`crates/areka-sakura/`・`crates/wintf/` には触らない**（同じウェーブの他の spec が触る）。**10-03 の組み直しで同じ C1 に `status-execution-states` が入った＝`crates/areka-kanade/`・`emo2_boot/{user_break_cue.rs, balloon_visibility_phase.rs}`・`crates/areka/src/update/` にも触らない**。
 - 全体テスト（`tools/test-all.ps1`）が、分割の前後で同じ本数・同じ結果であること。
 - 実機の確かめは 1 回（emo2 を起こして会話・選択肢・中断が今日と同じ）。
 

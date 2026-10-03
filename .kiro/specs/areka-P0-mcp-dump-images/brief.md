@@ -60,3 +60,7 @@ UI スレッドの処理で読み戻し → premultiplied から straight α へ
 
 - 棚卸⑳では個別の再測定をしていない（`mcp-tool-entrances` が、各 spec の触るファイルを設計で固定する）。着手は `mcp-tool-entrances` の完了の後で、そのとき接触ファイルを照合する。
 - emo-present と emo-text を読む＝文字まわりの spec と時期が重なるときは接触ファイルを照合する。
+
+## 2026-10-03 C4 の候補（10-03 の再編（開発者「MCP は複合 spec なので早めに着手したい」））
+
+- 段は「優先」。C3 に入れなかった理由: C3 の `balloon-font-file` と emo-text の境目が近い。

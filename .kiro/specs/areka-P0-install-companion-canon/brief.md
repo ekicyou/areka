@@ -72,7 +72,7 @@
 
 ## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
 
-- **ウェーブ C1・Fable 推奨**。規模 S〜M（8〜12 タスク）。
+- **ウェーブ C2-⑥**（10-03 の組み直しで段は「その他」・`release-package-versioned` の後）**・Fable 推奨**。規模 S〜M（8〜12 タスク）。
 - brief の記述はすべて実物と一致した。**足りなかった事実**:
   - `crates/areka/src/install/terms.rs` の `nested_terms` が `format!("{}/{file}", companion.source_directory)` で書庫を引く。階層付きの取り出し元を入れるとここも追随が要る（正規化の形を `/` 区切りにすれば無改変で済む見込み）。
   - `crates/areka-nar/src/plan.rs` の `companion_placement` は `collect_tree(..., 1)` で先頭の 1 要素だけを剥がす。階層付きなら剥がす数を変える。
