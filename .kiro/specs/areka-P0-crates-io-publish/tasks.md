@@ -32,7 +32,7 @@
   - 完了の状態: 引数なしと `-Verify` がともに終了コード 0 で、`-Verify` では 0.0.1 が既に在る旨の cargo の警告が 2 件出る。前後で `git status --porcelain` が同じで、作業の物は `target\crates-io\` の下だけに在る
   - _Requirements: 1.4, 1.7, 2.1, 2.2, 2.5, 2.6, 2.8, 2.10, 2.11_
 
-- [ ] 2.3 「まだ出ていないクレート」を答える `-Pending` を作る
+- [x] 2.3 「まだ出ていないクレート」を答える `-Pending` を作る
   - 公開する一覧の各クレートについて索引を 1 回読み、行ごとの `vers` にワークスペースの版が在るかを見る。無いクレートの名前だけを標準出力へ、人が読む「在る・無い」の行は別の流れへ出す
   - 索引が 404 なら「crates.io に 1 つも版が無い・手順書の予備の手順で出して Trusted Publishing を設定する」とクレートの名前を示して失敗。ほかの読み取りの失敗も名前つきで失敗。名前が 4 文字未満の索引の置き場は明示的に失敗させる
   - `-Version` と一緒に渡されたら、索引を読む前に版を判定する
@@ -118,3 +118,4 @@
 - `tools/crates-io.ps1` は `[Console]::OutputEncoding` を UTF-8 にしないと cp932 の端末で cargo metadata の JSON が化けて ConvertFrom-Json が落ちる（2.1）
 - `-Pending` は 2.1 では未宣言（渡すと引数の割り当てで exit 1）。2.3 で `param` に足す
 - `cargo package`（引数なし）は .crate を `package/`・`package/tmp-crate/`・`package/tmp-registry/` の 3 か所に、`--dry-run` は後の 2 か所に出す。判定は両方に在る `tmp-crate` を読む（2.2）
+- 子の `pwsh -File` では `Write-Host` が標準出力へ出る。`-Pending` の人が読む行は `[Console]::Error`（`Say`）へ。workflow は `2>&1` で混ぜず、`$LASTEXITCODE` を見てから標準出力の名前を使う（途中で落ちると名前が一部だけ出ていることがある）（2.3）
