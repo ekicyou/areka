@@ -290,6 +290,8 @@ fn collect_observations(
                 visible,
                 hover: hover_wiring.map(|w| w.is_balloon_hovered(scope as usize)),
                 choice_active: runtime.as_ref().map(|rt| rt.choice_active(&actor)),
+                // 箱の観測は表示の相へつなぐまで偽（つなぎは areka-P0-shell-balloon の 10.3）。
+                box_showing: false,
             },
         );
     }

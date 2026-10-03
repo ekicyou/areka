@@ -283,6 +283,12 @@ pub(crate) struct ScopeObservation {
     /// `None` は観測が取れなかったことを表し、`hover` と同じく抑止しない側へ倒す
     /// （Requirement 5.5）。
     pub(crate) choice_active: Option<bool>,
+    /// この scope の箱（シェル内バルーン）のどれかに文字が出ているか（areka-P0-shell-balloon
+    /// 要件 6.10・6.11）。既定は偽で、偽なら判断は箱を足す前と同じになる。
+    ///
+    /// 中断と時間切れの対象は「窓が見えている、または箱に文字が出ている」scope である。
+    /// 窓を出す判断（`decide_content`）はこの欄を読まない。
+    pub(crate) box_showing: bool,
 }
 
 /// 本フレームの観測スナップショット。
@@ -450,6 +456,10 @@ mod user_break_tests;
 #[cfg(test)]
 #[path = "balloon_visibility_forget_tests.rs"]
 mod forget_tests;
+
+#[cfg(test)]
+#[path = "balloon_visibility_box_tests.rs"]
+mod box_tests;
 
 // 会話終了観測から判断中核までの端から端（task 6.6）。実台本の再生から占有終端が計測起点に
 // なるところまでを 1 本で通す。判断中核の私有状態を読むため親の内側に置く。
