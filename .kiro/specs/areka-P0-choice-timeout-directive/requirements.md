@@ -21,9 +21,9 @@
 - `0` と `-1` を指定したメニューは、時間切れにならず、選ぶまで開いたままになる。
 - 指定の無い台本、時間を省いた指定の台本は、今日と同じ既定（30 秒）で時間切れになる。
 
-要件の段で確かめた事実（`main` `76e17654` 時点。「何の定義か」で指す）:
+要件の段で確かめた事実（`main` `1ce4c74e` 時点。「何の定義か」で指す）:
 
-- **単位**: 台本はミリ秒。台本から選択待ちまでの途中の値はすべて**秒**で持っている——再生層の選択待ちの区切りの値（dola の `BarrierKind::WaitForChoice` の `timeout`）、それを kanade へ運ぶ通知（areka-kanade の `msg.rs` にある `ChoiceWaiting` の `timeout_directive_secs`）、kanade の期限の写し方（`schedule/choice.rs` の `choice_deadline`＝秒を 1000 倍して四捨五入）。したがって変換は「台本を読む側でミリ秒を秒へ」の 1 回だけでよく、下流の単位は変えない。
+- **単位**: 台本はミリ秒。台本から選択待ちまでの途中の値はすべて**秒**で持っている——再生層の選択待ちの区切りの値（dola の `BarrierKind::WaitForChoice` の `timeout`）、それを kanade へ運ぶ通知（sakura から ghost へは areka-talk の `ChoiceWaiting`、ghost から kanade へは areka-kanade の `msg.rs` にある `KanadeMsg::ChoiceWaiting`。どちらも `timeout_directive_secs` を無改変で運ぶ）、kanade の期限の写し方（`schedule/choice.rs` の `choice_deadline`＝秒を 1000 倍して四捨五入）。したがって変換は「台本を読む側でミリ秒を秒へ」の 1 回だけでよく、下流の単位は変えない。
 - **再生層の扱い（`brief.md` の想定に無かった点）**: 再生層の時刻表（dola の `schedule.rs` にある `TimedSchedule::tick`）は、区切りに時間の値が入っていると、それを**自分で解く期限**として扱う。値が `0` や負のとき、および区切りに着いた時刻がすでに「区切りの時刻＋値」を過ぎているときは、区切りを**飛ばす**。このため、台本の値をそのまま区切りへ入れるだけでは、`0`・`-1` を指定したメニューは選択待ちに入らず、短い正の値も時刻の進み方しだいで選択待ちに入らないことがある。本 spec の要件は「値に依らず選択待ちが必ず成り立つ」ことを求める（要件 5）。どこで満たすかは設計で決める。
 
 ## Boundary Context
@@ -31,8 +31,8 @@
 - **In scope**:
   - `\![set,choicetimeout,時間]` を台本から読み、その台本の選択待ちの時間切れに反映させること（正の値・`0`・`-1` とその他の負の値・時間の省略・読めない値・選択肢より後ろ・複数回）。
   - ミリ秒から秒への変換（1 か所）。
-  - 値に依らず選択待ちが成り立つこと。
-  - 決定論テスト、網羅台帳の 1 行、`doc/COMPAT_ARCHITECTURE.md` §8 の記録。
+  - 値に依らず選択待ちが成り立つこと。そのために、再生層（dola）の選択待ちの区切りの扱いに限って触ってよい（`brief.md` の「触るソース」からの拡大。同じウェーブ C1 の他の spec は dola に触らないので並走の衝突は 0。クリック待ち・時間待ちの区切りは触らない）。
+  - 決定論テスト、網羅台帳の 1 行とそれに連なる文書（要件 10.5）、`doc/COMPAT_ARCHITECTURE.md` §8 の記録、着地で古くなる記述の書き直し（要件 10.6）。
 - **Out of scope**:
   - `\![set,balloontimeout,時間]`（受ける側が未実装。`areka-P0-sakura-time-directives` に残す）。
   - `quicksection`・`balloonwait`・`embed`・`sound,wait`・`syncobject`・`move` ほかの時間の引数（`areka-P0-sakura-time-directives` に残す）。
@@ -83,7 +83,7 @@
 #### Acceptance Criteria
 
 1. When `\![set,choicetimeout,…]` が選択肢（`\q`）より後ろに書かれている, the areka shall 選択肢より前に書いたときと同じ時間切れにする。
-2. When 同じ台本に `\![set,choicetimeout,…]` が 2 回以上書かれている, the areka shall 台本の中で最後に書かれたものの値を使う（時間の省略も「既定に戻す」という 1 回の指定として数える）。
+2. When 同じ台本に `\![set,choicetimeout,…]` が 2 回以上書かれている, the areka shall 台本の中で最後に書かれたものの値を使う（時間の省略も「既定に戻す」という 1 回の指定として数える。正典は黙っているが、台本は頭から順に実行され、時間を数え始める「表示が全部終わった時点」で効いているのは最後に実行された指定である、という読みによる areka の裁量）。
 3. When `\![set,choicetimeout,…]` が終わりのタグ（`\e`・`\-`）より後ろにだけ書かれている, the areka shall それを数えない（正典の `\e`「この後に書かれたスクリプトは実行・表示されない」に従う）。
 4. When 選択肢を含まない台本に `\![set,choicetimeout,…]` が書かれている, the areka shall 何も変えず、誤りとしても扱わない。
 
@@ -159,3 +159,5 @@
 2. The 網羅台帳 shall 台帳を検査する既存のテストを通し続ける。
 3. When 本 spec の実装が着地する, the `doc/COMPAT_ARCHITECTURE.md` §8 shall 正典が黙っている点の areka の裁量を 1 行で記録する（同じ台本に複数回書いたら最後のものが勝つ・`-1` 以外の負の値も時間切れなし・時間の欄が空は省略と同じ・読めない値は既定として扱い警告を残す・終わりのタグより後ろは数えない）。
 4. When 本 spec の実装が着地する, the `doc/COMPAT_ARCHITECTURE.md` §8 shall 「compile 側時間指令 allowlist」の行に、`set,choicetimeout` は本 spec で実際に読むようになったことを書き足す（他の時間の指令は `areka-P0-sakura-time-directives` の担当のまま）。
+5. When 要件 10.1 で台帳の行を書き換える, the areka shall 台帳の整合の検査が求める連鎖をすべて満たす: `doc/ukadoc-coverage/roadmap-draft.md` に本 spec の行を足し、引受先を移した件数（`areka-P0-sakura-time-directives` の受け持ちの数・brief の総数・段階ごとの表）を直し、追加の理由を書く。台帳から作る報告（`doc/ukadoc-coverage/report/sakura-script.md`・`doc/ukadoc-coverage/report/summary.md`）は生成器で作り直し、手で数を直さない。実装済みの証拠として、読み取りの定義の箇所に正典の URL の `// ukadoc:` 行を 1 行置く。
+6. When 本 spec の実装が着地する, the areka shall 着地で事実と食い違う既存の記述を書き直す: `doc/choice-cascade-compat.md` の行 5b（「実際に流れるのは既定値のみ」）と行 5d（再生層の区切りの自動解除）、`doc/ukadoc-coverage/briefing-sakura-script.md` の担当の表と消費側の表の `set,choicetimeout` の行、`crates/areka-sakura/src/compile.rs` の選択待ちの区切りの注記（「本層は値を供給しない」）。
