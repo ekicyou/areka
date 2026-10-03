@@ -534,3 +534,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "status_derive_tests.rs"]
+mod derive_tests;
