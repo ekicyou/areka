@@ -641,7 +641,7 @@ impl Drop for McpServer { /* 上記 */ }
 |---|---|---|
 | `candidates_from_env_value_fixed_table`（port_tests.rs） | 未設定→既定の 20 個／`0`→空／`9821`→[9821]／`65535`→[65535]／`65536`→既定＋warn／`-1`→既定＋warn／`abc`→既定＋warn／空→既定＋warn／` 9000 `→[9000]。warn の件数は `capture` で数える（純粋な判断で、ソケットは開かない） | 2.1〜2.3, 2.5, 2.6 |
 | `default_candidates_are_twenty_in_alternating_order`（port_tests.rs） | `DEFAULT_PORTS == [9801, 9821]`・`FALLBACK_STEPS == 9`・既定の列が 20 個で `[9801, 9821, 9802, 9822, …, 9810, 9830]` と逐語で一致・重複なし | 2.1, 2.8 |
-| `read_port_candidates_non_unicode_falls_back_with_warn`（port_tests.rs） | `OsString::from_wide(&[0xD800])` を設定して `read_port_candidates()` → 既定の 20 個・warn 1 件（edition 2024 の `set_var` は `unsafe`＝`perf_thread_report.rs` の同種のテストの書き方に合わせる） | 2.5 |
+| `read_port_candidates_non_unicode_falls_back_with_warn`（port_tests.rs） | `OsString::from_wide(&[0xD800])` を `VarError::NotUnicode` に包んで非公開の `candidates_from_var` へ渡す → 既定の 20 個・warn 1 件（環境変数は書き換えない＝テストは並列に走り、edition 2024 の `set_var` は `unsafe`。`read_port_candidates` は `std::env::var` の結果をこの関数へ渡すだけ） | 2.5 |
 | `gate_origin_table`（gate_tests.rs） | 要件 4.5 の 8 値（`Host` は `127.0.0.1:1`） | 4.1, 4.2, 4.3, 4.5 |
 | `gate_host_table`（gate_tests.rs） | `127.0.0.1:<port>`・`localhost:<port>`・`[::1]:<port>` 通す／`evil.example`・無し 拒む | 4.4 |
 | `help_html_lists_five_items_with_actual_port`（help_tests.rs） | `help_html(12345)` に URL・`claude mcp add`・`mcpServers`・`AREKA_MCP_PORT`・Desktop の 5 つが在り、URL・登録コマンド・`mcpServers` の断片は `127.0.0.1:12345` で、`127.0.0.1:9801`・`127.0.0.1:9821` のどちらも無い。⑷ が既定の順（9801 → 9821 → 隣・末尾の 9810／9830）を `DEFAULT_PORTS`・`FALLBACK_STEPS` から組んだ文面で説明している（B-13 の前の「`9821` がちょうど 1 回」の assert は置き換える） | 6.1, 6.2 |

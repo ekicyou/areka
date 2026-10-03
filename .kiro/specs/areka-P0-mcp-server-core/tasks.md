@@ -160,7 +160,7 @@
   - _Requirements: 1.2, 1.3, 1.10, 2.9, 9.1, 9.3_
   - _Depends: 7.2_
   - _Boundary: server_tests, testkit, server_protocol_tests と server_gate_help_tests（署名が強いる行だけ）_
-- [ ] 7.5 (P) 文書の追随
+- [x] 7.5 (P) 文書の追随
   - `.kiro/steering/structure.md` の `areka-mcp` の節（Purpose の「未設定は 9821」・規律の「`start(Some(0), …)`」「9821 を掴まない」）と `tech.md`（既定ポートの記述があれば）を B-13 の形へ直す。`roadmap.md` の `mcp-server-core` の行の「既定ポート 9821」も直す（起票時の「決めたこと」の段落は記録なので書き換えず、覆したことを 1 文足す）
   - `doc/ssp-mcp/transport-diff-areka.md` にポートの行は無い（survey §2 の表に無い項目）ことを確かめ、変えない。先頭の説明に既定ポートの記述があれば直す
   - 完了の姿: steering と差の一覧に B-13 と食い違う「9821 決め打ち」「別のポートは試さない」の記述が 0 件（grep で確かめる）
