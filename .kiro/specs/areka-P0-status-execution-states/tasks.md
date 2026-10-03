@@ -48,7 +48,7 @@
   - kanade のテストが緑で、本番の結線のファイルに差分が無い。メッセージの定義と殻のファイルが 1,000 行以内に収まっている
   - _Requirements: 2.5, 2.6, 5.1, 5.2_
 
-- [ ] 2.4 写しと gating の判断を決定論のテストで押さえる
+- [x] 2.4 写しと gating の判断を決定論のテストで押さえる
   - 写しの入力がどの相でも写しを変え行動を返さないこと、旗が真でもトークが無ければ nouserbreak が載らずトーク中なら載ること、「会話なし」の作り方が online と balloon だけを残すこと
   - 起動の各段・切替・終了の握手・強制終了の各リクエストに online と balloon が載ることを 1 件ずつ確かめる
   - 運行表の兄弟テストとして接続され、緑になる
@@ -147,3 +147,4 @@
 
 - 1.1: `crates/areka` は bin crate なので兄弟テストは `cargo test -p areka --bins`（`--lib` は動かない）。`smoke_boot_loop_exit::argv_direction_boots_real_ghost_windows_and_exits_zero` は並走の負荷で揺れることがある（単独では緑）。
 - 1.1: `status.rs` の `ExecutionSnapshot` の NOTE（将来形 `snapshot_of(&Phase, &TickExtras)`）と `INACTIVE` の doc（「boot 系列・close 系列・ForceQuit 後」）は、2.2 で作り方を一本化した時点で古くなるので 2.2 で書き換える。
+- 2.4: 起動の根（OnFirstBoot・OnGhostChanged・更新）は `boot_root` の腕ごとに作り方を渡すので、根を 1 つだけ踏むテストでは他の腕の後退を捕まえられない。腕ごとに経路を持たせること。
