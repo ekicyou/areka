@@ -657,6 +657,9 @@ fn hide_touches_only_the_balloon_target() {
         issue_actions(
             &mut presenter,
             &mut world,
+            &Rc::new(RefCell::new(TextLayerRuntime::new(
+                TextLayerConfig::default(),
+            ))),
             &mut state,
             &observations,
             &[VisibilityAction::HideScopes {

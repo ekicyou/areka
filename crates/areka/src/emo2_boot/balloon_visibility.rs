@@ -72,6 +72,7 @@ mod decision;
 mod wait;
 
 pub(crate) use decision::decide;
+use decision::hide_reaches_boxes;
 pub(crate) use wait::configured_timeout_secs;
 #[cfg(test)]
 use wait::{parse_timeout_ms, resolve_timeout_secs};
@@ -352,6 +353,9 @@ struct ObservationFailureLogged {
     runtime: bool,
     /// ポインタ配線（`BalloonWiring`）が world に無い（滞在が観測できない）。
     hover_wiring: bool,
+    /// 箱の上の滞在の記録（`ShellBoxHover`）が world に無く、文字の出ている箱への滞在が
+    /// 観測できない（areka-P0-shell-balloon 要件 6.11）。
+    box_hover: bool,
     /// 表示層に当該 scope の target が無く、現に可視かが観測できない scope の集合。
     unattached_scopes: BTreeSet<u32>,
 }
