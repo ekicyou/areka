@@ -6,6 +6,8 @@
 pub mod bridge;
 pub mod outcome;
 
+pub use bridge::{Answer, Pending, ReplyTo, ToolRequest};
+
 pub mod dump_balloon;
 pub mod dump_surface;
 pub mod get_active_ghost_list;

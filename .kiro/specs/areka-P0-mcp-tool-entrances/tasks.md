@@ -44,7 +44,7 @@
   - _Requirements: 2.2, 2.3, 2.4, 2.5, 2.8_
 
 - [ ] 3. 橋: 届けて塞がずに待つ
-- [ ] 3.1 要求と返事の対（`ToolRequest`・`ReplyTo`・`Pending`・`Answer`）
+- [x] 3.1 要求と返事の対（`ToolRequest`・`ReplyTo`・`Pending`・`Answer`）
   - `ToolRequest::new` が要求と返事を受ける側の対を作る（本番の橋もテストもこの関数で作る）。`ReplyTo` は `Send` で、記録用のゴーストの名前を添えられ、1 回だけ送れる。受け手がもう居なければ送りは黙って捨てられる
   - `ReplyTo` の `Drop` は送り手を先に落としてから合図を立てる（合図を立てるのはここ 1 か所）。`Pending` の `Drop` は逆向きの合図を立て、`ReplyTo::is_abandoned` がそれを読む
   - `Pending::try_answer` で待たずに覗ける。公開面に rmcp・tokio・tokio-util の型を出さない
