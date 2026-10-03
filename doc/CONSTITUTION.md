@@ -3,8 +3,8 @@
 | 項目 | 内容 |
 |------|------|
 | **Document Title** | areka プロジェクト憲法 |
-| **Version** | 1.0 |
-| **Date** | 2026-02-14 |
+| **Version** | 1.1 |
+| **Date** | 2026-02-14（1.1 で §1・§4・§5 を現状へ合わせた: 2026-10-03） |
 
 ---
 
@@ -14,7 +14,9 @@
 
 areka は、「伺か」にインスピレーションを得たデスクトップマスコット・プラットフォームです。デスクトップ上にキャラクター（ゴースト）を常駐させ、ユーザーとの自然な対話を実現します。
 
-2025年の技術を駆使し、Rust の型安全性・メモリ安全性を持つ基盤の上に、ECSアーキテクチャと DirectComposition による高品質レンダリング、日本語縦書き描画、そして宣言的アニメーション定義を組み合わせることで、「存在感のある」デスクトップマスコット体験を構築します。
+Rust の型安全性・メモリ安全性を持つ基盤の上に、ECSアーキテクチャと GPU 合成（Windows.UI.Composition）による高品質レンダリング、日本語縦書き描画、そして時刻つき台本による演出制御を組み合わせることで、「存在感のある」デスクトップマスコット体験を構築します。
+
+2026-06-26 からは、ukadoc を正典とする**互換ベースウェア（SSP の代わり）**として既存のゴースト・シェル・バルーンを動かすことを先に進め、その後に areka ならではの表現を使う旗艦ゴースト（ぱすたさん）を載せる順序を取っています（正本は [COMPAT_ARCHITECTURE.md](COMPAT_ARCHITECTURE.md)）。
 
 ---
 
@@ -65,31 +67,26 @@ Model Context Protocol (MCP) によるゴーストのAI連携を設計に組み�
 
 この分離により、頭脳・シェル・バルーンは独立して配布・交換可能です。
 
-> 原典: [.kiro/specs/ukagaka-desktop-mascot/requirements.md](../.kiro/specs/ukagaka-desktop-mascot/requirements.md) — 責務境界（プラットフォーム憲法）
+> 原典: [.kiro/specs/ukagaka-desktop-mascot/requirements.md](../.kiro/specs/completed/ukagaka-desktop-mascot/requirements.md) — 責務境界（プラットフォーム憲法）
 
 ---
 
 ## 4. クレート構成と責務
 
-| クレート | 種別 | 責務 |
-|---------|------|------|
-| **wintf** | ライブラリ | Windows Tategaki Framework — ECS + DirectComposition + Direct2D による汎用Windows UIフレームワーク |
-| **dola** | ライブラリ | Declarative Orchestration for Live Animation — 宣言的アニメーション定義フォーマット（JSON/TOML/YAML） |
-| **areka** *(予定)* | バイナリ | デスクトップマスコット・プラットフォーム本体 — wintf/dola を統合し、ゴースト実行環境を提供 |
-| [**pasta**](https://github.com/ekicyou/pasta) | 外部 | 里々インスパイアの会話記述DSLスクリプトエンジン |
+アプリ本体 `areka`（bin）を、7 つのエンジン（⓪ghost ①shiori ②parsers ③kanade ④sakura ⑤seriko ⑥emo）と、共通の土台 `wintf`（Windows UI フレームワーク）・`dola`（時刻つき台本の再生）で組んでいます。エンジンとクレートの対応の一覧は [README.md](../README.md) の「構成」節にあります。
 
-> 詳細: [.kiro/steering/structure.md](../.kiro/steering/structure.md)、[doc/ARCHITECTURE.md](ARCHITECTURE.md)
+> 詳細: [.kiro/steering/structure.md](../.kiro/steering/structure.md)（クレートとモジュールの構成の正本）
 
 ---
 
 ## 5. 技術的意思決定記録
 
-### ECS + DirectComposition アーキテクチャ選定
+### ECS + GPU 合成 アーキテクチャ選定
 
 | 決定事項 | 根拠 |
 |---------|------|
 | **bevy_ecs 採用** | 複雑なGUI要素の管理とヒットテストロジックをコンポーネントベースで実装。既存のデスクトップGUIフレームワーク(egui等)では透過ウィンドウ+縦書き+カスタムヒットテストの要件を満たせない |
-| **DirectComposition 採用** | ハードウェアアクセラレーションによる高速な合成処理と透過ウィンドウの実現。WS_EX_LAYERED 方式と比較して、部分更新・VSync対応・Surface単位の描画制御で優位 |
+| **GPU 合成の採用**（当初 DirectComposition・2026-07-02 に Windows.UI.Composition へ移行） | ハードウェアアクセラレーションによる高速な合成処理と透過ウィンドウの実現。`UpdateLayeredWindow` 方式と比較して、部分更新・VSync対応・Surface単位の描画制御で優位。別プロセスへのクリックの透過は `WS_EX_TRANSPARENT` の動的な切り替えで GPU 合成のまま実現（`UpdateLayeredWindow` 方式は 2026-07-05 に撤去） |
 | **Direct2D + DirectWrite** | 高品質な日本語テキストレンダリングと縦書き対応をネイティブに提供 |
 | **Taffy (Flexbox)** | レイアウト計算の標準的なアルゴリズムを導入。CSS Flexbox準拠でWeb開発者にも馴染みやすい |
 
@@ -123,4 +120,4 @@ areka はプラットフォーム（サーバー）とゴースト（クライ�
 
 > **注記**: プラットフォーム提供UI（設定画面等）の国際化は別途対応予定。
 
-> 原典: [.kiro/specs/ukagaka-desktop-mascot/requirements.md](../.kiro/specs/ukagaka-desktop-mascot/requirements.md) — スコープ外事項
+> 原典: [.kiro/specs/ukagaka-desktop-mascot/requirements.md](../.kiro/specs/completed/ukagaka-desktop-mascot/requirements.md) — スコープ外事項
