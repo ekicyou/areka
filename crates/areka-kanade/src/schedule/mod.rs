@@ -42,6 +42,9 @@ pub(crate) mod steady;
 pub(crate) mod talk_gap;
 /// 運行表の翻訳（`OnTranslate`）——帳簿の型・元のイベントの控え・応答の読み。
 pub(crate) mod translate;
+/// 既存テスト用の「翻訳を台詞そのままで通す」補助（テスト専用）。
+#[cfg(test)]
+pub(crate) mod translate_test_support;
 pub(crate) mod user_break;
 
 /// 状態機械への入力。`KanadeMsg`（外部入力）＋シェルが同期往復で得た SHIORI 応答。
@@ -114,6 +117,8 @@ pub(crate) enum Input {
     /// 外から届いた実行状態の知らせ（UI → kanade）。相を問わず写し（[`State::external`]）を
     /// 更新するだけで、運行は変えない（行動を返さない）。
     ExecutionState(ExecutionStateUpdate),
+    /// 殻が [`Action::Translate`] を実行した結果（殻が即時再投入）。判断は [`translate::on_done`] が持つ。
+    TranslateDone(translate::TranslateResult),
 }
 
 /// 運行フェーズ（可視化は System Flows の状態機械図）。各待ち点は「直前に発行した
@@ -418,6 +423,8 @@ pub(crate) enum Action {
     },
     /// 運行の通知を UI へ送る（シェルは停止通知と同じ送出端へそのまま流す）。
     Notice(crate::change::KanadeNotice),
+    /// 翻訳の依頼（殻が `OnTranslate` を往復させ、結果を [`Input::TranslateDone`] で再投入する）。
+    Translate(translate::TranslateRequest),
 }
 
 /// 唯一の遷移入口。現在の [`State`] と [`Input`] から次の [`State`] と副作用指示
@@ -550,6 +557,9 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
 
         // ExecutionState: 相を問わず（終了中・停止後も）写しを更新するだけ（行動は返さない）。
         Input::ExecutionState(update) => on_execution_state(state, update),
+
+        // TranslateDone: 預けた一括の再開・故障・帳簿なしの判断ごと translate::on_done へ渡す。
+        Input::TranslateDone(result) => translate::on_done(state, result),
 
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 

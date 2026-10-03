@@ -9,10 +9,11 @@
 //! - [`before`]・[`after`]: [`step`](super::step) の入口と出口。応答を待っている GET の元の
 //!   イベント（[`State::reply_source`](super::State)）を控え、応答の入力で 1 回だけ取り出す。
 //! - [`read_reply`]: `OnTranslate` の生の結果を読む（殻が呼ぶ）。
+//! - [`on_done`]: 翻訳の結果の入力（`Input::TranslateDone`）の腕。預けた一括を返すか故障へ倒す。
 
 use super::events::SourceEvent;
-use super::{Action, Input, State};
-use crate::msg::{EventId, ShioriCall, ShioriFailure, ShioriOutcome};
+use super::{Action, Input, Phase, State};
+use crate::msg::{EventId, ShioriCall, ShioriFailure, ShioriFault, ShioriOutcome};
 use crate::status::ExecutionStatus;
 use crate::talk::TalkId;
 
@@ -58,7 +59,8 @@ pub(super) fn before(state: &mut State, input: &Input) -> Option<SourceEvent> {
 }
 
 /// [`step`](super::step) が `route` の後に呼ぶ。返す一括の最後の往復が GET ならその ID と
-/// Reference の写しを控え、NOTIFY・降ろす往復なら控えを空にする。往復の無い一括では変えない。
+/// Reference の写しを控え、NOTIFY・降ろす往復・翻訳の依頼なら控えを空にする。往復の無い一括では
+/// 変えない。
 ///
 /// 殻は一括の最後の往復の結果だけを入れ直すので、次の応答の入力はここで控えた往復のものになる。
 pub(super) fn after(state: &mut State, actions: Vec<Action>) -> Vec<Action> {
@@ -67,7 +69,9 @@ pub(super) fn after(state: &mut State, actions: Vec<Action>) -> Vec<Action> {
             id: id.clone(),
             references: references.clone(),
         })),
-        Action::ShioriRequest(ShioriCall::Notify { .. }) | Action::ShioriUnload => Some(None),
+        Action::ShioriRequest(ShioriCall::Notify { .. })
+        | Action::ShioriUnload
+        | Action::Translate(_) => Some(None),
         _ => None,
     });
     if let Some(source) = last_round_trip {
@@ -109,6 +113,71 @@ pub(crate) fn read_reply(
             tracing::warn!(target: "kanade", event = "translate_reply", source = %source, kind = "unexpected", "GET では起きない結果——204 と同じに展開済みの元の台詞で進む");
             ReplyReading::Proceed(expanded)
         }
+    }
+}
+
+/// `route` の `Input::TranslateDone` の腕。
+///
+/// - `Ok(script)`: 預けた一括の再生の開始の台詞だけを `script` に差し替えて返す（起動の記録の
+///   後ろ書き＝`epilogue` は触らない）。控え（再生中の台詞・切替の台詞）も書き換える
+///   （[`rewrite_notes`]）。
+/// - `Err`（輸送路の失敗）: `translate_failed` を残して預けた一括を捨て、既存の故障の遷移へ。
+///   切替の送り出しの台詞なら、表示しなかった台詞を次のゴーストへ渡さないよう切替の台詞を空にする。
+/// - 帳簿が無い: `translate_done_unexpected` を残して捨てる（構造上は起きない）。
+pub(super) fn on_done(mut state: State, result: TranslateResult) -> (State, Vec<Action>) {
+    let Some(TranslateWait {
+        talk_id,
+        source,
+        mut deferred,
+    }) = state.translate.take()
+    else {
+        tracing::warn!(target: "kanade", event = "translate_done_unexpected", ok = result.is_ok(), "帳簿が無いのに翻訳の結果が届いた——捨てる");
+        return (state, Vec::new());
+    };
+    let script = match result {
+        Ok(script) => script,
+        Err(failure) => {
+            tracing::error!(target: "kanade", event = "translate_failed", source = %source, talk_id = talk_id.0, error = %failure, "OnTranslate の輸送路が失敗——預けた一括を捨てて終了系列（Fault）へ");
+            if matches!(state.phase, Phase::ChangeTalkWait { talk_id: t, .. } if t == talk_id)
+                && let Some(change) = state.change.as_mut()
+            {
+                change.script = None;
+            }
+            return super::to_unloading_fault(state, ShioriFault::from_failure(&failure));
+        }
+    };
+    let mut changed = false;
+    for action in &mut deferred {
+        if let Action::StartTalk(start) = action
+            && start.talk_id == talk_id
+        {
+            changed = start.script != script;
+            start.script.clone_from(&script);
+        }
+    }
+    rewrite_notes(&mut state, talk_id, script);
+    tracing::debug!(target: "kanade", event = "translate_resume", talk_id = talk_id.0, changed, "預けた一括を最終の台詞で返す");
+    (state, deferred)
+}
+
+/// 控えを `talk_id` の一致で最終の台詞に書き換える（相は腕が決めたまま）。
+///
+/// - `Steady{talk: Some}`・`BootVersion{talk: Some}` → 再生中の台詞（`OnChoiceTimeout` の Reference0 の源）。
+/// - `ChangeTalkWait` → 切替の台詞（停止通知の切替の中身の源）。この相は `OnGhostChanging` の台詞の
+///   再生だけを表すので、切替の `OnClose` の台詞（`ChangeCloseTalkWait`）では書き換えない。
+fn rewrite_notes(state: &mut State, talk_id: TalkId, script: String) {
+    match &mut state.phase {
+        Phase::Steady { talk: Some(active) } | Phase::BootVersion { talk: Some(active) }
+            if active.talk_id == talk_id =>
+        {
+            active.script = script;
+        }
+        Phase::ChangeTalkWait { talk_id: t, .. } if *t == talk_id => {
+            if let Some(change) = state.change.as_mut() {
+                change.script = Some(script);
+            }
+        }
+        _ => {}
     }
 }
 

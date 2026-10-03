@@ -70,7 +70,7 @@
   - _Requirements: 2.1, 2.2, 4.1, 4.4, 4.5, 7.3, 8.1_
   - _Depends: 1.5, 2.1_
 
-- [ ] 3.3 翻訳の行動と結果の入力を、運行表と殻の駆動に通す（捕まえる規則はまだ働かせない）
+- [x] 3.3 翻訳の行動と結果の入力を、運行表と殻の駆動に通す（捕まえる規則はまだ働かせない）
   - 翻訳の行動と翻訳の結果の入力を足し、結果の入力の腕で預けた一括の台詞だけを差し替えて返す（起動の記録の後ろ書きは触らない）。控え（再生中の台詞・切替の台詞）を `talk_id` の一致で最終の台詞に書き換える。切替の `OnClose` の台詞では切替の台詞を書き換えない
   - 輸送路の失敗では `translate_failed` を残して預けた一括を捨て、既存の故障の遷移へ。切替の送り出しなら切替の台詞を空にする。帳簿の無い結果は `translate_done_unexpected` を残して捨てる
   - 殻の駆動は、入れ直すものが SHIORI の応答か翻訳の結果かで入力を選び、停止の原因と引き継ぎの控えを両方の枝で同じに取る。口つきの起動の関数を足し、既存の起動の関数は素通しを渡す薄い包みにする
@@ -146,3 +146,4 @@
 - 2.1: 台帳 `shiori.toml` の `OnTranslate` の note は最終形の振る舞いで書いた。根拠の場所は今は `events.rs`・`shiori3.rs` だけなので、3.x で `schedule/translate.rs`・`actor_translate.rs` ができたら根拠の行に書き足す。台帳を変えたら `briefing.md` の barrier の数・`roadmap-draft.md` の `owner_count` も合わせ、`report/*.md` は手でなく `cargo run -p ukadoc-survey -- report`／`-- report-summary` で作り直す（改行だけ変わった報告ファイルはコミットに含めない）
 - 3.1: `translate::before` は `Option<SourceEvent>` を返し、`after` は `replied` を取らない形で入れた（使い手がまだ無いため）。3.4 で設計の `Replied` の形に広げ、`after` の控えの決まりに「最後の往復が `Action::Translate` なら空にする」を足す。輸送路の失敗は `read_reply` では記録せず、`on_done` の `translate_failed`（3.3）が受け持つ。`State` を `..` なしで組む既存テストは 14 か所で、`steady_flow_tests.rs` は `..base_state()` なので触っておらず 925 行のまま（3.4 の行数の見積もりは 925 から）
 - 3.2: `lib.rs` の `mod actor_translate;` に一時の `#[allow(dead_code)]` がある。3.3 で `execute_actions` の腕から `run_translate` を呼んだら外す。送出は `round_trip_raw`（検査・印の置き換え・`shiori_request`・往復）と、エラー応答を写す `round_trip_request` の 2 段。偽の SHIORI のスレッドは送り手を落としてから join しないと `recv` で止まる
+- 3.3: 殻の本番の関数は `drive_translating`・`execute_batch` の名前になり、元の `drive`・`execute_actions` は素通しの口を渡す `#[cfg(test)]` の包みとして残した（既存テストを変えないため）。`actor.rs` は 876 行で、3.4 以降で殻に書き足す余地は 120 行ほど。翻訳の失敗で切替の台詞は `None`（下流は `unwrap_or_default()` で空文字）。設計の `translate_tests.rs` の行「選択の連鎖の後でも故障になること（論点 10）」はまだ無いので、3.5 で足す

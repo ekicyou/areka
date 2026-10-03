@@ -25,8 +25,7 @@ pub mod actor;
 pub mod change;
 // 殻で答える複数件のリソース照会（`KanadeMsg::ResourceQuery`）。`actor.rs` を薄く保つための分室。
 mod actor_resources;
-// 殻が翻訳の依頼（`Action::Translate`）を実行する 1 関数。呼び手（`execute_actions` の腕）は次の段で足す。
-#[allow(dead_code)]
+// 殻が翻訳の依頼（`Action::Translate`）を実行する 1 関数（呼び手は `actor` の `execute_batch` の腕）。
 mod actor_translate;
 pub mod msg;
 pub mod online;
@@ -40,7 +39,7 @@ pub mod status;
 pub mod talk;
 pub mod translate;
 
-pub use actor::{spawn_kanade, spawn_kanade_with_stop_sink};
+pub use actor::{spawn_kanade, spawn_kanade_translating, spawn_kanade_with_stop_sink};
 pub use change::{
     BootOrigin, CancelReason, ChangeHandoff, ChangeOrigin, ChangeRequest, ChangeTarget,
     ChangedFrom, GapLeft, GapRaise, KanadeNotice, MarkedEnd, RaiseOutcome, ShioriMethod, TalkGap,
