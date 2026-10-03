@@ -16,7 +16,7 @@
   - 完了の姿: 検体がリポジトリにあり、既存の surfaces.txt の読み手で読んで失敗せず、ワークスペースの見張りのテストが緑のまま
   - _Requirements: 10.4_
 
-- [ ] 2. surfaces.txt から箱に関わる行を原文のまま転記する読み手を足す
+- [x] 2. surfaces.txt から箱に関わる行を原文のまま転記する読み手を足す
   - `crates/areka-parsers/src/shell/boxes.rs` を新設し、`balloon.名前`ブレス（見出しの `balloon.` より後ろを名前とし、本体の行を欄の列のまま）と、`surface*`ブレス・`surface.append*`ブレス（箱の element定義が 0 件でも 1 件ずつ）を、登場順に並べた転記を返す
   - 箱の element定義は element番号・名前・X・Y を文字列のまま持ち、欄が欠けていれば空文字列で転記する。検証・展開・記録はしない（失敗しない）
   - 見出しの読み方は既存の `decode.rs` の見出しの読み取りを `pub(super)` にして共用し、`mod.rs` から公開する。画像の読み手（`shell::parse` と `Shell`・`Element`）には触れない

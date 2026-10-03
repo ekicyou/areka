@@ -435,7 +435,7 @@ fn decode_append_block(shell: &mut Shell, header: &[String], body: &[Vec<String>
 /// 入力例: `header="10"`, `rest=["2100-2110", "2200-2210"]`
 ///   → `[Single(10), Range{2100,2110}, Range{2200,2210}]`。
 /// 入力例: `header="2200"`, `rest=[]` → `[Single(2200)]`。
-fn parse_targets(header: &str, rest: &[String]) -> Vec<AppendTarget> {
+pub(super) fn parse_targets(header: &str, rest: &[String]) -> Vec<AppendTarget> {
     let mut targets: Vec<AppendTarget> = Vec::with_capacity(1 + rest.len());
     // ヘッダ数値は列挙要素と同一コードパスで第1要素として積む（一様扱い）。
     targets.push(parse_target_element(header));
