@@ -156,4 +156,4 @@
 ar-samples\work` の下）に環境変数の DLL を上書きして起こす。手元の DLL は `target
 ar-samples\cachemo2-4591449-272a04b4\ghostmo2\ghost\master\pasta.dll`。雑談の間隔は emo2 の `pasta.toml` の `talk_interval_min=15`・`max=30`。走行は約 90 秒。
 - 7.1: `tools/test-all.ps1` 全段緑（検査したコミット 20d659e3・x64 全テスト 275 秒）。C1 の 9 本は実在し `main` との差分 0（較正: 変更した `status.rs` は差分ありと出る）。変更した .rs に 1,000 行超えは無い。
-- 7.3: 実機の観測は起動時の台本（`dic/boot.pasta`）を写しの上で書き換えて流した。URL インストールは `\![execute,install,url,…]`（`\![install,url,…]` は効かない）。区間内でバルーンを左ダブルクリックして中断が実際に断られるかの目視は未実施（手作業の確認項目）。
+- 7.3: 実機の観測は起動時の台本（`dic/boot.pasta`）を写しの上で書き換えて流した。URL インストールは `\![execute,install,url,…]`（`\![install,url,…]` は効かない）。区間内でバルーンを左ダブルクリックして中断が断られることは開発者が目視で確かめた（10-03・`real-machine-observation.md`）。

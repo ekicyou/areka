@@ -100,8 +100,26 @@
 
 ## 確かめていないこと
 
-- 中断の無効化モードの区間でバルーンを左ダブルクリックして、実際に中断が断られることは試していない（画面の操作が要る）。断る判定は同じ旗 `UserBreakWiring.no_user_break` を読むので、上の時刻の並びで一致は示せている。目で確かめるなら、上の台本の「ここから中断できない区間」が出ている間に相方のバルーンを左ダブルクリックして台詞が続くこと（`RUST_LOG` に `areka::input_events=trace` を入れて棄却の記録を見る）、区間の後なら中断されることを見る
 - バルーンが画面に見えている形との突き合わせ（要件 4.7）は記録の上だけ。GPU の合成窓はスクリーンショットで読めないため、表示層が報告した組（`balloon_status_reported`）と要求の `status` が一致することを見た
+
+## 中断の拒否の目視（開発者・2026-10-03 17:47 JST）
+
+開発者がバルーンを左ダブルクリックし、区間の中では台詞が続き、区間の後では止まることを目で確かめた。根は `target\so\eye`（辞書の起動の場面を「区間 約 30 秒 → 区間の後 約 27 秒」の台本に差し替えた写し）。記録（UTC）:
+
+```
+08:47:47.548 no_user_break_changed value=true
+08:47:50.406 balloon_break_detected scope=0 → balloon_break_rejected reason="no_user_break"
+08:47:52.39  OnSecondChange status=Some("talking,nouserbreak,balloon(0=0/1=0)")
+08:47:59.164 balloon_break_detected scope=1 → balloon_break_rejected reason="no_user_break"
+08:48:17.072 balloon_break_detected scope=0 → balloon_break_rejected reason="no_user_break"
+08:48:20.40  OnSecondChange status=Some("talking,nouserbreak,balloon(0=0/1=0)")
+08:48:21.007 no_user_break_changed value=false
+08:48:21.38  OnSecondChange status=Some("talking,balloon(0=0/1=0)")
+08:48:24.230 balloon_break_detected scope=0 → balloon_break_accepted talk_id=1（kanade）
+08:48:24.39  OnSecondChange status=None（トークが止まり、バルーンも消えた）
+```
+
+- 区間の中の 3 回（` `・`` の両方のバルーン）はすべて断られ、そのときの要求には `nouserbreak` が載っていた。区間の後の 1 回は受け入れられ、トークが止まった。「載っているのに中断できる」「載っていないのに中断できない」は 0 件（要件 3.4）
 
 ## 後片付け
 
