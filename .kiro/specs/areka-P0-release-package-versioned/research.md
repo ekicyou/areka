@@ -1,6 +1,6 @@
 # ギャップ分析: areka-P0-release-package-versioned
 
-> 2026-10-03・`/kiro-validate-gap`。対象は確定した requirements.md（要件 1〜8）と、ブランチ `claude/areka-p0-release-package-688ad4`（main `1ce4c74e` の上・spec の初期化コミット `6be3879a`）の実物。ソースの場所は「何の定義か」で指す。
+> 2026-10-03・`/kiro-validate-gap`。対象は確定した requirements.md（要件 1〜8）と、ブランチ `claude/areka-p0-release-package-688ad4`（main `1ce4c74e` の上・spec の初期化コミット `6be3879a`）の実物。ソースの場所は「何の定義か」で指す。§1〜§8 がギャップ分析、§9 が設計フェーズ（同日 `/kiro-spec-design`）の調査と決定。
 
 ## 1. まとめ
 
@@ -179,6 +179,75 @@
 - 推す形は §4.3（スクリプトは改名して育てる・リンクは標準ライブラリで解いて 1 回だけ覚える）。
 - 議題 4（実機の権限の段取り）と議題 7（前回の同名の zip）は、答えで作業や要件の読みが変わるので要件討議で決めるのがよい。議題 15 は設計で決めてよい。
 - 実機の確かめでは、`areka` がリンクを指していたこと（`(Get-Command areka).Source` がリンクの置き場で、その `LinkType` が `SymbolicLink`）と、起動の記録の「ベースウェアの根を決めました」の `root=` がリンクの先であることを、両方記録に残す（片方だけだと PATH 経由の起動と見分けられない）。
+
+## 9. 設計フェーズの調査と決定（2026-10-03・`/kiro-spec-design`）
+
+### 9.1 まとめ
+
+- **Discovery の種類**: 既存の仕組みの拡張（light）。配布スクリプトも本体の 3 関数も既知の作りの延長で、新しい依存を 1 つも足さない。設計の調べ物は §6 の「調べ残し」のうち本仕様の内のものと、§5 の議題 1・2・3・6・8・9・10・11・12・13・15 の決定に絞った。
+- **主な知見**:
+  - 開発機の実測: Python 3.13（`python.exe`）・`vswhere.exe`（VS Installer 同梱）・VS 2022 Professional に ARM64 の部品あり・rustup に `aarch64-pc-windows-msvc` あり・`cargo metadata --no-deps --format-version 1` が `areka` の `version=0.0.1` を返す・PowerShell 7.6.6・OS の開発者モードは切（レジストリ `AllowDevelopmentWithoutDevLicense` 未設定）。
+  - 完成品の名前の zip と `.sha256` を**最後の段で一度に改名**すれば、要件 2.4・2.5・3.7（作りかけを残さない・両方そろって成功・前回の物を完成品に見せない）が 1 つの決め方で満たされる。起動確認は `.zip.tmp` のままでも展開できる。
+  - 本体の判断は「I/O を注入した純粋な関数＋`OnceLock` の口」で、`Cargo.toml` の変更 0・`main.rs` の変更 0・テストはリンクを作れない機械でも全分岐を踏める。
+  - ログの初期化（`main` の `tracing_subscriber::fmt()`）は `resolve_boot` と `default_helper_exe_path` より前＝初回の警告は記録に載る（実物で確認）。
+
+### 9.2 調査の記録
+
+#### リンク経由の起動での `current_exe()` の値（§6 の調べ残し）
+- **文脈**: リンクの場所が返るのか、先が返るのか。
+- **出典**: Rust 標準ライブラリ（Windows の `current_exe` は `GetModuleFileNameW`）・winget-cli #2889（リンク経由で隣の DLL を見失う＝アプリの場所がリンクの置き場と扱われる）。
+- **知見**: リンクの場所を返すと強く推定。この機械ではリンクを作れず実測できなかった。
+- **設計への影響**: 設計はこの前提で組む。実機の確かめ（要件 7）で `root=` がパッケージのフォルダになることを判定し、もし `current_exe()` が先を返す環境でも `NotALink` の枝で同じ結果になる（どちらでも壊れない）。
+
+#### `std::fs::read_link` の綴り
+- **出典**: rustc 1.99.0 の標準ライブラリ `sys/fs/windows.rs`（`readlink` → `from_wide_to_user_path`）。
+- **知見**: 再解析の `\??\` を `\\?\` に直し、外せるときは外した普通の綴りを返す。外せないのは 260 字超や末尾の空白・点など。
+- **影響**: 本体は `read_link` の綴りをそのまま使い、接頭辞が残ったら警告して起動した exe のパスへ倒す（6.5・6.6）。自前で接頭辞を外す処理は書かない（外せない形は `emo2` の 160 字でも壊れる形で、直す価値が無い）。
+
+#### 手元のマニフェストで zip を配る口（§5 議題 5 の道具）
+- **知見**: 開発機に Python 3.13 が在る。`python -m http.server <port> --bind 127.0.0.1 --directory target\package` で `target\package` の zip を `http://127.0.0.1:<port>/areka-{版}-x64.zip` として配れる。PowerShell の `HttpListener` で書く案は数十行で増える分だけ損。
+- **影響**: 設計は http.server を既定の道具とし、開発者が代えてよいと書く。
+
+#### winget の portable を外すときの入れ先の中のファイル（§5 議題 16 のうち本仕様に効く分）
+- **知見**: winget の portable の削除は、winget が置いたファイル以外が入れ先に在ると止まり、`--purge` で全部消す（`--preserve` で残す）。areka は入れ先の中に `profile\areka` とゴーストの `profile` を書く。
+- **影響**: 確かめの後片付けは `winget uninstall Areka.Areka.Portable --purge`（検体を丸ごと消す・7.3）。利用者向けの扱いは `winget-manifest-submission` へ申し送り済み（§5.1）。
+
+#### arm64 の道具の有無の調べ方（議題 10）
+- **知見**: `vswhere.exe -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath` がこの機械で VS 2022 Professional のパスを返す（空なら部品が無い）。`-products *` で Build Tools も拾う。GitHub の Windows ランナーにも `vswhere` は在る（下流の関心）。
+- **影響**: `-Arch` に arm64 を含むときだけ前提の確認で呼び、空なら 3。rustup の target は i686 と同じく段として `rustup target add`（無ければ入れる・失敗は 1）。
+
+### 9.3 設計の決定（§5 の議題の答え）
+
+| 議題 | 決定 | 理由 |
+|---|---|---|
+| 1 リンクの解き方 | 案 1（`symlink_metadata`＋`read_link` を繰り返す・相対は親と結合して `std::path::absolute`）。上限 32 回・接頭辞が残れば警告して倒す | 標準ライブラリだけ・`Cargo.toml` 変更 0・途中のドライブ文字や `subst` の綴りを書き換えない（6.3・6.5）。`canonicalize`（案 2）は珍しい環境で長い実パスへ展開しうる |
+| 2 1 回だけ求めて覚えるか | 覚える（`OnceLock<Option<PathBuf>>`・`exe_location`）。警告は初回に 1 度 | `default_app_profile_dir` は何度も呼ばれる。警告の繰り返しと途中の張り替えによる置き場の揺れを避ける |
+| 3 決定論テストの形 | 偽の `probe` を注入して `follow_exe_links` の全分岐（7 件）を踏む。実物のリンクのテストは置かない | この機械は管理者でないとリンクを作れない＝黙って飛ばすテストになる。実物の経路は要件 7 の実機が 1 回踏む。`probe_link`・`exe_location` は配線 |
+| 6 出力先の名前 | `target/package/`（cargo の `--target-dir`・stage・zip・`.sha256`・`check-*` を兼ねる） | スクリプトの名前から「alpha」を落とすのと同じ理由。1 回目の全ビルドのやり直しは 1 度きり。CI が拾う場所はここで固定 |
+| 8 `all` の片方が落ちたとき | 全組を仮の名前（`.zip.tmp`・`.sha256.tmp`）で作り、最後の段「完成」で一度に改名。失敗の経路は `.tmp` と今回の完成品を全部消す | 2.4・2.5・3.7 を 1 つの決め方で満たす。起動確認は `.tmp` のまま展開できる |
+| 9 謝辞 | 3 ターゲット（x64・arm64・i686）で 1 つを `-Arch` に依らず生成 | 3.6（違いは `areka.exe` だけ）と 5.2（手元 `x64` と CI `all` で同じ中身）に合う |
+| 10 arm64 の道具 | 前提の確認で `vswhere` を見て部品名と入れ方を印字して 3。rustup の target は段として足す | 上の調査。「黙って x64 だけ作らない」 |
+| 11 版の読み方 | `cargo metadata --no-deps --locked --format-version 1` の `areka` パッケージの `version`。`^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$` に合わなければ 3（`+` を弾く） | cargo は既に前提の道具。`Cargo.toml` を文字で読む正規表現より壊れにくい。`+` はファイル名と URL で困る |
+| 12 消す前の待ち | `Remove-Item -Recurse` を 5 回まで 1 秒おきに試し、消せなければ段「後片付け」の失敗（1） | 補助 exe の終了と Defender の走査の間だけ掴まれる。1 回で 1 にすると偽の赤が出やすい |
+| 13 名前の細部 | 展開先 `check-<HHmmss>`・記録 `check-<HHmmss>-logs`（「alpha」を落とす・`-logs` は保つ）・残す引数 `-KeepExpanded`・stage は `stage-{arch}` | 受入記録が `check-…-logs` の形で記録を引いてきた流儀に合う |
+| 15 `.sha256` の書式 | 小文字 16 進 64 字・空白 2 つ・ファイル名・LF・BOM なし | `sha256sum -c` がそのまま通る。`Get-FileHash` は大文字を返すので小文字へ |
+| （追加）完成を最後へ | 「完成」の段を「git status 不変の確認」の後の最後に置く | 議題 8 の帰結。完成品の名前の物が在る ⇔ 終了コード 0 |
+| （追加）1.2 の検査の範囲 | 展開先の長さは `-Check` か `-CheckDir` を付けたときだけ検査（今どおり） | 要件 1.2 は起動確認の文脈。`-Check` 無しの CI の長いパスで止めない |
+| （追加）警告の形 | `warn!(event = "exe_link_unresolved", exe, reason)` 1 行。新しい info の行は足さない | 6.6 は警告を求め、6.8 は新しい行を足さないと言う。実機の判定は既存の `root_resolved` の `root=` で足りる |
+
+### 9.4 統合の観点（設計の整理）
+
+- **一般化**: zip の名前・`arch=` の行・機械種別の期待値・ビルドの target は、較正値の表 `ARCHS` と 1 関数 `Get-ArtifactNames` からだけ引く。CPU 種別を足すとき（中継 exe の同梱など）は表に 1 行で済む。本体側は「起動した exe の場所」を 1 つの口に集め、3 関数が同じ値を使う。
+- **作るか借りるか**: ハッシュは `Get-FileHash`、zip は .NET、リンクの読み取りは標準ライブラリ、配る口は Python の `http.server`。新しいクレートも新しい道具も足さない。`dunce` のような接頭辞を外すクレートも `GetFinalPathNameByHandleW` も採らない（`Cargo.toml` 変更 0）。
+- **単純化**: 共通の関数を別ファイルへ分ける案（§4.1 案 B）・外側で 2 回呼ぶ案（案 C）は採らない。自己検査の枠（Pester 等）は足さず、実走の一覧を `verification/` に記録する（今どおり）。`exe_location` の結果に「リンクを解いたか」の印は持たせない（使う側が無い）。
+
+### 9.5 危うさと手当て
+
+- **`current_exe()` がリンクの先を返す環境**（推定が外れる場合）→ `NotALink` の枝で同じ結果になるので壊れない。実機の確かめで `root=` を見る。
+- **winget がリンクを作らず PATH へ倒れる**（開発者モードが切のまま）→ 7.2 の判定（`LinkType` と `root=` の両方）で「確かめは済んでいない」と判る。手順に開発者モードのオンを明記（開発者の手）。
+- **後片付けで木を消せない**（補助 exe の掴み・Defender）→ 5 回の再試行の後に 1 で止め、パスと理由を印字（黙って残さない）。
+- **`cargo about --target aarch64-pc-windows-msvc` が x64 だけの謝辞と差を生む**→ `Cargo.lock` に CPU 種別ごとのクレートは見当たらず差は小さい見込み。中身の検査 8 番は写し元とバイト比較なので、差があっても検査は通る（zip の中と写し元は同じ物）。
+- **1 回目の `target/package/` への全ビルド**（`target/alpha` から移る）→ 1 度きり。古い `target/alpha` は開発者が消してよい（本仕様は触らない）。
 
 ## 出典
 
