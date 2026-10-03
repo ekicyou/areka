@@ -68,6 +68,15 @@ areka は、前回使ったゴーストなどを次の 3 か所に覚えます�
 これらのフォルダを消すと、areka が覚えていたことは初めての起動と同じ状態に戻ります。
 
 
+■ 入手のしかた
+
+areka は次の方法で入れます。
+
+・配布の zip（https://github.com/ekicyou/areka/releases にあります）を展開します。
+
+cargo install areka では使えません。areka が動くのに必要なファイルの一部が付いてこないためです。
+
+
 ■ 既知の制限
 
 ・areka.exe には署名がありません。開くときに Windows が警告を出すことがあります。

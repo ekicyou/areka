@@ -18,6 +18,14 @@ ECSアーキテクチャ、DirectComposition による高品質レンダリン�
 
 ---
 
+## 入手とインストール
+
+- [GitHub Releases](https://github.com/ekicyou/areka/releases) の zip を展開する
+
+crates.io に版を出しているのは、汎用のライブラリ `wintf`・`dola` だけです。crates.io の `areka` は名前を確保するための 0.0.1 だけで、本体と部品は出していません。`cargo install areka` は areka の入れ方ではありません（32 ビットの補助 exe が付きません）。
+
+---
+
 ## スクリーンショット
 
 > 📷 *準備中 — アルファリリースにて掲載予定*

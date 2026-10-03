@@ -74,7 +74,7 @@
   - _Boundary: 手順書_
   - _Depends: 2.3, 3.1_
 
-- [ ] 5.2 (P) 根の `README.md` と配布物の `dist/README.txt` に入手の節を足す
+- [x] 5.2 (P) 根の `README.md` と配布物の `dist/README.txt` に入手の節を足す
   - `README.md` の「プロジェクト概要」の直後に「入手とインストール」を足す。入れ方は箇条書き（今は zip の 1 行）にし、crates.io に出しているのは `wintf`・`dola` だけ・`areka` は 0.0.1 の名前の確保だけ・`cargo install areka` は入れ方ではない（32 ビットの補助 exe が付かない）と書く
   - `dist/README.txt` の「■ 既知の制限」の前に「■ 入手のしかた」を足し、「・」の箇条書きで平易に書く。「時点」の行は触らない
   - winget の行は書かず、後から同じ箇条書きに足せる形にする
