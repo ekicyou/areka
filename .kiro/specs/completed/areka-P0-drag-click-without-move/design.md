@@ -138,7 +138,7 @@ graph TB
 
 ### New Files（記録）
 
-- `.kiro/specs/areka-P0-drag-click-without-move/verification/real-machine.md` — C5 の実機の結果（走行の区間・grep の件数・2 回目の起動の相方の位置の行）。実機の根と一時フォルダはワークツリーの `target\drag-click-signoff\` の下。
+- `.kiro/specs/completed/areka-P0-drag-click-without-move/verification/real-machine.md` — C5 の実機の結果（走行の区間・grep の件数・2 回目の起動の相方の位置の行）。実機の根と一時フォルダはワークツリーの `target\drag-click-signoff\` の下。
 
 ### Untouched（確認のために挙げる）
 
