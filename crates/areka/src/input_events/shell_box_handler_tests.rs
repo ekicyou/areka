@@ -479,3 +479,49 @@ fn real_handlers_call_the_prelude_before_the_existing_path() {
     assert_eq!(snapshot_borrow_failures(&events), 1, "押下: {events:?}");
     assert!(f.shell().is_empty());
 }
+
+// ---------------------------------------------------------------- 実機の判定の記録
+
+fn lines_of<'a>(
+    events: &'a [crate::placement::test_support::LogEvent],
+    event: &str,
+) -> Vec<&'a crate::placement::test_support::LogEvent> {
+    events
+        .iter()
+        .filter(|e| e.field_str("event") == Some(event))
+        .collect()
+}
+
+/// 箱の中の押下は結論を 1 行だけ残す（箱の中の単押しを箱の外の押下とログで見分ける）。
+/// 箱の外の押下は残さない。
+#[test]
+fn box_press_logs_the_verdict_once() {
+    use crate::placement::test_support::ExpectField;
+    let mut f = Fixture::new();
+    let ((), events) = capture_logs(|| {
+        f.pressed(BODY, DoubleClick::None, on_a(false));
+        f.pressed(BODY, DoubleClick::None, BoxPoint::default());
+    });
+    let lines = lines_of(&events, "box_press");
+    assert_eq!(lines.len(), 1, "箱の中の押下 1 回で 1 行: {events:?}");
+    assert_eq!(lines[0].expect_field("verdict"), "ShellOp");
+    assert_eq!(lines[0].field_str("box"), Some("a"));
+    assert_eq!(lines[0].expect_field("selected_now"), "false");
+}
+
+/// 滞在の箱が替わったときだけ 1 行残す（同じ箱の中の移動では残さない）。
+#[test]
+fn box_hover_change_logs_only_on_change() {
+    let mut f = Fixture::new();
+    let ((), events) = capture_logs(|| {
+        f.moved(BODY, on_a(true));
+        f.moved((52, 41), on_a(true));
+        f.moved((250, 10), on_b());
+        f.moved((500, 400), BoxPoint::default());
+    });
+    assert_eq!(
+        lines_of(&events, "box_hover_changed").len(),
+        3,
+        "a へ・b へ・外へ: {events:?}"
+    );
+}

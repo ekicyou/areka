@@ -141,6 +141,17 @@ pub(super) fn move_with_point(
     let prev = hover.get(scope).cloned();
     let last = hover.injected(scope);
     let (next, clear) = next_box_hover(prev.as_ref(), &mv);
+    if next != prev {
+        tracing::debug!(
+            event = "box_hover_changed",
+            scope,
+            from = prev.as_ref().map(BoxName::as_str),
+            to = next.as_ref().map(BoxName::as_str),
+            x,
+            y,
+            "ポインタの居る箱が替わった"
+        );
+    }
     // 前の箱から出た・行から外れた: 強調していれば外す（していなければ Keep で何もしない）。
     if let Some(old) = clear {
         apply_highlight(
@@ -239,7 +250,19 @@ pub(super) fn press_with_point(
         None
     };
     let selected_now = selection.is_some_and(|sel| send_selection(world, hit, sel));
-    on_box_press(world, scope, state.double_click, selected_now) != BoxPressVerdict::ShellOp
+    let verdict = on_box_press(world, scope, state.double_click, selected_now);
+    tracing::debug!(
+        event = "box_press",
+        scope,
+        r#box = hit.name.as_str(),
+        x,
+        y,
+        double_click = ?state.double_click,
+        selected_now,
+        verdict = ?verdict,
+        "箱の中の押下の結論"
+    );
+    verdict != BoxPressVerdict::ShellOp
 }
 
 /// 選択の確定を既存の送り口で送る（`balloon_pressed.rs` と同じ記録）。送れたら `true`。
