@@ -6,6 +6,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Instant;
 
 use bevy_ecs::message::Messages;
 use bevy_ecs::prelude::Entity;
@@ -45,7 +46,13 @@ fn deactivation_right_after_the_threshold_cancels_the_drag() {
         snapshot_drag_state(),
         DragStateSnapshot::JustStarted { .. }
     ));
-    accumulator.flush(); // start_dragging が積んだ Started を捨て、以降の遷移だけを見る
+    // mouse_move.rs が閾値越えで積む開始の種の代わりに手で積み、配った後の遷移だけを見る。
+    accumulator.set_transition(DragTransition::Started {
+        entity,
+        start_pos: PhysicalPoint::new(10, 20),
+        timestamp: Instant::now(),
+    });
+    accumulator.flush();
 
     let message = WindowMessage {
         hwnd: HWND(std::ptr::null_mut()),
@@ -65,16 +72,19 @@ fn deactivation_right_after_the_threshold_cancels_the_drag() {
         ),
         "JustStarted のまま非活性化してもドラッグは中断される"
     );
-    let transition = accumulator.flush().and_then(|flushed| flushed.transition);
+    let transitions = accumulator
+        .flush()
+        .map(|flushed| flushed.transitions)
+        .unwrap_or_default();
     assert!(
         matches!(
-            transition,
-            Some(DragTransition::Ended {
+            transitions.as_slice(),
+            [DragTransition::Ended {
                 cancelled: true,
                 ..
-            })
+            }]
         ),
-        "中断の遷移が積まれている: {transition:?}"
+        "中断の遷移が積まれている: {transitions:?}"
     );
 }
 
