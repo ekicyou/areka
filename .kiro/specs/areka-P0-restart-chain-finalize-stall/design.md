@@ -221,7 +221,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(source: &
 **Implementation Notes**
 - Integration: `match reason { ChainDeferReason::NoGhostWindows | ChainDeferReason::NoScopes | ChainDeferReason::NotShownYet { .. } => { trace!(...); return; } 残り 6 つ => defer_chain_finalize(world, reason) }` の形。`_` は書かない。
 - 記録の行: `trace!(scope = ?reason.scope(), reason = %reason, "chain_finalize: ゴースト待ちのため見送りを数えない（窓が無い・まだ一度も表示されていない）")`。項目は WARN と同じ `scope`・`reason` で揃え、grep の形を合わせる。
-- 説明文の更新: `finalize_chain_once_with` の「見送りの可観測性」の節に「ゴースト待ちは数えない（理由はゴーストの台本しだいで長さが決まり、巡でも秒でも固定の数で区切ると正常な待ちで鳴る）」と、`NotShownYet` に「表示側が未装着」も含むことと、その失敗は装着の側が記録することを書く。`defer_chain_finalize` の説明に「呼び手が areka 自身の理由だけを渡す」と書く。
+- 説明文の更新: `finalize_chain_once_with` の「見送りの可観測性」の節に「ゴースト待ちは数えない（理由はゴーストの台本しだいで長さが決まり、巡でも秒でも固定の数で区切ると正常な待ちで鳴る）」と、`NotShownYet` に「表示側が未装着」も含むことと、その失敗は装着の側が記録することを書く。走査はスコープの昇順で最初に躓いた理由 1 つで打ち切るので、仕分けもその理由 1 つで決まる（同じ巡に areka 自身の理由と未表示が重なっていれば、先に躓いた側で決まる）ことも一言残す。`defer_chain_finalize` の説明に「呼び手が areka 自身の理由だけを渡す」と書く。
 - Validation: T1〜T5（Testing Strategy）。
 - Risks: 「`\s` は出たのに表示が着地しない」はこの WARN では拾えなくなる。表示の経路が自分で記録していることを §設計判断 3 で確かめた。
 
@@ -286,6 +286,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(source: &
 | T5 | 同上（既存の置き換え） | `finalize_within_the_bounded_wait_emits_no_diagnostic` | 未 landing の fake で 599 巡 → `settled_sizes()` → さらに 1200 巡 | WARN 0 件・`ChainFinalized` が在る・x が 1205（2.1・3.8） | — |
 
 - T1〜T3 の赤は、本番を直す前に `cargo test -p areka <名前>` で実際に見る（3.3）。赤の本文を `research.md` か実装の記録へ書き残す。
+- T3 の「TRACE がちょうど 1200 件」は、今日この経路（`NotShownYet` の巡）に本 spec 以外の記録が無いことに依る（Monitoring の節）。将来この経路に別の `trace!` が足されて件数で赤になったら、それは「増えた記録に気付く」正しい赤なので、件数の判定を緩めずに記録の増分を確かめる。
 - 既存の `finalize_defers_while_any_scope_has_not_shown_yet`・`finalize_defers_until_resnap_has_landed`・`close_windows_for_restart_forgets_window_set_resources`・`next_window_set_finalizes_once_like_first_boot` は変えずに緑のまま通ること（後退の無さ）。
 - `chain_realign` の既存テスト（`frame_chain_realign_tests.rs` ほか）が緑のまま通ること（2.4：解き直しの数え方は変わらない）。
 
