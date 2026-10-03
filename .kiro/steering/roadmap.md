@@ -130,7 +130,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 |---|---|---|---|---|---|---|
 | `drag-click-without-move` | バグ | キャラクターの絵を動かさずにクリックしただけで窓の位置が保存されるのを止める（wintf が動かし始める前でも終了を配る 5 か所を先例に揃える） | S（6〜9） | **C1-①** | なし | − |
 | `choice-timeout-directive`（**10-02 起票**・`sakura-time-directives` から切り出し） | バグ | `\![set,choicetimeout,時間]` が効かず、時間切れなしを指定したメニューが 30 秒で閉じるのを直す（compile が値を選択待ちへ焼く） | XS〜S（3〜5） | **C1-②** | なし | − |
-| `restart-chain-finalize-stall`（**10-02 起票**・覚え書きから格上げ） | バグ | ゴーストを起こし直した後に `deferrals=600` の WARN が鳴るのを止める（窓の無い巡を見送りに数えない） | XS（2〜3） | **C1-③** | なし | − |
+| `restart-chain-finalize-stall`（**10-02 起票**・覚え書きから格上げ） | バグ | ゴーストを起こし直した後に `deferrals=600` の WARN が鳴るのを止める（10-03 要件の議論で見立てを改めた: 鳴る本体は相方の初回表示待ち＝台本しだいの長さ。ゴースト待ち〔窓が無い・まだ一度も表示されていない〕は数えず、areka 自身の待ちだけ数える） | XS（2〜3） | **C1-③** | なし | − |
 | `status-execution-states` | バグ | SHIORI へ渡す `Status` に `online`・`nouserbreak`・`balloon` を載せる（今は載らず、更新中や割り込み禁止の区間に雑談が割り込みうる＝潜在） | S〜M（5〜8） | **C1-④** | なし（同じ C1 の `emo-text-file-split` の 6 本と `drain_resnap.rs` に触らない約束） | − |
 | `release-package-versioned`（**10-02 起票**・配布と公開・**`package-check-temp-cleanup` を合流**） | バグ | 先頭で `-Check` の展開先と記録を `target\` の下へ移して片付ける（道具のバグ）。続けて配布 zip を版入りの固定の名前（`areka-{版}-{x64\|arm64}.zip`）と SHA256 で作る・arm64 の zip・リンク経由の起動でも exe の本当の場所から根を引く | M（11〜17） | **C1-⑤** | なし | − |
 | `install-live-target-hazards` | その他 | 表示中のシェル・使用中のバルーンへの上書きと、起動中のゴーストへ入れる途中の Windows の終了を**実測してから**扱いを決める | S〜M（8〜14） | C4 の候補（`dist/README.txt` を C2・C3 の配布と分け合う） | なし | ○ |
