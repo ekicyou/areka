@@ -2,6 +2,8 @@
 
 > 2026-09-29 `/kiro-discovery` で起票。SSP MCP 移植の **2 段目（空のダミー関数を置いて入り口だけ全部整備）**。全体の並びは `.kiro/steering/roadmap.md`「SSP MCP の移植」節。事実の正本は [doc/ssp-mcp/survey.md](../../../doc/ssp-mcp/survey.md)、ツール定義の逐語は [doc/ssp-mcp/tools-list-ssp-2.9.05.json](../../../doc/ssp-mcp/tools-list-ssp-2.9.05.json)。file:line は起票時（main `c3876110`）＝着手時に引き直す。
 
+> 2026-10-03 注記（`areka-P0-mcp-server-core` の実機確認で判明）: Claude Code 2.1.283 は `initialize` を送らず、2026-07-28 の無状態版（`server/discover` → `tools/list`）でつなぐ。この版の list 結果は `ttlMs`・`cacheScope` が必須で、areka は `list_tools` で付けている（server-core の要件 3.15・設計 B-12）。ツールを足しても `tools/list` の答えは同じ handler を通るので追加の手当ては要らない。ただし `resources/list`・`prompts/list` などの list を足す spec は同じ 2 欄を付けること。既定の待受は 9801 → 9821 の早い者勝ち（使用中なら隣 +1〜+9）で、実機確認は `info!` の実番号で行う。
+
 ## Problem
 
 3 段目のツール 7 spec を並走させたい。並走できるかは「各 spec が自分のファイルだけを触る」形が先にできているかで決まる。ツール表・引数検査・`ghost_name` の解決・アプリ本体への橋を各ツールの spec がそれぞれ足すと、同じファイル（振り分けの `match`・inbox の enum）を全員が触って毎回 rebase になる。

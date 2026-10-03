@@ -2,6 +2,8 @@
 
 > 2026-09-29 `/kiro-discovery` の続きで起票（開発者判断「SSP と同じ対応を行うには中継 exe を作らないとダメ。どうせ作りたくなるので spec を置いてロードマップに置く」）。SSP MCP 移植の **M2 の並走枠**。全体の並びは `.kiro/steering/roadmap.md`「SSP MCP の移植」節。事実の正本は [doc/ssp-mcp/survey.md](../../../doc/ssp-mcp/survey.md)（§1・§6）。
 
+> 2026-10-03 注記: `areka-P0-mcp-server-core` の開発者裁定で既定の待受は 9801 → 9821（どちらも使用中なら隣の +1〜+9 の計 20 候補・最初に束ねた 1 つ）になった。下の「既定 9821」はそれより前の記述。中継は同じ候補の並び（`areka_mcp::DEFAULT_PORTS`・`FALLBACK_STEPS`）と `AREKA_MCP_PORT` の意味に従うこと。areka の見つけ方は本 spec の要件で決める。
+
 ## Problem
 
 - **Claude Desktop の利用者**が areka の MCP を使えない。Desktop の `claude_desktop_config.json` は `command` で起動する stdio のサーバしか書けず（`url` の欄が無い＝本体の検査関数で確認・survey §6）、コネクタ登録は Anthropic のクラウドからつなぎに来るので `127.0.0.1` へ届かない（公式の案内に明記）。

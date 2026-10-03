@@ -36,6 +36,9 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 - **encoding_rs** (0.8): 伺か資産の charset デコード（`areka-parsers` の `charset` module・意図的依存追加＝2026-07-02 承認済）
 - **miniz_oxide** (0.9): `.nar`（zip コンテナ）の deflate **伸長のみ**（`areka-nar` の `container` module・意図的依存追加＝2026-09-18 承認済）。既定機能を切り `with-alloc` だけを明示する。圧縮側は機能で外せないので、本番クレートが `miniz_oxide::deflate` を綴らないことを常設検査 `crates/areka-nar/src/lib_tests.rs` が見張る。zip コンテナの読み手は `areka-nar` が std だけで持つ（`zip`・`flate2` は入れない）。推移的依存は `adler2` 1 本
 - **unicode-segmentation** (1.13.3): 台詞の文字の単位＝拡張書記素クラスタ（UAX #29）の切り方（`areka-sakura` の `cluster` module だけが使う・`Cargo.lock` に推移依存として既に在った版を直接の依存にした・2026-09-29 `balloon-color-emoji` の設計承認で決定）。版を上げると Unicode の版が変わり、絵文字の切り方が動きうる
+- **rmcp** (=3.5.0・`default-features = false`＋`server`・`transport-streamable-http-server`): MCP の公式 SDK（Apache-2.0）。JSON-RPC の解釈・`initialize` の版の交渉・`tools/list`／`tools/call` を任せる（`areka-mcp` だけが使う・2026-10-03 `areka-P0-mcp-server-core` で追加）。版は `=` で固定し、上げるときは `areka-mcp` の `server_*tests.rs` を全部通してから `doc/ssp-mcp/transport-diff-areka.md` の「測った版と日」を書き直す。既定機能（`macros`・`base64`）は切る＝ツールの登録は `ToolRoute::new_dyn`
+- **tokio** (1・`rt`・`net`・`time`)＋**tokio-util** (0.7・`CancellationToken`): `areka-mcp` の非同期ランタイム。**tokio は MCP のスレッドに閉じる**——`spawn_actor("mcp", …)` で起こしたスレッドの中で `current_thread` を 1 本作って回すだけで、`multi_thread`・`spawn_blocking` は使わず、公開面に tokio の型を出さない（呼び出し側の `fn main()` は同期のまま）。ほかのクレートは tokio に依存しない（UI スレッドの async は `wintf-winmsg-executor`）
+- **hyper** (1・`server`・`http1`)＋**hyper-util** (0.1・`tokio`)＋**http-body-util** (0.1)＋**tower-service** (0.3): `areka-mcp` の HTTP/1.1 の受付（`127.0.0.1` の 1 ポート・接続ごとの `serve_connection`）と、rmcp の `StreamableHttpService` を `Service::call` で呼ぶための土台。axum・HTTP/2 は入れない。これら MCP まわりの依存は `crates/areka-mcp/Cargo.toml` にだけ書き、根の `[workspace.dependencies]` は変えていない
 
 ### dola クレート依存
 - **serde** (1): シリアライズ/デシリアライズ基盤
