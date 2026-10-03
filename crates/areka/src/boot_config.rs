@@ -24,6 +24,113 @@ pub(crate) struct ConfigInputs {
 }
 
 // ---------------------------------------------------------------------------
+// 起動した exe の本当の場所（areka-P0-release-package-versioned task 4.1）
+// ---------------------------------------------------------------------------
+// 判断だけを置く。実 I/O の口と、それを使う根・補助 exe・記憶の置き場の配線は task 4.2 が足す
+// （それまでは本体から使われないので dead_code を本体ビルドでだけ許す）。
+
+/// リンクを 1 段読んだ結果。I/O は呼び手（`probe_link`）か、テストの偽の口が返す。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) enum LinkProbe {
+    /// リンクではない（普通のファイル）。
+    NotALink,
+    /// リンクで、先はこのパス（`read_link` の綴りのまま・絶対でも相対でもよい）。
+    Target(std::path::PathBuf),
+    /// リンクかどうか、または先を読めなかった（理由の文）。
+    Unreadable(String),
+}
+
+/// 解けなかった理由（警告の行に載せる）。どの形でも起動した exe のパスをそのまま使う（要件 6.6）。
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ExeLinkWarning {
+    /// `link` がリンクかどうか、または先を読めなかった（`reason` は読めなかった理由の文）。
+    Unreadable {
+        link: std::path::PathBuf,
+        reason: String,
+    },
+    /// 辿った回数が `limit` に達した（輪になったリンク）。`last` は最後に読んだ先。
+    TooManyHops {
+        limit: usize,
+        last: std::path::PathBuf,
+    },
+    /// たどり着いたパスに長いパスの接頭辞（`\\?\`）が付いている（要件 6.5）。
+    VerbatimPrefix { path: std::path::PathBuf },
+}
+
+/// 辿る回数の上限（輪になったリンクで止まるため・Windows の再解析の上限 63 より小さい値）。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) const EXE_LINK_MAX_HOPS: usize = 32;
+
+/// 起動した exe のパス `exe` からリンクを辿って、根・補助 exe・記憶の置き場に使うパスを決める
+/// 純粋な判断（要件 6.1〜6.3・6.5・6.7）。
+///
+/// - `probe(path)` が `NotALink` → そのパスを使う（リンクを経ていなければ `exe` の綴りそのまま・
+///   ドライブ文字や `subst` の綴りを書き換えない＝要件 6.3）。ただし `\\?\` の接頭辞が付いていれば
+///   `VerbatimPrefix`。
+/// - `Target(t)` → `t` が絶対ならそれ、相対ならリンクの親と結合して `std::path::absolute` で
+///   `.`・`..` を畳み、次を読む（要件 6.2）。`absolute` が失敗すれば `Unreadable`。
+/// - `Target` を `EXE_LINK_MAX_HOPS` 回受けたら次を読まずに `TooManyHops`。
+/// - `Unreadable(r)` → `Unreadable { link, reason: r }`。
+///
+/// I/O は `probe` だけ（`absolute` は文字列の操作）。`canonicalize` は使わない（要件 6.5）。
+/// 戻りの第 2 要素が `Some` のときは第 1 要素は `exe` そのもの（今のふるまいへ戻る・要件 6.6）。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn follow_exe_links(
+    exe: &std::path::Path,
+    probe: &mut dyn FnMut(&std::path::Path) -> LinkProbe,
+) -> (std::path::PathBuf, Option<ExeLinkWarning>) {
+    let fallback = |warning| (exe.to_path_buf(), Some(warning));
+    let mut path = exe.to_path_buf();
+    let mut hops = 0;
+    loop {
+        match probe(&path) {
+            LinkProbe::NotALink => {
+                let verbatim = matches!(
+                    path.components().next(),
+                    Some(std::path::Component::Prefix(p)) if p.kind().is_verbatim()
+                );
+                return if verbatim {
+                    fallback(ExeLinkWarning::VerbatimPrefix { path })
+                } else {
+                    (path, None)
+                };
+            }
+            LinkProbe::Unreadable(reason) => {
+                return fallback(ExeLinkWarning::Unreadable { link: path, reason });
+            }
+            LinkProbe::Target(target) => {
+                hops += 1;
+                let next = if target.is_absolute() {
+                    target
+                } else {
+                    let joined = path
+                        .parent()
+                        .unwrap_or(std::path::Path::new(""))
+                        .join(&target);
+                    match std::path::absolute(&joined) {
+                        Ok(next) => next,
+                        Err(e) => {
+                            return fallback(ExeLinkWarning::Unreadable {
+                                link: path,
+                                reason: e.to_string(),
+                            });
+                        }
+                    }
+                };
+                if hops >= EXE_LINK_MAX_HOPS {
+                    return fallback(ExeLinkWarning::TooManyHops {
+                        limit: EXE_LINK_MAX_HOPS,
+                        last: next,
+                    });
+                }
+                path = next;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // ベースウェアの根（areka-P0-baseware-root-layout task 2.3）
 // ---------------------------------------------------------------------------
 // 消費者は下の起動前の解決（`resolve_boot`）。
@@ -355,3 +462,7 @@ pub(crate) fn is_benign_boot_error(err: &areka_ghost::GhostBootError) -> bool {
         _ => false,
     }
 }
+
+#[cfg(test)]
+#[path = "boot_config_exe_link_tests.rs"]
+mod exe_link_tests;
