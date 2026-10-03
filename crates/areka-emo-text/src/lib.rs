@@ -409,6 +409,7 @@ mod tests {
         "draw_test_support.rs",
         "sink.rs",
         "surface.rs",
+        "surface_window_child_tests.rs",
         "viewbox_draw.rs",
         "viewbox_draw_choice_hover_tests.rs",
         "viewbox_draw_color_emoji_tests.rs",
