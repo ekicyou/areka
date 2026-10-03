@@ -129,7 +129,7 @@
   - _Requirements: 6.3, 6.4_
 
 - [ ] 6. 全体の確かめ
-- [ ] 6.1 ワークスペース全体のテストを通す
+- [x] 6.1 ワークスペース全体のテストを通す
   - `pwsh -NoProfile -File tools/test-all.ps1` を通し、ファイルの長さの検査も含めて緑にする
   - 完了の状態: 全体のテストの実行の記録が緑
   - _Requirements: 8.3_
@@ -152,3 +152,4 @@
 - 4.1: `lib.rs` の `mod translate_wiring;` と `sylphya_wiring.rs` の `translate_snapshot_source` に一時の `#[allow(dead_code)]` がある。4.2 で `runtime.rs` から呼んだら外す
 - 4.3: areka-ghost には 2 体の切替のテストが無いので、切替の送り先のテストは areka の `SwitchRig` の上（`crates/areka/src/ghost_session_switch_translate_tests.rs`）に置いた。`ghost_session.rs` への変更は `#[cfg(test)]` のモジュール宣言 1 つだけ。204 の `OnGhostChanging` の後の切替の `OnClose` の送り先は見ていない
 - 6.1: 全体テストで `log-capture-kit` の番人（`with_default_guard_test`）が赤。1.4 のテストが手作りの subscriber で捕捉先を直接差していたため。共有の窓口 `log_capture_kit::capture` へ寄せ、`areka-sakura` の `[dev-dependencies]` に `log-capture-kit` を足した（他の 14 クレートと同じテスト専用の依存。設計の「`Cargo.toml` の変更 0」からは外れるが、製品の依存は 0 のまま・外部クレートの追加も 0）
+- 6.1: `85707895` で `tools/test-all.ps1` の fmt と x64 全テストは緑。i686 の段で `shiori-host32-helper` の `testdll_drop_invokes_courtesy_unload` が 1 度だけ赤（本 spec はこのクレートに触れていない・その段だけの採り直し 3 回は緑）。揺れは別の作業として切り出した
