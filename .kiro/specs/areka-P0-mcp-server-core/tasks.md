@@ -71,7 +71,7 @@
   - _Requirements: 9.1_
   - _Depends: 3.3_
   - _Boundary: testkit_
-- [ ] 4.2 (P) 待受・束ねの失敗・終了のテスト
+- [x] 4.2 (P) 待受・束ねの失敗・終了のテスト
   - `server_tests.rs` に design.md の 6 本（URL の info・束ねの失敗の error と待ち受けない取っ手・`0` の info・2 本の同時接続・畳んだ後に接続できない・接続を開いたまま畳んでも上限内に戻る）を置く。ログは `log_capture_kit::capture` で数える
   - 完了の姿: 6 本が緑・固定のポート番号を使うテスト 0 本
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.7, 1.8, 1.9, 2.4, 9.1, 9.3, 9.4_
@@ -133,3 +133,4 @@
 - 2.3: help の本文は既定の説明に `9821` を 1 回だけ載せる（要件 6.2 が禁じるのは URL とコマンド例の固定だけ）。design の Testing 行と tasks の完了の姿をこれに合わせて直した。テストのビルドで使われるモジュールは `#![cfg_attr(not(test), expect(dead_code, …))]` の形
 - 3.1: `list_resources`／`list_prompts` は能力に載せなくても rmcp の既定が空の Ok を返す（未知メソッドではない）。差の一覧（5.2）を書くときの観察材料
 - 4.1: Windows では 413 を早く返して閉じると RST で未読の応答が捨てられうる。`body_over_limit_is_413` が揺れたらここ（4 MiB＋1 では 5/5 で届いた）
+- 4.2: 閉じたループバックのポートへの `connect` は Windows では SYN を再送して拒否まで約 2 秒かかる。「つながらない」の判定は `connect_timeout`（500 ms）で足りる
