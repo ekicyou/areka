@@ -113,7 +113,7 @@ graph TB
 |-------|------------------|-----------------|-------|
 | MCP プロトコル | rmcp `=3.5.0`（`default-features = false`・features `server`・`transport-streamable-http-server`） | `StreamableHttpService`（無状態・JSON 単発）・`ServerHandler`・`ToolRouter` | Apache-2.0。`macros`・`base64` は切る（B-5）。版上げは `server_tests.rs` を通してから |
 | HTTP の受付 | hyper 1（`server`・`http1`）＋ hyper-util 0.1（`tokio`＝`TokioIo`）＋ http-body-util（`Full`・`BodyExt`・`Limited`）＋ tower-service 0.3（rmcp の `Service::call` を呼ぶ） | 接続ごとの `http1::Builder::serve_connection` と `service_fn` | HTTP/2 は使わない（クライアントは HTTP/1.1）。axum は入れない（B-2） |
-| 非同期ランタイム | tokio 1（`rt`・`net`）＋ tokio-util 0.7（`CancellationToken`） | `Builder::new_current_thread().enable_io()` を MCP スレッドの中だけで | `multi_thread`・`spawn_blocking` は本 spec では使わない（名簿に載らないスレッドを増やさない） |
+| 非同期ランタイム | tokio 1（`rt`・`net`・`time`）＋ tokio-util 0.7（`CancellationToken`） | `Builder::new_current_thread().enable_all()` を MCP スレッドの中だけで | `multi_thread`・`spawn_blocking` は本 spec では使わない（名簿に載らないスレッドを増やさない） |
 | スレッド | `areka_actor::spawn_actor("mcp", …)` | 名簿に `actor:mcp` で載る 1 本 | inbox（`Receiver<()>`）は使わない。合図は `CancellationToken` |
 | JSON | serde_json 1 | 登録口の `input_schema`／引数／`method`・`id` の覗き読み | 既存の依存（本番にも在る） |
 | 記録 | tracing | `info!`／`warn!`／`error!`／`debug!` | target は既定（モジュールパス `areka_mcp::…`）。`RUST_LOG=areka_mcp=debug` で要求ごとの行が出る |

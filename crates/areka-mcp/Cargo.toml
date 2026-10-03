@@ -1,0 +1,39 @@
+[package]
+name = "areka-mcp"
+workspace = "../.."
+description = "MCP サーバの受け口（spec: areka-P0-mcp-server-core）: 127.0.0.1 の 1 ポートで Streamable HTTP を待ち受け、rmcp に JSON-RPC を任せる。tokio は mcp スレッドに閉じる"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# 依存はこのクレートと crates/areka/Cargo.toml（areka-mcp の 1 行）だけに書き、
+# 根の [workspace.dependencies] は変えない（要件 8.6）。
+[dependencies]
+# MCP の公式 SDK。版は = で固定し、上げるときは server_*tests.rs を全部通す（要件 8.2）。
+# 既定機能（macros・base64）は切る。登録は ToolRoute::new_dyn で足りる（設計 B-5）。
+rmcp = { version = "=3.5.0", default-features = false, features = [
+    "server",
+    "transport-streamable-http-server",
+] }
+# 非同期ランタイムは mcp スレッドの中の current_thread 1 本だけ（multi_thread は使わない）。
+tokio = { version = "1", features = ["rt", "net", "time"] }
+# 終了の合図（CancellationToken）。
+tokio-util = "0.7"
+# HTTP/1.1 の受付。axum は入れない（設計 B-2）。
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+# rmcp の StreamableHttpService を Service::call で呼ぶ。
+tower-service = "0.3"
+serde_json = "1"
+tracing = { workspace = true }
+# spawn_actor で mcp スレッドを名簿に載せる（前例 areka-sylphya）。
+areka-actor = { path = "../areka-actor" }
+
+[dev-dependencies]
+# 記録の捕捉。捕捉先を自前で差すのはワークスペースの常設検査が禁じているので、
+# 記録の件数を測るにはこの窓口を通す。依存方向の規律により [dependencies] へは決して置かない。
+log-capture-kit = { path = "../log-capture-kit" }

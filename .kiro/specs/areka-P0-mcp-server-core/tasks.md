@@ -2,8 +2,8 @@
 
 > 設計の正本は design.md。ファイル・型・関数の名前は design.md の「File Structure Plan」と「Components and Interfaces」に従う。テストは実装の隣の `*_tests.rs`（`#[cfg(test)] #[path = "…"] mod …;`）。1 ファイル 1,000 行を超えない。常時テストはネットへ出ず、ポートは `127.0.0.1:0` で OS に割り当てさせる（9821 を使うテスト 0 本）。
 
-- [ ] 1. 土台: 新しい葉クレートと依存
-- [ ] 1.1 `areka-mcp` クレートを足し、依存とモジュール・テストの骨組みを置く
+- [x] 1. 土台: 新しい葉クレートと依存
+- [x] 1.1 `areka-mcp` クレートを足し、依存とモジュール・テストの骨組みを置く
   - `crates/areka-mcp` を作り、根の `members = ["crates/*"]` で拾われることを確かめる（根の `Cargo.toml` は変えない＝変える行 0）
   - 依存は design.md「Allowed Dependencies」のとおり（rmcp を `=3.5.0`・`default-features = false`・`server`＋`transport-streamable-http-server`、tokio・tokio-util・hyper・hyper-util・http-body-util・tower-service・serde_json・tracing・`areka-actor`）。`log-capture-kit` は `[dev-dependencies]` だけ。`publish = false`・`version.workspace = true`
   - `lib.rs` に全モジュール（port・gate・help・registry・handler・dispatch・server と `#[cfg(test)]` の testkit）の宣言を置き、crate doc に「tokio は mcp スレッドに閉じる」を書く
@@ -126,3 +126,6 @@
   - 実機の根・一時フォルダはワークツリーの `target\` の下だけ
   - 完了の姿: `.kiro/specs/areka-P0-mcp-server-core/verification/signoff.md` に 4 項目とログの確かめ・増分が記録されている
   - _Requirements: 9.5, 9.6_
+
+## Implementation Notes
+- 1.1: `Cargo.lock` に増える外部クレートは 38 件。研究の 30 件は `cargo tree -e normal`（この機械向け）の数で、全部入っている。残り 8 件（iana-time-zone 系・wasi・cc 等）は chrono・mio が他の OS 向けに引くもので x64 のビルドには 0 件。数え方の差であって増えたのではない
