@@ -233,3 +233,25 @@
 - 「`\s` は出たのに表示が着地しない」はこの WARN では拾えなくなる — 7.2 の項目 3 で、表示の経路がその場で記録していることを確かめた。
 - しきい値の前提（60Hz で約 10 秒）は 120Hz では約 5 秒のまま — 本 spec の境界の外（§6.1 議題 2）。areka 自身の待ちが 5 秒を超える場面では今日どおり鳴る。
 - 直す前の赤（3.3）を見ずに本番を先に直すと、テストが「初めから緑」で判定の力を失う — 実装の順序は T1〜T3 を先に書いて赤を見てから本番を直す（`design.md` Testing Strategy）。
+
+## 8. 実装の記録
+
+### 8.1 直す前の赤（2026-10-03・コミット `c2fcb128` の上で採取）
+
+本番（`drain_resnap.rs`）に手を入れる前に `cargo test -p areka --bin areka chain_finalize` を回した。結果は 29 本が緑・3 本が赤。赤の 3 本は、どれも「ゴースト待ちの巡まで見送りに数えて 600 回目に WARN を出す」今日の振る舞いを捉えている（要件 3.3）。
+
+- T1 `no_window_frames_after_close_are_not_counted`（`frame_chain_finalize_restart_tests.rs`）
+  - 判定の中身: （窓なしで 600 巡回した後の WARN の件数, 見送りの数の記録 (数, 報告済み), 確定の印）
+  - 実際: `(1, Some((600, true)), false)` ／ 期待: `(0, None, false)`
+  - 出た WARN: `chain_finalize: 初期配置の確定が続けて見送られている（隣接が崩れたままの可能性・scg 7.1/6.5） deferrals=600 scope=None reason=GhostWindows が無い（窓が生えていない）`
+  - 読み: 窓を閉じた後の窓なしの巡が数えられ、外したはずの数の記録が作り直されて 600 回目に鳴った。
+- T2 `next_window_set_counts_only_areka_deferrals_after_all_shown`（`frame_chain_finalize_restart_tests.rs`）
+  - 判定の中身: WARN の件数 (窓なしの 600 巡, 相方が未表示の 600 巡, 表示が揃ってから 599 巡, 表示が揃ってから 600 回目, その後の 600 巡)
+  - 実際: `(1, 0, 0, 0, 0)` ／ 期待: `(0, 0, 0, 1, 0)`
+  - 出た WARN（最初の 1 行）: `… deferrals=600 scope=None reason=GhostWindows が無い（窓が生えていない）`
+  - 読み: WARN が窓なしの区間で先に出てしまい、一度きりの報告をそこで使い切ったため、本来鳴るべき「表示が揃ってから 600 回目」では鳴らなかった。
+- T3 `never_shown_scope_is_a_ghost_wait_and_is_not_counted`（`frame_chain_finalize_tests.rs`）
+  - 判定の中身: （相方が未表示のまま 1200 巡回した間の WARN・INFO・DEBUG・TRACE の件数, 見送りの数の記録 (数, 報告済み)）
+  - 実際: `(1, 0, 0, 0, Some((600, true)))` ／ 期待: `(0, 0, 0, 1200, None)`
+  - 出た WARN: `… deferrals=600 scope=Some(1) reason=scope 1: 実表示寸が未確定（初回表示が未成立）`
+  - 読み: 相方（scope 1）がまだ一度も表示されていない待ちが数えられて 600 回目に鳴り、数えなかった印の TRACE は 1 行も出ていない。
