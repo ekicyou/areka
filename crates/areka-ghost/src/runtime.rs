@@ -12,7 +12,7 @@ use std::sync::mpsc::{self, Sender};
 use areka_actor::ActorHandle;
 use areka_kanade::{
     BootOrigin, KanadeConfig, KanadeMsg, KanadeNotice, ShioriBackend, ShioriCut, ShioriProbe,
-    WaitBudget, spawn_kanade_with_stop_sink, spawn_shiori_actor,
+    TranslateSeams, WaitBudget, spawn_kanade_translating, spawn_shiori_actor,
 };
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::{MountError, MountModel, resolve_with_shell};
@@ -674,21 +674,40 @@ pub fn boot_with_origin(
         sylphya_publisher.clone(),
         ghost_asker.clone(),
     );
+    //    写しの源は kanade の起動の前に解決し、翻訳用と再生用の 2 つに分ける（spec
+    //    `areka-P0-translate-pipeline` 要件 2.3）。FromSylphya＝同じ reader＋自 asker から 1 つずつ
+    //    （翻訳用は再生用の固定の記録を出さない）／Custom＝注入された 1 つの源を `split_source` で分ける。
+    //    再生用は dispatcher が talk 起動ごとに呼ぶ（刻印点＝無改変・R7.1・design「provider 差替」）。
+    let (translate_source, system_var_source) = match options.system_vars {
+        SystemVarWiring::FromSylphya => (
+            crate::sylphya_wiring::translate_snapshot_source(
+                sylphya_reader.clone(),
+                ghost_asker.clone(),
+            ),
+            crate::sylphya_wiring::from_sylphya_provider(
+                sylphya_reader.clone(),
+                ghost_asker.clone(),
+            ),
+        ),
+        SystemVarWiring::Custom(src) => crate::translate_wiring::split_source(src),
+    };
+    //    翻訳の口: 展開は写しの源から組み、MAKOTO は素通し（要件 7.2）。
+    let seams = TranslateSeams {
+        expand: crate::translate_wiring::make_script_expander(translate_source),
+        makoto: TranslateSeams::passthrough().makoto,
+    };
     //    R15.3: 終了系列完了の通知端をそのまま kanade へ渡す（`None` なら通知は出ない＝従来どおり）。
-    let (kanade_tx, kanade_handle) =
-        spawn_kanade_with_stop_sink(config, shiori_tx, start_tx, resource_sink, kanade_stop);
+    let (kanade_tx, kanade_handle) = spawn_kanade_translating(
+        config,
+        shiori_tx,
+        start_tx,
+        resource_sink,
+        kanade_stop,
+        seams,
+    );
 
     // 7. sakura dispatcher（可変長 sink 列＋system_vars provider を構築時注入・S-3・
     //    要件 4.6/8.5/7.1）。provider は dispatcher が talk 起動ごとに呼び出す（刻印点＝無改変）。
-    //    provider の源を解決: FromSylphya＝reader＋自 asker 捕捉クロージャ（talk_snapshot→SystemVarSnapshot）／
-    //    Custom＝注入された SystemVarSource をそのまま（R7.1・design「provider 差替」）。
-    let system_var_source: SystemVarSource = match options.system_vars {
-        SystemVarWiring::FromSylphya => crate::sylphya_wiring::from_sylphya_provider(
-            sylphya_reader.clone(),
-            ghost_asker.clone(),
-        ),
-        SystemVarWiring::Custom(src) => src,
-    };
     // 起動記録 SET sink 登録（design「C5 GhostRuntime 増分」boot() step 4・要件 3.4/6.2/7.1）。
     //     `spawn_dispatcher` 直前の単一登録点——wired／fallback 両ブート経路が本 1 点を通るため
     //     自動被覆する（per-path 登録にしない・emo2_boot 不触）。以後 dispatcher が talk ごとに

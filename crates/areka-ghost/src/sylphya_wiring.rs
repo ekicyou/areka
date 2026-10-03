@@ -193,8 +193,6 @@ pub fn from_sylphya_provider(reader: SylphyaReader, asker: AskerId) -> SystemVar
 ///
 /// 再生用の固定の記録「talk snapshot from sylphya reader」は実機の確かめで数を数える記録
 /// なので、翻訳用はそれを出さず、別の記録「translate snapshot from sylphya reader」を出す。
-// 起動の結線（task 4.2）が使うまでは使い手が無い。4.2 で `runtime.rs` から呼んだら外す。
-#[allow(dead_code)]
 pub(crate) fn translate_snapshot_source(reader: SylphyaReader, asker: AskerId) -> SystemVarSource {
     let ctx = AskerContext { asker };
     Box::new(move || {

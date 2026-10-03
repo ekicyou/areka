@@ -589,8 +589,10 @@ fn notify(id: &str, references: &[&str]) -> RecordedCall {
 
 /// 台詞を返した照会（`id`・参照列 `references`）の後に届く `OnTranslate` 1 件ぶんの期待。
 ///
-/// 組み立ては events 表の `on_translate` を通す（参照列をここで組み直さない）。展開の口は素通し
-/// なので Ref0 は台詞そのまま。偽の SHIORI は台本に無い `OnTranslate` に 204 で答える
+/// 組み立ては events 表の `on_translate` を通す（参照列をここで組み直さない）。Ref0 は台詞を
+/// 翻訳の前の展開（`areka_sakura::expand_system_vars`）にかけたもの。台本の環境変数は
+/// `%username` だけで、その値は台本が照会に返す [`USERNAME`] なので、写しはそれ 1 つで組む。
+/// 偽の SHIORI は台本に無い `OnTranslate` に 204 で答える
 /// （`spine.rs` の `ScriptedShioriBackend::get` の既定）。Ref2 には ID の綴りだけが載るので、
 /// 元のイベントは任意名の形で運ぶ。記録は進行状態を持たないので、進行状態は何でもよい。
 fn translated(script: &str, id: &str, references: Vec<String>) -> RecordedCall {
@@ -598,9 +600,12 @@ fn translated(script: &str, id: &str, references: Vec<String>) -> RecordedCall {
         id: areka_kanade::EventId::Choice(id.to_string()),
         references,
     };
+    let mut vars = areka_sakura::contract::SystemVarSnapshot::default();
+    vars.insert("username", USERNAME);
+    let script = areka_sakura::expand_system_vars(script, &vars);
     let status = areka_kanade::ExecutionStatus::derive(&areka_kanade::ExecutionSnapshot::INACTIVE);
     let areka_kanade::ShioriCall::Get { id, references, .. } =
-        areka_kanade::events::on_translate(script, &source, status)
+        areka_kanade::events::on_translate(&script, &source, status)
     else {
         panic!("OnTranslate は照会");
     };
