@@ -255,7 +255,7 @@ sequenceDiagram
 | 1.2 | 空なら行を出さない | `render`（無改変）・導出の「空の組は載せない」 | `derive` | — |
 | 1.3 | 同じ状態を 2 度含めない | `from_states` の重複除去（無改変）・online は数→真偽 | `derive` | online |
 | 1.4 | talking・choosing を変えない | `State::snapshot_with_choice` の既存 2 欄の計算は無改変 | `ExecutionSnapshot` | — |
-| 1.5 | ヘッダの位置 | `shiori/real.rs`・host32 `build_request`（無改変） | — | — |
+| 1.5 | ヘッダの位置 | host32 `build_request`（`Status:` 行を書く唯一の口・x64 の in-process も同じ関数・無改変） | — | — |
 | 2.1 | 更新中の online | `KanadePorts.standard_started` の guard・`spawn_worker` の `drop(ports)` | `OnlineCounter::begin` | online |
 | 2.2 | 取得中の online | `fetch_and_send` 冒頭の guard | `OnlineCounter::begin` | online |
 | 2.3 | 終わったら載せない | guard の `Drop` | `OnlineGuard` | online |

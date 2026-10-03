@@ -152,8 +152,7 @@
 - 3.1: areka の bin テストには既定の口のまま本物の背景スレッドや kanade を起こすものがあり（`menu/update_frame_tests.rs`・`emo2_boot/spine_conformance_support_tests.rs` は `KanadeConfig::new` 経由で `PROCESS` を読み `Status` を逐語照合する）、本番の既定が `PROCESS` を立てると並列実行で揺れる。そこで `UpdateDesk` の既定は `#[cfg(test)]` で読まれない数にした。3.2 の取得の本番の起こし方でも同じ危険が無いか確かめること。
 - 4.1: トークの終わりの合図 `TalkEnded` が次のトークの `TalkStarted` より前に並ぶ保証は、自然終端（`on_done`）と選択の取り消しで dispatcher が合流しないため、talk スレッド側（areka-sakura `drive.rs`）で受け口を落としてから `TalkDone`／`Interrupted` を送る形で持たせた（境界を広げた・C1 外）。
 - 5.1: `status_report.rs` 先頭の `#![cfg_attr(not(test), allow(dead_code))]` は 5.2 の結線までの仮置き。5.2 で必ず外す。headless の表示層では可視にできないので、照会が見えている状態を読む経路は 5.2 のテストで踏む。
-- 7.2: 実 pasta の追験は `SampleRoot::acquire("emo2")` の辞書込みの複製（`target
-ar-samples\work` の下）に環境変数の DLL を上書きして起こす。手元の DLL は `target
-ar-samples\cachemo2-4591449-272a04b4\ghostmo2\ghost\master\pasta.dll`。雑談の間隔は emo2 の `pasta.toml` の `talk_interval_min=15`・`max=30`。走行は約 90 秒。
+- 7.2: 実 pasta の追験は `SampleRoot::acquire("emo2")` の辞書込みの複製（`target\nar-samples\work` の下）に環境変数の DLL を上書きして起こす。手元の DLL は `target\nar-samples\cache\emo2-4591449-272a04b4\ghost\emo2\ghost\master\pasta.dll`。雑談の間隔は emo2 の `pasta.toml` の `talk_interval_min=15`・`max=30`。走行は約 90 秒。
 - 7.1: `tools/test-all.ps1` 全段緑（検査したコミット 20d659e3・x64 全テスト 275 秒）。C1 の 9 本は実在し `main` との差分 0（較正: 変更した `status.rs` は差分ありと出る）。変更した .rs に 1,000 行超えは無い。
 - 7.3: 実機の観測は起動時の台本（`dic/boot.pasta`）を写しの上で書き換えて流した。URL インストールは `\![execute,install,url,…]`（`\![install,url,…]` は効かない）。区間内でバルーンを左ダブルクリックして中断が断られることは開発者が目視で確かめた（10-03・`real-machine-observation.md`）。
+- 完了時にその場で解決: この Implementation Notes の 7.2 の行（シェルがバックスラッシュを改行・制御文字に化かしていたパス）を書き直した。design の要件対応表の 1.5 の行を、`Status:` 行を書く唯一の口（host32 の `build_request`）に合わせて直した。
