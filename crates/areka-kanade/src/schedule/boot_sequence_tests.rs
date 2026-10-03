@@ -1,6 +1,7 @@
 use super::test_support::{assert_get, assert_notify, config, initial};
 use super::*;
 use crate::schedule::{ActiveTalk, step};
+use crate::status::ExecutionSnapshot;
 
 // --- Full happy path: Idle→…→Steady（各段の Phase＋Action を厳密検証） ---
 

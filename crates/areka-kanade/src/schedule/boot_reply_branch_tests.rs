@@ -1,6 +1,7 @@
 use super::test_support::{assert_get, assert_notify, config, initial};
 use super::*;
 use crate::schedule::{ActiveTalk, step};
+use crate::status::ExecutionSnapshot;
 
 // ========================================================================
 // タスク 6.2: username リソース照会 prefetch（OnInitialize 後・OnFirstBoot 前・R4.1/R9.3）

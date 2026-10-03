@@ -5,10 +5,9 @@
 //! 2.1 では骨格（呼出面）のみを用意し、[`crate::schedule::mod`] の `step` から
 //! フェーズ分岐として呼び出せるようにする。
 
-use super::{Action, ActiveTalk, Input, Phase, State, events, resources, snapshot_of};
+use super::{Action, ActiveTalk, Input, Phase, State, events, resources};
 use crate::change::{BootOrigin, KanadeNotice, ShioriMethod};
 use crate::msg::{CloseReason, KanadeConfig, ShioriCall, ShioriOutcome};
-use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkId};
 use resources::ResourceOutcome;
 
@@ -46,12 +45,8 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
 fn boot_start(mut state: State) -> (State, Vec<Action>) {
     tracing::info!(target: "kanade", event = "boot_start", "起動指示を受領——OnInitialize NOTIFY を発行");
     state.phase = Phase::BootInit;
-    (
-        state,
-        vec![Action::ShioriRequest(events::on_initialize(
-            &ExecutionSnapshot::INACTIVE,
-        ))],
-    )
+    let call = events::on_initialize(&state.snapshot_without_talk());
+    (state, vec![Action::ShioriRequest(call)])
 }
 
 /// boot 各待ち点の応答進行（正典順序の状態機械）。
@@ -64,12 +59,8 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
             ShioriOutcome::Notified => {
                 let mut state = state;
                 state.phase = Phase::BootPrefetch;
-                (
-                    state,
-                    vec![Action::ShioriRequest(resources::resource_username(
-                        &ExecutionSnapshot::INACTIVE,
-                    ))],
-                )
+                let call = resources::resource_username(&state.snapshot_without_talk());
+                (state, vec![Action::ShioriRequest(call)])
             }
             other => unexpected_reply(state, "BootInit", other),
         },
@@ -91,13 +82,8 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
             ShioriOutcome::NoContent => {
                 let mut state = state;
                 state.phase = Phase::BootMain;
-                (
-                    state,
-                    vec![Action::ShioriRequest(events::on_boot(
-                        config,
-                        &ExecutionSnapshot::INACTIVE,
-                    ))],
-                )
+                let call = events::on_boot(config, &state.snapshot_without_talk());
+                (state, vec![Action::ShioriRequest(call)])
             }
             ShioriOutcome::Value(script) => {
                 tracing::info!(target: "kanade", event = "boot_type_script", "起動種別にスクリプト——OnBoot をスキップし basewareversion へ");
@@ -204,19 +190,14 @@ fn on_prefetch_reply(
     // 起動の根（username 照会の応答後に 1 つだけ選ぶ・照会の段は不変）。根があれば BootType で
     // その応答を待ち、既存の腕（204 → OnBoot・台本 → OnBoot を飛ばす）へ合流する。根が無ければ
     // OnBoot（BootMain）へ直行する（今日の boot_gate の枝）。
-    if let Some(root) = boot_root(config) {
+    if let Some(root) = boot_root(&state, config) {
         state.phase = Phase::BootType;
         (state, vec![sink, Action::ShioriRequest(root)])
     } else {
         tracing::info!(target: "kanade", event = "boot_gate", "boot_gate skip_first_boot");
         state.phase = Phase::BootMain;
-        (
-            state,
-            vec![
-                sink,
-                Action::ShioriRequest(events::on_boot(config, &ExecutionSnapshot::INACTIVE)),
-            ],
-        )
+        let call = events::on_boot(config, &state.snapshot_without_talk());
+        (state, vec![sink, Action::ShioriRequest(call)])
     }
 }
 
@@ -227,9 +208,10 @@ fn on_prefetch_reply(
 /// （[`BootOrigin::Updated`]）→ 渡された名前と Reference の GET（204 でも `OnBoot` へ続けない）。
 /// それ以外（`Plain`・`Halted`）→ 根なし
 /// （`OnBoot` だけ。`Halted` の Ref6/7 は [`events::on_boot`] が載せる）。範囲外の根は
-/// [`BootOrigin`] に値を足し、この表に行を足すだけで入る。
-fn boot_root(config: &KanadeConfig) -> Option<ShioriCall> {
-    let snapshot = &ExecutionSnapshot::INACTIVE;
+/// [`BootOrigin`] に値を足し、この表に行を足すだけで入る。スナップショットは会話なしの作り方
+/// （online と balloon だけ写しから残す・要件 5.1）。
+fn boot_root(state: &State, config: &KanadeConfig) -> Option<ShioriCall> {
+    let snapshot = &state.snapshot_without_talk();
     if config.first_boot {
         return Some(events::on_first_boot(snapshot, config.vanish_count));
     }
@@ -316,7 +298,7 @@ fn to_baseware_version(
     state.phase = Phase::BootVersion { talk };
     actions.push(Action::ShioriRequest(events::baseware_version(
         config,
-        &snapshot_of(&state.phase),
+        &state.snapshot(),
     )));
     (state, actions)
 }

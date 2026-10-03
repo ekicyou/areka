@@ -2,6 +2,7 @@ use super::test_support::{assert_no_second_change, base_state, config, steady_no
 use super::*;
 use crate::msg::ShioriCall;
 use crate::schedule::step;
+use crate::status::ExecutionSnapshot;
 use crate::talk::TalkEndReason;
 
 /// 単一 Action が期待 ShioriCall（GET/NOTIFY・id・references）と一致することを検証する。

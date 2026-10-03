@@ -30,7 +30,6 @@ use crate::msg::{
     ChoiceInput, CloseReason, KanadeConfig, MonotonicMs, MouseEventKind, MouseInput, ShioriCall,
     ShioriOutcome,
 };
-use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkId};
 
 /// 定常運転（Steady）のフェーズ分岐。
@@ -892,14 +891,9 @@ fn begin_close(mut state: State, reason: CloseReason) -> (State, Vec<Action>) {
     // 掃除しない——保留は遷移ではなく、そこで帳簿を消すと選択が棄却されてバリアが解けず、
     // 待っている `TalkDone` が永遠に来ないため握手そのものが進まなくなる。
     super::clear_choice_ledger(&mut state, "close_handshake_begin");
-    // 通常 close 握手は talk 非アクティブで行う（INACTIVE スナップショット）。
-    (
-        state,
-        vec![Action::ShioriRequest(events::on_close(
-            reason,
-            &ExecutionSnapshot::INACTIVE,
-        ))],
-    )
+    // 通常 close 握手は会話なしの作り方で行う（online と balloon だけ写しから残す・要件 5.1）。
+    let call = events::on_close(reason, &state.snapshot_without_talk());
+    (state, vec![Action::ShioriRequest(call)])
 }
 
 /// Steady 以外の Phase が steady::step に届いた場合の防御アーム（構造上発生しない）。

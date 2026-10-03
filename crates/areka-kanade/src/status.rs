@@ -246,19 +246,17 @@ pub struct ExecutionSnapshot {
     // SEAM(Req6.3): minimizing/induction/passive/timecritical/opening は出どころが着地したら
     //   フィールドを 1 本追加し、導出表の該当行を差し替える（持ち主＝要件 6.3 の宛先）。
     //
-    // NOTE(シームの実体＝「フィールド 1 本」では閉じない): 源が Phase の外にある状態
-    //   （窓 geometry・Tick 付帯で運ばれる minimizing/balloon/opening・Ref1/Ref2）は
-    //   `snapshot_of(&Phase)` の入力に届かないため、シーム発動時は**供給側の署名を広げる**
-    //   （将来形 `snapshot_of(&Phase, &TickExtras)`）ことがシームに含まれる。
-    //   Req1.6/2.6 が不変を保証するのは **wire 送出契約**（カンマ連結書式・ヘッダ位置・
-    //   空集合→行省略・Reference 連番）であって内部シグネチャではない。
-    //   `choice_active` はこの NOTE の**最初の実例**である: 源（選択帳簿）は `Phase` の外に
-    //   あるため、供給側は `State::snapshot(&self)`（`schedule/mod.rs`）へ広がった。
-    //   送出契約（連結順序・区切り・空集合→行省略）は無改変のままである（Req6.3）。
+    // NOTE(シームの実体＝「フィールド 1 本」では閉じない): 源が Phase の外にある状態は、
+    //   欄に加えて**作り手**（`schedule/mod.rs` の `State::snapshot`／`State::snapshot_without_talk`
+    //   ——本番のスナップショットはこの 2 つからしか作らない）へ材料を届ける運搬も要る。
+    //   `choice_active`（源＝選択帳簿）と、写し（`ExternalStates`）から作る `no_user_break`・
+    //   `online`・`balloons` がその実例である。不変を保証するのは **wire 送出契約**
+    //   （カンマ連結書式・ヘッダ位置・空集合→行省略・Reference 連番）であって内部シグネチャではない。
 }
 
 impl ExecutionSnapshot {
-    /// 全実行状態が非アクティブなスナップショット（boot 系列・close 系列・ForceQuit 後）。
+    /// 全実行状態が非アクティブなスナップショット（テストと構造体リテラルの既定値の継ぎ足し用）。
+    /// 本番の送出は `State::snapshot`／`State::snapshot_without_talk` から作り、これを直接渡さない。
     pub const INACTIVE: ExecutionSnapshot = ExecutionSnapshot {
         talk_active: false,
         choice_active: false,

@@ -259,11 +259,12 @@ impl State {
         }
     }
 
-    /// 送出時点の実行状態スナップショット（運行フェーズ＋選択帳簿から導出・DD-IT-3／設計 C5）。
+    /// 送出時点の実行状態スナップショット（talk は相から・choice は選択帳簿から・nouserbreak・
+    /// online・balloons は外から届いた写しから作る・DD-IT-3／設計 C5）。
     ///
-    /// [`snapshot_of`] は `Phase` しか読めず選択待ちを知れないため、**供給側の署名を `State`
-    /// 全体へ広げた**形である（`status.rs` の NOTE どおり）。広げるのは内部シグネチャだけで
-    /// あり、wire 送出契約（連結順序・区切り・空集合→ヘッダ行省略）は無改変である（Req6.3）。
+    /// 本番の [`ExecutionSnapshot`] は本メソッド（と [`snapshot_with_choice`](State::snapshot_with_choice)）
+    /// か [`snapshot_without_talk`](State::snapshot_without_talk) からしか作らない。wire 送出契約
+    /// （連結順序・区切り・空集合→ヘッダ行省略）は無改変である（Req6.3）。
     pub(crate) fn snapshot(&self) -> ExecutionSnapshot {
         let choice_active = self
             .choice
@@ -279,12 +280,29 @@ impl State {
     /// これらの呼出点は手元の帳簿から得た真偽値をここへ渡す——[`snapshot`](State::snapshot) を
     /// そのまま呼ぶとカスケード段の呼出から `choosing` が落ちる（設計 C5 の源は
     /// `Waiting|Cascading|TimeoutInFlight` の全段である）。
+    ///
+    /// nouserbreak は「再生中のトーク かつ 写しの旗」——写しは UI の旗を遅れて追う鏡であり
+    /// トークの境界で下ろさないため、トークが無い間に旗が残っていても載せない（要件 3.3）。
     pub(crate) fn snapshot_with_choice(&self, choice_active: bool) -> ExecutionSnapshot {
+        let talk_active = talk_active_of(&self.phase);
         ExecutionSnapshot {
-            talk_active: snapshot_of(&self.phase).talk_active,
+            talk_active,
             choice_active,
-            // 本当の値（写しから作る nouserbreak・online・balloons）は 2.2 で入れる。
-            ..ExecutionSnapshot::INACTIVE
+            no_user_break: talk_active && self.external.no_user_break,
+            online: self.external.online,
+            balloons: self.external.balloons.clone(),
+        }
+    }
+
+    /// 会話も選択も無いと決めて送る場面（起動の各段・切替・終了の握手・強制終了）の
+    /// スナップショット。talk・choice・nouserbreak は無し、online と balloons は写しのまま（要件 5.1）。
+    pub(crate) fn snapshot_without_talk(&self) -> ExecutionSnapshot {
+        ExecutionSnapshot {
+            talk_active: false,
+            choice_active: false,
+            no_user_break: false,
+            online: self.external.online,
+            balloons: self.external.balloons.clone(),
         }
     }
 }
@@ -558,26 +576,16 @@ fn on_execution_state(mut state: State, update: ExecutionStateUpdate) -> (State,
     (state, Vec::new())
 }
 
-/// 送出時点の運行フェーズから実行状態スナップショットを導出する（DD-IT-3）。
-/// アクティブな talk を運ぶ phase のみ talk_active=true。
+/// 相が再生中のトークを運ぶか（DD-IT-3・スナップショットの talk 軸）。
 ///
-/// 選択待ち（`choice_active`）の源は `Phase` の外（[`State::choice`]）にあるため本関数からは
-/// 知れず、常に false を返す。選択待ちを知る必要がある呼出点は [`State::snapshot`]／
-/// [`State::snapshot_with_choice`] を使う（設計 C5）。残る本関数の利用点は選択待ちが構造上
-/// 存在しない場面のみである——boot 系列（`BootVersion` の起動挨拶）と、`Unloading` へ遷移
-/// **後**に採る `force_quit` の best-effort NOTIFY（＝INACTIVE・DD-IT-4）。
-pub(crate) fn snapshot_of(phase: &Phase) -> ExecutionSnapshot {
-    match phase {
-        // アクティブな talk を運ぶ phase＝Steady{Some} と（挨拶追跡中の）BootVersion{Some}（DD-IT-12）。
-        Phase::Steady { talk: Some(_) } | Phase::BootVersion { talk: Some(_) } => {
-            ExecutionSnapshot {
-                talk_active: true,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            }
-        }
-        _ => ExecutionSnapshot::INACTIVE,
-    }
+/// アクティブな talk を運ぶ相＝`Steady{Some}` と（挨拶追跡中の）`BootVersion{Some}`（DD-IT-12）。
+/// 選択待ちと写しの 3 状態は `Phase` の外にあるため、スナップショットは [`State::snapshot`]／
+/// [`State::snapshot_without_talk`] が組み立てる。
+pub(crate) fn talk_active_of(phase: &Phase) -> bool {
+    matches!(
+        phase,
+        Phase::Steady { talk: Some(_) } | Phase::BootVersion { talk: Some(_) }
+    )
 }
 
 /// フェーズの静的ラベル（ログ観測用）。`Phase` は Debug を持たないため、可観測性ログ
@@ -606,7 +614,8 @@ fn phase_label(phase: &Phase) -> &'static str {
 ///
 /// OnClose NOTIFY の構築は events.rs（[`events::on_close_notify`]）へ委譲する——events.rs が
 /// `ShioriCall` 構築の単一列挙点であり、force_quit はもはや inline 構築しない（DD-IT-8）。
-/// スナップショットは Unloading へ遷移**後**の [`snapshot_of`]（＝INACTIVE）を渡す（DD-IT-4）。
+/// スナップショットは Unloading へ遷移**後**の会話なしの作り方（[`State::snapshot_without_talk`]・
+/// online と balloon だけ写しから残す）を渡す（DD-IT-4・要件 5.1）。
 fn force_quit(mut state: State, reason: CloseReason) -> (State, Vec<Action>) {
     tracing::warn!(target: "kanade", event = "force_quit", reason = reason.as_ref_str(), "強制終了指示——終了系列（Forced）へ直行");
     state.phase = Phase::Unloading {
@@ -614,7 +623,10 @@ fn force_quit(mut state: State, reason: CloseReason) -> (State, Vec<Action>) {
     };
     // close 系遷移の掃除点（C4 規則 7）: 現行トークは失われるため選択帳簿を残さない。
     clear_choice_ledger(&mut state, "force_quit");
-    let notify = Action::ShioriRequest(events::on_close_notify(reason, &snapshot_of(&state.phase)));
+    let notify = Action::ShioriRequest(events::on_close_notify(
+        reason,
+        &state.snapshot_without_talk(),
+    ));
     (state, vec![notify, Action::ShioriUnload])
 }
 
