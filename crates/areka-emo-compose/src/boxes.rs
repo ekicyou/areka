@@ -6,9 +6,12 @@
 //! 事実を [`BoxReport`] に載せる。表の鍵は構造のある型（[`BoxName`]・`u32`）で持ち、
 //! 文字列の連結を鍵にしない。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-use areka_parsers::balloon::BalloonModel;
+use areka_parsers::balloon::{self, BalloonModel};
+use areka_parsers::shell::{BoxBrace, BoxDefinition, ShellBoxes};
+
+use crate::world::EmoWorld;
 
 /// 箱の名前（`balloon.名前`ブレスの名前）。中身は文字列として読むだけ。
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -131,6 +134,135 @@ pub enum BoxIssue {
     },
     /// `surface.append*`ブレスの対象のサーフェスがその時点で無い（要件 2.2・10.1）。
     AppendTargetMissing { surface: u32, name: String },
+}
+
+/// 転記から箱の定義の表と置き場所の表を作り、読み捨てた事実を報告に載せる（純粋・失敗しない）。
+///
+/// `images`（面の画像だけで在る番号）と `world`（画像の element番号）は element定義を
+/// 番号へ配る側が使う。本関数は fs にも記録にも触れない（記録の水準は入口が決める）。
+pub fn fold_boxes(
+    boxes: &ShellBoxes,
+    _images: &BTreeMap<u32, String>,
+    _world: &EmoWorld,
+) -> (BoxLayout, BoxReport) {
+    let mut issues = Vec::new();
+    let defs = fold_braces(boxes, &mut issues);
+    let layout = BoxLayout {
+        defs,
+        surfaces: BTreeMap::new(),
+    };
+    (layout, BoxReport { issues })
+}
+
+/// `balloon.*`ブレスを登場順に定義の表へ畳む（同じ名前は後のもので丸ごと置き換え・要件 1.8）。
+///
+/// 置き換えたブレスが採られなければ、その名前の定義は無くなる（前の定義へは戻さない）。
+fn fold_braces(boxes: &ShellBoxes, issues: &mut Vec<BoxIssue>) -> BTreeMap<BoxName, BoxDef> {
+    let mut defs = BTreeMap::new();
+    let mut seen = BTreeSet::new();
+    for definition in &boxes.definitions {
+        let BoxDefinition::Brace(BoxBrace { name, lines }) = definition else {
+            continue;
+        };
+        if name.is_empty() {
+            issues.push(BoxIssue::BraceEmptyName {
+                heading: format!("balloon.{name}"),
+            });
+            continue;
+        }
+        // `\b[ID番号]` と見分けがつかない名前（seriko の `resolve_balloon_key` と同じ基準・要件 1.9）。
+        if name.parse::<i64>().is_ok() {
+            issues.push(BoxIssue::BraceNumericName { name: name.clone() });
+            continue;
+        }
+        let key = BoxName(name.clone());
+        if !seen.insert(key.clone()) {
+            issues.push(BoxIssue::BraceReplaced { name: name.clone() });
+            defs.remove(&key);
+        }
+        if let Some((table, size, follow)) = split_brace(name, lines, issues) {
+            let model = balloon::parse(&table, None);
+            defs.insert(
+                key,
+                BoxDef {
+                    model,
+                    size,
+                    follow,
+                },
+            );
+        }
+    }
+    defs
+}
+
+/// descript.txt の読み手へ渡す表・`size`・`font.follow` の組。
+type SplitBrace = (BTreeMap<String, String>, (u32, u32), FontFollow);
+
+/// ブレスの本体を descript.txt の読み手へ渡す表と `size`・`font.follow` に分ける。
+///
+/// 本体の各行を「先頭の欄＝キー・残りを `,` でつないだもの＝値・同じキーは後勝ち」の表へ写し、
+/// `size`・`font.follow`（areka 独自のキー）と当てはまらないキー（要件 1.5）を抜く。
+/// `size` が無い・正の整数 2 つとして読めなければ `None`（要件 1.4）。
+fn split_brace(
+    name: &str,
+    lines: &[Vec<String>],
+    issues: &mut Vec<BoxIssue>,
+) -> Option<SplitBrace> {
+    // 欄が 1 つだけの行・キーが空の行は descript.txt の読み手（`kv::parse_kv`）と同じく読まない。
+    let mut table: BTreeMap<String, String> = lines
+        .iter()
+        .filter_map(|fields| match fields.as_slice() {
+            [key, value @ ..] if !key.is_empty() && !value.is_empty() => {
+                Some((key.clone(), value.join(",")))
+            }
+            _ => None,
+        })
+        .collect();
+
+    let Some(size_raw) = table.remove("size") else {
+        issues.push(BoxIssue::BraceMissingSize {
+            name: name.to_string(),
+        });
+        return None;
+    };
+    let positive = |s: &str| s.parse::<u32>().ok().filter(|v| *v > 0);
+    let Some(size) = size_raw
+        .split_once(',')
+        .and_then(|(w, h)| Some((positive(w)?, positive(h)?)))
+    else {
+        issues.push(BoxIssue::BraceBadSize {
+            name: name.to_string(),
+            value: size_raw,
+        });
+        return None;
+    };
+
+    let follow = match table.remove("font.follow").as_deref() {
+        None | Some("scope") => FontFollow::Scope,
+        Some("balloon") => FontFollow::Balloon,
+        Some(other) => {
+            issues.push(BoxIssue::BraceBadFollow {
+                name: name.to_string(),
+                value: other.to_string(),
+            });
+            FontFollow::Scope
+        }
+    };
+
+    table.retain(|key, _| {
+        let inapplicable = key.starts_with("windowposition.")
+            || key == "use_self_alpha"
+            || key == "use_input_alpha";
+        if inapplicable {
+            issues.push(BoxIssue::BraceKeyIgnored {
+                name: name.to_string(),
+                key: key.clone(),
+            });
+        }
+        !inapplicable
+    });
+
+    Some((table, size, follow))
 }
 
 #[cfg(test)]
