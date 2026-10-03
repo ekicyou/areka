@@ -64,3 +64,37 @@
 | `layout_scan_glyph.rs` | 174 | `balloon_moved.rs`／`balloon_pressed.rs`／`balloon_exit.rs` | 176／186／192 |
 | `viewbox.rs` | 460 | `emo2_boot/balloon_visibility.rs` | 450 |
 | `viewbox_diff.rs` | 429 | `balloon_visibility_decision.rs`／`balloon_visibility_wait.rs` | 268／234 |
+
+## 3. 実機の確かめ（タスク 5.2・要件 8）
+
+- ビルド: 分割後の HEAD `66d52b2c` の `cargo build -p areka`（debug）。検体は `nar-sample-path emo2` の `folder=`／`balloon.emo2-kakukaku=` の絶対パス（どちらも `target\nar-samples\manual\emo2\` の下）を引数で渡した（引数起動＝記憶と起動中の印に触れない）。
+- 置き場: ログ・作業フォルダ・`TEMP`／`TMP` はすべて `target\emo-text-file-split\real\` の下（要件 8.3）。生ログはコミットしない。
+- 環境: `RUST_LOG=info,areka_emo_text::actor=debug,areka::input_events::balloon=debug,areka::emo2_boot::balloon_visibility=debug`（2 回目は `areka::input_events::user_break=debug` も）・`NO_COLOR=1`・`AREKA_APP_SMOKE_EXIT_MS=600000`（有界の自動終了 10 分）・`AREKA_BALLOON_TIMEOUT_MS=8000`（時間切れを見やすくするため 8 秒）。
+- 操作: 選択肢のホバーとクリック・ダブルクリックは開発者が手で行った（画面操作の道具の許可は下りなかった）。
+
+| 走行 | pid | 結果 |
+|---|---|---|
+| run0 | 8444 | 実行体の隣の helper が 64bit 版（ワークスペースのビルドが上書き）で `pasta.dll` の LOAD が `0x800700C1`。分割とは無関係の既知の準備漏れ（`transition_judge_offset_signoff_tests.rs` §2.2）。i686 の helper を隣へ写して起こし直した |
+| run1 | 2908 | 10 分で自動終了・ERROR 0 件。文字の表示・ホバー・時間切れを確認。ダブルクリックは体の上（`OnMouseDoubleClick`＝メニュー）とバルーンの上（話の無いときの `user_break` で閉じる）だった |
+| run2 | 14404 | 10 分で自動終了（`event="app_exit" origin=Smoke`・`ghost shutdown sequence completed`）・ERROR 0 件。4 つの振る舞いすべてを確認 |
+
+### 4 つの振る舞い（要件 8.1）——いずれも分割前と同じ
+
+| 振る舞い | 開発者の目視 | ログの抜粋（run2・時刻は UTC 04 時台の分:秒） |
+|---|---|---|
+| 会話の文字の表示 | 表示された | `49:19.86 areka_emo_text::actor::present: テキスト供給面を予約スロットへ装着した … actor=0`／`49:22.37 … actor=1` |
+| 選択肢のホバーとクリック | 「大丈夫」 | `49:30.13 areka::input_events::balloon::moved: hover 遷移を上流 runtime へ注入 event="choice_hover_inject" scope=1 ordinal=Some(1)`／`49:30.65 areka::input_events::balloon::pressed: 選択確定: ChoiceSelection を発行 event="choice_selected" scope=1 id=Onおしゃべり頻度メニュー`（以降メニューを 4 段たどった） |
+| ダブルクリックでの中断 | 「消える」 | `50:34.39 kanade: 利用者の中断を受け入れた——現行のトークを止める event="balloon_break_accepted" scope=0 talk_id=10`／同時刻 `balloon_visibility::phase: … trigger="user_break" visible=false`（scope 0・1） |
+| バルーンの表示と非表示（時間切れを含む） | 消えた | `49:19.18 areka::emo2_boot::balloon_visibility::wait: バルーン非表示までの待ち時間を確定 env="AREKA_BALLOON_TIMEOUT_MS" timeout_secs=8.0`／`50:01.12 … trigger="timeout" visible=false`／`51:48.71 … 抑止が成立しているためタイムアウトによる非表示を見送った hover=true choice=true` |
+
+### 子の道筋のログ（要件 2.4）
+
+前置きの絞り込み 3 本で、子の道筋の行が拾えている（run2 の件数）: `areka_emo_text::actor::attach` 57,581（毎フレームの再追従の debug・文言は分割前と同じ）・`::actor::present` 2・`::actor::decoration` 2・`areka::input_events::balloon::moved` 30・`::pressed` 13・`areka::emo2_boot::balloon_visibility::wait` 1・`::phase` 146（run1 では `::balloon::exit` 1 も）。
+
+### 持ち越しの議題（承認フローで扱う・本 spec の範囲外）
+
+- **選択を待っているメニューを、なでなで（`OnMouseMove`）のような軽いイベントの返事で上書きしてよいのか**（2026-10-03 開発者の指示で記録）。
+  - 観測（run2・`50:15.54`〜`50:16.07`）: 体のダブルクリックでメニューの話（`talk_id=8 origin="OnMouseDoubleClick"`）が始まった 0.5 秒後、体の上のマウスの動きで `OnMouseMove` の返事が届き、`event="steady_talk_replace" talk_id=9 origin="OnMouseMove"` でメニューが置き換わった。開発者には「メニューを出した後に後続のトークが止まってないときがある」と見えた。
+  - 同じ形: `51:38.20` に始まった `OnSecondChange` の話を、`51:38.36` の体のダブルクリック（メニュー）が置き換えた。
+  - 分割との関係: 無い。決めているのは運行（kanade）の「話の最中に新しい返事が来たら差し替える」（単一 slot 置換）で、`crates/areka-kanade/`・`OnMouseMove` を送る側（`input_events/mod.rs`・`input_events/throttle.rs`・`emo2_boot/hit_region.rs`）・`crates/areka-ghost/` の基準 `94e3ad78` からの差分は 0 行。
+  - 次の一歩: 正典（ukadoc／SSP の話の最中・選択待ちの最中のイベントの扱い）と照らして、バグとして `/kiro-discovery` で起票するかを承認フローで決める。
