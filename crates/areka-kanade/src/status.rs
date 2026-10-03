@@ -510,8 +510,8 @@ mod tests {
     }
 
     /// C5: `INACTIVE` は**全ての源が false**（choosing の源を足しても非アクティブのまま）。
-    /// boot 系列・close 系列・ForceQuit 後がこの定数で送出する以上、源の増設で
-    /// 既定値が汚れないことを固定する。
+    /// テストと構造体リテラルの既定値（`..ExecutionSnapshot::INACTIVE`）がこの定数に頼る以上、
+    /// 源の増設で既定値が汚れないことを固定する。
     #[test]
     fn inactive_snapshot_has_every_source_false() {
         // 網羅的な構造体リテラルとの比較で固定する——源が 1 本増えたときは本行が
