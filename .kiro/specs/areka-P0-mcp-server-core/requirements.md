@@ -25,8 +25,8 @@
 - **本番のサーバは 0。** brief の 10-02 の再測定のとおり（`crates/**/src/` の本番に `std::net`・tokio のランタイム・HTTP の土台は無い）。テストには前例が 1 つ: `crates/areka-update/src/winhttp_real_tests.rs` が `std::net::TcpListener::bind("127.0.0.1:0")` で偽の HTTP サーバを立てている（OS に空きポートを割り当てさせる形）。
 - **起動と終了の配線の前例。** `crates/areka/src/main.rs` の `fn main()` は 1 つで、裏方を立てて畳む前例は `perf_thread_report::start()`／`stop_and_report_final()`。brief が注意するとおり、終了の閉包の中の早い `return` で後始末が飛びうるので、畳む処理は早い戻りより前か `Drop` に置く（設計の話＝ここでは要件 1 の「終了で待受が閉じる」だけを求める）。
 - **環境変数の前例。** `AREKA_APP_SMOKE_EXIT_MS`（`crates/areka/src/main.rs` の `SMOKE_EXIT_ENV` と、env を読まない純粋な読み解きの関数）は「未設定・空・数でない・負・溢れ → 無効（発火しない）」。`AREKA_ROOT`（`crates/areka/src/boot_config.rs` の `resolve_root_from`）は「空でも『設定あり』として扱い、exe の隣へ倒さない」。本 spec の `AREKA_MCP_PORT` は、`0` を「待ち受けない」の明示の値に使うので、数でない値を「無効」へ倒すと `0` と区別が付かなくなる＝数でない値は既定へ倒して `warn!` で知らせる（裁定 2）。
-- **ライセンスの門。** `deny.toml` の許可の表は 9 つ（MIT・Apache-2.0・Apache-2.0 WITH LLVM-exception・Unlicense・Zlib・0BSD・BSD-2-Clause・BSD-3-Clause・Unicode-3.0）。表に無いライセンスの推移依存が 1 つでも入ると `cargo deny check` が赤になる。rmcp（MIT）・tokio（MIT）・hyper／axum／tower（MIT）は表の中だが、推移依存の全部は実装で入れてみるまで分からない。
-- **rmcp の現物（2026-10-03・crates.io の最新は 3.5.0〔2026-09-28〕・rust-sdk の `main` の `crates/rmcp/src/transport/streamable_http_server/tower.rs` を読んだ）。** `StreamableHttpServerConfig` に ⑴ `legacy_session_mode`（**既定 `true`＝セッション有り**。`false` で無状態）、⑵ `json_response`（既定 `false`。`true` かつ無状態のとき、結果かエラーで終わる要求へ `application/json` の単発で答える・通知は `202 Accepted`）、⑶ `allowed_hosts`（**既定 `localhost`・`127.0.0.1`・`::1`**＝それ以外の `Host` は 403）、⑷ `allowed_origins`＋`enforce_origin_validation()`（既定は検査なし。有効にすると許可の表に無い `Origin` は 403・ポートのワイルドカード `:*` 可）、⑸ `stateless_protocol_metadata_required`（既定 `false`＝2026-07-28 の `_meta` を強いない）、⑹ `max_request_body_bytes`（既定 4 MiB）がある。`server/discover` は版の交渉の対象として扱われる。JSON でない本文は **415**、`MCP-Protocol-Version` の無い要求は `2025-03-26` と見なす。これらが 3.5.0 に入っているかは、設計で版を固定するときに `Cargo.lock` の現物で確かめる。
+- **ライセンスの門。** `deny.toml` の許可の表は 9 つ（MIT・Apache-2.0・Apache-2.0 WITH LLVM-exception・Unlicense・Zlib・0BSD・BSD-2-Clause・BSD-3-Clause・Unicode-3.0）。表に無いライセンスの推移依存が 1 つでも入ると `cargo deny check` が赤になる。rmcp（Apache-2.0）・tokio（MIT）・hyper／axum／tower（MIT）は表の中。ギャップ分析で rmcp 3.5.0 だけを依存に持つ空のクレートに `cargo deny check licenses` を回し、新しく入る 30 クレート（hyper を直に使う形）は全部 MIT か MIT OR Apache-2.0 で**門は緑・表に足すものは 0** と測った（research.md §4）。
+- **rmcp の現物（2026-10-03・crates.io の最新は 3.5.0〔2026-09-28〕・rust-sdk の `main` の `crates/rmcp/src/transport/streamable_http_server/tower.rs` を読んだ）。** `StreamableHttpServerConfig` に ⑴ `legacy_session_mode`（**既定 `true`＝セッション有り**。`false` で無状態）、⑵ `json_response`（既定 `false`。`true` かつ無状態のとき、結果かエラーで終わる要求へ `application/json` の単発で答える・通知は `202 Accepted`）、⑶ `allowed_hosts`（**既定 `localhost`・`127.0.0.1`・`::1`**＝それ以外の `Host` は 403）、⑷ `allowed_origins`＋`enforce_origin_validation()`（既定は検査なし。有効にすると許可の表に無い `Origin` は 403・ポートのワイルドカード `:*` 可）、⑸ `stateless_protocol_metadata_required`（既定 `false`＝2026-07-28 の `_meta` を強いない）、⑹ `max_request_body_bytes`（既定 4 MiB）がある。`server/discover` は版の交渉の対象として扱われる。`Content-Type` が JSON でない本文は **415**、JSON として壊れた本文は **400＋`-32600`**、`MCP-Protocol-Version` の無い要求は `2025-03-26` と見なし、5 版のいずれでもない値は **400**。これらが crates.io の **3.5.0 の現物に在ること**はギャップ分析で確かめた（research.md §3）。未知のメソッド名は本文の読み解きの段で弾かれ `-32600`・HTTP 400 になる見込み（`-32601` の経路は見当たらない＝要件 3.7 はコードを rmcp に任せる）。JSON-RPC のエラーのとき HTTP の状態コードも変わる（`-32602` は 400・`-32601` は 404。SSP は常に 200）。
 
 ### brief の記述を実物で引き直して改めた点
 
@@ -76,7 +76,8 @@
   - `resources`・`prompts` の能力（SSP は空の配列を返すが実体が無い。areka は `capabilities` に載せず、差の一覧に書く）。
 - **Adjacent expectations**:
   - 後続 `mcp-tool-entrances` は、本 spec の登録口を通してツール 10 本を足す。待受・ポート・`Origin`・help の振る舞いは変えない（本 spec の決定論テストが変わらず緑であること）。
-  - 後続 `mcp-stdio-bridge` は、本 spec の help に Desktop 用の設定例を足し、`AREKA_MCP_PORT` を同じ意味で読む（既定 9821）。
+  - 後続 `mcp-stdio-bridge` は、本 spec の help に Desktop 用の設定例を足し、`AREKA_MCP_PORT` を同じ意味で読む（既定 9821）。`dist/README.txt` への `AREKA_MCP_PORT` の記述もそちらで書く（本 spec は書かない＝要件 2.7）。
+  - 後続 `mcp-tool-entrances` は、本 spec の登録口の handler の形（同期か非同期か＝設計で決める）に従う。問い合わせの間に他の接続の要求を止めない（要件 1.5）のは後続でも変えない。
   - `perf_thread_report`（`crates/areka/src/perf_thread_report.rs`）の名簿に、本 spec が起こすスレッドが載ること（載らないスレッドは性能の報告に「名簿外」として出る）。設計で `areka_actor::spawn_actor` の作法に合わせる。
   - 依存を足す spec は 1 ウェーブに 1 本（`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md` が重なる）＝`animated-image-decode`・`mcp-stdio-bridge` と同じウェーブに置かない（roadmap の干渉台帳）。
   - 完了 spec の文書・`doc/ssp-mcp/survey.md` の本文は書き換えない。
@@ -109,9 +110,9 @@
 2. When `AREKA_MCP_PORT` が未設定である, the areka shall 既定の 9821 で待ち受ける（既定で有効）。
 3. When `AREKA_MCP_PORT` が 1〜65535 の整数である（前後の空白は許す）, the areka shall その番号で待ち受ける。
 4. When `AREKA_MCP_PORT` が `0` である, the areka shall 待ち受けない（接続 0 件・スレッド 0 本）。`info!` を 1 件残し、待ち受けないことと理由（環境変数が `0`）を載せる。
-5. If `AREKA_MCP_PORT` が空・空白だけ・数でない・負・65536 以上・溢れる値である, then the areka shall `warn!` を 1 件残し（その値を載せる）、既定の 9821 で待ち受ける。
+5. If `AREKA_MCP_PORT` が空・空白だけ・数でない・負・65536 以上・溢れる値・UTF-8 でない値である, then the areka shall `warn!` を 1 件残し（その値を載せる。UTF-8 でなければその旨）、既定の 9821 で待ち受ける。
 6. The areka shall 「値 → ポート／待ち受けない／既定へ倒す」の対応を、環境変数を読まない判断として持ち、未設定・`0`・`9821`・`65535`・`65536`・`-1`・`abc`・空・` 9000 `（空白付き）の各値について決定論テストで固定する。
-7. The areka shall 環境変数の名前を `AREKA_MCP_PORT` の 1 つだけとし（`AREKA_` の冠・新しい名前 0 個）、help の本文（要件 6）と `dist/README.txt` 以外の文書に別名を書かない。
+7. The areka shall 環境変数の名前を `AREKA_MCP_PORT` の 1 つだけとし（`AREKA_` の冠・新しい名前 0 個）、help の本文（要件 6）以外に別名を書かない。`dist/README.txt` には本 spec では書かない（roadmap の C1 の行で本 spec が触るファイルの外＝配布の spec 群と分け合うファイル。後続 `mcp-stdio-bridge` が Desktop の設定例と一緒に書く）。
 
 ### Requirement 3: `POST /api/mcp/v1` が MCP サーバとして応える（ツール 0 本）
 
@@ -125,13 +126,13 @@
 4. When `tools/list` が届く, the areka shall `tools` が空の配列（0 本）の結果を返す。
 5. When `ping` が届く, the areka shall `result: {}` を返す。
 6. When `tools/call` が届く（どの名前・どの引数でも）, the areka shall JSON-RPC のエラー（結果の `isError` ではない）`-32602`・`Invalid params` で答える（ツールが 0 本なので全部が未知の名前）。
-7. When 未知のメソッド（例 `no/such`）が届く, the areka shall JSON-RPC のエラー `-32601`（`Method not found`）で答える（HTTP の状態コードは rmcp のまま＝差の一覧に書く）。
-8. If 本文が JSON でない, then the areka shall エラーで答え（HTTP の 4xx か JSON-RPC の `-32700`。どちらかは rmcp のまま＝差の一覧に書く）、接続と待受を落とさず次の要求に答える。
+7. When 未知のメソッド（例 `no/such`）が届く, the areka shall JSON-RPC のエラーで答える（コードは `-32601` か `-32600` のどちらか＝rmcp のまま。HTTP の状態コードも rmcp のまま。SSP は `-32601`・200＝測った値を差の一覧に書く。areka がメソッドの表を持って `-32601` を作ることはしない）。
+8. If 本文が JSON でない, then the areka shall HTTP の 4xx で答え（`Content-Type` が JSON でなければ 415、本文が JSON として壊れていれば 400 と JSON-RPC のエラー。コードは rmcp のまま。SSP は 400・`-32700`＝差の一覧に書く）、接続と待受を落とさず次の要求に答える。
 9. The areka shall セッション ID（`Mcp-Session-Id`）を要求せず、`initialize` を経ていない接続からの `ping`・`tools/list` にも答える（無状態）。
 10. The areka shall 結果かエラーで終わる要求へ `Content-Type: application/json` の単発の応答で答え、SSE（`text/event-stream`）を使わない（0 本）。
 11. The areka shall `GET /api/mcp/v1` に手打ちフォームを出さない（SSP のフォームは移植しない＝0 ページ。応答は rmcp のまま＝差の一覧に書く）。
 12. When 無状態版の `server/discover` が届く, the areka shall `supportedVersions`・`capabilities`・`instructions`・`serverInfo` を含む結果を返す（SSP の `ttlMs`・`cacheScope`・`resultType` の有無は rmcp のまま＝差の一覧に書く）。
-13. When `MCP-Protocol-Version` ヘッダが旧式の 4 版のいずれか・または無い, the areka shall `ping`・`tools/list` に要件 3.4・3.5 のとおり答える（ヘッダの有無で結果を変えない）。
+13. When `MCP-Protocol-Version` ヘッダが旧式の 4 版のいずれか・または無い, the areka shall `ping`・`tools/list` に要件 3.4・3.5 のとおり答える（ヘッダの有無で結果を変えない）。5 版のいずれでもない値への応答は rmcp のまま（400 の見込み。SSP は無状態版の検査へ回す＝差の一覧に書く）。
 14. When 要求を 1 件処理する, the areka shall `debug!` を 1 件残し、メソッド名・`id`・HTTP の状態コードを載せる（`RUST_LOG` で絞って実機の確かめに使える）。
 
 ### Requirement 4: `Origin` と `Host` の検査（ループバック以外は拒む）
@@ -200,7 +201,7 @@
 #### Acceptance Criteria
 
 1. The areka shall 常時テスト（`cargo test`・`tools/test-all.ps1`）でネットへ出ない（ループバックのみ）。ポートは OS が割り当てる空きポート（`127.0.0.1:0`）をテストごとに取り、固定の番号を使わない（9821 を使うテスト 0 本）。
-2. The areka shall 実ソケットで次を決定論テストに持つ: `initialize` の 5 版（3.1）・未知の版（3.2）・`notifications/initialized` の 202（3.3）・`tools/list` が 0 本（3.4）・`ping`（3.5）・`tools/call` の `-32602`（3.6）・未知メソッドの `-32601`（3.7）・JSON でない本文（3.8）・`initialize` 無しの `ping`（3.9）・`application/json` の単発（3.10）・`server/discover`（3.12）・悪い `Origin` の 403（4.3）・悪い `Host` の 403（4.4）・help の 200 と本文（6.1・6.2）・未知のパスの 404（6.4）・登録 1 本の往復（7.2・7.3）。
+2. The areka shall 実ソケットで次を決定論テストに持つ: `initialize` の 5 版（3.1）・未知の版（3.2）・`notifications/initialized` の 202（3.3）・`tools/list` が 0 本（3.4）・`ping`（3.5）・`tools/call` の `-32602`（3.6）・未知メソッドのエラー（3.7）・JSON でない本文（3.8＝`Content-Type` 違いと壊れた JSON の 2 本）・5 版のいずれでもない `MCP-Protocol-Version`（3.13）・`initialize` 無しの `ping`（3.9）・`application/json` の単発（3.10）・`server/discover`（3.12）・悪い `Origin` の 403（4.3）・悪い `Host` の 403（4.4）・help の 200 と本文（6.1・6.2）・未知のパスの 404（6.4）・登録 1 本の往復（7.2・7.3）。
 3. The areka shall 待受の失敗を決定論テストで踏む: 先に `std::net::TcpListener` で空きポートを占め、その番号で待受を始めると `error!` が 1 件出てアプリ側の処理が続く（1.3）。ログの捕捉は `log-capture-kit` を通す。
 4. The areka shall 終了を決定論テストで踏む: 待受を畳んだ後に同じポートへ接続できない（1.7）。接続を開いたまま畳んでも畳む側が有限の時間で戻る（1.8）。
 5. The areka shall 実機で確かめ、結果を `.kiro/specs/areka-P0-mcp-server-core/verification/signoff.md` に残す: ⑴ 配布形の `areka.exe` を起動して `claude mcp add --transport http areka http://127.0.0.1:9821/api/mcp/v1` で登録し、`claude mcp list` が接続できたことを示す、⑵ `curl` で `initialize`→`tools/list`→`ping` が通る、⑶ `AREKA_MCP_PORT=0` で起動すると接続できず `info!` が出る、⑷ SSP が 9801 で動いている机で areka が 9821 で同時に待ち受ける。
