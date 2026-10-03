@@ -146,8 +146,12 @@ function Restore-Env {
     $script:SavedEnv.Clear()
 }
 
-function Invoke-Cleanup {
-    foreach ($p in $script:TmpFiles) {
+$script:Finalized = [Collections.Generic.List[string]]::new()  # 段「完成」が改名の済んだ zip・.sha256 から順に入れる
+
+# 仮の名前の物は常に、今回の完成品は終了コードが 0 でないときだけ消す（完成品が在る ⇔ 終了コード 0）
+function Invoke-Cleanup([int]$Code) {
+    $remove = @($script:TmpFiles) + ($Code ? @($script:Finalized) : @())
+    foreach ($p in $remove) {
         if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
     }
     # 起動から番犬までの段で落ちたときに、自分が起こした子だけを止める（名前では探さない）
@@ -157,7 +161,7 @@ function Invoke-Cleanup {
 }
 
 function Exit-Script([int]$Code, [string]$Message) {
-    Invoke-Cleanup
+    Invoke-Cleanup $Code
     if ($Message) { Write-Host $Message -ForegroundColor Red }
     exit $Code
 }
@@ -659,14 +663,22 @@ Step 'git status 不変の確認' {
 Step '完成' {
     foreach ($a in $script:BuildArchs) {
         $n = Get-ArtifactNames $a
+        # 1 本ずつ改名の直後に登録する（途中で落ちたら済んだ分だけを後始末が消す）
         Move-Item -LiteralPath $n.ZipTmp -Destination $n.Zip -Force
+        $script:Finalized.Add($n.Zip)
         Move-Item -LiteralPath $n.ShaTmp -Destination $n.Sha -Force
+        $script:Finalized.Add($n.Sha)
+    }
+    # 印字は全組の改名が済んでから（途中で落ちたら完成品の名前を 1 つも印字しない）
+    foreach ($a in $script:BuildArchs) {
+        $n = Get-ArtifactNames $a
         Write-Host "zip: $($n.Zip)"
         Write-Host "sha256: $($n.Sha)"
+        Write-Host "version: $script:Version"
     }
     Write-Host "コミット $script:Commit・未コミットの変更 $script:Dirty 件"
 }
 
-Invoke-Cleanup
+Invoke-Cleanup $EXIT_OK
 Write-Host "`n全段 緑" -ForegroundColor Green
 exit $EXIT_OK
