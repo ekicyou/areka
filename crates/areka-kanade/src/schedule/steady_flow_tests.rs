@@ -67,6 +67,7 @@ fn steady_none_tick_emits_get_and_updates_last_now() {
             &ExecutionSnapshot {
                 talk_active: false,
                 choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
             },
         ),
     );
@@ -94,6 +95,7 @@ fn steady_some_tick_emits_notify() {
             &ExecutionSnapshot {
                 talk_active: true,
                 choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
             },
         ),
     );
@@ -533,6 +535,7 @@ fn steady_talk_done_ended_resumes_steady_and_pump_restarts() {
             &ExecutionSnapshot {
                 talk_active: false,
                 choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
             },
         ),
     );
@@ -694,6 +697,7 @@ fn steady_none_mouse_move_emits_get_and_keeps_phase() {
             &ExecutionSnapshot {
                 talk_active: false,
                 choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
             },
         ),
     );
@@ -721,6 +725,7 @@ fn steady_none_mouse_double_click_left_emits_get_ref5_zero() {
             &ExecutionSnapshot {
                 talk_active: false,
                 choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
             },
         ),
     );
@@ -745,6 +750,7 @@ fn steady_none_mouse_double_click_right_emits_get_ref5_one() {
             &ExecutionSnapshot {
                 talk_active: false,
                 choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
             },
         ),
     );
@@ -781,6 +787,7 @@ fn steady_some_mouse_move_emits_get_with_talking_status() {
         &ExecutionSnapshot {
             talk_active: true,
             choice_active: false,
+            ..ExecutionSnapshot::INACTIVE
         },
     );
     assert_shiori(&actions[0], &expected);

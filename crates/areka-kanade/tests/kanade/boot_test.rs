@@ -100,6 +100,7 @@ fn boot_sequence_matches_canonical_exactly() {
             &ExecutionSnapshot {
                 talk_active: true,
                 choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
             },
         )), // NOTIFY（Ref0=version・Ref1=name・Status: talking）
     ];

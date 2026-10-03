@@ -42,6 +42,7 @@ pub(super) fn cascading_snapshot() -> ExecutionSnapshot {
     ExecutionSnapshot {
         talk_active: true,
         choice_active: true,
+        ..ExecutionSnapshot::INACTIVE
     }
 }
 

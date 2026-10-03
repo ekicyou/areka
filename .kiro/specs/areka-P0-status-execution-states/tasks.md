@@ -3,7 +3,7 @@
 > 触らない約束のファイル（C1）: `crates/areka/src/emo2_boot/balloon_visibility.rs`・`crates/areka/src/input_events/balloon.rs`・`crates/areka-emo-text/src/{actor,layout,viewbox,viewbox_draw}.rs`・`crates/areka/src/emo2_boot/mod.rs`・`crates/areka/src/input_events/mod.rs`・`crates/areka/src/emo2_boot/frame/drain_resnap.rs`。どのタスクでも、これらに及ぶと分かった時点で止めて報告する。
 
 - [ ] 1. 基盤: 状態の材料と通信中の数
-- [ ] 1.1 `Status` の材料に 3 つの状態を足し、導出表の 3 行を埋める
+- [x] 1.1 `Status` の材料に 3 つの状態を足し、導出表の 3 行を埋める
   - 材料のスナップショットに「中断の無効化モード中」「通信中」「見えているバルーンの組」の 3 欄を足し、値の複製はできるが暗黙の複写はできない形にする（全欄なしの既定値は定数のまま）
   - 導出表で nouserbreak・online・balloon の 3 行を欄から素直に写す（balloon は組が空なら載せない）。出どころの無い 5 状態の行は空のまま、注記を要件 6.3 の持ち主へ書き換える
   - バルーンの組の構成時に、キャラクターID の昇順へ整列し同じキャラクターID の重複を落とす
@@ -142,3 +142,8 @@
   - 実機の根と一時フォルダはワークツリーの `target\` の下だけに置く
   - 観測のログの抜き書きが残り、3 状態がそれぞれの区間でだけ載っている
   - _Requirements: 2.2, 3.4, 4.7, 5.2, 7.2_
+
+## Implementation Notes
+
+- 1.1: `crates/areka` は bin crate なので兄弟テストは `cargo test -p areka --bins`（`--lib` は動かない）。`smoke_boot_loop_exit::argv_direction_boots_real_ghost_windows_and_exits_zero` は並走の負荷で揺れることがある（単独では緑）。
+- 1.1: `status.rs` の `ExecutionSnapshot` の NOTE（将来形 `snapshot_of(&Phase, &TickExtras)`）と `INACTIVE` の doc（「boot 系列・close 系列・ForceQuit 後」）は、2.2 で作り方を一本化した時点で古くなるので 2.2 で書き換える。

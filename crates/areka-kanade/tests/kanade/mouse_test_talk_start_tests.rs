@@ -232,6 +232,7 @@ fn active_talk_mouse_value_replaces_with_new_talk_id() {
         &ExecutionSnapshot {
             talk_active: true,
             choice_active: false,
+            ..ExecutionSnapshot::INACTIVE
         },
     ));
     assert_eq!(
@@ -377,6 +378,7 @@ fn active_talk_non_mouse_pump_is_notify_no_replacement_dd6_preserved() {
         &ExecutionSnapshot {
             talk_active: true,
             choice_active: false,
+            ..ExecutionSnapshot::INACTIVE
         },
     ));
     assert_eq!(

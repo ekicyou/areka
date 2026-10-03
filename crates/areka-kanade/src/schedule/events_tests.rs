@@ -78,6 +78,7 @@ fn on_second_change_playable_is_get_ref3_one() {
         &ExecutionSnapshot {
             talk_active: false,
             choice_active: false,
+            ..ExecutionSnapshot::INACTIVE
         },
     );
     assert_eq!(
@@ -106,6 +107,7 @@ fn on_second_change_not_playable_is_notify_ref3_zero() {
         &ExecutionSnapshot {
             talk_active: true,
             choice_active: false,
+            ..ExecutionSnapshot::INACTIVE
         },
     );
     assert_eq!(
@@ -134,6 +136,7 @@ fn on_second_change_ref0_truncates_toward_zero() {
         &ExecutionSnapshot {
             talk_active: false,
             choice_active: false,
+            ..ExecutionSnapshot::INACTIVE
         },
     ));
     assert_eq!(references[0], "0");
@@ -413,6 +416,7 @@ fn mouse_constructors_carry_talking_status_when_active() {
     let active = ExecutionSnapshot {
         talk_active: true,
         choice_active: false,
+        ..ExecutionSnapshot::INACTIVE
     };
     let mv = on_mouse_move(0, 0, 0, Some("Head"), &active);
     assert_eq!(call_status(&mv), Some("talking".to_string()));
@@ -443,6 +447,7 @@ fn every_construction_function_returns_static_event_id() {
             &ExecutionSnapshot {
                 talk_active: true,
                 choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
             },
         ),
         on_close(CloseReason::User { scope: 0 }, &snap),
@@ -481,6 +486,7 @@ fn every_construction_function_returns_an_allowed_id() {
             &ExecutionSnapshot {
                 talk_active: true,
                 choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
             },
         ),
         on_close(CloseReason::User { scope: 0 }, &snap),
@@ -630,6 +636,7 @@ fn choice_constructors_carry_the_common_request_header() {
     let active = ExecutionSnapshot {
         talk_active: true,
         choice_active: false,
+        ..ExecutionSnapshot::INACTIVE
     };
     let idle = ExecutionSnapshot::INACTIVE;
 

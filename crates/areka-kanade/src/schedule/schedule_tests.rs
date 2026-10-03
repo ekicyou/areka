@@ -387,6 +387,7 @@ fn mouse_input_in_steady_emits_get_via_crosscutting_arm() {
             &ExecutionSnapshot {
                 talk_active: true,
                 choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
             },
         ),
     );

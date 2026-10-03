@@ -84,10 +84,12 @@ fn status_ledger_reads_choosing_where_references_cannot() {
     let talking = ExecutionSnapshot {
         talk_active: true,
         choice_active: false,
+        ..ExecutionSnapshot::INACTIVE
     };
     let choosing = ExecutionSnapshot {
         talk_active: true,
         choice_active: true,
+        ..ExecutionSnapshot::INACTIVE
     };
 
     // ── (1) 付随参照は会話中と選択待ちを区別しない（＝記録の第 2 系統が要る理由・R3.8） ──

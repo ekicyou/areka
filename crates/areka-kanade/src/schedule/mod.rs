@@ -277,6 +277,8 @@ impl State {
         ExecutionSnapshot {
             talk_active: snapshot_of(&self.phase).talk_active,
             choice_active,
+            // 本当の値（写しから作る nouserbreak・online・balloons）は 2.2 で入れる。
+            ..ExecutionSnapshot::INACTIVE
         }
     }
 }
@@ -542,6 +544,7 @@ pub(crate) fn snapshot_of(phase: &Phase) -> ExecutionSnapshot {
             ExecutionSnapshot {
                 talk_active: true,
                 choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
             }
         }
         _ => ExecutionSnapshot::INACTIVE,

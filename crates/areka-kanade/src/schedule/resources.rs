@@ -296,6 +296,7 @@ mod tests {
         let snapshot = ExecutionSnapshot {
             talk_active: true,
             choice_active: false,
+            ..ExecutionSnapshot::INACTIVE
         };
         let folded = shape_of(resource_username(&snapshot));
         assert_eq!(
@@ -311,6 +312,7 @@ mod tests {
         let call = resource_username(&ExecutionSnapshot {
             talk_active: true,
             choice_active: false,
+            ..ExecutionSnapshot::INACTIVE
         });
         let status = match call {
             ShioriCall::Get { status, .. } => status.render(),
