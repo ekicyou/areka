@@ -91,5 +91,6 @@
 - 2.4: 子は本文が素の名前で呼ぶ関数を名前で引く（設計の `use super::{decoration, plan};` の字面より本文不変を優先）。子でテストの枝だけが使う親の私有関数は `#[cfg(test)] use super::…;`。
 - 2.5: `region.rs` の接続に `#[rustfmt::skip]` を足した。字下げを 1 段戻すと rustfmt が `count_warns(|| { … })` の波括弧を外したがり、整形すると要件 7.3（字下げ以外 1 文字も変えない）に反し、放置すると全体テストの fmt の段が赤になるため。後続の spec が中身を書き換えるときに外すかどうかはその spec が決める。
 - 3.1: 親の既存の `use std::rc::Rc;`・`use areka_sakura::ActorKey;` は兄弟テストが `use super::*;` で受け取るだけになったので `#[cfg(test)]` を付けた（設計の束ね直しの全行の 4 行に加えて 2 行・規則「テストだけ → `#[cfg(test)] use`」どおり）。
-- 3.2: 設計の `pub(super)` の一覧（8 つ）に加え、`balloon_visibility_decision.rs` の `ContentDecisions` と欄 `shown`・`cleared` に `pub(super)` を付けた（兄弟 `wait` の `decide_timeout` が引数で受けて欄を読むため・設計 §Error Handling の「可視性が足りない」）。5.1 の「許す差分」の確認ではこの 3 つも許す差分に数える。
+- 3.2: 型 `ContentDecisions` は兄弟 `wait` の `decide_timeout` も引数で受けて欄を読む。当初は子 `decision` に置いて `pub(super)` を 3 つ付けたが、子同士が引き合うので完了時に親 `balloon_visibility.rs` へ戻した（基準の字面のまま・`pub(super)` なし）。
 - 5.2（承認フローへの持ち越し）: 「選択を待っているメニューを、なでなで（`OnMouseMove`）のような軽いイベントの返事で上書きしてよいのか」——実機で観測（`verification/notes.md` §3 の「持ち越しの議題」）。分割とは無関係（kanade の単一 slot 置換・差分 0 行）。`/kiro-complete` の未解決問題の棚卸で、正典と照らして起票するかを決める。
+- 完了時にその場で解決（1 件）: `decision` と `wait` の相互参照を、`ContentDecisions` を親へ戻して解いた（`verification/notes.md` §4）。

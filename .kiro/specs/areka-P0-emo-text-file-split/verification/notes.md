@@ -50,7 +50,7 @@
 | `viewbox_draw_render.rs` | `#[cfg(test)] use super::none_err;`・`decoration`／`plan` の関数を名前で引く `use` | テストの枝だけが使う名前・本文が素の名前で呼ぶため |
 | `region.rs` | 接続に `#[rustfmt::skip]` | 字下げを戻すと rustfmt が `count_warns(|| { … })` の波括弧を外したがり、整形すると要件 7.3 に反するため |
 | `input_events/balloon.rs` | 既存の `use std::rc::Rc;`・`use areka_sakura::ActorKey;` に `#[cfg(test)]` | 兄弟テストが `use super::*;` で受け取るだけになったため |
-| `balloon_visibility_decision.rs` | `ContentDecisions` と欄 `shown`・`cleared` に `pub(super)` | 兄弟 `wait` の `decide_timeout` が引数で受けて欄を読むため（設計 §Error Handling） |
+| `balloon_visibility.rs` | 型 `ContentDecisions` を子 `decision` でなく親に置いた（`pub(super)` なし・基準の字面のまま） | 兄弟 `wait` の `decide_timeout` が引数で受けて欄を読むため。当初は子 `decision` に置いて `pub(super)` を 3 つ付けたが、子同士が引き合う形になったので完了時に親へ戻した（§4） |
 
 ### 行数（すべて 700 行以下・700 行超の記録は無し）
 
@@ -106,6 +106,6 @@
 
 ### Info（完了を止めない・承認フローで扱う）
 
-- **`decision` と `wait` の相互参照**: `balloon_visibility_wait.rs` が `use super::decision::ContentDecisions;` で兄弟を引く（`decision` は `use super::wait::decide_timeout;`）。データは decision → wait の一方向で役割の切り方は壊れていないが、設計が型 `ContentDecisions` を子 `decision` に置いたため「定義は元・処理は子」から外れた。解くなら `ContentDecisions` を親 `balloon_visibility.rs` へ戻す（約 3 行）。後続の `balloon-lifecycle-events` か `shell-balloon` で拾うのが妥当。
+- **`decision` と `wait` の相互参照**（完了時にその場で解決）: 当初は `balloon_visibility_wait.rs` が `use super::decision::ContentDecisions;` で兄弟を引いていた。型 `ContentDecisions` を親 `balloon_visibility.rs` へ戻し（基準の字面のまま・`pub(super)` 3 つを撤去）、子 2 本は `use super::{…, ContentDecisions, …}` で親から引く形にした（「定義は元・処理は子」）。`cargo test -p areka balloon_visibility` 88 passed・警告 0。
 - **`region_tests.rs` に `//!` が無い**: 要件 7.3（字下げ以外 1 文字も変えない）を守るための意図した例外（設計の region の表に「足す予定の spec」の列が無く、タスク 4 も `region_tests` を除く）。要件 1.4 の例外であることをここに記す。
 - **`lib.rs` の doc の訂正**: 層規律の段落の「`#[cfg(test)] mod layer_discipline` 内」を実体の `mod tests` に直した（基準からの誤記・タスク 4 のコミット `9ba1f380`）。

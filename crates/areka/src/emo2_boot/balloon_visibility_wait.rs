@@ -5,11 +5,10 @@ use std::sync::OnceLock;
 
 use tracing::{info, warn};
 
-use super::decision::ContentDecisions;
 use super::{
-    BalloonVisibilityState, DEFAULT_BALLOON_TIMEOUT_SECS, MeasurementDiscardReason,
-    SuppressionKinds, TIMEOUT_ENV_KEY, TimeoutSource, VisibilityLogEvent, VisibilityObservations,
-    VisibilityTrigger,
+    BalloonVisibilityState, ContentDecisions, DEFAULT_BALLOON_TIMEOUT_SECS,
+    MeasurementDiscardReason, SuppressionKinds, TIMEOUT_ENV_KEY, TimeoutSource, VisibilityLogEvent,
+    VisibilityObservations, VisibilityTrigger,
 };
 
 /// 環境変数の値から短縮指定のミリ秒を読み取る純関数（環境変数へ触れない・単体テスト可能）。

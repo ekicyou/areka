@@ -3,9 +3,9 @@
 
 use super::wait::decide_timeout;
 use super::{
-    BalloonVisibilityState, MeasurementDiscardReason, ScopeVisibility, TalkLifecycleSignal,
-    VisibilityAction, VisibilityDecision, VisibilityLogEvent, VisibilityObservations,
-    VisibilityTrigger,
+    BalloonVisibilityState, ContentDecisions, MeasurementDiscardReason, ScopeVisibility,
+    TalkLifecycleSignal, VisibilityAction, VisibilityDecision, VisibilityLogEvent,
+    VisibilityObservations, VisibilityTrigger,
 };
 
 /// 本フレームの可視性遷移を決める（純関数・`World` / GPU / 時計に触れない）。
@@ -73,14 +73,6 @@ pub(crate) fn decide(
     }
 
     VisibilityDecision { actions, logs }
-}
-
-/// 可視コンテンツ駆動の判定が本フレームに導いた遷移（いずれも scope 昇順）。
-pub(super) struct ContentDecisions {
-    /// 表示する scope。
-    pub(super) shown: Vec<u32>,
-    /// 内容の全消去に伴い非表示にする scope。
-    pub(super) cleared: Vec<u32>,
 }
 
 /// 表示ライフサイクル信号を会話単位の状態へ畳み込み、**本フレームに利用者の中断があったか**を
