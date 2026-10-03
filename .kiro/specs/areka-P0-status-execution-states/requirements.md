@@ -61,7 +61,7 @@ areka は SSP の実測ではなく ukadoc の意味を採る。実 SSP は `bal
 3. When ネットワーク更新またはダウンロードが終わった場合（成功・失敗・中止のいずれでも）, the areka shall その後に送るリクエストの `Status` に、ほかの通信が続いていない限り `online` を含めない
 4. While ネットワーク更新とダウンロードが同時に行われている場合, the areka shall `online` を 1 つだけ含める
 5. While ネットワーク通信をしていない場合, the areka shall `Status` に `online` を含めない
-6. While ゴーストの切替または再起動（ネットワーク更新の途中の読み直しを含む）をまたいでネットワーク通信が続いている場合, the areka shall 新しいゴーストへ送るリクエストの `Status` にも `online` を含める（通信はゴーストではなく areka のものなので、`nouserbreak`・`balloon` と違って持ち越す）
+6. While ゴーストの切替または再起動をまたいでネットワーク通信が続いている場合（例: URL からのダウンロードの最中に利用者がゴーストを切り替えた）, the areka shall 新しいゴーストへ送るリクエストの `Status` にも `online` を含める（通信はゴーストではなく areka のものなので、`nouserbreak`・`balloon` と違って持ち越す）
 
 ### Requirement 3: nouserbreak（中断の無効化モード中）
 

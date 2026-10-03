@@ -58,6 +58,8 @@
 - `fetch_and_send`・`spawn_download_with`・`spawn_worker`・`KanadePorts` の引数が増える → `install/fetch_url_tests.rs`・`emo2_boot/install_cue_tests.rs`・`update/worker_tests.rs`・`update/desk_*_tests.rs`。
 - tick の門（`AREKA_TICK_GATE`）が既定で有効になる → 入力の段とバルーンの相が毎フレーム走る前提（要件 5.2）を見直す。
 - `Emo2Wiring` に欄を足すので、`Emo2Wiring::new` の呼び手と、相の分解（`let Emo2Wiring { .. } = wiring`）の形。
+- `KanadeConfig` に `online` の欄を足すので、`KanadeConfig::new` の既定（`&online::PROCESS`）。構成は全部 `KanadeConfig::new` を通る（構造体リテラルは本番にもテストにも無い）ので、呼び手は無改変。
+- `balloon_visibility_phase.rs` の冒頭の `use super::super::frame::{…}` に名前を足すので、同じ行を `emo-text-file-split` が触ると併合のときに文字の上の衝突が起きうる（研究 4.3）。併合のときに見るべき 1 行。
 - ukadoc 網羅の台帳で `\t` の宛先を `areka-P0-sakura-time-directives` へ移すので、同 spec の `[[spec]].owner_count`。
 
 ## Architecture
@@ -68,7 +70,7 @@
 - **材料の作り手は kanade の `State`**: `State::snapshot`（`schedule/mod.rs`）が運行相と選択の帳簿から `talk_active`・`choice_active` を作る。起動・終了・切替のイベントは `ExecutionSnapshot::INACTIVE` を直接渡している（`boot.rs`・`change.rs`・`steady.rs`・`force_quit`）。
 - **外からの入力は `KanadeMsg` → `Input` → 純粋関数 `step`** の形（`actor.rs` の `spawn_kanade_with_stop_sink` が振り分け、`schedule/mod.rs` の `route` が横断の入力を捌く）。状態機械は時刻・I/O・グローバル状態を読まない。
 - **出どころ 3 つ**: 中断の旗は UI の `UserBreakWiring.no_user_break`（`input_events/user_break.rs`・ゴーストごとに作り直し・kanade の送出端を既に持つ）。バルーンの表示は `EmoPresenter`（相 `run_balloon_visibility_phase` の終わりが「このフレームの最終の見え方」）。ネットワークは更新の背景スレッド `KanadePorts`（`update/worker.rs`）と URL 取得のスレッド `fetch_and_send`（`install/fetch_url.rs`）。
-- **工夫の要る点**: ⑴ online はゴーストでなく areka の状態で、更新の読み直し（同じゴーストへの切替）をまたいで続く。新しい kanade は起動の最初のイベント（OnInitialize）からそれを知る必要がある（要件 2.6・5.1）。⑵ 中断の旗は今トークの終わりで下りず、次のトークの最初の指示で下りる（要件 3.4 の是正点）。⑶ `GhostSlot` の入れ替えと新しい `Emo2Wiring`・`UserBreakWiring` の据え付けは `ghost_switch.rs` の `boot_into` の中で同期に続けて行われ、間にフレームは走らない（研究 R1）。
+- **工夫の要る点**: ⑴ online はゴーストでなく areka の状態で、通信が続いている間のゴーストの切替（URL からの取得の最中に利用者が切り替える）をまたいで続く。新しい kanade は起動の最初のイベント（OnInitialize）からそれを知る必要がある（要件 2.6・5.1）。なお更新の読み直しは、`run_order`（`update/procedure.rs`）が全対象を終えてから頼み、頼んだ直後に抜けるので、読み直しの後の起動のときには通信は終わっている。⑵ 中断の旗は今トークの終わりで下りず、次のトークの最初の指示で下りる（要件 3.4 の是正点）。⑶ `GhostSlot` の入れ替えと新しい `Emo2Wiring`・`UserBreakWiring` の据え付けは `ghost_switch.rs` の `boot_into` の中で同期に続けて行われ、間にフレームは走らない（研究 R1）。
 
 ### Architecture Pattern & Boundary Map
 
@@ -141,15 +143,17 @@ crates/areka-kanade/src/
 ├── online_tests.rs                # 新規: 数の増減・どの終わり方でも戻る・ローカルの数で決定論
 ├── status.rs                      # ExecutionSnapshot の欄 3 本・導出表 3 行・ExternalStates・ExecutionStateUpdate
 ├── status_derive_tests.rs         # 新規: 全組み合わせ（要件 8.1）。status.rs の既存テストは欄の追随だけ
-├── msg.rs                         # KanadeMsg::ExecutionState と、ラベル関数の腕
-├── actor.rs                       # 振り分けの腕 1 つ・sync_online（殻が通信中の数を写す）
+├── msg.rs                         # KanadeMsg::ExecutionState と、ラベル関数の腕・KanadeConfig.online（既定 &PROCESS）
+├── actor.rs                       # 振り分けの腕 1 つ・sync_online（殻が config.online の数を写す）
 └── schedule/
     ├── mod.rs                     # Input::ExecutionState・State.external・snapshot/snapshot_without_talk・talk_active_of
     ├── boot.rs / change.rs / steady.rs   # INACTIVE 直渡しを state の作り方へ置換
     └── external_state_tests.rs    # 新規: 入力で写しが変わる・どの相でも受理・gating（schedule/mod.rs から #[path] で接続）
-crates/areka-kanade/tests/kanade/
-├── kanade.rs                      # 接続 1 行
-└── external_status_test.rs        # 新規: 送り口を通した観測（要件 8.2）
+crates/areka-kanade/tests/
+├── kanade.rs                      # 束ねの入口: #[path] の接続 1 行
+└── kanade/external_status_test.rs # 新規: 送り口を通した観測（要件 8.2・online は自分の数を KanadeConfig で渡す）
+crates/areka-ghost/tests/
+└── real_pasta_online.rs           # 新規: 要件 8.4 の env ゲート追験。PROCESS を立てるので tests/ghost.rs とは別の実行ファイル
 crates/areka/src/
 ├── update/worker.rs               # KanadePorts に online の数と guard・spawn_worker の引数
 ├── update/desk.rs                 # UpdateDesk.online（既定 PROCESS・テストは差し替え）
@@ -166,8 +170,8 @@ crates/areka/src/
 ### Modified Files
 
 - `crates/areka-kanade/src/status.rs` — `ExecutionSnapshot` に `no_user_break: bool`・`online: bool`・`balloons: Vec<BalloonBinding>` を足し `Copy` を外す（`Clone` は残す）。`INACTIVE` は全欄なし（`Vec::new()` は const）。導出表 6・7・9 行目を埋める。`BalloonBindings::new` が `character_id` 昇順に整列し重複を落とす。`ExternalStates`（写し）と `ExecutionStateUpdate`（知らせ）を定義。
-- `crates/areka-kanade/src/msg.rs` — `KanadeMsg::ExecutionState(ExecutionStateUpdate)` と、ラベル関数の腕。
-- `crates/areka-kanade/src/actor.rs` — `KanadeMsg::ExecutionState(u) => Input::ExecutionState(u)`、受け取った**すべての**メッセージの処理の前に `sync_online(&mut state)`（`Close`・`ResourceQuery` の分岐より前）。
+- `crates/areka-kanade/src/msg.rs` — `KanadeMsg::ExecutionState(ExecutionStateUpdate)` と、ラベル関数の腕。`KanadeConfig.online: &'static OnlineCounter`（`new` で `&online::PROCESS`。殻が読む数の差し替え口。本番の結線は無改変）。
+- `crates/areka-kanade/src/actor.rs` — `KanadeMsg::ExecutionState(u) => Input::ExecutionState(u)`、受け取った**すべての**メッセージの処理の前に `sync_online(config.online, &mut state)`（`Close`・`ResourceQuery` の分岐より前）。
 - `crates/areka-kanade/src/schedule/mod.rs` — `Input::ExecutionState`、`State.external: ExternalStates`、`route` の横断の腕（相を問わず写しを更新・`trace!`・Action なし）。`snapshot_with_choice` が 3 欄を添える。`snapshot_without_talk` を足す。`snapshot_of(&Phase) -> ExecutionSnapshot` は `talk_active_of(&Phase) -> bool` へ縮める（残る 2 つの呼び手は `state.snapshot()` へ）。
 - `crates/areka-kanade/src/schedule/boot.rs` — `boot_start`・`on_reply`（BootInit／BootType）・`on_prefetch_reply` の `on_boot`・`boot_root`（`&State` を受ける）・`to_baseware_version` の `snapshot_of` → `state.snapshot_without_talk()`／`state.snapshot()`。
 - `crates/areka-kanade/src/schedule/change.rs` — `begin_change`（OnGhostChanging）・`on_reply_wait`（204 の後の OnClose）の `INACTIVE` → `state.snapshot_without_talk()`。
@@ -213,6 +217,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant W as update 背景スレッド
+    participant F as URL 取得スレッド
     participant P as online PROCESS
     participant S as kanade 殻
     participant G as ゴースト
@@ -220,15 +225,21 @@ sequenceDiagram
     W->>S: RaiseEvent OnUpdateBegin
     S->>P: is_online → true
     S->>G: Status: online
-    Note over W: 読み直し（切替）で新しい kanade が起動
-    S->>P: 新しい殻も同じ数を読む
-    S->>G: OnInitialize … OnBoot にも online
-    W->>P: run_order を抜けて guard の Drop  数 0
+    W->>W: 全対象を終えて request_reload を頼み run_order を抜ける
+    W->>P: drop(ports) で guard の Drop  数 0
     W->>S: OrderDone
+    Note over S,G: 読み直しで起きる新しいゴーストの起動（OnInitialize … OnBoot）には online は載らない（通信は終わっている）
+    F->>P: fetch_and_send の冒頭で begin  数 1
+    Note over S: 取得の最中に利用者がゴーストを切り替える
+    S->>P: 新しい殻も最初のメッセージ（Boot）の前に同じ数を読む
+    S->>G: OnInitialize … OnBoot に online（要件 2.6）
+    F->>P: fetch_and_send を抜けて guard の Drop  数 0
 ```
 
 - 数は `AtomicUsize`。`begin` で +1、guard の `Drop` で −1。成功・失敗・中止・途中の `return` のどれでも必ず戻る（要件 2.3）。重なりは数で持ち、載せる値は「0 より大きいか」なので 1 つだけ載る（要件 2.4）。
-- 殻は受け取った**すべての**メッセージの処理の前に数を読み、`State.external.online` に写す（変わったときだけ `debug!(event="online_changed")`）。運行表 `step` はグローバルを読まない。新しいゴーストの kanade も起動の最初のメッセージ（`Boot`）の前に読むので、OnInitialize から載る（要件 2.6・5.1）。
+- 殻は受け取った**すべての**メッセージの処理の前に `config.online`（本番は `PROCESS`）を読み、`State.external.online` に写す（変わったときだけ `debug!(event="online_changed")`）。運行表 `step` はグローバルを読まない。新しいゴーストの kanade も起動の最初のメッセージ（`Boot`）の前に読むので、通信が続いていれば OnInitialize から載る（要件 2.6・5.1）。
+- 更新の `online` の区間は `standard_started` から `run_order` を抜けるまでである。`run_order` は全対象を終えてから読み直しを頼み、頼んだ直後に抜ける（`update/procedure.rs`）ので、読み直しで起きる新しいゴーストの起動には `online` は**載らない**。これは要件 2.3（終わったら載せない）のとおりで、要件 2.6 が本番で実在する場面は「URL からの取得が続いている間に利用者がゴーストを切り替えた」である。読み直しの完了まで guard を持ち越す作り（`OrderDone` でなく読み直し後の起動まで持つ）は、通信していない間に `online` を載せることになるので採らない。
+- 要件 2.6 の決定論のテストは「数を立てたまま kanade を起こし、`Boot` の最初のリクエスト（OnInitialize）に `online` が載る」で固定する（この作りのまま成立する）。
 
 ### balloon: 相の終わりの観測と差分の送出
 
@@ -248,7 +259,7 @@ sequenceDiagram
 | 2.3 | 終わったら載せない | guard の `Drop` | `OnlineGuard` | online |
 | 2.4 | 重なっても 1 つ | 数で持ち `is_online` は `count > 0` | `OnlineCounter::is_online` | online |
 | 2.5 | 通信していなければ載せない | 数 0 → 写し false → 導出表 7 行目が空 | `derive` | online |
-| 2.6 | 切替をまたいで持ち越す | プロセスに 1 つの `PROCESS`・殻が毎メッセージ読む | `sync_online` | online |
+| 2.6 | 切替をまたいで持ち越す | プロセスに 1 つの `PROCESS`・殻が毎メッセージ読む（本番の場面は URL 取得中の切替。更新の読み直しの後は通信が終わっているので載らない） | `sync_online` | online |
 | 3.1 | enter で載る | `drain_no_user_break_signals` の送出・`State.external.no_user_break` | `KanadeMsg::ExecutionState` | nouserbreak |
 | 3.2 | leave で載らない | 同上（false を送る） | 同上 | nouserbreak |
 | 3.3 | leave なしで終わっても載らない | `TalkEnded` で旗を下ろす・`talk_active && 写し` の gating | `fold_no_user_break`・`snapshot_with_choice` | nouserbreak |
@@ -405,9 +416,10 @@ pub static PROCESS: OnlineCounter = OnlineCounter::new();
 ```
 - Preconditions: `begin` は何度でも重ねられる（数で持つ）。
 - Postconditions: `begin` は `info!(event="online_begin", what, count)`、`Drop` は `online_end`。`is_online` は `SeqCst` で読む。
-- `actor.rs`: `fn sync_online(state: &mut State)` — `PROCESS.is_online()` を読み、`state.external.online` と違えば `debug!(target: "kanade", event = "online_changed", online)` の上で写す。呼ぶのは受信閉包の先頭（`Close`・`ResourceQuery` の分岐より前）。
-- なぜグローバルか: online はゴーストでなく areka の状態で、更新の読み直しで作り直される新しい kanade が、起動の最初のメッセージから正しい値を要る（要件 2.6・5.1）。handle を配る道は起動の結線（`emo2_boot/mod.rs`・areka-ghost の起動入力）を通るので C1 の約束に当たる。運行表の純粋さは「殻が読んで状態に写す」ことで保つ。
-- テストの決定論: 本番の持ち手（更新・取得）は数を**引数で受ける**。areka の兄弟テストは自分の `static` を渡し、`PROCESS` には触れない。これで一周の照合（spine）など `Status` の値をそのまま比べるテストが、並列に走る取得・更新のテストに揺らされない。`PROCESS` を立てるテストは「載っている」だけを見る（「載っていない」は見ない）。
+- `msg.rs`: `KanadeConfig.online: &'static OnlineCounter`。`KanadeConfig::new` が `&online::PROCESS` を入れる。構成の作り手は本番（`areka-ghost/src/config.rs` の `resolve_config`）もテストも全部 `KanadeConfig::new` を通るので、呼び手は無改変で、結線のファイルにも触らない。
+- `actor.rs`: `fn sync_online(online: &OnlineCounter, state: &mut State)` — `config.online.is_online()` を読み、`state.external.online` と違えば `debug!(target: "kanade", event = "online_changed", online)` の上で写す。呼ぶのは受信閉包の先頭（`Close`・`ResourceQuery` の分岐より前）。
+- なぜグローバルか: online はゴーストでなく areka の状態で、通信の最中の切替で作り直される新しい kanade が、起動の最初のメッセージから正しい値を要る（要件 2.6・5.1）。handle を配る道は起動の結線（`emo2_boot/mod.rs`・areka-ghost の起動入力）を通るので C1 の約束に当たる。運行表の純粋さは「殻が読んで状態に写す」ことで保つ。
+- テストの決定論: `cargo test` は 1 つの実行ファイルの中のテストを並列に走らせるので、`PROCESS` を立てたテストは同じ実行ファイルの他のテスト（`Some("talking")`・`None` を期待する記録の照合）を揺らす。そこで**読む側も書く側も数を差し替えられる形**にする。⑴ 殻は `config.online` を読む。kanade のハーネス（`tests/kanade`・`src` の兄弟テスト）は関数内の `static` を `KanadeConfig` で渡し、「載っている」「載っていない」の両方を決定論で見る。⑵ 本番の持ち手（更新・取得）は数を**引数で受ける**。areka の兄弟テストは自分の `static` を渡す。⑶ `PROCESS` に触れるテストは要件 8.4 の実 pasta の追験 1 件だけで、`tests/ghost.rs` に束ねず、`crates/areka-ghost/tests/real_pasta_online.rs` という**別の実行ファイル**に置く（`Status` の完全一致を持つテストと同居させない）。
 
 ##### State Management
 - State model: 数（0 以上）。
@@ -492,7 +504,7 @@ pub(in crate::emo2_boot) fn report_balloons(
 
 - 検査の規則（`crates/ukadoc-survey/tests/consistency/spec_checks.rs` の腕 b・c・f）: 台帳の `owner` は `roadmap-draft.md` の `[[spec]]` の名前か `briefing.md` の `[[owner_completed]]` の名前でなければならず、`[[spec]]` の名前はフォルダが実在しなければならない。**フォルダの無い候補名を `owner` に書くと赤になる**。
 - したがって:
-  - `\t`（`ledger/sakura-script.toml` の `_5ct:1`）: `owner` を実在の `areka-P0-sakura-time-directives` へ移す。`roadmap-draft.md` の `[[spec]]` の `owner_count` を本 spec 4→3、`sakura-time-directives` 5→6 に合わせる。
+  - `\t`（`ledger/sakura-script.toml` の `_5ct:1`）: `owner` を実在の `areka-P0-sakura-time-directives` へ移す。`roadmap-draft.md` の `[[spec]]` の `owner_count` を本 spec 4→3、`sakura-time-directives` 11→12 に合わせる（数は `cargo test -p ukadoc-survey` が判定する。手で書いた数を信じず検査に通す）。
   - `\![enter,inductionmode]`・`\![enter,passivemode]`（同台帳）: `owner` は本 spec のまま（完了時に `[[owner_completed]]` へ移るのは完了手続きの既存の流れ）。`note` に「次の持ち主: 候補 `areka-P0-passive-mode-states`（`doc/ukadoc-coverage/roadmap-draft.md` 束 16・計画の波で起票）」を足す。
   - `Status [SSP拡張]`（`ledger/shiori.toml`）: `note` の「追跡先は areka-P0-status-execution-states」を、「online・nouserbreak・balloon は本 spec で導出済み。残り: timecritical→`areka-P0-sakura-time-directives`／induction・passive→候補 `areka-P0-passive-mode-states`／minimizing→候補 `areka-P0-minimize-state`／opening→候補 `areka-P0-inputbox-dialog`・`areka-P0-communicate-events`」へ書き換える。
   - `doc/ukadoc-coverage/report/`（生成物）は `cargo run -p ukadoc-survey -- report`／`report-summary` で作り直す。`briefing-sakura-script.md` の本 spec の所有行（`\t` の行）と件数は手で合わせる。
@@ -556,13 +568,13 @@ pub(in crate::emo2_boot) fn report_balloons(
 
 ### Integration Tests
 
-- `tests/kanade/external_status_test.rs`（要件 8.2）: 既存のハーネス（`Fixture`・`spawn_harness_gated`・`RecordedCall`）で、`ExecutionState(Balloons([0=0]))`→Tick で `talking,balloon(0=0)`、トークなしで `Balloons([0=2,1=0])`→`balloon(0=2/1=0)`、トーク中に `NoUserBreak(true)`→`talking,nouserbreak`、`false` の後は `talking` だけ、が記録される。`online` は関数内の `static` でなく `PROCESS` の guard を持って「載っている」だけを見る（並列のテストと干渉しない方向）。
+- `tests/kanade/external_status_test.rs`（要件 8.2）: 既存のハーネス（`Fixture`・`spawn_harness_gated`・`RecordedCall`）で、`ExecutionState(Balloons([0=0]))`→Tick で `talking,balloon(0=0)`、トークなしで `Balloons([0=2,1=0])`→`balloon(0=2/1=0)`、トーク中に `NoUserBreak(true)`→`talking,nouserbreak`、`false` の後は `talking` だけ、が記録される。`online` は関数内の `static` を `KanadeConfig.online` で渡し、guard を持ったまま起こすと `Boot` の最初のリクエスト（OnInitialize）から `online` が載る（要件 2.6・5.1）、guard を落として次の Tick からは載らない（要件 2.3）、の両方を見る。`PROCESS` には触れない。
 - `shiori/real_tests.rs` の追加 1 件: 複合値 `talking,balloon(0=2/1=0)` が `Status:` 行にそのまま書かれ、位置が `Sender` の後・`ID` の前のまま。
 - 既存の一周の照合（`spine_conformance_script.rs` の `expected_statuses`）は、ハーネスが `GhostSlot`・`UserBreakWiring` を据えないため（R2）値が変わらない。追随は `spine_conformance_support.rs` の構造体リテラルだけ。
 
 ### E2E / 実機
 
-- 要件 8.4: `crates/areka-ghost/tests/ghost/real_pasta_test.rs` に env ゲート（`HOST32_PASTA_DLL`）の 1 件を足す。`online::PROCESS` の guard を持ったまま実 pasta を起こし、起動の挨拶の完了を待ってから OnSecondChange を pasta の雑談の間隔を超える回数回し、`Value` の応答が 0 件であることを見る。ぱすたの `kick_force`（1 回だけ抑止を突破する旗）が立たない場面で見ること（起動直後の挨拶の後、他の入力を与えない）。実機の観測で代える場合は、URL からのインストールの最中に `RUST_LOG=kanade=trace` で `shiori_request` の `Status` に `online` が載り、その間 OnSecondChange が 204 で返ることを記録する。
+- 要件 8.4: `crates/areka-ghost/tests/real_pasta_online.rs`（新規・`tests/ghost.rs` とは別の実行ファイル。実 pasta の起こし方は `ghost/real_pasta_test.rs` と同じ）に env ゲート（`HOST32_PASTA_DLL`）の 1 件を置く。実ゴーストの結線は `KanadeConfig::new` の既定を使うので `online::PROCESS` の guard を持ったまま実 pasta を起こし、起動の挨拶の完了を待ってから OnSecondChange を pasta の雑談の間隔を超える回数回し、`Value` の応答が 0 件であることを見る。ぱすたの `kick_force`（1 回だけ抑止を突破する旗）が立たない場面で見ること（起動直後の挨拶の後、他の入力を与えない）。実機の観測で代える場合は、URL からのインストールの最中に `RUST_LOG=kanade=trace` で `shiori_request` の `Status` に `online` が載り、その間 OnSecondChange が 204 で返ることを記録する。
 
 ## Optional Sections
 
@@ -573,3 +585,5 @@ pub(in crate::emo2_boot) fn report_balloons(
 ### Supporting References
 
 - 調査の経緯・選択肢の比較・R1〜R4 の結果は `research.md` の 9 節。
+- トークの起動の順序（古いトークを閉じて合流してから、受け口を複製して新しいトークを起こす）は `crates/areka-ghost/src/dispatcher.rs` の `on_start`（areka-sakura ではない）。複製の所有と終わりでの `Drop` は `crates/areka-sakura/src/drive.rs`。
+- 設計のレビュー（コードとの突き合わせの結果）は `design-validation.md`。

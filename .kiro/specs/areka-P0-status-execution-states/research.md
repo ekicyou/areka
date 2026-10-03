@@ -319,7 +319,8 @@ online を届ける道の比較（研究 4.2 の O1〜O4）: O1（窓口から�
 #### 決定 2（7.1 の 3）: online はプロセスの数を殻が読む
 - **Selected**: `areka_kanade::online::{OnlineCounter, OnlineGuard, PROCESS}`。殻（`actor.rs`）が受け取ったすべてのメッセージの前に数を読み `State.external.online` へ写す。持ち手は `KanadePorts::standard_started`（更新）と `fetch_and_send` の冒頭（取得）。
 - **Rationale**: 上の 9.3。
-- **Trade-offs**: グローバル。テストの決定論のため、持ち手は `&'static OnlineCounter` を引数で受け、areka の兄弟テストは関数内の `static` を渡す。`PROCESS` を立てるテストは「載っている」だけを見る。
+- **Trade-offs**: グローバル。テストの決定論のため、書く側（持ち手）は `&'static OnlineCounter` を引数で受け、読む側（殻）は `KanadeConfig.online`（既定 `&PROCESS`）を読む。兄弟テストとハーネスは関数内の `static` を渡し、`PROCESS` に触れるのは要件 8.4 の実 pasta の追験 1 件だけで、別の実行ファイルに置く（設計レビューの重大 1 の是正・2026-10-03）。
+- **読み直しとの関係**: `run_order` は全対象を終えてから読み直しを頼み、頼んだ直後に抜けるので、更新の `online` は読み直しの前に終わる。読み直し後の起動には載らない（要件 2.3 のとおり）。要件 2.6 の本番の場面は URL 取得中の切替（設計レビューの重大 2 の是正）。
 - **Follow-up**: `KanadePorts` に `Cell<Option<OnlineGuard>>` を持たせても `run_order(&dyn UpdatePorts)` の境界が `Sync` を求めないことを実装時に確かめる（求めるなら `Mutex<Option<_>>` へ）。
 
 #### 決定 3（7.1 の 4）: online の区間の端
@@ -357,7 +358,7 @@ online を届ける道の比較（研究 4.2 の O1〜O4）: O1（窓口から�
 ### 9.6 リスクと手当て
 
 - 旗の運搬の遅れが「載っているのに中断できる」として実機で見えるか — 遅れは入力の段 1 巡＋受信箱で、`talking` と同じ種類。実機サインオフで `no_user_break_changed`・`shiori_request` の時刻を並べて確かめる。
-- `PROCESS` を立てる本番経路のテストが並列の他のテストを揺らす — 持ち手は数を引数で受け、兄弟テストは自分の `static` を渡す。`PROCESS` を使うテストは「載っている」だけを見る。
+- `PROCESS` を立てる本番経路のテストが並列の他のテストを揺らす — 持ち手は数を引数で受け、殻は `KanadeConfig.online` を読む。兄弟テストとハーネスは自分の `static` を渡す。`PROCESS` を使うのは実 pasta の追験 1 件だけで、別の実行ファイルに置く。
 - `ExecutionSnapshot` の `Copy` を外して広く赤になる — 47 か所は `..INACTIVE` で機械的に直る。
 - ukadoc 網羅の検査（`owner_count`・`report/` の一致）が記録の書き方で赤になる — 設計の「持ち主の記録」の手順どおりに `cargo test -p ukadoc-survey` で確かめる。
 
