@@ -423,5 +423,16 @@
 
 #### 走らせ方
 - 版: `9ed0dd88`（タスク 6.1 の後）の `cargo build -p areka`。`target\debug\shiori-host32-helper.exe` は 32bit の版（machine=0x14c）で上書きしてから起動した。
-- 起動: `RUST_LOG=info,kanade=trace,areka_kanade=trace`・`AREKA_APP_SMOKE_EXIT_MS=600000`（自動の終了より先に手で終了した）で、`target\debug\areka.exe <emo2 のゴーストの絶対パス> <emo2-kakukaku の絶対パス>`（どちらも `target\nar-samples\manual\emo2\（9.8）
+- 起動: `RUST_LOG=info,kanade=trace,areka_kanade=trace`・`AREKA_APP_SMOKE_EXIT_MS=600000`（自動の終了より先に手で終了した）で、`target\debug\areka.exe <emo2 のゴーストの絶対パス> <emo2-kakukaku の絶対パス>`（どちらも `target\nar-samples\manual\emo2\` の下）。終了コード 0。
+- 1 周の中身（画面操作で実施）: 起動（`OnFirstBoot`）→ 雑談 5 回 → キャラをダブルクリックしてメニュー →「おしゃべり頻度」→「ほどよく」→「もどる」→「閉じる」→ 雑談 1 回 → 右クリックのメニューの「終了」→ `OnClose` の別れ → `talk_done_quit` → `unload_clean` → `app_exit`。
+
+#### 確かめた 3 点
+1. **`translate_reply` が台詞ごとに `kind=no_content` で 1 件**: 再生の開始（`boot_talk` 1・`steady_talk` 11・`close_talk_start` 1）が 13 回で、`translate_begin`・`translate_reply`・`translate_resume` もそれぞれ 13 件。`translate_reply` の元のイベントは `OnFirstBoot` 1・`OnSecondChange` 6・`OnMouseDoubleClick` 1・選択肢の任意名 4（`Onおしゃべり頻度メニュー`・`Onほどよくおしゃべり`・`Onメインメニュー`・`Onメニュー閉じる`）・`OnClose` 1 で、すべて `kind="no_content"`。選択肢の任意名は Reference2 にも逐語で載っている。
+2. **台詞の記録が 1.1 の記録と同じ**: 毎秒の `OnSecondChange`・`OnMouseMove`・`OnTranslate` を除いた `shiori_request` と、再生の開始・選択・終了の行を順に並べて比べた。並びは同じ形（起動の照会 → 起動の挨拶 → `basewareversion` → 雑談 → メニューの選択の連なり → 終了の握手）。違いは次の 2 つだけで、どちらも操作とくじによる: 雑談の回数（前 7 回・後 5 回＋1 回）と、前の回だけ 2 回目のダブルクリックをしていること。前の回の最初のダブルクリックは雑談の最中で「置き換え」の腕を通り、後の回は雑談の合間で「空き」の腕を通った（どちらも翻訳を通る腕）。画面の台詞（起動の挨拶・メニューの文言と選択肢・選んだ後の返事）も前の回と同じだった。`OnTranslate` の Reference0 には pasta が返した台詞がそのまま載っている（emo2 の台詞には `%username` などが無いので、展開しても変わらない）。
+3. **記録の無い分岐が無い**: `translate_skipped_empty`・`translate_skipped_self`・`translate_source_missing`・`translate_failed`・`sysvar_expand_fallback`・`reference_absent_marker_replaced` はどれも 0 件。13 回の翻訳はすべて「捕まえる → 204 → 預けた一括を返す」の 1 本の道を通った。
+
+#### 置き場所
+- 全体の記録: `C:\home\maz\git\areka\.claude\worktrees\areka-p0-translate-pipeline-2cf68b\target\translate-after\after-run.log`
+- 比べた結果: 同じフォルダの `compare-output.txt`（比べる道具は同じフォルダの `compare.py`）
+- 前の記録: `…\target\translate-baseline\`（9.8）
 - 注意: 前の回の記録は文字コードが違うため、比べた結果の中で選択肢の名前が文字化けして見える。並びの比べには影響しない。
