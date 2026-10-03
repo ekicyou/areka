@@ -119,3 +119,4 @@
 - `-Pending` は 2.1 では未宣言（渡すと引数の割り当てで exit 1）。2.3 で `param` に足す
 - `cargo package`（引数なし）は .crate を `package/`・`package/tmp-crate/`・`package/tmp-registry/` の 3 か所に、`--dry-run` は後の 2 か所に出す。判定は両方に在る `tmp-crate` を読む（2.2）
 - 子の `pwsh -File` では `Write-Host` が標準出力へ出る。`-Pending` の人が読む行は `[Console]::Error`（`Say`）へ。workflow は `2>&1` で混ぜず、`$LASTEXITCODE` を見てから標準出力の名前を使う（途中で落ちると名前が一部だけ出ていることがある）（2.3）
+- 完了時にその場で解決: 公開の段の「版の形」「Release の確認」「残りの判定」で `[Console]::OutputEncoding` を UTF-8 にし、ランナーで日本語のログが化けないようにした（レビューの軽微な指摘）

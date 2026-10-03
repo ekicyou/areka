@@ -33,6 +33,7 @@ jobs:
     steps:
       - name: 版の形
         run: |
+          [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)  # 日本語のログを化けさせない
           if ($env:VERSION -cnotmatch '^[0-9]+\.[0-9]+\.[0-9]+\z') {
             Write-Host "::error::入力 version $($env:VERSION | ConvertTo-Json) が数字 3 つの版の形でない（v を付けない・例 0.0.2）。何も上げていない"
             exit 1
@@ -50,6 +51,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
+          [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)  # 日本語のログを化けさせない
           $draft = gh release view "v$env:VERSION" --json isDraft --jq .isDraft
           if ($LASTEXITCODE) {
             Write-Host "::error::v$env:VERSION の GitHub Release が無い（下書きは読めない権限なので、下書きのときもここで止まる）。Release を公開してから起動し直す。何も上げていない"
@@ -69,6 +71,7 @@ jobs:
       - name: 残りの判定
         id: pending
         run: |
+          [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)  # 日本語のログを化けさせない
           # 標準出力はまだ出ていないクレートの名前だけ（人が読む行は標準エラー）。混ぜない
           $names = @(pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version $env:VERSION)
           # 途中で落ちると名前が一部だけ出ていることがあるので、終了コードを先に見る
