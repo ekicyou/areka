@@ -228,3 +228,53 @@ MCP の tokio は 1 本のスレッドの上で接続ごとにタスクを回し
 4. **検査を定義（inputSchema）から汎用に引く形でよいか（要件 2）**: 汎用にすると、`ghost_name` の欠落の例外（要件 2.3）は「`ghost_name` は常に欠落を許す」という 1 規則になり、名前での分岐が要らない。ツールごとの手書きの検査にする場合より 3 段目が検査を触る余地が減る（要件 7.1 の狙いに沿う）。利用者から見える振る舞いは同じ。
 5. **要件 5.4 の「実ソケットで 9 本」**の範囲: 実ソケットの試験が「偽の受け手」までで、アプリ本体のダミーはソケット無しの試験で確かめる形（§3.7 (a)）で要件を満たしたとみなせるか。満たさないなら、`crates/areka` 側に HTTP の送り手を持つ（試験の部品が 2 つになる）。
 6. **結果の 4 形の画像（要件 7.2 ⑷）**: 本 spec の関数が base64 済みの文字列を受ける形でよいか（符号化は `mcp-dump-images` が持つ）。PNG のバイト列を受けるなら、本 spec で符号化を持つ（`Cargo.toml` を触らないので自前の数十行）。
+
+## 8. 設計の段の記録（2026-10-03・`/kiro-spec-design`）
+
+### 8.1 要約
+
+- **Feature**: `areka-P0-mcp-tool-entrances`
+- **Discovery Scope**: Extension（既存の `areka-mcp` と `crates/areka` への足し込み）＝軽い調査（light）。新しい依存 0 なので外部の調べものは無く、実物（`crates/areka-mcp/src/`・`crates/areka/src/`・rmcp 3.5.0 と tokio-util 0.7 のソース）を読んで §6 の 12 項目を確かめた。
+- **Key Findings**:
+  - `log-capture-kit` の `capture` は呼んだスレッドの記録しか拾わない。橋の `warn!`／`debug!` は MCP のスレッドで出るので、件数のテストは実ソケットでは書けない＝橋のフューチャをテストのスレッドの tokio（`current_thread`・`enable_time`）で回す。
+  - `.kiro/steering/tech.md` が `areka-mcp` に `spawn_blocking`・`multi_thread` を禁じている＝§4.2 の案 a は選べない。
+  - tokio-util 0.7 の `Cargo.toml` は tokio を `features = ["sync"]` で無条件に引く（`CancellationToken` のため）。§3.2 の「`sync` は rmcp 経由でだけ入る」は不正確だったが、「自分で宣言していない」ことは変わらないので `tokio::sync` は使わない。宣言済みの `CancellationToken` を返事の合図に使えば、宣言済みの依存だけで非同期の待ちが組める。
+  - rmcp の `jsonrpc_http_status`（`src/transport/streamable_http_server/tower.rs`）は `INVALID_PARAMS` を `400` にする＝無状態版の経路の `-32602` は 400 の見込み（旧式の経路は 200）。実装のテストで測って固定する。
+  - `ghost_switch.rs` の `take_down` は置き場から `take()` し、次が起きてから置き直す＝切替の途中は置き場が空（要件 3.8 のとおり 0 体になる）。ルートフォルダは初回（`main.rs`）も切替（絶対化済みの根からの目録）も絶対パス。
+
+### 8.2 §6 の 12 項目の結論
+
+| # | 結論 |
+|---|---|
+| 1 | 旧式 200・無状態版 400 の見込み。`tools_socket_tests.rs` で測って固定し、差の一覧へ |
+| 2 | 絶対パス。`resolve::active` が念のため `std::path::absolute` を 1 度通す。一覧は末尾の区切りなし |
+| 3 | 案 a（`spawn_blocking`）は `tech.md` が禁じる。案 c（`tokio::sync::oneshot`）は宣言していない機能。案 b（短い間隔で覗く）は遅れと空回り。**採ったのは 4 つ目**: `areka_actor::reply_channel`＋`CancellationToken` の合図（`ReplyTo` の `Drop` が、送り手を落としてから合図を立てる）。待つ側は `tokio::time::timeout(上限, 合図)` の後に `try_recv` で「来た・上限・手放された」を分ける |
+| 4・9 | `main.rs` の `app.run()` の直後に `mcp::close(world)` の 1 行。`exit_wait.rs` は触らない |
+| 5・12 | 区間で分ける。つなぎ目は `ToolRequest::new`（本番の橋とテストが同じ関数で対を作る）。`crates/areka` は tokio を持たないので登録した処理のフューチャは回せない |
+| 6・11 | base64 済みの文字列を受ける（`outcome::with_image`） |
+| 7 | 旗は立てない（心拍の約 0.5 秒まで・10 秒に収まる） |
+| 8 | `check.rs` の純粋な関数を `handler.rs` の写しの中で呼ぶ。`ghost_name` の欠落は常に許す |
+| 10 | 上限は `entrances(reply_wait)` の引数 1 つ（本番 `REPLY_WAIT` 10 秒） |
+
+### 8.3 設計で足した決定（§6 に無かったもの）
+
+- **アプリ本体側の処理は結果を戻り値で返さず、`ReplyTo` を受け取る。** 3 段目の多く（`get_status`・`sakurascript`・`raise_event`・`get_property`）は別スレッドのアクター（kanade・SHIORI）に問う。UI スレッドで待てない（要件 6.6）ので、戻り値の形だと 3 段目が振り分け（共有ファイル）を書き換えることになる。`ReplyTo` は `Send` で、後から・別スレッドから送れる。
+- **定義は各ツールのファイルの生文字列。** §3.1 の (a)。要件 7.1 が「定義もツールごとのファイル」を求める。写しの JSON を別に置く (b) は、原本と写しの 2 つを持つことになる。
+- **ダミーのテストはツールごとの兄弟ファイル、振り分けの共有テストは処理の答えの中身を見ない。** 共有テストがダミーの文言を見ると、3 段目が中身を入れるたびに共有ファイルを触ることになる。
+- **ダミーの文言は各ファイルに直に書く**（共有の定数にしない）。最後の 1 本が中身を入れたときに共有ファイルから定数を消す仕事が出ない。
+- **`"integer"` の欄は `1.0` を受ける。** 要件 2.4 が拒むのは「整数でない数」。小数部が 0 の数は整数として読む。
+- **`ok("")` は `OK`（コロンなし）。** SSP の `sakurascript` の成功の本文（survey §3）。
+- **答えの `debug!` は橋（MCP のスレッド）の 1 か所。** 上限・終了の途中の答えも同じ行を通る。解決したゴーストの名前は `ReplyTo::for_ghost` で返事に添えて運ぶ。
+- **引数の検査で拒んだときも `debug!` を 1 件**（記録の無い失敗の道を作らない）。
+
+### 8.4 統合の見直し（synthesis）
+
+- **一般化**: 「`ghost_name` の欠落を許す」は名前での分岐でなく検査の 1 規則。「解決する／しない／省略を拒む」は振り分けの `match` の 3 通り。
+- **作るか使うか**: 検査は 4 つの型だけなので JSON Schema の検査器は入れない（依存を足せない・要らない）。返事の器と合図は既存の依存をそのまま使う。
+- **削ったもの**: ツールごとの上限の表・検査つきの登録口（§4.1 案 B）・`crates/areka` 側の HTTP の送り手（§3.7 (b)）・写しの JSON ファイル・tick の門の旗。
+
+### 8.5 リスクと手当て
+
+- rmcp の版を上げると `into_tool_argument_error` の規則や `list_all` の扱いが変わりうる → `tools_socket_tests.rs` が赤になる（`-32602`・並び）。
+- 処理が `ReplyTo` を誤って落とすと「shutting down」と答える → 文言は紛らわしいが応答は必ず返る。3 段目のレビューで「送らずに落とす道が無いこと」を見る。
+- `main.rs` の行数（954 行）→ 足すのは 12 行まで。

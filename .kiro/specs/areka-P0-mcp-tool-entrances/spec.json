@@ -1,18 +1,19 @@
 {
   "feature_name": "areka-P0-mcp-tool-entrances",
   "created_at": "2026-10-03T10:14:59Z",
-  "updated_at": "2026-10-03T10:17:58Z",
+  "updated_at": "2026-10-03T10:52:44Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false,
+      "approved": true,
       "generated_at": "2026-10-03T10:17:58Z"
     },
     "design": {
-      "generated": false,
-      "approved": false
+      "generated": true,
+      "approved": false,
+      "generated_at": "2026-10-03T10:52:44Z"
     },
     "tasks": {
       "generated": false,
