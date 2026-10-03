@@ -41,6 +41,7 @@ pub mod sysvar;
 pub use compile::{CompiledTalk, compile};
 pub use drive::spawn_talk;
 pub use error::SakuraError;
+pub use sysvar::expand_system_vars;
 
 // 下流の import パス安定化（DD-1: 下流は `areka_sakura::contract::*` 経由で参照）。
 pub use contract::*;
