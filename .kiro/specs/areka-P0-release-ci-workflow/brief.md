@@ -19,14 +19,14 @@
 2. 失敗したら Release を作らない（zip が 1 つでも作れなければ止める）。途中で止まった跡（下書きの Release）を残さない。
 3. 普通の PR・main への push では動かない。手で `workflow_dispatch` から同じ手順を乾いた走り（Release を作らない）で試せる。
 4. 配布スクリプトの `-Check`（窓を出す自己検査）は CI では省く。その代わり、開発者が手元で `-Check` を通してから版を上げる、を `release-cycle` の手順に置く。
-5. 後段は別の workflow が持つ: crates.io へ出す `crates-io.yml`（`crates-io-publish`・同じウェーブ C2）と winget へ PR を出す `winget.yml`（`winget-manifest-submission`）。本 spec は `release.yml` が Release を**公開**（下書きでない）で作り、**その成功の後に `gh workflow run crates-io.yml -f version={版}`（と `winget.yml` が出来ていればそれも）で後段を呼ぶ**ことを約束する（10-03 `crates-io-publish` の要件討議の議題 1 で決定）。理由: `GITHUB_TOKEN` で作った Release は別の workflow の `release: published` を起こさない（GitHub の決まり）。`workflow_run` は crates.io の Trusted Publishing が受け付けない。手で起動する口（`workflow_dispatch`）だけは `GITHUB_TOKEN` から起動できる。そのため `release.yml` の権限は `contents: write` に `actions: write` を足す。入力の名前（`version`）は両 spec の設計でそろえる。
+5. 後段は別の workflow が持ち、きっかけは後段が自分で受ける: crates.io へ出す `crates-io.yml`（`crates-io-publish`・同じウェーブ C2）と winget へ PR を出す `winget.yml`（`winget-manifest-submission`）。`release.yml` は後段を呼ばない。本 spec は `release.yml` が Release を**公開**（下書きでない）で作ることと、workflow の名前 `release`・ファイル `.github/workflows/release.yml`・「タグの push で始まった回が成功で終わる ⇔ そのタグの Release が公開（下書きでない）で 4 つのファイル付きで在る」を保つことを約束する。`crates-io.yml` は同じタグの push を自分で受け、`gh api` で同じタグの `release.yml` の回が成功で終わるのを待ってから出す（10-03 `crates-io-publish` の完了時の開発者の裁定＝案 B）。理由: `GITHUB_TOKEN` で作った Release は別の workflow の `release: published` を起こさない（GitHub の決まり）。`workflow_run` で動いた回は crates.io の Trusted Publishing が鍵を渡さない。そのため `release.yml` の名前・ファイル名・きっかけを変えるときは `crates-io.yml` の待ちの段も見直す。
 6. `tech.md` の「外部 CI は持たない」を「テストの門は手元・ビルドと配布は Actions」に改める。
 
 ## Approach
 
 - ランナーは `windows-latest`。Rust は `rustup` で安定版・`x86_64-pc-windows-msvc`・`i686-pc-windows-msvc`・`aarch64-pc-windows-msvc` の 3 target。arm64 のリンクに要る MSVC の arm64 の道具がランナーに在るかは**最初のタスクで実測**し、無ければ VS の部品を足す段を入れる。
 - `cargo about`・`cargo deny` は配布スクリプトが要る＝`cargo install` を毎回走らせず、キャッシュ（`Swatinem/rust-cache` か `actions/cache`）を使う。
-- 権限は `contents: write` と `actions: write`（後段の呼び出し用）だけ（`GITHUB_TOKEN`・長生きするトークンを置かない）。
+- 権限は `contents: write` だけ（`GITHUB_TOKEN`・長生きするトークンを置かない）。
 - 採らない案: main への push で動かす（PR のたびに版が上がる・開発者の意図と違う）／タグを workflow が打つ（タグは `release-cycle` が開発者の手で打つ＝きっかけは人）。
 
 ## Scope

@@ -106,7 +106,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **出さないクレートは `publish = false # 理由`** と、印と理由を同じ行に書く。この行を `[package]` の最後の行に置かない（cargo-about 0.9.2 は `license` を受け継ぐクレートでその辺りへ 1 行を差し込み、日本語の途中に当たると落ちる。LF の作業木で起きる）。**新しいクレートを足すときは `publish` の行と理由を必ず書く**（書き忘れは全体テストの段が止める）
 - **確認は `tools/crates-io.ps1`**: 引数なし＝包むだけ（ネットを使わない）・`-Verify`＝組み立てまで（crates.io の索引を読む）・`-Pending`＝ワークスペースの版がまだ crates.io に無いクレートの名前だけを出す
 - **全体テストの段はネットを使わない形で包む**（Testing 節の「ネットへ出るテストは常時テストに入れない」のまま）。組み立てまでの形は手順書と公開の段が使う
-- **公開の段は `.github/workflows/crates-io.yml`**: `workflow_dispatch` で版を受けて動き、crates.io への認証は Trusted Publishing だけ（長く使える鍵をリポジトリにも GitHub の秘密の置き場にも置かない）
+- **公開の段は `.github/workflows/crates-io.yml`**: タグ `v*` の push を自分で受け、同じタグの `release.yml` の回が緑で終わるのを待ってから出す（`release.yml` は呼ばない・`workflow_run` は crates.io の Trusted Publishing が断るので使わない）。やり直しは `workflow_dispatch`（Actions の画面の「Run workflow」に版を渡す）。crates.io への認証は Trusted Publishing だけ（長く使える鍵をリポジトリにも GitHub の秘密の置き場にも置かない）
 - **版を上げるときに動かすのは根の `Cargo.toml` の 2 行**（`[workspace.package]` の `version`・`[workspace.dependencies]` の `dola` の `version`）と `Cargo.lock`。各クレートの `Cargo.toml` は動かさない
 - 手順書（Trusted Publishing の設定・やり直し・手元から出す予備の手順）は `doc/crates-io-publish.md`
 

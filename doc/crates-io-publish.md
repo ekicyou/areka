@@ -35,14 +35,15 @@ environment を空にするのは、公開の段が GitHub の environment（人
 
 ## 3. いつもの流れ
 
-1. 版を上げる PR を squash マージし、`v{版}` のタグを打つ。
-2. Release を作る workflow（`release.yml`）が、組み立て・zip・GitHub Release の公開を行う。
-3. Release を公開した後、`release.yml` が公開の段を呼ぶ（`gh workflow run crates-io.yml -f version={版}`）。入力 `version` は `v` を付けない版（例 `0.0.2`）。
+1. 版を上げる PR を squash マージし、`v{版}` のタグを打って push する。
+2. タグの push で、Release を作る workflow（`release.yml`）と公開の段（`crates-io.yml`）が同時に動き出す。`release.yml` は公開の段を呼ばない。公開の段がタグの push を自分で受ける。
+3. `release.yml` が、組み立て・zip・GitHub Release の公開を行う。その間、公開の段は段「release を待つ」で、同じタグの `release.yml` の回が緑で終わるのを待つ（30 秒ごとに見て、最長 45 分）。
 4. 公開の段が、次の段を上から順に行う。どれかが失敗したら、そこから先は「記録」以外を飛ばす。
 
 | 段 | すること |
 |---|---|
-| 版の形 | 入力 `version` が数字 3 つの版の形か確かめる |
+| 版の形 | タグが `v` と数字 3 つの形か（手で起動したときは、入力 `version` が数字 3 つの形か）確かめる |
+| release を待つ | タグの push のときだけ。同じタグの `release.yml` の回が緑で終わるのを待つ。赤で終わった・45 分で緑にならない・`release.yml` が無いときは、何も上げずに止まる |
 | 取り出し | タグ `v{版}` のコミットを取り出す |
 | Release の確認 | その版の GitHub Release が在って、下書きでないことを確かめる（Release より先に crates.io へ出さない） |
 | 道具 | Rust を最新の安定版にする |
@@ -54,7 +55,7 @@ environment を空にするのは、公開の段が GitHub の environment（人
 
 開発者は見守るだけでよい。終わったら次の節で確かめる。
 
-`release.yml` がまだ公開の段を呼ばない間は、Release を公開した後に手で `gh workflow run crates-io.yml -f version={版}` を起動する。
+`release.yml` が main に無い間（Release を作る workflow ができる前）は、タグの push で `release` の回が始まらないので、段「release を待つ」が 45 分待ってから「まだ始まっていない」と示して止まる（何も上げていない。`release.yml` が GitHub に一度も登録されていなければ「`release.yml` が無い」ですぐ止まる）。そのときは Release を手で公開してから、5 節の「Run workflow」で版を渡して起動する。
 
 ## 4. 出たことを確かめる
 
@@ -76,18 +77,24 @@ $left = pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version 0.0.2
 
 公開の段は、同じ版で何度起動し直してもよい。既に出たクレートは段「残りの判定」が飛ばすので、残りだけを出して終わる。残りが 0 なら、何も上げずに緑で終わる。
 
-```powershell
-gh workflow run crates-io.yml -f version=0.0.2
-```
+起動し直しは、GitHub の Actions の画面のボタンだけでできる。コマンドの行は要らない。
+
+- **その回を走らせ直す（Re-run）**: Actions の画面で止まった `crates-io` の回を開き、「Re-run jobs」→「Re-run all jobs」を押す。同じタグ・同じ workflow のファイルで、最初の段から走る。
+- **版を渡して起動する（Run workflow）**: Actions の画面の左の一覧で `crates-io` を選び、「Run workflow」を押す。「Use workflow from」は `main` のまま、「出す版」に `v` を付けない版（例 `0.0.2`）を入れて、緑の「Run workflow」を押す。この回は `main` の workflow のファイルで動き、段「release を待つ」は飛ばす（代わりに段「Release の確認」が、その版の Release が公開されていることを確かめる）。
+
+コマンドの行から起動したいときは `gh workflow run crates-io.yml -f version=0.0.2` でも「Run workflow」と同じになる（使わなくてよい）。
 
 どこで止まったかは、GitHub の Actions の画面で、その回の段ごとの結果と実行の要約を見る。止まり方ごとに、次のとおり切り分ける。
 
-- **workflow のファイルの誤り**（段の書き方・権限・入力の扱いなど）: 公開の段は、既定の枝（`main`）に在る workflow のファイルで動く。`main` で直してから、同じ版で起動し直す。
+- **release が赤で止まった**（段「release を待つ」が「release が failure で終わった」などと示す）: 何も上がっていない。先に release を緑にする。緑になったら、止まった `crates-io` の回を「Re-run」する（段「release を待つ」がすぐ緑を読んで先へ進む）。「Run workflow」で同じ版を渡してもよい。release をその版でやり直さずに次の版で出すなら、この回は止まったままでよい。
+- **45 分待っても release が緑にならない**: release の回が終わるのを待ち、緑で終わったら、止まった `crates-io` の回を「Re-run」する。
+- **`release` の回が始まらない・`release.yml` が無い**: 3 節の末尾に従う。
+- **workflow のファイルの誤り**（段の書き方・権限・入力の扱いなど）: タグの push で動いた回と、その回の「Re-run」は、**タグのコミットに在る** workflow のファイルで動く。`main` で直しても「Re-run」には効かない。`main` で直してから、「Run workflow」（`main` から）で同じ版を渡す。
 - **`tools/crates-io.ps1` の誤り**: スクリプトは、取り出したタグのコミットの物が使われる。`main` で直しても、その版の起動し直しには効かない。その版は 6 節の予備の手順で出す。直したスクリプトは次の版から効く。ただし予備の手順でも、タグのコミットの同じスクリプト（`-Verify`・`-Pending`）を手元で走らせる。誤りが手元でも再現するなら、その版は予備の手順でも出せない。その場合は `main` で直して次の版で出す。
-- **「公開」が緑で「記録」だけが赤**: 上げた直後で、crates.io の索引への反映を待っている。時間を置いて 4 節の確かめ方を手元で走らせるか、同じ版で起動し直す（何も上げずに緑で終わる）。
-- **Release が無い・下書き**: Release を公開してから、同じ版で起動し直す。
+- **「公開」が緑で「記録」だけが赤**: 上げた直後で、crates.io の索引への反映を待っている。時間を置いて 4 節の確かめ方を手元で走らせるか、その回を「Re-run」する（何も上げずに緑で終わる）。
+- **Release が無い・下書き**: Release を公開してから、その回を「Re-run」する（または「Run workflow」で同じ版）。
 - **公開前の確認が赤**: 赤の理由で分ける。
-  - 通信などの一時的な失敗（crates.io の索引を読めないなど）: 時間を置いて、同じ版で起動し直す。
+  - 通信などの一時的な失敗（crates.io の索引を読めないなど）: 時間を置いて、その回を「Re-run」する。
   - タグのコミットのコードや設定の誤り（クレートが包めない・組み立てに失敗する・版が合わないなど）: そのコミットのままでは出せない。`main` で直し、次の版で出す。
   - スクリプトそのものの誤り: 直上の「`tools/crates-io.ps1` の誤り」に従う。
 

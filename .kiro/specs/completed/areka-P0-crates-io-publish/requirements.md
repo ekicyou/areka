@@ -34,7 +34,7 @@ crates.io に一度出した版は消すことも差し替えることもでき�
   - テストだけが使う道具: `sample-ghost-kit`・`log-capture-kit`・`temp-path-kit`
   - 調査の道具: `ukadoc-survey`
 - **公開前の確認**: 何も crates.io へ上げずに、公開する一覧のすべてを「その版で出したとしたら」包んで確かめる手元の確認。包むだけの形と、組み立てまでの形がある（要件 2.11）。
-- **公開の段**: GitHub Release の公開の後に、同じ版を crates.io へ出す自分の GitHub Actions の workflow（`.github/workflows/crates-io.yml`）。
+- **公開の段**: GitHub Release の公開の後に、同じ版を crates.io へ出す自分の GitHub Actions の workflow（`.github/workflows/crates-io.yml`）。タグ `v{版}` の push を自分で受けて Release の段の成功を待つ形と、手での起動の形の 2 つで動く。
 
 ## Boundary Context
 
@@ -54,7 +54,7 @@ crates.io に一度出した版は消すことも差し替えることもでき�
   - クレート間の依存の組み合わせの変更・各クレートのソースコードの変更。
   - テストの実行（テストの門は手元の全体テストのまま。公開の段はテストを回さない）。
 - **Adjacent expectations**:
-  - `release-ci-workflow` は、タグ `v{版}` のときに GitHub Release を**公開**の状態（下書きでない）で作る。そのうえで、Release の公開に成功した後に、公開の段を手で起動する口（`workflow_dispatch`）から版を渡して呼ぶ（要件討議の議題 1 で決定・`release-ci-workflow` の brief へ申し送り済み）。リポジトリ既定の権限（`GITHUB_TOKEN`）で作った Release は別の workflow の `release: published` を起こさず、`workflow_run` は crates.io の Trusted Publishing が受け付けないため、この呼び出しが公開の段の唯一の自動のきっかけになる。
+  - `release-ci-workflow` は、タグ `v{版}` の push で動き、GitHub Release を**公開**の状態（下書きでない）で作る。`release.yml` は公開の段を呼ばない（10-03 完了時の開発者の裁定＝案 B・`release-ci-workflow` の brief へ申し送り済み）。公開の段は同じタグの push を自分で受け、同じタグの `release.yml` の回が成功で終わるのを待ってから出す（要件 4.13）。そのため `release-ci-workflow` には、workflow の名前 `release`・ファイル `.github/workflows/release.yml`・「タグの push で始まった回が成功で終わる ⇔ そのタグの Release が公開（下書きでない）で 4 つのファイル付きで在る」を保つことを期待する。リポジトリ既定の権限（`GITHUB_TOKEN`）で作った Release は別の workflow の `release: published` を起こさず、`workflow_run`（と `pull_request_target`）で動いた回の鍵の受け取りは crates.io の Trusted Publishing が断る（crates.io の `src/controllers/trustpub/tokens/exchange/mod.rs`）ため、きっかけはタグの push と手での起動の 2 つにした。
   - `release-cycle` は版を +0.0.1 し、その中で公開前の確認（組み立てまでの形）を通す。Trusted Publishing の設定は初回のタグより前に済ませる（`wintf`・`dola` は crates.io に既に在るので、手元からの初回の公開は要らない）。
   - `winget-manifest-submission` は、`README.md`・`dist/README.txt` の本 spec が書く節に、winget での入れ方の行を後から足す。
   - 同じウェーブ C2 で `Cargo.toml` を触る spec は置かない（並走の約束）。
@@ -115,8 +115,8 @@ crates.io に一度出した版は消すことも差し替えることもでき�
 
 #### Acceptance Criteria
 
-1. When `release-ci-workflow` の段が、ある版の GitHub Release を公開した後に公開の段をその版を渡して呼ぶ、または開発者が公開の段を版を指定して手で起動する, the 公開の段 shall その版で crates.io への公開を始める。
-2. If 公開の段を呼ぶ・手で起動する以外の出来事（普通の push・タグの push・PR・Release の作成など）が起きる, then the 公開の段 shall 動き出さず、crates.io へ何も出さない。
+1. When ある版のタグ `v{版}` が push される、または開発者が公開の段を版を指定して手で起動する, the 公開の段 shall その版で crates.io への公開を始める（タグの push のときは、要件 4.13 の待ちを経てから）。
+2. If タグ `v{版}` の push と手での起動以外の出来事（枝への push・PR・Release の作成・別の workflow の終わり・定時など）が起きる, then the 公開の段 shall 動き出さず、crates.io へ何も出さない。
 3. If 渡された版と、そのタグのコミットのワークスペースの版が一致しない, then the 公開の段 shall 何も上げずに止まり、二つの版を示す。
 4. The 公開の段 shall 上げ始める前に要件 2 の組み立てまでの形の公開前の確認を走らせ、それが失敗したら何も上げずに止まる。
 5. If 公開する一覧のどれかのクレートが crates.io にまだ 1 つの版も無い, then the 公開の段 shall 何も上げずに止まり、そのクレートの名前と「要件 3.5 の予備の手順で出し、Trusted Publishing を設定する」ことを示す。
@@ -127,6 +127,7 @@ crates.io に一度出した版は消すことも差し替えることもでき�
 10. The 公開の段 shall GitHub Release とその添付物、および winget への提出の段に手を加えず、自分の失敗でそれらを取り消したり止めたりしない。
 11. The 公開の段 shall 認証の情報やリポジトリの接続先の URL を実行の記録へ印字しない。
 12. If 渡された版の GitHub Release が公開の状態で存在しない（下書き・未作成）, then the 公開の段 shall 何も上げずに止まり、その版を示す（Release より先に crates.io へ出さない）。
+13. When 公開の段がタグ `v{版}` の push で動き出す, the 公開の段 shall 同じタグの push で始まった Release の段（`release.yml`）の回が成功で終わるのを、上限 45 分まで待ってから先へ進む。その回が成功以外で終わったとき、上限までに成功で終わらないとき、`release.yml` がリポジトリに無いときは、何も上げずに止まり、その版と止まった理由（回の終わり方・待った長さ）を示す（10-03 完了時の開発者の裁定＝案 B で追加）。
 
 ### Requirement 5: 説明の文書
 
@@ -144,5 +145,6 @@ crates.io に一度出した版は消すことも差し替えることもでき�
 ## 要件討議の決定
 
 1. **公開の段のきっかけ（議題 1）** → `release.yml` が Release の公開の後に `gh workflow run` で呼ぶ `workflow_dispatch`（要件 4.1・4.2・4.12・Adjacent expectations）。`release-ci-workflow`・`winget-manifest-submission` の brief へ申し送り済み。
+   - **10-03 改訂（完了時の開発者の裁定・案 B）**: `release.yml` が後段を呼ぶ形は、`release-ci-workflow` の承認済みの約束（`release.yml` は後段を呼ばない・権限は `contents: write` だけ）と食い違うので取りやめた。代わりの `workflow_run` は、crates.io の Trusted Publishing が `workflow_run`・`pull_request_target` で動いた回の鍵の受け取りを断る（`push`・`release`・`workflow_dispatch` は受け付け、workflow のファイル名は `workflow_ref` から照らす）と分かったので使えない。開発者は案 B を選んだ: 公開の段がタグ `v*` の push を自分で受け、同じタグの `release.yml` の回が成功で終わるのを待ってから出す。手での起動（`workflow_dispatch`）はやり直しの口として残す（要件 4.1・4.2・4.13・Adjacent expectations）。`release-ci-workflow`・`winget-manifest-submission` の brief の申し送りも改めた。
 2. **全体テストに公開前の確認を足すか（議題 2）** → 包むだけの形を全体テストに毎回、組み立てまでの形を手順書と公開の段に（要件 2.11〜2.13）。ギャップ分析の実測では、21 クレートを組み立てまで確かめると空の `target\` から約 12 分かかった（2 クレートになった今は短くなる見込み）。
 3. **何を crates.io へ出すか（議題 3）** → `wintf`・`dola` だけ。`areka` は 0.0.1 の名前の確保のまま据え置き、本体と部品は出さない。部品の名前の確保もしない（`areka-` で始まる名前をまとめて持つ仕組みは crates.io に無く、名前の確保だけの公開を何本も出すのは好まれない。紛らわしさを防ぐ要は `areka` の名前で、それは確保済み）。もとの議題「`shiori-host32-helper`・`log-capture-kit`・`temp-path-kit` を出すか」と「部品の説明の欄の言葉づかい」は、部品を出さないので消えた。`wintf`・`dola` の README の「名前の確保のため」の文は、出す以上は直すのが自明なので要件 5.6 にした。

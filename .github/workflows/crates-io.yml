@@ -1,11 +1,15 @@
-# 公開の段: 渡された版の wintf・dola を、確かめてから crates.io へ出す（認証は Trusted Publishing だけ）。
-# きっかけは手での起動（workflow_dispatch）だけ。release.yml が Release の公開の後に呼ぶか、手で起動する:
-#   gh workflow run crates-io.yml -f version=0.0.2
+# 公開の段: その版の wintf・dola を、確かめてから crates.io へ出す（認証は Trusted Publishing だけ）。
+# きっかけは 2 つだけ:
+#   - タグ v{版} の push: 同じタグの release.yml の回が緑で終わるのを待ってから出す（release.yml はこの段を呼ばない）
+#   - 手での起動（workflow_dispatch・入力 version）: やり直しの口。GitHub の Actions の画面の「Run workflow」から
+# workflow_run は crates.io の Trusted Publishing が受け付けないので使わない。
 # 同じ版で何度起動し直してもよい（既に出たクレートは飛ばす）。設定・やり直し・予備の手順は doc/crates-io-publish.md。
-# 判定は tools/crates-io.ps1（タグのコミットの物）に集め、ここは順に呼ぶ・止める・鍵を受け取るだけ。
+# 判定は tools/crates-io.ps1（タグのコミットの物）に集め、ここは順に呼ぶ・待つ・止める・鍵を受け取るだけ。
 name: crates-io
 
 on:
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       version:
@@ -16,6 +20,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  actions: read  # release.yml の回の様子を読む
 
 concurrency:
   group: crates-io
@@ -27,23 +32,83 @@ jobs:
     defaults:
       run:
         shell: pwsh
-    env:
-      # 入力はスクリプトの文に埋めず、環境変数で渡す
-      VERSION: ${{ inputs.version }}
     steps:
       - name: 版の形
+        env:
+          # タグ・入力はスクリプトの文に埋めず、環境変数で渡す
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+          INPUT: ${{ inputs.version }}
         run: |
           [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)  # 日本語のログを化けさせない
-          if ($env:VERSION -cnotmatch '^[0-9]+\.[0-9]+\.[0-9]+\z') {
-            Write-Host "::error::入力 version $($env:VERSION | ConvertTo-Json) が数字 3 つの版の形でない（v を付けない・例 0.0.2）。何も上げていない"
-            exit 1
+          if ($env:EVENT -ceq 'push') {
+            if ($env:TAG -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+\z') {
+              Write-Host "::error::タグ $($env:TAG | ConvertTo-Json) が v と数字 3 つの版の形でない（例 v0.0.2）。何も上げていない"
+              exit 1
+            }
+            $version = $env:TAG.Substring(1)
+          } else {
+            if ($env:INPUT -cnotmatch '^[0-9]+\.[0-9]+\.[0-9]+\z') {
+              Write-Host "::error::入力 version $($env:INPUT | ConvertTo-Json) が数字 3 つの版の形でない（v を付けない・例 0.0.2）。何も上げていない"
+              exit 1
+            }
+            $version = $env:INPUT
+          }
+          # 形を確かめた値だけを後の段へ渡す
+          "VERSION=$version" >> $env:GITHUB_ENV
+          Write-Host "版: $version（きっかけ: $env:EVENT）"
+
+      - name: release を待つ
+        # タグの push のときだけ。手での起動は、次の「Release の確認」が同じことを確かめる
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)  # 日本語のログを化けさせない
+          # 待つ長さ（変えるのはこの 2 行だけ）
+          $LIMIT_MINUTES = 45
+          $POLL_SECONDS = 30
+          $tag = "v$env:VERSION"
+          $until = [DateTime]::UtcNow.AddMinutes($LIMIT_MINUTES)
+          while ($true) {
+            # 同じコミット・同じタグの push で始まった release.yml の回（新しい順）
+            $out = @(gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/release.yml/runs?event=push&head_sha=$env:GITHUB_SHA" 2>&1)
+            $code = $LASTEXITCODE
+            $err = ($out | Where-Object { $_ -is [Management.Automation.ErrorRecord] }) -join ' '
+            if ($code -and $err -match 'HTTP 404') {
+              Write-Host "::error::release.yml（Release を作る workflow）がリポジトリに無い。$tag は何も上げていない"
+              exit 1
+            }
+            if ($code) {
+              # 一時的な失敗は待つ側に数える。gh の文はそのまま出さない（状態の番号だけ）
+              $state = "読めない（$([regex]::Match($err, 'HTTP [0-9]+').Value)）"
+            } else {
+              $runs = @((($out | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] }) -join "`n" | ConvertFrom-Json).workflow_runs)
+              $run = $runs | Where-Object { $_.head_branch -ceq $tag } | Select-Object -First 1
+              if (-not $run) { $state = 'まだ始まっていない' }
+              elseif ($run.status -cne 'completed') { $state = $run.status }
+              elseif ($run.conclusion -ceq 'success') {
+                Write-Host "release が緑で終わった（$tag）"
+                exit 0
+              } else {
+                Write-Host "::error::$tag の release が $($run.conclusion) で終わった。何も上げていない。release を緑にしてから、この回を Re-run する"
+                exit 1
+              }
+            }
+            if ([DateTime]::UtcNow -ge $until) {
+              Write-Host "::error::$LIMIT_MINUTES 分待っても $tag の release が緑で終わらない（最後の様子: $state）。何も上げていない"
+              exit 1
+            }
+            Write-Host "待つ: $tag の release は $state"
+            Start-Sleep -Seconds $POLL_SECONDS
           }
 
       - name: 取り出し
         id: checkout
         uses: actions/checkout@v4
         with:
-          ref: refs/tags/v${{ inputs.version }}
+          ref: refs/tags/v${{ env.VERSION }}
           persist-credentials: false
 
       - name: Release の確認
@@ -99,12 +164,12 @@ jobs:
         env:
           CHECKOUT: ${{ steps.checkout.outcome }}
         run: |
+          [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)  # 日本語のログを化けさせない
           if ($env:CHECKOUT -ne 'success') {
-            '取り出しより前で止まった・何も上げていない' >> $env:GITHUB_STEP_SUMMARY
+            '取り出しまで（版の形・release を待つ・取り出し）で止まった・何も上げていない' >> $env:GITHUB_STEP_SUMMARY
             exit 0
           }
           # 子の人が読む行（在る・無い）は UTF-8 で標準エラーへ出る。名前（標準出力）と分けて受け取る
-          [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
           $errFile = Join-Path $env:RUNNER_TEMP 'crates-io-pending.txt'
           $names = @(pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version $env:VERSION 2> $errFile)
           $code = $LASTEXITCODE

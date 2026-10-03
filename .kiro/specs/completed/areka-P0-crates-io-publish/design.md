@@ -12,7 +12,7 @@
 
 - 30 クレートのすべてで、出すか出さないかとその理由が設定ファイルから読める（1.1〜1.7）。
 - 1 つの操作で「この版で出せるか」を確かめられ、全体テストが毎回それを見張る（2.1〜2.13）。
-- 公開の段が、呼ばれたときだけ、Trusted Publishing だけで、上げる前に止まれる形で動く（4.1〜4.12）。
+- 公開の段が、タグの push（Release の段の成功を待つ）と手での起動のときだけ、Trusted Publishing だけで、上げる前に止まれる形で動く（4.1〜4.13）。
 - 止まったときのやり直しと予備の手順が文書で辿れる（3.1〜3.7）。
 
 ### Non-Goals
@@ -33,7 +33,7 @@
 - `.github/workflows/crates-io.yml`。
 - `doc/crates-io-publish.md`（手順書）。
 - `README.md`・`dist/README.txt`・`crates/wintf/README.md`・`crates/dola/README.md`・`.kiro/steering/tech.md` の、本書が定める節。
-- 公開の段の呼び出しの取り決め: 入力の名前は `version`、値は `v` を付けない版（例 `0.0.2`）。
+- 公開の段のきっかけの取り決め: タグ `v{版}` の push（版はタグから `v` を外した値）か、手での起動の入力 `version`（値は `v` を付けない版・例 `0.0.2`）。`release.yml` は公開の段を呼ばない（10-03 完了時の開発者の裁定＝案 B）。
 
 ### Out of Boundary
 
@@ -47,14 +47,15 @@
 
 - cargo 1.90 以上（複数クレートを 1 回で出す `cargo publish -p … -p …`。手元は 1.99.0）。
 - PowerShell 7（既存の `tools/*.ps1` と同じ）。新しい道具・クレートは足さない。
-- GitHub Actions: `actions/checkout`・`rust-lang/crates-io-auth-action@v1`・ランナーに入っている `gh` と `rustup`。
+- GitHub Actions: `actions/checkout`・`rust-lang/crates-io-auth-action@v1`・ランナーに入っている `gh` と `rustup`。`gh api` で同じリポジトリの `release.yml` の回の一覧を読む（権限 `actions: read`）。
 - crates.io の索引（`https://index.crates.io/`）の読み取り。
 - 依存の向き: `crates-io.yml` → `tools/crates-io.ps1` → cargo。`test-all.ps1` → `tools/crates-io.ps1`。スクリプトは workflow の環境変数を読まない（手元と同じ動き）。
 
 ### Revalidation Triggers
 
 - 公開する一覧が変わる（3 つ目を足す・外す）: スクリプトの一覧、手順書、`tech.md`、crates.io の Trusted Publishing の設定を見直す。
-- 入力の名前 `version` か値の形が変わる: `release-ci-workflow` と手順書を見直す。
+- 入力の名前 `version` か値の形・タグの形（`v{版}`）が変わる: 段「版の形」と手順書を見直す。
+- `release.yml` の workflow の名前（`release`）・ファイル名・きっかけ（タグの push）、または「タグの push で始まった回が成功で終わる ⇔ そのタグの Release が公開で在る」の約束が変わる: 段「release を待つ」と手順書を見直す。
 - workflow のファイル名が変わる: crates.io の Trusted Publishing の設定をやり直す。
 - 版の指定を持つ行が増える・置き場が変わる: `release-cycle` の版上げの手順を見直す。
 - 版が 0.1.0 以上になる: 版の指定の意味が「ちょうど」から「互換の範囲」に変わるので、決定 1 を見直す。
@@ -89,7 +90,10 @@ graph TB
 
     Dev --> Script
     TestAll --> Script
-    ReleaseYml -->|version を渡して呼ぶ| Stage
+    Tag[タグ v版 の push]
+    Tag --> ReleaseYml
+    Tag --> Stage
+    Stage -.->|同じタグの回の成功を待つ| ReleaseYml
     Dev -->|手で起動| Stage
     Stage --> Script
     Script --> Cargo
@@ -99,7 +103,7 @@ graph TB
     Cargo --> Registry
 ```
 
-- **選んだ形**: 判定はスクリプト 1 本に集め、手元・全体テスト・公開の段が同じ物を呼ぶ。workflow は「順に呼ぶ・止める・鍵を受け取る」だけを持つ。
+- **選んだ形**: 判定はスクリプト 1 本に集め、手元・全体テスト・公開の段が同じ物を呼ぶ。workflow は「順に呼ぶ・待つ・止める・鍵を受け取る」だけを持つ。
 - **保った型**: `tools/*.ps1` の書き方（冒頭の較正値・段ごとの印字・終了コード）。依存の順は cargo に任せ、手で並べない。
 - **新しい部品の理由**: cargo は「一覧の食い違い」「大きさ」「理由のコメント」「既に在る版を飛ばす」を見ないので、その 4 つだけ自分で判定する。
 
@@ -147,9 +151,10 @@ graph TB
 
 **決定 6: 公開の段に乾いた走りの口は作らない**
 
-- 公開の段は、上げる直前まで何も変えない読み取りだけの段でできている。初回（`v0.0.2`）で workflow の書き方に誤りがあっても、何も上がらずに止まる。workflow のファイルは既定の枝（main）の物が使われるので、workflow の誤りは main で直してから同じ版で手で起動し直せる（3.3・4.8）。
-- 直せるのは workflow のファイルだけ。`tools/crates-io.ps1` はタグのコミットの物が使われるので、スクリプトの誤りは main で直しても同じ版には効かない。そのときは同じ版を予備の手順（3.5）で出し、直したスクリプトは次の版から効く。この切り分けを手順書の「止まったときのやり直し」に書く。
-- 公開の段の中の判定「公開の段の形」が見るのは、タグのコミットに在る `crates-io.yml` の写し。実際に動く main の物は、全体テストが毎回見張る。
+- 公開の段は、上げる直前まで何も変えない読み取りだけの段でできている。初回（`v0.0.2`）で workflow の書き方に誤りがあっても、何も上がらずに止まる。
+- 動く workflow のファイルはきっかけで違う（10-03 案 B で改めた）。タグの push で動いた回は、**タグのコミットに在る** `crates-io.yml` で動く（main の物ではない）。その回の Re-run も同じタグのコミットの物で動くので、workflow の誤りは Re-run では直らない。main から手で起動した回（`workflow_dispatch`）だけが main の `crates-io.yml` で動く。そこで workflow の誤りは main で直し、Actions の画面の「Run workflow」で main から同じ版を渡して起動し直す（3.3・4.8）。Trusted Publishing は workflow のファイル名で照らすので、どちらの回も受け付けられる。
+- `tools/crates-io.ps1` は、どちらのきっかけでもタグのコミットの物が使われる（取り出すのはタグ）。スクリプトの誤りは main で直しても同じ版には効かない。そのときは同じ版を予備の手順（3.5）で出し、直したスクリプトは次の版から効く。この切り分けを手順書の「止まったときのやり直し」に書く。
+- 公開の段の中の判定「公開の段の形」が見るのは、タグのコミットに在る `crates-io.yml` の写し（タグの push で実際に動く物と同じ）。main の物は全体テストが毎回見張る。
 
 **決定 7: Trusted Publishing の設定に GitHub の environment は使わない**
 
@@ -213,9 +218,12 @@ doc/
 
 ```mermaid
 flowchart TD
-    Start[workflow_dispatch version] --> Shape{版の形は数字3つか}
+    Start[タグ v版 の push または workflow_dispatch version] --> Shape{版の形は数字3つか}
     Shape -->|いいえ| Stop[何も上げずに失敗]
-    Shape -->|はい| Checkout[タグ v版 を取り出す]
+    Shape -->|はい・タグの push| Wait{同じタグの release.yml の回が成功で終わったか 45分まで30秒ごと}
+    Shape -->|はい・手で起動| Checkout[タグ v版 を取り出す]
+    Wait -->|成功以外・45分超え・release.yml が無い| Stop
+    Wait -->|成功| Checkout
     Checkout --> Rel{その版の Release は公開済みか}
     Rel -->|いいえ| Stop
     Rel -->|はい| Check[確認 組み立てまで と版の一致]
@@ -229,7 +237,7 @@ flowchart TD
     Record --> End[残りが0なら成功 それ以外は失敗]
 ```
 
-- 「記録」は前の段が失敗しても必ず走り、2 クレートのそれぞれが crates.io に在るか無いかを実行の要約へ書く（4.9）。
+- 「記録」は前の段が失敗しても必ず走り、2 クレートのそれぞれが crates.io に在るか無いかを実行の要約へ書く（4.9）。取り出しまで（版の形・release を待つ・取り出し）で止まった回は「何も上げていない」とだけ書く。
 - `dola` だけ上がって `wintf` で落ちた回は、同じ版で起動し直すと残りの判定が `wintf` だけを返す（4.8）。
 
 ## Requirements Traceability
@@ -263,8 +271,8 @@ flowchart TD
 | 3.5 | 予備の手順 | 手順書 | 節「予備」 | − |
 | 3.6 | 鍵は手元だけ・使い終えたら取り消す | 手順書 | 節「予備」 | − |
 | 3.7 | 秘密を印字しない | 手順書 | 禁じる操作の一覧 | − |
-| 4.1 | 呼ばれたら・手で起動したら始める | 公開の段 | `workflow_dispatch`・`version` | 公開の段 |
-| 4.2 | ほかの出来事で動かない | 公開の段・確認スクリプト | 判定「公開の段の形」 | − |
+| 4.1 | タグの push・手で起動したら始める | 公開の段 | `push: tags: ['v*']`・`workflow_dispatch`・`version`・段「版の形」 | 公開の段 |
+| 4.2 | ほかの出来事で動かない | 公開の段・確認スクリプト | 判定「公開の段の形」（`on:` の直下は `workflow_dispatch` と、下が `tags` だけの `push`） | − |
 | 4.3 | 版の不一致で止まる | 公開の段・確認スクリプト | `-Version` | 公開の段 |
 | 4.4 | 先に確認 | 公開の段 | `-Verify` | 公開の段 |
 | 4.5 | 1 つも版が無いクレートで止まる | 確認スクリプト | `-Pending`（索引が 404） | 公開の段 |
@@ -275,6 +283,7 @@ flowchart TD
 | 4.10 | Release・winget に触らない | 公開の段 | 権限 `contents: read` | − |
 | 4.11 | 秘密を記録に出さない | 公開の段 | `persist-credentials: false`・鍵は環境変数 | − |
 | 4.12 | Release が公開でなければ止まる | 公開の段 | 段「Release の確認」 | 公開の段 |
+| 4.13 | タグの push では release の回の成功を待つ | 公開の段 | 段「release を待つ」（`gh api`・権限 `actions: read`） | 公開の段 |
 | 5.1 | 根の README | 文書 | 節「入手とインストール」 | − |
 | 5.2 | 配布物の README | 文書 | 節「■ 入手のしかた」 | − |
 | 5.3 | winget の行を足せる形 | 文書 | 入れ方を箇条書きに | − |
@@ -289,7 +298,7 @@ flowchart TD
 | クレートの設定 | 設定 | 出す・出さないと版の指定 | 1.1〜1.7 | cargo (P0) | State |
 | 確認スクリプト `tools/crates-io.ps1` | 道具 | 公開前の確認・残りの判定 | 1.2, 1.3, 2.1〜2.11, 3.4, 4.2, 4.3, 4.5, 4.6, 4.8, 5.5 | cargo (P0)・索引 (P1) | Service |
 | 全体テストの段 | 道具 | 包むだけの形を毎回 | 2.12 | 確認スクリプト (P0) | − |
-| 公開の段 `crates-io.yml` | CI | 呼ばれたら確かめて出す | 2.13, 4.1〜4.12 | 確認スクリプト (P0)・auth-action (P0)・`gh` (P0) | Batch |
+| 公開の段 `crates-io.yml` | CI | タグの push で release を待ち、確かめて出す | 2.13, 4.1〜4.13 | 確認スクリプト (P0)・auth-action (P0)・`gh` (P0) | Batch |
 | 手順書 `doc/crates-io-publish.md` | 文書 | 設定・やり直し・予備 | 3.1〜3.7, 2.13 | − | − |
 | 説明の文書 | 文書 | 何が crates.io に在るか | 5.1〜5.6 | − | − |
 
@@ -339,7 +348,7 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 4. **判定「欄」**（1.3）: 公開する一覧の各クレートの説明・ライセンス・リポジトリが空でない。
 5. **判定「理由」**（1.2・5.5）: 出さない各クレートの設定ファイルに、行頭から `publish = false # 文字` の形の行がある。
 6. **判定「版」**（4.3・`-Version` のときだけ）: 公開する一覧の各クレートの版が渡された値と同じ。
-7. **判定「公開の段の形」**（4.2・4.6）: `.github/workflows/crates-io.yml` の `on:` の直下のきっかけが `workflow_dispatch` だけで、ファイルに `secrets.` の参照が無い（workflow が `gh` に渡す鍵は `github.token` と書く）。
+7. **判定「公開の段の形」**（4.2・4.6）: `.github/workflows/crates-io.yml` の `on:` の直下のきっかけが `workflow_dispatch`（必須）と `push`（任意）だけで、`push:` の直下は `tags` だけ（`branches`・`paths` などは名前つきで失敗）、ファイルに `secrets.` の参照が無い（workflow が `gh` に渡す鍵は `github.token` と書く）。`on:` を 1 行や並び（`-`）で書いた形も失敗。キーの綴りは大文字・小文字を区別する。
 8. **包む**（2.1・2.2・2.6・2.10・1.7）: 前回の `.crate` を消してから包む。cargo の出力はそのまま見せる。
    - 包むだけの形: `cargo package --no-verify --allow-dirty --locked --offline --target-dir target/crates-io -p dola -p wintf`（決定 9）。
    - 組み立てまでの形: `cargo publish --dry-run --allow-dirty --locked --target-dir target/crates-io -p dola -p wintf`。「その版は既に在る」は cargo が名前つきの警告で示し、終了コードは 0 のまま（2.10）。
@@ -372,22 +381,23 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 
 | Field | Detail |
 |---|---|
-| Intent | 呼ばれた版の `wintf`・`dola` を、確かめてから crates.io へ出す |
-| Requirements | 2.13, 4.1〜4.12 |
+| Intent | タグの push（release の成功を待つ）か手での起動で受けた版の `wintf`・`dola` を、確かめてから crates.io へ出す |
+| Requirements | 2.13, 4.1〜4.13 |
 
 **Contracts**: Batch [x]
 
 ##### Batch / Job Contract
 
-- **Trigger**: `workflow_dispatch` だけ。入力は `version`（必須・文字列・`v` を付けない版）。呼び方は `gh workflow run crates-io.yml -f version=0.0.2`（`release.yml` から、または手で）。
-- **権限**: `contents: read`・`id-token: write` だけ。秘密の置き場（`secrets.`）を参照しない。
+- **Trigger**: `push: tags: ['v*']` と `workflow_dispatch` の 2 つだけ（10-03 案 B）。タグの push では版をタグ（`github.ref_name`）から `v` を外して取る。手での起動の入力は `version`（必須・文字列・`v` を付けない版）で、やり直しの口として GitHub の Actions の画面の「Run workflow」から起動する。`release.yml` は公開の段を呼ばない。`workflow_run` は crates.io の Trusted Publishing が断るので使わない。
+- **権限**: `contents: read`・`id-token: write`・`actions: read`（`release.yml` の回の様子を読む）だけ。秘密の置き場（`secrets.`）を参照しない。
 - **同時実行**: `concurrency` で 1 本に絞り、走っている回は取り消さない。
 - **ランナー**: `windows-latest`・シェルは `pwsh`。ビルドのキャッシュは使わない。
 - **段**（上から順・失敗したら「記録」以外は飛ばす）:
 
 | 段 | すること | 要件 |
 |---|---|---|
-| 版の形 | 入力を環境変数で受け、`^\d+\.\d+\.\d+$` に合わなければ失敗（スクリプトの文に入力を直接埋めない） | 4.1 |
+| 版の形 | タグの push ではタグを `^v\d+\.\d+\.\d+$`、手での起動では入力を `^\d+\.\d+\.\d+$` で確かめ、合わなければ失敗。どちらも環境変数で受け（スクリプトの文に `${{ }}` を埋めない）、形を確かめた版だけを `GITHUB_ENV` で後の段へ渡す | 4.1 |
+| release を待つ | タグの push のときだけ（手での起動では飛ばし、次の「Release の確認」が同じことを確かめる）。`gh api` で `release.yml` の回の一覧（`event=push`・`head_sha` がタグのコミット）を 30 秒ごとに読み、`head_branch` がタグと同じ最新の回が成功で終われば先へ。成功以外で終わったら終わり方と版を、45 分（待つ長さの 2 つの値は段の冒頭の 1 か所）で成功に至らなければ最後の様子と版を示して失敗。`release.yml` が GitHub に一度も登録されていない（404）ならすぐ失敗（登録済みで main に無いだけなら回が現れず、上限で失敗）。まだ現れない回・一時的な読み取りの失敗は待つ側に数える。URL や鍵は印字しない。取り出しの前に置く: 待つのにリポジトリの中身は要らず、release が緑になる前にタグを取り出さない | 4.13, 4.11 |
 | 取り出し | `actions/checkout`・`ref: refs/tags/v{版}`・`persist-credentials: false` | 4.3, 4.11 |
 | Release の確認 | `gh release view v{版} --json isDraft` が失敗、または下書きなら、版を示して失敗 | 4.12 |
 | 道具 | `rustup update stable --no-self-update` | − |
@@ -395,15 +405,16 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 | 残りの判定 | `tools/crates-io.ps1 -Pending -Version {版}` の出力を次の段へ渡す | 4.5, 4.8 |
 | 鍵 | 残りが在るときだけ `rust-lang/crates-io-auth-action@v1` | 4.6 |
 | 公開 | 残りが在るときだけ `cargo publish --locked --no-verify -p {残り…}`。鍵は `CARGO_REGISTRY_TOKEN` の環境変数で渡す | 4.7 |
-| 記録 | 必ず走る。`-Pending` をもう一度呼び、2 クレートの在る・無いを実行の要約へ書く。残りが 0 でなければ失敗。取り出しより前で止まった回（スクリプトがまだ無い）は「取り出しより前で止まった・何も上げていない」とだけ書く | 4.9 |
+| 記録 | 必ず走る。`-Pending` をもう一度呼び、2 クレートの在る・無いを実行の要約へ書く。残りが 0 でなければ失敗。取り出しまで（版の形・release を待つ・取り出し）で止まった回（スクリプトがまだ無い）は「何も上げていない」とだけ書く | 4.9 |
 
 - **Idempotency & recovery**: 同じ版で何度起動してもよい。既に在るクレートは飛ばされ、残りが 0 なら何も上げずに成功で終わる。
 - **触らないもの**: Release・添付物・ほかの workflow（4.10）。Release は読むだけ。
 
 **Implementation Notes**
 
-- Integration: 既定の枝の workflow のファイルが使われ、コードとスクリプトはタグのコミットの物が使われる。`release.yml` からの呼び出しは `--ref` を付けても付けなくてもよい。
-- Risks: Trusted Publishing の受け渡しと実際の公開は、本 spec の中では試せない（初めての実走は `release-cycle` の `v0.0.2`）。誤りがあっても上げる前に止まる。workflow の誤りは main で直して同じ版で起動し直し、スクリプトの誤りは予備の手順で出す（決定 6）。
+- Integration: タグの push の回はタグのコミットの workflow のファイルで、main からの手での起動の回は main の物で動く。コードとスクリプトはどちらもタグのコミットの物が使われる（決定 6）。
+- Risks: Trusted Publishing の受け渡しと実際の公開は、本 spec の中では試せない（初めての実走は `release-cycle` の `v0.0.2`）。誤りがあっても上げる前に止まる。workflow の誤りは main で直して main から手で起動し直し、スクリプトの誤りは予備の手順で出す（決定 6）。
+- Risks: release が赤で止まった回は、開発者が release を緑にした後、その回を Actions の画面の「Re-run」で走らせ直す（段「release を待つ」がすぐ緑を読む）か、「Run workflow」で同じ版を渡す。
 - Risks: 上げた直後は索引への反映が遅れることがある。「公開」が緑で「記録」だけが赤の回は反映待ちで、時間を置いて同じ版で起動し直せば、何も上げずに緑で終わる。
 
 ### 文書
@@ -414,10 +425,11 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 
 1. **何を出すか**: `wintf`・`dola` だけ。決め方は `tech.md` を指す。
 2. **Trusted Publishing の設定**（3.2）: crates.io の `wintf`・`dola` それぞれの設定の画面で、持ち主 `ekicyou`・リポジトリ `areka`・workflow のファイル名 `crates-io.yml`・environment は空。最初の自動の公開（`release-cycle` の初回のタグ）より前に済ませる。
-3. **いつもの流れ**: `release.yml` が Release の公開の後に公開の段を呼ぶ。開発者は見守るだけ。
+3. **いつもの流れ**: タグの push で `release.yml` と公開の段が同時に動き出し、公開の段は同じタグの `release.yml` の回の成功を待ってから出す。開発者は見守るだけ。
 4. **出たことを確かめる**（3.4）: タグのコミットで `pwsh -NoProfile -File tools/crates-io.ps1 -Pending`。2 クレートとも「在る」で、標準出力が空なら出ている。
-5. **止まったときのやり直し**（3.3）: `gh workflow run crates-io.yml -f version={版}`。既に出たクレートは飛ばされる。止まり方ごとの切り分けを書く。
-   - workflow のファイルの誤り: main で直してから同じ版で起動し直す。
+5. **止まったときのやり直し**（3.3）: 主な道は Actions の画面のボタン（その回の「Re-run」か、main の「Run workflow」に版を渡す）で、コマンドの行は要らない。既に出たクレートは飛ばされる。止まり方ごとの切り分けを書く。
+   - workflow のファイルの誤り: main で直してから、main の「Run workflow」で同じ版を渡す（タグの push の回の Re-run はタグのコミットの workflow で動くので直らない）。
+   - release が赤・45 分で終わらない: release を緑にしてから、その回を「Re-run」する（または「Run workflow」で同じ版）。
    - `tools/crates-io.ps1` の誤り: タグのコミットの物が使われるので、同じ版は予備の手順で出す。直した物は次の版から効く。
    - 「公開」が緑で「記録」だけが赤: 索引の反映待ち。時間を置いて `-Pending` を手元で走らせるか、同じ版で起動し直す。
    - `release-cycle` の「赤なら同じ版で再実行しない」は Release を作る `release.yml` の話で、公開の段は同じ版で何度起動し直してもよい。
@@ -429,7 +441,7 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 - **`README.md` の「入手とインストール」**（5.1・5.3）: 入れ方を箇条書きにする（今は「GitHub Releases の zip を展開する」の 1 行。winget の行は後から同じ箇条書きに足せる）。続けて、crates.io に版を出しているのは `wintf`・`dola` だけ・`areka` は 0.0.1 の名前の確保だけで本体と部品は出していない・`cargo install areka` は入れ方ではない（32 ビットの補助 exe が付かない）と書く。
 - **`dist/README.txt` の「■ 入手のしかた」**（5.2・5.3）: 「・」の箇条書きで、入れ方は配布の zip であること、`cargo install areka` では使えないことを平易に書く。winget の行は後から同じ箇条書きに足せる。
 - **`crates/wintf/README.md`・`crates/dola/README.md` の Status 節**（5.6）: 「Version 0.0.1」の表記を外し（版ごとに古びるため）、「名前の確保のための公開」の文を「使える早期の版である・API はまだ安定していない」の文に改める（英語の節なので英語で）。
-- **`tech.md` の「crates.io への公開」**（5.4・5.5・3.1）: 出すのは areka の外でも使える汎用のライブラリだけ（今は `wintf`・`dola`）／出さないクレートは `publish = false # 理由`／新しいクレートを足すときは `publish` の行と理由を必ず書く（書き忘れは全体テストが止める）／確認は `tools/crates-io.ps1`（`-Verify` で組み立てまで）／全体テストの段はネットを使わない形で包む（Testing 節の「ネットへ出るテストは常時テストに入れない」のまま）／公開の段は `crates-io.yml`・`workflow_dispatch`・Trusted Publishing／版を上げるときは根の `Cargo.toml` の 2 行／手順書は `doc/crates-io-publish.md`。
+- **`tech.md` の「crates.io への公開」**（5.4・5.5・3.1）: 出すのは areka の外でも使える汎用のライブラリだけ（今は `wintf`・`dola`）／出さないクレートは `publish = false # 理由`／新しいクレートを足すときは `publish` の行と理由を必ず書く（書き忘れは全体テストが止める）／確認は `tools/crates-io.ps1`（`-Verify` で組み立てまで）／全体テストの段はネットを使わない形で包む（Testing 節の「ネットへ出るテストは常時テストに入れない」のまま）／公開の段は `crates-io.yml`・タグ `v*` の push（release の成功を待つ）と `workflow_dispatch`・Trusted Publishing／版を上げるときは根の `Cargo.toml` の 2 行／手順書は `doc/crates-io-publish.md`。
 
 ## Error Handling
 
@@ -440,6 +452,7 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 | 版の指定の無い・合わない依存 | cargo | cargo の文言（依存の名前つき） |
 | 包んだ大きさが上限超え | 判定「大きさ」 | 名前と大きさ |
 | 渡された版とワークスペースの版の不一致 | 判定「版」 | 二つの版 |
+| release の回が成功以外で終わる・45 分で成功に至らない・`release.yml` が無い | 段「release を待つ」 | 版と終わり方（または最後の様子） |
 | Release が無い・下書き | 段「Release の確認」 | 版 |
 | crates.io に 1 つも版が無いクレート | `-Pending` | 名前と予備の手順の案内 |
 | 途中まで上がって失敗 | 段「公開」→「記録」 | クレートごとの在る・無い |
@@ -458,7 +471,7 @@ pwsh -NoProfile -File tools/crates-io.ps1 -Pending [-Version <版>]
 - 判定「理由」: `publish = false` だけの行、コメントが別の行にある見本で落ちる。`publish = false # 理由` は通る。
 - 判定「大きさ」: 上限ちょうどは通り、1 バイト超えは落ちる。
 - 判定「版」: 違う版で二つの版を示して落ちる。
-- 判定「公開の段の形」: `push:` を足した見本、`secrets.` を含む見本で落ちる。
+- 判定「公開の段の形」: 正しい見本（`push: tags: ['v*']` と `workflow_dispatch` の入力つき）、`on:` が最初の行の見本、`workflow_dispatch` だけの見本は通る。`pull_request:`・`workflow_run:`・`schedule:` を兄弟に足した見本、`Push:`・`On:` と書いた見本、`workflow_dispatch` が無い見本、`push:` の下に `branches:`・`paths:` を足した見本、`push:` の下が空の見本、`push:` を 1 行に書いた見本、`on:` を並び・1 行・1 行の並びで書いた見本、`on:` が無い見本、`secrets.` を含む見本で、それぞれ名前つきで落ちる。
 - 残りの判定: 索引の本文にその版が在る・無い・索引が 404 の 3 通り。
 
 ### 実物での確認（実装のタスクの中で 1 回ずつ）

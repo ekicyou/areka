@@ -11,8 +11,8 @@
     4. 判定「欄」: 公開する一覧の各クレートの説明・ライセンス・リポジトリが空でない
     5. 判定「理由」: 出さない各クレートの Cargo.toml に、行頭から「publish = false # 理由」の行がある
     6. 判定「版」（-Version のときだけ）: 公開する一覧の各クレートの版が渡された値と同じ
-    7. 判定「公開の段の形」: WORKFLOW の on: の直下のきっかけが workflow_dispatch だけで、
-       ファイルに secrets. の参照が無い（ファイルが無ければ失敗）
+    7. 判定「公開の段の形」: WORKFLOW の on: の直下のきっかけが workflow_dispatch（必須）と push（任意・
+       下は tags だけ）だけで、ファイルに secrets. の参照が無い（ファイルが無ければ失敗）
     8. 包む: 前回の .crate を消してから、公開する一覧を包む（cargo の出力はそのまま見せる）
          引数なし: cargo package --no-verify --allow-dirty --locked --offline（ネットを使わない）
          -Verify : cargo publish --dry-run --allow-dirty --locked（索引を読み、組み立てまで）
@@ -133,26 +133,45 @@ function Test-Indexed([string]$Name, [string]$Want, [string]$Body) {
     if ($Want -notin $vers) { "$Name の $Want が crates.io に無い" }
 }
 
-# workflow のファイルの本文。YAML の読み手は使わず、行頭の on: とその直下（字下げの最も浅い行）のキーだけを見る
+# 行の字下げの深さと、キーの名前（「名前:」の名前）と、キーと同じ行の値（コメントを除く）
+function Indent([string]$Line) { ($Line -replace '\S.*$', '').Length }
+function Key([string]$Line) { $Line.Trim() -replace '\s*:.*$', '' }
+function Inline([string]$Line) { ($Line -replace '^[^:]*:', '' -replace '\s#.*$', '').Trim() }
+
+# workflow のファイルの本文。YAML の読み手は使わず、行頭の on: の直下（字下げの最も浅い行）のキーと、
+# その push: の直下のキーだけを見る。きっかけは workflow_dispatch（必須）と、tags だけを持つ push（任意）
 function Test-Workflow([string]$Name, [string]$Text) {
     if ($Text -match 'secrets\.') { "$Name が secrets. を参照している（鍵は Trusted Publishing と github.token だけ）" }
     # 空行・コメントだけの行は読まない
     $lines = @($Text -split '\r?\n' | Where-Object { $_ -notmatch '^\s*(#.*)?$' })
     $at = @(for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -cmatch '^(on|"on"|''on'')[ \t]*:') { $i } })
     if ($at.Count -eq 0) { return "$Name に行頭の on: が無い" }
-    $inline = ($lines[$at[0]] -replace '^[^:]*:', '' -replace '\s#.*$', '').Trim()
+    $inline = Inline $lines[$at[0]]
     if ($inline) {
-        if ($inline -cne 'workflow_dispatch') { "$Name の on: のきっかけが workflow_dispatch だけでない: $inline" }
+        if ($inline -cne 'workflow_dispatch') { "$Name の on: を 1 行に書いている（きっかけは workflow_dispatch とタグの push だけ）: $inline" }
         return
     }
     # 次の行頭の行までが on: の中
     $children = @(for ($i = $at[0] + 1; $i -lt $lines.Count -and $lines[$i] -match '^\s'; $i++) { $lines[$i] })
     if ($children.Count -eq 0) { return "$Name の on: の直下にきっかけが無い" }
-    $depth = ($children | ForEach-Object { ($_ -replace '\S.*$', '').Length } | Measure-Object -Minimum).Minimum
-    $keys = @($children | Where-Object { ($_ -replace '\S.*$', '').Length -eq $depth } |
-            ForEach-Object { $_.Trim() -replace '^-\s*', '' -replace '\s*:.*$', '' })
-    $other = @($keys | Where-Object { $_ -cne 'workflow_dispatch' })
-    if ($other.Count) { "$Name の on: の直下に workflow_dispatch 以外のきっかけ: $($other -join ', ')" }
+    $depth = ($children | ForEach-Object { Indent $_ } | Measure-Object -Minimum).Minimum
+    $top = @(for ($i = 0; $i -lt $children.Count; $i++) { if ((Indent $children[$i]) -eq $depth) { $i } })
+    $keys = @($top | ForEach-Object { Key $children[$_] })
+    if (@($keys | Where-Object { $_.StartsWith('-') }).Count) { return "$Name の on: を並び（- で始まる行）で書いている（キーの形で書く）" }
+    $other = @($keys | Where-Object { $_ -cnotin 'workflow_dispatch', 'push' })
+    if ($other.Count) { "$Name の on: の直下に workflow_dispatch・push 以外のきっかけ: $($other -join ', ')" }
+    if ('workflow_dispatch' -cnotin $keys) { "$Name の on: の直下に workflow_dispatch（手で起動し直す口）が無い" }
+    $p = [array]::IndexOf($keys, 'push')
+    if ($p -lt 0) { return }
+    # push: の中は、次の同じ深さのキーまで
+    if (Inline $children[$top[$p]]) { return "$Name の push: を 1 行に書いている（下に tags: だけを置く）" }
+    $end = if ($p + 1 -lt $top.Count) { $top[$p + 1] } else { $children.Count }
+    $sub = @(for ($i = $top[$p] + 1; $i -lt $end; $i++) { $children[$i] })
+    $subDepth = ($sub | ForEach-Object { Indent $_ } | Measure-Object -Minimum).Minimum
+    $subKeys = @($sub | Where-Object { (Indent $_) -eq $subDepth } | ForEach-Object { Key $_ })
+    $bad = @($subKeys | Where-Object { $_ -cne 'tags' })
+    if ($bad.Count) { "$Name の push: の下に tags 以外: $($bad -join ', ')（枝・パスの push では動かさない）" }
+    if ('tags' -cnotin $subKeys) { "$Name の push: の下に tags: が無い（タグの push だけで動く）" }
 }
 
 # =============================================================================
@@ -198,13 +217,24 @@ Calibrate '残り' 'その版が在る' @((Test-Index 'dola' 200) + (Test-Indexe
 Calibrate '残り' 'その版が無い' (Test-Indexed 'dola' '0.0.1' ($index -replace '0\.0\.1"', '0.0.10"')) $false 'dola', '0.0.1'
 Calibrate '残り' '索引が 404' (Test-Index 'dola' 404) $false 'dola', '1 つも版が無い', '予備の手順'
 Calibrate '残り' '索引が 500' (Test-Index 'dola' 500) $false 'dola', '500'
-# 実物の on: の形の写し。workflow_dispatch の下の inputs・version は、きっかけと読まない
-$flow = "# 説明`r`nname: crates-io`r`n`r`non:`r`n  workflow_dispatch:`r`n    inputs:`r`n      version:`r`n        required: true`r`n`r`n# 権限`r`npermissions:`r`n  contents: read`r`n  id-token: write`r`njobs:`r`n  publish:`r`n    env:`r`n      GH_TOKEN: `${{ github.token }}`r`n"
+# 実物の on: の形の写し。push の下の tags の値と、workflow_dispatch の下の inputs・version は、きっかけと読まない
+$flow = "# 説明`r`nname: crates-io`r`n`r`non:`r`n  push:`r`n    tags: ['v*']`r`n  workflow_dispatch:`r`n    inputs:`r`n      version:`r`n        required: true`r`n`r`n# 権限`r`npermissions:`r`n  contents: read`r`n  id-token: write`r`n  actions: read`r`njobs:`r`n  publish:`r`n    env:`r`n      GH_TOKEN: `${{ github.token }}`r`n"
 Calibrate '公開の段の形' '正しい見本' (Test-Workflow 'w.yml' $flow) $true
 Calibrate '公開の段の形' 'on: が最初の行の見本' (Test-Workflow 'w.yml' $flow.Substring($flow.IndexOf("`non:") + 1)) $true
+Calibrate '公開の段の形' 'workflow_dispatch だけの見本' (Test-Workflow 'w.yml' ($flow -replace "  push:`r`n    tags: \['v\*'\]`r`n", '')) $true
 Calibrate '公開の段の形' 'On: と書いた見本' (Test-Workflow 'w.yml' ($flow -creplace '(?m)^on:', 'On:')) $false 'w.yml', 'on:'
-Calibrate '公開の段の形' 'push を足した見本' (Test-Workflow 'w.yml' ($flow -replace '(?m)^  workflow_dispatch:', "  push:`r`n    tags: ['v*']`r`n  workflow_dispatch:")) $false 'w.yml', 'push'
+Calibrate '公開の段の形' 'pull_request を足した見本' (Test-Workflow 'w.yml' ($flow -replace '(?m)^  workflow_dispatch:', "  pull_request:`r`n  workflow_dispatch:")) $false 'w.yml', 'pull_request'
+Calibrate '公開の段の形' 'workflow_run を足した見本' (Test-Workflow 'w.yml' ($flow -replace '(?m)^  workflow_dispatch:', "  workflow_run:`r`n    workflows: [release]`r`n    types: [completed]`r`n  workflow_dispatch:")) $false 'w.yml', 'workflow_run'
+Calibrate '公開の段の形' 'schedule を足した見本' (Test-Workflow 'w.yml' ($flow -replace '(?m)^  workflow_dispatch:', "  schedule:`r`n    - cron: '0 0 * * *'`r`n  workflow_dispatch:")) $false 'w.yml', 'schedule'
+Calibrate '公開の段の形' 'Push: と書いた見本' (Test-Workflow 'w.yml' ($flow -creplace '(?m)^  push:', '  Push:')) $false 'w.yml', 'Push'
+Calibrate '公開の段の形' 'workflow_dispatch が無い見本' (Test-Workflow 'w.yml' ($flow -replace '(?ms)^  workflow_dispatch:.*?(?=^# 権限)', '')) $false 'w.yml', 'workflow_dispatch'
+Calibrate '公開の段の形' 'push に branches を足した見本' (Test-Workflow 'w.yml' ($flow -replace '(?m)^    tags:', "    branches: [main]`r`n    tags:")) $false 'w.yml', 'branches'
+Calibrate '公開の段の形' 'push に paths を足した見本' (Test-Workflow 'w.yml' ($flow -replace '(?m)^    tags:', "    paths: ['crates/**']`r`n    tags:")) $false 'w.yml', 'paths'
+Calibrate '公開の段の形' 'push の下が空の見本' (Test-Workflow 'w.yml' ($flow -replace "(?m)^    tags: .*`r`n", '')) $false 'w.yml', 'tags'
+Calibrate '公開の段の形' 'push を 1 行に書いた見本' (Test-Workflow 'w.yml' ($flow -replace "(?m)^  push:`r`n    tags: .*`r`n", "  push: { tags: ['v*'] }`r`n")) $false 'w.yml', 'push'
+Calibrate '公開の段の形' 'on: を並びで書いた見本' (Test-Workflow 'w.yml' ($flow -replace '(?ms)^on:.*?(?=^# 権限)', "on:`r`n  - push`r`n  - workflow_dispatch`r`n`r`n")) $false 'w.yml', '並び'
 Calibrate '公開の段の形' 'on: を 1 行に書いた見本' (Test-Workflow 'w.yml' ($flow -replace '(?ms)^on:.*?(?=^# 権限)', "on: push`r`n")) $false 'w.yml', 'push'
+Calibrate '公開の段の形' 'on: を 1 行の並びで書いた見本' (Test-Workflow 'w.yml' ($flow -replace '(?ms)^on:.*?(?=^# 権限)', "on: [push, workflow_dispatch]`r`n")) $false 'w.yml', 'push'
 Calibrate '公開の段の形' 'on: が無い見本' (Test-Workflow 'w.yml' ($flow -replace '(?m)^on:', 'xon:')) $false 'w.yml', 'on:'
 Calibrate '公開の段の形' 'secrets. を含む見本' (Test-Workflow 'w.yml' ($flow -replace 'github\.token', 'secrets.GITHUB_TOKEN')) $false 'w.yml', 'secrets.'
 
