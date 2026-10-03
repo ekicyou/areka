@@ -32,7 +32,7 @@
 ### This Spec Owns
 - 新クレート `crates/areka-mcp/`（待受・ポートの読み解き・`Origin`／`Host` の検査・HTTP の振り分け・rmcp の組み込み・ツール登録口・help ページ・決定論テスト）。
 - 環境変数 `AREKA_MCP_PORT` の意味（未設定＝既定の候補 20 個〔9801・9821・9802・9822・…・9810・9830〕・1〜65535＝その 1 つだけ・`0`＝待ち受けない・読めない値＝`warn!`＋既定の候補）。
-- 公開の契約: `areka_mcp::start`・`McpServer`（取っ手）・`ToolRegistry`／`ToolSpec`／`ToolOutcome`／`ToolContent`（登録口）・`DEFAULT_PORTS`／`FALLBACK_STEPS`／`candidates_from_env_value`／`read_port_candidates`（B-13 で `DEFAULT_PORT`／`port_from_env_value`／`read_port_env` から置き換えた）。
+- 公開の契約: `areka_mcp::start`・`McpServer`（取っ手）・`SHUTDOWN_WAIT`・`ToolRegistry`／`ToolSpec`／`ToolOutcome`／`ToolContent`／`ToolHandler`／`ToolFuture`（登録口）・`PORT_ENV`／`DEFAULT_PORTS`／`FALLBACK_STEPS`／`candidates_from_env_value`／`read_port_candidates`（B-13 で `DEFAULT_PORT`／`port_from_env_value`／`read_port_env` から置き換えた）。
 - `crates/areka/src/main.rs` の `fn main()` への結線 1 行と `crates/areka/Cargo.toml` の依存 1 行。
 - `doc/ssp-mcp/transport-diff-areka.md`（SSP との輸送の差の一覧・新規）。
 - `.kiro/steering/tech.md`（Key Libraries の登記）・`structure.md`（`areka-mcp` の節）。
@@ -103,7 +103,7 @@ graph TB
 
 **Architecture Integration**:
 - 選んだ型: **葉クレート＋取っ手**。`areka-mcp` は「呼び出し側で同期に束ねる → 名前付きスレッドの中に tokio を 1 本立てる → hyper の受付ループ → 3 分岐の振り分け」で、アプリ本体は取っ手を 1 つ持つだけ。
-- 依存の向き: `port` → `gate` → `help` → `registry` → `handler` → `dispatch` → `server` → `lib`（公開面）。左の層は右を知らない。`server` だけが tokio・hyper・areka-actor を綴り、`handler` だけが rmcp の `ServerHandler`／`ToolRouter` を綴り、`dispatch` だけが rmcp の `StreamableHttpService` を呼ぶ。rmcp・tokio・hyper の型は `lib.rs` の公開面に現れない。
+- 依存の向き: `port` → `gate` → `help` → `registry` → `handler` → `dispatch` → `server` → `lib`（公開面）。左の層は右を知らない。tokio のランタイムと areka-actor を綴るのは `server` だけ（hyper の型は `server` と `dispatch`・`CancellationToken` は `dispatch` も受け取る）、`handler` だけが rmcp の `ServerHandler`／`ToolRouter` を綴り、`dispatch` だけが rmcp の `StreamableHttpService` を呼ぶ。rmcp・tokio・hyper の型は `lib.rs` の公開面に現れない。
 - 既存の型の踏襲: `period_from_env_value` の `warn!`＋既定・`ReportHandle` の上限つきの待ち・`spawn_actor` の名簿・`winhttp_real_tests::serve` の空きポート。
 - 新しい部品の理由: `gate` は help ページが rmcp の外にあるため自前が 1 つ要る（要件 6.3）。`registry` は rmcp の型を後続 10 spec へ漏らさないため。`dispatch` は 3 分岐しか無いのでルータの道具を入れない。
 - steering との整合: 本番 env は `AREKA_` の冠・ログ無しの失敗経路を作らない（`error!`／`warn!`／`info!` の件数を要件どおり固定）・1 ファイル 1,000 行・テストは実装の隣の `*_tests.rs`。
@@ -170,6 +170,8 @@ crates/areka-mcp/
 - `crates/areka/src/main.rs` — `fn main()` の `resolve_boot` の `match` の直後に `let _mcp = areka_mcp::start(&areka_mcp::read_port_candidates(), areka_mcp::ToolRegistry::default());`（B-13 の前は `read_port_env()`）と、意図を書くコメント（`Drop` で畳む・`down?` の罠を避ける・`app` より先に宣言する）。畳む行は無い（2 か所目は使わない）。
 - `Cargo.lock`・`THIRD-PARTY-NOTICES.md` — `cargo` と `tools/test-all.ps1 -License` が作り直す（手の差分 0 行）。
 - `doc/ssp-mcp/transport-diff-areka.md` — 新規（要件 5）。
+- `.kiro/steering/roadmap.md` — 本 spec の行の既定ポートの記述（B-13 の裁定に合わせる）と、起票時の記録への裁定の 1 文。
+- `.kiro/specs/areka-P0-mcp-stdio-bridge/brief.md` — 冒頭に B-13 の裁定の日付つき注記 1 段（本文の決めごとは変えない・Revalidation Trigger の追随）。
 - `.kiro/steering/tech.md` — Key Libraries に rmcp・tokio（＋tokio-util）・hyper（＋hyper-util・http-body-util・tower-service）の登記（用途・版・「tokio は MCP のスレッドに閉じる」）。
 - `.kiro/steering/structure.md` — 「MCP Server Crate（areka-mcp）」の節（Location・Purpose・Modules・Dependencies・規律）。
 - `.kiro/specs/areka-P0-mcp-server-core/verification/signoff.md` — 実機確認の記録（要件 9.5・9.6）。
