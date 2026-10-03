@@ -614,3 +614,7 @@ pub(super) fn font_tag_tokens(command: &areka_sakura::contract::CueCommand) -> O
 #[cfg(test)]
 #[path = "state_decoration_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "state_decoration_carry_tests.rs"]
+mod carry_tests;
