@@ -72,7 +72,7 @@ areka は SSP の実測ではなく ukadoc の意味を採る。実 SSP は `bal
 1. When 再生中のトークで `\![enter,nouserbreakmode]` が実行された場合, the areka shall その後そのトークの間に送るリクエストの `Status` に `nouserbreak` を含める
 2. When `\![leave,nouserbreakmode]` が実行された場合, the areka shall その後に送るリクエストの `Status` に `nouserbreak` を含めない
 3. When 中断の無効化モードに入ったトークが、`\![leave,nouserbreakmode]` を経ずに終わった、または中断された場合, the areka shall その後に送るリクエストの `Status` に `nouserbreak` を含めない
-4. While トークの再生中である場合, the areka shall `Status` の `nouserbreak` の有無を、利用者の操作によるトークの中断（バルーンの左ダブルクリックによる中断＝完了 `areka-P0-balloon-break` の定義）を areka が実際に受け付けない区間と一致させる（載っているのに中断できる、または載っていないのに中断できない、が起きない）。新しいトークの立ち上がり直後も例外としない
+4. While トークの再生中である場合, the areka shall `Status` の `nouserbreak` の有無を、利用者の操作によるトークの中断（バルーンの左ダブルクリックによる中断＝完了 `areka-P0-balloon-break` の定義）を areka が実際に受け付けない区間と一致させる（載っているのに中断できる、または載っていないのに中断できない、が起きない）。新しいトークの立ち上がり直後も例外としない。ただし、旗を持つ画面の側から `Status` を組み立てる側へ変化が届くまでの運搬の間（`talking` がトークの終わりを知るまでの遅れと同じ種類・通常 1 ミリ秒未満）は、構造上どの作りでも残るので一致の対象から外す（2026-10-03 設計討議の裁定）
 5. When ゴーストを切り替えた、または再起動した場合, the areka shall 前のゴーストの中断の無効化モードを新しいゴーストへのリクエストの `Status` に持ち越さない
 
 ### Requirement 4: balloon(ID群)（バルーンの表示）

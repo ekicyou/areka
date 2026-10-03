@@ -210,7 +210,7 @@ sequenceDiagram
 
 - 旗の畳み込みは 1 回の取り出し（入力の段・押下の判定より前）で全件済ませ、**取り出しの終わりに 1 回だけ**、旗が最後に送った値と違えば送る。同じ巡に `Enter` と `TalkEnded` が届いた場合は差し引き 0 で何も送らない。
 - kanade の写しは UI の旗を遅れて追う鏡である。kanade はトークの始まりや終わりで写しを勝手に下ろさない（下ろすと、UI がまだ旗を立てている間に「載っていないのに中断できない」が起きる）。代わりに `nouserbreak` は `talk_active && 写し` で載せるので、トークの終わりの後は写しの遅れに関わらず載らない（要件 3.3）。
-- 残る食い違いは「UI が旗を変えてから kanade の受信箱に届くまで」の運搬の間だけで、`talking`（`TalkDone` の運搬）と同じ種類の遅れである。これは 1 フレーム遅らせる解ではなく、旗の形（トークの終わりで下りる）を変えた上での運搬の遅れである。
+- 残る食い違いは「UI が旗を変えてから kanade の受信箱に届くまで」の運搬の間だけで、`talking`（`TalkDone` の運搬）と同じ種類の遅れである。これは 1 フレーム遅らせる解ではなく、旗の形（トークの終わりで下りる）を変えた上での運搬の遅れである。**この残差は受け入れる（2026-10-03 開発者裁定・設計討議 議題 1）**。旗をプロセスに 1 つの原子的な値にして kanade が送る瞬間に読む案は、送る瞬間と送出の間の競合が残ってゼロにはならず、ゴーストごとの状態をプロセス全体の値で持つ歪みだけが増えるので採らない。実機サインオフで「載っているのに中断できる」を探す範囲は、`no_user_break_changed` と `shiori_request` の時刻を並べて、運搬の間に収まっているかを見ることに定める。
 
 ### online: 数の増減と殻の読み取り
 
@@ -263,7 +263,7 @@ sequenceDiagram
 | 3.1 | enter で載る | `drain_no_user_break_signals` の送出・`State.external.no_user_break` | `KanadeMsg::ExecutionState` | nouserbreak |
 | 3.2 | leave で載らない | 同上（false を送る） | 同上 | nouserbreak |
 | 3.3 | leave なしで終わっても載らない | `TalkEnded` で旗を下ろす・`talk_active && 写し` の gating | `fold_no_user_break`・`snapshot_with_choice` | nouserbreak |
-| 3.4 | 断る区間と一致 | `TalkEnded`（旗の形の是正）・写しは UI の旗の鏡・取り出しの終わりに 1 回送る | `NoUserBreakSignal::TalkEnded` | nouserbreak |
+| 3.4 | 断る区間と一致 | `TalkEnded`（旗の形の是正）・写しは UI の旗の鏡・取り出しの終わりに 1 回送る。残差は UI→kanade の運搬の間だけ（`talking` と同種・受け入れ済み） | `NoUserBreakSignal::TalkEnded` | nouserbreak |
 | 3.5 | 切替で持ち越さない | `UserBreakWiring`・kanade の `State` はゴーストごとに新品 | — | — |
 | 4.1 | 表示中のキャラクターの組を含める | `status_report::collect_bindings` | `BalloonBinding` | balloon |
 | 4.2 | ID の意味 | scope 番号＝`character_id`・`current_surface_id`＝`balloon_id`（`None` は 0） | `collect_bindings` | balloon |
