@@ -603,6 +603,11 @@ impl TextLayerState {
         self.actors.get(key)
     }
 
+    /// 全部の場所のテキスト状態（`PlaceKey` 昇順＝スコープごとに普通のバルーン・箱の名前の順）。
+    pub fn places(&self) -> impl Iterator<Item = (&PlaceKey, &ActorTextState)> {
+        self.actors.iter()
+    }
+
     /// 全 actor の普通のバルーンの場所のテキスト状態（`ActorKey` 昇順・決定論的順序）。
     pub fn actors(&self) -> impl Iterator<Item = (&ActorKey, &ActorTextState)> {
         self.actors
@@ -645,3 +650,7 @@ mod clear_count_tests;
 #[cfg(test)]
 #[path = "state_route_tests.rs"]
 mod route_tests;
+
+#[cfg(test)]
+#[path = "state_place_tests.rs"]
+mod place_tests;

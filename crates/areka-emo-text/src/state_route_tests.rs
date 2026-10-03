@@ -3,6 +3,7 @@
 //!
 //! 箱の名前は公開の構築口を持たないので、テストの中に持つ surfaces.txt の文面を
 //! `parse_boxes` → `fold_boxes` で畳んで取り出す（検体は読まない）。
+//! 組み立ての支援（`pub(super)` のもの）は `state_place_tests.rs` も使う。
 
 use std::collections::BTreeMap;
 
@@ -49,7 +50,7 @@ element1,balloon,c,0,0
 ";
 
 /// 文面を畳んだ箱の表（サーフェス番号 → element番号の昇順の名前）。
-fn index() -> BTreeMap<u32, Vec<BoxName>> {
+pub(super) fn index() -> BTreeMap<u32, Vec<BoxName>> {
     let world = EmoWorld::build(&parse(SHELL));
     let (layout, report) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
     assert_eq!(report.issues, vec![], "検体の文面は誤りを持たない");
@@ -65,7 +66,7 @@ fn index() -> BTreeMap<u32, Vec<BoxName>> {
         .collect()
 }
 
-fn boxed(name: &str) -> TextPlace {
+pub(super) fn boxed(name: &str) -> TextPlace {
     let index = index();
     let found = index
         .values()
@@ -75,17 +76,17 @@ fn boxed(name: &str) -> TextPlace {
     TextPlace::Box(found.clone())
 }
 
-fn key(actor: &str) -> ActorKey {
+pub(super) fn key(actor: &str) -> ActorKey {
     ActorKey::from(actor)
 }
 
-fn state_with_boxes() -> TextLayerState {
+pub(super) fn state_with_boxes() -> TextLayerState {
     let mut state = TextLayerState::default();
     state.set_box_index(index());
     state
 }
 
-fn select(actor: &str, name: &str) -> TalkCue {
+pub(super) fn select(actor: &str, name: &str) -> TalkCue {
     cue(
         actor,
         0.0,
@@ -95,7 +96,7 @@ fn select(actor: &str, name: &str) -> TalkCue {
     )
 }
 
-fn show(state: &mut TextLayerState, actor: &str, id: u32) {
+pub(super) fn show(state: &mut TextLayerState, actor: &str, id: u32) {
     state.route_surface(&key(actor), SurfaceKeyOutcome::Show(id));
 }
 
@@ -106,7 +107,7 @@ fn warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
         .collect()
 }
 
-fn place_items(state: &TextLayerState, actor: &str, place: TextPlace) -> Vec<TextItem> {
+pub(super) fn place_items(state: &TextLayerState, actor: &str, place: TextPlace) -> Vec<TextItem> {
     state
         .place_state(&PlaceKey {
             actor: key(actor),
