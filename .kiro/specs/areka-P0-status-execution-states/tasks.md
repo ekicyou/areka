@@ -68,7 +68,7 @@
   - _Depends: 1.1_
 
 - [ ] 3. areka: 通信中の数を立てる持ち手
-- [ ] 3.1 (P) ネットワーク更新の標準の手続きの間だけ数を立てる
+- [x] 3.1 (P) ネットワーク更新の標準の手続きの間だけ数を立てる
   - 更新の背景の口に数と守り手の置き場を持たせ、標準の手続きが始まった時点で数を立てる（承諾待ちの間は含めない）
   - 手続きを抜けたら口を落として数を戻してから、窓口へ完了を伝える。窓口は既定でプロセスの数を持ち、テストは起こす前に自分の数へ差し替える
   - 更新の兄弟テストで、始まった後は数が 1、手続きを抜けると成功・失敗・門が閉じている、のどの経路でも 0 になることを確かめ、既存の更新のテストも引数の追随で緑になる
@@ -149,3 +149,4 @@
 - 1.1: `status.rs` の `ExecutionSnapshot` の NOTE（将来形 `snapshot_of(&Phase, &TickExtras)`）と `INACTIVE` の doc（「boot 系列・close 系列・ForceQuit 後」）は、2.2 で作り方を一本化した時点で古くなるので 2.2 で書き換える。
 - 2.4: 起動の根（OnFirstBoot・OnGhostChanged・更新）は `boot_root` の腕ごとに作り方を渡すので、根を 1 つだけ踏むテストでは他の腕の後退を捕まえられない。腕ごとに経路を持たせること。
 - 2.6: `Status:` 行を書く唯一の口は `shiori-host32-host/src/shiori3.rs` の `build_request`（x64 の in-process も同じ関数を呼ぶ）。`areka-kanade/src/shiori/real.rs` は文面を組み立てない。design の 8.2 の追跡と Testing Strategy をこれに合わせて直した。
+- 3.1: areka の bin テストには既定の口のまま本物の背景スレッドや kanade を起こすものがあり（`menu/update_frame_tests.rs`・`emo2_boot/spine_conformance_support_tests.rs` は `KanadeConfig::new` 経由で `PROCESS` を読み `Status` を逐語照合する）、本番の既定が `PROCESS` を立てると並列実行で揺れる。そこで `UpdateDesk` の既定は `#[cfg(test)]` で読まれない数にした。3.2 の取得の本番の起こし方でも同じ危険が無いか確かめること。

@@ -5,7 +5,9 @@
 //! 照会は `homeurl` と `useorigin1` を 1 回で・終了が始まった後の送出が 0 件・門が閉じていれば取得口
 //! にも `run` にも入らない・門の開いた一周は書く段の中で `run` を呼び `label` が「更新先 → 対象」・
 //! 取得口を作れなければ記録せずに門を手放す・スレッドが仕事を 1 件走らせて窓口へ頼む・本番の
-//! 取得口の型を綴る本番ファイルは 2 つだけ（字面の検査）。
+//! 取得口の型を綴る本番ファイルは 2 つだけ（字面の検査）・通信中の数は標準の手続きの間だけ立ち、
+//! 手続きを抜けると成功・失敗・門が閉じている、のどの経路でも窓口へ「終わった」を頼む前に戻る
+//! （要件 2.1・2.3・2.4・数はテストごとの関数内の `static`）。
 //!
 //! 実時間の待ちに依らない: 答える側は受信端の受け取りで、口は返信端の受け取りで揃える。
 
@@ -48,11 +50,24 @@ fn counting_fetch() -> (NewFetch, Arc<AtomicUsize>) {
     (new_fetch, made)
 }
 
+/// 誰も読まない通信中の数（数を見ないテストの口が持つ）。
+static UNOBSERVED: OnlineCounter = OnlineCounter::new();
+
 /// 本物の口と、窓口の代わりの受信端。
 fn ports(
     kanade: mpsc::Sender<KanadeMsg>,
     gate: Arc<WorkGate>,
     new_fetch: NewFetch,
+) -> (KanadePorts, Receiver<DeskAsk>) {
+    ports_counting(kanade, gate, new_fetch, &UNOBSERVED)
+}
+
+/// 本物の口（通信中の数を指定）と、窓口の代わりの受信端。
+fn ports_counting(
+    kanade: mpsc::Sender<KanadeMsg>,
+    gate: Arc<WorkGate>,
+    new_fetch: NewFetch,
+    online: &'static OnlineCounter,
 ) -> (KanadePorts, Receiver<DeskAsk>) {
     let (desk, asks) = mpsc::channel();
     (
@@ -61,6 +76,8 @@ fn ports(
             gate,
             desk,
             new_fetch,
+            online,
+            online_guard: Cell::new(None),
         },
         asks,
     )
@@ -462,34 +479,73 @@ fn reload_and_started_are_asked_to_desk() {
     assert!(rx.try_recv().is_err(), "列は kanade へ送らない");
 }
 
-/// スレッド `update` は仕事を受けて手続きを走らせ（仕事の送出端へ照会し）、終わったら「終わった」を頼む。
-#[test]
-fn worker_runs_a_job_and_asks_order_done() {
-    let (desk, asks) = mpsc::channel();
-    let (new_fetch, made) = counting_fetch();
-    let (jobs, handle) = spawn_worker(desk, Arc::default(), new_fetch);
-    let (kanade, rx) = mpsc::channel();
-    let order = UpdateOrder {
+/// 対象 0 の依頼（ゴースト `emo2`）。
+fn empty_order(reason: UpdateReason) -> UpdateOrder {
+    UpdateOrder {
         targets: Vec::new(),
-        reason: UpdateReason::Script,
+        reason,
         summary: SummaryKind::Result,
         ghost_dir: PathBuf::from(r"C:\root\ghost\emo2"),
         ghost_folder: Some("emo2".to_owned()),
-    };
-    jobs.send(UpdateJob { order, kanade }).expect("仕事を渡す");
+    }
+}
 
-    assert_eq!(asks.recv(), Ok(DeskAsk::Started));
+/// スレッド `update` を起こして依頼を 1 件渡す。窓口の頼みの受信端・kanade の代わりの受信端・
+/// 仕事の送出端・取っ手を返す。
+fn run_one(
+    order: UpdateOrder,
+    gate: Arc<WorkGate>,
+    new_fetch: NewFetch,
+    online: &'static OnlineCounter,
+) -> (
+    Receiver<DeskAsk>,
+    Receiver<KanadeMsg>,
+    mpsc::Sender<UpdateJob>,
+    ActorHandle,
+) {
+    let (desk, asks) = mpsc::channel();
+    let (jobs, handle) = spawn_worker(desk, gate, new_fetch, online);
+    let (kanade, rx) = mpsc::channel();
+    jobs.send(UpdateJob { order, kanade }).expect("仕事を渡す");
+    (asks, rx, jobs, handle)
+}
+
+/// 照会を 1 件受ける（返信端を返す）。
+fn take_query(
+    rx: &Receiver<KanadeMsg>,
+) -> (
+    Vec<&'static str>,
+    areka_actor::ReplySender<Vec<(&'static str, ResourceOutcome)>>,
+) {
     match rx.recv().expect("仕事の送出端へ照会が届く") {
-        KanadeMsg::ResourceQuery { ids, reply } => {
-            let _ = reply.send(
-                ids.into_iter()
-                    .map(|id| (id, ResourceOutcome::NoContent))
-                    .collect(),
-            );
-        }
+        KanadeMsg::ResourceQuery { ids, reply } => (ids, reply),
         _ => panic!("ResourceQuery のはず"),
     }
+}
+
+/// スレッド `update` は仕事を受けて手続きを走らせ（仕事の送出端へ照会し）、終わったら「終わった」を頼む。
+/// 照会の返事待ちの間は通信中の数が立っていて、「終わった」が届いた時点で戻っている（成功の経路）。
+#[test]
+fn worker_runs_a_job_and_asks_order_done() {
+    static ONLINE: OnlineCounter = OnlineCounter::new();
+    let (new_fetch, made) = counting_fetch();
+    let (asks, rx, jobs, handle) = run_one(
+        empty_order(UpdateReason::Script),
+        Arc::default(),
+        new_fetch,
+        &ONLINE,
+    );
+
+    assert_eq!(asks.recv(), Ok(DeskAsk::Started));
+    let (ids, reply) = take_query(&rx);
+    assert!(ONLINE.is_online(), "標準の手続きの間は通信中");
+    let _ = reply.send(
+        ids.into_iter()
+            .map(|id| (id, ResourceOutcome::NoContent))
+            .collect(),
+    );
     assert_eq!(asks.recv(), Ok(DeskAsk::OrderDone));
+    assert!(!ONLINE.is_online(), "「終わった」の前に数が戻っている");
     assert_eq!(
         made.load(Ordering::SeqCst),
         0,
@@ -500,6 +556,77 @@ fn worker_runs_a_job_and_asks_order_done() {
     handle
         .join()
         .expect("仕事の送出端が落ちたらスレッドは終わる");
+}
+
+/// メニューの依頼: `OnUpdateProcessExec` の答え待ちの間は数を立てず（要件 2.1）、標準の手続きが
+/// 始まると立ち、照会が失敗して手続きを抜けると「終わった」の前に戻る（失敗の経路・要件 2.3）。
+#[test]
+fn online_is_not_raised_while_awaiting_exec_and_drops_on_failure() {
+    static ONLINE: OnlineCounter = OnlineCounter::new();
+    let (asks, rx, jobs, handle) = run_one(
+        empty_order(UpdateReason::Manual),
+        Arc::default(),
+        counting_fetch().0,
+        &ONLINE,
+    );
+
+    match rx.recv().expect("答えを問うイベントが届く") {
+        KanadeMsg::RaiseEvent { id, reply, .. } => {
+            assert_eq!(id, "OnUpdateProcessExec");
+            assert!(!ONLINE.is_online(), "答え待ちの間は通信中でない");
+            let _ = reply
+                .expect("返事を待つので返信端つき")
+                .send(RaiseOutcome::NoReply);
+        }
+        _ => panic!("RaiseEvent のはず"),
+    }
+    assert_eq!(asks.recv(), Ok(DeskAsk::Started));
+    let (_ids, reply) = take_query(&rx);
+    assert!(ONLINE.is_online(), "標準の手続きの間は通信中");
+    drop(reply);
+    assert_eq!(asks.recv(), Ok(DeskAsk::OrderDone));
+    assert!(!ONLINE.is_online(), "失敗で抜けても「終わった」の前に戻る");
+
+    drop(jobs);
+    handle.join().expect("スレッドは終わる");
+}
+
+/// 門が閉じている: 標準の手続きは始まって（`Started`）照会を送らずに抜け、「終わった」の前に数が戻る。
+#[test]
+fn online_drops_when_the_gate_is_closed() {
+    static ONLINE: OnlineCounter = OnlineCounter::new();
+    let gate = Arc::new(WorkGate::default());
+    let _ = close(&gate);
+    let (asks, rx, jobs, handle) = run_one(
+        empty_order(UpdateReason::Script),
+        gate,
+        counting_fetch().0,
+        &ONLINE,
+    );
+
+    assert_eq!(asks.recv(), Ok(DeskAsk::Started));
+    assert_eq!(asks.recv(), Ok(DeskAsk::OrderDone));
+    assert!(
+        !ONLINE.is_online(),
+        "門が閉じていても「終わった」の前に戻る"
+    );
+    assert!(rx.try_recv().is_err(), "照会は送らない");
+
+    drop(jobs);
+    handle.join().expect("スレッドは終わる");
+}
+
+/// 口の単体: 始まる前は立たず、`standard_started` で立ち（重ねても真偽は 1 つ）、口を落とすと戻る。
+#[test]
+fn standard_started_holds_online_until_the_ports_drop() {
+    static ONLINE: OnlineCounter = OnlineCounter::new();
+    let (kanade, _rx) = mpsc::channel();
+    let (ports, _asks) = ports_counting(kanade, Arc::default(), counting_fetch().0, &ONLINE);
+    assert!(!ONLINE.is_online(), "始まる前は通信中でない");
+    ports.standard_started();
+    assert!(ONLINE.is_online(), "始まった後は通信中");
+    drop(ports);
+    assert!(!ONLINE.is_online(), "口を落とすと戻る");
 }
 
 // ---------------------------------------------------------------- 字面の検査

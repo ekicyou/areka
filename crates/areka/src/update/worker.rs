@@ -1,14 +1,15 @@
 //! 更新の手続きを走らせる背景のスレッドと、kanade へ直接送る本物の口（design「背景スレッドと本物の口
 //! （`update/worker.rs`）」）。
 //!
-//! スレッド `update` は仕事 [`UpdateJob`] を 1 件ずつ受けて [`run_order`] を走らせ、終わったら窓口へ
-//! [`DeskAsk::OrderDone`] を頼む。本物の口 [`KanadePorts`] はイベントと照会を仕事の送出端へ直接送って
-//! 返事を待ち（UI を塞がない＝要件 1.11）、エンジンの一周を終了の門 [`WorkGate`] の出入りで囲む
+//! スレッド `update` は仕事 [`UpdateJob`] を 1 件ずつ受けて [`run_order`] を走らせ、終わったら口を落として
+//! 通信中の数を戻してから窓口へ [`DeskAsk::OrderDone`] を頼む（数は標準の手続きの間だけ立つ）。
+//! 本物の口 [`KanadePorts`] はイベントと照会を仕事の送出端へ直接送って返事を待ち（UI を塞がない＝要件 1.11）、エンジンの一周を終了の門 [`WorkGate`] の出入りで囲む
 //! （要件 7.1・7.3）。終了が始まった後は何も送らない（要件 7.4）。
 //!
 //! 窓口への頼みの型はこのモジュールが定義し、窓口（6.3）が読む。本番の取得口の型を綴る本体の
 //! 本番ファイルは、このファイルと `install/fetch_url.rs` の 2 つだけ（`worker_tests` の字面の検査）。
 
+use std::cell::Cell;
 use std::convert::Infallible;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
@@ -16,6 +17,7 @@ use std::sync::Arc;
 use std::sync::mpsc::Sender;
 
 use areka_actor::{ActorHandle, reply_channel, run_inbox, spawn_actor};
+use areka_kanade::online::{OnlineCounter, OnlineGuard};
 use areka_kanade::resources::ResourceOutcome;
 use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod};
 use areka_update::{Fetch, FetchError, Progress, UpdateRequest, WinHttpFetch};
@@ -58,11 +60,13 @@ pub(crate) fn winhttp_fetch() -> NewFetch {
 }
 
 /// 背景スレッド `update` を起こし、仕事の送出端と取っ手を返す（窓口が最初の依頼で 1 度だけ呼ぶ）。
-/// 仕事の送出端が全部落ちたらスレッドは終わる。
+/// 仕事の送出端が全部落ちたらスレッドは終わる。`online` は標準の手続きの間だけ立てる通信中の数
+/// （本番はプロセスの数）。
 pub(crate) fn spawn_worker(
     desk: Sender<DeskAsk>,
     gate: Arc<WorkGate>,
     new_fetch: NewFetch,
+    online: &'static OnlineCounter,
 ) -> (Sender<UpdateJob>, ActorHandle) {
     spawn_actor("update", move |jobs| {
         run_inbox(jobs, |job: UpdateJob| {
@@ -71,8 +75,12 @@ pub(crate) fn spawn_worker(
                 gate: gate.clone(),
                 desk: desk.clone(),
                 new_fetch: new_fetch.clone(),
+                online,
+                online_guard: Cell::new(None),
             };
             let end = run_order(&job.order, &ports);
+            // 口を落として通信中の数を戻してから「終わった」を頼む（窓口が `Idle` へ移る時点で戻っている）。
+            drop(ports);
             tracing::debug!(event = "update_order_done", ends = ?end.ends, "[update] 依頼を終えました");
             ask_desk(&desk, DeskAsk::OrderDone);
             Ok::<_, Infallible>(ControlFlow::Continue(()))
@@ -86,6 +94,10 @@ pub(crate) struct KanadePorts {
     gate: Arc<WorkGate>,
     desk: Sender<DeskAsk>,
     new_fetch: NewFetch,
+    /// 通信中の数（本番はプロセスの数）。
+    online: &'static OnlineCounter,
+    /// 標準の手続きの間の守り手（[`UpdatePorts::standard_started`] で立て、口を落とすと戻る）。
+    online_guard: Cell<Option<OnlineGuard>>,
 }
 
 impl UpdatePorts for KanadePorts {
@@ -229,6 +241,8 @@ impl UpdatePorts for KanadePorts {
     }
 
     fn standard_started(&self) {
+        // 承諾待ち（`OnUpdateProcessExec` の答え待ち）は含めない（要件 2.1）。口を落とすと戻る（要件 2.3）。
+        self.online_guard.set(Some(self.online.begin("update")));
         ask_desk(&self.desk, DeskAsk::Started);
     }
 }
