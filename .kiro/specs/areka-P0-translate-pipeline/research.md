@@ -252,3 +252,124 @@
 - 推す形は決めない。比べる軸は「要件 5.2 の読み（相か帳簿か）」「`talk_gap` と Status への波及」「触るファイルの数（`steady.rs` の分割の要否）」の 3 つ。
 - 展開は「今日の字句解析と同じ規則で位置を決め、今日と同じ値で、今日と同じ表示になる」ことを先に単独の部品として固める（brief の「展開の前倒しは単独でも着地できる」）。その後に翻訳の往復を足す順が、差分の確かめ方として素直。
 - 論点 12（`emo2_boot/` の偽の SHIORI）は要件の境界に関わるので、設計より前に答えが要る。
+
+---
+
+## 9. 設計フェーズの記録（2026-10-03・`/kiro-spec-design`）
+
+### 9.1 Summary
+- **Feature**: `areka-P0-translate-pipeline`
+- **Discovery Scope**: Extension（既存の運行表への差し込み。調べ方は light＝既存コードの差し込み点・依存・前例の確認。外部の新しい依存は 0）
+- **Key Findings**:
+  - 台詞から再生を始める腕 9 か所（SHIORI の台詞 8・areka が作る台詞 1）は、どれも入力が `Input::ShioriReply` の `step` の中でだけ `Action::StartTalk` を作る。よって `step` の出口 1 か所で全部を捕まえられ、腕を 1 行も書き換えずに済む（`steady.rs` の分割も要らない）。
+  - 線の Reference の組み立ては `crates/shiori-host32-host/src/shiori3.rs` の `build_request` の 1 か所で、補助プロセス経由も in-proc（`crates/areka-ghost/src/shiori_inproc.rs` の `build_input`）もここを通る。欠番はここ 1 か所で表せる。
+  - 文字列のままの展開は、値の先頭が直前のタグの読みを変える並びがある（`\w%username` で値が数字始まり・`\n%username` で値が `[` 始まり・`\_%username`）。エスケープだけでは足りず、読みの同値の照合が要る。
+
+### 9.2 Research Log
+
+#### 再生を始める腕の再確認
+- **Sources**: `crates/areka-kanade/src/schedule/boot.rs` の `to_baseware_version`・`close.rs` の `on_close_pending`・`change.rs` の `on_reply_wait`／`on_yielded_reply`・`steady.rs` の `on_reply`／`on_cascade_reply`／`on_timeout_reply`
+- **Findings**: §2.2 の表のとおり 9 か所（うち `on_reply_wait` は `OnGhostChanging` と切替の `OnClose` の 2 役）。`StartTalk` を `ShioriReply` 以外の入力から作る所は 0 か所。areka が作る台詞は 204 の応答の `step` で `script` が空のまま生まれる。
+- **Implications**: 「台詞を返した応答の `step` が作った `StartTalk`」という規則で、SHIORI の台詞と areka の台詞を見た目に頼らず分けられる。
+
+#### 許可表と外からの依頼
+- **Sources**: `schedule/events.rs` の `ALLOWED_EVENT_IDS`（45 語）・`allowed_static`・`schedule/events_change_tests.rs` の数の検査
+- **Findings**: 許可表は「送ってよい」と「外から頼める」を兼ねる。`OnTranslate` を足すと汎用の通知の入口からも頼めるようになる。既にある `OnClose`・`OnFirstBoot` も同じ。
+- **Implications**: 表を 2 つに分ける仕組みは作らない（design の OnTranslateCall の Risks に記載）。
+
+#### `ShioriBackend` の実装の数と境界
+- **Sources**: `crates/areka-kanade/src/shiori/real.rs` の `ShioriBackend`・実装 17 個（本番は `ShioriConnection`・`InProcBackend`、残りはテストの偽物）
+- **Findings**: Reference の型を変えると 17 個の実装の関数の形が変わり、`crates/areka/src/emo2_boot/spine.rs`（998 行）の偽の SHIORI も変わる。要件の「開発上の制約」が許すのは「`OnTranslate` は既定で 204」を足すことだけ。
+- **Implications**: 欠番は関数の形を変えずに運ぶ（欠番の印）。
+
+#### 字句の規則
+- **Sources**: `crates/areka-parsers/src/sakura/lexer.rs` の `lex`・`scan_tag`・`bare_tag_len`・`scan_bracket_args`・`scan_sysvar`
+- **Findings**: `%` の後ろは英数字と `_` を貪欲に読む。`\\`・`\%` は文字。角括弧の中の `%` は引数の一部。未閉じの `[` は末尾まで 1 かたまり。角括弧なしのタグの長さは直後の文字に左右される（短縮形 `\w`・`\b`・`\p` ＋数字、`_` 始まりの 2〜3 文字、直後の `[`、`\q*[`）。
+- **Implications**: 置き換えの位置は `lex` と走査を共有して決める。値を埋めた後の読みは `parse` の結果で照合する。
+
+#### pasta（emo2）の `OnTranslate` への応答（§7 の調べ事の 1 つ目）
+- **Sources**: 主リポジトリの `vendors/pasta`（`48c42fc3`・2026-09-20）の `crates/pasta_lua/pasta_scripts/pasta/shiori/event/init.lua` の `EVENT.fire`・`EVENT.no_entry`、`pasta/scene.lua` の `SCENE.co_exec`
+- **Findings**: 登録の無いイベントは同名のシーンを探し、無ければ `nil` → 204 を返す。続きを待っているシーン（`STORE.co_scene`）には触れない。
+- **Implications**: emo2 では `OnTranslate` は 204 で、会話の続きにも影響しない見込み。実機での確認は実装の最初に行う（emo2 の DLL がこの版と同じとは限らない）。
+
+#### 里々・YAYA の `OnTranslate`（§7 の調べ事の 3 つ目）
+- **Sources**: ukadoc MCP の YAYA docs「OnTranslateイベント」「OnTranslateの使い方」
+- **Findings**: 例はどれも `reference0` だけを読んで置換し、その文字列を返す（敬称の重なり・句読点の後の `\w5`）。Reference1〜3 を読む例は無い。
+- **Implications**: 欠番と空文字の違いが標準の辞書の動きを変える見込みは薄いが、要件 3.3 は正典どおりの欠番を求めるので欠番で送る。応答にはタグが足されうる（`\w5`）ので、翻訳の結果は再生側で普通に字句解析される前提で足りる。
+
+### 9.3 Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| 相を足す（案 A） | `Phase::Translating` と経路ごとの続き | 待ちが相の名前に出る | `talk_gap` の見張りと Status が変わる・相の網羅の `match` 全部・`steady.rs` の分割 | 不採用 |
+| 帳簿＋腕が共通の関数を呼ぶ（案 B1） | 8 か所の腕を 1 行ずつ書き換える | 明示 | 呼び忘れが素通りになる・8 か所の差分 | 不採用 |
+| 帳簿＋出口で捕まえる（案 B2） | `step` の出口で一括を預ける | 腕の差分 0・将来の腕も自動で通る・相が今日のまま | 暗黙になる（規則を 1 か所に書いて補う） | **採用** |
+| 殻で同期（案 C） | `StartTalk` の実行の直前に往復 | 運行表の差分が最小 | 要件 5.2 に反する | 不採用 |
+
+### 9.4 Design Decisions
+
+#### Decision: 翻訳の待ちは相の外の帳簿、捕まえるのは `step` の出口
+- **Context**: 論点 1・2・3。要件 5.2・5.5・1.2・1.5。
+- **Alternatives Considered**: 9.3 の表。
+- **Selected Approach**: `State::translate`（預けた一括）と `State::reply_source`（元のイベント）を足す。`step` は `route` の前後で `translate::before`／`translate::after` を呼ぶ。条件（台詞を返した応答の `step`・台詞が 1 文字以上・一括に `StartTalk` がある）を満たせば、一括を丸ごと預けて `[Action::Translate]` に替える。結果は専用の入力 `Input::TranslateDone` で戻す。
+- **Rationale**: 再生を始める時点の相・期限・見張り・Status が今日と同じ値になることが形で決まる。`Input::ShioriReply` の形を変えないので、それを組み立てている多数の既存テストが変わらない。翻訳の結果が専用の入力なので、応答待ちの相の判定（`awaits_reply`）にも選択の往復の例外にも当たらない。
+- **Trade-offs**: 待ちの間、相は「再生中のつもり」の値になる。ただし 1 つの `drive` の中で完結するので、その状態を見る外からの入力は無い。
+- **Follow-up**: 最上位の `step` を通る既存テストのうち「`Value` の直後に `StartTalk`」を期待するものの数を、実装の最初に数える。
+
+#### Decision: 一括を丸ごと後ろへ回す
+- **Context**: 論点 3。
+- **Alternatives Considered**: `StartTalk` だけ回す／一括を丸ごと回す。
+- **Selected Approach**: 丸ごと・順序そのまま。
+- **Rationale**: 起動の一括（`StartTalk`＋`basewareversion` NOTIFY）を割ると 1 つの一括に往復が 2 つ並ぶ。選択の連鎖の `ResolveChoice` を先に出すと、古い台詞の選択待ちが解けてから新しい台詞が始まるまでに隙間ができる。
+- **Trade-offs**: `basewareversion` は `OnTranslate` の後に送られる（今日は挨拶の `StartTalk` の直後）。挨拶との前後は今日と同じ。
+
+#### Decision: 展開は注入の関数を殻が呼ぶ。実体は sakura、位置は parsers
+- **Context**: 論点 4・5・6・16。要件 2.1〜2.5。
+- **Alternatives Considered**: kanade が sakura に依存する（X1）／注入（X2）／kanade が `username` を持つ（X3）／最長一致の文字列走査（brief）。
+- **Selected Approach**: `areka_parsers::sakura::substitute_system_vars`（`lex` と走査を共有・値はエスケープ）→ `areka_sakura::expand_system_vars`（`resolve_system_var` で値を決め、`parse` の結果で同値を照合し、違えば元の文字列を返す）→ `areka-ghost` の `translate_wiring` が写しの源と組んで `ScriptExpander` にする → 殻が `Action::Translate` の実行の中で呼ぶ。
+- **Rationale**: kanade の依存は増えない。規則の写しを作らない。同値の照合 1 つで、タグが値を飲み込む並びをすべて拾える（並びを列挙しない）。
+- **Trade-offs**: 読みが変わる並びの台詞は翻訳の前に展開されず、`OnTranslate` が `%名前` を見る（表示は今日と同じ）。値の中の `\`・`%` は Reference0 にエスケープの綴りで見える。写しは台詞 1 つにつき 2 回読む。
+- **Follow-up**: 値の境界で書記素がつながる並び（design の SysVarExpander の Risks）は検査を足さない。実在のゴーストで見つかったら同値の照合に書記素の数の比較を足す。
+
+#### Decision: Reference1 の欠番は線の層の印で運ぶ
+- **Context**: 論点 8。要件 3.3。
+- **Alternatives Considered**: Reference の型を変える／空文字で送る／印。
+- **Selected Approach**: `shiori3::ABSENT_REFERENCE`（NUL 1 文字）。`build_request` がその位置の行を出さず番号を保つ。
+- **Rationale**: 関数の形を変えないので 17 個の実装と境界の外のファイルに触れない。線の組み立ては 1 か所なので、補助プロセス経由も in-proc も同じ結果になる。
+- **Trade-offs**: 値の中に印を混ぜる形（型で表していない）。印は線に載せられない文字で、実際の値と重ならない。偽の SHIORI は印をそのまま受け取る。
+- **Follow-up**: 将来 Reference の欠番が他のイベントでも要るようになったら、型で表す形へ移す（そのときは `ShioriBackend` の形を変える spec を別に立てる）。
+
+#### Decision: 応答の読みは純粋な関数、MAKOTO の口は殻で 1 回
+- **Context**: 要件 4・7。
+- **Alternatives Considered**: 応答の読みと MAKOTO の口をそれぞれ行動と入力の組にして運行表を 2 段にする／殻の 1 回の実行にまとめる。
+- **Selected Approach**: 殻の `run_translate` が「展開 → 往復 → `translate::read_reply`（純粋）→ MAKOTO の口」を 1 回の実行で行い、最終の台詞か輸送路の失敗を `Input::TranslateDone` で戻す。
+- **Rationale**: MAKOTO の口は後半の spec で DLL を呼ぶので運行表（純粋）の中には置けない。2 段にすると帳簿の段と入れ直しの種類が増えるが、本 spec の口は素通しなので得るものが無い。口を関数 1 つにしておけば、後半の spec は結線で差し替えるだけで済む。
+- **Trade-offs**: 応答の読みを殻が呼ぶ（判断そのものは純粋な関数に置き、殻は呼ぶだけ）。
+
+#### Decision: `OnTranslate` の Status は再生を始める時点の状態
+- **Context**: 論点 9。正典は沈黙。
+- **Selected Approach**: 捕まえた時点（腕が相を決めた後）の `State::snapshot`。
+- **Rationale**: 既存の決まり「Status は送る時点の運行の状態から導く」のまま。起動の挨拶では直後の `basewareversion` と同じ値になる。
+- **Follow-up**: §8 に登記する（要件 6.3 の 6 点とは別に、設計で決めた裁量として）。
+
+#### Decision: 既存テストは期待の列に書き足す
+- **Context**: 論点 13。
+- **Selected Approach**: `OnTranslate` を期待の列に足す。偽の SHIORI は既定で 204 を返し、記録に残す。除いて比べる道具は作らない。
+- **Rationale**: 往復の数（要件 5.6）が既存テストからも見える。
+
+### 9.5 Synthesis（まとめ直しの結果）
+- **一般化**: 5 種類の経路は「SHIORI の GET が台詞を返し、その `step` が再生を始める」という 1 つの形の変種。経路ごとに継ぎ目を作らず、出口の規則 1 つにした。
+- **作るか使うか**: 展開は既存の `resolve_system_var`・`lex`・`parse` を使う。失敗の分類は `areka-P0-shiori-fault-notice` の決まりを使う。注入は `ResourceSink` の前例、帳簿は `pending_close`・`choice` の前例に倣う。新しい外部の依存は 0。
+- **削ったもの**: 翻訳の相・経路ごとの続きの型・MAKOTO の待ちの段・Reference の新しい型・`StartTalk` に写しを載せる欄・「`OnTranslate` を除いて比べる」道具・許可表を 2 つに分ける仕組み。
+
+### 9.6 Risks & Mitigations
+- 最上位の `step` を通る既存テストの差分が広い — `translate_test_support.rs` に「翻訳を 204 で通す」補助を置き、期待の列への書き足しを機械的にする。
+- `crates/areka/src/emo2_boot/spine.rs` が 998 行 — 既定の 204 は既存の `homeurl` の既定の式へ混ぜ、行を増やさない。
+- 同じウェーブの spec と同じテストのファイルが重なる — 後から着地する側が rebase で直す（要件の「開発上の制約」）。
+- pasta の実物が 204 以外を返す — 実装の最初に emo2 を 1 回動かして `translate_reply` の `kind` を見る。エラー応答なら警告が台詞ごとに出るだけで表示は変わらない。
+- 展開の関数・MAKOTO の口が返らないと運行が止まる — 本 spec の実装（写しの読み取り・素通し）はすぐ返る。後半の spec の口は期限つきで返す責任を持つ（design の TranslateRunner の Risks）。
+
+### 9.7 References
+- [トランスレータ](https://ssp.shillest.net/ukadoc/manual/manual_translator.html) — 翻訳の順序とタイミング
+- [OnTranslate](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnTranslate:1) — Reference0〜3・「OnTranslate 自身では再度発生しない」
+- [YAYA docs: OnTranslateの使い方](https://yaya-shiori.github.io/yaya-docs/tips/on-translate-usage/) — 標準の辞書が Reference0 だけを読む例
