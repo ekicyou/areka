@@ -626,7 +626,7 @@ impl Drop for McpServer { /* 上記 */ }
 | `read_port_env_non_unicode_falls_back_with_warn`（port_tests.rs） | `OsString::from_wide(&[0xD800])` を設定して `read_port_env()` → Some(9821)・warn 1 件（edition 2024 の `set_var` は `unsafe`＝`perf_thread_report.rs` の同種のテストの書き方に合わせる） | 2.5 |
 | `gate_origin_table`（gate_tests.rs） | 要件 4.5 の 8 値（`Host` は `127.0.0.1:1`） | 4.1, 4.2, 4.3, 4.5 |
 | `gate_host_table`（gate_tests.rs） | `127.0.0.1:<port>`・`localhost:<port>`・`[::1]:<port>` 通す／`evil.example`・無し 拒む | 4.4 |
-| `help_html_lists_five_items_with_actual_port`（help_tests.rs） | `help_html(12345)` に URL・`claude mcp add`・`mcpServers`・`AREKA_MCP_PORT`・Desktop の 5 つが在り、`9821` が無い | 6.1, 6.2 |
+| `help_html_lists_five_items_with_actual_port`（help_tests.rs） | `help_html(12345)` に URL・`claude mcp add`・`mcpServers`・`AREKA_MCP_PORT`・Desktop の 5 つが在り、URL・登録コマンド・`mcpServers` の断片は `127.0.0.1:12345` で `127.0.0.1:9821` が無い（`9821` は ⑷ の既定の説明に `DEFAULT_PORT` から 1 回だけ） | 6.1, 6.2 |
 
 ### Integration Tests（実ソケット・3 ファイル）
 

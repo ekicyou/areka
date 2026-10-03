@@ -26,9 +26,9 @@
   - _Requirements: 4.1, 4.2, 4.4, 4.5_
   - _Depends: 1.1_
   - _Boundary: gate_
-- [ ] 2.3 (P) 登録案内の HTML
+- [x] 2.3 (P) 登録案内の HTML
   - 実際のポート番号を引数に、日本語の HTML（`<meta charset="utf-8">`）で 5 項目（URL・`claude mcp add` の登録コマンド・Cursor の `mcpServers` の断片・`AREKA_MCP_PORT` の説明〔`0` で待ち受けない・既定 9821〕・Claude Desktop は中継が要る旨〔設定例なし〕）を組む
-  - 完了の姿: 既定でない番号（例 12345）で組んだ本文に 5 項目が在り `9821` が現れないことが `help_tests.rs` で緑
+  - 完了の姿: 既定でない番号（例 12345）で組んだ本文に 5 項目が在り、URL・登録コマンド・`mcpServers` の断片が実番号で `127.0.0.1:9821` が現れない（`9821` は既定の説明の 1 回だけ）ことが `help_tests.rs` で緑
   - _Requirements: 6.1, 6.2, 2.7_
   - _Depends: 1.1_
   - _Boundary: help_
@@ -130,3 +130,4 @@
 ## Implementation Notes
 - 1.1: `Cargo.lock` に増える外部クレートは 38 件。研究の 30 件は `cargo tree -e normal`（この機械向け）の数で、全部入っている。残り 8 件（iana-time-zone 系・wasi・cc 等）は chrono・mio が他の OS 向けに引くもので x64 のビルドには 0 件。数え方の差であって増えたのではない
 - 2.1〜2.4: `mod` が非公開のあいだは各モジュール先頭の `#![expect(dead_code, reason = …)]` で clippy を緑に保つ。3.3 で公開面へ出したら満たされず赤になるので、そこで消す
+- 2.3: help の本文は既定の説明に `9821` を 1 回だけ載せる（要件 6.2 が禁じるのは URL とコマンド例の固定だけ）。design の Testing 行と tasks の完了の姿をこれに合わせて直した。テストのビルドで使われるモジュールは `#![cfg_attr(not(test), expect(dead_code, …))]` の形
