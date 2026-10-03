@@ -122,7 +122,7 @@
   - _Boundary: doc/ukadoc-coverage・steering のロードマップ・移し先の brief_
 
 - [ ] 7. 検証
-- [ ] 7.1 ワークスペース全体の回帰と約束のファイルを確かめる
+- [x] 7.1 ワークスペース全体の回帰と約束のファイルを確かめる
   - 全体のテストを 1 本の手順で回し、一周の照合の期待する `Status` が変わっていないこと（ハーネスが置き場と中断の持ち物を据えないため）を含めて緑になる
   - 約束のファイル（C1）に差分が無いことを、パスが実在することを確かめた上で示す
   - 1 ファイル 1,000 行の上限を超えたファイルが無い
@@ -155,3 +155,4 @@
 - 7.2: 実 pasta の追験は `SampleRoot::acquire("emo2")` の辞書込みの複製（`target
 ar-samples\work` の下）に環境変数の DLL を上書きして起こす。手元の DLL は `target
 ar-samples\cachemo2-4591449-272a04b4\ghostmo2\ghost\master\pasta.dll`。雑談の間隔は emo2 の `pasta.toml` の `talk_interval_min=15`・`max=30`。走行は約 90 秒。
+- 7.1: `tools/test-all.ps1` 全段緑（検査したコミット 20d659e3・x64 全テスト 275 秒）。C1 の 9 本は実在し `main` との差分 0（較正: 変更した `status.rs` は差分ありと出る）。変更した .rs に 1,000 行超えは無い。
