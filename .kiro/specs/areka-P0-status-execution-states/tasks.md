@@ -128,7 +128,7 @@
   - 1 ファイル 1,000 行の上限を超えたファイルが無い
   - _Requirements: 1.4, 1.5, 8.3_
 
-- [ ] 7.2 emo2（ぱすた）が online の間に雑談を始めないことを確かめる
+- [x] 7.2 emo2（ぱすた）が online の間に雑談を始めないことを確かめる
   - 実 pasta の DLL がある時だけ走る追験を、`Status` の完全一致を持つテストとは別の実行ファイルとして置く
   - 実 pasta の起こし方は既存の実 pasta のテストの補助をパス指定の取り込みで共有する（取り込めない形なら最小限を写し、その旨を注記する）
   - プロセスの数の守り手を持ったまま実 pasta を起こし、起動の挨拶の完了を待ってから、雑談の間隔を超える回数の OnSecondChange を送り、`Value` の応答が 0 件であることを見る（他の入力を与えない）
@@ -152,3 +152,6 @@
 - 3.1: areka の bin テストには既定の口のまま本物の背景スレッドや kanade を起こすものがあり（`menu/update_frame_tests.rs`・`emo2_boot/spine_conformance_support_tests.rs` は `KanadeConfig::new` 経由で `PROCESS` を読み `Status` を逐語照合する）、本番の既定が `PROCESS` を立てると並列実行で揺れる。そこで `UpdateDesk` の既定は `#[cfg(test)]` で読まれない数にした。3.2 の取得の本番の起こし方でも同じ危険が無いか確かめること。
 - 4.1: トークの終わりの合図 `TalkEnded` が次のトークの `TalkStarted` より前に並ぶ保証は、自然終端（`on_done`）と選択の取り消しで dispatcher が合流しないため、talk スレッド側（areka-sakura `drive.rs`）で受け口を落としてから `TalkDone`／`Interrupted` を送る形で持たせた（境界を広げた・C1 外）。
 - 5.1: `status_report.rs` 先頭の `#![cfg_attr(not(test), allow(dead_code))]` は 5.2 の結線までの仮置き。5.2 で必ず外す。headless の表示層では可視にできないので、照会が見えている状態を読む経路は 5.2 のテストで踏む。
+- 7.2: 実 pasta の追験は `SampleRoot::acquire("emo2")` の辞書込みの複製（`target
+ar-samples\work` の下）に環境変数の DLL を上書きして起こす。手元の DLL は `target
+ar-samples\cachemo2-4591449-272a04b4\ghostmo2\ghost\master\pasta.dll`。雑談の間隔は emo2 の `pasta.toml` の `talk_interval_min=15`・`max=30`。走行は約 90 秒。
