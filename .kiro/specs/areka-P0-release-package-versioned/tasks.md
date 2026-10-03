@@ -115,6 +115,6 @@
 ## Implementation Notes
 
 - 3.1: 合格の `-Check` で「後片付け」が 4 秒かかった（同じ木を手で消すと 0.65 秒）＝子の終了直後は補助 exe か Defender が掴んでいる。`REMOVE_RETRY`×`REMOVE_RETRY_WAIT_SEC`（5×1 秒）の予算ぎりぎりなので、6.1 の実走で後片付けの秒数を記録し、1 で落ちる走りが出たら設計の較正値を見直す。
-- 3.3: `-CheckDir` の既定の親は `"$PSScriptRoot\..\target\package"` の直書きで `OUT_DIR` を通っていない（値は同じ・設計 S1 は直書き・較正値の表は OUT_DIR に含める＝設計の内部で食い違い）。動きに差は無い。直すなら `Join-Path $PSScriptRoot "..\$OUT_DIR"` に寄せ、説明の欄の OUT_DIR の行に check-* を足す。
+- 3.3: `-CheckDir` の既定の親は `"$PSScriptRoot\..\target\package"` の直書きで `OUT_DIR` を通っていない（値は同じ・設計 S1 は直書き・較正値の表は OUT_DIR に含める＝設計の内部で食い違い）。動きに差は無い。直すなら `Join-Path $PSScriptRoot "..\$OUT_DIR"` に寄せ、説明の欄の OUT_DIR の行に check-* を足す。→ validate-impl の後にこの形へ直し、design S1 も合わせた。
 - 6.1: 実走 11 回で「後片付け」はどれも 0 秒（1 回目で消えた）。3.1 で見た 4 秒は一度きり＝較正値（5×1 秒）は据え置く。
 - 6.2: 手元のマニフェストで入れた物は winget の ID が `ARP\User\X64\Areka.Areka.Portable__DefaultSource` になり、`winget uninstall --id Areka.Areka.Portable` では見つからない（その ID に `--exact --purge` で外した）。開発者モードがオフだと winget はリンクを作らず PATH を足す＝リンク経由の確かめには開発者モードが要る。

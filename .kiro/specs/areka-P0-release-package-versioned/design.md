@@ -250,7 +250,7 @@ flowchart TD
 | 6.8 | 根の行 | 既存 `root_resolved` | `resolve_boot_from` の info 行の `root=` が解いた後の根（変更 0） | − |
 | 7.1 | winget から入れて `areka` で起動 | 実機の確かめ | `verification/winget-local-check.md` の手順 | − |
 | 7.2 | リンク経由であったことを両方記録 | 実機の確かめ | `(Get-Command areka).Source` の `LinkType`＝`SymbolicLink` と記録の `root=` | − |
-| 7.3 | 置き場は `target\`・追跡しない・外す | 実機の確かめ | `target\package\winget-local\`・`winget uninstall … --purge` | − |
+| 7.3 | 置き場は `target\`・追跡しない・外す | 実機の確かめ | `target\package\winget-local\`・`winget uninstall --id <ARP の ID> --exact --purge` | − |
 | 7.4 | 設定は開発者の手で・記録に残す | 実機の確かめ | 開発者モードと `LocalManifestFiles` の on/off を記録の表に | − |
 | 7.5 | arm64 は既知の制限 | 実機の確かめ | 記録の末尾に明記 | − |
 | 7.6 | `localhost` の http で渡す | 実機の確かめ | Python の `http.server` を `target\package` で起こす | − |
@@ -314,7 +314,7 @@ flowchart TD
 - 版: `cargo metadata --no-deps --locked --format-version 1` の JSON から `name` が `areka` のパッケージの `version` を読む。読めない・空・`VERSION_PATTERN` に合わない → 3（理由を印字・ビルドしない）。`$script:Version` に持つ。
 - 名前の組み立ては 1 関数 `Get-ArtifactNames($Arch)` に集め、`Zip`・`Sha`・`ZipTmp`・`ShaTmp` の 4 つの絶対パスを返す（`$OUT_DIR\areka-{版}-{arch}.zip`・同 `.zip.sha256`・それぞれに `.tmp`）。zip の名前と `arch=` の行と 8 項目の期待値はすべてこの関数と `ARCHS` から引く（手書きの重複を作らない）。
 - 前回の組の削除: 作る CPU 種別ごとに `Zip`・`Sha`・`ZipTmp`・`ShaTmp` が在れば消す（2.4）。
-- 展開先: `$script:ExpandDir = <親>\check-<HHmmss>`・`$script:LogDir = "$ExpandDir-logs"`（旧 `areka-alpha-check-` の「alpha」は落とす）。既定の親は `[IO.Path]::GetFullPath("$PSScriptRoot\..\target\package")`。
+- 展開先: `$script:ExpandDir = <親>\check-<HHmmss>`・`$script:LogDir = "$ExpandDir-logs"`（旧 `areka-alpha-check-` の「alpha」は落とす）。既定の親は `[IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../$OUT_DIR"))`（＝ワークツリーの `target\package`・置き場の値は `OUT_DIR` の 1 か所）。
 - 道具が欠けるときの印字は 1 行で「何が無いか・どう入れるか」（例: `arm64 のリンクに要る VS の部品が無い（VS Installer で Microsoft.VisualStudio.Component.VC.Tools.ARM64 を追加する）`・`vswhere.exe が無い（探した場所: <VSWHERE_PATH> と PATH。Visual Studio か Build Tools を入れる）`）。
 - `-Check` を付けず `-CheckDir` も無いとき、展開先の長さは検査しない（今どおり。CI の長いパスで止めない）。
 
@@ -448,7 +448,7 @@ pub(crate) fn exe_location() -> Option<&'static std::path::Path>;
 - 置き場: `target\package\winget-local\<版>\`（マニフェスト 3 ファイル＝version・defaultLocale・installer）・同 `run.log`／`run.stderr.log`・記録の正本は `.kiro/specs/areka-P0-release-package-versioned/verification/winget-local-check.md`。
 - マニフェストの要点: `PackageIdentifier: Areka.Areka.Portable`・`InstallerType: zip`・`NestedInstallerType: portable`・`NestedInstallerFiles: [{RelativeFilePath: areka.exe, PortableCommandAlias: areka}]`・`InstallerUrl: http://127.0.0.1:<port>/areka-{版}-x64.zip`・`InstallerSha256` は本仕様の `.sha256` の値（大文字で書く）。**`ArchiveBinariesDependOnPath` は書かない**（リンクの経路を通すため・7.2）。
 - 配る口: `python -m http.server <port> --bind 127.0.0.1 --directory target\package`（開発機に Python 3.13 が在ることを実測済み・他の道具でもよい）。
-- 手順: (1) `pwsh -NoProfile -File tools/package.ps1 -Check` で zip と `.sha256` を作る → (2) 開発者の手で OS の開発者モードをオン・管理者で `winget settings --enable LocalManifestFiles`（変えた物と時刻を記録） → (3) http.server を起こす → (4) 利用者の権限で `winget install --manifest target\package\winget-local\<版>` → (5) `(Get-Command areka).Source` と `(Get-Item (Get-Command areka).Source).LinkType` を記録（`…\Microsoft\WinGet\Links\areka.exe`・`SymbolicLink` であること。`LinkType` が空か PATH にパッケージのフォルダが足されていれば 7.2 の確かめは済んでいない） → (6) `$env:RUST_LOG='info'; $env:AREKA_APP_SMOKE_EXIT_MS='10000'; Start-Process areka -RedirectStandardOutput … -RedirectStandardError … -Wait` で有界に起動 → (7) `run.log` の `root_resolved` の `root=` がパッケージのフォルダ（`…\WinGet\Packages\Areka.Areka.Portable_…`）でリンクの置き場でないことと、`本物のゴースト窓を開きました` の行を記録 → (8) `winget uninstall Areka.Areka.Portable --purge`・http.server を止める → (9) 開発者の手で `LocalManifestFiles` と開発者モードを元へ戻し記録。
+- 手順: (1) `pwsh -NoProfile -File tools/package.ps1 -Check` で zip と `.sha256` を作る → (2) 開発者の手で OS の開発者モードをオン・管理者で `winget settings --enable LocalManifestFiles`（変えた物と時刻を記録） → (3) http.server を起こす → (4) 利用者の権限で `winget install --manifest target\package\winget-local\<版>` → (5) `(Get-Command areka).Source` と `(Get-Item (Get-Command areka).Source).LinkType` を記録（`…\Microsoft\WinGet\Links\areka.exe`・`SymbolicLink` であること。`LinkType` が空か PATH にパッケージのフォルダが足されていれば 7.2 の確かめは済んでいない） → (6) `$env:RUST_LOG='info'; $env:AREKA_APP_SMOKE_EXIT_MS='10000'; Start-Process areka -RedirectStandardOutput … -RedirectStandardError … -Wait` で有界に起動 → (7) `run.log` の `root_resolved` の `root=` がパッケージのフォルダ（`…\WinGet\Packages\Areka.Areka.Portable_…`）でリンクの置き場でないことと、`本物のゴースト窓を開きました` の行を記録 → (8) 手元のマニフェストで入れた物は ID が ARP の形（`ARP\User\X64\Areka.Areka.Portable__DefaultSource`）になり `Areka.Areka.Portable` では見つからないので、`winget list` で ID を引いて `winget uninstall --id <その ID> --exact --purge` で外す（2026-10-03 実測）・http.server を止める → (9) 開発者の手で `LocalManifestFiles` と開発者モードを元へ戻し記録。
 - 記録に書く表: 変えた設定と戻した時刻／`Source`・`LinkType`／`root=` の値／窓の行の件数／arm64 は確かめていない（既知の制限・7.5）。
 
 ## Data Models

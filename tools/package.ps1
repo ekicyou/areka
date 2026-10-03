@@ -42,7 +42,7 @@
 
   較正値・調整値の一覧（変更するときはスクリプト冒頭の「較正値」の 1 か所だけを書き換える）:
     SCRIPT_VERSION                  本スクリプトの版（BUILD-INFO.txt の script= に書く）
-    OUT_DIR              = target/package  cargo の --target-dir・stage・zip・.sha256 の置き場
+    OUT_DIR              = target/package  cargo の --target-dir・stage・zip・.sha256・-Check の既定の展開先（check-*）の置き場
     ARCHS                           CPU 種別ごとのビルドのターゲットと機械種別（x64・arm64）
     HELPER_TARGET／HELPER_MACHINE   補助 exe と pasta.dll のターゲットと機械種別（i686・0x014c）
     REMOVE_RETRY = 5／REMOVE_RETRY_WAIT_SEC = 1  後片付けで展開した木を消す再試行の回数と間隔（秒）
@@ -278,7 +278,7 @@ Step '前提の確認' {
         }
     }
     # 既定の親はワークツリーの target\package（%TEMP% には何も作らない）
-    $parent = if ($CheckDir) { [IO.Path]::GetFullPath($CheckDir) } else { [IO.Path]::GetFullPath("$PSScriptRoot\..\target\package") }
+    $parent = if ($CheckDir) { [IO.Path]::GetFullPath($CheckDir) } else { [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../$OUT_DIR")) }
     $script:ExpandDir = Join-Path $parent ('check-' + (Get-Date -Format 'HHmmss'))
     $script:LogDir = "$script:ExpandDir-logs"
     if (($Check -or $CheckDir) -and $script:ExpandDir.Length -gt $EXPAND_DIR_MAX_CHARS) {
@@ -585,7 +585,7 @@ foreach ($a in $script:BuildArchs) {
     }
 }
 
-# 記録の判定（要件 3.3・3.5）。2 つの記録を連結した文字列・子の終了コード・番犬で止めたかを受け、
+# 記録の判定（完了 alpha-package の要件 3.3・3.5）。2 つの記録を連結した文字列・子の終了コード・番犬で止めたかを受け、
 # 条件ごとに { Name; Ok; Detail } を返す。全部見てから呼び手が 1 回主張する（1 つ目で止めない）。
 function Test-RunLog([AllowEmptyString()][string]$Text, [int]$ExitCode, [bool]$WatchdogKilled) {
     $lines = $Text -split "`r?`n"
@@ -600,7 +600,7 @@ function Test-RunLog([AllowEmptyString()][string]$Text, [int]$ExitCode, [bool]$W
     $faults = @($LOG_MARKER_FAULTS | ForEach-Object { $n = & $count $_; if ($n) { "「$_」$n 件" } })
     & $row 'SHIORI の接続の失敗が無い' (-not $faults.Count) ($faults.Count ? ($faults -join '・') : '失敗の目印 0 件')
     # 204 側の「epilogue-only 起動記録トーク…」は同じ event="boot_talk" だが文言が違うので数えない
-    # 自動終了より後の挨拶は数えない（要件 3.3 の空振り）。両方とも run.log に出るので行の位置で比べる。
+    # 自動終了より後の挨拶は数えない（完了 alpha-package の要件 3.3 の空振り）。両方とも run.log に出るので行の位置で比べる。
     # 自動終了の目印が無ければ全行を見る（そのときは「有界で走った」側か終了コードで落ちる）
     $exitAt = [array]::FindIndex([string[]]$lines, [Predicate[string]]{ param($l) $l.Contains($LOG_MARKER_SMOKE_EXIT) })
     $before = ($exitAt -ge 0) ? @($lines | Select-Object -First $exitAt) : $lines
