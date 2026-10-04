@@ -276,3 +276,14 @@
 - 既存テストが累積器を入れ直していて控えとずれる → 手直しの対象を設計書に列挙した。ずれると終了の知らせが 0 件になり赤で気付ける。
 - `ClientToScreen` を確かめるテストは実物の窓が要る → `api.rs`・`clickthrough/controller_tests.rs` と同じ「隠れた `Static` の窓」の作り方を使う。
 - 左クリックのたびに再入の記録が出る → 何もしなかったときは `debug!`。
+
+## §9 設計ディスカッションの記録（2026-10-04）
+
+設計の検証（`design-validation.md`・判定 GO）の指摘を `design.md` へ反映した。開発者へ伺う議題は 0 件（どれも答えが 1 つに決まるもの）。
+
+| 指摘 | 反映 |
+|---|---|
+| 起床の旗の一覧の漏れ | `ecs/world/tick_gate_tests.rs` の一覧と `ecs/world/tick_wake.rs` の名簿へ 1 行ずつ足す（触るファイル +2）。旗をやめる案は取らない（次の画面更新を回す守りを 2 つ保つ） |
+| 要件 2.4 のテストが本番の並びを踏まない | 本物の `try_tick_world` を 2 回回し、`UISetup` の途中から入口へ渡すテスト 7b を足す。旗を触るテストは `TICK_WAKE_TEST_LOCK` を取る |
+| 再入の頻度の見立て | areka が窓を作るのは `spawn_ghost_windows` を呼ぶ `ghost_session.rs` の 1 か所（起動・切り替え）だけと確かめ、「直した後に利用者から見える変化」の節へ書いた。level は保つ。実機は判定に使わず、記録の件数だけ残す |
+| 小さな指摘 6 件 | 公開関数の説明・`state/tests.rs` の `warn!`・`flush` の毒化の記録・`mouse_click_tests.rs` の説明文・`start_preparing` のテスト 14・残りの段が見る状態、をそれぞれ反映 |

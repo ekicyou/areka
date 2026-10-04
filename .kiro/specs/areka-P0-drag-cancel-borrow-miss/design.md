@@ -33,6 +33,7 @@
 - 終了の知らせの種を積む所（`ecs/drag/state/mod.rs` の `end_dragging`・`cancel_dragging` の中）と、そこから累積器へ届く道（`ecs/drag/accumulator.rs` の「wndproc 側の控え」）。
 - 左ボタンを離したときの「離した窓とドラッグの窓の一致」の判断の根拠（マウスの捕捉を取った窓との一致へ揃える）。
 - 上の扱いの記録（要件 7）と、決定論のテスト。
+- 起床の旗を立てる本番ファイルの一覧への 1 行（`ecs/world/tick_gate_tests.rs` の `WINTF_PRODUCERS` と、`ecs/world/tick_wake.rs` の冒頭の名簿）。新しい `reentry.rs` が旗を立てるので、載せないと見張りのテスト `the_wintf_table_lists_every_file_that_marks_the_wake` が赤になる。要件の境界に書いた「World を組み立てる所」と同じ `ecs/world/` の下で、足すのは一覧の行と説明だけ（振る舞いの変更は 0 件）。
 
 ### Out of Boundary
 
@@ -118,7 +119,16 @@ sequenceDiagram
 | tick の途中で積んだ種が配られる回 | 積んだ後に最初に回る `dispatch_drag_events`。`Input` は 1 本目なので、`UISetup` から積んだ種は次の tick で配られる。これは「その tick の直後に再入でなく届いたメッセージ」と同じ回である。次の tick は、再入の扱いが立てる起床の旗と、`rearm_tick_while_dragging`（`DraggingState` が残っている間 `DRAG` の旗を立てる）の 2 つで必ず回る |
 | ドラッグ中の印を World 無しでどう外すか | メッセージの時点では外さない。終了の種を積めば、配る段の `Ended` の腕が、再入でない場合と同じ回に `DraggingState` と `WindowDragging` を外す。外すための新しい道は 0 本 |
 | 1 スレッドに World が複数あるとき（テスト） | wndproc 側の控えは `DRAG_STATE` と同じく 1 スレッドに 1 つ。最後に `install_drag_accumulator` を通った World の累積器を指す。本番は 1 スレッド 1 World。テストは 1 本 1 スレッドで、World の資源を別の累積器へ入れ替えない（下の Testing Strategy） |
+| 再入で取り消した画面更新の、残りの段が見る状態 | 「ドラッグの状態は休んでいるが、`DraggingState`・`WindowDragging` はまだ付いている」状態で残りの段が回る（再入でない場合は、この間に段は回らない）。印が付いたままの間、印を読む段（wintf の窓の位置の段・`rearm_tick_while_dragging`、areka の追従・バルーンの表示の段）は「ドラッグ中」として 1 回分だけ余計に回る。累積器には新しい動きが積まれないので、窓は動かない。設計の検証でも害は見当たらなかった。テスト 7b が、この 1 回分を挟んだ後に印が外れることを確かめる |
 | 新しく生まれる危険 | 入口が捕捉の喪失を通すようになると、`DRAG_STATE` を借りたまま OS を呼ぶ所で入れ子の借用が起こりうる。今は `start_preparing` が `DRAG_STATE` を借りたまま `SetCapture` を呼ぶ 1 か所。捕捉を取るのを借用の外へ出す |
+
+### 直した後に利用者から見える変化
+
+- wintf は窓を作ると、画面更新の途中で `ShowWindow(hwnd, SW_SHOW)` を呼ぶ（`runtime/window_factory.rs` の「4b. ウィンドウを表示」）。areka のゴーストの窓の作り（`placement/spawn.rs` の `window_style`）には「活性化しない」指定が無いので、新しい窓が活性化し、ドラッグ中の窓へ非活性化が同期で届く見込みが高い（ソースからの見立て・実機では未確認）。
+- いまは、その非活性化が入口で捨てられ、ドラッグは続く。直した後は、要件 2.1 のとおりその場でドラッグが取り消され、位置が 1 件保存される。これは、画面更新の外で非活性化が届いたときのいまの振る舞いと同じである。
+- areka が窓を作るのは `spawn_ghost_windows`（起動とゴーストの切り替え）だけ。したがって、この変化が出るのは「起動の直後・切り替えの最中に、ちょうどドラッグしている」ときに限られる。台詞を喋るたびに窓が増えることは無い（バルーンの窓もここで作る）。
+- 記録の level（終えた・取り消したときは `warn!`）はこのまま保つ。上の場面でしか出ないので、量は増えない。
+- 新しい窓を活性化させない作り（`SW_SHOWNOACTIVATE`）へ変えるのは、本 spec の境界の外（`window_factory.rs` は触らない）。
 
 ### Technology Stack
 
@@ -152,7 +162,10 @@ crates/wintf/src/
     │   ├── keyboard_tests.rs          # 累積器の取り方を手直し
     │   ├── mouse_click.rs             # 離しの 2 つの枝を end_dragging_on_release へ揃える
     │   └── mouse_click_tests.rs       # 累積器の取り方を手直し
-    └── world/mod.rs                   # 累積器を入れる 1 行を install_drag_accumulator へ替える
+    └── world/
+        ├── mod.rs                     # 累積器を入れる 1 行を install_drag_accumulator へ替える
+        ├── tick_wake.rs               # 冒頭の名簿へ drag/reentry.rs を 1 行（説明だけ）
+        └── tick_gate_tests.rs         # 一覧 WINTF_PRODUCERS へ drag/reentry.rs を 1 行（8 行 → 9 行）
 crates/wintf/tests/window/multiwindow_event_test.rs   # 説明文だけ直す
 doc/COMPAT_ARCHITECTURE.md             # §8 へ 1 行
 ```
@@ -160,7 +173,9 @@ doc/COMPAT_ARCHITECTURE.md             # §8 へ 1 行
 ### Modified Files
 
 - `runtime/wndproc_bridge.rs` — `try_borrow()` が失敗した枝に、`crate::ecs::drag::handle_message_while_world_busy(entity, &msg)` の呼び出しを 1 つ足す。`WM_ENDSESSION` の `warn!` と `None` を返すことは変えない。冒頭の「安全スキップ規律」の節と `make_wndproc` の手順 3 の説明に、5 種の例外を書く。ファイル内の既存テスト 4 本は主張を変えない（借用中のテストが使うメッセージは `WM_ERASEBKGND` で、5 種ではない）。
-- `ecs/drag/accumulator.rs` — `install_drag_accumulator`・`push_ended_seed` と `thread_local!` の控えを足す。`DragAccumulatorResource::set_transition` は、`Mutex` の毒化のとき `warn!` を出す（今は黙って何もしない）。
+- `ecs/drag/accumulator.rs` — `install_drag_accumulator`・`push_ended_seed` と `thread_local!` の控えを足す。`DragAccumulatorResource::set_transition` と `flush` は、`Mutex` の毒化のとき `warn!` を出す（今はどちらも黙って何もしない）。
+- `ecs/world/tick_gate_tests.rs`・`ecs/world/tick_wake.rs` — 起床の旗を立てる本番ファイルの一覧と名簿へ、`drag/reentry.rs` を 1 行ずつ足す。
+- `ecs/window_proc/mouse_click_tests.rs` — 累積器の取り方のほか、`setup` の説明文（予備の枝の判断として `find_owner_window` を挙げている）を直す。
 - `ecs/drag/state/mod.rs` — 下の Components を参照。
 - `ecs/window_proc/keyboard.rs` — `WM_KEYDOWN`（ESC）・`WM_CANCELMODE` は `cancel_dragging()`、`WM_ACTIVATE`（非活性化）も `cancel_dragging()`（押していない状態では何もしない。今ある `info!`・`debug!` は戻り値で出し分ける）、`WM_CAPTURECHANGED` は `cancel_dragging_on_capture_lost()` を呼ぶだけにする。World の借用は `WM_ACTIVATE` の沈降の観測の目印の 1 か所だけが残る。
 - `ecs/window_proc/mouse_click.rs` — 当たり判定の枝と予備の枝の左ボタンを離す所を、どちらも `end_dragging_on_release(hwnd, Some(画面の座標))` の 1 呼び出しにする。`find_owner_window` の呼び出し 2 か所と、種を積む 2 か所が消える。冒頭の画面の座標の計算は変えない。
@@ -204,7 +219,7 @@ doc/COMPAT_ARCHITECTURE.md             # §8 へ 1 行
 | 7.2 | 読めなかった情報を記録 | drag reentry・累積器の控え | `drag_reentry_pos_unreadable`・`drag_end_seed_unreachable` | — |
 | 8.1 | 入口を通る再入のテストで、直す前の赤と直した後の緑 | Testing Strategy の表 1〜7・12 | — | — |
 | 8.2 | 前後の結果を記録するテスト | Testing Strategy の表 8〜11 | — | — |
-| 8.3 | 同じ回の配る段で配られること | Testing Strategy の表 7 | — | — |
+| 8.3 | 同じ回の配る段で配られること | Testing Strategy の表 7・7b | — | — |
 | 8.4 | ふつうの条件と安全スキップが崩れていないこと | Testing Strategy の表 13・既存テスト | — | — |
 | 8.5 | 決定論・兄弟ファイル・1,000 行以下 | Testing Strategy・File Structure Plan | — | — |
 | 8.6 | 実機はふつうの条件だけ | Testing Strategy の「実機」 | — | — |
@@ -318,6 +333,7 @@ pub fn end_dragging_on_release(hwnd: HWND, position: Option<PhysicalPoint>) -> D
 **Implementation Notes**
 - `CaptureGuard` に `pub fn hwnd(&self) -> HWND` を足す（窓の一致に使う）。
 - 既存の呼び出し元は戻り値を使わなくてよい（`end_dragging`・`cancel_dragging` は今 `()` を返す）。
+- wintf は公開のクレートで、この 2 関数は公開の関数。「戻り値が `DragClose` になった」「呼ぶだけで終了の種が積まれる（呼び出し側で積むと二重になる）」を関数の説明に書き、完了時の PR の説明にも書く（リポジトリに変更の記録のファイルは 0 件）。
 - 閾値前の取り消しで今出ている `debug!`「Ended without Started dropped」（累積器の入口）は、種を積まなくなるので出なくなる。この行を見ているテストは 0 件。
 
 #### 累積器の控え（`ecs/drag/accumulator.rs`）
@@ -355,7 +371,7 @@ pub(crate) fn push_ended_seed(entity: Entity, end_pos: PhysicalPoint, cancelled:
 |---|---|---|
 | `ClientToScreen` が失敗（窓が無いなど） | 状態が持つ最後の画面の座標で終える | `warn!` `drag_reentry_pos_unreadable` |
 | wndproc 側の控えが無い | 状態は休ませ、捕捉は解放する。種は積めない | `warn!` `drag_end_seed_unreachable` |
-| 累積器の `Mutex` の毒化 | 種は積めない | `warn!`（`set_transition` の中） |
+| 累積器の `Mutex` の毒化 | 種は積めない・配れない | `warn!`（`set_transition` と `flush` の中） |
 | 離した窓が捕捉を取った窓と違う | 何もしない | 再入なら 1 行の中の `action = "none"`、ふつうの道は今の `trace!` |
 
 ### Monitoring
@@ -380,6 +396,8 @@ pub(crate) fn push_ended_seed(entity: Entity, end_pos: PhysicalPoint, cancelled:
 | 5 | 閾値前の離しで状態が休む。実物の窓では `GetCapture()` がその窓でなくなる | 4.1 | 赤 |
 | 6 | 4・5 の後、ボタンを押さずに閾値を越える `WM_MOUSEMOVE` を渡しても、開始の知らせ 0 件・状態は休んだまま | 4.3 | 赤 |
 | 7 | 再入の終了の知らせは、借用を返した後の 1 回目の配る段で 1 件、2 回目は 0 件。借用なしで渡した場合も同じ 1 回目。再入の扱いの後、起床の旗が立っている | 2.4 (8.3) | 赤 |
+| 7b | 本番の並び: 本物の `try_tick_world` を 2 回回す。1 回目の途中、`UISetup` に置いたテスト用のシステムが入口のクロージャ（`thread_local!` に預けておく）へ非活性化を渡す。1 回目の終わりでは終了の知らせ 0 件・状態は休んでいる・起床の旗が立っている。2 回目で終了の知らせ 1 件・`DraggingState` と `WindowDragging` が外れている。比べる相手: 同じメッセージを 1 回目と 2 回目の間に借用なしで渡した場合も、2 回目で 1 件 | 2.4 (8.3), 2.5 | 赤 |
+| 14 | `start_preparing` の後、状態は `Preparing`、隠れた実物の窓では `GetCapture()` がその窓。捕捉を取る間、`DRAG_STATE` は借りられていない（`SetCapture` が同期で送る `WM_CAPTURECHANGED` を入口から受けても落ちない） | 不変条件 2 | 緑のまま（状態と捕捉） |
 | 8 | 5 種でないメッセージ（`WM_MOUSEMOVE`・`WM_LBUTTONDOWN`・ESC でない `WM_KEYDOWN`・活性化の `WM_ACTIVATE`）は、借用中は状態も累積器も変えず `None`。`drag_reentry_handled` の記録 0 件 | 1.4, 6.3 | 緑のまま |
 | 9 | 再入の後、動かさないクリックで終了の知らせ 0 件 | 3.1 | 前後を記録 |
 | 10 | 再入の後、次の閾値越えのドラッグで開始 1 件 → 終了 1 件、対象は新しいドラッグのもの | 3.3 | 前後を記録 |
@@ -387,19 +405,21 @@ pub(crate) fn push_ended_seed(entity: Entity, end_pos: PhysicalPoint, cancelled:
 | 12 | 再入の扱いで `drag_reentry_handled` が 1 行（終えたとき `warn!`・何もしなかったとき `debug!`）。空の `hwnd` の離しで `drag_reentry_pos_unreadable` が 1 行 | 7.1, 7.2 | 赤 |
 | 13 | 再入の扱いは `None` を返し、非活性化でも沈降の観測の目印が付かない。借用は握られたまま（扱いの後も `try_borrow()` が失敗する）。画面更新の回数（`FrameCount`）は増えない | 1.2, 1.3 | 緑のまま |
 
+起床の旗はプロセスで 1 つなので、旗を読む・立てるテスト（7・7b）は共有の錠 `ecs::world::TICK_WAKE_TEST_LOCK` を、毒化に耐える取り方で取ってから触る（`drag/systems.rs` のテストと同じ形）。
+
 直す前の赤は、実装の前にテストを先に置いて走らせて確かめ、結果（赤・緑）を `tasks.md` の該当タスクへ記録する（8.1・8.2）。
 
 ### 既存テストの手直しと保つ主張
 
 - `keyboard_tests.rs`・`mouse_click_tests.rs`: `EcsWorld::new()` の後に累積器を入れ直すのをやめ、World の資源の複製を使う（入れ直すと控えとずれる）。主張は変えない（6.1・6.2）。
-- `drag/state/tests.rs`: 戻り値の型が変わる所だけ追随。`start_preparing` の順の変更は結果を変えない。
+- `drag/state/tests.rs`: 戻り値の型が変わる所だけ追随。`start_preparing` の順の変更は結果を変えない。このファイルは World を作らずに閾値後の `end_dragging` を呼ぶので、直した後は `drag_end_seed_unreachable` の `warn!` が出る（テストは落ちない。控えが無いスレッドでの正しい記録）。
 - `accumulator_tests.rs`: 控えが無いとき `push_ended_seed` が `false` を返し `warn!` を 1 件出すテストを 1 本足す（7.2）。
 - `wndproc_bridge.rs` の中の 4 本・`wintf/tests/drag/dispatch_test.rs`・`wintf/tests/layout/…/drag_lifecycle.rs`・areka の受け手のテスト（`follow_drag_tests.rs`・`follow_drag_end_gate_tests.rs`・`follow_drag_end_persist_tests.rs`）: 変更 0 行で緑のまま（8.4）。要件 5 は、上の表の 1・2・9 と、受け手の既存テスト（終了 1 件で保存 1 件・0 件で保存 0 件）を合わせて満たす。
 - 新しいテストファイルは 1,000 行以下。越えそうなら「取り消し」「離し」で 2 ファイルに分け、共有の組み立ては `wndproc_bridge_drag_test_support.rs` へ置く（8.5）。
 
 ### 実機（8.6）
 
-再入は狙って起こせないので、ふつうの条件だけを見る。根と一時フォルダはワークツリーの `target\` の下。`RUST_LOG` は位置の保存・`[DragEndEvent] Dispatching`・`wintf::ecs::drag=debug` まで開ける。
+再入は狙って起こしにくい（出うるのは起動の直後・ゴーストの切り替えの最中のドラッグだけ）ので、判定はふつうの条件だけで行う。走らせたログに `action` が `"ended"`・`"cancelled"` の `drag_reentry_handled` が出たか出なかったかは、件数を記録に残す（0 件でも 0 件と書く。合否には使わない）。根と一時フォルダはワークツリーの `target\` の下。`RUST_LOG` は位置の保存・`[DragEndEvent] Dispatching`・`wintf::ecs::drag=debug` まで開ける。
 
 - 閾値を越えたドラッグで保存 1 件。
 - 動かさないクリックで保存 0 件（`drag_reentry_handled` は `action = "none"` の `debug!` だけ）。
