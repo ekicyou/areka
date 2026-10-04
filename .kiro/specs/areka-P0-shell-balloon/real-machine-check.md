@@ -11,7 +11,7 @@
 | 根 | ワークツリーの `target\sbx\A` と `target\sbx\B`。どちらも `nar-sample-path emo2` が展開した `target\nar-samples\manual\emo2` の写しに、`areka.exe` と 32bit の補助プロセス（PE の機種 `014C`＝32bit を確かめた）を置いたもの |
 | 環境変数 | `NO_COLOR=1`・`RUST_LOG=info,areka=debug,areka_emo_text=debug,areka_emo_present=debug,areka_kanade=debug`（行き先の切り替え・箱の登録と片付け・面の装着・表示の判断が出る水準）・`AREKA_APP_SMOKE_EXIT_MS`（有界の自動終了・A は 80 秒・B は 40 秒）・`AREKA_BALLOON_TIMEOUT_MS=5000`（時間切れを見やすくするため 5 秒）・`AREKA_ROOT`／`AREKA_PROFILE_DIR`＝根・`TMP`／`TEMP`＝根の `tmp` |
 | 起動 | `<根>\areka.exe "<根>\ghost\emo2"`（ゴーストは絶対パスで渡す） |
-| 道具 | 本フォルダの `real-machine-run.ps1`（`-Prepare` で根を作り、`-Run A｜B` で起こす）。製品のコードとリポジトリの検体（`.nar`）には触れていない。1〜3 章の記録の後に、1 回の起動で 1 項目だけを確かめる `-Item` を足した（4 章・そのため今の `-Prepare` の根の master には、確かめ用の surface1110〜1112 が足されている） |
+| 道具 | 本フォルダの `real-machine-run.ps1`（`-Prepare` で根を作り、`-Run A｜B` で起こす）。製品のコードとリポジトリの検体（`.nar`）には触れていない。1〜3 章の記録の後に、1 回の起動で 1 項目だけを確かめる `-Item` を足した（4 章・項目は手順に分け、相方のバルーンの「次へ」で人が進める・そのため今の `-Prepare` の根の master には、確かめ用の surface1110〜1112 が足されている） |
 
 走行の一覧（`target\sbx\runs.txt` より）:
 
@@ -194,11 +194,25 @@ A1 の surface0 → 1100（文字の層が先に受け取った回）:
 
 ## 4. 目視待ちの項目の手順（開発者）
 
-1 回の起動で 1 つの項目だけを確かめる（`-Item`）。台本はその項目の台詞 1 本だけに差し替わり、ゴースト自身の台詞（ランダムトーク・なでなで・メニュー・選択肢の時間切れ・シェル切替の台詞）はその回のあいだ出ない。説明は相方（右の子）の普通のバルーンに、触る相手の文字は紫の子の箱に出る。自動終了の時間・バルーンの待ち時間・ログの水準は項目ごとに決めてある（`-ExitMs`・`-RustLog` を明示すればそちらが勝つ）。ログは毎回 `<根>\run.log` に上書きされるので、項目ごとに走らせた直後に照らす。
+1 回の起動で 1 つの項目だけを確かめる（`-Item`）。項目は番号つきの**手順**に分けてあり、1 手順が 1 本の台詞になる。どの手順も次の形で出る。
 
-**吹き出しの絵について**: 検体のシェルの `surface0.png` には、吹き出し（「アヒルやアヒル！…」）が**絵として描き込まれている**。areka のバルーンではないので、つかむと立ち絵ごと動く（要件 9.1・9.2・9.7 どおり）。項目ごとの確かめでは、吹き出しの描き込まれていない絵（`purple\0\base1.png`・`base2.png`。着せ替えの土台なので顔は描かれていない）で作った surface1110〜1112 に箱を置いた。起動の直後、台本の `\s[1110]` が届くまでの一瞬だけは surface0 が見えるが、その吹き出しは絵の一部。
+1. 相方（右の子）の普通のバルーンに、見出し「項目 n・手順 k/N: …」と、その手順で何が出て何を見るかの説明。
+2. 紫の子の箱に、確かめる文字。
+3. 相方のバルーンに選択肢「次へ」「もう一度」。**クリックするまで次の手順へ進まない**（どの手順も頭で `\![set,choicetimeout,0]` を出して選択肢の時間切れを切ってある。0 は無期限＝`areka-sakura` の `parse_choice_timeout` と `areka-kanade` の `choice_deadline` で「0・負は期限なし」）。「もう一度」はその手順を最初から出し直す。
 
-準備（1 度だけ・根 A と B を作り直す。areka は起こさない）:
+選択肢は相方のバルーンの中にあるので、確かめる箱の場所とは重ならない。選択肢を待つあいだは、どのスコープに選択肢があってもバルーンの時間切れが止まる（`balloon_visibility_wait` の `observe_suppression` はスコープを問わず選択肢を数える）ので、**紫の子の箱の文字も消えずに残る**。最後の手順は相方のバルーンの「この項目はおしまい。」で終わり、選択肢を出さない（その後はバルーンの待ち時間で消える）。
+
+選択肢を待つ手順で台詞が中断されたとき（箱を誤ってダブルクリックした等）は、話していない秒が 3 回たまるとその手順が出し直される。例外が 3 つある。
+
+- 項目 7 の手順 2: 次へ進む合図は、紫の子の札の中の選択肢「はい」「いいえ」。
+- 項目 9 の手順 2・項目 10 の手順 2: 「話していない」状態を確かめるため選択肢を出さない（選択肢を待つあいだは「話している最中」に数えられる・`fold_talking`）。次へ進む合図は**ダブルクリック**（項目 9 は青い文字、項目 10 は右の子）。
+- 項目 8 の手順 2: 台詞を中断するのが確かめる操作なので、中断の 3 秒後に次の手順（手順 3）が出る。
+
+ゴースト自身の台詞（ランダムトーク・なでなで・メニュー・選択肢の時間切れ・シェル切替の台詞）はその回のあいだ出ない。自動終了は 15 分（人がクリックで進めるため）。途中でやめるときは窓を閉じてよい。バルーンの待ち時間・ログの水準は項目ごとに決めてある（`-ExitMs`・`-RustLog` を明示すればそちらが勝つ）。ログは毎回 `<根>\run.log` に上書きされるので、項目ごとに走らせた直後に照らす。
+
+**吹き出しの絵について**: 検体のシェルの `surface0.png` には、吹き出し（「アヒルやアヒル！…」）が**絵として描き込まれている**。areka のバルーンではないので、つかむと立ち絵ごと動く（要件 9.1・9.2・9.7 どおり）。項目ごとの確かめでは、吹き出しの描き込まれていない絵（`purple\0\base1.png`・`base2.png`。着せ替えの土台なので顔は描かれていない）で作った surface1110〜1112 に箱を置いた。どの手順も台詞の頭で `\0\s[1110]`（項目 7 と項目 1 の手順 4 は `\s[1111]`）を出すので、起動の直後の一瞬だけ surface0 が見える。その吹き出しは絵の一部。
+
+準備（1 度だけ・根 A と B を作り直す。areka は起こさない。台本は `-Run` のたびに書き直すので、台本だけを替えたときは作り直さなくてよい）:
 
 ```
 pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Prepare
@@ -208,22 +222,42 @@ pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-e
 
 見出しの「2 章の #」は 2 章の判定の一覧の番号（`-Item` の番号とは別）。ログは PowerShell の `Select-String` で照らす。行の欄は `event="box_press"`・`box="tate1"`・`verdict=Break` の形で出る（`box_hover_changed` の `from`／`to` は、箱の外なら欄そのものが出ない）。
 
+**手順の印（どの手順のあいだの行かを分ける）**: 下の 1 行で、手順の切り替わりの時刻の並びが取れる。項目ごとの判定の行は、この印のあいだの時刻で読む。
+
+```
+Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\target\sbx\A\run.log" -SimpleMatch -Pattern 'event="boot_talk"','event="choice_selected"','event="steady_talk"'
+```
+
+- `event="boot_talk"` … 手順 1 が出た。
+- `event="choice_selected" scope=1 id=OnSbI<n>S<k>` … 相方のバルーンで選んだ（`label=次へ` なら手順 k へ進んだ、`label=もう一度` なら手順 k の出し直し）。続く `event="steady_talk" … origin="OnChoiceEvent"` がその手順の台詞の始まり。
+- `event="steady_talk" … origin="OnSecondChange"` … 中断の後の出し直し（項目 8 では手順 3）。
+- `event="steady_talk" … origin="OnMouseDoubleClick"` … ダブルクリックで次の手順が出た（項目 9・10 の手順 3）。
+- 選択肢を待つ手順ごとに `[balloon-visibility] 抑止が成立しているためタイムアウトによる非表示を見送った … choice=true` が 1 行出る（箱の文字が残ったことの裏付け）。
+
+「もう一度」を押した回数だけ、その手順の判定の行も増える。下の「1 行」は手順を 1 回出したときの数。
+
 ### 項目 1（2 章の #1）箱に文字が出る・`\b[名前]` の書き分け・サーフェスの切替で付いて回る
 
 ```
 pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 1
 ```
 
-- 出るもの: 右肩に青い縦書き「一の箱（青）です。」、左肩に赤い縦書き「二の箱（赤）です。」。腕の形が替わると青い文字が左上へ移り、足元の緑の札に赤い「札は赤。」。続く「一は青のまま。」は左上の青い列へ。「普通の吹き出しへ。」は紫の子の普通のバルーンに出て、「箱へ戻る。」で右肩の箱へ戻る（約 35 秒）。
-- すること: 見るだけ。
-- 合格の姿: 上のとおりに見える。札の赤が青い列へ移らない。
-- ログで判定:
+| 手順 | 見出し | 出るもの | 見ること |
+|---|---|---|---|
+| 1/5 | 右肩に青・左肩に赤の縦書きが出る | 右肩に青い縦書き「一の箱（青）です。」、左肩に赤い縦書き「二の箱（赤）です。」 | 2 つの箱に色違いで書き分けられる |
+| 2/5 | 無い名前の箱を指しても赤い列のまま | 左肩の赤い列に「二の箱（赤）です。」「無い名前の後も赤。」 | 名前の無い箱を指した後も赤い列に続く |
+| 3/5 | 腕の形が替わると青い文字が左上へ移る | 右肩に青い「付いて回る。」→ 2 秒後に腕の形が替わり、青い文字が左上へ移って「腕が替わった。」が続く | 文字が絵と一緒に左上へ移る |
+| 4/5 | 足元の緑の札だけが赤い文字になる | 足元の札に赤い「札は赤。」、左上の青い列に「一は青のまま。」 | 札の赤が青い列へ移らない |
+| 5/5 | 普通の吹き出しへ移り、箱へ戻る | 右肩に「青の箱。」→ 紫の子の普通のバルーンに「普通の吹き出しへ。」→ 3 秒後に右肩の箱へ「箱へ戻る。」。相方に「この項目はおしまい。」 | 普通のバルーンと箱を行き来する |
+
+- 合格の姿: 各手順の「見ること」のとおりに見える。
+- ログで判定（手順の印とあわせて読む）:
 
 ```
-Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\target\sbx\A\run.log" -SimpleMatch -Pattern '\s による行き先の決定','\b[名前]','箱の置き場所を登録した','\f の指定を写さない','バルーンの可視状態が遷移した'
+Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\target\sbx\A\run.log" -SimpleMatch -Pattern 'event="choice_selected"','\s による行き先の決定','\b[名前]','箱の置き場所を登録した','\f の指定を写さない','バルーンの可視状態が遷移した'
 ```
 
-  tate1 が `surface=1110 element=1 x=330 y=40`・tate2 が `x=10 y=40` で登録、`name="nai"` の警告がちょうど 1 行、`\s[1111]` の後に tate1 が `surface=1111 element=1 x=10 y=80` で登録し直し、fuda へ入るときに `\f の指定を写さない` が 1 行、`\s[1112]` の後に `scope=0 trigger="content" visible=true` が 1 行。
+  手順 1 で tate1 が `surface=1110 element=1 x=330 y=40`・tate2 が `x=10 y=40` で登録、手順 2 で `name="nai"` の警告がちょうど 1 行、手順 3 で `\s[1111]` の後に tate1 が `surface=1111 element=1 x=10 y=80` で登録し直し、手順 4 で fuda へ入るときに `\f の指定を写さない` が 1 行（fuda は `surface=1111 element=2 x=70 y=470`）、手順 5 で `\s[1112]` の後に `scope=0 trigger="content" visible=true` が 1 行。
 
 ### 項目 2（2 章の #2）ドラッグと拡大率の変化でずれない
 
@@ -231,16 +265,21 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 2
 ```
 
-- 出るもの: 右肩に「青の文字」、左肩に「赤の文字」が出たまま 90 秒話し続ける。
-- すること: 紫の子の体をつかんでドラッグする。拡大率の違うモニタがあれば、そちらへ持っていって戻す。
+| 手順 | 見出し | 出るもの | すること・見ること |
+|---|---|---|---|
+| 1/4 | 右肩に青・左肩に赤の文字が出る | 右肩に「青の文字」、左肩に「赤の文字」 | 2 つの文字を確かめる |
+| 2/4 | ドラッグしても文字が絵とずれない | 同じ文字 | 紫の子の体（文字の無い所）をつかんでドラッグする。最中も離した後も文字が絵と一緒に動く |
+| 3/4 | 拡大率の違うモニタへ移してもずれない | 同じ文字 | 拡大率の違うモニタがあれば、そちらへ持っていって戻す（無ければそのまま次へ）。文字が絵とずれない |
+| 4/4 | まとめ | 相方に「この項目はおしまい。」 | — |
+
 - 合格の姿: ドラッグの最中も、モニタをまたいだ後も、文字が絵とずれない。
 - ログで判定（ずれそのものは目視）:
 
 ```
-Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\target\sbx\A\run.log" -SimpleMatch -Pattern '[diag.window_move]','箱の置き場所を登録した'
+Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\target\sbx\A\run.log" -SimpleMatch -Pattern 'event="choice_selected"','[diag.window_move]','箱の置き場所を登録した'
 ```
 
-  モニタをまたいだ後に、箱の置き場所が新しい拡大率（`k=`）で登録し直されている。
+  手順 3（`id=OnSbI2S3` の後）でモニタをまたいだ後に、箱の置き場所が新しい拡大率（`k=`）で登録し直されている。
 
 ### 項目 3（2 章の #3）ちらつかない
 
@@ -248,9 +287,13 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 3
 ```
 
-- 出るもの: 箱に文字が出る・`\c` で消える・腕の形が替わる・普通のバルーンへ移る・箱へ戻る、を 8 回くり返す（約 80 秒）。
-- すること: 立ち絵を見続ける。
-- 合格の姿: 立ち絵が一瞬消える・白くなる・跳ねることが無い。
+| 手順 | 見出し | 出るもの | 見ること |
+|---|---|---|---|
+| 1/3 | これから 8 回くり返す | 説明だけ | 次の手順で立ち絵を見続ける用意 |
+| 2/3 | 立ち絵がちらつかないか見る | 箱に文字が出る・`\c` で消える・腕の形が替わる・普通のバルーンへ移る・箱へ戻る、を 8 回（約 70 秒）。終わると「次へ」「もう一度」 | 立ち絵が一瞬消える・白くなる・跳ねることが無い |
+| 3/3 | まとめ | 相方に「この項目はおしまい。」 | — |
+
+- 合格の姿: 手順 2 のあいだ、立ち絵が一瞬消える・白くなる・跳ねることが無い。
 - ログで判定（ちらつきそのものは目視）:
 
 ```
@@ -265,16 +308,20 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 4
 ```
 
-- 出るもの: 青い「行き来する文字」が、3 秒ごとに腕の形が替わるたびに右肩（surface1110）と左上（surface1111）を行き来する（16 回）。
-- すること: 替わる瞬間を見る。
+| 手順 | 見出し | 出るもの | 見ること |
+|---|---|---|---|
+| 1/3 | これから 16 回替わる | 説明だけ | — |
+| 2/3 | 替わる瞬間に前の位置に文字が残るか見る | 青い「行き来する文字」が、3 秒ごとに腕の形が替わるたびに右肩（surface1110）と左上（surface1111）を行き来する（16 回・約 50 秒）。終わると「次へ」「もう一度」 | 替わる瞬間に、前の位置に文字が一瞬残って見えるか |
+| 3/3 | まとめ | 相方に「この項目はおしまい。」 | — |
+
 - 合格の姿: 前の位置に文字が一瞬残って見えても目に付かない（目に付くなら `areka-P0-shell-balloon-frame-align` として起票）。
 - ログで判定:
 
 ```
-Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\target\sbx\A\run.log" -SimpleMatch -Pattern 'apply(ShowSurface)','\s による行き先の決定','箱の置き場所を登録した'
+Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\target\sbx\A\run.log" -SimpleMatch -Pattern 'event="choice_selected"','apply(ShowSurface)','\s による行き先の決定','箱の置き場所を登録した'
 ```
 
-  3.2 の読み方で、16 回の切替のうち、絵の差し替え（`apply(ShowSurface)`）が文字の層の `\s` の受け取り（`\s による行き先の決定`）より先に来た回（前の置き場所の文字が 1 フレーム残る型）を数える。
+  3.2 の読み方で、手順 2（`id=OnSbI4S2` から `id=OnSbI4S3` まで）の 16 回の切替のうち、絵の差し替え（`apply(ShowSurface)`）が文字の層の `\s` の受け取り（`\s による行き先の決定`）より先に来た回（前の置き場所の文字が 1 フレーム残る型）を数える。台詞の頭の `\s[1110]` は切替に数えない。
 
 ### 項目 5（2 章の #5）はみ出し（根 B）
 
@@ -282,9 +329,12 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run B -Item 5 -Watch
 ```
 
-- 出るもの: 紫の子の右下に、絵（382×547）の右と下へはみ出す箱 hami の長い文字が 30 秒ほど出る。
-- すること: 見るだけ。
-- 合格の姿: はみ出した部分が立ち絵の窓の端で切れ、立ち絵の窓が大きくならない。
+| 手順 | 見出し | 出るもの | 見ること |
+|---|---|---|---|
+| 1/2 | 右下の箱が絵からはみ出す | 紫の子の右下に、絵（382×547）の右と下へはみ出す箱 hami の長い文字 | はみ出した部分が立ち絵の窓の端で切れ、窓が大きくならない |
+| 2/2 | まとめ | 相方に「この項目はおしまい。」 | — |
+
+- 合格の姿: 手順 1 のあいだ、はみ出した部分が立ち絵の窓の端で切れて見え、立ち絵の窓が大きくならない。
 - ログで判定:
 
 ```
@@ -292,7 +342,7 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 (Get-Content "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\target\sbx\B\windows.txt") -replace '^.*hwnd=(\d+).*size=(\S+)$','$1 $2' | Sort-Object -Unique
 ```
 
-  警告がちょうど 1 行（`surface=1110 name="hami" rect=(200, 480, 320, 120) surface_size=(382, 547)`）。窓の記録は、立ち絵の窓の hwnd の大きさが 1 通りだけ（起動直後の surface0 の大きさの行が別にあってもよい）。
+  警告が手順 1 を出した回数だけ（1 回なら 1 行・`surface=1110 name="hami" rect=(200, 480, 320, 120) surface_size=(382, 547)`）。窓の記録は、立ち絵の窓の hwnd の大きさが 1 通りだけ（起動直後の surface0 の大きさの行が別にあってもよい）。
 
 ### 項目 6（2 章の #8）透明な画素のクリックが下へ抜ける
 
@@ -300,16 +350,21 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 6
 ```
 
-- 出るもの: 右肩に青い「文字」が 90 秒出たまま。その下（同じ縦の列）は箱の四角の中だが何も描かれていない。
-- すること: 紫の子の後ろにメモ帳などの窓を置く。⑴ 青い文字の下の何も描かれていない所をクリックする。⑵ 青い文字そのものを 1 回だけクリックする。
-- 合格の姿: ⑴ で後ろの窓が選ばれる。⑵ は後ろへ抜けない。
+| 手順 | 見出し | 出るもの | すること・見ること |
+|---|---|---|---|
+| 1/4 | 紫の子の後ろに窓を置く | 右肩に青い「文字」 | 紫の子の右肩の後ろにメモ帳などの窓を置く |
+| 2/4 | 青い文字の下をクリックすると後ろの窓へ抜ける | 同じ | 青い文字の下（同じ縦の列の、何も描かれていない所。箱の四角の中）を 1 回クリックする。後ろの窓が選ばれる |
+| 3/4 | 青い文字そのものは後ろへ抜けない | 同じ | 青い文字そのものを 1 回だけクリックする。後ろの窓が選ばれない |
+| 4/4 | まとめ | 相方に「この項目はおしまい。」 | — |
+
+- 合格の姿: 手順 2 で後ろの窓が選ばれ、手順 3 では選ばれない。手順 2 で前に出たメモ帳が相方のバルーンを隠したら、メモ帳をずらしてから「次へ」を押す。
 - ログで判定:
 
 ```
-Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\target\sbx\A\run.log" -SimpleMatch -Pattern 'event="box_press"'
+Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\target\sbx\A\run.log" -SimpleMatch -Pattern 'event="choice_selected"','event="box_press"'
 ```
 
-  ⑵ の 1 回ぶんの 1 行（`box="tate1" double_click=None selected_now=false verdict=ShellOp`）だけ。⑴ のクリックは areka に届かないので行が増えない。
+  `box_press` は手順 3（`id=OnSbI6S3` から `id=OnSbI6S4` まで）の 1 行（`box="tate1" double_click=None selected_now=false verdict=ShellOp`）だけ。手順 2 のクリックは areka に届かないので行が増えない（相方のバルーンの「次へ」は箱ではないので `box_press` にならない）。
 
 ### 項目 7（2 章の #9 のうち選択肢）箱の選択肢の強調とクリック
 
@@ -317,16 +372,20 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 7
 ```
 
-- 出るもの: 足元の緑の札（fuda・横書き）に「選んで」と、選択肢「はい」「いいえ」。選択肢の時間切れは `\![set,choicetimeout,0]` で切ってある。
-- すること: ポインタを「はい」「いいえ」に重ねて動かし、どちらかをクリックする。
-- 合格の姿: 重ねた選択肢が強調され、クリックすると「はいを選んだ。」などの返事が同じ札に出る。
+| 手順 | 見出し | 出るもの | すること・見ること |
+|---|---|---|---|
+| 1/3 | 足元の緑の札に選択肢が出る | 説明だけ | — |
+| 2/3 | 札の選択肢に重ねてからクリックする | 足元の緑の札（fuda・横書き）に「選んで」と、選択肢「はい」「いいえ」。相方のバルーンに「次へ」は出ない | ポインタを「はい」「いいえ」に重ねて動かし、強調を見てからどちらかをクリックする（それが次へ進む合図） |
+| 3/3 | 返事が同じ札に出る | 札に「はいを選んだ。」か「いいえを選んだ。」。相方に「この項目はおしまい。」 | 返事が同じ札に出る |
+
+- 合格の姿: 重ねた選択肢が強調され、クリックすると返事が同じ札に出る。
 - ログで判定:
 
 ```
 Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\target\sbx\A\run.log" -SimpleMatch -Pattern 'event="box_choice_hover_inject"','event="choice_selected"','event="box_press"'
 ```
 
-  強調の注入（`box="fuda" ordinal=Some(0)`／`Some(1)`）、`choice_selected` が `box="fuda"` で 1 行、`box_press` が `box="fuda" selected_now=true verdict=ConsumedBySelection` で 1 行。
+  手順 2 のあいだに強調の注入（`box="fuda" ordinal=Some(0)`／`Some(1)`）、`choice_selected` が `scope=0 id=OnSbYes`（または `OnSbNo`）`box="fuda"` で 1 行、`box_press` が `box="fuda" selected_now=true verdict=ConsumedBySelection` で 1 行。相方のバルーンの `choice_selected`（`scope=1 id=OnSbI7S2`）は手順 2 へ進んだ印。
 
 ### 項目 8（2 章の #9 のうち中断）話している最中の箱の左ダブルクリックで中断
 
@@ -334,16 +393,22 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 8
 ```
 
-- 出るもの: 右肩に青い「ここをダブルクリック」。60 秒話し続ける（この回はログに `kanade=trace` を自動で足す）。
-- すること: 話しているあいだに青い文字を左ダブルクリックする。
-- 合格の姿: 台詞が止まって文字が消える。左肩に赤い「止まらなかった」も「立ち絵へのダブルクリックが届いた。」も出ない。
+この回はログに `kanade=trace` を自動で足す。
+
+| 手順 | 見出し | 出るもの | すること・見ること |
+|---|---|---|---|
+| 1/3 | 話している最中に箱をダブルクリックする | 説明だけ | — |
+| 2/3 | 青い文字を左ダブルクリック | 右肩に青い「ここをダブルクリック」。そのまま 60 秒話し続ける | 話しているあいだに青い文字を左ダブルクリックする。台詞が止まって文字（相方のバルーンも）が消える。止まると 3 秒後に手順 3 が出る |
+| 3/3 | 止まったか | 相方に判定の説明と「この項目はおしまい。」 | 手順 2 で左肩に赤い「止まらなかった」が出ていない |
+
+- 合格の姿: 手順 2 で台詞が止まって文字が消え、赤い「止まらなかった」が出ない（止まらずに 60 秒たつと赤い「止まらなかった」と「次へ」「もう一度」が出る＝不合格の印）。
 - ログで判定:
 
 ```
-Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\target\sbx\A\run.log" -SimpleMatch -Pattern 'event="box_press"','balloon_break_accepted','id=OnMouseDoubleClick'
+Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\target\sbx\A\run.log" -SimpleMatch -Pattern 'event="choice_selected"','event="box_press"','balloon_break_accepted','id=OnMouseDoubleClick','event="steady_talk"'
 ```
 
-  `box_press` が 2 行（1 打目 `double_click=None verdict=ShellOp`、2 打目 `double_click=Left verdict=Break`）、`balloon_break_accepted` が 1 行、`id=OnMouseDoubleClick` が 0 行。
+  手順 2（`id=OnSbI8S2` の後）に `box_press` が 2 行（1 打目 `double_click=None verdict=ShellOp`、2 打目 `double_click=Left verdict=Break`）、`balloon_break_accepted` が 1 行、`id=OnMouseDoubleClick` が 0 行。その約 3 秒後に `event="steady_talk" … origin="OnSecondChange"` が 1 行（手順 3）。
 
 ### 項目 9（2 章の #9 のうち立ち絵へ）話していないときの箱のダブルクリックは立ち絵へ
 
@@ -351,16 +416,22 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 9
 ```
 
-- 出るもの: 右肩に青い「ここをダブルクリック」が出た時点で話し終わっている。文字は 60 秒残る（この回だけ待ち時間 60 秒・ログに `kanade=trace` を自動で足す）。
-- すること: 青い文字を左ダブルクリックする。
-- 合格の姿: 左肩に赤い「立ち絵へのダブルクリックが届いた。」が出る。
+この回だけバルーンの待ち時間は 300 秒（手順 2 の文字が読み終わる前に消えないように）。ログに `kanade=trace` を自動で足す。
+
+| 手順 | 見出し | 出るもの | すること・見ること |
+|---|---|---|---|
+| 1/3 | 話していないときに箱をダブルクリックする | 説明だけ | — |
+| 2/3 | 青い文字を左ダブルクリック | 右肩に青い「ここをダブルクリック」。出た時点で話し終わっている。**選択肢は出ない** | 青い文字を左ダブルクリックする（それが次へ進む合図） |
+| 3/3 | 立ち絵へ届いた | 左肩に赤い「立ち絵へのダブルクリックが届いた。」。相方に「この項目はおしまい。」 | 赤い文字が出る |
+
+- 合格の姿: 手順 2 のダブルクリックで手順 3 の赤い文字が出る（ダブルクリックが立ち絵へ届いた＝ゴーストの `OnMouseDoubleClick` が手順 3 を返した）。
 - ログで判定:
 
 ```
-Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\target\sbx\A\run.log" -SimpleMatch -Pattern 'event="box_press"','id=OnMouseDoubleClick'
+Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\target\sbx\A\run.log" -SimpleMatch -Pattern 'event="choice_selected"','event="box_press"','id=OnMouseDoubleClick','event="steady_talk"'
 ```
 
-  `box_press` の 2 打目が `double_click=Left verdict=ShellOp`、`id=OnMouseDoubleClick` の `SHIORI 送出` が 1 行。
+  手順 2（`id=OnSbI9S2` の後）に `box_press` の 2 打目が `double_click=Left verdict=ShellOp`、`id=OnMouseDoubleClick` の `SHIORI 送出` が 1 行、続いて `event="steady_talk" … origin="OnMouseDoubleClick"` が 1 行（手順 3）。
 
 ### 項目 10（2 章の #10）ポインタを置いているあいだ消えない
 
@@ -368,16 +439,22 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 10
 ```
 
-- 出るもの: 右肩に青い「ここに置く」。台詞が終わると 8 秒で消える（この回だけ待ち時間 8 秒）。
-- すること: 青い文字が出たら、その文字（の描かれている所）の上にポインタを置いて動かさずに待つ。台詞が終わって 8 秒以上たったら、ポインタを立ち絵からも吹き出しからも外す。
-- 合格の姿: ポインタを置いているあいだは消えない。外すと 8 秒で消える。
+この回だけバルーンの待ち時間は 8 秒。
+
+| 手順 | 見出し | 出るもの | すること・見ること |
+|---|---|---|---|
+| 1/3 | ポインタを置いているあいだ消えない | 説明だけ | — |
+| 2/3 | 青い文字の上にポインタを置いて待つ | 右肩に青い「ここに置く」。5 秒後に台詞が終わる。**選択肢は出ない** | 青い文字（の描かれている所）の上にポインタを置いて動かさずに 15 秒ほど待つ。消えなければ、ポインタを立ち絵からも吹き出しからも外す。8 秒で消えたら、右の子をダブルクリックする（それが次へ進む合図） |
+| 3/3 | まとめ | 相方に「この項目はおしまい。」 | — |
+
+- 合格の姿: 手順 2 でポインタを置いているあいだは消えず、外すと 8 秒で消える。
 - ログで判定:
 
 ```
-Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\target\sbx\A\run.log" -SimpleMatch -Pattern 'event="box_hover_changed"','抑止が成立しているため','抑止が解けたので','バルーンの可視状態が遷移した'
+Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\target\sbx\A\run.log" -SimpleMatch -Pattern 'event="choice_selected"','event="box_hover_changed"','抑止が成立しているため','抑止が解けたので','バルーンの可視状態が遷移した','event="steady_talk"'
 ```
 
-  `box_hover_changed` の `to="tate1"` が 1 行以上、`hover=true` の見送りが 1 行、外した後に計測のやり直しが 1 行、その 8 秒後に `trigger="timeout" visible=false`。
+  手順 2（`id=OnSbI10S2` の後）に `box_hover_changed` の `to="tate1"` が 1 行以上、`choice=false hover=true` の見送りが 1 行（手順 1 の `choice=true` の行とは別）、外した後に計測のやり直しが 1 行、その 8 秒後に `trigger="timeout" visible=false`。右の子のダブルクリックで `event="steady_talk" … origin="OnMouseDoubleClick"` が 1 行（手順 3）。
 
 `-Item` を付けない `-Run A`／`-Run B` は、1〜3 章の記録を取った最初の通し（起動の台詞＋3 つの段・箱は surface0 などの吹き出しの描き込まれた絵）をそのまま流す。
 
