@@ -1,6 +1,6 @@
 //! 公開面（`lib.rs`）の兄弟テスト。
 //!
-//! ここが判定するのは 7 つ。
+//! ここが判定するのは 9 つ。
 //!
 //! ⑴ `open` は 1 バイトも書かない——固定入力を全て通した前後で根の木が 1 つも
 //!    変わらないことを、実際に歩いて突き合わせる（走査そのものの較正を 3 本持つ）。
@@ -13,6 +13,8 @@
 //! ⑺ 名前・パスの長さの上限（200 単位）の境界を公開の入口 `open` で測る。
 //! ⑻ 確定の段の失敗を公開の入口 `install` で本当に起こし、失敗の値と記録の両方が
 //!    正しい場所を指す。
+//! ⑼ 同梱のバルーンを公開の入口で通す——探索の順の名前の列・剥がした置き場所・
+//!    記録の並びを、根を歩いて完全一致で確かめる。
 //!
 //! 語彙の全数対応と「失敗のたびに記録が 1 回」は [`vocabulary`] が持つ。
 //!
@@ -581,6 +583,183 @@ fn the_deflate_scan_looks_at_real_files_and_catches_the_spelling() {
     assert!(
         !"miniz_oxide::inflate::decompress_to_vec_with_limit(data, limit)".contains(&needle),
         "伸長側の綴りまで拾うのでは意味が無い"
+    );
+}
+
+// ---- 同梱のバルーンを公開の入口で通す（areka-P0-install-companion-reading 要件 8.2・8.3） ----
+
+/// 根の下の全てのファイルの相対パス（フォルダは除く）。
+fn files_under(root: &Path) -> Vec<String> {
+    tree(root)
+        .into_keys()
+        .filter(|path| !path.ends_with('/'))
+        .collect()
+}
+
+/// どのファイルも、本体か同梱の宛先のどれかの配下に在る。外れたものを返す。
+fn files_outside(files: &[String], body: &str, companions: &[&str]) -> Vec<String> {
+    let homes: Vec<String> = std::iter::once(format!("ghost/{body}/"))
+        .chain(companions.iter().map(|name| format!("balloon/{name}/")))
+        .collect();
+    files
+        .iter()
+        .filter(|file| !homes.iter().any(|home| file.starts_with(home.as_str())))
+        .cloned()
+        .collect()
+}
+
+/// 書庫を空の根へ入れる。書庫は根とは別の作業フォルダに置く（根を空のまま渡すため）。
+fn install_into_empty_root(nar: &NarBuilder, root: &Path) -> InstallOutcome {
+    let shelf = WorkDir::new().expect("書庫の置き場を借りられる");
+    let archive = NarArchive::open(&put(shelf.path(), "ghost.nar", nar)).expect("開ける");
+    assert!(tree(root).is_empty(), "根が空でない");
+    archive
+        .install(&InstallRequest {
+            root,
+            target_ghost: None,
+        })
+        .expect("入れられる")
+}
+
+/// 無印と `balloon0`〜`balloon10` を持つ書庫を入れると、入れたものの名前の列は
+/// 本体 → 無印 → 0 → 1 … → 10 の数の順（`10` が `1` と `2` の間に来ない）。
+/// 根の全てのファイルが本体か各宛先の配下に在り、記録は 0 件（要件 1.7・5.6・8.2・8.3）。
+#[test]
+fn eleven_numbered_companions_install_in_number_order_under_their_homes() {
+    let numbers: Vec<String> = (0..=10).map(|n| n.to_string()).collect();
+    let mut lines = vec![
+        "type,ghost".to_owned(),
+        "name,Tester".to_owned(),
+        "directory,tester".to_owned(),
+        "balloon.directory,kaku".to_owned(),
+        "balloon.source.directory,kaku".to_owned(),
+    ];
+    for n in &numbers {
+        lines.push(format!("balloon{n}.directory,b{n}"));
+        lines.push(format!("balloon{n}.source.directory,s{n}"));
+    }
+    let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+    let mut nar = NarBuilder::new()
+        .file("install.txt", &install_txt(&lines))
+        .done()
+        .file("ghost/master/descript.txt", b"charset,Shift_JIS\r\n")
+        .done()
+        .file("kaku/balloon.txt", b"kaku\r\n")
+        .done();
+    for n in &numbers {
+        nar = nar.file(format!("s{n}/balloon.txt"), n.as_bytes()).done();
+    }
+
+    let work = WorkDir::new().expect("根を借りられる");
+    let root = work.path();
+    let outcome = install_into_empty_root(&nar, root);
+
+    let mut expected = vec!["Tester".to_owned(), "kaku".to_owned()];
+    expected.extend(numbers.iter().map(|n| format!("b{n}")));
+    assert_eq!(
+        outcome
+            .installed
+            .iter()
+            .map(|element| element.name.clone())
+            .collect::<Vec<_>>(),
+        expected,
+        "入れたものの名前の列"
+    );
+    assert_eq!(outcome.warnings, vec![], "記録は 0 件");
+
+    let files = files_under(root);
+    // 本体 2（descript.txt と install.txt）・無印 1・番号付き 11。数が合わなければ下の
+    // 「外れ 0 件」は空の根でも緑になる。
+    assert_eq!(files.len(), 14, "{files:?}");
+    let homes: Vec<String> = expected[1..].to_vec();
+    let homes: Vec<&str> = homes.iter().map(String::as_str).collect();
+    assert_eq!(
+        files_outside(&files, "tester", &homes),
+        Vec::<String>::new(),
+        "本体と宛先の外にファイルがある"
+    );
+    for n in &numbers {
+        assert_eq!(
+            fs::read(root.join(format!("balloon/b{n}/balloon.txt"))).expect("読める"),
+            n.as_bytes(),
+            "balloon{n} の中身が自分の取り出し元から来ていない"
+        );
+    }
+}
+
+/// `balloon0.source.directory,../extra\bal1` と、打ち切りの後ろの `balloon2.directory` を
+/// 持つ書庫を入れる。同梱は `extra/bal1` の段を剥がした位置に置かれ、`balloon2` の宛先は
+/// 作られない。記録は「探索で読まなかった」→「取り除いた」の順の完全一致
+/// （要件 2.2・3.1・5.6・6.1・6.3・8.2）。
+#[test]
+fn a_cleaned_hierarchical_source_installs_stripped_and_records_in_order() {
+    let nar = NarBuilder::new()
+        .file(
+            "install.txt",
+            &install_txt(&[
+                "type,ghost",
+                "name,Tester",
+                "directory,tester",
+                "balloon0.directory,b0",
+                "balloon0.source.directory,../extra\\bal1",
+                "balloon2.directory,b2",
+            ]),
+        )
+        .done()
+        .file("ghost/master/descript.txt", b"charset,Shift_JIS\r\n")
+        .done()
+        .file("extra/bal1/descript.txt", b"bal1\r\n")
+        .done()
+        .file("extra/bal1/sub/s0.png", b"png")
+        .done();
+
+    let work = WorkDir::new().expect("根を借りられる");
+    let root = work.path();
+    let outcome = install_into_empty_root(&nar, root);
+
+    assert_eq!(
+        outcome.warnings,
+        vec![
+            ManifestWarning::CompanionNotSearched {
+                key: "balloon2.directory".to_owned(),
+            },
+            ManifestWarning::SourceDirectoryCleaned {
+                key: "balloon0.source.directory".to_owned(),
+                written: "../extra\\bal1".to_owned(),
+                read: "extra/bal1".to_owned(),
+            },
+        ]
+    );
+    assert_eq!(
+        outcome
+            .installed
+            .iter()
+            .map(|element| element.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Tester", "b0"]
+    );
+
+    assert_eq!(
+        files_under(root),
+        vec![
+            "balloon/b0/descript.txt".to_owned(),
+            "balloon/b0/sub/s0.png".to_owned(),
+            "ghost/tester/ghost/master/descript.txt".to_owned(),
+            "ghost/tester/install.txt".to_owned(),
+        ],
+        "同梱は段を剥がした位置に在り、本体に extra は残らない"
+    );
+    assert_eq!(
+        files_outside(&files_under(root), "tester", &["b0"]),
+        Vec::<String>::new()
+    );
+    assert!(
+        !tree(root).contains_key("ghost/tester/extra/"),
+        "本体に空の extra フォルダが残った"
+    );
+    assert!(
+        !root.join("balloon/b2").exists(),
+        "balloon2 の宛先が作られた"
     );
 }
 
