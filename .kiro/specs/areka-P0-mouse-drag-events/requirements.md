@@ -16,8 +16,8 @@
 - **キャラクター窓**: 本体・相方などのキャラクターの絵を出す窓。バルーン（吹き出し）の窓は含まない。
 - **ドラッグ**: キャラクター窓を左ボタンで押したまま、閾値を越えて動かすこと。窓は指に付いて動く。
 - **開始**: ドラッグが閾値を越えて始まったこと。位置は押した位置。
-- **終了**: 開始したドラッグが、ボタンを離して終わったこと、または取り消されたこと。位置は終わった位置。
-- **動かさないクリック**: 押してから閾値を越えずに離した操作（ダブルクリックの各押下も含む）。
+- **終了**: 開始したドラッグが、ボタンを離して終わったこと、または取り消されたこと。位置は離したときは離した位置、取り消しのときは押した位置（取り消しでは窓が開始の位置へ戻るため）。
+- **動かさないクリック**: 押してから閾値を越えずに離した操作（閾値を越えずに離したダブルクリックの各押下も含む）。
 - **定常**: ゴーストが起動を終え、終了や切替の途中でない状態。今の他のマウスのイベントはこの間だけ送られる。
 - **終了の握手の待ち**: 終了の要求を受けて、SHIORI とのやり取りで終わる段取りを待っている間。今の他のマウスのイベントはこの間送られない。
 
@@ -64,7 +64,7 @@
 
 #### Acceptance Criteria
 1. If 利用者がキャラクター窓を押して閾値を越えずに離したとき, the areka shall `OnMouseDragStart`・`OnMouseDragEnd` のどちらも送らない。
-2. If 利用者がキャラクター窓をダブルクリックしたとき, the areka shall ダブルクリックの各押下について `OnMouseDragStart`・`OnMouseDragEnd` を送らない（`OnMouseDoubleClick` の送り方は今のまま）。
+2. If 利用者がキャラクター窓をダブルクリックし、どの押下も閾値を越えずに離したとき, the areka shall `OnMouseDragStart`・`OnMouseDragEnd` を送らない（`OnMouseDoubleClick` の送り方は今のまま）。2 回目の押下のまま閾値を越えて動かしたときは、要件 1・2 のドラッグとして扱う（`OnMouseDoubleClick` の後に `OnMouseDragStart` が送られる。押下とドラッグを突き合わせる仕組みは作らない）。
 3. If 利用者がバルーン窓をドラッグしたとき, the areka shall `OnMouseDragStart`・`OnMouseDragEnd` を送らない。
 4. If 利用者がキャラクター窓を右ボタンで押したまま動かしたとき, the areka shall `OnMouseDragStart`・`OnMouseDragEnd` を送らない（今の窓のドラッグは左ボタンでだけ始まる）。
 
@@ -73,9 +73,9 @@
 
 #### Acceptance Criteria
 1. The areka shall `OnMouseDragStart`・`OnMouseDragEnd` の Reference を、Reference0〜6 の 7 つとし、`OnMouseDoubleClick` と同じ並びにする。
-2. The areka shall Reference0／1 を、他のマウスのイベントと同じ座標の空間（当たり判定を引くのと同じ、キャラクターの絵の座標）の x／y とし、`OnMouseDragStart` では押した位置、`OnMouseDragEnd` では終わった位置（離した位置、取り消しのときは取り消された時点の位置）を入れる。
+2. The areka shall Reference0／1 を、他のマウスのイベントと同じ座標の空間（当たり判定を引くのと同じ、キャラクターの絵の座標）の x／y とし、`OnMouseDragStart` では押した位置、`OnMouseDragEnd` では終わった位置（離したときは離した位置、取り消しのときは押した位置）を入れる。取り消しでは窓が開始の位置へ戻るので、取り消しの `OnMouseDragEnd` の Reference0／1 は `OnMouseDragStart` と同じ値になる（正典は取り消しについて書いていない＝要件 7.4 の裁量の記録に載せる）。
 3. The areka shall Reference2 を `0` とする。
-4. The areka shall Reference3 を、ドラッグしたキャラクター窓のスコープの番号（本体 `0`・相方 `1`・3 体目以降のキャラクターはその番号）とする。
+4. The areka shall Reference3 を、ドラッグしたキャラクター窓のスコープの番号（本体 `0`・相方 `1`）とし、他のマウスのイベントと同じ引き方で得る（今の areka は 3 体目以降のキャラクター窓を作らない。作れるようになったときは他のマウスのイベントと一緒に直す）。
 5. The areka shall Reference4 を、Reference0／1 の位置にある当たり判定の識別子とし、当たり判定が無い位置では空文字列とする。
 6. The areka shall Reference5 を `0`（左ボタン）とする。
 7. The areka shall Reference6 を `mouse` とする。
@@ -104,15 +104,16 @@
 
 #### Acceptance Criteria
 1. The areka shall `OnMouseDragStart`・`OnMouseDragEnd` を SHIORI へ送ってよいイベントの表に加え、他の行と同じ形で ukadoc の URL の注記を付ける。
-2. The areka shall 網羅の台帳（`doc/ukadoc-coverage/ledger/shiori.toml`）の `OnMouseDragStart:1`・`OnMouseDragEnd:1` の 2 行を実装済み（担当は本 spec）に改め、備考を実装済みの他の行（`OnMouseDoubleClick:1` など）と同じ形（壊れ方・ログ・根拠の場所・組み立ての場所・無いと失うもの）で書き直し、台帳から作る報告（`doc/ukadoc-coverage/report/` の該当の生成物）を作り直す。
+2. The areka shall 網羅の台帳（`doc/ukadoc-coverage/ledger/shiori.toml`）の `OnMouseDragStart:1`・`OnMouseDragEnd:1` の 2 行を実装済み（担当は本 spec）に改め、備考を実装済みの他の行（`OnMouseDoubleClick:1` など）と同じ形（壊れ方・ログ・根拠の場所・組み立ての場所・無いと失うもの）で書き直し、台帳から作る報告（`doc/ukadoc-coverage/report/` の該当の生成物）を作り直し、網羅の検査（`ukadoc-survey` のテスト）が台帳と突き合わせる文書（`briefing.md` の状態の数・`roadmap-draft.md` の担当 spec の行など）も検査が緑になるように直す。
 3. The areka shall パッシブモードでの抑えを持たないことを、台帳の 2 行の備考と、送るかどうかを決める場所の印（パッシブモードへ入る経路ができたときに抑えを置く場所）の 2 か所に残す。
+4. The areka shall 正典が書いていない点について本 spec で決めたこと（取り消しでも終了を送ること・取り消しの位置・Reference2 を `0` とすること など）を、正典の沈黙箇所の裁量の記録（`doc/COMPAT_ARCHITECTURE.md` §8 の表）に追記する。
 
 ### Requirement 8: 記録
 **Objective:** As a 実機で確かめる開発者, I want 送ったことも送らなかったことも記録で追えてほしい, so that 反応が無いときに、どこで止まったかが分かる
 
 #### Acceptance Criteria
 1. When 2 つのイベントのどちらかを送るとき, the areka shall 他の SHIORI イベントと同じく、イベントの名前と Reference を含む記録を 1 件残す。
-2. The areka shall 開始・終了の知らせを受けてから送らないと決めるすべての経路（定常でない・終了の握手の待ち・送り先が無い・重ねて届いた知らせを捨てる）に記録を残し、記録の無いまま捨てる経路を 0 本とする。
+2. The areka shall 開始・終了の知らせを受けてから送らないと決めるすべての経路（定常でない・終了の握手の待ち・送り先が無い、および重ねて届いた知らせを捨てる経路を設けるならその経路）に記録を残し、記録の無いまま捨てる経路を 0 本とする。
 
 ### Requirement 9: 検証
 **Objective:** As a 開発者, I want 届くこと・届かないことが決定論のテストと実機で確かめられていてほしい, so that 後から他のマウスのイベントを足しても壊れたことに気付ける
