@@ -463,8 +463,9 @@ if ($Run) {
     $env:AREKA_ROOT = $root
     $env:AREKA_PROFILE_DIR = Join-Path $root 'profile'
     $env:TMP = Join-Path $root 'tmp'; $env:TEMP = $env:TMP
+    # デバッグ版はコンソールの実行ファイル（main.rs の windows_subsystem はリリース版だけ）。出力はファイルへ回すので、空のコンソール窓は隠す。
     $p = Start-Process (Join-Path $root 'areka.exe') -ArgumentList "`"$ghost`"" -WorkingDirectory $root `
-        -RedirectStandardOutput (Join-Path $root 'run.log') -RedirectStandardError (Join-Path $root 'run.err.log') -PassThru
+        -RedirectStandardOutput (Join-Path $root 'run.log') -RedirectStandardError (Join-Path $root 'run.err.log') -WindowStyle Hidden -PassThru
     "$Run item=$Item pid=$($p.Id) start=$(Get-Date -Format o) exit_ms=$ExitMs timeout_ms=$timeoutMs" | Tee-Object -Append (Join-Path $base 'runs.txt')
     if ($Watch) {
         Add-Type -AssemblyName System.Drawing
