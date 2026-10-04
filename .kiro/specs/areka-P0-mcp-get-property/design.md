@@ -124,7 +124,7 @@ flowchart LR
 
 - `crates/areka/src/mcp/get_property.rs` — `handle` の本体を書き換える（ダミーの 1 文 → 下の「get_property::handle」）。先頭の説明文も「ダミー」から本 spec の説明へ直す。16 行 → 50 行前後。
 - `crates/areka/src/mcp/get_property_tests.rs` — ダミーを期待する `answers_not_implemented_yet_with_an_empty_world` を消し、新しいテスト 2 本に置き換える。33 行 → 150 行前後。
-- `crates/areka-ghost/src/runtime.rs` — `impl GhostRuntime` に `sylphya_reader()` を 1 本足す（`sylphya_publisher()` の直後）。欄 `sylphya_reader` の説明文は実態に合わせて 1 行直してよい。783 行 → 790 行前後（1,000 行以下）。既存の欄・既存の読み口・`into_parts`・`GhostParts`・起動と終了の手順は変えない。
+- `crates/areka-ghost/src/runtime.rs` — `impl GhostRuntime` に `sylphya_reader()` を 1 本足す（`sylphya_publisher()` の直後）。欄 `sylphya_reader` の説明文も変えない（要件 5.2＝差分は読み口の追加だけ）。783 行 → 790 行前後（1,000 行以下）。既存の欄・既存の読み口・`into_parts`・`GhostParts`・起動と終了の手順は変えない。
 
 新しいファイルは 0（子モジュールは要らない）。
 
@@ -156,7 +156,7 @@ flowchart LR
 | 1.1 | 値を素のまま返す | `handle` | `outcome::value(v)` | テスト 2 の ⑴ |
 | 1.2 | 空の値は空の本文 | `handle` | `outcome::value("")` | テスト 2 の ⑵ |
 | 1.3 | 宛先のゴーストの記憶から、そのゴーストの問い手で読む | `handle`・`sylphya_reader()` | `ghost_asker_id(&runtime.mount().shiori.dir)` | テスト 2 の ⑸ |
-| 1.4 | 名前を手直ししない | `handle` | `args.property_name` をそのまま `resolve_dotted_str` へ | 設計の約束（コードに手直しの処理 0）。大小のテストは置かない（4.7） |
+| 1.4 | 名前を手直ししない | `handle` | `args.property_name` をそのまま `resolve_dotted_str` へ | テスト 2 の「前に空白を付けた名前」の行（空白を削らないこと）。大小のテストは置かない（4.7） |
 | 1.5 | その場で答える | `handle` | `reply.send` を返る前に 1 回 | テスト 1・2 の `try_answer` |
 | 1.6 | 切替の後は今のゴースト | `handle`（呼ばれた時点の置き場を読む）・既存の `drain` | — | 専用のテストなし（4.5） |
 | 2.1 | 無い名前は `NG:Cannot find such property name.` | `handle` | `DottedResolution::NotFound` → `outcome::ng` | テスト 2 の ⑶ |
@@ -333,6 +333,7 @@ pub fn sylphya_reader(&self) -> &SylphyaReader {
   | ⑵ 値が空 | `test.empty` | 空の本文 1 つ・false |
   | ⑶ 値が無い | `currentghost.name` | `NG:Cannot find such property name.`・true |
   | ⑶ 空の名前（2.2 の代表） | （空文字） | `NG:Cannot find such property name.`・true |
+  | 名前を手直ししない（1.4） | ` baseware.name`（前に空白 1 つ） | `NG:Cannot find such property name.`・true（survey §7.1 の SSP と同じ。`trim` を足すと `areka` が返って赤になる） |
 
 - この組で捕まる間違い: 問い手を `ActiveGhost.root` など別の元から組むと `test.key` が `global` になり、`test.empty` が「無い名前」になる。値と「無い」の写し違い・空の値を `NG:` にする間違いも赤になる。
 - 読めない書式（`baseware..name` など）は読み手の持ち物（`areka-sylphya` が確かめ済み）なので、代表として空の名前 1 つだけを通す。
