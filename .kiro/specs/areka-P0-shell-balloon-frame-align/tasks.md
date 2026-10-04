@@ -19,7 +19,7 @@
   - _Requirements: 1.1, 1.2, 1.4, 1.8, 1.9, 2.1, 2.2, 2.3, 3.1, 3.2, 4.1, 4.2, 4.3, 4.4_
 
 - [ ] 2. `Status` の届けをフレームの終わりへ移し、箱だけのときの番号を覚える
-- [ ] 2.1 届けの台帳が普通のバルーンの面の番号を覚え、箱だけのときにその番号で載せる
+- [x] 2.1 届けの台帳が普通のバルーンの面の番号を覚え、箱だけのときにその番号で載せる
   - 台帳に「スコープごとに最後に取れた面の番号」と「文字の層を借りられない旨を記録済みか」の 2 つを足す
   - 組を作るとき、窓が見えずに箱だけに文字があるスコープは、今の番号が取れなければ覚えた番号（無ければ 0）で載せ、警告の対象にしない。窓が見えていて番号が取れないときは今までどおり 0 で警告の対象にする
   - 観測に番号があるスコープは、組を作る前に覚えた番号を書き換える
@@ -75,3 +75,4 @@
 - areka クレートの枠の檻の絞り込みは `cargo test -p areka --bin areka shell_box_integration_tests`（モジュールの道筋は `emo2_boot::frame::visibility_integration_tests::shell_box_integration_tests`・子は `::align_tests::`）。`frame_shell_box` では 0 件になる。
 - 1.1 の足場: `Cage::boot(shell, scopes)`・`picture(scope, id)`（絵の差し替え）・`hide_picture(scope)`・`picture_id(scope)`（表示中の番号）・定数 `BOX_SURFACE_ID=0`／`PLAIN_SURFACE_ID=10`・文面 `SHELL_TWO_PLACES`（子）と `SHELL`（親・面 0 だけ箱）。窓を隠すのは既存の `cue(scope, CueCommand::Clear)`。時間切れの檻の末尾の `let _ = &cage.present_tx;` は不要になった（檻に触るついでに消す）。
 - 1.2 の枠の檻 7 本（`...::align_tests::` の下）は 4.2 まで赤のまま。`speak_in_both` は前提のあいだに届いた組を判定せずに捨てている（直す前と後で並びが違うため）。4.2 で全部が緑になった後、ここを `vec![vec![(0, 0)]]` の判定へ締め直す。
+- 2.1 で枠の檻 5（`box_only_after_hiding_the_window_reports_without_a_warning`）は緑になった（既知の赤は 6 本）。欄 `runtime_busy_logged` は 2.2 の届けの相が読むまで dead_code の警告が 1 件出る（2.2 で消えることを確かめる）。
