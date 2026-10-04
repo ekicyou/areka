@@ -35,7 +35,7 @@
 
 1. brief の Scope の「network／update／status の出す側（既存の行に target を付ける）」は行わない。同じウェーブ（C3）の約束（brief の 10-04 の追記）のとおり、**出す側の行は 1 行も触らず、既存のモジュールのパスで振り分ける**。`crates/areka/src/install/`・`update/`・`crates/areka-update/` は他の spec（`install-companion-reading`・`network-update-canon-order` など）が触るためである。
 2. brief は「error＝warn 以上」と「network／update＝更新・インストールの出来事」を並べて書くが、更新の失敗（`error!`）はどちらにも当たる。1 件の記録は 1 つの種別だけに入れることにし、**warn 以上は出どころを問わず error 種別**、network・update・status は info の行だけとした（裁定 2）。
-3. brief は「ゴースト名で絞る」と書くが、今の行にはゴーストの名前の欄が無い。取り決めの欄（`ghost`）を持つ記録だけがゴーストに属し、今ある行は欄が付くまでゴーストに属さない記録として残る（裁定 7・要件 2.6）。既存の行へ欄を足すのは、その行の持ち主の spec が触るときでよい。
+3. brief は「ゴースト名で絞る」と書くが、今の行には、ゴーストの正式な名前を載せる共通の意味の欄が無い（`ghost` という名前の欄はあるが、値はフォルダ名・`-`・`Some("emo2")` の形で不ぞろい＝research.md §3.4）。**取り決めの target で出し、`ghost` の欄を持つ記録だけ**がゴーストに属し、今ある行はゴーストに属さない記録として残る（裁定 7・要件 2.6）。
 4. brief の Current State の「SSP の script の行の種別は `[SSTP(Local,Auth)]`」（survey §3）は、1 行の `[<種別>]` の欄に `script` 以外の語が入ることを示す。出す側が欄で表示の語を渡せる形にした（裁定 8・要件 2.7）。
 
 ### 要件の段での暫定の裁定（要件ディスカッションで覆せる）
@@ -79,7 +79,7 @@
   - `mcp-tool-entrances` の入口（定義の逐語・引数の型の検査・`-32602`・橋・待ちの上限）は変えない。本 spec が触るのは、同 spec の design が固定した「自分のツールのファイル」（`crates/areka/src/mcp/get_log.rs`・`get_log_tests.rs`）と履歴の新規ファイル、`main.rs` の初期化である。`crates/areka/src/mcp/mod.rs`・`crates/areka-mcp/src/**` は触らない。
   - `mcp-kanade-tools` は、再生した台本を取り決めの target と欄（`ghost`・必要なら `label`）で出す。本 spec とコードの依存を作らない。
   - `mcp-strict-errors` は、取り決めの target で error 種別へ残し、「いま最後に振った通し番号」を読んで `sakurascript` の返事に載せる。
-  - `ghost` の欄を持たない今の行は、`ghost_name` で絞ると出てこない。各行へ欄を足すのは、その行の持ち主の spec の仕事である。
+  - 取り決めの target でない今の行は、`ghost_name` で絞ると出てこない（SSP でも status・network の行はゴーストの名前で絞ると出ない＝research.md §2.1）。起動・切替の行をゴーストの名前付きで残したくなったら、そのときに規則を足す。
   - `mcp-tool-entrances` の振り分けのテスト（0 体の `get_log` が名前の解決の `NG:` を出さない）は、本 spec の着地の後も緑のままである。
 
 ## Requirements
@@ -113,8 +113,9 @@
 3. When レベルが info で、target が `areka::install::fetch_url`・`areka_update::winhttp`・`areka_update::fetch` のどれか（またはその下のモジュール）である出来事が出る, the areka shall その出来事を network 種別として残す（今ログを出しているのは `areka::install::fetch_url` の info 3 行だけで、`areka_update::winhttp`・`areka_update::fetch` は 1 行も出していない。この 2 つは、行の持ち主の spec が取得の行を足したときの受け皿である）。
 4. When レベルが info で、target が `areka_update`・`areka::update`・`areka::install` のどれか（またはその下のモジュール）であり、2.3 に当たらない出来事が出る, the areka shall その出来事を update 種別として残す。
 5. When レベルが info で、target が `areka`（下のモジュールを含まない）・`areka::boot_resolve`・`areka::ghost_session`・`areka::emo2_boot::ghost_switch` のどれかである出来事が出る, the areka shall その出来事を status 種別として残す。
-6. When 残す出来事が `ghost` の欄を持つ, the areka shall その値を記録の `<名>` とする。持たなければ `<名>` を種別ごとの既定の名（下の表）とする。
-7. When 残す出来事が `label` の欄を持つ, the areka shall その値を記録の `[<種別>]` の表示の語とする。持たなければ種別ごとの既定の語（下の表）とする（表示の語が変わっても、記録の種別は変わらない）。
+6. When 残す出来事の target が取り決めの target（`areka::log::script`・`areka::log::error`）であり、`ghost` の欄を持つ, the areka shall その値を記録の `<名>` とする。それ以外（欄が無い・取り決めの target でない）は `<名>` を種別ごとの既定の名（下の表）とする。
+7. When 残す出来事の target が取り決めの target であり、`label` の欄を持つ, the areka shall その値を記録の `[<種別>]` の表示の語とする。それ以外は種別ごとの既定の語（下の表）とする（表示の語が変わっても、記録の種別は変わらない）。
+   - 取り決めの target でない行の `ghost`・`label` の欄は、取り決めの欄として読まず、ほかの欄と同じく本文に ` ghost=値` の形で残す（要件ディスカッション議題 4 で確定。今のコードには、フォルダ名・`-`・`Some("emo2")` の形の値を `ghost` の欄に持つ起動・切替・インストールの行と、選択肢の文言を `label` の欄に持つ行がある＝research.md §3.4。出す側は 0 行変える約束なので、履歴の側で読み分ける）。
 
    | 種別 | 既定の語（`[…]` の中） | 既定の名 | SSP 2.9.07 の実測 |
    |---|---|---|---|
@@ -126,7 +127,7 @@
 8. The areka shall 2.1〜2.5 のどれにも当たらない出来事（レベルが debug・trace で取り決めの target でないもの、2.3〜2.5 のどの target でもない info の出来事）を残さない。
 9. The areka shall target の照合を「そのモジュール自身か、`::` で区切った下のモジュール」で行う（`areka::update` は `areka::update::desk` に当たり、`areka::updater` には当たらない）。2.5 の `areka` だけは例外で、完全に一致する target だけに当たる（下のモジュールまで含めると、アプリ本体の info の行が全部 status になるため）。
 10. The areka shall 標準出力の出力に warn 以上で現れる出来事を、areka のクレートの外のライブラリが出したものも含めて error 種別に残す（外のライブラリが別のログの仕組みで出す行が履歴へ届くことを、設計で実物を使って確かめる。届かないものがあれば取り決めの文書に名前を書く）。
-11. The areka shall 2.1〜2.9 を、種別ごとに「当たる出来事」と「当たらない出来事」を 1 つ以上与える決定論テストで固定する（warn の更新の行が error だけに入ること・`areka::updater` が update に入らないこと・`ghost` と `label` の有無の 4 通りを含む）。
+11. The areka shall 2.1〜2.9 を、種別ごとに「当たる出来事」と「当たらない出来事」を 1 つ以上与える決定論テストで固定する（warn の更新の行が error だけに入ること・`areka::updater` が update に入らないこと・取り決めの target の行での `ghost` と `label` の有無の 4 通り・取り決めの target でない行の `ghost` の欄が `<名>` にならず本文に残ることを含む）。
 12. The areka shall 2.3〜2.5 の target が今のコードに実在することを、テストで判定する（名指ししたモジュールが無くなる・名前が変わると赤になる）。
 
 ### Requirement 3: `get_log` の `log_type`
@@ -150,7 +151,7 @@
 
 1. When 絞り込み（要件 5）の後に 1 件以上の記録が残る, the areka shall それらを古い順（通し番号の小さい順）に、記録と記録の間を `\r\n` で区切った 1 つの文字列として、`isError: false` の結果で答える（先頭に `OK:` を付けない。末尾に `\r\n` を付けない）。
 2. The areka shall 1 件の記録を `#<id> <yyyy/mm/dd hh:mm> [<表示の語>] <名> : <本文>` の形で書く（`<id>` は通し番号の 10 進、時刻は記録した時点の現地時刻で 24 時間・0 埋め、欄の間は半角の空白 1 つ、`<名>` と `<本文>` の間は ` : `）。
-3. The areka shall 本文を、出来事のメッセージに、取り決めの欄（`ghost`・`label`）を除く残りの欄を ` 名前=値` の形で出来事に書かれた順に続けたものとする（残りの欄が無ければメッセージだけ。メッセージが無ければ欄だけ）。
+3. The areka shall 本文を、出来事のメッセージに、取り決めの欄（取り決めの target の行の `ghost`・`label`。要件 2.6・2.7）を除く残りの欄を ` 名前=値` の形で出来事に書かれた順に続けたものとする（残りの欄が無ければメッセージだけ。メッセージが無ければ欄だけ）。
 4. When 本文が改行（`\r\n`・`\n`・`\r`）を含む, the areka shall 改行ごとに `\r\n` とタブ 1 つへ置き換える（2 行目以降はタブで始まる。行の頭が `#` で始まるのは記録の 1 行目だけ）。
 5. When 絞り込みの後に記録が 0 件である, the areka shall 本文 `(no log entries)`・`isError: false` の結果で答える。
 6. The areka shall 本文の字を変えずに返す（逆斜線・二重引用符・制御文字・日本語を含む台本でも、MCP の応答は JSON として読め、読んだ文字列は記録した本文と一致する）。
