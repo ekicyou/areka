@@ -322,7 +322,8 @@ function Step-Scripts([int]$n, [hashtable]$it) {
         $tail = if ($k -eq $total) { '\1\n\nこの項目はおしまい。' }
         elseif ($s.End) { '' }
         else { "\1\n\n\q[次へ,OnSbI${n}S$($k + 1)]　\q[もう一度,OnSbI${n}S${k}]" }
-        "\![set,choicetimeout,0]\0\s[${sf}]\1\s[10]項目 ${n}・手順 ${k}/${total}: $($s.Head)\n$($s.Say)$($s.Box)$tail\e"
+        # 相方のバルーンは数行しか見えず長い説明は流れ去るので、見出しだけを出す（説明は記録の 4 章）。
+        "\![set,choicetimeout,0]\0\s[${sf}]\1\s[10]項目 ${n} 手順 ${k}/${total}\n$($s.Head)$($s.Box)$tail\e"
     }
 }
 
