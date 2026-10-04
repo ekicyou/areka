@@ -96,7 +96,7 @@
 ### 渡すもの
 
 - **コマの引き方**: `areka-emo-atlas` の `AtlasTable::animation(id)`。`id` が動く絵の親（今までの鍵で引く `ElementId`）のときだけ `Some(&Animation)` を返し、静止画と 2 枚目以降のコマの `id` では `None`。`AtlasKey`・`manifest.rs`・`AtlasTable::new` の署名は変えていない（動く絵つきの表は別の組み立て口 `AtlasTable::with_frames` で組む）。
-- **`Animation` の 3 つの欄**: `frames: Vec<ElementId>`（`frames[0]` は親自身＝0 番のコマ＝今までの鍵で引ける絵）・`delays_ms: Vec<u32>`（`frames` と同じ長さ）・`loop_count: LoopCount`。コマは 2 枚以上。
+- **`Animation` の 3 つの欄**: `frames: Vec<ElementId>`（`frames[0]` は親自身＝0 番のコマ＝今までの鍵で引ける絵）・`delays_ms: Vec<u32>`（`frames` と同じ長さ）・`loop_count: LoopCount`。コマは 2 枚以上。**注意**: `AtlasTable::with_frames` が assert するのは「鍵とエントリの数が同じ」「コマが 2 枚以上で待ち時間と同じ長さ」「番号が表の中」の 3 つだけで、「`frames[0]` が親」「2 枚目以降が鍵のエントリの後ろに続く」は確かめない（今は `bake` だけが守っている）。本 spec が自分で表を組むなら、この 2 つを自分で守るか、`with_frames` に assert を足す。
 - **コマの番号の並び**: 2 枚目以降のコマは、鍵のエントリが全部並んだ後ろに、親の番号の昇順・コマの番号の昇順で続けて並ぶ。動く絵が無いシェルでは静止画の番号は今までと同じ。2 枚目以降のコマの鍵（`AtlasTable::key`）は親と同じ鍵で、鍵からの逆引き（`AtlasTable::resolve`）はいちばん小さい番号＝親を返す。各コマは普通のエントリとして `AtlasTable::entry` で引ける。全透明のコマも、位置の無い（`placement` が `None` の）エントリとして番号と待ち時間が残る。
 - **コマの中身**: ファイルの重ね方（背景へ戻す・前へ戻す・重ねる）を解いた後の、絵の全体の寸法の 1 枚ずつ。乗算済み BGRA。透明な縁の切り詰めはコマごとに静止画と同じに行う（ずれは各エントリの `trim_offset`）。透明度を持たない動く絵は、1 枚目のコマの左上の色が全コマから抜かれている。
 - **繰り返し回数**: `LoopCount::Infinite`（終わりなし）か `LoopCount::Finite(n)`（全体を合計 n 回・n は 1 以上）。APNG・WebP で同じ意味。

@@ -171,8 +171,10 @@ crates/areka-emo-atlas/
     ├── limits.rs                   # 新規: AnimationLimits・環境変数・判定
     ├── limits_tests.rs             # 新規
     ├── decode.rs                   # 変更: ElementDecoder の 3 メソッド・型・MemoryDecoder の登録口
+    ├── decode_animation_tests.rs   # 新規（実装で足した兄弟テスト）: 偽の読み手が登録どおりに答える
     ├── decode/
     │   ├── wic_arm.rs              # 変更: 3 メソッドの実装（sniff と image_arm を呼ぶだけ）
+    │   ├── wic_arm_tests.rs        # 新規（実装で足した兄弟テスト）: 本番の読み手で検体の見出し・全コマ・1 枚目
     │   ├── sniff.rs                # 新規: PNG／RIFF の見出しだけを読む純粋関数
     │   ├── sniff_tests.rs          # 新規
     │   ├── image_arm.rs            # 新規: 本番のソースで image を綴る唯一のファイル
