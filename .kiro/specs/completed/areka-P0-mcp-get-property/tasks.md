@@ -1,0 +1,55 @@
+# Implementation Plan
+
+> 設計は [design.md](design.md)。コードの所在と形（関数の形・欄の名前・テストの表）は design.md の「Components and Interfaces」と「Testing Strategy」が正本で、タスクには繰り返さない。触るソースは 3 つだけ（要件 5.1）。ほかを触る要が出たら止めて報告する。
+
+- [x] 1. ゴーストの実行系に、記憶の読み手を借りる読み口を 1 本足す
+  - 既にある書き手の読み口と同じ「借りて返す」形で、私有の読み手の欄をそのまま貸す。既存の欄・既存の読み口・分解の形・起動と終了の手順、欄の説明文は変えない
+  - 読み口は判断の分岐を持たないので専用のテストは足さない（タスク 2.2 のテストが通ることで使われていると分かる）
+  - 完了の状態: 実行系のクレートがビルドでき、そのファイルの差分が読み口 1 本（説明文つき）の追加だけで、1,000 行以下
+  - _Requirements: 1.3, 5.2, 5.5_
+
+- [x] 2. `get_property` の中身を、宛先のゴーストの記憶を読んで答える処理に替える
+- [x] 2.1 新しい振る舞いの決定論テスト 2 本を先に書き、ダミーの今の処理で赤になることを見る
+  - ダミーを期待していた旧テストを消し、design.md のテスト 1（空の World・実行系なし・`warn!` 1 件を捕まえて数える）とテスト 2（本物の実行系を 1 回だけ起こし、ゴーストごと・全体・別の問い手・空の値を載せて 7 つの名前を聞く）に置き換える
+  - どのテストも処理を直に呼び、答えは呼び出しの直後に取り出す（後から答える置き場を回さない）。`ghost_name` はすべて省略、英字の大小を混ぜた名前は使わない
+  - 「呼ばれた時点の今のゴーストを読む」ことと橋の記録の行にはテストを足さない
+  - 完了の状態: テストのファイルがビルドでき、2 本ともダミーの処理（`NG:not implemented yet`）に対して期待の食い違いで赤になる（コンパイルの失敗で赤なのではない）。テストのファイルに `not implemented yet` の文字列が 0 件
+  - _Requirements: 4.1, 4.2, 4.3, 4.5, 4.7, 4.8_
+- [x] 2.2 処理の本体を書き、2 本のテストを緑にする
+  - 置き場から実行系を引き、無ければ宛先のゴーストと渡された名前を添えた `warn!` を 1 件残して `NG:Property system is not available` で答える
+  - あれば、そのゴースト自身の問い手（起動の手順と同じ組み方）として、渡された名前を手直しせずに読み手へ聞き、値なら素のまま（空も含め `isError: false`）、無ければ `NG:Cannot find such property name.` で答える
+  - どの道も返る前にちょうど 1 回答える。待ち・別スレッドへの問い合わせ・普通の答えへの独自の記録・値の追加をしない。panic しない。ファイル先頭の説明文も「ダミー」から改める
+  - 完了の状態: タスク 2.1 の 2 本が緑。処理のファイルに `not implemented yet` の文字列が 0 件で、1,000 行以下
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 5.4, 5.5_
+  - _Depends: 1_
+
+- [x] 3. 触る範囲と共有のテストを確かめる
+  - アプリ本体と実行系のクレートのテスト全体（共有のテスト `mcp_tests.rs`・`resolve_tests.rs` と `areka-mcp` のテストを含む）と clippy を流す
+  - 本ブランチの main からの差分で、変えたソースが 3 つだけであること、design.md の「変えないファイル」の一覧と `Cargo.toml` が現れないこと、3 つとも 1,000 行以下であることを見る
+  - 完了の状態: テスト全体が緑で clippy の警告が 0。`git diff --stat main...HEAD -- crates` に 3 つのファイルだけが出る
+  - _Requirements: 4.4, 5.1, 5.3, 5.5_
+
+- [x] 4. 実機で `get_property` を確かめ、記録を残す
+  - タスク 2.2 の後のコードで配布形を作り直す（古い配布形を使わない）。design.md の「実機確認」の手順どおり、配布形をワークツリーの `target\` の下へ展開し、有界の自動終了つきで emo2 を起こす。SSP が動いていても止めない。自分が起こしていないプロセスは止めない
+  - 記録の行から実際の待受の URL を読み、会話が始まった後に ⑴ `baseware.name`・⑵ 値の無い名前・⑶ `get_active_ghost_list` の答えを `ghost_name` に渡した `baseware.name` を呼ぶ
+  - 完了の状態: `verification/signoff.md` に ⑴ `areka`・`isError: false`、⑵ `NG:Cannot find such property name.`・`isError: true`、⑶ の呼び方と答え、各呼び出しの「ツールに答えた」の記録 1 件ずつ、`ERROR` の段 0 件が残っている
+  - _Requirements: 4.6_
+
+- [x] 5. 後続の spec へ申し送る
+- [x] 5.1 `mcp-ghost-name-match` の brief の末尾へ、実装の事実で申し送りを書く
+  - 書く 3 点: 処理が宛先を記録の欄にだけ使い実行系を引く鍵にしていないこと、テストの `ghost_name` がすべて省略であること、実機確認 ⑶ の呼び方と答え
+  - `mcp-ghost-name-match` が先に着地していたら、追記の代わりにその照合で本 spec のテストと実機確認が通ることを確かめる
+  - 完了の状態: 同 brief の末尾に「`mcp-get-property` からの申し送り（日付）」の節があり、3 点が実装と実機の事実で書かれている
+  - _Requirements: 5.7_
+  - _Depends: 4_
+- [x] 5.2 `property-name-case-fold` の brief の申し送りを、実装の事実で書き直す
+  - 要件 5.6 の「完了のときの書き直し」をこのタスクで済ませる（`/kiro-complete` では済みとして扱い、着地の前に食い違いが無いかだけ見る）。設計の段で書いた節（2026-10-04）の 3 点を、実装した処理・テスト・実機確認の手順の事実に合わせて書き直し、日付を改める。改行は CRLF のまま保つ
+  - `property-name-case-fold` が先に着地していたら、追記の代わりに着地の後の振る舞いを本 spec の要件 1.4 と実機確認へ反映する
+  - 完了の状態: 同 brief の申し送りの節が実装の事実と食い違わず、日付が書き直した日になっている
+  - _Requirements: 5.6_
+  - _Depends: 4_
+
+## Implementation Notes
+
+- clippy（toolchain 1.99.0）は本 spec より前からあるコード（dola・`areka-ghost` の `runtime.rs` の collapsible_if など）で `-D warnings` が赤。`clippy-199-lints` の持ち物で、`tools/test-all.ps1`・CI には clippy の段が無い。本 spec の検査は「差分が新しい警告を増やさない」（`cargo clippy -p <crate> --no-deps` の警告の位置が差分の外）で見る。
+- 新しいワークツリーでは `areka` の統合テスト `smoke_boot_loop_exit` が i686 の補助 exe の欠けで赤になる（コードの欠陥ではない）。先に `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` と `cargo build -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` を建てる。タスク 3 の確認: `cargo test --no-fail-fast -p areka -p areka-ghost -p areka-mcp` 全緑（bin 2,519・areka-ghost 156/40/6・areka-mcp 100）・fmt 緑・変えた行に clippy の警告 0・`git diff --stat main...HEAD -- crates` は 3 ファイルだけ（55・134・788 行）。
