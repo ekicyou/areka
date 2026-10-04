@@ -61,12 +61,12 @@ fn reads_companions_for_a_shell_too() {
     assert_eq!(manifest.warnings, vec![]);
 }
 
-/// `balloonN` の N は数字列。並びはキーの名前順で決まる（要件 3.12）。
+/// `balloonN` は無印 → 0 → 1… の探索の順に読み、欠番で打ち切る（要件 1.1・1.3）。
 ///
-/// `balloon10` が `balloon2` より前に来るのは名前順だから。数の順ではないが、
-/// 同じ `install.txt` からは必ず同じ並びが出る。
+/// `balloon1` が無いので `balloon2` と `balloon10` は読まれず、鍵の名前順に
+/// 「探索で読まなかった」として記録される（要件 6.3）。
 #[test]
-fn reads_numbered_balloon_companions_in_key_order() {
+fn reads_numbered_balloon_companions_in_search_order() {
     let manifest = parsed_ghost(&[
         "balloon2.directory,two",
         "balloon10.directory,ten",
@@ -78,8 +78,18 @@ fn reads_numbered_balloon_companions_in_key_order() {
         .iter()
         .map(|companion| companion.key.as_str())
         .collect();
-    assert_eq!(keys, vec!["balloon", "balloon0", "balloon10", "balloon2"]);
-    assert_eq!(manifest.warnings, vec![]);
+    assert_eq!(keys, vec!["balloon", "balloon0"]);
+    assert_eq!(
+        manifest.warnings,
+        vec![
+            ManifestWarning::CompanionNotSearched {
+                key: "balloon10.directory".to_owned()
+            },
+            ManifestWarning::CompanionNotSearched {
+                key: "balloon2.directory".to_owned()
+            },
+        ]
+    );
 }
 
 /// `balloon` の直後が数字でなければ同時インストールではない（要件 3.12 の境界）。
@@ -104,14 +114,29 @@ fn balloon_followed_by_a_non_digit_is_not_a_companion() {
     }
 }
 
-/// `balloon0` は通る（上の境界の反対側）。
+/// `balloon` の直後が数字なら同時インストールの形（上の境界の反対側）。
+///
+/// 単独で書いて読まれるのは、探索が最初に引く `balloon` と `balloon0` だけ。
+/// `balloon9`・`balloon10`・`balloon007` は読まれないが、知らない鍵ではなく
+/// 「探索で読まなかった」として記録する（同梱の形としては認めている・要件 1.3・1.6・6.3）。
 #[test]
 fn balloon_followed_by_digits_is_a_companion() {
-    for key in ["balloon", "balloon0", "balloon9", "balloon10", "balloon007"] {
+    for key in ["balloon", "balloon0"] {
         let manifest = parsed_ghost(&[&format!("{key}.directory,x")]);
         assert_eq!(manifest.companions.len(), 1, "{key}.directory が読まれない");
         assert_eq!(manifest.companions[0].key, key);
         assert_eq!(manifest.warnings, vec![]);
+    }
+    for key in ["balloon9", "balloon10", "balloon007"] {
+        let manifest = parsed_ghost(&[&format!("{key}.directory,x")]);
+        assert_eq!(manifest.companions, vec![], "{key}.directory が読まれた");
+        assert_eq!(
+            manifest.warnings,
+            vec![ManifestWarning::CompanionNotSearched {
+                key: format!("{key}.directory")
+            }],
+            "{key}.directory が「探索で読まなかった」として記録されない"
+        );
     }
 }
 
@@ -489,7 +514,7 @@ fn never_records_a_key_it_actually_reads() {
 
 /// 警告は順序つきの列で、同じキーに 2 度は出ない（要件 3.13・3.15・3.16）。
 ///
-/// 本体の再インストール → キーの名前順 → 同時インストールの名前順、の 3 段で並ぶ。
+/// 本体の再インストール → キーの名前順 → 同時インストールごと（探索の順）、の 3 段で並ぶ。
 /// 「含む」で測ると、この順序も重複の有無も測れない。
 #[test]
 fn warnings_come_back_as_an_ordered_sequence_with_no_duplicates() {

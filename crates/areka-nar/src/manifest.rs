@@ -25,8 +25,9 @@
 //! # 警告の並び
 //!
 //! 同じ `install.txt` からは必ず同じ列が出る。⑴ 本体の再インストール →
-//! ⑵ キーの名前順の読み飛ばし → ⑶ 同時インストールの名前順の再インストール、
-//! の 3 段。1 件のキーからは最大 1 件の警告しか出さない。
+//! ⑵ キーの名前順の読み飛ばし（探索で読まなかった同時インストールの鍵もここ）→
+//! ⑶ 同時インストールごとの記録（探索の順）、の 3 段。1 件のキーからは最大
+//! 1 件の警告しか出さない。
 //!
 //! 本モジュールは宛先を受け取らず、ファイルシステムを変える呼び出しを 1 つも
 //! 持たない（兄弟テストが字面で見張る）。
@@ -122,7 +123,7 @@ pub struct InstallManifest {
     /// `accept` の値。照合はしない（`ghost-install` の責務）。空値は `None`。
     pub accept: Option<String>,
     pub existing: ExistingPolicy,
-    /// `kind` が `Ghost`／`Shell` のときだけ非空。接頭辞の名前順に並ぶ。
+    /// `kind` が `Ghost`／`Shell` のときだけ非空。探索の順（無印 → 0 → 1…）に並ぶ。
     pub companions: Vec<Companion>,
     pub warnings: Vec<ManifestWarning>,
     /// ファイルに書かれていた `charset` の値（実際に使われた文字コードではない）。
@@ -311,11 +312,7 @@ enum KeyRole<'a> {
     /// 単独で意味を持つキー。ここでは何もしない（読むのは各担当）。
     Known,
     /// 同時インストールの形。`supported` が偽なら areka が扱わない種別。
-    Companion {
-        prefix: &'a str,
-        suffix: &'a str,
-        supported: bool,
-    },
+    Companion { prefix: &'a str, supported: bool },
     /// 知らないキー。
     Unknown,
 }
@@ -337,7 +334,6 @@ fn classify(key: &str) -> KeyRole<'_> {
         if numbered(prefix, BALLOON_PREFIX) {
             return KeyRole::Companion {
                 prefix,
-                suffix,
                 supported: true,
             };
         }
@@ -347,7 +343,6 @@ fn classify(key: &str) -> KeyRole<'_> {
         {
             return KeyRole::Companion {
                 prefix,
-                suffix,
                 supported: false,
             };
         }
@@ -364,29 +359,37 @@ fn numbered(prefix: &str, base: &str) -> bool {
         .is_some_and(|rest| rest.chars().all(|ch| ch.is_ascii_digit()))
 }
 
-/// 同時インストールのバルーンを組み、読み飛ばした指定を記録する（要件 3.12〜3.14・3.16）。
+/// 探索で見つかった同梱のバルーンの接頭辞を、探索の順に返す（要件 1.1〜1.6・1.9）。
+///
+/// 無印（`balloon`）→ `balloon0` → `balloon1` … の順に `<接頭辞>.directory` の鍵を引く。
+/// 値が空でも行が在れば見つかったとする。無印は無くても続け、番号は最初に無かった所で
+/// 止める。番号は `format!` で先頭に 0 を付けない 10 進の綴りだけを作るので、
+/// `balloon01` のような鍵には決して当たらない。
+fn search_balloons(keys: &BTreeMap<String, String>) -> Vec<String> {
+    let found = |prefix: &String| keys.contains_key(&format!("{prefix}.directory"));
+    let plain = Some(BALLOON_PREFIX.to_owned()).filter(found);
+    let numbered = (0_usize..)
+        .map(|n| format!("{BALLOON_PREFIX}{n}"))
+        .take_while(found);
+    plain.into_iter().chain(numbered).collect()
+}
+
+/// 同時インストールのバルーンを組み、読み飛ばした指定を記録する（要件 1.1〜1.10・6.3〜6.5）。
+///
+/// 3 つの段で進む。⑴ 探索の順に接頭辞を見つける。⑵ 鍵の名前順に読み飛ばしを
+/// 記録する。⑶ 探索の順に値を検査して組む。値を見るのは ⑶ だけなので、打ち切りの
+/// 後ろの鍵に壊れた値が書かれていても断らない。
 fn collect_companions(
     kind: InstallKind,
     keys: &BTreeMap<String, String>,
     warnings: &mut Vec<ManifestWarning>,
 ) -> Result<Vec<Companion>, RefuseReason> {
     let handles_companions = matches!(kind, InstallKind::Ghost | InstallKind::Shell);
-
-    // 先に宛先（`<接頭辞>.directory`）だけを集める。宛先の決まっていない接頭辞の
-    // 断片（`balloon.source.directory` だけ、など）は、どこへ入れるのか決まらない。
-    let mut directories: BTreeMap<String, String> = BTreeMap::new();
-    if handles_companions {
-        for (key, value) in keys {
-            if let KeyRole::Companion {
-                prefix,
-                suffix: "directory",
-                supported: true,
-            } = classify(key)
-            {
-                directories.insert(prefix.to_owned(), value.clone());
-            }
-        }
-    }
+    let found = if handles_companions {
+        search_balloons(keys)
+    } else {
+        Vec::new()
+    };
 
     // 読み飛ばしの記録。キーの名前順に 1 件のキーへ 1 件だけ出す。
     for key in keys.keys() {
@@ -402,25 +405,34 @@ fn collect_companions(
                     warnings.push(ManifestWarning::CompanionOnNonGhost { key: key.clone() });
                 } else if !supported {
                     warnings.push(ManifestWarning::UnsupportedCompanionKind { key: key.clone() });
-                } else if !directories.contains_key(prefix) {
+                } else if found.iter().any(|searched| searched == prefix) {
+                    // 探索で見つかった接頭辞の鍵は ⑶ で読む。
+                } else if keys.contains_key(&format!("{prefix}.directory")) {
+                    // 宛先は書かれているが、打ち切りの後ろか先頭に 0 を付けた綴り。
+                    warnings.push(ManifestWarning::CompanionNotSearched { key: key.clone() });
+                } else {
+                    // 宛先の無い断片（`balloon.source.directory` だけ、など）は、
+                    // どこへ入れるのか決まらない。
                     warnings.push(ManifestWarning::IgnoredKey { key: key.clone() });
                 }
             }
         }
     }
 
-    let mut companions = Vec::with_capacity(directories.len());
-    for (prefix, directory) in &directories {
-        check_one_level(&format!("{prefix}.directory"), directory)?;
+    let mut companions = Vec::with_capacity(found.len());
+    for prefix in found {
+        let directory = keys[&format!("{prefix}.directory")].clone();
+        check_one_level(&format!("{prefix}.directory"), &directory)?;
         let source_key = format!("{prefix}.source.directory");
         // `*.source.directory` が無い（または空）なら宛先と同じ名前を取り出し元にする。
         let source_directory = non_empty(keys, &source_key).unwrap_or_else(|| directory.clone());
         check_one_level(&source_key, &source_directory)?;
+        let existing = existing_policy(keys, &format!("{prefix}."), warnings);
         companions.push(Companion {
-            key: prefix.clone(),
-            directory: directory.clone(),
+            key: prefix,
+            directory,
             source_directory,
-            existing: existing_policy(keys, &format!("{prefix}."), warnings),
+            existing,
         });
     }
     Ok(companions)
