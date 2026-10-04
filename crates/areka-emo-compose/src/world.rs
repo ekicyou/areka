@@ -151,6 +151,12 @@ impl EmoWorld {
         crate::nesting::NestTable::from_world(self)
     }
 
+    /// 入れ子の無い番号と循環の報告（要件 1.8・1.9・3.1・3.2・3.4）。ファイル名の慣習だけで建つ面も
+    /// 「在る」に数える。面の表を 1 度なめるだけで、記録は出さない（出すのは fs を触る入口）。
+    pub fn nest_report(&self) -> crate::nesting::NestReport {
+        crate::nesting::NestReport::from_world(self)
+    }
+
     /// fold による entity 常駐段（single-pass fold への唯一の呼び出し口）。
     ///
     /// 空 `Shell`（surface/append/alias 皆無）に対しては何も積まず、World を空のまま保つ。
@@ -246,7 +252,7 @@ impl EmoWorld {
 /// （[`EmoWorld::dangling_pattern_targets`] は記録を出さない）。
 ///
 /// [`ComposeMethod::from_name`]: crate::method::ComposeMethod::from_name
-fn targets_animation_id(method: &str) -> bool {
+pub(crate) fn targets_animation_id(method: &str) -> bool {
     // 正規化は `ComposeMethod::from_name` と同じ 1 本（`method::canonical_method_name`）を引く。
     // `from_name` 自体は未知の語で `warn!` を出すのでこの照会からは呼ばない（要件 3.5）。
     let canon = crate::method::canonical_method_name(method);
