@@ -19,7 +19,7 @@ use crate::world::EmoWorld;
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
 
 /// 検体の、子 70（箱を持つ）を置く行。
-const PLACE_70: &str = "element1,overlay,70,10,10\n";
+const PLACE_70: &str = "element1,overlay,70,10,10";
 
 fn fold(text: &str) -> (BoxLayout, Vec<BoxIssue>) {
     let world = EmoWorld::build(&parse(text));
@@ -44,8 +44,13 @@ fn only_in_child(issues: &[BoxIssue]) -> Vec<BoxIssue> {
 }
 
 fn without(text: &str, line: &str) -> String {
-    assert!(text.contains(line), "文面に {line:?} が在る");
-    text.replacen(line, "", 1)
+    // 行で比べる（作業ファイルの改行が CRLF でも LF でも同じに働く）。
+    let hits = text.lines().filter(|l| l.trim_end() == line).count();
+    assert_eq!(hits, 1, "文面に {line:?} がちょうど 1 行在る");
+    text.lines()
+        .filter(|l| l.trim_end() != line)
+        .map(|l| format!("{l}\n"))
+        .collect()
 }
 
 /// 検体: 71 が置く子 70 の箱 `fuda` が 1 件だけ載り、他の報告は無い（要件 6.1・8.1・検体の冒頭の説明）。
@@ -198,11 +203,11 @@ fn compose(text: &str, top: u32) -> (u32, u32, Vec<u8>) {
 /// 箱の行が無いときと同じで、子の画像とサーフェスは描かれる（要件 6.2）。
 #[test]
 fn child_images_and_surfaces_compose_the_same_with_or_without_its_box() {
-    let box_line = "element3,balloon,a,0,0\n";
+    let box_line = "element3,balloon,a,0,0";
     let text = format!(
         "balloon.a\n{{\nsize,10,10\n}}\n\
         surface0\n{{\nelement0,overlay,p.png,0,0\nelement1,overlay,5,2,2\n}}\n\
-        surface5\n{{\nelement0,overlay,q.png,0,0\nelement1,overlay,6,4,0\n{box_line}}}\n\
+        surface5\n{{\nelement0,overlay,q.png,0,0\nelement1,overlay,6,4,0\n{box_line}\n}}\n\
         surface6\n{{\nelement0,overlay,r.png,0,0\n}}\n"
     );
     let plain = without(&text, box_line);

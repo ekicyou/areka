@@ -177,7 +177,7 @@
   - _Requirements: 5.6, 5.7, 5.9, 5.12, 8.3_
 
 - [ ] 8. 通しの確かめと登記
-- [ ] 8.1 検体を、読み手から合成まで通して確かめる
+- [x] 8.1 検体を、読み手から合成まで通して確かめる
   - `crates/areka-emo-compose/src/nesting_fixture_tests.rs` を新設し（接続は `nesting.rs`）、検体の surfaces.txt と PNG を解析 → 面の表 → 焼く → 合成の順に通す
   - 報告の件数が検体に仕込んだ件数と一致し、仕込んでいない種類が 0 件／2 つの親が同じ子の絵を含む／3 段目の絵が各段の位置の和に出る／子の領域が親の列に持ち込まれている、を確かめる
   - 完了の姿: 検体を通すテストが緑で、検体の行を 1 つ消すと件数の比べ合いが赤になる
@@ -220,3 +220,4 @@
 - 7.2: 有効な `bind+random` のコマが pattern0 を置き換えている部品では、pattern0 の先が刻みの最初に見えている扱いになり、毎刻み評価・境界ごとに抽選される（design.md「見えない間」の例外・刻みの最後の片付けで欄からは外す）。`parts_tests.rs` の `part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field` が 3000 の境界まで乱数の回数で固定。7.4 の消費順の檻はこの前提で数える。`lib.rs` の `mod parts;` に付けた `expect(dead_code)` は 7.4 でつないだら外す。
 - 7.3: 部品の記録の文言は `seriko: part 抽選発火…`／`末尾残留…`／`停止…`／`bind から外れた ID の再生を停止…`（`info!`・欄 scope／part／animation_id）と warn `seriko: part \`-1\` 以外の負 surface…`。8.4 の実機の判定はこの文言で検索する。`peek` が負の番号のコマを書かないことを直接見るテストは無い（7.5 で覆ってよい）。
 - 7.4: 刻みの部品の経路の入口は `PartClocks::moving_visible`（見える部品のどれかが animation を持つ）。「保持している部品の欄が空でない」は「欄に載る部品 ⊆ 見える部品」で含まれる（着せ替えの変化の後は 7.5 の `refresh_parts` が保つ）。`refresh_parts` の一時の `expect(dead_code)` は 7.5 で外す。⚠C: の空きが 35 MB まで減り、ワークツリーの `target\debug\incremental` を消した（以後 `CARGO_INCREMENTAL=0`）。
+- 8.1: 5.3 の `boxes_nesting_tests.rs` が検体の作業ファイルの改行を LF と決め打ちしていた（`core.autocrlf=true` で checkout すると CRLF になり 2 本赤）→ 行で比べる形に直した。検体を `include_str!` で読む他のテストに LF の決め打ちは無い（CRLF の検体で 3 クレート緑）。`nesting_fixture_tests.rs` の焼く一覧は present の `build_shell_target_with_boxes` の写し（本番の経路は 6.1 のテストが見張る）。`tests/surface_nesting_fixture_test.rs` は読み手の段の番として残した。

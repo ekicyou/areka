@@ -323,3 +323,7 @@ mod visible_tests;
 #[cfg(test)]
 #[path = "nesting_report_tests.rs"]
 mod report_tests;
+
+#[cfg(test)]
+#[path = "nesting_fixture_tests.rs"]
+mod fixture_tests;
