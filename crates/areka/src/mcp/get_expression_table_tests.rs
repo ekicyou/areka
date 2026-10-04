@@ -674,3 +674,115 @@ fn surfaces_txt_in_the_same_folder_does_not_change_the_table() {
     assert!(!after.contains(r"\s[77]"), "{after}");
     assert!(!after.contains(r"\s[50]"), "{after}");
 }
+
+// ---- 配線（実行系つきの単位・同時の呼び出し・副作用なし・切替の後） ----
+
+/// 置き場のゴーストの今のシェルのフォルダ（実行系が無ければ `None`）。
+fn current_shell_dir(world: &World) -> Option<PathBuf> {
+    world
+        .get_non_send::<GhostSlot>()?
+        .0
+        .as_ref()?
+        .runtime()
+        .map(|runtime| runtime.mount().shell.dir.clone())
+}
+
+/// kanade へ先に送られた依頼の処理が済むまで待つ（受信は順に 1 件ずつ・空のリソース照会は SHIORI を
+/// 呼ばずにその場で答える）。これで「呼出の記録が増えない」が kanade の遅れで素通りしない。
+fn settle_kanade(world: &World) {
+    let kanade = world
+        .non_send::<GhostSlot>()
+        .0
+        .as_ref()
+        .and_then(|session| session.kanade())
+        .expect("起動したゴーストには kanade の送り口がある")
+        .clone();
+    let (reply, rx) = areka_actor::reply_channel();
+    kanade
+        .send(areka_kanade::KanadeMsg::ResourceQuery {
+            ids: Vec::new(),
+            reply,
+        })
+        .expect("kanade に届く");
+    rx.recv_timeout(std::time::Duration::from_secs(20))
+        .expect("照会の返事が届く");
+}
+
+/// 偽の SHIORI で実行系つきの単位を起こし、受け口を置いて定常に落ち着かせる。今のシェルのフォルダへ
+/// `surfacetable.txt` を置き、2 件続けて送って `Input` の段を 1 回回すと 2 件とも同じ表で答え、
+/// SHIORI の呼出の記録は増えない。`set_shell_dir` でリグの根の下の別のシェルのフォルダへ替えて呼ぶと、
+/// 替えた後の表で答える（要件 1.7・6.1・6.2・6.4）。
+#[test]
+fn real_unit_answers_from_the_current_shell_each_call_without_side_effects() {
+    use std::sync::mpsc;
+
+    use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+
+    let mut rig = SwitchRig::new(vec![(
+        "A",
+        FakeShiori::Scripted(Box::new(|| standard_script(r"\0A\e"))),
+    )]);
+    rig.boot("A");
+    let (tx, rx) = mpsc::channel();
+    crate::mcp::install(&mut rig.world, rx);
+    let steady = rig.wait_steady();
+    let shell = current_shell_dir(&rig.world).expect("起動したゴーストには実行系がある");
+    std::fs::write(
+        shell.join("surfacetable.txt"),
+        utf8_hontai("charset,UTF-8\r\n"),
+    )
+    .expect("今のシェルへ surfacetable.txt を書く");
+    settle_kanade(&rig.world);
+    let calls_before = rig.calls("A");
+
+    let ask = || {
+        let (request, pending) = ToolRequest::new(ToolCall::GetExpressionTable(Args {
+            ghost_name: Some("A".to_owned()),
+        }));
+        assert!(tx.send(request).is_ok(), "受け口は生きている");
+        pending
+    };
+    let (first, second) = (ask(), ask());
+    rig.world.run_schedule(wintf::ecs::Input);
+    let both = [&first, &second].map(|p| p.try_answer().ok().flatten().map(|a| a.outcome));
+    settle_kanade(&rig.world);
+    let calls_after = rig.calls("A");
+
+    // 別のシェルのフォルダ（リグの根の下）へ替えて呼ぶ。
+    let other = rig
+        .root
+        .ghost_dir("A")
+        .join("shell")
+        .join("expression-table-other");
+    std::fs::create_dir_all(&other).expect("別のシェルのフォルダを作る");
+    std::fs::write(
+        other.join("surfacetable.txt"),
+        "charset,UTF-8\r\ngroup,別\r\n{\r\n\tscope,1\r\n\t200,横顔\r\n}\r\n",
+    )
+    .expect("別のシェルへ surfacetable.txt を書く");
+    let switched = rig
+        .world
+        .get_non_send_mut::<GhostSlot>()
+        .and_then(|mut slot| slot.0.as_mut().map(|s| s.set_shell_dir(other.clone())));
+    let third = ask();
+    rig.world.run_schedule(wintf::ecs::Input);
+    let after_switch = third.try_answer().ok().flatten().map(|a| a.outcome);
+    let down = rig.shutdown();
+
+    let table = Some(outcome::value(hontai_answer()));
+    assert_eq!(
+        (steady, both, switched, down),
+        (true, [table.clone(), table], Some(true), true),
+        "（定常に着いた・2 件の答え・替えられた・降ろせた）"
+    );
+    assert_eq!(calls_after, calls_before, "呼出の記録は増えない");
+    assert_eq!(
+        after_switch,
+        Some(outcome::value(format!(
+            "{}{}",
+            crlf(DEFAULTS_ONLY_ANSWER),
+            crlf(r"|\1|別|横顔|\s[200]|")
+        ))),
+        "替えた後の表"
+    );
+}

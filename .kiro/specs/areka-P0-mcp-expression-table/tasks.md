@@ -41,7 +41,7 @@
   - _Requirements: 1.7, 3.5, 5.9_
 
 - [ ] 3. 結合の確かめ
-- [ ] 3.1 実行系つきの単位で、同時の呼び出し・副作用なし・切替の後を確かめる
+- [x] 3.1 実行系つきの単位で、同時の呼び出し・副作用なし・切替の後を確かめる
   - 置き場は `get_expression_table_tests.rs`（1,000 行に近づいたら `get_expression_table.rs` から `#[path]` で 2 本目を繋ぐ。`mcp/mod.rs` には足さない）。型は `mcp_tests.rs` の `real_unit_answers_get_active_ghost_list_in_one_frame`
   - `SwitchRig` で単位を起こし（`rig.boot`）、`mcp::install` で受け口を据え、`wait_steady` で落ち着かせてから、今のシェルのフォルダへ `surfacetable.txt` を置き、偽の SHIORI の呼出の記録（`rig.calls`）の「前」を採る
   - 受け口へ 2 件続けて送って `Input` の段を 1 回回す → 2 件とも同じ表で答え、呼出の記録が増えていない
