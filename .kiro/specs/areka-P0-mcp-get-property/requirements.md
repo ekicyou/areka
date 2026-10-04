@@ -50,9 +50,9 @@
 ## Boundary Context
 
 - **In scope**: `get_property` の中身（宛先のゴーストの記憶から値を読んで答える）・「値がある（空を含む）」と「値が無い」の区別・宛先の記憶が見つからないときの答え・実行系の記憶を読む口を 1 本足すこと・決定論テスト・実機確認。
-- **Out of scope**: プロパティの値そのものの追加（`currentghost.*`・一覧系・`status`・`zorder` など）・書き込み（SSP の MCP に `set_property` は無い）・`ghost_name` の解決の仕方の変更・他の 9 本のツール・SHIORI の `GetProperty` の振る舞いの変更・ツールの定義（`DEFINITION`）と引数の検査の変更・名前の括弧の読み方（`ghostlist(0)` を番号と読むか名前と読むか。ukadoc の正典は `ghostlist(ゴースト名/本体側名/パス)` と `ghostlist.index(ID)` で、SSP 2.9.07 は `ghostlist(0).name` を「無い名前」にする〔survey §7.3 の 5〕。一覧系の値を実装する `property-catalog-lists` の持ち物）・名前の英字の大小を区別せずに引くこと（`property-name-case-fold` の持ち物・議題 1）。
+- **Out of scope**: プロパティの値そのものの追加（`currentghost.*`・一覧系・`status`・`zorder` など）・書き込み（SSP の MCP に `set_property` は無い）・`ghost_name` の解決の仕方の変更・他の 9 本のツール・SHIORI の `GetProperty` の振る舞いの変更・ツールの定義（`DEFINITION`）と引数の検査の変更・名前の括弧の読み方（`ghostlist(0)` を番号と読むか名前と読むか。ukadoc の正典は `ghostlist(ゴースト名/本体側名/パス)` と `ghostlist.index(ID)` で、SSP 2.9.07 は `ghostlist(0).name` を「無い名前」にする〔survey §7.3 の 5〕。一覧系の値を実装する `property-catalog-lists` の持ち物）・名前の英字の大小を区別せずに引くこと（`property-name-case-fold` の持ち物・議題 1）・`ghost_name` の照合を SSP 2.9.07 に合わせること（英字の大小・本体側名・前後の空白・空文字＝survey §7.4。`mcp-ghost-name-match` の持ち物・議題 2）。
 - **Adjacent expectations**:
-  - `mcp-tool-entrances` の振り分け（`dispatch`）が、`ghost_name` の省略を起動中の 1 体へ解決し、0 体・名前違いを `handle` の手前で `NG:` に終える。本 spec はこの振る舞いに頼り、変えない。
+  - `mcp-tool-entrances` の振り分け（`dispatch`）が、`ghost_name` の省略を起動中の 1 体へ解決し、0 体・名前違いを `handle` の手前で `NG:` に終える。本 spec はこの振る舞いに頼り、変えない。照合の細部は SSP と 4 点ずれている（survey §7.4）が、直すのは `mcp-ghost-name-match`（要件ディスカッション 議題 2・2026-10-04 起票）。
   - 同じく橋（`bridge.rs`）が答えを `debug!` 1 行で記録する。本 spec は普通の答え（値・空の値・無い名前）に**独自の記録を足さない**。
   - 統一プロパティシステム sylphya の読み手が、名前の書式の誤りを `warn!` に残して「見つからない」に倒す。本 spec はこの記録を重ねて出さない。
   - 後続のプロパティの spec が値を足すと、`get_property` の答えが変更なしで増える。
@@ -106,6 +106,7 @@
 5. The areka shall 「呼ばれた時点の今のゴーストを読む」こと（要件 1.6）と答えの記録の行（橋の `debug!`）には専用のテストを足さない（判断の分岐でなく、手前の振り分けと橋が確かめ済みの配線であるため）。
 6. When 実装が済んだ, the areka shall 実機で emo2 を起こし、MCP のクライアントから `get_property` を呼んで、⑴ `baseware.name` → `areka`（`isError: false`）、⑵ 値の無い名前 → `NG:Cannot find such property name.`（`isError: true`）を確かめ、結果を本 spec の `verification/` に残す。
 7. The areka shall 英字の大小だけが違う名前（`BASEWARE.NAME` など）の答えを固定するテストを置かない（「無い名前」と期待するテストも、値が返ると期待するテストも置かない）。大小の扱いは `property-name-case-fold` が読み手の側で決めるので、本 spec のテストがその spec の着地を赤で妨げないようにする。
+8. The areka shall `ghost_name` の照合（英字の大小・本体側名・前後の空白・空文字）の答えを固定するテストを本 spec に置かない。照合は手前の振り分けの持ち物で、`mcp-ghost-name-match` が SSP 2.9.07 の形（survey §7.4）へ直すので、本 spec のテストは `ghost_name` を省略するか、起動中のゴーストの名前を完全一致で渡す形だけを使う。
 
 ### Requirement 5: 触る範囲
 
@@ -119,3 +120,4 @@
 4. The areka shall プロパティの値を 1 つも足さず、既存の値の載せ方を変えない。
 5. The areka shall 1 ファイル 1,000 行以下の目安を、変更する 3 つのファイルすべてで守る。
 6. When 本 spec の設計でテストの組み方と読み手の呼び方が決まったとき、および本 spec を完了するとき（`/kiro-complete`）, the areka shall `.kiro/specs/areka-P0-property-name-case-fold/brief.md` の末尾に「`mcp-get-property` からの申し送り（日付）」の節を足し（設計のときに書き、完了のときに実装の事実で書き直す）、次の 3 点を書く: ⑴ `get_property` は渡された名前を手直しせず読み手（`SylphyaReader::resolve_dotted_str`）へ渡すので、読み手の側で大小を畳めば `get_property` は何も変えずに追従する、⑵ `get_property` のテストは大小の扱いを固定していない（要件 4.7）、⑶ `get_property` の実機確認の手順（要件 4.6）のどこに大小を混ぜた名前の確認を足せばよいか。この追記は spec 文書の変更で、要件 5.1 の「変更するソースファイル」に数えない。`property-name-case-fold` が本 spec より先に着地していたら、追記の代わりに、その着地の後の振る舞いを本 spec の要件 1.4 と実機確認に反映する。
+7. When 本 spec の実装の最終段階（最後のタスクの実機確認が済み、`/kiro-complete` に入る前）, the areka shall `.kiro/specs/areka-P0-mcp-ghost-name-match/brief.md` の末尾に「`mcp-get-property` からの申し送り（日付）」の節を足し、実装の事実で次の 3 点を書く: ⑴ `get_property` の処理が受け取った宛先（`ActiveGhost`）を何に使っているか（記録の欄だけか・実行系を引く鍵にしているか）＝照合を直しても `get_property` 側を変えずに済むかの判断材料、⑵ `get_property` のテストが `ghost_name` をどう渡しているか（要件 4.8＝省略か完全一致だけ）、⑶ 実機確認（要件 4.6）で `ghost_name` を渡した呼び方と、その答え。この追記は spec 文書の変更で、要件 5.1 の「変更するソースファイル」に数えない。`mcp-ghost-name-match` が本 spec より先に着地していたら、追記の代わりに、その着地の後の照合で本 spec のテストと実機確認が通ることを確かめる。
