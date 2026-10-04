@@ -26,12 +26,26 @@
 
     見込み（1・3・4・7・7b は赤、8・13 は緑）との違いは 0 件。入口のファイルの既存テスト 4 本は緑のまま。`cargo test -p wintf --lib` は 987 passed / 14 failed で、落ちたのは上の新規 14 本だけ。
 
-- [ ] 1.2 離し側・その後の操作・記録のテストを書く
+- [x] 1.2 離し側・その後の操作・記録のテストを書く
   - 隠れた実物の窓を決まった位置に作る組み立てを足す（座標と捕捉を確かめるテストに使う）
   - テスト 2（閾値を越えた後の離しで終了 1 件・印なし・位置は借用なしで渡した場合と同じ画面の座標）・5（閾値前の離しで状態が休み捕捉がその窓でなくなる）・6（その後押さずに閾値を越えて動かしても開始 0 件）・9（再入の後の動かさないクリックで終了 0 件）・10（次の閾値越えで開始 1 件→終了 1 件・対象は新しいドラッグ）・11（捕捉を取った窓と違う窓の離しでは、借用の有無に関わらず終えない）・12（再入の扱いの記録が 1 行・空の窓の離しで位置を読めなかった記録が 1 行）・14（押しの後、状態は準備中で捕捉はその窓・捕捉を取る間にドラッグの状態が借りられていない）を書く
   - テストファイルが 1,000 行を越えそうなら「取り消し」「離し」の 2 ファイルに分け、共通の組み立てを支えのファイルへ移す
   - 今のコードで走らせ、各テストの赤・緑をこのタスクの下へ記録してある（2・5・6・12 は赤、14 は緑、9・10・11 は前後を記録する対象）
   - _Requirements: 2.2, 2.3, 3.1, 3.3, 4.1, 4.2, 4.3, 7.1, 7.2, 8.1, 8.2, 8.5_
+  - 直す前の結果（2026-10-04・`cargo test -p wintf --lib runtime::wndproc_bridge`・8 passed / 25 failed＝1.1 の 14 本＋本タスクの 11 本）
+
+    | # | テスト名 | 結果 | 赤の理由 |
+    |---|---|---|---|
+    | 2 | `t02_reentrant_release_after_threshold_ends_once_at_the_same_screen_point` | 赤 | 再入の離しは入口で捨てられ、終了の知らせが 0 件。比べる相手の借用なしの道は緑で、1 件・印なし・位置は離した点の画面の座標（実物の窓の原点を足した値。窓の中の座標とは違う） |
+    | 5 | `t05_reentrant_release_{before_threshold,just_after_threshold}_rests_and_frees_capture`（2 本） | 赤（2 本とも） | 再入の離しが捨てられ、状態が `Preparing`／`JustStarted` のまま残る（押しの後に捕捉がその窓であることは確かめ済み） |
+    | 6 | `t06_no_start_without_press_after_reentrant_{cancel,release}_before_threshold`（2 本） | 赤（2 本とも） | 準備中が残るため、押さずに閾値を越えて動かすと開始の知らせが 1 件出る |
+    | 9 | `t09_click_without_move_after_reentrant_{cancel,release}_sends_no_end`（2 本） | 赤（2 本とも・前後を記録する対象） | 再入の終わりが捨てられて `Dragging` が残る。次の押しは無視され、動かさないクリックの離しが元のドラッグを終える。終了の知らせが 1 件（印なし）出る＝動かさないクリックで位置が 1 件保存される症状 |
+    | 10 | `t10_next_drag_after_reentrant_{cancel,release}_starts_and_ends_once_for_the_new_target`（2 本） | 赤（2 本とも・前後を記録する対象） | 前のドラッグが `Dragging` のまま残る。新しい対象の押しは無視され、動きは前のドラッグの移動として扱われる。新しい対象の開始の知らせは 0 件 |
+    | 11 | `t11_release_on_another_window_does_not_end_with_or_without_borrow` | 緑（前後を記録する対象） | —（準備中・ドラッグ中 × 借用の有無の 4 通りとも、違う窓の離しでは状態も捕捉も変わらず、終了の知らせ 0 件） |
+    | 12 | `t12_reentrant_handling_logs_exactly_one_line`・`t12_reentrant_release_on_an_empty_window_logs_pos_unreadable` | 赤（2 本とも） | 再入の扱いが無いので、`drag_reentry_handled`・`drag_reentry_pos_unreadable` の記録が 0 行（1 行ずつの中身＝level〔終えた・取り消した warn!・何もしなかった debug!〕・`msg`・`entity`・`window`・`action` の判定までは届かない） |
+    | 14 | `t14_start_preparing_takes_capture_without_falling_over_on_capture_changed` | 緑 | —（先に捕捉を持つ実物の窓が、`SetCapture` の同期の `WM_CAPTURECHANGED` を入口で 1 回受け、落ちない。押しの後は `Preparing`・捕捉はその窓） |
+
+    見込み（2・5・6・12 は赤、14 は緑、9・10・11 は前後を記録）との違いは 0 件。9・10 は直す前は赤、11 は直す前から緑で、タスク 3 で前後とも緑を確かめる。1.1 の 14 本は同じ assert・同じ理由で赤のまま。入口のファイルの既存テスト 4 本は緑。`cargo test -p wintf --lib` は 989 passed / 25 failed / 3 ignored で、落ちたのは新規 25 本だけ。1,000 行を越えるため、テストは「取り消し」（`wndproc_bridge_drag_cancel_tests.rs`・466 行。1.1 の `wndproc_bridge_drag_tests.rs` の名前を変えた）と「離し」（`wndproc_bridge_drag_release_tests.rs`・532 行）に分け、共通の組み立ては `wndproc_bridge_drag_test_support.rs`（370 行）へ移した。
 
 - [ ] 2. 状態を休ませる所で終了の種を積む形へ変える
 - [ ] 2.1 World を借りずに累積器へ届く控えを足す
@@ -92,3 +106,8 @@
   - 閾値を越えたドラッグで保存 1 件、動かさないクリックで保存 0 件、閾値を越えた後の ESC キーで今どおりの保存になることを確かめる
   - 走らせたログに、終えた・取り消した再入の扱いの記録が何件出たかを、0 件でも 0 件と記録してある（合否には使わない）
   - _Requirements: 5.1, 5.2, 5.3, 8.6_
+
+## Implementation Notes
+
+- 1.1・1.2: 再入のテストは `runtime/wndproc_bridge_drag_{cancel,release}_tests.rs`、共通の組み立て（`Rig`・隠れた実物の窓 `RealWindow`）は `wndproc_bridge_drag_test_support.rs`。`WindowPos` の既定の位置は `CW_USEDEFAULT` で、そのままだと `mouse_move.rs` の閾値の計算が debug ビルドで桁あふれするので、組み立ては位置を明示する。
+- 2.4 向け: テスト 12 は `drag_reentry_handled` の `entity`・`window` を `format!("{:?}", entity)`（例 `18v0`）と完全一致で見る。`Option<Entity>` の Debug（`Some(18v0)`）で記録すると赤になる。無いときは空の文字で記録する（design の Monitoring「無ければ空」）。

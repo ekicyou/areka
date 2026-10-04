@@ -96,8 +96,16 @@ pub(crate) fn make_wndproc() -> impl Fn(Pin<&WndState>, WindowMessage) -> Option
 }
 
 #[cfg(test)]
-#[path = "wndproc_bridge_drag_tests.rs"]
-mod wndproc_bridge_drag_tests;
+#[path = "wndproc_bridge_drag_test_support.rs"]
+mod wndproc_bridge_drag_test_support;
+
+#[cfg(test)]
+#[path = "wndproc_bridge_drag_cancel_tests.rs"]
+mod wndproc_bridge_drag_cancel_tests;
+
+#[cfg(test)]
+#[path = "wndproc_bridge_drag_release_tests.rs"]
+mod wndproc_bridge_drag_release_tests;
 
 #[cfg(test)]
 mod tests {
