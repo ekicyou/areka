@@ -506,3 +506,36 @@ image v0.25.10
 - **設計への反映**: 読み手の口に `decode_first_frame`（既定の実装つき）を足し、`image_arm.rs` の `read_first_frame` が `into_frames()` の最初の 1 つだけを取る。読めた 1 枚は今の静止画の枝へ渡すので、透明度を持たない絵ではその 1 枚の左上の色（＝0 番のコマの左上の色）が抜かれる。WIC へ落ちるときは `warn!` をもう 1 回出す。
 - **残る場合**: `image` が 1 枚目も読めない絵（16 ビットの APNG・1 枚目から壊れた絵）は WIC の 1 枚になり、このときだけ既定の絵・抜き色なし・拡張機能しだいが残る。
 - **動かしていないこと**: `into_frames()` から 1 つだけ取って止めたときに 2 枚目以降が解かれないこと（`image` のコマの並びが遅延であることは 3.4 節でソースを読んだ。時間・メモリでは確かめていない）。実装のタスクで、枚数の多い検体の 1 枚目だけを読む時間が全コマを読む時間より十分短いことを測る。
+
+### 9.12 取り込みを足した状態の公開の検査と謝辞（2026-10-04・タスク 1.3・コミット `d4f6d953` の上）
+
+9.9 節の 5 と 9.10 節の ⒞ の記録。依存の登記（タスク 1.1）と取り込みの検査（タスク 1.2）を入れた状態で走らせた。
+
+**`pwsh -NoProfile -File tools/crates-io.ps1 -Verify -Version 0.0.1`（ワークスペースの版は 0.0.1）: 緑（終了コード 0）**。公開はしていない（`cargo publish --dry-run`。cargo は 2 本とも「aborting upload due to dry run」と出して上げずに止めた）。
+
+- 判定「一覧」「欄」「理由」「版」「公開の段の形」「大きさ」は全部 OK。
+- 索引を読んで、`wintf 0.0.1`・`dola 0.0.1` が crates.io に既に在ると警告が出た（スクリプトの説明どおり失敗にしない）。
+- 包んだ物を組み立て直す段も通った（`dola` 約 56 秒・`wintf` 約 3 分 33 秒）。包んだ大きさは `dola-0.0.1.crate` 172,964 バイト・`wintf-0.0.1.crate` 1,087,658 バイト（上限 10 MB の内）。
+- 包んだ `wintf` の `Cargo.lock` の `image-webp` は `version = "0.2.4"`・`source = "registry+https://github.com/rust-lang/crates.io-index"` のまま。包んだ `wintf`・`dola` の `Cargo.toml` に `patch` の字は 0 件。根の `[patch.crates-io]` は公開するクレートへ持ち出されない（設計の「公開への影響」の見立てどおり）。
+
+**`tools/test-all.ps1 -Format -License` の段ごとの結果**（検査したコミット `d4f6d953`・開始時の未コミットの変更 0 件）:
+
+| 段 | 結果 |
+| --- | --- |
+| i686 ターゲット導入 | 緑 |
+| i686 成果物ビルド | 緑 |
+| cargo fmt（整形） | 緑。整形で変わったファイルは 0 本 |
+| fmt --check | 緑 |
+| x64 ワークスペース全テスト | **赤 1 件**: `areka-mcp` の `server::server_gate_help_tests::bad_origin_is_403_before_mcp` が「応答を 1 バイトも受けられなかった」（os error 10053・接続が相手側で切られた）で落ちた。ほかは全部緑 |
+| i686 テスト（host-32 系） | 緑 |
+| crates.io 公開前の確認（包むだけ） | 緑 |
+| cargo deny check | 緑 |
+| cargo about generate | 緑。謝辞に差分あり（黄色の知らせ） |
+
+- 赤の 1 件は本 spec と関係しない: `areka-mcp` の依存の木に `areka-emo-atlas` は無い（`cargo tree -p areka-mcp -i areka-emo-atlas` が「一致するパッケージが無い」）。同じテストを単独で 3 回（`cargo test -p areka-mcp --lib`）走らせて 3 回とも 100 件緑。全体テストの重い並列の中でだけ、403 を返して閉じた接続を読む前に切られることがある、と見ている（原因は確かめていない）。
+
+**謝辞（`THIRD-PARTY-NOTICES.md`）**: クレートの行は 259 行 → 271 行で、**12 行増え、減った行は 0**。増えた 12 行は設計の Technology Stack の表とちょうど同じ:
+`image 0.25.10`・`image-webp 0.2.5`・`png 0.18.1`・`bytemuck 1.25.2`・`byteorder-lite 0.1.0`・`moxcms 0.8.1`・`pxfm 0.1.30`・`quick-error 2.0.1`・`crc32fast 1.5.2`・`fdeflate 0.3.7`・`flate2 1.1.10`・`simd-adler32 0.3.10`。
+
+- 10 本は MIT の節に、`moxcms`・`pxfm`（BSD-3-Clause OR Apache-2.0）は Apache License 2.0 の節に載った。冒頭の一覧は「MIT License 252 → 262 crate」「Apache License 2.0 2 → 4 crate」。
+- 行の数え方: 「対象 crate:」の下の `- 名前 版` の行（正規表現 `^- \S+ \d+\.\d+`）を数えた。`ff308cf1` の謝辞もこの数え方で 259 行で、`ff308cf1` から今までに謝辞を変えたコミットは無い。9.7 節の「250 行 → 262 行」とは数え方が違う（9.7 節の数え方は記録が無い）。増えた数（12）と顔ぶれは同じ。

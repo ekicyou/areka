@@ -17,7 +17,7 @@
   - 完了: 今のリポジトリで緑、較正の 3 通りがどれも赤として判定される
   - _Requirements: 7.6_
 
-- [ ] 1.3 謝辞を生成し直し、公開の検査を取り込みつきで走らせる
+- [x] 1.3 謝辞を生成し直し、公開の検査を取り込みつきで走らせる
   - `tools/test-all.ps1 -Format -License` で `THIRD-PARTY-NOTICES.md` を生成し直す。全体テストは差分を黄色で知らせるだけなので、差分を目で確かめてコミットに含める
   - `pwsh -NoProfile -File tools/crates-io.ps1 -Verify -Version <今の版>` を 1 回走らせ、結果を `research.md` に記録する（公開はしない）
   - 完了: 生成し直した謝辞がコミットに入っていて、クレートの行が 12 行増えている。`-Verify` の結果（緑か、赤ならその中身）が `research.md` に在る
@@ -140,3 +140,8 @@
   - `tools/test-all.ps1 -Format -License` を全段緑にする（`cargo deny check`・謝辞・公開の包むだけの形・取り込みの検査を含む）
   - 完了: 全段緑、`emo2` の照合のファイルと呼び手 5 ファイルの差分が 0、謝辞の差分が無い（1.3 でコミット済み）
   - _Requirements: 5.1, 5.2, 5.5, 7.4, 8.6_
+
+## Implementation Notes
+
+- 1.3（範囲外・完了時に `/kiro-discovery` で起票）: `tools/test-all.ps1` の x64 全テストの負荷の下でだけ、`areka-mcp` の `server::server_gate_help_tests::bad_origin_is_403_before_mcp` が `testkit.rs` の「応答を 1 バイトも受けられなかった（os error 10053）」で 1 回赤になった。`areka-mcp` は `areka-emo-atlas` にも `image-webp` にも依存せず、単独の `cargo test -p areka-mcp --lib` は 4 回とも 100 件緑。詳細は `research.md` 9.12 節。
+- 1.3: 謝辞のクレートの行は 259 → 271（`^- \S+ \d+\.\d+` で数えて +12・−0）。research.md 9.7 節の「250」は数え方の違い。
