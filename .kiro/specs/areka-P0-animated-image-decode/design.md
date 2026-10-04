@@ -3,20 +3,26 @@
 > コードの引用は「何の定義か（関数名・型名＋ファイル）」で指す。版・件数・実測値は **2026-10-04・コミット `ff308cf1` の上**で取ったもの。実測の手順と生の結果は `research.md` 9 節にある。
 > 「動かして確かめた」と「ソースを読んだだけ」は本文で書き分ける。
 
+### 設計討議の裁定の記録
+
+| 日付 | 議題 | 裁定 | 効く所 |
+|---|---|---|---|
+| 2026-10-04 | 議題 1: 1 枚へ縮めた動く絵をどう読むか | **新しい読み手（`image`）で動きの 1 枚目だけを読む**。それも読めないときだけ、今までの WIC の 1 枚読みへ落とす。それも読めなければ今までの静止画の失敗 | 「System Flows／鍵 1 つの読み込み」「読み手の口」「image_arm」「load」「対応表に書くこと」「Error Handling」「Testing Strategy」。要件 6.2・6.4・6.5・8.4 の文面も合わせて直した |
+
 ## Overview
 
 **Purpose**: 動く APNG・WebP をシェル（とバルーン）の絵に置いたとき、重ね済みの全コマ・コマごとの待ち時間・繰り返し回数を読み、全コマをアトラスに載せてコマの番号で引けるようにする。再生はしない（後続 `areka-P0-animated-image-playback`）。
 
 **Users**: シェルの作者（動く絵を置くだけでよい）と、再生の spec の実装者（形式の違いを気にせず同じ形でコマを受け取る）。
 
-**Impact**: アトラスのクレート `areka-emo-atlas` の中だけが変わる。読み手の口 `ElementDecoder` に既定の実装つきのメソッドが 2 つ増え、焼く入口 `bake` に動く絵の枝が 1 本増え、表 `AtlasTable` にコマを引く口が 1 つ増える。静止画しか持たない集合の焼いた結果は 1 つも変わらない。外部クレート `image`（機能 `png`・`webp`）が本番の依存に入り、`image-webp` は上流の GitHub の固定コミットから取り込む。
+**Impact**: アトラスのクレート `areka-emo-atlas` の中だけが変わる。読み手の口 `ElementDecoder` に既定の実装つきのメソッドが 3 つ増え、焼く入口 `bake` に動く絵の枝が 1 本増え、表 `AtlasTable` にコマを引く口が 1 つ増える。静止画しか持たない集合の焼いた結果は 1 つも変わらない。外部クレート `image`（機能 `png`・`webp`）が本番の依存に入り、`image-webp` は上流の GitHub の固定コミットから取り込む。
 
 ### Goals
 
 - 動く絵かどうかを中身（先頭のチャンクの見出し）だけで見分ける。静止画の復号は今までどおり 1 回。
 - 全コマ・待ち時間（ミリ秒の整数）・繰り返し回数を 2 形式で同じ形で渡す。
 - 各コマを静止画 1 枚と同じ `AtlasEntry` として `ElementId` で引けるようにする（合成の側は無改変で描ける）。
-- 上限（3 つ＋ページの一辺）と読み込みの失敗では 1 枚へ縮め、`warn!` を 1 回出す。失敗の一覧には載せない。
+- 上限（3 つ＋ページの一辺）と読み込みの失敗では 1 枚へ縮め、`warn!` を 1 回出す。失敗の一覧には載せない。縮めたときに出る 1 枚は、全コマを読めたときの 0 番のコマと同じ絵・同じ透過にする（動きの 1 枚目を `image` で読む。裁定 2026-10-04）。
 - 今の呼び手・`AtlasKey`・`manifest.rs` を変えない（変更 0）。`AtlasTable::new` は署名と逆引き表の作り方を変えない（本体に足すのは、新しい欄を空で初期化する 1 か所だけ）。
 
 ### Non-Goals
@@ -32,7 +38,7 @@
 
 ### This Spec Owns
 
-- 読み手の口 `ElementDecoder`（`crates/areka-emo-atlas/src/decode.rs`）の動く絵の 2 メソッドと、その入出力の型（`AnimationInfo`・`AnimatedImage`・`AnimationFrame`）。
+- 読み手の口 `ElementDecoder`（`crates/areka-emo-atlas/src/decode.rs`）の動く絵の 3 メソッドと、その入出力の型（`AnimationInfo`・`AnimatedImage`・`AnimationFrame`）。
 - 動く絵の見分け（`decode/sniff.rs`）と、`image` クレートを使う読み込み（`decode/image_arm.rs`）。**本番のソースで `image` の型を綴るファイルはこの 1 つだけ**。本番でない例外は 1 つ: 検体を作る `examples/gen_animated_samples.rs`（配布物には入らない）。
 - 上限の型 `AnimationLimits`・環境変数 3 つ・判定（`limits.rs`）。
 - 焼く入口の動く絵の枝（`lib.rs` の `bake`／`bake_with_limits` と `animated.rs`）。
@@ -60,7 +66,7 @@
 
 ### Revalidation Triggers
 
-- `ElementDecoder` の 2 メソッドの署名、`AnimationInfo`・`AnimatedImage` の欄を変える → `MemoryDecoder` を使う全テストと下流 playback。
+- `ElementDecoder` の動く絵の 3 メソッドの署名、`AnimationInfo`・`AnimatedImage` の欄を変える → `MemoryDecoder` を使う全テストと下流 playback。
 - `AtlasTable::animation` の戻り値・`Animation` の欄・「0 番のコマは親の `ElementId`」「2 枚目以降は末尾に足す」の採番を変える → 下流 playback と `emo2_golden.rs`。
 - 上限の既定値・環境変数の名前を変える → 利用者向けの文書と沈黙ルール対応表。
 - `image`・`image-webp` の版や固定コミットを変える → 検体のテスト全部と `webp_pin_tests.rs`、`tech.md` の登記。
@@ -113,7 +119,7 @@ flowchart TD
 |-------|------------------|-----------------|-------|
 | 画像の復号（動く絵） | `image` 0.25.10（`png`・`webp`） | APNG・WebP の重ね済みのコマ・待ち時間・繰り返し回数 | `areka-emo-atlas` の本番の依存へ足す（承認 2026-10-04） |
 | WebP の重ね合わせ | `image-webp` 0.2.5（git・コミット `75f81091…`） | 透過のあるコマの正しい重ね合わせ | `[patch.crates-io]`。公開版 0.2.4 は欠陥を再現した（下の「実測」） |
-| 画像の復号（静止画） | WIC（既存 `WicDecoderArm`） | 今までどおり。縮めた絵の 1 枚もここで読む | 変更 0 |
+| 画像の復号（静止画） | WIC（既存 `WicDecoderArm`） | 今までどおり。縮めた絵の 1 枚は `image` で読み、それが読めないときだけここへ落ちる | 変更 0 |
 | 記録 | `tracing` | 縮めたとき・設定値が読めないときの `warn!` | 既存 |
 
 **本番の木に新しく入るクレート（`cargo tree -e normal -p areka-emo-atlas` と `cargo about` を実際に走らせて確かめた）**: `Cargo.lock` に新しく入るパッケージは **0 本**（`image-webp` は 0.2.4 が 0.2.5 に置き換わる）。謝辞に新しく載るのは **12 本**:
@@ -164,9 +170,9 @@ crates/areka-emo-atlas/
     ├── animated_tests.rs           # 新規: MemoryDecoder で bake の枝を判定
     ├── limits.rs                   # 新規: AnimationLimits・環境変数・判定
     ├── limits_tests.rs             # 新規
-    ├── decode.rs                   # 変更: ElementDecoder の 2 メソッド・型・MemoryDecoder の登録口
+    ├── decode.rs                   # 変更: ElementDecoder の 3 メソッド・型・MemoryDecoder の登録口
     ├── decode/
-    │   ├── wic_arm.rs              # 変更: 2 メソッドの実装（sniff と image_arm を呼ぶだけ）
+    │   ├── wic_arm.rs              # 変更: 3 メソッドの実装（sniff と image_arm を呼ぶだけ）
     │   ├── sniff.rs                # 新規: PNG／RIFF の見出しだけを読む純粋関数
     │   ├── sniff_tests.rs          # 新規
     │   ├── image_arm.rs            # 新規: 本番のソースで image を綴る唯一のファイル
@@ -190,10 +196,11 @@ crates/areka-emo-atlas/
 - `doc/COMPAT_ARCHITECTURE.md` — 8 節「沈黙ルール対応表」に本 spec の 1 節。
 - `doc/ukadoc-coverage/ledger/assets.toml` — `element*` の項（`ukadoc:descript_shell_surfaces:element_2a…:1`）に注記。段は変えない。
 - `dist/README.txt` — 上限の設定項目（名前・意味・既定・変え方）。
+- `crates/areka-emo-present/src/balloon_target_tests.rs` — テストを 1 本足す（縮んだ動く絵を面に持つバルーンが組み立てに成功する）。テストのファイルであり、呼び手 5 ファイル（`balloon.rs` の本体を含む）には触らない。
 - `.kiro/specs/areka-P0-animated-image-playback/brief.md` — 渡すもの・残したものの追記。
 - `.kiro/specs/<--clipping を引き受ける spec>/brief.md` — 新規（起票は `/kiro-discovery` で行う。名前はそこで決める）。
 
-各ファイルは 1,000 行以内（今の最大は `lib.rs` の 614 行。足すのは 100 行前後）。
+各ファイルは 1,000 行以内（今の最大は `lib.rs` の 614 行。足すのは 100 行前後。`decode.rs` は 238 行に 110 行前後、新規の `image_arm.rs` は 1 枚目だけを読む口を入れて 200 行前後、`animated.rs` は 3 段の落とし方を入れて 150 行前後の見込み）。
 
 ## System Flows
 
@@ -204,17 +211,28 @@ flowchart TD
     S[鍵 1 つ] --> P{probe_animation}
     P -->|None| ST[decode 1 回・今までどおり]
     P -->|Some info| J{judge info limits 使用量 cfg}
-    J -->|上限・ページの一辺を超える| W1[warn 1 回] --> ST
+    J -->|上限・ページの一辺を超える| W1[warn 1 回・縮める]
     J -->|収まる| F{decode_frames}
-    F -->|Err| W2[warn 1 回] --> ST
+    F -->|Err| W2[warn 1 回・縮める]
     F -->|Ok だが枚数か寸法が info と違う| W2
     F -->|Ok| OK[全コマ・使用量に足す]
-    ST -->|Err| E[BakeResult.errors へ・今までどおり]
-    ST -->|Ok| ONE[1 枚の絵]
+    W1 --> FF{decode_first_frame}
+    W2 --> FF
+    FF -->|Ok 段 1| ONE[1 枚の絵]
+    FF -->|Err| W3[warn 1 回・今までの読み方へ落とす] --> ST
+    ST -->|Err 段 3| E[BakeResult.errors へ・今までどおり]
+    ST -->|Ok| ONE
 ```
 
 - 静止画は `probe_animation` が `None` を返し、`decode` は 1 回だけ（要件 1.5）。
 - 上限の判定は全コマを読む前に終わる。`decode_frames` は `info.frame_count` 枚を超えて読まない（要件 6.3）。
+- **縮めるときの 3 段**（裁定 2026-10-04。縮める理由は 7 つ＝枚数の上限・絵 1 つの画素の上限・合計の上限・ページの一辺・見出しと実物の枚数の食い違い・途中のコマの失敗・読み手が受け付けない形〔16 ビットの APNG など〕で、どれも同じ道を通る）:
+  1. **段 1**: `decode_first_frame` で動きの 1 枚目だけを `image` で読む。出る絵は全コマを読めたときの 0 番のコマと同じ（既定の絵を持つ APNG では既定の絵を飛ばした動きの 1 枚目）。この 1 枚は静止画の枝へ渡すので、透明度を持たない絵なら**その 1 枚の左上の色**＝0 番のコマの左上の色が抜かれる。全コマのときと同じ透過になる。
+  2. **段 2**: 段 1 が `Err` のときだけ、今までの `decode`（WIC の 1 枚読み）へ落とす。落とすことと段 1 の失敗の理由を `warn!` で 1 回記録する。
+  3. **段 3**: 段 2 も `Err` なら、今までの静止画の失敗（`BakeResult.errors` へ `BakeError::Decode`。要件 6.5）。
+- 段 1 は全コマを読まない・抱えない: `image` の遅延のコマの並び（`into_frames()`）から**最初の 1 つだけ**を取って止める。抱えるのは 1 コマ分（要件 6.3）。
+- 16 ビットの APNG は `image` が 1 枚目で断る（ソースを読んだだけ）ので、`decode_frames` が `Err` → 縮める → 段 1 も `Err` → 段 2 で WIC が既定の絵を 8 ビットへ変えて返す。`warn!` は 2 回（縮めた・落とした）。
+- ページの一辺を超えて縮んだ絵は、段 1 の 1 枚も絵の全体の寸法なので、切り詰めた後もページに入らなければ、今までの大きすぎる静止画と同じ扱いになる: `Packer::pack` が `error!` を出して外し、エントリは `placement = None` で残る（今の振る舞い・変更 0）。切り詰めた結果がページに入れば普通に載る。
 - 使用量（合計の上限 ㋒ の勘定）に足すのは、実際に動く絵として載せた絵だけ。縮めた絵は足さない。鍵は（集合の番号・相対パス）の昇順で回るので、どの絵から縮むかは並び順だけで決まる（要件 6.8）。
 - 合計は `bake` の 1 回の呼び出しごとに 0 から数える（シェルの 1 回・バルーンの 1 回がそれぞれ「1 つを焼くとき」）。
 
@@ -248,12 +266,12 @@ flowchart TD
 | 2.8 | 何度読んでも同じ | image_arm | 状態を持たない | — |
 | 3.1 | 静止画と同じ透過の決まり | bake の枝 | `Normalizer` | 焼く |
 | 3.2 | 透明度を持つならそのまま | image_arm・bake の枝 | `has_alpha = true` | 焼く 3 |
-| 3.3 | 持たないなら 1 枚目の左上の色を全コマから | bake の枝・normalize | `clear_key_color` | 焼く 2 |
+| 3.3 | 持たないなら 1 枚目の左上の色を全コマから（縮んだ 1 枚にも同じ色） | bake の枝・normalize | `clear_key_color` | 焼く 2 |
 | 3.4 | 「透明度を持つか」の見分け方 | image_arm | `ColorType::has_alpha()` | — |
 | 3.5 | 全透明のコマも残す | bake の枝 | `placement = None` | 焼く 6 の下 |
 | 4.1 | 全コマをアトラスに | bake の枝 | — | 焼く |
 | 4.2 | 今までの鍵から引ける | table | `resolve` → `animation` | — |
-| 4.3 | 番号を指定しなければ 0 番 | table | `with_frames`（小さい番号が勝つ） | — |
+| 4.3 | 番号を指定しなければ 0 番（縮んだ 1 枚も動きの 1 枚目） | table | `with_frames`（小さい番号が勝つ） | — |
 | 4.4 | 各コマは静止画と同じ情報 | table | `entry(ElementId)` | — |
 | 4.5 | 鍵・集め方・`new` を変えない | table・bake | 変更 0 | — |
 | 4.6 | 静止画は枚数 1・時間なし | table | `animation` が `None` | — |
@@ -261,14 +279,14 @@ flowchart TD
 | 5.1 | 静止画の結果は不変 | load・bake | `None` の枝は今のコード | 読み込み |
 | 5.2 | `emo2` の照合を書き換えずに通す | bake | 既存 `emo2_golden.rs` | — |
 | 5.3 | 検体の動く絵の数 | — | **0 枚**（`research.md` 4 節で実測） | — |
-| 5.4 | バルーンも同じ | bake | 入口は 1 つのまま | — |
+| 5.4 | バルーンも同じ（縮め方も同じ） | bake | 入口は 1 つのまま | — |
 | 5.5 | 呼び手は変更 0 ファイル | bake・WicDecoderArm | `bake` の署名は不変 | — |
 | 6.1 | 3 つの上限と既定 | limits | `AnimationLimits::default` | — |
-| 6.2 | 超えたら 1 枚＋`warn!` | limits・load | `judge` | 読み込み |
-| 6.3 | 読む前に判定 | sniff・load | `probe_animation` → `judge` | 読み込み |
-| 6.4 | 途中で失敗したら 1 枚＋`warn!` | load・image_arm | `decode_frames` の `Err` | 読み込み |
-| 6.5 | 1 枚も読めなければ今までの失敗 | load | `BakeError::Decode` | 読み込み |
-| 6.6 | 記録の無い失敗 0 本・縮めは失敗でない | load | `errors` に載せない | 読み込み |
+| 6.2 | 超えたら動きの 1 枚目だけ＋`warn!` | limits・load・image_arm | `judge`・`decode_first_frame` | 読み込み（段 1） |
+| 6.3 | 読む前に判定・抱えすぎない | sniff・load・image_arm | `probe_animation` → `judge`。段 1 は最初の 1 つだけ取る | 読み込み |
+| 6.4 | 途中で失敗したら動きの 1 枚目だけ＋`warn!` | load・image_arm | `decode_frames` の `Err` → `decode_first_frame` | 読み込み（段 1） |
+| 6.5 | 2 段とも読めなければ今までの失敗 | load | 段 2 の `decode` も `Err` → `BakeError::Decode` | 読み込み（段 3） |
+| 6.6 | 記録の無い失敗 0 本・縮めは失敗でない | load | 段 3 に着くまで `errors` に載せない。段 2 へ落ちるときも `warn!` | 読み込み |
 | 6.7 | ほかの絵を止めない | bake | 鍵ごとに続ける | — |
 | 6.8 | 並び順だけで決まる | load | 鍵の順 | 読み込み |
 | 6.9 | 外から渡せる | limits・bake | `bake_with_limits` | — |
@@ -286,7 +304,7 @@ flowchart TD
 | 8.1 | 検体と作り方 | 検体 | `testdata/animated/` | — |
 | 8.2 | 2 形式の中身の一致 | image_arm_tests | — | — |
 | 8.3 | 境目 | image_arm_tests・sniff_tests | — | — |
-| 8.4 | 上限・壊れた絵 | animated_tests・samples_e2e_tests | — | — |
+| 8.4 | 上限・壊れた絵が 1 枚へ縮み、その 1 枚が全コマのときの 0 番と同じ | animated_tests・samples_e2e_tests・balloon_target_tests | `decode_first_frame` | 読み込み（段 1〜3） |
 | 8.5 | 焼いて番号で引く | animated_tests・samples_e2e_tests | — | — |
 | 8.6 | 拡張機能・ネットに依らない | 全テスト | 動く絵は `image` で読む | — |
 | 9.1 | 対応表 | 記録 | `doc/COMPAT_ARCHITECTURE.md` 8 節 | — |
@@ -299,10 +317,10 @@ flowchart TD
 
 | Component | Layer | Intent | Req Coverage | Key Dependencies | Contracts |
 |---|---|---|---|---|---|
-| 読み手の口（`decode.rs`） | 口 | 動く絵の 2 メソッドと型・偽の読み手 | 1.1, 2.1–2.5, 8.4 | — | Service |
+| 読み手の口（`decode.rs`） | 口 | 動く絵の 3 メソッドと型・偽の読み手 | 1.1, 2.1–2.5, 8.4 | — | Service |
 | sniff（`decode/sniff.rs`） | 読み手 | 見出しだけで「動くか・何コマか・寸法」 | 1.1–1.5, 6.3 | std | Service |
 | image_arm（`decode/image_arm.rs`） | 読み手 | `image` で全コマを読み、乗算済み BGRA へ | 2.1–2.5, 2.7, 2.8, 3.2, 3.4, 6.4, 7.5 | `image`（P0） | Service |
-| `WicDecoderArm`（`decode/wic_arm.rs`） | 読み手 | 2 メソッドを sniff と image_arm へつなぐ | 5.5 | sniff・image_arm | Service |
+| `WicDecoderArm`（`decode/wic_arm.rs`） | 読み手 | 3 メソッドを sniff と image_arm へつなぐ | 5.5 | sniff・image_arm | Service |
 | limits（`limits.rs`） | 設定 | 上限・環境変数・判定 | 6.1, 6.2, 6.9–6.11 | `tracing` | Service, State |
 | load（`animated.rs`） | 焼く | 鍵 1 つの段取りと `warn!` | 5.1, 6.2–6.8 | 口・limits | Service |
 | bake の枝（`lib.rs`） | 焼く | 抜き色・切り詰め・採番・表の組み立て | 3.1–3.5, 4.1, 4.7, 5.2, 5.4, 5.5, 6.9 | load・table | Service |
@@ -357,23 +375,31 @@ pub trait ElementDecoder {
     /// 動く絵の全コマを読む。info は probe_animation が返した見出し（読むのは info.frame_count 枚まで）。
     /// 既定は Err（この読み手は動く絵を読めない）。
     fn decode_frames(&self, path: &Path, info: AnimationInfo) -> Result<AnimatedImage, DecodeError> { /* Err */ }
+
+    /// 動く絵の動きの 1 枚目だけを読む（縮めるときの段 1）。全コマは読まない・抱えない。
+    /// 返す絵は、decode_frames が Ok のときの frames[0].image と同じ画素・同じ has_alpha。
+    /// 既定は Err。
+    fn decode_first_frame(&self, path: &Path, info: AnimationInfo) -> Result<DecodedImage, DecodeError> { /* Err */ }
 }
 ```
 
-- Preconditions: `decode_frames` は `probe_animation` が `Some` を返したパスにだけ、その見出しを渡して呼ぶ。
+- Preconditions: `decode_frames`・`decode_first_frame` は `probe_animation` が `Some` を返したパスにだけ、その見出しを渡して呼ぶ。
+- Postconditions（`decode_first_frame` が `Ok` のとき）: 寸法は `info` と同じ。画素と `has_alpha` は、同じファイルを `decode_frames` で読めた場合の 0 番のコマと同じ。読むのは 1 コマだけ。
 - Postconditions（`Ok` のとき）: コマは `info.frame_count` 枚ちょうど。全コマの `image` は `info` と同じ `width`・`height` で、`has_alpha` も全コマ同じで、`bgra.len() == stride * height`。画素は乗算済み BGRA。コマはファイルの順。1 コマでも読めなければ `Err`（読めた分だけを返さない）。
-- Invariants: 既存の 2 メソッドの意味は変わらない。既定の実装があるので、今ある `impl ElementDecoder`（`WicDecoderArm`・`MemoryDecoder` の 2 つだけ）のほかに書き換えは起きない。
+- Invariants: 既存の 2 メソッドの意味は変わらない。足すメソッドは 3 つ（`probe_animation`・`decode_frames`・`decode_first_frame`）で、どれも既定の実装があるので、今ある `impl ElementDecoder`（`WicDecoderArm`・`MemoryDecoder` の 2 つだけ）のほかに書き換えは起きない。
 
 **`MemoryDecoder` の登録口（追加 1 つ）**:
 
 ```rust
 impl MemoryDecoder {
     /// 動く絵として登録する。frames が Err なら decode_frames は Decode の失敗を返す（渡された info は見ない）。
-    /// 縮めたときに読まれる 1 枚は、今までの insert で別に登録する。
+    /// first は decode_first_frame の答え（段 1）。Err なら段 2 へ落ちる。
+    /// 段 2 で読まれる 1 枚（今までの decode の答え）は、今までの insert／insert_corrupt で別に登録する。
     pub fn insert_animated(
         &mut self,
         path: impl Into<PathBuf>,
         info: AnimationInfo,
+        first: Result<DecodedImage, String>,
         frames: Result<AnimatedImage, String>,
     );
 }
@@ -425,12 +451,20 @@ pub(crate) fn read_frames(path: &Path, info: AnimationInfo) -> Result<AnimatedIm
 
 **Implementation Notes**
 
-- 16 ビットの APNG は `image` が 1 枚目で `Err` を返す（ソースを読んだだけ。動かしていない）。`Err` は上の決まりで 1 枚へ縮む。テストで判定する（Testing Strategy）。
+- **1 枚目だけを読む口**（縮めるときの段 1）:
+
+  ```rust
+  /// 動きの 1 枚目だけを読む。into_frames() から最初の 1 つを取って止める（2 枚目以降は解かない）。
+  pub(crate) fn read_first_frame(path: &Path, info: AnimationInfo) -> Result<DecodedImage, String>;
+  ```
+
+  読み手の選び方・透明度の見分け・画素の直し方は `read_frames` と同じ（同じ内部の関数を通す）ので、出る 1 枚は `read_frames` の 0 番のコマと同じになる。既定の絵を持つ APNG では `image` が既定の絵を飛ばすので、動きの 1 枚目が出る。寸法が `info` と違えば `Err`。動く WebP もここで読むので、**縮めた動く WebP は Windows の WebP の拡張機能に依らない**。
+- 16 ビットの APNG は `image` が 1 枚目で `Err` を返す（ソースを読んだだけ。動かしていない）。`read_frames` も `read_first_frame` も `Err` になり、段 2 の WIC へ落ちる。テストで判定する（Testing Strategy）。
 - 絵 1 つの全コマ（最大で上限 ㋑＝256 MiB）を一度に持つ。切り詰めた後に手放すので、山は絵 1 つにつきその 2 倍まで。
 
 #### `WicDecoderArm`（`decode/wic_arm.rs`）
 
-`probe_animation` はファイルを開いて `sniff` を呼ぶ（開けなければ `None`。続く `decode` が `NotFound` を返す）。`decode_frames` は受け取った見出しをそのまま `image_arm::read_frames` へ渡し、`Err(String)` を `DecodeError::Decode { path, source }` に包む。`decode`・`probe_pna`・`decode_inner` は変えない。
+`probe_animation` はファイルを開いて `sniff` を呼ぶ（開けなければ `None`。続く `decode` が `NotFound` を返す）。`decode_frames` は受け取った見出しをそのまま `image_arm::read_frames` へ渡し、`Err(String)` を `DecodeError::Decode { path, source }` に包む。`decode_first_frame` も同じ形で `image_arm::read_first_frame` へ渡す。`decode`・`probe_pna`・`decode_inner` は変えない。
 
 ### 設定
 
@@ -492,7 +526,7 @@ pub(crate) fn judge(
 ```
 
 - 判定の順: ㋐ 枚数 → ㋑ 絵 1 つの画素の量 → ページの一辺（幅か高さ＋余白 2 つ分がページの一辺を超える）→ ㋒ 合計（`used` ＋この絵）。掛け算は 64 ビットで、あふれは上限超えとして扱う。
-- **ページの一辺**は利用者が変える上限ではないが、同じ縮め方にする: 動く絵の全体がページに入らないと、コマごとに `Packer::pack` が `error!` を出して外し、穴の空いた動きになる。それより 1 枚へ縮めて `warn!` 1 回のほうが原因を探しやすい。縮めた 1 枚は今までの静止画と同じ扱い（今も一辺が 2,046 画素を超える静止画は `Packer::pack` が外す。変更 0）。
+- **ページの一辺**は利用者が変える上限ではないが、同じ縮め方にする: 動く絵の全体がページに入らないと、コマごとに `Packer::pack` が `error!` を出して外し、穴の空いた動きになる。それより 1 枚へ縮めて `warn!` 1 回のほうが原因を探しやすい。縮めた 1 枚（動きの 1 枚目）は絵の全体の寸法のままなので、切り詰めた後もページに入らなければ、今までの大きすぎる静止画と同じ扱いになる（今も一辺が 2,046 画素を超える静止画は `Packer::pack` が `error!` を出して外し、エントリは `placement = None` で残る。変更 0）。
 - **名前と欄の割り当て・読めない値の扱いは、全部 `from_lookup` の中に在る**。`from_env` は「本物の環境で `from_lookup` を呼ぶ・返った `LimitWarning` を `warn!` で出す・`OnceLock` に入れる」の 3 行で、判断の分かれ目を持たない。こうしておくと、本番が通る割り当て（どの名前がどの欄へ入るか）を、プロセスの環境変数を書き換えずにテストで踏める。
 - 値が UTF-8 でないとき（`std::env::var` が `VarError::NotUnicode` を返すとき）は、その項目だけ既定にして `LimitWarning` を 1 件返す。先例は `crates/areka-mcp/src/port.rs` の `candidates_from_var`（`std::env::var` の結果をそのまま受け取る純粋な関数で、この場合に `warn!` を 1 件出す）。
 - `from_env` は `std::sync::OnceLock` で 1 回だけ読む。読めない値の `warn!` はプロセスで項目ごとに 1 回。
@@ -529,9 +563,11 @@ pub(crate) fn load(
 - 流れは System Flows の図のとおり。
 - `warn!`（どれも `target: "areka_emo_atlas"`・欄 `set`・`rel_path`）:
   - 上限: 欄 `frame_count`・`width`・`height`・`exceeded`（`frames`／`pixels`／`total_pixels`／`page_side`）。文「bake: 動く絵が上限を超えたので 1 枚だけ読みます」。
-  - 失敗: 欄 `reason`（`DecodeError` の文）。文「bake: 動く絵として読めなかったので 1 枚だけ読みます」。
-- 縮めた絵は `Loaded::Still` になり、`BakeResult.errors` には載らない。`balloon.rs` の `build_balloon_target_from_faces` は `errors` が空でないと組み立てを失敗にするが、縮めただけでは `errors` は空のまま。
-- 記録の無い失敗の経路は 0 本: 縮めは `warn!`、1 枚も読めなければ `Failed` → `errors`。
+  - 失敗: 欄 `reason`（`DecodeError` の文）。文「bake: 動く絵として読めなかったので 1 枚だけ読みます」。見出しと実物の枚数・寸法の食い違いもこの文で、`reason` に食い違いの中身を書く。
+  - 段 2 へ落ちるとき: 欄 `reason`（`decode_first_frame` の `DecodeError` の文）。文「bake: 動く絵の 1 枚目を読めなかったので、今までの読み方で 1 枚だけ読みます」。
+- `warn!` の回数は絵 1 つにつき: 段 1 で済めば 1 回（縮めた）、段 2 へ落ちれば 2 回（縮めた・落とした）。段 3 はそこへ今までの失敗の記録（`errors`）が加わる。
+- 段 1・段 2 で読めた絵は `Loaded::Still` になり、今の静止画の枝をそのまま通る（抜き色もここで効く）。**段 3 に着かない限り `BakeResult.errors` には載らない**。`balloon.rs` の `build_balloon_target_from_faces` は `errors` が空でないと組み立てを失敗にするが、縮めただけでは `errors` は空のまま。
+- 記録の無い失敗の経路は 0 本: 縮めは `warn!`、段 2 へ落ちるのも `warn!`、1 枚も読めなければ `Failed` → `errors`。
 
 #### bake の枝（`lib.rs`）
 
@@ -693,11 +729,12 @@ impl AtlasTable {
 
 見た目が変わる所（先頭の 2 項目）と、上流の読み手・WIC に由来する性質（残り）:
 
-- 既定の絵を持つ APNG は、出る絵が既定の絵から動きの 1 枚目へ変わる。**上限や失敗で 1 枚へ縮んだときは、今までどおり既定の絵が出る**（1 枚は WIC が読む）。
+- 既定の絵を持つ APNG は、出る絵が既定の絵から動きの 1 枚目へ変わる。上限や失敗で 1 枚へ縮んだときも、出るのは動きの 1 枚目である（裁定 2026-10-04。全コマを読めたときの 0 番のコマと同じ絵）。
 - **透明度の旗を持たない動く WebP は、これからは 1 枚目のコマの左上の色が全コマから抜かれる**。今は WIC が `has_alpha = true` で返すので抜き色が効いておらず、不透明の四角で出ている（実測）。これは要件 3.3 の開発者裁定（1 枚目の左上の色を全コマから抜く）の帰結であり、要件 4.3 が「既定の絵を持つ APNG に限り」と書いた例外の**外**にある、もう 1 つの見た目の変化である。対応表と利用者向けの文書に、APNG の項目と並べて書く。
 - 透明度を持たない動く WebP で「背景へ戻す」指定の次に部分のコマが来ると、戻された所は黒い不透明になる（実測。上流の読み手の振る舞い）。
 - 動く WebP の「重ねる」指定のコマは、色が 1 ずれることがある（実測 255 → 254。上流の重ね算の丸め）。
-- 1 枚へ縮んだ動く WebP は WIC が読むので、Windows の WebP の拡張機能が無い機械では今までの静止画の失敗になる。
+- 1 枚へ縮んだ動く絵は、動きの 1 枚目を新しい読み手が読む。透明度を持たない絵なら、縮んだ 1 枚も 1 枚目の左上の色が抜かれる。縮んだ動く WebP は Windows の WebP の拡張機能に依らない。
+- **残る場合（段 2 へ落ちたとき）**: 新しい読み手が 1 枚目も読めない絵（16 ビットの APNG・1 枚目から壊れている絵）だけは、今までの WIC の 1 枚読みになる。このときに限り、既定の絵を持つ APNG は既定の絵が出て、透明度の旗を持たない WebP は抜き色が効かず、WebP は Windows の拡張機能が無ければ今までの静止画の失敗になる。`warn!` が 2 回出る。
 
 ## Data Models
 
@@ -713,9 +750,11 @@ impl AtlasTable {
 
 | 起きること | 扱い | 記録 | `BakeResult.errors` |
 |---|---|---|---|
-| 上限・ページの一辺を超える | 1 枚へ縮める | `warn!` 1 回 | 載せない |
-| 全コマを読む途中で失敗（壊れている・16 ビット・見出しと食い違う） | 1 枚へ縮める | `warn!` 1 回 | 載せない |
-| 縮めた 1 枚も読めない | その絵を表に載せない | 今までどおり | `BakeError::Decode` |
+| 上限・ページの一辺を超える | 1 枚へ縮める（段 1: 動きの 1 枚目を `image` で） | `warn!` 1 回 | 載せない |
+| 全コマを読む途中で失敗（壊れている・16 ビット・見出しと食い違う） | 1 枚へ縮める（段 1） | `warn!` 1 回 | 載せない |
+| 段 1 の 1 枚目も `image` で読めない | 段 2: 今までの WIC の 1 枚読みへ落とす | `warn!` もう 1 回（理由つき） | 載せない |
+| 段 2 も読めない | 段 3: その絵を表に載せない | 今までどおり | `BakeError::Decode` |
+| 縮めた 1 枚が切り詰めた後もページに入らない | `placement = None` のエントリ（今の大きすぎる静止画と同じ） | `Packer::pack` の `error!`（今までどおり） | 載せない |
 | 未実装の透過の腕（`.pna` など） | その絵を表に載せない | 今までどおり | `BakeError::Normalize` |
 | 上限の設定値が読めない | その項目だけ既定 | `warn!` 項目ごとに 1 回 | — |
 | 見出しが途中で読めない | 静止画として読む（読めなければ上の行） | 今までどおり | 今までどおり |
@@ -752,14 +791,17 @@ impl AtlasTable {
 - 動く絵 1 つ＋静止画 2 つを焼く: 静止画の番号が、動く絵を静止画に替えた場合と同じ／コマの番号が末尾／`resolve` が 0 番／各コマの `entry` が引ける／2 回焼いて同じ表（要件 4・5.1・8.5）。
 - 上限の 4 通り（枚数・画素・合計・ページの一辺）: 1 枚へ縮む・`warn!` が 1 回で欄が合う・`errors` は空・**`decode_frames` が呼ばれない**（偽の読み手の中身を `Err` にしておき、`warn!` の文が「上限」の方であることで判定）。
 - 合計の上限: 動く絵 3 つのうち 3 つ目だけが縮む。並びを変えずに 2 回焼いて同じ絵が縮む（要件 6.8）。
-- `decode_frames` が `Err`・枚数が見出しと違う: 1 枚へ縮む・`warn!`・`errors` は空。縮めた 1 枚も無い: `errors` に 1 件で、ほかの絵は載る。
+- `decode_frames` が `Err`・枚数が見出しと違う: 1 枚へ縮む・`warn!`・`errors` は空。
+- **縮んだ 1 枚は、全コマを読めたときの 0 番のコマと同じ**（要件 8.4・裁定 2026-10-04）: 同じ偽の絵を「上限を広げて全コマ」と「縮めて 1 枚」の 2 通りで焼き、縮めた方のエントリ（寸法・切り詰めの位置）とページ上の画素が、全コマの方の 0 番のコマと一致することを判定する。縮める理由 7 つ（枚数・画素・合計・ページの一辺〔ページに入る大きさへ `PackConfig` を合わせた上で〕・枚数の食い違い・`decode_frames` の `Err`・受け付けない形）それぞれで行う。透明度なしの絵では、縮んだ 1 枚でも左上の色が抜けていること。
+- **段 2・段 3 の分かれ目**（偽の読み手で踏む。本物の WIC の読み手には依らない）: `first` が `Err`・今までの `decode` が `Ok` → 出るのは `decode` の絵・`warn!` が 2 回（縮めた・落とした。2 回目に段 1 の理由）・`errors` は空／`first` が `Err`・`decode` も `Err` → `errors` に 1 件で、ほかの絵は載る／`first` が `Ok` → `decode` は呼ばれない（`decode` の側を別の絵にしておき、出た絵が `first` の方であることで判定）。
 - 透明度なしの動く絵: 0 番の左上の色が全コマから消える。コマごとに左上の色が違っても、消えるのは 0 番の色だけ。
 - 全透明のコマ: `placement = None` で番号と待ち時間が残る。動く絵のコマには全透明の `warn!` が 0 回、全コマが透明なら 1 回。
 - `bake`（上限を渡さない入口）が既定の上限で動く（環境変数は触らない）。
 
 ### 本物の読み手（`samples_e2e_tests.rs`）
 
-- `WicDecoderArm` で検体のフォルダを焼く: `basic.apng`・`alpha.webp` が全コマ載る／`two_frames.gif` と `single.apng` は `animation` が `None` で 1 枚／上限を 1 コマにして焼くと `basic.apng` が 1 枚へ縮む（1 枚は WIC の PNG の読み手＝Windows に常に在る）。WebP を WIC で読む経路はここでは通さない（拡張機能に依るため）。
+- `WicDecoderArm` で検体のフォルダを焼く: `basic.apng`・`alpha.webp` が全コマ載る／`two_frames.gif` と `single.apng` は `animation` が `None` で 1 枚／上限を 1 コマにして焼くと、`basic.apng`・`alpha.webp`・`default_image.apng`・`rgb.webp` が 1 枚へ縮み、その 1 枚が上限を広げて焼いたときの 0 番のコマと同じ（`default_image.apng` は赤＝既定の絵の黒ではない／`rgb.webp` は左上の色が抜けている）。縮めた 1 枚は `image` が読むので、WebP でも Windows の拡張機能に依らない。`truncated.apng` は 1 枚へ縮み、0 番のコマが出る。WIC へ落ちる段 2 は本物の読み手では通さない（偽の読み手で判定する）。
+- **バルーン**（`crates/areka-emo-present/src/balloon_target_tests.rs` に 1 本足す。偽の読み手を使う既存のテストの形。`balloon.rs` の本体は触らない）: 面の絵が「全コマを読むと失敗する動く絵」（偽の読み手で全コマの読みが `Err`・`first` は `Ok`）であるバルーンを `build_balloon_target_from_faces` で組み、組み立てが成功して面に `first` の絵が出ること（要件 6.6・5.4）。縮める理由を上限でなく読みの失敗にするのは、このテストが上限の値に頼らないようにするためである（`bake` は環境変数から上限を読むので、上限で縮める形にすると、開発者の機械の環境変数しだいで赤になる）。上限で縮む場合は、上限を引数で渡せる `bake_with_limits` のテスト（animated_tests）が判定する。
 - 既存の `emo2_golden.rs`・`emo2_e2e.rs` は書き換えずに緑（要件 5.2）。
 
 ### 構成
