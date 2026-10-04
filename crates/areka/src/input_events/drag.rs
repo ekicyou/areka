@@ -165,3 +165,10 @@ fn notify_drag(
         );
     }
 }
+
+#[cfg(test)]
+#[path = "drag_test_support.rs"]
+mod test_support;
+#[cfg(test)]
+#[path = "drag_tests.rs"]
+mod tests;
