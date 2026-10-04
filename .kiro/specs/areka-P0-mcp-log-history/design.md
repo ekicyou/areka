@@ -62,6 +62,7 @@
 - ログの出口の組み方（層の順・フィルタの掛け方）を変える → 標準出力の同一性（[research.md](research.md) §9.1 の実験をやり直す）と `.kiro/steering/logging.md`。
 - 履歴の層のフィルタは、出来事でない問い合わせ（`tracing::enabled!`・スパン）を断ってはならない（断ると、診断の target を点けたときに履歴が記録を取りこぼす）。`tracing-subscriber` の版を上げる・フィルタの答えを変えるときは [design-validation.md](design-validation.md) 指摘 1 の実験をやり直す。
 - 名指ししたモジュール（`RULES` の target）の改名・移動 → 実在のテストが赤になるので、持ち主の spec が `RULES` と文書を直す。
+- `tracing::event_enabled!`・`log::log_enabled!` を使い始める → これらは出来事の問い合わせとして届き、後に出来事が続かないので、フィルタが断った印が残って同じスレッドの次の出来事（関心が always の呼び出し口）を 1 件取りこぼしうる（完了時点でワークスペースと依存の利用は 0 件）。使う spec が [design-validation.md](design-validation.md) 指摘 1 の実験にこの 2 つを足してやり直す。
 
 ## Architecture
 
