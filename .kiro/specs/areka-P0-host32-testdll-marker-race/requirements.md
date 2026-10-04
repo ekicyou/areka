@@ -9,7 +9,7 @@ host-32 の補助 exe（`shiori-host32-helper`）には、32 ビットでしか�
 
 - `shiori_proxy.rs` の `mod tests` の `testdll_drop_invokes_courtesy_unload`（以下「印のテスト」）: プロセス全体の環境変数 `HOST32_TESTDLL_UNLOAD_MARKER` に自分の一時フォルダの印のパスを差し、load の直後・drop の前に「印のファイルはまだ無い」を確かめ、drop の後に「印のファイルが在り、中身が `unloaded`」を確かめる。
 - 同じ `mod tests` の `testdll_request_roundtrip_get_and_notify`: 偽の DLL へ要求を往復させ、最後に drop で unload する。
-- `main_loopback_tests.rs`（`main.rs` から別のファイルとして読み込む loopback のテスト）の `loopback_hello_request_proxy_driven_and_bounded_loop`: 補助 exe の窓を組み、LOAD の経路で偽の DLL を読ませ、途中の UNLOAD の知らせで unload し、最後に窓の後片付けでもう一度 unload しうる。
+- `main_loopback_tests.rs`（`main.rs` から別のファイルとして読み込む loopback のテスト）の `loopback_hello_request_proxy_driven_and_bounded_loop`: 補助 exe の窓を組み、LOAD の経路で偽の DLL を読ませ、途中の UNLOAD の知らせで unload する。LOAD の後・UNLOAD の前に確かめが落ちたときは、巻き戻しの中の窓の後片付けで unload する（ふつうに最後まで走れば、窓の後片付けでの unload は無い）。
 
 偽の DLL の unload の出口（`crates/shiori-host32-testdll/src/lib.rs` の `unload` の定義）は、呼ばれるたびに環境変数 `HOST32_TESTDLL_UNLOAD_MARKER` を読み、値があればそのパスへ印を書く。写した DLL でも同じコードが走る。印のテストと他のテストの競合を避けるための直列化（`mod tests` の中の `TESTDLL_SERIAL`）は、同じ `mod tests` の 2 本だけが取っており、loopback のテストは取っていない。よって、印のテストが環境変数を差してから drop するまでの間に loopback のテストの unload が走ると、印のテストの印が先に作られ、「drop の前は印が無い」の確かめが落ちる。これは観測した症状（「unload はまだ呼ばれていない」で 1 度だけ落ちる）と一致する。起票時の見立てであり、実走での再現はまだしていない。
 
