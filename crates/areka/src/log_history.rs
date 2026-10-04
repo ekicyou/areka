@@ -4,14 +4,17 @@
 //! 規則は [`RULES`] の 1 表だけに書き、[`classify`] が判定の順に当てる。
 //! 振り分けは tracing の受け口にも World にも触れない純粋な関数で、テストは値を直に渡す。
 //! 記録は [`History`] が全種別で 1 本の通し番号を振り、種別ごとに [`PER_KIND_CAP`] 件まで持つ。
+//! 入れ物はプロセスに 1 つの置き場に据え、[`record`] で積み [`snapshot`]・[`last_id`] で読む。
 
 // 本番の呼び手（履歴の層・出口の据え付け）が生えるまでの一時的な抑止。
 // areka-P0-mcp-log-history task 2.3 で外す。
 #![allow(dead_code)]
 
 use std::collections::VecDeque;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use tracing::Level;
+use windows::Win32::System::SystemInformation::GetLocalTime;
 
 /// 種別（SSP の 5 語）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -279,6 +282,54 @@ impl History {
     }
 }
 
+/// プロセスに 1 つの置き場。
+///
+/// 排他を握るのは [`record`]・[`snapshot`]・[`last_id`] の 3 か所だけで、どれも排他の中で
+/// tracing のマクロも呼び手の処理も走らせない（ログを出す側が自分の排他で固まる道が無い）。
+static STORE: Mutex<History> = Mutex::new(History::new());
+
+/// 排他を取る。毒されていたら中身を取り出して続ける（`push` は失敗の道を持たないので
+/// パニックした側が途中で止まっても入れ物は壊れていない）。
+fn lock(store: &Mutex<History>) -> MutexGuard<'_, History> {
+    store.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// 置き場へ 1 件積み、振った番号を返す（履歴の層とテストが使う同じ口）。
+pub(crate) fn record(at: Stamp, draft: Draft) -> u64 {
+    lock(&STORE).push(at, draft)
+}
+
+/// いま最後に振った通し番号（1 件も無ければ 0）。後続の spec が読む口。
+// 呼び手は後続の spec（番号を読んでから `since_id` で絞る処理）。生えるまで未使用の警告を抑える。
+#[allow(dead_code)]
+pub(crate) fn last_id() -> u64 {
+    lock(&STORE).last_id()
+}
+
+/// その種別の記録を写して返す（古い順・最大 [`PER_KIND_CAP`] 件）。
+/// 排他を握るのは写す間だけで、呼び手は排他の外で絞って整形する。
+pub(crate) fn snapshot(kind: Kind) -> Vec<Record> {
+    lock(&STORE).rows(kind).cloned().collect()
+}
+
+/// 現地時刻（`GetLocalTime`・分まで）。
+fn local_now() -> Stamp {
+    // SAFETY: GetLocalTime は出力先を自前で用意して埋めるだけで、前提も失敗の道も無い。
+    let t = unsafe { GetLocalTime() };
+    // 月・日・時・分は Windows の定義で u8 に収まる範囲（1〜12・1〜31・0〜23・0〜59）。
+    Stamp {
+        year: t.wYear,
+        month: t.wMonth as u8,
+        day: t.wDay as u8,
+        hour: t.wHour as u8,
+        minute: t.wMinute as u8,
+    }
+}
+
 #[cfg(test)]
 #[path = "log_history_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "log_history_convention_tests.rs"]
+mod convention_tests;
