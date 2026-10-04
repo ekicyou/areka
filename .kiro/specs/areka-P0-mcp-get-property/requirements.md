@@ -11,7 +11,7 @@
 
 **何を変えるか**: `get_property(property_name, ghost_name?)` が、SHIORI の `GetProperty` と同じ解決で値を素の文字列のまま返し、値の無い名前には `NG:Cannot find such property name.`（`isError: true`）と答える（survey §3: `currentghost.name` → `Emily/Phase4.5`）。本 spec の後にプロパティの値が増えれば、`get_property` 側は何もせずに答えが増える。
 
-> 起票: 2026-09-29 `/kiro-discovery`。SSP MCP の移植の 3 段目（個別のツール）の 1 本で、ウェーブ C3-⑦（段「優先」）。事実の正本は [doc/ssp-mcp/survey.md](../../../doc/ssp-mcp/survey.md)（SSP 2.9.05 の実測）。前提の spec は [completed/areka-P0-mcp-tool-entrances](../completed/areka-P0-mcp-tool-entrances/)（ツールのファイルの約束は同 design の「mcp/<ツール>.rs（10 本）」）。
+> 起票: 2026-09-29 `/kiro-discovery`。SSP MCP の移植の 3 段目（個別のツール）の 1 本で、ウェーブ C3-⑦（段「優先」）。事実の正本は [doc/ssp-mcp/survey.md](../../../doc/ssp-mcp/survey.md)（SSP 2.9.05 の実測。`get_property` を名前の書き方ごとに当てた詳しい実測は §7＝2026-10-04・SSP 2.9.07）。前提の spec は [completed/areka-P0-mcp-tool-entrances](../completed/areka-P0-mcp-tool-entrances/)（ツールのファイルの約束は同 design の「mcp/<ツール>.rs（10 本）」）。
 
 ## Introduction
 
@@ -43,19 +43,20 @@
 | # | 議題 | 暫定の裁定 | 根拠 | 載せた要件 |
 |---|---|---|---|---|
 | 1 | 宛先の実行系（記憶）が見つからないときの文言 | **`NG:Property system is not available`**（`isError: true`）＋`warn!` 1 件 | 本番の振り分けからは来ない場面（手前の解決が実行系の無い単位を起動中に数えない）だが、ツールのファイルの約束は「置き場が無くても panic せず `NG:`」。名前の解決の失敗の 2 文言と「無い名前」の文言のどれとも違う文にして、原因を取り違えないようにする。SSP の文言の型（`NG:` ＋大文字で始まる英文）に揃える | 3.1・3.2 |
-| 2 | 値の前後の空白・改行 | **手を加えない**（足さず削らない） | survey §3 の「素の値」。SHIORI の `GetProperty` も値をそのまま返す | 1.1 |
-| 3 | 名前の手直し（前後の空白の除去・大文字小文字の変換） | **しない**（受け取ったまま解決へ渡す） | SHIORI の `GetProperty` と同じ解決にする。手直しを足すと 2 つの口で答えがずれる | 1.4 |
+| 2 | 値の前後の空白・改行 | **手を加えない**（足さず削らない） | survey §3 の「素の値」。survey §7.1 の SSP 2.9.07 の実測でも、値は `OK:` なしのそのまま、空の値（何もしていないときの `currentghost.status`）は空の本文・`isError: false`。SHIORI の `GetProperty` も値をそのまま返す | 1.1・1.2 |
+| 3 | 名前の手直し（前後の空白の除去・大文字小文字の変換） | **しない**（受け取ったまま解決へ渡す） | SHIORI の `GetProperty` と同じ解決にする。手直しを足すと 2 つの口で答えがずれる。survey §7.1 の SSP 2.9.07 でも前後の空白は削られず「無い名前」になる | 1.4 |
 | 4 | 実機確認 | **する**（起動中の emo2 に MCP のクライアントから 2 つの名前を聞く） | 決定論テストは本番の振り分けの経路を通らない部分がある。実機の記録と静的な証跡の二本立て | 4.6 |
 
 ## Boundary Context
 
 - **In scope**: `get_property` の中身（宛先のゴーストの記憶から値を読んで答える）・「値がある（空を含む）」と「値が無い」の区別・宛先の記憶が見つからないときの答え・実行系の記憶を読む口を 1 本足すこと・決定論テスト・実機確認。
-- **Out of scope**: プロパティの値そのものの追加（`currentghost.*`・一覧系・`status`・`zorder` など）・書き込み（SSP の MCP に `set_property` は無い）・`ghost_name` の解決の仕方の変更・他の 9 本のツール・SHIORI の `GetProperty` の振る舞いの変更・ツールの定義（`DEFINITION`）と引数の検査の変更。
+- **Out of scope**: プロパティの値そのものの追加（`currentghost.*`・一覧系・`status`・`zorder` など）・書き込み（SSP の MCP に `set_property` は無い）・`ghost_name` の解決の仕方の変更・他の 9 本のツール・SHIORI の `GetProperty` の振る舞いの変更・ツールの定義（`DEFINITION`）と引数の検査の変更・名前の括弧の読み方（`ghostlist(0)` を番号と読むか名前と読むか。ukadoc の正典は `ghostlist(ゴースト名/本体側名/パス)` と `ghostlist.index(ID)` で、SSP 2.9.07 は `ghostlist(0).name` を「無い名前」にする〔survey §7.3 の 5〕。一覧系の値を実装する `property-catalog-lists` の持ち物）。
 - **Adjacent expectations**:
   - `mcp-tool-entrances` の振り分け（`dispatch`）が、`ghost_name` の省略を起動中の 1 体へ解決し、0 体・名前違いを `handle` の手前で `NG:` に終える。本 spec はこの振る舞いに頼り、変えない。
   - 同じく橋（`bridge.rs`）が答えを `debug!` 1 行で記録する。本 spec は普通の答え（値・空の値・無い名前）に**独自の記録を足さない**。
   - 統一プロパティシステム sylphya の読み手が、名前の書式の誤りを `warn!` に残して「見つからない」に倒す。本 spec はこの記録を重ねて出さない。
   - 後続のプロパティの spec が値を足すと、`get_property` の答えが変更なしで増える。
+  - 読み手が値を返す名前には、どれにも答える。前回までに保存された内部の名前（`areka.*`）も、SHIORI の `GetProperty` と同じく読める。`get_property` だけ名前を隠す仕組みは足さない（足すと 2 つの口で答えがずれる）。
 
 ## Requirements
 
@@ -79,7 +80,7 @@
 #### Acceptance Criteria
 
 1. If 渡された名前に値が無い, the areka shall 本文 `NG:Cannot find such property name.`（`isError: true`）で答える。
-2. If 渡された名前が空の文字列、またはプロパティの名前として読めない書式である, the areka shall 要件 2.1 と同じ本文で答える。
+2. If 渡された名前が空の文字列、またはプロパティの名前として読めない書式（`baseware..name`・末尾の点 `baseware.name.` など）である, the areka shall 要件 2.1 と同じ本文で答える（survey §7.1 の SSP 2.9.07 も同じ本文）。
 3. While プロパティシステムがその名前の値をまだ持っていない（2026-10-04 時点の `currentghost.name` など）, the areka shall 要件 2.1 と同じ本文で答え、偽の値や空の本文で答えない。
 
 ### Requirement 3: 答えられないときも止まらずに `NG:` で答える
