@@ -20,6 +20,9 @@
 //! - [`hit_region`]: サーフェス px の点を照合する**素の純照合関数**（÷k は呼び手責務・契約不変）。
 //! - [`hit_region_scaled`]: 窓 client 物理 px の点を k で縮約してから [`hit_region`] へ
 //!   **完全委譲**する合成純関数。重なり・反転・閉区間の意味論を再実装しない。
+//! - [`hit_region_in`]・[`hit_region_scaled_in`]: 上の 2 関数の本体で、サーフェスの代わりに
+//!   領域の列を直に受ける（子から持ち込んだ列＝`EmoWorld::hit_regions` を渡すための形）。
+//!   持ち込んだ列は 256 矩形を超えうるが、線形走査のままでよい。
 
 use crate::normalized::SurfaceMaster;
 use crate::scale::ScaleRatio;
@@ -31,7 +34,7 @@ use areka_parsers::shell::Collision;
 /// 忠実解決は行わない（要件 2.2・正典確定表 C3 の意図的逸脱）。
 ///
 /// **シームの機序**: variant を追加すると [`hit_region_in`] 内の**網羅 match がコンパイルエラー**
-/// となり実装漏れを機械的に検出する。これを成立させるため [`hit_region`] の match に
+/// となり実装漏れを機械的に検出する。これを成立させるため [`hit_region_in`] の match に
 /// `_`（ワイルドカード）アームを置いてはならない（実装制約＝レビュー担保・design
 /// 「Testing Strategy」の注記どおりテストでは担保できない唯一の口）。`#[non_exhaustive]` は
 /// 定義 crate 内では効かないため検出機序ではない（下流 crate に wildcard を強制する副作用が
