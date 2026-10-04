@@ -96,6 +96,10 @@ pub(crate) fn make_wndproc() -> impl Fn(Pin<&WndState>, WindowMessage) -> Option
 }
 
 #[cfg(test)]
+#[path = "wndproc_bridge_drag_tests.rs"]
+mod wndproc_bridge_drag_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::rc::Rc;
