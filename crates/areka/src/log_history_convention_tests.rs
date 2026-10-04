@@ -309,3 +309,131 @@ fn the_convention_doc_table_equals_the_rules_and_the_two_convention_targets() {
         "文書の表と規則の表が食い違う\n文書に無い: {missing:?}\n規則に無い: {extra:?}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// 名指ししたモジュールの実在（要件 2.12）
+// ---------------------------------------------------------------------------
+
+/// ゴーストの実行時のファイル（`::` を含まない target の字面を探す先・`CARGO_MANIFEST_DIR` からの相対）。
+const GHOST_RUNTIME: &str = "../areka-ghost/src/runtime.rs";
+
+/// target の先頭のクレート名から（クレートのフォルダ・根のファイル）を引く。知らないクレートは None。
+fn crate_of(name: &str) -> Option<(&'static str, &'static str)> {
+    match name {
+        "areka" => Some(("../areka", "main.rs")),
+        "areka_update" => Some(("../areka-update", "lib.rs")),
+        _ => None,
+    }
+}
+
+/// target の在りかを判定し、無ければ理由を返す。導けない target も理由付きで返す（黙って通さない）。
+fn locate(target: &str) -> Result<(), String> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut segments = target.split("::");
+    let head = segments.next().unwrap_or_default();
+    let Some((dir, root_file)) = crate_of(head) else {
+        if target.contains("::") {
+            return Err(format!("{target}: クレート `{head}` のフォルダを導けない"));
+        }
+        // `::` を含まない明示の target はゴーストの実行時のファイルに字面がある。
+        let path = root.join(GHOST_RUNTIME);
+        let text = std::fs::read_to_string(&path)
+            .map_err(|e| format!("{target}: {} を読めない: {e}", path.display()))?;
+        let literal = format!("target: \"{target}\"");
+        return if text.contains(&literal) {
+            Ok(())
+        } else {
+            Err(format!(
+                "{target}: {} に `{literal}` が無い",
+                path.display()
+            ))
+        };
+    };
+    let src = root.join(dir).join("src");
+    let rest: Vec<&str> = segments.collect();
+    let candidates = if rest.is_empty() {
+        vec![src.join(root_file)]
+    } else {
+        let module = rest.iter().fold(src, |p, s| p.join(s));
+        vec![module.with_extension("rs"), module.join("mod.rs")]
+    };
+    if candidates.iter().any(|p| p.is_file()) {
+        Ok(())
+    } else {
+        Err(format!("{target}: どれも無い {candidates:?}"))
+    }
+}
+
+#[test]
+fn every_rule_target_names_a_module_or_literal_that_exists() {
+    let missing: Vec<String> = RULES
+        .iter()
+        .filter_map(|r| locate(r.target).err())
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "規則の表の target がソースに無い:\n{}",
+        missing.join("\n")
+    );
+}
+
+#[test]
+fn locate_turns_red_for_missing_and_underivable_targets() {
+    // 判定が何でも通す形になっていないことの較正（当たりは同じ表の実物）。
+    assert_eq!(locate("areka"), Ok(()));
+    assert_eq!(locate("areka::update"), Ok(()));
+    assert_eq!(locate("areka_update::fetch"), Ok(()));
+    assert_eq!(locate("ghost-boot"), Ok(()));
+    for bogus in [
+        "areka::no_such_module",
+        "areka_update::no_such_module",
+        "no-such-literal-target",
+        "no_such_crate::x",
+    ] {
+        assert!(locate(bogus).is_err(), "{bogus} は赤");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 本物のマクロの形（要件 6.1・6.4）
+// ---------------------------------------------------------------------------
+
+/// 捕捉した出来事を欄の 2 つの形へ写して下書きに通す。
+fn draft_of_captured(ev: &log_capture_kit::CapturedEvent) -> Option<Draft> {
+    draft(
+        ev.level,
+        &ev.target,
+        ev.fields.iter().map(|(name, v)| FieldText {
+            name,
+            debug: &v.debug,
+            raw: v.str_raw.as_deref(),
+        }),
+    )
+}
+
+#[test]
+fn real_macros_with_the_convention_targets_draft_kind_name_label_and_body() {
+    // 出す側は本 spec の型も定数も使わず、取り決めどおりの字面だけで書く。
+    let ghost = "emo2";
+    let ((), events) = log_capture_kit::capture(|| {
+        tracing::info!(target: "areka::log::script", ghost = %ghost, label = "Talk", r"\0こんにちは\e");
+        tracing::info!(target: "areka::log::error", ghost = "emo2", step = 3, "台本が壊れた");
+        tracing::warn!(count = 3, "普通の警告");
+    });
+    let drafts: Vec<Draft> = events
+        .iter()
+        .map(|ev| draft_of_captured(ev).unwrap_or_else(|| panic!("当たらない: {ev:?}")))
+        .collect();
+    let expected = [
+        (Kind::Script, "emo2", "Talk", r"\0こんにちは\e"),
+        (Kind::Error, "emo2", "Error", "台本が壊れた step=3"),
+        (Kind::Error, "[SYSTEM]", "Error", "普通の警告 count=3"),
+    ];
+    assert_eq!(drafts.len(), expected.len(), "捕捉した出来事: {events:?}");
+    for (d, (kind, name, label, body)) in drafts.iter().zip(expected) {
+        assert_eq!(
+            (d.kind, d.name.as_str(), d.label.as_str(), d.body.as_str()),
+            (kind, name, label, body)
+        );
+    }
+}
