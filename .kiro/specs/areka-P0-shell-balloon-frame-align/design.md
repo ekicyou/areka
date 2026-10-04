@@ -36,7 +36,7 @@
 
 - 文字の行き先とスコープの「受け取った `\s` の番号」（`state_route.rs` の `ScopeRoute`・`route_surface`・`route_select`・`reset_routes`）。読むだけで変えない。
 - 表示層（emo-present クレート）。公開済みの照会 `current_surface_id`・`target_visible`・`text_slot_view` を読むだけ。
-- `crates/areka/src/input_events/`・`emo2_boot/frame/wiring.rs`・`emo2_boot/frame/{attach,switch}.rs`・`emo2_boot/spine.rs`（同じウェーブの約束と 1,000 行の上限）。
+- `crates/areka/src/input_events/`・`emo2_boot/frame/wiring.rs`・`emo2_boot/frame/{attach,switch}.rs`・`emo2_boot/spine.rs`（同じウェーブの約束と 1,000 行の上限）。例外は `wiring.rs` の説明文 2 か所だけ（コードは変えない）。
 - 可視性の判断の中身（`balloon_visibility_decision.rs` の `decide`）。入力の数え方だけが変わり、判断の分岐は変えない。
 - 普通のバルーンの窓が見えているときの番号と警告（`balloon_status_surface_unknown`）。今のまま。
 
@@ -135,6 +135,7 @@ sequenceDiagram
 - `balloon_visibility_phase_box_tests.rs` — `glyph_count_is_the_one_shown_in_the_balloon_window` を外す。この檻の表示層はシェルの窓を持たず（`attach_headless`）、絵の番号を持たせる道具も無いので、絵の番号基準では成り立たない。数の判断は文字の層の檻の 5 が、相が表示層の番号を渡すことは枠の檻の 3（箱のある面で窓が隠れる）が持つ。
 - `frame_shell_box_integration_tests.rs` — `Cage` にシェルの文面の引数と、絵の差し替えを送る道具を足す。既存の 3 本は絵の差し替えも送る形に直す。新しいテストファイルを子として結ぶ。
 - `spine_text_scale_tests.rs` — `text_scale_phase_syncs_boxes_on_the_shell_window` が絵（面 0）を表示した状態で確かめる形に直し、`Hide` の 1 歩を足す（差し込み口はあるが絵の番号は無い → 登録を外す。要件 1.3 の結線）。
+- `frame/wiring.rs` — **説明文だけ**直す（コードは 1 行も変えない・2026-10-04 設計討議で約束の例外にした）。`Emo2Wiring` の「可視性の相が消費する 6 つ」から `balloon_status` を外して 5 つにし、欄 `balloon_status` の説明を「フレームの終わりの届けの相が使う」に改める。
 
 ### New Files
 
@@ -142,7 +143,7 @@ sequenceDiagram
 
 ### 触らないファイル（約束）
 
-`crates/areka/src/input_events/`・`emo2_boot/frame/wiring.rs`・`emo2_boot/frame/{attach,switch}.rs`・`emo2_boot/spine.rs`・`crates/areka-emo-present/`・`crates/areka-emo-text/src/state_route.rs`・`balloon_visibility_decision.rs`。
+`crates/areka/src/input_events/`・`emo2_boot/frame/{attach,switch}.rs`・`emo2_boot/spine.rs`・`crates/areka-emo-present/`・`emo2_boot/frame/wiring.rs` のコード（説明文 2 か所だけは直す）・`crates/areka-emo-text/src/state_route.rs`・`balloon_visibility_decision.rs`。
 
 ## System Flows
 
