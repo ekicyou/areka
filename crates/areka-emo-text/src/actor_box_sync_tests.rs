@@ -1,5 +1,8 @@
 //! 毎フレームの箱の同期（task 7.4・要件 3.1〜3.3・3.5・3.9・6.1〜6.3・6.5・9.3）。
 //!
+//! 置き場所は結線が渡す「シェルの窓がいま表示している絵の番号」だけから導く（spec
+//! `areka-P0-shell-balloon-frame-align` 要件 1.1〜1.5）。台本の `\s` は文字の行き先だけを決める。
+//!
 //! 面はまだ作られない（箱の面の提示は 7.5）ので、ここでは「登録の状態」（装着先・配置の入力・
 //! 置き場所）で見る。`World` は予約スロットの entity を得るためだけに使い、COM は使わない。
 //! 箱の束はテストの中に持つ surfaces.txt の文面を畳んで作る（検体は読まない）。
@@ -113,6 +116,8 @@ pub(super) struct Fixture {
     pub(super) layout: BoxLayout,
     pub(super) window: Entity,
     pub(super) slot: Entity,
+    /// シェルの窓がいま表示している絵の番号（結線が表示層から照会して渡す値・非表示は `None`）。
+    pub(super) picture: Option<u32>,
 }
 
 pub(super) fn fixture() -> Fixture {
@@ -127,6 +132,7 @@ pub(super) fn fixture() -> Fixture {
         layout,
         window,
         slot,
+        picture: None,
     }
 }
 
@@ -139,8 +145,15 @@ impl Fixture {
         TextSlotBinding::new(self.slot, self.window, scale, physical, SHELL_IMAGE)
     }
 
+    /// 台本の `\s` と絵の差し替えの両方が届いた状態にする（`-1` は非表示）。
+    pub(super) fn show(&mut self, key: &str) {
+        self.rt.apply_cue(&emote("0", key));
+        self.picture = key.parse().ok();
+    }
+
+    /// 箱の同期: 拡大率が `None` ならシェルの窓が未確立。絵の番号は [`Self::picture`] を渡す。
     pub(super) fn sync(&mut self, scale: Option<f32>) {
-        let shell = scale.map(|k| self.shell(k));
+        let shell = scale.zip(self.picture).map(|(k, n)| (self.shell(k), n));
         self.rt
             .sync_box_bindings(&mut self.world, &[(ActorKey::from("0"), shell)]);
     }
@@ -186,7 +199,7 @@ fn messages(events: &[CapturedEvent], message: &str) -> usize {
 #[test]
 fn only_boxes_with_text_register_and_same_placement_is_a_no_op() {
     let mut f = fixture();
-    f.rt.apply_cue(&emote("0", "0"));
+    f.show("0");
     f.sync(Some(1.0));
     assert_eq!(f.registered(0, "a"), None, "文字の無い箱は登録しない");
 
@@ -221,7 +234,7 @@ fn only_boxes_with_text_register_and_same_placement_is_a_no_op() {
 #[test]
 fn layout_input_uses_the_box_size_as_the_image_size_with_white_background() {
     let mut f = fixture();
-    f.rt.apply_cue(&emote("0", "0"));
+    f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
     f.sync(Some(1.0));
 
@@ -252,7 +265,7 @@ fn layout_input_uses_the_box_size_as_the_image_size_with_white_background() {
 #[test]
 fn scale_change_rebuilds_the_registration_and_keeps_text() {
     let mut f = fixture();
-    f.rt.apply_cue(&emote("0", "0"));
+    f.show("0");
     f.rt.apply_cue(&text("0", "あい"));
     f.sync(Some(1.0));
     let before = f.registered(0, "a").expect("登録済み").0;
@@ -279,19 +292,99 @@ fn scale_change_rebuilds_the_registration_and_keeps_text() {
     );
 }
 
-/// 同じ名前の箱が新しいサーフェスにあれば、その位置で登録し直す（要件 6.1）。
+/// 同じ名前の箱が新しい絵にあれば、その位置で登録し直す（要件 6.1）。置き場所を動かすのは
+/// 渡された絵の番号で、台本の `\s` の cue は要らない（本 spec 要件 1.1）。
 #[test]
 fn same_name_on_the_next_surface_moves_the_registration() {
     let mut f = fixture();
-    f.rt.apply_cue(&emote("0", "0"));
+    f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
     f.sync(Some(1.0));
 
-    f.rt.apply_cue(&emote("0", "1"));
+    f.picture = Some(1);
     f.sync(Some(1.0));
-    let (_, site) = f.registered(1, "a").expect("新しいサーフェスの a");
-    assert_eq!((site.x, site.y), (30, 40), "新しいサーフェスでの位置");
+    let (_, site) = f.registered(1, "a").expect("新しい絵の a");
+    assert_eq!((site.x, site.y), (30, 40), "新しい絵での位置");
     assert_eq!(f.items(1, "a"), vec![TextItem::glyph("あ")]);
+}
+
+/// 台本の `\s` の cue だけでは登録は動かない。絵の番号が同じなら、受け取った番号が箱の無い面・
+/// 別の置き場所の面・非表示のどれでも、登録はそのまま（本 spec 要件 1.1・1.6）。
+#[test]
+fn surface_cue_alone_does_not_move_the_registration() {
+    let mut f = fixture();
+    f.show("0");
+    f.rt.apply_cue(&text("0", "あ"));
+    f.sync(Some(1.0));
+    let before = f.registered(0, "a").expect("絵 0 の a");
+
+    for key in ["1", "4", "-1"] {
+        f.rt.apply_cue(&emote("0", key));
+        let ((), events) = capture(|| f.sync(Some(1.0)));
+        assert_eq!(
+            messages(&events, REGISTER_MESSAGE),
+            0,
+            "\\s[{key}] の cue だけでは登録し直さない"
+        );
+        assert_eq!(
+            f.registered(0, "a"),
+            Some(before.clone()),
+            "\\s[{key}] の cue だけでは絵 0 の置き場所のまま"
+        );
+    }
+}
+
+/// 絵の番号だけが替われば cue が無くても登録が動き・外れ・戻る（本 spec 要件 1.1・1.2・1.4）。
+/// 文字の進み具合は保たれる。
+#[test]
+fn picture_number_alone_moves_unregisters_and_restores() {
+    let mut f = fixture();
+    f.show("0");
+    f.rt.apply_cue(&text("0", "あ"));
+    f.rt.apply_cue(&select("0", "b"));
+    f.rt.apply_cue(&text("0", "い"));
+    f.sync(Some(1.0));
+
+    // 絵 1 には a だけが別の位置に在る: a は動き、b は外れる。
+    f.picture = Some(1);
+    f.sync(Some(1.0));
+    let (_, a_site) = f.registered(1, "a").expect("絵 1 の a");
+    assert_eq!((a_site.x, a_site.y), (30, 40), "動く");
+    assert_eq!(f.registered(0, "b"), None, "絵 1 に無い b は外れる");
+
+    // 箱の無い絵 4: どれも外れる。
+    f.picture = Some(4);
+    f.sync(Some(1.0));
+    assert!(f.rt.box_sites.is_empty(), "箱の無い絵では何も登録しない");
+
+    // 絵 0 へ戻る: 保持していた文字ごと戻る。
+    f.picture = Some(0);
+    f.sync(Some(1.0));
+    let (_, a_site) = f.registered(0, "a").expect("絵 0 の a");
+    assert_eq!((a_site.x, a_site.y), (10, 20), "戻る");
+    assert!(f.registered(0, "b").is_some());
+    assert_eq!(f.items(0, "a"), vec![TextItem::glyph("あ")]);
+    assert_eq!(f.items(0, "b"), vec![TextItem::glyph("い")]);
+}
+
+/// 差し込み口があっても絵の番号が無ければ（絵が非表示）登録を外す。文字は残る（本 spec 要件 1.3）。
+#[test]
+fn no_picture_number_unregisters_and_keeps_text() {
+    let mut f = fixture();
+    f.show("0");
+    f.rt.apply_cue(&text("0", "あ"));
+    f.sync(Some(1.0));
+    assert!(f.registered(0, "a").is_some());
+
+    // 台本の `\s` は絵 0 のまま、絵だけが隠れる。
+    f.picture = None;
+    f.sync(Some(1.0));
+    assert_eq!(f.registered(0, "a"), None, "絵の番号が無い");
+    assert_eq!(f.items(0, "a"), vec![TextItem::glyph("あ")], "文字は残る");
+
+    f.picture = Some(0);
+    f.sync(Some(1.0));
+    assert!(f.registered(0, "a").is_some(), "絵が出れば戻る");
 }
 
 /// 名前が外れた箱は登録が片付き文字は残り、戻ると登録し直されて文字の進み具合が保たれる
@@ -299,7 +392,7 @@ fn same_name_on_the_next_surface_moves_the_registration() {
 #[test]
 fn box_leaving_the_surface_is_unregistered_and_comes_back_with_its_text() {
     let mut f = fixture();
-    f.rt.apply_cue(&emote("0", "0"));
+    f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
     f.rt.apply_cue(&select("0", "b"));
     f.rt.apply_cue(&text("0", "い"));
@@ -307,7 +400,7 @@ fn box_leaving_the_surface_is_unregistered_and_comes_back_with_its_text() {
     assert!(f.registered(0, "a").is_some() && f.registered(0, "b").is_some());
 
     // サーフェス 2 には b だけ: a は片付き、行き先でない b も登録されたまま（要件 6.5）。
-    f.rt.apply_cue(&emote("0", "2"));
+    f.show("2");
     f.sync(Some(1.0));
     assert_eq!(f.registered(0, "a"), None, "名前が外れた箱は片付ける");
     assert_eq!(f.items(0, "a"), vec![TextItem::glyph("あ")], "文字は残る");
@@ -315,15 +408,15 @@ fn box_leaving_the_surface_is_unregistered_and_comes_back_with_its_text() {
     assert_eq!((b_site.x, b_site.y), (0, 0));
 
     // 箱の無い（表に無い）サーフェス 4 と非表示: どの箱も片付く（要件 6.4・6.6）。
-    f.rt.apply_cue(&emote("0", "4"));
+    f.show("4");
     f.sync(Some(1.0));
     assert_eq!(f.registered(0, "b"), None);
-    f.rt.apply_cue(&emote("0", "-1"));
+    f.show("-1");
     f.sync(Some(1.0));
     assert!(f.rt.box_sites.is_empty(), "非表示では何も登録しない");
 
     // 戻る: 保持していた文字ごと登録し直す。
-    f.rt.apply_cue(&emote("0", "0"));
+    f.show("0");
     f.sync(Some(1.0));
     assert!(f.registered(0, "a").is_some() && f.registered(0, "b").is_some());
     assert_eq!(f.items(0, "a"), vec![TextItem::glyph("あ")]);
@@ -334,7 +427,7 @@ fn box_leaving_the_surface_is_unregistered_and_comes_back_with_its_text() {
 #[test]
 fn hidden_scope_or_missing_shell_window_unregisters() {
     let mut f = fixture();
-    f.rt.apply_cue(&emote("0", "0"));
+    f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
     f.sync(None);
     assert_eq!(f.registered(0, "a"), None, "シェルの窓が未確立");
@@ -358,7 +451,7 @@ fn hidden_scope_or_missing_shell_window_unregisters() {
 #[test]
 fn replacing_the_bundle_drops_registrations() {
     let mut f = fixture();
-    f.rt.apply_cue(&emote("0", "0"));
+    f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
     f.sync(Some(1.0));
     assert!(!f.rt.box_sites.is_empty());
@@ -376,7 +469,7 @@ fn replacing_the_bundle_drops_registrations() {
 #[test]
 fn overflowing_box_is_kept_and_warned_once() {
     let mut f = fixture();
-    f.rt.apply_cue(&emote("0", "0"));
+    f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
     let ((), events) = capture(|| f.sync(Some(1.0)));
     assert_eq!(
@@ -385,7 +478,7 @@ fn overflowing_box_is_kept_and_warned_once() {
         "収まる箱は警告しない"
     );
 
-    f.rt.apply_cue(&emote("0", "3"));
+    f.show("3");
     let ((), events) = capture(|| f.sync(Some(1.0)));
     let warns: Vec<&CapturedEvent> = events
         .iter()
@@ -401,9 +494,9 @@ fn overflowing_box_is_kept_and_warned_once() {
     assert!(f.registered(3, "a").is_some(), "はみ出しても採る");
 
     // 離れて戻っても、拡大率が変わって作り直しても 2 度目は出さない。
-    f.rt.apply_cue(&emote("0", "0"));
+    f.show("0");
     f.sync(Some(1.0));
-    f.rt.apply_cue(&emote("0", "3"));
+    f.show("3");
     let ((), events) = capture(|| {
         f.sync(Some(1.0));
         f.sync(Some(2.0));
@@ -418,7 +511,7 @@ fn overflowing_box_is_kept_and_warned_once() {
 #[test]
 fn overflow_is_judged_in_native_size_even_at_double_scale() {
     let mut f = fixture();
-    f.rt.apply_cue(&emote("0", "0"));
+    f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
     let ((), events) = capture(|| f.sync(Some(2.0)));
     assert_eq!(messages(&events, REGISTER_MESSAGE), 1, "k=2.0 で初めて登録");
@@ -428,7 +521,7 @@ fn overflow_is_judged_in_native_size_even_at_double_scale() {
         "native で収まる箱は k=2.0 でも警告しない"
     );
 
-    f.rt.apply_cue(&emote("0", "3"));
+    f.show("3");
     let ((), events) = capture(|| f.sync(Some(2.0)));
     let warns: Vec<&CapturedEvent> = events
         .iter()
@@ -452,7 +545,7 @@ fn overflow_is_judged_in_native_size_even_at_double_scale() {
 #[test]
 fn box_child_index_is_right_after_the_slot() {
     let mut f = fixture();
-    f.rt.apply_cue(&emote("0", "0"));
+    f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
     f.sync(Some(1.0));
     let key = f.key(0, "a");
@@ -517,7 +610,7 @@ fn box_definition_warnings_name_the_brace_and_fire_once_per_box_name() {
     let mut f = fixture();
     f.rt.set_box_layout(&mut f.world, layout.clone(), resolver(), vec![]);
     f.layout = layout.clone();
-    f.rt.apply_cue(&emote("0", "0"));
+    f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
 
     let ((), events) = capture(|| f.sync(Some(1.0)));
@@ -532,11 +625,11 @@ fn box_definition_warnings_name_the_brace_and_fire_once_per_box_name() {
 
     let ((), events) = capture(|| {
         f.sync(Some(2.0));
-        f.rt.apply_cue(&emote("0", "1"));
+        f.show("1");
         f.sync(Some(2.0));
-        f.rt.apply_cue(&emote("0", "-1"));
+        f.show("-1");
         f.sync(Some(2.0));
-        f.rt.apply_cue(&emote("0", "0"));
+        f.show("0");
         f.sync(Some(1.0));
     });
     assert_eq!(
@@ -551,7 +644,7 @@ fn box_definition_warnings_name_the_brace_and_fire_once_per_box_name() {
     );
 
     f.rt.set_box_layout(&mut f.world, layout, resolver(), vec![]);
-    f.rt.apply_cue(&emote("0", "0"));
+    f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
     let ((), events) = capture(|| f.sync(Some(1.0)));
     assert_eq!(

@@ -4,8 +4,10 @@
 //! （装着の相とシェルの切替）渡す。受け取ると前の箱の面を片付け、箱の場所の文字を捨て、
 //! 新しい表を純粋状態へ入れる（要件 6.8）。普通のバルーンの場所には触れない。
 //!
-//! 毎フレームの箱の同期（`sync_boxes`）は、文字を持つ箱の場所ごとに「あるべき置き場所」を導いて
-//! 登録（装着先・配置の入力・置き場所）を合わせる。面そのものは次の提示が作る。
+//! 毎フレームの箱の同期（`sync_boxes`）は、文字を持つ箱の場所ごとに、結線が渡す「シェルの窓が
+//! いま表示している絵の番号」から「あるべき置き場所」を導いて登録（装着先・配置の入力・置き場所）を
+//! 合わせる。面そのものは次の提示が作る。台本の `\s` で受け取った番号は文字の行き先だけに使い
+//! （`state_route.rs`）、この部品は読まない。
 //!
 //! 窓の子の entity を消すので `World` に触れる（純粋な走査の外）。
 
@@ -129,8 +131,9 @@ impl TextLayerRuntime {
     }
 
     /// 最後に提示したフレームで文字が 1 字以上見えていた箱の四角（手前＝element番号の大きい順・
-    /// シェルの窓の物理 px）。行き先の変化・`\c`・台詞の頭・箱を隠す印・箱の束の差し替えで
-    /// 出なくなった箱は、次の提示を待たずに外れている。
+    /// シェルの窓の物理 px）。`\c`・台詞の頭・箱を隠す印・箱の束の差し替え・絵の切替と非表示
+    /// （箱の同期が登録を外す）で出なくなった箱は、次の提示を待たずに外れている。台本の `\s` の
+    /// 受け取りだけでは外れない（絵が替わるまで箱は前の絵の置き場所に出ている）。
     pub fn shown_boxes(&self, actor: &ActorKey) -> &[ShownBox] {
         self.shown_boxes.get(actor).map_or(&[], Vec::as_slice)
     }
@@ -232,31 +235,18 @@ impl TextLayerRuntime {
         self.shown_boxes = shown;
     }
 
-    /// 箱の場所が今も描かれたままでよいか: 隠す印が無く、文字を持ち、今のサーフェスでの置き場所が
-    /// 登録済み（＝提示した）置き場所と同じ。`\b[名前]` で行き先だけが替わっても前の箱の文字は
-    /// 出たまま（要件 4.5）なので外さない。`\c`・台詞の頭は文字が無くなり、サーフェスの切替・
-    /// 非表示は置き場所が変わる（または無くなる）ので外れる。
+    /// 箱の場所が今も描かれたままでよいか: 登録があり、隠す印が無く、文字を持つ。登録は直近の
+    /// 同期が絵の番号から導いた置き場所で、絵はフレームの外では替わらないので、登録があること
+    /// 自体が「絵と合っている」ことを表す。台本の `\s` の受け取り（行き先だけが替わる）と
+    /// `\b[名前]`（要件 4.5）では外さない。`\c`・台詞の頭は文字が無くなるので外れ、絵の切替・
+    /// 非表示は次の同期が登録を外す（`unregister_box`）ので外れる。
     fn box_still_shown(&self, key: &PlaceKey) -> bool {
-        let TextPlace::Box(name) = &key.place else {
-            return false;
-        };
-        let Some(registered) = self.box_sites.get(key) else {
-            return false;
-        };
-        !self.hidden_boxes.contains(&key.actor)
+        self.box_sites.contains_key(key)
+            && !self.hidden_boxes.contains(&key.actor)
             && self
                 .state
                 .place_state(key)
                 .is_some_and(|s| !s.items().is_empty())
-            && self
-                .state
-                .current_surface(&key.actor)
-                .is_some_and(|surface| {
-                    self.box_layout
-                        .placements(surface)
-                        .iter()
-                        .any(|p| p.name == *name && p == registered)
-                })
     }
 }
 
@@ -264,9 +254,9 @@ impl TextLayerRuntime {
 struct DesiredBox {
     /// 装着先（シェルの窓・差し込み口・拡大率。画像の大きさは箱の大きさ）。
     binding: TextSlotBinding,
-    /// 今のサーフェスでの置き場所。
+    /// シェルの窓がいま表示している絵での置き場所。
     site: BoxPlacement,
-    /// 今のサーフェス番号。
+    /// シェルの窓がいま表示している絵のサーフェス番号（はみ出しの警告の鍵）。
     surface: u32,
     /// シェルの窓のサーフェスの画像の大きさ（native 原寸）。
     surface_size: (u32, u32),
@@ -275,17 +265,26 @@ struct DesiredBox {
 impl TextLayerRuntime {
     /// 毎フレームの箱の同期（UI スレッドから・結線のテキストの拡大率の相が呼ぶ）。
     ///
-    /// `shell_views` はスコープごとのシェルの窓の [`TextSlotView`]（未確立は `None`・渡されない
-    /// スコープも未確立と同じ）。文字を持つ箱の場所すべてについて「あるべき置き場所」を導き、
-    /// 登録済みと違えば面を片付けて登録し直し（文字の進み具合は保つ）、同じなら何もしない。
+    /// `shell_views` はスコープごとの「シェルの窓がいま表示している絵」＝差し込み口の
+    /// [`TextSlotView`] と絵のサーフェス番号の組（絵が非表示・窓が未確立なら `None`・渡されない
+    /// スコープも `None` と同じ）。文字を持つ箱の場所すべてについて、その絵の番号だけから
+    /// 「あるべき置き場所」を導き（台本の `\s` で受け取った番号は読まない）、登録済みと違えば
+    /// 面を片付けて登録し直し（文字の進み具合は保つ）、同じなら何もしない。
     pub fn sync_boxes(
         &mut self,
         world: &mut World,
-        shell_views: &[(ActorKey, Option<TextSlotView>)],
+        shell_views: &[(ActorKey, Option<(TextSlotView, u32)>)],
     ) {
-        let shells: Vec<(ActorKey, Option<TextSlotBinding>)> = shell_views
+        let shells: Vec<(ActorKey, Option<(TextSlotBinding, u32)>)> = shell_views
             .iter()
-            .map(|(actor, view)| (actor.clone(), view.as_ref().map(TextSlotBinding::from_view)))
+            .map(|(actor, shown)| {
+                (
+                    actor.clone(),
+                    shown
+                        .as_ref()
+                        .map(|(view, surface)| (TextSlotBinding::from_view(view), *surface)),
+                )
+            })
             .collect();
         self.sync_box_bindings(world, &shells);
     }
@@ -295,7 +294,7 @@ impl TextLayerRuntime {
     pub(super) fn sync_box_bindings(
         &mut self,
         world: &mut World,
-        shells: &[(ActorKey, Option<TextSlotBinding>)],
+        shells: &[(ActorKey, Option<(TextSlotBinding, u32)>)],
     ) {
         let desired: BTreeMap<PlaceKey, DesiredBox> = self
             .state
@@ -324,12 +323,12 @@ impl TextLayerRuntime {
         }
     }
 
-    /// あるべき置き場所: 名前が今のサーフェスの箱の列にあり、箱を隠す印が立っておらず、
-    /// シェルの窓が確立しているときだけ在る。
+    /// あるべき置き場所: シェルの窓が絵を表示していて（絵の番号が渡され）、名前がその絵の箱の列に
+    /// あり、箱を隠す印が立っていないときだけ在る。
     fn desired_box(
         &self,
         key: &PlaceKey,
-        shells: &[(ActorKey, Option<TextSlotBinding>)],
+        shells: &[(ActorKey, Option<(TextSlotBinding, u32)>)],
     ) -> Option<DesiredBox> {
         let TextPlace::Box(name) = &key.place else {
             return None;
@@ -337,11 +336,10 @@ impl TextLayerRuntime {
         if self.hidden_boxes.contains(&key.actor) {
             return None;
         }
-        let shell = shells
+        let (shell, surface) = shells
             .iter()
             .find(|(actor, _)| *actor == key.actor)
-            .and_then(|(_, shell)| *shell)?;
-        let surface = self.state.current_surface(&key.actor)?;
+            .and_then(|(_, shown)| *shown)?;
         let site = self
             .box_layout
             .placements(surface)

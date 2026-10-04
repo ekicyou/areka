@@ -45,7 +45,7 @@ fn shown(f: &Fixture) -> Vec<(String, u32, HitRectPx)> {
 /// 拡大率 2 で登録して、両方を提示したことにする。
 fn two_boxes_shown() -> Fixture {
     let mut f = fixture();
-    f.rt.apply_cue(&emote("0", "0"));
+    f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
     f.rt.apply_cue(&select("0", "b"));
     f.rt.apply_cue(&text("0", "い"));
@@ -104,23 +104,30 @@ fn clear_drops_only_the_destination_box() {
 }
 
 /// `\b[名前]` で行き先だけが替わっても、前の箱の文字は出たまま（要件 4.5）なので外さない。
-/// 置き場所の変わるサーフェスの切替と非表示は、その場で外す（要件 6.2・6.6）。
+/// 台本の `\s` の受け取りでも外さない（絵はまだ替わっていない・本 spec 要件 1.6・2.1）。
+/// 置き場所の変わる絵の切替と絵の非表示は、その同期で外す（要件 6.2・6.6・本 spec 要件 1.1〜1.3）。
 #[test]
-fn route_changes_drop_boxes_that_are_no_longer_shown_there() {
+fn only_the_picture_number_drops_boxes_from_the_snapshot() {
     let mut f = two_boxes_shown();
     let before = shown(&f);
     f.rt.apply_cue(&select("0", "a"));
     assert_eq!(shown(&f), before, "行き先だけが替わっても出ている箱は残る");
-    f.rt.apply_cue(&emote("0", "0"));
-    assert_eq!(shown(&f), before, "同じサーフェスなら置き場所は同じ");
+    for key in ["0", "2", "4", "-1"] {
+        f.rt.apply_cue(&emote("0", key));
+        assert_eq!(shown(&f), before, "\\s[{key}] の受け取りでは外さない");
+        f.sync(Some(2.0));
+        assert_eq!(shown(&f), before, "絵 0 のままの同期でも外さない");
+    }
 
-    // サーフェス 2 には b だけが別の位置 (0,0) に在る: a は名前が外れ、b は位置が替わる。
-    f.rt.apply_cue(&emote("0", "2"));
-    assert_eq!(shown(&f), vec![], "置き場所が変わった箱はその場で外す");
+    // 絵 2 には b だけが別の位置 (0,0) に在る: a は名前が外れ、b は位置が替わる。
+    f.picture = Some(2);
+    f.sync(Some(2.0));
+    assert_eq!(shown(&f), vec![], "置き場所が変わった箱はその同期で外す");
 
     let mut f = two_boxes_shown();
-    f.rt.apply_cue(&emote("0", "-1"));
-    assert_eq!(shown(&f), vec![], "非表示");
+    f.picture = None;
+    f.sync(Some(2.0));
+    assert_eq!(shown(&f), vec![], "絵の非表示");
 }
 
 /// 台詞の頭・箱を隠す印・箱の束の差し替えは、そのスコープの写しを空にする（要件 6.7・6.8・6.10）。
@@ -244,7 +251,7 @@ fn box_choice_rows_equal_balloon_rows_shifted_by_the_box_position() {
     let shell_image = (200u32, 300u32);
     let shell_physical = (300u32, 450u32);
     let shell = TextSlotBinding::new(slot, window, k, shell_physical, shell_image);
-    rt.sync_box_bindings(&mut world, &[(actor(), Some(shell))]);
+    rt.sync_box_bindings(&mut world, &[(actor(), Some((shell, 0)))]);
 
     let name_a = layout
         .placements(0)
