@@ -223,6 +223,8 @@ fn box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it() {
     let mut cage = Cage::boot(SHELL, &[0]);
 
     // 箱のあるサーフェスで話す。提示が写しを埋めるのはこのフレームの終わりなので 2 フレーム回す。
+    // 本番どおり、台本の `\s` と一緒に表示層への絵の差し替えも届く（以下の `\s` も同じ）。
+    cage.picture(0, BOX_SURFACE_ID);
     cage.surface(0, BOX_SURFACE);
     cage.text(0, "あい");
     let mut events = cage.frame();
@@ -245,6 +247,7 @@ fn box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it() {
     );
 
     // 箱の無いサーフェスへ移って話す: 以後の文字は窓へ書かれ、窓が出る（要件 5.2・6.4）。
+    cage.picture(0, PLAIN_SURFACE_ID);
     cage.surface(0, PLAIN_SURFACE);
     cage.text(0, "う");
     let events = cage.frame();
@@ -269,6 +272,7 @@ fn box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it() {
     );
 
     // 窓に文字が在るまま箱のあるサーフェスへ: 窓は消え、箱の文字が出直す（要件 6.9・6.3）。
+    cage.picture(0, BOX_SURFACE_ID);
     cage.surface(0, BOX_SURFACE);
     let mut events = cage.frame();
     events.extend(cage.frame());
@@ -283,6 +287,7 @@ fn box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it() {
     );
 
     // 同じ台詞のまま箱の無いサーフェスへ戻ると、保持していた文字で窓が出直す（要件 6.9 の逆向き）。
+    cage.picture(0, PLAIN_SURFACE_ID);
     cage.surface(0, PLAIN_SURFACE);
     let events = cage.frame();
     assert_eq!(
@@ -308,8 +313,10 @@ fn box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it() {
 fn scopes_are_judged_separately() {
     let mut cage = Cage::boot(SHELL, &[0, 1]);
 
+    cage.picture(0, BOX_SURFACE_ID);
     cage.surface(0, BOX_SURFACE);
     cage.text(0, "あい");
+    cage.picture(1, PLAIN_SURFACE_ID);
     cage.surface(1, PLAIN_SURFACE);
     cage.text(1, "う");
     let mut events = cage.frame();
@@ -340,6 +347,7 @@ fn timeout_raises_the_hide_boxes_flag_and_the_box_text_disappears() {
         .send(TalkLifecycleSignal::DisplayEndAt(display_end))
         .expect("受信端は結線資源が保持している");
 
+    cage.picture(0, BOX_SURFACE_ID);
     cage.surface(0, BOX_SURFACE);
     cage.text(0, "あい");
     let mut events = cage.frame();
