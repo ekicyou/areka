@@ -8,10 +8,19 @@
 //! 想定し、変換前フレームのピクセルフォーマット由来の α 有無を保持する。
 //!
 //! （trait 署名・型は本タスク 1.4 で定義。既定 WIC 腕は後続タスク 2.2。）
+//!
+//! 動く絵（コマが 2 枚以上の APNG・WebP）は「見出しを聞く」（`probe_animation`）→
+//! 「全コマを読む」（`decode_frames`）／「動きの 1 枚目だけを読む」（`decode_first_frame`）
+//! で読む（spec: areka-P0-animated-image-decode 要件 1.1・2.1〜2.5）。3 つとも既定の実装を
+//! 持つので、静止画しか読まない読み手は書き換え不要。
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use crate::table::LoopCount;
+
+mod image_arm;
+mod sniff;
 pub mod wic_arm;
 
 /// デコード済み画像（BGRA8・非トリム・原寸）。
@@ -53,6 +62,42 @@ impl std::fmt::Display for DecodeError {
 
 impl std::error::Error for DecodeError {}
 
+/// 動く絵の見出し（全コマを読む前に分かること）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AnimationInfo {
+    /// 絵の全体の幅。
+    pub width: u32,
+    /// 絵の全体の高さ。
+    pub height: u32,
+    /// 動きのコマの枚数（2 以上）。
+    pub frame_count: u32,
+}
+
+/// 重ね済みの 1 コマ。
+#[derive(Clone, Debug)]
+pub struct AnimationFrame {
+    /// 乗算済み BGRA・絵の全体の寸法。
+    pub image: DecodedImage,
+    /// 待ち時間（ミリ秒・0 は 0 のまま）。
+    pub delay_ms: u32,
+}
+
+/// 動く絵の全部。
+#[derive(Clone, Debug)]
+pub struct AnimatedImage {
+    /// コマはファイルの順（0 番から）。
+    pub frames: Vec<AnimationFrame>,
+    pub loop_count: LoopCount,
+}
+
+/// 動く絵を読めない読み手の既定の答え（`Decode`・パス付き）。
+fn not_animated(path: &Path) -> DecodeError {
+    DecodeError::Decode {
+        path: path.to_path_buf(),
+        source: "this decoder does not read animated images".into(),
+    }
+}
+
 /// 差替可能デコードポート。既定手段（WIC）を上位へ露出しない（2.3・D4）。
 ///
 /// trait 面は「パス→デコード済み BGRA 画像」の最小面のみで、WIC/COM 型を一切公開しない。
@@ -65,6 +110,41 @@ pub trait ElementDecoder {
     fn probe_pna(&self, _path: &Path) -> bool {
         false
     }
+
+    /// 動く絵（コマが 2 枚以上の APNG・WebP）なら見出しを返す。既定は None（動かない）。
+    fn probe_animation(&self, _path: &Path) -> Option<AnimationInfo> {
+        None
+    }
+
+    /// 動く絵の全コマを読む。`info` は `probe_animation` が返した見出し（読むのは
+    /// `info.frame_count` 枚まで）。`Ok` ならコマは `info.frame_count` 枚ちょうどで、全コマ
+    /// `info` と同じ寸法・同じ `has_alpha`。1 コマでも読めなければ `Err`。
+    /// 既定は `Err`（この読み手は動く絵を読めない）。
+    fn decode_frames(
+        &self,
+        path: &Path,
+        _info: AnimationInfo,
+    ) -> Result<AnimatedImage, DecodeError> {
+        Err(not_animated(path))
+    }
+
+    /// 動く絵の動きの 1 枚目だけを読む（縮めるときの段 1）。全コマは読まない・抱えない。
+    /// 返す絵は、`decode_frames` が `Ok` のときの `frames[0].image` と同じ画素・同じ
+    /// `has_alpha`。既定は `Err`。
+    fn decode_first_frame(
+        &self,
+        path: &Path,
+        _info: AnimationInfo,
+    ) -> Result<DecodedImage, DecodeError> {
+        Err(not_animated(path))
+    }
+}
+
+/// `MemoryDecoder::insert_animated` の登録 1 件。
+struct AnimatedEntry {
+    info: AnimationInfo,
+    first: Result<DecodedImage, String>,
+    frames: Result<AnimatedImage, String>,
 }
 
 /// メモリ上の登録データから画素バッファを返すテスト腕（COM 非依存）。
@@ -78,6 +158,7 @@ pub struct MemoryDecoder {
     /// 破損として登録したパス→`Decode.source` 文字列。
     corrupt: HashMap<PathBuf, String>,
     pnas: HashSet<PathBuf>,
+    animated: HashMap<PathBuf, AnimatedEntry>,
 }
 
 impl MemoryDecoder {
@@ -117,6 +198,43 @@ impl MemoryDecoder {
     pub fn insert_pna(&mut self, path: impl Into<PathBuf>) {
         self.pnas.insert(path.into());
     }
+
+    /// 動く絵として登録する。`probe_animation` は `info` を返す。`frames` が `Err` なら
+    /// `decode_frames` は `Decode` の失敗を返す（渡された info は見ない）。`first` は
+    /// `decode_first_frame` の答え（段 1）。見出しと中身は照合せず登録どおりに返すので、
+    /// 「見出しと枚数が食い違う」も作れる。段 2 で読まれる 1 枚（今までの `decode` の答え）は
+    /// `insert`／`insert_corrupt` で別に登録する。
+    pub fn insert_animated(
+        &mut self,
+        path: impl Into<PathBuf>,
+        info: AnimationInfo,
+        first: Result<DecodedImage, String>,
+        frames: Result<AnimatedImage, String>,
+    ) {
+        self.animated.insert(
+            path.into(),
+            AnimatedEntry {
+                info,
+                first,
+                frames,
+            },
+        );
+    }
+
+    /// 登録の答えを、パス付きの `Decode` の失敗へ包んで返す。未登録は既定と同じ失敗。
+    fn animated_answer<T: Clone>(
+        &self,
+        path: &Path,
+        pick: impl Fn(&AnimatedEntry) -> &Result<T, String>,
+    ) -> Result<T, DecodeError> {
+        let Some(entry) = self.animated.get(path) else {
+            return Err(not_animated(path));
+        };
+        pick(entry).clone().map_err(|source| DecodeError::Decode {
+            path: path.to_path_buf(),
+            source,
+        })
+    }
 }
 
 impl ElementDecoder for MemoryDecoder {
@@ -138,7 +256,31 @@ impl ElementDecoder for MemoryDecoder {
     fn probe_pna(&self, path: &Path) -> bool {
         self.pnas.contains(path)
     }
+
+    fn probe_animation(&self, path: &Path) -> Option<AnimationInfo> {
+        self.animated.get(path).map(|e| e.info)
+    }
+
+    fn decode_frames(
+        &self,
+        path: &Path,
+        _info: AnimationInfo,
+    ) -> Result<AnimatedImage, DecodeError> {
+        self.animated_answer(path, |e| &e.frames)
+    }
+
+    fn decode_first_frame(
+        &self,
+        path: &Path,
+        _info: AnimationInfo,
+    ) -> Result<DecodedImage, DecodeError> {
+        self.animated_answer(path, |e| &e.first)
+    }
 }
+
+#[cfg(test)]
+#[path = "decode_animation_tests.rs"]
+mod animation_tests;
 
 #[cfg(test)]
 mod tests {
