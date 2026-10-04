@@ -296,3 +296,95 @@ A のときの小さな選択: 口が返すのを「合成済みの絵」にす�
 - `dump_surface`（省略）に箱の文字を写すか（§7 の論点 6。要件の裁定 10 のとおり合否を変えず、差の一覧に書く）。
 - バルーンの窓に描かれるもの（文字・上へ送る矢印の印・送り主の印）のうち、areka が今描いているものをそのまま返す（§8.2。足りない印は本 spec で足さない）。
 - 背景と文字の位置合わせの原点・テストの置き場（§6 の調べもの 6・7）。
+
+## 10. 設計の段の調べ（2026-10-04・軽い発見＝既存の仕組みへの追加）
+
+§6「設計へ持っていく調べもの」と §9 を、コードを読んで確かめた結果。**確かめられなかったものは「未確認」と書く。**
+
+### 10.1 UI スレッドの COM と WIC の符号化（調べもの 1）
+
+- UI スレッドは MTA で初期化済み（`WinApp` の構築＝`crates/wintf/src/runtime/mod.rs` が `CoInitializeEx(COINIT_MULTITHREADED)` を呼ぶ）。WIC の工場は UI スレッドで作れる（`wintf::com::wic::wic_factory`）。
+- メモリのストリームは `SHCreateMemStream`（`Win32_UI_Shell`＋`Win32_System_Com`。どちらも根の `Cargo.toml` で宣言済み）で作れる。
+- **しかし WIC の符号化そのものが、宣言済みの機能だけでは呼べない。** `windows` 0.62.2 の `IWICBitmapEncoder::CreateNewFrame` と `IWICBitmapFrameEncode::Initialize` は `#[cfg(feature = "Win32_System_Com_StructuredStorage")]` の下にある（引数の `IPropertyBag2` がその機能の型）。`cargo metadata` の解決結果では、ワークスペースで有効な `windows` の機能 64 個にこれが無い。有効にするには `Cargo.toml` の変更が要る＝要件の境界の外。
+- brief と §2.8・§5.3 の「WIC の符号化器は宣言済みの機能で使える」は誤りだった（復号は使えるが、符号化はフレームを作る口が別の機能の下）。
+
+### 10.2 隠している間の着せ替え（調べもの 2）
+
+- seriko の `ScopeStates::apply_bind`（`crates/areka-seriko/src/state.rs`）は、スコープが隠れている（または未表示）とき `BindApplyOutcome::StateOnly` を返し、表示の指令を出さない。新しい集合は次の表示の指令に載る。
+- だから、隠している間に `\![bind]` が来ると、表示の層の `last_show` の着せ替えは次に表示するまで古いまま。要件 2.2 は「最後に表示したときのもの」と定めているので要件どおり。差の一覧に書く。
+
+### 10.3 応答の大きさ（調べもの 3・4）
+
+- areka の応答の経路に上限は無い（`MAX_BODY_BYTES`＝`crates/areka-mcp/src/dispatch.rs` は要求の本文だけ）。
+- rmcp 3.5.0 の Streamable HTTP のサーバ（`transport/streamable_http_server/`）で大きさに関わる設定は `max_request_body_bytes` だけ＝応答の上限は無い（ソースを検索して確認）。
+- 受け取る側（Claude Code など）の画像の応答の上限は**未確認**。符号化の所要時間も**未測定**。どちらも実機確認で記録する。
+
+### 10.4 窓はあるが絵の無いスコープ・装着の前（調べもの 5）
+
+- 絵の無いスコープ（今は 2 以降）は、装着の相が飛ばすので表示の層に target が無い。「シェルの target が登録されているか」（`EmoPresenter::target_visible(shell_target(scope)).is_some()`）がそのまま「絵の資産が組まれているスコープ」の判定になる。
+- 装着の前は、資産のあるスコープも target が無い。区別には結線状態の `attached` の欄が要る（今は `frame` の中だけに見える）。`wiring.rs` に読み口を 1 本足す。
+
+### 10.5 文字の位置合わせの原点（調べもの 6）
+
+- 文字の面は、差し込み口の entity に「物理寸・窓の原点からの物理 px の offset（領域の原点×拡大率）」の `Arrangement` で付く（`TextSurface::attach`・`physical_arrangement`＝`crates/areka-emo-text/src/surface.rs`）。
+- 背景の原寸と物理寸は `TextSlotView` の `surface_size()`・`physical_size()` で取れる。
+- `ScaleRatio` は分子と分母を公開していない。`as_f32` は寸法の計算に使わない約束（`presenter/read.rs` の注記）。だから縮める比は「物理寸÷原寸」の整数比を使う。物理寸は丸めた値なので、厳密な拡大率との差は端で最大 0.5 物理 px。
+
+### 10.6 描画を通るテストの置き場と、拡大率が 1 でない状態の作り方（調べもの 7）
+
+- `emo2_boot/spine.rs` の `SpineHarness` は欄も作り口も非公開で、`mcp` のテストからは使えない。
+- `emo2_boot` の外に、GPU つきの統合テストの前例がある: `crates/areka/src/shell_balloon_switch_session_lap_tests.rs` が、公開（クレート内）の土台 `SwitchRig`（`ghost_switch_test_support.rs`）に `GraphicsCore::new()`＋`WucGraphicsResource` と窓の一式（`spawn_ghost_windows`＋偽の HWND＋`DPI` の component）を足し、本番の `Input`・`Update` の段を回している。同じ組み方をツールの子のテストの土台に書ける。
+- 拡大率は窓の `DPI` の component で決まる（`DPI::from_dpi`）。96 以外を入れれば 1 でない状態になる。
+- GPU を通るテストの接続条件は `#[cfg(all(test, target_pointer_width = "64"))]`（`emo2_boot/frame.rs` の接続と同じ）。
+
+### 10.7 そのほか確かめたこと
+
+- 各スコープのシェルの target は、シェル全体から組んだ `EmoWorld` を 1 つずつ持つ（`ScopeAssets`＝`emo2_boot/assets.rs`。読み込みは 1 回で、World だけスコープごとに組む）。「シェル全体から探す」はそのスコープの target の `EmoWorld::surface(id)` で足りる。別名は `AliasMap` で、`surface(id)` は見ない。
+- 隠す処理 `apply_hide` は `current_surface_id` を `None` にする。隠した後の surface ID は非公開の `last_show` にしか残らない＝要件 1.6 のために、表示の層の新しいファイルに「最後に表示した ID と絵」を返す口が要る（要件ディスカッションの議題 2 で挙げた 2 本に加えて 3 本目。同じ 1 ファイルの中で、読むだけ）。
+- 合成メモの全破棄（`PresentCommand::InvalidateCache`）を本番で送る所は 0 か所（テストの語彙だけ）。「最後に表示した絵がメモに無い」は今の本番では起きない。
+- 合成の層は、surface が無いとき（`SurfaceNotFound`）と定義層が皆無のとき（`EmptyComposition`）に自分で `error!` を出す（`crates/areka-emo-compose/src/plan.rs`）。前者は事前に `EmoWorld::surface` で避けられる。後者は避ける口が無い。
+- CRC-32 の本番の実装は `areka_nar::crc32`（`crates/areka-nar/src/crc32.rs`・公開）。`areka` は既に `areka-nar` に依存している。PNG の CRC と同じ多項式。
+- 箱の文字がキャラクターの絵に写らないこと（§3 ⑶）は読み直して同じ結論。
+
+## 11. 設計の決定と、捨てた案（2026-10-04）
+
+### 11.1 まとめる・借りる・削る
+
+- **まとめる**: 「今の見た目」「指定した surface」「バルーンの背景」は、どれも「原寸・乗算済み BGRA の絵 1 枚を PNG にする」。符号化は 1 関数（`png_base64`）、判断は 1 つの事実の口（`ShellFacts`）に寄せ、2 本のツールで共用する。
+- **借りる**: 合成は `Composer::compose`、CRC は `areka_nar::crc32`、後から答える仕組みは `mcp::later`、テストの土台は `SwitchRig` と配置の準備。新しく書くのは、乗算を戻す・PNG の器・base64・縮めて重ねる、の 4 つだけ。
+- **削る**: 「バルーンに文字が残っているか」の判定（消えた面は透明なので要らない）。`wiring.rs` の `read_back_target` を本番へ開けること（`presenter()` 経由で足りる）。符号化の別スレッド。資産の写しを結線状態に持つこと。
+
+### 11.2 PNG の作り方
+
+| 案 | 判定 | 理由 |
+|---|---|---|
+| WIC の符号化器 | 取れない | §10.1。`Cargo.toml` の変更が要る |
+| **標準ライブラリだけの無圧縮の PNG** | **採用** | 要件 5.1〜5.5 を満たす。COM も `unsafe` も要らない。チャンクは SSP と同じ 3 つ。応答が SSP の約 10 倍（434×687 で base64 約 1.6 MB） |
+| 自前の圧縮（固定ハフマン＋連長） | 取らない | 自作の圧縮器を持つことになる。圧縮が要ると分かったら、`crates/areka/Cargo.toml` の `windows` の機能に `Win32_System_Com_StructuredStorage` の 1 語を足して WIC を使うほうが小さい |
+| `miniz_oxide`・`png` クレート | 取れない | `areka` の `Cargo.toml` の変更が要る |
+
+- **設計ディスカッションへ出す点**: 無圧縮のままでよいか、`crates/areka/Cargo.toml` に機能 1 語を足して WIC の圧縮 PNG にするか。後者は要件の境界（`Cargo.toml` を変えない）を緩める判断。同じウェーブで `Cargo.toml` を触るのは `animated-image-decode`（`areka-emo-atlas` の側）で、`crates/areka/Cargo.toml` は重ならない見込み。どちらでも替わるのは `png_base64` の中身だけ。
+
+### 11.3 装着の前の呼び出し
+
+| 案 | 判定 | 理由 |
+|---|---|---|
+| そのまま判断する | 取らない | 在るはずのスコープ 0 に `NG:No such scope in this ghost` を返す |
+| 新しい文言で断る | 取らない | 要件に無い文言が増える |
+| **`mcp::later` に預けて装着の後に答える** | **採用** | 既存の口。新しい文言なし。済まなければ入口の 10 秒が答える |
+
+### 11.4 表示の層の新しいファイルのテスト
+
+- 合意は「新しいファイル 1 つ＋親への 1 行」。`areka-emo-present` にテストのファイルを足すと 2 つ目のファイルになるので、足さない。3 本の口は、本番の唯一の呼び手であるツールの側の、実際の描画を通るテストで固定する。
+- **設計ディスカッションへ出す点**: `areka-emo-present` の側に兄弟のテストファイル（`presenter/snapshot_tests.rs`）を足してよいなら、GPU 無しで `has_surface`・`compose_alone` を固定できる（他の spec の触るファイルとは重ならない）。
+
+### 11.5 文字の縮め方
+
+- 面積で重み付けした平均（箱フィルタ）1 本。拡大率 1 では写しと同じ値、1 より小さいときも同じ式で通る。別の分岐を持たない。
+- 厳密な拡大率（`ScaleRatio`）を使わず「物理寸÷原寸」を使う。差は端で最大 0.5 物理 px で、縮めた後の絵では 1 画素に満たない。
+
+### 11.6 残るリスク
+
+- 受け取る側が 1〜数 MB の画像を扱えるか（未確認・実機確認で確かめる。だめなら §11.2 の設計ディスカッションの点へ戻る）。
+- 壊れたシェル（定義層の無い surface）を指定すると ERROR の記録が 2 件になる（合成の層の 1 件＋ツールの 1 件）。
+- 拡大率が変わったフレームは文字の面が作り直しの途中で、その 1 フレームだけ背景だけの絵が返りうる。
