@@ -60,3 +60,7 @@ impl EmoPresenter {
         ))
     }
 }
+
+#[cfg(test)]
+#[path = "snapshot_tests.rs"]
+mod tests;
