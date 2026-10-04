@@ -112,7 +112,7 @@ graph TB
 - 選んだ型: 既存を延ばす＋新しいモジュール 3 つ（compose の `nesting.rs`・`hit_import.rs`、seriko の `parts.rs`）。合成と外形の再帰は `plan.rs` の中で延ばす（同じ再帰に入れるのが自然）。静的な解析と部品の時計は新しいモジュールへ置き、既存のファイルは呼ぶだけにする。
 - 境界の分け方: 「静的な入れ子（読み分け・合成・外形・報告・領域）」は compose、「部品の時計」は seriko。両者の継ぎ目は `NestTable`（静的な写し）と `PatternState` の部品の欄（毎回の入力）の 2 つだけ。
 - 守る既存の型: parser は転記・解決は下流／記録は入口 1 か所／アニメのエンジンは sakura と seriko の 2 つ／`hit_region` は純関数／発行は `emit_display` の 1 点。
-- steering との整合: 1 ファイル 1,000 行以下（`plan.rs` は 694 行から 800 行前後の見込み）・テストは新しい兄弟ファイル・時刻と乱数は注入・記録の無い読み飛ばしを作らない。
+- steering との整合: 1 ファイル 1,000 行以下（`plan.rs` は 730 行から 840 行前後の見込み）・テストは新しい兄弟ファイル・時刻と乱数は注入・記録の無い読み飛ばしを作らない。
 
 ### Technology Stack
 
@@ -315,7 +315,7 @@ pub fn element_kind(path: &ElementPath) -> ElementKind;
 
 /// サーフェスごとの静的な参照（Send。seriko が写しを持つ）。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct NestTable { /* 番号 → SurfaceParts。参照を 1 つも持たない番号は載せない */ }
+pub struct NestTable { /* 番号 → SurfaceParts。children・bind_targets・bind_ids のどれかが空でない番号だけを載せる */ }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SurfaceParts {
@@ -351,7 +351,7 @@ pub struct NestReport { pub issues: Vec<NestIssue> }
 - **`visible_parts` の規則**（`flatten_surface` と同じ辺をたどる）: 一番上から始め、各サーフェスについて ① `children` ② 有効な着せ替え（`binds` に在る）の `bind_targets`。ただし同じ animation の番号にコマが在ればコマが置き換えるので数えない ③ そのサーフェスのコマ（一番上は今までの欄、部品は部品の欄）のうち、描画メソッドが動くもので、着せ替えの種類なら `binds` に在るもの——の指す先を部品に数え、その先へ進む。先祖に在る番号へ戻る辺は進まない。
 - **`NestReport` の循環**: element定義の辺 (親, element, 子) について、子から「element定義の辺と、すべての pattern定義の辺（欄 2 が animation の番号になる 7 語は除く）」をたどって親へ戻れるなら `Cycle`。辺 1 本につき 1 件。並びは親の番号 → element定義の番号の昇順。
 - Preconditions: 面の表は畳み込みと土台の絵の決定が済んでいる（ファイル名の慣習だけで建つ面も「在る」に数える）。
-- Invariants: `NestTable` は面の表が同じなら同じ値。入れ子も着せ替えの pattern0 も無いシェルでは空。
+- Invariants: `NestTable` は面の表が同じなら同じ値。載せる条件は 1 つだけ（`children`・`bind_targets`・`bind_ids` のどれかが空でない）。pattern0 を持たない `bind+random` だけのサーフェスも `bind_ids` で載る。入れ子も着せ替えの種類の animation も無いシェルでは空。
 
 **Implementation Notes**
 
@@ -542,6 +542,7 @@ impl PartClocks {
   1. 境界を跨いだ刻みで、再生中でなく、`BindRandom` なら `binds` に在るものだけ `should_fire`。当たれば `Playing { now }`（`Residual` は捨てる）。
   2. `BindRandom` で `binds` に無いものは時計を消す。
   3. `Playing` は `frame_at(now − 開始)` を見る。`Pending` はコマ無し・`Active` はそのコマ・`FinishedResidual` はそのコマを出して `Residual` へ・`Stopped` は時計を消す。`Residual` は保っているコマを出す。
+- **`peek` も同じ番人を通す**: `BindRandom` で `binds` に無い animation のコマは、`peek` でも欄に書かない（時計は書き換えないので、消すのは次の `advance`）。着せ替えを外した瞬間の `refresh_parts` で、外れた側のコマを載せた `Show` を出さないため。
 - **見えない間**（要件 5.7・5.11）: 何もしない。`Playing` は開始の時刻を持ったままなので、戻った刻みに経過から今のコマが決まる（多くは終わっている）。巻き戻りは起きない。見えない間は抽選しないので、乱数も消費しない。今動く間隔の語は確率で引くものだけなので、見えない間に抽選を回し続ける形と見分けがつかない。
 - **初めて表示**（要件 5.5）: 特別な状態は持たない。見えた刻み以降の境界で抽選の対象になる。
 - **抽選の消費順**: 今の順（スコープの昇順 → シェル → バルーン → animation の番号の昇順）で一番上の分を全スコープぶん引き終えた後、スコープの昇順に、シェル面の部品を「評価する順（繰り返しの回 → 部品の番号の昇順 → animation の番号の昇順）」で引く。動く部品の無いシェルでは 1 つも足されない。
@@ -620,14 +621,14 @@ impl LoopRuntime {
 - **外形**（`plan_nesting_extent_tests.rs`・2.5・2.6）: 子を置いた範囲が外形に入る／部品のコマを変えても外形が変わらない。
 - **領域**（`hit_import_tests.rs`・4.1〜4.10）: ずらした位置で当たる／番号の大きい子が手前／子の中の順は単独と同じ／親が手前／親と同じ名前は重なっていない場所でも当たらない／孫→子→親の段ごとの落とし方／2 人の子の同じ名前が両方当たる／無い番号・循環の辺からは持ち込まない／pattern定義の先からは持ち込まない／持ち込みの無いサーフェスに `HitRegions` が付かない。
 - **部品の欄**（`pattern_parts_tests.rs`）: 空の欄どうしは等しい／入れた順に依らず等しい／`clear_parts` の後は部品の欄を使う前と等しい。
-- **部品の時計**（`parts_tests.rs`・5.1〜5.5・5.7・5.11〜5.14）: 見える刻みの境界でだけ抽選する／見えない間は乱数を呼ばず、欄に書かない／再生中に見えなくなり、戻った刻みに経過から決まる（巻き戻らない）／`bind+random` は `binds` に在るときだけ発火し、外れたら止まる／コマが別のサーフェスを指すと、その先の部品も同じ刻みで評価される／element定義で置いた子と pattern定義が指した同じ番号が 1 つの時計を使う。
+- **部品の時計**（`parts_tests.rs`・5.1〜5.5・5.7・5.11〜5.14）: 見える刻みの境界でだけ抽選する／見えない間は乱数を呼ばず、欄に書かない／再生中に見えなくなり、戻った刻みに経過から決まる（巻き戻らない）／`bind+random` は `binds` に在るときだけ発火し、外れたら止まる／コマが別のサーフェスを指すと、その先の部品も同じ刻みで評価される／element定義で置いた子と pattern定義が指した同じ番号が 1 つの時計を使う／`peek` は `binds` から外れた `bind+random` のコマを書かない。
 
 ### Integration Tests
 
 - **検体を通す**（`nesting_fixture_tests.rs`・8.2）: 検体の surfaces.txt を解析→面の表→焼く→合成。報告が検体に仕込んだ件数と一致し、仕込んでいない種類は 0 件。
 - **焼く一覧と記録**（`shell_target_nesting_tests.rs`・1.5・3.5・8.1）: 数字だけの名前の画像が在っても読みに行かない／読み込みの失敗が 0 件／無い番号・循環・子の中の箱の `warn!` がそれぞれ 1 度だけ出る。
 - **当たり判定の入口**（`presenter_nesting_hit_tests.rs`・4.2・2.8）: `hit_region_client` が子から持ち込んだ名前を返す（拡大率 1 と 2）。
-- **切り替えの発行列**（`actor_parts_tests.rs`・5.6・5.9）: 子が閉じ目のコマの途中で `\s` を切り替えると、`Show` が 1 件だけ出て、そのコマを載せている／一番上の animation は最初から／子を置いていない面へ行って戻っても続きから（5.7）／着せ替えの変化でも 1 件。
+- **切り替えの発行列**（`actor_parts_tests.rs`・5.6・5.9）: 子が閉じ目のコマの途中で `\s` を切り替えると、`Show` が 1 件だけ出て、そのコマを載せている／一番上の animation は最初から／子を置いていない面へ行って戻っても続きから（5.7）／着せ替えの変化でも 1 件／着せ替えを外した瞬間の `Show` に、外れた側の部品のコマが載らない。
 - **捨てる時機**（`looper_parts_tests.rs`・5.8）: シェルの表の差し替えの後、部品の時計が空。
 - **入れ子なしの不変**（`looper_parts_tests.rs`・`table_parts_tests.rs`・7.1〜7.3）: 入れ子も動く部品も無い表で `has_animated_parts` が偽／同じ刻みの列で、乱数の呼び出し回数と発行列が部品の経路を外した場合と一致する。既存の golden・seriko の決定論テストは 1 本も書き換えない。
 - **emo2**（`looper_parts_emo2_tests.rs`・7.4）: 下記。
@@ -665,7 +666,7 @@ impl LoopRuntime {
 - 切り替えの 1 枚目: `refresh_parts` で部品のコマを載せた `Show` を 1 件。
 - 大きすぎる数字: 無い番号と同じ扱い。
 - 箱の「画像より下」の報告: サーフェスを置く element定義も数える（今の成り行きのまま）。
-- 検体: フォルダのまま置く（`crates/areka-emo-compose/tests/fixtures/surface-nesting/`）。seriko のテストは surfaces.txt を `include_str!` で読む。
+- 検体: フォルダのまま置く（`crates/areka-emo-compose/tests/fixtures/surface-nesting/`）。検体では `surface.append*`ブレスに画像の element定義を書かない（下の「残した」の最後の項のため）。seriko のテストは surfaces.txt を `include_str!` で読む。
 
 **残した**
 
