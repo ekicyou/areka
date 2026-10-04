@@ -7,7 +7,7 @@
   - 完了の状態: `research.md` に、数え上げの結果（テストの定義の名前の一覧、読み書きするコードの場所）と「見立てと一致／違い」の結論が書かれている
   - _Requirements: 3.1, 3.4_
 
-- [ ] 2. 競合の経路を切り出すテストを足し、直す前の赤を記録する
+- [x] 2. 競合の経路を切り出すテストを足し、直す前の赤を記録する
   - 補助 exe の `mod tests` に、ワークスペースの `target\` の下へ一意なフォルダを作って偽の DLL を `shiori.dll` として写す道具を 1 つ足す（フォルダの根は `CARGO_MANIFEST_DIR` の 2 つ上＝ワークスペースの根から組む。プロセス識別子・時刻のナノ秒・フォルダごとの札で一意にし、`..` を含まない形で組む。OS の一時フォルダの入口は呼ばない）
   - その道具を 2 回呼ぶテスト `testdll_unload_from_another_folder_leaves_marker_untouched` を足す。錠を取り、X の印のパスを環境変数に差し、X を load したまま Y を load して drop し、X にも Y にも印が無いことを確かめ、X を drop して X の印が在り中身が `unloaded` であることを確かめ、環境変数を外してフォルダを消す。時間待ちは使わない。i686 のときだけ走る無視の印は既存の 2 本と同じ形にする
   - i686 の成果物を `cargo build -p shiori-host32-helper -p shiori-host32-testdll -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` で作り、このテストだけを回す
@@ -44,3 +44,7 @@
   - `research.md` の競合の経路の記録に、直した後は経路 1・2 が成り立たない理由（書き手が別の写しで、置き場の判定で書かない）を書き足す
   - 完了の状態: 全体テストの緑の結果、差分の境界の確かめ、経路が成り立たない理由が `research.md` に記録されている
   - _Requirements: 4.3, 5.1, 5.3, 5.4, 3.3, 2.3_
+
+## Implementation Notes
+- タスク 2: 並走の cargo が多いと i686 の `cargo build` が rustc の 0xc000012d（確約メモリの不足）で落ちることがある。同時に走る cargo が減ってから採り直す。直す前の赤の実走は片付けの手前で panic するので `target\h32m_*` が 2 つずつ残る＝回すたびに消す
+

@@ -310,3 +310,41 @@ load しないもの（確認済み）:
 
 - **見立てと一致**。load するテストは 3 本、印の環境変数を差すのは印のテストだけ、読むのは偽の DLL の `unload` だけ、で 2 節の記録と同じだった。錠を取らないのが loopback のテストであることも同じ。
 - 見立てと違うものは無いので、要件 3.4 に従って以降のタスクの対象一覧へ足すものは無い。
+
+## 15. 直す前の赤（タスク 2・要件 3.2・2.1・2.4）
+
+### 15.1 足したもの
+
+- `shiori_proxy.rs` の `mod tests` に、道具 `copy_testdll_into_unique_target_dir`（札を受け取り、ワークスペースの `target\` の下に `h32m_{プロセス識別子}_{時刻のナノ秒}_{札}` のフォルダを作って偽の DLL を `shiori.dll` として写す）と、それを 2 回（札 `x`・`y`）呼ぶテスト `testdll_unload_from_another_folder_leaves_marker_untouched` を足した。
+- フォルダの根は `CARGO_MANIFEST_DIR` から `parent()` を 2 回たどって組むので、パスに `..` は入らない。OS の一時フォルダの入口は呼ばない。時間待ちは無い。i686 のときだけ走る無視の印は既存の 2 本と同じ形。
+- 偽の DLL は触っていない（直すのはタスク 3）。
+
+### 15.2 実走の出力
+
+成果物は `cargo build -p shiori-host32-helper -p shiori-host32-testdll -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` で作った。このテストだけを回した結果:
+
+```
+> cargo test -p shiori-host32-helper --target i686-pc-windows-msvc -- testdll_unload_from_another_folder_leaves_marker_untouched
+     Running unittests src\main.rs (target\i686-pc-windows-msvc\debug\deps\shiori_host32_helper-4696ad579ce35468.exe)
+running 1 test
+test shiori_proxy::tests::testdll_unload_from_another_folder_leaves_marker_untouched ... FAILED
+thread 'shiori_proxy::tests::testdll_unload_from_another_folder_leaves_marker_untouched' (30060) panicked at crates\shiori-host32-helper\src\shiori_proxy.rs:703:9:
+X has no marker: 別のフォルダ Y の写しの unload が X 宛ての印を書いた
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 37 filtered out; finished in 0.66s
+```
+
+- 落ちたのは確かめ 1（X の印が無い）。Y の写しを drop した時点で、X のフォルダに `unload.marker` ができていた。競合の芯「別の写しの unload が印を書く」（3 節の経路 1・2）が、2 本のテストの間の順番に頼らずに 1 本の中で再現できた。
+- 残ったフォルダの中身を見ると、X には `shiori.dll` と `unload.marker`（8 バイト・中身 `unloaded`）、Y には `shiori.dll` だけだった。Y の写しが X 宛ての印を書いたことと合う（X の写しの drop は巻き戻しの中でも走るが、その前の確かめ 1 で既に赤）。
+- 行番号はこの実走の時点のもの。後で整形の都合で 1 行縮めたので、今は 702 行目が同じ確かめ。
+
+### 15.3 補助 exe のテスト全体を回したとき
+
+`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc`（絞らずに 38 本）を 2 回回した。
+- 1 回目: 赤 2 本＝足したテストと印のテスト `testdll_drop_invokes_courtesy_unload`。印のテストの赤は、錠を取らない loopback のテストの unload が印を書いたものと見られる（3 節の経路 1。直す前の揺れそのもの）。メッセージは採り損ねたので、断定はしない。
+- 2 回目: 赤 1 本＝足したテストだけ（37 本緑）。
+
+### 15.4 後片付け
+
+- 足したテストは確かめ 1 で panic するので、最後のフォルダの削除まで届かない。この節の実走（絞った 2 回と全体の 2 回）で `target\` の下に `h32m_*_x`・`h32m_*_y` が 1 回あたり 2 つずつ、計 8 つ残った。すべて消し、`target\` の下に `h32m_` で始まるフォルダが 0 であることを確かめた。
+- 1 回目の全体の実走で印のテストが落ちたため、その一時フォルダ（OS の一時フォルダの下・既存の置き場の `host32_proxy_test_17132_…`）も 1 つ残っていたので消した。同じ場所に別のプロセスの残り（`host32_proxy_test_30400_…`・`host32_proxy_test_34796_…`）が 2 つあるが、この実走のものではないので触っていない。
+- 環境変数はテストのプロセスの中だけのもので、プロセスが終われば残らない。

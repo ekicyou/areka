@@ -651,6 +651,72 @@ mod tests {
         let _ = std::fs::remove_dir_all(&load_dir);
     }
 
+    /// ワークスペースの `target\` の下に一意なフォルダを作り、偽の DLL を `shiori.dll` として写す。
+    /// 根は `CARGO_MANIFEST_DIR` の 2 つ上（ワークスペースの根）を `parent()` で引き、`..` を含めない。
+    /// 一意にするのはプロセス識別子・時刻のナノ秒・フォルダごとの札。OS の一時フォルダは使わない。
+    /// 返り値は（フォルダ、写した `shiori.dll` の絶対パス）。
+    fn copy_testdll_into_unique_target_dir(tag: &str) -> (PathBuf, PathBuf) {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let workspace = manifest
+            .parent()
+            .and_then(Path::parent)
+            .expect("CARGO_MANIFEST_DIR の 2 つ上（ワークスペースの根）");
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        // パスが長くなりすぎないようフォルダ名は短く。
+        let name = format!("h32m_{}_{}_{}", std::process::id(), nanos, tag);
+        let dir = workspace.join("target").join(name);
+        std::fs::create_dir_all(&dir).expect("create load_dir under target");
+        let dll = dir.join("shiori.dll");
+        std::fs::copy(resolve_testdll(), &dll).expect("copy shiori.dll into load_dir");
+        (dir, dll)
+    }
+
+    /// 同じプロセスに読まれた別の写し（フォルダ Y）の unload が、フォルダ X 宛ての印を書かないこと。
+    /// 印のテストと往復のテストの間の順番に頼らず、競合の芯「別の写しの unload が印を書く」を
+    /// 1 本の中で切り出す（要件 3.2）。時間待ちは無く、1 つのスレッドで順に進む。
+    #[test]
+    #[cfg_attr(
+        not(target_arch = "x86"),
+        ignore = "i686 専用: 32bit testdll(shiori.dll) を load するため x64 では BAD_EXE_FORMAT。`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` で実行"
+    )]
+    fn testdll_unload_from_another_folder_leaves_marker_untouched() {
+        let _serial = TESTDLL_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        let (dir_x, dll_x) = copy_testdll_into_unique_target_dir("x");
+        let (dir_y, dll_y) = copy_testdll_into_unique_target_dir("y");
+        let marker_x = dir_x.join("unload.marker");
+        let marker_y = dir_y.join("unload.marker");
+
+        // SAFETY: edition 2024 では set_var は unsafe（プロセス global 変更）。印の環境変数を差す
+        // テストは錠 `TESTDLL_SERIAL` で直列になっている。
+        unsafe {
+            std::env::set_var("HOST32_TESTDLL_UNLOAD_MARKER", &marker_x);
+        }
+
+        let proxy_x = ShioriByteProxy::load(&dll_x, &dir_x).expect("testdll X load must succeed");
+        let proxy_y = ShioriByteProxy::load(&dll_y, &dir_y).expect("testdll Y load must succeed");
+        drop(proxy_y);
+
+        assert!(
+            !marker_x.exists(),
+            "X has no marker: 別のフォルダ Y の写しの unload が X 宛ての印を書いた"
+        );
+        assert!(!marker_y.exists(), "Y has no marker");
+
+        drop(proxy_x);
+        let content = std::fs::read(&marker_x).expect("X の unload が印を書くはず");
+        assert_eq!(content, b"unloaded", "X の unload が書く印の中身");
+
+        // SAFETY: set_var と同じ（錠の中で外す）。
+        unsafe {
+            std::env::remove_var("HOST32_TESTDLL_UNLOAD_MARKER");
+        }
+        let _ = std::fs::remove_dir_all(&dir_x);
+        let _ = std::fs::remove_dir_all(&dir_y);
+    }
+
     // ---------------------------------------------------------------------
     // 4. testdll 越し request loopback（R3.2/3.3/3.4/3.6・Task 4.1）
     // ---------------------------------------------------------------------
