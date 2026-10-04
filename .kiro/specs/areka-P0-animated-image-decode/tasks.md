@@ -93,7 +93,7 @@
   - _Requirements: 3.3, 4.3, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 8.4, 8.5_
 
 - [ ] 5. 本物の読み手とバルーンでの結合
-- [ ] 5.1 本物の読み手で検体のフォルダを焼く
+- [x] 5.1 本物の読み手で検体のフォルダを焼く
   - 本番の読み手で検体のフォルダを焼き、動く 2 形式は全コマが載る・GIF と 1 枚だけの APNG は動く絵の答えが無しで 1 枚、を確かめる
   - 上限を 1 コマにして焼き、`basic.apng`・`alpha.webp`・`default_image.apng`・`rgb.webp` が 1 枚へ縮み、その 1 枚が上限を広げて焼いたときの 0 番のコマと同じであること（`default_image.apng` は赤、`rgb.webp` は左上の色が抜ける）、`truncated.apng` が 1 枚へ縮むことを確かめる
   - 完了: このテストが Windows の WebP の拡張機能の有無に依らず緑（動く絵と縮めた 1 枚は `image` が読む）
@@ -150,3 +150,4 @@
 - 3.3: `limits.rs` の 7 行目にファイル全体の `#![allow(dead_code)]` がある（`from_env` にテストを置かないため、テストのビルドでも未使用になる）。4.1 で `bake_with_limits` と再輸出につないだら必ず外す。値は前後の空白を除いてから読む（`areka-mcp` の `port.rs` の先例どおり）。
 - 4.1: `animated.rs` の `shrink()` は今は今までの 1 枚読みだけ（`ponytail:` の継ぎ目）。4.2 は `shrink()` の中身（段 1 `decode_first_frame`→段 2 `decode`→段 3 失敗の一覧）とテストを足すだけで組み直しは要らない。上限の判定（`judge`）と上限・失敗の `warn!` は 4.1 で配線済みだが、専用のテストは 4.2 の担当。0 番のコマは今の静止画の正規化の道をそのまま通し、残りのコマは `normalize::clear_key_color(bgra, width, height, stride, key)` で 0 番の抜き色を消す（設計の手順 2 と画素で同じ）。
 - 4.2: `bake_without_limits_uses_the_default_limits` は本物の環境変数を読む（設計どおり環境は触らない）。`AREKA_ANIMATED_IMAGE_MAX_*` を 3 コマ・12 画素より小さく設定した機械では赤になる。
+- 5.1: 本物の読み手の結合テストは `single.webp`（1 枚の WebP は WIC の拡張機能が要る）と `deep16.apng`（段 2 で WIC へ落ちる）を焼く検体から外す。GIF の検体は透明度なし・全面が赤なので 0 番が全透明になり、0 番を読んだことは抜き色の `debug!` の行で判定している。

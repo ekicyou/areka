@@ -291,6 +291,10 @@ mod log_capture;
 #[cfg(test)]
 mod webp_pin_tests;
 
+// 本物の読み手で動く絵の検体のフォルダを焼く結合テスト（spec: areka-P0-animated-image-decode 要件 8.3〜8.6）。
+#[cfg(test)]
+mod samples_e2e_tests;
+
 #[cfg(test)]
 mod bake_entry_tests {
     use super::*;
