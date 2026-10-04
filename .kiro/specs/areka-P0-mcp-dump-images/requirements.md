@@ -25,7 +25,7 @@
 - SSP ヘルプ「その他の機能」（<https://ssp.shillest.net/ukadoc/ssphelp/other.html>）: `dump_surface` は「サーフィスIDを省略すると現在表示中の姿(拡大縮小・透明度の適用前)を、指定するとそのサーフィス単体を初期状態で描画したものを返す」「1回1枚」。`dump_balloon` は「最後に描画された状態を返す」。
 - ukadoc `\![execute,dumpballoon,…]`: 「その時点でバルーンに描かれている内容がそのまま出力される。拡大縮小や半透明(フェード含む)は適用前の等倍の画像になる」「バルーンが非表示でも、描画内容が残っていれば出力される」。
 - ukadoc `\![execute,dumpsurface,…]`: スコープ ID の指定で「着せ替え状態などのスコープに依存する処理が変わる」。
-- 結果の文言は SSP 2.9.05 の実測（survey §3）。**実測していないもの**（下の裁定 3〜6・8）は ukadoc にも記述が無く、areka の文言を暫定で置いた。
+- 結果の文言は SSP 2.9.05 の実測（survey §3）と、2026-10-04 の SSP 2.9.07 の実測（[research.md](research.md) §8）。**実測していないもの**（下の裁定 6）は ukadoc にも記述が無く、areka の文言を置いた。裁定 4・5 は実測が暫定の裁定と逆に出ており、要件ディスカッションの議題にする。
 
 ### いま何が起きているか（2026-10-04 実測）
 
@@ -40,12 +40,12 @@
 |---|---|---|---|---|
 | 1 | `dump_balloon` の「拡大の前」（brief の議題 ⒜⒝⒞） | **原寸（拡大率 1 のときの大きさ）で返す**。⒞「拡大の後の大きさで返す」は取らない。⒜ 文字を縮めて重ねる／⒝ 拡大率 1 で描き直す、のどちらで作るかは設計で決める | ukadoc「拡大縮小や半透明…は適用前の等倍の画像」・brief の Out of Boundary「拡大縮小・半透明の適用後の画像」。⒜と⒝は字の鮮明さが違いうるので、設計で選んだ結果を要件ディスカッション後の設計討議に出す | 3.3 |
 | 2 | `scope` の省略 | **0** | 定義の description「Default 0」 | 1.2・3.2 |
-| 3 | 存在しないスコープ | そのゴーストにキャラクターの窓が無いスコープ（負の数を含む）は、2 本とも **`NG:No such scope in this ghost`** | `dump_surface` は SSP の実測の文言。`dump_balloon` の存在しないスコープは未実測＝同じ文言に揃える | 4.1 |
+| 3 | 存在しないスコープ | そのゴーストにキャラクターの窓が無いスコープ（負の数を含む）は、2 本とも **`NG:No such scope in this ghost`** | 2 本とも SSP の実測の文言（`dump_balloon` は 2026-10-04 に SSP 2.9.07 で実測） | 4.1 |
 | 4 | `surface` 省略で、そのスコープが何も表示していない（`\s[-1]` で隠した・まだ一度も出していない） | **`NG:No surface is currently shown in this scope`**（areka の文言） | SSP は未実測。空の画像を返すより、理由の分かる失敗のほうがエージェントが次の手を選べる | 4.3 |
 | 5 | そのスコープのバルーンをまだ一度も描いていない・描いた内容が残っていない | **`NG:No balloon has been drawn in this scope yet`**（areka の文言） | SSP は未実測。ukadoc は「描画内容が残っていれば出力される」＝残っていなければ出ない | 4.4 |
 | 6 | 窓の無いゴースト（窓への結線が成立せず記録だけの起動へ倒れた） | 2 本とも **`NG:This ghost has no window`**（areka の文言） | `mcp-tool-entrances` 要件 3.8「窓が要るツールが窓の無いときにどう答えるかは各 spec が `NG:` で決める」 | 4.5 |
 | 7 | 指定した surface の「初期状態」 | **そのスコープの今の着せ替えを掛け、アニメーションは始まる前の姿**。今の画面は変えない | ukadoc `dumpsurface`「スコープ ID…で、着せ替え状態などのスコープに依存する処理が変わる」・SSP ヘルプ「単体を初期状態で描画」。アニメーションの途中のコマは台本の `dumpsurface` のアニメーション ID の役目（本 spec の外） | 2.1・2.2 |
-| 8 | 指定した surface のときの成功の本文 | **`OK:scope <n>, surface <id> rendered alone in its initial state (before scaling and transparency)`**（areka の文言） | SSP は「今の見た目」の本文しか実測していない（survey §3）。「as currently shown」と書くと嘘になるので別の文にする。実測できたら SSP の文言へ差し替える | 2.4 |
+| 8 | 指定した surface のときの成功の本文 | **`OK:scope <n>, surface <id> rendered alone in its initial state (not what is on the screen now)`** | SSP 2.9.07 の実測（2026-10-04・research.md §8） | 2.4 |
 | 9 | 今話している途中の呼び出し | **拒まず、その時点の絵を返す**（文字が途中まででもよい） | `dump_balloon` の description「While the ghost is still talking the text may be partially drawn; wait until get_status no longer reports talking」＝待つのは呼ぶ側 | 3.5 |
 | 10 | シェルの絵の中の「箱」（`shell-balloon` の `\b[名前]`）に書いた台詞 | `dump_balloon` は**バルーンの窓だけ**を返し、箱の文字は含めない。`dump_surface`（省略）に箱の文字が写るかは**設計で調べて差の一覧に書く**（どちらでも本 spec の合否を変えない） | 箱はキャラクターの窓の子で、SSP に対応物が無い（areka の拡張） | 3.6 |
 | 11 | 画像の大きさの上限 | **設けない**（1 回 1 枚・原寸） | SSP も原寸で返す。シェルの絵は高々数千 px 四方 | 5.5 |
@@ -92,7 +92,7 @@
 1. When `surface` を渡した `dump_surface` が届き、その ID がそのスコープのシェルに在る, the areka shall その surface を単体で、アニメーションが始まる前の初期状態で描いた透過 PNG 1 枚を返す。
 2. The areka shall 2.1 の絵に、そのスコープの今の着せ替えの状態を掛ける。
 3. The areka shall 2.1 の処理で画面の表示（今の surface・再生中のアニメーション・台詞）を変えない（そのスコープが今何も表示していなくても、指定した surface は返す）。
-4. When 2.1 に成功する, the areka shall 本文を `OK:scope <スコープ番号>, surface <指定した ID> rendered alone in its initial state (before scaling and transparency)`・`isError: false` とし、その後に画像の content を 1 つ続ける。
+4. When 2.1 に成功する, the areka shall 本文を `OK:scope <スコープ番号>, surface <指定した ID> rendered alone in its initial state (not what is on the screen now)`・`isError: false` とし、その後に画像の content を 1 つ続ける。
 5. The areka shall 2.1 の画像の大きさを、要件 1.3 と同じく原寸とする。
 
 ### Requirement 3: `dump_balloon`＝最後に描いたバルーンを返す
@@ -160,5 +160,5 @@
 3. The areka shall 成功の本文 3 種（要件 1.4・2.4・3.7）を、スコープ番号と surface ID を変えた例で決定論テストに固定する。
 4. The areka shall 絵の中身を、実際の描画を通るテストで固定する: ⑴ 今の見た目が表示中の surface の画素と一致する、⑵ 指定した surface が画面を変えずにその surface の画素で返る、⑶ バルーンが背景と文字の両方を含み、拡大率が 1 でないときも原寸で返る、⑷ 隠れたバルーンでも最後の内容が返る。GPU を使うテストはこのリポジトリの定石（常時テストに入れる条件・画面外の描画先での画素の検証）に従う。
 5. The areka shall `mcp-tool-entrances` が置いた 2 本のダミーのテスト（`NG:not implemented yet` を固定するもの）を、本 spec の振る舞いを固定するテストへ書き換える（`NG:not implemented yet` を返す経路を 2 本に残さない）。
-6. The areka shall SSP との差の一覧（`doc/ssp-mcp/` の下）に、areka の文言を置いた 5 件（要件 2.4・4.3・4.4・4.5 と、`dump_balloon` の存在しないスコープ）と、シェルの絵の中の箱の文字が `dump_surface` に写るかどうかを、「SSP は未実測」の印とともに書く。
+6. The areka shall SSP との差の一覧（`doc/ssp-mcp/` の下）に、areka の文言を置いた 3 件（要件 4.3・4.4・4.5）と、シェルの絵の中の箱の文字が `dump_surface` に写るかどうかを、「SSP は未実測」の印とともに書く。
 7. The areka shall 実機で確かめ、結果を本 spec の `verification/signoff.md` に残す: ⑴ 既定ゴースト（emo2）で `dump_surface`（省略）が今の姿の透過 PNG を返し、開いて画面と同じに見える、⑵ `sakurascript` で表情を変えた後に撮ると変わった姿が返る、⑶ `surface` 指定で画面が変わらずにその surface が返る、⑷ 台詞を出した後の `dump_balloon` が背景と文字の入った画像を返し、バルーンが消えた後も同じ内容が返る、⑸ 画面の拡大率が 1 でない環境で ⑴ と ⑷ が原寸で返る、⑹ 存在しないスコープと surface ID が要件 4.1・4.2 の文言で返る、⑺ 撮っている間もゴーストの描画と会話が止まらず、ERROR の記録が増えない。
