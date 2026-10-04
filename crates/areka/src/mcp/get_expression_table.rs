@@ -1,10 +1,12 @@
 //! `get_expression_table` のダミーの処理（spec: areka-P0-mcp-tool-entrances）。
 
 use std::collections::HashSet;
+use std::path::Path;
 
 use areka_mcp::tools::get_expression_table::Args;
 use areka_mcp::tools::{ReplyTo, outcome};
-use areka_parsers::shell::SurfaceTable;
+use areka_parsers::charset::{self, DefaultEncoding};
+use areka_parsers::shell::{SurfaceTable, parse_surfacetable};
 use bevy_ecs::world::World;
 
 use super::resolve::ActiveGhost;
@@ -63,6 +65,36 @@ fn render(table: &SurfaceTable) -> String {
         out.push_str(&format!("|{scope}|{group}|{name}|\\s[{id}]|\r\n"));
     }
     out
+}
+
+/// シェルのフォルダの `surfacetable.txt` だけを読んで転記を返す（`surfaces.txt`・画像・
+/// `descript.txt` は読まない）。`charset` を見て読み、無ければ Shift_JIS。無ければ記録せず空の転記、
+/// 開けなければ `warn!` して空の転記、読めない行があれば行番号の列を持つ `warn!` を 1 回だけ出す
+/// （要件 1.6・2.10・2.12・3.5・5.1・5.2・5.7・5.8）。
+fn load(shell_dir: &Path) -> SurfaceTable {
+    let path = shell_dir.join("surfacetable.txt");
+    let bytes = match std::fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return SurfaceTable::default(),
+        Err(err) => {
+            tracing::warn!(
+                path = %path.display(),
+                error = %err,
+                "[get_expression_table] surfacetable.txt を開けない: 既定の名前だけで答える"
+            );
+            return SurfaceTable::default();
+        }
+    };
+    let table = parse_surfacetable(&charset::decode(&bytes, DefaultEncoding::Ansi));
+    if !table.unreadable.is_empty() {
+        tracing::warn!(
+            path = %path.display(),
+            count = table.unreadable.len(),
+            lines = ?table.unreadable,
+            "[get_expression_table] surfacetable.txt に読めない行: 読めた行だけで答える"
+        );
+    }
+    table
 }
 
 /// まだ中身が無い。World・ゴースト・引数は使わず（ゴーストに何もさせず）`NG:` で答える（要件 5.1・5.2）。

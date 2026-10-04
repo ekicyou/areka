@@ -33,8 +33,6 @@ fn answers_not_implemented_yet_with_an_empty_world() {
 
 // ---- 規則（render(&parse_surfacetable(..))・期待値は ssp-measurements.md の写し） ----
 
-use areka_parsers::shell::parse_surfacetable;
-
 /// 期待値の各行を `\r\n` で終えて 1 本にする（行の終わりは survey.md の `\r\n`・要件 1.3）。
 fn crlf(lines: &str) -> String {
     lines.lines().map(|line| format!("{line}\r\n")).collect()
@@ -531,4 +529,141 @@ fn the_same_id_written_twice_is_shown_twice_in_written_order() {
             crlf("|\\0|b|二|\\s[30]|\n|\\0|a|一|\\s[30]|")
         )
     );
+}
+
+// ---- 読み取りと記録（load・一時フォルダは temp-path-kit・記録は log-capture-kit） ----
+
+use log_capture_kit::{CapturedEvent, capture};
+use temp_path_kit::TempPath;
+
+/// `本体` と `表情` の Shift_JIS（`表` の 2 バイト目は `\` と同じ 0x5C）。
+const SJIS_HONTAI: [u8; 4] = [0x96, 0x7B, 0x91, 0xCC];
+const SJIS_HYOUJOU: [u8; 4] = [0x95, 0x5C, 0x8F, 0xEE];
+
+/// `group,本体`・`scope,0`・`100,表情` を読めたときの表（既定の 15 件の後に 100 が続く）。
+fn hontai_answer() -> String {
+    format!(
+        "{}{}",
+        crlf(DEFAULTS_ONLY_ANSWER),
+        crlf(r"|\0|本体|表情|\s[100]|")
+    )
+}
+
+/// `group,本体` の 1 グループを、先頭に `head` を付けた UTF-8 のバイト列にする。
+fn utf8_hontai(head: &str) -> Vec<u8> {
+    format!("{head}group,本体\r\n{{\r\n\tscope,0\r\n\t100,表情\r\n}}\r\n").into_bytes()
+}
+
+/// `group,本体` の 1 グループを、先頭に `head` を付けた Shift_JIS のバイト列にする。
+fn sjis_hontai(head: &str) -> Vec<u8> {
+    [
+        head.as_bytes(),
+        b"group,",
+        &SJIS_HONTAI,
+        b"\r\n{\r\n\tscope,0\r\n\t100,",
+        &SJIS_HYOUJOU,
+        b"\r\n}\r\n",
+    ]
+    .concat()
+}
+
+/// 一時フォルダをシェルのフォルダに見立て、`surfacetable.txt` に `bytes` を書く。
+fn shell_dir_with(bytes: &[u8]) -> TempPath {
+    let dir = TempPath::new("expression-table");
+    std::fs::write(dir.child("surfacetable.txt"), bytes).expect("surfacetable.txt を書く");
+    dir
+}
+
+fn warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
+    events
+        .iter()
+        .filter(|ev| ev.level == tracing::Level::WARN)
+        .collect()
+}
+
+/// Shift_JIS（`charset` なし・`charset,Shift_JIS`）と UTF-8（`Charset,UTF-8`・BOM 付き・BOM なし
+/// `charset,UTF-8`）のそれぞれで、キャラクタ名と説明が元の字のとおりの表になる。どれも記録を出さない
+/// （要件 7.4・1.6・5.1・5.2）。
+#[test]
+fn each_charset_and_bom_reads_names_as_written() {
+    let cases: [(&str, Vec<u8>); 5] = [
+        ("Shift_JIS・charset なし", sjis_hontai("")),
+        ("charset,Shift_JIS", sjis_hontai("charset,Shift_JIS\r\n")),
+        ("Charset,UTF-8", utf8_hontai("Charset,UTF-8\r\n")),
+        ("BOM 付き UTF-8", utf8_hontai("\u{feff}charset,UTF-8\r\n")),
+        ("BOM なし charset,UTF-8", utf8_hontai("charset,UTF-8\r\n")),
+    ];
+    for (label, bytes) in cases {
+        let dir = shell_dir_with(&bytes);
+        let (rendered, events) = capture(|| render(&load(dir.path())));
+        assert_eq!(rendered, hontai_answer(), "{label}");
+        assert!(warns(&events).is_empty(), "{label}: {events:?}");
+    }
+}
+
+/// `surfacetable.txt` が無い → 既定の 15 件だけ・`warn!` は出さない（要件 3.5）。
+#[test]
+fn a_missing_file_is_defaults_only_without_a_warning() {
+    let dir = TempPath::new("expression-table");
+    let (rendered, events) = capture(|| render(&load(dir.path())));
+    assert_eq!(rendered, crlf(DEFAULTS_ONLY_ANSWER));
+    assert!(warns(&events).is_empty(), "{events:?}");
+}
+
+/// `surfacetable.txt` という名前のフォルダ（開けない）→ 既定の 15 件だけ・`warn!` が 1 件（要件 5.8）。
+#[test]
+fn an_unopenable_file_is_defaults_only_with_one_warning() {
+    let dir = TempPath::new("expression-table");
+    std::fs::create_dir(dir.child("surfacetable.txt")).expect("同名のフォルダを作る");
+    let (rendered, events) = capture(|| render(&load(dir.path())));
+    assert_eq!(rendered, crlf(DEFAULTS_ONLY_ANSWER));
+    let warns = warns(&events);
+    assert_eq!(warns.len(), 1, "{events:?}");
+    assert!(
+        warns[0].message().starts_with("[get_expression_table]"),
+        "{events:?}"
+    );
+    assert!(warns[0].field("path").is_some(), "{events:?}");
+    assert!(warns[0].field("error").is_some(), "{events:?}");
+}
+
+/// 読めない行が 2 つあっても、読めた分の表が返り、`warn!` は 1 件だけで行番号の列を持つ
+/// （要件 7.6・5.7）。
+#[test]
+fn unreadable_lines_keep_the_readable_rows_and_warn_once_with_line_numbers() {
+    let dir = shell_dir_with(
+        "charset,UTF-8\r\ngroup,本体\r\n{\r\n\tscope,0\r\n\t100,表情\r\n\tabc,壊れ\r\n\t壊れ\r\n}\r\n"
+            .as_bytes(),
+    );
+    let (rendered, events) = capture(|| render(&load(dir.path())));
+    assert_eq!(rendered, hontai_answer());
+    let warns = warns(&events);
+    assert_eq!(warns.len(), 1, "{events:?}");
+    assert!(
+        warns[0].message().starts_with("[get_expression_table]"),
+        "{events:?}"
+    );
+    assert_eq!(warns[0].field("lines"), Some("[6, 7]"), "{events:?}");
+}
+
+/// 同じフォルダの `surfaces.txt` の `surface.alias`ブレスと surface*ブレスの `name` は表を変えず、
+/// `surfaces.txt` にだけ定義された ID も載らない（要件 2.10・2.12）。
+#[test]
+fn surfaces_txt_in_the_same_folder_does_not_change_the_table() {
+    let dir = shell_dir_with(&utf8_hontai("charset,UTF-8\r\n"));
+    let before = render(&load(dir.path()));
+    std::fs::write(
+        dir.child("surfaces.txt"),
+        "charset,UTF-8\r\n\
+         surface.alias\r\n{\r\n50,[0]\r\n}\r\n\
+         surface0\r\n{\r\nname,別名\r\n}\r\n\
+         surface77\r\n{\r\nname,定義だけ\r\nelement0,overlay,a.png,0,0\r\n}\r\n",
+    )
+    .expect("surfaces.txt を書く");
+
+    let after = render(&load(dir.path()));
+    assert_eq!(after, before);
+    assert_eq!(after, hontai_answer());
+    assert!(!after.contains(r"\s[77]"), "{after}");
+    assert!(!after.contains(r"\s[50]"), "{after}");
 }

@@ -26,7 +26,7 @@
   - 完了の形: 上の各場合のテストが緑になり、規則の 1 か所（例: 集合を載せる行だけから作る）を変えると少なくとも 1 本が赤になる
   - _Requirements: 1.4, 1.5, 2.7, 2.8, 2.9, 2.11, 3.3, 3.4, 3.8, 4.4, 5.9, 5.10, 7.2, 7.3, 7.5_
 
-- [ ] 2.3 シェルのフォルダから `surfacetable.txt` を読み、後退を記録する
+- [x] 2.3 シェルのフォルダから `surfacetable.txt` を読み、後退を記録する
   - `surfacetable.txt` だけを読み（`surfaces.txt`・画像・`descript.txt` は読まない）、`charset` を見て読み取り、無ければ Shift_JIS で読む
   - 無いときは記録せず空の転記、開けないときは `warn!` して空の転記、読めない行があれば行番号の列を持つ `warn!` を 1 回だけ出す（前置き `[get_expression_table]`）
   - 同じ一時フォルダに `surface.alias`ブレスと surface*ブレスの `name` を書いた `surfaces.txt` を置いても表が変わらず、`surfaces.txt` にだけ定義された ID が載らないことも確かめる
@@ -60,3 +60,4 @@
 
 - `areka` に lib の target は無い。単位のテストは `cargo test -p areka --bin areka mcp::get_expression_table` で走らせる（`--lib` は使えない）。
 - `cargo clippy -p areka --all-targets -- -D warnings` は、この spec の前から dola・areka-emo-compose・areka-kanade などの clippy 1.99 の lint で赤（26 件・持ち主は起票済みの `clippy-199-lints`）。この spec では「変えたファイルから警告が出ない」ことで判定する。2.4 までは `DEFAULT_NAMES`・`render` の dead_code の 2 件が出てよい。
+- `temp-path-kit` は `std::env::temp_dir()` の下に作る。手元で走らせるときは TMP／TEMP をワークツリーの `target\` の下へ向け、走らせた後に空のフォルダを消す。
