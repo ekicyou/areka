@@ -292,6 +292,18 @@ fn body_is_message_only_or_fields_only() {
 }
 
 #[test]
+fn string_message_uses_the_raw_value_like_stdout() {
+    // `warn!(message = "…")` は record_str で届き `{:?}` に引用符が付く。標準出力と同じく生の値を使う。
+    let quoted = draft(
+        Level::WARN,
+        "kanade",
+        [s("message", "止まった", "\"止まった\""), d("code", "5")],
+    )
+    .unwrap();
+    assert_eq!(quoted.body, "止まった code=5");
+}
+
+#[test]
 fn unclassified_event_has_no_draft() {
     assert_eq!(draft(Level::INFO, "kanade", [msg("x")]), None);
     assert_eq!(draft(Level::DEBUG, TARGET_SCRIPT, [msg("x")]), None);

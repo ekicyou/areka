@@ -186,7 +186,8 @@ pub(crate) fn draft<'a>(
     let mut rest = String::new();
     for f in fields {
         match f.name {
-            "message" => message = Some(f.debug),
+            // 標準出力の層は文字列の message を引用符なしで書くので、生の値があればそれに揃える。
+            "message" => message = Some(f.raw.unwrap_or(f.debug)),
             "ghost" if convention => name = Some(f.raw.unwrap_or(f.debug)),
             "label" if convention => label = Some(f.raw.unwrap_or(f.debug)),
             n if n.starts_with("log.") => {}
@@ -377,13 +378,8 @@ impl Visit for Fields {
     }
 
     fn record_str(&mut self, field: &Field, value: &str) {
-        // 標準出力の層は文字列の message を引用符なしで書くので、本文の先頭もそれに揃える。
-        let debug = if field.name() == "message" {
-            value.to_string()
-        } else {
-            format!("{value:?}")
-        };
-        self.0.push((field.name(), debug, Some(value.to_string())));
+        self.0
+            .push((field.name(), format!("{value:?}"), Some(value.to_string())));
     }
 }
 
