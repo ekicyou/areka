@@ -3,7 +3,7 @@
 > 要件 4.4 は欠番（要件ディスカッションの議題 1 で取り下げ・要件 3.9 へ統合）なので、どのタスクにも載せない。
 > 触ってよいファイルは design.md の「Boundary Commitments」と「File Structure Plan」のとおり。`crates/areka/src/mcp/mod.rs`・`crates/areka-mcp/`・`areka-emo-compose`・`areka-emo-text`・`areka-emo-present` の既存の行は変えない。これ以外に触る要が出たら止めて報告する。
 
-- [ ] 1. PNG の圧縮に使うクレートを本体の依存へ足す
+- [x] 1. PNG の圧縮に使うクレートを本体の依存へ足す
   - `crates/areka/Cargo.toml` の `[dependencies]` に、`areka-nar` と同じ版・同じ機能の指定（既定機能を切り、伸長と圧縮に要る割り当ての機能だけ）で 1 行足す。ほかの `Cargo.toml` は触らない
   - 足した後に本体のクレートの検査（ビルド）が通り、`Cargo.lock` に新しいクレートの行が増えていない（差分が本体の依存の並びの 1 行だけ）
   - `areka-nar` の「圧縮側を綴らない」常設の検査が、本体のクレートの圧縮の利用に当たらず緑のまま

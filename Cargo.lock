@@ -120,6 +120,7 @@ dependencies = [
  "dola",
  "human-panic",
  "log-capture-kit",
+ "miniz_oxide 0.9.1",
  "sample-ghost-kit",
  "shiori-abi",
  "shiori-host32-host",
