@@ -134,6 +134,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 | spec（`areka-P0-` 省略） | 段 | 何をするか | 規模 | 並び | 前提（先に着地） | Fable |
 |---|---|---|---|---|---|---|
 | `host32-testdll-marker-race`（**10-04 起票**・`translate-pipeline` の完了時に発見） | バグ | i686 の helper のテスト `testdll_drop_invokes_courtesy_unload` が揺れる穴を塞ぐ（プロセス全体の環境変数の印を、錠を取らずに test DLL を unload する別のテストが書く疑い・sleep なしで直す） | XS〜S（3〜5） | **C3-①** | なし | − |
+| `ghost-session-test-load-flake`（**10-04 起票**・`mcp-log-history` の完了時に発見） | バグ | 機械が重いと `ghost_session_*`・`shell_balloon_switch_session_*` のテストが毎回違う組で 5〜10 件赤（単独・静かな時は緑・main の赤は未記録）。まず負荷付きで再現し、壁時計の締切の待ちを観測の待ちへ置き換える（sleep で直さない）。再現しなければ記録して据え置きへ | S（3〜6） | C4 以降のバグの席 | なし | − |
 | `mouse-drag-events`（**10-04 起票**・開発者「クローディアがドラッグ中に足の浮いた絵になる」・同日に開発者が優先の段へ上げた） | 優先 | キャラクター窓をドラッグし始めたら `OnMouseDragStart`、離したら `OnMouseDragEnd` を ukadoc の 7 つの Reference で送る（今は台帳で `absent`・動かさないクリックでは送らない・パッシブの抑えは継ぎ目だけ） | S（6〜9） | **C3-④**（kanade の列の先頭・`balloon-lifecycle-events` と同時に走らせない） | なし | − |
 | `drag-cancel-borrow-miss`（**10-03 起票**・`drag-click-without-move` の完了時に発見） | バグ | wndproc のハンドラが World を借りられないとき、取り消しの終了を積まずに累積器の「ドラッグ中の対象」が残る穴を塞ぐ（再入の条件・実機は未観測） | S（4〜7） | **C3-②** | なし | − |
 | `install-live-target-hazards` | その他 | 表示中のシェル・使用中のバルーンへの上書きと、起動中のゴーストへ入れる途中の Windows の終了を**実測してから**扱いを決める | S〜M（8〜14） | C5 の候補（⑴ は `balloon-font-file` の後に測る・`dist/README.txt` を配布の列と分け合う） | なし | ○ |
