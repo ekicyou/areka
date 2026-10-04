@@ -12,7 +12,7 @@
   - 新しいテストファイルを既存のシェルの箱の檻の子モジュールとして結ぶ
   - 完了の姿: 足場を使った確かめの檻が、直す前のコードで緑になる。既存のシェルの箱の檻 3 本も緑のまま
   - _Requirements: 4.4_
-- [ ] 1.2 本 spec の枠の檻を書き、直す前のコードで赤を記録する
+- [x] 1.2 本 spec の枠の檻を書き、直す前のコードで赤を記録する
   - 設計の枠の檻の 1〜5 を書く: 置き場所が違う面への切替（絵が先・`\s` が先）、窓と箱の入れ替わり（両方の向き・両方の並び・移る先が空の場面を含む）、`\s` の後・絵の前に書いた文字、出して隠した後に箱だけ
   - 毎フレームの終わりに、絵の番号・箱の四角・窓の可視・届いた組・ログを判定する（表示するだけにしない）
   - 完了の姿: 直す前のコードで走らせ、1〜5 のそれぞれが「直す前のずれ」の場面で失敗することを確かめ、失敗の要旨（どの檻のどの判定で落ちたか）を `research.md` に日本語で記録する
@@ -74,3 +74,4 @@
 
 - areka クレートの枠の檻の絞り込みは `cargo test -p areka --bin areka shell_box_integration_tests`（モジュールの道筋は `emo2_boot::frame::visibility_integration_tests::shell_box_integration_tests`・子は `::align_tests::`）。`frame_shell_box` では 0 件になる。
 - 1.1 の足場: `Cage::boot(shell, scopes)`・`picture(scope, id)`（絵の差し替え）・`hide_picture(scope)`・`picture_id(scope)`（表示中の番号）・定数 `BOX_SURFACE_ID=0`／`PLAIN_SURFACE_ID=10`・文面 `SHELL_TWO_PLACES`（子）と `SHELL`（親・面 0 だけ箱）。窓を隠すのは既存の `cue(scope, CueCommand::Clear)`。時間切れの檻の末尾の `let _ = &cage.present_tx;` は不要になった（檻に触るついでに消す）。
+- 1.2 の枠の檻 7 本（`...::align_tests::` の下）は 4.2 まで赤のまま。`speak_in_both` は前提のあいだに届いた組を判定せずに捨てている（直す前と後で並びが違うため）。4.2 で全部が緑になった後、ここを `vec![vec![(0, 0)]]` の判定へ締め直す。

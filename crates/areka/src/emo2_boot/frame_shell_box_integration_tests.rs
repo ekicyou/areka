@@ -380,7 +380,6 @@ fn timeout_raises_the_hide_boxes_flag_and_the_box_text_disappears() {
         cage.shown_boxes(0).is_empty(),
         "印は次の台詞の頭まで立ったまま（次の提示でも面にならない）"
     );
-    let _ = &cage.present_tx;
 }
 
 // 絵と箱の置き場所の揃え（areka-P0-shell-balloon-frame-align）。本ファイルの `Cage` をそのまま
