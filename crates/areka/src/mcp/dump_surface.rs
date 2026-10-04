@@ -155,3 +155,11 @@ impl judge::ShellFacts for PresenterFacts<'_> {
 #[cfg(test)]
 #[path = "dump_surface_tests.rs"]
 mod dump_surface_tests;
+
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "dump_surface_gpu_test_support.rs"]
+pub(in crate::mcp) mod gpu_test_support;
+
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "dump_surface_gpu_tests.rs"]
+mod dump_surface_gpu_tests;

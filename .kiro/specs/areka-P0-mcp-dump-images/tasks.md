@@ -74,7 +74,7 @@
   - _Depends: 3.3, 4.1_
 
 - [ ] 5. 実際の描画を通るテストで絵の中身を固定する
-- [ ] 5.1 GPU を通るテストの土台を作り、今の見た目を固定する
+- [x] 5.1 GPU を通るテストの土台を作り、今の見た目を固定する
   - 2 本のテストで共用する土台を兄弟のファイルに置き、キャラクター用のツールのファイルの中で 64 ビットのテストのときだけ接続し、MCP のモジュールの中だけに見える公開範囲にする（バルーン用のテストから使う）
   - 土台は、既存の偽の SHIORI の土台（クレートの中で公開されているもの）をそのまま使い、GPU 資源と窓の一式（偽の HWND・DPI の component）を据えて本番の `Input`・`Update` の段を回す。「シェル内バルーンの切替の一周」のテストの組み方を手本に土台のファイルの中で書き直し、手本のファイルは触らない。ツールは要求を作って `handle` へ渡して呼び、`DPI` を 96 以外にして拡大率が 1 でない状態を作れる
   - キャラクター用のテストファイルを 64 ビットだけで接続し、検体に在る surface を台本で出した後の今の見た目の PNG を復号した画素が、同じ surface を合成器で合成した絵（乗算を戻したもの）と一致し、本文が今の見た目の逐語であることを固定する
@@ -125,3 +125,5 @@
 - 4.1: 「装着の前は後から答える」を固定するのは 5.2 の GPU を通るテスト（4.1 の空の World のテストでは捕まらない）。
 - 4.1（範囲外・完了時の棚卸へ）: `crates/areka/src/mcp/mod.rs` の `later` に付いた一時の `#[allow(dead_code)]` は呼び手ができて不要になったが、mod.rs は本 spec で触らない約束なので残している。
 - 4.2: 文字の面は在るのに差し込み口に `Arrangement` が無い場合は、design の表に無い文言 `NG:the text slot has no arrangement`（`fail`＝`error!` 1 件）にした。`TextSurface::attach` が両方を同じ insert で入れるので本番では届かない防御の枝（4.1 の `compose_alone` が None の枝と同じ扱い）。
+- 5.1: GPU を通るテストの土台の `dump_balloon()`・`calls()` に一時の `#[allow(dead_code)]` を付けている。5.2・5.3 で呼び手ができたら外す。`decode_png` の一時フォルダは呼び出しごとに別（pid＋連番）。
+- 5.1（範囲外・完了時の棚卸へ）: 他のセッションの cargo が 25〜35 本動く重さの下で、全体テストに無関係な不安定が出た（`default_ghost_fault_after_fallback_exits_through_shiori_fault_path`・`script_change_tag_switches_a_to_b_and_reaches_steady`・`switch_to_b_without_boot_record_sends_first_boot_not_ghost_changed`・`stop_with_handoff_under_reservation_switches_without_exit`）。1 本ずつ流すと緑・新しいテストを外した対照でも出る。
