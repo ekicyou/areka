@@ -106,7 +106,7 @@
   - 完了: 足したテストが緑で、呼び手 5 ファイルの差分が 0
   - _Requirements: 5.4, 5.5, 6.6_
 
-- [ ] 6. 記録と申し送り
+- [x] 6. 記録と申し送り
 - [x] 6.1 (P) 依存の登記と上限の説明を書く
   - steering `tech.md` の Key Libraries に `image`・`image-webp` の名前・版・機能・使うクレート・承認日、取り外し条件、`flate2` が本番の木に入ることと `miniz_oxide` の項の一言を書く
   - steering `roadmap.md` に、取り込みを外す作業の持ち主の行と、予約「設定画面と設定ファイル」への「動く絵の 3 つの上限を設定項目として引き取る」を書き足す
@@ -123,7 +123,7 @@
   - _Requirements: 5.3, 9.1, 9.2, 9.4, 9.5_
   - _Boundary: COMPAT_ARCHITECTURE.md, ukadoc-coverage ledger, playback brief_
 
-- [ ] 6.3 `--clipping` を引き受ける spec を起票する
+- [x] 6.3 `--clipping` を引き受ける spec を起票する
   - `/kiro-discovery` で、`--clipping` を付けた element定義では動く絵として読まない決まり（正典 C2）を引き受ける spec を起票し、`roadmap.md` に行を載せる
   - 完了: 新しい spec の `brief.md` と `roadmap.md` の行が在る
   - _Depends: 6.1_
