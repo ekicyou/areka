@@ -5,15 +5,23 @@
 //! 振り分けは tracing の受け口にも World にも触れない純粋な関数で、テストは値を直に渡す。
 //! 記録は [`History`] が全種別で 1 本の通し番号を振り、種別ごとに [`PER_KIND_CAP`] 件まで持つ。
 //! 入れ物はプロセスに 1 つの置き場に据え、[`record`] で積み [`snapshot`]・[`last_id`] で読む。
+//! 出口は [`init`] が標準出力の層と履歴の層（[`HistoryLayer`]＋[`HistoryFilter`]）を重ねて据える。
 
 // 本番の呼び手（履歴の層・出口の据え付け）が生えるまでの一時的な抑止。
 // areka-P0-mcp-log-history task 2.3 で外す。
 #![allow(dead_code)]
 
 use std::collections::VecDeque;
+use std::fmt;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use tracing::Level;
+use tracing::field::{Field, Visit};
+use tracing::subscriber::Interest;
+use tracing::{Event, Level, Metadata, Subscriber};
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::layer::{Context, Filter, Layer, SubscriberExt};
+use tracing_subscriber::util::SubscriberInitExt;
 use windows::Win32::System::SystemInformation::GetLocalTime;
 
 /// 種別（SSP の 5 語）。
@@ -324,6 +332,95 @@ fn local_now() -> Stamp {
         hour: t.wHour as u8,
         minute: t.wMinute as u8,
     }
+}
+
+/// 履歴の層がその呼び出し口を必ず欲しいか（出来事で、かつ振り分けが当たる）。
+/// 偽なら「関心なし」で、その呼び出し口は履歴の層へ届かない。
+pub(crate) fn wants(is_event: bool, level: Level, target: &str) -> bool {
+    is_event && classify(level, target).is_some()
+}
+
+/// 履歴の層のフィルタが通すか。出来事でない問い合わせ（`tracing::enabled!`・スパン）は必ず通す。
+///
+/// 層ごとのフィルタは断るたびに「断った」印をスレッドに書き、直後の `on_event` で消す。
+/// 出来事でない問い合わせを断ると印が残り、同じスレッドの次の出来事を履歴の層だけが
+/// 1 件飛ばす（design-validation.md 指摘 1）。
+pub(crate) fn passes(is_event: bool, level: Level, target: &str) -> bool {
+    !is_event || classify(level, target).is_some()
+}
+
+/// 履歴の層の規則のフィルタ（答えは [`wants`]・[`passes`]。`filter_fn` は上の印の理由で使わない）。
+pub(crate) struct HistoryFilter;
+
+impl<S> Filter<S> for HistoryFilter {
+    fn enabled(&self, meta: &Metadata<'_>, _cx: &Context<'_, S>) -> bool {
+        passes(meta.is_event(), *meta.level(), meta.target())
+    }
+
+    fn callsite_enabled(&self, meta: &'static Metadata<'static>) -> Interest {
+        if wants(meta.is_event(), *meta.level(), meta.target()) {
+            Interest::always()
+        } else {
+            Interest::never()
+        }
+    }
+
+    fn max_level_hint(&self) -> Option<LevelFilter> {
+        // 履歴が残すのは info 以上だけ（取り決めの行も info 以上で出す約束）。
+        Some(LevelFilter::INFO)
+    }
+}
+
+/// 出来事の欄を書かれた順に集める（文字列の欄は生の値と `{:?}` の両方）。
+#[derive(Default)]
+struct Fields(Vec<(&'static str, String, Option<String>)>);
+
+impl Visit for Fields {
+    fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+        self.0.push((field.name(), format!("{value:?}"), None));
+    }
+
+    fn record_str(&mut self, field: &Field, value: &str) {
+        // 標準出力の層は文字列の message を引用符なしで書くので、本文の先頭もそれに揃える。
+        let debug = if field.name() == "message" {
+            value.to_string()
+        } else {
+            format!("{value:?}")
+        };
+        self.0.push((field.name(), debug, Some(value.to_string())));
+    }
+}
+
+/// 当たる出来事を下書きにし、出したスレッドの上で同期に置き場へ積む層。
+pub(crate) struct HistoryLayer;
+
+impl<S: Subscriber> Layer<S> for HistoryLayer {
+    fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
+        let mut fields = Fields::default();
+        event.record(&mut fields);
+        let meta = event.metadata();
+        // `log` から橋渡しされた行はここへ target `log` で届く。info 以下は下書きが None で捨てる。
+        let texts = fields.0.iter().map(|(name, debug, raw)| FieldText {
+            name,
+            debug,
+            raw: raw.as_deref(),
+        });
+        if let Some(d) = draft(*meta.level(), meta.target(), texts) {
+            record(local_now(), d);
+        }
+    }
+}
+
+/// ログの出口を据える（`fn main()` の先頭で 1 度だけ。2 度目はパニックする）。
+/// 標準出力の層（`RUST_LOG` のフィルタ・未設定や不正なら info）と履歴の層を重ねる。
+/// `init()` は `log` クレートの受け口も据える。
+pub(crate) fn init() {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        ))
+        .with(HistoryLayer.with_filter(HistoryFilter))
+        .init();
 }
 
 #[cfg(test)]

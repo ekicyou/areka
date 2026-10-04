@@ -134,3 +134,100 @@ fn a_poisoned_store_still_accepts_records() {
     let bodies: Vec<&str> = h.rows(Kind::Error).map(|r| r.body.as_str()).collect();
     assert_eq!(bodies, ["毒の前", "毒の後"]);
 }
+
+// ---------------------------------------------------------------------------
+// 規則のフィルタの答え（要件 1.7・1.9・6.3）
+// ---------------------------------------------------------------------------
+
+const LEVELS: [Level; 5] = [
+    Level::ERROR,
+    Level::WARN,
+    Level::INFO,
+    Level::DEBUG,
+    Level::TRACE,
+];
+
+/// 診断の target・規則の target・取り決めの target・当たらない target・橋渡しの target。
+const TARGETS: [&str; 9] = [
+    "areka::perf",
+    "wintf::tick_diag",
+    "areka::boot_config",
+    "areka::update::desk",
+    "areka::log::script",
+    "areka::log::error",
+    "areka::alert",
+    "log",
+    "",
+];
+
+#[test]
+fn a_query_that_is_not_an_event_always_passes_and_is_never_wanted() {
+    // `tracing::enabled!` とスパンは出来事でない。断ると「断った」印がスレッドに残り、
+    // 次の出来事を履歴の層だけが飛ばす（design-validation.md 指摘 1）。
+    for level in LEVELS {
+        for target in TARGETS {
+            assert!(
+                passes(false, level, target),
+                "出来事でない問い合わせ {level:?} {target:?} は通す"
+            );
+            assert!(
+                !wants(false, level, target),
+                "出来事でない問い合わせ {level:?} {target:?} に関心は無い"
+            );
+        }
+    }
+    // 前置ガードの実物の形（診断の target の debug）。
+    assert!(passes(false, Level::DEBUG, "areka::perf"));
+}
+
+#[test]
+fn an_event_is_wanted_and_passes_exactly_when_classify_hits() {
+    let cases = [
+        (Level::WARN, "wintf::tick_diag", true),
+        (Level::ERROR, "areka::alert", true),
+        (Level::INFO, "areka::boot_config", true),
+        (Level::INFO, "areka::log::script", true),
+        (Level::INFO, "areka::update::desk", true),
+        (Level::DEBUG, "areka::log::script", false),
+        (Level::DEBUG, "areka::perf", false),
+        (Level::TRACE, "areka::boot_config", false),
+        (Level::INFO, "areka::alert", false),
+        (Level::INFO, "log", false),
+    ];
+    for (level, target, hit) in cases {
+        assert_eq!(
+            wants(true, level, target),
+            hit,
+            "wants {level:?} {target:?}"
+        );
+        assert_eq!(
+            passes(true, level, target),
+            hit,
+            "passes {level:?} {target:?}"
+        );
+    }
+    // 全組み合わせで振り分けの当たり外れと一致する。
+    for level in LEVELS {
+        for target in TARGETS {
+            let hit = classify(level, target).is_some();
+            assert_eq!(
+                wants(true, level, target),
+                hit,
+                "wants {level:?} {target:?}"
+            );
+            assert_eq!(
+                passes(true, level, target),
+                hit,
+                "passes {level:?} {target:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_filter_hints_info_as_the_most_verbose_level() {
+    use tracing_subscriber::layer::Filter;
+    let hint =
+        <HistoryFilter as Filter<tracing_subscriber::Registry>>::max_level_hint(&HistoryFilter);
+    assert_eq!(hint, Some(tracing_subscriber::filter::LevelFilter::INFO));
+}
