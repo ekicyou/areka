@@ -276,3 +276,128 @@ const EXPECTED_SHOWS: &[&str] = &[
 
 /// HEAD（`eb1a7e77`）で採った乱数の呼び出し回数。
 const EXPECTED_RNG_CALLS: usize = 118;
+
+// ── 端（要件 7.5）: 刻みが 880ms 以上止まった直後に 2110 が絵に出ている ─────────────────
+
+/// 決めた値を順に返し、呼ばれた回数を数える乱数（列を使い切ったら赤）。
+fn scripted_rng(values: &'static [u32]) -> (LoopRng, Arc<AtomicUsize>) {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&calls);
+    let rng: LoopRng = Box::new(move |_bound| {
+        let n = counter.fetch_add(1, Ordering::Relaxed);
+        *values.get(n).unwrap_or_else(|| {
+            panic!(
+                "乱数が {} 回目まで呼ばれた（用意は {} 回）",
+                n + 1,
+                values.len()
+            )
+        })
+    });
+    (rng, calls)
+}
+
+/// 実物の emo2 の表で `\1`＝10 だけを出し、`ticks` の刻みを回して `Show` の列と乱数の回数を返す。
+///
+/// 行は `"時刻 scope 面 [animation:コマ ...] 部品:[animation:コマ ...]"`。部品の欄は
+/// `PatternState::part` で 2106・2110 を引く（emo2 で pattern定義が指す `\1` 側の部品の全部）。
+fn run_kero(ticks: &[u64], rng: (LoopRng, Arc<AtomicUsize>)) -> (Vec<String>, usize) {
+    let (rng, calls) = rng;
+    let mut rt = LoopRuntime::new(cfg(emo2_shell_table(), rng));
+    let mut states = ScopeStates::new(build_static_bindset(&[]));
+    states.apply(&ActorKey::from("1"), SurfaceTarget::Show(10));
+    let mut lines = Vec::new();
+    for &now in ticks {
+        for cmd in rt.on_tick(now, &mut states) {
+            let DisplayCommand::Show {
+                scope, surface_id, ..
+            } = &cmd
+            else {
+                panic!("Show を期待: {cmd:?}");
+            };
+            let pattern = pattern_of(&cmd);
+            let frames = |it: &mut dyn Iterator<Item = (u32, &areka_emo_compose::PatternFrame)>| {
+                it.map(|(id, f)| format!("{id}:{}", f.surface_id))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
+            let mut line = format!(
+                "{now} {} {surface_id} [{}]",
+                scope.as_str(),
+                frames(&mut pattern.iter())
+            );
+            for part in [2106, 2110] {
+                if pattern.part(part).next().is_some() {
+                    line.push_str(&format!(" {part}:[{}]", frames(&mut pattern.part(part))));
+                }
+            }
+            lines.push(line);
+        }
+    }
+    (lines, calls.load(Ordering::Relaxed))
+}
+
+/// 刻みが 0 → 1960 と 960ms 止まり（境界 1000 から 960ms 遅れ）、その刻みで `\1` のまばたきが
+/// 発火すると、次の境界 2000 の刻みで 2 枚目のコマ 2110 が絵に出ている（発火の 40ms 後）。
+/// このとき 2110 は部品として抽選され（乱数を 1 回多く消費）、当たれば 2110 の `animation0`
+/// （2106 を 0ms から 160ms まで）が部品の欄に載る。ただし 2110 自身が `\1` の `animation0` で
+/// 120ms（発火から）に `-1` で消えるので、2106 が重なるのは 2000〜2080 の 80ms だけ。
+/// 消えた後の 2110 の時計は見えない間触られず、次のまばたき（3040 に 2110）で経過 1040ms＝
+/// `-1` の先なので止まり、2106 は 2 度目には重ならない。規則どおりの動き（要件 7.5・5.13）で、
+/// 例外は足さない。
+#[test]
+fn emo2_part_lottery_after_stalled_ticks_is_one_extra_draw_and_at_most_80ms() {
+    // 端: 境界 2000 の刻みで 2110 が見えている。
+    const EDGE: &[u64] = &[0, 1960, 2000, 2079, 2080, 3000, 3040];
+    // 比べる相手: 同じ境界を跨ぐが、跨ぐ刻み（2080）ではまばたきが終わっていて 2110 が見えない。
+    const CONTROL: &[u64] = &[0, 1960, 2080, 3000, 3040];
+
+    let (control, control_calls) = run_kero(CONTROL, scripted_rng(&[0, 0]));
+    assert_eq!(
+        control,
+        [
+            "1960 1 10 [0:2106]",
+            "2080 1 10 []",
+            "3000 1 10 [0:2106]",
+            "3040 1 10 [0:2110]",
+        ],
+        "部品が境界で見えないなら部品のコマは載らない"
+    );
+    assert_eq!(control_calls, 2, "一番上の抽選 2 回（1960・3000）だけ");
+
+    // 当たり: 2000 の部品の抽選が 0 を引く。
+    let (hit, hit_calls) = run_kero(EDGE, scripted_rng(&[0, 0, 0]));
+    assert_eq!(
+        hit,
+        [
+            "1960 1 10 [0:2106]",
+            // 2110 の部品の欄に 2106（2110 の animation0 の pattern0）が載る。
+            "2000 1 10 [0:2110] 2110:[0:2106]",
+            // 2079 は変化なし（2106 は重なったまま）で発行なし。2080 に 2110 ごと消える＝80ms。
+            "2080 1 10 []",
+            "3000 1 10 [0:2106]",
+            // 次のまばたきでは 2110 の時計は `-1` の先で止まり、2106 は重ならない。
+            "3040 1 10 [0:2110]",
+        ],
+        "当たれば 2106 が 2000〜2080 の 80ms だけ重なる"
+    );
+    assert_eq!(hit_calls, control_calls + 1, "部品の抽選の 1 回だけ多い");
+
+    // 外れ: 2000 の部品の抽選が 1 を引く。乱数の 1 回の上乗せは同じで、絵は前と同じ。
+    let (miss, miss_calls) = run_kero(EDGE, scripted_rng(&[0, 1, 0]));
+    assert_eq!(
+        miss,
+        [
+            "1960 1 10 [0:2106]",
+            "2000 1 10 [0:2110]",
+            "2080 1 10 []",
+            "3000 1 10 [0:2106]",
+            "3040 1 10 [0:2110]",
+        ],
+        "外れなら部品のコマは載らない"
+    );
+    assert_eq!(
+        miss_calls,
+        control_calls + 1,
+        "外れでも部品の抽選の 1 回だけ多い"
+    );
+}
