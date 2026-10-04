@@ -685,6 +685,7 @@ impl AtlasTable {
 | `trns.apng` | RGB＋`tRNS`（透明色の指定）・2 コマ | 3.4 |
 | `single.apng` | コマ 1 枚 | 1.3 |
 | `truncated.apng` | `basic.apng` の 2 コマ目の途中で切ったもの | 6.4 |
+| `deep16.apng` | 16 ビットの APNG・2 コマ（`image` が 1 枚目で断る形。タスク生成で足した） | 6.4 |
 | `alpha.webp` | 8×8・α つき・3 コマ・「背景へ戻す」の次に透けたコマ・待ち時間 100・0・70・繰り返し 3 | 2.7, 8.2, 8.3 |
 | `rgb.webp` | 透明度の旗なし・2 コマ | 3.3, 3.4 |
 | `single.webp` | 動きの旗つき・コマ 1 枚 | 1.3 |
