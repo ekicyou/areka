@@ -2,13 +2,16 @@
 //! （spec: areka-P0-animated-image-decode 要件 3.1〜3.5・4.1・4.7・5.1・6.2・6.4・6.9）。
 //!
 //! 見出しが無ければ今までの 1 枚読み（`decode` 1 回）をそのまま通す。見出しがあれば上限を
-//! 判定してから全コマを読み、読めなければ 1 枚へ縮める。0 番のコマは呼び手（`bake_with_limits`）
+//! 判定してから全コマを読み、超えたか読めなければ 1 枚へ縮める（動きの 1 枚目 → 今までの
+//! 1 枚読み → 今までの失敗の 3 段）。0 番のコマは呼び手（`bake_with_limits`）
 //! が静止画と同じ道に通し、2 枚目以降のコマはここで透過・切り詰めをして、全部の鍵を回った後に
 //! 鍵のエントリの後ろへ番号を振る。
 
 use std::path::Path;
 
-use crate::decode::{AnimatedImage, AnimationFrame, DecodeError, DecodedImage, ElementDecoder};
+use crate::decode::{
+    AnimatedImage, AnimationFrame, AnimationInfo, DecodeError, DecodedImage, ElementDecoder,
+};
 use crate::limits::{AnimationLimits, Exceeded, judge};
 use crate::normalize::{NormalizedImage, clear_key_color};
 use crate::pack::PackConfig;
@@ -51,7 +54,7 @@ pub(crate) fn load(
                 exceeded = exceeded_name(exceeded),
                 "bake: 動く絵が上限を超えたので 1 枚だけ読みます"
             );
-            return shrink(decoder, path);
+            return shrink(decoder, path, key, info);
         }
     };
     let checked = decoder.decode_frames(path, info).and_then(|anim| {
@@ -94,7 +97,7 @@ pub(crate) fn load(
                 reason = %reason,
                 "bake: 動く絵として読めなかったので 1 枚だけ読みます"
             );
-            shrink(decoder, path)
+            shrink(decoder, path, key, info)
         }
     }
 }
@@ -107,10 +110,28 @@ fn still(decoder: &impl ElementDecoder, path: &Path) -> Loaded {
     }
 }
 
-/// 動く絵を 1 枚へ縮める。
-// ponytail: 今は今までの 1 枚読みだけ。動きの 1 枚目を読む段 1 と、段 2 へ落ちる `warn!` は 4.2 で足す。
-fn shrink(decoder: &impl ElementDecoder, path: &Path) -> Loaded {
-    still(decoder, path)
+/// 動く絵を 1 枚へ縮める（要件 6.2・6.4〜6.6）。段 1 は動きの 1 枚目、段 2 はそれが読めない
+/// ときだけ今までの 1 枚読み、段 3 はそれも読めないときの今までの失敗。段 1・段 2 の絵は
+/// 静止画の枝を通る（透明度が無ければ左上の色が抜ける）。
+fn shrink(
+    decoder: &impl ElementDecoder,
+    path: &Path,
+    key: &AtlasKey,
+    info: AnimationInfo,
+) -> Loaded {
+    match decoder.decode_first_frame(path, info) {
+        Ok(img) => Loaded::Still(img),
+        Err(reason) => {
+            tracing::warn!(
+                target: "areka_emo_atlas",
+                set = key.set.0,
+                rel_path = key.rel_path.as_str(),
+                reason = %reason,
+                "bake: 動く絵の 1 枚目を読めなかったので、今までの読み方で 1 枚だけ読みます"
+            );
+            still(decoder, path)
+        }
+    }
 }
 
 fn exceeded_name(exceeded: Exceeded) -> &'static str {
