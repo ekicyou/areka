@@ -115,12 +115,54 @@
     赤だった 25 本はすべて緑になり、緑だった 4 本（8・11・13・14）も緑のまま。見込みとの違いは 0 件。入口のファイルの既存テスト 4 本は変更 0 行で緑。`cargo test -p wintf --lib` は 1028 passed / 0 failed / 3 ignored、`cargo test -p wintf --test '*'` はすべて緑、`cargo test -p areka --bin areka placement::follow::` は 259 passed。`cargo check -p wintf` の警告は 0 件。
 
 - [ ] 4. ふつうの条件が崩れていないことと完了の条件を確かめる
-- [ ] 4.1 上書きの記録と、既存テスト・行数の確認
+- [x] 4.1 上書きの記録と、既存テスト・行数の確認
   - 互換の設計文書の §8 へ、完了 spec の入口の安全スキップを 5 種についてだけ変えた「上書き」の行を 1 行足す（完了 spec のアーカイブ本体は書き換えない）
   - ドラッグの知らせを配るテスト・ドラッグのライフサイクルのテスト・areka のドラッグの終了の受け手のテスト（終了 1 件で保存 1 件・0 件で保存 0 件）が変更 0 行で緑
   - 触った本番ファイルとテストファイルがどれも 1,000 行以下であることを数えて記録してある
   - ワークスペース全体のテストが緑であることを確かめ、結果をこのタスクの下へ記録してある
   - _Requirements: 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 8.4, 8.5, 8.7, 8.8_
+  - 結果（2026-10-05）
+    - **上書きの記録**: `doc/COMPAT_ARCHITECTURE.md` §8 の表の末尾へ「【上書き】画面更新の最中に届いた、ドラッグを終える窓のメッセージを捨てるか」の 1 行を足した（完了 spec `wintf-winmsg-executor` 要件 4.3 の入口の安全スキップを、ESC の押下・`WM_CANCELMODE`・非活性化の `WM_ACTIVATE`・`WM_CAPTURECHANGED`・`WM_LBUTTONUP` の 5 種に限って上書きする。根拠に開発者裁定 2026-10-04 の要件ディスカッション議題 1 を引く）。完了 spec のアーカイブ本体は書き換えていない
+    - **変更 0 行で緑**: `git diff --stat 0389fb5d -- crates/wintf/tests/drag/dispatch_test.rs crates/wintf/tests/drag.rs crates/wintf/tests/layout/boxstyle_coordinate_separation_test/drag_lifecycle.rs crates/areka/src/placement/follow_drag_tests.rs crates/areka/src/placement/follow_drag_end_gate_tests.rs crates/areka/src/placement/follow_drag_end_persist_tests.rs` の出力は空（areka のクレート全体も差分 0）。入口のファイルの既存テスト 4 本も、`wndproc_bridge.rs` の差分がすべて `mod tests` より前で、0 行
+
+      | テスト | 結果 |
+      |---|---|
+      | `cargo test -p wintf --test drag dispatch_test`（ドラッグの知らせを配る） | 10 passed（`--test drag` 全体は 20 passed） |
+      | `cargo test -p wintf --test layout drag_lifecycle`（ドラッグのライフサイクル） | 5 passed |
+      | `cargo test -p areka --bin areka placement::follow::drag_tests::` | 19 passed |
+      | `cargo test -p areka --bin areka placement::follow::drag_end_gate_tests::`（終了 1 件で保存 1 件 `real_drag_persists_once_for_char_and_balloon`・終了 0 件で保存 0 件 `click_without_move_on_char_persists_nothing_and_keeps_position` ほか） | 6 passed |
+      | `cargo test -p areka --bin areka placement::follow::drag_end_persist_tests::` | 3 passed |
+      | `cargo test -p wintf --lib runtime::wndproc_bridge::tests`（入口の既存テスト 4 本） | 4 passed |
+
+    - **行数**（`git diff --name-only 0389fb5d -- crates/` の 20 本・どれも 1,000 行以下）
+
+      | 行数 | ファイル |
+      |---:|---|
+      | 238 | `crates/wintf/src/ecs/drag/accumulator.rs` |
+      | 260 | `crates/wintf/src/ecs/drag/accumulator_tests.rs` |
+      | 109 | `crates/wintf/src/ecs/drag/capture_guard.rs` |
+      | 194 | `crates/wintf/src/ecs/drag/mod.rs` |
+      | 111 | `crates/wintf/src/ecs/drag/reentry.rs` |
+      | 250 | `crates/wintf/src/ecs/drag/reentry_tests.rs` |
+      | 638 | `crates/wintf/src/ecs/drag/state/mod.rs` |
+      | 812 | `crates/wintf/src/ecs/drag/state/tests.rs` |
+      | 151 | `crates/wintf/src/ecs/window_proc/keyboard.rs` |
+      | 187 | `crates/wintf/src/ecs/window_proc/keyboard_tests.rs` |
+      | 490 | `crates/wintf/src/ecs/window_proc/mouse_click.rs` |
+      | 149 | `crates/wintf/src/ecs/window_proc/mouse_click_tests.rs` |
+      | 941 | `crates/wintf/src/ecs/world/mod.rs` |
+      | 660 | `crates/wintf/src/ecs/world/tick_gate_tests.rs` |
+      | 374 | `crates/wintf/src/ecs/world/tick_wake.rs` |
+      | 252 | `crates/wintf/src/runtime/wndproc_bridge.rs` |
+      | 466 | `crates/wintf/src/runtime/wndproc_bridge_drag_cancel_tests.rs` |
+      | 532 | `crates/wintf/src/runtime/wndproc_bridge_drag_release_tests.rs` |
+      | 370 | `crates/wintf/src/runtime/wndproc_bridge_drag_test_support.rs` |
+      | 307 | `crates/wintf/tests/window/multiwindow_event_test.rs` |
+
+    - **ワークスペース全体**: `pwsh -NoProfile -File tools/test-all.ps1` の x64 以外の 5 段は緑（i686 ターゲット導入・i686 成果物ビルド・fmt --check・i686 テスト〔host-32 系〕・crates.io 公開前の確認）
+      - その回の x64 の段は、コンパイルの途中（`Compiling areka-talk` の行の後）で終了コード -1 で止まった。エラー文も `test result` も 0 件で、テストの判定の前に外から止められた跡。後の 2 回は同じコードがコンパイルできている
+      - 同じコマンド `cargo test --workspace --no-fail-fast -j 4` の取り直し 1 回目は 9,851 passed / 2 failed。落ちたのは `areka` の `install::desk::overwrite_tests` の 2 本（時間の読みの判定。areka のクレートは本 spec で 0 行の変更・そのモジュールだけを走らせ直すと 7 passed）
+      - 取り直し 2 回目は **終了コード 0・9,853 passed / 0 failed / 44 ignored**（テストの実行ファイル 120 本・wintf の lib は 1,028 passed / 3 ignored）。完了時の `/kiro-complete` でもう一度全体を走らせる
 
 - [ ] 4.2 実機でふつうの条件の振る舞いを確かめる
   - 実機の根と一時フォルダをワークツリーの `target\` の下だけに置き、記録の level を位置の保存・ドラッグの終了の知らせ・ドラッグの扱いのデバッグまで開けて起動する
@@ -132,3 +174,5 @@
 
 - 1.1・1.2: 再入のテストは `runtime/wndproc_bridge_drag_{cancel,release}_tests.rs`、共通の組み立て（`Rig`・隠れた実物の窓 `RealWindow`）は `wndproc_bridge_drag_test_support.rs`。`WindowPos` の既定の位置は `CW_USEDEFAULT` で、そのままだと `mouse_move.rs` の閾値の計算が debug ビルドで桁あふれするので、組み立ては位置を明示する。
 - 2.4 向け: テスト 12 は `drag_reentry_handled` の `entity`・`window` を `format!("{:?}", entity)`（例 `18v0`）と完全一致で見る。`Option<Entity>` の Debug（`Some(18v0)`）で記録すると赤になる。無いときは空の文字で記録する（design の Monitoring「無ければ空」）。
+- 範囲外（`/kiro-complete` の棚卸で扱う）: 4.1 の全体テストの取り直し 1 回目で、`areka` の `install::desk::overwrite_tests` の `a_failed_commit_boots_the_same_ghost_with_its_old_contents_and_reports_failure`・`a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through` が負荷時の時間の読みで 1 度だけ落ちた（`target\nar-samples\work` の後片付けで os error 5 も出た）。本 spec は areka を 0 行しか変えず、単独と再走では緑。完了 spec `areka-P0-file-drop` の tasks.md にも同じ一過性の記録がある。
+- 範囲外: 4.1 の `tools/test-all.ps1` で x64 の段がコンパイルの途中に終了コード -1 で止まった（エラー文 0 件・原因不明）。
