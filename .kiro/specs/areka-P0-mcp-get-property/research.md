@@ -109,3 +109,36 @@
 1. **実機確認で SSP と並べるか止めるか**。SSP は 9801 と 9821 の両方を握るので、SSP を動かしたまま areka を起こすと、areka は隣の口（+1〜+9）へ逃げる（`mcp-server-core` の早い者勝ちの規則）。その場合は `claude mcp add` に実際の口を渡す。止めて 9801 を取らせる前例の手順と、どちらで採るかを設計の検証計画で決める。実機の根は `target\` の下だけ。
 2. **起動直後の短い窓**（7 節）を、設計の「既知の振る舞い」に書き残すか。実機確認の手順は「会話の始まりの後に呼ぶ」で足りる見込み。
 3. **`ghost_name` の照合の食い違い**（survey §7.4・大小・本体側名・前後の空白・空文字）→ 要件ディスカッション 議題 2 で開発者が起票を裁定し、`mcp-ghost-name-match` を起票した（2026-10-04）。本 spec のテストは照合を固定せず（要件 4.8）、実装の最終段階でその brief へ申し送りを書く（要件 5.7）。設計では、処理が `ActiveGhost` を何に使うか（6 節の 3）を申し送りに書ける形で決める。
+
+## 9. 設計の段の調べと決定（2026-10-04・`/kiro-spec-design`）
+
+- **調べの種別**: 既存の仕組みへの足し込み（軽い調べ）。外部の依存・新しい仕組みは 0 なので、Web の調べはしていない。3 節の事実を実物で引き直し、次を足して確かめた。
+  - 空の値は載る: `SylphyaPublisher::set` の自由な名前は `SylphyaCore::apply` の `SetClass::StoreWrite` の枝が `Effect::SetDottedPerAsker` にそのまま写す（空の文字列を捨てる処理は無い）。`publish_static` の点付きも `Effect::SetDottedGlobal` にそのまま写す。
+  - 読み手 `SylphyaReader::resolve_dotted_canonical` は「問い手ごとの点付きの表 → 全体の点付きの表」の順に引く（`crates/areka-sylphya/src/reader.rs`）。
+  - 起動の手順 `boot_with_origin`（`crates/areka-ghost/src/runtime.rs`）は `ghost_asker_id(&mount.shiori.dir)` で問い手を組み、`publish_ghost_statics` で `baseware.name`・`baseware.version` を全体へ載せる。
+  - `install/names.rs` の `current_runtime` は `pub(super)`＝`mcp` からは借りられない。`handle` に同じ引き方を 1 行書く（`install/` を触らない）。
+  - `CapturedEvent::field_str` は文字列として渡した欄だけを読める（`%`・`?` で渡した欄は読めない）＝`warn!` の欄は `as_str()` で渡す。
+  - 橋の記録の欄は `tool`・`ghost`・`is_error`・`text`（`crates/areka-mcp/src/tools/bridge.rs`）。`ghost` は `resolve::listed_value` の値＝`handle` の `warn!` の `ghost` も同じ値にそろえる。
+
+### 決定（6 節・8 節の分かれ目への答え。design.md「設計の決定」と同じ）
+
+| # | 分かれ目 | 決定 | 選ばなかった案と理由 |
+|---|---|---|---|
+| 1 | テストの組み方 | 4 節の A の変形。本物の実行系（`SwitchRig`）を 1 回だけ起こすテスト 1 本に、値がある・空・無い・問い手の選び方をまとめる。実行系が無い道は空の World のテスト 1 本 | B・C（純粋な関数へ切り出す）は、呼び手が 1 つの関数を本番に増やす。B は問い手を組む元の取り違えを捕まえられない。A をテスト 4 本に分けると起動が 4 回になって重い |
+| 2 | 読み口の形 | `pub fn sylphya_reader(&self) -> &SylphyaReader`（借りる） | 複製を返す形は、既存の `sylphya_publisher()` と型がずれる |
+| 3 | `ActiveGhost` と置き場の突き合わせ | しない。`ghost` は `warn!` の欄にだけ使う | 突き合わせは本番で来ない分岐を 1 つ増やす。置き場が複数になるときに見直す（design の Revalidation Triggers） |
+| 4 | `warn!` の形 | `event = "mcp_get_property_unavailable"`・`ghost`・`property_name` | `event` 無しだと、テストがメッセージの文で絞ることになり、文を直すたびに赤くなる |
+| 5 | 起動直後の短い窓 | 直さず、既知の振る舞いとして design に書く | 反映を待つと要件 1.5（待たない）に反する |
+| 6 | 実機確認で SSP を止めるか | 止めない。記録の行から実際の口を読む | 自分が起こしていないプロセスを止めない |
+
+### まとめ直しの 3 つの観点
+
+- **一般化**: 要件 2.1〜2.3 は読み手の `NotFound` 1 つに写せば足りる（SSP も 1 つの文言・survey §7.3 の 2）。要件 3.1 の 3 つの入り方（置き場の資源が無い・置き場が空・実行系なしの単位）も `None` の道 1 つ。
+- **作るか借りるか**: すべて借りる（読み手・問い手の組み方・答えの形・記録・ログの捕まえ方・本物の実行系を起こす土台）。作るのは読み口 1 本と `handle` の本体だけ。
+- **削る**: 純粋な関数への切り出し・子モジュール・共有の定数・独自の記録・名前の検査は足さない。
+
+### 危険と手当て
+
+- テスト 2 が重い（emo2 の検体の複製・COM・起動と降ろし）→ 起こすのは 1 回。`mcp_tests.rs` の既存の 2 本と同じ重さ。
+- `SwitchRig` の中身が変わってテスト 2 が組めなくなる → 土台は本 spec では触らない。組めないと分かったら止めて報告する（要件 5.1）。
+- 設計の段で `property-name-case-fold` の brief に申し送りを書いた（要件 5.6）。完了のときの書き直しと、`mcp-ghost-name-match` への申し送り（要件 5.7）はタスクに残る。

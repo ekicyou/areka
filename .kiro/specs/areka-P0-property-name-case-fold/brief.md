@@ -53,3 +53,11 @@ SSP はプロパティの名前の英字の大小を区別しない（`BASEWARE.
 
 - 段は「その他」（プロパティ）。プロパティの動く値の列（`crates/areka-sylphya/src/{actor,mirror,vocab/dotted}.rs`）と触るファイルが重なる＝同じ列の spec と同時に走らせない。規模の見立て S〜M（5〜9）。
 - 意味は ukadoc から持ち込む方針の例外（ukadoc が黙っている所を SSP に合わせる）であることを、要件の冒頭に書く。
+
+## `mcp-get-property` からの申し送り（2026-10-04）
+
+> `areka-P0-mcp-get-property` の設計の段で書いた（同 spec の要件 5.6）。同 spec を完了するときに、実装の事実で書き直す。
+
+1. **`get_property` は名前を手直ししない。** 処理（`crates/areka/src/mcp/get_property.rs` の `handle`）は、渡された `property_name` を受け取ったまま読み手 `SylphyaReader::resolve_dotted_str` へ渡す設計（前後の空白の除去・英字の大小の変換は 0）。読み手の側で大小を畳めば、`get_property` は何も変えずに追従する。問い手は宛先のゴースト自身（`ghost_asker_id(&runtime.mount().shiori.dir)`）で、読み手は実行系の読み口 `GhostRuntime::sylphya_reader()`（同 spec が足す）から借りる。
+2. **`get_property` のテストは大小の扱いを固定していない。** `crates/areka/src/mcp/get_property_tests.rs` のテストは小文字の名前だけを使う設計（`baseware.name`・`currentghost.name`・自由な名前 `test.key`・`test.other_only`・`test.empty`・空の名前）。大文字を混ぜた名前を「無い名前」と期待するテストも、値が返ると期待するテストも 0 本＝本 spec の着地を赤で妨げない。
+3. **実機確認に大小を混ぜた名前を足す場所。** `get_property` の実機確認（同 spec の design「実機確認」の手順 3 の表）は、⑴ `baseware.name` → `areka`、⑵ `no.such.thing` → `NG:Cannot find such property name.`、⑶ `ghost_name` を渡した `baseware.name` の順に呼ぶ。大小の確認は ⑴ の直後に `BASEWARE.NAME` を 1 行足せばよい（本 spec の着地の前は `NG:Cannot find such property name.`、後は `areka`）。同じ手順（配布形を `target\` の下へ展開・記録の行から待受の URL を読む・`curl` の `tools/call`）がそのまま使える。

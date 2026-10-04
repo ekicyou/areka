@@ -1,17 +1,17 @@
 {
   "feature_name": "areka-P0-mcp-get-property",
   "created_at": "2026-10-04T04:47:58Z",
-  "updated_at": "2026-10-04T04:54:05Z",
+  "updated_at": "2026-10-04T05:33:57Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false,
+      "approved": true,
       "generated_at": "2026-10-04T04:54:05Z"
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {
