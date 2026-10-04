@@ -126,6 +126,19 @@ fn current_frame_index(frames: &[LoopFrame], elapsed_ms: u64) -> Option<usize> {
     current
 }
 
+/// 表のコマ 1 枚を合成へ渡すコマにする（一番上と部品で共有）。
+///
+/// [`frame_at`] が `Active`/`FinishedResidual` を返したコマにだけ使う（その時点で `surface_id` は
+/// 非負・負は `Stopped`）。
+pub(crate) fn pattern_frame(f: &LoopFrame) -> PatternFrame {
+    PatternFrame {
+        surface_id: f.surface_id as u32,
+        method: f.method.clone(),
+        x: f.x,
+        y: f.y,
+    }
+}
+
 impl LoopRuntime {
     /// ループ構成を受けて再生状態ゼロの統括器を構築する（表・rng は注入済み）。
     pub(crate) fn new(config: SerikoLoopConfig) -> Self {
@@ -324,17 +337,7 @@ impl LoopRuntime {
                     }
                     // 現在コマ 1 枚を搬送（4.2）。Active は再生継続、FinishedResidual は残留のうえ playback 除去。
                     FrameStatus::Active(i) | FrameStatus::FinishedResidual(i) => {
-                        let f = &anim.frames[i];
-                        // frame_at が Active/FinishedResidual を返す時点で surface_id は非負（負は Stopped）。
-                        new_pattern.set(
-                            anim_id,
-                            PatternFrame {
-                                surface_id: f.surface_id as u32,
-                                method: f.method.clone(),
-                                x: f.x,
-                                y: f.y,
-                            },
-                        );
+                        new_pattern.set(anim_id, pattern_frame(&anim.frames[i]));
                         // 末尾非負到達（FinishedResidual）＝もう「再生中」ではない → playback のみ除去
                         // （コマは残す・IdleResidual へ・4.4/9.4）。Active は再生継続でここは通らない。
                         let is_last = i == anim.frames.len() - 1;

@@ -27,6 +27,15 @@ mod actor;
 mod bind;
 mod looper;
 mod output;
+// 部品の時計（spec: areka-P0-surface-element-nesting）。looper へは tasks.md 7.4 でつなぐ。
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "tasks.md 7.4 で looper へつなぐまで本番から呼ばれない"
+    )
+)]
+mod parts;
 mod resolve;
 mod state;
 mod table;
