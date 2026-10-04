@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. `surfacetable.txt` の読み手
+- [x] 1. `surfacetable.txt` の読み手
 - [x] 1.1 `surfacetable.txt` の文面を行の列へ転記する読み手を作り、`shell` から公開する
   - `boxes` の読み手と同じ置き方で、新しいファイルに読み手と返す型を置き、`shell/mod.rs` へ `mod`・テストの `mod`・`pub use` の 3 か所だけを足す（`model.rs`・`decode.rs`・`Cargo.toml` は触らない）
   - 設計の「行の読み分け」の表のとおりに読む: 落とす空白は ASCII の空白とタブだけ・最初の `,` の前だけを整え後ろは書かれたとおり・見出し語は大小を区別しない・ID と `scope` は ASCII の数字だけ
@@ -10,7 +10,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.8, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8_
 
 - [ ] 2. 表の組み立てとツールの中身
-- [ ] 2.1 既定の名前 15 件と、転記から表の文字列を組む規則を作る
+- [x] 2.1 既定の名前 15 件と、転記から表の文字列を組む規則を作る
   - 既定の 15 件を埋め込みの定数で持つ（言語の設定を読まない）
   - 書かれた ID の集合は転記の全行から作り、`__disabled` の行と `__parts` の行を除いたシェルの行と、集合に無い既定の行を 1 本にして（スコープ, ID）で安定に並べる
   - 見出し行・区切り行・各行を `\r\n` で終え、スコープは `\0`・`\1`・`\p[n]` で書く。空の列は何も挟まない
@@ -55,3 +55,8 @@
   - 入口の解決の失敗の文言を見張る今のテスト（`mcp_tests.rs`）が変更なしで緑のまま
   - 完了の形: `cargo test -p areka-parsers` と `cargo test -p areka` と `cargo clippy -p areka -p areka-parsers --all-targets -- -D warnings` が通り、どのテストも SSP・ネットワークに頼らない
   - _Requirements: 6.3, 7.7_
+
+## Implementation Notes
+
+- `areka` に lib の target は無い。単位のテストは `cargo test -p areka --bin areka mcp::get_expression_table` で走らせる（`--lib` は使えない）。
+- `cargo clippy -p areka --all-targets -- -D warnings` は、この spec の前から dola・areka-emo-compose・areka-kanade などの clippy 1.99 の lint で赤（26 件・持ち主は起票済みの `clippy-199-lints`）。この spec では「変えたファイルから警告が出ない」ことで判定する。2.4 までは `DEFAULT_NAMES`・`render` の dead_code の 2 件が出てよい。
