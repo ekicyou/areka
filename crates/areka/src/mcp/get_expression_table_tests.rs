@@ -538,6 +538,27 @@ fn the_same_id_written_twice_is_shown_twice_in_written_order() {
     );
 }
 
+/// 同じスコープの 2 つの `group` の ID は互い違いでも ID の順に混ざり、別のスコープに書かれた
+/// 同じ ID はそれぞれのスコープに載る（要件 4.4・2.7）。
+#[test]
+fn ids_interleave_across_groups_and_the_same_id_appears_in_each_scope() {
+    let text =
+        "group,b\n{\n31,b一\n33,b三\n}\ngroup,a\n{\n32,a二\n}\ngroup,c\n{\nscope,1\n31,c一\n}\n";
+    assert_eq!(
+        render(&parse_surfacetable(text)),
+        format!(
+            "{}{}",
+            crlf(DEFAULTS_ONLY_ANSWER),
+            crlf(
+                r"|\0|b|b一|\s[31]|
+|\0|a|a二|\s[32]|
+|\0|b|b三|\s[33]|
+|\1|c|c一|\s[31]|"
+            )
+        )
+    );
+}
+
 // ---- 読み取りと記録（load・一時フォルダは temp-path-kit・記録は log-capture-kit） ----
 
 use log_capture_kit::{CapturedEvent, capture};
