@@ -85,13 +85,34 @@
   - _Requirements: 1.1, 1.2, 1.3, 2.2, 2.3, 2.4, 4.1, 7.1, 7.2_
   - _Boundary: drag reentry_
 
-- [ ] 3. 入口をつなぎ、再入のテストを緑にする
+- [x] 3. 入口をつなぎ、再入のテストを緑にする
   - 窓のメッセージの入口で World を借りられなかった枝に、セッションの終了の記録の後で World を使わないドラッグの扱いを 1 回呼ぶ。戻り値は使わず、今どおり既定の手続きへ委ねる
   - 入口のソースの冒頭の安全スキップの規律の節と、入口の手順の説明に 5 種の例外を書く
   - 入口のファイルの中の既存テスト 4 本が変更 0 行で緑のまま
   - 1.1・1.2 のテストを走らせ、赤だったものがすべて緑になり、緑だったものが緑のままであることを、このタスクの下へ前後の表として記録してある
   - _Depends: 2.3, 2.4_
   - _Requirements: 1.1, 1.3, 1.4, 6.3, 8.1, 8.2, 8.3, 8.4, 8.7_
+  - 前後の結果（2026-10-04・`cargo test -p wintf --lib runtime::wndproc_bridge`・直す前 8 passed / 25 failed → 直した後 33 passed / 0 failed・3 回走らせて 3 回とも同じ。直す前はレビューで結線の無い `f4afa74b` を別に展開して採り直し、同じ 25 本が赤）
+
+    | # | テスト名 | 直す前 | 直した後 |
+    |---|---|---|---|
+    | 1 | `t01_reentrant_{esc,cancelmode,deactivate,capture_lost}_after_threshold_ends_once_cancelled`（4 本） | 赤（4 本とも） | 緑（4 本とも） |
+    | 2 | `t02_reentrant_release_after_threshold_ends_once_at_the_same_screen_point` | 赤 | 緑 |
+    | 3 | `t03_reentrant_{esc,cancelmode,deactivate,capture_lost}_clears_drag_markers`（4 本） | 赤（4 本とも） | 緑（4 本とも） |
+    | 4 | `t04_reentrant_{esc,cancelmode,deactivate,capture_lost}_before_threshold_rests_without_end`（4 本） | 赤（4 本とも） | 緑（4 本とも） |
+    | 5 | `t05_reentrant_release_{before_threshold,just_after_threshold}_rests_and_frees_capture`（2 本） | 赤（2 本とも） | 緑（2 本とも） |
+    | 6 | `t06_no_start_without_press_after_reentrant_{cancel,release}_before_threshold`（2 本） | 赤（2 本とも） | 緑（2 本とも） |
+    | 7 | `t07_reentrant_end_is_dispatched_on_the_first_dispatch_like_the_ordinary_path` | 赤 | 緑 |
+    | 7b | `t07b_deactivate_inside_a_real_tick_ends_on_the_next_tick` | 赤 | 緑 |
+    | 8 | `t08_non_drag_messages_while_borrowed_change_nothing` | 緑 | 緑 |
+    | 9 | `t09_click_without_move_after_reentrant_{cancel,release}_sends_no_end`（2 本） | 赤（2 本とも） | 緑（2 本とも） |
+    | 10 | `t10_next_drag_after_reentrant_{cancel,release}_starts_and_ends_once_for_the_new_target`（2 本） | 赤（2 本とも） | 緑（2 本とも） |
+    | 11 | `t11_release_on_another_window_does_not_end_with_or_without_borrow` | 緑 | 緑 |
+    | 12 | `t12_reentrant_handling_logs_exactly_one_line`・`t12_reentrant_release_on_an_empty_window_logs_pos_unreadable` | 赤（2 本とも） | 緑（2 本とも） |
+    | 13 | `t13_reentrant_handling_returns_none_keeps_the_borrow_and_skips_side_work` | 緑 | 緑 |
+    | 14 | `t14_start_preparing_takes_capture_without_falling_over_on_capture_changed` | 緑 | 緑 |
+
+    赤だった 25 本はすべて緑になり、緑だった 4 本（8・11・13・14）も緑のまま。見込みとの違いは 0 件。入口のファイルの既存テスト 4 本は変更 0 行で緑。`cargo test -p wintf --lib` は 1028 passed / 0 failed / 3 ignored、`cargo test -p wintf --test '*'` はすべて緑、`cargo test -p areka --bin areka placement::follow::` は 259 passed。`cargo check -p wintf` の警告は 0 件。
 
 - [ ] 4. ふつうの条件が崩れていないことと完了の条件を確かめる
 - [ ] 4.1 上書きの記録と、既存テスト・行数の確認
