@@ -258,3 +258,8 @@
 - `.kiro/specs/completed/areka-P0-shell-balloon/requirements.md` — 要件 5.5・5.6・6（番号の規則と行き先の規則）
 - `.kiro/specs/completed/areka-P0-shell-balloon/real-machine-check.md` — 16 回中 2 回のずれと警告の実機の記録
 - ukadoc `spec_shiori3` の `Status` — `balloon(ID群)` の定義
+
+### 2026-10-04 設計討議 議題 1: 要件 1.8 の文面
+
+- 決着: 要件 1.8 を「送り先の切り替え」で書き直した。絵が替わるフレームで送り先（窓か箱か）は必ず切り替わる。送り先は表示されていなくても存在するので、移る先が空のあいだ画面に何も出ないのはずれではない。「窓も箱も表示されていないフレームを作らない」は外した。
+- 動きは設計の読みのまま。枠の檻に「移る先が空」の場面を足した。
