@@ -6,6 +6,8 @@
 
 > **2026-10-04 要件討議の裁定（本書より後）: 動く GIF には対応しない**（開発者「古い」）。対応するのは APNG と WebP の 2 形式。本書の GIF についての記述（3.1 節の `gif`・`weezl`・`color_quant`、3.3 節の全体、3.5 節の GIF の行、3.6 節の GIF の反復子、8 節の項目 3）は**不要になった**。謝辞に新しく載るのは約 12 本（`Cargo.lock` に新しく入るクレートは 0 本の見込み）へ減る。動く GIF は今までどおり WIC が 1 枚だけ読む。
 
+> **2026-10-04 設計の段で追記**: 8 節の「調べ残し」を実際に動かして確かめた結果と、設計で決めたことを 9 節に足した。3.2 節の道 ⑷ の見立て・「0.2.5 でも `set_background_color` を呼ぶかは別に決める」は、9.2 節の実測で決着した（0.2.5 では呼ばない）。
+
 ## 1. まとめ
 
 - **今あるもの**: 読み手の口 `ElementDecoder`（`decode.rs`）は「1 ファイル → 1 枚の絵」だけ。本番の読み手 `WicDecoderArm`（`decode/wic_arm.rs`）は `GetFrame(0)` だけを呼ぶ。焼く入口 `bake`（`lib.rs`）は鍵 1 つにつき `decode` を 1 回呼び、表 `AtlasTable`（`table.rs`）は「鍵の数＝エントリの数」を `assert_eq!` で守る。コマ・待ち時間・繰り返し回数を持つ場所は 0 か所。
@@ -329,3 +331,162 @@
 4. `image` の画素（乗算前）を乗算済みへ変えるときの丸めを、WIC の結果と揃える必要があるか（揃えないと、同じ絵を静止画として読んだときと画素が 1 ずれうる）。
 5. 本番の木に入るクレートの正確な一覧（`cargo tree -e normal` を依存を足した状態で取り直す）。
 6. `image-webp` 0.2.5 の公開の有無（着手時に crates.io を引き直す）。
+
+## 9. 設計の段の調査（2026-10-04・コミット `ff308cf1` の上）
+
+> 8 節の「調べ残し」1〜6 を実際に動かして確かめた記録と、設計で決めたこと。調査の種類は**軽い調査（既存の拡張）**＋外部クレートの実走。
+> 一時の物は全部ワークツリーの `target\design-probe\` の下に置いた（コミットしない）。`Cargo.toml`・`Cargo.lock`・`deny.toml` は試した後に `git checkout` で戻し、`git status` が空であることを確かめた。
+
+### 9.1 何を動かしたか
+
+- 捨てる前提の小さなプログラム `target\design-probe\probe\`（独立したワークスペース。依存は `image` =0.25.10〔`png`・`webp`〕・`png` 0.18・`image-webp`・`areka-emo-atlas`〔パス〕・`windows`）。
+  - 検体を自作する: 動く WebP 4 種（`image-webp` の可逆の書き手で 1 コマずつ作り、`VP8L` のチャンクを `VP8X`・`ANIM`・`ANMF` に手で包んだ）、APNG 4 種（`png` クレートの書き手）、α の全組み合わせの静止 PNG 1 枚（256×256・R=G=B=x・A=y）。
+  - `image` で全コマを読んで画素を印字する（`set_background_color` を呼ぶ・呼ばないの両方）。
+  - 今の `WicDecoderArm::decode` で同じファイルを読み、寸法・`has_alpha`・画素を印字する。
+  - 乗算の式 4 通りを WIC の結果と比べる。
+  - `Packer::pack` に同じ寸法の矩形を N 個渡して時間を測る（release）。
+- 同じプログラムを、公開版 `image-webp` 0.2.4 と、`[patch.crates-io]` で固定コミットへ替えた 0.2.5 の両方で走らせた。作った検体のバイト列は両方で同じ（`cmp` で一致）。
+- 本物のワークスペースに依存を足して（後で戻した）、`cargo tree -e normal -p areka-emo-atlas`・`cargo deny check`・`cargo about generate`（出力は `target\` の下）・`tools/crates-io.ps1` を走らせた。
+
+### 9.2 動く WebP（調べ残し 1・6）
+
+**固定するコミット**: `https://github.com/image-rs/image-webp` の `75f810915d02ae4ff55d3f825bf6a4b07efdf994`（枝 `release-0.2.5` の先頭・`git ls-remote` で確認・`Cargo.toml` の版は 0.2.5）。GitHub の比較 API では、この枝は `main` に対して 4 コミット先・18 コミット後ろ（分かれている）。4 コミットは「#171 透けたコマの消し方」「#178 α を持たないコマのキャンバスの壊れ」「#179 足す前にマスクする」の 3 件の直しと版上げ。`main` は公開版 0.2.4 から 18 コミット先で、版は 0.2.4 のまま。crates.io の最新は 0.2.4（2026-10-04 に API で確認）。
+
+**検体 `anim_alpha.webp`**（8×8・α の旗あり・ファイルの背景色は不透明な白・繰り返し 3）: 0 番＝左半分が赤・「背景へ戻す」・重ねない・100 ms／1 番＝右半分が緑（1 行目だけ透明）・重ねる・0 ms／2 番＝(2,2) に 2×2 の青・重ねる・70 ms。
+
+| 読み方 | 1 番のコマの左半分（正しくは透明） |
+| --- | --- |
+| 0.2.4・`set_background_color` を呼ばない | **赤が残る（欠陥を再現）** |
+| 0.2.4・`set_background_color` に透明を渡す | 透明（正しい） |
+| 0.2.5（固定コミット）・呼ばない | 透明（正しい） |
+| 0.2.5（固定コミット）・透明を渡す | 透明（正しい。上と同じ結果） |
+
+- 0.2.5 では、ファイルの背景色（不透明な白）は使われなかった（透明で消えた）。
+- **`set_background_color` は 0.2.5 では呼ばなくてよい**。3.2 節の「0.2.5 でも α を持たないコマでは消さない」は、可逆（`VP8L`）のコマには当たらなかった: 0.2.5 の `read_frame` は可逆のコマを常に「α を持つ」として扱う（`(rgba_frame, true)`）。検体 `anim_mixed.webp`（α の旗あり・「背景へ戻す」の次が RGB で書いた部分のコマ）でも、呼ばずに正しく消えた。非可逆（`VP8`）で `ALPH` を持たないコマは検体を作れておらず、**確かめていない**。
+- 検体 `anim_noalpha.webp`（α の旗なし・「背景へ戻す」の次に部分のコマ）: 0.2.5 では、戻された所が**黒い不透明**になった（呼ぶ・呼ばないで同じ）。`image` は α の旗の無いファイルを RGB で読んで不透明の RGBA へ変えるので、透明は表せない。0.2.4 で呼ばない場合は消えずに前のコマが残った。
+- **重ねる指定のコマの色が 1 ずれる**: 緑 (0,255,0,255) を重ねたコマの画素が (0,254,0,255) になった（0.2.4・0.2.5 とも）。重ねない指定の 0 番のコマの赤は 255 のまま。同じ書き手で作った静止画の WebP を読むと 255 のまま（`image-webp` でも WIC でも）なので、ずれは動く絵の重ね算（`do_alpha_blending`）で起きている。
+- 待ち時間は (100,1)・(0,1)・(70,1)、繰り返しは `Finite(3)`。繰り返し 0 のファイルは `Infinite`。
+- コマが 1 枚だけで動きの旗が立ったファイルは、`has_animation = true`・コマ 1 枚で読めた。
+
+**`[patch.crates-io]` の効き方**（開発者メモ「版が合わないと黙って crates.io 版を引く」の確認）:
+
+- `Cargo.lock` が `image-webp` 0.2.4（crates.io）を持っている状態で `[patch.crates-io]` を足して `cargo build` すると、cargo は「patch … was not used in the crate graph」の**警告だけ**を出し、`Cargo.lock` の末尾に `[[patch.unused]]`（`image-webp` 0.2.5・git）を足して、**0.2.4 のまま**組んだ。捨てるプログラムでも本物のワークスペースでも同じ。
+- `cargo update -p image-webp` を走らせると「Removing image-webp v0.2.4／Adding image-webp v0.2.5 (https://github.com/image-rs/image-webp?rev=75f81091…)」と出て、`Cargo.lock` の `source` が `git+https://github.com/image-rs/image-webp?rev=75f810915d02ae4ff55d3f825bf6a4b07efdf994#75f810915d02ae4ff55d3f825bf6a4b07efdf994` になり、`[[patch.unused]]` は消えた。
+- したがって要件 7.6 の検査は「`Cargo.lock` の `image-webp` の `source` が固定コミットの git であること」と「`[[patch.unused]]` が無いこと」を判定する。版の数字（0.2.5 かどうか）は決め手にしない。
+
+**ほかの検査への効き方**:
+
+- `cargo deny check sources`: 許可を足す前は `error[source-not-allowed]: detected 'git' source not explicitly allowed` で `sources FAILED`。`deny.toml` の `[sources]` に `allow-git = ["https://github.com/image-rs/image-webp"]` を足すと `cargo deny check` は `advisories ok, bans ok, licenses ok, sources ok`。
+- `cargo about generate`: git の依存が在っても通り、`image-webp 0.2.5` として載った。
+- `tools/crates-io.ps1`（包むだけの形・`--locked --offline`）: 緑。包まれた `wintf-0.0.1.crate` の中の `Cargo.lock` の `image-webp` は `version = "0.2.4"`・`source = "registry+…"`、包まれた `Cargo.toml` に `patch` の文字は 0 件。`-Verify` の形（`cargo publish --dry-run`・索引を読む）は**走らせていない**。
+
+### 9.3 APNG
+
+検体 `apng_basic.png`（8×8・RGBA・`num_plays = 2`・4 コマ）: 0 番＝全面・左半分が赤・1/3 秒・残す・置き換え／1 番＝(4,0) に 4×4 の緑・0/100 秒・背景へ戻す・重ねる／2 番＝(2,2) に 2×2 の青・7/0 秒・前へ戻す・重ねる／3 番＝全面が透明・1/1000 秒。
+
+- `is_apng() = Ok(true)`・`color_type = Rgba8`・繰り返し `Finite(2)`（`num_plays = 0` の検体は `Infinite`）。
+- 待ち時間の分数（`numer_denom_ms`）: (1000,3)・(0,1)・(70,1)・(1,1)。分母 0 は 100 と読まれた。端数が出たのは 1/3 秒だけ。
+- 重ね方は 3 種とも指定どおり: 1 番は赤の右上に緑、2 番は緑が消えて（背景へ戻す）青が乗り、3 番は青が消えて（前へ戻す）全面が透明。全透明のコマも 1 コマとして出た。
+- APNG では重ねた画素の色のずれは出なかった（緑は 255 のまま）。
+- 検体 `apng_sepdefault.png`（既定の絵＝黒・動きは赤と緑の 2 コマ）: `image` の 0 番は**赤**（既定の絵は飛ばされた）。
+- 検体 `apng_rgb.png`（RGB）: `color_type = Rgb8`。コマは不透明の RGBA で出た。
+- 16 ビットの APNG・途中で壊れた APNG は**動かしていない**（3.6 節はソースを読んだ見立てのまま）。`tRNS` を持つ PNG が α つきと答えることも、`image` が `png::Transformations::EXPAND` を設定している行（`image-0.25.10/src/codecs/png.rs`）を読んだだけで、動かしていない。
+
+### 9.4 今の `WicDecoderArm` が動く絵の 1 枚目をどう返すか（調べ残し 2）
+
+この機械（Windows 11 Pro 10.0.26300・WebP の読み手が入っている）での実測。全部 8×8 の絵。
+
+| 検体 | 寸法 | `has_alpha` | 画素 | `image` の 0 番のコマとの差 |
+| --- | --- | --- | --- | --- |
+| 動く WebP・α の旗あり（`anim_alpha`・`anim_mixed`） | 8×8（絵の全体） | true | 左半分が赤・右半分が透明 | 同じ |
+| 動く WebP・α の旗なし（`anim_noalpha`） | 8×8 | **true** | 0 番のコマと同じ | 画素は同じ。`image` は「透明度なし」と答えるので、本 spec の後は左上の色が抜かれる（今は抜かれていない） |
+| 動く WebP・コマ 1 枚（`anim_single`） | 8×8 | true | 全面が赤 | 同じ（本 spec では静止画のまま WIC が読む） |
+| APNG（`apng_basic`） | 8×8 | true | 0 番のコマ（＝`IDAT`）と同じ | 同じ |
+| APNG・既定の絵つき（`apng_sepdefault`） | 8×8 | true | **黒（既定の絵）** | `image` の 0 番は赤（要件 4.3 の裁定どおり変わる） |
+| APNG・RGB（`apng_rgb`） | 8×8 | false | 0 番のコマと同じ | 同じ（どちらも抜き色の腕） |
+
+- 動く GIF は検体を作っておらず、**測っていない**。
+- WebP の読み手が入っていない機械での結果は**測っていない**（この機械では試せない）。
+
+### 9.5 乗算の丸め（調べ残し 4）
+
+256×256 の静止 PNG（R=G=B=x・A=y）を WIC で読み、B の値を式と比べた（65,536 通り）。
+
+| 式 | 不一致 |
+| --- | --- |
+| `(c*a + 127) / 255` | **0** |
+| `t = c*a + 128; (t + (t >> 8)) >> 8` | **0** |
+| `c*a / 255`（切り捨て） | 31,770 |
+| `(c*a + 254) / 255`（切り上げ） | 31,770 |
+
+設計は 1 行目の式を使う。同じ絵を静止画として読んだときと画素がずれない。
+
+### 9.6 `Packer::pack` の時間（調べ残し 3・release）
+
+| 矩形 | 個数 | ページ数 | 時間（2 回の実測） |
+| --- | --- | --- | --- |
+| 336×400 | 55 | 2 | 0.41〜0.44 ms |
+| 336×400 | 300 | 10 | 6.4〜6.7 ms |
+| 254×254 | 1,024 | 16 | 15.8〜20.4 ms |
+| 500×500 | 268（上限 ㋑ いっぱいの絵 1 つ） | 17 | 9.6〜14.4 ms |
+| 500×500 | 1,024（上限 ㋒ いっぱい） | 64 | 330〜428 ms |
+| 336×400 | 2,000（上限 ㋒ いっぱい） | 67 | 783〜870 ms |
+
+- 全部の矩形が置かれた（外れ 0）。上限の中では 1 秒未満。
+- debug では**測っていない**。切り詰めで寸法がばらつく実物の絵でも測っていない（同じ寸法の矩形だけ）。タスクで、検体を焼くテストの時間と `emo2` の前後を測る。
+
+### 9.7 本番の木（調べ残し 5）
+
+`crates/areka-emo-atlas/Cargo.toml` に `image = { version = "0.25.10", default-features = false, features = ["png", "webp"] }` を足し、根に `[patch.crates-io]` を足して `cargo update -p image-webp` をした状態の `cargo tree -e normal -p areka-emo-atlas`（`image` の下）:
+
+```
+image v0.25.10
+├── bytemuck v1.25.2
+├── byteorder-lite v0.1.0
+├── image-webp v0.2.5 (https://github.com/image-rs/image-webp?rev=75f81091…)
+│   ├── byteorder-lite v0.1.0
+│   └── quick-error v2.0.1
+├── moxcms v0.8.1
+│   ├── num-traits v0.2.19
+│   └── pxfm v0.1.30
+├── num-traits v0.2.19
+└── png v0.18.1
+    ├── bitflags v2.13.2
+    ├── crc32fast v1.5.2 → cfg-if v1.0.5
+    ├── fdeflate v0.3.7 → simd-adler32 v0.3.10
+    ├── flate2 v1.1.10 → crc32fast, miniz_oxide v0.9.1 → adler2 v2.0.1, simd-adler32
+    └── miniz_oxide v0.8.9 → adler2, simd-adler32
+```
+
+- `Cargo.lock` の差分: `areka-emo-atlas` の依存に `image` の 1 行、`image-webp` の項目の版と出どころ。**新しく入るパッケージは 0 本**。
+- 謝辞（`cargo about` の出力のクレートの行を今の `THIRD-PARTY-NOTICES.md` と比べた）: 250 行 → 262 行。増えた 12 行は `bytemuck`・`byteorder-lite`・`crc32fast`・`fdeflate`・`flate2`・`image`・`image-webp`・`moxcms`・`png`・`pxfm`・`quick-error`・`simd-adler32`。冒頭の注記の「約 12 本」と合う。
+
+### 9.8 設計で決めたこと
+
+| 決めたこと | 選んだもの | 捨てたものと理由 |
+| --- | --- | --- |
+| 作り方 | 6 節の案 A（今の部品を広げる）。入口は 1 つのまま | 案 B（呼び手が変わる）／案 C（入口が 2 つ。バルーンも同じに読む裁定で不要になった） |
+| 表の中のコマ | ㋐ コマも `ElementId` を持ち、2 枚目以降は末尾へ。合成の側は `atlas.entry(op.element)` で描いている（`crates/areka-emo-compose/src/blit.rs`）ので無改変で描ける | ㋑（下流で合成に手が入る）／㋒（連結した綴りを鍵にしない決まりに反する） |
+| 表の組み立て | `AtlasTable::with_frames` を足す。同じ鍵はいちばん小さい番号が勝つ | `AtlasTable::new` を変える（並走の約束）。`new` は後が勝つ |
+| 見分け | 見出し（PNG のチャンク・RIFF のチャンク）だけを自前でたどる | `image` の `is_apng`・`has_animation`（コマの総数を答えず、上限を読む前に判定できない・`warn!` に枚数を書けない）／`png`・`image-webp` を直に使う（直の依存が増える・承認の外） |
+| 読み手の口 | 「見出しを聞く」「全コマを読む」の 2 メソッド（既定の実装つき）。上限の判定は `bake` の側 | 読み手に上限を渡して中で判定する（偽の読み手と本物で判定が 2 か所になる） |
+| 抜き色 | `bake` が 0 番のコマに `Normalizer::key_color` を聞き、全コマから消す。消すループは `normalize.rs` から関数に出して共用 | 読み手の中で抜く（偽の読み手で分かれ目を踏めない）／コマごとに `Normalizer` を呼ぶ（コマごとに色が変わる・裁定に反する） |
+| 上限を読む場所 | `bake` の中（`AnimationLimits::from_env`・プロセスで 1 回）。上限を渡す入口 `bake_with_limits` を足す | `bake` の引数を増やす（呼び手 5 ファイルが変わる）／`PackConfig` に欄を足す（`PackConfig { … }` を直に書く所が変わる） |
+| 縮めたことの伝え方 | `warn!` と表の中身（`animation` が `None`）。`BakeResult`・`BakeError` は変えない | `BakeResult` に欄を足す（要る呼び手が 0 か所）／`errors` に載せる（バルーンの組み立てが失敗する） |
+| 全透明のコマの `warn!` | 動く絵のコマには出さない。全コマが透明な絵にだけ 1 回 | コマごとに出す（正当なコマに誤報が出る） |
+| ページの一辺を超える動く絵 | 1 枚へ縮める（`warn!` 1 回） | 今のままコマごとに `Packer::pack` が外す（穴の空いた動きと、コマの数だけの `error!`） |
+| 待ち時間の端数 | 四捨五入 | 切り捨て・切り上げ（どちらでもよいが、誤差が小さい方） |
+| 検体の作り方 | `image` と std だけで作る例プログラム | `png` を開発専用の依存に足す（承認の外。本調査の捨てるプログラムはこれを使った） |
+| 固定するコミット | 枝 `release-0.2.5` の先頭 | `main`（公開版から 18 コミット先で差が大きい） |
+
+**まとめ直し（広げすぎていないか）**: 新しい型の読み手・設定ファイル・`BakeResult` の新しい欄・コマを流しながら渡す口（山を下げるための作り）は作らない。絵 1 つの全コマを一度に持つ（上限 ㋑ まで）。山が問題になったら、`decode_frames` をコマごとに渡す形へ変える。
+
+### 9.9 残っている未確認
+
+1. 非可逆（`VP8`）のコマを持つ動く WebP（検体を作れていない。`image` に非可逆の書き手が無い）。
+2. 16 ビットの APNG・途中で壊れた APNG・`tRNS` を持つ APNG（動かしていない。テストで判定する）。
+3. 動く GIF を今の WIC がどう返すか（検体を作っていない）。
+4. WebP の読み手が入っていない Windows で、縮めた動く WebP がどうなるか（今までの静止画の失敗になるはず。試せる機械が無い）。
+5. `tools/crates-io.ps1 -Verify`（索引を読む形）を取り込みつきで通すこと。
+6. debug での `Packer::pack` の時間と、`emo2` を焼く時間の前後。
+7. APNG の検体を `image` だけで包み直して作ること（本調査は `png` の書き手で作った）。
