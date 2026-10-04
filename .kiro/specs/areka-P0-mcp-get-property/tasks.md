@@ -23,7 +23,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 5.4, 5.5_
   - _Depends: 1_
 
-- [ ] 3. 触る範囲と共有のテストを確かめる
+- [x] 3. 触る範囲と共有のテストを確かめる
   - アプリ本体と実行系のクレートのテスト全体（共有のテスト `mcp_tests.rs`・`resolve_tests.rs` と `areka-mcp` のテストを含む）と clippy を流す
   - 本ブランチの main からの差分で、変えたソースが 3 つだけであること、design.md の「変えないファイル」の一覧と `Cargo.toml` が現れないこと、3 つとも 1,000 行以下であることを見る
   - 完了の状態: テスト全体が緑で clippy の警告が 0。`git diff --stat main...HEAD -- crates` に 3 つのファイルだけが出る
@@ -52,3 +52,4 @@
 ## Implementation Notes
 
 - clippy（toolchain 1.99.0）は本 spec より前からあるコード（dola・`areka-ghost` の `runtime.rs` の collapsible_if など）で `-D warnings` が赤。`clippy-199-lints` の持ち物で、`tools/test-all.ps1`・CI には clippy の段が無い。本 spec の検査は「差分が新しい警告を増やさない」（`cargo clippy -p <crate> --no-deps` の警告の位置が差分の外）で見る。
+- 新しいワークツリーでは `areka` の統合テスト `smoke_boot_loop_exit` が i686 の補助 exe の欠けで赤になる（コードの欠陥ではない）。先に `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` と `cargo build -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` を建てる。タスク 3 の確認: `cargo test --no-fail-fast -p areka -p areka-ghost -p areka-mcp` 全緑（bin 2,519・areka-ghost 156/40/6・areka-mcp 100）・fmt 緑・変えた行に clippy の警告 0・`git diff --stat main...HEAD -- crates` は 3 ファイルだけ（55・134・788 行）。
