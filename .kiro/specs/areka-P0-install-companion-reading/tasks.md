@@ -67,7 +67,7 @@
   - _Requirements: 7.1, 7.2, 7.3, 7.4_
   - _Boundary: 文書_
 
-- [ ] 6. 回帰の確認
+- [x] 6. 回帰の確認
   - `cargo test -p areka-nar`・`cargo test -p areka --bin areka install::terms`・`cargo test -p ukadoc-survey` を回し、すべて緑
   - 変更 0 と決めた次のパスに、基のブランチからの差分が無いことを `git diff --stat main...HEAD -- <パス>` で確かめる: `crates/areka/src/install/procedure.rs`・`judge.rs`・`terms.rs`・`procedure_tests.rs`・`procedure_branch_tests.rs`・`procedure_test_support.rs`・`judge_tests.rs`、`crates/areka-nar/src/install.rs`・`lib.rs`、`crates/areka-parsers/`・`crates/areka-ghost/`・`crates/areka/src/boot_resolve.rs`、`crates/sample-ghost-kit/examples/fold-samples.rs`
   - 作業中に OS の一時フォルダや `C:\` 直下へ検体を作っていないこと
