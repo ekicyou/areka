@@ -91,7 +91,7 @@
   - _Requirements: 7.4_
   - _Depends: 2.3_
 
-- [ ] 5. 実プロセスの試験と回帰の確認
+- [x] 5. 実プロセスの試験と回帰の確認
 - [x] 5.1 実プロセス・実ソケットの `get_log` の試験を 1 本書く
   - 空きの番号・`RUST_LOG=warn,areka::boot_config=info`・`NO_COLOR=1`・`AREKA_NO_ALERT=1`・`AREKA_APP_SMOKE_EXIT_MS=20000`・一時のプロファイルで emo2 の検体を渡して areka を起こし、標準出力は一時フォルダ（ワークツリーの `target\` の下）のファイルへ向ける
   - i686 の helper を `areka.exe` の隣に揃える手順を本ファイルに自前で持つ（`smoke_boot_loop_exit.rs` は触らない）
@@ -100,7 +100,7 @@
   - _Requirements: 1.1, 1.7, 1.8, 4.6, 4.7, 6.3_
   - _Depends: 2.3, 3.2_
 
-- [ ] 5.2 触る範囲と既存のテストの回帰を確かめる
+- [x] 5.2 触る範囲と既存のテストの回帰を確かめる
   - 出す側のファイル・`crates/areka/src/mcp/mod.rs`・`crates/areka-mcp/src/**`・`Cargo.toml`・`Cargo.lock`・見張りの例外表の差分が 0 行であることを main との差分で確かめる
   - ワークスペースの全テストを回し、`with_default_guard_test`（例外表 4 件のまま）・`file_length_guard_test`・`mcp_tests.rs`・`smoke_boot_loop_exit` を含めて緑であることを確かめる
   - 差分 0 行の確認と全テストの緑が記録されている
@@ -110,3 +110,4 @@
 
 - 1.2: 本文の先頭は message 欄の `debug`。`info!(message = some_str)` のような素の文字列の message は `record_str` で届き `debug` に引用符が付くので標準出力と食い違いうる（2.2 の訪問者で `record_str` の message は生の値を `debug` に入れると揃う）。
 - 2.3: レビュー中の `cargo test -p areka --bin areka` で `ghost_session` 系が毎回違う組で 5〜10 件赤（他セッションの cargo/areka 約 15 本と並走）。静かな時に再実行して 41 件緑。時刻待ちのテストは機械の負荷で揺れる。最終の全体テストは静かな時に回す。
+- 5.2: main（merge-base `e2a373b5`）との差分は 8 ファイル。出す側（`areka-update`・`update/`・`install/`・`boot_config.rs`・`boot_resolve.rs`・`ghost_session.rs`・`emo2_boot/`・`areka-ghost`）・`mcp/mod.rs`・`areka-mcp/src`・`Cargo.toml`・`Cargo.lock`・`crates/areka/Cargo.toml`・`with_default_guard_test.rs`・`smoke_boot_loop_exit.rs` の 15 本は、どれも `git ls-files` で 1 件以上の実在を確かめた上で差分 0 行。`main.rs` は 953 行。`tools/test-all.ps1` は `7b4164bc`（未コミット 0 件）で全段 緑（fmt・x64 全テスト・i686・crates.io 確認）。
