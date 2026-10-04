@@ -167,3 +167,94 @@
 ## 8. 次の段
 
 - 要件討議（`/kiro-requirements-discussion areka-P0-shell-balloon-frame-align`）で 6 節の 1〜6 を扱い、その後 `/kiro-design areka-P0-shell-balloon-frame-align`。
+
+---
+
+# 設計フェーズの記録（2026-10-04 `kiro-spec-design`）
+
+## Summary
+
+- **Feature**: `areka-P0-shell-balloon-frame-align`
+- **Discovery Scope**: Extension（既存の文字の層と結線の直し。軽い discovery＝統合点と既存の型の確認だけ。外の依存は足さない）
+- **Key Findings**:
+  - 絵の番号を文字の層に覚えさせる必要は無い。使う所（箱の同期・窓に出す文字の数）はどちらもフレームの中で表示層を持つ結線から呼ばれるので、引数で渡せば足りる。文字の層に「表示用の番号」の欄を作らない＝番号の写しが増えない。
+  - `box_still_shown` の「受け取った `\s` の番号」の条件は、足し替えでなく**外す**だけでよい。登録（`box_sites`）は直近の同期で絵の番号から導いた置き場所で、絵はフレームの外では替わらないから、登録があること自体が絵と合っていることを表す。
+  - `Status` の届けを外しても、可視性の相の檻（`balloon_visibility_phase_tests.rs` ほか）は届けを見ていない。届けを数える檻は `emo2_frame_system` を丸ごと回す `frame_visibility_integration_tests.rs`（とその子）と、純関数の `status_report_tests.rs` だけである（要件 4.5 を保てる）。
+
+## Research Log
+
+### 7 節の「調べが要ること」の答え
+
+- **SERIKO のアニメーションで絵の番号が動くか**: 動かない。seriko の `DisplayCommand::Show` はスコープの面の番号（`surface_id`）とアニメーションの進み具合（`pattern`）を別の欄で運び（`areka-seriko/src/output.rs`）、表示層は `ShowSurface` の `surface_id` を `current_surface_id` に書く（`presenter/show.rs` の表示成立点）。コマの差し替えでは番号は同じ。
+- **シェルに在る番号でも合成で落ちる場合**: 表示層は解決できない番号・合成の失敗を `error!` で記録して表示成立点より前で戻るので、`current_surface_id` は前のまま（`presenter/show.rs` の `Err(e)` の腕）。全透明への退化だけは `Hide` と同じ扱いで `None` になる（同ファイルの `EmptyComposition` の腕）。絵の番号を基準にすれば、前者は「今の置き場所のまま」、後者は「絵が消えたので箱も消す」になる。
+- **新しい窓の子が同じフレームに出るか**: 置き場所が替わるときの「面を片付けて登録し直し、同じフレームの提示で付け直す」道は完了 spec のままで、本 spec は呼ばれる時機だけを変える。実機の記録（`real-machine-check.md` の項目 4）では付け替えたフレームに揃っていた。任意の実機の確かめで見る。
+- **檻の絵の番号**: `Cage::boot` は面 0 の `ShowSurface` を既に送って確立させている。面 10 は emo2 の検体で `\1` の面として使われる番号。合成できなければ檻の中の番号だけを選び直す（実装の最初のタスクで確かめる）。
+
+### 可視性の判断は入力の数え方だけで足りるか
+
+- **Sources**: `balloon_visibility_decision.rs` の `decide_content`。
+- **Findings**: 窓 → 箱は「文字の数が 0 へ落ち、現に可視」の腕（契機 `Clear`・`hide_reaches_boxes` が偽なので箱へ届かない）、箱 → 窓は「0 からの増加・現に不可視」の腕がそのまま当たる。既存の檻（`box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it`）が、サーフェスの切替だけで数が 0 ↔ n に動く形を既に通している。
+- **Implications**: `decide` は触らない。`balloon_shown_glyphs` の基準を絵の番号に替えるだけで、窓の表示・非表示が絵と同じフレームに乗る（要件 1.8）。
+
+## Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| A1 引数で渡す（採用） | 結線が毎フレーム絵の番号を `sync_boxes`・`balloon_shown_glyphs` へ渡す | 番号の写しが増えない・届く順に依らない・emo-present 無変更 | 既存の箱の檻を絵も送る形に直す | ギャップ分析の A1 を「覚えさせず渡す」形に絞った |
+| A1' 文字の層に欄を持つ | 文字の層がスコープごとの「表示している番号」を覚える | 呼び出しの引数が増えない | 表示層の値の写しが 1 つ増える・書く時機を別に決める必要 | 不採用（写しを増やさない） |
+| A2 drain で知らせる | `run_drain_phase` が適用のたびに文字の層へ知らせる | 変化の瞬間が分かる | 照会で足りるものを 2 本目の経路で運ぶ・合成失敗の見分けを複製 | 不採用 |
+| S1 届けをフレームの終わりへ（採用） | `run_text_phase` の後に届けの相 | 判定を複製しない・窓と箱の最終の姿を読む | 借用の失敗の記録を置き直す | |
+| S2 可視性の相で先読み | 同期を前へ動かす／純粋に判定する | 相を足さない | 「隠す印 → 同期 → 提示」の並びを崩す・提示の失敗と食い違う | 不採用 |
+| N1 台帳が番号を覚える（採用） | `BalloonStatusLedger` に最後に取れた番号 | `status_report.rs` で閉じる | 同じフレームの「切り替えてすぐ隠す」は追えない | |
+| N2 表示層に照会を足す | `last_show` の番号を公開 | 真実源が 1 つ | 同じウェーブの約束（emo-present に触らない）に触れる | 不採用（N1 の限界が問題になったときの上げ先） |
+
+## Design Decisions
+
+### Decision: 絵の番号は文字の層に覚えさせず、引数で渡す
+
+- **Context**: 6 節の 1（2 つの番号の線引き）。
+- **Alternatives Considered**: A1'（欄を持つ）・A2（drain で知らせる）。
+- **Selected Approach**: 行き先用の番号は `state_route.rs` の中だけで読む。表示用の番号は結線が `EmoPresenter::current_surface_id(shell_target(scope))` を毎フレーム渡す。`actor_box.rs` は `state.current_surface` を読まなくなる。
+- **Rationale**: 0 フレームで解くには、絵と同じ真実源から同じフレームの中で導くのが最短。覚えさせると「いつ書くか」という新しい時機の問題が生まれる。
+- **Trade-offs**: `sync_boxes`・`balloon_shown_glyphs` の引数が増え、箱の檻を直す。
+- **Follow-up**: 実装後に `actor_box.rs` で `current_surface` を grep して 0 件を確かめる。
+
+### Decision: 写しの刈り込みから番号の条件を外す
+
+- **Context**: 要件 2.1（`\s` の受け取りで写しが外れて `balloon(ID群)` が欠ける）。
+- **Selected Approach**: `box_still_shown` を「登録がある・隠す印が無い・文字を持つ」にする。`prune_shown_boxes` の呼び出しは残す（`\c`・台詞の頭ではその場で外す）。
+- **Rationale**: 足すのでなく削るだけで要件を満たす。写しへ足すのは提示だけ、という不変条件は変わらない。
+- **Trade-offs**: 箱のポインタの前段（`input_events/shell_box_handler.rs`）が読む写しも `\s` の受け取りでは外れなくなる。画素と同じ時機になるので意図どおり（6 節の 5）。
+
+### Decision: 届けは `run_text_phase` の後の独立した相
+
+- **Context**: 6 節の 2。
+- **Selected Approach**: `status_report.rs` に `run_status_report_phase` を足し、`emo2_frame_system` の最後で呼ぶ。可視性の相からは呼び出しを外す。借用の失敗は台帳の旗で 1 度だけ記録。
+- **Rationale**: 提示の後なら窓と箱の両方が最終の姿。可視性 → 同期 → 提示の並びを動かさずに済む。
+- **Follow-up**: `frame_visibility_integration_tests.rs` の普通のバルーンの 2 本が期待値を変えずに通ること。
+
+### Decision: 箱だけのときの番号は台帳が覚える。窓が見えているときの規則は変えない
+
+- **Context**: 6 節の 4・要件 3。
+- **Selected Approach**: `report_observed` の頭で、番号の取れたスコープを `last_surface` へ書く。`collect_bindings` は箱だけ・今の番号なしのときに覚えた番号（無ければ 0）を使い、警告の対象にしない。
+- **Rationale**: 「無ければ 0」は完了 spec の要件 5.5 の「切り替えていなければ 0」そのもの。普通のバルーンの警告の檻は変えずに済む（境界の外）。
+- **Trade-offs**: 同じフレームの「切り替えてすぐ隠す」は追えない（design.md に限界として記載）。
+
+### Decision: 要件 1.8 は「移る先にそのフレームで見えている文字がある」ときの入れ替わりと読む
+
+- **Context**: 絵が先に届き、移る先にまだ文字が無い（保持した文字も、`\s` の後の文字も無い）場合、絵が替わるフレームで前の側の表示をやめる（要件 1.2）一方、移る先には出すものが無い。
+- **Selected Approach**: 空の窓・空の箱は出さない（完了 spec の規則のまま）。文字が届いたフレームで移る先に出る。枠の檻は、両側に文字を持たせた形で両方の並びを確かめる。
+- **Rationale**: 要件 1.8 の条件は「文字の表示が…移る場合」で、表示する文字が無ければ移るものが無い。要件 1.2 と、内容の無いバルーンを出さない既存の規則から一意に決まる。
+
+## Risks & Mitigations
+
+- 絵の差し替えが失敗し続けると、`\s` の後の文字が出ないまま溜まる — 失敗は表示層が `error!` で記録済み。次に絵が替われば出る。design.md の Error Handling に明記。
+- 相を 1 つ足すことで、届けを前提にした他の相の順が崩れる — 届けは kanade への片道の送出だけで、同じフレームの他の相は結果を読まない。
+- 既存の箱の檻の直し漏れ — 引数の形が変わるのでコンパイルで分かる。絵を送らない檻は期待が外れて赤になる。
+- 並走の `balloon-canon-residue` が番号の出どころを変える — 台帳は表示層の値を写すだけ。決定論テストの期待値だけ見直す（Revalidation Triggers）。
+
+## References
+
+- `.kiro/specs/completed/areka-P0-shell-balloon/requirements.md` — 要件 5.5・5.6・6（番号の規則と行き先の規則）
+- `.kiro/specs/completed/areka-P0-shell-balloon/real-machine-check.md` — 16 回中 2 回のずれと警告の実機の記録
+- ukadoc `spec_shiori3` の `Status` — `balloon(ID群)` の定義
