@@ -499,6 +499,16 @@ fn log_box_issue(issue: &BoxIssue) {
             name = name.as_str(),
             "shell: surface.append*ブレスの追記先のサーフェスが無いので箱の element定義を読み捨てた"
         ),
+        BoxIssue::InChildSurface {
+            parent,
+            child,
+            name,
+        } => tracing::warn!(
+            parent = *parent,
+            child = *child,
+            name = name.as_str(),
+            "shell: 子として置かれたサーフェスの箱は親の中に置かない"
+        ),
     }
 }
 

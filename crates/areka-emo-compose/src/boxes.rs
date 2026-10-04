@@ -140,6 +140,13 @@ pub enum BoxIssue {
     },
     /// `surface.append*`ブレスの対象のサーフェスがその時点で無い（要件 2.2・10.1）。
     AppendTargetMissing { surface: u32, name: String },
+    /// element定義で子として置かれたサーフェスが箱を持つ。箱は親の中に置かない
+    /// （spec: areka-P0-surface-element-nesting 要件 6.1・8.1）。
+    InChildSurface {
+        parent: u32,
+        child: u32,
+        name: String,
+    },
 }
 
 /// 転記から箱の定義の表と置き場所の表を作り、読み捨てた事実を報告に載せる（純粋・失敗しない）。
@@ -163,7 +170,42 @@ pub fn fold_boxes(
         // 箱の無い番号は表に載せない（`placements` は無い番号に空の列を返す）。
         .filter(|(_, placements)| !placements.is_empty())
         .collect();
-    (BoxLayout { defs, surfaces }, BoxReport { issues })
+    let layout = BoxLayout { defs, surfaces };
+    report_child_boxes(&layout, world, &mut issues);
+    (layout, BoxReport { issues })
+}
+
+/// element定義で子として置かれたサーフェスの箱を、辺 (親, 子) ごとに箱 1 つにつき 1 件載せる
+/// （spec: areka-P0-surface-element-nesting 要件 6.1・8.1）。置き場所の表は変えない（子の箱は親の中に
+/// 置かれず、子を一番上に表示したときは今までどおり置かれる・要件 6.2〜6.4）。
+///
+/// 辺は面の表の入れ子の表（[`EmoWorld::nest_table`] の `children`＝面の表に在る子だけ）から取る。
+/// 面の表に無い番号は子として描かれず、無い番号の報告（`NestIssue::MissingTarget`）が受け持つので
+/// ここでは見ない。同じ親が同じ子を何度置いても辺は 1 本に数える。並びは親の番号の昇順 →
+/// element定義の番号の昇順 → 箱の並び（子の element番号の昇順）。
+fn report_child_boxes(layout: &BoxLayout, world: &EmoWorld, issues: &mut Vec<BoxIssue>) {
+    if layout.is_empty() {
+        return;
+    }
+    let table = world.nest_table();
+    for parent in world.surface_ids() {
+        let Some(parts) = table.parts(parent) else {
+            continue;
+        };
+        let mut seen = BTreeSet::new();
+        for &child in parts.children.iter().filter(|&&c| seen.insert(c)) {
+            issues.extend(
+                layout
+                    .placements(child)
+                    .iter()
+                    .map(|p| BoxIssue::InChildSurface {
+                        parent,
+                        child,
+                        name: p.name.as_str().to_string(),
+                    }),
+            );
+        }
+    }
 }
 
 /// 箱の element定義の行を、画像の element と同じ規則でサーフェス番号へ配る（要件 2.1・2.2）。
@@ -407,3 +449,7 @@ fn split_brace(
 #[cfg(test)]
 #[path = "boxes_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "boxes_nesting_tests.rs"]
+mod nesting_tests;
