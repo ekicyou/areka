@@ -37,7 +37,6 @@
 - `InstallManifest.companions` の**並びの約束**: 「探索の順」。
 - 記録の種類 2 つ（`ManifestWarning::SourceDirectoryCleaned`・`ManifestWarning::CompanionNotSearched`）。
 - 取り出し元が複数段のときの配置（`plan.rs` の `in_folder`・`body_placement`・`companion_placement`）。
-- 開発用の道具 `crates/sample-ghost-kit/examples/fold-samples.rs` の写像の追随。
 - `doc/COMPAT_ARCHITECTURE.md` §8 の行と、網羅台帳の 2 行の `note`。
 
 ### Out of Boundary
@@ -48,6 +47,7 @@
 - `crates/areka/src/install/terms.rs` の本体（テストのファイル `terms_tests.rs` だけ触る）。
 - `crates/areka-nar/src/install.rs`（確定の手順）・`lib.rs`（記録を出す出口。接続の宣言も足さない）・`names.rs` の検査の中身。
 - `crates/areka-parsers/`・`crates/areka-ghost/`・`crates/areka/src/boot_resolve.rs`。
+- 開発用の道具 `crates/sample-ghost-kit/examples/fold-samples.rs`。階層付きの取り出し元を持つ検体は 0 体なので広げない（設計の討議の決め）。この道具の `strip_folder` は取り出し元の先頭の 1 段だけを見るので、階層付きの検体を畳むと、道具自身の突き合わせ（置かれた物と写像の不一致を数える）が報せる。広げるのはそのときである。
 - `RefuseReason` の種類（14 種のまま）・`InstallManifest` の欄（8 欄のまま）・`Companion` の欄と型（4 欄・`source_directory` は `String` のまま）。
 - 本体の `directory` の検査・同梱の `*.directory` の検査（今どおり 1 階層の名前でなければ断る）。
 - 網羅台帳の 2 行の `note` 以外の欄（`status`・`owner`・`priority`・`values`・`links`）と、ほかの全ての行。
@@ -112,7 +112,6 @@ flowchart LR
 - `crates/areka-nar/src/plan.rs` — `in_folder` を段ごとの前方一致へ広げる。`body_placement` が取り出し元の途中のフォルダのエントリを除く。`companion_placement` が取り出し元の段数を剥がす。`build_plan` の説明文の「接頭辞の名前順」を「探索の順」へ直す。273 行 → 300 行台。
 - `crates/areka-nar/src/error.rs` — `ManifestWarning` に 2 種を足す（5 種 → 7 種）。`RefuseReason` は触らない。
 - `crates/areka-nar/src/names.rs` — `is_valid_one_level_name` の説明文の 1 か所（`*.source.directory` は「各段」が満たす、と直す）。検査の中身は変更 0。
-- `crates/sample-ghost-kit/examples/fold-samples.rs` — `strip_folder` を複数段へ広げる。冒頭と `installed_path` の説明文の「1 階層剥がして」を直す。
 
 テスト:
 
@@ -186,8 +185,7 @@ flowchart TD
 | 2.5 | 配下が空なら断る | plan（変更 0 の枝） | `companion_placement` の `CompanionSourceMissing` | — |
 | 2.6 | 行が無い・空なら宛先の名前 | manifest（変更 0 の枝） | `collect_companions` | — |
 | 2.7 | 階層付きの取り出し元の直下の利用条件 | terms（本体は変更 0） | `nested_terms` | — |
-| 2.8 | 開発用の道具の追随 | fold-samples | `strip_folder` | — |
-| 2.9 | 重なる取り出し元はそれぞれが受け取る | plan | `in_folder`（同梱ごとに独立に判定） | — |
+| 2.8 | 重なる取り出し元はそれぞれが受け取る | plan | `in_folder`（同梱ごとに独立に判定） | — |
 | 3.1 | `..` の段を取り除く | manifest | `read_source_directory` | — |
 | 3.2 | `..` は手前を打ち消さない | manifest | `read_source_directory` | — |
 | 3.3 | 空の段を取り除く | manifest | `read_source_directory` | — |
@@ -227,9 +225,8 @@ flowchart TD
 |-----------|--------------|--------|--------------|------------------|-----------|
 | manifest（`manifest.rs`） | 読み手 | 探索・取り出し元の読み替え・記録 | 1.1〜1.10, 2.1, 2.6, 3.1〜3.4, 4.1, 4.2, 5.1〜5.4, 5.7, 6.1〜6.6, 6.8 | `names`（P0）・`error`（P0） | Service |
 | error（`error.rs`） | 語彙 | 記録の種類 2 つ | 6.1, 6.3 | — | State |
-| plan（`plan.rs`） | 配置の計画 | 複数段の取り出し元の配下の判定と剥がし | 1.7, 2.2〜2.5, 2.9, 5.6, 5.8 | manifest（P0） | Service |
+| plan（`plan.rs`） | 配置の計画 | 複数段の取り出し元の配下の判定と剥がし | 1.7, 2.2〜2.5, 2.8, 5.6, 5.8 | manifest（P0） | Service |
 | terms（`terms.rs`） | 手続き | 取り出し元の直下の利用条件 | 2.7 | manifest（P0） | 変更 0 |
-| fold-samples | 開発用の道具 | 検体の写像 | 2.8 | manifest（P0） | Batch |
 | 文書 | — | 上書きと決めの記録 | 7.1〜7.4 | — | — |
 
 ### 読み手
@@ -330,7 +327,7 @@ pub enum ManifestWarning {
 | Field | Detail |
 |-------|--------|
 | Intent | 取り出し元が何段でも、配下の判定と剥がしを同じ一言で行う |
-| Requirements | 1.7, 2.2〜2.5, 2.9, 5.6, 5.8 |
+| Requirements | 1.7, 2.2〜2.5, 2.8, 5.6, 5.8 |
 
 ##### Service Interface
 
@@ -350,7 +347,7 @@ fn leads_to_folder(entry: &EntryName, folder: &str) -> bool;
   - どれかの同梱の取り出し元の配下（今どおり `in_folder`）。
   - どれかの同梱の取り出し元へ降りる途中のフォルダのエントリ（`leads_to_folder`）。
 - 途中のフォルダを「エントリとしては」必ず除くのが要件 2.4 の実現である。その配下に本体へ置くファイルやフォルダが在れば、`collect_tree` が親として同じフォルダを作る。無ければ作られない。書庫がフォルダのエントリを持つかどうかで結果が変わらない。
-- 重なる取り出し元（要件 2.9）: 同梱ごとに自分の `source_directory` だけで `in_folder` を引くので、`extra` と `extra/bal1` はそれぞれ自分の配下の全てを受け取る。新しい枝は要らない。
+- 重なる取り出し元（要件 2.8）: 同梱ごとに自分の `source_directory` だけで `in_folder` を引くので、`extra` と `extra/bal1` はそれぞれ自分の配下の全てを受け取る。新しい枝は要らない。
 - `in_folder` と `leads_to_folder` は「段ごとの突き合わせ」を共有する。突き合わせは 1 か所に書く。
 
 **Implementation Notes**
@@ -365,20 +362,11 @@ fn leads_to_folder(entry: &EntryName, folder: &str) -> bool;
 - `terms.rs` の本体は変更 0。`nested_terms` は `source_directory` と `terms.txt`／`terms.md` を `/` で繋いで `entry_bytes` で引くので、`extra/bal1` なら `extra/bal1/terms.txt` を引く。`extra/terms.txt` は引かない（直下だけ）。
 - 足すのはテスト 1 本だけである。
 
-### 開発用の道具
-
-#### fold-samples
-
-- `strip_folder(relative, folder)` を、`folder` を `/` で分けた全ての段と `relative` の先頭の段を ASCII の大小を無視して比べ、合えば残りを返す形にする。1 段のときは今と同じ結果になる。
-- `areka-nar` の判定の関数は呼ばない。この道具の写像は、インストールの結果と突き合わせる独立した答え合わせだからである。
-- **確かめ方（はっきり書く）**: この道具には関数単位のテストが無く（0 本）、階層付きの取り出し元を持つ検体も無い（0 体）。本 spec はテストも検体も足さない。確かめるのは「例がコンパイルできること」と「差分の読み合わせ」だけである。広げた枝の正しさは、将来だれかが階層付きの検体を畳んだときに、道具自身の突き合わせ（置かれた物と写像の不一致を数える）が判定する。
-- 取り出し元が重なる検体は扱わない（写像は最初に合った同梱だけを返す）。そういう検体は無い（0 体）。
-
 ### 文書
 
 - `doc/COMPAT_ARCHITECTURE.md` §8 に、既存の 4 列（項目・裁量・根拠・出典 spec）で 4 行足す。
   1. 【上書き】同梱の番号の読み方（完了 `areka-P0-nar-install` 要件 3.12 を上書き）。「見つかった」の判定は `*.directory` の行・先頭に 0 を付けた番号は数えない、を含む。
-  2. 【上書き】`*.source.directory` の読み方（同 要件 3.9 のうち `*.source.directory` の部分を上書き。`*.directory` を 1 階層の名前に限る部分は上書きしない）。SSP 2.9.00 以降の形を採る・`..` は打ち消さずに取り除く・段が残らなければ断る、を含む。
+  2. 【上書き】`*.source.directory` の読み方（同 要件 3.9 のうち `*.source.directory` の部分を上書き。`*.directory` を 1 階層の名前に限る部分は上書きしない）。SSP 2.8.00 以降の形を採る・`..` は打ち消さずに取り除く・段が残らなければ断る、を含む。
   3. 同梱の `*.directory` の区切り: ukadoc の「使えない」を採って断り、`_` への置き換えは採らない。
   4. `type` が `ghost`／`shell` 以外の書庫の同梱は読まないまま。
 - `assets.toml` の 2 行は `note` だけを書き換える。`status = "implemented"` の根拠は、`manifest.rs` の `COMPANION_SUFFIXES` の上の `// ukadoc:` の行のままである（台帳の検査は「実装済みの項目の URL がソースに 1 件以上在ること」だけを見る）。`note` の「根拠の場所」の文は今のまま正しい。
@@ -457,7 +445,7 @@ fn leads_to_folder(entry: &EntryName, folder: &str) -> bool;
 | 綴りの大小 | `install.txt` の `Extra\BAL1` が書庫の `extra/bal1/` に当たる | 2.3 |
 | 段ごとの突き合わせ | `extra/bal10/x.png` は `extra/bal1` の同梱に入らず、本体に残る | 2.3, 2.4 |
 | 配下が空 | 階層付きの取り出し元が書庫に無い → `CompanionSourceMissing`（鍵・`extra/bal1`） | 2.5 |
-| 重なる取り出し元 | `extra` と `extra/bal1` の 2 つの同梱で、前者に `bal1/descript.txt`、後者に `descript.txt` が入り、本体には入らない | 2.9 |
+| 重なる取り出し元 | `extra` と `extra/bal1` の 2 つの同梱で、前者に `bal1/descript.txt`、後者に `descript.txt` が入り、本体には入らない | 2.8 |
 | 根の外へ出ない | 上の受理される計画の全ての宛先・ファイル・フォルダを `escapes` で歩き、外が 0 件で、歩いた数が固定の数に等しい | 5.6, 8.2 |
 
 ### `lib_tests.rs` に足す 2 本（公開の入口 `NarArchive::open` → `install` を通す）
@@ -475,11 +463,10 @@ fn leads_to_folder(entry: &EntryName, folder: &str) -> bool;
 
 - `error_tests.rs`: `manifest_warnings_are_five_and_carry_their_key` を 7 種へ直す（名前も改める）。新しい 2 種の表示が鍵・書かれていた値・取り除いた後の値を含むことを確かめる。
 - `terms_tests.rs`: `balloon.source.directory,extra\bal1` の書庫で、`extra/bal1/terms.txt` が `nested_terms` に載り、`extra/terms.txt` は載らないことを確かめる（要件 2.7・8.4）。
-- `fold-samples.rs`: 自動テストは足さない（0 本）。理由は「開発用の道具」の節に書いた。
 
 ### 実行の範囲
 
-- 実装の間に回すのは `cargo test -p areka-nar`・`cargo test -p areka --bin areka install::terms`・`cargo build -p sample-ghost-kit --example fold-samples`・`cargo test -p ukadoc-survey`（台帳の整合）である。全体テストは完了の段で 1 回だけ回す。
+- 実装の間に回すのは `cargo test -p areka-nar`・`cargo test -p areka --bin areka install::terms`・`cargo test -p ukadoc-survey`（台帳の整合）である。全体テストは完了の段で 1 回だけ回す。
 
 ## Security Considerations
 

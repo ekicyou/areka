@@ -128,3 +128,4 @@
 
 - 開発者の決め: 同梱の `*.directory` に区切りを含む値は、ukadoc の「パス区切りは使えない」を採って**今どおり断る**。括弧の中の「`_` に置換される」は採らない（「バグを受け入れる必要はないと思う」）。
 - 上の Current State の ⑶、Desired Outcome の「`*.directory` のパス区切りは `_` に置き換える」と「置き換える規則を起動の側も使える場所に置く」、Approach の「`*.source.directory` が無いときは `_` へ置き換えた後の名前」、Scope の「`_` への置き換えの関数」、再測定の節の `crates/areka-parsers/src/` の新規モジュールは、どれも取り下げた。正本は `requirements.md`。
+- 設計の討議の決め: `crates/sample-ghost-kit/examples/fold-samples.rs` は広げない（階層付きの取り出し元を持つ検体が 0 体）。Scope の「`fold-samples.rs` の追随」は取り下げ。
