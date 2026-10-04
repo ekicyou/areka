@@ -65,6 +65,7 @@ mod input_events;
 /// 終了の統合操作（areka-P0-app-lifetime-separation）。全窓を閉じてから終了を指示する
 /// `quit_app` と出所の語彙 `ExitOrigin` を持つ。
 mod app_exit;
+mod log_history;
 mod mcp;
 mod menu;
 mod readme;
