@@ -17,8 +17,6 @@ const WEBP_ANIMATION_FLAG: u8 = 0x02;
 /// 動く APNG・WebP なら見出しを返す。それ以外（静止画・GIF・読めない）は None。
 ///
 /// 署名で形式を分ける（拡張子は見ない）。読み手の位置はどこからでもよい（先頭へ戻して読む）。
-// 本番の呼び手（`WicDecoderArm::probe_animation`）はタスク 3.4 でつなぐ。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn sniff<R: Read + Seek>(reader: &mut R) -> Option<AnimationInfo> {
     let total = reader.seek(SeekFrom::End(0)).ok()?;
     let head = read_at::<12, _>(reader, 0)?;

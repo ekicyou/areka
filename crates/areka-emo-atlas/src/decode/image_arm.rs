@@ -29,8 +29,6 @@ struct Opened {
 
 /// 動く絵の全コマを読む。`info` は `sniff` が返した見出し。枚数・寸法が `info` と違えば `Err`。
 /// 最初に読めなかったコマで止める（読めた分だけを返さない）。
-// 本番の呼び手（`WicDecoderArm::decode_frames`）はタスク 3.4 でつなぐ。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn read_frames(path: &Path, info: AnimationInfo) -> Result<AnimatedImage, String> {
     let opened = open(path)?;
     let mut frames = Vec::new();
@@ -65,8 +63,6 @@ pub(crate) fn read_frames(path: &Path, info: AnimationInfo) -> Result<AnimatedIm
 
 /// 動きの 1 枚目だけを読む。コマの並びから最初の 1 つを取って止める（2 枚目以降は解かない）。
 /// `read_frames` と同じ内部の関数を通るので、`read_frames` の 0 番のコマと同じ絵になる。
-// 本番の呼び手（`WicDecoderArm::decode_first_frame`）はタスク 3.4 でつなぐ。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn read_first_frame(path: &Path, info: AnimationInfo) -> Result<DecodedImage, String> {
     let mut opened = open(path)?;
     let frame = opened
