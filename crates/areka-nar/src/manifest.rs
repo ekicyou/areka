@@ -399,9 +399,7 @@ fn collect_companions(
         match classify(key) {
             KeyRole::Known => {}
             KeyRole::Unknown => warnings.push(ManifestWarning::IgnoredKey { key: key.clone() }),
-            KeyRole::Companion {
-                prefix, supported, ..
-            } => {
+            KeyRole::Companion { prefix, supported } => {
                 if !handles_companions {
                     // 種別の判定が先に効く。扱わない種別でも、ここでは
                     // 「ゴースト以外に書かれている」として 1 件だけ記録する。

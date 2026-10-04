@@ -76,5 +76,5 @@
   - _Depends: 4.1, 4.2, 5_
 
 ## Implementation Notes
-- `KeyRole::Companion` から使われなくなった `suffix` の欄を外した（`classify` の分類は変わらない）。`collect_companions` の `KeyRole::Companion { prefix, supported, .. }` の `..` は今は要らないが害は無い
+- `KeyRole::Companion` から使われなくなった `suffix` の欄を外した（`classify` の分類は変わらない）。`collect_companions` の `KeyRole::Companion { prefix, supported, .. }` の要らない `..` は完了時にその場で解決（外した）
 - 範囲外（完了時の棚卸へ）: `crates/sample-ghost-kit/examples/fold-samples.rs` の `strip_folder` は取り出し元の先頭の 1 段だけを比べる（設計で広げないと決めた・階層付きの検体は 0 体）。`ghost-standard-balloon` の brief は取り下げた「`_` への置き換え」を本文でまだ前提にしている（末尾の申し送りで取り下げは明記済み・起動の側の `catalog.rs` は今も `balloon.directory` だけを読む）
