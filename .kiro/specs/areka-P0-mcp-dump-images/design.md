@@ -20,7 +20,6 @@
 
 - 台本の `\![execute,dumpsurface,…]`／`\![execute,dumpballoon,…]`（ファイルへの書き出し）。
 - 拡大縮小・半透明を掛けた後の画像、シェルの絵の中の箱の文字を `dump_surface` に写すこと。
-- PNG の圧縮（下の「PNG の作り方」の決定。差し替えは 1 関数で済む形にする）。
 - ツールの定義・引数の検査・`ghost_name` の解決・待ちの上限の変更。
 - バルーンの文字を拡大率 1 で描き直すこと（`areka-emo-text` は触らない）。
 
@@ -36,7 +35,7 @@
 
 ### Out of Boundary
 
-- `crates/areka/src/mcp/mod.rs`・`crates/areka-mcp/`（`handler.rs` を含む）・`areka-emo-compose`・`areka-emo-text`・すべての `Cargo.toml`。
+- `crates/areka/src/mcp/mod.rs`・`crates/areka-mcp/`（`handler.rs` を含む）・`areka-emo-compose`・`areka-emo-text`。`Cargo.toml` は `crates/areka/Cargo.toml` の `[dependencies]` へ `miniz_oxide` の 1 行を足すだけ（設計ディスカッションの議題 1 で開発者が承認・2026-10-04）で、ほかの `Cargo.toml` は触らない。
 - `areka-emo-present` の既存ファイルの既存の行（`cache.rs`・`shell_target.rs`・`presenter/read.rs` ほか）。足すのは新しいファイル 1 つと、`presenter.rs` の `mod` の並びへの 1 行だけ。
 - seriko が持つ「今の着せ替えの集合」を尋ねる口（作らない。着せ替えは表示の層が覚えている「最後に表示したときの集合」を使う）。
 - 3 人目以降のキャラクターの窓。絵の資産が組まれれば同じ規則で撮れるが、本 spec では資産を足さない。
@@ -49,7 +48,7 @@
 - `EmoPresenter` の既存の読み口 `target_visible`・`text_slot_view`、`TextLayerRuntime::surface`、`TextSurface::read_back`・`size`、wintf の `Arrangement`。
 - `areka_nar::crc32`（PNG のチャンクの CRC。`areka` は既に `areka-nar` に依存している）。
 - `crate::emo2_boot::target_map::{shell_target, balloon_target}`。
-- 新しいクレートの依存・`windows` の機能の追加は 0。本番コードに `unsafe` を足さない。
+- `miniz_oxide::deflate::compress_to_vec_zlib`（PNG の `IDAT` の圧縮。`areka-nar` と同じ版・同じ機能の指定で `crates/areka/Cargo.toml` に足す。`Cargo.lock` に新しいクレートは増えない）。`windows` の機能の追加は 0。本番コードに `unsafe` を足さない。
 
 ### Revalidation Triggers
 
@@ -101,19 +100,20 @@ graph TB
 | 指定した surface | `EmoPresenter::compose_alone(target, id)` が、その target の資産で、着せ替え＝`last_show` の集合（無ければ空）、アニメーション＝空で、新しい `Composer` を使って合成して返す | `&self` で書け、合成メモも画面も変えない（要件 2.3）。一度も表示していないスコープは着せ替えなし（要件 2.2） |
 | スコープの存在 | そのスコープのシェルの target が表示の層に登録されていること（`target_visible(shell_target(scope)).is_some()`） | 「絵の資産が組まれているスコープ」と同じ（装着の相は資産のあるスコープだけ登録する）。窓だけあるスコープ 2 以降は登録されない |
 | 装着の前の呼び出し | `Emo2Wiring::attached()` が偽の間は答えず、`mcp::later` に預けて毎フレーム同じ判断をやり直す。装着が済んだフレームで答える。済まないままなら入口の 10 秒の上限が答える | 装着の前に判断すると、在るはずのスコープ 0 に `NG:No such scope in this ghost` を返してしまう。新しい文言を足さずに済む。`later` はこのための既存の口 |
-| PNG の作り方 | 標準ライブラリだけで書く。8 ビット RGBA・`IHDR`／`IDAT`／`IEND` の 3 チャンク・行のフィルタなし・zlib の無圧縮ブロック。CRC は `areka_nar::crc32` | 下の「PNG の作り方を WIC にしなかった理由」 |
+| PNG の作り方 | 入れ物は自分で書き、`IDAT` の中身だけ `miniz_oxide` で zlib 圧縮する。8 ビット RGBA・`IHDR`／`IDAT`／`IEND` の 3 チャンク・行のフィルタなし。CRC は `areka_nar::crc32` | 下の「PNG の作り方」 |
 | 符号化を走らせる場所 | UI スレッドでその場で行う | 別スレッドへ渡す仕組みを持たない。実機確認で所要時間を測り、合否の線（Performance の節）を越えたときだけ別スレッドへ逃がす |
 | バルーンの文字 | 文字の面が在れば読み戻して背景へ重ねる。無ければ背景だけ。文字が残っているかの判定は持たない | 消された文字の面は透明なので、重ねても背景だけになる（要件 3.9） |
 | 文字の位置合わせ | 画面に出ている値をそのまま使う: 文字の面の offset は差し込み口の `Arrangement`、縮める比は `TextSlotView` の「物理寸÷原寸」（軸ごとの整数比） | バルーンの定義から解き直さないので、画面とずれようがない。`ScaleRatio::as_f32` を寸法の計算に使わない約束も破らない |
 | 箱の文字 | `dump_surface` に写さない | 箱の文字は窓の子の別の面で、合成メモに入っていない。差の一覧に書く（裁定 10） |
 | 差の一覧の置き場 | `doc/ssp-mcp/dump-images-diff-areka.md`（新規） | 既存の `transport-diff-areka.md` は輸送の差の表。並走の MCP の spec と同じファイルを触らない |
 
-#### PNG の作り方を WIC にしなかった理由
+#### PNG の作り方
 
-- WIC の符号化に要る `IWICBitmapEncoder::CreateNewFrame` と `IWICBitmapFrameEncode::Initialize` は、`windows` 0.62.2 では機能 `Win32_System_Com_StructuredStorage` の下にある。この機能はワークスペースのどこでも有効になっていない（`cargo metadata` の解決結果で確認）。有効にするには `Cargo.toml` を変える必要があり、要件の境界（`Cargo.toml` を変えない）の外になる。
-- 無圧縮の PNG は要件 5.1〜5.5 をすべて満たす。チャンクの並びは SSP と同じ 3 つ。違いは大きさだけ: 434×687 のキャラクターで PNG 約 1.2 MB・base64 約 1.6 MB（SSP は 80〜150 KB）、400×224 のバルーンで base64 約 0.5 MB。
-- areka の応答の経路に大きさの上限は無い（`MAX_BODY_BYTES` は要求だけ。rmcp 3.5.0 の Streamable HTTP のサーバにも応答の上限は無い）。受け取る側（Claude Code）が 1〜数 MB の画像を扱えるかは**未確認**で、実機確認（要件 7.7 ⑴）で確かめる。
-- 符号化は `image::png_base64(乗算済み BGRA, 幅, 高さ) -> String` の 1 関数に閉じる。後で圧縮へ替えるとき（`crates/areka/Cargo.toml` の `windows` の機能に 1 語足して WIC を使う、など）は、この関数の中身だけを替える。**替えるかどうかは設計ディスカッションで開発者が決める**（`Cargo.toml` を触る判断なので、設計では決めない）。
+- **`IDAT` を `miniz_oxide` で圧縮する**（設計ディスカッションの議題 1・2026-10-04）。`miniz_oxide::deflate::compress_to_vec_zlib(行のフィルタ 0 を付けた RGBA, 6)` の戻り値が、そのまま `IDAT` の中身になる（zlib のヘッダと Adler-32 を含む）。応答は SSP と同じ桁の大きさになる（SSP は 434×687 で 80〜150 KB）。
+- `miniz_oxide` は `areka-nar` が伸長に使っているクレートで、`Cargo.lock` に既に在る。`crates/areka/Cargo.toml` に `areka-nar` と同じ書き方（`version = "0.9"`・`default-features = false`・`features = ["with-alloc"]`）で 1 行足す。`areka-nar` の「圧縮側を綴らない」の見張りは `areka-nar/src` だけを見るので、当たらない。
+- 捨てた案: ⑴ 無圧縮（`Cargo.toml` を触らずに済むが、434×687 で base64 約 1.6 MB。受け取る側の上限が未確認で、だめなら作り直し）。⑵ WIC の符号化（`windows` 0.62.2 では `IWICBitmapEncoder::CreateNewFrame` と `IWICBitmapFrameEncode::Initialize` が機能 `Win32_System_Com_StructuredStorage` の下にあり、どのみち `Cargo.toml` を触る。COM の呼び出し数十行と `unsafe` が要る）。
+- areka の応答の経路に大きさの上限は無い（`MAX_BODY_BYTES` は要求だけ。rmcp 3.5.0 の Streamable HTTP のサーバにも応答の上限は無い）。
+- 符号化は `image::png_base64(乗算済み BGRA, 幅, 高さ) -> String` の 1 関数に閉じる。
 
 ### Technology Stack
 
@@ -124,6 +124,7 @@ graph TB
 | 合成 | `areka-emo-compose` の `Composer::compose` | 指定した surface の合成 | 呼ぶだけ |
 | 文字の層 | `areka-emo-text` の `TextSurface::read_back` | バルーンの文字の読み戻し | 呼ぶだけ |
 | CRC | `areka_nar::crc32` | PNG のチャンクの CRC-32 | 既存の本番の実装 |
+| 圧縮 | `miniz_oxide` 0.9（`with-alloc`） | PNG の `IDAT` の zlib 圧縮 | `Cargo.lock` に既に在る。`crates/areka/Cargo.toml` に 1 行 |
 
 ## File Structure Plan
 
@@ -165,6 +166,7 @@ doc/ssp-mcp/
 - `crates/areka/src/mcp/dump_surface_tests.rs`・`dump_balloon_tests.rs` — `NG:not implemented yet` を固定するテストを、窓の無い World で `NG:This ghost has no window` を返すテストへ書き換える。
 - `crates/areka/src/emo2_boot/frame/wiring.rs` — `impl Emo2Wiring` に `pub(crate) fn attached(&self) -> bool` を 1 本足す（`presenter()` の隣）。既存の行は変えない。
 - `crates/areka-emo-present/src/presenter.rs` — `mod` の並びに `mod snapshot;` を 1 行足す。
+- `crates/areka/Cargo.toml` — `[dependencies]` に `miniz_oxide` を 1 行足す。
 
 ## System Flows
 
@@ -378,12 +380,12 @@ fn base64(bytes: &[u8]) -> String;
 
 - Preconditions: `premultiplied_bgra.len() == width * height * 4`・幅と高さは 1 以上（呼ぶ側が確かめ、合わなければ想定外の失敗として答える）。
 - 乗算を戻す: アルファ 0 は `(0,0,0,0)`。それ以外は各色 `min(255, round(色×255÷アルファ))`。
-- PNG: 署名 8 バイト → `IHDR`（幅・高さ・深さ 8・カラータイプ 6・圧縮 0・フィルタ 0・インターレース 0）→ `IDAT` 1 つ → `IEND`。`IDAT` の中身は zlib のヘッダ（`0x78 0x01`）＋無圧縮ブロック（1 つ 65,535 バイトまで・最後のブロックに終わりの印）＋Adler-32。各行の先頭にフィルタ 0 の 1 バイト。チャンクの CRC は `areka_nar::crc32`（種類の 4 バイト＋中身）。
+- PNG: 署名 8 バイト → `IHDR`（幅・高さ・深さ 8・カラータイプ 6・圧縮 0・フィルタ 0・インターレース 0）→ `IDAT` 1 つ → `IEND`。`IDAT` の中身は、各行の先頭にフィルタ 0 の 1 バイトを付けた RGBA を `miniz_oxide::deflate::compress_to_vec_zlib`（水準 6）へ渡した戻り値。チャンクの CRC は `areka_nar::crc32`（種類の 4 バイト＋中身）。
 - base64: 標準の文字集合・`=` の詰めあり・改行なし。
 
 **Implementation Notes**
 
-- Risks: 無圧縮なので応答が大きい（「PNG の作り方を WIC にしなかった理由」）。関数の注記に、大きさの見積もりと圧縮へ替える道を書いて残す。
+- Risks: 圧縮の時間が所要時間の大半になる。Performance の節の合否の線で見る。
 
 #### overlay（`dump_balloon_overlay.rs`）
 
@@ -492,7 +494,7 @@ impl Emo2Wiring {
 1. **判断**（`dump_surface_judge_tests.rs`・要件 7.2）: 手書きの `ShellFacts` で次を 1 件ずつ固定する——スコープ省略＝0／負のスコープ／絵の無いスコープ／窓だけあって絵の無いスコープ（＝`scope_exists` が偽の 2）／無い surface ID／負の surface ID／別名にしか無い番号（＝`surface_exists` が偽）／別のスコープ用の ID は成功／隠しているだけ（`last_shown` が Some）は成功／一度も表示していない／窓の無いゴースト／複数に当たるときの順（窓 → スコープ → surface ID → 未表示）。`judge_balloon` も同じ表で、窓・スコープ・成功の 3 通り。
 2. **本文**（同じファイル・要件 7.3）: `shown_text`・`alone_text`・`balloon_text` を、スコープ番号と surface ID を変えた例で逐語に固定する。
 3. **乗算を戻す**（`dump_surface_image_tests.rs`・要件 7.1）: 完全に透明・半透明・不透明の画素で、戻した RGBA が期待値と 1 段階以内。
-4. **PNG**（同・要件 7.1）: ⑴ 既知の 2×2 の絵のバイト列が、手で組んだ期待値と一致（署名・`IHDR`・CRC・Adler-32）。⑵ 65,535 バイトを超える絵で無圧縮ブロックが正しく分かれる。⑶ **別の実装で読み戻す**: 書いた PNG をワークツリーの `target\` の下の一時ファイルへ置き、WIC の復号（`wintf::com::wic` の `create_decoder_from_filename` → 先頭のフレームの `copy_pixels`）で幅・高さ・各画素が一致。
+4. **PNG**（同・要件 7.1）: ⑴ 既知の 2×2 の絵で、署名・`IHDR` の 13 バイト・チャンクの並び（`IHDR`・`IDAT`・`IEND` が 1 つずつ）・各チャンクの CRC が期待どおりで、`IDAT` を `miniz_oxide::inflate` で戻すと「フィルタ 0＋RGBA」の行の並びに一致する。⑵ 同じ色が続く大きな絵（例 256×256）で、PNG が元の画素のバイト数より小さい（圧縮が効いている）。⑶ **別の実装で読み戻す**: 書いた PNG をワークツリーの `target\` の下の一時ファイルへ置き、WIC の復号（`wintf::com::wic` の `create_decoder_from_filename` → 先頭のフレームの `copy_pixels`）で幅・高さ・各画素が一致。
 5. **base64**（同・要件 7.1）: 空・長さ 1・2・3 の既知の入力（`""`・`"f"→"Zg=="`・`"fo"→"Zm8="`・`"foo"→"Zm9v"`）と、`+`・`/` が出る入力。
 6. **重ね合わせ**（`dump_balloon_overlay_tests.rs`）: ⑴ 拡大率 1・整数の offset で、文字の画素がそのまま背景の上に載る（縮めない写しと一致）。⑵ 物理寸が原寸の 2 倍で、2×2 の同じ色の塊が原寸の 1 画素へ正確に戻る。⑶ 半透明の文字が背景と正しく混ざる。⑷ 文字の面の外は背景のまま。⑸ 拡大率が 1 より小さいときも落ちずに背景の大きさで返る。
 7. **窓の無い World**（`dump_surface_tests.rs`・`dump_balloon_tests.rs`・要件 7.5）: 空の World で `handle` を呼ぶと、その場で `NG:This ghost has no window`・`isError: true`・content は本文 1 つ。`NG:not implemented yet` を固定するテストは残さない。
@@ -512,7 +514,7 @@ impl Emo2Wiring {
 
 ### 実機確認（要件 7.7）
 
-`verification/signoff.md` に、要件 7.7 の ⑴〜⑺ を 1 項目ずつ記録する。あわせて、返った base64 の長さと、Claude Code が画像を受け取れたか（無圧縮の PNG の大きさの確認）、1 回の呼び出しの所要時間を記録する。
+`verification/signoff.md` に、要件 7.7 の ⑴〜⑺ を 1 項目ずつ記録する。あわせて、返った base64 の長さと、1 回の呼び出しの所要時間を記録する。
 
 ### 差の一覧に書くこと（要件 7.6・`doc/ssp-mcp/dump-images-diff-areka.md`）
 
@@ -525,11 +527,10 @@ impl Emo2Wiring {
 | 拡大率が 1 でないときのバルーンの字 | 少しにじむ（拡大した面を縮めて重ねる） | 未実測 |
 | 負のスコープ | `NG:No such scope in this ghost` | JSON-RPC の `Invalid params`（実測） |
 | シェルの絵の中の箱の文字 | `dump_surface` に写らない・`dump_balloon` にも含めない | 対応物なし |
-| PNG の圧縮 | 無圧縮（大きさは幅×高さ×4 より少し大きい） | 圧縮あり（実測） |
 | バルーンの窓の印（上へ送る矢印・送り主の印） | areka が描いているものだけ写る | 写る（実測） |
 
 ## Performance & Scalability
 
-- 1 回の呼び出しの仕事: 絵の写し 1 回・乗算を戻す 1 回・CRC と Adler-32 の表引き・base64。バルーンはこれに文字の面の読み戻し（GPU から CPU への写し 1 回）と重ね合わせ。どれも絵の大きさに比例し、待つ処理は無い。所要時間は**未測定**（実機確認で記録する）。
+- 1 回の呼び出しの仕事: 絵の写し 1 回・乗算を戻す 1 回・zlib の圧縮・CRC の表引き・base64。バルーンはこれに文字の面の読み戻し（GPU から CPU への写し 1 回）と重ね合わせ。どれも絵の大きさに比例し、待つ処理は無い。所要時間は**未測定**（実機確認で記録する）。
 - **合否の線**: 配布用のビルドで、既定ゴーストのキャラクター 1 枚（434×687 前後）の `handle` の所要時間が 1 フレーム（16 ms）以内。超えたら、絵の写しまでを UI スレッドで行い、符号化を別のスレッドへ渡して `mcp::later` で結果を受ける形へ替える（`ReplyTo` はスレッドをまたげる）。線を越えるまでは作らない。
 - 画像の大きさで断る分岐は持たない（要件 5.5）。
