@@ -20,8 +20,9 @@ pub use dispatch::{
     DragEndEvent, DragEvent, DragStartEvent, OnDrag, OnDragEnd, OnDragStart, dispatch_drag_events,
 };
 pub use state::{
-    DragState, DragStateSnapshot, cancel_dragging, check_threshold, end_dragging, read_drag_state,
-    snapshot_drag_state, start_dragging, start_preparing, update_drag_state, update_dragging,
+    DragClose, DragState, DragStateSnapshot, cancel_dragging, cancel_dragging_on_capture_lost,
+    check_threshold, end_dragging, end_dragging_on_release, read_drag_state, snapshot_drag_state,
+    start_dragging, start_preparing, update_drag_state, update_dragging,
 };
 pub use systems::{cleanup_drag_state, rearm_tick_while_dragging};
 
