@@ -99,7 +99,22 @@ impl EmoWorld {
         emo.populate_from_shell(shell);
         let report = crate::base_image::apply_base_images(&mut emo.world, images);
         emo.world.insert_resource(report);
+        // 子の当たり判定の領域を親へ持ち込む（持ち込みが在るサーフェスにだけ付く・要件 4.1〜4.10）。
+        crate::hit_import::attach_hit_regions(&mut emo);
         emo
+    }
+
+    /// 当たり判定に使う領域の列（要件 4.1・4.2）。子から持ち込んだ分が在ればその列
+    /// （［持ち込み］→［直接書いた領域］）、無ければ転記のままの `SurfaceMaster.collisions`。
+    /// 存在しない番号は `None`。
+    pub fn hit_regions(&self, id: u32) -> Option<&[areka_parsers::shell::Collision]> {
+        let entity = *self.world.resource::<SurfaceIndex>().0.get(&id)?;
+        if let Some(regions) = self.world.get::<crate::hit_import::HitRegions>(entity) {
+            return Some(&regions.0);
+        }
+        self.world
+            .get::<SurfaceMaster>(entity)
+            .map(|m| m.collisions.as_slice())
     }
 
     /// 土台の絵の決定の結果（層 0 として使った画像と、`element0` が在って使わなかった画像）。

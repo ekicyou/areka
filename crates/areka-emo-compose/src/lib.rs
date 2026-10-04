@@ -55,6 +55,8 @@ pub use plan::BlitOp;
 pub mod blit;
 pub mod hit;
 pub use hit::{RegionPriority, ScaledHit, hit_region, hit_region_scaled};
+mod hit_import;
+pub use hit_import::HitRegions;
 pub mod scale;
 pub use scale::ScaleRatio;
 
