@@ -51,7 +51,7 @@
 
 ### Revalidation Triggers
 
-- `SurfaceTable`・`SurfaceTableRow`・`UnreadableLine` の欄の変更（読み手の使い手は本ツールだけだが、公開の型である）。
+- `SurfaceTable`・`SurfaceTableRow` の欄の変更（読み手の使い手は本ツールだけだが、公開の型である）。
 - `MountModel.shell.dir` の意味の変更、またはシェルの切替が `GhostRuntime::set_shell_dir` を通らなくなる変更（切替の後の表が古いシェルを指す）。
 - `ActiveGhost`・`handle` の引数の並びの変更（`areka-P0-mcp-tool-entrances` の持ち分）。
 - `charset::decode` の既定への戻り方の変更。
@@ -104,7 +104,7 @@ graph LR
 
 ```
 crates/areka-parsers/src/shell/
-├── surfacetable.rs           # 新規: parse_surfacetable と SurfaceTable・SurfaceTableRow・UnreadableLine
+├── surfacetable.rs           # 新規: parse_surfacetable と SurfaceTable・SurfaceTableRow
 ├── surfacetable_tests.rs     # 新規: 行の読み分けのテスト
 └── mod.rs                    # 変更: mod surfacetable; / #[cfg(test)] mod surfacetable_tests; / pub use の 3 か所
 
@@ -115,7 +115,7 @@ crates/areka/src/mcp/
 
 ### Modified Files
 
-- `crates/areka-parsers/src/shell/mod.rs` — `boxes` と同じ形で `mod surfacetable;`・`#[cfg(test)] mod surfacetable_tests;`・`pub use surfacetable::{SurfaceTable, SurfaceTableRow, UnreadableLine, parse_surfacetable};` を足す。ほかの行は動かさない。
+- `crates/areka-parsers/src/shell/mod.rs` — `boxes` と同じ形で `mod surfacetable;`・`#[cfg(test)] mod surfacetable_tests;`・`pub use surfacetable::{SurfaceTable, SurfaceTableRow, parse_surfacetable};` を足す。ほかの行は動かさない。
 - `crates/areka/src/mcp/get_expression_table.rs` — ダミーを本物に置き換える。`handle` の引数の並びは変えない。テストの接続（`#[path = "get_expression_table_tests.rs"]`）はそのまま。
 - `crates/areka/src/mcp/get_expression_table_tests.rs` — `NG:not implemented yet` を期待する 1 本を捨て、下の Testing Strategy の内容にする。1,000 行に近づいたら、2 本目のテストのファイルを `get_expression_table.rs` の中から `#[path]` で繋ぐ（`mcp/mod.rs` には足さない）。
 
@@ -231,8 +231,8 @@ flowchart TD
 pub struct SurfaceTable {
     /// `サーフェスID,名前` の行（書かれた順）。
     pub rows: Vec<SurfaceTableRow>,
-    /// 読めなかった行（書かれた順）。
-    pub unreadable: Vec<UnreadableLine>,
+    /// 読めなかった行の行番号（1 から数える・書かれた順）。
+    pub unreadable: Vec<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -246,18 +246,15 @@ pub struct SurfaceTableRow {
     pub scope: u32,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct UnreadableLine {
-    /// 1 から数えた行番号。
-    pub line: usize,
-    /// 前後の空白を落とした行の文面。
-    pub text: String,
-}
-
 pub fn parse_surfacetable(text: &str) -> SurfaceTable;
 ```
 
-行の読み分け（行の前後の空白を落としてから、上から順に当てる。見出し語 `charset`・`version`・`option`・`group`・`scope` は ASCII の大文字と小文字を区別しない。見出し語と値は最初の `,` で分け、それぞれ前後の空白を落とす）:
+行の読み分け（上から順に当てる）。前置きの決め:
+
+- 落とす空白は **ASCII の空白とタブだけ**（全角の空白は字として残す。1.6）。行はまず前後のこの空白を落とす。
+- 行は最初の `,` で前と後ろに分ける。**前**（見出し語・サーフェス ID）は前後の空白を落とす。**後ろ**（グループ名・名前）は落とさず、書かれたとおりに写す。`scope` の数値だけは前後の空白を落としてから読む。
+- 見出し語 `charset`・`version`・`option`・`group`・`scope` は ASCII の大文字と小文字を区別しない。
+- 数値（サーフェス ID・`scope`）は **ASCII の数字だけ**の並びで、`u32` に収まるもの（先頭の 0 は許す。`+5`・`-1`・空は数値でない）。
 
 | 行 | 扱い |
 |---|---|
@@ -265,10 +262,10 @@ pub fn parse_surfacetable(text: &str) -> SurfaceTable;
 | `{` だけの行 | 読み飛ばす（`group` は `group,` の行で始まる。`{` が無くても始まる） |
 | `}` だけの行 | 今の `group` を閉じる。開いた `group` が無ければ読み飛ばす |
 | `version,…`・`option,…` | 読み飛ばす |
-| `charset,名前` | `encoding_rs::Encoding::for_label` が知っている名前なら読み飛ばす。知らない名前なら `unreadable` |
+| `charset,名前` | `encoding_rs::Encoding::for_label` が知っている名前なら読み飛ばす。知らない名前なら `unreadable`。ファイルのどの行にあっても同じ扱い（`charset::decode` が見るのは冒頭の最初の 1 つだけだが、読み手は場所を問わない。害は無い） |
 | `group,名前` | 新しい `group` を始める（グループ名＝最初の `,` より後ろ・`scope` は 0）。前の `group` が開いたままなら、そこで閉じたとみなす |
 | `scope,数値` | 今の `group` の `scope` にする。その `group` で既に転記した行にも当てる（`scope` が行の後に書かれていても同じ結果）。2 つ以上あれば後が勝つ。数値でない・`group` の外にあるなら `unreadable`（`scope` は変えない） |
-| `数値,名前`（名前は空でもよい） | `rows` へ転記。数値は `u32` として読める 10 進数（先頭の 0 は許す）。名前は最初の `,` より後ろの全部（`,` や行末の `}` を含む） |
+| `数値,名前`（名前は空でもよい） | `rows` へ転記。名前は最初の `,` より後ろの全部（`,` や行末の `}` を含む） |
 | 上のどれでもない行（ID が数値でない・`,` が無い・`{` や `}` と同じ行に別の字がある など） | `unreadable` |
 
 - Preconditions: `text` は文字コードを読み終えた文字列。
@@ -392,7 +389,7 @@ pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: 
 
 ### 規則（`crates/areka/src/mcp/get_expression_table_tests.rs`・`render(&parse_surfacetable(..))`）
 
-- 実測 14 の検体の全文の一致（7.1）。`group,0`（`scope,0`・0〜9・20・21）と `group,1`（`scope,1`・2100〜2110・2200〜2210）。既定の 10・11・19 が 9 と 20 の間、25 が 21 の後に入る（4.1〜4.3）。
+- 実測 14 の検体の全文の一致（7.1）。入力と期待値は `ssp-measurements.md` の検体 1 の文面をそのまま使う。検体 3・5・8・9 も同ファイルの文面のまま使い、検体 4・6・7 は同じ形の小さい入力で確かめる。`group,0`（`scope,0`・0〜9・20・21）と `group,1`（`scope,1`・2100〜2110・2200〜2210）。既定の 10・11・19 が 9 と 20 の間、25 が 21 の後に入る（4.1〜4.3）。
 - 実測ごと（7.2）: `\p[2]`（1.4）・同じスコープの `group` が 2 つで ID の順に混ざる（2.7・4.4）・`__disabled` と `__parts` が載らない（2.8・2.9）・`scope` の無い `group`・グループ名が空・`group` の外の行・名前の省略 `|\0|本体基本||\s[0]|`（1.5）・閉じていない `{`・行末の `}`・空の転記で既定の 15 件だけ（3.1・3.5）。
 - 既定が消える 3 つ（スコープ 1 に書かれた ID・`__disabled` の中の ID・名前を省略した ID）と、消えない 1 つ（7.3・3.2〜3.4）。
 - `option,DisableNoDefineSurfaces` の有無で同じ文字列（7.5・3.8）。
@@ -409,9 +406,9 @@ pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: 
 ### 配線（同じファイル）
 
 - 空の World で `handle` → 既定の 15 件・`is_error` は偽・`warn!` が 1 件（今のテストの書き換え先。5.9）。
-- `SwitchRig` で実行系つきの単位を起こし、`mount().shell.dir` に `surfacetable.txt` を置いて、受け口へ 2 件続けて送り `Input` の段を 1 回回す → 2 件とも同じ表で答える（6.4・1.7）。偽の SHIORI の呼出の記録が前後で増えない（6.1）。その後 `GhostSession::set_shell_dir` で別のフォルダ（別の `surfacetable.txt`）へ替えて呼ぶ → 替えた後の表（6.2）。
+- `SwitchRig` で実行系つきの単位を起こし、`mount().shell.dir` に `surfacetable.txt` を置いて、受け口へ 2 件続けて送り `Input` の段を 1 回回す → 2 件とも同じ表で答える（6.4・1.7）。偽の SHIORI の呼出の記録が前後で増えない（6.1。起動の一連の呼出は別スレッドから遅れて届くので、`SwitchRig::wait_steady` で落ち着かせてから「前」を採る）。その後 `GhostSession::set_shell_dir` で別のフォルダ（別の `surfacetable.txt`）へ替えて呼ぶ → 替えた後の表（6.2）。
 - 6.3 は `mcp_tests.rs` の今のテスト（解決の失敗の文言）がそのまま見張る。触らない。
 
-### 実装の前に要るもの
+### 期待値の出どころ
 
-実測 14 の検体の `surfacetable.txt` の全文（0〜9 と 2100 番台の名前）と SSP の返した全文は、リポジトリに無い（`requirements.md` は行の要約）。7.1 の期待値を起こす最初のタスクで、開発者の机の検体と SSP の出力から写して `research.md` に残す。設計はこれで変わらない。
+SSP の実測 8 体の答えと検体の文面は `ssp-measurements.md` に写してある。期待値はそこから起こす。行の終わりは `\r\n` にする。
