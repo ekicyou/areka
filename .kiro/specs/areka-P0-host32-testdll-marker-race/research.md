@@ -442,3 +442,41 @@ test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 - 結論: 10 回とも緑。赤の回は 0 回。直す前に揺れていた印のテスト `testdll_drop_invokes_courtesy_unload`（15.3 節・タスク 2 のレビューの 2 回目）も 10 回とも緑。
 - 後片付け: 実走の後、`target\` の下の `h32m_*` は 0 個。ログのフォルダ `target\marker-race-runs` は消した。
+
+## 19. 全体テストと境界の確かめ（タスク 5.2・要件 4.3・5.1・5.3・5.4・3.3・2.3）
+
+### 19.1 全体テスト
+
+- コマンド: `pwsh -NoProfile -File tools/test-all.ps1`。検査したコミットは `1f4c5160`、開始時の未コミットの変更は 0 件。
+- 結果は全段 緑。
+  - i686 ターゲット導入・i686 成果物ビルド・fmt --check・x64 ワークスペース全テスト（807 秒）・i686 テスト（host-32 系）・crates.io 公開前の確認の 6 段とも終了コード 0。
+  - `test result:` の行は 123 本で、合計 9,870 passed／0 failed／45 ignored。`test result: FAILED` は 0 本。
+- 名指しの確かめ:
+  - x64 側の host-32 の通しのテスト（`crates/shiori-host32-host/tests/`）: `error_paths` 2／`lifecycle_cyclic_e2e` 2／`lifecycle_kill_e2e` 1／`shiori_load_e2e` 2／`shiori_request_e2e` 2 本。すべて緑。
+  - 1 ファイル 1,000 行の見張り `file_length_guard_test`: 6 passed／0 failed。
+  - 一時パスの見張り `temp_path_guard_test`: 16 passed／0 failed。
+- 先に 2 回失敗した。どちらもテストの赤ではなく、ほかのセッションの cargo が並走したことによる確約メモリの不足だった。1 回目は `areka-mcp` のコンパイルで `memory allocation ... failed`。2 回目は `link.exe` が 0xc000012d。この 2 回はテストが 1 本も走っていない。その後、セッションの障害で `-j 2` の採り直しも途中で切れ、欠けた成果物（`can't find crate`）が残った。上の全段 緑の 1 回は、それとは別に最初から回したもの。
+
+### 19.2 差分の境界
+
+`git diff --stat main...HEAD` でコードの差分を確かめた。コードで差分があるのは次の 3 つだけ。
+
+- `crates/shiori-host32-testdll/src/lib.rs`（405 行）
+- `crates/shiori-host32-testdll/Cargo.toml`（21 行）
+- `crates/shiori-host32-helper/src/shiori_proxy.rs`（814 行。差分は `mod tests` の中だけ・17 節）
+
+ほかは spec の文書だけ。次のものには差分が 0 件。
+
+- `Cargo.lock`
+- 群 D の `shiori_proxy_loadu_tests.rs`
+- 2 本目の偽の DLL `shiori-host32-testdll-loadu`
+- `main_loopback_tests.rs`
+
+触ったファイルはどれも 1,000 行未満。
+
+### 19.3 直した後に経路 1・2 が成り立たない理由（3 節への追記）
+
+- **経路 1**: 手順 3 で書き手になるのは、loopback のテストが読んだ写しの `unload` だった。この写しは loopback のテストの一時フォルダにあり、印のテストのフォルダにはない。直した後の `unload` は、印の親フォルダが自分の置き場と同じときだけ書く。だから loopback の写しは印のテストの `unload.marker` を書かず、手順 4 の確かめは壊されない。
+- **経路 2**: 巻き戻しの中の後片付けで呼ばれるのも、同じ loopback の写しの `unload`。同じ置き場の判定で書かないので、成り立たない。
+- 往復のテストも同じ理由で、印を書かない（錠を外してよい根拠・17 節）。この判定の「違う」の枝を踏むのは `testdll_unload_from_another_folder_leaves_marker_untouched`（15 節で赤→16 節で緑）、「同じ」の枝を踏むのは印のテスト。
+- 落ちたときの名残（3 節の末尾）は残る。印のテストが落ちると環境変数が差したままになる。ただ、他の写しは自分の置き場と違うので書かない。だから片付けの漏れが他のテストの赤を呼ぶことはない。
