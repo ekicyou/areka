@@ -46,7 +46,7 @@
 
 - `crates/areka/src/install/procedure.rs`・`judge.rs` と、そのテストのファイル（`procedure_tests.rs`・`procedure_branch_tests.rs`・`procedure_test_support.rs`・`judge_tests.rs`）。
 - `crates/areka/src/install/terms.rs` の本体（テストのファイル `terms_tests.rs` だけ触る）。
-- `crates/areka-nar/src/install.rs`（確定の手順）・`lib.rs` の本体（記録を出す出口）・`names.rs` の検査の中身。
+- `crates/areka-nar/src/install.rs`（確定の手順）・`lib.rs`（記録を出す出口。接続の宣言も足さない）・`names.rs` の検査の中身。
 - `crates/areka-parsers/`・`crates/areka-ghost/`・`crates/areka/src/boot_resolve.rs`。
 - `RefuseReason` の種類（14 種のまま）・`InstallManifest` の欄（8 欄のまま）・`Companion` の欄と型（4 欄・`source_directory` は `String` のまま）。
 - 本体の `directory` の検査・同梱の `*.directory` の検査（今どおり 1 階層の名前でなければ断る）。
@@ -119,7 +119,7 @@ flowchart LR
 - `crates/areka-nar/src/manifest_companion_tests.rs` — 結果が変わる 3 本をその場で書き換える（下の Testing Strategy）。
 - `crates/areka-nar/src/manifest_tests.rs` — 末尾に接続の宣言を足す（618 行 → 622 行前後）。
 - `crates/areka-nar/src/plan_tests.rs` — 末尾に接続の宣言を足す（916 行 → 920 行前後。テストの本体は足さない）。
-- `crates/areka-nar/src/lib.rs` — 末尾に接続の宣言を足す（本体は変更 0）。
+- `crates/areka-nar/src/lib_tests.rs` — 公開の入口を通す 2 本を末尾に足す（599 行 → 700 行前後）。`lib.rs` は変更 0。
 - `crates/areka-nar/src/error_tests.rs` — `warning_name` と `manifest_warnings_are_five_and_carry_their_key` を 7 種へ直す。
 - `crates/areka/src/install/terms_tests.rs` — 助手 `open` の置き場を `WorkDir` へ替え、階層付きの場面を 1 本足す。
 
@@ -133,8 +133,7 @@ flowchart LR
 ```
 crates/areka-nar/src/
 ├── manifest_companion_reading_tests.rs  # 探索の順・打ち切り・取り出し元の読み替え・記録（manifest_tests.rs から mod companion_reading で繋ぐ）
-├── plan_source_path_tests.rs            # 階層付きの取り出し元の配置（plan_tests.rs から mod source_path で繋ぐ）
-└── lib_companion_tests.rs               # 公開の入口を通した並びと置き場所（lib.rs から mod companion_tests で繋ぐ）
+└── plan_source_path_tests.rs            # 階層付きの取り出し元の配置（plan_tests.rs から mod source_path で繋ぐ）
 ```
 
 - 繋ぎ方は既存の形に揃える。`manifest_tests.rs` は既に `manifest_companion_tests.rs` を子として繋いでおり、子は `use super::*` で助手を借りる。`plan_tests.rs` の助手は私有だが、子のモジュールからは見えるので、可視性の変更は 0 か所で済む。
@@ -209,7 +208,7 @@ flowchart TD
 | 6.3 | 探索で読まなかった鍵を区別して記録 | manifest・error | `CompanionNotSearched` | 探索 |
 | 6.4 | `*.directory` の行が無い断片は今どおり | manifest（変更 0 の枝） | `IgnoredKey` | 探索 |
 | 6.5 | 1 つの鍵から最大 1 件 | manifest | 記録の 3 段の並び | 探索 |
-| 6.6 | 同じ入力から同じ列 | manifest | 鍵の名前順と探索の順だけで決まる | — |
+| 6.6 | 同じ入力から同じ列 | manifest | 鍵の名前順と探索の順だけで決まる（乱数・時刻・ハッシュの順を使わない作りで満たす。専用のテストは足さない） | — |
 | 6.7 | ログへ 1 件ずつ警告 | 既存の出口（変更 0） | `NarArchive::install` の `warn!` | — |
 | 6.8 | 読み替えも読み飛ばしも無ければ 0 件 | manifest | — | — |
 | 7.1 | 完了 spec の要件 3.9・3.12 の上書きを記す | 文書 | `doc/COMPAT_ARCHITECTURE.md` §8 | — |
@@ -218,7 +217,7 @@ flowchart TD
 | 7.4 | ほかの行は変えない | 文書（変更 0） | — | — |
 | 8.1 | 13 の場面 | テスト | Testing Strategy の表 | — |
 | 8.2 | 置き場所・並び・記録を確かめる | テスト | `escapes`・根の走査・列の完全一致 | — |
-| 8.3 | 10 以上の同梱で並びを確かめる | テスト | `lib_companion_tests.rs` | — |
+| 8.3 | 10 以上の同梱で並びを確かめる | テスト | `lib_tests.rs` に足す 2 本 | — |
 | 8.4 | 階層付きの利用条件 | テスト | `terms_tests.rs` | — |
 | 8.5 | 置き場は `target\` の下だけ | テスト | `WorkDir` | — |
 
@@ -405,6 +404,7 @@ fn leads_to_folder(entry: &EntryName, folder: &str) -> bool;
 
 - 記録の出口は変えない。`NarArchive::install` が成功したとき、`outcome.warnings` を 1 件ずつ `warn!`（`[areka_nar] manifest entry skipped`）で出す。新しい 2 種も同じ出口を通る（要件 6.7）。
 - ログを出す場所は増えない（0 か所）。
+- 断られた書庫では、読み替えの記録（`SourceDirectoryCleaned`・`CompanionNotSearched`）はログに出ない（今の読み飛ばしの記録と同じ）。出るのは断った理由で、そこに鍵と値が載る。取り除いた後の取り出し元が書庫に無いときの理由（`CompanionSourceMissing`）には、取り除いた後の値が載る。
 
 ## Testing Strategy
 
@@ -432,7 +432,6 @@ fn leads_to_folder(entry: &EntryName, folder: &str) -> bool;
 | 取り除いた後に段が残らない | `..`・`/`・`../..` → `InvalidDirectoryName`（鍵・書かれていた値） | 3.4 |
 | 取り除いた後の検査 | `.` の段・`C:` を含む段・末尾が空白の段・予約名の段 → 断る。全体がちょうど 200 単位は通り、201 単位は断る | 5.3, 5.4 |
 | 同梱の `*.directory` に区切り | `extra\bal1`・`../escape` → `InvalidDirectoryName` | 4.1, 4.2, 5.1, 5.2 |
-| 同じ入力から同じ結果 | 記録を複数含む入力を 2 度読み、同梱の列と記録の列が等しい | 6.6 |
 
 - 本体の `directory` に区切りがある場合（要件 5.7・8.1 の最後の場面）は、既存の `manifest_tests.rs` の `refuses_a_directory_that_is_not_a_one_level_name` がそのまま固定している。足さない（追加 0 本）。
 - 要件 5.8・6.8 の「今と同じ」は、既存の `every_real_sample_install_txt_is_accepted_verbatim_without_a_single_warning` と、書き換えない既存のテストが通り続けることで見る。
@@ -461,7 +460,7 @@ fn leads_to_folder(entry: &EntryName, folder: &str) -> bool;
 | 重なる取り出し元 | `extra` と `extra/bal1` の 2 つの同梱で、前者に `bal1/descript.txt`、後者に `descript.txt` が入り、本体には入らない | 2.9 |
 | 根の外へ出ない | 上の受理される計画の全ての宛先・ファイル・フォルダを `escapes` で歩き、外が 0 件で、歩いた数が固定の数に等しい | 5.6, 8.2 |
 
-### `lib_companion_tests.rs`（新規・公開の入口 `NarArchive::open` → `install` を通す）
+### `lib_tests.rs` に足す 2 本（公開の入口 `NarArchive::open` → `install` を通す）
 
 | 場面 | 確かめること | 要件 |
 |---|---|---|
