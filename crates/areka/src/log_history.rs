@@ -51,8 +51,6 @@ impl Kind {
     }
 
     /// 5 語と大文字小文字の違いを除いて一致すれば Some（前後の空白は削らない・空は None）。
-    // 本番の呼び手は get_log の入口（areka-P0-mcp-log-history task 3.2）。生えるまで未使用の警告を抑え、3.2 で外す。
-    #[allow(dead_code)]
     pub(crate) fn from_log_type(word: &str) -> Option<Kind> {
         Kind::ALL
             .into_iter()
@@ -314,8 +312,6 @@ pub(crate) fn last_id() -> u64 {
 
 /// その種別の記録を写して返す（古い順・最大 [`PER_KIND_CAP`] 件）。
 /// 排他を握るのは写す間だけで、呼び手は排他の外で絞って整形する。
-// 本番の呼び手は get_log の入口（areka-P0-mcp-log-history task 3.2）。生えるまで未使用の警告を抑え、3.2 で外す。
-#[allow(dead_code)]
 pub(crate) fn snapshot(kind: Kind) -> Vec<Record> {
     lock(&STORE).rows(kind).cloned().collect()
 }
