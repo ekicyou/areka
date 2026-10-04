@@ -1,7 +1,8 @@
 //! `get_expression_table` の決定論テスト。
 //!
-//! 空の World と作ったゴースト・引数で呼ぶと `NG:not implemented yet`（isError: true）を返す
-//! （空の World で答えられる＝ゴーストに何もさせていない・要件 5.1・5.2・5.4）。
+//! 規則（`render`）・読み取りと記録（`load`）・配線（`handle`）。
+//! 空の World で `handle` を呼ぶと、シェルのフォルダが引けないので `warn!` を 1 件出し、
+//! 既定の 15 件の全文を素の値（isError: false）で答える（要件 1.7・3.5・5.9）。
 
 use std::path::PathBuf;
 
@@ -11,7 +12,7 @@ use areka_mcp::tools::{ToolCall, ToolRequest};
 use super::*;
 
 #[test]
-fn answers_not_implemented_yet_with_an_empty_world() {
+fn an_empty_world_answers_the_15_defaults_with_one_warning() {
     let ghost = ActiveGhost {
         name: Some("Emily/Phase4.5".to_string()),
         root: PathBuf::from(r"C:\ssp\ghost\emily4"),
@@ -21,14 +22,20 @@ fn answers_not_implemented_yet_with_an_empty_world() {
     };
     let (req, pending) = ToolRequest::new(ToolCall::GetExpressionTable(args.clone()));
 
-    handle(&mut World::new(), &ghost, args, req.reply);
+    let ((), events) = capture(|| handle(&mut World::new(), &ghost, args, req.reply));
 
     let answer = pending.try_answer().ok().flatten().expect("その場で答える");
     assert_eq!(
         answer.outcome.content,
-        vec![ToolContent::Text("NG:not implemented yet".to_string())]
+        vec![ToolContent::Text(crlf(DEFAULTS_ONLY_ANSWER))]
     );
-    assert!(answer.outcome.is_error);
+    assert!(!answer.outcome.is_error);
+    let warns = warns(&events);
+    assert_eq!(warns.len(), 1, "{events:?}");
+    assert!(
+        warns[0].message().starts_with("[get_expression_table]"),
+        "{events:?}"
+    );
 }
 
 // ---- 規則（render(&parse_surfacetable(..))・期待値は ssp-measurements.md の写し） ----
