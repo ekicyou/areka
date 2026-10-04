@@ -25,7 +25,7 @@
   - _Requirements: 8.2_
 
 - [ ] 2. 数字だけの element定義の読み分けと、部品のコマの欄
-- [ ] 2.1 (P) 数字だけの欄をサーフェスの番号として読み分け、画像としては引かない
+- [x] 2.1 (P) 数字だけの欄をサーフェスの番号として読み分け、画像としては引かない
   - `crates/areka-emo-compose/src/nesting.rs` を新設し、element定義が置くもの（画像・サーフェスの番号・番号として扱える範囲を超える数）の型と、読み分けの関数を 1 つだけ置く。欄が空でなく全部が半角の数字なら十進で読む（`0100` は 100）。符号つき・全角の数字・拡張子つき・空は画像
   - 畳み込みで作る正規化済みの element に「置くもの」の欄を足し、`fold.rs` の正規化が読み分けの関数を呼んで入れる。`base_image.rs` が作る土台の element は画像。`surface.append*`ブレスの element定義も同じ正規化を通る
   - `atlas_bind.rs` は、画像でない element をアトラスから引かず、警告も出さない（束縛は空にする）
@@ -206,3 +206,4 @@
 
 - 1.1: 実物の emo2 の表で seriko の刻みを回す既存テストは、seriko の中には 0 本・`crates/areka/src/emo2_boot/spine_seriko_loop_tests.rs` に 5 本（端には当たらない）。`looper_parts_emo2_tests.rs` は `\0` に 1400 を足した着せ替えで、`Show` 73 件・乱数 118 回を HEAD のリテラルで固定した（`LoopRuntime::on_tick` の段。actor の `refresh_parts` はこの檻を通らない）。
 - 1.2: 検体の仕込みは、無い番号 2（`9999`・`4294967296`）・循環の辺 3（60→60・61→62・62→61）・子の中の箱 1（71→70 の `fuda`）。件数の比べは 8.1 の役目で、`tests/surface_nesting_fixture_test.rs` は読み手の段の番だけ（報告の件数を見ない）。`descript.txt` が無いので実機（8.4）では着せ替えの先 40・41 は絵に出ない。
+- 2.1: `plan.rs` の `push_static_element_ops` の `trace!`「bind 時 warn 済み」は番号の element に当たらない → 4.1 で書き換える。画像が見つからないときの `atlas_bind` の `warn!` を確かめるテストは crate 内に無い（前からの穴）。

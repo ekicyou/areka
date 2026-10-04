@@ -16,6 +16,7 @@ use bevy_ecs::world::World;
 
 use crate::base_image::SurfaceImages;
 use crate::method::ComposeMethod;
+use crate::nesting::element_kind;
 use crate::normalized::{NormalizedElement, SurfaceMaster, Transform};
 use crate::world::{AliasMap, SurfaceId, SurfaceIndex};
 
@@ -275,7 +276,8 @@ fn normalize_surface(id: u32, surface: &Surface) -> SurfaceMaster {
     }
 }
 
-/// 転記 element を正規化 element へ写す（x,y→[`Transform`]・method は M1 固定 [`Overlay`]）。
+/// 転記 element を正規化 element へ写す（x,y→[`Transform`]・method は M1 固定 [`Overlay`]・
+/// 置くものは [`element_kind`] の読み分け＝`surface*`・`surface.append*` の両方がここを通る・要件 1.1/1.2）。
 ///
 /// [`Overlay`]: ComposeMethod::Overlay
 fn normalize_element(element: &Element) -> NormalizedElement {
@@ -284,6 +286,7 @@ fn normalize_element(element: &Element) -> NormalizedElement {
         path: element.path.clone(),
         transform: Transform::translate(element.x, element.y),
         method: ComposeMethod::Overlay,
+        kind: element_kind(&element.path),
     }
 }
 
