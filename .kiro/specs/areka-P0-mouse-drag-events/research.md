@@ -178,3 +178,67 @@
 ### 9.3 開発者に確かめるもの
 
 - なし（答えで作業が変わる議題は残っていない）。
+
+## 10. 設計の段の調べものと決定（2026-10-04 `/kiro-spec-design`）
+
+- **調べ方の種類**: 既存の仕組みの延長（light）。新しい依存・新しいクレートは無い。調べた実物は作業ブランチ `claude/mouse-drag-events-456cbe`（`22042edb`）。
+- **設計を決めた主な事実**:
+  - `enqueue_window_set_pos` は成功するとその場で `WindowPos.position` を書く（`follow_window_move_tests.rs` の `enqueue_window_set_pos_none_updates_position_leaves_size` が呼んだ直後の値を見ている）。だから位置の保存の受け手を呼んだ直後に、窓の最終位置が読める。
+  - 開始が配られるまで、窓の手続きは窓を動かさない（下の §10.1）。
+  - `spawn_ghost_windows` は公開の関数で、`input_events` のテストから本物の窓の組み立てを通せる（`emo2_boot/frame_test_support.rs` の `spawn_resnap_windows` が同じことをしている）。
+  - kanade には mock の SHIORI を通す統合テストの置き場（`tests/kanade/mouse_test*.rs`）が既にあり、定常でないとき・終了の握手の待ちのときの檻（`mouse_test_phase_guard_tests.rs`）の型紙がある。
+
+### 10.1 §7 の調べものの答え
+
+- **開始の時点の `WindowPos.position`**: 閾値を越えた枝（`window_proc/mouse_move.rs` の `Preparing` の腕）は `start_dragging` で状態を「開始した直後」（`JustStarted`）へ進め、開始の種を積むだけで、窓は動かさない。窓を動かすのは状態が「ドラッグ中」（`Dragging`）の腕だけで、そこへ進めるのは配る所 `dispatch_drag_events` が開始の受け手を呼んだ**後**の `update_dragging`。窓の HWND と開始時の窓位置（`WindowDragContextResource`）も配る所が開始の腕で初めて書く。よって開始の受け手が走る時点の `WindowPos.position` は押したときの窓の位置で、`DragStartEvent.position − WindowPos.position` が押した位置の窓の中の物理 px になる。
+- **ドラッグ中に面が替わったときの配置**: 面の切り替えで窓を置き直すのは `emo2_boot/frame/drain_resnap.rs` の `resnap_from_sizes` で、キャラクター窓の今の大きさと表示する絵の大きさが**違うときだけ** `resize_window_to` を呼ぶ（同じ大きさは何もしない）。クローディアの絵はどれも 333×500 なので、ドラッグ中に面 29／19 へ替わっても置き直しは働かない。大きさの違う絵へ替えるゴーストでは、ドラッグ中に `resize_window_to`（経路 `Resnap`）が窓の位置を書きうるが、これは今でもドラッグ中に他の応答（`OnSecondChange` の台詞など）で絵が替われば起きることで、本 spec が作る経路ではない。範囲の外とし、実機の確認（R7）で跳ねないことだけ見る。
+- **会話の置き換え**: `value_replaces_active_talk` は `OnSecondChange` 以外の出どころの応答で再生中の会話を置き換える。2 つのイベントの応答も同じ扱いになる（`OnMouseDoubleClick` と同じ・正典でも新しい台本は前の台本を止める）。特別な手当てはしない。
+- **実機の記録の照合**: 送出の記録は kanade の `shiori_request`（trace）。wintf は配るときに info で `[DragStartEvent] Dispatching`／`[DragEndEvent] Dispatching` を出す。areka 側には「送った」記録を足さず、「送らなかった」記録（`mouse_drag_dropped`）だけを足す。これで、配った → 捨てた（理由つき）か送った → kanade が捨てた（中身つき）か送った、のどこで止まったかが追える。実機は `kanade=trace`・`areka=debug`。
+- **`roadmap-draft.md` の `wave`**: 正本のロードマップの写しという決まり（直前の 2 行は `C1-②`・`C4 の候補`）。本 spec は `C3-④`。
+
+### 10.2 §9.2 から送られた設計判断
+
+#### Decision: 終了の座標を引く窓の位置（議題 2）
+- **Context**: 終了の知らせは画面の位置しか運ばない。窓の中の位置へ直すのに、位置の保存の受け手を呼ぶ前と後のどちらの窓の位置を使うか。
+- **Alternatives Considered**: 1. 呼んだ後の位置／2. 呼ぶ前の位置
+- **Selected Approach**: 呼んだ後の `WindowPos.position`。
+- **Rationale**: 要件 4.2 は取り消しの終了が開始と同じ値になると決めている。取り消しでは保存の受け手が窓を開始の位置へ戻すので、後の位置から引けばそうなる。前の位置から引くと、動かした先の窓から見た値になり要件に反する。また最後の移動の知らせは配られないことがあり（`on_char_drag_end` の doc にある穴）、前の位置は 1 つ古いことがある。
+- **Trade-offs**: 窓が指に付いて動く置き方（Free）では、離したときの値が開始と同じになる。SSP でも窓は指に付いて動くので自然な値。`doc/COMPAT_ARCHITECTURE.md` §8 に書く。
+- **Follow-up**: テスト A4（取り消しは開始と同じ値）・A6（前の位置から引くと赤）。
+
+#### Decision: 「開始を送った」印を持たない（議題 3）
+- **Context**: 開始・終了が重なって届く・対にならないときに、areka 側で見張るか。
+- **Alternatives Considered**: 1. スコープごとの印を `MouseWiring` に持ち、印の無い終了・印のある開始を記録して捨てる／2. 持たない
+- **Selected Approach**: 持たない。Bubble の相だけで送ることで 2 相の重なりを 1 回にする。
+- **Rationale**: 要件の Adjacent expectations が「開始の知らせを伴わない終了の知らせは来ないものとして扱う」と決めている。残る穴（終了の無い開始が続く）は同じウェーブの `areka-P0-drag-cancel-borrow-miss` が出どころで直す。印を持つと同じ決まりが 2 か所になり、ゴーストの切替や窓の作り直しで印を戻す手当ても要る。
+- **Trade-offs**: 並走の修正が入るまで、まれに開始だけが届く。要件 8.2 の「重ねて届いた知らせを捨てる経路」は設けない（0 本）。
+- **Follow-up**: なし。穴の形を固定するテストは置かない（並走の修正で運ぶ箱の振る舞いが変わると、本 spec のテストが巻き込まれるため）。
+
+#### Decision: 捨てたときの記録（議題 5）
+- **Selected Approach**: kanade は水準を変えず（trace）、`mouse_input_ignored` に知らせの中身（`input = ?m`）を足す（4 種類共通の 1 行）。areka は `mouse_drag_dropped`（`reason`・`kind`）を新設し、送り先が無いときは debug、今の作りでは起きない 3 つ（対象が別の窓・スコープが引けない・窓の位置が無い）は warn。送出の失敗は既存の `mouse_send_failed`（warn）。
+- **Rationale**: kanade で種類ごとに水準を変えると横断の腕に種類の分岐が入る。捨てるのは普通に起きる入力で異常ではない。areka 側は 1 回のドラッグに高々 2 件で量の心配が無い。
+
+#### Decision: 位置の保存が前と同じことを見るテストの置き場（議題 8）
+- **Alternatives Considered**: 1. `follow_drag_end_gate_tests.rs` の土台を共有の手助けへ切り出す／2. 包みが受け手を呼んだことだけ見る／3. `input_events/drag_tests.rs` で、包みを付けた窓と付けない窓を同じ操作で動かして比べる
+- **Selected Approach**: 3。窓は本物の `spawn_ghost_windows` で作り、付けない側は `spawn` のまま（本 spec の前の付け方）、付けた側は `attach_char_pointer_handlers` を通す。比べるのは窓の位置と、偽の記憶の書き手に書かれた組。
+- **Rationale**: 「前と同じ」をそのまま判定にできる。`placement` のファイルに触れない（同じウェーブの約束・触るファイルの一覧を広げない）。置き換えの順（`spawn` → `attach`）も本物を通る。1 は `placement` のテストを動かす。2 は保存の値を見ないので弱い。
+- **Trade-offs**: 偽の記憶の書き手を組む十数行が、`placement` のテストの土台と似た形で `input_events` 側にもう 1 つできる（判定の中身は別）。
+
+#### Decision: 台帳に連動する文書（議題 4 の後半）
+- **Selected Approach**: `roadmap-draft.md` の `[[spec]]` に `stage = "A"`・`bundle = "撫で"`・`owner_count = 2`・`wave = "C3-④"` の行を足し、`[briefs].count`・`snapshot_on`・追加の段落・段階 A の表の「撫で」の行を直す。`briefing.md` は `list_shiori_event` の `[[barrier]]` の 2 つの数（46 → 48・238 → 236）を数え直して直す。
+- **`install-companion-reading` との重なり**: 後から main を取り込む側が `[[spec]]` の塊を数え直す。両方が同じ数を書いた行はぶつからずに通るが、検査の腕 a（`[briefs].count` ＝ `[[spec]]` の行数）が赤にする。
+- **`briefing.md` 7-7 節は直さない**: この節の 5 つの数（未対応 67 など）は 2026-09 の起票（PR#147）から 1 度も変わっておらず（`git log -S` で確かめた）、その後に実装済みへ移った項目（`OnChoiceTimeout`・`OnTranslate` など）でも直されていない。見張る検査も無い（同じ文書の残件の表に「判定が 0 件」とある）。2 件だけ直すと撮った日の違う数が混ざる。本 spec の後、この節の「未対応」の表にある `OnMouseDragStart`・`OnMouseDragEnd` の 2 行は実態と 2 件ずれる（既にあるずれに加わる）。
+- **`[[owner_completed]]`**: 触らない。検査の腕 b は `[[spec]]` の名前が `.kiro/specs/` の直下か `completed/` にあれば緑なので、完了の後も行は有効。
+
+### 10.3 まとめ方の見直し（synthesis）
+
+- **一般化**: 開始と終了は「画面の位置から座標・スコープ・当たり判定を引いて送る」という同じ仕事なので、areka 側は 1 つの関数（`notify_drag`）にまとめ、種類だけを渡す。kanade の組み立ても名前だけが違う。
+- **作るか使うか**: すべて既存のもの（`KanadeMsg::Mouse`・`MouseWiring`・`char_scope`・`resolve_hit_owned`・`on_char_drag_end`・`steady::on_mouse`・`ALLOWED_EVENT_IDS`）を使う。新しい型・資源・通り道は 0。
+- **削ったもの**: 「開始を送った」印・areka 側の「送った」記録・kanade の種類ごとの記録の水準・ボタンと取り消しを運ぶ欄・`placement` のテストの土台の切り出し。
+- **先に分ける作業**: 要らない（`steady.rs` 929 → 950 前後・`schedule/mod.rs` 937 → 938）。
+
+### 10.4 設計の見直しの関門
+
+- 機械の確かめ: 要件の 39 個の番号がすべて対応表に載っている・境界の 4 節が埋まっている・ファイルの計画に具体のパスがある・部品がすべてファイルに対応している。
+- 直したのは 1 巡（終了の無い開始が続く形を固定するテストを外した＝並走の修正に巻き込まれるため／「外すと赤」の欄の書き方 2 か所／A6 の操作の書き方）。
+- 要件の穴・矛盾は見つからなかった。
