@@ -165,3 +165,114 @@
 - 制約（0 フレーム・共有の 1 か所で直す・黙って捨てない・決定論のテスト）に最もよく合うのは、**案 B（状態の移り変わりの所で種を積む）に、議題 1 の答えしだいで案 C（入口）を組む形**。
 - 議題 1 を (a) で閉じる場合でも、テストが本番の道を踏まないことを設計書に明記し、入口のクロージャの安全スキップが本番の再入の実際の振る舞いであることを記録に残す必要がある。
 - 要件 6.1 の記録は、World 無しの道を通るたびに 1 行（メッセージの種類・対象）を出す 1 か所に集める。`DragAccumulatorResource` の `Mutex` の毒化で黙って何もしない形も、同じ機会に記録へ寄せるかを設計で決める。
+
+---
+
+## 8. 設計フェーズの調査と決定（2026-10-04 `/kiro-spec-design`）
+
+> 要件番号は改訂後の `requirements.md` の番号（本節より上の §0〜§7 の番号より 1 つ大きい）。調査の種類は「既存の仕組みの拡張」（light）。外部の新しい依存は 0 件。
+
+### 8.1 まとめ
+
+- **Discovery Scope**: Extension（wintf の入口・ドラッグの状態・累積器）。
+- **Key Findings**:
+  - 本番で `dispatch_window_message` を呼ぶのは `make_wndproc` のクロージャの 1 か所だけ。再入のメッセージは今は全部ここで捨てられる。
+  - tick の中でメッセージを汲む呼び出しは 0 件。再入で届くのは同期のメッセージ（非活性化・捕捉の喪失・メニューやダイアログの割り込み）だけで、ESC キーと左ボタンを離すメッセージが再入で届く道は今は無い。
+  - 「開始の知らせを配ったドラッグか」はドラッグの状態（`JustStarted`／`Dragging`）が知っている。状態を休ませる関数の中で終了の種を積めば、状態と種がずれる形が無くなる。
+
+### 8.2 調査の記録
+
+#### ESC キー・左ボタンを離すメッセージは再入で届くか（§5 調べること 1）
+
+- **調べた所**: `TrackPopupMenuEx`・`MessageBoxW`・`PeekMessageW`／`DispatchMessageW`・`DoDragDrop`・`DialogBox` の呼び出しを `crates/wintf/src`・`crates/areka/src` で洗った。
+- **結果**:
+  - `TrackPopupMenuEx`（`areka/src/menu/win32.rs` の `show`）: `menu/trigger.rs` の `show_task`（tick の外のタスク）から呼ぶ。`display` の説明に「外側の World には触れない」とある。メニューの表示中に回る tick は、自分の回の間だけ World を借りる。
+  - `MessageBoxW`（`areka/src/alert.rs` の `raise`・`ask_yes_no`）: `raise` は `main.rs` の起動の失敗と終了の後始末（tick の外）、`ask_yes_no` はインストールの背景スレッド（`install/worker.rs`）。UI スレッドの tick の中では 0 件。
+  - `PeekMessageW` の汲み出し（`wintf/src/com/wuc.rs` の `pump_current_thread_messages`）: `drain_dispatcher_queue` の中だけ。tick の中からの呼び出しは 0 件。
+  - `DoDragDrop`・`DialogBox`: 0 件。
+- **意味**: 待ち行列を通る 2 種は、今のコードでは再入で届かない。要件どおり 5 種とも扱いを揃えるが、テストで作る再入（World を借りたまま入口へ渡す）だけがこの 2 種の再入の証拠になる。tick の中へ汲む呼び出しを足すと届くようになるので、設計書の Revalidation Triggers に入れた。
+
+#### 同期の 3 種が再入で届く道
+
+- `UISetup` の `create_windows` → `runtime/window_factory.rs` の `create_window`（`Window::new_ex` と `ShowWindow(hwnd, SW_SHOW)`）。新しい窓の活性化で、ドラッグ中の窓へ `WM_ACTIVATE`（非活性化）・`WM_CAPTURECHANGED` が同期で届きうる。
+- `handle_button_message` の当たり判定の枝が `try_borrow_mut()` を握ったまま `end_dragging` を呼び、`CaptureGuard` の `ReleaseCapture` が同期で `WM_CAPTURECHANGED` を送る。これは左クリックのたびに起こる。状態はすでに休んでいるので、再入の扱いは何もしない（記録は `debug!`）。
+- 窓の位置の書き込み（`SetWindowPos`）は `tick_one_frame_with` が借用を返した後の `flush_window_pos_commands` で行うので、再入の元にならない。
+
+#### tick の途中で積んだ種が配られる回（§5 調べること 3・要件 2.4）
+
+- `EcsWorld::try_tick_world` は 13 本を `Input` → `Update` → … → `UISetup` → … → `FrameFinalize` の順に回す。`dispatch_drag_events` は `Input`（1 本目）。
+- 再入の種は「積んだ後に最初に回る `dispatch_drag_events`」で配られる。`Input` より後（たとえば `UISetup`）で積んだ種は次の tick。これは、その tick の直後に再入でなく届いたメッセージと同じ回。`Input` の中で配る段より前に積んだ種はその tick で配られる（遅れは 0）。
+- 次の tick が回る保証: (1) 再入の扱いが `tick_wake::mark` を立てる（今は捨てられたメッセージは旗を立てない。配送表の入口と同じ式を使う）。(2) `FrameFinalize` の `rearm_tick_while_dragging` が、`DraggingState` が残っている間 `DRAG` の旗を立てる。
+- 取らなかった案: メッセージを覚えておいて借用が空いてからハンドラへ渡し直す案。ドラッグの状態が休むのが遅れ、その間の移動で窓が動くので取らない（1 フレーム遅らせる解に当たる）。
+
+#### ドラッグ中の印の外し方（要件 2.5）
+
+- `DraggingState`（対象）と `WindowDragging`（対象を含む窓）は、`dispatch_drag_events` の `Ended` の腕が外す。再入でない場合もメッセージの時点では外さず、次の配る段で外す。
+- 再入でも終了の種さえ積めれば、同じ腕が同じ回に外す。メッセージの時点で World が要る処理は 0 件。印を読むのは areka の `emo2_boot/balloon_visibility_phase.rs`（`WindowDragging`）と `placement/follow/drag_follow.rs`（`DraggingState`）で、どちらも tick の中のシステム。
+
+#### 離しの画面の座標（§5 調べること 2・要件 2.3）
+
+- ふつうの道: `handle_button_message` の冒頭で「窓の中の座標＋`WindowPos.position`」。`WindowPos.position` はクライアント領域の左上の画面の座標（`window_handle.rs` の `client_to_window_coords` の引数の説明、`dispatch.rs` の `Started` の腕の注記）。
+- `ClientToScreen(hwnd, 窓の中の座標)` は同じ値を OS から直に得る。`windows` クレートの機能 `Win32_Graphics_Gdi` は有効済み（`ScreenToClient` を `clickthrough/controller.rs` などが使っている）。
+- 失敗するとき（テストの空の `hwnd`・壊れた窓）: 状態が持つ最後の画面の座標で終え、`warn!` を出す（要件 7.2）。
+- 取らなかった案: (b) 状態の `current_pos` を主に使う＝離した点と違いうる。(c) 窓の原点を `thread_local!` へ写しておく＝写しを保つ所が増え、再入で `WM_WINDOWPOSCHANGED` が捨てられると古くなる。
+
+#### 窓の一致（§5 調べること 4・要件 4.2）
+
+- 今: `Dragging` は状態の `hwnd`（配る段が、対象を含む窓の `WindowHandle` から `WindowDragContextResource` 経由で写す）と離した窓の `hwnd` の一致。`Preparing`／`JustStarted` は `find_owner_window(対象) == 離した窓の entity`。
+- 揃えた後: 3 つの状態とも「離した窓の `hwnd` == `CaptureGuard` が持つ `hwnd`（`start_preparing` へ渡った、押しを受けた窓）」。
+- 同じ答えになる条件: 対象を含む窓が押した窓であること。`DragConfig` を付けている所は areka の `placement/spawn.rs`（キャラクターの窓・バルーンの窓の entity そのもの）と wintf の例 `taffy_flex_demo/setup.rs`（窓かその中の部品）で、どちらも満たす。満たさない使い方は 0 件。
+- 完了 spec の `tests/window/multiwindow_event_test.rs` の `test_drag_hwnd_guard_owner_window_check` は `find_owner_window` の答えだけを見ており、緑のまま。説明文がハンドラの判断として `find_owner_window` を挙げているので、説明文だけ直す。
+
+#### 1 スレッドに World が複数あるとき（§5 調べること 5）
+
+- wndproc 側の控えは `thread_local!` に 1 つ。`install_drag_accumulator` が World の資源と控えへ同じ実体を置く。`EcsWorld::new` が呼ぶ。
+- `cargo test` は 1 本 1 スレッドなので、テスト同士は混ざらない。1 本の中で World を 2 つ作ると、後の方が控えになる。
+- `keyboard_tests.rs`・`mouse_click_tests.rs` は `EcsWorld::new()` の後に `insert_resource(DragAccumulatorResource::new())` で入れ直している。入れ直すと控えとずれるので、資源の複製を使う形へ手直しする。素の `World` へ累積器を入れて `set_transition` を直に呼ぶテスト（`wintf/tests/drag/dispatch_test.rs`・`tests/layout/…/drag_lifecycle.rs`・areka の `follow_drag_end_gate_tests.rs`）は、`end_dragging`・`cancel_dragging` で種を積むことに頼っていないので変更 0 行。
+- `areka/src/menu/trigger_flow_tests.rs` は `Preparing` から `end_dragging` を呼ぶだけ（種は積まれない）。変更 0 行。
+
+#### 新しく生まれる危険: `DRAG_STATE` の入れ子の借用
+
+- `start_preparing` は `update_drag_state` のクロージャの中（`DRAG_STATE` を可変で借りたまま）で `CaptureGuard::acquire` → `SetCapture` を呼ぶ。`SetCapture` は前の捕捉の持ち主へ `WM_CAPTURECHANGED` を同期で送る。
+- 今は、この呼び出しが `handle_button_message` の World の可変の借用の中にあるので、入れ子のメッセージは入口で捨てられる。本 spec の後は入口を通り、`update_drag_state` が二重の借用で panic しうる。
+- 前の持ち主が自分のスレッドの窓であるのは、`SetCapture` を呼ぶ所が `capture_guard.rs` の 1 か所だけなので、押している状態（＝ `start_preparing` が先に戻る）に限られ、実際には起こらない見込み。それでも構造で塞ぐ: 捕捉を取るのを借用の外へ出す。
+
+### 8.3 設計の決定
+
+#### Decision: 終了の種は、状態を休ませる関数の中で積む（案 B）
+
+- **Alternatives**: (A) 5 つのハンドラが控えから累積器を取って積む。(B) `end_dragging`・`cancel_dragging` が積む。
+- **Selected**: (B)。ハンドラの 6 か所（`keyboard.rs` 4・`mouse_click.rs` 2）は消す。
+- **Rationale**: どの道もこの 2 関数を通る。開始を配ったかは状態が知っている。ふつうの道と再入の道が同じ関数を通るので、片方だけ直し忘れる形が無い。
+- **Trade-offs**: brief は `drag/state/` を境界の外としていたが、要件の境界（「ドラッグの部分」）には入る。`mouse_move.rs` の開始の種は境界の外なので動かさず、累積器の入口の判断を二重の守りとして残す。
+- **Follow-up**: 閾値前の取り消しで出ていた累積器の `debug!`「Ended without Started dropped」は出なくなる（見ているテストは 0 件）。
+
+#### Decision: 累積器へ届く道は `thread_local!` の控え
+
+- **Alternatives**: (1) `thread_local!` の控え。(2) `WndState` に累積器の複製を持たせて入口から渡す。(3) 累積器そのものを `thread_local!` にする。
+- **Selected**: (1)。
+- **Rationale**: (2) は `runtime/window_factory.rs`（境界の外）を触り、`end_dragging` などの引数が増える。(3) は累積器が `Send`/`Sync` の資源である前提と、素の `World` へ累積器を入れる他クレートのテストを壊す。(1) は `EcsWorld::new` の 1 行で済み、`DRAG_STATE` と同じ「1 スレッドに 1 つ」。
+
+#### Decision: 再入の扱いは `ecs/drag/reentry.rs` に置く
+
+- **Rationale**: `ecs/window_proc` は `ecs` の中だけに見える。`ecs/drag` は公開の module なので、`ecs/mod.rs`・`window_proc/mod.rs` を触らずに入口から呼べる。
+
+#### Decision: 記録の level
+
+- 終えた・取り消した: `warn!`（まれ・ドラッグ以外の処理を飛ばしている）。何もしなかった: `debug!`（左クリックのたびに通る）。読めなかった情報・控えが無い・`Mutex` の毒化: `warn!`。
+
+#### Decision: `doc/COMPAT_ARCHITECTURE.md` §8 へ 1 行
+
+- 完了 spec `wintf-winmsg-executor` 要件 4.3 の「再入は安全スキップ」を、5 種についてだけ「World を使わないドラッグの扱いをしてから既定の手続きへ委ねる」へ変えた、と記す。デッドロックと二重の画面更新を起こさない保証は保つ。`drag-click-without-move`・`event-drag-system` の要件（知らせの約束）は上書きしない（種を積む所は要件ではなく作り）。
+
+### 8.4 まとめ直し（synthesis）
+
+- **一般化**: 5 種の扱いは「取り消す」「捕捉を失って取り消す」「離して終える」の 3 つの動きに畳める。ふつうの道と再入の道は同じ 3 つの関数を通る。
+- **作るか借りるか**: 座標は OS の `ClientToScreen` を使う（自前の写しを作らない）。
+- **削ったもの**: 座標の出どころを差し替える口・入口でのメッセージの溜め直し・`WndState` の欄の追加・`mouse_move.rs` の変更。どれも要件に要らない。
+
+### 8.5 危険と手当て
+
+- 既存テストが累積器を入れ直していて控えとずれる → 手直しの対象を設計書に列挙した。ずれると終了の知らせが 0 件になり赤で気付ける。
+- `ClientToScreen` を確かめるテストは実物の窓が要る → `api.rs`・`clickthrough/controller_tests.rs` と同じ「隠れた `Static` の窓」の作り方を使う。
+- 左クリックのたびに再入の記録が出る → 何もしなかったときは `debug!`。
