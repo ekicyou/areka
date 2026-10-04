@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. `surfacetable.txt` の読み手
-- [ ] 1.1 `surfacetable.txt` の文面を行の列へ転記する読み手を作り、`shell` から公開する
+- [x] 1.1 `surfacetable.txt` の文面を行の列へ転記する読み手を作り、`shell` から公開する
   - `boxes` の読み手と同じ置き方で、新しいファイルに読み手と返す型を置き、`shell/mod.rs` へ `mod`・テストの `mod`・`pub use` の 3 か所だけを足す（`model.rs`・`decode.rs`・`Cargo.toml` は触らない）
   - 設計の「行の読み分け」の表のとおりに読む: 落とす空白は ASCII の空白とタブだけ・最初の `,` の前だけを整え後ろは書かれたとおり・見出し語は大小を区別しない・ID と `scope` は ASCII の数字だけ
   - `__disabled` の行・`__parts` の行・名前を省略した行も転記する（載せる・載せないは決めない）。`scope` が行の後に書かれても同じ `group` の行へ当てる

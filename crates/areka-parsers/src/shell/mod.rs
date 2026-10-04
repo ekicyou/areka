@@ -43,6 +43,13 @@ mod boxes;
 #[cfg(test)]
 mod boxes_tests;
 
+// 表情の表の転記（areka-P0-mcp-expression-table）: surfacetable.txt を行の列へ写すだけ。
+// lexer・decode・model は使わない。
+mod surfacetable;
+
+#[cfg(test)]
+mod surfacetable_tests;
+
 // 公開面一点集約（要件 11.1）: 下流は本モジュールからの import のみで
 // モデル型と公開 facade を消費でき、内部の model/lexer/decode/parse 分割へ
 // 直接依存しない。依存方向 `model ← lexer ← decode ← parse` は不変。
@@ -54,3 +61,4 @@ pub use model::{
     ElementPath, Interval, Pattern, Shell, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
 };
 pub use parse::parse;
+pub use surfacetable::{SurfaceTable, SurfaceTableRow, parse_surfacetable};
