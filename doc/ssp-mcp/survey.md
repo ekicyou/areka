@@ -69,3 +69,52 @@ areka へ SSP の MCP サーバを移植する spec 群（`.kiro/steering/roadma
 - **`mcp.exe` の中の文字列**: `POST /api/mcp/v1 HTTP/1.1`・`Host: 127.0.0.1:9801`・`Mcp-Method:`・`Mcp-Name:`・`MCP-Protocol-Version:`・`Server not available`・`No response from server`・`Invalid JSON response from server`・`Unsupported protocol version`・`result.supportedVersions`・`server/discover`＝SSP へは無状態版のヘッダを付けて送り、版の交渉に `server/discover` を使っている様子。
 - **Claude Desktop の JSON 設定は stdio だけ**: Desktop 2.9939.4.0（`C:\Program Files\WindowsApps\Claude_2.9939.4.0_x64__pzs8sxrjxfjjc\app\resources\app.asar`）の検査関数は、`mcpServers` の各項目に `command`（文字列）を必須とし、ほかに `args`・`env`・`extensionId` だけを許す。`url` だけの項目は検査に落ちる。
 - **Claude Desktop のコネクタは 127.0.0.1 へ届かない**: 公式の案内（support.claude.com「Getting started with custom connectors using remote MCP」）は、コネクタの接続が Anthropic のクラウドから行われ、公開インターネットから到達できるサーバが要ると書く。ukadoc の「ブラウザ上で動く AI（claude.ai など）からは 127.0.0.1 に接続できない」と同じ理由。
+
+## 7. `get_property` の詳しい実測（2026-10-04・SSP 2.9.07・`get_property` spec の要件の段）
+
+SSP 2.9.07（`baseware.version` → `SSP/2.9.07 (20261001-0; Windows NT 10.0.26300)`）・ゴースト「えも2DEBUG」（emo2）1 体の起動中に、Claude Code から SSP の MCP サーバへ直接打った。`tools/list` の `get_property` の定義（説明文・2 つの引数の説明・必須は `property_name` だけ）は 2.9.05 と同じで、areka の定義（`crates/areka-mcp` の get_property の定義）とも一字違わない。
+
+### 7.1 名前ごとの答え
+
+| 送った `property_name` | `ghost_name` | 答え | `isError` |
+|---|---|---|---|
+| `currentghost.name` | なし | `えも2DEBUG` | false |
+| `baseware.name` | なし | `SSP` | false |
+| `currentghost.status` | なし | （空の本文）＝idle | false |
+| `currentghost.scope(0).surface.num` | なし | `1000` | false |
+| `currentghost.scope(5).surface.num`（無いスコープ） | なし | `-1` | false |
+| `currentghost.seriko.surfacelist.all` | なし | `0,10,1000,…,2210`（カンマ区切りの 1 行） | false |
+| `currentghost.path` | なし | `C:\…\emo2\ghost\emo2\`（末尾の区切りあり） | false |
+| `ghostlist.index(0).name` | なし | `Emily/Phase4.5` | false |
+| `ghostlist(えも2DEBUG).path`／`ghostlist(えも2debug).path` | なし | 同じパス | false |
+| `ghostlist(0).name`／`ghostlist(0).path` | なし | `NG:Cannot find such property name.` | true |
+| `ghostlist(99).name`・`ghostlist(nonexistent).path` | なし | `NG:Cannot find such property name.` | true |
+| `ghostlist`（一覧そのもの） | なし | `NG:Cannot find such property name.` | true |
+| `currentghost.icon`（descript に無い） | なし | `NG:Cannot find such property name.` | true |
+| `no.such.thing` | なし | `NG:Cannot find such property name.` | true |
+| （空文字） | なし | `NG:Cannot find such property name.` | true |
+| `baseware..name`・`baseware.name.` | なし | `NG:Cannot find such property name.` | true |
+| ` baseware.name `（前後に空白） | なし | `NG:Cannot find such property name.` | true |
+| `BASEWARE.NAME` | なし | `SSP` | false |
+
+### 7.2 `ghost_name` の効き方
+
+| `ghost_name` | `baseware.name` への答え |
+|---|---|
+| `えも2DEBUG` と同じ綴り | `SSP` |
+| `えも2debug`（英字の大小違い） | `SSP` |
+| ルートフォルダのフルパス `…\emo2\ghost\emo2\` | `SSP` |
+| ゴーストのフォルダでない上位のパス `…\project\emo2` | `NG:Cannot find active ghost from specified name` |
+| `nobody` | `NG:Cannot find active ghost from specified name` |
+| 空文字 | `NG:Cannot find active ghost from specified name` |
+
+全体の名前（`baseware.*`）を引くときも、`ghost_name` が外れていれば先に名前の解決で落ちる。
+
+### 7.3 読み取れる約束（areka との突き合わせ）
+
+1. **値は素のまま**: `OK:` を付けず、空白も改行も足さない。空の値（idle の `status`）は空の本文で `isError: false`。→ areka の要件と同じ。
+2. **「無い」はすべて 1 つの文言**: 名前の誤り・書式の誤り・範囲外の番号・選んだ名前の不在・一覧そのものの名前・descript に無い項目は、どれも `NG:Cannot find such property name.`。→ areka の `DottedResolution::NotFound` 1 つに写せば足りる。
+3. **名前は手直ししない（空白）**: 前後の空白は削らず「無い名前」になる。→ areka の要件と同じ。
+4. **名前の英字の大小は区別しない（SSP）**: `BASEWARE.NAME` が通る。areka の読み手（`areka-sylphya` の点付きの名前の解釈 `parse_dotted` と鏡像の引き当て）は大小を区別する＝`BASEWARE.NAME` は「無い名前」になる。SHIORI の `GetProperty`・`%property[]` も同じ読み手なので、直すなら読み手の側で全経路をそろえる話になる（get_property だけ畳むと SHIORI 側と食い違う）。
+5. **数字の括弧（SSP）**: `ghostlist(0).name` は SSP では「名前が 0 のゴースト」と読まれて無い名前になり、番号で引くのは `ghostlist.index(0).name` の形だけ。areka の `parse_dotted` は数字だけの括弧を番号として読む。値の網羅の spec（`property-catalog-lists`）の持ち物。
+6. **`ghost_name` の綴り（SSP）**: 英字の大小を区別せず、空文字は「省略」でなく「外れ」。areka の宛先の解決（`crates/areka/src/mcp/resolve.rs` の `resolve`）は名前を完全一致で比べ、空文字を省略と同じに扱う。全ツール共通の振る舞いなので `mcp-tool-entrances` の持ち物（get_property だけの話ではない）。
