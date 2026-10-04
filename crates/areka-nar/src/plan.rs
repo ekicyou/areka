@@ -70,7 +70,8 @@ pub(crate) struct Placement {
 
 /// マニフェストとエントリ列と要求から配置計画を組む。
 ///
-/// 返る列の先頭は必ず本体の配置で、その後ろに同梱バルーンが接頭辞の名前順で並ぶ。
+/// 返る列の先頭は必ず本体の配置で、その後ろに同梱バルーンが探索の順（無印 →
+/// `balloon0` → `balloon1` …）で並ぶ。
 /// 組み上げも確定もこの順で行い、巻き戻しは逆順になる（タスク 4.3）。
 ///
 /// # Errors
@@ -128,15 +129,16 @@ fn body_placement(
 
     // 同梱バルーンの取り出し元は本体の側に複製しない（要件 5.3）。フォルダの
     // エントリそのものも除く——残すと中身の無い抜け殻が本体側に生える。
+    // 取り出し元へ降りる途中のフォルダのエントリも同じ理由で除く（要件 2.4）。
+    // その配下に本体のものが在れば、親として同じフォルダが作られる。
     // ゴーストだけでなくシェルにも同じ規則を当てる。同梱を持てるのはこの 2 種で、
     // どちらも「取り出し元は本体の置き場ではない」ことに違いが無い。
     let skip_install_txt = manifest.kind == InstallKind::Supplement;
     let accept = |entry: &EntryName| {
-        !manifest
-            .companions
-            .iter()
-            .any(|companion| in_folder(entry, &companion.source_directory))
-            && !(skip_install_txt && is_top_level_install_txt(entry))
+        !manifest.companions.iter().any(|companion| {
+            in_folder(entry, &companion.source_directory)
+                || leads_to_folder(entry, &companion.source_directory)
+        }) && !(skip_install_txt && is_top_level_install_txt(entry))
     };
 
     let (files, dirs) = collect_tree(names, accept, 0);
@@ -154,18 +156,20 @@ fn body_placement(
 
 /// 同梱バルーン 1 件の配置を組む（要件 5.3・5.4・6.3）。
 ///
-/// 取り出し元の 1 階層を剥がしてバルーン格納先へ写す。中の `install.txt` は解釈せず、
-/// 普通のファイルとして置く（正典 `manual_install`「同梱される側には install.txt
-/// 不要。あっても無視される」）。
+/// 取り出し元の全ての段を剥がしてバルーン格納先へ写す（要件 2.2）。宛先のパスには
+/// 取り出し元の値を継ぎ足さない——置く相対パスは検証済みのエントリ名の尾だけになる。
+/// 中の `install.txt` は解釈せず、普通のファイルとして置く（正典 `manual_install`
+/// 「同梱される側には install.txt 不要。あっても無視される」）。
 fn companion_placement(
     companion: &Companion,
     names: &[EntryName],
     request: &InstallRequest<'_>,
 ) -> Result<Placement, RefuseReason> {
+    // `in_folder` が通したエントリは取り出し元の段数以上を持つので、剥がしは範囲を外れない。
     let (files, dirs) = collect_tree(
         names,
         |entry| in_folder(entry, &companion.source_directory),
-        1,
+        segment_count(&companion.source_directory),
     );
     // フォルダのエントリだけがあって配下が空の書庫も「取り出せない」に含める。
     // 空のバルーンを作っても利用者には何も届かないので、拒否のほうが正直。
@@ -204,17 +208,47 @@ fn existing_target_ghost(request: &InstallRequest<'_>) -> Result<String, RefuseR
     Ok(target.to_owned())
 }
 
-/// エントリが `folder` そのもの、またはその配下か。
+/// エントリが `folder`（`/` 区切りの取り出し元）そのもの、またはその配下か。
 ///
 /// 本体から除く側（要件 5.3）と同梱バルーンへ取り込む側（要件 5.4）が**同じ一言**を
 /// 使う。二重に書くと、片方だけを直したときに同じエントリが両方へ入る（複製が残る）か
 /// どちらにも入らない（消える）。取り出し元のフォルダのエントリそのものは、剥がすと
 /// 何も残らないので [`collect_tree`] が落とす。
 ///
+/// `folder` の全ての段を、エントリの先頭の段と比べる。綴りの前方一致では測らない
+/// （`extra/bal10/x` は `extra/bal1` の配下ではない）。1 段の `folder` では先頭の
+/// 1 段だけを比べることになる。
+fn in_folder(entry: &EntryName, folder: &str) -> bool {
+    entry.components.len() >= segment_count(folder) && leading_segments_match(entry, folder)
+}
+
+/// エントリが、`folder` へ降りる途中のフォルダのエントリか（取り出し元が `extra/bal1`
+/// のときの `extra/`）。
+///
+/// 本体の側はこれをエントリとしては置かない。途中のフォルダの配下に本体のものが
+/// 在れば、[`collect_tree`] が親として同じフォルダを作る。無ければ作られない。
+/// 書庫がフォルダのエントリを持つかどうかで結果が変わらない（要件 2.4）。
+fn leads_to_folder(entry: &EntryName, folder: &str) -> bool {
+    entry.is_dir
+        && entry.components.len() < segment_count(folder)
+        && leading_segments_match(entry, folder)
+}
+
+/// 取り出し元の段数。
+fn segment_count(folder: &str) -> usize {
+    folder.split('/').count()
+}
+
+/// エントリと `folder` の段を先頭から突き合わせ、短いほうが尽きるまで全て合うか。
+///
 /// 突き合わせは ASCII の大小を無視する。`install.txt` に書かれた綴りと書庫の中の
 /// 綴りが大小だけ違う配布物は普通にあり、Windows では同じフォルダを指す。
-fn in_folder(entry: &EntryName, folder: &str) -> bool {
-    entry.components[0].eq_ignore_ascii_case(folder)
+fn leading_segments_match(entry: &EntryName, folder: &str) -> bool {
+    entry
+        .components
+        .iter()
+        .zip(folder.split('/'))
+        .all(|(component, segment)| component.eq_ignore_ascii_case(segment))
 }
 
 /// 最上位の `install.txt`（マニフェストそのもの）か。
