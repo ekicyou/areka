@@ -6,7 +6,7 @@
 >
 > 触らないファイル（同じ時期に並走する spec と重ねないため）: `areka-parsers` の `shell/mod.rs`・`model.rs`・`decode.rs`・`boxes.rs`、`areka-emo-atlas` の `manifest.rs`・`AtlasKey`・`AtlasTable::new` の形、`areka-emo-text` の全体、`crates/areka/src/input_events/`、`areka-emo-present` の `cache.rs`、`areka-seriko` の `state.rs`。既存の golden のテストと seriko の決定論テストは期待値を 1 本も書き換えない（呼び出しの形の変更に合わせた書き換えだけは数えない）。
 
-- [ ] 1. 着手前の確認と、前と同じであることの基準を採る
+- [x] 1. 着手前の確認と、前と同じであることの基準を採る
 - [x] 1.1 既存テストの刻みの飛びを確かめ、emo2 の発行列と乱数の呼び出し回数を実装の前の HEAD で採って焼き込む
   - 最初に、実物の emo2 の表で刻みを回す既存テスト（`crates/areka-seriko/tests/regression.rs`・`cue_sequence.rs`・`loop_integration.rs`・`bind_e2e.rs`・`balloon_face_e2e.rs` と、`src/` の `looper_*tests.rs`・`actor_*tests.rs` のうち emo2 の表を使うもの）の注入する刻みの列を読み、隣り合う刻みの差が 880ms 以上になる所を全部挙げる
   - 挙がった所ごとに、その直前に `\1` のまばたき（`surface.append10,2100`・`surface.append2200` の `animation0`）が発火し、刻みの時点で 2110／2210 が絵に出ている（発火の 40ms 後〜120ms 後）かを判定する。当たるものがあれば、そのテストの期待値が要件 7.5 の端（乱数を 1 つ多く消費し、2106／2206 が最長 80ms 重なりうる）に触れるので、実装へ進まずに開発者へ報告して止まる
@@ -16,7 +16,7 @@
   - 完了の姿: 本タスクのコミットの時点で、新しいテストが HEAD のコードに対して緑で、期待値がリテラルで固定され、端に当たる既存テストが 0 件であることがファイルの冒頭に書かれている
   - _Requirements: 7.4, 7.5, 8.3_
 
-- [ ] 1.2 入れ子を持つ試験用シェルの検体を置く
+- [x] 1.2 入れ子を持つ試験用シェルの検体を置く
   - `crates/areka-emo-compose/tests/fixtures/surface-nesting/` に、`surfaces.txt` と小さな PNG 数枚を置く
   - 中身は少なくとも: 2 つの親が同じ子を置く・3 段の入れ子（各段に X,Y のずれ）・まばたきのアニメーションを持つ子・当たり判定の領域（collision）を持つ子（親と同じ名前の領域と、親に無い名前の領域の両方）・pattern定義が指す、アニメーションを持つサーフェス・`element0` が子を指す親・ブレスを持たず `surface<数字>.png` だけで建つ子・`surface.append*`ブレスでサーフェスを置く行
   - 読み飛ばしの確かめのために、無い番号を指す行・循環する行（自分自身と、2 つの相互）・描画メソッド `balloon` の element定義を持つ子を、件数が数えられる形で仕込む
@@ -205,3 +205,4 @@
 ## Implementation Notes
 
 - 1.1: 実物の emo2 の表で seriko の刻みを回す既存テストは、seriko の中には 0 本・`crates/areka/src/emo2_boot/spine_seriko_loop_tests.rs` に 5 本（端には当たらない）。`looper_parts_emo2_tests.rs` は `\0` に 1400 を足した着せ替えで、`Show` 73 件・乱数 118 回を HEAD のリテラルで固定した（`LoopRuntime::on_tick` の段。actor の `refresh_parts` はこの檻を通らない）。
+- 1.2: 検体の仕込みは、無い番号 2（`9999`・`4294967296`）・循環の辺 3（60→60・61→62・62→61）・子の中の箱 1（71→70 の `fuda`）。件数の比べは 8.1 の役目で、`tests/surface_nesting_fixture_test.rs` は読み手の段の番だけ（報告の件数を見ない）。`descript.txt` が無いので実機（8.4）では着せ替えの先 40・41 は絵に出ない。
