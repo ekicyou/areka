@@ -401,3 +401,23 @@ test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 - 並走の cargo が多い時間に i686 の `cargo build` が rustc の 0xc000012d で 1 回落ちた。そのとき cargo は、ターゲットの情報を問う rustc の**失敗をワークツリーの `target\.rustc_info.json` に覚えてしまい**、以後メモリが空いても同じ失敗を毎回そのまま返し続けた（同じ問い合わせを手で打つと通り、別の target フォルダでは建つ、で切り分けた）。`target\.rustc_info.json`（cargo が作り直す控え）を消したら建った。0xc000012d が何度試しても続くときは、まずこの控えを疑う。
 - 16.2 の実走は確かめ 1 で panic するので `target\h32m_*_x`・`h32m_*_y` が 2 つ残った。消して、`target\` の下に `h32m_` で始まるフォルダが 0 であることを確かめた。16.3 の実走は緑なので、テスト自身が消す。切り分けに作った `target\i686probe` も消した。
+
+## 17. 錠の役目と説明の手直し（タスク 4・要件 1.2・1.3・2.2・2.3・6.1・6.2）
+
+### 17.1 変えたもの（`shiori_proxy.rs` の `mod tests` の中だけ）
+
+- 錠 `TESTDLL_SERIAL`: 名前はそのまま。説明を「印の環境変数を差すテスト同士の直列化」に書き直し、設計の「錠の説明に書く決まり」4 項をここ 1 か所に書いた（4 項目はテストの定義の名前の一覧だけで、本数は書かない）。
+- 往復のテスト `testdll_request_roundtrip_get_and_notify`: 錠を取るのをやめた（環境変数を差さないため）。確かめは変えていない。
+- 印のテスト `testdll_drop_invokes_courtesy_unload` の説明、`set_var`・`remove_var` の安全の説明、往復のテストの説明、足したテストの説明と安全の説明、`mod tests` の冒頭の説明（「3 本立て」→今の 4 節と中身）を事実に合わせた。印のテストの手順と確かめは変えていない。
+- 差分の塊は 12 個ですべて `mod tests` の中（`git diff -U0` の見出しがすべて `mod tests {`）。ファイルは 814 行。
+
+### 17.2 古い記述の検索
+
+`唯一のテスト`・`本テストのみが`・`以後 testdll を load`・`以後 load するテスト`・`唯一の所有者`・`marker env レース`・`ロードテスト同士`・`3 本立て` を `shiori_proxy.rs` で検索して **0 件**。
+
+### 17.3 実走
+
+- `cargo build -p shiori-host32-helper -p shiori-host32-testdll -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` は緑。
+- `cargo test -p shiori-host32-helper --target i686-pc-windows-msvc --no-fail-fast`: `test result: ok. 38 passed; 0 failed; 0 ignored`。印のテスト・往復のテスト（錠なし）・足したテストがいずれも `ok`。
+- `cargo fmt --all -- --check` は緑。`cargo clippy -p shiori-host32-helper --target i686-pc-windows-msvc --tests` は警告 0。
+- 実走の後、`target\` の下に `h32m_` で始まるフォルダは 0。
