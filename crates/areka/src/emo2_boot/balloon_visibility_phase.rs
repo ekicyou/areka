@@ -40,7 +40,7 @@ use crate::input_events::shell_box::{ShellBoxHover, settle_box_hover};
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
 use super::super::frame::{Emo2Wiring, resolve_talk_time};
-use super::super::target_map::balloon_target;
+use super::super::target_map::{balloon_target, shell_target};
 use super::{
     BalloonVisibilityState, GlyphObservation, ScopeObservation, TalkLifecycleSignal,
     VisibilityAction, VisibilityLogEvent, VisibilityObservations, VisibilityTrigger,
@@ -293,12 +293,17 @@ fn collect_observations(
                 //
                 // 消去の回数は数と同じ借用・同じ条件でだけ組にして運ぶ（片方だけが進む記憶を作らない）。
                 //
-                // 数は普通のバルーンの窓に今出ている文字の数（今のサーフェスに箱があれば 0）。
-                // 箱のあるサーフェスでは窓を出さず、箱の無いサーフェスへ移ると出る
-                // （areka-P0-shell-balloon 要件 5.1〜5.3・6.4・6.9）。
+                // 数は普通のバルーンの窓に今出ている文字の数（シェルの窓がいま表示している絵に
+                // 箱があれば 0）。箱のある絵では窓を出さず、箱の無い絵へ替わると出る
+                // （areka-P0-shell-balloon 要件 5.1〜5.3・6.4・6.9）。絵の番号は表示層から引き、
+                // 台本の `\s` の受け取りには従わない（areka-P0-shell-balloon-frame-align 要件 1.8）。
                 visible_glyphs: runtime.as_ref().zip(now_talk_time).map(|(rt, t)| {
                     GlyphObservation {
-                        count: rt.balloon_shown_glyphs(&actor, t),
+                        count: rt.balloon_shown_glyphs(
+                            &actor,
+                            presenter.current_surface_id(shell_target(scope)),
+                            t,
+                        ),
                         clear_count: rt.state().clear_count(&actor),
                     }
                 }),

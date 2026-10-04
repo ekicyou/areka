@@ -48,7 +48,7 @@
   - _Requirements: 1.8, 1.9, 4.5_
 
 - [ ] 4. 結線: 表示層の絵の番号を文字の層へ渡す
-- [ ] 4.1 文字層の拡大率の相と可視性の相が、表示層の絵の番号を文字の層へ渡す
+- [x] 4.1 文字層の拡大率の相と可視性の相が、表示層の絵の番号を文字の層へ渡す
   - 文字層の拡大率の相が、シェルの窓の差し込み口と絵の番号を組にして箱の同期へ渡す。差し込み口があっても絵の番号が無ければ「無し」として渡す
   - 可視性の相が、窓に出す文字の数へそのスコープのシェルの絵の番号を渡す
   - 呼び出し側は 3 か所（拡大率の相・可視性の相・既存のシェルの箱の檻の中の窓の文字の数の呼び出し）。3 か所を直して初めて areka クレートが組み上がる
@@ -78,3 +78,4 @@
 - 2.1 で枠の檻 5（`box_only_after_hiding_the_window_reports_without_a_warning`）は緑になった（既知の赤は 6 本）。欄 `runtime_busy_logged` は 2.2 の届けの相が読むまで dead_code の警告が 1 件出る（2.2 で消えることを確かめる）。
 - 3.1 の後、`sync_boxes(world, &[(ActorKey, Option<(TextSlotView, u32)>)])`。areka クレートは 4.1 で呼び出し側（`frame/scale_text.rs` ほか）を直すまで組み上がらない（計画どおり）。
 - この機械は既定の並列数で `cargo test` すると os error 1455（ページングファイル不足）で rustc が落ちる。`-j 2` で回す。
+- 4.1 の結線で枠の檻（`align_tests::`）は全部緑になった。代わりに既存のシェルの箱の檻 2 本（`box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it`・`scopes_are_judged_separately`）が、台本の `\s` だけで絵の差し替えを送らないために赤（4.2 で直す）。

@@ -292,10 +292,11 @@ fn box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it() {
     );
     assert_eq!(cage.window_visible(0), Some(true));
     assert_eq!(
-        cage.wiring
-            .runtime
-            .borrow()
-            .balloon_shown_glyphs(&ActorKey::from("0"), 5.0),
+        cage.wiring.runtime.borrow().balloon_shown_glyphs(
+            &ActorKey::from("0"),
+            cage.wiring.presenter().current_surface_id(shell_target(0)),
+            5.0,
+        ),
         1,
         "窓に出ているのは箱の無いサーフェスで書いた文字だけ（箱の文字は窓へ混ざらない）"
     );
