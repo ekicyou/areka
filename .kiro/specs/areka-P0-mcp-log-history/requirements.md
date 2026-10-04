@@ -52,7 +52,7 @@
 | 8 | 1 行の `[<種別>]` の欄 | 取り決めの欄 `label` があればその値、無ければ種別の語（`error`・`script`・`network`・`update`・`status`） | 改めた点 4。SSP の script 以外の種別の表示は survey の記述（`[<種別>]`）のまま | 2.7・4.2 |
 | 9 | 取り決めの target の名前 | script＝**`areka::log::script`**、error へ直接残す口＝**`areka::log::error`**（どのレベルで出しても残る） | 既存の target・モジュールのパスと重ならない。名前は設計で変えてよいが、変えたら取り決めの文書と要件 2 を合わせる | 2.2・2.1・7 |
 | 10 | `log_type` の省略・空の文字列 | 省略は **`error`**。空の文字列は未知の値と同じ `NG:`。5 語との照合は大文字小文字を区別しない（前後の空白は削らない）＝**SSP と同じ**（要件ディスカッション議題 1 で確定） | SSP 2.9.07 の実測（research.md §2.1・§2.3）。SSP 向けの呼び方が同じ答えで通じる | 3.1・3.2 |
-| 11 | `ghost_name` の意味（`mcp-tool-entrances` 要件 3.7 が本 spec へ委ねた点） | 省略・空＝絞らない。値があれば、記録の `<名>` と完全一致する記録だけ。値が**起動中のゴーストのルートフォルダのフルパス**に当たるときは、そのゴーストの名前へ読み替えてから照合する（照合の規則は `mcp-tool-entrances` 要件 3.2・3.3 と同じ）。当たらなくても `NG:` にせず 0 件 | SSP の説明「only entries of this ghost (ghost name or full path of its root folder)」。もう起動していないゴーストの記録を名前で絞れる。SSP の絞り込みの実例は**未測** | 5.1〜5.4 |
+| 11 | `ghost_name` の意味（`mcp-tool-entrances` 要件 3.7 が本 spec へ委ねた点） | 省略＝絞らない。値があれば（空も）**起動中のゴーストから探し**（名前かフルパス・他のツールと同じ解決）、当たればそのゴーストの名前の記録だけ、当たらなければ `NG:Cannot find active ghost from specified name`＝**SSP と同じ**（要件ディスカッション議題 2 で確定） | SSP 2.9.07 の実測（research.md §2.1）。名前の打ち間違いが「ログなし」に化けない。もう起動していないゴーストの記録は省略で読める | 5.1〜5.4 |
 | 12 | `since_id`・`max_count` の端の値 | `since_id` が負＝0 と同じ（全部）。`max_count` が負＝省略と同じ（数で絞らない）。**`max_count` が 0＝0 件**＝SSP と同じ（要件ディスカッション議題 1 で確定） | SSP 2.9.07 の実測（research.md §2.1） | 5.5〜5.8 |
 | 13 | 本文の作り方 | 出来事のメッセージに、取り決めの欄（`ghost`・`label`）を除く残りの欄を ` 名前=値` の形で続ける | 今の行は `event = "…"` などの欄に意味を載せている。欄を捨てると何が起きたか分からない | 4.3 |
 | 14 | 通し番号の始まりと寿命 | アプリの起動ごとに **1 から**。履歴から捨てた記録の番号は使い回さない。再起動で 1 へ戻る | SSP の id も起動ごと（survey の例は 2 桁）。AI は `since_id` に「見た中の最大の id」を渡す | 1.2・1.3 |
@@ -130,7 +130,7 @@
 1. When `get_log` の `log_type` が無い, the areka shall error 種別を読む。
 2. When `log_type` が `error`・`script`・`network`・`update`・`status` のどれかと、大文字小文字の違いを除いて一致する（`STATUS`・`Status` は status。前後の空白は削らない）, the areka shall その種別を読む。
 3. If `log_type` が 3.1・3.2 のどれでもない（空の文字列・前後に空白のある語を含む）, then the areka shall 本文 `NG:Unknown log_type (error / script / network / update / status)`・`isError: true` の結果で答える。
-4. The areka shall `get_log` を、起動中のゴーストが 0 体でも答える（名前の解決の `NG:` を出さない）。
+4. While `ghost_name` が無い, the areka shall `get_log` を、起動中のゴーストが 0 体でも答える（名前の解決の `NG:` を出さない。`ghost_name` があるときは要件 5.3）。
 5. The areka shall `get_log` で、ゴーストに何もさせない（SHIORI を呼ばない・台本を流さない）。
 6. The areka shall 3.1〜3.3 を決定論テストで固定する（5 語それぞれ・省略・空・未知の語・大文字の `ERROR`・前後に空白のある ` error `）。
 
@@ -154,16 +154,16 @@
 
 #### Acceptance Criteria
 
-1. When `ghost_name` が無い・空の文字列である, the areka shall ゴーストで絞らない（`<名>` が `areka` の記録も含める）。
-2. When `ghost_name` が空でない, the areka shall `<名>` がその値と完全に一致する（大文字小文字も区別）記録だけを残す。
-3. When `ghost_name` が起動中のゴーストのルートフォルダのフルパスに当たる（照合は `mcp-tool-entrances` 要件 3.3 と同じ＝大文字小文字・区切り・末尾の区切りの差を同じとみなす）, the areka shall その値をそのゴーストの名前（`get_active_ghost_list` が返す値）へ読み替えてから 5.2 の照合を行う。
-4. If `ghost_name` がどの記録にも当たらない, then the areka shall `NG:` にせず、0 件（要件 4.5）として答える。
+1. When `ghost_name` が無い, the areka shall ゴーストで絞らない（ゴーストに属さない記録も含める）。
+2. When `ghost_name` が起動中のゴーストの名前、またはルートフォルダのフルパスに当たる（照合は `mcp-tool-entrances` 要件 3.2・3.3 と同じ＝他のツールと同じ解決。フルパスは大文字小文字・区切り・末尾の区切りの差を同じとみなす）, the areka shall `<名>` がそのゴーストの名前（`get_active_ghost_list` が返す値）と完全に一致する記録だけを残す。
+3. If `ghost_name` があり（空の文字列を含む）、起動中のどのゴーストにも当たらない（起動中のゴーストが 0 体のときを含む）, then the areka shall 本文 `NG:Cannot find active ghost from specified name`・`isError: true` の結果で答える（SSP と同じ。もう起動していないゴーストの記録は、`ghost_name` を省いて読む）。
+4. When `ghost_name` が起動中のゴーストに当たり、そのゴーストの記録が 1 件も無い, the areka shall 0 件（要件 4.5）として答える。
 5. When `since_id` がある, the areka shall 通し番号がその値より大きい記録だけを残す。`since_id` が無い・負であるときは番号で絞らない。
 6. When `max_count` が 1 以上である, the areka shall 他の絞り込み（種別・`ghost_name`・`since_id`）を済ませた後の記録のうち、新しい方からその件数だけを残す（返す順は古い順のまま）。
 7. When `max_count` が無い・負である, the areka shall 件数で絞らない（その種別に残っている記録を全部返しうる）。When `max_count` が 0 である, the areka shall 0 件（要件 4.5）として答える。
 8. When `since_id` がいま最後に振った通し番号以上である, the areka shall 0 件（要件 4.5）として答える。
 9. The areka shall 絞り込みを「種別 → `ghost_name` → `since_id` → `max_count`」の順に行う。
-10. The areka shall 5.1〜5.9 を決定論テストで固定する（種別の混ざった 10 件ほどの履歴に対し、`since_id` の境の値〔ちょうど同じ・1 つ小さい・負・最大より大きい〕、`max_count` の 0・負・1・件数より大きい値、`since_id` と `max_count` の併用、名前の一致・大文字小文字だけ違う名前・フルパスの読み替え・当たらない名前を含む）。
+10. The areka shall 5.1〜5.9 を決定論テストで固定する（種別の混ざった 10 件ほどの履歴に対し、`since_id` の境の値〔ちょうど同じ・1 つ小さい・負・最大より大きい〕、`max_count` の 0・負・1・件数より大きい値、`since_id` と `max_count` の併用、名前の一致・フルパスの読み替え・当たらない名前と空の名前の `NG:`・当たるが記録の無いゴーストの 0 件を含む）。
 
 ### Requirement 6: 後続の spec のための口
 
