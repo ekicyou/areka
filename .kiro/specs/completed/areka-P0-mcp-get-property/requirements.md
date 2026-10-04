@@ -11,7 +11,7 @@
 
 **何を変えるか**: `get_property(property_name, ghost_name?)` が、SHIORI の `GetProperty` と同じ解決で値を素の文字列のまま返し、値の無い名前には `NG:Cannot find such property name.`（`isError: true`）と答える（survey §3: `currentghost.name` → `Emily/Phase4.5`）。本 spec の後にプロパティの値が増えれば、`get_property` 側は何もせずに答えが増える。
 
-> 起票: 2026-09-29 `/kiro-discovery`。SSP MCP の移植の 3 段目（個別のツール）の 1 本で、ウェーブ C3-⑦（段「優先」）。事実の正本は [doc/ssp-mcp/survey.md](../../../doc/ssp-mcp/survey.md)（SSP 2.9.05 の実測。`get_property` を名前の書き方ごとに当てた詳しい実測は §7＝2026-10-04・SSP 2.9.07）。前提の spec は [completed/areka-P0-mcp-tool-entrances](../completed/areka-P0-mcp-tool-entrances/)（ツールのファイルの約束は同 design の「mcp/<ツール>.rs（10 本）」）。
+> 起票: 2026-09-29 `/kiro-discovery`。SSP MCP の移植の 3 段目（個別のツール）の 1 本で、ウェーブ C3-⑦（段「優先」）。事実の正本は [doc/ssp-mcp/survey.md](../../../../doc/ssp-mcp/survey.md)（SSP 2.9.05 の実測。`get_property` を名前の書き方ごとに当てた詳しい実測は §7＝2026-10-04・SSP 2.9.07）。前提の spec は [completed/areka-P0-mcp-tool-entrances](../areka-P0-mcp-tool-entrances/)（ツールのファイルの約束は同 design の「mcp/<ツール>.rs（10 本）」）。
 
 ## Introduction
 

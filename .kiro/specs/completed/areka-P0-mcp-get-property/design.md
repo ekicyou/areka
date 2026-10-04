@@ -1,6 +1,6 @@
 # Design Document: areka-P0-mcp-get-property
 
-> 実測は 2026-10-04・本ブランチ（main `e2a373b5` の上に spec 文書のコミットだけ）。コードは「何の定義か」（関数名・型名・定数名＋ファイルパス）で指し、行番号では指さない。調べた事実と選ばなかった案は [research.md](research.md)（3 節＝実物で確かめた事実・4 節＝テストの組み方の 3 案・9 節＝設計の段の決定）。SSP の振る舞いの正本は [doc/ssp-mcp/survey.md](../../../doc/ssp-mcp/survey.md) §7。
+> 実測は 2026-10-04・本ブランチ（main `e2a373b5` の上に spec 文書のコミットだけ）。コードは「何の定義か」（関数名・型名・定数名＋ファイルパス）で指し、行番号では指さない。調べた事実と選ばなかった案は [research.md](research.md)（3 節＝実物で確かめた事実・4 節＝テストの組み方の 3 案・9 節＝設計の段の決定）。SSP の振る舞いの正本は [doc/ssp-mcp/survey.md](../../../../doc/ssp-mcp/survey.md) §7。
 
 ## Overview
 
