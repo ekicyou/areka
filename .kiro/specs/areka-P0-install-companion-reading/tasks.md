@@ -60,7 +60,7 @@
   - _Requirements: 2.7, 8.4, 8.5_
   - _Depends: 3_
 
-- [ ] 5. (P) 正典との対応の記録と網羅台帳を実装に合わせる
+- [x] 5. (P) 正典との対応の記録と網羅台帳を実装に合わせる
   - `doc/COMPAT_ARCHITECTURE.md` §8 の表に、既存の 4 列で 4 行足す: 同梱の番号の読み方（完了 `areka-P0-nar-install` 要件 3.12 を上書き）・`*.source.directory` の読み方（同 要件 3.9 の取り出し元の部分を上書き。SSP 2.9.00 以降の形・`..` は打ち消さず取り除く・段が残らなければ断る）・同梱の `*.directory` の区切りは断り `_` へ置き換えない・`ghost`／`shell` 以外の書庫の同梱は読まないまま
   - 網羅台帳の `descript_install` の `*.directory`・`*.source.directory` の 2 行の `note` だけを書き換え、ほかの欄と行は変えない
   - 完了の状態: `cargo test -p ukadoc-survey` が緑で、台帳の差分が 2 行の `note` だけ
