@@ -249,3 +249,108 @@ SSP の MCP（ツール名 `mcp__ssp__get_log` など）へ読み取りだけを
 - 名指しのモジュールの実在をテストで判定する方法（要件 2.12）と、文書と実装の一致の判定（要件 7.3。例: 文書の表を読み込んで規則の表と突き合わせる）。
 - SSP の未測の点（§2.2）のうち、要件を動かすもの（error 種別の行の形・もう起動していないゴーストの名前での絞り込み・継続行）を、副作用を許せる場で測る。
 - 排他の中でログを出さないこと（履歴の層の中で tracing のマクロを呼ぶと自分へ戻る）と、毒された排他でもパニックしないこと（要件 1.10）。
+
+---
+
+# 設計の段の調査と決定（2026-10-04）
+
+> ここから下は設計の段で足した。調べ方は「既存の仕組みへの足し込み」向けの軽い調査（統合点・依存・危険の確認）で、外部の新しい依存は 0 件である。
+> 実験は、ワークツリーの `target\` の下に作った使い捨ての小さなクレート（`tracing 0.1.44`・`tracing-subscriber 0.3.23`〔`env-filter`〕・`tracing-log 0.2.0`・`log 0.4`＝本体の `Cargo.lock` と同じ版・release ビルド）で行い、記録した後に消した。リポジトリには残していない。
+
+## 9. 設計の段の実測
+
+### 9.1 出口を組み替えても標準出力は 1 字も変わらない（要件 1.8・設計判断 h）
+
+- **比べたもの**: 今の形 `tracing_subscriber::fmt().with_env_filter(EnvFilter…).init()` と、組み替えた形 `tracing_subscriber::registry().with(tracing_subscriber::fmt::layer().with_filter(EnvFilter…)).with(履歴の層.with_filter(filter_fn(…))).init()`。
+- **流した出来事**: 欄つきの info（文字列の欄・`?` の欄・`%` の欄・数の欄・逆斜線と二重引用符と日本語を含むメッセージ）、warn、error、debug、取り決めの target の debug／trace／info、`log::warn!`・`log::info!`・`log::debug!`。
+- **結果**: `RUST_LOG` が未設定・`warn`・`<モジュール>=debug` の 3 通りで、標準出力は行数も中身も、行頭の時刻を除いて完全に一致した（7 行・3 行・3 行）。`NO_COLOR=1`・ファイルへの出力で比べた。
+- **理由（ソース）**: `tracing_subscriber::fmt()` が作る受け口は「`EnvFilter` の下に `fmt::Layer` の既定値、その下に `Registry`」で、`fmt::layer()` は同じ `fmt::Layer` の既定値を返す。違いはフィルタが全体に掛かるか層に掛かるかだけである。`EnvFilter` は層ごとのフィルタとしても使える（`tracing-subscriber 0.3.23` の `filter/env/mod.rs` に `layer::Filter` の実装がある）。
+- **`init()` は見張りに当たらない**: `SubscriberInitExt::init()` の字面は、`crates/log-capture-kit/tests/with_default_guard_test.rs` の走査語（開き括弧までの 3 語）のどれでもない。
+
+### 9.2 取り決めの target をどのレベルでも拾うときの費用（設計判断 a）
+
+`tracing-subscriber 0.3.23` の `SubscriberInitExt::try_init`（`util.rs`）は、受け口を据えた後に `LogTracer` の最大レベルを `LevelFilter::current()`（受け口全体の最大レベルの見立て）に合わせる。履歴の層のフィルタの見立てを変えて測った。
+
+| 構成 | `RUST_LOG` | tracing の最大レベル | `log` の最大レベル | 関心のない `debug!` | 関心のない `trace!` | どの層も要らない info | `log::debug!` |
+|---|---|---|---|---|---|---|---|
+| 今の形 | 未設定相当 | INFO | Info | 0.74 ns | 0.92 ns | 1.72 ns | 1.39 ns |
+| 組み替え・見立て `TRACE` | 未設定相当 | **TRACE** | **Trace** | 2.41 ns | 2.13 ns | 2.01 ns | **137 ns** |
+| 組み替え・見立て `INFO` | 未設定相当 | INFO | Info | 0.70 ns | 0.74 ns | 1.33 ns | 0.68 ns |
+| 今の形 | `warn` | WARN | Warn | 0.73 ns | 0.72 ns | 0.64 ns | 0.73 ns |
+| 組み替え・見立て `TRACE` | `warn` | **TRACE** | **Trace** | 1.65 ns | 1.51 ns | 1.89 ns | **116 ns** |
+| 組み替え・見立て `INFO` | `warn` | INFO | Info | 0.62 ns | 0.67 ns | 1.32 ns | 0.57 ns |
+
+（1 回あたり。tracing は 5,000 万回、`log` は 500 万回の平均。「未設定相当」は `info,<測定用の target>=warn`。）
+
+- **tracing のマクロ**: 見立てを `TRACE` にしても、関心のない呼び出し口は「関心なし」が覚えられ、増えるのは 1 回あたり 1〜1.7 ns。
+- **`log` クレート**: 見立てが `TRACE` だと `log::debug!`／`log::trace!` が受け口まで届き、1 件 約 120〜140 ns で捨てられる。
+- **`log` を使う依存**: `cargo tree -p areka -i log` で `bevy_ecs 0.19.1`・`bevy_app 0.19.1`・`tracing-log`（`wgpu-types`・`iana-time-zone` は `Cargo.lock` にはあるが areka の木には出ない）。`bevy_ecs` の `debug!` は 6 件（段階実行 `schedule/stepping.rs` の 4 件と、差し替えの 2 件）、`bevy_app` は `debug!` 2 件（プラグインを足したとき）と `trace!` 4 件（スレッドプールを作るとき）で、**毎フレーム通る `log` の `debug!`／`trace!` は 0 件**。
+- **届くこと**: 見立てが `TRACE` のとき、`RUST_LOG` が未設定でも `warn` でも、`debug!(target: "areka::log::script", …)` と `trace!(target: "areka::log::error", …)` は履歴の層へ届いた（標準出力には出ない）。見立てが `INFO` のときは届かない。
+
+### 9.3 `log` クレートの行の届き方（要件 2.10・設計判断 f）
+
+- `log::warn!("log crate warn {}", 1)` は、標準出力には ` WARN <クレート名>: log crate warn 1`（本来の target・`log.` の欄なし）と出る。履歴の層の `on_event` には、**target が `log`**、欄が `message`・`log.target="<クレート名>"`・`log.module_path="…"`・`log.file="src\\main.rs"`・`log.line=94` の形で届いた。
+- フィルタ（`enabled`）には本来の target とレベルで問い合わせが来る（`tracing-log 0.2.0` の `LogTracer::enabled` が `metadata.as_trace()` で尋ねる）。よって、フィルタは本来の target で、`on_event` は target `log` で判定することになる。warn 以上はどちらでも error 種別なので食い違わない。
+- 見立てが `INFO` のとき、`log::info!` は履歴の層に届かなかった（フィルタが「要らない」と答える）。
+
+### 9.4 本文の形は標準出力の行と同じになる
+
+- 履歴の層で「`message` を先頭、残りの欄を ` 名前={:?}`（文字列の欄は引用符つき、`%`・`?` の欄は整形済みの文）」で組んだ本文は、標準出力の行の `<target>: ` より後ろと一致した。例: `起動 \0\s[0] "q" event="boot" folder="C:\\a\\b" name=x y n=3`。
+- 台本をメッセージとして出すと、逆斜線は 1 つのまま残る（`\0\s[0]こんにちは\n\![raise,OnTest]`）。欄として文字列で出すと引用符つき・逆斜線は 2 つになる。**台本はメッセージで出す**のが取り決めになる。
+
+### 9.5 既存のコードで確かめたこと
+
+- `crates/areka/src/mcp/resolve.rs` の `resolve` は、`ghost_name` が空の文字列だと「省略」と同じ扱いで `NOT_ACTIVE` を返す。SSP は空にも `Cannot find active ghost from specified name` を返すので、`get_log` は空を `resolve` へ渡さずに自分で `CANNOT_FIND` を返す。空でない値なら、`resolve` の失敗は起動中が 0 体のときも含めて `CANNOT_FIND` になる。
+- `crates/areka/src/mcp/mcp_tests.rs` の `get_log_call` は 4 つの引数とも `None` で、`get_log_and_seven_omitted_do_not_answer_with_a_resolve_failure` は 0 体でそれを呼ぶ。`ghost_name` が `None` のとき名前の解決をしない設計なので、このテストは変えずに緑のままである（§3.2 の懸念は当たらない）。
+- 「起動するゴーストを決めました」の行は `crates/areka/src/boot_config.rs`（`event = "ghost_resolved"`・`route = ?…`・`dir = %….display()`）にあり、target は `areka::boot_config`＝status。逆斜線入りのパスと二重引用符を含むので、実プロセスの試験の「JSON を通しても字が変わらない」の材料になる。「本物のゴースト窓を開きました」は `crates/areka/src/ghost_session.rs`（target `areka::ghost_session`＝status）。
+- `crates/areka-mcp/src/server.rs` の `start` は待受の番地を `info!` で出し、`AREKA_MCP_PORT` に番号を 1 つ指定すればその番号だけを使う。`tools/call` は初期化の往復なしの `POST` 1 本で通る（`crates/areka-mcp/src/tools/tools_socket_tests.rs` の旧式の送り方）。`areka-mcp` の `testkit` は非公開なので、実プロセスの試験は手書きの HTTP/1.1 を自前で持つ。
+- `GetLocalTime` は `windows 0.62.2` の `Win32::System::SystemInformation` にあり、この機能は根の `Cargo.toml` に宣言済み。`crates/areka` には `unsafe` を禁じる属性は無く、既に `alert.rs`・`readme.rs` などが `unsafe` を持つ。
+- `crates/areka-ghost/src/runtime.rs` には `target: "ghost-boot"`／`target: "ghost-shutdown"` の字面が 18 か所ある。`RULES` が名指しするモジュールのファイル（`crates/areka/src/` の 7 つと `crates/areka-update/src/` の 3 つ）は全部実在する。
+
+## 10. 設計判断の記録
+
+### 判断 a: 取り決めの target はどのレベルでも拾う
+- **選択肢**: (1) どのレベルでも拾う（見立て `TRACE`） (2)「info 以上で出す」約束に狭める（見立て `INFO`）
+- **決定**: (1)。
+- **理由**: 要件 2.1・2.2 の「レベルを問わない」を字のとおりに満たせる。出す側が「標準出力には出さずに履歴へだけ残す」（`debug!` で出す）を選べる。費用は §9.2 のとおり小さい。
+- **引き換え**: `log` クレートの `debug!`／`trace!` が受け口まで届く（今の木では毎フレームの行が 0 件）。debug・trace で出した行が本物の受け口を通ることは、本 spec の常時テストでは固定されず、§9.2 の実験が証跡になる。
+- **見直すとき**: `log` で大量に出す依存を足すとき。(2) へ狭めれば見立ては `INFO` に戻る（要件 2.1・2.2 と取り決めの文書を改める）。
+
+### 判断 b: 継ぎ目のテストは「純粋な関数＋実プロセス 1 本」
+- **選択肢**: (1) 純粋な関数に `CapturedEvent` を食わせる＋実プロセス・実ソケットの試験 (2) 見張りの例外表に 1 件足して、層を載せた受け口をテストで差す
+- **決定**: (1)。例外表は 4 件のまま。
+- **理由**: (2) は要件 8.5 に反する。実プロセスの試験は要件 4.7 の「実ソケットで 1 本」と兼ねられ、`RUST_LOG` と独立であること（要件 1.7）も同じ 1 本で固定できる（`RUST_LOG=warn,areka::boot_config=info` で起こし、標準出力に無い info が履歴にあることを見る）。
+- **引き換え**: 実プロセスの試験は i686 の helper とモニタを前提にする（`smoke_boot_loop_exit.rs` と同じ）。helper を揃える手順の写しが 60 行ほど増える（既存のテストを触らない約束のため）。
+
+### 判断 c: 置き場は「純粋な型＋静的な 1 つ」
+- **決定**: `History`（純粋）と `static` の `Mutex<History>`。`Mutex::new`・`VecDeque::new` は `const` なので `OnceLock` は要らない。
+- **理由**: `handle` の引数も `mcp/mod.rs` も変えずに読める。World の無いスレッドからも `last_id` を読める。テストは `History` を手元で作る。
+
+### 判断 d: 1 ファイル
+- **決定**: `crates/areka/src/log_history.rs`（450 行前後の見込み）＋兄弟のテスト 2 本。出口の据え付け `init` もここに置く（`main.rs` は 1 行の呼び出しになり、行数は 957 から減る）。
+- **見直すとき**: 900 行を超えたら、ファサード形式で `log_history/` へ分ける。
+
+### 判断 e: 時刻は `GetLocalTime`・差し替えは引数
+- **決定**: `History::push(at, draft)` が時刻を引数で受ける。本番は層が `local_now()` を渡し、テストは値を渡す。時計の trait は作らない（実装が 1 つしか無い）。
+
+### 判断 f: `log.` で始まる欄は本文から除く
+- **決定**: `tracing-log` を依存に足さず、欄の名前で除く。標準出力の側も同じ 4 欄を出さないので、見え方がそろう。
+
+### 判断 g: 規則の表 1 つを 3 つのテストが読む
+- **決定**: `RULES`（13 行）を `classify`・実在のテスト（要件 2.12）・文書との一致のテスト（要件 7.3）が読む。実在は target からソースの場所を導いて判定し、導けない target は赤にする。
+
+### 判断 h: 出口の形
+- **決定**: §9.1 の組み替えた形。証跡は §9.1。
+
+### まとめ直し（一般化・自作か採用か・削ったもの）
+- **一般化**: 「どう出せばどの種別になるか」は `RULES` と取り決めの target の 1 つの規則に寄せた。network・update・status・後続の script・error は同じ道を通る（後続の spec は規則を足さない）。
+- **採用**: 層を重ねる仕組み・層ごとのフィルタ・`log` の橋は `tracing-subscriber` の既定機能をそのまま使う。自作は環状の列と振り分けの表だけ。
+- **削ったもの**: 時計の trait、World に置く資源、`log_history/` のディレクトリ分け、`tracing-log`・`serde_json`（テスト用）の依存の追加、SSP の「誤りが出たら status に案内を足す」振る舞い。
+
+## 11. 危険と手当て
+
+- **`RUST_LOG` の最大レベルの見立てが常に `TRACE` になる** — 費用は §9.2。`perf_thread_report` のように「`RUST_LOG` に特定の指定があるか」を自分で読む処理には影響しない（見立てではなく環境変数を読んでいる）。
+- **排他の中でログを出すと固まる** — 排他を握る箇所を 3 か所に限り、その中で tracing のマクロを呼ばない。`answer` も呼ばない。
+- **実プロセスの試験のポートの取り合い** — 空きの番号を OS から得てから渡す。既定の 9801・9821 は使わない。
+- **SSP の未測の点**（update 種別の行の形・継続行・もう起動していないゴーストの名前・上限）— 要件の暫定の裁定のまま進む。設計では動かしていない。
+
