@@ -118,3 +118,29 @@
 - **項目 4（`\![reload,balloon]`）は安くなった**: α がバルーンだけを組み直す道（`build_balloon_assets`・切替の仕組み）を作った＝その上に載せる。
 - **項目 2（面の偶数・奇数で左右のバルーンを選ぶ）が最も利用者に近い**（優先度 中）。着手するときは項目 2 を先に、3〜6 は後ろへ。
 - **触るファイル**: `crates/areka-emo-present/src/balloon.rs`（658）・`crates/areka/src/emo2_boot/frame/{attach,switch}.rs`・`crates/areka/src/placement/config.rs`（715）。`shell-balloon`・`balloon-markers` と emo-present の `balloon.rs`・`emo2_boot/frame/` を共有＝同時に走らせない。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M（12〜16 タスク・項目 2〜6 の 5 件）。切らない。棚卸⑳のとおり項目 2 を先に、3〜6 は後ろ。20 を超えそうなら項目 2（面の偶数・奇数と左右）で 1 本、3〜6 で 1 本に切る。
+- 前提の状態: `shell-balloon`（PR#227）・`shell-balloon-switch`（バルーンだけを組み直す道）は着地済み＝満たす。
+- 崩れた前提／古くなった位置:
+  - 面の番号の `0` の直書きは今も `emo2_boot/frame/attach.rs` の装着の `surface_id: 0`。`\b[数字]` の面の切り替えは seriko の `areka-seriko/src/actor.rs`（`CueCommand::BalloonSurface` の腕）を通る。左右の判定は `areka/src/placement/resolver.rs`（`BalloonSide::Auto` の腕）と `placement/config.rs` の `balloon_alignment`。
+  - **`shell-balloon` で `\b[…]` が二通りの意味を持つようになった**: 名前なら箱の行き先の切り替え（emo-text の `state_route.rs`）、数字なら普通のバルーンの面（seriko）。項目 2 の自動の偶奇の選択は**普通のバルーンだけ**の話で、箱（`balloon.名前`ブレス）には面が無いので効かせる対象が無い。要件で「箱には適用しない」と明記するだけでよい。
+  - 項目 4（`\![reload,balloon]`）が載る道は `emo2_boot/shell_balloon_switch.rs` と `frame/switch.rs`（バルーンの切替の結び直し・`set_balloon_label` の呼び出しもここ）。
+  - 棚卸⑳の「`shell-balloon` と共有＝同時に走らせない」は相手の完了で消えた。今の相手は `balloon-font-file`（`frame/attach.rs`・`frame/switch.rs` に普通のバルーンのフォント探し場所を渡す呼び出しを足す）と `shell-companion-balloon`（`frame/switch.rs`）。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-present/src/balloon.rs`（658 行・系列と面の解決）
+  - `crates/areka/src/emo2_boot/frame/{attach.rs, switch.rs}`・`crates/areka/src/emo2_boot/shell_balloon_switch.rs`
+  - `crates/areka/src/placement/{config.rs（715 行）, resolver.rs}`
+  - `crates/areka-seriko/src/actor.rs`（`\b[数字]` の面の選択）
+  - `balloon.defaultsurface` を読む場所（ゴースト／シェルの descript の読み手・要件で確定）・`balloonc*` の系列（emo-present の `balloon.rs`）
+  - 多面の検体（新規）・`doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）: 棚卸⑬の 2 件（面の偶奇の規則と縦書きの矢印）のうち、縦書きの矢印は `balloon-markers` へ移った（項目 1 ごと）。残るのは面の偶奇の自動切替の規則（キャラのどちら側に出たかで偶奇を選ぶ・`\b[数字]` で明示されたときの優先）だけ。
+- 見つけた穴: なし。
+- 並走の判定（厳しめ）:
+  - `balloon-font-file` とは `frame/attach.rs`・`frame/switch.rs` が重なる＝**並べない**。
+  - `shell-balloon-frame-align` とは、ファイルの重なりは 0 にできる（本 spec は emo-text・`frame/scale_text.rs`・`frame/status_report.rs`・`balloon_visibility_phase.rs` に触らない、と設計で約束する条件つき）。`Status` の `balloon(ID群)` の番号の出どころ（項目 2 が変える）を相手のテストが読むので、相手と同じウェーブなら項目 2 の番号の規則を先に相手へ知らせる。**条件つきで並べられる**。
+- **裁定（棚卸㉑・roadmap の裁定 5）**: `\![reload,balloon]` は `mcp-reload` が持つ。本 spec の項目 4 は範囲から外す（二重の持ち主を 1 つにした）。

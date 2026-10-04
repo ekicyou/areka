@@ -70,3 +70,11 @@
 
 - 優先度 低（開発者が許容済み）。**着手するなら最初の 1 タスクは測り直し**＝完了 `present-gpu-transform-scale` の後に跳ねが残っているかを誰も測っていない。残っていなければ取り下げる。
 - 本文の Approach と Scope には、取り下げた「判定器を直す」の記述がまだ残っている（09-24 に取り下げ済み）。読み飛ばすこと。`run_dpi_phase`（`emo2_boot/frame/dpi.rs`）と `refresh_scale` は変わっていない。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 据え置きのままでよい。10-02 の後に `crates/areka/src/emo2_boot/frame/dpi.rs`（`run_dpi_phase`）と `crates/areka-emo-present/src/presenter/refresh.rs`（`refresh_scale`）を触ったコミットは 0。開発者の許容も変わらない。
+- 規模・切り方・触るファイルは 10-02 のまま（着手するなら最初は測り直し・跳ねが無ければ取り下げ）。議題・穴: なし。

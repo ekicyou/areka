@@ -61,3 +61,27 @@ AI エージェントは辞書やシェルを書き換えたら、ゴースト�
 ## 2026-10-03 C4 の候補（10-03 の再編（開発者「MCP は複合 spec なので早めに着手したい」））
 
 - 段は「優先」。C3 に入れなかった理由: `mcp-kanade-tools` と kanade を分け合いうる。
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: L（15〜20 タスク・20 をまたぎうる）。またいだときの切り方の案: ⒜ 本 spec＝`ghost`・`shell`・`balloon`・`descript` の 4 対象＋MCP の口＋台本の消費者＋makoto の縮退（14〜17）、⒝ `\![reload,shiori]`（SHIORI だけ載せ替え・シェルは残す）を別 spec（`reload-shiori`・S〜M）へ。⒝ は実行系（`areka-ghost/src/runtime.rs` の SHIORI アクター）を作り直すので触る所が別系統。順は ⒜ → ⒝。
+- 前提の状態: `mcp-tool-entrances`（PR#223）・`shell-balloon-switch`（PR#205）は着地済み。前提は満たす。`shell-balloon`（PR#227）も着地済み。
+- 崩れた前提／古くなった位置:
+  - ダミーの場所: アプリ本体側 `crates/areka/src/mcp/reload.rs` の `handle`（`NG:not implemented yet` の 1 文）と `reload_tests.rs`（同じ文言を期待＝書き換える）。プロトコル側 `crates/areka-mcp/src/tools/reload.rs` は定義と `Args { target: String, ghost_name: Option<String> }` まで完成。`target` の値の検査（`NG:Unknown …`）はアプリ本体側が返す約束（tool-entrances の design）。
+  - **「同じゴーストへ載せ替える」既存の道がある**: `network-update` が作った `crates/areka/src/update/desk.rs` の `fn reload` が、`request_ghost_switch(world, SwitchRequest { ghost: GhostSpec::Folder(同じフォルダ), raise_event: false, origin: ChangeOrigin::Automatic, boot_event })`（`emo2_boot/ghost_switch.rs`）で同じゴーストへ切り替えている。`\![reload,ghost]` はこの形に載る。
+  - ただし「SHIORI イベントを出さない」には起動側の口が足りない: 起動の由来 `BootOrigin`（`crates/areka-kanade/src/change.rs`）は `Plain`／`ChangedFrom`／`Halted`／`Updated { id, references }` で、**起動の知らせを 1 つも送らない由来が無い**（`Updated` は別のイベントを送る）。降ろす側も `take_down` が `session.shutdown(CloseReason::System)` を呼ぶ。→ **kanade（`change.rs` の `BootOrigin`・`schedule/boot.rs`）を触る見込みが高い**＝kanade の進行の列に入る。
+  - シェル・バルーンの載せ替えは `emo2_boot/shell_balloon_switch.rs`（台詞の切れ目で差し替え・背景で資産を組む）と `\![change,shell|balloon]` の消費者（`emo2_boot/consumer_ledger.rs` の `SwitchSink`・`emo2_boot/change_cue.rs`）。`\![reload,…]` の消費者は 0 件（台帳に `reload` の行が無い）。
+  - **`\![reload,balloon]` の持ち主が 2 つある**: `balloon-canon-residue` の brief の項目 4 も `\![reload,balloon]` を持つ（「切替の仕組みに載せる」）。本 spec と二重。
+- 触るファイル（並走の照合用）:
+  - `crates/areka/src/mcp/reload.rs`・`reload_tests.rs`
+  - **新規**の消費者（例 `crates/areka/src/emo2_boot/reload_cue.rs`＋兄弟テスト）・`emo2_boot/consumer_ledger.rs`（`reload` の行）・`emo2_boot/mod.rs`（`mod` と系の登録）
+  - `emo2_boot/ghost_switch.rs`（同じゴーストへの載せ替えの入口・891 行）・`emo2_boot/shell_balloon_switch.rs`（同じシェル／バルーンの組み直し）
+  - `crates/areka-kanade/src/change.rs`（知らせなしの起動の由来）・`schedule/boot.rs`・降ろす側の終了の扱い（`schedule/close.rs` か `msg.rs`）
+  - ⒝ を含めるなら `crates/areka-ghost/src/runtime.rs`
+  - `doc/ukadoc-coverage/ledger/sakura-script.toml` の `\![reload,…]` の行の `owner`
+- 議題（答えで作業が変わるものだけ）:
+  - `\![reload,balloon]` をどちらが持つか（本 spec か `balloon-canon-residue` か）。片方の brief から外す。
+  - `\![reload,shiori]` を本 spec に含めるか ⒝ へ切るか（含めると `runtime.rs` を `mcp-get-property` と分け合う）。
+  - 知らせなしの起動を kanade に足すか（足すなら `mcp-kanade-tools` と同時に走らせない）、kanade に触らず UI 側だけで済ませる形があるか。
+- 見つけた穴: `\![reload,balloon]` の持ち主の二重（上記）。
+- **裁定（棚卸㉑・roadmap の裁定 5）**: `\![reload,balloon]` は本 spec が持つ（`balloon-canon-residue` の項目 4 から移した）。切替の仕組み（`shell_balloon_switch.rs`）に載せる。

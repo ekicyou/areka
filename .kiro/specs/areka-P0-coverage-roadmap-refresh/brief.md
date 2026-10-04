@@ -110,3 +110,37 @@ ukadoc 網羅調査の文書（`doc/ukadoc-coverage/roadmap-draft.md`・`briefin
   7. 完了 `ghost-install` が申し送った「`assets.toml` の `manual_install` の束の行の語の食い違い」を引き取る。
 - **合流しない物**: 覚え書きの残り 3 つ（`present-write-coherence` の未達 40 件・正典語彙の孤児 2 件・配布物を束ねる／作る側の 3 件）は製品の穴で、台帳の番ではない＝roadmap の覚え書きに残す。
 - **並べ方**: 触るのは `doc/ukadoc-coverage/` と `crates/ukadoc-survey/` だけで製品のコードと共有 0。ただし**台帳を書き換える spec とは同じウェーブに置かない**（`choice-timeout-directive`＝C1・`install-companion-reading`＝C2・`ghost-standard-balloon`＝C3・`shell-companion-balloon`＝C4 の候補は台帳の行を直す。10-03 に `install-companion-canon` を 3 本へ分けた）。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M（14〜18 タスク・10-02 の見立てのまま）。切る: なし。
+- 前提の状態: 上流なし。単独でいつでも取れるが、台帳を書き換える spec と同じウェーブに置けない（下）。
+- 数え直し（main `634032f6`・10-02 の表の続き）:
+
+| 項目 | 10-02 | 今 |
+|---|---|---|
+| 台帳の持ち主が完了済みなのに `[[owner_completed]]` に居ない | 16 本・128 行 | **19 本・134 行**（`status-execution-states` 3・`translate-pipeline` 2・`choice-timeout-directive` 1 が増えた。上位は変わらず `network-update` 30・`text-decoration-canon` 16・`baseware-root-layout` 15・`ghost-install` 13・`nar-install` 11・`popup-menu-minimal` 10） |
+| `briefing.md` の `[[owner_completed]]` | 14 | **14** |
+| `roadmap-draft.md` の `[[spec]]` が完了済みを載せる | 39 行のうち 20 | **41 行のうち 23** |
+| 一度も起票されなかった仕様名を引く項目 | 107 | **107**（`assets.toml` の `areka-P0-seriko-runtime` 78・`areka-P0-balloon-loader` 27、`shiori.toml` の `areka-P0-shiori-host-32` 2） |
+| 持ち主が空（4 台帳の合計） | — | 1,231（`assets.toml` 364・`sakura-script.toml` 248・`shiori.toml` 619・`property.toml` 0） |
+| `roadmap-draft.md` の波の欄の旧番号（W13〜W17）を含む行 | 70 | **70** |
+
+- 崩れた前提／古くなった位置:
+  - **`install-companion-canon` の分解は、台帳の持ち主を 1 行も動かしていない**。同 spec は要件の段で閉じ（PR#221）、台帳の `owner` に一度も登記していない（`[[spec]]` の表にも行が無い）。同 spec が直す予定だった `assets.toml` の `descript_install` の `*.directory`・`*.source.directory` の行は、今も持ち主が完了 `nar-install`・状態 `implemented` のまま（上の 134 行に含まれる）。この 2 行は後継の `install-companion-reading`（C2-⑥）が、同梱の行は `ghost-standard-balloon`（C3-⑥）・`shell-companion-balloon`（C4 の候補）が書き換える予定＝**本 spec の「持ち主の付け替え」（範囲 2）と同じ行を取り合う**。本 spec は、この 3 本が触る行を付け替えの対象から外すか、3 本の着地の後に回す。
+  - **`emo-text-canon-residue` の片付け**: フォルダは `.kiro/specs/areka-P0-emo-text-canon-residue/` に残り、`roadmap-draft.md` の `[[spec]]` に `none = true`・`owner_count = 0` の行がある。整合検査（`crates/ukadoc-survey/tests/consistency/spec_checks.rs` の「`[[spec]]` の各名前が `.kiro/specs/` の直下か `completed/` に在ること」）が名前を見るので、表の行を消すのとフォルダを消す（または `_rejected/` へ移す）のを同じコミットで行う。台帳の `owner` には 0 行＝それ以外の片付けは無い。残り 1 件を引き取った `shell-balloon` は完了した。
+  - **brief の「検査は今も `completed/` を走査しない」は半分だけ正しい**。整合検査（`crates/ukadoc-survey/tests/consistency/documents.rs`）は既に `.kiro/specs/completed/` の直下を集めており、`spec_checks.rs` の判定 2 つ（`[[spec]]` の名前の実在・`[[owner_completed]]` の行が本当に完了済みか）で使っている。無いのは「台帳の `owner` が完了済みなのに `[[owner_completed]]` に居ない」を赤にする判定。範囲 1 は新しい集め方を作るのでなく、この判定を 1 本足す形で済む。
+  - `briefing.md` の数（5-3）は `status-execution-states`・`translate-pipeline`・`choice-timeout-directive` が手で動かした（`git log 03e8d7d6..` で `doc/ukadoc-coverage/` を触ったのはこの 3 本）。
+- 触るファイル（並走の照合用）:
+  - `doc/ukadoc-coverage/{briefing.md, briefing-*.md, roadmap-draft.md, README.md}`
+  - `doc/ukadoc-coverage/ledger/{assets,shiori,sakura-script}.toml`（持ち主の付け替え・実在しない名前の書き換え）
+  - `doc/ukadoc-coverage/report/*.md`（作り直し）
+  - `crates/ukadoc-survey/tests/consistency/{spec_checks.rs, documents.rs, documents_non_vacuity.rs}`（判定の追加）・必要なら `crates/ukadoc-survey/src/documents/`
+  - `.kiro/specs/areka-P0-emo-text-canon-residue/`（消すか移す）
+- **同じウェーブに置けない相手**（台帳の行を直す未完了 spec・C2〜C3 の今の並び）: `install-companion-reading`（C2-⑥・`assets.toml`）・`mouse-drag-events`（C2-⑦・`shiori.toml` の `OnMouseDragStart`・`OnMouseDragEnd`）・`ghost-standard-balloon`（C3-⑥・`assets.toml` の `balloon`・`default.balloon.path` と同梱の行）。ほかに台帳の `owner` に名前を持つ未完了 spec（`property-catalog-lists` 120 行・`currentghost-property-tree` 64・`anchor-tag-canon` 61・`choice-marker-styling` 39・`balloon-canon-residue` 26 ほか）は、着手した時点で同じ扱いになる。C3 の残りでは `balloon-font-file`（C3-②・`assets.toml` の `font.name` と `sakura-script.toml` の `\f[name]` を着手時に確かめる＝直す見込み）も台帳を触りうる。`surface-element-nesting`・`balloon-lifecycle-events`・`mcp-*` の 3 本の brief は台帳に触れていない（`animated-image-decode` は状態を読むだけ）。並べるなら C3 の着地の後の、台帳を触る spec が 1 本も走らない席。
+- 議題（答えで作業が変わるものだけ）: 
+  1. 上の `descript_install` の行（後継 3 本が触る）を本 spec の付け替えから外してよいか（外せば後継 3 本と並べやすいが、134 行の一部が残る）。
+- 見つけた穴: なし（製品の穴ではない）。

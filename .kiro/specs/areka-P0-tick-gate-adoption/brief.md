@@ -69,3 +69,12 @@ dlp が建てた自走ループ（perf-loop）を**測定側 3 是正を先に�
 
 - 保留のまま。門は今も既定で切（`wintf/src/ecs/world/mod.rs`）。基準の数は 08-23 のもので、その後に毎フレーム・表示・World を触るコミットが約 15 件入った＝測り直しが要る。
 - 着手の前に、開発者方針「長い試行はしない」と両立する短い A/B の測り方へ brief を書き直す。`main.rs`・`tools/perf/`・wintf を触り、計測を汚すので他の spec と並べない。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 保留のままでよい。門は今も既定で切（`crates/wintf/src/ecs/world/mod.rs` の `tick_gate_enabled: false`・`AREKA_TICK_GATE` で上書き）。`tick_gate.rs`・`tick_gate_config.rs` を触ったコミットは 10-02 の後 0。
+- 基準の数（08-23）はさらに古くなった: C2 で毎フレームの処理に関わる変更が入った（`shell-balloon` のシェル内の箱の追従と描画・`translate-pipeline` の運行表の出口・`mcp-server-core`／`mcp-tool-entrances` の tokio の専用スレッドと UI への橋）。着手するなら測り直しから。計測を汚すので他の spec と並べない（10-02 のまま）。
+- 議題・穴: なし。

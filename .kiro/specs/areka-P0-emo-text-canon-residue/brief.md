@@ -85,3 +85,19 @@
 
 - **取り下げ予定（棚卸⑳）・着手しない**。残っていたのは項目 14（折り返しの警告にバルーンの名前を出す）の 1 件だけになった＝項目 12 は 09-24 に直接修正・項目 11 と 15 は `text-typesetting` へ移した。項目 14 は、名前を持つバルーンを入れて同じファイルを触る `areka-P0-shell-balloon` が引き取る（同 brief に記載）。
 - 本フォルダは置いたままにする。消す・移すと網羅台帳の整合検査（`doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` の表が本 spec の名前を持つ）が赤くなる。表から外すのと一緒に `areka-P0-coverage-roadmap-refresh` が片付ける。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: XS（0 タスク＝作業は残っていない）。取り下げ予定のまま・着手しない。
+- 前提の状態: 最後の 1 件（項目 14）の引き取り手 `shell-balloon` が着地した（PR#227）。
+- 崩れた前提／古くなった位置:
+  - **項目 14 は消化済み**: 定数 `BALLOON_NAME_PLACEHOLDER` はソースから消えた（0 件）。折り返しの警告（`actor_attach.rs` の `warn_coarse_wrap_threshold`）と範囲外の `origin` の警告（`actor_decoration.rs` の `warn_ignored_origin`）の `balloon` 欄は、呼び手が渡す名前になった——普通のバルーンは `frame/attach.rs`（装着）と `frame/switch.rs`（バルーンの切替）が `set_balloon_label` で入れる**フォルダの名前**（無ければ `スコープ{番号}のバルーン`）、箱は `balloon.名前`ブレスの名前（`shell-balloon` 要件 3.11・3.12）。
+  - 本 brief が書いていた「descript の `name,` を写す」形とは違う（フォルダの名前を使った）。網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の `name,`（バルーン名）の行は `status = "implemented"`・`owner = "areka-P0-baseware-root-layout"` で、空の担当は残っていない。
+  - 項目 14 の前半（粗いバルーン定義を確かめる道具を持つか）は判断だけで作業ではない＝持たない（警告で知らせる今の形）のままで残件にしない。
+- 触るファイル（並走の照合用）: なし。
+- 議題: なし。
+- 見つけた穴: なし。
+- 片付け: フォルダの削除は今も `doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` の表（本 spec の名前を持つ）の整合検査を赤くするので、`coverage-roadmap-refresh` が表から外すのと一緒に行う（棚卸⑳のまま）。

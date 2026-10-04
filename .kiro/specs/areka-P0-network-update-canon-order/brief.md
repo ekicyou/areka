@@ -82,3 +82,24 @@
 - **設計の前に見る物**: `KanadeMsg::AwaitTalkGap`（台詞の切れ目の口・`areka-kanade/src/msg.rs`）が「前の台詞の終わりを待つ」に使えるかもしれない。新しい口を作る前に確かめる。
 - **本 spec が持たない物（引受先なし＝roadmap の覚え書き）**: 更新のオプション（`checkonly` など）と `OnUpdateCheck*` の 4 語・`other_homeurl_override`。
 - **触るファイル**: kanade の `schedule/steady.rs`・`crates/areka/src/emo2_boot/{ghost_switch.rs 891, mod.rs 878, update_cue.rs}`・`crates/areka/src/ghost_session.rs`・`crates/areka/src/update/`。`emo2_boot` を触る spec とは同時に走らせない。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M（10〜14 タスク）。切る: なし。
+- 前提の状態: すべて着地済み（`network-update`・`update-engine`・`kanade`・`shell-balloon-switch`）。`translate-pipeline` も着地＝更新のイベントの返事の台本も `OnTranslate` を通る（テストの期待に載る）。
+- 崩れた前提／古くなった位置:
+  - **kanade に新しい口は要らない見込み**。`KanadeMsg::AwaitTalkGap { raise: Some(GapRaise{…}), reply }` は「許可の表にあるイベントを送り、その返事の台詞が終わるまで待って 1 回返す」汎用の口で（`schedule/talk_gap.rs` の `begin`・名前の検査は `events::allowed_static` だけ）、差 2（台詞の再生が終わるまで待つ）にそのまま使える。結果 `TalkGap::Reached{ marked: Some(MarkedEnd::NoTalk) }` が「台本を返さなかった」を表す＝差 4（`OnUpdateResultEx` が台本を返さなかったときだけ `OnUpdateResult`）も同じ口か、`RaiseEvent` の返事 `RaiseOutcome::{Script, NoReply}` で書ける。`change.rs` の `GapRaise` の説明の「本仕様では `OnShellChanging` だけ」は使い手の話で、型の制約ではない。
+  - よって本 spec は「kanade の進行」の列（`schedule/*`・`msg.rs`）から外せる見込み（設計で確かめる・確かめたら roadmap の列から外す）。待つ間に台詞がマウスの返事などで置き換わったときの結果（`MarkedEnd::Replaced`）をどう扱うか（置き換わったら先へ進むか）は本 spec が決める。
+  - 進行中は「定常」でないと口が `GapLeft::NotSteady` を返す。読み直し（`BootOrigin::Updated`）の後は新しい kanade になる＝読み直しをまたいで待つ順は今の「後送りの列」で持つ。
+- 触るファイル（並走の照合用）:
+  - `crates/areka/src/update/{procedure.rs 383, worker.rs 263, desk.rs}` と兄弟のテスト（`worker_path_tests.rs`・`desk_reload_tests.rs` を書き換え）
+  - `crates/areka/src/emo2_boot/update_cue.rs`（217）・`crates/areka/src/ghost_session.rs`（873）
+  - 対象ごとの読み直しをするなら `crates/areka/src/emo2_boot/shell_balloon_switch.rs`（442）・`emo2_boot/ghost_switch.rs`（891）
+  - `crates/areka-update/src/{lib.rs 393, error.rs}`（MD5 の取り直し・`run` の中の `md5::md5_hex` の比較）
+  - `doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/ledger/shiori.toml` の備考
+  - kanade は触らない見込み（触るなら `schedule/talk_gap.rs`）
+- 議題（答えで作業が変わるものだけ）: 前回までのまま（対象ごとの読み直しの単位・自動更新〔差 5〕を本 spec で持つか）。新しく足すものは無い。
+- 見つけた穴: なし。並走の照合: `emo2_boot/{ghost_switch, shell_balloon_switch}.rs`・`ghost_session.rs` を触る spec（`makoto-dll-host` の ⒝・`mcp-reload`・`mcp-tool-entrances` の後続）と同時に走らせない。kanade を触らずに済めば、kanade の列の spec（`mouse-drag-events`・`balloon-lifecycle-events`・`property-query-channels`）とは並べられる。

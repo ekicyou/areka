@@ -63,3 +63,21 @@
 - 規模 M（8〜12 タスク）。文字まわりの直列の列。
 - **brief の誤り**: 「一度描いた字は描き直さない」の実体は `surface.rs` ではない。判断は見える範囲の計画（`ScrollPlanner`・`DirtyRect`）と `viewbox_draw` 系の `render_styled` が持ち、`actor` 系の `present_actor` から動く。触るのは `state.rs`・`actor` 系・`viewbox_draw` 系・`viewbox_draw_plan.rs`・場合により `viewbox` 系。
 - **`\_q` は実装が無い**（パーサにも compile にも腕が無い・担当は `sakura-time-directives`）＝「`\_q` の中は即座」はつなぐ先が無い。口だけ用意し、後から着地する側がつなぐ。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M（9〜12 タスク）。切らない。
+- 前提の状態: 機能の前提は無く、満たす（`emo-text-file-split`・`shell-balloon` 着地済み）。列の上では `text-ruby` の後・`balloon-scroll-fade` の前。早送り（`talk-fast-forward`）は列で先に着地する予定なので、その口を使う側になる見込み。`\_q` は今もパーサ・compile に腕が無い（担当 `sakura-time-directives`・据え置き）＝口だけ用意する、は棚卸⑳のまま。
+- 崩れた前提／古くなった位置:
+  - 分割での移り先: 1 コマの流れ `present_actor` は `actor_present.rs`、描き直す範囲の導出（`derive_dirty`・`derive_dirty_with_overhangs`）は `viewbox_diff.rs`、描画（`render_styled`）は `viewbox_draw_render.rs`、統計と描画の設定は `viewbox_draw.rs`。現れる時刻の列は `state.rs` の `TextLayerState::visible`（`partition_point`）のまま。
+  - **シェル内バルーンの箱にも効く**: 箱は同じ `present_actor` と描画を通る（`actor_present.rs` の `TextPlace::Box` の腕は面の挿し場所が違うだけ）。キー `text_reveal` は箱の定義（`balloon.名前`ブレス）も `areka-emo-compose/src/boxes.rs` で同じ `balloon::parse` を通るので書ける＝バルーン定義ごとの値（`ResolvedBalloonText` の側）に載せること。
+  - 箱だけの論点: 箱の面は「表示されている字の矩形」でポインタを受ける（`actor_present.rs` の末尾で `glyph_cells` → `set_hit_cells`）。薄れている途中の字を当たりに入れるか（今の規則のままなら、現れる時刻を過ぎた字は透明度に関わらず当たる）を決める。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-text/src/{state.rs（透明度の純関数・`CueCommand::Custom` の腕で `\![text,reveal,…]`）, actor.rs（ResolvedBalloonText）, actor_present.rs, viewbox_diff.rs, viewbox_draw_render.rs, viewbox_draw.rs, viewbox_draw_plan.rs}`＋新規（透明度の仕組み・`balloon-scroll-fade` と共用）＋`lib.rs`
+  - `crates/areka-parsers/src/balloon/{model.rs, parse.rs}`（`text_reveal`）
+  - `doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）: 箱の当たりの矩形に、薄れている途中の字を入れるか。
+- 見つけた穴: なし。

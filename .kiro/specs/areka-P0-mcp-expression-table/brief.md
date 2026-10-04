@@ -58,3 +58,25 @@ AI エージェントが台本に `\s[n]` を書くには「どの番号がど�
 ## 2026-10-03 ウェーブ C3-⑦（予定・10-03 の再編（開発者「MCP は複合 spec なので早めに着手したい」））
 
 - 段は「優先」。`mcp-tool-entrances`（C2）の design が固定した「自分のツールのファイル」と、同じ C3 の他の spec（`balloon-lifecycle-events` は kanade・`balloon-font-file` は emo-text）の触るファイルを、着手の前に照合する。
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: S〜M（6〜10 タスク）。切らない。
+- 前提の状態: `mcp-tool-entrances` は着地済み（PR#223）。前提は満たす。
+- 崩れた前提／古くなった位置:
+  - ダミーの場所: アプリ本体側 `crates/areka/src/mcp/get_expression_table.rs` の `handle`（`NG:not implemented yet` の 1 文）と `get_expression_table_tests.rs`（同じ文言を期待＝書き換える）。プロトコル側 `crates/areka-mcp/src/tools/get_expression_table.rs` は定義と `Args { ghost_name: Option<String> }` まで完成＝触らない見込み。`ghost_name` の省略・空は `dispatch` が `Omitted::Reject` で `NG:Specified ghost is not active` にしてから来る（ここで扱わない）。
+  - 今のシェルの所在: `GhostSession::current_shell_folder()` と `ghost_dir()`（`crates/areka/src/ghost_session.rs`）。キャラクタ名は `GhostSession::names()`（`GhostNames`）。
+  - `areka-parsers` の shell は今も descript の見出しを捨て（`shell/model.rs` の冒頭の注記「descript ヘッダ・charset はモデルに保持しない」）、`surfacetable.txt` の解析は無い（ソース全域で 0 件）。`Shell.aliases`（`SurfaceAlias`・surfaces.txt の `sakura.surface.alias` 等のブレス）はある。
+  - `shell-balloon`（C2）が `shell/model.rs`・`decode.rs` へ `balloon.名前`ブレスの読み取りを足した。同じ 2 ファイルは C3 の `surface-element-nesting` も触る（「シェルの element」の列）。
+- 触るファイル（並走の照合用）:
+  - `crates/areka/src/mcp/get_expression_table.rs`・`get_expression_table_tests.rs`
+  - `crates/areka-parsers/src/shell/` に**新規**の読み取り（例 `surfacetable.rs`＋兄弟テスト）と `shell/mod.rs` の `mod`／`pub use` の行。**`model.rs`・`decode.rs` の `Shell` へ欄を足さない形を先に探す**（`surfacetable.txt` は別ファイルなので別の型で返せる）。足すなら `surface-element-nesting` と同時に走らせない。
+  - 触らない: `crates/areka/src/mcp/mod.rs`・`resolve.rs`・`crates/areka-mcp/src/**`・`Cargo.toml`
+- 議題（答えで作業が変わるものだけ）:
+  - 説明の出どころと順（`surfacetable.txt`／surfaces.txt の alias／descript）と、表に載せる surface の範囲（定義全部か説明のあるものだけか）——SSP の実測（開発者の机の SSP）で 1 度とる。答えで「パーサに何を足すか」が変わる。
+- 見つけた穴: なし。
+
+## 2026-10-04 ウェーブ C3-⑧（棚卸㉑）
+
+- 段は「優先」。C3 は 11 本並走（`roadmap.md`「ウェーブ編成」の C3 の行が正本）。着手は最新の main から。
+- 同じウェーブの約束: `crates/areka/src/mcp/mod.rs`・`handler.rs` を触らない。表の読み手は新規 `crates/areka-parsers/src/shell/surfacetable.rs`＋`shell/mod.rs` の 1 行で、`Shell` 型（`model.rs`・`decode.rs`＝C3-⑤ の場所）に欄を足さず別の型で返す。

@@ -95,3 +95,34 @@
 - 段は**優先**（起票の日に開発者が上げた）。roadmap の C2-⑦。C2-① `shell-balloon`（10-04 に PR#227 で完了）が `crates/areka/src/input_events/` に足した変更の上に乗せる。
   - 10-04 に shell balloon セッションから聞いた範囲: `input_events/mod.rs` に mod 宣言 2 行（`shell_box`・`shell_box_handler`）と、`on_char_pointer_moved`・`on_char_pointer_pressed` の先頭に箱の上の操作をシェルへ送らない早期 return を足した。`attach_char_pointer_handlers` の本体には触っていない。
   - 箱の中の押下は、選択肢と中断以外はシェルへの操作（`shell-balloon` 要件 9.1）。ドラッグの送出は wintf の `OnDragStart`／`OnDragEnd` の側に置くので、この前段とは別の経路になる。箱の上から始めたドラッグもシェルのドラッグとして届くことを、着手のときに確かめる。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: S（6〜9 タスク）。切る: なし。
+- 前提の状態: すべて着地済み（`drag-click-without-move`・`translate-pipeline`〔PR#226〕・`shell-balloon`〔PR#227〕）。
+- 崩れた前提／古くなった位置:
+  - **`steady.rs` は分割されていない**。`translate-pipeline` は「`step` の出口で捕まえる」設計を採り、`schedule/steady.rs` は 929 行のまま（上限 1,000 まで 71 行）。`on_mouse` の `match input.kind` に 2 つの腕（各 8 行ほど）を足すのは収まるが、同じ列の後続（`balloon-lifecycle-events`・`sakura-time-critical`・`property-query-channels`）の分も足すと上限に近づく。`schedule/mod.rs` も 937 行。
+  - 送ってよい名前の表の個数のテストは `events_tests.rs` ではなく `schedule/events_change_tests.rs` の `assert_eq!(ALLOWED_EVENT_IDS.len(), 46)`。表の末尾は `translate-pipeline` の `OnTranslate`。
+  - 組み立ての関数を外へ見せる一覧は `crates/areka-kanade/src/lib.rs` の `pub mod events` の `pub use` の並び（統合テストが使う）。新しい 2 関数をここへ足す。
+  - `on_char_drag_end` の定義は `placement/spawn.rs` ではなく `crates/areka/src/placement/follow/drag_follow.rs`（`pub(crate)`）。`spawn.rs` は `OnDragEnd(on_char_drag_end)` を付けるだけ。窓を作る本番の経路は `ghost_session.rs` の `prepare_ghost_windows` の 1 つで、`spawn_ghost_windows` の直後に `input_events::attach_char_pointer_handlers` が走る＝ここで `OnDragEnd` を包みに差し替えれば placement の付けたものを上書きできる（同じ窓に同じ部品の `insert` は置き換え）。
+  - wintf のハンドラは `Phase<DragEndEvent>`（Tunnel／Bubble）で呼ばれる。包みは今の `on_char_drag_end` を必ず呼び、知らせは片方の相でだけ 1 回送ること（二重送出に注意）。
+  - 経路は brief の推奨どおり `KanadeMsg::Mouse`（`MouseEventKind` に 2 つ足す）がよい。汎用の `KanadeMsg::RaiseEvent` でも送れるが、それだと `on_mouse` の「終了の握手の待ちは送らない」防御を通らず、後で `sakura-time-critical` が `on_mouse` に置く抑えにも掛からない。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-kanade/src/msg.rs`（`MouseEventKind`）
+  - `crates/areka-kanade/src/schedule/events.rs`（組み立ての 2 関数・`ALLOWED_EVENT_IDS` の末尾 2 行）
+  - `crates/areka-kanade/src/schedule/steady.rs`（`on_mouse` の `match input.kind` の腕）
+  - `crates/areka-kanade/src/lib.rs`（`pub mod events` の `pub use`）
+  - `crates/areka-kanade/src/schedule/events_change_tests.rs`（個数 46→48）・テストは新しい兄弟ファイル（`steady_flow_tests.rs` 925 行・`events_tests.rs` 787 行）
+  - `crates/areka/src/input_events/mod.rs`（`attach_char_pointer_handlers` で `OnDragStart`・`OnDragEnd` を付ける）＋新規 `crates/areka/src/input_events/drag.rs`（包みと送出）と兄弟のテスト
+  - `doc/ukadoc-coverage/ledger/shiori.toml`（`OnMouseDragStart:1`・`OnMouseDragEnd:1`）と生成物 `doc/ukadoc-coverage/report/{shiori,summary}.md`
+- 議題（答えで作業が変わるものだけ）: なし（経路・座標・包みの置き場はどれも勝者が明白）。
+- 見つけた穴: なし。並走の照合: `balloon-lifecycle-events` とは `events.rs` の表の末尾・`events_change_tests.rs` の個数の行・`lib.rs` の `pub use` の並びの 3 か所で必ず文字の衝突が起きる（中身は独立）。`sakura-time-critical` とは `steady.rs` の `on_mouse` という同じ関数を触る（向こうは関数の先頭の防御・こちらは `match` の腕）。`areka` のクレートでは、どちらとも同じファイルを触らない（`balloon-lifecycle-events` のバルーンの側は `emo2_boot/balloon_visibility*`・`input_events/user_break.rs`）。
+- 追記（棚卸㉑の分割の指示）: kanade の `schedule/steady.rs`（929 行）・`schedule/mod.rs`（937 行）は分割されていない。本 spec の変更を足して 1,000 行を超えるなら、先頭のタスクで分割する。
+
+## 2026-10-04 ウェーブ C3-④（棚卸㉑）
+
+- 段は「優先」。C3 は 11 本並走（`roadmap.md`「ウェーブ編成」の C3 の行が正本）。着手は最新の main から。
+- 同じウェーブの約束: kanade を触るのは同じウェーブで本 spec だけ。`steady.rs`・`schedule/mod.rs` が 1,000 行を超えるなら先頭のタスクで分割する。areka の側は `input_events/mod.rs` と新規 `input_events/drag.rs` だけ（`emo2_boot/`・`frame/` に触らない）。

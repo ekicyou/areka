@@ -59,3 +59,26 @@
 - 正典は ukadoc。`\t` の終わり方と止めるイベントの範囲は要件の段で ukadoc を引き直して確定する（SSP 実測主義は取らない）。
 - 決定論テスト必達。`\t` の無い台本の既存テストは 1 本も変えない。
 - 規模の見立て: S〜M（6〜10 タスク）。段は「その他」（正典の穴で、`\t` を使うゴーストが現れるまで利用者に見える害は無い）。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: S〜M（7〜10 タスク）。切る: なし。
+- 前提の状態: `status-execution-states`（PR#220）は着地済み。差し替え口は `crates/areka-kanade/src/status.rs` の導出表の「5. timecritical ← SEAM(Req6.1/6.3)」の行。
+- 崩れた前提／古くなった位置:
+  - `\t` は今、字句で裸の `t`（`Token::Bare`）になり、`crates/areka-parsers/src/sakura/decode.rs` の `decode_bare` の残りの腕 → `decode_passthrough_bare` → `Instruction::Raw("\\t")` → コンパイルで捨てられる。
+  - 真似る雛形は `nouserbreak` の作り（`status-execution-states`・`balloon-break`）がそのまま使える: 台本の合図を cue へ写す → 受け口（`crates/areka/src/emo2_boot/user_break_cue.rs` の `NoUserBreakCueSink` と同じ形）→ `KanadeMsg::ExecutionState(ExecutionStateUpdate::…)` → `status.rs` の `ExternalStates` の写し → `State::snapshot_with_choice`（`schedule/mod.rs`）が「再生中のトーク かつ 写しの旗」で `ExecutionSnapshot` に載せる。
+  - **コンパイルを触らずに済む道がある**: `decode_bare` で `"t"` を内部の `\!` キャリアへ写せば（裸の `\+` を `\![change,ghost,random]` へ写している腕が先例）、汎用キャリアのまま cue へ届く＝`crates/areka-sakura/src/compile.rs`（台本のコンパイルの列）に触れない。正典の `\t` の名前とは別の内部名を使うので、消費者の台帳の選び手が台本の書き手から見える `\![…]` とぶつからないことを要件で確かめる。
+  - マウス系の抑えは `crates/areka-kanade/src/schedule/steady.rs` の `on_mouse` の先頭（今の「終了の握手の待ちは送らない」防御の隣）に置くのが素直。`schedule/mod.rs` の `route` の `Input::Mouse` の腕に置けば `steady.rs` に触れずに済む（`mod.rs` は 937 行・`steady.rs` は 929 行＝どちらも上限に近い。前回までの「`steady.rs` は分割済み」は誤りで、分割はされていない）。
+  - `mouse-drag-events` が `OnMouseDragStart`／`OnMouseDragEnd` を同じ `KanadeMsg::Mouse` の道で足す＝抑えを `on_mouse`（または `route` の腕）に置けばドラッグの 2 語も自動で止まる。逆にどちらかを `RaiseEvent` の道で送る spec が出ると抑えから漏れる。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-parsers/src/sakura/decode.rs`（`decode_bare` の `"t"` の腕）
+  - `crates/areka-kanade/src/status.rs`（`ExecutionStateUpdate`・`ExternalStates`・`ExecutionSnapshot`・導出表の 5 行目）・`status_derive_tests.rs`
+  - `crates/areka-kanade/src/schedule/mod.rs`（`snapshot_with_choice`・`on_execution_state` の記録の名前・`route` の `Input::Mouse` の腕に抑えを置くならここ）または `schedule/steady.rs`（`on_mouse`）
+  - 新規 `crates/areka/src/emo2_boot/time_critical_cue.rs`・`emo2_boot/consumer_ledger.rs`（859）・`emo2_boot/mod.rs`（883・受け口の並び）
+  - `doc/ukadoc-coverage/ledger/sakura-script.toml`（`_5ct:1`）
+- 議題（答えで作業が変わるものだけ）: 区間で止める「マウス系など」の範囲（`OnMouseMove`・`OnMouseDoubleClick`・着地後の `OnMouseDrag*`・`OnFileDrop2` などの投げ込み・`OnSecondChange` を含めるか）。ukadoc の本文は「マウス系などのイベント通知」とだけ書く＝要件で決める（前回どおり）。
+- 見つけた穴: 区間の終わり方のうち「選択の確定」と「置き換え」は、どちらも新しいトークが始まる＝「再生中のトーク かつ 写しの旗」の式だと、UI の旗を下ろし忘れると新しいトークまで区間が続く。`nouserbreak` の旗を誰がいつ下ろしているかを着手のときに読み、同じ点で下ろす（`\t` は「再度書いても解除されない」・`\e` かスクリプトブレークまで）。並走の照合: `mouse-drag-events` とは `on_mouse` を分け合う（抑えを `route` の腕へ置けば文字の衝突は無い）。`balloon-lifecycle-events` とは kanade で同じ関数を触らない見込み。
+- 追記（棚卸㉑の分割の指示）: kanade の `schedule/steady.rs`（929 行）・`schedule/mod.rs`（937 行）は分割されていない。本 spec の変更を足して 1,000 行を超えるなら、先頭のタスクで分割する。

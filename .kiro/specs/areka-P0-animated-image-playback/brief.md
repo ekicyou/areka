@@ -69,3 +69,21 @@
 - 規模 M〜L（15〜20 タスク）。brief の記述は実物と一致（seriko の表は `Random`・`BindRandom`・`sometimes`・`rarely` だけを記録・`is_implemented` は Overlay だけ・`CAPACITY = 3`）。軽い違い 1 つ＝`balloon_tables` は `assets.rs` が面ごとに作っている（emo2 では中身が空なだけ）。
 - **触るファイル**: `crates/areka-seriko/src/{table.rs, timeline.rs, looper.rs}`・`crates/areka-emo-compose/src/{method.rs, plan.rs}`・自動アニメーションの合成サーフェスを作る場所（設計で決める）・`doc/ukadoc-coverage/ledger/assets.toml`・検体。
 - **議題**: 合成サーフェスの番号の空間／ファイルの繰り返し回数を守るか／`CAPACITY` を変えるか。
+
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M〜L（15〜20 タスク）。変わらず。前提の 2 本の設計しだいで上下する（子の時計を `surface-element-nesting` が作り切れば下限側）。
+- 前提の状態: 未（`animated-image-decode`・`surface-element-nesting` のどちらも C3 で未着手）。
+- 崩れた前提／古くなった位置:
+  - `shell-balloon` の着地で seriko に入ったのは `crates/areka-seriko/src/actor.rs` の `BalloonResolve::NameForm` の腕を `debug!` へ下げた 1 か所だけ。`table.rs`（`Random`・`BindRandom`・`sometimes`・`rarely` だけを記録）・`timeline.rs`・`looper.rs`（`on_surface_changed`）・`areka-emo-compose` の `method.rs`（`is_implemented` は `Overlay` だけ）・`plan.rs`（`is_top_level`）・`areka-emo-present/src/cache.rs`（`CAPACITY = 3`）は棚卸⑳のまま。
+  - `shell-balloon` が入れた箱の表（`areka-emo-compose/src/boxes.rs` の `BoxLayout`）はサーフェス番号を鍵に持つ。本 spec が作る「合成のサーフェス」は surfaces.txt の文面に現れないので `parse_boxes` には載らず衝突しないが、番号の空間を決めるときは `BoxLayout` と seriko の表の両方で作者の番号と分かれていることを確かめる。
+  - 前提の 2 本が「`AtlasKey`・`manifest.rs`・`AtlasTable::new` を変えない」設計で着地すると、コマの引き方は atlas の `table.rs` に足される別の口になる（`animated-image-decode` の棚卸㉑の節）。本 spec の合成のサーフェスの element はその口でコマを引く＝`areka-emo-compose/src/atlas_bind.rs` を触る見込みが新たに出た。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-seriko/src/{table.rs, timeline.rs, looper.rs}`（`always` と繰り返し）
+  - `crates/areka-emo-compose/src/{method.rs, plan.rs, atlas_bind.rs}`（`import`・コマの引き方）
+  - 合成のサーフェスを作る場所（設計で決める。候補は `areka-emo-present/src/shell_target.rs` の読み込みの直後か compose の畳み込み）
+  - `crates/areka/src/emo2_boot/assets.rs`（バルーンの面の `balloon_tables`）
+  - `doc/ukadoc-coverage/ledger/assets.toml`・新規の検体
+- 議題（答えで作業が変わるものだけ）: 棚卸⑳のまま（合成サーフェスの番号の空間／ファイルの繰り返し回数を守るか／`CAPACITY` を変えるか）。
+- 見つけた穴: 無し。

@@ -67,3 +67,25 @@
 - 優先度 中。**`emo-text-canon-residue` への依存は消えた**（重なっていた項目 15 が `text-typesetting` へ移った）。本当の制約は `layout` 系・`viewbox_draw` 系を `text-typesetting`・`text-ruby`・`shell-balloon`・`balloon-scroll-fade` と共有すること＝文字まわりの直列の列に並ぶ。
 - 記述は実物と一致（寄せは `draw.rs` に直書き・影のキーは予約だけ）。
 - **20 タスクを超えるおそれ**＝要件の段で「影（描く層）」と「寄せ（配置の層）」に分ける。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M〜L（17〜21 タスク）。**今は切らない**（本 spec は `text-decoration-canon` から一度切り出したもの＝上限を少しまたぐ理由でさらに削らない）。要件の段で 20 を超えたら、次の境界で**影 → 寄せの順に**切る。
+  - **① 寄せ（配置の層）・M（10〜13）**: `\f[align]`／`\f[valign]`（3 書字方向・縦書きの写像は bvc の裁定のまま）と追加登記 4 件（`\_l` 直後の `align` の戻し・`\_l` の後の中央揃えのインデント・SC8 の裁定・行送り方向へ後戻りした行のあふれの判定）。
+  - **② 影（描く層）・S（6〜8）**: `\f[shadowcolor]`／`\f[shadowcolor,none]`／`\f[shadowstyle]`・descript の影 4 キーと無効表示の影 4 キーの配線（`BalloonModel::font_shadow_raw`・`disable_font().shadow_raw()` は在る）・予約名 `canvas.rs` の `RESERVED_EFFECT_SHADOW` の実体化・影の複製は `D2D1_DRAW_TEXT_OPTIONS_NONE`。
+  - 順序（切ったとき）: ②影を先に。配置の層に触らず小さいので、先に済ませると①の要件（SC8）に集中できる。どちらも文字の列の中で直列（`look.rs`・`viewbox_draw_render.rs` を共有）。
+- 前提の状態: `text-decoration-canon`・`cursor-tag-canon`・`emo-text-line-height-canon`・`emo-text-file-split` は着地済み。列の上では `balloon-scroll-fade` の後。`text-typesetting`（同じ折り返し・配置）が先に着地している前提で並んでいる＝その意味では未。
+- 崩れた前提／古くなった位置:
+  - 分割での移り先（File Structure Plan のとおり）: `\_l` 直後の寄せの戻しは **`layout_scan.rs` の `Scan::cursor_move`**、行矩形の置き場所は **`layout_scan.rs` の `finish_line`**、後戻りした行のあふれの所見は **`layout.rs` の `LayoutEngine::visible_window`**（固定しているテスト `layout_cursor_overflow_tests.rs` は今 `layout_scan.rs`＋`layout_scan_glyph.rs` を読む）。行の描画は `viewbox_draw_render.rs`。寄せの直書き（`DWRITE_TEXT_ALIGNMENT_LEADING`・`DWRITE_PARAGRAPH_ALIGNMENT_NEAR`）は今も `draw.rs` の `DirectionRecipe` の組み立ての中。
+  - Constraints の「`layout.rs` 955 行＝新規ファイルで足す」は古い（`layout.rs` 489・`layout_scan.rs` 428・`layout_scan_glyph.rs` 174 行）。
+  - 所有外のキーの判定は `look.rs` の `UNOWNED_KEYS`（`align`・`valign`・`shadowcolor`・`shadowstyle` の 4 つ）のまま。
+  - **シェル内バルーンの箱**: `\f` の指定は箱の `font.follow`（`Scope`＝スコープに付いて回る／`Balloon`＝箱だけ・`areka-emo-compose/src/boxes.rs` の `FontFollow`、文字の層では `state_decoration.rs` と `actor_box.rs`）に従う。寄せ・影を `TextLook` の欄として足せば、この振り分けに自動で乗る（`reset_decoration` が `TextLook` を丸ごと置き換えるのと同じ理由）。descript の影キーは箱の定義でも `balloon::parse` を通る。
+- 触るファイル（並走の照合用）:
+  - ①: `crates/areka-emo-text/src/{layout.rs, layout_scan.rs, layout_scan_glyph.rs, cursor_tag.rs, draw.rs（DirectionRecipe）, look.rs, state_decoration.rs}`・`layout_cursor_overflow_tests.rs` ほか兄弟テスト・`crates/areka-parsers/src/sakura/decode.rs`（`"f"` の腕の内側）
+  - ②: `crates/areka-emo-text/src/{look.rs, canvas.rs, balloon_overrides.rs, viewbox_draw_render.rs, viewbox_draw_decoration.rs}`
+  - 共通: `doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）: SC8（縦書きでのインデントの軸）の裁定（brief のまま・①の要件で）。
+- 見つけた穴: なし（後戻りした行が境界の外に置き去りになる所見は brief の追加登記 4 のまま。今の決定論テストが今日の値を固定している）。

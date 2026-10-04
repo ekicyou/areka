@@ -61,3 +61,29 @@ AI エージェントは台本を流した後、「エラーが出たか」「�
 ## 2026-10-03 ウェーブ C3-⑧（予定・10-03 の再編（開発者「MCP は複合 spec なので早めに着手したい」））
 
 - 段は「優先」。`mcp-tool-entrances`（C2）の design が固定した「自分のツールのファイル」と、同じ C3 の他の spec（`balloon-lifecycle-events` は kanade・`balloon-font-file` は emo-text）の触るファイルを、着手の前に照合する。
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M（8〜12 タスク）。切らない。
+- 前提の状態: `mcp-tool-entrances` は着地済み（PR#223）。前提は満たす。`network-update` も完了済み（Adjacent の「α の着地後」は済んだ）。
+- 崩れた前提／古くなった位置:
+  - ダミーの場所: アプリ本体側 `crates/areka/src/mcp/get_log.rs` の `handle(_world, _args, reply)`（`ghost_name` を解決しない形・`dispatch` の `ToolCall::GetLog` の腕）と `get_log_tests.rs`（`NG:not implemented yet` を期待＝書き換える）。プロトコル側 `crates/areka-mcp/src/tools/get_log.rs` は `Args { log_type, ghost_name, since_id: Option<i64>, max_count: Option<i64> }` まで完成。`ghost_name` の空の文字列はそのまま届く（tool-entrances の design「`get_log` には空のまま届く」）＝空の扱いは本 spec が決める。
+  - tracing の初期化は今も `crates/areka/src/main.rs` の `fn main()` の先頭の `tracing_subscriber::fmt().with_env_filter(…).init()` の 1 か所。`main.rs` は 957 行（上限 1,000）。tool-entrances の約束では `main.rs` は「3 段目が触らない共有ファイル」＝本 spec は理由を要件に書いて数行だけ触る（`registry().with(fmt 層).with(履歴の層)` への組み替え）。
+  - 依存は足さずに済む: `tracing-subscriber`（ワークスペースの `version = "0.3", features = ["env-filter"]`・既定機能に `registry`・`fmt`・`tracing-log` を含む）で層を重ねられる。時刻の `yyyy/mm/dd hh:mm`（現地時刻）は `windows` の `Win32_System_SystemInformation`（宣言済み）の `GetLocalTime` で足りる。
+  - 層を差す書き方の注意: `log-capture-kit/tests/with_default_guard_test.rs` が「捕捉先を直接差す呼出」の新設をワークスペース全体で見張っている。`SubscriberInitExt::init()` で組めば当たらない見込みだが、着手時に見張りの 3 語と照らす。
+  - 出す側の行に target を足す案は触るファイルが多い（`crates/areka-update/src/`・`crates/areka/src/update/`・`crates/areka/src/install/`・起動の節目＝`ghost_session.rs`・`emo2_boot/ghost_switch.rs`）。いずれも他の spec（`install-companion-reading`・`install-live-target-hazards`・`network-update-canon-order`・`mcp-reload`）と重なる。tracing の既定の target はモジュールのパス（`areka_update::…`・`areka::install::…`）なので、**既存の target とモジュールのパスで振り分ける**なら出す側を 1 行も触らずに済む。
+- 触るファイル（並走の照合用）:
+  - `crates/areka/src/mcp/get_log.rs`・`get_log_tests.rs`
+  - **新規**の履歴の層（例 `crates/areka/src/log_history.rs`＋兄弟テスト。`mcp/` の下に置くなら `mcp/mod.rs` を触らないよう `get_log.rs` の子モジュールにする）
+  - `crates/areka/src/main.rs`（初期化の組み替えと `mod` 1 行）
+  - target の取り決めの文書（`doc/` の下・新規。`mcp-kanade-tools`・`mcp-strict-errors` が読む）
+  - 出す側の行は上の振り分けを選べば 0 件
+- 議題（答えで作業が変わるものだけ）:
+  - 種別への振り分けを「出す側の行に target を足す」か「既存のモジュールのパスと target で振り分ける」か（前者は 5 か所以上のファイルを触り並走を崩す・後者は 0 件）。
+  - 履歴の層の絞り込みは `RUST_LOG` と独立にするか（全体の `EnvFilter` の下に置くと、利用者が `RUST_LOG=areka_mcp=debug` のように絞ったとき error 種別が履歴に残らない＝層ごとの filter にする必要がある）。
+- 見つけた穴: なし。
+
+## 2026-10-04 ウェーブ C3-⑨（棚卸㉑）
+
+- 段は「優先」。C3 は 11 本並走（`roadmap.md`「ウェーブ編成」の C3 の行が正本）。着手は最新の main から。
+- 同じウェーブの約束: `crates/areka/src/mcp/mod.rs`・`handler.rs` を触らない。出す側の行に target を足さず、既存のモジュールのパスで振り分ける（`install/`・`update/`・`areka-update` に触らない）。`main.rs` は tracing の初期化だけ（理由を要件に書く）。

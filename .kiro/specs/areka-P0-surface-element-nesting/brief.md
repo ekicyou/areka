@@ -118,3 +118,34 @@ surface100
 ## 2026-10-03 ウェーブ C3-③（予定・10-03 の組み直し（開発者「1 バグ・2 リリース関係・バルーン関係・アニメーション画像関係・3 その他」））
 
 - 段は「優先」。C3 は C2 の着地で brief が動くので、着手の前に同じウェーブの他の spec と触るファイルを照合し直す（`roadmap.md`「ウェーブ編成」の C3 の行）。
+
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M〜L（16〜21 タスク）。上限 20 の境目は変わらず。一度も切り出していないので削らずに進める（24 を超えたときの継ぎ目は棚卸⑳のとおり「静的な入れ子（parser・atlas・合成・当たり判定）」と「子の時計（seriko・`PatternState`・`ComposeKey`）」）。下の「揃えない」を採れば 1〜2 タスク減る。
+- 前提の状態: `shell-balloon` は着地済み（PR#227）＝満たす。
+- 崩れた前提／古くなった位置:
+  - **`shell-balloon` は `Element` の型に触らなかった**（完了 design の論点 B「B-1 の変形」）。箱は同じ文面を読む 2 つ目の転記 `areka_parsers::shell::parse_boxes` → `ShellBoxes`（新規 `crates/areka-parsers/src/shell/boxes.rs`）で拾い、畳み込みは `crates/areka-emo-compose/src/boxes.rs` の `fold_boxes`（`BoxLayout`・`BoxReport`）、読み込みは `crates/areka-emo-present/src/shell_target.rs` の `load_shell_target`。`model.rs` は無改変、`decode.rs` は `parse_targets` を `pub(super)` にしただけ、`fold.rs` は `expand_targets` を `pub(crate)` にしただけ、`areka-emo-atlas` と `plan.rs`・`hit.rs` は無改変。＝本 spec が乗る画像の側の土台（`Element{layer, path}`・`decode_elements` は `overlay` だけ・`manifest.rs` の `collect_elements` は全 element の道を鍵へ入れる・`plan.rs` の `is_top_level`）は棚卸⑳の記述のまま。
+  - そのため brief の「`shell-balloon` の `balloon` と合わせて 1 つの列挙にする」「後から着地した方が 3 通りの読み分けを揃える」は前提が変わった。`decode_elements` は `overlay` の行しか読まず、`balloon` の行は `parse_boxes` の側にしか来ないので、ファイル名の欄が数字だけの `overlay` 行をサーフェスとして読むだけで 3 通りは衝突しない（名前が数字の箱 `elementN,balloon,100,…` は今後も箱）。列挙へ揃えると `ElementPath::new` を書く 29 ファイルへ波及する（棚卸⑳の 20 から増えた）。
+  - 内側の `balloon` の警告の置き場所が具体になった: 箱の表は `fold_boxes` がサーフェス番号ごとに作るので、子として置かれたサーフェスの箱は黙って使われないだけになる。警告は `boxes.rs`（compose）か `shell_target.rs` の報告の 1 か所で出す。
+  - wintf の兄弟の重なり順（描画は `visual_sync.rs` の `visual_hierarchy_sync_system` が先頭の子を最前面、当たり判定は `tree_iter.rs` の `DepthFirstReversePostOrder` が最後の子を最前面）は、**`shell-balloon` も裁定していない**。`shell-balloon` は窓の子を `[差し込み口, 箱…, 絵]` の順に挿し（`actor_box.rs` の `box_child_index`）、箱は絵より手前に描かれるが、当たり判定は絵が先に引かれる（`surface_hit_cells_tests.rs` の「絵が不透明なら今までどおり絵が受ける」）。窓のハンドラの前段が `shown_boxes` の四角で箱を先に見るので実害は出ていない。本 spec の子サーフェスは 1 枚の絵へ合成される（`flatten_surface`）ので窓の子は増えず、この裁定を本 spec に乗せる必要はない＝重なり順を実際に分ける `balloon-element-order` の要件へ送るのが筋。
+  - `PatternState` の欄 `frames` は私有のまま（`pattern.rs`）。子の時計を別の欄で足せば、型を名指しする 82 ファイルへの波及は避けられる。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-parsers/src/shell/model.rs`（数字だけの判定を `ElementPath` に足すなら。下流で読むなら触らない）
+  - `crates/areka-emo-atlas/src/manifest.rs`（`collect_elements`・`resolve_indirect` で数字だけの element を画像の鍵から外し、指す先へたどる）
+  - `crates/areka-emo-compose/src/{plan.rs 730, atlas_bind.rs, hit.rs 714, fold.rs, pattern.rs, boxes.rs}`
+  - `crates/areka-seriko/src/{table.rs, looper.rs, actor.rs 647, state.rs}`
+  - `crates/areka-emo-present/src/cache.rs`（`ComposeKey`）・必要なら `shell_target.rs`（内側の箱の警告）
+  - 新規: 検体（入れ子のシェル）・兄弟のテストファイル
+  - `doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）:
+  1. 「3 通りを 1 つの列挙に揃える」をやめてよいか（推し: やめる。`Element` は画像とサーフェスの 2 通りを `ElementPath` のまま下流で読み、箱は `ShellBoxes` のまま。揃えると 29 ファイルへ波及し、`shell-balloon` が構造で守った「箱の無いシェルは前と同じ」の保証も崩れる）。
+  2. 子の時計の持ち方・pattern が指すサーフェスの内側を動かすか・着せ替え（bind）を子へ持ち込むか（棚卸⑳から据え置き）。
+- 見つけた穴:
+  - 今の main でも、数字だけの element（`element1,overlay,100,…`）を書いたシェルは、`manifest.rs` の `collect_elements` が `100` を画像の鍵に入れ、`bake`（`lib.rs`）が `100` というファイルを読みに行って `NotFound` を記録する。黙ってはいないが、本 spec の着地までは「部品が描かれない＋読み込み失敗の記録」になる（SSP と同じ見た目）。
+  - 同じ C3 の `mcp-expression-table` が表情の説明を読むために `crates/areka-parsers/src/shell/model.rs`（descript の見出しを捨てている注記の所）か `decode.rs` を触る見込み＝本 spec と同時に走らせるなら、本 spec は `model.rs`・`decode.rs` に触らない形（数字だけの判定を compose 側に置く）にする。
+
+## 2026-10-04 ウェーブ C3-⑤（棚卸㉑）
+
+- 段は「優先」。C3 は 11 本並走（`roadmap.md`「ウェーブ編成」の C3 の行が正本）。着手は最新の main から。
+- 同じウェーブの約束: `crates/areka-parsers/src/shell/mod.rs`（C3-⑧ が 1 行足す）・`AtlasKey`・`AtlasTable::new` の形・emo-text・`input_events/` に触らない。数字だけの判定は compose の側に置く。

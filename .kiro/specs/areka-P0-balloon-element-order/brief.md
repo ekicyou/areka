@@ -54,3 +54,24 @@
 ## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
 
 - `shell-balloon` の追跡 spec。element の型とシェルのパーサ・emo-compose／emo-present の合成を触る＝`surface-element-nesting`・`animated-image-playback` と同時に走らせない（シェルの element の直列の列）。
+
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M（10〜14 タスク・初めての見積り）。合成を分ける案なら上限側、文字を合成へ描き込む案は性能の確かめが増えてさらに上がりうる。
+- 前提の状態: `shell-balloon` は着地済み（PR#227）。`animated-image-playback`（roadmap の台帳の前提）は未。シェルの element の直列の列の 4 本目なので、`surface-element-nesting`・`animated-image-playback` の後。
+- 崩れた前提／古くなった位置（`shell-balloon` が実際に作った形）:
+  - 箱の文字の面は**差し込み口の下ではなく、シェルの窓の直接の子**（完了 design の論点 C「C-2 の変形」）。窓の `Children` は `[差し込み口, 箱…, 合成済みの面]` の順で、箱は差し込み口の直後に element番号の大きい順に挿す（`crates/areka-emo-text/src/actor_box.rs` の `box_child_index`・挿すのは `surface_window_child.rs` の `TextSurface::attach_window_child`）。brief の Current State の「窓の子は差し込み口（手前）と合成済みの面（奥）の 2 つ」は古い。
+  - 「最初の版の縮め」の実体は 2 か所: 描画は常に画像より手前（上の並び）、警告は `crates/areka-emo-compose/src/boxes.rs` の `place`（画像の element の最大の番号より小さい番号の箱を採ったうえで `BoxIssue` へ載せる）。撤去するのはこの 2 か所。
+  - 箱の当たり判定は wintf の当たり判定に「表示されている字の矩形のマスク」で乗り（`surface_window_child.rs` の `set_hit_cells`）、操作は窓へ上がって窓のハンドラの前段（`crates/areka/src/input_events/shell_box.rs`）が `shown_boxes` の四角で箱を先に見る。
+  - **wintf の兄弟の重なり順は描画と当たり判定で逆のまま**（描画: `visual_sync.rs` の `visual_hierarchy_sync_system` は先頭の子が最前面／当たり判定: `tree_iter.rs` の `DepthFirstReversePostOrder` は最後の子が最前面）。`shell-balloon` は裁定せず、この逆を前提に組んだ（`surface_hit_cells_tests.rs`「絵が不透明なら今までどおり絵が受ける」）。合成を上下 2 枚以上の窓の子へ分ける案では、「箱より手前の画像」の上のクリックが奥の画像へ当たる・奥の画像の上で箱が先に当たる、が初めて表に出る＝**この裁定は本 spec の要件に乗せるのが筋**（`surface-element-nesting` は子を 1 枚へ合成するので窓の子が増えない）。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-present/src/{mount.rs, presenter.rs, cache.rs}`（合成を分けるなら・`VisualMount` の子の構成）
+  - `crates/areka-emo-compose/src/{plan.rs, boxes.rs}`（合成の分け目・警告の撤去）
+  - `crates/areka-emo-text/src/{actor_box.rs, surface_window_child.rs}`（挿す位置）
+  - 裁定によっては `crates/wintf/src/ecs/layout/hit_test/mod.rs` か `crates/wintf/src/ecs/graphics/systems/visual_sync.rs`
+  - 兄弟のテスト・検体（`crates/areka-emo-text/tests/fixtures/shell-balloon/surfaces.txt` の並びを変えた版）
+- 議題（答えで作業が変わるものだけ）:
+  1. 合成を分けて文字の層を挟むか、文字を合成へ描き込むか（brief のまま）。
+  2. wintf の兄弟の重なり順を描画と当たり判定のどちらへ揃えるか（分ける案を採るなら必須。wintf を直すと `shell-balloon` の `[差し込み口, 箱…, 絵]` の当たり判定の前提も一緒に変わる）。
+- 見つけた穴: 無し（逆の重なり順は今は窓のハンドラの前段が吸収している）。

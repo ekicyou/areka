@@ -55,3 +55,22 @@ AI が書いた台本は、存在しない surface 番号や綴りを誤った�
 ## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
 
 - 棚卸⑳では個別の再測定をしていない（`mcp-tool-entrances` が、各 spec の触るファイルを設計で固定する）。着手は `mcp-tool-entrances` の完了の後で、そのとき接触ファイルを照合する。
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M〜L（12〜18 タスク・6 類それぞれの赤と緑＋印の通り道＋表の検査）。20 を超えたら、⒜ 印の通り道と記録の口＋`\s`・`\b`・`\i` の 3 類 ⒝ 未知のタグ・未知の `\!`・`\&` の 3 類、に切る（⒜ → ⒝）。
+- 前提の状態: **未**。`mcp-kanade-tools`（`strict` を受けて下流へ渡す口）と `mcp-log-history`（error 種別の履歴）がどちらも未着手。`mcp-tool-entrances`（PR#223）は着地済み。
+- 崩れた前提／古くなった位置:
+  - `strict` の引数は型まで来ている: `crates/areka-mcp/src/tools/sakurascript.rs`・`raise_event.rs` の `Args.strict: Option<bool>`（tool-entrances が完成）。アプリ本体側 `crates/areka/src/mcp/{sakurascript,raise_event}.rs` は `mcp-kanade-tools` が中身を入れた後に本 spec が引き継ぐ（干渉台帳で直列と決まっている）。
+  - 台本の起動の契約 `StartTalk` の正本は `crates/areka-talk`（`areka_kanade::talk` は再エクスポート）＝「台本に strict の印を持たせる」なら `areka-talk` と、それを読む再生側（`areka-ghost` の dispatcher・`areka-sakura` の drive）を通る。
+  - 検出点の候補（着手時に全数を引き直す）: 未知のタグ＝`areka-parsers/src/sakura/model.rs` の `Instruction::Raw` を受ける所／`\s`・`\b` の不在＝`areka-seriko`（`resolve.rs` の注記「呼び手（actor）が warn!＋skip」）と `areka-emo-present`（`presenter/show.rs` ほか）／`\i` の不在＝`areka-seriko`／未知の `\!`＝`crates/areka/src/emo2_boot/consumer_ledger.rs` の `consumer_of` が `None` を返す所／`\&[…]`＝消費者の有無から確かめる。
+  - `translate-pipeline` が台詞を `OnTranslate` へ通すようになった＝strict の印は翻訳の後の台本にも付いたまま運ぶ必要がある（`schedule/translate.rs`）。
+- 触るファイル（並走の照合用・着手時に確定）:
+  - `crates/areka/src/mcp/{sakurascript,raise_event}.rs` と各 `_tests.rs`（`mcp-kanade-tools` の後）
+  - `crates/areka-talk/src/`（印）・`crates/areka-kanade/src/`（`msg.rs`・外からの台本の処理＝`mcp-kanade-tools` が作る新規ファイル・`schedule/translate.rs`）
+  - `crates/areka-sakura/src/{compile,drive}.rs`・`crates/areka-seriko/src/{actor,resolve}.rs`・`crates/areka-emo-present/src/presenter/show.rs`・`crates/areka/src/emo2_boot/consumer_ledger.rs`
+  - 記録の口（`mcp-log-history` が作る履歴）
+  - 検出点の表（spec 単位・新規）と、表と実装の一致を判定する検査（新規）
+- 議題（答えで作業が変わるものだけ）:
+  - 印を台本に載せて再生側の各消費者まで運ぶか、kanade が「strict の talk の ID」を覚えて消費者の失敗の記録を talk の ID で拾うか（前者は `areka-talk`・dispatcher・sakura・seriko・emo を貫く／後者は消費者の記録に talk の ID が要る）。
+- 見つけた穴: なし。並走の注意＝`consumer_ledger.rs` を `mcp-reload`・`makoto-dll-host`・`property-query-channels` も触る。kanade は kanade の進行の列の最後尾（`mcp-kanade-tools` の後）。

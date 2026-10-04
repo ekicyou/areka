@@ -114,3 +114,31 @@ x64 in-proc（COM `IShiori`）の MAKOTO 版は作らない（そのような DL
 - 優先度 低〜中（MAKOTO を同梱する今どきのゴーストは少ない）。**そのままでは 20 タスクを超える**＝要件の段で ⒜ ホスト・文字コード・鎖 と ⒝ `\![load/unload/reload,makoto]` に切る（⒝ は `mcp-reload` と口を共有）。
 - **崩れた前提**: 「`\!` の消費者は 4 つだけ」は誤り（切替・インストール・更新・説明書・割り込み禁止が増えた）／「読み直しは無い」は誤り（`crates/areka/src/update/procedure.rs` がゴーストを読み直す）／「シェルの切替は将来」は誤り（`shell-balloon-switch` が着地）＝**シェルの側の MAKOTO を切替と更新の後に付け直すことが範囲に入る**。
 - 前提は `translate-pipeline`（掛ける場所）。`property-ipc-transport` とは同じクレートを触るので同時に走らせない。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: 22〜27 タスク＝**切る**。案: ⒜ 本体＝descript の `makoto,`（ゴースト・シェル）・MAKOTO/2.0 の組み立てと読み・DLL 1 本につき helper 1 つ・起動時の鎖（ゴースト側→シェル側）を `TranslateSeams.makoto` へ差す・テスト DLL・e2e＝L（15〜18）／⒝ `\![load|unload|reload,makoto]`・シェルの切替と更新の読み直しの後の付け直し・`mcp-reload` の `target: "makoto"` の口＝M（7〜10）。順は ⒜→⒝。**brief は今分けてよい**: ⒝ だけが `mcp-reload`（未着手）と口を分け合い、前提が違う。⒜ は待つものが無い。
+- 前提の状態: `translate-pipeline`（PR#226）・`charset-canon`・`shiori-loadu` は着地済み。⒝ の相手 `mcp-reload` はまだ（どちらが先でも後着がつなぐ、の約束のまま）。
+- 崩れた前提／古くなった位置:
+  - 差し込む口は `crates/areka-kanade/src/translate.rs` の `MakotoChain`（`Box<dyn Fn(&str, &str) -> String + Send>`）。kanade の起動時に 1 回渡され、本番の結線は `crates/areka-ghost/src/runtime.rs` の `TranslateSeams { … makoto: TranslateSeams::passthrough().makoto }` の 1 か所。**`Fn` で中身を変えられず、起動後に差し替える口も無い**＝⒝ の付け外しとシェルの切替（kanade を作り直さない）での付け直しには、閉包の中に共有の状態（鎖の入れ物）を持たせるのが要る。kanade の型を変えずに済む（変えるなら kanade の列に入る）。
+  - kanade の運行表（`schedule/*`）には触らない＝roadmap の「kanade の進行」の列の最後に置く理由は薄い。触る kanade のファイルは無いか、`translate.rs` だけ。
+  - 文字コードは `crates/shiori-host32-host/src/charset.rs` の `Charset`（`encoding_rs::Encoding` の包み）と `CharsetNegotiator` が在る＝brief の「⒝ 案の型を本 spec が先に置く」の分岐は不要。
+  - `loadu` は `shiori-loadu` で着地済み（helper の `shiori_proxy.rs` は編集集合から外れたまま）。
+  - 「`\!` の消費者は 4 つ」は古い: 台帳 `consumer_ledger.rs` の登記は今 move・bind・set/reset zorder・open readme・change ghost・切替の選び手・execute install など。`("load", Some("makoto"))` などの 3 行を足す。
+  - 読み直しは在る（`crates/areka/src/update/procedure.rs`）・シェルの切替も在る（`crates/areka/src/emo2_boot/shell_balloon_switch.rs`）＝シェル側の鎖は切替と更新の後に付け直す（前回どおり・⒝ に入れる）。
+  - `crates/areka-parsers/src/package/resolve.rs` は 866 行（上限まで 134）・`model.rs` 457 行。
+- 触るファイル（並走の照合用）:
+  - ⒜: `crates/areka-parsers/src/package/{model,resolve}.rs`・新規 `crates/shiori-host32-host/src/makoto.rs`（組み立てと読み・`charset.rs` を呼ぶ）・`crates/shiori-host32-host/src/lib.rs`・新規 `crates/shiori-host32-makoto-testdll/`・`crates/areka-ghost/src/runtime.rs`（783）＋新規 `crates/areka-ghost/src/makoto_wiring.rs`・`crates/areka/src/boot_config.rs`・`Cargo.toml`（workspace の members）・`Cargo.lock`・`doc/COMPAT_ARCHITECTURE.md` §5／§8
+  - ⒝: `crates/areka/src/emo2_boot/consumer_ledger.rs`＋新規の受け口・`emo2_boot/mod.rs`・`emo2_boot/shell_balloon_switch.rs`・`crates/areka/src/update/procedure.rs`・`crates/areka/src/mcp/reload.rs`
+  - `doc/ukadoc-coverage/ledger/{sakura-script,assets}.toml`（4 行）
+- 議題（答えで作業が変わるものだけ）: 今 brief を ⒜⒝ に分けるか（上の案）。
+- 見つけた穴: なし。並走の照合: `shiori-host32-host` を `property-query-channels`（`SenderType` のため `shiori3.rs`・`client.rs`）と `property-ipc-transport` が触る＝同時に走らせない（⒜ の新しいファイルは別でも `lib.rs`・`Cargo.lock` を分け合う）。`areka-ghost/src/runtime.rs` を `mcp-get-property`・`property-query-channels` と分け合う。
+
+## 2026-10-04 棚卸㉑で切った後の範囲
+
+- 残した範囲: ⒜ descript の `makoto,`（ゴースト・シェル）・MAKOTO/2.0 の組み立てと読み・DLL 1 本につき helper 1 つ・起動時の鎖（ゴースト側→シェル側）を `TranslateSeams.makoto` へ差すこと・テスト DLL と e2e・実機の確認（付け外しの往復を除く）。鎖は後続が中身を差し替えられる入れ物の形で作っておく。
+- 規模: L（15〜18 タスク）。
+- 移した先: `\![load|unload|reload,makoto]`・シェルの切替と更新の読み直しの後の付け直し・`mcp-reload` の `target: "makoto"` の口は新しい spec `areka-P0-makoto-reload-directives` へ（本 spec が前提）。網羅台帳の命令 3 行の持ち主は向こうが着地するときに直す。

@@ -58,3 +58,27 @@ compile の汎用キャリアアームへ allowlist 判定を追加（純関数�
 - **B 群の `\![set,choicetimeout]` を `areka-P0-choice-timeout-directive` へ切り出した**（利用者に見えるバグ＝時間切れなしを指定したメニューが 30 秒で閉じる。ウェーブ C1）。本 spec に残るのは A 群（`quicksection`・`balloonwait`）・B 群の `balloontimeout`（受ける側は `balloon-lifecycle-events` の項目 7）・C 群・D 群。
 - 残りも全部入れると 20 タスクを超える見込み＝要件の段で「A と `balloontimeout`（compile の中で閉じる）」と「C・D（消費する者がまだ居ない＝音の再生・時間つきの移動・拡大と透明度が無い）」に分け、C・D は消費する者が現れるまで置く。
 - `compile.rs`（346 行）は `text-decoration-canon` の完了で空いた。今は `choice-timeout-directive`・`anchor-tag-canon`・`talk-fast-forward` と共有＝同時に走らせない。A 群は `talk-fast-forward`・`text-reveal-fade` と「台詞の時計」を分け合う。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: 残り全部では 20 を超える（A・B の残り・C・D で 24〜30）＝**切る**。案: ⒜ 本 spec＝A 群（`\![quicksection,…]`・`\![set,balloonwait,…]`）＋`\_q`（網羅台帳で本 spec が持ち主・下記）＋B 群の `\![set,balloontimeout]` のコンパイルの側＝M（10〜14）／⒝ C 群・D 群＝消費する者が現れるまで置く（`\![sound,wait]` は音の再生、`\![wait,syncobject]` は同期の物、D 群は時間つきの移動・拡大・透明度が無い）。C 群の `\![embed]` だけは消費する者（SHIORI）が既に居るので、`property-query-channels` の再測定の案どおり別 spec（仮名 `sakura-embed-directive`）へ出し、本 spec の C 群からは外す。⒝ を今 brief に分けるかは任意（置くだけなら本 brief の「Out」に残せば足りる）。
+- 前提の状態: `choice-timeout-directive`（✅ 10-03）は着地。`talk-fast-forward`（台詞の時計を分け合う・後着がテストで固定する約束）はまだ。
+- 崩れた前提／古くなった位置:
+  - `crates/areka-sakura/src/compile.rs` は 411 行（前回 346）。汎用キャリアの腕は `compile` の `Instruction::GenericCommand { name, raw_args }` の腕。`choice-timeout-directive` が `\![set,choicetimeout]` の先読みをここへ入れた＝本 spec の「位置によらない属性の先読み」の雛形が在る（`compile_choice_timeout_tests.rs`）。
+  - `\_q` は字句で正しく切れない既知の不具合（`anchor-tag-canon` の brief の棚卸⑫の追記）が `\_` の 2 文字の裸の形すべてに在る。`\_q` を実装するなら、その直し（`anchor-tag-canon` の働きの側の先頭）の後でないと動かない。
+  - 網羅台帳 `sakura-script.toml` で本 spec が持ち主の行は 10（`\_q`・`quicksection` 2・`balloonwait`・`move`・`scaling` 2・`alpha`・`sound,wait`・`wait,syncobject`）。`\![set,balloontimeout]` の行の持ち主は `areka-P0-balloon-canon-residue` のまま（受ける側は `balloon-lifecycle-events` の項目 7）。
+- 触るファイル（並走の照合用・⒜）:
+  - `crates/areka-sakura/src/compile.rs`・`crates/areka-sakura/src/duration.rs`（文字ごとの時間の焼き込み）と兄弟のテスト
+  - `\_q` を含めるなら `crates/areka-parsers/src/sakura/{lexer,decode}.rs`
+  - `doc/ukadoc-coverage/ledger/sakura-script.toml`・`doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）: `\_q` を本 spec の ⒜ に入れるか（入れるなら字句の直しの後＝`anchor-tag-canon` の後）。
+- 見つけた穴: なし。並走の照合: 台本のコンパイルの列（`anchor-tag-canon`・`talk-fast-forward`）と `compile.rs` を分け合う＝直列のまま。`sakura-time-critical` は `\t` を汎用キャリアへ写せば `compile.rs` を触らずに済む（向こうの再測定）。
+
+## 2026-10-04 棚卸㉑で切った後の範囲
+
+- 残した範囲: ⒜ A 群（`\![quicksection,…]`・`\![set,balloonwait,…]`）と B 群の `\![set,balloontimeout]` のコンパイル側。`\_q` を入れるかは議題のまま（入れるなら字句の直し＝`anchor-tag-canon` の後）。
+- 規模: M（10〜14 タスク）。
+- 移した先: `\![embed]` は新しい spec `areka-P0-sakura-embed-directive` へ。C 群の残り（`\![sound,wait]`・`\![wait,syncobject]`）と D 群（同期の `\![move]` の時間・`\![set,scaling]`・`\![set,alpha]` の `--time`／`--wait`）は、消費する者（音の再生・同期の物・時間つきの移動・拡大・透明度）が現れるまで roadmap の覚え書きへ戻す（本 spec では作らない）。

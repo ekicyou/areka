@@ -100,3 +100,26 @@
 - `crates/areka-nar/src/plan_tests.rs` は 916 行なので、新しいテストは兄弟の新しいファイルへ置く。
 - 検体・一時フォルダはワークツリーの `target\` の下だけ。
 - 段は**その他**・ウェーブ **C2-⑥**（前身の席を引き継ぐ）・規模 S〜M（7〜11 タスク）・Fable 推奨。
+
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: S〜M（7〜11 タスク）。変わらず。
+- 前提の状態: 前提の spec は無い＝満たす。C2-⑥ の席で未着手（`.kiro/specs/areka-P0-install-companion-reading/` は brief だけ）。C2 の他の 6 本のうち未着手は `mouse-drag-events` だけで、触るファイルの重なりは 0（向こうは kanade と `input_events/mod.rs`）。
+- 崩れた前提／古くなった位置:
+  - 起票（main `d4f9e93d`）の後に `crates/areka-nar/` へ入ったのは `Cargo.toml` の版の 1 行だけ。`manifest.rs`（`classify`・`numbered`・`collect_companions`・`check_one_level` が `directory`・`<prefix>.directory`・`<prefix>.source.directory` の 3 か所で呼ばれる）・`names.rs`・`plan.rs`（`companion_placement`・`in_folder`）は brief の記述のまま。`crates/areka/src/install/terms.rs` は棚卸⑳（PR#211・利用条件の文の切り詰めが絵文字を割る件）で 7 行変わったが、`nested_terms` の `format!("{}/{file}", companion.source_directory)` は同じ。`crates/sample-ghost-kit/examples/fold-samples.rs` の `strip_folder(relative, &companion.source_directory)` も同じ。
+  - **`_` への置き換えの関数の置き場所**: `areka-nar` と `areka-ghost` はどちらも `areka-parsers` に依存し、互いには依存しない（`crates/areka-ghost/Cargo.toml`・`crates/areka-nar/Cargo.toml`）。`areka-parsers` に置けば新しい依存の辺は 0 本で、`ghost-standard-balloon`（`catalog.rs`）・`shell-companion-balloon` もそのまま使える。`areka-ghost` の `catalog.rs` はすでに `areka_parsers::kv::parse_kv` で `install.txt` を読んでいる。＝勝ちが明白なので議題にせず設計で決めてよい。
+  - `install-live-target-hazards` と同じ `crates/areka/src/install/` を使うが、こちらが触るのは `terms.rs`（と `terms_tests.rs`）だけ、向こうは `judge.rs`・`procedure.rs`・`overwrite.rs`・`desk.rs`＝ファイルの重なり 0。条件は「`procedure.rs`・`judge.rs` を無改変で済ませる」（brief の見込み）を守ること。`crates/areka-nar/src/install.rs`（確定の手順）にはどちらも触らない。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-nar/src/{manifest.rs 431, names.rs, plan.rs, error.rs}`・新規の兄弟テスト（`plan_tests.rs` 916・`manifest_companion_tests.rs` 528 は伸ばしすぎない）
+  - `crates/areka-parsers/src/` の新規の小さなモジュール（`_` への置き換え・`..` の取り除き）
+  - `crates/areka/src/install/terms.rs`・`terms_tests.rs`
+  - `crates/sample-ghost-kit/examples/fold-samples.rs`
+  - `doc/ukadoc-coverage/ledger/assets.toml`（`descript_install` の `*.directory`・`*.source.directory` の 2 行）・`doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）: 棚卸の時点で新しいものは無し（brief の「前身の書きかけの要件で決めた形」4 点を要件の段で確かめる）。
+- 見つけた穴: 無し（brief の ⑴〜⑷ そのものが正典とのずれ＝本 spec の仕事）。
+
+## 2026-10-04 ウェーブ C3-⑪（棚卸㉑）
+
+- 段は「その他」。C3 は 11 本並走（`roadmap.md`「ウェーブ編成」の C3 の行が正本）。着手は最新の main から。
+- 同じウェーブの約束: `crates/areka-parsers/src/lib.rs` と `shell/` に触らない（`_` への置き換えの関数は `areka-nar` か `areka-parsers` の既存の子の下へ）。`crates/areka/src/install/` は `terms.rs` だけで、`procedure.rs`・`judge.rs` は無改変。
