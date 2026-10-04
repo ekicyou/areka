@@ -259,7 +259,7 @@ sequenceDiagram
 | 6.1 | 子の中の箱の警告 | Boxes・ShellTarget | `BoxIssue::InChildSurface` | — |
 | 6.2, 6.3, 6.4 | 残りは描く・一番上では使える・親の箱は不変 | （既存の構造）`BoxLayout` は番号ごと | — | — |
 | 7.1, 7.2, 7.3 | 入れ子なしは不変 | 全体 | 空の `NestTable`・空の部品の欄・`has_animated_parts` が偽 | — |
-| 7.4 | 検体（emo2）は同じ | Looper | `looper_parts_emo2_tests.rs`（下記「emo2 についての事実」） | — |
+| 7.4, 7.5 | 検体（emo2）は刻みが普通に届く間は同じ・端は規則どおり | Looper・Parts | `looper_parts_emo2_tests.rs`（下記「emo2 についての事実」） | — |
 | 8.1 | 黙った読み飛ばしなし | Nesting・Boxes・ShellTarget | 3 種の報告 | — |
 | 8.2 | 検体 | `tests/fixtures/surface-nesting/` | — | — |
 | 8.3 | 決定論テスト | Testing Strategy | — | — |
@@ -278,7 +278,7 @@ sequenceDiagram
 | PresenterHit（拡張） | present | 持ち込み済みの列で判定 | 4.1, 4.2, 2.8 | HitImport（P0） | Service |
 | Table（拡張） | seriko | 参照の表の写し | 5.1, 7.2, 7.3 | Nesting（P0） | State |
 | Parts | seriko | 部品の時計 | 5.1〜5.8, 5.11〜5.14 | Table・Pattern（P0） | Service, State |
-| Looper・Actor（拡張） | seriko | 刻みと切り替えの統括 | 5.6, 5.8, 5.9, 7.2, 7.3, 7.4 | Parts（P0） | Service |
+| Looper・Actor（拡張） | seriko | 刻みと切り替えの統括 | 5.6, 5.8, 5.9, 7.2, 7.3, 7.4, 7.5 | Parts（P0） | Service |
 
 ### 合成（areka-emo-compose）
 
@@ -553,7 +553,7 @@ impl PartClocks {
 | Field | Detail |
 |-------|--------|
 | Intent | 刻みと、面の切り替え・着せ替えの変化に、部品の時計をつなぐ |
-| Requirements | 5.6, 5.8, 5.9, 7.2, 7.3, 7.4 |
+| Requirements | 5.6, 5.8, 5.9, 7.2, 7.3, 7.4, 7.5 |
 
 ```rust
 impl LoopRuntime {
@@ -631,13 +631,13 @@ impl LoopRuntime {
 - **切り替えの発行列**（`actor_parts_tests.rs`・5.6・5.9）: 子が閉じ目のコマの途中で `\s` を切り替えると、`Show` が 1 件だけ出て、そのコマを載せている／一番上の animation は最初から／子を置いていない面へ行って戻っても続きから（5.7）／着せ替えの変化でも 1 件／着せ替えを外した瞬間の `Show` に、外れた側の部品のコマが載らない。
 - **捨てる時機**（`looper_parts_tests.rs`・5.8）: シェルの表の差し替えの後、部品の時計が空。
 - **入れ子なしの不変**（`looper_parts_tests.rs`・`table_parts_tests.rs`・7.1〜7.3）: 入れ子も動く部品も無い表で `has_animated_parts` が偽／同じ刻みの列で、乱数の呼び出し回数と発行列が部品の経路を外した場合と一致する。既存の golden・seriko の決定論テストは 1 本も書き換えない。
-- **emo2**（`looper_parts_emo2_tests.rs`・7.4）: 下記。
+- **emo2**（`looper_parts_emo2_tests.rs`・7.4・7.5）: 下記。
 
 ### 実機
 
 - 検体のフォルダを、ワークツリーの `target\` の下に用意した emo2 のシェルとして読ませ、`\s` の切り替えをまたいで部品の発火・停止の記録（`part` の欄）が途切れないこと、警告 3 種が 1 度ずつ出ることを確かめる（時間を区切って自動で終わらせ、記録を検索する）。
 
-## emo2 についての事実（要件 7.4）
+## emo2 についての事実（要件 7.4・7.5）
 
 実物（`target\nar-samples\manual\emo2\ghost\emo2\shell\master\surfaces.txt`）を確かめた結果:
 
@@ -652,7 +652,9 @@ impl LoopRuntime {
 - したがって**刻みが普通に届いているあいだ、emo2 の絵・発行列・乱数の消費は本 spec の前と同じ**。`looper_parts_emo2_tests.rs` は、`\1` のまばたきを細かい刻みで回し、発行列と乱数の呼び出し回数が部品の経路を外した場合と一致することを留める。
 - 刻みが 880ms 以上止まった直後の 1 回に限り、2110（または 2210）について抽選が 1 回走りうる（乱数を 1 つ消費し、1/4 で 2106／2206 が最長 80ms 重なる）。これは「pattern定義が指すサーフェスも部品として動かす」（要件 5.13）の帰結で、同じテストファイルがこの端も 1 本の檻で固定する。
 
-**未解決（設計ディスカッションで開発者に確かめる）**: 要件 7.4 の文面「本 spec の前と同じ結果に保つ」は、上の端を含めると字義どおりには成り立たない。7.4 を「刻みが普通に届いているあいだ同じ」と読む形へ書き直すか、この端も塞ぐ規則を要件 5.13 に足すかは、要件の側の判断である。本設計は前者の読みで書いてある（後者なら `PartClocks` の抽選の条件に 1 つ足すだけで、ほかの部分は変わらない）。
+**解決（2026-10-04 開発者裁定）**: 要件 7.4 を「刻みが普通に届いている間は同じ」へ書き直し、上の端は要件 7.5 として「規則どおりの動き・例外を設けない」と定めた。emo2 のためだけの抽選の例外は足さない。
+
+`looper_parts_emo2_tests.rs` の比べる相手は、新しいコードに付けた抜け道ではなく、**実装の前の HEAD で採った発行列と乱数の呼び出し回数**を期待値として焼き込む。また実装の最初に、実物の emo2 の表で刻みを回す既存のテスト（`crates/areka-seriko/tests/regression.rs`・`cue_sequence.rs` ほか）に 880ms 以上の刻みの飛びが無いかを確かめる（在れば、そのテストの期待値が要件 7.5 の端に当たるかを見てから進める）。
 
 ## 解決したこと・残したこと
 
@@ -666,11 +668,11 @@ impl LoopRuntime {
 - 切り替えの 1 枚目: `refresh_parts` で部品のコマを載せた `Show` を 1 件。
 - 大きすぎる数字: 無い番号と同じ扱い。
 - 箱の「画像より下」の報告: サーフェスを置く element定義も数える（今の成り行きのまま）。
+- 要件 7.4 の文面: 「刻みが普通に届いている間は同じ」へ書き直し、端は要件 7.5 で規則どおりと定めた。
 - 検体: フォルダのまま置く（`crates/areka-emo-compose/tests/fixtures/surface-nesting/`）。検体では `surface.append*`ブレスに画像の element定義を書かない（下の「残した」の最後の項のため）。seriko のテストは surfaces.txt を `include_str!` で読む。
 
 **残した**
 
-- 要件 7.4 の文面（上記）。
 - 合成のキャッシュの容量: 3 のまま。親と部品が同時に動くシェルで命中が下がりうるが、測るだけに留める。
 - 周期で回る間隔の語: 今は採らない。採るときは `PartAnim::Playing` の開始の時刻から周期を求める形に載る（見えない間に何もしない形のまま延ばせる）。
 - `surface.append*`ブレスに書いた画像の element定義は、今も焼く一覧に入っていない（焼く一覧は `shell.surfaces` の複製だけ）。本 spec の前からの事実で、本 spec では変えない。
