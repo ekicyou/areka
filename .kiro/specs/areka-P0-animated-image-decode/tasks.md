@@ -129,14 +129,14 @@
   - _Depends: 6.1_
   - _Requirements: 9.3_
 
-- [ ] 7. 測ることと全体の確認
+- [x] 7. 測ることと全体の確認
 - [x] 7.1 焼く時間と起動のメモリの山を測って記録する
   - `emo2` のシェルを焼く時間の前後、debug での詰めの時間、上限 ㋑ いっぱいの絵 1 つ（例 500×500 で 268 コマ）を焼く通しの時間を release と debug で、起動の形（シェル 2 回＋バルーン 1 回）の合計を測る。測るための絵は `target\` の下へ作り、リポジトリには置かない
   - 遅延のコマの並びから 1 枚目だけを取るとき、2 枚目以降が解かれていないことも確かめる
   - 完了: 数字が `research.md` と `areka-P0-animated-image-playback` の `brief.md` に在り、採寸の側の直しが要るかどうかの判断（要るなら完了時に `/kiro-discovery` で起票する旨）が書いてある
   - _Requirements: 6.1, 6.3, 9.2_
 
-- [ ] 7.2 全体テストを緑にする
+- [x] 7.2 全体テストを緑にする
   - `tools/test-all.ps1 -Format -License` を全段緑にする（`cargo deny check`・謝辞・公開の包むだけの形・取り込みの検査を含む）
   - 完了: 全段緑、`emo2` の照合のファイルと呼び手 5 ファイルの差分が 0、謝辞の差分が無い（1.3 でコミット済み）
   - _Requirements: 5.1, 5.2, 5.5, 7.4, 8.6_
@@ -153,3 +153,4 @@
 - 5.1: 本物の読み手の結合テストは `single.webp`（1 枚の WebP は WIC の拡張機能が要る）と `deep16.apng`（段 2 で WIC へ落ちる）を焼く検体から外す。GIF の検体は透明度なし・全面が赤なので 0 番が全透明になり、0 番を読んだことは抜き色の `debug!` の行で判定している。
 - 5.2（範囲外・完了時に棚卸で判断）: レビューで 1 回だけ、`cargo test -p areka-emo-present` の出力に `__rust_alloc_error_handler` のバックトレース行が混じった（終了コード 0・全部緑・後の 2 回は出ず・出どころ未調査）。`cargo clippy -p areka-emo-present --tests -- -D warnings` は依存の `dola` の既存の lint 21 件で赤（`clippy-199-lints` で起票済みの類）。
 - 7.1（完了時に `/kiro-discovery` で起票）: 採寸の側（`crates/areka/src/placement/measure.rs` の `measure_native_scope_sizes`）は `load_shell_target` で全部を焼いて寸法だけ使い、読んだ全コマを捨てる。上限 ㋑ いっぱいの絵 1 つで起動の焼く時間が release 0.19 → 3.2 秒（うち約 1.5 秒が採寸）。バルーンは scope 2 つで 4 回焼かれる（採寸と資産組み立て）。数字は research.md 9.14 節。
+- 7.2: `tools/test-all.ps1 -Format -License` を コミット `1e37a7d6` で全 9 段緑（x64 全テスト 464 秒・開始時の未コミット 0・整形と謝辞の差分 0）。1.3 のときの `areka-mcp` の赤は再現しなかった。呼び手 5 ファイルと `emo2` の照合のファイルは合流点 `e2a373b5` から差分 0。
