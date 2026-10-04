@@ -131,9 +131,10 @@ sequenceDiagram
 - `balloon_visibility_phase.rs` — `collect_observations` が `balloon_shown_glyphs` へ絵の番号を渡す。`report_balloons` の呼び出しと、そのための `balloon_status` の取り出しを外す。
 - `frame/status_report.rs` — 届けの相 `run_status_report_phase` を足す。`BalloonStatusLedger` に欄を 2 つ足す。`collect_bindings` が箱だけのときに覚えた番号を使い、警告の対象にしない。モジュールの説明を「フレームの終わり」に合わせる。
 - `frame.rs` — `emo2_frame_system` の `run_text_phase` の後に `run_status_report_phase` を呼ぶ。相の並びの説明を合わせる。
-- `frame/status_report_tests.rs` — 箱だけ・番号なしの期待を改め、覚えた番号の分岐を足す。
+- `frame/status_report_tests.rs` — 箱だけ・番号なしの期待を改め、覚えた番号の分岐を足す。`collect_bindings` の引数が増えるので、既存の呼び出しは全部が形だけ変わる（期待値は変えない）。
+- `balloon_visibility_phase_box_tests.rs` — `glyph_count_is_the_one_shown_in_the_balloon_window` を外す。この檻の表示層はシェルの窓を持たず（`attach_headless`）、絵の番号を持たせる道具も無いので、絵の番号基準では成り立たない。数の判断は文字の層の檻の 5 が、相が表示層の番号を渡すことは枠の檻の 3（箱のある面で窓が隠れる）が持つ。
 - `frame_shell_box_integration_tests.rs` — `Cage` にシェルの文面の引数と、絵の差し替えを送る道具を足す。既存の 3 本は絵の差し替えも送る形に直す。新しいテストファイルを子として結ぶ。
-- `spine_text_scale_tests.rs` — `text_scale_phase_syncs_boxes_on_the_shell_window` が絵（面 0）を表示した状態で確かめる形に直す（必要な場合だけ）。
+- `spine_text_scale_tests.rs` — `text_scale_phase_syncs_boxes_on_the_shell_window` が絵（面 0）を表示した状態で確かめる形に直し、`Hide` の 1 歩を足す（差し込み口はあるが絵の番号は無い → 登録を外す。要件 1.3 の結線）。
 
 ### New Files
 
@@ -184,7 +185,7 @@ sequenceDiagram
 | 4.1 | 1.1・1.8 を両方の並びで | 枠の檻 | `frame_shell_box_align_tests.rs` | − |
 | 4.2 | 2.1・2.2 を 2 種の切替で | 枠の檻 | 同上 | − |
 | 4.3 | 3.1・3.2 を「出して隠した後」で | 枠の檻・純関数の檻 | 同上・`status_report_tests.rs` | − |
-| 4.4 | 直す前のコードで失敗する | 枠の檻 | 既存の道具だけで組む | − |
+| 4.4 | 直す前のコードで失敗する | 枠の檻 | テストの足場だけを足して組む | − |
 | 4.5 | 普通のバルーンだけのテストを変えない | 全体 | 箱の表が空なら引数に依らない | − |
 
 ## Components and Interfaces
@@ -367,7 +368,7 @@ pub(in crate::emo2_boot) struct BalloonStatusLedger {
 
 ## Testing Strategy
 
-方針: 判断の分岐だけを檻に入れる。枠の檻は本番の `emo2_frame_system` をそのまま回し、台本の cue は `apply_cue`、絵は `present_tx` への `PresentCommand::ShowSurface`／`Hide` で、届く順を決定論で組む。枠の檻は既存の道具だけで書けるので、**修正を入れる前のコードでそのまま走らせて失敗を確かめる**（要件 4.4。実装の最初のタスクで赤を記録する）。
+方針: 判断の分岐だけを檻に入れる。枠の檻は本番の `emo2_frame_system` をそのまま回し、台本の cue は `apply_cue`、絵は `present_tx` への `PresentCommand::ShowSurface`／`Hide` で、届く順を決定論で組む。枠の檻はテストの足場（`Cage` のシェルの文面の引数と、絵を送る口）だけを足せば書けるので、**修正を入れる前のコードでそのまま走らせて失敗を確かめる**（要件 4.4）。実装の最初のタスクは、足場の追加 → 檻で使う面が検体で合成できることの確かめ → 赤の記録、の順に踏む。
 
 ### 枠の檻（新規 `frame_shell_box_align_tests.rs`・GPU 付き）
 
@@ -399,8 +400,8 @@ pub(in crate::emo2_boot) struct BalloonStatusLedger {
 ### 変えないテスト（要件 4.5）
 
 - `frame_visibility_integration_tests.rs` の普通のバルーンの 2 本（見えたフレームに 1 回・消えたフレームに空の組・新しい台帳）は期待値を変えない。届けは同じフレームの中で後ろへ動くだけ。
-- 可視性の相の檻（`balloon_visibility_phase_tests.rs` ほか）は届けを見ていないので、相から呼び出しを外しても期待は変わらない。箱の表が空の檻は `balloon_shown_glyphs` の値が変わらない。
-- 直すのは箱の檻だけ: `frame_shell_box_integration_tests.rs` の 3 本（絵の差し替えも送る）・文字の層の箱の檻（引数の形）・`status_report_tests.rs` の箱だけの 1 本。
+- 可視性の相の檻（`balloon_visibility_phase_tests.rs`）は届けを見ていないので、相から呼び出しを外しても期待は変わらない。箱の表が空の檻は `balloon_shown_glyphs` の値が変わらない。
+- 直すのは箱の檻だけ: `frame_shell_box_integration_tests.rs` の 3 本（絵の差し替えも送る）・文字の層の箱の檻（引数の形）・`status_report_tests.rs`（呼び出しの形は全部・期待値は箱だけの 1 本）・`balloon_visibility_phase_box_tests.rs` の 1 本（外す。理由は File Structure Plan）・`spine_text_scale_tests.rs` の 1 本。
 
 ### 実機の確かめ（任意・テストの代わりにしない）
 
