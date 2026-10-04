@@ -64,3 +64,28 @@
 ## 想定
 
 - 規模 XS（手順 6 本・毎回同じ）。議題 1 件（版上げを cargo-edit に頼るか、`Cargo.toml` の 1 行を書き換える手元の小さなスクリプトにするか＝道具を足さない方を推す）。Opus で足りる。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: XS〜S（初回 8〜11 タスク・2 回目からは手順 6 本）。切る: なし。初回だけ重いのは、要件〜タスクを作る段と、`release-ci-workflow` が申し送った初回だけの見守り 6 項目（`completed/areka-P0-release-ci-workflow/verification/runner-trial.md` の「release-cycle への申し送り」1〜6）が乗るため。
+- 前提の状態: 上流 3 本（`release-package-versioned`・`release-ci-workflow`・`crates-io-publish`）はすべて着地した。`.github/workflows/release.yml`（タグ `v*` の push と手での起動）・`.github/workflows/crates-io.yml`（タグ `v*` の push を自分で受け、同じタグの `release` の走りの緑を最長 120 分待つ）・`tools/package.ps1`・`tools/crates-io.ps1`・手順書 `doc/crates-io-publish.md` が main に在る。根の `Cargo.toml` は `[workspace.package]` の `version = "0.0.1"` と `[workspace.dependencies]` の `dola = { version = "0.0.1", path = … }` の 2 か所で、各クレートの `Cargo.toml` に `wintf`・`dola` の版の指定は無い（brief の手順 7 のとおり）。
+  - ただし手順 1 の「open PR 0 本」は、C2 の残り 2 本（`install-companion-reading`・`mouse-drag-events`）が着地するまで満たせない。
+- 崩れた前提／古くなった位置:
+  - `crates-io-publish` の裁定（案 B）で、公開の段は `release.yml` から呼ばれず、タグの push を自分で受ける。手順 5 の「見守る」相手は `release`（Release を作る走り）と `crates-io`（公開の段）の 2 本が同時に始まる形になった。brief の手順 5 は「Release の公開より後（crates.io・winget）の赤は原因を直す spec を起票し、同じ版で出し直さない」と書くが、手順書（`doc/crates-io-publish.md` 5 節の末尾）は「その決めごとは `release.yml` の話で、公開の段は同じ版で何度起動し直してもよい（既に出たクレートは飛ばす）」と決めた。tasks.md は手順書に合わせる（`crates-io` の赤は Re-run／Run workflow で同じ版のまま残りを出す。版を上げ直すのはタグのコミットのコードやスクリプトの誤りのときだけ）。
+  - `winget.yml` はまだ無い（`winget-manifest-submission`＝C3-①）。初回の見守りの相手に winget は入らない。
+  - 開発者の手が要るもの（初回）: ⑴ crates.io で `wintf`・`dola` それぞれに Trusted Publishing を足す（持ち主 `ekicyou`・リポジトリ `areka`・workflow `crates-io.yml`・environment は空。`doc/crates-io-publish.md` 2 節）。済んでいないと公開の段は段「鍵」で止まる（何も上がらない）。⑵ 版上げの PR の squash マージとタグの push（公開に当たる操作）。⑶ 手順 1 の `tools/package.ps1 -Check`（窓が出る起動確認）。⑷ 赤のときの Re-run の判断。シークレットの登録は初回には要らない（`release.yml` は `GITHUB_TOKEN` の `contents: write` だけ・`crates-io.yml` は Trusted Publishing だけ）。
+  - `release.yml` は Rust を `1.99.0` に固定し、`crates-io.yml` は `rustup update stable` で最新を使う。公開前の確認（`-Verify`）が Release の組み立てと別の版の Rust で走る＝赤なら版の差を先に疑う（見守りの覚え）。
+- 触るファイル（並走の照合用）:
+  - `.kiro/specs/areka-P0-release-cycle/`（要件〜tasks.md・新規）
+  - `Cargo.toml`（根の 2 行だけ）・`Cargo.lock`
+  - `dist/README.txt`（冒頭の「2026-10-01 時点」の行）
+  - `README.md`（下の議題 2 で取るなら「## 入手と起動」の 1 行）
+  - `.kiro/steering/roadmap.md`（リリースの記録 1 行）
+- 議題（答えで作業が変わるものだけ）:
+  1. **初回の PR の分け方**。初回は `/kiro-start` で要件〜タスクを作るので、spec の文書のコミットが要る。一方 brief の手順 3 は「版上げの PR に他の変更を混ぜない」。⒜ spec の文書だけの PR を先に入れ、版上げの PR を別に出す ⒝ 初回だけ同じ PR に入れる。さらに手順 6（roadmap への記録）はタグの後なので、版上げの PR には入らない＝⒜ 次の spec の PR か棚卸に相乗り ⒝ 記録だけの PR を出す、のどちらか。
+  2. **`README.md` の「まだ GitHub Releases での配布はしていない」の行**（「## 入手と起動」の最初の箇条・PR#222 で書いた）。`v0.0.2` の Release が出た時点で偽になる。本 spec の触る範囲（Constraints）に `README.md` が無く、次に触る `winget-manifest-submission` は C3＝間に偽の期間ができる。初回だけ本 spec が直すか、偽の期間を許して winget に任せるか。
+  3. （既存）版上げを cargo-edit の `cargo set-version` に頼るか、根の 2 行を書き換える小さなスクリプトにするか。`set-version --workspace` が `[workspace.dependencies]` の `dola` の `version` も動かすかは未確認のまま。
+- 見つけた穴: なし（上の `README.md` の行は議題 2）。

@@ -64,3 +64,25 @@ MCP でいちばん使われるのは「台本を流して見る」（`sakurascr
 ## 2026-10-03 C4 の候補（10-03 の再編（開発者「MCP は複合 spec なので早めに着手したい」））
 
 - 段は「優先」。C3 に入れなかった理由: C3 の `balloon-lifecycle-events` と kanade を分け合う。
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: L（14〜19 タスク）。20 を超えるなら `get_status`（問い合わせの変種 1 つと書式だけ・S）を先に切り出し、`sakurascript`＋`raise_event`（M〜L）を後にする。今の見積もりでは切らない。
+- 前提の状態: `mcp-tool-entrances`（PR#223）・`status-execution-states`（PR#220）・`translate-pipeline`（PR#226）は着地済み。前提は満たす。kanade の進行の列（roadmap「直列の列」）では `mouse-drag-events`（C2-⑦）→ `balloon-lifecycle-events`（C3-④）→ `property-query-channels` → `network-update-canon-order` の後ろ＝それらと同時に走らせない。
+- 崩れた前提／古くなった位置:
+  - ダミーの場所: アプリ本体側 `crates/areka/src/mcp/{get_status,sakurascript,raise_event}.rs` の `handle`（各 `NG:not implemented yet` の 1 文）と各 `_tests.rs`（同じ文言を期待＝書き換える）。プロトコル側 `crates/areka-mcp/src/tools/` の同名 3 ファイルは定義と `Args`（`sakurascript`＝`script`・`ghost_name`・`strict: Option<bool>`、`raise_event`＝`event`・`references: Vec<String>`・`ghost_name`・`strict`）まで完成＝触らない見込み。kanade の返事は `areka_actor::ReplySender<具体の型>` で受け、`mcp::later(world, reply, 覗く関数)`（`crates/areka/src/mcp/mod.rs`）に預ける形が決まっている（`ReplyTo` は kanade へ渡せない）。kanade への送り口は `GhostSession::kanade()`。
+  - `get_status`: `status-execution-states` が `talking`・`choosing` に加えて `nouserbreak`・`online`・`balloon(…)` も実物から導くようにした（`ExecutionSnapshot` の欄 `no_user_break`・`online`・`balloons`、外からの入口 `KanadeMsg::ExecutionState`）。**`balloon(…)` の素はもう `EmoPresenter::target_visible` ではなく kanade の中の写し（`ExternalStates.balloons`）**＝kanade に問えば全部そろう。外から問う口は今も無い（`KanadeMsg` に問い合わせの変種なし）。手本は `KanadeMsg::ResourceQuery`（`actor_resources.rs` が状態機械を経ずに答える）。
+  - `raise_event`: `KanadeMsg::RaiseEvent { id, references, method, reply: Option<ReplySender<RaiseOutcome>> }`（`msg.rs`）は在る。許可表は `schedule/events.rs` の `ALLOWED_EVENT_IDS`（46 語）。`RaiseOutcome`（`change.rs`）は `NotAllowed`／`NotSteady`／`Script`／`NoReply`／`Failed` で台本の文字列を持たない。今の呼び手は 6 か所（`emo2_boot/frame/switch.rs`・`input_events/file_drop.rs`・`install/desk.rs`・`update/desk.rs` 2 か所・`update/worker.rs`）＝`RaiseOutcome` を変えると全部に波及するので、台本つきの結果は**別の型か別の変種**で返す方が触る所が少ない。
+  - `sakurascript`: 外から台本を流す経路は今も無い。台本の起点は `Action::StartTalk`（`schedule/steady.rs`・`change.rs`・`close.rs`・`boot.rs`）。`StartTalk` の正本は `crates/areka-talk`（`areka_kanade::talk` は再エクスポート）。
+  - **翻訳の経路が増えた**: `translate-pipeline` が SHIORI の台詞を再生の前に `OnTranslate` へ通すようにし（`schedule/translate.rs`・`actor_translate.rs`・`translate.rs`）、「Reference1 は常に欠番」を `doc/COMPAT_ARCHITECTURE.md` §8 に登記した。ukadoc の `OnTranslate` の Reference1 には SSP の出どころの語（`sstp-send`・`owned` など）がある＝MCP の台本を翻訳に通すか・通すなら Reference1 に何を入れるかを決める必要が出た（下の議題）。
+  - kanade のファイルが上限に近い: `schedule/mod.rs` 937 行・`schedule/steady.rs` 929 行・`msg.rs` 902 行・`actor.rs` 876 行（上限 1,000）。新しい処理は兄弟の新規ファイル（`actor_resources.rs` の形）へ置く前提で見積もる。
+- 触るファイル（並走の照合用）:
+  - `crates/areka/src/mcp/{get_status,sakurascript,raise_event}.rs` と各 `_tests.rs`
+  - `crates/areka-kanade/src/msg.rs`（変種 2 つ＋`RaiseEvent` の拡張・名前の腕）・`actor.rs`（振り分け）・**新規**の殻の処理（例 `actor_external.rs`＋兄弟テスト）・`schedule/mod.rs`（`Input` の変種）・`schedule/steady.rs` または新規の `schedule/` の子（外からの台本の起動）・`schedule/events.rs`（許可表を迂回する印）・`change.rs`（台本つきの結果）・`lib.rs`（公開）
+  - 翻訳に通すなら `schedule/translate.rs`・`translate.rs` と `doc/COMPAT_ARCHITECTURE.md` §8
+  - script 種別のログの 1 行（`mcp-log-history` と取り決める target）
+  - 触らない: `crates/areka/src/mcp/mod.rs`・`resolve.rs`・`crates/areka-mcp/src/**`・`main.rs`・`ghost_session.rs`・`Cargo.toml`
+- 議題（答えで作業が変わるものだけ）:
+  - MCP の `sakurascript` の台本を `OnTranslate` に通すか。通すなら Reference1 を欠番のままにするか SSP と同じ出どころの語にするか（SSP に同じ台本を送って `OnTranslate` の Reference1 を実測する）。答えで翻訳の経路と §8 の登記が変わる。
+  - 許可表の迂回は `property-query-channels`（`\![get,property,<イベント名>]`）も要る＝先に着手した方が一度で作る（棚卸⑳の注記のまま）。kanade の列では `property-query-channels` が前なので、そちらが作った迂回を使う形になる見込み。
+- 見つけた穴: なし（`RaiseOutcome` を広げると呼び手 6 か所に波及する点は設計の注意）。

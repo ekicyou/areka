@@ -66,3 +66,26 @@
 - 合っていた点: 予約キーは `writing.rs` に在る・ぶら下げの「未実装」の注記は `layout.rs` と `region.rs` に在る。`layout.rs` の分割は `emo-text-file-split` が先に済ませる。
 - **抜け**: ⑴ 描画の側も触る＝字の向きは `DirectionRecipe`（`draw.rs`）か行の TextLayout（`draw_line_store.rs`）、計測用は `draw_metrics.rs`。DirectWrite に縦中横の機能は無いので、塊を自前で描く（`viewbox_draw` 系が太る）。⑵ 縦中横の塊を「一度に現れる 1 単位」にすると `state.rs` の現れる時刻の列を触る。
 - **議題**: 禁則の表を手で書くかクレート（UAX#14）か（クレートなら `Cargo` の類を触る・手書きを推す）／縦中横を自前で描く方式。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M〜L（14〜18 タスク）。今は切らない。20 を超えそうなら、要件の段で「禁則とぶら下げ（折り返しの規則・`line_break`／`hanging_punctuation`）」と「縦中横と字の向き（配置の単位と描画・`text_combine_upright`／`\![text,combine-upright,…]`／`text_orientation`・縦書きの字形の観測点）」に切る。前者が先（触るのが配置の層だけで小さい）。
+- 前提の状態: `layout.rs` の分割（`emo-text-file-split`・PR#217）と `shell-balloon`（PR#227）は着地済み＝満たす。列の上では `balloon-font-file` と `anchor-tag-canon`（働き）の後。
+- 崩れた前提／古くなった位置:
+  - 「`layout.rs` 977 行＝先に分割が要る」は済んだ（Scope の「`layout.rs` の分割」は外してよい）。折り返しの判定と文字の配置は **`layout_scan_glyph.rs` の `Scan::glyph`**（可視の打ち切り→保留の実体化→折り返し判定→遠辺の判定→配置）、行を閉じる仕上げは `layout_scan.rs` の `finish_line` ほか、入口と型は `layout.rs`。ぶら下げ「未実装」の注記は `layout.rs` のモジュール doc・`layout_scan.rs` の `layout_inner` の中・`region.rs`（折り返し基準と絶対上限の 2 値の説明）に在る。
+  - 縦中横の塊を描く所は `viewbox_draw_render.rs` の `render_styled`／`line_layout_for`（分割前は `viewbox_draw.rs`）。字の向きは `draw.rs` の `DirectionRecipe` と `draw_line_store.rs` の行 TextLayout、計測は `draw_metrics.rs`。
+  - **シェル内バルーンにも効くか**: 効く。箱の定義（`balloon.名前`ブレス）は `areka-emo-compose/src/boxes.rs` で普通のバルーンと同じ `balloon::parse` を通って `BalloonModel` になり、文字の層でも同じ `ResolvedBalloonText::resolve_with_background` を通る（`actor_box.rs` の `register_box`）。新しいキーは**バルーン定義ごとの値**（`ResolvedBalloonText` か、そこから引ける型）に載せること。`state.rs` の `TextLayerConfig`（ランタイム共通・今は `line_gap` だけ）に載せると、普通のバルーンと箱で別々の値を持てない。
+  - 予約キー（`writing.rs` の `RESERVED_KEY_TEXT_ORIENTATION`・`RESERVED_KEY_TEXT_COMBINE_UPRIGHT`）は変わらず在る。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-text/src/{layout_scan_glyph.rs, layout_scan.rs, layout.rs, wrap.rs, segment.rs}`（禁則・ぶら下げ・縦中横の単位）
+  - `crates/areka-emo-text/src/region.rs`（ぶら下げの注記と上限）
+  - 新規（禁則の表＝新しいファイル）＋`crates/areka-emo-text/src/lib.rs`（新しいファイルの登録）
+  - `crates/areka-emo-text/src/{writing.rs, actor.rs（ResolvedBalloonText）, state.rs（`CueCommand::Custom` の腕で `\![text,combine-upright,…]`・現れる時刻の列）}`
+  - `crates/areka-emo-text/src/{draw.rs, draw_line_store.rs, draw_metrics.rs, viewbox_draw_render.rs}`（字の向き・縦中横の塊の描画）
+  - `crates/areka-parsers/src/balloon/{model.rs, parse.rs}`（4 つのキー・`model.rs` は 774 行）
+  - `doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）: 棚卸⑳の 2 件のまま（禁則の表を手で書くか UAX#14 のクレートか／縦中横を自前で描く方式）。
+- 見つけた穴: なし。

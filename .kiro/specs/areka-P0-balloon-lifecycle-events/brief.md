@@ -73,3 +73,30 @@ kanade（会話進行）と UI（表示寿命）の間に通知路を 1 本敷�
 ## 2026-10-03 ウェーブ C3-④（予定・10-03 の組み直し（開発者「1 バグ・2 リリース関係・バルーン関係・アニメーション画像関係・3 その他」））
 
 - 段は「優先」。C3 は C2 の着地で brief が動くので、着手の前に同じウェーブの他の spec と触るファイルを照合し直す（`roadmap.md`「ウェーブ編成」の C3 の行）。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: Reference2（中断位置）を作るかで変わる。作らなければ M（9〜13 タスク）。作るなら L（18〜24）で、台本のコンパイルの列をまたぐ。20 を超える形になるなら「切る」: ⒜ 項目 8・10 の発火（Reference2 は空で送り、縮退を登記）＝M ／ ⒝ 中断位置を字句から完了の知らせまで通す工事＝M（台本のコンパイルの列の空きで）。順は ⒜→⒝。項目 7 は今までどおり `sakura-time-directives` の後。
+- 前提の状態: 項目 8・10 の前提は着地済み（`translate-pipeline`・`emo-text-file-split`・`balloon-break`）。項目 7 の前提 `sakura-time-directives` はまだ。
+- 崩れた前提／古くなった位置:
+  - **`steady.rs` は分割されていない**（`translate-pipeline` は出口で捕まえる設計にした・929 行）。前回の「大きいファイルの分割は `translate-pipeline` が先に済ませる」は外れ。
+  - `OnBalloonBreak` のきっかけは kanade の中にもう在る: 利用者の中断は `schedule/user_break.rs` の `on_user_break` が `state.user_break_talk` に控え、`schedule/mod.rs` の `on_talk_done` が `TalkDone{Interrupted}` で受ける。Reference0（台本）は `ActiveTalk.script` に在る。Reference1（scope）は `Input::UserBreak{scope}` に在るが、今は控えていない（`user_break_talk` は `TalkId` だけ）。
+  - **Reference2（中断位置）の源はどこにも無い**: 字句（`areka-parsers/src/sakura/lexer.rs` の `Token`）・`Instruction`・コンパイル・dola の cue・完了の知らせ `areka_talk::TalkDone` のどれにも台本の中の位置を持たない。足すなら `TalkDone` に欄を足すことになり、`TalkDone {` の書き方は 27 ファイル・60 か所（kanade 19・sakura 3・ghost 2・talk 2・areka 1）。
+  - `OnBalloonTimeout`／`OnBalloonClose` は表示の側（`emo2_boot/balloon_visibility*.rs`）が時間切れを知る。送る道は汎用の `KanadeMsg::RaiseEvent` で足りる（時間切れのときは台詞が終わって定常・トーク無し）＝kanade の運行表は表へ 3 行足すだけで済む見込み。
+  - 3 語の返事の台本も `translate-pipeline` の出口を通り、`OnTranslate` に掛かる（作業は増えない・テストの期待に `OnTranslate` が載る）。
+  - 網羅台帳の 3 行（`OnBalloonClose:1`・`OnBalloonTimeout:1`・`OnBalloonBreak:1`）と `\![set,balloontimeout]` の行の `owner` は、まだ分割元の `areka-P0-balloon-canon-residue` のまま。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-kanade/src/schedule/events.rs`（`ALLOWED_EVENT_IDS` の末尾 3 行・組み立ての関数）・`schedule/events_change_tests.rs`（個数）・`crates/areka-kanade/src/lib.rs`（`pub mod events`）
+  - `crates/areka-kanade/src/schedule/user_break.rs`・`schedule/mod.rs`（`on_talk_done` の中断の腕）・`schedule/mod.rs` の `State`（scope を控えるなら欄 1 つ＝`..` なしで `State` を組むテスト 14 か所）
+  - `crates/areka/src/emo2_boot/talk_lifecycle.rs`（`BalloonLifecycleNotice` の予約を外す）・`emo2_boot/balloon_visibility.rs`・`balloon_visibility_wait.rs`・`balloon_visibility_phase.rs`
+  - `crates/areka/src/input_events/user_break.rs`（中断の scope を運ぶなら）。`input_events/mod.rs` は触らない見込み
+  - Reference2 を作るなら追加で: `crates/areka-parsers/src/sakura/{lexer,model,decode}.rs`・`crates/areka-sakura/src/{compile,drive}.rs`・`crates/dola/src/cue/`・`crates/areka-talk/src/lib.rs`
+  - `doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/ledger/{shiori,sakura-script}.toml`
+- 議題（答えで作業が変わるものだけ）:
+  1. Reference2（中断位置）を今作るか。作るなら字句から完了の知らせまで位置を通す工事（台本のコンパイルの列と同時に走れない・規模が倍）。作らないなら空で送って COMPAT §8 に縮退を登記し、別 spec に切る。
+  2. areka で `OnBalloonClose` が起きる場面はどれか（areka のバルーンには閉じるボタンが無く、ダブルクリックは中断＝`OnBalloonBreak`）。時間切れ以外に「閉じる」が無いなら、`OnBalloonClose` は台詞の差し替え・`\c` などで閉じたときだけになるのか、要件で決める。
+- 見つけた穴: 網羅台帳の `owner` が分割元のまま（上記）。実害は無いが、着地のときに本 spec 名へ直す。並走の照合: `mouse-drag-events` とは `events.rs` の表の末尾・個数の行・`lib.rs` の `pub use` の 3 か所で文字が必ず衝突する（中身は独立・後着が足し直せば済む）。`areka` のクレートでは同じファイルを触らない（向こうは `input_events/mod.rs` と新規 `drag.rs`）。
+- 追記（棚卸㉑の分割の指示）: kanade の `schedule/steady.rs`（929 行）・`schedule/mod.rs`（937 行）は分割されていない。本 spec の変更を足して 1,000 行を超えるなら、先頭のタスクで分割する。

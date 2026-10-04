@@ -68,3 +68,28 @@
 ## 2026-10-03 C4 の候補（10-03 の再編（開発者「MCP は複合 spec なので早めに着手したい」））
 
 - 段は「優先」。C3 に入れなかった理由: 依存の席を C3 の `animated-image-decode` が使い、`dist/README.txt` を C3 の winget と分け合う。
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: S〜M（8〜12 タスク）。切らない（areka の見つけ方が 1〜2 タスク増えた）。
+- 前提の状態: **満たす**。`mcp-server-core`（PR#219）は着地済み。台帳の前提に残る `package-check-temp-cleanup` は 10-02 に `release-package-versioned` へ合流し、その spec が着地済み（PR#218）＝前提は `mcp-server-core`・`release-package-versioned` の 2 本と読み替える（roadmap の台帳の行の前提の欄も同じく古い）。`release-ci-workflow`（PR#224）・`crates-io-publish`（PR#225）も着地済み。
+- 崩れた前提／古くなった位置:
+  - **既定の待受は 9801 が先**: `crates/areka-mcp/src/port.rs` の `DEFAULT_PORTS = [9801, 9821]`・`FALLBACK_STEPS = 9`＝候補は 9801・9821・9802・9822 … 9810・9830 の 20 個で、先に空いていた 1 つ。本文の「既定 9821」と Out of Boundary の「SSP と同じ 9801 の焼き込み（areka は既定 9821）」は古い。**SSP が 9801 を持っているとき、候補を順に試すだけの中継は SSP につながる**（下の穴）。
+  - areka の名乗り: `initialize` の応答の `serverInfo.name` は `"areka-mcp-server"`（`crates/areka-mcp/src/handler.rs` の `SERVER_NAME`）。help の HTML の題は「areka MCP サーバの登録」（`help.rs`）。
+  - 候補の定数を共有する手段: 中継が `areka-mcp` に依存すると rmcp・tokio・hyper を引き込む（`Cargo.lock` には既に在るので新しい外部依存にはならないが、exe が太る）。定数を写して、一致を検査で判定する手もある。
+  - help の Desktop の節は今「中継は今後の版で用意します」の 1 文（`help.rs` の `help_html`・`help_tests.rs` は「Claude Desktop」と「中継」の 2 語だけを見る）。設定例に中継の**絶対パス**を入れるには、`help_html(port)` の引数に exe の置き場を足す＝呼び手 `crates/areka-mcp/src/dispatch.rs`（`help_html(port)` の 1 か所）と、その値を渡す `areka_mcp::start` の引数・`crates/areka/src/main.rs` の結線まで波及しうる。
+  - 配布: `tools/package.ps1`（726 行・`release-package-versioned` の後）で同梱に変える所は ⑴ `$ALLOWED_EXECUTABLES` ⑵ 本体ビルドの段（`cargo build --locked --release -p areka --target …` の CPU 種別ごとの繰り返しに `-p <中継>` を足す）⑶「静的リンクの確認」の `$exes` の表 ⑷ `Test-ZipContent` の根の項目の一覧と機種の表（`$machines`）。`.github/workflows/release.yml` は `tools/package.ps1 -Arch all` を呼んで zip と `.sha256` を照らすだけで exe の一覧を持たない＝変える所 0 の見込み。
+  - 新しいクレートはワークスペースに自動で入る（根の `members = ["crates/*"]`）＝根の `Cargo.toml` は 0 行・`Cargo.lock` にパッケージの行が 1 つ増える。`tools/crates-io.ps1` の判定により、新しいクレートの `Cargo.toml` に「`publish = false # 理由`」の行が要る。
+  - `dist/README.txt`: 本体のクレジットの見出し「◆ areka 本体（areka.exe・shiori-host32-helper.exe）」に中継を足し、使い方（Desktop の設定）を 1 節。
+- 触るファイル（並走の照合用）:
+  - **新規** `crates/areka-mcp-bridge/**`（名前は要件で決める・bin・`Cargo.toml` に `publish = false # 理由`）
+  - `Cargo.lock`（パッケージの行 1 つ・外部依存を足さなければ `THIRD-PARTY-NOTICES.md` は変わらない）
+  - `crates/areka-mcp/src/help.rs`・`help_tests.rs`（Desktop の設定例）。絶対パスを入れるなら `crates/areka-mcp/src/dispatch.rs`・`server.rs`／`lib.rs`（`start` の引数）・`crates/areka/src/main.rs` の結線
+  - `tools/package.ps1`・`dist/README.txt`
+  - 他の spec の brief への申し送り: `release-code-signing`（署名する exe の一覧に中継を足す）・`winget-manifest-submission`（`NestedInstallerFiles` に中継を入れるか）
+- 議題（答えで作業が変わるものだけ）:
+  - areka の見つけ方: 候補を順に試して最初に応えた所へつなぐか、`initialize` の `serverInfo.name`（または help の題）で areka だと確かめてからつなぐか。前者だと SSP が 9801 を持っているとき SSP へつながる。
+  - 候補の定数を `areka-mcp` への依存で共有するか、写して一致を検査するか。
+  - help に中継の絶対パスを載せるか（載せるなら `mcp-server-core` の `start` の引数と `dispatch.rs` まで触る）。
+  - （既存）exe の名前／ポートを引数でも渡せるか／arm64 の zip に入れるか／winget の `PortableCommandAlias` を付けるか。
+- 見つけた穴: 本文が前提にする「既定 9821」は今の実装（9801 が先）と逆。素朴に候補を辿る中継は、SSP が起動していると黙って SSP の MCP につながり、Desktop の利用者は SSP のゴーストを操作していることに気付けない。

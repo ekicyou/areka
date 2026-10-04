@@ -77,3 +77,49 @@
 - **そのままでは 20 タスクを超える**＝要件の段で「働き（範囲・クリックとホバー・`OnAnchorSelect`／`OnAnchorSelectEx`）」と「装飾 16 × 状態 3」に切り、**働きを先に**。働きの側は `text-align-shadow-canon`・`choice-marker-styling` を待たなくてよい（依存は同じファイルを触るだけ）。
 - 変わっていない点: `sakura/decode.rs` に `_a` の腕は無い・`OnAnchorSelect` は 0 件・字句の直しは済み。`viewbox_draw` の行番号は古い。
 - **触るファイル**: `crates/areka-parsers/src/sakura/decode.rs`・`crates/areka-sakura/src/compile.rs`・`crates/areka-emo-text/src/{actor 系, viewbox_draw 系}`・`crates/areka/src/input_events/` のバルーン・kanade の `schedule/events.rs`。文字まわりの直列の列に並ぶ（`emo-text-file-split` → `shell-balloon` の後）。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: 一括なら 22〜28 タスク＝**切る**。
+  - **① 働き（`anchor-tag-canon` の名前のまま）・M（12〜15）**: `\_a` の全形の解読（`\_a[ID]`・`\_a[ID,r2,…]`・**`\_a[OnID,r0,…]`**＝ID が `On` で始まればその名前のイベントを直接送る形〔ukadoc `\_a[OnID,r0,r1...]`・本 brief の「3 形」に抜けている 4 つ目〕・閉じの `\_a`）→ compile → 文字の層でアンカーの範囲を持つ → 当たり判定の行（選択肢の `ChoiceHitRow` と同じ形）→ ホバーとクリック（普通のバルーンと箱）→ `OnAnchorSelectEx`→`OnAnchorSelect` の順の送出（Reference は ukadoc どおり）。見た目は**既定の 1 種類だけ**（非選択は既定の色、ホバーは選択肢と同じ強調）で、作者の指定は効かなくてよい。
+  - **② 装飾（新しい spec を起こす。名前の案 `anchor-style-canon`）・M（10〜13）**: `\f[anchor*]` 16 項目（`anchorstyle`・色 4 系・`anchormethod`〔`SetROP2` の名前〕× 選択中／非選択／訪問済みの 3 状態）・`\f[anchor.font.color]`・descript の `anchor.font.*`／`anchor.notselect.font.*`／`anchor.visited.font.*` の読み取り（`balloon/parse.rs` の完全一致の引きの注記と `parse_tests.rs` の「拾ってはいけない」例 `anchor.font.color.r` の意図の書き換え）・訪問済みの記録・縦書きで下線を列の右へ。
+  - 順序: ①を先に（列の 2 番目）、②は列の後ろ（`text-align-shadow-canon` の後）。
+  - **今 2 本の brief に切るべきか**: 切るべき。roadmap の直列の列は既に①と②を列の 2 番目と 12 番目に置いており、あいだに 9 本が入る。1 spec＝1 ブランチ＝1 PR なので 1 本のままでは列の形どおりに進められない。要件の段で切ると、②の requirements が①の着手から 9 本ぶん寝かされて陳腐化する。今のうちに②の brief を起こし、①の brief の Scope から装飾を外すのがよい。
+  - ②は `choice-marker-styling`（`\f[cursor*]` 10 項目）と形がほぼ同じ（形状 4 種・ブラシ／ペン／文字の色・`SetROP2` の描画方法・非選択の 5 項目）。②と `choice-marker-styling` を列で隣に並べ、先に着地する方が「descript × 実行時の 2 層で印の見た目を解く型」と `SetROP2` の名前の受け取りを作り、後の方が使う形を推す（1 本へ合わせると 15〜20 で上限の直前になるので合わせない）。
+- 前提の状態: 字句の直し（`sakura-bare-tag-lexer`・PR#134）・`text-decoration-canon`（下線の描画の基盤）・`choice-timeout-directive`（PR#215・`compile.rs`）・`emo-text-file-split`・`shell-balloon` はすべて着地済み。①の前提は満たす。②は `text-align-shadow-canon` の後（同じ `look.rs`・`viewbox_draw` 系）。
+- 崩れた前提／古くなった位置:
+  - 分割でホバーとクリックは `input_events/balloon_moved.rs`（`on_balloon_pointer_moved`）と `balloon_pressed.rs`（`on_balloon_pointer_pressed`）へ、行の描画と強調の矩形は `viewbox_draw_render.rs`（`render_styled`・`ChoiceDraw`・`highlight_rect`）へ、1 コマの流れは `actor_present.rs`（`present_actor`）へ移った。brief の `viewbox_draw.rs:346-354` は無効。
+  - **箱（シェル内バルーン）のクリックは別の道**: `input_events/shell_box_handler.rs`（ホバーと押下の前段）と `shell_box.rs` の純関数（`judge_box_click`・`BoxPressVerdict`＝今は「選択で使った／シェルの操作」の 2 値）。アンカーを箱でも押せるようにするには、ここに「アンカーで使った」を足す必要がある。箱は `ResolvedBalloonText` と描画を普通のバルーンと共有しているので、範囲と見た目は自動で両方に効く。
+  - kanade 側の送出は選択肢と同じ並び: `areka-kanade/src/msg.rs`・`schedule/events.rs`・`schedule/choice.rs`（`translate-pipeline` で `schedule/steady.rs` は分割済み）。選択の受け口は `input_events/choice_drain.rs`（`ChoiceSelectionInbox`）。
+  - 文字の装飾の受け口は `look.rs` の `Note::AnchorColorAsDefault` の腕と、所有外のキーの判定（`look.rs` の `is_unowned`：`starts_with("anchor")`）。これは②の仕事。
+  - dola の `CueCommand` に種類を足すと網羅の match が連鎖する（`emo-text` の `actor.rs`／`state.rs`・`areka-ghost` の `sink.rs`／`prop_sink.rs`・`areka-seriko` の `actor.rs`・`areka-sakura` の `contract.rs`・`dola` の `sink.rs`、ほか `emo2_boot` の `*_cue.rs` 6 本は `Custom` を見るだけ）。`Choice` と同じく専用の種類にするか、既存の種類に乗せるかで①の規模が 2〜3 タスク動く。
+- 触るファイル（並走の照合用・①働き）:
+  - `crates/areka-parsers/src/sakura/{decode.rs, model.rs}`（`"_a"` の腕・`Instruction`）
+  - `crates/areka-sakura/src/compile.rs`（＋`drive.rs` の可能性）
+  - `crates/dola/src/cue/command.rs`（種類を足すなら）と網羅の match の各所（上記）
+  - `crates/areka-emo-text/src/{state.rs, actor.rs, actor_present.rs, viewbox_draw_render.rs, choice.rs}`（範囲・当たり判定の行・既定の見た目）、範囲を layout が運ぶなら `layout.rs` 系
+  - `crates/areka/src/input_events/{balloon.rs, balloon_moved.rs, balloon_pressed.rs, choice_drain.rs, shell_box.rs, shell_box_handler.rs}`
+  - `crates/areka-kanade/src/{msg.rs, schedule/events.rs}`（＋`schedule/choice.rs` に倣う新しいファイル）
+  - `doc/ukadoc-coverage/ledger/{sakura-script,events}.toml`・`doc/COMPAT_ARCHITECTURE.md` §8
+- 触るファイル（②装飾）: `crates/areka-emo-text/src/{look.rs, state_decoration.rs, viewbox_draw_render.rs, viewbox_draw_decoration.rs, balloon_overrides.rs}`・`crates/areka-parsers/src/balloon/{model.rs, parse.rs, parse_tests.rs}`
+- 議題（答えで作業が変わるものだけ）:
+  1. アンカーを dola の専用の種類にするか（`Choice` と同じ）、既存の種類に乗せるか。
+  2. ①の既定の見た目（作者の指定が無いときの非選択・ホバーの姿）。①で何も描かないと「押せるのに見えない」になる。
+  3. 話している最中のアンカーのクリックの扱い（ukadoc は「選択肢タイムアウトしないが、通常トーク同様バルーンタイムアウトする」と書くだけ）。`talk-fast-forward` の早送りのクリックと同じ箱の押下を取り合う＝どちらが先に着地しても、後の方は `shell_box.rs` の判定の順を決め直す。
+- 見つけた穴: バグの候補は無い。ただし brief の Scope が `\_a[OnID,…]` の形を数えていない（作業の抜け）。
+
+
+## 2026-10-04 棚卸㉑で切った後の範囲
+
+- **本 spec は働きだけを持つ**（M・12〜15 タスク）。装飾（`\f[anchor*]` 16 項目×3 状態・`\f[anchor.font.color]`・descript の `anchor(.notselect|.visited).font.*` 族・訪問済み・縦書きの下線）は新しい spec **`areka-P0-anchor-style-canon`** へ移した（開発者「負荷が高すぎる仕様は分割を検討せよ」）。
+- **見た目は既定の 1 種類だけ**: 作者の指定が無いときの姿（非選択の姿とホバーの姿）を 1 つ決めて描く。作者の指定（`\f[anchor*]`・descript）は本 spec では効かなくてよい（受け取りは今までどおり `unowned_vocab()` に保持）。何も描かないと「押せるのに見えない」になるので、既定の姿は要件で決める。
+- **Scope の読み替え**:
+  - In から外す: 「装飾 16 項目」「descript `anchor(.notselect|.visited).font.*` 族の解析」「訪問済み状態の管理」「縦書き下線位置（bvc 語彙継承）」→ すべて `anchor-style-canon`。
+  - In に残す: `\_a` の全形の解読・アンカーの範囲の保持・クリックとホバー・`OnAnchorSelect`／`OnAnchorSelectEx`・既定の見た目 1 種類・決定論テスト。
+  - In に足す: ⑴ **4 つ目の形 `\_a[OnID,r0,r1,…]`**（ID が `On` で始まれば、クリックでその名前のイベントを直接送り、続く引数を Reference0 以降に入れる・ukadoc の `\_a[OnID,r0,r1...]` の項）。本 brief の「3 形」はこれを数えていない。⑵ **シェル内バルーンの箱の押下**: 箱の押下は `crates/areka/src/input_events/shell_box_handler.rs` → `shell_box.rs` の純関数 `judge_box_click` を通り、結論 `BoxPressVerdict` は今「選択で使った／シェルの操作」の 2 値しかない。ここに「アンカーで使った」を足す（ホバーも同じ前段）。範囲と見た目は箱も普通のバルーンと同じ道（`ResolvedBalloonText`・描画）を通るので自動で効く。
+  - Desired Outcome の「装飾 16 項目＋descript `anchor.*.font.*` 族が 3 状態で効き、下線は縦書きで列の右側に出る」は `anchor-style-canon` の到達点へ読み替える。
+- Boundary Candidates の「アンカー範囲＋イベント（機能）と装飾 16 項目（見た目）の 2 相」は、この切り出しで消化した。
+- 箱の押下の判定は `talk-fast-forward`（話している最中の早送り）・`balloon-markers`（矢印のクリック）も同じ `judge_box_click` に結論を足しにくる。先に着地した方が判定の順（選択 → アンカー → 早送り → シェル の順など）を決め、後の方がそこへ足す。

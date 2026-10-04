@@ -93,3 +93,29 @@
 ## 2026-10-03 ウェーブ C3-⑤ へ（予定・10-03 の再編（開発者「MCP は複合 spec なので早めに着手したい」））
 
 - 依存を足す席を C1 の `mcp-server-core` へ返し、C3 へ移した。`animated-image-playback` は `surface-element-nesting`（C3）を待つので、動く画像の列は遅れない。上の「推す設計」（`AtlasKey` と `manifest.rs` を変えない）は変わらず必須＝同じ C3 の `surface-element-nesting` と共有 0。
+
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M（11〜15 タスク）。変わらず。
+- 前提の状態: 前提の spec は無い（α の完成宣言のみ）＝満たす。依存を足す席は C1 の `mcp-server-core` が使い終えた（着地済み・`tech.md` に rmcp・tokio・hyper の登記あり）＝C3 で本 spec が 1 本だけ依存を足す形は成り立つ。
+- 崩れた前提／古くなった位置:
+  - `crates/areka-emo-atlas` には棚卸⑳の後も版の 1 行（`Cargo.toml`）以外の変更が無い。`shell-balloon` は atlas に触らなかった（完了 design の Out of Boundary）。brief と棚卸⑳の記述はそのまま有効。
+  - `image-webp` は crates.io でまだ 0.2.4 が最新（2026-10-04 に crates.io の版の一覧で確認・0.2.5 は未公開）。lock も 0.2.4。動く WebP の透過の欠陥の議題は残る。
+  - `image` は今も `crates/wintf/Cargo.toml` の dev-dependency だけ（0.25.9 指定・lock は 0.25.10・機能 `png`・`webp`）。
+- `surface-element-nesting` と共有 0 で並べる条件（厳しめに見た結果・3 つとも守るとき共有 0）:
+  1. `AtlasKey{set, rel_path}` を変えない（変えると `areka-emo-compose` の `blit.rs`・`blit_transparent_alpha_tests.rs`・`log_firing_tests.rs` へ波及＝相手の crate）。
+  2. `manifest.rs` を変えない（相手は `collect_elements`・`resolve_indirect` を必ず触る）。動く絵かどうかは `bake` の中（`lib.rs`）で読み手に聞けば足り、鍵の集め方は今のまま 1 ファイル 1 鍵でよい。
+  3. **`AtlasTable::new(keys, entries, pages)` の形を変えない**（新しく見つけた条件）。`keys.len() == entries.len()` を `assert_eq!` で守る密な表で、呼び手は `lib.rs` のほか `areka-emo-compose/src/blit.rs` のテスト 2 か所と `crates/areka/src/` のテスト 7 ファイル（`emo2_boot/adapter_rebased_tests.rs`・`balloon_visibility_*`・`frame/switch_tests.rs`・`frame_test_support.rs`・`input_events/balloon_test_support.rs`）。2 枚目以降のコマは別の欄（例: 鍵の `ElementId` → コマの `ElementId` 列）に持ち、`bake` からだけ呼ぶ別の組み立ての口で足す。
+  - 読み手の口は trait `ElementDecoder`（`decode.rs`）に既定の実装つきのメソッドを足す形なら、外の実装は `WicDecoderArm`・`MemoryDecoder` の 2 つだけ（どちらも atlas の中）、`&impl ElementDecoder` を受ける `areka-emo-present` の `balloon.rs`・`shell_target.rs` も無改変で済む。`DecodedImage {…}` を直に書く所も atlas の中だけ（`decode.rs`・`decode/wic_arm.rs`・`normalize.rs`・`normalize_key_color_tests.rs`）。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-atlas/src/{decode.rs, decode/wic_arm.rs, lib.rs, table.rs}`・新規 `crates/areka-emo-atlas/src/decode/<動く絵の読み手>.rs` と兄弟のテスト
+  - `crates/areka-emo-atlas/Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`（生成物）・`deny.toml`（要れば）・`.kiro/steering/tech.md`
+  - 新規: 3 形式の小さな検体（`crates/areka-emo-atlas/src/testdata/` の下）
+- 議題（答えで作業が変わるものだけ）: 棚卸⑳のまま（動く WebP の透過の欠陥を待つか `[patch.crates-io]` で固定するか／GIF の繰り返し回数のために `gif` を直に呼ぶか／コマ数と総画素の上限）。新しい議題は無し。
+- 見つけた穴: 無し（実害のあるバグの候補は見当たらない）。
+
+## 2026-10-04 ウェーブ C3-⑥（棚卸㉑）
+
+- 段は「優先（依存を足す席）」。C3 は 11 本並走（`roadmap.md`「ウェーブ編成」の C3 の行が正本）。着手は最新の main から。
+- 同じウェーブの約束: `AtlasKey`・`manifest.rs`・`AtlasTable::new(keys, entries, pages)` の形を変えない（呼び手が compose の `blit.rs` と areka のテスト 7 ファイル）。コマは別の欄と `bake` だけが呼ぶ別の口で足す。`ElementDecoder` には既定の実装つきのメソッドで足す。

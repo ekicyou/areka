@@ -57,3 +57,21 @@
 
 - 優先度 低。前提（`charset-canon`・`host32-window-thread-pump`）は完了済み。通信の札（Hello/Load/Request/Response/Unload）は変わっていない。
 - **縮める**: SHIORI/3 にベースウェアへ問い合わせる正典の道は無い見込みで、答えは「登記して先送り」か「SSTP 経由」になりそうである＝**最初の 1 段（調べて裁定する・文書だけ）で終わる形にする**。輸送を作ると決まったときだけ M。`makoto-dll-host` と同じクレートを触るので同時に走らせない。`main.rs`（946 行）を触りうる。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: 1 段目（調べて裁定・文書だけ）で終わるなら XS〜S（2〜4 タスク）。輸送を作ると決まったときだけ M（10〜14）。切る: なし（前回の「1 段目で終わる形」のまま）。
+- 前提の状態: `charset-canon`・`host32-window-thread-pump` は着地済み。
+- 崩れた前提／古くなった位置:
+  - 通信の札 `crates/shiori-host32-ipc/src/lib.rs` の `MsgTag` は Hello／Load／Request／Response／Unload の 5 つのまま。`crates/shiori-abi/src/interface.rs` の `GetProperty`／`SetProperty` も変わらない。
+  - `crates/areka/src/main.rs` は 957 行（前回 946・上限まで 43）。輸送を作る場合に `main.rs` を触ると上限に当たる＝結線は `ghost_session.rs` か `areka-ghost` の側へ置く。
+  - 外から読む道として `mcp-get-property`（C3-⑦・SSP MCP の `get_property`）が別に作られる。これは開発者向けで、SHIORI から読む道ではない＝本 spec の裁定の材料に「同期で読みたいゴーストには何があるか」を足すだけで、役割は重ならない。
+  - `.ext.*` の逆向きのイベント `property.get`／`property.set` の網羅台帳の持ち主は、まだ `property-query-channels`（`shiori.toml`）。棚卸⑬で本 spec へ移した語彙なので、1 段目の文書で台帳の持ち主も直す。
+- 触るファイル（並走の照合用）:
+  - 1 段目: `doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/ledger/shiori.toml`（2 行の持ち主）だけ
+  - 輸送を作るなら: `crates/shiori-host32-ipc/src/lib.rs`・`crates/shiori-host32-host/src/`・`crates/shiori-host32-helper/src/`・`crates/shiori-abi/src/interface.rs`・`crates/areka/src/shiori_host.rs`・`crates/areka-ghost/src/shiori_inproc.rs`
+- 議題（答えで作業が変わるものだけ）: なし（1 段目の裁定そのものが本 spec の仕事）。
+- 見つけた穴: 上の網羅台帳の持ち主のずれ（実害なし）。並走の照合: 1 段目は文書だけ＝どの spec とも並べられる。輸送を作るなら `makoto-dll-host`・`property-query-channels`（`SenderType` のため `shiori-host32-host` を触る）と同時に走らせない。

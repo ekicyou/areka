@@ -2,7 +2,7 @@
 //!
 //! 描画面を「キャンバスに置かれる変換行列付き矩形コンテンツ（住人）」の集合として表現する
 //! `ContentCanvas`／`Resident`／`ResidentContent`（GlyphRun／Image シーム／Surface シーム）／
-//! `RegionTransform`（M1 は恒等/平行移動のみ）／`TextEffects`（M2 予約）を担う。
+//! `RegionTransform`（M1 は恒等/平行移動のみ）／`TextEffects`（予約）を担う。
 //!
 //! **層規律**: 純粋層——`windows` 系 crate への依存を一切持たない（決定論檻）。
 //! 行列は自前表現（emo-compose の行列原則と収束可能な統一形・emo-compose は改変しない）。
@@ -24,7 +24,7 @@
 //! M1 の実装住人はグリフ（[`GlyphRunContent`]・1 行=1 住人）のみ・Image/Surface は
 //! 型シーム（実挙動なし・R8.5——描画実行時の `warn!`＋skip は COM 層 draw の領分）。
 //!
-//! ## M2 予約（記録のみ・実装しない・R8.3/R10.3）
+//! ## 予約（記録のみ・実装しない・R8.3/R10.3）
 //!
 //! `\f` 系のうち**寄せ 2 項目（`align`／`valign`）は今も未実装**（語彙の記録のみ）で、
 //! 追跡先は `areka-P0-text-align-shadow-canon`。正典 2 ページで `valign` の写像が逆である
@@ -38,28 +38,28 @@
 //! [`ResolvedFont::looks`](crate::draw::ResolvedFont::looks) で実体化済みで、本シームに属さない。
 //! [`TextEffects`] に残るのは次の予約名だけである:
 //!
-//! - [`RESERVED_EFFECT_MULTICOLOR`]／[`RESERVED_EFFECT_ROTATION`]——M2 予約のまま
+//! - [`RESERVED_EFFECT_MULTICOLOR`]／[`RESERVED_EFFECT_ROTATION`]——予約のまま
 //!   （所有仕様なし・実挙動を持たない）。
 //! - [`RESERVED_EFFECT_SHADOW`]——影 3 項目の実体化は `areka-P0-text-align-shadow-canon`
 //!   が所有する。
 //! - [`RESERVED_EFFECT_OUTLINE`]——白抜き。上下付き（`\f[sub]`／`\f[sup]`）とあわせて
 //!   `areka-P0-text-decoration-canon` が**語彙のみ**で受理する裁定を下した（6 値の解釈・
-//!   状態の保持・戻しへの参加までは行い、表示は変えない）。表示手段が見つかるまで M2 予約
-//!   （追跡先＝steering `roadmap.md` の M2 予約の行）。
+//!   状態の保持・戻しへの参加までは行い、表示は変えない）。表示手段が見つかるまで予約
+//!   （追跡先＝`roadmap.md` の『予約』節の行）。
 
 use crate::layout::{PositionedGlyph, PositionedLine};
 use crate::region::TextRegion;
 use crate::writing::WritingMode;
 
-/// M2 予約名: 白抜き `outline`（`areka-P0-text-decoration-canon` が語彙のみで受理する
-/// 裁定を下し、表示手段が見つかるまで M2 予約に据え置いた・R8.3/R10.3）。
+/// 予約名: 白抜き `outline`（`areka-P0-text-decoration-canon` が語彙のみで受理する
+/// 裁定を下し、表示手段が見つかるまで予約に据え置いた・R8.3/R10.3）。
 pub const RESERVED_EFFECT_OUTLINE: &str = "outline";
-/// M2 予約名: 多色装飾 `multicolor`（記録のみ・実装しない・所有仕様なし・R8.3/R10.3）。
+/// 予約名: 多色装飾 `multicolor`（記録のみ・実装しない・所有仕様なし・R8.3/R10.3）。
 pub const RESERVED_EFFECT_MULTICOLOR: &str = "multicolor";
-/// M2 予約名: シャドウ装飾 `shadow`（記録のみ・実体化の所有は
+/// 予約名: シャドウ装飾 `shadow`（記録のみ・実体化の所有は
 /// `areka-P0-text-align-shadow-canon`・R8.3/R10.3）。
 pub const RESERVED_EFFECT_SHADOW: &str = "shadow";
-/// M2 予約名: 回転 `rotation`（記録のみ・実装しない・R8.2/R8.3）。
+/// 予約名: 回転 `rotation`（記録のみ・実装しない・R8.2/R8.3）。
 pub const RESERVED_EFFECT_ROTATION: &str = "rotation";
 
 /// 変換行列付き領域の行列（R8.1）——3x2 アフィン行列の自前表現（windows 非依存）。
@@ -68,7 +68,7 @@ pub const RESERVED_EFFECT_ROTATION: &str = "rotation";
 /// （点の写像は `(x', y') = (m11·x + m21·y + dx, m12·x + m22·y + dy)`）。
 /// **M1 はコンストラクタが恒等（[`identity`](Self::identity)）と平行移動
 /// （[`translation`](Self::translation)）のみを生成する（R8.2）**——回転・拡縮の
-/// 生成口は M2 で解禁する型シーム（予約名 [`RESERVED_EFFECT_ROTATION`]）。
+/// 生成口は α 後に解禁する型シーム（予約名 [`RESERVED_EFFECT_ROTATION`]）。
 /// 合成・適用は一般アフィン積で計算する（emo-compose の行列原則と収束可能な統一形・R8.6）。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RegionTransform {
@@ -135,7 +135,7 @@ impl RegionTransform {
     }
 
     /// M1 不変条件の表明: 回転・拡縮成分ゼロ（コンストラクタが translation のみ生成
-    /// するため恒真——生成口が M2 で増えた時に檻が破れないための `debug_assert`・R8.2）。
+    /// するため恒真——生成口が α 後に増えた時に檻が破れないための `debug_assert`・R8.2）。
     fn debug_assert_m1_translation_only(&self, context: &str) {
         debug_assert!(
             self.is_translation_only(),
@@ -145,12 +145,12 @@ impl RegionTransform {
     }
 }
 
-/// **行単位**の文字装飾の M2 予約型シーム（R8.3/R10.3——実挙動なし・フィールド未使用）。
+/// **行単位**の文字装飾の予約型シーム（R8.3/R10.3——実挙動なし・フィールド未使用）。
 ///
 /// 予約対象: 白抜き（語彙のみ・上記の裁定）・多色・シャドウ（`areka-P0-text-align-shadow-canon`
 /// が所有）・回転（予約名定数はモジュール doc 参照）。文字ごとの `\f` 装飾は
 /// [`TextLook`](crate::look::TextLook) が担うため本型には載らない。
-/// `#[non_exhaustive]` により M2 でのフィールド追加は破壊的変更にならない。
+/// `#[non_exhaustive]` により α 後のフィールド追加は破壊的変更にならない。
 /// 今日は [`Default`] 生成のみ可能で、描画へ一切影響しない。
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -272,7 +272,7 @@ pub struct Resident {
     pub content: ResidentContent,
     /// キャンバス上の配置変換（M1: 恒等/平行移動のみ・R8.2）。
     pub transform: RegionTransform,
-    /// M2 予約の**行単位**の文字装飾シーム（白抜き〔語彙のみ〕/多色/シャドウ/回転・R8.3）。
+    /// 予約の**行単位**の文字装飾シーム（白抜き〔語彙のみ〕/多色/シャドウ/回転・R8.3）。
     pub effects: TextEffects,
 }
 
@@ -463,9 +463,9 @@ mod tests {
         assert_eq!(RegionTransform::identity().then(&a), a);
     }
 
-    // ── R8.3/R10.3: TextEffects——行単位の M2 予約の型シーム（予約名は定数記録のみ） ──
+    // ── R8.3/R10.3: TextEffects——行単位の予約の型シーム（予約名は定数記録のみ） ──
 
-    /// M2 予約名（outline/multicolor/shadow/rotation）は定数として記録するに留める。
+    /// 予約名（outline/multicolor/shadow/rotation）は定数として記録するに留める。
     /// TextEffects 自体はフィールド未使用の予約型（既定値のみ生成可能）で、文字ごとの
     /// `\f` 装飾（[`TextLook`](crate::look::TextLook)）はここを通らない。
     #[test]

@@ -393,7 +393,7 @@ fn handler_double_click_left_and_right_send() {
 }
 
 /// 送出集合檻（7.1・7.3）: 中／拡張ボタンのダブルクリックと単発クリックはいずれも
-/// 送出せず false を返す（OnMouseDoubleClickEx は M2・OnMouseClick 単発は不送出）。
+/// 送出せず false を返す（OnMouseDoubleClickEx は α 後・OnMouseClick 単発は不送出）。
 #[test]
 fn handler_middle_xbutton_and_single_click_do_not_send() {
     let (mut world, rx) = world_with_wiring(

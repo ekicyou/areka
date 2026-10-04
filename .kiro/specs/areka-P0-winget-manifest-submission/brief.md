@@ -64,3 +64,28 @@
 ## 2026-10-03 ウェーブ C3-①（予定・10-03 の組み直し（開発者「1 バグ・2 リリース関係・バルーン関係・アニメーション画像関係・3 その他」））
 
 - 段は「優先」。C3 は C2 の着地で brief が動くので、着手の前に同じウェーブの他の spec と触るファイルを照合し直す（`roadmap.md`「ウェーブ編成」の C3 の行）。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: S（7〜10 タスク・下の議題 2 で上げ直しの実測を足すと +1〜2）。切る: なし。
+- 前提の状態: `release-package-versioned`・`release-ci-workflow`・`crates-io-publish` は着地。**`release-cycle` の初回（`v0.0.2`）はまだ**＝Release が無いので初回の手提出（Desired 3）はできない。マニフェストの雛形・手元の `--manifest` の確かめ・`winget.yml` は Release が無くても作れる（手元の確かめは `release-package-versioned` の `verification/winget-local-check.md` と同じく、手元の http サーバーから zip を配る形で通る）。
+- 崩れた前提／古くなった位置:
+  - **リンク経由の起動の問題は areka 側で解いた**。`release-package-versioned`（PR#218）が `crates/areka/src/boot_config.rs` に、起動した exe のリンクを解く `follow_exe_links` と、それを 1 度だけ求めて覚える `exe_location` を足し、`resolve_root`・`default_helper_exe_path`・`default_app_profile_dir` がそれを通る。実機で `winget install --manifest` → `areka` の 1 語で起動 → リンク経由で根を引けたことを確かめ済み。brief の「`ArchiveBinariesDependOnPath: true` で避ける」は、もう唯一の手ではない（下の議題 1）。
+  - 同 spec の設計の範囲外に「portable を外す・上げるときに、入れ先の中の記憶（`profile\areka`・ゴーストの `profile`）が消えるかの利用者向けの扱いは `winget-manifest-submission` へ申し送り」とある（`completed/areka-P0-release-package-versioned/design.md` の「Out of Boundary」）。brief は外すとき（アンインストール）しか書いていない。areka の根は exe の隣なので、利用者が入れたゴースト・記憶・`.nar-work` もすべて winget の入れ先の中に住む（下の議題 2）。
+  - 手元の確かめの手順の罠は `release-package-versioned` の `verification/winget-local-check.md` が正本（`LocalManifestFiles` は管理者で入れて戻す・ID は `ARP\User\X64\<Id>__DefaultSource` になり `winget list` で引いて `--exact --purge`・開発者モードがオフだとリンクの代わりに PATH が足される）。
+  - `release.yml` は `workflow_dispatch` でも動く（main での乾いた走り）。`winget.yml` を `workflow_run` で受けるなら、元の走りが `push` で、タグ（`head_branch` が `v*`）で、緑のときだけ進む絞りが要る（乾いた走りで PR を出さない）。`winget-releaser` に渡す版も `workflow_run` の `head_branch` から取る。
+  - 書き足す場所: `dist/README.txt` の「■ 入手のしかた」は箇条書き 1 行（zip）だけで、winget の行を同じ箇条書きに足せる形になっている（`crates-io-publish` が用意）。「■ 既知の制限」の先頭に「areka.exe には署名がありません」が既に在る。`README.md` は PR#222 で書き直され、「## 入手と起動」の箇条書きが 1 行（「まだ GitHub Releases での配布はしていない」）。
+- 触るファイル（並走の照合用）:
+  - `dist/winget/**`（新規・3 ファイル×版の雛形）
+  - `.github/workflows/winget.yml`（新規）
+  - `dist/README.txt`（「■ 入手のしかた」に 1 行・「■ 既知の制限」に 2 行）
+  - `README.md`（「## 入手と起動」の箇条書き）
+  - 同じウェーブ C3 の他の 8 本はどれもこの 4 つに触らない。後で `dist/README.txt` を触る `install-live-target-hazards`・`mcp-stdio-bridge`（どちらも C4 の候補）・`release-code-signing` とは順に並ぶ。
+- 議題（答えで作業が変わるものだけ）:
+  1. **`ArchiveBinariesDependOnPath` を付けるか**。⒜ 付ける（brief どおり）＝リンクを作らず入れ先を PATH に足す。areka の外の都合（DLL を探す順など）にも強いが、PATH に areka のフォルダが丸ごと載る ⒝ 付けない＝winget の既定（リンクを作る。ただし管理者でない利用者は開発者モードがオンのときだけリンクになり、オフなら winget が入れ先を PATH に足す＝実測）。areka は今リンクを解けるのでどちらでも動く。どちらにするかでマニフェストの欄と手元の確かめの見るもの（`(Get-Command areka).Source` がリンクかどうか）が変わる。
+  2. **上げ直し（`winget upgrade`）で利用者のゴースト・記憶が残るか**。portable の上げ直しは古い版を外してから新しい版を入れる。areka は利用者のゴースト（`ghost\`）・areka の記憶（`profile\areka\`）・ゴーストの記憶を入れ先の中に置く。winget が「自分が置いたファイルだけ」を消すなら残るが、同梱の `ghost\emo2` は新しい版で上書きされる。実測していない。⒜ 本 spec で手元の 2 版のマニフェスト（例 0.0.2 → 0.0.3 の名乗りで同じ zip）を使って上げ直しを 1 回確かめ、結果を説明書に書く ⒝ 確かめずに既知の制限として「上げ直しの前に ghost と profile を写しておく」と書く。消えると分かったら置き場を変える別の spec が要る（インストーラー版の `%APPDATA%` と同じ話）。
+  3. （既存）`max-versions-to-keep` の数・Tags の語。
+- 見つけた穴: なし（議題 2 は実測していないので穴とは書かない）。

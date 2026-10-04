@@ -404,11 +404,9 @@ impl TextSurface {
         self.size
     }
 
-    /// back 面（`1 - front`）への crate 内アクセス——後続 ViewboxExecutor（task 6）が
+    /// back 面（`1 - front`）への crate 内アクセス——ViewboxExecutor が
     /// D2D ターゲット bitmap を巻く本番描画の書き込み先。front（確定面）を読み口に残したまま
     /// back へ描き、`flip` で交換する（面内 blit ＋ ダーティ描画の描き先・R1.2）。
-    /// task 6 の配線までは未使用のため dead_code を許容する（前方シーム）。
-    #[allow(dead_code)]
     pub(crate) fn back_tex(&self) -> &ID3D11Texture2D {
         &self.sources[1 - self.front]
     }
@@ -434,8 +432,6 @@ impl TextSurface {
     /// **src=front と dst=back は別テクスチャ**ゆえ重なり未定義動作はない（ダブルバッファの
     /// 存在理由）。back の露出帯（非コピー域）は呼び手（ViewboxExecutor）がダーティ描画で埋める
     /// 契約——本メソッドは平行移動のみを担う。immediate context（`self.context`）で発行する。
-    /// task 6 の ViewboxExecutor 配線までは本番非経路（テストのみ使用）のため dead_code を許容する。
-    #[allow(dead_code)]
     pub(crate) fn copy_front_to_back_shifted(&mut self, blit: (i32, i32)) {
         let front = &self.sources[self.front];
         let back = &self.sources[1 - self.front];
@@ -490,8 +486,6 @@ impl TextSurface {
 
     /// front/back の役割交換（コピーなし・EndDraw 成功後に呼ぶ）。以降 present/read_back は
     /// 新しい front（直前の back＝最新確定面）を読む。
-    /// task 6 の ViewboxExecutor 配線までは本番非経路（テストのみ使用）のため dead_code を許容する。
-    #[allow(dead_code)]
     pub(crate) fn flip(&mut self) {
         self.front = 1 - self.front;
     }
@@ -775,7 +769,7 @@ mod tests {
     }
 
     /// 固定層差し込み点は型シームのみ＝データを一切持たない（zero-sized・M1 で描画へ
-    /// 影響し得ない構造保証・R7.2）。他 crate 内シーム（`TextEffects`・M2 予約）と
+    /// 影響し得ない構造保証・R7.2）。他 crate 内シーム（`TextEffects`・予約）と
     /// 同じ zero-sized 規律。
     #[test]
     fn fixed_overlay_seam_is_type_only() {

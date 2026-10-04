@@ -177,11 +177,6 @@ pub fn move_window_with_route(
 /// 確定である（詳細は [`BalloonKeywordBase`] の doc）。素材はリサイズを待たずに消えることも
 /// ある——利用者がバルーンをドラッグして相対位置を保存した瞬間に退役するからである
 /// （要件 4.7・`drag_follow::retire_keyword_base_on_save`）。
-// 本体では結線済み（`emo2_boot::frame::dpi`／`emo2_boot::frame::drain_resnap` が呼ぶ）。
-// allow が要るのは examples が `placement/mod.rs` を `#[path]` include して本体を伴わずに
-// ビルドする形があるためで、そちらでは本関数に到達する呼出が存在しない
-// （[`resize_window_keep_position`] の allow と同じ事情）。
-#[allow(dead_code)] // examples が #[path] include するため、本体未使用ビルドでも必要
 pub fn resize_window_to(
     world: &mut World,
     char_window: Entity,
@@ -446,7 +441,7 @@ pub fn resize_window_to(
 /// # Concurrency
 ///
 /// UI スレッド・World 排他（`&mut World`）。他 actor は触れない（design State Management）。
-#[allow(dead_code)] // schedule 登録（結線）は main.rs／runtime 側の領分（本 task は定義のみ）
+#[allow(dead_code)] // schedule へ登録する呼び手は本番に無い・テストだけが使う
 pub fn anchor_changed_system(
     world: &mut World,
     mut state: Local<Option<SystemState<Query<'static, 'static, Entity, Changed<Anchored>>>>>,
@@ -1160,7 +1155,6 @@ fn window_rect_of(world: &World, window: Entity) -> Option<RectPx> {
 /// 本関数の書込は定義上つねに [`PlacementRoute::KeepPositionResize`]（経路語彙が関数名
 /// そのもの）ゆえ、[`resize_window_to`] と違い route を引数で受けない——受けても
 /// 呼出側が渡せる値は 1 つしか無く、取り違えの余地だけを増やすため。
-#[allow(dead_code)] // examples が #[path] include するため、本体未使用ビルドでも必要
 pub fn resize_window_keep_position(world: &mut World, window: Entity, new_size: SizePx) -> bool {
     // 0. 存在確認（要件 6.2/6.3・design D8 消費側）: 破棄済みバルーン窓は正常終了系として
     //    debug で打ち切る（下の `WindowPos` 未付与 warn は**実在する**窓の異常に取っておく）。

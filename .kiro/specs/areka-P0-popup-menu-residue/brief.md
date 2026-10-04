@@ -84,3 +84,26 @@
 - 項目 9（引受先の無い語彙 4 件＝`shiori.toml` の `char_2a.popupmenu.type`・`char_2a.popupmenu.visible`・`kero.popupmenu.type`・`sakura.popupmenu.type`。台帳の持ち主は完了 `popup-menu-minimal` のまま）の持ち主の付け替えは `coverage-roadmap-refresh` が行う。
 - **本文の古い記述**: 43・48 行あたりが `ghost-shell-balloon-switch`・`baseware-root-layout` を「これから行う」と書いているが、どちらも完了済み。3 人目以降のキャラクターの窓（`char{n≧2}`）は今どの spec も持っていない（説明書の既知の制限）。
 - 単独で回すより、次に `crates/areka/src/menu/` を触る spec へ相乗りするのが安い。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: S（5〜7 タスク）。切る: なし。段は「その他」のまま。
+- 前提の状態: 上流なし。10-02 の後に `crates/areka/src/menu/`・`readme.rs`・`emo2_boot/readme_cue.rs` を触ったコミットは 0。
+- 崩れた前提／古くなった位置:
+  - 項目 7: sink の数は今も **11**（`emo2_boot/mod.rs` の `wire_emo2_boot` の `sinks: vec![…]`。`shell-balloon` は足していない）。`spine.rs` のコメントは今も「現在は 4 本」「4-sink 構成」。
+  - 項目 4: `menu/trigger.rs` の `finish` の「`[menu] TrackPopupMenuEx failed`」は残っている（`trigger_show_tests.rs` が同じ文言を逐語で見ている＝文言を変えるとテストも直す）。
+  - 項目 6: `areka-kanade/src/actor.rs` の往復の失敗の 3 か所（「——終了系列（Fault）へ」）は残っている。
+  - 項目 9: `menu/captions.rs` の `UNQUERIED_POPUPMENU_RESOURCES` は残っている。台帳の 4 行の持ち主は完了 `popup-menu-minimal` のまま＝付け替えは `coverage-roadmap-refresh`。
+  - 本文の「`ghost-shell-balloon-switch` へ渡す」（3 人目以降の窓）は、渡し先が完了済みで持ち主が居ない（roadmap の覚え書き）。
+- 触るファイル（並走の照合用）:
+  - `crates/areka/src/menu/{trigger.rs, win32.rs, captions.rs}`・`menu/trigger_show_tests.rs`
+  - `crates/areka/src/readme.rs`・`crates/areka/src/emo2_boot/readme_cue.rs`
+  - `crates/areka/src/emo2_boot/spine.rs`（コメントだけ）
+  - `crates/areka-kanade/src/actor.rs`（記録の文言 3 か所）
+  - `crates/areka-kanade/src/actor_resources.rs`（接頭辞を揃えるなら）
+  - 共有しうる相手: `menu/` を触る未完了 spec は 0。`emo2_boot/spine.rs` は C2〜C3 の `emo2_boot` を触る spec（`shell-balloon` の後継・`balloon-lifecycle-events`）が近くを触りうるがコメント 1 か所。`areka-kanade/src/actor.rs` は kanade の進行の列（`mouse-drag-events`・`balloon-lifecycle-events` は `msg.rs`・`schedule/` で別のファイル）と重ならないが、`property-query-channels` は `actor.rs` に触る。
+- 議題（答えで作業が変わるものだけ）: なし（10 件の仕分けは要件の段で）。
+- 見つけた穴: なし。

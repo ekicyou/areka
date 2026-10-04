@@ -57,3 +57,21 @@
 ## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
 
 - 文字まわりの直列の列（`balloon-markers` の後）。透明度を時間で変える仕組みは `text-reveal-fade` と共用＝先に着地した方が作る。棚卸⑳では個別の再測定をしていない。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: S〜M（6〜9 タスク）。切らない。透明度を時間で変える仕組みを `text-reveal-fade` が先に作る（列で前）なら S。
+- 前提の状態: `balloon-markers`（同じスクロールの部分・手動スクロール）が未着手＝未。`text-reveal-fade` も未（列で前・仕組みを共用）。
+- 崩れた前提／古くなった位置:
+  - 分割での移り先: 見える範囲は `layout.rs` の `LayoutEngine::visible_window`、押し出しの計画は `viewbox.rs`（`ScrollPlanner` の前半・型）と `viewbox_diff.rs`（描き直す範囲の導出）、描画は `viewbox_draw_render.rs`、1 コマの流れは `actor_present.rs`。
+  - **シェル内バルーンの箱が本来の使い手**（参考ゴーストの 2 列の欄）。箱は同じ見える範囲・計画・描画を通る。キーはバルーン定義ごとの値（`ResolvedBalloonText` の側）に載せれば `balloon.名前`ブレスにも書ける（箱の定義も `balloon::parse` を通る）。
+  - 箱だけの論点: 箱の面は表示されている字の矩形でポインタを受ける（`actor_present.rs` の `glyph_cells` → `set_hit_cells`）。薄れている途中の押し出された行を当たりに入れるか。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-text/src/{layout.rs, viewbox.rs, viewbox_diff.rs, viewbox_draw_render.rs, viewbox_draw_plan.rs, actor_present.rs, actor.rs}`＋透明度の仕組み（`text-reveal-fade` が作る新しいファイル）
+  - `crates/areka-parsers/src/balloon/{model.rs, parse.rs}`（areka 独自のキー）
+  - `doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）: 箱の当たりの矩形に薄れていく行を入れるか（`text-reveal-fade` と同じ答えにする）。
+- 見つけた穴: なし。

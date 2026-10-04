@@ -1,0 +1,74 @@
+# Brief: areka-P0-anchor-style-canon
+
+> 2026-10-04 棚卸㉑で `areka-P0-anchor-tag-canon` から切り出した（開発者「負荷が高すぎる仕様は分割を検討せよ」）。元の spec はアンカーの**働き**（範囲・クリックとホバー・イベント）だけを持ち、本 spec はアンカーの**見た目**（装飾 16 項目×3 状態・descript の `anchor.*.font.*` 族・訪問済み・縦書きの下線）を持つ。正典の引用と経緯の正本は元の brief。
+
+## Problem
+
+- **ゴーストの作者**: アンカー（`\_a`・本文中のリンク）の見た目を変えられない。正典はスクリプトの `\f[anchor*]` で、選択中・非選択・訪問済みの 3 状態ごとに形状・色・描画方法を変えることを認めているが、areka は受け取って保持するだけで表示を変えない。
+- バルーンの descript.txt の `anchor.font.*`／`anchor.notselect.font.*`／`anchor.visited.font.*` 族も読んでいない。
+- 元の spec（働き）が着地すると、アンカーは既定の 1 種類の見た目だけで出る。作者が指定した見た目は本 spec の着地まで効かない。
+
+## Current State
+
+- 装飾 16 項目（ukadoc）: `anchorstyle`（`square`／`underline`／`square+underline`／`none`）・`anchorcolor`＝`anchorbrushcolor`・`anchorfontcolor`・`anchorpencolor`・`anchormethod`（Win32 `SetROP2` の名前・`default` でバルーン設定の標準へ戻る）が選択中、同じ 5 項目の `anchornotselect*` が非選択、`anchorvisited*` が訪問済み。ほかに `\f[anchor.font.color]`（アンカーの文字色）。
+- 文字の層は `\f[anchor*]` を `ActorTextState::unowned_vocab()`（`crates/areka-emo-text/src/state_decoration.rs`）に保持するだけ。所有外のキーの判定は `crates/areka-emo-text/src/look.rs` の `is_unowned`（`starts_with("anchor")`）。`\f[color,default.anchor*]` は `look.rs` の `apply_color` で既定色に解かれ、`Note::AnchorColorAsDefault` を返す。
+- 下線の描画の基盤は着地済み（`crates/areka-emo-text/src/viewbox_draw_decoration.rs` の `apply_font_ranges` が区間へ下線を渡す）。行の描画と強調の矩形は `viewbox_draw_render.rs`（`render_styled`・`ChoiceDraw`・`highlight_rect`）。
+- descript の読み手（`crates/areka-parsers/src/balloon/parse.rs`）は `anchor.font.*` を持たない。`parse.rs` の完全一致の引きの注記と `parse_tests.rs` は `anchor.font.color.r` を「拾ってはいけない例」として使っている＝読み取りを足すときにこのテストの意図を書き換える。
+- 縦書きでアンカーの下線は列の**右側**（bvc R5.3 の語彙が確定済み）。
+
+## Desired Outcome
+
+- `\f[anchor*]` 16 項目と `\f[anchor.font.color]` が、選択中・非選択・訪問済みの 3 状態で正典どおりに効く。`default` でバルーン定義の値へ戻る。
+- descript の `anchor.font.*`／`anchor.notselect.font.*`／`anchor.visited.font.*` を読み、スクリプトの指定と 2 層（descript の上に実行時が後勝ち）で解く。
+- 一度クリックしたアンカーは訪問済みの見た目になる。
+- 下線は横書きで字の下、縦書きで列の右側に出る。
+- 普通のバルーンとシェル内バルーンの箱の両方で同じ規則が効く。
+
+## Approach
+
+- 元の spec（働き）が置いたアンカーの範囲と、既定の 1 種類の見た目の上に、3 状態の見た目の解決を重ねる。
+- 解決の形は選択肢の印（`choice-marker-styling`＝`\f[cursor*]` 10 項目）とほぼ同じ（形状 4 種・ブラシ／ペン／文字の色・`SetROP2` の描画方法・非選択の 5 項目）。先に着地した方が「descript × 実行時の 2 層で印の見た目を解く型」と `SetROP2` の名前の受け取りを作り、後の方が使う。
+- 新しい項目は `look.rs` の `TextLook` の欄として足す。戻す操作（`state_decoration.rs` の `TextLayerState::reset_decoration`）は `TextLook` を丸ごと置き換えるので、列挙なしで戻る。箱の `font.follow`（スコープに付いて回る／箱だけ）の振り分けにも同じ理由で自動で乗る。
+
+## Scope
+
+- **In**: `\f[anchor*]` 16 項目×3 状態・`\f[anchor.font.color]`・`default` での復帰・descript の `anchor(.notselect|.visited).font.*` 族の読み取りと 2 層の解決・訪問済みの記録・縦書きの下線（列の右側）・`SetROP2` の名前の受け取りと未知の名前の縮退（記録つき）・普通のバルーンと箱・網羅台帳の更新・決定論テスト（3 状態 × 縦横 × descript の有無）。
+- **Out**: アンカーの働き（`\_a` の解読・範囲・当たり判定・クリックとホバー・`OnAnchorSelect`／`OnAnchorSelectEx`・既定の見た目＝`anchor-tag-canon`）・選択肢の印の `\f[cursor*]`（`choice-marker-styling`）・装飾の基盤（`text-decoration-canon`・完了）。
+
+## Boundary Candidates
+
+- 解決の層（descript × 実行時の 2 層・3 状態の選び分け）と、描画（形状・下線・描画方法）の 2 相。
+
+## Out of Boundary
+
+- アンカーの範囲の持ち方とクリックの道（元の spec が決める）。本 spec は範囲と「どの状態か」を読むだけ。
+
+## Upstream / Downstream
+
+- **Upstream**: `anchor-tag-canon`（働き・範囲と既定の見た目・必須先行）・`text-decoration-canon`（完了・下線の基盤）・`text-align-shadow-canon`（同じ `look.rs`・`viewbox_draw_render.rs` を触る＝列で先）・bvc（完了・縦書きの下線の写像）。
+- **Downstream**: アンカーを使うゴースト資産の見た目の互換。
+
+## Existing Spec Touchpoints
+
+- **Extends**: `areka-P0-anchor-tag-canon`（切り出し元・装飾の部分を引き継ぐ）。
+- **Adjacent**: `choice-marker-styling`（同じ形の 3 状態の印・列で隣に並べる）・`text-align-shadow-canon`（同じファイル）。
+
+## Constraints
+
+- 既定（作者の指定なし）では、元の spec が決めた既定の見た目と同じ結果になること。
+- 1 ファイル 1,000 行（`look.rs` 771・`choice.rs` 744 行＝足す量によっては新しいファイルで足す）。決定論テスト網羅は必達。ログ無しの失敗の経路を作らない。
+
+## 2026-10-04 棚卸㉑で切り出し
+
+- 元の spec: `areka-P0-anchor-tag-canon`（一括だと 22〜28 タスクで上限 20 を超えるため、働きと装飾に切った）。
+- 規模: M（10〜13 タスク）。
+- 前提: `anchor-tag-canon`（働き）の着地。文字とバルーンの直列の列の上では `text-align-shadow-canon` の後（同じ `look.rs`・`viewbox_draw_render.rs`）。
+- `choice-marker-styling` と隣に並べる理由: 形がほぼ同じ（形状 4 種・ブラシ／ペン／文字の色・`SetROP2` の描画方法・非選択の 5 項目）で、「descript × 実行時の 2 層の解決」と「`SetROP2` の名前の扱い」を共用できる。離して並べると同じ仕組みを 2 度作るか、後の方が古い設計を読み直すことになる。1 本へ合わせると 15〜20 で上限の直前になるので合わせない。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-text/src/{look.rs, state_decoration.rs, viewbox_draw_render.rs, viewbox_draw_decoration.rs, balloon_overrides.rs}`（＋足す量によっては新規と `lib.rs`）
+  - `crates/areka-parsers/src/balloon/{model.rs, parse.rs, parse_tests.rs}`
+  - 訪問済みの記録の置き場所（元の spec が作るアンカーの状態の隣・`crates/areka-emo-text/src/state.rs` か `actor.rs` の見込み）
+  - `doc/ukadoc-coverage/ledger/{sakura-script,assets}.toml`・`doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）:
+  1. `SetROP2` の描画方法（`anchormethod`）を Direct2D でどこまで再現するか（D2D に ROP2 は無い。`copypen` 以外を合成モードへ写すか、既定へ縮退して記録するか）。`choice-marker-styling` と同じ答えにする。
+  2. 訪問済みをいつまで覚えるか（その台詞の間・バルーンが閉じるまで・ゴーストが起きている間）。

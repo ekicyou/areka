@@ -66,3 +66,31 @@
 ## 2026-10-03 ウェーブ C3-②（予定・10-03 の組み直し（開発者「1 バグ・2 リリース関係・バルーン関係・アニメーション画像関係・3 その他」））
 
 - 段は「優先」。C3 は C2 の着地で brief が動くので、着手の前に同じウェーブの他の spec と触るファイルを照合し直す（`roadmap.md`「ウェーブ編成」の C3 の行）。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M（8〜11 タスク）。切らない。
+- 前提の状態: `emo-text-file-split`（✅ PR#217）・`shell-balloon`（✅ PR#227）とも着地済み＝前提は満たす。
+- 崩れた前提／古くなった位置:
+  - **シェル内バルーンの探し場所の口は `shell-balloon` が作った**: 純関数 `emo2_boot/shell_box_assets.rs` の `box_font_search_dirs`（シェルのフォルダ → ゴーストのフォルダ）が順を決め、`ShellBoxAssets::hand_to` → `TextLayerRuntime::set_box_layout` で文字の層へ渡り、`actor_box.rs` の `box_font_dirs()` で読める（欄は `actor.rs` の `TextLayerRuntime::box_font_dirs`＝**ランタイムに 1 つ**）。組み立ては `emo2_boot/assets.rs`（`font_dirs: box_font_search_dirs(…)` の行）。本 spec はこれを読むだけでよい。
+  - **普通のバルーンの探し場所（バルーンのフォルダ → ゴーストのフォルダ）を運ぶ口はまだ無い**。今文字の層へ渡っているのは警告用のフォルダ名だけ（`actor_decoration.rs` の `set_balloon_label`・呼び手は `frame/attach.rs` の装着と `frame/switch.rs` のバルーン切替）。同じ 2 か所の隣に「探し場所」を渡す呼び出しを足すのが素直＝`frame/attach.rs`・`frame/switch.rs` を触る。
+  - 棚卸⑳の議題「ランタイムごとかスコープごとか」は、箱の側が「ランタイムに 1 つ」で決まった。普通のバルーンもゴーストに 1 つのバルーンなので同じ形で足りる（スコープごとに違うバルーンを持つ経路は今無い）。
+  - 分割での移り先: 書式を作る `create_text_format` の呼び手は `draw.rs`（`DrawExecutor`・照合用）・`draw_metrics.rs`（`DWriteMetrics::new_shared`）・**`viewbox_draw_render.rs` の `ensure_format`**（本番の描画・分割前は `viewbox_draw.rs`）の 3 か所。`FontCatalog` を作るのは `actor_decoration.rs` の `build_actor_render`（actor ごと・箱も同じ関数）と `viewbox_draw.rs` の `ViewboxExecutor::new`（照合用）と `draw_metrics.rs` の `DWriteMetrics::new`。
+  - 箱も普通のバルーンも `ResolvedBalloonText::resolve_with_background` と `build_actor_render` を通る＝読み込みの仕組みは 1 つで両方に効く。違うのは探し場所の一覧だけ（箱＝`box_font_dirs`・普通＝新しい欄）。
+  - `.ttf`／`.otf`／`.ttc` を警告して読み飛ばす所は `draw_catalog.rs` の `FONT_FILE_EXTENSIONS` と `FontCatalog::pick` のまま。`THIRD-PARTY-NOTICES.md` が `cargo about generate` の生成物（`tools/test-all.ps1`）なのも変わらない。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-text/src/draw_catalog.rs`（フォント集の組み立て・ファイルの読み込み）
+  - `crates/areka-emo-text/src/draw.rs`（`create_text_format` にフォント集を渡す）・`draw_metrics.rs`・`viewbox_draw_render.rs`（`ensure_format`）・`viewbox_draw.rs`（`ViewboxExecutor::new`）
+  - `crates/areka-emo-text/src/actor_decoration.rs`（`build_actor_render`・探し場所の入れ口）・`actor.rs`（`TextLayerRuntime` に普通のバルーンの探し場所の欄）・`actor_box.rs`（箱の `font.name` に `box_font_dirs` を渡す所）
+  - `crates/areka-emo-text/src/look.rs`（`\f[name,…]` の候補の解決が同じ読み手を通るか）
+  - 新規ファイル（フォント集の寿命を `draw_catalog.rs` の外に置くなら）＋`crates/areka-emo-text/src/lib.rs`（新しいファイルの登録の一覧 `PURE_SOURCES`／`SOURCES_OUTSIDE_THE_PURE_SCAN`）
+  - `crates/areka/src/emo2_boot/frame/attach.rs`・`frame/switch.rs`（普通のバルーンの探し場所を渡す）・`emo2_boot/assets.rs`（バルーンのフォルダの場所の取り出し）
+  - 試験用フォントの検体（新規・置き場所は要件で決める）・`about.hbs` か検体の隣のライセンス文・`doc/ukadoc-coverage/ledger/{assets,sakura-script}.toml`・`doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）:
+  1. `FontCatalog` を actor ごとに作り直している（`build_actor_render`）。ファイルのフォント集をここで毎回組むか、ランタイムに 1 つ持って共有するか（共有なら切替での作り直しの時機を決める）。
+  2. 試験用フォントのライセンスの置き場所（`THIRD-PARTY-NOTICES.md` は生成物で手書きが消える）。
+- 見つけた穴: なし（実害のあるものは見つからなかった）。
+- 並走の判定（厳しめ）: `shell-balloon-frame-align` とは `actor.rs`・`actor_box.rs`（と新しいファイルを足すなら `lib.rs`）が重なる＝**並べない**。`balloon-canon-residue` とは `frame/attach.rs`・`frame/switch.rs` が重なる＝**並べない**。本 spec は文字の列で単独で走らせる。

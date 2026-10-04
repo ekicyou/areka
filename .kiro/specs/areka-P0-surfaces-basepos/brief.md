@@ -60,3 +60,19 @@ surfaces.txt の `point.basepos.x/y` 宣言が parse で転記され、move 解�
 - 優先度 低・据え置き（basepos を宣言するシェルが要るまで始めない）。
 - **brief の誤り**: 「trait の実装を差し替えるだけ」は成り立たない。`fn basepos(&self, window_size)` は面の番号を受け取らないが、宣言された basepos は面ごとの値である＝trait の形を変える必要があり、値は作者の画素なので拡大率を掛ける。
 - シェルのパーサ（`areka-parsers/src/shell/{model,decode}.rs`）を `shell-balloon`・`surface-element-nesting`・`animated-image-playback` と共有＝それらの後。
+
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: S（5〜8 タスク）。据え置きのまま（basepos を宣言するシェルが要るまで始めない）。
+- 前提の状態: 着手の条件（`point.basepos` を宣言する実シェルの適合が要ること）は未。シェルの element の列では `surface-element-nesting`・`animated-image-playback`・`balloon-element-order` の後。
+- 崩れた前提／古くなった位置:
+  - `crates/areka/src/emo2_boot/move_cue.rs` の `BaseposResolver`（`fn basepos(&self, window_size: SizeI)`）・`CanonDefaultBasepos`・`resolve_move_target_position` は棚卸⑳のまま。`basepos` を読む所は parsers・compose に 0 件。棚卸⑳の訂正（trait は面の番号を受け取らないので形を変える・値は作者の画素なので拡大率を掛ける）も有効。
+  - `shell-balloon` が「`surface*`ブレスの中の行を、画像の読み手とは別の 2 つ目の転記で拾う」前例（`crates/areka-parsers/src/shell/boxes.rs` の `parse_boxes` → `crates/areka-emo-compose/src/boxes.rs` の `fold_boxes`）を作った。`point.basepos.x/y` も同じ形で拾えば `Shell`・`Surface` の型（構造体リテラルで 30 を超えるファイル）に触らずに済む。逆に `decode.rs` の読み手に欄を足すと、その波及を本 spec が負う。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-parsers/src/shell/` の新規の転記（`parse_boxes` と同じ型）か `decode.rs`・`model.rs`
+  - `crates/areka-emo-present/src/shell_target.rs`（面ごとの basepos の表を運ぶなら）
+  - `crates/areka/src/emo2_boot/move_cue.rs`（trait の形）と `move_cue_tests.rs`
+  - `doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/ledger/assets.toml`
+- 議題（答えで作業が変わるものだけ）: 着手のときに、転記を `parse_boxes` と同じ 2 つ目の転記にするか、画像の読み手（`decode.rs`）へ足すか（推し: 前者）。
+- 見つけた穴: 無し。

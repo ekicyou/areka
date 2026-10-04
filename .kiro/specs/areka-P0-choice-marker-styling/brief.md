@@ -66,3 +66,21 @@
 ## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
 
 - 優先度 低。中身は今も正しいが、行番号はすべてずれた（警告は今 `choice.rs` の 585〜591 行あたり）。`text-align-shadow-canon` への依存は同じファイルを触るだけ（`look.rs`・`viewbox_draw` 系）＝文字まわりの直列の列に並ぶ。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: S（5〜8 タスク）。切らない。
+- 前提の状態: `text-decoration-canon`（下線の基盤）・`choice-render` は着地済み。列の上では `text-align-shadow-canon` の後（同じ `look.rs`・`viewbox_draw_render.rs`）＝その意味では未。
+- 崩れた前提／古くなった位置:
+  - 行番号はすべて古い。下線系→塗りへの縮退は `choice.rs` の `ResolvedChoiceStyle::resolve`（`style_has_underline` の腕で warn「cursor.style underline 系は M1 未対応: SquareFill へ縮退」）。ホバーの描画は分割で `viewbox_draw_render.rs`（`ChoiceDraw`・`ChoiceHover`・`highlight_rect`）へ移った。下線を区間へ渡す `apply_font_ranges` は `viewbox_draw_decoration.rs`。所有外のキーの判定は `look.rs` の `is_unowned`（`starts_with("cursor")`）。
+  - **シェル内バルーンの箱にも自動で効く**: descript の `cursor.*` は `ResolvedBalloonText::choice_style` に解かれ、箱も同じ `ResolvedBalloonText::resolve_with_background` を通る（`actor_box.rs` の `register_box`）。実行時の `\f[cursor*]` は箱の `font.follow` の振り分け（`state_decoration.rs`）に乗る。箱の選択肢の当たりは `input_events/shell_box.rs`／`shell_box_handler.rs` で、本 spec は触らない。
+  - **`anchor-tag-canon` の装飾の側と形がほぼ同じ**（形状 4 種・ブラシ／ペン／文字の色・`SetROP2` の名前の描画方法・非選択の 5 項目）。2 本を列で隣に並べ、先に着地する方が「descript × 実行時の 2 層で印の見た目を解く型」と `SetROP2` の名前の受け取り（未知の名前の縮退込み）を作り、後の方が使う形を推す。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-text/src/{choice.rs, look.rs, state_decoration.rs, viewbox_draw_render.rs, viewbox_draw_decoration.rs}`
+  - `crates/areka-parsers/src/sakura/decode.rs`（`"f"` の腕の内側で済むなら触らない）
+  - `doc/ukadoc-coverage/ledger/sakura-script.toml`
+- 議題（答えで作業が変わるものだけ）: `SetROP2` の描画方法（`cursormethod`）を Direct2D でどこまで再現するか（D2D に ROP2 は無い。`copypen` 以外を合成モードへ写すか、既定へ縮退して記録するか）。`anchor-tag-canon` の装飾の側と同じ答えにする。
+- 見つけた穴: なし。

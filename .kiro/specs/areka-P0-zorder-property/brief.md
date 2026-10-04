@@ -66,3 +66,23 @@ ukadoc プロパティ **`currentghost.seriko.zorder`**（SSP 2.8.78・[SET有�
 - 優先度 低。規模 S。読み書きの解析と台帳は `crates/areka/src/placement/zorder_group_ledger.rs` に在り、文字列へ戻す関数はまだ無い。
 - **brief に無い問い 2 つ**: 台帳に「全部置き換える」口が無い（在るのは `try_add_tag_group`・`set_descript_base`・`reset_to_descript`）／空の文字列を書いたとき descript の基本の組も消すか。
 - 書く側は `property-query-channels` の受け口を通る。読む側は単独で出して試験できる。`zorder-chain-residue` の B-4（`doc/COMPAT_ARCHITECTURE.md` の行）を引き取ってよい。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: S（5〜8 タスク）。ただし書き込みを届ける先を本 spec が作るなら S〜M（8〜11）。切る: なし。
+- 前提の状態: `scope-zorder-pinning` は着地済み。読む道（`property-query-channels`・`mcp-get-property`）はまだ。
+- 崩れた前提／古くなった位置:
+  - 台帳 `crates/areka/src/placement/zorder_group_ledger.rs`（633 行）の公開の操作は今も `parse_zorder_tokens`・`try_add_tag_group`・`set_descript_base`・`reset_to_descript`・`groups`・`version`。文字列へ戻す関数と「全部置き換える」口は無い（前回どおり）。
+  - **読む値は動く**: タグ `\![set,zorder]`・`\![reset,zorder]` で台帳は実行中に変わる。sylphya に動く値を出す口が無い（`SylphyaPublisher` は静的・SHIORI 照会・永続だけ）＝`currentghost-property-tree` が作る口に乗るか、本 spec が先に作るか。
+  - **書く値の届け先が無い**: sylphya の SET で運行の値に分類されたものは `RuntimeCommandSink`（`crates/areka-sylphya/src/actor.rs`）へ渡す決まりだが、届け先は未登録（受けても警告を残して捨てる）。`currentghost.seriko.zorder` の書き込みを台帳まで届けるには、この届け先を登録する（UI のスレッドの台帳へ渡す）仕事が要る。届け先の登録は他の運行の値（`mousecursor.*` など）と共通の口になる。
+  - 先送りの見張り `crates/areka/src/placement/zorder_property_deferral_tests.rs` の `t_zpd40` は `crates/areka-sylphya/src` の全ソースを `zorder` で走査する＝語彙表へ載せるときはこのテストを同じ変更で改める（前回どおり）。
+- 触るファイル（並走の照合用）:
+  - `crates/areka/src/placement/zorder_group_ledger.rs`（文字列へ戻す・全部置き換える）と兄弟のテスト・`placement/zorder_property_deferral_tests.rs`
+  - `crates/areka-sylphya/src/{actor.rs, vocab/dotted.rs}`（`SET_EFFECTIVE` に `seriko.zorder`・届け先の登録）
+  - 届け先を UI へつなぐ所（`crates/areka-ghost/src/sylphya_wiring.rs`・`crates/areka/src/emo2_boot/mod.rs` の見込み）
+  - `doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/ledger/property.toml`（1 行）
+- 議題（答えで作業が変わるものだけ）: 前回の 2 つ（「全部置き換える」口・空文字で descript の基本の組も消すか）に加えて、`RuntimeCommandSink` の届け先の登録を本 spec が作るか、`property-query-channels`（書く道）か `currentghost-property-tree` が作るか（最初に要る spec が作る、が素直）。
+- 見つけた穴: なし。並走の照合: `currentghost-property-tree`・`property-catalog-lists` と sylphya の `actor.rs`・`dotted.rs` を分け合う＝直列。

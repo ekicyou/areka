@@ -86,3 +86,22 @@
 - 意味論は ukadoc から輸入する。ukadoc が沈黙するところは議題として開発者が決める。
 - 決定論のテスト網羅は必達。ログの無い失敗の経路を作らない。
 - 段は**優先**（バルーン関係）・**C4 の候補**（`shell-balloon` と `ghost-standard-balloon` の後）・`emo2_boot` の結線の列・規模 M（10〜14 タスク）・Fable 推奨。
+
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M（10〜14 タスク）。議題 4 で「シェルとバルーンを同じ切れ目で一度に替える」を選ぶと上限を少し超えうる（12〜16）。
+- 前提の状態: `shell-balloon` は着地済み（PR#227）。`install-companion-reading`（C2-⑥）・`ghost-standard-balloon`（C3-⑥）は未。
+- 崩れた前提／古くなった位置:
+  - `shell-balloon` が `crates/areka/src/emo2_boot/frame/switch.rs` を先に変え終えた: `finish_shell` は引数 `boxes: ShellBoxAssets` を受け、最初に `boxes.hand_to(...)`（箱の束を文字の層へ）→ 配置 → 重なり → `set_shell_dir` → `record_last_shell` → `OnShellChanged` の順。`SwapFinish::Shell` に `boxes` の欄が増え、`split` が `assets.boxes` を運ぶ。`finish_balloon` は `set_balloon_label` を呼ぶようになった。`emo2_boot/shell_balloon_switch.rs` は 4 行だけ変わった。brief の「`shell-balloon` と同時に走らせると `frame/switch.rs` でぶつかる」は解けた。
+  - 起動の側: `decide_boot_shell` は `ghost_session.rs` ではなく `crates/areka/src/boot_resolve.rs` に在り、`ghost_session.rs` の 2 か所から呼ばれる。バルーンは `boot_config.rs`（`resolve_balloon_for_ghost`）で先に決まる＝brief の「シェルを先に決めてからバルーン」への並べ替えは `boot_config.rs` と `ghost_session.rs` の両方に及ぶ。`ghost_session.rs`（873 行）は `mcp-tool-entrances`（PR#223）でも変わった。
+  - **切替の進行中の印は高々 1 つ**（`shell_balloon_switch.rs` の `SkinSwitchInFlight`。在れば次の要求は `skin_switch_busy` の `warn!` で断る）。シェルの着替えの中から今の入口（`request_skin_switch`）でバルーンの切替を出すと断られる。「同じ切れ目で一度に替える」なら、背景の資産づくり（`switch_assets.rs` の `SwapBuilt`）と `SwapFinish` にシェルとバルーンを一緒に持つ形を足す必要がある。「シェルの後に別の切れ目で替える」なら、`finish_shell` の後で改めて要求を出す（台詞の切れ目を 2 度待つ）。
+  - `PersistScope::Shell` は今も sylphya の中（`crates/areka-sylphya/src/persist/mod.rs`・`actor.rs`）だけで使われる。推しの「読む」案なら触らない。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-ghost/src/catalog.rs`（シェルのフォルダの `install.txt` の同梱の読み手）と兄弟のテスト
+  - `crates/areka/src/boot_resolve.rs`・`boot_config.rs`・`ghost_session.rs`（起動の順）
+  - `crates/areka/src/emo2_boot/frame/switch.rs` 635（`finish_shell`・`split`）・`emo2_boot/shell_balloon_switch.rs` 442・`emo2_boot/switch_assets.rs`（一度に替えるなら）・`emo2_boot/ghost_switch.rs` 891（ゴーストの切替で起こすときのシェルとバルーンの順）
+  - `doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/ledger/assets.toml`
+- 共有しうる相手: `balloon-canon-residue`（`frame/switch.rs`）・`mcp-reload`・`network-update-canon-order`（`ghost_switch.rs`・`ghost_session.rs`）・`ghost-standard-balloon`（`catalog.rs`・`boot_resolve.rs`・`boot_config.rs`＝前提として直列）。`shell-balloon-frame-align`（バグ・`actor_box.rs`・`frame/status_report.rs`・`balloon_visibility_phase.rs`・`spine.rs`）とは重ならない。
+- 議題（答えで作業が変わるものだけ）: brief の 4 つ。とくに 4（同じ切れ目で一度に替えるか）は、上の「進行中の印は 1 つ」のため、選んだ側で `switch_assets.rs`・`shell_balloon_switch.rs` まで広がるかが決まる。
+- 見つけた穴: 無し。

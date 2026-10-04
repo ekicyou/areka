@@ -98,7 +98,7 @@ pub enum SylphyaMsg {
 /// 差替シーム。M1 では sink 登録を行わず、[`SylphyaCore::apply`] は
 /// [`Effect::RuntimeCommandReserved`] を返して warn 記録するのみで実配送しない（R3.4）。
 pub trait RuntimeCommandSink: Send {
-    /// 運行コマンドを配送する（M1 未配線・M2 で seriko 等へ橋渡し）。
+    /// 運行コマンドを配送する（M1 未配線・α 後に seriko 等へ橋渡し）。
     fn dispatch(&self, asker: &AskerId, key: &str, value: &str);
 }
 
@@ -652,7 +652,7 @@ fn run_actor(
                 }
                 Effect::RuntimeCommandReserved { asker, key, value } => {
                     // SET 運行コマンド。M1 は sink 未登録（apply 側 warn 済み）→ 配送なし。
-                    // sink が登録されていれば橋渡し（M2 seriko 等・M1 未配線経路の予約シーム）。
+                    // sink が登録されていれば橋渡し（α 後の seriko 等・M1 未配線経路の予約シーム）。
                     if let Some(sink) = runtime_sink.as_ref() {
                         sink.dispatch(&asker, &key, &value);
                     }

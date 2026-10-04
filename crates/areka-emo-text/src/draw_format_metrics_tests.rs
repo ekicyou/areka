@@ -150,7 +150,7 @@ fn all_direction_recipes_share_leading_near_alignment() {
     }
 }
 
-// ── R4.4/R4.8/R16.4: 無効表示は実体・行単位の装飾は M2 予約のまま ──
+// ── R4.4/R4.8/R16.4: 無効表示は実体・行単位の装飾は予約のまま ──
 
 /// 無効表示の層が**実体化**し（色が背景との混色になる）、**行単位**の予約型
 /// （[`TextEffects`]）は今も 0 バイトのままであることを固定する
@@ -161,7 +161,7 @@ fn all_direction_recipes_share_leading_near_alignment() {
 /// 入れると黒背景の 2 つの断言が赤くなる。
 #[test]
 fn disable_layer_is_materialized_and_row_effects_stay_reserved() {
-    // 行単位の装飾は M2 予約のまま（0 バイト＝描画へ影響し得ない構造保証）。
+    // 行単位の装飾は予約のまま（0 バイト＝描画へ影響し得ない構造保証）。
     assert_eq!(std::mem::size_of::<TextEffects>(), 0);
 
     // ── バルーン定義なし: 既定は ukadoc 既定（黒）・無効表示は白背景との混色 ──

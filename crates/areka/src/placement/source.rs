@@ -57,15 +57,12 @@ const BALLOON_DPI_KEY: &str = "dpi";
 /// 「`char{n}.name`（あれば）」は同じ起点 descript を decode した `ghost_kv` から
 /// 補完する（正本は同一ファイル＝意味は等価・選択理由を本コメントに記録）。
 /// 欠落スコープは既定 [`DEFAULT_TITLE`]（パニックしない・常に文字列を返す）。
-#[allow(dead_code)]
-// scaffold（task 2.2）: spawn（task 5）が消費するまで非テストビルドでは未使用
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GhostTitles {
     /// スコープ番号 → タイトル（非公開・アクセサ `title` 経由）。
     titles: BTreeMap<usize, String>,
 }
 
-#[allow(dead_code)] // scaffold（task 2.2）: spawn（task 5）が消費するまで非テストビルドでは未使用
 impl GhostTitles {
     /// スコープの窓タイトルを返す。欠落時は既定 `"areka"`（panic しない）。
     pub fn title(&self, scope: usize) -> &str {
@@ -96,8 +93,6 @@ impl GhostTitles {
 /// `ghost_kv`/`shell_kv` は `kv::parse_kv` の出力形（`BTreeMap<String, String>`）
 /// そのままで、`config::build_placement_config(&ghost_kv, &shell_kv)` へ直接
 /// 供給できる（task 2.1 との結線契約）。
-#[allow(dead_code)]
-// scaffold（task 2.2）: 後続タスク（3〜6）が消費するまで非テストビルドでは未使用
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DescriptSource {
     /// ghost/master/descript.txt の生 KV（読取失敗時は空・継続）。
@@ -110,7 +105,6 @@ pub struct DescriptSource {
     pub titles: GhostTitles,
 }
 
-#[allow(dead_code)] // scaffold（areka-P0-emo-dpi-scaling task 2.1）: main.rs/measure 結線（task 4）まで非テストビルドでは未使用
 impl DescriptSource {
     /// shell descript の作者基準 DPI（ukadoc `seriko.dpi`・SSP 2.7.21+・design D1）。
     ///
@@ -134,7 +128,7 @@ impl DescriptSource {
 /// - shell descript 読取失敗 → `error!`＋`Err(PlacementError::DescriptRead)`
 /// - ghost descript 読取失敗 → `warn!`＋空 KV で継続（shell 側だけで emo2 は成立。
 ///   resolve 成功直後ゆえ通常は読めるが、TOCTOU への防御として寛容経路を維持する）
-#[allow(dead_code)] // scaffold（task 2.2）: main.rs シーム（task 6）が結線するまで非テストビルドでは未使用
+#[allow(dead_code)] // 本番の呼び手は無い（起動はシェル名つきの `load_descript_source_for_shell` を通る）・テストだけが使う
 pub fn load_descript_source(ghost_root: &Path) -> Result<DescriptSource, PlacementError> {
     load_descript_source_for_shell(ghost_root, None)
 }
@@ -210,7 +204,6 @@ fn read_kv_lenient(path: &Path) -> BTreeMap<String, String> {
 /// 縮退（design「Error Handling」・すべて観測可能・panic しない）:
 /// - ファイル不在・読取失敗 → `warn!`（[`read_kv_lenient`]・パス付き）＋無宣言扱い＝96
 /// - 無宣言 → `debug!`＋96 ／ 不正・0 → `warn!`＋96
-#[allow(dead_code)] // scaffold（areka-P0-emo-dpi-scaling task 2.1）: main.rs 結線（task 4）まで非テストビルドでは未使用
 pub fn load_balloon_author_dpi(balloon_root: &Path) -> u16 {
     let path = balloon_root.join(DESCRIPT_FILE);
     let kv = read_kv_lenient(&path);

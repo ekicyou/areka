@@ -76,3 +76,31 @@
 - 優先度 中。規模 L（**そのままでは 20 タスクを超える**＝要件の段で `balloon.scope` の 19 項目を先に切る）。
 - **崩れた前提**: 「値を出す場所は `emo2_boot` の 1 か所」は古い。α でゴースト・シェル・バルーンの切替が入り、ゴーストを起こすたびに実行環境が新しくなる＝値は実行環境ごと・切替のたびに出し直す（前例 `install/names.rs` の種の入れ直し・`ghost_switch.rs`）。`shelllist.*` は `areka_ghost::catalog::{list_shells, list_all_shells}` から出せる。`currentghost.status` は `ExecutionStatus::render` を使い回す。
 - 読む道は `property-query-channels` か `mcp-get-property`（開発者向け）。出すだけなら単独で作って試験できる。`property-catalog-lists` とは同じファイル（sylphya の語彙・`emo2_boot/mod.rs`）を触る＝直列。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: 網羅台帳 `property.toml` で本 spec が持ち主の行は 64。全部では 25〜32 タスク＝**切る**。案: ⒜ 動く値を出す仕組み（下記）＋`currentghost.balloon.scope(ID).*` の 19 項目＝M（13〜16）／⒝ `currentghost.scope(ID).*`（面・窓の位置と大きさ・モニタ）・`seriko.*`（`zorder` を除く 13）・`mousecursor.*`・`shelllist.*`・`status`＝M〜L（14〜18）。順は ⒜→⒝（⒝ は ⒜ の仕組みに乗る）。**brief は今分けてよい**: ⒜ は bvc（`.vertical`）の指名の受け皿で単独の価値があり、20 を大きく超える（25 以上）ので「一度切り出した spec は削らない」の目安の外。
+- 前提の状態: 読む道の `property-query-channels`・`mcp-get-property`（C3-⑦）はどちらもまだ。出すことと決定論のテストは単独でできる（前回どおり）。
+- 崩れた前提／古くなった位置:
+  - **動く値を出す口が sylphya に無い**: `SylphyaPublisher`（`crates/areka-sylphya/src/actor.rs`）の出す口は `publish_static`（静的構成）・`publish_shiori`（SHIORI 照会）・`persist_put`（永続）だけで、`BackingLayer::RuntimeState`（面・scope 系）は「縮退のまま層の存在を型で表す」と書かれたまま。読む側は `SharedMirror` の写し（`mirror.rs`）を引くだけ。面の番号・窓の位置・`status` は刻々と変わる＝「変わるたびに出し直す」か「読む時に問い合わせる」かを決め、口を足す（⒜ の最初の仕事）。
+  - `currentghost.status` を `ExecutionStatus::render` で作る案（前回）は、その値が kanade のスレッドの `State` から毎回導かれる点に注意（UI の側に写しは無い）。
+  - 切替: 値はゴーストの実行環境ごと（`ghost_switch.rs` の `runtime.sylphya_publisher()`・`crates/areka/src/emo2_boot/frame/switch.rs` の `record_memory`）。シェル・バルーンの切替は kanade を作り直さない＝`balloon.*`・`shelllist.*` は切替の後に出し直す。
+  - `shell-balloon`（PR#227）で、シェルの絵の中の箱（`balloon.名前`ブレス・`\b[名前]`）が入った。これは `currentghost.balloon.scope(ID)` の scope ではない＝19 項目の対象に入れないことを要件で書く。
+  - `emo2_boot/mod.rs` は 883 行・`ghost_switch.rs` は 891 行（どちらも上限に近い）。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-sylphya/src/{actor.rs, mirror.rs, vocab/dotted.rs, vocab/mod.rs}`
+  - `crates/areka-ghost/src/sylphya_wiring.rs`・`crates/areka-ghost/src/runtime.rs`
+  - `crates/areka/src/emo2_boot/{mod.rs, ghost_switch.rs, shell_balloon_switch.rs, frame/switch.rs}`＋新規（値を集める所・例 `crates/areka/src/property/`）
+  - ⒝ で `crates/areka-ghost/src/catalog.rs`（`list_shells`・`list_all_shells` を読むだけ）
+  - `doc/ukadoc-coverage/ledger/property.toml`・`doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）: 動く値を「変わるたびに出す」か「読む時に問い合わせる」か（前者は出す点が多く、後者は sylphya に読む時の問い合わせ口を足す）。brief を今分けるか（上の案）。
+- 見つけた穴: なし。並走の照合: `property-catalog-lists`（同じ sylphya の口・`dotted.rs`・`emo2_boot/mod.rs`）・`zorder-property`（同じ動く値の口）・`mcp-get-property`（`areka-ghost/src/runtime.rs`）とは同時に走らせない。動く値の口は 3 本（本 spec・`property-catalog-lists` の `system.clock` など・`zorder-property`）が共通に要る＝最初に着手する 1 本が作り、残りが使う。
+
+## 2026-10-04 棚卸㉑で切った後の範囲
+
+- 残した範囲: ⒜ 動く値を出す口（sylphya に足す・「変わるたびに出す」か「読む時に問い合わせる」かは本 spec の議題）と、`currentghost.balloon.scope(ID).*`・`balloon.汎用`・`balloon.count` の 19 項目・scope ID の列挙と未解決スコープの表し方。**動く値の口の持ち主は本 spec**（`system-property-values`・`currentghost-property-others`・`zorder-property` はこれを使う）。
+- 規模: M（13〜16 タスク）。
+- 移した先: `currentghost.scope(ID).*`・`mousecursor.*`・`seriko.*`（`zorder` を除く）・`shelllist.*`・`status`・`汎用` は新しい spec `areka-P0-currentghost-property-others` へ（本 spec が前提）。

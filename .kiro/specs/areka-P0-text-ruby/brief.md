@@ -58,3 +58,23 @@
 ## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
 
 - 文字まわりの直列の列（`text-typesetting` の後・同じ `layout` 系）。棚卸⑳では個別の再測定をしていない＝着手のときに照合する。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M〜L（12〜16 タスク）。切らない。
+- 前提の状態: `text-typesetting`（同じ配置の層・禁則の単位）が**未着手**＝未。`emo-text-file-split`・`shell-balloon` は着地済み。
+- 崩れた前提／古くなった位置:
+  - `TextItem` の定義は `state.rs`（`pub enum TextItem`）。配置の本体は分割で `layout_scan.rs`（`layout_inner` の駆動・`Scan`・`finish_line`）と `layout_scan_glyph.rs`（`Scan::glyph`＝親文字の単位の折り返し判定はここ）へ移った。描画は `viewbox_draw_render.rs`。
+  - **`line_gap` は今ランタイム共通**: 行送りの調整値は `state.rs` の `TextLayerConfig`（欄は `line_gap` だけ・既定 2.0）にあり、行送りは `TextLayerConfig::line_pitch`、計測側は `draw_metrics.rs` の `line_pitch`、選択肢の強調の帯は `choice.rs` が `metrics.line_pitch` を読む。バルーンのキー `line_height`／`letter_spacing` は**バルーン定義ごと**の値なので、ランタイム共通の `TextLayerConfig` ではなく `ResolvedBalloonText`（`actor.rs`）の側に置く必要がある。そうしないと普通のバルーンとシェル内バルーンの箱（同じ `ResolvedBalloonText::resolve_with_background` を通る・`actor_box.rs` の `register_box`）で別々の値を持てない。行送りの式の 1 点（`line_pitch`）の持ち主が変わる＝`draw_metrics.rs`・`choice.rs` の帯まで追随する。
+  - 箱の定義は `areka-emo-compose/src/boxes.rs` で同じ `balloon::parse` を通る＝キーを足せば `balloon.名前`ブレスにも書ける（参考ゴーストの `1.9`・`0.08em` は箱に書く想定）。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-text/src/{state.rs（`TextItem`・`TextLayerConfig`・`CueCommand::Custom` の腕で `\![text,ruby,…]`）, layout.rs, layout_scan.rs, layout_scan_glyph.rs}`
+  - `crates/areka-emo-text/src/{actor.rs（ResolvedBalloonText）, draw_metrics.rs, choice.rs, viewbox_draw_render.rs, viewbox_diff.rs}`（行送りの持ち主・ルビの描画と描き直しの範囲）
+  - `crates/areka-parsers/src/balloon/{model.rs, parse.rs}`（`line_height`・`letter_spacing`）
+  - 新規（ルビの配置）＋`crates/areka-emo-text/src/lib.rs`
+  - `doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）: `line_height` を入れたとき、選択肢の強調の帯（`choice.rs` の `highlight_band_extent`）を本文の高さに合わせるか行送り全体に合わせるか（ルビが行の間隔の内側に入るので、帯がルビに重なるかが変わる）。
+- 見つけた穴: なし。

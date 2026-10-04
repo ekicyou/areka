@@ -66,3 +66,33 @@
 - 「`OnMouseClick` などは送らない」とあるが、areka は今そもそも `OnMouseClick` を送っていない。
 - **議題**: dola の対象外を覆すか barrier で組むか／ダブルクリックの 1 回目が早送りとして食われる順序／印を emo-text と emo-present のどちらで描くか。
 - `compile.rs` を触る＝`choice-timeout-directive`（C1）の後。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M〜L（15〜19 タスク）。今は切らない。20 を超えそうなら「早送り（クリック→台詞の終わりまで一気に）」と「`\x`／`\x[noclear]` と `clickwaitmarker.*`」に切る。早送りが先（印の系列は `balloon-markers` と共有で、後ろに置くほど相手が先に作っている見込みが高い）。
+- 前提の状態: `shell-balloon`（PR#227・箱の当たり判定と押下の前段）・`choice-timeout-directive`（PR#215・`compile.rs`）とも着地済み＝満たす。
+- 崩れた前提／古くなった位置:
+  - **棚卸⑳の議題「dola の対象外を覆すか barrier で組むか」は、barrier で組める見込みが強くなった**: dola に入力待ちの区切り `BarrierKind::WaitForInput`（`dola/src/cue/command.rs`・「旧 WaitForClick を統合」）と、その再開口 `CuePlayer::resolve_click`（`dola/src/cue/runtime.rs`）が既に在り、`tick` も `WaitingForInput` で止まる。`CueCommand` に種類を足す必要は無い（網羅の match の連鎖は起きない）。止める仕組みの対象外（`Paused`/`pause`/`resume`）には触れない。
+  - **ただし区切りを台詞の途中に置いた前例が無い**: compile が今置くのは末尾の選択待ち（`compile.rs` の `WaitForChoice`）だけ。`TimedSchedule::notify_barrier_resolved` は区切りを外すだけで、後ろの cue の時刻をずらさない＝`\x` の後ろの文字・`\w` の待ちが、クリックまで待った分だけ「過ぎた」扱いで一度に出る。途中の `\x` には時刻の付け替え（再開した時刻へ後ろを寄せる）が dola に要る。
+  - 再生の本体は ghost のスレッド（`areka-ghost/src/dispatcher.rs`・`ResolveChoice` を受ける `on_resolve_choice` と同じ形で「クリックで再開」の知らせを足す）。UI の `emo2_boot/talk_clock.rs` の `TalkClock` は届いた cue の時刻を `observe_cue` で追うだけ＝早送りは ghost の側の時刻を進め、文字の層の「現れる時刻の列」（`state.rs` の `visible`）がそれに追いつく形になる。
+  - 分割でクリックは `input_events/balloon_pressed.rs`（末尾で `user_break` へ渡す）、ダブルクリックの判定は `input_events/user_break.rs`（`on_left_press`・箱は `on_box_press`）。**箱の押下は `input_events/shell_box_handler.rs` → `shell_box.rs` の `judge_box_click`（`BoxPressVerdict` は今「選択で使った／シェルの操作」の 2 値）**＝「話している最中なら早送り」はここに 3 つ目の結論として足す。
+  - brief の「`OnMouseClick` などは送らない」は、今 areka が `OnMouseClick` を送っていない（棚卸⑳）うえ、`mouse-drag-events`（C2-⑦・起票済み）がキャラクター窓のマウスのイベントを足しにくる＝どちらが先でも、箱の押下でシェルへ送らない条件を相手に合わせる。
+  - 印の系列（`clickwait*`）は `balloon-markers` と共有。印の位置は箱の左上からも読む（箱でも出す）。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-parsers/src/sakura/{decode.rs, model.rs}`（`x` の腕）
+  - `crates/areka-sakura/src/compile.rs`（途中の `WaitForInput`）・`drive.rs`
+  - `crates/dola/src/cue/{schedule.rs, runtime.rs}`（区切りの後ろの時刻の付け替え）
+  - `crates/areka-ghost/src/dispatcher.rs`（クリックで再開・早送り）と知らせの型
+  - `crates/areka/src/emo2_boot/talk_clock.rs`・kanade への届け口（クリックをどの経路で ghost へ渡すか次第で `areka-kanade/src/msg.rs`・`schedule/steady.rs` 系）
+  - `crates/areka-emo-text/src/{state.rs, state_decoration.rs（`\x` での `\f` の解除）, actor.rs}`
+  - `crates/areka/src/input_events/{balloon_pressed.rs, user_break.rs, shell_box.rs, shell_box_handler.rs}`
+  - 印: `crates/areka-emo-present/src/balloon.rs`（`SeriesFamily` の `clickwait` の行・`balloon-markers` と取り合い）・`crates/areka-parsers/src/balloon/{model.rs, parse.rs}`（`clickwaitmarker.*`）・検体
+  - `doc/ukadoc-coverage/ledger/{sakura-script,assets}.toml`
+- 議題（答えで作業が変わるものだけ）:
+  1. 途中の `\x` の後ろの時刻を、dola の `TimedSchedule` で付け替えるか（区切りの再開時刻を新しい起点にする）、compile が `\x` で台本を前後に分けるか。
+  2. ダブルクリックの 1 回目が早送りとして食われる順序（棚卸⑳のまま）。
+  3. 印を emo-text と emo-present のどちらで描くか（棚卸⑳のまま・`balloon-markers` と同じ答えにする）。
+- 見つけた穴: 実害のあるバグは無い。ただし「dola の入力待ちの区切りは解いても後ろの時刻をずらさない」ので、今の部品のまま途中に `WaitForInput` を置くと後ろが一度に出る（未使用の経路なので今は害が無い）。

@@ -58,3 +58,29 @@
 
 - 1 フレーム遅らせる解は取らない。状態の持ち方を変えて 0 フレームで解く。
 - 実機の根と一時フォルダはワークツリーの `target\` の下だけ。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: S（4〜7 タスク）。切る: なし。
+- 前提の状態: 上流 `drag-click-without-move` は着地済み（PR#216）。起票の後に `crates/wintf/src/ecs/window_proc/` と `crates/wintf/src/ecs/drag/` を触ったコミットは 0＝brief の指し先はそのまま。
+- 崩れた前提／古くなった位置: なし。確かめたこと:
+  - `keyboard.rs` の `WM_KEYDOWN`（ESC）・`WM_CANCELMODE`・`WM_ACTIVATE`（非活性化の枝）・`WM_CAPTURECHANGED` の 4 つは、どれも `world.try_borrow()` が取れたときだけ `DragAccumulatorResource` へ `DragTransition::Ended` を積み、取れなくても `cancel_dragging()` へ進む。
+  - `mouse_click.rs` の左ボタンを離したとき: hit_test の枝は `try_borrow_mut()` の中にあり、取れなければフォールバックの枝へ落ちる。フォールバックの枝は `Dragging` なら窓の一致だけで `should_end` を真にし、その中の `try_borrow()` が取れないと終了を積まずに `end_dragging()` を呼ぶ＝**同じ穴がある**（brief の「着手時に確かめる」はこれで済み）。
+  - `mouse_move.rs` の開始（`Started` を積む所）は、取り出したスナップショットの処理全体が World の借用の中にあり、取れなければ状態も動かさない＝穴ではない。
+  - `DragAccumulatorResource` は `Arc<Mutex<DragAccumulator>>` を包む `Clone` の型で、World へ入れるのは `crates/wintf/src/ecs/world/mod.rs` の 1 か所（`insert_resource`）。読むのは `drag/dispatch.rs` の flush だけ。brief の案 1（World の借用なしで触れる置き場へ移す）は、この複製を wndproc の側（`drag/state/mod.rs` の `thread_local!` と同じ並び）にも持たせるだけで済む見込み。
+- 触るファイル（並走の照合用）:
+  - `crates/wintf/src/ecs/window_proc/keyboard.rs`・`keyboard_tests.rs`
+  - `crates/wintf/src/ecs/window_proc/mouse_click.rs`・`mouse_click_tests.rs`
+  - `crates/wintf/src/ecs/drag/accumulator.rs`・`accumulator_tests.rs`
+  - 案 1 なら `crates/wintf/src/ecs/drag/state/mod.rs` か `drag/mod.rs`（複製の置き場）と `crates/wintf/src/ecs/world/mod.rs`（置き場へ渡す 1 行）
+  - 共有しうる相手: `mouse-drag-events`（C2-⑦）は wintf の開始・終了の知らせを使う側で、触るのは kanade と areka の `input_events/mod.rs`＝重なり 0（同 brief の Adjacent も「触るファイルは重ならない」）。wintf を触る他の未完了 spec は C3 までに無い。`host32-testdll-marker-race` とも重なり 0。
+- 議題（答えで作業が変わるものだけ）: なし。
+- 見つけた穴（候補・着手時に確かめる）: `mouse_click.rs` のフォールバックの枝で、状態が `Preparing`／`JustStarted` のときは窓の一致を World の借用で調べるため、借用が取れないと `should_end` が偽になり、`end_dragging()` も呼ばれない＝**ボタンを離した後も準備の状態が残る**。`mouse_move.rs` は左ボタンが押されているかを見ずに閾値を比べるので、その後の移動で閾値を越えると、押していないのに開始が積まれうる。同じ「借用が取れないときの扱い」の話なので本 spec の範囲で一緒に見る。
+
+## 2026-10-04 ウェーブ C3-②（棚卸㉑）
+
+- 段は「バグ」。C3 は 11 本並走（`roadmap.md`「ウェーブ編成」の C3 の行が正本）。着手は最新の main から。
+- 同じウェーブの約束: 触るのは `crates/wintf/src/ecs/` の `window_proc/{keyboard,mouse_click}.rs`・`drag/`・`world/mod.rs` の 1 行とそのテストだけ。`mouse-drag-events`（C3-④）は wintf に触らない。

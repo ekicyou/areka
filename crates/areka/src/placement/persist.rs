@@ -156,7 +156,6 @@ fn clamp_axis(v: i32, lo: i32, hi: i32) -> i32 {
 /// 返す（identity＝架空の既定矩形を発明しない・既存縮退流儀・panic しない・Req5.1）。
 /// この場合、再射影結果を永続へ書き戻さないのは merge 側（`apply_restored_placements`）
 /// が純関数で書込 API を持たない構造遮断が担う（Req5.4）。
-#[allow(dead_code)] // 結線（apply_restored_placements・task 1.4）は後続タスクの領分
 pub fn project_restore(
     anchor: Anchor,
     pos: PointPx,
@@ -255,7 +254,6 @@ pub fn project_restore(
 ///
 /// IO は本番実装 [`FsPersistIo`]（sylphya 内で FS に触れる唯一の型）。返り値は決定論的順序
 /// （[`load_scope`] の契約）。
-#[allow(dead_code)] // 結線（main.rs シーム・task 6.1）は後続タスクの領分
 pub fn load_restored_state(
     ghost_root: &Path,
     default_encoding: DefaultEncoding,
@@ -317,7 +315,6 @@ fn entry_value<'a>(entries: &'a [(PersistKey, String)], target: PersistKey) -> O
 ///
 /// `ScopePlacement.scope` は `usize`・[`PersistKey`] の scope は `u32` ゆえ、entries 突合は
 /// `scope as u32` で一貫キャストする。
-#[allow(dead_code)] // 結線（main.rs シーム・task 6.1）は後続タスクの領分
 pub fn apply_restored_placements(
     placements: Vec<ScopePlacement>,
     entries: &[(PersistKey, String)],
@@ -462,7 +459,6 @@ fn merge_scope(
 /// UI スレッド専有の規律とも一致するため **NonSend** リソースとして World に持たせる（design C1
 /// State Management・軸B）。DragEnd 観測点（[`super::follow`] の task 2.2/2.3 フック）が
 /// [`persist_entries`] 経由でこの publisher の clone 送信端から保存 entries を投函する。
-#[allow(dead_code)] // 挿入（main.rs シーム＝C4・task 2.4/6.x）は後続タスクの領分
 pub struct PersistWiring {
     /// sylphya アクターへの変異投函の送信端（`persist_put` の fire-and-forget 投函に用いる）。
     pub publisher: SylphyaPublisher,
@@ -481,7 +477,6 @@ pub struct PersistWiring {
 /// [`PersistWiring`] 不在（例: fallback boot 経路が挿入しなかった場合）は `debug!` ＋ **no-op**で、
 /// **panic しない**（6.2 系縮退・無音失敗なし）。`world` は共有参照で足りる（NonSend の読取のみ）——
 /// DragEnd フックは `&mut World` を保持するが `&World` へ暗黙 reborrow して渡せる。
-#[allow(dead_code)] // 結線（follow.rs DragEnd フック＝C2/C3・task 2.2/2.3）は後続タスクの領分
 pub fn persist_entries(world: &World, entries: Vec<(PersistKey, String)>) {
     let Some(wiring) = world.get_non_send::<PersistWiring>() else {
         // fallback 未挿入等で PersistWiring が無い → debug!＋no-op（起動を止めない・6.2）。

@@ -408,7 +408,7 @@ pub(crate) fn follow_balloon(
 /// 本ガードが持つのは「完全不可視への遷移を防ぐ安全網」までである。clamp によりバルーンが
 /// キャラと部分的に重なり得ることは**許容する**（*見えない会話*より*重なった会話*を優先する
 /// 裁定・design「バルーン適用（S3′ 是正）」）。画面端での左右反転など SSP 互換の美観配置政策は
-/// 本 spec の対象外（M2）であり、**`ClampX` の `warn!` がその先送りの縮退シーム**である
+/// 本 spec の対象外（α 後）であり、**`ClampX` の `warn!` がその先送りの縮退シーム**である
 /// ——「安全網が働いた＝本来なら美観政策が要る局面」を実機ログに残す
 /// （diagnosis-report.md §1.4「縮退シームの明示」）。
 fn guard_balloon_position(world: &World, balloon: Entity, proposed: PointPx) -> PointPx {

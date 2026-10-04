@@ -59,3 +59,19 @@
 ## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
 
 - 夢・任意のまま（`text-reveal-fade` の後・開発者が望んだときだけ）。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M（8〜11 タスク）。切らない。夢・任意のまま。
+- 前提の状態: `text-reveal-fade`（現れ方の枠＝キー・台本・描き直しの口）が未着手＝未。
+- 崩れた前提／古くなった位置:
+  - brief の「文字の層は自前のスワップチェーン」は、描き直しの判断の持ち主としては不正確（`text-reveal-fade` の棚卸⑳と同じ）。描き直す範囲は `viewbox_diff.rs`（`derive_dirty_with_overhangs`・はみ出しの帯の計算）、描画は `viewbox_draw_render.rs`（`expand_overhang_for_band` もここ）、1 コマの流れは `actor_present.rs`。動きの振れ幅を含む描き直しは、既存の「はみ出しの帯」（`LineOverhang`・`DIRTY_GUARD_IMG_PX`＝`viewbox.rs`）の考え方に乗せられる見込み。
+  - シェル内バルーンの箱にも同じ道で効く。箱は字の矩形でポインタを受ける（`actor_present.rs` の `glyph_cells`）ので、動いている途中の字の当たりは定位置の矩形のままでよいか（`text-reveal-fade` と同じ論点）。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-text/src/{state.rs, viewbox.rs, viewbox_diff.rs, viewbox_draw_render.rs, actor_present.rs}`＋`text-reveal-fade` が作る透明度・現れ方の新しいファイル
+  - `crates/areka-parsers/src/balloon/{model.rs, parse.rs}`（`text_reveal` の値の追加）
+- 議題（答えで作業が変わるものだけ）: なし（フェードとの組み合わせの可否は要件で決める＝brief のまま）。
+- 見つけた穴: なし。

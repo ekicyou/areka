@@ -39,6 +39,13 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 - **rmcp** (=3.5.0・`default-features = false`＋`server`・`transport-streamable-http-server`): MCP の公式 SDK（Apache-2.0）。JSON-RPC の解釈・`initialize` の版の交渉・`tools/list`／`tools/call` を任せる（`areka-mcp` だけが使う・2026-10-03 `areka-P0-mcp-server-core` で追加）。版は `=` で固定し、上げるときは `areka-mcp` の `server_*tests.rs` を全部通してから `doc/ssp-mcp/transport-diff-areka.md` の「測った版と日」を書き直す。既定機能（`macros`・`base64`）は切る＝ツールの登録は `ToolRoute::new_dyn`
 - **tokio** (1・`rt`・`net`・`time`)＋**tokio-util** (0.7・`CancellationToken`): `areka-mcp` の非同期ランタイム。**tokio は MCP のスレッドに閉じる**——`spawn_actor("mcp", …)` で起こしたスレッドの中で `current_thread` を 1 本作って回すだけで、`multi_thread`・`spawn_blocking` は使わず、公開面に tokio の型を出さない（呼び出し側の `fn main()` は同期のまま）。ほかのクレートは tokio に依存しない（UI スレッドの async は `wintf-winmsg-executor`）
 - **hyper** (1・`server`・`http1`)＋**hyper-util** (0.1・`tokio`)＋**http-body-util** (0.1)＋**tower-service** (0.3): `areka-mcp` の HTTP/1.1 の受付（`127.0.0.1` の 1 ポート・接続ごとの `serve_connection`）と、rmcp の `StreamableHttpService` を `Service::call` で呼ぶための土台。axum・HTTP/2 は入れない。これら MCP まわりの依存は `crates/areka-mcp/Cargo.toml` にだけ書き、根の `[workspace.dependencies]` は変えていない
+- **async-channel** (2): アクターのチャンネル（`areka-actor`）
+- **async-io** (2.6・`default-features = false`): 非同期のタイマー（`areka` の `main.rs` の有界の自動終了・`wintf` も依存に持つ）
+- **bevy_utils** (0.19)・**bitflags** (2): `wintf` の補助
+- **budouy** (0.2.2・`std`＋`vendored-models`): 文節の切れ目の推定（`areka-emo-text` の折り返し）
+- **human-panic** (2.0.6): panic のときの利用者向けの知らせ（`areka`・`wintf`）
+- **rectangle-pack** (=0.4.2): アトラスへの画像の詰め込み（`areka-emo-atlas`）
+- 上の一覧は本番（`[dependencies]`）の外部クレートを 2026-10-04 の棚卸㉑で突き合わせて足したもの。開発専用の依存は載せない
 
 ### dola クレート依存
 - **serde** (1): シリアライズ/デシリアライズ基盤

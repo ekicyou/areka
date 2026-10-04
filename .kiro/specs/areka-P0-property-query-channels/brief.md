@@ -99,3 +99,34 @@ sink 新設（get/set）＋ kanade への「参照付きイベント発生」型
 - 変わっていない点: `%property[` はまだ字句にならない（`sakura/lexer.rs` の `scan_sysvar` が `[` で止まる）・`get`／`embed` を消費する者は居ない・`PropSetCueSink` は在る（`areka-ghost/src/prop_sink.rs`）。
 - **規模**: `\![embed]`（コンパイル済みの台本の途中へ SHIORI の返事を差し込む）を含めると 20 タスクを超える見込み＝**要件の段で `\![embed]` を別へ切る**（切り出すなら `sakura-time-directives` の C 群と一緒）。含めなければ M（12〜16）。
 - **触るファイル**: `areka-kanade/src/{msg.rs 894, schedule/{events,change,mod 859}.rs}`・`areka-parsers/src/sakura/{lexer,decode}.rs`・`areka-sakura/src/sysvar.rs`・`areka-ghost/src/prop_sink.rs`・`crates/areka/src/emo2_boot/{consumer_ledger.rs 859, mod.rs 878}`。kanade の `schedule/` を触る spec（`translate-pipeline`・`balloon-lifecycle-events`・`network-update-canon-order`）とは同時に走らせない。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: `\![embed]` を含めると 20 を超える（22〜26）＝**切る**。案: ⒜ 本 spec＝`\![get,property]`・`\![set,property]`・`%property[…]`・`SenderType: property` の送出＝M（13〜17）／⒝ `\![embed]`＝新しい spec（仮名 `sakura-embed-directive`）＝M（10〜14）。⒝ は台本を途中で分けて SHIORI の返事を差し込み、続きを組み直す工事で、`sakura-time-directives` の C 群（実行時に長さが決まる待ち）と同じ形だが、C 群の他の語と違って消費する者（SHIORI）が既に居る＝今でも作れる。順は ⒜→⒝（⒝ は ⒜ が足す「任意の名前のイベント」と `SenderType` の口を使う・台本のコンパイルの列にも入る）。**brief は今分けてよい**: `\![embed]` は前回「切るなら `sakura-time-directives` の C 群と一緒」とされたが、C 群は「消費する者が現れるまで置く」ので、そこへ入れると `\![embed]` だけが理由なく止まる。
+- 前提の状態: 着地済み（`translate-pipeline` の `State` の 2 つの欄と `Action::Translate`／`Input::TranslateDone` を受け取る）。
+- 崩れた前提／古くなった位置:
+  - 「`KanadeMsg` にイベントを起こす型が無い」は誤り（前回どおり）。`KanadeMsg::RaiseEvent`（返事つき）と `KanadeMsg::AwaitTalkGap`（印のイベントを送ってその台詞の終わりを待つ）が在る。どちらも `events::allowed_static` で許可の表に無い名前を捨てる。`\![get,property,<ゴーストが決めた名前>,…]` を通すには、選択肢の任意名と同じく出所つきの名前（`msg.rs` の `EventId` に `Choice(String)` と並ぶ腕を 1 つ）を足すのが素直。`mcp-kanade-tools` の `raise_event`（`crates/areka/src/mcp/raise_event.rs` は今ダミー）も同じ迂回が要る＝一度で設計する（前回どおり）。
+  - **`SenderType` はどこからも送っていない**（`crates/shiori-host32-host/src/shiori3.rs` の `build_request` の説明に「M1 最小のため送出しない」）。`SenderType: property` を載せるには、kanade の `ShioriCall`（`msg.rs`）→ 殻（`actor.rs`）→ `shiori-host32-host` の `ShioriRequest`（`client.rs` の 2 か所）と `build_request`、x64 の同じ組み立て（`crates/areka-ghost/src/shiori_inproc.rs` の `build_request` の呼び出し）まで欄を通す。brief の触るファイルにこのクレートが無い。ukadoc は「`OnTranslate` は元のイベントの属性を引き継ぐ」とも書く＝`schedule/translate.rs` の `SourceEvent` にも載せる。
+  - 消費者の台帳 `crates/areka/src/emo2_boot/consumer_ledger.rs` は 859 行（中にテストを持つ）。登記は `("get", Some("property"))`・`("set", Some("property"))` の選び手つき。
+  - `scan_sysvar` は `crates/areka-parsers/src/sakura/lexer.rs` の `fn scan_sysvar`（415 行のファイル）。主張は変わらない（`[` で止まる）。
+  - `%property[…]` の値の源: 今の `%` の解決は台詞ごとの写し（sylphya の `SylphyaReader::talk_snapshot`）で、点つきの名前は引けない。`resolve_dotted_str` を表示の時に引く口が要る。
+  - sylphya の SET は `RuntimeCommandSink` が未登録（`crates/areka-sylphya/src/actor.rs`）＝`\![set,property]` で運行の値（`seriko.*`・`mousecursor.*` など）へ書いても届く先が無い。本 spec は経路だけで、届け先は値の側の spec（`zorder-property` ほか）が登録する、と要件で書き分ける。
+- 触るファイル（並走の照合用・⒜）:
+  - `crates/areka-kanade/src/msg.rs`（`EventId`・`ShioriCall`）・`schedule/events.rs`・`schedule/change.rs`（`on_raise_event`）・`schedule/translate.rs`・`actor.rs`
+  - `crates/shiori-host32-host/src/{shiori3.rs, client.rs}`・`crates/areka-ghost/src/shiori_inproc.rs`
+  - `crates/areka-parsers/src/sakura/lexer.rs`（`%property[` の字句）・`crates/areka-sakura/src/sysvar.rs`
+  - `crates/areka-ghost/src/prop_sink.rs`（set の受け口の雛形 `PropSetCueSink`）＋新規の get の受け口・`crates/areka-ghost/src/runtime.rs`（受け口の登録）
+  - `crates/areka/src/emo2_boot/consumer_ledger.rs`・`emo2_boot/mod.rs`（883 行・受け口の並び）
+  - `doc/ukadoc-coverage/ledger/sakura-script.toml`（4 行）
+  - ⒝ を含めるなら追加で `crates/areka-sakura/src/compile.rs`・`crates/dola/src/cue/`・`crates/areka-kanade/src/schedule/`（台詞の途中の往復）
+- 議題（答えで作業が変わるものだけ）: `\![embed]` を今別 spec に分けるか（上の案・分けるなら新しい brief を起こす）。
+- 見つけた穴: 網羅台帳 `shiori.toml` の `property.get:1`・`property.set:1` の `owner` が本 spec のまま。棚卸⑬で `.ext.*` の運搬は `property-ipc-transport` へ移した＝台帳の持ち主が古い（実害なし・次に台帳を触る spec が直す）。並走の照合: `shiori-host32-host` を触るので `makoto-dll-host`・`property-ipc-transport` とも同時に走らせない（brief の「host32 系に触れない」は `SenderType` のために崩れる）。sylphya を読む `mcp-get-property`（C3-⑦）とは `areka-ghost/src/runtime.rs` を分け合う。
+
+## 2026-10-04 棚卸㉑で切った後の範囲
+
+- 残した範囲: 経路 1〜3（`\![get,property,…]`・`\![set,property,…]`・`%property[…]`）と、許可の表に無い任意の名前のイベントを出所つきで送る口・`SenderType`（`property` に加えて後続が使う `embed` の値も運べる形）の運搬。
+- 規模: M（13〜17 タスク）。
+- 移した先: `\![embed]`（経路 4）は新しい spec `areka-P0-sakura-embed-directive` へ（本 spec が前提）。網羅台帳の `\![embed,…]` の行の持ち主は、向こうが着地するときに直す。

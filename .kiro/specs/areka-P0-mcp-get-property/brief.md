@@ -60,3 +60,25 @@ AI エージェントがゴーストを作るとき、プロパティシステ�
 ## 2026-10-03 ウェーブ C3-⑥（予定・10-03 の再編（開発者「MCP は複合 spec なので早めに着手したい」））
 
 - 段は「優先」。`mcp-tool-entrances`（C2）の design が固定した「自分のツールのファイル」と、同じ C3 の他の spec（`balloon-lifecycle-events` は kanade・`balloon-font-file` は emo-text）の触るファイルを、着手の前に照合する。
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: S（4〜6 タスク）。切らない。
+- 前提の状態: `mcp-tool-entrances` は着地済み（PR#223・`completed/areka-P0-mcp-tool-entrances/`）。前提は満たす。
+- 崩れた前提／古くなった位置:
+  - ダミーの場所が決まった: アプリ本体側 `crates/areka/src/mcp/get_property.rs` の `handle(_world, _ghost, _args, reply)`（本体は `reply.send(outcome::ng("not implemented yet"))` の 1 文）と、そのテスト `get_property_tests.rs`（`NG:not implemented yet` を期待＝中身を入れたら書き換える）。プロトコル側 `crates/areka-mcp/src/tools/get_property.rs` は定義の逐語と `Args { property_name: String, ghost_name: Option<String> }` まで完成済み＝触らずに済む見込み。
+  - `ghost_name` の解決は `mcp/mod.rs` の `dispatch`（`Omitted::UseActive`）が済ませてから `handle` に `&ActiveGhost` が来る。今のゴーストの実行系は `GhostSlot` → `GhostSession::runtime()`（`ghost_session.rs`）。
+  - reader の取り出し口はまだ無い: `GhostRuntime` の欄 `sylphya_reader`（`crates/areka-ghost/src/runtime.rs` の `pub struct GhostRuntime`）は私有のまま、外へ出るのは `into_parts` の `GhostParts.sylphya_reader` だけ。足すのは `GhostRuntime` の読み口 1 本（例 `sylphya_reader(&self) -> &SylphyaReader`）。
+  - 問い手（`AskerContext`）は SHIORI の `GetProperty`（`crates/areka/src/shiori_host.rs` の `ShioriHostSink::GetProperty`）と同じく、そのゴーストの問い手 `areka_ghost::sylphya_wiring::ghost_asker_id(&mount.shiori.dir)` で組める（`GhostRuntime::mount()` は公開済み）＝`runtime.rs` に問い手の欄を足さずに済む。
+  - `SylphyaReader::resolve_dotted_str` は同期で `DottedResolution::{Value, NotFound}` の 2 つ。「無い名前」＝`NotFound` → `NG:Cannot find such property name.`、「値が空」＝`Value("")` → 空の本文（`outcome::value("")`）で区別できる。同期なので `mcp::later` は使わずその場で答えられる。
+- 触るファイル（並走の照合用）:
+  - `crates/areka/src/mcp/get_property.rs`・`crates/areka/src/mcp/get_property_tests.rs`
+  - `crates/areka-ghost/src/runtime.rs`（`GhostRuntime` の読み口 1 本）
+  - 触らない: `crates/areka/src/mcp/mod.rs`・`resolve.rs`・`crates/areka-mcp/src/**`・`main.rs`・`ghost_session.rs`・`Cargo.toml`
+- 議題（答えで作業が変わるものだけ）: なし（「無い名前」と「値が空」の区別は SHIORI の `GetProperty` の既存の区別に写すだけ）。
+- 見つけた穴: なし。注意 1 点＝実行系の無い単位（`GhostSession::for_test`・LogSink へ倒れた単位で reader が無い形）では `resolve::active` が `None` を返すので `handle` まで来ないが、World に置き場が無いときも panic せず `NG:` で答える約束（tool-entrances の design「mcp/<ツール>.rs」）を守る。
+
+## 2026-10-04 ウェーブ C3-⑦（棚卸㉑）
+
+- 段は「優先」。C3 は 11 本並走（`roadmap.md`「ウェーブ編成」の C3 の行が正本）。着手は最新の main から。
+- 同じウェーブの約束: `crates/areka/src/mcp/mod.rs`・`handler.rs` を触らない。足すファイルは自分のツールのファイルの子モジュールにする。エンジンの側は `crates/areka-ghost/src/runtime.rs` の読み口 1 本だけ。

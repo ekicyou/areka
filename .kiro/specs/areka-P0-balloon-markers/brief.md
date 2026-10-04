@@ -68,3 +68,28 @@
 - 規模 M〜L（14〜19 タスク）。文字まわりの直列の列（`shell-balloon` の後）。
 - 合っていた点: `SeriesFamily`（emo-present の `balloon.rs`）は旧名の列を積める・パーサにこれらのキーは無い。既定バルーン（Staysee）には `arrow0/1.png`・`online0〜8.png`・`sstp.png`・`marker.png` が在り、`clickwait*` と数字の画像は無い。
 - **触るファイル**: `crates/areka-parsers/src/balloon/{model.rs 774, parse.rs}`（キーが多く 850 行を超えうる＝新しいファイルへ）・emo-present の `balloon.rs`・emo-text の `viewbox` 系・`layout` 系（`visible_window`）・`actor` 系・`state.rs`（`balloonnum`）・`crates/areka/src/input_events/` のバルーン（矢印のクリックとホイール）・通信のきっかけの配線（`emo2_boot/update_cue.rs` か `crates/areka/src/update/`）・台帳。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: L（16〜20 タスク）＝20 の直前。箱で出す分（下記）を足すと超えうる＝**要件の段で超えたら切る**。切り方: ①「矢印と手動スクロール（`arrow*`・矢印のクリック・ホイール）＋装飾の系列の土台（`SeriesFamily` の行・`clickwait` を含む）」M（10〜12）→ ②「通信中・数字・SSTP の印（`onlinemarker`・`number.*`／`\![set,balloonnum]`・`sstpmarker`／`sstpmessage` の表示だけ）」S〜M（7〜9）。①が先（`balloon-scroll-fade` は①だけを待てばよい）。
+- 前提の状態: `shell-balloon`（PR#227）着地済み＝満たす。
+- 崩れた前提／古くなった位置:
+  - 分割での移り先: 見える範囲の計算は `layout.rs` の `LayoutEngine::visible_window`、送りの計画は `viewbox.rs`（`ScrollPlanner` の前半）と `viewbox_diff.rs`（描き直す範囲）、描画は `viewbox_draw_render.rs`、1 コマの流れは `actor_present.rs`。矢印のクリックは `input_events/balloon_pressed.rs`、純関数の判定は `input_events/balloon.rs`（`hit_choice_row`・`click_selection` ほか）。
+  - **ホイールは入力の口から無い**（`balloon_pressed.rs` の doc に「wheel/keyboard は本 spec 未実装」）＝バルーン窓のホイールの受け口を新しく作る。
+  - **箱（シェル内バルーン）**: 箱の位置と大きさは `actor_box.rs`（`ShownBox`）が持ち、箱への押下は `input_events/shell_box_handler.rs` → `shell_box.rs` の `judge_box_click` を通る。箱の上の矢印のクリック・ホイールはこの道に足す。箱は描画を普通のバルーンと共有するので印の重ね方は 1 つで済むが、**印の画像（`arrow0.png` ほか）をどのフォルダから引くか**は箱では決まっていない（普通のバルーンはバルーンのフォルダ。箱はシェルのフォルダか、今のバルーンのフォルダか）。
+  - キーは今もパーサに無い（`areka-parsers/src/balloon/validation_tests.rs` が「accessor が無い」ことを記録している＝キーを足すとこの記録の意図を書き換える）。箱は `areka-emo-compose/src/boxes.rs` で同じ `balloon::parse` を通るので、キーを足せば `balloon.名前`ブレスにも自動で書ける。
+  - 通信のきっかけは `emo2_boot/update_cue.rs`（`UpdateCueSink`）と `crates/areka/src/update/`。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-parsers/src/balloon/{model.rs（774 行＝新しいファイルへ）, parse.rs, validation_tests.rs}`
+  - `crates/areka-emo-present/src/balloon.rs`（`SeriesFamily` の行）
+  - `crates/areka-emo-text/src/{layout.rs, viewbox.rs, viewbox_diff.rs, viewbox_draw_render.rs, actor.rs, actor_present.rs, actor_box.rs, state.rs（`balloonnum`）}`＋新規（印の配置）＋`lib.rs`
+  - `crates/areka/src/input_events/{balloon.rs, balloon_pressed.rs, shell_box.rs, shell_box_handler.rs}`＋ホイールの新しい受け口
+  - `crates/areka/src/emo2_boot/update_cue.rs` か `crates/areka/src/update/`
+  - 検体（`clickwait*`・数字の画像は既定バルーンに無い）・`doc/ukadoc-coverage/ledger/assets.toml`
+- 議題（答えで作業が変わるものだけ）:
+  1. 箱の印の画像をどのフォルダから引くか（シェルのフォルダ／今のバルーンのフォルダ）。答えで系列の解決の入力が変わる。
+  2. 手動で戻している最中に新しい文字が来たときの扱い（最新へ戻すか、戻したままか）。`balloon-scroll-fade` の押し出しの判定にも効く。
+- 見つけた穴: なし。

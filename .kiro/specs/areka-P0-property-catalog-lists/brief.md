@@ -82,3 +82,30 @@ SSP プロパティ木の過半は `currentghost` の外にある——`system.*
 
 - 優先度 低〜中。**そのままでは 20 タスクを超える**＝要件の段で ⒜ `system.*`（時計・モニタ・OS の値）と ⒝ 一覧（`ghostlist`・`balloonlist`）に切る。
 - **崩れた前提**: 「一覧の列挙は M2 の基盤でまだ無い」は誤りになった＝`areka_ghost::catalog::{list_ghosts, list_balloons, list_shells}` が在る。`ghostlist`・`balloonlist` は今日出せる。`activeghostlist` は 1 体だけなので今のゴーストそのもの。音・履歴・利用率・プラグインは登記だけのまま。網羅台帳で本 spec が持つ行は 120（最多）。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: 網羅台帳 `property.toml` で本 spec が持ち主の行は 120（最多）。全部では 25 を大きく超える＝**切る**。案: ⒜ `system.*`（時計・モニタ・カーソル・OS／メモリ／CPU／電源／ディスク・テーマ・ドラッグの様子）と Win32 の採り口（偽の値を差せる形）＝M〜L（14〜18）／⒝ 一覧（`ghostlist`・`balloonlist`・`activeghostlist`＝今出せる）と、基盤待ちの枝（`headlinelist`・`pluginlist`・`history`・`rateofuselist`・`currentghost.sound.*`・`.ext.*`）の語彙と縮退の登記＝M（10〜14）。順はどちらからでもよいが、⒜ の時計が「動く値の口」を要するので、`currentghost-property-tree` の ⒜ の後に置くのが素直。**brief は今分けてよい**（20 を大きく超え、⒜ と ⒝ は値の源が別）。
+- 前提の状態: 読む道（`property-query-channels`・`mcp-get-property`）はまだ。出すことと決定論のテストは単独でできる。
+- 崩れた前提／古くなった位置:
+  - 一覧の源は在る: `crates/areka-ghost/src/catalog.rs` の `list_ghosts`・`list_balloons`・`list_shells`（前回どおり）。`activeghostlist` は 1 体だけ＝今のゴースト。
+  - モニタの値は `crates/wintf/src/ecs/window/monitor.rs` の `Monitor`（`bounds`・`work_area`・`dpi`・`is_primary`）。`bpp` だけ源が無い（前回どおり）。
+  - **動く値を出す口が sylphya に無い**（`SylphyaPublisher` は静的・SHIORI 照会・永続の 3 つだけ・`BackingLayer::SystemEnv` は縮退のまま）。時計（毎秒変わる）・カーソルの位置・メモリは「読む時に問い合わせる」口でないと出し直しが追いつかない＝`currentghost-property-tree` の議題と同じ口。
+  - サウンドの 18 葉は `dotted.rs` の `SOUND_PROP_NAMES` に登記済み（`sylphya-set-ledger`）。本 spec に残るのは値の導出だけ（前回どおり）。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-sylphya/src/{actor.rs, vocab/dotted.rs, key.rs}`
+  - 新規 Win32 の採り口（例 `crates/areka/src/property/system_env.rs`）・`crates/wintf/src/ecs/window/monitor.rs`（読むだけ）
+  - `crates/areka-ghost/src/catalog.rs`（読むだけ）・`crates/areka-ghost/src/sylphya_wiring.rs`
+  - `crates/areka/src/emo2_boot/mod.rs`（883）
+  - `doc/ukadoc-coverage/ledger/property.toml`・`doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）: 動く値の出し方（`currentghost-property-tree` と一度で決める）。brief を今分けるか（上の案）。
+- 見つけた穴: なし。並走の照合: `currentghost-property-tree` とは sylphya の口・`dotted.rs`・`emo2_boot/mod.rs` を分け合う＝直列（前回どおり）。`.ext.*` の運搬は `property-ipc-transport` と発火条件を分け合う。
+
+## 2026-10-04 棚卸㉑で切った後の範囲
+
+- 残した範囲: ⒝ 一覧の枝＝`ghostlist`・`balloonlist`・`activeghostlist` の値の導出（`areka_ghost::catalog` から）と、基盤待ちの枝（`headlinelist`・`pluginlist`・`history`・`rateofuselist`・`currentghost.sound.*`・`.ext.*` の発火条件）の完全な語彙と縮退の登記。
+- 規模: M（10〜14 タスク）。
+- 移した先: `system.*` と Win32 の採り口は新しい spec `areka-P0-system-property-values` へ（前提は `currentghost-property-tree` の動く値の口）。網羅台帳の `system.*` の行の持ち主は向こうが着地するときに直す。

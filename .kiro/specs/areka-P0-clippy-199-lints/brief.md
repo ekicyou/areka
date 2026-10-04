@@ -57,3 +57,25 @@ lint ごとに clippy の提案どおりの機械的な直しを当てる（`col
 - 1 ファイル 1,000 行の番人（`crates/log-capture-kit/tests/file_length_guard_test.rs`）を超えない。
 - 検証は `pwsh -NoProfile -File tools/test-all.ps1`（fmt＋全テスト）と `cargo clippy --workspace --all-targets -- -D warnings`。
 - **議題（要件の段）**: `tools/test-all.ps1` に clippy の段（`-D warnings`）を足すか。足せば今後の退行を止められるが、ツールチェーンが上がるたびに既存のコードで赤になり、関係の無い spec の完了が止まる。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+`cargo clippy` は走らせていない（共通の決まり）。下は git の履歴からの推定で、着手の最初のタスクで測り直す。
+
+- 規模: S〜M（8〜12 タスク）。切る: なし（20 を超えない）。ただし着手の順を 2 段に分ける案（下）。
+- 前提の状態: 上流なし。brief の実測は `mcp-server-core` の枝（main の `55067b63`＝PR#219 の時点）＝`emo-text-file-split`（PR#217）の分割の**後**なので、分割で動いたファイルは brief の列挙に影響しない。
+- 崩れた前提／古くなった位置（`55067b63..634032f6` の差分から）:
+  - **列挙のファイルはすべて今も在る**（移動・改名 0）。
+  - 列挙のうち、その後に書き換わったもの: `areka-kanade` の `shiori/real.rs`・`actor_raise_reply_tests.rs`（どちらも `translate-pipeline`）、`areka` の `emo2_boot/frame/wiring.rs`（`status-execution-states`）・`ghost_session.rs`（`mcp-tool-entrances`・`translate-pipeline`・`shell-balloon`）・`input_events/balloon.rs`（`shell-balloon`）。指摘の行は動いている見込み。
+  - 列挙のうち動いていないもの: `dola` の全件（`dola` の変更は `cue/sink.rs` と README だけ）・`areka-emo-compose` の `plan.rs` とテスト 4 本・`shiori-host32-host` の `tests/` 2 本・`shiori-abi` の `ergonomic.rs`・`areka` の `app_exit.rs`・`boot_config.rs`・`placement/*`・`update/procedure.rs`。
+  - **新しい指摘が増えている見込み**: C2 で約 2.3 万行が入った（新しいファイル: kanade の `translate.rs`・`schedule/translate.rs`・`online.rs`・`actor_translate.rs`、`areka-emo-compose` の `boxes.rs`、`areka-emo-text` の `actor_box.rs`・`place.rs`・`state_route.rs`・`surface_window_child.rs`（brief の列挙に `areka-emo-text` は無かった）、`areka-parsers` の `shell/boxes.rs`、`areka-ghost` の `translate_wiring.rs`、areka の `emo2_boot/shell_box_assets.rs`・`balloon_visibility_*`・`input_events/shell_box*.rs`・`src/mcp/`、`areka-mcp` の `tools/`）。各 spec のレビューは clippy を門にしていないので、0 とは言えない。
+- 触るファイル（並走の照合用・クレート単位）:
+  - 段 1（いつでも空き席に入れられる）: `crates/dola/src/{validate,runtime,compile}/**`・`crates/shiori-abi/src/ergonomic.rs`・`crates/shiori-host32-host/tests/lifecycle_{cyclic,kill}_e2e.rs`・`crates/areka-mcp/`（指摘が出れば）。今の列と C3 の 9 本のどれも触らない。`dola` は crates.io へ出すクレートだが、`release-cycle` は版の行しか触らないので重ならない（`too_many_arguments` を `#[expect]` で残す `compile/resolve.rs` は公開の API の形を変えない）。
+  - 段 2（列が空いてから）: `areka-emo-compose`（C3-③ `surface-element-nesting` が `plan.rs` を触る＝brief の `plan.rs` の `collapsible_if` と同じファイル）・`areka-kanade`（C2-⑦ `mouse-drag-events`・C3-④ `balloon-lifecycle-events` は `schedule/{steady,events}.rs`・`msg.rs` で、列挙の `shiori/real.rs` とは別のファイルだが、新しい指摘がどこに出るかは測るまで分からない）・`areka`（`emo2_boot/`・`input_events/` は C2-⑦・C3-②④ が、`boot_config.rs` は C3-⑥ `ghost-standard-balloon` が触る。`placement/*` は今どの列も持っていない）。
+- 議題（答えで作業が変わるものだけ）:
+  1. （既存）`tools/test-all.ps1` に clippy の段を足すか。
+  2. **2 段に分けて出すか**。⒜ 段 1 だけを 1 本目の PR として C3 の空き席で出し、段 2 は C3 の着地の後に同じ spec の 2 本目の PR で出す（1 spec 1 PR の決まりから外れる）⒝ spec 全体を C3 の着地の後まで待たせる（`areka` の `placement/*` と段 1 だけなら今でも重ならない）。1 本で出すなら ⒝。
+- 見つけた穴: なし。

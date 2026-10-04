@@ -261,7 +261,7 @@ impl Drop for InProcLibrary {
 ///   `Err(SHIORI_E_PROPERTY_NOT_FOUND)`（out_value 未書込）で判別可能にする。
 ///
 /// areka bin の `ShioriHostSink`（メールボックス・突合枠つき）は能力集合が異なる別物であり移設しない。
-/// M2 native 消費時に host 注入シームごと再設計する（design.md §InProcHost・Revalidation Trigger）。
+/// α 後の native 消費時に host 注入シームごと再設計する（design.md §InProcHost・Revalidation Trigger）。
 ///
 /// スレッド座: `RefCell`＋COM 参照ゆえ実際に `!Send`。shiori アクタースレッド常駐で用いる（D-6）。
 #[implement(IShioriHost)]
@@ -529,7 +529,7 @@ impl ShioriBackend for InProcBackend {
 /// 5. `shiori`／`host`／`library` を宣言順で保持する [`InProcBackend`] を構築して返す。
 ///
 /// いずれの失敗も `error!` 済みの `Err(String)`（呼び出し側 `spawn_shiori_actor` が `ShioriDown` へ写す・
-/// 要件 3.5）。`pub`（D-3・テストの `Recorder` 合成と M2 の直接利用の両方に供する・要件 7.1）。
+/// 要件 3.5）。`pub`（D-3・テストの `Recorder` 合成と α 後の直接利用の両方に供する・要件 7.1）。
 pub fn inproc_connect(
     shiori: ShioriMount,
 ) -> impl FnOnce() -> Result<Box<dyn ShioriBackend>, String> + Send + 'static {

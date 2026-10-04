@@ -93,7 +93,7 @@ pub struct TextLook {
     pub underline: bool,
     /// 打ち消し線（`SetStrikethrough`）。
     pub strike: bool,
-    /// 白抜き——語彙のみ（表示に効かない・M2 予約・要件 5.9）。
+    /// 白抜き——語彙のみ（表示に効かない・予約・要件 5.9）。
     pub outline: bool,
     /// 上下付き——語彙のみ（表示に効かない・要件 6.1）。
     pub script: Script,

@@ -210,7 +210,7 @@ pub const SOUND_PROP_NAMES: &[&str] = &[
 ///
 /// `activeghostlist(...).ext.*`・`pluginlist(...).ext.*` は所有者（ゴースト/プラグイン）側へ
 /// この名の SHIORI/PLUGIN イベントを発生させて値を取得する語彙。M1 は名前の予約に留め、
-/// イベント発火（ext 亜枝の実働）は M2 の領分。
+/// イベント発火（ext 亜枝の実働）は α 後の領分。
 pub const EXT_EVENT_GET: &str = "property.get";
 
 /// ext 亜枝の SET イベント名（予約のみ・M1 では発火しない・R3.5）。

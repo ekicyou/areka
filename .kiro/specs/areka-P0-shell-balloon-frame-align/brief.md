@@ -57,3 +57,30 @@
 
 - 目に付かないので急がない（列の空きで入れる）。
 - テストの決定論・1 ファイル 1,000 行未満（`crates/areka/src/emo2_boot/spine.rs` は起票時にちょうど 1,000 行で、足すと番人が赤）。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: S〜M（5〜8 タスク）。切らない。
+- 前提の状態: `shell-balloon`（PR#227）着地済み＝満たす。
+- 崩れた前提／古くなった位置:
+  - brief の指し先は実物と一致する（`actor_box.rs` の `sync_boxes`・`shown_boxes`・`hide_boxes`・`refresh_shown_boxes`・`prune_shown_boxes`、`state_route.rs` の `route_surface`、`frame/status_report.rs` の `report_balloons`・観測の欄 `box_showing`・警告 `balloon_status_surface_unknown`、`balloon_visibility_phase.rs` の `report_balloons` の呼び出し）。
+  - **Boundary Candidates に抜けているファイルが 2 つ**: ⑴ `sync_boxes` の唯一の呼び手は **`emo2_boot/frame/scale_text.rs`**（`run_text_scale_phase` の末尾 `runtime.borrow_mut().sync_boxes(world, &shell_views)`）＝付け替えの時機を動かすならここを触る。⑵ `\s` の受け取りで写しを外すのは `actor.rs` の `TextLayerRuntime::apply_cue` の末尾の `prune_shown_boxes`、写しを作り直すのは `actor_present.rs` の `present_frame` の中の `refresh_shown_boxes`。
+  - `apply_cue` は UI スレッドの受け口（`sink.rs` の drain）から呼ばれ、`World` を持たない。`sync_boxes` は `&mut World` を要る＝「`\s` を受け取った時点で置き場所を付け替える」案は、`apply_cue` の中では world に触れない。状態の持ち方（受け取った `\s` を「付け替え待ち」として持ち、同じフレームの絵の差し替え〔`run_drain_phase`〕と同じ相で両方を適用する等）を設計で決める必要がある。
+  - `emo2_boot/spine.rs` は今もちょうど 1,000 行（足すと見張りが赤）。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-text/src/{actor_box.rs, state_route.rs, actor.rs（apply_cue の末尾）, actor_present.rs（refresh_shown_boxes の呼び出し）}`
+  - `crates/areka/src/emo2_boot/frame/{scale_text.rs, status_report.rs}`・`crates/areka/src/emo2_boot/balloon_visibility_phase.rs`
+  - 相の順を変えるなら `crates/areka/src/emo2_boot/frame.rs`（`emo2_frame_system` の相の並び）
+- 議題（答えで作業が変わるものだけ）: 箱だけが見えているときの番号（普通のバルーンを隠した時点の番号を持ち続けるか／警告の水準を下げるか）。brief のとおり設計で決めてよいが、`balloon-canon-residue` の項目 2（面の偶数・奇数）がバルーンの面の番号の決め方を変えるので、持ち続ける番号の意味をそちらと揃える。
+- 見つけた穴: brief に書かれたもの以外は無い。
+- 並走の判定（厳しめ）:
+  - `balloon-font-file` とは `actor.rs`・`actor_box.rs` が重なる＝**並べない**。
+  - `balloon-canon-residue` とは、ファイルの重なりは 0 にできる（本 spec は `frame/attach.rs`・`frame/switch.rs`・`emo-present` に触らない／相手は `frame/scale_text.rs`・`frame/status_report.rs`・`balloon_visibility_phase.rs`・emo-text に触らない、と両方の設計で約束する条件つき）。意味の上では `Status` の `balloon(ID群)` の番号を両方が扱うので、相手の項目 2 が番号の出どころを変えるなら本 spec の決定論テストの期待値が動く。**条件つきで並べられる**。
+
+## 2026-10-04 ウェーブ C3-③（棚卸㉑）
+
+- 段は「バグ」。C3 は 11 本並走（`roadmap.md`「ウェーブ編成」の C3 の行が正本）。着手は最新の main から。
+- 同じウェーブの約束: `input_events/`・`emo2_boot/frame/wiring.rs`・emo-present・`emo2_boot/frame/{attach,switch}.rs` に触らない（それぞれ C3-④・⑩・C4 の `balloon-font-file` の場所）。`apply_cue` は `World` を持たないので、状態の持ち方の設計が要る。

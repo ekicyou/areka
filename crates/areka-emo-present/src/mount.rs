@@ -15,7 +15,7 @@
 //!    1 回だけ掛けて原寸マスクを読む（要件 4.2）。
 //! 2. **text-layer slot**: surface entity の**兄弟・上位 z**（描画で上）に置く空 entity
 //!    （`Name("emo-text-layer-slot")` ＋ `Visual` ＋ `HitTest`・内容（brush）なし）。M1 の独立レイヤ
-//!    描画／M2 の合成パス内レイヤ化の双方を「この entity の差し替え」で吸収する seam
+//!    描画／α 後の合成パス内レイヤ化の双方を「この entity の差し替え」で吸収する seam
 //!    （emo-text-layer が消費）。`HitTest` を明示付与するのは非表示時にポインタ透過させるため
 //!    （未付与は既定 `Bounds` 扱いで、`Bounds` の合成 α は `is_visible` を見ない）。
 //!

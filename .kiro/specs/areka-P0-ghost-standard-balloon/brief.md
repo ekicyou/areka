@@ -91,3 +91,22 @@
 - 利用者が選んだもの（記憶・引数）を作者の指定で上書きしない（完了 `baseware-root-layout` の順を崩さない）。
 - 決定論のテスト網羅は必達。ログの無い失敗の経路を作らない。
 - 段は**優先**（バルーン関係）・ウェーブ **C3**（予定・`install-companion-reading` の後）・規模 S〜M（6〜10 タスク）・Fable 推奨。
+
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: S〜M（6〜10 タスク）。変わらず。
+- 前提の状態: 未（`install-companion-reading` が C2-⑥ で未着手）。
+- 崩れた前提／古くなった位置:
+  - 起票（main `d4f9e93d`）の後に `crates/areka-ghost/src/catalog.rs`・`catalog_tests.rs`・`crates/areka/src/boot_resolve.rs`・`boot_config.rs`・`emo2_boot/ghost_switch.rs` へ入った変更は 0。brief の記述（`companion_balloon` は無印の `balloon.directory` だけ・`BalloonInputs` の段・`find` は完全一致・切替は `ghost_switch.rs` の `resolve_balloon_for_ghost` 呼び出しで同じ鎖）はそのまま。
+  - 細部 1: `boot_config.rs` の `resolve_balloon_for_ghost` は `list_balloons` の結果を `identity.folder` だけへ落として `BalloonInputs.listed` に渡している。`catalog.rs` の `Identity` は `name`（バルーンの descript の `name`）も持つので、議題 2 で「名前で引く」を選ぶと `listed` の形（フォルダ名の列 → フォルダ名と名前の組）が変わり、`boot_resolve.rs` の `resolve_balloon` とそのテストへ波及する。
+  - 細部 2: 網羅台帳の古い注記「`boot_config::default_balloon_root`（もう無い関数）」は、本 spec の 2 行（`descript_ghost` の `balloon`・`default.balloon.path`）のほか、範囲外の `recommended.balloon`・`recommended.balloon.path` の 2 行にも同じ文で残っている（`doc/ukadoc-coverage/ledger/assets.toml`）。後者を直す担当は居ない。
+  - `_` への置き換えの関数は `install-companion-reading` が `areka-parsers` に置くのが自然（`areka-ghost` は `areka-nar` に依存しない・両方とも `areka-parsers` には依存する）＝本 spec は `catalog.rs` からそれを呼ぶだけ。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-ghost/src/catalog.rs` 377・`catalog_tests.rs` 642（伸ばすなら兄弟の新しいテストへ）
+  - `crates/areka/src/boot_resolve.rs` 544・`boot_resolve_tests.rs`・`boot_config.rs` 492
+  - `doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8
+  - `emo2_boot/ghost_switch.rs` は配線が共有なので無改変の見込み
+- 共有の注意: 同じ C3 の `mcp-get-property` が `crates/areka-ghost/src/runtime.rs` を触る（別のファイル）。`shell-companion-balloon` は同じ `catalog.rs`・`boot_resolve.rs`・`boot_config.rs` を触る＝直列（roadmap どおり）。
+- 議題（答えで作業が変わるものだけ）: brief の 3 つのまま（段の並び／`balloon` をバルーンの名前で引くかフォルダ名でも引くか＝上の細部 1 で作業量が変わる／`default.balloon.path` の起点）。加えて、範囲外の `recommended.*` の 2 行の古い注記をついでに直してよいか（直すなら 1 タスク足さずに台帳の作業に含められる）。
+- 見つけた穴: 無し（brief の不一致そのものが本 spec の仕事）。

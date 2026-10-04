@@ -29,7 +29,7 @@
 //!   （生成失敗は warn→既定フォント再試行→なお失敗は `Device` エラー・R4.2）。
 //! - 無効表示の層（`disable.font.*`）は [`ResolvedFont::looks`] で**実体化済み**
 //!   （要件 4.4——`\f[disable]` の戻し先）。行単位の文字装飾（[`TextEffects`]）だけが
-//!   **型シームのみ・実挙動なし**のまま残る（M2 予約）。
+//!   **型シームのみ・実挙動なし**のまま残る（予約）。
 //! - 縦書きの寄せと下線の写像は確定済み（spec `areka-P0-balloon-vertical-canon`
 //!   要件 5.1〜5.3・5.7：`align` は `left`＝上寄せ／`right`＝下寄せ／`center`＝縦中央、
 //!   `valign` は `top`＝右寄せ／`bottom`＝左寄せ、下線は列の右側）。正典 2 ページで
@@ -203,7 +203,7 @@ pub struct ResolvedFont {
     pub height: f32,
     /// フォント色 r/g/b（成分独立既定 0＝欠落は黒・ukadoc 既定）。
     pub color: (u8, u8, u8),
-    /// 行単位の文字装飾の M2 予約シーム（実挙動なし）。
+    /// 行単位の文字装飾の予約シーム（実挙動なし）。
     pub effects: TextEffects,
     /// 既定／無効表示の 2 層＋選択肢文字色（要件 4.1／4.4／4.5）。
     ///

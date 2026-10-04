@@ -9,12 +9,6 @@
 //! 保持は task 2.6 の `MouseWiring` が `HashMap` で行う。本モジュールは状態型＋純関数のみ）。
 
 /// per-scope の間引き状態（値のみ・純粋更新）。
-///
-/// `#[allow(dead_code)]`: 状態型＋純関数のみを提供する本 task（2.4）の時点では非テストコードから
-/// 未消費。task 2.6 の `MouseWiring`（per-scope `HashMap` 保持）／2.7 のポインタハンドラ結線が
-/// 消費する（collision-geometry の `resolve_hit_region` が最初の消費者まで `#[allow(dead_code)]` を
-/// 携えたのと同型）。
-#[allow(dead_code)]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct MouseMoveThrottle {
     /// 前回観測位置（移動検出・毎観測更新）。
@@ -27,8 +21,6 @@ pub(crate) struct MouseMoveThrottle {
 
 /// 送出上限間隔（10Hz）。touch_detect.lua の 2 秒規律に対し 20 サンプル/2s の余裕。
 ///
-/// `#[allow(dead_code)]`: task 2.6／2.7 が消費するまで非テストコードから未参照。
-#[allow(dead_code)]
 pub(crate) const MOUSE_MOVE_MIN_INTERVAL_MS: u64 = 100;
 
 /// 純関数: (現状態, 観測) → (次状態, 送出可否)。
@@ -53,8 +45,6 @@ pub(crate) const MOUSE_MOVE_MIN_INTERVAL_MS: u64 = 100;
 /// # Invariants
 /// 判定は位置・region・時刻のみ＝撫で意味論（連打・滞留の解釈）を持たない（要件 5.3）。
 ///
-/// `#[allow(dead_code)]`: task 2.6／2.7 のポインタハンドラが消費するまで非テストコードから未呼出。
-#[allow(dead_code)]
 pub(crate) fn plan_mouse_move(
     state: &MouseMoveThrottle,
     pos: (i64, i64),

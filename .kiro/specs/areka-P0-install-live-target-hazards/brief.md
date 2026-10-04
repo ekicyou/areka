@@ -75,3 +75,22 @@
 - **同じウェーブの他の spec との約束（必ず守る）**: `crates/areka-nar/`（`install-companion-reading`）・`crates/areka/src/install/terms.rs`（同）・`crates/areka/src/emo2_boot/frame/drain_resnap.rs`（`restart-chain-finalize-stall`）・`crates/areka/src/main.rs` と `ghost_session.rs`（`mcp-server-core` と、その次の `mcp-tool-entrances`）には触らない。扱いがこれらに及ぶと分かったら、そこで止めて報告する。
 - **議題**: ⑴ 掴みを外して入れるか既知の制限にするか（測った後）／⑵ 窓 0 枚の区間に受け手（隠れたトップレベルの窓など）を残すか説明書に書くか／Windows を本当に終える実機の 1 回を開発者が行うか。
 - 関連: 起こし直しの後の `deferrals=600` の WARN は別 spec `restart-chain-finalize-stall` が直す（同じ場面の実機でこの WARN を見ても本 spec では追わない）。利用条件の文の切り詰めが絵文字を割る件は棚卸⑳で直した。
+
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: S〜M（8〜14 タスク。測るだけで終われば 4〜5）。変わらず。
+- 前提の状態: 前提の spec は無い（α の完成宣言のみ）＝満たす。ただし下の「`balloon-font-file` の後に測る」を守るなら、C3 の `balloon-font-file` の着地を待つ。
+- 崩れた前提／古くなった位置:
+  - **`dist/README.txt` の共有**: `release-ci-workflow`・`crates-io-publish` は着地済み（PR#224・PR#225）。`crates-io-publish` は「入手のしかた」の節を足した（`release-ci-workflow` は `dist/README.txt` に触らなかった・「深いフォルダに展開しないで」の行を「既知の制限」から外したのは README の書き直し PR#222）＝この 2 本との共有は解けた。**残る相手は 4 本**: `winget-manifest-submission`（C3-①・「既知の制限」に Smart App Control とスタートメニューの 2 行を足す＝本 spec と同じ節）・`release-cycle`（「時点」の行）・`release-code-signing`（「既知の制限」の「署名なし」の行）・`mcp-stdio-bridge`（C4 の候補・要れば）。同じ節の行の足し引きなので、並べるなら本 spec の `dist/README.txt` の変更は最後のタスクに寄せ、着地の前に rebase する。
+  - 「既知の制限」には `.nar-work` に 7 日残る旨の行がすでに在る（`dist/README.txt`）。⑵ で説明書へ書く場合は、この行への追記で足りるかを先に見る。
+  - `crates/areka/src/install/` で棚卸⑳の後に変わったのは `fetch_url.rs`（と兄弟のテスト）・`mod.rs` 1 行・`terms.rs`・`worker_tests.rs`（`OnTranslate` が続くようになった・PR#226）。本 spec の触る `judge.rs`（`destination_of` は `Shell`・`Balloon` を `Destination::Elsewhere`）・`procedure.rs`・`overwrite.rs`・`desk.rs`・`session_end.rs`（`on_os_session_end`）・`app_exit.rs`・`crates/areka-nar/src/install.rs`（`SURVIVOR_RETENTION` 7 日）は変わっていない。
+  - `install-companion-reading` とは同じ `crates/areka/src/install/` を使うが、向こうは `terms.rs` だけ＝ファイルの重なり 0（向こうが `procedure.rs`・`judge.rs` を無改変で済ませる限り）。`crates/areka-nar/` は本 spec では触らない約束のまま。
+  - **⑴ の仮説が C3 で古くなる**: 棚卸⑳の「areka がシェル・バルーンのファイルを開いたまま持つ道は静的に見当たらない」（WIC は `decode/wic_arm.rs` で読み終えて手放す・DirectWrite へのフォントファイルの登録は無い）は今も正しい。ところが C3 の `balloon-font-file` は、バルーン・シェル・ゴーストのフォルダのフォントファイルを DirectWrite のフォントセット（`AddFontFile` → `CreateFontCollectionFromFontSet`）へ載せる計画で、フォント集が生きている間はそのファイルを areka が掴みうる。＝⑴ は `balloon-font-file` の着地の後に測らないと、測った事実がすぐ古くなる。
+- 触るファイル（測った結果で変わる・並走の照合用）:
+  - `crates/areka/src/install/{judge.rs, procedure.rs, overwrite.rs, desk.rs}` と兄弟のテスト（`desk_overwrite_tests.rs` ほか）
+  - `crates/areka/src/session_end.rs`・`app_exit.rs` と `session_end_tests.rs`・`session_end_deadline_tests.rs`
+  - 掴みを外すなら `balloon-font-file` が作るフォント集の片付けの口（`crates/areka-emo-text/src/draw_catalog.rs` の周り）
+  - `dist/README.txt`・`doc/COMPAT_ARCHITECTURE.md`
+- 議題（答えで作業が変わるものだけ）: 棚卸⑳の 3 つ（⑴ 掴みを外して入れるか既知の制限にするか／⑵ 窓 0 枚の区間に受け手を残すか説明書に書くか／Windows を本当に終える実機の 1 回を開発者が行うか）に加え、**⑴ を `balloon-font-file` の着地の後に測るか**（推し: 後。C4 の候補の席はもともと C3 の後なので、並びは変えずに済む）。
+- 見つけた穴: 無し（新しいバグの候補は見当たらない。フォントファイルの掴みは `balloon-font-file` の設計で片付けの口を持たせれば済む＝その spec の着手時に申し送る）。

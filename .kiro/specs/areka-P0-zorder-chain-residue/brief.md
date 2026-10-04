@@ -85,3 +85,12 @@ zsp は「所有の鎖」でスコープ窓の重なりを構造保証して着�
 
 - 優先度 低・据え置き。09-11 以降 main で赤を出した記録は 0 件のまま（発動の条件は満たされていない）。
 - 古くなった点: B-6 は解決済み・B-4 の指す場所がずれた・`SPIN_WAIT` を使うファイルは 5 → 約 10。B-4 は `zorder-property` へ移してよい。
+
+
+---
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 据え置きのままでよい。10-02 の後に C1・C2 で着地した 12 本の完了記録に、spine の族や重なり順・vblank のテストが赤を出した記録は無い（発動の条件は満たされていない）。`crates/wintf/src/ecs/window/zorder_pair_maintain.rs`・`crates/wintf/src/runtime/tick_bridge.rs` を触ったコミットは 0。
+- A-2 の族の数え直し: 30 秒の期限 `SPIN_WAIT`（`crates/areka/src/emo2_boot/spine.rs`）を名指しするか、それを使う `spin_wait_until` を呼ぶファイルは `crates/areka/src/` に 18 本（名指しは 10 本）。`#[ignore]` は 0。brief の表の「5 ファイル」「約 10」は古い＝着手時に A-2 の対象を引き直す。
+- 規模・切り方は 10-02 のまま。議題・穴: なし。

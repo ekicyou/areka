@@ -646,7 +646,7 @@ pub(crate) struct SpineHarness {
     /// frame 三相結線状態（presenter/rx/runtime/clock/assets）。`run_attach_phase` の駆動対象。
     wiring: Emo2Wiring,
     /// 文字層ランタイムの観測用クローン（6.2/6.3 が `present_frame`/`read_back` に使う）。
-    #[allow(dead_code)]
+    #[allow(dead_code)] // 読むのは一部のテストだけ
     runtime: Rc<RefCell<TextLayerRuntime>>,
     /// ghost ランタイム（`dispatcher()` への Tick 注入・`shutdown()` の駆動）。
     ghost: GhostRuntime,
@@ -655,7 +655,7 @@ pub(crate) struct SpineHarness {
     /// scripted backend の発火列観測ハンドル（boot 系列・close 系列の照合）。
     shiori_handle: ScriptedShioriHandle,
     /// 文字層 UI アクター（`spawn_emo_text` の pump アクター）の生存ハンドル（drain は `pump_text`）。
-    #[allow(dead_code)]
+    #[allow(dead_code)] // 持って生かすだけで読まない
     text_pump: JoinHandle<()>,
     /// SERIKO ループ tick の直接注入端（task 9.4）。`spawn_seriko` が返す `SerikoSink` の clone で、
     /// `inject_seriko_tick`（`send_tick` 直接注入・loop ticker 不起動・R7.2/7.3）に使う。surface_sink 本体は

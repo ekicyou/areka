@@ -64,3 +64,27 @@ UI スレッドの処理で読み戻し → premultiplied から straight α へ
 ## 2026-10-03 C4 の候補（10-03 の再編（開発者「MCP は複合 spec なので早めに着手したい」））
 
 - 段は「優先」。C3 に入れなかった理由: C3 の `balloon-font-file` と emo-text の境目が近い。
+
+## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
+
+- 規模: M（10〜14 タスク）。切らない。
+- 前提の状態: `mcp-tool-entrances`（PR#223）は着地済み。前提は満たす。`emo-text-file-split`（C1）・`shell-balloon`（PR#227）も着地済み。
+- 崩れた前提／古くなった位置:
+  - ダミーの場所: アプリ本体側 `crates/areka/src/mcp/{dump_surface,dump_balloon}.rs` の `handle`（各 `NG:not implemented yet` の 1 文）と各 `_tests.rs`（書き換える）。プロトコル側 `crates/areka-mcp/src/tools/{dump_surface,dump_balloon}.rs` は `Args`（`scope: Option<i64>`・`surface: Option<i64>`・`ghost_name`）まで完成。画像を付ける口 `areka_mcp::tools::outcome::with_image(outcome, png_base64: String)` は在る（base64 済みの文字列を受ける＝符号化は本 spec）。
+  - **emo-text の返事付きの変種は要らない見込み**: MCP の要求を汲む系（`mcp::drain`）は UI スレッドで走り、文字の層は World の中の `Rc<RefCell<TextLayerRuntime>>`（`emo2_boot/frame/wiring.rs` の結線状態の `runtime()`）にある。`TextLayerRuntime::surface_at(place)`／`surface(actor)` → `TextSurface::read_back()`（`areka-emo-text/src/surface.rs`・`pub`）を UI スレッドで直に呼べる。`TextMsg`（`sink.rs`）を広げる必要は無い。
+  - 今の見た目の読み戻し: `EmoPresenter::read_back(target)`（`areka-emo-present/src/presenter/read.rs`）は合成メモの**原寸**の BGRA を返す（DPI の拡大 k に依らない＝SSP の「拡大の前」と合う）。結線状態の包み `read_back_target`（`emo2_boot/frame/wiring.rs`）は `#[cfg(test)]` のまま＝本番の口を 1 本開ける。`read_back` は幅・高さを返さない（大きさは別に取る）。
+  - PNG の符号化: WIC の符号化器は `windows` の宣言済み機能で使える（`Win32_Graphics_Imaging_D2D` が `Win32_Graphics_Imaging` を含む・`areka-emo-atlas/src/decode/wic_arm.rs` が `CLSID_WICImagingFactory` を使用中）＝`Cargo.toml` 0 行。テスト側には依存なしの PNG 書き出し（`areka-emo-text/src/viewbox_draw_png_dump_tests.rs`・無圧縮）の前例もある。
+- 触るファイル（並走の照合用）:
+  - `crates/areka/src/mcp/{dump_surface,dump_balloon}.rs` と各 `_tests.rs`
+  - **新規**の PNG と base64 の符号化（`mcp/mod.rs` を触らないよう、ツールのファイルの子モジュールにするか、別のクレートの新規ファイルに置く）
+  - `crates/areka/src/emo2_boot/frame/wiring.rs`（`read_back_target` 相当の本番の口と、文字の層を引く口）
+  - 指定 surface を画面外で合成するなら `crates/areka-emo-compose/src/lib.rs` の `compose` を呼ぶだけ（変えない）。変える必要が出たら `surface-element-nesting`（C3・emo-compose を触る）と同時に走らせない。
+  - 触らない見込み: `areka-emo-present/src/presenter/read.rs`・`areka-emo-text/src/sink.rs`・`surface.rs`
+- 議題（答えで作業が変わるものだけ）:
+  - `dump_balloon` の「拡大の前」をどう作るか: 背景（emo-present）は原寸だが、文字の層の供給面は**物理 px＝`ceil(validrect 寸 × k)`**（`surface.rs` の `size` の注記）。k≠1 では 2 枚の大きさが合わない。⒜ 文字を縮めて重ねる ⒝ k=1 で画面外に描き直す ⒞ 拡大の後の大きさで返して差の一覧に書く、のどれか。
+- 見つけた穴: `EmoPresenter::read_back` は未表示・メモから追い出された target で `error!` を出して `Err` を返す。MCP の呼び出しのたびに ERROR の行が出うる（`mcp-log-history` の着地後は error 種別の履歴にも積まれる）。MCP の経路では読む前に表示の有無を確かめて `NG:` で返し、`error!` を出さない形にする。
+
+## 2026-10-04 ウェーブ C3-⑩（棚卸㉑）
+
+- 段は「優先」。C3 は 11 本並走（`roadmap.md`「ウェーブ編成」の C3 の行が正本）。着手は最新の main から。
+- 同じウェーブの約束: `crates/areka/src/mcp/mod.rs`・`handler.rs` と `areka-emo-compose` を触らない。本番の読み戻しの口は `emo2_boot/frame/wiring.rs` だけ（`frame/scale_text.rs`・`status_report.rs` は C3-③）。
