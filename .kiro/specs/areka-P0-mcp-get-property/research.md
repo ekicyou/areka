@@ -95,7 +95,7 @@
 2. **読み口の形**。`sylphya_reader(&self) -> &SylphyaReader`（借りる）か、複製を返すか。名前は既存の `sylphya_publisher()` に合わせる案が自然。問い手は `mount()` から組めるので読み口は 1 本で足りる（要件 5.2）。
 3. **`ActiveGhost` と置き場の実行系を突き合わせるか**。本番では置き場は 1 つで常に一致する。突き合わせ（例: ルートフォルダの一致）を足すと本番で来ない分岐が 1 つ増える。足さないなら `handle` は `ghost` を記録（`warn!` の欄）にだけ使う。
 4. **要件 3.1 の `warn!` の形**。欄の名前（宛先のゴースト＝`listed_value` 相当か `root` か・渡された名前＝`property_name`）と、`event` の欄を付けるか（`ghost_switch_notice_tests.rs` は `event` の欄で絞る型）。テストは `log_capture_kit::capture` で数える。
-5. **英字の大小の食い違い（注 1）を起票するか**（要件ディスカッションの議題で扱う）。範囲外の問題は spawn_task のチップでなく `/kiro-discovery` で起票する方針。読み手の側で全経路をそろえる話なので、別の spec の候補になりうる。
+5. **英字の大小の食い違い（注 1）** → 要件ディスカッション 議題 1 で開発者が起票を裁定し、`property-name-case-fold` を起票した（2026-10-04）。本 spec は大小の扱いをテストで固定せず（要件 4.7）、設計と完了のときにその brief へ申し送りを書く（要件 5.6）。
 6. **`areka.*`（永続の内部の名前）が MCP から読めること** → 要件ディスカッションで要件の Boundary（Adjacent expectations）に「隠す仕組みは足さない」と明記して閉じた（設計で扱う分岐なし）。
 
 ## 7. 調べが要る点（Research Needed）

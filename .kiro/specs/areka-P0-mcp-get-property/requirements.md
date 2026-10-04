@@ -44,13 +44,13 @@
 |---|---|---|---|---|
 | 1 | 宛先の実行系（記憶）が見つからないときの文言 | **`NG:Property system is not available`**（`isError: true`）＋`warn!` 1 件 | 本番の振り分けからは来ない場面（手前の解決が実行系の無い単位を起動中に数えない）だが、ツールのファイルの約束は「置き場が無くても panic せず `NG:`」。名前の解決の失敗の 2 文言と「無い名前」の文言のどれとも違う文にして、原因を取り違えないようにする。SSP の文言の型（`NG:` ＋大文字で始まる英文）に揃える | 3.1・3.2 |
 | 2 | 値の前後の空白・改行 | **手を加えない**（足さず削らない） | survey §3 の「素の値」。survey §7.1 の SSP 2.9.07 の実測でも、値は `OK:` なしのそのまま、空の値（何もしていないときの `currentghost.status`）は空の本文・`isError: false`。SHIORI の `GetProperty` も値をそのまま返す | 1.1・1.2 |
-| 3 | 名前の手直し（前後の空白の除去・大文字小文字の変換） | **しない**（受け取ったまま解決へ渡す） | SHIORI の `GetProperty` と同じ解決にする。手直しを足すと 2 つの口で答えがずれる。survey §7.1 の SSP 2.9.07 でも前後の空白は削られず「無い名前」になる | 1.4 |
+| 3 | 名前の手直し（前後の空白の除去・大文字小文字の変換） | **しない**（受け取ったまま解決へ渡す） | SHIORI の `GetProperty` と同じ解決にする。手直しを足すと 2 つの口で答えがずれる。survey §7.1 の SSP 2.9.07 でも前後の空白は削られず「無い名前」になる。英字の大小は SSP は区別しない（`BASEWARE.NAME` → `SSP`・survey §7.3 の 4）が、ukadoc は黙っており、読み手は 3 つの口（`GetProperty`・`%property[]`・`get_property`）で共有なので、`get_property` だけでは畳まない。**要件ディスカッション 議題 1（2026-10-04）で開発者が `/kiro-discovery` での起票を裁定し、`property-name-case-fold` を起票した**（読み手の側で 3 つの口を一度にそろえる）。本 spec はその着地の後、何もせずに追従する | 1.4・4.7・5.6 |
 | 4 | 実機確認 | **する**（起動中の emo2 に MCP のクライアントから 2 つの名前を聞く） | 決定論テストは本番の振り分けの経路を通らない部分がある。実機の記録と静的な証跡の二本立て | 4.6 |
 
 ## Boundary Context
 
 - **In scope**: `get_property` の中身（宛先のゴーストの記憶から値を読んで答える）・「値がある（空を含む）」と「値が無い」の区別・宛先の記憶が見つからないときの答え・実行系の記憶を読む口を 1 本足すこと・決定論テスト・実機確認。
-- **Out of scope**: プロパティの値そのものの追加（`currentghost.*`・一覧系・`status`・`zorder` など）・書き込み（SSP の MCP に `set_property` は無い）・`ghost_name` の解決の仕方の変更・他の 9 本のツール・SHIORI の `GetProperty` の振る舞いの変更・ツールの定義（`DEFINITION`）と引数の検査の変更・名前の括弧の読み方（`ghostlist(0)` を番号と読むか名前と読むか。ukadoc の正典は `ghostlist(ゴースト名/本体側名/パス)` と `ghostlist.index(ID)` で、SSP 2.9.07 は `ghostlist(0).name` を「無い名前」にする〔survey §7.3 の 5〕。一覧系の値を実装する `property-catalog-lists` の持ち物）。
+- **Out of scope**: プロパティの値そのものの追加（`currentghost.*`・一覧系・`status`・`zorder` など）・書き込み（SSP の MCP に `set_property` は無い）・`ghost_name` の解決の仕方の変更・他の 9 本のツール・SHIORI の `GetProperty` の振る舞いの変更・ツールの定義（`DEFINITION`）と引数の検査の変更・名前の括弧の読み方（`ghostlist(0)` を番号と読むか名前と読むか。ukadoc の正典は `ghostlist(ゴースト名/本体側名/パス)` と `ghostlist.index(ID)` で、SSP 2.9.07 は `ghostlist(0).name` を「無い名前」にする〔survey §7.3 の 5〕。一覧系の値を実装する `property-catalog-lists` の持ち物）・名前の英字の大小を区別せずに引くこと（`property-name-case-fold` の持ち物・議題 1）。
 - **Adjacent expectations**:
   - `mcp-tool-entrances` の振り分け（`dispatch`）が、`ghost_name` の省略を起動中の 1 体へ解決し、0 体・名前違いを `handle` の手前で `NG:` に終える。本 spec はこの振る舞いに頼り、変えない。
   - 同じく橋（`bridge.rs`）が答えを `debug!` 1 行で記録する。本 spec は普通の答え（値・空の値・無い名前）に**独自の記録を足さない**。
@@ -105,6 +105,7 @@
 4. The areka shall 共有のテスト（`crates/areka/src/mcp/mcp_tests.rs`・`resolve_tests.rs`、`crates/areka-mcp` のテスト）を 1 行も変えずに緑のまま保つ。
 5. The areka shall 「呼ばれた時点の今のゴーストを読む」こと（要件 1.6）と答えの記録の行（橋の `debug!`）には専用のテストを足さない（判断の分岐でなく、手前の振り分けと橋が確かめ済みの配線であるため）。
 6. When 実装が済んだ, the areka shall 実機で emo2 を起こし、MCP のクライアントから `get_property` を呼んで、⑴ `baseware.name` → `areka`（`isError: false`）、⑵ 値の無い名前 → `NG:Cannot find such property name.`（`isError: true`）を確かめ、結果を本 spec の `verification/` に残す。
+7. The areka shall 英字の大小だけが違う名前（`BASEWARE.NAME` など）の答えを固定するテストを置かない（「無い名前」と期待するテストも、値が返ると期待するテストも置かない）。大小の扱いは `property-name-case-fold` が読み手の側で決めるので、本 spec のテストがその spec の着地を赤で妨げないようにする。
 
 ### Requirement 5: 触る範囲
 
@@ -117,3 +118,4 @@
 3. The areka shall 次のファイルを変えない（変える行 0）: `crates/areka/src/mcp/mod.rs`・`crates/areka/src/mcp/resolve.rs`・`crates/areka-mcp/src/` の下の全ファイル（`handler.rs` を含む）・`crates/areka/src/main.rs`・`crates/areka/src/ghost_session.rs`・`crates/areka/src/shiori_host.rs`・`crates/areka-sylphya/` の下の全ファイル・すべての `Cargo.toml`（新しい依存 0）。
 4. The areka shall プロパティの値を 1 つも足さず、既存の値の載せ方を変えない。
 5. The areka shall 1 ファイル 1,000 行以下の目安を、変更する 3 つのファイルすべてで守る。
+6. When 本 spec の設計でテストの組み方と読み手の呼び方が決まったとき、および本 spec を完了するとき（`/kiro-complete`）, the areka shall `.kiro/specs/areka-P0-property-name-case-fold/brief.md` の末尾に「`mcp-get-property` からの申し送り（日付）」の節を足し（設計のときに書き、完了のときに実装の事実で書き直す）、次の 3 点を書く: ⑴ `get_property` は渡された名前を手直しせず読み手（`SylphyaReader::resolve_dotted_str`）へ渡すので、読み手の側で大小を畳めば `get_property` は何も変えずに追従する、⑵ `get_property` のテストは大小の扱いを固定していない（要件 4.7）、⑶ `get_property` の実機確認の手順（要件 4.6）のどこに大小を混ぜた名前の確認を足せばよいか。この追記は spec 文書の変更で、要件 5.1 の「変更するソースファイル」に数えない。`property-name-case-fold` が本 spec より先に着地していたら、追記の代わりに、その着地の後の振る舞いを本 spec の要件 1.4 と実機確認に反映する。
