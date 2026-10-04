@@ -17,7 +17,7 @@
 - 全コマ・待ち時間（ミリ秒の整数）・繰り返し回数を 2 形式で同じ形で渡す。
 - 各コマを静止画 1 枚と同じ `AtlasEntry` として `ElementId` で引けるようにする（合成の側は無改変で描ける）。
 - 上限（3 つ＋ページの一辺）と読み込みの失敗では 1 枚へ縮め、`warn!` を 1 回出す。失敗の一覧には載せない。
-- 今の呼び手・`AtlasKey`・`manifest.rs`・`AtlasTable::new` を変えない（変更 0）。
+- 今の呼び手・`AtlasKey`・`manifest.rs` を変えない（変更 0）。`AtlasTable::new` は署名と逆引き表の作り方を変えない（本体に足すのは、新しい欄を空で初期化する 1 か所だけ）。
 
 ### Non-Goals
 
@@ -33,7 +33,7 @@
 ### This Spec Owns
 
 - 読み手の口 `ElementDecoder`（`crates/areka-emo-atlas/src/decode.rs`）の動く絵の 2 メソッドと、その入出力の型（`AnimationInfo`・`AnimatedImage`・`AnimationFrame`）。
-- 動く絵の見分け（`decode/sniff.rs`）と、`image` クレートを使う読み込み（`decode/image_arm.rs`）。**`image` の型を綴るファイルはこの 1 つだけ**。
+- 動く絵の見分け（`decode/sniff.rs`）と、`image` クレートを使う読み込み（`decode/image_arm.rs`）。**本番のソースで `image` の型を綴るファイルはこの 1 つだけ**。本番でない例外は 1 つ: 検体を作る `examples/gen_animated_samples.rs`（配布物には入らない）。
 - 上限の型 `AnimationLimits`・環境変数 3 つ・判定（`limits.rs`）。
 - 焼く入口の動く絵の枝（`lib.rs` の `bake`／`bake_with_limits` と `animated.rs`）。
 - 表 `AtlasTable` のコマの欄（`Animation`・`LoopCount`・`AtlasTable::with_frames`・`AtlasTable::animation`）。**下流が頼る契約はここ**。
@@ -43,7 +43,7 @@
 
 ### Out of Boundary
 
-- `AtlasKey` の形・`manifest.rs`・`AtlasTable::new` の形と中身（並走 `areka-P0-surface-element-nesting` との約束。**触らない**）。
+- `AtlasKey` の形・`manifest.rs`（並走 `areka-P0-surface-element-nesting` との約束。**触らない**）。`AtlasTable::new` は**署名と、逆引き表の作り方**を変えない。本体には、新しい欄 `animations` を空で初期化する 1 か所が増える（欄を足す以上、ここは避けられない）。
 - `SurfaceSet` の欄（足さない。約 50 か所の書き換えを起こさない）。
 - 読み手を受け取る呼び手 5 ファイル（`crates/areka/src/emo2_boot/assets.rs`・`emo2_boot/switch_assets.rs`・`placement/measure.rs`・`crates/areka-emo-present/src/balloon.rs`・`shell_target.rs`）。変更 0 ファイル。
 - `BakeResult` の欄・`BakeError` の種類（足さない。縮めたことは `warn!` と表の中身で分かる）。
@@ -103,7 +103,7 @@ flowchart TD
 
 - 選んだ形: 今の部品を広げる（`research.md` 6 節の案 A）。読み手の口に既定の実装つきのメソッドを足し、`bake` の中で枝を分ける。新しい読み手の型は作らない。
 - 責務の分かれ目: 「動くか・何コマか」（見出しだけ）と「全コマを読む」を別のメソッドにし、**上限の判定を全コマを読む前に終える**。判定は `bake` の側（読み手の種類に依らない 1 か所）。
-- 守る型: `AtlasKey`・`manifest.rs`・`AtlasTable::new`・`SurfaceSet`・`BakeResult`・`BakeError` は無改変。
+- 守る型: `AtlasKey`・`manifest.rs`・`SurfaceSet`・`BakeResult`・`BakeError` は無改変。`AtlasTable::new` は署名と逆引き表の作り方が不変（本体に新しい欄の初期化が 1 か所入る）。
 - 新しい部品の理由: `sniff.rs`＝静止画を 2 回解かないため／`image_arm.rs`＝`image` を 1 ファイルに閉じ込めるため／`limits.rs`＝上限を外から渡せる形で持つため／`animated.rs`＝`lib.rs` を太らせないため。
 - steering との整合: 外部クレートは承認済みの 1 本だけ・1 ファイル 1,000 行以内・テストは兄弟ファイル・記録の無い失敗の経路 0 本・本番の環境変数は `AREKA_` 冠。
 
@@ -144,7 +144,7 @@ flowchart TD
 | `[patch.crates-io]` を足しただけの状態 | `Cargo.lock` は 0.2.4 のままで、`[[patch.unused]]` が付き、cargo は警告だけ出して公開版を使った | 足した後に `cargo update -p image-webp` が要る。検査は `Cargo.lock` を判定する |
 | git の依存を足した状態で `cargo deny check sources` | `source-not-allowed` で落ちた。`allow-git` に 1 行足すと通った | `deny.toml` に名指しの 1 行 |
 | git の依存を足した状態で `tools/crates-io.ps1`（包むだけの形） | 緑。包まれた `wintf` の `Cargo.lock` の `image-webp` は crates.io の 0.2.4 | crates.io への公開に影響しない（`-Verify` の形は走らせていない） |
-| WIC が動く絵の 1 枚目をどう返すか | 動く WebP: 絵の全体の寸法・`has_alpha = true`（透明度を持たないファイルでも）。APNG: 既定の絵・`has_alpha` は色の形式どおり | 0 番のコマと今の 1 枚の違いは下の「見た目が変わる所」 |
+| WIC が動く絵の 1 枚目をどう返すか | 動く WebP: 絵の全体の寸法・`has_alpha = true`（透明度を持たないファイルでも）。APNG: 既定の絵・`has_alpha` は色の形式どおり | 0 番のコマと今の 1 枚の違いは「対応表に書くこと」の「見た目が変わる所」 |
 | 乗算の丸め | `(c × a + 127) / 255` が WIC の結果と全 65,536 通りで一致（不一致 0） | この式を使う |
 | `Packer::pack` の時間（release） | 300 枚・10 ページ 6.4 ms／268 枚・17 ページ 9.6 ms／1,024 枚・64 ページ 330 ms／2,000 枚・67 ページ 783 ms | 上限の中では 1 秒未満。debug は測っていない |
 | 動く WebP の「重ねる」指定のコマ | 不透明な画素の色が 255 → 254 になった（上流の重ね算の丸め。静止画の往復では 255 のまま） | 検体のテストは、重ねる指定のコマの色だけ ±1 を許す |
@@ -169,7 +169,7 @@ crates/areka-emo-atlas/
     │   ├── wic_arm.rs              # 変更: 2 メソッドの実装（sniff と image_arm を呼ぶだけ）
     │   ├── sniff.rs                # 新規: PNG／RIFF の見出しだけを読む純粋関数
     │   ├── sniff_tests.rs          # 新規
-    │   ├── image_arm.rs            # 新規: image を綴る唯一のファイル
+    │   ├── image_arm.rs            # 新規: 本番のソースで image を綴る唯一のファイル
     │   └── image_arm_tests.rs      # 新規: 検体で画素・時間・回数を判定
     ├── normalize.rs                # 変更: 抜き色で消す数行を関数に出す（振る舞い不変）
     ├── table.rs                    # 変更: Animation・LoopCount・with_frames・animation を足す
@@ -184,7 +184,7 @@ crates/areka-emo-atlas/
 - `Cargo.toml`（根）— `[patch.crates-io]` に `image-webp` の 1 行。
 - `Cargo.lock` — `cargo update -p image-webp` の結果（`image-webp` の 1 項目と、`areka-emo-atlas` の依存の並びに `image`）。
 - `deny.toml` — `[sources]` に `allow-git = ["https://github.com/image-rs/image-webp"]`。
-- `THIRD-PARTY-NOTICES.md` — 生成し直す（12 行増える）。
+- `THIRD-PARTY-NOTICES.md` — 生成し直す（12 行増える）。**生成し直した結果をコミットに含めることが、依存のタスクの完了条件**（下の「依存の登記と pin の検査」）。
 - `.kiro/steering/tech.md` — Key Libraries に `image`・`image-webp` の登記、取り外し条件、`miniz_oxide` の項の「`flate2` は入れない」が `areka-nar` の話であることの一言。
 - `.kiro/steering/roadmap.md` — 予約「設定画面と設定ファイル」への追記／取り込みを外す作業の持ち主／`--clipping` を引き受ける spec の行。
 - `doc/COMPAT_ARCHITECTURE.md` — 8 節「沈黙ルール対応表」に本 spec の 1 節。
@@ -406,7 +406,7 @@ pub(crate) fn sniff<R: Read + Seek>(reader: &mut R) -> Option<AnimationInfo>;
 
 | Field | Detail |
 |---|---|
-| Intent | `image` で全コマを読み、areka の画素の形（乗算済み BGRA）へ直す。`image` を綴る唯一のファイル |
+| Intent | `image` で全コマを読み、areka の画素の形（乗算済み BGRA）へ直す。本番のソースで `image` を綴る唯一のファイル（本番でない例外は `examples/gen_animated_samples.rs` の 1 つ） |
 | Requirements | 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 2.8, 3.2, 3.4, 6.4, 7.5 |
 
 ```rust
@@ -456,14 +456,31 @@ pub struct AnimationLimits {
 }
 impl Default for AnimationLimits { /* 上の既定 */ }
 
+/// 読めなかった設定値 1 件（warn! に書く中身）。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct LimitWarning {
+    pub name: &'static str, // 環境変数の名前
+    pub given: String,      // 与えられた値（UTF-8 でないときは、置き換え文字つきの写し）
+}
+
 impl AnimationLimits {
-    /// 環境変数 3 つから作る（プロセスで 1 回だけ読み、以後は同じ値）。
+    /// 純粋な組み立て口。lookup は「名前 → 値」を引く関数で、std::env::var と同じ形の答えを返す。
+    /// 3 つの名前を 3 つの欄へ割り当て、読めなかった項目は既定にして warnings に 1 件ずつ積む。
+    /// 環境変数に触らず、warn! も出さない（出すのは from_env）。
+    pub(crate) fn from_lookup(
+        lookup: impl Fn(&'static str) -> Result<String, std::env::VarError>,
+    ) -> (Self, Vec<LimitWarning>);
+
+    /// 本番の入口。from_lookup を std::env::var で呼び、warnings を 1 件ずつ warn! で出し、
+    /// 結果を OnceLock に入れる（プロセスで 1 回だけ読み、以後は同じ値）。判断は持たない。
     pub fn from_env() -> Self;
 }
 
-/// 1 項目を決める純粋な関数。raw が None なら既定。
-/// 正の整数でなければ（数でない・0・負）既定を返し、名前と値を warn! で記録する。
-pub(crate) fn resolve_limit(name: &str, raw: Option<&str>, default: u64) -> u64;
+/// 1 項目を決める純粋な関数。NotPresent なら既定（記録なし）。
+/// 正の整数でなければ（数でない・0・負・UTF-8 でない）既定を返し、LimitWarning を返す。
+pub(crate) fn resolve_limit(
+    name: &'static str, raw: Result<String, std::env::VarError>, default: u64,
+) -> (u64, Option<LimitWarning>);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Exceeded { Frames, Pixels, TotalPixels, PageSide }
@@ -476,7 +493,10 @@ pub(crate) fn judge(
 
 - 判定の順: ㋐ 枚数 → ㋑ 絵 1 つの画素の量 → ページの一辺（幅か高さ＋余白 2 つ分がページの一辺を超える）→ ㋒ 合計（`used` ＋この絵）。掛け算は 64 ビットで、あふれは上限超えとして扱う。
 - **ページの一辺**は利用者が変える上限ではないが、同じ縮め方にする: 動く絵の全体がページに入らないと、コマごとに `Packer::pack` が `error!` を出して外し、穴の空いた動きになる。それより 1 枚へ縮めて `warn!` 1 回のほうが原因を探しやすい。縮めた 1 枚は今までの静止画と同じ扱い（今も一辺が 2,046 画素を超える静止画は `Packer::pack` が外す。変更 0）。
+- **名前と欄の割り当て・読めない値の扱いは、全部 `from_lookup` の中に在る**。`from_env` は「本物の環境で `from_lookup` を呼ぶ・返った `LimitWarning` を `warn!` で出す・`OnceLock` に入れる」の 3 行で、判断の分かれ目を持たない。こうしておくと、本番が通る割り当て（どの名前がどの欄へ入るか）を、プロセスの環境変数を書き換えずにテストで踏める。
+- 値が UTF-8 でないとき（`std::env::var` が `VarError::NotUnicode` を返すとき）は、その項目だけ既定にして `LimitWarning` を 1 件返す。先例は `crates/areka-mcp/src/port.rs` の `candidates_from_var`（`std::env::var` の結果をそのまま受け取る純粋な関数で、この場合に `warn!` を 1 件出す）。
 - `from_env` は `std::sync::OnceLock` で 1 回だけ読む。読めない値の `warn!` はプロセスで項目ごとに 1 回。
+- **プロセスの環境変数を書き換えるテストは 0 本**（並走で不安定になり、`OnceLock` のせいで最初の 1 回しか効かない）。
 - 名前は steering の決まり（`AREKA_` 冠・領域の語）。`ANIMATION` は SERIKO のアニメーションと紛れるので `ANIMATED_IMAGE` とした。
 - 設定ファイルが出来たら、`bake_with_limits` へ渡す値をそこから作る（この型はそのまま使える）。
 
@@ -563,7 +583,7 @@ pub struct Animation {
 }
 
 impl AtlasTable {
-    pub fn new(keys, entries, pages) -> Self;            // 既存・無改変
+    pub fn new(keys, entries, pages) -> Self;            // 既存・署名と逆引きの作り方は不変
 
     /// 動く絵つきの表を組む（bake とテストの入口）。
     /// keys と entries は同じ長さ。同じ鍵が複数あれば、いちばん小さい番号が resolve の答えになる。
@@ -606,6 +626,8 @@ impl AtlasTable {
   3. `cargo update -p image-webp`（`Cargo.lock` の `image-webp` が 0.2.4・crates.io から 0.2.5・git へ替わる）。
   4. `deny.toml` の `[sources]` に `allow-git = ["https://github.com/image-rs/image-webp"]`（`unknown-git = "deny"` はそのまま）。
   5. `tools/test-all.ps1 -Format -License`（謝辞の生成し直しを含む）。
+  6. `pwsh -NoProfile -File tools/crates-io.ps1 -Verify -Version <今の版>` を、取り込みを足した状態で 1 回走らせ、結果を `research.md` に記録する（要件 7.8。下の「公開への影響」）。
+- **完了条件**（依存のタスク）: 上の 1〜6 が済み、**生成し直した `THIRD-PARTY-NOTICES.md` がコミットに入っていて、クレートの行が 12 行増えている**こと。`tools/test-all.ps1 -License` は謝辞を生成し直した後、`git diff --quiet -- THIRD-PARTY-NOTICES.md` で差分を見て「差分あり（依存が変わった証跡・コミットに含める）」を**黄色で知らせるだけ**で、赤の段には数えない（`tools/test-all.ps1` の末尾。赤を数える `$failed` は `Step` の結果だけを見る）。つまり、コミットし忘れても全体テストは緑になるので、人の手順として完了条件に置く。
 - **検査 `webp_pin_tests.rs`**（x64 のワークスペース全テストの中で走る・ネットを使わない）: 根の `Cargo.lock` と `Cargo.toml` を読み、純粋な関数 `judge_pin(lock: &str, manifest: &str) -> Result<(), String>` で判定する。
   - `Cargo.lock` の `name = "image-webp"` の項目がちょうど 1 つで、その `source` が `git+https://github.com/image-rs/image-webp?rev=<固定コミット>#<固定コミット>` である。
   - `Cargo.lock` に `[[patch.unused]]` が無い。
@@ -613,7 +635,7 @@ impl AtlasTable {
   - 較正（同じファイルの中のテスト）: 公開版の `source` の文・`[[patch.unused]]` つきの文・コミットが違う文を渡して、どれも赤になることを判定する。文は今の `Cargo.lock` と、実測で得た `[[patch.unused]]` の実物から取る。
 - **コミットの選び方**: 枝 `release-0.2.5` の先頭 `75f81091…`（版 0.2.5）。公開版 0.2.4 に直し 3 件（#171・#178・#179）と版上げだけを載せた枝で、`main`（公開版から 18 コミット先・版は 0.2.4 のまま）より差が小さい。この枝でも、`cargo update` をしなければ取り込みは効かなかった（上の実測）。`main` を指した場合は試していない。
 - **取り外し条件**（`tech.md` に記す）: `image-webp` 0.2.5 以上が crates.io に公開されたら、`[patch.crates-io]` の行・`deny.toml` の `allow-git` の行・`webp_pin_tests.rs` を外し、`cargo update -p image-webp` で公開版へ戻して検体のテストを通す。持ち主は `roadmap.md` に 1 行で載せる（登記だけの行。棚卸のたびに crates.io を引く）。
-- **公開への影響**（要件 7.8）: `[patch]` は根の `Cargo.toml` にだけ在り、`wintf`・`dola` の `Cargo.toml` は変えない。取り込みを足した状態で `tools/crates-io.ps1`（包むだけの形）が緑で、包まれた `wintf` の `Cargo.lock` の `image-webp` は crates.io の 0.2.4 だった。`-Verify` の形（索引を読む）は本設計では走らせていない。タグを打つ前の確認として手順に残す。
+- **公開への影響**（要件 7.8）: `[patch]` は根の `Cargo.toml` にだけ在り、`wintf`・`dola` の `Cargo.toml` は変えない。取り込みを足した状態で `tools/crates-io.ps1`（包むだけの形）が緑で、包まれた `wintf` の `Cargo.lock` の `image-webp` は crates.io の 0.2.4 だった。`-Verify` の形（`cargo publish --dry-run`・索引を読む。公開はしない）は本設計では走らせていない。タグを打ったときに本番で走るのはこの形（`.github/workflows/crates-io.yml`）なので、**実装のタスクで 1 回走らせて結果を記録する**（上の手順 6）。タグを打つ日まで回すと、最初に赤を見るのが公開の当日になる。
 
 ### テスト
 
@@ -652,6 +674,12 @@ impl AtlasTable {
 | 取り込みを外す作業の持ち主／予約「設定画面と設定ファイル」に「動く絵の 3 つの上限を設定項目として引き取る」 | `.kiro/steering/roadmap.md` | 6.12, 7.7 |
 | 上限の設定項目（名前・意味・既定・変え方） | `dist/README.txt` | 6.12 |
 | リポジトリ内の検体の動く絵は 0 枚（シェル・バルーンとも）。見た目が変わる絵は 0 枚 | 本書と `research.md` 4 節 | 5.3 |
+| 上限いっぱいの `bake` の時間と、起動でシェルが 2 回焼かれる形での合計・メモリの山（Testing Strategy「測ること」の結果） | `research.md` と `areka-P0-animated-image-playback` の `brief.md` | 6.1, 9.2 |
+
+**申し送り（本 spec の境界の外・完了時に `/kiro-discovery` で起票する）**:
+
+- **採寸で全コマを読まずに済ませる直し**。起動では同じシェルが 2 回焼かれる（Performance & Scalability）。1 回目は寸法を測るだけなので、動く絵の全コマは要らない。直すには採寸の呼び手（`crates/areka/src/placement/measure.rs`）か `load_shell_target` の呼び方を変えることになり、要件 5.5（呼び手は変更 0 ファイル）の外である。「測ること」の結果で要ると分かったら、完了時に `/kiro-discovery` で起票して `roadmap.md` に載せる。要らないと分かったら、その数字を `research.md` に残して起票しない。
+- `--clipping` を引き受ける spec（上の表・要件 9.3）。
 
 **対応表に書くこと**:
 
@@ -661,8 +689,12 @@ impl AtlasTable {
 - 待ち時間はミリ秒へ四捨五入。0 は 0 のまま。
 - 繰り返し回数は「終わりなし」か「合計 n 回」。
 - 3 つの上限の既定と環境変数。ページの一辺を超える動く絵も 1 枚へ縮む。
+- 見出しのコマの枚数（APNG の `acTL`・WebP の `ANMF` の数）と、実際に読めたコマの枚数が食い違う絵は、1 枚へ縮む（多くても少なくても。`warn!` 1 回）。
+
+見た目が変わる所（先頭の 2 項目）と、上流の読み手・WIC に由来する性質（残り）:
+
 - 既定の絵を持つ APNG は、出る絵が既定の絵から動きの 1 枚目へ変わる。**上限や失敗で 1 枚へ縮んだときは、今までどおり既定の絵が出る**（1 枚は WIC が読む）。
-- 透明度を持たない動く WebP は、今は WIC が `has_alpha = true` で返すので抜き色が効いていない（実測）。本 spec の後は 1 枚目の左上の色が全コマから抜かれる（裁定どおり）。
+- **透明度の旗を持たない動く WebP は、これからは 1 枚目のコマの左上の色が全コマから抜かれる**。今は WIC が `has_alpha = true` で返すので抜き色が効いておらず、不透明の四角で出ている（実測）。これは要件 3.3 の開発者裁定（1 枚目の左上の色を全コマから抜く）の帰結であり、要件 4.3 が「既定の絵を持つ APNG に限り」と書いた例外の**外**にある、もう 1 つの見た目の変化である。対応表と利用者向けの文書に、APNG の項目と並べて書く。
 - 透明度を持たない動く WebP で「背景へ戻す」指定の次に部分のコマが来ると、戻された所は黒い不透明になる（実測。上流の読み手の振る舞い）。
 - 動く WebP の「重ねる」指定のコマは、色が 1 ずれることがある（実測 255 → 254。上流の重ね算の丸め）。
 - 1 枚へ縮んだ動く WebP は WIC が読むので、Windows の WebP の拡張機能が無い機械では今までの静止画の失敗になる。
@@ -701,7 +733,17 @@ impl AtlasTable {
 ### 単体（兄弟ファイル）
 
 - `sniff_tests.rs`: 検体 11 個それぞれが `Some`／`None` のどちらか（動く 2 形式＝`Some` と枚数・寸法／1 枚だけ・GIF・`webp_named.png`＝中身どおり）。12 バイトに満たないファイル・`IDAT` の後ろに `acTL` を置いた PNG は `None`。
-- `limits_tests.rs`: `resolve_limit` の 4 分岐（未設定・正の数・数でない・0）と `warn!` の有無。`judge` の 5 分岐（収まる・枚数・画素・ページの一辺・合計）と、ちょうど上限の値は収まること。
+  - 境目 4 つ（どれもメモリ上のバイト列で作る。行き先は「`None`＝静止画として今までの `decode` が読む」か「`Some`＝後段で枚数が食い違い、`warn!` つきで 1 枚へ縮む」のどちらかで、黙って消える道は 0 本）:
+    1. 奇数の長さのチャンクを持つ WebP（RIFF は偶数へ詰める）: 詰めの 1 バイトを読み飛ばし、後ろの `ANMF` を正しく数える。詰めを飛ばさない実装では枚数がずれて赤になる。
+    2. 動きの旗が立っていて `ANMF` が 0 個: `None`。
+    3. `acTL` の枚数が 0 と 1: どちらも `None`。
+    4. チャンクの長さが残りのファイルより大きい（PNG・WebP の両方）: そこで数えるのを止め、それまでの結果で答える（2 枚以上を数えていれば `Some`、でなければ `None`）。panic しない・読み過ぎない。
+  - 2〜4 で `None` になった絵と、1・4 で `Some` になった絵が、`bake` を通して「静止画の 1 枚」または「`warn!` つきの 1 枚」になることは、結合の `animated_tests.rs`（見出しと中身が食い違う偽の読み手）が判定する。
+- `limits_tests.rs`:
+  - `resolve_limit` の 6 分岐: 未設定（既定・記録なし）／正の数（その値・記録なし）／数でない／0／負の数／UTF-8 でない（後ろ 4 つは既定＋`LimitWarning` 1 件で、名前と与えられた値が入っている）。
+  - `from_lookup`（本番が通る割り当て）: ⑴ 3 つの名前に互いに違う値（例 7・11・13）を返す偽の引く関数を渡し、`max_frames`・`max_pixels`・`max_total_pixels` にそれぞれの値が入る（名前の取り違えで赤になる）／⑵ 1 項目だけ壊れた値にすると、その項目だけ既定になり、ほかの 2 項目は渡した値のまま、`LimitWarning` はちょうど 1 件でその項目の名前／⑶ 3 項目とも未設定なら `AnimationLimits::default()` と同じで、`LimitWarning` は 0 件／⑷ UTF-8 でない値（`VarError::NotUnicode`）は、その項目だけ既定＋`LimitWarning` 1 件。
+  - `judge` の 5 分岐（収まる・枚数・画素・ページの一辺・合計）と、ちょうど上限の値は収まること。
+  - どのテストもプロセスの環境変数を書き換えない（偽の引く関数を渡すだけ）。`from_env` は 3 行の包みなので、テストは置かない。
 - `table_frames_tests.rs`: `with_frames` で親の鍵が 0 番のコマを返す／`animation` が親で `Some`・静止画と 2 枚目以降で `None`／`key(コマの番号)` が親の鍵／`new` で作った表は `animation` が全部 `None`。
 - `image_arm_tests.rs`（要件 8.2・8.3）: `basic.apng` と `alpha.webp` の枚数・各コマの決め手の画素・待ち時間（333・0・70・1／100・0・70）・繰り返し回数。`alpha.webp` の 1 番のコマの左半分が透明（**これが公開版 0.2.4 では赤になる分かれ目**）。「重ねる」指定のコマの不透明な画素だけ色 ±1 を許し、α と「重ねない」指定のコマは完全一致。`default_image.apng` の 0 番が赤。`rgb.*` の `has_alpha` が偽、`trns.apng` は真。`truncated.apng` が `Err`。同じファイルを 2 回読んで同じ。
 
@@ -723,18 +765,28 @@ impl AtlasTable {
 ### 構成
 
 - `webp_pin_tests.rs`: 上の「検査」。
-- `tools/test-all.ps1 -Format -License` が全段緑（`cargo deny check`・謝辞・`tools/crates-io.ps1` を含む）。
+- `tools/test-all.ps1 -Format -License` が全段緑（`cargo deny check`・謝辞・`tools/crates-io.ps1` の包むだけの形を含む）。生成し直した `THIRD-PARTY-NOTICES.md`（12 行増）がコミットに入っていること（全体テストは黄色で知らせるだけなので、目で確かめる）。
+- `tools/crates-io.ps1 -Verify` を取り込みつきで 1 回走らせ、結果を `research.md` に記録する（要件 7.8）。
 
 ### 測ること（タスクで）
 
-- `emo2` のシェルを焼く時間の前後（見出しを読む分の増え方）。本設計では測っていない。
+本設計が測ったのは `Packer::pack` だけである。次を実装のタスクで測り、結果を `research.md` と `areka-P0-animated-image-playback` の `brief.md` に書く。
+
+- `emo2` のシェルを焼く時間の前後（見出しを読む分の増え方）。
 - debug での `Packer::pack` の時間（本設計は release だけ測った）。
+- **`bake` の全体の時間**（`image` での復号と重ね合わせ → 正規化 → 切り詰め → 詰め → ページへ焼く、の通し）を、release と debug の両方で:
+  - ⒜ 既定の上限 ㋑ いっぱいの絵 1 つ（例: 500×500 で 268 コマ）。検体は測るときに `target\` の下へ作る（リポジトリには置かない）。
+  - ⒝ **本番の起動の形**での合計。起動では同じシェルが **2 回**焼かれる: 採寸の `measure_scope_sizes`（`crates/areka/src/placement/measure.rs`。中の `measure_native_scope_sizes` が同じファイルの `build_shell_assets` を呼ぶ）と、資産組み立ての `build_shell_assets`（`crates/areka/src/emo2_boot/assets.rs`）が、それぞれ `load_shell_target`（`crates/areka-emo-present/src/shell_target.rs`）を呼ぶ。採寸の側のファイル冒頭の説明は、この二重の読み込みを受け入れた取り決めとして書いている。⒜ の絵を持つシェルで、2 回分＋バルーンの 1 回の合計を測る。
+- 測った結果、起動が目に見えて止まるなら、直し（採寸では全コマを読まない）は本 spec の境界の外（要件 5.5）なので、完了時に `/kiro-discovery` で起票する（「記録」の申し送り）。
 
 ## Performance & Scalability
 
 - 静止画 1 枚あたりの追加は、ファイルを開く 1 回と見出しの数十〜数百バイトの読み込み。画素の復号は増えない。
 - 動く絵のメモリ: 絵 1 つの全コマ（上限 ㋑ まで）＋切り詰め後の写し。全部の絵を回り終えた時点で、切り詰め後の全コマ（上限 ㋒ まで）と焼いたページを同時に持つ（今の `bake` と同じ形）。
-- `Packer::pack` は上限 ㋒ いっぱい（64 ページ相当）でも release で 1 秒未満（実測 330〜783 ms）。上限 ㋑ いっぱいの絵 1 つ（500×500 で 268 枚・17 ページ）は 9.6 ms。
+- `Packer::pack` は上限 ㋒ いっぱい（64 ページ相当）でも release で 1 秒未満（実測 330〜783 ms）。上限 ㋑ いっぱいの絵 1 つ（500×500 で 268 枚・17 ページ）は 9.6 ms。**`image` で全コマを読んで重ねる時間は測っていない**（「測ること」）。
+- **合計の上限 ㋒ は `bake` の呼び出し 1 回ごとに 0 から数える**。本番の起動では同じシェルが 2 回焼かれる（採寸と資産組み立て。「測ること」⒝ に出どころ）ので、**起動全体で読む動く絵の量は、最大で ㋒ の 2 倍（シェル 2 回）＋バルーンの 1 回分**になる。既定では 268,435,456 画素 × 3 ＝ 約 8 億画素（3 GiB 相当）を読んで重ねることになる。
+- **メモリの山の見積もり**（既定の上限いっぱい・1 画素 4 バイト・測ってはいない）: `bake` 1 回の中で、切り詰め後の全コマ（最大 1 GiB）と焼いたページ（最大 1 GiB）を同時に持つので**約 2 GiB**、そこへ読んでいる最中の絵 1 つ分（最大 256 MiB）が乗って**約 2.25 GiB**。採寸の 1 回目の結果は `measure_native_scope_sizes` の局所の変数で、関数を出るときに手放されるので、2 回分が同時に乗ることはない（山は 2 倍にならない。読む量と時間が 2 倍になる）。焼き終えた後に持ち続けるのはページだけ（シェルで最大 1 GiB、バルーンに動く絵が在ればその分）。
+- 既定の上限の値は開発者の裁定なので動かさない。上の数字が実機でどれだけの時間になるかを測り、要るなら採寸の側の直しを起票する（「記録」の申し送り）。
 
 ## Supporting References
 

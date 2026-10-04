@@ -490,3 +490,11 @@ image v0.25.10
 5. `tools/crates-io.ps1 -Verify`（索引を読む形）を取り込みつきで通すこと。
 6. debug での `Packer::pack` の時間と、`emo2` を焼く時間の前後。
 7. APNG の検体を `image` だけで包み直して作ること（本調査は `png` の書き手で作った）。
+
+### 9.10 設計の検証を受けて足したこと（2026-10-04）
+
+- **起動ではシェルが 2 回焼かれる**（ソースを読んで確かめた）: 採寸の `measure_scope_sizes`（`crates/areka/src/placement/measure.rs`）は `measure_native_scope_sizes` → 同じファイルの `build_shell_assets` → `load_shell_target` と呼び、資産組み立ての `build_shell_assets`（`crates/areka/src/emo2_boot/assets.rs`）も `load_shell_target` を呼ぶ。採寸の側のファイル冒頭の説明に「二重ロードは M1 受容トレードオフ」とある。採寸の側の結果は `measure_native_scope_sizes` の局所の変数で、関数を出るときに手放される。
+- 合計の上限 ㋒ は `bake` の 1 回ごとに数えるので、起動全体で読む動く絵は最大で ㋒ の 2 倍＋バルーンの 1 回分（既定で約 8 億画素・3 GiB 相当）。メモリの山は `bake` 1 回の中の約 2.25 GiB（切り詰め後の全コマ 1 GiB＋ページ 1 GiB＋読んでいる絵 256 MiB）で、2 回分が同時に乗ることはない。**この数字は見積もりで、測っていない**。
+- **測り残し（実装のタスクで測ってここへ書く）**: ⒜ 上限 ㋑ いっぱいの絵 1 つを `bake` する全体の時間（`image` での復号と重ね合わせを含む・release と debug）／⒝ それを起動の形（シェル 2 回＋バルーン 1 回）で行った合計／⒞ `tools/crates-io.ps1 -Verify` を取り込みつきで走らせた結果。結果は `areka-P0-animated-image-playback` の brief へも書く。採寸で全コマを読まずに済ませる直しが要ると分かったら、本 spec の境界の外（要件 5.5）なので完了時に `/kiro-discovery` で起票する。
+- `tools/test-all.ps1 -License` は謝辞の差分を黄色で知らせるだけで赤にしない（`git diff --quiet -- THIRD-PARTY-NOTICES.md` の結果は `$failed` に数えられない）ことを、スクリプトを読んで確かめた。
+- 上限を環境変数から組む道は、`std::env::var` と同じ形の答えを返す「引く関数」を受け取る純粋な組み立て口へ出した（先例 `crates/areka-mcp/src/port.rs` の `candidates_from_var`）。
