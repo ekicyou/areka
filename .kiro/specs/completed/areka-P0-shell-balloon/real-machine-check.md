@@ -215,7 +215,7 @@ A1 の surface0 → 1100（文字の層が先に受け取った回）:
 準備（1 度だけ・根 A と B を作り直す。areka は起こさない。台本は `-Run` のたびに書き直すので、台本だけを替えたときは作り直さなくてよい）:
 
 ```
-pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Prepare
+pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\completed\areka-P0-shell-balloon\real-machine-run.ps1" -Prepare
 ```
 
 項目ごとの箱の置き場所（surface.append*ブレスの element定義・サーフェスの画像の中の座標）: surface1110 は tate1（青・縦書き）が右肩 (330,40)・tate2（赤・縦書き）が左肩 (10,40)、surface1111 は tate1 が左上 (10,80)・fuda（緑・横書き・`font.follow,balloon`）が足元 (70,470)、surface1112 は箱なし。根 B だけ surface1110 に hami（はみ出す箱・(200,480)・320×120）を足してある。
@@ -239,7 +239,7 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 ### 項目 1（2 章の #1）箱に文字が出る・`\b[名前]` の書き分け・サーフェスの切替で付いて回る
 
 ```
-pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 1
+pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\completed\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 1
 ```
 
 | 手順 | 見出し | 出るもの | 見ること |
@@ -262,7 +262,7 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 ### 項目 2（2 章の #2）ドラッグと拡大率の変化でずれない
 
 ```
-pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 2
+pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\completed\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 2
 ```
 
 | 手順 | 見出し | 出るもの | すること・見ること |
@@ -284,7 +284,7 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 ### 項目 3（2 章の #3）ちらつかない
 
 ```
-pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 3
+pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\completed\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 3
 ```
 
 | 手順 | 見出し | 出るもの | 見ること |
@@ -305,7 +305,7 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 ### 項目 4（2 章の #4）置き場所の替わる瞬間の 1 フレーム
 
 ```
-pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 4
+pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\completed\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 4
 ```
 
 | 手順 | 見出し | 出るもの | 見ること |
@@ -326,7 +326,7 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 ### 項目 5（2 章の #5）はみ出し（根 B）
 
 ```
-pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run B -Item 5 -Watch
+pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\completed\areka-P0-shell-balloon\real-machine-run.ps1" -Run B -Item 5 -Watch
 ```
 
 | 手順 | 見出し | 出るもの | 見ること |
@@ -347,7 +347,7 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 ### 項目 6（2 章の #8）透明な画素のクリックが下へ抜ける
 
 ```
-pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 6
+pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\completed\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 6
 ```
 
 | 手順 | 見出し | 出るもの | すること・見ること |
@@ -369,7 +369,7 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 ### 項目 7（2 章の #9 のうち選択肢）箱の選択肢の強調とクリック
 
 ```
-pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 7
+pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\completed\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 7
 ```
 
 | 手順 | 見出し | 出るもの | すること・見ること |
@@ -390,7 +390,7 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 ### 項目 8（2 章の #9 のうち中断）話している最中の箱の左ダブルクリックで中断
 
 ```
-pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 8
+pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\completed\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 8
 ```
 
 この回はログに `kanade=trace` を自動で足す。
@@ -413,7 +413,7 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 ### 項目 9（2 章の #9 のうち立ち絵へ）話していないときの箱のダブルクリックは立ち絵へ
 
 ```
-pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 9
+pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\completed\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 9
 ```
 
 この回だけバルーンの待ち時間は 300 秒（手順 2 の文字が読み終わる前に消えないように）。ログに `kanade=trace` を自動で足す。
@@ -436,7 +436,7 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 ### 項目 10（2 章の #10）ポインタを置いているあいだ消えない
 
 ```
-pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 10
+pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-execution-bf7596\.kiro\specs\completed\areka-P0-shell-balloon\real-machine-run.ps1" -Run A -Item 10
 ```
 
 この回だけバルーンの待ち時間は 8 秒。
@@ -465,7 +465,7 @@ Select-String -Path "C:\home\maz\git\areka\.claude\worktrees\areka-p0-status-exe
 | 1 | **成立**（5 手順とも意図どおり） | 手順 1（00:28:46）右肩に青い縦書き「一の箱（青）です。」・左肩に赤い縦書き「二の箱（赤）です。」。手順 2（00:28:54）赤い列に「無い名前の後も赤。」が続き、列があふれて左へ折り返す・`\b[nai]` の警告 1 行で行き先は替わらない。手順 3（00:29:00→00:29:03）右肩の青「付いて回る。」が、腕の形が替わる（surface1111）と左上へ移り「腕が替わった。」が続く。手順 4（00:29:09）足元の札に赤い「札は赤。」、左上の列は青のまま「一は青のまま。」（`\f の指定を写さない` 1 行）。手順 5（00:29:19→00:29:25）紫の子の普通の吹き出しに「普通の吹き出しへ。」が出て、3 秒後に右肩の箱へ「箱へ戻る。」が戻る |
 | 2 | **成立**（ドラッグの最中と、拡大率の違うモニタへの往復） | 00:45:29.75 に紫の子のドラッグを始め（`DragStartEvent entity=25v0`）、ドラッグの最中（00:45:30.04）も「赤の文字」「青の文字」が左肩・右肩の位置のまま付いて動く。00:45:30.43 に拡大率 2.0→1.5 のモニタへ入り、同じフレームで tate1・tate2 が `k=1.5` で登録し直され、向こうのモニタ（00:45:30.82・00:45:31.62）でも絵との位置関係は同じ。00:45:32.71 に 2.0 へ戻って同じフレームで `k=2.0` で登録し直され、戻った後（00:45:33.91）も同じ。取り込みは 0.7 秒ごとなので、1 フレームのずれの有無はこの取り込みでは見えない（項目 4 で見る） |
 | 3 | **成立**（ちらつき無し） | 手順 2（00:48:29.8〜00:49:39.5・8 回のくり返し）のあいだ、約 0.08 秒ごとの取り込み 846 枚を数えた。立ち絵の窓の大きさが同じ前後の 3 枚で、真ん中だけ描かれた画素が 15% 以上減る（立ち絵が一瞬消える・白くなる）枚は 0 枚。描かれた画素が最も少ない枚（00:48:59.30 ほか）は、腕の形が surface1111 で箱の文字が `\c` で空になった正常な姿だった |
-| 4 | **成立**（ずれは最大 1 フレーム・16 回中 2 回） | 手順 2（00:53:43〜00:54:36）の 16 回の切替で、絵の差し替え（`apply(ShowSurface) … TargetId(0) surface_id=…`）から箱の登録し直し（`箱の置き場所を登録した … surface=…`）までは 3.8〜7.3 ms が 14 回（同じフレーム）、12.3 ms と 12.4 ms が 2 回（次のフレーム＝約 8 ms のあいだ新しい絵の上に前の置き場所の文字）。2 回とも文字の層の `\s` の受け取りが、そのフレームの箱の同期より後に届いた回。0.08 秒ごとの取り込みでは 1 フレームの姿は写らず、目に付く長さではない。設計の記述（1 フレームで収まる・どちらの向きもありうる）どおりで、`areka-P0-shell-balloon-frame-align` の起票は開発者の判断に回す |
+| 4 | **成立**（ずれは最大 1 フレーム・16 回中 2 回） | 手順 2（00:53:43〜00:54:36）の 16 回の切替で、絵の差し替え（`apply(ShowSurface) … TargetId(0) surface_id=…`）から箱の登録し直し（`箱の置き場所を登録した … surface=…`）までは 3.8〜7.3 ms が 14 回（同じフレーム）、12.3 ms と 12.4 ms が 2 回（次のフレーム＝約 8 ms のあいだ新しい絵の上に前の置き場所の文字）。2 回とも文字の層の `\s` の受け取りが、そのフレームの箱の同期より後に届いた回。0.08 秒ごとの取り込みでは 1 フレームの姿は写らず、目に付く長さではない。設計の記述（1 フレームで収まる・どちらの向きもありうる）どおりで、`areka-P0-shell-balloon-frame-align` として完了時に起票した（2026-10-04） |
 | 5 | **成立**（根 B） | 00:56:00.95 に警告が 1 行だけ `箱がサーフェスの画像からはみ出している——採ったうえで、はみ出した部分は窓の端で切れる surface=1110 name="hami" rect=(200, 480, 320, 120) surface_size=(382, 547)`。取り込み（00:56:04.11）で、右下の箱の文字は窓の右端と下端で切れている。本体の窓は走行のあいだ `kind=char scope=0 … w=764 h=1094`（382×547 の 2 倍）の 1 通りだけで、大きくならなかった |
 | 6 | **成立**（改訂後の 9.4・タスク 13 の後でやり直し） | 開発者の目視: 手順 2（青い文字の下の何も描かれていない所）では後ろの窓が選ばれ、手順 3（青い文字そのもの）では選ばれなかった。ログ: 手順 2（11:18:10〜11:18:19）のあいだ `event="box_press"` は 0 行。手順 3（11:18:19〜11:18:35）は 2 行（`box="tate1"` の y=105 と y=136・縦書きの 2 字それぞれ・どちらも `double_click=None selected_now=false verdict=ShellOp`）。1 行を見込んでいたが、2 字を 1 回ずつ押した分で、どちらも字の矩形が受けている ／ （改訂前の記録）開発者の目視: 手順 2（青い文字の下の何も描かれていない所）でも手順 3（青い文字そのもの）でも後ろの窓が選ばれ、「文字をどうクリックしても後ろへ抜けた」。ログ: 手順 2・3（00:59:00〜00:59:46）のあいだ `event="box_press"` は 0 行（箱の四角の中のクリックは areka に届いていない）。同じあいだに届いた押下は、紫の子の体の上（絵のある所・00:59:38）と相方の立ち絵の上（00:59:45）だけ |
 | 7 | **成立**（タスク 13 の後でやり直し） | 開発者の目視: 「はい」「いいえ」とも強調され、クリックすると返事が同じ札に出た。ログ: 手順 2（11:19:43〜）に `box_choice_hover_inject box="fuda"` が `ordinal=Some(0)`（はい）と `Some(1)`（いいえ）の両方で出て、`choice_selected scope=0 id=OnSbYes label=はい box="fuda"` が 1 行、`box_press box="fuda" selected_now=true verdict=ConsumedBySelection` が 1 行。札の上を動くあいだ `box_hover_changed to="fuda"` が `from` 無しで何度も出る（字の矩形のあいだの隙間は下へ抜けるので、窓を出入りしている）が、強調と確定に障りは無い ／ （やり直し前の記録）開発者の目視: 足元の札の選択肢のうち「いいえ」は強調・確定できたが、「はい」はポインタが届かず選べなかった（札の左半分の後ろに絵が無い）。ログ: `box_hover_changed to="fuda"`・`box_choice_hover_inject ordinal=Some(1)`・`choice_selected id=OnSbNo`（箱）だけで、「はい」（ordinal 0）への注入は 0 行。改訂前の 9.4（届くかは絵だけ）が 8.3 を妨げたので、要件 9.4 を改訂し（表示されている字の矩形でも受ける・2026-10-04 開発者裁定）、タスク 13 で実装した |
