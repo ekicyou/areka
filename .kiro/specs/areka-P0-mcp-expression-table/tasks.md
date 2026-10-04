@@ -40,7 +40,7 @@
   - 完了の形: 空の World で呼ぶと既定の 15 件の全文が返り、`is_error` が偽で、`warn!` が 1 件出るテストが緑になる
   - _Requirements: 1.7, 3.5, 5.9_
 
-- [ ] 3. 結合の確かめ
+- [x] 3. 結合の確かめ
 - [x] 3.1 実行系つきの単位で、同時の呼び出し・副作用なし・切替の後を確かめる
   - 置き場は `get_expression_table_tests.rs`（1,000 行に近づいたら `get_expression_table.rs` から `#[path]` で 2 本目を繋ぐ。`mcp/mod.rs` には足さない）。型は `mcp_tests.rs` の `real_unit_answers_get_active_ghost_list_in_one_frame`
   - `SwitchRig` で単位を起こし（`rig.boot`）、`mcp::install` で受け口を据え、`wait_steady` で落ち着かせてから、今のシェルのフォルダへ `surfacetable.txt` を置き、偽の SHIORI の呼出の記録（`rig.calls`）の「前」を採る
@@ -50,7 +50,7 @@
   - 完了の形: この結合テストが緑になる
   - _Requirements: 1.7, 6.1, 6.2, 6.4_
 
-- [ ] 3.2 触らない約束と全体のテストを確かめる
+- [x] 3.2 触らない約束と全体のテストを確かめる
   - `crates/areka/src/mcp/mod.rs`・`resolve.rs`・`crates/areka-mcp/src/**`・すべての `Cargo.toml`・`crates/areka-parsers/src/shell/model.rs`・`decode.rs` に main からの差分が無いことを、pathspec が実在するファイルを指すと確かめてから `git diff` で示す
   - 入口の解決の失敗の文言を見張る今のテスト（`mcp_tests.rs`）が変更なしで緑のまま
   - 完了の形: `cargo test -p areka-parsers` と `cargo test -p areka` と `cargo clippy -p areka -p areka-parsers --all-targets -- -D warnings` が通り、どのテストも SSP・ネットワークに頼らない
@@ -61,3 +61,4 @@
 - `areka` に lib の target は無い。単位のテストは `cargo test -p areka --bin areka mcp::get_expression_table` で走らせる（`--lib` は使えない）。
 - `cargo clippy -p areka --all-targets -- -D warnings` は、この spec の前から dola・areka-emo-compose・areka-kanade などの clippy 1.99 の lint で赤（26 件・持ち主は起票済みの `clippy-199-lints`）。この spec では「変えたファイルから警告が出ない」ことで判定する。2.4 までは `DEFAULT_NAMES`・`render` の dead_code の 2 件が出てよい。
 - `temp-path-kit` は `std::env::temp_dir()` の下に作る。手元で走らせるときは TMP／TEMP をワークツリーの `target\` の下へ向け、走らせた後に空のフォルダを消す。
+- 3.2 の確かめ（10-04）: 触らない約束のファイル（`mcp/mod.rs`・`resolve.rs`・`mcp_tests.rs`・`crates/areka-mcp/src`・全 `Cargo.toml` 31 本・`model.rs`・`decode.rs`）は実在を確かめたうえで `git diff main...HEAD` が空。`cargo test -p areka-parsers`＝527 通過・`cargo test -p areka`＝2,536 通過（2 ignored）。`cargo clippy -p areka -p areka-parsers --all-targets -- -D warnings` は依存の dola・areka-kanade・areka-emo-compose の既存の lint（`clippy-199-lints` の持ち分）で止まるため、完了の形の字面どおりには通らない。代わりに `cargo clippy -p areka-parsers --no-deps --all-targets -- -D warnings` が緑、`cargo clippy -p areka --all-targets` で `get_expression_table*`・`surfacetable*` からの警告が 0 件であることで判定した。
