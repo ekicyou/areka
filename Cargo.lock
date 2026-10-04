@@ -296,6 +296,7 @@ dependencies = [
  "areka-parsers",
  "areka-talk",
  "dola",
+ "log-capture-kit",
  "thiserror",
  "tracing",
  "unicode-segmentation",

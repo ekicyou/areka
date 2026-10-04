@@ -260,8 +260,8 @@ impl ShioriBackend for ScriptedShioriBackend {
         self.get_scripts
             .get_mut(id)
             .and_then(VecDeque::pop_front)
-            // 回数は定常到達の数で決まる＝台本に無ければ「homeurl を書いていない」で答える。
-            .or_else(|| (id == HOMEURL_RESOURCE).then_some(Ok(None)))
+            // 回数は定常到達・台詞の数で決まる＝台本に無ければ homeurl も OnTranslate も 204 で答える。
+            .or_else(|| (id == HOMEURL_RESOURCE || id == "OnTranslate").then_some(Ok(None)))
             .unwrap_or_else(|| {
                 panic!("ScriptedShioriBackend::get(\"{id}\"): no scripted response left")
             })

@@ -1,8 +1,10 @@
 //! rmcp の `ServerHandler`（登録表 → `ToolRouter` の写し）。
 //!
 //! rmcp の `ServerHandler`／`ToolRouter` を綴るのはこのモジュールだけ。登録表の中身は
-//! [`ArekaHandler::new`] が 1 度だけ `ToolRouter` へ写し、一覧・呼び出し・定義の取得は
-//! そこへ委ねる（未登録の名前は `ToolRouter::call` が `-32602` にする＝設計 B-6）。
+//! [`ArekaHandler::new`] が 1 度だけ `ToolRouter` へ写し、呼び出し・定義の取得はそこへ委ねる
+//! （未登録の名前は `ToolRouter::call` が `-32602` にする＝設計 B-6）。一覧は `ToolRouter` が
+//! 名前順に並べ替えるので、写すときに登録順で積んだ列を返す。写しの中で `arguments` を
+//! 登録した `inputSchema` に照らし、合わなければ `-32602` にする。
 
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -17,24 +19,29 @@ use rmcp::model::{
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer, ServerHandler};
 
+use tracing::debug;
+
+use crate::check::check_arguments;
 use crate::registry::{ToolContent, ToolOutcome, ToolRegistry};
 
 /// `serverInfo.name`（版は Cargo の版）。
 pub(crate) const SERVER_NAME: &str = "areka-mcp-server";
 
-/// `initialize` の `instructions`（英文・2 文）。
-pub(crate) const INSTRUCTIONS: &str = "This server controls areka, a desktop mascot (Ukagaka-compatible baseware) running on this machine. Tools are added in later releases; this build registers none, so tools/list is empty.";
+/// `initialize` の `instructions`（英文・3 文）。
+pub(crate) const INSTRUCTIONS: &str = "This server controls areka, a desktop mascot (Ukagaka-compatible baseware) running on this machine. It exposes the same tools as the MCP server of SSP; call get_active_ghost_list first to get the ghost name for the ghost_name parameter. A tool that is not implemented yet returns a result starting with \"NG:not implemented yet\".";
 
-/// rmcp へ渡す受け手。中身は登録表を写した `ToolRouter` だけ（複製は `Arc` の複製）。
+/// rmcp へ渡す受け手。中身は登録表を写した `ToolRouter` と登録順の定義の列（複製は `Arc` の複製）。
 #[derive(Clone)]
 pub(crate) struct ArekaHandler {
     router: Arc<ToolRouter<ArekaHandler>>,
+    tools: Arc<Vec<Tool>>,
 }
 
 impl ArekaHandler {
     /// 登録表を `ToolRouter` へ 1 度だけ写す。
     pub(crate) fn new(registry: ToolRegistry) -> Self {
         let mut router = ToolRouter::new();
+        let mut tools = Vec::with_capacity(registry.len());
         for (spec, handler) in registry.entries() {
             let mut tool = Tool::new_with_raw(
                 spec.name.clone(),
@@ -42,13 +49,22 @@ impl ArekaHandler {
                 spec.input_schema.clone(),
             );
             tool.title = spec.title.clone();
+            tools.push(tool.clone());
             let handler = handler.clone();
+            let name = spec.name.clone();
+            let schema = spec.input_schema.clone();
             router.add_route(ToolRoute::new_dyn(
                 tool,
                 move |ctx: ToolCallContext<'_, Self>| {
-                    // `arguments` が無ければ `{}` を渡す（registry の約束）。
-                    let pending =
-                        handler(serde_json::Value::Object(ctx.arguments.unwrap_or_default()));
+                    // `arguments` が無ければ `{}` として検査し、そのまま渡す（registry の約束）。
+                    let args = ctx.arguments.unwrap_or_default();
+                    if let Err(reason) = check_arguments(&schema, &args) {
+                        debug!(tool = %name, reason = %reason, "MCP: 引数が inputSchema に合わない");
+                        return Box::pin(std::future::ready(Err(ErrorData::invalid_params(
+                            reason, None,
+                        ))));
+                    }
+                    let pending = handler(serde_json::Value::Object(args));
                     Box::pin(async move {
                         Ok(CallToolResponse::from(to_call_tool_result(pending.await)))
                     })
@@ -57,6 +73,7 @@ impl ArekaHandler {
         }
         Self {
             router: Arc::new(router),
+            tools: Arc::new(tools),
         }
     }
 }
@@ -91,7 +108,8 @@ impl ServerHandler for ArekaHandler {
         _request: Option<PaginatedRequestParams>,
         context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
-        let result = ListToolsResult::with_all_items(self.router.list_all());
+        // `ToolRouter::list_all` は名前順に並べ替えるので、登録順の列を返す。
+        let result = ListToolsResult::with_all_items(self.tools.as_ref().clone());
         // 2026-07-28 以降は `ttlMs`・`cacheScope` が必須（rmcp は欄を空のまま出す＝設計 B-12）。
         // 無状態では list_changed を送れず、後の spec で道具が増えるので 0／private
         // （`server/discover` の rmcp の既定と同じ）。旧式の版には付けない。

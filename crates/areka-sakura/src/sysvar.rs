@@ -16,6 +16,7 @@
 //! 既定値 [`DEFAULT_USERNAME`] は**唯一の定義点**であり、⓪ghost の暫定 provider は
 //! これを re-use する（`%username` だけの偽ストアを二重定義しない・R7.4）。
 
+use areka_parsers::sakura::{Instruction, parse, substitute_system_vars};
 use std::collections::BTreeMap;
 
 /// 名前→値の凍結スナップショット（プロパティシステム読み口の凍結像・R7.3）。
@@ -82,6 +83,68 @@ pub fn resolve_system_var(name: &str, vars: &SystemVarSnapshot) -> ResolvedVar {
     );
     ResolvedVar::PassThrough(format!("%{name}"))
 }
+
+/// 台詞の環境変数を、再生時の展開と同じ規則（[`resolve_system_var`]）で展開する。
+///
+/// 翻訳（`OnTranslate`）の前に使う。`Text` を返す名前（写しの値・`username` の既定値）は
+/// その値に置き換え、`PassThrough` を返す名前は `%名前` の綴りのまま残す（要件 2.3・2.4）。
+/// 置き換える位置と値のエスケープは [`substitute_system_vars`] が字句解析と同じ規則で決める。
+///
+/// 埋めた値が直前のタグに飲み込まれる並び（`\w%username` で値が数字始まり等）では読みが
+/// 変わるので、展開した台詞の命令の列が「元の命令の列で置き換えた環境変数を文字にしたもの」と
+/// 等しいかを照合し、違えば `warn!`（`sysvar_expand_fallback`）を残して元の台詞を返す
+/// （再生時の展開が今日どおり働く・要件 2.2・2.5）。
+pub fn expand_system_vars(script: &str, vars: &SystemVarSnapshot) -> String {
+    let text_of = |name: &str| match resolve_system_var(name, vars) {
+        ResolvedVar::Text(value) => Some(value),
+        ResolvedVar::PassThrough(_) => None,
+    };
+    let expanded = substitute_system_vars(script, &mut |name| text_of(name));
+    if expanded == script {
+        return expanded;
+    }
+    // 同値の照合: 置き換えた環境変数を文字にした元の命令の列と、展開した台詞の命令の列。
+    let want = join_texts(parse(script).into_iter().map(|ins| match ins {
+        Instruction::SystemVar(name) => match text_of(&name) {
+            Some(value) => Instruction::Text(value),
+            None => Instruction::SystemVar(name),
+        },
+        other => other,
+    }));
+    if join_texts(parse(&expanded)) == want {
+        return expanded;
+    }
+    tracing::warn!(
+        event = "sysvar_expand_fallback",
+        script = %script,
+        expanded = %expanded,
+        "[sysvar] 展開すると台本の読みが変わるので、翻訳の前には展開せず元の台詞のまま渡す"
+    );
+    script.to_owned()
+}
+
+/// 隣り合う `Text` を 1 つにつなぎ、空の `Text` は捨てる（文字のかたまりの切れ目は読みに
+/// 影響しない。空の値で置き換えた環境変数は `parse` の側に現れない）。
+fn join_texts(instructions: impl IntoIterator<Item = Instruction>) -> Vec<Instruction> {
+    let mut out: Vec<Instruction> = Vec::new();
+    for ins in instructions {
+        if let Instruction::Text(s) = &ins {
+            if s.is_empty() {
+                continue;
+            }
+            if let Some(Instruction::Text(prev)) = out.last_mut() {
+                prev.push_str(s);
+                continue;
+            }
+        }
+        out.push(ins);
+    }
+    out
+}
+
+#[cfg(test)]
+#[path = "sysvar_expand_tests.rs"]
+mod expand_tests;
 
 #[cfg(test)]
 mod tests {

@@ -25,6 +25,8 @@ pub mod actor;
 pub mod change;
 // 殻で答える複数件のリソース照会（`KanadeMsg::ResourceQuery`）。`actor.rs` を薄く保つための分室。
 mod actor_resources;
+// 殻が翻訳の依頼（`Action::Translate`）を実行する 1 関数（呼び手は `actor` の `execute_batch` の腕）。
+mod actor_translate;
 pub mod msg;
 pub mod online;
 // schedule の消費者はランタイム層の actor.rs シェル（[`crate::actor::spawn_kanade`]）。
@@ -35,8 +37,9 @@ pub(crate) mod schedule;
 pub mod shiori;
 pub mod status;
 pub mod talk;
+pub mod translate;
 
-pub use actor::{spawn_kanade, spawn_kanade_with_stop_sink};
+pub use actor::{spawn_kanade, spawn_kanade_translating, spawn_kanade_with_stop_sink};
 pub use change::{
     BootOrigin, CancelReason, ChangeHandoff, ChangeOrigin, ChangeRequest, ChangeTarget,
     ChangedFrom, GapLeft, GapRaise, KanadeNotice, MarkedEnd, RaiseOutcome, ShioriMethod, TalkGap,
@@ -56,6 +59,7 @@ pub use status::{
     ExternalStates,
 };
 pub use talk::{ChoiceWaiting, StartTalk, TalkCommand, TalkDone, TalkEndReason, TalkId};
+pub use translate::{MakotoChain, ScriptExpander, TranslateSeams};
 
 /// ukadoc Reference 表の実装正本（純粋関数群）を露出する公開ファサード（DD-9 例外）。
 ///
@@ -67,11 +71,11 @@ pub use talk::{ChoiceWaiting, StartTalk, TalkCommand, TalkDone, TalkEndReason, T
 /// `pub(crate)` のまま非公開に保つ。
 pub mod events {
     pub use crate::schedule::events::{
-        ALLOWED_EVENT_IDS, allowed_static, baseware_version, is_allowed_choice_event,
+        ALLOWED_EVENT_IDS, SourceEvent, allowed_static, baseware_version, is_allowed_choice_event,
         is_allowed_event_id, on_boot, on_choice_named, on_choice_select, on_choice_select_ex,
         on_choice_timeout, on_close, on_close_notify, on_first_boot, on_ghost_changed,
         on_ghost_changing, on_initialize, on_mouse_double_click, on_mouse_move, on_second_change,
-        raise, value_replaces_active_talk,
+        on_translate, raise, value_replaces_active_talk,
     };
 }
 

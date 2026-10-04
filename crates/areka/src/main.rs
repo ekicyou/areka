@@ -65,6 +65,7 @@ mod input_events;
 /// 終了の統合操作（areka-P0-app-lifetime-separation）。全窓を閉じてから終了を指示する
 /// `quit_app` と出所の語彙 `ExitOrigin` を持つ。
 mod app_exit;
+mod mcp;
 mod menu;
 mod readme;
 /// OS のセッションの終了（`WM_ENDSESSION`）を窓の手続きの中できれいな終わりにする受け手。
@@ -181,10 +182,9 @@ fn main() -> Result<()> {
     // MCP の待受（areka-P0-mcp-server-core 設計判断 B-3）。畳むのは取っ手の `Drop` で、`down?` の
     // 早い戻りを含む `main` のどの出口でも閉じる。`app` より先に宣言する＝`app` の後に落ちる。
     // 待受の失敗は `error!` に残すだけで終了コードには響かない（`start` は `Result` を返さない）。
-    let _mcp = areka_mcp::start(
-        &areka_mcp::read_port_candidates(),
-        areka_mcp::ToolRegistry::default(),
-    );
+    // 10 本の登録表と受け口（受け口は `register_systems` の後で World へ置く・mcp-tool-entrances）。
+    let (mcp_tools, mcp_inbox) = areka_mcp::tools::entrances(areka_mcp::tools::REPLY_WAIT);
+    let _mcp = areka_mcp::start(&areka_mcp::read_port_candidates(), mcp_tools);
 
     // 実行ファイル隣接の 32bit SHIORI helper パスを一度だけ解決する（起動の文脈と起動入力の作り口が
     // 持ち、実 sink 結線経路と `LogSink` フォールバック boot 経路の双方が使う・DD-7）。
@@ -201,6 +201,7 @@ fn main() -> Result<()> {
     // 2 経路へ渡す（要件 6.4）。main 自身の送出端は起動の分岐の後で落とす。
     let (kanade_stop_tx, kanade_stop_rx) = std::sync::mpsc::channel();
     ghost_session::register_systems(app.world().borrow_mut().world_mut(), kanade_stop_rx);
+    mcp::install(app.world().borrow_mut().world_mut(), mcp_inbox);
 
     // 起動の文脈と起動入力の作り口（本番版）を据える（切替と右クリックメニューの「ゴースト」枠が読む）。
     install_boot_context(
@@ -309,6 +310,8 @@ fn main() -> Result<()> {
     // `app_exit::quit_app`（全窓を閉じてから終了を指示）の終了の指示で `run()` が戻る。
     // 失敗でも後始末は通すので `?` で抜けない（要件 3.2・6.3）。
     let run = app.run();
+    // MCP の受け口を外す（溜まった要求は即座に "shutting down"・`begin_close` より前）。
+    mcp::close(app.world().borrow_mut().world_mut());
     // 印の判定の材料（`run` は下で `finish_after_run` へ渡すので、成否をここで控える）。
     let run_ok = run.is_ok();
     // 終了を始める（ghost-install 要件 8）: 背景の仕事の門を閉じ、待っている依頼を捨てる。書いている

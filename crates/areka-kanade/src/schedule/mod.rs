@@ -40,6 +40,11 @@ pub(crate) mod log_capture;
 pub mod resources;
 pub(crate) mod steady;
 pub(crate) mod talk_gap;
+/// 運行表の翻訳（`OnTranslate`）——帳簿の型・元のイベントの控え・応答の読み。
+pub(crate) mod translate;
+/// 既存テスト用の「翻訳を台詞そのままで通す」補助（テスト専用）。
+#[cfg(test)]
+pub(crate) mod translate_test_support;
 pub(crate) mod user_break;
 
 /// 状態機械への入力。`KanadeMsg`（外部入力）＋シェルが同期往復で得た SHIORI 応答。
@@ -112,6 +117,8 @@ pub(crate) enum Input {
     /// 外から届いた実行状態の知らせ（UI → kanade）。相を問わず写し（[`State::external`]）を
     /// 更新するだけで、運行は変えない（行動を返さない）。
     ExecutionState(ExecutionStateUpdate),
+    /// 殻が [`Action::Translate`] を実行した結果（殻が即時再投入）。判断は [`translate::on_done`] が持つ。
+    TranslateDone(translate::TranslateResult),
 }
 
 /// 運行フェーズ（可視化は System Flows の状態機械図）。各待ち点は「直前に発行した
@@ -236,6 +243,12 @@ pub(crate) struct State {
     pub talk_gap: Option<talk_gap::GapWatch>,
     /// 外から届いた実行状態の写し（中断の旗・通信中・見えているバルーンの組）。ゴーストごとに新品。
     pub external: ExternalStates,
+    /// 翻訳の待ちの帳簿（高々 1 つ・[`translate::TranslateWait`]）。
+    pub translate: Option<translate::TranslateWait>,
+    /// 応答を待っている GET の元のイベント（一括の最後の往復が GET のときだけ `Some`）。
+    ///
+    /// 書くのは [`translate::after`]、SHIORI の応答の入力で 1 回だけ取り出すのは [`translate::before`]。
+    pub reply_source: Option<events::SourceEvent>,
 }
 
 impl State {
@@ -256,6 +269,8 @@ impl State {
             pending_change: None,
             talk_gap: None,
             external: ExternalStates::default(),
+            translate: None,
+            reply_source: None,
         }
     }
 
@@ -408,6 +423,8 @@ pub(crate) enum Action {
     },
     /// 運行の通知を UI へ送る（シェルは停止通知と同じ送出端へそのまま流す）。
     Notice(crate::change::KanadeNotice),
+    /// 翻訳の依頼（殻が `OnTranslate` を往復させ、結果を [`Input::TranslateDone`] で再投入する）。
+    Translate(translate::TranslateRequest),
 }
 
 /// 唯一の遷移入口。現在の [`State`] と [`Input`] から次の [`State`] と副作用指示
@@ -417,12 +434,16 @@ pub(crate) enum Action {
 /// 防御アームを実装し、フェーズ固有の遷移は各サブモジュールへ委譲する。処理順は
 /// 「横断遷移を先に判定 → 該当しなければフェーズ分岐」である。
 ///
-/// どの入力でも、遷移の後に台詞の切れ目の見極め（[`talk_gap::observe`]）を 1 回だけ走らせる
+/// どの入力でも、遷移の前後で元のイベントの控えと翻訳の出口の規則（[`translate::before`]・
+/// [`translate::after`]）を扱い、遷移の後に台詞の切れ目の見極め（[`talk_gap::observe`]）を 1 回だけ走らせる
 /// （見張りが無ければ何もしない）。
-pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
+pub(crate) fn step(mut state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     // 印のイベントの応答なら、遷移の前のトークを控える（応答で台詞が始まったかを後で突き合わせる）。
     let marked_reply = talk_gap::marked_reply(&state, &input);
+    // 応答の入力なら、応答を待っていた GET の元のイベントの控えを取り出す（1 回だけ使う）。
+    let replied = translate::before(&mut state, &input);
     let (mut state, actions) = route(state, input, config);
+    let actions = translate::after(&mut state, replied, actions);
     talk_gap::observe(&mut state, marked_reply);
     (state, actions)
 }
@@ -536,6 +557,9 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
 
         // ExecutionState: 相を問わず（終了中・停止後も）写しを更新するだけ（行動は返さない）。
         Input::ExecutionState(update) => on_execution_state(state, update),
+
+        // TranslateDone: 預けた一括の再開・故障・帳簿なしの判断ごと translate::on_done へ渡す。
+        Input::TranslateDone(result) => translate::on_done(state, result),
 
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 
@@ -906,3 +930,8 @@ mod external_state_tests;
 #[cfg(test)]
 #[path = "schedule_log_firing_tests.rs"]
 mod log_firing_tests;
+
+/// 翻訳の経路（SHIORI の台詞で再生を始める 8 か所の腕）を最上位の `step` から通すテスト。
+#[cfg(test)]
+#[path = "translate_path_tests.rs"]
+mod translate_path_tests;

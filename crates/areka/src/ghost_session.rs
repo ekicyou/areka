@@ -68,6 +68,7 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
     input_events::choice_drain::register_choice_drain(world);
     crate::install::register(world);
     crate::update::register(world);
+    crate::mcp::register(world);
 
     world.resource_mut::<Schedules>().add_systems(
         FrameFinalize,
@@ -866,3 +867,7 @@ mod shell_balloon_switch_session_abort_tests;
 #[cfg(test)]
 #[path = "shell_balloon_switch_session_update_tests.rs"]
 mod shell_balloon_switch_session_update_tests;
+
+#[cfg(test)]
+#[path = "ghost_session_switch_translate_tests.rs"]
+mod switch_translate_tests;

@@ -6,7 +6,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+publish = false # areka 本体の部品・areka の中でしか意味を持たない
 repository.workspace = true
-publish = false
 
 [dependencies]

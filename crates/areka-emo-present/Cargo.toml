@@ -6,15 +6,15 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+publish = false # areka 本体の部品・areka の中でしか意味を持たない
 repository.workspace = true
-publish = false
 
 [dependencies]
 areka-parsers = { path = "../areka-parsers" }
 areka-emo-atlas = { path = "../areka-emo-atlas" }
 areka-emo-compose = { path = "../areka-emo-compose" }
 areka-actor = { path = "../areka-actor" }
-wintf = { version = "0.0.1", path = "../wintf" }
+wintf = { path = "../wintf" }
 bevy_ecs = { workspace = true }
 # display.rs は D2D の DXGI_FORMAT_B8G8R8A8_UNORM（workspace 既定の `Win32_Graphics_Dxgi_Common`
 # で有効）のみを要する。swap chain 本体型（`Win32_Graphics_Dxgi`）は不要（自前供給面は撤去済み）。

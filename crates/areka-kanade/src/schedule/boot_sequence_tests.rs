@@ -1,5 +1,6 @@
 use super::test_support::{assert_get, assert_notify, config, initial};
 use super::*;
+use crate::schedule::translate_test_support::pass_translate;
 use crate::schedule::{ActiveTalk, step};
 use crate::status::ExecutionSnapshot;
 
@@ -72,12 +73,15 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
 
     // 4. BootMain + Value("greeting") → StartTalk(id=1) + basewareversion NOTIFY /
     //    BootVersion{talk: Some(挨拶)}（DD-IT-12: 挨拶を正規追跡）。
-    let (s, actions) = step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("greeting".to_string()),
-            origin: "test",
-        },
+    let (s, actions) = pass_translate(
+        step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("greeting".to_string()),
+                origin: "test",
+            },
+            &cfg,
+        ),
         &cfg,
     );
     assert!(
@@ -169,12 +173,15 @@ fn boot_type_value_skips_onboot_and_starts_talk() {
     assert!(matches!(s.phase, Phase::BootType));
 
     // BootType + Value("earlygreet") → StartTalk + basewareversion NOTIFY / BootVersion。
-    let (s, actions) = step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("earlygreet".to_string()),
-            origin: "test",
-        },
+    let (s, actions) = pass_translate(
+        step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("earlygreet".to_string()),
+                origin: "test",
+            },
+            &cfg,
+        ),
         &cfg,
     );
     assert!(
@@ -229,6 +236,8 @@ fn boot_main_no_content_emits_no_talk() {
         pending_change: None,
         talk_gap: None,
         external: Default::default(),
+        translate: None,
+        reply_source: None,
     };
     let (s, actions) = step(
         s,
@@ -274,6 +283,8 @@ fn boot_talk_ids_are_unique_and_monotonic() {
         pending_change: None,
         talk_gap: None,
         external: Default::default(),
+        translate: None,
+        reply_source: None,
     };
     let (s1, actions1) = step(
         s1,
@@ -303,6 +314,8 @@ fn boot_talk_ids_are_unique_and_monotonic() {
         pending_change: None,
         talk_gap: None,
         external: Default::default(),
+        translate: None,
+        reply_source: None,
     };
     let (s2, actions2) = step(
         s2,
@@ -345,6 +358,8 @@ fn close_request_during_boot_records_pending_only() {
             pending_change: None,
             talk_gap: None,
             external: Default::default(),
+            translate: None,
+            reply_source: None,
         };
         let phase_before = std::mem::discriminant(&s.phase);
         let (s, actions) = step(
@@ -466,6 +481,8 @@ fn baseware_version_status_reflects_greeting_tracking() {
         pending_change: None,
         talk_gap: None,
         external: Default::default(),
+        translate: None,
+        reply_source: None,
     };
     let (_, actions) = step(
         greeting,
@@ -494,6 +511,8 @@ fn baseware_version_status_reflects_greeting_tracking() {
         pending_change: None,
         talk_gap: None,
         external: Default::default(),
+        translate: None,
+        reply_source: None,
     };
     let (_, actions) = step(
         no_greeting,
@@ -555,12 +574,15 @@ fn boot_greeting_talkdone_correlates_without_unknown_error() {
         },
         &cfg,
     ); // BootType→BootMain（OnBoot GET）
-    let (s, _) = step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("greeting".to_string()),
-            origin: "test",
-        },
+    let (s, _) = pass_translate(
+        step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("greeting".to_string()),
+                origin: "test",
+            },
+            &cfg,
+        ),
         &cfg,
     ); // BootMain(Value)→BootVersion{talk: Some(id=1)}
     let (s, _) = step(

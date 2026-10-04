@@ -1,202 +1,135 @@
-# areka — デスクトップマスコット・プラットフォーム
+# areka — 伺か互換のデスクトップマスコット・ベースウェア
 
-> Rust製デスクトップマスコット・プラットフォーム
+> Rust 製・Windows 用。デスクトップにキャラクター（ゴースト）を住まわせるアプリです。
 
 [![Rust](https://img.shields.io/badge/Rust-2024_Edition-orange?logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE-MIT)
-[![Windows](https://img.shields.io/badge/Platform-Windows_10%2F11-0078D6?logo=windows)](https://www.microsoft.com/windows)
+[![Windows](https://img.shields.io/badge/Platform-Windows_10%2F11_(x64%2Farm64)-0078D6?logo=windows)](https://www.microsoft.com/windows)
+
+<p align="center"><img src="doc/images/emo2-boot.png" alt="同梱のゴースト えも？？ が起動の挨拶をしているところ" width="560"></p>
+
+<p align="center"><sub>同梱のゴースト「えも？？」。シェル: \0 側「コンフィズリー」（ゆゆぴか）・\1 側「City-Pop'n」（大槻）／バルーン: emo2-kakukaku（素材: フキダシデザイン）。絵の利用条件はそれぞれの作者に従います（<a href="dist/README.txt">dist/README.txt</a> の「同梱物とライセンス」）。</sub></p>
 
 ---
 
-## プロジェクト概要
+## これは何か
 
-**areka** は、デスクトップ上にキャラクター（ゴースト）を常駐させ、ユーザーとの自然な対話を実現するデスクトップマスコット・プラットフォームです。
+**areka** は「伺か」のベースウェアです。[ukadoc](https://ssp.shillest.net/ukadoc/manual/) を正典として、SSP の代わりに既存のゴースト・シェル・バルーンを動かすことを目指しています。
 
-ECSアーキテクチャ、DirectComposition による高品質レンダリング、日本語縦書き描画、そして宣言的アニメーション定義を基盤に据えています。
-
-配布物（zip）を受け取った方向けの使い方は [dist/README.txt](dist/README.txt) を参照してください。
-
----
-
-## スクリーンショット
-
-> 📷 *準備中 — アルファリリースにて掲載予定*
-
-<!--
-![areka demo](shell/icon.png)
--->
+- 描画は Windows.UI.Composition（WUC）＋ Direct2D ＋ DirectWrite で、透過窓と、透明な所のクリックを下のアプリへ通す動きを GPU 合成のまま実現しています。
+- 32 ビットの SHIORI（`shiori.dll` など）は、32 ビットの補助 exe（`shiori-host32-helper.exe`）の中で動かします。本体は 64 ビット（x64・arm64）です。
+- 同梱のゴーストは **えも？？**（`emo2`・SHIORI は pasta の 32 ビット版）です。
+- 将来は、areka ならではの表現（縦書きのタイプライター・シェルの中のバルーンなど）を使う旗艦ゴースト **ぱすたさん** も入れる予定です（まだ作れていません。構想は [doc/PASTA_PROFILE.md](doc/PASTA_PROFILE.md)）。
 
 ---
 
-## 二層構造
+## いまできること（α 版・2026-10-02 時点）
 
-areka は **UIフレームワーク** と **アプリケーション** の二層で構成されています。
+α 版の目標は「第三者がデスクトップマスコットを管理できる」ことです。
 
-| 層 | クレート | 役割 |
-|----|---------|------|
-| **フレームワーク** | `wintf` | Windows Tategaki Framework — ECS + DirectComposition + Direct2D による汎用Windows UIフレームワーク |
-| **フレームワーク** | `dola` | Declarative Orchestration for Live Animation — 宣言的アニメーション定義フォーマット |
-| **アプリケーション** | `areka` *(予定)* | デスクトップマスコット・プラットフォーム本体（バイナリクレート） |
-| **外部** | [`pasta`](https://github.com/ekicyou/pasta) | 里々インスパイアの会話記述DSLスクリプトエンジン |
+- ゴーストの起動・会話・撫で・右クリックメニュー・終了
+- `.nar` のインストール（メニューから、またはキャラクターへのドラッグ＆ドロップ）
+- ゴースト・シェル・バルーンの切り替え
+- ネットワーク更新
+- 前回使ったゴースト・シェル・バルーンを覚えて、次の起動で戻す
+- 前回きれいに終わらなかったときは、同梱の えも？？ で立ち上がる
 
----
+動作を確かめているゴーストは次のとおりです（どれも `vendors/sample_ghost/` に配布形のまま置いています）。
 
-## クレート構成
+| ゴースト | SHIORI | 備考 |
+| --- | --- | --- |
+| えも？？（`emo2`） | pasta（32 ビット） | 同梱。areka の適合の物差し |
+| `R_POST_and_KOMAINU` | 里々 | 標準テンプレート |
+| 紺野ややめ（`konnoyayame`） | YAYA | 標準テンプレート。シェルが CC BY-NC-ND のため開発用の検体としてだけ使い、配布物には入れません |
+| 悪役令嬢クローディア（`claudia`） | YAYA | 同梱バルーンを 2 つ持つ検体 |
 
-```
-areka/                          # ワークスペースルート
-├── crates/
-│   ├── wintf/                  # Windows Tategaki Framework（UIフレームワーク）
-│   ├── dola/                   # 宣言的アニメーション定義
-│   └── areka/                  # (予定) マスコットアプリ本体
-└── pasta (外部リポジトリ)       # 会話記述DSL
-```
+既定のバルーンは CC0 の [StayseeBalloon](https://github.com/ponapalt/StayseeBalloon) です。
 
-詳細は [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md) を参照。
+表現力は「えも？？ が普通に動く」水準までで、ゴーストによっては表情や演出の一部が欠けます。複数体の同時表示・SSTP などはまだありません。制限の一覧は [dist/README.txt](dist/README.txt) の「既知の制限」にあります。
 
 ---
 
-## 技術スタック
+## 入手と起動
 
-| カテゴリ | 技術 | バージョン |
-|---------|------|-----------|
-| 言語 | Rust | 2024 Edition |
-| ECS | bevy_ecs | 0.18.0 |
-| Windows API | windows-rs | 0.62.2 |
-| グラフィックス | DirectComposition + Direct2D + Direct3D11 | — |
-| テキスト | DirectWrite（縦書き・横書き両対応） | — |
-| レイアウト | Taffy (Flexbox) | 0.9.2 |
-| アニメーション定義 | dola (JSON / TOML / YAML) | — |
-| イメージング | WIC (Windows Imaging Component) | — |
+- 配布物の zip を展開する（まだ GitHub Releases での配布はしていないので、今は手元で zip を組みます。下の「ビルド」）
+
+zip を展開して `areka.exe` を開けば、同梱の えも？？ が立ちます。起動・終了・メニュー・`.nar` の入れ方・更新・記憶の置き場は、利用者向けの説明書 [dist/README.txt](dist/README.txt) にまとめてあります。
+
+crates.io に版を出しているのは、汎用のライブラリ `wintf`・`dola` だけです。crates.io の `areka` は名前を確保するための 0.0.1 だけで、本体と部品は出していません。`cargo install areka` は areka の入れ方ではありません（32 ビットの補助 exe が付きません）。
 
 ---
 
-## 🎯 アルファリリース目標: ぱすたさん
+## ビルド
 
-**ぱすたさん** — areka プロジェクト初のデスクトップマスコット。
+### 前提
 
-| 属性 | 内容 |
-|------|------|
-| 名前 | ぱすたさん |
-| 種別 | ゴースト（pasta DSL 解釈・実行） |
-| シェル | 1体キャラクター表示（透過ウィンドウ、60表情パターン） |
-| バルーン | 縦書きタイプライター付き吹き出し |
-| スクリプト | pasta DSL（里々インスパイアのカスタムDSL） |
-
-詳細は [doc/PASTA_PROFILE.md](doc/PASTA_PROFILE.md) を参照。
-
----
-
-## 現在の到達点
-
-200件の仕様を完了（2026-09-26 時点で `.kiro/specs/completed/` 直下のフォルダを数えた数）。
-
-### ✅ 実装済み基盤機能
-
-**ECS基盤 (7件)**
-- [x] bevy_ecs + bevy_app 統合
-- [x] コンポーネントグループ整理、エンティティ追跡
-- [x] ジェネリックツリーシステム、Changed検出パターン
-
-**グラフィックス / DirectComposition (12件)**
-- [x] D3D11 → DXGI → DirectComposition → D2D パイプライン
-- [x] ビジュアルツリー実装・ECS自動同期
-- [x] Surface生成最適化、VSync優先レンダリング
-- [x] デバイスロスト対応、グラフィックリソース再初期化
-
-**レイアウト (6件)**
-- [x] Taffy Flexbox統合
-- [x] 軸平行バウンディングボックス管理
-- [x] BoxStyle統合、レイアウト→グラフィックス同期
-
-**ウィンドウ管理 / DPI (8件)**
-- [x] Win32ウィンドウ管理（マルチウィンドウ対応）
-- [x] Per-Monitor DPI伝播、マルチモニタ対応
-- [x] ECS ↔ Win32 双方向同期
-
-**ポインター / イベント (9件)**
-- [x] ヒットテスト（アルファマスク対応、キャッシュ最適化）
-- [x] イベント配信（Tunnel/Bubble 2フェーズ）
-- [x] ドラッグシステム（エンティティ＋ウィンドウ移動）
-- [x] ダブルクリック検出
-
-**ウィジェット (4件)**
-- [x] Image ウィジェット（WIC読込、透過PNG、非同期タスクプール）
-- [x] Brush コンポーネント分離
-
-**テキスト / 縦書き (2件)**
-- [x] 横書き DirectWrite テキストレンダリング
-- [x] 日本語縦書きレイアウト（Label コンポーネント）
-
-**タイプライター (1件)**
-- [x] 文字単位表示制御、pause/resume/skip
-
-**アニメーション定義 (1件)**
-- [x] dola クレート（宣言的アニメーションデータモデル）
-
-**スクリプトエンジン (1件)**
-- [x] pasta DSL 設計完了（外部リポジトリ）
-
----
-
-## 開発ロードマップ概要
-
-| フェーズ | 内容 | 状態 |
-|---------|------|------|
-| **Phase A** | 基盤完成（イベントシステム残件、アニメーション統合） | 🔵 進行中 |
-| **Phase B** | 表示層（バルーンシステム、ウィンドウ配置） | ⚪ 未着手 |
-| **Phase C** | コンテンツ（リファレンスシェル/バルーン/ゴースト） | ⚪ 未着手 |
-| **Phase D** | アプリ統合（areka クレート、システムトレイ、永続化） | ⚪ 未着手 |
-| **Phase E** | アルファ出荷（統合テスト、リリースビルド） | ⚪ 未着手 |
-
-詳細は [doc/ROADMAP.md](doc/ROADMAP.md) を参照。
-
----
-
-## ビルド手順
-
-### 前提条件
-
-- Rust 2024 Edition (rustup で最新版を推奨)
 - Windows 10/11
-- Visual Studio Build Tools (Windows SDK)
+- Rust（stable・2024 Edition）と Visual Studio Build Tools（Windows SDK）
+- PowerShell 7（`pwsh`）
+- rustup のターゲット `i686-pc-windows-msvc`（32 ビットの補助 exe とテスト用 DLL）。`tools/` のスクリプトが自分で追加します
+- arm64 版を作るときだけ: ターゲット `aarch64-pc-windows-msvc` と、Visual Studio の部品 `Microsoft.VisualStudio.Component.VC.Tools.ARM64`
+
+ターゲットをまたぐビルドは PowerShell から実行してください（Git Bash では別の `link.exe` が先に見つかってリンクに失敗します）。
 
 ### コマンド
 
-```bash
+```powershell
 # ビルド
 cargo build
 
-# サンプル実行
-cargo run --example taffy_flex_demo
+# 全体テスト（i686 の成果物の準備込み）
+pwsh -NoProfile -File tools/test-all.ps1
 
-# テスト
-cargo test
-
-# リリースビルド（サイズ最適化）
-cargo build --release
+# 配布物の zip（target/package/areka-<版>-<arch>.zip と .sha256）
+pwsh -NoProfile -File tools/package.ps1            # x64
+pwsh -NoProfile -File tools/package.ps1 -Arch all  # x64 と arm64
+pwsh -NoProfile -File tools/package.ps1 -Check     # 組んだ zip を展開して起動まで確かめる
 ```
+
+素の `cargo test --workspace` は使わないでください。32 ビットの SHIORI を扱うテストは i686 の成果物を要するので、それが無いと「先にビルドせよ」で止まります。`tools/test-all.ps1` は準備から判定までを 1 本で行います。
 
 ---
 
-## ドキュメントガイド
+## 構成
 
-| ドキュメント | 内容 |
-|-------------|------|
-| [doc/CONSTITUTION.md](doc/CONSTITUTION.md) | 設計理念・責務境界・プロジェクト憲法 |
-| [doc/ROADMAP.md](doc/ROADMAP.md) | アルファリリースまでのロードマップ |
-| [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md) | クレート構成・モジュール構成の俯瞰 |
-| [doc/PASTA_PROFILE.md](doc/PASTA_PROFILE.md) | ぱすたさんプロファイル |
-| [doc/spec/](doc/spec/) | wintf 詳細設計仕様（12章） |
-| [crates/wintf/README.md](crates/wintf/README.md) | wintf クレート概要 |
-| [crates/dola/README.md](crates/dola/README.md) | dola クレート概要 |
-| [doc/DEVLOG_ORIGINAL_README.md](doc/DEVLOG_ORIGINAL_README.md) | 旧README（開発ログとして保存） |
+伺かの仕組みを、7 つのエンジンに分けて作っています。
+
+| エンジン | 役割 | 主なクレート |
+| --- | --- | --- |
+| ⓪ ghost | ゴーストの起動と各エンジンの結線・ゴーストの目録 | `areka-ghost` |
+| ① shiori | SHIORI との通信（32 ビットの DLL は補助 exe 越し） | `shiori-abi`・`shiori-host32-*` |
+| ② parsers | さくらスクリプトと `descript.txt`・`surfaces.txt` などの読み取り | `areka-parsers` |
+| ③ kanade | 起動・会話・終了の進行（いつ・何を SHIORI に尋ねるか） | `areka-kanade` |
+| ④ sakura | SHIORI が返したさくらスクリプトを時刻つきの台本へ変換して再生 | `areka-sakura` |
+| ⑤ seriko | SERIKO のアニメーション | `areka-seriko` |
+| ⑥ emo | 画像の合成と表示・文字とバルーンの描画 | `areka-emo-*` |
+
+その下に共通の土台として、Windows の UI フレームワーク **`wintf`**（ECS（bevy_ecs）＋ WUC ＋ Direct2D ＋ DirectWrite・縦書き対応）と、時刻つきの台本を再生する **`dola`** があります。アプリ本体は `areka`（bin）で、`.nar` のインストールは `areka-nar`、ネットワーク更新は `areka-update`、MCP サーバ（`127.0.0.1`。ツールはこれから整備）は `areka-mcp` が受け持ちます。
+
+詳しくは次を参照してください。
+
+- [.kiro/steering/structure.md](.kiro/steering/structure.md) — クレートとモジュールの構成
+- [doc/COMPAT_ARCHITECTURE.md](doc/COMPAT_ARCHITECTURE.md) — 互換ベースウェアとしての設計判断（正本）
+- [doc/ukadoc-coverage/](doc/ukadoc-coverage/) — ukadoc の項目ごとの対応状況
+
+---
+
+## 開発の進め方
+
+仕様駆動（Kiro 方式）で、1 つの機能を「要件 → 設計 → タスク → 実装」の順に進めています。
+
+- [.kiro/steering/](.kiro/steering/) — プロジェクト全体の決めごと（`product.md`・`tech.md`・`structure.md`）
+- [.kiro/steering/roadmap.md](.kiro/steering/roadmap.md) — ロードマップと次に着手する仕様（正本）
+- [.kiro/specs/](.kiro/specs/) — 個々の仕様（完了したものは `completed/`）
+- [doc/CONSTITUTION.md](doc/CONSTITUTION.md) — 設計理念と責務の分け方
 
 ---
 
 ## ライセンス
 
-MIT（[LICENSE-MIT](LICENSE-MIT) 参照）
+areka 本体は MIT ライセンスです（[LICENSE-MIT](LICENSE-MIT)）。本体が使っているライブラリの著作権表示は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) にあります。
+
+配布物に同梱するゴースト・バルーンには MIT は及ばず、それぞれの作者の条件に従います（[dist/README.txt](dist/README.txt) の「同梱物とライセンス」）。`vendors/sample_ghost/` の検体の出どころと条件は [vendors/sample_ghost/README.md](vendors/sample_ghost/README.md) にあります。
 
 ---
 

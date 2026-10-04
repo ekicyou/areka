@@ -6,8 +6,8 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+publish = false # areka 本体の部品・areka の中でしか意味を持たない
 repository.workspace = true
-publish = false
 
 [dependencies]
 dola = { path = "../dola" }
@@ -20,3 +20,9 @@ thiserror = { workspace = true }
 # Cargo.lock に推移依存として既に在る 1.13.3 に揃える（版を上げると Unicode の版が変わり
 # 絵文字のクラスタの切り方が動きうる）。
 unicode-segmentation = "1.13.3"
+
+[dev-dependencies]
+# ログ捕捉テストの硬化機構の唯一の定義元（spec: areka-P0-test-cage-determinism）。
+# ワークスペース内 crate に依存しない leaf・publish = false・テスト専用（sysvar_expand_tests.rs の
+# `sysvar_expand_fallback` の警告を数える）。依存方向の規律により [dependencies] へは決して置かない。
+log-capture-kit = { path = "../log-capture-kit" }

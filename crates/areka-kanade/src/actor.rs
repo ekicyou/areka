@@ -40,8 +40,11 @@ use crate::msg::{
 };
 use crate::online::OnlineCounter;
 use crate::schedule::resources::ResourceSink;
+use crate::schedule::translate::TranslateResult;
 use crate::schedule::{Action, Input, Phase, State, TermCause, step};
+use crate::shiori::real::ABSENT_REFERENCE;
 use crate::talk::TalkCommand;
+use crate::translate::TranslateSeams;
 
 /// kanade アクターを起動する（areka-actor 規約: スレッド名 "kanade"）。
 ///
@@ -92,12 +95,35 @@ pub fn spawn_kanade(
 /// 本番は UI スレッドの毎フレーム結線（`areka` の `emo2_boot::frame`）が受信端を持ち、通知 1 件で
 /// 全ゴースト窓を閉じる。ゴーストの終了挨拶が終わってから窓が消えるという順序は、この通知が
 /// **終了系列の完了後**に出ることで成立する（R15.4）。
+///
+/// 翻訳の口は素通し（[`TranslateSeams::passthrough`]）を渡す（[`spawn_kanade_translating`] の薄い包み）。
 pub fn spawn_kanade_with_stop_sink(
     config: KanadeConfig,
     shiori: Sender<ShioriMsg>,
     sakura: Sender<TalkCommand>,
     resource_sink: ResourceSink,
     stop_sink: Option<Sender<KanadeNotice>>,
+) -> (Sender<KanadeMsg>, ActorHandle) {
+    spawn_kanade_translating(
+        config,
+        shiori,
+        sakura,
+        resource_sink,
+        stop_sink,
+        TranslateSeams::passthrough(),
+    )
+}
+
+/// 翻訳の口つきで kanade アクターを起動する（[`spawn_kanade_with_stop_sink`] の引数に `seams` を
+/// 足した派生）。`seams` の展開と MAKOTO の口は、翻訳の依頼（`OnTranslate`）を実行するたびに
+/// kanade のスレッドで同期に呼ぶ（返るまで運行は進まない）。
+pub fn spawn_kanade_translating(
+    config: KanadeConfig,
+    shiori: Sender<ShioriMsg>,
+    sakura: Sender<TalkCommand>,
+    resource_sink: ResourceSink,
+    stop_sink: Option<Sender<KanadeNotice>>,
+    seams: TranslateSeams,
 ) -> (Sender<KanadeMsg>, ActorHandle) {
     spawn_actor("kanade", move |rx| {
         let mut state = State::initial();
@@ -166,7 +192,7 @@ pub fn spawn_kanade_with_stop_sink(
                 }
                 KanadeMsg::ExecutionState(update) => Input::ExecutionState(update),
             };
-            let (flow, first_reply) = drive(
+            let (flow, first_reply) = drive_translating(
                 &mut state,
                 input,
                 &config,
@@ -174,6 +200,7 @@ pub fn spawn_kanade_with_stop_sink(
                 &sakura,
                 &resource_sink,
                 stop_sink.as_ref(),
+                &seams,
             );
             // 返事はこの依頼の処理（応答を入れ直して動作を実行し終えるまで）が済んだ後に 1 回だけ送る。
             // 往復が無かったのは、許可表に無い名前か定常以外での依頼（どちらも運行表が捨てた）。
@@ -203,11 +230,8 @@ enum Drive {
     Stop,
 }
 
-/// DD-2 同期往復ループ: `step` の Action バッチを全実行し、最後の SHIORI 往復応答のみを
-/// `Input::ShioriReply` として再投入して Actions が尽きるまで反復する（execute-batch/reinject-last）。
-///
-/// 戻り値の 2 つ目は、最初の一括の往復の結果を [`RaiseOutcome`] へ写したもの（往復が無ければ
-/// `None`）。汎用の通知の入口の返事の材料で、他の入力では呼び手が読み捨てる。
+/// 翻訳の口を素通しにした [`drive_translating`]（既存の殻のテストの入口）。
+#[cfg(test)]
 fn drive(
     state: &mut State,
     input: Input,
@@ -216,6 +240,36 @@ fn drive(
     sakura: &Sender<TalkCommand>,
     resource_sink: &ResourceSink,
     stop_sink: Option<&Sender<KanadeNotice>>,
+) -> (Drive, Option<RaiseOutcome>) {
+    let seams = TranslateSeams::passthrough();
+    drive_translating(
+        state,
+        input,
+        config,
+        shiori,
+        sakura,
+        resource_sink,
+        stop_sink,
+        &seams,
+    )
+}
+
+/// DD-2 同期往復ループ: `step` の Action バッチを全実行し、最後の往復の結果のみを再投入して
+/// Actions が尽きるまで反復する（execute-batch/reinject-last）。入れ直すものが SHIORI の応答なら
+/// `Input::ShioriReply`、翻訳の結果なら `Input::TranslateDone` を入れる。
+///
+/// 戻り値の 2 つ目は、最初の一括の往復の結果を [`RaiseOutcome`] へ写したもの（往復が無ければ
+/// `None`）。汎用の通知の入口の返事の材料で、他の入力では呼び手が読み捨てる。
+#[allow(clippy::too_many_arguments)]
+fn drive_translating(
+    state: &mut State,
+    input: Input,
+    config: &KanadeConfig,
+    shiori: &Sender<ShioriMsg>,
+    sakura: &Sender<TalkCommand>,
+    resource_sink: &ResourceSink,
+    stop_sink: Option<&Sender<KanadeNotice>>,
+    seams: &TranslateSeams,
 ) -> (Drive, Option<RaiseOutcome>) {
     // 終了原因の受け渡し（R15.3）: [`Action::StopSelf`] は必ず `Unloading{cause}` からの遷移で
     // 生まれる（発行点は `schedule::unloading_reply` の 1 箇所だけで、そこへ入れるのは
@@ -228,8 +282,19 @@ fn drive(
     let mut first_batch = true;
     let mut first_reply = None;
     loop {
-        let BatchResult { last_reply, stop } =
-            execute_actions(actions, shiori, sakura, resource_sink, stop_sink, term);
+        let BatchResult {
+            last_reply,
+            translated,
+            stop,
+        } = execute_batch(
+            actions,
+            shiori,
+            sakura,
+            resource_sink,
+            stop_sink,
+            term,
+            seams,
+        );
         // `ShioriOutcome` は複製できないので、入れ直す前に参照から写す。
         if std::mem::take(&mut first_batch) {
             first_reply = last_reply
@@ -240,20 +305,21 @@ fn drive(
             *state = st;
             return (Drive::Stop, first_reply);
         }
-        match last_reply {
-            // 往復応答を再投入して次の遷移を得る（Actions が尽きるまで反復）。origin を転記する。
-            Some((outcome, origin)) => {
-                term = (stop_cause_of(&st), handoff_of(&st));
-                let (s, a) = step(st, Input::ShioriReply { outcome, origin }, config);
-                st = s;
-                actions = a;
-            }
-            // バッチに SHIORI 往復が無い＝この入力の処理は完了。
-            None => {
+        // 往復の結果を再投入して次の遷移を得る（Actions が尽きるまで反復）。origin を転記する。
+        let input = match (last_reply, translated) {
+            (Some((outcome, origin)), _) => Input::ShioriReply { outcome, origin },
+            (None, Some(result)) => Input::TranslateDone(result),
+            // バッチに往復が無い＝この入力の処理は完了。
+            (None, None) => {
                 *state = st;
                 return (Drive::Continue, first_reply);
             }
-        }
+        };
+        // 停止の原因と切替の中身は、どちらの再投入でも step へ渡す直前の状態から控える。
+        term = (stop_cause_of(&st), handoff_of(&st));
+        let (s, a) = step(st, input, config);
+        st = s;
+        actions = a;
     }
 }
 
@@ -332,18 +398,21 @@ fn send_gap_reply(reply: Option<ReplySender<TalkGap>>, outcome: TalkGap) {
     }
 }
 
-/// Action バッチ 1 回分の実行結果（[`drive`] の反復条件）。
+/// Action バッチ 1 回分の実行結果（[`drive_translating`] の反復条件）。
 struct BatchResult {
     /// バッチ中で最後に発生した SHIORI 往復の応答と、その応答が由来する呼出イベント ID
     /// （origin・DD-IE-3）。`None` はバッチに SHIORI 往復が無かったこと（＝再投入しない）を表す。
     last_reply: Option<(ShioriOutcome, &'static str)>,
+    /// バッチの最後の往復が翻訳の依頼（[`Action::Translate`]）だったときの結果。`last_reply` とは
+    /// 同時に `Some` にならない（後に実行した往復の方だけを残す）。
+    translated: Option<TranslateResult>,
     /// [`Action::StopSelf`] を実行した（以降の Action は実行しない・呼び手は停止する）。
     stop: bool,
 }
 
 /// Action バッチを**先頭から順に全て実行**する（execute-batch/reinject-last の execute 側）。
 ///
-/// [`drive`] の反復本体から切り出してあるのは、[`Action`] → [`TalkCommand`] 写像を発行点
+/// [`drive_translating`] の反復本体から切り出してあるのは、[`Action`] → [`TalkCommand`] 写像を発行点
 /// （タスク 4.3／4.5）の実装を待たずに実行で檻に入れられるようにするためである（design C6）。
 ///
 /// # talk 指示 3 形の写像（design C6・DD-5・Req 5.6）
@@ -357,16 +426,21 @@ struct BatchResult {
 /// # 停止通知（R15.3・design D15 の 2）
 /// `stop_sink` が `Some` のとき、[`Action::StopSelf`] の実行点で [`KanadeNotice::Stopped`] を
 /// 1 度だけ送る。[`Action::Notice`] はそのままの値で同じ送出端へ流す（[`send_notice`]）。
-/// `term` は呼び手（[`drive`]）が step へ渡す直前の運行状態から控えた（原因, 切替の中身）である。
-fn execute_actions(
+/// `term` は呼び手（[`drive_translating`]）が step へ渡す直前の運行状態から控えた（原因, 切替の中身）である。
+///
+/// [`Action::Translate`] は `actor_translate::run_translate` で実行し、その結果をこのバッチの
+/// 「入れ直すもの」にする。
+fn execute_batch(
     actions: Vec<Action>,
     shiori: &Sender<ShioriMsg>,
     sakura: &Sender<TalkCommand>,
     resource_sink: &ResourceSink,
     stop_sink: Option<&Sender<KanadeNotice>>,
     term: (Option<KanadeStopCause>, Option<ChangeHandoff>),
+    seams: &TranslateSeams,
 ) -> BatchResult {
     let mut last_reply: Option<(ShioriOutcome, &'static str)> = None;
+    let mut translated: Option<TranslateResult> = None;
     for action in actions {
         match action {
             Action::StartTalk(start) => {
@@ -390,6 +464,13 @@ fn execute_actions(
                     },
                 };
                 last_reply = Some((round_trip_request(shiori, call), origin));
+                translated = None;
+            }
+            Action::Translate(request) => {
+                translated = Some(crate::actor_translate::run_translate(
+                    request, shiori, seams,
+                ));
+                last_reply = None;
             }
             Action::ResourceOutcome { id, outcome } => {
                 // リソース照会結果を注入クロージャへ**同期的に**渡す（返るまで次段へ進まない・R4.1）。
@@ -401,6 +482,7 @@ fn execute_actions(
                 // unload には出所イベントが無いため "Unload" を転記する（Unloading 応答は
                 // origin を参照しないが、契約上必ず値を持たせる）。
                 last_reply = Some((round_trip_unload(shiori), "Unload"));
+                translated = None;
             }
             Action::Notice(notice) => send_notice(stop_sink, notice),
             Action::StopSelf => {
@@ -411,6 +493,7 @@ fn execute_actions(
                 notify_stop(stop_sink, term.0, term.1);
                 return BatchResult {
                     last_reply,
+                    translated,
                     stop: true,
                 };
             }
@@ -418,8 +501,31 @@ fn execute_actions(
     }
     BatchResult {
         last_reply,
+        translated,
         stop: false,
     }
+}
+
+/// 翻訳の口を素通しにした [`execute_batch`]（既存の殻のテストの入口）。
+#[cfg(test)]
+fn execute_actions(
+    actions: Vec<Action>,
+    shiori: &Sender<ShioriMsg>,
+    sakura: &Sender<TalkCommand>,
+    resource_sink: &ResourceSink,
+    stop_sink: Option<&Sender<KanadeNotice>>,
+    term: (Option<KanadeStopCause>, Option<ChangeHandoff>),
+) -> BatchResult {
+    let seams = TranslateSeams::passthrough();
+    execute_batch(
+        actions,
+        shiori,
+        sakura,
+        resource_sink,
+        stop_sink,
+        term,
+        &seams,
+    )
 }
 
 /// GET／NOTIFY の同期往復。SHIORI へ出る**唯一の実行点**であり（本番・mock 双方が必ず通る・
@@ -434,7 +540,51 @@ fn execute_actions(
 ///   `shiori_request`）で残して送出する（Req6.2）。往復失敗は error!＋`Failed(Ipc)` へ写像（宙吊りなし）。
 /// - SHIORI のエラー応答（`Failed(ShioriFailure::Shiori)`）は、GET なら `NoContent`、NOTIFY なら
 ///   `Notified` に写して返し、`warn!`（event=`shiori_error_response`）を 1 件残す（会話を続ける）。
+///
+/// 検査と送出は [`round_trip_raw`] が受け持ち、ここはエラー応答の写しだけを足す。
 pub(crate) fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -> ShioriOutcome {
+    // エラー応答の記録に載せるため、call を渡す前に種別と ID を控える（固定 ID なら複製は無料）。
+    let (method, event_id) = match &call {
+        ShioriCall::Get { id, .. } => ("GET", id.clone()),
+        ShioriCall::Notify { id, .. } => ("NOTIFY", id.clone()),
+    };
+    let outcome = round_trip_raw(shiori, call);
+
+    // エラー応答（400・500 など）は致命の失敗にせず「返事なし」に写す（shiori-fault-notice
+    // 要件 6.1・裁定 3）: GET は 204 相当の NoContent、NOTIFY は Notified として再投入する。
+    // 運行表は応答が GET か NOTIFY かを知らないので、種別を知るここで写す。回数の閾値は置かない。
+    // 他の 4 種（接続・期限切れ・通信・内部）は Failed のまま（Fault の判断は運行表のまま）。
+    match outcome {
+        ShioriOutcome::Failed(ShioriFailure::Shiori(e)) => {
+            tracing::warn!(
+                target: "kanade",
+                event = "shiori_error_response",
+                method,
+                id = %event_id.as_str(),
+                error = %e,
+                "SHIORI がエラー応答——返事なし（204）と同じ扱いで会話を続ける"
+            );
+            if method == "GET" {
+                ShioriOutcome::NoContent
+            } else {
+                ShioriOutcome::Notified
+            }
+        }
+        other => other,
+    }
+}
+
+/// 送出の檻を通して送り、SHIORI の結果を写さずに返す（エラー応答も `Failed` のまま）。
+///
+/// 許可表の検査・欠番の印の置き換え・`shiori_request` の記録・往復をここで行う。今日の呼び手は
+/// [`round_trip_request`] を通し、翻訳の往復（`actor_translate`）はエラー応答を自分で読むので
+/// これを直接呼ぶ（`shiori_error_response` を重ねて出さない）。
+///
+/// Reference の値が欠番の印（`ABSENT_REFERENCE`）と同じ位置は、`OnTranslate` の添字 1 を除き
+/// 空文字に置き換えて `warn!`（event=`reference_absent_marker_replaced`）を 1 件ずつ残す。外から
+/// 入った値が線の上で行ごと消えるのを止めるためで、送る 1 か所のここで全イベントに効かせる。
+pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -> ShioriOutcome {
+    replace_absent_markers(&mut call);
     // 送出しようとしているイベントの Method／ID（出所カテゴリ込み）／参照値／実行状態を取り出す。
     // `status.render()` は `None` ⇔ Status ヘッダ行なし（Req6.2・DD-IT-5 の kanade 層観測）。
     let (method, event_id, references, status_wire) = match &call {
@@ -491,39 +641,35 @@ pub(crate) fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -
         "SHIORI 送出"
     );
 
-    // エラー応答の記録に載せるため、call を渡す前に ID を控える（固定 ID なら複製は無料）。
-    let event_id = event_id.clone();
     let (reply_tx, reply_rx) = reply_channel::<ShioriOutcome>();
-    let outcome = round_trip(
+    round_trip(
         shiori,
         ShioriMsg::Request {
             call,
             reply: reply_tx,
         },
         reply_rx,
-    );
+    )
+}
 
-    // エラー応答（400・500 など）は致命の失敗にせず「返事なし」に写す（shiori-fault-notice
-    // 要件 6.1・裁定 3）: GET は 204 相当の NoContent、NOTIFY は Notified として再投入する。
-    // 運行表は応答が GET か NOTIFY かを知らないので、種別を知るここで写す。回数の閾値は置かない。
-    // 他の 4 種（接続・期限切れ・通信・内部）は Failed のまま（Fault の判断は運行表のまま）。
-    match outcome {
-        ShioriOutcome::Failed(ShioriFailure::Shiori(e)) => {
-            tracing::warn!(
-                target: "kanade",
-                event = "shiori_error_response",
-                method,
-                id = %event_id.as_str(),
-                error = %e,
-                "SHIORI がエラー応答——返事なし（204）と同じ扱いで会話を続ける"
-            );
-            if method == "GET" {
-                ShioriOutcome::NoContent
-            } else {
-                ShioriOutcome::Notified
-            }
+/// Reference のうち欠番の印と同じ値を空文字に置き換え、位置ごとに `warn!` を 1 件残す。
+///
+/// 印を正当に載せるのは `OnTranslate` の添字 1（[`crate::events::on_translate`] が置く欠番）だけ。
+fn replace_absent_markers(call: &mut ShioriCall) {
+    let (ShioriCall::Get { id, references, .. } | ShioriCall::Notify { id, references, .. }) = call;
+    for (index, value) in references.iter_mut().enumerate() {
+        if value != ABSENT_REFERENCE || (index == 1 && matches!(id, EventId::Static("OnTranslate")))
+        {
+            continue;
         }
-        other => other,
+        tracing::warn!(
+            target: "kanade",
+            event = "reference_absent_marker_replaced",
+            id = %id.as_str(),
+            index,
+            "Reference が欠番の印と同じ値——行が消えないよう空文字に置き換えて送る"
+        );
+        value.clear();
     }
 }
 
@@ -723,3 +869,8 @@ mod talk_gap_tests;
 #[cfg(test)]
 #[path = "actor_online_tests.rs"]
 mod online_tests;
+
+// バッチ実行の翻訳の腕が入れ直すものを決めることの檻（areka-P0-translate-pipeline タスク 3.3）。
+#[cfg(test)]
+#[path = "actor_translate_batch_tests.rs"]
+mod translate_batch_tests;

@@ -92,5 +92,5 @@ pub use mock_shiori::{
     BlockOn, FailKind, FailOn, MockShiori, ShioriGate, spawn_mock_shiori,
     spawn_mock_shiori_blocking, spawn_mock_shiori_failing,
 };
-pub use recording::{CallMethod, RecordedCall, expected_call, expected_unload};
+pub use recording::{CallMethod, RecordedCall, expected_call, expected_translate, expected_unload};
 pub use window_actor::{WINDOW_CREATE_SERIAL, spawn_window_actor};

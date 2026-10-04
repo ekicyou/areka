@@ -4,17 +4,17 @@ Windows Tategaki Framework - Rust UI library with Japanese vertical text support
 
 ## Status
 
-⚠️ **Early Development - Version 0.0.1**
+⚠️ **Early Development**
 
-This crate is published for name reservation purposes. The API is not stable and may change significantly in future versions.
+This crate is usable, but it is still an early release. The API is not stable yet and may change significantly in future versions.
 
 ## About
 
-**wintf** (Windows Tategaki Framework) is a Rust UI framework for Windows that integrates DirectComposition, Direct2D, and DirectWrite with an ECS architecture. It provides transparent windows, Japanese vertical text rendering, and high-precision hit testing for desktop mascot applications like Ukagaka.
+**wintf** (Windows Tategaki Framework) is a Rust UI framework for Windows that integrates Windows.UI.Composition, Direct2D, and DirectWrite with an ECS architecture. It provides GPU-composited transparent windows with click-through to other processes, Japanese vertical text rendering, and high-precision hit testing for desktop mascot applications like Ukagaka.
 
 Key features include:
 - ECS-based declarative UI management (bevy_ecs)
-- Hardware-accelerated composition with DirectComposition
+- Hardware-accelerated composition with Windows.UI.Composition
 - Vertical and horizontal Japanese text support via DirectWrite
 - Flexbox layout engine (Taffy)
 - Advanced pointer event handling and drag system

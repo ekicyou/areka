@@ -29,3 +29,5 @@ mod real_helper_test;
 mod resource_query_test;
 #[path = "kanade/steady_test.rs"]
 mod steady_test;
+#[path = "kanade/translate_test.rs"]
+mod translate_test;

@@ -60,9 +60,11 @@
 //! | `OnShellChanging` | GET（台詞の切れ目の口の印） | Ref0〜2=切替先のシェル名・今のシェル名・切替先のパス（渡された列のまま） |
 //! | `OnShellChanged` | GET（汎用の入口） | Ref0〜2=今のシェル名・ゴースト名・シェルのパス（渡された列のまま） |
 //! | `OnBalloonChange` | GET（汎用の入口） | Ref0〜1=バルーン名・パス（渡された列のまま） |
+//! | `OnTranslate` | GET | Ref0=展開済みの台詞・Ref1=欠番・Ref2=元のイベントの ID・Ref3=元の Reference をバイト値 1 で連ねたもの |
 
 use crate::change::{BootOrigin, ChangeRequest, ChangedFrom, ShioriMethod};
 use crate::msg::{CloseReason, EventId, KanadeConfig, MonotonicMs, MouseButton, ShioriCall};
+use crate::shiori::real::ABSENT_REFERENCE;
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 
 /// `OnSecondChange` Ref0 の除数（ミリ秒→時。正典: OS 連続起動時間 hour）。
@@ -199,6 +201,10 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnShellChanged",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonChange:1
     "OnBalloonChange",
+    // 翻訳の 1 語（areka-P0-translate-pipeline 要件 3.4・45→46 語）。SHIORI が返した台詞を
+    // 再生の前に、その台詞を返した SHIORI へ送る。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnTranslate:1
+    "OnTranslate",
 ];
 
 /// `id` が送出許可集合（[`ALLOWED_EVENT_IDS`]）に属するかを判定する（Req3.1）。
@@ -613,6 +619,34 @@ pub fn on_choice_named(
         // 空参照列なら空 Vec のまま＝Reference 位置を 1 個も作らない（Req3.5）。
         references: references.to_vec(),
         status: ExecutionStatus::derive(snapshot),
+    }
+}
+
+/// 元のイベント（台詞を返させた GET の ID と Reference の並び）。
+///
+/// GET を送った時点で控え、応答の後まで覚えておく。`id` は選択肢の任意名も逐語のまま運ぶ
+/// （[`EventId::Choice`]）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceEvent {
+    pub id: EventId,
+    pub references: Vec<String>,
+}
+
+/// `OnTranslate`（GET）。
+///
+/// Ref0＝展開済みの台詞、Ref1＝欠番（[`ABSENT_REFERENCE`]・areka には出所が無い）、
+/// Ref2＝元のイベントの ID、Ref3＝元のイベントの Reference をバイト値 1 で連ねたもの
+/// （0 個なら空文字列）。Status は呼び手が渡した値をそのまま載せる。
+pub fn on_translate(expanded: &str, source: &SourceEvent, status: ExecutionStatus) -> ShioriCall {
+    ShioriCall::Get {
+        id: EventId::Static("OnTranslate"),
+        references: vec![
+            expanded.to_string(),
+            ABSENT_REFERENCE.to_string(),
+            source.id.as_str().to_string(),
+            source.references.join("\u{1}"),
+        ],
+        status,
     }
 }
 

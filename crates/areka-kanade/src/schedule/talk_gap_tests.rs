@@ -383,8 +383,10 @@ fn await_marked(s: State) -> (State, Vec<Action>) {
     )
 }
 
+/// SHIORI の応答を入れる（翻訳の行動が出たら、`OnTranslate` が 204 を返したときの続きを返す）。
 fn reply(s: State, outcome: ShioriOutcome, origin: &'static str) -> (State, Vec<Action>) {
-    step(s, Input::ShioriReply { outcome, origin }, &cfg())
+    let next = step(s, Input::ShioriReply { outcome, origin }, &cfg());
+    crate::schedule::translate_test_support::pass_translate(next, &cfg())
 }
 
 fn done_of(

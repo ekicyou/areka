@@ -6211,24 +6211,27 @@ absent のまま変わらない。
 """
 
 [entry."ukadoc:list_shiori_event:OnTranslate:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-translate-pipeline"
 priority = "E4"
 values = ["掛け合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。SHIORI が GET の応答で返した
+台詞（1 文字以上）を再生へ渡す前に、その台詞を返した SHIORI へ GET で 1 回送る（Ref0＝環境変数を
+展開した後の台詞・Ref1＝欠番〔areka にはコミュニケート・SSTP・プラグインの出所が無い〕・Ref2＝
+元のイベントの ID〔選択肢の任意名も逐語〕・Ref3＝元のイベントの Reference をバイト値 1 で連ねた
+もの〔0 個なら空〕）。応答の台詞を最終の台詞にし、204 とエラー応答では元の台詞で進む。areka が自分で
+作る台詞・中身が空の 200・OnTranslate 自身の応答には送らない。MAKOTO の鎖を差し込む口は素通し。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。応答を読むと translate_reply
+（元のイベントの ID と応答の種類）が 1 行出る。置換・空・204 は info、エラー応答は warn。
+輸送路の失敗では translate_reply は出ず、error のログ（translate_failed）が 1 行出る。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+組み立ては同じファイルの on_translate、欠番の印は crates/shiori-host32-host/src/shiori3.rs の
+ABSENT_REFERENCE。台詞を出口で捕まえる規則（capture）と応答の読み（read_reply）は
+crates/areka-kanade/src/schedule/translate.rs、展開から MAKOTO の口までの往復の殻
+（run_translate）は crates/areka-kanade/src/actor_translate.rs。
 無いと失うもの: 台詞を最後にひと通し仕上げる口が無く、口調の統一や言葉の置き換えができない。
 """
 

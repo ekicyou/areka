@@ -216,6 +216,7 @@ For tasks that add or change behavior, enforce RED → GREEN with a feature flag
 **Skip this protocol for**: refactoring, configuration, documentation, or tasks with no behavioral change.
 
 ## Critical Constraints
+- **Out-of-scope findings go to the completion inventory, not to chips**: when implementation, review, debug or validation finds a problem outside the current spec (another crate's flaky test, an unrelated bug), do NOT call the harness `spawn_task` chip tool. Record it in `## Implementation Notes` of tasks.md; `/kiro-complete`'s opening inventory tickets it with `/kiro-discovery` (brief.md + roadmap row). Chips make the developer click and instruct each one and never reach the roadmap (developer, 2026-10-04).
 - **Strict Handoff Parsing**: Never infer implementer `STATUS` or reviewer `VERDICT` from surrounding prose; only the exact structured fields count
 - **No Destructive Reset**: Never use `git checkout .`, `git reset --hard`, or similar destructive rollback inside the implementation loop
 - **Selective Staging**: NEVER use `git add -A` or `git add .`; always stage explicit file paths

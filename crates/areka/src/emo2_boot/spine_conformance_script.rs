@@ -587,6 +587,34 @@ fn notify(id: &str, references: &[&str]) -> RecordedCall {
     }
 }
 
+/// 台詞を返した照会（`id`・参照列 `references`）の後に届く `OnTranslate` 1 件ぶんの期待。
+///
+/// 組み立ては events 表の `on_translate` を通す（参照列をここで組み直さない）。Ref0 は台詞を
+/// 翻訳の前の展開（`areka_sakura::expand_system_vars`）にかけたもの。台本の環境変数は
+/// `%username` だけで、その値は台本が照会に返す [`USERNAME`] なので、写しはそれ 1 つで組む。
+/// 偽の SHIORI は台本に無い `OnTranslate` に 204 で答える
+/// （`spine.rs` の `ScriptedShioriBackend::get` の既定）。Ref2 には ID の綴りだけが載るので、
+/// 元のイベントは任意名の形で運ぶ。記録は進行状態を持たないので、進行状態は何でもよい。
+fn translated(script: &str, id: &str, references: Vec<String>) -> RecordedCall {
+    let source = areka_kanade::events::SourceEvent {
+        id: areka_kanade::EventId::Choice(id.to_string()),
+        references,
+    };
+    let mut vars = areka_sakura::contract::SystemVarSnapshot::default();
+    vars.insert("username", USERNAME);
+    let script = areka_sakura::expand_system_vars(script, &vars);
+    let status = areka_kanade::ExecutionStatus::derive(&areka_kanade::ExecutionSnapshot::INACTIVE);
+    let areka_kanade::ShioriCall::Get { id, references, .. } =
+        areka_kanade::events::on_translate(&script, &source, status)
+    else {
+        panic!("OnTranslate は照会");
+    };
+    RecordedCall::Get {
+        id: id.as_str().to_string(),
+        references,
+    }
+}
+
 /// マウス系の参照列 7 本を組む（移動と二重クリックで**同一の並び**である）。
 ///
 /// 出所: `crates/areka-kanade/src/schedule/events.rs:256-264`（移動）と `:299-307`（二重クリック）。
@@ -608,7 +636,8 @@ fn mouse_references(probe: &MouseProbe, button: &str) -> Vec<String> {
 /// 一周で送られる呼出の期待列（`ScriptedShioriHandle::non_status_calls()` と等値で突き合わせる）。
 ///
 /// 死活の問い合わせは取り出し口の側で除かれている（`spine.rs:302-311`）ため、本列には現れない。
-/// 各要素の直上に、その段と参照列の出所を注記してある。
+/// 各要素の直上に、その段と参照列の出所を注記してある。台詞を返した照会のすぐ後には、その台詞を
+/// 再生の前にかける `OnTranslate`（[`translated`]）が 1 件ずつ続く（台詞の数＝10 件）。
 pub(super) fn expected_calls() -> Vec<RecordedCall> {
     vec![
         // ── 起動 1: 初期化の通知。M1 にリロードの概念が無いので参照は無い。
@@ -623,6 +652,7 @@ pub(super) fn expected_calls() -> Vec<RecordedCall> {
         // ── 起動 4: 通常起動の照会。Ref0＝シェル名（Ref6/7 は M1 では省略）。
         //    出所: events.rs:135-141。
         get("OnBoot", &[SHELL_NAME]),
+        translated(BOOT_TALK, "OnBoot", vec![SHELL_NAME.to_string()]),
         // ── 起動 5: ベースウェア版の通知。Ref0＝版・Ref1＝名（Ref2 は省略）。
         //    出所: events.rs:146-155。
         notify("basewareversion", &[BASEWARE_VERSION, BASEWARE_NAME]),
@@ -636,6 +666,18 @@ pub(super) fn expected_calls() -> Vec<RecordedCall> {
                 SECOND_CHANGE_OVERLAP,
                 SECOND_CHANGE_PLAYABLE,
             ],
+        ),
+        translated(
+            IDLE_TALK,
+            "OnSecondChange",
+            [
+                SECOND_CHANGE_HOURS,
+                SECOND_CHANGE_OFFSCREEN,
+                SECOND_CHANGE_OVERLAP,
+                SECOND_CHANGE_PLAYABLE,
+            ]
+            .map(str::to_string)
+            .to_vec(),
         ),
         // ── 会話中の抑止: 同じ参照の並びのまま片道になり Ref3 が "0" になる。
         //    片道は応答スクリプトを運べない型ゆえ、新しい会話は構造的に始まらない。
@@ -654,28 +696,52 @@ pub(super) fn expected_calls() -> Vec<RecordedCall> {
             id: "OnMouseMove".to_string(),
             references: mouse_references(&STROKE_SAKURA, MOUSE_MOVE_BUTTON),
         },
+        translated(
+            STROKE_SAKURA_TALK,
+            "OnMouseMove",
+            mouse_references(&STROKE_SAKURA, MOUSE_MOVE_BUTTON),
+        ),
         // ── 撫で（相方側）: 話者と当たり領域だけが本体側と異なる。
         RecordedCall::Get {
             id: "OnMouseMove".to_string(),
             references: mouse_references(&STROKE_KERO, MOUSE_MOVE_BUTTON),
         },
+        translated(
+            STROKE_KERO_TALK,
+            "OnMouseMove",
+            mouse_references(&STROKE_KERO, MOUSE_MOVE_BUTTON),
+        ),
         // ── メニュー: 同じ 7 本。Ref2 は "0"・Ref5 は押下ボタン（左＝"0"）。
         RecordedCall::Get {
             id: "OnMouseDoubleClick".to_string(),
             references: mouse_references(&MENU_CLICK, MENU_CLICK_BUTTON),
         },
+        translated(
+            MAIN_MENU_TALK,
+            "OnMouseDoubleClick",
+            mouse_references(&MENU_CLICK, MENU_CLICK_BUTTON),
+        ),
         // ── 選択確定: 選択肢 ID そのものが照会の id になる。付随参照列は空ゆえ参照は 1 本も無い
         //    （空文字で埋めない＝マウス系とは逆の規約・events.rs:385-396・:316-323）。
         //    正典の選択確定イベントは**先行しない**（choice.rs:58-66 が `On` 始まりを 1 段へ写す）。
         get(CHOICE_TALK_INTERVAL_MENU, &[]),
+        translated(TALK_INTERVAL_MENU_TALK, CHOICE_TALK_INTERVAL_MENU, vec![]),
         // ── サブメニューと戻り: 「もどる」→ メインメニュー、続けて「エモの位置調整」。
         get(CHOICE_MAIN_MENU, &[]),
+        translated(MAIN_MENU_TALK, CHOICE_MAIN_MENU, vec![]),
         get(CHOICE_MOVE_MENU, &[]),
+        translated(MOVE_MENU_TALK, CHOICE_MOVE_MENU, vec![]),
         // ── 位置調整: 「調整」を確定すると応答が移動の指令を運ぶ。
         get(CHOICE_MOVE_APPLY, &[]),
+        translated(MOVE_APPLY_TALK, CHOICE_MOVE_APPLY, vec![]),
         // ── 終了: 照会で送られ Ref0 は由来・Ref1／Ref2 はスコープ番号（窓 0 の終了は 0）。
         //    出所: events.rs:197-206。
         get("OnClose", &[CLOSE_REASON, "0", "0"]),
+        translated(
+            CLOSE_TALK,
+            "OnClose",
+            vec![CLOSE_REASON.into(), "0".into(), "0".into()],
+        ),
         // ── 解放: ちょうど 1 度だけ（R3.9）。列の等値照合が件数もそのまま固定する。
         RecordedCall::Unload,
     ]
@@ -706,8 +772,8 @@ pub(super) fn expected_calls() -> Vec<RecordedCall> {
 /// である。
 ///
 /// design D3 はこの列の完全一致を「判定の本体」と書くが、**2 行では R2.4 の判定は設計が想定する
-/// より実質的に弱い**。段の順序と内容を機械で証明したと言えるのは、交信の列（16 行）と進行状態の
-/// 列（15 行）を合わせた 3 列の等値であって、この列だけではない。表示経路の被覆は既存の兄弟テスト
+/// より実質的に弱い**。段の順序と内容を機械で証明したと言えるのは、交信の列（26 行）と進行状態の
+/// 列（25 行）を合わせた 3 列の等値であって、この列だけではない。表示経路の被覆は既存の兄弟テスト
 /// （`spine_display_tests.rs`・`spine_seriko_loop_tests.rs`・`spine_talk_close_tests.rs`）が正本
 /// として持つ。**この弱さを埋めるために架空の表示指令を足すことはしない**——期待列は実装が実際に
 /// 出すものの写しでなければ、退行の検出器として働かない。
@@ -750,6 +816,9 @@ pub(super) const STATUS_TALKING: &str = "talking";
 /// 複合になる（`crates/areka-kanade/src/status.rs:211-216`）。連結順は正典順（`talking` が先）。
 pub(super) const STATUS_TALKING_CHOOSING: &str = "talking,choosing";
 
+/// 台詞を再生の前にかける照会の ID（[`translated`]）。
+const TRANSLATE: &str = "OnTranslate";
+
 /// 進行状態の記録 1 件ぶんの期待。`None`＝ヘッダ行を出さない（記録の欠落ではない）。
 fn status(id: &str, status: Option<&str>) -> RecordedStatus {
     RecordedStatus {
@@ -781,28 +850,42 @@ pub(super) fn expected_statuses() -> Vec<RecordedStatus> {
         //    から送出時点のスナップショットを撮る（`crates/areka-kanade/src/schedule/boot.rs:226-228`
         //    ・同 `:275-280`）。204 で返る経路なら非アクティブになるが、本走行の台本は
         //    [`BOOT_TALK`] を返すので会話中側を通る。
+        //    挨拶の `OnTranslate` も同じ時点（再生を始める時点）の状態から導くので会話中である。
+        status(TRANSLATE, Some(STATUS_TALKING)),
         status("basewareversion", Some(STATUS_TALKING)),
-        // ── 自発会話（会話可）: 会話が始められる＝会話中でない。
+        // ── 自発会話（会話可）: 会話が始められる＝会話中でない。その台詞の `OnTranslate` は
+        //    再生を始める時点（相が会話中へ移った後）の状態を運ぶ。
         status("OnSecondChange", None),
+        status(TRANSLATE, Some(STATUS_TALKING)),
         // ── 会話中の抑止: 直前の応答が再生中＝会話中。
         status("OnSecondChange", Some(STATUS_TALKING)),
         // ── 撫で 2 件: 自発会話の再生が続いたまま入力が届く。
         status("OnMouseMove", Some(STATUS_TALKING)),
+        status(TRANSLATE, Some(STATUS_TALKING)),
         status("OnMouseMove", Some(STATUS_TALKING)),
+        status(TRANSLATE, Some(STATUS_TALKING)),
         // ── メニュー: 撫での応答（相方側）がまだ再生中のうちに二重クリックが届く。
         //    撫で段は会話の**起動**までで完了し、以後は注入を止めて観測だけを続けるので、
         //    再生時刻は 1 ミリ秒も進まないまま次段へ渡る（会話中にメニューが開くこと自体が
         //    R1.5 の「結合と一周でしか現れない事象」である）。
         status("OnMouseDoubleClick", Some(STATUS_TALKING)),
+        status(TRANSLATE, Some(STATUS_TALKING)),
         // ── 選択起源の 4 呼出: 選択待ちは会話の枠を占有したまま成立する（複合値）。
         //    出所: `crates/areka-kanade/src/schedule/steady.rs:292-294`（選択確定の発火は
         //    `snapshot_with_choice(true)` を明示的に渡す）。
+        //    その応答の `OnTranslate` は、選択が解けて新しい台詞を再生する時点＝会話中だけ。
         status(CHOICE_TALK_INTERVAL_MENU, Some(STATUS_TALKING_CHOOSING)),
+        status(TRANSLATE, Some(STATUS_TALKING)),
         status(CHOICE_MAIN_MENU, Some(STATUS_TALKING_CHOOSING)),
+        status(TRANSLATE, Some(STATUS_TALKING)),
         status(CHOICE_MOVE_MENU, Some(STATUS_TALKING_CHOOSING)),
+        status(TRANSLATE, Some(STATUS_TALKING)),
         status(CHOICE_MOVE_APPLY, Some(STATUS_TALKING_CHOOSING)),
+        status(TRANSLATE, Some(STATUS_TALKING)),
         // ── 終了: 終了系列は運行を `Unloading` へ移してから発火する＝全状態が非アクティブ。
         //    出所: `crates/areka-kanade/src/schedule/mod.rs:484-492`。
         status("OnClose", None),
+        //    終了の挨拶の `OnTranslate` も終了の相の状態＝ヘッダ行なし。
+        status(TRANSLATE, None),
     ]
 }

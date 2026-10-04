@@ -8,7 +8,8 @@
   3. cargo fmt --check（-Format のときは先に cargo fmt --all で整形する）
   4. x64 のワークスペース全テスト（--no-fail-fast・-j 4＝ページング不足 os error 1455 の回避）
   5. i686 でしか走らないテスト（host-32 系）
-  6. -License のときだけ cargo deny check と cargo about generate（テストと同時に回すと rustc がメモリ不足で落ちるので最後に直列で）
+  6. crates.io 公開前の確認（tools/crates-io.ps1 の包むだけの形・ネットを使わない）
+  7. -License のときだけ cargo deny check と cargo about generate（テストと同時に回すと rustc がメモリ不足で落ちるので最後に直列で）
   段が赤でも止めずに最後まで回し、段ごとの合否を一覧にして、1 つでも赤なら終了コード 1 で終わる。
   一覧には検査したコミットと、始めた時点の未コミットの変更の件数も出す（「直近の緑」で再実行を省けるかの証拠）。
 
@@ -44,6 +45,7 @@ if ($Format) { Step 'cargo fmt（整形）' { cargo fmt --all } }
 Step 'fmt --check' { cargo fmt --all -- --check }
 Step 'x64 ワークスペース全テスト' { cargo test --workspace --no-fail-fast -j 4 }
 Step 'i686 テスト（host-32 系）' { cargo test -p shiori-host32-helper -p shiori-host32-ipc --target $i686 --no-fail-fast }
+Step 'crates.io 公開前の確認（包むだけ）' { pwsh -NoProfile -File tools/crates-io.ps1 }
 if ($License) {
     Step 'cargo deny check' { cargo deny check }
     Step 'cargo about generate' { cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md }
