@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 着手時の数え上げと記録
+- [x] 1. 着手時の数え上げと記録
   - 補助 exe のテストのバイナリ（`crates/shiori-host32-helper/src/` の全ファイル）で、偽の DLL `shiori.dll` を load するテストと、環境変数 `HOST32_TESTDLL_UNLOAD_MARKER` を読み書きするコードを全数で数え直す（`crates/shiori-host32-host/tests/` と `tools/test-all.ps1` が差していないことも併せて確かめる）
   - 起票時の見立て（load するテストは 3 本・差すのは印のテストだけ）と合うかを、`research.md` の 2 節の記録と突き合わせる
   - 見立てと違うものがあれば、要件 3.4 に従い、そのテストやコードを錠の決まりと説明の対象に加え、以降のタスクの対象一覧に足す

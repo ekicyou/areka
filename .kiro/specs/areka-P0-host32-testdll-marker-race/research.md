@@ -272,3 +272,41 @@ unload は製品の 1 か所、`ShioriByteProxy` の Drop の定義（後片付�
 - [Dynamic-link library search order](https://learn.microsoft.com/en-us/windows/win32/dlls/dynamic-link-library-search-order) — 検索の手順（読み込み済みの一覧を含む）は絶対パスを渡さないときのもの
 - [GetModuleHandleExW](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandleexw) — アドレスからモジュールを引く。参照数を変えない旗
 - [GetModuleFileNameW](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulefilenamew) — モジュールの完全なパス。書き方は読んだときのまま。切り詰めの返り値
+
+---
+
+# 実装フェーズの記録（2026-10-04）
+
+## 14. 着手時の数え上げ（タスク 1・要件 3.1・3.4）
+
+- やり方: 前の記録を信じず、ワークツリーの今のコードを ripgrep で引き直した。引いた語は `HOST32_TESTDLL_UNLOAD_MARKER`（`crates/` 全体）、`#[test]`・`ShioriByteProxy::load`・`shiori.dll`・`resolve_testdll`（`crates/shiori-host32-helper/src/` の全 8 ファイル）、`HOST32_TESTDLL` で始まる環境変数と錠（`crates/shiori-host32-host/tests/`・`tools/test-all.ps1`）。
+
+### 14.1 偽の DLL `shiori.dll` を load するテスト
+
+補助 exe のテストは全部で 37 本（`shiori_proxy.rs` の `mod tests` 6・`shiori_proxy_loadu_tests.rs` 13・`main_classify_tests.rs` 8・`main_load_ack_tests.rs` 2・`main_resolve_param_tests.rs` 6・`main_loopback_tests.rs` 1・`main_response_flavor_hung_cage_tests.rs` 1）。そのうち `shiori.dll` を写して load するのは次の 3 本だけ。
+
+| テストの定義 | 置き場 | load の仕方 | 錠 `TESTDLL_SERIAL` |
+|---|---|---|---|
+| `testdll_drop_invokes_courtesy_unload`（印のテスト） | `shiori_proxy.rs` の `mod tests` | 自分の一時フォルダへ写し、`ShioriByteProxy::load` を直に呼ぶ | 取る |
+| `testdll_request_roundtrip_get_and_notify`（往復のテスト） | `shiori_proxy.rs` の `mod tests` | 同上 | 取る |
+| `loopback_hello_request_proxy_driven_and_bounded_loop`（loopback のテスト） | `main_loopback_tests.rs` | 自分の一時フォルダへ写し、補助 exe の窓を組んで LOAD の知らせを送る（窓の手続き `handle_message` の LOAD の枝が `ShioriByteProxy::load` を呼ぶ） | 取らない |
+
+load しないもの（確認済み）:
+- `kernel32_yields_entry_not_found`: `kernel32.dll` を読むだけ。
+- `shiori_proxy_loadu_tests.rs` の群 D の 2 本: 別の DLL `shiori_loadu.dll` を読む（`load_loadu_testdll` の中・自前の錠 `LOADU_SERIAL`）。
+- `main_resolve_param_tests.rs` の `env_used_when_arg_absent`: `shiori.dll` は引数の文字列として出るだけ。
+- そのほかのテストは、DLL を読む呼び出しを持たない。
+
+### 14.2 印の環境変数 `HOST32_TESTDLL_UNLOAD_MARKER` を読み書きするコード
+
+`crates/` 全体で、この名前が出るのは 2 ファイルだけ（7 か所）。
+- **読む**: 偽の DLL `crates/shiori-host32-testdll/src/lib.rs` の `unload` の定義（その説明の 1 か所と、`std::env::var` で読む 1 か所）。2 本目の偽の DLL `shiori-host32-testdll-loadu` には出てこない。
+- **差す・外す**: 印のテストの定義 `testdll_drop_invokes_courtesy_unload` の中の `set_var`（load の前）と `remove_var`（最後の後片付け）だけ。
+- 残りの 3 か所は説明の文: 錠 `TESTDLL_SERIAL` の説明、印のテストの説明、往復のテストの説明。
+- `crates/shiori-host32-host/tests/` は、この環境変数を差さない。使うのは `HOST32_TESTDLL_DLL`（所在を読む）と `HOST32_TESTDLL_LOAD_FAIL`（`shiori_load_e2e.rs` が差して外す）だけ。
+- `tools/test-all.ps1` は、`HOST32_TESTDLL` で始まる環境変数を 1 つも差さない（i686 の段は成果物を作って `cargo test` を回すだけ）。
+
+### 14.3 結論
+
+- **見立てと一致**。load するテストは 3 本、印の環境変数を差すのは印のテストだけ、読むのは偽の DLL の `unload` だけ、で 2 節の記録と同じだった。錠を取らないのが loopback のテストであることも同じ。
+- 見立てと違うものは無いので、要件 3.4 に従って以降のタスクの対象一覧へ足すものは無い。
