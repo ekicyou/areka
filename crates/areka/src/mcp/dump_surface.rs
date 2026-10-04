@@ -6,6 +6,10 @@ use bevy_ecs::world::World;
 
 use super::resolve::ActiveGhost;
 
+#[allow(dead_code)]
+#[path = "dump_surface_judge.rs"]
+pub(in crate::mcp) mod judge;
+
 /// まだ中身が無い。World・ゴースト・引数は使わず（ゴーストに何もさせず）`NG:` で答える（要件 5.1・5.2）。
 pub(super) fn handle(_world: &mut World, _ghost: &ActiveGhost, _args: Args, reply: ReplyTo) {
     reply.send(outcome::ng("not implemented yet"));
