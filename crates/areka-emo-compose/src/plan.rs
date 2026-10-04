@@ -652,6 +652,10 @@ pub(crate) fn build_plan(
 /// を「累積オフセット＋原寸」として外形へ寄与させる（未束縛 None は原寸不明ゆえ寄与しない）。
 /// `placement` が None でも `original` は既知ゆえ寄与する（ops ではスキップされる層も外形は数える）。
 ///
+/// element定義の子（[`ElementKind::Surface`]）は element定義の X,Y を足して再帰する（surface-element-
+/// nesting 要件 2.5）。コマ（[`PatternState`]）は見ないので、部品のアニメーションでも外形は動かない
+/// （要件 2.6）。飛ばす子は外形に数えず、記録は命令の経路だけが出す。
+///
 /// 引数は max_x/max_y/visited のスクラッチ3本＋world/atlas＋surface_id＋累積 offset(x,y) の計8本。
 /// [`flatten_surface`] と同型の再帰 walker ゆえ全引数が各段で必要（スクラッチ構造体化は将来余地）。
 #[allow(clippy::too_many_arguments)]
@@ -678,7 +682,26 @@ fn flatten_extent(
 
     if let Some((master, binding)) = surface_and_binding(world, surface_id) {
         // 当 surface の静的 element を外形へ寄与させる（束縛済み・placement 有無を問わず原寸で数える）。
-        for (i, _element) in master.elements.iter().enumerate() {
+        for (i, element) in master.elements.iter().enumerate() {
+            // element定義の子（surface-element-nesting 要件 2.5）: 位置を足して子へ再帰する。範囲を
+            // 超える数・先祖は黙って飛ばし、面の表に無い子は再帰先で何も足さない。記録は命令の経路の
+            // debug! が合成 1 回につき 1 度出す（先祖へ再帰すると循環の warn! になるので入口の前で見る）。
+            if let ElementKind::Surface(child) = element.kind {
+                if !visited.contains(&child) {
+                    let (ex, ey) = element.transform.offset();
+                    flatten_extent(
+                        max_x,
+                        max_y,
+                        visited,
+                        world,
+                        atlas,
+                        child,
+                        offset_x + ex,
+                        offset_y + ey,
+                    );
+                }
+                continue;
+            }
             let Some(element_id) = binding.0.get(i).copied().flatten() else {
                 // 未束縛（原寸不明）は外形に寄与できない。ops 側でも skip 済み。
                 continue;
@@ -792,3 +815,7 @@ mod extent_tests;
 #[cfg(test)]
 #[path = "plan_nesting_tests.rs"]
 mod nesting_tests;
+
+#[cfg(test)]
+#[path = "plan_nesting_extent_tests.rs"]
+mod nesting_extent_tests;
