@@ -226,6 +226,10 @@ mod emo2_golden;
 #[cfg(test)]
 mod log_capture;
 
+// image-webp を固定コミットから取り込んでいることの検査（spec: areka-P0-animated-image-decode 要件 7.6）。
+#[cfg(test)]
+mod webp_pin_tests;
+
 #[cfg(test)]
 mod bake_entry_tests {
     use super::*;
