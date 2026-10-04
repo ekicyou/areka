@@ -266,3 +266,93 @@
 
 - `type` が `balloon`・`supplement` の書庫に書かれた同時インストールの指定。ukadoc は「アーカイブ自身のtypeを問わず機能する」と書くが、areka は読まない。担当の spec は今は無い（0 本）。
 - 同じ `*.directory` の値を 2 つの同梱が書いた場合（3 節の a）。今の動きのままで、本 spec はこの場面を増やさない。
+
+## 10. 設計の段の記録（2026-10-04）
+
+### 10.1 要約
+
+- **Feature**: `areka-P0-install-companion-reading`
+- **Discovery Scope**: Extension（既存の読み手と配置の計画を広げる。軽い発見の手順で足りた。外部の依存・新しいライブラリは 0 個）
+- **Key Findings**:
+  - 読み替えは `manifest.rs` の私有の関数 2 つ（探索・取り出し元の読み替え）で閉じる。`plan.rs` は「段ごとの前方一致」と「途中のフォルダのエントリを本体から除く」の 2 点だけを広げる。
+  - `temp_path_kit::TempPath` の置き場は OS の一時フォルダで、`target\` の下ではない。`terms_tests.rs` の助手 `open` がこれを使っているので、`WorkDir` へ替える必要がある。
+  - 台帳の検査は `note` の文面を見ない。見るのは「実装済みの項目の URL がソースに 1 件以上在ること」だけである。
+
+### 10.2 6 節の調べものの結果
+
+#### 一時フォルダの実際の置き場所
+
+- **Sources**: `crates/sample-ghost-kit/src/devroot.rs` の `find_target_dir`・`namespace_dir`・`WorkDir::new`、`crates/temp-path-kit/src/lib.rs` の `TempPath::new`。
+- **Findings**:
+  - `WorkDir` は `<ビルド成果物の置き場>/nar-samples/work/<プロセス識別子>-<連番>/`。ビルド成果物の置き場は `CARGO_TARGET_DIR`、無ければ実行ファイルの祖先で名前が `target` の最初のフォルダ。本リポジトリに `.cargo/config.toml` は無いので、ワークツリーの `target\` の下になる。
+  - `TempPath` は `std::env::temp_dir()` の下（`areka-<札>-<プロセス識別子>-<連番>`）。`target\` の下ではない。
+- **Implications**: 本 spec のテストは `WorkDir` だけを使う。`crates/areka/src/install/terms_tests.rs` の助手 `open` を `WorkDir` へ替える（`sample-ghost-kit` は `areka` の dev 依存に既に在る）。`manifest` のテストはファイルシステムに触らない。
+
+#### 台帳の検査が 2 行に求める形
+
+- **Sources**: `crates/ukadoc-survey/src/check/content.rs` の `check_evidence`、`crates/ukadoc-survey/src/evidence/mod.rs` の説明、`crates/ukadoc-survey/tests/consistency/spec_checks.rs` の説明（宛先の数の検査）。
+- **Findings**:
+  - `status = "implemented"` の行は、その項目の URL がソースに 1 件以上在ればよい。行番号も `note` の文面も見ない。
+  - `owner` を変えると、宛先の数を数える検査（`[[spec]].owner_count`・`[[owner_completed]]`）に波及する。
+- **Implications**: 2 行は `note` だけを書き換え、`status`・`owner`・`priority`・`values`・`links` は触らない。`manifest.rs` の `COMPANION_SUFFIXES` の上の `// ukadoc:` の行を残せば、根拠は今のまま成り立つ。
+
+#### 同じ宛先を 2 つの同梱が指し、宛先が無かった場合の実際の結果
+
+- 実行して確かめていない。本 spec は対象外（9.4 節）で、この場面を増やさないので、設計の判断には使わなかった。
+
+#### `areka-P0-install-live-target-hazards` との重なり
+
+- 本 spec は `procedure.rs`・`judge.rs` とそのテストのファイルを 1 行も触らない（知らせの並びは `areka-nar` の側で確かめる）。向こうの着手の状態にかかわらず、重なるファイルは 0 本。
+
+### 10.3 設計の決め
+
+#### 取り出し元の持ち方（5.2 節）
+
+- **Selected**: 案 A。`Companion.source_directory` は `String` のまま、`/` 区切りの正規化した相対パスを入れる。
+- **Rationale**: `terms.rs` の本体が変更 0 になる。公開の型の形が変わらない。`CompanionSourceMissing` の理由にそのまま載る。
+- **Trade-offs**: `plan.rs` と `fold-samples.rs` が使うたびに `/` で分ける（数行）。
+
+#### 探索と記録の組み方（5.3 節）
+
+- **Selected**: 案 A（今の関数を広げる）。`manifest.rs` に私有の関数 `search_balloons`・`read_source_directory` を足し、`collect_companions` の署名は変えない。
+- **Rationale**: 共有する規則が無くなった（9.1 節）ので、関数を別のファイルや別のクレートへ出す理由が無い。`manifest.rs` は 500 行台で、1,000 行の上限に遠い。
+- **Alternatives**: 同梱の読み手を兄弟のファイルへ分ける案は、移す差分が大きいわりに得が無いので採らない。
+
+#### 記録の種類（5.4 節）
+
+- **Selected**: 2 種を足す（`SourceDirectoryCleaned`・`CompanionNotSearched`）。5 種 → 7 種。
+- **Rationale**: 要件 6.3 が「知らない鍵の読み飛ばしと区別できる形」を求める。`crates/areka/` に種類の名前を書く場所は 0 か所なので、足しても `areka` は変わらない。
+- **Follow-up**: `error_tests.rs` の「5 種」のテストを 7 種へ直す。
+
+#### 断る理由
+
+- **Selected**: 既存の `InvalidDirectoryName` を使う（種類は 14 のまま）。載せる値は、どの失敗でも書かれていた値。
+- **Rationale**: 種類を足すと `judge.rs` の `failure_word` が変わる（並走の約束に触れる）。
+
+#### 取り出し元の途中のフォルダ（要件 2.4）
+
+- **Selected**: 取り出し元へ降りる途中のフォルダのエントリを、本体から必ず除く。配下に本体へ置くものが在れば、`collect_tree` が親として同じフォルダを作る。
+- **Rationale**: 「配下に本体へ置くものが在るか」を数える処理を書かずに、要件の結果（要るときだけ作る・フォルダのエントリの有無で変わらない）になる。
+
+#### 開発用の道具の確かめ方（7 節の 8）
+
+- **Selected**: `strip_folder` を複数段へ広げるだけにし、テストも検体も足さない。確かめは「例がコンパイルできること」と差分の読み合わせ。
+- **Rationale**: 階層付きの取り出し元を持つ検体が 0 体で、道具は使うときに自分で答え合わせをする（置かれた物と写像の不一致を数える）。写像をテストから呼べる場所へ出す案は、道具 1 つのために公開面を増やすので採らない。
+- **Trade-offs**: 広げた枝は、階層付きの検体を畳む日まで一度も通らない。設計に明記した。
+
+#### 新しいテストの置き方
+
+- **Selected**: 新しいファイル 3 本（`manifest_companion_reading_tests.rs`・`plan_source_path_tests.rs`・`lib_companion_tests.rs`）。前の 2 本は既存のテストのファイルの子として繋ぎ、助手を `use super::*` で借りる。
+- **Rationale**: `plan_tests.rs` は 916 行で本体を足せない。子として繋げば、私有の助手の可視性を 1 つも変えずに済む（足すのは接続の宣言だけ）。
+
+### 10.4 まとめ直し（一般化・既存の利用・簡素化）
+
+- **一般化**: 1 段の取り出し元は「複数段の前方一致」の 1 段の場合である。枝を分けず、同じ判定に通す（要件 5.8 の「今と同じ」が構造で成り立つ）。
+- **既存の利用**: 検査は `is_valid_one_level_name`、長さは `utf16_len` と `MAX_ENTRY_PATH_UTF16`、剥がしは `collect_tree` の段数の引数、理由は `InvalidDirectoryName`、記録の出口は `NarArchive::install` の `warn!`。新しく作る検査・出口は 0 個。
+- **簡素化**: 新しいクレート 0・新しい依存 0・新しい公開の関数 0・新しい本番のファイル 0。`crates/areka-parsers/` は触らない（5.1 節は 9.1 節で要らなくなった）。
+
+### 10.5 危険と手当て
+
+- 読み替えが「断る」を「入れる」に変える — 取り出し元の値は書庫の中のエントリを選ぶためにだけ使い、宛先のパスには継ぎ足さない。宛先に継ぎ足すのは検査を通った `*.directory` と検証済みのエントリ名の尾だけなので、読み替えに誤りが在っても根の外へは出ない。
+- 既存のテスト 3 本の期待が変わる — その場で書き換え、変わる理由を設計の表に並べた。
+- `plan_tests.rs` が 920 行前後になる — 足すのは接続の宣言だけ。次に場面を足す spec は新しい兄弟のファイルへ置く。
