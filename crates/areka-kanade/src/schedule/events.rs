@@ -61,6 +61,8 @@
 //! | `OnShellChanged` | GET（汎用の入口） | Ref0〜2=今のシェル名・ゴースト名・シェルのパス（渡された列のまま） |
 //! | `OnBalloonChange` | GET（汎用の入口） | Ref0〜1=バルーン名・パス（渡された列のまま） |
 //! | `OnTranslate` | GET | Ref0=展開済みの台詞・Ref1=欠番・Ref2=元のイベントの ID・Ref3=元の Reference をバイト値 1 で連ねたもの |
+//! | `OnMouseDragStart` | GET | Ref0/1=押した位置の x/y・Ref2=`"0"`・Ref3=スコープ・Ref4=当たり判定（無ければ空）・Ref5=`"0"`（左）・Ref6=`mouse` |
+//! | `OnMouseDragEnd` | GET | Ref0/1=終わった位置の x/y（取り消しは押した位置）・Ref2〜6 は `OnMouseDragStart` と同じ |
 
 use crate::change::{BootOrigin, ChangeRequest, ChangedFrom, ShioriMethod};
 use crate::msg::{CloseReason, EventId, KanadeConfig, MonotonicMs, MouseButton, ShioriCall};
@@ -205,6 +207,12 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     // 再生の前に、その台詞を返した SHIORI へ送る。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnTranslate:1
     "OnTranslate",
+    // ドラッグの 2 語（areka-P0-mouse-drag-events 要件 7.1・46→48 語）。キャラクター窓を
+    // 左ボタンで動かし始めたとき・終えたときに送る。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseDragStart:1
+    "OnMouseDragStart",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseDragEnd:1
+    "OnMouseDragEnd",
 ];
 
 /// `id` が送出許可集合（[`ALLOWED_EVENT_IDS`]）に属するかを判定する（Req3.1）。
@@ -530,6 +538,59 @@ pub fn on_mouse_double_click(
             scope.to_string(),
             region.unwrap_or("").to_string(),
             button_ref5.to_string(),
+            REF6_DEVICE_MOUSE.to_string(),
+        ],
+        status: ExecutionStatus::derive(snapshot),
+    }
+}
+
+/// `OnMouseDragStart`（GET・Ref0..6 正典 layout・areka-P0-mouse-drag-events 要件 4）。
+///
+/// [`on_mouse_double_click`] の左ボタンと同じ並び `[x, y, "0", scope, region, "0", "mouse"]`
+/// で組み立てる純粋関数。座標は押した位置を呼び手から受け、無変換で載せる（座標空間の契約は
+/// [`on_mouse_move`] の「座標空間」節と同一）。今のドラッグは左ボタンでだけ始まるので Ref5 は常に "0"。
+pub fn on_mouse_drag_start(
+    x: i64,
+    y: i64,
+    scope: u32,
+    region: Option<&str>,
+    snapshot: &ExecutionSnapshot,
+) -> ShioriCall {
+    mouse_drag_get("OnMouseDragStart", x, y, scope, region, snapshot)
+}
+
+/// `OnMouseDragEnd`（GET・Ref0..6 正典 layout・areka-P0-mouse-drag-events 要件 4）。
+///
+/// 中身は [`on_mouse_drag_start`] と名前だけが違う。座標は終わった位置（離したときは離した位置・
+/// 取り消しのときは押した位置）を呼び手から受け、無変換で載せる。
+pub fn on_mouse_drag_end(
+    x: i64,
+    y: i64,
+    scope: u32,
+    region: Option<&str>,
+    snapshot: &ExecutionSnapshot,
+) -> ShioriCall {
+    mouse_drag_get("OnMouseDragEnd", x, y, scope, region, snapshot)
+}
+
+/// ドラッグの 2 イベントの共通の組み立て（Ref2・Ref5 は常に "0"・Ref4 の `None` は空文字）。
+fn mouse_drag_get(
+    id: &'static str,
+    x: i64,
+    y: i64,
+    scope: u32,
+    region: Option<&str>,
+    snapshot: &ExecutionSnapshot,
+) -> ShioriCall {
+    ShioriCall::Get {
+        id: EventId::Static(id),
+        references: vec![
+            x.to_string(),
+            y.to_string(),
+            "0".to_string(),
+            scope.to_string(),
+            region.unwrap_or("").to_string(),
+            "0".to_string(),
             REF6_DEVICE_MOUSE.to_string(),
         ],
         status: ExecutionStatus::derive(snapshot),
