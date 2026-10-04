@@ -36,7 +36,7 @@
 ### Out of Boundary
 
 - `crates/areka/src/mcp/mod.rs`・`crates/areka-mcp/`（`handler.rs` を含む）・`areka-emo-compose`・`areka-emo-text`。`Cargo.toml` は `crates/areka/Cargo.toml` の `[dependencies]` へ `miniz_oxide` の 1 行を足すだけ（設計ディスカッションの議題 1 で開発者が承認・2026-10-04）で、ほかの `Cargo.toml` は触らない。
-- `areka-emo-present` の既存ファイルの既存の行（`cache.rs`・`shell_target.rs`・`presenter/read.rs` ほか）。足すのは新しいファイル 1 つと、`presenter.rs` の `mod` の並びへの 1 行だけ。
+- `areka-emo-present` の既存ファイルの既存の行（`cache.rs`・`shell_target.rs`・`presenter/read.rs` ほか）。足すのは新しいファイル `presenter/snapshot.rs` と、その兄弟のテストファイル `presenter/snapshot_tests.rs`（設計ディスカッションの議題 2 で開発者が承認・2026-10-04）と、`presenter.rs` の `mod` の並びへの 1 行だけ。
 - seriko が持つ「今の着せ替えの集合」を尋ねる口（作らない。着せ替えは表示の層が覚えている「最後に表示したときの集合」を使う）。
 - 3 人目以降のキャラクターの窓。絵の資産が組まれれば同じ規則で撮れるが、本 spec では資産を足さない。
 
@@ -147,7 +147,8 @@ crates/areka/src/mcp/
 └── dump_balloon_gpu_tests.rs       # 新規: 実際の描画を通るテスト（バルーン・x64 だけ接続）
 
 crates/areka-emo-present/src/presenter/
-└── snapshot.rs                     # 新規: EmoPresenter の読むだけの口 3 本
+├── snapshot.rs                     # 新規: EmoPresenter の読むだけの口 3 本
+└── snapshot_tests.rs               # 新規: 3 本の口の決定論テスト（GPU なし・snapshot.rs の末尾で接続）
 
 doc/ssp-mcp/
 └── dump-images-diff-areka.md       # 新規: SSP との差の一覧
@@ -299,7 +300,7 @@ impl EmoPresenter {
 **Implementation Notes**
 
 - Integration: `presenter/read.rs` の `read_back` と同じ引き方（`last_show` → `cache.get`）。違いは記録を出さないことと、絵を借りて返すこと。
-- Validation: 本番の唯一の呼び手であるツールの側のテスト（判断は偽の事実、絵は GPU のテスト）で固定する。`areka-emo-present` にテストのファイルは足さない（合意は「新しいファイル 1 つ」）。
+- Validation: 兄弟のテストファイル `presenter/snapshot_tests.rs`（GPU なし）で 3 本を固定し、ツールの側の GPU を通るテストで本番の経路を固定する。
 - Risks: 定義層が 1 つも無い退化した surface を `compose_alone` へ渡すと、合成の層が自分で `error!` を 1 件出す（`EmptyComposition`）。ツールの `error!` と合わせて 2 件になる。壊れたシェルでだけ起き、事前に見分ける口は無い。
 
 ### アプリ本体・純粋な関数
@@ -498,6 +499,8 @@ impl Emo2Wiring {
 5. **base64**（同・要件 7.1）: 空・長さ 1・2・3 の既知の入力（`""`・`"f"→"Zg=="`・`"fo"→"Zm8="`・`"foo"→"Zm9v"`）と、`+`・`/` が出る入力。
 6. **重ね合わせ**（`dump_balloon_overlay_tests.rs`）: ⑴ 拡大率 1・整数の offset で、文字の画素がそのまま背景の上に載る（縮めない写しと一致）。⑵ 物理寸が原寸の 2 倍で、2×2 の同じ色の塊が原寸の 1 画素へ正確に戻る。⑶ 半透明の文字が背景と正しく混ざる。⑷ 文字の面の外は背景のまま。⑸ 拡大率が 1 より小さいときも落ちずに背景の大きさで返る。
 7. **窓の無い World**（`dump_surface_tests.rs`・`dump_balloon_tests.rs`・要件 7.5）: 空の World で `handle` を呼ぶと、その場で `NG:This ghost has no window`・`isError: true`・content は本文 1 つ。`NG:not implemented yet` を固定するテストは残さない。
+
+8. **表示の層の読み口**（`crates/areka-emo-present/src/presenter/snapshot_tests.rs`・GPU なし）: このクレートの既存のテストと同じ組み方で target を登録し、⑴ 一度も表示していない target は `last_shown` が None・`has_surface` は答える、⑵ 表示の後は ID と絵が返り、隠した後も同じ ID と同じ絵が返る、⑶ `has_surface` は生の ID にだけ真で、別名の表にだけ在る番号と無い番号は偽、未登録の target は None、⑷ `compose_alone` の絵が同じ surface を着せ替えなし・アニメーションなしで合成した絵と一致し、表示の後は最後に表示したときの着せ替えが掛かる、⑸ `compose_alone` を呼ぶ前後で `current_surface_id`・`target_visible`・`last_shown` の答えが変わらない、⑹ 3 本とも記録を 1 件も出さない（`log-capture-kit`）。
 
 ### Integration Tests（実際の描画を通る・x64 だけ接続・要件 7.4）
 
