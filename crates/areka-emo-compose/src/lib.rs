@@ -37,7 +37,7 @@ pub mod normalized;
 pub mod pattern;
 pub use bind::BindSet;
 pub use composed::ComposedSurface;
-pub use nesting::{ElementKind, element_kind};
+pub use nesting::{ElementKind, NestTable, SurfaceParts, element_kind};
 pub use normalized::{NormalizedElement, SurfaceMaster, Transform};
 pub use pattern::{PatternFrame, PatternState};
 pub mod world;

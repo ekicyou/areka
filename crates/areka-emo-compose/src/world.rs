@@ -144,6 +144,13 @@ impl EmoWorld {
         dangling
     }
 
+    /// サーフェスごとの静的な参照の表（要件 5.11・5.13）。ファイル名の慣習だけで建つ面も「在る」に数える。
+    ///
+    /// 面の表を 1 度なめるだけで、毎フレームの経路ではない。記録は出さない。
+    pub fn nest_table(&self) -> crate::nesting::NestTable {
+        crate::nesting::NestTable::from_world(self)
+    }
+
     /// fold による entity 常駐段（single-pass fold への唯一の呼び出し口）。
     ///
     /// 空 `Shell`（surface/append/alias 皆無）に対しては何も積まず、World を空のまま保つ。

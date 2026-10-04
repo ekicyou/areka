@@ -678,7 +678,7 @@ fn flatten_extent(
 ///
 /// `Interval::Random`（純ランダム・非 bind）は有効 bind の対象にしない。`Interval` は
 /// `#[non_exhaustive]` ゆえ未知 variant は bind でないものとして扱う（非パニック）。
-fn is_bind_interval(interval: &Interval) -> bool {
+pub(crate) fn is_bind_interval(interval: &Interval) -> bool {
     matches!(interval, Interval::Bind | Interval::BindRandom { .. })
 }
 
