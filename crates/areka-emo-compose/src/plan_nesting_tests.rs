@@ -14,8 +14,9 @@ use super::derive_ops;
 use super::test_support::{bake_atlas, id_to_path};
 use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
+use crate::method::ComposeMethod;
 use crate::nesting::NestIssue;
-use crate::pattern::PatternState;
+use crate::pattern::{PatternFrame, PatternState};
 use crate::world::EmoWorld;
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
@@ -42,6 +43,17 @@ fn compose(
     top: u32,
     binds: &BindSet,
 ) -> (Vec<(&'static str, i64, i64)>, String) {
+    compose_with(text, images, top, binds, &PatternState::default())
+}
+
+/// [`compose`] にコマの状態を渡す形。
+fn compose_with(
+    text: &str,
+    images: &[(u32, &str)],
+    top: u32,
+    binds: &BindSet,
+    pattern: &PatternState,
+) -> (Vec<(&'static str, i64, i64)>, String) {
     let base = Path::new("shell/master");
     let atlas = bake_atlas(base, RELS);
     let map = id_to_path(&atlas, RELS);
@@ -50,17 +62,8 @@ fn compose(
     world.bind_atlas(&atlas, SetId(0));
     let mut ops = Vec::new();
     let mut visited = Vec::new();
-    let logs = capture_logs(|| {
-        derive_ops(
-            &mut ops,
-            &mut visited,
-            &world,
-            &atlas,
-            top,
-            binds,
-            &PatternState::default(),
-        )
-    });
+    let logs =
+        capture_logs(|| derive_ops(&mut ops, &mut visited, &world, &atlas, top, binds, pattern));
     assert!(visited.is_empty(), "先祖の積み上げは走査後に空へ戻る");
     let named = ops
         .iter()
@@ -274,4 +277,159 @@ fn only_the_missing_element_is_dropped() {
         vec![(0, 1, "9999".to_string()), (0, 2, "4294967296".to_string())]
     );
     assert!(!logs.contains("level=WARN"), "合成の中は debug!: {logs}");
+}
+
+// ── 部品の段のコマの合流（task 4.2・要件 5.1・5.2・5.10・5.12・5.13） ──
+
+/// `surface_id` を (x,y) に置く Overlay のコマ。
+fn frame(surface_id: u32, x: i64, y: i64) -> PatternFrame {
+    PatternFrame {
+        surface_id,
+        method: ComposeMethod::Overlay,
+        x,
+        y,
+    }
+}
+
+/// 子 10 を (20,30) に置く親 0。子と親は同じ番号の animation0 を持つ。
+const PART_TEXT: &str = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,10,20,30\n\
+                         animation0.interval,random,2\nanimation0.pattern0,overlay,13,50,1,1\n}\n\
+                         surface10\n{\nelement0,overlay,eye.png,0,0\n\
+                         animation0.interval,random,2\nanimation0.pattern0,overlay,12,50,0,0\n}\n\
+                         surface12\n{\nelement0,overlay,eye_closed.png,0,0\n}\n\
+                         surface13\n{\nelement0,overlay,c.png,0,0\n}\n";
+
+/// 部品のコマは部品の段で使い、一番上の同じ番号のコマとは混ざらない（要件 5.1・5.10）。
+#[test]
+fn part_frames_are_used_in_the_part_stage_only() {
+    let binds = BindSet::default();
+    let run = |pattern: &PatternState| compose_with(PART_TEXT, &[], 0, &binds, pattern).0;
+    let base = vec![("body.png", 0, 0), ("eye.png", 20, 30)];
+    assert_eq!(run(&PatternState::default()), base);
+
+    // 部品 10 の animation0 のコマ → 子の段で、子の位置に重なる。
+    let mut part = PatternState::default();
+    part.set_part(10, 0, frame(12, 0, 0));
+    assert_eq!(
+        run(&part),
+        vec![
+            ("body.png", 0, 0),
+            ("eye.png", 20, 30),
+            ("eye_closed.png", 20, 30)
+        ]
+    );
+
+    // 一番上の animation0 のコマは一番上の段だけ（子の段へ漏れない）。
+    let mut top = PatternState::default();
+    top.set(0, frame(13, 1, 1));
+    assert_eq!(
+        run(&top),
+        vec![("body.png", 0, 0), ("eye.png", 20, 30), ("c.png", 1, 1)]
+    );
+
+    // 両方の欄に同じ番号 0 のコマ → それぞれの段に 1 つずつ。
+    let mut both = part.clone();
+    both.set(0, frame(13, 1, 1));
+    assert_eq!(
+        run(&both),
+        vec![
+            ("body.png", 0, 0),
+            ("eye.png", 20, 30),
+            ("eye_closed.png", 20, 30),
+            ("c.png", 1, 1),
+        ]
+    );
+
+    // 一番上の番号 0 を部品の欄に置いても、一番上の段は部品の欄を見ない。
+    let mut misplaced = PatternState::default();
+    misplaced.set_part(0, 0, frame(13, 1, 1));
+    assert_eq!(run(&misplaced), base);
+}
+
+/// 子の中の着せ替えの pattern0 は、全段で同じ着せ替えの集合で出る（要件 5.12）。
+#[test]
+fn bind_pattern0_inside_child_follows_the_bind_set() {
+    let text = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,10,20,30\n}\n\
+                surface10\n{\nelement0,overlay,eye.png,0,0\n\
+                animation100.interval,bind\nanimation100.pattern0,overlay,40,0,2,3\n}\n\
+                surface40\n{\nelement0,overlay,mouth.png,0,0\n}\n";
+    assert_eq!(
+        compose(text, &[], 0, &BindSet::from_ids([100])).0,
+        vec![
+            ("body.png", 0, 0),
+            ("eye.png", 20, 30),
+            ("mouth.png", 22, 33)
+        ]
+    );
+    assert_eq!(
+        compose(text, &[], 0, &BindSet::default()).0,
+        vec![("body.png", 0, 0), ("eye.png", 20, 30)]
+    );
+}
+
+/// 着せ替えから外れた部品のコマは合流せず、有効ならコマが pattern0 を置き換える。描画メソッドの
+/// 番人も一番上と同じ（要件 5.12・一番上と同じ 1 本の経路）。
+#[test]
+fn part_frames_go_through_the_same_bind_and_method_rules() {
+    let text = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,10,20,30\n}\n\
+                surface10\n{\nelement0,overlay,eye.png,0,0\n\
+                animation100.interval,bind\nanimation100.pattern0,overlay,40,0,2,3\n}\n\
+                surface40\n{\nelement0,overlay,mouth.png,0,0\n}\n\
+                surface41\n{\nelement0,overlay,mouth_open.png,0,0\n}\n";
+    let mut pattern = PatternState::default();
+    pattern.set_part(10, 100, frame(41, 1, 1));
+    let (ops, logs) = compose_with(text, &[], 0, &BindSet::default(), &pattern);
+    assert_eq!(ops, vec![("body.png", 0, 0), ("eye.png", 20, 30)]);
+    assert!(
+        logs.contains("bind 集合に属さない"),
+        "外れたコマを捨てた記録: {logs}"
+    );
+    assert_eq!(
+        compose_with(text, &[], 0, &BindSet::from_ids([100]), &pattern).0,
+        vec![
+            ("body.png", 0, 0),
+            ("eye.png", 20, 30),
+            ("mouth_open.png", 21, 31)
+        ]
+    );
+
+    // 描画メソッドが動かない部品のコマは描かず、pattern0 も置き換えたまま（一番上と同じ）。
+    let mut replace = PatternState::default();
+    replace.set_part(
+        10,
+        100,
+        PatternFrame {
+            method: ComposeMethod::Replace,
+            ..frame(41, 1, 1)
+        },
+    );
+    let (ops, logs) = compose_with(text, &[], 0, &BindSet::from_ids([100]), &replace);
+    assert_eq!(ops, vec![("body.png", 0, 0), ("eye.png", 20, 30)]);
+    assert!(logs.contains("非 Overlay method の現在コマ"), "{logs}");
+}
+
+/// 多段の内側の部品のコマも使い、部品の欄のコマは、その部品が出ている段の絵だけを変える（要件 5.13）。
+#[test]
+fn inner_multi_level_part_frames_are_used() {
+    let binds = BindSet::default();
+    let (base, _) = compose(FIXTURE, &[], 0, &binds);
+    let mut pattern = PatternState::default();
+    pattern.set_part(32, 0, frame(12, 1, 1));
+    let (ops, _) = compose_with(FIXTURE, &[], 0, &binds, &pattern);
+    let mut expected = base.clone();
+    let at = expected
+        .iter()
+        .position(|op| *op == ("part.png", 10, 10))
+        .expect("32 は (10,10)")
+        + 1;
+    expected.insert(at, ("eye_closed.png", 11, 11));
+    assert_eq!(ops, expected);
+
+    // 子 10 は一番上 30 の絵に出ていない → 10 の部品のコマは 30 の命令列を変えない。
+    let mut elsewhere = PatternState::default();
+    elsewhere.set_part(10, 0, frame(12, 0, 0));
+    assert_eq!(
+        compose_with(FIXTURE, &[], 30, &binds, &elsewhere).0,
+        compose(FIXTURE, &[], 30, &binds).0
+    );
 }
