@@ -115,7 +115,7 @@
   - _Requirements: 6.12, 7.3, 7.7_
   - _Boundary: tech.md, roadmap.md, dist/README.txt_
 
-- [ ] 6.2 (P) 対応表・網羅台帳・後続の brief に記す
+- [x] 6.2 (P) 対応表・網羅台帳・後続の brief に記す
   - `doc/COMPAT_ARCHITECTURE.md` 8 節に本 spec の 1 節（設計の「対応表に書くこと」の全項目と、見た目が変わる 2 つ・段 2 へ落ちたときの残る場合）を足す
   - 網羅台帳の `element*` の項に「動く GIF の自動アニメーションは非対応（開発者裁定 2026-10-04・理由: 古い形式）」を注記し、段は「縮退」のまま変えない
   - `areka-P0-animated-image-playback` の `brief.md` に、渡すもの・残したもの・GIF 非対応を書き足す。リポジトリ内の検体の動く絵が 0 枚であることを `research.md` で確かめ直す

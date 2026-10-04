@@ -87,3 +87,30 @@
   - `doc/ukadoc-coverage/ledger/assets.toml`・新規の検体
 - 議題（答えで作業が変わるものだけ）: 棚卸⑳のまま（合成サーフェスの番号の空間／ファイルの繰り返し回数を守るか／`CAPACITY` を変えるか）。
 - 見つけた穴: 無し。
+
+
+## 2026-10-04 `animated-image-decode` からの申し送り（同 spec のタスク 6.2）
+
+読み込みの側（`areka-P0-animated-image-decode`）が着地した形。コードの引用は「何の定義か」で指す。着手時に引き直すこと。
+
+### 渡すもの
+
+- **コマの引き方**: `areka-emo-atlas` の `AtlasTable::animation(id)`。`id` が動く絵の親（今までの鍵で引く `ElementId`）のときだけ `Some(&Animation)` を返し、静止画と 2 枚目以降のコマの `id` では `None`。`AtlasKey`・`manifest.rs`・`AtlasTable::new` の署名は変えていない（動く絵つきの表は別の組み立て口 `AtlasTable::with_frames` で組む）。
+- **`Animation` の 3 つの欄**: `frames: Vec<ElementId>`（`frames[0]` は親自身＝0 番のコマ＝今までの鍵で引ける絵）・`delays_ms: Vec<u32>`（`frames` と同じ長さ）・`loop_count: LoopCount`。コマは 2 枚以上。
+- **コマの番号の並び**: 2 枚目以降のコマは、鍵のエントリが全部並んだ後ろに、親の番号の昇順・コマの番号の昇順で続けて並ぶ。動く絵が無いシェルでは静止画の番号は今までと同じ。2 枚目以降のコマの鍵（`AtlasTable::key`）は親と同じ鍵で、鍵からの逆引き（`AtlasTable::resolve`）はいちばん小さい番号＝親を返す。各コマは普通のエントリとして `AtlasTable::entry` で引ける。全透明のコマも、位置の無い（`placement` が `None` の）エントリとして番号と待ち時間が残る。
+- **コマの中身**: ファイルの重ね方（背景へ戻す・前へ戻す・重ねる）を解いた後の、絵の全体の寸法の 1 枚ずつ。乗算済み BGRA。透明な縁の切り詰めはコマごとに静止画と同じに行う（ずれは各エントリの `trim_offset`）。透明度を持たない動く絵は、1 枚目のコマの左上の色が全コマから抜かれている。
+- **繰り返し回数**: `LoopCount::Infinite`（終わりなし）か `LoopCount::Finite(n)`（全体を合計 n 回・n は 1 以上）。APNG・WebP で同じ意味。
+- **待ち時間**: ミリ秒へ四捨五入した値。0 は 0 のまま。
+- **1 枚へ縮んだ動く絵**: 上限を超えた絵・読み込みに失敗した絵は、動きの 1 枚目だけの普通の静止画になり、`animation` は `None`。再生の側から見ると静止画と区別が付かない。
+- **3 つの上限**: `AREKA_ANIMATED_IMAGE_MAX_FRAMES`（既定 1,024 枚）・`AREKA_ANIMATED_IMAGE_MAX_PIXELS`（既定 67,108,864 画素）・`AREKA_ANIMATED_IMAGE_MAX_TOTAL_PIXELS`（既定 268,435,456 画素）。定義は `areka-emo-atlas` の `limits.rs`、利用者向けの説明は `dist/README.txt`。合計は `bake` 1 回ごとに 0 から数える（起動ではシェルが採寸と資産の組み立てで 2 回焼かれるが、それぞれ別に数える）。設定画面と設定ファイルへの引き取りは `roadmap.md` の予約に載せた。
+- **検体**: `crates/areka-emo-atlas/src/testdata/animated/` の 12 個（APNG 7・動く WebP 4〔中身が WebP の `.png` を含む〕・GIF 1）と、その中身を書いた `README.md`。作り手は `crates/areka-emo-atlas/examples/gen_animated_samples.rs`（単色の矩形だけ・第三者の著作物 0 件）。本物の読み手の結合テスト（`samples_e2e_tests.rs`）は、`single.webp`（1 枚の WebP は WIC の WebP の拡張機能が要る）と `deep16.apng`（16 ビットは新しい読み手で読めず、今までの WIC の 1 枚読みへ落ちる）を焼く検体から外している。実機の確かめにも使える。
+- **見た目の変化の記録**: `doc/COMPAT_ARCHITECTURE.md` の §8 の 1 節「動く絵（APNG・動く WebP）の読み込み」。
+
+### 渡さずに残したもの（本 spec では決めていない）
+
+- **待ち時間 0 の丸め方**: 読み込みは 0 を 0 のまま渡す。0 や極端に小さい値をどう再生するかは、再生の側で正典を確かめて決める。
+- **繰り返し回数の使い方**: 読み込みは回数を渡すだけ。自動アニメーションで守るか・`import` で無視する（正典）かは再生の側。
+- **C2 の `--clipping` の決まり**: element定義に `--clipping` を付けると、動く絵としての読み込みが無効になる（正典）。areka は element定義のオプションをまだ読まないので、今の読み込みは `--clipping` を見ずに全コマを読む。引き受ける spec は、読み込みの側のタスク 6.3 で `/kiro-discovery` から起票する。
+- **再生そのもの**（自動アニメーション・interval `always`・`import`）。
+- **動く GIF は非対応**（開発者裁定 2026-10-04・理由: 古い形式）。GIF は今までどおり 1 枚の絵として読み、`animation` は常に `None`（`image` の機能 `gif` は入れていない）。上の Problem 1 が引く正典の文は GIF も挙げているが、areka は動く GIF を動かさない。Scope の「実機の確かめ（3 形式の検体）」は、APNG と動く WebP の 2 形式に読み替える。網羅台帳の `element*` の項にも同じ注記がある。
+- **焼く時間と起動のメモリの山の数字**: 読み込みの側のタスク 7.1 で測って、この brief に追記する。採寸の側で全コマを読まずに済ませる直しが要るかも、その数字で判断する（要るなら読み込みの側の完了時に `/kiro-discovery` で起票）。

@@ -7018,6 +7018,7 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。縮退の転記元: 見直し表の `areka-P0-seriko-runtime`。areka-parsers の shell::decode_elements は第 2 欄が `overlay` の行だけを値にし、他の描き方の行は何も記録せずに読み飛ばす。層の番号・画像の道・位置は転記してareka-emo-compose が重ね合わせに使う。見出しの `*` は 1 個以上の数字。
 2026-09-20 の実測: 面の画像と `overlay` の `element0` の関係は正典どおりになった。`overlay` 以外の描画メソッドが読み飛ばされる縮退は残り、その間は `overlay` 以外の `element0` を持つ面で画像が土台に使われる（正典では破棄。`areka-P0-shell-implicit-surface` の要件 2.7 の既知のずれ）。`element0` の無い面にファイル名だけの画像を層 0 として敷くのは areka-emo-compose の base_image::apply_base_images で、`element0` が在る面には手を出さない。状態と担当はこの実測では変えていない（縮退の根は `overlay` 以外の読み飛ばしのままだからである）。
+2026-10-04 の注記: 動く GIF の自動アニメーションは非対応（開発者裁定 2026-10-04・理由: 古い形式）。GIF は今までどおり 1 枚の絵として読む。APNG・動く WebP は areka-P0-animated-image-decode で全コマを読んでアトラスに載せるようになったが、自動アニメーションの再生はまだ無い（再生は areka-P0-animated-image-playback の担当）。状態と担当はこの注記では変えていない（縮退の根は上と同じだからである）。読み方の裁量は doc/COMPAT_ARCHITECTURE.md の §8「沈黙ルール対応表」に 1 節で登記してある。
 担当 spec は areka-P0-shell-parse。同 spec の brief は範囲の In に surfaces.txt の解析を挙げ、その中身として重ね合わせの一覧を名指ししている。
 束: 絵の重ね合わせの行・引き受けたうえで縮めている（記録なし）（先に要る仕組み: emo の合成器）。束の順位: 17——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """

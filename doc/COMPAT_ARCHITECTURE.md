@@ -329,6 +329,30 @@ ukadoc が沈黙/曖昧な箇所を areka 裁量で決定した記録（§2 沈�
 | **外から頼まれた `OnTranslate` の応答の台詞**（`OnTranslate` は送ってよいイベントの表に載るので、汎用の通知の入口と台詞の切れ目の口から頼める。正典は「なおOnTranslate自身では再度発生しない。」と書くだけで、外から頼まれたときに沈黙） | **翻訳しない**。元のイベントが `OnTranslate` なら、その応答の台詞には `OnTranslate` を送らず今日どおり再生し、`debug!`（`translate_skipped_self`）を 1 件残す。表を「送ってよい」と「外から頼める」に分ける仕組みは作らない。定義点＝`crates/areka-kanade/src/schedule/translate.rs` の `capture`（台詞を捕まえる条件の ⑷） | **areka 裁量**。「再度発生しない」を、出所が外のときにも当てはめる（https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnTranslate:1 ）。判定は `crates/areka-kanade/src/schedule/translate_tests.rs` の `reply_to_on_translate_is_played_without_translation`、`crates/areka-kanade/src/schedule/translate_path_tests.rs` の `reply_to_on_translate_asked_through_the_talk_gap_is_not_translated` | areka-P0-translate-pipeline（設計の裁量 10・要件 4.6） |
 | **Reference の値が NUL 1 文字だけのとき**（areka は `OnTranslate` の Reference1 の欠番の印に NUL 1 文字を使う。正典 SHIORI/3.0 は Reference の値に NUL が来るときに沈黙） | **空文字に置き換えて送る**。`OnTranslate` の Reference1 の位置だけを除き、全イベントの全 Reference に効く。位置ごとに `warn!`（`reference_absent_marker_replaced`・`id`・`index`）を 1 件残す。外から入った値（汎用の通知の入口・選択肢・元の Reference を写した `OnTranslate` の Reference3）が印と同じでも、行が記録なしに消えない。定義点＝`crates/areka-kanade/src/actor.rs` の `round_trip_raw`（`replace_absent_markers`） | **areka 裁量**。NUL は見出しの値として線に載せられない文字で、実際の Reference と重ならないので印に選んだ。印と同じ値の Reference は空にして欠番と区別する。判定は `crates/areka-kanade/src/actor_translate_tests.rs` の `absent_marker_in_on_translate_reference3_is_replaced_with_one_warning`・`absent_marker_from_outside_is_replaced_on_existing_send_path` | areka-P0-translate-pipeline（設計の裁量 11） |
 
+### 動く絵（APNG・動く WebP）の読み込み（正典は読み方の細部に沈黙）
+
+ukadoc の element定義の項は、surface*.png や element定義に動く絵を指定すると SERIKO 定義なしで自動的にアニメーションする（SSP 2.7.38〜）と書くが、透過・待ち時間の端数・繰り返し回数・大きすぎる絵の扱いには触れない。areka は次を裁量で定めた。再生（自動アニメーション）はまだ無く、ここに書くのは読み込みとアトラスへの載せ方だけである（再生は `areka-P0-animated-image-playback` の担当）。
+
+- **動く GIF は動く絵として扱わない**（開発者裁定 2026-10-04・理由: 古い形式）。GIF は今までどおり 1 枚の絵として読む。網羅台帳の `element*` の項にも同じ注記がある。
+- **動く絵の見分け**: 拡張子ではなく中身で見る。APNG は `IDAT` より前の `acTL` が 2 枚以上を宣言するもの、WebP は `VP8X` の動きの旗が立ち `ANMF` が 2 個以上あるもの。それ以外（コマが 1 枚だけのものを含む）は今までどおり 1 枚の絵として読む。
+- **透明度を持つかの見分け**: APNG は色の形式が α つきか `tRNS` を持つこと、WebP は `VP8X` の α の旗。読む前に 1 回だけ決め、全コマ同じ扱いにする。
+- **透明度を持たない動く絵の抜き色**: 動きの 1 枚目のコマの左上の色を、全コマから抜く（静止画の「左上の色を抜く」を、動く絵では 1 枚目の色に揃える）。
+- **待ち時間**: ファイルに書かれた分数をミリ秒へ四捨五入する。0 は 0 のまま渡す（0 をどう再生するかは再生の側が決める）。
+- **繰り返し回数**: 「終わりなし」か「合計 n 回（n は 1 以上）」の 2 通りに揃える。APNG・WebP とも、ファイルの 0 が「終わりなし」。
+- **3 つの上限**: 動く絵 1 つのコマの枚数 1,024 枚（`AREKA_ANIMATED_IMAGE_MAX_FRAMES`）、動く絵 1 つの全コマの画素の数 67,108,864 画素（`AREKA_ANIMATED_IMAGE_MAX_PIXELS`・1 画素 4 バイトで 256 MiB）、1 回の読み込み（シェル 1 つ、またはバルーン 1 つ）での動く絵の全コマの画素の数の合計 268,435,456 画素（`AREKA_ANIMATED_IMAGE_MAX_TOTAL_PIXELS`・同 1 GiB）。環境変数で変えられ、1 以上の整数でない値はその項目だけ既定に戻して `warn!` を出す。超えた絵は全コマを読まずに 1 枚へ縮め、`warn!` を 1 回出す。絵の一辺がアトラスのページに入らない動く絵も同じに 1 枚へ縮む。利用者向けの説明は `dist/README.txt` の「動く絵の上限」。
+- **見出しと中身の食い違い**: 見出しのコマの枚数（APNG の `acTL`・WebP の `ANMF` の数）と実際に読めたコマの枚数が違う絵、コマの寸法が見出しと違う絵、途中で読めなくなった絵は、多くても少なくても 1 枚へ縮め、`warn!` を 1 回出す（読めたコマまでで動かすことはしない）。
+
+見た目が変わる所（先頭の 2 つ）と、上流の読み手や WIC に由来する性質（残り）:
+
+- **既定の絵を持つ APNG**（動きに含めない代わりの絵を別に持つもの）は、出る絵が既定の絵から動きの 1 枚目へ変わる。上限や失敗で 1 枚へ縮んだときも、出るのは動きの 1 枚目である（全コマを読めたときの 0 番のコマと同じ絵）。
+- **透明度の旗を持たない動く WebP** は、1 枚目のコマの左上の色が全コマから抜かれるようになる。今までは WIC がこの種の絵も「透明度あり」として返していたので、抜き色が効かず不透明の四角で出ていた（実測）。
+- 透明度を持たない動く WebP で「背景へ戻す」指定の次に部分のコマが来ると、戻された所は黒い不透明になる（上流の読み手の振る舞い・実測）。
+- 動く WebP の「重ねる」指定のコマは、色が 1 ずれることがある（実測 255 → 254・上流の重ね算の丸め）。
+- 1 枚へ縮んだ動く絵は、動きの 1 枚目を新しい読み手（`image`）が読む。透明度を持たない絵なら、縮んだ 1 枚も 1 枚目の左上の色が抜かれる。縮んだ動く WebP は Windows の WebP の拡張機能に依らない。
+- **残る場合**: 新しい読み手が 1 枚目も読めない絵（16 ビットの APNG・1 枚目から壊れている絵）だけは、今までの WIC の 1 枚読みへ落ちる。このときに限り、既定の絵を持つ APNG は既定の絵が出て、透明度の旗を持たない WebP は抜き色が効かず、WebP は Windows の拡張機能が無ければ今までどおり読めない絵（その絵だけ表に載らない）になる。`warn!` は 2 回出る。
+- リポジトリ内の検体（`vendors/sample_ghost/` の `.nar` の中身を含む）に動く絵は 0 枚なので、既存の検体で見た目が変わる絵は 0 枚である（`areka-P0-animated-image-decode` の `research.md` 4 節）。
+- 出典 spec: `areka-P0-animated-image-decode`（2026-10-04 裁定・要件 2.3・2.5・3.3・3.4・4.3・6.1・6.2・6.4・6.9・6.10・9.1）。
+
 ### areka 裁量の性能目標（正典は負荷に沈黙）
 
 ukadoc はベースウェアが消費してよい計算資源について何も定めていない。areka は次を裁量で定め、性能に関する判断の唯一の拠り所とする。
