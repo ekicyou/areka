@@ -37,12 +37,15 @@ use windows_numerics::Vector2;
 
 use wintf::com::dxgi::create_composition_swap_chain;
 use wintf::com::wuc::CompositorInteropExt;
+use wintf::ecs::widget::bitmap_source::AlphaMask;
 use wintf::ecs::{
-    Arrangement, GraphicsCore, HitTest, LayoutScale, Offset, Size, Visual, VisualGraphics,
+    AlphaMaskResource, Arrangement, GraphicsCore, HitTest, LayoutScale, Offset, Size, Visual,
+    VisualGraphics,
 };
 
 use crate::TextLayerError;
 use crate::actor::TextSlotBinding;
+use crate::choice::HitRectPx;
 
 /// `windows_core::Error` を [`TextLayerError::Device`]（ログ＋`HRESULT`＋文脈）へ写像する
 /// クロージャ（log-first: `error!`＋`Err` 戻り値・panic 禁止）。
@@ -178,6 +181,8 @@ pub struct TextSurface {
     fixed_overlay: FixedOverlaySeam,
     /// 箱の文字の面として窓の直接の子に作った entity（差し込み口へ装着した面は `None`）。
     window_child: Option<Entity>,
+    /// 窓の子の entity の当たりのマスクへ最後に焼いた字の矩形（同じ集まりなら焼き直さない）。
+    hit_cells: Vec<HitRectPx>,
 }
 
 /// 物理 px 直接の `Arrangement`（寸＝供給面の物理寸・offset＝窓クライアント原点基準の物理 px）。
@@ -192,6 +197,52 @@ fn physical_arrangement(size: (u32, u32), offset: (f32, f32)) -> Arrangement {
             width: size.0 as f32,
             height: size.1 as f32,
         },
+    }
+}
+
+/// 字の矩形の集まり（面の左上を原点とする物理 px）を、面の大きさ `size` の当たりのマスクへ焼く
+/// （要件 9.4）。矩形 `[left, right) × [top, bottom)` を外側へ丸めた画素が内で、面の外は切る。
+/// マスクは面と同じ物理寸なので、wintf の bounds 相対の比例写像は 1:1 になる。
+pub(crate) fn hit_cells_mask(size: (u32, u32), cells: &[HitRectPx]) -> AlphaMask {
+    let (w, h) = size;
+    let mut px = vec![0u8; w as usize * h as usize * 4];
+    let span = |lo: f32, hi: f32, len: u32| {
+        let clip = |v: f32| v.clamp(0.0, len as f32) as usize;
+        clip(lo.floor())..clip(hi.ceil())
+    };
+    for c in cells {
+        for y in span(c.top, c.bottom, h) {
+            for x in span(c.left, c.right, w) {
+                px[(y * w as usize + x) * 4 + 3] = 255;
+            }
+        }
+    }
+    AlphaMask::from_pbgra32(&px, w, h, w * 4)
+}
+
+/// 箱の文字の面の entity が装着の時に持つ当たり判定: マスク判定で、字の矩形は 0 個（何も受けない）。
+/// マスクを空のまま（`AlphaMaskResource::new()`）にすると wintf は矩形全体の判定へ縮退するので、
+/// 必ず面の大きさの空のマスクを入れる。
+pub(crate) fn box_hit_components(size: (u32, u32)) -> (HitTest, AlphaMaskResource) {
+    let mut mask = AlphaMaskResource::new();
+    mask.set(hit_cells_mask(size, &[]));
+    (HitTest::alpha_mask(), mask)
+}
+
+/// 箱の文字の面の entity の当たりのマスクを、字の矩形の集まりへ差し替える（要件 9.4）。
+/// クリック透過の切り替えと窓のメッセージの振り分けは、どちらもこのマスクを読む。
+pub(crate) fn set_child_hit_cells(
+    world: &mut World,
+    entity: Entity,
+    size: (u32, u32),
+    cells: &[HitRectPx],
+) {
+    match world.get_mut::<AlphaMaskResource>(entity) {
+        Some(mut res) => res.set(hit_cells_mask(size, cells)),
+        None => tracing::warn!(
+            ?entity,
+            "箱の文字の面の entity に当たりのマスクが無い——字の矩形でクリックを受けられない"
+        ),
     }
 }
 
@@ -241,9 +292,11 @@ impl TextSurface {
 
     /// 箱の文字の面の装着（UI スレッド・`&mut World`）: 供給面を [`Self::attach`] と同じ手順で作り、
     /// **シェルの窓の直接の子**の entity（`Visual`＋`VisualGraphics`＋物理 px の `Arrangement`＋
-    /// `HitTest::none()`）として窓の `Children` の `index` 番目へ挿す（`index` が子の数を超えれば末尾）。
+    /// 字の矩形のマスクの当たり判定）として窓の `Children` の `index` 番目へ挿す（`index` が子の数を
+    /// 超えれば末尾）。
     ///
-    /// 当たり判定を持たないので、届くかどうかはシェルの絵の entity だけで決まる（要件 9.4）。
+    /// 当たり判定は表示されている字の矩形の集まりで、装着の時は 0 個（何も受けない）。提示が
+    /// [`Self::set_hit_cells`] で入れ替える。届くかどうかはシェルの絵とこの矩形で決まる（要件 9.4）。
     /// 面は透明で始まり、背景の絵を描かない（要件 1.6）。作った entity は面が持ち、
     /// [`Self::despawn_window_child`] で消す。
     pub fn attach_window_child(
@@ -275,7 +328,7 @@ impl TextSurface {
                 Visual::default(),
                 VisualGraphics::new(wuc_visual),
                 physical_arrangement(physical_size, physical_offset),
-                HitTest::none(),
+                box_hit_components(physical_size),
                 ChildOf(window),
             ))
             .id();
@@ -299,6 +352,20 @@ impl TextSurface {
                 "despawn_window_child: 箱の文字の面の entity が既に居ない"
             );
         }
+    }
+
+    /// 箱の文字の面の当たり判定を、表示されている字の矩形の集まり（面の左上を原点とする物理 px）へ
+    /// 合わせる（要件 9.4）。前に焼いた集まりと同じなら何もしない。差し込み口へ装着した面（窓の子を
+    /// 持たない）は何もしない（普通のバルーンの窓の当たり判定は emo-present の領分）。
+    pub fn set_hit_cells(&mut self, world: &mut World, cells: Vec<HitRectPx>) {
+        let Some(entity) = self.window_child else {
+            return;
+        };
+        if self.hit_cells == cells {
+            return;
+        }
+        set_child_hit_cells(world, entity, self.size, &cells);
+        self.hit_cells = cells;
     }
 
     /// 窓の子として装着した面の entity（差し込み口へ装着した面は `None`）。
@@ -373,6 +440,7 @@ impl TextSurface {
                 size: physical_size,
                 fixed_overlay: FixedOverlaySeam::default(),
                 window_child: None,
+                hit_cells: Vec::new(),
             },
             wuc_visual,
         ))
@@ -888,3 +956,7 @@ mod tests {
 #[cfg(test)]
 #[path = "surface_window_child_tests.rs"]
 mod window_child_tests;
+
+#[cfg(test)]
+#[path = "surface_hit_cells_tests.rs"]
+mod hit_cells_tests;

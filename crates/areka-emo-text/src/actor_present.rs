@@ -9,7 +9,7 @@ use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 use crate::TextLayerError;
 use crate::canvas::ContentCanvas;
 use crate::choice::{
-    annotate_lines, decorate_canvas, derive_hit_rows, line_bands, to_window_physical,
+    annotate_lines, decorate_canvas, derive_hit_rows, glyph_cells, line_bands, to_window_physical,
 };
 use crate::layout::{LayoutEngine, WrapPlan};
 use crate::place::{PlaceKey, TextPlace};
@@ -343,6 +343,19 @@ fn present_actor(
             })
             .collect();
         runtime.choice_snapshot.insert(place.clone(), snapshot);
+        // 箱の文字の面は、表示されている字の矩形でポインタを受ける（要件 9.4）。字の矩形は表示と
+        // 同じ配置の結果（見えている字だけ）と面反映済みのスクロールから作る。
+        if matches!(place.place, TextPlace::Box(_)) {
+            let cells = glyph_cells(
+                &lines,
+                &bands,
+                resolved.mode,
+                &resolved.region,
+                committed,
+                &contract,
+            );
+            render.surface.set_hit_cells(world, cells);
+        }
         render.surface.present()?;
     }
     Ok(())

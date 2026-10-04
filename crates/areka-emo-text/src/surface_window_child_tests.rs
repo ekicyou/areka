@@ -46,10 +46,10 @@ fn children_of(world: &World, window: Entity) -> Vec<Entity> {
         .unwrap_or_default()
 }
 
-/// 窓の子の面は、指定の並び位置（差し込み口の直後＝1）に挿さり、当たり判定を持たず、
+/// 窓の子の面は、指定の並び位置（差し込み口の直後＝1）に挿さり、字の矩形 0 個のマスクの当たり判定を持ち、
 /// 物理 px の位置と大きさを持ち、透明で始まる。片付けると entity が消え、窓の子の並びから外れる。
 #[test]
-fn window_child_is_inserted_at_index_without_hit_test_and_despawned_on_cleanup() {
+fn window_child_is_inserted_at_index_with_empty_hit_mask_and_despawned_on_cleanup() {
     let (_dq, compositor) = make_dispatcher_and_compositor();
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
 
@@ -82,11 +82,24 @@ fn window_child_is_inserted_at_index_without_hit_test_and_despawned_on_cleanup()
         "窓の直接の子（差し込み口の下の子ではない・要件 3.6）"
     );
 
-    // --- 当たり判定なし（届くかはシェルの絵だけで決まる・要件 9.4） ---
+    // --- 当たり判定は字の矩形のマスクで、装着の時は 0 個（何も受けない・要件 9.4・task 13） ---
     assert_eq!(
         world.get::<HitTest>(child).copied(),
-        Some(HitTest::none()),
-        "箱の面は当たり判定を持たない"
+        Some(HitTest::alpha_mask()),
+        "箱の面はマスク（字の矩形の集まり）で当たりを決める"
+    );
+    let mask = world
+        .get::<wintf::ecs::AlphaMaskResource>(child)
+        .and_then(wintf::ecs::AlphaMaskResource::mask)
+        .expect("空のマスクを持つ（無いと wintf は矩形全体の判定へ縮退する）");
+    assert_eq!(
+        (mask.width(), mask.height()),
+        (5, 4),
+        "マスクは面と同じ物理寸"
+    );
+    assert!(
+        (0..4).all(|y| (0..5).all(|x| !mask.is_hit(x, y))),
+        "装着の時は字が無いので何も受けない"
     );
 
     // --- 物理 px の位置と大きさ・自前 brush・wintf の描画経路は使わない ---

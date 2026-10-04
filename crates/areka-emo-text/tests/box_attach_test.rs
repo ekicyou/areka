@@ -6,7 +6,7 @@
 //!
 //! - 窓の `Children` が「差し込み口 → element番号の大きい箱 → 小さい箱 → 絵」に並ぶ
 //!   （element番号の大きい順の数え方はこの GPU の通しでしか踏めない・tasks.md 7.4 の申し送り）
-//! - 箱の面は当たり判定を持たない
+//! - 箱の面の当たり判定は表示されている字の矩形の集まり（字の無い所は受けない・task 13）
 //! - 読み戻しで箱ごとに独立に文字が描かれ、背景は透明（絵を描かない）
 //! - 箱の位置が `(X + 領域の左, Y + 領域の上) × 拡大率`
 //! - 箱の束の差し替えで箱の面の entity が消える
@@ -37,8 +37,8 @@ use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::{
-    Arrangement, DPI, GraphicsCommandList, GraphicsCore, HitTest, VisualGraphics,
-    WucGraphicsResource,
+    AlphaMaskResource, Arrangement, DPI, GraphicsCommandList, GraphicsCore, HitTest,
+    VisualGraphics, WucGraphicsResource,
 };
 
 /// シェルの面の native 原寸（サーフェス 1000 の絵）。
@@ -225,6 +225,21 @@ fn read_back(rt: &TextLayerRuntime, place: &PlaceKey) -> Vec<u8> {
         .expect("read_back")
 }
 
+/// 箱の面の entity の当たりのマスクで「内」の画素の数と、(左上, 最後の行, 右上) の内外。
+fn mask_summary(world: &World, child: Entity) -> (usize, bool, bool, bool) {
+    let mask = world
+        .get::<AlphaMaskResource>(child)
+        .and_then(AlphaMaskResource::mask)
+        .expect("箱の面は当たりのマスクを持つ");
+    let (w, h) = (mask.width(), mask.height());
+    let inside = (0..h)
+        .flat_map(|y| (0..w).map(move |x| (x, y)))
+        .filter(|&(x, y)| mask.is_hit(x, y))
+        .count();
+    let last_row = (0..w).any(|x| mask.is_hit(x, h - 1));
+    (inside, mask.is_hit(1, 1), last_row, mask.is_hit(w - 1, 0))
+}
+
 fn children(world: &World, window: Entity) -> Vec<Entity> {
     world
         .get::<Children>(window)
@@ -237,7 +252,8 @@ fn children(world: &World, window: Entity) -> Vec<Entity> {
 // ══ 観測できる完了の姿 ══════════════════════════════════════════════════════════════
 
 /// 箱 2 つを持つスコープを提示すると、箱の面はシェルの窓の直接の子として
-/// 「差し込み口 → element番号の大きい箱 → 小さい箱 → 絵」に並び、当たり判定を持たず、
+/// 「差し込み口 → element番号の大きい箱 → 小さい箱 → 絵」に並び、表示されている字の矩形で
+/// ポインタを受け（字の無い所は受けない）、
 /// `(X + 領域の左, Y + 領域の上) × 拡大率` に置かれ、箱ごとに独立に透明な背景へ文字を描く。
 /// 箱の束を差し替えると箱の面の entity は消え、窓の子は差し込み口と絵だけに戻る。
 #[test]
@@ -286,12 +302,21 @@ fn boxes_attach_as_window_children_in_element_order_and_draw_independently() {
         "窓の子は 差し込み口 → element番号の大きい箱 → 小さい箱 → 絵"
     );
 
-    // ── 当たり判定なし（要件 9.4）・装着の構造 ──
+    // ── 当たり判定は表示されている字の矩形の集まり（要件 9.4・task 13）・装着の構造 ──
     for (name, child) in [("a", child_a), ("b", child_b)] {
         assert_eq!(
             world.get::<HitTest>(child).copied(),
-            Some(HitTest::none()),
-            "箱 {name} の面は当たり判定を持たない"
+            Some(HitTest::alpha_mask()),
+            "箱 {name} の面はマスク（字の矩形の集まり）で当たりを決める"
+        );
+        let (inside, first_glyph, last_row, top_right) = mask_summary(&world, child);
+        assert!(
+            inside > 0 && first_glyph,
+            "箱 {name}: 1 字目の矩形（面の左上）は受ける"
+        );
+        assert!(
+            !last_row && !top_right,
+            "箱 {name}: 1 行だけの短い文字の下と右の字の無い所は受けない"
         );
         assert!(
             world
@@ -349,8 +374,21 @@ fn boxes_attach_as_window_children_in_element_order_and_draw_independently() {
     }
 
     // ── 独立性: b への追記は a の面へ波及しない ──
+    let (inside_a, inside_b) = (
+        mask_summary(&world, child_a).0,
+        mask_summary(&world, child_b).0,
+    );
     rt.apply_cue(&cue(CueCommand::Text("ふむふむ".into())));
     present_frame(&mut rt, &mut world, LATE + 1.0).expect("追記後フレーム");
+    assert!(
+        mask_summary(&world, child_b).0 > inside_b,
+        "b の追記で b の字の矩形が増える"
+    );
+    assert_eq!(
+        mask_summary(&world, child_a).0,
+        inside_a,
+        "b の追記は a の字の矩形を変えない"
+    );
     assert!(
         opaque_count(&read_back(&rt, &box_b)) > opaque_count(&bytes_b),
         "b の追記で b のインクが増える"
