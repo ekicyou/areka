@@ -7,7 +7,7 @@
 - 2026-10-04、`areka-P0-mcp-log-history` の 2.3 のレビューで観測した。赤になった族: `ghost_session_switch_tests.rs`・`ghost_session_switch_fallback_tests.rs`・`shell_balloon_switch_session_update_tests.rs` ほか `crates/areka/src/ghost_session_*_tests.rs`・`shell_balloon_switch_session_*_tests.rs`。1 回目の全体で約 10 件、`ghost_session::` だけの回し直しで 5 件、組は 2 回とも違った。
 - 単独で回すと緑（`switch_to_self_takes_down_and_reboots_a`・`switch_translate_tests` など）。静かな時の `cargo test -p areka --bin areka ghost_session` は 41 件緑（104 秒）。`tools/test-all.ps1` の全体も緑。
 - 変更の差分（log の出口の付け替え）は単体テストが通らない `fn main()` だけで、原因ではない。
-- 疑い: 落ち着くのを待つテストが壁時計の締切（例: `ghost_session_restart_tests.rs` の 10 秒の deadline、`run_bounded(.., 20 秒)`）で待っており、負荷で締切を越える。**main で赤になった記録はまだ無い**（`zorder-chain-residue` の「先回りしない」と同じ形かは、まず再現してから決める）。
+- 疑い: 落ち着くのを待つテストが壁時計の締切（例: `ghost_session_restart_tests.rs` の 10 秒の deadline、`run_bounded(.., 20 秒)`）で待っており、負荷で締切を越える。**全体テストでの赤も 1 回記録がある**: 10-05、`host32-testdll-marker-race` の完了時の `tools/test-all.ps1` で `ghost_session::switch_tests::fallback_tests` の 2 本（`target_connect_fail_boots_default_with_halt_and_no_alert`・`sync_target_boot_failure_leaves_only_default_windows`）が「切替先の失敗で既定ゴーストへ戻らない」で赤（他のセッションの cargo と並走して x64 段が約 2 倍の 1,497 秒・直前に `target\nar-samples\work` の残骸の退避が os error 5・単独では 9 本すべて緑＝roadmap の覚え書き「一度だけ落ちた試験」）。os error 5 との関係も調べる。
 
 ## Desired Outcome
 - 負荷をかけた条件で赤を再現する手順が 1 つあり、どのテストがどの待ちで落ちるかが分かっている。
