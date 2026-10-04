@@ -169,3 +169,106 @@ unload は製品の 1 か所、`ShioriByteProxy` の Drop の定義（後片付�
 5. 新しく足すテスト（赤のテストや字面の検査）を、今ある `mod tests` に入れるか、兄弟のファイルに出すか。兄弟のファイルが一時フォルダを作るなら、一時パスの見張りの表（範囲外の `log-capture-kit`）に 1 行足すことになる。
 6. 案 B を採るなら: 偽の DLL の `Cargo.toml` に機能を 1 つ足すのを、触ってよいファイルに入れるか（brief の一覧の外）。7 節の要調査 1 を設計で確かめる。
 7. 開発者の方針との照合（要件の議論で追記）: 方針は 2 つとも案 B 寄りである。1 つ目は「根本が 1 か所で直るなら、境界を少し広げてでもそこを直す」。揺れの根本は「どの写しの DLL も、プロセス全体の 1 つの印の置き場へ書く」ことで、案 B はそこを直す。案 A は錠でテストを並べる約束の側で抑える。2 つ目は「報告を読むだけでは原因の実在を判断できないときは、赤のテストを立てる」。案 B なら要件 3.2 の赤→緑のテストを作れる。案 B の不安は 7 節の要調査 1 と、`Cargo.toml` が brief の一覧の外にあること（同じウェーブの他の spec がこのファイルに触らないかを設計で照合する）。
+
+---
+
+# 設計フェーズの調査と決定（2026-10-04）
+
+- 調査の深さ: 軽い調査（今ある仕組みの延長。新しいクレートなし）。外の文書は Microsoft の 4 ページだけを引いた。
+- 要点:
+  - 7 節の要調査 1（同じ名前の DLL を別のフォルダから絶対パスで読むと別々のモジュールになるか）は、Microsoft の文書で「なる」と確かめた。案 B の前提は成り立つ。
+  - 直し方は案 B（偽の DLL が、自分の置き場と同じフォルダの印だけを書く）に決めた。
+  - 同じウェーブ C3 のほかの 10 本は、偽の DLL のクレートにも補助 exe のテストにも触らない。
+
+## 10. 調査の記録
+
+### 10.1 同じ名前の DLL を絶対パスで読むと別のモジュールになるか（7 節の要調査 1）
+
+- きっかけ: 案 B は「写しごとに別のモジュールとして読まれ、自分のパスを引くと自分の写しのパスが返る」ことが前提。
+- 引いた文書と、決め手の文:
+  - LoadLibraryW（引数の説明）: "If the string specifies a full path, the function searches only that path for the module." ＝絶対パスなら、そのパスだけを探す。
+  - LoadLibraryW（Remarks）: "If lpFileName does not include a path and there is more than one loaded module with the same base name and extension, the function returns a handle to the module that was loaded first." および "When no path is specified, the function searches for loaded modules whose base name matches the base name of the module to be loaded." ＝「すでに読んである同じ名前のモジュールを使う」のはパスを省いたときだけ。また、同じ名前のモジュールが同時に複数読まれている状態を文書が前提にしている。
+  - DLL の検索の順（Dynamic-link library search order）: 冒頭 "You can control the specific location from which any given DLL is loaded by specifying a full path. But if you don't use that method, then the system searches for the DLL at load time as described in this topic." ＝「読み込み済みのモジュールの一覧」を見る手順は、絶対パスを渡さないときの検索の一部。
+  - GetModuleHandleExW: `GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS` は "The lpModuleName parameter is an address in the module."。Remarks は、同じ名前のモジュールが複数あるとき名前では引けないので "specify a memory location rather than a DLL name" と勧める。`GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT` は参照数を増やさない（得たモジュールを `FreeLibrary` へ渡してはいけない）。
+  - GetModuleFileNameW: "Retrieves the fully qualified path for the file that contains the specified module." と "The string returned will use the same format that was specified when the module was loaded. Therefore, the path can be a long or short file name"。置き場が足りないときは切り詰めて、置き場の長さを返す。
+- コードの側の裏付け: `ShioriByteProxy::load` の手順 1 は、受け取った絶対パスをそのまま `LoadLibraryW` へ渡す（`load_library_quiet`）。偽の DLL を load する 3 本のテストは、どれも自分の一時フォルダへ写した `shiori.dll` の絶対パスを渡す。
+- 当てはまらない注意書き: LoadLibraryW の「リダイレクトのファイルがあると、アプリのフォルダの同名の DLL を優先する」は、テストの exe のそばにリダイレクトのファイルも `shiori.dll` も置かないので当たらない。
+- 設計への意味:
+  - 案 B の前提は成り立つ。自分のモジュールは、名前でなく DLL の中のアドレスから引く。
+  - 返るパスは読んだときの書き方のままなので、文字の並びでは比べず、`std::fs::canonicalize` で両方をそろえてから比べる。
+  - 文書の確認に加えて、足す 1 本のテストが「1 つ目の写しを読んだまま 2 つ目の写しを読む」形で、この前提を実走で確かめる。前提が崩れていれば、そのテストが必ず赤になる（揺れにはならない）。
+
+### 10.2 同じウェーブの他の spec との重なり
+
+- 見たもの: `.kiro/steering/roadmap.md` のウェーブ C3 の行（11 本の「触るファイル」）、`.kiro/specs/*/brief.md` のうち偽の DLL に言及するもの。
+- 結果:
+  - C3 の ②〜⑪ の「触るファイル」に、`crates/shiori-host32-testdll/`・`crates/shiori-host32-helper/` は出てこない。
+  - 偽の DLL に言及する brief は `makoto-dll-host`・`property-ipc-transport`・`mcp-stdio-bridge`・`release-code-signing` の 4 本で、どれも C3 に居ない。
+  - 「依存を足す spec は 1 ウェーブに 1 本」の席（C3 は `animated-image-decode`）とはぶつからない。足すのは今ある `windows` クレートの機能 1 つで、`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md` は変わらない（`Cargo.lock` は機能の一覧を持たない。`windows` 0.62.2 は 1 つだけ載っており、補助 exe が同じ機能をすでに使っている）。
+- 設計への意味: `crates/shiori-host32-testdll/Cargo.toml` に 1 行足しても、並走の約束を破らない。roadmap の C3-① の「触るファイル」の書き方（補助 exe のテストだけ）とは違うので、設計の議論で開発者に見せる。
+
+### 10.3 見張りとの関係
+
+- 一時パスの見張り（`crates/log-capture-kit/tests/temp_path_guard_test.rs`）はファイル単位の例外表。`shiori_proxy.rs` は「プロセス識別子で一意化済み」で載っている。足すテストは OS の一時フォルダの入口を呼ばず、ワークスペースの `target\` の下にフォルダを作るので、表は変えずに済む。既存の 2 本の入口の呼び出しは残るので、「表に載ったファイルに当たりが無い」の赤にもならない。
+- 偽の DLL の `lib.rs` は表に載っていない。偽の DLL の側にフォルダを作る単体テストを足すと表に行が要るので、足さない。
+
+## 11. 設計の決定
+
+### 決定 1: 直し方は案 B
+
+- 背景: 9 節の 1・7。
+- 比べた案: A（錠を 3 本で共有）／B（偽の DLL が自分の置き場と同じフォルダの印だけ書く）／C（両方）／B の変形 1（load で受け取ったフォルダを覚える）／B の変形 2（環境変数は旗だけ・いつも自分のフォルダへ書く）。
+- 選んだもの: B。
+- 理由:
+  - 揺れの根は「どの写しも 1 つの置き場へ書く」こと。B はそこを 1 か所で直す。A は、約束を守らなかった 1 本を約束の中へ入れ直すだけで、次に足す人がまた外せる。
+  - B なら、直す前は赤・直した後は緑のテストを時間待ちなしで作れる（要件 3.2）。A では作れない（6 節）。
+  - 開発者の方針 2 つ（根本が 1 か所なら境界を少し広げてでも直す／読むだけで実在を判断できないなら赤を立てる）と合う。
+- 代わりに払うもの: 触るファイルが 1 つ増える（偽の DLL の `Cargo.toml`）。偽の DLL に Win32 の呼び出しが 2 つ増える（環境変数に値があるときだけ走る）。
+- 採らなかった理由:
+  - C: B だけで止まる。loopback のテストを直列にする時間と、約束が 1 つ増える。
+  - 変形 1: load の入口は既定コードページのバイト列でフォルダを受けるので、偽の DLL に文字コードの変換が要る。
+  - 変形 2: 環境変数の意味が変わる。x64 側を含め、unload のたびに DLL のフォルダへファイルができる。直す前のテストが「機能がまだ無い」で赤になり、競合の経路を示す赤にならない。
+- 実装で確かめること: 足す 1 本のテストの赤と緑。
+
+### 決定 2: 証拠の形は赤→緑のテスト 1 本（9 節の 2）
+
+- 手順は design.md の「Testing Strategy」。1 つ目の写しを読んだまま 2 つ目を読んで drop する形にして、決定 1 の前提（別のモジュールとして読まれる）も同じテストで確かめる。
+- 字面の検査（「load するテストは錠を取っている」）は足さない。案 B では錠が揺れを止める仕組みでなくなる。
+
+### 決定 3: 錠は残し、役目を「環境変数を差すテストの直列化」に変える（9 節の 3 の置き換え）
+
+- 環境変数はプロセスに 1 つなので、差すテスト同士（印のテストと足す 1 本）は直列が要る。
+- 錠の置き場は今のまま（`shiori_proxy.rs` の `mod tests`）。loopback のテストから届く場所へ移す必要はない。名前は `MARKER_ENV_SERIAL` に変える。
+- 往復のテストは錠を外す。決まりを「環境変数を差すテストだけが取る」の 1 行にするため。外さなくても揺れは止まるので、開発者が残す方を選べば説明の 1 行を変えるだけで済む。
+
+### 決定 4: 落ちたときの片付け役は足さない（9 節の 4）
+
+- 印のテストが落ちて環境変数が差したまま残っても、ほかの写しの unload は置き場が違うので書かない。次に差すテストは自分の値で上書きする。別のテストの赤にはつながらない。
+
+### 決定 5: 足すテストは今ある `mod tests` に入れる（9 節の 5）
+
+- `structure.md` の決まりは新しいテストのモジュールが対象。足すのは今あるモジュールへの 1 本で、非公開の `resolve_testdll` と錠をそのまま使える。
+- フォルダはワークスペースの `target\` の下に作る（開発者の決まり「一時フォルダはワークツリーの `target\` の下」）。既存の 2 本の置き場は変えない。
+
+### 決定 6: 偽の DLL の `Cargo.toml` に機能を 1 行足す（9 節の 6）
+
+- 10.2 のとおり、同じウェーブの約束とぶつからない。手書きの外部関数の宣言で `Cargo.toml` を避ける手は採らない（`windows` クレートに同じものがある）。
+
+### まとめ直し（設計の 3 つの見方）
+
+- 一般化: 要件 1・3・6 は「印の宛先を書く側が判定する」1 つの仕組みで同時に満たせる。テストの側の約束は「環境変数を差すなら錠」の 1 つに減る。
+- 作るか借りるか: 自分のパスを引くのは OS の関数 2 つ、パスをそろえるのは標準ライブラリ。自作はフォルダの比較の数行だけ。
+- 削ったもの: loopback のテストの変更、錠の移し替え、`resolve_testdll` の一本化、落ちたときの片付け役、偽の DLL の単体テスト、字面の検査。
+
+## 12. 危うさと手当て
+
+- 判定が誤って「違う」に倒れる（パスのそろえ方の不備）: 印のテストが毎回赤になるので実装の時点で見つかる。標準エラーの 1 行が手がかり。
+- 偽の DLL を直した後に i686 の成果物を作り直さず、古い DLL で回す: 赤・緑の記録が嘘になる。実装の順に「作り直す」を明記した。
+- roadmap の C3-① の「触るファイル」と違う（偽の DLL の `Cargo.toml`）: 設計の議論で開発者に見せる。
+
+## 13. 引いた文書
+
+- [LoadLibraryW](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryw) — 絶対パスならそのパスだけを探す。同じ名前のモジュールの使い回しはパスを省いたときだけ
+- [Dynamic-link library search order](https://learn.microsoft.com/en-us/windows/win32/dlls/dynamic-link-library-search-order) — 検索の手順（読み込み済みの一覧を含む）は絶対パスを渡さないときのもの
+- [GetModuleHandleExW](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandleexw) — アドレスからモジュールを引く。参照数を変えない旗
+- [GetModuleFileNameW](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulefilenamew) — モジュールの完全なパス。書き方は読んだときのまま。切り詰めの返り値
