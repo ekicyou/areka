@@ -74,7 +74,7 @@ ukadoc が書いていないこと（本 spec が決める）は次の 4 点で�
 #### Acceptance Criteria
 
 1. While 書庫の `type` が `ghost` または `shell` である, the NAR エンジン shall 同時インストールのバルーンを、無印（`balloon`）→ `balloon0` → `balloon1` → `balloon2` … の順に探す。
-2. The NAR エンジン shall バルーンを「見つかった」とみなすのを、その接頭辞の `*.directory` の行（無印なら `balloon.directory`、番号 N なら `balloonN.directory`）が書かれているときに限る。
+2. The NAR エンジン shall バルーンを「見つかった」とみなすのを、その接頭辞の `*.directory` の行（無印なら `balloon.directory`、番号 N なら `balloonN.directory`）が書かれているときに限る。値が空でも行が在れば「見つかった」とし、今どおり Requirement 5 の検査でインストール全体を断る（空の値の扱いは変更 0）。
 3. When 番号 N のバルーンが見つからなかったとき, the NAR エンジン shall そこで探索を打ち切り、N より大きい番号のバルーンを入れない（例: `balloon0` と `balloon2` だけが書かれていれば、入るのは `balloon0` だけ）。
 4. When 無印のバルーンが見つからなかったとき, the NAR エンジン shall 打ち切らずに `balloon0` から探索を続ける。
 5. When 無印と `balloon0` の両方が見つかったとき, the NAR エンジン shall 両方を別のバルーンとして入れる。
@@ -93,11 +93,12 @@ ukadoc が書いていないこと（本 spec が決める）は次の 4 点で�
 1. When 同梱のバルーンの `*.source.directory` の値が `\` または `/` を含むとき, the NAR エンジン shall その値を、`\` と `/` のどちらでも区切る書庫の中の相対パスとして読み、そのことを理由にインストール全体を断らない。
 2. When 取り出し元が 2 段以上の相対パスであるとき, the NAR エンジン shall 書庫の中でそのパスの配下に在るファイルとフォルダを、そのパスの全段を剥がした相対の位置のまま、バルーンの置き場の宛先のフォルダ（`<根>/balloon/<宛先のフォルダ名>/`）へ置く。
 3. The NAR エンジン shall 取り出し元のパスの各段を、今の 1 階層の取り出し元と同じく、ASCII の大小を無視して書庫の中の名前と突き合わせる。
-4. The NAR エンジン shall 取り出し元のパスの配下に在るファイルとフォルダを本体の側に置かず、配下でないもの（例: 取り出し元が `extra/bal1` のときの `extra/readme.txt`）を今どおり本体の側に置く。
+4. The NAR エンジン shall 取り出し元のパスの配下に在るファイルとフォルダを本体の側に置かず、配下でないもの（例: 取り出し元が `extra/bal1` のときの `extra/readme.txt`）を今どおり本体の側に置く。取り出し元の途中のフォルダ（例の `extra/`）は、その配下に本体の側へ置くものが 1 つも無ければ本体の側に作らない（書庫がフォルダのエントリを持つかどうかで結果を変えない）。
 5. If 取り出し元のパスの配下に、書庫のファイルもフォルダも 1 つも無いとき, then the NAR エンジン shall 今どおりインストール全体を断り、理由に鍵と取り出し元の値を載せる。
 6. When `*.source.directory` の行が無い、または値が空であるとき, the NAR エンジン shall 宛先のフォルダ名（Requirement 4 の置き換えの後の名前）を取り出し元とする。
 7. When インストールの手続きが同梱のバルーンの取り出し元の中の利用条件（`terms.txt`／`terms.md`）を調べるとき, the areka shall 取り出し元が階層付きでも、1 階層のときと同じく取り出し元のフォルダの直下で探し、出さずに記録する。
 8. When 検体をインストール済みの形へ畳む開発用の道具が、階層付きの取り出し元を持つ検体を畳むとき, the 開発用の道具 shall インストールと同じ置き場所（2 項・4 項）へ置く。
+9. When 2 つの同梱の取り出し元が重なるとき（例: `extra` と `extra/bal1`）, the NAR エンジン shall それぞれの同梱に、自分の取り出し元の配下の全てを置く（今の「同じ取り出し元を 2 つの同梱が指す」場合と同じく、重なった部分は両方へ入る）。
 
 ### Requirement 3: `*.source.directory` の `..` と空の段を取り除く
 
@@ -118,7 +119,7 @@ ukadoc が書いていないこと（本 spec が決める）は次の 4 点で�
 
 1. When 同梱のバルーンの `*.directory` の値が `\` または `/` を含むとき, the NAR エンジン shall 区切りの 1 文字ごとに `_` の 1 文字へ置き換えた名前を宛先のフォルダ名とし、そのことを理由にインストール全体を断らない（例: `extra\bal1` は `extra_bal1`）。
 2. The NAR エンジン shall 置き換えた後の名前を、「何をインストールしたか」の列に載せる名前にも使う。
-3. The NAR エンジン shall `*.directory` の値から `..` を取り除く読み替えを行わない（ukadoc が `*.directory` に書くのは区切りの置き換えだけ。`..` を含む値は Requirement 5 の検査で今どおり断られる）。
+3. The NAR エンジン shall `*.directory` の値から `..` を取り除く読み替えを行わない（ukadoc が `*.directory` に書くのは区切りの置き換えだけ）。値が `..` そのものなら Requirement 5 の検査で今どおり断り、`..` と区切りが混じる値は置き換えた後の名前で入れる（例: `../escape` は `.._escape`。1 階層の名前なので宛先はバルーンの置き場の外へ出ない）。
 4. The areka shall `*.directory` の値を宛先のフォルダ名へ読み替える規則を 1 つだけ持ち、起動時に `install.txt` から同梱のバルーンの名前を引く側が、同じ規則をそのまま使えるようにする。
 5. The areka shall 本 spec では、起動時にどのバルーンを使うかの決め方を変えない（変更 0）。
 
@@ -146,8 +147,8 @@ ukadoc が書いていないこと（本 spec が決める）は次の 4 点で�
 1. When `*.directory` の区切りの置き換えで値が変わったとき, the NAR エンジン shall 鍵ごとに 1 件、鍵・書かれていた値・置き換えた後の値を記録する。
 2. When `*.source.directory` の `..` または空の段の取り除きで、段の並びが書かれていた値と変わったとき, the NAR エンジン shall 鍵ごとに 1 件、鍵・書かれていた値・取り除いた後の値を記録する。
 3. The NAR エンジン shall `*.source.directory` の区切りが `\` か `/` かだけの違い（段の並びは同じ）を、読み替えとして記録しない（記録 0 件）。
-4. If 探索で入れなかった同梱のバルーンの鍵（打ち切りの後ろの番号の鍵・先頭に 0 を付けた綴りの鍵）が書かれているとき, then the NAR エンジン shall その鍵ごとに 1 件、「探索で読まなかった」ことを、知らない鍵の読み飛ばしと区別できる形で記録し、本体と他の同梱のインストールは続ける。
-5. If 接頭辞の `*.directory` の行が無い同梱の鍵（Requirement 1 の 9 項）が書かれているとき, then the NAR エンジン shall その鍵を今どおり読み飛ばして、鍵ごとに 1 件記録する。
+4. If 探索で入れなかった同梱のバルーンの鍵（打ち切りの後ろの番号の鍵・先頭に 0 を付けた綴りの鍵）が書かれていて、その接頭辞の `*.directory` の行が在るとき, then the NAR エンジン shall その接頭辞の鍵ごとに 1 件、「探索で読まなかった」ことを、知らない鍵の読み飛ばしと区別できる形で記録し、本体と他の同梱のインストールは続ける。
+5. If 接頭辞の `*.directory` の行が無い同梱の鍵（Requirement 1 の 9 項）が書かれているとき, then the NAR エンジン shall その鍵を今どおり読み飛ばして、鍵ごとに 1 件記録する（打ち切りの後ろの番号や先頭に 0 を付けた綴りであっても、4 項ではなく本項の記録にする）。
 6. The NAR エンジン shall 1 つの鍵から出す記録を最大 1 件とする。
 7. The NAR エンジン shall 同じ `install.txt` からは、同じ同梱の列と同じ記録の列（件数と並び）を必ず返す。
 8. When インストールが終わったとき, the areka shall 本要件の記録を、今の読み飛ばしの記録と同じくログに 1 件ずつ警告として出す。
@@ -161,8 +162,9 @@ ukadoc が書いていないこと（本 spec が決める）は次の 4 点で�
 
 1. The `doc/COMPAT_ARCHITECTURE.md` §8 shall 完了 `areka-P0-nar-install` の要件 3.9（同梱の `*.directory`・`*.source.directory` を 1 階層の名前に限る）と要件 3.12（`balloonN` の N は 0 以上の整数をすべて読む）の読み方を、本 spec が上書きしたことを記す。
 2. The `doc/COMPAT_ARCHITECTURE.md` §8 shall ukadoc が書いていない点で本 spec が決めたこと（「見つかった」の判定は `*.directory` の行・先頭に 0 を付けた番号は数えない・取り除いた後に段が残らない取り出し元は断る・`*.source.directory` が無いときの取り出し元は置き換えた後の名前・SSP 2.9.00 以降の形を採る・`type` が `ghost`／`shell` 以外の書庫の同梱は読まないまま）を記す。
-3. The 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` shall `descript_install` の `*.directory` と `*.source.directory` の 2 行で、本 spec の後の読み方と記録の仕方を述べる。
-4. The 網羅台帳 shall 3 項の 2 行のほかの行を、本 spec では変えない（変更 0）。
+3. The `doc/COMPAT_ARCHITECTURE.md` §8 shall `areka-P0-ghost-standard-balloon` が着地するまで、区切りを含む `balloon.directory` のゴーストは置き換えた後の名前で入るが、起動の側は置き換えずに探すので同梱のバルーンが選ばれないこと（今は書庫ごと断られるので、悪くなる書庫は 0）を記す。
+4. The 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` shall `descript_install` の `*.directory` と `*.source.directory` の 2 行で、本 spec の後の読み方と記録の仕方を述べる。
+5. The 網羅台帳 shall 4 項の 2 行のほかの行を、本 spec では変えない（変更 0）。
 
 ### Requirement 8: 決定論の自動テスト
 
@@ -182,10 +184,12 @@ ukadoc が書いていないこと（本 spec が決める）は次の 4 点で�
    - `..` と空の段の取り除き
    - 取り除いた後に段が残らない場合
    - `*.directory` の区切りの置き換え
+   - `*.directory` に `..` と区切りが混じる場合（`../escape`）
+   - 取り出し元が重なる 2 つの同梱と、取り出し元の途中のフォルダ
    - `*.source.directory` を省略して `*.directory` に区切りがある場合の取り出し元
    - 置き換えた結果が予約名になる場合と、長すぎる名前になる場合
    - 本体の `directory` に区切りがある場合（今どおり断る）
 2. The 自動テスト shall 各場面で、置かれたファイルとフォルダの全てが根の中の宛先の配下に在ること、「何をインストールしたか」の列の並び、記録の件数と中身を確かめる。
-3. The 自動テスト shall 知らせの並び（`OnInstallComplete` の Reference2 と `OnInstallCompleteEx` の各 Reference）が探索の順になることを、番号が 10 以上の同梱を持つ書庫で確かめる。
+3. The 自動テスト shall 「何をインストールしたか」の列が探索の順になることを、番号が 10 以上の同梱を持つ書庫で確かめる。この列から知らせ（`OnInstallComplete` の Reference2 と `OnInstallCompleteEx` の各 Reference）への写しは、インストールの手続きの既存のテストが順を保つことを確かめているので、本 spec では足さない（手続きの側は変更 0）。
 4. The 自動テスト shall 階層付きの取り出し元の直下の利用条件が見つかること（Requirement 2 の 7 項）を確かめる。
 5. The 自動テスト shall 検体と一時フォルダをワークツリーの `target\` の下だけに作る。
