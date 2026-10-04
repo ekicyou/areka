@@ -29,7 +29,7 @@
   - 完了の状態: テスト全体が緑で clippy の警告が 0。`git diff --stat main...HEAD -- crates` に 3 つのファイルだけが出る
   - _Requirements: 4.4, 5.1, 5.3, 5.5_
 
-- [ ] 4. 実機で `get_property` を確かめ、記録を残す
+- [x] 4. 実機で `get_property` を確かめ、記録を残す
   - タスク 2.2 の後のコードで配布形を作り直す（古い配布形を使わない）。design.md の「実機確認」の手順どおり、配布形をワークツリーの `target\` の下へ展開し、有界の自動終了つきで emo2 を起こす。SSP が動いていても止めない。自分が起こしていないプロセスは止めない
   - 記録の行から実際の待受の URL を読み、会話が始まった後に ⑴ `baseware.name`・⑵ 値の無い名前・⑶ `get_active_ghost_list` の答えを `ghost_name` に渡した `baseware.name` を呼ぶ
   - 完了の状態: `verification/signoff.md` に ⑴ `areka`・`isError: false`、⑵ `NG:Cannot find such property name.`・`isError: true`、⑶ の呼び方と答え、各呼び出しの「ツールに答えた」の記録 1 件ずつ、`ERROR` の段 0 件が残っている
