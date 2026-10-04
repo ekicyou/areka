@@ -254,6 +254,12 @@ impl Emo2Wiring {
         &self.presenter
     }
 
+    /// 装着の相（`run_attach_phase`）が済んだか。済む前は表示の層に target が 1 つも無い
+    /// （MCP の `dump_surface`／`dump_balloon` が、済むまで答えを後回しにするのに読む）。
+    pub(crate) fn attached(&self) -> bool {
+        self.attached
+    }
+
     /// 文字層 runtime への共有ハンドル読み口（design「アクセサ（emo2_boot/frame.rs）」・
     /// `Emo2Wiring::runtime()`・Req 4.1）。
     ///
