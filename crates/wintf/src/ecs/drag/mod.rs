@@ -8,6 +8,7 @@ mod accumulator;
 mod capture_guard;
 mod context;
 mod dispatch;
+mod reentry;
 mod state;
 mod systems;
 
@@ -19,6 +20,7 @@ pub use context::{WindowDragContext, WindowDragContextResource};
 pub use dispatch::{
     DragEndEvent, DragEvent, DragStartEvent, OnDrag, OnDragEnd, OnDragStart, dispatch_drag_events,
 };
+pub(crate) use reentry::handle_message_while_world_busy;
 pub use state::{
     DragClose, DragState, DragStateSnapshot, cancel_dragging, cancel_dragging_on_capture_lost,
     check_threshold, end_dragging, end_dragging_on_release, read_drag_state, snapshot_drag_state,
