@@ -470,13 +470,6 @@ impl LoopRuntime {
     /// 刻みが 1 度も来ていなければ時計が無く、部品のコマも無い。
     ///
     /// [`PatternState`]: areka_emo_compose::PatternState
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "tasks.md 7.5 で actor の切り替え・着せ替えの変化からつなぐまで本番から呼ばれない"
-        )
-    )]
     pub(crate) fn refresh_parts(
         &mut self,
         scope: &ActorKey,

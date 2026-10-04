@@ -522,6 +522,11 @@ fn handle_message<O: SurfaceOutput>(
                     };
                     match outcome {
                         BindApplyOutcome::Changed(command) => {
+                            // 部品のコマを新しい着せ替えで載せ直した Show があればそれを、無ければ
+                            // apply の指令を 1 件だけ出す（spec: areka-P0-surface-element-nesting 要件 5.12）。
+                            let command = loop_runtime
+                                .refresh_parts(&cue.actor, states)
+                                .unwrap_or(command);
                             emit_display(out, command); // 単一発行点（R3.5）
                             // 実機サインオフの grep マーカー（R7.1・有界 auto-exit＋ログ grep 流儀）。
                             tracing::info!(
@@ -624,10 +629,15 @@ fn handle_message<O: SurfaceOutput>(
 
     // 状態更新（2.2）＋発行（2.3）: 状態が実際に変化したときだけ単一発行点から発行する（冪等ガード）。
     if let ApplyOutcome::Changed(command) = states.apply(&cue.actor, target) {
-        emit_display(out, command);
         // シェル面切替／Hide でループ再生をリセット（当該 slot の playback 全除去・R2.3 表示従属）。
-        // PatternState クリアは apply の責務、playback クリアはループ統括器の責務。
+        // PatternState クリアは apply の責務、playback クリアはループ統括器の責務。部品の時計は捨てない。
         loop_runtime.on_surface_changed(&cue.actor, Slot::Shell);
+        // 部品のコマが在ればそれを載せた Show に差し替えて、切り替えの発行は 1 件だけ
+        // （spec: areka-P0-surface-element-nesting 要件 5.6・5.9）。
+        let command = loop_runtime
+            .refresh_parts(&cue.actor, states)
+            .unwrap_or(command);
+        emit_display(out, command);
     }
 
     ControlFlow::Continue(())
@@ -639,6 +649,9 @@ mod bind_loop_tests;
 #[cfg(test)]
 #[path = "actor_dispatch_tests.rs"]
 mod dispatch_tests;
+#[cfg(test)]
+#[path = "actor_parts_tests.rs"]
+mod parts_tests;
 #[cfg(test)]
 #[path = "actor_replace_tests.rs"]
 mod replace_tests;
