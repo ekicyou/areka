@@ -290,3 +290,40 @@
 - 2・3（`\s` が先）・4 は「前の絵の上に新しい置き場所の文字が出る／窓が先に出る」ずれ（`\s` を受け取った時点で箱の同期と窓に出す文字の数が面 10 へ動く）。
 - 2 では、コードの読みでは同じフレームに空の組も届く（`\s` の受け取りで写しが刈られ、可視性の相の届けが空を見る）が、先に `Look` の判定で落ちるので組の判定までは走っていない（実測していない）。組の判定はそれぞれの `Look` の判定の直後に置いてあり、置き場所の判定が直った後も 1 フレームの空の組が残れば、そこで落ちる。
 - 5 は普通のバルーンを一度出して隠した後（表示層の番号が `None`）に箱だけの組を届ける場面で、警告の段の行が 1 件出ることで落ちる。組の判定（`(0, 0)` が 1 度）は警告の判定の後にあるので、直す前のコードでは走っていない。
+
+# 仕上げの確かめ（タスク 5.1・2026-10-05）
+
+- 確かめたコミット: `adaa6837`（タスク 4.2 まで）。比べた基準は実装を始める前の `2299fe3e`。
+
+## 箱の部品が `\s` の番号を読まない（要件 1.6）
+
+- `grep -c current_surface crates/areka-emo-text/src/actor_box.rs` → **0**。
+- 較正: 同じ検索を `git show 2299fe3e:crates/areka-emo-text/src/actor_box.rs` にかけると **3**（箱の同期・写し・窓に出す文字の数の 3 か所）。検索そのものは当たる。
+
+## 触らない約束のファイル（要件 1.7・4.5）
+
+`git ls-files <path>`（実在の数）と `git diff 2299fe3e..HEAD -- <path> | wc -l`（差分の行数）。行き先の部品 `route_surface` は `state_route.rs` にある。
+
+| パス | ls-files | 差分の行数 |
+|------|----------|------------|
+| `crates/areka/src/input_events/` | 26 | 0 |
+| `crates/areka/src/emo2_boot/frame/attach.rs` | 1 | 0 |
+| `crates/areka/src/emo2_boot/frame/switch.rs` | 1 | 0 |
+| `crates/areka/src/emo2_boot/spine.rs` | 1 | 0 |
+| `crates/areka-emo-present/` | 60 | 0 |
+| `crates/areka-emo-text/src/state_route.rs` | 1 | 0 |
+| `crates/areka/src/emo2_boot/balloon_visibility_decision.rs` | 1 | 0 |
+| `crates/areka/src/emo2_boot/frame_visibility_integration_tests.rs` | 1 | 0 |
+| `crates/areka/src/emo2_boot/balloon_visibility_phase_tests.rs` | 1 | 0 |
+| `crates/areka/src/emo2_boot/frame/wiring.rs` | 1 | 24（説明文だけ） |
+
+- `wiring.rs` の差分は `Emo2Wiring` の説明文 2 か所（設計討議 議題 2 の例外）。変わった行から `//` で始まる行を除くと 0 行＝コードは変えていない。差分のある `wiring.rs` が 24 行を返すことが、差分の数え方の較正にもなる。
+
+## テスト全体（要件 4.5）
+
+- `cargo test -j 2 -p areka-emo-text` → 19 本のテストの組で **1022 passed・0 failed・2 ignored**。1 回目はサンプル `emo-text-typewriter-demo` の組み立てで rustc の内部エラー（`no resolution for an import`・`wintf` の import）が出て落ちた。サンプルも wintf も本 spec では変えていない。作り直しで消えた（組み立ての成果物の傷みと読む）。
+- `cargo test -j 2 -p areka --bin areka` → **2524 passed・4 failed・2 ignored**。落ちた 4 本は `install::desk::overwrite_tests` の 3 本と `ghost_session::switch_translate_tests` の 1 本。どれも `spin_wait_until`（壁時計で 30 秒）の期限切れ。
+  - 本 spec はこの 2 つのテストのファイルも、その足場（`ghost_switch_test_support.rs`）も変えていない（差分 0）。足場は `Input` の段と終了の相だけを回し、本 spec が変えたフレームの相（届けの相・可視性の相・文字層の拡大率の相）は走らない。
+  - 2 つのモジュールだけを並列で回し直すと、落ちたのは別の 2 本（`overwriting_the_running_ghost_...` と `a_failed_commit_...`）で、落ちる顔ぶれが毎回違う。`--test-threads=1` で回すと **8 passed・0 failed**。機械の負荷で期限を越える揺れで、本 spec の変更とは関わらない。
+- 普通のバルーンだけを使う既存の檻: `frame::visibility_integration_tests` の直下 6 本・`balloon_visibility::phase::tests` の 15 本が全部 ok。どちらのファイルも差分 0（期待値は変えていない）。子の `shell_box_integration_tests` 11 本（本 spec の枠の檻を含む）も全部 ok。
+- `cargo fmt --all -- --check` → 終了コード 0。`cargo build -j 2 -p areka` → warning 0 件。
