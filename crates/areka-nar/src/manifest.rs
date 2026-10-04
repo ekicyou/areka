@@ -26,14 +26,16 @@
 //!
 //! 同じ `install.txt` からは必ず同じ列が出る。⑴ 本体の再インストール →
 //! ⑵ キーの名前順の読み飛ばし（探索で読まなかった同時インストールの鍵もここ）→
-//! ⑶ 同時インストールごとの記録（探索の順）、の 3 段。1 件のキーからは最大
-//! 1 件の警告しか出さない。
+//! ⑶ 同時インストールごとの記録（探索の順・1 体の中は取り除き → マスク）、
+//! の 3 段。1 件のキーからは最大 1 件の警告しか出さない。
 //!
 //! 本モジュールは宛先を受け取らず、ファイルシステムを変える呼び出しを 1 つも
 //! 持たない（兄弟テストが字面で見張る）。
 
 use crate::error::{ManifestWarning, RefuseReason};
-use crate::names::{EntryName, bounded_value, is_valid_one_level_name};
+use crate::names::{
+    EntryName, MAX_ENTRY_PATH_UTF16, bounded_value, is_valid_one_level_name, utf16_len,
+};
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::kv::parse_kv;
 use std::collections::{BTreeMap, BTreeSet};
@@ -108,7 +110,8 @@ pub struct Companion {
     pub key: String,
     /// 宛先 `<根>/balloon/<directory>/`。
     pub directory: String,
-    /// アーカイブ内の取り出し元フォルダ名。
+    /// 書庫の中の取り出し元。`/` で区切った 1 段以上の相対パスで、各段は 1 階層の
+    /// 名前。`..`・空の段・`\` を含まない。
     pub source_directory: String,
     pub existing: ExistingPolicy,
 }
@@ -425,8 +428,10 @@ fn collect_companions(
         check_one_level(&format!("{prefix}.directory"), &directory)?;
         let source_key = format!("{prefix}.source.directory");
         // `*.source.directory` が無い（または空）なら宛先と同じ名前を取り出し元にする。
-        let source_directory = non_empty(keys, &source_key).unwrap_or_else(|| directory.clone());
-        check_one_level(&source_key, &source_directory)?;
+        let source_directory = match non_empty(keys, &source_key) {
+            Some(written) => read_source_directory(&source_key, &written, warnings)?,
+            None => directory.clone(),
+        };
         let existing = existing_policy(keys, &format!("{prefix}."), warnings);
         companions.push(Companion {
             key: prefix,
@@ -436,6 +441,45 @@ fn collect_companions(
         });
     }
     Ok(companions)
+}
+
+/// `*.source.directory` に書かれていた値を、書庫の中の `/` 区切りの相対パスへ読む
+/// （要件 2.1・3.1〜3.4・5.3・5.4・6.1・6.2）。
+///
+/// `written` は空でない値（空と行なしは呼び手が宛先の名前に倒す）。`\` と `/` の
+/// どちらでも分け、空の段と `..` の段を落とす。`..` は手前の段を打ち消さない
+/// （`extra/../bal1` は `extra/bal1`）。打ち消すと、書かれていない段を書庫から
+/// 選ぶことになる。落とした後の値にも今の検査を掛け、断るときの理由には書かれて
+/// いた値を載せる。段を 1 つでも落としたときだけ記録し、区切りの違いは記録しない。
+fn read_source_directory(
+    key: &str,
+    written: &str,
+    warnings: &mut Vec<ManifestWarning>,
+) -> Result<String, RefuseReason> {
+    let pieces: Vec<&str> = written.split(['\\', '/']).collect();
+    let kept: Vec<&str> = pieces
+        .iter()
+        .copied()
+        .filter(|piece| !piece.is_empty() && *piece != "..")
+        .collect();
+    let read = kept.join("/");
+    if kept.is_empty()
+        || !kept.iter().all(|piece| is_valid_one_level_name(piece))
+        || utf16_len(&read) > MAX_ENTRY_PATH_UTF16
+    {
+        return Err(RefuseReason::InvalidDirectoryName {
+            key: key.to_owned(),
+            value: bounded_value(written),
+        });
+    }
+    if kept.len() < pieces.len() {
+        warnings.push(ManifestWarning::SourceDirectoryCleaned {
+            key: key.to_owned(),
+            written: bounded_value(written),
+            read: read.clone(),
+        });
+    }
+    Ok(read)
 }
 
 #[cfg(test)]

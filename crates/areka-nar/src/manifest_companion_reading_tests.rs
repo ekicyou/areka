@@ -158,3 +158,169 @@ fn a_broken_value_after_the_search_stops_is_recorded_not_refused() {
         ]
     );
 }
+
+// ---- 取り出し元（`*.source.directory`）の読み方 ----
+
+/// 鍵 `balloon.source.directory` に `written` を書いた書庫を読む。
+fn read_source(written: &str) -> InstallManifest {
+    parsed_ghost(&[
+        "balloon.directory,bal",
+        &format!("balloon.source.directory,{written}"),
+    ])
+}
+
+/// 鍵 `balloon.source.directory` に `written` を書いた書庫の断った理由。
+fn refused_source(written: &str) -> RefuseReason {
+    refused_ghost(&[
+        "balloon.directory,bal",
+        &format!("balloon.source.directory,{written}"),
+    ])
+}
+
+/// 書かれていた値で断ったことを表す理由。
+fn invalid_source(written: &str) -> RefuseReason {
+    RefuseReason::InvalidDirectoryName {
+        key: "balloon.source.directory".to_owned(),
+        value: bounded_value(written),
+    }
+}
+
+/// `\` と `/` のどちらで区切っても `/` 区切りの同じ値になり、記録は出ない（要件 2.1・6.2）。
+#[test]
+fn reads_a_source_directory_split_by_either_separator() {
+    for written in ["extra\\bal1", "extra/bal1"] {
+        let manifest = read_source(written);
+        assert_eq!(
+            manifest.companions[0].source_directory, "extra/bal1",
+            "{written}"
+        );
+        assert_eq!(manifest.warnings, vec![], "{written}");
+    }
+}
+
+/// `..` と空の段を取り除き、鍵ごとに 1 件だけ記録する（要件 3.1〜3.3・6.1）。
+///
+/// `..` は手前の段を打ち消さない。`extra/../bal1` は `bal1` ではなく `extra/bal1`。
+#[test]
+fn removes_dot_dot_and_empty_segments_and_records_it_once() {
+    for written in [
+        "../extra/bal1",
+        "extra/../bal1",
+        "/extra//bal1/",
+        "..\\extra\\\\bal1",
+    ] {
+        let manifest = read_source(written);
+        assert_eq!(
+            manifest.companions[0].source_directory, "extra/bal1",
+            "{written}"
+        );
+        assert_eq!(
+            manifest.warnings,
+            vec![ManifestWarning::SourceDirectoryCleaned {
+                key: "balloon.source.directory".to_owned(),
+                written: written.to_owned(),
+                read: "extra/bal1".to_owned(),
+            }],
+            "{written}"
+        );
+    }
+}
+
+/// 同梱ごとに探索の順で、取り除きの記録 → マスクの記録の順に並ぶ（要件 6.1・6.5）。
+#[test]
+fn records_the_removal_per_companion_before_its_mask() {
+    let manifest = parsed_ghost(&[
+        "balloon0.directory,zero",
+        "balloon0.source.directory,../zero-src",
+        "balloon.directory,plain",
+        "balloon.source.directory,plain-src//",
+        "balloon.refresh,1",
+        "balloon.refreshundeletemask,a/b",
+    ]);
+    let sources: Vec<&str> = manifest
+        .companions
+        .iter()
+        .map(|companion| companion.source_directory.as_str())
+        .collect();
+    assert_eq!(sources, vec!["plain-src", "zero-src"]);
+    assert_eq!(
+        manifest.warnings,
+        vec![
+            ManifestWarning::SourceDirectoryCleaned {
+                key: "balloon.source.directory".to_owned(),
+                written: "plain-src//".to_owned(),
+                read: "plain-src".to_owned(),
+            },
+            ManifestWarning::InvalidMaskEntry {
+                key: "balloon.refreshundeletemask".to_owned(),
+                value: "a/b".to_owned(),
+            },
+            ManifestWarning::SourceDirectoryCleaned {
+                key: "balloon0.source.directory".to_owned(),
+                written: "../zero-src".to_owned(),
+                read: "zero-src".to_owned(),
+            },
+        ]
+    );
+}
+
+/// 取り除いた後に段が 1 つも残らなければ、書かれていた値で断る（要件 3.4）。
+#[test]
+fn refuses_a_source_directory_with_no_segment_left() {
+    for written in ["..", "/", "../..", "\\..\\"] {
+        assert_eq!(
+            refused_source(written),
+            invalid_source(written),
+            "{written}"
+        );
+    }
+}
+
+/// 取り除いた後の各段にも 1 階層の名前の検査を掛け、書かれていた値で断る（要件 5.3・5.4）。
+#[test]
+fn refuses_a_source_directory_whose_remaining_segment_is_not_a_one_level_name() {
+    for written in [
+        "extra/./bal1",
+        "../C:/bal1",
+        "extra/C:bal1",
+        "extra /bal1",
+        "extra/CON",
+        "../aux.txt",
+        "extra/.../bal1",
+    ] {
+        assert_eq!(
+            refused_source(written),
+            invalid_source(written),
+            "{written}"
+        );
+    }
+}
+
+/// 取り除いた後の全体の長さを測る。ちょうど 200 単位は通り、201 単位は断る（要件 5.3・5.4）。
+///
+/// 書かれていた値は `../` の分だけ長いので、取り除く前に測ると 200 単位でも断ってしまう。
+#[test]
+fn measures_the_length_of_the_source_directory_after_removal() {
+    let at_limit = format!("../{}/{}", "a".repeat(99), "b".repeat(100));
+    let manifest = read_source(&at_limit);
+    assert_eq!(utf16_len(&manifest.companions[0].source_directory), 200);
+    assert_eq!(manifest.warnings.len(), 1, "取り除いた記録が 1 件");
+
+    let over = format!("{}/{}", "a".repeat(100), "b".repeat(100));
+    assert_eq!(refused_source(&over), invalid_source(&over));
+}
+
+/// 同梱の `*.directory` は今どおり 1 階層の名前でなければ断る（要件 4.1・4.2・5.1・5.2）。
+#[test]
+fn still_refuses_a_separator_in_the_companion_directory() {
+    for written in ["extra\\bal1", "../escape"] {
+        assert_eq!(
+            refused_ghost(&[&format!("balloon.directory,{written}")]),
+            RefuseReason::InvalidDirectoryName {
+                key: "balloon.directory".to_owned(),
+                value: written.to_owned(),
+            },
+            "{written}"
+        );
+    }
+}

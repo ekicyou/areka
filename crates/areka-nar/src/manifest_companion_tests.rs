@@ -187,17 +187,25 @@ fn refuses_a_companion_directory_that_is_not_a_one_level_name() {
     );
 }
 
-/// 取り出し元のフォルダ名も 1 階層でなければならない（要件 3.9）。
+/// 取り出し元は階層付きの相対パスとして読み、各段が 1 階層の名前でなければ断る
+/// （要件 2.1・5.3・5.4）。
 #[test]
-fn refuses_a_companion_source_directory_that_is_not_a_one_level_name() {
+fn refuses_a_companion_source_directory_with_a_segment_that_is_not_a_one_level_name() {
+    let manifest = parsed_ghost(&[
+        "balloon.directory,emo2-kakukaku",
+        "balloon.source.directory,sub/kakukaku",
+    ]);
+    assert_eq!(manifest.companions[0].source_directory, "sub/kakukaku");
+    assert_eq!(manifest.warnings, vec![]);
+
     assert_eq!(
         refused_ghost(&[
             "balloon.directory,emo2-kakukaku",
-            "balloon.source.directory,sub/kakukaku",
+            "balloon.source.directory,sub/CON",
         ]),
         RefuseReason::InvalidDirectoryName {
             key: "balloon.source.directory".to_owned(),
-            value: "sub/kakukaku".to_owned(),
+            value: "sub/CON".to_owned(),
         }
     );
 }
