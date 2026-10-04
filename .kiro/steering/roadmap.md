@@ -221,7 +221,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 **道具と試験**
 
 - **`tools/perf` の実走していない 3 経路**（S）。`invoke-perf-run.ps1` へ `-GhostRoot`／`-BalloonRoot` を渡す実走・`invoke-followup-checks.ps1` の単独起動・`check-quiet.ps1`。**自己検査の赤（終了コード 4）は 10-02 の実行で再現しなかった**（`SELFTEST RESULT ok=9 ng=0`・終了コード 0）。性能改善ループを次に回す前に 3 経路を通す。
-- **一度だけ落ちた試験 1 本**（原因未調査・再発したら出力を添えて起票）: `sample-ghost-kit` の展開テストの os error 5（09-26）。i686 の `testdll_drop_invokes_courtesy_unload` は `host32-testdll-marker-race` が引き取った。
+- **一度だけ落ちた試験 2 本**（原因未調査・再発したら出力を添えて起票）: `sample-ghost-kit` の展開テストの os error 5（09-26）。`wintf --test graphics` の `STATUS_ACCESS_VIOLATION`（10-04・`mcp-expression-table` の最終検証。他のセッションの cargo と並走した `cargo test --workspace -j 4` で `window_pos_systems_test::invalidate_*`・`wuc_restart_regression_test::wuc_stack_a_full_cycle` などが 60 秒を超えて止まった後に落ちた。直後の単独実行は 97 本すべて緑。完了 `wintf-gpu-test-crash` の落ち方と同じ形で、負荷の高いときだけ出た）。i686 の `testdll_drop_invokes_courtesy_unload` は `host32-testdll-marker-race` が引き取った。
 
 ## 直接修正候補（spec なし）
 
