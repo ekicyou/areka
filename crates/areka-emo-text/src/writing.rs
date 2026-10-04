@@ -4,7 +4,7 @@
 //! `writing_mode`（`horizontal_tb`／`vertical_rl`／`vertical_lr`）——を**独立に分類**し、
 //! 確定した 2 つの分類の間で優先順位を裁定して [`WritingMode`] を 1 つ決める。
 //! 裁定とその根拠は [`WritingDirectionDecision`] が保持する（正典が再改訂されたときの
-//! 唯一の追随点）。方向写像と M2 予約キー名（`text_orientation`／`text_combine_upright`）の
+//! 唯一の追随点）。方向写像と予約キー名（`text_orientation`／`text_combine_upright`）の
 //! 記録も本モジュールが担う。
 //!
 //! 2 層マージ（`descript.txt` 基層と面別上書き層の後勝ち）は `areka-parsers` の
@@ -32,7 +32,7 @@
 //! `writing_mode` が受理語彙外）は `warn!` のうえ「**指定なし**」として上表へ合流する
 //! （設計 DD6）。
 //!
-//! ## M2 予約キー（記録のみ・実装しない・R5.7）
+//! ## 予約キー（記録のみ・実装しない・R5.7）
 //!
 //! CSS 借用の snake_case 予約キー名を定数として記録するに留め、M1 では実挙動を
 //! 一切実装しない:
@@ -48,9 +48,9 @@ const VALUE_VERTICAL_RL: &str = "vertical_rl";
 /// `writing_mode` の CSS 語彙 `vertical_lr` に対応する受理値（R5.1）。
 const VALUE_VERTICAL_LR: &str = "vertical_lr";
 
-/// M2 予約キー: 欧文の向き `text_orientation`（記録のみ・実装しない・R5.7）。
+/// 予約キー: 欧文の向き `text_orientation`（記録のみ・実装しない・R5.7）。
 pub const RESERVED_KEY_TEXT_ORIENTATION: &str = "text_orientation";
-/// M2 予約キー: 縦中横 `text_combine_upright`（記録のみ・実装しない・R5.7）。
+/// 予約キー: 縦中横 `text_combine_upright`（記録のみ・実装しない・R5.7）。
 pub const RESERVED_KEY_TEXT_COMBINE_UPRIGHT: &str = "text_combine_upright";
 
 /// `writing_mode` 宣言の解決結果（3 語彙→3 方向の 1:1 写像・R5.1/R5.5）。
@@ -470,7 +470,7 @@ mod tests {
         assert_eq!(WritingMode::resolve(&merged), WritingMode::VerticalRl);
     }
 
-    // ── R5.7: M2 予約キーは名前の記録のみ（実挙動なし） ──
+    // ── R5.7: 予約キーは名前の記録のみ（実挙動なし） ──
 
     #[test]
     fn m2_reserved_key_names_are_recorded_as_constants() {

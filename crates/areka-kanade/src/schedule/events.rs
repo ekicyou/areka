@@ -85,7 +85,7 @@ pub(crate) const REF2_WHEEL_M1: &str = "0";
 /// マウス系イベント Ref6（入力デバイス種）の M1 固定値（DD-IE-6）。
 ///
 /// M1 は物理マウスのみを対象とするため常に "mouse"。touch/pen/eraser の区別は
-/// M2 のシーム（呼び手がデバイス種を渡す形へ）として残す。
+/// α 後のシーム（呼び手がデバイス種を渡す形へ）として残す。
 pub(crate) const REF6_DEVICE_MOUSE: &str = "mouse";
 
 /// **スケジューラ起源**（[`crate::msg::EventId::Static`]）で送出し得るイベント ID の

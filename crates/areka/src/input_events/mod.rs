@@ -466,7 +466,7 @@ pub(crate) fn on_char_pointer_moved(
 /// - **右ダブルクリック** → 当たり判定を解決するが**送らない**。スコープ・`surface_point`・
 ///   当たり判定名を [`PendingDoubleClick`] として高々 1 件預かる（前の預かりは上書き）。送るか
 ///   どうかはメニュー側が決める（areka-P0-popup-menu-minimal 要件 1.10）。true。
-/// - **中／拡張ボタンのダブルクリック** → 送出しない（OnMouseDoubleClickEx は M2・7.1）。false。
+/// - **中／拡張ボタンのダブルクリック** → 送出しない（OnMouseDoubleClickEx は α 後・7.1）。false。
 /// - **単発クリック**（`DoubleClick::None`）→ 送出しない（7.3）。false。
 /// - The Hand／collisionex は実装しない（7.4）。右クリックメニューは本ハンドラでは扱わない
 ///   （引き金は押下ではなく右ボタンの解放で、`menu` モジュールの担当）。
@@ -514,7 +514,7 @@ pub(crate) fn on_char_pointer_pressed(
     let right = match state.double_click {
         DoubleClick::Left => false,
         DoubleClick::Right => true,
-        // Middle/XButton1/XButton2（M2）・None（単発）→ 送出しない。
+        // Middle/XButton1/XButton2（α 後）・None（単発）→ 送出しない。
         DoubleClick::Middle | DoubleClick::XButton1 | DoubleClick::XButton2 | DoubleClick::None => {
             return false;
         }

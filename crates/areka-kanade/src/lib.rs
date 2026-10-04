@@ -30,8 +30,8 @@ mod actor_translate;
 pub mod msg;
 pub mod online;
 // schedule の消費者はランタイム層の actor.rs シェル（[`crate::actor::spawn_kanade`]）。
-// schedule 内には後続タスクが埋めるフェーズ分岐スタブが残り lib ビルドから未使用となるため、
-// クレート全体は `#[allow(dead_code)]` を付さず schedule 側の該当箇所に限局する（下記）。
+// schedule には書くだけで読まない欄（`ClosePending.reason`・`ActiveTalk.origin`）が残り、
+// 外すと dead_code が鳴るため allow を付けたままにしてある。
 #[allow(dead_code)]
 pub(crate) mod schedule;
 pub mod shiori;

@@ -45,8 +45,6 @@ const KERO_INITIAL_SURFACE_ID: u32 = 10;
 ///
 /// アセット（`EmoWorld`/`AtlasTable`）は持たない——素の物理 px 数値のみ
 /// （採寸後破棄の契約を型で担保する）。
-#[allow(dead_code)]
-// scaffold（task 4.1）: main.rs シーム（task 6）が結線するまで非テストビルドでは未使用
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MeasuredSizes {
     /// スコープごとの採寸入力（`scope_ids` と同順・同長）。
@@ -59,10 +57,6 @@ pub struct MeasuredSizes {
 /// 宣言され得るため、k も別軸で持つ（要件 1.1・design「measure.rs（k₀ 適用・R7.8 席保全）」）。
 /// `MeasureScaling::IDENTITY`（k=1/1）は既存の等倍採寸と構造的に同一の出力を返す
 /// （`ScaleRatio::scale_len` が恒等時に入力を素通しするため・要件 7.2）。
-///
-/// scaffold: main.rs boot シーム（task 4.3）が構築するまで非テストビルドでは
-/// 既定値（恒等）しか現れないため `dead_code` を許容する。
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub struct MeasureScaling {
     /// キャラ surface へ適用する k（primary モニタ DPI ÷ shell author_dpi）。
@@ -139,7 +133,6 @@ impl SizeKind {
 ///
 /// 失敗の scope 帰属は (1) native 段・(2) k 適用段のいずれでも**実スコープ番号**で一貫する
 /// （バルーン採寸が scope ループ内へ移り、帰属先が定まらない状況が無くなった）。
-#[allow(dead_code)] // scaffold（task 4.1）: 結線は task 6
 pub fn measure_scope_sizes(
     shell_dir: &Path,
     balloon_root: &Path,

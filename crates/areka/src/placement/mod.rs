@@ -98,7 +98,6 @@ use self::windowposition::{LimitVocab, XVocab, classify_limit_vocab, classify_x_
 /// design「Error Handling」準拠: 安易な panic 禁止・失敗は `error!`＋`Err`。
 /// すべて main.rs シームを経て呼び手の `main` へ返り、「起動窓を開けない」の告知と
 /// 終了コード 1 になる（log-first）。
-#[allow(dead_code)] // scaffold（task 1）: 利用側は後続タスクで実装
 #[derive(Debug, thiserror::Error)]
 pub enum PlacementError {
     /// ゴーストパッケージのマウント解決（`areka_parsers::package::resolve`）失敗。

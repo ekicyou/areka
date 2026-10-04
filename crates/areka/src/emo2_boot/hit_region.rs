@@ -66,12 +66,6 @@ use areka_emo_present::EmoPresenter;
 /// **shell 窓専用**（`resolve_hit_region` が `shell_target` の偶数 target のみを解決する）であり、
 /// balloon（奇数 target・`choice-render` の領分）は扱わない（研究 §10.5）。契約の定義箇所は本
 /// モジュール1点であり、`input-events` は再定義せず本型を参照する（Coordination Notes C-1）。
-///
-/// 本 spec 内に production 消費者は未だ居ない（第一消費者は `input-events`＝roadmap W2、加えて
-/// probe＝`examples/collision-probe.rs`・Task 4.1）。`areka` は bin crate ゆえ未使用 `pub` 項目は
-/// dead_code 警告になる（baseline は警告皆無）。W2 の実配線で消費点が生えるまで `#[allow(dead_code)]`
-/// で明示的に抑止する（消費者が生えたら除去可）。
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HitRegion {
     /// ゴースト scope（0=本体 / 1=相方 …）。型は `super::target_map` の正本（`u32`）へ揃える（研究 §10.5）。
@@ -109,11 +103,7 @@ pub struct HitRegion {
 /// 解決された領域名（`&str`）は搬送のため所有形 `Option<String>` へ写す（`input-events` への受け渡しに
 /// 必要な、本層で許容される唯一の割当）。`surface_point` は `Copy` ゆえ割当を生まない。
 ///
-/// production 消費者（`input-events`＝W2・probe＝Task 4.1）が生えるまで dead_code 警告を明示抑止する
-/// （[`HitRegion`] の doc 参照）。
-///
 /// [`EmoPresenter::hit_region_client`]: areka_emo_present::EmoPresenter::hit_region_client
-#[allow(dead_code)]
 pub fn resolve_hit_region(presenter: &EmoPresenter, scope: u32, x: i64, y: i64) -> HitRegion {
     let target = super::target_map::shell_target(scope);
     // ÷k は presenter 側（`hit_region_client`）で吸収済み。本層は region を所有形へ写し、

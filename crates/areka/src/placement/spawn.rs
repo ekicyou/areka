@@ -107,7 +107,6 @@ use super::source::GhostTitles;
 // ---------------------------------------------------------------------------
 
 /// スコープ別キャラ窓の識別 marker（6.2・補助的な逆引き。正本は [`GhostWindows`]）。
-#[allow(dead_code)] // 結線（main.rs シーム）は task 6.2
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CharWindowMarker {
     /// スコープ番号（0=本体・1=相方・…）。
@@ -115,7 +114,6 @@ pub struct CharWindowMarker {
 }
 
 /// スコープ別バルーン窓の識別 marker（6.2・補助的な逆引き。正本は [`GhostWindows`]）。
-#[allow(dead_code)] // 結線（main.rs シーム）は task 6.2
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BalloonWindowMarker {
     /// スコープ番号（対応するキャラ窓と同じ番号）。
@@ -303,7 +301,6 @@ pub struct GhostWindows {
     windows: BTreeMap<usize, ScopeWindows>,
 }
 
-#[allow(dead_code)] // 消費側（emo2-boot／main.rs シーム task 6.2）は後続
 impl GhostWindows {
     /// スコープのキャラ窓 entity を返す（未知スコープは `None`・panic しない）。
     pub fn char_window(&self, scope: usize) -> Option<Entity> {

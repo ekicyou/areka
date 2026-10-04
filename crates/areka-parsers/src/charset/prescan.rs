@@ -23,9 +23,7 @@ const SCAN_CAP: usize = 4096;
 ///
 /// 宣言が上限内に見つからなければ「宣言なし」として `None` を返す（R1.4）。
 ///
-/// 純粋関数（環境非依存・panic せず・`Result` を返さない）。消費側 `decode`
-/// はタスク 2.3 で結線するため、それまで未使用警告を抑止する。
-#[allow(dead_code)]
+/// 純粋関数（環境非依存・panic せず・`Result` を返さない）。消費側は `decode`。
 pub(super) fn prescan_charset(bytes: &[u8]) -> Option<String> {
     // 1. 先頭 UTF-8 BOM を読み飛ばす（走査開始前）。
     let after_bom = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);

@@ -32,7 +32,7 @@ use crate::status::{ExecutionSnapshot, ExecutionStatus};
 /// メニュー表示可否（要件 3.6）である。`popupmenu.type` 系は**問い合わせない**裁定なので載せない
 /// （要件 3.8）。n≧2 の `char*.popupmenu.visible` も α に窓が無いので載せない（要件 3.6）。
 ///
-/// SEAM(M2・159 項目汎用化): SHIORI Resource は正典で 159 項目ある。語彙拡張は本集合への
+/// SEAM(α 後・159 項目汎用化): SHIORI Resource は正典で 159 項目ある。語彙拡張は本集合への
 /// ID 追加（additive）で行い、判定側と構築側（[`resource_get`]）は無改変で追随する。
 pub const ALLOWED_RESOURCE_IDS: &[&str] = &[
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#username:1

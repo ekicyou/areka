@@ -1,7 +1,7 @@
 //! # viewbox — スクロール位置の内部表現・軸写像・量子化（純粋層）
 //!
 //! 可視窓（[`crate::layout::VisibleWindow`]）の `block_offset` を「真位置（f32 連続量・
-//! 物理 px）」と「確定位置（whole-pixel 整数）」へ分離して保持し（M2 補間シームの土台・
+//! 物理 px）」と「確定位置（whole-pixel 整数）」へ分離して保持し（α 後の補間シームの土台・
 //! R8.2）、ブロック軸のスカラを writing_mode 追随の 2D ベクトルへ写す [`ScrollState`]／
 //! [`ScrollPlanner`]／[`block_axis_vector`] を担い、ダーティ導出（[`ScrollPlanner::derive_dirty`]）
 //! と状態遷移（[`ScrollPlanner::plan`]／[`ScrollPlanner::commit`]・[`FramePlan`]）を提供する
@@ -33,12 +33,12 @@
 //!   （`ceil` 由来）ゆえ行単位 `block_offset` が整数＝`pos` が整数＝`committed == pos`
 //!   （byte 一致の構造前提）。
 //!
-//! ## choice-render 座標契約点（R9.3）／M2 補間シーム（R8）
+//! ## choice-render 座標契約点（R9.3）／補間シーム（α 後）（R8）
 //!
 //! canvas（image px・validrect-local）→描画面（物理 px）の写像は
 //! `p_surface_block = (p_canvas_block + block_offset) × k`（行内軸は `× k` のみ）。量子化状態
 //! （committed）は [`ScrollPlanner::scroll_state`] で読める（クリック範囲の実導出は
-//! choice-render の責務）。M2 は `pos` の生成器（補間過程）だけを差し替える——`plan`/`commit`・
+//! choice-render の責務）。α 後の補間は `pos` の生成器（補間過程）だけを差し替える——`plan`/`commit`・
 //! 量子化・ダーティ導出は再設計不要（R8.3）。
 
 use crate::canvas::ContentCanvas;
@@ -46,16 +46,16 @@ use crate::layout::VisibleWindow;
 use crate::region::{ImagePx, ScaleContract};
 use crate::writing::WritingMode;
 
-/// スクロール位置の内部表現（R8.2/9.3 の契約点・choice-render と M2 が読む）。
+/// スクロール位置の内部表現（R8.2/9.3 の契約点・choice-render と α 後の補間が読む）。
 ///
 /// スクロール位置を**真位置**（f32 連続量）と**確定位置**（whole-pixel 整数）へ分離して
 /// 保持する値オブジェクト。不変条件 `|committed − pos| ≤ 0.5`（`committed = round(pos)`
-/// ゆえ恒真）。M2 補間は `pos` の生成器（補間過程）だけを差し替える——`committed`／写像
+/// ゆえ恒真）。α 後の補間は `pos` の生成器（補間過程）だけを差し替える——`committed`／写像
 /// 規約は不変（R8.3）。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScrollState {
     /// 真位置（物理 px・f32 連続量）＝ `block_offset × k`（ブロック軸スカラ・符号は素通し）。
-    /// M2 補間はこの値の生成を差し替える。
+    /// α 後の補間はこの値の生成を差し替える。
     pub pos: f32,
     /// 面に反映済みの whole-pixel 位置（真位置格子吸着・`round(pos)`・`|committed − pos| ≤ 0.5`）。
     pub committed: i32,
@@ -137,7 +137,7 @@ pub fn block_axis_vector(mode: WritingMode, v: i32) -> (i32, i32) {
 pub struct ScrollPlanner {
     /// 面に反映済みの whole-pixel 位置（`commit` で更新・初期 0）。
     committed: i32,
-    /// 直近の真位置（f32 連続量・M2 で補間過程が更新元になる・初期 0）。
+    /// 直近の真位置（f32 連続量・α 後に補間過程が更新元になる・初期 0）。
     pos: f32,
     /// 前回 `commit` 時の canvas 行指紋（変化行検出の唯一の根拠・初期空＝全域ダーティ）。
     prev_lines: Vec<CommittedLine>,
@@ -152,7 +152,7 @@ impl ScrollPlanner {
         ScrollPlanner::default()
     }
 
-    /// スクロール位置契約点（R9.3/R8.3——choice-render／M2 が読む）。
+    /// スクロール位置契約点（R9.3/R8.3——choice-render／α 後の補間が読む）。
     ///
     /// canvas（image px・validrect-local）→描画面（物理 px）の写像は
     /// `p_surface_block = (p_canvas_block + block_offset) × k`（行内軸は `× k` のみ）で、

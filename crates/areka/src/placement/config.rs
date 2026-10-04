@@ -11,8 +11,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use tracing::warn;
 
 /// `seriko.alignmenttodesktop` の解釈（2.8: 未使用値はシーム受理）。
-#[allow(dead_code)]
-// scaffold（task 2.1）: resolver（task 3.1）が消費するまで非テストビルドでは未使用
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Alignment {
     /// 既定（emo2 実使用）。Y は work area 下端固定・`defaulttop` 無視（2.2/2.4）。
@@ -25,8 +23,6 @@ pub enum Alignment {
 }
 
 /// バルーンの左右位置（暫定 offset の向きにのみ使用・DD7）。既定 `Left`。
-#[allow(dead_code)]
-// scaffold（task 2.1）: resolver（task 3.1）が消費するまで非テストビルドでは未使用
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BalloonSide {
     /// バルーンをキャラ窓の左側へ（既定・emo2 scope0）。
@@ -57,8 +53,6 @@ pub enum BalloonXMode {
 }
 
 /// スコープ 1 つぶんのカスケード解決済み配置構成。
-#[allow(dead_code)]
-// scaffold（task 2.1）: resolver（task 3.1）が消費するまで非テストビルドでは未使用
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScopeConfig {
     /// 4 層カスケード解決済み（既定 `Bottom`・2.2/2.3）。
@@ -98,8 +92,6 @@ impl Default for ScopeConfig {
 }
 
 /// ghost/shell descript KV から解決した配置構成の全体（スコープ別＋シーム転記）。
-#[allow(dead_code)]
-// scaffold（task 2.1）: resolver（task 3.1）が消費するまで非テストビルドでは未使用
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlacementConfig {
     /// 検出済みスコープ（0 起点・`BTreeMap` で昇順）。emo2 → {0, 1}（DD6）。
@@ -126,7 +118,6 @@ pub struct PlacementConfig {
 /// 同層内の優先順位: 正典プレフィックス（`sakura.`/`kero.`）＞ 別名（`char0.`/`char1.`）、
 /// 同一プレフィックス内では `defaultx` ＞ `defaultleft`・`defaulty` ＞ `defaulttop`（DD3）・
 /// `alignmenttodesktop` ＞ 別綴 `alignmentondesktop`。
-#[allow(dead_code)] // scaffold（task 2.1）: source/resolver（task 2.2/3.1）が結線するまで非テストビルドでは未使用
 pub fn build_placement_config(
     ghost_kv: &BTreeMap<String, String>,
     shell_kv: &BTreeMap<String, String>,

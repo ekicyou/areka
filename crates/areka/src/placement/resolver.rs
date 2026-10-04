@@ -23,8 +23,6 @@ use super::config::{Alignment, BalloonSide, BalloonXMode, PlacementConfig, Scope
 use super::follow::OffsetBase;
 
 /// 物理 px の矩形（スクリーン座標系・wintf 非依存）。
-#[allow(dead_code)]
-// scaffold（task 3.1）: main.rs シーム（task 6）が結線するまで非テストビルドでは未使用
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RectPx {
     /// 左端（物理 px）。
@@ -38,7 +36,6 @@ pub struct RectPx {
 }
 
 /// 物理 px の点（スクリーン座標系）。
-#[allow(dead_code)] // scaffold（task 3.1）: 結線は task 6
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PointPx {
     /// X 座標（物理 px）。
@@ -48,7 +45,6 @@ pub struct PointPx {
 }
 
 /// 物理 px の寸法。
-#[allow(dead_code)] // scaffold（task 3.1）: 結線は task 6
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SizePx {
     /// 幅（物理 px）。
@@ -58,7 +54,6 @@ pub struct SizePx {
 }
 
 /// スコープ 1 体ぶんの採寸入力（物理 px）。
-#[allow(dead_code)] // scaffold（task 3.1）: 結線は task 6
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScopeInput {
     /// スコープ番号（0=本体・1=相方・…）。
@@ -70,7 +65,6 @@ pub struct ScopeInput {
 }
 
 /// 解決済み配置（物理 px・スクリーン座標）。
-#[allow(dead_code)] // scaffold（task 3.1）: 結線は task 6
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScopePlacement {
     /// スコープ番号（入力の転記）。
@@ -417,8 +411,6 @@ pub fn virtual_desktop_union(monitor_bounds: &[RectPx]) -> Option<RectPx> {
 /// wintf/bevy 非依存で `resolver` に在住し（U5・純粋 DPI 檻が wintf 非依存で走る）、
 /// 後続で `ScopePlacement.anchor` として spawn へ運ばれ `Anchored(Anchor)` Component
 /// として char 窓へ焼き込まれる。射影 T（`project_anchor`）は follow 層が所有する。
-#[allow(dead_code)]
-// scaffold（task 1.1）: ScopePlacement への結線は task 1.2・射影消費は follow（task）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Anchor {
     /// 上端固定（`y = wa.top`・X 保持）。
@@ -433,7 +425,6 @@ pub enum Anchor {
     Free,
 }
 
-#[allow(dead_code)] // scaffold（task 1.1）: 結線は task 1.2 以降
 impl Anchor {
     /// cascade 解決済み `Alignment` を 5 値アンカーへ解釈する消費写像（4.2）。
     ///

@@ -101,7 +101,6 @@ impl DragPositionPolicy for BottomSnapPolicy {
 ///
 /// 正寸・snapshot 有効時、適用後の窓のアンカー辺 ≡ work area 対応辺。既にアンカー辺
 /// 一致の位置に対しては同値を返す（べき等の基礎・R3.1）。
-#[allow(dead_code)] // consumer（resize_window_to／on_char_drag 改修）は後続 task 2.2-2.4 の領分
 pub fn project_anchor(
     anchor: Anchor,
     raw: PointPx,
@@ -178,7 +177,5 @@ pub fn project_anchor(
 /// ドラッグ（`on_char_drag`）とリサイズ（`resize_window_to`）の**両者がこの値を読んで**
 /// 同一射影 T（`project_anchor`）を呼ぶ——`Free` か否かで wndproc 委譲／単一ライターを
 /// 分岐する。
-#[allow(dead_code)]
-// spawn 付与（task 3.1）は後続 task の領分——構築が付くまで dead_code 警告を抑える
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Anchored(pub Anchor);

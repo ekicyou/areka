@@ -60,14 +60,13 @@ impl MessageLoopDriver {
     ///
     /// ライブラリの [`MessageLoop::run`] へ委譲する。OS メッセージはすべてウィンドウ
     /// 手続きへ配送され、wake メッセージはライブラリが保護する。`future` 完了による
-    /// 自動 quit は無いため、終了は filter 経由の `MessageLoop::quit` 等に委ねる
-    /// （その結線は後続タスク）。
+    /// 自動 quit は無いため、終了は filter 経由の `MessageLoop::quit` 等に委ねる。
     ///
     /// # Panics
     ///
     /// filter クロージャ内から（直接・間接に）本関数を再入した場合に panic する
     /// （ライブラリ仕様：ネストした `MessageLoop::run` は不可）。
-    #[allow(dead_code)]
+    #[allow(dead_code)] // 本番の呼び手は無い（shutdown の駆動は `block_on` を通る）
     pub(crate) fn run() {
         MessageLoop::run(|_loop, msg| Self::default_filter(msg));
     }

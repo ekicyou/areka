@@ -193,8 +193,8 @@ impl Default for ZOrderPairStrategy {
 /// ——同じ「z が動いた」でも要件 1.3 と要件 1.2 のどちらの腕かが変わるため、
 /// ここを 1 種へ潰してはならない。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// 組み立てているのは維持系の `Reassert` だけである。残る 3 種の供給者は後続タスク
-// （z 変化検知＝案 B／補助浮上）が入れるまで存在しない。
+// 本番で組み立てているのは維持系の `Reassert` だけで、残る 3 種を作る呼び手は無い
+// （判断の分岐とテストだけが使う）。
 #[allow(dead_code)]
 pub(crate) enum PairTrigger {
     /// owner 確立直後の初期隣接の確定

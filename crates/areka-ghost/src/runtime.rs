@@ -68,7 +68,7 @@ pub enum ShioriWiring {
     /// ロードし、SHIORI4 生成入口（`shiori_factory`）→ `IShiori` → `ShioriBackend` へ
     /// [`crate::shiori_inproc::inproc_connect`] が写像する（要件 3.1）。ユニット variant であり
     /// テスト専用パラメータを持たない——DLL パスはマウント解決結果から本番同型に導出される
-    /// （design.md D-1）。M2 の native x64 SHIORI4 がそのまま本番消費者として再利用する正規
+    /// （design.md D-1）。α 後の native x64 SHIORI4 がそのまま本番消費者として再利用する正規
     /// シームである（要件 7.1・第一級の布石）。
     InProc,
 }
