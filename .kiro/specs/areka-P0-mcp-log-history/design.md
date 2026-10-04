@@ -47,7 +47,7 @@
 
 ### Allowed Dependencies
 
-- `tracing`・`tracing-subscriber`（ワークスペースの既定機能＋`env-filter`。`registry`・層ごとのフィルタ・`filter_fn` は既定機能に含まれる）。
+- `tracing`・`tracing-subscriber`（ワークスペースの既定機能＋`env-filter`。`registry`・層ごとのフィルタ・`layer::Filter` は既定機能に含まれる）。
 - `windows` の `Win32::System::SystemInformation::GetLocalTime`（根の `Cargo.toml` の `[workspace.dependencies.windows]` に `Win32_System_SystemInformation` が宣言済み）。
 - `crate::mcp::resolve` の `active`・`resolve`・`listed_value`・`CANNOT_FIND`・`Omitted`（`get_log.rs` は `mcp` の子モジュールなので `super::resolve` で届く。どれも `pub(crate)`）。
 - `areka_mcp::tools::{get_log::Args, ReplyTo, outcome}`。
@@ -60,6 +60,7 @@
 - `RULES` の行を足す・消す → 取り決めの文書（テストが赤にする）。
 - `last_id` の意味（全種別で 1 本の「最後に振った番号」）を変える → `mcp-strict-errors`。
 - ログの出口の組み方（層の順・フィルタの掛け方）を変える → 標準出力の同一性（[research.md](research.md) §9.1 の実験をやり直す）と `.kiro/steering/logging.md`。
+- 履歴の層のフィルタは、出来事でない問い合わせ（`tracing::enabled!`・スパン）を断ってはならない（断ると、診断の target を点けたときに履歴が記録を取りこぼす）。`tracing-subscriber` の版を上げる・フィルタの答えを変えるときは [design-validation.md](design-validation.md) 指摘 1 の実験をやり直す。
 - 名指ししたモジュール（`RULES` の target）の改名・移動 → 実在のテストが赤になるので、持ち主の spec が `RULES` と文書を直す。
 
 ## Architecture
@@ -120,7 +121,7 @@ graph TB
 
 | # | 点 | 決定 | 根拠（証跡は research.md） |
 |---|---|---|---|
-| a | 取り決めの target を debug・trace でも拾うか | **拾う**（要件 2.1・2.2 の「レベルを問わない」を字のとおりに満たす）。履歴の層のフィルタは最大レベルの見立てを `TRACE` と答える | 実測で、関心のない `debug!`／`trace!` 1 回の費用は 0.7 ns → 1.5〜2.4 ns。`log` クレートの `debug!` は 0.7 ns → 約 120〜140 ns だが、areka の依存の木で `log` を使うのは `bevy_ecs`・`bevy_app` で、毎フレーム通る `debug!`／`trace!` は 0 件（§9.2） |
+| a | 取り決めの target を debug・trace でも拾うか | **拾う**（要件 2.1・2.2 の「レベルを問わない」を字のとおりに満たす）。履歴の層のフィルタは最大レベルの見立てを `TRACE` と答える | 実測で、関心のない `debug!`／`trace!` 1 回の費用は 0.7 ns → 1.5〜2.4 ns。`log` クレートの `debug!` は 0.7 ns → 約 120〜140 ns だが、`Cargo.lock` で `log` に依存するのは `bevy_app`・`bevy_ecs`・`iana-time-zone`・`wgpu-types`・`tracing-log` の 5 つで、areka の依存の木（`cargo tree -p areka -i log`）で `log` の行を出すのは `bevy_ecs`・`bevy_app`。毎フレーム通る `debug!`／`trace!` は 0 件（§9.2） |
 | b | 層の継ぎ目のテストの置き場 | **純粋な関数へ `log-capture-kit` の `CapturedEvent` を食わせるテスト＋実プロセス・実ソケットの試験 1 本**。見張りの例外表は触らない | 例外表へ足すのは要件 8.5 に反する。実プロセスの試験は要件 4.7 の「実ソケットで 1 本」と兼ねる |
 | c | 履歴の置き場 | **純粋な入れ物の型 `History`＋プロセスに 1 つの静的な置き場**（`static` の `Mutex<History>`） | `handle` の引数も `mcp/mod.rs` も変えずに読める。World の無いスレッドからも `last_id` を読める |
 | d | ファイルの置き方 | **`crates/areka/src/log_history.rs` の 1 ファイル**（見込み 450 行前後）＋兄弟のテスト 2 本。900 行を超えたらファサード形式で `log_history/` へ分ける | 部品が小さく、分けると `mod` の配線の方が多くなる。`structure.md` の分割の目安は 1,000 行 |
@@ -133,7 +134,7 @@ graph TB
 
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
-| ログの出口 | `tracing-subscriber 0.3.23`（`registry`・`fmt`・`env-filter`・`filter_fn`） | 標準出力の層と履歴の層を重ねる | 追加の機能・依存は 0 件 |
+| ログの出口 | `tracing-subscriber 0.3.23`（`registry`・`fmt`・`env-filter`・`layer::Filter`） | 標準出力の層と履歴の層を重ねる | 追加の機能・依存は 0 件 |
 | 履歴 | 標準ライブラリ（`VecDeque`・`Mutex`） | 種別ごとの列・全体で 1 本の番号 | 置き場は `static`（`Mutex::new`・`VecDeque::new` はどちらも `const`） |
 | 時刻 | `windows 0.62`（`GetLocalTime`） | 記録した時点の現地時刻 | 機能は宣言済み。`unsafe` は `local_now` の 1 か所 |
 | MCP | `areka-mcp`（既存） | `Args`・`ReplyTo`・`outcome` | 0 行変える |
@@ -263,7 +264,7 @@ sequenceDiagram
 | 振り分け（`Kind`・`RULES`・`classify`） | `log_history`・純粋 | レベルと target から種別を決める | 2.1〜2.5・2.8・2.9・3.2 | `tracing::Level`（P2） | Service |
 | 下書き（`draft`） | `log_history`・純粋 | 欄の並びから `<名>`・語・本文を作る | 1.5・2.6・2.7・2.10・4.3 | 振り分け（P0） | Service |
 | 入れ物（`History`） | `log_history`・純粋 | 番号を振って種別ごとの列に積む | 1.2〜1.4 | — | State |
-| 置き場と層（`init`・`last_id`・`read`・`local_now`） | `log_history`・継ぎ目 | 出口を据え、出来事を置き場へ届け、読む口を出す | 1.1・1.6〜1.10・6.1〜6.3・8.1 | `tracing-subscriber`（P0）・`GetLocalTime`（P1） | Service・State |
+| 置き場と層（`init`・`last_id`・`snapshot`・`local_now`・`HistoryFilter`） | `log_history`・継ぎ目 | 出口を据え、出来事を置き場へ届け、読む口を出す | 1.1・1.6〜1.10・6.1〜6.3・8.1 | `tracing-subscriber`（P0）・`GetLocalTime`（P1） | Service・State |
 | `get_log`（`handle`・`answer`・`render`） | `mcp`・ツールのファイル | 検査・解決・絞り込み・書式 | 3.1〜3.5・4.1〜4.6・5.1〜5.9 | `log_history`（P0）・`mcp::resolve`（P0） | Service |
 | 取り決めの文書 | `doc/` | 出す側の約束を 1 つの文書に | 7.1〜7.3 | `RULES`（テストで縛る） | — |
 
@@ -384,7 +385,7 @@ pub(crate) fn draft<'a>(
 ) -> Option<Draft>;
 ```
 
-- **本文**: `message` の欄の `debug`（整形済みの文。引用符は付かない）を先頭に置き、残りの欄を書かれた順に ` 名前=値` で続ける。値は `debug` の形（標準出力の行と同じ見え方）。メッセージが無ければ欄だけ（先頭の空白は付けない）、欄が無ければメッセージだけ。
+- **本文**: `message` の欄の `debug`（整形済みの文。引用符は付かない）を先頭に置き、残りの欄を書かれた順に ` 名前=値` で続ける。値は `debug` の形（標準出力の行と同じ見え方。ただし `dyn Error` で渡された欄は、標準出力の層が原因の連なり `<欄>.sources=[…]` を足すのに対し、履歴は `{:?}` の形だけなので見え方が違いうる）。メッセージが無ければ欄だけ（先頭の空白は付けない）、欄が無ければメッセージだけ。
 - **取り決めの欄**: target が `TARGET_SCRIPT` か `TARGET_ERROR` の行だけ、`ghost` を `<名>`、`label` を表示の語として読み、本文から除く。値は `raw` があればそれ、無ければ `debug`。同じ名前の欄が複数あれば最後のものを使い、どれも本文から除く。それ以外の行の `ghost`・`label` は普通の欄として本文に残す。
 - **既定**: 欄が無ければ `Kind::default_name`・`Kind::default_label`。
 - **除く欄**: 名前が `log.` で始まる欄（`log` クレートから橋渡しされた行の `log.target` など）は本文に入れない。
@@ -443,7 +444,7 @@ impl History {
 
 **Dependencies**
 
-- External: `tracing-subscriber`（`registry`・`fmt::layer`・`EnvFilter`・`filter_fn`・`Layer`）— 出口（P0）
+- External: `tracing-subscriber`（`registry`・`fmt::layer`・`EnvFilter`・`layer::Filter`・`Layer`）— 出口（P0）
 - External: `windows::Win32::System::SystemInformation::GetLocalTime` — 時刻（P1）
 
 ##### Service Interface
@@ -456,8 +457,9 @@ pub(crate) fn init();
 /// いま最後に振った通し番号（1 件も無ければ 0）。後続の spec が読む口。
 pub(crate) fn last_id() -> u64;
 
-/// 置き場を借りて読む（`get_log` が使う）。`f` の中でログを出さないこと。
-pub(crate) fn read<R>(f: impl FnOnce(&History) -> R) -> R;
+/// その種別の記録を写して返す（古い順・最大 1,000 件。`get_log` が使う）。
+/// 排他を握るのは写す間だけで、呼び手は排他の外で絞って整形する。
+pub(crate) fn snapshot(kind: Kind) -> Vec<Record>;
 
 /// 現地時刻（`GetLocalTime`）。
 fn local_now() -> Stamp;
@@ -466,11 +468,15 @@ fn local_now() -> Stamp;
 - **`init` の組み方**（設計判断 h）:
   `tracing_subscriber::registry().with(tracing_subscriber::fmt::layer().with_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))).with(履歴の層.with_filter(規則のフィルタ)).init()`。
   `init()` は今と同じく `log` クレートの受け口も据える。
-- **規則のフィルタ**: `filter_fn(|meta| meta.is_event() && classify(*meta.level(), meta.target()).is_some()).with_max_level_hint(Level::TRACE)`。関心のない呼び出し口は「関心なし」と答えるので、履歴の層へは届かない（設計判断 a）。
+- **規則のフィルタ**: `tracing_subscriber::layer::Filter` を自分で実装した型 `HistoryFilter`（`filter_fn` は使わない）。答えは純粋な関数 2 つに切り出す。
+  - `wants(is_event, level, target) -> bool`＝出来事で、かつ `classify` が当たる。`callsite_enabled` はこれが真なら「必ず欲しい」、偽なら「関心なし」と答える（関心のない呼び出し口は履歴の層へ届かない＝設計判断 a）。
+  - `passes(is_event, level, target) -> bool`＝**出来事でない問い合わせ（`tracing::enabled!`・スパン）には必ず真**、出来事には `classify` が当たるかどうか。`enabled` はこれを返す。
+  - `max_level_hint` は `TRACE`。
+  - **`filter_fn` を使わない理由**（[design-validation.md](design-validation.md) 指摘 1・実験で再現）: `tracing-subscriber 0.3.23` の層ごとのフィルタは、`enabled` で断るたびに「断った」印をスレッドごとの置き場に書き、直後の `on_event` で消す。`tracing::enabled!` は尋ねるだけで出来事を出さないので印が残り、次に同じスレッドで出た「どの層も必ず欲しい」出来事を履歴の層だけが 1 件飛ばす。今のコードの前置ガードは 3 か所（`crates/wintf/src/ecs/world/tick_diag.rs`・`crates/wintf/src/ecs/window/transition_diag.rs`・`crates/areka/src/perf_thread_report.rs` の `is_enabled`）で、`RUST_LOG` でその診断の target を点けると、ガードの直後の warn・error・status が標準出力には出るのに履歴に残らない。出来事でない問い合わせを断らなければ印は残らない（同じ実験で、取りこぼし 0 件・ガードの答えと標準出力は変わらず）。
 - **履歴の層**: `on_event` で欄を訪問して集め（文字列の欄は生の値と `{:?}` の形の両方、それ以外は `{:?}` の形）、`draft` を呼ぶ。`None` なら何もしない。`Some` なら `local_now()` を読み、置き場の排他を取って `push` する。
   - `log` から橋渡しされた行は、フィルタには本来の target で、`on_event` には target `log` で届く（[research.md](research.md) §9.3）。warn 以上はどちらでも `Error` になる。info 以下で `on_event` の `draft` が `None` になった行は捨てる。
 - **置き場**: `static` の `Mutex<History>`。排他が毒されていたら中身を取り出して続ける（`unwrap_or_else(PoisonError::into_inner)`）。`push` は割り当てと番号の加算だけで、失敗の道を持たない。
-- **排他の規律**: 排他の中で tracing のマクロを呼ばない。本ファイルの中で排他を握る箇所は `push` の呼び出しと `read`・`last_id` の 3 か所だけ。
+- **排他の規律**: 排他の中で tracing のマクロを呼ばない。本ファイルの中で排他を握る箇所は `push` の呼び出しと `snapshot`・`last_id` の 3 か所だけで、どれも呼び手の書いた処理を排他の中で走らせない（呼び手がログを出しても固まる道が構造として無い）。
 - **テスト用の口**: 置き場へ直に積む関数 `record(at: Stamp, draft: Draft) -> u64` を `pub(crate)` で持つ（層が使う同じ関数。テストはこれで置き場に積む）。
 
 **Implementation Notes**
@@ -492,7 +498,7 @@ fn local_now() -> Stamp;
 **Dependencies**
 
 - Inbound: `mcp::dispatch`（既存・変えない）— `handle(world, args, reply)` を呼ぶ（P0）
-- Outbound: `log_history::{Kind, History, Record, read}`（P0）、`super::resolve::{active, resolve, listed_value, CANNOT_FIND, Omitted, ActiveGhost}`（P0）、`areka_mcp::tools::outcome`（P0）
+- Outbound: `log_history::{Kind, Record, snapshot}`（P0）、`super::resolve::{active, resolve, listed_value, CANNOT_FIND, Omitted, ActiveGhost}`（P0）、`areka_mcp::tools::outcome`（P0）
 
 ##### Service Interface
 
@@ -504,8 +510,13 @@ pub(crate) const NO_ENTRIES: &str = "(no log entries)";
 /// 入口（署名は今のまま）。World は ghost_name があるときに起動中のゴーストを読むだけ。
 pub(super) fn handle(world: &mut World, args: Args, reply: ReplyTo);
 
-/// 純粋な答え。`active` は起動中のゴースト（ghost_name が無いときは見ない）。
-fn answer(history: &History, active: Option<&ActiveGhost>, args: &Args) -> ToolOutcome;
+/// 純粋な答え。`rows_of` は種別の記録（古い順）を返す口で、種別が決まった後に 1 度だけ呼ぶ。
+/// `active` は起動中のゴースト（ghost_name が無いときは見ない）。
+fn answer(
+    rows_of: impl FnOnce(Kind) -> Vec<Record>,
+    active: Option<&ActiveGhost>,
+    args: &Args,
+) -> ToolOutcome;
 
 /// 記録 1 件を 1 行（継続行を含む）にする。
 fn render(record: &Record) -> String;
@@ -522,13 +533,13 @@ fn render(record: &Record) -> String;
 
 `render` の形: `#{id} {year:04}/{month:02}/{day:02} {hour:02}:{minute:02} [{label}] {name} : {body}`。本文の中の `\r\n`・`\n`・`\r` はどれも `\r\n` とタブ 1 つへ置き換える（`\r\n` を 2 つに数えない）。
 
-`handle`: `ghost_name` が `Some` のときだけ `resolve::active(world)` を読む。`log_history::read(|h| answer(h, active.as_ref(), &args))` の結果を `reply.send` する。`answer` の中ではログを出さない。
+`handle`: `ghost_name` が `Some` のときだけ `resolve::active(world)` を読む。`answer(log_history::snapshot, active.as_ref(), &args)` の結果を `reply.send` する。排他を握るのは `snapshot` が種別の列を写す間だけで、絞り込みと書式は排他の外で行う（System Flows の図のとおり）。未知の `log_type` では `rows_of` を呼ばない。
 
 **Implementation Notes**
 
 - Integration: `mcp/mod.rs` の `dispatch` は変えない。`mcp_tests.rs` の `get_log_and_seven_omitted_do_not_answer_with_a_resolve_failure` は `ghost_name: None`・0 体で呼ぶので、答えは `(no log entries)` か記録の行になり、`NG:` にならない（緑のまま）。
-- Validation: `answer` は `History` を引数で受けるので、テストは手元で作った履歴を渡す（置き場を共有しない）。
-- Risks: `read` の間は出す側のスレッドが `push` で待つ。`answer` は最大 1,000 件の整形なので短いが、長く握らないよう、`answer` の中で World・SHIORI・ファイルに触れない。
+- Validation: `answer` は記録を返す口を引数で受けるので、テストは手元で作った履歴の `rows(kind)` を写して渡す（置き場を共有しない）。
+- Risks: `snapshot` の間（最大 1,000 件の写し）は出す側のスレッドが `push` で待つ。写しは文字列の複製だけで、World・SHIORI・ファイルに触れない。
 
 ### 取り決めの文書
 
@@ -592,9 +603,10 @@ fn render(record: &Record) -> String;
 1. **本物のマクロの形（6.1・6.4）**: `capture` の中で `tracing::info!(target: "areka::log::script", ghost = %…, label = "…", "…")`・`tracing::debug!(target: "areka::log::error", …)`・普通の `warn!` を出し、得た `CapturedEvent` を `draft` へ渡して、種別・名・語・本文を確かめる（出す側は本 spec の型を使っていない）。
 2. **名指しのモジュールの実在（2.12）**: `RULES` の各行について、target からソースの場所を導いて実在を判定する。`areka` → `crates/areka/src/main.rs`、`areka::a::b` → `crates/areka/src/a/b.rs` か `a/b/mod.rs`、`areka_update` → `crates/areka-update/src/lib.rs`、`areka_update::x` → `crates/areka-update/src/x.rs`。`::` を含まない target（`ghost-boot`・`ghost-shutdown`）は、`crates/areka-ghost/src/runtime.rs` に `target: "<名前>"` の字面があることを判定する。導けない target が `RULES` に入ったら赤にする（黙って通さない）。
 3. **文書との一致（7.3）**: `doc/ssp-mcp/log-convention.md` の目印の間の表を読み、（種別の語・target・照合）の集合が `RULES`＋取り決めの target 2 行と一致することを判定する。表が 0 行なら赤（読めていないのに緑にならない）。
-4. **置き場と番号の口（6.2・6.4）**: `last_id()` を読み、`record` で 1 件積み、`read` でその種別を「読んだ番号より大きい」で絞ると、積んだ 1 件が入っている（並走する他のテストが積んでも成り立つ形で確かめる）。
+4. **置き場と番号の口（6.2・6.4）**: `last_id()` を読み、`record` で 1 件積み、`snapshot` でその種別を写して「読んだ番号より大きい」で絞ると、積んだ 1 件が入っている（並走する他のテストが積んでも成り立つ形で確かめる）。
 5. **並行（1.9）**: 手元の `Mutex<History>` へ 8 スレッドから 500 件ずつ積み、番号が 1〜4,000 でちょうど 1 回ずつ現れ、件数が合う（上限に掛からないよう種別を 5 つに散らす）。
 6. **毒された排他（1.10）**: 手元の `Mutex<History>` を別スレッドのパニックで毒し、同じ取り出し方で積めること。
+7. **フィルタの答え（1.7・1.9・6.3）**: `wants` と `passes` を値で確かめる。出来事でない問い合わせは、どのレベル・どの target（診断の target `areka::perf` の debug を含む）でも `passes` が真・`wants` が偽。出来事は `classify` の当たり外れと同じ（warn の普通の target・info の `areka::boot_config`・debug の `areka::log::script` は真、debug の普通の target・info の `areka::alert` は偽）。`passes` を「出来事でない問い合わせを断る」形へ書き換えると赤になる。
 
 ### Unit Tests — `crates/areka/src/mcp/get_log_tests.rs`（書き換え）
 
@@ -611,12 +623,12 @@ fn render(record: &Record) -> String;
 層が本当に受け口に載っていること・`RUST_LOG` と独立であること・JSON を通しても本文の字が変わらないことを固定する（1.1・1.7・1.8・4.6・4.7・6.3）。
 
 - **手順**: `127.0.0.1:0` を束ねて空きの番号を得て放し、`AREKA_MCP_PORT=<番号>`・`RUST_LOG=warn,areka::boot_config=info`・`NO_COLOR=1`・`AREKA_NO_ALERT=1`・`AREKA_APP_SMOKE_EXIT_MS=20000`・一時の `AREKA_PROFILE_DIR` で、emo2 の検体を argv に渡して `CARGO_BIN_EXE_areka` を起こす。標準出力はパイプでなく一時フォルダのファイルへ向ける（パイプが詰まって子が止まるのを避ける）。
-- **問い合わせ**: 手書きの HTTP/1.1 で `POST /api/mcp/v1` に `tools/call`（`get_log`・`log_type=status`）を送る。つながるまで・目当ての行が出るまで短い間隔で繰り返す（締切 60 秒）。本文の `text` の JSON 文字列は、テストの中の小さな復号（`\\`・`\"`・`\r`・`\n`・`\t`・`\uXXXX`）で読む（`serde_json` を `areka` の依存に足さない）。
+- **問い合わせ**: 手書きの HTTP/1.1 で `POST /api/mcp/v1` に `tools/call`（`get_log`・`log_type=status`）を送る。つながるまで・目当ての行が出るまで短い間隔で繰り返す（締切 60 秒）。繰り返しのたびに子の終了（`try_wait`）も見て、子が先に終わっていたら締切を待たずに決める（モニタ 0 台の告知と非 0 終了なら受理、それ以外は標準出力のファイルの中身を添えて失敗）。本文の `text` の JSON 文字列は、テストの中の小さな復号（`\\`・`\"`・`\r`・`\n`・`\t`・`\uXXXX`）で読む（`serde_json` を `areka` の依存に足さない）。
 - **判定**:
   1. status の答えに `本物のゴースト窓を開きました` を含む行があり、標準出力のファイルにはその文が無い（`RUST_LOG` で標準出力から消えた info が履歴には残る）。
   2. status の答えの `event="ghost_resolved"` の行の本文が、標準出力の同じ出来事の行の `areka::boot_config: ` より後ろと 1 字も違わない（逆斜線入りのパスと二重引用符が JSON を通って元に戻る・履歴の本文の作り方が標準出力と同じ）。
   3. 各行が `#<数字> <yyyy/mm/dd hh:mm> [STAT] STAT : ` で始まり、番号が昇順。
-- **後始末**: 答えを得たら子を止める（自分が起こした子だけ）。締切を超えたら子を止めて失敗にする。
+- **後始末**: 答えを得た後は、`AREKA_APP_SMOKE_EXIT_MS` の自動終了を待つ（外から止めない。外から止めると、隣で起きている i686 の helper と検体の複製の後始末が areka の終了処理を通らず、掃除漏れになる。`smoke_boot_loop_exit.rs` と同じ扱い）。子を止めるのは締切を超えたときだけで、止めるのは自分が起こした子だけ、そのときは失敗にする。標準出力のファイルは子が終わってから読む（判定 1・2）。
 - **前提**: i686 の `shiori-host32-helper.exe` が `areka.exe` の隣にあること（`smoke_boot_loop_exit.rs` の ①② と同じ前提）。揃える手順は本ファイルに自前で持つ（`smoke_boot_loop_exit.rs` は触らない＝要件 8.4。写しになる分は 60 行ほど）。モニタ 0 台の環境では、`smoke_boot_loop_exit.rs` と同じく「起動窓を開けません」の告知と非 0 終了を受理して終える。
 
 ### 既存のテストと見張り
@@ -628,12 +640,14 @@ fn render(record: &Record) -> String;
 ### テストで固定されないこと（明示）
 
 - 「取り決めの target を **debug・trace** で出した行が、本物の受け口の最大レベルの門を通って履歴へ届く」ことは、本 spec の常時テストでは固定されない（そのレベルで出す側が本 spec に無く、層を載せた受け口をテストで差せないため）。証跡は [research.md](research.md) §9.2 の実験である。最初に debug で出す後続の spec（`mcp-kanade-tools` か `mcp-strict-errors`）が、実プロセスの試験で固定する。
+- 「`log` クレートから橋渡しされた warn 以上の行が、本物の受け口を通って履歴へ届く」こと（要件 2.10）も、常時テストでは固定されない（外のライブラリに warn を出させる手段がテストに無い）。固定されるのは `log.` で始まる欄を除く純粋な部分だけで、橋を通ること自体の証跡は [research.md](research.md) §9.3 の実験である。
+- 「診断の target を点けた状態でも履歴が取りこぼさない」ことは、フィルタの答え（`wants`・`passes`）の決定論テストで固定する。`tracing-subscriber` の中の印の仕組みそのものは常時テストで踏まない（証跡は [design-validation.md](design-validation.md) 指摘 1 の実験。Revalidation Triggers に載せた）。
 
 ## Performance & Scalability
 
 - **出す側の費用**: 関心のない `debug!`／`trace!` は呼び出し口ごとに「関心なし」が覚えられ、1 回あたり 1 ns ほど増える（0.7 → 1.5〜2.4 ns・実測）。info の行は、標準出力の層と履歴の層で関心が分かれる呼び出し口だけ、出来事ごとにフィルタが 2 つ評価される（info は節目の行で、毎フレームは出ない）。
 - **残す 1 件の費用**: 欄の訪問・本文の組み立て（割り当て数回）・`GetLocalTime`・排他 1 回。warn 以上と節目の info だけなので、毎フレームの経路には乗らない。
-- **`get_log`**: 排他の中で最大 1,000 件を絞って整形する。UI スレッドで待たない（その場で答える）。
+- **`get_log`**: 排他の中で種別の列（最大 1,000 件）を写し、排他の外で絞って整形する。UI スレッドで待たない（その場で答える）。
 
 ## Supporting References
 
