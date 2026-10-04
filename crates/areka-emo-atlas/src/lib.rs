@@ -97,15 +97,16 @@ pub fn bake_with_limits(
 
         // デコード（失敗＝索引表に載せず・エラー集約・継続・R2.2）。動く絵は 0 番のコマが
         // 静止画と同じ道を通り、残りのコマ・待ち時間・繰り返し回数は脇へ取っておく。
-        let (decoded, animation) =
-            match animated::load(decoder, &path, key, limits, cfg, &mut used_pixels) {
-                animated::Loaded::Still(d) => (d, None),
-                animated::Loaded::Frames(anim) => {
+        let (decoded, animation, frames_pixels) =
+            match animated::load(decoder, &path, key, limits, cfg, used_pixels) {
+                animated::Loaded::Still(d) => (d, None, 0),
+                animated::Loaded::Frames(anim, pixels) => {
                     let mut frames = anim.frames.into_iter();
                     let first = frames.next().expect("load checks >= 2 frames");
                     (
                         first.image,
                         Some((first.delay_ms, frames.collect(), anim.loop_count)),
+                        pixels,
                     )
                 }
                 animated::Loaded::Failed(e) => {
@@ -131,6 +132,8 @@ pub fn bake_with_limits(
                 continue;
             }
         };
+        // 表に載ると決まった動く絵だけを合計に足す（正規化で落ちた絵は数えない・要件 6.8）。
+        used_pixels += frames_pixels;
 
         // 抜き色で扱った絵は、抜いた色を記録する（要件 6.3）。
         if let Some([b, g, r, a]) = key_color {

@@ -615,6 +615,36 @@ fn total_limit_shrinks_only_the_third_animation() {
     assert_eq!(animated_of(&result.table), [false, true, true]);
 }
 
+/// 全コマを読めても 0 番の正規化で落ちた絵（透明度なし＋同名 `.pna`＝未実装の腕）は表に載らない
+/// ので、合計に数えない。2 つ目・3 つ目は両方とも全コマで載る（設計「実際に載せた絵だけ」）。
+#[test]
+fn picture_dropped_by_normalize_is_not_counted_in_the_total() {
+    let limits = AnimationLimits {
+        max_total_pixels: 16,
+        ..AnimationLimits::default()
+    };
+    let mut dec = three_animations(None);
+    let opaque = animated(&[([K0; 4], 100), ([Y; 4], 50)], false);
+    insert_anim(
+        &mut dec,
+        "anim1.png",
+        2,
+        Ok(opaque.frames[0].image.clone()),
+        Ok(opaque),
+    );
+    dec.insert_pna(Path::new(BASE).join("anim1.png"));
+    let result = bake_in(&dec, &ANIMS, limits, PackConfig::default());
+    assert_eq!(result.errors.len(), 1, "{:?}", result.errors);
+    assert!(result.table.resolve(SetId(0), "anim1.png").is_none());
+    for rel in ["anim2.png", "anim3.png"] {
+        let id = result.table.resolve(SetId(0), rel).unwrap();
+        assert!(
+            result.table.animation(id).is_some(),
+            "{rel} keeps all frames"
+        );
+    }
+}
+
 /// 段 1 が `Err` なら段 2（今までの 1 枚読み）の絵が出て `warn!` は 2 回（2 回目に段 1 の理由）。
 /// 段 2 も `Err` なら段 3: 失敗の一覧に 1 件で、ほかの絵は載る（要件 6.4〜6.6）。
 #[test]

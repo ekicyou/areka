@@ -22,26 +22,27 @@ use crate::trim::{TrimResult, Trimmed, Trimmer};
 pub(crate) enum Loaded {
     /// 1 枚の絵（静止画・1 枚へ縮めた動く絵）。今までの静止画の枝を通る。
     Still(DecodedImage),
-    /// 全コマを読めた動く絵（コマは見出しどおりの枚数・寸法）。
-    Frames(AnimatedImage),
+    /// 全コマを読めた動く絵（コマは見出しどおりの枚数・寸法）と、その全コマの画素の数。
+    /// 画素の数は、呼び手が 0 番のコマの正規化を通して表に載せると決めたときだけ合計に足す。
+    Frames(AnimatedImage, u64),
     /// 1 枚も読めなかった（今までの静止画の失敗と同じ扱い）。
     Failed(DecodeError),
 }
 
-/// 鍵 1 つを読む。`used` はこの `bake` で既に全コマを載せた動く絵の画素の合計で、
-/// 全コマを読めたときだけ足す（要件 6.8）。
+/// 鍵 1 つを読む。`used` はこの `bake` で既に全コマを載せた動く絵の画素の合計
+/// （足すのは呼び手・要件 6.8）。
 pub(crate) fn load(
     decoder: &impl ElementDecoder,
     path: &Path,
     key: &AtlasKey,
     limits: AnimationLimits,
     cfg: PackConfig,
-    used: &mut u64,
+    used: u64,
 ) -> Loaded {
     let Some(info) = decoder.probe_animation(path) else {
         return still(decoder, path);
     };
-    let pixels = match judge(info, limits, *used, cfg) {
+    let pixels = match judge(info, limits, used, cfg) {
         Ok(pixels) => pixels,
         Err(exceeded) => {
             tracing::warn!(
@@ -85,10 +86,7 @@ pub(crate) fn load(
         }
     });
     match checked {
-        Ok(anim) => {
-            *used += pixels;
-            Loaded::Frames(anim)
-        }
+        Ok(anim) => Loaded::Frames(anim, pixels),
         Err(reason) => {
             tracing::warn!(
                 target: "areka_emo_atlas",
