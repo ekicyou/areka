@@ -196,3 +196,105 @@
 6. **合成のキャッシュの容量**（2.8）。本 spec では 3 のまま測るだけにするか、入れ子のシェルの命中率を要件に入れるか。
 7. **`u32` に収まらない数字**（6 の 3）。要件 1.1 の「十進のサーフェス番号として読む」の端。
 8. **箱の「画像より下」の報告**（2.6）。サーフェスを指す element を「画像の element」に数える今の成り行きでよいか。
+
+---
+
+# 設計フェーズの記録（2026-10-04）
+
+> ここから上（1〜7 章）はギャップ分析の本体で、要件ディスカッションの前に書かれた。次の行は古い: 「pattern定義の先はコマを見ない＝在」（2.4・3 章の 2.7／5.13 の行・6 章の 1）、「着せ替えを持ち込まない／element の再帰だけ空に」（2.4・3 章の 5.12 の行）。正は `requirements.md` と `design.md`。
+
+## Summary
+
+- **Feature**: `areka-P0-surface-element-nesting`
+- **Discovery Scope**: Extension（既存の合成・SERIKO ループの延長。新しい外部の依存なし＝light discovery）
+- **Key Findings**:
+  - 読み分けは compose の 1 関数で足り、`areka-parsers`・`areka-emo-atlas` は無改変で済む。焼く一覧は `build_shell_target_with_boxes` が `shell.surfaces` の複製から数字だけの element を外せばよい。
+  - 切り替えの `Show` に部品のコマを載せる仕事は、今ある `ScopeStates::apply` → `commit_pattern` の組み合わせで足りる。`state.rs` は変えずに済む。
+  - **emo2 は「pattern定義が指すサーフェスがアニメーションを持たない」を `\1` 側で満たさない**（2110・2210）。下の「emo2 の実物の確認」。
+
+## Research Log
+
+### emo2 の実物の確認
+
+- **Context**: 要件 7 の条件に「pattern定義が指すサーフェスのどれもアニメーションを持たない」が加わった。emo2 がこれを満たすかを設計で確かめることになっていた。
+- **Sources Consulted**: `target\nar-samples\manual\emo2\ghost\emo2\shell\master\surfaces.txt`（508 行・ブレス 66 個）を、ブレスごとに行を集めて数えた。
+- **Findings**:
+  - 数字だけの element定義: 0 件。
+  - pattern定義が指す 0 以上の番号: 38 個（1100・1101・1200〜1211・1300〜1305・1410〜1414・1500〜1503・1600・1700・1701・1800・1801・2106・2110・2206・2210）。
+  - アニメーションの行を持つブレス: `surface1000`・`surface.append10,2100`・`surface.append2200`・`surface.append2110`・`surface.append2210` の 5 個。
+  - 上の 2 つの重なり＝アニメーションを持つ、pattern定義が指すサーフェス: **2110 と 2210 の 2 個**（どちらも `animation0.interval,random,4`・`pattern0,overlay,2106|2206,0`・`pattern3,overlay,-1,160`）。`\0` 側（1100〜1801）と 2106・2206 は 0 個。
+  - 2110／2210 は `\1` のまばたき（`pattern0` 2106 を 0ms・`pattern1` 2110 を 40ms・`pattern3` -1 を 80ms）の 2 枚目で、発火から 40〜120ms の間だけ絵に出る。
+- **Implications**:
+  - 部品の抽選を「境界を跨いだ刻みに、一番上の進行を済ませた後の絵に出ている部品だけ」とすると、2110 が抽選に当たるのは、発火の刻み T1 と次の境界を跨ぐ刻み T2 の差が 40ms 以上 120ms 未満のときだけ。T1 は境界 G を跨いだ最初の刻み、T2 は T1 より後の最初の 1000 の倍数 G' 以上なので、T1 > G' − 120 かつ G ≤ G' − 1000。つまり [G' − 1000, G' − 120) に刻みが 1 つも無い＝刻みが 880ms 以上止まっていた直後に限る。
+  - 抽選を「刻みの頭の時点で見えている部品」にすると、2110 が絵に出ている 80ms の間に刻みが止まり、次の刻みが境界を跨いだときにも当たる。既存の粗い刻みのテスト（発火 → 40ms 後 → 次の境界）が乱数の消費を変えうるので採らなかった。
+  - 要件 7.4 の文面は、この端を含めると字義どおりには成り立たない。設計ディスカッションへ持ち込む。
+
+### 焼く一覧と `surface.append*`ブレス
+
+- **Context**: 数字だけの element を焼く一覧から外す場所を確かめた。
+- **Findings**: `build_shell_target_with_boxes` が `SurfaceSet` に渡すのは `shell.surfaces` の複製と、土台に使う面の画像だけ。`shell.appends` の element は渡っていない。
+- **Implications**: 外すのは `surfaces` の複製の 1 か所で足りる。`surface.append*`ブレスに書いた**画像**の element定義が焼かれないのは本 spec の前からの事実で、本 spec の範囲外（別に起票するのが筋）。
+
+### 切り替えの 1 枚目
+
+- **Context**: `ScopeStates::apply` は空の `PatternState` の `Show` を返し、保持していた `PatternState` を消す。
+- **Findings**: `apply` の直後に `commit_pattern(部品のコマ)` を呼ぶと、保持と発行の両方に部品のコマが入った `Show` が 1 件返る。`apply` が返した空の `Show` は出さずに捨てればよい。
+- **Implications**: `state.rs` に新しい口は要らない。発行は 1 件のまま。次の刻みの `commit_pattern` の比べる相手も正しい。
+
+## Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| 既存を延ばすだけ | `plan.rs`・`fold.rs`・`looper.rs`・`state.rs` の中へ全部足す | 新しいファイルが無い | `looper.rs`・`state.rs` が膨らむ。静的な解析が合成の再帰に埋もれる | 不採用 |
+| 全部を新しい部品へ | 合成の再帰も別モジュール | 継ぎ目が明確 | `flatten_surface` と同じ再帰を 2 つ持つ | 不採用 |
+| **混ぜる** | 合成と外形の再帰は `plan.rs` の中、静的な解析は `nesting.rs`・`hit_import.rs`、時計は `parts.rs` | 再帰は 1 つ・既存のファイルは呼ぶだけ | `visible_parts` と `flatten_surface` の一致を檻で留める必要 | 採用（ギャップ分析の案 Z） |
+
+## Design Decisions
+
+### Decision: 読み分けは compose の 1 関数（ギャップ分析 4.1-A）
+
+- **Alternatives Considered**: `ElementPath` に口を足す（`model.rs` と `manifest.rs` に触る）／`Element` を列挙にする（29 ファイルへ波及）。
+- **Selected Approach**: `element_kind`（`nesting.rs`）を `fold.rs` と `shell_target.rs` が呼ぶ。`NormalizedElement` に `kind` を足す（構造体リテラルは compose の 3 ファイル）。
+- **Rationale**: 同じ時期に走る spec と触るファイルが重ならない。「parser は転記・解決は下流」に合う。
+
+### Decision: 警告は読み込みのとき 1 度（ギャップ分析 4.3-A）
+
+- **Selected Approach**: `NestReport` を `EmoWorld::dangling_pattern_targets` と同じ型で作り、`load_shell_target` が出す。合成の中の読み飛ばしは `debug!`。循環は element定義の辺について、element定義と pattern定義の両方の辺で親へ戻れるかで判定する。
+- **Trade-offs**: 「どの一番上から見ても切られうる辺」を全部挙げるので、表示しないサーフェスの循環も警告になる（作者の書き間違いなので妥当）。
+
+### Decision: 当たり判定は並べた列を別に持つ（ギャップ分析 4.2-A）
+
+- **Selected Approach**: 持ち込みの在るサーフェスにだけ `HitRegions` を付ける。`hit_region` は列を受ける形を足して委譲する。
+- **Rationale**: 手前奥が並べる順だけで決まる。持ち込みの無いシェルでは面の表が前と同じ。
+
+### Decision: 部品の時計は `LoopRuntime`、コマは `PatternState` の欄
+
+- **Alternatives Considered**: コマも `ScopeStates` に持つ（ギャップ分析 4.4-A）／全部 `LoopRuntime` に持ち `Show` を 2 件出す（4.4-B）。
+- **Selected Approach**: 時計（開始の時刻・末尾で保つコマ）は `PartClocks`。見える部品のコマは刻みごと・切り替えごとに時計から求めて `PatternState` の部品の欄へ書く。切り替えは `apply` → `refresh_parts`（`peek` → `commit_pattern`）で `Show` を 1 件。
+- **Rationale**: 見えなかった部品のコマを保存しておくと、戻った 1 枚目に古いコマが出る。時計から求める形なら、切り替えた瞬間の絵が「直前の刻みの時点」で揃う。1 コマ遅らせて直す形を取らずに済む。
+
+### Decision: 見えない部品は何もしない（ギャップ分析 4.4 後半の B）
+
+- **Rationale**: 今動く間隔の語は確率で引くものだけで、見えない間に抽選を回す形と見分けがつかない。乱数を消費しないので、入れ子の無いシェルと emo2 の消費順が変わらない。周期の語が載るときは開始の時刻から周期を求める。
+
+### Decision: 部品の時計はシェル面だけ
+
+- **Rationale**: 要件の範囲はシェルの surfaces.txt。バルーン面まで広げると `apply_balloon` 側にも同じ仕組みが要る。合成の側（`flatten_surface`）は面の種類を問わないので、後から広げる妨げは無い。
+
+### 一般化・既存の利用・削ったもの
+
+- **一般化**: 「element定義の子」と「pattern定義が指すサーフェス」を 1 つの「部品」として扱う（開発者裁定）。時計の鍵・コマの欄・見えるかの規則が 1 つになる。
+- **既存の利用**: 先祖の積み上げ（`visited`）・`frame_at`・`should_fire`・`commit_pattern` の同値の番人・`fold.rs` の `expand_targets`・`dangling_pattern_targets` の報告の型・`log_box_issue` の網羅 `match`。
+- **削ったもの**: `state.rs` の変更・`cache.rs` の変更・`manifest.rs` の変更・バルーン面の部品の時計・「初めて表示された」の印（状態を持たずに済む）。
+
+## Risks & Mitigations
+
+- `visible_parts` と `flatten_surface` がずれる → `nesting_visible_tests.rs` で「コマを足すと命令列が変わる ⇔ 見える部品に在る」を留める。
+- emo2 の乱数の消費が変わる → `looper_parts_emo2_tests.rs` で、部品の経路を外した場合と発行列・乱数の回数が一致することを留める。端（刻みが 880ms 以上止まった直後）も 1 本で固定する。
+- 合成のキャッシュの命中が下がる（親と部品が同時に動くシェル） → 容量は変えず、既存の計測の記録（`cache_hit`）で測る。
+- `plan.rs` の行数（694 行 → 800 行前後） → 1,000 行以内。テストは新しい兄弟ファイルへ。
+
+## References
+
+- ukadoc `descript_shell_surfaces`（element定義・pattern定義・`sometimes`／`rarely`）: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html
+- `doc/COMPAT_ARCHITECTURE.md` §8（areka 独自の語の登記の前例: `balloon.*`ブレス・描画メソッド `balloon`）
