@@ -92,7 +92,7 @@
   - _Depends: 2.3_
 
 - [ ] 5. 実プロセスの試験と回帰の確認
-- [ ] 5.1 実プロセス・実ソケットの `get_log` の試験を 1 本書く
+- [x] 5.1 実プロセス・実ソケットの `get_log` の試験を 1 本書く
   - 空きの番号・`RUST_LOG=warn,areka::boot_config=info`・`NO_COLOR=1`・`AREKA_NO_ALERT=1`・`AREKA_APP_SMOKE_EXIT_MS=20000`・一時のプロファイルで emo2 の検体を渡して areka を起こし、標準出力は一時フォルダ（ワークツリーの `target\` の下）のファイルへ向ける
   - i686 の helper を `areka.exe` の隣に揃える手順を本ファイルに自前で持つ（`smoke_boot_loop_exit.rs` は触らない）
   - 手書きの HTTP で `get_log`（`log_type=status`）を繰り返し送り、子の終了も見る（締切 60 秒・子が先に終わったらモニタ 0 台の告知と非 0 終了なら受理）。答えを得た後は自動終了を待ち、締切を超えたときだけ自分が起こした子を止めて失敗にする
