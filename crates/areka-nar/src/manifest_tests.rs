@@ -616,3 +616,6 @@ fn the_mutation_scan_catches_every_spelling_it_claims_to_watch() {
 
 #[path = "manifest_companion_tests.rs"]
 mod companion;
+
+#[path = "manifest_companion_reading_tests.rs"]
+mod companion_reading;
