@@ -53,7 +53,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 6.3, 8.3_
   - _Boundary: sniff_
 
-- [ ] 3.2 (P) `image` で全コマと動きの 1 枚目を読む
+- [x] 3.2 (P) `image` で全コマと動きの 1 枚目を読む
   - 先頭の署名で APNG・WebP の読み手を選び、重ね済みのコマを 1 枚ずつ進める。最初の失敗で止める。見出しより多い・少ない・寸法が違うときも失敗。`set_background_color` は呼ばない
   - 画素は乗算済み BGRA（`(c × a + 127) / 255`）、待ち時間はミリ秒へ四捨五入（0 は 0・分母 0 も扱う）、繰り返し回数は 2 形式で同じ意味へ写す。透明度を持つかは読む前に色の形式で 1 回だけ聞き、全コマ同じ値にする
   - 動きの 1 枚目だけを読む口は、遅延のコマの並びから最初の 1 つを取って止め、全コマのときと同じ内部の関数を通す
@@ -146,3 +146,4 @@
 - 1.3（範囲外・完了時に `/kiro-discovery` で起票）: `tools/test-all.ps1` の x64 全テストの負荷の下でだけ、`areka-mcp` の `server::server_gate_help_tests::bad_origin_is_403_before_mcp` が `testkit.rs` の「応答を 1 バイトも受けられなかった（os error 10053）」で 1 回赤になった。`areka-mcp` は `areka-emo-atlas` にも `image-webp` にも依存せず、単独の `cargo test -p areka-mcp --lib` は 4 回とも 100 件緑。詳細は `research.md` 9.12 節。
 - 1.3: 謝辞のクレートの行は 259 → 271（`^- \S+ \d+\.\d+` で数えて +12・−0）。research.md 9.7 節の「250」は数え方の違い。
 - 3.1: `sniff` に一時の `#[cfg_attr(not(test), allow(dead_code))]` がある。3.4 でつないだら外す。`File` に直につなぐなら `BufReader` で包む（チャンクごとに seek と小さい読み込みをするため）。
+- 3.2: `image_arm` にも 3.1 と同じ一時の dead_code 許可がある（3.4 で外す）。`webp_named.png` を読み込みの側で読むテストは無い（5.1 の検体のフォルダを焼くテストで覆う）。分母 0 の待ち時間は `image` が 100 と読み替えるので、`delay_ms` の 0 の分岐は守りだけ。
