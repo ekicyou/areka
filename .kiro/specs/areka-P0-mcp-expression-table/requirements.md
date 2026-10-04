@@ -41,7 +41,7 @@ brief は説明の出どころの候補に「`surfacetable.txt`・surfaces.txt �
 
 - SSP の文字化けの欠陥は移植しない。6 本を同時に呼んだときに SSP が返した「No response from server」も SSP の癖であり、移植しない。
 
-### SSP の実測（2026-10-04・SSP 2.9.05・開発者の机・6 体を 1 体ずつ）
+### SSP の実測（2026-10-04・SSP 2.9.05・開発者の机・8 体を 1 体ずつ）
 
 1. 表の形: 見出し行 `|scope \0,\1,\p[2]...|character name|description|surface number : \s[]|`、区切り行 `|-----|-----|-----|-----|`、以降は `|スコープ|グループ名|名前|\s[ID]|`。行の終わりはこの経路では見分けられなかったため、`doc/ssp-mcp/survey.md` の `\r\n` に従う。
 2. 並び: スコープの昇順、同じスコープの中はサーフェス ID の昇順（ファイルに書かれた順ではない。既定の 10・11・19 が、シェルの 9 と 20 の間に入る）。
@@ -54,9 +54,10 @@ brief は説明の出どころの候補に「`surfacetable.txt`・surfaces.txt �
 9. 名前を省略した行（`0,`）は**載る**。説明の列は空で、既定の名前より勝つ（`|\0|本体基本||\s[0]|`）。この検体は `{` が閉じないままファイルが終わるが、読めた分は使われた。
 10. `surfacetable.txt` が無いシェルは、既定の 15 件だけの表（すべて `|\0||名前|\s[ID]|`）。
 11. 既定の名前は、シェルの `surfacetable.txt` が**触れていない ID** にだけ載る（スコープ `\0`・キャラクタ名は空）。「触れている」は ID だけで判定され、スコープは見ない（10・11・19 をスコープ 1 に書いたシェルでは、既定の 10・11・19 は `\0` に出ず、25 は出る）。`group,__disabled` の中に書かれた ID も既定を消す（10 を `__disabled` の中に `__parts` で書いたシェルでは、既定の 10 は出ず、11・19・20・25 は出る）。
-12. surfaces.txt にサーフェスの定義があるかどうかは見られていない（定義の無い 11・19・25 も載る）。少なくとも `option,DisableNoDefineSurfaces` が無いとき。
+12. surfaces.txt にサーフェスの定義があるかどうかは見られていない（定義の無い 11・19・25 も載る）。`option,DisableNoDefineSurfaces` があるシェルでも同じで、定義も画像も無い既定の 19・20・25 が載った。このオプションは表を変えない。
 13. `surface.alias`ブレスは表に影響しない。surfaces.txt で定義されていても `surfacetable.txt` に行が無く既定の表にも無いサーフェスは載らない。
 14. 検体（`group,0`＝`scope,0` に 0〜9・20・21、`group,1`＝`scope,1` に 2100〜2110・2200〜2210）の結果: `\0` の 0〜9（キャラクタ名 `0`）→ `|\0||\1-素|\s[10]|` → `|\0||\1-刮目|\s[11]|` → `|\0||\1-歌|\s[19]|` → `|\0|0|ぴえん|\s[20]|` → `|\0|0|ジト|\s[21]|` → `|\0||歌|\s[25]|` → `\1` の 2100〜（キャラクタ名 `1`）。
+15. 行の終わりに `}` が付いた行（`100,黒塗り}`）は、`}` を名前の一部としてそのまま載せる（`|\0|ほつれ銀糸|黒塗り}|\s[100]|`）。`group` を閉じるのは `}` だけの行である。
 
 ### 実物の `surfacetable.txt` に見られた書き方（開発者の机の 13 本）
 
@@ -64,7 +65,6 @@ brief は説明の出どころの候補に「`surfacetable.txt`・surfaces.txt �
 
 ### 実測していないもの
 
-- `option,DisableNoDefineSurfaces` の効き方は SSP で実測していない。Requirement 3 の該当の基準は **ukadoc の文言から導いたもので、SSP では未実測**である。
 - 同じサーフェス ID が `surfacetable.txt` に 2 度書かれたときの勝ち負けは実測していない。要件は「表全体を失敗させない」までとし、どちらを採るかは設計で決める。
 
 ## Boundary Context
@@ -126,9 +126,8 @@ brief は説明の出どころの候補に「`surfacetable.txt`・surfaces.txt �
 4. The get_expression_table ツール shall 「`surfacetable.txt` に書かれている」をサーフェス ID だけで判定し、書かれた `group` のスコープが 0 でなくても、`__disabled` の `group` の中でも、名前が `__parts` でも、名前が省略されていても、書かれているものとして扱う
 5. If 今のシェルに `surfacetable.txt` が無い, then the get_expression_table ツール shall 既定の 15 件だけの表を返す（`NG:` を返さない）
 6. The get_expression_table ツール shall 既定の名前を、OS や areka の言語の設定に関わらず日本語の 15 件のまま返す
-7. Where `surfacetable.txt` に `option,DisableNoDefineSurfaces` が無い, the get_expression_table ツール shall 既定の名前を、そのサーフェスがシェルに定義されているかどうかを見ずに載せる
-8. Where `surfacetable.txt` に `option,DisableNoDefineSurfaces` がある, the get_expression_table ツール shall 既定の名前のうち、今のシェルに定義（surfaces.txt の surface*ブレス、または surface*.png の画像）の無いサーフェス ID のものを表に載せない（ukadoc の文言から導いた基準。SSP では未実測）
-9. Where `surfacetable.txt` に `option,DisableNoDefineSurfaces` がある, the get_expression_table ツール shall シェルの `surfacetable.txt` に書かれた行は、Requirement 2 のとおりに載せる（このオプションで減らさない）
+7. The get_expression_table ツール shall 既定の名前を、そのサーフェスがシェルに定義されているかどうかを見ずに載せる
+8. The get_expression_table ツール shall `surfacetable.txt` の `option,DisableNoDefineSurfaces` の有無で、表の行を増やしも減らしもしない（SSP の実測 12）
 
 ### Requirement 4: 行の並び
 
@@ -149,13 +148,14 @@ brief は説明の出どころの候補に「`surfacetable.txt`・surfaces.txt �
 
 1. The get_expression_table ツール shall `surfacetable.txt` を 1 行目の `charset` の文字コードで読み、`charset` が無ければ Shift_JIS で読む
 2. The get_expression_table ツール shall `charset` の綴りの大文字と小文字の違い（`Charset`）と、`charset` の前に置かれた UTF-8 の BOM を受け入れる
-3. The get_expression_table ツール shall `version` の行・`//` で始まる注釈の行・空行を、表の行にせずに読み飛ばす
+3. The get_expression_table ツール shall `version` の行・`option` の行・`//` で始まる注釈の行・空行を、表の行にせずに読み飛ばす
 4. The get_expression_table ツール shall 行の先頭のタブや空白による字下げを無視して読む
 5. If `{` が閉じられないまま `surfacetable.txt` が終わっている, then the get_expression_table ツール shall そこまでに読めた行を使って表を返す
-6. If `surfacetable.txt` に読み取れない行がある（行の終わりに `}` が付いた行・サーフェス ID が数値でない行・知らないオプションなど）, then the get_expression_table ツール shall 読み取れた分で表を返し、読み取れなかったことを areka のログに記録する
-7. If `surfacetable.txt` があるのに開けない、または文字コードが分からず読めない, then the get_expression_table ツール shall そのことを areka のログに記録し、読めた分と既定の名前で表を返す
-8. The get_expression_table ツール shall `surfacetable.txt` の書き方の崩れを理由に `NG:` を返すことも、表全体を空にすることもしない
-9. If 同じサーフェス ID が `surfacetable.txt` に 2 度以上書かれている, then the get_expression_table ツール shall 表全体を失敗させずに表を返す
+6. Where `サーフェスID,名前` の行の終わりに `}` が付いている, the get_expression_table ツール shall その `}` を名前の一部としてそのまま説明の列へ書き、その行で `group` を閉じたとみなさない（SSP の実測 15）
+7. If `surfacetable.txt` に読み取れない行がある（サーフェス ID が数値でない行など）, then the get_expression_table ツール shall 読み取れた分で表を返し、読み取れなかったことを areka のログに記録する
+8. If `surfacetable.txt` があるのに開けない、または文字コードが分からず読めない, then the get_expression_table ツール shall そのことを areka のログに記録し、読めた分と既定の名前で表を返す
+9. The get_expression_table ツール shall `surfacetable.txt` の書き方の崩れを理由に `NG:` を返すことも、表全体を空にすることもしない
+10. If 同じサーフェス ID が `surfacetable.txt` に 2 度以上書かれている, then the get_expression_table ツール shall 表全体を失敗させずに表を返す
 
 ### Requirement 6: 呼び出しの副作用と対象
 
@@ -175,9 +175,9 @@ brief は説明の出どころの候補に「`surfacetable.txt`・surfaces.txt �
 #### Acceptance Criteria
 
 1. The 常時テスト shall SSP の実測 14 の検体と同じ中身の `surfacetable.txt` に対して、SSP の実測と突き合わせた期待値の文字列（見出し行・区切り行・全行・行の終わりまで）と、ツールの返す文字列が一致することを確かめる
-2. The 常時テスト shall 次の実測のそれぞれを、期待値の行で確かめる: スコープ 2 以上の `\p[n]`・同じスコープの `group` が 2 つ・`__disabled` と `__parts` が載らないこと・`scope` の無い `group`・グループ名が空の `group`・`group` の外の行・名前を省略した行・閉じていない `{`・`surfacetable.txt` の無いシェル（既定の 15 件だけ）
+2. The 常時テスト shall 次の実測のそれぞれを、期待値の行で確かめる: スコープ 2 以上の `\p[n]`・同じスコープの `group` が 2 つ・`__disabled` と `__parts` が載らないこと・`scope` の無い `group`・グループ名が空の `group`・`group` の外の行・名前を省略した行・閉じていない `{`・行の終わりに `}` が付いた行・`surfacetable.txt` の無いシェル（既定の 15 件だけ）
 3. The 常時テスト shall 既定の名前が消える 3 つの場合（スコープ 0 以外の `group` に書かれた ID・`__disabled` の中に書かれた ID・名前を省略した ID）と、消えない場合（どこにも書かれていない ID）を確かめる
 4. The 常時テスト shall Shift_JIS の `surfacetable.txt` と UTF-8 の `surfacetable.txt`（BOM の有無・`Charset` の綴りを含む）のそれぞれで、キャラクタ名と説明が元の字のとおりに返ることを確かめる
-5. The 常時テスト shall `option,DisableNoDefineSurfaces` がある場合と無い場合で、既定の名前の載り方が Requirement 3 のとおりに変わることを確かめる
+5. The 常時テスト shall `option,DisableNoDefineSurfaces` がある場合と無い場合で、返る表が同じであること（シェルに定義の無い既定の名前も載ること）を確かめる
 6. The 常時テスト shall 読み取れない行のある `surfacetable.txt` で、表が返ることと、読み取れなかったことが記録されることを確かめる
 7. The 常時テスト shall 稼働中の SSP にも、ネットワークにも頼らずに走る
