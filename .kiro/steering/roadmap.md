@@ -124,7 +124,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 
 **保存義務（据え置き）**: 既存の終了経路（右クリックメニューの「終了」→ `OnClose` の握手 → `ghost_quit`）の決定論テストを 1 本も落とさない。実機サインオフの「絶対パス起動」（argv 上書き）を残す。
 
-## spec 台帳（brief を持つ 62 本・2026-10-04 棚卸㉑の実数え＝53 本に、切り出し 5 本〔`anchor-style-canon`・`sakura-embed-directive`・`makoto-reload-directives`・`currentghost-property-others`・`system-property-values`〕と覚え書きからの起票 4 本〔`self-alpha-declaration`・`seriko-trigger-intervals`・`extra-character-windows`・`update-check-options`〕を足した。それより前の数えの経緯は history「2026-10-04 棚卸㉑退避」。2026-10-05 に `element-clipping-option`〔優先〕を起票＝63 本）
+## spec 台帳（brief を持つ 62 本・2026-10-04 棚卸㉑の実数え＝53 本に、切り出し 5 本〔`anchor-style-canon`・`sakura-embed-directive`・`makoto-reload-directives`・`currentghost-property-others`・`system-property-values`〕と覚え書きからの起票 4 本〔`self-alpha-declaration`・`seriko-trigger-intervals`・`extra-character-windows`・`update-check-options`〕を足した。それより前の数えの経緯は history「2026-10-04 棚卸㉑退避」。2026-10-05 に `element-clipping-option`〔優先〕と `placement-measure-bake-once`〔優先〕を起票＝64 本）
 
 > **spec は名前で呼ぶ**（2026-09-26 開発者指示）: 報告・brief・コミット・PR で spec を指すときは spec 名（`areka-P0-` は省略してよい）を書く。「#数字」は `PR#185` の形の PR 番号にだけ使う。古い文書に台帳番号が出てきたら、その時点の表（history）で名前へ読み替える。
 > **段＝優先度の 3 段**（2026-10-03 開発者「1 バグ・2 リリース関係・バルーン関係・アニメーション画像関係・3 その他」）: **バグ**＝1 段目／**優先**＝2 段目（配布と公開・文字とバルーンの列・シェルの element の列・動く画像・バルーンのイベントと残件・**SSP MCP の移植 10 本**＝10-03 に開発者が追加・`mouse-drag-events`＝10-04 に開発者が個別に上げた）／**その他**＝3 段目（ゴーストのインストール・kanade・プロパティ・道具）／**据え置き**＝当面着手しない（理由は行に）／**保留**。どのウェーブに居るかは「並び」の列。完了した spec はこの表に置かない（完了サマリと history）。
@@ -157,6 +157,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 | `animated-image-decode` | 優先 | APNG・動く WebP の全コマと待ち時間を読む（動く GIF は 2026-10-04 の裁定で非対応・`image` クレートを本番へ＝10-04 承認済み） | M（11〜15） | **C3-⑥**（依存を足す席） | なし | ○ |
 | `animated-image-playback` | 優先 | 動く絵を子サーフェスへ分解して自動で回す・`import`・interval `always` | M〜L（15〜20） | **C4-⑤**（予定）・シェルの element の列 | `animated-image-decode`・`surface-element-nesting` | ○ |
 | `element-clipping-option`（**10-05 起票**・`animated-image-decode` のタスク 6.3＝要件 9.3） | 優先 | element定義の `--clipping,左,上,右,下` で矩形だけを描く・付けた element定義では動く絵として読まない（正典 C2）・オプションの並びを読み手で転記（`--alpha`・`--source`・`--scaling` の描画は範囲外） | S〜M（8〜12） | シェルの element の列（`animated-image-playback` の後） | `animated-image-decode`・`surface-element-nesting` | ○ |
+| `placement-measure-bake-once`（**10-05 起票**・`animated-image-decode` の完了時の棚卸＝research.md 9.14 節） | 優先 | 起動の採寸が絵を全部焼いて寸法だけ使い、動く絵の全コマを読んでは捨てる（上限いっぱいの絵 1 つで起動の焼く時間が release 0.19 → 3.2 秒）。バルーンも scope ごとに採寸と資産組み立てで 2 回ずつ焼く。焼くのを 1 回にするか、採寸を全コマ無しで済ませる | S〜M（8〜12） | `animated-image-playback` の前が望ましい（再生が着地すると動く絵の検体が増える）・`emo2_boot` の結線の列と `placement` | `animated-image-decode` | − |
 | `balloon-element-order` | 優先 | `balloon` の element定義を並び順どおりの重ね順で描く。wintf の兄弟の重なり順（描画と当たり判定が逆）の裁定の持ち主 | M（10〜14） | シェルの element の列 | `shell-balloon`・`animated-image-playback` | ○ |
 | `property-query-channels` | その他 | `\![get/set,property]`・`%property[…]`・`SenderType`（`\![embed]` は 10-04 に `sakura-embed-directive` へ切った）。許可の表の迂回を最初に決める | M（13〜17） | C5 の候補・kanade の列・host32-host の列 | `translate-pipeline` | ○ |
 | `balloon-lifecycle-events` | 優先 | `OnBalloonClose`／`OnBalloonTimeout`／`OnBalloonBreak`（項目 8・10 を先に。項目 7 の `balloontimeout` は `sakura-time-directives` を待つ） | M（9〜13・Ref2 の中断位置を作るなら L 18〜24＝要件の段で切る） | **C4-④**（予定）・kanade の列 | `mouse-drag-events`（kanade の列） | − |
@@ -222,7 +223,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 **道具と試験**
 
 - **`tools/perf` の実走していない 3 経路**（S）。`invoke-perf-run.ps1` へ `-GhostRoot`／`-BalloonRoot` を渡す実走・`invoke-followup-checks.ps1` の単独起動・`check-quiet.ps1`。**自己検査の赤（終了コード 4）は 10-02 の実行で再現しなかった**（`SELFTEST RESULT ok=9 ng=0`・終了コード 0）。性能改善ループを次に回す前に 3 経路を通す。
-- **一度だけ落ちた試験 1 本**（原因未調査・再発したら出力を添えて起票）: `sample-ghost-kit` の展開テストの os error 5（09-26）。i686 の `testdll_drop_invokes_courtesy_unload` は `host32-testdll-marker-race` が引き取った。
+- **一度だけ落ちた試験 2 本と、一度だけ出た出力 1 件**（原因未調査・再発したら出力を添えて起票）: `sample-ghost-kit` の展開テストの os error 5（09-26）。`areka-mcp` の `server::server_gate_help_tests::bad_origin_is_403_before_mcp` が全体テストの負荷の下で 1 回赤（10-04・`testkit.rs` の「応答を 1 バイトも受けられなかった（os error 10053）」＝403 を返して閉じた接続を読む前に切られる取り合いと見られる・単独では 4 回とも緑・次の全体テストでは再現せず・`animated-image-decode` の research.md 9.12 節）。`cargo test -p areka-emo-present` の出力に `__rust_alloc_error_handler` のバックトレース行が 1 回だけ混じった（10-05・終了コード 0・全部緑・出どころ未調査・後の 2 回は出ず）。i686 の `testdll_drop_invokes_courtesy_unload` は `host32-testdll-marker-race` が引き取った。
 - **`image-webp` の取り込みを外す作業**（10-05 登記・XS・`animated-image-decode` が持ち主をここに置いた）。`image-webp` は上流の GitHub の固定コミット（0.2.5）から取り込んでいる（`tech.md` の登記）。**棚卸のたびに crates.io で `image-webp` の最新版を引き**、0.2.5 以上が出ていたら `tech.md` の取り外し条件どおりに外す＝根の `Cargo.toml` の `[patch.crates-io]` の行・`deny.toml` の `allow-git` の行・`crates/areka-emo-atlas/src/webp_pin_tests.rs` と同じクレートの `lib.rs` の `mod webp_pin_tests;` の宣言を外し、`cargo update -p image-webp` で公開版へ戻して検体のテストを通す。
 
 ## 直接修正候補（spec なし）
@@ -367,6 +368,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 - [ ] areka-P0-animated-image-decode -- APNG・動く WebP（動く GIF は 2026-10-04 の裁定で非対応）の全部のコマ・待ち時間・繰り返し回数を読み、アトラスにコマの番号で載せる。Dependencies: α 完成宣言
 - [ ] areka-P0-surface-element-nesting -- element定義でサーフェスを置く（数字だけ＝番号）・子の当たり判定・子の時計は独立。Dependencies: α 完成宣言
 - [ ] areka-P0-animated-image-playback -- 動く絵を子サーフェスへ分解して置く自動アニメーション・`import` メソッド・interval `always`。Dependencies: areka-P0-animated-image-decode, areka-P0-surface-element-nesting
+- [ ] areka-P0-placement-measure-bake-once -- 起動の採寸で動く絵の全コマを読んで捨てない・バルーンを scope ごとに 2 回焼かない（2026-10-05 起票）。Dependencies: areka-P0-animated-image-decode
 - [ ] areka-P0-element-clipping-option -- element定義の `--clipping` で矩形だけを描き、付けた element定義では動く絵として読まない（正典 C2・2026-10-05 起票）。Dependencies: areka-P0-animated-image-decode, areka-P0-surface-element-nesting
 
 ### 文字の現れ方（α 後・2026-10-01 `/kiro-discovery` で起票）
