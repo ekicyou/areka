@@ -348,3 +348,56 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 37 filtered out;
 - 足したテストは確かめ 1 で panic するので、最後のフォルダの削除まで届かない。この節の実走（絞った 2 回と全体の 2 回）で `target\` の下に `h32m_*_x`・`h32m_*_y` が 1 回あたり 2 つずつ、計 8 つ残った。すべて消し、`target\` の下に `h32m_` で始まるフォルダが 0 であることを確かめた。
 - 1 回目の全体の実走で印のテストが落ちたため、その一時フォルダ（OS の一時フォルダの下・既存の置き場の `host32_proxy_test_17132_…`）も 1 つ残っていたので消した。同じ場所に別のプロセスの残り（`host32_proxy_test_30400_…`・`host32_proxy_test_34796_…`）が 2 つあるが、この実走のものではないので触っていない。
 - 環境変数はテストのプロセスの中だけのもので、プロセスが終われば残らない。
+
+## 16. 偽の DLL の置き場の判定と、直した後の緑（タスク 3・要件 1.1・1.2・1.3・3.4・5.2・6.1）
+
+### 16.1 変えたもの
+
+- `crates/shiori-host32-testdll/Cargo.toml`: `windows` の機能に `Win32_System_LibraryLoader` を 1 行足した。`git diff --stat Cargo.lock` は空（`Cargo.lock` は変わらない）。
+- `crates/shiori-host32-testdll/src/lib.rs`:
+  - 非公開の関数 `own_module_dir` を足した。`GetModuleHandleExW` を「アドレスから引く」「参照数を変えない」の 2 つの旗で、`unload` 自身のアドレスを渡して呼び、得たモジュールを `GetModuleFileNameW`（置き場は 32,768 字）へ渡して親フォルダを返す。0 文字、または置き場いっぱい（切り詰め）は `None`。得たモジュールは `FreeLibrary` へ渡さない。
+  - `unload`: 環境変数に値が無ければ何も引かずに `true`。値があれば置き場を引き、引けなければ標準エラーへ 1 行出して書かない。印の親フォルダと置き場を文字の並びのまま比べ、違うときだけ両方を `std::fs::canonicalize` でそろえて比べ直す。そろえられない・親が無いは黙って書かない。同じときだけ `unloaded` を書く（書けなくても黙って続ける）。返り値はいつも `true`。
+  - `unload` の説明を、書く条件とその理由（同じプロセスに同じ名前の写しが複数読まれる）に合わせ、「テストを足すときの決まりは補助 exe の `shiori_proxy.rs` の錠 `TESTDLL_SERIAL` の説明にある」と 1 行で指した。
+  - `load`・`request` の出口と `HOST32_TESTDLL_LOAD_FAIL` の働きには差分が無い（`git diff -U0` の変更箇所は `unload` の説明と定義、その後ろに足した `own_module_dir` だけ）。
+
+### 16.2 直す前の赤をもう一度確かめた
+
+直す前に、作ってあった i686 のテストの実行ファイルを直接回した（`cargo test` は後述の理由で動かなかった）:
+
+```
+> target\i686-pc-windows-msvc\debug\deps\shiori_host32_helper-4696ad579ce35468.exe testdll_unload_from_another_folder_leaves_marker_untouched
+running 1 test
+test shiori_proxy::tests::testdll_unload_from_another_folder_leaves_marker_untouched ... FAILED
+thread '...' panicked at crates\shiori-host32-helper\src\shiori_proxy.rs:702:9:
+X has no marker: 別のフォルダ Y の写しの unload が X 宛ての印を書いた
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 37 filtered out; finished in 2.32s
+```
+
+### 16.3 直した後の実走の出力
+
+i686 の成果物を `cargo build -p shiori-host32-helper -p shiori-host32-testdll -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` で作り直してから回した。
+
+```
+> cargo test -p shiori-host32-helper --target i686-pc-windows-msvc -- testdll_
+running 5 tests
+test shiori_proxy::loadu_tests::testdll_loadu_false_is_load_returned_false_without_falling_back ... ok
+test shiori_proxy::loadu_tests::testdll_loadu_is_called_with_utf8_and_load_is_not ... ok
+test shiori_proxy::tests::testdll_drop_invokes_courtesy_unload ... ok
+test shiori_proxy::tests::testdll_request_roundtrip_get_and_notify ... ok
+test shiori_proxy::tests::testdll_unload_from_another_folder_leaves_marker_untouched ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 33 filtered out; finished in 0.78s
+
+> cargo test -p shiori-host32-helper --target i686-pc-windows-msvc --no-fail-fast
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 40.04s
+
+> cargo test -p shiori-host32-testdll        （x64・偽の DLL 自身の単体テスト）
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+```
+
+- 足したテスト（「違う」の枝）と印のテスト（「同じ」の枝）がどちらも緑。印のテストが緑なので、判定が誤って「違う」に倒れていない（倒れていれば毎回赤になる・設計の Risks）。
+- `cargo fmt --all -- --check` は緑（整形 1 か所を `cargo fmt` で直した後）。`cargo clippy -p shiori-host32-testdll` は i686・x64 とも警告 0。
+
+### 16.4 道具の罠と後片付け
+
+- 並走の cargo が多い時間に i686 の `cargo build` が rustc の 0xc000012d で 1 回落ちた。そのとき cargo は、ターゲットの情報を問う rustc の**失敗をワークツリーの `target\.rustc_info.json` に覚えてしまい**、以後メモリが空いても同じ失敗を毎回そのまま返し続けた（同じ問い合わせを手で打つと通り、別の target フォルダでは建つ、で切り分けた）。`target\.rustc_info.json`（cargo が作り直す控え）を消したら建った。0xc000012d が何度試しても続くときは、まずこの控えを疑う。
+- 16.2 の実走は確かめ 1 で panic するので `target\h32m_*_x`・`h32m_*_y` が 2 つ残った。消して、`target\` の下に `h32m_` で始まるフォルダが 0 であることを確かめた。16.3 の実走は緑なので、テスト自身が消す。切り分けに作った `target\i686probe` も消した。
