@@ -242,3 +242,48 @@ A のときの小さな選択: 口が返すのを「合成済みの絵」にす�
 5. **PNG は WIC（圧縮あり）でよいか。** 無圧縮の自前の書き出しは単純だが、応答が数 MB になりうる。
 6. **`dump_surface`（省略）に箱の文字を写さない、でよいか。** 今の作りでは写らない。写すなら論点 3 と同じ重ねる処理が箱ごとに要る。写さないなら差の一覧に「画面では箱に文字が見えていても、返る絵には無い」と書く。
 7. **窓はあるが絵の無いスコープ（今はスコープ 2 以降）の答え。** 要件 4.1 の字面では「キャラクターの窓がある」ので存在するスコープになり、省略なら「何も表示していない」、`surface` 指定なら答える文言が決まっていない。窓ではなく「絵の資産があるスコープ」を存在の基準にする手もある。
+
+## 8. SSP の実測の追補（2026-10-04・SSP 2.9.07・ゴースト「えも2DEBUG」・手元の SSP の MCP で測定）
+
+要件の「暫定の裁定」で「SSP は未実測」としていた点を測った。**要件と食い違うものに ★ を付ける。**
+
+### 8.1 測った結果
+
+| 呼び方 | SSP の答え | 要件との関係 |
+|---|---|---|
+| `dump_surface`（省略・スコープ 0／1） | `OK:scope 0, surface 1000 as currently shown (with running animations and dressups, before scaling and transparency)`＋画像 | 要件 1.4 と一致 |
+| `dump_surface`（`surface` 指定・在る ID） | `OK:scope 0, surface 2105 rendered alone in its initial state (not what is on the screen now)`＋画像 | ★ 要件 2.4 の文言（`…(before scaling and transparency)`）と末尾が違う |
+| `dump_surface`（`\s[-1]` で隠した後・省略。プロパティ `currentghost.scope(0).surface.num` は `-1`） | `OK:scope 0, surface 1000 as currently shown (…)`＋**隠す直前の絵**。失敗にしない | ★ 要件 4.3・裁定 4（`NG:No surface is currently shown in this scope`）と逆 |
+| `dump_surface`（スコープ 2＝このゴーストに無い） | `NG:No such scope in this ghost` | 要件 4.1 と一致 |
+| `dump_balloon`（スコープ 2） | `NG:No such scope in this ghost` | 裁定 3 の推定どおり（実測で確定） |
+| `scope: -1`（2 本とも） | JSON-RPC のエラー `Invalid params`（`NG:` の結果ではない） | ★ 要件 4.1「負の数を含む」と違う。areka の入口（`mcp-tool-entrances`）が負の数をどう通すかと合わせて決める |
+| `scope: 0.5` | スコープ 0 として成功（小数は切り捨て） | 入口の検査の範囲 |
+| `surface: 9999`・`surface: -1`・`surface: 5.7` | `NG:No such surface ID. Check get_expression_table tool` | 要件 4.2 と一致 |
+| `surface: 5`（`get_expression_table` には `\s[5]` と出る＝別名） | `NG:No such surface ID. …` | ★ **`surface` は別名を解かない生の ID**。別名の先の `1000`・`2105`・`10` は成功 |
+| `scope: 0, surface: 2105`（スコープ 1 用の絵）／`scope: 1, surface: 0` | どちらも成功 | ★ **surface の在る・無いはシェル全体で見る**（要件 2.1・4.2 の「そのスコープのシェルに在る」ではない）。スコープは本文と着せ替えにだけ効く |
+| 表示中と同じ ID を `surface` で指定 | 成功・本文は `rendered alone…`（動いているアニメーションの無い絵） | 要件 2.1 と一致 |
+| `dump_balloon`（話している途中） | 成功・途中までの文字 | 要件 3.5 と一致 |
+| `dump_balloon`（台詞の頭で消された後の、話していないスコープ） | 成功・**背景だけの絵** | ★ 要件 4.4・裁定 5（`NG:No balloon has been drawn in this scope yet`）と逆 |
+| `dump_balloon`（文字の無い台本 `\0\s[-1]\e` を送った後） | 成功・背景＋送り主の印（`from MCP (local)`）だけ | ★ 同上。文字が 0 でも失敗にしない |
+| 存在しない `ghost_name` | `NG:Cannot find active ghost from specified name` | `mcp-tool-entrances` の範囲 |
+
+### 8.2 画像の形（返った 16 枚の PNG のヘッダを読んだ）
+
+- 8 ビット・カラータイプ 6（RGBA）・インターレース無し・チャンクは `IHDR`・`IDAT`・`IEND` だけ（付帯情報なし）。**圧縮あり**（434×687 のキャラクターが 80〜150 KB、400×224 のバルーンが 10〜14 KB）。
+- キャラクターはどの surface でも同じ大きさ（434×687＝このシェルの絵の大きさ）。バルーンはスコープごとの背景の大きさ（400×224・288×203）。
+- バルーンの画像には、背景・文字のほかに**上へ送る矢印の印**と **SSTP の送り主の印**が写る（バルーンの窓に描かれたものすべて）。
+
+### 8.3 ここから出る「要る機能」の一覧
+
+1. 今の見た目: 最後に表示した絵と surface ID を返す。**隠していても返す**（一度も表示していないときだけが未決）。
+2. 指定の surface: 生の ID・シェル全体から探す・別名は解かない・動く前の姿・今の着せ替え・画面を変えない。
+3. バルーン: 背景＋窓に描かれたもの全部（文字・矢印・送り主の印）。**文字が無くても背景だけで返す**。話している途中・隠れた後も返す。
+4. 失敗は 3 種だけ: スコープが無い（`NG:No such scope in this ghost`）・surface ID が無い（`NG:No such surface ID. Check get_expression_table tool`）・ゴーストが見つからない（入口の文言）。SSP に「表示していない」「描いていない」の失敗は無い。
+5. 画像: 圧縮した 8 ビット RGBA の PNG・原寸・1 枚。
+6. areka だけの失敗として残るもの: 窓の無いゴースト（裁定 6）・まだ一度も表示していないスコープ・装着の前。
+
+### 8.4 測れなかったもの
+
+- 画面の拡大率が 1 でないときの大きさ（SSP の拡大の設定を変えていない）。
+- 起動してから一度も台詞を出していないスコープのバルーン（測った時点でどちらも描いた後）。背景だけが返ると見るのが 8.1 の 2 行と整合する。
+- 着せ替えの切り替えが指定の surface に掛かるか（このゴーストに着せ替えが無い）。
