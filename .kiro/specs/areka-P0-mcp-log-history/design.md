@@ -121,7 +121,7 @@ graph TB
 
 | # | 点 | 決定 | 根拠（証跡は research.md） |
 |---|---|---|---|
-| a | 取り決めの target を debug・trace でも拾うか | **拾う**（要件 2.1・2.2 の「レベルを問わない」を字のとおりに満たす）。履歴の層のフィルタは最大レベルの見立てを `TRACE` と答える | 実測で、関心のない `debug!`／`trace!` 1 回の費用は 0.7 ns → 1.5〜2.4 ns。`log` クレートの `debug!` は 0.7 ns → 約 120〜140 ns だが、`Cargo.lock` で `log` に依存するのは `bevy_app`・`bevy_ecs`・`iana-time-zone`・`wgpu-types`・`tracing-log` の 5 つで、areka の依存の木（`cargo tree -p areka -i log`）で `log` の行を出すのは `bevy_ecs`・`bevy_app`。毎フレーム通る `debug!`／`trace!` は 0 件（§9.2） |
+| a | 取り決めの target を debug・trace でも拾うか | **拾わない。取り決めの行は info 以上で出す約束**（設計ディスカッション議題 1 で確定・要件 2.1・2.2 を改めた）。履歴の層のフィルタは最大レベルの見立てを `INFO` と答える（今の既定の出口と同じ） | 拾う形だと、debug で出した行が本物の出口を通って届くことを本 spec のテストで固定できず、後続の spec へ宿題が残る。info 以上なら実プロセスの試験が踏む道と同じ道を通る。参考（拾う形の費用の実測）: 関心のない `debug!`／`trace!` 1 回は 0.7 ns → 1.5〜2.4 ns、`log` クレートの `debug!` は 0.7 ns → 約 120〜140 ns。`Cargo.lock` で `log` に依存するのは `bevy_app`・`bevy_ecs`・`iana-time-zone`・`wgpu-types`・`tracing-log` の 5 つで、areka の依存の木（`cargo tree -p areka -i log`）で `log` の行を出すのは `bevy_ecs`・`bevy_app`。毎フレーム通る `debug!`／`trace!` は 0 件（§9.2） |
 | b | 層の継ぎ目のテストの置き場 | **純粋な関数へ `log-capture-kit` の `CapturedEvent` を食わせるテスト＋実プロセス・実ソケットの試験 1 本**。見張りの例外表は触らない | 例外表へ足すのは要件 8.5 に反する。実プロセスの試験は要件 4.7 の「実ソケットで 1 本」と兼ねる |
 | c | 履歴の置き場 | **純粋な入れ物の型 `History`＋プロセスに 1 つの静的な置き場**（`static` の `Mutex<History>`） | `handle` の引数も `mcp/mod.rs` も変えずに読める。World の無いスレッドからも `last_id` を読める |
 | d | ファイルの置き方 | **`crates/areka/src/log_history.rs` の 1 ファイル**（見込み 450 行前後）＋兄弟のテスト 2 本。900 行を超えたらファサード形式で `log_history/` へ分ける | 部品が小さく、分けると `mod` の配線の方が多くなる。`structure.md` の分割の目安は 1,000 行 |
@@ -208,14 +208,14 @@ sequenceDiagram
 | 1.9 | 並行でも取りこぼし 0・重複 0 | 置き場 | `Mutex<History>` | — |
 | 1.10 | 記録の失敗でパニックしない | 置き場 | 毒された排他は中身を取り出して続ける | — |
 | 1.11 | 1.2〜1.6・1.9 のテスト | `log_history_tests.rs`・`log_history_convention_tests.rs` | Testing Strategy | — |
-| 2.1 | warn 以上、または `areka::log::error` は error | `classify` | 判定の順 2・3 | — |
-| 2.2 | `areka::log::script` は script（2.1 より先） | `classify` | 判定の順 1 | — |
+| 2.1 | warn 以上、または info 以上の `areka::log::error` は error | `classify` | 判定の順 3・4 | — |
+| 2.2 | info 以上の `areka::log::script` は script（2.1 より先） | `classify` | 判定の順 2 | — |
 | 2.3 | network の target | `RULES` | 先頭の 3 行 | — |
 | 2.4 | update の target | `RULES` | 次の 3 行 | — |
 | 2.5 | status の target | `RULES` | 残りの 7 行 | — |
 | 2.6 | `<名>`（取り決めの行の `ghost`・無ければ既定） | `draft` | `Kind::default_name` | — |
 | 2.7 | `[<種別>]` の語（取り決めの行の `label`・無ければ既定） | `draft` | `Kind::default_label` | — |
-| 2.8 | どれにも当たらない出来事は残さない | `classify` | 判定の順 5 | — |
+| 2.8 | どれにも当たらない出来事は残さない | `classify` | 判定の順 1・5 | — |
 | 2.9 | 照合は自身か `::` の下・`areka` だけ完全一致 | `RULES` | `Rule::exact` と `Rule::matches` | — |
 | 2.10 | 外のライブラリの warn 以上も error | 層・`draft` | 設計判断 f。届かないものは文書に書く | — |
 | 2.11 | 2.1〜2.9 のテスト | `log_history_tests.rs` | Testing Strategy | — |
@@ -337,11 +337,11 @@ pub(crate) fn classify(level: tracing::Level, target: &str) -> Option<Kind>;
 
 `classify` の判定の順:
 
-1. target が `TARGET_SCRIPT` と完全に一致 → `Script`（レベルを問わない）。
-2. target が `TARGET_ERROR` と完全に一致 → `Error`（レベルを問わない）。
-3. レベルが warn か error → `Error`（target を問わない）。
-4. レベルが info → `RULES` を上から当て、最初に当たった行の種別。当たらなければ `None`。
-5. それ以外（debug・trace）→ `None`。
+1. レベルが debug・trace → `None`（取り決めの target でも残さない＝info 以上で出す約束）。
+2. target が `TARGET_SCRIPT` と完全に一致 → `Script`（info・warn・error のどれでも）。
+3. target が `TARGET_ERROR` と完全に一致 → `Error`（同上）。
+4. レベルが warn か error → `Error`（target を問わない）。
+5. レベルが info → `RULES` を上から当て、最初に当たった行の種別。当たらなければ `None`。
 
 - 「自身か下」は `target == rule` または「`rule` で始まり、その直後が `::`」。`areka::updater` は `areka::update` に当たらない。
 - network の 3 行が update の 3 行より先にあるので、`areka::install::fetch_url` は network に入る。
@@ -471,7 +471,7 @@ fn local_now() -> Stamp;
 - **規則のフィルタ**: `tracing_subscriber::layer::Filter` を自分で実装した型 `HistoryFilter`（`filter_fn` は使わない）。答えは純粋な関数 2 つに切り出す。
   - `wants(is_event, level, target) -> bool`＝出来事で、かつ `classify` が当たる。`callsite_enabled` はこれが真なら「必ず欲しい」、偽なら「関心なし」と答える（関心のない呼び出し口は履歴の層へ届かない＝設計判断 a）。
   - `passes(is_event, level, target) -> bool`＝**出来事でない問い合わせ（`tracing::enabled!`・スパン）には必ず真**、出来事には `classify` が当たるかどうか。`enabled` はこれを返す。
-  - `max_level_hint` は `TRACE`。
+  - `max_level_hint` は `INFO`（履歴が残すのは info 以上だけ。`RUST_LOG` が未設定なら出口全体の見立ては今と同じ `INFO` のまま）。
   - **`filter_fn` を使わない理由**（[design-validation.md](design-validation.md) 指摘 1・実験で再現）: `tracing-subscriber 0.3.23` の層ごとのフィルタは、`enabled` で断るたびに「断った」印をスレッドごとの置き場に書き、直後の `on_event` で消す。`tracing::enabled!` は尋ねるだけで出来事を出さないので印が残り、次に同じスレッドで出た「どの層も必ず欲しい」出来事を履歴の層だけが 1 件飛ばす。今のコードの前置ガードは 3 か所（`crates/wintf/src/ecs/world/tick_diag.rs`・`crates/wintf/src/ecs/window/transition_diag.rs`・`crates/areka/src/perf_thread_report.rs` の `is_enabled`）で、`RUST_LOG` でその診断の target を点けると、ガードの直後の warn・error・status が標準出力には出るのに履歴に残らない。出来事でない問い合わせを断らなければ印は残らない（同じ実験で、取りこぼし 0 件・ガードの答えと標準出力は変わらず）。
 - **履歴の層**: `on_event` で欄を訪問して集め（文字列の欄は生の値と `{:?}` の形の両方、それ以外は `{:?}` の形）、`draft` を呼ぶ。`None` なら何もしない。`Some` なら `local_now()` を読み、置き場の排他を取って `push` する。
   - `log` から橋渡しされた行は、フィルタには本来の target で、`on_event` には target `log` で届く（[research.md](research.md) §9.3）。warn 以上はどちらでも `Error` になる。info 以下で `on_event` の `draft` が `None` になった行は捨てる。
@@ -484,7 +484,7 @@ fn local_now() -> Stamp;
 - Integration: `main.rs` は `log_history::init();` の 1 行。`human_panic::setup_panic!()` の直後・`thread_roles::install()` の前という今の位置を変えない。
 - Integration: `last_id` を呼ぶのは後続の spec なので、本 spec の時点では本番の呼び手が 0 件である。未使用の警告は、`crates/areka/src/mcp/mod.rs` の `later` と同じく、理由のコメントを添えた `#[allow(dead_code)]` で抑える（呼び手が生えたら外す）。
 - Validation: 層と受け口の継ぎ目は実プロセスの試験が固定する（Testing Strategy）。`init` の組み方と標準出力の同一性は [research.md](research.md) §9.1 の実験が証跡。
-- Risks: 最大レベルの見立てが `TRACE` になるので、`log` クレートの `debug!`／`trace!` が受け口まで届く（1 件 約 120〜140 ns で捨てられる）。今の依存の木では毎フレームの `log::debug!`／`trace!` は 0 件。将来、`log` で大量に出す依存を足すときは取り決めを「info 以上で出す」へ狭める（見立てを `INFO` に戻せる）。
+- Risks: `RUST_LOG=warn` のように標準出力を絞っても、履歴の層の見立てが `INFO` なので出口全体の見立ては `INFO` になる（info の出来事が履歴の層のフィルタまで届く）。info は節目の行で毎フレームは出ないので、費用は増えない。debug・trace の費用は今と変わらない。
 
 ### mcp（ツールのファイル）
 
@@ -549,7 +549,7 @@ fn render(record: &Record) -> String;
 2. **規則の表**（目印 `<!-- log-rules:begin -->` と `<!-- log-rules:end -->` の間）。列は「種別・target・照合」。`RULES` の 13 行と、取り決めの target の 2 行（`areka::log::script`＝script・完全一致、`areka::log::error`＝error・完全一致）の計 15 行。テストがこの表を読む。
 3. 取り決めの欄 `ghost`・`label` の意味（取り決めの target の行だけで読む。`ghost` は `get_active_ghost_list` が返す値を入れる）と、種別ごとの既定の語と名。
 4. 本文の作り方（メッセージ＋残りの欄・`log.` で始まる欄は除く）、上限（種別ごとに 1,000 件・本文 4,096 文字）、`RUST_LOG` と独立であること、通し番号（起動ごとに 1 から・全種別で 1 本）。
-5. 書き方の例を 2 つ: `tracing::info!(target: "areka::log::script", ghost = %name, label = "SSTP(Local,Auth)", "{script}")` と `tracing::warn!(target: "areka::log::error", ghost = %name, "[GHOST/Script] …")`。レベルは何でも残ること、標準出力に出したくなければ `debug!` で出せること。
+5. 書き方の例を 2 つ: `tracing::info!(target: "areka::log::script", ghost = %name, label = "SSTP(Local,Auth)", "{script}")` と `tracing::warn!(target: "areka::log::error", ghost = %name, "[GHOST/Script] …")`。info 以上で出す約束であること（debug・trace で出した行は残らない）。
 6. 届かないもの: tracing も `log` も通らない出力（`println!`・パニックの報告）と、`log` クレートの info 以下の行。
 7. 「最後に振った番号」の口 `log_history::last_id()` の使い方。
 
@@ -592,7 +592,7 @@ fn render(record: &Record) -> String;
 
 ### Unit Tests — `crates/areka/src/log_history_tests.rs`
 
-1. **振り分け（2.1〜2.5・2.8・2.9・2.11）**: 種別ごとに「当たる」「当たらない」を 1 つ以上。warn の `areka::update::desk` が error だけに入る、`areka::updater` の info が `None`、`areka::install::fetch_url` の info が network、`areka::emo2_boot` の info が `None`（`areka` は完全一致）、`areka::alert` の info が `None`、debug の `areka::log::script` が script、error レベルの `areka::log::script` が script（error に入らない）、trace の `areka::log::error` が error、debug の普通の target が `None`。
+1. **振り分け（2.1〜2.5・2.8・2.9・2.11）**: 種別ごとに「当たる」「当たらない」を 1 つ以上。warn の `areka::update::desk` が error だけに入る、`areka::updater` の info が `None`、`areka::install::fetch_url` の info が network、`areka::emo2_boot` の info が `None`（`areka` は完全一致）、`areka::alert` の info が `None`、info の `areka::log::script` が script、error レベルの `areka::log::script` が script（error に入らない）、info の `areka::log::error` が error、debug の `areka::log::script`・trace の `areka::log::error`・debug の普通の target が `None`。
 2. **下書き（2.6・2.7・4.3・2.10）**: 取り決めの target の行での `ghost`・`label` の有無の 4 通り（既定の語と名の表を 5 種別ぶん）。取り決めの target でない status の行の `ghost = "emo2"` が `<名>` にならず本文に ` ghost="emo2"` で残る。メッセージだけ・欄だけ・両方。`log.target` などの欄が本文に出ない。
 3. **切り詰め（1.5）**: 4,096 文字はそのまま、4,097 文字は先頭 4,096 文字＋` ...(truncated)`（日本語の文字で数える）。
 4. **入れ物（1.2〜1.4・1.6・1.11）**: 種別を混ぜて積むと番号が 1 から 1 ずつ増える。ある種別へ 1,001 件積むと最古の 1 件だけが消え、他の種別の件数は減らない。捨てた後も番号は続きから振られる。`draft` が `None` の出来事では `last_id` が動かない。
@@ -600,13 +600,13 @@ fn render(record: &Record) -> String;
 
 ### Unit Tests — `crates/areka/src/log_history_convention_tests.rs`
 
-1. **本物のマクロの形（6.1・6.4）**: `capture` の中で `tracing::info!(target: "areka::log::script", ghost = %…, label = "…", "…")`・`tracing::debug!(target: "areka::log::error", …)`・普通の `warn!` を出し、得た `CapturedEvent` を `draft` へ渡して、種別・名・語・本文を確かめる（出す側は本 spec の型を使っていない）。
+1. **本物のマクロの形（6.1・6.4）**: `capture` の中で `tracing::info!(target: "areka::log::script", ghost = %…, label = "…", "…")`・`tracing::info!(target: "areka::log::error", …)`・普通の `warn!` を出し、得た `CapturedEvent` を `draft` へ渡して、種別・名・語・本文を確かめる（出す側は本 spec の型を使っていない）。
 2. **名指しのモジュールの実在（2.12）**: `RULES` の各行について、target からソースの場所を導いて実在を判定する。`areka` → `crates/areka/src/main.rs`、`areka::a::b` → `crates/areka/src/a/b.rs` か `a/b/mod.rs`、`areka_update` → `crates/areka-update/src/lib.rs`、`areka_update::x` → `crates/areka-update/src/x.rs`。`::` を含まない target（`ghost-boot`・`ghost-shutdown`）は、`crates/areka-ghost/src/runtime.rs` に `target: "<名前>"` の字面があることを判定する。導けない target が `RULES` に入ったら赤にする（黙って通さない）。
 3. **文書との一致（7.3）**: `doc/ssp-mcp/log-convention.md` の目印の間の表を読み、（種別の語・target・照合）の集合が `RULES`＋取り決めの target 2 行と一致することを判定する。表が 0 行なら赤（読めていないのに緑にならない）。
 4. **置き場と番号の口（6.2・6.4）**: `last_id()` を読み、`record` で 1 件積み、`snapshot` でその種別を写して「読んだ番号より大きい」で絞ると、積んだ 1 件が入っている（並走する他のテストが積んでも成り立つ形で確かめる）。
 5. **並行（1.9）**: 手元の `Mutex<History>` へ 8 スレッドから 500 件ずつ積み、番号が 1〜4,000 でちょうど 1 回ずつ現れ、件数が合う（上限に掛からないよう種別を 5 つに散らす）。
 6. **毒された排他（1.10）**: 手元の `Mutex<History>` を別スレッドのパニックで毒し、同じ取り出し方で積めること。
-7. **フィルタの答え（1.7・1.9・6.3）**: `wants` と `passes` を値で確かめる。出来事でない問い合わせは、どのレベル・どの target（診断の target `areka::perf` の debug を含む）でも `passes` が真・`wants` が偽。出来事は `classify` の当たり外れと同じ（warn の普通の target・info の `areka::boot_config`・debug の `areka::log::script` は真、debug の普通の target・info の `areka::alert` は偽）。`passes` を「出来事でない問い合わせを断る」形へ書き換えると赤になる。
+7. **フィルタの答え（1.7・1.9・6.3）**: `wants` と `passes` を値で確かめる。出来事でない問い合わせは、どのレベル・どの target（診断の target `areka::perf` の debug を含む）でも `passes` が真・`wants` が偽。出来事は `classify` の当たり外れと同じ（warn の普通の target・info の `areka::boot_config`・info の `areka::log::script` は真、debug の `areka::log::script`・debug の普通の target・info の `areka::alert` は偽）。`passes` を「出来事でない問い合わせを断る」形へ書き換えると赤になる。
 
 ### Unit Tests — `crates/areka/src/mcp/get_log_tests.rs`（書き換え）
 
@@ -639,13 +639,13 @@ fn render(record: &Record) -> String;
 
 ### テストで固定されないこと（明示）
 
-- 「取り決めの target を **debug・trace** で出した行が、本物の受け口の最大レベルの門を通って履歴へ届く」ことは、本 spec の常時テストでは固定されない（そのレベルで出す側が本 spec に無く、層を載せた受け口をテストで差せないため）。証跡は [research.md](research.md) §9.2 の実験である。最初に debug で出す後続の spec（`mcp-kanade-tools` か `mcp-strict-errors`）が、実プロセスの試験で固定する。
+- 取り決めの target の行は info 以上で出す約束にしたので（設計判断 a）、「debug・trace の行が届くか」という固定されない経路は無い（0 件）。info 以上の行が本物の受け口を通って履歴へ届くことは、実プロセスの試験の判定 1 が踏む（`RUST_LOG` で標準出力から消えた info が履歴に残る）。取り決めの target の行も同じ道（同じフィルタ・同じ層）を通り、種別への振り分けは決定論テストが固定する。
 - 「`log` クレートから橋渡しされた warn 以上の行が、本物の受け口を通って履歴へ届く」こと（要件 2.10）も、常時テストでは固定されない（外のライブラリに warn を出させる手段がテストに無い）。固定されるのは `log.` で始まる欄を除く純粋な部分だけで、橋を通ること自体の証跡は [research.md](research.md) §9.3 の実験である。
 - 「診断の target を点けた状態でも履歴が取りこぼさない」ことは、フィルタの答え（`wants`・`passes`）の決定論テストで固定する。`tracing-subscriber` の中の印の仕組みそのものは常時テストで踏まない（証跡は [design-validation.md](design-validation.md) 指摘 1 の実験。Revalidation Triggers に載せた）。
 
 ## Performance & Scalability
 
-- **出す側の費用**: 関心のない `debug!`／`trace!` は呼び出し口ごとに「関心なし」が覚えられ、1 回あたり 1 ns ほど増える（0.7 → 1.5〜2.4 ns・実測）。info の行は、標準出力の層と履歴の層で関心が分かれる呼び出し口だけ、出来事ごとにフィルタが 2 つ評価される（info は節目の行で、毎フレームは出ない）。
+- **出す側の費用**: 履歴の層の見立ては `INFO` なので、`RUST_LOG` が未設定のとき `debug!`／`trace!` の費用は今と変わらない。info の行は、標準出力の層と履歴の層で関心が分かれる呼び出し口だけ、出来事ごとにフィルタが 2 つ評価される（info は節目の行で、毎フレームは出ない）。
 - **残す 1 件の費用**: 欄の訪問・本文の組み立て（割り当て数回）・`GetLocalTime`・排他 1 回。warn 以上と節目の info だけなので、毎フレームの経路には乗らない。
 - **`get_log`**: 排他の中で種別の列（最大 1,000 件）を写し、排他の外で絞って整形する。UI スレッドで待たない（その場で答える）。
 

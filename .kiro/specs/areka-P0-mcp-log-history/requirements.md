@@ -50,7 +50,7 @@
 | 6 | 履歴に残すかどうかを `RUST_LOG` に従わせるか（brief の議題） | **従わせない**（`RUST_LOG=warn` でも status の info は残る。`RUST_LOG=areka_mcp=debug` でも error は残る） | `RUST_LOG` は標準出力の見え方の設定であり、AI が読む履歴が黙って欠けると「エラーなし」と誤読する | 1.7・1.8 |
 | 7 | 1 行の `<名>` の欄 | 取り決めの欄 `ghost` があればその値。無ければ**種別ごとの既定の名**（SSP の語＝要件 2.6 の表。status は `STAT`、ほかは `[SYSTEM]`）（要件ディスカッション議題 3 で確定） | SSP 2.9.07 の実測（research.md §2.1・§2.3）。ゴーストに属さない error と update は**未測で推定** | 2.6・4.2 |
 | 8 | 1 行の `[<種別>]` の欄 | 取り決めの欄 `label` があればその値、無ければ**種別ごとの既定の語**（SSP の語＝要件 2.7 の表。`Error`・`SSTP`・`Info`・`Info`・`STAT`）（要件ディスカッション議題 3 で確定） | 同上。SSP の script の語は送り手ごと（`Ghost:<イベント名>`・`SSTP(Local,Auth)`）なので、script は出す側が `label` で渡すのが普通 | 2.7・4.2 |
-| 9 | 取り決めの target の名前 | script＝**`areka::log::script`**、error へ直接残す口＝**`areka::log::error`**（どのレベルで出しても残る） | 既存の target・モジュールのパスと重ならない。名前は設計で変えてよいが、変えたら取り決めの文書と要件 2 を合わせる | 2.2・2.1・7 |
+| 9 | 取り決めの target の名前 | script＝**`areka::log::script`**、error へ直接残す口＝**`areka::log::error`**（どちらも info 以上で出す約束。debug・trace は残さない＝設計ディスカッション議題 1 で確定） | 既存の target・モジュールのパスと重ならない。名前は設計で変えてよいが、変えたら取り決めの文書と要件 2 を合わせる | 2.2・2.1・7 |
 | 10 | `log_type` の省略・空の文字列 | 省略は **`error`**。空の文字列は未知の値と同じ `NG:`。5 語との照合は大文字小文字を区別しない（前後の空白は削らない）＝**SSP と同じ**（要件ディスカッション議題 1 で確定） | SSP 2.9.07 の実測（research.md §2.1・§2.3）。SSP 向けの呼び方が同じ答えで通じる | 3.1・3.2 |
 | 11 | `ghost_name` の意味（`mcp-tool-entrances` 要件 3.7 が本 spec へ委ねた点） | 省略＝絞らない。値があれば（空も）**起動中のゴーストから探し**（名前かフルパス・他のツールと同じ解決）、当たればそのゴーストの名前の記録だけ、当たらなければ `NG:Cannot find active ghost from specified name`＝**SSP と同じ**（要件ディスカッション議題 2 で確定） | SSP 2.9.07 の実測（research.md §2.1）。名前の打ち間違いが「ログなし」に化けない。もう起動していないゴーストの記録は省略で読める | 5.1〜5.4 |
 | 12 | `since_id`・`max_count` の端の値 | `since_id` が負＝0 と同じ（全部）。`max_count` が負＝省略と同じ（数で絞らない）。**`max_count` が 0＝0 件**＝SSP と同じ（要件ディスカッション議題 1 で確定） | SSP 2.9.07 の実測（research.md §2.1） | 5.5〜5.8 |
@@ -108,8 +108,9 @@
 
 #### Acceptance Criteria
 
-1. When 出来事のレベルが warn 以上である（2.2 の target を除く）、または target が `areka::log::error` である（レベルを問わない）, the areka shall その出来事を error 種別として残す（出どころのクレート・モジュールを問わない。他の種別には入れない）。
-2. When 出来事の target が `areka::log::script` である, the areka shall その出来事をレベルを問わず script 種別として残す（warn 以上で出されても 2.1 より先に当たり、error 種別には入れない）。
+1. When 出来事のレベルが warn 以上である（2.2 の target を除く）、または target が `areka::log::error` でレベルが info 以上である, the areka shall その出来事を error 種別として残す（出どころのクレート・モジュールを問わない。他の種別には入れない）。
+2. When 出来事の target が `areka::log::script` でレベルが info 以上である, the areka shall その出来事を script 種別として残す（warn 以上で出されても 2.1 より先に当たり、error 種別には入れない）。
+   - 取り決めの target の行は **info 以上で出す約束**とし、debug・trace で出した行は残さない（設計ディスカッション議題 1 で確定。どのレベルでも拾う形にすると、debug で出した行が本物の出口を通って届くことを本 spec のテストで固定できず、後続の spec へ宿題が残るため。再生した台本は標準出力にも 1 行出る）。
 3. When レベルが info で、target が `areka::install::fetch_url`・`areka_update::winhttp`・`areka_update::fetch` のどれか（またはその下のモジュール）である出来事が出る, the areka shall その出来事を network 種別として残す（今ログを出しているのは `areka::install::fetch_url` の info 3 行だけで、`areka_update::winhttp`・`areka_update::fetch` は 1 行も出していない。この 2 つは、行の持ち主の spec が取得の行を足したときの受け皿である）。
 4. When レベルが info で、target が `areka_update`・`areka::update`・`areka::install` のどれか（またはその下のモジュール）であり、2.3 に当たらない出来事が出る, the areka shall その出来事を update 種別として残す。
 5. When レベルが info で、target が `areka`（下のモジュールを含まない）・`areka::boot_config`・`areka::boot_resolve`・`areka::ghost_session`・`areka::emo2_boot::ghost_switch`・`ghost-boot`・`ghost-shutdown` のどれかである出来事が出る, the areka shall その出来事を status 種別として残す（`ghost-boot`・`ghost-shutdown` は `crates/areka-ghost/src/runtime.rs` が明示している target で、ゴースト自体の起動と終了の節目。`areka::alert` の問いかけの行は起動の節目ではないので入れない。要件ディスカッション議題 5 で確定）。
@@ -124,7 +125,7 @@
    | network | `Info` | `[SYSTEM]` | 実測（`[Info] [SYSTEM]`） |
    | update | `Info` | `[SYSTEM]` | 未測で推定（network と同じ） |
    | status | `STAT` | `STAT` | 実測（`[STAT] STAT`） |
-8. The areka shall 2.1〜2.5 のどれにも当たらない出来事（レベルが debug・trace で取り決めの target でないもの、2.3〜2.5 のどの target でもない info の出来事）を残さない。
+8. The areka shall 2.1〜2.5 のどれにも当たらない出来事（レベルが debug・trace のもの〔取り決めの target でも残さない〕、2.3〜2.5 のどの target でもない info の出来事）を残さない。
 9. The areka shall target の照合を「そのモジュール自身か、`::` で区切った下のモジュール」で行う（`areka::update` は `areka::update::desk` に当たり、`areka::updater` には当たらない）。2.5 の `areka` だけは例外で、完全に一致する target だけに当たる（下のモジュールまで含めると、アプリ本体の info の行が全部 status になるため）。
 10. The areka shall 標準出力の出力に warn 以上で現れる出来事を、areka のクレートの外のライブラリが出したものも含めて error 種別に残す（外のライブラリが別のログの仕組みで出す行が履歴へ届くことを、設計で実物を使って確かめる。届かないものがあれば取り決めの文書に名前を書く）。
 11. The areka shall 2.1〜2.9 を、種別ごとに「当たる出来事」と「当たらない出来事」を 1 つ以上与える決定論テストで固定する（warn の更新の行が error だけに入ること・`areka::updater` が update に入らないこと・取り決めの target の行での `ghost` と `label` の有無の 4 通り・取り決めの target でない行の `ghost` の欄が `<名>` にならず本文に残ることを含む）。
@@ -180,7 +181,7 @@
 
 #### Acceptance Criteria
 
-1. When 他の処理が取り決めの target（`areka::log::script`・`areka::log::error`）でログを出す, the areka shall その出来事を、出した側が本 spec の型や関数を使っていなくても、要件 2 のとおり履歴に残す。
+1. When 他の処理が取り決めの target（`areka::log::script`・`areka::log::error`）で info 以上のログを出す, the areka shall その出来事を、出した側が本 spec の型や関数を使っていなくても、要件 2 のとおり履歴に残す。
 2. The areka shall 「いま最後に振った通し番号」（1 件も無ければ 0）を、アプリ本体の他の処理が読める口として持つ（その値を `since_id` に渡して `get_log` を呼ぶと、読んだ時点より後の記録だけが返る）。
 3. When ある処理が出来事を出し終えてから `get_log` が届く, the areka shall その出来事を結果に含める（出した直後の問い合わせで取りこぼさない）。
 4. The areka shall 6.1〜6.3 を決定論テストで固定する（取り決めの target で出した行が script・error へ入ること、番号を読んでから出した行だけが `since_id` で返ること）。
