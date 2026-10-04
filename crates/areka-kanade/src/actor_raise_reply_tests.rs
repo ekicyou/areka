@@ -136,7 +136,11 @@ fn script_reply_is_script_after_the_talk_is_started() {
     boot_to_steady(&rig);
 
     assert_eq!(raise(&rig, RAISED, ShioriMethod::Get), RaiseOutcome::Script);
-    assert_eq!(drain(&rig.calls), vec![format!("GET {RAISED}")]);
+    // 台詞の再生の前に OnTranslate を 1 回送る（偽の shiori は既定の 204）。
+    assert_eq!(
+        drain(&rig.calls),
+        vec![format!("GET {RAISED}"), "GET OnTranslate".to_string()]
+    );
     assert!(
         matches!(rig.talks.try_recv(), Ok(TalkCommand::Start(_))),
         "返事の前に再生の起動が済んでいる"
@@ -144,18 +148,24 @@ fn script_reply_is_script_after_the_talk_is_started() {
     close(rig);
 }
 
-/// 空の台本・空白だけの台本・204 はどれも `NoReply`（送った往復は 1 回）。
+/// 空の台本・空白だけの台本・204 はどれも `NoReply`。依頼のイベントの往復は 1 回で、1 文字以上の
+/// 空白だけの台本にだけ OnTranslate が続く（翻訳は 1 文字以上の台詞にかける）。
 #[test]
 fn empty_blank_and_no_content_are_no_reply() {
-    let answers: [(&str, Answer); 3] = [
-        ("空の台本", Box::new(|| ShioriOutcome::Value(String::new()))),
+    let answers: [(&str, Answer, &[&str]); 3] = [
+        (
+            "空の台本",
+            Box::new(|| ShioriOutcome::Value(String::new())),
+            &[],
+        ),
         (
             "空白だけの台本",
             Box::new(|| ShioriOutcome::Value(" \t\r\n\u{3000}".into())),
+            &["GET OnTranslate"],
         ),
-        ("204", Box::new(|| ShioriOutcome::NoContent)),
+        ("204", Box::new(|| ShioriOutcome::NoContent), &[]),
     ];
-    for (label, answer) in answers {
+    for (label, answer, translated) in answers {
         let rig = spawn_rig(answer);
         boot_to_steady(&rig);
         assert_eq!(
@@ -163,7 +173,9 @@ fn empty_blank_and_no_content_are_no_reply() {
             RaiseOutcome::NoReply,
             "{label} は返事なし"
         );
-        assert_eq!(drain(&rig.calls), vec![format!("GET {RAISED}")], "{label}");
+        let mut expected = vec![format!("GET {RAISED}")];
+        expected.extend(translated.iter().map(|call| call.to_string()));
+        assert_eq!(drain(&rig.calls), expected, "{label}");
         close(rig);
     }
 }
@@ -235,7 +247,10 @@ fn close_talk_wait_is_not_steady_and_nothing_is_sent() {
         RaiseOutcome::NotSteady
     );
     // 終了の挨拶は送られて再生が始まり、依頼のイベントは送られていない。
-    assert_eq!(drain(&rig.calls), vec!["GET OnClose".to_string()]);
+    assert_eq!(
+        drain(&rig.calls),
+        vec!["GET OnClose".to_string(), "GET OnTranslate".to_string()]
+    );
     assert!(
         matches!(rig.talks.try_recv(), Ok(TalkCommand::Start(_))),
         "終了の挨拶の再生を待っている"
@@ -277,7 +292,12 @@ fn without_reply_the_event_is_sent_as_today() {
     assert_eq!(raise(&rig, RAISED, ShioriMethod::Get), RaiseOutcome::Script);
     assert_eq!(
         drain(&rig.calls),
-        vec![format!("GET {RAISED}"), format!("GET {RAISED}")]
+        vec![
+            format!("GET {RAISED}"),
+            "GET OnTranslate".to_string(),
+            format!("GET {RAISED}"),
+            "GET OnTranslate".to_string(),
+        ]
     );
     close(rig);
 }

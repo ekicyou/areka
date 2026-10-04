@@ -36,7 +36,9 @@ fn steady_talking(origin: &'static str) -> State {
 
 fn reply_from(s: State, origin: &'static str, script: &str) -> (State, Vec<Action>) {
     let outcome = ShioriOutcome::Value(script.to_string());
-    step(s, Input::ShioriReply { outcome, origin }, &cfg())
+    let next = step(s, Input::ShioriReply { outcome, origin }, &cfg());
+    // 翻訳の行動が出たら、`OnTranslate` が 204 を返したときの続きを返す。
+    crate::schedule::translate_test_support::pass_translate(next, &cfg())
 }
 
 #[test]

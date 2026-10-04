@@ -2,8 +2,8 @@ use super::test_support::onclose_get_index;
 use super::{
     CallMethod, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT,
     FIXED_STEADY_SCRIPT, Fixture, Harness, KanadeConfig, KanadeMsg, MonotonicMs, QuitPolicy,
-    RecordedCall, events, expected_call, expected_unload, join_bounded, spawn_harness,
-    spawn_harness_gated,
+    RecordedCall, events, expected_call, expected_translate, expected_unload, join_bounded,
+    spawn_harness, spawn_harness_gated,
 };
 
 // ============================================================================
@@ -86,8 +86,8 @@ fn farewell_talk_without_quit_tag_still_terminates() {
         started
     );
 
-    // (c) 定常へ戻る経路は 0 本: OnClose GET より後に現れる記録は Unload 1 件だけで、pump
-    //     （OnSecondChange）も追加イベントも一切無い。
+    // (c) 定常へ戻る経路は 0 本: OnClose GET より後に現れる記録は別れの台詞の OnTranslate と
+    //     Unload の 2 件だけで、pump（OnSecondChange）も追加イベントも一切無い。
     let after_close: Vec<&RecordedCall> = recorded
         .iter()
         .enumerate()
@@ -96,14 +96,24 @@ fn farewell_talk_without_quit_tag_still_terminates() {
         .collect();
     assert_eq!(
         after_close.len(),
-        1,
-        "OnClose の後に現れるのは Unload だけ（終了の握手から定常へ戻る経路は 0 本）: {:?}",
+        2,
+        "OnClose の後に現れるのは OnTranslate と Unload だけ（終了の握手から定常へ戻る経路は 0 本）: {:?}",
         recorded
     );
+    let onclose = events::on_close(CloseReason::User { scope: 0 }, &ExecutionSnapshot::INACTIVE);
     assert_eq!(
         *after_close[0],
+        expected_translate(
+            FIXED_FAREWELL_SCRIPT,
+            &onclose,
+            &ExecutionSnapshot::INACTIVE
+        ),
+        "OnClose の後の 1 件目は別れの台詞の OnTranslate（終了の相は会話なしの状態）"
+    );
+    assert_eq!(
+        *after_close[1],
         expected_unload(),
-        "OnClose の後の 1 件は Unload"
+        "OnClose の後の 2 件目は Unload"
     );
 
     // (d) 定常の talk も起動しない: sink に届くのは別れの close talk 1 本のみ。

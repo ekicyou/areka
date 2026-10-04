@@ -955,6 +955,12 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
             Some("OnFirstBoot".to_string()),
             ExchangeOutcome::Value(expected_onfirstboot_value()),
         ),
+        // 挨拶の台詞は再生の前に OnTranslate へかける。pasta は登録の無いイベントに 204 を返す。
+        (
+            ExchangeKind::Get,
+            Some("OnTranslate".to_string()),
+            ExchangeOutcome::NoContent,
+        ),
         (
             ExchangeKind::Notify,
             Some("basewareversion".to_string()),

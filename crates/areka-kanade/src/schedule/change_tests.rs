@@ -10,6 +10,7 @@ use crate::change::{ChangeOrigin, ChangeTarget};
 use crate::msg::{CloseReason, ShioriCall};
 use crate::schedule::log_capture::{capture, logged_once};
 use crate::schedule::steady::test_support::base_state;
+use crate::schedule::translate_test_support::pass_translate;
 use crate::schedule::{ActiveTalk, step};
 use crate::talk::{TalkDone, TalkEndReason};
 use tracing::Level;
@@ -41,15 +42,13 @@ fn steady() -> State {
     }
 }
 
+/// SHIORI の応答を入れる（翻訳の行動が出たら、`OnTranslate` が 204 を返したときの続きを返す）。
 fn reply(s: State, outcome: ShioriOutcome) -> (State, Vec<Action>) {
-    step(
-        s,
-        Input::ShioriReply {
-            outcome,
-            origin: "test",
-        },
-        &cfg(),
-    )
+    let input = Input::ShioriReply {
+        outcome,
+        origin: "test",
+    };
+    pass_translate(step(s, input, &cfg()), &cfg())
 }
 
 fn talk_done(s: State, talk_id: TalkId, reason: TalkEndReason) -> (State, Vec<Action>) {

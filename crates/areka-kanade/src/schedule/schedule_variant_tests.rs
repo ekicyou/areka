@@ -24,6 +24,8 @@ fn action_variants_are_existing_five_plus_choice_two() {
             Action::ResolveChoice { .. } => "ResolveChoice",
             Action::CancelChoice { .. } => "CancelChoice",
             Action::Notice(_) => "Notice",
+            // translate-pipeline で翻訳の依頼（`Translate`）の腕を足した。
+            Action::Translate(_) => "Translate",
         }
     }
     assert_eq!(tag(&Action::ShioriUnload), "ShioriUnload");
@@ -109,6 +111,8 @@ fn input_variants_are_existing_eight_plus_choice_two() {
             Input::AwaitTalkGap { .. } => "AwaitTalkGap",
             // status-execution-states で外から届いた実行状態の知らせ（`ExecutionState`）の腕を足した。
             Input::ExecutionState(_) => "ExecutionState",
+            // translate-pipeline で翻訳の結果（`TranslateDone`）の腕を足した。
+            Input::TranslateDone(_) => "TranslateDone",
         }
     }
     assert_eq!(tag(&Input::Boot), "Boot");

@@ -1,0 +1,26 @@
+{
+  "feature_name": "areka-P0-translate-pipeline",
+  "created_at": "2026-10-03T10:12:34Z",
+  "updated_at": "2026-10-03T23:56:59Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-10-03T23:56:59Z"
+    }
+  },
+  "ready_for_implementation": true
+}

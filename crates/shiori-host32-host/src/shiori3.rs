@@ -53,6 +53,13 @@ pub struct ShioriRequest<'a> {
     pub charset: Charset,
 }
 
+/// 欠番の印。Reference の並びの中でこの値と一致する位置は、行を出さずに番号だけ進める。
+///
+/// NUL 1 文字は見出しの値として線に載せられない文字で、実際の Reference の値と重ならない。
+/// `OnTranslate` の Reference3 の区切り（バイト値 1）とも重ならない。
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnTranslate:1
+pub const ABSENT_REFERENCE: &str = "\u{0}";
+
 /// 符号化済みの要求（2 つの事実）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EncodedRequest {
@@ -71,7 +78,8 @@ pub struct EncodedRequest {
 /// - `Sender: <sender>`（`req.sender` をそのまま・単一差替点）
 /// - `Status: <status>`（`req.status` が `Some` のときのみ・`Sender` の後・`ID` の前・DD-IT-6・要件 2.3）
 /// - `ID: <id>`（要件 1.4・汎用・特定イベント分岐なし＝要件 1.5）
-/// - `Reference0`・`Reference1`・…（`references` を 0 起点連番で・要件 1.4）
+/// - `Reference0`・`Reference1`・…（`references` を 0 起点連番で・要件 1.4）。値が
+///   [`ABSENT_REFERENCE`] の位置は行を出さず番号だけ進める（欠番）
 /// - `SecurityLevel: local`（pasta 実テスト準拠・de-facto）
 ///
 /// 各行は CR+LF（0x0D 0x0A）で区切り、ヘッダ部の終端を空行（連続する CR+LF＝末尾
@@ -114,6 +122,10 @@ pub fn build_request(req: &ShioriRequest) -> EncodedRequest {
     out.push_str(req.id);
     out.push_str("\r\n");
     for (n, reference) in req.references.iter().enumerate() {
+        // 欠番の印の位置は行を出さず、番号だけ進める（詰めない）。
+        if reference == ABSENT_REFERENCE {
+            continue;
+        }
         // Reference0..N（0 起点連番・要件 1.4）。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#Reference_2a:1
         out.push_str("Reference");
@@ -731,6 +743,75 @@ mod tests {
              Reference1: 0\r\n\
              SecurityLevel: local\r\n\
              \r\n"
+        );
+    }
+
+    /// 欠番の印の位置は `Reference1:` の行を出さず、`Reference2:`・`Reference3:` の番号を
+    /// 詰めずに保つ（areka-P0-translate-pipeline 要件 3.3・正典「該当がない場合欠番」）。
+    #[test]
+    fn build_absent_reference_skips_line_and_keeps_numbering() {
+        let references = [
+            "台詞".to_owned(),
+            ABSENT_REFERENCE.to_owned(),
+            "OnBoot".to_owned(),
+            "master".to_owned(),
+        ];
+        let req = ShioriRequest {
+            method: Method::Get,
+            id: "OnTranslate",
+            references: &references,
+            sender: "areka",
+            status: None,
+            charset: Charset::UTF_8,
+        };
+        let bytes = build_request(&req).bytes;
+        let s = std::str::from_utf8(&bytes).expect("valid UTF-8");
+        assert_eq!(
+            s,
+            "GET SHIORI/3.0\r\n\
+             Charset: UTF-8\r\n\
+             Sender: areka\r\n\
+             ID: OnTranslate\r\n\
+             Reference0: 台詞\r\n\
+             Reference2: OnBoot\r\n\
+             Reference3: master\r\n\
+             SecurityLevel: local\r\n\
+             \r\n"
+        );
+    }
+
+    /// 印を含まない要求は、空文字・バイト値 1 を含む値でも今までどおり全行を書く
+    /// （印は NUL 1 文字の完全一致だけ・印の無い要求のバイト列は 1 バイトも変わらない）。
+    #[test]
+    fn build_without_absent_marker_is_byte_identical() {
+        let references = [
+            String::new(),
+            "\u{1}".to_owned(),
+            "a\u{0}b".to_owned(),
+            "x".to_owned(),
+        ];
+        let req = ShioriRequest {
+            method: Method::Get,
+            id: "OnTest",
+            references: &references,
+            sender: "areka",
+            status: None,
+            charset: Charset::UTF_8,
+        };
+        let bytes = build_request(&req).bytes;
+        assert_eq!(
+            bytes,
+            "GET SHIORI/3.0\r\n\
+             Charset: UTF-8\r\n\
+             Sender: areka\r\n\
+             ID: OnTest\r\n\
+             Reference0: \r\n\
+             Reference1: \u{1}\r\n\
+             Reference2: a\u{0}b\r\n\
+             Reference3: x\r\n\
+             SecurityLevel: local\r\n\
+             \r\n"
+                .as_bytes()
         );
     }
 }

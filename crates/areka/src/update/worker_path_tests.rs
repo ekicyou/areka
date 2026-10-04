@@ -151,11 +151,13 @@ fn marked_leftovers(ghost_dir: &Path) -> Vec<PathBuf> {
 }
 
 /// 古いゴースト: 起動系列（起動記録あり＝`OnFirstBoot` なし）に続く進捗のイベントの正典の順
-/// （1 ファイルの `changed`・締めと総括は後送りの列＝古いゴーストへは送らない）。
-const CHANGED_ROUND: [&str; 10] = [
+/// （1 ファイルの `changed`・締めと総括は後送りの列＝古いゴーストへは送らない）。台詞を返した照会の
+/// 後には、その台詞を再生の前にかける `OnTranslate` が続く（起動の挨拶と最後の進捗の返事）。
+const CHANGED_ROUND: [&str; 12] = [
     "NOTIFY OnInitialize",
     "GET username",
     "GET OnBoot",
+    "GET OnTranslate",
     "NOTIFY basewareversion",
     "GET useorigin1",
     "GET OnUpdateBegin",
@@ -163,6 +165,7 @@ const CHANGED_ROUND: [&str; 10] = [
     "GET OnUpdate.OnDownloadBegin",
     "GET OnUpdate.OnMD5CompareBegin",
     "GET OnUpdate.OnMD5CompareComplete",
+    "GET OnTranslate",
 ];
 
 /// 読み直した新しいゴースト: 起動の知らせは列の先頭 `OnUpdateComplete`（`OnGhostChanged`・`OnBoot` の
@@ -294,7 +297,7 @@ fn a_none_round_requests_no_switch() {
 
     assert!(done, "依頼が終わる: {events:?}");
     assert_eq!(
-        kinds(&a[0])[4..],
+        kinds(&a[0])[5..],
         [
             "GET useorigin1",
             "GET OnUpdateBegin",

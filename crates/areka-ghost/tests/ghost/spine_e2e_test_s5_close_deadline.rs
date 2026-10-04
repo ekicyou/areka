@@ -289,6 +289,11 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
             &config,
             &areka_kanade::ExecutionSnapshot::INACTIVE,
         )),
+        // 台詞は再生の前に OnTranslate へかける（偽の SHIORI の既定は 204）。
+        super::expected_translate(
+            r"\s[0]hello\e",
+            &events::on_boot(&config, &areka_kanade::ExecutionSnapshot::INACTIVE),
+        ),
         expected_from_shiori_call(events::baseware_version(
             &config,
             &areka_kanade::ExecutionSnapshot::INACTIVE,
@@ -297,6 +302,13 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
             CloseReason::User { scope: 0 },
             &areka_kanade::ExecutionSnapshot::INACTIVE,
         )),
+        super::expected_translate(
+            r"\_w[49999950]this-never-completes\-",
+            &events::on_close(
+                CloseReason::User { scope: 0 },
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            ),
+        ),
         RecordedCall::Unload,
     ];
     let calls_without_status: Vec<RecordedCall> = handle
@@ -310,7 +322,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
     assert_eq!(
         calls_without_status, expected_sequence,
         "起動系列＋close 開始＋強制終了系列（OnInitialize→username prefetch→OnFirstBoot→OnBoot→\
-         basewareversion→OnClose→Unload）が正典順序で発火していない"
+         OnTranslate→basewareversion→OnClose→OnTranslate→Unload）が正典順序で発火していない"
     );
 
     // ---- 主観測: shutdown() が全スレッド join を有界時間内に完走する（要件 7.3) ----

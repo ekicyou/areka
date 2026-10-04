@@ -170,6 +170,7 @@ fn target_connect_fail_boots_default_with_halt_and_no_alert() {
                     "NOTIFY OnInitialize".to_owned(),
                     "GET username".to_owned(),
                     "GET OnBoot".to_owned(),
+                    "GET OnTranslate".to_owned(),
                     "NOTIFY basewareversion".to_owned(),
                 ]],
                 halted_tail(),
