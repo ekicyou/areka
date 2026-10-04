@@ -3,8 +3,6 @@
 //! 上限は外から渡せる値（[`AnimationLimits`]）で持ち、設定ファイルが無いあいだは `AREKA_` の
 //! 環境変数で変える。名前と欄の割り当て・読めない値の扱いは純粋な [`AnimationLimits::from_lookup`]
 //! に置き、本番の入口 [`AnimationLimits::from_env`] は本物の環境で 1 回だけそれを呼ぶ。
-// 4.1 で bake_with_limits と再輸出に結線するまで未使用（from_env はテストからも呼ばない）。
-#![allow(dead_code)]
 
 use std::env::VarError;
 use std::sync::OnceLock;
