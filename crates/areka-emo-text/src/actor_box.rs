@@ -138,13 +138,18 @@ impl TextLayerRuntime {
         self.shown_boxes.get(actor).map_or(&[], Vec::as_slice)
     }
 
-    /// 普通のバルーンの窓に今出ている文字の数（要件 5.1・5.2）: スコープの今のサーフェスに箱が
-    /// あれば 0（窓を出さない）、無ければ普通のバルーンの場所の見えている文字の数。
-    pub fn balloon_shown_glyphs(&self, actor: &ActorKey, talk_time: f64) -> usize {
-        let has_boxes = self
-            .state
-            .current_surface(actor)
-            .is_some_and(|surface| !self.box_layout.placements(surface).is_empty());
+    /// 普通のバルーンの窓に今出ている文字の数（要件 5.1・5.2）: `shown_surface`（そのスコープの
+    /// シェルの窓がいま表示している絵の番号・非表示と未確立は `None`）が箱を持つ面なら 0（窓を
+    /// 出さない）、そうでなければ普通のバルーンの場所の見えている文字の数。台本の `\s` の受け取り
+    /// には従わない。箱の表が空のシェルでは絵の番号に依らない。
+    pub fn balloon_shown_glyphs(
+        &self,
+        actor: &ActorKey,
+        shown_surface: Option<u32>,
+        talk_time: f64,
+    ) -> usize {
+        let has_boxes =
+            shown_surface.is_some_and(|surface| !self.box_layout.placements(surface).is_empty());
         if has_boxes {
             0
         } else {

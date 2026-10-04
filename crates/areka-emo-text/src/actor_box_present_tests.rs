@@ -153,18 +153,27 @@ fn clear_all_hide_and_bundle_replacement_empty_the_snapshot() {
     assert_eq!(shown(&f), vec![], "箱の束の差し替え");
 }
 
-/// 普通のバルーンの窓に今出ている文字の数: 今のサーフェスに箱があれば 0、無ければ普通のバルーンの
-/// 場所の見えている文字の数（要件 5.1・5.2・6.9）。
+/// 普通のバルーンの窓に今出ている文字の数: 表示している絵が箱を持つ面なら 0、そうでなければ普通の
+/// バルーンの場所の見えている文字の数（要件 5.1・5.2・6.9・本 spec 要件 1.8）。台本の `\s` の
+/// 受け取りには従わない。箱の表が空なら絵の番号に依らない（本 spec 要件 4.5）。
 #[test]
-fn balloon_shown_glyphs_is_zero_while_the_surface_has_boxes() {
+fn balloon_shown_glyphs_follows_the_shown_picture_number() {
     let mut f = fixture();
     let a = actor();
     f.rt.apply_cue(&text("0", "あい"));
-    assert_eq!(
-        f.rt.balloon_shown_glyphs(&a, LATE),
-        2,
-        "まだ \\s が無い＝普通のバルーン"
-    );
+    // 絵 0・2 は箱を持ち、絵 4 は持たない。
+    for (picture, expected, why) in [
+        (Some(0), 0, "箱のある絵では窓に出さない"),
+        (Some(2), 0, "箱のある絵では窓に出さない"),
+        (Some(4), 2, "箱の無い絵では普通のバルーンの文字が出る"),
+        (None, 2, "絵の非表示・未確立は箱が無い"),
+    ] {
+        assert_eq!(
+            f.rt.balloon_shown_glyphs(&a, picture, LATE),
+            expected,
+            "絵 {picture:?}: {why}"
+        );
+    }
     f.rt.apply_cue(&emote("0", "0"));
     assert_eq!(
         f.rt.state().visible_glyphs(&a, LATE),
@@ -172,24 +181,29 @@ fn balloon_shown_glyphs_is_zero_while_the_surface_has_boxes() {
         "普通のバルーンの文字は保持している"
     );
     assert_eq!(
-        f.rt.balloon_shown_glyphs(&a, LATE),
-        0,
-        "箱のあるサーフェスでは窓に出さない"
+        f.rt.balloon_shown_glyphs(&a, Some(4), LATE),
+        2,
+        "\\s[0] を受け取っても絵が 4 のままなら窓に出す"
     );
     f.rt.apply_cue(&emote("0", "4"));
     assert_eq!(
-        f.rt.balloon_shown_glyphs(&a, LATE),
-        2,
-        "箱の無いサーフェスへ戻ると再び出る"
+        f.rt.balloon_shown_glyphs(&a, Some(0), LATE),
+        0,
+        "\\s[4] を受け取っても絵が 0 のままなら窓に出さない"
     );
-    f.rt.apply_cue(&emote("0", "-1"));
-    assert_eq!(f.rt.balloon_shown_glyphs(&a, LATE), 2, "非表示は箱が無い");
 
-    // 箱の束がまだ無いランタイムは本 spec の前と同じ値（要件 5.4）。
+    // 箱の表が空のシェル（箱の束がまだ無いランタイム）は、絵の番号に依らず本 spec の前と同じ値
+    // （要件 5.4・本 spec 要件 4.5）。
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.apply_cue(&text("0", "あい"));
     rt.apply_cue(&emote("0", "0"));
-    assert_eq!(rt.balloon_shown_glyphs(&a, LATE), 2);
+    for picture in [None, Some(0), Some(2), Some(4), Some(u32::MAX)] {
+        assert_eq!(
+            rt.balloon_shown_glyphs(&a, picture, LATE),
+            2,
+            "箱の表が空なら絵 {picture:?} でも同じ値"
+        );
+    }
 }
 
 /// 場所を指す照会と強調: 箱の場所の行と強調はその場所の鍵で持ち、普通のバルーンの口は
