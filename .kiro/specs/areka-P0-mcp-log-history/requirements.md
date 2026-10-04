@@ -1,7 +1,7 @@
 # Requirements Document
 
 > 本文の実測は **2026-10-04・本ブランチ**（main `e2a373b5`＝棚卸㉑の PR#229 のコミット）のもの。コードは「何の定義か」（関数名・型名・定数名＋ファイルパス）で指し、行番号では指さない。
-> 「要件の段での暫定の裁定」の表は、brief が「要件で決める」とした議題と、要件を書く途中で答えが要った点に対する**推奨案による暫定の確定**であり、要件ディスカッションで覆せる（覆したら該当要件も改める）。答えで作業が変わる議題は見込み 4 件（裁定 3〔network と update の分け方〕・裁定 5〔上限の数〕・裁定 7〔`<名>` の欄〕・裁定 8〔`[<種別>]` の欄〕）。
+> 「要件の段での暫定の裁定」の表は、brief が「要件で決める」とした議題と、要件を書く途中で答えが要った点に対する**推奨案による暫定の確定**であり、要件ディスカッションで覆せる（覆したら該当要件も改める）。要件ディスカッション（2026-10-04）で 5 件を開発者と確定した（裁定 4・7・8・10・11・12 と、`ghost`・`label` の欄を読む行の範囲）。確定した行には「要件ディスカッション議題 N で確定」と書いた。裁定 3（network と update の分け方）・裁定 5（上限の数）は暫定のまま設計へ進む。
 > **SSP の実測は [research.md](research.md) §2 にある**（2026-10-04・SSP 2.9.07）。要件を書いた時点では SSP が起動しておらず、下の表に「未測」と書いた点の多くは、その後のギャップ分析と追加の実測で測れた。実測と食い違う暫定の裁定は要件ディスカッションで改める。まだ未測なのは、update 種別の行の形・複数行の本文の継続行・もう起動していないゴーストの名前での絞り込み・履歴の上限である。
 > 今のログの出口の書き手は既定のまま＝**標準出力**である（brief と初版の「標準エラー」は誤り）。
 
@@ -45,7 +45,7 @@
 | 1 | 種別への振り分けを「出す側に target を足す」か「既存のモジュールのパスで振り分ける」か（brief の議題） | **既存のモジュールのパスで振り分ける**（出す側は 0 行） | C3 の約束。出す側を触ると並走する 4 spec と重なる | 2・8.2 |
 | 2 | warn 以上の更新・インストールの行はどの種別か | **error 種別だけ**（1 件は 1 種別）。network・update・status は info の行だけ。debug・trace は残さない | SSP の説明（description）は error を「errors/warnings」と書く。AI は誤りを error だけ見れば拾える | 2.1・2.3〜2.5 |
 | 3 | network と update の分け方 | **network**＝URL からの取得の行（`areka::install::fetch_url`・`areka_update::winhttp`・`areka_update::fetch`）。**update**＝それ以外の更新とインストールの行（`areka_update`・`areka::update`・`areka::install`）。細かいパスが先に当たる | brief「network／update＝`areka-update`・インストールの出来事」。SSP の `update` 種別の実例は**未測**（survey §5） | 2.3・2.4 |
-| 4 | status に入れる行 | 起動・切替・読み込みの節目＝`areka`（`main.rs`）・`areka::boot_resolve`・`areka::ghost_session`・`areka::emo2_boot::ghost_switch` の info の行 | brief「status＝起動・読み込みの節目」 | 2.5 |
+| 4 | status に入れる行 | 起動・切替・読み込みの節目＝`areka`（`main.rs`）・`areka::boot_config`・`areka::boot_resolve`・`areka::ghost_session`・`areka::emo2_boot::ghost_switch`・`ghost-boot`・`ghost-shutdown` の info の行（要件ディスカッション議題 5 で 3 つ足した） | brief「status＝起動・読み込みの節目」。SSP の status は `Starting up <ゴースト>`・`Loading SHIORI subsystem`・`Materialized.`（research.md §2.1）で、切替や再読み込みの後に立ち上がったかを確かめるのに使う | 2.5 |
 | 5 | 履歴の上限（brief「上限の数は要件で決める」） | **種別ごとに 1,000 件**（合わせて最大 5,000 件）。1 件の本文は **4,096 文字**まで（超えた分は捨て、末尾に ` ...(truncated)` を付ける） | 種別ごとに分けると、status の行が多くても error が押し出されない。最大でも数十 MB に届かない | 1.4〜1.6 |
 | 6 | 履歴に残すかどうかを `RUST_LOG` に従わせるか（brief の議題） | **従わせない**（`RUST_LOG=warn` でも status の info は残る。`RUST_LOG=areka_mcp=debug` でも error は残る） | `RUST_LOG` は標準出力の見え方の設定であり、AI が読む履歴が黙って欠けると「エラーなし」と誤読する | 1.7・1.8 |
 | 7 | 1 行の `<名>` の欄 | 取り決めの欄 `ghost` があればその値。無ければ**種別ごとの既定の名**（SSP の語＝要件 2.6 の表。status は `STAT`、ほかは `[SYSTEM]`）（要件ディスカッション議題 3 で確定） | SSP 2.9.07 の実測（research.md §2.1・§2.3）。ゴーストに属さない error と update は**未測で推定** | 2.6・4.2 |
@@ -112,7 +112,7 @@
 2. When 出来事の target が `areka::log::script` である, the areka shall その出来事をレベルを問わず script 種別として残す（warn 以上で出されても 2.1 より先に当たり、error 種別には入れない）。
 3. When レベルが info で、target が `areka::install::fetch_url`・`areka_update::winhttp`・`areka_update::fetch` のどれか（またはその下のモジュール）である出来事が出る, the areka shall その出来事を network 種別として残す（今ログを出しているのは `areka::install::fetch_url` の info 3 行だけで、`areka_update::winhttp`・`areka_update::fetch` は 1 行も出していない。この 2 つは、行の持ち主の spec が取得の行を足したときの受け皿である）。
 4. When レベルが info で、target が `areka_update`・`areka::update`・`areka::install` のどれか（またはその下のモジュール）であり、2.3 に当たらない出来事が出る, the areka shall その出来事を update 種別として残す。
-5. When レベルが info で、target が `areka`（下のモジュールを含まない）・`areka::boot_resolve`・`areka::ghost_session`・`areka::emo2_boot::ghost_switch` のどれかである出来事が出る, the areka shall その出来事を status 種別として残す。
+5. When レベルが info で、target が `areka`（下のモジュールを含まない）・`areka::boot_config`・`areka::boot_resolve`・`areka::ghost_session`・`areka::emo2_boot::ghost_switch`・`ghost-boot`・`ghost-shutdown` のどれかである出来事が出る, the areka shall その出来事を status 種別として残す（`ghost-boot`・`ghost-shutdown` は `crates/areka-ghost/src/runtime.rs` が明示している target で、ゴースト自体の起動と終了の節目。`areka::alert` の問いかけの行は起動の節目ではないので入れない。要件ディスカッション議題 5 で確定）。
 6. When 残す出来事の target が取り決めの target（`areka::log::script`・`areka::log::error`）であり、`ghost` の欄を持つ, the areka shall その値を記録の `<名>` とする。それ以外（欄が無い・取り決めの target でない）は `<名>` を種別ごとの既定の名（下の表）とする。
 7. When 残す出来事の target が取り決めの target であり、`label` の欄を持つ, the areka shall その値を記録の `[<種別>]` の表示の語とする。それ以外は種別ごとの既定の語（下の表）とする（表示の語が変わっても、記録の種別は変わらない）。
    - 取り決めの target でない行の `ghost`・`label` の欄は、取り決めの欄として読まず、ほかの欄と同じく本文に ` ghost=値` の形で残す（要件ディスカッション議題 4 で確定。今のコードには、フォルダ名・`-`・`Some("emo2")` の形の値を `ghost` の欄に持つ起動・切替・インストールの行と、選択肢の文言を `label` の欄に持つ行がある＝research.md §3.4。出す側は 0 行変える約束なので、履歴の側で読み分ける）。
@@ -203,7 +203,7 @@
 #### Acceptance Criteria
 
 1. The areka shall `crates/areka/src/main.rs` の変更を、ログの出口の組み替えと履歴のモジュールの宣言だけにとどめる。**触る理由**: ログの出口はアプリの起動の先頭で 1 度だけ決まり、`fn main()` のその 1 か所に履歴を重ねる以外に、すべての出来事を履歴へ届ける場所が無い。`main.rs` は 1,000 行の上限を超えない。
-2. The areka shall 出す側の行（`crates/areka-update/`・`crates/areka/src/update/`・`crates/areka/src/install/`・`boot_resolve.rs`・`ghost_session.rs`・`emo2_boot/`）を 0 行変える。
+2. The areka shall 出す側の行（`crates/areka-update/`・`crates/areka/src/update/`・`crates/areka/src/install/`・`boot_config.rs`・`boot_resolve.rs`・`ghost_session.rs`・`emo2_boot/`・`crates/areka-ghost/`）を 0 行変える。
 3. The areka shall `crates/areka/src/mcp/mod.rs`・`crates/areka-mcp/src/**` を 0 行変える（`get_log` の定義の逐語・引数の検査・橋はそのまま）。
 4. The areka shall 既存の決定論テストを、`crates/areka/src/mcp/get_log_tests.rs`（`NG:not implemented yet` の期待を本物の答えへ書き換える）を除いて変えずに緑のままにする。
 5. The areka shall ログの捕捉先を直接差す呼び出しを新設しない（`crates/log-capture-kit/tests/with_default_guard_test.rs` が緑のまま）。履歴のテストでログを捕まえる要があるときは `log-capture-kit` を通す。
