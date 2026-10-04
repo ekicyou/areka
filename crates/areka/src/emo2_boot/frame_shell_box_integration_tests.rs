@@ -46,14 +46,18 @@ element1,balloon,talk,10,10
 const BOX_SURFACE: &str = "0";
 /// 箱の無いサーフェスの鍵。
 const PLAIN_SURFACE: &str = "10";
+/// 箱のあるサーフェスの番号（絵の差し替えで表示層へ送る形）。
+const BOX_SURFACE_ID: u32 = 0;
+/// 箱の無いサーフェスの番号（同上）。
+const PLAIN_SURFACE_ID: u32 = 10;
 
 /// 箱を隠す印を立てたときに文字の層が残す 1 行（`actor_box.rs` の `hide_boxes`）。
 const HIDE_BOXES_MESSAGE: &str = "箱を隠す印を立てた（次の台詞の頭まで）";
 
 /// 檻を組んで装着のフレームまで回し、箱の束を渡してシェルの窓の表示を確立させる。
 ///
-/// emo2 のシェルは箱を持たないので、装着の相が渡した束を [`SHELL`] の束で差し替える（本番では
-/// シェルの切替の後始末が同じ `hand_to` で差し替える）。シェルの窓の文字の差し込み口は最初の
+/// emo2 のシェルは箱を持たないので、装着の相が渡した束を `shell`（シェルの文面）の束で差し替える
+/// （本番ではシェルの切替の後始末が同じ `hand_to` で差し替える）。シェルの窓の文字の差し込み口は最初の
 /// `\s` 相当の表示で確立するので、`scopes` の分だけ面 0 の表示を送っておく（次のフレームの drain が適用する）。
 struct Cage {
     world: World,
@@ -65,7 +69,7 @@ struct Cage {
 }
 
 impl Cage {
-    fn boot(shell_scopes: &[u32]) -> Self {
+    fn boot(shell: &str, shell_scopes: &[u32]) -> Self {
         let (mut world, gw) = gpu_frame_world();
         // 本番は `wire_balloon_choice` が入れる。無いと箱に文字が出たフレームで観測の欠落が 1 行鳴る。
         world.insert_non_send(ShellBoxHover::default());
@@ -83,8 +87,8 @@ impl Cage {
             "前提: 両 scope の balloon 装着が成立している"
         );
 
-        let text_world = EmoWorld::build(&parse(SHELL));
-        let (layout, report) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &text_world);
+        let text_world = EmoWorld::build(&parse(shell));
+        let (layout, report) = fold_boxes(&parse_boxes(shell), &BTreeMap::new(), &text_world);
         assert_eq!(report.issues, vec![], "文面は誤りを持たない");
         ShellBoxAssets {
             layout,
@@ -94,17 +98,6 @@ impl Cage {
         }
         .hand_to(&mut wiring.runtime.borrow_mut(), &mut world);
 
-        for &scope in shell_scopes {
-            present_tx
-                .send(PresentCommand::ShowSurface {
-                    target: shell_target(scope),
-                    surface_id: 0,
-                    binds: BindSet::default(),
-                    pattern: PatternState::default(),
-                    reply: None,
-                })
-                .expect("受信端は結線資源が保持している");
-        }
         let mut cage = Self {
             world,
             wiring,
@@ -113,6 +106,9 @@ impl Cage {
             reports,
             _gw: gw,
         };
+        for &scope in shell_scopes {
+            cage.picture(scope, 0);
+        }
         cage.frame();
         for &scope in shell_scopes {
             assert!(
@@ -156,6 +152,37 @@ impl Cage {
         self.cue(scope, CueCommand::Text(text.into()));
     }
 
+    /// scope のシェルの窓へ絵の差し替えを送る（本番の adapter が `\s` から作る `ShowSurface` と同じ形・
+    /// 次のフレームの drain が適用する）。台本の `\s`（[`Self::surface`]）とは別の口で、届く順を檻が決める。
+    fn picture(&self, scope: u32, surface_id: u32) {
+        self.present_tx
+            .send(PresentCommand::ShowSurface {
+                target: shell_target(scope),
+                surface_id,
+                binds: BindSet::default(),
+                pattern: PatternState::default(),
+                reply: None,
+            })
+            .expect("受信端は結線資源が保持している");
+    }
+
+    /// scope のシェルの窓へ絵の非表示（`\s[-1]` 相当）を送る（次のフレームの drain が適用する）。
+    fn hide_picture(&self, scope: u32) {
+        self.present_tx
+            .send(PresentCommand::Hide {
+                target: shell_target(scope),
+                reply: None,
+            })
+            .expect("受信端は結線資源が保持している");
+    }
+
+    /// scope のシェルの窓に表示層が今表示している絵の番号（非表示なら `None`）。
+    fn picture_id(&self, scope: u32) -> Option<u32> {
+        self.wiring
+            .presenter
+            .current_surface_id(shell_target(scope))
+    }
+
     fn window_visible(&self, scope: u32) -> Option<bool> {
         self.wiring.presenter.target_visible(balloon_target(scope))
     }
@@ -193,7 +220,7 @@ fn show_transitions(events: &[LogEvent], scope: u32) -> usize {
 /// サーフェスのあいだ保持され、箱の無いサーフェスへ戻ると窓が出直す（要件 6.9）。
 #[test]
 fn box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it() {
-    let mut cage = Cage::boot(&[0]);
+    let mut cage = Cage::boot(SHELL, &[0]);
 
     // 箱のあるサーフェスで話す。提示が写しを埋めるのはこのフレームの終わりなので 2 フレーム回す。
     cage.surface(0, BOX_SURFACE);
@@ -278,7 +305,7 @@ fn box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it() {
 /// `\0` は箱の文字で、両方が `Status` の組に載る（要件 5.3・5.5）。
 #[test]
 fn scopes_are_judged_separately() {
-    let mut cage = Cage::boot(&[0, 1]);
+    let mut cage = Cage::boot(SHELL, &[0, 1]);
 
     cage.surface(0, BOX_SURFACE);
     cage.text(0, "あい");
@@ -306,7 +333,7 @@ fn scopes_are_judged_separately() {
 fn timeout_raises_the_hide_boxes_flag_and_the_box_text_disappears() {
     // 待ち時間の確定はプロセスで一度きりの記録なので、捕捉窓の外で先に確定させる。
     let timeout_secs = configured_timeout_secs();
-    let mut cage = Cage::boot(&[0]);
+    let mut cage = Cage::boot(SHELL, &[0]);
     let display_end = 5.0;
     cage.lifecycle_tx
         .send(TalkLifecycleSignal::DisplayEndAt(display_end))
@@ -355,3 +382,8 @@ fn timeout_raises_the_hide_boxes_flag_and_the_box_text_disappears() {
     );
     let _ = &cage.present_tx;
 }
+
+// 絵と箱の置き場所の揃え（areka-P0-shell-balloon-frame-align）。本ファイルの `Cage` をそのまま
+// 使うため子に置く。
+#[path = "frame_shell_box_align_tests.rs"]
+mod align_tests;

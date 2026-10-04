@@ -5,7 +5,7 @@
 > 1.2 で書く枠の檻は 4.2 まで赤のまま置く。途中のタスクの「緑」の確かめは、そのタスクの檻のモジュールに絞って走らせる。
 
 - [ ] 1. 枠の檻の足場と、直す前の赤
-- [ ] 1.1 枠の檻の足場を足し、檻で使う面が検体で合成できることを確かめる
+- [x] 1.1 枠の檻の足場を足し、檻で使う面が検体で合成できることを確かめる
   - シェルの箱の檻の道具に、シェルの文面（面ごとの箱の置き場所）を渡す引数と、絵の差し替え（面の表示・非表示）を表示層の受け口へ送る道具を足す
   - 普通のバルーンの窓を出して隠す手順（文字を書いてから消す）が今の道具で踏めることを確かめ、踏めなければ道具を足す
   - 面 0 と面 10 に箱 `talk` を別の置き場所で持つ文面と、面 0 に箱あり・面 10 に箱なしの文面を用意し、emo2 の検体でどちらの面も合成できることを 1 本の檻で確かめる（合成できなければ檻の中の番号だけを選び直す）
@@ -69,3 +69,8 @@
   - 2 つのクレートのテスト全体を走らせる。普通のバルーンだけを使う既存の檻（`frame_visibility_integration_tests`・`balloon_visibility_phase_tests`）が期待値の差分なしに緑であることを差分と結果で確かめる
   - 完了の姿: 検索が 0 件、触らないファイルの差分が 0、テスト全体が緑
   - _Requirements: 1.6, 1.7, 4.5_
+
+## Implementation Notes
+
+- areka クレートの枠の檻の絞り込みは `cargo test -p areka --bin areka shell_box_integration_tests`（モジュールの道筋は `emo2_boot::frame::visibility_integration_tests::shell_box_integration_tests`・子は `::align_tests::`）。`frame_shell_box` では 0 件になる。
+- 1.1 の足場: `Cage::boot(shell, scopes)`・`picture(scope, id)`（絵の差し替え）・`hide_picture(scope)`・`picture_id(scope)`（表示中の番号）・定数 `BOX_SURFACE_ID=0`／`PLAIN_SURFACE_ID=10`・文面 `SHELL_TWO_PLACES`（子）と `SHELL`（親・面 0 だけ箱）。窓を隠すのは既存の `cue(scope, CueCommand::Clear)`。時間切れの檻の末尾の `let _ = &cage.present_tx;` は不要になった（檻に触るついでに消す）。
