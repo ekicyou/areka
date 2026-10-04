@@ -49,3 +49,4 @@
 - タスク 2: 並走の cargo が多いと i686 の `cargo build` が rustc の 0xc000012d（確約メモリの不足）で落ちることがある。同時に走る cargo が減ってから採り直す。直す前の赤の実走は片付けの手前で panic するので `target\h32m_*` が 2 つずつ残る＝回すたびに消す
 
 - タスク 3: cargo は rustc の 0xc000012d の失敗を `target\.rustc_info.json` に覚えて返し続ける＝メモリが空いても直らないときはこのファイルを消す
+- 完了時の棚卸: その場で解決 0 件・起票 0 件（Implementation Notes の 2 件は cargo と並走の環境の罠でコードの問題ではない・design の Open Questions は全て決定済み）
