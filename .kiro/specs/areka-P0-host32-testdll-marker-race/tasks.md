@@ -32,7 +32,7 @@
   - _Requirements: 1.2, 1.3, 2.2, 2.3, 6.1, 6.2_
 
 - [ ] 5. 繰り返しの実走と境界の確かめ
-- [ ] 5.1 i686 の段を 10 回続けて回す
+- [x] 5.1 i686 の段を 10 回続けて回す
   - 前提として i686 の成果物（補助 exe・偽の DLL 2 つ）を作り直してから、`cargo test -p shiori-host32-helper -p shiori-host32-ipc --target i686-pc-windows-msvc --no-fail-fast` を 10 回続けて回す
   - 1 回でも赤なら完了とせず原因を調べ、採り直しの緑で置き換えない
   - 完了の状態: 10 回とも緑の結果（各回の合否と本数）が `research.md` に記録されている

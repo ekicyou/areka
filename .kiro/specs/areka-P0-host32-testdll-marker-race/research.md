@@ -421,3 +421,24 @@ test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 - `cargo test -p shiori-host32-helper --target i686-pc-windows-msvc --no-fail-fast`: `test result: ok. 38 passed; 0 failed; 0 ignored`。印のテスト・往復のテスト（錠なし）・足したテストがいずれも `ok`。
 - `cargo fmt --all -- --check` は緑。`cargo clippy -p shiori-host32-helper --target i686-pc-windows-msvc --tests` は警告 0。
 - 実走の後、`target\` の下に `h32m_` で始まるフォルダは 0。
+
+## 18. i686 の段の 10 回続けての実走（タスク 5.1・要件 4.1・4.2・1.2）
+
+- 対象のコミット: `52860172`（タスク 4 の後）。i686 の成果物（補助 exe・偽の DLL 2 つ）を `cargo build -p shiori-host32-helper -p shiori-host32-testdll -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` で作り直してから回した。
+- コマンド: `cargo test -p shiori-host32-helper -p shiori-host32-ipc --target i686-pc-windows-msvc --no-fail-fast` を 10 回続けて回した（採り直しは無し）。
+
+| 回 | 合否（終了コード） | 補助 exe | ipc の単体 | ipc の doc |
+|---|---|---|---|---|
+| 1 | 緑（0） | 38 passed / 0 failed | 22 passed / 0 failed | 0 |
+| 2 | 緑（0） | 38 passed / 0 failed | 22 passed / 0 failed | 0 |
+| 3 | 緑（0） | 38 passed / 0 failed | 22 passed / 0 failed | 0 |
+| 4 | 緑（0） | 38 passed / 0 failed | 22 passed / 0 failed | 0 |
+| 5 | 緑（0） | 38 passed / 0 failed | 22 passed / 0 failed | 0 |
+| 6 | 緑（0） | 38 passed / 0 failed | 22 passed / 0 failed | 0 |
+| 7 | 緑（0） | 38 passed / 0 failed | 22 passed / 0 failed | 0 |
+| 8 | 緑（0） | 38 passed / 0 failed | 22 passed / 0 failed | 0 |
+| 9 | 緑（0） | 38 passed / 0 failed | 22 passed / 0 failed | 0 |
+| 10 | 緑（0） | 38 passed / 0 failed | 22 passed / 0 failed | 0 |
+
+- 結論: 10 回とも緑。赤の回は 0 回。直す前に揺れていた印のテスト `testdll_drop_invokes_courtesy_unload`（15.3 節・タスク 2 のレビューの 2 回目）も 10 回とも緑。
+- 後片付け: 実走の後、`target\` の下の `h32m_*` は 0 個。ログのフォルダ `target\marker-race-runs` は消した。
