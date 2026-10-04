@@ -67,7 +67,7 @@
   - `Cargo.toml` の変更（新しい依存 0）。
 - **Adjacent expectations**:
   - `mcp-tool-entrances` から受け取るもの: 検査を通った引数・解決済みのゴースト・結果を作る関数（`value`／`ok`／`ng`／`with_image`）・10 秒の待ちの上限。
-  - 同じウェーブの約束（`.kiro/steering/roadmap.md`「ウェーブ編成」の C3）: `crates/areka/src/mcp/mod.rs`・`crates/areka-mcp/src/handler.rs`・`areka-emo-compose` を触らない。本番の読み戻しの口は `crates/areka/src/emo2_boot/frame/wiring.rs` だけに開ける。足すファイルは自分のツールのファイルの子モジュールにする。触る要が出たら止めて報告する。
+  - 同じウェーブの約束（`.kiro/steering/roadmap.md`「ウェーブ編成」の C3）: `crates/areka/src/mcp/mod.rs`・`crates/areka-mcp/src/handler.rs`・`areka-emo-compose` を触らない。本番の読み戻しの口は `crates/areka/src/emo2_boot/frame/wiring.rs` だけに開ける。足すファイルは自分のツールのファイルの子モジュールにする。**例外として、`crates/areka-emo-present/src/presenter/` に新しいファイル 1 つと、親モジュールへの 1 行を足す**（要件ディスカッションの議題 2 で開発者が承認・2026-10-04）: 指定した surface を画面の外で描いて返す口と、surface ID が在るかを ERROR の記録なしで答える口で、どちらも読むだけ（画面・合成のメモ・表示の状態を変えない）。同じウェーブで `surface-element-nesting` が触る `cache.rs`（要れば `shell_target.rs`）の既存の行は変えない。これ以外に触る要が出たら止めて報告する。
   - `mcp-expression-table`（並走）: 失敗の文言 `NG:No such surface ID. Check get_expression_table tool` は相手のツールの名前を挙げるだけで、相手の着地を待たない。
   - `mcp-log-history`（並走）: MCP の呼び出しが原因の ERROR の記録を出さない（要件 4.6）ので、相手の error 種別の履歴に本 spec 由来の行は積まれない。
 
