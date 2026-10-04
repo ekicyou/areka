@@ -23,6 +23,7 @@
 pub mod bake;
 pub mod decode;
 pub mod error;
+mod limits;
 pub mod manifest;
 pub mod normalize;
 pub mod pack;
