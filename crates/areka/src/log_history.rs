@@ -3,10 +3,13 @@
 //! ログの出来事を SSP の 5 種別（error・script・network・update・status）へ振り分ける。
 //! 規則は [`RULES`] の 1 表だけに書き、[`classify`] が判定の順に当てる。
 //! 振り分けは tracing の受け口にも World にも触れない純粋な関数で、テストは値を直に渡す。
+//! 記録は [`History`] が全種別で 1 本の通し番号を振り、種別ごとに [`PER_KIND_CAP`] 件まで持つ。
 
 // 本番の呼び手（履歴の層・出口の据え付け）が生えるまでの一時的な抑止。
 // areka-P0-mcp-log-history task 2.3 で外す。
 #![allow(dead_code)]
+
+use std::collections::VecDeque;
 
 use tracing::Level;
 
@@ -203,6 +206,77 @@ pub(crate) fn draft<'a>(
         name: name.unwrap_or(kind.default_name()).to_string(),
         body,
     })
+}
+
+/// 記録した時刻（現地時刻・分まで）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Stamp {
+    pub year: u16,
+    pub month: u8,
+    pub day: u8,
+    pub hour: u8,
+    pub minute: u8,
+}
+
+/// 置き場に積んだ記録 1 件。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Record {
+    pub id: u64,
+    pub at: Stamp,
+    pub kind: Kind,
+    pub label: String,
+    pub name: String,
+    pub body: String,
+}
+
+/// 種別ごとに残す件数の上限。
+pub(crate) const PER_KIND_CAP: usize = 1000;
+
+/// 通し番号を振り、種別ごとの列へ古い順に積む入れ物。
+///
+/// 番号は全種別で 1 本（1 から）。`last_id` は減らず、捨てた番号は使い回さない。
+/// ある種別の `push` は他の種別の列を変えない。
+pub(crate) struct History {
+    last_id: u64,
+    /// 添え字は `Kind` の宣言順。
+    rows: [VecDeque<Record>; 5],
+}
+
+impl History {
+    pub(crate) const fn new() -> Self {
+        History {
+            last_id: 0,
+            rows: [const { VecDeque::new() }; 5],
+        }
+    }
+
+    /// 番号を振って積む。その種別が上限なら最古の 1 件を捨ててから積む。振った番号を返す。
+    pub(crate) fn push(&mut self, at: Stamp, draft: Draft) -> u64 {
+        self.last_id += 1;
+        let row = &mut self.rows[draft.kind as usize];
+        if row.len() >= PER_KIND_CAP {
+            row.pop_front();
+        }
+        row.push_back(Record {
+            id: self.last_id,
+            at,
+            kind: draft.kind,
+            label: draft.label,
+            name: draft.name,
+            body: draft.body,
+        });
+        self.last_id
+    }
+
+    /// いま最後に振った番号（1 件も無ければ 0）。
+    pub(crate) fn last_id(&self) -> u64 {
+        self.last_id
+    }
+
+    /// その種別の記録（古い順）。
+    pub(crate) fn rows(&self, kind: Kind) -> impl Iterator<Item = &Record> {
+        self.rows[kind as usize].iter()
+    }
 }
 
 #[cfg(test)]

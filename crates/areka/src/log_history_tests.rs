@@ -1,4 +1,4 @@
-//! `log_history` の決定論テスト（振り分け・`log_type` の語）。
+//! `log_history` の決定論テスト（振り分け・`log_type` の語・下書き・入れ物）。
 
 use super::*;
 use tracing::Level;
@@ -479,4 +479,134 @@ fn body_is_cut_after_4096_chars_counting_characters() {
     let got = draft(Level::WARN, "kanade", [msg(&over)]).unwrap();
     assert_eq!(got.body, format!("{exact}{TRUNCATED_SUFFIX}"));
     assert_eq!(got.body.chars().count(), 4096 + " ...(truncated)".len());
+}
+
+// ---------------------------------------------------------------------------
+// 入れ物（要件 1.2・1.3・1.4・1.6・1.11）
+// ---------------------------------------------------------------------------
+
+const AT: Stamp = Stamp {
+    year: 2026,
+    month: 10,
+    day: 4,
+    hour: 9,
+    minute: 30,
+};
+
+/// その種別の下書き（本文だけ変える）。
+fn draft_of(kind: Kind, body: &str) -> Draft {
+    Draft {
+        kind,
+        label: kind.default_label().to_string(),
+        name: kind.default_name().to_string(),
+        body: body.to_string(),
+    }
+}
+
+fn ids(h: &History, kind: Kind) -> Vec<u64> {
+    h.rows(kind).map(|r| r.id).collect()
+}
+
+#[test]
+fn empty_history_has_last_id_zero_and_no_rows() {
+    let h = History::new();
+    assert_eq!(h.last_id(), 0);
+    for kind in Kind::ALL {
+        assert_eq!(h.rows(kind).count(), 0, "{kind:?}");
+    }
+}
+
+#[test]
+fn ids_run_from_one_across_all_kinds_in_push_order() {
+    let mut h = History::new();
+    let order = [
+        Kind::Status,
+        Kind::Error,
+        Kind::Status,
+        Kind::Script,
+        Kind::Network,
+        Kind::Update,
+        Kind::Error,
+    ];
+    for (i, kind) in order.into_iter().enumerate() {
+        assert_eq!(h.push(AT, draft_of(kind, "x")), i as u64 + 1);
+        assert_eq!(h.last_id(), i as u64 + 1);
+    }
+    assert_eq!(ids(&h, Kind::Status), [1, 3]);
+    assert_eq!(ids(&h, Kind::Error), [2, 7]);
+    assert_eq!(ids(&h, Kind::Script), [4]);
+    assert_eq!(ids(&h, Kind::Network), [5]);
+    assert_eq!(ids(&h, Kind::Update), [6]);
+}
+
+#[test]
+fn record_keeps_the_stamp_and_the_draft() {
+    let mut h = History::new();
+    let d = Draft {
+        kind: Kind::Script,
+        label: "SSTP".to_string(),
+        name: "emo2".to_string(),
+        body: r"\h\s[0]こんにちは\e".to_string(),
+    };
+    h.push(AT, d);
+    let got: Vec<&Record> = h.rows(Kind::Script).collect();
+    assert_eq!(
+        got,
+        [&Record {
+            id: 1,
+            at: AT,
+            kind: Kind::Script,
+            label: "SSTP".to_string(),
+            name: "emo2".to_string(),
+            body: r"\h\s[0]こんにちは\e".to_string(),
+        }]
+    );
+}
+
+#[test]
+fn over_cap_drops_only_the_oldest_of_that_kind_and_ids_continue() {
+    let mut h = History::new();
+    h.push(AT, draft_of(Kind::Status, "s1"));
+    h.push(AT, draft_of(Kind::Network, "n1"));
+    for i in 0..PER_KIND_CAP + 1 {
+        h.push(AT, draft_of(Kind::Error, &format!("e{i}")));
+    }
+    // 1・2 が他の種別、3〜1,003 が error。最古の 3 だけが消える。
+    assert_eq!(h.last_id(), 1003);
+    let err = ids(&h, Kind::Error);
+    assert_eq!(err.len(), PER_KIND_CAP);
+    assert_eq!(err.first(), Some(&4));
+    assert_eq!(err.last(), Some(&1003));
+    assert!(err.windows(2).all(|w| w[0] + 1 == w[1]));
+    assert_eq!(h.rows(Kind::Error).next().unwrap().body, "e1");
+    // 他の種別は減らない。
+    assert_eq!(ids(&h, Kind::Status), [1]);
+    assert_eq!(ids(&h, Kind::Network), [2]);
+
+    // 捨てた後も番号は続きから（捨てた番号を使い回さない）。
+    assert_eq!(h.push(AT, draft_of(Kind::Error, "next")), 1004);
+    assert_eq!(h.push(AT, draft_of(Kind::Update, "u1")), 1005);
+    let err = ids(&h, Kind::Error);
+    assert_eq!(err.len(), PER_KIND_CAP);
+    assert_eq!((err[0], err[PER_KIND_CAP - 1]), (5, 1004));
+    assert_eq!(ids(&h, Kind::Update), [1005]);
+}
+
+#[test]
+fn unclassified_event_does_not_advance_the_id() {
+    let mut h = History::new();
+    // 置き場へ積む側の形: 下書きが当たったときだけ積む。
+    let mut feed = |level, target: &str| {
+        if let Some(d) = draft(level, target, [msg("m")]) {
+            h.push(AT, d);
+        }
+    };
+    feed(Level::INFO, "areka");
+    feed(Level::INFO, "areka::menu");
+    feed(Level::DEBUG, TARGET_SCRIPT);
+    feed(Level::TRACE, "areka");
+    feed(Level::WARN, "kanade");
+    assert_eq!(h.last_id(), 2);
+    assert_eq!(ids(&h, Kind::Status), [1]);
+    assert_eq!(ids(&h, Kind::Error), [2]);
 }
