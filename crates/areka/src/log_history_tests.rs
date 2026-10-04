@@ -228,3 +228,255 @@ fn kind_words_and_defaults_follow_the_ssp_table() {
         ]
     );
 }
+
+// ---------------------------------------------------------------------------
+// 下書き（要件 1.5・2.6・2.7・2.10・4.3）
+// ---------------------------------------------------------------------------
+
+/// 文字列で渡された欄（生の値と `{:?}` の両方を持つ）。
+fn s<'a>(name: &'a str, raw: &'a str, debug: &'a str) -> FieldText<'a> {
+    FieldText {
+        name,
+        debug,
+        raw: Some(raw),
+    }
+}
+
+/// 文字列以外の欄（`{:?}` の形だけ）。
+fn d<'a>(name: &'a str, debug: &'a str) -> FieldText<'a> {
+    FieldText {
+        name,
+        debug,
+        raw: None,
+    }
+}
+
+fn msg(text: &str) -> FieldText<'_> {
+    d("message", text)
+}
+
+/// 種別・語・名・本文の 4 つ組。
+fn parts(draft: Draft) -> (Kind, String, String, String) {
+    (draft.kind, draft.label, draft.name, draft.body)
+}
+
+#[test]
+fn body_is_message_then_remaining_fields_in_written_order() {
+    let got = draft(
+        Level::INFO,
+        "areka::update::desk",
+        [
+            d("count", "3"),
+            msg("更新を確かめた"),
+            s("event", "check", "\"check\""),
+        ],
+    )
+    .unwrap();
+    assert_eq!(got.body, "更新を確かめた count=3 event=\"check\"");
+}
+
+#[test]
+fn body_is_message_only_or_fields_only() {
+    let only_msg = draft(Level::WARN, "kanade", [msg("止まった")]).unwrap();
+    assert_eq!(only_msg.body, "止まった");
+    // メッセージが無ければ欄だけ（先頭の空白は付けない）。
+    let only_fields = draft(
+        Level::ERROR,
+        "kanade",
+        [d("code", "5"), s("path", "a b", "\"a b\"")],
+    )
+    .unwrap();
+    assert_eq!(only_fields.body, "code=5 path=\"a b\"");
+    let empty = draft(Level::ERROR, "kanade", []).unwrap();
+    assert_eq!(empty.body, "");
+}
+
+#[test]
+fn unclassified_event_has_no_draft() {
+    assert_eq!(draft(Level::INFO, "kanade", [msg("x")]), None);
+    assert_eq!(draft(Level::DEBUG, TARGET_SCRIPT, [msg("x")]), None);
+}
+
+#[test]
+fn convention_rows_read_ghost_and_label_four_ways() {
+    for target in [TARGET_SCRIPT, TARGET_ERROR] {
+        let kind = classify(Level::INFO, target).unwrap();
+        // 両方無し → 既定。
+        assert_eq!(
+            parts(draft(Level::INFO, target, [msg("m")]).unwrap()),
+            (
+                kind,
+                kind.default_label().to_string(),
+                kind.default_name().to_string(),
+                "m".to_string()
+            ),
+            "{target}"
+        );
+        // ghost だけ。
+        assert_eq!(
+            parts(
+                draft(
+                    Level::INFO,
+                    target,
+                    [s("ghost", "emo", "\"emo\""), msg("m")]
+                )
+                .unwrap()
+            ),
+            (
+                kind,
+                kind.default_label().to_string(),
+                "emo".to_string(),
+                "m".to_string()
+            ),
+            "{target}"
+        );
+        // label だけ。
+        assert_eq!(
+            parts(
+                draft(
+                    Level::INFO,
+                    target,
+                    [s("label", "Ghost:OnBoot", "\"Ghost:OnBoot\""), msg("m")]
+                )
+                .unwrap()
+            ),
+            (
+                kind,
+                "Ghost:OnBoot".to_string(),
+                kind.default_name().to_string(),
+                "m".to_string()
+            ),
+            "{target}"
+        );
+        // 両方。欄は本文から除かれ、残りの欄は残る。
+        assert_eq!(
+            parts(
+                draft(
+                    Level::INFO,
+                    target,
+                    [
+                        s("ghost", "emo", "\"emo\""),
+                        s("label", "SSTP(Local,Auth)", "\"SSTP(Local,Auth)\""),
+                        d("n", "1"),
+                        msg("m"),
+                    ]
+                )
+                .unwrap()
+            ),
+            (
+                kind,
+                "SSTP(Local,Auth)".to_string(),
+                "emo".to_string(),
+                "m n=1".to_string()
+            ),
+            "{target}"
+        );
+    }
+}
+
+#[test]
+fn convention_field_without_raw_uses_debug_and_last_one_wins() {
+    let got = draft(
+        Level::INFO,
+        TARGET_SCRIPT,
+        [
+            s("ghost", "first", "\"first\""),
+            d("ghost", "Some(\"emo2\")"),
+            msg("m"),
+            s("label", "a", "\"a\""),
+            s("label", "b", "\"b\""),
+        ],
+    )
+    .unwrap();
+    assert_eq!(got.name, "Some(\"emo2\")");
+    assert_eq!(got.label, "b");
+    // どれも本文から除く。
+    assert_eq!(got.body, "m");
+}
+
+#[test]
+fn defaults_follow_the_kind_for_all_five_kinds() {
+    let cases = [
+        (Level::WARN, "kanade", Kind::Error, "Error", "[SYSTEM]"),
+        (Level::INFO, TARGET_SCRIPT, Kind::Script, "SSTP", "[SYSTEM]"),
+        (
+            Level::INFO,
+            "areka::install::fetch_url",
+            Kind::Network,
+            "Info",
+            "[SYSTEM]",
+        ),
+        (
+            Level::INFO,
+            "areka_update",
+            Kind::Update,
+            "Info",
+            "[SYSTEM]",
+        ),
+        (Level::INFO, "areka", Kind::Status, "STAT", "STAT"),
+    ];
+    for (level, target, kind, label, name) in cases {
+        let got = draft(level, target, [msg("m")]).unwrap();
+        assert_eq!(
+            (got.kind, got.label.as_str(), got.name.as_str()),
+            (kind, label, name),
+            "{target}"
+        );
+    }
+}
+
+#[test]
+fn ghost_and_label_on_other_rows_stay_in_the_body() {
+    let got = draft(
+        Level::INFO,
+        "areka::ghost_session",
+        [msg("起動した"), s("ghost", "emo2", "\"emo2\"")],
+    )
+    .unwrap();
+    assert_eq!(got.kind, Kind::Status);
+    assert_eq!(got.name, "STAT");
+    assert_eq!(got.label, "STAT");
+    assert_eq!(got.body, "起動した ghost=\"emo2\"");
+    // warn の外の行の label も普通の欄。
+    let warn = draft(
+        Level::WARN,
+        "areka::menu",
+        [s("label", "x", "\"x\""), msg("m")],
+    )
+    .unwrap();
+    assert_eq!(
+        (warn.label.as_str(), warn.body.as_str()),
+        ("Error", "m label=\"x\"")
+    );
+}
+
+#[test]
+fn bridged_log_fields_are_dropped_from_the_body() {
+    let got = draft(
+        Level::WARN,
+        "log",
+        [
+            msg("wgpu が警告した"),
+            s("log.target", "wgpu_core", "\"wgpu_core\""),
+            s("log.module_path", "wgpu_core::x", "\"wgpu_core::x\""),
+            s("log.file", "x.rs", "\"x.rs\""),
+            d("log.line", "Some(12)"),
+            d("logical", "true"),
+        ],
+    )
+    .unwrap();
+    assert_eq!(got.kind, Kind::Error);
+    assert_eq!(got.body, "wgpu が警告した logical=true");
+}
+
+#[test]
+fn body_is_cut_after_4096_chars_counting_characters() {
+    let exact = "あ".repeat(BODY_CAP_CHARS);
+    let got = draft(Level::WARN, "kanade", [msg(&exact)]).unwrap();
+    assert_eq!(got.body, exact);
+
+    let over = format!("{exact}い");
+    let got = draft(Level::WARN, "kanade", [msg(&over)]).unwrap();
+    assert_eq!(got.body, format!("{exact}{TRUNCATED_SUFFIX}"));
+    assert_eq!(got.body.chars().count(), 4096 + " ...(truncated)".len());
+}

@@ -12,7 +12,7 @@
   - 種別ごとに当たる・当たらない出来事を与えるテストが緑（warn の `areka::update::desk` が error だけ・`areka::updater` と `areka::emo2_boot` と `areka::alert` の info が外れ・`areka::install::fetch_url` が network・error レベルの取り決めの script が script・debug の取り決めの target が外れ・`log_type` の 5 語と `STATUS`・`Status`・空・` error `・未知の語）
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.8, 2.9, 2.11, 3.2_
 
-- [ ] 1.2 記録の下書き（名・表示の語・本文・切り詰め）を作り、決定論テストで固定する
+- [x] 1.2 記録の下書き（名・表示の語・本文・切り詰め）を作り、決定論テストで固定する
   - 欄の並びから本文を組む（メッセージの後に残りの欄を ` 名前=値` で書かれた順に続ける・メッセージだけ・欄だけの形も）
   - 取り決めの target の行だけ `ghost`・`label` の欄を名と表示の語として読み本文から除く。それ以外の行の同名の欄は本文に残す。無ければ種別ごとの既定
   - `log.` で始まる欄（`log` クレートから橋渡しされた行の欄）を本文から除く
@@ -105,3 +105,7 @@
   - ワークスペースの全テストを回し、`with_default_guard_test`（例外表 4 件のまま）・`file_length_guard_test`・`mcp_tests.rs`・`smoke_boot_loop_exit` を含めて緑であることを確かめる
   - 差分 0 行の確認と全テストの緑が記録されている
   - _Requirements: 8.2, 8.3, 8.4, 8.5_
+
+## Implementation Notes
+
+- 1.2: 本文の先頭は message 欄の `debug`。`info!(message = some_str)` のような素の文字列の message は `record_str` で届き `debug` に引用符が付くので標準出力と食い違いうる（2.2 の訪問者で `record_str` の message は生の値を `debug` に入れると揃う）。

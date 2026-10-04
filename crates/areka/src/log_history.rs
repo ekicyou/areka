@@ -135,6 +135,76 @@ pub(crate) fn classify(level: Level, target: &str) -> Option<Kind> {
     RULES.iter().find(|r| r.matches(target)).map(|r| r.kind)
 }
 
+/// 欄 1 つ（tracing の訪問で得る 2 つの形）。
+pub(crate) struct FieldText<'a> {
+    pub name: &'a str,
+    /// `{:?}` の形（文字列で渡された欄は引用符つき）。
+    pub debug: &'a str,
+    /// 文字列で渡された欄の生の値（そうでなければ None）。
+    pub raw: Option<&'a str>,
+}
+
+/// 置き場へ積む前の記録。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Draft {
+    pub kind: Kind,
+    pub label: String,
+    pub name: String,
+    pub body: String,
+}
+
+/// 本文の上限（`char` の数）。
+pub(crate) const BODY_CAP_CHARS: usize = 4096;
+/// 上限を超えた本文の末尾に付ける印。
+pub(crate) const TRUNCATED_SUFFIX: &str = " ...(truncated)";
+
+/// 出来事 1 件から記録の下書きを作る。種別に当たらなければ None。欄は出来事に書かれた順で渡す。
+///
+/// 本文は `message` の欄の後に残りの欄を ` 名前=値`（値は `{:?}` の形）で続ける。
+/// 取り決めの target の行だけ `ghost`・`label` を名と表示の語として読み本文から除く
+/// （同名が複数なら最後のもの）。`log.` で始まる欄（`log` クレートから橋渡しされた行）は除く。
+pub(crate) fn draft<'a>(
+    level: Level,
+    target: &str,
+    fields: impl IntoIterator<Item = FieldText<'a>>,
+) -> Option<Draft> {
+    let kind = classify(level, target)?;
+    let convention = target == TARGET_SCRIPT || target == TARGET_ERROR;
+    let mut name = None;
+    let mut label = None;
+    let mut message = None;
+    let mut rest = String::new();
+    for f in fields {
+        match f.name {
+            "message" => message = Some(f.debug),
+            "ghost" if convention => name = Some(f.raw.unwrap_or(f.debug)),
+            "label" if convention => label = Some(f.raw.unwrap_or(f.debug)),
+            n if n.starts_with("log.") => {}
+            n => {
+                rest.push(' ');
+                rest.push_str(n);
+                rest.push('=');
+                rest.push_str(f.debug);
+            }
+        }
+    }
+    let mut body = match message {
+        Some(m) => format!("{m}{rest}"),
+        // メッセージが無ければ欄だけ（先頭の空白は付けない）。
+        None => rest.strip_prefix(' ').unwrap_or(&rest).to_string(),
+    };
+    if let Some((cut, _)) = body.char_indices().nth(BODY_CAP_CHARS) {
+        body.truncate(cut);
+        body.push_str(TRUNCATED_SUFFIX);
+    }
+    Some(Draft {
+        kind,
+        label: label.unwrap_or(kind.default_label()).to_string(),
+        name: name.unwrap_or(kind.default_name()).to_string(),
+        body,
+    })
+}
+
 #[cfg(test)]
 #[path = "log_history_tests.rs"]
 mod tests;
