@@ -56,3 +56,11 @@ AI エージェントが MCP のツールに渡す `ghost_name` の照合が、S
 
 - 段は「優先」（SSP MCP の移植）。規模の見立て S（3〜5）。
 - **共有ファイルを触る**: MCP の 3 段目の約束は「`mcp/mod.rs`・`handler.rs` を触らない」。`resolve.rs`・`resolve_tests.rs` も全ツールの共有の土台なので、**3 段目の spec と同じウェーブに置かない**。席は 3 段目が着地した後（`mcp-strict-errors` の後）か、3 段目が走っていないウェーブ。`mcp/mod.rs` を触らずに済むかは要件の段で確かめる（`get_expression_table` の空文字の文言は `resolve` の中で決まる見込み）。
+
+## `mcp-get-property` からの申し送り（2026-10-04）
+
+> `areka-P0-mcp-get-property` の実装の最終段階（実機確認の後）で、実装と実機の事実で書いた（同 spec の要件 5.7）。
+
+1. **`get_property` の処理は宛先を記録の欄にだけ使う。** `crates/areka/src/mcp/get_property.rs` の `handle` は、受け取った `ActiveGhost` を、実行系が見つからないときの `warn!`（`event="mcp_get_property_unavailable"`）の欄 `ghost`（`resolve::listed_value(ghost)`）にだけ使う。実行系は置き場 `GhostSlot` の 1 つから `GhostSession::runtime()` で引き、`ActiveGhost` を鍵にしていない。`args.ghost_name` も読まない。照合（`resolve.rs`）を直しても `get_property` 側は変えずに済む。ただし置き場が 2 体以上を持つ形になったら、`ActiveGhost` を実行系を引く鍵に使う必要が出る（同 spec の design の Revalidation Triggers）。
+2. **`get_property` のテストの `ghost_name` はすべて省略。** `crates/areka/src/mcp/get_property_tests.rs` の 2 本（`answers_unavailable_and_warns_once_without_a_runtime`・`reads_values_through_the_ghost_own_asker_on_a_real_runtime`）は、`Args.ghost_name` をすべて `None` にして `handle` を直に呼ぶ（振り分けの `dispatch` を通らない）。照合の答えを固定するテストは 0 本＝本 spec の着地を赤で妨げない。
+3. **実機確認 ⑶ の呼び方と答え。** 2026-10-04・配布形（コミット `584feaa1`）・emo2・SSP なし（待受 9801）・curl の `tools/call`（無状態版の形）。`get_active_ghost_list` の答え `えも？？`（「？」は全角）をそのまま `ghost_name` に渡した `get_property {"property_name":"baseware.name","ghost_name":"えも？？"}` → `areka`・`isError: false`。橋の記録は `tool="get_property" ghost="えも？？" is_error=false`。試したのは完全一致の名前だけ（英字の大小・本体側名・前後の空白・空文字は試していない）。記録の正本は `areka-P0-mcp-get-property` の `verification/signoff.md`。

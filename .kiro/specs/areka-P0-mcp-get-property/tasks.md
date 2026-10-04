@@ -35,14 +35,14 @@
   - 完了の状態: `verification/signoff.md` に ⑴ `areka`・`isError: false`、⑵ `NG:Cannot find such property name.`・`isError: true`、⑶ の呼び方と答え、各呼び出しの「ツールに答えた」の記録 1 件ずつ、`ERROR` の段 0 件が残っている
   - _Requirements: 4.6_
 
-- [ ] 5. 後続の spec へ申し送る
-- [ ] 5.1 `mcp-ghost-name-match` の brief の末尾へ、実装の事実で申し送りを書く
+- [x] 5. 後続の spec へ申し送る
+- [x] 5.1 `mcp-ghost-name-match` の brief の末尾へ、実装の事実で申し送りを書く
   - 書く 3 点: 処理が宛先を記録の欄にだけ使い実行系を引く鍵にしていないこと、テストの `ghost_name` がすべて省略であること、実機確認 ⑶ の呼び方と答え
   - `mcp-ghost-name-match` が先に着地していたら、追記の代わりにその照合で本 spec のテストと実機確認が通ることを確かめる
   - 完了の状態: 同 brief の末尾に「`mcp-get-property` からの申し送り（日付）」の節があり、3 点が実装と実機の事実で書かれている
   - _Requirements: 5.7_
   - _Depends: 4_
-- [ ] 5.2 `property-name-case-fold` の brief の申し送りを、実装の事実で書き直す
+- [x] 5.2 `property-name-case-fold` の brief の申し送りを、実装の事実で書き直す
   - 要件 5.6 の「完了のときの書き直し」をこのタスクで済ませる（`/kiro-complete` では済みとして扱い、着地の前に食い違いが無いかだけ見る）。設計の段で書いた節（2026-10-04）の 3 点を、実装した処理・テスト・実機確認の手順の事実に合わせて書き直し、日付を改める。改行は CRLF のまま保つ
   - `property-name-case-fold` が先に着地していたら、追記の代わりに着地の後の振る舞いを本 spec の要件 1.4 と実機確認へ反映する
   - 完了の状態: 同 brief の申し送りの節が実装の事実と食い違わず、日付が書き直した日になっている
