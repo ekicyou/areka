@@ -366,7 +366,7 @@ fn leads_to_folder(entry: &EntryName, folder: &str) -> bool;
 
 - `doc/COMPAT_ARCHITECTURE.md` §8 に、既存の 4 列（項目・裁量・根拠・出典 spec）で 4 行足す。
   1. 【上書き】同梱の番号の読み方（完了 `areka-P0-nar-install` 要件 3.12 を上書き）。「見つかった」の判定は `*.directory` の行・先頭に 0 を付けた番号は数えない、を含む。
-  2. 【上書き】`*.source.directory` の読み方（同 要件 3.9 のうち `*.source.directory` の部分を上書き。`*.directory` を 1 階層の名前に限る部分は上書きしない）。SSP 2.8.00 以降の形を採る・`..` は打ち消さずに取り除く・段が残らなければ断る、を含む。
+  2. 【上書き】`*.source.directory` の読み方（同 要件 3.9 のうち `*.source.directory` の部分を上書き。`*.directory` を 1 階層の名前に限る部分は上書きしない）。SSP 2.9.00 以降の形を採る・`..` は打ち消さずに取り除く・段が残らなければ断る、を含む。
   3. 同梱の `*.directory` の区切り: ukadoc の「使えない」を採って断り、`_` への置き換えは採らない。
   4. `type` が `ghost`／`shell` 以外の書庫の同梱は読まないまま。
 - `assets.toml` の 2 行は `note` だけを書き換える。`status = "implemented"` の根拠は、`manifest.rs` の `COMPANION_SUFFIXES` の上の `// ukadoc:` の行のままである（台帳の検査は「実装済みの項目の URL がソースに 1 件以上在ること」だけを見る）。`note` の「根拠の場所」の文は今のまま正しい。
