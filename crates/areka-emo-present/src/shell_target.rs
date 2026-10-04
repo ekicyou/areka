@@ -25,7 +25,8 @@
 //! それぞれ 1 度だけ出る——一覧の結果の `info!`（R6.1）・使わなかった画像の `debug!`（R6.2）・
 //! 同じ番号の重複の `warn!`（R1.5）・桁溢れの `debug!`（R1.6）・相手の無いコマの `warn!`（R3.5）・
 //! 焼く段で落ちた絵の `warn!`・3 つの失敗の `error!`（R1.7・R6.4）、および箱の報告の各件の
-//! `warn!` と箱の数の `info!`（spec: areka-P0-shell-balloon 要件 10.1）である。一覧の 1 件だけが
+//! `warn!` と箱の数の `info!`（spec: areka-P0-shell-balloon 要件 10.1）、入れ子の報告（無い番号・
+//! 循環）の各件の `warn!`（spec: areka-P0-surface-element-nesting 要件 3.1・3.2）である。一覧の 1 件だけが
 //! 取れないときは `warn!` を出してその 1 件を飛ばす（[`list_file_names`]）。
 //! [`ShellTarget::build_world`] は新しい記録を 1 本も出さない。
 //!
@@ -39,7 +40,10 @@ use areka_emo_atlas::{
     AlphaParams, AtlasTable, BakeError, ElementDecoder, PackConfig, SetId, SurfaceSet,
     UseSelfAlpha, bake,
 };
-use areka_emo_compose::{BaseImageReport, BoxIssue, BoxLayout, BoxReport, EmoWorld, fold_boxes};
+use areka_emo_compose::{
+    BaseImageReport, BoxIssue, BoxLayout, BoxReport, ElementKind, EmoWorld, NestIssue, NestReport,
+    element_kind, fold_boxes,
+};
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::shell::{
     AppendTarget, BoxDefinition, Element, ElementPath, Shell, ShellBoxes, Surface, parse_boxes,
@@ -190,6 +194,8 @@ pub struct ShellTarget {
     box_report: BoxReport,
     /// 箱の置き場所を持つサーフェスの数（[`load_shell_target`] の `info!` の出どころ）。
     box_surfaces: usize,
+    /// 入れ子の無い番号と循環の報告（記録を出すのは [`load_shell_target`]・要件 3.1・3.2）。
+    nest_report: NestReport,
 }
 
 impl ShellTarget {
@@ -309,6 +315,9 @@ pub fn load_shell_target(
     for error in &target.bake_errors {
         tracing::warn!(error = %error, "shell: shell bake で脱落した element");
     }
+    for issue in &target.nest_report.issues {
+        log_nest_issue(issue);
+    }
     for issue in &target.box_report.issues {
         log_box_issue(issue);
     }
@@ -355,7 +364,9 @@ pub fn build_shell_target(
 /// [`build_shell_target`] に箱の転記（[`parse_boxes`] の結果）を足した fs を触らない核。
 ///
 /// 箱の表は [`fold_boxes`] が作り、読み捨てた事実は報告として [`ShellTarget`] に載せるだけで
-/// 記録を出さない（記録は [`load_shell_target`] が読み込み 1 回につき 1 度だけ出す）。
+/// 記録を出さない（記録は [`load_shell_target`] が読み込み 1 回につき 1 度だけ出す）。入れ子の
+/// 報告（[`EmoWorld::nest_report`]）も同じく載せるだけである。焼く一覧は `shell.surfaces` の
+/// 複製から画像でない element（数字だけの欄）を外したもので、その名前の絵を読みに行かない。
 pub fn build_shell_target_with_boxes(
     shell: Shell,
     boxes: &ShellBoxes,
@@ -376,8 +387,16 @@ pub fn build_shell_target_with_boxes(
         .surface_ids()
         .filter(|&id| !box_layout.placements(id).is_empty())
         .count();
+    let nest_report = probe.nest_report();
 
+    // 数字だけの element定義はサーフェスを置くもので画像ではない。焼く一覧に入れると、その名前の
+    // 絵を読みに行き（在れば使い・無ければ脱落の warn!）になるので、複製から外して渡す（要件 1.5・3.5）。
     let mut surfaces = shell.surfaces.clone();
+    for surface in &mut surfaces {
+        surface
+            .elements
+            .retain(|e| element_kind(&e.path) == ElementKind::Image);
+    }
     surfaces.extend(
         base_images
             .used
@@ -404,6 +423,33 @@ pub fn build_shell_target_with_boxes(
         boxes: box_layout,
         box_report,
         box_surfaces,
+        nest_report,
+    }
+}
+
+/// 入れ子の報告の 1 件を `warn!` 1 行にする（親・element・指した番号・要件 3.1・3.2・8.1）。
+fn log_nest_issue(issue: &NestIssue) {
+    match issue {
+        NestIssue::MissingTarget {
+            surface,
+            element,
+            target,
+        } => tracing::warn!(
+            surface = *surface,
+            element = *element,
+            target = target.as_str(),
+            "shell: element定義が指したサーフェスが無いので置かない"
+        ),
+        NestIssue::Cycle {
+            surface,
+            element,
+            target,
+        } => tracing::warn!(
+            surface = *surface,
+            element = *element,
+            target = *target,
+            "shell: element定義の参照が循環するので、先祖へ戻る参照を置かない"
+        ),
     }
 }
 
@@ -614,3 +660,7 @@ mod emo2_tests;
 #[cfg(test)]
 #[path = "shell_target_boxes_tests.rs"]
 mod boxes_tests;
+
+#[cfg(test)]
+#[path = "shell_target_nesting_tests.rs"]
+mod nesting_tests;
