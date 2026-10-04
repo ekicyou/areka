@@ -3,7 +3,7 @@
 > コードの引用は「何の定義か」で指す。設計の正本は `design.md`、実測の記録は `research.md` 9 節。要件 2.6 は欠番（動く GIF を外した裁定で削除）なので、割り当てるタスクは 0 個である。
 
 - [ ] 1. 依存の取り込みと検体
-- [ ] 1.1 `image` を本番の依存へ移し、`image-webp` を固定コミットから取り込む
+- [x] 1.1 `image` を本番の依存へ移し、`image-webp` を固定コミットから取り込む
   - アトラスのクレートの本番の依存に `image`（既定の機能を切り、`png`・`webp` だけ）を足す。ほかのクレートの `Cargo.toml`（`wintf`・`dola` を含む）は変えない
   - 根の `Cargo.toml` の `[patch.crates-io]` に `image-webp` を固定コミット `75f810915d02ae4ff55d3f825bf6a4b07efdf994` で足し、`cargo update -p image-webp` を走らせる（足しただけでは取り込みは黙って無視される）
   - `deny.toml` の git の許可に `https://github.com/image-rs/image-webp` の 1 件だけを名指しで足す（ほかの git は今までどおり落とす）
