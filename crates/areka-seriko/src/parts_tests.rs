@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 
 use areka_emo_compose::{BindSet, ComposeMethod, EmoWorld, PatternFrame, PatternState};
 use areka_sakura::ActorKey;
+use log_capture_kit::{LineFormat, capture_lines};
 
 use super::{PartAnim, PartClocks};
 use crate::looper::tests::{RngProbe, counting_rng};
@@ -453,4 +454,326 @@ fn part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field() {
     );
     assert_eq!(part_frames(&p, 100), vec![(5, 41)]);
     assert_eq!(parts_in_field(&p), vec![100], "40 のコマは欄に載らない");
+}
+
+// ── 7.3: 時計を書き換えない口・時計を捨てる口・記録 ─────────────────────────────
+
+/// 子 100 は 50ms で 101 → さらに 50ms で 102（`-1` の無い末尾＝保つ）。
+const HOLD: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\nsurface1\n{\n}\n\
+    surface100\n{\nanimation0.interval,random,2\n\
+    animation0.pattern0,overlay,101,50,0,0\n\
+    animation0.pattern1,overlay,102,50,0,0\n}\n";
+
+/// 時計を書き換えない口で部品の欄を作り直した結果を返す。
+fn peek_at(
+    clocks: &PartClocks,
+    table: &AnimationTable,
+    top: u32,
+    binds: &BindSet,
+    now_ms: u64,
+    top_pattern: &PatternState,
+) -> PatternState {
+    let mut pattern = top_pattern.clone();
+    clocks.peek(&scope(), top, binds, table, now_ms, &mut pattern);
+    pattern
+}
+
+/// 時計を書き換えない口は乱数を呼ばず、時計を変えない。末尾に着いた時刻を見ても `Residual` へ
+/// 移さない（移すのは次の刻み）。何度呼んでも、次の刻みの結果は呼ばなかったときと同じ（要件 5.6）。
+#[test]
+fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
+    let table = table_of(HOLD);
+    let b = no_binds();
+    let top = PatternState::default();
+
+    // 呼ばない側（比べる相手）。
+    let (mut rng0, probe0) = counting_rng(&[0, 1]);
+    let mut plain = PartClocks::default();
+    tick(&mut plain, &table, 0, &b, 1000, true, &mut rng0, &top);
+    let expect_1100 = tick(&mut plain, &table, 0, &b, 1100, false, &mut rng0, &top);
+    let expect_2000 = tick(&mut plain, &table, 0, &b, 2000, true, &mut rng0, &top);
+
+    // 呼ぶ側。
+    let (mut rng, probe) = counting_rng(&[0, 1]);
+    let mut clocks = PartClocks::default();
+    // 時計が 1 本も無いうちは欄が空になる（前の写しの欄も消える）。
+    let mut stale = PatternState::default();
+    stale.set_part(100, 0, overlay(999));
+    assert!(peek_at(&clocks, &table, 0, &b, 900, &stale).is_empty());
+
+    tick(&mut clocks, &table, 0, &b, 1000, true, &mut rng, &top);
+    assert_eq!(calls(&probe), 1);
+    let playing = Some(PartAnim::Playing {
+        started_at_ms: 1000,
+    });
+
+    for _ in 0..3 {
+        assert!(
+            part_frames(&peek_at(&clocks, &table, 0, &b, 1000, &top), 100).is_empty(),
+            "Pending はコマ無し"
+        );
+        assert_eq!(
+            part_frames(&peek_at(&clocks, &table, 0, &b, 1060, &stale), 100),
+            vec![(0, 101)],
+            "前の写しの欄は作り直される"
+        );
+        // 末尾の時刻: コマは出すが時計は `Playing` のまま。
+        assert_eq!(
+            part_frames(&peek_at(&clocks, &table, 0, &b, 1100, &top), 100),
+            vec![(0, 102)]
+        );
+        // 見えない面では何も書かない。
+        assert!(peek_at(&clocks, &table, 1, &b, 1100, &stale).is_empty());
+        assert_eq!(clocks.clock(&scope(), 100, 0), playing);
+    }
+    assert_eq!(calls(&probe), 1, "時計を書き換えない口は乱数を呼ばない");
+
+    // 次の刻みの結果は、呼ばなかった側と同じ。
+    assert_eq!(
+        tick(&mut clocks, &table, 0, &b, 1100, false, &mut rng, &top),
+        expect_1100
+    );
+    assert_eq!(
+        clocks.clock(&scope(), 100, 0),
+        Some(PartAnim::Residual { frame_index: 1 })
+    );
+    // 保っている間も同じ。
+    for _ in 0..3 {
+        assert_eq!(
+            part_frames(&peek_at(&clocks, &table, 0, &b, 1500, &top), 100),
+            vec![(0, 102)]
+        );
+    }
+    assert_eq!(
+        tick(&mut clocks, &table, 0, &b, 2000, true, &mut rng, &top),
+        expect_2000
+    );
+    assert_eq!(calls(&probe), calls(&probe0));
+}
+
+/// 時計を書き換えない口でも、有効でない `bind+random` のコマは欄に書かない。時計は消さない
+/// （消すのは次の刻み・要件 5.12）。
+#[test]
+fn peek_does_not_write_inactive_bind_random_frames() {
+    let table = table_of(
+        "surface0\n{\nelement0,overlay,100,0,0\n}\n\
+         surface100\n{\nanimation5.interval,bind+random,2\n\
+         animation5.pattern0,overlay,101,0,0,0\n\
+         animation5.pattern1,overlay,102,100,0,0\n\
+         animation6.interval,random,2\n\
+         animation6.pattern0,overlay,103,0,0,0\n}\n",
+    );
+    let (mut rng, _probe) = counting_rng(&[0, 0]);
+    let mut clocks = PartClocks::default();
+    let top = PatternState::default();
+    let on = BindSet::from_ids([5]);
+    let off = no_binds();
+
+    tick(&mut clocks, &table, 0, &on, 1000, true, &mut rng, &top);
+    assert_eq!(
+        part_frames(&peek_at(&clocks, &table, 0, &on, 1050, &top), 100),
+        vec![(5, 101), (6, 103)]
+    );
+
+    // 外した直後: 5 のコマは書かず、`random` の 6 は書く。5 の時計は残る。
+    assert_eq!(
+        part_frames(&peek_at(&clocks, &table, 0, &off, 1050, &top), 100),
+        vec![(6, 103)]
+    );
+    assert_eq!(
+        clocks.clock(&scope(), 100, 5),
+        Some(PartAnim::Playing {
+            started_at_ms: 1000
+        })
+    );
+
+    // 次の刻みで消える。
+    tick(&mut clocks, &table, 0, &off, 1100, false, &mut rng, &top);
+    assert_eq!(clocks.clock(&scope(), 100, 5), None);
+}
+
+/// 時計を捨てる口は全スコープの時計を捨てる（要件 5.8）。
+#[test]
+fn clear_drops_clocks_of_every_scope() {
+    let table = table_of(HOLD);
+    let (mut rng, _probe) = counting_rng(&[0, 0]);
+    let mut clocks = PartClocks::default();
+    let b = no_binds();
+    let other = ActorKey::from("1");
+
+    let mut p = PatternState::default();
+    clocks.advance(&scope(), 0, &b, &table, 1000, true, &mut rng, &mut p);
+    let mut p = PatternState::default();
+    clocks.advance(&other, 0, &b, &table, 1000, true, &mut rng, &mut p);
+    assert!(clocks.clock(&scope(), 100, 0).is_some());
+    assert!(clocks.clock(&other, 100, 0).is_some());
+
+    clocks.clear();
+    assert_eq!(clocks.clock(&scope(), 100, 0), None);
+    assert_eq!(clocks.clock(&other, 100, 0), None);
+    assert!(peek_at(&clocks, &table, 0, &b, 1060, &PatternState::default()).is_empty());
+}
+
+fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
+    capture_lines(LineFormat::LevelTargetFields, f).1
+}
+
+fn count(lines: &[String], needles: &[&str]) -> usize {
+    lines
+        .iter()
+        .filter(|l| needles.iter().all(|n| l.contains(n)))
+        .count()
+}
+
+/// `-1` 以外の負の番号は (スコープ, 部品, animation) ごとに初回だけ `warn!` を出し、その animation を
+/// 止める。捨てた後は再び初回として扱う（要件 8.1）。`-1` では出さない。
+#[test]
+fn negative_id_other_than_minus_one_warns_once_per_scope_part_animation() {
+    let table = table_of(
+        "surface0\n{\nelement0,overlay,100,0,0\nelement1,overlay,200,0,0\n}\n\
+         surface100\n{\nanimation0.interval,random,2\n\
+         animation0.pattern0,overlay,101,0,0,0\n\
+         animation0.pattern1,overlay,-2,50,0,0\n}\n\
+         surface200\n{\nanimation0.interval,random,2\n\
+         animation0.pattern0,overlay,201,0,0,0\n\
+         animation0.pattern1,overlay,-1,50,0,0\n}\n",
+    );
+    let (mut rng, _probe) = counting_rng(&[0; 16]);
+    let mut clocks = PartClocks::default();
+    let b = no_binds();
+    let top = PatternState::default();
+    let other = ActorKey::from("1");
+
+    let lines = capture_logs(|| {
+        for base in [1000u64, 2000, 3000] {
+            tick(&mut clocks, &table, 0, &b, base, true, &mut rng, &top);
+            let p = tick(&mut clocks, &table, 0, &b, base + 50, false, &mut rng, &top);
+            assert!(part_frames(&p, 100).is_empty(), "負の番号で止まる");
+            assert_eq!(clocks.clock(&scope(), 100, 0), None);
+        }
+        // 別のスコープは別に数える。
+        for base in [1000u64, 2000] {
+            let mut p = PatternState::default();
+            clocks.advance(&other, 0, &b, &table, base, true, &mut rng, &mut p);
+            let mut p = PatternState::default();
+            clocks.advance(&other, 0, &b, &table, base + 50, false, &mut rng, &mut p);
+        }
+    });
+    let warn = ["level=WARN", "seriko: part", "part=100", "surface_id=-2"];
+    assert_eq!(
+        count(&lines, &warn),
+        2,
+        "スコープごとに初回だけ: {lines:#?}"
+    );
+    assert_eq!(count(&lines, &["level=WARN", "scope=\"0\""]), 1);
+    assert_eq!(count(&lines, &["level=WARN", "scope=\"1\""]), 1);
+    assert_eq!(
+        count(&lines, &["level=WARN", "part=200"]),
+        0,
+        "`-1` では出さない"
+    );
+    assert_eq!(
+        count(&lines, &["level=INFO", "seriko: part 停止", "part=100"]),
+        5,
+        "停止は毎回 info で残る（陽性対照）"
+    );
+
+    // 捨てた後は初回に戻る。
+    clocks.clear();
+    let lines = capture_logs(|| {
+        tick(&mut clocks, &table, 0, &b, 5000, true, &mut rng, &top);
+        tick(&mut clocks, &table, 0, &b, 5050, false, &mut rng, &top);
+    });
+    assert_eq!(count(&lines, &warn), 1, "{lines:#?}");
+}
+
+/// 部品の発火・末尾での保持・停止・着せ替えから外れた停止は `info!` で部品の番号の欄つきで残る。
+/// 時計を書き換えない口は何も記録しない（同じ捕捉の中で刻みの行が出ることを陽性対照にする）。
+#[test]
+fn part_fire_hold_and_stop_lines_carry_the_part_number() {
+    let table = table_of(
+        "surface0\n{\nelement0,overlay,100,0,0\n}\n\
+         surface100\n{\nanimation0.interval,random,2\n\
+         animation0.pattern0,overlay,101,50,0,0\n\
+         animation0.pattern1,overlay,102,50,0,0\n\
+         animation3.interval,random,2\n\
+         animation3.pattern0,overlay,103,0,0,0\n\
+         animation3.pattern1,overlay,-1,50,0,0\n\
+         animation5.interval,bind+random,2\n\
+         animation5.pattern0,overlay,105,0,0,0\n}\n",
+    );
+    let (mut rng, _probe) = counting_rng(&[0, 0, 0]);
+    let mut clocks = PartClocks::default();
+    let top = PatternState::default();
+    let on = BindSet::from_ids([5]);
+    let off = no_binds();
+
+    let lines = capture_logs(|| {
+        tick(&mut clocks, &table, 0, &on, 1000, true, &mut rng, &top);
+        for _ in 0..3 {
+            peek_at(&clocks, &table, 0, &on, 1100, &top);
+            peek_at(&clocks, &table, 0, &off, 1100, &top);
+        }
+        tick(&mut clocks, &table, 0, &on, 1100, false, &mut rng, &top);
+        tick(&mut clocks, &table, 0, &off, 1150, false, &mut rng, &top);
+        tick(&mut clocks, &table, 0, &off, 1200, false, &mut rng, &top);
+    });
+    let part_lines: Vec<&String> = lines
+        .iter()
+        .filter(|l| l.contains("seriko: part"))
+        .collect();
+    let fire = [
+        "level=INFO",
+        "seriko: part 抽選発火",
+        "scope=\"0\"",
+        "part=100",
+    ];
+    assert_eq!(count(&lines, &fire), 3, "{part_lines:#?}");
+    for id in [0, 3, 5] {
+        let id_field = format!("animation_id={id} ");
+        let mut needles = fire.to_vec();
+        needles.push(&id_field);
+        assert_eq!(count(&lines, &needles), 1, "{part_lines:#?}");
+    }
+    assert_eq!(
+        count(
+            &lines,
+            &[
+                "level=INFO",
+                "seriko: part 末尾残留",
+                "part=100",
+                "animation_id=0"
+            ]
+        ),
+        1,
+        "末尾での保持は移った刻みの 1 回だけ（時計を書き換えない口は記録しない）: {part_lines:#?}"
+    );
+    assert_eq!(
+        count(
+            &lines,
+            &[
+                "level=INFO",
+                "seriko: part 停止",
+                "part=100",
+                "animation_id=3"
+            ]
+        ),
+        1,
+        "{part_lines:#?}"
+    );
+    assert_eq!(
+        count(
+            &lines,
+            &[
+                "level=INFO",
+                "seriko: part bind から外れた",
+                "part=100",
+                "animation_id=5"
+            ]
+        ),
+        1,
+        "外れた刻みの 1 回だけ（次の刻みでは時計が無いので出さない）: {part_lines:#?}"
+    );
+    // 発火 3・末尾残留 2（5 は待ち 0 の 1 コマなので発火の刻みで保つ）・停止 1・外れた停止 1。
+    assert_eq!(part_lines.len(), 7, "{part_lines:#?}");
 }
