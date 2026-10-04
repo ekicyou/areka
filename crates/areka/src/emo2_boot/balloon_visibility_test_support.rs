@@ -24,6 +24,7 @@ pub(crate) fn seen(visible_glyphs: usize, visible: bool) -> ScopeObservation {
         visible,
         hover: Some(false),
         choice_active: Some(false),
+        box_showing: false,
     }
 }
 
@@ -34,6 +35,7 @@ pub(crate) fn unobserved(visible: bool) -> ScopeObservation {
         visible,
         hover: Some(false),
         choice_active: Some(false),
+        box_showing: false,
     }
 }
 

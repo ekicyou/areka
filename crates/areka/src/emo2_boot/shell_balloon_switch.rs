@@ -33,6 +33,7 @@ use super::ghost_switch::SwitchInFlight;
 use super::shell_balloon_resolve::{
     SkinCandidate, balloon_candidates, installed_for, resolve_skin_target, shell_candidates,
 };
+use super::shell_box_assets::ShellBoxAssets;
 use super::switch_assets::{SwapBuilt, SwitchBuildError, SwitchBuildRequest, spawn_switch_build};
 use crate::boot_config::BootContext;
 use crate::boot_resolve::pick_index;
@@ -141,11 +142,12 @@ pub(crate) enum SkinSwitchStage {
 /// 資産のうち、荷物（scope ごとの `EmoWorld`・アトラス）と seriko の定義に入らず、完了の後始末で
 /// 使う残り。
 pub(crate) enum SwapFinish {
-    /// シェル: 新しいシェルの配置の値・走っているバルーンの配置の値・位置の記憶。
+    /// シェル: 新しいシェルの配置の値・走っているバルーンの配置の値・位置の記憶・箱の束。
     Shell {
         source: DescriptSource,
         balloon: BalloonPlacementInputs,
         restored: Vec<(PersistKey, String)>,
+        boxes: ShellBoxAssets,
     },
     /// バルーン: scope ごとの文字の模型と背景色。
     Balloon {

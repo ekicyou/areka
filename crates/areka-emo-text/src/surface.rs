@@ -35,10 +35,15 @@ use windows_numerics::Vector2;
 
 use wintf::com::dxgi::create_composition_swap_chain;
 use wintf::com::wuc::CompositorInteropExt;
+
 use wintf::ecs::{Arrangement, GraphicsCore, LayoutScale, Offset, Size, VisualGraphics};
 
 use crate::TextLayerError;
 use crate::actor::TextSlotBinding;
+use crate::choice::HitRectPx;
+
+#[path = "surface_window_child.rs"]
+mod window_child;
 
 /// `windows_core::Error` を [`TextLayerError::Device`]（ログ＋`HRESULT`＋文脈）へ写像する
 /// クロージャ（log-first: `error!`＋`Err` 戻り値・panic 禁止）。
@@ -172,6 +177,25 @@ pub struct TextSurface {
     /// 別合成層——増設時に blit 構成を再構築せずに済む・R7.3）。
     #[allow(dead_code)]
     fixed_overlay: FixedOverlaySeam,
+    /// 箱の文字の面として窓の直接の子に作った entity（差し込み口へ装着した面は `None`）。
+    window_child: Option<Entity>,
+    /// 窓の子の entity の当たりのマスクへ最後に焼いた字の矩形（同じ集まりなら焼き直さない）。
+    hit_cells: Vec<HitRectPx>,
+}
+
+/// 物理 px 直接の `Arrangement`（寸＝供給面の物理寸・offset＝窓クライアント原点基準の物理 px）。
+fn physical_arrangement(size: (u32, u32), offset: (f32, f32)) -> Arrangement {
+    Arrangement {
+        offset: Offset {
+            x: offset.0,
+            y: offset.1,
+        },
+        scale: LayoutScale::default(),
+        size: Size {
+            width: size.0 as f32,
+            height: size.1 as f32,
+        },
+    }
 }
 
 impl TextSurface {
@@ -193,6 +217,38 @@ impl TextSurface {
         physical_size: (u32, u32),
         physical_offset: (f32, f32),
     ) -> Result<TextSurface, TextLayerError> {
+        let (surface, wuc_visual) = Self::create(compositor, core, physical_size)?;
+
+        // 予約スロット entity へ donor 装着（有効な VisualGraphics を渡すことで wintf
+        // `Visual` フックの既定値上書き・`deferred_surface_creation_system` と競合しない。
+        // `GraphicsCommandList` は挿入しない）。
+        let Ok(mut slot) = world.get_entity_mut(binding.slot) else {
+            tracing::error!(
+                slot = ?binding.slot,
+                "text_slot entity が World に存在しない（装着不能・binding が古い可能性）"
+            );
+            return Err(TextLayerError::Device {
+                hresult: 0,
+                context: "text_slot entity not found",
+            });
+        };
+        slot.insert((
+            VisualGraphics::new(wuc_visual),
+            physical_arrangement(physical_size, physical_offset),
+        ));
+        // insert フックの遅延コマンドを確定させる（mount.rs と同じ規律）。
+        world.flush();
+
+        Ok(surface)
+    }
+
+    /// 供給面（swapchain・描画面ダブルバッファ・staging）と、それを brush に持つ `SpriteVisual` を作る。
+    /// 挿す先（差し込み口か窓の子か）だけが違う 2 つの入口の共通部分。
+    fn create(
+        compositor: &Compositor,
+        core: &GraphicsCore,
+        physical_size: (u32, u32),
+    ) -> Result<(TextSurface, WucVisual), TextLayerError> {
         let (w, h) = physical_size;
         let d3d = core
             .d3d()
@@ -242,46 +298,21 @@ impl TextSurface {
             .cast()
             .map_err(device_err("SpriteVisual->Visual cast"))?;
 
-        // 予約スロット entity へ donor 装着（有効な VisualGraphics を渡すことで wintf
-        // `Visual` フックの既定値上書き・`deferred_surface_creation_system` と競合しない。
-        // `GraphicsCommandList` は挿入しない）。
-        let Ok(mut slot) = world.get_entity_mut(binding.slot) else {
-            tracing::error!(
-                slot = ?binding.slot,
-                "text_slot entity が World に存在しない（装着不能・binding が古い可能性）"
-            );
-            return Err(TextLayerError::Device {
-                hresult: 0,
-                context: "text_slot entity not found",
-            });
-        };
-        slot.insert((
-            VisualGraphics::new(wuc_visual),
-            Arrangement {
-                offset: Offset {
-                    x: physical_offset.0,
-                    y: physical_offset.1,
-                },
-                scale: LayoutScale::default(),
-                size: Size {
-                    width: w as f32,
-                    height: h as f32,
-                },
+        Ok((
+            TextSurface {
+                swapchain,
+                sources,
+                front: 0,
+                staging,
+                context,
+                sprite,
+                size: physical_size,
+                fixed_overlay: FixedOverlaySeam::default(),
+                window_child: None,
+                hit_cells: Vec::new(),
             },
-        ));
-        // insert フックの遅延コマンドを確定させる（mount.rs と同じ規律）。
-        world.flush();
-
-        Ok(TextSurface {
-            swapchain,
-            sources,
-            front: 0,
-            staging,
-            context,
-            sprite,
-            size: physical_size,
-            fixed_overlay: FixedOverlaySeam::default(),
-        })
+            wuc_visual,
+        ))
     }
 
     /// 描画済み内容の提示（`CopyResource(backbuffer, front)`→`Present(0)` のみ・

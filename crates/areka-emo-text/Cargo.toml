@@ -49,13 +49,15 @@ wintf-winmsg-executor = { workspace = true }
 # （design.md Allowed Dependencies・依存方向 `areka-emo-present → areka-emo-text` の順方向。
 # 逆方向 import（emo-present → emo-text）は禁止・emo-present 本体は改変しない）。
 areka-emo-present = { path = "../areka-emo-present" }
+# 文字の場所の鍵（place.rs の `TextPlace::Box(BoxName)`）と箱の置き場所の表（`BoxLayout`）の型の正本
+# （spec: areka-P0-shell-balloon。今も areka-emo-present 越しに推移的に引いている・外部クレートの追加は 0）。
+areka-emo-compose = { path = "../areka-emo-compose" }
 
 [dev-dependencies]
 # 統合テスト（tests/attach_wiring_test.rs）: 2 target 結線シナリオで EmoPresenter へ渡す
 # 合成入力（EmoWorld/AtlasTable）を上流公開 API（bake→EmoWorld）で組む
 # （emo-present presenter.rs テストと同技法・テスト専用）。
 areka-emo-atlas = { path = "../areka-emo-atlas" }
-areka-emo-compose = { path = "../areka-emo-compose" }
 # 観測 example（examples/emo-text-layer.rs・task 9.2）のログ初期化
 # （RUST_LOG 対応・emo-present example と同型。example 専用＝dev-deps）。
 tracing-subscriber = { workspace = true }

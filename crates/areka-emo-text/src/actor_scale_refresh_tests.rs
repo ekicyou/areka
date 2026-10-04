@@ -6,6 +6,7 @@ use bevy_ecs::prelude::World;
 
 use super::test_support::{com_world, cue, geo_model, opaque_count, spawn_reserved_slot};
 use super::{TextLayerRuntime, TextSlotBinding, present_frame};
+use crate::place::PlaceKey;
 use crate::state::TextLayerConfig;
 
 // ══ task 7.1: 文字層 k 再追従シーム（R8.1/8.2/8.3/8.5/8.7・design D11） ══
@@ -38,8 +39,8 @@ fn refresh_actor_binding_with_all_keys_equal_is_noop_returning_false() {
         TextSlotBinding::new(slot, window, 1.25, (500, 280), NATIVE),
         &geo_model(),
     );
-    let binding_before = rt.routing[&actor];
-    let resolved_before = rt.layout_input[&actor].clone();
+    let binding_before = rt.routing[&PlaceKey::balloon(&actor)];
+    let resolved_before = rt.layout_input[&PlaceKey::balloon(&actor)].clone();
 
     let changed = rt.refresh_actor_binding(
         &actor,
@@ -51,9 +52,14 @@ fn refresh_actor_binding_with_all_keys_equal_is_noop_returning_false() {
         !changed,
         "判定キーが全同値の再追従要求は no-op で false（R4.5/R8.5）"
     );
-    assert_eq!(rt.routing[&actor], binding_before, "binding は不変");
     assert_eq!(
-        rt.layout_input[&actor], resolved_before,
+        rt.routing[&PlaceKey::balloon(&actor)],
+        binding_before,
+        "binding は不変"
+    );
+    assert_eq!(
+        rt.layout_input[&PlaceKey::balloon(&actor)],
+        resolved_before,
         "layout 入力は不変（判定用の再解決は等値ゆえ上書きが起きない）"
     );
 }
@@ -72,7 +78,7 @@ fn refresh_actor_binding_with_same_k_but_different_image_size_rebuilds() {
         TextSlotBinding::new(slot, window, 1.25, (500, 280), NATIVE),
         &geo_model(),
     );
-    let region_before = rt.layout_input[&actor].region;
+    let region_before = rt.layout_input[&PlaceKey::balloon(&actor)].region;
 
     // k は据え置き（1.25）で面だけ別寸へ——物理寸も image 原寸も変わる。
     const NARROW: (u32, u32) = (320, 180);
@@ -83,7 +89,7 @@ fn refresh_actor_binding_with_same_k_but_different_image_size_rebuilds() {
     );
 
     assert!(changed, "k 同値でも面実寸が違えば再構築する（R4.4）");
-    let after = rt.routing[&actor];
+    let after = rt.routing[&PlaceKey::balloon(&actor)];
     assert_eq!(after.scale, 1.25, "k は同値のまま");
     assert_eq!(
         after.image_size, NARROW,
@@ -95,7 +101,8 @@ fn refresh_actor_binding_with_same_k_but_different_image_size_rebuilds() {
         "物理寸も新しい面の値へ更新される"
     );
     assert_ne!(
-        rt.layout_input[&actor].region, region_before,
+        rt.layout_input[&PlaceKey::balloon(&actor)].region,
+        region_before,
         "文字描画領域も新しい面実寸で解き直される（旧寸の領域を残さない）"
     );
 }
@@ -110,7 +117,7 @@ fn refresh_actor_binding_with_same_binding_but_changed_region_rebuilds() {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     let binding = TextSlotBinding::new(slot, window, 1.25, (500, 280), NATIVE);
     rt.register_actor_binding(actor.clone(), binding, &geo_model());
-    let region_before = rt.layout_input[&actor].region;
+    let region_before = rt.layout_input[&PlaceKey::balloon(&actor)].region;
 
     // binding は 1 バイトも変えず、model の validrect だけが別 scope の値へ変わった状況。
     // origin は宣言しない——本檻の関心は「validrect だけが変わったとき region が変わるか」で
@@ -131,9 +138,14 @@ fn refresh_actor_binding_with_same_binding_but_changed_region_rebuilds() {
         changed,
         "binding 同値でも文字描画領域が違えば再構築する（R4.4）"
     );
-    assert_eq!(rt.routing[&actor], binding, "binding は同値のまま");
+    assert_eq!(
+        rt.routing[&PlaceKey::balloon(&actor)],
+        binding,
+        "binding は同値のまま"
+    );
     assert_ne!(
-        rt.layout_input[&actor].region, region_before,
+        rt.layout_input[&PlaceKey::balloon(&actor)].region,
+        region_before,
         "layout 入力は新しい validrect の領域へ更新される"
     );
 }
@@ -153,10 +165,11 @@ fn refresh_actor_scale_rebuilds_binding_at_new_k_keeping_image_space() {
         &geo_model(),
     );
     assert_eq!(
-        rt.routing[&actor].image_size, NATIVE,
+        rt.routing[&PlaceKey::balloon(&actor)].image_size,
+        NATIVE,
         "k=1.25 の物理寸 500×280 から image px 原寸 400×224 が導出される"
     );
-    let region_before = rt.layout_input[&actor].region;
+    let region_before = rt.layout_input[&PlaceKey::balloon(&actor)].region;
 
     let changed = rt.refresh_actor_binding(
         &actor,
@@ -165,7 +178,7 @@ fn refresh_actor_scale_rebuilds_binding_at_new_k_keeping_image_space() {
     );
 
     assert!(changed, "k 変化の再追従は true（R8.1）");
-    let after = rt.routing[&actor];
+    let after = rt.routing[&PlaceKey::balloon(&actor)];
     assert_eq!(after.scale, 2.0, "binding の k が新 k へ更新される");
     assert_eq!(after.surface_size, (800, 448), "物理原寸は新 k の値");
     assert_eq!(
@@ -173,7 +186,8 @@ fn refresh_actor_scale_rebuilds_binding_at_new_k_keeping_image_space() {
         "image px 原寸は k 不変（作者画像空間・R8.2 の ceil(validrect×k) が k に比例する前提）"
     );
     assert_eq!(
-        rt.layout_input[&actor].region, region_before,
+        rt.layout_input[&PlaceKey::balloon(&actor)].region,
+        region_before,
         "解決済み region（全値 image px）も k 不変——k は描画行列と供給面寸にだけ効く"
     );
 }
@@ -311,7 +325,7 @@ fn refresh_actor_scale_for_unregistered_actor_is_noop() {
 
     assert!(!changed, "未登録 actor は再構築対象が無い＝false");
     assert!(
-        !rt.routing.contains_key(&actor),
+        !rt.routing.contains_key(&PlaceKey::balloon(&actor)),
         "再追従は装着経路ではない（routing を生やさない）"
     );
 }

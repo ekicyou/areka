@@ -16,6 +16,7 @@ use bevy_ecs::world::World;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::{DoubleClick, dispatch_pointer_events};
 
+use super::shell_box::{BoxPressVerdict, fold_talking, judge_box_press};
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use crate::emo2_boot::target_map::balloon_target;
@@ -36,6 +37,8 @@ pub(crate) struct UserBreakWiring {
     kanade: Sender<KanadeMsg>,
     /// 直前の左押下が選択の確定だったか（要件 1.5）。
     prev_press_selected: bool,
+    /// 話している最中か（台詞の始まりで真・終わりで偽・areka-P0-shell-balloon 要件 9.6）。
+    talking: bool,
 }
 
 impl UserBreakWiring {
@@ -52,6 +55,7 @@ impl UserBreakWiring {
             lifecycle_tx,
             kanade,
             prev_press_selected: false,
+            talking: false,
         }
     }
 
@@ -59,6 +63,12 @@ impl UserBreakWiring {
     /// kanade へ届ける（areka-P0-status-execution-states 要件 3.1・3.2）。
     pub(crate) fn no_user_break(&self) -> bool {
         self.no_user_break
+    }
+
+    /// 話している最中か（テスト専用の読み口。本番の読み手は [`on_box_press`] で欄を直に読む）。
+    #[cfg(test)]
+    pub(crate) fn talking(&self) -> bool {
+        self.talking
     }
 
     /// 旗の線の受信端が今の送出端につながっているか（テスト専用の読み口）。
@@ -150,6 +160,7 @@ pub(crate) fn drain_no_user_break_signals(world: &mut World) {
     let mut drained = false;
     while let Ok(signal) = wiring.flag_rx.try_recv() {
         drained = true;
+        wiring.talking = fold_talking(wiring.talking, signal);
         let (value, leave_outside) = fold_no_user_break(wiring.no_user_break, signal);
         if value != wiring.no_user_break {
             wiring.no_user_break = value;
@@ -233,11 +244,7 @@ pub(crate) fn on_left_press(
 }
 
 /// 押下 1 回の本体。照会の結果を引数に取るのは、GPU 無しでは可視のバルーンを作れず、
-/// 受理の経路を照会ごとテストできないためである。
-///
-/// 送る順は「隠せ」→「止めろ」で、1 件ずつ。どちらの失敗も記録し、もう一方の送出はやめない
-/// ——止める要求だけ落ちると「バルーンは消えたのに再生が続く」になるので、隣の
-/// `fn send_selection` より重い水準で記録する（要件 1.7・2.8）。
+/// 受理の経路を照会ごとテストできないためである。受理の送り出しは [`send_break`]。
 fn press_with_visibility(
     world: &mut World,
     scope: usize,
@@ -300,30 +307,81 @@ fn press_with_visibility(
             false
         }
         PressVerdict::Break => {
-            if wiring
-                .lifecycle_tx
-                .send(TalkLifecycleSignal::UserBreak)
-                .is_err()
-            {
-                tracing::error!(
-                    event = "balloon_break_hide_send_failed",
-                    scope,
-                    "表示の側へ「中断された」を渡せない（受け手が消えている）"
-                );
-            }
-            let msg = KanadeMsg::UserBreak {
-                scope: scope as u32,
-            };
-            if wiring.kanade.send(msg).is_err() {
-                tracing::error!(
-                    event = "balloon_break_send_failed",
-                    scope,
-                    "運行の側へ中断の要求を渡せない（受け手が消えている）: 再生は止まらない"
-                );
-            }
+            send_break(&wiring, scope);
             true
         }
     }
+}
+
+/// 中断の送り出し: 「隠せ」→「止めろ」を 1 件ずつ。どちらの失敗も記録し、もう一方の送出は
+/// やめない——止める要求だけ落ちると「バルーンは消えたのに再生が続く」になるので、隣の
+/// `fn send_selection` より重い水準で記録する（要件 1.7・2.8）。普通のバルーンの窓と箱の
+/// 両方の入口が使う（areka-P0-shell-balloon 要件 9.6）。
+fn send_break(wiring: &UserBreakWiring, scope: usize) {
+    if wiring
+        .lifecycle_tx
+        .send(TalkLifecycleSignal::UserBreak)
+        .is_err()
+    {
+        tracing::error!(
+            event = "balloon_break_hide_send_failed",
+            scope,
+            "表示の側へ「中断された」を渡せない（受け手が消えている）"
+        );
+    }
+    let msg = KanadeMsg::UserBreak {
+        scope: scope as u32,
+    };
+    if wiring.kanade.send(msg).is_err() {
+        tracing::error!(
+            event = "balloon_break_send_failed",
+            scope,
+            "運行の側へ中断の要求を渡せない（受け手が消えている）: 再生は止まらない"
+        );
+    }
+}
+
+/// 文字の出ている箱の中の押下の入口（シェルの窓の押下ハンドラから呼ばれる・
+/// areka-P0-shell-balloon 要件 9.6）。結論が [`BoxPressVerdict::ShellOp`] 以外なら呼び手は
+/// 「処理した」として既存の道へ落とさない。
+///
+/// 普通のバルーンの窓と同じ規則（直前の押下の記憶・中断を禁じる区間）で判断し、中断なら同じ
+/// 送り出し（[`send_break`]）を使う。「バルーンが出ているか」の照会は無い——箱に文字が出て
+/// いることは呼び手が `shown_boxes` で確かめている。持ち物が無い（結線前）は話していない扱い。
+pub(crate) fn on_box_press(
+    world: &mut World,
+    scope: usize,
+    double_click: DoubleClick,
+    selected_now: bool,
+) -> BoxPressVerdict {
+    let Some(mut wiring) = world.get_non_send_mut::<UserBreakWiring>() else {
+        tracing::trace!(
+            event = "box_break_no_wiring",
+            "中断の持ち物が無い（結線前）: 話していない扱い"
+        );
+        return judge_box_press(double_click, selected_now, false, false, false);
+    };
+    // 読んでから上書きする（普通のバルーンの窓の入口と同じ）。
+    let prev_press_selected = wiring.prev_press_selected;
+    wiring.prev_press_selected = selected_now;
+    let verdict = judge_box_press(
+        double_click,
+        selected_now,
+        prev_press_selected,
+        wiring.talking,
+        wiring.no_user_break,
+    );
+    match verdict {
+        BoxPressVerdict::Disabled => tracing::debug!(
+            event = "box_break_rejected",
+            scope,
+            reason = "no_user_break",
+            "中断を禁じる区間: 箱の左ダブルクリックで止めず隠さない"
+        ),
+        BoxPressVerdict::Break => send_break(&wiring, scope),
+        BoxPressVerdict::ShellOp | BoxPressVerdict::ConsumedBySelection => {}
+    }
+    verdict
 }
 
 #[cfg(test)]

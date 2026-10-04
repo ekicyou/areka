@@ -5,6 +5,8 @@ use std::sync::OnceLock;
 
 use tracing::{info, warn};
 
+use super::decision::hide_reaches_boxes;
+
 use super::{
     BalloonVisibilityState, ContentDecisions, DEFAULT_BALLOON_TIMEOUT_SECS,
     MeasurementDiscardReason, SuppressionKinds, TIMEOUT_ENV_KEY, TimeoutSource, VisibilityLogEvent,
@@ -89,17 +91,24 @@ pub(super) fn decide_timeout(
     // 本フレームの発行を反映した可視 scope。真実源はあくまで観測値で、そこへ本フレームに
     // 発行した表示・非表示を重ねる（第 2 の可視性帳簿を作らない）。表示は最後の行動なので、
     // 中断や全消去で隠した直後に出し直した scope は可視として数える。
+    //
+    // 「可視」は窓が見えている、または箱に文字が出ていること（areka-P0-shell-balloon 要件 6.10）。
+    // 箱の側は本フレームの隠す発行が箱に届いたときだけ消えたとみなす——全消去は窓だけを隠し、
+    // 中断は掛け金が掛かったままのときだけ箱にも届く（`hide_reaches_boxes`）。
+    let break_reaches_boxes = hide_reaches_boxes(VisibilityTrigger::UserBreak, state.break_latch);
     let visible: Vec<u32> = obs
         .scopes
         .iter()
         .filter(|(scope, observed)| {
-            if content.shown.contains(scope) {
+            let window = if content.shown.contains(scope) {
                 true
             } else if content.cleared.contains(scope) || broken.contains(scope) {
                 false
             } else {
                 observed.visible
-            }
+            };
+            let boxes = observed.box_showing && !(broken.contains(scope) && break_reaches_boxes);
+            window || boxes
         })
         .map(|(&scope, _)| scope)
         .collect();

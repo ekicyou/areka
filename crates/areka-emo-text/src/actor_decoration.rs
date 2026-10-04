@@ -26,7 +26,7 @@ use crate::TextLayerError;
 use crate::choice::ResolvedChoiceStyle;
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, DWriteMetrics, FontCatalog, ResolvedFont};
 use crate::look::GlyphStyles;
-use crate::region::{BALLOON_NAME_PLACEHOLDER, TextRegion};
+use crate::region::TextRegion;
 use crate::state::{ActorTextState, TextLayerConfig};
 use crate::surface::TextSurface;
 use crate::viewbox_draw::ViewboxExecutor;
@@ -100,7 +100,11 @@ pub(super) fn glyph_styles_of<'a>(
 /// 範囲の内外の判定そのものは**ここでは引き直さない**。純粋層が
 /// [`TextRegion::ignored_origin`] に載せて運んだ値を読むだけである（同じ判定式が 2 か所に
 /// あると、片方だけが直って静かに食い違う）。
-pub(super) fn warn_ignored_origin(resolved: &ResolvedBalloonText, previous: Option<TextRegion>) {
+pub(super) fn warn_ignored_origin(
+    balloon: &str,
+    resolved: &ResolvedBalloonText,
+    previous: Option<TextRegion>,
+) {
     let region = resolved.region;
     if previous == Some(region) {
         return;
@@ -116,7 +120,7 @@ pub(super) fn warn_ignored_origin(resolved: &ResolvedBalloonText, previous: Opti
     ] {
         let Some(ignored) = ignored else { continue };
         warn!(
-            balloon = BALLOON_NAME_PLACEHOLDER,
+            balloon,
             key,
             resolved = ignored,
             range_min,
@@ -172,6 +176,22 @@ impl TextLayerRuntime {
             "バルーン背景色を受け取った（無効表示の色の混色に使う）"
         );
         self.balloon_background.insert(actor, background);
+    }
+
+    /// 普通のバルーンの名前（バルーンのフォルダ名）を actor ごとに覚える（結線が入れる・要件 3.12）。
+    /// 折り返しの基準と無視した書き出し位置の 2 つの警告の名前の欄に出る。後から入れても
+    /// 既に出した警告は書き直さない（次に値が新しく決まった登録から効く）。
+    pub fn set_balloon_label(&mut self, actor: &ActorKey, label: String) {
+        debug!(actor = %actor, label = label.as_str(), "普通のバルーンの名前を受け取った（警告の名前の欄に出す）");
+        self.balloon_label.insert(actor.clone(), label);
+    }
+
+    /// 普通のバルーンの警告の名前の欄（入れた名前・未設定は `スコープ{番号}のバルーン`）。
+    pub(super) fn balloon_label_of(&self, actor: &ActorKey) -> String {
+        self.balloon_label
+            .get(actor)
+            .cloned()
+            .unwrap_or_else(|| format!("スコープ{actor}のバルーン"))
     }
 
     /// 覚えている背景色（未設定は [`DEFAULT_BALLOON_BACKGROUND`]＝白）。

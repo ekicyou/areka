@@ -226,7 +226,13 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         // ないよう [`AuthorDpis`] へ束ねる（下の `attach_target` 呼び 2 箇所が `for_target` で引く）。
         shell_author_dpi,
         balloon_author_dpi,
+        boxes,
     } = assets;
+    // 箱の束（areka-P0-shell-balloon「箱の束の結線」）: 置き場所の表・`\s` の解決の閉包・
+    // フォントを探す場所の順を文字の層へ渡す。全スコープで共有する 1 束ゆえループの前に 1 度。
+    // ゴーストの切替は文字の層ごと作り直し、この相がもう 1 度走って新しいシェルの束を渡す
+    // （要件 6.8 のゴーストの側）。
+    boxes.hand_to(&mut wiring.runtime.borrow_mut(), world);
     let author_dpis = AuthorDpis {
         shell: shell_author_dpi,
         balloon: balloon_author_dpi,
@@ -313,6 +319,7 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             atlas: balloon_atlas,
             model: balloon_model,
             background_color,
+            name: balloon_name,
             ..
         }) = balloons.get_mut(balloon_index).and_then(|b| b.take())
         else {
@@ -371,12 +378,19 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         // apply は同期ゆえ同一フレームで text_slot_view が Some になるのが正常経路（DD-4）。
         // None（上流の遅延化）は接続せず次フレーム再試行へ委ねる（R4.2）。
         let view = wiring.presenter.text_slot_view(item.balloon_target);
+        // 再追従（[`run_text_scale_phase`]）は**同一の写像**で actor を引く——
+        // ここと式が食い違うと、再追従が別 actor を作って文字だけ旧 k のまま残る。
+        let actor = ActorKey::from(scope.to_string());
+        // 普通のバルーンの名前（フォルダ名）は装着の**前**に渡す（要件 3.12）——後だと、領域が
+        // 同じままの再追従では警告が出ず、名前は次に値が新しく決まった登録からしか効かない。
+        wiring
+            .runtime
+            .borrow_mut()
+            .set_balloon_label(&actor, balloon_name);
         connect_balloon_text(
             &wiring.runtime,
             view,
-            // 再追従（[`run_text_scale_phase`]）は**同一の写像**で actor を引く——
-            // ここと式が食い違うと、再追従が別 actor を作って文字だけ旧 k のまま残る。
-            ActorKey::from(scope.to_string()),
+            actor,
             &balloon_model,
             // 面 0 の原点画素（要件 4.6）——無効表示の文字色の混色の相手。
             background_color,

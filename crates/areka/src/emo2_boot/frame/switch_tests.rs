@@ -143,6 +143,7 @@ fn shell_built() -> SwapBuilt {
             loop_table: AnimationTable::empty(),
             author_dpi: 120,
             bake_failures: Vec::new(),
+            boxes: crate::emo2_boot::shell_box_assets::ShellBoxAssets::default(),
         },
         source: DescriptSource {
             ghost_kv: BTreeMap::new(),
@@ -169,6 +170,7 @@ fn balloon_built() -> SwapBuilt {
                     atlas: empty_atlas(),
                     model: areka_parsers::balloon::parse_str("", None),
                     background_color: (255, 255, 255),
+                    name: String::new(),
                 })
                 .into(),
             loop_tables: [0, 1].map(|s| (s, AnimationTable::empty())).into(),

@@ -17,6 +17,7 @@ use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 use crate::color::mix_disabled;
 use crate::draw::DEFAULT_BALLOON_BACKGROUND;
 use crate::look::LookLayers;
+use crate::place::PlaceKey;
 use crate::state::TextLayerConfig;
 
 /// 代表 native 原寸（`actor_scale_refresh_tests` と同値）。
@@ -64,7 +65,7 @@ fn attaching_an_actor_delivers_both_look_layers_to_the_pure_state() {
 
     rt.register_actor_binding(actor.clone(), bind, &styled_model());
 
-    let resolved = &rt.layout_input[&actor];
+    let resolved = &rt.layout_input[&PlaceKey::balloon(&actor)];
     let delivered = rt
         .state()
         .actor_state(&actor)
@@ -95,7 +96,7 @@ fn balloon_background_is_white_until_it_is_set() {
 
     rt.register_actor_binding(actor.clone(), bind, &styled_model());
 
-    let text = rt.layout_input[&actor].font.color;
+    let text = rt.layout_input[&PlaceKey::balloon(&actor)].font.color;
     assert_eq!(
         rt.state()
             .actor_state(&actor)
@@ -121,7 +122,7 @@ fn the_disabled_look_mixes_with_the_configured_background() {
     rt.set_balloon_background(actor.clone(), TINTED);
     rt.register_actor_binding(actor.clone(), bind, &styled_model());
 
-    let text = rt.layout_input[&actor].font.color;
+    let text = rt.layout_input[&PlaceKey::balloon(&actor)].font.color;
     let disable = rt
         .state()
         .actor_state(&actor)
@@ -192,7 +193,10 @@ fn refreshing_after_the_background_changed_rebuilds_once() {
             .look_layers()
             .disable
             .color,
-        mix_disabled(rt.layout_input[&actor].font.color, TINTED),
+        mix_disabled(
+            rt.layout_input[&PlaceKey::balloon(&actor)].font.color,
+            TINTED
+        ),
         "作り直しの後も 2 層は新しい背景で組まれている"
     );
 }

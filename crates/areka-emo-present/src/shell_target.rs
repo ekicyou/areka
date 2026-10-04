@@ -24,7 +24,8 @@
 //! **記録を出すのは fs を触る入口 [`load_shell_target`] だけ**で、読み込み 1 回につき
 //! それぞれ 1 度だけ出る——一覧の結果の `info!`（R6.1）・使わなかった画像の `debug!`（R6.2）・
 //! 同じ番号の重複の `warn!`（R1.5）・桁溢れの `debug!`（R1.6）・相手の無いコマの `warn!`（R3.5）・
-//! 焼く段で落ちた絵の `warn!`・3 つの失敗の `error!`（R1.7・R6.4）である。一覧の 1 件だけが
+//! 焼く段で落ちた絵の `warn!`・3 つの失敗の `error!`（R1.7・R6.4）、および箱の報告の各件の
+//! `warn!` と箱の数の `info!`（spec: areka-P0-shell-balloon 要件 10.1）である。一覧の 1 件だけが
 //! 取れないときは `warn!` を出してその 1 件を飛ばす（[`list_file_names`]）。
 //! [`ShellTarget::build_world`] は新しい記録を 1 本も出さない。
 //!
@@ -38,9 +39,11 @@ use areka_emo_atlas::{
     AlphaParams, AtlasTable, BakeError, ElementDecoder, PackConfig, SetId, SurfaceSet,
     UseSelfAlpha, bake,
 };
-use areka_emo_compose::{BaseImageReport, EmoWorld};
+use areka_emo_compose::{BaseImageReport, BoxIssue, BoxLayout, BoxReport, EmoWorld, fold_boxes};
 use areka_parsers::charset::{DefaultEncoding, decode};
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Shell, Surface};
+use areka_parsers::shell::{
+    AppendTarget, BoxDefinition, Element, ElementPath, Shell, ShellBoxes, Surface, parse_boxes,
+};
 
 use crate::balloon::face_digits_of;
 
@@ -181,6 +184,12 @@ pub struct ShellTarget {
     base_images: BaseImageReport,
     /// 相手の面が存在しないコマの「(コマを持つ面, 相手の番号)」（R3.5・出どころは同上）。
     dangling: BTreeSet<(u32, u32)>,
+    /// 箱の定義の表とサーフェス番号ごとの置き場所の表（spec: areka-P0-shell-balloon）。
+    boxes: BoxLayout,
+    /// 箱の畳み込みで読み捨てた事実（記録を出すのは [`load_shell_target`]）。
+    box_report: BoxReport,
+    /// 箱の置き場所を持つサーフェスの数（[`load_shell_target`] の `info!` の出どころ）。
+    box_surfaces: usize,
 }
 
 impl ShellTarget {
@@ -192,6 +201,11 @@ impl ShellTarget {
     /// 焼く段で落ちた絵の一覧（`emo2` では 0 件）。
     pub fn bake_errors(&self) -> &[BakeError] {
         &self.bake_errors
+    }
+
+    /// 箱の定義の表とサーフェス番号ごとの置き場所の表（箱の無いシェルでは空）。
+    pub fn boxes(&self) -> &BoxLayout {
+        &self.boxes
     }
 
     /// 面の表を 1 つ組む（[`EmoWorld::build_with_images`] → `bind_atlas(SetId(0))`）。
@@ -265,6 +279,7 @@ pub fn load_shell_target(
             }
         })?;
     let shell = areka_parsers::shell::parse(&content);
+    let boxes = parse_boxes(&content);
     if shell.surfaces.is_empty() {
         tracing::error!(
             path = %surfaces_path.display(),
@@ -275,7 +290,7 @@ pub fn load_shell_target(
         });
     }
 
-    let target = build_shell_target(shell, selection, shell_dir, decoder);
+    let target = build_shell_target_with_boxes(shell, &boxes, selection, shell_dir, decoder);
 
     for (&surface_id, file) in &target.base_images.shadowed {
         tracing::debug!(
@@ -293,6 +308,20 @@ pub fn load_shell_target(
     }
     for error in &target.bake_errors {
         tracing::warn!(error = %error, "shell: shell bake で脱落した element");
+    }
+    for issue in &target.box_report.issues {
+        log_box_issue(issue);
+    }
+    if !target.boxes.is_empty() {
+        tracing::info!(
+            braces = boxes
+                .definitions
+                .iter()
+                .filter(|d| matches!(d, BoxDefinition::Brace(_)))
+                .count(),
+            surfaces = target.box_surfaces,
+            "shell: 箱を読んだ（書かれた balloon.*ブレスの数・箱の置き場所を持つサーフェスの数）"
+        );
     }
     tracing::info!(
         shell_dir = %shell_dir.display(),
@@ -320,6 +349,20 @@ pub fn build_shell_target(
     shell_dir: &Path,
     decoder: &impl ElementDecoder,
 ) -> ShellTarget {
+    build_shell_target_with_boxes(shell, &ShellBoxes::default(), selection, shell_dir, decoder)
+}
+
+/// [`build_shell_target`] に箱の転記（[`parse_boxes`] の結果）を足した fs を触らない核。
+///
+/// 箱の表は [`fold_boxes`] が作り、読み捨てた事実は報告として [`ShellTarget`] に載せるだけで
+/// 記録を出さない（記録は [`load_shell_target`] が読み込み 1 回につき 1 度だけ出す）。
+pub fn build_shell_target_with_boxes(
+    shell: Shell,
+    boxes: &ShellBoxes,
+    selection: SurfaceImageSelection,
+    shell_dir: &Path,
+    decoder: &impl ElementDecoder,
+) -> ShellTarget {
     let images = selection.images;
 
     // どの画像を土台に使うかは面の表を組んで初めて決まる（`element0` が在る面では使わない）。
@@ -328,6 +371,11 @@ pub fn build_shell_target(
     let probe = EmoWorld::build_with_images(&shell, &images);
     let base_images = probe.base_images().clone();
     let dangling = probe.dangling_pattern_targets();
+    let (box_layout, box_report) = fold_boxes(boxes, &images, &probe);
+    let box_surfaces = probe
+        .surface_ids()
+        .filter(|&id| !box_layout.placements(id).is_empty())
+        .count();
 
     let mut surfaces = shell.surfaces.clone();
     surfaces.extend(
@@ -353,6 +401,104 @@ pub fn build_shell_target(
         bake_errors: baked.errors,
         base_images,
         dangling,
+        boxes: box_layout,
+        box_report,
+        box_surfaces,
+    }
+}
+
+/// 箱の報告の 1 件を `warn!` 1 行にする（欄は報告の対象の欄そのまま・要件 10.1）。
+fn log_box_issue(issue: &BoxIssue) {
+    match issue {
+        BoxIssue::BraceEmptyName { heading } => tracing::warn!(
+            heading = heading.as_str(),
+            "shell: 名前が空の balloon.*ブレスを採らない"
+        ),
+        BoxIssue::BraceMissingSize { name } => tracing::warn!(
+            name = name.as_str(),
+            "shell: size の無い balloon.*ブレスを採らない"
+        ),
+        BoxIssue::BraceBadSize { name, value } => tracing::warn!(
+            name = name.as_str(),
+            value = value.as_str(),
+            "shell: size が正の整数 2 つとして読めない balloon.*ブレスを採らない"
+        ),
+        BoxIssue::BraceNumericName { name } => tracing::warn!(
+            name = name.as_str(),
+            "shell: 名前が整数として読める balloon.*ブレスを採らない"
+        ),
+        BoxIssue::BraceReplaced { name } => tracing::warn!(
+            name = name.as_str(),
+            "shell: 同じ名前の balloon.*ブレスを後のもので置き換えた"
+        ),
+        BoxIssue::BraceKeyIgnored { name, key } => tracing::warn!(
+            name = name.as_str(),
+            key = key.as_str(),
+            "shell: 箱に当てはまらないキーを読み捨てた"
+        ),
+        BoxIssue::BraceBadFollow { name, value } => tracing::warn!(
+            name = name.as_str(),
+            value = value.as_str(),
+            "shell: font.follow の値が不正（scope として扱う）"
+        ),
+        BoxIssue::ElementBadNumber { surface, element } => tracing::warn!(
+            surface = *surface,
+            element = element.as_str(),
+            "shell: element番号が読めない箱の element定義を読み捨てた"
+        ),
+        BoxIssue::ElementUnknownBrace {
+            surface,
+            element,
+            name,
+        } => tracing::warn!(
+            surface = *surface,
+            element = *element,
+            name = name.as_str(),
+            "shell: 名前の balloon.*ブレスが無い箱の element定義を読み捨てた"
+        ),
+        BoxIssue::ElementBadPosition {
+            surface,
+            element,
+            name,
+            x,
+            y,
+        } => tracing::warn!(
+            surface = *surface,
+            element = *element,
+            name = name.as_str(),
+            x = x.as_str(),
+            y = y.as_str(),
+            "shell: X・Y が整数として読めない箱の element定義を読み捨てた"
+        ),
+        BoxIssue::ElementDuplicateName {
+            surface,
+            element,
+            name,
+            kept,
+        } => tracing::warn!(
+            surface = *surface,
+            element = *element,
+            name = name.as_str(),
+            kept = *kept,
+            "shell: 同じ名前の箱の element定義のうち element番号が最小でないものを読み捨てた"
+        ),
+        BoxIssue::ElementBelowImage {
+            surface,
+            element,
+            name,
+            image_element,
+        } => tracing::warn!(
+            surface = *surface,
+            element = *element,
+            name = name.as_str(),
+            image_element = *image_element,
+            "shell: 箱の element番号が画像の element番号より小さい（箱は画像より手前に描く）"
+        ),
+        BoxIssue::AppendTargetMissing { surface, name } => tracing::warn!(
+            surface = *surface,
+            name = name.as_str(),
+            "shell: surface.append*ブレスの追記先のサーフェスが無いので箱の element定義を読み捨てた"
+        ),
     }
 }
 
@@ -454,3 +600,7 @@ mod template_tests;
 #[cfg(test)]
 #[path = "shell_target_emo2_tests.rs"]
 mod emo2_tests;
+
+#[cfg(test)]
+#[path = "shell_target_boxes_tests.rs"]
+mod boxes_tests;

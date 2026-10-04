@@ -170,7 +170,14 @@ fn rows_lifted_by_real_k() -> Vec<ChoiceHitRow> {
                 id: format!("q{ordinal}"),
                 label: format!("label{ordinal}"),
                 references: Vec::new(),
-                rect: to_window_physical(&canvas, &region, WritingMode::HorizontalTb, 0, &contract),
+                rect: to_window_physical(
+                    &canvas,
+                    &region,
+                    WritingMode::HorizontalTb,
+                    0,
+                    &contract,
+                    (0.0, 0.0),
+                ),
             }
         })
         .collect()

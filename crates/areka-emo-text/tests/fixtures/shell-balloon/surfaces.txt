@@ -1,0 +1,84 @@
+charset,UTF-8
+// shell-balloon 検体（areka-P0-shell-balloon・要件 10.4）: 箱（シェル内バルーン）を持つ試験用シェル
+//
+// 「正しく書いたシェル」の見本。誤りのある定義はここに入れず、各テストの中の文面で作る。
+// この検体を読むのは areka-emo-present の読み込みのテストと、読み手から文字の層までの通しのテストだけ。
+// 下の層のクレート（areka-parsers・areka-emo-compose）のテストは自分の文面を持ち、ここを読まない。
+//
+// element定義の overlay が指す画像はこのフォルダに置かない（箱の振る舞いの確かめに絵は要らない）。
+
+descript
+{
+version,1
+}
+
+// ── balloon.*ブレス（キーはバルーンの descript.txt と同じ意味・同じ既定値。size と font.follow は areka 独自） ──
+
+// 縦書きの箱。font.follow を書かない（＝スコープに従う）。
+balloon.tate
+{
+size,120,240
+vertical,1
+font.height,16
+font.color.r,0
+font.color.g,0
+font.color.b,0
+}
+
+// 横書きの箱。font.follow,scope（書かないときと同じ扱い）。大きさも文字の大きさも tate と違う。
+balloon.yoko
+{
+size,200,80
+font.follow,scope
+font.height,20
+font.color.r,64
+font.color.g,0
+font.color.b,0
+}
+
+// 装飾の指定をこの箱だけに持つ箱。
+balloon.fuda
+{
+size,160,60
+font.follow,balloon
+font.height,12
+font.color.r,0
+font.color.g,0
+font.color.b,128
+}
+
+// ── サーフェス ──
+
+// 箱を 2 つ持つサーフェス。画像の element定義（overlay）と箱の element定義が同居する。
+// 画像の element番号を箱より小さくする（箱の文字は常に画像より手前）。
+surface0
+{
+element0,overlay,body0.png,0,0
+element1,balloon,tate,10,20
+element2,balloon,yoko,150,300
+}
+
+// 同じ名前の箱（tate）を surface0 とは別の位置に置くサーフェス。
+surface1
+{
+element0,overlay,body1.png,0,0
+element1,balloon,tate,240,40
+}
+
+// 箱の無いサーフェス（文字は普通のバルーンへ出る）。
+surface2
+{
+element0,overlay,body2.png,0,0
+}
+
+// 画像だけのサーフェス。箱は下の surface.append3 で足す。
+surface3
+{
+element0,overlay,body3.png,0,0
+}
+
+// surface.append*ブレスで箱を足す（surface3 は先に書かれているので足される）。
+surface.append3
+{
+element1,balloon,fuda,20,400
+}

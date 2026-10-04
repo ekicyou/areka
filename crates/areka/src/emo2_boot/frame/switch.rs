@@ -38,6 +38,7 @@ use crate::emo2_boot::shell_balloon_resolve::SkinCandidate;
 use crate::emo2_boot::shell_balloon_switch::{
     SkinKind, SkinSwitchInFlight, SkinSwitchStage, SwapFinish, skin_ref_name, skin_ref_path,
 };
+use crate::emo2_boot::shell_box_assets::ShellBoxAssets;
 use crate::emo2_boot::switch_assets::{SwapBuilt, SwapPayload};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::placement::config::build_placement_config;
@@ -369,7 +370,8 @@ fn step_committed(
             source,
             balloon,
             restored,
-        } => finish_shell(wiring, world, &target, &source, &balloon, &restored),
+            boxes,
+        } => finish_shell(wiring, world, &target, &source, &balloon, &restored, boxes),
         SwapFinish::Balloon { scopes } => finish_balloon(wiring, world, &target, scopes),
     }
     info!(
@@ -409,7 +411,8 @@ fn poll_replies(
     }
 }
 
-/// シェルの後始末（design「SwitchPhase」の完了の後始末・この順）: 配置の値を入れ直す → 重なりの
+/// シェルの後始末（design「SwitchPhase」の完了の後始末・この順）: 箱の束を文字の層へ渡す
+/// （areka-P0-shell-balloon）→ 配置の値を入れ直す → 重なりの
 /// 基底を置き直す → 実行系の今のシェルを書き換える → `LastShell` だけを書く → `OnShellChanged`。
 fn finish_shell(
     wiring: &mut Emo2Wiring,
@@ -418,7 +421,12 @@ fn finish_shell(
     source: &DescriptSource,
     balloon: &BalloonPlacementInputs,
     restored: &[(PersistKey, String)],
+    boxes: ShellBoxAssets,
 ) {
+    // 新しいシェルの箱の束を文字の層へ渡す（areka-P0-shell-balloon 要件 6.8）: 前の箱の面と
+    // 箱の文字を捨て、今のサーフェス番号を保ったまま行き先を新しい表で引き直す（`\s` を書かない
+    // 次の台詞が新しいシェルの同じ番号のサーフェスの箱へ入る）。
+    boxes.hand_to(&mut wiring.runtime.borrow_mut(), world);
     // 配置の解決は窓寸を入力に取るので、drain が置き換えで積んだ窓寸の報告をここで先に窓へ
     // 反映し、新しいシェルの寸法で解かせる（同じフレームの後段の照合は取り出し済みで何もしない）。
     reconcile_reported_sizes(&mut wiring.presenter, world);
@@ -476,11 +484,12 @@ fn finish_balloon(
     scopes: Vec<(u32, BalloonModel, (u8, u8, u8))>,
 ) {
     for (scope, model, background) in scopes {
-        // 文字の層は同じフレームの再追従が新しいスロットへ結び直す（そのとき背景色も焼き直る）。
-        wiring
-            .runtime
-            .borrow_mut()
-            .set_balloon_background(ActorKey::from(scope.to_string()), background);
+        // 文字の層は同じフレームの再追従が新しいスロットへ結び直す（そのとき背景色も焼き直り、
+        // 警告の名前の欄も新しいバルーンのフォルダ名になる・areka-P0-shell-balloon 要件 3.12）。
+        let actor = ActorKey::from(scope.to_string());
+        let mut runtime = wiring.runtime.borrow_mut();
+        runtime.set_balloon_label(&actor, target.folder.clone());
+        runtime.set_balloon_background(actor, background);
         wiring.balloon_models.insert(scope, model);
         wiring.balloon_visibility.forget_scope(scope);
     }
@@ -590,6 +599,7 @@ fn split(built: SwapBuilt, epoch: u64) -> (Targets, SerikoReplace, SwapFinish) {
                 source,
                 balloon,
                 restored,
+                boxes: assets.boxes,
             },
         ),
         SwapBuilt::Balloon { assets } => {

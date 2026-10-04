@@ -209,19 +209,6 @@ pub struct TextRegion {
     ignored_origin: (Option<f32>, Option<f32>),
 }
 
-/// 折返し基準が描画範囲の外に解決されたときの警告で、バルーン名の欄に載せる代替値。
-///
-/// 警告そのものを書くのは actor の登録口（`actor.rs` の `TextLayerRuntime::register_actor`）
-/// である。本層は値を提供するだけなので、欄の代替値は本 const を共有する
-/// （2 か所に別々の文字列を置くと、片方だけが直って静かに食い違う）。
-///
-/// `BalloonModel`（`areka-parsers` の balloon 集約ルート）は `descript.txt` の `name,` キーを
-/// **写像していない**——写像対象キーを列挙しているのは同 crate の balloon parse の
-/// `map_merged` であり、そこに `name` は無い（あるのは `font.name` で、これはフォント名で
-/// あってバルーン名ではない）。名前を読めるようになるまでは欄をこの値で埋める。欄ごと
-/// 落とさないのは、記録の無い経路を作らないためである（`.kiro/steering/logging.md`）。
-pub(crate) const BALLOON_NAME_PLACEHOLDER: &str = "(名前なし)";
-
 /// 行内軸の名前（横書き＝`"x"`・縦書き 2 方向＝`"y"`）——折返し警告の `axis` 欄の値。
 ///
 /// 軸の割り当ては [`TextRegion::resolve`] の折返し基準・遠辺の解決（正準表）と同じであり、

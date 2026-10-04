@@ -6,7 +6,8 @@ use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::ActorKey;
 use tracing::{debug, info, warn};
 
-use crate::region::{BALLOON_NAME_PLACEHOLDER, TextRegion, inline_axis_name};
+use crate::place::PlaceKey;
+use crate::region::{TextRegion, inline_axis_name};
 #[cfg(doc)]
 use crate::state::TextLayerState;
 
@@ -28,8 +29,9 @@ use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 /// 「読み込み（装着）1 回につき 1 件」という意味を持つのは actor の登録口である。ゆえに
 /// 解決からは粗さの記録を外し、記録は本関数が担う。文言と 4 つの欄（`balloon`・`axis`・
 /// `wrap_threshold`・`inline_limit`）は移動の前後で 1 文字も変えていない——実機走行の判定は
-/// この語を grep する（要件 14.3・手順書 §5.7）。バルーン名の代替値は解決側と同一の
-/// [`BALLOON_NAME_PLACEHOLDER`] を共有する。
+/// この語を grep する（要件 14.3・手順書 §5.7）。`balloon` の欄は場所の名前（普通のバルーンは
+/// 結線が入れた名前か `スコープ{番号}のバルーン`、箱は `balloon.*`ブレスの名前・shell-balloon
+/// 要件 3.11・3.12）で、呼び手が渡す。
 ///
 /// # 件数（要件 14.2）
 ///
@@ -41,15 +43,22 @@ use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 /// - binding だけが変わって領域が同値の再追従は、登録口に達しても **0 件**、
 /// - 領域の値が変わる再追従は **1 件**（新しい値で）。
 ///
+/// 箱の登録（`actor_box.rs` の `register_box`）は前の配置の入力を持たないので `None` を渡し、
+/// 箱の名前ごとに 1 度だけ呼ぶ。
+///
 /// 檻は `actor_region_warn_tests.rs`（装着 1 件・4 欄・3 回の同値再追従で 0 件・再構築するが
 /// 領域同値で 0 件・値の変わる再追従で 1 件・遠辺の内で 0 件・縦書きの軸欄）。
-fn warn_coarse_wrap_threshold(resolved: &ResolvedBalloonText, previous: Option<TextRegion>) {
+pub(super) fn warn_coarse_wrap_threshold(
+    balloon: &str,
+    resolved: &ResolvedBalloonText,
+    previous: Option<TextRegion>,
+) {
     let region = resolved.region;
     if region.wrap_threshold() <= region.inline_limit() || previous == Some(region) {
         return;
     }
     warn!(
-        balloon = BALLOON_NAME_PLACEHOLDER,
+        balloon,
         axis = inline_axis_name(resolved.mode),
         wrap_threshold = region.wrap_threshold(),
         inline_limit = region.inline_limit(),
@@ -80,16 +89,18 @@ impl TextLayerRuntime {
     ) {
         debug!(actor = %actor, slot = ?binding.slot, "actor の装着先（予約スロット）を登録した");
         // 前回の解決済み領域（未登録＝装着なら None＝「値が新しく決まった」側）と突き合わせる。
-        let previous = self.layout_input.get(&actor).map(|it| it.region);
-        warn_coarse_wrap_threshold(&resolved, previous);
-        decoration::warn_ignored_origin(&resolved, previous);
+        let place = PlaceKey::balloon(&actor);
+        let previous = self.layout_input.get(&place).map(|it| it.region);
+        let label = self.balloon_label_of(&actor);
+        warn_coarse_wrap_threshold(&label, &resolved, previous);
+        decoration::warn_ignored_origin(&label, &resolved, previous);
         // 2 層（既定・無効表示・選択肢文字色）を純粋状態へ差し込む唯一の点（要件 3.1／4.6）。
         // 装着も再追従もここへ合流するので、`\f[default]`／`\f[disable]` の戻し先は
         // 常に「今装着されているバルーン定義」で解決した値になる。
         self.state
             .set_look_layers(&actor, resolved.font.looks.clone());
-        self.routing.insert(actor.clone(), binding);
-        self.layout_input.insert(actor, resolved);
+        self.routing.insert(place.clone(), binding);
+        self.layout_input.insert(place, resolved);
     }
 
     /// 統合配線の一点口（R9.5・task 8）: `ActorKey → TargetId` 対応の解決結果
@@ -183,7 +194,8 @@ impl TextLayerRuntime {
         binding: TextSlotBinding,
         model: &BalloonModel,
     ) -> bool {
-        let Some(&current) = self.routing.get(actor) else {
+        let place = PlaceKey::balloon(actor);
+        let Some(&current) = self.routing.get(&place) else {
             // 未装着 actor（`text_slot_view` が None のまま等）——再構築すべき binding が無い。
             // 失敗ではなく「対象なし」の静穏 skip（装着は register_actor_view の領分・R4.6）。
             debug!(
@@ -208,7 +220,7 @@ impl TextLayerRuntime {
             binding.image_size,
             self.background_of(actor),
         );
-        if current == binding && self.layout_input.get(actor) == Some(&resolved) {
+        if current == binding && self.layout_input.get(&place) == Some(&resolved) {
             debug!(
                 actor = %actor,
                 k = k_new,
@@ -223,7 +235,7 @@ impl TextLayerRuntime {
         self.register_actor(actor.clone(), binding, resolved);
         // 描画資源だけを破棄する。次 present_frame の初回解決分岐が新しい k・面実寸の物理寸で
         // 再生成し、空の行 TextLayout キャッシュから保存済み状態を全再描画する（R4.3/R8.4）。
-        self.surfaces.remove(actor);
+        self.surfaces.remove(&place);
         info!(
             actor = %actor,
             k_old,
