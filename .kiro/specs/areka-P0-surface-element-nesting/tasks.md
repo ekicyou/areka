@@ -134,7 +134,7 @@
   - _Depends: 5.1, 5.2_
 
 - [ ] 7. 部品の時計をアニメのループへつなぐ
-- [ ] 7.1 (P) アニメの表に参照の表の写しと「動く部品が在るか」を持たせる
+- [x] 7.1 (P) アニメの表に参照の表の写しと「動く部品が在るか」を持たせる
   - `crates/areka-seriko/src/table.rs` の表に、参照の表の写しと、「部品になりうるサーフェス（子・着せ替えの pattern0 の先・採った animation のコマが指す 0 以上の番号）のうち、採った animation を 1 本でも持つものが在るか」の真偽を持たせる。構築・空の表・animation の列を引く口の署名は変えない
   - 部品で動く animation は、その番号を一番上に表示したときに動く animation の列をそのまま使う
   - 検体の surfaces.txt は `include_str!` で `crates/areka-emo-compose/tests/fixtures/surface-nesting/` から読む（design.md の「解決した」の節）
@@ -216,3 +216,4 @@
 - 5.2: 領域の持ち込みは根ごとに先祖をたどる（相互の循環 61↔62 は根 61 で 62 の領域を持ち込み、戻る辺だけを切る＝合成が描く範囲と同じ）。持ち込んだ写しの `Collision.index` は子の値のまま（今は本番で誰も読まない）。検体の親 0 では Eye が親の Head の下に隠れるので、点で当てる確かめは親 1・2 で行う。
 - 5.3: `BoxIssue` の網羅 `match` のため、`shell_target.rs` の `log_box_issue` に `InChildSurface` の枝（`warn!`・`shell:`・parent/child/name）を先に足した → 6.1 は記録のテストを足す。辺は (親, 子) の組で 1 本に数える。自分を指す辺（60→60）で箱を持つ面は `InChildSurface{60,60}` も出る（循環の警告と並ぶ・今の検体では出ない）。
 - 6.1: **範囲外（前から・完了時の棚卸へ）**: 配置の採寸（`placement/measure.rs`）も `load_shell_target` を別に呼ぶので、起動 1 回で読み込みの warn（脱落・箱・入れ子）が 2 度出うる。8.4 の実機の判定は「読み込み 1 回につき 1 度」で数える（起動 1 回で 2 行なら読み込みが 2 回）。
+- 7.1: `has_animated_parts` は実物の検体で claudia・konnoyayame・R_POST_and_KOMAINU が偽・emo2 だけ真。コマの先は描画メソッドで絞らず、自分自身を指すコマも候補から外さない（在れば速い経路を外れるだけで答えは同じ）。
