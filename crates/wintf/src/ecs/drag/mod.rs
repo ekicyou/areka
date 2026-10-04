@@ -11,7 +11,9 @@ mod dispatch;
 mod state;
 mod systems;
 
-pub use accumulator::{DragAccumulator, DragAccumulatorResource, DragTransition, FlushResult};
+pub use accumulator::{
+    DragAccumulator, DragAccumulatorResource, DragTransition, FlushResult, install_drag_accumulator,
+};
 pub use capture_guard::CaptureGuard;
 pub use context::{WindowDragContext, WindowDragContextResource};
 pub use dispatch::{
