@@ -1,12 +1,14 @@
 //! バルーンの表示の届け（areka-P0-status-execution-states 要件 4.1〜4.7・7.1・design「balloon の届け」）。
 //!
-//! 可視性の相の終わりに、表示層の照会 2 本（`target_visible`・`current_surface_id`）から
+//! フレームの終わり（提示の後）の届けの相で、表示層の照会 2 本（`target_visible`・`current_surface_id`）から
 //! 「見えているバルーンの組」を作り、最後に kanade へ送った組と違うときだけ置き場のゴーストの
 //! kanade へ `ExecutionState(Balloons(組))` を 1 件送る。表示の真実源は `EmoPresenter` のままで、
 //! 台帳が覚えるのは「最後に何を送ったか」「番号が取れない旨を警告済みの scope」「scope ごとに最後に
 //! 取れた番号（表示層の値の写し）」だけである。
-//! 台帳は `Emo2Wiring::balloon_status`（ゴーストごとに新品）にあり、可視性の相
-//! （`balloon_visibility_phase.rs`）が表示・非表示の発行の後に [`report_balloons`] を呼ぶ。
+//! 台帳は `Emo2Wiring::balloon_status`（ゴーストごとに新品）にあり、`emo2_frame_system` が提示の相の
+//! 直後に [`run_status_report_phase`] を呼ぶ。窓の可視（可視性の相が発行済み）と箱の写し（同じ
+//! フレームの提示で作り直し済み）がどちらもそのフレームの最終の姿になってから組を作るので、
+//! 届けは画面から遅れない（areka-P0-shell-balloon-frame-align 要件 2.3）。
 //!
 //! 箱に文字が出ているスコープ（文字の層の `shown_boxes` が空でない）も、普通のバルーンの窓が
 //! 見えているときと同じ形で組に載せる（areka-P0-shell-balloon 要件 5.5・5.6）。
@@ -20,6 +22,7 @@ use areka_sakura::ActorKey;
 use bevy_ecs::world::World;
 use tracing::{debug, error, warn};
 
+use super::Emo2Wiring;
 use crate::emo2_boot::target_map::balloon_target;
 use crate::ghost_session::GhostSlot;
 
@@ -74,10 +77,33 @@ pub(in crate::emo2_boot) fn collect_bindings(
     (bindings, surface_unknown)
 }
 
-/// 相の終わりに呼ぶ配線。照会（表示層 2 本＋文字の層の `shown_boxes`）→ 純関数 → 差分 →
+/// 届けの相。装着済みバルーンのスコープ（昇順）について照会 → 組 → 差分 → 送出 → 記録。
+///
+/// スコープの一覧は相の中で自分で作る（可視性の相の手元の一覧は使わない）。文字の層を借りられない
+/// フレームは誤りの段で 1 度だけ記録して届けを次のフレームへ回し、借りられたら記録の印を戻す。
+pub(in crate::emo2_boot) fn run_status_report_phase(wiring: &mut Emo2Wiring, world: &World) {
+    // `HashMap` の列挙順は不定なので、組の並びを決定論にするため昇順へ固定する。
+    let mut scopes: Vec<u32> = wiring.balloon_models.keys().copied().collect();
+    scopes.sort_unstable();
+    let ledger = &mut wiring.balloon_status;
+    let Ok(runtime) = wiring.runtime.try_borrow() else {
+        if !ledger.runtime_busy_logged {
+            ledger.runtime_busy_logged = true;
+            error!(
+                event = "balloon_status_runtime_busy",
+                "文字の層を借りられないので、バルーンの組を届けるのを次のフレームへ回す"
+            );
+        }
+        return;
+    };
+    ledger.runtime_busy_logged = false;
+    report_balloons(&wiring.presenter, &runtime, world, ledger, &scopes);
+}
+
+/// 照会の配線。照会（表示層 2 本＋文字の層の `shown_boxes`）→ 純関数 → 差分 →
 /// `GhostSlot` の kanade へ送出 → 記録。
 ///
-/// `scopes` は装着済みバルーンの scope 昇順（相が既に作る `scopes`）。`issue_actions` の後に呼ぶ。
+/// `scopes` は装着済みバルーンの scope 昇順（[`run_status_report_phase`] が作る）。
 pub(in crate::emo2_boot) fn report_balloons(
     presenter: &EmoPresenter,
     runtime: &TextLayerRuntime,

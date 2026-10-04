@@ -302,3 +302,51 @@ fn report_balloons_reads_the_presenter_and_drops_unattached_scopes() {
     assert_eq!(sent(&rx), vec![Vec::new()]);
     assert!(ledger.last_sent.is_empty());
 }
+
+// ---------------------------------------------------------------------------
+// ⑷ 届けの相（areka-P0-shell-balloon-frame-align design「届けの相と台帳」）
+// ---------------------------------------------------------------------------
+
+/// 文字の層を借りられないフレームは誤りの段で 1 度だけ記録して届けを次のフレームへ回し、
+/// 借りられたフレームで届けて記録の印を戻す（次に借りられなくなったらまた 1 度鳴る）。
+#[test]
+fn status_report_phase_defers_while_the_runtime_is_busy_and_logs_once_per_outage() {
+    use super::super::test_support::{headless_wiring_with, zero_clock};
+
+    let (world, rx) = world_with_ghost();
+    let mut wiring = headless_wiring_with(mpsc::channel().1, zero_clock());
+    // 装着済みバルーンの scope 0（表示層には未装着＝見えていない扱い）。前に送った組と違うので、
+    // 借りられたフレームでは空の組が届く。
+    wiring
+        .balloon_models
+        .insert(0, areka_parsers::balloon::parse_str("", None));
+    wiring.balloon_status.last_sent = vec![binding(0, 2)];
+    let runtime = std::rc::Rc::clone(wiring.runtime());
+
+    let (_, events) = capture_logs(|| {
+        let held = runtime.borrow_mut();
+        run_status_report_phase(&mut wiring, &world);
+        run_status_report_phase(&mut wiring, &world);
+        drop(held);
+    });
+    let busy = named(&events, "balloon_status_runtime_busy");
+    assert_eq!(busy.len(), 1, "借りられない旨は 1 行: {events:?}");
+    assert_eq!(busy[0].level, Level::ERROR);
+    assert!(sent(&rx).is_empty(), "借りられないフレームは届けない");
+    assert_eq!(wiring.balloon_status.last_sent, vec![binding(0, 2)]);
+
+    run_status_report_phase(&mut wiring, &world);
+    assert_eq!(sent(&rx), vec![Vec::new()], "借りられたフレームで届く");
+    assert!(!wiring.balloon_status.runtime_busy_logged);
+
+    let (_, events) = capture_logs(|| {
+        let held = runtime.borrow_mut();
+        run_status_report_phase(&mut wiring, &world);
+        drop(held);
+    });
+    assert_eq!(
+        named(&events, "balloon_status_runtime_busy").len(),
+        1,
+        "印を戻した後の次の縮退でまた 1 行: {events:?}"
+    );
+}

@@ -39,7 +39,7 @@ use crate::input_events::balloon::BalloonWiring;
 use crate::input_events::shell_box::{ShellBoxHover, settle_box_hover};
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
-use super::super::frame::{Emo2Wiring, resolve_talk_time, status_report};
+use super::super::frame::{Emo2Wiring, resolve_talk_time};
 use super::super::target_map::balloon_target;
 use super::{
     BalloonVisibilityState, GlyphObservation, ScopeObservation, TalkLifecycleSignal,
@@ -75,7 +75,6 @@ pub(in crate::emo2_boot) fn run_balloon_visibility_phase(
         presenter,
         lifecycle_rx,
         balloon_visibility: state,
-        balloon_status,
         balloon_models,
         clock,
         ..
@@ -127,13 +126,6 @@ pub(in crate::emo2_boot) fn run_balloon_visibility_phase(
         &decision.actions,
     );
     hidden.extend(issued.hidden.iter().copied());
-
-    // 本フレームの表示・非表示が照会に反映された後で、見えている組の差分を kanade へ届ける
-    // （判断は持たない・areka-P0-status-execution-states 要件 4.1／4.5）。
-    // 借りられないフレームは `borrow_runtime` が誤りを 1 回記録し、届けを次のフレームへ回す。
-    if let Some(runtime) = borrow_runtime(&runtime, state) {
-        status_report::report_balloons(presenter, &runtime, world, balloon_status, &scopes);
-    }
 
     emit_visibility_logs(&decision.logs, &issued.not_shown);
     clear_hover_residency(world, &hidden);
