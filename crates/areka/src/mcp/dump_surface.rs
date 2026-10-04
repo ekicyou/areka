@@ -16,8 +16,6 @@ use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::target_map::shell_target;
 use judge::SurfacePlan;
 
-// `judge_balloon`・`balloon_text` の呼び手は `dump_balloon`（次の配線）。生えるまで未使用の警告を抑える。
-#[allow(dead_code)]
 #[path = "dump_surface_judge.rs"]
 pub(in crate::mcp) mod judge;
 
