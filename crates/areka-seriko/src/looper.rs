@@ -33,6 +33,7 @@ use areka_emo_compose::PatternFrame;
 use areka_sakura::ActorKey;
 
 use crate::output::DisplayCommand;
+use crate::parts::PartClocks;
 use crate::state::{PatternApplyOutcome, ScopeStates, Slot};
 use crate::table::{AnimationTable, LoopFrame, LoopTrigger};
 use crate::timeline::{FrameStatus, LoopRng, LotteryBoundary, frame_at, seeded_rng, should_fire};
@@ -100,6 +101,9 @@ pub(crate) struct LoopRuntime {
     /// `-1` 以外の負 surface に対する warn! を (scope, slot, anim id) ごとに 1 回だけ発火するための記録
     /// （初回のみ warn!・要件 8.2）。
     warned_negative: HashSet<(ActorKey, Slot, u32)>,
+    /// 部品の時計（spec: areka-P0-surface-element-nesting・シェル面だけ）。シェルの表が
+    /// [`AnimationTable::has_animated_parts`] で偽なら 1 度も触らない（要件 7.2・7.3）。
+    parts: PartClocks,
 }
 
 /// 固定消費順のための slot ランク（Shell を Balloon より前に置く・D-7）。
@@ -148,6 +152,7 @@ impl LoopRuntime {
             playback: HashMap::new(),
             last_seen: None,
             warned_negative: HashSet::new(),
+            parts: PartClocks::default(),
         }
     }
 
@@ -160,6 +165,13 @@ impl LoopRuntime {
     /// [`PatternState`] を組む（`Pending`→エントリ除去＝再発火残留の即時クリア・`Active`/`FinishedResidual`
     /// →コマ搬送・`Stopped`→除去＋playback 除去・`FinishedResidual`→コマ残留のまま playback 除去）。
     /// (4) slot ごとに `commit_pattern` し `Changed` を集約。
+    ///
+    /// 部品（spec: areka-P0-surface-element-nesting 要件 5.1・7.2・7.3）: シェルの表が
+    /// [`AnimationTable::has_animated_parts`] で真のときだけ、シェル面の (3) の後に
+    /// [`PartClocks::advance`] で部品の欄を作り直してから (4) を 1 回行う。部品の抽選は一番上の抽選
+    /// （全スコープぶん）の後に、スコープの昇順 → 繰り返しの回 → 部品の番号 → animation の番号の順で
+    /// 引く。一番上の再生が無い slot は、見える部品に動くものが在るときだけ通す。偽の表と
+    /// バルーン面は今までの経路のまま。
     pub(crate) fn on_tick(&mut self, now_ms: u64, states: &mut ScopeStates) -> Vec<DisplayCommand> {
         // (1) 単調性ガード（防御・実クロックでは非発生）。非単調 tick は状態を変えず無発行。
         if let Some(last) = self.last_seen {
@@ -188,6 +200,7 @@ impl LoopRuntime {
             config,
             playback,
             warned_negative,
+            parts,
             ..
         } = self;
         let SerikoLoopConfig {
@@ -198,6 +211,8 @@ impl LoopRuntime {
         // 不在 scope へ貸す空表（抽選対象ゼロ・乱数非消費・panic なし＝`disabled()` と同じ不活性・
         // 要件 5.6）。`BTreeMap::new()` は確保を伴わないため tick ごとの構築コストは無い。
         let empty_balloon_table = AnimationTable::empty();
+        // 部品の経路を通す表か（偽なら以下で部品の行を 1 つも通らない・要件 7.2・7.3）。
+        let parts_on = shell_table.has_animated_parts();
 
         // 表示中 slot を列挙し、固定消費順（scope 昇順→Shell→Balloon）へ整列する（D-7）。
         let mut shown = states.shown_slots();
@@ -259,13 +274,23 @@ impl LoopRuntime {
             }
         }
 
-        // (3)+(4) 進行と commit（表示中 slot のうち再生中エントリを持つものだけ）。
+        // (3)+(4) 進行と commit（表示中 slot のうち再生中エントリを持つもの・部品の経路では動く部品が見えるものだけ）。
         let mut commands = Vec::new();
         for (scope, slot, sid) in &shown {
             let key = (scope.clone(), *slot);
             // 再生中エントリを持たない slot（Idle/IdleResidual のみ）は残留を保ったまま無評価・無発行。
             let has_playback = playback.get(&key).is_some_and(|pb| !pb.is_empty());
-            if !has_playback {
+            let with_parts = parts_on && *slot == Slot::Shell;
+            // 一番上の再生が無くても、見える部品に動くものが在れば部品の時計を進める。
+            if !has_playback
+                && !(with_parts
+                    && parts.moving_visible(
+                        *sid,
+                        states.current_binds(scope),
+                        shell_table,
+                        states.current_pattern(scope, *slot),
+                    ))
+            {
                 continue;
             }
             let table: &AnimationTable = match slot {
@@ -390,6 +415,20 @@ impl LoopRuntime {
                 playback.remove(&key);
             }
 
+            // 部品: 一番上の進行を済ませた絵で部品の欄を作り直す（一番上の抽選は全スコープぶん済み）。
+            if with_parts {
+                parts.advance(
+                    scope,
+                    *sid,
+                    states.current_binds(scope),
+                    shell_table,
+                    now_ms,
+                    crossed,
+                    rng,
+                    &mut new_pattern,
+                );
+            }
+
             // (4) 差分反映: 変化した slot のみ指令を返す（Unchanged は無発行・要件 6.2）。
             if let PatternApplyOutcome::Changed(cmd) =
                 states.commit_pattern(scope, *slot, new_pattern)
@@ -419,6 +458,51 @@ impl LoopRuntime {
     pub(crate) fn replace_shell_table(&mut self, table: AnimationTable) {
         self.config.shell_table = table;
         self.forget_slot_kind(Slot::Shell);
+        // 部品の時計もシェルの表の差し替えでだけ捨てる（spec: areka-P0-surface-element-nesting 要件 5.8）。
+        self.parts.clear();
+    }
+
+    /// 面の切り替え・着せ替えの変化の直後に呼ぶ（spec: areka-P0-surface-element-nesting 要件 5.6）。
+    ///
+    /// 動く部品の在る表で、`scope` のシェル面が表示中のときだけ、保持している [`PatternState`] の写しの
+    /// 部品の欄を直前の刻みの時刻のコマで作り直し（[`PartClocks::peek`]・時計も乱数も触らない）、
+    /// `commit_pattern` が変化を返したらその `Show` を返す。時計は刻みの `advance` でだけ生まれるので、
+    /// 刻みが 1 度も来ていなければ時計が無く、部品のコマも無い。
+    ///
+    /// [`PatternState`]: areka_emo_compose::PatternState
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "tasks.md 7.5 で actor の切り替え・着せ替えの変化からつなぐまで本番から呼ばれない"
+        )
+    )]
+    pub(crate) fn refresh_parts(
+        &mut self,
+        scope: &ActorKey,
+        states: &mut ScopeStates,
+    ) -> Option<DisplayCommand> {
+        let table = &self.config.shell_table;
+        if !table.has_animated_parts() {
+            return None;
+        }
+        let (_, _, sid) = states
+            .shown_slots()
+            .into_iter()
+            .find(|(s, slot, _)| s == scope && *slot == Slot::Shell)?;
+        let mut pattern = states.current_pattern(scope, Slot::Shell).clone();
+        self.parts.peek(
+            scope,
+            sid,
+            states.current_binds(scope),
+            table,
+            self.last_seen.unwrap_or(0),
+            &mut pattern,
+        );
+        match states.commit_pattern(scope, Slot::Shell, pattern) {
+            PatternApplyOutcome::Changed(cmd) => Some(cmd),
+            PatternApplyOutcome::Unchanged => None,
+        }
     }
 
     /// バルーンの表の差し替え（spec: areka-P0-shell-balloon-switch 要件 3.5）。
@@ -440,6 +524,9 @@ impl LoopRuntime {
 #[cfg(test)]
 #[path = "looper_parts_emo2_tests.rs"]
 mod parts_emo2_tests;
+#[cfg(test)]
+#[path = "looper_parts_tests.rs"]
+mod parts_tests;
 #[cfg(test)]
 #[path = "looper_replace_tests.rs"]
 mod replace_tests;

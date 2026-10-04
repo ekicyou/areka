@@ -294,6 +294,26 @@ impl PartClocks {
         );
     }
 
+    /// 一番上の再生が無い刻みで部品の経路を通すか: `pattern` の絵に見える部品に、動く animation を
+    /// 持つものが在るか（作業用の列を使い回す・design.md「Performance & Scalability」）。
+    ///
+    /// 保持している部品の欄に載る番号は見える部品に含まれ（design.md「Data Models」の不変条件）、
+    /// 欄のコマはその部品の animation のコマなので、「部品の欄が空でない」もこの判定に含まれる。
+    pub(crate) fn moving_visible(
+        &mut self,
+        surface_id: u32,
+        binds: &BindSet,
+        table: &AnimationTable,
+        pattern: &PatternState,
+    ) -> bool {
+        table
+            .nest_table()
+            .visible_parts(surface_id, binds, pattern, &mut self.visible);
+        self.visible
+            .iter()
+            .any(|&p| !table.animations(p).is_empty())
+    }
+
     /// 全スコープの時計と、負の番号の `warn!` の記録を捨てる（シェルの表の差し替え・要件 5.8）。
     pub(crate) fn clear(&mut self) {
         self.clocks.clear();
@@ -304,6 +324,13 @@ impl PartClocks {
     #[cfg(test)]
     pub(crate) fn clock(&self, scope: &ActorKey, part: u32, animation_id: u32) -> Option<PartAnim> {
         self.clocks.get(scope)?.get(&(part, animation_id)).copied()
+    }
+
+    /// 最後の `clear` の後（または作ってから）`advance` がどのスコープでも 1 度も走っていないか
+    /// （テストの観測用・`advance` はスコープの入れ物を先に作る）。
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.clocks.is_empty()
     }
 }
 
