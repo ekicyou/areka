@@ -60,6 +60,7 @@ fn empty_assets() -> BootAssets {
         },
         shell_author_dpi: 96,
         balloon_author_dpi: 96,
+        boxes: crate::emo2_boot::shell_box_assets::ShellBoxAssets::default(),
     }
 }
 
@@ -656,6 +657,9 @@ fn hide_touches_only_the_balloon_target() {
         issue_actions(
             &mut presenter,
             &mut world,
+            &Rc::new(RefCell::new(TextLayerRuntime::new(
+                TextLayerConfig::default(),
+            ))),
             &mut state,
             &observations,
             &[VisibilityAction::HideScopes {

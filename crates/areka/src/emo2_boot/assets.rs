@@ -11,7 +11,7 @@
 //! `default_bind_ids` は tasks.md task 2.3 で実装済み。`build_boot_assets` の骨格は残り、
 //! 実装は tasks.md task 2.6 が担う。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use areka_emo_atlas::{AtlasTable, WicDecoderArm};
@@ -33,6 +33,7 @@ use tracing::error;
 
 use super::BootWiringError;
 use super::balloon_background;
+use super::shell_box_assets::{ShellBoxAssets, box_font_search_dirs};
 
 /// shell descript KV から `default==1` の bindgroup id を抽出する純関数（DD-8・ukadoc 正典）。
 ///
@@ -128,6 +129,8 @@ pub struct BalloonScopeAssets {
     /// `connect_balloon_text_hands_the_background_over_before_attaching` が見張る）。
     /// 導出そのものは `assets_tests.rs` の emo2 fixture テストが固定している。
     pub background_color: (u8, u8, u8),
+    /// 普通のバルーンの名前（バルーンのフォルダ名・警告の名前の欄に出す・areka-P0-shell-balloon 要件 3.12）。
+    pub name: String,
 }
 
 /// SERIKO ループ表の一括（シェル面 1 表＋バルーン面の scope 別表・design「結線・資産・実機経路
@@ -206,6 +209,8 @@ pub struct BootAssets {
     ///
     /// シェルとは別パッケージ・別キーゆえ独立に保持する（両者が異なる宣言値を持ち得る）。
     pub balloon_author_dpi: u16,
+    /// 箱の束（装着の相が文字の層へ渡す・areka-P0-shell-balloon「箱の束の結線」）。
+    pub boxes: ShellBoxAssets,
 }
 
 /// 構築入力（[`BootAssets`]）を一括組立する（tasks.md task 2.6・design「構築入力 / assets」）。
@@ -299,6 +304,7 @@ pub fn build_boot_assets_with_shell(
         // 作者基準 DPI は呼び手が読んだ値の素通し搬送（解釈・再読取・既定差し替えをしない）。
         shell_author_dpi: shell_assets.author_dpi,
         balloon_author_dpi: balloon_assets.author_dpi,
+        boxes: shell_assets.boxes,
     })
 }
 
@@ -323,6 +329,8 @@ pub struct ShellAssets {
     /// 起動（[`build_boot_assets_with_shell`]）は読まずに今日どおり読み飛ばして続ける。切替は
     /// 空でなければ差し替えの前の失敗にする（areka-P0-shell-balloon-switch 要件 5.5・5.6）。
     pub bake_failures: Vec<String>,
+    /// 箱の束（置き場所の表・別名の写し・面の表の番号・フォントを探す場所の順）。
+    pub boxes: ShellBoxAssets,
 }
 
 /// バルーンの側だけの資産（[`build_balloon_assets`] の戻り値・[`BootAssets`] のバルーンの欄の一括）。
@@ -391,10 +399,12 @@ pub fn build_shell_assets(
     // scope 非依存ゆえ最初に組んだ World から一度だけ採る。
     let mut shells = Vec::with_capacity(scopes.len());
     let mut resolver_snapshot: Option<BTreeMap<String, Vec<u32>>> = None;
+    let mut surface_ids = BTreeSet::new();
     for &scope in scopes {
         let emo_world = target.build_world();
         if resolver_snapshot.is_none() {
             resolver_snapshot = Some(emo_world.alias_snapshot());
+            surface_ids = emo_world.surface_ids().collect();
         }
         let initial_surface_id = if scope == 0 {
             0
@@ -409,7 +419,15 @@ pub fn build_shell_assets(
         });
     }
     // scopes が空でも resolver は必ず構築する（空 alias 表＝解決なし・degenerate 許容）。
-    let resolver = SurfaceResolver::new(resolver_snapshot.unwrap_or_default());
+    let aliases = resolver_snapshot.unwrap_or_default();
+    // 箱の束は同じ別名の写しと面の表の番号から組む（seriko と文字の層が同じ解決を使う）。
+    let boxes = ShellBoxAssets {
+        layout: target.boxes().clone(),
+        aliases: aliases.clone(),
+        surface_ids,
+        font_dirs: box_font_search_dirs(&shell_dir, &model.shiori.dir),
+    };
+    let resolver = SurfaceResolver::new(aliases);
 
     // static bindset: shell descript KV → default_bind_ids（DD-8・task 2.3）→ build_static_bindset。
     let descript_path = shell_dir.join(DESCRIPT_TXT);
@@ -441,6 +459,7 @@ pub fn build_shell_assets(
         loop_table,
         author_dpi,
         bake_failures,
+        boxes,
     })
 }
 
@@ -468,6 +487,11 @@ pub fn build_balloon_assets(
     // されるためで（消費タイミングが交差する）、並行構造の `LoopTables.balloon` 側で保持する。
     let mut balloons = Vec::with_capacity(scopes.len());
     let mut balloon_tables: BTreeMap<u32, AnimationTable> = BTreeMap::new();
+    // 普通のバルーンの名前＝バルーンのフォルダ名（名前の無い根なら道のりそのもの・要件 3.12）。
+    let name = balloon_root.file_name().map_or_else(
+        || balloon_root.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    );
     for &scope in scopes {
         let faces = resolve_balloon_faces(balloon_root, scope)?;
         let (emo_world, atlas) = build_balloon_target_from_faces(balloon_root, decoder, &faces)?;
@@ -495,6 +519,7 @@ pub fn build_balloon_assets(
             atlas,
             model,
             background_color,
+            name: name.clone(),
         });
     }
 

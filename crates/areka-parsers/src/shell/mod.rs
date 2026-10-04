@@ -36,9 +36,19 @@ mod parse_tests;
 #[cfg(test)]
 mod validation_tests;
 
+// 箱の転記（areka-P0-shell-balloon）: 画像の読み手とは別に、同じ文面から箱に関わる行だけを
+// 原文のまま並べる。`decode::parse_targets` を見出しの読み取りとして共用する。
+mod boxes;
+
+#[cfg(test)]
+mod boxes_tests;
+
 // 公開面一点集約（要件 11.1）: 下流は本モジュールからの import のみで
 // モデル型と公開 facade を消費でき、内部の model/lexer/decode/parse 分割へ
 // 直接依存しない。依存方向 `model ← lexer ← decode ← parse` は不変。
+pub use boxes::{
+    BoxBrace, BoxDefinition, BoxElementLine, BoxSurfaceLines, ShellBoxes, parse_boxes,
+};
 pub use model::{
     AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element,
     ElementPath, Interval, Pattern, Shell, SortOrder, Surface, SurfaceAlias, SurfaceAppend,

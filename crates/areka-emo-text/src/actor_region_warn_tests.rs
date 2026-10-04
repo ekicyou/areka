@@ -53,6 +53,7 @@ use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::spawn_reserved_slot;
 use super::{TextLayerRuntime, TextSlotBinding};
+use crate::place::PlaceKey;
 use crate::region::TextRegion;
 use crate::state::TextLayerConfig;
 use crate::writing::WritingMode;
@@ -174,12 +175,11 @@ fn assert_coarse_warning(warn: &CapturedEvent, axis: &str, wrap_threshold: f32, 
     assert_eq!(warn.field_str("axis"), Some(axis), "行内軸の欄");
     assert_eq!(number_field(warn, "wrap_threshold"), wrap_threshold);
     assert_eq!(number_field(warn, "inline_limit"), inline_limit);
-    let balloon = warn
-        .field_str("balloon")
-        .expect("欄 balloon が警告に載っていない");
-    assert!(
-        !balloon.is_empty(),
-        "バルーン名の欄を空にしてはならない（名前が無いときもプレースホルダで記録する）"
+    // 折返しの警告を見る呼出側はどれも相方（スコープ 1）で、名前を入れていない（要件 3.12）。
+    assert_eq!(
+        warn.field_str("balloon"),
+        Some("スコープ1のバルーン"),
+        "名前を入れていないバルーンの名前の欄はスコープから導く（要件 3.12）"
     );
 }
 
@@ -347,7 +347,9 @@ fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn() {
         "k と物理寸が変われば再追従は起きる（前提の確認——登録口には達している）"
     );
     assert_eq!(
-        rt.layout_input[&actor].region.wrap_threshold(),
+        rt.layout_input[&PlaceKey::balloon(&actor)]
+            .region
+            .wrap_threshold(),
         KERO_WRAP_X,
         "前提: 領域の値は据え置き"
     );
@@ -482,10 +484,13 @@ fn assert_ignored_origin_warning(
         corner,
         "実際に用いた書き始めの角の欄"
     );
-    assert_eq!(
-        warn.field_str("balloon"),
-        Some("(名前なし)"),
-        "バルーン名の欄は名前が無いときも空にせず代替値を載せる（要件 3.3）"
+    // 呼出側は本体（スコープ 0）か相方（スコープ 1）で、名前を入れていない（要件 3.12）。
+    assert!(
+        matches!(
+            warn.field_str("balloon"),
+            Some("スコープ0のバルーン" | "スコープ1のバルーン")
+        ),
+        "名前を入れていないバルーンの名前の欄はスコープから導く（要件 3.12）: {warn:?}"
     );
 }
 
@@ -642,7 +647,7 @@ fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn_about_origin() 
         binding(slot, window, SAKURA_IMAGE),
         &merged_with_origin(ORIGIN_BOTH_OUTSIDE, SAKURA_OVERLAY),
     );
-    let before = rt.layout_input[&actor].region;
+    let before = rt.layout_input[&PlaceKey::balloon(&actor)].region;
 
     // image 原寸は据え置き（＝領域は同値）で k と物理寸だけを変える。
     let scaled = TextSlotBinding::new(slot, window, 2.0, (800, 448), SAKURA_IMAGE);
@@ -663,7 +668,8 @@ fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn_about_origin() 
         "k と物理寸が変われば再追従は起きる（前提の確認——登録口には達している）"
     );
     assert_eq!(
-        rt.layout_input[&actor].region, before,
+        rt.layout_input[&PlaceKey::balloon(&actor)].region,
+        before,
         "前提: 領域の値は据え置き"
     );
     assert_eq!(
@@ -843,4 +849,46 @@ fn ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning() {
         "折返しの警告は相方の別警告に影響されず 1 件のまま: {warns:?}"
     );
     assert_coarse_warning(coarse[0], "x", KERO_WRAP_X, KERO_RIGHT);
+}
+
+// ── shell-balloon 要件 3.12: 名前の欄は結線が入れた名前・未設定はスコープから導く ──
+
+/// 結線が名前（バルーンのフォルダ名）を入れたスコープは、2 つの警告の名前の欄にその名前を出す。
+/// 入れていないスコープは `スコープ{番号}のバルーン` のまま（名前はスコープごと）。
+#[test]
+fn warnings_carry_the_balloon_label_set_by_the_wiring() {
+    let mut world = World::new();
+    let (mut rt, window, slot) = runtime_with_slot(&mut world);
+    let labelled = ActorKey::from("1");
+    let unlabelled = ActorKey::from("0");
+    rt.set_balloon_label(&labelled, "kakukaku".to_owned());
+
+    let (_, warns, errors) = capturing(|| {
+        rt.register_actor_binding(
+            labelled.clone(),
+            binding(slot, window, KERO_IMAGE),
+            &merged_with_origin(ORIGIN_BOTH_OUTSIDE, KERO_OVERLAY),
+        );
+        rt.register_actor_binding(
+            unlabelled.clone(),
+            binding(slot, window, KERO_IMAGE),
+            &merged(KERO_OVERLAY),
+        );
+    });
+
+    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
+    let names: Vec<(&str, Option<&str>)> = warns
+        .iter()
+        .map(|w| (w.message(), w.field_str("balloon")))
+        .collect();
+    assert_eq!(
+        names,
+        vec![
+            (WARN_MESSAGE, Some("kakukaku")),
+            (IGNORED_ORIGIN_MESSAGE, Some("kakukaku")),
+            (IGNORED_ORIGIN_MESSAGE, Some("kakukaku")),
+            (WARN_MESSAGE, Some("スコープ0のバルーン")),
+        ],
+        "名前を入れたスコープは入れた名前・入れていないスコープはスコープから導く"
+    );
 }

@@ -43,6 +43,10 @@ pub use world::{AliasMap, AtlasBinding, EmoWorld, ShellSettings, SurfaceId, Surf
 pub mod atlas_bind;
 pub mod base_image;
 pub use base_image::{BaseImageReport, SurfaceImages};
+pub mod boxes;
+pub use boxes::{
+    BoxDef, BoxIssue, BoxLayout, BoxName, BoxPlacement, BoxReport, FontFollow, fold_boxes,
+};
 pub mod fold;
 pub mod plan;
 pub use plan::BlitOp;

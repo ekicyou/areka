@@ -73,10 +73,17 @@ use super::{
 /// 続き、`Show` で `applied` が跳ねた次の走査が再追従する。
 ///
 /// [`BalloonModel`] は attach 時に記憶した per-scope の同一モデルを再利用する（再パースしない・
-/// D11-3）。actor は attach と同一写像 `ActorKey::from(scope.to_string())`。shell target は emo2 で
-/// 文字スロットを持たないため走査対象に入らない（`balloon_models` が balloon 装着 scope のみを持つ）。
-/// panic しない。
-pub fn run_text_scale_phase(wiring: &mut Emo2Wiring) -> Vec<u32> {
+/// D11-3）。actor は attach と同一写像 `ActorKey::from(scope.to_string())`。走査するのは
+/// `balloon_models` の持つ装着済みの scope である。panic しない。
+///
+/// # 箱の同期（areka-P0-shell-balloon 要件 3.5・6.8・design.md「箱の束の結線」）
+///
+/// 同じ走査で各 scope のシェルの窓の `text_slot_view(shell_target(scope))` を集め、最後に
+/// [`TextLayerRuntime::sync_boxes`] を 1 回呼ぶ（拡大率・サーフェス・シェルの切替に箱の面を合わせる）。
+/// シェルの窓が未確立の scope は `None` を渡す（最初の `\s` までは箱を面にしない）。未確立は
+/// 起動直後の正常な状態ゆえ記録しない（毎フレーム鳴らさない）。`present_frame` の上流なので、
+/// 合わせた登録は同じフレームの描画に効く。
+pub fn run_text_scale_phase(wiring: &mut Emo2Wiring, world: &mut World) -> Vec<u32> {
     // presenter（view 供給）／runtime（適用先）／balloon_models（再利用モデル）／warn ガードは
     // 互いに素なフィールドゆえ同時に借りられる。
     let Emo2Wiring {
@@ -92,11 +99,14 @@ pub fn run_text_scale_phase(wiring: &mut Emo2Wiring) -> Vec<u32> {
     let mut scopes: Vec<u32> = balloon_models.keys().copied().collect();
     scopes.sort_unstable();
 
+    let mut shell_views = Vec::with_capacity(scopes.len());
     for scope in scopes {
         let target = balloon_target(scope);
         // actor 引き当ては attach（`run_attach_phase` の `connect_balloon_text` 呼び）と**同一の写像**。
         // 別式で組むと存在しない actor を指し、7.1 の未登録 skip で静かに何も起きなくなる。
         let actor = ActorKey::from(scope.to_string());
+        // 箱の同期の材料（シェルの窓が未確立なら None）。バルーンの縮退 skip より前に集める。
+        shell_views.push((actor.clone(), presenter.text_slot_view(shell_target(scope))));
         let Some(view) = presenter.text_slot_view(target) else {
             // 表示未確立（初回 ShowSurface が成立していない）。毎フレーム走査ゆえ scope ごとに 1 回だけ鳴らす。
             if text_scale_warned.insert(scope) {
@@ -120,6 +130,7 @@ pub fn run_text_scale_phase(wiring: &mut Emo2Wiring) -> Vec<u32> {
             refreshed.push(scope);
         }
     }
+    runtime.borrow_mut().sync_boxes(world, &shell_views);
     refreshed
 }
 

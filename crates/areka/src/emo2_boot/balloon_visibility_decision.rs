@@ -75,6 +75,26 @@ pub(crate) fn decide(
     VisibilityDecision { actions, logs }
 }
 
+/// 隠す発行が箱（シェル内バルーン）の文字にも届くかを決める（areka-P0-shell-balloon 要件 6.10）。
+///
+/// - 文字が 0 に落ちたことによる非表示（`Clear`）は窓だけ——箱のあるサーフェスへ切り替えて
+///   普通のバルーンの文字が 0 になっても、箱の文字は出し続ける（要件 5.1）。
+/// - 時間切れ（`Timeout`）は窓と箱の両方。
+/// - 利用者の中断（`UserBreak`）は、中断の掛け金が掛かったままなら箱も。同じ巡に次の台詞の
+///   始まりが届いて掛け金が解けていれば、箱の文字は新しい台詞のものなので隠さない。
+///
+/// `break_latch` は信号を畳み込んだ後の値（`BalloonVisibilityState::break_latch`）を渡す。
+/// 表示の契機（`Content`）と判断中核が作らない契機（`Explicit`）は隠す発行ではないので偽。
+pub(super) fn hide_reaches_boxes(trigger: VisibilityTrigger, break_latch: bool) -> bool {
+    match trigger {
+        VisibilityTrigger::Timeout => true,
+        VisibilityTrigger::UserBreak => break_latch,
+        VisibilityTrigger::Clear | VisibilityTrigger::Content | VisibilityTrigger::Explicit => {
+            false
+        }
+    }
+}
+
 /// 表示ライフサイクル信号を会話単位の状態へ畳み込み、**本フレームに利用者の中断があったか**を
 /// 返す（Requirements 4.1 / 4.5・areka-P0-balloon-break 要件 4.1 / 4.7）。
 ///
@@ -143,9 +163,10 @@ fn apply_lifecycle_signals(
 
 /// 利用者の中断で非表示にする scope を返す（areka-P0-balloon-break 要件 4.1 / 4.2 / 4.3）。
 ///
-/// 対象は**現に出ているバルーンすべて**で、中断の合図が起きた scope だけではない。既に隠れて
-/// いる scope は載せない（隠す指示を重ねて出さない）。抑止（ドラッグ・ポインタの滞在・選択肢の
-/// 表示中）は**見ない**——抑止はタイムアウトだけの規則であり、ダブルクリックした利用者は必ず
+/// 対象は**現に出ているバルーンすべて**で、中断の合図が起きた scope だけではない。窓が
+/// 見えている scope に加え、箱に文字が出ている scope も載せる（areka-P0-shell-balloon
+/// 要件 6.10）。どちらも出ていない scope は載せない（隠す指示を重ねて出さない）。
+/// 抑止（ドラッグ・ポインタの滞在・選択肢の表示中）は**見ない**——抑止はタイムアウトだけの規則であり、ダブルクリックした利用者は必ず
 /// バルーンの上に居るためである。
 fn decide_user_break(
     state: &mut BalloonVisibilityState,
@@ -159,7 +180,7 @@ fn decide_user_break(
 
     let mut hidden: Vec<u32> = Vec::new();
     for (&scope, observed) in &obs.scopes {
-        if !observed.visible {
+        if !observed.visible && !observed.box_showing {
             continue;
         }
         // 初見の scope でも遷移は成立する（装着直後に外から出ているバルーンを隠す形）。

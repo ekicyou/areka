@@ -14,8 +14,8 @@
 //! 表示指令発行までは単一関数 [`emit_display`] に集約され、後続の時間駆動ループ（`seriko-loop`）が
 //! 同じ発行点を再利用できる（5.3）。broadcast（D4）で seriko は全 cue を受け取るため、担当外
 //! （非 Shell）・純粋 Wait の受信は「正常な担当外受信」＝良性 `debug!`＋skip（action を無視し
-//! duration を honor・R2.2/2.3/5.4）、破損入力（Unresolved/Invalid=`error!`／NameForm/EntityRef=
-//! `warn!`）のみが真の異常。いずれもループは継続する。停止は Close 受領・全 Sender drop の 2 経路（1.4）。
+//! duration を honor・R2.2/2.3/5.4）、名前形バルーン key（NameForm）は文字の層が読むので `debug!`＋skip、
+//! 破損入力（Unresolved/Invalid=`error!`／EntityRef=`warn!`）のみが真の異常。いずれもループは継続する。停止は Close 受領・全 Sender drop の 2 経路（1.4）。
 //!
 //! # 結線契約（受け口＝単一の出力契約）
 //!
@@ -226,7 +226,8 @@ fn emit_display<O: SurfaceOutput>(out: &mut O, command: DisplayCommand) {
 /// # 失敗経路・担当外受信（6.1/6.2/6.3/6.4）
 ///
 /// 真の異常——解決不能（[`SurfaceTarget::Unresolved`]）・破損バルーン数値（`Invalid`）は
-/// `error!`＋skip、名前形バルーン key（`NameForm`）・防御枝 `EntityRef` は `warn!`＋skip。
+/// `error!`＋skip、防御枝 `EntityRef` は `warn!`＋skip。名前形バルーン key（`NameForm`）は文字の層が
+/// 読むので `debug!`＋skip。
 /// 対して broadcast の担当外受信——非 Shell（Balloon 系）・純粋 Wait は「正常経路」ゆえ良性
 /// `debug!`＋skip（action 無視・duration honor・新ローカル遅延なし・R2.2/2.3/5.4）。いずれも
 /// ループを殺さず継続する（silent failure 禁止・入力起因では panic しない）。
@@ -374,7 +375,7 @@ fn handle_message<O: SurfaceOutput>(
     // 受信」——action を無視しつつ duration を honor（seriko は自前 reveal/timeline を持たず
     // タイミングは焼き込み絶対時刻が担うので、skip が新ローカル遅延を生まない＝否定的 no-op）。
     // ゆえに良性 debug!＋skip（warn/error でない・実害ない水準・R2.2/2.3/5.4）。genuine anomaly
-    // （Unresolved/Invalid=error!／NameForm/EntityRef=warn!）は下流で severity を維持する。
+    // （Unresolved/Invalid=error!／EntityRef=warn!）は下流で severity を維持する。
     match cue_target_of(&cue.command) {
         Some(CueTarget::Shell) => {}
         Some(other) => {
@@ -557,12 +558,13 @@ fn handle_message<O: SurfaceOutput>(
             BalloonResolve::Show(id) => SurfaceTarget::Show(id),
             BalloonResolve::Hide => SurfaceTarget::Hide,
             BalloonResolve::NameForm => {
-                // 名前形（\b[バルーン１]）: M-boot 未対応の正当構文＝warn!＋skip・発行なし（R4.5）。
-                // EntityRef の「M-boot 未対応」warn! 先例に整合。将来の名前解決 additive の余地を残す。
-                tracing::warn!(
+                // 名前形（\b[バルーン１]）: 行き先は文字の層（emo-text）が箱の名前で決める正当構文。
+                // seriko は debug!＋skip・発行なし・状態不変。名前形についての警告は文字の層だけが出す
+                // （shell-balloon 4.8/4.9）。
+                tracing::debug!(
                     key = %key,
                     scope = %cue.actor,
-                    "seriko: バルーン面 key を名前解決できず読み飛ばす（M-boot は数値のみ・名前解決は将来 additive・R4.5）"
+                    "seriko: 名前の形の `\\b` は文字の層が読む"
                 );
                 return ControlFlow::Continue(());
             }

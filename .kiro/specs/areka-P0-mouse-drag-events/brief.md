@@ -92,6 +92,6 @@
 - 1 フレーム遅らせる解は取らない。
 - 決定論のテストは x64 の偽の境界で組む。実機の根と一時フォルダはワークツリーの `target\` の下だけ。
 - 規模の見立ては S（6〜10 タスク）。
-- 段は**優先**（起票の日に開発者が上げた）。roadmap の C2-⑦。C2-① `shell-balloon` と `crates/areka/src/input_events/` を分け合うので、着手の前に `shell-balloon` の実際の変更と照合する。
+- 段は**優先**（起票の日に開発者が上げた）。roadmap の C2-⑦。C2-① `shell-balloon`（10-04 に PR#227 で完了）が `crates/areka/src/input_events/` に足した変更の上に乗せる。
   - 10-04 に shell balloon セッションから聞いた範囲: `input_events/mod.rs` に mod 宣言 2 行（`shell_box`・`shell_box_handler`）と、`on_char_pointer_moved`・`on_char_pointer_pressed` の先頭に箱の上の操作をシェルへ送らない早期 return を足した。`attach_char_pointer_handlers` の本体には触っていない。
   - 箱の中の押下は、選択肢と中断以外はシェルへの操作（`shell-balloon` 要件 9.1）。ドラッグの送出は wintf の `OnDragStart`／`OnDragEnd` の側に置くので、この前段とは別の経路になる。箱の上から始めたドラッグもシェルのドラッグとして届くことを、着手のときに確かめる。

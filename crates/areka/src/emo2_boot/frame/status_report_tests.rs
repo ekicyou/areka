@@ -12,6 +12,9 @@ use std::sync::mpsc::{self, Receiver};
 
 use tracing::Level;
 
+use areka_emo_text::actor::TextLayerRuntime;
+use areka_emo_text::state::TextLayerConfig;
+
 use super::*;
 use crate::ghost_session::GhostSession;
 use crate::placement::test_support::{LogEvent, capture_logs};
@@ -21,6 +24,15 @@ fn obs(scope: u32, visible: Option<bool>, surface_id: Option<u32>) -> BalloonObs
         scope,
         visible,
         surface_id,
+        box_showing: false,
+    }
+}
+
+/// 箱に文字が出ている観測（areka-P0-shell-balloon 要件 5.5・5.6）。
+fn obs_box(scope: u32, visible: Option<bool>, surface_id: Option<u32>) -> BalloonObservation {
+    BalloonObservation {
+        box_showing: true,
+        ..obs(scope, visible, surface_id)
     }
 }
 
@@ -84,6 +96,25 @@ fn collect_includes_visible_scope_without_number_as_zero_and_returns_it_as_warni
     ]);
     assert_eq!(bindings, vec![binding(0, 0), binding(1, 4)]);
     assert_eq!(unknown, vec![0]);
+}
+
+/// 箱だけに文字が出ているスコープも、普通のバルーンが見えているときと同じ形で載る
+/// （番号は普通のバルーンの今の面・取れなければ 0 で警告の対象）。どちらにも出ていなければ載らない
+/// （areka-P0-shell-balloon 要件 5.5・5.6）。
+#[test]
+fn collect_lists_box_only_scopes_in_the_same_shape_as_visible_balloons() {
+    let (bindings, unknown) = collect_bindings(&[
+        obs(0, Some(true), Some(2)),      // 窓が見えている
+        obs_box(1, Some(false), Some(5)), // 箱だけ
+        obs(2, Some(false), Some(7)),     // どちらにも出ていない
+        obs_box(3, Some(false), None),    // 箱だけ・番号なし
+        obs_box(4, Some(true), Some(1)),  // 両方
+    ]);
+    assert_eq!(
+        bindings,
+        vec![binding(0, 2), binding(1, 5), binding(3, 0), binding(4, 1)]
+    );
+    assert_eq!(unknown, vec![3]);
 }
 
 #[test]
@@ -209,7 +240,8 @@ fn report_balloons_reads_the_presenter_and_drops_unattached_scopes() {
         last_sent: vec![binding(0, 2)],
         ..Default::default()
     };
-    report_balloons(&presenter, &world, &mut ledger, &[0, 1]);
+    let runtime = TextLayerRuntime::new(TextLayerConfig::default());
+    report_balloons(&presenter, &runtime, &world, &mut ledger, &[0, 1]);
     assert_eq!(sent(&rx), vec![Vec::new()]);
     assert!(ledger.last_sent.is_empty());
 }

@@ -380,7 +380,7 @@ pub fn emo2_frame_system(world: &mut World) {
     // ／drain 相の `apply_show`）の**両方の下流**、かつ `present_frame` の**上流**に置く。こうすると
     // どちらの経路で k が跳ねても同一フレーム内で binding が新 k へ組み直され、直後の描画が新しい物理寸
     // で走る（旧寸の文字が 1 フレーム残らない）。戻り値（再構築 scope）は観測用ゆえ本番は捨てる。
-    let _ = run_text_scale_phase(&mut wiring);
+    let _ = run_text_scale_phase(&mut wiring, world);
     run_text_phase(&mut wiring, world, None); // 本番: override なし（FrameTime＋clock で解決）。
     world.insert_non_send(wiring);
 }

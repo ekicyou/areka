@@ -27,7 +27,7 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::{Duration, Instant};
 
 use areka_emo_present::{EmoPresenter, PresentCommand};
-use areka_emo_text::actor::TextLayerRuntime;
+use areka_emo_text::actor::{ShownBox, TextLayerRuntime};
 use areka_sakura::ActorKey;
 use bevy_ecs::prelude::{Entity, With};
 use bevy_ecs::world::World;
@@ -36,14 +36,15 @@ use wintf::ecs::world::tick_wake;
 use wintf::ecs::{FrameTime, WindowDragging};
 
 use crate::input_events::balloon::BalloonWiring;
-use crate::placement::spawn::BalloonWindowMarker;
+use crate::input_events::shell_box::{ShellBoxHover, settle_box_hover};
+use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
 use super::super::frame::{Emo2Wiring, resolve_talk_time, status_report};
 use super::super::target_map::balloon_target;
 use super::{
     BalloonVisibilityState, GlyphObservation, ScopeObservation, TalkLifecycleSignal,
     VisibilityAction, VisibilityLogEvent, VisibilityObservations, VisibilityTrigger,
-    configured_timeout_secs, decide,
+    configured_timeout_secs, decide, hide_reaches_boxes,
 };
 
 /// バルーン可視性の相（`emo2_frame_system` の相順から毎フレーム呼ばれる配線）。
@@ -117,12 +118,22 @@ pub(in crate::emo2_boot) fn run_balloon_visibility_phase(
         VisibilityWake::None => {}
     }
 
-    let issued = issue_actions(presenter, world, state, &observations, &decision.actions);
+    let issued = issue_actions(
+        presenter,
+        world,
+        &runtime,
+        state,
+        &observations,
+        &decision.actions,
+    );
     hidden.extend(issued.hidden.iter().copied());
 
     // 本フレームの表示・非表示が照会に反映された後で、見えている組の差分を kanade へ届ける
     // （判断は持たない・areka-P0-status-execution-states 要件 4.1／4.5）。
-    status_report::report_balloons(presenter, world, balloon_status, &scopes);
+    // 借りられないフレームは `borrow_runtime` が誤りを 1 回記録し、届けを次のフレームへ回す。
+    if let Some(runtime) = borrow_runtime(&runtime, state) {
+        status_report::report_balloons(presenter, &runtime, world, balloon_status, &scopes);
+    }
 
     emit_visibility_logs(&decision.logs, &issued.not_shown);
     clear_hover_residency(world, &hidden);
@@ -236,13 +247,22 @@ fn collect_observations(
         };
     }
 
-    // ドラッグ中の観測（world の問い合わせ）は可変借用を要するため、以降の共有借用より先に済ませる。
-    let dragging = observe_dragging(world);
     let runtime = borrow_runtime(runtime, state);
+    // 箱の観測（文字が出ているか・その上の滞在）。滞在は観測の直前に毎フレーム整える。
+    // ドラッグ中の観測と記録の書き戻しは world の可変借用を要するため、ポインタ配線の共有借用
+    // より先に済ませる。
+    let boxes = observe_boxes(world, runtime.as_deref(), scopes, state);
+    let box_scopes: Vec<u32> = scopes
+        .iter()
+        .zip(&boxes)
+        .filter(|(_, (showing, _))| *showing)
+        .map(|(&scope, _)| scope)
+        .collect();
+    let dragging = observe_dragging(world) || observe_shell_dragging(world, &box_scopes);
     let hover_wiring = observe_hover_wiring(world, state);
 
     let mut observed = BTreeMap::new();
-    for &scope in scopes {
+    for (&scope, &(box_showing, box_hovered)) in scopes.iter().zip(&boxes) {
         let target = balloon_target(scope);
         let Some(visible) = presenter.target_visible(target) else {
             // 判断の真実源が引けない scope（表示層に target が無い）。第 2 の帳簿で代用せず、
@@ -280,16 +300,23 @@ fn collect_observations(
                 // 構造的に起こらない。
                 //
                 // 消去の回数は数と同じ借用・同じ条件でだけ組にして運ぶ（片方だけが進む記憶を作らない）。
+                //
+                // 数は普通のバルーンの窓に今出ている文字の数（今のサーフェスに箱があれば 0）。
+                // 箱のあるサーフェスでは窓を出さず、箱の無いサーフェスへ移ると出る
+                // （areka-P0-shell-balloon 要件 5.1〜5.3・6.4・6.9）。
                 visible_glyphs: runtime.as_ref().zip(now_talk_time).map(|(rt, t)| {
-                    let text = rt.state();
                     GlyphObservation {
-                        count: text.visible_glyphs(&actor, t),
-                        clear_count: text.clear_count(&actor),
+                        count: rt.balloon_shown_glyphs(&actor, t),
+                        clear_count: rt.state().clear_count(&actor),
                     }
                 }),
                 visible,
-                hover: hover_wiring.map(|w| w.is_balloon_hovered(scope as usize)),
+                hover: combine_hover(
+                    hover_wiring.map(|w| w.is_balloon_hovered(scope as usize)),
+                    box_hovered,
+                ),
                 choice_active: runtime.as_ref().map(|rt| rt.choice_active(&actor)),
+                box_showing,
             },
         );
     }
@@ -346,6 +373,75 @@ fn observe_hover_wiring<'w>(
     }
 }
 
+/// scope ごとの箱の観測 `(箱に文字が出ているか, 文字の出ている箱の上に滞在しているか)` を
+/// `scopes` と同じ並びで返す（areka-P0-shell-balloon 要件 6.10・6.11）。
+///
+/// 文字層ランタイムを借りられなかったフレームは写しが読めないので、どちらも偽（抑止しない側）
+/// とし、滞在の記録も整えない（借用の失敗は [`borrow_runtime`] が記録済み）。
+fn observe_boxes(
+    world: &mut World,
+    runtime: Option<&TextLayerRuntime>,
+    scopes: &[u32],
+    state: &mut BalloonVisibilityState,
+) -> Vec<(bool, bool)> {
+    let Some(runtime) = runtime else {
+        return vec![(false, false); scopes.len()];
+    };
+    let mut hover = world.get_non_send_mut::<ShellBoxHover>();
+    scopes
+        .iter()
+        .map(|&scope| {
+            let shown = runtime.shown_boxes(&ActorKey::from(scope.to_string()));
+            observe_scope_boxes(
+                shown,
+                hover.as_deref_mut(),
+                scope,
+                &mut state.observation_failure_logged.box_hover,
+            )
+        })
+        .collect()
+}
+
+/// 1 scope の箱の観測。滞在の記録は、居る箱の文字が消えていれば無しへ整えて書き戻してから読む
+/// （ポインタが動かなくても、消えた箱の滞在が待ちを止め続けないため・design「箱のポインタの前段」の 4）。
+///
+/// 記録（`ShellBoxHover`）が無ければ滞在なしとして扱う。失う観測があるのは箱に文字が出ている
+/// ときだけなので、記録はそのときに 1 度だけ出し、記録が戻れば武装し直す。
+fn observe_scope_boxes(
+    shown: &[ShownBox],
+    hover: Option<&mut ShellBoxHover>,
+    scope: u32,
+    missing_logged: &mut bool,
+) -> (bool, bool) {
+    let showing = !shown.is_empty();
+    let hovered = match hover {
+        Some(hover) => {
+            *missing_logged = false;
+            let settled = settle_box_hover(hover.get(scope as usize), shown);
+            let hovered = settled.is_some();
+            hover.set(scope as usize, settled);
+            hovered
+        }
+        None => {
+            if showing && !*missing_logged {
+                *missing_logged = true;
+                error!(
+                    scope,
+                    "[balloon-visibility] 箱の上の滞在の記録が world に無く、文字の出ている箱への滞在を観測できない → 滞在なしとして扱う"
+                );
+            }
+            false
+        }
+    };
+    (showing, hovered)
+}
+
+/// 滞在＝バルーンの窓の上、または文字の出ている箱の上（areka-P0-shell-balloon 要件 6.11）。
+/// 窓の滞在が観測できなくても箱の上に居れば滞在あり。どちらも無ければ窓の観測のまま。
+fn combine_hover(window: Option<bool>, on_box: bool) -> Option<bool> {
+    if on_box { Some(true) } else { window }
+}
+
 /// いずれかのバルーン窓がドラッグ中か（Requirement 5.1・design 決定 D8）。
 ///
 /// `WindowDragging` はドラッグの全期間に載る窓 entity のマーカーで、バルーンではドラッグ対象が
@@ -357,6 +453,19 @@ fn observe_dragging(world: &mut World) -> bool {
         .iter(world)
         .next()
         .is_some()
+}
+
+/// 箱に文字が出ている scope（`box_scopes`）のシェルの窓のどれかがドラッグ中か
+/// （areka-P0-shell-balloon 要件 6.11）。箱の文字はシェルの窓に描かれるので、その窓のドラッグも
+/// バルーン窓のドラッグと同じく待ちを止める。箱に文字が出ていない scope のシェルの窓は数えない
+/// （本 spec の前と同じ観測）。標識は [`observe_dragging`] と同じ `WindowDragging` を、
+/// シェルの窓の `CharWindowMarker` との連言で読む。
+fn observe_shell_dragging(world: &mut World, box_scopes: &[u32]) -> bool {
+    !box_scopes.is_empty()
+        && world
+            .query_filtered::<&CharWindowMarker, With<WindowDragging>>()
+            .iter(world)
+            .any(|marker| box_scopes.contains(&(marker.scope as u32)))
 }
 
 // ---------------------------------------------------------------------------
@@ -413,9 +522,14 @@ struct IssueOutcome {
 /// `apply(PresentCommand::Hide)` を通す（非表示側の新しい入口は作らない・design の指定）。
 /// 非表示が触るのはバルーン窓の可視性と現サーフェスだけで、内容の合成キャッシュ・会話状態・
 /// キャラクター窓には触れない（Requirements 4.4／6.7）。
+///
+/// 隠す契機が箱に届くとき（[`hide_reaches_boxes`]・中断の掛け金は判断が畳んだ後の値）は、
+/// 同じ scope の箱を隠す印も立てる（areka-P0-shell-balloon 要件 6.10）。窓の非表示は今までどおり
+/// 列挙した scope すべてへ発行する——箱だけが出ていた scope の窓は既に不可視で、非表示は冪等である。
 fn issue_actions(
     presenter: &mut EmoPresenter,
     world: &mut World,
+    runtime: &Rc<RefCell<TextLayerRuntime>>,
     state: &mut BalloonVisibilityState,
     observations: &VisibilityObservations,
     actions: &[VisibilityAction],
@@ -430,7 +544,7 @@ fn issue_actions(
                     not_shown.push(*scope);
                 }
             }
-            VisibilityAction::HideScopes { scopes, .. } => {
+            VisibilityAction::HideScopes { scopes, trigger } => {
                 for &scope in scopes {
                     presenter.apply(
                         world,
@@ -441,10 +555,35 @@ fn issue_actions(
                     );
                     hidden.push(scope);
                 }
+                if hide_reaches_boxes(*trigger, state.break_latch) {
+                    hide_scope_boxes(runtime, scopes, *trigger);
+                }
             }
         }
     }
     IssueOutcome { hidden, not_shown }
+}
+
+/// 列挙した scope の箱を隠す印を立てる（印は次の台詞の頭で文字の層が自分で下ろす）。
+///
+/// 文字層ランタイムを借りられなければ当該の行動だけを見送って誤りレベルで記録する（印が
+/// 立たないので、箱の文字は次の判断まで出たまま＝消えない側の縮退）。
+fn hide_scope_boxes(
+    runtime: &Rc<RefCell<TextLayerRuntime>>,
+    scopes: &[u32],
+    trigger: VisibilityTrigger,
+) {
+    let Ok(mut runtime) = runtime.try_borrow_mut() else {
+        error!(
+            ?scopes,
+            trigger = trigger.as_str(),
+            "[balloon-visibility] 文字層ランタイムを借用できず箱を隠す印を立てられない → 本フレームは箱を隠さない"
+        );
+        return;
+    };
+    for &scope in scopes {
+        runtime.hide_boxes(&ActorKey::from(scope.to_string()));
+    }
 }
 
 /// 1 scope の表示を発行し、**実際に可視になったか**を返す。
@@ -608,3 +747,8 @@ mod zorder_chain_tests;
 #[cfg(test)]
 #[path = "balloon_visibility_phase_reappear_tests.rs"]
 mod reappear_tests;
+
+// 観測と発行に箱をつなぐ配線（areka-P0-shell-balloon task 10.3）。
+#[cfg(test)]
+#[path = "balloon_visibility_phase_box_tests.rs"]
+mod box_tests;

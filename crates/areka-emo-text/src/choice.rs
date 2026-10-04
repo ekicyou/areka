@@ -363,6 +363,10 @@ pub fn derive_hit_rows(
 /// - 軸割当は writing_mode 正準表: **horizontal_tb**＝行内 x／ブロック y・
 ///   **vertical_rl/lr**＝行内 y／ブロック x（committed はブロック軸へ）。
 ///
+/// - `origin`＝場所の左上の窓の中の位置（image px）。箱はシェルの窓の中の箱の置き場所（X,Y）、
+///   普通のバルーンは (0,0)。領域の原点と同じく ×k の前に足す（箱の面の装着位置
+///   `(箱の X + 領域の左, 箱の Y + 領域の上) × k` と同源）。
+///
 /// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
 pub fn to_window_physical(
     row: &CanvasHitRow,
@@ -370,10 +374,11 @@ pub fn to_window_physical(
     mode: WritingMode,
     committed: i32,
     contract: &ScaleContract,
+    origin: (f32, f32),
 ) -> HitRectPx {
     let k = contract.scale;
     let committed = committed as f32;
-    let (ox, oy) = (region.left(), region.top());
+    let (ox, oy) = (origin.0 + region.left(), origin.1 + region.top());
     let r = &row.rect;
     // 行内軸: phys = (region_inline_origin + inline) × k
     // ブロック軸: phys = (region_block_origin + block) × k + committed
@@ -393,6 +398,68 @@ pub fn to_window_physical(
             bottom: (oy + r.bottom) * k,
         },
     }
+}
+
+/// 表示されている字 1 字ずつの矩形（送りの幅 × 行の高さ。字の形の画素ではない）を、文字の面の
+/// 左上を原点とする物理 px で返す（要件 9.4・箱の文字の面の当たり判定の材料）。
+///
+/// `lines` は配置の結果（見えている字だけが載る＝表示の進み具合を反映済み）。式は
+/// [`to_window_physical`] から面の装着位置（`(場所の左上 + 領域の原点) × k`）を引いたもの:
+/// 行内軸＝`(字の位置 − 領域の原点) × k`、ブロック軸＝`(行の範囲 − 領域の原点) × k + committed`。
+///
+/// 行の範囲（ブロック軸）は**行矩形と選択肢の帯の和**: 近い辺は行矩形の近い辺（横書き＝上・縦書き＝
+/// 左。[`derive_hit_rows`] と同じ起点）、遠い辺は `max(行矩形の遠い辺, 近い辺 + 帯の offset + extent)`。
+/// `bands` は [`decorate_canvas`]・[`derive_hit_rows`] へ渡すのと同じ [`line_bands`] の列で、帯が
+/// em を越えるフォントでも選択肢の当たり行・強調の帯の全部が字の矩形に入る（要件 8.3・R3.3 の
+/// 単一導出）。帯の無い行は行矩形だけ。送りの幅が 0 の字は矩形を持たない。同一入力→同一出力（純粋）。
+pub fn glyph_cells(
+    lines: &[PositionedLine],
+    bands: &[LineBand],
+    mode: WritingMode,
+    region: &TextRegion,
+    committed: i32,
+    contract: &ScaleContract,
+) -> Vec<HitRectPx> {
+    let k = contract.scale;
+    let c = committed as f32;
+    let (ox, oy) = (region.left(), region.top());
+    lines
+        .iter()
+        .enumerate()
+        .flat_map(|(i, line)| {
+            let r = line.rect;
+            // ブロック軸の範囲（絶対 image px）: 行矩形と帯の和。
+            let (near, far) = match mode {
+                WritingMode::HorizontalTb => (r.top, r.bottom),
+                WritingMode::VerticalRl | WritingMode::VerticalLr => (r.left, r.right),
+            };
+            let (b0, b1) = bands.get(i).map_or((near, far), |b| {
+                (
+                    near.min(near + b.offset),
+                    far.max(near + b.offset + b.extent),
+                )
+            });
+            line.glyphs.iter().map(move |g| (b0, b1, g))
+        })
+        .filter(|(_, _, g)| g.advance > 0.0)
+        .map(|(b0, b1, g)| {
+            let (i0, i1) = (g.inline_pos, g.inline_pos + g.advance);
+            match mode {
+                WritingMode::HorizontalTb => HitRectPx {
+                    left: (i0 - ox) * k,
+                    top: (b0 - oy) * k + c,
+                    right: (i1 - ox) * k,
+                    bottom: (b1 - oy) * k + c,
+                },
+                WritingMode::VerticalRl | WritingMode::VerticalLr => HitRectPx {
+                    left: (b0 - ox) * k + c,
+                    top: (i0 - oy) * k,
+                    right: (b1 - ox) * k + c,
+                    bottom: (i1 - oy) * k,
+                },
+            }
+        })
+        .collect()
 }
 
 /// canvas 装飾（純粋）: 選択肢セグメントを含む GlyphRun 住人を Choice 住人へ置換する。
@@ -671,3 +738,7 @@ fn bands_of(extent: f32, offset: f32) -> Vec<LineBand> {
 #[cfg(test)]
 #[path = "choice_decorate_tests.rs"]
 mod decorate_tests;
+
+#[cfg(test)]
+#[path = "choice_glyph_cells_tests.rs"]
+mod glyph_cells_tests;

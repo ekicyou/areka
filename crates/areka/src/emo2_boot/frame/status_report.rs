@@ -6,11 +6,16 @@
 //! 台帳が覚えるのは「最後に何を送ったか」と「番号が取れない旨を警告済みの scope」だけである。
 //! 台帳は `Emo2Wiring::balloon_status`（ゴーストごとに新品）にあり、可視性の相
 //! （`balloon_visibility_phase.rs`）が表示・非表示の発行の後に [`report_balloons`] を呼ぶ。
+//!
+//! 箱に文字が出ているスコープ（文字の層の `shown_boxes` が空でない）も、普通のバルーンの窓が
+//! 見えているときと同じ形で組に載せる（areka-P0-shell-balloon 要件 5.5・5.6）。
 
 use std::collections::BTreeSet;
 
 use areka_emo_present::EmoPresenter;
+use areka_emo_text::actor::TextLayerRuntime;
 use areka_kanade::{BalloonBinding, ExecutionStateUpdate, KanadeMsg};
+use areka_sakura::ActorKey;
 use bevy_ecs::world::World;
 use tracing::{debug, error, warn};
 
@@ -24,21 +29,25 @@ pub(in crate::emo2_boot) struct BalloonStatusLedger {
     surface_unknown_warned: BTreeSet<u32>,
 }
 
-/// 1 scope の観測（表示層の照会 2 本をそのまま運ぶ）。
+/// 1 scope の観測（表示層の照会 2 本と、箱に文字が出ているか）。
 pub(in crate::emo2_boot) struct BalloonObservation {
     scope: u32,
     visible: Option<bool>,
     surface_id: Option<u32>,
+    box_showing: bool,
 }
 
-/// 観測列から組を作る純関数。`visible == Some(true)` の scope だけを `character_id = scope`・
+/// 観測列から組を作る純関数。`visible == Some(true)` または `box_showing` の scope だけを `character_id = scope`・
 /// `balloon_id = surface_id.unwrap_or(0)` で並べ（入力の順＝昇順）、番号が取れなかった scope を第 2 の返り値に添える。
 pub(in crate::emo2_boot) fn collect_bindings(
     observed: &[BalloonObservation],
 ) -> (Vec<BalloonBinding>, Vec<u32>) {
     let mut bindings = Vec::new();
     let mut surface_unknown = Vec::new();
-    for o in observed.iter().filter(|o| o.visible == Some(true)) {
+    for o in observed
+        .iter()
+        .filter(|o| o.visible == Some(true) || o.box_showing)
+    {
         if o.surface_id.is_none() {
             surface_unknown.push(o.scope);
         }
@@ -50,11 +59,13 @@ pub(in crate::emo2_boot) fn collect_bindings(
     (bindings, surface_unknown)
 }
 
-/// 相の終わりに呼ぶ配線。照会 → 純関数 → 差分 → `GhostSlot` の kanade へ送出 → 記録。
+/// 相の終わりに呼ぶ配線。照会（表示層 2 本＋文字の層の `shown_boxes`）→ 純関数 → 差分 →
+/// `GhostSlot` の kanade へ送出 → 記録。
 ///
 /// `scopes` は装着済みバルーンの scope 昇順（相が既に作る `scopes`）。`issue_actions` の後に呼ぶ。
 pub(in crate::emo2_boot) fn report_balloons(
     presenter: &EmoPresenter,
+    runtime: &TextLayerRuntime,
     world: &World,
     ledger: &mut BalloonStatusLedger,
     scopes: &[u32],
@@ -67,6 +78,9 @@ pub(in crate::emo2_boot) fn report_balloons(
                 scope,
                 visible: presenter.target_visible(target),
                 surface_id: presenter.current_surface_id(target),
+                box_showing: !runtime
+                    .shown_boxes(&ActorKey::from(scope.to_string()))
+                    .is_empty(),
             }
         })
         .collect();

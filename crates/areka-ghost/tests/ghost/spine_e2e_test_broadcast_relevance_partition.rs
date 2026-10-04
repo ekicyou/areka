@@ -10,6 +10,10 @@
 // 本モジュールは `CueCommand` の全 10 variant について、`cue_target_of` の分類が
 // 「Shell→seriko だけが action／Balloon→emo-text だけが action／None→誰も action しない」の
 // partition になっていることを純関数として固定する（GPU 不要・決定論）。
+//
+// 文字の層（emo-text）は `\s`（`Emote`）と名前の形の `\b`（数値として読めない `BalloonSurface`）を、
+// 行き先を決めるために読む。これは演じる（action する）ことではないため、両者の演者は seriko のまま
+// で、下の期待値は変わらない（areka-P0-shell-balloon）。
 
 use areka_sakura::contract::{CueCommand, CueTarget, cue_target_of};
 

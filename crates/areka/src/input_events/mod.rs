@@ -10,6 +10,8 @@
 pub(crate) mod balloon;
 pub(crate) mod choice_drain;
 pub(crate) mod file_drop;
+pub(crate) mod shell_box;
+pub(crate) mod shell_box_handler;
 pub(crate) mod throttle;
 pub(crate) mod user_break;
 
@@ -425,6 +427,11 @@ pub(crate) fn on_char_pointer_moved(
         Phase::Bubble(s) => s,
     };
 
+    // 箱の前段（areka-P0-shell-balloon）: 箱の選択肢の行の上は強調だけで、シェルへは送らない。
+    if shell_box_handler::on_box_pointer_moved(world, entity, state) {
+        return true;
+    }
+
     // self-gating: MouseWiring 不在（wiring 前）は no-op（trace）。
     if world.get_non_send::<MouseWiring>().is_none() {
         tracing::trace!(event = "mouse_moved_no_wiring", "MouseWiring 不在: no-op");
@@ -495,6 +502,11 @@ pub(crate) fn on_char_pointer_pressed(
             "Ctrl+左ダブルクリック（強制退避）: 全ゴースト窓を閉じる"
         );
         quit_app(world, ExitOrigin::Escape);
+        return true;
+    }
+
+    // 箱の前段（areka-P0-shell-balloon）: 箱の選択肢の確定・箱での中断はシェルへ送らない。
+    if shell_box_handler::on_box_pointer_pressed(world, entity, state) {
         return true;
     }
 

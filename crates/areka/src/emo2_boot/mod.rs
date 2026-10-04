@@ -33,6 +33,8 @@ mod readme_cue;
 pub(crate) mod shell_balloon_resolve;
 /// シェル・バルーンの切替の入口（areka-P0-shell-balloon-switch）。
 pub(crate) mod shell_balloon_switch;
+/// 箱の束（置き場所の表・別名の写し・在るサーフェス番号・フォントの探す場所・areka-P0-shell-balloon）。
+pub(crate) mod shell_box_assets;
 /// シェル・バルーンの差し替えの資産を背景で作る部品と荷物の置き場（areka-P0-shell-balloon-switch）。
 pub(crate) mod switch_assets;
 /// `\![change,shell|balloon,…]` の受け口（areka-P0-shell-balloon-switch）。
@@ -524,6 +526,7 @@ pub fn wire_emo2_boot(
         loop_tables,
         shell_author_dpi,
         balloon_author_dpi,
+        boxes,
     } = assets;
     // SERIKO ループ構成（design「本番は実時間・実 entropy 接続」・R7.4）: シェル／バルーンの 2 表は
     // `BootAssets.loop_tables`（task 9.1 が `EmoWorld` スナップショットから `from_world` で構築）を
@@ -582,6 +585,8 @@ pub fn wire_emo2_boot(
         // 作者基準 DPI は搬送のみ（本相は値を解釈しない・attach への供給は task 4.2）。
         shell_author_dpi,
         balloon_author_dpi,
+        // 箱の束は装着の相が文字の層へ渡す（seriko は読まない）。
+        boxes,
     };
 
     // loop ticker 用の tick 送出端: SerikoSink を 1 本 clone して保持する（surface_sink 本体は下の

@@ -57,6 +57,7 @@ fn empty_assets() -> BootAssets {
         },
         shell_author_dpi: 96,
         balloon_author_dpi: 96,
+        boxes: crate::emo2_boot::shell_box_assets::ShellBoxAssets::default(),
     }
 }
 

@@ -208,7 +208,7 @@ fn merge_animations(
 /// 「展開結果の適用順は記述順」）。
 ///
 /// emo2 は除外を使用しないため実処理は型シームだが、記述子の口は保持し減算まで実装する（要件 2.5/12.3）。
-fn expand_targets(targets: &[AppendTarget]) -> Vec<u32> {
+pub(crate) fn expand_targets(targets: &[AppendTarget]) -> Vec<u32> {
     use std::collections::BTreeSet;
 
     // (1) 包含 id を記述順に列挙（重複はそのまま保つ）。

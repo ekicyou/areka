@@ -718,3 +718,95 @@ fn flag_source_connected_is_false_after_the_sender_drops_even_with_an_unread_val
 
     assert!(!wiring.flag_source_connected(), "送出端は落ちている");
 }
+
+// ---------------------------------------------------------------- 話している最中か・箱での中断（areka-P0-shell-balloon 要件 9.6）
+
+impl Lines {
+    fn talking(&self) -> bool {
+        self.world
+            .get_non_send::<UserBreakWiring>()
+            .expect("結線済み")
+            .talking()
+    }
+
+    /// 箱の上の押下 1 回（シェルの窓のハンドラの代役）。
+    fn press_box(&mut self, scope: usize, double_click: DoubleClick) -> BoxPressVerdict {
+        on_box_press(&mut self.world, scope, double_click, false)
+    }
+}
+
+/// 台詞の始まりで真・終わりで偽。中断を禁じる区間の出入りは旗を動かさない（要件 9.6）。
+#[test]
+fn talk_signals_flip_the_talking_flag() {
+    let mut lines = Lines::wired();
+    assert!(!lines.talking(), "話していない状態から始まる");
+    lines.signal(NoUserBreakSignal::TalkStarted);
+    assert!(lines.talking(), "台詞の始まりで真");
+    lines.signal(NoUserBreakSignal::Enter);
+    lines.signal(NoUserBreakSignal::Leave);
+    assert!(lines.talking(), "区間の出入りは最中のまま");
+    lines.signal(NoUserBreakSignal::TalkEnded);
+    assert!(!lines.talking(), "台詞の終わりで偽");
+}
+
+/// 話している最中の箱の左ダブルクリックは、普通のバルーンの窓の左ダブルクリックと同じ
+/// 送り出し（「隠せ」→「止めろ」が 1 件ずつ）になる（要件 9.6）。
+#[test]
+fn box_break_dispatches_the_same_as_the_balloon_double_click() {
+    let mut balloon = Lines::wired();
+    assert!(balloon.press(1, DoubleClick::Left, false));
+    let balloon_lifecycle = balloon.lifecycle();
+    let balloon_kanade = balloon.kanade();
+
+    let mut lines = Lines::wired();
+    lines.signal(NoUserBreakSignal::TalkStarted);
+    lines.kanade(); // 旗の知らせがあれば捨てる
+    assert_eq!(
+        lines.press_box(1, DoubleClick::Left),
+        BoxPressVerdict::Break
+    );
+
+    assert_eq!(lines.lifecycle(), balloon_lifecycle);
+    let to_kanade = lines.kanade();
+    assert_eq!(to_kanade.len(), balloon_kanade.len());
+    assert!(
+        matches!(
+            (&to_kanade[..], &balloon_kanade[..]),
+            (
+                [KanadeMsg::UserBreak { scope: 1 }],
+                [KanadeMsg::UserBreak { scope: 1 }]
+            )
+        ),
+        "どちらも押されたスコープの止める要求がちょうど 1 件"
+    );
+}
+
+/// 話していないあいだの箱の左ダブルクリックはシェルへの操作で、何も送らない（要件 9.6・9.7）。
+#[test]
+fn box_double_click_while_not_talking_is_a_shell_op() {
+    let mut lines = Lines::wired();
+    assert_eq!(
+        lines.press_box(0, DoubleClick::Left),
+        BoxPressVerdict::ShellOp
+    );
+    assert!(lines.lifecycle().is_empty() && lines.kanade().is_empty());
+}
+
+/// 中断を禁じる区間では何も送らず、debug を 1 行だけ残す（要件 9.6）。
+#[test]
+fn box_break_in_the_no_break_section_sends_nothing_and_logs_one_debug_line() {
+    let mut lines = Lines::wired();
+    lines.signal(NoUserBreakSignal::TalkStarted);
+    lines.signal(NoUserBreakSignal::Enter);
+    lines.kanade(); // 旗の知らせを捨てる
+
+    let (verdict, events) = capture_logs(|| lines.press_box(2, DoubleClick::Left));
+    assert_eq!(verdict, BoxPressVerdict::Disabled);
+    assert!(lines.lifecycle().is_empty(), "隠さない");
+    assert!(lines.kanade().is_empty(), "止めない");
+    let debug: Vec<_> = events.iter().filter(|e| e.level == Level::DEBUG).collect();
+    assert_eq!(debug.len(), 1, "debug は 1 行: {events:?}");
+    assert_eq!(debug[0].field_str("event"), Some("box_break_rejected"));
+    assert_eq!(debug[0].field_str("reason"), Some("no_user_break"));
+    assert_eq!(debug[0].field("scope"), Some("2"));
+}
