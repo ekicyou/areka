@@ -42,6 +42,7 @@ use bevy_ecs::entity::Entity;
 use crate::bind::BindSet;
 use crate::error::ComposeError;
 use crate::method::ComposeMethod;
+use crate::nesting::ElementKind;
 use crate::normalized::{SurfaceMaster, Transform};
 use crate::pattern::PatternState;
 use crate::world::{AtlasBinding, EmoWorld, SurfaceIndex};
@@ -106,11 +107,23 @@ pub struct Extent {
 ///
 /// 消費は task 5.2 の [`derive_ops`] が本関数を wrap して行う（合成対象 surface 自身の静的層＝
 /// (offset_x, offset_y)=(0,0)・bind pattern0 の入れ子参照＝pattern の (x,y) をオフセット）。
+///
+/// # element定義の子（surface-element-nesting 要件 2.1〜2.3・3.1〜3.4）
+///
+/// 欄がサーフェスの番号（[`ElementKind::Surface`]）の element定義は、同じ順の位置でその場で子へ
+/// 再帰する（位置は親の位置＋ element定義の X,Y・[`flatten_surface`] を `is_top_level=false` で）。
+/// 子が先祖（`visited`）に在る・面の表に無い・範囲を超える数のときは、その element定義だけを
+/// 飛ばして `debug!` を 1 行出す（警告は読み込みのときに出ている）。画像だけのサーフェスでは
+/// 命令列は前と同じ。
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn push_static_element_ops(
     out_ops: &mut Vec<BlitOp>,
+    visited: &mut Vec<u32>,
     world: &EmoWorld,
     atlas: &AtlasTable,
     surface_id: u32,
+    binds: &BindSet,
+    pattern: &PatternState,
     offset_x: i64,
     offset_y: i64,
 ) {
@@ -127,14 +140,52 @@ pub(crate) fn push_static_element_ops(
 
     for i in order {
         let element = &master.elements[i];
-        // 束縛が Some の element のみ命令化する。None（未解決・bind 時に warn 済み）はスキップ。
+        let (ex, ey) = element.transform.offset();
+        // element定義の子: その場で再帰する（位置は親の位置＋ X,Y）。飛ばすのはこの element定義だけ。
+        let skip_reason = match element.kind {
+            ElementKind::Image => None,
+            ElementKind::SurfaceOutOfRange => Some("番号として扱える範囲を超える数"),
+            ElementKind::Surface(child) if world.surface(child).is_none() => {
+                Some("面の表に無い番号")
+            }
+            ElementKind::Surface(child) if visited.contains(&child) => {
+                Some("先祖へ戻る参照（循環）")
+            }
+            ElementKind::Surface(child) => {
+                flatten_surface(
+                    out_ops,
+                    visited,
+                    world,
+                    atlas,
+                    child,
+                    binds,
+                    pattern,
+                    offset_x + ex,
+                    offset_y + ey,
+                    false,
+                );
+                continue;
+            }
+        };
+        if let Some(reason) = skip_reason {
+            tracing::debug!(
+                target: "areka_emo_compose",
+                surface_id,
+                element = element.layer,
+                child = element.path.as_str(),
+                reason,
+                "element定義の子のサーフェスを置かない（読み込みのとき warn 済み）"
+            );
+            continue;
+        }
+        // 束縛が Some の画像のみ命令化する。None（画像の解決に失敗・bind 時に warn 済み）はスキップ。
         let Some(element_id) = binding.0.get(i).copied().flatten() else {
             tracing::trace!(
                 target: "areka_emo_compose",
                 surface_id,
                 layer = element.layer,
                 path = element.path.as_str(),
-                "未束縛 element を静的命令からスキップ（bind 時 warn 済み）"
+                "未束縛の画像 element を静的命令からスキップ（画像の解決に失敗・bind 時 warn 済み）"
             );
             continue;
         };
@@ -153,7 +204,6 @@ pub(crate) fn push_static_element_ops(
         // 入れ子参照の (x,y) オフセットを element 配置へ足し込む（1 段 inline 展開・要件 5.2 の
         // pattern0 入れ子参照。M1 は平行移動のみゆえ加算で足りる）。offset=(0,0) の合成対象自身の
         // 静的層では element の transform そのままになる。
-        let (ex, ey) = element.transform.offset();
         out_ops.push(BlitOp {
             element: element_id,
             transform: Transform::translate(ex + offset_x, ey + offset_y),
@@ -297,8 +347,11 @@ fn flatten_surface(
     }
     visited.push(surface_id);
 
-    // 層（i）: 当 surface 自身の静的 element を累積オフセットで積む（placement None はスキップ）。
-    push_static_element_ops(out_ops, world, atlas, surface_id, offset_x, offset_y);
+    // 層（i）: 当 surface 自身の静的 element を累積オフセットで積む（placement None はスキップ・
+    // element定義の子はその場で再帰）。
+    push_static_element_ops(
+        out_ops, visited, world, atlas, surface_id, binds, pattern, offset_x, offset_y,
+    );
 
     // 当 surface 不在なら bind 層もない（後続 task が SurfaceNotFound 分類を担う）。存在する場合のみ
     // bind 層を積む。いずれにせよ枝離脱で visited を pop する。
@@ -728,3 +781,7 @@ mod ops_tests;
 #[cfg(test)]
 #[path = "plan_extent_tests.rs"]
 mod extent_tests;
+
+#[cfg(test)]
+#[path = "plan_nesting_tests.rs"]
+mod nesting_tests;

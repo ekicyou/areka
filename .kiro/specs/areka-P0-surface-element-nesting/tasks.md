@@ -62,7 +62,7 @@
   - _Requirements: 1.8, 1.9, 3.1, 3.2, 3.4, 8.1, 8.3_
 
 - [ ] 4. 合成と外形を element定義の子へ再帰させる
-- [ ] 4.1 element定義の子を、親の element定義の番号の順に、位置を足して重ねる
+- [x] 4.1 element定義の子を、親の element定義の番号の順に、位置を足して重ねる
   - `plan.rs` の合成の再帰で、静的な element定義を番号の昇順（同じ番号は書いた順）に 1 つずつ見て、画像は今までどおり命令にし、サーフェスの番号はその場で子へ再帰する（位置は親の位置＋ element定義の X,Y）
   - 子が先祖に在る・面の表に無い・範囲を超える数のときは、その element定義だけを飛ばして `debug!` を 1 行出す。先祖の積み上げは枝を出るときに外す（同じ子を何か所にも置ける）
   - pattern定義から入った再帰の循環の `warn!` は今のまま残す。合成の入口の署名は変えない
@@ -209,3 +209,4 @@
 - 2.1: `plan.rs` の `push_static_element_ops` の `trace!`「bind 時 warn 済み」は番号の element に当たらない → 4.1 で書き換える。画像が見つからないときの `atlas_bind` の `warn!` を確かめるテストは crate 内に無い（前からの穴）。
 - 3.1: `visible_parts` は `out` を訪れた印に使う（一番上以外の辺は部品の欄と番号だけで決まるので祖先の積み上げと同じ集合）。面の表に無い番号を指すコマ・pattern0 の先も部品に数える（design どおり）ので、4.4 の「コマを足すと命令列が変わる ⇔ 部品に在る」は在る番号に限る。`method.rs` は記録を出さない `known_method`／`is_implemented_name` を足した（`from_name` の warn は不変）。
 - 3.2: 循環の報告の辺は描画メソッド・着せ替えの有効で絞らない（合成が切る辺より広い）。element定義と pattern定義が混ざった循環で一番上が親のとき、合成が切るのは pattern定義の辺のほう（`warn!` のまま）なので、4.4 の「切った辺 ⊆ 報告」は element定義の辺について確かめる。7 語の判定は `world.rs` の `targets_animation_id`（`pub(crate)`）。
+- 4.1: `push_static_element_ops` は `visited`・`binds`・`pattern` を受ける（`plan_ops_tests.rs` は呼び出しの形だけ追随・このファイルは前から 1,000 行超えで番人の例外表に在る）。4.3 までは外形が子へ進まないので、画像を持たず子だけを置く親は `build_plan` で `EmptyComposition` になる（4.3 で解消を確かめる）。
