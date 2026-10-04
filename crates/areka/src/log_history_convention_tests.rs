@@ -231,3 +231,81 @@ fn the_filter_hints_info_as_the_most_verbose_level() {
         <HistoryFilter as Filter<tracing_subscriber::Registry>>::max_level_hint(&HistoryFilter);
     assert_eq!(hint, Some(tracing_subscriber::filter::LevelFilter::INFO));
 }
+
+// ---------------------------------------------------------------------------
+// 取り決めの文書との一致（要件 7.3）
+// ---------------------------------------------------------------------------
+
+/// 取り決めの文書（`CARGO_MANIFEST_DIR` からの相対）。
+const CONVENTION_DOC: &str = "../../doc/ssp-mcp/log-convention.md";
+const TABLE_BEGIN: &str = "<!-- log-rules:begin -->";
+const TABLE_END: &str = "<!-- log-rules:end -->";
+/// 照合の列の語（完全一致は true）。
+const MATCH_EXACT: &str = "完全一致";
+const MATCH_SUBTREE: &str = "下も含む";
+
+/// 文書の目印の間の表を（種別の語・target・完全一致か）の列で読む（見出しと区切りの行は飛ばす）。
+fn doc_rules(doc: &str) -> Vec<(String, String, bool)> {
+    let begin = doc.find(TABLE_BEGIN).expect("文書に表の始まりの目印がある");
+    let end = doc.find(TABLE_END).expect("文書に表の終わりの目印がある");
+    assert!(begin < end, "始まりの目印が終わりの目印より前");
+    doc[begin + TABLE_BEGIN.len()..end]
+        .lines()
+        .map(str::trim)
+        .filter(|l| l.starts_with('|'))
+        .skip(2)
+        .map(|l| {
+            let cells: Vec<&str> = l
+                .trim_matches('|')
+                .split('|')
+                .map(|c| c.trim().trim_matches('`'))
+                .collect();
+            assert_eq!(cells.len(), 3, "表の行は 3 列（種別・target・照合）: {l}");
+            let exact = match cells[2] {
+                MATCH_EXACT => true,
+                MATCH_SUBTREE => false,
+                other => panic!(
+                    "照合の列の語が `{MATCH_EXACT}` でも `{MATCH_SUBTREE}` でもない: {other}"
+                ),
+            };
+            (cells[0].to_string(), cells[1].to_string(), exact)
+        })
+        .collect()
+}
+
+#[test]
+fn the_convention_doc_table_equals_the_rules_and_the_two_convention_targets() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(CONVENTION_DOC);
+    let doc = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("取り決めの文書 {} を読めない: {e}", path.display()));
+    let rows = doc_rules(&doc);
+    assert!(!rows.is_empty(), "文書の表から 1 行も読めていない");
+
+    let documented: std::collections::HashSet<_> = rows.iter().cloned().collect();
+    assert_eq!(documented.len(), rows.len(), "文書の表に同じ行が 2 度ある");
+
+    let expected: std::collections::HashSet<(String, String, bool)> = RULES
+        .iter()
+        .map(|r| (r.kind.word().to_string(), r.target.to_string(), r.exact))
+        .chain([
+            (
+                Kind::Script.word().to_string(),
+                TARGET_SCRIPT.to_string(),
+                true,
+            ),
+            (
+                Kind::Error.word().to_string(),
+                TARGET_ERROR.to_string(),
+                true,
+            ),
+        ])
+        .collect();
+    assert_eq!(expected.len(), RULES.len() + 2);
+
+    let missing: Vec<_> = expected.difference(&documented).collect();
+    let extra: Vec<_> = documented.difference(&expected).collect();
+    assert!(
+        missing.is_empty() && extra.is_empty(),
+        "文書の表と規則の表が食い違う\n文書に無い: {missing:?}\n規則に無い: {extra:?}"
+    );
+}
