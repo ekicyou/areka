@@ -130,7 +130,10 @@ pub(in crate::emo2_boot) fn run_balloon_visibility_phase(
 
     // 本フレームの表示・非表示が照会に反映された後で、見えている組の差分を kanade へ届ける
     // （判断は持たない・areka-P0-status-execution-states 要件 4.1／4.5）。
-    status_report::report_balloons(presenter, &runtime.borrow(), world, balloon_status, &scopes);
+    // 借りられないフレームは `borrow_runtime` が誤りを 1 回記録し、届けを次のフレームへ回す。
+    if let Some(runtime) = borrow_runtime(&runtime, state) {
+        status_report::report_balloons(presenter, &runtime, world, balloon_status, &scopes);
+    }
 
     emit_visibility_logs(&decision.logs, &issued.not_shown);
     clear_hover_residency(world, &hidden);

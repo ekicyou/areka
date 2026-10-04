@@ -11,7 +11,9 @@ use windows::UI::Composition::Compositor;
 use windows::Win32::System::WinRT::{DQTAT_COM_ASTA, DQTAT_COM_NONE};
 
 use wintf::com::wuc::create_dispatcher_queue_controller;
-use wintf::ecs::{GraphicsCommandList, HitTest, Visual};
+use wintf::ecs::{Arrangement, GraphicsCommandList, HitTest, Visual};
+
+use crate::actor::TextSlotBinding;
 
 /// テスト用 WUC dispatcher と Compositor（`surface.rs` の既存テストと同じ作り方）。
 fn make_dispatcher_and_compositor() -> (windows::System::DispatcherQueueController, Compositor) {

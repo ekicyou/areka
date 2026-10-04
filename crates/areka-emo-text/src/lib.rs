@@ -418,6 +418,7 @@ mod tests {
         "sink.rs",
         "surface.rs",
         "surface_hit_cells_tests.rs",
+        "surface_window_child.rs",
         "surface_window_child_tests.rs",
         "viewbox_draw.rs",
         "viewbox_draw_choice_hover_tests.rs",

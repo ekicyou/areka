@@ -214,7 +214,7 @@ crates/
 - `crates/areka-emo-text/src/actor.rs` — 表の鍵を `PlaceKey` へ。`apply_cue` が `Emote` を解決して行き先へ渡す。`choice_active` をスコープの全部の場所で見る。
 - `crates/areka-emo-text/src/actor_attach.rs`・`actor_decoration.rs` — 警告の名前の欄を場所の名前にする。`set_balloon_label`。
 - `crates/areka-emo-text/src/actor_present.rs` — 走査を場所ごとにする。箱の位置（X,Y）を面の位置と選択肢の当たり行へ足す。提示のたびに `shown_boxes` の写しを更新する。
-- `crates/areka-emo-text/src/surface.rs` — `TextSurface::attach_window_child`（窓の子として作り `Children` の指定位置へ挿す）と、作った entity の片付け。今 792 行なので、面の生成の手順を複製しない: 既存の `attach` の本体のうち「スワップチェーン・描画面・`SpriteVisual` を作る」部分を私有の関数 1 つへ括り出し、`attach` と `attach_window_child` は「どの entity へ挿すか」だけが違う薄い入口にする（増えるのは 60 行程度の見込みで 1,000 行に届かない）。それでも 900 行を超えるなら、窓の子の入口と片付けを兄弟ファイル `surface_window_child.rs`（`#[path]` で `surface.rs` の子）へ出す。
+- `crates/areka-emo-text/src/surface.rs` — `TextSurface::attach_window_child`（窓の子として作り `Children` の指定位置へ挿す）と、作った entity の片付け。今 792 行なので、面の生成の手順を複製しない: 既存の `attach` の本体のうち「スワップチェーン・描画面・`SpriteVisual` を作る」部分を私有の関数 1 つへ括り出し、`attach` と `attach_window_child` は「どの entity へ挿すか」だけが違う薄い入口にする（増えるのは 60 行程度の見込みで 1,000 行に届かない）。それでも 900 行を超えるなら、窓の子の入口と片付けを兄弟ファイル `surface_window_child.rs`（`#[path]` で `surface.rs` の子）へ出す。タスク 13 で 962 行になったので、最終の検証で窓の子の入口・片付け・字の矩形のマスク（`attach_window_child`・`despawn_window_child`・`set_hit_cells`・`hit_cells_mask` ほか）を `surface_window_child.rs` へ出した（`surface.rs` 823 行）。
 - `crates/areka-emo-text/src/choice.rs` — `to_window_physical` に箱の位置の引数を足す（普通のバルーンは 0,0）。
 - `crates/areka-emo-text/src/region.rs` — `BALLOON_NAME_PLACEHOLDER` の撤去。
 - `crates/areka-seriko/src/actor.rs` — `BalloonResolve::NameForm` の腕を `debug!` へ下げる（警告は文字の層が出す）。
@@ -640,7 +640,7 @@ impl TextLayerState {
 - `sync_boxes`（毎フレーム・結線が呼ぶ）: スコープごとのシェルの窓の `TextSlotView`（窓・差し込み口・拡大率）を受け取り、文字を持つ箱の場所すべてについて「あるべき置き場所」を導く。あるべき置き場所は、名前が今のサーフェスの箱の列にあり、箱を隠す印が立っておらず、シェルの窓が確立しているときだけ存在する。登録済みの置き場所と違えば、面を片付けて登録し直す（面は次の `present_frame` が作る。文字の進み具合は保つ）。同じなら何もしない。
 - 置き場所から配置の入力を作る式は普通のバルーンと同じ（`ResolvedBalloonText::resolve_with_background(&def.model, def.size, 背景色)`）。箱の大きさを「画像の大きさ」として渡すので、`validrect`・`origin`・負の値の読み方は既存の `TextRegion::resolve` のまま成り立つ（要件 3.1〜3.3）。背景色は既定（白）を使う（箱に背景の絵は無い。`\f[disable]` の混色の相手として §8 に登記）。
 - 面の位置は `(箱の X + 領域の左, 箱の Y + 領域の上) × 拡大率`、面の大きさは既存の式（`ScaleContract::physical_extent`）。選択肢の当たり行も同じ位置を足す。
-- 面の entity はシェルの窓の直接の子で、`Visual`＋`VisualGraphics`＋`Arrangement`（物理 px）＋`HitTest::alpha_mask()`＋`AlphaMaskResource`（面と同じ物理寸のマスク）を持つ。マスクは装着の時は空（何も受けない。マスクを入れないと wintf は矩形全体の判定へ縮退する）で、提示が面を描き替えたフレームに、表示と同じ配置の結果（見えている字だけ）と面反映済みのスクロールから作った字の矩形（`choice::glyph_cells`・面の左上を原点とする物理 px。ブロック軸は行矩形と選択肢の帯（`line_bands`・`decorate_canvas`／`derive_hit_rows` へ渡すのと同じ列）の和）へ入れ替える（`TextSurface::set_hit_cells`・同じ集まりなら焼き直さない）。`\c`・`ClearAll`・箱を隠す印・登録を外すときは面の entity ごと片付くので、字の矩形も残らない（要件 9.4）。`Children` の中の位置は「差し込み口の直後から、element番号の大きい順」。絵の entity より前なので、画像より手前に描かれる（要件 3.7・3.9）。
+- 面の entity はシェルの窓の直接の子で、`Visual`＋`VisualGraphics`＋`Arrangement`（物理 px）＋`HitTest::alpha_mask()`＋`AlphaMaskResource`（面と同じ物理寸のマスク）を持つ。マスクは装着の時は空（何も受けない。マスクを入れないと wintf は矩形全体の判定へ縮退する）で、提示が面を描き替えたフレームに、表示と同じ配置の結果（見えている字だけ）と面反映済みのスクロールから作った字の矩形（`choice::glyph_cells`・面の左上を原点とする物理 px。ブロック軸は行矩形と選択肢の帯（`line_bands`・`decorate_canvas`／`derive_hit_rows` へ渡すのと同じ列）の和）へ入れ替える（`TextSurface::set_hit_cells`・同じ集まりなら焼き直さない）。`\c`・`ClearAll`・箱を隠す印・登録を外すときは、次のフレームの同期で面の entity ごと片付くので、字の矩形も残らない（要件 9.4）。片付くまでの最大 1 フレームは、画素と同じくマスクも前の姿のまま残る（そのあいだの操作は `shown_boxes` が外れているのでシェルへの操作になる）。`Children` の中の位置は「差し込み口の直後から、element番号の大きい順」。絵の entity より前なので、画像より手前に描かれる（要件 3.7・3.9）。
 - 箱がサーフェスの画像からはみ出す置き場所は採用し、最初に面にするときに 1 度だけ `warn!` する（サーフェス番号・名前・箱の四角・サーフェスの大きさ）。はみ出した部分は窓の端で切れる見込みである（窓の大きさは絵の大きさだけで決まる＝`frame/scale_text.rs` の `reconcile_reported_sizes`）。**この見え方は測っていない**（要件ディスカッションの結論 7 の「実測して決める」は未了）。決め手は実機の確かめの「はみ出す定義」の項目で、そこで「窓の端で切れる・窓の大きさが変わらない」を確かめる。違っていた場合は、採用する・警告するは変えず、見え方の記述だけを直す。
 - `shown_boxes`: 最後に提示したフレームで文字が 1 字以上見えていた箱の四角を、手前から順に返す。サーフェスの切替と `\s[-1]` で箱の名前が今のサーフェスの箱の列から外れたとき、または置き場所が変わったとき・`\c`・`ClearAll`・`hide_boxes`・`set_box_layout` のときは、その場で写しから外す（選択肢の当たり行の写しと同じ規律）。`\b[名前]` で行き先だけが替わったときは、前の箱の文字は出たまま（要件 4.5）なので外さない。
 
@@ -798,6 +798,7 @@ pub(crate) fn settle_box_hover(prev: Option<&BoxName>, shown: &[ShownBox]) -> Op
   3. シェルの窓から出る（窓の離脱のハンドラ → `None`。強調も外す・`balloon_exit.rs` と同じ後始末）。
   4. 箱の文字が消える（時間切れ・中断・`\c`・サーフェスの切替・次の台詞の頭）: ポインタが動かなくても、`balloon_visibility_phase.rs` の観測の直前に毎フレーム `settle_box_hover` を通して `None` へ戻す。
 - 時間切れの観測の `hover` には、整えた後の値が `Some` かどうかを入れる。4 が無いと、ポインタを置いたまま箱の文字が消えた後も印が残り、次に出た箱の文字が時間で消えなくなる（要件 6.11 の待ちが止まり続ける）。
+- 「箱の上にある」（要件 6.11）は、areka にポインタが届いている箱の上のこと。要件 9.4（2026-10-04 改訂）で、絵が透明で字の矩形にも入らない所（字と字の隙間・箱の四角の空いた所）は下のアプリへ通るので、そこではシェルの窓から出たのと同じ（3）になり、待ちは進む。字の矩形とシェルの絵の上では止まる。
 
 **Implementation Notes**
 - Integration: 箱の四角の中で選択肢の行の上でない移動は、滞在を記録してから既存の道へ落とす（`OnMouseMove` は今までどおり送る・要件 9.1・9.7）。

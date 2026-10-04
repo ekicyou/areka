@@ -302,7 +302,7 @@ fn talking_left_double_click_on_box_breaks_without_a_shell_double_click() {
 }
 
 /// 箱の中の行の上でない単押しはシェルへの操作のまま（今までどおり何も送らない）。
-/// 話していないあいだの左ダブルクリックはシェルのダブルクリックになる（要件 9.7）。
+/// 話していないあいだの左ダブルクリックはシェルのダブルクリックになる（要件 9.1）。
 #[test]
 fn not_talking_left_double_click_on_box_reaches_the_shell() {
     let mut f = Fixture::new();
