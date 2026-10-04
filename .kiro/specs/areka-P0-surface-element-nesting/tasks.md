@@ -7,7 +7,7 @@
 > 触らないファイル（同じ時期に並走する spec と重ねないため）: `areka-parsers` の `shell/mod.rs`・`model.rs`・`decode.rs`・`boxes.rs`、`areka-emo-atlas` の `manifest.rs`・`AtlasKey`・`AtlasTable::new` の形、`areka-emo-text` の全体、`crates/areka/src/input_events/`、`areka-emo-present` の `cache.rs`、`areka-seriko` の `state.rs`。既存の golden のテストと seriko の決定論テストは期待値を 1 本も書き換えない（呼び出しの形の変更に合わせた書き換えだけは数えない）。
 
 - [ ] 1. 着手前の確認と、前と同じであることの基準を採る
-- [ ] 1.1 既存テストの刻みの飛びを確かめ、emo2 の発行列と乱数の呼び出し回数を実装の前の HEAD で採って焼き込む
+- [x] 1.1 既存テストの刻みの飛びを確かめ、emo2 の発行列と乱数の呼び出し回数を実装の前の HEAD で採って焼き込む
   - 最初に、実物の emo2 の表で刻みを回す既存テスト（`crates/areka-seriko/tests/regression.rs`・`cue_sequence.rs`・`loop_integration.rs`・`bind_e2e.rs`・`balloon_face_e2e.rs` と、`src/` の `looper_*tests.rs`・`actor_*tests.rs` のうち emo2 の表を使うもの）の注入する刻みの列を読み、隣り合う刻みの差が 880ms 以上になる所を全部挙げる
   - 挙がった所ごとに、その直前に `\1` のまばたき（`surface.append10,2100`・`surface.append2200` の `animation0`）が発火し、刻みの時点で 2110／2210 が絵に出ている（発火の 40ms 後〜120ms 後）かを判定する。当たるものがあれば、そのテストの期待値が要件 7.5 の端（乱数を 1 つ多く消費し、2106／2206 が最長 80ms 重なりうる）に触れるので、実装へ進まずに開発者へ報告して止まる
   - `crates/areka-seriko/src/looper_parts_emo2_tests.rs` を新設し、`looper.rs` の末尾に接続の宣言だけを足す（本番の振る舞いには触らない）。上の確認の結果（飛びを含むテストの一覧と、端に当たるか否か）をこのファイルの冒頭の説明に書く
@@ -201,3 +201,7 @@
   - `\s` の切り替えを台本で何度か起こし、部品の発火・停止の記録（部品の番号の欄）が切り替えをまたいで途切れないこと、無い番号・循環・子の中の箱の `warn!` が読み込み 1 回につき 1 度ずつ出ることを記録の検索で判定する。見た目の確かめが要る所は 1 項目ずつ開発者の GO を待つ
   - 完了の姿: 自動で終わった実機の記録に、切り替えの前後で同じ部品の番号の行が続き、警告 3 種が 1 行ずつある
   - _Requirements: 3.1, 3.2, 5.6, 5.7, 6.1_
+
+## Implementation Notes
+
+- 1.1: 実物の emo2 の表で seriko の刻みを回す既存テストは、seriko の中には 0 本・`crates/areka/src/emo2_boot/spine_seriko_loop_tests.rs` に 5 本（端には当たらない）。`looper_parts_emo2_tests.rs` は `\0` に 1400 を足した着せ替えで、`Show` 73 件・乱数 118 回を HEAD のリテラルで固定した（`LoopRuntime::on_tick` の段。actor の `refresh_parts` はこの檻を通らない）。

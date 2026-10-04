@@ -435,6 +435,9 @@ impl LoopRuntime {
 }
 
 #[cfg(test)]
+#[path = "looper_parts_emo2_tests.rs"]
+mod parts_emo2_tests;
+#[cfg(test)]
 #[path = "looper_replace_tests.rs"]
 mod replace_tests;
 #[cfg(test)]
