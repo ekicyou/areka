@@ -9,6 +9,7 @@
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+use areka_emo_compose::{ComposeError, ComposedSurface};
 use areka_emo_present::EmoPresenter;
 use areka_mcp::ToolOutcome;
 use areka_mcp::tools::dump_surface::Args;
@@ -133,22 +134,33 @@ fn answer(world: &World, args: &Args) -> Option<Step> {
                 )),
             }
         }
-        SurfacePlan::Alone { scope, surface_id } => {
-            match presenter.compose_alone(shell_target(scope), surface_id) {
-                Some(Ok(pic)) => picture(
-                    scope,
-                    surface_id,
-                    judge::alone_text(scope, surface_id),
-                    pic.bytes(),
-                    pic.width(),
-                    pic.height(),
-                ),
-                Some(Err(e)) => Step::Now(fail(TOOL, scope, &e.to_string())),
-                // 判断が同じ表示の層でスコープの登録を確かめた後なので、ここへは来ない。
-                None => Step::Now(fail(TOOL, scope, judge::NO_SUCH_SCOPE)),
-            }
-        }
+        SurfacePlan::Alone { scope, surface_id } => alone(
+            scope,
+            surface_id,
+            presenter.compose_alone(shell_target(scope), surface_id),
+        ),
     })
+}
+
+/// 単体の合成の結果から答えの種を作る（要件 2.1）。合成の結果が無い（表示の層にスコープのシェルが
+/// 無い）のは、判断が同じ表示の層で登録を確かめた後なので届かない枝。届いたら専用の文言で想定外の失敗。
+fn alone(
+    scope: u32,
+    surface_id: u32,
+    composed: Option<Result<ComposedSurface, ComposeError>>,
+) -> Step {
+    match composed {
+        Some(Ok(pic)) => picture(
+            scope,
+            surface_id,
+            judge::alone_text(scope, surface_id),
+            pic.bytes(),
+            pic.width(),
+            pic.height(),
+        ),
+        Some(Err(e)) => Step::Now(fail(TOOL, scope, &e.to_string())),
+        None => Step::Now(fail(TOOL, scope, "the shell of this scope is not ready")),
+    }
 }
 
 /// 絵を写して、本文＋画像 1 枚の成功を別のスレッドで仕上げる（要件 1.4・2.4・5.4）。大きさが合わなければ

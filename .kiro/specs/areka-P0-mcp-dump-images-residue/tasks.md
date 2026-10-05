@@ -13,7 +13,7 @@
   - _Boundary: areka-emo-text surface.rs_
 
 - [ ] 2. 答え方の部品を作り直す（`dump_surface` の側）
-- [ ] 2.1 (P) 指定の surface の合成の結果から答えの種を作る関数を置き、届かない枝に専用の文言を与える
+- [x] 2.1 (P) 指定の surface の合成の結果から答えの種を作る関数を置き、届かない枝に専用の文言を与える
   - 合成の結果が「無い」ときは `NG:the shell of this scope is not ready` と `error!` 1 件で答える。成功と合成の失敗の振る舞いは今のまま
   - 「無い」を渡すと本文・`isError: true`・画像なし・ERROR 1 件になることを、記録を捕まえる決定論テストで固定する
   - _Requirements: 2.1, 7.1_
@@ -90,3 +90,4 @@
 
 - 1.1: `surface.rs` は 994 行で上限 1,000 の手前。後のタスクはこのファイルに足さない。
 - 1.1: 今の道具（clippy 0.1.99・2026-09-28）では `cargo clippy -p areka-emo-text --all-targets -- -D warnings` が、このブランチで触っていないファイル（`choice.rs`・`viewbox*.rs`・`draw_line_store.rs`・各 `*_tests.rs` など）の約 36 件と `dola` の組み立てで赤になる。この spec の外の問題（完了の棚卸で起票）。タスクの判定は `--no-deps` で回し、触ったファイルの指摘だけを見る。
+- `areka` にライブラリの的は無い。テストは `cargo test -p areka -j 2 --bin areka`（`--lib` は通らない）。
