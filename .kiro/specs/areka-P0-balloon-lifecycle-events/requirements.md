@@ -34,7 +34,7 @@
   - 互換対応表（`doc/COMPAT_ARCHITECTURE.md` の沈黙ルール対応表）と網羅の台帳（`doc/ukadoc-coverage/ledger/shiori.toml` の 3 行・`sakura-script.toml` の `balloontimeout` の行の持ち主）とその生成物の更新。
   - 決定論のテストと、実機での確認。
 - **Out of scope**:
-  - **中断位置（`OnBalloonBreak` の Reference2）の源を作ること**。台本の中の位置を、字句から台本のコンパイル・再生・完了の知らせまで通す工事が要る。本 spec では空で送り、縮退として登記し、別 spec に切る（要件 6.2・討議で確定する点 A）。
+  - **中断位置（`OnBalloonBreak` の Reference2）の源を作ること**。台本の中の位置を、字句から台本のコンパイル・再生・完了の知らせまで通す工事が要る。本 spec では空で送り、縮退として登記する。位置を通す工事は `areka-P0-balloon-break-position` が持つ（要件 6.2・討議で確定する点 A）。
   - **`\![set,balloontimeout,時間]` の表示の側（brief の項目 7）**。台本のコンパイルの側を持つ `areka-P0-sakura-time-directives` が着手前なので、本 spec から切り離す（要件 6.5・討議で確定する点 C）。台本にこのタグがあっても、今と同じく既定の待ち時間のまま。
   - `\x`／`\x[noclear]`（クリック待ち）。`areka-P0-talk-fast-forward` が持つ。
   - 利用者の中断そのものの規則（ダブルクリックで止まること・即座に隠れること・中断を禁じる区間・終了の予約の扱い）。完了 spec `areka-P0-balloon-break` の約束をそのまま使い、変えない。
@@ -56,7 +56,7 @@
 ## 討議で確定する点
 要件の討議で開発者と決める。下の要件は、括弧内の既定（brief の推しか、軽い側）で書いてある。答えが既定と違えば、該当する要件を書き直す。
 
-- **A. 中断位置（Reference2）を今作るか**（要件 1.4・6.2）——既定: **作らない**。空で送り、互換対応表に縮退を登記し、位置を通す工事は別 spec に切る（規模 M のまま）。作るなら規模が L（18〜24 タスク）になり、台本のコンパイルの列と同時に走れない＝brief の推しどおり「⒜ 発火（本 spec）→ ⒝ 位置の工事（別 spec）」に分ける。
+- **A. 中断位置（Reference2）を今作るか**（要件 1.4・6.2）——**確定（2026-10-05 開発者裁定「今は作らない。起票を行え」）**: 空で送り、互換対応表と網羅の台帳に縮退を登記する。位置を通す工事は `/kiro-discovery` で起票した `areka-P0-balloon-break-position`（その他・台本のコンパイルの列の最後）が持つ。本 spec の規模は M のまま。
 - **B. areka で `OnBalloonClose` が起きる場面**（要件 3）——既定: **再生中のトークが無いときに、出ているバルーンを利用者が左ダブルクリックして隠したとき**だけ送る。areka のバルーンには閉じるボタンが無い。同じダブルクリックでも、再生中なら中断（`OnBalloonBreak`）、再生が終わって表示だけが残っているなら「読み終えたバルーンを閉じた」（`OnBalloonClose`）と読む。SSP の本体設定の説明（「スクリプトブレーク」は「スクリプトの表示を中断し、バルーンを閉じます」）と、完了 spec `areka-P0-balloon-visibility` の確定判断「クリックによる閉鎖は `OnBalloonClose` へ集約される」に沿う。台本の `\b[-1]`・次のトークの開始での消去・時間切れでは送らない。別の案は「areka には閉じる操作が無いので送らず、縮退として登記する」（この場合、予約の型の閉じる分岐は追跡先つきで残る）。
 - **C. 項目 7（`balloontimeout` の表示の側）の扱い**（要件 6.5）——既定: **本 spec から切り離し**、`areka-P0-sakura-time-directives` に表示の側も引き取ってもらう（台本のコンパイルの側と揃って初めて成り立つため。brief「着手するときは 8 と 10 を先に、7 は切り離す」）。引き取り先を別の新しい spec にするなら `/kiro-discovery` で起票する。どちらでも、台帳と互換対応表の持ち主を引き取り先の名前へ直す。
 - **D. `OnBalloonTimeout` の Reference1（残り時間）の値**（要件 2.3）——**討議の前に確定: `0`**（時間切れは満了の時刻に達した巡で決まるので残りは常に 0 以下で、ほかの値を作る材料が無く、単位も決めずに済む）。正典は「残り時間」とだけ書き、何の残りか・単位を示さない。時間切れの時点では待ち時間の残りは 0 なので `0` を送り、areka 裁量として互換対応表に記録する。
@@ -127,7 +127,7 @@
 
 #### Acceptance Criteria
 1. The 開発チーム shall 互換対応表の行「`OnBalloonClose` ／ `OnBalloonTimeout` ／ `OnBalloonBreak` の SHIORI 発火」を、送る場面（要件 1〜3）と Reference の入れ方に書き直し、正典が沈黙する点の areka の決定（`OnBalloonClose` を送る場面・`OnBalloonTimeout` の Reference1 を `0` とすること・中断の後に定常へ戻ったときだけ `OnBalloonBreak` を送ること・3 つとも GET で送ること）を根拠の区分（正典整合／areka 裁量）とともに記録する。
-2. The 開発チーム shall `OnBalloonBreak` の Reference2 を空で送ることを縮退として互換対応表に記録し、中断位置を通す工事の追跡 spec を本 spec の完了までに `/kiro-discovery` で起票して、その名前を互換対応表と台帳に書く（追跡先の無い先送りを作らない）。
+2. The 開発チーム shall `OnBalloonBreak` の Reference2 を空で送ることを縮退として互換対応表に記録し、追跡先 `areka-P0-balloon-break-position`（起票済み）の名前を互換対応表と台帳に書く（追跡先の無い先送りを作らない）。
 3. The 開発チーム shall 互換対応表の行「会話が中断で終わったときのタイムアウト起点」を、要件 5 の規則に書き直す。
 4. The 開発チーム shall 網羅の台帳の 3 行の状態を実際に合わせ（`OnBalloonClose`・`OnBalloonTimeout` は実装済み、`OnBalloonBreak` は Reference2 を空で送るので縮退）、持ち主を本 spec の名前へ直し、`note` を書き直し、台帳から作る生成物を作り直す。実装済みとする行には、ソースの側に正典の URL の証拠を置く。
 5. The 開発チーム shall `\![set,balloontimeout,時間]` の表示の側を本 spec では実装せず、台帳の `balloontimeout` の行と互換対応表の該当行の持ち主・追跡先を、引き取る spec の名前へ直し、引き取る spec の brief に相互登記する（討議で確定する点 C）。
