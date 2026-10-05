@@ -83,6 +83,9 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **判定は終了コードで行う**: `| Select-String` で絞ると終了コードが失われ赤でも通って見える。`--no-fail-fast` で最初の赤いバイナリの後ろも回し、段ごとの合否を最後に一覧する
 - **重いビルドを同時に走らせない**: `-j 4`（ページング不足 os error 1455 の回避）。`cargo deny`／`cargo about` はテストと並べると rustc がメモリ不足で落ちるので最後に直列
 - 実物の SHIORI・実機サインオフ用のテストは環境変数（`AREKA_EMO2_REAL_RUN`・`HOST32_PASTA_DLL` など）が無ければ飛ばす＝フルテストの対象外。ネットへ出るテストは常時テストに入れない
+- **段 `encoding check`**（`tools/encoding-check.ps1`・crates.io の公開前の確認の後、`-License` の段の前）: リリースの道具（`tools/*.ps1`・`tools/perf/` を除く）と `.github/workflows/*.yml` の `run:` の本文を構文解析して、端末へ出す文の ASCII の外の字・端末の文字コードの書き替え・`cargo metadata`／`nar-sample-path` の素の呼び出しを赤にし、端末を 932 にした自分だけの子で `Invoke-Utf8Child`（`tools/utf8-child.ps1`）が UTF-8 を字のとおりに読むことを確かめる（2026-10-06 `areka-P0-tools-utf8-child-output`）
+
+**道具が端末へ出す文は ASCII だけ・端末の文字コードを書き替えない**（`tools/` のスクリプトと workflow の `run:` の本文）: 進みの表示・失敗の文・判定の結果の行・投げる例外の文は英語（ASCII）で書く。`[Console]::OutputEncoding` などの代入や `chcp` で端末を書き替えて逃げない。子のプロセスの出力を値として読む所（JSON・パス・版）は `tools/utf8-child.ps1` の `Invoke-Utf8Child` で UTF-8 のバイトとして読む。子の出力をそのまま写すだけの所は中身を書き替えない（932 の端末で `cargo deny` の罫線が崩れて見えるのは表示だけで合否に効かない）。注記・段の名前（workflow）・手順書の地の文は日本語のままでよい
 
 **テストの門は手元のフルテスト（`tools/test-all.ps1`）のまま。ビルドと配布だけを GitHub Actions に乗せる**（タグ `v*` の push のときだけ・`.github/workflows/release.yml`。x64 と arm64 の zip と SHA256 を作って GitHub Release を公開する。手で始めて公開しない試しの走りもある）。zip の起動確認（配布スクリプトの `-Check`）は窓を出すので CI では回さず、手元で通す（`release-cycle` の手順）。テストを GitHub Actions へ移すことは 2026-09-24 に検討して見送った。テストの主役は実窓・WUC・GPU 描画の GUI 層で、ホスト型の実行環境で同じ水準を確かめられる見込みが薄いため（デバッグビルドの `GraphicsCore::new()` は D3D11 デバッグ層を必ず要求する等）。
 
