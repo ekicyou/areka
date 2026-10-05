@@ -1,16 +1,16 @@
 {
   "feature_name": "areka-P0-tools-utf8-child-output",
   "created_at": "2026-10-05T13:51:03Z",
-  "updated_at": "2026-10-05T13:53:05Z",
+  "updated_at": "2026-10-05T14:33:34Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {
