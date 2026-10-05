@@ -156,7 +156,7 @@ crates/wintf/
 
 `Cargo.toml`・`README.md`・`tick_wake.rs`・`tick_gate_tests.rs`・ポインタやドラッグのファイルには触れない。
 
-brief のウェーブ C4 の約束は「触るのは `crates/wintf/src/` だけ」だが、要件 7.4 がサンプルを求めるので、`crates/wintf/examples/tooltip_demo.rs` の新規の 1 ファイルだけを `src/` の外に置く（サンプルは自動で見つかるので `Cargo.toml` は変わらず、他の spec のファイルとも重ならない）。
+brief のウェーブ C4 の約束は「触るのは `crates/wintf/src/` だけ」だが、要件 7.4 がサンプルを求めるので、`crates/wintf/examples/tooltip_demo.rs` の新規の 1 ファイルだけを `src/` の外に置く（サンプルは自動で見つかるので `Cargo.toml` は変わらず、他の spec のファイルとも重ならない）。この例外は 2026-10-05 の設計の討議で開発者に報告し、認められた。
 
 ## System Flows
 
