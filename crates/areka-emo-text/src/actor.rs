@@ -24,7 +24,7 @@ use tracing::debug;
 use crate::choice::ResolvedChoiceStyle;
 use crate::cursor_tag::CursorWarnGuard;
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, DWriteMetrics, ResolvedFont};
-use crate::lookahead::advance_state;
+use crate::lookahead::{TalkLookahead, advance_state};
 use crate::place::PlaceKey;
 use crate::region::{ScaleContract, TextRegion};
 use crate::sink::{EmoTextSink, TextMsg, handle_text_msg_with};
@@ -263,6 +263,9 @@ pub struct TextLayerRuntime {
     /// 箱を隠す印・箱の同期が登録を外した箱）はその場で外す。台本の `\s` の受け取りでは外さない
     /// （置き場所は絵の番号に従い、絵が替わった同期で外れる）。
     shown_boxes: HashMap<ActorKey, Vec<ShownBox>>,
+    /// 先渡しの空回しで求めた区間の全文の持ち主（[`preview_talk`](Self::preview_talk) が入れ、
+    /// 合図の適用が消去と届いた数を数える）。正本ではない（届いた字の正本は `state`）。
+    lookahead: TalkLookahead,
 }
 
 impl TextLayerRuntime {
@@ -291,6 +294,7 @@ impl TextLayerRuntime {
             box_overflow_warned: BTreeSet::new(),
             box_definition_warned: BTreeSet::new(),
             shown_boxes: HashMap::new(),
+            lookahead: TalkLookahead::default(),
         }
     }
 
@@ -307,15 +311,17 @@ impl TextLayerRuntime {
     ///   R6.4/R7.4）。上流は残存スコープを列挙できないため、全消しは本ランタイムが自己完結して
     ///   行う（`state.rs::apply_cue` の全 `actor_states` 消去と対）。
     pub fn apply_cue(&mut self, cue: &TalkCue) {
+        // 状態を進める前の行き先（`\c` が消すのは今の行き先の場所だけ＝純粋状態の `apply_cue` と
+        // 同じ宛先）。先渡しの区間の番号は空回しと同じく、この行き先で消去を数える（要件 4.1）。
+        let place = PlaceKey {
+            actor: cue.actor.clone(),
+            place: self.state.destination(&cue.actor),
+        };
+        self.lookahead.note_cue(cue, &place);
         // catch-all を置かず variant を明示し、将来 dola が clear 系 variant を追加した際に
         // コンパイラへ描画実行部側の再検討を強制する（no-catch-all 規律）。
         match &cue.command {
             CueCommand::Clear => {
-                // `\c` が消すのは今の行き先の場所だけ（純粋状態の `apply_cue` と同じ宛先）。
-                let place = PlaceKey {
-                    actor: cue.actor.clone(),
-                    place: self.state.destination(&cue.actor),
-                };
                 if let Some(render) = self.surfaces.get_mut(&place) {
                     render.executor.request_clear();
                 }
@@ -360,6 +366,19 @@ impl TextLayerRuntime {
         // `\c`・台詞の頭で文字が無くなった箱を、提示を待たずに写しから外す。`\s` の受け取りは
         // 行き先だけを替え、箱の置き場所は絵の番号に従う（次の箱の同期が決める）ので外さない。
         self.prune_shown_boxes();
+    }
+
+    /// 先渡し（再生の前に渡された、これから届く合図の全部）を受け取る: 今の状態の写しで空回しし、
+    /// 区間の全文を入れ替える（要件 2.1）。受け取ったことを `debug!` 1 行（合図の数・求めた区間の数）で
+    /// 残す——実機の確かめは、最初の字の適用より前にこの行があることを読む（design.md「Monitoring」）。
+    fn preview_talk(&mut self, upcoming: &[TalkCue]) {
+        self.lookahead
+            .install(&self.state, self.surface_resolver.as_deref(), upcoming);
+        debug!(
+            cues = upcoming.len(),
+            sections = self.lookahead.section_count(),
+            "先渡しを受け取った——空回しで区間の全文を求めた"
+        );
     }
 
     /// 純粋状態機械（可視グリフ数・actor 状態の読み取り口）。
@@ -492,7 +511,7 @@ impl TextLayerRuntime {
 ///
 /// handler は `runtime` の `Rc` clone を捕捉し（`!Send` handler・基盤許容）、
 /// [`handle_text_msg_with`]（終了規律の正準写像）へ委譲して cue を純粋状態へ適用する。
-/// 先渡し（`TextMsg::Upcoming`）はこの時点では受け取って使わない（実行時へ渡す口は後のタスク）。
+/// 先渡し（`TextMsg::Upcoming`）は実行時の `preview_talk` へ渡し、空回しで区間の全文を求める。
 /// 終了経路はちょうど 2 つ——`TextMsg::Close` 受領＝`Ok(Break)`・全 `UiSender`
 /// （＝全 [`EmoTextSink`] クローン）drop＝drain 正常終了（R1.4・error ログなし）。
 /// 個別 cue の適用失敗（runtime 借用競合など）は `Err` 戻し→基盤が `error!`＋継続する
@@ -520,7 +539,18 @@ pub fn spawn_emo_text(
                     cue.actor, cue.at
                 )),
             },
-            |_upcoming| Ok(()),
+            |upcoming| match runtime.try_borrow_mut() {
+                Ok(mut rt) => {
+                    rt.preview_talk(&upcoming);
+                    Ok(())
+                }
+                // 借用競合——cue と同じく Err 戻しで基盤の error!＋継続に乗せる（そのトークは
+                // 先渡し無し＝修正前の動きになり、文節の折り返しでは warn が出る）。
+                Err(_) => Err(format!(
+                    "TextLayerRuntime が借用中のため先渡しを受け取れない（cues={}）——そのトークは先渡し無し",
+                    upcoming.len()
+                )),
+            },
         )
     })?;
     Ok((EmoTextSink::new(tx), handle))

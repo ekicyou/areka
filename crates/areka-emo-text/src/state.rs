@@ -415,13 +415,6 @@ impl TextLayerState {
     ///
     /// 止めるのは warn だけで、`debug!` と warn 済みの記録の集合の更新は本番と同じ
     /// （集合は写しの中だけで進み、本番の集合には触れない）。
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "タスク 4.1 で TalkLookahead::install を実行時から呼ぶまで"
-        )
-    )]
     pub(crate) fn rehearsal_copy(&self) -> TextLayerState {
         TextLayerState {
             rehearsal: true,

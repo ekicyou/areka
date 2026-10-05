@@ -117,3 +117,62 @@ fn arrange_for_test_lays_out_with_fixed_metrics_without_gpu() {
         "配置の入力の無い場所は None"
     );
 }
+
+/// 先渡しの受け取り（タスク 4.1・要件 2.1・4.1）: 本物の受け口（[`spawn_emo_text`](super::spawn_emo_text)
+/// の取り出し）へ先渡しを積んで汲み出すと、実行時が空回しして区間の全文を持ち、受け取りの
+/// `debug!` がちょうど 1 行（合図の数・求めた区間の数）出る。続く本番の合図は、状態を進める前に
+/// 消去を数える（頭の全消去と途中の `\c` で、その場所の区間の番号が 1 つずつ進む）。
+#[test]
+fn preview_rehearses_once_and_applied_cues_count_clears() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use areka_sakura::contract::{ActorKey, CueCommand, CueSink};
+    use log_capture_kit::capture;
+
+    use super::test_support::{cue, pump_until_idle};
+    use super::{TextLayerRuntime, spawn_emo_text};
+    use crate::place::PlaceKey;
+    use crate::state::TextLayerConfig;
+
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
+    let (mut sink, _handle) =
+        spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
+    // 頭の全消去 → 「あい」 → `\c` → 「う」: 区間は「あい」（番号 1）と「う」（番号 2）の 2 つ。
+    let cues = vec![
+        cue("0", 0.0, CueCommand::ClearAll),
+        cue("0", 0.0, CueCommand::Text("あい".into())),
+        cue("0", 0.1, CueCommand::Clear),
+        cue("0", 0.2, CueCommand::Text("う".into())),
+    ];
+    let ((), events) = capture(|| {
+        sink.preview(&cues);
+        pump_until_idle();
+    });
+    let received: Vec<_> = events
+        .iter()
+        .filter(|e| e.message() == "先渡しを受け取った——空回しで区間の全文を求めた")
+        .collect();
+    assert_eq!(received.len(), 1, "受け取りの debug! は 1 行: {events:?}");
+    assert_eq!(received[0].level, tracing::Level::DEBUG);
+    assert_eq!(received[0].field("cues"), Some("4"), "合図の数");
+    assert_eq!(received[0].field("sections"), Some("2"), "求めた区間の数");
+
+    let balloon = PlaceKey::balloon(&ActorKey::from("0"));
+    assert_eq!(
+        runtime.borrow().lookahead.number(&balloon),
+        0,
+        "先渡しを受け取った時点の番号は 0（本番の数えはここから）"
+    );
+    for c in cues {
+        sink.emit(c);
+    }
+    pump_until_idle();
+    assert_eq!(
+        runtime.borrow().lookahead.number(&balloon),
+        2,
+        "本番の合図の全消去と `\\c` を 1 つずつ数える"
+    );
+}

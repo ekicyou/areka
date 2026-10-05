@@ -104,13 +104,6 @@ fn begins_with(full: &ActorTextState, arrived: &ActorTextState) -> bool {
 /// 先渡しの空回しで求めた区間の全文の持ち主（design.md「`TalkLookahead`」）。
 ///
 /// 正本ではない（届いた字の正本は `TextLayerState`）。本番の状態を書き換えない。
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "タスク 4.1 で実行時（TextLayerRuntime）から呼ぶまで"
-    )
-)]
 #[derive(Default)]
 pub(crate) struct TalkLookahead {
     /// 場所 × 区間の番号 → その区間の全文。
@@ -125,13 +118,6 @@ pub(crate) struct TalkLookahead {
     delivered: usize,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "タスク 4.1 で実行時（TextLayerRuntime）から呼ぶまで"
-    )
-)]
 impl TalkLookahead {
     /// 先渡しを受け取る: 今の状態の写しで空回しし、区間の全文を入れ替える（design.md の手順 1〜8）。
     pub(crate) fn install(
@@ -195,6 +181,13 @@ impl TalkLookahead {
     /// 空回しをやり直す: 今の状態の写しから、先渡しの列のまだ届いていない残りを流し、
     /// 今の区間とそれより後の区間の全文を入れ替える（design.md の手順 1〜5）。
     /// 先渡しの列が無ければ何もしない。
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "タスク 4.3 で実行時の rehearse_again から呼ぶまで"
+        )
+    )]
     pub(crate) fn reinstall(
         &mut self,
         state: &TextLayerState,
@@ -229,6 +222,13 @@ impl TalkLookahead {
     }
 
     /// 箱の場所の区間の全文と数えを捨てる（箱の束の差し替え）。warn 済みの印も区間と一緒に捨てる。
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "タスク 4.3 で箱の束の差し替え（set_box_layout）から呼ぶまで"
+        )
+    )]
     pub(crate) fn forget_boxes(&mut self) {
         let is_box = |key: &PlaceKey| matches!(key.place, TextPlace::Box(_));
         self.sections.retain(|(place, _), _| !is_box(place));
@@ -236,9 +236,15 @@ impl TalkLookahead {
         self.counts.by_place.retain(|place, _| !is_box(place));
     }
 
-    /// 場所の今の区間の番号。
+    /// 場所の今の区間の番号（検査の読み口）。
+    #[cfg(test)]
     pub(crate) fn number(&self, place: &PlaceKey) -> u64 {
         self.counts.number(place)
+    }
+
+    /// 持っている区間の全文の数（先渡しの受け取りの記録に出す）。
+    pub(crate) fn section_count(&self) -> usize {
+        self.sections.len()
     }
 
     /// 写し `copy` で合図の列を空回しし、区間の全文を控える（`install` の手順 4〜5）。番号は
@@ -297,6 +303,13 @@ impl TalkLookahead {
 
     /// 配置に使う字の列を答える。全文が無い・食い違うときは [`Basis::Arrived`] を返し、
     /// （場所, 区間）ごとに初回だけ warn を残す。届いた内容に字が 1 つも無ければ warn しない。
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "タスク 4.2 で arrange_lines の文節の枝から読むまで"
+        )
+    )]
     pub(crate) fn basis(&mut self, place: &PlaceKey, arrived: &ActorTextState) -> Basis<'_> {
         let key = (place.clone(), self.counts.number(place));
         let reason = match self.sections.get(&key) {
