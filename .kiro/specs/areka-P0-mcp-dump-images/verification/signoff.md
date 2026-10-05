@@ -14,7 +14,7 @@
 | # | 確かめたこと | 結果 |
 |---|---|---|
 | ⑴ | `dump_surface`（省略）が今の姿の透過 PNG を返し、開いて画面と同じに見える | **合**（走行 3・`b222af2e`。走行 1 の `de80f039` でも合。下記） |
-| ⑵ | 表情を変えた後は、変わった姿が返る | 未実施 |
+| ⑵ | 表情を変えた後は、変わった姿が返る | **合**（走行 3。`sakurascript` が未実装のため、キャラクターのダブルクリックで表情を変える代わりの手順。下記） |
 | ⑶ | `surface` を指定しても画面は変わらず、その surface が返る | 未実施 |
 | ⑷ | 台詞の後の `dump_balloon` に背景と文字が入り、消えた後も同じ絵が返る | 未実施 |
 | ⑸ | 拡大率が 1 でない画面で ⑴ と ⑷ が原寸で返る | ⑴ の側は **合**（拡大率 200% の画面で 382×547＝原寸。下記）。⑷ の側は未実施 |
@@ -91,3 +91,17 @@ DEBUG areka::mcp::dump_surface: [mcp] 絵を返す tool="dump_surface" scope=0 s
 | `encode_us`（別のスレッド） | 31 | 12,048 µs | 15,709 µs | 20,534 µs |
 
 UI スレッドの側は最大でも 0.31 ms で、合否の線（16 ms）を大きく下回った。符号化そのものは中央 15.7 ms かかっており、走行 1・2 ではこれが丸ごと UI スレッドに乗っていた。ERROR の段の行は 0 件（標準出力・標準エラー出力の両方）。
+
+### ⑵（代わりの手順）
+
+要件 7.7 ⑵ は「`sakurascript` で表情を変えた後に撮る」だが、areka の `sakurascript` ツールはまだ中身が無く `NG:not implemented yet` を返す（`crates/areka/src/mcp/sakurascript.rs`・別の spec の受け持ち）。開発者の了承を得て、画面の右のキャラクターの体をダブルクリックし、ゴーストに表情を変えてもらう手順に替えた。
+
+ダブルクリックの 2 秒後に画面を撮った。右のキャラクターは「ダブルクリックしたね？ メニューやで。」と話し、目を開いて青いリボンで手を下ろした姿に変わっていた。その直後に `dump_surface` を引数なしで呼んだ。
+
+```
+本文: OK:scope 0, surface 1000 as currently shown (with running animations and dressups, before scaling and transparency)
+画像: image/png・base64 の長さ 180616（⑴ の 162972 から変わった）・isError=false
+DEBUG areka::mcp::dump_surface: [mcp] 絵を返す tool="dump_surface" scope=0 surface_id=1000 width=382 height=547 base64_len=180616 ui_us=247 encode_us=15794
+```
+
+返った PNG は、変わった後の画面と同じ姿（目を開き、青いリボン、手を下ろした姿）だった。surface の ID は 1000 のまま。emo2 は同じ surface の中のアニメーションと着せ替えで表情を変えており、表示の層の記録にも `ShowSurface` の `surface_id=1000` しか出ていない。本文が言う「動いているアニメーションと着せ替えを含む今の見た目」が写っている。
