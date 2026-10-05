@@ -34,6 +34,7 @@
 - バルーンを決める鎖の「descript の指定」の段と、その段の警告 `descript_balloon_not_found`、決まった段の腕 `BalloonRoute::Descript`。
 - ゴーストの切替で決まったバルーンの記録 `switch_balloon_resolved`。
 - `doc/COMPAT_ARCHITECTURE.md` §8 の 2 行と、網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の 5 行（`descript_ghost` の `balloon`・`default.balloon.path`・`recommended.balloon`・`recommended.balloon.path`、`descript_install` の `*.directory`）。
+- 台帳の 2 行の状態と担当を変えたことに伴う、`doc/ukadoc-coverage/briefing.md` のページ別の数（`descript_ghost`）と `doc/ukadoc-coverage/roadmap-draft.md` の本 spec の 1 行（「文書と台帳」の節）。
 
 ### Out of Boundary
 
@@ -41,7 +42,7 @@
 - 鎖の他の段（引数・記憶・唯一・既定・無作為・0 個の失敗）と、同梱の段の突き合わせ・警告 `companion_balloon_not_found` の形。
 - 記憶の読み書き（`boot_resolve.rs` の `read_last_balloon`・`LastUsed::record`・`record_last_balloon`）。
 - 実行中のバルーンの切替の決め方（`crates/areka/src/emo2_boot/shell_balloon_resolve.rs` の `resolve_skin_target`。差分 0 行）とシェルの切替（`emo2_boot/frame/switch.rs`・`shell_balloon_switch.rs`）、`ghost_session.rs`。
-- 台帳の上の 5 行以外の行、`doc/ukadoc-coverage/linkage.md`・`briefing.md`、台帳の `priority` の欄と注記の末尾の「束: …」の文。
+- 台帳の上の 5 行以外の行、`doc/ukadoc-coverage/linkage.md`、`briefing.md`・`roadmap-draft.md` の上に挙げた所以外、台帳の `priority` の欄と注記の末尾の「束: …」の文。
 - `recommended.*` の 2 行の status（`absent` のまま）。
 
 ### Allowed Dependencies
@@ -138,13 +139,15 @@ doc/
 ├── COMPAT_ARCHITECTURE.md             # 直す: §8 に 2 行
 └── ukadoc-coverage/
     ├── ledger/assets.toml             # 直す: 5 行
+    ├── briefing.md                    # 直す: descript_ghost のページ別の数
+    ├── roadmap-draft.md               # 直す: 本 spec の [[spec]] 1 行と数
     └── report/                        # 作り直し（道具が書く・手で直さない）
 ```
 
 ### Modified Files
 
 - `crates/areka-ghost/src/catalog.rs` — `companion_balloon` を最初の 1 個へ（名前と戻り値の型は変えない）。`StandardBalloonKeys` と `standard_balloon_keys` を足す。冒頭の説明の「同梱バルーン名（`install.txt` の `balloon.directory`）」を直す。新しいテストの `mod` を 1 つ足す。
-- `crates/areka-ghost/src/catalog_test_support.rs`・`catalog_tests.rs` — 共有なしで開いて「読めない」を作る補助 `hold_exclusive` を support へ移し、2 本のテストファイルから使う（同じ補助を 2 か所に書かない）。`companion_balloon_reads_one_key` の「番号付きは読まない」というコメントを直す（検体と期待値はそのまま通る）。
+- `crates/areka-ghost/src/catalog_test_support.rs`・`catalog_tests.rs` — 共有なしで開いて「読めない」を作る補助 `hold_exclusive` を support へ移し、2 本のテストファイルから使う（同じ補助を 2 か所に書かない）。`companion_balloon_reads_one_key` の「番号付きは読まない」というコメントを直す（検体と期待値はそのまま通る）。`catalog.rs` の `companion_balloon` の説明の「番号付きの鍵は読まない」も直す。
 - `crates/areka/src/boot_resolve.rs` — `BalloonInputs` に 2 欄を足し `listed` の型を変える。`BalloonRoute::Descript` を `Memory` と `Companion` の間に足す。`resolve_balloon` に段を足す。冒頭の説明（「7 分岐」「列挙の並びは判断に使わない」・既定の段の番号）を直す。新しいテストの `mod` を 1 つ足す。
 - `crates/areka/src/boot_resolve_tests.rs` — 補助関数 `balloon` が、受け取ったフォルダ名の列を `name` 無しの `BalloonEntry` の列へ直し、新しい 2 欄に `None` を入れる。既存のテスト本体は差分 0 行。
 - `crates/areka/src/boot_config.rs` — `resolve_balloon_for_ghost` が descript の 2 鍵を読んで渡し、列挙をそのまま渡す。`resolve_boot_from` の引数の腕は新しい 2 欄に `None` を渡す。関数の説明の段の並びを直す。新しいテストの `mod` を 1 つ足す。
@@ -352,6 +355,8 @@ descript の段（記憶の段の後・同梱の段の前）:
 | 鍵の値が当たらない | 次の鍵か次の段へ | `descript_balloon_not_found`（鍵ごと） | 2.12, 5.2 |
 | 根のバルーンが 0 個 | 失敗（今と同じ） | 起動は告知・切替は `ghost_switch_boot_failed` | 3.7 |
 
+「descript.txt が読めない」の出口へ届くのは、引数でゴーストを渡した起動か、列挙の後で読めなくなった場合だけ（`list_ghosts` が descript.txt を読めないゴーストを先に除くため）。
+
 起動を止める出口は増やさない（0 本）。
 
 ## 文書と台帳
@@ -382,6 +387,10 @@ descript の段（記憶の段の後・同梱の段の前）:
 
 - 5 行とも `priority` と注記の末尾の「束: …」の文は変えない（`linkage.md`・`briefing.md` から道具が導く値で、状態を変えても束の帰属と数は動かない）。
 - 直した後、`boot_config::default_balloon_root`・`boot_config::resolve_config_inputs` の綴りが `assets.toml` に 0 か所であることを検索で確かめる（今は 4 か所）。
+- 2 行の状態と担当を変えるので、整合のテスト（`crates/ukadoc-survey/tests/consistency/` の `briefing_arms.rs`・`spec_checks.rs`）が数え直す次の 2 か所も同じコミットで直す（先例: 完了 `areka-P0-mouse-drag-events`）。
+  - `briefing.md` の `[[barrier]]` `page = "descript_ghost"` の数: `implemented` 16 → 17・`degraded` 0 → 1・`absent` 58 → 56（着手時に今の値を読み直してから直す）。
+  - `roadmap-draft.md` に本 spec の `[[spec]]` を 1 行足す（`owner_count = 2`）。併せて `[briefs].count`・`snapshot_on`・説明の段落を先例と同じ形で直す。
+  - 採らなかった案: `owner` を空のままにする（`roadmap-draft.md` は触らずに済むが、読むようにした行の担当が台帳から辿れなくなる）。
 - `cargo run -p ukadoc-survey -- report` で報告を作り直し、`cargo test -p ukadoc-survey` を通す。テストが全体の報告の食い違いを指したら `report-summary` も作り直す。報告は手で直さない。
 
 ## Testing Strategy
@@ -395,10 +404,10 @@ descript の段（記憶の段の後・同梱の段の前）:
 
 ### 鎖（`crates/areka/src/boot_resolve_balloon_tests.rs`・I/O なし）
 
-3. 段の並び（7.2・7.3）: 記憶が descript と同梱に勝つ／descript が同梱に勝つ／同梱が既定に勝つ（候補 3 個以上）／記憶の先が無く descript へ（警告 1 件）／descript の先が無く同梱へ（警告は鍵の数だけ）／同梱の最初の 1 個が無く、候補に 2 個目の名前が在っても既定へ（警告 1 件）／引数が在れば、当たらない記憶・descript・同梱を渡しても記録 0 件で `Argv`。各場面で、決まったフォルダ・段・記録の件数と欄を判定する。
+3. 段の並び（7.2・7.3）: 記憶が descript と同梱に勝つ／descript が同梱に勝つ／同梱が既定に勝つ（候補 3 個以上）／同梱が無作為に勝つ（候補 2 個以上・既定のバルーンなし。無作為の添字は呼ばれない）／記憶の先が無く descript へ（警告 1 件）／descript の先が無く同梱へ（警告は鍵の数だけ）／同梱の最初の 1 個が無く、候補に 2 個目の名前が在っても既定へ（警告 1 件）／引数が在れば、当たらない記憶・descript・同梱を渡しても記録 0 件で `Argv`。各場面で、決まったフォルダ・段・記録の件数と欄を判定する。
 4. descript の突き合わせ（7.4）: `default.balloon.path` だけで当たる・当たらない／値が `../balloon/x`・`balloon/x`・`x/`・`C:\balloon\x` → どれも警告 1 件（`key`・`value`・`balloon_store` を判定）で次の段へ／`balloon` が `name` で当たる・フォルダ名で当たる・どちらにも当たらない／`name` と別のバルーンのフォルダ名の両方に一致 → `name` の側／同じ `name` が複数 → 列挙の並びで最初／大文字と小文字だけ違う → 当たらない／値が `random`（`random` という `name` のバルーンが在れば当たり、無ければ警告 1 件。無作為の添字は呼ばれない）／両方が書かれ `default.balloon.path` が当たる → 記録 0 件／先が当たらず `balloon` が当たる → 警告 1 件／どちらも当たらない → 警告 2 件で同梱へ／どちらも `None` → 記録 0 件。
 5. 同梱の値が区切りを含む（7.5 の 3 つ目）: 読み替えず `companion_balloon_not_found` 1 件で次の段へ。
-6. 実行中の決め方との突き合わせ（2.6）: 同じ候補と同じ名前（`name` で当たる・フォルダ名で当たる・両方に一致・複数の `name`・当たらない）について、鎖が descript の段で決めたフォルダ名と、`resolve_skin_target` に `SkinSpec::Name` を渡した答えが一致することを判定する。
+6. 実行中の決め方との突き合わせ（2.6）: 同じ候補と同じ名前（`name` で当たる・フォルダ名で当たる・両方に一致・複数の `name`・当たらない）について、鎖が descript の段で決めたフォルダ名と、`resolve_skin_target` に `SkinSpec::Name` を渡した答えが一致することを判定する。`SkinCandidate` の列は、鎖へ渡すのと同じ `BalloonEntry` の列 1 つから、本番の `balloon_candidates` と同じ写し方で作る（2 つの列を別々に手で書かない）。
 
 ### 実ファイル（`crates/areka/src/boot_config_balloon_tests.rs`）
 
@@ -407,8 +416,12 @@ descript の段（記憶の段の後・同梱の段の前）:
 
 ### 切替（`crates/areka/src/emo2_boot/ghost_switch_balloon_tests.rs`・切替の土台 `SwitchRig`）
 
+どちらの場面も、準備で切替先の検体の複製に記憶（`[last] balloon`）が無いことを確かめる（残っていると記憶の段が勝ち、場面が成り立たない）。
+
 9. 土台の根に 2 つ目のバルーン（土台のバルーンの複製・フォルダ名と `name` を変える）を足し、切替先の descript.txt に `balloon,<2 つ目のバルーンの name>` を足して切り替える → 起動の文脈の今のバルーンが 2 つ目・段が `Descript`・`switch_balloon_resolved` がちょうど 1 件で `route` と `dir` が合う（7.6・5.8）。
 10. 切替先の install.txt を番号付きだけ（`balloon0.directory` が 2 つ目・`balloon1.directory` が元のバルーン）に書き換えて切り替える → 2 つ目・`Companion`・記録 1 件（7.6）。
+
+「切替先を起こせず既定ゴーストへ戻すと記録が 2 件」の場面は足さない。記録は `boot_into` の 1 か所で、2 件になるのは既存の「戻す」配線が `boot_into` を 2 回通るからであり、本 spec が足す判断の分岐ではない。
 
 ### 既存のテストと見張り（書き換えずに通ること）
 
@@ -429,7 +442,7 @@ descript の段（記憶の段の後・同梱の段の前）:
 3. `boot_config_balloon_tests.rs`。
 4. `ghost_switch.rs` の記録と `ghost_switch_balloon_tests.rs`。
 5. `doc/COMPAT_ARCHITECTURE.md` §8。
-6. 台帳の 5 行・報告の作り直し・`cargo test -p ukadoc-survey`。
+6. 台帳の 5 行・`briefing.md` と `roadmap-draft.md` の数・報告の作り直し・`cargo test -p ukadoc-survey`。
 7. 実機の確認 A〜C。
 
 1 と 2 は順に、5 と 6 は 2 の後ならどちらが先でもよい。
