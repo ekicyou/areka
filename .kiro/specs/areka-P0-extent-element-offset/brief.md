@@ -67,3 +67,14 @@
   1. 案 A（和集合）か案 B（土台で切る・記録を出す）か（本文どおり・上の ukadoc の読みを添えて出す）。
   2. `element-base-method` との順: 両方が `plan.rs` を触り、`base` の意味（土台を置き換える）が外形の規則と直に絡む。**`element-base-method` を先に着地させ、その上で本 spec の裁定をする**のが自然（同時に走らせない）。
 - 同時に走らせない: `element-base-method`・`animated-image-playback`（C4・`plan.rs`）・`element-clipping-option`。
+
+
+## 2026-10-05 `animated-image-playback` からの申し送り（同 spec の設計・要件 10.6）
+
+> `animated-image-playback` が先に main へ入る（本 spec は未着手）。実装で形が変わったら同 spec が書き直す。着手時に引き直すこと。
+
+- `compute_extent`・`flatten_extent` は `crates/areka-emo-compose/src/plan.rs` から `plan_extent.rs` へ移した（中身は変えていない）。roadmap の「`plan.rs` の `flatten_extent`」は `plan_extent.rs` と読み替える。
+- 本 spec が足したのは 2 か所: `always` の animation の全部の pattern を数える輪と、動く絵の子（`ElementKind::Film`）の原寸。
+- 画像の element と動く絵の子は**同じ 1 行**で数えている。画像の element の X,Y を外形に足す直しは、その 1 行に入れれば子にも効く。
+- 着せ替えの pattern0 を「index が最小」で取る既存の食い違いは、直していない。
+- 手書きの `always` の外形は全部の pattern の和集合にした（開発者 2026-10-05・理由: 自動で作る子と手書きは同じに振る舞う／ずっと見える絵が外形で切れてはいけない）。ほかのアニメーション（`random` ほか）のコマは今までどおり数えていない。はみ出す絵の一般の決まりは本 spec の裁定のまま。
