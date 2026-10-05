@@ -48,7 +48,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.5, 4.1, 4.2, 4.4, 5.1, 5.2, 7.1_
 
 - [ ] 3. `dump_balloon` を待たない読み戻しへ移す
-- [ ] 3.1 既存の `dump_balloon` の成功のテストの待ち方を替える
+- [x] 3.1 既存の `dump_balloon` の成功のテストの待ち方を替える
   - GPU のテストの道具に「台詞の時計を止めたままフレームを回して答えを待つ」口を足し、既存の `dump_balloon` の成功を待つテストをその口に替える。期待する値は変えない
   - 今の同期の答えでも使える口なので、待ち方を替えた既存の GPU を通るテストがすべて緑（3.3 で答えが後のフレームになっても待ち方を替えずに済む）
   - _Requirements: 6.2_
@@ -95,3 +95,4 @@
 - 2.3: `send_back` に仮の dead_code の許しを付け、2.4 で外した。
 - 2.4: 並走の負荷の下では `ghost_session::` も 14 本ほど赤になることがある（台本の待ちの時間切れ）。単独で緑。
 - 2.5: `is_picture` は `dump_surface_tests.rs` に `pub(in crate::mcp)` で置いたが、`mod dump_surface_tests;` が非公開なので今は `dump_surface` の子からだけ使える。`dump_balloon_gpu_tests` から使うなら `dump_surface.rs` のその宣言を広げる（4.1）。
+- 3.1: GPU のテストの時計は 2 つ。台本の待ちと指令は注入する Tick の時刻（`answer_of` は止める）、字の現れは実時間（`FrameTime`）。4.1 で「台詞を進める」ときは Tick を進める口（`frames_until(step_ms>0, ..)`）を使う。
