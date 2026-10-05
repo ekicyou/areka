@@ -216,3 +216,121 @@ A と B は橋を共有する点で同じで、違いは「後続が触るファ
 - 対応表に在って台帳で `absent` の `\!` が実際に在るか（要件 4.10 のテストが最初から赤になるか）。
 - `crates/areka/src/mcp/` と `crates/areka-mcp/src/tools/` のファイルの行数の余裕（1 ファイル 1,000 行の上限）。
 - 外部の依存の調査は不要（rmcp の使い方は変えない）。4.2 の A を採るときだけ、`toml` を `crates/areka` の木へ入れる手続き（`deny.toml`・`THIRD-PARTY-NOTICES.md`）を確かめる。
+
+---
+
+# 設計の段の記録（2026-10-05）
+
+> ここから下は `/kiro-spec-design` が足した。上のギャップ分析はそのまま残す。設計の結論は [design.md](design.md) が正本で、ここは調べた事実と、採らなかった案の理由を置く。
+
+## 8. まとめ
+
+- **対象**: `areka-P0-mcp-author-tools`（登録口＋`check_script` の 1 本）
+- **調べ方**: 既存の作りへの拡張（軽い調べ）。外部の依存は増えないので、外の調べものはしていない。コードはすべて本ブランチを読んで確かめた。
+- **分かったこと**:
+  1. 再生の経路には、検査がそのまま呼べる純粋な関数が既に 4 つ在る（`SurfaceResolver::resolve`・`resolve_balloon_key`・`apply_font_tag`・`parse_choice_timeout`）。足りないのは「台本を読む段が位置と自分の扱いを返す口」と「`\!` を誰が拾うかを引ける表」の 2 つだけ。
+  2. 「`\!` を誰が拾うか」の表（`ConsumerLedger::canonical`）は既に在り、足りないのは 2 行（`compile` が読む `set,choicetimeout`・`areka-ghost` の `PROP_SET_CUE_NAME`）と、受け口の選別との一致を固定するテスト。受け口のファイルに手を入れずに済む。
+  3. 「受け取るが何もしない」の実例は、再生の経路に 2 種類だけ在る: 選択肢マーカー `\![*]`（`decode` の `fold_choice_marker` が受けるが何も作らない）と、文字の層が「語彙として受理したが表示は変えない」と値で返す `\f` のキー（`sub`・`sup`・`outline`・寄せ・影・`cursor*`・`anchor*`・スタイルシートの大きさの語）。
+  4. バルーンもスコープごとにシェルと同じ仕組みの対象として組まれているので、`EmoPresenter::has_surface` に `balloon_target(scope)` を渡せば面の ID の有無が分かる（7 章の調べものの 1 つ目の答え）。
+  5. `areka` クレートは `serde_json` に直接は依存していない。結果を JSON にする処理を `areka-mcp` の側に置けば、依存を足さずに済む。
+
+## 9. 調べた記録
+
+### 9.1 台本を読む段が黙って決めていること
+
+- **見た所**: `crates/areka-parsers/src/sakura/lexer.rs`（`scan`・`scan_tag`・`scan_bracket_args`）、同 `decode.rs`（`decode_token`・`decode_bare`・`decode_tag`・`fold_choice_marker`・`fold_legacy_q`・`wait_absolute_ms`・`newline_ratio_from_arg`・`speaker_scope_n`・`decode_choice`・`decode_passthrough_*`）、`crates/areka-sakura/src/compile.rs`（`compile`・`parse_choice_timeout`）。
+- **分かったこと**:
+  - `Instruction::Raw` になる道は 5 つ: 腕の無い角括弧つきのタグ・腕の無い角括弧なしのタグ・旧い 2 連の `\q`・想定外の短縮形（今は届かない）・字句の未閉じの吸収。前の 4 つは「知らないタグ」、最後の 1 つは「閉じていない」。
+  - 既定の値へ黙って落とす所は 4 つ: `\_w[…]`（引数なし・非数 → 0 ms）・`\n[…]`（`half` でも数でもない → 1.0）・`\p[…]`（引数なし・非数 → 0）・`\q[…]`（引数が 2 つ未満 → 空の ID）。`\n[]` は引数が 0 個で素の `\n` と同じ値なので、落としたとは数えない。
+  - `\s[…]`・`\b[…]`・`\_l[…]`・`\f[…]`・`\![…]` の引数は、読む段では解釈せずにそのまま下流へ運ぶ。
+  - `compile` が中身を読む `\!` は `set,choicetimeout` だけで、読めないときは `warn!` を出して既定にする。
+  - `\x`（クリック待ち）は `decode_bare` に腕が無く `Raw` になる。今の再生では捨てられるので、検査は「知らないタグ」と答える。
+- **設計への効き方**: 印は 4 種類で足りる（`UnknownTag`・`Unclosed`・`ArgumentDefaulted`・`MarkerIgnored`）。`decode` の中で落とす判断をした所が、そのまま印を付ける所になる。
+
+### 9.2 `\!` を拾う所の全数
+
+- **見た所**: `as_command_carrier` を呼ぶ所をリポジトリ全体で引いた。`crates/areka/src/emo2_boot/` の 8 つの受け口（`move_cue.rs`・`zorder_cue.rs`・`readme_cue.rs`・`user_break_cue.rs`・`change_cue.rs`・`switch_cue.rs`・`install_cue.rs`・`update_cue.rs`）、`crates/areka-seriko/src/actor.rs`（`bind`）、`crates/areka-emo-text/src/state_decoration.rs`（`font_tag_tokens`）、`crates/areka-ghost/src/prop_sink.rs`（`PropSetCueSink`）。
+- **分かったこと**:
+  - 8 つの受け口はどれも `new(送信端)` で組め、拾ったときだけ送信端へ指令を送る。受け口を変えずに「拾ったか」を外から見られる。
+  - `ConsumerLedger::canonical` は 15 行で、8 つの受け口・`bind`・`\f` の運搬名を載せている。`set,choicetimeout` と `PROP_SET_CUE_NAME` は載っていない。
+  - 台本に `\![areka.prop.set,…]` と書くと、名前がそのまま運搬名になり、`PropSetCueSink` が拾う（受け付けるのは起動回数などの数える鍵だけ）。同じく `\![\f,…]` と書くと文字の層が拾う。どちらも作者が書く綴りではないが、再生では実際に拾われる。
+- **設計への効き方**: 表に 2 行を足して「拾う所の全数」にし、検査は表だけを引く。一致のテストは 8 つの受け口を本物で組んで回す。
+
+### 9.3 `\f` のキーの扱い
+
+- **見た所**: `crates/areka-emo-text/src/look.rs`（`apply_font_tag`・`Note`・`is_unowned`・`STYLESHEET_SIZE_KEYWORDS`）、同 `state_decoration.rs`（`apply_font_args`）。
+- **分かったこと**: `apply_font_tag` は公開の純粋な関数で、`Note::VocabularyOnly`（`sub`・`sup`・`outline`）・`Note::Unowned`（寄せ・影・`cursor*`・`anchor*`）・`Note::StylesheetKeyword` を「受け取ったが表示は変えない」として値で返す。どの印になるかはキーと値だけで決まり、そのときの見た目には依らない。`Err` は値の誤りと未知のキー。
+- **設計への効き方**: 検査は使い捨ての見た目に `apply_font_tag` を当て、3 つの `Note` だけを「何もしない」として返す。`Err` は要件 3.4 の「受け口が読む引数」なので診ない。関数を取り出す仕事は要らない。
+
+### 9.4 surface・バルーンの事実を UI スレッドから読む道
+
+- **見た所**: `crates/areka/src/mcp/dump_surface.rs`（`PresenterFacts`・`answer`）、`crates/areka-emo-present/src/presenter/snapshot.rs`（`has_surface`）、`crates/areka/src/emo2_boot/assets.rs`（`build_shell_assets` が `SurfaceResolver` を作る所）、`crates/areka/src/emo2_boot/target_map.rs`（`shell_target`・`balloon_target`）、`crates/areka-emo-present/src/balloon.rs`（`build_balloon_target_from_faces` の説明）。
+- **分かったこと**: 再生の解決器は、最初に組んだシェルの `EmoWorld::alias_snapshot` から作る。表示の層の対象も同じシェルから組んだ `EmoWorld` を持つので、対象から別名の表を取り出せば同じ材料になる。取り出す口だけが無い。バルーンはスコープごとに「面の ID ＝ surface ID」の `EmoWorld` として組まれる。
+- **設計への効き方**: `EmoPresenter::alias_snapshot` を 1 つ足す。バルーンの有無は `has_surface` をそのまま使う。
+
+### 9.5 既存のテストと行数の余裕
+
+- `tools_tests.rs`・`tools_socket_tests.rs` は `TABLE`・`entrances`・`register_rows` を読む。`register_rows` の引数と戻り値を変えなければ触らずに済む。実ソケットの道具（`testkit` の `serve`・`rpc`・`post_rpc`）は別のテストファイルからも使える。
+- `decode_tests.rs`・`decode_font_tests.rs` は `decode(lex(input))` の形で呼ぶ。`lex` と `decode` の引数と戻り値を残せば触らずに済む。
+- 行数: `tools/mod.rs` 180・`mcp/mod.rs` 148・`handler.rs` 139・`help.rs` 64・`registry.rs` 78・`decode.rs` 400・`lexer.rs` 415・`consumer_ledger.rs` 859（テスト込み）。どれも足した後で 1,000 行に届かない。`consumer_ledger.rs` だけ余裕が小さいので、新しいテストは兄弟のファイルに置く。
+
+## 10. 比べた案と決めたこと
+
+### 10.1 橋の形（4.1 の A・B・C）
+
+- **決めたこと**: A（`ToolCall` に変種を足す・独自の表を別に持つ・`dispatch` に腕を足す）。
+- **採らなかった案**: B（独自の呼び出しの型と振り分けを別に持つ）は、実装が 1 つしか無い段を増やす。後続が触るファイルは A でも 2 つの共有ファイルに 3〜4 行ずつで、同じウェーブに置かない約束で足りる。C（橋を通さない）は、`check_script` がシェルの事実を UI スレッドから読むので当てはまらない。
+- **引き換え**: 後続の spec は `tools/mod.rs` と `mcp/mod.rs` を触る。足し忘れは網羅の `match` がコンパイルで知らせる。
+
+### 10.2 「知らない `\!`」の出どころ（4.3 の A・B・C）
+
+- **決めたこと**: A を仕上げる。`ConsumerLedger::canonical` に 2 行を足して全数にし、検査は `consumer_of` を引く。8 つの受け口との一致は 1 本のテストで固定する。
+- **採らなかった案**: B（各受け口に「自分が拾うか」を答えさせる）は 11 のファイルと 4 つのクレートに手が入る。C（網羅台帳）は要件 3.11 が禁じている。
+- **引き換え**: 表と受け口は別々のコードのままなので、一致はテストが守る。`emo2_boot` の外の 4 行（`bind`・`\f`・`PROP_SET_CUE_NAME`・`set,choicetimeout`）は、名前の定数の共有と各クレートの既存のテストで結ばれている。`bind` だけは名前が seriko の中の文字列で、共有の定数が無い。
+
+### 10.3 位置と印の出し方
+
+- **決めたこと**: `parse_noted` を足し、`parse` をその上に載せる（経路は 1 本）。
+- **採らなかった案**: 検査用に字句と意味の段をもう 1 組書く案は、再生と食い違う元になる。`Instruction` に位置を持たせる案は、`Instruction` を使う全員（`compile`・テスト多数）に響く。
+- **引き換え**: 再生のたびに、命令ごとに範囲と空の列が 1 つ余分に作られて捨てられる。空の列は確保を伴わないので、目に見える差にはならない見込み。
+
+### 10.4 位置の単位
+
+- **決めたこと**: 文字の数（Unicode の符号位置・0 始まり・末尾を含まない）。該当する綴りそのもの（`text`）を必ず添える。
+- **採らなかった案**: バイトは areka の内側の単位で、JSON の文字列を扱う側には数えにくい。UTF-16 の単位は JavaScript にだけ都合が良い。行と桁は、台本が 1 行の文字列であることが多く、役に立たない。
+
+### 10.5 結果の形
+
+- **決めたこと**: 1 行目 `OK:<n> diagnostics`、続けて診断 1 件につき 1 行の JSON。0 件は 1 行だけ。
+- **採らなかった案**: 全体を 1 つの JSON にする案は、10 本の `OK`／`NG:` の作法から外れる。SSP 風の表（Markdown）は、綴りの中の `|` や改行で壊れる。0 件を本文 `OK` だけにする案は、1 件以上のときと 1 行目の形が変わり、読む側の分岐が増える。
+- **引き換え**: 結果の構造化の欄（`structuredContent`）は使わない。`ToolOutcome` を変えずに済む。
+
+### 10.6 help の日本語の 1 行の置き場
+
+- **決めたこと**: 入口のファイル（定義の隣）の定数に置き、独自の表の行が運び、登録口が名前と対で預かる。
+- **採らなかった案**: help の側に名前をキーにした表を持つ案は、名前を 2 か所に書く（要件 4.3 に反する）。`ToolSpec` に欄を足す案は、`ToolSpec` を手で組んでいる既存のテストを広く直すことになる。
+
+### 10.7 UI スレッドか別スレッドか
+
+- **決めたこと**: UI スレッドでその場で答える。
+- **理由**: 仕事は台本の長さに比例する解釈と表引きだけで、ファイルも GPU も触らない。事実（表示の層）は UI スレッドでしか読めない。別スレッドへ出すには事実を値へ写す段が要り、得るものが無い。
+- **見張り方**: 処理が残す `debug!` の時間を実機確認で記録する。本文の上限は 4 MiB（`MAX_BODY_BYTES`）。
+
+## 11. まとめ直し（設計の前の 3 つの見直し）
+
+- **広げて捉える**: 「検査が答えること」は全部「再生の関数が値で返すことを、位置を付けて並べ直す」の 1 つの形に収まった。種類ごとに別の仕組みは要らない。
+- **作るか借りるか**: 判定は 1 つも新しく書かない（借りる 4 つの関数＋既存の表）。新しく書くのは、位置と印を運ぶこと・並べ直すこと・結果の文字列にすること。
+- **削ったもの**: 独自のツール用の別の型と振り分け／別スレッド／台本ごとの長さの上限／結果の構造化の欄／`ToolSpec` の欄の追加／受け口への「拾うか」の問い合わせ口。
+
+## 12. リスクと手当て
+
+- **表と受け口がずれる** — 一致のテストが赤で知らせる。`\!` を拾う受け口を足す spec は、表の行とテストの見本を同じ変更で足す（Revalidation Triggers に書いた）。
+- **`parse` の載せ替えで再生が変わる** — 既存の約 3,000 行のテストを書き換えずに通すことと、`parse` と `parse_noted` の命令の列が等しいことのテストで守る。
+- **「無い」と誤って答える** — 切替のタグの後・名前の形の `\b`・絵の無いスコープは診ない側へ倒す。誤る向きは「診ない」だけ。
+- **長い台本で UI スレッドが詰まる** — 4 MiB で頭打ち・線形。実機確認で時間を記録し、近づけば別スレッドへ移す。
+- **同じウェーブの衝突** — `tools/mod.rs`・`mcp/mod.rs`・`handler.rs`・`roadmap.md` を触る。MCP の共有ファイルを触る他の spec と同じウェーブに置かない（要件の Boundary のとおり）。roadmap は着地の直前に書く。
+
+## 13. 設計の範囲の外で気づいたこと（起票の候補）
+
+- **台本から `\![areka.prop.set,…]` と書くと、内部のプロパティの書き込みの受け口が拾う。** 受け付ける鍵は起動回数などの数える鍵だけに絞られているが、SHIORI の台本が内部の運搬名を直接書ける。`\![\f,…]` も同じ道で文字の層に届く。本 spec は「再生で拾われるものは、検査でも拾われると答える」に留め、道そのものは変えない。塞ぐかどうかは別に決める。
+- **`ConsumerLedger::canonical` の `bind` の行は、seriko の中の文字列 `"bind"` と名前を共有していない。** 共有の定数にすれば、表と受け口が作りで結ばれる。
