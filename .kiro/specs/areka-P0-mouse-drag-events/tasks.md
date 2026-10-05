@@ -86,7 +86,7 @@
 
 - [ ] 4. 全体の検証
 
-- [ ] 4.1 ワークスペース全体のテスト
+- [x] 4.1 ワークスペース全体のテスト
   - `tools/test-all.ps1` の手順を通す。触ったファイルがどれも 1,000 行未満であること（番人を含む）
   - 全体の手順が緑
   - _Requirements: 9.4_
@@ -104,3 +104,5 @@
 - 1.3: kanade は Boot 1 通の中で起動の系列を Steady まで同期で走り切るので、受信箱から「起動の途中」へ知らせを差し込める窓は Boot の前（`Phase::Idle`）だけ。起動の途中の段そのものは K8（`step` を直に呼ぶ）が受け持つ。
 - 2.2: 土台は `drag_test_support.rs`（`Rig`）。偽の窓では `initial_inset` が `(0,0)` のままで終了の配りで窓が跳ぶので、A1・A2・A8 の終了の期待は「保存の後の窓の位置」から作る。2.3 は `initial_inset` の上書き・包みなしの窓・`MouseWiring` なし・受け口を落とす・`FakePersistIo` の書いた値を読む口を `Rig` に足す。
 - 範囲外（完了の棚卸で起票の要否を判断）: 負荷の高いときの `cargo test -p areka` 全体で、実時間の期限で待つテスト（ghost_session の切替・既定へ戻す・記憶、install の desk 上書き、session_end の sync_send、emo2_boot::ghost_switch の boot_event_tests）が回ごとに違う 4〜8 件落ちた（単独・別の回では緑）。また `cargo test -p areka --bin areka -- --test-threads=4` は drag のテストを外しても STATUS_ACCESS_VIOLATION で落ちる（既定のスレッド数では落ちない）。どちらも本 spec の経路を通らない。
+- 2.5（決定 D7）: バルーン窓もドラッグを許す窓なので、ダブルクリックの 2 回目を押したまま動かすとバルーンも動くようになった（話の中断・選択肢の確定は押下の知らせで動くので影響なし。areka はバルーンのドラッグを知らせない＝要件 3.3）。実機 R4 で一緒に見る。並走の `drag-cancel-borrow-miss` が `mouse_click.rs` を作り変えて先に着地したら、取り込みの後で W1・W2 と A1〜A9 を流し直す。
+- 4.1: `steady.rs` は 947 行で上限まで 53 行。次に `schedule/` へ足す spec は新しいファイルへ置くこと。
