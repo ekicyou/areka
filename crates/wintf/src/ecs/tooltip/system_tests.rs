@@ -617,4 +617,44 @@ mod decide_tests {
             "{events:?}"
         );
     }
+
+    /// `EcsWorld` の作成が資源を置き、画面更新の末尾の判定が押下の印を読んで倒す（同じスレッド）。
+    #[test]
+    fn ecs_world_installs_frame_that_takes_press_mark() {
+        let mut ecs = crate::ecs::world::EcsWorld::new();
+        assert!(ecs.world().get_non_send::<TooltipSession>().is_some());
+
+        let (mut rig, w, _) = rig_with_window();
+        reg(&mut rig, w, rect(10.0, 10.0, 60.0, 40.0), Some("x"));
+        note_button_press();
+        // 範囲の無い World の 1 周（OS は呼ばない）でも印は倒れる。倒れていなければ、
+        // 下の判定が押下として休みになる（較正は press_mark_while_no_ranges_is_not_carried_over）。
+        assert!(ecs.try_tick_world());
+        assert!(!deadlines(&rig.at(100, 30, 20)).is_empty());
+    }
+
+    /// 窓のメッセージの配送点を通ったダブルクリックが押下の印を立てる（押下でない種は立てない）。
+    #[test]
+    fn dispatched_button_message_sets_press_mark() {
+        use crate::executor::util::WindowMessage;
+        use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+        use windows::Win32::UI::WindowsAndMessaging::{WM_LBUTTONDBLCLK, WM_USER};
+
+        let ecs = std::rc::Rc::new(std::cell::RefCell::new(crate::ecs::world::EcsWorld::new()));
+        let target = ecs.borrow_mut().world_mut().spawn(()).id();
+        let pressed_after = |msg: u32, ms: u64, rig: &mut Rig| {
+            let m = WindowMessage {
+                hwnd: HWND(std::ptr::null_mut()),
+                msg,
+                wparam: WPARAM(0),
+                lparam: LPARAM(0),
+            };
+            crate::ecs::dispatch_window_message(&ecs, target, &m);
+            deadlines(&rig.at(ms, 30, 20)).is_empty()
+        };
+        let (mut rig, w, _) = rig_with_window();
+        reg(&mut rig, w, rect(10.0, 10.0, 60.0, 40.0), Some("x"));
+        assert!(!pressed_after(WM_USER, 0, &mut rig), "較正: 押下でない種");
+        assert!(pressed_after(WM_LBUTTONDBLCLK, 100, &mut rig));
+    }
 }

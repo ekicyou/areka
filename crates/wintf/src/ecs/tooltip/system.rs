@@ -397,11 +397,6 @@ fn hide(
 }
 
 /// 画面更新の末尾に登録する系。本物の OS の読み取りと表示で判定と適用を 1 回行う。
-// テストは窓を作らないので本物の系を呼ばない（テストの外ではモジュールの宣言の expect が受ける）。
-#[cfg_attr(
-    test,
-    expect(dead_code, reason = "本物の OS を呼ぶ系。テストは frame_with を通す")
-)]
 pub(crate) fn tooltip_frame(world: &mut World) {
     let now = Instant::now();
     let visible = |w: &World, e: Entity| {

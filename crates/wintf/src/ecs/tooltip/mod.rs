@@ -1,46 +1,16 @@
 //! ツールチップ（マウスを置いた所に出る短い説明）。
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "安全地帯の判定は画面更新の系（tooltip_frame）からしか届かない。系の登録は後の段で足す"
-    )
-)]
 mod geometry;
-#[expect(
-    dead_code,
-    reason = "OS の読み取りは画面更新の系（tooltip_frame）から使う。系の登録は後の段で足す。テストは窓を作らない"
-)]
 mod os;
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "当たりは画面更新の系（tooltip_frame）から使う。系の登録は後の段で足す"
-    )
-)]
 mod ranges;
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "画面更新の末尾への配線（tooltip_frame の登録）と押下の印の呼び出しは後の段で足す"
-    )
-)]
 mod system;
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "状態機械を進めるのは画面更新の系（tooltip_frame）。系の登録は後の段で足す"
-    )
-)]
 mod turn;
 
 pub use os::TooltipOsError;
 pub use ranges::{TooltipArea, TooltipRange, TooltipRangeId};
 pub use turn::{TooltipEndReason, TooltipTurnToken};
+
+pub(crate) use system::note_button_press;
 
 use crate::ecs::{PointF, Window};
 use bevy_ecs::prelude::*;
@@ -151,6 +121,14 @@ pub fn supply_text(world: &mut World, token: TooltipTurnToken, text: &str) -> To
 /// 続いている出す番のツールチップを消す（出す番は続く）。印が続いていれば真。
 pub fn dismiss(world: &mut World, token: TooltipTurnToken) -> bool {
     system::with_os_tip(|tip| system::dismiss_with(world, token, Instant::now(), tip))
+}
+
+/// 判定の資源を置き、画面更新の末尾（`FrameFinalize`）に判定を足す。`EcsWorld` の作成が 1 回呼ぶ。
+pub(crate) fn install(world: &mut World) {
+    world.insert_non_send(system::TooltipSession::default());
+    world
+        .resource_mut::<Schedules>()
+        .add_systems(crate::ecs::world::FrameFinalize, system::tooltip_frame);
 }
 
 /// マウスが動かないままでも、次の画面更新で判定が回るよう期限を預ける。
