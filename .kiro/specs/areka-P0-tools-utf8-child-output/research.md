@@ -252,3 +252,56 @@
 ## 12. 手元の確かめの記録（要件 6）
 
 （実装の後に開発者が記入する: 端末の文字コード・`tools/package.ps1 -Check` の終了コードと通った段・`tools/crates-io.ps1 -Verify` の終了コード・回す前後の `chcp` と `[Console]::OutputEncoding.CodePage`・見つかった文字化け）
+
+## 13. 戻しの確かめの記録（タスク 6.2・2026-10-06）
+
+- 作業木の HEAD: `b1b1fb61`。pwsh 7.6.6・この端末の文字コードは 932（書き替えていない）。
+- やり方: ⒜〜⒟ を 1 つずつ作業木だけの一時の書き替えとして入れ、判定のスクリプト `pwsh -NoProfile -File tools/encoding-check.ps1` だけを回し（全体テストは回さない）、その都度 `git restore` で戻した。書き替えはコミットしていない。各回の後の `git status --short` は空。
+- 下の不合格の行は判定が端末へ出した字のまま（ASCII）。それぞれの回で、挙げた行のほかの判定はすべて `PASS` だった。
+
+### 13.1 ⒜ パッケージの道具の版を読む所を素の呼び出しへ戻す → 規則 D・E が不合格
+
+- 書き替え: `tools/package.ps1` の版を読む行 `$r = Invoke-Utf8Child cargo @('metadata', '--no-deps', '--locked', '--format-version', '1')` を `$out = @(cargo metadata --no-deps --locked --format-version 1 2>&1)` に替えた（構文は通る形）。
+- 不合格の行:
+  ```
+  FAIL tools/package.ps1:313: D cargo metadata --no-deps --locked --format-version 1 2>&1
+  FAIL tools/package.ps1: E no Invoke-Utf8Child call with metadata
+  ```
+- 最後の行: `encoding check: 2 failure(s)`・終了コード 1。
+
+### 13.2 ⒝ 共通の関数の標準出力の UTF-8 の指定を消す → 932 の子の本番が不合格
+
+- 書き替え: `tools/utf8-child.ps1` の `$psi.StandardOutputEncoding = $utf8` の行を消した（標準エラーの指定は残した）。
+- 不合格の行:
+  ```
+  FAIL cp932 child: production: Invoke-Utf8Child read the sample as {"description":"\u8FDA\u30FB,"version":"0.0.1"}
+  FAIL cp932 child: real: cargo metadata output is not JSON
+  ```
+- 最後の行: `encoding check: 2 failure(s)`・終了コード 1。
+- 本番の見本が較正の素の呼び出しと同じ崩れ方（`\u8FDA\u30FB`＝`迚・`）になったうえ、続く本物の `cargo metadata` も JSON として読めずに落ちた（期待した本番の不合格に加えて、本物の読みも不合格を出す）。
+
+### 13.3 ⒞ 道具の文に日本語を 1 字足す → 規則 A が不合格
+
+- 書き替え: `tools/package.ps1` の `Write-Host "removed previous artifact: $p"` を `Write-Host "removed previous artifact 済: $p"` にした。
+- 不合格の行:
+  ```
+  FAIL tools/package.ps1:334: A "removed previous artifact 済: $p"
+  ```
+- 最後の行: `encoding check: 1 failure(s)`・終了コード 1。
+
+### 13.4 ⒟ 公開の道具の冒頭に書き替えの行を戻す → 規則 C が不合格
+
+- 書き替え: `tools/crates-io.ps1` の `$ErrorActionPreference = 'Stop'` の直後に `[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)` を足した。
+- 不合格の行:
+  ```
+  FAIL tools/crates-io.ps1:60: C [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+  ```
+- 最後の行: `encoding check: 1 failure(s)`・終了コード 1。
+
+### 13.5 4 つとも戻した後
+
+- `git status --short` は空（書き替えは残っていない）。判定を回し直して不合格の行 0 件、最後の 2 行は次のとおり・終了コード 0。
+  ```
+  PASS own console code pages unchanged (output 932, input 932)
+  encoding check: all passed
+  ```
