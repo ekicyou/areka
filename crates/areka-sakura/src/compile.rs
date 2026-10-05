@@ -306,7 +306,7 @@ fn emit_barrier(scope: u32, offset: f64, kind: BarrierKind) -> Cue {
 
 /// `\![set,choicetimeout,時間]` の時間の欄の読み取りの結果（design `parse_choice_timeout`）。
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum ChoiceTimeoutDirective {
+pub enum ChoiceTimeoutDirective {
     /// 欄なし・空欄 → 既定へ戻す（区切りには `None` を書く）。
     Default,
     /// 整数で読めた → 秒（区切りには `Some(secs)` を書く）。`0`・負は無期限、正は期限。
@@ -324,7 +324,7 @@ pub(crate) enum ChoiceTimeoutDirective {
 /// （`ms as f64 / 1000.0`）はここ 1 か所だけで、値の正規化（`-1` を `0.0` にそろえる等）はしない。
 /// `Secs(v)` の `v` は常に有限。
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1
-pub(crate) fn parse_choice_timeout(raw_args: &[String]) -> ChoiceTimeoutDirective {
+pub fn parse_choice_timeout(raw_args: &[String]) -> ChoiceTimeoutDirective {
     use std::num::IntErrorKind;
     // 欄なし・空欄（空白だけを含む）は省略と同じ＝既定へ戻す。
     let field = match raw_args.get(1).map(|f| f.trim()) {

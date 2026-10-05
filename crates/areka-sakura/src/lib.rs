@@ -38,7 +38,7 @@ pub mod duration;
 pub mod error;
 pub mod sysvar;
 
-pub use compile::{CompiledTalk, compile};
+pub use compile::{ChoiceTimeoutDirective, CompiledTalk, compile, parse_choice_timeout};
 pub use drive::spawn_talk;
 pub use error::SakuraError;
 pub use sysvar::expand_system_vars;
