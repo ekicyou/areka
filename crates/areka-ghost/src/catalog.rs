@@ -2,8 +2,8 @@
 //!
 //! 根の直下 `ghost/`・`balloon/` と、ゴーストの `shell/` を**直下 1 段だけ**走査し、
 //! ゴースト・シェル・バルーンを素性（要件 2.4 の 7 項目）付きで返す。同梱バルーン名
-//! （`install.txt` の同梱の最初の 1 個＝無印 → `balloon0` の `*.directory`）と「そのフォルダは
-//! ゴーストか」の判定も持つ。
+//! （`install.txt` の同梱の最初の 1 個＝無印 → `balloon0` の `*.directory`）・ゴーストの descript の
+//! 標準のバルーンの指定（`default.balloon.path`・`balloon`）と「そのフォルダはゴーストか」の判定も持つ。
 //!
 //! - descript は `charset::decode`（既定 `Ansi`）＋`kv::parse_kv` で読み、鍵は ASCII
 //!   小文字化して引く。`menu`／`type` の**値**は trim＋ASCII 小文字化して比べる（R5）。
@@ -205,6 +205,26 @@ pub fn companion_balloon(ghost_dir: &Path) -> Option<String> {
         .into_iter()
         .find(|key| lines.contains(*key))?;
     lowercased(&bytes).remove(first)
+}
+
+/// ゴーストの descript.txt に書かれた標準のバルーンの指定。書かれていない鍵・空の値は `None`。
+/// 値は前後の空白を落としただけで読み替えない（当たり・外れは鎖が決める）。
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct StandardBalloonKeys {
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#default.balloon.path_2c_30d1_30b9:1
+    pub default_balloon_path: Option<String>,
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#balloon_2c_30d0_30eb_30fc_30f3_540d:1
+    pub balloon: Option<String>,
+}
+
+/// `<ゴースト>/ghost/master/descript.txt` を 1 回だけ読み、`default.balloon.path` と `balloon` を返す。
+/// 無い → 2 欄とも None・読めない → `warn!` 1 件＋2 欄とも None（要件 5.4）。`recommended.*` は引かない。
+pub fn standard_balloon_keys(ghost_dir: &Path) -> StandardBalloonKeys {
+    let mut keys = master_descript_keys(ghost_dir).unwrap_or_default();
+    StandardBalloonKeys {
+        default_balloon_path: keys.remove("default.balloon.path"),
+        balloon: keys.remove("balloon"),
+    }
 }
 
 /// `<ゴースト>/ghost/master/descript.txt` の `sakura.name`（切替先の本体側の名前・要件 8.7）。
