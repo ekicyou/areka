@@ -6,7 +6,8 @@
 //! `Input`・`Update` の段をそのまま回す。組み方は `shell_balloon_switch_session_lap_tests.rs` の
 //! `lap_rig_of`・`spawn_windows` と同じ（2 つ目のシェルは足さない）。台本は A の `OnBoot` の応答で
 //! 流し、置き場のゴーストの dispatcher へ合成の Tick を注入して進める。MCP の受け口と後から答える
-//! 置き場も据えるので、装着の前に預けた答えはフレームを回すと届く。ERROR の記録を捕まえる口は
+//! 置き場も据えるので、装着の前に預けた答えはフレームを回すと届く。偽の SHIORI の呼び出しの列を
+//! 比べる前に通す関所（kanade へ返事つきの印の NOTIFY）も持つ。ERROR の記録を捕まえる口は
 //! 土台に持たず、呼ぶ側のテストが `log_capture_kit`（`capture`・`count_levels`）を直接使う。
 
 use std::path::Path;
@@ -14,11 +15,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+use areka_actor::{ReplyReceiver, reply_channel};
 use areka_emo_atlas::WicDecoderArm;
 use areka_emo_compose::{BindSet, Composer, PatternState};
 use areka_emo_present::shell_target::load_shell_target;
 use areka_ghost::dispatcher::DispatcherMsg;
-use areka_kanade::MonotonicMs;
+use areka_kanade::{KanadeMsg, MonotonicMs, RaiseOutcome, ShioriMethod};
 use areka_mcp::tools::{Pending, ToolCall, ToolRequest, dump_balloon, dump_surface};
 use bevy_ecs::world::World;
 use windows::Win32::Foundation::{GENERIC_READ, HINSTANCE, HWND};
@@ -57,6 +59,8 @@ const WORK_AREA: RectPx = RectPx {
 const TICK_EVERY: Duration = Duration::from_millis(1);
 /// 1 巡で配るメッセージの上限（起こし直しの投函が続いても巡を終わらせる）。
 const PUMP_MAX: usize = 1024;
+/// 関所の印のイベント（許可表に在り、kanade は Tick が無いと自分では送らない・NOTIFY で送る）。
+pub(in crate::mcp) const FLUSH_EVENT: &str = "OnSecondChange";
 
 /// 窓・GPU つきのゴースト A。
 pub(in crate::mcp) struct GpuRig {
@@ -72,7 +76,12 @@ impl GpuRig {
         let on_boot = on_boot.to_owned();
         let mut rig = SwitchRig::new(vec![(
             "A",
-            FakeShiori::Scripted(Box::new(move || standard_script(&on_boot))),
+            FakeShiori::Scripted(Box::new(move || {
+                // 関所の印の応答（[`GpuRig::flush_to_shiori`] 1 回で 1 件使う・2 回ぶん）。
+                standard_script(&on_boot)
+                    .notify(FLUSH_EVENT, Ok(()))
+                    .notify(FLUSH_EVENT, Ok(()))
+            })),
         )]);
         rig.plant_boot_record("A");
         spawn_windows(&mut rig, dpi);
@@ -153,9 +162,56 @@ impl GpuRig {
         pending
     }
 
+    /// 台詞の時計を止めたまま、本番の段を `n` 巡だけ回す（読み戻しの後に画面へ遅れて届く変化が
+    /// 無いことを見るため）。
+    pub(in crate::mcp) fn frames(&mut self, n: usize) {
+        let mut left = n;
+        self.frames_until(0, |_| {
+            left = left.saturating_sub(1);
+            left == 0
+        });
+    }
+
+    /// 呼び出しの列を比べる前の関所: A の kanade へ印の NOTIFY（[`FLUSH_EVENT`]）を返事つきで送り、
+    /// 返事が届くまで巡を回す。定常でないと断られたら送り直す。kanade は依頼を届いた順に 1 つずつ
+    /// 済ませるので、送れた（`NoReply`）返事が届いた時点で、それより前に届いた依頼はみな SHIORI まで
+    /// 済み、印も呼び出しの列に載っている。返るのは最後の返事（期限切れ・送れなければ `None`）。
+    pub(in crate::mcp) fn flush_to_shiori(&mut self) -> Option<RaiseOutcome> {
+        let mut waiting: Option<ReplyReceiver<RaiseOutcome>> = None;
+        let mut last = None;
+        self.frames_until(0, |world| {
+            if let Some(rx) = &waiting {
+                match rx.try_recv() {
+                    Ok(Some(RaiseOutcome::NotSteady)) => waiting = None,
+                    Ok(Some(outcome)) => {
+                        last = Some(outcome);
+                        return true;
+                    }
+                    _ => return false,
+                }
+            }
+            let (tx, rx) = reply_channel();
+            let sent = world
+                .get_non_send::<GhostSlot>()
+                .and_then(|slot| slot.0.as_ref())
+                .and_then(|session| session.kanade())
+                .is_some_and(|kanade| {
+                    kanade
+                        .send(KanadeMsg::RaiseEvent {
+                            id: FLUSH_EVENT.to_owned(),
+                            references: Vec::new(),
+                            method: ShioriMethod::Notify,
+                            reply: Some(tx),
+                        })
+                        .is_ok()
+                });
+            waiting = sent.then_some(rx);
+            false
+        });
+        last
+    }
+
     /// A の偽の SHIORI の呼び出しの列（状態の問い合わせと `homeurl` の照会を除く）。
-    // 呼び手は「邪魔をしない」のテスト（タスク 5.2・5.3）。生えるまで未使用の警告を抑える。
-    #[allow(dead_code)]
     pub(in crate::mcp) fn calls(&self) -> Vec<RecordedCall> {
         self.rig.calls("A").into_iter().next().unwrap_or_default()
     }

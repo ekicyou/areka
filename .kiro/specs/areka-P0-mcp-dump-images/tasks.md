@@ -81,7 +81,7 @@
   - 本体のクレートのテストで、このテストが 64 ビットで緑
   - _Requirements: 1.1, 1.3, 1.4, 5.2, 5.3, 7.4_
 
-- [ ] 5.2 キャラクターの残りの場合を描画を通して固定する
+- [x] 5.2 キャラクターの残りの場合を描画を通して固定する
   - 指定した surface: 表示中と別の ID でその surface の画素が返り、前後で今の surface・可視の状態が変わらない。スコープ 0 でスコープ 1 用の ID も成功する。検体の別名の表にだけ在る番号は `NG:No such surface ID. Check get_expression_table tool`
   - 隠したキャラクター: `\s[-1]` の後も隠す直前の絵と ID で成功する
   - 一度も表示していないスコープ: 省略は `NG:No surface has been shown in this scope yet`、指定は成功。スコープ 2 は `NG:No such scope in this ghost`
@@ -127,3 +127,4 @@
 - 4.2: 文字の面は在るのに差し込み口に `Arrangement` が無い場合は、design の表に無い文言 `NG:the text slot has no arrangement`（`fail`＝`error!` 1 件）にした。`TextSurface::attach` が両方を同じ insert で入れるので本番では届かない防御の枝（4.1 の `compose_alone` が None の枝と同じ扱い）。
 - 5.1: GPU を通るテストの土台の `dump_balloon()`・`calls()` に一時の `#[allow(dead_code)]` を付けている。5.2・5.3 で呼び手ができたら外す。`decode_png` の一時フォルダは呼び出しごとに別（pid＋連番）。
 - 5.1（範囲外・完了時の棚卸へ）: 他のセッションの cargo が 25〜35 本動く重さの下で、全体テストに無関係な不安定が出た（`default_ghost_fault_after_fallback_exits_through_shiori_fault_path`・`script_change_tag_switches_a_to_b_and_reaches_steady`・`switch_to_b_without_boot_record_sends_first_boot_not_ghost_changed`・`stop_with_handoff_under_reservation_switches_without_exit`）。1 本ずつ流すと緑・新しいテストを外した対照でも出る。
+- 5.2: 偽の SHIORI の呼び出しの列を比べる前に、土台の `flush_to_shiori()`（kanade へ返事つきの NOTIFY `OnSecondChange` を送り返事まで巡を回す）を通す。巡を回すだけの比較は「呼び出しのたびに kanade へ送る」壊し方を見逃した。5.3 の「邪魔をしない」も同じ関所を使う。
