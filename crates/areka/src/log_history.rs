@@ -304,8 +304,8 @@ pub(crate) fn record(at: Stamp, draft: Draft) -> u64 {
     lock(&STORE).push(at, draft)
 }
 
-/// いま最後に振った通し番号（1 件も無ければ 0）。後続の spec が読む口。
-// 呼び手は後続の spec（番号を読んでから `since_id` で絞る処理）。生えるまで未使用の警告を抑える。
+/// いま最後に振った通し番号（1 件も無ければ 0）。`mcp-strict-errors` が読む口。
+// 呼び手は `mcp-strict-errors`（番号を読んでから `since_id` で絞る処理）。生えるまで未使用の警告を抑える。
 #[allow(dead_code)]
 pub(crate) fn last_id() -> u64 {
     lock(&STORE).last_id()

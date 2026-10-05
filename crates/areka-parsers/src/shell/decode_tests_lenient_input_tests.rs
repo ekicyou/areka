@@ -11,7 +11,7 @@ use super::{
 // --- タスク 4.6/1.2: subset 外・不正入力の振り分け（吸収 or 忠実転記・既定値・非パニック） ---
 //
 // 検証範囲（要件 2.3/4.5/4.6/6.3/8.2/9.2/10.4）:
-// - element の overlay 以外のメソッド・collisionex は値化せず passthrough で吸収する
+// - element の overlay・base 以外のメソッド・collisionex は値化せず passthrough で吸収する
 //   （モデルに materialize しない・要件 4.5/6.3/10.4）。この 2 経路のフィルタは task 1.2 でも不変。
 // - pattern メソッド（overlay/replace 等）・未認識 interval キーワード（sometimes 等）は
 //   task 1.2 で overlay フィルタ／fallback-Bind を撤去し、吸収でなく忠実転記へ転じた
@@ -19,10 +19,10 @@ use super::{
 // - 非数トークン・欠損フィールドを既定値（0）へ倒し、パニックしない（要件 3.3/2.3）。
 // - subset 外を含む断片が、隣接する認識可能ブロックのパースを壊さない（要件 9.2/10.4 の核心）。
 
-/// 非 overlay element メソッド（`element0,base,...`）は materialize されない一方、
-/// 同一 surface 内の overlay element は保持される（要件 4.5・passthrough 吸収）。
+/// element定義の描画メソッド `base`（`element0,base,...`）は `overlay` と同じ値になり、
+/// 同じ surface の overlay element と並ぶ（areka-P0-element-base-method 要件 1.1・1.2）。
 #[test]
-fn non_overlay_element_method_is_absorbed_but_overlay_sibling_survives() {
+fn base_element_method_becomes_value_beside_overlay_sibling() {
     let input = "\
 surface0
 {
@@ -32,15 +32,23 @@ element1,overlay,over.png,7,8
 ";
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces.len(), 1);
-    // base メソッド element は値化されず、overlay element だけが残る。
+    // base の element も overlay と同じ値になり、レイヤ昇順で土台が先に並ぶ。
     assert_eq!(
         shell.surfaces[0].elements,
-        vec![Element {
-            layer: 1,
-            path: ElementPath::new("over.png".to_string()),
-            x: 7,
-            y: 8,
-        }]
+        vec![
+            Element {
+                layer: 0,
+                path: ElementPath::new("base.png".to_string()),
+                x: 0,
+                y: 0,
+            },
+            Element {
+                layer: 1,
+                path: ElementPath::new("over.png".to_string()),
+                x: 7,
+                y: 8,
+            },
+        ]
     );
 }
 
@@ -273,17 +281,19 @@ animation0.pattern0,overlay,2206,0,0,0
     );
 }
 
-/// 単一 surface 内で吸収対象（element base・collisionex）と忠実転記対象（pattern method・
+/// 単一 surface 内で吸収対象（element replace・collisionex）と忠実転記対象（pattern method・
 /// interval）を混在させ、各々が正しく振り分けられ互いを壊さないことを確認する
-/// （要件 4.5/4.6/6.3/8.2/9.2）。overlay element・純 collision は残り、base element・
-/// collisionex は吸収される一方、replace/overlay 両 pattern と `always` interval は忠実転記される。
+/// （要件 4.5/4.6/6.3/8.2/9.2）。overlay element・純 collision は残り、replace element・
+/// collisionex は吸収される一方、replace/overlay 両 pattern と `always` interval は忠実転記される
+/// （areka-P0-element-base-method 要件 2.4: 描けない語の行だけが吸収され隣の行は残る）。
 #[test]
 fn mixed_valid_and_subset_out_lines_in_one_surface() {
     let input = "\
 surface3000
 {
-element0,base,skip.png,1,1
+element0,replace,skip.png,1,1
 element1,overlay,keep.png,2,3
+element2,base,also.png,4,5
 collisionex0,circle,5,5,10
 collision0,10,20,30,40,Head
 animation0.interval,always,9
@@ -294,15 +304,23 @@ animation0.pattern1,overlay,901,4,0,0
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces.len(), 1);
     let s = &shell.surfaces[0];
-    // overlay element のみ残る（base 吸収）。
+    // overlay と base の element が残る（replace 吸収）。
     assert_eq!(
         s.elements,
-        vec![Element {
-            layer: 1,
-            path: ElementPath::new("keep.png".to_string()),
-            x: 2,
-            y: 3,
-        }]
+        vec![
+            Element {
+                layer: 1,
+                path: ElementPath::new("keep.png".to_string()),
+                x: 2,
+                y: 3,
+            },
+            Element {
+                layer: 2,
+                path: ElementPath::new("also.png".to_string()),
+                x: 4,
+                y: 5,
+            },
+        ]
     );
     // 純 collision のみ残る（collisionex 吸収）。
     assert_eq!(

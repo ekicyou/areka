@@ -109,3 +109,12 @@ SSP プロパティ木の過半は `currentghost` の外にある——`system.*
 - 残した範囲: ⒝ 一覧の枝＝`ghostlist`・`balloonlist`・`activeghostlist` の値の導出（`areka_ghost::catalog` から）と、基盤待ちの枝（`headlinelist`・`pluginlist`・`history`・`rateofuselist`・`currentghost.sound.*`・`.ext.*` の発火条件）の完全な語彙と縮退の登記。
 - 規模: M（10〜14 タスク）。
 - 移した先: `system.*` と Win32 の採り口は新しい spec `areka-P0-system-property-values` へ（前提は `currentghost-property-tree` の動く値の口）。網羅台帳の `system.*` の行の持ち主は向こうが着地するときに直す。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（10〜14）のまま。切る: なし（一度切り出した spec）。
+- 前提の状態: roadmap の並びでは `currentghost-property-tree` の後（同じ sylphya の口と `emo2_boot/mod.rs`）。読む道は `mcp-get-property`（✅ 10-04）でできた。
+- 崩れた前提／古くなった位置: なし。一覧の源 `crates/areka-ghost/src/catalog.rs`（377）の `list_ghosts`・`list_shells`・`list_all_shells`・`list_balloons` は同じ名前で在る。網羅台帳 `property.toml` で本 spec が持ち主の行は今も 120（うち `system.*` の行は `system-property-values` が着地するときに移す）。`dotted.rs` の `EXT_EVENT_GET`／`EXT_EVENT_SET` の定義行は説明文の「M2」→「α 後」の言い換えだけ。
+- 触るファイル: `crates/areka-sylphya/src/{actor.rs, vocab/dotted.rs, key.rs}`・`crates/areka-ghost/src/{catalog.rs（読むだけ）, sylphya_wiring.rs}`・`crates/areka/src/emo2_boot/mod.rs`（883）・`doc/ukadoc-coverage/ledger/property.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
+- 議題（答えで作業が変わるものだけ）: なし（動く値の出し方は `currentghost-property-tree` が決める）。
+- 見つけた穴: なし。並走の照合: `property-name-case-fold` が括弧の中の名前（`ghostlist(名前)`）を畳む範囲を決めると、本 spec の名前での引き当てに効く＝向こうが先なら、その裁定に従う。

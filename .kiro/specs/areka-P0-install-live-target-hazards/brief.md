@@ -94,3 +94,18 @@
   - `dist/README.txt`・`doc/COMPAT_ARCHITECTURE.md`
 - 議題（答えで作業が変わるものだけ）: 棚卸⑳の 3 つ（⑴ 掴みを外して入れるか既知の制限にするか／⑵ 窓 0 枚の区間に受け手を残すか説明書に書くか／Windows を本当に終える実機の 1 回を開発者が行うか）に加え、**⑴ を `balloon-font-file` の着地の後に測るか**（推し: 後。C4 の候補の席はもともと C3 の後なので、並びは変えずに済む）。
 - 見つけた穴: 無し（新しいバグの候補は見当たらない。フォントファイルの掴みは `balloon-font-file` の設計で片付けの口を持たせれば済む＝その spec の着手時に申し送る）。
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: S〜M（8〜14 タスク。測るだけで終われば 4〜5）。切る: なし。
+- 前提の状態: 前提の spec は無い。棚卸㉑の推し「⑴ は `balloon-font-file` の着地の後に測る」を守るなら**待ち**（`balloon-font-file` は C4 の予定で未着手）。⑵ だけなら今すぐ取れる。
+- 崩れた前提／古くなった位置:
+  - C3 で本 spec の触るファイルに入った変更は `crates/areka/src/install/terms_tests.rs` だけ（`install-companion-reading`）。`judge.rs`（`destination_of` は今も `Shell`・`Balloon` を降ろさずに入れる道へ送る）・`procedure.rs`・`overwrite.rs`・`desk.rs`・`session_end.rs`（`on_os_session_end`）・`app_exit.rs` は 0 行。`crates/areka-nar/src/install.rs` の `SURVIVOR_RETENTION`（7 日）も変わらない。
+  - `install-companion-reading` が `crates/areka-nar/src/{manifest,plan,names}.rs` を変えた（同梱の探索の順と、階層つきの取り出し元）。確定の `rename` 2 回の作り（`install.rs`）には触れていない＝⑴ の「どちらの `rename` で止まるか」の問いはそのまま。
+  - ⑴ の仮説に 1 か所の読み口が増えた: `animated-image-decode` が動く絵を `crates/areka-emo-atlas/src/decode/image_arm.rs` で読む（`std::fs::File` を `BufReader` で開き、コマを読み終えると関数の終わりで手放す）。WIC の `wic_arm.rs` と同じく読む間だけ掴む形で、持ち続ける道は増えていない。
+  - `dist/README.txt` には「■ 動く絵の上限」の節が足されたが、「■ 既知の制限」の `.nar-work` に 7 日残る旨の行はそのまま。
+- 触るファイル（並走の照合用・測った結果で変わる）: 棚卸㉑のまま＝`crates/areka/src/install/{judge.rs, procedure.rs, overwrite.rs, desk.rs}` と兄弟のテスト・`crates/areka/src/session_end.rs`・`app_exit.rs` とそのテスト・（掴みを外すなら）`balloon-font-file` が作るフォント集の片付けの口・`dist/README.txt`（「■ 既知の制限」）・`doc/COMPAT_ARCHITECTURE.md`。
+- 共有しうる相手: 「■ 既知の制限」を触る `winget-manifest-submission`・`release-code-signing`・`update-check-options`（同じ節の別の行）。`crates/areka-nar/` は今も触らない約束。
+- 議題（答えで作業が変わるものだけ）: 棚卸㉑のまま（⑴ 掴みを外すか既知の制限か／⑵ 窓 0 枚の区間に受け手を残すか説明書か／Windows を本当に終える実機の 1 回を開発者が行うか／⑴ を `balloon-font-file` の後に測るか）。加えて、⑵ だけを先に（`balloon-font-file` を待たずに）回すか。
+- 見つけた穴: なし。

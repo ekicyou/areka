@@ -26,7 +26,9 @@
 //! 同じ番号の重複の `warn!`（R1.5）・桁溢れの `debug!`（R1.6）・相手の無いコマの `warn!`（R3.5）・
 //! 焼く段で落ちた絵の `warn!`・3 つの失敗の `error!`（R1.7・R6.4）、および箱の報告の各件の
 //! `warn!` と箱の数の `info!`（spec: areka-P0-shell-balloon 要件 10.1）、入れ子の報告（無い番号・
-//! 循環）の各件の `warn!`（spec: areka-P0-surface-element-nesting 要件 3.1・3.2）である。一覧の 1 件だけが
+//! 循環）の各件の `warn!`（spec: areka-P0-surface-element-nesting 要件 3.1・3.2）、描けない
+//! 描画メソッドの element定義の各行の `warn!`（spec: areka-P0-element-base-method 要件 2.1・4.2）
+//! である。一覧の 1 件だけが
 //! 取れないときは `warn!` を出してその 1 件を飛ばす（[`list_file_names`]）。
 //! [`ShellTarget::build_world`] は新しい記録を 1 本も出さない。
 //!
@@ -47,6 +49,7 @@ use areka_emo_compose::{
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::shell::{
     AppendTarget, BoxDefinition, Element, ElementPath, Shell, ShellBoxes, Surface, parse_boxes,
+    parse_undrawn_elements,
 };
 
 use crate::balloon::face_digits_of;
@@ -286,6 +289,7 @@ pub fn load_shell_target(
         })?;
     let shell = areka_parsers::shell::parse(&content);
     let boxes = parse_boxes(&content);
+    let undrawn = parse_undrawn_elements(&content);
     if shell.surfaces.is_empty() {
         tracing::error!(
             path = %surfaces_path.display(),
@@ -320,6 +324,14 @@ pub fn load_shell_target(
     }
     for issue in &target.box_report.issues {
         log_box_issue(issue);
+    }
+    for line in &undrawn {
+        tracing::warn!(
+            heading = line.heading.as_str(),
+            element = line.element.as_str(),
+            method = line.method.as_str(),
+            "shell: areka が描けない描画メソッドの element定義を描かない"
+        );
     }
     if !target.boxes.is_empty() {
         tracing::info!(
@@ -664,3 +676,7 @@ mod boxes_tests;
 #[cfg(test)]
 #[path = "shell_target_nesting_tests.rs"]
 mod nesting_tests;
+
+#[cfg(test)]
+#[path = "shell_target_element_base_tests.rs"]
+mod element_base_tests;

@@ -273,6 +273,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 - `install/` - `.nar` のインストールの結線（`areka-P0-ghost-install` 2026-09-29・窓への投げ込みは `input_events/file_drop.rs`＝`areka-P0-file-drop`）。UI 側の窓口 `desk.rs`・背景スレッド `worker.rs`・純粋な手続き `procedure.rs`・行き先の判断 `judge.rs`・利用条件 `terms.rs`・ファイルを選ぶ画面 `pick.rs`・起動中のゴーストへの上書き `overwrite.rs`・台本の指示で取ってくる `fetch_url.rs`・置換語の値 `names.rs`。エンジンは `areka-nar`
 - `update/` - ネットワーク更新の結線（`areka-P0-network-update` 2026-09-30）。`install/` と同じ形＝UI 側の窓口 `desk.rs`（受付・段・預かり 1 枠・対象の解決・読み直しと後送りの列）・背景スレッド `worker.rs`（本物の口・門）・純粋な手続き `procedure.rs`（口 `UpdatePorts`・偽の口で決定論テスト）・写し `refs.rs`（イベント名 19 語・Reference・失敗の語）。エンジンは `areka-update`。成功の `OnUpdateComplete` と総括は再起動の後の新しいゴーストへ（kanade `BootOrigin::Updated`）
 - `mcp/` - MCP のツールの結線（`areka-P0-mcp-tool-entrances` 2026-10-03）。`fn main()` が受け口を `install`／`close` し、`Input` 段の汲む系（`drain`）が要求を毎フレーム取り出して `ghost_name` を解決（`resolve.rs`）してからツールごとのファイルの `handle` へ振り分ける。UI スレッドで待たない＝別スレッドに問うツールは `later` に預けて毎フレーム覗く。重い仕事を抱えるツールは、UI スレッドでは写しまでにして別のスレッドから `ReplyTo` で直接答える（`dump_surface`／`dump_balloon` の PNG の符号化・`areka-P0-mcp-dump-images` 2026-10-05）。3 段目の spec は自分のツールのファイルだけを書き換える
+- `log_history.rs` - `get_log` の履歴の層（`areka-P0-mcp-log-history` 2026-10-05）。`main.rs` の `log_history::init()` の 1 行で tracing に差し込み、info 以上の出来事を `RUST_LOG` と独立に 5 種別へ積む。出す側との取り決めの正本は `doc/ssp-mcp/log-convention.md`
 **Dependencies**: wintf, human-panic, thiserror, tracing, tracing-subscriber, async-io, bevy_ecs, windows
 
 ### Parser Crate
@@ -319,7 +320,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 ### emo Render Engine Crates（⑥・三段直列＋テキスト層）
 **Location**: `/crates/areka-emo-atlas/`・`/crates/areka-emo-compose/`・`/crates/areka-emo-present/`・`/crates/areka-emo-text/`
 **Pattern**（自前コンポジタの三段直列チェーン・入力=(surface id, BindSet)・wintf へは完成品のみ）:
-- **`areka-emo-atlas`（1/3・pure）**: 素材基盤層＝bake パイプライン。アトラス正本（premultiplied BGRA・`Placement` 解決済み `AtlasTable`）。
+- **`areka-emo-atlas`（1/3・pure）**: 素材基盤層＝bake パイプライン。アトラス正本（premultiplied BGRA・`Placement` 解決済み `AtlasTable`）。**動く絵**（`areka-P0-animated-image-decode` 2026-10-05）: 静止画は `decode/wic_arm.rs`、APNG・動く WebP は `decode/image_arm.rs`（`image` クレートを使う唯一のファイル）。3 つの上限は `limits.rs`、上限越えを 1 枚へ縮める 3 段は `animated.rs`、2 枚目以降のコマは `AtlasTable::animation` で引く。
 - **`areka-emo-compose`（2/3・pure）**: `areka-parsers::shell` の忠実転記モデル＋`AtlasTable` を入力に、静的合成済みビットマップ `ComposedSurface` を生成する純粋層。`base_image.rs` は**ファイル名の慣習だけで置かれた面の画像を「層 0 が空いているときだけ」土台として足す**（畳み込み `fold` の後に判定・新しい層の型は足さない）。**element定義の入れ子**（`areka-P0-surface-element-nesting` 2026-10-05）: 数字だけの欄の読み分け（`element_kind`）・参照の表（`NestTable`・今の絵に出ている部品を求める `visible_parts` は合成の再帰と同じ辺をたどる）・無い番号と循環の報告（`NestReport`）は `nesting.rs` の 1 か所、子の当たり判定の持ち込み（`HitRegions`）は `hit_import.rs`。
 - **`areka-emo-present`（3/3・提示段）**: `ComposedSurface` を wintf の WUC 表示面へアップロード・提示し、当たり判定用 AlphaMask を供給。`presenter/show.rs` の `apply_show` が単一漏斗（k 導出・合成/キャッシュ・アップロード・マスク同期・可視化）。**`shell_target.rs` がシェルのフォルダの読み込みの権威**（`areka-P0-shell-implicit-surface` 2026-09-20）: `surface<数字>.png` の名前判定はバルーンの面と**同じ 1 つの実装**（`balloon::face_digits_of`）を接頭辞違いで呼ぶ。fs を触るのは `load_shell_target` だけで、核 `build_shell_target` はメモリ上で通せる。
 - **記録を出す場所の型（emo 三段共通）**: 純粋な核（名前判定・土台の決定・核の組み立て）は fs にも記録にも触れず、**事実を戻り値（`…Report`）に載せるだけ**。`info!`／`warn!`／`error!` を出すのは **fs を触る入口 1 か所**で、読み込み 1 回につき 1 度だけ出す。

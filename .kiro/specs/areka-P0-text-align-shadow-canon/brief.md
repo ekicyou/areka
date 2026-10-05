@@ -89,3 +89,21 @@
   - 共通: `doc/COMPAT_ARCHITECTURE.md` §8
 - 議題（答えで作業が変わるものだけ）: SC8（縦書きでのインデントの軸）の裁定（brief のまま・①の要件で）。
 - 見つけた穴: なし（後戻りした行が境界の外に置き去りになる所見は brief の追加登記 4 のまま。今の決定論テストが今日の値を固定している）。
+
+
+---
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M〜L（17〜21 タスク）のまま。今は切らない（一度切り出したもの）。要件で 20 を超えたら棚卸㉑の境界（②影 S 6〜8 → ①寄せ M 10〜13 の順）で切る。
+- 前提の状態: 上流の完了 spec はそろっている。列の上では `balloon-scroll-fade` の後、`text-typesetting` の後の前提で並ぶ＝その意味では未。
+- 崩れた前提／古くなった位置:
+  - 棚卸㉑の位置は全部そのまま当たる（`layout_scan.rs` の `Scan::cursor_move` と `finish_line`・`layout.rs` の `LayoutEngine::visible_window`・`layout_cursor_overflow_tests.rs`・`draw.rs` の `DirectionRecipe` の組み立ての中の `DWRITE_TEXT_ALIGNMENT_LEADING`／`DWRITE_PARAGRAPH_ALIGNMENT_NEAR`・`TEXT_DRAW_OPTIONS`・`look.rs` の `UNOWNED_KEYS`（4 つ）・`balloon_overrides.rs` の `overrides`・`BalloonModel::font_shadow_raw` と `shadow_raw`）。
+  - C3 での変化は注記だけ: `canvas.rs`・`draw.rs`・`look.rs` の「M2 予約」が「予約」へ言い換わった（`RESERVED_EFFECT_SHADOW` の定義と所有の注記は残っている）。
+- 触るファイル（並走の照合用）:
+  - ①寄せ: `crates/areka-emo-text/src/{layout.rs, layout_scan.rs, layout_scan_glyph.rs, cursor_tag.rs, draw.rs, look.rs, state_decoration.rs}`・`layout_cursor_overflow_tests.rs` ほか兄弟テスト・`crates/areka-parsers/src/sakura/decode.rs`（`"f"` の腕の内側）
+  - ②影: `crates/areka-emo-text/src/{look.rs, canvas.rs, balloon_overrides.rs, viewbox_draw_render.rs, viewbox_draw_decoration.rs}`
+  - 共通: `doc/COMPAT_ARCHITECTURE.md` §8
+- 並走の見立て: ②影だけなら `budoux-reveal-reflow`（`actor_present.rs`・`state.rs`・`segment.rs`）とはファイルが重ならない。ただし `balloon-font-file`（`viewbox_draw_render.rs` の `ensure_format`・`look.rs`）と `anchor-tag-canon`（`viewbox_draw_render.rs` の既定の見た目）とは重なる＝C4 の席では並べられない。
+- 議題: SC8（縦書きでのインデントの軸）の裁定（①の要件で・棚卸㉑のまま）。
+- 見つけた穴: なし。

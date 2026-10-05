@@ -43,6 +43,13 @@ mod boxes;
 #[cfg(test)]
 mod boxes_tests;
 
+// 描けない行の転記（areka-P0-element-base-method）: 画像の読み手・箱の転記のどちらも拾わない
+// element定義の行を原文のまま並べる。記録は入口（`load_shell_target`）が出す。
+mod undrawn;
+
+#[cfg(test)]
+mod undrawn_tests;
+
 // 表情の表の転記（areka-P0-mcp-expression-table）: surfacetable.txt を行の列へ写すだけ。
 // lexer・decode・model は使わない。
 mod surfacetable;
@@ -62,3 +69,4 @@ pub use model::{
 };
 pub use parse::parse;
 pub use surfacetable::{SurfaceTable, SurfaceTableRow, parse_surfacetable};
+pub use undrawn::{UndrawnElementLine, parse_undrawn_elements};

@@ -87,3 +87,25 @@
   1. `0` のときの抜き色。α 付きの絵は乗算済みで届くので、デコードの段で α を捨てるか、正規化の段でまっすぐの α に戻すか。
   2. ⑹（`overlay` 以外の描画メソッドの `element0` を持つ面で画像が土台に使われるずれ）と、`surface.append` の行にだけ現れる絵のファイル名を、本 spec に同居させるか。
   3. 既定を `0` にしたとき、宣言の無い既存の資産の見た目が変わる場合の扱い。
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: S〜M（7〜10 タスク）。起票時の 8〜12 より下振れ（本番の決め打ちが 2 か所だけだった）。切らない。
+- 前提の状態: `animated-image-decode`・`surface-element-nesting` とも着地済み＝今すぐ着手できる。
+- 崩れた前提／古くなった位置:
+  - **本番の決め打ちは 2 か所だけ**: シェルを焼く集合を組む `build_shell_target_with_boxes`（`areka-emo-present/src/shell_target.rs`）と、バルーンの `build_balloon_target_from_faces`（`balloon.rs`）。Current State が挙げる `manifest.rs`・`lib.rs`・`atlas_bind.rs` の 3 か所は、どれも `#[cfg(test)]` の試験の中で本番の経路ではない。→ `manifest.rs`・`atlas_bind.rs`・emo-compose を触らずに済み、**シェルの element の列から外せる**（roadmap の「`manifest.rs`・`atlas_bind.rs` を共有するので playback とは別のウェーブ」の理由は消えた）。
+  - `animated-image-decode` が抜き色の処理を `clear_key_color`（`normalize.rs`）へ切り出し、動く絵の 2 枚目以降のコマ（`animated.rs`）へ 1 枚目の左上の色を使い回す形にした。色は焼く入口（`lib.rs` の `bake_with_limits`）が `Normalizer::key_color` で鍵ごとに求めて渡す。`full`・`0` の腕を足すとき、コマの側も同じ設定で揃うかを確かめる（揃わなければ `lib.rs`・`animated.rs` も触る）。
+  - 宣言の読み口: バルーンは `balloon.rs` が `descript.txt` の基層を既に寛容に読んでいる（`read_descript_layer`）＝`areka-parsers` のバルーンの読み手（文字とバルーンの列）に触らずに引ける。シェルの `descript.txt` は emo-present では読んでいない（読むのは `placement/source.rs`）。
+  - 画像だけのシェル: `load_shell_target` の `surfaces.txt` の読み取りの失敗と「面が 1 つも無い」の判定は起票時のまま。`surface-element-nesting` の design-validation が「`surface.append*`ブレスの画像が焼かれない」を本 spec の議題 2 に預けたまま。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-atlas/src/normalize.rs`（コマにも効かせるなら `lib.rs`・`animated.rs`）と兄弟のテスト
+  - `crates/areka-emo-present/src/{shell_target.rs, balloon.rs}`
+  - `doc/ukadoc-coverage/ledger/assets.toml`・`dist/README.txt`（`winget-manifest-submission`・`mcp-stdio-bridge` と同じファイル＝同じウェーブなら別々の節か確かめる）
+- 議題（答えで作業が変わるものだけ）: 起票時の 3 つに 1 つ足す。
+  4. シェルの宣言を `load_shell_target` の中で読むか、引数で渡すか。推しは中で読む＝呼び手（`placement/measure.rs`・`emo2_boot/assets.rs`・MCP の試験の支え）を変えずに済み、`placement-measure-bake-once` と並べられる。
+- 見つけた穴: Current State の「本番の決め打ちは次の 5 か所」は誤り（上のとおり 2 か所）。
+
+### 同じウェーブ C4 の約束（2026-10-05 棚卸㉒・破るなら止めて報告）
+
+- compose・seriko に触らない。emo-present は `shell_target.rs`・`balloon.rs` だけ（C4 で emo-present を触るのは本 spec だけ）。`dist/README.txt` は既知の制限の行だけ（`release-cycle` が「時点」の行を直す）。

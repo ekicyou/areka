@@ -57,3 +57,16 @@
 - 触るファイル: `crates/areka-sylphya/src/vocab/dotted.rs`・`crates/areka-ghost/src/{sylphya_wiring.rs, catalog.rs（読むだけ）}`・`crates/areka/src/emo2_boot/{mod.rs, ghost_switch.rs, shell_balloon_switch.rs}`・`currentghost-property-tree` が作る値を集める所・`doc/ukadoc-coverage/ledger/property.toml`。
 - 共有しうる相手: `currentghost-property-tree`・`system-property-values`・`property-catalog-lists`・`zorder-property`・`mcp-get-property`。
 - 議題: `currentghost.status` を kanade のスレッドから UI の側へどう写すか（kanade に知らせを足すなら kanade の進行の列に入る）。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M〜L（14〜18）のまま。切る: なし（一度切り出した spec）。
+- 前提の状態: `currentghost-property-tree`（動く値の口）はまだ＝着手できない。読む道は `mcp-get-property`（✅ 10-04）でできた。
+- 崩れた前提／古くなった位置:
+  - **出すと赤になるテストがある**: `crates/areka/src/mcp/get_property_tests.rs` の `reads_values_through_the_ghost_own_asker_on_a_real_runtime` は `currentghost.name` が `NG:Cannot find such property name.` になることを期待する。`currentghost.name`（`currentghost.汎用`）は本 spec の範囲＝出したらこの期待を値へ書き換える（触るファイルに足す）。
+  - `currentghost.status` の写し方の議題に相手が増えた: `mcp-kanade-tools`（優先）の `get_status` も kanade の `ExecutionStatus` を読む。先に着地した方の読み口を使う。
+  - `mouse-drag-events` で `OnMouseDragStart`／`OnMouseDragEnd` が入ったが、`currentghost.*` の値の源は変わらない。`catalog.rs` の `list_shells`・`list_all_shells` は同じ名前で在る（377 行）。
+  - 行数: `emo2_boot/mod.rs` 883・`ghost_switch.rs` 891・`shell_balloon_switch.rs` 442。
+- 触るファイル: `crates/areka-sylphya/src/vocab/dotted.rs`・`crates/areka-ghost/src/{sylphya_wiring.rs, catalog.rs（読むだけ）}`・`crates/areka/src/emo2_boot/{mod.rs, ghost_switch.rs, shell_balloon_switch.rs}`・`currentghost-property-tree` が作る値を集める所・`crates/areka/src/mcp/get_property_tests.rs`（`currentghost.name` の期待）・`doc/ukadoc-coverage/ledger/property.toml`。
+- 議題（答えで作業が変わるものだけ）: `currentghost.status` の写し方（前回どおり）。
+- 見つけた穴: 上の `get_property_tests.rs` の期待（着地のときに直す・今は直さない）。

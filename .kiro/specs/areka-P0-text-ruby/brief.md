@@ -78,3 +78,20 @@
   - `doc/COMPAT_ARCHITECTURE.md` §8
 - 議題（答えで作業が変わるものだけ）: `line_height` を入れたとき、選択肢の強調の帯（`choice.rs` の `highlight_band_extent`）を本文の高さに合わせるか行送り全体に合わせるか（ルビが行の間隔の内側に入るので、帯がルビに重なるかが変わる）。
 - 見つけた穴: なし。
+
+
+---
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M〜L（12〜16 タスク）のまま。切らない。
+- 前提の状態: `text-typesetting`（同じ配置の層・禁則の単位）は今も未着手＝未。列の上では `balloon-markers` の後。C3 で文字の層に入ったのは `shell-balloon-frame-align`（`actor_box.rs`・`actor.rs` の注記）だけで、配置・描画・台本の受け取りの側（`layout*.rs`・`state.rs`・`draw_metrics.rs`・`choice.rs`・`viewbox_*.rs`・`areka-parsers/src/balloon/`・`areka-sakura`）は 1 行も動いていない。
+- 崩れた前提／古くなった位置:
+  - 棚卸㉑の位置は全部そのまま当たる（`state.rs` の `pub enum TextItem`・`TextLayerConfig` と `line_pitch`、`draw_metrics.rs` の `line_pitch`、`choice.rs` の `highlight_band_extent`、`actor.rs` の `ResolvedBalloonText`、`actor_box.rs` の `register_box` が `ResolvedBalloonText::resolve_with_background` を呼ぶ所）。
+  - **棚卸㉑の一覧に抜けていた行送りの 1 点**: 配置の側の行送りは `layout_styled.rs` の `line_pitch_of`（`metrics.line_pitch` を呼ぶ）を通り、`layout_scan.rs`・`layout_scan_glyph.rs` がそれを読む（要件 7.8「行送りの式は 1 点だけ」）。`line_height` はこの 1 点と計測側の `line_pitch` を一緒に替える。
+  - 箱の置き場所は `shell-balloon-frame-align` で「シェルの窓がいま表示している絵の番号」から決まるようになった（`sync_boxes` の引数が絵の番号の組へ）。箱の定義の読み（`register_box` が `ResolvedBalloonText` を解く所）は変わらない＝本 spec のキーの載せ場所には響かない。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-text/src/{state.rs, layout.rs, layout_styled.rs, layout_scan.rs, layout_scan_glyph.rs, draw_metrics.rs, choice.rs, actor.rs, viewbox_draw_render.rs, viewbox_diff.rs, lib.rs}`＋新規（ルビの配置）
+  - `crates/areka-parsers/src/balloon/{model.rs, parse.rs}`・`doc/COMPAT_ARCHITECTURE.md` §8
+- 議題: 棚卸㉑のまま（強調の帯を本文の高さに合わせるか行送り全体に合わせるか）。
+- 見つけた穴: なし。

@@ -105,3 +105,18 @@
 - 共有しうる相手: `balloon-canon-residue`（`frame/switch.rs`）・`mcp-reload`・`network-update-canon-order`（`ghost_switch.rs`・`ghost_session.rs`）・`ghost-standard-balloon`（`catalog.rs`・`boot_resolve.rs`・`boot_config.rs`＝前提として直列）。`shell-balloon-frame-align`（バグ・`actor_box.rs`・`frame/status_report.rs`・`balloon_visibility_phase.rs`・`spine.rs`）とは重ならない。
 - 議題（答えで作業が変わるものだけ）: brief の 4 つ。とくに 4（同じ切れ目で一度に替えるか）は、上の「進行中の印は 1 つ」のため、選んだ側で `switch_assets.rs`・`shell_balloon_switch.rs` まで広がるかが決まる。
 - 見つけた穴: 無し。
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（10〜14 タスク。議題 4 で「一度に替える」なら 12〜16）。切る: なし。
+- 前提の状態: **待ち＝`ghost-standard-balloon`**（未着手・C4 の予定）。`install-companion-reading`（10-04）と `shell-balloon`（10-04）は着地した。`shell-balloon-frame-align`（10-05）も着地し、`emo2_boot` の結線の列で本 spec の前に残るのは `balloon-font-file`（`frame/attach.rs`）と `balloon-canon-residue`（`frame/switch.rs` を分け合う）。
+- 崩れた前提／古くなった位置:
+  - 上流から受け取る探索の順は `crates/areka-nar/src/manifest.rs` の `search_balloons`（無印 → `balloon0` → `balloon1` …・最初に無かった番号で止める・`pub` ではない）。シェルの書庫も同じ関数で読まれる。起動の側で同じ規則を使う形は `ghost-standard-balloon` が先に決める（写すか共有の関数にするか）＝本 spec はそれに乗る。
+  - シェルの `install.txt` はシェルのフォルダに残る（`plan.rs`。残さないのは supplement だけ）。`install-companion-reading` は宛先の作り方を変えていない。
+  - C3 で本 spec の触るファイルに入った変更は 0: `emo2_boot/frame/switch.rs`（635 行）・`shell_balloon_switch.rs`（442）・`switch_assets.rs`（253）・`ghost_switch.rs`（891）・`ghost_session.rs`（873）・`boot_resolve.rs`（`decide_boot_shell` は今もここ）・`boot_config.rs`・`catalog.rs`。`shell-balloon-frame-align` が触ったのは同じ `emo2_boot` の別のファイル（`balloon_visibility_phase.rs`・`frame.rs`・`frame/{scale_text, status_report, wiring}.rs`・`spine.rs`）。
+  - 切替の進行中の印は今も高々 1 つ（`SkinSwitchInFlight`）。棚卸㉑の議題 4 の見立てはそのまま。
+- 触るファイル（並走の照合用）: 棚卸㉑のまま＝`crates/areka-ghost/src/catalog.rs` と兄弟のテスト・`crates/areka/src/{boot_resolve, boot_config, ghost_session}.rs`・`emo2_boot/frame/switch.rs`・`emo2_boot/shell_balloon_switch.rs`・（一度に替えるなら）`emo2_boot/switch_assets.rs`・`emo2_boot/ghost_switch.rs`・`doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/ledger/assets.toml`。
+- 共有しうる相手: `ghost-standard-balloon`（前提・直列）・`balloon-canon-residue`（`frame/switch.rs`）・`network-update-canon-order`（`ghost_switch.rs`・`ghost_session.rs`・`shell_balloon_switch.rs`）・`mcp-reload`（`ghost_session.rs`）・`coverage-roadmap-refresh`（台帳）。
+- 議題（答えで作業が変わるものだけ）: brief の 4 つのまま。
+- 見つけた穴: なし。

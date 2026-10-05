@@ -82,3 +82,12 @@ compile の汎用キャリアアームへ allowlist 判定を追加（純関数�
 - 残した範囲: ⒜ A 群（`\![quicksection,…]`・`\![set,balloonwait,…]`）と B 群の `\![set,balloontimeout]` のコンパイル側。`\_q` を入れるかは議題のまま（入れるなら字句の直し＝`anchor-tag-canon` の後）。
 - 規模: M（10〜14 タスク）。
 - 移した先: `\![embed]` は新しい spec `areka-P0-sakura-embed-directive` へ。C 群の残り（`\![sound,wait]`・`\![wait,syncobject]`）と D 群（同期の `\![move]` の時間・`\![set,scaling]`・`\![set,alpha]` の `--time`／`--wait`）は、消費する者（音の再生・同期の物・時間つきの移動・拡大・透明度）が現れるまで roadmap の覚え書きへ戻す（本 spec では作らない）。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（10〜14）のまま。切る: なし。
+- 前提の状態: 台本のコンパイルの列で `anchor-tag-canon`（働き）→ `talk-fast-forward` の後ろ。どちらもまだ＝着手は待ち。
+- 崩れた前提／古くなった位置: なし。C3 は `crates/areka-sakura/`・`crates/areka-parsers/src/sakura/` に触れていない（`compile.rs` 411・`duration.rs` 104・`lexer.rs` 415・`decode.rs` 400 は前回と同じ）。網羅台帳 `sakura-script.toml` で本 spec が持ち主の行は 10 のまま。`\![set,balloontimeout]` の受ける側の `balloon-lifecycle-events` は C4 予定。
+- 触るファイル: `crates/areka-sakura/src/{compile.rs, duration.rs}` と兄弟のテスト・（`\_q` を入れるなら）`crates/areka-parsers/src/sakura/{lexer,decode}.rs`・`doc/ukadoc-coverage/ledger/sakura-script.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
+- 議題（答えで作業が変わるものだけ）: `\_q` を入れるか（前回どおり・入れるなら `anchor-tag-canon` の後）。
+- 見つけた穴: なし。
