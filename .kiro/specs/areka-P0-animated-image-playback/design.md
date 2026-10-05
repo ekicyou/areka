@@ -14,7 +14,7 @@
 
 - 動く絵は「自動で書かれた定義」として動く。作者が手で書いた `always` の部品と、同じ経路・同じ時計・同じ決まりを通る。
 - `always` のアニメーション（手書きも自動も）は、**経過 0 の絵を定義だけから描ける**。コマが 1 つも届いていなくても絵は欠けず、外形も正しい。
-- 繰り返しは「開始の時刻からの経過を周期で割る」1 つの純粋な計算で決める。待ち時間は丸めない。時計の開始は、表示の出来事が運ぶ時刻そのもの。
+- 繰り返しは「開始の時刻からの経過を周期で割る」1 つの純粋な計算で決める。待ち時間は丸めない。時計の開始は出来事の時刻で決める（台本の合図は seriko がそれを処理した時刻・バルーンの窓の知らせは送り手が送った時刻）。
 - シェルとバルーンは同じ仕組みを通る。バルーンだけの再生の仕組みは 0 個。
 - 動く絵も `always` も無いシェル（`emo2` を含む）は、足した経路を 1 行も通らない。
 
@@ -33,7 +33,7 @@
 - 部品を指す鍵の 2 つ目の種類「動く絵の子」（`PartKey::Film`・`ElementKind::Film`）。
 - `always` の経過 0 の絵を定義から描く決まり（合成 `plan.rs`）と、`always` を外形に数える決まり（`flatten_extent`）、見える部品に数える決まり（`NestTable`）。
 - seriko の引き金 `LoopTrigger::Always`、繰り返しの計算（`lap_of`・`always_at`）、時計の開始の時刻の渡し方（`SerikoClock`）、バルーンの面で部品を回す経路。
-- バルーンの窓の見える・見えないを seriko へ知らせる線（`SerikoMsg::Stage`）と、隠れている外から所有される対象の合成を先送りする決まり（表示層 `apply_show`）。
+- バルーンの窓の見える・見えないを seriko へ知らせる線（`SerikoMsg::Stage`）と、隠れている外から所有される対象の合成を先送りする決まり（表示層の指令の入口と `show_target`）。
 - 試験用のシェルとバルーン（検体）、決定論テスト、実機の確かめの記録。
 - 網羅台帳の `element*`・`always` の項、対応表（`doc/COMPAT_ARCHITECTURE.md` §8）の本 spec の節、後続 2 本の brief の申し送りの節。
 
@@ -140,7 +140,7 @@ graph TB
         Actor[seriko アクター]
     end
     subgraph Present[areka-emo-present]
-        Show[apply_show 合成の先送り]
+        Show[指令の入口と show_target 合成の先送り]
     end
     subgraph Areka[areka emo2_boot]
         Report[status_report 窓の知らせ]
@@ -244,8 +244,11 @@ crates/areka-seriko/src/
 ├── actor_stage_tests.rs           # 新規
 └── lib.rs                         # 変更: 公開の接続
 crates/areka-emo-present/src/presenter/
-├── show.rs                        # 変更: 隠れている外から所有される対象は入力だけ替える
+├── hub.rs                         # 変更: 指令の入口（ShowSurface の腕）で、隠れている対象のコマを預かる
+├── target.rs                      # 変更: 預かったコマの欄 1 つ
+├── visibility.rs                  # 変更: show_target が預かったコマで通し直す・回数つきの子の欄を外す
 ├── timing.rs                      # 変更: compose_key_hash が部品の欄も混ぜる
+├── （show.rs の apply_show は変更 0）
 └── （兄弟）presenter_film_tests.rs  # 新規（接続宣言は presenter.rs）
 crates/areka/src/emo2_boot/
 ├── frame/status_report.rs         # 変更: 窓の知らせ（seriko へ）
@@ -257,10 +260,10 @@ doc/・.kiro/                        # 台帳・対応表・後続 2 本の brie
 
 ### Modified Files
 
-- 行数の見通し（今 → 見込み）: `plan.rs` 821 → 約 780（外形の約 130 行を出し、約 90 行を足す）／`plan_extent.rs` 新規 約 190／`plan_always.rs` 新規 約 150／`nesting.rs` 329 → 約 420／`pattern.rs` 203 → 約 290／`world.rs` 371 → 約 400／`timeline.rs` 506 → 約 570／`table.rs` 616 → 約 760／`looper.rs` 528 → 約 700／`parts.rs` 339 → 約 480／`state.rs` 632 → 約 710／`actor.rs` 660 → 約 720／`show.rs` 426 → 約 455／`timing.rs` 304 → 約 320／`status_report.rs` 191 → 約 260／`mod.rs` 883 → 約 892。どれも 1,000 行以下。`looper.rs` が 800 を超えそうなら、バルーンの面と `refresh` を `looper_stage.rs` へ出す。
+- 行数の見通し（今 → 見込み）: `plan.rs` 821 → 約 780（外形の約 130 行を出し、約 90 行を足す）／`plan_extent.rs` 新規 約 190／`plan_always.rs` 新規 約 150／`nesting.rs` 329 → 約 420／`pattern.rs` 203 → 約 290／`world.rs` 371 → 約 400／`timeline.rs` 506 → 約 570／`table.rs` 616 → 約 760／`looper.rs` 528 → 約 700／`parts.rs` 339 → 約 480／`state.rs` 632 → 約 710／`actor.rs` 660 → 約 720／`hub.rs` 184 → 約 215／`target.rs` 164 → 約 172／`visibility.rs` 144 → 約 175／`timing.rs` 304 → 約 320／`status_report.rs` 191 → 約 260／`mod.rs` 883 → 約 892。どれも 1,000 行以下。`looper.rs` が 800 を超えそうなら、バルーンの面と `refresh` を `looper_stage.rs` へ出す。
 - `crates/areka/src/emo2_boot/spine.rs`（1,000 行ちょうど）は **触らない**。時計を渡さない起動（今の `spawn_seriko`）は署名を変えずに残し、時計つきの起動を別の関数として足す。
 - `PatternFrame`・`LoopAnimation` の今の欄と、`PatternState` の今の関数（`set`・`get`・`iter`・`set_part`・`part_get`・`part`・`clear_parts`）、`NestTable::visible_parts` の署名は変えない（表示層と `areka` のテストの書き換え 0）。`LoopFrame` には「指す先が絵のときの絵の番号」の欄を 1 つ足す（seriko の中のテストの書き下しを直す）。
-- 既存のテストで書き換えが要るもの: `table.rs` の中のテスト `only_random_and_bindrandom_are_recorded_others_debug_logged`（「採らない語」の例の `always` を `runonce` へ）・`LoopTrigger` の腕を 2 つと決め打つ 2 か所・`LoopFrame` の書き下し・`timing_tests.rs` の鍵の檻（部品の欄の弁別を足す）。`emo2` の照合（要件 7.7）の書き換えは 0。
+- 既存のテストで書き換えが要るもの: `table.rs` の中のテスト `only_random_and_bindrandom_are_recorded_others_debug_logged`（「採らない語」の例の `always` を `runonce` へ）・`LoopTrigger` の腕を 2 つと決め打つ 3 か所（`table.rs` の `from_world` の `k == 0` の検査・`parts.rs` の `gate`・`looper.rs` の `on_tick` の抽選の振り分け）と `table.rs` のテスト `recorded_anims_satisfy_postconditions`・`LoopFrame` の書き下し・`timing_tests.rs` の鍵の檻（部品の欄の弁別を足す）。`emo2` の照合（要件 7.7）の書き換えは 0。
 
 ### 触るファイルと並走の重なり（調整用）
 
@@ -268,22 +271,28 @@ doc/・.kiro/                        # 台帳・対応表・後続 2 本の brie
 
 | ファイル | 触る所 | 印 |
 | --- | --- | --- |
-| `crates/areka-emo-compose/src/plan.rs` | `push_static_element_ops`（`ElementKind` の振り分けに `Film` の腕）・`flatten_surface`（重ねる番号に `always` を足す・コマが無ければ経過 0・コマが絵を指す腕・「消えている」の腕）・`compute_extent`／`flatten_extent` を `plan_extent.rs` へ移す | **約**・**他**: `areka-P0-element-base-method`（`plan.rs`・`fold.rs`・`method.rs`。同じ `push_static_element_ops` に描画メソッドの扱いを足す見込み）／`flatten_extent` は未着手の `areka-P0-extent-element-offset` の持ち物とされている |
+| `crates/areka-emo-compose/src/plan.rs` | `push_static_element_ops`（`ElementKind` の振り分けに `Film` の腕）・`flatten_surface`（重ねる番号に `always` を足す・コマが無ければ経過 0・コマが絵を指す腕・「消えている」の腕）・`compute_extent`／`flatten_extent` を `plan_extent.rs` へ移す | **約**。同じウェーブでの重なりは **0**（`areka-P0-element-base-method` は `plan.rs` に触らないと確かめた・下の「調整で確かめた事実」）。`flatten_extent` は未着手の `areka-P0-extent-element-offset` の持ち物とされているので、移したことを申し送る |
 | `crates/areka-emo-compose/src/plan_extent.rs`・`plan_always.rs` | 新規 | — |
 | `crates/areka-emo-compose/src/nesting.rs` | `ElementKind` に `Film`・`PartKey`・`SurfaceParts` に 2 欄・`NestTable::walk`・`NestReport::from_world` の `ElementKind` の振り分け | — |
 | `crates/areka-emo-compose/src/pattern.rs`・`world.rs`・`lib.rs`・`film.rs` | 欄・`bind_atlas` の直後の 1 行と読み口・公開の接続・新規 | — |
 | `crates/areka-emo-compose/src/{fold,method,atlas_bind,boxes,hit_import,base_image}.rs` | 変更 0 | — |
 | `crates/areka-seriko/src/{table,looper,parts,timeline}.rs` | 上の File Structure のとおり | 棚卸の一覧どおり。後続 `areka-P0-seriko-trigger-intervals` と分け合う（同じウェーブではない） |
 | `crates/areka-seriko/src/{state,actor,lib}.rs` | `ScopeStates` に窓と面の覚え・`commit_pattern` のバルーンの腕・`SerikoMsg` に 1 種・`SerikoSink` に 2 関数・時計つきの起動 | 棚卸の一覧に無い（ほかの spec の一覧にも無い） |
-| `crates/areka-emo-present/src/presenter/show.rs` | `apply_show` の頭（引き当ての前）に早い戻り 1 つ | **約**。`areka-P0-self-alpha-declaration` は `shell_target.rs`・`balloon.rs` だけなので重ならない |
+| `crates/areka-emo-present/src/presenter/hub.rs`・`target.rs`・`visibility.rs` | 指令の入口の `ShowSurface` の腕（預かる）・`PresentTarget` に欄 1 つ・`show_target`（預かったコマで通し直す・回数つきの子の欄を外す）。`show.rs` の `apply_show` は変更 0 | **約**。`areka-P0-self-alpha-declaration` は `shell_target.rs`・`balloon.rs`、`areka-P0-element-base-method` は `shell_target.rs` の `load_shell_target` だけなので重ならない |
 | `crates/areka-emo-present/src/presenter/timing.rs`・`presenter.rs` | `compose_key_hash`・テストの接続宣言 1 つ | **約** |
 | `crates/areka/src/emo2_boot/frame/status_report.rs` | `run_status_report_phase`・`report_balloons`・`BalloonStatusLedger` に欄 | ほかの spec の一覧に無い |
-| `crates/areka/src/emo2_boot/mod.rs` | seriko と刻みの起動の所（時計を 1 つ作って両方へ渡す・数行）・テストの接続宣言 | **他**: `areka-P0-balloon-lifecycle-events`（`mod.rs`・`frame/wiring.rs` ほか） |
+| `crates/areka/src/emo2_boot/mod.rs` | seriko の起動の所（`spawn_seriko(` の呼び出し）と刻みの起動の所（`LoopTickerConfig`）に、新しい時計 `seriko_clock` を 1 つ作って渡す数行・テストの接続宣言 | **他**: `areka-P0-balloon-lifecycle-events` は同じファイルの別の所の 1〜3 行だけ（下の「調整で確かめた事実」） |
 | `crates/areka/src/emo2_boot/{spine,assets,frame,frame/wiring}.rs` | 変更 0 | — |
 | `doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` | `element*`・`always` の項／§8 に 1 節 | **他**（別の行・別の節）: `element-base-method`・`ghost-standard-balloon`・`self-alpha-declaration` |
 | `.kiro/steering/roadmap.md` | 同じウェーブの行の本 spec の一覧と約束・本 spec の行の言い方 | 棚卸の持ち物 |
 
-調整の要る点は 3 つ: ①`plan.rs` を `areka-P0-element-base-method` と分け合う（先に入る側の後で取り込む。外形を別ファイルへ移す作業はどちらか一方だけが行う）②`flatten_extent` の持ち主の約束を直す ③`emo2_boot/mod.rs` の数行。
+#### 調整で確かめた事実（2026-10-05・ほかのセッションから）
+
+- **`areka-P0-element-base-method`**: `crates/areka-emo-compose/src/plan.rs` には**触らない**（同 spec の tasks.md が `plan.rs`・`blit.rs`・`base_image.rs`・`method.rs` の `is_implemented`／`known_method` を「触らない」に挙げている）。触るのは、読み手の `shell/`（`decode.rs` の `is_image_element_method`・新しい `undrawn.rs`）・合成の `fold.rs` の `normalize_element` と `method.rs` の `ComposeMethod::Base` の注記だけ・表示層の `shell_target.rs` の `load_shell_target`（`warn!` 1 つとテストの接続）・対応表 §8 の 1 行・台帳 `assets.toml` の 2 行。**同 spec が先に main へ入り、本 spec は後**。このウェーブで `plan.rs` の重なりは 0。
+- **`areka-P0-balloon-lifecycle-events`**: `crates/areka/src/emo2_boot/mod.rs` の 1〜3 行だけ（今ある `let clock = TalkClock::new(clock_fn);` の写しを `BalloonLifecycleSink::new(lifecycle_tx)` へ渡す）。`spawn_seriko(` の所・刻みの起動・テストの接続宣言・`frame/status_report.rs` には触らない。**本 spec への縛り: その `clock: TalkClock` の名前・型・持ち主を変えない**。seriko の時計は別の名前（`seriko_clock`）の別の値として足す。**同 spec が先に main へ入り、本 spec は後**。
+- **`areka-P0-extent-element-offset`**: 未着手（セッションなし）。本 spec が先。同 spec の brief へ「`compute_extent`・`flatten_extent` は `plan_extent.rs` へ移した」「足したのは `always` の全部の pattern と動く絵の子の 2 か所」「画像の element と動く絵の子は同じ 1 行で数えているので、X,Y の直しはその 1 行に入れる」を申し送る（文面は「申し送りの文面」）。
+
+残る調整は文書だけ: roadmap の同じウェーブの行（本 spec の触るファイル・約束・規模）と `flatten_extent` の持ち主の書き直し。タスクの頭に「main を取り込んで、先に入った 2 本の後の形を引き直す」を置く。
 
 ## System Flows
 
@@ -335,17 +344,19 @@ sequenceDiagram
     participant Rep as 届けの相
     participant Ser as seriko
     Ser->>Pres: 隠れている間もコマの指令は届く
-    Pres->>Pres: 入力の記録だけ替える 合成しない
+    Pres->>Pres: コマを預かるだけ 合成しない
     Vis->>Pres: show_target
-    Pres->>Pres: 最後の入力で合成して見えるようにする
+    Pres->>Pres: 預かったコマから回数つきの子の欄を外して合成 見えるようにする
     Rep->>Pres: target_visible と current_surface_id を読む
     Rep->>Ser: Stage 開いた 時刻つき
     Ser->>Ser: 回数つきの時計をその時刻で作る
 ```
 
-- 隠れている間、seriko は生まれている時計（終わりなしの絵）を進め続け、コマが替われば指令を出す。表示層は、**隠れている・外から所有される対象への、面の番号と着せ替えが同じでコマだけが違う指令**を、入力の記録（`last_show`）の差し替えだけで済ませる（合成・転送・描画は 0 回・要件 6.4・3.7）。
-- 窓を出すとき、`show_target` は今でも最後の入力で通し直す。入力が最新なので、出た瞬間から正しいコマが見える（古いコマが 1〜2 フレーム見えることは無い）。
-- 回数つきの絵は、窓が閉じた知らせで時計を捨てる（欄は「載っていない」＝経過 0 に戻る）。次に窓が出た瞬間は経過 0 の絵が見え、開いた知らせが運ぶ時刻で時計が生まれる（要件 2.3）。知らせが seriko に着くのが遅れても、開始の時刻は窓が出たフレームの時刻である。
+- 隠れている間、seriko は生まれている時計（終わりなしの絵）を進め続け、コマが替われば指令を出す。表示層は、**隠れている・外から所有される対象への、面の番号と着せ替えが同じでコマだけが違う指令**を、**預かるだけ**にする（対象ごとの「出すときに使うコマ」の欄に置く。合成・転送・描画は 0 回・要件 6.4・3.7）。最後に表示が成立した入力（`last_show`）には触らないので、隠れているバルーンの読み戻し（`last_shown`・`read_back`・MCP の `dump_balloon`）は今までどおり成立した絵を返す。
+- 窓を出すとき、`show_target` は「預かったコマが在ればそれ、無ければ最後に成立した入力のコマ」で通し直す。預かったコマは最新なので、終わりなしの絵は出た瞬間から正しいコマが見える（古いコマが 1〜2 フレーム見えることは無い）。
+- **回数つきの絵は、隠れていた対象を出すとき必ず経過 0 から**: `show_target` は通し直すコマから、回数つきの子（その対象の面の表の `FilmSheet.laps` が在る子）の欄を外す。欄が無い＝経過 0 なので、閉じた知らせの往復が間に合っていなくても、出た最初のフレームから 1 枚目が見える（要件 2.3・0 フレーム）。表示層は時刻も seriko も要らない。
+- seriko の側は、窓が閉じた知らせで回数つきの時計を捨て、開いた知らせが運ぶ時刻で作り直す。知らせが seriko に着くのが遅れても、開始の時刻は窓が出たフレームの時刻である。
+- バルーンの表を差し替えた後、窓が開いたままのスコープは知らせが出ない（変化が無い）。時計は次の刻みの時刻で生まれる。その間は経過 0 の絵が出るので絵は欠けない。
 - 知らせは、今ある届けの相の中で、文字の層を借りる手前に置く。観測は表示層の照会（真実は表示層のまま）なので、可視性の相・`\b[-1]`・時間切れのどの道で変わっても同じ 1 か所で拾える。
 
 ## Requirements Traceability
@@ -390,7 +401,7 @@ sequenceDiagram
 | 6.1 | バルーンの面の動く絵が動く | 分解・LoopRuntime・届けの相 | バルーンの面でも部品を回す・`SerikoMsg::Stage` | 窓が出る・隠れる |
 | 6.2 | 大きさ・位置・文字を変えない | 外形 | 外形は同じ・面の番号も同じ | — |
 | 6.3 | コマで出したり隠したりしない | （既存） | 外から所有される対象への表示の指令は見えるようにしない | — |
-| 6.4 | 隠れている間は描き直さない | 表示層 | `apply_show` の先送り | 同上 |
+| 6.4 | 隠れている間は描き直さない | 表示層 | 指令の入口で預かる（合成の先送り） | 同上 |
 | 6.6 | シェルと混ぜない | PartClocks | 鍵に面の種類 | — |
 | 6.7 | 同じ仕組み・バルーン専用 0 個 | 全体 | 分解・鍵・時計・計算・合成は面の種類を見ない | — |
 | 6.5 | 静止画のバルーンは変わらない | Table・表示層 | 表が空なら評価しない。先送りは絵を変えない | — |
@@ -425,7 +436,7 @@ sequenceDiagram
 | PartClocks（`parts.rs`） | seriko | `always` の時計・回数つきの整理 | 2.3, 2.7, 2.8, 3.1〜3.6, 4.4, 6.6 | Repeat (P0) | State |
 | LoopRuntime（`looper.rs`） | seriko | 刻みと出来事の統括・バルーンの面 | 4.1, 4.3, 4.7, 6.1, 7.2 | PartClocks (P0) | Service |
 | ScopeStates・アクター | seriko | 窓と面の覚え・`Stage`・時計 | 6.1 | — | State, Event |
-| 表示層の先送り（`show.rs`） | 表示 | 隠れている対象は入力だけ替える | 3.7, 6.4 | — | Service |
+| 表示層の先送り（`hub.rs`・`target.rs`・`visibility.rs`） | 表示 | 隠れている対象はコマを預かるだけ・出すとき回数つきは経過 0 | 2.3, 3.7, 6.4 | FilmSheets (P0) | Service, State |
 | 窓の知らせ（`status_report.rs`） | areka | 窓の見える・見えないを seriko へ | 6.1, 2.3 | 表示層の照会 (P0)・`GhostSession::seriko_sink` (P0) | Event |
 
 ### 合成（`areka-emo-compose`）
@@ -481,13 +492,13 @@ impl EmoWorld {
 }
 ```
 
-- Preconditions: `bind_atlas` が済んでいる。Postconditions: `ElementKind::Film(id)` の element が在れば、`film_sheet(id)` は必ず `Some`。同じ入力から同じ結果。
+- Preconditions: `bind_atlas` が済んでいる。**同じ面の表に `bind_atlas` を呼ぶのは 1 度だけ**（今の本番の呼び手 2 か所はどちらも 1 度。2 度呼ぶと、束縛の手順は画像でない element を束縛しないので、子の定義が古いアトラスのまま残る。`debug_assert!` で見張る）。Postconditions: `ElementKind::Film(id)` の element が在れば、`film_sheet(id)` は必ず `Some`。同じ入力から同じ結果。
 - Integration: `EmoWorld::bind_atlas` の中で `atlas_bind::bind_atlas` の次の行に呼ぶ。シェル（`ShellTarget::build_world`）とバルーン（`build_balloon_target_from_faces`）はどちらも `bind_atlas` を通るので、呼び手の変更は 0。
 
 #### NestTable の拡張（`nesting.rs`）
 
 - `ElementKind` に `Film(FilmId)` を足す。`element_kind`（欄の読み分け）は `Film` を返さない（作者は書けない）。
-- `SurfaceParts`（1 行）に 2 欄を足す: `films`（そのサーフェスに置かれた動く絵の子・昇順・重複なし）／`always_rest`（`always` の animation の番号, 経過 0 の pattern が指すサーフェス）。
+- `SurfaceParts`（1 行）に 2 欄を足す: `films`（そのサーフェスに置かれた動く絵の子・昇順・重複なし）／`always_rest`（`always` の animation の番号, 経過 0 の pattern が指すサーフェス）。**行を載せる条件**（`NestTable::from_world` の今の「`children`・`bind_targets`・`bind_ids` のどれかが空でない」）に、この 2 欄も足す（足さないと、動く絵だけを置いたサーフェスの行が載らない）。
 - 見える部品の求め方（`walk`）に辺を 1 つ足す: `always` の animation にコマが載っていなければ、経過 0 の先へ進む（合成と同じ辺）。「消えている」なら進まない。
 - 見えている動く絵の子を求める読み口を足す。`visible_parts` の署名は変えない。
 
@@ -545,9 +556,9 @@ impl PatternState {
 
 **Responsibilities & Constraints**
 
-- `push_static_element_ops`: `ElementKind::Film(id)` の element は、今の `ElementKind::Surface` と同じ場所（element の番号の順・親の位置＋ X,Y）で子を平坦化する。子の平坦化は「欄を読む（`Cell`）→ `Picture` ならその絵・`Rest` なら経過 0 のコマの絵・`Blank` なら何も」を 1 枚の命令にする（位置を持たない全透明のコマは命令にしない）。
+- `push_static_element_ops`: `ElementKind::Film(id)` の element は、今の `ElementKind::Surface` と同じ場所（element の番号の順・親の位置＋ X,Y）で子を平坦化する。子の平坦化は「欄を読む（`Cell`）→ `Picture` ならその絵・`Rest` なら経過 0 のコマの絵・`Blank` なら何も」を 1 枚の命令にする（位置を持たない全透明のコマは命令にしない）。命令の描画メソッドは、**置いた element の描画メソッドをそのまま運ぶ**（位置・順と同じく、静止画のときと同じにする）。
 - `flatten_surface`: 重ねる対象の番号に、そのサーフェスの `always` の animation（`is_always_interval`）を足す。番号ごとに `Cell` を読み、`Frame` なら今までどおり・`Rest` で `always` なら経過 0 の pattern（番号が 0 以上・描画メソッドが動くものだけ）を今のコマと同じやり方で描く・`Blank` なら描かない。`always` でない animation の `Rest` は今までどおり（着せ替えなら pattern0、そうでなければ何も）。重ねる順（animation-sort）は変えない。
-- 外形: 上の b のとおり。
+- 外形: 上の b のとおり。`compute_extent`・`flatten_extent` は中身を変えずに `plan_extent.rs` へ移し、足すのは b の 2 か所だけ。今の `flatten_extent` は着せ替えの pattern0 を「index が最小の pattern」で取り、命令の経路は「index が 0 の pattern」で取る（既存の食い違い）。**これは移すだけで直さない**（本 spec の範囲外）。
 - 動く絵も `always` も無い面の表では、足した腕は 1 つも通らない（`ElementKind::Film` が無い・`always` の animation が無い）。`emo2` の命令列と外形は今と同じバイトになる。
 
 **Contracts**: Service [x] — 公開の署名（`Composer::compose_into`・`build_plan`）は変えない。
@@ -624,7 +635,7 @@ impl AnimationTable {
 - 時計の入れ物の鍵を（スコープ, 面の種類）にし、中の鍵を（`PartKey`, animation の番号）にする。値は今の `PartAnim` のまま。
 - 評価する部品 ＝ 今の見える部品（`visible_parts`）＋ 見えている動く絵の子（`visible_films`）。部品 1 つの評価は今の 1 本の経路（`part_animations` を番号の昇順に）で、動く絵の子もそこを通る。
 - 着せ替えの番人 `gate` は 3 通り（抽選する K・`always`・対象外）を返す。`always` は乱数を引かない。時計が無ければ、渡された時刻で作る。`always_at` の答えを欄へ書く: 経過 0 のコマと同じなら載せない／別のコマならコマ（絵を指すなら `set_film`）／何も出さないなら、経過 0 のコマが在るときだけ「消えている」。
-- 回数つき（`laps` が在る）の時計は、評価のとき見えていなければ捨てる。面が隠れた（`\s[-1]`・`\b[-1]`・窓が閉じた知らせ）ときは、その入れ物の回数つきの時計を全部捨てる。
+- 回数つき（`laps` が在る）の時計は、評価のとき見えていなければ捨てる。**評価は刻みだけでなく、面の切り替え・着せ替えの変化・窓の知らせの直後の `refresh` でも行う**（`\s[A]` → `\s[B]` → `\s[A]` が刻みの間に続いても、B で見えなくなった時計は捨てられ、A に戻ると頭から始まる）。面が隠れた（`\s[-1]`・`\b[-1]`・窓が閉じた知らせ）ときは、その入れ物の回数つきの時計を全部捨てる。
 - 抽選の animation の決まり（境界の抽選・`peek` は時計を作らない・末尾の保持）は変更 0。
 - 記録: `always` の時計が生まれた・捨てられたとき `debug!`。
 
@@ -639,7 +650,8 @@ impl AnimationTable {
 - バルーンの面は、窓が閉じていても評価する。ただし閉じている間は時計を作らず、回数つきの時計は無い（捨ててある）。動くのは、窓が開いていたときに生まれた終わりなしの時計だけ。
 - 飛ばす条件: 今の条件に「一番上に `always` が無い」を足す。`is_continuous()` が偽の表では今と同じ行だけを通る。
 - `refresh(scope, slot, at_ms)`: 今の `refresh_parts` を広げる。面の切り替え・着せ替えの変化・窓の知らせの直後に呼び、見えている `always` の時計を `at_ms` で作り、欄を作り直して `commit_pattern` する。抽選の animation には触らない（今の `peek` のまま）。
-- 表の差し替え: シェルの表ならシェルの面の時計、バルーンの表ならバルーンの面の時計を捨てる。
+- 表の差し替え: シェルの表ならシェルの面の時計、バルーンの表ならバルーンの面の時計を捨てる。差し替えの後、見えている面の時計は次の出来事（シェルは差し替えの合図の後の最初の刻み・窓が開いたままのバルーンも次の刻み）の時刻で生まれる。
+- **出来事の時刻は、刻みの単調性の番人（`last_seen`）に入れない**。`last_seen` は刻みの時刻だけで進める。入れると、別スレッドが僅かに前に読んだ刻みが「非単調」として捨てられる。
 
 #### 時計の開始の時刻（`SerikoClock`）
 
@@ -652,7 +664,7 @@ pub fn spawn_seriko_clocked<O>(/* 今の引数 */, clock: Option<SerikoClock>) -
 ```
 
 - 出来事の時刻の決め方: 台本の合図（`\s`・`\b`・着せ替え）は、seriko がそれを処理するときに時計を読む。窓の知らせは、送り手（UI スレッド）が送るときに時計を読んで知らせに載せる。時計が渡されていなければ（今のテストと `spine.rs` の檻）、直前の刻みの時刻を使う。
-- 本番は `mod.rs` が時計を 1 つ作り、刻みの起動（`LoopTickerConfig::clock`）と seriko の起動の両方へ同じものを渡す。経過は「今の時刻 − 開始の時刻」を 0 で止めて求める（別スレッドが読んだ刻みの時刻が開始より僅かに前でも負にならない）。
+- 本番は `mod.rs` が新しい時計 `seriko_clock` を 1 つ作り、刻みの起動（`LoopTickerConfig::clock`）と seriko の起動の両方へ同じものを渡す。同じ関数に今ある台本の時計（`let clock = TalkClock::new(clock_fn);`）とは別の値で、そちらの名前・型・持ち主は変えない（`areka-P0-balloon-lifecycle-events` が使う）。経過は「今の時刻 − 開始の時刻」を 0 で止めて求める（別スレッドが読んだ刻みの時刻が開始より僅かに前でも負にならない）。
 
 #### ScopeStates・アクター（`state.rs`・`actor.rs`）
 
@@ -681,11 +693,27 @@ impl ScopeStates {
 
 ### 表示（`areka-emo-present`）
 
-#### 合成の先送り（`presenter/show.rs`）
+#### 合成の先送り（`presenter/hub.rs`・`target.rs`・`visibility.rs`）
 
-- `apply_show` の頭に 1 つ足す: 対象が**外から所有され**・**今見えておらず**・最後に確立した入力と**面の番号も着せ替えも同じ**で・面が確立済み（`current_surface_id` がその番号）なら、`last_show` のコマだけを差し替えて成功を返す（合成・表示の記録・配置・マスクには触らない）。
-- 外形はコマに依らないので、窓の寸法・文字のスロットは変わらない。見えるようにするとき `show_target` が最後の入力で通し直す（今の作り）ので、その時点の絵が合成される。
-- 面の番号が違う指令（`\b[番号]`）・見えている対象・命令で見える・見えないが決まる対象（シェル）は今までどおり。
+読んで確かめた今の作り: 合成の漏斗 `apply_show`（`presenter/show.rs`）を呼ぶのは 4 か所——外からの指令の入口（`hub.rs` の `ShowSurface` の腕）・`show_target`（`visibility.rs`）・`refresh_scale`（`refresh.rs`）・対象の差し替え（`replace.rs`）。`last_show` は「最後に表示が成立した入力」で、`last_shown`（`snapshot.rs`）と `read_back`（`read.rs`）がこの 3 つ組で合成の覚えを引き、MCP の `dump_balloon`（`crates/areka/src/mcp/dump_balloon.rs`）は隠れているバルーンでも `last_shown` が絵を返す前提で動く。
+
+**決まり**
+
+1. **`last_show` の意味は変えない**（最後に表示が成立した入力）。合成していないコマで上書きすることは 0 回。
+2. **預かる欄**: `PresentTarget`（`target.rs`）に「出すときに使うコマ」（`PatternState` 1 つ・無ければ空の印）を足す。
+3. **預かるのは指令の入口だけ**: `hub.rs` の `ShowSurface` の腕で、次の 4 つが全部真なら、コマを預かる欄に置き、**成功の応答を必ず 1 回返して**戻る（`apply_show` は呼ばない）。
+   - 対象が外から所有されている（`VisibilityOwnership::External`）
+   - 対象が今見えていない
+   - 面が確立済みで、指令の面の番号が今の面の番号（`current_surface_id`）と同じ
+   - 指令の着せ替えが、最後に成立した入力の着せ替えと同じ
+   
+   1 つでも偽なら今までどおり `apply_show` を通す。通って表示が成立したら、預かる欄を空にする（面の番号が替わる `\b[番号]`・見えている対象・シェルはここに入る）。
+4. **`apply_show` は変更 0**。`show_target`・`refresh_scale`・対象の差し替えは今までどおり `apply_show` を直接呼ぶので、先送りの条件に掛からない（通し直しが自分で預かってしまうことが無い）。
+5. **`show_target`**: 通し直すコマを「預かったコマが在ればそれ、無ければ `last_show` のコマ」とし、そこから**回数つきの子の欄を外す**（対象の面の表を `film_sheets` でなめ、`laps` が在る子の欄を消す。動く絵の無い面の表では何もしない）。面の番号と着せ替えは `last_show` のもの。通し直しが成立したら預かる欄を空にする。失敗したら預かる欄は残す（今の「失敗したら前の状態を保つ」と同じ側）。
+6. `refresh_scale`（隠れている間の DPI の変化）と読み戻しは `last_show` を使う（今のまま）。対象の差し替え・`Hide` の後の別の面の確立では、預かる欄を空にする。
+
+- 外形はコマに依らないので、預かっている間も窓の寸法・文字のスロットは変わらない。
+- 終わりなしの子の欄は外さない（見えなかった間も進んでいたものとして続きから・要件 3.3）。
 - `compose_key_hash`（`timing.rs`）は、部品の欄・動く絵の子の欄・「消えている」も混ぜる（perf の記録の鍵の種類の数が、動く部品と動く絵で過少にならないようにする）。
 
 ### 結線（`areka`）
@@ -722,11 +750,11 @@ impl ScopeStates {
 
 ### Unit Tests
 
-1. `timeline_repeat_tests.rs` — `always_at`: 待ち時間どおりの境目（1.5・1.6）／終わりなしの 2 周目と、最初の待ちの間は前の周の最後のコマ（2.1・4.2）／合計 N 回で最後のコマに止まる（2.2）／待ち時間 0 のコマを飛ばす（2.4・検体 `alpha.webp` の 100・0・70）／**経過が 1 秒飛んだときに 1 秒ぶん進む——手書きの `always` の形と動く絵の形の両方で**（2.9）／途中の `-1` で消えて次のコマで戻る（4.5）／同じ入力で同じ答え（2.6）。
+1. `timeline_repeat_tests.rs` — `always_at`: 待ち時間どおりの境目（1.5・1.6）／終わりなしの 2 周目と、最初の待ちの間は前の周の最後のコマ（2.1・4.2）／合計 N 回で最後のコマに止まる（2.2）／待ち時間 0 のコマを飛ばす（2.4・検体 `alpha.webp` の 100・0・70）／**経過が 1 秒飛んだときに 1 秒ぶん進む——手書きの `always` の形と動く絵の形の両方で**（2.9）／途中の `-1` で消えて次のコマで戻る（4.5）／同じ入力で同じ答え（2.6）／**pattern0 の待ちが 0 の手書きの `always` の周の境目**（待ち 0・100 の 2 コマは、周の境目で最後のコマと次の周の pattern0 が同じ時刻になり後ろが勝つ＝最後のコマは 0 ミリ秒しか出ない。この帰結を固定する）。
 2. `film_tests.rs` — 分解: element の番号・X,Y が保たれる（1.4）／検査で落ちる 4 通り（2.5・8.2）／`element0` が在るサーフェスの `surface*.png` は分解されない（1.3）／GIF と縮んだ絵は分解されない（1.11）／同じファイルは同じ子（3.4）／動く絵が 0 の面の表に何も載らない（7.1）／経過 0 のコマ（1 枚目の待ち時間が 0 の絵では次のコマ）。
 3. `plan_always_tests.rs` — コマの欄が空のとき `always` の経過 0 の絵が出る（手書きの一番上・手書きの部品・動く絵の子の 3 通り・3.1・4.1）／「消えている」では出ない（4.5）／合計 0 の `always` は最後のコマ（4.6）／透明な所から 1 枚目が透けない（コマの絵 1 枚だけが命令になる）／全透明のコマは命令にならない／`always` の無いサーフェスの命令列は今と同じ。
 4. `plan_extent_film_tests.rs` — 動く絵を置いたサーフェスの外形が、同じ寸法の静止画を置いたときと同じ（1.7）／動く `surface0.png` だけのサーフェスが 0×0 にならない（1.2）／手書きの `always` は全部の pattern の和集合／コマを替えても外形は同じ。
-5. `nesting_film_tests.rs`・`pattern_cell_tests.rs` — 見える動く絵の子（一番上・子・pattern の先・1.9）／`always` の経過 0 の先が見える部品に入る／欄の 3 つの意味と等しさ（入れた順に依らない・空と「全部が経過 0」が等しい）。
+5. `nesting_film_tests.rs`・`pattern_cell_tests.rs` — 見える動く絵の子（一番上・子・pattern の先・1.9）／`always` の経過 0 の先が見える部品に入る／欄の 3 つの意味と等しさ（入れた順に依らない・空と「全部が経過 0」が等しい）／動く絵だけを置いたサーフェスの行が `NestTable` に載る／**`NestReport` が `ElementKind::Film` を「無い番号」にも「循環」にも数えない**（振り分けが `_` の腕なので、コンパイラは漏れを教えない）／**「合成が描いた先」と「見える部品」の突き合わせ**: 同じ検体・同じコマの欄で、合成が平坦化でたどったサーフェスと動く絵の子の集合が、`visible_parts`＋`visible_films` の答えと一致する（`always` の経過 0・「消えている」・動く絵の子を含む。今ある `nesting_fixture_tests.rs` の型）。
 6. `table_always_tests.rs`・`table_film_tests.rs` — `always` の完全一致だけ採る・`bind+always`・`always+bind`・`Always` は今の `debug!` の腕（4.8・4.9）／合計 0 の `warn!` が 1 回／子の行（周期・回数・絵を指すコマ）と `film_skips` の `warn!`（8.4）。
 
 ### Integration Tests
@@ -734,7 +762,7 @@ impl ScopeStates {
 1. `parts_film_tests.rs`・`parts_always_tests.rs` — 見えた出来事の時刻で時計が生まれる（3.1）／同じ絵を置く別のサーフェスへ切り替えても続き（3.2）／置いていないサーフェスへ行って戻っても進んでいる（3.3）／回数つきは見えなくなると捨てられ、戻ると頭から（2.3）／続けて見えていれば始め直さない・止まっていれば止まったまま（2.7・2.8）／スコープごと・面の種類ごとに別（3.5・6.6）／表の差し替えで捨てる（3.6）／子では巻き戻らない（4.4）／経過 0 と同じコマは欄に載らない（7.4）。
 2. `looper_always_tests.rs` — 一番上の `always` が抽選を待たず始まり、切り替えで頭から（4.1・4.3）／`always` を足しても、同じ乱数の列で `random` の発火の時刻が変わらない（4.7）／時計を注入したとき、時計の開始が合図を処理した時刻になる（刻みの時刻ではない）。
 3. `looper_balloon_tests.rs`・`actor_stage_tests.rs`・`state_stage_tests.rs` — 窓が開いた知らせでバルーンの面の動く絵の時計が、知らせの時刻で生まれる（6.1）／閉じた知らせで回数つきの時計が捨てられ、欄が経過 0 に戻る／`\b` を受けていないスコープは知らせの面の番号を使い、受けた後は使わない／知らせだけでは `HideBalloon`・`Hide` を出さない（6.3）。
-4. `presenter_film_tests.rs`（表示層） — 隠れている外から所有される対象へコマだけが違う指令を 3 回送ると、合成の回数が 0 回で、`show_target` の後の絵が最後の指令のコマになる（6.4・3.3）／見えているバルーンでコマを替えても、文字のスロット（`text_slot_view`）と対象の寸法（`target_physical_size`）が同じ（6.2）／**コマごとに透ける形が替わる: あるコマで不透明・別のコマで透明な画素の当たり判定が、表示中のコマに従う**（1.13）／作者の当たり判定の矩形は同じ（1.8）。
+4. `presenter_film_tests.rs`（表示層） — 隠れている外から所有される対象へコマだけが違う指令を 3 回送ると、合成の回数が 0 回で、`show_target` の後の絵が最後の指令のコマになる（6.4・3.3）／**隠れている間にコマだけが違う指令を送った後も、`last_shown` が成立済みの絵を返し、`read_back` が失敗しない**（完了 `areka-P0-mcp-dump-images` の非退行。`areka` の側にも、隠れているバルーンで `dump_balloon` が失敗しないテストを 1 本置く）／**閉じてすぐ出す**: 回数つきの絵が最後のコマで止まった状態で隠し、seriko からの戻しの指令を送らないまま `show_target` を呼ぶと、最初の絵が経過 0 のコマである（2.3・0 フレーム）。同じ場面で終わりなしの絵の欄は外れない（3.3）／先送りの条件の縁: 面の番号が違う・着せ替えが違う・見えている・命令で見える対象（シェル）は、どれも今までどおり合成される／預かった後の応答が必ず 1 回返る／見えているバルーンでコマを替えても、文字のスロット（`text_slot_view`）と対象の寸法（`target_physical_size`）が同じ（6.2）／**コマごとに透ける形が替わる: あるコマで不透明・別のコマで透明な画素の当たり判定が、表示中のコマに従う**（1.13）／作者の当たり判定の矩形は同じ（1.8）。
 5. 回数を数えるテスト（9.2） — ①動く絵も `always` も無い表（`emo2` の表を含む）で、同じ刻みと乱数の列に対して出る指令の列が今の期待値のまま（既存の `spine_seriko_loop_tests.rs`・`looper_parts_emo2_tests.rs` を書き換えずに通す）②動く絵 1 つの表で、待ち時間 100 ミリ秒のコマに 16 ミリ秒刻みを 7 回与えて指令が 1 件だけ（7.4）③面の表示の指令の直後の最初の刻みで指令が 0 件（経過 0 の絵は最初の指令で出ている）。
 6. `status_report_stage_tests.rs` — 観測の列 → 送る知らせの列（前と同じなら送らない・文字の層を借りられないフレームでも送る）。
 
@@ -760,7 +788,7 @@ impl ScopeStates {
 ## 文書の更新（要件 10）
 
 - **網羅台帳**（`doc/ukadoc-coverage/ledger/assets.toml`）: `always` の項を「単独の `always` は駆動する。組み合わせは駆動しない」へ。`element*` の項に、自動アニメーションが動くこと・動く GIF は非対応のまま・`--clipping` を付けても動く絵として読むこと（`areka-P0-element-clipping-option` が着地するまで）を書く。`import` の項は触らない。
-- **対応表**（`doc/COMPAT_ARCHITECTURE.md` §8）に 1 節: 繰り返し回数を守る・回数つきは表示のたびに始め直す／待ち時間は丸めない・合計 0 は動かさない／終わりなしの絵はサーフェスを切り替えても巻き戻さない（SSP と見え方が違いうる）／`always` の途中の終わりのコマと合計 0／`always` はコマが無くても経過 0 の絵が出て、外形に全部の pattern が入る／バルーンの面も動く（完了 `areka-P0-animated-image-decode` の「後続でも作らない」を上書きした）／コマの切り替えは 16 ミリ秒の刻みで見つける。
+- **対応表**（`doc/COMPAT_ARCHITECTURE.md` §8）に 1 節: 繰り返し回数を守る・回数つきは表示のたびに始め直す／待ち時間は丸めない・合計 0 は動かさない／終わりなしの絵はサーフェスを切り替えても巻き戻さない（SSP と見え方が違いうる）／`always` の途中の終わりのコマと合計 0／`always` はコマが無くても経過 0 の絵が出て、外形に全部の pattern が入る／バルーンの面も動く（完了 `areka-P0-animated-image-decode` の「後続でも作らない」を上書きした）／コマの切り替えは 16 ミリ秒の刻みで見つける／**手書きの `always` で pattern0 の待ちが 0 のとき、最後のコマは 0 ミリ秒しか出ない**（待ちは「出す前の待ち」なので、周の境目で次の周の pattern0 が同じ時刻に勝つ）／**バルーンの動く絵の記録はスコープごとに 1 回出る**（バルーンの表はスコープごとに作る。要件 8.4 の「読み込み 1 回につき 1 回」は、スコープごとの読み込みを 1 回と数える）／隠れていたバルーンを出すとき、回数つきの絵は必ず 1 枚目から。
 - **roadmap**: 同じウェーブの行の本 spec の触るファイルと約束を、上の「触るファイルと並走の重なり」に合わせて直す。`seriko-trigger-intervals` の行が「優先（高）」で、`always` を含む組み合わせが載っていることを完了のときに確かめる（要件 10.7）。
 
 ### 申し送りの文面（要件 5.2・10.5）
@@ -781,6 +809,13 @@ impl ScopeStates {
 - `bind+always` を入れるときは、`is_always_interval`（経過 0 を描くか・外形に数えるか）と「着せ替えの種類か」（`plan.rs` の `is_bind_interval`・`nesting.rs` の `bind_ids`・`parts.rs` の `gate`）の両方に載せ、着せ替えが無効の間は経過 0 の絵も描かない形にする。
 - バルーンの面でも部品の経路が回る。時計の鍵に面の種類が入った。
 
+**`areka-P0-extent-element-offset` に足すこと（要件 10.6 の範囲・同 spec は未着手で、本 spec の後）**
+
+- `compute_extent`・`flatten_extent` は `crates/areka-emo-compose/src/plan.rs` から `plan_extent.rs` へ移した（中身は変えていない）。roadmap の「`plan.rs` の `flatten_extent`」は `plan_extent.rs` と読み替える。
+- 本 spec が足したのは 2 か所: `always` の animation の全部の pattern を数える輪と、動く絵の子（`ElementKind::Film`）の原寸。
+- 画像の element と動く絵の子は**同じ 1 行**で数えている。画像の element の X,Y を外形に足す直しは、その 1 行に入れれば子にも効く。
+- 着せ替えの pattern0 を「index が最小」で取る既存の食い違いは、直していない。
+
 **`areka-P0-animated-image-import` に足すこと（分解の仕組みの形）**
 
 - 動く絵は「子」になる: 子の定義 `FilmSheet`（`EmoWorld::film_sheet`・`crates/areka-emo-compose/src/film.rs`）、鍵 `PartKey::Film(FilmId)`、子を置く element `ElementKind::Film`。子は `always` を 1 本持ち、部品の時計で回る。
@@ -792,20 +827,26 @@ impl ScopeStates {
 
 ## Open Questions / Risks
 
-### 開発者に確かめたいこと（答えで作業が変わるもの）
+### ❓ 開発者に確かめたいこと（未決は 1 件）
 
-1. **コマの切り替えを見つけるのは 16 ミリ秒の刻み**。時計の開始は出来事の時刻そのもの（正確）で、今のコマは経過から正確に決まる。しかし seriko がコマの替わり目に気付くのは次の刻みなので、切り替えは最大 1 刻み遅れて画面に出る（積み上がらない・待ち時間が 16 ミリ秒より短いコマは飛ぶ）。これを 0 にするには、刻みを「次にコマが替わる時刻」に合わせて起こす形（刻みの出し手 `spawn_loop_ticker` の作り替え）が要る。まばたきなど今のアニメーションも同じ刻みで動いている。**今の刻みのままでよいか**。作り替えるなら別の spec に起票する。
-2. **隠れているバルーンへもコマの指令は流れ続ける**（合成・描画は 0 回）。出た瞬間に正しいコマを見せるための形である。指令そのものも止めたいなら、窓が出てから seriko の返事が届くまで（1〜2 フレーム）古いコマが見える形になる。**指令が流れることは「描き直さない」（要件 6.4・3.7）に反しないと読んでよいか**。
-3. **手書きの `always` の外形は全部の pattern の和集合にする**。今 `always` を書いているシェルは、動かなかった `always` の絵のぶん外形（窓の大きさ）が広がりうる。経過 0 のコマだけを数える形もあるが、コマが外形の外へ出て切れる。**和集合でよいか**。
+**手書きの `always` の外形を、全部の pattern の和集合にしてよいか。**
+今 `always` を書いているシェルは、これまで動かなかった `always` の絵のぶん、外形（窓の大きさ）が広がりうる。別の形は「経過 0 のコマだけを数える」か「数えない（今のまま）」だが、その場合はコマが外形の外へ出た所で切れる。外形はコマに依らない静的な量のまま保つので、和集合が「切れない」唯一の形である。設計は和集合で書いてある。答えが「数えない」なら、`plan_extent.rs` に足すのは動く絵の子の原寸だけになり、`always` の輪と、そのテスト 1 本が減る。動く絵の子の外形（静止画のときと同じ）はどちらの答えでも変わらない。
+
+### 決めたこと（開発者の決まり「時刻は正確に扱う・更新が遅れたら過ぎた時間の分だけ進める」に基づく。異議が出たら直す）
+
+1. **コマの切り替えは 16 ミリ秒の刻みで見つける（今の刻みのまま）**。時計の開始は出来事の時刻で、今のコマは「今の時刻 − 開始の時刻」から正確に決まる。刻みが遅れても、過ぎた時間の分だけ進む（要件 2.9 の裁定の例のとおり）。待ち時間は丸めず、刻みより短いコマは飛ぶ（要件 2.4 の裁定のとおり）。seriko がコマの替わり目に気付くのは次の刻みなので、切り替えが画面に出るのは最大 1 刻み後になるが、遅れは積み上がらない。まばたきなど今のアニメーションも同じ刻みで動いている。刻みを「次にコマが替わる時刻」で起こす形への作り替えは本 spec では行わない。
+2. **隠れているバルーンへもコマの指令は流れ続ける（合成・転送・描画は 0 回）**。見えなかった間も進んでいたものとして、出た瞬間に正しいコマを見せるための形である（要件 3.3・1 フレーム遅らせる解を取らない）。要件 6.4・3.7 の「描き直さない」は、合成・描画が 0 回であることと読む。流れるのは seriko から表示層への指令だけで、表示層はコマを預かるだけである。
 
 ### 残る遅れ（避けられないもの・上限つき）
 
-- seriko（別スレッド）が出した指令を UI スレッドが当てるまでの時間（多くて UI の 1 フレーム）。全部の指令に同じだけ掛かるので、コマを出しておく時間は変わらない。`\s`・`\b`・まばたきも同じ道を通る。
-- 上の 1 の刻み（多くて 16 ミリ秒・積み上がらない）。
+- **スレッドの境**: seriko（別スレッド）が出した指令を UI スレッドが当てるまで（多くて UI の 1 フレーム）。全部の指令に同じだけ掛かるので、コマを出しておく時間は変わらない。`\s`・`\b`・まばたきも同じ道を通る。
+- **刻み**: 上の 1（多くて 16 ミリ秒・積み上がらない）。
+- **飛んでいる途中の古い指令**: バルーンが閉じてから、閉じた知らせを seriko が処理するまでの間（1〜2 フレーム）に、seriko が回数つきの絵のコマの指令を出していて、かつその間に窓がもう一度出たとき。出た最初のフレームは経過 0 の絵が出る（`show_target` が回数つきの子の欄を外す）が、その後に古い指令が着くと、seriko の戻しの指令が着くまで（多くて 1〜2 フレーム）古いコマが見えうる。起きるのは「回数つきの絵がまだ回っている最中に閉じ、1〜2 フレームの内に出し直した」ときだけ。指令に世代の印を付ければ消せるが、seriko と表示層の指令の型の全部に関わるので、本 spec では足さず、対応表に書く。実機で見えたら起票する。
 
 ### リスク
 
-- `plan.rs` を `areka-P0-element-base-method` と同じウェーブで分け合う。外形を別ファイルへ移す作業を含むので、取り込みの順を先に決める。
-- 合成の先送りは「隠れている・外から所有される・面と着せ替えが同じ」の 3 つが揃ったときだけ効く。条件を広げすぎると、隠れている間に変わった面が確立されない。表示層のテストで条件の縁を固定する。
+- 合成の先送りは「外から所有される・見えていない・面の番号が同じ・着せ替えが同じ」の 4 つが揃ったときだけ効く。条件を広げすぎると、隠れている間に変わった面が確立されない。表示層のテストで条件の縁を固定する。
+- 本 spec は `areka-P0-element-base-method`・`areka-P0-balloon-lifecycle-events` の後に main へ入る。タスクの頭で main を取り込み、`shell_target.rs`・`fold.rs`・`method.rs`・`mod.rs` の先に入った形を引き直す（`plan.rs` の重なりは 0）。
+- 欄の読みの種類が増え、合成と見える部品の求め方がずれる。突き合わせのテスト（Unit Tests 5）で固定する。
 - コマが 4 枚以上の絵で合成が 16 ミリ秒に収まらない場合は、数字を添えて報告する（席の数は変えない）。
-- 起票の候補（要件 10.6）: 刻みを次の切り替えの時刻に合わせる作り替え（上の 1 の答えしだい）。
+- 起票の候補（要件 10.6）: 指令に世代の印を付ける形（上の「飛んでいる途中の古い指令」が実機で見えたとき）。

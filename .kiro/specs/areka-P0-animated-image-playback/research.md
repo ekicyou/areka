@@ -470,3 +470,37 @@ brief の Approach 1 は「コマを 1 枚ずつ持ち `always` で順に指す�
 - 合成の先送りの条件を広げすぎる — 表示層のテストで条件の縁（面が違う・見えている・命令で見える対象）を固定する。
 - 欄の読みの種類が増え、合成と見える部品の求め方がずれる — 同じ検体で「合成が描いた先」と「見える部品」を突き合わせるテストを置く（今ある `nesting_fixture_tests.rs` の型）。
 - コマが 4 枚以上の絵で合成が 16 ミリ秒に収まらない — 測って報告する（席の数は変えない）。
+
+
+## 再検証（2026-10-05）を受けた直し
+
+> 作り直した版の再検証（`design-validation.md`）と、ほかのセッションから得た事実を受けて、上の「作り直し」の節の決定を次のとおり改める・足す。
+
+### Decision: 合成の先送りは指令の入口に置き、`last_show` は変えない（上の「隠れている対象は合成を先送り」を改める）
+
+- **Context**: 再検証の指摘 1。`apply_show` の頭で `last_show` のコマを差し替える形だと、①`show_target` の通し直しが同じ条件に掛かって合成されない ②`last_show` で合成の覚えを引く読み戻し（`EmoPresenter::last_shown`・`read_back`、MCP の `dump_balloon`）が外れる。
+- **Sources Consulted**: `apply_show` を呼ぶ 4 か所（`presenter/hub.rs` の `ShowSurface` の腕・`visibility.rs` の `show_target`・`refresh.rs` の `refresh_scale`・`replace.rs`）／`last_shown`（`snapshot.rs`）／`read_back`（`read.rs`）／`dump_balloon`（`crates/areka/src/mcp/dump_balloon.rs` は `last_shown` が絵を返さないと失敗を返す）。
+- **Selected Approach**: `last_show` は「最後に表示が成立した入力」のまま。預かったコマは対象ごとの別の欄に置く。預かるのは外からの指令の入口（`hub.rs`）だけで、`apply_show` は変更 0。`show_target` は預かったコマで `apply_show` を直接通す。預かったときも応答は必ず 1 回返す。
+- **Rationale**: 通し直しが自分で預かる道が形から無い。読み戻しは今までどおり成立した絵を返す（完了 `areka-P0-mcp-dump-images` の後退 0）。
+
+### Decision: 隠れていた対象を出すとき、回数つきの絵は必ず経過 0 から（再検証の案 A）
+
+- **Context**: 再検証の指摘 3。閉じた知らせ → seriko の戻しの指令、の往復が着く前に窓が出ると、止まった最後のコマが 1〜2 フレーム見える。1 フレーム遅らせる解は取らない。
+- **Selected Approach**: `show_target` が通し直すコマから、回数つきの子（面の表の `FilmSheet.laps` が在る子）の欄を外す。欄が無い＝経過 0。
+- **Rationale**: 表示層は時刻も seriko も要らず、出た最初のフレームから 1 枚目が出る。
+- **Trade-offs**: 飛んでいる途中の古い指令が後から着く僅かな窓は残る（design.md「残る遅れ」）。指令に世代の印を付ければ消せるが、指令の型の全部に関わるので足さない。
+
+### Decision: 刻みと、隠れたバルーンへの指令は「決めたこと」にする
+
+- **Context**: 前の版で開発者への問いにしていた 2 件。開発者の決まり「時刻は正確に扱う・更新が遅れたら過ぎた時間の分だけ進める」（2026-10-05）で決まっていると読む。
+- **Selected Approach**: 刻みは今の 16 ミリ秒のまま（今のコマは経過から正確に決まる・遅れは積み上がらない）。隠れているバルーンへも指令は流れる（合成・描画 0 回）。未決として残すのは、手書きの `always` の外形（和集合か）の 1 件だけ。
+
+### 調整で確かめた事実（ほかのセッションから・design.md の同名の節が正本）
+
+- `areka-P0-element-base-method` は `plan.rs` に触らない。先に main へ入る。このウェーブで `plan.rs` の重なりは 0。
+- `areka-P0-balloon-lifecycle-events` は `emo2_boot/mod.rs` の 1〜3 行だけ（今ある `clock: TalkClock` の写しを渡す）。その `clock` の名前・型・持ち主を変えない。先に main へ入る。
+- `areka-P0-extent-element-offset` は未着手。本 spec が先。`flatten_extent` を `plan_extent.rs` へ移したことを申し送る。
+
+### 軽い直し（設計書へ入れたもの）
+
+`LoopTrigger` の腕を決め打つ所は 3 か所／`NestTable` の行を載せる条件に 2 欄を足す／面の切り替え・着せ替えの変化の直後の `refresh` でも回数つきの時計を捨てる／出来事の時刻は `last_seen` に入れない／時計の開始の言い方（台本の合図は処理した時刻・窓の知らせは送った時刻）／子の命令は置いた element の描画メソッドを運ぶ／`bind_atlas` は面の表につき 1 度／`flatten_extent` は移すだけで既存の食い違いは直さない／対応表に 2 行／テスト 3 本（突き合わせ・周の境目・`NestReport`）＋読み戻しと閉じてすぐ出すテスト／バルーンの表の差し替えの後の時計は次の刻みで生まれる。
