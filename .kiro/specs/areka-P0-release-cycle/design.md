@@ -196,15 +196,19 @@ flowchart TD
 | 枝に余計な変更が無い（4.2・4.4） | `git diff --name-only {remote}/main...HEAD` | 2 回目以降は 0 件。初回は全部がこの spec のフォルダの下 | 止まる |
 | 3 つのファイルを触る開いた PR が 0 本（2.2） | `gh pr list --state open --limit 200 --json number,title,files` | `files` に `Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`（どれも根の物）を持つ PR が 0 本 | その PR の番号と題を示して止まる |
 | 今の版（3.6） | 根の `Cargo.toml` の 2 行を読む | 2 行の版が同じ | 止まる |
+| 今の版のタグが在る（1.1・5.1） | `git ls-remote --quiet --tags {remote} refs/tags/v{旧版}` | 出力が 1 行 | 版を上げずに止まる。前の回が「マージの後・タグの前」で止まっている。題が `chore(release): v{旧版}` のマージ済みの PR（`gh pr list --state merged --search "chore(release): v{旧版} in:title" --json number,mergeCommit`）を示し、その squash のコミットで段 5 から続けるかを開発者に聞く |
 | 次の版（3.1・3.2） | 指示が無ければ `{旧版}` の 3 つ目の数字に 1 を足す。指示があればその版 | 数字 3 つを点でつないだ形（`release.yml` と `crates-io.yml` が受ける形） | 形が違えば開発者に聞き直す |
 | タグが無い（3.7） | `git ls-remote --quiet --tags {remote} refs/tags/v{版}` | 出力が 0 行 | 止まる（同じ版で出し直さない） |
 | 版上げの道具 | `cargo set-version --version` | 終了コード 0 | 段 2 を「代わりのやり方」で行う |
 
+- **「初回」の決め方**: 作業の枝の `tasks.md` に、見出しに「（初回だけ）」と付いたタスクが 1 つでも在る回を初回とする。ほかの事実（`spec.json` の `phase`・タグ）では決めない。
+  - 「（初回だけ）」のタスクが在るのに、リモートに `v0.0.2` のタグが在るときは、初回の記録の相乗りがまだ main に入っていない。版を上げずに止まり、相乗りを先に済ませるよう開発者に頼む（初回だけの手順を二度行わない）。
 - **初回だけ**: 確かめの前に、`spec.json` の `phase` を `implementation` にしてコミットする（1.4。版上げの PR に spec の文書として載る）。2 回目以降は `spec.json` に触らない。
 - 開いた PR の `files` は 1 本あたり 100 件までしか返らない。100 件ちょうどの PR は `gh pr diff {番号} --name-only` で読み直す。
 - 3 つのファイルを触らない PR が開いていても止まらない（2.3）。
 - 前の回の記録が main に入っているか（roadmap の「リリース」に、リモートのいちばん新しい `v*` のタグの行が在るか）も読み、無ければ開発者へ知らせる。止まる理由にはしない。
 - **初回だけ（8.4）**: ここで main の乾いた走りを始める（`gh workflow run release.yml --ref main`）。走りは GitHub の上で進むので、段 2・段 3 と並べて待つ。承認 A を求める前に緑を確かめ、赤なら承認 A へ進まずに止まって報告する。開発者が省くと決めた回は始めない。
+  - 始めた走りの番号は、`gh run list --workflow release.yml --event workflow_dispatch --branch main --limit 1 --json databaseId,headSha,createdAt` で、始めた時刻より後の 1 本を取る。
   - この赤で起票が要るときは、作業の枝に起票のコミットを置かない（版上げの PR に混ざる）。止まって報告し、開発者が別のセッションで `/kiro-discovery` を打つ。
   - タグの直前でなく段 1 に置く理由: 版上げの PR をマージした後に赤が分かると、main の版だけが上がってタグを打てない版が残る。マージの前に分かれば、何も出ていないうちに止まれる。
 
@@ -251,7 +255,13 @@ flowchart TD
 3. `git push --quiet {remote} HEAD` の後、`gh pr create --base main --title "chore(release): v{版}"`。本文には、版・4 ファイルの `--numstat`・段 3 の a〜e の結果を書く。初回は「spec の文書を同じ PR に載せている」と書く。
 4. PR の中身を読み直す: `gh pr view {番号} --json files`。2 回目以降は上の 4 ファイルだけ（4.2）。初回は 4 ファイルと、この spec のフォルダの下のファイルだけ（4.4）。違えば止まる。
 5. **承認 A**: PR の URL・差分の数・確かめの結果を示し、「squash マージしてよいか」を開発者に聞いて止まる（4.3）。初回は、乾いた走りの結果（緑・省いた）も添える。
-6. 承認を得たら、`git fetch --quiet {remote} main` で main を読み直す。先端が「確かめた main」と違えば（2.7）、`git merge {remote}/main` で取り込み、段 3 の a・b・c を回し直し、push する。取り込みで衝突したら止まる。取り込みの後も版上げの 4 ファイルの差分が同じなら、承認 A は取り直さない。差分が変わったら取り直す。
+6. 承認を得たら、`git fetch --quiet {remote} main` で main を読み直す。先端が「確かめた main」と違えば（2.7）、次を行う。
+   - `git merge {remote}/main` で取り込む。衝突したら止まる。
+   - 段 3 の a・b を回し直す。b の後、作業木が（この spec の `tasks.md` を除いて）きれいでなければ止まる（回し直した `-License` が `THIRD-PARTY-NOTICES.md` を変えた＝main に依存の変更が入った。コミットせずに開発者へ報告する）。
+   - 段 3 の c を回し直す。版上げはもうコミット済みなので、比べる相手を読み替える: c の表の `git diff … HEAD` を `git diff … {remote}/main HEAD` にする（main の先端と枝の先端の比べ。初回は、この spec のフォルダの下のファイルが在ってよい）。
+   - `git push --quiet {remote} HEAD` の後、新しい先端を「確かめた main」として覚え直す。
+   - 承認 A を取り直すかは、取り込みの前と後の `git diff {remote}/main HEAD -- Cargo.toml Cargo.lock THIRD-PARTY-NOTICES.md dist/README.txt` の出力で決める。1 字違わず同じなら取り直さない。違えば取り直す。
+   - マージの直前にもう一度 main を読み、また動いていたら、この 6 を繰り返す。
 7. `gh pr merge {番号} --squash`（`--delete-branch` は付けない。枝は段 7 の受け渡しで使う）。`gh pr view {番号} --json state,mergeCommit` で `MERGED` と squash のコミットを読む。main へ直接 push する操作は 0 回（4.1）。
 
 ### 段 5: タグ
@@ -365,6 +375,8 @@ flowchart TD
 | 版上げの PR | `gh pr list --head {枝} --state all --json number,state,mergeCommit` | 開いていれば承認 A から。`MERGED` なら段 5 から（段 2〜4 をやり直さない） |
 | タグ | `git ls-remote --quiet --tags {remote} refs/tags/v{版}` | 在れば段 6 から（タグを打ち直さない） |
 | Release・走り | `gh release view v{版}`・`gh run list` | 在れば見守りの続きから |
+| `{版}` | 版上げの PR が在ればその題（`chore(release): v{版}`）。無ければ根の `Cargo.toml` の版 | — |
+| 手元だけのタグ | `git rev-parse --verify --quiet refs/tags/v{版}`（リモートには無いとき） | squash のコミットと同じなら、`git tag` を飛ばして承認 B の後の push から。違えば止まって報告する（手元のタグも消さない） |
 
 マージの後、タグの承認が得られないまま日が空いても、タグを打つ相手は同じ squash のコミットのまま変わらない。
 
@@ -473,6 +485,7 @@ flowchart TD
 
 - `cargo set-version --bump patch --workspace` が根の `Cargo.toml` の 2 行を両方動かし、`Cargo.lock` の動いた行がワークスペースのクレートの数と同じであること（8.3）。
 - `tools/test-all.ps1 -License` の作り直しが、`THIRD-PARTY-NOTICES.md` の版の行の外を動かさないこと。動いたら段 3 の c で止まる。
+- 版を上げた作業木（crates.io にまだ無い版の `dola` を頼る `wintf`）で、`tools/crates-io.ps1 -Verify -Version {版}` が緑になること。この形ではまだ一度も回っていない。赤なら段 3 で止まる。
 - `--quiet` を付けて標準エラーを捨てた `git push`・`git ls-remote` が、接続先を画面に出さないこと（1.7）。
 - `gh pr list --json files` が、開いた PR の触るファイルを漏れなく返すこと（100 件の上限の扱い）。
 - 承認 A・承認 B で主文脈が止まり、承認の後に同じセッションで続けられること。
