@@ -99,7 +99,7 @@
   - _Depends: 4.2, 5.1_
 
 - [ ] 6. SSP との差の一覧と実機確認
-- [ ] 6.1 (P) SSP との差の一覧を新しいファイルに書く
+- [x] 6.1 (P) SSP との差の一覧を新しいファイルに書く
   - `doc/ssp-mcp/` の下の新しいファイルに、design.md の「差の一覧に書くこと」の 8 行（一度も表示していないスコープで省略・窓の無いゴースト・一度も表示していないスコープで指定・隠している間に着せ替えを変えた後の指定・拡大率が 1 でないときのバルーンの字・負のスコープ・シェルの絵の中の箱の文字・バルーンの窓の印）を、SSP 側の「未実測」「実測」の印つきで載せる。既存の輸送の差の表は触らない
   - ファイルが在り、要件 7.6 が挙げる 6 項目がすべて行として見つかる
   - _Requirements: 7.6_
@@ -129,3 +129,4 @@
 - 5.1（範囲外・完了時の棚卸へ）: 他のセッションの cargo が 25〜35 本動く重さの下で、全体テストに無関係な不安定が出た（`default_ghost_fault_after_fallback_exits_through_shiori_fault_path`・`script_change_tag_switches_a_to_b_and_reaches_steady`・`switch_to_b_without_boot_record_sends_first_boot_not_ghost_changed`・`stop_with_handoff_under_reservation_switches_without_exit`）。1 本ずつ流すと緑・新しいテストを外した対照でも出る。
 - 5.2: 偽の SHIORI の呼び出しの列を比べる前に、土台の `flush_to_shiori()`（kanade へ返事つきの NOTIFY `OnSecondChange` を送り返事まで巡を回す）を通す。巡を回すだけの比較は「呼び出しのたびに kanade へ送る」壊し方を見逃した。5.3 の「邪魔をしない」も同じ関所を使う。
 - 5.3: GPU を通るテストで台詞が現れ切ったかは、注入する Tick の時刻でなく実時間の台詞の時刻で決まる（話の起点は遅れて届く指令が後ろへ押す）。字の現れる時刻の列が字数だけ揃い、その末尾だけ実時間が過ぎた状態が 2 巡続くのを待つ。隠す指令は Tick を 1 ms ずつ刻まないと字が現れ切る前に届き、後から現れた字で表示が戻る。
+- 6.1: design-validation.md の b（ゴーストの切り替えの途中に別のゴーストの絵を返しうる）は design の 8 行に無く未確認なので、差の一覧に載せていない。6.2 の実機確認か完了時の棚卸で確かめる。
