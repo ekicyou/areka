@@ -68,38 +68,70 @@ pub(super) fn handle(world: &mut World, _ghost: &ActiveGhost, args: Args, reply:
 
 /// その場の答えはその場で送り、写しまで済んだ成功は別のスレッドで仕上げてそのスレッドから送る
 /// （`ReplyTo` はスレッドをまたげる・`later` を通さない）。スレッドを起こせなければ想定外の失敗として
-/// その場で答える。
+/// その場で答える。`ui_us` はスレッドを起こす時間を含む。
 pub(in crate::mcp) fn reply_elsewhere(
     tool: &'static str,
     step: Step,
     started: Instant,
     reply: ReplyTo,
 ) {
-    let (scope, job) = match step {
-        Step::Now(outcome) => return reply.send(outcome),
-        Step::Encode(scope, job) => (scope, job),
-    };
-    let ui = started.elapsed();
-    // 仕事と返事は起こせた後で渡す（起こせなければ手元に残り、その場で答えられる）。
-    let (tx, rx) = mpsc::channel::<(Job, ReplyTo)>();
+    match step {
+        Step::Now(outcome) => reply.send(outcome),
+        Step::Encode(scope, job) => {
+            encode_elsewhere(tool, scope, job, || started.elapsed(), reply, ReplyTo::send)
+        }
+    }
+}
+
+/// 符号化のスレッド（名前 `mcp-encode`）を起こし、起こし終えた後に `ui()` で UI スレッドの側の
+/// 時間を測って、(仕事, 届け先, 時間) を手渡す。起こせなければ `deliver(to, fail(tool, scope, 理由))`。
+/// 手渡しの前にスレッドが消えていたら `deliver(to, fail(tool, scope, "the encoding thread is gone"))`。
+/// 必ず 1 度だけ届ける（要件 3.4）。
+fn encode_elsewhere<T: Send + 'static>(
+    tool: &'static str,
+    scope: u32,
+    job: Job,
+    ui: impl FnOnce() -> Duration,
+    to: T,
+    deliver: fn(T, ToolOutcome),
+) {
+    // 仕事と届け先は起こせた後で渡す（起こせなければ手元に残り、その場で届けられる）。
+    let (tx, rx) = mpsc::channel::<(Job, T, Duration)>();
     let spawned = std::thread::Builder::new()
         .name(ENCODE_THREAD.to_owned())
         .spawn(move || {
-            if let Ok((job, reply)) = rx.recv() {
-                // panic で返事を落とすと入口が「終了中」と誤って答えるので、ここで受けて記録する。
-                let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| job(ui)))
-                    .unwrap_or_else(|_| fail(tool, scope, "the encoding thread panicked"));
-                reply.send(outcome);
+            if let Ok((job, to, ui)) = rx.recv() {
+                deliver(to, finish(tool, scope, job, ui));
             }
         });
     match spawned {
         Ok(_) => {
-            if let Err(mpsc::SendError((_, reply))) = tx.send((job, reply)) {
-                reply.send(fail(tool, scope, "the encoding thread is gone"));
+            if let Err(mpsc::SendError((_, to, _))) = tx.send((job, to, ui())) {
+                deliver(to, fail(tool, scope, "the encoding thread is gone"));
             }
         }
-        Err(e) => reply.send(fail(tool, scope, &e.to_string())),
+        Err(e) => deliver(to, fail(tool, scope, &e.to_string())),
     }
+}
+
+/// 符号化のスレッドの体。仕事を panic を受けて走らせ、panic なら
+/// `fail(tool, scope, "the encoding thread panicked")`（要件 3.3）。
+pub(in crate::mcp) fn finish(
+    tool: &'static str,
+    scope: u32,
+    job: Job,
+    ui: Duration,
+) -> ToolOutcome {
+    // panic で返事を落とすと入口が「終了中」と誤って答えるので、ここで受けて記録する。
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| job(ui)))
+        .unwrap_or_else(|_| fail(tool, scope, "the encoding thread panicked"))
+}
+
+/// 覗く関数の受け取り口へ送る。待つ側が去って受け取り口が無ければ黙って捨てる（要件 3.5）。
+// 本番の呼び手はタスク 2.4 の覗く関数で付く（それまでテストだけが呼ぶ）。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(in crate::mcp) fn send_back(tx: mpsc::Sender<ToolOutcome>, outcome: ToolOutcome) {
+    let _ = tx.send(outcome);
 }
 
 /// 今答えられるなら `Some`。装着の相がまだなら `None`（`later` が次のフレームでもう 1 度呼ぶ）。

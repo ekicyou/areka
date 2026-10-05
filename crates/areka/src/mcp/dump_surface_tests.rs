@@ -78,3 +78,86 @@ fn alone_without_composed_result_answers_shell_not_ready_with_one_error() {
     assert!(answered.is_error);
     assert_eq!(levels.error, 1);
 }
+
+/// 符号化のスレッドの体で出た `error!` の件数（答えと一緒に返す）。5.1 の判定の本体で、
+/// 下の較正で「わざと失敗させれば 1・成功なら 0」を確かめる。
+fn errors_in_finish(job: Job) -> (ToolOutcome, usize) {
+    let (answered, levels) = log_capture_kit::count_levels(|| finish(TOOL, 0, job, Duration::ZERO));
+    (answered, levels.error)
+}
+
+/// `finish` の較正（要件 3.3・5.2）: panic する仕事は `NG:the encoding thread panicked` と ERROR 1 件、
+/// `fail` を呼ぶ仕事は ERROR 1 件、成功する仕事は ERROR 0 件。同じ判定の関数で数える。
+///
+/// # 非空虚性
+/// `finish` が panic を受けないとテストが panic して赤。判定の関数が常に 0 を返すと前の 2 つで赤、
+/// 常に 1 を返すと最後で赤。
+#[test]
+fn finish_calibration_counts_errors_of_failing_jobs_only() {
+    let (panicked, errors) = errors_in_finish(Box::new(|_| panic!("わざと")));
+    assert_eq!(
+        panicked.content,
+        vec![ToolContent::Text(
+            "NG:the encoding thread panicked".to_string()
+        )]
+    );
+    assert!(panicked.is_error);
+    assert_eq!(errors, 1);
+
+    let (failed, errors) = errors_in_finish(Box::new(|_| fail(TOOL, 0, "わざと")));
+    assert!(failed.is_error);
+    assert_eq!(errors, 1);
+
+    let (ok, errors) = errors_in_finish(Box::new(|_| outcome::ok("撮れた")));
+    assert!(!ok.is_error);
+    assert_eq!(errors, 0);
+}
+
+/// 受け取り口の無い送りは黙って捨てる（要件 3.5・7.1 ⑸）: panic せず ERROR 0 件。
+///
+/// # 非空虚性
+/// 送りの失敗を `expect` すると panic で赤、`fail` へ回すと ERROR 1 件で赤。
+#[test]
+fn send_back_without_receiver_drops_silently() {
+    let (tx, rx) = mpsc::channel();
+    drop(rx);
+
+    let ((), levels) = log_capture_kit::count_levels(|| {
+        send_back(
+            tx,
+            finish(TOOL, 0, Box::new(|_| outcome::ok("撮れた")), Duration::ZERO),
+        )
+    });
+
+    assert_eq!(levels.error, 0);
+}
+
+/// 成功の記録の欄（要件 5.3・7.1 ⑺）: `picture` の 1×1 の仕事を UI 時間 1,234 µs で `finish` に通すと、
+/// `[mcp] 絵を返す` が 1 件で、`ui_us` が 1234、`encode_us` が数として読める。
+///
+/// # 非空虚性
+/// 記録が無い・2 件・欄の名前が変わる・`ui` を渡し損ねる（0 や別の値）といずれも赤。
+#[test]
+fn success_record_carries_ui_us_and_encode_us() {
+    let Step::Encode(scope, job) = picture(0, 0, "撮れた".to_string(), &[0, 0, 0, 0], 1, 1)
+    else {
+        panic!("写しまで済んだ成功");
+    };
+
+    let (answered, events) =
+        log_capture_kit::capture(|| finish(TOOL, scope, job, Duration::from_micros(1234)));
+
+    assert!(!answered.is_error);
+    let records: Vec<_> = events
+        .iter()
+        .filter(|e| e.message() == "[mcp] 絵を返す")
+        .collect();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].field("ui_us"), Some("1234"));
+    assert!(
+        records[0]
+            .field("encode_us")
+            .and_then(|v| v.parse::<u64>().ok())
+            .is_some()
+    );
+}
