@@ -130,3 +130,28 @@ sink 新設（get/set）＋ kanade への「参照付きイベント発生」型
 - 残した範囲: 経路 1〜3（`\![get,property,…]`・`\![set,property,…]`・`%property[…]`）と、許可の表に無い任意の名前のイベントを出所つきで送る口・`SenderType`（`property` に加えて後続が使う `embed` の値も運べる形）の運搬。
 - 規模: M（13〜17 タスク）。
 - 移した先: `\![embed]`（経路 4）は新しい spec `areka-P0-sakura-embed-directive` へ（本 spec が前提）。網羅台帳の `\![embed,…]` の行の持ち主は、向こうが着地するときに直す。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（13〜17）のまま。`SenderType` の運搬を下の `script-security-level` に任せれば M（11〜14）に縮む。切る: なし（一度切り出した spec なので削らない）。
+- 前提の状態: `translate-pipeline` は着地済み＝着手できる。kanade の列では `balloon-lifecycle-events`（C4 予定）→ `sakura-time-critical` の後ろ。
+- 崩れた前提／古くなった位置:
+  - **`SenderType` の運搬の持ち主が 2 本になった**: 10-05 起票の `script-security-level`（優先・前提なし）が「台本とイベントに出どころを付けて運び、SHIORI へ `SecurityLevel`・`SenderType` を正典の値で渡す」（`embed`・`raise` も含む）を持つ。本 spec の棚卸㉑の範囲「`SenderType` の運搬」と重なる。優先の段が先に走る見込みなので、本 spec は「出どころに `property` を 1 つ足して載せる」だけにするのが素直。網羅台帳 `shiori.toml` の `SenderType` の行（`ukadoc:spec_shiori3:SenderType…`）の持ち主は空のまま。
+  - **許可の表の迂回を要る spec が 3 本になった**: `mcp-kanade-tools`（`raise_event`・優先）・10-05 起票の `mcp-shiori-query`（ゴースト側で決めたイベントへ問う・優先）・本 spec。優先の 2 本が先に走れば、そちらが作った出所つきの任意の名前（`msg.rs` の `EventId` の `Choice(String)` の隣）を使う形になる。
+  - 許可の表 `schedule/events.rs` の `ALLOWED_EVENT_IDS` は今 48 語（`mouse-drag-events` が `OnMouseDragStart`／`OnMouseDragEnd` を足した）。
+  - 行数: `msg.rs` 909（+7）・`schedule/steady.rs` 947・`schedule/mod.rs` 938・`areka-ghost/src/runtime.rs` 788（`mcp-get-property` が `sylphya_reader()` を足した）。`consumer_ledger.rs` 859・`emo2_boot/mod.rs` 883・`lexer.rs` 415・`decode.rs` 400・`sysvar.rs` 220 は変わらない。`scan_sysvar` は今も `[` で止まる。
+  - `mcp-get-property` が着地し、点つきの名前を表示の時に引く口 `SylphyaReader::resolve_dotted_str` の本番の使い手ができた（`%property[…]` も同じ読み口を引けばよい）。
+- 触るファイル（`SenderType` を `script-security-level` に任せる場合）:
+  - `crates/areka-kanade/src/{msg.rs, actor.rs}`・`schedule/{events.rs, change.rs, translate.rs}`（`steady.rs`・`mod.rs` に足すなら新しいファイルへ）
+  - `crates/areka-parsers/src/sakura/lexer.rs`・`crates/areka-sakura/src/sysvar.rs`
+  - `crates/areka-ghost/src/{prop_sink.rs, runtime.rs}`＋新規の get の受け口
+  - `crates/areka/src/emo2_boot/{consumer_ledger.rs, mod.rs}`・`doc/ukadoc-coverage/ledger/{sakura-script,shiori}.toml`
+  - 自分で運ぶ場合は追加で `crates/shiori-host32-host/src/{shiori3.rs, client.rs}`・`crates/areka-ghost/src/shiori_inproc.rs`
+- 議題（答えで作業が変わるものだけ）: `SenderType` の運搬を `script-security-level` に寄せるか（寄せるなら本 spec は host32-host の列から外れ、`script-security-level` の後に置く）。
+- 見つけた穴: 網羅台帳の持ち主のずれ 2 つ（実害なし・すぐ直せる）＝`shiori.toml` の `property.get:1`・`property.set:1` は `property-ipc-transport` へ、`sakura-script.toml` の `\![embed,…]` の行は `sakura-embed-directive` へ。`SenderType` の行の持ち主（空）は上の議題の答えの側へ。
+
+### 棚卸㉒の裁定（2026-10-05）
+
+- `SenderType`（と `SecurityLevel`）を SHIORI へ運ぶ仕組みは `script-security-level`（優先）が持つ。本 spec は出どころに `property` を 1 つ足して使うだけにし、host32-host の列（`shiori3.rs`・`client.rs`）から外れる。網羅台帳 `shiori.toml` の `SenderType` の行の持ち主は `script-security-level` が要件の段で登記する。
+- 許可の表の迂回は `mcp-kanade-tools` が作り、本 spec はそれを使う（kanade の列で `mcp-kanade-tools` を前へ出した）。
+- `property-name-case-fold` を本 spec より先に着地させる（書く道を開く前に `classify_set` の大小の迂回をふさぐ）。

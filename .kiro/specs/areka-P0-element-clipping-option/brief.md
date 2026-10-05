@@ -68,5 +68,20 @@
 1. 切り抜きの矩形が画像の外にはみ出す・左 ≥ 右・欄が 4 つに足りないときの扱い（正典は書いていない）。
 2. 同じ画像を切り抜き違いで使うときのアトラスの持ち方（鍵に矩形を足すか、1 枚を載せて描く側で切るか）。
 3. 当たり判定（collision）とビューボックスの広がりは、切り抜き後の大きさで決まるか。
-</content>
-</invoke>
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: S〜M（10〜14 タスク）。起票時の 8〜12 より上振れ（鍵・動く絵の判定・外形の 3 か所に及ぶ）。切らない。
+- 前提の状態: `animated-image-decode`・`surface-element-nesting` とも着地済み。ただし同じ行（`element0,base,face.png,0,0,--clipping,…`）を読む `element-base-method` と、合成の置き方を分け合う `animated-image-playback`・`extent-element-offset` の後＝今すぐは着手しない。
+- 崩れた前提／古くなった位置:
+  - `surface-element-nesting` は `decode_elements`・`Element`・`manifest.rs` を**触らずに**着地した（roadmap の C3 の実績）。Constraints の「読み手と `manifest.rs` は `surface-element-nesting` と共有」は古い。今の相手は `element-base-method`（`Element` の型・`decode_elements`・転記の element を合成の element へ写す `fold.rs` の 1 か所）。
+  - 動く絵として読むかの分かれ目は、焼く入口 `bake_with_limits`（`crates/areka-emo-atlas/src/lib.rs`）が鍵ごとに `animated::load` を呼ぶ所。Approach の「`animated.rs` の `load`」より 1 段手前で、鍵が `--clipping` を知る形（鍵か一覧の欄）が要る。鍵 `AtlasKey`（組の番号, 相対パス）と `manifest.rs` は今も起票時のまま。
+  - 外形の計算 `flatten_extent`（`plan.rs`）は `extent-element-offset` が直す。切り抜いた後の大きさを外形へ数えるなら、あちらの裁定（element定義の X,Y を数えるか）の上に載る。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-parsers/src/shell/{model.rs, decode.rs}`（オプションの転記）
+  - `crates/areka-emo-atlas/src/{manifest.rs, lib.rs}`（鍵を広げるなら `table.rs`）と `emo2_golden.rs` の照合
+  - `crates/areka-emo-compose/src/{fold.rs, normalized.rs, atlas_bind.rs, plan.rs}`（当たり判定の大きさを変えるなら `hit.rs`）
+  - `doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）: 起票時の 3 つのまま。
+- すぐ直せる軽微な修正: この brief の「要件の段で決める議題」の直後に、起票のときの書き損じの 2 行（`</content>`・`</invoke>`）が紛れ込んでいる。消すだけ。

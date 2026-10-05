@@ -20,7 +20,7 @@
 - `\![open,…]`: 汎用の `\!` の運び手（`GenericCommand{name:"open",raw_args}`）までは届く。受け取る側の表 `crates/areka/src/emo2_boot/consumer_ledger.rs` に登録があるのは `("open","readme")`（→ `ReadmeSink`）だけ。同ファイルのテストが `("open","browser")` に受け取り手が無いことを固定している（このテストは本 spec で書き替える）。
 - OS で開く処理は `crates/areka/src/readme.rs` の `ShellExecuteW(…,"open",…)` 1 か所だけ。`popup-menu-residue` が「World を借りている間の `ShellExecuteW`」を残件に挙げている。
 - 網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml`: `\j[ID]`・`\![open,browser,…]`・`\![open,file,…]` などは「無い」・引受先なし。
-- MCP の `sakurascript` ツールは実装済み（`crates/areka/src/mcp/mod.rs` の `ToolCall::Sakurascript`）＝本 spec の着地から、エージェントの台本でも開ける。
+- MCP の `sakurascript` ツールは入口（`crates/areka/src/mcp/mod.rs` の `ToolCall::Sakurascript`）だけがあり、今も `NG:not implemented yet` を返す（`crates/areka/src/mcp/sakurascript.rs` の `handle`・本物にするのは `mcp-kanade-tools`）。そちらが着地すれば、エージェントの台本でも開ける（2026-10-05 棚卸㉒で訂正）。
 
 ## Desired Outcome
 
@@ -70,3 +70,8 @@
 - 台本のコンパイルの列（`decode.rs`）と `emo2_boot` の結線の列（`consumer_ledger.rs`）の両方に掛かる。着手の前に両列の先頭と照合する。
 - 常時テストは x64 の偽の境界で決定論に（実際に OS のアプリを開かない）。
 - 段: 優先（バルーン関係）。規模の見込み M（10〜14）。
+
+### 同じウェーブ C4 の約束（2026-10-05 棚卸㉒・破るなら止めて報告）
+
+- 開く処理の新しいファイルは `readme.rs` の子に置く（`main.rs` は `mcp-author-tools` が触る見込み）。`emo2_boot/mod.rs`（`balloon-lifecycle-events`）に触らない。dola の `CueCommand` に種類を足さない（`\j` は汎用の `\!` の運び手へ写す。足さないと済まないと分かったら止めて報告）。
+- `decode.rs`・`compile.rs` は C5 の `anchor-tag-canon` が次に触る＝本 spec の腕は既存の腕の並びに 1 本足す形に留める。

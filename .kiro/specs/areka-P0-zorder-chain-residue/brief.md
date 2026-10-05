@@ -94,3 +94,18 @@ zsp は「所有の鎖」でスコープ窓の重なりを構造保証して着�
 - 据え置きのままでよい。10-02 の後に C1・C2 で着地した 12 本の完了記録に、spine の族や重なり順・vblank のテストが赤を出した記録は無い（発動の条件は満たされていない）。`crates/wintf/src/ecs/window/zorder_pair_maintain.rs`・`crates/wintf/src/runtime/tick_bridge.rs` を触ったコミットは 0。
 - A-2 の族の数え直し: 30 秒の期限 `SPIN_WAIT`（`crates/areka/src/emo2_boot/spine.rs`）を名指しするか、それを使う `spin_wait_until` を呼ぶファイルは `crates/areka/src/` に 18 本（名指しは 10 本）。`#[ignore]` は 0。brief の表の「5 ファイル」「約 10」は古い＝着手時に A-2 の対象を引き直す。
 - 規模・切り方は 10-02 のまま。議題・穴: なし。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M のまま（A 群を外せば B 群だけで S〜M）。切り方は下の議題しだい。
+- 前提の状態: **A-2 の発動の条件に触れる記録が出た**。roadmap の覚え書き（10-05）: `drag-cancel-borrow-miss` の完了時の全体テストで `emo2_boot::spine` の 3 本（`spine_blink_smoke_send_tick_drives_loop_pattern_command`・`spine_move_cue_drives_window_move_end_to_end`・`close_request_that_lands_during_boot_is_honored_without_any_second_change`）が `run_bounded` の 10 秒の期限（「spine ghost shutdown did not complete」）で赤。機械が重い回（x64 の段が約 1.3 倍）で、回し直し 5 回はすべて緑。main 上の赤ではないが、完了の手順の全体テストを止めた。
+- 崩れた前提／古くなった位置:
+  - A-2 の部品（`crates/areka/src/emo2_boot/spine.rs` の `spin_wait_until`・`run_bounded`）は、`ghost-session-test-load-flake` が直そうとしている待ちの部品と同じ。`spin_wait_until`／`SPIN_WAIT` を使うファイルは `crates/areka/src/` に 20 本（㉑の 18 本から増えた）・`run_bounded`／`join_bounded` は 7 本。`#[ignore]` は 0 のまま。
+  - **`spine.rs` はちょうど 1,000 行**（番人は 1,000 を超えると赤）＝A-2 を直す spec は最初に部品を別ファイルへ出す必要がある。
+  - A-1・B 群の場所は動いていない（C3 で `crates/wintf/src/ecs/window/zorder_pair.rs` の注記 2 行が直っただけ＝`drag-cancel-borrow-miss`・振る舞い不変）。`zorder_pair_maintain.rs`・`tick_bridge.rs`・B-1〜B-3 の檻のファイルを触ったコミットは 0。
+- 触るファイル: A-2＝`crates/areka/src/emo2_boot/spine.rs` と新しい部品のファイル・`spine_*_tests.rs` の族。A-1＝`crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs`。B 群＝`crates/areka/src/placement/zorder_group_branch_coverage_tests.rs`・`crates/wintf/src/ecs/window/zorder_chain_tests.rs`・`crates/wintf/src/ecs/world/tick_gate_tests.rs`・`crates/areka/src/tick_gate_config_producers_tests.rs`。
+- 議題: **A-2 を `ghost-session-test-load-flake` へ移すか**（同じ仕組み・同じファイルの部品を直すので、別々に走らせると取り合う）。移せば本 spec は A-1 と B 群だけになり、据え置きのまま規模は S〜M へ下がる。
+
+### 棚卸㉒の裁定（2026-10-05）
+
+- A-2（`emo2_boot/spine.rs` の締切の待ち）は `ghost-session-test-load-flake` へ移した。10-05 に `spine` の 3 本が `run_bounded` の 10 秒の締切で赤になり、直す部品が同じ `spine.rs` のため。本 spec は A-1 と B 群だけ＝S〜M。

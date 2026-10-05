@@ -75,3 +75,19 @@
   - `doc/COMPAT_ARCHITECTURE.md` §8
 - 議題（答えで作業が変わるものだけ）: 箱の当たりの矩形に薄れていく行を入れるか（`text-reveal-fade` と同じ答えにする）。
 - 見つけた穴: なし。
+
+
+---
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: S〜M（6〜9 タスク）のまま。切らない。
+- 前提の状態: `balloon-markers`（手動スクロール・同じスクロールの部分）と `text-reveal-fade`（透明度の仕組み）は今も未着手＝未。
+- 崩れた前提／古くなった位置:
+  - 見える範囲・押し出しの計画・描画の各ファイル（`layout.rs` の `LayoutEngine::visible_window`・`viewbox.rs`・`viewbox_diff.rs`・`viewbox_draw_render.rs`・`actor_present.rs`）は C3 で無変更＝棚卸㉑の位置がそのまま当たる。`viewbox.rs` の変更は注記の言い換え（「M2」→「α 後」）だけ。
+  - 箱の置き場所は `shell-balloon-frame-align` で「いま表示している絵の番号」から決まるようになった。替わった絵で箱の置き場所が変わる（または箱が無くなる・絵が隠れる）と、次の同期が箱の登録を外して面を片付け、作り直す（`actor_box.rs` の `sync_box_bindings` → `unregister_box`）＝押し出された行が薄れている途中にそうなれば、薄れる層ごと消える。その扱い（消えてよい、で足りる見込み）を要件で一言決める。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-text/src/{layout.rs, viewbox.rs, viewbox_diff.rs, viewbox_draw_render.rs, viewbox_draw_plan.rs, actor_present.rs, actor.rs}`＋`text-reveal-fade` が作る透明度の新しいファイル
+  - `crates/areka-parsers/src/balloon/{model.rs, parse.rs}`・`doc/COMPAT_ARCHITECTURE.md` §8
+- 議題: 棚卸㉑のまま（箱の当たりに薄れていく行を入れるか・`text-reveal-fade` と同じ答え）。
+- 見つけた穴: なし。

@@ -100,3 +100,31 @@ kanade（会話進行）と UI（表示寿命）の間に通知路を 1 本敷�
   2. areka で `OnBalloonClose` が起きる場面はどれか（areka のバルーンには閉じるボタンが無く、ダブルクリックは中断＝`OnBalloonBreak`）。時間切れ以外に「閉じる」が無いなら、`OnBalloonClose` は台詞の差し替え・`\c` などで閉じたときだけになるのか、要件で決める。
 - 見つけた穴: 網羅台帳の `owner` が分割元のまま（上記）。実害は無いが、着地のときに本 spec 名へ直す。並走の照合: `mouse-drag-events` とは `events.rs` の表の末尾・個数の行・`lib.rs` の `pub use` の 3 か所で文字が必ず衝突する（中身は独立・後着が足し直せば済む）。`areka` のクレートでは同じファイルを触らない（向こうは `input_events/mod.rs` と新規 `drag.rs`）。
 - 追記（棚卸㉑の分割の指示）: kanade の `schedule/steady.rs`（929 行）・`schedule/mod.rs`（937 行）は分割されていない。本 spec の変更を足して 1,000 行を超えるなら、先頭のタスクで分割する。
+
+
+---
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（9〜13 タスク・Reference2 を空で送る形）。切らない。Reference2 を作るなら㉑のとおり ⒜ 発火 → ⒝ 位置の工事に切る。
+- 前提の状態: kanade の列の前 `mouse-drag-events`（PR#240）が着地＝項目 8・10 は今すぐ着手できる。項目 7 は `sakura-time-directives` 待ちのまま。
+- 崩れた前提／古くなった位置:
+  - 行数の実数え: `schedule/steady.rs` 947・`schedule/mod.rs` 938・`schedule/events.rs` 733・`schedule/user_break.rs` 75・`msg.rs` 909。本 spec が足すのは主に `schedule/mod.rs`（`on_talk_done` の中断の腕・`State` に scope を控える欄）と `events.rs`（3 語の組み立て）。`OnBalloonTimeout`／`OnBalloonClose` を汎用の `KanadeMsg::RaiseEvent` で送るなら受理は `schedule/change.rs` の `on_raise_event` で、`steady.rs` と `msg.rs` には触れない見込み。`mod.rs` へ 60 行を超えて足すなら、足す分を新しいファイルへ置く（`mod.rs` は腕を呼ぶだけ）。
+  - ㉑の「`mouse-drag-events` と `events.rs` の表の末尾・個数・`lib.rs` の `pub use` で衝突」は相手の着地で消えた（`lib.rs` の `pub use` に `on_mouse_drag_*` が入り、表に 2 語が増えた。後から足すだけ）。
+  - **`input_events/user_break.rs` は触らなくてよい**: 中断の scope は既に `KanadeMsg::UserBreak { scope }` → `schedule/user_break.rs` の `on_user_break(state, scope)` まで届いている（記録に載せるだけで、`state.user_break_talk` は `TalkId` しか控えていない）。控えるのは kanade の中だけ＝㉑の「`input_events/user_break.rs`（中断の scope を運ぶなら）」は外す。
+  - **表示の側から kanade へ送る口が無い**: 可視性の相（`balloon_visibility_phase.rs`）が読む `frame/wiring.rs` の結線の束は `lifecycle_rx`（talk スレッドからの受け口）を持つが、kanade への送り手を持たない。時間切れを送るには送り手を足す＝`frame/wiring.rs`（束の組み立ての `new`）と、その組み立ての呼び手 `emo2_boot/mod.rs`（`lifecycle_tx, lifecycle_rx` の channel を作る所）を触る。㉑の触るファイルに抜けていた。
+  - `balloon_visibility_phase.rs` は C3（`shell-balloon-frame-align`）で、箱を持つ面の判定が「シェルの窓がいま表示している絵の番号」を渡す形に変わった（`balloon_shown_glyphs` の引数）。時間切れの判断の本体（`balloon_visibility_wait.rs` の `decide_timeout`）は変わっていない。
+  - `talk_lifecycle.rs` の `#[allow(dead_code)]`（`BalloonLifecycleNotice` の定義の上・持ち主の名は本 spec）は現存。網羅台帳 `shiori.toml` の `OnBalloon*` の行の `owner` は今も `areka-P0-balloon-canon-residue`。
+  - `State` を `..` なしで組む所: `user_break_talk:` で数えて 16 か所・5 ファイル（既定の 1 か所を含む）。
+- 触るファイル（並走の照合用・Reference2 を空で送る形）:
+  - `crates/areka-kanade/src/schedule/{events.rs, events_change_tests.rs, user_break.rs, mod.rs}`・`crates/areka-kanade/src/lib.rs`（`pub mod events`）・新しいファイル（`mod.rs` を太らせないなら）
+  - `crates/areka/src/emo2_boot/{talk_lifecycle.rs, balloon_visibility.rs, balloon_visibility_wait.rs, balloon_visibility_phase.rs, frame/wiring.rs, mod.rs}`
+  - `doc/ukadoc-coverage/ledger/shiori.toml`（3 行）・`doc/COMPAT_ARCHITECTURE.md` §8
+  - Reference2 を作るなら追加で㉑の列（`areka-parsers/src/sakura/{lexer,model,decode}.rs`・`areka-sakura/src/{compile,drive}.rs`・`dola/src/cue/`・`areka-talk/src/lib.rs`）
+- 議題（答えで作業が変わるものだけ）: ㉑の 2 件のまま（Reference2 を今作るか／`OnBalloonClose` が起きる場面）。
+- 見つけた穴: なし。軽微: 台帳の `owner`（上記・着地のときに直す）。
+- 並走の判定（厳しめ・Reference2 を空で送る形）: `balloon-font-file`・`budoux-reveal-reflow`・`balloon-canon-residue`・`text-typesetting`・`balloon-markers` とは重なり 0＝**並べられる**（`emo2_boot/mod.rs`・`frame/wiring.rs` は今挙げた相手のどれも触らない）。`anchor-tag-canon`（kanade の `events.rs`・`schedule/mod.rs`・`lib.rs`）・`talk-fast-forward`（kanade の `schedule/mod.rs` の見込み）とは重なる＝並べない。Reference2 を作るなら台本のコンパイルの列とも重なる。
+
+### 同じウェーブ C4 の約束（2026-10-05 棚卸㉒・破るなら止めて報告）
+
+- kanade の `msg.rs`・`actor.rs` に触らない（`mcp-get-status` の持ち物）。`schedule/mod.rs`（938 行）が 1,000 を超えるなら先頭のタスクで分割する。`emo2_boot/spine.rs` に触らない（`ghost-session-test-load-flake`）。
