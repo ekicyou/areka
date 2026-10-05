@@ -15,9 +15,7 @@ use bevy_ecs::world::World;
 use tracing::debug;
 use wintf::ecs::Arrangement;
 
-use super::dump_surface::{
-    PresenterFacts, Step, check_size, fail, image, judge, refuse, reply_elsewhere,
-};
+use super::dump_surface::{PresenterFacts, Step, check_size, fail, image, judge, refuse, start};
 use super::resolve::ActiveGhost;
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::target_map::balloon_target;
@@ -28,15 +26,8 @@ mod overlay;
 const TOOL: &str = "dump_balloon";
 
 /// 今答えられればその場で（成功は別のスレッドから）、装着の相がまだなら `later` に預けて答える（要件 6.1）。
-pub(super) fn handle(world: &mut World, _ghost: &ActiveGhost, args: Args, reply: ReplyTo) {
-    let started = Instant::now();
-    match answer(world, &args) {
-        Some(step) => reply_elsewhere(TOOL, step, started, reply),
-        None => super::later(world, reply, move |w| {
-            let started = Instant::now();
-            answer(w, &args).map(|step| step.here(started))
-        }),
-    }
+pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: ReplyTo) {
+    start(world, TOOL, ghost, reply, move |w| answer(w, &args));
 }
 
 /// 今答えられるなら `Some`。装着の相がまだなら `None`（`later` が次のフレームでもう 1 度呼ぶ）。

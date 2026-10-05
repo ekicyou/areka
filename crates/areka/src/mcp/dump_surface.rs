@@ -1,10 +1,10 @@
 //! `dump_surface` の処理（spec: areka-P0-mcp-dump-images）——事実を集めて判断し、絵を PNG で返す。
 //!
-//! 結線状態が無い → 窓が無い答え。装着の相がまだ → 答えずに [`super::later`] へ預けて毎フレーム
-//! やり直す。それ以外 → 判断して、今の見た目は最後に表示した絵を、指定は単体の合成の絵を返す。
-//! 判断と絵の写しは UI スレッドで、乗算の戻し・PNG・base64 は別のスレッドで行い、そのスレッドから
-//! 答える（[`reply_elsewhere`]）。読むだけで、ゴーストへイベントを送らず、台本を再生せず、
-//! ファイルを書かない（要件 6.1・6.2）。
+//! 結線状態が無い → 窓が無い答え。装着の相がまだ → 答えずに [`super::later`] へ覗く関数（[`Wait`]）を
+//! 預けて毎フレーム 1 段ずつ進める。それ以外 → 判断して、今の見た目は最後に表示した絵を、指定は
+//! 単体の合成の絵を返す。判断と絵の写しは UI スレッドで、乗算の戻し・PNG・base64 は別のスレッドで行う
+//! （その場で答えられたときはそのスレッドから [`reply_elsewhere`]、預けたときは覗く関数が受け取って
+//! 答える）。読むだけで、ゴーストへイベントを送らず、台本を再生せず、ファイルを書かない（要件 6.1・6.2）。
 
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -17,7 +17,7 @@ use areka_mcp::tools::{ReplyTo, outcome};
 use bevy_ecs::world::World;
 use tracing::{debug, error};
 
-use super::resolve::ActiveGhost;
+use super::resolve::{self, ActiveGhost};
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::target_map::shell_target;
 use judge::SurfacePlan;
@@ -44,25 +44,110 @@ pub(in crate::mcp) enum Step {
     Encode(u32, Job),
 }
 
-impl Step {
-    /// 今のスレッドで終える（装着の前に預けた組。`later` は答えをその場で受け取るので逃がせない）。
-    pub(in crate::mcp) fn here(self, started: Instant) -> ToolOutcome {
-        match self {
-            Step::Now(outcome) => outcome,
-            Step::Encode(_, job) => job(started.elapsed()),
+/// 今答えられればその場で（成功は別のスレッドから）、装着の相がまだなら `later` に預けて答える（要件 6.1）。
+pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: ReplyTo) {
+    start(world, TOOL, ghost, reply, move |w| answer(w, &args));
+}
+
+/// 2 本のツールの入口。`answer` を 1 度呼び、答えられれば [`reply_elsewhere`] で、装着の前（`None`）なら
+/// 覗く関数（[`Wait`]）にして `later` へ預ける。
+pub(in crate::mcp) fn start(
+    world: &mut World,
+    tool: &'static str,
+    ghost: &ActiveGhost,
+    reply: ReplyTo,
+    mut answer: impl FnMut(&World) -> Option<Step> + 'static,
+) {
+    let started = Instant::now();
+    match answer(world) {
+        Some(step) => reply_elsewhere(tool, step, started, reply),
+        None => {
+            let mut wait = Wait {
+                tool,
+                ghost: ghost.clone(),
+                stage: Stage::Attaching,
+                answer,
+                carry: started.elapsed(),
+                ui_max: Duration::ZERO,
+            };
+            super::later(world, reply, move |w| wait.poll(w));
         }
     }
 }
 
-/// 今答えられればその場で（成功は別のスレッドから）、装着の相がまだなら `later` に預けて答える（要件 6.1）。
-pub(super) fn handle(world: &mut World, _ghost: &ActiveGhost, args: Args, reply: ReplyTo) {
-    let started = Instant::now();
-    match answer(world, &args) {
-        Some(step) => reply_elsewhere(TOOL, step, started, reply),
-        None => super::later(world, reply, move |w| {
-            let started = Instant::now();
-            answer(w, &args).map(|step| step.here(started))
-        }),
+/// 覗く関数の状態（1 フレームで済まない仕事を、待たずに毎フレーム 1 段ずつ進める・要件 1.4・3.1）。
+struct Wait<A> {
+    tool: &'static str,
+    /// 呼び出しを解決したゴースト（名前とルートフォルダ・要件 4.2）。
+    ghost: ActiveGhost,
+    stage: Stage,
+    answer: A,
+    /// 預けた直後の覗きに足す、入口で使った時間。
+    carry: Duration,
+    /// これまでの 1 フレームの UI スレッドの時間の最大（要件 5.3）。
+    ui_max: Duration,
+}
+
+enum Stage {
+    /// 装着待ち。覗くたびにゴーストを確かめてから `answer` をやり直す。
+    Attaching,
+    /// 符号化待ち（スコープ, 答えの受け取り口）。
+    Encoding(u32, mpsc::Receiver<ToolOutcome>),
+}
+
+impl<A: FnMut(&World) -> Option<Step>> Wait<A> {
+    /// 1 フレームぶん進める。待たない。`Some` を返したら答えて組を外す。
+    fn poll(&mut self, world: &World) -> Option<ToolOutcome> {
+        let began = Instant::now();
+        // 始めから戻るまでを 1 フレームの時間とし、最初の覗きには入口の時間を足す。
+        let carry = std::mem::take(&mut self.carry);
+        let ui_max = self.ui_max;
+        let ui = move || ui_max.max(carry + began.elapsed());
+        let answered = match self.stage {
+            Stage::Attaching => self.attach(world, ui),
+            Stage::Encoding(scope, ref rx) => receive(self.tool, scope, rx),
+        };
+        self.ui_max = ui();
+        answered
+    }
+
+    /// 装着待ちの 1 段。写す前にゴーストが替わっていたら断る（要件 4.1・4.2）。写しまで済んだら
+    /// 符号化を起こし、同じ覗きの中で受け取り口を 1 度覗く。
+    fn attach(&mut self, world: &World, ui: impl FnOnce() -> Duration) -> Option<ToolOutcome> {
+        if resolve::active(world).as_ref() != Some(&self.ghost) {
+            debug!(
+                tool = self.tool,
+                reason = resolve::NOT_ACTIVE,
+                "[mcp] 撮れない"
+            );
+            return Some(outcome::ng(resolve::NOT_ACTIVE));
+        }
+        match (self.answer)(world)? {
+            Step::Now(outcome) => Some(outcome),
+            Step::Encode(scope, job) => {
+                let (tx, rx) = mpsc::channel();
+                encode_elsewhere(self.tool, scope, job, ui, tx, send_back);
+                let answered = receive(self.tool, scope, &rx);
+                self.stage = Stage::Encoding(scope, rx);
+                answered
+            }
+        }
+    }
+}
+
+/// 符号化待ちの 1 段（要件 3.2）。届いていれば答え、まだなら `None`。届けずにスレッドが消えたら
+/// 想定外の失敗（`finish` が必ず届けるので届かない枝）。
+fn receive(
+    tool: &'static str,
+    scope: u32,
+    rx: &mpsc::Receiver<ToolOutcome>,
+) -> Option<ToolOutcome> {
+    match rx.try_recv() {
+        Ok(outcome) => Some(outcome),
+        Err(mpsc::TryRecvError::Empty) => None,
+        Err(mpsc::TryRecvError::Disconnected) => {
+            Some(fail(tool, scope, "the encoding thread is gone"))
+        }
     }
 }
 
@@ -128,8 +213,6 @@ pub(in crate::mcp) fn finish(
 }
 
 /// 覗く関数の受け取り口へ送る。待つ側が去って受け取り口が無ければ黙って捨てる（要件 3.5）。
-// 本番の呼び手はタスク 2.4 の覗く関数で付く（それまでテストだけが呼ぶ）。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(in crate::mcp) fn send_back(tx: mpsc::Sender<ToolOutcome>, outcome: ToolOutcome) {
     let _ = tx.send(outcome);
 }
