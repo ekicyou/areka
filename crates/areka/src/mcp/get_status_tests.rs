@@ -1,4 +1,4 @@
-//! `get_status` の決定論テスト（design Testing Strategy M1〜M5）。
+//! `get_status` の決定論テスト（design Testing Strategy M1〜M6）。
 //!
 //! 置き場に偽の kanade の送り口（`mpsc` の送出端）を置き、受信端で問い合わせを受け取って
 //! 返信端へ値を送る（または落とす）。答えは後から答える置き場（`later`）を `drain` で覗いて取る。
@@ -216,4 +216,92 @@ fn m5_answers_not_available_without_a_kanade_in_the_slot() {
     );
     assert!(outcome.is_error);
     assert_eq!((levels.warn, levels.error), (1, 0));
+}
+
+/// 受け口へ `get_status`（`ghost_name` 省略）を 1 通送り、待つ側を返す。
+fn ask(inbox: &mpsc::Sender<ToolRequest>) -> Pending {
+    let (request, pending) = ToolRequest::new(ToolCall::GetStatus(Args { ghost_name: None }));
+    inbox.send(request).ok().expect("受け口は生きている");
+    pending
+}
+
+/// 答えの本文 1 つ（本文が 1 つの文字列でなければ落ちる）。
+fn body(outcome: &ToolOutcome) -> String {
+    match outcome.content.as_slice() {
+        [ToolContent::Text(text)] => text.clone(),
+        other => panic!("本文は文字列 1 つのはず: {other:?}"),
+    }
+}
+
+/// 問い直す回数の上限（台詞の時計を進めながら `talking` が消えるまで）。
+const REASK_LIMIT: usize = 200;
+
+/// M6: 本物の単位で端から端まで。起動の挨拶つきのゴーストを起こし、受け口へ `get_status` を送る。
+/// 台詞の時計を進めない間は本文が `talking` で始まり、進めながら問い直すと上限の内に `talking` を
+/// 含まない答えが返る。どの答えも `isError: false` で `not implemented yet` を含まない
+/// （要件 1.1・2.1・3.4・4.2・4.3）。
+#[test]
+fn m6_real_unit_answers_talking_then_not_after_the_talk_ends() {
+    use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+
+    let mut rig = SwitchRig::new(vec![(
+        "A",
+        FakeShiori::Scripted(Box::new(|| standard_script(r"\0A\e"))),
+    )]);
+    rig.boot("A");
+    let steady = rig.wait_steady();
+    let (inbox, rx) = mpsc::channel();
+    install(&mut rig.world, rx);
+
+    // ⑴ 台詞の時計を進めない（起動の挨拶は再生中のまま）。
+    let pending = ask(&inbox);
+    let mut first = None;
+    let first_arrived = rig.pump_input_until(|_| {
+        first = pending.try_answer().ok().flatten();
+        first.is_some()
+    });
+
+    // ⑵ 台詞の時計を進めながら、答えが届くたびに問い直す（`talking` が消えるまで・上限つき）。
+    let mut seen: Vec<ToolOutcome> = Vec::new();
+    let mut pending = ask(&inbox);
+    let ended = rig.pump_talking_until(|_| {
+        let Some(answer) = pending.try_answer().ok().flatten() else {
+            return false;
+        };
+        let done = !body(&answer.outcome).contains("talking");
+        seen.push(answer.outcome);
+        if !done && seen.len() < REASK_LIMIT {
+            pending = ask(&inbox);
+        }
+        done || seen.len() >= REASK_LIMIT
+    });
+    let down = rig.shutdown();
+
+    assert!(
+        steady && first_arrived && down,
+        "（定常・最初の答え・降ろせた）"
+    );
+    let first = first.expect("最初の答えが届いている").outcome;
+    assert!(
+        body(&first).starts_with("talking"),
+        "時計を進めない間は talking: {first:?}"
+    );
+    assert!(
+        ended,
+        "上限の内に答えが届き続ける（{} 回届いた）",
+        seen.len()
+    );
+    let last = seen.last().expect("答えが 1 つ以上ある");
+    assert!(
+        !body(last).contains("talking"),
+        "{REASK_LIMIT} 回の内に talking が消える（{} 回目: {last:?}）",
+        seen.len()
+    );
+    for outcome in std::iter::once(&first).chain(&seen) {
+        assert!(!outcome.is_error, "isError: false: {outcome:?}");
+        assert!(
+            !body(outcome).contains("not implemented yet"),
+            "本物の答え: {outcome:?}"
+        );
+    }
 }
