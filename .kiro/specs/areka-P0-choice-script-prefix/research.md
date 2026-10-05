@@ -111,7 +111,7 @@
 
 ## 6. 設計の段で決めること（議題の候補）
 
-1. **`script:` の台本を `OnTranslate`・MAKOTO に通すか**
+1. **`script:` の台本を `OnTranslate`・MAKOTO に通すか** — **✅ 2026-10-05 要件ディスカッション議題 1 で決着＝(a) 通さない**（要件 1.2・1.7・6.2）。選択肢を含む元の台本が翻訳を通るときに一部として 1 回通っている。`translate.rs` には触らない。`%…` は角括弧の中では翻訳の前に展開されず、新しいトークの再生時の展開で埋まる（`lexer.rs` の `substitute_system_vars` の説明で確認）＝§7 の 1 つ目の調べは済み。
    - 事実: 今の翻訳の出口の規則（`schedule/translate.rs` の `capture`）は「入力が SHIORI の応答で結果が台本」のときだけ働くので、`Input::Choice` から出す `StartTalk` は通らない。`script:` の中身は、選択肢を含んでいた元の台本の一部として**すでに 1 回** `OnTranslate` を通っている。ukadoc の `OnTranslate` は「主に、GET コマンドの SHIORI Event に対してベースウェアへスクリプトが返却された場合に、それに応じて発行される」と書き、`script:` の場合には触れていない（正典は沈黙）。Reference2（元のイベント ID）は「イベントが原因ではない場合欠番」。
    - 案 (a) 通さない（元の台本と一緒に翻訳済みとみなす）。新しいファイルだけで済む。正典の沈黙を areka の決めごととして `choice-cascade-compat.md` に記す。
    - 案 (b) 通す（Reference2・3 は欠番）。`translate.rs` の出口の規則は C4 の約束の外のファイルなので、子のファイルが `TranslateWait` を自分で組むか、約束を広げる必要がある。同じ問いを `mcp-kanade-tools` の brief が `sakurascript` について議題に挙げている（「MCP の台本を `OnTranslate` に通すか」）。

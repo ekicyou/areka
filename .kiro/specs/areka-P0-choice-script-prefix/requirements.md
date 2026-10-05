@@ -51,11 +51,12 @@
 #### Acceptance Criteria
 
 1. When 利用者が、第 2 引数が `script:` で始まる選択肢を選んだ, the areka shall `script:` の後ろの文字列を、新しいトークとして再生する。
-2. When 利用者が `script:` の選択肢を選んだ, the areka shall SHIORI のイベント（`OnChoiceSelectEx`・`OnChoiceSelect`・`On` で始まる名前のイベント）を 1 つも起こさない。
+2. When 利用者が `script:` の選択肢を選んだ, the areka shall SHIORI のイベント（`OnChoiceSelectEx`・`OnChoiceSelect`・`On` で始まる名前のイベント・`OnTranslate`）を 1 つも起こさない。
 3. When `script:` の台本で新しいトークを始める, the areka shall 選択肢の待ち（タイムアウトの計測を含む）を、新しいトークを始めるのと同じときに閉じる。
 4. When `script:` の台本で新しいトークを始める, the areka shall 選択肢を含んでいたトークを、選択肢の SHIORI イベントが台本を返して次のトークが始まるときと同じく、新しいトークへ置き換える（元のトークの残りは再生しない）。
-5. The areka shall `script:` の台本を、SHIORI の応答の台本と同じ読み方・同じ再生の結果で扱う（崩れた書き方の扱い、選択肢・タイムアウトの指定・`\e` などのタグの効き方が、応答の台本と変わらない）。
+5. The areka shall `script:` の台本を、SHIORI の応答の台本と同じ読み方・同じ再生の結果で扱う（崩れた書き方の扱い、選択肢・タイムアウトの指定・`\e` などのタグの効き方・再生時の環境変数（`%…`）の展開が、応答の台本と変わらない）。
 6. The areka shall `script:` の判定を、第 2 引数がちょうど小文字の `script:` で始まるときだけに限る（`script` だけ・`Script:`・`xscript:` などは今までどおり通常の選択肢として扱う）。
+7. The areka shall `script:` の台本を、翻訳（`OnTranslate`・MAKOTO）に通さずに再生する（`script:` の台本は、選択肢を含んでいた元の台本が翻訳を通るときに、その一部として 1 回通っている。選んだ後にもう一度通すと、台本全体を置き換える翻訳が二重に掛かる）。
 
 ### Requirement 2: 正典の記述例が正典どおりに動く
 
@@ -105,7 +106,7 @@
 #### Acceptance Criteria
 
 1. When 本仕様の実装が終わった, the 網羅台帳（`doc/ukadoc-coverage/ledger/sakura-script.toml`）の `\q[タイトル,script:実行内容]` の行 shall 状態を縮退から実装済みに改め、注記を今の動き（選ぶと台本を新しいトークとして再生する・空の `script:` と余分な引数の扱い・記録の出方）に書き替える。
-2. When 本仕様の実装が終わった, the 選択肢の正典の沈黙・縮退の記録（`doc/choice-cascade-compat.md` の 7a の行と、それを指す `doc/COMPAT_ARCHITECTURE.md` の選択肢の行） shall `script:` が縮退ではなくなったことを記し、正典が黙っている所の areka の決めごと（SHIORI のイベントを起こさない・第 3 引数以降を使わない・空なら待ちを閉じるだけ）を出どころ付きで記録する。
+2. When 本仕様の実装が終わった, the 選択肢の正典の沈黙・縮退の記録（`doc/choice-cascade-compat.md` の 7a の行と、それを指す `doc/COMPAT_ARCHITECTURE.md` の選択肢の行） shall `script:` が縮退ではなくなったことを記し、正典が黙っている所の areka の決めごと（SHIORI のイベントを起こさない・翻訳（`OnTranslate`・MAKOTO）に通さない・第 3 引数以降を使わない・空なら待ちを閉じるだけ）を出どころ付きで記録する。翻訳に通さない決めごとには、台本全体を置き換える翻訳の二重掛けを避ける理由と、タグの中を避けて翻訳するゴーストでは `script:` の台本が翻訳されないまま再生されることを併記する。
 3. The 網羅台帳の検査 shall 本仕様の更新の後も通る。
 
 ### Requirement 7: 実機なしで確かめるテスト
