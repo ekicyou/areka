@@ -39,7 +39,7 @@
 2. **descript の値の前後の空白。** `crates/areka-parsers/src/kv/parse.rs` の読み取りは、キーと値の前後の空白を除いて持つ（全角の空白も除く）。起動中のゴーストの `name`・`sakura.name` は前後に空白を持たない。
 3. **`get_log` は自分で空文字を断っている。** `crates/areka/src/mcp/get_log.rs` の純粋な答え `answer` は、`ghost_name` が空なら解決を呼ばずに `Cannot find` と答え、それ以外は解決を呼んで失敗をすべて `Cannot find` に読み替え、解決できたら一覧に出る値（そのゴーストの名前）で記録を絞る。照合を直せば `get_log` にも同じ規則が効き、`get_log.rs` は変えずに済む。
 4. **`get_expression_table` の空文字の文言は解決の中で決まる。** `crates/areka/src/mcp/mod.rs` の振り分け `dispatch` は解決の結果をそのまま `NG:` にする。空文字の文言を `Cannot find` へ変えるのに `mod.rs` を触らずに済む。
-5. **今の形を固定しているテスト。** `resolve_tests.rs` の `name_differing_only_in_case_does_not_resolve`・`sakura_name_does_not_resolve`・`empty_or_omitted_with_use_active_resolves_to_the_active_one`・`empty_or_omitted_with_reject_is_not_active`・`no_active_ghost_omitted_is_not_active`（空文字の側）と、`mcp_tests.rs` の `get_expression_table_omitted_is_not_active_even_with_one_ghost`（空文字の側）。
+5. **今の形を固定しているテスト。** `resolve_tests.rs` の `name_differing_only_in_case_does_not_resolve`・`sakura_name_does_not_resolve`・`empty_or_omitted_with_use_active_resolves_to_the_active_one`・`empty_or_omitted_with_reject_is_not_active`・`no_active_ghost_omitted_is_not_active`（空文字の側）と、`mcp_tests.rs` の `get_expression_table_omitted_is_not_active_even_with_one_ghost`（空文字の側）と、`get_log_tests.rs` の `unmatched_empty_and_no_ghost_are_cannot_find`（英字の大小違い `emily/phase4.5` を「外れ」とする場合。ギャップ分析で見つかった）。
 6. **起動中のゴーストは 1 体だけ。** `crates/areka/src/ghost_session.rs` の置き場 `GhostSlot` は 1 体分。本体側名と別のゴーストの名前が重なる場面は今の areka では起きない。
 7. **SSP の机での追試はできなかった。** 本要件を書いた時点で SSP の MCP（9801）は応答しなかった。下の表の「未実測」の細部は推奨案で決め、要件ディスカッションと実機確認（要件 6）で確かめる。
 
@@ -126,7 +126,7 @@
 #### Acceptance Criteria
 
 1. The areka shall 照合の判断を、ゴーストの名前・本体側名・ルートフォルダの値を受け取る（アプリ本体やゴーストの実行系を要しない）判断として、次の各場合を決定論テストで固定する: 名前の英字の大小違い（一致）・本体側名（一致）・`name` が無いゴーストの本体側名（一致）・相方の名前（不一致）・`sakura.name2`（不一致）・かなの違い（不一致）・全角の英字の大小違い（不一致）・前後に空白の付いた名前（一致・半角の空白・タブ・全角の空白のそれぞれ）・途中の空白の違い（不一致）・空白だけ（`Cannot find`）・空文字（`Cannot find`・省略で起動中のゴーストを使う扱いと省略を断る扱いの両方・ゴーストが 0 体のときも）・省略（起動中の 1 体へ・断る扱いでは `Specified ghost is not active`・0 体では `Specified ghost is not active`）・前後に空白のあるフルパス（不一致）・`/` 区切りで末尾の区切りの無いフルパス（一致）・フォルダ名だけ（不一致）。
-2. The areka shall 今の形を固定していたテスト（英字の大小違いの名前で不一致・本体側名で不一致・空文字を省略と同じに扱う・`get_expression_table` の空文字で `Specified ghost is not active`）を、SSP の実測の期待へ書き換える（古い期待と新しい期待を両方残さない）。
+2. The areka shall 今の形を固定していたテスト（英字の大小違いの名前で不一致・本体側名で不一致・空文字を省略と同じに扱う・`get_expression_table` の空文字で `Specified ghost is not active`・`get_log` の英字の大小違いの名前で `Cannot find`）を、SSP の実測の期待へ書き換える（古い期待と新しい期待を両方残さない）。
 3. The areka shall ツールの振り分けを通した決定論テストで、`get_expression_table` に空文字・空白だけを渡すと `NG:Cannot find active ghost from specified name`、省略すると `NG:Specified ghost is not active` になることを固定する。
 4. The areka shall 一覧の値（名前あり・名前が無くフルパス）を `ghost_name` に渡すと同じゴーストへ解決することを、決定論テストで固定し続ける。
 
