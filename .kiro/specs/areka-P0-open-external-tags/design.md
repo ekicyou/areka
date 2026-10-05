@@ -481,7 +481,7 @@ pub(crate) fn register_readme_drain(world: &mut World);
   - `Path`・`Program`（パスに解けたもの）を開くときの作業フォルダは、そのファイルのあるフォルダ（エクスプローラーでダブルクリックしたときと同じ）。それ以外は無し。
 - **実行 `execute`（開く専用のスレッド）**: 解決に失敗 → `error!`。成功 → `info!` 1 行（OS へ渡す時点）→ `OsPort::shell_execute` → 失敗の符号なら `error!`。メッセージボックスは出さない（要件 7.6）。
 - **スレッド `serve`／`Opener::spawn`**: 名前 `open-external` の 1 本。起動時に COM を STA で 1 度初期化してから（`ShellExecuteExW` の公式の注記どおり）`for job in rx { execute(&mut port, job) }`。World を落とすと送信端が落ちて受信が終わり、スレッドは自然に終わる。
-  - スレッドが持つ OS の口は `#[cfg(not(test))]` では本物の `WindowsShell`、`#[cfg(test)]` では「OS を呼ばずに断る口」（`shell_execute` は呼ばれた `OsCall` をプロセス共有の記録へ積み、`Err` を返す・`env_var` は `None`）。COM の初期化も `#[cfg(not(test))]` だけ。これで後続の spec がテストの組み立てで開く系の台本を流しても、開発者の机で本物のアプリは起きない（要件 10.1）。`spawn` で起こしたスレッドへ 1 件送ると、断る口の記録に積まれ、`error!` 1 行（`reason = "os"`）が残ることを 1 本のテストで固定する。
+  - スレッドが持つ OS の口は `#[cfg(not(test))]` では本物の `WindowsShell`、`#[cfg(test)]` では「OS を呼ばずに断る口」（`shell_execute` は呼ばれた `OsCall` をプロセス共有の記録へ積み、`Err` を返す・`env_var` は `None`）。COM の初期化も `#[cfg(not(test))]` だけ。これで後続の spec がテストの組み立てで開く系の台本を流しても、開発者の机で本物のアプリは起きない（要件 10.1）。`spawn` で起こしたスレッドへ固有の行き先を 1 件送ると、時間の上限つきで待つ間に断る口の記録にその行き先が見つかることを 1 本のテストで固定する（記録はプロセス共有で他のテストの組み立ても送りうるので件数や位置では判定しない。`log_capture_kit` は呼んだスレッドの記録しか拾わないので、`error!` 1 行（`reason = "os"`）は `serve`／`execute` を同じスレッドで呼ぶテストで判定する）。
 
 **記録の形**（`kind`＝`OpenKind::as_str`・`destination` は解決した行き先・`tag` は元の綴り）
 
