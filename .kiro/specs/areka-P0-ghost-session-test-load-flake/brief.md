@@ -53,3 +53,29 @@
 
 - 他のセッションの cargo が 25〜35 本動く机で `tools/test-all.ps1` を回すと、同じ族の 4 本がときどき赤になった: `ghost_session_switch_fallback_tests.rs` の `default_ghost_fault_after_fallback_exits_through_shiori_fault_path`、`ghost_session_switch_tests.rs` の `script_change_tag_switches_a_to_b_and_reaches_steady`・`switch_to_b_without_boot_record_sends_first_boot_not_ghost_changed`、`emo2_boot/frame_ghost_quit_switch_tests.rs` の `stop_with_handoff_under_reservation_switches_without_exit`（4 本目も足場 `ghost_switch_test_support` を使う＝対象の族に数える）。
 - 1 本ずつ流すと緑。`mcp-dump-images` の新しいテストを外した対照でも出た。静かな机の `tools/test-all.ps1` は全段緑（`b222af2e`）。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: S〜M（5〜8 タスク）。起票時の S（3〜6）より広い＝赤の族が増えた（下）。切らない（20 に遠い）。
+- 前提の状態: 上流なし・今すぐ着手できる。C3 の 11 本の完了の全体テストのうち少なくとも 4 回で、この族の赤が出た（本文の観測 3 つと roadmap の覚え書き）。毎回「回し直して緑」で通しており、レビューの判定を濁す害は起票時より大きい。
+- 崩れた前提／古くなった位置:
+  - 足場 `ghost_switch_test_support` を使うファイルは本文の「9 本」でなく **28 本**（`git grep -l ghost_switch_test_support -- crates/areka/src`）。C3 で `mcp/get_property_tests.rs`・`mcp/get_expression_table_tests.rs`・`mcp/dump_surface_gpu_test_support.rs`（実際の GPU を使う）の 3 本が増えた。
+  - 待ちの部品は 3 つ: `emo2_boot/spine.rs` の `spin_wait_until`（30 秒の期限・最初の 100 万回は `yield_now` の空回し）と `run_bounded`（呼び手が期限を渡す・spine の降ろしは 10 秒）、足場の `wait_steady`（`recv_timeout` 20 秒）。`pump_talking_until` は実時間 1 ms ごとに台詞の時計を 100 ms 進める Tick を注入する。
+  - **`emo2_boot/spine.rs` はちょうど 1,000 行**（行数の番人 `file_length_guard_test.rs` は 1,000 を超えると赤）。待ちの部品を直すなら、最初に部品を別ファイルへ出す必要がある。
+  - roadmap の覚え書きの `emo2_boot::spine` の 3 本（10-05・`run_bounded` の 10 秒で赤）は、`zorder-chain-residue` の A-2（spine の族）と同じ部品。本 spec で一緒に扱うのが自然（下の議題 1）。
+- 見立て（要件の段で確かめる）: 期限が短いだけでなく、同じテストの実行ファイルの中で多数のテストが同時に `yield_now` の空回しで CPU を取り合う（`spin_wait_until` の doc 自身が「巻き添えの flake」を記録している）。負荷のときは自分たちで飢えを強めている見込み。
+- 触るファイル: `crates/areka/src/emo2_boot/spine.rs`（待ちの部品を出す）・新規の待ちの部品のファイル（`emo2_boot/` の下）・`emo2_boot/ghost_switch_test_support.rs`・`ghost_session_switch_tests.rs`・`ghost_session_switch_fallback_tests.rs`・`ghost_session_restart_tests.rs`（10 秒の deadline）・`install/desk_overwrite_tests.rs`・`session_end_sync_send_tests.rs`・`emo2_boot/ghost_switch_boot_event_tests.rs`・`emo2_boot/frame_ghost_quit_switch_tests.rs`。部品の形を変えるなら足場を使う 28 本と `spin_wait_until` を呼ぶ 20 本に波及しうる。
+- 議題:
+  1. `zorder-chain-residue` の A-2（spine の族の壁時計の期限）を本 spec へ移すか。同じ `spine.rs` の部品を直すので、別々に走らせると同じファイルを取り合う。
+  2. 直し方の向き: 期限を観測の待ちへ置き換える／期限切れの文言に「実時間で何秒待ったか・相手のスレッドが進んだか」を足して負荷と欠陥を見分けられるようにする、のどちらを本命にするか（両方なら規模は上の上限側）。
+- 同時に走らせない: `areka-test-threads-av`（同じ `areka` のテストの実行ファイル・二分探索の測定を互いに汚す）。
+
+### 棚卸㉒の裁定（2026-10-05）
+
+- `zorder-chain-residue` の A-2 と、roadmap の覚え書きにあった `emo2_boot::spine` の 3 本（`run_bounded` の 10 秒の締切で赤・`drag-cancel-borrow-miss` の完了時の全体テスト）と、`install::desk::overwrite_tests` の 2 本・`sample-ghost-kit` の展開テストの os error 5（`target\nar-samples\work` の退避と同じ族と見る）を本 spec が引き取った。
+- `spine.rs` はちょうど 1,000 行＝最初のタスクで待ちの部品（`spin_wait_until`・`run_bounded`）を別ファイルへ出す。
+- `areka-test-threads-av` と同じウェーブに置かない（どちらもテストの土台）。
+
+### 同じウェーブ C4 の約束（2026-10-05 棚卸㉒・破るなら止めて報告）
+
+- 触るのは `emo2_boot/spine.rs`（待ちの部品を新しいファイルへ出す）・`ghost_switch_test_support.rs`・切替と起こし直しと上書きと終了のテストのファイルだけ。`emo2_boot/mod.rs`・`frame/`・`ghost_switch.rs` の本番の処理は触らない（`balloon-lifecycle-events`・`char-position-save-on-exit` の持ち物）。

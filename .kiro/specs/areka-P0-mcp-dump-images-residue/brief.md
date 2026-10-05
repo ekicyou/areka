@@ -49,3 +49,21 @@ MCP の `dump_surface`／`dump_balloon`（`areka-P0-mcp-dump-images`・2026-10-0
 ## Constraints
 - 1 フレーム遅らせる解は取らない（状態の持ち方で 0 フレームで解く）。1 の非同期の読み戻しで「答えが 1 フレーム後になる」のは、描画を遅らせるのでなく答えを後にするだけなので可。
 - 実機の根・一時ファイルはワークツリーの `target\` の下だけ。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模（タスク数）と切るかどうか: S〜M（5〜9）。切らない。
+- 前提の状態: 1〜5 は**着手できる**（`mcp-dump-images` は着地済み・本 spec の起票と同じ main）。6 だけ `sakurascript` の実装（`mcp-kanade-tools`）を待つ。
+- 崩れた前提／古くなった位置: 起票直後なのでずれは無い。位置の確認:
+  - 1: 文字の面の読み戻しは `crates/areka-emo-text/src/surface.rs` の `read_back`（写し → `Map` を同じ呼び出しの中で行う）。呼ぶのは `crates/areka/src/mcp/dump_balloon.rs` の絵を組む所。
+  - 2: `crates/areka/src/mcp/dump_surface.rs` の `answer` の `SurfacePlan::Alone` の腕の `None`（`judge::NO_SUCH_SCOPE` を `fail` で返す）。
+  - 3: 同ファイルの `Step::here` と `handle` の `later` の覗く関数。**`mod.rs` に触らずに直せる見込み**: 覗く関数が `answer` から `Step::Encode` を受けたら、その場で符号化のスレッドを起こして受け取り口を手元に持ち、以後のフレームは `None` を返し、仕上がったら `Some` を返す（答えが 1 フレーム以上後になるだけ・描画は遅らせない）。
+- 触るファイル（並走の照合用）: `crates/areka/src/mcp/{dump_surface.rs, dump_surface_judge.rs, dump_balloon.rs}` と各テスト（`dump_*_tests.rs`・`dump_*_gpu_tests.rs`・`dump_surface_gpu_test_support.rs`）・`crates/areka-emo-text/src/surface.rs`（817 行・1 で要るとき）。`crates/areka/src/mcp/mod.rs` は上の形なら触らない。
+- 議題（答えで作業が変わるものだけ）:
+  - 3 を `mod.rs` の `later` に「別のスレッドで答える」形を足して直すか、`dump_surface.rs` の中だけで直すか（後者なら MCP の共有ファイルに触らず、`mcp-author-tools`・`mcp-ghost-name-match` と並べられる）。
+  - 6（`sakurascript` で表情を変えてから撮り直す実機確認 1 回）を本 spec に残すか、`mcp-kanade-tools` の実機確認へ移すか（移せば本 spec は待ちなしで閉じられる）。
+- 見つけた穴: なし。
+
+### 同じウェーブ C4 の約束（2026-10-05 棚卸㉒・破るなら止めて報告）
+
+- 項目 1〜5 だけ（項目 6 の撮り直しは `mcp-kanade-tools` の実機確認へ）。`crates/areka/src/mcp/mod.rs` に触らない（覗く関数が符号化のスレッドを起こし、仕上がるまで `None` を返す形）。emo-text に新しいファイルを足さない（`budoux-reveal-reflow` が `lib.rs` を持つ）。

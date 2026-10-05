@@ -60,3 +60,12 @@
 - 触るファイル: `crates/areka/src/emo2_boot/consumer_ledger.rs`＋新規の受け口・`emo2_boot/mod.rs`・`emo2_boot/shell_balloon_switch.rs`・`crates/areka/src/update/procedure.rs`・`crates/areka/src/mcp/reload.rs`・`crates/areka-ghost/src/makoto_wiring.rs`（`makoto-dll-host` が作る）・`doc/ukadoc-coverage/ledger/sakura-script.toml`（3 行）。
 - 共有しうる相手: `mcp-reload`・`network-update-canon-order`・`emo2_boot` の切替系を触る spec。
 - 議題: なし（命令が鎖の両側に効くのは元の brief の推奨のまま）。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（7〜10）のまま。切る: なし。
+- 前提の状態: `makoto-dll-host` はまだ＝着手できない。`mcp-reload` もまだ（`crates/areka/src/mcp/reload.rs` は 16 行のダミー・ツールの説明 `crates/areka-mcp/src/tools/reload.rs` には `makoto` が載っている）。
+- 崩れた前提／古くなった位置: なし。C3 は `emo2_boot/shell_balloon_switch.rs`（442）・`update/procedure.rs`（383）・`consumer_ledger.rs`（859）・`emo2_boot/mod.rs`（883）に触れていない。
+- 触るファイル: `crates/areka/src/emo2_boot/{consumer_ledger.rs, mod.rs, shell_balloon_switch.rs}`＋新規の受け口・`crates/areka/src/update/procedure.rs`・`crates/areka/src/mcp/reload.rs`・`crates/areka-ghost/src/makoto_wiring.rs`（`makoto-dll-host` が作る）・`doc/ukadoc-coverage/ledger/sakura-script.toml`（3 行）。
+- 議題（答えで作業が変わるものだけ）: なし。
+- 見つけた穴: なし。並走の照合: `emo2_boot` の結線の列（`balloon-font-file`・`shell-companion-balloon` など `shell_balloon_switch.rs`・`frame/switch.rs` を触るもの）と同時に走らせない。

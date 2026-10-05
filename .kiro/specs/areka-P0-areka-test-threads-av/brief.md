@@ -49,3 +49,15 @@
 ## Constraints
 
 - 段は**バグ**（テストのプロセスが落ちる・原因不明のメモリの壊れ）。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: S（3〜6）のまま。切らない。原因が本番のコードにあれば +2〜3（直しと檻）。
+- 前提の状態: 上流なし・今すぐ着手できる。起票（`1bb449ae`）の後に入ったのは `mcp-dump-images` だけで、新しい観測（落ちた・落ちない）の記録は無い。roadmap の覚え書きにも本件の再発は載っていない。
+- 崩れた前提／古くなった位置:
+  - **実際の GPU を使うテストが `areka` の実行ファイルに 15 本増えた**: `mcp-dump-images` の `mcp/dump_surface_gpu_tests.rs`（9 本）・`mcp/dump_balloon_gpu_tests.rs`（6 本）と土台 `mcp/dump_surface_gpu_test_support.rs`（WARP を含む GPU 資源・偽の窓・自分のスレッドでのメッセージの汲み出し）。起票のときより「スレッドに縛られる資源」を使うテストの母集団が広い＝二分探索はこの 2 本を外した対照も採ること。
+  - 前から GPU・COM を使うテストのファイル（`emo2_boot/{assets_tests, assets_shell_tests, frame_attach_tests, frame_visibility_integration_tests, switch_assets_tests}.rs`・`ghost_session_restart_tests.rs`・`shell_balloon_switch_session_lap_tests.rs`・`placement/{measure_tests.rs, placement_shared_test_support.rs}`・`input_events/balloon_pass_through_tests.rs`）は、どれもテスト同士を順番に並べる錠を持たない（`areka` の中に `Mutex<()>` の錠は 0。wintf には `TICK_WAKE_TEST_LOCK` がある）。`assets_tests.rs`・`assets_shell_tests.rs` は `CoInitializeEx(MULTITHREADED)` を自前で呼ぶ。
+  - wintf `--test graphics` の一度だけの AV（覚え書き）は、負荷の高いときに 60 秒止まった後に落ちた形で、完了 `wintf-gpu-test-crash` と同じ。こちらは「スレッド 4 本で再現する」ので別の入口のまま。
+- 触るファイル（見込み・原因しだい）: 上の GPU・COM を使うテストのファイルとその土台（`emo2_boot/ghost_switch_test_support.rs`・`mcp/dump_surface_gpu_test_support.rs`・`placement/placement_shared_test_support.rs`）。順番に並べる錠を足すなら新しい小さな共有ファイル 1 本。wintf の GPU 資源の作り方が原因なら `crates/wintf/src/ecs/graphics/` も。
+- 議題: なし（直し方は原因が分かってから決まる）。
+- 同時に走らせない: `ghost-session-test-load-flake`（同じ実行ファイル・負荷を互いに汚す）。

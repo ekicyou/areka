@@ -84,3 +84,19 @@
   - `doc/ukadoc-coverage/ledger/sakura-script.toml`
 - 議題（答えで作業が変わるものだけ）: `SetROP2` の描画方法（`cursormethod`）を Direct2D でどこまで再現するか（D2D に ROP2 は無い。`copypen` 以外を合成モードへ写すか、既定へ縮退して記録するか）。`anchor-tag-canon` の装飾の側と同じ答えにする。
 - 見つけた穴: なし。
+
+
+---
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: S（5〜8 タスク）のまま。切らない。
+- 前提の状態: 機能の前提（`text-decoration-canon` の下線の基盤・`choice-render`）は着地済み。列の上の待ちは `text-align-shadow-canon`（同じ `look.rs`・`viewbox_draw_render.rs`）だけで、機能の依存ではない。
+- 崩れた前提／古くなった位置:
+  - C3 で `choice.rs`・`state_decoration.rs`・`viewbox_draw_render.rs`・`viewbox_draw_decoration.rs` は無変更、`look.rs` は注記 1 行（「M2 予約」→「予約」）だけ。棚卸㉑の位置はそのまま当たる: 下線系→塗りへの縮退は `choice.rs` の `ResolvedChoiceStyle::resolve` の `style_has_underline` の腕（警告「cursor.style underline 系は M1 未対応: SquareFill へ縮退」）、同じ関数の中のすぐ上に `cursor.blendmethod` の ROP 系の縮退の警告（「none 扱い（色ベース描画）へ縮退」）もある（`cursormethod` の議題と同じ扱いになる）。所有外の判定は `look.rs` の `is_unowned`（`starts_with("cursor")`）。
+  - 台本の側は `areka-parsers/src/sakura/decode.rs` の `"f"` の腕が引数をそのまま運ぶ（`Instruction::Font { args }`）＝`decode.rs` は触らずに済む見込みが強まった。
+  - 元の名で書いていた「`anchor-tag-canon` の装飾の側」は、10-04 に `anchor-style-canon` へ切り出された。議題の「同じ答えにする」相手は `anchor-style-canon`。
+- 触るファイル（並走の照合用）: `crates/areka-emo-text/src/{choice.rs, look.rs, state_decoration.rs, viewbox_draw_render.rs, viewbox_draw_decoration.rs}`・`doc/ukadoc-coverage/ledger/sakura-script.toml`
+- 並走の見立て: `budoux-reveal-reflow`（`actor_present.rs`・`state.rs`・`segment.rs`）とはファイルが重ならない。`balloon-font-file`（`viewbox_draw_render.rs`・`look.rs`）・`anchor-tag-canon`（`choice.rs`・`viewbox_draw_render.rs`）とは重なる。列の順（`text-align-shadow-canon` の後）は同じファイルを触るからで機能の依存ではないので、列を飛ばして前へ出すなら相手は `budoux-reveal-reflow` だけ。
+- 議題: `SetROP2` の描画方法（`cursormethod`・descript の `cursor.blendmethod` の縮退と合わせて）を D2D でどこまで再現するか。`anchor-style-canon` と同じ答えにする。
+- 見つけた穴: なし。

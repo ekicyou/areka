@@ -62,3 +62,7 @@ wintf の窓ならどれでも使える土台。
 - wintf は crates.io に公開している（`crates-io-publish`）＝公開の口は版の上げ方に気を配る。
 - wintf の中だけで閉じ、areka の型に依存しない。
 - 段: 優先（バルーン関係の土台）。規模の見込み M（8〜12）。
+
+### 同じウェーブ C4 の約束（2026-10-05 棚卸㉒・破るなら止めて報告）
+
+- 触るのは `crates/wintf/src/` だけ。`Cargo.toml`（根も wintf も）に触らない（`Win32_UI_Controls` は根で有効・`release-cycle` の版上げの条件）。areka の側の使い手は `balloon-link-hover`・`shell-tooltip`（後のウェーブ）。

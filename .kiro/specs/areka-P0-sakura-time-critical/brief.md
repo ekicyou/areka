@@ -82,3 +82,21 @@
 - 議題（答えで作業が変わるものだけ）: 区間で止める「マウス系など」の範囲（`OnMouseMove`・`OnMouseDoubleClick`・着地後の `OnMouseDrag*`・`OnFileDrop2` などの投げ込み・`OnSecondChange` を含めるか）。ukadoc の本文は「マウス系などのイベント通知」とだけ書く＝要件で決める（前回どおり）。
 - 見つけた穴: 区間の終わり方のうち「選択の確定」と「置き換え」は、どちらも新しいトークが始まる＝「再生中のトーク かつ 写しの旗」の式だと、UI の旗を下ろし忘れると新しいトークまで区間が続く。`nouserbreak` の旗を誰がいつ下ろしているかを着手のときに読み、同じ点で下ろす（`\t` は「再度書いても解除されない」・`\e` かスクリプトブレークまで）。並走の照合: `mouse-drag-events` とは `on_mouse` を分け合う（抑えを `route` の腕へ置けば文字の衝突は無い）。`balloon-lifecycle-events` とは kanade で同じ関数を触らない見込み。
 - 追記（棚卸㉑の分割の指示）: kanade の `schedule/steady.rs`（929 行）・`schedule/mod.rs`（937 行）は分割されていない。本 spec の変更を足して 1,000 行を超えるなら、先頭のタスクで分割する。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: S〜M（7〜10）のまま。切る: なし。
+- 前提の状態: `status-execution-states` は着地済み＝着手できる。kanade の列では `balloon-lifecycle-events`（C4 予定）の後ろ。
+- 崩れた前提／古くなった位置:
+  - `mouse-drag-events`（✅ 10-05）は `OnMouseDragStart`／`OnMouseDragEnd` を同じ `KanadeMsg::Mouse` の道で足した（`msg.rs` の `MouseEventKind::DragStart`／`DragEnd`・`steady.rs` の `on_mouse` の腕）＝抑えを `on_mouse` の先頭か `schedule/mod.rs` の `route` の `Input::Mouse` の腕に置けばドラッグの 2 語も止まる（前回の見込みどおり）。
+  - **同じ場所に先客の印がある**: `on_mouse` のドラッグの腕に `SEAM(Req7.3)`（正典はパッシブモードでドラッグの 2 語を抑える・抑えは「終了の握手の待ちの防御と同じ並び＝組み立ての前」に置く）と書かれた。`\t` の抑えと同じ置き場所＝抑えの判定を 1 つの関数にまとめ、パッシブモードが後から乗れる形にしておく。
+  - 前回の穴（旗を下ろし忘れると次のトークまで区間が続く）は雛形で解ける: `crates/areka/src/emo2_boot/user_break_cue.rs` の `NoUserBreakSignal` は `TalkStarted`（閉じ忘れを解く）と `TalkEnded`（下ろす）の二重の守りを持つ。同じ 4 値の形を写す。
+  - 行数: `steady.rs` 947・`schedule/mod.rs` 938（どちらも上限の近く）。抑えの判定は新しいファイル（例 `schedule/time_critical.rs`）に置き、`route` の腕か `on_mouse` から 1〜3 行で呼ぶ＝分割は要らない見込み。`status.rs` 538・`decode.rs` 400（`decode_bare` の `"+"` の腕が写しの先例のまま）・`consumer_ledger.rs` 859・`emo2_boot/mod.rs` 883。
+- 触るファイル:
+  - `crates/areka-parsers/src/sakura/decode.rs`（`decode_bare` に `"t"` の腕）
+  - `crates/areka-kanade/src/status.rs`（`ExecutionStateUpdate`・`ExternalStates`・導出表の `timecritical` の行）・`status_derive_tests.rs`
+  - `crates/areka-kanade/src/schedule/mod.rs`（`snapshot_with_choice`・`route` の `Input::Mouse` の腕）または `schedule/steady.rs`（`on_mouse`）＋新規 `schedule/time_critical.rs`
+  - 新規 `crates/areka/src/emo2_boot/time_critical_cue.rs`・`emo2_boot/{consumer_ledger.rs, mod.rs}`
+  - `doc/ukadoc-coverage/ledger/{sakura-script,shiori}.toml`（`_5ct:1` と `Status` の `timecritical`）
+- 議題（答えで作業が変わるものだけ）: 止める「マウス系など」の範囲（前回どおり。ドラッグの 2 語は同じ道なので既定で入る）。
+- 見つけた穴: なし。並走の照合: kanade の列の `balloon-lifecycle-events` と同時に走らせない。台本のコンパイルの列（`compile.rs`）には触れない。

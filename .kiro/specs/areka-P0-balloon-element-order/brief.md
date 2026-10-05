@@ -75,3 +75,20 @@
   1. 合成を分けて文字の層を挟むか、文字を合成へ描き込むか（brief のまま）。
   2. wintf の兄弟の重なり順を描画と当たり判定のどちらへ揃えるか（分ける案を採るなら必須。wintf を直すと `shell-balloon` の `[差し込み口, 箱…, 絵]` の当たり判定の前提も一緒に変わる）。
 - 見つけた穴: 無し（逆の重なり順は今は窓のハンドラの前段が吸収している）。
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（10〜14 タスク）。変わらず。切らない。
+- 前提の状態: `shell-balloon` は着地済み。roadmap の前提 `animated-image-playback` は働きの依存ではなく（合成の分け目は `plan.rs`、pattern の上乗せは今の仕組みのまま）、`plan.rs` と emo-compose を分け合うための順番待ち。もう 1 つ、emo-text の `actor_box.rs` を `balloon-font-file`（C4・文字とバルーンの列）と分け合う＝**2 つの列にまたがる**。両方の列が空いた席でしか着手できない。
+- 崩れた前提／古くなった位置:
+  - `shell-balloon-frame-align` が `actor_box.rs` を書き直した（約 95 行）が、挿す位置の `box_child_index`・挿す口の `TextSurface::attach_window_child`・当たりの `set_hit_cells` は今もある。棚卸㉑の位置はそのまま使える。wintf の当たり判定の順の `DepthFirstReversePostOrder` は `crates/wintf/src/ecs/common/tree_iter.rs`、描画の順は `visual_sync.rs` の `visual_hierarchy_sync_system`。
+  - `surface-element-nesting` が、子のサーフェスの中の `balloon` の element定義を警告して無視する `BoxIssue::InChildSurface`（`boxes.rs`）を足した。本 spec の並び順は一番上のサーフェスの element定義だけが相手（子の中の箱は今も無視のまま）。
+  - `mcp-dump-images` が「最後に表示した合成の 1 枚」を読む口（`areka-emo-present/src/presenter/snapshot.rs` の `last_shown`）を足した。合成を上下 2 枚以上に分ける案では、`dump_surface` が返す絵も重ね直す必要が出る＝触るファイルが増える。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-present/src/{mount.rs, presenter.rs, cache.rs, presenter/snapshot.rs}`（分ける案なら）・`crates/areka/src/mcp/dump_surface.rs`（同）
+  - `crates/areka-emo-compose/src/{plan.rs, boxes.rs}`
+  - `crates/areka-emo-text/src/{actor_box.rs, surface_window_child.rs}`
+  - 裁定によっては `crates/wintf/src/ecs/layout/hit_test/mod.rs` か `crates/wintf/src/ecs/graphics/systems/visual_sync.rs`
+- 議題（答えで作業が変わるものだけ）: 棚卸㉑の 2 つのまま（分けるか描き込むか／wintf の兄弟の重なり順をどちらへ揃えるか）。1 で分ける案を採ると `dump_surface` の重ね直しも範囲に入る。
+- 見つけた穴: 無し。

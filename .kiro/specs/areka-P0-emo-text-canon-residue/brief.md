@@ -101,3 +101,15 @@
 - 議題: なし。
 - 見つけた穴: なし。
 - 片付け: フォルダの削除は今も `doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` の表（本 spec の名前を持つ）の整合検査を赤くするので、`coverage-roadmap-refresh` が表から外すのと一緒に行う（棚卸⑳のまま）。
+
+
+---
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: XS（0 タスク）のまま。取り下げ予定・着手しない（据え置き）。
+- 前提の状態: 残件なし。片付けの担い手 `coverage-roadmap-refresh` は今も未着手（フォルダ `.kiro/specs/areka-P0-coverage-roadmap-refresh/` は在る）。
+- 崩れた前提／古くなった位置: なし。定数 `BALLOON_NAME_PLACEHOLDER` は `crates/` 全体で 0 件のまま。`doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` の表には `name = "areka-P0-emo-text-canon-residue"` の行が今も 1 つある＝フォルダを消すと整合検査が赤くなる事情は変わらない。
+- 触るファイル（並走の照合用）: なし。
+- 議題: なし。
+- 見つけた穴: なし。

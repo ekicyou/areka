@@ -74,3 +74,15 @@ AI が書いた台本は、存在しない surface 番号や綴りを誤った�
 - 議題（答えで作業が変わるものだけ）:
   - 印を台本に載せて再生側の各消費者まで運ぶか、kanade が「strict の talk の ID」を覚えて消費者の失敗の記録を talk の ID で拾うか（前者は `areka-talk`・dispatcher・sakura・seriko・emo を貫く／後者は消費者の記録に talk の ID が要る）。
 - 見つけた穴: なし。並走の注意＝`consumer_ledger.rs` を `mcp-reload`・`makoto-dll-host`・`property-query-channels` も触る。kanade は kanade の進行の列の最後尾（`mcp-kanade-tools` の後）。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模（タスク数）と切るかどうか: M〜L（12〜18）のまま。切らない（20 を超えたときの切り方は前回のまま）。
+- 前提の状態: **半分**。`mcp-log-history`（PR#235）は着地＝error 種別の履歴と記録の約束（`doc/ssp-mcp/log-convention.md`・target `areka::log::error`）がある。`mcp-kanade-tools`（`strict` を受けて下流へ渡す口）は未着手＝待ち。`mcp-kanade-tools` から `get_status` を切り出しても本 spec の待ちは変わらない（`sakurascript`／`raise_event` の側を待つ）。
+- 崩れた前提／古くなった位置:
+  - 履歴の層は `crates/areka/src/log_history.rs`（`last_id()` もここ）。`since_id` の約束はこの層の通し番号で書ける。
+  - `handler.rs` の `INSTRUCTIONS` の「not implemented yet」の 1 文を消すのは本 spec（roadmap の MCP の 3 段目の約束）。ただし `mcp-author-tools` が同じ `INSTRUCTIONS` に独自ツールの案内を足すので、2 本は `crates/areka-mcp/src/handler.rs` で重なる。今 `NG:not implemented yet` で答えるのは `get_status`・`sakurascript`・`raise_event`・`reload` の 4 本＝`mcp-reload` が本 spec より後に着地すると 1 文を消せない（順は `mcp-reload` → 本 spec を守る）。
+  - 未知のタグの受け手は前回の位置のまま（`634032f6..f26aa1c1` で `areka-parsers`・`areka-sakura`・`areka-seriko` の解釈の腕に差分なし。`areka-seriko` は `surface-element-nesting` が `parts`・`table`・`looper`・`actor` を変えた＝`\i` の不在の検出点は着手時に引き直す）。
+- 触るファイル（並走の照合用）: 前回の一覧に加えて `crates/areka-mcp/src/handler.rs`（`INSTRUCTIONS` の 1 文）と `server_protocol_tests.rs`（その文言を読む）。`crates/areka/src/log_history.rs` は読むだけ。
+- 議題: 前回の 1 つ（印を台本に載せて運ぶか、talk の ID で拾うか）。加えて、`script-security-level` が台本に出どころの印を載せるなら、strict の印も同じ入れ物に載せるか（載せるなら `script-security-level` の後に回す）。
+- 見つけた穴: なし。
