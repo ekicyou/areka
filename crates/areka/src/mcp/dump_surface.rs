@@ -217,7 +217,12 @@ pub(in crate::mcp) fn check_size(
 }
 
 /// 判断で返す失敗（窓・スコープ・surface ID・未表示）。記録は `debug!` だけ（要件 4.6）。
-pub(in crate::mcp) fn refuse(tool: &str, scope: Option<i64>, reason: &str) -> ToolOutcome {
+pub(in crate::mcp) fn refuse(
+    tool: &str,
+    scope: Option<i64>,
+    reason: judge::Refusal,
+) -> ToolOutcome {
+    let reason = reason.as_str();
     debug!(tool, scope = ?scope, reason, "[mcp] 撮れない");
     outcome::ng(reason)
 }
