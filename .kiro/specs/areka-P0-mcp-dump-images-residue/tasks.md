@@ -67,13 +67,13 @@
   - _Depends: 1.1, 3.2_
   - _Requirements: 1.1, 1.2, 1.3, 1.5_
 
-- [ ] 4. GPU を通るテストと全体で固定する
+- [x] 4. GPU を通るテストと全体で固定する
 - [x] 4.1 呼び出しを受けた時点の絵と、符号化のスレッドの記録を GPU で固定する
   - 台詞 1 行を出した時点の背景と文字から期待の絵を作り、読み出しを待つ種を受け取った後、文字の面が期待と違うようになるまで台詞を進めてから読み、仕事を走らせた絵が期待と一致することを固定する
   - `dump_balloon` の本物の仕事と、`dump_surface` の写しまで済んだ本物の仕事を、記録を数える中で符号化のスレッドの体に通し、ERROR 0 件と画像つきの成功を固定する
   - 3 本のテストが緑で、台詞を進める前後で文字の面が実際に変わったことをテストの中で確かめている
   - _Requirements: 1.3, 5.1, 7.1_
-- [ ] 4.2 全体の確かめ
+- [x] 4.2 全体の確かめ
   - `areka`・`areka-emo-text` のテストと clippy を回し、すべて緑・警告 0
   - 判断の文言が想定外の失敗の本文に使われていないこと、`mod.rs`・`log-capture-kit`・`areka-emo-text` の `lib.rs` に差分が無いことを、差分で確かめる
   - _Requirements: 2.2, 6.1, 6.2_
@@ -89,7 +89,7 @@
 ## Implementation Notes
 
 - 1.1: `surface.rs` は 994 行で上限 1,000 の手前。後のタスクはこのファイルに足さない。
-- 1.1: 今の道具（clippy 0.1.99・2026-09-28）では `cargo clippy -p areka-emo-text --all-targets -- -D warnings` が、このブランチで触っていないファイル（`choice.rs`・`viewbox*.rs`・`draw_line_store.rs`・各 `*_tests.rs` など）の約 36 件と `dola` の組み立てで赤になる。この spec の外の問題（完了の棚卸で起票）。タスクの判定は `--no-deps` で回し、触ったファイルの指摘だけを見る。
+- 1.1: 今の道具（clippy 0.1.99・2026-09-28）では `cargo clippy -p areka-emo-text --all-targets -- -D warnings` が、このブランチで触っていないファイル（`choice.rs`・`viewbox*.rs`・`draw_line_store.rs`・各 `*_tests.rs` など）の約 36 件と `dola` の組み立てで赤になる。この spec の外の問題で、`clippy-199-lints` として起票済み。タスクの判定は `--no-deps` で回し、触ったファイルの指摘だけを見る。
 - `areka` にライブラリの的は無い。テストは `cargo test -p areka -j 2 --bin areka`（`--lib` は通らない）。
 - 並走の負荷の下で `emo2_boot::spine::` の 3 本（seriko_loop・display・move_cue）が赤になることがある。単独で回すと緑（10-06・2.2）。
 - 2.3: `send_back` に仮の dead_code の許しを付け、2.4 で外した。
@@ -97,3 +97,4 @@
 - 2.5: `is_picture` は `dump_surface_tests.rs` に `pub(in crate::mcp)` で置いたが、`mod dump_surface_tests;` が非公開なので今は `dump_surface` の子からだけ使える。`dump_balloon_gpu_tests` から使うなら `dump_surface.rs` のその宣言を広げる（4.1）。
 - 3.1: GPU のテストの時計は 2 つ。台本の待ちと指令は注入する Tick の時刻（`answer_of` は止める）、字の現れは実時間（`FrameTime`）。4.1 で「台詞を進める」ときは Tick を進める口（`frames_until(step_ms>0, ..)`）を使う。
 - 3.3: 読み出しの口が読めた後にもう一度呼ばれた腕に、設計に無い文言 `the text read was already taken` を置いた（`Wait` は読めた後に口を呼ばないので届かない・黙らせないため）。面の大きさの検査は「積む前に面の大きさ」「読めた後にバイト数」に分かれ、装置の失敗と大きさの食い違いが同時に起きたときだけ答えの文言が前と入れ替わる（どちらも想定外の失敗の `NG:` と ERROR 1 件）。
+- 4.2（10-06）: `cargo test -p areka-emo-text` 緑・`cargo test -p areka --bin areka` 2687 件緑（無視 2）・fmt 緑。clippy（`-p areka -p areka-emo-text --bins --lib --tests --no-deps -D warnings`）は 127 件の指摘がすべて触っていないファイルにあり、この spec で変えたファイルへの指摘は 0 件。`mod.rs`・`log-capture-kit`・`areka-emo-text/src/lib.rs` は分岐点からの差分 0。判断の文言を `fail` へ渡す所は 0 件（`as_str` は `refuse` の中だけ）。
