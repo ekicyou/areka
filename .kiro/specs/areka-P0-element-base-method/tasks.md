@@ -44,7 +44,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.6, 4.2_
   - _Depends: 1.2_
 
-- [ ] 2.3 無改変のクローディアを DLL なしで読み、surface6・11・26 の大きさを固定する
+- [x] 2.3 無改変のクローディアを DLL なしで読み、surface6・11・26 の大きさを固定する
   - `shell_target_test_support.rs` に `sample-ghost-kit` の `claudia` のシェルのフォルダを返す受け口を足す（`emo2_shell_dir` と同じ `LazyLock<SampleRoot>` の形・`.nar` は `SampleRoot::acquire` が展開する）。同じファイルの受け口の自己確認（`every_sample_receptor_points_at_a_real_shell_folder`）の一覧にも `claudia` を足す
   - 2.1 のファイルに 1 本: `claudia` を既存の emo2 の檻と同じ受け口（実際の画像の復号）で `load_shell_target` に読ませ、surface6・11・26 の外形が 333×500、本 spec の警告が 0 件
   - 完了の姿: このテストが緑で、1.1 の判定を元の `overlay` だけに戻すと surface26 の外形が 100×56 になって赤になる

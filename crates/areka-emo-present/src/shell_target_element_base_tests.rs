@@ -16,19 +16,22 @@
 //! ⑴〜⑷ は fs に触れない。画像はメモリ上の復号器（[`MemoryDecoder`]）に実寸と色で登録し、
 //! シェルのフォルダは実在しないパスでよい（`shell_target_base_image_tests.rs` と同じ形）。
 //!
-//! 末尾の 3 本は入口 [`load_shell_target`] の警告（描けない行 1 行につき `warn!` 1 行・読み込み
+//! 続く 3 本は入口 [`load_shell_target`] の警告（描けない行 1 行につき `warn!` 1 行・読み込み
 //! 1 回につき 1 度）を見る。こちらは surfaces.txt を `TempPath` に置いて読ませる。
+//!
+//! 最後の 1 本は不具合の実物——無改変のクローディア（`claudia` 検体）を実際の画像の復号で読み、
+//! `base` を使う surface6・11・26 の外形を固定する（要件 4.3）。
 
 use super::*;
 
 use std::path::{Path, PathBuf};
 
-use areka_emo_atlas::MemoryDecoder;
+use areka_emo_atlas::{MemoryDecoder, WicDecoderArm};
 use areka_emo_compose::{BindSet, ComposeError, Composer, PatternState};
 use areka_parsers::shell::parse;
 use temp_path_kit::TempPath;
 
-use super::test_support::{CapturedEvent, capture_events};
+use super::test_support::{CapturedEvent, capture_events, claudia_shell_dir, with_com_initialized};
 
 /// 画像 1 枚の登録内容（ファイル名・実寸・全画素の色＝premultiplied BGRA 不透明）。
 type Image = (&'static str, (u32, u32), [u8; 4]);
@@ -391,4 +394,44 @@ fn undrawable_warning_repeats_once_per_load() {
     let twice = undrawn_count(&load_events(WITH_UNDRAWN, 2));
     assert_eq!(once, 1, "読み込み 1 回で 1 件");
     assert_eq!(twice, 2 * once, "読み込み 2 回でちょうど 2 倍");
+}
+
+// ── 無改変のクローディア（要件 4.3・2.6・3.2）────────────────────────────────────
+
+/// クローディアの surface6・11・26 の外形（土台の絵 `surface0.png`／`surface10.png` の実寸）。
+const CLAUDIA_EXTENT: (u32, u32) = (333, 500);
+
+/// 要件 4.3・2.6・3.2: 無改変の `claudia` を DLL なしで実際の画像の復号で読むと、
+/// `element0,base` の土台に顔の部品を重ねる surface6・11・26 の外形が 333×500 になり、
+/// 本 spec の警告は 0 件（`overlay`・`base` だけで書かれている）。
+///
+/// 較正: 読み手の判定を `overlay` だけに戻すと土台が値にならず、部品の大きさだけで描かれて
+/// surface26 は 100×56（surface11 は 71×42）になって赤になる。
+#[test]
+fn claudia_base_surfaces_are_full_size_without_warnings() {
+    with_com_initialized(|| {
+        let dec = WicDecoderArm::new().expect("COM 初期化下で WIC ファクトリが作れる");
+        let (target, events) = capture_events(|| {
+            load_shell_target(&claudia_shell_dir(), &dec).expect("claudia のシェルは読める")
+        });
+        // 3 面の外形を並べて比べる（赤のとき、どの面がどの大きさに縮んだかが一度に見える）。
+        let extents: Vec<(u32, (u32, u32))> = [6, 11, 26]
+            .into_iter()
+            .map(|id| {
+                let (w, h, _) =
+                    snapshot(&target, id).unwrap_or_else(|e| panic!("面 {id} は合成できる: {e}"));
+                (id, (w, h))
+            })
+            .collect();
+        assert_eq!(
+            extents,
+            vec![
+                (6, CLAUDIA_EXTENT),
+                (11, CLAUDIA_EXTENT),
+                (26, CLAUDIA_EXTENT)
+            ],
+            "`element0,base` の面の外形が土台の絵の実寸でない"
+        );
+        assert_eq!(undrawn_count(&events), 0, "claudia に描けない行は無い");
+    });
 }
