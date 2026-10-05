@@ -329,6 +329,12 @@ pub(crate) fn place(input: &PlaceInput) -> PointPx;
 
 /// 幅を越える行を、入る文字数ごとに改行で割る。fit は「この並びの先頭から何文字入るか」（1 以上）。
 pub(crate) fn force_break(text: &str, fit: &dyn Fn(&str) -> usize) -> String;
+
+/// 改行（LF だけ・CR LF・CR だけ）を、標準のツールチップが行を分ける CR LF に揃える（要件 3.3）。
+pub(crate) fn normalize_newlines(text: &str) -> String;
+
+/// 最大の幅（物理ピクセル）＝ min(320 を dpi で換算した幅, 作業領域の幅)（要件 3.4）。
+pub(crate) fn max_tip_width(dpi: u32, work_area: RectPx) -> i32;
 ```
 - Preconditions: 矩形は `left <= right`・`top <= bottom`。`fit` は 1 以上を返す。
 - Postconditions: `place` の結果は、ツールチップが作業領域より小さければ必ず作業領域の中に収まる。大きければ左上を作業領域の左上に合わせる。
@@ -402,7 +408,7 @@ impl TooltipRanges {
 - 状態は `Idle`・`Waiting`・`Active`・`Suppressed` の 4 つ（System Flows の図）。同時に追う範囲は 1 つだけ。
 - 時刻は引数の `Instant` だけを使う（自分では時計を読まない）。OS の設定も引数の関数で受け、`Waiting` に入るときだけ呼ぶ。
 - 待ち時間は「設定の値×2」。直前のツールチップが**消えた時刻**から 0.2 秒以内に `Waiting` に入るときは×1。
-- `Active` の間、足元を次の順で見る: ①ツールチップの矩形の中 → 続ける ②範囲の矩形の中 → 窓がそこでマウスを受けていれば続け、受けていなければ「窓が隠れた」で終わる ③ 2 つを包む凸の領域の中 → 続ける ④それ以外 → 「安全地帯から出た」で終わる。
+- `Active` の間、足元を次の順で見る: ①ツールチップの矩形の中 → 続ける ②範囲の矩形の中 → 窓がそこでマウスを受けていれば続ける。受けていなければ終わる。理由は、前回の判定からマウスの位置が変わっていれば「安全地帯から出た」（動かして、範囲の矩形の中の透過の穴や上に重なった別の窓へ移った）、変わっていなければ「窓が隠れた」（要件 2.9 の「動かないまま」）③ 2 つを包む凸の領域の中 → 続ける ④それ以外 → 「安全地帯から出た」で終わる。
 - `Active` の出す番は、始まったときの範囲の矩形（論理）と文字の有無を自分で持つ。途中の差し替えは次の出す番から効く。
 - 表示が OS の側で失敗しても状態は変えない（ツールチップの矩形が無いまま `Active` を続ける＝安全地帯は範囲だけ）。
 - 判定の分岐は `trace` の記録に残す（入った・数え始め・使った待ち時間・来た・来なかった理由・終わりの理由）。
@@ -435,7 +441,9 @@ pub(crate) struct Over {
 
 /// 今追っている範囲の様子（追っていなければ渡さない）。
 pub(crate) enum Tracked {
-    Present { range_px: RectPx, receives: bool }, // receives＝窓がマウスの位置でマウスを受けている
+    // receives＝その窓の配下に PointerState がある かつ マウスの位置が hit_test_in_window に当たる かつ 窓が見えている
+    // （足元の候補 Over と同じ 3 つの条件。上に別の wintf の窓が重なった所は、PointerState がそちらへ移るので偽になる）
+    Present { range_px: RectPx, receives: bool },
     RangeUnregistered,
     WindowDestroyed,
     WindowHidden,
@@ -461,7 +469,9 @@ pub(crate) enum Effect {
 }
 
 /// 消した理由（記録用。要件 6.2 の 8 通り）。
-pub(crate) enum HideReason { End(TooltipEndReason), Dismissed, EmptyText, Replaced }
+/// 要件 6.2 の「別のツールチップへの置き換え」は、この設計では起きない（出す番は同時に 1 つで、
+/// 次の出す番は前の終わりの後にしか来ない。文字の差し替えは「出した」の記録になる）ので、型に置かない。
+pub(crate) enum HideReason { End(TooltipEndReason), Dismissed, EmptyText }
 
 pub(crate) enum SupplyDecision { Show, HideEmpty, Stale }
 
@@ -502,7 +512,8 @@ impl TurnMachine {
 - 作り方: `tooltips_class32`・`WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP`・`WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT`。道具は 1 つだけ登録し、旗は `TTF_TRACK | TTF_ABSOLUTE | TTF_TRANSPARENT`。
 - 版 6: 作る間だけ、版 6 を指す実行時の切り替え（`CreateActCtxW` → `ActivateActCtx` → `LoadLibraryW("comctl32.dll")` → `CreateWindowExW` → `DeactivateActCtx`）を効かせる。切り替えの元は、システムの `shell32.dll` が持つマニフェストの資源（番号 124）を使う。切り替えに失敗したら `warn` を 1 回残し、切り替え無し（古い見た目）で作る。
 - 字体: 出す前に、マウスのある画面の DPI を `MonitorFromPoint`＋`GetDpiForMonitor` で取り、`SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS)` の `lfStatusFont` から字体を作って `WM_SETFONT` で渡す。DPI が前回と同じなら作り直さない。
-- 最大の幅: `min(320 を画面の DPI で換算した幅, 作業領域の幅)` を `TTM_SETMAXTIPWIDTH` で渡す。
+- 最大の幅: `geometry::max_tip_width` の値を `TTM_SETMAXTIPWIDTH` で渡す。改行の整えは `geometry::normalize_newlines`。計算は `geometry` に置き、このファイルは OS に渡すだけにする（窓なしでテストするため）。
+- 待ち時間の設定を読めなかったときの代わりの値（400 ミリ秒）は `turn.rs` の定数に置く。`warn` はプロセスで 1 回だけ出す（数え始めるたびに読むので、毎回出すと記録が埋まる）。
 - 出す手順: 字体 → 最大の幅 → 文字（改行は CR LF に整える）→ 大きさを問い合わせる（`TTM_GETBUBBLESIZE`）→ 幅が最大の幅を越えていたら `geometry::force_break`（入る文字数は `GetTextExtentExPointW` で測る）で割って入れ直す → `geometry::place` → `TTM_TRACKPOSITION` → `TTM_TRACKACTIVATE(TRUE)` → `SetWindowPos(HWND_TOPMOST, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE)` → 実際の矩形を `GetWindowRect` で読んで返す。
 - 消す: `TTM_TRACKACTIVATE(FALSE)`。
 - OS の読み取り: `read_hover_time`（`SPI_GETMOUSEHOVERTIME`。失敗は 400 ミリ秒＋`warn`）・`sample`（`GetCursorPos` と、左・右・中・拡張 2 つの `GetAsyncKeyState`）・`is_visible`（`IsWindowVisible`）。
@@ -538,7 +549,7 @@ impl TipWindow {
 - Invariants: 窓は 1 枚。入力先と手前の窓を変える呼び出しをしない。
 
 **Implementation Notes**
-- Integration: 実行時の切り替えの 4 関数と構造体 `ACTCTXW` は、`windows` クレートの機能が無効なので、このファイルに手書きで宣言する（`Cargo.toml` に触れないというウェーブ C4 の約束による）。宣言の所に、置き換えの条件を註釈で残す。
+- Integration: 実行時の切り替えの 4 関数と構造体 `ACTCTXW` は、`windows` クレートの機能が無効なので、このファイルに手書きで宣言する（`Cargo.toml` に触れないというウェーブ C4 の約束による）。宣言の所に、置き換えの条件を註釈で残す。手書きの `ACTCTXW` は、並びの誤りを見た目の試し（S1）だけに頼らないよう、大きさをコンパイル時に確かめる 1 行（64 ビットで 56 バイト）を添える。
 - Validation: このファイルの振る舞いは窓なしのテストでは確かめない。下の「最初の試し」の項目を `tooltip_demo` で確かめる。
 - Risks: 下の「最初の試し」の表のとおり。
 
@@ -554,8 +565,8 @@ impl TipWindow {
 **Responsibilities & Constraints**
 - 持ちもの: NonSend の資源 `TooltipSession`（`TurnMachine`・`Option<TipWindow>`・今の出す番の控え＝知らせの関数の写し・基準の位置・文字の出どころ）。
 - 回す段: `FrameFinalize`（レイアウトの後。その回に起きた絵や当たり判定の変化を、同じ回のうちに見るため）。排他の系（`&mut World`）として登録する。
-- **早戻り**: 範囲の部品が 1 つも無く、状態が `Idle` なら、OS を 1 回も呼ばずに戻る（要件 1.11）。
-- **集める**（`collect`・窓なしでテストできる）: `TooltipRanges` を持つ窓のうち、配下に `PointerState` を持つエンティティがある窓を足元の候補にする。マウスの画面の位置から `WindowPos` の `position` を引いて窓の中の位置にし、`hit_test_in_window` が `Some`・窓が見えている（`is_visible`）なら「マウスを受けている」。窓の `DPI` で論理の位置に直して `TooltipRanges::hit` で範囲を決める。追っている範囲については、窓のエンティティの有無・登録の有無・可視・範囲の画面の矩形（論理の矩形×DPI＋`position`。窓の全体なら `WindowPos` の `size`）から `Tracked` を作る。
+- **早戻り**: 範囲の部品が 1 つも無く、状態が `Idle` なら、OS を 1 回も呼ばずに戻る（要件 1.11）。戻る前に押下の印は倒す（範囲が無い間の古い押下を、後で登録した最初の判定が拾って、理由なく「入り直すまで出さない」にならないため）。
+- **集める**（`collect`・窓なしでテストできる）: `TooltipRanges` を持つ窓のうち、配下に `PointerState` を持つエンティティがある窓を足元の候補にする。マウスの画面の位置から `WindowPos` の `position` を引いて窓の中の位置にし、`hit_test_in_window` が `Some`・窓が見えている（`is_visible`）なら「マウスを受けている」（追っている範囲の `receives` も、`PointerState` を含むこの 3 つの条件で決める）。窓の `DPI` で論理の位置に直して `TooltipRanges::hit` で範囲を決める。追っている範囲については、窓のエンティティの有無・登録の有無・可視・範囲の画面の矩形（論理の矩形×DPI＋`position`。窓の全体なら `WindowPos` の `size`）から `Tracked` を作る。
 - **適用**: `Effect` を順に適用する。`ArmDeadline` → `tick_wake::arm_deadline`。`TurnStarted` で `stored` が真 → 預けた文字を `TipWindow::show`（失敗は `warn`・状態は続ける）→ `set_tip`。`Hide` → `TipWindow::hide`＋`debug`。知らせは溜めておき、資源を World に戻してから順に呼ぶ。
 - 知らせの関数は、出す番が来たときに窓の部品 `OnTooltip` から写しを取って控える。窓が壊れて終わるときも、その写しで終わりの知らせを呼べる。
 - 記録: 出した（`debug`・窓・印・出どころ・文字数）／消した（`debug`・窓・印・理由）／表示の失敗（`warn`）。本文は載せない。
@@ -582,6 +593,19 @@ pub(crate) fn decide(
 
 /// 「すること」を OS と利用側へ適用する（OS を呼ぶ）。
 pub(crate) fn apply(world: &mut World, effects: Vec<Effect>, now: Instant);
+
+/// 表示の出入口。本物は TipWindow の show／hide を呼ぶ。テストは記録するだけの閉包を渡す。
+pub(crate) struct Tip<'a> {
+    pub show: &'a mut dyn FnMut(&str, PointPx) -> Result<RectPx, TooltipOsError>,
+    pub hide: &'a mut dyn FnMut(),
+}
+
+/// apply と公開の関数（supply_text・dismiss・unregister）の中身。判断の分岐は全部ここに置く。
+/// 外側は、資源から TipWindow を取り出して本物の Tip を渡すだけの薄い包みにする。
+pub(crate) fn apply_with(world: &mut World, effects: Vec<Effect>, now: Instant, tip: &mut Tip<'_>);
+pub(crate) fn supply_text_with(world: &mut World, token: TooltipTurnToken, text: &str, now: Instant, tip: &mut Tip<'_>) -> TooltipSupply;
+pub(crate) fn dismiss_with(world: &mut World, token: TooltipTurnToken, now: Instant, tip: &mut Tip<'_>) -> bool;
+pub(crate) fn unregister_with(world: &mut World, id: TooltipRangeId, now: Instant, tip: &mut Tip<'_>) -> bool;
 ```
 
 ##### Event Contract
@@ -590,7 +614,8 @@ pub(crate) fn apply(world: &mut World, effects: Vec<Effect>, now: Instant);
 - Ordering / delivery: 1 つの出す番について「来た」1 回 →「終わり」1 回。別の出す番の「来た」は、前の「終わり」の後。部品 `OnTooltip` が無い窓では知らせは捨てる（預けた文字は出る）。
 
 **Implementation Notes**
-- Integration: `decide` と `apply` を分けるのはテストのため（`decide` までは OS を呼ばない）。差し替え用のトレイトは置かない。
+- Integration: `decide` と `apply` を分けるのはテストのため（`decide` までは OS を呼ばない）。`apply` と公開の関数にも判断の分岐（知らせを呼ぶ順・結果の出し分け・表示の失敗の後の継続・記録・基準の位置を動かさない・取り消しの同期の終わり）があるので、中身を `*_with` に置き、表示の出入口を関数の引数（`Tip`）で受ける。`decide` が OS の読み取りを引数で受けるのと同じ流儀で、差し替え用のトレイトは置かない。
+- 実装の注意: 名簿の検査（`tick_gate_tests.rs`）は行頭が `//` の行しか読み飛ばさない。新しいファイルでは、行末の註釈や文字列の中にも `tick_wake::mark` と書かない。
 - Risks: 画面更新の最中に届いた `WM_MOUSELEAVE` が捨てられると `PointerState` が残りうる。待ちの期限と見回りの判定で、実際のマウスの位置（`GetCursorPos`）と `hit_test_in_window` を照らすので、窓の外へ出た場合は拾える。別の窓が上に重なっただけの場合（位置は窓の中のまま）は拾えない（既存の追跡の限界。記録に残る）。
 
 #### mod（公開の口）
@@ -670,7 +695,7 @@ pub(crate) fn note_button_press();
 
 **Implementation Notes**
 - `install` は、NonSend の資源 `TooltipSession` を置き、`FrameFinalize` に `tooltip_frame` を足す。
-- `note_button_press` は、UI スレッドの `Cell<bool>` に「前回の判定の後に押された」を立てるだけ（World を借りない）。`dispatch_window_message` が 5 種のボタンの押下とダブルクリックのメッセージで呼ぶ。`tooltip_frame` が読んで倒す。押してすぐ離した（次の画面更新までに離した）場合を、`GetAsyncKeyState` の読み取りだけでは取りこぼすため。
+- `note_button_press` は、UI スレッドの `Cell<bool>` に「前回の判定の後に押された」を立てるだけ（World を借りない）。`dispatch_window_message` が 5 種のボタンの押下とダブルクリックのメッセージで呼ぶ。`tooltip_frame` が読んで倒す。押してすぐ離した（次の画面更新までに離した）場合を、`GetAsyncKeyState` の読み取りだけでは取りこぼすため。既存の `PointerState` の押下の旗（1 フレームだけ立つ）を読む案は採らない（`PointerState` が付いていない所の押下を落とすため）。
 - クレートの文書（要件 7.5）は `mod.rs` の冒頭に書く: 使い方の例（静的・動的）、待ち時間は OS の設定の 2 倍（出し直しは 1 倍）、安全地帯、消えるきっかけ、印の意味、終わった印へ渡したときの結果、説明を出し分けたい単位で範囲を登録すること、既知の限界。`README.md` には触れない。
 
 #### tooltip_demo（サンプル）
@@ -727,10 +752,10 @@ pub(crate) fn note_button_press();
 | 段 | 記録の名前 | いつ | 欄 |
 |---|---|---|---|
 | `debug` | `tooltip_shown` | 出した・置き換えた | 窓・印・出どころ（預けた／渡された）・`chars` |
-| `debug` | `tooltip_hidden` | 消した | 窓・印・理由（安全地帯から出た・ボタン・窓が隠れた・窓が壊された・登録の取り消し・利用側の求め・文字が空・置き換え） |
+| `debug` | `tooltip_hidden` | 消した | 窓・印・理由（安全地帯から出た・ボタン・窓が隠れた・窓が壊された・登録の取り消し・利用側の求め・文字が空。「置き換え」はこの設計では起きない） |
 | `debug` | `tooltip_supply_stale` | 終わった印で渡された | 印 |
 | `trace` | `tooltip_turn` | 判定の分岐 | 何が起きたか（入った・数え始め・来た・来なかった・終わり）・範囲・使った待ち時間・理由 |
-| `warn` | `tooltip_hover_time_unreadable` | 設定を読めなかった | 失敗の中身 |
+| `warn` | `tooltip_hover_time_unreadable` | 設定を読めなかった（1 回だけ） | 失敗の中身 |
 | `warn` | `tooltip_show_failed` | 表示の失敗 | 段・失敗の中身・印 |
 | `warn` | `tooltip_visual_style_unavailable` | 版 6 の切り替えの失敗（1 回だけ） | 失敗の中身 |
 
@@ -745,7 +770,7 @@ pub(crate) fn note_button_press();
   - 待ちの途中で出る・押す・隠れる・壊れる・取り消す → 何も出ない。入り直すと最初から数える（2.1・2.2・2.4・2.7）。
   - `Active` の間: 範囲の中で動く・ツールチップの上へ移る・通り道を通る → 終わらない（2.5）。安全地帯の外・押下・隠れた・壊れた・取り消し → `Hide`（出ていれば）と `TurnEnded` が 1 回、理由が合う（2.6・3.13）。
   - 押して終わった後、範囲の中に居続けても来ない。出て入り直すと別の印で来る（2.8・1.8・1.7）。
-  - 範囲の矩形の中で `receives` が偽になる → 「窓が隠れた」で終わる。ツールチップの矩形の中なら `receives` が偽でも続く（2.9）。
+  - 範囲の矩形の中で、位置が変わらないまま `receives` が偽になる → 「窓が隠れた」で終わる（2.9）。位置が変わって `receives` が偽になる（透過の穴・上に重なった窓へ動かした）→ 「安全地帯から出た」で終わる（2.6）。ツールチップの矩形の中なら `receives` が偽でも続く（2.5）。
   - 安全地帯から出て同じ回に別の範囲に入る → `TurnEnded` の後、その回のうちに `Waiting`（2.10）。
   - `Waiting`・`Active` の間、毎回 `ArmDeadline` が返る（預け直し）。
 - **turn_tests（要件 7.2 の印の照合）**: 続いている印 → `Show`／空 → `HideEmpty`（3.12）。終わった印 → `Stale`（5.2）。前の印を、後の出す番の間に渡す → `Stale`（5.3）。長い時間の後でも続いていれば `Show`（5.4）。預けた文字が出ている間に渡す → `Show`（5.5）。`dismiss` の後も出す番は続き、渡せばまた出る（5.6）。表示の失敗（`set_tip(None)`）の後も終わりの判定が続く（6.7）。
@@ -757,7 +782,16 @@ pub(crate) fn note_button_press();
 - 窓のエンティティ＋`WindowPos`＋`DPI`＋当たり判定のある子＋`PointerState` を置き、マウスの位置を渡すと、`Over` が論理の位置で作られ、期限の後に `TurnStarted` が出る。知らせの中身（窓・範囲・論理の位置・印・`has_text`）が合う（1.3）。DPI を 144 に変えても同じ論理の矩形に当たる（4.9）。
 - 当たり判定の無い所（透過で抜ける所）では、範囲の矩形の中でも `Over` にならない（1.10）。
 - `Active` の間に、窓のエンティティを消す → `WindowDestroyed`、当たり判定の子を消す → `WindowHidden`、`visible` が偽 → `WindowHidden`（2.4・2.9・4.8）。
-- 記録（`log-capture-kit`）: 終わった印で渡すと `tooltip_supply_stale` が `debug` に出る（6.3）。`trace` を開けると `tooltip_turn` に待ち時間と理由が載る（6.4）。どの記録にも本文が載らない（6.5）。
+- 記録（`log-capture-kit`）: 終わった印で渡すと `tooltip_supply_stale` が `debug` に出る（6.3）。`trace` を開けると `tooltip_turn` に待ち時間と理由が載る（6.4）。
+- 適用と公開の関数（`*_with` に、記録するだけの `Tip` を渡す）:
+  - 預けた文字の範囲で出す番が来ると、`show` が 1 回呼ばれてから「来た」の知らせが呼ばれる。知らせの中から `supply_text` を呼ぶと、同じ回のうちに `show` がもう 1 回呼ばれ、`Shown` が返る（4.3・5.1・5.5）。
+  - 結果の出し分け: 続いている印＋文字 → `Shown`／空の文字 → `hide` が呼ばれて `Cleared`／終わった印 → `show` は呼ばれず `StaleTurn`／`show` が失敗 → `Failed`（5.2・3.12・6.6）。
+  - `show` が失敗した後も、出す番は続き、安全地帯（範囲だけ）から出ると「終わり」の知らせが呼ばれる（6.7）。
+  - 同じ出す番で 2 回目に出すとき、`show` に渡る基準の位置が 1 回目と同じ（3.2）。
+  - `unregister_with` は、追っている範囲なら戻る前に `hide` と「終わり」の知らせを済ませる（4.7）。`dismiss_with` は `hide` を呼び、出す番は続く（5.6）。
+  - 記録: 出した・消したが `debug` に窓・印・出どころ・理由付きで出る（6.1・6.2）。渡した本文がどの記録にも載らず、文字数だけが載る（6.5）。
+  - 重なった別の窓へ動かした場合: 範囲の矩形の中のまま `PointerState` が別の窓へ移ると、`receives` が偽になり「安全地帯から出た」で終わる（1.10・2.6）。
+- `geometry_tests` に足す: `normalize_newlines`（LF・CR LF・CR が混ざっても CR LF に揃う）・`max_tip_width`（DPI 96 で 320、144 で 480、作業領域が狭ければ作業領域の幅）。`turn_tests` に足す: 設定を読めなかったときの代わりの値（400 ミリ秒）で 800 ミリ秒に来る（1.6）。範囲が無い間に立った押下の印が、登録の後の最初の判定に持ち越されない。
 - 既存の回帰: `ecs/world/mod.rs` の 13 本の順序のテスト・`tick_gate_tests.rs` の名簿の検査・`mouse_move.rs` と `pointer/dispatch` のテストが、変更なしで緑のまま（1.11・7.6）。
 
 ### 実機（tooltip_demo）
