@@ -1,8 +1,13 @@
 //! 画面を変えずに読む口 3 本（MCP の `dump_surface`／`dump_balloon` が使う・spec
 //! `areka-P0-mcp-dump-images`）——最後に表示した絵・生の surface ID の有無・単体の合成。
 //!
-//! 3 本とも `&self` で、合成メモ・表示の状態・World を変えず、`tracing` の記録を自分では出さない
-//! （失敗の判断と記録は呼び手のツールが持つ）。戻り値は既存の公開の型だけで、新しい公開の型は無い。
+//! 加えて、別名の表と生の surface ID の集合の写し 2 本（MCP の台本の検査 `check_script` が使う・
+//! spec `areka-P0-mcp-author-tools`）。
+//!
+//! どれも `&self` で、合成メモ・表示の状態・World を変えず、`tracing` の記録を自分では出さない
+//! （失敗の判断と記録は呼び手のツールが持つ）。戻り値は既存の公開の型と標準の型だけで、新しい公開の型は無い。
+
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
     BindSet, ComposeError, ComposedSurface, Composer, EmoPresenter, PatternState, TargetId,
@@ -20,6 +25,20 @@ impl EmoPresenter {
                 .surface(surface_id)
                 .is_some(),
         )
+    }
+
+    /// target の別名の表（`surface.alias`）の写し。未登録の target は `None`。記録を出さない。
+    ///
+    /// target の `EmoWorld::alias_snapshot` をそのまま返す（再生の `SurfaceResolver` と同じ材料・
+    /// spec `areka-P0-mcp-author-tools` の台本の検査が使う）。
+    pub fn alias_snapshot(&self, target: TargetId) -> Option<BTreeMap<String, Vec<u32>>> {
+        Some(self.targets.get(&target)?.emo_world.alias_snapshot())
+    }
+
+    /// target のシェルに在る生の surface ID の集合の写し（別名の表は見ない）。未登録の target は
+    /// `None`。記録を出さない。[`Self::has_surface`] が真を返す ID の全部と一致する。
+    pub fn surface_ids(&self, target: TargetId) -> Option<BTreeSet<u32>> {
+        Some(self.targets.get(&target)?.emo_world.surface_ids().collect())
     }
 
     /// 最後に表示が成立した surface ID と、その合成済みの絵（原寸・乗算済み BGRA）。

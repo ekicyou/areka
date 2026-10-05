@@ -1,5 +1,6 @@
-//! 読むだけの口 3 本（`has_surface`／`last_shown`／`compose_alone`）の決定論テスト（GPU なし・spec
-//! `areka-P0-mcp-dump-images` タスク 2.2）。
+//! 読むだけの口 3 本（`has_surface`／`last_shown`／`compose_alone`・spec `areka-P0-mcp-dump-images`
+//! タスク 2.2）と写しの口 2 本（`alias_snapshot`／`surface_ids`・spec `areka-P0-mcp-author-tools`
+//! タスク 2.2）の決定論テスト（GPU なし）。
 //!
 //! # GPU なしで「表示」を成立させる方法
 //!
@@ -434,4 +435,59 @@ fn reads_emit_no_records() {
         loud.is_empty(),
         "compose_alone が ERROR／WARN を出した: {loud:?}"
     );
+}
+
+/// ⑺ 別名の表と面の ID の集合の写し（spec `areka-P0-mcp-author-tools` タスク 2.2）は、組んだ資産
+/// どおりに返り、未登録は無し。写しを取っても表示の状態が変わらず、記録も出さない。
+#[test]
+fn alias_snapshot_and_surface_ids_copy_the_built_assets() {
+    let (mut presenter, mut world) = setup();
+    show(
+        &mut presenter,
+        &mut world,
+        SHOWN,
+        BASE,
+        bound(),
+        PatternState::default(),
+    );
+
+    let state = |p: &EmoPresenter| {
+        let (id, picture) = p.last_shown(SHOWN).expect("表示の後");
+        (
+            p.current_surface_id(SHOWN),
+            p.target_visible(SHOWN),
+            id,
+            picture.map(bytes_of),
+        )
+    };
+    let before = state(&presenter);
+    assert_eq!(before.0, Some(BASE), "前提: 表示している");
+
+    let (copies, records) = capture(|| {
+        (
+            presenter.alias_snapshot(SHOWN),
+            presenter.surface_ids(SHOWN),
+            presenter.alias_snapshot(UNREGISTERED),
+            presenter.surface_ids(UNREGISTERED),
+        )
+    });
+    let (aliases, ids, no_aliases, no_ids) = copies;
+
+    assert_eq!(
+        aliases,
+        Some(std::collections::BTreeMap::from([(
+            ALIAS_ONLY.to_string(),
+            vec![BASE]
+        )])),
+        "別名の表は組んだ資産どおり"
+    );
+    assert_eq!(
+        ids,
+        Some(std::collections::BTreeSet::from([BASE, PART])),
+        "面の ID の集合は生の ID だけ（別名の表にだけ在る番号は入らない）"
+    );
+    assert_eq!(no_aliases, None);
+    assert_eq!(no_ids, None);
+    assert!(records.is_empty(), "写しが記録を出した: {records:?}");
+    assert_eq!(state(&presenter), before, "写しで表示の状態が変わった");
 }
