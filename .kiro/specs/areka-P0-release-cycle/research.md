@@ -164,3 +164,124 @@
 
 - 要件ディスカッションで 8 節の議題（とくに 2・3・4・6）を開発者と詰める。要件が変わるのは 4・6（記録の受け渡しと文書の直しの範囲）になりうる。
 - その後 `/kiro-design areka-P0-release-cycle` で設計へ進む。
+
+---
+
+# 設計の段の調べと決め（2026-10-05・`/kiro-spec-design`）
+
+## Summary
+
+- **Feature**: `areka-P0-release-cycle`
+- **Discovery Scope**: Extension（軽い調べ。既に在る道具と workflow をつなぐ手順の設計で、新しい依存は 0 個）
+- **Key Findings**:
+  - 承認で止まれるのは `/kiro-impl` の主文脈だけ。タスクごとのサブエージェントは開発者に聞けないので、この spec では主文脈が自分でタスクを行う形に読み替える。
+  - `tasks.md` の `[x]` をコミットしなければ、版上げの PR に `tasks.md` が混ざらず、main の `tasks.md` はいつも未完了のままになる。「戻す」作業そのものが要らなくなる。
+  - `release.yml` は Release を `gh release create` で直接公開する（下書きを経ない）。下書きは gh が止められたときにだけ残る。申し送りの 6 項目のうち 3 つ（後始末の消す経路・下書きの見え方・Re-run）は、赤か取り消しが起きた回にしか見られない。
+
+## Research Log
+
+### `/kiro-impl` の自走の形と承認の点
+
+- **Context**: ギャップ分析 4.1 節・8 節の 2。
+- **Sources Consulted**: `.claude/skills/kiro-impl/SKILL.md` の「Autonomous Mode」「e) Commit」「Step 4: Final Validation」「Feature Flag Protocol」。
+- **Findings**:
+  - 文脈の読み込みで `design.md` と `tasks.md` の両方を読む。読み替えを両方に書けば、スキルの文書を直さずに伝わる。
+  - 機能の旗の手順は、スキル自身が「設定・文書・振る舞いの変わらないタスクでは飛ばす」と書いている。
+  - タスクごとのコミットは「変えたファイルと `tasks.md`」を足す決まり。この spec ではここを読み替える。
+- **Implications**: 設計の「`/kiro-impl` の読み替え」の表。`tasks.md` の冒頭に、その表を指す短い節を置く。
+
+### `release.yml` の公開と後始末の形
+
+- **Context**: 初回の 6 項目を、どの事実で見るかを決めるため。
+- **Sources Consulted**: `.github/workflows/release.yml` の段の名前（「版の検査」「既存の Release の検査」「Release を公開」「後始末」）と、`PUBLISH` の行・`concurrency` の行・後始末の段の `if` の行。
+- **Findings**:
+  - 公開は `gh release create $tag @files @opts` の 1 回。下書きを作ってから公開に変える形ではない。
+  - 後始末の段は「失敗か取り消し」かつ「タグの push」かつ「始めに Release が無かった」ときだけ動く。手で起動した乾いた走りでは動かない。
+  - `concurrency` の組は ref ごと。タグから手で起動する乾いた走りは、タグの push の走りと同じ組になる（先の走りが終わるまで待たされるだけで、取り消されない）。
+- **Implications**: タグからの乾いた走り（申し送りの 5 の後半）は、Release の走りと公開の走りが両方終わった後に始める。乾いた走りが Release を消すことは無い。
+
+### タグの種類と push の出力
+
+- **Context**: ギャップ分析 3.4 節・7 節の 3。
+- **Sources Consulted**: `git cat-file -t v0.0.1`（`commit`＝注釈なしのタグ）・`git tag -l`（`pre-rebase-5-1`・`pre-rebase-5-1b`・`v0.0.1`）・`git remote`（名前だけ）。
+- **Findings**: 既に在る `v0.0.1` は注釈なしのタグ。手元の 3 本のうち 2 本はリモートに出したくないタグ。
+- **Implications**: 注釈なしのタグで揃える。push は `refs/tags/v{版}` を名指しする 1 本だけ。`git` の通信のコマンドは `--quiet` を付けて標準エラーを捨て、成否は終了コードと読み直しで決める（出力に接続先が載るかどうかを当てにしない）。実物の確かめは初回の実走で行う。
+
+### roadmap の「完了サマリ」の今の形
+
+- **Context**: 「リリース」の置き場。
+- **Sources Consulted**: `.kiro/steering/roadmap.md` の「## 完了サマリ」（ウェーブの表と、その後の箇条書き 3 つ）。
+- **Findings**: 表の後の箇条書きには「完了 spec 直下エントリ＝……」のように、spec の完了のたびに書き換わる行が在る。
+- **Implications**: 「リリース」は箇条書きの後・次の「## 」の前に置き、行は表の末尾に足す。相乗りの頼みには記録の 1 行の文字も添え、取り込みで衝突したら手で足せるようにする。
+
+## Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| 主文脈が自分で回す | `/kiro-impl` の読み替えを本 spec の中に置く | 承認で止まれる・文書を足さない | 読み替えを読み落とすと、いつもの自走の形で回ってしまう | 採る。`tasks.md` の冒頭にも書く |
+| サブエージェントに回させ、承認の点で親が止まる | タスクに「承認待ち」の印を付ける | `/kiro-impl` の形に近い | サブエージェントに渡す文脈が増えるだけで、得る物が無い（レビューする差分が 4 ファイル） | 採らない |
+| 専用のスキルを足す | `/kiro-release` のような新しいスキル | 読み替えが要らない | 要件 1.1 はコマンドを `/kiro-impl` と決めている。分け合う文書が増える | 採らない |
+
+## Design Decisions
+
+### Decision: `tasks.md` の `[x]` をコミットしない
+
+- **Context**: 要件 1.3・4.2・7.4。
+- **Alternatives Considered**:
+  1. タスクごとに `[x]` をコミットし、最後に戻して次の PR に相乗り
+  2. `[x]` を作業木にだけ付け、コミットしない
+  3. `tasks.md` に印を付けず、進み具合を別のファイルに書く
+- **Selected Approach**: 2。
+- **Rationale**: 1 は 2 回目以降の版上げの PR に `tasks.md` が混ざる（要件 4.2 に反する）。3 は再開のときに「どこまで進んだか」を読む相手が増える。2 なら main の `tasks.md` に `[x]` が入る経路が 0 本になる。
+- **Trade-offs**: 作業木を作り直すと印が消える。そのときは PR・タグ・Release の在否から続きを決める（設計の「再開のときの事実の読み方」）。
+- **Follow-up**: 初回の実走で、作業木に `tasks.md` の変更が在るままで `tools/package.ps1 -Check`（始めと終わりの `git status` が同じかを見る）が通ることを確かめる。
+
+### Decision: 記録は作業の枝のコミットと、相乗りの頼みの 1 文で渡す
+
+- **Context**: 要件 7.3・7.4・1.8。ギャップ分析 4.4 節。
+- **Alternatives Considered**:
+  1. 次の PR を出す側のスキルが、Release の一覧から事実を読んで書く
+  2. 作業の枝に記録のコミットを置いて push し、開発者へ頼みの 1 文を渡す
+  3. 記憶のファイルに残す
+- **Selected Approach**: 2。
+- **Rationale**: 1 は `/kiro-complete` か `/kiro-discovery` の文書を直すことになり、要件 1.8 に反する。winget の PR と起票した spec の名前は Release の一覧から読めない。3 は main に入る保証が無い。
+- **Trade-offs**: 開発者が次のセッションへ 1 文を渡す手間が残る。忘れに備えて、次の回の段 1 が「前の回の行が main に在るか」を読んで知らせる。
+- **Follow-up**: roadmap の取り込みで衝突が多いようなら、置き場を見直す。
+
+### Decision: 初回の乾いた走りは段 1 で始め、承認 A の前に緑を見る
+
+- **Context**: 要件 8.4（タグを打つ前・main で）。
+- **Alternatives Considered**:
+  1. 版上げの PR をマージした後、タグの直前に回す
+  2. 段 1 で始め、マージの承認の前に緑を見る
+- **Selected Approach**: 2。
+- **Rationale**: 1 で赤が分かると、main の版だけが上がってタグを打てない版が残る。2 なら何も出ていないうちに止まれる。「main で」「タグを打つ前」の両方を満たす。
+- **Trade-offs**: 乾いた走りが見る main は版上げの前の物（版上げの 4 ファイルの差は入っていない）。版上げの中身は手元の全体テスト・起動の確かめ・公開前の確かめが見る。
+
+### Decision: 起票の書き込みは、この手順の「書き換える物」に数えない
+
+- **Context**: 要件 1.6 は書き換えてよい物を限り、要件 6.5・6.7・8.6 は `/kiro-discovery` での起票を求める。起票は brief と roadmap の行を書く。
+- **Selected Approach**: 起票の書き込みは `/kiro-discovery` の成果物として別のコミットに置き、記録のコミットと一緒に相乗りで渡す。要件 1.6 は「リリースの手順そのものが書き換える物」の決まりとして読む。
+- **Rationale**: そう読まないと 1.6 と 6.5 が両立しない。起票が要るのは赤の回だけ。
+- **Follow-up**: 設計ディスカッションで、この読みでよいかを開発者に確かめる。
+
+### 統合（`design-synthesis` の 3 つの見方）
+
+- **まとめられる物**: 「範囲の外の変更で止まる」（3.5）・「2 行の版が合わなければ止まる」（3.6）・「道具が 2 行とも動かしたか」（8.3）は、同じ 1 つの差分の読み（段 3 の c）で済む。別々の確かめにしない。
+- **作るか・在る物を使うか**: 全部、在る物を使う。足すスクリプトは 0 本。差分の範囲の判定のスクリプト（ギャップ分析の案 C）は、見る相手が 4 ファイル・行の形が 2 種類で、承認 A で開発者も同じ差分を見るので作らない。
+- **削った物**: 進み具合を書く別のファイル・記録だけの PR・`tasks.md` を戻すコミット・`/kiro-validate-impl`・レビュー役のサブエージェント。
+
+## Risks & Mitigations
+
+- 読み替えを読み落として、いつもの自走の形で回る — `tasks.md` の冒頭に「走らせ方」を置き、最初のタスクを「読み替えを読む」にする（タスクの段で決める）。
+- `cargo about` の作り直しが版の行の外を動かす — 段 3 の c で止まる。開発者に示し、謝辞だけを先に別の PR で揃えるかを決めてもらう。
+- 相乗りを忘れる — 次の回の段 1 が知らせる。
+- 開いた PR の `files` が 100 件で切れる — 100 件ちょうどの PR は `gh pr diff --name-only` で読み直す。
+- マージの後にタグを打てない — 待つ。再開しても、タグを打つ相手は同じ squash のコミット。
+
+## References
+
+- `.claude/skills/kiro-impl/SKILL.md` — 自走の形と、読み替える段。
+- `doc/crates-io-publish.md` — 2 節（Trusted Publishing）・4 節（出たことを確かめる）・5 節（やり直し）・7 節（してはいけない操作）。
+- `.kiro/specs/completed/areka-P0-release-ci-workflow/verification/runner-trial.md` — 「release-cycle への申し送り」の 6 項目。
+- `.kiro/steering/workflow.md` — 「`Cargo.lock` の扱い」（`cargo update -w`）。
