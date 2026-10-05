@@ -35,7 +35,7 @@
 - 台本を読む段の「位置と印つきの入口」（`areka_parsers::sakura::parse_noted`）。既存の `parse` はこの入口の上に載せ替える（結果は今と同じ）。
 - 「`\!` を再生の経路の誰が拾うか」の表を、検査が引ける形に仕上げること（`ConsumerLedger::canonical` に足りない 2 行を足し、受け口の選別と表の一致をテストで固定する）。
 - サーバーの指示文と登録案内（help）への、独自のツールの案内。
-- 検査が再生と同じ関数を呼ぶための、公開の範囲の 2 つの広げ（`areka-sakura` の `parse_choice_timeout`、`areka-emo-present` の `EmoPresenter::alias_snapshot`）。どちらも中身は変えない。
+- 検査が再生と同じ関数を呼ぶための、公開の範囲の 3 つの広げ（`areka-sakura` の `parse_choice_timeout`、`areka-emo-present` の `EmoPresenter::alias_snapshot`、`areka-emo-text` の「`apply_font_tag` の `Err` が、知らないキーかキーなしか」を答える小さな口。理由の定数 `REASON_UNKNOWN_KEY` などは今 `pub(crate)`）。どれも中身は変えない。
 
 ### Out of Boundary
 
@@ -43,7 +43,7 @@
 - 橋（`bridge::call`）の作り。時間切れ・終了の途中・記録はそのまま使う。
 - 再生の経路の振る舞い（`decode` が返す `Instruction`・`compile` が作る cue・各受け口の選別）。本 spec は読むだけで、受け口のファイルは変えない。
 - 網羅台帳（`doc/ukadoc-coverage/`）。読まず、書き換えず、バイナリにも入れない。
-- `\f` の値の誤り・未知の `\f` のキー・`%` の変数の未対応名の診断（文書に「診ていないもの」として載せる）。
+- `\f` の値の誤り・`%` の変数の未対応名の診断（文書に「診ていないもの」として載せる）。
 
 ### Allowed Dependencies
 
@@ -558,6 +558,7 @@ pub fn render(diagnostics: &[Diagnostic], unchecked: Option<&str>) -> ToolOutcom
 | 11 | `unreadable_argument` | `set,choicetimeout` の読めない時間 | `parse_choice_timeout` の `Unreadable` | `\![set,choicetimeout,abc]` | `\![set,choicetimeout,5000]` |
 | 12 | `ignored` | 選択肢マーカー | `parse_noted` の `MarkerIgnored` | `\![*]` | `\q[題,ID]` |
 | 13 | `ignored` | 受け取るが表示を変えない `\f` のキー | `apply_font_tag` が返す `Note`（`VocabularyOnly`・`Unowned`・`StylesheetKeyword`） | `\f[sub,1]`・`\f[align,center]`・`\f[height,large]` | `\f[bold,1]` |
+| 14 | `unknown_tag` | 知らない `\f` のキー・キーの無い `\f`（設計ディスカッションの裁定。値の誤りは診ない） | `apply_font_tag` が返す `Err` の理由（知らないキー・キーなし） | `\f[colour,red]`・`\f[]` | `\f[color,red]`・`\f[bold,abc]` |
 
 名前だけ予約する種類（今は出さない。文書にだけ書く）: `missing_animation`（`\i` に対応した後）・`unknown_entity`（`\&` に対応した後）。今はどちらも 2 行目の `unknown_tag` で返る。
 
@@ -662,7 +663,7 @@ pub(in crate::mcp) fn diagnose(
 | 印 `MarkerIgnored` | `ignored`。単独のマーカー（`GenericCommand` の名前 `*`）は、下の `\!` の規則を通さない |
 | `GenericCommand`・`Move` | `ledger.consumer_of(名前, 第 1 引数)` が `None` → `unknown_command`。`Move` の名前は `move` |
 | `GenericCommand` の `set,choicetimeout` | `parse_choice_timeout` が `Unreadable` → `unreadable_argument` |
-| `Font` | `apply_font_tag` を使い捨ての見た目に適用し、`Ok(Some(VocabularyOnly｜Unowned｜StylesheetKeyword))` → `ignored`。`Err` と他の `Ok` は診断しない |
+| `Font` | `apply_font_tag` を使い捨ての見た目に適用し、`Ok(Some(VocabularyOnly｜Unowned｜StylesheetKeyword))` → `ignored`。`Err` のうち「知らないキー」「キーが無い」→ `unknown_tag`。値の誤りの `Err` と他の `Ok` は診断しない |
 | `Surface` | `resolve_surface` が `Unresolved` → `missing_surface`。`Show(id)` で `shell_has(scope, id)` が `Some(false)` → `missing_surface`。`Hide`・`None` は診断しない |
 | `BalloonSurface` | `resolve_balloon_key` が `Invalid` → `missing_balloon`。`Show(id)` で `balloon_has(scope, id)` が `Some(false)` → `missing_balloon`。`Hide`・`NameForm`・`None` は診断しない |
 | それ以外（文字・待ち・改行・`%` の変数など） | 診断しない |
@@ -679,12 +680,12 @@ pub(in crate::mcp) fn diagnose(
 **Implementation Notes**
 
 - Integration: 位置は、`Read::span`（バイト）を台本の先頭からの文字の数へ直して `Diagnostic` に入れる。診断は台本の順に出るので、換算は前から 1 回だけ数える（診断ごとに先頭から数え直さない）。`text` は `&script[span]`。
-- Validation: `check_script_judge_tests.rs` が、種類の表の 13 行すべてに「出る台本」「出ない台本」を置く。事実は手書きの表で答える。
+- Validation: `check_script_judge_tests.rs` が、種類の表の 14 行すべてに「出る台本」「出ない台本」を置く。事実は手書きの表で答える。
 - Risks: 1 つの命令に印が 2 つ付く場合（`\![*]\q[題]`）は診断が 2 件出て、位置は同じ範囲になる。
 
 ### 文書
 
-- `doc/ssp-mcp/areka-tools.md`（新規・正本）: ⑴ 独自のツールとは（SSP に無い・接頭辞なし・一覧では 10 本の後）、⑵ `check_script` の引数と結果の形、⑶ 診断の種類の表と文面・予約した種類、⑷ 診ていないもの（受け口が読む引数: `\![move]`・`\![set,zorder]`・`\![bind]`・`\![change,…]`・`\![open,readme]`・`\![execute,install]`・更新の 3 つ・`\_l`、`\f` の値の誤りと未知のキー、`%` の変数の未対応名、字面で決まらないもの）、⑸ SSP との違い、⑹ 後続がツールを足す手順（File Structure Plan の表）。
+- `doc/ssp-mcp/areka-tools.md`（新規・正本）: ⑴ 独自のツールとは（SSP に無い・接頭辞なし・一覧では 10 本の後）、⑵ `check_script` の引数と結果の形、⑶ 診断の種類の表と文面・予約した種類、⑷ 診ていないもの（受け口が読む引数: `\![move]`・`\![set,zorder]`・`\![bind]`・`\![change,…]`・`\![open,readme]`・`\![execute,install]`・更新の 3 つ・`\_l`、`\f` の値の誤り、`%` の変数の未対応名、字面で決まらないもの）、⑸ SSP との違い、⑹ 後続がツールを足す手順（File Structure Plan の表）。
 - `.kiro/steering/roadmap.md`: 干渉の記述と「MCP の 3 段目の約束」を File Structure Plan の中身で書き直す。「`check_script` が診ない引数の誤り」の覚え書きに、上の文書の ⑷ への参照を足す。書くのは実装のタスク（他のブランチと同じ行を直しやすいので、着地の直前に書く）。
 - 本 spec の完了のときに、`.kiro/specs/areka-P0-mcp-strict-errors/brief.md` へ申し送りを書く: 種類の名前と文面は `areka-tools.md` に揃える／再生中の判定は `parse_noted` の印と `ConsumerLedger::consumer_of` を引けば検査と同じ答えになる。
 
@@ -715,7 +716,7 @@ pub(in crate::mcp) fn diagnose(
 ### Unit Tests
 
 1. **`parse_noted`**（`parse_noted_tests.rs`）: 印の表の 4 行それぞれの「付く台本」「付かない台本」／`span` が該当の綴りを指す（日本語を含む台本で文字の境界に在る）／畳んだ命令の `span`／`parse` と命令の列が等しい／`Raw` と印の同値。— 3.2, 3.4, 3.10, 3.11
-2. **判断**（`check_script_judge_tests.rs`）: 種類の表の 13 行すべての「出る台本」「出ない台本」／位置が文字の数で返る／切替の後の `\s`・`\b` を診ない／事実なし（窓なし）で surface とバルーンを診ない／スコープを追う（`\1\s[…]` が相方の側の絵で判定される）。— 3.2〜3.4, 3.8, 3.10, 3.12, 3.13
+2. **判断**（`check_script_judge_tests.rs`）: 種類の表の 14 行すべての「出る台本」「出ない台本」／位置が文字の数で返る／切替の後の `\s`・`\b` を診ない／事実なし（窓なし）で surface とバルーンを診ない／スコープを追う（`\1\s[…]` が相方の側の絵で判定される）。— 3.2〜3.4, 3.8, 3.10, 3.12, 3.13
 3. **`render`**（`areka-mcp` の `check_script_tests.rs`）: 0 件は 1 行だけ／n 件は 1 行目の数と n 行の JSON／綴りに改行・引用符・日本語が在っても 1 件が 1 行に収まる／注記つきの 1 行目／どれも `isError: false`。— 3.5, 3.6, 3.7, 3.9
 4. **登録**（`tools_own_tests.rs`）: `all_entrances` が 11 本・先頭 10 本が `entrances` と同じ・名前の重複 0・`OWN_TABLE` の各行が登録表に在る／`entrances` は 10 本のまま。— 1.1, 1.3, 1.4, 4.3
 5. **`\!` の表の一致**（`consumer_ledger_agreement_tests.rs`）: 上の「一致のテスト」。— 3.11
