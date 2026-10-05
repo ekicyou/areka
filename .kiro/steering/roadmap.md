@@ -136,6 +136,10 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 |---|---|---|---|---|---|---|
 | `ghost-session-test-load-flake`（**10-04 起票**・`mcp-log-history` の完了時に発見） | バグ | 機械が重いと `ghost_session_*`・`shell_balloon_switch_session_*` のテストが毎回違う組で 5〜10 件赤（単独・静かな時は緑・`host32-testdll-marker-race` の完了時の全体テストでも `fallback_tests` 2 本が赤＝覚え書き）。まず負荷付きで再現し、壁時計の締切の待ちを観測の待ちへ置き換える（sleep で直さない）。再現しなければ記録して据え置きへ | S（3〜6） | C4 以降のバグの席 | なし | − |
 | `extent-element-offset`（**10-05 起票**・`surface-element-nesting` の完了時の棚卸） | バグ | 外形（`plan.rs` の `flatten_extent`）が画像の element定義の X,Y を数えず、ベースの画像の外へはみ出す画像の element が記録なしに切られる（emo-compose を作った時から・入れ子の子の中の element も漏れる）。ukadoc の外形の定義を確かめ、全命令の和集合に揃えるか、ベースで切ると明文化して記録を出すかを裁定する | S（3〜6） | C4 以降のバグの席・シェルの element の列（`animated-image-playback` の前が望ましい） | なし | ○ |
+| `element-base-method`（**10-05 起票**・`mouse-drag-events` の実機で発見） | バグ | element定義の描画メソッド `base` を描けない（`areka-parsers` の `decode_elements` が `overlay` 以外の行を捨て、`areka-emo-compose` の `is_implemented` も `overlay` だけ）。`element0,base,<別の絵>`＋`overlay` の面（クローディアの surface6・11・26）が上乗せの部品の大きさだけで描かれ、キャラクターが消える（記録なし・起動直後の `\s[26]` でも起きる）。読み手に描画メソッドの欄を足して `base` を描き、他の未対応の描画メソッドは記録を出す | S〜M（6〜10） | C4 以降のバグの席・シェルの element の列（`element-clipping-option`・`extent-element-offset` と同時に走らせない） | なし | − |
+| `char-position-save-on-exit`（**10-05 起票**・`mouse-drag-events` の実機 R7・開発者「不自然」） | バグ | キャラクター窓の位置を記憶に書くのがドラッグの終了だけ（`drag_follow.rs` の `on_char_drag_end`）。一度もドラッグしていない相方は再起動で前回の並びに戻らず、`chain_finalize` で本体の左隣へ並べ直される。正常な終了で全キャラクターの位置を書く（`position-persist` の発火規律 Req1.9 の改訂を要件の段で裁定） | S（4〜8） | C4 以降のバグの席（`placement/` を触る spec と同時に走らせない） | なし | ○ |
+| `areka-test-threads-av`（**10-05 起票**・`mouse-drag-events` の 2.2 の検証で発見） | バグ | `cargo test -p areka --bin areka -- --test-threads=4` が `STATUS_ACCESS_VIOLATION` で落ちる（drag のテストを外しても・既定のスレッド数では落ちない・再現する）。二分探索で落ちる組を特定し、スレッドに縛られる資源の扱いを直す。再現しなければ記録して据え置きへ | S（3〜6） | C4 以降のバグの席（`ghost-session-test-load-flake` と同時に走らせない） | なし | − |
+| `collisionex-regions`（**10-05 起票**・`mouse-drag-events` の実機で発見） | 優先 | `collisionex`（矩形・円・楕円・多角形の当たり判定）を読まない（`decode_collisions` は数字だけの `collisionN` だけ・台帳 `absent`）。`collisionex` だけで書くクローディアでは全マウスイベントの Reference4 がいつも空。読み手に形を足し、`hit.rs` で形ごとに内外を判定する | S〜M（6〜10） | シェルの element の列（`element-base-method` の後） | なし | − |
 | `mouse-drag-events`（**10-04 起票**・開発者「クローディアがドラッグ中に足の浮いた絵になる」・同日に開発者が優先の段へ上げた） | 優先 | キャラクター窓をドラッグし始めたら `OnMouseDragStart`、離したら `OnMouseDragEnd` を ukadoc の 7 つの Reference で送る（今は台帳で `absent`・動かさないクリックでは送らない・パッシブの抑えは継ぎ目だけ） | S（6〜9） | **C3-④**（kanade の列の先頭・`balloon-lifecycle-events` と同時に走らせない） | なし | − |
 | `install-live-target-hazards` | その他 | 表示中のシェル・使用中のバルーンへの上書きと、起動中のゴーストへ入れる途中の Windows の終了を**実測してから**扱いを決める | S〜M（8〜14） | C5 の候補（⑴ は `balloon-font-file` の後に測る・`dist/README.txt` を配布の列と分け合う） | なし | ○ |
 | `ghost-standard-balloon`（**10-03 起票**・同 2/3） | 優先 | 起動時のゴーストの標準バルーン＝同梱の最初の 1 個（無印が無ければ `balloon0`）と descript の `balloon`・`default.balloon.path`（今はどれも効かない） | S〜M（6〜10） | **C4-③**（予定） | `install-companion-reading`（✅ 10-04 完了） | ○ |
@@ -444,6 +448,20 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 - [ ] areka-P0-winget-manifest-submission -- `Areka.Areka.Portable` のマニフェスト・初回の手提出・winget-releaser。Dependencies: areka-P0-release-cycle
 - [x] areka-P0-crates-io-publish -- `wintf`・`dola` だけを crates.io へ（Trusted Publishing・自分の workflow `crates-io.yml`）。Dependencies: areka-P0-release-package-versioned, areka-P0-mcp-server-core（C2・`release-ci-workflow` と並走）
 - [ ] areka-P0-release-code-signing -- SignPath Foundation への申請と CI での署名（任意）。Dependencies: areka-P0-release-ci-workflow
+
+### mouse-drag-events の持ち越し（2026-10-05 `/kiro-discovery` で起票）
+
+> 出どころは `mouse-drag-events` の実機（4.2・クローディア）と完了時の棚卸（`completed/areka-P0-mouse-drag-events/tasks.md` の Implementation Notes・`verification/real-machine.md` 4 章）。開発者の方針（2026-10-05）「実機で areka が未対応だったためにうまくいかなかった件はすべて起票」。
+
+- **分け方**: 4 本にした。`base` と `collisionex` はどちらも `shell/decode.rs` を触るが、描画（合成器）と当たり判定（`hit.rs`）で直す先が分かれるので別にした（同じ列で直列）。位置の保存は `placement/`、テストの AV はテストの土台で、触る所が重ならない。
+- **負荷のときの赤**（`install` の desk の上書き・`session_end` の `sync_send`・`emo2_boot::ghost_switch` の `boot_event_tests`）は新しく起票せず、`ghost-session-test-load-flake` の brief の Current State へ観測を足した。
+
+#### Specs (dependency order)
+
+- [ ] areka-P0-element-base-method -- element定義の描画メソッド `base` を読んで描き、他の未対応の描画メソッドの行は記録を出す（バグ）。Dependencies: areka-P0-surface-element-nesting
+- [ ] areka-P0-collisionex-regions -- `collisionex` の 4 つの形を読んで当たり判定に使い、Reference4 に名前を載せる。Dependencies: areka-P0-element-base-method
+- [ ] areka-P0-char-position-save-on-exit -- 正常な終了で全キャラクター窓の位置を記憶に書き、再起動で前回の並びに立つ（バグ）。Dependencies: なし
+- [ ] areka-P0-areka-test-threads-av -- `--test-threads=4` の `STATUS_ACCESS_VIOLATION` の組を特定して直す（バグ）。Dependencies: なし
 
 ## 予約（全て任意・brief なし）
 
