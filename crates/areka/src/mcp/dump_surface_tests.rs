@@ -2,13 +2,19 @@
 //!
 //! 結線状態の無い空の World で呼ぶと、その場で `NG:This ghost has no window`（isError: true・
 //! content は本文 1 つ＝画像なし）を返す（要件 4.5・4.8・7.5）。描画を通る場合は GPU のテストが固定する。
+//! 後半は窓の無い切り替えの道具（`SwitchRig`・GPU 不要）で、装着の前に預けた呼び出しを通す。
 
 use std::path::PathBuf;
 
 use areka_mcp::ToolContent;
 use areka_mcp::tools::{ToolCall, ToolRequest};
+use wintf::ecs::Input;
+use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
+use super::super::McpLater;
 use super::*;
+use crate::emo2_boot::ghost_switch::SwitchInFlight;
+use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 #[test]
 fn answers_no_window_at_once_with_an_empty_world() {
@@ -159,5 +165,302 @@ fn success_record_carries_ui_us_and_encode_us() {
             .field("encode_us")
             .and_then(|v| v.parse::<u64>().ok())
             .is_some()
+    );
+}
+
+// ── 窓の無い切り替えの道具で、預けた呼び出しを通す（要件 3.1・3.2・3.3・3.5・4.1・4.2・4.4・7.1） ──
+
+/// 画像つきの成功か（`isError` でなく、画像が 1 つ以上ある）。答えで判定するテストの判定の関数
+/// （符号化のスレッドの `error!` は必ず `fail` を通って `NG:` の答えになるので、これが真なら
+/// 符号化のスレッドの ERROR は 0 件・要件 5.1・5.2）。GPU を通るテストからも使う。
+pub(in crate::mcp) fn is_picture(answered: &ToolOutcome) -> bool {
+    !answered.is_error
+        && answered
+            .content
+            .iter()
+            .any(|c| matches!(c, ToolContent::Image { .. }))
+}
+
+/// 今の見た目を求める呼び出しの引数（ゴーストは省く）。
+fn current_look() -> Args {
+    Args {
+        scope: Some(0),
+        surface: None,
+        ghost_name: None,
+    }
+}
+
+/// `on_boot` を台本にした A と B を据え、A を起こして MCP の置き場を据えた土台（窓は作らないので
+/// 装着は起きない）。A・B とも起動記録あり（`OnBoot` から始まる）で、切替で起きた側の
+/// `OnGhostChanged` は 204。
+fn rig_with(on_boot: &'static str) -> SwitchRig {
+    let fake = |on_boot: &'static str| {
+        FakeShiori::Scripted(Box::new(move || {
+            standard_script(on_boot).get("OnGhostChanged", Ok(None))
+        }))
+    };
+    let mut rig = SwitchRig::new(vec![("A", fake(on_boot)), ("B", fake(r"\0B\e"))]);
+    // 切替先の窓の準備が閉包を投函する先（`Input` の段に作業プールの取り出しの系は無いので走らない）。
+    rig.world.insert_resource(WintfTaskPool::new());
+    rig.plant_boot_record("A");
+    rig.plant_boot_record("B");
+    rig.boot("A");
+    super::super::install(&mut rig.world, mpsc::channel().1);
+    rig
+}
+
+/// 起きているゴースト（呼び出しを解決したゴースト）。
+fn active_ghost(rig: &SwitchRig) -> ActiveGhost {
+    resolve::active(&rig.world).expect("A が起きている")
+}
+
+/// 置き場（`McpLater`）に預かっている組の数。
+fn held(rig: &SwitchRig) -> usize {
+    rig.world.non_send::<McpLater>().0.len()
+}
+
+/// 本番の `start` に、1 回目（入口）は `None`・2 回目（最初の覗き）からは `step()` を返す `answer` を
+/// 渡して預け、巡を答えが届くまで有界に回す。（預けた直後の答え, 届いた答え）。
+fn deposit_and_answer(
+    rig: &mut SwitchRig,
+    step: impl Fn() -> Step + 'static,
+) -> (Option<ToolOutcome>, Option<ToolOutcome>) {
+    let ghost = active_ghost(rig);
+    let (req, pending) = ToolRequest::new(ToolCall::DumpSurface(current_look()));
+    let mut calls = 0;
+    start(&mut rig.world, TOOL, &ghost, req.reply, move |_| {
+        calls += 1;
+        (calls >= 2).then(&step)
+    });
+    let at_deposit = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let mut later = None;
+    rig.pump_input_until(|_| {
+        later = pending.try_answer().ok().flatten().map(|a| a.outcome);
+        later.is_some()
+    });
+    (at_deposit, later)
+}
+
+/// 装着の前に預けた呼び出しの符号化は `mcp-encode` のスレッドで行われ、預けた時点では答えない
+/// （要件 3.1・3.2・7.1 ⑶）。仕事は自分の走ったスレッドの名前を答えに書く。
+///
+/// # 非空虚性
+/// 覗く関数が UI スレッド（テストのスレッド）で仕事を仕上げると名前が違って赤。入口で答えてしまうと
+/// 預けた直後の答えが `Some` で赤。符号化待ちの段で受け取り口を覗かないと届かず `None` で赤。
+#[test]
+fn deposited_call_is_encoded_on_the_encoding_thread() {
+    let mut rig = rig_with(r"\0A\e");
+
+    let (at_deposit, later) = deposit_and_answer(&mut rig, || {
+        Step::Encode(
+            0,
+            Box::new(|_| outcome::ok(std::thread::current().name().unwrap_or(""))),
+        )
+    });
+    let down = rig.shutdown();
+
+    assert_eq!(
+        (at_deposit, later, down),
+        (None, Some(outcome::ok("mcp-encode")), true),
+        "（預けた直後の答え, 届いた答え, 降ろせた）"
+    );
+}
+
+/// 預けた呼び出しの仕事が `mcp-encode` で panic すると `NG:the encoding thread panicked` で答え、
+/// その答えを `is_picture` に通すと偽（要件 3.3・5.2・7.1 ⑷）。比べに 1×1 の絵の仕事を同じ形で
+/// 預けると `is_picture` が真（判定の関数の較正）。
+///
+/// # 非空虚性
+/// 判定の関数が常に真なら前で、常に偽なら後で赤。`finish` が panic を受けないと答えが届かず赤。
+#[test]
+fn deposited_panic_answers_encoding_thread_panicked_and_is_not_a_picture() {
+    let mut rig = rig_with(r"\0A\e");
+
+    let (_, panicked) =
+        deposit_and_answer(&mut rig, || Step::Encode(0, Box::new(|_| panic!("わざと"))));
+    let (_, pictured) = deposit_and_answer(&mut rig, || {
+        picture(0, 0, "撮れた".to_string(), &[0, 0, 0, 0], 1, 1)
+    });
+    let down = rig.shutdown();
+
+    assert_eq!(
+        (
+            panicked.clone(),
+            panicked.as_ref().map(is_picture),
+            pictured.as_ref().map(is_picture),
+            down
+        ),
+        (
+            Some(outcome::ng("the encoding thread panicked")),
+            Some(false),
+            Some(true),
+            true
+        ),
+        "（panic の答え, それは絵か, 1×1 の絵の答えは絵か, 降ろせた）"
+    );
+}
+
+/// 符号化待ちのまま待つ側が去ると、次の巡で置き場の組が 0 件になり（覗く関数ごと落ちる）、
+/// その後に仕事を放して巡を回しても UI スレッドの ERROR は 0 件で panic しない（要件 3.5・7.1 ⑸）。
+///
+/// # 非空虚性
+/// 待つ側の居ない組を残すと組の数が 1 で赤。受け取り口が切れたのを `fail` へ回すと ERROR 1 件で赤。
+/// 符号化待ちまで進んでいたことは、放した仕事が走り終えること（`ran`）で確かめる。待つ側が去った後の組は
+/// 覗かれずに落ちるので、仕事が走るのは去る前に符号化のスレッドを起こしていたときだけ。
+#[test]
+fn abandoned_while_encoding_drops_the_pair_without_ui_errors() {
+    let mut rig = rig_with(r"\0A\e");
+    let ghost = active_ghost(&rig);
+    let (req, pending) = ToolRequest::new(ToolCall::DumpSurface(current_look()));
+    let (release_tx, release_rx) = mpsc::channel::<()>();
+    let (ran_tx, ran_rx) = mpsc::channel::<()>();
+    let mut parts = Some((release_rx, ran_tx));
+    let mut calls = 0;
+    start(&mut rig.world, TOOL, &ghost, req.reply, move |_| {
+        calls += 1;
+        if calls < 2 {
+            return None;
+        }
+        let (release, ran) = parts.take()?;
+        Some(Step::Encode(
+            0,
+            Box::new(move |_| {
+                // 放されるまで（または止め札が落ちるまで）止まる。
+                let _ = release.recv();
+                let _ = ran.send(());
+                outcome::ok("放した")
+            }),
+        ))
+    });
+    rig.world.run_schedule(Input);
+    let held_while_encoding = held(&rig);
+
+    drop(pending);
+    let ((held_after_leave, ran), levels) = log_capture_kit::count_levels(|| {
+        rig.world.run_schedule(Input);
+        let held_after_leave = held(&rig);
+        let _ = release_tx.send(());
+        let ran = ran_rx.recv_timeout(Duration::from_secs(20)).is_ok();
+        for _ in 0..3 {
+            rig.world.run_schedule(Input);
+        }
+        (held_after_leave, ran)
+    });
+    let down = rig.shutdown();
+
+    assert_eq!(
+        (
+            held_while_encoding,
+            held_after_leave,
+            ran,
+            levels.error,
+            down
+        ),
+        (1, 0, true, 0, true),
+        "（符号化待ちの組の数, 去った後の組の数, 仕事が走り終えた, UI スレッドの ERROR, 降ろせた）"
+    );
+}
+
+/// 預けている間に台本の `\![change,ghost,B]` で本物の切り替えが通ると、預けた呼び出しは
+/// `NG:Specified ghost is not active`・`isError: true` で答え、`[mcp]` の記録に ERROR が無い
+/// （要件 4.1・4.2・4.4・7.1 ⑹）。切り替えの手順そのものの記録は判定に入れない。
+///
+/// # 非空虚性
+/// 覗く関数がゴーストを確かめないと、B は装着しないので答えが届かず `None` で赤。断りを `fail` で
+/// 答えると ERROR 1 件で赤。B の定常まで届いたことで、切り替えが実際に起きたことを確かめる。
+#[test]
+fn switch_to_another_ghost_answers_not_active_without_mcp_errors() {
+    let mut rig = rig_with(r"\0A\![change,ghost,B]\e");
+    let ghost = active_ghost(&rig);
+    let (req, pending) = ToolRequest::new(ToolCall::DumpSurface(current_look()));
+    handle(&mut rig.world, &ghost, current_look(), req.reply);
+    let at_once = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let steady = rig.wait_steady();
+
+    let (welcomed, events) = log_capture_kit::capture(|| {
+        rig.pump_talking_until(|rig| {
+            rig.exit_requested()
+                || (!rig.calls("B").is_empty()
+                    && rig.world.get_non_send::<SwitchInFlight>().is_none())
+        })
+    });
+    let answered = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let now = resolve::active(&rig.world).and_then(|g| g.name);
+    let mcp_errors = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::ERROR && e.message().starts_with("[mcp]"))
+        .count();
+    let exit_requested = rig.exit_requested();
+    let down = rig.shutdown();
+
+    assert_eq!(
+        (
+            at_once,
+            steady,
+            welcomed,
+            now,
+            answered.as_ref().map(|a| a.is_error),
+            answered,
+            mcp_errors,
+            exit_requested,
+            down
+        ),
+        (
+            None,
+            true,
+            true,
+            Some("B".to_owned()),
+            Some(true),
+            Some(outcome::ng(resolve::NOT_ACTIVE)),
+            0,
+            false,
+            true
+        ),
+        "（その場の答え, A の定常, B の定常まで届いた, 今のゴースト, isError, 届いた答え, \
+         [mcp] の ERROR, 終了の指示, 降ろせた）"
+    );
+}
+
+/// 台本の `\![change,ghost,A]` で同じゴーストを起こし直しても、同じゴーストと見なして断らず、
+/// 起こし直した A が定常に達しても答えは届かない（まだ装着待ち・要件 4.2）。
+///
+/// # 非空虚性
+/// ゴーストの見分けを起こし直しで変わるもの（実行系そのもの等）で行うと断りが届いて赤。
+/// A の起動が 2 回であることで、起こし直しが実際に起きたことを確かめる。
+#[test]
+fn switch_to_the_same_ghost_keeps_waiting_for_attachment() {
+    let mut rig = rig_with(r"\0A\![change,ghost,A]\e");
+    let ghost = active_ghost(&rig);
+    let (req, pending) = ToolRequest::new(ToolCall::DumpSurface(current_look()));
+    handle(&mut rig.world, &ghost, current_look(), req.reply);
+    let steady = rig.wait_steady();
+
+    let welcomed = rig.pump_talking_until(|rig| {
+        rig.exit_requested()
+            || (rig.calls("A").len() >= 2 && rig.world.get_non_send::<SwitchInFlight>().is_none())
+    });
+    // 起こし直した後の巡でも覗かれている（組が残り、答えはまだ）。
+    rig.world.run_schedule(Input);
+    let answered = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let a_boots = rig.calls("A").len();
+    let same = resolve::active(&rig.world) == Some(ghost);
+    let held_after = held(&rig);
+    let exit_requested = rig.exit_requested();
+    let down = rig.shutdown();
+
+    assert_eq!(
+        (
+            steady,
+            welcomed,
+            a_boots,
+            same,
+            answered,
+            held_after,
+            exit_requested,
+            down
+        ),
+        (true, true, 2, true, None, 1, false, true),
+        "（A の定常, 起こし直した A の定常まで届いた, A の起動の回数, 同じゴースト, 届いた答え, \
+         預かった組の数, 終了の指示, 降ろせた）"
     );
 }
