@@ -1,4 +1,4 @@
-//! `turn` の決定論テスト（待ち時間・来た・取り消し・安全地帯・終わり・入り直し・期限の預け直し）。
+//! `turn` の決定論テスト（待ち時間・来た・取り消し・安全地帯・終わり・入り直し・期限の預け直し・印の照合）。
 //!
 //! 時刻は基準の時刻からのミリ秒で渡し、実際の時間は待たない。窓も作らない。
 //! 画面の位置と論理の位置は同じ（96 DPI）として組む。
@@ -251,8 +251,7 @@ fn wait_after_end(tip_shown: bool, end_ms: u64, enter_ms: u64) -> Duration {
     let mut r = Rig::new();
     r.active_on_a();
     if tip_shown {
-        // 表示の結果を覚えるのは 2.3 の set_tip。ここでは出たことにする。
-        r.m.tip = Some(TIP);
+        r.m.set_tip(Some(TIP), r.t(800));
     }
     r.at(end_ms, 150, 50);
     let fx = r.at(enter_ms, 250, 50);
@@ -365,7 +364,7 @@ fn entering_with_the_button_down_does_not_count() {
 fn moving_in_the_safe_zone_does_not_end() {
     let mut r = Rig::new();
     r.active_on_a();
-    r.m.tip = Some(TIP);
+    r.m.set_tip(Some(TIP), r.t(800));
     // 範囲の中・通り道（範囲とツールチップの間）・ツールチップの上・範囲へ戻る。
     for (ms, x, y) in [
         (900, 90, 90),
@@ -383,12 +382,13 @@ fn inside_the_tip_continues_even_if_the_window_does_not_receive() {
     // ツールチップが範囲の矩形に重なって出た所へ動かす（範囲として見れば「安全地帯から出た」）。
     let mut r = Rig::new();
     r.active_on_a();
-    r.m.tip = Some(RectPx {
+    let over_range = RectPx {
         left: 20,
         top: 60,
         right: 80,
         bottom: 90,
-    });
+    };
+    r.m.set_tip(Some(over_range), r.t(800));
     r.at(900, 50, 50);
     let tracked = r.present(false);
     let fx = r.step(1_000, Some((50, 75)), false, None, tracked);
@@ -403,7 +403,7 @@ fn end_while_active(
     let mut r = Rig::new();
     let token = r.active_on_a();
     if tip_shown {
-        r.m.tip = Some(TIP);
+        r.m.set_tip(Some(TIP), r.t(800));
     }
     r.at(900, 50, 50);
     let fx = end(&mut r);
@@ -545,4 +545,172 @@ fn active_turn_keeps_the_area_it_started_with() {
         panic!("出す番のはず");
     };
     assert_eq!(turn.area, area(RECT_A));
+}
+
+// ---- 印の照合（3.12・4.3・4.4・4.7・5.1〜5.5・5.7・5.8・6.7） ----
+
+#[test]
+fn supply_on_a_live_token_shows_and_empty_hides() {
+    let mut r = Rig::new();
+    let token = r.active_on_a();
+    assert_eq!(r.m.supply(token, false), SupplyDecision::Show);
+    // 空（""）は出さない・出ていれば消す（3.12）。出す番は続く。
+    r.m.set_tip(Some(TIP), r.t(850));
+    assert_eq!(r.m.supply(token, true), SupplyDecision::HideEmpty);
+    r.m.set_tip(None, r.t(860));
+    assert_eq!(r.m.tracked_range(), Some((r.window, r.a)));
+    assert_eq!(r.at(900, 50, 50), vec![Effect::ArmDeadline(r.t(1_000))]);
+}
+
+#[test]
+fn ended_token_is_stale_and_cannot_dismiss() {
+    let (mut r, token, _) = end_while_active(true, |r| r.at(1_000, 150, 50));
+    assert_eq!(r.m.supply(token, false), SupplyDecision::Stale);
+    // 終わった印なら、空でも「終わっていた」。
+    assert_eq!(r.m.supply(token, true), SupplyDecision::Stale);
+    assert!(!r.m.dismiss(token, r.t(1_100)));
+}
+
+#[test]
+fn earlier_token_supplied_during_a_later_turn_is_stale() {
+    let mut r = Rig::new();
+    let first = r.active_on_a();
+    r.at(1_000, 150, 50);
+    // 次の範囲の待ちの間も、前の印は受けない。
+    r.at(1_100, 250, 50);
+    assert_eq!(r.m.supply(first, false), SupplyDecision::Stale);
+    let (second, _, _) = started(&r.at(1_900, 250, 50)).expect("B で来る");
+    assert_eq!(r.m.supply(first, false), SupplyDecision::Stale);
+    assert!(!r.m.dismiss(first, r.t(1_950)));
+    assert_eq!(r.m.supply(second, false), SupplyDecision::Show);
+}
+
+#[test]
+fn supply_has_no_time_limit_while_the_turn_continues() {
+    let mut r = Rig::new();
+    let token = r.active_on_a();
+    for ms in [60_000, 3_600_000] {
+        assert!(quiet(&r.at(ms, 50, 50)), "{ms} ミリ秒");
+    }
+    assert_eq!(r.m.supply(token, false), SupplyDecision::Show);
+}
+
+#[test]
+fn turn_without_deposited_text_shows_nothing_until_supplied() {
+    let mut r = Rig::new();
+    r.has_text = false;
+    r.at(0, 50, 50);
+    let (token, _, stored) = started(&r.at(800, 50, 50)).expect("来る");
+    assert!(!stored, "預けた文字が無ければ殻は出さない（4.4・5.7）");
+    // 何も渡さなければ、続いても消すも終わりも出ない。
+    for ms in [900, 5_000] {
+        assert!(quiet(&r.at(ms, 50, 50)), "{ms} ミリ秒");
+    }
+    assert_eq!(r.m.supply(token, false), SupplyDecision::Show);
+}
+
+#[test]
+fn supplying_while_deposited_text_is_shown_replaces_it() {
+    let mut r = Rig::new();
+    let token = r.active_on_a();
+    r.m.set_tip(Some(TIP), r.t(800));
+    assert_eq!(r.m.supply(token, false), SupplyDecision::Show);
+    // 置き換えた矩形が安全地帯になる（前の矩形の上は、範囲との通り道の外）。
+    let replaced = RectPx {
+        left: 120,
+        top: -60,
+        right: 180,
+        bottom: -30,
+    };
+    r.m.set_tip(Some(replaced), r.t(900));
+    let fx = r.at(1_000, 150, -45);
+    assert_eq!(fx, vec![Effect::ArmDeadline(r.t(1_100))]);
+    let fx = r.at(1_100, 50, -45);
+    assert_eq!(
+        hides(&fx),
+        vec![HideReason::End(TooltipEndReason::LeftSafeZone)]
+    );
+    assert_eq!(ended(&fx), vec![(token, TooltipEndReason::LeftSafeZone)]);
+}
+
+#[test]
+fn after_dismiss_the_turn_continues_and_supplying_shows_again() {
+    let mut r = Rig::new();
+    let token = r.active_on_a();
+    r.m.set_tip(Some(TIP), r.t(800));
+    assert!(r.m.dismiss(token, r.t(850)));
+    assert_eq!(r.at(900, 50, 50), vec![Effect::ArmDeadline(r.t(1_000))]);
+    assert_eq!(r.m.supply(token, false), SupplyDecision::Show);
+    // 消した時刻が出し直しの起点になる（消して 200 ミリ秒以内に別の範囲へ入れば 1 倍）。
+    let mut r2 = Rig::new();
+    let t2 = r2.active_on_a();
+    r2.m.set_tip(Some(TIP), r2.t(800));
+    assert!(r2.m.dismiss(t2, r2.t(1_000)));
+    let fx = r2.at(1_100, 250, 50);
+    assert_eq!(ended(&fx), vec![(t2, TooltipEndReason::LeftSafeZone)]);
+    assert!(hides(&fx).is_empty(), "消した後は終わりで消し直さない");
+    assert_eq!(fx.last(), Some(&Effect::ArmDeadline(r2.t(1_100) + SETTING)));
+}
+
+#[test]
+fn after_a_show_failure_ending_detection_continues() {
+    // 表示の失敗は set_tip(None) で渡るだけ（6.7）。
+    let mut r = Rig::new();
+    let token = r.active_on_a();
+    assert_eq!(r.at(900, 50, 50), vec![Effect::ArmDeadline(r.t(1_000))]);
+    r.m.set_tip(None, r.t(950));
+    assert_eq!(r.at(960, 50, 50), vec![Effect::ArmDeadline(r.t(1_060))]);
+    let fx = r.at(1_000, 150, 50);
+    assert!(hides(&fx).is_empty());
+    assert_eq!(ended(&fx), vec![(token, TooltipEndReason::LeftSafeZone)]);
+    // 出なかった出す番は出し直しの起点にならない（失敗から 100 ミリ秒でも 2 倍）。
+    assert_eq!(
+        r.at(1_050, 250, 50),
+        vec![Effect::ArmDeadline(r.t(1_050) + SETTING * 2)]
+    );
+}
+
+#[test]
+fn unregistering_the_tracked_range_ends_synchronously() {
+    let mut r = Rig::new();
+    let token = r.active_on_a();
+    r.m.set_tip(Some(TIP), r.t(800));
+    // 追っていない範囲の取り消しは何もしない。
+    assert!(r.m.on_unregistered(r.b, r.t(850)).is_empty());
+    assert_eq!(r.m.tracked_range(), Some((r.window, r.a)));
+
+    let fx = r.m.on_unregistered(r.a, r.t(900));
+    assert_eq!(
+        fx,
+        vec![
+            Effect::Hide {
+                token,
+                reason: HideReason::End(TooltipEndReason::RangeUnregistered),
+            },
+            Effect::TurnEnded {
+                token,
+                window: r.window,
+                range: r.a,
+                reason: TooltipEndReason::RangeUnregistered,
+            },
+        ]
+    );
+    assert_eq!(r.m.tracked_range(), None);
+    assert_eq!(r.m.supply(token, false), SupplyDecision::Stale);
+    // 次の判定で終わりを重ねない（殻はもう足元に A を渡さない）。
+    assert!(r.step(950, Some((50, 50)), false, None, None).is_empty());
+    // 消えた時刻が出し直しの起点になる。
+    assert_eq!(
+        r.at(1_000, 250, 50),
+        vec![Effect::ArmDeadline(r.t(1_000) + SETTING)]
+    );
+}
+
+#[test]
+fn unregistering_the_waiting_range_drops_out_without_notice() {
+    let mut r = Rig::new();
+    r.at(0, 50, 50);
+    assert!(r.m.on_unregistered(r.a, r.t(500)).is_empty());
+    assert_eq!(r.m.tracked_range(), None);
+    assert!(r.step(900, Some((50, 50)), false, None, None).is_empty());
 }

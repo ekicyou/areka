@@ -41,7 +41,7 @@
   - 完了の状態: 状態機械のテストが、実際の時間を待たず窓も作らずに緑
   - _Requirements: 1.1, 1.2, 1.4, 1.6, 1.7, 1.8, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10, 3.13, 6.4, 7.1_
 
-- [ ] 2.3 印の照合（文字を渡す・消す・表示の結果・取り消しの同期の終わり）
+- [x] 2.3 印の照合（文字を渡す・消す・表示の結果・取り消しの同期の終わり）
   - 印を照らして渡された文字をどうするか（出す・空なので消す・終わった印なので出さない）を決める。出す番が続いている限り時間の上限なく受ける
   - 利用側の「消して」で消す（出す番は続く）。表示の結果（出た矩形・出ていない）と消えた時刻を覚える。表示が失敗しても状態を変えない
   - 登録の取り消しを同期で反映し、追っている範囲なら消す・終わったを返す
@@ -135,3 +135,4 @@
 - 1.2: `cargo clippy -p wintf --all-targets -- -D warnings` は前からある警告（dola 約 10 件・wintf 約 143 件）で赤。この spec の判定は「`ecs[\/]tooltip` を指す警告が 0 件」（`cargo clippy -p wintf --all-targets -j 2 2>&1 | grep -E "ecs[\/]tooltip"`）
 - 1.2: `tooltip/mod.rs` の `mod geometry;` に `#[cfg_attr(not(test), expect(dead_code))]` がある。os.rs（3.1）が使い始めたら外す。`force_break` の `fit` は Rust の `char` の数で返す約束＝os 側で `GetTextExtentExPointW` の UTF-16 の数を `char` の数に直す（サロゲート対に注意）
 - 2.2（4.2 で使う）: `TurnMachine` は出す番の始まりの論理の矩形 `Turn.area` を持つが、読み出しの口が無い（`tracked_range()` は持ち手だけ）。殻が `Tracked::Present.range_px` を始まりの矩形から作るなら、4.2 で読み出しを足す。位置が読めないまま待ちの期限を過ぎると `ArmDeadline(過ぎた期限)` が毎回返る＝殻はすぐ起き直さないよう扱う
+- 2.3（4.3 で使う）: `supply` は `HideEmpty` を返すだけでツールチップの矩形を外さない（`now` を受けない設計の形）。殻は `HideEmpty` で表示を消した後に必ず `set_tip(None, now)` を呼ぶ（忘れると矩形が安全地帯に残り、消えた時刻＝出し直しの起点も記録されない）。表示の失敗も `set_tip(None, now)` で渡す（出ていなければ起点にならない）。`HideReason` の `#[cfg_attr(test, expect(dead_code))]` は 4.3 で `Dismissed`/`EmptyText` を作り始めたら外す

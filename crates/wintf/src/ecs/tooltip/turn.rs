@@ -91,10 +91,32 @@ pub(crate) enum Effect {
     },
 }
 
-/// 消した理由（記録用）。利用側の求め・空の文字は印の照合（supply・dismiss）と一緒に足す。
+/// 消した理由（記録用）。
+#[cfg_attr(
+    test,
+    expect(
+        dead_code,
+        reason = "利用側の求め・空の文字は殻（apply・dismiss）の記録から使う"
+    )
+)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum HideReason {
     End(TooltipEndReason),
+    /// 利用側の求め（dismiss）。
+    Dismissed,
+    /// 渡された文字が空。
+    EmptyText,
+}
+
+/// 渡された文字をどうするか。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SupplyDecision {
+    /// 出す（出ていれば置き換える）。
+    Show,
+    /// 空なので出さない（出ていれば消す）。
+    HideEmpty,
+    /// 終わった印なので出さない。
+    Stale,
 }
 
 /// 出す番の状態機械。
@@ -276,12 +298,23 @@ impl TurnMachine {
             fx.push(Effect::ArmDeadline(input.now + PATROL));
             return State::Active(turn);
         };
-        if self.tip.take().is_some() {
+        self.end_turn(turn, reason, input.now, fx)
+    }
+
+    /// 出す番を終える（出ていれば消し、終わりを出す）。
+    fn end_turn(
+        &mut self,
+        turn: Turn,
+        reason: TooltipEndReason,
+        now: Instant,
+        fx: &mut Vec<Effect>,
+    ) -> State {
+        if self.tip.is_some() {
             fx.push(Effect::Hide {
                 token: turn.token,
                 reason: HideReason::End(reason),
             });
-            self.last_hidden = Some(input.now);
+            self.set_tip(None, now);
         }
         trace!(range = ?turn.range, token = turn.token.0, reason = ?reason, "[tooltip_turn] 終わり");
         fx.push(Effect::TurnEnded {
@@ -294,6 +327,67 @@ impl TurnMachine {
             TooltipEndReason::ButtonPressed => State::Suppressed { range: turn.range },
             _ => State::Idle,
         }
+    }
+
+    /// 印を照らして、渡された文字をどうするか決める。出す番が続いている限り時間の上限なく受ける。
+    /// text_is_empty は `""` のときだけ真（範囲の表の「空」と同じ。空白だけの文字は空でない）。
+    pub(crate) fn supply(
+        &mut self,
+        token: TooltipTurnToken,
+        text_is_empty: bool,
+    ) -> SupplyDecision {
+        let decision = if !self.is_current(token) {
+            SupplyDecision::Stale
+        } else if text_is_empty {
+            SupplyDecision::HideEmpty
+        } else {
+            SupplyDecision::Show
+        };
+        trace!(token = token.0, decision = ?decision, "[tooltip_turn] 文字を渡された");
+        decision
+    }
+
+    /// 印が続いていれば真（ツールチップを消す。出す番は続く）。
+    pub(crate) fn dismiss(&mut self, token: TooltipTurnToken, now: Instant) -> bool {
+        let current = self.is_current(token);
+        if current {
+            self.set_tip(None, now);
+        }
+        trace!(
+            token = token.0,
+            current, "[tooltip_turn] 消してと求められた"
+        );
+        current
+    }
+
+    /// 表示の結果を覚える（Some＝出た矩形・None＝出ていない）。出ていたものが消えたら、その時刻を
+    /// 出し直しの起点にする。表示の失敗も None で渡すだけで、出す番は続く。
+    pub(crate) fn set_tip(&mut self, tip: Option<RectPx>, now: Instant) {
+        if tip.is_none() && self.tip.is_some() {
+            self.last_hidden = Some(now);
+        }
+        self.tip = tip;
+    }
+
+    /// 登録の取り消しを同期で反映する（追っている範囲なら終わらせる。待ちなら知らせなしで外れる）。
+    pub(crate) fn on_unregistered(&mut self, id: TooltipRangeId, now: Instant) -> Vec<Effect> {
+        let mut fx = Vec::new();
+        match std::mem::take(&mut self.state) {
+            State::Active(turn) if turn.range == id => {
+                self.state = self.end_turn(turn, TooltipEndReason::RangeUnregistered, now, &mut fx);
+            }
+            State::Waiting { range, .. } if range == id => {
+                // 待ちから外れるだけなので知らせは出さない（状態は何もない、のまま）。
+                trace!(range = ?range, "[tooltip_turn] 来なかった（登録の取り消し）");
+            }
+            other => self.state = other,
+        }
+        fx
+    }
+
+    /// 印が今続いている出す番のものか。
+    fn is_current(&self, token: TooltipTurnToken) -> bool {
+        matches!(&self.state, State::Active(t) if t.token == token)
     }
 
     /// 今追っている範囲（待ち・出す番のとき）。殻が Tracked を作るために読む。
