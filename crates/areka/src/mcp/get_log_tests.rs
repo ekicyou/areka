@@ -321,6 +321,7 @@ fn since_id_and_max_count_together() {
 fn emily() -> ActiveGhost {
     ActiveGhost {
         name: Some("Emily/Phase4.5".to_string()),
+        sakura_name: None,
         root: PathBuf::from(r"C:\ssp\ghost\emily4"),
     }
 }
@@ -358,6 +359,7 @@ fn ghost_name_full_path_is_read_as_that_ghost() {
 fn nameless_ghost_matches_records_named_by_its_full_path() {
     let g = ActiveGhost {
         name: None,
+        sakura_name: None,
         root: PathBuf::from(r"C:\ssp\ghost\nameless\"),
     };
     let mut h = history();

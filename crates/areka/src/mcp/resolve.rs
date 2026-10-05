@@ -13,6 +13,8 @@ use crate::ghost_session::GhostSlot;
 pub(crate) struct ActiveGhost {
     /// descript の `name`（無い・空なら None）。
     pub name: Option<String>,
+    /// descript の `sakura.name`＝本体側名（無い・空なら None）。
+    pub sakura_name: Option<String>,
     /// ルートフォルダ（`ghost/<フォルダ名>`）の絶対パス。
     pub root: PathBuf,
 }
@@ -34,13 +36,18 @@ pub(crate) const CANNOT_FIND: &str = "Cannot find active ghost from specified na
 pub(crate) fn active(world: &World) -> Option<ActiveGhost> {
     let session = world.get_non_send::<GhostSlot>()?.0.as_ref()?;
     session.runtime()?;
-    let name = session
-        .names()
-        .and_then(|n| n.name.clone())
+    let names = session.names();
+    let name = names.and_then(|n| n.name.clone()).filter(|n| !n.is_empty());
+    let sakura_name = names
+        .and_then(|n| n.sakura_name.clone())
         .filter(|n| !n.is_empty());
     let dir = session.ghost_dir();
     let root = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
-    Some(ActiveGhost { name, root })
+    Some(ActiveGhost {
+        name,
+        sakura_name,
+        root,
+    })
 }
 
 /// 解決の判断（純粋・要件 3.2〜3.6）。失敗は `NG:` の後ろに付ける理由。

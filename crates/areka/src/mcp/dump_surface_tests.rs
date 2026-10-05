@@ -14,6 +14,7 @@ use super::*;
 fn answers_no_window_at_once_with_an_empty_world() {
     let ghost = ActiveGhost {
         name: Some("Emily/Phase4.5".to_string()),
+        sakura_name: None,
         root: PathBuf::from(r"C:\ssp\ghost\emily4"),
     };
     let args = Args {

@@ -16,6 +16,7 @@ const ROOT: &str = r"C:\ssp\ghost\emily4";
 fn named() -> ActiveGhost {
     ActiveGhost {
         name: Some("Emily/Phase4.5".to_string()),
+        sakura_name: None,
         root: PathBuf::from(ROOT),
     }
 }
@@ -23,6 +24,7 @@ fn named() -> ActiveGhost {
 fn unnamed() -> ActiveGhost {
     ActiveGhost {
         name: None,
+        sakura_name: None,
         root: PathBuf::from(ROOT),
     }
 }
@@ -137,6 +139,7 @@ fn listed_value_is_full_path_without_trailing_separator_when_name_absent() {
     assert_eq!(listed_value(&unnamed()), ROOT);
     let trailing = ActiveGhost {
         name: None,
+        sakura_name: None,
         root: PathBuf::from(r"C:\ssp\ghost\emily4\"),
     };
     assert_eq!(listed_value(&trailing), ROOT);
