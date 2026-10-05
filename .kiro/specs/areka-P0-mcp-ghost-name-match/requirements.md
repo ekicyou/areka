@@ -67,11 +67,17 @@
   - 宛先が解決された後の各ツールの処理（各ツールの答えの中身は変えない）。
   - プロトコル側の引数の検査（型・必須の欄の欠落の `-32602`）。
   - フルパスの照合の規則（大文字小文字・`\` と `/`・末尾の区切りの差を同じとみなし、フォルダ名だけ・相対パス・上位のパスは外れる）は今のまま変えない（SSP と同じ）。
-  - SSP の実測の記録（survey）そのものの書き換え。
+  - SSP の実測の記録（survey）そのものの書き換え（完了のときに §7.4 の末尾の「areka との違い」の段落へ、着地で違いが無くなったことの注記を 1 行足すのは範囲内＝要件ディスカッション 議題 1）。
 - **Adjacent expectations**:
   - 完了 spec `mcp-tool-entrances` の要件 3.2〜3.5・3.9 と暫定の裁定 6・7 を本 spec が上書きする。完了した spec の文書は書き換えない（本書が新しい約束の正本）。同 spec の要件 4.4（一覧の値を `ghost_name` に渡すと同じゴーストへ解決する）は保つ。
   - `mcp-get-property` は宛先の解決に頼るだけで照合をテストで固定していない（同 spec の申し送り）。本 spec の着地で `get_property` の答えの中身は変わらない。
-  - 同じウェーブ C4 の約束（棚卸㉒）: 本 spec が触るのは `crates/areka/src/mcp/` の `resolve.rs`・`resolve_tests.rs`・`mcp_tests.rs` だけ。`mcp/mod.rs`・各ツールのファイル・`crates/areka-mcp/`・`ghost_session.rs` は触らない。`mcp-author-tools` は `mcp_tests.rs` に触らない約束。この約束を破る必要が出たら止めて報告する。
+  - 同じウェーブ C4 の約束（棚卸㉒の約束を要件ディスカッション 議題 1〔2026-10-05〕で改めた）: 本 spec が触るのは次だけ。
+    - `crates/areka/src/mcp/` の `resolve.rs`・`resolve_tests.rs`・`mcp_tests.rs`（照合の本体とそのテスト）。
+    - 型 `ActiveGhost` に本体側名の欄を足すとコンパイルが落ちる、この型を字面で組んでいる約束の外のテストファイル（`get_status_tests.rs`・`dump_surface_tests.rs`・`dump_balloon_tests.rs`・`get_expression_table_tests.rs`・`get_property_tests.rs`・`get_active_ghost_list_tests.rs`・`get_log_tests.rs`・`sakurascript_tests.rs`・`raise_event_tests.rs`・`reload_tests.rs`）。字面に欄を 1 行足すことだけを行い、期待は変えない。ただし `get_log_tests.rs` の `unmatched_empty_and_no_ghost_are_cannot_find` は、英字の大小違いの場合の期待を新しい規則へ書き換え、空文字の注釈も直す。
+    - `get_log.rs` の空文字の腕に付いた注釈（「解決は空を省略として扱う」は着地の後は事実と食い違う）。答えは変えない。
+    - `doc/ssp-mcp/survey.md` §7.4 の末尾への注記 1 行（完了のとき）。
+  - `mcp/mod.rs`・各ツールの処理・`crates/areka-mcp/`・`ghost_session.rs` は触らない。`mcp-author-tools` は `mcp_tests.rs` に触らない約束。
+  - 同じ字面に触る ⑥ `mcp-get-status`・⑧ `mcp-dump-images-residue`・⑨ `mcp-author-tools` とは「先に着地した側に合わせる」: 後から着地する側が、rebase のときに自分の `ActiveGhost` の字面へ欄を 1 行足す（足し忘れはコンパイルが落ちるので見落とされない）。
 
 ## Requirements
 
