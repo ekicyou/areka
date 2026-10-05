@@ -7,6 +7,7 @@ use areka_mcp::{ToolContent, ToolOutcome};
 use bevy_ecs::world::World;
 use log_capture_kit::count_levels;
 
+use super::WaitAnswer;
 use super::gpu_test_support::{FLUSH_EVENT, GpuRig, decode_png};
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::spine::RecordedCall;
@@ -32,11 +33,11 @@ fn shown_surface_matches_the_composed_pixels_at_native_size() {
             .and_then(|w| w.presenter().last_shown(shell_target(0)))
             .is_some_and(|(id, pic)| id == SHOWN && pic.is_some())
     });
-    let answer = gpu.dump_surface(None, None).try_answer().ok().flatten();
+    let answer = gpu.dump_surface(None, None).wait_answer();
     let expected = gpu.composed_rgba(SHOWN);
     let down = gpu.shutdown();
 
-    let answer = answer.expect("装着の後はその場で答える");
+    let answer = answer.expect("装着の後は上限のうちに答えが届く");
     let (text, (w, h, pixels), mime) = match answer.outcome.content.as_slice() {
         [
             ToolContent::Text(text),
@@ -174,18 +175,14 @@ fn specified_surface_returns_its_pixels_without_changing_the_screen() {
     let mut gpu = GpuRig::new(r"\0\s[1101]\e", 96);
     let shown = gpu.frames_until(100, |world| is_shown(world, 0, SHOWN));
     let before = screen(&gpu.rig.world);
-    let answer = gpu
-        .dump_surface(None, Some(i64::from(OTHER)))
-        .try_answer()
-        .ok()
-        .flatten();
+    let answer = gpu.dump_surface(None, Some(i64::from(OTHER))).wait_answer();
     let right_after = screen(&gpu.rig.world);
     gpu.frames(SETTLE_FRAMES);
     let settled = screen(&gpu.rig.world);
     let expected = gpu.composed_rgba(OTHER);
     let down = gpu.shutdown();
 
-    let answer = answer.expect("装着の後はその場で答える");
+    let answer = answer.expect("装着の後は上限のうちに答えが届く");
     assert_eq!(
         (
             shown,
@@ -220,15 +217,11 @@ fn specified_surface_returns_its_pixels_without_changing_the_screen() {
 fn scope_zero_renders_a_surface_meant_for_scope_one() {
     let mut gpu = GpuRig::new(r"\0\s[1101]\e", 96);
     let shown = gpu.frames_until(100, |world| is_shown(world, 0, SHOWN));
-    let answer = gpu
-        .dump_surface(None, Some(i64::from(KERO)))
-        .try_answer()
-        .ok()
-        .flatten();
+    let answer = gpu.dump_surface(None, Some(i64::from(KERO))).wait_answer();
     let expected = gpu.composed_rgba(KERO);
     let down = gpu.shutdown();
 
-    let answer = answer.expect("装着の後はその場で答える");
+    let answer = answer.expect("装着の後は上限のうちに答えが届く");
     assert_eq!(
         (shown, down, read_picture(&answer.outcome, &expected)),
         (
@@ -266,11 +259,7 @@ fn number_only_in_the_alias_table_is_no_such_surface() {
     let lines: Vec<&str> = surfaces.lines().map(str::trim).collect();
     let in_alias = lines.contains(&"kero.surface.alias") && lines.contains(&"100,[2100]");
     let raw = lines.contains(&"surface100");
-    let answer = gpu
-        .dump_surface(None, Some(ALIAS_ONLY))
-        .try_answer()
-        .ok()
-        .flatten();
+    let answer = gpu.dump_surface(None, Some(ALIAS_ONLY)).wait_answer();
     let down = gpu.shutdown();
 
     assert_eq!(
@@ -304,11 +293,11 @@ fn hidden_character_returns_the_picture_before_hiding() {
                 .target_visible(shell_target(0))
                 == Some(false)
     });
-    let answer = gpu.dump_surface(None, None).try_answer().ok().flatten();
+    let answer = gpu.dump_surface(None, None).wait_answer();
     let expected = gpu.composed_rgba(SHOWN);
     let down = gpu.shutdown();
 
-    let answer = answer.expect("装着の後はその場で答える");
+    let answer = answer.expect("装着の後は上限のうちに答えが届く");
     assert_eq!(
         (hidden, down, read_picture(&answer.outcome, &expected)),
         (
@@ -340,16 +329,14 @@ fn never_shown_scope_refuses_the_omitted_but_renders_the_specified() {
         .presenter()
         .last_shown(shell_target(1))
         .is_none();
-    let omitted = gpu.dump_surface(Some(1), None).try_answer().ok().flatten();
+    let omitted = gpu.dump_surface(Some(1), None).wait_answer();
     let specified = gpu
         .dump_surface(Some(1), Some(i64::from(KERO_FACE)))
-        .try_answer()
-        .ok()
-        .flatten();
+        .wait_answer();
     let expected = gpu.composed_rgba(KERO_FACE);
     let down = gpu.shutdown();
 
-    let specified = specified.expect("装着の後はその場で答える");
+    let specified = specified.expect("装着の後は上限のうちに答えが届く");
     assert_eq!(
         (
             shown,
@@ -382,12 +369,10 @@ fn never_shown_scope_refuses_the_omitted_but_renders_the_specified() {
 fn scope_two_is_no_such_scope() {
     let mut gpu = GpuRig::new(r"\0\s[1101]\e", 96);
     let shown = gpu.frames_until(100, |world| is_shown(world, 0, SHOWN));
-    let omitted = gpu.dump_surface(Some(2), None).try_answer().ok().flatten();
+    let omitted = gpu.dump_surface(Some(2), None).wait_answer();
     let specified = gpu
         .dump_surface(Some(2), Some(i64::from(SHOWN)))
-        .try_answer()
-        .ok()
-        .flatten();
+        .wait_answer();
     let down = gpu.shutdown();
 
     let no_scope = Some(refusal("No such scope in this ghost"));
@@ -457,7 +442,7 @@ fn before_attachment_answers_after_the_frames_run() {
 /// # 非空虚性
 /// 前後とも関所（[`GpuRig::flush_to_shiori`]）を通してから列を読むので、呼び出しが kanade へ送った
 /// イベントは後の印より前に列へ載る（届く前に読んで見逃さない）。ゴーストへイベントを送ると列が
-/// 伸びて赤。判断の失敗の記録を `error!` にすると件数で赤。呼び出しは全部その場で答えたことと、
+/// 伸びて赤。判断の失敗の記録を `error!` にすると件数で赤。呼び出しは全部上限のうちに答えが届いたことと、
 /// 前の列に `OnBoot` が載っている（観測口が生きている）ことも確かめる。
 #[test]
 fn calls_do_not_disturb_the_ghost() {
@@ -476,13 +461,7 @@ fn calls_do_not_disturb_the_ghost() {
             (Some(2), None),
             (Some(-1), None),
         ]
-        .map(|(scope, surface)| {
-            gpu.dump_surface(scope, surface)
-                .try_answer()
-                .ok()
-                .flatten()
-                .is_some()
-        })
+        .map(|(scope, surface)| gpu.dump_surface(scope, surface).wait_answer().is_some())
     });
     let second = gpu.flush_to_shiori();
     let after = gpu.calls();
@@ -509,7 +488,7 @@ fn calls_do_not_disturb_the_ghost() {
             after
         ),
         (true, sent, sent, true, true, [true; 8], 0, expected),
-        "（台本の surface が出た, 前の関所, 後の関所, 降ろせた, 前の列に OnBoot, その場で答えた, \
+        "（台本の surface が出た, 前の関所, 後の関所, 降ろせた, 前の列に OnBoot, 答えが届いた, \
          ERROR の件数, 後の呼び出しの列）"
     );
 }

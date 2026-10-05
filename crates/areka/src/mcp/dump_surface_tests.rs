@@ -32,3 +32,27 @@ fn answers_no_window_at_once_with_an_empty_world() {
     );
     assert!(answer.outcome.is_error);
 }
+
+/// 写しまで済んだ成功は、呼んだスレッドでなく符号化のスレッドで仕上がり、そのスレッドから答える
+/// （要件 6.1・タスク 4.3）。仕事は自分の走ったスレッドの名前を答えに書く。
+///
+/// # 非空虚性
+/// 呼んだスレッド（テストのスレッド）で仕上げると、答えの名前がテストの名前になって赤。
+/// 答えは上限つきで待つ（届かなければ `None` で赤）。
+#[test]
+fn success_is_finished_on_the_encoding_thread_and_answered_from_there() {
+    let args = Args {
+        scope: Some(0),
+        surface: None,
+        ghost_name: None,
+    };
+    let (req, pending) = ToolRequest::new(ToolCall::DumpSurface(args));
+    let job: Job = Box::new(|_| outcome::ok(std::thread::current().name().unwrap_or("")));
+
+    reply_elsewhere(TOOL, Step::Encode(0, job), Instant::now(), req.reply);
+
+    assert_eq!(
+        pending.wait_answer().map(|a| a.outcome),
+        Some(outcome::ok(ENCODE_THREAD))
+    );
+}

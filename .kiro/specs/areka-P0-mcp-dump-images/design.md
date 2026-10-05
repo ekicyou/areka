@@ -87,7 +87,7 @@ graph TB
     HandleB --> Later
 ```
 
-- **選んだ形**: 「薄い配線（`handle`）＋純粋な関数 3 つ（判断・符号化・重ね合わせ）＋表示の層の読むだけの口」。`handle` は事実を集めて純粋な関数へ渡し、結果を `reply.send` するだけ。
+- **選んだ形**: 「薄い配線（`handle`）＋純粋な関数 3 つ（判断・符号化・重ね合わせ）＋表示の層の読むだけの口」。`handle` は事実を集めて純粋な関数へ渡し、結果を `reply.send` するだけ（成功の符号化は別のスレッドで仕上げ、そこから送る。タスク 4.3）。
 - **依存の向き**: `judge`・`image`・`overlay`（std と `areka_nar::crc32` だけ）← `dump_surface`／`dump_balloon`（World・表示の層・文字の層を読む）← `mcp::dispatch`。逆向きの参照は作らない。`dump_balloon` は `super::dump_surface` の子モジュール（`judge`・`image`）を使う。
 - **残す既存の型**: ツールごとのファイル・`handle` の署名・`outcome` の 4 つの形・`later`。
 - **新しい部品の理由**: `snapshot.rs` は非公開の `last_show`・`EmoWorld`・アトラスに届く唯一の場所。`judge` は要件 7.2 が求める「窓や GPU を要しない判断」。`image`・`overlay` は本番に無い処理。
@@ -233,7 +233,7 @@ flowchart TD
 | 5.3 | 幅と高さが一致 | image | `IHDR` に絵の幅と高さ | P |
 | 5.4 | 1 回 1 枚 | dump_surface・dump_balloon | `with_image` を 1 回 | O |
 | 5.5 | 上限なし | image | 大きさで断る分岐を持たない | — |
-| 6.1 | UI を止めない | dump_surface・dump_balloon | その場で終わる／装着の前は `later` | C |
+| 6.1 | UI を止めない | dump_surface・dump_balloon | UI スレッドは判断と写しまで・符号化は別のスレッド（タスク 4.3）／装着の前は `later` | C |
 | 6.2 | イベント 0・台本 0・ファイル 0 | 全部 | 読み口だけを呼ぶ | — |
 | 6.3 | 待ちの上限は相手のまま | — | `mcp/mod.rs`・`areka-mcp` を触らない | — |
 | 6.4 | `ghost_name` は解決済みを使う | dump_surface・dump_balloon | `handle` の引数のまま | — |
@@ -430,13 +430,21 @@ pub(super) fn overlay_text(
 pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: ReplyTo);
 
 /// 今答えられるなら Some。装着の相がまだなら None（`later` が次のフレームでもう 1 度呼ぶ）。
-fn answer(world: &World, args: &Args) -> Option<ToolOutcome>;
+fn answer(world: &World, args: &Args) -> Option<Step>;
+
+/// その場の答え（判断の失敗・写しまでの想定外の失敗）か、別のスレッドで仕上げる仕事（タスク 4.3）。
+pub(super) enum Step { Now(ToolOutcome), Encode(u32, Job) }
+pub(super) type Job = Box<dyn FnOnce(Duration) -> ToolOutcome + Send>;
+
+/// `Now` はその場で送る。`Encode` は名前つきのスレッド（`mcp-encode`）を 1 本起こし、そこで仕上げて送る。
+pub(super) fn reply_elsewhere(tool: &'static str, step: Step, started: Instant, reply: ReplyTo);
 
 /// 表示の層を読んで `ShellFacts` に答える（dump_surface.rs に置き、dump_balloon も使う）。
 pub(super) struct PresenterFacts<'a>(pub(super) &'a EmoPresenter);
 ```
 
-- `handle`: `answer` が `Some` ならその場で `reply.send`。`None` なら `super::later(world, reply, move |w| answer(w, &args))`。
+- `handle`: `answer` が `Some` なら `reply_elsewhere` へ渡す（判断の失敗と写しまでの想定外の失敗はその場で、成功は別のスレッドから `reply.send`）。`None` なら `super::later` に預け、覗くたびに `answer` をやり直して `Step::here` で仕上げる。`later` は同期で `ToolOutcome` を返す口なので、装着の前に預けた組だけは UI スレッドで符号化まで仕上げる（起動の直後に 1 度だけ。`crates/areka/src/mcp/mod.rs` は本 spec で触らない）。
+- 別のスレッドへ渡すのは持ち主の決まった写し（絵のバイト列・大きさ・文字の面の読み戻しと offset）だけで、World を借りたものは渡さない。乗算を戻す・重ね合わせ・PNG・base64・成功の `debug!` は仕事の中で行う。
 - `answer`（キャラクター）: `Emo2Wiring` が World に無い → `judge_surface(None, …)` の答え。`attached()` が偽 → `None`。それ以外は `PresenterFacts` で判断し、`Shown` は `last_shown(shell_target(scope))` の絵、`Alone` は `compose_alone(shell_target(scope), id)` の絵を `png_base64` へ渡して `outcome::with_image(outcome::ok(本文), base64)`。
 - `answer`（バルーン）: 同じ入口。判断の後、背景＝`last_shown(balloon_target(scope))` の絵の写し。`text_slot_view(balloon_target(scope))` と `wiring.runtime().borrow().surface(&ActorKey::from(scope.to_string()))` の両方が取れたら、`read_back()`・`size()`・差し込み口の `Arrangement` の offset・`TextSlotView` の `surface_size()`／`physical_size()` を `overlay_text` へ渡す。文字の面が無ければ背景だけ。
 - `PresenterFacts`: `scope_exists` ＝ `target_visible(shell_target(scope)).is_some()`、`surface_exists` ＝ `has_surface(shell_target(scope), id) == Some(true)`、`last_shown` ＝ `last_shown(shell_target(scope))` の ID。
@@ -479,8 +487,9 @@ impl Emo2Wiring {
 | 指定した surface の合成が失敗（`ComposeError`） | `NG:`＋`ComposeError` の表示 | `error!` 1 件 |
 | 文字の面の読み戻しが失敗（`TextLayerError`） | `NG:`＋エラーの表示 | `error!` 1 件 |
 | 絵のバイト数が幅×高さ×4 と合わない・幅か高さが 0 | `NG:picture size mismatch` | `error!` 1 件 |
+| 符号化のスレッドを起こせない・符号化のスレッドで panic（タスク 4.3） | `NG:`＋理由（起こせないときは OS のエラーの表示、panic は `the encoding thread panicked`） | `error!` 1 件 |
 
-- 下の 5 行が要件 4.7 の「想定外の失敗」。`error!` にはツール名（`tool`）・スコープ（`scope`）・理由（`reason`）を欄で載せる。2 本の `handle` から呼ぶ小さな関数 `fail(tool, scope, reason) -> ToolOutcome`（`dump_surface.rs` に置く）が、`error!` と `outcome::ng` をまとめる。
+- 下の 6 行が要件 4.7 の「想定外の失敗」。`error!` にはツール名（`tool`）・スコープ（`scope`）・理由（`reason`）を欄で載せる。2 本の `handle` から呼ぶ小さな関数 `fail(tool, scope, reason) -> ToolOutcome`（`dump_surface.rs` に置く）が、`error!` と `outcome::ng` をまとめる。
 - 合成メモの全破棄（`InvalidateCache`）を本番で送る所は今 0 か所なので、3 行目は今の本番では起きない。
 - 失敗の結果は `outcome::ng` だけで作るので、画像は付かない（要件 4.8）。
 
@@ -535,5 +544,5 @@ impl Emo2Wiring {
 ## Performance & Scalability
 
 - 1 回の呼び出しの仕事: 絵の写し 1 回・乗算を戻す 1 回・zlib の圧縮・CRC の表引き・base64。バルーンはこれに文字の面の読み戻し（GPU から CPU への写し 1 回）と重ね合わせ。どれも絵の大きさに比例し、待つ処理は無い。所要時間は**未測定**（実機確認で記録する）。
-- **合否の線**: 配布用のビルドで、既定ゴーストのキャラクター 1 枚（434×687 前後）の `handle` の所要時間が 1 フレーム（16 ms）以内。超えたら、絵の写しまでを UI スレッドで行い、符号化を別のスレッドへ渡して `mcp::later` で結果を受ける形へ替える（`ReplyTo` はスレッドをまたげる）。**2026-10-05 の実機確認で線を越えた見込みになり、別のスレッドへ逃がす形に替えた**（タスク 4.3）。結果は `later` を通さず、別のスレッドから `ReplyTo` で直接返す。判定は、成功の記録に足した UI スレッドの側の所要時間で行う。
+- **合否の線**: 配布用のビルドで、既定ゴーストのキャラクター 1 枚（434×687 前後）の `handle` の所要時間が 1 フレーム（16 ms）以内。超えたら、絵の写しまでを UI スレッドで行い、符号化を別のスレッドへ渡す形へ替える（`ReplyTo` はスレッドをまたげる）。**2026-10-05 の実機確認で線を越えた見込みになり、別のスレッドへ逃がす形に替えた**（タスク 4.3）。結果は `later` を通さず、別のスレッドから `ReplyTo` で直接返す。判定は、成功の記録に足した UI スレッドの側の所要時間で行う。
 - 画像の大きさで断る分岐は持たない（要件 5.5）。

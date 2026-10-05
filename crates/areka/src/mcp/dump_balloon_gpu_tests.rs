@@ -20,6 +20,7 @@ use wintf::ecs::FrameTime;
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::spine::RecordedCall;
 use crate::emo2_boot::target_map::balloon_target;
+use crate::mcp::dump_surface::WaitAnswer;
 use crate::mcp::dump_surface::gpu_test_support::{FLUSH_EVENT, GpuRig, decode_png, unpremultiply};
 
 /// スコープ 0 が話す字（[`LINE`]・[`LINE_THEN_HIDE`] の本文）。
@@ -176,7 +177,7 @@ fn balloon_text_lies_on_the_background_at_the_text_area_origin() {
     let mut gpu = GpuRig::new(LINE, 96);
     let spoke = speak(&mut gpu, 100);
     let text = text_surface(&gpu.rig.world, 0);
-    let answer = gpu.dump_balloon(None).try_answer().ok().flatten();
+    let answer = gpu.dump_balloon(None).wait_answer();
     let background = gpu.balloon_composed(0);
     let origin = gpu.text_area_origin(0, (background.0, background.1));
     let down = gpu.shutdown();
@@ -193,7 +194,7 @@ fn balloon_text_lies_on_the_background_at_the_text_area_origin() {
             (origin.0 as u32, origin.1 as u32),
         )),
     );
-    let answer = answer.expect("装着の後はその場で答える");
+    let answer = answer.expect("装着の後は上限のうちに答えが届く");
     let (is_error, body, mime, picture) = read_picture(&answer.outcome);
     assert_eq!(
         (
@@ -229,10 +230,10 @@ fn balloon_at_dpi_144_keeps_native_size_and_text_position() {
         let mut gpu = GpuRig::new(LINE, dpi);
         let spoke = speak(&mut gpu, 100);
         let text_size = text_surface(&gpu.rig.world, 0).map(|(size, _)| size);
-        let answer = gpu.dump_balloon(None).try_answer().ok().flatten();
+        let answer = gpu.dump_balloon(None).wait_answer();
         let background = gpu.balloon_composed(0);
         let down = gpu.shutdown();
-        let answer = answer.expect("装着の後はその場で答える");
+        let answer = answer.expect("装着の後は上限のうちに答えが届く");
         let (is_error, body, _, picture) = read_picture(&answer.outcome);
         let background = (background.0, background.1, unpremultiply(&background.2));
         (
@@ -283,9 +284,9 @@ fn hidden_balloon_returns_the_same_pixels() {
     let mut gpu = GpuRig::new(LINE_THEN_HIDE, 96);
     let spoke = speak(&mut gpu, 1);
     let visible_before = balloon_visible(&gpu.rig.world);
-    let before = gpu.dump_balloon(None).try_answer().ok().flatten();
+    let before = gpu.dump_balloon(None).wait_answer();
     let hidden = gpu.frames_until(1, |world| balloon_visible(world) == Some(false));
-    let after = gpu.dump_balloon(None).try_answer().ok().flatten();
+    let after = gpu.dump_balloon(None).wait_answer();
     let background = gpu.balloon_composed(0);
     let down = gpu.shutdown();
 
@@ -329,13 +330,13 @@ fn hidden_balloon_returns_the_same_pixels() {
 fn never_spoken_scope_returns_only_the_background() {
     let mut gpu = GpuRig::new(LINE, 96);
     let spoke = speak(&mut gpu, 100);
-    let answer = gpu.dump_balloon(Some(1)).try_answer().ok().flatten();
+    let answer = gpu.dump_balloon(Some(1)).wait_answer();
     let background = gpu.balloon_composed(1);
     let down = gpu.shutdown();
 
     let background = (background.0, background.1, unpremultiply(&background.2));
     let (is_error, body, mime, picture) =
-        read_picture(&answer.expect("装着の後はその場で答える").outcome);
+        read_picture(&answer.expect("装着の後は上限のうちに答えが届く").outcome);
     assert_eq!(
         (
             spoke,
@@ -372,13 +373,8 @@ fn scope_two_is_no_such_scope_and_calls_do_not_disturb_the_ghost() {
     let first = gpu.flush_to_shiori();
     let before = gpu.calls();
     let (answers, levels) = count_levels(|| {
-        [None, Some(0), Some(1), Some(2), Some(-1)].map(|scope| {
-            gpu.dump_balloon(scope)
-                .try_answer()
-                .ok()
-                .flatten()
-                .map(|a| a.outcome)
-        })
+        [None, Some(0), Some(1), Some(2), Some(-1)]
+            .map(|scope| gpu.dump_balloon(scope).wait_answer().map(|a| a.outcome))
     });
     let second = gpu.flush_to_shiori();
     let after = gpu.calls();
