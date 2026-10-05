@@ -23,16 +23,35 @@
        E  tools/package.ps1 (metadata and nar-sample-path), tools/crates-io.ps1 (metadata) and the
           run bodies of .github/workflows/release.yml (metadata) each have an Invoke-Utf8Child
           call with that element
+  3. cp932 child: this script starts itself with -Cp932Child as a windowless child that has its
+     own console (Invoke-Utf8Child -OwnConsole). Only that child sets its own console to code
+     page 932 (Set-OwnConsoleCp932), then checks with the fixed sample {"description":"<U+7248>",
+     "version":"0.0.1"} written as raw UTF-8 bytes by a child pwsh:
+       calibration  the plain call (@(& pwsh ... 2>&1) | ConvertFrom-Json) must break the sample
+                    (else this console cannot detect a regression)
+       production   Invoke-Utf8Child must read the sample exactly
+       real         Invoke-Utf8Child cargo metadata must give exactly one areka package with a
+                    version, printed as version=<v>
+     The parent copies the child's lines, fails on a non-zero exit, reads the version itself and
+     fails unless the child's version=<v> line is the same, and fails if its own two console code
+     pages changed. The parent never sets its own console.
   All failures are collected and printed, then the exit code is decided once.
   Writes nothing, creates no temporary files, prints ASCII only, never prints the environment.
 
   Run: pwsh -NoProfile -File tools/encoding-check.ps1
+  (-Cp932Child is internal; run by hand from a terminal it changes nothing and exits with 1.)
 #>
 using namespace System.Management.Automation.Language
 #Requires -Version 7
+param(
+    [switch]$Cp932Child   # internal: only the windowless child started by this script uses it
+)
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
+
+# Invoke-Utf8Child: read a child's output as UTF-8 regardless of the console code page
+. (Join-Path $PSScriptRoot 'utf8-child.ps1')
 
 $NonAscii = '[^\t\r\n\x20-\x7E]'
 $SelfWhere = 'tools/encoding-check.ps1'
@@ -44,12 +63,13 @@ $RequiredCalls = [ordered]@{
     '.github/workflows/release.yml' = @('metadata')
 }
 
-# Printable form: non-ASCII and control chars become \uXXXX, long text is cut.
-function Show-Ascii([string]$s) {
+# Printable form: non-ASCII and control chars become \uXXXX, text longer than $Max is cut
+# ($Max 0 = never cut).
+function Show-Ascii([string]$s, [int]$Max = 80) {
     $t = -join ($s.ToCharArray() | ForEach-Object {
             if ([int]$_ -ge 0x20 -and [int]$_ -le 0x7E) { $_ } else { '\u{0:X4}' -f [int]$_ }
         })
-    if ($t.Length -gt 80) { $t.Substring(0, 77) + '...' } else { $t }
+    if ($Max -gt 0 -and $t.Length -gt $Max) { $t.Substring(0, $Max - 3) + '...' } else { $t }
 }
 
 # Leaf name of a command (cargo, & 'cargo.exe', C:\x\chcp.com), or $null.
@@ -191,7 +211,88 @@ function Get-TargetResult([string]$Text, [string]$Where, [bool]$IsYaml) {
     [pscustomobject]@{ Findings = $f.ToArray(); CallWords = $w.ToArray() }
 }
 
+# ---- 3. cp932 child: shared parts ----
+$root = Split-Path -Parent $PSScriptRoot
+$pwsh = [Environment]::ProcessPath
+$VersionPattern = '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$'
+
+# The only console rewrite rule C allows: called only in the windowless child (-Cp932Child), on
+# the console that child owns alone.
+function Set-OwnConsoleCp932 {
+    $cp932 = [System.Text.Encoding]::GetEncoding(932)
+    [Console]::OutputEncoding = $cp932
+    [Console]::InputEncoding = $cp932
+}
+
+# Version of the areka package read with Invoke-Utf8Child cargo metadata. Throws (ASCII message).
+function Read-ArekaVersion {
+    $r = Invoke-Utf8Child cargo @('metadata', '--no-deps', '--locked', '--format-version', '1',
+        '--manifest-path', (Join-Path $root 'Cargo.toml'))
+    if ($r.Code) { throw "cargo metadata exited with code $($r.Code): $(Show-Ascii ([string]($r.ErrLines | Select-Object -Last 1)))" }
+    try { $meta = $r.Out | ConvertFrom-Json } catch { throw 'cargo metadata output is not JSON' }
+    $pkgs = @($meta.packages | Where-Object { $_.name -ceq 'areka' })
+    if ($pkgs.Count -ne 1) { throw "expected exactly one areka package, got $($pkgs.Count)" }
+    $v = [string]$pkgs[0].version
+    if ($v -cnotmatch $VersionPattern) { throw "areka version is not a version: $(Show-Ascii $v)" }
+    $v
+}
+
+if ($Cp932Child) {
+    # Run by hand from a terminal: do not touch the developer's console.
+    if (-not ([Console]::IsOutputRedirected -and [Console]::IsErrorRedirected)) {
+        '-Cp932Child is internal; run tools/encoding-check.ps1 without it'
+        exit 1
+    }
+    $bad = [System.Collections.Generic.List[string]]::new()
+    $same = { param([string]$a, [string]$b) [string]::Equals($a, $b, [StringComparison]::Ordinal) }
+
+    try {
+        Set-OwnConsoleCp932
+        $cp = [Console]::OutputEncoding.CodePage
+        if ($cp -eq 932) { 'PASS cp932 child: own console code page 932' }
+        else { $bad.Add("FAIL cp932 child: own console code page is $cp, not 932") }
+    }
+    catch { $bad.Add("FAIL cp932 child: cannot set own console to 932: $(Show-Ascii $_.Exception.Message)") }
+
+    # The sample is written as raw UTF-8 bytes by a child pwsh. U+7248 ends with 0x88, a lead byte
+    # in 932, so a 932 decoder swallows the following double quote.
+    $desc = "`u{7248}"
+    $sample = '{"description":"' + $desc + '","version":"0.0.1"}'
+    $b64 = [Convert]::ToBase64String([System.Text.UTF8Encoding]::new($false).GetBytes($sample))
+    $emit = "[Console]::OpenStandardOutput().Write([Convert]::FromBase64String('$b64'))"
+
+    # calibration: the plain call must break the sample on this console
+    $raw = @(& $pwsh -NoProfile -NonInteractive -Command $emit 2>&1) -join "`n"
+    if ($LASTEXITCODE) { $bad.Add("FAIL cp932 child: calibration: sample writer exited with code $LASTEXITCODE") }
+    else {
+        $readOk = $false
+        try { $readOk = & $same ($raw | ConvertFrom-Json).description $desc } catch { }
+        if ($readOk) { $bad.Add('FAIL cp932 child: calibration: the plain call read the sample intact; cannot detect a regression on this console') }
+        else { "PASS cp932 child: calibration (the plain call breaks the sample: $(Show-Ascii $raw))" }
+    }
+
+    # production: Invoke-Utf8Child must read the sample exactly
+    try {
+        $r = Invoke-Utf8Child $pwsh @('-NoProfile', '-NonInteractive', '-Command', $emit)
+        if ($r.Code) { throw "sample writer exited with code $($r.Code)" }
+        $exact = $false
+        try { $j = $r.Out | ConvertFrom-Json; $exact = (& $same $j.description $desc) -and (& $same $j.version '0.0.1') } catch { }
+        if ($exact) { 'PASS cp932 child: production (Invoke-Utf8Child reads the sample exactly)' }
+        else { $bad.Add("FAIL cp932 child: production: Invoke-Utf8Child read the sample as $(Show-Ascii $r.Out 0)") }
+    }
+    catch { $bad.Add("FAIL cp932 child: production: $(Show-Ascii $_.Exception.Message)") }
+
+    # real: the version of the current workspace
+    try { "version=$(Read-ArekaVersion)" }
+    catch { $bad.Add("FAIL cp932 child: real: $(Show-Ascii $_.Exception.Message)") }
+
+    $bad
+    if ($bad.Count) { exit 1 }
+    exit 0
+}
+
 $fails = [System.Collections.Generic.List[string]]::new()
+$cpBefore = @([Console]::OutputEncoding.CodePage, [Console]::InputEncoding.CodePage)
 
 # ---- 1. calibration ----
 $jp = "`u{65E5}`u{672C}"
@@ -241,7 +342,6 @@ foreach ($s in $calib) {
 if ($fails.Count -eq 0) { "PASS calibration ($($calib.Count) samples)" }
 
 # ---- 2. static rules over the real files ----
-$root = Split-Path -Parent $PSScriptRoot
 $targets = @(Get-ChildItem -LiteralPath (Join-Path $root 'tools') -Filter '*.ps1' -File) +
 @(Get-ChildItem -LiteralPath (Join-Path $root '.github/workflows') -Filter '*.yml' -File)
 $callWordsOf = @{}
@@ -259,6 +359,32 @@ foreach ($where in $RequiredCalls.Keys) {
         else { $fails.Add("FAIL ${where}: E no Invoke-Utf8Child call with $w") }
     }
 }
+
+# ---- 3. cp932 child ----
+$child = $null
+try { $child = Invoke-Utf8Child $pwsh @('-NoProfile', '-NonInteractive', '-File', $PSCommandPath, '-Cp932Child') -OwnConsole }
+catch { $fails.Add("FAIL cp932 child: cannot start: $(Show-Ascii $_.Exception.Message)") }
+if ($null -ne $child) {
+    $childLines = @($child.Out -split '\r?\n' | Where-Object { $_ -ne '' } | ForEach-Object { Show-Ascii $_ 0 })
+    $childFails = @($childLines | Where-Object { $_.StartsWith('FAIL ') })
+    $childLines | Where-Object { -not $_.StartsWith('FAIL ') }
+    foreach ($e in $child.ErrLines) { "cp932 child stderr: $(Show-Ascii $e 0)" }
+    foreach ($f in $childFails) { $fails.Add($f) }
+    if ($child.Code -and $childFails.Count -eq 0) { $fails.Add("FAIL cp932 child: exit code $($child.Code)") }
+    $childVersion = @($childLines | Where-Object { $_.StartsWith('version=') })
+    if ($childVersion.Count -eq 1) {
+        try {
+            $mine = 'version=' + (Read-ArekaVersion)
+            if ([string]::Equals($childVersion[0], $mine, [StringComparison]::Ordinal)) { "PASS cp932 child: $mine is the version this process read" }
+            else { $fails.Add("FAIL cp932 child: child printed $($childVersion[0]) but this process read $mine") }
+        }
+        catch { $fails.Add("FAIL cp932 child: this process cannot read the version: $(Show-Ascii $_.Exception.Message)") }
+    }
+    elseif ($childFails.Count -eq 0) { $fails.Add("FAIL cp932 child: expected one version= line, got $($childVersion.Count)") }
+}
+$cpAfter = @([Console]::OutputEncoding.CodePage, [Console]::InputEncoding.CodePage)
+if (($cpBefore -join ',') -ceq ($cpAfter -join ',')) { "PASS own console code pages unchanged (output $($cpAfter[0]), input $($cpAfter[1]))" }
+else { $fails.Add("FAIL own console code pages changed: output $($cpBefore[0]) -> $($cpAfter[0]), input $($cpBefore[1]) -> $($cpAfter[1])") }
 
 $fails
 if ($fails.Count) { "encoding check: $($fails.Count) failure(s)"; exit 1 }
