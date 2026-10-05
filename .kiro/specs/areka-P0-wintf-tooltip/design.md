@@ -391,7 +391,7 @@ pub struct TooltipRange {
 
 /// 登録した範囲の持ち手（中身は非公開）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TooltipRangeId { /* window: Entity, serial: u32 */ }
+pub struct TooltipRangeId { /* window: Entity, serial: u64 */ }
 
 impl TooltipRangeId {
     pub fn window(&self) -> Entity;
@@ -749,7 +749,7 @@ pub(crate) fn note_button_press();
 - **不変の決まり**: ツールチップが出ているなら出す番は `Active`。`Active` でなくなる前に必ず消す。印は使い回さない。
 
 ### Logical Data Model
-- `TooltipRanges`（窓のエンティティの部品）: `Vec<(serial: u32, TooltipRange)>`（登録の順）＋次の通し番号。
+- `TooltipRanges`（窓のエンティティの部品）: `Vec<(TooltipRangeId, TooltipRange)>`（登録の順。`hit` が窓を引数に取らずに持ち手を返せるよう持ち手ごと持つ）＋次の通し番号（u64＝一回りして使い回さない）。
 - `TooltipSession`（NonSend の資源・1 つ）: `TurnMachine`（状態・次の印・最後にツールチップが消えた時刻）・`Option<TipWindow>`・今の出す番の控え（知らせの関数の写し・基準の位置）。
 - 押下の印: UI スレッドの `Cell<bool>`（`mod.rs` の中）。
 
