@@ -42,6 +42,9 @@ pub enum ComposeMethod {
     /// src の透過を無視して不透明扱いで重ねる。シーム。
     Asis,
     /// ベース完全置換・XY 無視（先頭層以外は overlay 読替）。シーム。
+    ///
+    /// 「XY 無視」は pattern定義の話。element定義の `base` はこの値を通らず、読み込み時に
+    /// [`ComposeMethod::Overlay`] で置かれて X,Y を位置として使う（areka-P0-element-base-method 要件 4.4）。
     Base,
     /// 不透明度の乗算（切り抜き・RGB 無視・範囲外は消去）。シーム。
     Reduce,
