@@ -14,7 +14,7 @@
 
 - **seriko の表**（`crates/areka-seriko/src/table.rs` の `AnimationTable::from_world`）が記録するのは `random`・`bindrandom`・`sometimes`・`rarely` だけ。`always`・`runonce`・`bind` などは駆動されない。時計は 2 層（1000 ms の抽選の境目と、`frame_at` の累積の待ち時間＝`timeline.rs`）で、**繰り返しの概念が無い**（1 回再生したら次の抽選を待つ）。刻みは `spawn_loop_ticker`（`crates/areka-ghost/src/ticker.rs`・16 ms）→ `SerikoMsg::Tick`。
 - **出力は `PatternState`**（アニメーションの id → 1 つの `PatternFrame`・`crates/areka-emo-compose/src/pattern.rs`）→ `DisplayCommand::Show{pattern}` → 合成のキャッシュの鍵 `ComposeKey{surface_id, binds, pattern}`（`crates/areka-emo-present/src/cache.rs`・`CAPACITY = 3`）。**コマが替わるたびに CPU で合成し直す**。
-- **合成器**: `ComposeMethod::is_implemented()` は `Overlay` だけ（`method.rs`）。`flatten_surface`（`plan.rs`）は pattern が指すサーフェスへ再帰する（位置のずれの加算・循環の停止）が、**入れ子の内側は `PatternState` を見ない**（`is_top_level=false`）。
+- **合成器**: `ComposeMethod::is_implemented()` は `Overlay` だけ（`method.rs`）。`flatten_surface`（`plan.rs`）は pattern が指すサーフェスへ再帰する（位置のずれの加算・循環の停止）が、**入れ子の内側は `PatternState` を見ない**（`is_top_level=false`）。→ **2026-10-05 `surface-element-nesting` の着地で古くなった**: 部品の段（element定義で置いた子・pattern定義の先）は `PatternState` の部品の欄（`set_part`・`part`）を読み、seriko の `PartClocks`（`crates/areka-seriko/src/parts.rs`・スコープ × 部品の番号 × animation の番号）が部品の時計を回す。数字だけの element定義はサーフェスの番号（`ElementKind`・`NormalizedElement.kind`）。周期で回る語を足すときは `PartAnim::Playing` の開始の時刻から求める形に載せる（同 spec の design「残した」）。
 - **element は画像専用**: `Element{layer, path}`（`crates/areka-parsers/src/shell/model.rs`）に描画メソッドの欄が無く、`overlay` 以外の行は読み捨て。
 - バルーンの面は合成した `surfaces.txt` を同じパーサと `bake` へ通す（`crates/areka-emo-present/src/balloon.rs`）＝読み込みの変更は届くが、面ごとのアニメーションの表（`SerikoLoopConfig.balloon_tables`）は emo2 では空。
 

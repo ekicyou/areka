@@ -46,7 +46,7 @@
 - `push_static_element_ops`: element を層の昇順に並べ、束縛済みの画像だけを `BlitOp` にする。サーフェスを指す element を知らない。
 - `flatten_surface`: 層 (i) で上の関数を呼び、層 (ii) で着せ替えとコマを animation の番号順に積む。コマと着せ替えの pattern0 が指すサーフェスへは再帰する（`is_top_level=false`）。再帰の先では `PatternState` を見ない＝止まった絵。**着せ替えの集合（`binds`）は全段で同じものを渡している**（要件 5.12 の「子へ持ち込まない」とは逆の今の振る舞い。pattern定義の側は今のまま、element定義の側だけ空にする必要がある）。
 - 循環の `warn!` は `flatten_surface` と `flatten_extent` の中にあり、**合成のたびに出る**（外形と命令で 2 回）。
-- `compute_extent`／`flatten_extent`: 全 element の「位置＋原寸」と、全着せ替えの pattern0 の先を足した静的な外形。`PatternState` に依らない。子の範囲を足す再帰をここにも入れれば、要件 2.5・2.6 は同じ規則で満たせる。
+- `compute_extent`／`flatten_extent`: 全 element の「累積の位置＋原寸」（element定義自身の X,Y は足さない＝2026-10-05 の完了時に実コードで確かめて訂正・reka-P0-extent-element-offset で起票）と、全着せ替えの pattern0 の先を足した静的な外形。`PatternState` に依らない。子の範囲を足す再帰をここにも入れれば、要件 2.5・2.6 は同じ規則で満たせる。
 
 ### 2.5 当たり判定（`hit.rs`・`crates/areka-emo-present/src/presenter/hit.rs`）
 
