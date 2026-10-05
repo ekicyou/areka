@@ -94,8 +94,3 @@ zsp は「所有の鎖」でスコープ窓の重なりを構造保証して着�
 - 据え置きのままでよい。10-02 の後に C1・C2 で着地した 12 本の完了記録に、spine の族や重なり順・vblank のテストが赤を出した記録は無い（発動の条件は満たされていない）。`crates/wintf/src/ecs/window/zorder_pair_maintain.rs`・`crates/wintf/src/runtime/tick_bridge.rs` を触ったコミットは 0。
 - A-2 の族の数え直し: 30 秒の期限 `SPIN_WAIT`（`crates/areka/src/emo2_boot/spine.rs`）を名指しするか、それを使う `spin_wait_until` を呼ぶファイルは `crates/areka/src/` に 18 本（名指しは 10 本）。`#[ignore]` は 0。brief の表の「5 ファイル」「約 10」は古い＝着手時に A-2 の対象を引き直す。
 - 規模・切り方は 10-02 のまま。議題・穴: なし。
-
-## 2026-10-05 `shell-balloon-frame-align` の完了時の観測（ブランチ `21089d83`）
-
-- A-2 の族が負荷の高い走行で出た。`cargo test -j 2 -p areka --bin areka`（全体）で `install::desk::overwrite_tests` の 3 本と `ghost_session::switch_translate_tests` の 1 本が `spin_wait_until`（30 秒）の期限切れで赤。落ちる顔ぶれは回すたびに変わり、`--test-threads=1` では 8 本とも緑。直後の `tools/test-all.ps1`（`-j 4`）では全段緑。どちらのファイルも足場の `ghost_switch_test_support.rs` も、その spec では触っていない。
-- 据え置きの判断は変えない（main での赤ではない）。着手するときは、この 2 つのファイルも A-2 の対象に数える。
