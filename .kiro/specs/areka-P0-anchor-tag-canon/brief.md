@@ -123,3 +123,13 @@
   - Desired Outcome の「装飾 16 項目＋descript `anchor.*.font.*` 族が 3 状態で効き、下線は縦書きで列の右側に出る」は `anchor-style-canon` の到達点へ読み替える。
 - Boundary Candidates の「アンカー範囲＋イベント（機能）と装飾 16 項目（見た目）の 2 相」は、この切り出しで消化した。
 - 箱の押下の判定は `talk-fast-forward`（話している最中の早送り）・`balloon-markers`（矢印のクリック）も同じ `judge_box_click` に結論を足しにくる。先に着地した方が判定の順（選択 → アンカー → 早送り → シェル の順など）を決め、後の方がそこへ足す。
+
+## 2026-10-05 `/kiro-discovery`「バルーンのリンクと OS の連携」で直したこと
+
+- **誤りの訂正**: 上の Scope の Out にある「選択肢 `\q`/`\__q` の機構（完了済み・不変）」のうち、`\__q` は**未実装**だった（`decode.rs` の素通しの腕で `Raw` になり `compile.rs` が捨てる・網羅台帳 `sakura-script.toml` の `\__q` の行は「無い」・引受先なし）。`\__q` は新しい spec `range-choice-tag` が引き受け、本 spec の後に作る（開発者裁定・議題 4＝本 spec に足さない）。
+- **後に乗る spec**: 本 spec が作る「範囲を押せるようにする仕組み」（範囲の当たりの行の集合）の上に、次の 3 本が乗る。
+  - `range-choice-tag`（同じ仕組みで範囲を選択肢にする）。
+  - `link-context-copy`（右クリックでアンカーの行き先をコピー）。
+  - `balloon-link-hover`（`OnAnchorHover` と、アンカーの上に止まったときの行き先の説明）。
+  範囲の当たりは、選択肢の範囲にも使い回せる形で作ると後が楽になる（設計の段で検討）。
+- **OS 連携部の可否**（Out の 3 つ目）: アンカーから URL などを開くのは、ゴーストが `OnAnchorSelect(Ex)` の応答で `\j[…]` などを返す正典の作法で足りる。`\j` と `\![open,…]` は `open-external-tags` が作る。本 spec はアンカーの既定の動作で OS を呼ばない。

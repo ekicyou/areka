@@ -106,3 +106,10 @@ MCP のエージェントは `sakurascript` と `raise_event` で、正典のタ
 - 規模の見立て: M（10〜14 タスク・同意の窓を含めると上振れ）。
 </content>
 </invoke>
+
+## 2026-10-05 `/kiro-discovery`「バルーンのリンクと OS の連携」で足したこと
+
+- 高の段の `\j[URL]`・`\![open,file/browser/explorer/editor/mailer]` は、新しい spec `open-external-tags` が**本 spec より先に**作る（開発者裁定・議題 5＝先に入れてよい・開くたびに必ず記録）。開発者の考え方「エージェントは元から強い権限を持つ」に沿う。
+- `open-external-tags` は開く処理を 1 か所（例: `open_external(kind, target, origin)`）に集め、毎回 `info` の記録を出す。本 spec の同意の窓は、その 1 か所へ差し込めば足りる。
+- 本 spec が入るまでは、MCP の `sakurascript` から来た `\![open,file,…]` も記録だけで素通しになる。
+- 外部アプリは OS の既定のアプリで開く（開発者「いまは OS の受け口を最大限活用すべき」・SSP の外部アプリの設定は写さない）。
