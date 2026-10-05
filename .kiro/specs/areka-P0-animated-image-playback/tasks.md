@@ -14,7 +14,7 @@
   - 完了の姿: 取り込みのコミットがあり、全テストが緑で、research.md に「前の数字」と「引き直した結果（食い違い 0 件、または件数と中身）」が載っている
   - _Requirements: 7.3, 7.7_
 
-- [ ] 1.2 試験用のシェルとバルーンの検体を置く
+- [x] 1.2 試験用のシェルとバルーンの検体を置く
   - `crates/areka-emo-compose/tests/fixtures/animated-playback/` に、シェル（`surfaces.txt` と絵）とバルーン（面の絵）を置く。絵は読み込みの側の検体から `rgb.apng`（終わりなし）・`basic.apng`（合計 2 回・全透明のコマと待ち時間 0 を含む）・`rgb.webp`（終わりなし）・`alpha.webp`（合計 3 回・待ち時間 0 を含む）を写す
   - 中身は少なくとも: element定義に置いた動く絵／`surface<数字>.png` として置いた動く絵／`element0` を持つサーフェスの動く `surface<数字>.png`／同じ絵を置く 2 つのサーフェス／同じ絵を 1 つのサーフェスの 2 か所に置く行／手書きの `always`（一番上と部品）／`bind+always` の行／待ち時間の合計が 0 の手書きの `always`
   - 完了の姿: 検体がリポジトリにあり、シェルは今の読み手と `load_shell_target` で、バルーンの面は `resolve_balloon_faces` で読んで失敗せず、第三者の著作物が 0 件で、ワークスペースの見張りのテストが緑のまま
@@ -228,3 +228,6 @@
   - 実装の途中で見つけた範囲外の問題がすべて `/kiro-discovery` で起票され roadmap に載っていることを確かめる
   - 完了の姿: 3 本の brief の申し送りと実物の食い違いが 0 件で、`import` の扱いの差分が 0（読み手・`method.rs` に変更なし）
   - _Requirements: 5.1, 5.2, 10.5, 10.6, 10.7_
+
+## Implementation Notes
+- 1.2: 検体は `tests/fixtures/animated-playback/{shell,balloon}/`。面とバルーンの面は `.png` の名前しか拾わないので、`surface1.png`＝`basic.apng`・`surface2.png`／`balloons0.png`＝`rgb.apng`・`balloons1.png`＝`alpha.webp` の中身の写し。`rgb.*` は α を持たず左上の白が抜き色になる＝決め手の画素は写し元 `crates/areka-emo-atlas/src/testdata/animated/` の README の表を正本に選ぶ（5.4）

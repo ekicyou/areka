@@ -664,3 +664,7 @@ mod boxes_tests;
 #[cfg(test)]
 #[path = "shell_target_nesting_tests.rs"]
 mod nesting_tests;
+
+#[cfg(test)]
+#[path = "shell_target_animated_fixture_tests.rs"]
+mod animated_fixture_tests;
