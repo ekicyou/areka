@@ -65,7 +65,7 @@
   - _Requirements: 3.1, 3.2, 3.4, 9.1, 9.2_
   - _Boundary: wintf の `window_proc`（`mouse_dblclick_wheel.rs`・その兄弟のテスト・`mouse_click.rs` の 1 行）_
 
-- [ ] 3. 網羅の台帳と文書
+- [x] 3. 網羅の台帳と文書
 
 - [x] 3.1 (P) 台帳の 2 行と、連動する文書・生成物
   - 台帳の `OnMouseDragStart:1`・`OnMouseDragEnd:1` を実装済み（担当は本 spec）にし、備考を `OnMouseDoubleClick:1` と同じ 5 項目で書き直す。末尾に「パッシブモードでの抑えは持たない（印は定常の振り分けの `on_mouse`）。右ボタン・バルーン窓・タッチとペンは対象外」を書く
@@ -77,7 +77,7 @@
   - _Boundary: 台帳と文書_
   - _Depends: 1.1, 1.2_
 
-- [ ] 3.2 (P) 正典が書いていない点の裁量の記録
+- [x] 3.2 (P) 正典が書いていない点の裁量の記録
   - `doc/COMPAT_ARCHITECTURE.md` §8 の表に、design.md「台帳と文書」の 6 行（取り消しでも終了を送る・取り消しの座標・離したときの座標と当たり判定・Reference2 を `0`・当たり判定の外や箱の上からのドラッグ・ダブルクリックの 2 回目のまま動かしたとき）を、既存の行の粒度で足す。出典は本 spec
   - §8 の表に 6 行が載り、既存の行の形と揃っている
   - _Requirements: 7.4_
