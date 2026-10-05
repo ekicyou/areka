@@ -203,3 +203,4 @@
   5. 6 章の調べもの 7 件（`tRNS` の付いた絵の届き方を含む）。
   6. 本番の決め打ちは 2 か所という数え方（論点 8）。
   8. **議題 2 の裁定**: `.pna` は宣言が何であっても無いものとして扱い、絵は普通に描く（要件 5 の 7）。`select_source` の表から `.pna` の有無による枝（`Pna` → `Unsupported`）が無くなる。バルーンが `.pna` のせいで全体ごと使えなくなる経路（論点 4）も無くなる。`probe_pna` は「無視した枚数」の記録のためだけに残るか、設計で決める。既存のテスト `off_with_pna_ignores_own_alpha_selects_pna_seam` などは書き換えになる。
+  9. **議題 3 の裁定**: シェルの `descript.txt` が無いシェルは扱わない（論点 2 の ⑴）。`placement::source::load_descript_source_for_shell` と `emo2_boot::assets::build_shell_assets` の失敗は今のまま。

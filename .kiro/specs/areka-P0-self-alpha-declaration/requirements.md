@@ -41,6 +41,7 @@
 - **Out of scope**:
   - `.pna` の画素を透明度として使うこと（開発者方針で非対応のまま。説明書と台帳の `.pna` の記述は保つ）。
   - バルーンの `use_input_alpha`（入力ボックス系のバルーン）と、`paint_transparent_region_black`／`seriko.paint_transparent_region_black`。
+  - シェルの descript.txt そのものが無いシェルの起動（今までどおり起動に失敗し、理由が記録に残る。画像だけのシェルも descript.txt は持つものとする）。
   - 全画素が透明になる面を表示したときの窓・当たり判定の確かめ（roadmap 覚え書きの ⑷）。
   - `overlay` 以外の描画メソッドの `element0` を持つ面で画像が土台に使われるずれ（同 ⑹）と、`surface.append` の行にだけ現れる絵のファイル名。
   - 合成の描画メソッドそのもの（`overlay` 以外のメソッドの中身）。
@@ -62,7 +63,7 @@
 2. When `seriko.use_self_alpha` の値が `1` または `true` のとき, the areka shall そのシェルを要件 3 の扱いで描く。
 3. When `seriko.use_self_alpha` の値が `full` のとき, the areka shall そのシェルを要件 4 の扱いで描く。
 4. When `seriko.use_self_alpha` の値が `0` のとき, the areka shall そのシェルを要件 5 の扱いで描く。
-5. If シェルの descript.txt に `seriko.use_self_alpha` の行が無い、またはシェルの descript.txt が無いとき, then the areka shall そのシェルを要件 9 の扱い（絵の中身を見て決める）で描く。
+5. If シェルの descript.txt に `seriko.use_self_alpha` の行が無いとき, then the areka shall そのシェルを要件 9 の扱い（絵の中身を見て決める）で描く。
 6. If `seriko.use_self_alpha` の値が `1`・`true`・`full`・`0` のどれでもないとき, then the areka shall 行が無いときと同じに扱い、読めなかった値を記録に残す。値は前後の空白を除き、英字の大文字と小文字を区別せずに比べる（`TRUE`・`Full` は読める。`false` など 4 つ以外の語は読めない値）。
 7. When ゴーストを切り替える、またはシェルを切り替えるとき, the areka shall 切り替えた先のシェルの宣言で描き、前のシェルの宣言を持ち越さない。
 
@@ -182,4 +183,5 @@ brief の議題 3 つと、要件を書く中で決めを置いた点。どれ�
 4. **`.pna` が在る絵**（要件 5 の 7）: **解決（ディスカッション議題 2）**。宣言が何であっても `.pna` は無いものとして扱い、絵は普通に描く。今まで表示しなかった「α の無い絵 ＋ `.pna`」は、抜き色で表示されるようになる。
 5. **宣言の値が読めないとき**（要件 1 の 6・要件 2 の 6）: 正典に定めが無いので、既定（`0`）として扱い記録する、とした。
 6. **`surfaces.txt` が在るのに読めないとき**（要件 6 の 6）: 「無い」とは区別して、今までどおり失敗のままとした。
+8. **シェルの descript.txt が無いとき**: **解決（ディスカッション議題 3）**。本仕様では扱わない。要件 1 の 5 を「行が無いとき」だけに狭め、範囲外に明記した。
 7. **全画素が透明になる面（roadmap 覚え書きの ⑷）**: brief が「要件の段で確かめる項目に入れるかを決める」としている。本要件では範囲外に置いた。入れる場合は確かめの項目を足す。
