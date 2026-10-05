@@ -480,6 +480,7 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
                     target: "kanade",
                     event = "mouse_input_ignored",
                     phase = phase_label(&state.phase),
+                    input = ?m,
                     "非 Steady フェーズのマウス入力——状態を変えず無視（DD-IE-8）"
                 );
                 (state, Vec::new())

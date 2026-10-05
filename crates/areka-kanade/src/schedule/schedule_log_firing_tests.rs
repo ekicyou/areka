@@ -661,3 +661,63 @@ fn info_talk_done_interrupted_as_non_quit_logs() {
     );
     assert_logged(&ev, Level::INFO, "talk_done_interrupted_as_non_quit");
 }
+
+// ============================================================
+// ドラッグの知らせを送らない 2 経路（areka-P0-mouse-drag-events K8・K9・要件 5.2／5.3／8.2）
+// ============================================================
+
+/// 檻用のドラッグの知らせ（座標・判定名は本檻で load-bearing でない＝種類だけを見る）。
+fn drag_input(kind: crate::msg::MouseEventKind) -> Input {
+    Input::Mouse(crate::msg::MouseInput {
+        scope: 0,
+        x: 10,
+        y: 20,
+        region: Some("Head".to_string()),
+        kind,
+    })
+}
+
+/// K8: 定常でない状態へ入れた開始／終了は、`mouse_input_ignored`（trace）がちょうど 1 件で、
+/// 捨てた知らせの中身（種類）が `input` 欄に載る（決定 D3）。記録か中身の欄を消すと赤。
+#[test]
+fn trace_mouse_input_ignored_logs_dropped_drag_input() {
+    use crate::msg::MouseEventKind;
+    for (kind, label) in [
+        (MouseEventKind::DragStart, "DragStart"),
+        (MouseEventKind::DragEnd, "DragEnd"),
+    ] {
+        for phase in [
+            Phase::BootMain,
+            Phase::ClosePending {
+                reason: CloseReason::System,
+            },
+            Phase::Stopped,
+        ] {
+            let ev = run_step(phase, drag_input(kind));
+            let ignored = logged_once(&ev, Level::TRACE, "mouse_input_ignored");
+            let input = ignored.fields.get("input").map(String::as_str);
+            assert!(
+                input.is_some_and(|v| v.contains(label)),
+                "捨てた知らせの種類 {label} が記録に載る。\n捕捉={ignored:#?}"
+            );
+        }
+    }
+}
+
+/// K9: 終了の握手の待ち（`pending_close` 在り）へ入れた開始／終了は、`mouse_close_pending`
+/// （trace）がちょうど 1 件で、GET は出さない。記録を消すと赤。
+#[test]
+fn trace_mouse_close_pending_logs_once_for_drag_input() {
+    use crate::msg::MouseEventKind;
+    let cfg = config();
+    for kind in [MouseEventKind::DragStart, MouseEventKind::DragEnd] {
+        let mut s = state_in(Phase::Steady { talk: None });
+        s.pending_close = Some(CloseReason::System);
+        let mut actions = Vec::new();
+        let ev = capture(|| {
+            actions = step(s, drag_input(kind), &cfg).1;
+        });
+        logged_once(&ev, Level::TRACE, "mouse_close_pending");
+        assert!(actions.is_empty(), "終了の握手の待ちでは GET を出さない");
+    }
+}

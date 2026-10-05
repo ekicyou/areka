@@ -9,6 +9,7 @@
 
 pub(crate) mod balloon;
 pub(crate) mod choice_drain;
+mod drag;
 pub(crate) mod file_drop;
 pub(crate) mod shell_box;
 pub(crate) mod shell_box_handler;
@@ -21,6 +22,7 @@ use std::sync::mpsc::Sender;
 use areka_emo_present::EmoPresenter;
 use areka_kanade::{CloseReason, KanadeMsg, MouseButton, MouseEventKind, MouseInput};
 use bevy_ecs::prelude::*;
+use wintf::ecs::drag::{OnDragEnd, OnDragStart};
 use wintf::ecs::pointer::{DoubleClick, OnPointerMoved, OnPointerPressed, Phase, PointerState};
 
 use crate::app_exit::{ExitOrigin, quit_app};
@@ -349,6 +351,15 @@ pub(crate) fn wire_mouse_input(world: &mut World, sender: Sender<KanadeMsg>) {
 /// `spawn_ghost_windows` の**直後**に同一 `&mut World` クロージャ内で呼ぶこと
 /// （キャラ窓が既に存在する状態・`ghost_session::prepare_ghost_windows` が組む窓を作るクロージャ）。同一
 /// World-mutation 内で同期実行するため async race はない。
+///
+/// # ドラッグの受け手（areka-P0-mouse-drag-events）
+///
+/// 同じ `insert` で `OnDragStart`（[`drag::on_char_drag_start`]）と `OnDragEnd`
+/// （[`drag::on_char_drag_end_and_notify`]）も入れる。この `OnDragEnd` は `placement::spawn` が
+/// 先に付けた `OnDragEnd(on_char_drag_end)` を**置き換える**（同じ型の部品は 1 つの窓に 1 つ）。
+/// 包みが同じ `on_char_drag_end` を先に呼ぶので位置の保存は続く。順を入れ替えない
+/// （`spawn_ghost_windows` の直後に呼ぶ。逆にすると spawn が包みを上書きし、知らせが止まる）。
+/// バルーン窓（`OnDragEnd(on_balloon_drag_end)`）には何も付けない（要件 3.3）。
 pub(crate) fn attach_char_pointer_handlers(world: &mut World) {
     // `&mut World` を借用中にクエリで別の可変借用を取れないため、まず対象 entity を
     // 収集してから 1 件ずつ挿入する。
@@ -360,6 +371,8 @@ pub(crate) fn attach_char_pointer_handlers(world: &mut World) {
         world.entity_mut(e).insert((
             OnPointerMoved(on_char_pointer_moved),
             OnPointerPressed(on_char_pointer_pressed),
+            OnDragStart(drag::on_char_drag_start),
+            OnDragEnd(drag::on_char_drag_end_and_notify),
         ));
     }
 }

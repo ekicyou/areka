@@ -34,8 +34,9 @@ fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
     // 投げ込みの 2 語を足して 23 語（areka-P0-file-drop 要件 7.3・8.8）、
     // ネットワーク更新の 19 語を足して 42 語（areka-P0-network-update 要件 2.15・9.13）、
     // シェル・バルーン切替の 3 語を足して 45 語（areka-P0-shell-balloon-switch 要件 8.2）、
-    // 翻訳の `OnTranslate` を足して 46 語（areka-P0-translate-pipeline 要件 3.4）。
-    assert_eq!(ALLOWED_EVENT_IDS.len(), 46);
+    // 翻訳の `OnTranslate` を足して 46 語（areka-P0-translate-pipeline 要件 3.4）、
+    // ドラッグの 2 語を足して 48 語（areka-P0-mouse-drag-events 要件 7.1）。
+    assert_eq!(ALLOWED_EVENT_IDS.len(), 48);
     for id in [
         "OnGhostChanging",
         "OnGhostChanged",

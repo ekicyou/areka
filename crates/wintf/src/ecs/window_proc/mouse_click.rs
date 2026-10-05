@@ -374,7 +374,7 @@ pub(super) fn WM_XBUTTONUP(
 
 /// target_entity自身または祖先（ChildOf辿り）からDragConfigを持つエンティティを探す。
 /// 見つかった場合は (entity, DragConfig clone) を返す。
-fn find_ancestor_with_drag_config(
+pub(super) fn find_ancestor_with_drag_config(
     world: &bevy_ecs::world::World,
     start: bevy_ecs::entity::Entity,
 ) -> Option<(bevy_ecs::entity::Entity, crate::ecs::drag::DragConfig)> {
