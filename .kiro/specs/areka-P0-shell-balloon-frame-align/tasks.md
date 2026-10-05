@@ -81,3 +81,5 @@
 - 4.1 の結線で枠の檻（`align_tests::`）は全部緑になった。代わりに既存のシェルの箱の檻 2 本（`box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it`・`scopes_are_judged_separately`）が、台本の `\s` だけで絵の差し替えを送らないために赤（4.2 で直す）。
 - 4.2 で既存の 3 本に絵の差し替えを足し、`speak_in_both` も `vec![vec![(0, 0)]]` の判定へ締め直した（シェルの箱の檻 11 本が全部緑）。既存の 3 本は絵と `\s` を同じフレームに届けるので「文字の層が `\s` に従う」後戻りは見分けられない。それを捕まえるのは枠の檻 2・3（`\s` が先）・4。
 - 範囲外（完了時の棚卸で起票）: areka の全体テストを `-j 2` で回すと `install::desk::overwrite_tests`（3 本）と `ghost_session::switch_translate_tests`（1 本）が `spin_wait_until`（壁時計 30 秒）の期限切れで落ちる。落ちる顔ぶれは毎回変わり、`--test-threads=1` では 8 本とも緑。本 spec はどちらのファイルも足場（`ghost_switch_test_support.rs`）も触っておらず、足場は本 spec が変えたフレームの相を通らない（`run_ghost_quit_phase` だけ）。
+- 完了時にその場で解決: `frame_visibility_integration_tests.rs` の節見出し「相の終わりに kanade へ届ける」を「フレームの終わり（提示の後）に」へ直した（説明文だけ・期待値は変えていない）。
+- 完了時の棚卸: その場で解決 1 件・起票 0 件。時間切れの揺れ 4 本は既存の `zorder-chain-residue` の A-2 が受け持つので、その brief に観測を書き足した。`wiring.rs` の `balloon_status` の可視性が必要より広い件は、設計討議の裁定（wiring.rs は説明文だけ直す）により対象外。
