@@ -20,10 +20,11 @@ argument-hint: '<feature-name> — .kiro/specs/ 配下のフィーチャー名'
 ### Phase 1: コンテキストロード
 
 1. `.kiro/specs/{feature}/spec.json` を読み、language と現在のフェーズを確認
-2. `.kiro/specs/{feature}/requirements.md` を全文読み込み
-3. `.kiro/specs/{feature}/gap-analysis.md` を全文読み込み（存在する場合）
-4. `.kiro/steering/` 配下をすべて読み込み（product.md, tech.md, structure.md + カスタム）
-5. `.kiro/settings/rules/ears-format.md` を読み込み（EARS形式検証用）
+2. `.kiro/specs/{feature}/brief.md` を全文読み込み（存在する場合。spec の動機・背景の正本）
+3. `.kiro/specs/{feature}/requirements.md` を全文読み込み
+4. `.kiro/specs/{feature}/gap-analysis.md` を全文読み込み（存在する場合）
+5. `.kiro/steering/` 配下をすべて読み込み（product.md, tech.md, structure.md + カスタム）
+6. `.kiro/settings/rules/ears-format.md` を読み込み（EARS形式検証用）
 
 ### Phase 2: イシュー収集
 
@@ -49,6 +50,17 @@ requirements.md と gap-analysis.md を精査し、以下の観点でイシュ�
 | **B: 設計判断** | how に関わる判断、アーキテクチャ選択、トレードオフ | 設計フェーズへ先送り（gap-analysis.md の設計判断セクションと統合） |
 | **C: 開発者確認** | what/why が曖昧、ドメイン知識依存、優先度判断が必要 | 1議題ずつディスカッション |
 
+### Phase 3.5: spec の説明（開発者への最初のメッセージ）
+
+開発者は spec 名や要件の見出しを見ただけでは目的が分からないことが多い。Phase 4 以降の一覧や議題を出す**前に**、必ず次の順で spec を説明する（イシューが 0 件でも省かない）：
+
+1. **この spec は何か**: 誰の・何が困っていて、終わると何ができるようになるかを 2〜3 文で。spec 名・要件番号・内部の符牒は使わず、平易な語で書く（設定ファイルの構造は ukadoc の用語で）
+2. **なぜ必要か（背景）**: brief.md の動機と、roadmap 上の位置（何の後・何の前か）を短く
+3. **やること・やらないこと**: 要件ごとに「要件 n: 一行の要約」の形で並べ、範囲外として明記されたものを添える
+4. **これからの進め方**: 収集したイシューの件数（A 自明な修正 n 件・B 設計へ回す n 件・C 相談する n 件）と、この後の順番
+
+説明は 1 画面に収まる長さにし、ここでは質問しない（そのまま Phase 4 へ続ける）。
+
 ### Phase 4: 自明な修正の実行（カテゴリ A）
 
 1. 修正内容を一覧として提示（修正前→修正後）
@@ -70,9 +82,10 @@ requirements.md と gap-analysis.md を精査し、以下の観点でイシュ�
 - 各議題について以下を提示：
   1. **議題番号と総数**（例: 「議題 1/3」）
   2. **対象**: どの要件・受入基準に関わるか（ID付き引用）
-  3. **問題点**: 何が曖昧・不明確か
-  4. **選択肢**: 考えられる解釈や方向性（2-3個）
-  5. **推奨**: エージェントとしての推奨案（根拠付き）
+  3. **なぜ決める必要があるか**: この議題が spec の目的（Phase 3.5 で説明したもの）のどこに関わり、決まらないと何が困るかを平易な語で
+  4. **問題点**: 何が曖昧・不明確か
+  5. **選択肢**: 考えられる解釈や方向性（2-3個）
+  6. **推奨**: エージェントとしての推奨案（根拠付き）
 - 開発者の回答を受けて：
   1. requirements.md を更新：議論で明らかになった点の記載、不要になった要件の集約・削除も実施（必要に応じて gap-analysis.md も更新）
   2. 変更をコミット（コミットメッセージ: `docs({feature}): resolve discussion #{n} - {topic}`）
@@ -102,7 +115,7 @@ requirements.md と gap-analysis.md を精査し、以下の観点でイシュ�
 
 - **requirements.md 未生成**: 「先に `/kiro-spec-requirements {feature}` を実行してください」と案内して停止
 - **gap-analysis.md 未生成**: 警告を出しつつ requirements.md のみで続行（「ギャップ分析なしで精査します。`/kiro-validate-gap {feature}` の実行を推奨します」）
-- **イシューなし**: 「精査の結果、修正すべき点は見つかりませんでした。設計フェーズに進めます」と即座に案内
+- **イシューなし**: Phase 3.5 の説明を出した後に「精査の結果、修正すべき点は見つかりませんでした。設計フェーズに進めます」と即座に案内
 
 ## コミット規約
 
