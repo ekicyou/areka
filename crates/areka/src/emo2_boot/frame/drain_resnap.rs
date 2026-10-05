@@ -16,6 +16,7 @@ use crate::placement::chain_realign;
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use crate::placement::dpi_sync::{self, HoldSite};
 use crate::placement::follow::{move_window_to, resize_window_to};
+use crate::placement::persist::persist_unremembered_char_positions;
 use crate::placement::resolver::{PointPx, SizePx};
 use crate::placement::spawn::GhostWindows;
 
@@ -386,6 +387,10 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     }
 
     world.insert_resource(ChainFinalized);
+    // 記憶に位置が無い窓の位置をここで書く（areka-P0-char-position-save-on-exit 要件 1.1）。
+    // 印の内側に置くので同じ窓の一式で 1 度だけ通り、並べ終える前に終わった回は書かない
+    // （1.6）。動かすスコープが 0 件の回でも呼ぶ。本番の呼び手はここ 1 か所だけ（3.1・3.2）。
+    persist_unremembered_char_positions(world);
     debug!(
         scopes = states.len(),
         moved = moves.len(),

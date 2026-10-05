@@ -527,7 +527,6 @@ pub fn persist_entries(world: &World, entries: Vec<(PersistKey, String)>) {
 ///
 /// World は変えず（`&World`）、panic しない。戻す側の [`apply_restored_placements`] は
 /// 純関数で World を持たないので、ここへは届かない（寄せ直した位置を書き戻さない構造を保つ）。
-#[allow(dead_code)] // 呼び手（drain_resnap の finalize_chain_once_with）はタスク 3.1 で付く・付いたら外す
 pub fn persist_unremembered_char_positions(world: &World) {
     if world.get_non_send::<PersistWiring>().is_none() {
         // 結線は成り立ったが実行系が無い回。スコープごとの行は出さない。
