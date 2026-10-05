@@ -376,13 +376,25 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     // ここを明示的に書くのは、上の反映が `move_window_to`＝`PlacementRoute::MoveCue`
     // ＝**明示操作**の経路を通るからである。単一の窓書込口の追随規則（atom D9／D16）は
     // システム由来の再アンカーにしか効かないので、両者は重ならない（二重に書かない）。
+    //
+    // Y は今の窓の Y でなく**元の既定位置の Y** を載せる。並べ直しは x だけで「既定配置のまま」を
+    // 見るので、SHIORI の移動の指示で縦にだけ動かされた窓も動かす。今の Y を載せると台本の Y が
+    // 既定に入り、既定と今の位置が揃って「動かされていない」に化け、並べ終えた時点の保存が台本の
+    // 位置を書いてしまう（areka-P0-char-position-save-on-exit 要件 1.7・SHIORI の移動はその回かぎり）。
+    // 普段は今の Y と既定の Y が等しいので結果は変わらない。
     if !moves.is_empty()
         && let Some(mut ghost_windows) = world.get_resource_mut::<GhostWindows>()
     {
         for m in &moves {
-            if let Some(&(_, _, pos)) = targets.iter().find(|(s, _, _)| *s == m.scope) {
-                ghost_windows.set_default_char_pos(m.scope, moved_default_pos(pos, m.new_x));
-            }
+            // 動かすのは既定の x と今の x が等しいスコープだけなので既定は必ずある。
+            let Some(old_default) = ghost_windows.default_char_pos(m.scope) else {
+                debug!(
+                    scope = m.scope,
+                    "chain_finalize: 既定位置が無いので既定の更新を見送る（届かないはずの分かれ道）"
+                );
+                continue;
+            };
+            ghost_windows.set_default_char_pos(m.scope, moved_default_pos(old_default, m.new_x));
         }
     }
 
