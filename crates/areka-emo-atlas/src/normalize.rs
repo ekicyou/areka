@@ -26,8 +26,8 @@ pub struct AlphaParams {
     pub use_self_alpha: UseSelfAlpha,
 }
 
-/// `use_self_alpha` の 3 値（ukadoc 動作表・1／true・full・0）。
-#[derive(Clone, Copy, Debug)]
+/// `use_self_alpha` の宣言（ukadoc の 1／true・full・0）と、宣言が無い場合。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UseSelfAlpha {
     /// `1` / `true`（α チャンネル採用）。
     On,
@@ -35,6 +35,17 @@ pub enum UseSelfAlpha {
     Full,
     /// `0`（無効）。
     Off,
+    /// 行が無い・値が読めない（areka 独自: 絵の中身を見て決める）。
+    Undeclared,
+}
+
+/// 1 枚目の絵で決め、その絵と（動く絵なら）全部のコマに当てる画素の扱い。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct AlphaRule {
+    /// 全画素の α を 255 にする（色のバイトは触らない）。
+    pub opaque: bool,
+    /// この 4 バイトと完全に同じ画素を 0,0,0,0 にする。
+    pub key: Option<[u8; 4]>,
 }
 
 /// 採用された透過ソース（3.5）。
@@ -136,7 +147,37 @@ impl Normalizer {
                     AlphaSource::KeyColor
                 }
             }
+            // 宣言なし: この旧い選び方では描かない仮の枝（`normalize` は失敗を返す）。
+            // 宣言なしの決まりは `plan` にあり、焼きの段を `plan` へ切り替えるときに
+            // この関数ごと消す。
+            UseSelfAlpha::Undeclared => AlphaSource::KeyColor,
         }
+    }
+
+    /// 宣言と絵から画素の扱いを決める（純粋・画素を変えない・設計の表の 7 行）。
+    ///
+    /// `On`・`Full` の「α を持つ絵」は読み手の `has_alpha` で決める。`Undeclared` は
+    /// `has_alpha` を見ず、届いた画素に α<255 が 1 つでも在るかで決める（要件 9）。
+    /// `.pna` の有無は受け取らない（要件 5 の 7）。幅か高さが 0 の絵は `key` を持たない。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "焼きの段へつなぐまでは使い手がテストだけ")
+    )]
+    pub(crate) fn plan(img: &DecodedImage, params: AlphaParams) -> AlphaRule {
+        let top_left = top_left(img);
+        let (opaque, key) = match params.use_self_alpha {
+            // 1 / true: α あり→そのまま、α なし→左上の 4 バイトを抜く（要件 3.1・3.2）。
+            UseSelfAlpha::On if img.has_alpha => (false, None),
+            UseSelfAlpha::On => (false, top_left),
+            // full: α あり→そのまま、α なし→全画素 α=255（要件 4.1・4.2）。
+            UseSelfAlpha::Full => (!img.has_alpha, None),
+            // 0: α を捨てて全画素 α=255、その後の左上と同じ色を抜く（要件 5.1〜5.3）。
+            UseSelfAlpha::Off => (true, top_left.map(|[b, g, r, _]| [b, g, r, 255])),
+            // 宣言なし: 透明な画素が在れば α、無ければ `On` × α なしと同じ抜き色（要件 9）。
+            UseSelfAlpha::Undeclared if has_translucent_pixel(img) => (false, None),
+            UseSelfAlpha::Undeclared => (false, top_left),
+        };
+        AlphaRule { opaque, key }
     }
 
     /// 抜き色の腕が選ばれ、かつ左上の画素が在るときだけ抜き色（`[b, g, r, a]`）を返す。
@@ -213,6 +254,51 @@ impl Normalizer {
             // シーム腕（未実装）: 選択ソースを載せて明示エラー（3.2/3.5）。
             (_, other) => Err(NormalizeError::Unsupported(other)),
         }
+    }
+}
+
+/// 左上の 1 画素（`[b, g, r, a]`）。幅か高さが 0 の絵は持たない。
+fn top_left(img: &DecodedImage) -> Option<[u8; 4]> {
+    if img.width == 0 || img.height == 0 {
+        return None;
+    }
+    img.bgra.get(0..4)?.try_into().ok()
+}
+
+/// α が 255 未満の画素が 1 つでも在るか（行の詰め物は読まない・見つけたら止める）。
+fn has_translucent_pixel(img: &DecodedImage) -> bool {
+    let row_bytes = img.width as usize * 4;
+    (0..img.height as usize)
+        .map_while(|y| {
+            let start = y * img.stride as usize;
+            img.bgra.get(start..start + row_bytes)
+        })
+        .any(|row| row.as_chunks::<4>().0.iter().any(|px| px[3] < 255))
+}
+
+/// 扱いを画素に当てる（`opaque` → `key` の順）。行の詰め物は読まない。
+///
+/// `opaque` は各画素の 4 バイト目だけを 255 にし、色のバイトは触らない。`key` は
+/// 既存の [`clear_key_color`]（完全一致・許容幅 0）で抜く（要件 5.3・5.4・9.5）。
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "焼きの段へつなぐまでは使い手がテストだけ")
+)]
+pub(crate) fn apply(bgra: &mut [u8], width: u32, height: u32, stride: u32, rule: AlphaRule) {
+    if rule.opaque {
+        let row_bytes = width as usize * 4;
+        for y in 0..height as usize {
+            let start = y * stride as usize;
+            let Some(row) = bgra.get_mut(start..start + row_bytes) else {
+                break;
+            };
+            for px in row.as_chunks_mut::<4>().0 {
+                px[3] = 255;
+            }
+        }
+    }
+    if let Some(key) = rule.key {
+        clear_key_color(bgra, width, height, stride, key);
     }
 }
 
@@ -407,3 +493,7 @@ mod tests {
 #[cfg(test)]
 #[path = "normalize_key_color_tests.rs"]
 mod normalize_key_color_tests;
+
+#[cfg(test)]
+#[path = "normalize_rule_tests.rs"]
+mod normalize_rule_tests;
