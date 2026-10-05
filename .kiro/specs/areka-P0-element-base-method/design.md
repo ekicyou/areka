@@ -53,6 +53,7 @@
 - 読み手が値にする描画メソッドの語を増やす・`Element` に欄を足す変更（追跡用の spec・`element-clipping-option`）。そのときは `parse_undrawn_elements` の対象が連動して減ること（「3 つの転記が element定義の行を漏れなく重なりなく分ける」テスト）を確かめ直す。
 - `lexer::lex` の欄の切り方（前後の空白を落とす）を変える変更。語の完全一致の前提が動く。
 - 見出しの判定順（`surface.append*` を `surface*` より先）を `decode.rs` で変える変更。`undrawn.rs` は同じ順を写している。
+- 箱の転記（`boxes.rs`）が拾う描画メソッドの語を `balloon` から増やす変更。`undrawn.rs` の除外は同じ語の書き写しなので、合わせないと二重に拾う。
 - `load_shell_target` 以外にシェルの surfaces.txt を読む製品の入口を足す変更。警告を出す場所が 1 か所である前提が動く。
 
 ## Architecture
@@ -341,7 +342,7 @@ pub fn parse_undrawn_elements(text: &str) -> Vec<UndrawnElementLine>;
 **Implementation Notes**
 
 - Integration: `ShellTarget` に欄を足さない。`build_shell_target*`（fs を触らない核）の署名も変えない。
-- Risks: `load_shell_target` は製品の中で複数の所から呼ばれる（起動の `emo2_boot/assets.rs:392`・窓の配置の測定 `placement/measure.rs:329`）。呼び出しごとに 1 度出るのは、入れ子・箱の報告と同じ今の型である。
+- Risks: `load_shell_target` は製品の中で複数の所から呼ばれる（起動の `emo2_boot/assets.rs:392`・窓の配置の測定 `placement/measure.rs:329`）。呼び出しごとに 1 度出るのは、入れ子・箱の報告と同じ今の型である。したがって実機のログでは、描けない行 1 行につき起動 1 回で警告が 2 件出るのが正しい。
 
 ## Data Models
 
@@ -357,7 +358,7 @@ pub fn parse_undrawn_elements(text: &str) -> Vec<UndrawnElementLine>;
 
 ### Monitoring
 
-- 実機では、クローディアの読み込みで本 spec の警告が 0 件であること（`overlay`・`base` だけで書かれている）と、`shadowed` の数が surface6・11・19・26・29 の分を含むことをログで見る。
+- 実機では、クローディアの読み込みで本 spec の警告が 0 件であること（`overlay`・`base` だけで書かれている）をログで見る。`shadowed`（画像が在るのに `element0` が在るので使わなかった番号）は surface19・29 の 2 件だけ増え、`used` が 2 件減る。surface6・11・26 は自分の番号の画像（`surface6.png` ほか）が無いので `shadowed` には載らない——成否は大きさ 333×500 で見る。
 
 ## Testing Strategy
 
@@ -365,11 +366,11 @@ pub fn parse_undrawn_elements(text: &str) -> Vec<UndrawnElementLine>;
 
 ### Unit Tests（`areka-parsers`）
 
-1. `base` の行は `overlay` と同じ値になる（1.1・1.4・1.5・1.6・3.5）: `surface*`ブレスの `element0,base`・`element1` 以降の `base`・`surface.append*`ブレスの `base`・数字だけの欄の `base`・複数の番号を並べた見出しを含む文面について、`parse(文面)` が `,base,` を `,overlay,` に書き替えた文面の `parse` と等しい。較正として element の件数が 0 でないことも見る。
+1. `base` の行は `overlay` と同じ値になる（1.1・1.4・1.5・1.6・3.5）: `surface*`ブレスの `element0,base`・`element1` 以降の `base`・`surface.append*`ブレスの `base`・数字だけの欄の `base`・複数の番号を並べた見出しを含む文面について、`parse(文面)` が `,base,` を `,overlay,` に書き替えた文面の `parse` と等しい。較正として、`base` の行を除いた文面の `parse` より element の件数がちょうど `base` の行の数だけ多いことも見る（`overlay` の行だけで真になる「0 でない」では較正にならない）。
 2. 描けない行は値にならず、隣の行は残る（2.4・2.5）: `replace`・空の欄・ukadoc に無い語・`Overlay`（大文字）・`add`・`bind` の行を含む文面の `parse` が、その行を除いた文面の `parse` と等しい。
 3. 描けない行の転記（2.1・2.2）: 上の各語について `UndrawnElementLine` が見出し・element番号・語つきで 1 件ずつ返る。複数の番号を並べた見出し（`surface0,1`）と `surface.append0-1` で 1 行が 1 件・見出しが原文のまま。数字でない element番号は原文のまま。
 4. 描ける語だけなら 0 件（2.6）: `overlay`・`base`・`balloon` だけの文面で空。`surface*` でないブレスの中・ブレスの外の `element` の行は対象にならない。
-5. 3 つの転記が行を漏れなく重なりなく分ける: 全種類の語を混ぜた文面で、`element` の行の数＝`Element` の件数＋箱の element定義の件数＋`UndrawnElementLine` の件数。
+5. 3 つの転記が行を漏れなく重なりなく分ける: 全種類の語を混ぜた文面で、`element` の行の数＝`Element` の件数＋箱の element定義の件数＋`UndrawnElementLine` の件数。左辺はテストに手で書いた数（文面の `surface*`・`surface.append*`ブレスの中の `element` で始まる行を数えたもの。見出しは番号 1 つだけにして、展開で `Element` の件数が増えないようにする）。見出しの判定の書き写しがずれたら数で捕まるよう、文面には対象にならない行——`descript`ブレス・`balloon.*`ブレス・`kero.surface.alias`ブレス・未知の見出しのブレス・ブレスの外・閉じずに終わる `surface*`ブレス——の中の `element` の行も混ぜる（これらは左辺に数えない）。
 6. 既存の 3 本の付け替え（`decode_tests_lenient_input_tests.rs` の 2 本・`validation_tests.rs` の 1 本）: 「`base` は値になる」「`replace` は吸収され隣は残る」へ書き替える（消さない）。
 
 ### Integration Tests（`areka-emo-present`・DLL なし・`MemoryDecoder`）
@@ -377,7 +378,8 @@ pub fn parse_undrawn_elements(text: &str) -> Vec<UndrawnElementLine>;
 1. `base` の土台に `overlay` を重ねた外形と画素（4.1・1.2・1.3）: `surface26 { element0,base,body.png,0,0 / element1,overlay,face.png,X,Y }` を `build_shell_target` で焼いて合成し、外形が `body.png` の実寸、土台の位置の画素が `body.png` の色、部品の位置の画素が `face.png` の色であること。`surface26.png` を**大きさも色も違う絵**として復号器に入れておき、それが使われない（外形が動かない・`shadowed` に 26 が載る）ことを較正にする。
 2. `element0,base,surfaceN.png` の不変（3.2）: その行を持つ文面と、ブレスごと除いた文面（`surface*.png` が土台に敷かれる今の経路）とで、合成した外形と画素が等しい。
 3. 描けない `element0` を持つサーフェスの不変（2.5）: `element0,replace,x.png` と `surface*.png` を持つサーフェスの合成結果が、その行を除いた文面と等しく、`x.png` は焼かれていない。
-4. 警告の回数（4.2・2.1・2.3・2.6）: `TempPath` に surfaces.txt を置いて `load_shell_target` を `capture_events` の中で呼ぶ。`surface0,1` の見出しの下に描けない行 1 行（と `overlay`・`base`・`balloon` の行。箱の警告が混ざらないよう、`balloon` の行には正しい `balloon.*`ブレスを添える）を置いた文面で、`warn` 以上の記録が本 spec の 1 行だけ（欄 `heading`・`element`・`method` の値まで一致）。描ける語だけの文面で `warn` 以上が 0 行。その後 `build_world` を複数回呼んでも本 spec の記録が増えないこと。
+4. 警告の回数（4.2・2.1・2.3・2.6）: `TempPath` に surfaces.txt を置いて `load_shell_target` を `capture_events` の中で呼ぶ。`surface0,1` の見出しの下に描けない行 1 行（と `overlay`・`base`・`balloon` の行。箱の警告が混ざらないよう、`balloon` の行には正しい `balloon.*`ブレスを添える）を置いた文面で、`warn` 以上の記録が本 spec の 1 行だけ（欄 `heading`・`element`・`method` の値まで一致）。描ける語だけの文面で `warn` 以上が 0 行。同じ文面で `load_shell_target` を 2 回呼ぶと本 spec の記録がちょうど 2 倍（呼び出し 1 回につき 1 行 1 件）。描画のたびに繰り返さないことは作りで成り立つ（描けない行は `Shell` に入らず、面の表を組む側は材料を持たない）ので、テストにしない。
+5. 無改変のクローディアを読む（4.3 の檻・不具合の実物）: `sample-ghost-kit` に登記済みの `claudia` を、`shell_target` の既存の檻と同じ受け口で DLL なしに `load_shell_target` で読み、surface6・11・26 の外形が 333×500 であること、本 spec の警告が 0 件であること。
 
 ### 実機の確認（4.3）
 
