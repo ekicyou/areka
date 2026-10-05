@@ -12,7 +12,7 @@
   - _Requirements: 3.15, 3.8_
   - _Boundary: 2 つの build.rs とマニフェスト_
 
-- [ ] 1.2 (P) ツールチップのモジュールの骨組みと、置き場所・安全地帯・折り返しの純粋な計算
+- [x] 1.2 (P) ツールチップのモジュールの骨組みと、置き場所・安全地帯・折り返しの純粋な計算
   - wintf に新しいモジュールを足し、公開の口の列挙に足すだけの変更を入れる（既存の公開の口は変えない）
   - 安全地帯の判定（範囲・ツールチップ・その 2 つを包む凸の領域）、置き場所（真上・中央合わせ・カーソルから離す・上に収まらなければ下へ・作業領域へ寄せる・大きすぎれば左上合わせ）、幅を越えた行を入る文字数ごとに割る処理、改行を CR LF に揃える処理、最大の幅（320 の論理の幅と作業領域の幅の小さい方）を、画面のピクセルの整数だけで計算する
   - 兄弟のテストで固定する: 真上・中央・離す量、上に収まらない・左右の端・大きすぎる・負の座標の画面、安全地帯の内外（通り道の外側の角は外）、割り方（既にある改行を保つ・多バイトの文字の途中で切らない）、改行の揃え、DPI 96 と 144 の最大の幅
@@ -132,3 +132,5 @@
 
 - 1.1: 新しいワークツリーでは areka のテストの前に i686 の `shiori-host32-helper` と `shiori-host32-testdll-loadu` を `--target i686-pc-windows-msvc` でビルドしておく（無いと `mcp_get_log_real_run`・`smoke_boot_loop_exit` が赤）
 - 1.1（範囲外・完了の棚卸で起票）: 明示したときだけ走る `AREKA_EMO2_REAL_RUN=1` の `emo2_real_run` が `crates/areka/tests/emo2_real_run.rs` の `wrap=BudouxWordWrap` の待ちで赤。マニフェストを外しても同じく赤＝この spec の前からの問題。192 DPI の debug ビルドで文字の取り付けが起動から約 2.5 秒かかり、3 秒の自動終了に間に合わない見込み
+- 1.2: `cargo clippy -p wintf --all-targets -- -D warnings` は前からある警告（dola 約 10 件・wintf 約 143 件）で赤。この spec の判定は「`ecs[\/]tooltip` を指す警告が 0 件」（`cargo clippy -p wintf --all-targets -j 2 2>&1 | grep -E "ecs[\/]tooltip"`）
+- 1.2: `tooltip/mod.rs` の `mod geometry;` に `#[cfg_attr(not(test), expect(dead_code))]` がある。os.rs（3.1）が使い始めたら外す。`force_break` の `fit` は Rust の `char` の数で返す約束＝os 側で `GetTextExtentExPointW` の UTF-16 の数を `char` の数に直す（サロゲート対に注意）

@@ -8,6 +8,7 @@ pub mod layout;
 pub mod pointer;
 #[cfg(test)]
 pub(crate) mod test_support;
+pub mod tooltip;
 pub mod types;
 pub mod visual;
 pub mod widget;
