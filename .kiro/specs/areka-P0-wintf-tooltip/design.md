@@ -530,7 +530,7 @@ impl TurnMachine {
 - 字体: 出す前に、マウスのある画面の DPI を `MonitorFromPoint`＋`GetDpiForMonitor` で取り、`SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS)` の `lfStatusFont` から字体を作って `WM_SETFONT` で渡す。DPI が前回と同じなら作り直さない。
 - 最大の幅: `geometry::max_tip_width` の値を `TTM_SETMAXTIPWIDTH` で渡す。改行の整えは `geometry::normalize_newlines`。計算は `geometry` に置き、このファイルは OS に渡すだけにする（窓なしでテストするため）。
 - 待ち時間の設定を読めなかったときの代わりの値（400 ミリ秒）は `turn.rs` の定数に置く。`warn` はプロセスで 1 回だけ出す（数え始めるたびに読むので、毎回出すと記録が埋まる）。
-- 出す手順: 字体 → 最大の幅 → 文字（改行は CR LF に整える）→ 大きさを問い合わせる（`TTM_GETBUBBLESIZE`）→ 幅が最大の幅を越えていたら `geometry::force_break`（入る文字数は `GetTextExtentExPointW` で測る）で割って入れ直す → `geometry::place` → `TTM_TRACKPOSITION` → `TTM_TRACKACTIVATE(TRUE)` → `SetWindowPos(HWND_TOPMOST, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE)` → 実際の矩形を `GetWindowRect` で読んで返す。
+- 出す手順: 字体 → 最大の幅 → 文字（改行は CR LF に整える）→ 大きさを問い合わせる（`TTM_GETBUBBLESIZE`）→ 幅が最大の幅を越えていたら（`TTM_GETBUBBLESIZE` はふちと余白を含むので、最大の幅に `TTM_ADJUSTRECT(TRUE)` でふちを足した窓の幅と比べる。ふちを含む大きさを最大の幅とそのまま比べると、OS が折り返せた英語の行まで語の途中で割ってしまう）`geometry::force_break`（入る文字数は `GetTextExtentExPointW` で測る）で割って入れ直す → `geometry::place` → `TTM_TRACKPOSITION` → `TTM_TRACKACTIVATE(TRUE)` → `SetWindowPos(HWND_TOPMOST, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE)` → 実際の矩形を `GetWindowRect` で読んで返す。
 - 消す: `TTM_TRACKACTIVATE(FALSE)`。
 - OS の読み取り: `read_hover_time`（`SPI_GETMOUSEHOVERTIME`。失敗は 400 ミリ秒＋`warn`）・`sample`（`GetCursorPos` と、左・右・中・拡張 2 つの `GetAsyncKeyState`）・`is_visible`（`IsWindowVisible`）。
 
@@ -772,6 +772,7 @@ pub(crate) fn note_button_press();
 | `trace` | `tooltip_turn` | 判定の分岐 | 何が起きたか（入った・数え始め・来た・来なかった・終わり）・範囲・使った待ち時間・理由 |
 | `warn` | `tooltip_hover_time_unreadable` | 設定を読めなかった（1 回だけ） | 失敗の中身 |
 | `warn` | `tooltip_show_failed` | 表示の失敗 | 段・失敗の中身・印 |
+| `warn` | `tooltip_monitor_unreadable` | 画面の情報を読めなかった（作業領域に収めずに出す） | x・y |
 
 ## Testing Strategy
 
