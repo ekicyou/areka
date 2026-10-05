@@ -263,6 +263,17 @@ spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 
 `none = true` の行が **14 行**である（3 つとも数え直した値で、引き算では出していない）。`[briefs].count` はこの
 42 に合わせ、`snapshot_on` は行の集合に最後に手を入れた日として **2026-10-05** にした。
 
+**2026-10-06 の追加**: `areka-P0-choice-script-prefix` の行を 1 行足した。理由は上の ⑴ ⑵ ⑶ と同じで、この spec が
+台帳 `ledger/sakura-script.toml` の `\q[タイトル,script:実行内容]` の 1 項目を実装済みへ移し、自分の宛先として
+登記したからである（この項目はそれまで宛先が空だったので、宛先を移された spec は無い）。項目は `linkage.md` の束
+「会話」に属するので、束の欄には「会話」を書き、段階 A の表の「会話」の行にこの spec を件数付きで足した。「会話」の
+束の構成は **46 件**（`linkage.md` の `members` を数えた）で、この spec の 1 件は ⑴（全数）にも ⑵（過半）にも
+当たらないので、候補 spec 名の案の欄は変えていない。足した行の中身は `stage = "A"`・`bundle = "会話"`・
+`owner_count = 1`・`wave = "C4-⑭"` で、段階は「会話」が順位表で置かれている段階の写し、ウェーブは正本の
+ロードマップの写しである。行数は **43 行**（`[[spec]]` の塊を数えた）で、うち束を持つ行が **29 行**・
+`none = true` の行が **14 行**である（3 つとも数え直した値で、引き算では出していない）。`[briefs].count` はこの
+43 に合わせ、`snapshot_on` は行の集合に最後に手を入れた日として **2026-10-06** にした。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -296,8 +307,8 @@ spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 
 
 ```toml
 [briefs]
-count = 42
-snapshot_on = "2026-10-05"
+count = 43
+snapshot_on = "2026-10-06"
 ```
 
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
@@ -633,6 +644,13 @@ stage = "A"
 bundle = "撫で"
 owner_count = 2
 wave = "C3-④"
+
+[[spec]]
+name = "areka-P0-choice-script-prefix"
+stage = "A"
+bundle = "会話"
+owner_count = 1
+wave = "C4-⑭"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -645,7 +663,7 @@ spec 台帳で、この表はそれを写した写真である。
 
 | 順位 | 束 | 候補 spec 名の案 | 依存する既存 spec | 波の案 |
 | ---: | --- | --- | --- | --- |
-| 1 | 会話 | `areka-P0-talk-script-canon` | `areka-P0-balloon-canon-residue`（W14・5 件）／`areka-P0-sakura-time-directives`（W16・4 件）／`areka-P0-anchor-tag-canon`（W17・1 件）／`areka-P0-sakura-time-critical`（C4 の候補・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件）／`areka-P0-choice-timeout-directive`（C1-②・1 件） | 第 1 波（先頭ウェーブ） |
+| 1 | 会話 | `areka-P0-talk-script-canon` | `areka-P0-balloon-canon-residue`（W14・5 件）／`areka-P0-sakura-time-directives`（W16・4 件）／`areka-P0-anchor-tag-canon`（W17・1 件）／`areka-P0-sakura-time-critical`（C4 の候補・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件）／`areka-P0-choice-timeout-directive`（C1-②・1 件）／`areka-P0-choice-script-prefix`（C4-⑭・1 件） | 第 1 波（先頭ウェーブ） |
 | 2 | 窓の配置と重なり | `areka-P0-window-placement-canon` | `areka-P0-currentghost-property-tree`（W15・16 件）／`areka-P0-surfaces-basepos`（W13 任意／W14・2 件）／`areka-P0-sakura-time-directives`（W16・2 件）／`areka-P0-zorder-property`（W15・1 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件）／`areka-P0-sylphya-set-ledger`（完了・1 件） | 第 1 波（先頭ウェーブ） |
 | 3 | 名前の記憶 | `areka-P0-user-name-memory` | `areka-P0-currentghost-property-tree`（W15・1 件）／`areka-P0-package-mount`（完了・2 件）／`areka-P0-sylphya`（完了・2 件）／`areka-P0-sakura-dialogue-tags`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件） | 第 1 波（先頭ウェーブ） |
 | 4 | 起動と挨拶 | `areka-P0-boot-greeting-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-package-mount`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・3 件） | 第 1 波（先頭ウェーブ） |

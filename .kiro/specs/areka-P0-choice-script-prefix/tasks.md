@@ -39,7 +39,7 @@
   - _Boundary: areka-parsers の読み込みのテスト_
 
 - [ ] 4. 網羅台帳と互換の記録を今の動きに合わせる
-- [ ] 4.1 網羅台帳の行を実装済みにして報告を作り直す
+- [x] 4.1 網羅台帳の行を実装済みにして報告を作り直す
   - `\q[タイトル,script:実行内容]` の行の状態を実装済み・持ち主を本仕様にし、注記の 2 行（壊れ方・ログ）を今の動きと記録の語彙に書き替える（角括弧の転記元などの行と他の欄は残す）
   - 報告は手で直さず `ukadoc-survey` の `report` と `report-summary` で作り直す
   - 完了の状態: `cargo test -p ukadoc-survey` が緑（実装済みの根拠として正典 URL の行が拾われる）
@@ -63,3 +63,5 @@
 
 - 2.1: 設計のテスト 1 の「`choice_unsupported_category` が無いこと」の確認は入れない（完了の状態で crate からその語が 0 件のため・出すコードも無い）。2.2 で `choice_script_started` → `choice_resolved` の記録の順も確かめるとよい
 - 2.1: `cargo clippy -p areka-kanade --all-targets` は触っていない `actor_raise_reply_tests.rs` に既存のエラー 1 件と他ファイルの既存の警告がある（本仕様の範囲外・完了時の棚卸の候補）
+- 4.1: 台帳の owner を本仕様にすると `ukadoc-survey` の検査（`owner_destination_findings`）が `doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` を求めるので、設計の一覧に無いが前例（mouse-drag-events）どおり足した（`[briefs]` の count 42→43 は手書きの数・並走のマージで同じ数を書く枝があれば後から入る側が数え直す）
+- 4.1: `doc/ukadoc-coverage/briefing-sakura-script.md` の調査時点の写しはこの項目を「一部だけが効かない」のまま残す（検査の対象外・完了時に書き添えるかを判断）
