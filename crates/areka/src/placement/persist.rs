@@ -24,10 +24,12 @@ use areka_parsers::package::resolve;
 use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{Axis, PersistKey, PersistScope, ScopeRoots, SylphyaPublisher, load_scope};
 use bevy_ecs::world::World;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
+use wintf::ecs::WindowPos;
 
-use super::follow::{MonitorSnapshot, OffsetBase, project_anchor, work_area_for_window};
+use super::follow::{Anchored, MonitorSnapshot, OffsetBase, project_anchor, work_area_for_window};
 use super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
+use super::spawn::GhostWindows;
 
 /// 永続値の寛容 parse（design C1・6.1）。
 ///
@@ -502,12 +504,128 @@ pub fn persist_entries(world: &World, entries: Vec<(PersistKey, String)>) {
     wiring.publisher.persist_put(PersistScope::Ghost, entries);
 }
 
+/// 並べ終えた時点の保存（areka-P0-char-position-save-on-exit 要件 1.1・1.2・1.4・1.5・1.7・
+/// 4.1〜4.3・design FinalizeSave）。
+///
+/// 起動の最後の並べ直しが済んだ直後に 1 度だけ呼ばれ、記憶に位置が無いキャラクター窓の位置を
+/// 記憶へ送る。[`GhostWindows`] に居る全スコープを昇順に回り（数を決め打ちしない・1.4）、
+/// 書くのは次の 2 つを満たすスコープだけ:
+///
+/// - 既定の位置 [`GhostWindows::default_char_pos`] が `Some`＝記憶に位置が無い。`None` は
+///   記憶から戻したスコープで、書き換えない（寄せ直して表示している場合を含む・1.2）。
+/// - 今の位置（x・y）が既定の位置と同じ。違うのは並べ終える前にドラッグされた窓（ドラッグの
+///   確定が書く）か、SHIORI の移動の指示で動いた窓（その回かぎり・1.7）で、どちらも書かない。
+///   並べ直し（`chain_finalize::finalize_chain`）は横の並びだけを見るので x だけで比べるが、
+///   ここは台本が縦にだけ動かした窓（例: 並べ直しが動かさない連鎖の起点）も見逃さないよう
+///   x・y の両方で比べる。システムの置き直しは既定の位置を x・y とも一緒に運ぶので
+///   （`follow::window_move` の既定の位置の追随）、ふだんの流れで書き漏れは起きない。
+///
+/// 位置は [`WindowPos`] の位置と大きさから読み、ドラッグの確定と同じ [`char_pos_to_origin_x`]
+/// で下端の中央の x へ直す。送る鍵は [`PersistKey::WindowPos`] の x・y だけで（1.5）、全スコープの
+/// 分を 1 つの束にして [`persist_entries`] を 1 回呼ぶ（待たない。書き込みの失敗は送った先が
+/// 記録し、UI の側へは戻らない＝起動は続く・4.1）。読めない窓は `warn!` を出して飛ばし、
+/// 残りを書く（4.2）。書いた・書かなかったは target `areka::persist::save` に残す（4.3）。
+///
+/// World は変えず（`&World`）、panic しない。戻す側の [`apply_restored_placements`] は
+/// 純関数で World を持たないので、ここへは届かない（寄せ直した位置を書き戻さない構造を保つ）。
+#[allow(dead_code)] // 呼び手（drain_resnap の finalize_chain_once_with）はタスク 3.1 で付く・付いたら外す
+pub fn persist_unremembered_char_positions(world: &World) {
+    if world.get_non_send::<PersistWiring>().is_none() {
+        // 結線は成り立ったが実行系が無い回。スコープごとの行は出さない。
+        info!(
+            target: "areka::persist::save",
+            "並べ終えた時点の保存: 記憶の送り口が無いので書かない"
+        );
+        return;
+    }
+    let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
+        // 並べ直しの直後には起きない（防御）。
+        debug!(
+            target: "areka::persist::save",
+            "並べ終えた時点の保存: GhostWindows が無いので書かない"
+        );
+        return;
+    };
+
+    let mut entries = Vec::new();
+    for scope in ghost_windows.scopes() {
+        let Some(default_pos) = ghost_windows.default_char_pos(scope) else {
+            info!(
+                target: "areka::persist::save",
+                scope,
+                "並べ終えた時点の保存: 記憶に位置があるので書かない"
+            );
+            continue;
+        };
+        let skip = |missing: &str| {
+            warn!(
+                target: "areka::persist::save",
+                scope,
+                missing,
+                "並べ終えた時点の保存: 読めないので飛ばす"
+            );
+        };
+        let Some(entity) = ghost_windows.char_window(scope) else {
+            skip("キャラ窓");
+            continue;
+        };
+        let Some(window_pos) = world.get::<WindowPos>(entity) else {
+            skip("WindowPos");
+            continue;
+        };
+        let Some(pos) = window_pos.position else {
+            skip("位置");
+            continue;
+        };
+        let current = PointPx { x: pos.x, y: pos.y };
+        if current != default_pos {
+            info!(
+                target: "areka::persist::save",
+                scope,
+                current_x = current.x, current_y = current.y,
+                default_x = default_pos.x, default_y = default_pos.y,
+                "並べ終えた時点の保存: 並べ終える前に動かされたので書かない"
+            );
+            continue;
+        }
+        let Some(size) = window_pos.size else {
+            skip("大きさ");
+            continue;
+        };
+        let Some(anchor) = world.get::<Anchored>(entity).map(|a| a.0) else {
+            skip("揃え方");
+            continue;
+        };
+        let char_size = SizePx {
+            w: size.width,
+            h: size.height,
+        };
+        let saved = char_pos_to_origin_x(anchor, current, char_size);
+        info!(
+            target: "areka::persist::save",
+            scope,
+            char_x = current.x, char_y = current.y,
+            saved_x = saved.x, saved_y = saved.y,
+            char_w = char_size.w,
+            ?anchor,
+            "並べ終えた時点の保存: 書いた"
+        );
+        entries.extend(char_pos_entries(scope as u32, saved));
+    }
+    if !entries.is_empty() {
+        persist_entries(world, entries);
+    }
+}
+
 #[cfg(test)]
 #[path = "balloon_offset_persist_roundtrip_tests.rs"]
 mod balloon_offset_persist_roundtrip_tests;
 #[cfg(test)]
 #[path = "persist_entries_tests.rs"]
 mod entries_tests;
+#[cfg(test)]
+#[path = "persist_finalize_save_tests.rs"]
+mod finalize_save_tests;
 #[cfg(test)]
 #[path = "persist_io_wiring_tests.rs"]
 mod io_wiring_tests;
