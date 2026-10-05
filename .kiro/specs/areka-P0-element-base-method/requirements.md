@@ -35,7 +35,7 @@ surface26
   - DLL を使わない決定論的なテストと、クローディア（無改変）での実機の確認。
   - 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の 2 行（element定義・`base`）と `doc/COMPAT_ARCHITECTURE.md` §8 の更新。
 - **Out of scope**:
-  - `base` 以外の描画メソッド（`overlayfast`／`overlay-fast`・`replace`・`interpolate`・`asis`・`reduce`・`blend-*` など）を element定義で描くこと。本 spec では記録を残すところまで。
+  - `base` 以外の描画メソッド（`overlayfast`／`overlay-fast`・`replace`・`interpolate`・`asis`・`reduce`・`blend-*` など）を element定義で描くこと。本 spec では記録を残すところまで。残りを描く仕事は、本 spec の完了時に `/kiro-discovery` で追跡用の spec を起票して持ち主を決める（2026-10-05 要件の討議・開発者の決定）。向きは「合成の方法は Direct2D が支える全部に対応できるよう、wintf も含めて広げる」（開発者の方針）で、起票する spec はこの向きに沿って範囲を決める。
   - pattern定義（`animation*.pattern*`）の描画メソッド `base`。今の振る舞い（描かずに警告を残す）のままにする。
   - element定義のオプション（`--clipping` ほか＝`element-clipping-option`）。
   - 動く絵の再生（`animated-image-playback`）。
@@ -97,4 +97,4 @@ surface26
 2. The areka の決定論的なテスト shall 描けない描画メソッドの element定義について、警告がサーフェスの番号・element番号・描画メソッドの語を含んで 1 件出ること、および描ける描画メソッドだけのシェルで 0 件であることを判定する
 3. When 無改変のクローディア（`sample-ghost-kit` の `claudia`）を実機で起動し `\s[6]`・`\s[11]`・`\s[26]` を表示した場合, the areka shall キャラクターを 333×500 の大きさで、土台の絵と顔の部品が重なった形で表示する
 4. The `doc/COMPAT_ARCHITECTURE.md` §8 shall 「element定義の `base` の X,Y は、ukadoc が pattern定義についてだけ無視すると書いており element定義については書いていないため、areka は `overlay` の element定義と同じに扱う」ことを、ukadoc の該当の項を指して記録する
-5. The 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` shall element定義の行と `base` の行（`ukadoc:descript_shell_surfaces:base:1`）に、本 spec の後の実際の状態（element定義の `base` は描ける・pattern定義の `base` は未対応のまま・`overlay` と `base` 以外の描画メソッドの element定義は描かずに警告を残す）と担当の spec を書く
+5. The 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` shall element定義の行と `base` の行（`ukadoc:descript_shell_surfaces:base:1`）に、本 spec の後の実際の状態（element定義の `base` は描ける・pattern定義の `base` は未対応のまま・`overlay` と `base` 以外の描画メソッドの element定義は描かずに警告を残す）と担当の spec を書く。残りの描画メソッドを描く仕事の担当には、完了時に起票する追跡用の spec の名前を書く
