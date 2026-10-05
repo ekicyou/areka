@@ -85,7 +85,7 @@
 1. When 台本に `\![open,explorer,ファイル]` があり、解決した先がフォルダ, the areka shall そのフォルダを OS のファイル管理の窓で開く。
 2. When 台本に `\![open,explorer,ファイル]` があり、解決した先がファイル, the areka shall そのファイルを含むフォルダを、そのファイルを選んだ状態で OS のファイル管理の窓で開く（ukadoc「ファイラーの指定がない場合」のふるまい）。
 3. When `ファイル` が相対パス, the areka shall `ghost/master` を基準に解決する（要件 2.2 と同じ規則）。
-4. When 台本に `\![open,explorer,種類,名前]` があり、種類が `ghost`, the areka shall ベースウェアの目録でその名前のゴーストを引き、そのゴーストのフォルダを開く（名前の引き方は `\![change,ghost,名前]` と同じ）。
+4. When 台本に `\![open,explorer,種類,名前]` があり、種類が `ghost`, the areka shall ベースウェアの目録でその名前のゴーストを引き、そのゴーストのフォルダを開く（名指しの引き方＝`descript` の `name` → フォルダ名の順は `\![change,ghost,名前]` と同じ。`random`・`sequential`・`lastinstalled` などの特別な名前は解かない）。
 5. When 台本に `\![open,explorer,種類,名前]` があり、種類が `balloon`, the areka shall ベースウェアの目録でその名前のバルーンを引き、そのフォルダを開く。
 6. When 台本に `\![open,explorer,種類,名前]` があり、種類が `shell`, the areka shall 実行中のゴーストの `shell` の中からその名前のシェルのフォルダを開く。
 7. If 種類が `headline`・`plugin`（areka に無い仕組み）または上のどれでもない, then the areka shall 何も開かず `warn!` で種類と名前を 1 行記録する（台帳では縮退として書く）。
@@ -149,7 +149,7 @@
 
 1. When 本 spec が完了する, the 網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml` shall `\j[ID]`・`\![open,browser,…]`・`\![open,file,…]`・`\![open,explorer,…]`・`\![open,editor,…]`・`\![open,mailer,…]` の 6 行の `status` を `absent` から実装に合う語（URL・`file:///`・`mailto:` 以外の ID を開かない `\j[ID]` と、`headline`・`plugin` を開かない `\![open,explorer,…]` は `degraded`、残りの 4 行は `implemented`）に改め、`owner` を本 spec とし、`note` に壊れ方とログの実態を書き直す。`implemented` にした行は、台帳の検査（`ukadoc-survey`）が求める `/// ukadoc: <URL>` の出典コメントを実装のソースに持つ。
 2. The 受け取り手の表（`consumer_ledger.rs` の正準台帳） shall `("open","file")`・`("open","browser")`・`("open","explorer")`・`("open","editor")`・`("open","mailer")` の受け取り手を登記し、`("open","readme")` の登記はそのまま残す。
-3. The 受け取り手の表の既存テスト（`("open","browser")` に受け取り手が無いことを固定しているものと、登記の総数 15 を固定しているもの） shall 新しい登記に合わせて書き替え、`("open","help")` など本 spec の範囲外の第 1 引数は受け取り手なしのままであることを固定する。総数は main を取り込んだ後の実物の行を数え直して書く（並走の `balloon-lifecycle-events` も同じ表に `("set","balloontimeout")` の 1 行を足す。後から main へ入る側が、相手の変種・登録の行を落とさず手で足し直し、数を数え直す。2026-10-05 相互の約束）。
+3. The 受け取り手の表の既存テスト（`("open","browser")` に受け取り手が無いことを固定しているものと、登記の総数 15 を固定しているもの） shall 新しい登記に合わせて書き替え、`("open","help")` など本 spec の範囲外の第 1 引数は受け取り手なしのままであることを固定する。総数は main を取り込んだ後の実物の行を数え直して書く（並走の `balloon-lifecycle-events` も同じ表に `("set","balloontimeout")` の 1 行を足す。後から main へ入る側が、相手の変種・登録の行を落とさず手で足し直し、数を数え直す。2026-10-05 相互の約束。並走の `mcp-author-tools` も同じ表に 2 行と一致のテスト `consumer_ledger_agreement_tests.rs` を足すので、同じ規則で、後から入る側が相手の行と見本を落とさず足し直し、総数とモジュールの doc の行数を数え直す）。
 4. When 本 spec が正典の沈黙や SSP との差を裁量で決めた（外部アプリの設定を写さない・`表示行` を無視する・`headline`／`plugin` を開かない・`\j[ID]` の旧来のジャンプ）, the `doc/COMPAT_ARCHITECTURE.md` §8 shall その裁量を 1 行ずつ登記する。
 
 ### Requirement 10: 決定論テスト（OS は偽の境界）

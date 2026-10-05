@@ -59,8 +59,8 @@
 - `Destination`・`Target`・`OpenKind` の形を変えたとき → `link-context-copy`・`balloon-link-hover` が再確認する。
 - 開く処理の入口（`opener::submit`）の署名や、そこを通らない開き方を足したとき → `script-impact-tiers` が差し込む場所を再確認する。
 - 運搬名 `JUMP_TAG_CARRIER` の綴りを変えたとき → 受け取り手の表・受け口・台帳。
-- `decode_tag` の腕の並び（`anchor-tag-canon` が次に `"_a"` を足す）。
-- 受け取り手の表の総数（`balloon-lifecycle-events` も 1 行足す・後から main へ入る側が数え直す）。
+- `decode_tag` の腕の並び（`anchor-tag-canon` が次に `"_a"` を足す）。並走の `mcp-author-tools`（C4-⑨）は `decode.rs` を「範囲と印を運ぶ」形へ載せ替える（`Raw` を作る所に印を付ける・返す `Instruction` は今と同じ）。本 spec の `"j"` の腕は `Raw` を作らないので印は付かない。後から main へ入る側が、相手の形に合わせて腕を置き直す。
+- 受け取り手の表（`consumer_ledger.rs`）。並走の 2 本も同じ表を変える: `balloon-lifecycle-events` は 1 行、`mcp-author-tools` は 2 行と `#![allow(dead_code)]` の除去と一致のテスト `consumer_ledger_agreement_tests.rs`（表の各行に「受け口へ届く見本」を 1 つずつ持つ）。後から main へ入る側が、相手の変種・登記・見本を落とさず足し直し、総数とモジュールの doc の行数を実物から数え直す（本 spec の 6 行の見本は、`\j` は `http://` の URL・`open` の 5 組は引数つき。URL でない `\j` は受け口が断るので見本にならない）。
 - 記録の取り決めの表（`doc/ssp-mcp/log-convention.md`）に行を足す他の spec。
 
 ## Architecture
@@ -133,7 +133,7 @@ crates/areka/src/
 
 - `crates/areka-parsers/src/sakura/model.rs` — 運搬名の定数 `pub const JUMP_TAG_CARRIER: &str = "\\j";` を `Instruction` の近くに足す。
 - `crates/areka-parsers/src/sakura/mod.rs` — 公開面の `pub use model::{…}` に `JUMP_TAG_CARRIER` を足す。
-- `crates/areka-parsers/src/sakura/decode.rs` — `decode_tag` の `"f"` の腕（`decode.rs:270`）の次・`_` の腕の前に `"j"` の腕を 1 本だけ足す。他の行は変えない。
+- `crates/areka-parsers/src/sakura/decode.rs` — `decode_tag` の `"f"` の腕（`decode.rs:270`）の次・`_` の腕の前に `"j"` の腕を 1 本だけ足す。他に変えるのは、`_` の腕のすぐ上の注記（「subset 外タグ（`\i` `\j` 等）はタスク 4.2 のパススルー領分。」）から `\j` を外す 1 行だけ（角括弧つきの `\j[…]` を読むようになると古くなるため。裸の `\j` を書く `decode_bare` 側の注記は、裸の `\j` が今のまま `Raw` なので変えない）。
 - `crates/areka-parsers/src/sakura/decode_tests.rs` — `\j[…]` が運搬名の `GenericCommand` になり、引数を記述順のまま運ぶことのテストを足す。
 - `crates/areka/src/readme.rs` — `ReadmeRequest` を中身つきの enum に変える・取り出しを「要求の列を取り出して 1 件ずつ渡す」形に変える・`open_from_world` に元の綴りの引数を足して OS を直接呼ばず `opener::submit` へ渡す・`open()` を削る・`register_readme_drain` で開く専用のスレッドを 1 度だけ起こす・子 module の宣言。
 - `crates/areka/src/readme_tests.rs` — 本物の `ShellExecuteW` を呼ぶテスト（`open_records_a_missing_file_as_an_error_and_returns_err`）を、テスト用の送り先で「何を渡したか」を見るテストへ置き換える。要求の型の変更に追随する。
@@ -453,7 +453,7 @@ pub(crate) fn register_readme_drain(world: &mut World);
 
 **Implementation Notes**
 - Integration: 説明書のパスは `std::path::absolute` で絶対にしてから `Target::Path` の文字列にする（`ghost/master` 基準の解決に吸われないように）。文字列への写しは `to_string_lossy`（UTF-16 として不正なパスだけが崩れる。目録は UTF-8 でないフォルダ名を除外して読むので、崩れうるのはベースウェアの根そのものが UTF-16 として不正な場合だけ）。
-- Validation: 既存の登録のテスト（`register_readme_drain_alone_adds_one_system_to_the_input_schedule`）に「`Opener` の持ち物が入る」を足す。このとき起きる本物のスレッドには要求を 1 件も送らない（OS は呼ばれない）。
+- Validation: 既存の登録のテスト（`register_readme_drain_alone_adds_one_system_to_the_input_schedule`）に「`Opener` の持ち物が入る」を足す。`register_readme_drain` は `ghost_session::register_systems` 経由でテストの組み立て（`ghost_switch_test_support.rs`・`ghost_session_restart_tests.rs` など）からも呼ばれるので、「要求を送らないから OS は呼ばれない」という約束に頼らず、**テストのビルドでは本物の OS を呼べない形**にする（下の Opener の `spawn`）。
 - Risks: `take_pending` は件数でなく要求の列を返す形に変わる（「全件取り出して 1 件も残さない」のテストは列の長さで判定し直す）。
 
 ### 開く処理の 1 か所
@@ -481,6 +481,7 @@ pub(crate) fn register_readme_drain(world: &mut World);
   - `Path`・`Program`（パスに解けたもの）を開くときの作業フォルダは、そのファイルのあるフォルダ（エクスプローラーでダブルクリックしたときと同じ）。それ以外は無し。
 - **実行 `execute`（開く専用のスレッド）**: 解決に失敗 → `error!`。成功 → `info!` 1 行（OS へ渡す時点）→ `OsPort::shell_execute` → 失敗の符号なら `error!`。メッセージボックスは出さない（要件 7.6）。
 - **スレッド `serve`／`Opener::spawn`**: 名前 `open-external` の 1 本。起動時に COM を STA で 1 度初期化してから（`ShellExecuteW` の公式の注記どおり）`for job in rx { execute(&mut port, job) }`。World を落とすと送信端が落ちて受信が終わり、スレッドは自然に終わる。
+  - スレッドが持つ OS の口は `#[cfg(not(test))]` では本物の `WindowsShell`、`#[cfg(test)]` では「OS を呼ばずに断る口」（`shell_execute` は呼ばれた `OsCall` をプロセス共有の記録へ積み、`Err` を返す・`env_var` は `None`）。COM の初期化も `#[cfg(not(test))]` だけ。これで後続の spec がテストの組み立てで開く系の台本を流しても、開発者の机で本物のアプリは起きない（要件 10.1）。`spawn` で起こしたスレッドへ 1 件送ると、断る口の記録に積まれ、`error!` 1 行（`reason = "os"`）が残ることを 1 本のテストで固定する。
 
 **記録の形**（`kind`＝`OpenKind::as_str`・`destination` は解決した行き先・`tag` は元の綴り）
 
@@ -489,7 +490,7 @@ pub(crate) fn register_readme_drain(world: &mut World);
 | OS へ渡す（要件 7.2・7.3） | `info!`・既定（`areka::readme::opener`＝規則の表で `status`） | `open_external` | `kind`・`destination`・`ghost`・`tag`・`verb` |
 | 解決に失敗（要件 2.5・4.8・5.4・7.4） | `error!(target: TARGET_ERROR, ghost = %名, …)` | `open_external_failed` | `kind`・`destination`（書かれた綴り）・`tag`・`reason`（`not_found`／`no_match`／`no_baseware_root`） |
 | OS が断った（要件 2.5・3.3・5.4・6.4・7.4） | 同上 | `open_external_failed` | `kind`・`destination`・`tag`・`reason = "os"`・`code`（`ShellExecuteW` の符号） |
-| 入口で捨てた（ゴースト無し・スレッド無し・送れない） | `error!`（既定の target） | `open_external_dropped` | `kind`・`destination`・`tag`・`reason` |
+| 入口で捨てた（ゴースト無し・スレッド無し・送れない） | `error!(target: TARGET_ERROR, …)`（ゴーストが居れば `ghost = %名` も付ける） | `open_external_dropped` | `kind`・`destination`・`tag`・`reason` |
 
 **Contracts**: Service [x] / Batch [x] / State [x]
 
@@ -542,7 +543,7 @@ pub(crate) fn submit(world: &World, destination: Destination);
 **Implementation Notes**
 - Integration: `serve` と `execute` はテストから同じスレッドで呼ぶ（`log_capture_kit` は呼んだスレッドの記録しか拾わない）。`Opener::spawn` のスレッドの閉包だけが COM の初期化と本物の `WindowsShell` を持つ。
 - Validation: 解決の全分岐・記録の全行を `opener_tests.rs` で偽の `OsPort` と一時フォルダ（`temp_path_kit`）で判定する。
-- Risks: 開く専用のスレッドが `ShellExecuteW` で長く待つと後ろの要求も待つ（順序を守るための代償・画面は止まらない）。アプリの終了時に溜まっている要求は捨てられる（終了を待たない）。
+- Risks: 開く専用のスレッドが `ShellExecuteW` で長く待つと後ろの要求も待つ（順序を守るための代償・画面は止まらない）。アプリの終了時に溜まっている要求は捨てられる（終了を待たない）。文脈（ゴースト名・フォルダ）は台本を出した時点でなく UI で取り出した時点の `GhostSlot` から写すので、ゴーストの切り替えの境目の 1 tick に出た要求は、切り替え後のゴーストの名前・フォルダで解かれうる（取り出しは毎 tick なので境目だけ）。
 
 ### OS の境界
 
@@ -554,7 +555,7 @@ pub(crate) fn submit(world: &World, destination: Destination);
 | Requirements | 2.3, 7.1, 7.7, 10.1 |
 
 **Responsibilities & Constraints**
-- `ShellExecuteW` と `CoInitializeEx` を綴るのは `readme/os_port.rs` だけ。`crates/areka/src` で `ShellExecute` の綴りがこのファイル以外に無いことをテストが見張る（要件 7.1）。
+- 本 spec の中で `ShellExecuteW` と `CoInitializeEx` を綴るのは `readme/os_port.rs` だけ（`CoInitializeEx` は既存のテスト `emo2_boot/assets_tests.rs` などにもあるので、見張るのは `ShellExecute` の綴りだけ）。`crates/areka/src` で `ShellExecute` の綴りがこのファイル以外に無いことをテストが見張る（要件 7.1）。
 - 動詞は `open` と `edit` の 2 つだけ（OS の既定・areka 独自の設定値 0・要件 7.7）。窓の表示は `SW_SHOWNORMAL`、親の窓は無し。
 - `ShellExecuteW` の戻り値が 32 以下なら `Err(符号)`。
 
@@ -643,7 +644,7 @@ pub(crate) fn init_com_for_shell();
 
 ### Monitoring
 
-- 成功は `get_log` の `status` 種別（本文に `kind`・`destination`・`ghost`・`tag`）、失敗は `error` 種別（取り決めの target なので `ghost_name` で絞り込める）。断り（`warn!`）も `error` 種別に入る。
+- 成功は `get_log` の `status` 種別（本文に `kind`・`destination`・`ghost`・`tag`）、失敗は `error` 種別（取り決めの target なので `ghost_name` で絞り込める。入口で捨てた行はゴーストが居ないときだけ名が無い）。断り（`warn!`）も `error` 種別に入る。
 
 ## Testing Strategy
 
@@ -668,7 +669,8 @@ pub(crate) fn init_com_for_shell();
 ### Integration Tests（受け口・取り出し・表）
 - `readme_cue_tests.rs`: 5 つの `open` の形と `\j` が `ReadmeRequest::Open` を 1 件送る・断る入力は送らず `warn!` 1 行・`\![open,help]` と裸の `\![open]` は担当外で警告なし・`\![open,readme]` の今のふるまいは変わらない（要件 1.7・2.6・3.2・4.7・6.3・10.3）。
 - `readme_tests.rs`: 説明書が在ると `open_from_world` が `Target::Path`（絶対パス）と綴りを 1 件送る・無いと送らず `warn!`（今のまま）・取り出しが `Readme` と `Open` を届いた順に渡す。本物の `ShellExecuteW` を呼ぶテストは無くす（要件 7.1・10.1）。
-- `consumer_ledger.rs` の檻: 6 組の登記・総数・`("open","help")` 担当なし（要件 9.2・9.3）。
+- `consumer_ledger.rs` の檻: 6 組の登記・総数・`("open","help")` 担当なし（要件 9.2・9.3）。`mcp-author-tools` の一致のテストが先に main へ入っていれば、本 spec の 6 行の見本をそこへ足す。
+- テストのビルドの開く専用のスレッド（要件 10.1）: `Opener::spawn` で起こしたスレッドへ 1 件送ると、OS を呼ばずに断る口の記録に積まれる（本物の `WindowsShell` はテストのビルドに現れない）。
 - `log_history_convention_tests.rs`（既存）: 表と `RULES` の一致（要件 7.3）。
 
 ### 実機での確認（常時テストの外）
