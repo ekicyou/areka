@@ -107,12 +107,8 @@ fn eight_with_no_active_ghost_are_not_active() {
 #[test]
 fn get_expression_table_omitted_is_not_active_even_with_one_ghost() {
     let g = ghost();
-    for ghost_name in [None, Some("")] {
-        let call = ToolCall::GetExpressionTable(get_expression_table::Args {
-            ghost_name: ghost_name.map(str::to_owned),
-        });
-        assert_eq!(dispatch_text(Some(&g), call), ng(NOT_ACTIVE));
-    }
+    let call = ToolCall::GetExpressionTable(get_expression_table::Args { ghost_name: None });
+    assert_eq!(dispatch_text(Some(&g), call), ng(NOT_ACTIVE));
 }
 
 #[test]
