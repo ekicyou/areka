@@ -58,8 +58,8 @@ param([switch]$Verify, [string]$Version, [switch]$Pending)
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
-# cargo の出力（JSON・UTF-8）を文字化けさせずに読む
-[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+# 子の出力を端末の文字コードに依らず UTF-8 で読む関数 Invoke-Utf8Child
+. (Join-Path $PSScriptRoot 'utf8-child.ps1')
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
 # =============================================================================
@@ -241,9 +241,10 @@ Calibrate '公開の段の形' 'secrets. を含む見本' (Test-Workflow 'w.yml'
 # =============================================================================
 # 2〜6. 実物の判定
 # =============================================================================
-$out = @(cargo metadata --no-deps --format-version 1 --locked 2>&1)
-if ($LASTEXITCODE) { Fail "読み取り: cargo metadata が終了コード $LASTEXITCODE（$($out | Select-Object -Last 1)）" }
-$packages = @((($out | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] }) -join "`n" | ConvertFrom-Json).packages)
+# 括弧の中は子の標準エラーの最後の行。JSON として読めないときは捕まえない例外（終了コード 1）
+$r = Invoke-Utf8Child cargo @('metadata', '--no-deps', '--locked', '--format-version', '1')
+if ($r.Code) { Fail "read: cargo metadata exited with code $($r.Code) ($($r.ErrLines | Select-Object -Last 1))" }
+$packages = @(($r.Out | ConvertFrom-Json).packages)
 
 function Check([string]$Judgment, [string[]]$Got) {
     if ($Got) { Fail "判定「$Judgment」: $($Got -join '・')" }
