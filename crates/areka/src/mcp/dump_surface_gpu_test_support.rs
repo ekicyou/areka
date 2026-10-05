@@ -18,7 +18,11 @@ use std::time::{Duration, Instant};
 use areka_actor::{ReplyReceiver, reply_channel};
 use areka_emo_atlas::WicDecoderArm;
 use areka_emo_compose::{BindSet, Composer, PatternState};
+use areka_emo_present::balloon::{
+    build_balloon_target, load_scope_balloon_model, resolve_balloon_faces,
+};
 use areka_emo_present::shell_target::load_shell_target;
+use areka_emo_text::actor::ResolvedBalloonText;
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_kanade::{KanadeMsg, MonotonicMs, RaiseOutcome, ShioriMethod};
 use areka_mcp::tools::{Pending, ToolCall, ToolRequest, dump_balloon, dump_surface};
@@ -149,8 +153,6 @@ impl GpuRig {
     }
 
     /// `dump_balloon` を要求として作り、本番の `handle` へ渡す。
-    // 呼び手はバルーンの GPU のテスト（タスク 5.3）。生えるまで未使用の警告を抑える。
-    #[allow(dead_code)]
     pub(in crate::mcp) fn dump_balloon(&mut self, scope: Option<i64>) -> Pending {
         let args = dump_balloon::Args {
             scope,
@@ -232,6 +234,38 @@ impl GpuRig {
             )
             .expect("合成できる");
         (pic.width(), pic.height(), unpremultiply(pic.bytes()))
+    }
+
+    /// 装着の相と同じ読み込みで `scope` のバルーンを組み、面 0（装着で表示を確立する面）を
+    /// 合成した絵の、乗算済み BGRA のままの画素と（幅, 高さ）。
+    pub(in crate::mcp) fn balloon_composed(&self, scope: u32) -> (u32, u32, Vec<u8>) {
+        let dir = self.rig.root.balloon_dir(BALLOON);
+        let decoder = WicDecoderArm::new().expect("WIC の復号器");
+        let (world, atlas) =
+            build_balloon_target(&dir, &decoder, scope).expect("A のバルーンを読める");
+        let pic = Composer::new()
+            .compose(
+                &world,
+                &atlas,
+                0,
+                &BindSet::default(),
+                &PatternState::default(),
+            )
+            .expect("合成できる");
+        (pic.width(), pic.height(), pic.bytes().to_vec())
+    }
+
+    /// `scope` のバルーンの定義（面 0 の上書き込み）から解いた、文字の領域の原点（原寸の px）。
+    pub(in crate::mcp) fn text_area_origin(
+        &self,
+        scope: u32,
+        image_size: (u32, u32),
+    ) -> (f32, f32) {
+        let dir = self.rig.root.balloon_dir(BALLOON);
+        let faces = resolve_balloon_faces(&dir, scope).expect("面を解ける");
+        let model = load_scope_balloon_model(&dir, scope, &faces[0]);
+        let region = ResolvedBalloonText::resolve(&model, image_size).region;
+        (region.left(), region.top())
     }
 
     /// 置き場のゴーストを有界に降ろす（成功で `true`）。

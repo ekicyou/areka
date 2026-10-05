@@ -108,3 +108,7 @@ fn answer(world: &World, args: &Args) -> Option<ToolOutcome> {
 #[cfg(test)]
 #[path = "dump_balloon_tests.rs"]
 mod dump_balloon_tests;
+
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "dump_balloon_gpu_tests.rs"]
+mod dump_balloon_gpu_tests;
