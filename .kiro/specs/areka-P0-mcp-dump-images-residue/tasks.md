@@ -78,8 +78,8 @@
   - 判断の文言が想定外の失敗の本文に使われていないこと、`mod.rs`・`log-capture-kit`・`areka-emo-text` の `lib.rs` に差分が無いことを、差分で確かめる
   - _Requirements: 2.2, 6.1, 6.2_
 
-- [ ] 5. 実機確認
-- [ ] 5.1 配布用のビルドで `dump_balloon` を撮り、`verification/signoff.md` に残す
+- [x] 5. 実機確認
+- [x] 5.1 配布用のビルドで `dump_balloon` を撮り、`verification/signoff.md` に残す
   - 配布用のビルドをこのワークツリーの `target\` の下（絶対パス）に展開し、既定ゴースト（emo2）・拡大率 200%・`RUST_LOG=info,areka::mcp=debug,areka_mcp=debug` で起こす
   - 台詞を出した後に `dump_balloon` を 5 回以上（最初の 1 回を含む）呼び、成功の記録の `ui_us` がすべて 2,000 以下であること・撮ったバルーンの物理 px・返った PNG に背景と文字が原寸で入ること・呼んでいる間も描画と会話が止まらず ERROR が 0 件であることを記録する
   - 件 5（預けている間にゴーストが替わる）の確かめの結果を、定義の名前で再び確かめられる形で記録に載せる
