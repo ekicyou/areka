@@ -252,15 +252,15 @@ fn test_mouseleave_scoped_pointer_clear() {
 // Task 5.2 / 7.4: ドラッグ HWND ガードテスト
 // ============================================================================
 
-/// Preparing/JustStarted 状態のドラッグで、異なるウィンドウからの
-/// ボタンアップが end_dragging をスキップすることを検証。
+/// ドラッグ対象の entity の所属ウィンドウを find_owner_window で引き、異なるウィンドウの
+/// entity では「同じウィンドウか」の判定が不成立になることを純粋 ECS で検証する。
 ///
-/// handlers.rs 内の HWND ガードロジック:
-///   Preparing { entity, .. } / JustStarted { entity, .. }:
-///     find_owner_window(world, entity) == Some(window_entity) の場合のみ end_dragging 実行
-///
-/// ここでは find_owner_window によるウィンドウ所有権チェックを模擬実行し、
-/// 異なるウィンドウの entity では guard が不成立であることを純粋 ECS で検証する。
+/// 左ボタンを離したときの今のガードは find_owner_window を使わない。
+/// `mouse_click.rs` のハンドラは `end_dragging_on_release(hwnd, ..)` を呼ぶだけで、
+/// 離した窓の HWND が押しで捕捉を取った窓の HWND（`CaptureGuard::hwnd`）と同じときだけ
+/// ドラッグを休ませる（Preparing/JustStarted/Dragging のどれでも同じ判定）。
+/// 異なるウィンドウからの離しの振る舞いは `wndproc_bridge_drag_release_tests.rs` の
+/// 隠れた実物の窓 2 枚のテストで確かめる。ここでは find_owner_window の答えだけを固定する。
 #[test]
 fn test_drag_hwnd_guard_owner_window_check() {
     let mut world = World::new();

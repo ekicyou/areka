@@ -87,6 +87,25 @@ pub struct AtlasPage {
     pub bytes: Arc<[u8]>,
 }
 
+/// 繰り返し回数。APNG と WebP で同じ意味（2.5）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LoopCount {
+    /// 終わりなく繰り返す。
+    Infinite,
+    /// 全体を合計 n 回。
+    Finite(std::num::NonZeroU32),
+}
+
+/// 動く絵 1 つのコマの並び（4.2）。
+#[derive(Clone, Debug)]
+pub struct Animation {
+    /// `frames[n]` が n 番のコマ。`frames[0]` は親（今までの鍵の `ElementId`）。
+    pub frames: Vec<ElementId>,
+    /// `delays_ms[n]` が n 番のコマの待ち時間。`frames` と同じ長さ。
+    pub delays_ms: Vec<u32>,
+    pub loop_count: LoopCount,
+}
+
 /// 索引表＋頁群（bake の成果物・channel 非依存・6.5）。
 ///
 /// `entries`/`keys` は `ElementId`（= index）で整列した密 `Vec`（毎フレーム O(1)）。
@@ -100,6 +119,8 @@ pub struct AtlasTable {
     /// 構築時の一度きり用（(set, rel_path)→ElementId）。
     resolve: HashMap<AtlasKey, ElementId>,
     pages: Arc<[AtlasPage]>,
+    /// 動く絵の親の `ElementId`→コマの並び（静止画と 2 枚目以降のコマは載らない）。
+    animations: Arc<HashMap<ElementId, Animation>>,
 }
 
 impl AtlasTable {
@@ -129,7 +150,63 @@ impl AtlasTable {
             entries: entries.into(),
             resolve,
             pages: pages.into(),
+            animations: Arc::default(),
         }
+    }
+
+    /// 動く絵つきの表を組む（`bake` とテストの入口・4.2〜4.5）。
+    ///
+    /// 2 枚目以降のコマは鍵のエントリの後ろに並び、鍵の欄には親と同じ `AtlasKey` が入る。
+    /// ゆえに同じ鍵が複数あるときは、いちばん小さい番号（＝親・0 番のコマ）を `resolve`
+    /// の答えにする（4.3）。
+    ///
+    /// # Panics
+    /// `keys.len() != entries.len()`、コマの並びが 2 未満か待ち時間と長さが違う、
+    /// コマの番号が表の外、のいずれかで panic する（契約違反・呼び出し側のバグ）。
+    pub fn with_frames(
+        keys: Vec<AtlasKey>,
+        entries: Vec<AtlasEntry>,
+        pages: Vec<AtlasPage>,
+        animations: Vec<(ElementId, Animation)>,
+    ) -> Self {
+        assert_eq!(
+            keys.len(),
+            entries.len(),
+            "AtlasTable::with_frames: keys.len() ({}) != entries.len() ({}) — both are indexed by ElementId",
+            keys.len(),
+            entries.len(),
+        );
+        for (parent, a) in &animations {
+            assert!(
+                a.frames.len() >= 2 && a.frames.len() == a.delays_ms.len(),
+                "AtlasTable::with_frames: animation {parent:?} has {} frames and {} delays (need equal and >= 2)",
+                a.frames.len(),
+                a.delays_ms.len(),
+            );
+            assert!(
+                a.frames.iter().all(|f| (f.0 as usize) < entries.len()),
+                "AtlasTable::with_frames: animation {parent:?} has a frame outside the table ({} entries)",
+                entries.len(),
+            );
+        }
+        let mut resolve = HashMap::new();
+        for (i, k) in keys.iter().enumerate() {
+            // 先に入った（小さい）番号を残す。
+            resolve.entry(k.clone()).or_insert(ElementId(i as u32));
+        }
+        Self {
+            keys: keys.into(),
+            entries: entries.into(),
+            resolve,
+            pages: pages.into(),
+            animations: Arc::new(animations.into_iter().collect()),
+        }
+    }
+
+    /// 【ランタイム】`id` が動く絵の親なら `Some`。静止画と 2 枚目以降のコマの `id` には
+    /// `None`（4.6）。
+    pub fn animation(&self, id: ElementId) -> Option<&Animation> {
+        self.animations.get(&id)
     }
 
     /// 【ランタイム正準・毎フレーム】`ElementId`→エントリ（O(1) Vec index・6.1）。
@@ -182,6 +259,10 @@ impl AtlasTable {
         &self.pages
     }
 }
+
+#[cfg(test)]
+#[path = "table_frames_tests.rs"]
+mod table_frames_tests;
 
 #[cfg(test)]
 mod tests {

@@ -51,3 +51,5 @@ allow-wildcard-paths = true
 # crates.io / vendored path 以外の未知ソースを拒否
 unknown-registry = "deny"
 unknown-git = "deny"
+# git の依存はこの 1 件だけ名指しで許す（根の Cargo.toml の [patch.crates-io]・spec: areka-P0-animated-image-decode 要件 7.7）
+allow-git = ["https://github.com/image-rs/image-webp"]

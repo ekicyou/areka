@@ -20,9 +20,11 @@
 //! - [`table`] — 成果物契約型（正本）
 //! - [`error`] — 診断可能なエラー型
 
+mod animated;
 pub mod bake;
 pub mod decode;
 pub mod error;
+mod limits;
 pub mod manifest;
 pub mod normalize;
 pub mod pack;
@@ -53,11 +55,31 @@ pub struct BakeResult {
 /// マニフェスト採番（`SetId` 昇順・rel_path 昇順）→ 同一失敗集合 → 同一生存集合 →
 /// 同一密再採番、と各段が決定的ゆえ、同一入力（＋同一失敗）で同一 `AtlasTable` を返す
 /// （golden 安定・D7）。
+///
+/// 動く絵の上限は環境変数の既定の取り方（[`AnimationLimits::from_env`]）で決める。
 pub fn bake(sets: &[SurfaceSet<'_>], decoder: &impl ElementDecoder, cfg: PackConfig) -> BakeResult {
+    bake_with_limits(sets, decoder, cfg, AnimationLimits::from_env())
+}
+
+/// 動く絵の上限を外から渡す入口（spec: areka-P0-animated-image-decode 要件 6.9）。
+///
+/// 動く絵（コマが 2 枚以上の APNG・WebP）は全コマを載せる: 0 番のコマは今までの鍵の
+/// エントリ、2 枚目以降は鍵のエントリが全部並んだ後ろへ（親の番号・コマの番号の昇順で）
+/// 足し、[`AtlasTable::animation`] で引ける。動く絵が無ければ結果は今までと同じ。
+pub fn bake_with_limits(
+    sets: &[SurfaceSet<'_>],
+    decoder: &impl ElementDecoder,
+    cfg: PackConfig,
+    limits: AnimationLimits,
+) -> BakeResult {
     // 1. マニフェスト導出（列挙・重複排除・決定的採番）。
     let manifest = ManifestDeriver.derive(sets);
 
     let mut errors: Vec<crate::error::BakeError> = Vec::new();
+    // この呼び出しで全コマを載せた動く絵の画素の合計（上限 ㋒・呼び出しごとに 0 から）。
+    let mut used_pixels = 0u64;
+    // 2 枚目以降のコマ（親の番号の昇順）。全部の鍵を回った後に番号を振る。
+    let mut pending_frames: Vec<animated::PendingFrames> = Vec::new();
 
     // 生存エントリ（デコード・正規化を通過）を manifest 順で密に積む。
     //   survivor_keys[final] ↔ 最終 ElementId(final)
@@ -73,14 +95,25 @@ pub fn bake(sets: &[SurfaceSet<'_>], decoder: &impl ElementDecoder, cfg: PackCon
         // 唯一の実パス化（Path::join・一度きり・design 3.6）。
         let path = set.base_dir.join(&key.rel_path);
 
-        // デコード（失敗＝索引表に載せず・エラー集約・継続・R2.2）。
-        let decoded = match decoder.decode(&path) {
-            Ok(d) => d,
-            Err(e) => {
-                errors.push(crate::error::BakeError::Decode(e));
-                continue;
-            }
-        };
+        // デコード（失敗＝索引表に載せず・エラー集約・継続・R2.2）。動く絵は 0 番のコマが
+        // 静止画と同じ道を通り、残りのコマ・待ち時間・繰り返し回数は脇へ取っておく。
+        let (decoded, animation, frames_pixels) =
+            match animated::load(decoder, &path, key, limits, cfg, used_pixels) {
+                animated::Loaded::Still(d) => (d, None, 0),
+                animated::Loaded::Frames(anim, pixels) => {
+                    let mut frames = anim.frames.into_iter();
+                    let first = frames.next().expect("load checks >= 2 frames");
+                    (
+                        first.image,
+                        Some((first.delay_ms, frames.collect(), anim.loop_count)),
+                        pixels,
+                    )
+                }
+                animated::Loaded::Failed(e) => {
+                    errors.push(crate::error::BakeError::Decode(e));
+                    continue;
+                }
+            };
 
         let has_pna = decoder.probe_pna(&path);
 
@@ -99,6 +132,8 @@ pub fn bake(sets: &[SurfaceSet<'_>], decoder: &impl ElementDecoder, cfg: PackCon
                 continue;
             }
         };
+        // 表に載ると決まった動く絵だけを合計に足す（正規化で落ちた絵は数えない・要件 6.8）。
+        used_pixels += frames_pixels;
 
         // 抜き色で扱った絵は、抜いた色を記録する（要件 6.3）。
         if let Some([b, g, r, a]) = key_color {
@@ -116,6 +151,19 @@ pub fn bake(sets: &[SurfaceSet<'_>], decoder: &impl ElementDecoder, cfg: PackCon
 
         // トリム（全透明→空エントリ／それ以外→配置エントリ）。生存確定＝密採番へ加える。
         let trim = Trimmer.trim(&normalized);
+        let final_id = ElementId(survivor_keys.len() as u32);
+
+        // 動く絵の残りのコマを 0 番と同じ透過（0 番の左上の色）に通して切り詰める（要件 3.1〜3.3）。
+        let frames = animation.map(|(first_delay_ms, rest, loop_count)| {
+            animated::PendingFrames::new(
+                final_id,
+                key.clone(),
+                first_delay_ms,
+                rest,
+                loop_count,
+                key_color,
+            )
+        });
 
         // 0 寸/全透明 element の早期警告（ゴースト制作者ミスの可能性が高いため・設計ディスカッション #1）。
         // **ログのみの増分**: bake の生成結果（索引表・placement・trim 矩形）は一切変更しない。
@@ -132,7 +180,8 @@ pub fn bake(sets: &[SurfaceSet<'_>], decoder: &impl ElementDecoder, cfg: PackCon
                 original_h = trim.original.h,
                 "bake: element の元画像が 0 寸です（ゴースト制作者ミスの可能性）"
             );
-        } else if trim.placement.is_none() {
+        } else if trim.placement.is_none() && frames.as_ref().is_none_or(|f| f.all_transparent()) {
+            // 動く絵の透明なコマは正当な 1 コマ。全部のコマが透明な動く絵にだけ出す（要件 3.5）。
             tracing::warn!(
                 target: "areka_emo_atlas",
                 set = key.set.0,
@@ -143,13 +192,21 @@ pub fn bake(sets: &[SurfaceSet<'_>], decoder: &impl ElementDecoder, cfg: PackCon
             );
         }
 
-        let final_id = ElementId(survivor_keys.len() as u32);
         survivor_keys.push(key.clone());
         survivor_originals.push(trim.original);
         if let Some(trimmed) = trim.placement {
             placed_items.push((final_id, trimmed));
         }
+        pending_frames.extend(frames);
     }
+
+    // 2 枚目以降のコマを鍵のエントリの後ろへ（親の番号・コマの番号の昇順・要件 4.7）。
+    let animations = animated::append_frames(
+        pending_frames,
+        &mut survivor_keys,
+        &mut survivor_originals,
+        &mut placed_items,
+    );
 
     // 5. packing（座標のみ・最終 ElementId で採番済み）。
     let pack = Packer.pack(&placed_items, cfg);
@@ -171,7 +228,7 @@ pub fn bake(sets: &[SurfaceSet<'_>], decoder: &impl ElementDecoder, cfg: PackCon
         .collect();
 
     let pages_vec: Vec<AtlasPage> = pages;
-    let table = AtlasTable::new(survivor_keys, entries, pages_vec);
+    let table = AtlasTable::with_frames(survivor_keys, entries, pages_vec, animations);
 
     // 8. 値で直接返す（channel 非依存・R6.5）。
     BakeResult { table, errors }
@@ -179,11 +236,18 @@ pub fn bake(sets: &[SurfaceSet<'_>], decoder: &impl ElementDecoder, cfg: PackCon
 
 // 成果物契約の正本型（D3・R6）。下流 emo-compose はこれらを import する。
 pub use table::{
-    AtlasEntry, AtlasKey, AtlasPage, AtlasTable, ElementId, Placement, Point, Rect, SetId, Size,
+    Animation, AtlasEntry, AtlasKey, AtlasPage, AtlasTable, ElementId, LoopCount, Placement, Point,
+    Rect, SetId, Size,
 };
 
 // デコードポート（D4・R2.3）。既定手段（WIC）を露出せず、trait とデータ型のみ公開。
-pub use decode::{DecodeError, DecodedImage, ElementDecoder, MemoryDecoder};
+pub use decode::{
+    AnimatedImage, AnimationFrame, AnimationInfo, DecodeError, DecodedImage, ElementDecoder,
+    MemoryDecoder,
+};
+
+// 動く絵の 3 つの上限（spec: areka-P0-animated-image-decode 要件 6.9）。
+pub use limits::AnimationLimits;
 
 // 既定デコード腕（WIC 経由・COM 隔離・D4）。上位は trait 越しに用いる。
 pub use decode::wic_arm::WicDecoderArm;
@@ -225,6 +289,14 @@ mod emo2_golden;
 // `#[cfg(test)]` 限定ゆえ本番 bake 経路に現れない。
 #[cfg(test)]
 mod log_capture;
+
+// image-webp を固定コミットから取り込んでいることの検査（spec: areka-P0-animated-image-decode 要件 7.6）。
+#[cfg(test)]
+mod webp_pin_tests;
+
+// 本物の読み手で動く絵の検体のフォルダを焼く結合テスト（spec: areka-P0-animated-image-decode 要件 8.3〜8.6）。
+#[cfg(test)]
+mod samples_e2e_tests;
 
 #[cfg(test)]
 mod bake_entry_tests {

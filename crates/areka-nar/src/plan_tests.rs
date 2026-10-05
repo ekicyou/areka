@@ -914,3 +914,6 @@ fn the_snapshot_notices_every_shape_of_write() {
         "空フォルダの追加を見落とす"
     );
 }
+
+#[path = "plan_source_path_tests.rs"]
+mod source_path;

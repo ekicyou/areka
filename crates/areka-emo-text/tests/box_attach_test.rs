@@ -286,7 +286,11 @@ fn boxes_attach_as_window_children_in_element_order_and_draw_independently() {
     rt.apply_cue(&cue(CueCommand::Emote { key: "1000".into() }));
     write_to(&mut rt, "a", "アヒル");
     write_to(&mut rt, "b", "ふむ");
-    rt.sync_boxes(&mut world, &[(actor(), Some(view))]);
+    // 置き場所はシェルの窓がいま表示している絵の番号から導く（結線と同じく表示層に照会する）。
+    let shown = presenter
+        .current_surface_id(TargetId(0))
+        .expect("前提: 絵 1000 を表示している");
+    rt.sync_boxes(&mut world, &[(actor(), Some((view, shown)))]);
     present_frame(&mut rt, &mut world, LATE).expect("提示フレーム");
 
     // ── 並び（要件 3.7・3.9）: 差し込み口 → b（element2）→ a（element1）→ 絵 ──
