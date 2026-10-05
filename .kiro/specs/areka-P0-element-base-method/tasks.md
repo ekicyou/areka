@@ -91,3 +91,4 @@
 - 3.2: 台帳の担当や状態を動かすと `doc/ukadoc-coverage/briefing.md`（barrier・owner_completed の数）と `roadmap-draft.md`（`[[spec]]`・段階 A の表・`[briefs].count`）も手で合わせないと `cargo test -p ukadoc-survey` の consistency が赤（前例 PR#240）。完了時に担当を追跡用 spec へ移すときも同じ 3 か所を直す。
 - 完了時の申し送り: squash マージの後に animated-image-playback のセッション（名前 "animated image playback"）へ SendMessage でマージを知らせる約束（10-05・向こうは着地を待って main を取り込む）。
 - 4.1（範囲外・完了時に起票）: `cargo clippy --workspace --all-targets` が `crates/areka-kanade/src/actor_raise_reply_tests.rs` の `loop`（`never_loop`・error）で止まる。本 spec は kanade に触れておらず、最後の変更は PR#226。clippy の版が上がって出たものと見られる。本 spec の差分のファイルへの警告は 0 件（触った 4 crate を個別に clippy して確認）。
+- 完了時の棚卸（10-05）: その場で解決 0 件。起票 1 件＝`draw-methods-canon`（残りの描画メソッドと pattern定義の `base`・優先・台帳の 2 行の担当を移した）。kanade の clippy の `never_loop` は `clippy-199-lints` の brief が `actor_raise_reply_tests.rs` を挙げて起票済みなので除いた。
