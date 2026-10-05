@@ -111,6 +111,8 @@ $SmokeExitMsGiven = $PSBoundParameters.ContainsKey('SmokeExitMs')
 $ErrorActionPreference = 'Stop'
 # 外部コマンドの標準エラー出力で例外を投げさせない。終了コードは自前で見る。
 $PSNativeCommandUseErrorActionPreference = $false
+# 判定に使う子の出力（版・検体のパス）は端末の文字コードを通さず UTF-8 で読む
+. (Join-Path $PSScriptRoot 'utf8-child.ps1')
 
 # =============================================================================
 # 較正値（説明の一覧と対応。変更はここだけ）
@@ -308,14 +310,12 @@ Step '前提の確認' {
     }
 
     # 版（正本は Cargo.toml の [workspace.package] version。areka パッケージ経由で読む）。3 で止まる検査の最後
-    $out = @(cargo metadata --no-deps --locked --format-version 1 2>&1)
-    $code = $LASTEXITCODE
-    $err = @($out | Where-Object { $_ -is [Management.Automation.ErrorRecord] } | ForEach-Object { "$_" })
-    if ($code) {
-        Exit-Script $EXIT_BAD_ARGS ("版を読めない（cargo metadata が終了コード {0}: {1}）" -f $code, ($err | Select-Object -Last 1))
+    $r = Invoke-Utf8Child cargo @('metadata', '--no-deps', '--locked', '--format-version', '1')
+    if ($r.Code) {
+        Exit-Script $EXIT_BAD_ARGS ('cannot read the version (cargo metadata exited with code {0}: {1})' -f $r.Code, ($r.ErrLines | Select-Object -Last 1))
     }
     try {
-        $meta = ($out | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] }) -join "`n" | ConvertFrom-Json
+        $meta = $r.Out | ConvertFrom-Json
     } catch {
         Exit-Script $EXIT_BAD_ARGS "版を読めない（cargo metadata の出力が JSON として読めない: $_）"
     }
@@ -429,14 +429,17 @@ Step '謝辞の生成' {
 
 # nar-sample-path の出力（1 行 1 組の key=value）から $Keys の値を読む。鍵が無い・パスが実在しなければ throw。
 function Read-SamplePaths([string]$Sample, [string[]]$Keys) {
-    $lines = @(cargo run -q --locked -p sample-ghost-kit --bin nar-sample-path -- $Sample)
-    if ($LASTEXITCODE) { throw "nar-sample-path $Sample が終了コード $LASTEXITCODE" }
+    $r = Invoke-Utf8Child cargo @('run', '-q', '--locked', '-p', 'sample-ghost-kit', '--bin', 'nar-sample-path', '--', $Sample)
+    # 子の標準エラーは書き替えずにそのまま写す（Step の出力の末尾には入らないので、失敗の文に最後の行を添える）
+    foreach ($e in $r.ErrLines) { Write-Host $e }
+    if ($r.Code) { throw "nar-sample-path $Sample exited with code $($r.Code): $($r.ErrLines | Select-Object -Last 1)" }
+    $lines = @($r.Out -split '\r?\n')
     $paths = @{}
     foreach ($key in $Keys) {
         $line = $lines | Where-Object { $_.StartsWith("$key=") } | Select-Object -First 1
-        if (-not $line) { throw "nar-sample-path $Sample の出力に $key= が無い" }
+        if (-not $line) { throw "nar-sample-path $Sample output has no $key=" }
         $path = $line.Substring($key.Length + 1)
-        if (-not (Test-Path -LiteralPath $path -PathType Container)) { throw "nar-sample-path $Sample の $key= が実在しない: $path" }
+        if (-not (Test-Path -LiteralPath $path -PathType Container)) { throw "nar-sample-path $Sample ${key}= does not exist: $path" }
         $paths[$key] = $path
     }
     $paths
