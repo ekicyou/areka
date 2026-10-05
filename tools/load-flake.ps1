@@ -10,7 +10,7 @@ load-flake.ps1 — CPU の負荷をかけて areka のテストを回し、回�
   ⑵ マシン全体の CPU（`\Processor(_Total)\% Processor Time`）を 5 秒採って記録する
   ⑶ CPU を回すだけの子（pwsh の空の繰り返し）を -Burners 本起こし、番号を控え、
      負荷の最中の CPU をもう一度 5 秒採る
-  ⑷ 回ごとに `cargo test -p areka --bin areka -- <Filter> [--test-threads N]` を回し、
+  ⑷ 回ごとに `cargo test -p areka --bin areka -- <Filter> [--test-threads N] [--nocapture]` を回し、
      標準出力と標準エラーを 1 つのファイル round-N.log へバイトのまま保存する
      （cmd の `> file 2>&1`。コンソールの文字コードを通さない）。
      -RoundTimeoutMin を越えたら、その回に自分で起こしたプロセスの木だけを止めて「上限越え」と書く
@@ -28,6 +28,11 @@ load-flake.ps1 — CPU の負荷をかけて areka のテストを回し、回�
 
 -Burners 0 は負荷なし。静かな机の所要時間の測定（design「Performance」）に使う。
 
+-NoCapture は libtest に `--nocapture` を渡す。libtest は緑のテストの標準エラーを捨てるので、
+これが無いと `sample-ghost-kit:` の後片付けの失敗は赤のテストの分しか残らない（要件 5.1 は
+赤に依らず数える）。付けても赤の名前は末尾の `failures:` の一覧から取れる（失敗の文言は
+`---- 名前 stdout ----` の囲みでなく、その場の panic の行として出る）。直す前と後で揃えること。
+
 終了コード:
   0 … 手順が最後まで走った（テストが赤でも 0。赤は summary.txt で読む）
   2 … ⑴ のビルドに失敗した
@@ -36,7 +41,7 @@ load-flake.ps1 — CPU の負荷をかけて areka のテストを回し、回�
   どの場合も summary.txt を書く。
 
 使い方:
-  pwsh -NoProfile -File tools/load-flake.ps1 -Label before
+  pwsh -NoProfile -File tools/load-flake.ps1 -Label before -NoCapture
   pwsh -NoProfile -File tools/load-flake.ps1 -Label smoke -Rounds 1 -Burners 2 -Filter some::test
   pwsh -NoProfile -File tools/load-flake.ps1 -Label quiet -Burners 0 -Rounds 3
 ================================================================================
@@ -53,7 +58,9 @@ param(
     [string]$Filter = '',
     # --test-threads にそのまま渡す（0 なら渡さない）
     [ValidateRange(0, 4096)][int]$TestThreads = 0,
-    [ValidateRange(1, 1440)][int]$RoundTimeoutMin = 30
+    [ValidateRange(1, 1440)][int]$RoundTimeoutMin = 30,
+    # --nocapture を渡す（緑のテストの標準エラー＝`sample-ghost-kit:` の後片付けの失敗も round-N.log に残す）
+    [switch]$NoCapture
 )
 
 Set-StrictMode -Version Latest
@@ -154,6 +161,7 @@ $startedAt = Get-Date
 $testArgs = '-p areka --bin areka --'
 if ($Filter) { $testArgs += " `"$Filter`"" }
 if ($TestThreads -gt 0) { $testArgs += " --test-threads $TestThreads" }
+if ($NoCapture) { $testArgs += ' --nocapture' }
 
 $commit = (& git -C $repoRoot rev-parse HEAD 2>$null) -join ''
 $dirty = if ((& git -C $repoRoot status --porcelain 2>$null)) { 'yes' } else { 'no' }
@@ -165,6 +173,7 @@ Add-Text 'conditions.txt' @(
     "filter: $(if ($Filter) { $Filter } else { '(none: whole binary)' })"
     "test_threads: $(if ($TestThreads -gt 0) { $TestThreads } else { '(not passed)' })"
     "round_timeout_min: $RoundTimeoutMin"
+    "nocapture: $(if ($NoCapture) { 'yes' } else { 'no' })"
     "command: cargo test $testArgs"
     "logical_cpus: $logicalCpus"
     "commit: $commit (dirty: $dirty)"

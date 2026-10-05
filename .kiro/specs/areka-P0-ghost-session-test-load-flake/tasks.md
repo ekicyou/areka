@@ -11,7 +11,7 @@
   - 完了の姿: `-Label smoke -Rounds 1 -Burners 2 -Filter <1 本の名前>` で回すとまとめのファイルができ、走り終わった後に負荷の子が 1 つも残っていない（この試し回しはスクリプトの確かめで、再現の回に数えない）
   - _Requirements: 1.3, 7.2_
 
-- [ ] 1.2 再現の手順と数え上げを spec の記録に書く
+- [x] 1.2 再現の手順と数え上げを spec の記録に書く
   - spec のフォルダに `load-repro.md` を作り、最初の実行の前に「手順」（負荷の作り方・回す範囲・回数・1 回の上限の実際の値）を書く
   - 待ちの部品（`spin_wait_until`・`SPIN_WAIT`・`run_bounded`・`join_bounded`・`wait_steady`・`pump_*`・テストのファイルが自前で持つ締切つきの待ち）を使うファイル（本番のファイルの中の利用を含む）と、切替の足場を使うファイルを全数で数え、起票時の数（足場 28・名指し 20）との差を書く
   - `spin_wait_until` を直接呼び、足場か偽の SHIORI の観測口が手元にある対象の族の呼び出し（設計の時点で 7 か所）を取り直し、移す先の一覧にする
@@ -160,3 +160,4 @@
 
 ## Implementation Notes
 - 1.1: libtest は成功したテストの `eprintln!` を捨てるので、`sample-ghost-kit:` の後片付けの失敗の行（`devroot.rs` の `report_cleanup`）と `待ちの打ち切り` の行は、赤のテストの分しか `round-N.log` に残らない。成功したテストの os error 5 を数えるには `--nocapture` が要る（1.2・1.4・4.4 で扱いを決める）
+- 1.2: 再現は `-NoCapture` つきで回す（1.1 の注のとおり）。fallback の `run_input_until` と lap の `LapRig::frames_until` は条件の中で足場を可変で借りるので、`wait_for(&self)` でなく先に `progress_probe()` を取ってから `wait_until(…, Progress::Count(&probe), …)` へ移す（4.3）。`frame/switch_tests.rs` の 5 秒の `yield_now` だけの待ちは要件 2.5 に反する形だが、`frame/` は同じウェーブの他の spec の持ち物なので設計どおり条件つき（5.4）
