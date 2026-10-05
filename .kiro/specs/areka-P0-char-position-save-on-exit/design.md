@@ -57,7 +57,14 @@
 - `GhostWindows` の「既定の位置」`default_char_pos` の意味（`None`＝記憶から戻した）が変わるとき（「記憶に位置が無い」の見分けに使っている）。
 - 記憶の位置の形（`PersistKey::WindowPos`・下端の中央の x）が変わるとき。
 - `extra-character-windows` が 3 体目以降の窓を別の台帳で持つようにするとき（今の設計は `GhostWindows` に居る全スコープを回る）。
+- 拡大率が変わったあとの詰め直し（`placement/chain_realign.rs`）の対象の決め方が変わるとき（下の「知っている後退」）。
 - 終了や切り替えの経路に位置を書く口を足そうとするとき（要件 3.1 に反する。要件から見直す）。
+
+### 知っている後退（2026-10-05・設計ディスカッション 議題 1）
+
+拡大率が変わったあとの詰め直し（`placement/chain_realign.rs:27`〜`30` の説明）は、起動の並べ直しと同じ判定を使い、既定の位置が `None`（＝位置を覚えている）のスコープを対象から外す。この spec が入ると、2 回目の起動からは全員が `None` になり、拡大率を変えても誰も詰め直されない。隣り合っていた 2 人のあいだに隙間（実測 359px・`chain_realign.rs:12`〜`13`）が開いたままになる。両方をドラッグ済みの利用者は今でも同じ動きである。
+
+開発者の裁定は「受け入れず、別の spec として起票」。この spec では直さず、`areka-P0-dpi-realign-remembered-chain`（`.kiro/specs/areka-P0-dpi-realign-remembered-chain/brief.md`・roadmap の台帳に登録済み）が持つ。この spec の本体（書く関数・見分けの直し）は変わらない。実機の確認（Testing Strategy）では拡大率を変えない。`verification/real-machine.md` にこの後退と起票先を 1 行書く。
 
 ## Architecture
 
