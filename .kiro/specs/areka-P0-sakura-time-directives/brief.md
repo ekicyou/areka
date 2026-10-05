@@ -91,3 +91,8 @@ compile の汎用キャリアアームへ allowlist 判定を追加（純関数�
 - 触るファイル: `crates/areka-sakura/src/{compile.rs, duration.rs}` と兄弟のテスト・（`\_q` を入れるなら）`crates/areka-parsers/src/sakura/{lexer,decode}.rs`・`doc/ukadoc-coverage/ledger/sakura-script.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
 - 議題（答えで作業が変わるものだけ）: `\_q` を入れるか（前回どおり・入れるなら `anchor-tag-canon` の後）。
 - 見つけた穴: なし。
+
+
+---
+
+> **📌 2026-10-05 相互登記（`areka-P0-balloon-lifecycle-events` の要件の討議）**——**`\![set,balloontimeout,時間]` は本 spec の担当から外し、`balloon-lifecycle-events` が丸ごと持つ**（開発者裁定「並走の spec が触らないなら本 spec が担当すべき」）。正典は「時間切れはスクリプトの表示が終わってからカウント」「そのスクリプト中のみ有効」で、タグは汎用の `\!` の運び手で表示が終わる時刻までに必ず表示の側へ届くため、コンパイルの側の先読みは要らない（`choicetimeout` とは違い、区切りの値へ焼き込む必要が無い）。本 spec に残るのは A 群（`\![quicksection,…]`・`\![set,balloonwait,…]`）と `\_q`（議題）。網羅台帳の `balloontimeout` の行の持ち主は `balloon-lifecycle-events` が直す。
