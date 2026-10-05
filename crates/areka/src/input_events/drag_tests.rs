@@ -1,5 +1,5 @@
 //! ドラッグの開始・終了の知らせが届く・届かないの基本と、終了の座標・位置の保存
-//! （areka-P0-mouse-drag-events・design「Testing Strategy > areka」A1〜A8）。
+//! （areka-P0-mouse-drag-events・design「Testing Strategy > areka」A1〜A8）と、送らない経路の記録（A9）。
 //!
 //! 土台は [`super::test_support::Rig`]（本番の順で組んだ窓と受け口）。期待する知らせは偽の当たり判定
 //! （[`fake_hit`]）へ「押した位置 − 窓の位置」を渡して作る（受け口の座標・当たり判定から、
@@ -9,14 +9,19 @@
 //! `DraggingState.initial_inset` を開始時の窓位置で上書きし（偽の窓では `(0,0)` のまま入るため）、
 //! ドラッグの間の窓の移動は窓の位置を直に書いて作る（[`begin_drag`]）。
 
+use std::time::Instant;
+
 use areka_kanade::{MouseButton, MouseEventKind, MouseInput};
 use areka_sylphya::PersistKey;
-use wintf::ecs::Point;
-use wintf::ecs::drag::{DraggingState, OnDragStart};
+use bevy_ecs::prelude::Entity;
+use wintf::ecs::drag::{DragStartEvent, DraggingState, OnDragStart};
 use wintf::ecs::pointer::{DoubleClick, Phase, PointerState};
+use wintf::ecs::{PhysicalPoint, Point, WindowPos};
 
 use super::super::{MouseWiring, on_char_pointer_moved, on_char_pointer_pressed};
+use super::on_char_drag_start;
 use super::test_support::{Rig, SCOPE, ended, fake_hit, started};
+use crate::placement::test_support::{LogEvent, capture_logs};
 
 /// 押した位置の窓の中の点（当たり判定のある位置）。
 const PRESS_LOCAL: Point = Point { x: 60, y: 100 };
@@ -379,4 +384,145 @@ fn wrapper_keeps_window_position_and_saved_pairs_unchanged() {
             assert_eq!(sent, want, "{gesture:?}・{wrapped:?}: 届いた知らせの件数");
         }
     }
+}
+
+/// A9 の 1 件: 送らない経路の記録（`mouse_drag_dropped`／`mouse_send_failed`）がちょうど 1 件で、
+/// 理由・種類・重さが期待どおり。
+fn assert_one_record(
+    events: &[LogEvent],
+    event: &str,
+    reason: Option<&str>,
+    level: tracing::Level,
+) {
+    let records: Vec<&LogEvent> = events
+        .iter()
+        .filter(|e| {
+            matches!(
+                e.field_str("event"),
+                Some("mouse_drag_dropped" | "mouse_send_failed")
+            )
+        })
+        .collect();
+    assert_eq!(
+        records.len(),
+        1,
+        "送らない経路の記録が 1 件ではない: {events:?}"
+    );
+    let got = records[0];
+    assert_eq!(got.field_str("event"), Some(event), "{got:?}");
+    assert_eq!(got.field_str("reason"), reason, "{got:?}");
+    assert_eq!(got.field_str("kind"), Some("drag_start"), "{got:?}");
+    assert_eq!(got.level, level, "{got:?}");
+}
+
+/// 本番の配りで開始を 1 回配り、その間の記録を返す。
+fn dispatch_start_capturing(rig: &mut Rig) -> Vec<LogEvent> {
+    let press = offset(rig.position_of(rig.char_w), PRESS_LOCAL);
+    rig.put(started(rig.char_w, press));
+    capture_logs(|| rig.tick()).1
+}
+
+/// 受け手を直に呼んで開始を 1 回知らせ、その間の記録を返す（本番の配りでは作れない防御の枝）。
+fn call_start_capturing(rig: &mut Rig, entity: Entity, target: Entity) -> Vec<LogEvent> {
+    let ev = Phase::Bubble(DragStartEvent {
+        target,
+        position: PhysicalPoint::new(0, 0),
+        is_primary: true,
+        timestamp: Instant::now(),
+    });
+    capture_logs(|| on_char_drag_start(&mut rig.world, entity, entity, &ev)).1
+}
+
+/// A9（要件 8.2・9.2）: `MouseWiring` なし → `mouse_drag_dropped`（`no_wiring`・debug）1 件・知らせ 0 件。
+#[test]
+fn no_wiring_records_one_drop() {
+    let mut rig = Rig::new();
+    rig.world
+        .remove_non_send::<MouseWiring>()
+        .expect("前提: MouseWiring がある");
+
+    let events = dispatch_start_capturing(&mut rig);
+
+    assert_one_record(
+        &events,
+        "mouse_drag_dropped",
+        Some("no_wiring"),
+        tracing::Level::DEBUG,
+    );
+    assert_eq!(rig.drain(), vec![]);
+    rig.close();
+}
+
+/// A9（要件 8.2・9.2）: 対象が別の窓 → `mouse_drag_dropped`（`target_mismatch`・warn）1 件・知らせ 0 件。
+#[test]
+fn target_mismatch_records_one_drop() {
+    let mut rig = Rig::new();
+    let (char_w, balloon) = (rig.char_w, rig.balloon);
+
+    let events = call_start_capturing(&mut rig, char_w, balloon);
+
+    assert_one_record(
+        &events,
+        "mouse_drag_dropped",
+        Some("target_mismatch"),
+        tracing::Level::WARN,
+    );
+    assert_eq!(rig.drain(), vec![]);
+    rig.close();
+}
+
+/// A9（要件 8.2・9.2）: `CharWindowMarker` なし（バルーン窓）→ `mouse_drag_dropped`（`no_scope`・warn）
+/// 1 件・知らせ 0 件。
+#[test]
+fn no_scope_records_one_drop() {
+    let mut rig = Rig::new();
+    let balloon = rig.balloon;
+
+    let events = call_start_capturing(&mut rig, balloon, balloon);
+
+    assert_one_record(
+        &events,
+        "mouse_drag_dropped",
+        Some("no_scope"),
+        tracing::Level::WARN,
+    );
+    assert_eq!(rig.drain(), vec![]);
+    rig.close();
+}
+
+/// A9（要件 8.2・9.2）: `WindowPos.position` なし → `mouse_drag_dropped`（`no_window_pos`・warn）
+/// 1 件・知らせ 0 件。
+#[test]
+fn no_window_pos_records_one_drop() {
+    let mut rig = Rig::new();
+    let press = offset(rig.position_of(rig.char_w), PRESS_LOCAL);
+    rig.world
+        .get_mut::<WindowPos>(rig.char_w)
+        .expect("前提: WindowPos がある")
+        .position = None;
+    rig.put(started(rig.char_w, press));
+
+    let events = capture_logs(|| rig.tick()).1;
+
+    assert_one_record(
+        &events,
+        "mouse_drag_dropped",
+        Some("no_window_pos"),
+        tracing::Level::WARN,
+    );
+    assert_eq!(rig.drain(), vec![]);
+    rig.close();
+}
+
+/// A9（要件 8.2・9.2）: 受け口を落とす → `mouse_send_failed`（warn）1 件・知らせ 0 件。
+#[test]
+fn send_failure_records_one_failure() {
+    let mut rig = Rig::new();
+    rig.drop_receiver();
+
+    let events = dispatch_start_capturing(&mut rig);
+
+    assert_one_record(&events, "mouse_send_failed", None, tracing::Level::WARN);
+    assert_eq!(rig.drain(), vec![]);
+    rig.close();
 }
