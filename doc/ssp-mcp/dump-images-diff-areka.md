@@ -2,7 +2,7 @@
 
 キャラクターの絵を返す `dump_surface` と、バルーンの絵を返す `dump_balloon` について、SSP と areka で答えが違う場合、または SSP の答えをまだ測っていない場合を行ごとに並べる。成功の本文と、無いスコープ・無い surface ID の文言のように SSP と同じものは載せない。輸送の差は [transport-diff-areka.md](transport-diff-areka.md) にある。
 
-- **SSP の印**: 「実測」は SSP 2.9.07 の MCP で 2026-10-04 に測ったもの（ゴースト「えも2DEBUG」）。測った結果の正本は `.kiro/specs/areka-P0-mcp-dump-images/research.md` の「SSP の実測の追補」の節。「未実測」は SSP で測っていないもの。「対応物なし」は SSP にその仕組みが無いもの
+- **SSP の印**: 「実測」は SSP 2.9.07 の MCP で 2026-10-04 に測ったもの（ゴースト「えも2DEBUG」）。測った結果の正本は `.kiro/specs/completed/areka-P0-mcp-dump-images/research.md` の「SSP の実測の追補」の節。「未実測」は SSP で測っていないもの。「対応物なし」は SSP にその仕組みが無いもの
 - **areka の根拠**: どの文言を返すかを決める関数は `crates/areka/src/mcp/dump_surface_judge.rs`（文言の定数と、窓→スコープ→surface ID→一度も表示していない、の順の判断）。絵を集める処理は `crates/areka/src/mcp/dump_surface.rs` と `crates/areka/src/mcp/dump_balloon.rs`、バルーンの文字を重ねる処理は `crates/areka/src/mcp/dump_balloon_overlay.rs`
 
 | 項目 | areka | SSP | SSP の印 |
