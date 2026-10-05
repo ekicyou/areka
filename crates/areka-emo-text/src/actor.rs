@@ -258,7 +258,9 @@ pub struct TextLayerRuntime {
     /// 前の配置の入力が毎回無いので、名前ごとに 1 度だけにする。箱の束を差し替えると空に戻す。
     box_definition_warned: BTreeSet<BoxName>,
     /// スコープ → 最後に提示したフレームで文字が 1 字以上見えていた箱の四角（手前から・
-    /// `actor_box.rs` の `shown_boxes`）。提示のたびに作り直し、出なくなった箱はその場で外す。
+    /// `actor_box.rs` の `shown_boxes`）。提示のたびに作り直し、出なくなった箱（`\c`・台詞の頭・
+    /// 箱を隠す印・箱の同期が登録を外した箱）はその場で外す。台本の `\s` の受け取りでは外さない
+    /// （置き場所は絵の番号に従い、絵が替わった同期で外れる）。
     shown_boxes: HashMap<ActorKey, Vec<ShownBox>>,
 }
 
@@ -360,7 +362,8 @@ impl TextLayerRuntime {
             | CueCommand::Wait => {}
         }
         self.state.apply_cue(cue);
-        // 行き先の変化・`\c`・台詞の頭で出なくなった箱を、提示を待たずに写しから外す。
+        // `\c`・台詞の頭で文字が無くなった箱を、提示を待たずに写しから外す。`\s` の受け取りは
+        // 行き先だけを替え、箱の置き場所は絵の番号に従う（次の箱の同期が決める）ので外さない。
         self.prune_shown_boxes();
     }
 

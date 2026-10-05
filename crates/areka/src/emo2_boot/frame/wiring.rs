@@ -47,8 +47,8 @@ use crate::placement::zorder_group_ledger::ZOrderGroupLedger;
 /// 大半のフィールドは `frame` 配下の相（attach／dpi／drain／text）だけが触るため `pub(super)`
 /// ＝`emo2_boot::frame` 内である。ただしバルーン可視性の相は design の File Structure Plan により
 /// **兄弟モジュール** `emo2_boot::balloon_visibility` に置かれる（判断中核と同居させるため）。
-/// その相が消費する 6 つ（`presenter`／`lifecycle_rx`／`balloon_visibility`／`balloon_status`／
-/// `balloon_models`／`clock`）だけを `pub(in crate::emo2_boot)` へ広げてある。相は 6 つを**同時に**可変借用するため
+/// その相が消費する 5 つ（`presenter`／`lifecycle_rx`／`balloon_visibility`／`balloon_models`／
+/// `clock`）と、届けの相の台帳 `balloon_status` を `pub(in crate::emo2_boot)` へ広げてある。可視性の相は 5 つを**同時に**可変借用するため
 /// （表示層へ発行しながら状態を更新する）、読み口メソッドを並べる形では組めない。広げた先は
 /// emo2_boot の内側どまりで、公開面は 1 つも増えない。
 pub struct Emo2Wiring {
@@ -105,7 +105,7 @@ pub struct Emo2Wiring {
     /// ため、フレームを跨いで生きる器がここに要る（`dpi_state` と同じ理由——相関数は排他 system
     /// から呼ばれる素の関数で `Local` を取れない）。UI スレッド専有で、可視性相以外は触らない。
     pub(in crate::emo2_boot) balloon_visibility: BalloonVisibilityState,
-    /// 最後に kanade へ届けた「見えているバルーンの組」の台帳（可視性の相の終わりの報告が使う・
+    /// 最後に kanade へ届けた「見えているバルーンの組」の台帳（フレームの終わりの届けの相が使う・
     /// areka-P0-status-execution-states 要件 4.1／4.8）。結線状態はゴーストごとに新しく作られる
     /// ので、台帳も新品から始まり前のゴーストの組を持ち越さない。
     pub(in crate::emo2_boot) balloon_status: BalloonStatusLedger,

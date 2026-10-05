@@ -27,6 +27,8 @@ mod actor;
 mod bind;
 mod looper;
 mod output;
+// 部品の時計（spec: areka-P0-surface-element-nesting）。持ち主は looper。
+mod parts;
 mod resolve;
 mod state;
 mod table;

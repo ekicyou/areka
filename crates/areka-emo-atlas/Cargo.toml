@@ -11,6 +11,10 @@ repository.workspace = true
 
 [dependencies]
 areka-parsers = { path = "../areka-parsers" }
+# 動く絵（APNG・動く WebP）の重ね済みのコマ・待ち時間・繰り返し回数を読む（承認 2026-10-04・
+# spec: areka-P0-animated-image-decode 要件 7）。動く GIF は扱わないので機能 gif は足さない。
+# 既定の機能は exr/avif 経由で paste（RUSTSEC-2024-0436）を引くので切る。
+image = { version = "0.25.10", default-features = false, features = ["png", "webp"] }
 rectangle-pack = { workspace = true }
 tracing = { workspace = true }
 windows = { workspace = true }

@@ -22,7 +22,8 @@ type HandlerResult = Option<LRESULT>;
 ///
 /// ダブルクリックイベントを処理し、hit_testでターゲットエンティティを特定して
 /// PointerStateを付与する。WM_LBUTTONDOWNの代わりにWM_LBUTTONDBLCLKが来るため、
-/// ボタン押下記録も同時に行う。
+/// ボタン押下記録も同時に行う。左ボタンなら、普通の押下と同じ決まり（祖先の `DragConfig` が
+/// 有効で左ボタンを許す）でドラッグ準備も始める（2 回目の押下のまま動かせばドラッグになる）。
 ///
 /// # Arguments
 /// - `hwnd`: ウィンドウハンドル
@@ -32,7 +33,7 @@ type HandlerResult = Option<LRESULT>;
 fn handle_double_click_message(
     world: &Rc<RefCell<EcsWorld>>,
     window_entity: Entity,
-    _hwnd: HWND,
+    hwnd: HWND,
     wparam: WPARAM,
     lparam: LPARAM,
     double_click: crate::ecs::pointer::DoubleClick,
@@ -120,6 +121,26 @@ fn handle_double_click_message(
 
                 // ボタン状態をバッファに記録
                 crate::ecs::pointer::record_button_down(target_entity, button);
+
+                // 2 回目の押下からもドラッグ準備を始める（普通の押下と同じ決まり）
+                if button == crate::ecs::pointer::PointerButton::Left {
+                    let w = world_borrow.world();
+                    if let Some((drag_entity, drag_config)) =
+                        super::mouse_click::find_ancestor_with_drag_config(w, target_entity)
+                        && drag_config.enabled
+                        && drag_config.left_button
+                    {
+                        let (screen_x, screen_y) = w
+                            .get::<crate::ecs::window::WindowPos>(window_entity)
+                            .and_then(|wp| wp.position)
+                            .map_or((x, y), |pos| (x + pos.x, y + pos.y));
+                        crate::ecs::drag::start_preparing(
+                            drag_entity,
+                            PhysicalPoint::new(screen_x, screen_y),
+                            hwnd,
+                        );
+                    }
+                }
             }
         }
     }
@@ -232,3 +253,7 @@ pub(super) fn WM_MOUSEHWHEEL(
 
     Some(LRESULT(0))
 }
+
+#[cfg(test)]
+#[path = "mouse_dblclick_wheel_tests.rs"]
+mod tests;

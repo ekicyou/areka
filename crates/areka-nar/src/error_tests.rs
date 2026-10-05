@@ -372,7 +372,7 @@ fn io_keeps_what_was_committed_and_whether_it_was_rolled_back() {
 }
 
 /// 警告の変種名。ワイルドカードの腕を持たないので、変種を足すとここが
-/// コンパイルエラーになる＝「5 種」の主張が恒真にならない。
+/// コンパイルエラーになる＝「7 種」の主張が恒真にならない。
 fn warning_name(warning: &ManifestWarning) -> &'static str {
     match warning {
         ManifestWarning::UnsupportedCompanionKind { .. } => "UnsupportedCompanionKind",
@@ -380,11 +380,13 @@ fn warning_name(warning: &ManifestWarning) -> &'static str {
         ManifestWarning::IgnoredKey { .. } => "IgnoredKey",
         ManifestWarning::RefreshIgnoredForSupplement => "RefreshIgnoredForSupplement",
         ManifestWarning::InvalidMaskEntry { .. } => "InvalidMaskEntry",
+        ManifestWarning::SourceDirectoryCleaned { .. } => "SourceDirectoryCleaned",
+        ManifestWarning::CompanionNotSearched { .. } => "CompanionNotSearched",
     }
 }
 
 #[test]
-fn manifest_warnings_are_five_and_carry_their_key() {
+fn manifest_warnings_are_seven_and_carry_their_key() {
     let warnings = [
         ManifestWarning::UnsupportedCompanionKind {
             key: "headline0".to_string(),
@@ -400,6 +402,14 @@ fn manifest_warnings_are_five_and_carry_their_key() {
             key: "refreshundeletemask".to_string(),
             value: "..".to_string(),
         },
+        ManifestWarning::SourceDirectoryCleaned {
+            key: "balloon0.source.directory".to_string(),
+            written: "../extra\\bal1".to_string(),
+            read: "extra/bal1".to_string(),
+        },
+        ManifestWarning::CompanionNotSearched {
+            key: "balloon2.directory".to_string(),
+        },
     ];
     let names: Vec<&'static str> = warnings.iter().map(warning_name).collect();
     assert_eq!(
@@ -410,16 +420,39 @@ fn manifest_warnings_are_five_and_carry_their_key() {
             "IgnoredKey",
             "RefreshIgnoredForSupplement",
             "InvalidMaskEntry",
+            "SourceDirectoryCleaned",
+            "CompanionNotSearched",
         ],
-        "マニフェストの警告は 5 種（設計）"
+        "マニフェストの警告は 7 種（設計）"
     );
     assert!(warnings[0].to_string().contains("headline0"));
     assert!(warnings[1].to_string().contains("balloon.directory"));
     assert!(warnings[2].to_string().contains("bootghost"));
     assert!(!warnings[3].to_string().is_empty());
-    let last = warnings[4].to_string();
+    let mask = warnings[4].to_string();
     assert!(
-        last.contains("refreshundeletemask") && last.contains(".."),
-        "{last}"
+        mask.contains("refreshundeletemask") && mask.contains(".."),
+        "{mask}"
+    );
+    // 鍵・書かれていた値・取り除いた後の値の 3 つを落とさない（要件 6.1）。
+    let cleaned = warnings[5].to_string();
+    assert!(
+        cleaned.contains("balloon0.source.directory")
+            && cleaned.contains("../extra\\bal1")
+            && cleaned.contains("extra/bal1"),
+        "{cleaned}"
+    );
+    // 知らない鍵の読み飛ばしと区別できる表示で、鍵を落とさない（要件 6.3）。
+    let not_searched = warnings[6].to_string();
+    assert!(
+        not_searched.contains("balloon2.directory"),
+        "{not_searched}"
+    );
+    assert_ne!(
+        not_searched,
+        ManifestWarning::IgnoredKey {
+            key: "balloon2.directory".to_string(),
+        }
+        .to_string()
     );
 }

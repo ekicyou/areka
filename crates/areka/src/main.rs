@@ -21,7 +21,6 @@
 //! 終了を総仕上げする。boot 失敗は非致命として扱い骨格起動を止めない（要件 7.3・8.2）。
 
 use bevy_ecs::prelude::*;
-use tracing_subscriber::EnvFilter;
 use windows::core::Result;
 use wintf::*;
 
@@ -65,6 +64,7 @@ mod input_events;
 /// 終了の統合操作（areka-P0-app-lifetime-separation）。全窓を閉じてから終了を指示する
 /// `quit_app` と出所の語彙 `ExitOrigin` を持つ。
 mod app_exit;
+mod log_history;
 mod mcp;
 mod menu;
 mod readme;
@@ -145,11 +145,7 @@ fn main() -> Result<()> {
     // tracing-subscriber 初期化（RUST_LOG環境変数対応、デフォルト info）
     // 外部入力の扱い（A1-V）: RUST_LOG が未設定・非UTF-8・不正な構文の場合は
     // try_from_default_env() が Err を返し "info" へフォールバックする（panic 経路なし）。
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .init();
+    log_history::init();
 
     // アクタースレッドの役割宣言フックを導入する（draw-load-parity 要件 2.3）。
     // 以後 `spawn_actor` で起きるスレッド（ticker／loop-ticker／各アクター）は走り始めに

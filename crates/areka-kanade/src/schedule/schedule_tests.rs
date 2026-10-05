@@ -407,6 +407,41 @@ fn mouse_input_in_steady_with_pending_close_emits_no_get() {
     assert!(actions.is_empty(), "close 保留中はマウス GET を発行しない");
 }
 
+// ドラッグの開始・終了（areka-P0-mouse-drag-events 要件 1.1・2.1）: Steady では種類に対応する
+// 組み立ての GET がちょうど 1 件出る（Status は他のマウスの GET と同じ snapshot から）。phase 不変。
+#[test]
+fn drag_input_in_steady_emits_matching_get() {
+    let active = ExecutionSnapshot {
+        talk_active: true,
+        choice_active: false,
+        ..ExecutionSnapshot::INACTIVE
+    };
+    let cases: [(
+        MouseEventKind,
+        fn(i64, i64, u32, Option<&str>, &ExecutionSnapshot) -> ShioriCall,
+    ); 2] = [
+        (MouseEventKind::DragStart, events::on_mouse_drag_start),
+        (MouseEventKind::DragEnd, events::on_mouse_drag_end),
+    ];
+    for (kind, build) in cases {
+        let input = MouseInput {
+            kind,
+            ..mouse_move()
+        };
+        let (next, actions) = step(
+            state_in(steady_with_talk(TalkId(5))),
+            Input::Mouse(input),
+            &config(),
+        );
+        assert!(
+            matches!(next.phase, Phase::Steady { talk: Some(_) }),
+            "ドラッグの GET は phase を変えない"
+        );
+        assert_eq!(actions.len(), 1, "ドラッグの知らせ 1 件で GET を 1 件出す");
+        assert_get(&actions[0], &build(10, 20, 0, Some("head"), &active));
+    }
+}
+
 // ============================================================
 // 11. 選択系の additive 追加（タスク 4.1・Req4.4・DD-3／DD-10）
 // ============================================================

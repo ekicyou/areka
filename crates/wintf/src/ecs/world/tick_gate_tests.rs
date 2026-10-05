@@ -350,9 +350,10 @@ fn is_run_distinguishes_run_from_skip() {
 ///
 /// 並びは見出しの辞書順。areka 側の生産者は別クレートなのでここからは読めず、
 /// areka 側の同種の検査が受け持つ。
-const WINTF_PRODUCERS: [(&str, &str, &str); 8] = [
+const WINTF_PRODUCERS: [(&str, &str, &str); 9] = [
     ("app.rs", include_str!("../app.rs"), "WM_GEOMETRY"),
     ("dola/mod.rs", include_str!("../dola/mod.rs"), "ANIM"),
+    ("drag/reentry.rs", include_str!("../drag/reentry.rs"), ""),
     (
         "drag/systems.rs",
         include_str!("../drag/systems.rs"),

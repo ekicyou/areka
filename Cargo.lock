@@ -149,6 +149,7 @@ name = "areka-emo-atlas"
 version = "0.0.1"
 dependencies = [
  "areka-parsers",
+ "image",
  "log-capture-kit",
  "rectangle-pack",
  "sample-ghost-kit",
@@ -1346,9 +1347,8 @@ dependencies = [
 
 [[package]]
 name = "image-webp"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3"
+version = "0.2.5"
+source = "git+https://github.com/image-rs/image-webp?rev=75f810915d02ae4ff55d3f825bf6a4b07efdf994#75f810915d02ae4ff55d3f825bf6a4b07efdf994"
 dependencies = [
  "byteorder-lite",
  "quick-error",

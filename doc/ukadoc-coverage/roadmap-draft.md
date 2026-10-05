@@ -252,6 +252,17 @@ spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 
 写しである。行数は **41 行**で、うち束を持つ行が **27 行**・`none = true` の行が **14 行**である（3 つとも
 数え直した値）。`[briefs].count` はこの 41 に合わせた。
 
+**2026-10-05 の追加**: `areka-P0-mouse-drag-events` の行を 1 行足した。理由は上の ⑴ ⑵ ⑶ と同じで、この spec が
+台帳 `ledger/shiori.toml` の `OnMouseDragStart` と `OnMouseDragEnd` の 2 項目を実装済みへ移し、自分の宛先として
+登記したからである（2 項目はそれまで宛先が空だったので、宛先を移された spec は無い）。2 項目は `linkage.md` の束
+「撫で」に属するので、束の欄には「撫で」を書き、段階 A の表の「撫で」の行にこの spec を件数付きで足した。「撫で」の
+束の構成は **33 件**（`linkage.md` の `members` を数えた）で、この spec の 2 件は ⑴（全数）にも ⑵（過半）にも
+当たらないので、候補 spec 名の案の欄は変えていない。足した行の中身は `stage = "A"`・`bundle = "撫で"`・
+`owner_count = 2`・`wave = "C3-④"` で、段階は「撫で」が順位表で置かれている段階の写し、ウェーブは正本の
+ロードマップの写しである。行数は **42 行**（`[[spec]]` の塊を数えた）で、うち束を持つ行が **28 行**・
+`none = true` の行が **14 行**である（3 つとも数え直した値で、引き算では出していない）。`[briefs].count` はこの
+42 に合わせ、`snapshot_on` は行の集合に最後に手を入れた日として **2026-10-05** にした。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -285,8 +296,8 @@ spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 
 
 ```toml
 [briefs]
-count = 41
-snapshot_on = "2026-10-03"
+count = 42
+snapshot_on = "2026-10-05"
 ```
 
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
@@ -615,6 +626,13 @@ stage = "A"
 bundle = "会話"
 owner_count = 1
 wave = "C4 の候補"
+
+[[spec]]
+name = "areka-P0-mouse-drag-events"
+stage = "A"
+bundle = "撫で"
+owner_count = 2
+wave = "C3-④"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -641,7 +659,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 10 | バルーンのリンク | `areka-P0-anchor-tag-canon`（既存 spec がそのまま引受先・構成 60 件の全数を `owner` に持つ） | `areka-P0-anchor-tag-canon`（W17・60 件） | 第 2 波 |
 | 10 | マウスの矢印 | `areka-P0-mouse-cursor-canon` | `areka-P0-currentghost-property-tree`（W15・15 件） | 第 2 波 |
 | 11 | メニュー | `areka-P0-ownerdraw-menu-canon` | `areka-P0-popup-menu-minimal`（A0・8 件）／`areka-P0-property-catalog-lists`（W16・4 件）／`areka-P0-shell-balloon-switch`（B8・2 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件）／`areka-P0-ghost-install`（B5-②・1 件）／`areka-P0-network-update`（B7・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・1 件） | 第 2 波 |
-| 12 | 撫で | `areka-P0-touch-events-canon` | `areka-P0-currentghost-property-tree`（W15・5 件）／`areka-P0-shell-parse`（完了・1 件） | 第 2 波 |
+| 12 | 撫で | `areka-P0-touch-events-canon` | `areka-P0-currentghost-property-tree`（W15・5 件）／`areka-P0-shell-parse`（完了・1 件）／`areka-P0-mouse-drag-events`（C3-④・2 件） | 第 2 波 |
 | 13 | バルーンの付属画像 | `areka-P0-balloon-inline-image` | `areka-P0-balloon-canon-residue`（W14・9 件） | 第 2 波 |
 | 14 | イベントの呼び起こし | `areka-P0-raise-event-tag` | `areka-P0-property-query-channels`（W14・1 件） | 第 2 波 |
 | 14 | 選択肢の目印 | `areka-P0-choice-marker-rest`（残余） | `areka-P0-choice-marker-styling`（W16・39 件） | 第 2 波 |

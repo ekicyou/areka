@@ -115,7 +115,7 @@ fn is_usable_windows_name(component: &str) -> bool {
 
 /// `name` が「木を掘らない 1 つの名前」として使えるか（要件 3.9・3.15）。
 ///
-/// `install.txt` の `directory`・`*.directory`・`*.source.directory` と、
+/// `install.txt` の `directory`・`*.directory` と、`*.source.directory` の各段と、
 /// `refreshundeletemask` の各要素が満たすべき規則。エントリ名と同じ
 /// [`is_usable_windows_name`] を土台にして、そこに含まれない 3 つ——空・`/`・`\`
 /// ——と長さの上限（[`MAX_ENTRY_PATH_UTF16`]・要件 1.5）だけを足す。`..` は末尾が

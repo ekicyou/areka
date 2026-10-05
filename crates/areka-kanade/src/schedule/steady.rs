@@ -58,7 +58,8 @@ pub(crate) fn step(state: State, input: Input, _config: &KanadeConfig) -> (State
 /// Steady でのマウス入力受理（DD-IE-1／DD-IE-8・Req 1.4／2.1／3.1）。
 ///
 /// mod.rs の横断アームが Steady フェーズのマウス入力のみを本関数へ委譲する。受領した
-/// [`MouseInput`] から正典イベント（`OnMouseMove` / `OnMouseDoubleClick`）の GET を 1 件構築し
+/// [`MouseInput`] から正典イベント（`OnMouseMove` / `OnMouseDoubleClick` /
+/// `OnMouseDragStart` / `OnMouseDragEnd`）の GET を 1 件構築し
 /// 発行する。GET の応答（204／Value）に対する reply／置換政策は本関数の責務ではなく後続の
 /// `on_reply` アーム（タスク 2.3）が担う——本関数は**GET 発行まで**である。
 ///
@@ -101,6 +102,23 @@ pub(super) fn on_mouse(state: State, input: MouseInput) -> (State, Vec<Action>) 
             input.scope,
             input.region.as_deref(),
             button,
+            &snapshot,
+        ),
+        // SEAM(Req7.3): 正典は OnMouseDragStart・OnMouseDragEnd をパッシブモードで抑えると
+        // 書く。areka にはまだパッシブモードへ入る経路が無いので抑えを持たない。経路ができたら、
+        // 抑えは先頭の終了の握手の待ちの防御と同じ並び（組み立ての前）に置く。
+        MouseEventKind::DragStart => events::on_mouse_drag_start(
+            input.x,
+            input.y,
+            input.scope,
+            input.region.as_deref(),
+            &snapshot,
+        ),
+        MouseEventKind::DragEnd => events::on_mouse_drag_end(
+            input.x,
+            input.y,
+            input.scope,
+            input.region.as_deref(),
             &snapshot,
         ),
     };
