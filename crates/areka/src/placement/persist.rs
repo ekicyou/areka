@@ -6,7 +6,13 @@
 //! （形式・原子性・寛容読取・スコープ分離）は sylphya の領分であり、本モジュールは
 //! その契約（[`areka_sylphya::PersistKey`]／[`areka_sylphya::Axis`]）を消費するのみ。
 //!
-//! 本モジュールは永続への書込 API を持たない（保存の投函口は上位の結線層が持つ）。
+//! 記憶への送り口は [`persist_entries`] 1 つで、キャラ窓の位置を書く時機はドラッグの確定
+//! （`follow::drag_follow` の `on_char_drag_end`）と、起動の最後に並べ終えた時点
+//! （[`persist_unremembered_char_positions`]・記憶に位置が無いキャラだけ）の 2 つ。戻す側
+//! （[`apply_restored_placements`]）は純関数のままで、送り口に届かない。
+//! 2 つ目の時機は、完了 spec `areka-P0-position-persist` の要件 1.9（ドラッグの確定でだけ
+//! 書く）を `areka-P0-char-position-save-on-exit` で改めたもの。一度もドラッグしていない
+//! キャラが起動のたびに並べ直されないようにするため（記録は `doc/COMPAT_ARCHITECTURE.md` 8 章）。
 //! task 1.1（Foundation）で用意するのは決定論的な変換のみ——寛容 parse（[`parse_px`]）
 //! と保存 entries 構築（[`char_pos_entries`]／[`balloon_offset_entries`]）。復元 merge・
 //! 再射影・`PersistWiring` は後続タスクで本モジュールへ追加する。
@@ -470,7 +476,8 @@ fn merge_scope(
 ///
 /// [`SylphyaPublisher`] は `Clone + Send`（内部 `std::sync::mpsc::Sender`）だが `Sync` を仮定せず、
 /// UI スレッド専有の規律とも一致するため **NonSend** リソースとして World に持たせる（design C1
-/// State Management・軸B）。DragEnd 観測点（[`super::follow`] の task 2.2/2.3 フック）が
+/// State Management・軸B）。ドラッグの確定（[`super::follow`] の task 2.2/2.3 フック）と、起動の
+/// 最後に並べ終えた時点（[`persist_unremembered_char_positions`]・キャラ窓の位置だけ）の 2 つが
 /// [`persist_entries`] 経由でこの publisher の clone 送信端から保存 entries を投函する。
 pub struct PersistWiring {
     /// sylphya アクターへの変異投函の送信端（`persist_put` の fire-and-forget 投函に用いる）。

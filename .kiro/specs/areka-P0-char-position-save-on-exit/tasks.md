@@ -70,7 +70,7 @@
   - _Requirements: 1.2, 3.2, 3.3, 5.3_
   - _Boundary: 4.2 のテストファイルだけ_
 
-- [ ] 5. 書く時機を改めた記録
+- [x] 5. 書く時機を改めた記録
   - 次の説明を「ドラッグの確定と、起動の最後に並べ終えた時点の 2 つ」に直す（処理は変えない）: `drag_follow.rs` のドラッグの確定の説明（937 行・行数を増やさない）／`persist.rs` の冒頭の「書込 API を持たない」と保存の節の説明／`spawn.rs` の既定の位置の欄と読み口の説明／`follow_drag_tests.rs` の書かないことを確かめるテストの説明（892 行・行数を増やさない）。`main.rs` の説明は 2.2 が持つ
   - `doc/COMPAT_ARCHITECTURE.md` の 8 章の表に、完了 spec `areka-P0-position-persist` の要件 1.9 を改めた 1 行を `areka-P0-kero-balloon` の行の形で足す
   - 完了: 「DragEnd の観測点のみ」の説明が本番コードに残っておらず、記録の表に 1 行ある
