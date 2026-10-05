@@ -33,7 +33,7 @@
   - 完了の状態: 振り分けのテストのファイルが全部緑。足したテストは、照合の判断を前の形（大小を区別・本体側名を見ない・空文字を省略扱い）へ戻すと赤になる
   - _Requirements: 1.2, 1.4, 2.4, 3.1, 3.2, 5.1, 5.3_
 
-- [ ] 4. 触る範囲と全体のテストを確かめる
+- [x] 4. 触る範囲と全体のテストを確かめる
   - アプリ本体と `areka-mcp` のクレートのテスト全体・fmt・clippy を流す（clippy は差分が新しい警告を増やさないことで見る）
   - 新しいワークツリーでは、統合テストの前に i686 の補助 exe 2 つを建てる（`mcp-get-property` の Implementation Notes と同じ）
   - main からの差分で、変えたソースが design.md の「File Structure Plan」の一覧（本番 2・テスト 12）だけであり、「Out of Boundary」のファイルと `Cargo.toml`・`Cargo.lock` が現れないこと、どのファイルも 1,000 行以下であることを見る
@@ -53,3 +53,8 @@
   - 完了の状態: §7.4 の末尾の段落に本 spec の名前と注記 1 行があり、ほかの行の差分が 0
   - _Requirements: 6.1_
   - _Depends: 5_
+
+## Implementation Notes
+
+- タスク 4 の確認（10-06）: `cargo test --no-fail-fast -p areka -p areka-mcp` は bin 2,678 通過・2 赤（`ghost_session::switch_tests::fallback_tests` の `default_ghost_fault_after_fallback_exits_through_shiori_fault_path` と `async_target_fault_before_window_closure_leaves_only_default_windows`）。2 本とも単独で回し直すと 5 本すべて緑で、並走の負荷で落ちる既知の揺れ（起票済み `areka-P0-ghost-session-test-load-flake`）に当たる。本 spec の差分とは無関係。統合テスト 3 本・areka-mcp 100 は緑。fmt 緑。clippy は変えた行に警告 0（`mcp_tests.rs` の `ok().expect()` 4 件は 10-03 からある行）。`git diff --stat main...HEAD -- crates Cargo.toml Cargo.lock` は design の一覧の 14 ファイルだけ（本番 2・テスト 12・最大 810 行）。
+- ディスク満杯（C: の空き 6 GB）で一度ビルドが `no space on device` で落ち、`target\` が消えた。空きが戻った後に i686 の補助 exe 2 つから建て直した。
