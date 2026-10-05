@@ -222,7 +222,7 @@ pub(super) fn on_choice_waiting(
 ///
 /// # 受理（規則 2）
 /// [`plan_cascade`] が段列を一意に決める（本層で再判定しない・Req2.5）:
-/// - [`CascadePlan::Unsupported`]（`script:` 前置）→ SHIORI イベントを発行せず
+/// - [`CascadePlan::Script`]（`script:` 前置）→ SHIORI イベントを発行せず
 ///   `choice_unsupported_category`（warn）を記録し、[`Action::ResolveChoice`] のみ発行して帳簿を
 ///   消す（会話を停止させない・Req2.7・裁定 7）。
 /// - [`CascadePlan::Named`]（`On` 始まり）→ 任意名イベント **1 段のみ**を発行する
@@ -310,7 +310,7 @@ pub(super) fn on_choice(mut state: State, input: ChoiceInput) -> (State, Vec<Act
     // `choosing` が落ちる（C5 の源は `Waiting|Cascading|TimeoutInFlight` の全段）。
     let snapshot = state.snapshot_with_choice(true);
     let (call, next) = match plan {
-        CascadePlan::Unsupported => {
+        CascadePlan::Script => {
             // M1 未対応カテゴリ（裁定 7）: イベントを発行せず解決だけ行う（Req2.7）。
             tracing::warn!(
                 target: "kanade",
