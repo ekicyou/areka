@@ -3,6 +3,8 @@
 > 2026-10-05・本ブランチ（main `ec072853` の上）のコードを読んで書いた。ビルドとテストは回していない（読んだだけ）。
 > コードは「何の定義か＋ファイル」で指す。設計・実装の着手時に引き直すこと。
 > この文書は材料と選択肢を並べるもので、決定はしない。決めるのは要件討議と設計である。
+>
+> **2026-10-05 設計の段の追記**: この文書の 1〜8 章はギャップ分析（main `ec072853` の上）のままで、一部が古くなった。⑴ `import` は棚卸㉒で `areka-P0-animated-image-import` へ切り出した。`import` についての記述（1 章の 3 項目め・2.5 節の pattern定義の行・3 章の表の 5.x の行・3.2 節・4 章の各案の `import` の文・6 章の 6・8 章の最後の項）は**引き渡し済みの材料**であり、本 spec は使わない（消さずに残す）。⑵ 議題 1〜5 は要件討議で全部決着した（requirements.md）。⑶ 設計が選んだ形と、その根拠は末尾の「設計の段の調査」に在る。
 
 ## 1. まとめ
 
@@ -127,6 +129,8 @@ brief の Approach 1 は「コマを 1 枚ずつ持ち `always` で順に指す�
 
 ### 3.2 `import` の今の読まれ方（直さないと残る副作用）
 
+> 【引き渡し済み】この節は `areka-P0-animated-image-import` の材料である（2026-10-05 棚卸㉒）。本 spec は `import` に触らない。
+
 `animation0.pattern0,import,glow.png,100,10,20` は、今は `method = "import"`・`surface_id = 0`（ファイル名が数でないため）・`wait = 100` と読まれる。その結果:
 
 - `EmoWorld::dangling_pattern_targets`（`crates/areka-emo-compose/src/world.rs`）は「サーフェス 0 を指すコマ」と数える。サーフェス 0 が無いシェルでは「相手の面が無い」の `warn!` が出る。
@@ -236,3 +240,128 @@ brief の Approach 1 は「コマを 1 枚ずつ持ち `always` で順に指す�
 - 進め方は、開発者確定の「子サーフェスへ分解」を骨格にした **案 A か案 C** が brief と合う。案 C は 3.1 の ① とサーフェスの数を消せるが、コマの形（`PatternFrame`）を変える。案 B は brief の確定事項から離れるので、採るなら開発者の裁定が要る。
 - 要件討議で先に決まると設計が軽くなる順: **議題 1**（バルーン＝時計の鍵と範囲が変わる）→ **議題 2**（回数＝仕組みが 1 つで済むか）→ 議題 4 → 議題 3（後ろの 2 つは仮の案なら足す仕事が無い）。
 - 要件には無いが設計で必ず触る場所: `areka-parsers` の pattern定義（`import` のファイル名の欄）と、3.2 の 3 か所。brief の「触るファイル」に足す。
+
+
+---
+
+# 設計の段の調査（2026-10-05・main `82607b5f` を取り込んだ後）
+
+> コードを読んで確かめた（ビルドとテストは回していない）。コードは「何の定義か＋ファイル」で指す。
+
+## Summary
+
+- **Feature**: `areka-P0-animated-image-playback`
+- **Discovery Scope**: Extension（今ある合成と seriko への足し込み。外部の依存 0・軽い調査）
+- **Key Findings**:
+  - brief の案（動く絵をコマ 1 枚ずつのサーフェスと子サーフェスへ分解する）は、同じウェーブの約束（`plan.rs` に触らない）の下では要件を満たせない。コマが届くまで絵が丸ごと消える場面（バルーンの装着・シェルの差し替えの最初の表示）が残り、外形も数えられない。
+  - 合成の入口 `Composer::compose_into`（`crates/areka-emo-compose/src/lib.rs`）は約束の外に在り、`build_plan` を呼ぶのはここ 1 か所である。命令の絵の番号をここで今のコマへ替えれば、位置・重ね順・外形は静止画のときのまま、コマだけが替わる。
+  - シェルの表示は必ず seriko から出る（装着は出さない）ので、seriko は見えているシェルの面をいつも知っている。バルーンは逆で、装着が面 0 を確立し、見える・見えないは可視性の相だけが決める。seriko へ窓の見える・見えないを知らせる線が 1 本要る。
+
+## Research Log
+
+### 子サーフェスへ分解する形が約束の下で成り立つか
+
+- **Context**: brief の Approach 1 と、同じウェーブ C4 の約束（`plan.rs`・`fold.rs`・`method.rs`・`areka-emo-present`・`assets.rs` に触らない）の両方を満たす形を探した。
+- **Sources Consulted**: `flatten_surface`・`push_static_element_ops`・`flatten_extent`・`build_plan`（`crates/areka-emo-compose/src/plan.rs`）／`NestTable::visible_parts`（`nesting.rs`）／装着の手順（`crates/areka/src/emo2_boot/frame/attach.rs`）／`RebasedShow`（`crates/areka-seriko/src/output.rs`）／`ScopeStates::apply`・`apply_balloon`（`state.rs`）。
+- **Findings**:
+  - 合成は、コマ（`PatternState`）が空のとき、着せ替えでない animation の絵を 1 枚も描かない。静的に描かれるのは element定義の絵と、有効な着せ替えの pattern0 だけ。
+  - コマが静的な絵を「置き換える」のは、有効な着せ替え（番号が着せ替えの集合に在る）の pattern0 に対してだけ。着せ替えの集合は seriko と装着が持つ値で、合成の側から足せない。しかも着せ替えの層は element定義の後に積まれるので、element定義の番号の順（要件 1.4）を保てない。
+  - element定義の絵は必ず描かれ、コマはその上に重なるだけ。1 枚目を element として残すと、コマ（重ね済みの全体の絵）の透明な所から 1 枚目が見える。
+  - 外形は「束縛の在る画像の element の原寸」「element定義の子」「全部の着せ替えの pattern0 の先」だけを数える。着せ替えでない animation のコマだけのサーフェスは 0×0。
+  - 空のコマで合成される場面が実在する: バルーンの装着（面 0・空のコマ・見える・見えないは外が持ち主）／シェルとバルーンの差し替えの最初の表示（`RebasedShow` はコマを運ばない）／起動の採寸。
+  - 装着はシェルの最初の表示を出さない（注記「シェルは初回 ShowSurface を attach で発行しない」）。seriko は `\b[番号]` が来るまでバルーンの面を知らない。
+- **Implications**: 「コマが届かなければ絵が無い」という状態の持ち方そのものが、1 フレーム遅らせる解を取らない決まりと当たる。「何も届かなければ 1 枚目・届けばそのコマ」という持ち方に変える必要がある。`plan.rs` の今の決まりの中にはその持ち方を表す手段が無い。
+
+### 試して捨てた抜け道
+
+- **使われない着せ替えの animation を子サーフェスに足して外形に数えさせる**: 外形は取れるが、作者の `bindgroup` の番号と当たると 1 枚目が重なって見える。外形の計算の癖に寄りかかるので、後続 `areka-P0-extent-element-offset` が外形を直すと壊れうる。コマが届くまで絵が無い問題は解けない。
+- **置き換えの前の外形を覚えておき、`Composer` でその外形を使う**: 外形は解けるが、コマが届くまで絵が無い問題は解けない。
+- **アトラスに「原寸だけ持つ空の絵」を足す**: 外形は解けるが、読み込みとアトラスは本 spec の範囲外（要件の Boundary Context）。コマが届くまで絵が無い問題は解けない。
+- **seriko にシェルの最初の面も知らせる**: シェルは seriko が出すまで表示されないので要らなかった。
+
+### バルーンの窓の見える・見えないを seriko が知る方法
+
+- **Context**: 要件 6.1（見えている間は動く）・6.4（隠れている間は描き直さない）・2.3（隠れていたバルーンが出たら回数つきは始め直す）。
+- **Sources Consulted**: `run_balloon_visibility_phase`・`issue_actions`（`crates/areka/src/emo2_boot/balloon_visibility_phase.rs`）／`run_status_report_phase`（`crates/areka/src/emo2_boot/frame/status_report.rs`）／`EmoPresenter::target_visible`・`current_surface_id`（`crates/areka-emo-present/src/presenter/read.rs`）／`GhostSession::seriko_sink`（`crates/areka/src/ghost_session.rs`）。
+- **Findings**: 見えているかの真実は表示層の照会。フレームの終わりに照会から組を作り、前と違うときだけ運行の側へ送る相が既に在る。seriko の送り手は `GhostSession` だけが持ち、差し替えの相が同じ口を借りている。
+- **Implications**: 同じ形の相を 1 つ足し、seriko へ（開いているか・面の番号）を送る。可視性の判断には触らない。
+
+### 既存の決まりを壊さないか
+
+- **Findings**:
+  - バルーンの面の表は今は必ず空（`crates/areka-emo-present/src/balloon.rs` の `synthetic_surfaces_txt` が `element0` だけのサーフェスを作る）。バルーンの面の進行を広げても、今ある振る舞いは変わらない。
+  - 乱数の消費の順は、抽選の輪の対象の並びで決まる。`Always` を乱数を引く前に飛ばし、抽選の対象（`shown_slots`）を変えなければ、既存の決定論テストの期待値は動かない。
+  - `ComposeKey`（`crates/areka-emo-present/src/cache.rs`）は `PatternState` を丸ごと持ち等しさで比べるので、欄を足しても鍵は正しく分かれる。perf の記録の `key_hash`（`crates/areka-emo-present/src/presenter/timing.rs` の `compose_key_hash`）は一番上の欄しか混ぜておらず、足す欄も混ざらない（今も部品の欄は混ざっていない）。
+  - `AtlasBinding` を読むのは `plan.rs` だけ。束縛を別のコマへ付け替えても、ほかの読み手は居ない。
+  - `crates/areka/src/emo2_boot/spine.rs` は 1,000 行ちょうど。テストの接続宣言は `mod.rs`（883 行）に置く。
+  - `areka-seriko` は `areka-emo-atlas` に依存していない。動く絵の事実を数と文字列だけの型で渡せば、`Cargo.toml` を触らずに済む。
+
+## Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+| --- | --- | --- | --- | --- |
+| 子サーフェスへ分解（brief の案） | コマ 1 枚ずつのサーフェス＋ `always` で指す子サーフェス | 手で書いた定義と同じ形 | 約束の下では不成立（空のコマで絵が消える・外形・番号の空間・`\s[番号]` で呼べる） | `plan.rs` を直せば成り立つが、約束を解く必要がある |
+| 絵のコマの欄＋合成の入口で差し替え（採用） | `PatternState` に「動く絵 → コマの番号」を足し、`Composer::compose_into` が命令の絵を替える | 空の欄＝ 1 枚目なので絵が欠けない・外形と重ね順は `plan.rs` のまま・番号を作らない・約束の 7 か所に触らない | brief の言い方（子サーフェス）から離れる。`import` は別に命令を出す所が要る | 時計は部品の時計と同じ型・同じ持ち主 |
+| コマが絵を直接指す（ギャップ分析の案 C） | `PatternFrame` の指す先を「サーフェスか絵か」に広げる | `import` と口を共有できる | `plan.rs` の変更が必須（約束に反する） | 不採用 |
+
+## Design Decisions
+
+### Decision: 動く絵は「絵のコマの欄」で運び、合成の入口で差し替える
+
+- **Context**: 要件 1.1〜1.13・7.1 と、同じウェーブの約束。
+- **Alternatives Considered**:
+  1. 子サーフェスへ分解 — 上の表のとおり不成立。
+  2. 約束を解いて `plan.rs` を直す — 開発者の判断が要り、同じウェーブの `areka-P0-element-base-method` と場所が重なる。
+- **Selected Approach**: `bind_atlas` の直後に動く絵の事実（`FilmFacts`）を面の表へ載せ、seriko の時計が `PatternState` の絵のコマの欄を進め、`Composer::compose_into` が `build_plan` の後に命令の絵の番号を今のコマへ替える。
+- **Rationale**: 「何も届かなければ 1 枚目」が状態の持ち方から出るので、絵が欠ける場面が 0 になる。外形・位置・重ね順は静止画と同じ計算のまま。サーフェスの番号を作らないので、要件 1.12 が形から満たされる。
+- **Trade-offs**: brief の「子サーフェス」の言い方から離れる（設計討議の議題）。ギャップ分析（上の 8 章）は、これに近い案 B を「採るなら開発者の裁定が要る」と書いている。perf の記録の `key_hash` は欄を数えない。
+- **Follow-up**: 設計討議で開発者の確認を取る。roadmap の本 spec の行の言い方を直す。
+
+### Decision: 繰り返しは「経過を周期で割る」1 つの計算で決める
+
+- **Context**: 要件 1.6・2.1・2.2・2.4・2.9・4.2（時刻は正確に扱う・開発者裁定 2026-10-05）。
+- **Selected Approach**: `lap_of`（何周目か・周の頭からの経過）を共有し、`always_at`（pattern定義の待ち＝出す前の待ち）と `film_frame_at`（画像の待ち＝出しておく時間）がその上に載る。状態は開始の時刻だけ。
+- **Rationale**: 今のコマが「刻みの時刻 − 開始の時刻」だけで決まるので、刻みの遅れを持ち越す状態が無い。回数つきの「止まった」も経過から求まり、状態を足さない。
+- **Trade-offs**: 待ち時間の数え方の違いは 2 つの関数に分かれる（共有するのは周の計算だけ）。
+
+### Decision: 時計は「見えた最初の刻み」で生まれ、無い間は経過 0 として見る
+
+- **Context**: 要件 3.1・4.1 と、1 フレーム遅らせる解を取らない決まり。seriko は刻みでしか時刻を知らない。
+- **Alternatives Considered**:
+  1. 表示の指令のときに、直前の刻みの時刻で時計を作る — 刻みが 1 度も来ていないと時刻が無い。始まりが最大 1 刻み早まる。
+  2. seriko に時計を持たせる — アクターの作り方が変わり、決定論テストの注入の口が増える。
+- **Selected Approach**: 表示の指令には経過 0 の絵（動く絵は 1 枚目・`always` は待ち 0 のコマ）を載せ、時計は次の刻みの時刻で作る。
+- **Rationale**: 絵は切り替えの指令と同時に出る（0 フレーム）。規則が 1 つで、時刻が無い場合の分岐が要らない。
+- **Trade-offs**: 1 枚目が最大 1 刻みぶん長く見える（1 度きり・積み上がらない）。設計討議の議題 2。
+
+### Decision: 回数つきの絵の「始め直し」は、見えなくなった時計を捨てることで作る
+
+- **Context**: 要件 2.3・2.7・2.8。
+- **Selected Approach**: 回数つきの絵の時計は、評価（刻み・切り替えの直後・窓の知らせ）で「見えていない」と分かったら捨てる。終わりなしの絵と `always` の時計は捨てない。
+- **Rationale**: 「見えていたか」を別に覚えずに済む（時計が在る＝途切れずに見えている）。始め直すかどうかが、繰り返し回数だけで決まる（要件 2.8）。
+
+### Decision: 記録は seriko の表が出す
+
+- **Context**: 要件 8.4（読み込み 1 回につき 1 回）。面の表はスコープの数だけ組まれる。
+- **Selected Approach**: 合成の側は事実（`FilmFacts::skipped`）を返すだけ。`AnimationTable::from_world` が `warn!` を出す。
+- **Rationale**: シェルの表は読み込み 1 回につき 1 回だけ作られる（`crates/areka/src/emo2_boot/assets.rs` の今の呼び方）。
+
+### 設計の 3 つの見直し（まとめる・作るか使うか・削る）
+
+- **まとめる**: 動く絵・一番上の `always`・部品の `always` は「見えたら乱数なしで始まり、経過を周期で割る」同じ問題。計算と「時計なし＝経過 0」の規則を 1 つにした。シェルとバルーンは面の種類を鍵に持つだけで同じ経路。
+- **作るか使うか**: 外部のライブラリで解く部分は無い。今ある `frame_at`・`PartAnim`・`commit_pattern`・`NestTable::visible_parts`・届けの相の形をそのまま使う。
+- **削る**: サーフェスの番号の割り当て・`\s[番号]` の遮り・外形を覚える表・シェルの最初の面の知らせは、採った形では要らないので作らない。合成の結果を覚える席の数は測るまで変えない。
+
+## Risks & Mitigations
+
+- brief の案から離れたことを開発者が認めない — 設計討議の最初の議題にする。別の道（約束を解いて `plan.rs` を直す）の材料は上の Research Log に在る。
+- バルーンの面のコマが替わるたびに文字の層が作り直される — E2E と実機で確かめる。起きたら `areka-emo-present` の側の直しになるので、止めて報告する。
+- コマが 4 枚以上の絵で合成が 16 ミリ秒に収まらない — 測って数字を残し、開発者へ報告する（席の数は変えない）。
+- `plan.rs` の「命令が出る条件」が同じウェーブの spec で変わる — 束縛の付け替えの前提を design.md の Revalidation Triggers に挙げた。マージの後にテストを回す。
+
+## References
+
+- [descript_shell_surfaces `element*`](https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#element*%2C%E6%8F%8F%E7%94%BB%E3%83%A1%E3%82%BD%E3%83%83%E3%83%89%2C%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E5%90%8D%2CX%E5%BA%A7%E6%A8%99%2CY%E5%BA%A7%E6%A8%99) — 自動アニメーションの正典（requirements.md の C1〜C3）
+- [descript_shell_surfaces `always`](https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#always) — C5
+- `.kiro/specs/completed/areka-P0-animated-image-decode/` — コマ・待ち時間・繰り返し回数の渡し方
+- `.kiro/specs/completed/areka-P0-surface-element-nesting/` — 部品の時計の決まり
