@@ -117,13 +117,20 @@ pub struct MouseInput {
     pub kind: MouseEventKind,
 }
 
-/// マウスイベント種別（OnMouseMove／OnMouseDoubleClick に対応）。
+/// マウスイベント種別（OnMouseMove／OnMouseDoubleClick／OnMouseDragStart／OnMouseDragEnd に対応）。
+///
+/// ドラッグの 2 つはボタンも取り消しの印も持たない: 窓のドラッグは左ボタンでだけ始まり Ref5 は
+/// 常に "0"、取り消しを区別する値は Reference に足さない（areka-P0-mouse-drag-events 要件 2.2・4.6）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MouseEventKind {
     /// マウス移動（OnMouseMove・Ref5 は常に "0"）。
     Move,
     /// ダブルクリック（OnMouseDoubleClick・Ref5 は左右で分岐）。
     DoubleClick { button: MouseButton },
+    /// ドラッグの開始（OnMouseDragStart）。x／y は押した位置。
+    DragStart,
+    /// ドラッグの終了（OnMouseDragEnd）。x／y は終わった位置（取り消しは押した位置）。
+    DragEnd,
 }
 
 /// マウスボタン識別（Ref5: 左 "0"／右 "1"）。

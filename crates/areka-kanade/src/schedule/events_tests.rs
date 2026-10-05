@@ -203,8 +203,10 @@ fn on_close_notify_is_notify_with_reason_and_derived_status() {
 /// シェル・バルーン切替の 3 語（OnShellChanging/OnShellChanged/OnBalloonChange）は
 /// shell-balloon-switch 1.1 で同じ前例に倣い足した（42→45・いずれも正典固定 ID）。
 /// 翻訳の `OnTranslate` は translate-pipeline 2.1 で同じ前例に倣い足した（45→46・正典固定 ID）。
+/// ドラッグの 2 語（OnMouseDragStart/OnMouseDragEnd）は mouse-drag-events 7.1 で同じ前例に倣い
+/// 足した（46→48・いずれも正典固定 ID）。
 #[test]
-fn allowed_event_ids_are_exactly_the_forty_six_and_exclude_ontalk_onhour() {
+fn allowed_event_ids_are_exactly_the_forty_eight_and_exclude_ontalk_onhour() {
     assert_eq!(
         ALLOWED_EVENT_IDS,
         &[
@@ -254,6 +256,8 @@ fn allowed_event_ids_are_exactly_the_forty_six_and_exclude_ontalk_onhour() {
             "OnShellChanged",
             "OnBalloonChange",
             "OnTranslate",
+            "OnMouseDragStart",
+            "OnMouseDragEnd",
         ]
     );
     assert!(
@@ -426,6 +430,60 @@ fn mouse_constructors_carry_talking_status_when_active() {
     assert_eq!(call_status(&dbl), Some("talking".to_string()));
 }
 
+/// `OnMouseDragStart`／`OnMouseDragEnd`（areka-P0-mouse-drag-events 要件 4.1・4.3〜4.8・K1）:
+/// GET・名前・Reference 7 つが `OnMouseDoubleClick` の左ボタンと同じ並び
+/// `[x, y, "0", scope, region, "0", "mouse"]`・当たり判定なしは空文字列・実行状態は渡した snapshot から。
+/// 並びは全欄の一致で見るので、どの欄を変えても赤になる。
+#[test]
+fn on_mouse_drag_start_and_end_build_the_double_click_left_layout() {
+    let active = ExecutionSnapshot {
+        talk_active: true,
+        choice_active: false,
+        ..ExecutionSnapshot::INACTIVE
+    };
+    type Build = fn(i64, i64, u32, Option<&str>, &ExecutionSnapshot) -> ShioriCall;
+    let builders: [(&str, Build); 2] = [
+        ("OnMouseDragStart", on_mouse_drag_start),
+        ("OnMouseDragEnd", on_mouse_drag_end),
+    ];
+    for (name, build) in builders {
+        let call = build(12, -34, 1, Some("Head"), &active);
+        assert_eq!(
+            call_status(&call),
+            Some("talking".to_string()),
+            "{name}: 実行状態は渡した snapshot から（要件 4.8）"
+        );
+        let (id, references) = expect_get(call);
+        assert_eq!(id, name);
+        assert_eq!(
+            references,
+            vec![
+                "12".to_string(),    // Ref0=x
+                "-34".to_string(),   // Ref1=y
+                "0".to_string(),     // Ref2=常に "0"（要件 4.3）
+                "1".to_string(),     // Ref3=scope（相方 1・要件 4.4）
+                "Head".to_string(),  // Ref4=当たり判定（要件 4.5）
+                "0".to_string(),     // Ref5=左ボタン "0"（要件 4.6）
+                "mouse".to_string(), // Ref6=デバイス種（要件 4.7）
+            ],
+            "{name}: Reference の並び（要件 4.1）"
+        );
+
+        let call = build(0, 0, 0, None, &ExecutionSnapshot::INACTIVE);
+        assert_eq!(
+            call_status(&call),
+            None,
+            "{name}: INACTIVE は Status を出さない"
+        );
+        let (_, references) = expect_get(call);
+        assert_eq!(
+            references[4], "",
+            "{name}: 当たり判定なしは空文字列（要件 4.5）"
+        );
+        assert_eq!(references.len(), 7, "{name}: None でも Reference 数は 7");
+    }
+}
+
 /// 全構築関数の返す `id` が**スケジューラ起源**（[`EventId::Static`]）であること（DD-1）。
 ///
 /// 選択起源（[`EventId::Choice`]）はカスケード planner のみが構成する不変条件を、構築関数側から
@@ -495,6 +553,8 @@ fn every_construction_function_returns_an_allowed_id() {
         on_close_notify(CloseReason::System, &snap),
         on_mouse_move(0, 0, 0, Some("Head"), &snap),
         on_mouse_double_click(0, 0, 0, None, MouseButton::Left, &snap),
+        on_mouse_drag_start(0, 0, 0, None, &snap),
+        on_mouse_drag_end(0, 0, 0, None, &snap),
         on_choice_select_ex("ラベル", "ID", &[], &snap),
         on_choice_select("ID", &snap),
         on_choice_timeout("\\e", &snap),

@@ -110,9 +110,10 @@ pub(crate) fn on_char_drag(
 /// （最終カーソル位置持ち）で埋める。[`DraggingState`] はハンドラ配送**後**に
 /// remove されるため、ここではまだ読める（実 flow 準拠）。
 ///
-/// cancel（ESC 等・`ev.cancelled=true`）も同写像で確定する——move_window=false の
-/// 窓は wndproc の巻き戻しが存在せず、吸着不変量（Y=下端）を満たす位置で終える
-/// のが 4.7 の意図に最も忠実（M1 簡素化・開始位置への復元は将来領分）。
+/// cancel（ESC 等・`ev.cancelled=true`）も同写像で確定する。wintf は取り消しの
+/// `DragEndEvent.position` に押した位置を載せるので、ここで窓の位置を引き直すと
+/// 結果として開始の位置へ戻る（`input_events/drag_tests.rs` の
+/// `cancelled_drag_end_reports_the_start_coordinates` が固定）。
 ///
 /// # 全アンカー結線と Free の保存専用アーム（1.1・design C2）
 ///

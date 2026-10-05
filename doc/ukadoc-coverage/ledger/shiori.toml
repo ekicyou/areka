@@ -3754,47 +3754,53 @@ absent のまま変わらない。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseDragEnd:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-mouse-drag-events"
 priority = "A12"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はキャラクター窓のドラッグを離したとき（取り消したときも）、窓の位置を
+保存した後にこのイベントを実際に SHIORI へ送っている。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。定常でないとき（起動や終了の途中）は trace のログ（mouse_input_ignored）が知らせの中身
+付きで、終了の握手を待っている間は trace のログ（mouse_close_pending）が出て送らない。areka 側で
+送らないと決めたときは mouse_drag_dropped が理由付きで 1 行出る。送出そのものが失敗したときは
+error のログ（shiori_send_failed）が出て終了の系列へ倒れるので、黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、同じファイルの構築関数がこの呼び出しを組み立てる。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の on_mouse_drag_end。
 無いと失うもの: 引っ張り終えたことが届かず、置かれた先について何も言えない。
+パッシブモードでの抑えは持たない（areka にパッシブモードへ入る経路がまだ無い。印は
+crates/areka-kanade/src/schedule/steady.rs の on_mouse）。右ボタンのドラッグ・バルーン窓・
+タッチとペンは対象外。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseDragStart:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-mouse-drag-events"
 priority = "A12"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はキャラクター窓のドラッグが始まったとき、このイベントを実際に SHIORI へ
+送っている。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。定常でないとき（起動や終了の途中）は trace のログ（mouse_input_ignored）が知らせの中身
+付きで、終了の握手を待っている間は trace のログ（mouse_close_pending）が出て送らない。areka 側で
+送らないと決めたときは mouse_drag_dropped が理由付きで 1 行出る。送出そのものが失敗したときは
+error のログ（shiori_send_failed）が出て終了の系列へ倒れるので、黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、同じファイルの構築関数がこの呼び出しを組み立てる。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の on_mouse_drag_start。
 無いと失うもの: 引っ張り始めたことが届かず、動かされることに応えられない。
+パッシブモードでの抑えは持たない（areka にパッシブモードへ入る経路がまだ無い。印は
+crates/areka-kanade/src/schedule/steady.rs の on_mouse）。右ボタンのドラッグ・バルーン窓・
+タッチとペンは対象外。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseEnter:1"]
