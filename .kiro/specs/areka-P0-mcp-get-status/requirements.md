@@ -106,6 +106,7 @@
 3. The areka shall 待ちの上限と終了の途中の答えを `mcp-tool-entrances` のまま（10 秒・`NG:areka did not respond within 10 seconds`・`NG:areka is shutting down`）とし、本 spec で変えない。
 4. The areka shall `get_status` に `NG:not implemented yet` を返す経路を残さない。
 5. The areka shall 要件 3.2 の答えのときに warn 以上の記録を出さない（切替や終了の途中に呼ばれるのは普通の出来事であり、`debug!` までにとどめる）。
+6. If 宛先の解決を通ったのに、そのゴーストの運行（kanade）への問い合わせ先が置き場に無い（本番では起きないはずの食い違い）, the areka shall 本文 `NG:Status is not available`・`isError: true` の結果で返し、`warn!` を 1 件残す（要件 3.2 の「降りた」の答えには混ぜない。文言は areka 独自で、`get_property` の `NG:Property system is not available` と同じ並び。設計の段で足した守りの枝）。
 
 ### Requirement 4: ゴーストと利用者を邪魔しない
 

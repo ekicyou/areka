@@ -153,7 +153,7 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     A[handle が呼ばれる] --> B{置き場に kanade の送り口があるか}
-    B -- 無い --> X[error 1 件 と NG Status is not available]
+    B -- 無い --> X[warn 1 件 と NG Status is not available]
     B -- ある --> C[返信端を作り StatusQuery を送る]
     C -- 送れない kanade は止まっている --> G[debug 1 件 と 解決の失敗と同じ NG]
     C -- 送れた --> D[受信端を later に預けて戻る]
@@ -188,6 +188,7 @@ flowchart TD
 | 3.3 | 上限と終了の途中の答えはそのまま | （既存）橋・`mcp::later`・`mcp::close` | 触らない。`ReplyTo` を送らずに落とす所を作らない（`later` に預けた組だけが、終了のとき置き場ごと落ちる） | — |
 | 3.4 | `not implemented yet` を残さない | `get_status::handle` | 文字列ごと消す | — |
 | 3.5 | 3.2 の答えで warn 以上を出さない | `get_status::handle` | 記録は `debug!` 1 件だけ | 同上 |
+| 3.6 | 解決を通ったのに問い合わせ先が無いときは独自の文言と `warn!` 1 件 | `get_status::handle` | `outcome::ng("Status is not available")` | 「無い」の枝 |
 | 4.1 | SHIORI へ送らない・再生しない・運行と状態を変えない | `answer_status` | 引数が `&State`（書き換えられない）・`step` を通さない・SHIORI と sakura の送り口を受け取らない | — |
 | 4.2 | 再生・選択の終わりを待たない | `answer_status` | 殻が知らせの間でその場で答える（往復中は往復の後） | — |
 | 4.3 | UI を塞がない | `get_status::handle` | `try_recv` と `mcp::later`・`recv` を呼ばない | 図のとおり |
@@ -205,7 +206,7 @@ flowchart TD
 |---|---|---|---|---|---|
 | `KanadeMsg::StatusQuery` | kanade の知らせの境界 | 今の実行の状態を問う | 1.2・4.1・4.2 | `areka_actor::ReplySender`（P0） | Service |
 | `answer_status` | kanade の殻 | 知らせの間の状態を読んで 1 回答える | 1.2・2.1〜2.5・4.1・4.2・4.4 | `State::snapshot`（P0）・`ExecutionStatus::derive`（P0） | Service |
-| `get_status::handle` | アプリ本体・MCP のツール | 問い合わせを送り、答えを本文へ写す | 1.1・1.3・1.6・3.2〜3.5・4.3・4.4 | `GhostSlot`（P0）・`mcp::later`（P0）・`resolve::resolve`（P0） | Service |
+| `get_status::handle` | アプリ本体・MCP のツール | 問い合わせを送り、答えを本文へ写す | 1.1・1.3・1.6・3.2〜3.6・4.3・4.4 | `GhostSlot`（P0）・`mcp::later`（P0）・`resolve::resolve`（P0） | Service |
 
 ### kanade
 
@@ -259,7 +260,7 @@ fn answer_status(state: &State, reply: ReplySender<ExecutionStatus>);
 | Field | Detail |
 |---|---|
 | Intent | 宛先のゴーストの kanade へ問い合わせを送り、返事を待たずに戻り、届いた値を本文にして答える |
-| Requirements | 1.1, 1.3, 1.6, 3.2, 3.3, 3.4, 3.5, 4.3, 4.4 |
+| Requirements | 1.1, 1.3, 1.6, 3.2, 3.3, 3.4, 3.5, 3.6, 4.3, 4.4 |
 
 **Responsibilities & Constraints**
 
@@ -273,7 +274,7 @@ fn answer_status(state: &State, reply: ReplySender<ExecutionStatus>);
 処理の順（上から）:
 
 1. 降りたときの文言を取る: `resolve::resolve(None, args.ghost_name.as_deref(), Omitted::UseActive)` の `Err` の理由。起動中のゴースト無しを渡すので `Ok` にはならない（型の上の `Ok` の腕は `NOT_ACTIVE` に倒す）。
-2. 置き場から kanade の送り口を引く: `world.get_non_send::<GhostSlot>()` → 中の `GhostSession::kanade()`。無ければ **起きないはずの食い違い**として `error!` 1 件（ゴーストの名前を添える）＋`outcome::ng("Status is not available")` で答えて戻る。
+2. 置き場から kanade の送り口を引く: `world.get_non_send::<GhostSlot>()` → 中の `GhostSession::kanade()`。無ければ **起きないはずの食い違い**として `warn!` 1 件（ゴーストの名前を添える。強さは同じ場面の `get_property` の「実行系が無い」と同じ。`.kiro/steering/logging.md` の `error!` は致命的・回復不能に限る）＋`outcome::ng("Status is not available")` で答えて戻る。
 3. `reply_channel::<ExecutionStatus>()` を作り、`KanadeMsg::StatusQuery { reply }` を送る。送れなければ（kanade は止まっている）`debug!` 1 件＋`outcome::ng(降りたときの文言)` で答えて戻る。
 4. `super::later(world, reply, 覗く関数)` に預けて戻る。覗く関数は受信端を持ち、`try_recv` の結果を次の表で写す。
 
@@ -298,7 +299,7 @@ fn answer_status(state: &State, reply: ReplySender<ExecutionStatus>);
 
 **Implementation Notes**
 
-- `ghost` 引数は `error!` の欄（`listed_value(ghost)`）にだけ使う。問い合わせ先は置き場の 1 体から引く（`get_property` と同じ）。
+- `ghost` 引数は `warn!` の欄（`listed_value(ghost)`）にだけ使う。問い合わせ先は置き場の 1 体から引く（`get_property` と同じ）。
 - 橋が成功・失敗とも `debug!` 1 行を残す（既存）ので、ツールの側で成功の記録を重ねない。
 
 ## Error Handling
@@ -308,7 +309,7 @@ fn answer_status(state: &State, reply: ReplySender<ExecutionStatus>);
 | 起きること | 扱い | 記録 | 答え |
 |---|---|---|---|
 | 答える前にゴーストが降りた（切替・終了・倒れた）。送れない・返信端が落ちたの 2 通り | 普通の出来事 | `debug!` 1 件 | 解決の失敗と同じ `NG:`（要件 3.2・3.5） |
-| 置き場に kanade の送り口が無いのに解決を通った | 起きないはずの食い違い。黙って「降りた」に混ぜない | `error!` 1 件（ゴーストの名前つき） | `NG:Status is not available` |
+| 置き場に kanade の送り口が無いのに解決を通った | 起きないはずの食い違い。黙って「降りた」に混ぜない | `warn!` 1 件（ゴーストの名前つき） | `NG:Status is not available`（要件 3.6） |
 | kanade が SHIORI の答えを 10 秒を超えて待っている | 既存の上限 | 橋の `warn!` 1 件（既存） | `NG:areka did not respond within 10 seconds`（要件 3.3） |
 | 終了の途中 | 既存 | 橋の `warn!` 1 件（既存） | `NG:areka is shutting down`（要件 3.3） |
 | 返信の受け手が上限でもう居ない（kanade の側） | 普通の出来事 | `debug!` 1 件 | （送らない） |
@@ -317,7 +318,7 @@ panic する所は無い。記録なしで失敗する経路も無い。
 
 ### Monitoring
 
-成功は橋の `debug!` 1 行（ツール名・ゴースト・`is_error`）だけ。本 spec が足す記録は上の表の `debug!` 3 か所と `error!` 1 か所。
+成功は橋の `debug!` 1 行（ツール名・ゴースト・`is_error`）だけ。本 spec が足す記録は上の表の `debug!` 3 か所と `warn!` 1 か所。
 
 ## Testing Strategy
 
@@ -331,6 +332,8 @@ panic する所は無い。記録なしで失敗する経路も無い。
 - **K2: 選択待ち**（5.1⑵⑶・5.3）。再生中にして問う → `talking` ／ `KanadeMsg::ChoiceWaiting` を送る → 問う → `talking,choosing` ／ 次の Tick の周期の要求の `Status` と同じ ／ その後に選択の入力を送ると選択のイベントが SHIORI へ届く（問い合わせが選択待ちの帳簿を壊していない）。
 - **K3: 問い合わせは運行を変えない**（5.1⑹・4.1）。K1・K2 の筋書きで、⑴ 同じ所で続けて 2 回問うと同じ値が返る、⑵ 終わりまで走らせた後、偽の shiori が受けた呼出の列（名前・メソッド・Reference・`Status`）が、問い合わせを挟まない筋書きの期待（`events` の表から導く）と一致する＝問い合わせの分の呼出が 0、⑶ 偽の sakura が受けた指示の列が増えていない。運行の相・選択待ちの帳簿・再生中のトークが変わっていれば、後に続く周期の要求の種類（GET か NOTIFY か）・`Status`・選択のイベントのどれかがずれて赤になる。通信中の写しは比べない（要件 5.1⑹ のただし書き）。
 
+- **K4: 止まった kanade に残った問い合わせ**（3.2 の kanade の側）。起動した後、同じ送出端から終了の知らせ（`KanadeMsg::Close`）と問い合わせを続けて送る。終了の処理が済むと受信箱ごと落ちるので、問い合わせの受信端は `Err(ReplyError::Dropped)` を返す（上限つきの受け取りで待つ）。MCP の側の M3 が偽の送り口で見る「返信端が落ちた」を、本物の殻で裏付ける。
+
 ### MCP の側のテスト（`crates/areka/src/mcp/get_status_tests.rs`）— 要件 5.2・5.4・3.2・3.5・4.3・4.4
 
 World に `mcp::install` で受け口と後から答える置き場を置き、`GhostSlot` に `GhostSession::for_test(Some(偽の送り口), 根)` を差す。テストは偽の受信端で問い合わせを受け取り、返信端へ値を送る・落とす。答えは `mcp::drain` を 1 回回して `Pending::try_answer` で見る。
@@ -339,8 +342,8 @@ World に `mcp::install` で受け口と後から答える置き場を置き、`
 - **M2: 値あり → そのままの本文**（5.2⑵・1.1・1.6・5.3）。再生中＋バルーン 2 つの `ExecutionSnapshot` から作った値を送る → 本文が `render()` の値（`talking,balloon(0=0/1=0)`）と一字違わず同じ・content は本文 1 つ。
 - **M3: 答える前に降りた**（5.2⑶・3.2・3.5）。`ghost_name` あり・省略の 2 通り × 「返信端を落とす」「受信端を先に落として送れなくする」の 2 通り。文言は `resolve.rs` の定数と突き合わせ、`isError: true`。`log_capture_kit` で warn 以上が 0 件。
 - **M4: 待たない・1 通だけ**（4.3・4.1）。`handle` から戻った時点で答えはまだ無く、後から答える置き場に 1 組ある。偽の受信端に届いたのは `StatusQuery` 1 通だけ。返信端へ送る前に `drain` を回しても答えは出ない（預けたまま）。成功の枝で warn 以上が 0 件（4.4）。
-- **M5: 置き場に問い合わせ先が無い**。空の World で呼ぶ → `NG:Status is not available`・`isError: true`・`error!` が 1 件。
-- **M6: 本物の単位で端から端まで**（1.1・2.1・3.4・4.2）。`SwitchRig` で起動の挨拶つきのゴーストを起こし、受け口へ `get_status` を送って `Input` の段を回す。⑴ 台詞の時計を進める前は本文が `talking` で始まる（再生の終わりを待たずに返る）、⑵ 台詞を進めて再生が終わった後は `talking` を含まない、⑶ どちらも `isError: false` で、`not implemented yet` を含まない。振り分け → `handle` → 本物の kanade → `later` → 橋への答え、の到達する経路をそのまま踏む。
+- **M5: 置き場に問い合わせ先が無い**（3.6）。空の World で呼ぶ → `NG:Status is not available`・`isError: true`・`warn!` がちょうど 1 件で、`error!` は 0 件。
+- **M6: 本物の単位で端から端まで**（1.1・2.1・3.4・4.2）。`SwitchRig` で起動の挨拶つきのゴーストを起こし、`rig.world` へ `mcp::install` で受け口と後から答える置き場を据える（`SwitchRig` 自身は据えない）。受け口へ `get_status` を送って `Input` の段を回す。⑴ 台詞の時計を進めない回し方（`pump_input_until`）の間は本文が `talking` で始まる（再生の終わりを待たずに返る。`SwitchRig` は台詞の時計を止めて起こすので、進めない限り再生の完了は kanade へ届かない）、⑵ 台詞の時計を進めながら（`pump_talking_until`）`get_status` を問い直し、`talking` を含まない答えが回す回数の上限の内に返る（再生の完了は別のスレッド越しに kanade へ届くので、進めた直後の 1 回の答えには頼らない。終わりの条件を答えの中身にする）、⑶ どちらも `isError: false` で、`not implemented yet` を含まない。振り分け → `handle` → 本物の kanade → `later` → 橋への答え、の到達する経路をそのまま踏む。
 
 ### 足さないテスト（0 本と明記）
 
@@ -359,7 +362,7 @@ World に `mcp::install` で受け口と後から答える置き場を置き、`
 | ⑸ ゴーストの SHIORI が考えている間に届いた呼び出し | その答えが返ってから答える（10 秒を超えれば上限の `NG:`） | 未実測 |
 | ⑹ 終了の挨拶・切り替えのお別れの台詞の再生中 | `talking` が出ない（直す先は `farewell-talk-status`） | 未実測 |
 
-補足に 1 行: 置き場に問い合わせ先が無いときの `NG:Status is not available` は areka の内部の食い違いの知らせで、SSP に対応物なし。
+補足に 1 行: 置き場に問い合わせ先が無いときの `NG:Status is not available`（要件 3.6）は areka の内部の食い違いの知らせで、SSP に対応物なし。
 
 ### 実機確認（要件 5.6）— `verification/signoff.md`
 
