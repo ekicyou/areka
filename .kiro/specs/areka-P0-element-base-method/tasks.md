@@ -9,7 +9,7 @@
 > 完了時（`/kiro-complete`）に回すもの（本書のタスクにしない）: 残りの描画メソッドの追跡用 spec の `/kiro-discovery` での起票、台帳の担当をその spec の名前へ直すこと、roadmap の本 spec の行（「読み手に描画メソッドの欄を足して」）を実際の形へ直すこと。
 
 - [ ] 1. 読み手で `base` を値にし、描けない行を一覧にする
-- [ ] 1.1 画像の element定義として値にする語を `overlay` と `base` の 2 語にし、縮退を固定していたテストを付け替える
+- [x] 1.1 画像の element定義として値にする語を `overlay` と `base` の 2 語にし、縮退を固定していたテストを付け替える
   - `decode.rs` の `decode_elements` の判定（第 2 欄が `overlay` と完全一致）を、語を受けて真偽を返す 1 関数 `is_image_element_method`（`pub(super)`・`overlay` と `base` だけ真・完全一致）に置き換える。`Element` に写す欄と並べ替えは変えない
   - 説明文を新しい約束に直す: `decode.rs`・`model.rs` の `Element`／`Surface.elements`（「`overlay` と `base` の行」）・`boxes_tests.rs` の `image_reader_ignores_box_lines`（判定は変えない）
   - 既存の 3 本を付け替える（消さない）: `decode_tests_lenient_input_tests.rs` の 2 本を「`base` は値になる」「`replace` は吸収されて隣の行は残る」へ、`validation_tests.rs` の `surface200` の `element0,base,bg.png` の 1 本を「`base` は値になる」へ。`unknown.block.head` の中の `base` の行はそのまま
