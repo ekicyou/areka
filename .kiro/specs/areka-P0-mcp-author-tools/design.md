@@ -35,7 +35,7 @@
 - 台本を読む段の「位置と印つきの入口」（`areka_parsers::sakura::parse_noted`）。既存の `parse` はこの入口の上に載せ替える（結果は今と同じ）。
 - 「`\!` を再生の経路の誰が拾うか」の表を、検査が引ける形に仕上げること（`ConsumerLedger::canonical` に足りない 2 行を足し、受け口の選別と表の一致をテストで固定する）。
 - サーバーの指示文と登録案内（help）への、独自のツールの案内。
-- 検査が再生と同じ関数を呼ぶための、公開の範囲の 3 つの広げ（`areka-sakura` の `parse_choice_timeout`、`areka-emo-present` の `EmoPresenter::alias_snapshot`、`areka-emo-text` の「`apply_font_tag` の `Err` が、知らないキーかキーなしか」を答える小さな口。理由の定数 `REASON_UNKNOWN_KEY` などは今 `pub(crate)`）。どれも中身は変えない。
+- 検査が再生と同じ関数を呼ぶための、公開の範囲の 3 つの広げ（`areka-sakura` の `parse_choice_timeout`、`areka-emo-present` の `EmoPresenter::alias_snapshot` と `surface_ids`、`areka-emo-text` の「`apply_font_tag` の `Err` が、知らないキーかキーなしか」を答える小さな口。理由の定数 `REASON_UNKNOWN_KEY` などは今 `pub(crate)`）。どれも中身は変えない。
 
 ### Out of Boundary
 
@@ -123,7 +123,7 @@ graph TB
   - `set,choicetimeout` の時間 → `compile` が使う `parse_choice_timeout`。
   - 何もしない `\f` のキー → 文字の層が使う `apply_font_tag`。
   - 無い surface・バルーン → 再生が使う `SurfaceResolver::resolve`・`resolve_balloon_key` と、表示の層の `has_surface`。
-- **スレッド**: UI スレッドでその場で答える（要件 2.5）。仕事は台本の長さに比例する解釈と、表を引くことだけで、ファイルも GPU も触らない。別スレッドへ出す仕組みは足さない（上限と見張り方は「Performance」）。
+- **スレッド**: UI スレッドは、今のシェルとバルーンの事実を値へ写し取ることだけをする。台本の解釈と判断は別スレッドで行い、仕上がった結果を答える（要件 2.5 を作りで満たす。`dump_surface` の「別スレッドで仕上げて後から答える」と同じ形）。台本の長さの上限は置かない（設計ディスカッションの裁定「ゴーストを甘く見ちゃだめ」＝長い台本・巨大な台本を書くゴーストは実在する。頭打ちは受け口全体の 4 MiB だけ）。
 - **既存の形を保つもの**: ツールごとに「入口のファイル（`areka-mcp`）＋処理のファイル（`areka`）＋兄弟のテスト」。判断は純粋な関数に分け、事実は小さな trait で差し替える（`dump_surface_judge.rs` の `ShellFacts` と同じ）。
 - **steering との整合**: 失敗を黙って捨てる経路を作らない／1 フレーム遅らせる解を取らない（装着の相がまだのときだけ、既存の `later` で待つ）／テストは決定論・ネットに出ない・固定のポートを束ねない／1 ファイル 1,000 行以下・テストは兄弟の `_tests.rs`。
 
@@ -156,8 +156,8 @@ crates/areka-sakura/src/
 └── lib.rs                      # 追記: 上の 2 つの再公開
 
 crates/areka-emo-present/src/presenter/
-├── snapshot.rs                 # 追記: EmoPresenter::alias_snapshot（対象の別名の表の写し）
-└── snapshot_tests.rs           # 追記: 上のテスト 1 本
+├── snapshot.rs                 # 追記: EmoPresenter::alias_snapshot・surface_ids（対象の別名の表と面の ID の写し）
+└── snapshot_tests.rs           # 追記: 上のテスト
 
 crates/areka-mcp/src/
 ├── handler.rs                  # 変更: INSTRUCTIONS に独自のツールの 1 文を足す
@@ -225,7 +225,7 @@ sequenceDiagram
     alt cannot resolve
         U-->>M: NG text with isError true
     else resolved
-        U->>P: parse_noted script
+        U->>P: snapshot facts then hand off to worker thread, parse_noted script
         P-->>U: reads with spans and notes
         U->>P: ledger and font and resolver lookups
         U-->>M: OK line and one JSON line per diagnostic
@@ -253,7 +253,7 @@ sequenceDiagram
 | 2.2 | 失敗は `NG:`・`isError: true` | `check_script` の処理 | `outcome::ng` | — |
 | 2.3 | `ghost_name` の解決と文言 | `dispatch` の腕 | `resolved!`・`Omitted::UseActive` | 流れ図 |
 | 2.4 | ゴーストに何もさせない | `check_script` の処理・判断 | `&World` だけを読む | 流れ図の末尾の注 |
-| 2.5 | 描画・再生・メニューを止めない | `check_script` の処理 | UI スレッドでその場で答える | — |
+| 2.5 | 描画・再生・メニューを止めない | `check_script` の処理 | UI スレッドは事実の写し取りだけ・解釈と判断は別スレッド | — |
 | 2.6 | 10 秒の時間切れ | 既存（`bridge::call`） | — | — |
 | 2.7 | 答えた記録 1 件 | 既存（`bridge::call`）・`dispatch` の腕 | `ReplyTo::for_ghost` | — |
 | 3.1 | 再生せずに解釈・今のシェルとバルーンに照らす | 位置と印つきの入口・事実の読み取り | `parse_noted`・`ScriptFacts` | 流れ図 |
@@ -594,7 +594,7 @@ pub fn render(diagnostics: &[Diagnostic], unchecked: Option<&str>) -> ToolOutcom
 
 | Field | Detail |
 |-------|--------|
-| Intent | UI スレッドで事実を集め、判断を呼び、その場で答える |
+| Intent | UI スレッドで事実を値へ写し取り、別スレッドで解釈と判断をして答える |
 | Requirements | 2.2, 2.3, 2.4, 2.5, 2.7, 3.1 |
 
 **Responsibilities & Constraints**
@@ -602,7 +602,9 @@ pub fn render(diagnostics: &[Diagnostic], unchecked: Option<&str>) -> ToolOutcom
 - `dispatch` の腕は `resolved!(check_script, args, Omitted::UseActive)`。解決の失敗の文言と、記録に添えるゴーストの名前は 10 本と同じ経路で付く。
 - World は読むだけ（`&World`）。SHIORI・再生・表示・ファイル・ネットへ進む呼び出しを持たない。
 - 表示の結線（`Emo2Wiring`）が無い → 事実なしで判断する（surface とバルーンは診ない）。結線は在るが装着がまだ → `later` に預ける。それ以外 → 表示の層を事実として判断する。
-- 答えるたびに `debug!` を 1 件残す（診断の件数・UI スレッドでかかった時間）。橋の記録（ツール名・解決の結果・`isError`）とは別に、時間を見張るためのもの。
+- UI スレッドでするのは事実の写し取りまで: 窓を持つスコープごとに、シェルとバルーンの面の ID の集合（`EmoPresenter::surface_ids`）と、scope 0 のシェルの別名の表（`EmoPresenter::alias_snapshot`）を値（`ScriptFactsSnapshot`）へ写す。仕事の量はシェルの大きさで決まり、台本の長さに依らない。
+- 写した値・台本・返事の口（`ReplyTo`）を別スレッドへ渡し（`dump_surface.rs` の `std::thread::Builder` と同じ作り方）、そこで `parse_noted`・`ConsumerLedger::canonical`・`diagnose`・`render` を通して答える。どれも純粋な計算で、World に触らない。スレッドを起こせなかったときは `error!` を残して `NG:` で答える（黙って捨てない）。
+- 答えるたびに `debug!` を 1 件残す（診断の件数・台本のバイト数・UI スレッドでかかった時間・別スレッドでかかった時間）。橋の記録（ツール名・解決の結果・`isError`）とは別に、時間を見張るためのもの。
 
 **Contracts**: Service [x]
 
@@ -610,8 +612,8 @@ pub fn render(diagnostics: &[Diagnostic], unchecked: Option<&str>) -> ToolOutcom
 // crates/areka/src/mcp/check_script.rs
 pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: ReplyTo);
 
-/// 表示の層を読んで、判断の事実に答える。
-struct PresenterScriptFacts<'a> { /* presenter と、scope 0 のシェルの別名から作った解決器 */ }
+/// UI スレッドで表示の層から写し取った事実（別スレッドへ渡せる値）。`ScriptFacts` を実装する。
+struct ScriptFactsSnapshot { /* スコープごとのシェル・バルーンの面の ID の集合と、scope 0 のシェルの別名から作った解決器 */ }
 ```
 
 - Preconditions: `dispatch` が `ghost_name` を解決済み。
@@ -619,8 +621,8 @@ struct PresenterScriptFacts<'a> { /* presenter と、scope 0 のシェルの別�
 
 **Implementation Notes**
 
-- Integration: `PresenterScriptFacts` は、`alias_snapshot(shell_target(0))` から `SurfaceResolver::new` で解決器を 1 度作る（再生の解決器と同じ作り方）。
-- Risks: 装着が永久に済まない場合は、橋の 10 秒の時間切れで終わる（`dump_surface` と同じ）。
+- Integration: `ScriptFactsSnapshot` は、`alias_snapshot(shell_target(0))` から `SurfaceResolver::new` で解決器を 1 度作る（再生の解決器と同じ作り方）。面の ID の集合は `EmoPresenter::surface_ids`（`has_surface` の隣に足す。対象の `EmoWorld::surface_ids` をそのまま返す）から取る。
+- Risks: 装着が永久に済まない場合と、4 MiB 近い台本で別スレッドの仕事が 10 秒を超える場合は、橋の 10 秒の時間切れで終わる（`dump_surface` と同じ。別スレッドは仕上げてから、受け手の居ない返事を捨てる）。写し取ってから答えるまでの間にシェルが切り替わると、答えは写し取った時点のシェルに対するものになる（文書に書く）。
 
 #### `check_script` の判断
 
@@ -634,7 +636,7 @@ struct PresenterScriptFacts<'a> { /* presenter と、scope 0 のシェルの別�
 ```rust
 // crates/areka/src/mcp/check_script_judge.rs
 
-/// 判断に要る事実。本番は表示の層を読み、テストは手書きの表で答える。
+/// 判断に要る事実。本番は UI スレッドで写し取った値（`ScriptFactsSnapshot`）が答え、テストは手書きの表で答える。
 pub(in crate::mcp) trait ScriptFacts {
     /// `\s` の引数を、再生と同じ解決器で解いた結果。
     fn resolve_surface(&self, key: &str) -> SurfaceTarget;
@@ -738,7 +740,7 @@ pub(in crate::mcp) fn diagnose(
 1. `tools/list` に 11 本が出る（先頭 10 本は今までどおり）。
 2. 誤りを含む台本（`\x`・`\s[99999]`・`\f[sub,1]`）を `check_script` に渡すと 3 件の診断が返り、ゴーストは喋らず、表情も変わらない。
 3. 誤りの無い台本で `OK:0 diagnostics` が返る。
-4. 呼んでいる間もゴーストの描画と会話が止まらない。処理の `debug!` の時間（マイクロ秒）を記録する。
+4. 呼んでいる間もゴーストの描画と会話が止まらない。普通の台本と、長い台本（1 MiB 前後・誤りを多く含む）の両方で確かめ、処理の `debug!` の時間（UI スレッド・別スレッド）を記録する。
 5. help のページに「areka 独自のツール」の節が出る。
 
 ## Optional Sections
@@ -750,5 +752,6 @@ pub(in crate::mcp) fn diagnose(
 
 ### Performance & Scalability
 
-- 仕事の量は台本の長さに比例する（解釈 1 回・命令ごとに表を 1〜2 回引く・別名の表の写しを 1 回）。普通の台本（数 KB まで）ではマイクロ秒の桁の見込み。
-- 上限は MCP の本文の上限（`dispatch.rs` の `MAX_BODY_BYTES`＝4 MiB）で頭打ちになる。台本ごとの上限は足さない。実機確認の 4 で時間を記録し、普通の台本で 1 フレーム（16 ms）に近づくようなら、`dump_surface` と同じ「別のスレッドで仕上げて答える」形へ移す（そのときは事実を値に写してから渡す）。
+- UI スレッドの仕事は事実の写し取りだけで、量はシェルの大きさ（面の ID の数・別名の数）で決まる。台本の長さに依らない。
+- 台本の長さに比例する仕事（解釈 1 回・命令ごとに表を 1〜2 回引く・位置の換算 1 回）は別スレッドで行う。台本ごとの上限は置かず、頭打ちは MCP の本文の上限（`dispatch.rs` の `MAX_BODY_BYTES`＝4 MiB）だけ。
+- 実機確認で、普通の台本と長い台本（1 MiB 前後）の両方について、UI スレッドと別スレッドの時間を記録する。
