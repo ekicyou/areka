@@ -52,7 +52,7 @@
 
 - 読み手が値にする描画メソッドの語を増やす・`Element` に欄を足す変更（追跡用の spec・`element-clipping-option`）。そのときは `parse_undrawn_elements` の対象が連動して減ること（「3 つの転記が element定義の行を漏れなく重なりなく分ける」テスト）を確かめ直す。
 - `lexer::lex` の欄の切り方（前後の空白を落とす）を変える変更。語の完全一致の前提が動く。
-- 見出しの判定順（`surface.append*` を `surface*` より先）を `decode.rs` で変える変更。`undrawn.rs` は同じ順を写している。
+- 見出しの判定順（`surface.append*` を `surface*` より先）を `decode.rs` で変える変更。`undrawn.rs` は同じ範囲（`surface` で始まる見出し）を 1 本の判定で写している。
 - 箱の転記（`boxes.rs`）が拾う描画メソッドの語を `balloon` から増やす変更。`undrawn.rs` の除外は同じ語の書き写しなので、合わせないと二重に拾う。
 - `load_shell_target` 以外にシェルの surfaces.txt を読む製品の入口を足す変更。警告を出す場所が 1 か所である前提が動く。
 

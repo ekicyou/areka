@@ -17,7 +17,7 @@
   - 完了の姿: `cargo test -p areka-parsers` が緑で、`decode_elements` の判定を元の `overlay` だけに戻すと ⑴ と付け替えた 3 本が赤になる
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.4, 2.5, 3.1, 3.5_
 
-- [ ] 1.2 描けない行の転記を足す
+- [x] 1.2 描けない行の転記を足す
   - `crates/areka-parsers/src/shell/undrawn.rs` を新設し、`UndrawnElementLine`（`heading`・`element`・`method` の 3 つの文字列）と `parse_undrawn_elements(text)` を置く。字句解析は `lexer::lex`、閉じたブレスだけを見て、見出しの判定は読み手と同じ順（`surface.append` を `surface` より先）
   - 対象は、キーが `element` で始まり、第 2 欄が `is_image_element_method` で偽で、かつ `balloon` でない行。第 2 欄が無ければ語は空文字列。見出しは欄を `,` でつなぎ直した原文で持ち、展開しない（1 行 1 件）。element番号は `element` に続く文字列を原文のまま
   - `shell/mod.rs` に `mod undrawn;`・`#[cfg(test)] mod undrawn_tests;` と `UndrawnElementLine`・`parse_undrawn_elements` の公開を足す
@@ -83,3 +83,8 @@
   - 完了の姿: 記録に 3 面の 333×500 と警告 0 件が書かれ、絵が添えられている
   - _Requirements: 4.3, 3.2_
   - _Depends: 4.1_
+
+## Implementation Notes
+
+- 1.1: `replace` に付け替えたテストは隣に `base` の行を 1 本置かないと判定を戻しても赤にならない。檻は「判定を戻すと赤」を変異で確かめてから閉じる。
+- 1.2: 3 つの転記の見出しの範囲はどれも「`surface` で始まる」で同じ（`kero.surface.alias` は完全一致で先に外れる・閉じないブレスは字句解析が `Raw` にする）。`undrawn.rs` は 1 本の `starts_with("surface")` で、判定の順の入れ替えは外から見えない。
