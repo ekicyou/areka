@@ -141,3 +141,82 @@
 - 推す方向: **案 C（または議題 2 の答え次第で案 B）**＝`choice.rs` の子の新しいファイルに判定と台本の始め方を置き、`steady.rs` は腕の付け替えだけ。一括の形はカスケードの `Value`（`[ResolveChoice{旧}, StartTalk(新)]`・`choice_prev_talk = Some(旧)`）、空はカスケード終端の 204（`[ResolveChoice]`）に合わせる。
 - 先に答えを出すもの: 議題 1（翻訳）。答えで触るファイル（C4 の約束の内か外か）が変わる。
 - 設計書に一言書くもの: 議題 5（`sakurascript` が使い回す口の形）＝brief の C4 の約束。
+
+## 9. 設計の段の決定（2026-10-05 `kiro-spec-design`）
+
+> 調べ方は軽い方（既存の仕組みへの足し込み）。外の調べ物・新しい依存は無い。§6 の議題 2〜6 をここで決めた（議題 1 は要件の段で決着済み）。設計書は `design.md`。
+
+### 9.1 設計の段で確かめ直した事実
+
+- **翻訳に通らないことは、何も足さなくても成り立つ**: `schedule/mod.rs` の `step` は `translate::before` → `route` → `translate::after` の順に呼ぶ。`before` が作る材料の `script` は入力が `Input::ShioriReply` で結果が `ShioriOutcome::Value` のときだけ `Some` になり、`after` の中の `capture` は `script` が `None` なら一括をそのまま返す。`Input::Choice` から出す `Action::StartTalk` は捕まえられない。
+- **解決の関数は `steady.rs` の中からしか呼べない**: `resolve_choice` は `steady.rs` の非公開の関数。`choice.rs` の子のモジュール（`schedule::choice::script`）は `steady` の兄弟の下なので、見える範囲を広げない限り呼べない。
+- **テストの補助も `steady` の中からしか見えない**: `steady_test_support.rs` の `steady_with_ledger`・`choice_input_of` は `pub(super)`（`steady` まで）。新しいテストのファイルは同じ形の小さな補助を自分で持つ（`State::initial()` と `State` の公開の欄で組める）。`schedule_log_firing_tests.rs` も自前の補助を持っており、同じ流儀。
+- **`implemented` の根拠の行は kanade にも置ける**: 正典 URL の行は `crates/areka-kanade/src/schedule/events.rs` に既にあり（`OnBoot` など）、kanade のソースは証拠の走査の対象。兄弟の選択肢の行（`\q[タイトル,ID,r2,r3...]`・`\q[タイトル,OnID,…]`）の根拠は `areka-parsers` の `decode.rs` の `decode_choice` の所にある。`script:` の行の根拠は、判定の腕（`plan_cascade`）に置く。
+- **兄弟の `implemented` の行は `owner` が空**: 台帳の決まり（`doc/ukadoc-coverage/README.md` の欄の表）は「担当 spec 名。未定なら空」。本仕様は spec 名を書く。
+- **保留中の終了・切替・中断との重なり**: `on_cascade_reply` の `Value` の腕は `phase`・`next_talk_id`・`choice_prev_talk` の 3 つしか書かない。本仕様も同じ 3 つだけを書くので、重なったときの動きはその腕と同じになる（§7 の 4 つ目の調べの答え）。
+
+### 9.2 統合の見立て（まとめる・借りる・削る）
+
+- **まとめる**: 「台本を始めた」と「空で閉じた」は、既存の「選択肢のイベントが台本を返した」と「何も返さなかった」の 2 つの形にそのまま重なる。新しい形は作らない。
+- **借りる**: 再生・元のトークを閉じる順・遅れた完了の知らせの扱い・選択肢の待ちは、既存の `Action::StartTalk`／`Action::ResolveChoice` と dispatcher に任せる。
+- **削る**: 結論に台本を持たせる新しい型・翻訳の依頼の自前の組み立て・`steady.rs` の 3 か所の複写の整理・出どころの欄の先取りは、どれも置かない。
+
+### Decision: 解決を発行する場所は 1 か所のまま（議題 2 ＝案 C）
+
+- **Context**: 新しいファイルから `resolve_choice` は呼べない。
+- **Alternatives Considered**:
+  1. 新しいファイルに 2 つ目の発行する場所を作る（案 B）
+  2. `resolve_choice` の見える範囲を広げる
+  3. `on_choice` の腕が `resolve_choice` を呼び、新しいファイルは再生開始の行動だけを返す（案 C）
+- **Selected Approach**: 3。`begin` は `Option<Action>`（再生開始があるか無いか）を返し、腕が結果の語（`"script"`／`"script_empty"`）を決めて解決を先頭に並べる。
+- **Rationale**: 「1 回の選択につき解決は高々 1 回」を、発行する場所が 1 つであることで保つ今の作りを崩さない。腕は今の 14 行より短くなり、`steady.rs` の行数は増えない。
+- **Trade-offs**: 腕に結果の語を決める 1 行が残る（「付け替えだけ」の範囲の内と見る）。
+
+### Decision: 結論の名前は `CascadePlan::Script`・古い語彙は消す（議題 3）
+
+- **Selected Approach**: `Unsupported` を `Script` に改名する。警告 `choice_unsupported_category` と解決の結果の語 `"unsupported"` は消す。古い前提のテスト 3 本は、`choice.rs` の 1 本を改名、`steady_choice_tests.rs` と `schedule_log_firing_tests.rs` の各 1 本を消して新しい兄弟のテストへ置き換える。
+- **Rationale**: 名前を残すと「未対応」という嘘の名前で実行することになる。未対応の種類はもう無いので、空の入れ物を残さない。
+- **Follow-up**: `doc/choice-cascade-compat.md` の 7a-ii が `CascadePlan::Unsupported` を名指ししているので、同じ PR で書き替える（要件 6.2）。
+
+### Decision: `origin` は固定の語・記録は新しい event 名（議題 4）
+
+- **Selected Approach**:
+  - 新しいトークの `ActiveTalk::origin` は `"choice_script"`。
+  - 実行の記録は info `choice_script_started`（`choice_id`・`talk_id`・`prev_talk_id`）を 1 件。
+  - 空は warn `choice_script_empty`。余分な引数は、1 つ以上あるときだけ warn `choice_script_unused_args`（`count`）。
+  - 解決の記録 `choice_resolved` の結果の語は `"script"`／`"script_empty"`。
+- **Rationale**:
+  - `origin` は「何がトークを始めたか」の記録用のラベルで、今はどこからも読まれない（`lib.rs` の注記）。元のトークの値（例 `OnBoot`）を写すと、記録の上で「`OnBoot` の応答で始まったトーク」に見えてしまう。出どころ（要件 4）は別の話で、`script-security-level` が欄を足したときに `begin` の 1 か所で元のトークから写す。
+  - `steady_talk` に欄を足す案は、SHIORI の応答で始まったトークの記録と混ざるので取らない。
+  - 余分な引数は括り忘れの疑い＝作者に気付いてほしい事なので、info の欄に埋めずに warn にした。引数が無い普通の場合は記録が増えない。
+- **Trade-offs**: 余分な引数つきの選択は、1 回の選択の記録が 1 件増える。
+
+### Decision: `sakurascript` が使い回す口は `start_talk` の 1 関数（議題 5）
+
+- **Selected Approach**: `choice_script.rs` に `start_talk(state, origin, script) -> (TalkId, Action)`（採番・枠の差し替え・再生開始の行動）を置き、見える範囲を `crate::schedule` にする。帳簿の掃除・1 世代の控え・記録は呼び手の仕事。
+- **Rationale**: 選択肢の道と MCP の道で共有できるのはこの芯まで（前後は呼び手ごとに違う＝§6 の議題 5 の事実）。`begin` が必ず要る処理を関数 1 つに切っただけで、MCP のための追加の作りは無い。
+- **Trade-offs**: 置き場の名前（選択肢の下）が MCP から見るとずれる。`mcp-kanade-tools` が `schedule/mod.rs` を触るときに移してよい。`steady.rs` の既存の 3 か所の複写はそのまま残る（本仕様の範囲の外）。
+
+### Decision: 入れ子の記述例の読みのテストは `decode_tests.rs` に 1 本（議題 6）
+
+- **Alternatives Considered**:
+  1. `crates/areka-parsers/tests/` に新しい統合テスト
+  2. `areka-sakura` の `drive_choice_tests.rs`
+  3. `areka-parsers` の `decode_tests.rs` に 1 本足す
+- **Selected Approach**: 3。
+- **Rationale**: 確かめたいのは読み込みの層の動き（括りの中の `,` と `]`）で、置き場はその層の選択肢のテストの隣が素直。本番のコードも宣言も `Cargo.*` も触らない。1 は `tests/` のフォルダ自体がまだ無く、入口の作りから足すことになる。2 は再生の層のテストで、読みの確認の置き場としては遠い。
+- **Trade-offs**: ウェーブ C4 の約束（kanade だけ）の外のファイル。`open-external-tags` が同じ列を触るので、開発者の調整の対象として設計書に挙げた。
+
+### 9.3 ウェーブ C4 の約束との照合
+
+- 本番のコードは約束の内に収まる（`choice.rs`・`steady.rs` の `on_choice` の腕と説明・`choice.rs` の子の新しいファイル）。`schedule/mod.rs` に宣言は足さない。`lib.rs`・`msg.rs`・`actor.rs`・`translate.rs`・`Cargo.*` は触らない。
+- 約束の外で触るもの（設計書の「Modified Files」の表が正本）:
+  1. `schedule/mod.rs` — `Action::ResolveChoice` の説明のコメントの 1 句だけ（コードは変えない）。
+  2. `schedule/steady_choice_tests.rs`・`schedule/schedule_log_firing_tests.rs` — 古い前提のテストを各 1 本消すだけ（要件 7.4）。
+  3. `crates/areka-parsers/src/sakura/decode_tests.rs` — 読みのテストを 1 本足すだけ。
+  4. 文書（要件 6）— 台帳・報告 2 本（機械が作り直す）・`choice-cascade-compat.md`・`COMPAT_ARCHITECTURE.md`。
+
+### 9.4 残る注意
+
+- 報告の `summary.md` は台帳を触るどの spec も作り直すので、並走の spec と重なったら後に入る側が作り直す。
+- 実装の段で確かめること: `on_choice` の腕で `state` を書き替えられること（`snapshot` は値で持っているので借用は残らない見込み）、証拠の走査（`cargo run -p ukadoc-survey -- evidence`）に `choice.rs` の行が載ること。
