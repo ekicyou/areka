@@ -15,7 +15,9 @@ use bevy_ecs::world::World;
 use tracing::debug;
 use wintf::ecs::Arrangement;
 
-use super::dump_surface::{PresenterFacts, Step, check_size, fail, image, judge, refuse, start};
+use super::dump_surface::{
+    Job, PresenterFacts, Step, check_size, fail, image, judge, refuse, start,
+};
 use super::resolve::ActiveGhost;
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::target_map::balloon_target;
@@ -54,7 +56,7 @@ fn answer(world: &World, args: &Args) -> Option<Step> {
     if let Err(e) = check_size(TOOL, scope, pic.bytes(), width, height) {
         return Some(Step::Now(e));
     }
-    let mut canvas = pic.bytes().to_vec();
+    let canvas = pic.bytes().to_vec();
 
     // 文字の面が在るときだけ重ねる。無ければ背景だけで成功する（要件 3.9）。
     let runtime = wiring.runtime().borrow();
@@ -84,25 +86,35 @@ fn answer(world: &World, args: &Args) -> Option<Step> {
 
     Some(Step::Encode(
         scope,
-        Box::new(move |ui| {
-            let started = Instant::now();
-            if let Some((physical, bytes, size, offset)) = layer {
-                overlay::overlay_text(&mut canvas, (width, height), physical, &bytes, size, offset);
-            }
-            let png = image::png_base64(&canvas, width, height);
-            debug!(
-                tool = TOOL,
-                scope,
-                width,
-                height,
-                base64_len = png.len(),
-                ui_us = ui.as_micros() as u64,
-                encode_us = started.elapsed().as_micros() as u64,
-                "[mcp] 絵を返す"
-            );
-            outcome::with_image(outcome::ok(&judge::balloon_text(scope)), png)
-        }),
+        balloon_job(scope, canvas, (width, height), layer),
     ))
+}
+
+/// 文字の面の読み出し（物理の大きさ, 密な BGRA, 面の大きさ, 文字の領域の原点）。
+type TextLayer = ((u32, u32), Vec<u8>, (u32, u32), (f32, f32));
+
+/// 背景（乗算済み BGRA の写し）に文字を重ね、PNG・base64 にして成功で答える仕事。文字の面が
+/// ある・ないの両方の腕でこれを使う。
+fn balloon_job(scope: u32, mut canvas: Vec<u8>, size: (u32, u32), layer: Option<TextLayer>) -> Job {
+    let (width, height) = size;
+    Box::new(move |ui| {
+        let started = Instant::now();
+        if let Some((physical, bytes, text_size, offset)) = layer {
+            overlay::overlay_text(&mut canvas, size, physical, &bytes, text_size, offset);
+        }
+        let png = image::png_base64(&canvas, width, height);
+        debug!(
+            tool = TOOL,
+            scope,
+            width,
+            height,
+            base64_len = png.len(),
+            ui_us = ui.as_micros() as u64,
+            encode_us = started.elapsed().as_micros() as u64,
+            "[mcp] 絵を返す"
+        );
+        outcome::with_image(outcome::ok(&judge::balloon_text(scope)), png)
+    })
 }
 
 #[cfg(test)]
