@@ -26,7 +26,7 @@
 - **Release の走り**: タグの push で動き、組み立て・zip・SHA256 を作って GitHub Release を公開する `release.yml` の走り。
 - **公開の走り**: 同じタグの push を自分で受け、Release の走りの緑を待ってから `wintf`・`dola` を crates.io へ出す `crates-io.yml` の走り。
 - **乾いた走り**: `release.yml` を手で起動し、Release を作らずに組み立てまでを確かめる走り。
-- **全体テスト**: 手元の `tools/test-all.ps1`（整形とライセンスの確かめを含む形）。
+- **全体テスト**: 手元の `tools/test-all.ps1`（整形とライセンスの確かめを含む形。整形は確かめるだけで、ソースを書き換えない）。
 - **起動の確かめ**: 配布スクリプト `tools/package.ps1 -Check`（x64）。窓を出すので GitHub Actions では回せず、手元で回す。
 - **公開前の確かめ**: `tools/crates-io.ps1 -Verify`（何も上げずに、組み立てまで確かめる形）。
 
@@ -64,7 +64,7 @@
 
 1. When 開発者が本 spec の実装（`/kiro-impl areka-P0-release-cycle`）を打つ, the リリースの手順 shall 1 回の実行で 1 回のリリース（版を 1 つ上げ、タグを 1 つ打つ）だけを行う。
 2. The リリースの手順 shall 2 回目以降、毎回同じタスクの並びで回る（初回だけの手順は要件 8 に分け、2 回目以降のタスクには残さない）。
-3. When 1 回の実行が終わる（要件 7 の記録の 1 行を書き終える）, the リリースの手順 shall `tasks.md` のチェックをすべて未完了に戻し、本 spec を `.kiro/specs/` の直下に置いたままにする（`completed/` へ移さない）。
+3. When 1 回の実行が終わる（要件 7 の記録の 1 行を書き終える）, the リリースの手順 shall main の `tasks.md` をチェックがすべて未完了の状態（次の回にそのまま使える形）に置き、本 spec を `.kiro/specs/` の直下に置いたままにする（`completed/` へ移さない）。
 4. The 本 spec の `spec.json` shall 初回の実行の後も実装中の段のまま置き、完了の段へ進めない。
 5. The リリースの手順 shall 版を上げ、タグを打つ唯一の経路である（ほかの spec の PR や `/kiro-complete` は版にもタグにも触らない）。
 6. The リリースの手順 shall ソースコード（各クレートのコード・`tools/` のスクリプト・workflow のファイル）を書き換えない。書き換えるのは要件 3.3 のファイルと、本 spec のフォルダと、要件 7 の記録の 1 行と、初回だけ根の `README.md` の 1 行（要件 8.8・記録の 1 行と同じ PR）だけ。
@@ -94,7 +94,7 @@
 2. Where 開発者がその回の版を指示した, the リリースの手順 shall 指示された版にする。
 3. The リリースの手順 shall 版上げで次だけを書き換える: 根の `Cargo.toml` の 2 行（`[workspace.package]` の `version`・`[workspace.dependencies]` の `dola` の `version`）、`Cargo.lock` のワークスペースのクレートの版の行、`THIRD-PARTY-NOTICES.md`（全体テストで作り直した物）、`dist/README.txt` の冒頭の「この説明書は …… 時点の内容です。」の日付（その日の日付にする）。初回だけ直す根の `README.md` の 1 行は版上げに含めず、記録の 1 行と同じ PR に載せる（要件 8.8）。
 4. The リリースの手順 shall 各クレートの `Cargo.toml`・外部のクレートの版・`dist/README.txt` の「時点」の行以外の行を書き換えない。
-5. If 版上げの差分に要件 3.3 の外の変更（`Cargo.lock` の外部のクレートの行を含む）が現れる, then the リリースの手順 shall その変更を取り込まずに止まり、開発者へ報告する。
+5. If 版上げの差分に要件 3.3 の外の変更（`Cargo.lock` の外部のクレートの行を含む）が現れる, then the リリースの手順 shall その変更を取り込まずに止まり、開発者へ報告する（変更かどうかは中身の差分で判断し、改行の違いだけのものは変更と数えない）。
 6. If 根の `Cargo.toml` の 2 行の版が一致しない, then the リリースの手順 shall 版上げの PR を出さずに止まる。
 7. If 上げた後の版のタグ `v{版}` が既に在る, then the リリースの手順 shall 版上げの PR を出さずに止まり、開発者へ報告する（同じ版で出し直さない）。
 8. When 版を上げ終えた, the リリースの手順 shall 版上げの枝の中身で公開前の確かめを通し、緑を確かめる。
@@ -143,10 +143,10 @@
 
 #### Acceptance Criteria
 
-1. When 見守りが終わる（すべて緑、または赤の原因を直す spec の起票まで済む）, the リリースの手順 shall `.kiro/steering/roadmap.md` の「完了サマリ」の下の「リリース」に 1 行を足す。
+1. When 見守りが終わる（すべて緑、または赤の原因を直す spec の起票まで済む）, the リリースの手順 shall `.kiro/steering/roadmap.md` の「完了サマリ」の下の「リリース」に 1 行を足す（「リリース」の小見出しが無ければ初回に作る）。
 2. The 記録の 1 行 shall 版・日付・GitHub Release の URL・winget-pkgs への PR の URL（在る回だけ）・赤の原因を直すために起票した spec の名前（在る回だけ）を含む。
 3. The リリースの手順 shall 記録を PR で main へ入れる（main へ直接 push しない）。
-4. The リリースの手順 shall 記録の 1 行と `tasks.md` のチェックの戻し（要件 1.3）を、次に main へ入る spec か棚卸の PR に相乗りさせ、記録だけの PR は出さない（2026-10-05 開発者の裁定）。
+4. The リリースの手順 shall 記録の 1 行と、main の `tasks.md` に要るなら、そのチェックの戻し（要件 1.3）を、次に main へ入る spec か棚卸の PR に相乗りさせ、記録だけの PR は出さない（2026-10-05 開発者の裁定）。
 
 ### Requirement 8: 初回（`v0.0.2`）だけの手順
 
