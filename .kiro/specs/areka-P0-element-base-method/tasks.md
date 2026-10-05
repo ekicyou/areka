@@ -8,7 +8,7 @@
 >
 > 完了時（`/kiro-complete`）に回すもの（本書のタスクにしない）: 残りの描画メソッドの追跡用 spec の `/kiro-discovery` での起票、台帳の担当をその spec の名前へ直すこと、roadmap の本 spec の行（「読み手に描画メソッドの欄を足して」）を実際の形へ直すこと。
 
-- [ ] 1. 読み手で `base` を値にし、描けない行を一覧にする
+- [x] 1. 読み手で `base` を値にし、描けない行を一覧にする
 - [x] 1.1 画像の element定義として値にする語を `overlay` と `base` の 2 語にし、縮退を固定していたテストを付け替える
   - `decode.rs` の `decode_elements` の判定（第 2 欄が `overlay` と完全一致）を、語を受けて真偽を返す 1 関数 `is_image_element_method`（`pub(super)`・`overlay` と `base` だけ真・完全一致）に置き換える。`Element` に写す欄と並べ替えは変えない
   - 説明文を新しい約束に直す: `decode.rs`・`model.rs` の `Element`／`Surface.elements`（「`overlay` と `base` の行」）・`boxes_tests.rs` の `image_reader_ignores_box_lines`（判定は変えない）
@@ -26,7 +26,7 @@
   - 完了の姿: `cargo test -p areka-parsers` が緑で、見出しの判定の順を入れ替える・`balloon` の除外を外す、のどちらでも `undrawn_tests.rs` のどれかが赤になる
   - _Requirements: 2.1, 2.2, 2.6, 4.2_
 
-- [ ] 2. 入口で警告を出し、絵と大きさを通しで固定する
+- [x] 2. 入口で警告を出し、絵と大きさを通しで固定する
 - [x] 2.1 `base` の土台に `overlay` を重ねた外形と画素、今の見え方の不変を檻にする
   - `crates/areka-emo-present/src/shell_target_element_base_tests.rs` を新設し、`shell_target.rs` の末尾に接続の宣言を足す
   - ⑴ `surface26 { element0,base,body.png,0,0 / element1,overlay,face.png,X,Y }` を `build_shell_target` で焼いて合成し、外形が `body.png` の実寸、土台の位置の画素が `body.png` の色、部品の位置の画素が `face.png` の色。`surface26.png` を大きさも色も違う絵として復号器に入れ、それが使われない（外形が動かない・`shadowed` に 26 が載る）ことを較正にする
@@ -51,7 +51,7 @@
   - _Requirements: 4.3, 2.6, 3.2_
   - _Depends: 1.1, 2.2_
 
-- [ ] 3. 説明文と台帳を実際の状態に合わせる
+- [x] 3. 説明文と台帳を実際の状態に合わせる
 - [x] 3.1 (P) 合成器の説明文と COMPAT §8 を直す
   - `fold.rs` の `normalize_element` の説明文を「読み手が届けるのは `overlay` と `base` の行で、どちらも `Overlay` で置く」に、`method.rs` の `ComposeMethod::Base` の注記を「XY 無視は pattern定義の話で、element定義の `base` はこの値を通らない」に直す（処理は変えない）
   - `doc/COMPAT_ARCHITECTURE.md` §8 の表に 1 行: 項目「element定義の描画メソッド `base` の X,Y」・裁量「`overlay` の element定義と同じに扱う（位置として使う）」・根拠（`ukadoc:descript_shell_surfaces` の `base` の項は pattern定義に限って XY を無視すると書く／`element0` では置き換えられる側が空・`element1` 以降は正典が `overlay` に読み替える）・出典 spec
@@ -70,7 +70,7 @@
   - _Boundary: 台帳_
   - _Depends: 2.2_
 
-- [ ] 4. 通しの確認
+- [x] 4. 通しの確認
 - [x] 4.1 ワークスペースの全テストと静的検査を通す
   - `cargo test --workspace`・`cargo clippy --workspace --all-targets` を回す。pattern定義の `base`（描かずに警告）の既存テストと、`overlay` だけのサーフェスの既存テスト（golden を含む）が期待値を変えずに通ることを確かめる
   - 完了の姿: 全テストが緑で、本 spec の差分に clippy の警告が 0 件、1.1 で付け替えた 3 本のほかに期待値の書き換えが無い
