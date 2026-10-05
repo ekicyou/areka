@@ -125,6 +125,11 @@ pub(crate) fn chars_within_utf16(text: &str, units: usize) -> usize {
 
 /// 道具の番号（窓に道具は 1 つだけ）。
 const TOOL_ID: usize = 1;
+/// 大きさを測る間に置く、どの画面にも掛からない位置（最小化した窓と同じ慣例の座標）。
+const PARKED: PointPx = PointPx {
+    x: -32000,
+    y: -32000,
+};
 /// 画面の情報が読めないときの作業領域（収める処理が効かない広さ）。
 const UNBOUNDED: RectPx = RectPx {
     left: i32::MIN / 4,
@@ -171,6 +176,29 @@ impl TipWindow {
         }
     }
 
+    /// いつも手前の窓の中の最前へ当て直す（入力先は変えない）。窓が無ければ何もしない。
+    ///
+    /// 後から最前面へ当て直された別のいつも手前の窓はツールチップを覆う（最初の試し S7）。
+    /// 出す番の間の見回りのたびに呼んで手前へ戻す（設計の S7 の逃げ道）。
+    pub(crate) fn keep_on_top(&self) -> Result<(), TooltipOsError> {
+        let Some(hwnd) = self.hwnd else {
+            return Ok(());
+        };
+        // SAFETY: Win32 境界。自分のツールチップの窓の重なりの順だけを変える。
+        unsafe {
+            SetWindowPos(
+                hwnd,
+                Some(HWND_TOPMOST),
+                0,
+                0,
+                0,
+                0,
+                SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE,
+            )
+        }
+        .map_err(|_| TooltipOsError::Show { stage: "topmost" })
+    }
+
     fn try_show(&mut self, text: &str, anchor: PointPx) -> Result<RectPx, TooltipOsError> {
         let hwnd = self.ensure_window()?;
         let (work_area, dpi) = monitor_at(anchor).unwrap_or_else(|| {
@@ -212,33 +240,10 @@ impl TipWindow {
             offset_above: scale(20, dpi),
             offset_below: cursor_height,
         });
-        let mut ti = tool_info(hwnd, PWSTR::null());
-        // ⑥ 出す → ⑦ いつも手前の最前へ（入力先は変えない）。
-        // SAFETY: Win32 境界。自分のツールチップの窓へ、位置と手元の TTTOOLINFOW を渡す。
-        unsafe {
-            SendMessageW(
-                hwnd,
-                TTM_TRACKPOSITION,
-                Some(WPARAM(0)),
-                Some(LPARAM(make_lparam(pos.x, pos.y))),
-            );
-            SendMessageW(
-                hwnd,
-                TTM_TRACKACTIVATE,
-                Some(WPARAM(1)),
-                Some(LPARAM((&raw mut ti) as isize)),
-            );
-            SetWindowPos(
-                hwnd,
-                Some(HWND_TOPMOST),
-                0,
-                0,
-                0,
-                0,
-                SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE,
-            )
-        }
-        .map_err(|_| TooltipOsError::Show { stage: "topmost" })?;
+        // ⑥ 出す（置き場所へ動かす）。
+        track_at(hwnd, pos);
+        // ⑦ いつも手前の最前へ。
+        self.keep_on_top()?;
         // ⑧ 実際の矩形。
         let mut rc = RECT::default();
         // SAFETY: Win32 境界。書き込み先は手元の RECT。
@@ -377,18 +382,52 @@ fn tool_info(hwnd: HWND, text: PWSTR) -> TTTOOLINFOW {
     }
 }
 
-/// 文字を入れ直し、出す前の大きさを問い合わせる。
+/// 追跡型の道具を pos（左上）に置いて追跡を始める（出ていればその場で動かす）。
+fn track_at(hwnd: HWND, pos: PointPx) {
+    let mut ti = tool_info(hwnd, PWSTR::null());
+    // SAFETY: Win32 境界。自分のツールチップの窓へ、位置と手元の TTTOOLINFOW を渡す。
+    unsafe {
+        SendMessageW(
+            hwnd,
+            TTM_TRACKPOSITION,
+            Some(WPARAM(0)),
+            Some(LPARAM(make_lparam(pos.x, pos.y))),
+        );
+        SendMessageW(
+            hwnd,
+            TTM_TRACKACTIVATE,
+            Some(WPARAM(1)),
+            Some(LPARAM((&raw mut ti) as isize)),
+        );
+    }
+}
+
+/// 文字を入れ直し、置き場所へ動かす前の大きさを問い合わせる。
+///
+/// 古い版（版 5）は、追跡を始める前（出ていないとき）の `TTM_GETBUBBLESIZE` で落ちる（最初の試し
+/// S2）。出ていなければ画面の外で追跡を始めてから測り、置き場所へは後で動かす（設計の S2 の逃げ道）。
+/// 出ていればその場で入れ替えて測る（画面の外へ外すと、出ているものが一瞬消えうる）。追跡は文字が
+/// 入ってからでないと始まらないので、文字の後に始める。始まらなければ問い合わせずに誤りにする。
 fn set_text_and_measure(hwnd: HWND, text: &str) -> Result<SizePx, TooltipOsError> {
     let mut wide: Vec<u16> = text.encode_utf16().chain([0]).collect();
     let mut ti = tool_info(hwnd, PWSTR(wide.as_mut_ptr()));
     // SAFETY: Win32 境界。手元の TTTOOLINFOW と文字を渡す（文字は窓の側に写される）。
-    let packed = unsafe {
+    unsafe {
         SendMessageW(
             hwnd,
             TTM_UPDATETIPTEXTW,
             Some(WPARAM(0)),
             Some(LPARAM((&raw mut ti) as isize)),
         );
+    }
+    if !is_visible(hwnd) {
+        track_at(hwnd, PARKED);
+        if !is_visible(hwnd) {
+            return Err(TooltipOsError::Show { stage: "track" });
+        }
+    }
+    // SAFETY: Win32 境界。追跡の始まった自分のツールチップの窓へ、手元の TTTOOLINFOW を渡す。
+    let packed = unsafe {
         SendMessageW(
             hwnd,
             TTM_GETBUBBLESIZE,

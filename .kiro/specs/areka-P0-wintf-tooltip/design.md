@@ -733,7 +733,7 @@ pub(crate) fn note_button_press();
 | # | 確かめること | 満たした、の基準 | 満たさないときの逃げ道 |
 |---|---|---|---|
 | S1 | `build.rs` からのリンカへの指示で exe にマニフェストが埋まり、今風の見た目になるか（wintf のサンプルと areka.exe の両方） | ビルドが通り、exe の資源にマニフェストが入っている。サンプルで `GetWindowTheme(ツールチップの窓)` が空でなく、見た目が今風。areka.exe が今までどおり起動し、既存のテストが緑 | リンカが既定のマニフェストとぶつかるなら `/MANIFEST:NO` と資源のファイルで埋める形に替える。それでも駄目なら**止めて報告** |
-| S2 | 追跡型＋`TTF_ABSOLUTE` で、渡した位置が左上になるか・出す前に大きさを問い合わせられるか | `GetWindowRect` の左上が渡した位置と一致し、`TTM_GETBUBBLESIZE` が出す前に 0 でない値を返す | 画面の外で一度出して `GetWindowRect` で測り、`TTM_TRACKPOSITION` で動かす |
+| S2 | 追跡型＋`TTF_ABSOLUTE` で、渡した位置が左上になるか・出す前に大きさを問い合わせられるか | `GetWindowRect` の左上が渡した位置と一致し、`TTM_GETBUBBLESIZE` が出す前に 0 でない値を返す | 画面の外で一度出して測り、`TTM_TRACKPOSITION` で動かす（3.2 で当てた形: 出ていなければ画面の外 (-32000,-32000) で追跡を始めてから `TTM_GETBUBBLESIZE` で測る。測った大きさが `GetWindowRect` の大きさと一致することを S2 で確かめた） |
 | S3 | 出しても入力先と手前の窓が変わらないか | 出す前後で `GetForegroundWindow` と `GetFocus` が同じ | `SWP_NOACTIVATE` 付きの `SetWindowPos` だけで出す形に替える。駄目なら**止めて報告** |
 | S4 | ツールチップの上のボタンの操作が、下の窓（同じスレッド・別プロセス）へ届くか | メモ帳の上に重ねたツールチップを押すと、メモ帳が押下を受ける | `WS_EX_LAYERED` を足して `SetLayeredWindowAttributes` で不透明にする。駄目なら**止めて報告** |
 | S5 | 最大の幅で、日本語の長い 1 行と、切れ目の無い URL がどう折り返されるか | 日本語が幅で折り返す。URL が幅を越えたら `force_break` が効いて収まる | `force_break` を、幅を越えたかに関わらず全部の行に当てる |
