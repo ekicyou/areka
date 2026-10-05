@@ -6254,14 +6254,15 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 """
 
 [entry."ukadoc:descript_shell_surfaces:base:1"]
-status = "vocabulary-only"
+status = "degraded"
 introduced = ""
-owner = ""
+owner = "areka-P0-element-base-method"
 priority = "A15"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+壊れ方: 見た目の差。記録: warn!。element定義では描ける・pattern定義では未対応のまま。element の行の側は areka-parsers の shell::decode_elements が `base` を `overlay` と同じ値にし、areka-emo-compose が `overlay` と同じに重ねる（X,Y は位置として使う。裁量は doc/COMPAT_ARCHITECTURE.md の §8）。コマ（`animation*.pattern*`）の側は、areka-emo-compose の method::from_name がこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。沈黙ルール対応表と見直し表のすべての行を当たった。
+担当 spec は areka-P0-element-base-method（2026-10-05）。pattern定義の側の残りを追跡用の spec が持つなら、完了時にその名前を書く。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
 束: 絵の重ね方の語・名前は解けるが描けず警告を残す（先に要る仕組み: emo の合成器）。束の順位: 71——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -7011,15 +7012,16 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 [entry."ukadoc:descript_shell_surfaces:element_2a_2c_63cf_753b_30e1_30bd_30c3_30c9_2c_30d5_30a1_30a4_30eb_540d_2cX_5ea7_6a19_2cY_5ea7_6a19_28_2c_30aa_30d7_30b7:1"]
 status = "degraded"
 introduced = "2.3.53"
-owner = "areka-P0-shell-parse"
+owner = "areka-P0-element-base-method"
 priority = "A15"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。縮退の転記元: 見直し表の `areka-P0-seriko-runtime`。areka-parsers の shell::decode_elements は第 2 欄が `overlay` の行だけを値にし、他の描き方の行は何も記録せずに読み飛ばす。層の番号・画像の道・位置は転記してareka-emo-compose が重ね合わせに使う。見出しの `*` は 1 個以上の数字。
+壊れ方: 黙って壊れる。記録: warn!。縮退の転記元: 見直し表の `areka-P0-seriko-runtime`。areka-parsers の shell::decode_elements は第 2 欄が `overlay` と `base` の行を同じ値にし、他の描き方の行は値にせず読み飛ばす。読み飛ばした行は areka-parsers の shell::parse_undrawn_elements が拾い、areka-emo-present の shell_target::load_shell_target が 1 行につき 1 件の warn!（「shell: areka が描けない描画メソッドの element定義を描かない」・欄は面の見出し・element の番号・描画メソッドの語）を出す。層の番号・画像の道・位置は転記してareka-emo-compose が重ね合わせに使う。見出しの `*` は 1 個以上の数字。
+2026-10-05 の注記（areka-P0-element-base-method）: `base` は描ける・ほかは描かずに `warn!` を残す・`overlay` と `base` 以外の `element0` を持つサーフェスで画像が土台に残るずれは残る。`base` の X,Y の扱いは doc/COMPAT_ARCHITECTURE.md の §8 に登記してある。
 2026-09-20 の実測: 面の画像と `overlay` の `element0` の関係は正典どおりになった。`overlay` 以外の描画メソッドが読み飛ばされる縮退は残り、その間は `overlay` 以外の `element0` を持つ面で画像が土台に使われる（正典では破棄。`areka-P0-shell-implicit-surface` の要件 2.7 の既知のずれ）。`element0` の無い面にファイル名だけの画像を層 0 として敷くのは areka-emo-compose の base_image::apply_base_images で、`element0` が在る面には手を出さない。状態と担当はこの実測では変えていない（縮退の根は `overlay` 以外の読み飛ばしのままだからである）。
 2026-10-04 の注記: 動く GIF の自動アニメーションは非対応（開発者裁定 2026-10-04・理由: 古い形式）。GIF は今までどおり 1 枚の絵として読む。APNG・動く WebP は areka-P0-animated-image-decode で全コマを読んでアトラスに載せるようになったが、自動アニメーションの再生はまだ無い（再生は areka-P0-animated-image-playback の担当）。状態と担当はこの注記では変えていない（縮退の根は上と同じだからである）。読み方の裁量は doc/COMPAT_ARCHITECTURE.md の §8「沈黙ルール対応表」に 1 節で登記してある。
-担当 spec は areka-P0-shell-parse。同 spec の brief は範囲の In に surfaces.txt の解析を挙げ、その中身として重ね合わせの一覧を名指ししている。
+担当 spec は areka-P0-element-base-method（完了時に、残りの描画メソッドを描く追跡用の spec の名前へ書き換える）。元の担当は areka-P0-shell-parse で、同 spec の brief は範囲の In に surfaces.txt の解析を挙げ、その中身として重ね合わせの一覧を名指ししている。
 束: 絵の重ね合わせの行・引き受けたうえで縮めている（記録なし）（先に要る仕組み: emo の合成器）。束の順位: 17——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 

@@ -60,7 +60,7 @@
   - _Boundary: Compose 説明文, COMPAT_
   - _Depends: 1.1_
 
-- [ ] 3.2 (P) 網羅台帳の 2 行を書き換え、報告を作り直す
+- [x] 3.2 (P) 網羅台帳の 2 行を書き換え、報告を作り直す
   - 先に、書き換える前の台帳で `cargo run -p ukadoc-survey -- report` と `report-summary` を 1 度回し、報告の差分が 0 であることを確かめる（差分が出たら main 側の陳腐化として別のコミットにする）
   - `doc/ukadoc-coverage/ledger/assets.toml` の element定義の行: 状態は `degraded` のまま、注記を「`base` は描ける・ほかは描かずに `warn!` を残す・`overlay` と `base` 以外の `element0` を持つサーフェスで画像が土台に残るずれは残る」へ、記録を `warn!` へ、担当は本 spec（完了時に追跡用 spec の名前へ）
   - `ukadoc:descript_shell_surfaces:base:1` の行: 状態を `vocabulary-only` から `degraded` へ（element定義では描ける・pattern定義では未対応のまま）、担当は本 spec
@@ -88,3 +88,4 @@
 
 - 1.1: `replace` に付け替えたテストは隣に `base` の行を 1 本置かないと判定を戻しても赤にならない。檻は「判定を戻すと赤」を変異で確かめてから閉じる。
 - 1.2: 3 つの転記の見出しの範囲はどれも「`surface` で始まる」で同じ（`kero.surface.alias` は完全一致で先に外れる・閉じないブレスは字句解析が `Raw` にする）。`undrawn.rs` は 1 本の `starts_with("surface")` で、判定の順の入れ替えは外から見えない。
+- 3.2: 台帳の担当や状態を動かすと `doc/ukadoc-coverage/briefing.md`（barrier・owner_completed の数）と `roadmap-draft.md`（`[[spec]]`・段階 A の表・`[briefs].count`）も手で合わせないと `cargo test -p ukadoc-survey` の consistency が赤（前例 PR#240）。完了時に担当を追跡用 spec へ移すときも同じ 3 か所を直す。
