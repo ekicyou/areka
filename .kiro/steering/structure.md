@@ -282,7 +282,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 - `charset/` - **共通基盤**: BOM 読飛→冒頭 ASCII プリスキャン→charset 宣言/既定 encoding_rs 再デコード（全パーサー共通の入口）
 - `kv/` - **共通基盤**: KV 読み込み（素朴 BTreeMap・後勝ち・trim）
 - `sakura/` - さくらスクリプト emo2 subset→token（パターン確立元）
-- `shell/` - surfaces.txt→SERIKO/2.0 subset 型付きモデル（四層 model←lexer←decode←parse）
+- `shell/` - surfaces.txt→SERIKO/2.0 subset 型付きモデル（四層 model←lexer←decode←parse）。別の型を返す読み手として、シェル内バルーンの箱 `parse_boxes`（`boxes.rs`）と `surfacetable.txt` の転記 `parse_surfacetable`（`surfacetable.rs`・`areka-P0-mcp-expression-table` 2026-10-04・MCP の `get_expression_table` が使う）
 - `balloon/` - balloon descript→幾何＋フォント型付きモデル（descript＋画像別の後勝ち2層マージ）
 - `package/` - `ghost/master/descript.txt` 起点の SHIORI/shell 2点マウント解決（`install.txt` は NAR 配置マニフェスト＝起動時不使用でスコープ外）
 **Pattern**:

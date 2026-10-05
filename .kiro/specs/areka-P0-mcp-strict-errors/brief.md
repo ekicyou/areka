@@ -69,7 +69,7 @@ AI が書いた台本は、存在しない surface 番号や綴りを誤った�
   - `crates/areka/src/mcp/{sakurascript,raise_event}.rs` と各 `_tests.rs`（`mcp-kanade-tools` の後）
   - `crates/areka-talk/src/`（印）・`crates/areka-kanade/src/`（`msg.rs`・外からの台本の処理＝`mcp-kanade-tools` が作る新規ファイル・`schedule/translate.rs`）
   - `crates/areka-sakura/src/{compile,drive}.rs`・`crates/areka-seriko/src/{actor,resolve}.rs`・`crates/areka-emo-present/src/presenter/show.rs`・`crates/areka/src/emo2_boot/consumer_ledger.rs`
-  - 記録の口（`mcp-log-history` が作る履歴）
+  - 記録の口（`mcp-log-history` で着地済み: target `areka::log::error` の info 以上で出す・欄 `ghost`・`label`。正本は `doc/ssp-mcp/log-convention.md`。出した後の記録を見分けるのは `crate::log_history::last_id()`）
   - 検出点の表（spec 単位・新規）と、表と実装の一致を判定する検査（新規）
 - 議題（答えで作業が変わるものだけ）:
   - 印を台本に載せて再生側の各消費者まで運ぶか、kanade が「strict の talk の ID」を覚えて消費者の失敗の記録を talk の ID で拾うか（前者は `areka-talk`・dispatcher・sakura・seriko・emo を貫く／後者は消費者の記録に talk の ID が要る）。

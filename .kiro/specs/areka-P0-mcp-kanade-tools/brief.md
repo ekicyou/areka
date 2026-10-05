@@ -80,7 +80,7 @@ MCP でいちばん使われるのは「台本を流して見る」（`sakurascr
   - `crates/areka/src/mcp/{get_status,sakurascript,raise_event}.rs` と各 `_tests.rs`
   - `crates/areka-kanade/src/msg.rs`（変種 2 つ＋`RaiseEvent` の拡張・名前の腕）・`actor.rs`（振り分け）・**新規**の殻の処理（例 `actor_external.rs`＋兄弟テスト）・`schedule/mod.rs`（`Input` の変種）・`schedule/steady.rs` または新規の `schedule/` の子（外からの台本の起動）・`schedule/events.rs`（許可表を迂回する印）・`change.rs`（台本つきの結果）・`lib.rs`（公開）
   - 翻訳に通すなら `schedule/translate.rs`・`translate.rs` と `doc/COMPAT_ARCHITECTURE.md` §8
-  - script 種別のログの 1 行（`mcp-log-history` と取り決める target）
+  - script 種別のログの 1 行（`mcp-log-history` で取り決め済み: target `areka::log::script`・欄 `ghost`・`label`。正本は `doc/ssp-mcp/log-convention.md`）
   - 触らない: `crates/areka/src/mcp/mod.rs`・`resolve.rs`・`crates/areka-mcp/src/**`・`main.rs`・`ghost_session.rs`・`Cargo.toml`
 - 議題（答えで作業が変わるものだけ）:
   - MCP の `sakurascript` の台本を `OnTranslate` に通すか。通すなら Reference1 を欠番のままにするか SSP と同じ出どころの語にするか（SSP に同じ台本を送って `OnTranslate` の Reference1 を実測する）。答えで翻訳の経路と §8 の登記が変わる。
