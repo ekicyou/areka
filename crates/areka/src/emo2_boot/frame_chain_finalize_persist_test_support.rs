@@ -53,6 +53,8 @@ pub(super) struct PersistStore {
     io: Arc<dyn PersistIo + Sync>,
     roots: ScopeRoots,
     publisher: SylphyaPublisher,
+    /// 偽の保存先のとき、その本体（書き込みを失敗させる口 [`Self::fail_next_commit`] に使う）。
+    fake: Option<Arc<FakePersistIo>>,
     /// 破棄で止めて待つ（テストが途中で panic しても、植えたゴーストを消す前に書き手が止まる）。
     handle: Option<ActorHandle>,
 }
@@ -64,7 +66,10 @@ impl PersistStore {
             ghost: Some(PathBuf::from("/g")),
             ..ScopeRoots::default()
         };
-        Self::spawn(Arc::new(FakePersistIo::new()), roots)
+        let fake = Arc::new(FakePersistIo::new());
+        let mut store = Self::spawn(fake.clone(), roots);
+        store.fake = Some(fake);
+        store
     }
 
     /// 植えたゴーストの実物のファイル（本番と同じ置き場 `ghost\master\profile\areka\`・
@@ -87,6 +92,7 @@ impl PersistStore {
             io,
             roots,
             publisher: parts.publisher,
+            fake: None,
             handle: Some(parts.handle),
         }
     }
@@ -105,6 +111,19 @@ impl PersistStore {
         load_scope(PersistScope::Ghost, &self.roots, &SharedIo(self.io.clone()))
             .into_iter()
             .collect()
+    }
+
+    /// 次の書き込み（ファイルの確定）を 1 回だけ失敗させる（偽の保存先だけ・`FakePersistIo` の
+    /// 同名の口）。先に送ったものの書き込みが済むのを待ってから仕掛ける（仕掛けが前の書き込みに
+    /// 当たらないように）。
+    pub(super) fn fail_next_commit(&self) {
+        self.publisher
+            .barrier()
+            .expect("barrier はアクターが生きている間は返る");
+        self.fake
+            .as_ref()
+            .expect("書き込みを失敗させる口は偽の保存先だけ（PersistStore::fake）")
+            .fail_next_commit();
     }
 
     /// アクターを止めて待つ（World に残った送り口の写しは、止めた後は何も書かない）。
