@@ -9,6 +9,8 @@
 //! `windows` を直接利用）。COM 依存は本モジュールに隔離し、MTA/COM 規律に従う。
 //! 変換前フレームのピクセルフォーマット由来の α 有無を `DecodedImage` へ確定する。
 
+use std::fs::File;
+use std::io::BufReader;
 use std::path::Path;
 
 use windows::Win32::Foundation::GENERIC_READ;
@@ -26,7 +28,9 @@ use windows::Win32::Graphics::Imaging::{
 use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
 use windows::core::{GUID, HSTRING, Interface};
 
-use crate::decode::{DecodeError, DecodedImage, ElementDecoder};
+use crate::decode::{
+    AnimatedImage, AnimationInfo, DecodeError, DecodedImage, ElementDecoder, image_arm, sniff,
+};
 
 /// 既定デコード腕（WIC 経由）。COM/unsafe をこの腕へ隔離する（D4）。
 ///
@@ -125,6 +129,35 @@ impl ElementDecoder for WicDecoderArm {
     fn probe_pna(&self, path: &Path) -> bool {
         // 同名 `.pna` の兄弟存在（emo2 は `.pna` を持たないため常に false）。
         path.with_extension("pna").exists()
+    }
+
+    fn probe_animation(&self, path: &Path) -> Option<AnimationInfo> {
+        // 開けなければ無し（続く `decode` が `NotFound` を返す）。見出しだけを読むので静止画の
+        // 全体の復号は増えない（要件 1.5）。チャンクごとに seek と小さい読みをするので BufReader で包む。
+        let file = File::open(path).ok()?;
+        sniff::sniff(&mut BufReader::new(file))
+    }
+
+    fn decode_frames(
+        &self,
+        path: &Path,
+        info: AnimationInfo,
+    ) -> Result<AnimatedImage, DecodeError> {
+        image_arm::read_frames(path, info).map_err(|source| DecodeError::Decode {
+            path: path.to_path_buf(),
+            source,
+        })
+    }
+
+    fn decode_first_frame(
+        &self,
+        path: &Path,
+        info: AnimationInfo,
+    ) -> Result<DecodedImage, DecodeError> {
+        image_arm::read_first_frame(path, info).map_err(|source| DecodeError::Decode {
+            path: path.to_path_buf(),
+            source,
+        })
     }
 }
 
@@ -267,3 +300,7 @@ mod tests {
         });
     }
 }
+
+#[cfg(test)]
+#[path = "wic_arm_tests.rs"]
+mod animation_tests;

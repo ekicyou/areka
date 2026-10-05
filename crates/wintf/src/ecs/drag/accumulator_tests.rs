@@ -234,3 +234,27 @@ fn ended_then_started_in_one_flush_keeps_order() {
     );
     assert_eq!(result.current_dragging_entity, Some(second));
 }
+
+/// 要件 7.2: 控えの無いスレッドで終了の種を積むと「積めなかった」（false）が返り、
+/// `drag_end_seed_unreachable` の `warn!` がちょうど 1 件出る。
+/// 控えはスレッドごとなので、新しいスレッドで走らせて「控えが無い」を作る。
+#[test]
+fn push_ended_seed_without_handle_returns_false_and_warns_once() {
+    let (pushed, events) = std::thread::spawn(|| {
+        log_capture_kit::capture(|| push_ended_seed(entity(9), PhysicalPoint::new(4, 5), true))
+    })
+    .join()
+    .expect("thread panicked");
+
+    assert!(!pushed, "控えが無いのに積めたと返した");
+    let warns: Vec<_> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .collect();
+    assert_eq!(warns.len(), 1, "warn! がちょうど 1 件でない: {events:?}");
+    assert_eq!(
+        warns[0].field_str("event"),
+        Some("drag_end_seed_unreachable"),
+        "{events:?}"
+    );
+}

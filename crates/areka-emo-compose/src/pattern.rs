@@ -24,6 +24,10 @@ use crate::method::ComposeMethod;
 pub struct PatternState {
     /// animation id → 現在コマ。各アニメは同時に最大 1 コマ（4.2「現在コマ 1 枚」）。
     frames: BTreeMap<u32, PatternFrame>,
+    /// 部品のサーフェス番号 → animation id → 現在コマ（要件 5.3, 5.4, 5.10）。一番上の欄とは別。
+    ///
+    /// どちらも昇順の表で、空の内側の表は持たない（入れた順・消した後に依らず [`Eq`] を安定させる）。
+    parts: BTreeMap<u32, BTreeMap<u32, PatternFrame>>,
 }
 
 /// pattern の現在コマ 1 枚。表示中 surface のアニメに属する transient な合成寄与。
@@ -44,9 +48,9 @@ pub struct PatternFrame {
 }
 
 impl PatternState {
-    /// pattern 寄与が無い（コマを 1 枚も持たない）か。[`Default`] は真。
+    /// pattern 寄与が無い（一番上の欄にも部品の欄にもコマを 1 枚も持たない）か。[`Default`] は真。
     pub fn is_empty(&self) -> bool {
-        self.frames.is_empty()
+        self.frames.is_empty() && self.parts.is_empty()
     }
 
     /// 指定 animation id の現在コマを設定する（同 id の既存コマは置換＝現在コマ 1 枚・要件 4.2）。
@@ -68,7 +72,40 @@ impl PatternState {
     pub fn iter(&self) -> impl Iterator<Item = (u32, &PatternFrame)> {
         self.frames.iter().map(|(&id, frame)| (id, frame))
     }
+
+    /// 部品 `surface_id` の animation `animation_id` の今のコマを置く（同じ鍵の既存コマは置換）。
+    ///
+    /// 一番上の欄（[`set`](Self::set)）とは別の欄なので、同じ番号のサーフェスが一番上と部品の両方で
+    /// 出ても混ざらない（要件 5.10）。同じ部品を何か所に置いても欄は 1 つ（要件 5.4）。
+    pub fn set_part(&mut self, surface_id: u32, animation_id: u32, frame: PatternFrame) {
+        self.parts
+            .entry(surface_id)
+            .or_default()
+            .insert(animation_id, frame);
+    }
+
+    /// 部品のコマを全部消す（一番上の欄は残す）。空の内側の表は残らない。
+    pub fn clear_parts(&mut self) {
+        self.parts.clear();
+    }
+
+    /// 部品 `surface_id` の animation `animation_id` の今のコマを引く（無ければ `None`）。
+    pub fn part_get(&self, surface_id: u32, animation_id: u32) -> Option<&PatternFrame> {
+        self.parts.get(&surface_id)?.get(&animation_id)
+    }
+
+    /// 部品 `surface_id` のコマを animation の番号の昇順に走査する（無ければ空）。
+    pub fn part(&self, surface_id: u32) -> impl Iterator<Item = (u32, &PatternFrame)> {
+        self.parts
+            .get(&surface_id)
+            .into_iter()
+            .flat_map(|frames| frames.iter().map(|(&id, frame)| (id, frame)))
+    }
 }
+
+#[cfg(test)]
+#[path = "pattern_parts_tests.rs"]
+mod parts_tests;
 
 #[cfg(test)]
 mod tests {

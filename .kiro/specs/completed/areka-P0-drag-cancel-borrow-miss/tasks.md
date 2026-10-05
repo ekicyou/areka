@@ -1,0 +1,185 @@
+# Implementation Plan
+
+> 進め方: 直す前の赤を先に確かめるため、入口を通る再入のテストを今の API だけで先に書いて走らせ、各テストの結果（赤・緑）をこのファイルの該当タスクへ記録してから、実装へ進む（要件 8.1・8.2）。テストの番号は design.md の Testing Strategy の表の番号。
+> タスク 1 の後からタスク 3 の前までは、1.1・1.2 の再入のテストは意図して赤のまま残る。2.1〜2.4 の「緑になっている」は、そのタスクが名指すテストについてだけ言い、確かめるときは再入のテストを名前で外して走らせる。
+
+- [x] 1. 入口を通る再入のテストを先に置き、直す前の結果を記録する
+- [x] 1.1 再入のテストの組み立てと、取り消し側のテストを書く
+  - 本番の World を作り、ドラッグの対象（窓＋ドラッグの設定）を置き、押しを状態へ直に入れ、閾値を越える動きを本番の窓のメッセージの入口から渡して開始の知らせを配るまでの、共通の組み立てを用意する（実時間の待機は 0 か所）
+  - World を可変で借りたまま入口へメッセージを渡し、借用を返してから知らせを配る段を回して終了の知らせを数える形にする
+  - テスト 1（閾値を越えた後の取り消し 4 種のそれぞれで終了 1 件・取り消しの印つき・位置は押した位置）・3（ドラッグ中の印が外れる）・4（閾値前の取り消し 4 種で状態が休み終了 0 件）・7（借用を返した後の 1 回目の配る段で 1 件・2 回目は 0 件・起床の旗が立つ）・7b（本物の画面更新を 2 回回し、1 回目の途中の段から非活性化を入口へ渡す）・8（5 種でないメッセージは状態も累積器も変えず記録 0 件）・13（戻り値・沈降の観測の目印が付かない・借用は握られたまま・画面更新の回数が増えない）を書く
+  - 入口のファイルへ、新しいテストファイルを兄弟として読み込む宣言（テストのときだけ）を足す（分けたときは支えのファイルの宣言も）
+  - 起床の旗を触るテストは、共有の錠を毒化に耐える取り方で取ってから触る
+  - 今のコードで走らせ、各テストの赤・緑をこのタスクの下へ記録してある（1・3・4・7・7b は赤、8・13 は緑の見込み。見込みと違えば理由も書く）
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.3, 2.4, 2.5, 3.2, 6.3, 8.1, 8.2, 8.3, 8.5_
+  - 直す前の結果（2026-10-04・`cargo test -p wintf --lib runtime::wndproc_bridge`・6 passed / 14 failed）
+
+    | # | テスト名 | 結果 | 赤の理由 |
+    |---|---|---|---|
+    | 1 | `t01_reentrant_{esc,cancelmode,deactivate,capture_lost}_after_threshold_ends_once_cancelled`（4 本） | 赤（4 本とも） | 入口が借用中のメッセージを捨てるため、状態が `Dragging` のまま残る（休まない） |
+    | 3 | `t03_reentrant_{esc,cancelmode,deactivate,capture_lost}_clears_drag_markers`（4 本） | 赤（4 本とも） | 終了の種が積まれず配る段の `Ended` の腕が通らないため、`DraggingState` が外れない |
+    | 4 | `t04_reentrant_{esc,cancelmode,deactivate,capture_lost}_before_threshold_rests_without_end`（4 本） | 赤（4 本とも） | 状態が `Preparing` のまま残る |
+    | 7 | `t07_reentrant_end_is_dispatched_on_the_first_dispatch_like_the_ordinary_path` | 赤 | 再入では配る段 2 回の件数が (0, 0)（借用なしの対照は (1, 0) で緑） |
+    | 7b | `t07b_deactivate_inside_a_real_tick_ends_on_the_next_tick` | 赤 | 1 回目の画面更新の途中（UISetup）でテスト用システムが入口を 1 回呼んだが、1 回目の終わりで状態が `Dragging` のまま（借用なしの対照は 2 回目で 1 件・緑） |
+    | 8 | `t08_non_drag_messages_while_borrowed_change_nothing` | 緑 | — |
+    | 13 | `t13_reentrant_handling_returns_none_keeps_the_borrow_and_skips_side_work` | 緑 | — |
+
+    見込み（1・3・4・7・7b は赤、8・13 は緑）との違いは 0 件。入口のファイルの既存テスト 4 本は緑のまま。`cargo test -p wintf --lib` は 987 passed / 14 failed で、落ちたのは上の新規 14 本だけ。
+
+- [x] 1.2 離し側・その後の操作・記録のテストを書く
+  - 隠れた実物の窓を決まった位置に作る組み立てを足す（座標と捕捉を確かめるテストに使う）
+  - テスト 2（閾値を越えた後の離しで終了 1 件・印なし・位置は借用なしで渡した場合と同じ画面の座標）・5（閾値前の離しで状態が休み捕捉がその窓でなくなる）・6（その後押さずに閾値を越えて動かしても開始 0 件）・9（再入の後の動かさないクリックで終了 0 件）・10（次の閾値越えで開始 1 件→終了 1 件・対象は新しいドラッグ）・11（捕捉を取った窓と違う窓の離しでは、借用の有無に関わらず終えない）・12（再入の扱いの記録が 1 行・空の窓の離しで位置を読めなかった記録が 1 行）・14（押しの後、状態は準備中で捕捉はその窓・捕捉を取る間にドラッグの状態が借りられていない）を書く
+  - テストファイルが 1,000 行を越えそうなら「取り消し」「離し」の 2 ファイルに分け、共通の組み立てを支えのファイルへ移す
+  - 今のコードで走らせ、各テストの赤・緑をこのタスクの下へ記録してある（2・5・6・12 は赤、14 は緑、9・10・11 は前後を記録する対象）
+  - _Requirements: 2.2, 2.3, 3.1, 3.3, 4.1, 4.2, 4.3, 7.1, 7.2, 8.1, 8.2, 8.5_
+  - 直す前の結果（2026-10-04・`cargo test -p wintf --lib runtime::wndproc_bridge`・8 passed / 25 failed＝1.1 の 14 本＋本タスクの 11 本）
+
+    | # | テスト名 | 結果 | 赤の理由 |
+    |---|---|---|---|
+    | 2 | `t02_reentrant_release_after_threshold_ends_once_at_the_same_screen_point` | 赤 | 再入の離しは入口で捨てられ、終了の知らせが 0 件。比べる相手の借用なしの道は緑で、1 件・印なし・位置は離した点の画面の座標（実物の窓の原点を足した値。窓の中の座標とは違う） |
+    | 5 | `t05_reentrant_release_{before_threshold,just_after_threshold}_rests_and_frees_capture`（2 本） | 赤（2 本とも） | 再入の離しが捨てられ、状態が `Preparing`／`JustStarted` のまま残る（押しの後に捕捉がその窓であることは確かめ済み） |
+    | 6 | `t06_no_start_without_press_after_reentrant_{cancel,release}_before_threshold`（2 本） | 赤（2 本とも） | 準備中が残るため、押さずに閾値を越えて動かすと開始の知らせが 1 件出る |
+    | 9 | `t09_click_without_move_after_reentrant_{cancel,release}_sends_no_end`（2 本） | 赤（2 本とも・前後を記録する対象） | 再入の終わりが捨てられて `Dragging` が残る。次の押しは無視され、動かさないクリックの離しが元のドラッグを終える。終了の知らせが 1 件（印なし）出る＝動かさないクリックで位置が 1 件保存される症状 |
+    | 10 | `t10_next_drag_after_reentrant_{cancel,release}_starts_and_ends_once_for_the_new_target`（2 本） | 赤（2 本とも・前後を記録する対象） | 前のドラッグが `Dragging` のまま残る。新しい対象の押しは無視され、動きは前のドラッグの移動として扱われる。新しい対象の開始の知らせは 0 件 |
+    | 11 | `t11_release_on_another_window_does_not_end_with_or_without_borrow` | 緑（前後を記録する対象） | —（準備中・ドラッグ中 × 借用の有無の 4 通りとも、違う窓の離しでは状態も捕捉も変わらず、終了の知らせ 0 件） |
+    | 12 | `t12_reentrant_handling_logs_exactly_one_line`・`t12_reentrant_release_on_an_empty_window_logs_pos_unreadable` | 赤（2 本とも） | 再入の扱いが無いので、`drag_reentry_handled`・`drag_reentry_pos_unreadable` の記録が 0 行（1 行ずつの中身＝level〔終えた・取り消した warn!・何もしなかった debug!〕・`msg`・`entity`・`window`・`action` の判定までは届かない） |
+    | 14 | `t14_start_preparing_takes_capture_without_falling_over_on_capture_changed` | 緑 | —（先に捕捉を持つ実物の窓が、`SetCapture` の同期の `WM_CAPTURECHANGED` を入口で 1 回受け、落ちない。押しの後は `Preparing`・捕捉はその窓） |
+
+    見込み（2・5・6・12 は赤、14 は緑、9・10・11 は前後を記録）との違いは 0 件。9・10 は直す前は赤、11 は直す前から緑で、タスク 3 で前後とも緑を確かめる。1.1 の 14 本は同じ assert・同じ理由で赤のまま。入口のファイルの既存テスト 4 本は緑。`cargo test -p wintf --lib` は 989 passed / 25 failed / 3 ignored で、落ちたのは新規 25 本だけ。1,000 行を越えるため、テストは「取り消し」（`wndproc_bridge_drag_cancel_tests.rs`・466 行。1.1 の `wndproc_bridge_drag_tests.rs` の名前を変えた）と「離し」（`wndproc_bridge_drag_release_tests.rs`・532 行）に分け、共通の組み立ては `wndproc_bridge_drag_test_support.rs`（370 行）へ移した。
+
+- [x] 2. 状態を休ませる所で終了の種を積む形へ変える
+- [x] 2.1 World を借りずに累積器へ届く控えを足す
+  - 新しい累積器を World の資源とこのスレッドの控えの両方へ同じ実体で置く関数と、控えを通して終了の種を積む関数を足す。控えが無いときは警告を 1 件出して「積めなかった」を返す
+  - World を組み立てる所の累積器を入れる 1 行を、控えへも置く関数へ替える
+  - 累積器の錠が毒化したとき、積む所と配る所の両方で警告を出す（今は黙って何もしない）
+  - 控えが無いスレッドで終了の種を積むと「積めなかった」が返り警告が 1 件出るテストを、累積器のテストの兄弟ファイルへ足し、緑になっている
+  - _Requirements: 2.4, 7.2_
+
+- [x] 2.2 ドラッグの状態を休ませる関数が終了の種を積み、離しと捕捉の喪失の関数を足す
+  - 休ませた結果（休ませた・対象と種を積んだか／離した窓が違う／押していなかった）を返す型を足し、既存の休ませる 2 関数の戻り値にする
+  - 前の状態が開始済み（開始直後・ドラッグ中）のときだけ、状態を休む状態へ移した後に控えを通して終了の種を 1 件積む。準備中からは積まない。順は「状態を移す → 種を積む → 状態の借用を返す → 捕捉の守りを落とす」
+  - 捕捉を失ったときの関数（捕捉の守りに解放済みの印を付けてから取り消す）と、左ボタンを離したときの関数（離した窓が捕捉を取った窓と同じときだけ印なしで休ませる。位置が無いときは状態が持つ最後の画面の座標を使う）を足す。捕捉の守りに、取った窓を返す関数を足す
+  - ドラッグのモジュールの公開の宣言へ、結果の型と新しい 2 関数を足す（2.3・2.4 はここから呼ぶ）
+  - 押しを受け付ける関数を、状態の借用を返してから捕捉を取る順に直す
+  - 公開の関数の説明に「戻り値が変わった」「呼ぶだけで終了の種が積まれる（呼び出し側で積むと二重になる）」を書く
+  - 2.3 までは、ハンドラが先に終了の種を積んでから休ませる関数を呼ぶので、状態の積む 2 件目は累積器の入口の判断で捨てられる（デバッグの記録が出る）。これは途中の状態として正しく、守りを足さない
+  - 状態のテストの兄弟ファイルを戻り値の型に追随させ、状態のテストが緑になっている
+  - _Requirements: 2.1, 2.2, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 6.1, 6.2_
+
+- [x] 2.3 (P) キーボード・取り消し系とマウスのボタンのハンドラを、休ませる関数を呼ぶだけにする
+  - ESC キー・メニューやダイアログの割り込み・非活性化は取り消しの関数、捕捉の喪失は捕捉を失ったときの関数を呼ぶだけにし、種を積む 4 か所を消す。非活性化の今の記録は戻り値で出し分け、沈降の観測の目印のための World の借用だけを残す
+  - 左ボタンを離す 2 つの枝を、離したときの関数の 1 呼び出しへ揃え、種を積む 2 か所と対象を含む窓を探す呼び出し 2 か所を消す。画面の座標の計算は変えない
+  - ハンドラのテストの兄弟ファイルで累積器を入れ直すのをやめて World の資源の複製を使うように直し、マウスのボタンのテストの組み立ての説明文と、複数窓のイベントのテストの説明文を今の判断へ直す（主張は変えない）
+  - ハンドラのテストと複数窓のイベントのテストが、主張を変えずに緑になっている
+  - _Depends: 2.2_
+  - _Requirements: 6.1, 6.2_
+  - _Boundary: ハンドラ_
+
+- [x] 2.4 (P) World を使わないドラッグの扱いを足す
+  - 5 種（ESC の押下・メニューやダイアログの割り込み・非活性化・捕捉の喪失・左ボタンを離す）を見分け、取り消し 3 種は取り消しの関数、捕捉の喪失は捕捉を失ったときの関数、離しは窓の中の座標を画面の座標へ直して離したときの関数へ渡す。5 種でなければ何もせず「扱わなかった」を返す
+  - 画面の座標へ直せなかったときは位置を渡さずに終え、位置を読めなかった記録を警告で残す
+  - 扱ったときは配送表の入口と同じ式で起床の旗を立て、記録を 1 行出す（メッセージの種類・対象・受けた窓・行った扱い。終えた・取り消したときは警告、何もしなかったときはデバッグ）
+  - World を借りない・画面更新を呼ばない・ボタンを離した記録や沈降の観測の目印や当たり判定を行わない
+  - ドラッグのモジュールへ新しいファイルの宣言とその入口の関数の公開だけを足し（2.2 の公開の宣言には触らない）、起床の旗を立てる本番ファイルの一覧（見張りのテスト）と名簿へ新しいファイルを 1 行ずつ足し、見張りのテストが緑になっている
+  - _Depends: 2.2_
+  - _Requirements: 1.1, 1.2, 1.3, 2.2, 2.3, 2.4, 4.1, 7.1, 7.2_
+  - _Boundary: drag reentry_
+
+- [x] 3. 入口をつなぎ、再入のテストを緑にする
+  - 窓のメッセージの入口で World を借りられなかった枝に、セッションの終了の記録の後で World を使わないドラッグの扱いを 1 回呼ぶ。戻り値は使わず、今どおり既定の手続きへ委ねる
+  - 入口のソースの冒頭の安全スキップの規律の節と、入口の手順の説明に 5 種の例外を書く
+  - 入口のファイルの中の既存テスト 4 本が変更 0 行で緑のまま
+  - 1.1・1.2 のテストを走らせ、赤だったものがすべて緑になり、緑だったものが緑のままであることを、このタスクの下へ前後の表として記録してある
+  - _Depends: 2.3, 2.4_
+  - _Requirements: 1.1, 1.3, 1.4, 6.3, 8.1, 8.2, 8.3, 8.4, 8.7_
+  - 前後の結果（2026-10-04・`cargo test -p wintf --lib runtime::wndproc_bridge`・直す前 8 passed / 25 failed → 直した後 33 passed / 0 failed・3 回走らせて 3 回とも同じ。直す前はレビューで結線の無い `f4afa74b` を別に展開して採り直し、同じ 25 本が赤）
+
+    | # | テスト名 | 直す前 | 直した後 |
+    |---|---|---|---|
+    | 1 | `t01_reentrant_{esc,cancelmode,deactivate,capture_lost}_after_threshold_ends_once_cancelled`（4 本） | 赤（4 本とも） | 緑（4 本とも） |
+    | 2 | `t02_reentrant_release_after_threshold_ends_once_at_the_same_screen_point` | 赤 | 緑 |
+    | 3 | `t03_reentrant_{esc,cancelmode,deactivate,capture_lost}_clears_drag_markers`（4 本） | 赤（4 本とも） | 緑（4 本とも） |
+    | 4 | `t04_reentrant_{esc,cancelmode,deactivate,capture_lost}_before_threshold_rests_without_end`（4 本） | 赤（4 本とも） | 緑（4 本とも） |
+    | 5 | `t05_reentrant_release_{before_threshold,just_after_threshold}_rests_and_frees_capture`（2 本） | 赤（2 本とも） | 緑（2 本とも） |
+    | 6 | `t06_no_start_without_press_after_reentrant_{cancel,release}_before_threshold`（2 本） | 赤（2 本とも） | 緑（2 本とも） |
+    | 7 | `t07_reentrant_end_is_dispatched_on_the_first_dispatch_like_the_ordinary_path` | 赤 | 緑 |
+    | 7b | `t07b_deactivate_inside_a_real_tick_ends_on_the_next_tick` | 赤 | 緑 |
+    | 8 | `t08_non_drag_messages_while_borrowed_change_nothing` | 緑 | 緑 |
+    | 9 | `t09_click_without_move_after_reentrant_{cancel,release}_sends_no_end`（2 本） | 赤（2 本とも） | 緑（2 本とも） |
+    | 10 | `t10_next_drag_after_reentrant_{cancel,release}_starts_and_ends_once_for_the_new_target`（2 本） | 赤（2 本とも） | 緑（2 本とも） |
+    | 11 | `t11_release_on_another_window_does_not_end_with_or_without_borrow` | 緑 | 緑 |
+    | 12 | `t12_reentrant_handling_logs_exactly_one_line`・`t12_reentrant_release_on_an_empty_window_logs_pos_unreadable` | 赤（2 本とも） | 緑（2 本とも） |
+    | 13 | `t13_reentrant_handling_returns_none_keeps_the_borrow_and_skips_side_work` | 緑 | 緑 |
+    | 14 | `t14_start_preparing_takes_capture_without_falling_over_on_capture_changed` | 緑 | 緑 |
+
+    赤だった 25 本はすべて緑になり、緑だった 4 本（8・11・13・14）も緑のまま。見込みとの違いは 0 件。入口のファイルの既存テスト 4 本は変更 0 行で緑。`cargo test -p wintf --lib` は 1028 passed / 0 failed / 3 ignored、`cargo test -p wintf --test '*'` はすべて緑、`cargo test -p areka --bin areka placement::follow::` は 259 passed。`cargo check -p wintf` の警告は 0 件。
+
+- [x] 4. ふつうの条件が崩れていないことと完了の条件を確かめる
+- [x] 4.1 上書きの記録と、既存テスト・行数の確認
+  - 互換の設計文書の §8 へ、完了 spec の入口の安全スキップを 5 種についてだけ変えた「上書き」の行を 1 行足す（完了 spec のアーカイブ本体は書き換えない）
+  - ドラッグの知らせを配るテスト・ドラッグのライフサイクルのテスト・areka のドラッグの終了の受け手のテスト（終了 1 件で保存 1 件・0 件で保存 0 件）が変更 0 行で緑
+  - 触った本番ファイルとテストファイルがどれも 1,000 行以下であることを数えて記録してある
+  - ワークスペース全体のテストが緑であることを確かめ、結果をこのタスクの下へ記録してある
+  - _Requirements: 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 8.4, 8.5, 8.7, 8.8_
+  - 結果（2026-10-05）
+    - **上書きの記録**: `doc/COMPAT_ARCHITECTURE.md` §8 の表の末尾へ「【上書き】画面更新の最中に届いた、ドラッグを終える窓のメッセージを捨てるか」の 1 行を足した（完了 spec `wintf-winmsg-executor` 要件 4.3 の入口の安全スキップを、ESC の押下・`WM_CANCELMODE`・非活性化の `WM_ACTIVATE`・`WM_CAPTURECHANGED`・`WM_LBUTTONUP` の 5 種に限って上書きする。根拠に開発者裁定 2026-10-04 の要件ディスカッション議題 1 を引く）。完了 spec のアーカイブ本体は書き換えていない
+    - **変更 0 行で緑**: `git diff --stat 0389fb5d -- crates/wintf/tests/drag/dispatch_test.rs crates/wintf/tests/drag.rs crates/wintf/tests/layout/boxstyle_coordinate_separation_test/drag_lifecycle.rs crates/areka/src/placement/follow_drag_tests.rs crates/areka/src/placement/follow_drag_end_gate_tests.rs crates/areka/src/placement/follow_drag_end_persist_tests.rs` の出力は空（areka のクレート全体も差分 0）。入口のファイルの既存テスト 4 本も、`wndproc_bridge.rs` の差分がすべて `mod tests` より前で、0 行
+
+      | テスト | 結果 |
+      |---|---|
+      | `cargo test -p wintf --test drag dispatch_test`（ドラッグの知らせを配る） | 10 passed（`--test drag` 全体は 20 passed） |
+      | `cargo test -p wintf --test layout drag_lifecycle`（ドラッグのライフサイクル） | 5 passed |
+      | `cargo test -p areka --bin areka placement::follow::drag_tests::` | 19 passed |
+      | `cargo test -p areka --bin areka placement::follow::drag_end_gate_tests::`（終了 1 件で保存 1 件 `real_drag_persists_once_for_char_and_balloon`・終了 0 件で保存 0 件 `click_without_move_on_char_persists_nothing_and_keeps_position` ほか） | 6 passed |
+      | `cargo test -p areka --bin areka placement::follow::drag_end_persist_tests::` | 3 passed |
+      | `cargo test -p wintf --lib runtime::wndproc_bridge::tests`（入口の既存テスト 4 本） | 4 passed |
+
+    - **行数**（`git diff --name-only 0389fb5d -- crates/` の 20 本・どれも 1,000 行以下）
+
+      | 行数 | ファイル |
+      |---:|---|
+      | 238 | `crates/wintf/src/ecs/drag/accumulator.rs` |
+      | 260 | `crates/wintf/src/ecs/drag/accumulator_tests.rs` |
+      | 109 | `crates/wintf/src/ecs/drag/capture_guard.rs` |
+      | 194 | `crates/wintf/src/ecs/drag/mod.rs` |
+      | 111 | `crates/wintf/src/ecs/drag/reentry.rs` |
+      | 250 | `crates/wintf/src/ecs/drag/reentry_tests.rs` |
+      | 638 | `crates/wintf/src/ecs/drag/state/mod.rs` |
+      | 812 | `crates/wintf/src/ecs/drag/state/tests.rs` |
+      | 151 | `crates/wintf/src/ecs/window_proc/keyboard.rs` |
+      | 187 | `crates/wintf/src/ecs/window_proc/keyboard_tests.rs` |
+      | 490 | `crates/wintf/src/ecs/window_proc/mouse_click.rs` |
+      | 149 | `crates/wintf/src/ecs/window_proc/mouse_click_tests.rs` |
+      | 941 | `crates/wintf/src/ecs/world/mod.rs` |
+      | 660 | `crates/wintf/src/ecs/world/tick_gate_tests.rs` |
+      | 374 | `crates/wintf/src/ecs/world/tick_wake.rs` |
+      | 252 | `crates/wintf/src/runtime/wndproc_bridge.rs` |
+      | 466 | `crates/wintf/src/runtime/wndproc_bridge_drag_cancel_tests.rs` |
+      | 532 | `crates/wintf/src/runtime/wndproc_bridge_drag_release_tests.rs` |
+      | 370 | `crates/wintf/src/runtime/wndproc_bridge_drag_test_support.rs` |
+      | 307 | `crates/wintf/tests/window/multiwindow_event_test.rs` |
+
+    - **ワークスペース全体**: `pwsh -NoProfile -File tools/test-all.ps1` の x64 以外の 5 段は緑（i686 ターゲット導入・i686 成果物ビルド・fmt --check・i686 テスト〔host-32 系〕・crates.io 公開前の確認）
+      - その回の x64 の段は、コンパイルの途中（`Compiling areka-talk` の行の後）で終了コード -1 で止まった。エラー文も `test result` も 0 件で、テストの判定の前に外から止められた跡。後の 2 回は同じコードがコンパイルできている
+      - 同じコマンド `cargo test --workspace --no-fail-fast -j 4` の取り直し 1 回目は 9,851 passed / 2 failed。落ちたのは `areka` の `install::desk::overwrite_tests` の 2 本（時間の読みの判定。areka のクレートは本 spec で 0 行の変更・そのモジュールだけを走らせ直すと 7 passed）
+      - 取り直し 2 回目は **終了コード 0・9,853 passed / 0 failed / 44 ignored**（テストの実行ファイル 120 本・wintf の lib は 1,028 passed / 3 ignored）。完了時の `/kiro-complete` でもう一度全体を走らせる
+
+- [x] 4.2 実機でふつうの条件の振る舞いを確かめる
+  - 実機の根と一時フォルダをワークツリーの `target\` の下だけに置き、記録の level を位置の保存・ドラッグの終了の知らせ・ドラッグの扱いのデバッグまで開けて起動する
+  - 閾値を越えたドラッグで保存 1 件、動かさないクリックで保存 0 件、閾値を越えた後の ESC キーで今どおりの保存になることを確かめる
+  - 走らせたログに、終えた・取り消した再入の扱いの記録が何件出たかを、0 件でも 0 件と記録してある（合否には使わない）
+  - _Requirements: 5.1, 5.2, 5.3, 8.6_
+  - 結果（2026-10-05・記録は `verification/real-machine.md`・配布物はコミット `1bd66f0d` から組んだもの・操作は開発者）
+    - R1（閾値を越えたドラッグ 3 回・要件 5.2）: 保存 3 件＝ドラッグ 1 回につき 1 件。開始 → 終了（印なし）→ 保存の順。合格
+    - R2（動かさないクリック 2 回・要件 5.3）: 保存 0 件・開始 0 件・終了 0 件。合格
+    - R3（閾値を越えた後に ESC を 2 回・要件 5.1）: 保存 2 件＝取り消し 1 回につき 1 件。終了は取り消しの印つきで 1 件ずつ、ESC の後の離しで 2 件目は出ない。保存した位置は押す前の位置で今どおり。合格
+    - 再入の扱いで終えた・取り消した記録（`drag_reentry_handled` の `action` が `"ended"`・`"cancelled"`）は R1・R2・R3 とも **0 件**（合否には使わない）。何もしなかった記録（`action="none"`）は R1 で 4 件・R2 で 4 件・R3 で 0 件。どれもドラッグが休んだ後に届いた `WM_CAPTURECHANGED`・非活性化。ERROR は 3 回とも 0 件
+
+## Implementation Notes
+
+- 1.1・1.2: 再入のテストは `runtime/wndproc_bridge_drag_{cancel,release}_tests.rs`、共通の組み立て（`Rig`・隠れた実物の窓 `RealWindow`）は `wndproc_bridge_drag_test_support.rs`。`WindowPos` の既定の位置は `CW_USEDEFAULT` で、そのままだと `mouse_move.rs` の閾値の計算が debug ビルドで桁あふれするので、組み立ては位置を明示する。
+- 2.4 向け: テスト 12 は `drag_reentry_handled` の `entity`・`window` を `format!("{:?}", entity)`（例 `18v0`）と完全一致で見る。`Option<Entity>` の Debug（`Some(18v0)`）で記録すると赤になる。無いときは空の文字で記録する（design の Monitoring「無ければ空」）。
+- 範囲外（`/kiro-complete` の棚卸で扱う）: 4.1 の全体テストの取り直し 1 回目で、`areka` の `install::desk::overwrite_tests` の `a_failed_commit_boots_the_same_ghost_with_its_old_contents_and_reports_failure`・`a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through` が負荷時の時間の読みで 1 度だけ落ちた（`target\nar-samples\work` の後片付けで os error 5 も出た）。本 spec は areka を 0 行しか変えず、単独と再走では緑。完了 spec `areka-P0-file-drop` の tasks.md にも同じ一過性の記録がある。
+- 範囲外: 4.1 の `tools/test-all.ps1` で x64 の段がコンパイルの途中に終了コード -1 で止まった（エラー文 0 件・原因不明）。
+- 範囲外: 最終判定（`/kiro-validate-impl`・HEAD `0efda0a4`）の `tools/test-all.ps1` で、i686 の段の `shiori-host32-helper` の `shiori_proxy::tests::testdll_drop_invokes_courtesy_unload` が 1 度だけ落ちた（`unload はまだ呼ばれていない`＝Drop の前に unload の印のファイルがもうあった）。i686 の段だけを走らせ直すと 59 passed / 0 failed。本 spec は `shiori-host32-*` を 0 行しか変えない。見立て（未確認）: 印の場所をプロセス共有の環境変数 `HOST32_TESTDLL_UNLOAD_MARKER` で渡しており、ほかのテストが起こした子プロセスが同じ印を書く競合。あわせて、このテストは一時フォルダを `std::env::temp_dir()` に作っていて、「一時フォルダはワークツリーの `target\` の下だけ」の決まりに合わない。
+- 完了時の棚卸（2026-10-05）: その場で解決 0 件・起票 0 件。i686 の `testdll_drop_invokes_courtesy_unload` の揺れは、直す spec `host32-testdll-marker-race`（PR#233）が main に着地済み（最終判定の HEAD `0efda0a4` にはまだ入っていなかった・完了時の全体テストで確かめる）。`overwrite_tests` の 1 度の赤と、`tools/test-all.ps1` の x64 の段の終了コード -1（当時 C: の空き 35MB）は、roadmap の覚え書き「一度だけ落ちた試験」へ記録（再発したら起票）。一時フォルダを `%TEMP%` に作るテストは、リポジトリのふつうの書き方（`temp-path-kit` も同じ）で、`target\` の下だけの決まりは実機の根・検体のもの＝起票しない。

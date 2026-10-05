@@ -112,7 +112,7 @@ updated_at: 2026-10-02
 - `runtime/mod.rs` - 公開 facade `WinApp`（`new`/`world`/`run`/`spawn_ui_local`）。COM/DPI 初期化・World 所有・全結線
 - `runtime/message_loop.rs` - `MessageLoopDriver`（`block_on`/`MessageLoop::run` 委譲）＋ `ShutdownPolicy`（`event_listener::Event` 終了規律）
 - `runtime/tick_bridge.rs` - `VsyncEventBridge`（DwmFlush→event_listener notify）＋ `AsyncTickTask`（13 schedule tick）
-- `runtime/wndproc_bridge.rs` - `WndState`/`make_wndproc`（ライブラリ `Window::new_ex` クロージャ→`dispatch_window_message` 配送・GWLP 不使用）
+- `runtime/wndproc_bridge.rs` - `WndState`/`make_wndproc`（ライブラリ `Window::new_ex` クロージャ→`dispatch_window_message` 配送・GWLP 不使用。画面更新の最中で World を借りられないメッセージは捨てるが、ドラッグを終える 5 種〔ESC の押下・`WM_CANCELMODE`・非活性化・`WM_CAPTURECHANGED`・`WM_LBUTTONUP`〕だけは World を使わない `ecs/drag/reentry.rs` へ渡す）
 - `runtime/window_registry.rs` - `WindowRegistry`（NonSend・`Window<S>` 所有・reconcile で寿命/終了管理）
 - `runtime/window_factory.rs` - `EcsWindowFactory`（`util::Window::new_ex` 生成・style/pos/title 反映）
 
@@ -282,7 +282,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 - `charset/` - **共通基盤**: BOM 読飛→冒頭 ASCII プリスキャン→charset 宣言/既定 encoding_rs 再デコード（全パーサー共通の入口）
 - `kv/` - **共通基盤**: KV 読み込み（素朴 BTreeMap・後勝ち・trim）
 - `sakura/` - さくらスクリプト emo2 subset→token（パターン確立元）
-- `shell/` - surfaces.txt→SERIKO/2.0 subset 型付きモデル（四層 model←lexer←decode←parse）
+- `shell/` - surfaces.txt→SERIKO/2.0 subset 型付きモデル（四層 model←lexer←decode←parse）。別の型を返す読み手として、シェル内バルーンの箱 `parse_boxes`（`boxes.rs`）と `surfacetable.txt` の転記 `parse_surfacetable`（`surfacetable.rs`・`areka-P0-mcp-expression-table` 2026-10-04・MCP の `get_expression_table` が使う）
 - `balloon/` - balloon descript→幾何＋フォント型付きモデル（descript＋画像別の後勝ち2層マージ）
 - `package/` - `ghost/master/descript.txt` 起点の SHIORI/shell 2点マウント解決（`install.txt` は NAR 配置マニフェスト＝起動時不使用でスコープ外）
 **Pattern**:
@@ -313,14 +313,14 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 - **`areka-ghost`（⓪・結線層）**: descript.txt 起点のマウント解決（`areka_parsers::package::resolve`）を入力に、shiori 通信層（host-32 経由）・kanade・sakura・ticker を起動順に結線し、終了時は逆順で統括する最上位 owner。
 - **`areka-kanade`（③・conductor）**: **運行表（scheduling state machine）の正本**。ghost の boot/steady/close 各フェーズの運行判断。純粋状態機械＋アクターシェル＋メッセージ境界差し替えの三層構造。**sylphya へ依存しない**（`ResourceSink` クロージャで疎結合）。UI（右クリックメニュー）からの複数件の SHIORI リソース照会（`KanadeMsg::ResourceQuery`）は**運行状態機械を経ずにアクターの殻で答える**（`actor_resources.rs`）——会話できる状態（`Phase::Steady`）のときだけ往復し、起動・終了系列の固定の呼出順へ割り込まない。送出の許可表は 1 か所のまま。
 - **`areka-sakura`（④・さくらスクリプト再生）**: SHIORI が返す Value を時間軸上で再生する **per-talk transient** エンジン＝`areka_parsers::sakura::parse` の `Instruction` 列から dola `CueSheet` へのコンパイラ。再生制御そのもの（状態機械・horizon・broadcast）は **dola `cue` が唯一のエンジン**（dola 節参照）。
-- **`areka-seriko`（⑤・SERIKO アニメ）**: サーフェス解決・状態・発行・構築・アクターを責務別モジュールへ分割。公開 API は crate root の `pub use` re-export に集約（唯一の公開面）。
+- **`areka-seriko`（⑤・SERIKO アニメ）**: サーフェス解決・状態・発行・構築・アクターを責務別モジュールへ分割。部品（element定義の子・pattern定義の先）の時計は `parts.rs` の `PartClocks`（スコープ × 部品の番号 × animation の番号・一番上の切り替えでは捨てない）で、コマは `PatternState` の部品の欄で運ぶ。公開 API は crate root の `pub use` re-export に集約（唯一の公開面）。
 - **`areka-talk`（talk 契約 leaf）**: talk 授受契約の**物理正本**（`TalkId`／`StartTalk`／`TalkDone`／`TalkEndReason`／`TalkCommand`／`ChoiceWaiting`）。kanade（③）⇄ sakura（④）間契約の唯一の物理定義。**依存ゼロ（std のみ）**・エンジン知識を持ち込まない。
 
 ### emo Render Engine Crates（⑥・三段直列＋テキスト層）
 **Location**: `/crates/areka-emo-atlas/`・`/crates/areka-emo-compose/`・`/crates/areka-emo-present/`・`/crates/areka-emo-text/`
 **Pattern**（自前コンポジタの三段直列チェーン・入力=(surface id, BindSet)・wintf へは完成品のみ）:
 - **`areka-emo-atlas`（1/3・pure）**: 素材基盤層＝bake パイプライン。アトラス正本（premultiplied BGRA・`Placement` 解決済み `AtlasTable`）。
-- **`areka-emo-compose`（2/3・pure）**: `areka-parsers::shell` の忠実転記モデル＋`AtlasTable` を入力に、静的合成済みビットマップ `ComposedSurface` を生成する純粋層。`base_image.rs` は**ファイル名の慣習だけで置かれた面の画像を「層 0 が空いているときだけ」土台として足す**（畳み込み `fold` の後に判定・新しい層の型は足さない）。
+- **`areka-emo-compose`（2/3・pure）**: `areka-parsers::shell` の忠実転記モデル＋`AtlasTable` を入力に、静的合成済みビットマップ `ComposedSurface` を生成する純粋層。`base_image.rs` は**ファイル名の慣習だけで置かれた面の画像を「層 0 が空いているときだけ」土台として足す**（畳み込み `fold` の後に判定・新しい層の型は足さない）。**element定義の入れ子**（`areka-P0-surface-element-nesting` 2026-10-05）: 数字だけの欄の読み分け（`element_kind`）・参照の表（`NestTable`・今の絵に出ている部品を求める `visible_parts` は合成の再帰と同じ辺をたどる）・無い番号と循環の報告（`NestReport`）は `nesting.rs` の 1 か所、子の当たり判定の持ち込み（`HitRegions`）は `hit_import.rs`。
 - **`areka-emo-present`（3/3・提示段）**: `ComposedSurface` を wintf の WUC 表示面へアップロード・提示し、当たり判定用 AlphaMask を供給。`presenter/show.rs` の `apply_show` が単一漏斗（k 導出・合成/キャッシュ・アップロード・マスク同期・可視化）。**`shell_target.rs` がシェルのフォルダの読み込みの権威**（`areka-P0-shell-implicit-surface` 2026-09-20）: `surface<数字>.png` の名前判定はバルーンの面と**同じ 1 つの実装**（`balloon::face_digits_of`）を接頭辞違いで呼ぶ。fs を触るのは `load_shell_target` だけで、核 `build_shell_target` はメモリ上で通せる。
 - **記録を出す場所の型（emo 三段共通）**: 純粋な核（名前判定・土台の決定・核の組み立て）は fs にも記録にも触れず、**事実を戻り値（`…Report`）に載せるだけ**。`info!`／`warn!`／`error!` を出すのは **fs を触る入口 1 か所**で、読み込み 1 回につき 1 度だけ出す。
 - **`areka-emo-text`（テキスト層）**: バルーン文字レンダリング（spec 名は `areka-P0-emo-text-layer`・atlas/compose/present の単一トークン命名に倣う）。

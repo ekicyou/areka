@@ -1,0 +1,25 @@
+{
+  "feature_name": "areka-P0-host32-testdll-marker-race",
+  "created_at": "2026-10-04T08:38:39Z",
+  "updated_at": "2026-10-04T14:34:38Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-04T08:40:21Z"
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-04T08:59:21Z"
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-04T10:00:00Z"
+    }
+  },
+  "ready_for_implementation": true
+}

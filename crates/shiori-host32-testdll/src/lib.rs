@@ -66,20 +66,85 @@ pub unsafe extern "C" fn load(hdir: HGLOBAL, _len: usize) -> bool {
     true
 }
 
-/// SHIORI unload: `true` 返し。
+/// SHIORI unload: いつも `true` を返す。panic しない。
 ///
-/// env `HOST32_TESTDLL_UNLOAD_MARKER` 指定時はそのファイルパスを作成し、
-/// courtesy unload の実呼出を観測可能化する（Drop teardown テストの決定的証拠・
-/// R2.2・validation issue #2）。
+/// 環境変数 `HOST32_TESTDLL_UNLOAD_MARKER` に値があり、かつ、そのパスの親フォルダが
+/// いま unload されているこの DLL 自身の置き場のフォルダと同じときだけ、そのパスへ
+/// `unloaded` を書く（courtesy unload の実呼出を観測可能にする印）。
+///
+/// 置き場を確かめる理由: テストは偽の DLL をテストごとのフォルダへ写して読むので、
+/// 同じプロセスに同じ名前の写しが複数読まれ、どの写しの unload も同じ環境変数を読む。
+/// 置き場を確かめないと、別の写しの unload が他のテスト宛ての印を書いてしまう。
+///
+/// - 比べ方は 2 段: まず文字の並びのまま比べ、違うときだけ両方を
+///   `std::fs::canonicalize` でそろえて比べ直す。そろえられないときは「違う」と同じに扱い、
+///   黙って書かない（別の写し宛ての印なのでふつうに起きる）。書けなくても黙って続ける。
+/// - 置き場を引けないときだけ、書かずに標準エラーへ 1 行出す。
+/// - 値が無いときは何も引かない。
+///
+/// テストを足すときの決まりは、補助 exe の `shiori_proxy.rs` の錠 `TESTDLL_SERIAL` の説明にある。
 ///
 /// # Safety
 /// 引数を取らない flat-C エクスポート。呼出側の ABI 契約（cdecl）にのみ依存する。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn unload() -> bool {
-    if let Ok(path) = std::env::var("HOST32_TESTDLL_UNLOAD_MARKER") {
-        let _ = std::fs::write(&path, b"unloaded");
+    let Ok(marker) = std::env::var("HOST32_TESTDLL_UNLOAD_MARKER") else {
+        return true;
+    };
+    let Some(own_dir) = own_module_dir() else {
+        eprintln!(
+            "shiori-host32-testdll: own module dir unavailable; skip writing unload marker {marker}"
+        );
+        return true;
+    };
+    let marker = std::path::Path::new(&marker);
+    let Some(marker_dir) = marker.parent() else {
+        return true;
+    };
+    let same = marker_dir.as_os_str() == own_dir.as_os_str()
+        || matches!(
+            (std::fs::canonicalize(marker_dir), std::fs::canonicalize(&own_dir)),
+            (Ok(a), Ok(b)) if a == b
+        );
+    if same {
+        let _ = std::fs::write(marker, b"unloaded");
     }
     true
+}
+
+/// いま走っているこの DLL が置かれているフォルダ。引けなければ `None`。
+///
+/// 同じ名前の写しが複数読まれるので名前では引かず、この DLL の中の関数のアドレスから引く。
+/// 参照数を変えない旗で得たモジュールは `FreeLibrary` へ渡さない（unload は呼出側の
+/// `FreeLibrary` の前に呼ばれるので、判定の間この DLL は読まれたまま）。
+fn own_module_dir() -> Option<std::path::PathBuf> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows::Win32::Foundation::HMODULE;
+    use windows::Win32::System::LibraryLoader::{
+        GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        GetModuleFileNameW, GetModuleHandleExW,
+    };
+    use windows::core::PCWSTR;
+
+    let mut module = HMODULE::default();
+    // SAFETY: アドレスはこの DLL の中の関数。module は有効な出力先。
+    unsafe {
+        GetModuleHandleExW(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            PCWSTR(unload as *const u16),
+            &mut module,
+        )
+    }
+    .ok()?;
+    let mut buf = vec![0u16; 32_768];
+    // SAFETY: module は上で得た読まれたままのモジュール。buf は書き込み可能な置き場。
+    let n = unsafe { GetModuleFileNameW(Some(module), &mut buf) } as usize;
+    // 0 は失敗、置き場の長さと同じは切り詰め。どちらも引けない扱い。
+    if n == 0 || n >= buf.len() {
+        return None;
+    }
+    let path = std::path::PathBuf::from(std::ffi::OsString::from_wide(&buf[..n]));
+    path.parent().map(std::path::Path::to_path_buf)
 }
 
 /// 受領 request バイト列から request line（先頭行）と `ID:` ヘッダ値を取り出す純粋関数。

@@ -170,60 +170,19 @@ fn handle_button_message(
                     crate::ecs::pointer::record_button_up(target_entity, button);
 
                     // ドラッグ終了（HWND ガード付き: 当該ウィンドウのドラッグのみ終了）
-                    if button == crate::ecs::pointer::PointerButton::Left {
-                        let state_snapshot = crate::ecs::drag::snapshot_drag_state();
-
-                        let should_end = match &state_snapshot {
-                            crate::ecs::drag::DragStateSnapshot::Dragging {
-                                hwnd: drag_hwnd,
-                                ..
-                            } => *drag_hwnd == hwnd,
-                            crate::ecs::drag::DragStateSnapshot::Preparing { entity, .. }
-                            | crate::ecs::drag::DragStateSnapshot::JustStarted { entity, .. } => {
-                                crate::ecs::window::find_owner_window(world_borrow.world(), *entity)
-                                    == Some(window_entity)
-                            }
-                            _ => false,
-                        };
-
-                        if should_end {
-                            if let crate::ecs::drag::DragStateSnapshot::Dragging {
-                                entity, ..
-                            }
-                            | crate::ecs::drag::DragStateSnapshot::Preparing {
-                                entity, ..
-                            }
-                            | crate::ecs::drag::DragStateSnapshot::JustStarted {
-                                entity, ..
-                            } = &state_snapshot
-                            {
-                                // DragAccumulatorResourceにEnded遷移を記録
-                                if let Some(accumulator) = world_borrow
-                                    .world()
-                                    .get_resource::<crate::ecs::drag::DragAccumulatorResource>(
-                                ) {
-                                    accumulator.set_transition(
-                                        crate::ecs::drag::DragTransition::Ended {
-                                            entity: *entity,
-                                            end_pos: PhysicalPoint::new(screen_x, screen_y),
-                                            cancelled: false,
-                                        },
-                                    );
-                                }
-                            }
-
-                            // thread_local DragStateをJustEndedに遷移
-                            // 旧状態の CaptureGuard が Drop され ReleaseCapture が自動呼び出し
-                            crate::ecs::drag::end_dragging(
-                                PhysicalPoint::new(screen_x, screen_y),
-                                false,
-                            );
-                        } else {
-                            trace!(
-                                hwnd = format!("0x{:X}", hwnd.0 as usize),
-                                "[handle_button_message] Drag end skipped: HWND mismatch"
-                            );
-                        }
+                    // 捕捉を取った窓と同じ窓の離しだけを、取り消しの印なしで休ませる。
+                    // 開始済みなら終了の種も積む（ここで積むと二重になる）。
+                    // 旧状態の CaptureGuard が Drop され ReleaseCapture が自動呼び出し
+                    if button == crate::ecs::pointer::PointerButton::Left
+                        && crate::ecs::drag::end_dragging_on_release(
+                            hwnd,
+                            Some(PhysicalPoint::new(screen_x, screen_y)),
+                        ) == crate::ecs::drag::DragClose::OtherWindow
+                    {
+                        trace!(
+                            hwnd = format!("0x{:X}", hwnd.0 as usize),
+                            "[handle_button_message] Drag end skipped: HWND mismatch"
+                        );
                     }
                 }
 
@@ -239,59 +198,17 @@ fn handle_button_message(
         crate::ecs::pointer::record_button_up(window_entity, button);
 
         // ドラッグ終了（hit_test失敗時でもドラッグ中なら終了処理、HWNDガード付き）
-        if button == crate::ecs::pointer::PointerButton::Left {
-            let state_snapshot = crate::ecs::drag::snapshot_drag_state();
-
-            let should_end = match &state_snapshot {
-                crate::ecs::drag::DragStateSnapshot::Dragging {
-                    hwnd: drag_hwnd, ..
-                } => *drag_hwnd == hwnd,
-                crate::ecs::drag::DragStateSnapshot::Preparing { entity, .. }
-                | crate::ecs::drag::DragStateSnapshot::JustStarted { entity, .. } => {
-                    if let Ok(world_borrow) = world.try_borrow() {
-                        crate::ecs::window::find_owner_window(world_borrow.world(), *entity)
-                            == Some(window_entity)
-                    } else {
-                        false
-                    }
-                }
-                _ => false,
-            };
-
-            if should_end {
-                {
-                    if let Ok(world_borrow) = world.try_borrow() {
-                        if let crate::ecs::drag::DragStateSnapshot::Dragging { entity, .. }
-                        | crate::ecs::drag::DragStateSnapshot::Preparing { entity, .. }
-                        | crate::ecs::drag::DragStateSnapshot::JustStarted { entity, .. } =
-                            &state_snapshot
-                        {
-                            // DragAccumulatorResourceにEnded遷移を記録
-                            if let Some(accumulator) = world_borrow
-                                .world()
-                                .get_resource::<crate::ecs::drag::DragAccumulatorResource>(
-                            ) {
-                                accumulator.set_transition(
-                                    crate::ecs::drag::DragTransition::Ended {
-                                        entity: *entity,
-                                        end_pos: PhysicalPoint::new(screen_x, screen_y),
-                                        cancelled: false,
-                                    },
-                                );
-                            }
-                        }
-                    }
-                }
-
-                // thread_local DragStateをJustEndedに遷移
-                // 旧状態の CaptureGuard が Drop され ReleaseCapture が自動呼び出し
-                crate::ecs::drag::end_dragging(PhysicalPoint::new(screen_x, screen_y), false);
-            } else {
-                trace!(
-                    hwnd = format!("0x{:X}", hwnd.0 as usize),
-                    "[handle_button_message] Fallback drag end skipped: HWND mismatch"
-                );
-            }
+        // 当たり判定の枝と同じく、捕捉を取った窓と同じ窓の離しだけを休ませる。
+        if button == crate::ecs::pointer::PointerButton::Left
+            && crate::ecs::drag::end_dragging_on_release(
+                hwnd,
+                Some(PhysicalPoint::new(screen_x, screen_y)),
+            ) == crate::ecs::drag::DragClose::OtherWindow
+        {
+            trace!(
+                hwnd = format!("0x{:X}", hwnd.0 as usize),
+                "[handle_button_message] Fallback drag end skipped: HWND mismatch"
+            );
         }
     }
 

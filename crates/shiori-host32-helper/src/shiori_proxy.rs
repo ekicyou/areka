@@ -470,23 +470,35 @@ fn init_bytes(entry: &InitEntry, load_dir: &Path) -> Result<Vec<u8>, ProxyError>
 #[cfg(test)]
 mod tests {
     //! Task 5.2: プロキシの i686 単体テスト（design §387 Validation・Testing Strategy Unit #6・
-    //! 確定設計判断 (d)）。3 本立て:
+    //! 確定設計判断 (d)）。4 節立て:
     //! 1. 純関数部（コードページ符号化）の決定的検証。
     //! 2. `kernel32.dll` への load で `EntryNotFound` を決定的に証明（エクスポート欠落態様・R6.2）。
     //! 3. testdll を直接 `load`→`drop` し、courtesy unload の実呼出（観測マーカー）と無 panic を確認
-    //!    （R2.2・E2E では Drop 経路が実行されない補完）。
+    //!    （R2.2・E2E では Drop 経路が実行されない補完）。あわせて、別のフォルダから読んだ写しの
+    //!    unload がその印を書かないことを確認する。
+    //! 4. testdll 越しの `request` の往復（GET・NOTIFY）。
+    //!
+    //! 偽の DLL を load するテストを足すときの決まりは、錠 `TESTDLL_SERIAL` の説明にある。
 
     use super::*;
     use std::path::{Path, PathBuf};
     use std::sync::Mutex;
 
-    /// testdll を実 `load`／`drop` するテスト同士の直列化ガード。
+    /// 印の環境変数 `HOST32_TESTDLL_UNLOAD_MARKER` を差すテスト同士の直列化。
     ///
-    /// `unload` は fixture で `HOST32_TESTDLL_UNLOAD_MARKER`（プロセス global env）を読み観測マーカーを
-    /// 書く。`testdll_drop_invokes_courtesy_unload` はこの env を set したうえで「Drop 前は marker 未作成」を
-    /// assert するため、別の testdll ロードテスト（`testdll_request_roundtrip_get_and_notify`）が並行して
-    /// Drop→unload を走らせると env を読んで marker を先行作成し assert を破る。testdll をロードする全テスト
-    /// を本 mutex で直列化し、この env レースを排除する（Mutex 汚染は無視して継続）。
+    /// 環境変数はプロセス全体で 1 つなので、差すテスト同士はこの錠で直列にする。偽の DLL の unload は、
+    /// 環境変数に値があり、印の親フォルダが自分の置き場と同じときだけ印を書く。汚れた錠は無視して続ける。
+    ///
+    /// 偽の DLL `shiori.dll` を load するテストを足すときの決まり:
+    /// 1. 偽の DLL `shiori.dll` を load するテストは、自分だけのフォルダへ写してから絶対パスで読む。
+    /// 2. 印の環境変数を差さないテストは、錠を取らなくてよい。そのテストの unload は、他のテストの印を
+    ///    書かない（偽の DLL が、自分の置き場と同じフォルダの印だけを書くため）。
+    /// 3. 印の環境変数を差すテストは、この錠を取る。印のパスは、読む DLL と同じフォルダに置く。
+    /// 4. 今、偽の DLL を load するテストは、`testdll_drop_invokes_courtesy_unload`・
+    ///    `testdll_unload_from_another_folder_leaves_marker_untouched`・
+    ///    `testdll_request_roundtrip_get_and_notify`・`main_loopback_tests.rs` の loopback のテスト。
+    ///    うち環境変数を差すのは `testdll_drop_invokes_courtesy_unload` と
+    ///    `testdll_unload_from_another_folder_leaves_marker_untouched`。
     static TESTDLL_SERIAL: Mutex<()> = Mutex::new(());
 
     // ---------------------------------------------------------------------
@@ -590,15 +602,16 @@ mod tests {
     /// （unload 観測マーカーのファイル作成）と、Drop 全体が無 panic で完了することを確認する
     /// （R2.2 の受入証拠・E2E は helper をプロセスごと落とすため Drop が走らない、その補完）。
     ///
-    /// env `HOST32_TESTDLL_UNLOAD_MARKER` はプロセス global ゆえ、testdll を load する他テストと
-    /// `TESTDLL_SERIAL` で直列化して競合を避ける（本テストのみが marker env を set/remove する）。
+    /// 印の環境変数 `HOST32_TESTDLL_UNLOAD_MARKER` を差すので錠 `TESTDLL_SERIAL` を取る。他のテストの
+    /// unload は、偽の DLL の置き場の判定（印の親フォルダが自分の置き場と同じときだけ書く）によって、
+    /// この印を書かない。
     #[test]
     #[cfg_attr(
         not(target_arch = "x86"),
         ignore = "i686 専用: 32bit testdll(shiori.dll) を load するため x64 では BAD_EXE_FORMAT。`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` で実行"
     )]
     fn testdll_drop_invokes_courtesy_unload() {
-        // testdll ロードテスト同士を直列化（marker env レース排除）。汚染ロックは無視して継続。
+        // 印の環境変数を差すテスト同士を直列化。汚染ロックは無視して継続。
         let _serial = TESTDLL_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let src_dll = resolve_testdll();
 
@@ -621,8 +634,9 @@ mod tests {
         let marker = load_dir.join("unload.marker");
         assert!(!marker.exists(), "marker は load 前に未作成");
 
-        // SAFETY: edition 2024 では set_var は unsafe（プロセス global 変更）。本テストは testdll を
-        // load する唯一のテストゆえ他テストと競合しない。set は load 前に行う。
+        // SAFETY: edition 2024 では set_var は unsafe（プロセス global 変更）。環境変数を差すテストは
+        // 錠 `TESTDLL_SERIAL` で直列になっている。ほかのテストは、この環境変数を偽の DLL の unload の
+        // 中で読むだけである。set は load 前に行う。
         unsafe {
             std::env::set_var("HOST32_TESTDLL_UNLOAD_MARKER", &marker);
         }
@@ -644,11 +658,80 @@ mod tests {
         assert_eq!(content, b"unloaded", "testdll unload が書くマーカー内容");
 
         // 後始末（best-effort）: env・一時 dir を掃除。
-        // SAFETY: set_var と同じく unsafe。以後 testdll を load するテストは無い。
+        // SAFETY: set_var と同じく unsafe。環境変数を差すテストは錠で直列になっており（錠の中で外す）、
+        // ほかのテストは、この環境変数を偽の DLL の unload の中で読むだけである。
         unsafe {
             std::env::remove_var("HOST32_TESTDLL_UNLOAD_MARKER");
         }
         let _ = std::fs::remove_dir_all(&load_dir);
+    }
+
+    /// ワークスペースの `target\` の下に一意なフォルダを作り、偽の DLL を `shiori.dll` として写す。
+    /// 根は `CARGO_MANIFEST_DIR` の 2 つ上（ワークスペースの根）を `parent()` で引き、`..` を含めない。
+    /// 一意にするのはプロセス識別子・時刻のナノ秒・フォルダごとの札。OS の一時フォルダは使わない。
+    /// 返り値は（フォルダ、写した `shiori.dll` の絶対パス）。
+    fn copy_testdll_into_unique_target_dir(tag: &str) -> (PathBuf, PathBuf) {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let workspace = manifest
+            .parent()
+            .and_then(Path::parent)
+            .expect("CARGO_MANIFEST_DIR の 2 つ上（ワークスペースの根）");
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        // パスが長くなりすぎないようフォルダ名は短く。
+        let name = format!("h32m_{}_{}_{}", std::process::id(), nanos, tag);
+        let dir = workspace.join("target").join(name);
+        std::fs::create_dir_all(&dir).expect("create load_dir under target");
+        let dll = dir.join("shiori.dll");
+        std::fs::copy(resolve_testdll(), &dll).expect("copy shiori.dll into load_dir");
+        (dir, dll)
+    }
+
+    /// 同じプロセスに読まれた別の写し（フォルダ Y）の unload が、フォルダ X 宛ての印を書かないこと。
+    /// 印のテストと往復のテストの間の順番に頼らず、競合の芯「別の写しの unload が印を書く」を
+    /// 1 本の中で切り出す（要件 3.2）。時間待ちは無く、1 つのスレッドで順に進む。
+    /// 印の環境変数を差すので錠 `TESTDLL_SERIAL` を取る。印のパスは X の DLL と同じフォルダに置く。
+    #[test]
+    #[cfg_attr(
+        not(target_arch = "x86"),
+        ignore = "i686 専用: 32bit testdll(shiori.dll) を load するため x64 では BAD_EXE_FORMAT。`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` で実行"
+    )]
+    fn testdll_unload_from_another_folder_leaves_marker_untouched() {
+        let _serial = TESTDLL_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        let (dir_x, dll_x) = copy_testdll_into_unique_target_dir("x");
+        let (dir_y, dll_y) = copy_testdll_into_unique_target_dir("y");
+        let marker_x = dir_x.join("unload.marker");
+        let marker_y = dir_y.join("unload.marker");
+
+        // SAFETY: edition 2024 では set_var は unsafe（プロセス global 変更）。環境変数を差すテストは
+        // 錠 `TESTDLL_SERIAL` で直列になっている。ほかのテストは、この環境変数を偽の DLL の unload の
+        // 中で読むだけである。
+        unsafe {
+            std::env::set_var("HOST32_TESTDLL_UNLOAD_MARKER", &marker_x);
+        }
+
+        let proxy_x = ShioriByteProxy::load(&dll_x, &dir_x).expect("testdll X load must succeed");
+        let proxy_y = ShioriByteProxy::load(&dll_y, &dir_y).expect("testdll Y load must succeed");
+        drop(proxy_y);
+
+        assert!(
+            !marker_x.exists(),
+            "X has no marker: 別のフォルダ Y の写しの unload が X 宛ての印を書いた"
+        );
+        assert!(!marker_y.exists(), "Y has no marker");
+
+        drop(proxy_x);
+        let content = std::fs::read(&marker_x).expect("X の unload が印を書くはず");
+        assert_eq!(content, b"unloaded", "X の unload が書く印の中身");
+
+        // SAFETY: set_var と同じ（錠の中で外す）。
+        unsafe {
+            std::env::remove_var("HOST32_TESTDLL_UNLOAD_MARKER");
+        }
+        let _ = std::fs::remove_dir_all(&dir_x);
+        let _ = std::fs::remove_dir_all(&dir_y);
     }
 
     // ---------------------------------------------------------------------
@@ -662,16 +745,14 @@ mod tests {
     /// - NOTIFY(`OnTestNotify`) → 204 No Content。
     ///
     /// helper クレートには codec が無いため request バイト列は手書きする。無 panic 完了が
-    /// 「入力 callee-free／応答 caller-free」（二重解放なし）の観測証拠。`HOST32_TESTDLL_UNLOAD_MARKER`
-    /// は設定しない（プロセス global ゆえ `testdll_drop_invokes_courtesy_unload` が唯一の所有者）。
+    /// 「入力 callee-free／応答 caller-free」（二重解放なし）の観測証拠。印の環境変数
+    /// `HOST32_TESTDLL_UNLOAD_MARKER` を差さないので錠 `TESTDLL_SERIAL` を取らない。
     #[test]
     #[cfg_attr(
         not(target_arch = "x86"),
         ignore = "i686 専用: 32bit testdll(shiori.dll) を load するため x64 では BAD_EXE_FORMAT。`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` で実行"
     )]
     fn testdll_request_roundtrip_get_and_notify() {
-        // testdll ロードテスト同士を直列化（drop テストの marker env レース排除）。
-        let _serial = TESTDLL_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let src_dll = resolve_testdll();
 
         // 一意な一時 load_dir へ shiori.dll をコピー（絶対 dll_path＝load_dir\shiori.dll）。

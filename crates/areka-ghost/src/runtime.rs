@@ -235,6 +235,11 @@ impl GhostRuntime {
         &self.sylphya_publisher
     }
 
+    /// sylphya（統一プロパティシステム）の読み手への参照。`sylphya_publisher()` と同じ形の読み口。
+    pub fn sylphya_reader(&self) -> &SylphyaReader {
+        &self.sylphya_reader
+    }
+
     /// 解決済みマウントモデルへの参照（`readme` キー転記の読み出し口・
     /// popup-menu-minimal task 1.3・要件 4.1/9.4/10.4）。`kanade()`／
     /// `sylphya_publisher()` と同型の additive アクセサ。

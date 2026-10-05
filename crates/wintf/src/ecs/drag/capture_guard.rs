@@ -43,6 +43,11 @@ impl CaptureGuard {
         self.released = true;
     }
 
+    /// キャプチャを取った窓の HWND を返す（左ボタンを離した窓との一致に使う）。
+    pub fn hwnd(&self) -> HWND {
+        self.hwnd
+    }
+
     /// キャプチャが既に解放済みかどうかを返す。
     #[allow(dead_code)]
     pub fn is_released(&self) -> bool {

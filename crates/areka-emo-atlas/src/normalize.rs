@@ -201,22 +201,7 @@ impl Normalizer {
                     ..
                 } = img;
                 if let Some(key) = key {
-                    // 行の詰め物（`stride > width * 4`）を読まないよう行ごとに歩く。
-                    let row_bytes = width as usize * 4;
-                    for y in 0..height as usize {
-                        let start = y * stride as usize;
-                        let Some(row) = bgra.get_mut(start..start + row_bytes) else {
-                            break;
-                        };
-                        let (pixels, _) = row.as_chunks_mut::<4>();
-                        for px in pixels {
-                            // 完全一致（許容幅 0・要件 4.2）。一致しない画素は 1 バイトも
-                            // 変えず、一致した画素には色を残さない（要件 4.6）。
-                            if *px == key {
-                                *px = [0, 0, 0, 0];
-                            }
-                        }
-                    }
+                    clear_key_color(&mut bgra, width, height, stride, key);
                 }
                 Ok(NormalizedImage {
                     width,
@@ -227,6 +212,27 @@ impl Normalizer {
             }
             // シーム腕（未実装）: 選択ソースを載せて明示エラー（3.2/3.5）。
             (_, other) => Err(NormalizeError::Unsupported(other)),
+        }
+    }
+}
+
+/// `key` と 4 バイトとも同じ画素を `0,0,0,0` にする（抜き色の腕と、動く絵の 2 枚目以降の
+/// コマで共用・spec: areka-P0-animated-image-decode 要件 3.3）。
+/// 行の詰め物（`stride > width * 4`）を読まないよう行ごとに歩く。
+pub(crate) fn clear_key_color(bgra: &mut [u8], width: u32, height: u32, stride: u32, key: [u8; 4]) {
+    let row_bytes = width as usize * 4;
+    for y in 0..height as usize {
+        let start = y * stride as usize;
+        let Some(row) = bgra.get_mut(start..start + row_bytes) else {
+            break;
+        };
+        let (pixels, _) = row.as_chunks_mut::<4>();
+        for px in pixels {
+            // 完全一致（許容幅 0・要件 4.2）。一致しない画素は 1 バイトも
+            // 変えず、一致した画素には色を残さない（要件 4.6）。
+            if *px == key {
+                *px = [0, 0, 0, 0];
+            }
         }
     }
 }

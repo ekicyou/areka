@@ -42,6 +42,7 @@ use bevy_ecs::entity::Entity;
 use crate::bind::BindSet;
 use crate::error::ComposeError;
 use crate::method::ComposeMethod;
+use crate::nesting::ElementKind;
 use crate::normalized::{SurfaceMaster, Transform};
 use crate::pattern::PatternState;
 use crate::world::{AtlasBinding, EmoWorld, SurfaceIndex};
@@ -106,11 +107,23 @@ pub struct Extent {
 ///
 /// 消費は task 5.2 の [`derive_ops`] が本関数を wrap して行う（合成対象 surface 自身の静的層＝
 /// (offset_x, offset_y)=(0,0)・bind pattern0 の入れ子参照＝pattern の (x,y) をオフセット）。
+///
+/// # element定義の子（surface-element-nesting 要件 2.1〜2.3・3.1〜3.4）
+///
+/// 欄がサーフェスの番号（[`ElementKind::Surface`]）の element定義は、同じ順の位置でその場で子へ
+/// 再帰する（位置は親の位置＋ element定義の X,Y・[`flatten_surface`] を `is_top_level=false` で）。
+/// 子が先祖（`visited`）に在る・面の表に無い・範囲を超える数のときは、その element定義だけを
+/// 飛ばして `debug!` を 1 行出す（警告は読み込みのときに出ている）。画像だけのサーフェスでは
+/// 命令列は前と同じ。
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn push_static_element_ops(
     out_ops: &mut Vec<BlitOp>,
+    visited: &mut Vec<u32>,
     world: &EmoWorld,
     atlas: &AtlasTable,
     surface_id: u32,
+    binds: &BindSet,
+    pattern: &PatternState,
     offset_x: i64,
     offset_y: i64,
 ) {
@@ -127,14 +140,52 @@ pub(crate) fn push_static_element_ops(
 
     for i in order {
         let element = &master.elements[i];
-        // 束縛が Some の element のみ命令化する。None（未解決・bind 時に warn 済み）はスキップ。
+        let (ex, ey) = element.transform.offset();
+        // element定義の子: その場で再帰する（位置は親の位置＋ X,Y）。飛ばすのはこの element定義だけ。
+        let skip_reason = match element.kind {
+            ElementKind::Image => None,
+            ElementKind::SurfaceOutOfRange => Some("番号として扱える範囲を超える数"),
+            ElementKind::Surface(child) if world.surface(child).is_none() => {
+                Some("面の表に無い番号")
+            }
+            ElementKind::Surface(child) if visited.contains(&child) => {
+                Some("先祖へ戻る参照（循環）")
+            }
+            ElementKind::Surface(child) => {
+                flatten_surface(
+                    out_ops,
+                    visited,
+                    world,
+                    atlas,
+                    child,
+                    binds,
+                    pattern,
+                    offset_x + ex,
+                    offset_y + ey,
+                    false,
+                );
+                continue;
+            }
+        };
+        if let Some(reason) = skip_reason {
+            tracing::debug!(
+                target: "areka_emo_compose",
+                surface_id,
+                element = element.layer,
+                child = element.path.as_str(),
+                reason,
+                "element定義の子のサーフェスを置かない（読み込みのとき warn 済み）"
+            );
+            continue;
+        }
+        // 束縛が Some の画像のみ命令化する。None（画像の解決に失敗・bind 時に warn 済み）はスキップ。
         let Some(element_id) = binding.0.get(i).copied().flatten() else {
             tracing::trace!(
                 target: "areka_emo_compose",
                 surface_id,
                 layer = element.layer,
                 path = element.path.as_str(),
-                "未束縛 element を静的命令からスキップ（bind 時 warn 済み）"
+                "未束縛の画像 element を静的命令からスキップ（画像の解決に失敗・bind 時 warn 済み）"
             );
             continue;
         };
@@ -153,7 +204,6 @@ pub(crate) fn push_static_element_ops(
         // 入れ子参照の (x,y) オフセットを element 配置へ足し込む（1 段 inline 展開・要件 5.2 の
         // pattern0 入れ子参照。M1 は平行移動のみゆえ加算で足りる）。offset=(0,0) の合成対象自身の
         // 静的層では element の transform そのままになる。
-        let (ex, ey) = element.transform.offset();
         out_ops.push(BlitOp {
             element: element_id,
             transform: Transform::translate(ex + offset_x, ey + offset_y),
@@ -225,8 +275,8 @@ pub(crate) fn derive_ops(
     // Composer ファサード）から借用して再利用する（要件 10.3・定常状態アロケーションなし）。
     // 走査開始前に空へ戻し、祖先スタック規律（push-on-enter／pop-on-exit）で走査後も空に戻す。
     visited.clear();
-    // top-level 合成対象。ここでのみ PatternState の現在コマを層(ii) へ合流させる（コマは表示中
-    // surface のアニメに属す・design「top-level surface のみ」）。入れ子再帰は is_top_level=false。
+    // top-level 合成対象は PatternState の今までの欄のコマを層(ii) へ合流させる。入れ子再帰
+    // （部品の段）は is_top_level=false で部品の欄を読む。
     flatten_surface(
         out_ops, visited, world, atlas, surface_id, binds, pattern, 0, 0, true,
     );
@@ -249,15 +299,16 @@ pub(crate) fn derive_ops(
 ///
 /// # 合成合流と method ゲート（task 7.2・要件 4.2/4.6/5.3/8.4）
 ///
-/// `is_top_level`（derive_ops 直下の合成対象 surface のみ真）のとき、層(ii) の対象 id 集合へ
-/// `pattern`（[`PatternState`]）の現在コマを持つ id を合流する。合流対象 id 集合 =
-/// `{ 有効 bind pattern0 を持つ id } ∪ { PatternState に現在コマを持つ id のうち bind 種でないもの、
+/// 層(ii) の対象 id 集合へ、この段のコマ（`is_top_level`＝derive_ops 直下の合成対象 surface なら
+/// [`PatternState`] の今までの欄、部品の段なら部品の欄の `surface_id` の分）を持つ id を合流する。
+/// 合流対象 id 集合 =
+/// `{ 有効 bind pattern0 を持つ id } ∪ { この段に現在コマを持つ id のうち bind 種でないもの、
 /// または bind 種でも現在の bind 集合に属するもの }`（bind 所属条件は bindopt D9-3・下記）。整列は既存の
 /// animation-sort 2 段規則を**変更せず**適用する（R5.3・画家のアルゴリズム）。各 id で現在コマが
 /// あれば**コマが pattern0 静的寄与を置換**する（4.2「各コマは直前コマをリセットしてベースへ」）。
 /// コマ・pattern0 いずれも method ゲート（[`ComposeMethod::is_implemented`]＝Overlay のみ）を通し、
-/// 非 Overlay は `warn!`（method 名込み）＋不描画（完全形保持のまま非駆動・8.4）。**再帰段（入れ子
-/// 参照）は `is_top_level=false` で PatternState を参照しない**（コマは表示中 surface のアニメに属す）。
+/// 非 Overlay は `warn!`（method 名込み）＋不描画（完全形保持のまま非駆動・8.4）。一番上と部品の段は
+/// 読む欄だけが違い、規則は同じ 1 本の経路を通る（surface-element-nesting 要件 5.1・5.10・5.12）。
 ///
 /// # bind 非所属コマの合流拒否（bindopt D9-3・最後の砦・bindopt 7.1/7.4）
 ///
@@ -280,7 +331,7 @@ fn flatten_surface(
     surface_id: u32,
     binds: &BindSet,
     // task 7.2: 現在コマ集合の層(ii) 合流＋コマ/pattern0 双方への method ゲートで実消費する。
-    // 合流は is_top_level のみ（コマは表示中 surface のアニメに属す）。再帰段は pattern を参照しない。
+    // 一番上は今までの欄、部品の段は部品の欄を読む。
     pattern: &PatternState,
     offset_x: i64,
     offset_y: i64,
@@ -297,45 +348,56 @@ fn flatten_surface(
     }
     visited.push(surface_id);
 
-    // 層（i）: 当 surface 自身の静的 element を累積オフセットで積む（placement None はスキップ）。
-    push_static_element_ops(out_ops, world, atlas, surface_id, offset_x, offset_y);
+    // 層（i）: 当 surface 自身の静的 element を累積オフセットで積む（placement None はスキップ・
+    // element定義の子はその場で再帰）。
+    push_static_element_ops(
+        out_ops, visited, world, atlas, surface_id, binds, pattern, offset_x, offset_y,
+    );
 
     // 当 surface 不在なら bind 層もない（後続 task が SurfaceNotFound 分類を担う）。存在する場合のみ
     // bind 層を積む。いずれにせよ枝離脱で visited を pop する。
     if let Some((master, _binding)) = surface_and_binding(world, surface_id) {
         // 層（ii）: 合流対象 id 集合 = { 有効 bind（interval が bind 種 ∧ id ∈ binds）の pattern0 を
-        //   持つ id } ∪ { PatternState に現在コマを持つ id }。後者は **is_top_level のみ**合流する
-        //   （コマは表示中 surface のアニメに属す・design「top-level surface のみ」・要件 4.6/5.3）。
+        //   持つ id } ∪ { この段のコマを持つ id }。この段のコマは、一番上なら今までの欄、部品の段
+        //   （element定義の子・pattern定義の先）なら部品の欄のこの番号の分（surface-element-nesting
+        //   要件 5.1・5.10・5.13）。以下の規則は両者で同じ 1 本の経路を通る。
+        let frame_of = |id: u32| {
+            if is_top_level {
+                pattern.get(id)
+            } else {
+                pattern.part_get(surface_id, id)
+            }
+        };
+        let frames = (pattern.iter().filter(|_| is_top_level))
+            .chain(pattern.part(surface_id).filter(|_| !is_top_level));
         let mut merged_ids: Vec<u32> = master
             .animations
             .iter()
             .filter(|a| is_bind_interval(&a.interval) && binds.contains(a.id))
             .map(|a| a.id)
             .collect();
-        if is_top_level {
-            // 現在コマの id を合流（有効 bind pattern0 を持たない id も含む）。重複は既存を優先し
-            // 二重列挙しない（整列後も 1 回だけ処理される）。
-            for (id, _frame) in pattern.iter() {
-                if merged_ids.contains(&id) {
-                    continue;
-                }
-                // bindopt D9-3（最後の砦・bindopt 7.1）: **bind 種**のアニメのコマは、現在の bind
-                // 集合に属するときだけ合流する。bind から外れた ID の保持コマ（`-1` 終端を持たない
-                // アニメが末尾到達後に保つ最終コマ）が、上流の掃除（状態側の発行前除去・再生側の
-                // 進行相停止）を漏れても表示へ届かない不変量をここで成立させる。**bind に属さない
-                // アニメ（純 `random` の `interval` 等・当 surface に定義の無い id）は無条件で従来
-                // どおり合流する**（bindopt 7.4）。合成順・重ね順の規則は不変（合流の可否のみ）。
-                if is_bind_animation(master, id) && !binds.contains(id) {
-                    tracing::debug!(
-                        target: "areka_emo_compose",
-                        surface_id,
-                        animation_id = id,
-                        "bind 集合に属さない bind 種アニメの保持コマ: 合成計画へ合流しない（bindopt 7.1・D9-3）"
-                    );
-                    continue;
-                }
-                merged_ids.push(id);
+        // 現在コマの id を合流（有効 bind pattern0 を持たない id も含む）。重複は既存を優先し
+        // 二重列挙しない（整列後も 1 回だけ処理される）。
+        for (id, _frame) in frames {
+            if merged_ids.contains(&id) {
+                continue;
             }
+            // bindopt D9-3（最後の砦・bindopt 7.1）: **bind 種**のアニメのコマは、現在の bind
+            // 集合に属するときだけ合流する。bind から外れた ID の保持コマ（`-1` 終端を持たない
+            // アニメが末尾到達後に保つ最終コマ）が、上流の掃除（状態側の発行前除去・再生側の
+            // 進行相停止）を漏れても表示へ届かない不変量をここで成立させる。**bind に属さない
+            // アニメ（純 `random` の `interval` 等・当 surface に定義の無い id）は無条件で従来
+            // どおり合流する**（bindopt 7.4）。合成順・重ね順の規則は不変（合流の可否のみ）。
+            if is_bind_animation(master, id) && !binds.contains(id) {
+                tracing::debug!(
+                    target: "areka_emo_compose",
+                    surface_id,
+                    animation_id = id,
+                    "bind 集合に属さない bind 種アニメの保持コマ: 合成計画へ合流しない（bindopt 7.1・D9-3）"
+                );
+                continue;
+            }
+            merged_ids.push(id);
         }
 
         // 段1/段2: animation-sort の2段規則を**変更せず**合流後 id 集合へ適用する（design 決定5・
@@ -358,41 +420,39 @@ fn flatten_surface(
 
         // 描画順に各 id の寄与（コマ優先・無ければ pattern0）を静的層の後（＝上）へ積む。
         for id in merged_ids {
-            // top-level かつ当 id に現在コマがあれば **コマが pattern0 静的寄与を置換**する
+            // この段の当 id に現在コマがあれば **コマが pattern0 静的寄与を置換**する
             //   （4.2「各コマは直前コマをリセットしてベースへ」）。コマは method ゲートを通す。
-            if is_top_level {
-                if let Some(frame) = pattern.get(id) {
-                    if frame.method.is_implemented() {
-                        // Overlay: pattern0 と同様、frame.surface_id へ (x,y) 累積で再帰 flatten
-                        //   （transient コマも入れ子参照を許す・循環検出は再帰入口の visited 判定）。
-                        flatten_surface(
-                            out_ops,
-                            visited,
-                            world,
-                            atlas,
-                            frame.surface_id,
-                            binds,
-                            pattern,
-                            offset_x + frame.x,
-                            offset_y + frame.y,
-                            false,
-                        );
-                    } else {
-                        // 非 Overlay: 完全形は保持しつつ非駆動＝当該コマ不描画（warn・要件 8.4）。
-                        tracing::warn!(
-                            target: "areka_emo_compose",
-                            surface_id,
-                            animation_id = id,
-                            method = ?frame.method,
-                            "非 Overlay method の現在コマ: 不描画 skip（完全形保持・非駆動・要件 8.4）"
-                        );
-                    }
-                    // コマが pattern0 を置換したゆえ、この id の pattern0 静的経路は辿らない。
-                    continue;
+            if let Some(frame) = frame_of(id) {
+                if frame.method.is_implemented() {
+                    // Overlay: pattern0 と同様、frame.surface_id へ (x,y) 累積で再帰 flatten
+                    //   （transient コマも入れ子参照を許す・循環検出は再帰入口の visited 判定）。
+                    flatten_surface(
+                        out_ops,
+                        visited,
+                        world,
+                        atlas,
+                        frame.surface_id,
+                        binds,
+                        pattern,
+                        offset_x + frame.x,
+                        offset_y + frame.y,
+                        false,
+                    );
+                } else {
+                    // 非 Overlay: 完全形は保持しつつ非駆動＝当該コマ不描画（warn・要件 8.4）。
+                    tracing::warn!(
+                        target: "areka_emo_compose",
+                        surface_id,
+                        animation_id = id,
+                        method = ?frame.method,
+                        "非 Overlay method の現在コマ: 不描画 skip（完全形保持・非駆動・要件 8.4）"
+                    );
                 }
+                // コマが pattern0 を置換したゆえ、この id の pattern0 静的経路は辿らない。
+                continue;
             }
 
-            // コマ無し（または非 top-level）: 従来の有効 bind pattern0 静的経路。
+            // コマ無し: 従来の有効 bind pattern0 静的経路。
             // 同 id の animation は fold 段で単一化済み（後勝ち）ゆえ find で足りる。
             let Some(anim) = master.animations.iter().find(|a| a.id == id) else {
                 continue;
@@ -592,6 +652,10 @@ pub(crate) fn build_plan(
 /// を「累積オフセット＋原寸」として外形へ寄与させる（未束縛 None は原寸不明ゆえ寄与しない）。
 /// `placement` が None でも `original` は既知ゆえ寄与する（ops ではスキップされる層も外形は数える）。
 ///
+/// element定義の子（[`ElementKind::Surface`]）は element定義の X,Y を足して再帰する（surface-element-
+/// nesting 要件 2.5）。コマ（[`PatternState`]）は見ないので、部品のアニメーションでも外形は動かない
+/// （要件 2.6）。飛ばす子は外形に数えず、記録は命令の経路だけが出す。
+///
 /// 引数は max_x/max_y/visited のスクラッチ3本＋world/atlas＋surface_id＋累積 offset(x,y) の計8本。
 /// [`flatten_surface`] と同型の再帰 walker ゆえ全引数が各段で必要（スクラッチ構造体化は将来余地）。
 #[allow(clippy::too_many_arguments)]
@@ -618,7 +682,26 @@ fn flatten_extent(
 
     if let Some((master, binding)) = surface_and_binding(world, surface_id) {
         // 当 surface の静的 element を外形へ寄与させる（束縛済み・placement 有無を問わず原寸で数える）。
-        for (i, _element) in master.elements.iter().enumerate() {
+        for (i, element) in master.elements.iter().enumerate() {
+            // element定義の子（surface-element-nesting 要件 2.5）: 位置を足して子へ再帰する。範囲を
+            // 超える数・先祖は黙って飛ばし、面の表に無い子は再帰先で何も足さない。記録は命令の経路の
+            // debug! が合成 1 回につき 1 度出す（先祖へ再帰すると循環の warn! になるので入口の前で見る）。
+            if let ElementKind::Surface(child) = element.kind {
+                if !visited.contains(&child) {
+                    let (ex, ey) = element.transform.offset();
+                    flatten_extent(
+                        max_x,
+                        max_y,
+                        visited,
+                        world,
+                        atlas,
+                        child,
+                        offset_x + ex,
+                        offset_y + ey,
+                    );
+                }
+                continue;
+            }
             let Some(element_id) = binding.0.get(i).copied().flatten() else {
                 // 未束縛（原寸不明）は外形に寄与できない。ops 側でも skip 済み。
                 continue;
@@ -678,7 +761,7 @@ fn flatten_extent(
 ///
 /// `Interval::Random`（純ランダム・非 bind）は有効 bind の対象にしない。`Interval` は
 /// `#[non_exhaustive]` ゆえ未知 variant は bind でないものとして扱う（非パニック）。
-fn is_bind_interval(interval: &Interval) -> bool {
+pub(crate) fn is_bind_interval(interval: &Interval) -> bool {
     matches!(interval, Interval::Bind | Interval::BindRandom { .. })
 }
 
@@ -728,3 +811,11 @@ mod ops_tests;
 #[cfg(test)]
 #[path = "plan_extent_tests.rs"]
 mod extent_tests;
+
+#[cfg(test)]
+#[path = "plan_nesting_tests.rs"]
+mod nesting_tests;
+
+#[cfg(test)]
+#[path = "plan_nesting_extent_tests.rs"]
+mod nesting_extent_tests;

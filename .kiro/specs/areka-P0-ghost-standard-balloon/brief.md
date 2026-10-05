@@ -110,3 +110,9 @@
 - 共有の注意: 同じ C3 の `mcp-get-property` が `crates/areka-ghost/src/runtime.rs` を触る（別のファイル）。`shell-companion-balloon` は同じ `catalog.rs`・`boot_resolve.rs`・`boot_config.rs` を触る＝直列（roadmap どおり）。
 - 議題（答えで作業が変わるものだけ）: brief の 3 つのまま（段の並び／`balloon` をバルーンの名前で引くかフォルダ名でも引くか＝上の細部 1 で作業量が変わる／`default.balloon.path` の起点）。加えて、範囲外の `recommended.*` の 2 行の古い注記をついでに直してよいか（直すなら 1 タスク足さずに台帳の作業に含められる）。
 - 見つけた穴: 無し（brief の不一致そのものが本 spec の仕事）。
+
+## 2026-10-04 `install-companion-reading` の要件の討議からの申し送り
+
+- `install-companion-reading` は、同梱の `*.directory` の区切りを `_` へ**置き換えない**と決めた（ukadoc の「パス区切りは使えない」を採って今どおり断る・開発者の決め）。
+- したがって上の「インストールでは `a_b` になるのに起動は `a/b` を探す」というずれは生まれない。「名前はインストールと同じ `_` への置き換えで読む」「`install-companion-reading` が置く関数をそのまま使う」は取り下げ。Upstream から受け取るのは**探索順だけ**で、共有する関数は 0 個。
+- 区切りを含む `balloon.directory` のゴーストはインストールで断られるので、起動の側がその値に出会うのは手で置かれたゴーストだけである。その扱いは本 spec の要件の段で決める。

@@ -18,7 +18,7 @@ type HandlerResult = Option<LRESULT>;
 /// WM_KEYDOWN: キー押下
 #[inline]
 pub(super) fn WM_KEYDOWN(
-    world: &Rc<RefCell<EcsWorld>>,
+    _world: &Rc<RefCell<EcsWorld>>,
     _entity: Entity,
     _hwnd: HWND,
     wparam: WPARAM,
@@ -28,35 +28,8 @@ pub(super) fn WM_KEYDOWN(
 
     // ESCキーでドラッグキャンセル
     if wparam.0 == VK_ESCAPE.0 as usize {
-        let state_snapshot = crate::ecs::drag::snapshot_drag_state();
-
-        if let crate::ecs::drag::DragStateSnapshot::Dragging {
-            entity, start_pos, ..
-        }
-        | crate::ecs::drag::DragStateSnapshot::Preparing {
-            entity, start_pos, ..
-        }
-        | crate::ecs::drag::DragStateSnapshot::JustStarted {
-            entity, start_pos, ..
-        } = state_snapshot
-        {
-            // DragAccumulatorResourceにEnded遷移を記録
-            if let Ok(world_borrow) = world.try_borrow() {
-                if let Some(accumulator) = world_borrow
-                    .world()
-                    .get_resource::<crate::ecs::drag::DragAccumulatorResource>(
-                ) {
-                    accumulator.set_transition(crate::ecs::drag::DragTransition::Ended {
-                        entity,
-                        end_pos: start_pos,
-                        cancelled: true,
-                    });
-                }
-            }
-        }
-
-        // cancel_dragging → DragState::JustEnded へ遷移
-        // 旧状態の CaptureGuard が Drop され ReleaseCapture が自動呼び出し
+        // cancel_dragging → DragState::JustEnded へ遷移。開始済みなら終了の種も積む
+        // （ここで積むと二重になる）。旧状態の CaptureGuard が Drop され ReleaseCapture が自動呼び出し
         crate::ecs::drag::cancel_dragging();
 
         tracing::debug!("[WM_KEYDOWN] ESC key pressed, drag cancelled");
@@ -68,42 +41,15 @@ pub(super) fn WM_KEYDOWN(
 /// WM_CANCELMODE: システムキャンセル
 #[inline]
 pub(super) fn WM_CANCELMODE(
-    world: &Rc<RefCell<EcsWorld>>,
+    _world: &Rc<RefCell<EcsWorld>>,
     _entity: Entity,
     _hwnd: HWND,
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
-    let state_snapshot = crate::ecs::drag::snapshot_drag_state();
-
-    if let crate::ecs::drag::DragStateSnapshot::Dragging {
-        entity, start_pos, ..
-    }
-    | crate::ecs::drag::DragStateSnapshot::Preparing {
-        entity, start_pos, ..
-    }
-    | crate::ecs::drag::DragStateSnapshot::JustStarted {
-        entity, start_pos, ..
-    } = state_snapshot
-    {
-        // DragAccumulatorResourceにEnded遷移を記録
-        if let Ok(world_borrow) = world.try_borrow() {
-            if let Some(accumulator) = world_borrow
-                .world()
-                .get_resource::<crate::ecs::drag::DragAccumulatorResource>()
-            {
-                accumulator.set_transition(crate::ecs::drag::DragTransition::Ended {
-                    entity,
-                    end_pos: start_pos,
-                    cancelled: true,
-                });
-            }
-        }
-    }
-
     // ドラッグキャンセル
-    // cancel_dragging → DragState::JustEnded へ遷移
-    // 旧状態の CaptureGuard が Drop され ReleaseCapture が自動呼び出し
+    // cancel_dragging → DragState::JustEnded へ遷移。開始済みなら終了の種も積む
+    // （ここで積むと二重になる）。旧状態の CaptureGuard が Drop され ReleaseCapture が自動呼び出し
     crate::ecs::drag::cancel_dragging();
 
     tracing::debug!("[WM_CANCELMODE] System cancel, drag cancelled");
@@ -135,43 +81,25 @@ pub(super) fn WM_ACTIVATE(
         return None;
     }
 
-    // ドラッグ中なら状態を確認してキャンセル
-    let state_snapshot = crate::ecs::drag::snapshot_drag_state();
-    match state_snapshot {
-        // JustStarted は Started を既に積んでいるので、Dragging と同じく Ended を積んで閉じる。
-        crate::ecs::drag::DragStateSnapshot::Dragging {
-            entity, start_pos, ..
-        }
-        | crate::ecs::drag::DragStateSnapshot::JustStarted {
-            entity, start_pos, ..
+    // 押している状態ならキャンセル（押していなければ何もしない）。
+    // JustStarted／Dragging は cancel_dragging が Ended(cancelled) を積んで閉じ、
+    // Preparing は積まずに休ませる（CaptureGuard が Drop され ReleaseCapture が自動呼び出し）。
+    match crate::ecs::drag::cancel_dragging() {
+        crate::ecs::drag::DragClose::Closed {
+            entity,
+            notified: true,
         } => {
             tracing::info!(
                 entity = ?entity,
                 "[WM_ACTIVATE] Window deactivated during drag, cancelling"
             );
-
-            // DragAccumulatorResourceにEnded(cancelled)遷移を記録
-            if let Ok(world_borrow) = world.try_borrow() {
-                if let Some(accumulator) = world_borrow
-                    .world()
-                    .get_resource::<crate::ecs::drag::DragAccumulatorResource>(
-                ) {
-                    accumulator.set_transition(crate::ecs::drag::DragTransition::Ended {
-                        entity,
-                        end_pos: start_pos,
-                        cancelled: true,
-                    });
-                }
-            }
-
-            crate::ecs::drag::cancel_dragging();
         }
-        crate::ecs::drag::DragStateSnapshot::Preparing { .. } => {
+        crate::ecs::drag::DragClose::Closed {
+            notified: false, ..
+        } => {
             tracing::debug!("[WM_ACTIVATE] Window deactivated during drag prepare, resetting");
-            // Preparing 状態をキャンセル（CaptureGuard が Drop され ReleaseCapture が自動呼び出し）
-            crate::ecs::drag::cancel_dragging();
         }
-        _ => {}
+        crate::ecs::drag::DragClose::OtherWindow | crate::ecs::drag::DragClose::NotActive => {}
     }
 
     // 沈降観測の目印を付ける（既存処理の後・読み取り専用）。
@@ -200,60 +128,20 @@ pub(super) fn WM_ACTIVATE(
 ///
 /// 冪等性: DragState が既に Idle / JustEnded の場合は何もしない。
 pub(super) fn WM_CAPTURECHANGED(
-    world: &Rc<RefCell<EcsWorld>>,
+    _world: &Rc<RefCell<EcsWorld>>,
     _entity: Entity,
     _hwnd: HWND,
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
-    // CaptureGuard を mark_released してからドラッグキャンセル
-    // mark_released を先に呼ぶことで、cancel_dragging → JustEnded 遷移時の
-    // CaptureGuard Drop で ReleaseCapture が呼ばれないようにする
-    let was_dragging = crate::ecs::drag::update_drag_state(|state| {
-        match state {
-            crate::ecs::drag::DragState::Preparing { capture_guard, .. }
-            | crate::ecs::drag::DragState::JustStarted { capture_guard, .. }
-            | crate::ecs::drag::DragState::Dragging { capture_guard, .. } => {
-                capture_guard.mark_released();
-                true
-            }
-            _ => false, // Idle / JustEnded: 何もしない
-        }
-    });
-
-    if !was_dragging {
-        return None;
-    }
-
-    // DragAccumulatorResource に Ended(cancelled) 遷移を記録
-    let state_snapshot = crate::ecs::drag::snapshot_drag_state();
-    if let crate::ecs::drag::DragStateSnapshot::Dragging {
-        entity, start_pos, ..
-    }
-    | crate::ecs::drag::DragStateSnapshot::Preparing {
-        entity, start_pos, ..
-    }
-    | crate::ecs::drag::DragStateSnapshot::JustStarted {
-        entity, start_pos, ..
-    } = state_snapshot
+    // cancel_dragging_on_capture_lost が CaptureGuard を mark_released してからキャンセルする
+    // （JustEnded 遷移時の CaptureGuard Drop で ReleaseCapture が呼ばれない）。
+    // 開始済みなら終了の種も積む（ここで積むと二重になる）。
+    if let crate::ecs::drag::DragClose::Closed { .. } =
+        crate::ecs::drag::cancel_dragging_on_capture_lost()
     {
-        if let Ok(world_borrow) = world.try_borrow() {
-            if let Some(accumulator) = world_borrow
-                .world()
-                .get_resource::<crate::ecs::drag::DragAccumulatorResource>()
-            {
-                accumulator.set_transition(crate::ecs::drag::DragTransition::Ended {
-                    entity,
-                    end_pos: start_pos,
-                    cancelled: true,
-                });
-            }
-        }
+        tracing::debug!("[WM_CAPTURECHANGED] Capture lost externally, drag cancelled");
     }
-
-    crate::ecs::drag::cancel_dragging();
-
-    tracing::debug!("[WM_CAPTURECHANGED] Capture lost externally, drag cancelled");
 
     None // DefWindowProcWに委譲
 }

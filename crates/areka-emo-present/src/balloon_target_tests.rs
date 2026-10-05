@@ -1,7 +1,7 @@
 use super::*;
 
 use super::test_support::{TempDir, emo2_balloon_root};
-use areka_emo_atlas::{ElementId, MemoryDecoder};
+use areka_emo_atlas::{AnimationInfo, DecodedImage, ElementId, MemoryDecoder};
 use areka_parsers::shell::parse;
 
 /// 不透明 1×1 PBGRA スペック（bake が placement を必ず産む＝非退化）。
@@ -255,6 +255,67 @@ fn no_frames_returns_empty_composition() {
             "枠不在は EmptyComposition(0) へ畳む: {err:?}"
         ),
     }
+}
+
+/// 要件 5.4・5.5・6.6（animated-image-decode tasks 5.2）: 面の絵が「全コマを読むと失敗する
+/// 動く絵」でも、バルーンの組み立ては成功し、面には動きの 1 枚目（段 1）が出る。
+///
+/// 縮める理由を上限でなく全コマの読み込みの失敗にするので、上限の環境変数に頼らない
+/// （上限で先に縮んでも同じ段 1 を通る）。今までの 1 枚読み（`decode`・段 2）には 1 枚目と
+/// 違う色を登録し、出た色で段 1 が使われたことを見分ける。
+#[test]
+fn shrunk_animated_face_builds_and_shows_first_frame() {
+    let dir = Path::new("balloon_dir");
+    let path = dir.join("balloons0.png");
+    let first_px = [10u8, 20, 30, 255];
+    let legacy_px = [200u8, 100, 50, 255];
+
+    let mut dec = MemoryDecoder::new();
+    dec.insert_animated(
+        &path,
+        AnimationInfo {
+            width: 1,
+            height: 1,
+            frame_count: 2,
+        },
+        Ok(DecodedImage {
+            width: 1,
+            height: 1,
+            stride: 4,
+            bgra: first_px.to_vec(),
+            has_alpha: true,
+        }),
+        Err("broken frame 1".to_string()),
+    );
+    dec.insert(&path, 1, 1, 4, legacy_px.to_vec(), true);
+
+    let faces = [ResolvedFace {
+        surface_id: 0,
+        prefix: "balloons".to_string(),
+        tier: ChainTier::Own,
+        file_name: "balloons0.png".to_string(),
+    }];
+    let Ok((world, table)) = build_balloon_target_from_faces(dir, &dec, &faces) else {
+        panic!("縮んだ動く絵の面でも組み立ては成功する（要件 6.6）");
+    };
+
+    assert!(world.surface(0).is_some(), "surface 0 が World にある");
+    let id = table
+        .resolve(SetId(0), "balloons0.png")
+        .expect("面がアトラスに解決される");
+    assert!(table.animation(id).is_none(), "1 枚へ縮んでコマは持たない");
+    let p = table
+        .entry(id)
+        .placement
+        .clone()
+        .expect("不透明ゆえ placement を持つ");
+    let page = table.page(p.page).expect("page exists");
+    let at = (p.uv_rect.y * page.stride + p.uv_rect.x * 4) as usize;
+    assert_eq!(
+        page.bytes[at..at + 4],
+        first_px,
+        "面に出るのは動きの 1 枚目（段 1）で、今までの 1 枚読みの絵ではない"
+    );
 }
 
 // ── 後方互換の非回帰（R1.4/R5.4/R5.5・tasks 5.1）──────────────────────────────────
