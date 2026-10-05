@@ -176,7 +176,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 | `mcp-dump-images-residue`（**10-05 起票**・`mcp-dump-images` の完了時の棚卸） | 優先 | `dump_balloon` の文字の面の読み戻しが UI スレッドに残り、実機で UI スレッドの側が最大 14.2 ms（線 16 ms に近い）＝非同期の読み戻しにする。ほかに 5 件（届かない枝が判断の文言を `error!` つきで返す・`later` を通る組は UI スレッドで符号化し `catch_unwind` が無い・符号化のスレッドの記録をテストで数えられない・預けている間のゴーストの替わりが未確認・`sakurascript` が入ったら要件 7.7 ⑵ を撮り直す） | S〜M（5〜9） | C4 以降・MCP の列（⑥ は `mcp-kanade-tools` の後） | `mcp-dump-images`（✅ 10-05 完了） | − |
 | `mcp-strict-errors` | 優先 | `strict`（不在の面・未知のタグなどをエラーログへ） | M〜L（12〜18） | MCP の最後・kanade の列 | `mcp-log-history`・`mcp-kanade-tools` | ○ |
 | `mcp-ghost-name-match`（**10-04 起票**・`mcp-get-property` の要件ディスカッションから） | 優先 | MCP の `ghost_name` の照合を SSP 2.9.07 に合わせる（英字の大小・本体側名・名前の前後の空白・空文字＝survey §7.4）。`mcp-tool-entrances` の裁定 6・7 を上書き | S（3〜5） | MCP の 3 段目の後（共有の `resolve.rs`・`resolve_tests.rs`） | `mcp-tool-entrances`・3 段目の着地 | − |
-| `mcp-author-tools`（**10-05 起票**・`/kiro-discovery`「エージェント目線の MCP ツール」） | 優先 | areka 独自ツールの登録口と橋（SSP の 10 本は変えない）＋読むだけの 3 本＝`check_script`（台本を再生せずに解釈）・`list_capabilities`（対応タグの一覧）・`validate_ghost`（設定ファイルの検査）。ツール名の接頭辞は要件の議題 | M〜L（14〜20・超えたら `validate_ghost` を切る） | C5 の候補（MCP の共有ファイルを触る＝共有ファイルを触る MCP の spec と同じウェーブに置かない） | `mcp-tool-entrances` | ○ |
+| `mcp-author-tools`（**10-05 起票**・`/kiro-discovery`「エージェント目線の MCP ツール」） | 優先 | areka 独自ツールの登録口と橋（SSP の 10 本は変えない）＋`check_script`（台本を再生せずに、areka で効かない箇所を返す・タグ 1 つの確認にも使う）の 1 本。**10-05 要件ディスカッションで絞った**＝接頭辞は付けない・`list_capabilities` は作らない（一覧が 1,000 項目を超える）・`validate_ghost` は覚え書きへ | M（10〜14） | C5 の候補（MCP の共有ファイルを触る＝共有ファイルを触る MCP の spec と同じウェーブに置かない） | `mcp-tool-entrances` | ○ |
 | `mcp-user-response`（**10-05 起票**・同） | 優先 | 選択肢・入力欄の答えと、なでる・クリックなどの操作を、`since_id` 付きでエージェントへ返すツール 1 本（さくらスクリプトでは届かない返り道・SSP にも無い） | M〜L（12〜18） | kanade の列（choice とマウスの配線） | `mcp-author-tools`・`mcp-kanade-tools`・`mouse-drag-events` | ○ |
 | `mcp-shiori-query`（**10-05 起票**・同・開発者「SHIORI への情報要求が無い・raise_event はトークになるだけ」） | 優先 | ゴーストへ情報を問うツール 1 本＝SSTP NOTIFY と同じ振る舞いに `X-MCP-PassThru-*` の往復を足す（作法は正典の `X-SSTP-PassThru-*` を写し、名前の頭だけ経路に合わせる＝開発者裁定・ghost_terminal の `ShioriEcho` 系が実例）。データはヘッダで返り、台本が空なら喋らない。SHIORI リソースを外から直接読む形は正典に無い＝要件の議題（推しは採らない） | M（10〜14） | kanade の列（`actor_resources` の隣・host32-host の `shiori3.rs` も触る＝`script-security-level` と同じウェーブに置かない） | `mcp-author-tools` | ○ |
 | `script-security-level`（**10-05 起票**・同・開発者「セキュリティレベルでさくらスクリプトに制約が出る・areka に未実装」） | 優先 | 台本とイベントに出どころを付けて運ぶ。SHIORI へ `SecurityLevel`・`SenderType` を正典の値で渡し、応答の `SecurityLevel` を読み、ukadoc が「外部からは不可」と書いたタグを止める（MCP は SSP と同じく Owned SSTP＝`local`） | M〜L（12〜18） | C5 の候補・kanade の列（host32-host の `shiori3.rs` も触る） | なし | ○ |
@@ -215,6 +215,8 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 > brief を書くほど固まっていない宿題。**着手の判断は棚卸で行う**（格上げするときは `/kiro-discovery`）。登記時の全文（数え方つき）は history「2026-10-02 棚卸⑳退避」。
 
 **製品の穴**
+
+- **設定の読み取りが捨てた行を言えない**（M・優先度は低い・2026-10-05 `mcp-author-tools` の要件ディスカッションで登記）。`parse_kv`・`shell::parse`・`balloon::parse`（`crates/areka-parsers`）は、読めない行・読まなかったキーを黙って捨て、行番号もログも残さない（値で返す前例は `SurfaceTable::unreadable` だけ）。作者は壊れた見た目から原因を推理するしかない。読み取りが捨てたものをログへ出せば、`reload`＋`get_log` で確かめられる。設定ファイルを検査する MCP のツール（起票時の `validate_ghost`）は、その後でまだ要れば足す。調べた中身は `mcp-author-tools` の research.md の 2.5 節。
 
 - **`present-write-coherence` の未達 40 件**（性能・L）。完了仕様が自ら「引受先なし・新規仕様の起票が必要」と書いた残量＝`visualize_to_write_us` が上限 16,667µs の 12.6〜18.4 倍・32 窓中 0 窓が上限以下。開発者裁定で「未達のまま GO」済み。着手前に測り直す。
 - **正典語彙の孤児 1 件**（S）。「スタイルシートのキーワード」（`larger` などは語彙のみ）の持ち主。`font.outline`（白抜き）の描画は「予約」の行が追跡するので 10-04 に外した。
@@ -466,7 +468,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 
 #### Specs (dependency order)
 
-- [ ] areka-P0-mcp-author-tools -- 独自ツールの登録口と橋＋`check_script`・`list_capabilities`・`validate_ghost`（読むだけ）。Dependencies: areka-P0-mcp-tool-entrances
+- [ ] areka-P0-mcp-author-tools -- 独自ツールの登録口と橋＋`check_script`（読むだけ・10-05 に 1 本へ絞った）。Dependencies: areka-P0-mcp-tool-entrances
 - [ ] areka-P0-script-security-level -- 出どころの運搬・SHIORI の `SecurityLevel`／`SenderType`・ukadoc のタグの制約。Dependencies: none
 - [ ] areka-P0-script-impact-tiers -- 影響の段（高・中・低）の正本の表と出どころごとの扱い。Dependencies: areka-P0-script-security-level, areka-P0-mcp-kanade-tools
 - [ ] areka-P0-mcp-user-response -- 選択肢・入力・操作をエージェントへ返す。Dependencies: areka-P0-mcp-author-tools, areka-P0-mcp-kanade-tools, areka-P0-mouse-drag-events
