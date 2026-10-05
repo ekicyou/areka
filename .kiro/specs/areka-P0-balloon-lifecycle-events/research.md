@@ -239,3 +239,116 @@
 7. **触るファイルの一覧の組み直し**（§9 の 5）: `frame/wiring.rs`・`emo2_boot/mod.rs` は `frame/status_report.rs` と同じ取り出しで避けられる見込み。
 8. **`\![set,balloontimeout,時間]` を受ける形**（要件 9・討議 3 で本 spec へ引き取り）: タグは汎用の `\!` の運び手の cue として全受け口へ配られる（`consumer_ledger.rs` の冒頭の説明＝受け口が名前で自分の分を選ぶ）。`BalloonLifecycleSink` が `("set","balloontimeout")` を拾って新しい信号で UI へ送り、判断中核がそのトークの待ち時間として使う形が最短の見込み。宣言表 `consumer_ledger.rs` への 1 行と受け取り手の種類 1 つは `open-external-tags` と隣り合う（後着が足し直して数を数え直す）。待ち時間の単位（正典はミリ秒・判断中核は秒）の変換で丸めないこと。
 9. **実装の最初のタスクで main を取り込む**（開発者の指示 2026-10-05）: 同じウェーブ C4 の spec が先に着地している見込み。取り込んだ後に、本書の行数と触るファイルの見立てを測り直す。
+
+---
+
+## 11. 設計フェーズ（2026-10-05・main を取り込んだ後の HEAD `dc45d5f3`）
+
+### 11.1 Summary
+- **Feature**: `areka-P0-balloon-lifecycle-events`
+- **Discovery Scope**: Extension（既存の運行表・表示の判断中核・受け口の拡張。軽い側の調査＝結合点の読み直しと行数の測り直し）
+- **Key Findings**:
+  - 表示の側（UI スレッド）はトークの番号を知らない。番号なしでは「時間切れを決めた後に次のトークが始まって終わっていた」行き違いを退けられない。番号は配送（`areka-ghost` の dispatcher の `on_start`）から受け口へ渡すのが最短で、`BootCueSink` に既定つきの関数 `begin_talk` を足せば、呼び出しの署名は 1 つも変わらない。
+  - 今の計測は「配られた cue の終わりに現在時刻が達したら」始まる。cue の境目から次の cue が届くまでに最大 1 フレームほどの隙間があり、`\![set,balloontimeout,10]` のような小さな値では話の途中で時間切れが成立する。トークの終わりの合図（受け口が落ちるときに送る）を計測の成立条件に足すと、起点（要件 5）・小さな待ち時間（要件 9.1）・知らせの意味（終わったトークのバルーンが消えた）が同時に片付く。
+  - 再生の開始 `Action::StartTalk` は必ず `step` の出口を通る。そこで番号と最終の台本を控えれば、再生を始める 8 か所の腕にも `steady.rs`・`change.rs` にも触らずに、3 つのイベントの Reference0 の源が 1 つになる（切替の `OnClose` の別れの台詞も取れる）。
+
+### 11.2 Research Log
+
+#### 取り込みの後の測り直し
+- **Context**: 同じウェーブの spec が先に着地している見込み（§10 の 9）。
+- **Findings**: 行数は `schedule/mod.rs` 938・`steady.rs` 947・`events.rs` 733・`user_break.rs` 75・`change.rs` 425・`msg.rs` 909・`actor.rs` 876・`talk_lifecycle.rs` 212・`balloon_visibility.rs` 472・`balloon_visibility_decision.rs` 281・`balloon_visibility_wait.rs` 242・`balloon_visibility_phase.rs` 751・`emo2_boot/mod.rs` 883・`consumer_ledger.rs` 859・`spine.rs` 1,000・`dispatcher.rs` 432。送ってよいイベントの表は 48 行（`events_change_tests.rs` の数の表明）、受け取り手の宣言表は 15 行、`State` を省略なしで組むテストは 14 か所。§2・§6 の事実（`on_talk_done` の 5 つの腕・`on_user_break` の「再生中のトークが無い」腕・`judge_press` が再生中を見ないこと・`judge_box_press` が話していなければシェルへの操作にすること・`status_report.rs` の送出端の取り出し方・talk スレッドが受け口を落としてから完了を知らせること）は、今のソースで読み直して変わっていない。
+- **Implications**: `schedule/mod.rs` の足し分は 20 行未満で、分割は要らない。`spine.rs` はちょうど 1,000 行なので、1 行も増やせない。
+
+#### 表示の側が持てる照合の印
+- **Context**: §8 の 3・§10 の 4（時間切れと次のトークの行き違い）。
+- **Findings**: 受け口は cue しか受け取らない。配送は `start.talk_id` を持つが、受け口は `clone_box` で複製されるだけ。`BootCueSink` は `Clone` を持つ型すべてへの一括の実装で、型ごとに振る舞いを変えるには、その型が `Clone` を持たずに自分で実装する必要がある。小さな 2 クレートを `rustc` で組んで、自分の型が `Clone` を持たなければ一括の実装と並べて書けることを確かめた。
+- **Implications**: `BalloonLifecycleSink` は `Clone` を外して `BootCueSink` を自分で実装し、`begin_talk` で番号を受け取る。
+
+#### トークの終わりの時刻の軸
+- **Context**: §8 の 5・§10 の 6。
+- **Findings**: `TalkClock` の起点は cue の到着から「到着の壁時刻 − cue の時刻」の最大値で推定し、新しいトークで前へ跳ぶ。受け口が落ちる時点では次のトークの cue は観測されていない（talk スレッドは受け口を落としてから完了を知らせ、置き換えでは配送が古いスレッドの合流を待つ）ので、落ちた瞬間の `talk_time` は止めたトークの軸で読める。推定は遅い側へ寄るので、最後まで流れたトークの止まった時刻が占有終端よりわずかに早く読まれることがあるが、本当の終端より前にはならない。
+- **Implications**: 起点は `min(占有区間の終端, 止まった時刻)` の 1 つの式でよい。
+
+#### 選択肢の時間切れの解除の後のバルーン
+- **Context**: §8 の 2・§10 の 5。
+- **Findings**: 表示の側の「選択肢が表示中か」（`TextLayerRuntime::choice_active`）は、文字の層の選択肢の行が空でないことだけを見る。行は内容の消去でしか消えない。選択が済んだ後も、時間切れで解除した後も、抑止は次のトークの全消去まで続く。
+- **Implications**: 選択肢を含む台詞のバルーンは時間切れにならず、`OnBalloonTimeout` も送られない。本 spec の変更の前からの性質で範囲の外。`/kiro-discovery` で起票する（controller へ申し送り）。
+
+#### 切れ目の見張りとの絡み
+- **Context**: §8 の 4。
+- **Findings**: 中断で定常へ戻った `step` の末尾で、印の無い見張りは「切れ目に達した」と決まる。同じ一括の GET（`OnBalloonBreak`）の応答でトークが始まっても、殻は結果をその依頼の処理の後に 1 回だけ返す。切れ目を待っていた側が続けて頼むイベントの応答は、再生中のトークを置き換える（`value_replaces_active_talk`）。毎秒の `OnSecondChange` の応答でトークが始まる場合と同じ性質。
+- **Implications**: 追加の決まりは要らない。
+
+### 11.3 Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| 案 A（既存の部品を広げる） | 判断を `mod.rs`・`user_break.rs`・`change.rs` に散らす。時間切れは汎用の入口で運ぶ | 新しいファイルが無い | `mod.rs` が太る。汎用の入口に「kanade が中身を補う」特別扱いが混ざる | 退けた |
+| 案 B（新しいファイルに集める） | 判断を `schedule/balloon_events.rs` に置き、時間切れは専用のメッセージで運ぶ | 規則の順が 1 か所で読める。`steady.rs`・`change.rs` に触らない | `msg.rs`・`actor.rs` に 1 変種・1 腕（約束の外） | **採用** |
+| 案 C（段に分ける） | イベントごとに段を切る | 各段が単独で緑 | 設計の形は案 B と同じ。段はタスクの順で表せる | タスクの並べ方として使う |
+
+### 11.4 Design Decisions
+
+#### Decision: 時間切れの知らせを専用のメッセージで運ぶ（§10 の 2）
+- **Alternatives Considered**:
+  1. `KanadeMsg::RaiseEvent` に `OnBalloonTimeout` を載せ、kanade が名前を見て Reference0 を補い、再生中なら捨てる。番号は Reference に入れる。
+  2. `KanadeMsg::BalloonTimeout { talk_id }` を足す。
+- **Selected Approach**: 2。
+- **Rationale**: 汎用の入口は「許可表のイベントを渡された Reference のまま送る」決まりで、MCP の `raise_event` からも使われる。1 は入口の決まりを 2 つにし、番号を Reference に紛れ込ませる。約束（`msg.rs`・`actor.rs` に触らない）を守るための回避の形であり、開発者の方針「本質の形で設計し、約束の外で触るファイルを挙げる」に従って 2 を採る。
+- **Trade-offs**: `msg.rs` に約 10 行・`actor.rs` に 1 行。持ち主（`areka-P0-mcp-get-status`）との調整が要る。
+- **Follow-up**: 外から頼まれた `OnBalloonTimeout`・`OnBalloonClose`・`OnBalloonBreak`（表に載るので頼める）は、渡された Reference のまま送る。
+
+#### Decision: トークの番号を受け口へ渡す（§10 の 4）
+- **Alternatives Considered**:
+  1. 番号なしで、kanade の相（再生中なら捨てる）だけで裁く。
+  2. 表示の側と kanade がそれぞれトークの数を数えて突き合わせる。
+  3. `spawn_dispatcher` か `GhostBootOptions` に「トークの開始」の口を足す。
+  4. dola の `CueSink` に既定つきの関数を足す。
+  5. `BootCueSink` に既定つきの `begin_talk` を足す。
+- **Selected Approach**: 5。
+- **Rationale**: 1 は「次のトークが始まって終わっていた」場合に Reference0 が別のトークの台本になり、そのトークの時間切れで同じ台本がもう一度送られる。2 は cue を 1 つも出さずに終わるトーク（最初の刻みの前に止められたトーク）で数が食い違い、以後ずっと合わなくなる。3 は `spawn_dispatcher` の呼び出し 11 か所・`GhostBootOptions` の組み立て 35 か所に波及する。4 は dola にトークの番号の概念を持ち込む。5 は配送の層（番号を知っている層）に閉じ、既存の受け口は既定のまま変わらない。
+- **Trade-offs**: `BalloonLifecycleSink` が `Clone` を持たなくなる（テストの `.clone()` は `clone_box` へ）。
+
+#### Decision: 計測はトークの終わりが届いてから始める（要件 5・9.1）
+- **Alternatives Considered**:
+  1. 今の成立条件のまま、止まった時刻が届いたら立っている満了予定を引き直す。
+  2. トークの終わりの合図が届くまで計測を立てない。
+- **Selected Approach**: 2。
+- **Rationale**: 1 は、抑止の解除で計り直した満了予定を引き直してよいかの場合分け（起点の種類の控え）が要り、話の途中の隙間での時間切れが残る。話の途中で時間切れが成立すると、kanade は同じ番号の知らせを「終わったトークの完了の知らせが遅れているだけ」なのか「話の途中の誤り」なのか区別できない。2 では、計測が立つ時点で起点も待ち時間も確定しており、引き直しが要らない。正典の「スクリプトの表示が終わってからカウント」にも合う。
+- **Trade-offs**: 完了 spec `areka-P0-balloon-visibility` の檻のうち時間切れの成立を期待するものに、トークの終わりの合図を足す（満了の時刻の期待は変わらない）。互換対応表の既定の待ち時間の行の説明も合わせる。最後まで流れたトークの振る舞いは、満了の時刻も含めて今と同じ。
+- **Follow-up**: 要件の「時間切れの判断の規則は変えない（起点だけを変える）」の読みとして、設計の討議で確かめる（成立条件に「終わりが届いていること」を足すのは、起点を正確に定めるための変更）。
+
+#### Decision: 中断を出したのにトークが自分で終わった場合は `OnBalloonClose`（要件 3.1 の読み）
+- **Alternatives Considered**:
+  1. 何も送らず記録だけ残す。
+  2. `OnBalloonClose` を送る。
+- **Selected Approach**: 2。
+- **Rationale**: 利用者のダブルクリックでバルーンは隠れている。トークは止められたのではなく最後まで流れていた（止める指示は終わったトークに届かなかった）ので、「再生中のトークが無いときに読み終えたバルーンを閉じた」と同じ出来事。1 では出来事が消える。
+- **Trade-offs**: 箱（シェルの中のバルーン）で同じ行き違いが起きたときも `OnBalloonClose` になる（表示の側が「話している」と判定して箱を隠した 1 フレーム以内の場合だけ）。設計の討議で確かめる。
+
+#### Decision: 終了の要求を保留している間は 3 つとも送らない（要件 3.4・§4 の B）
+- **Selected Approach**: 門を「相が `Steady{talk: None}` で、終了の保留が無い」の 1 つにする。
+- **Rationale**: マウスのイベントの決まりと揃う。次の刻みで終了の握手へ進むので、応答のトークを始めても握手に割り込むだけ。
+
+#### Decision: Reference0 の控えが無いときは空で送る（§10 の 3）
+- **Rationale**: 再生の開始が `step` を出るたびに控えるので、バルーンが出ていて控えが無い場面は構造上は無い。出来事そのものは起きているので、送らない分岐は作らず、空で送って警告を残す。
+
+#### Decision: `\![set,balloontimeout,時間]` は表示の合図の線で運ぶ（§10 の 8）
+- **Selected Approach**: `BalloonLifecycleSink` が `("set", "balloontimeout")` を拾い、同じ線へ `BalloonTimeout(TalkTimeout)` を流す。値の読み（正・0 と負・省略・読めない）は受け口の純関数で行い、読めなかった値は受け口で記録する。
+- **Rationale**: 占有終端・トークの始まりと同じ線なので、台本の順のまま届き、次のトークの始まりで既定へ戻すのも同じ畳み込みで済む。受け口を増やさない。
+
+### 11.5 統合の見立て（Synthesis）
+- **まとめた所**: 3 つのイベントは「トークの控えを読んで、定常なら GET を 1 本積む」同じ形。門と記録を共通にし、入口だけ 3 つに分けた。`OnBalloonBreak`・行き違いの `OnBalloonClose`・預かった `OnBalloonTimeout` は、どれも「完了の後の判断」の 1 か所に集まる。
+- **作らずに使う所**: 応答の台本の再生・`OnTranslate`・失敗の扱いは、定常の応答の腕と翻訳の出口と横断の失敗の腕をそのまま使う。落ちるときに合図を送る型は `NoUserBreakCueSink` の `Drop` の写し。
+- **削った所**: 予約の型 `BalloonLifecycleNotice`（表示の側は台本を持たないので使い道が無い）。満了予定の引き直しの仕組み（成立条件の変更で要らなくなった）。表示の側の「送り済み」の掛け金（kanade の控えの印 1 つで足りる）。新しい受け口・新しい線・新しい結線の束。
+
+### 11.6 Risks & Mitigations
+- 約束の外の 3 ファイル（`msg.rs`・`actor.rs`・`spine.rs`）の調整が付かない——変更は足すだけ（`spine.rs` は行数を変えない 1 行）なので、後からマージする側が足し直せる。調整が付かなければ設計を戻して相談する（回避の形には倒さない）。
+- 既存の可視性の檻の直し漏れ——時間切れを期待する檻は、補助 `display_end` を使う 15 か所と、合図を直に積む所。対象 crate のテストで赤になるので漏れは残らない。
+- 話の途中の隙間の時間切れが無くなることで、選択肢の待ちの間の計測（今は立って抑止で止まっている）が立たなくなる——解けた後の計り直しは、トークの終わりが届いた後の解除の縁で今までどおり働く。
+- 小さな待ち時間で、置き換えで止められたトークのバルーンが、次のトークの最初の文字までの間に時間切れで 1 回隠れることがある——知らせは番号の食い違いで捨てられ、次のトークの文字で出し直される。
+
+### 11.7 References
+- [OnBalloonBreak](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonBreak)・[OnBalloonClose](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonClose)・[OnBalloonTimeout](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonTimeout)
+- [`\![set,balloontimeout,時間]`](https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_!_set%2Cballoontimeout%2C%E6%99%82%E9%96%93_)
+- §10 の 9 件の行き先: 1→11.3（案 B）／2→11.4 の最初の決定／3→「Reference0 の控えが無いとき」／4→「トークの番号を受け口へ渡す」／5→11.2「選択肢の時間切れの解除の後のバルーン」（起票）／6→11.2「切れ目の見張り」「トークの終わりの時刻の軸」／7→design.md「File Structure Plan」（`frame/wiring.rs` は触らない・`emo2_boot/mod.rs` は 1 行）／8→「表示の合図の線で運ぶ」／9→11.2「取り込みの後の測り直し」。
