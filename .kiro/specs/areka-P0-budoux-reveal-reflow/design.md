@@ -182,7 +182,7 @@ crates/areka/src/emo2_boot/
 ### Modified Files
 
 - `crates/dola/src/cue/sink.rs` — `CueSink::preview` を足す。説明は `dola` の言葉（合図・受け手）だけで書く。
-- `crates/dola/src/cue/schedule.rs` — `TimedSchedule` に、まだ配っていない中身（`Entry::Payload`）を配る順に返す読み口を足す（`pub(crate)`）。区切り（`Barrier`）と配送の制御（`Routing`）は含めない。
+- `crates/dola/src/cue/schedule.rs` — `TimedSchedule` に、まだ配っていない中身（`Entry::Payload`）を配る順に返す読み口を足す（`pub(crate)`）。区切り（`Barrier`）と配送の制御（`Routing`）は含めない。予定表の欄 `entries` は後ろから取り出す並び（同じ時刻は先に入れたものが先に出る）なので、後ろから読んで配る順にする。
 - `crates/dola/src/cue/runtime.rs` — `register_sink` が、登録の前に上の読み口で合図の列を作り、`sink.preview` を 1 度呼ぶ。`tick` は変えない。
 - `crates/areka-emo-text/src/sink.rs` — `TextMsg` に `Upcoming(Vec<TalkCue>)` を足す。`EmoTextSink` が `preview` を実装して待ち行列へ積む。取り出しの写像に、先渡しの受け取りを差し込める形を足す（今の `handle_text_msg` の呼び方は残す）。
 - `crates/areka-emo-text/src/state.rs` — `TextLayerState` に「空回し」の印（私有の欄・既定は偽）と、印を立てた写しを返す口を足す。選択肢の字が空の warn を、印が立っていれば出さない。
@@ -528,7 +528,7 @@ impl TextLayerState {
 }
 ```
 
-- 印は `TextLayerState` の私有の欄（既定は偽）。本番の状態では決して立たない。写しは比べられないので、既存の等しさの検査に影響しない。
+- 印は `TextLayerState` の私有の欄（既定は偽）。本番の状態では決して立たない。`TextLayerState` は等しさを自動で導いているので、印の立った写しは中身が同じでも本番の状態と等しくならないが、検査が比べるのは場所ごとの内容（`ActorTextState`）で、印の立った写しそのものは比べない。既存の等しさの検査には影響しない。
 - 止めるのは warn の 4 か所だけ（Existing Architecture Analysis の最後の項）。`TextLayerState` の側の 2 か所は欄を見る。`ActorTextState` の側の 2 か所は、`state.rs` から呼ぶ `push_current_style`・`apply_font_args` へ真偽を 1 つ渡す。warn 済みの記録（同じ指定を 1 台詞に 1 度だけ記録する集合）は今のまま更新する（写しの中だけの話で、本番の集合には触れない）。
 - `debug!` は止めない。代わりに `install` の空回しを `debug_span!("rehearsal")` で囲み、記録を読む人が本番の適用と見分けられるようにする。
 - 本番の記録は、件数も文面も変えない。
@@ -556,7 +556,7 @@ pub(super) fn arrange_lines(
 - 見える数は、届いた内容の表示の時刻から（`reveal().visible(talk_time)`）。今と同じ。
 - 1 字ずつ: 届いた字の列・`WrapPlan::CharByChar`・届いた内容の装飾。今の呼び方と 1 つも変えない。`lookahead` に触れない。
 - 文節: `lookahead.basis(place, 届いた内容)` を聞く。
-  - `Full`: `LayoutEngine::layout_styled(全文.items(), 見える数, …, WrapPlan::Segmented(全文の区切り), 装飾)`。装飾は、番号と表を全文から、「今の見た目」（字の無い行の丈にだけ使う）を届いた内容から取る。
+  - `Full`: `LayoutEngine::layout_styled(全文.items(), 見える数, …, WrapPlan::Segmented(全文の区切り), 装飾)`。装飾は、番号と表も「今の見た目」（字の無い行の丈にだけ使う・`GlyphStyles` の欄 `current`）も、すべて全文の側から取る。「今の見た目」を届いた内容から取ると、字の無い行を `\_l` や改行で閉じた後に出た字が、後から届いた `\f[height,…]` で上下に動く（`LineHeights::close`・`LineHeights::peek` がこの値を読む）ので、要件 1.1・1.2 に当たる。出終わったときは届いた内容と全文が同じなので、最終形は変わらない（要件 3.2）。
   - `Arrived`: 今の呼び方（届いた字で `segment_plan`、届いた字で配置）。
 - `present_actor` は、今の「見える数 → 区切り → `layout_styled`」の並びを `arrange_lines(&runtime.state, &mut runtime.lookahead, &mut runtime.cursor_warn, place, &resolved, &render.metrics, talk_time)` の 1 回の呼び出しに替える。その後ろ（あふれの窓・選択肢・描画・クリックの範囲）は同じ行の列を今のまま使う。選択肢の範囲は届いた内容（`actor_state.choices()`）から取る。行の列には見えている字しか入らないので、番号はそのまま合う。
 - Postconditions: 同じ（状態・区間の全文・配置の入力・字幅・時刻）なら同じ行の列。字幅は引数で、GPU の資源を要らない。
@@ -615,6 +615,7 @@ pub(super) fn arrange_lines(
 7. **1 字ずつの折り返し**（要件 3.3・3.4）: `budoux_newline` の無いバルーンで 1 の台本。各段階で安定し、修正前の呼び方（`WrapPlan::CharByChar`）と同じ。先渡しを落としても warn が 0 件（区間の全文に触れない）。
 8. **縦書き・改行・選択肢・2 つの場所**（要件 1.6・1.7・4.4・4.5）: 1 の形を、縦書きのバルーン、`\n` を挟む台本、`\q` の選択肢を含む台本、本体側と相方側が交互に話す台本で回し、同じ判定の関数にかける。
 9. **中断と次のトーク**（要件 2.6）: 1 の台本を途中まで届けて止める（以後 `tick` しない）。時刻だけ進めても行の列が変わらない。続けて 2 本目の台本の再生機を登録だけして（先渡しだけが届く）行の列が変わらないこと、`tick` の後は 2 本目の字だけの台本と同じ行の列になることを見る。
+10. **字の無い行の後の字と、後から届く `\f[height,…]`**（要件 1.1・1.2）: 区間の頭が「改行 → 相対の `\_l` → 字 → 待ち → `\f[height,…]` → 字」の台本。最初の字の行内の位置と行の上下の位置が、`\f` の合図が届く前と後で同じで、出終わったときとも同じ。
 
 ### 純粋な部品の検査（`lookahead_tests.rs`）
 
@@ -639,13 +640,14 @@ pub(super) fn arrange_lines(
 ### 実機（要件 5.6）
 
 - デバッグ版の `areka` を建て（`cargo build -j 2 --bin areka`）、emo2 をワークツリーの `target\` の下の短いパスへ写し、profile を消して初回起動にし、絶対パスで起動する。記録は `areka_emo_text` を debug まで開ける。
-- 見るもの: エモ側の「‥」が最初から「ええと、」と同じ行（2 行目の頭）に出て、「ええと、」が届いた後も同じ行にあること（「‥」が出た直後と「ええと、」が出た後の 2 枚を撮り、spec の `evidence/` へ置く）。記録に、最初の字の適用より前に先渡しの受け取りの行があること、食い違い・先渡し無しの warn が 0 件であること。
+- 見るもの: エモ側の「‥」が最初から「ええと、」と同じ行（2 行目の頭）に出て、「ええと、」が届いた後も同じ行にあること（「‥」が出た直後と「ええと、」が出た後の 2 枚を撮り、spec の `evidence/` へ置く）。記録に、最初の字の適用より前に先渡しの受け取りの行があること、食い違い・先渡し無しの warn が 0 件であること。空回しは状態の適用をそのまま呼ぶので、字の適用の debug 行が先渡しの時点でもう 1 組出る。空回しの行は区切りの印 `rehearsal` の中に出るので、それを除いて読む。
 - 一時フォルダ・検体は `target\` の下だけに作り、終わったら消す。
 
 ### 既存の検査（要件 3.5）
 
 - `segment_plan(&[TextItem])`・`WrapPlan`・`LayoutEngine::layout*`・`handle_text_msg(msg, on_cue)`・`TextLayerState::apply_cue`・`route_select` の呼び方と結果は変えないので、完了済み `areka-P0-budoux-newline` と文字の層の既存の検査は書き換えずに通る。
-- 文節の折り返しのバルーンへ、先渡しなしで合図を直接流す既存の検査（`actor_scroll_retain_tests.rs` など）は、修正前の動きの枝を通る＝結果は今と同じ。warn が 1 件増えるが、これらの検査は warn の件数を見ていない（調べた範囲: warn の件数を見る既存の検査に、文節の折り返しで提示まで進むものは無い）。全体テストで確かめる。
+- 文節の折り返しのバルーンへ、先渡しなしで合図を直接流す既存の検査（`actor_scroll_retain_tests.rs` など）は、修正前の動きの枝を通る＝結果は今と同じ。warn が 1 件増えるが、これらの検査は warn の件数を見ていない（調べた範囲: warn の件数を見る既存の検査に、文節の折り返しで提示まで進むものは無い）。これは読んで調べただけなので、`TalkLookahead` を入れた直後に全体テストを 1 度回して確かめる。
+- 起動の通しの検査（`crates/areka/src/emo2_boot/spine.rs` の土台）に、「先渡しが無い」の warn が 0 件であることの判定を 1 行足す。本番の鎖（トークごとの写し → `ClockedTextSink` → `EmoTextSink`）のどこかで先渡しの転送が漏れたときに、ここで拾える。
 
 ## Performance & Scalability
 
