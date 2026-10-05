@@ -115,7 +115,7 @@ graph TB
 | D4 | 時間切れの知らせは専用のメッセージ `KanadeMsg::BalloonTimeout { talk_id }` で運ぶ | 汎用の入口は「渡された Reference のまま送る」決まりで、kanade が中身を補う特別扱いを混ぜると決まりが 2 つになる。番号を Reference に紛れ込ませる形も取らない |
 | D5 | トークの番号は配送から受け口へ `BootCueSink::begin_talk` で渡す | 表示の側と kanade が同じ番号で話せる。数を別々に数えて突き合わせる形は、cue を 1 つも出さずに終わるトークで食い違う |
 | D6 | 時間切れの計測は、トークの終わりの合図が届いてから始める | 起点（終端と止まった時刻の早い方）が終わりの時点で確定する。話の途中の隙間で時間切れが成立しなくなり、表示の側が「終わったトークのバルーンが時間切れで消えた」と言い切れる |
-| D7 | 利用者の中断を出したのにトークが自分で最後まで流れて終わった場合は、`OnBalloonClose` を送る | 利用者のダブルクリックでバルーンは隠れている。トークは止められたのではなく終わっていたので、「読み終えたバルーンを閉じた」に当たる。何も送らないと出来事が消える |
+| D7 | 利用者の中断を出したのにトークが自分で最後まで流れて終わった場合は、`OnBalloonClose` を送る | 利用者のダブルクリックでバルーンは隠れている。トークは止められたのではなく終わっていたので、「読み終えたバルーンを閉じた」に当たる。何も送らないと出来事が消える。`OnBalloonBreak` にすると Reference0 が実際には中断されていない台本になる。箱（シェルの中のバルーン）で起きた場合も同じ扱い（2026-10-05 設計の討議 議題 1・開発者裁定「案 1」） |
 | D8 | 終了の要求を保留している間は、3 つとも送らない | マウスのイベントの決まり（`steady::on_mouse` の先頭）と揃える（要件 3.4 の読み）。次の刻みで終了の握手へ進むので、応答のトークを始めても意味が無い |
 | D9 | Reference0 の控えが無い（構造上は起きない）ときは、空で送って警告を残す | 出来事そのものは起きている。送らない分岐を増やさない |
 | D10 | `OnBalloonTimeout` と `OnBalloonClose` は、1 つのトークにつきそれぞれ高々 1 回（控えに印を持つ） | 時間切れで隠す発行が 2 フレームに分かれる縮退や、同じフレームに 2 回届いたダブルクリックで二重に送らない |
@@ -185,7 +185,7 @@ doc/
 | `crates/areka-kanade/src/actor.rs` | `areka-P0-mcp-get-status` | `KanadeMsg` から `Input` への振り分けの腕 1 本（+1 行） | 上の変種を運行表へ渡す |
 | `crates/areka/src/emo2_boot/spine.rs` | `areka-P0-ghost-session-test-load-flake` | 受け口を組む 1 行を `BalloonLifecycleSink::new(lifecycle_tx, clock.clone())` に替える（行数は 1,000 のまま増えない） | 受け口が止まった時刻を talk 相対秒で送るには時刻源が要る。時刻源を省ける形にすると、決定論のテストだけが「時刻が届かない」縮退の道を通ることになる |
 
-調整の結果（2026-10-05）: `emo2_boot/mod.rs` は `areka-P0-animated-image-playback` が先に main へ入る（開発者の裁定）。向こうは時計 `seriko_clock` を足すだけで `clock` の名前・型・持ち主を変えないので、本 spec は取り込んだ後に受け口を組む 1 行を替える。`msg.rs`・`actor.rs`・`spine.rs` は後からマージする側が足し直す（足すだけなので機械的に解ける。数を手で書いている所は取り込んだ後に数え直す）。
+調整の結果（2026-10-05）: `emo2_boot/mod.rs` は `areka-P0-animated-image-playback` が先に main へ入る（開発者の裁定）。向こうは時計 `seriko_clock` を足すだけで `clock` の名前・型・持ち主を変えないので、本 spec は取り込んだ後に受け口を組む 1 行を替える。`msg.rs`・`actor.rs`・`spine.rs` は後からマージする側が足し直す（足すだけなので機械的に解ける。数を手で書いている所は取り込んだ後に数え直す）。持ち主の返事: `areka-P0-mcp-get-status` は `KanadeMsg` の末尾に `StatusQuery` を足し `actor.rs` に腕を 1 本足すだけで、並びは移さない。`areka-P0-ghost-session-test-load-flake` は `spine.rs` から待ちの部品を子のファイルへ出して 920 行前後へ減らすが、受け口を組む行と `spine_conformance_lap_tests.rs` には触らない。
 
 約束には無いが、別のクレートに及ぶ変更: `crates/areka-ghost/src/sink.rs`・`dispatcher.rs`（計 約 +12 行）。触らないもの: `schedule/steady.rs`・`schedule/change.rs`・`crates/areka-sakura/src/compile.rs`・`input_events/`・`frame/wiring.rs`・dola。
 
