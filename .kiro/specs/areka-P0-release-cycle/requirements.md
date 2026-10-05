@@ -69,6 +69,7 @@
 5. The リリースの手順 shall 版を上げ、タグを打つ唯一の経路である（ほかの spec の PR や `/kiro-complete` は版にもタグにも触らない）。
 6. The リリースの手順 shall ソースコード（各クレートのコード・`tools/` のスクリプト・workflow のファイル）を書き換えない。書き換えるのは要件 3.3 のファイルと、本 spec のフォルダと、要件 7 の記録の 1 行と、初回だけ根の `README.md` の 1 行（要件 8.8・記録の 1 行と同じ PR）だけ。
 7. The リリースの手順 shall 接続先の URL や認証の情報を画面にもログにも印字しない（`git remote -v` などを手順に入れない。してはいけない操作の一覧は `doc/crates-io-publish.md` 7 節に従う）。
+8. The 本 spec shall `/kiro-complete` を使わない。main への入り方（版上げの PR・記録の 1 行の相乗り）は本 spec の要件 4・7 と、それに従う設計・タスクだけで決める（例外は本 spec だけなので、決まりは本 spec の中に置き、ほかの決まりの文書は書き換えない・2026-10-05 開発者の裁定）。
 
 ### Requirement 2: 前提の確かめ
 
@@ -167,6 +168,7 @@
 
 - **初回の PR の分け方**（brief の議題 1・2026-10-05 開発者「どちらも推しで」）→ 初回だけ、本 spec の文書と版上げを 1 本の PR に入れる（要件 4.4）。記録の 1 行と `tasks.md` のチェックの戻しは、次の spec か棚卸の PR に相乗りさせ、記録だけの PR は出さない（要件 7.4）。
 - **`README.md` の「まだ GitHub Releases での配布はしていない」の行**（brief の議題 2・同じ裁定）→ 初回の本 spec が直す。Release の公開を確かめてから、記録の 1 行と同じ PR で直す（要件 1.6・8.8）。
+- **`/kiro-complete` との関係**（要件ディスカッション 議題 1・2026-10-05 開発者「この spec だけが例外なんだから、要件・設計・タスクがそれに従っていればいい。kiro-complete は繰り返し spec では使わない」）→ 本 spec は `/kiro-complete` を使わず、main への入り方は本 spec の要件・設計・タスクで決める。`workflow.md` や `kiro-complete` の文は直さない（要件 1.8）。
 - **版上げの道具**（brief の議題 3）→ 設計で決める（要件は変わらない）。brief の棚卸㉒の節は、手元の cargo-edit 0.13.13 のソースを読み、`cargo set-version --bump patch --workspace` が `[workspace.dependencies]` の `dola` の行も動かす見込みとした。実物は要件 8.3 で確かめる。
 - **開いている PR の条件**（brief の議題 4）→ 2026-10-05 棚卸㉒の裁定 8 で「`Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md` を触る開いた PR 0 本」に改めた（要件 2.2・2.3）。
 - **`THIRD-PARTY-NOTICES.md` の作り直し**（brief の議題 5）→ 作り直す。`.kiro/steering/workflow.md` の「`Cargo.lock` の扱い」が「lock を揃えたら謝辞も作り直してコミットに含める」と決めており、全体テストの `-License` が作り直す（要件 3.3）。
