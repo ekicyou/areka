@@ -166,7 +166,7 @@
   - _Depends: 1.2, 4.1, 4.2_
 
 - [ ] 7. 最終確認
-- [ ] 7.1 触ったクレートの全部の検査を回す
+- [x] 7.1 触ったクレートの全部の検査を回す
   - `cargo test -j 2 -p dola -p areka-emo-text -p areka -p areka-sakura -p areka-ghost -p areka-seriko -p log-capture-kit` を 1 度回し、すべて緑であること（受け手の約束の追加で、十数個のほかの受け手が書き換えなしでコンパイルできること、1 ファイル 1,000 行の番人を含む）
   - `Cargo.toml` がどれも変わっていないこと、`dola` の説明に上の層の言葉が無いこと、本番のコードに記録の捕捉先を差し替える呼び出しが無いことを確かめる
   - 完了の状態: 上のコマンドの結果がすべて緑で、確かめた 3 点を報告に残す
@@ -193,3 +193,4 @@
 - 5.2: 検査 5 を厳密に比べる中で dola の欠陥が見つかり、根本を直した。`TimedSchedule` は到達・区切りの期限・完了を `current_time - start_time` と相対の時刻で比べていたため、`CueSheet::absolute_fire_time`（`start + offset`）ちょうどの tick で合図を取りこぼすことがあった（例: 2.5999999999999996 @ 100）。今は絶対の `current_time` を持ち、すべて `start_time + offset` で判定する。境界の含み方は同じ。残り: 既存の `schedule_test.rs` の注釈に、もう無い欄の名前 `current_offset` が残る（既存の検査は書き換えない約束で残した）。`start_time` が NaN のとき、作ったばかりの `is_completed` が true から false に変わる（もともと tick 後は false で一貫していなかった）。
 - 5.3: 検査 8 の選択肢の範囲は、`present_actor` を通さず本番の `annotate_lines` → `line_bands` → `derive_hit_rows` を同じ順で呼んで出す（`present_frame` は DWrite の実測の字幅で要件 5.5 と食い違うため）。本番がこの 3 つへ同じ `lines` を渡すことは構造で確かめた。3 つを 1 つの本番の関数にまとめれば檻で固定できる（範囲外・完了時の棚卸で扱う）。縦書きの形は幅を 70 に狭め、縦書きの指定が効かなければ赤になることを確かめた。
 - 6.2: emo2-kakukaku は `budoux_newline,1` を持つので、起動の通しの検査の warn 0 件も判定になっている（転送を外す変異で「先渡しが無い」が 1 件出た）。ただし繰り返しは受け取りの行が出た回で止まり、字が提示されたことは判定していない。
+- 7.1: `cargo test -j 2 --no-fail-fast -p dola -p areka-emo-text -p areka -p areka-sakura -p areka-ghost -p areka-seriko -p log-capture-kit` は 52 個の検査の束で 5,086 件通過・0 件失敗・終了コード 0・警告 0。`Cargo.*` の変更 0・dola の本番のコードに上の層の言葉 0・本番のコードに記録の捕捉先を差し替える呼び出し 0。
