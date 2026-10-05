@@ -272,7 +272,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 - `readme.rs` - 説明書を既定アプリで開く葉 module（メニューにも入力配線にも依存しない）
 - `install/` - `.nar` のインストールの結線（`areka-P0-ghost-install` 2026-09-29・窓への投げ込みは `input_events/file_drop.rs`＝`areka-P0-file-drop`）。UI 側の窓口 `desk.rs`・背景スレッド `worker.rs`・純粋な手続き `procedure.rs`・行き先の判断 `judge.rs`・利用条件 `terms.rs`・ファイルを選ぶ画面 `pick.rs`・起動中のゴーストへの上書き `overwrite.rs`・台本の指示で取ってくる `fetch_url.rs`・置換語の値 `names.rs`。エンジンは `areka-nar`
 - `update/` - ネットワーク更新の結線（`areka-P0-network-update` 2026-09-30）。`install/` と同じ形＝UI 側の窓口 `desk.rs`（受付・段・預かり 1 枠・対象の解決・読み直しと後送りの列）・背景スレッド `worker.rs`（本物の口・門）・純粋な手続き `procedure.rs`（口 `UpdatePorts`・偽の口で決定論テスト）・写し `refs.rs`（イベント名 19 語・Reference・失敗の語）。エンジンは `areka-update`。成功の `OnUpdateComplete` と総括は再起動の後の新しいゴーストへ（kanade `BootOrigin::Updated`）
-- `mcp/` - MCP のツールの結線（`areka-P0-mcp-tool-entrances` 2026-10-03）。`fn main()` が受け口を `install`／`close` し、`Input` 段の汲む系（`drain`）が要求を毎フレーム取り出して `ghost_name` を解決（`resolve.rs`）してからツールごとのファイルの `handle` へ振り分ける。UI スレッドで待たない＝別スレッドに問うツールは `later` に預けて毎フレーム覗く。3 段目の spec は自分のツールのファイルだけを書き換える
+- `mcp/` - MCP のツールの結線（`areka-P0-mcp-tool-entrances` 2026-10-03）。`fn main()` が受け口を `install`／`close` し、`Input` 段の汲む系（`drain`）が要求を毎フレーム取り出して `ghost_name` を解決（`resolve.rs`）してからツールごとのファイルの `handle` へ振り分ける。UI スレッドで待たない＝別スレッドに問うツールは `later` に預けて毎フレーム覗く。重い仕事を抱えるツールは、UI スレッドでは写しまでにして別のスレッドから `ReplyTo` で直接答える（`dump_surface`／`dump_balloon` の PNG の符号化・`areka-P0-mcp-dump-images` 2026-10-05）。3 段目の spec は自分のツールのファイルだけを書き換える
 **Dependencies**: wintf, human-panic, thiserror, tracing, tracing-subscriber, async-io, bevy_ecs, windows
 
 ### Parser Crate
