@@ -52,7 +52,7 @@
   - _Boundary: actor_lookahead_tests.rs（検査だけ）・lib.rs の一覧_
   - _Depends: 1.3, 1.4_
 
-- [ ] 3. 空回しと区間の全文（純粋な部品）
+- [x] 3. 空回しと区間の全文（純粋な部品）
 - [x] 3.1 状態の層に「空回し」の印を足し、空回しの間は 4 か所の warn を出さない
   - 状態に私有の印（既定は偽）と、印を立てた写しを返す口を足す。本番の状態で印を立てる口は作らない
   - 止めるのは 4 か所だけ: 選択肢の字が空（state.rs）・`\b[名前]` の箱が無い（state_route.rs の `route_select`、公開の引数は変えない）・`\f` を適用できない／上下付きのまま字を足した（state_decoration.rs の 2 つの warn。`push_current_style`・`apply_font_args` へ「黙る」かどうかを 1 つ渡す。`apply_font_args` の名前と `match` の形は変えない）
@@ -87,7 +87,7 @@
   - _Requirements: 1.1, 2.7, 2.8_
   - _Boundary: TalkLookahead（lookahead.rs・lookahead_tests.rs）、StyleTable の読み口（look.rs）_
 
-- [ ] 3.5 空回しのやり直しと、箱の場所の全文を捨てる口を足す
+- [x] 3.5 空回しのやり直しと、箱の場所の全文を捨てる口を足す
   - `reinstall` を design.md の手順 1〜5 どおりに作る: 先渡しの列が無ければ何もしない → warn 済みの印を消し、今の番号以降の全文を捨てる → 印つきの写しから、数えは今の値の写しで始める（本番の数えに触れない）→ 内容のある場所すべてに「足した」印を付ける → 届いた数より後ろの合図を `install` と同じ手順で流して控える
   - `note_cue` が先渡しの列の次と違う合図を受けたら列を捨て、以後の `reinstall` は何もしない
   - `forget_boxes` は箱の場所の全文と数えを捨てる
@@ -187,3 +187,4 @@
 - 3.1・3.3: `TextLayerState::rehearsal_copy` と `TalkLookahead`（構造体と impl）に `#[cfg_attr(not(test), expect(dead_code, ...))]` が付いている。4.1 で実行時から呼ぶようになったら 3 つとも外す。
 - 3.2: `\s` を読まないときの debug の発生元は `areka_emo_text::lookahead` に変わった。実機（7.2）で `RUST_LOG` を絞るときは `areka_emo_text` 全体を debug まで開ける。
 - 3.3・3.4: 空回しが（場所, 0）の全文を求め直した場所は warn 済みの印を捨て、何も足さず全文を持ち越す場所だけ印も持ち越す（install 手順 7・reinstall 手順 2 と同じ考え方）。`install_carries_the_warned_mark_only_with_the_carried_section` で固定。`Basis` にも 4.1・4.2 までの `expect(dead_code)` が付いている。
+- 3.5: `forget_boxes` は箱の場所の全文・`\c` の数えに加えて warn 済みの印も捨てる（数えが下がった後も「（場所, 区間）につき 1 度」を保つため）。`reinstall` の最初の「足した」印は内容の空でない場所だけ。

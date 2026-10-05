@@ -34,8 +34,8 @@ element2,balloon,b,0,60
 }
 ";
 
-/// 箱の表を入れた状態（箱の名前は公開の構築口を持たないので文面を畳んで取り出す）。
-fn boxed_state() -> TextLayerState {
+/// 検体の箱の表を状態へ入れる（箱の名前は公開の構築口を持たないので文面を畳んで取り出す）。
+fn set_boxes(state: &mut TextLayerState) {
     let world = EmoWorld::build(&parse(SHELL));
     let (layout, report) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
     assert_eq!(report.issues, vec![], "検体の文面は誤りを持たない");
@@ -44,8 +44,13 @@ fn boxed_state() -> TextLayerState {
         .iter()
         .map(|p| p.name.clone())
         .collect();
-    let mut state = TextLayerState::default();
     state.set_box_index(BTreeMap::from([(0, names)]));
+}
+
+/// 箱の表を入れた状態。
+fn boxed_state() -> TextLayerState {
+    let mut state = TextLayerState::default();
+    set_boxes(&mut state);
     state
 }
 
@@ -562,5 +567,303 @@ fn rehearsal_is_silent_and_production_warns_are_unchanged() {
         messages(&production),
         messages(&without),
         "本番の warn は先渡し無しのときと同じ"
+    );
+}
+
+/// 4（続き）. 箱の束の差し替え（`forget_boxes`）: 箱の場所の全文・`\c` の数え・warn 済みの印を
+/// 捨て、普通のバルーンの全文と数えは残す。印は番号の変わらない箱（b）で見る。
+#[test]
+fn forget_boxes_drops_box_sections_and_counts_only() {
+    let mut state = boxed_state();
+    let resolve: &dyn Fn(&str) -> SurfaceKeyOutcome = &resolve;
+    let talk = [
+        cue("0", 0.0, CueCommand::ClearAll),
+        cue("0", 0.0, CueCommand::Emote { key: "0".into() }),
+        text("0", 0.1, "あ"),
+        cue("0", 0.2, CueCommand::Clear),
+        text("0", 0.3, "い"),
+        cue("0", 0.4, CueCommand::BalloonSurface { key: "b".into() }),
+        text("0", 0.5, "う"),
+        text("1", 0.6, "か"),
+        cue("1", 0.7, CueCommand::Clear),
+        text("1", 0.8, "き"),
+    ];
+    let mut look = TalkLookahead::default();
+    look.install(&state, Some(resolve), &talk);
+    deliver(&mut look, &mut state, Some(resolve), &talk);
+    let a = box_place(&state, "0", "a");
+    let b = box_place(&state, "0", "b");
+    let kero = place("1", TextPlace::Balloon);
+    let arrived = content(&state, &a);
+    assert!(
+        is_full(&look.basis(&a, &arrived)),
+        "前提: 箱の場所に全文がある"
+    );
+    assert_eq!(
+        [look.number(&a), look.number(&b), look.number(&kero)],
+        [2, 1, 2],
+        "前提: 頭の全消去と途中の \\c"
+    );
+    // 箱 b に warn 済みの印を付けておく（食い違う字を聞く）。
+    let stray = arrive(&[text("0", 0.0, "さ")]);
+    let (_, marked) = capture(|| is_full(&look.basis(&b, &stray)));
+    assert_eq!(warns(&marked).len(), 1, "前提: 箱の場所の印");
+
+    let balloons: BTreeMap<_, _> = contents(&look)
+        .into_iter()
+        .filter(|((key, _), _)| key.place == TextPlace::Balloon)
+        .collect();
+    assert_eq!(
+        balloons.keys().collect::<Vec<_>>(),
+        vec![&(kero.clone(), 1), &(kero.clone(), 2)],
+        "前提: 普通のバルーンの全文は相方側の 2 区間"
+    );
+
+    look.forget_boxes();
+    assert_eq!(contents(&look), balloons, "箱の場所の全文だけが消える");
+    assert_eq!(
+        [look.number(&a), look.number(&b), look.number(&kero)],
+        [1, 1, 2],
+        "箱の場所の \\c の数えだけが消える"
+    );
+    let (full, events) = capture(|| {
+        [
+            is_full(&look.basis(&a, &arrived)),
+            is_full(&look.basis(&b, &stray)),
+        ]
+    });
+    assert_eq!(full, [false, false], "箱の場所は全文が無い");
+    let warned: Vec<Option<&str>> = warns(&events)
+        .iter()
+        .map(|e| e.field_str("reason"))
+        .collect();
+    assert_eq!(
+        warned,
+        vec![Some("先渡しが無い"); 2],
+        "箱 b の印も消えた＝改めて 1 度記録する"
+    );
+}
+
+/// バルーンの定義の見た目（ukadoc の既定と違う）。
+fn attached_layers() -> LookLayers {
+    LookLayers::from_balloon(
+        vec!["Meiryo".to_owned()],
+        20.0,
+        (255, 0, 0),
+        (255, 255, 255),
+        (0, 0, 255),
+        &[],
+        &[],
+    )
+}
+
+/// 合図を 1 つずつ本番で流し、流すたびに場所 `key` の `basis` を聞く（場所に状態がある間だけ）。
+/// 返すのは答え（全文か）の列と、その間に出た `warn` の件数。
+fn deliver_judging(
+    look: &mut TalkLookahead,
+    state: &mut TextLayerState,
+    resolve: Option<&dyn Fn(&str) -> SurfaceKeyOutcome>,
+    cues: &[TalkCue],
+    key: &PlaceKey,
+) -> (Vec<bool>, usize) {
+    let (answers, events) = capture(|| {
+        let mut answers = Vec::new();
+        for c in cues {
+            deliver(look, state, resolve, std::slice::from_ref(c));
+            if let Some(arrived) = state.place_state(key).cloned() {
+                answers.push(is_full(&look.basis(key, &arrived)));
+            }
+        }
+        answers
+    });
+    (answers, warns(&events).len())
+}
+
+/// 6(a). やり直し（設計の討議 1）: 先渡しの後にバルーンの定義の見た目が差し込まれても、
+/// やり直せば `\f` を含む台本は最後まで全文で配置され、warn は 0 件。やり直さない対照は
+/// 装飾付きの字が届いた所で「届いた字で」になり、warn は 1 件。
+#[test]
+fn reinstall_after_attaching_look_keeps_full_basis() {
+    let actor = ActorKey::from("0");
+    let balloon = PlaceKey::balloon(&actor);
+    let talk = [
+        cue("0", 0.0, CueCommand::ClearAll),
+        text("0", 0.1, "あ"),
+        font("0", &["bold", "1"]),
+        text("0", 0.2, "い"),
+    ];
+    let run = |reinstall: bool| {
+        let mut state = TextLayerState::default();
+        let mut look = TalkLookahead::default();
+        look.install(&state, None, &talk);
+        state.set_look_layers(&actor, attached_layers());
+        let ((), events) = capture(|| {
+            if reinstall {
+                look.reinstall(&state, None);
+            }
+        });
+        assert_eq!(warns(&events).len(), 0, "やり直しの間は warn しない");
+        deliver_judging(&mut look, &mut state, None, &talk, &balloon)
+    };
+    assert_eq!(run(true), (vec![true; 4], 0), "やり直せば最後まで全文");
+    assert_eq!(
+        run(false),
+        (vec![true, true, true, false], 1),
+        "対照: 装飾付きの字で届いた字で"
+    );
+}
+
+/// 6(b). 先渡しが箱の表と解決の閉包より先に届いても、それらを入れた後にやり直せば、
+/// `\s` で箱へ行く字は箱の場所の全文で配置される。やり直さない対照は全文が無い。
+#[test]
+fn reinstall_after_box_layout_rehearses_into_boxes() {
+    let resolve: &dyn Fn(&str) -> SurfaceKeyOutcome = &resolve;
+    let talk = [
+        cue("0", 0.0, CueCommand::ClearAll),
+        cue("0", 0.0, CueCommand::Emote { key: "0".into() }),
+        text("0", 0.1, "あい"),
+    ];
+    let run = |reinstall: bool| {
+        let mut state = TextLayerState::default();
+        let mut look = TalkLookahead::default();
+        look.install(&state, None, &talk);
+        set_boxes(&mut state);
+        if reinstall {
+            look.reinstall(&state, Some(resolve));
+        }
+        deliver(&mut look, &mut state, Some(resolve), &talk);
+        let a = box_place(&state, "0", "a");
+        let arrived = content(&state, &a);
+        let (full, _) = capture(|| is_full(&look.basis(&a, &arrived)));
+        (full, contents(&look), BTreeMap::from([((a, 1), arrived)]))
+    };
+    let (full, table, expected) = run(true);
+    assert!(full, "やり直せば箱の場所は全文");
+    assert_eq!(table, expected, "全文は箱の場所にだけある");
+    let (full, table, expected) = run(false);
+    assert!(!full, "対照: やり直さなければ全文が無い");
+    assert_ne!(table, expected);
+}
+
+/// 6(c). 途中まで届けてからやり直す: 数えは 0 に戻らず（途中の `\c` の後でも番号が合う）、
+/// 今より前の区間の全文は残り、今の区間の全文の先頭は届いた内容と一致する。
+#[test]
+fn reinstall_midway_keeps_counts_and_earlier_sections() {
+    let actor = ActorKey::from("0");
+    let balloon = PlaceKey::balloon(&actor);
+    let talk = [
+        cue("0", 0.0, CueCommand::ClearAll),
+        text("0", 0.1, "あ"),
+        cue("0", 0.2, CueCommand::Clear),
+        text("0", 0.3, "い"),
+        font("0", &["bold", "1"]),
+        text("0", 0.4, "う"),
+    ];
+    let mut state = TextLayerState::default();
+    let mut look = TalkLookahead::default();
+    look.install(&state, None, &talk);
+    deliver(&mut look, &mut state, None, &talk[..4]);
+    let earlier = look.sections[&(balloon.clone(), 1)].content.clone();
+    state.set_look_layers(&actor, attached_layers());
+    // 食い違う字を聞いて今の区間に warn 済みの印を付ける（やり直しは印を消す）。
+    let stray = arrive(&[text("0", 0.0, "さ")]);
+    let stray_warns = |look: &mut TalkLookahead| {
+        let (full, events) = capture(|| is_full(&look.basis(&balloon, &stray)));
+        assert!(!full, "前提: 食い違う");
+        warns(&events).len()
+    };
+    assert_eq!(stray_warns(&mut look), 1, "前提: 今の区間の印");
+
+    look.reinstall(&state, None);
+    assert_eq!(
+        stray_warns(&mut look),
+        1,
+        "やり直しは warn 済みの印を消す＝新しい全文との食い違いは改めて 1 度"
+    );
+    assert_eq!(look.number(&balloon), 2, "数えは 0 に戻らない");
+    assert_eq!(
+        contents(&look).keys().cloned().collect::<Vec<_>>(),
+        vec![(balloon.clone(), 1), (balloon.clone(), 2)]
+    );
+    assert_eq!(
+        look.sections[&(balloon.clone(), 1)].content,
+        earlier,
+        "今より前の区間は残る"
+    );
+    assert!(
+        begins_with(
+            &look.sections[&(balloon.clone(), 2)].content,
+            &content(&state, &balloon)
+        ),
+        "今の区間の全文の先頭は届いた内容"
+    );
+    assert_eq!(
+        deliver_judging(&mut look, &mut state, None, &talk[4..], &balloon),
+        (vec![true, true], 0),
+        "残りは全文で配置される"
+    );
+    assert_eq!(
+        contents(&look)[&(balloon.clone(), 2)],
+        content(&state, &balloon),
+        "全文は出終わった内容"
+    );
+}
+
+/// 6(d). 残りの合図が何も足さない場所でも、やり直しの後は今の内容が今の区間の全文になる
+/// （見た目が載せ直された後の内容と合わせる）。
+#[test]
+fn reinstall_keeps_current_content_where_nothing_is_added() {
+    let actor = ActorKey::from("0");
+    let sakura = PlaceKey::balloon(&actor);
+    let kero = place("1", TextPlace::Balloon);
+    let talk = [text("0", 0.0, "あ"), text("1", 0.1, "か")];
+    let mut state = TextLayerState::default();
+    let mut look = TalkLookahead::default();
+    look.install(&state, None, &talk);
+    deliver(&mut look, &mut state, None, &talk[..1]);
+    state.set_look_layers(&actor, attached_layers());
+    assert_ne!(
+        contents(&look).get(&(sakura.clone(), 0)),
+        Some(&content(&state, &sakura)),
+        "前提: 見た目の差し込みで今の内容は全文と違う"
+    );
+
+    look.reinstall(&state, None);
+    deliver(&mut look, &mut state, None, &talk[1..]);
+    assert_eq!(
+        contents(&look),
+        BTreeMap::from([
+            ((sakura.clone(), 0), content(&state, &sakura)),
+            ((kero.clone(), 0), content(&state, &kero)),
+        ])
+    );
+}
+
+/// 6(e). 先渡しの列に無い合図が届くと列を捨て、以後のやり直しは何も変えない。
+/// 対照（列どおりに届く）では同じやり直しが全文を変える。
+#[test]
+fn stray_cue_drops_upcoming_and_reinstall_becomes_noop() {
+    let actor = ActorKey::from("0");
+    let talk = [text("0", 0.0, "あ"), text("0", 0.1, "い")];
+    let run = |first: TalkCue| {
+        let mut state = TextLayerState::default();
+        let mut look = TalkLookahead::default();
+        look.install(&state, None, &talk);
+        deliver(&mut look, &mut state, None, &[first]);
+        let kept = look.upcoming.is_some();
+        state.set_look_layers(&actor, attached_layers());
+        let before = contents(&look);
+        look.reinstall(&state, None);
+        (kept, before == contents(&look))
+    };
+    assert_eq!(
+        run(talk[0].clone()),
+        (true, false),
+        "対照: やり直しが全文を変える"
+    );
+    assert_eq!(
+        run(text("0", 0.0, "か")),
+        (false, true),
+        "列に無い合図で列を捨て、やり直しは何も変えない"
     );
 }

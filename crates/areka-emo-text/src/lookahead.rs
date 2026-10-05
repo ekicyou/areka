@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use areka_sakura::contract::{CueCommand, TalkCue};
 use tracing::{debug, warn};
 
-use crate::place::PlaceKey;
+use crate::place::{PlaceKey, TextPlace};
 use crate::segment::{SegmentPlan, segment_plan};
 use crate::state::{ActorTextState, SurfaceKeyOutcome, TextLayerState};
 
@@ -44,7 +44,7 @@ pub(crate) fn advance_state(
 }
 
 /// 先渡しを受け取ってからの消去の数え（区間の番号の元）。空回しと本番で同じ数え方をする。
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct ClearCounts {
     /// 全消去の回数（場所に状態があるかに関わらず進む）。
     all: u64,
@@ -153,42 +153,14 @@ impl TalkLookahead {
             .map(|(place, _)| place)
             .collect();
         // 2〜5. 数えは 0 から（上の take で戻した）、印つきの写しで空回しする。
-        let mut copy = state.rehearsal_copy();
-        let mut added = BTreeSet::new();
-        {
-            let _span = tracing::debug_span!("rehearsal").entered();
-            for cue in upcoming {
-                let dest = PlaceKey {
-                    actor: cue.actor.clone(),
-                    place: copy.destination(&cue.actor),
-                };
-                // 消去の前に、消される場所のうち「この区間に足した」ものを今の番号で控える。
-                let cleared: Vec<PlaceKey> = match cue.command {
-                    CueCommand::ClearAll => std::mem::take(&mut added).into_iter().collect(),
-                    CueCommand::Clear => added.take(&dest).into_iter().collect(),
-                    _ => Vec::new(),
-                };
-                for place in cleared {
-                    self.keep(&copy, place);
-                }
-                self.counts.count(cue, &dest);
-                advance_state(&mut copy, resolve, cue);
-                if matches!(
-                    cue.command,
-                    CueCommand::Text(_)
-                        | CueCommand::Choice { .. }
-                        | CueCommand::NewLine { .. }
-                        | CueCommand::Cursor { .. }
-                ) {
-                    added.insert(dest);
-                }
-            }
-            for place in added {
-                self.keep(&copy, place);
-            }
-        }
-        // 6. 本番の数えはここから。
-        self.counts = ClearCounts::default();
+        self.rehearse(
+            state.rehearsal_copy(),
+            ClearCounts::default(),
+            BTreeSet::new(),
+            resolve,
+            upcoming,
+        );
+        // 6. 本番の数えはここから（1 の take で 0 に戻したまま。空回しは自前の数えで番号を振った）。
         // 7. 持ち越しを番号 0 へ（空回しが番号 0 に控えた場所は空回しの側を採る）。warn 済みの
         //    印も持ち越しの一部なので、空回しが全文を求め直した場所では空回しの側（印なし）を採る
         //    ＝新しい全文との食い違いは改めて 1 度記録する（`reinstall` が印を消すのと同じ考え）。
@@ -220,15 +192,101 @@ impl TalkLookahead {
         }
     }
 
+    /// 空回しをやり直す: 今の状態の写しから、先渡しの列のまだ届いていない残りを流し、
+    /// 今の区間とそれより後の区間の全文を入れ替える（design.md の手順 1〜5）。
+    /// 先渡しの列が無ければ何もしない。
+    pub(crate) fn reinstall(
+        &mut self,
+        state: &TextLayerState,
+        resolve: Option<&dyn Fn(&str) -> SurfaceKeyOutcome>,
+    ) {
+        // 1. 列が無い（受け取っていない・捨てた）なら今ある全文のまま。
+        let Some(upcoming) = self.upcoming.take() else {
+            return;
+        };
+        // 2. 印は全部消し、全文は今の番号より前のものだけ残す（場所ごと）。
+        self.warned.clear();
+        let counts = &self.counts;
+        self.sections
+            .retain(|(place, n), _| *n < counts.number(place));
+        // 3〜4. 数えは今の値の写しから（本番の数えには触れない）。内容のある場所は全部「足した」
+        //       ことにして始める＝残りが何も足さない場所でも、今の内容がそのまま今の区間の全文になる。
+        let copy = state.rehearsal_copy();
+        let added = copy
+            .places()
+            .filter(|(_, content)| !content.is_empty())
+            .map(|(key, _)| key.clone())
+            .collect();
+        // 5. まだ届いていない残りを流して控える。
+        let rest = upcoming.get(self.delivered..).unwrap_or_default();
+        debug!(
+            delivered = self.delivered,
+            rest = rest.len(),
+            "空回しをやり直す（出発点が合図と無関係に変わった）"
+        );
+        self.rehearse(copy, self.counts.clone(), added, resolve, rest);
+        self.upcoming = Some(upcoming);
+    }
+
+    /// 箱の場所の区間の全文と数えを捨てる（箱の束の差し替え）。warn 済みの印も区間と一緒に捨てる。
+    pub(crate) fn forget_boxes(&mut self) {
+        let is_box = |key: &PlaceKey| matches!(key.place, TextPlace::Box(_));
+        self.sections.retain(|(place, _), _| !is_box(place));
+        self.warned.retain(|(place, _)| !is_box(place));
+        self.counts.by_place.retain(|place, _| !is_box(place));
+    }
+
     /// 場所の今の区間の番号。
     pub(crate) fn number(&self, place: &PlaceKey) -> u64 {
         self.counts.number(place)
     }
 
-    /// 写しの場所の内容を、今の番号の区間の全文として控える（区切りは `basis` で要ったときに）。
-    fn keep(&mut self, copy: &TextLayerState, place: PlaceKey) {
+    /// 写し `copy` で合図の列を空回しし、区間の全文を控える（`install` の手順 4〜5）。番号は
+    /// `counts` で振る。`added` は始めから「この区間に足した」ことにする場所。
+    fn rehearse(
+        &mut self,
+        mut copy: TextLayerState,
+        mut counts: ClearCounts,
+        mut added: BTreeSet<PlaceKey>,
+        resolve: Option<&dyn Fn(&str) -> SurfaceKeyOutcome>,
+        cues: &[TalkCue],
+    ) {
+        let _span = tracing::debug_span!("rehearsal").entered();
+        for cue in cues {
+            let dest = PlaceKey {
+                actor: cue.actor.clone(),
+                place: copy.destination(&cue.actor),
+            };
+            // 消去の前に、消される場所のうち「この区間に足した」ものを今の番号で控える。
+            let cleared: Vec<PlaceKey> = match cue.command {
+                CueCommand::ClearAll => std::mem::take(&mut added).into_iter().collect(),
+                CueCommand::Clear => added.take(&dest).into_iter().collect(),
+                _ => Vec::new(),
+            };
+            for place in cleared {
+                self.keep(&copy, &counts, place);
+            }
+            counts.count(cue, &dest);
+            advance_state(&mut copy, resolve, cue);
+            if matches!(
+                cue.command,
+                CueCommand::Text(_)
+                    | CueCommand::Choice { .. }
+                    | CueCommand::NewLine { .. }
+                    | CueCommand::Cursor { .. }
+            ) {
+                added.insert(dest);
+            }
+        }
+        for place in added {
+            self.keep(&copy, &counts, place);
+        }
+    }
+
+    /// 写しの場所の内容を、`counts` での今の番号の区間の全文として控える（区切りは `basis` で要ったときに）。
+    fn keep(&mut self, copy: &TextLayerState, counts: &ClearCounts, place: PlaceKey) {
         if let Some(content) = copy.place_state(&place) {
-            let n = self.counts.number(&place);
+            let n = counts.number(&place);
             let section = Section {
                 content: content.clone(),
                 plan: None,
