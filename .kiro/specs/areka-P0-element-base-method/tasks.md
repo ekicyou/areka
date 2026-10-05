@@ -52,7 +52,7 @@
   - _Depends: 1.1, 2.2_
 
 - [ ] 3. 説明文と台帳を実際の状態に合わせる
-- [ ] 3.1 (P) 合成器の説明文と COMPAT §8 を直す
+- [x] 3.1 (P) 合成器の説明文と COMPAT §8 を直す
   - `fold.rs` の `normalize_element` の説明文を「読み手が届けるのは `overlay` と `base` の行で、どちらも `Overlay` で置く」に、`method.rs` の `ComposeMethod::Base` の注記を「XY 無視は pattern定義の話で、element定義の `base` はこの値を通らない」に直す（処理は変えない）
   - `doc/COMPAT_ARCHITECTURE.md` §8 の表に 1 行: 項目「element定義の描画メソッド `base` の X,Y」・裁量「`overlay` の element定義と同じに扱う（位置として使う）」・根拠（`ukadoc:descript_shell_surfaces` の `base` の項は pattern定義に限って XY を無視すると書く／`element0` では置き換えられる側が空・`element1` 以降は正典が `overlay` に読み替える）・出典 spec
   - 完了の姿: §8 にその行があり、`cargo test -p areka-emo-compose` が期待値を変えずに緑
