@@ -63,6 +63,41 @@ fn success_is_finished_on_the_encoding_thread_and_answered_from_there() {
     );
 }
 
+/// `start` は文字の面の読み出し待ちを預けるので `reply_elsewhere` へ `Read` は渡らないが、渡されたら
+/// 黙らせず `NG:the text read was handed to the wrong path` と `error!` 1 件で答える（読み出しの口は
+/// 呼ばない）。
+///
+/// # 非空虚性
+/// 腕を黙って捨てると答えが届かず `None` で赤。読み出しの口を呼ぶと呼んだ回数が 1 で赤。
+#[test]
+fn read_handed_to_reply_elsewhere_answers_wrong_path_with_one_error() {
+    let (req, pending) = ToolRequest::new(ToolCall::DumpSurface(current_look()));
+    let reads = std::rc::Rc::new(std::cell::Cell::new(0));
+    let counted = reads.clone();
+    let read: Reader = Box::new(move || {
+        counted.set(counted.get() + 1);
+        Ok(None)
+    });
+
+    let ((), levels) = log_capture_kit::count_levels(|| {
+        reply_elsewhere(TOOL, Step::Read(0, read), Instant::now(), req.reply)
+    });
+
+    assert_eq!(
+        (
+            pending.try_answer().ok().flatten().map(|a| a.outcome),
+            levels.error,
+            reads.get()
+        ),
+        (
+            Some(outcome::ng("the text read was handed to the wrong path")),
+            1,
+            0
+        ),
+        "（答え, ERROR, 読み出しの口を呼んだ回数）"
+    );
+}
+
 /// 単体の合成の結果が「無い」（スコープのシェルが表示の層に無い）ときは、判断の断りの文言でなく
 /// 専用の文言で想定外の失敗を答え、`error!` を 1 件だけ出す（要件 2.1・7.1）。
 ///
@@ -462,5 +497,94 @@ fn switch_to_the_same_ghost_keeps_waiting_for_attachment() {
         (true, true, 2, true, None, 1, false, true),
         "（A の定常, 起こし直した A の定常まで届いた, A の起動の回数, 同じゴースト, 届いた答え, \
          預かった組の数, 終了の指示, 降ろせた）"
+    );
+}
+
+/// 呼ばれた回数を数え、`ready` 回目に `then` を返す読み出しの口（それまでは「まだ」）。
+fn counted_reader(
+    ready: usize,
+    then: impl FnOnce() -> Result<Option<Job>, ToolOutcome> + 'static,
+) -> (Reader, std::rc::Rc<std::cell::Cell<usize>>) {
+    let reads = std::rc::Rc::new(std::cell::Cell::new(0));
+    let counted = reads.clone();
+    let mut then = Some(then);
+    let read: Reader = Box::new(move || {
+        counted.set(counted.get() + 1);
+        match counted.get() < ready {
+            true => Ok(None),
+            false => then.take().expect("読めた後は呼ばれない")(),
+        }
+    });
+    (read, reads)
+}
+
+/// 入口の `answer` が文字の面の写しを積んだ（`Read`）なら、その場で答えず預け、後の巡で読み出しの口を
+/// 覗くたびに 1 度呼び、「まだ」の間は待ち、読めたら仕事を `mcp-encode` で仕上げて答える（要件 1.1・1.2）。
+/// 読み出し待ちの間は `answer` をやり直さない。
+///
+/// # 非空虚性
+/// 入口で `reply_elsewhere` へ回すと「wrong path」の答えで赤。入口で口を呼ぶと入口の後の回数が 1 で赤。
+/// 「まだ」で答えてしまう・読めた仕事を UI スレッドで仕上げると答えが違って赤。読み出し待ちで `answer` を
+/// やり直すと `answer` の回数が 1 でなく赤。
+#[test]
+fn read_at_entry_is_deposited_and_read_on_later_frames() {
+    let mut rig = rig_with(r"\0A\e");
+    let ghost = active_ghost(&rig);
+    let (req, pending) = ToolRequest::new(ToolCall::DumpSurface(current_look()));
+    let (read, reads) = counted_reader(3, || {
+        Ok(Some(Box::new(|_| {
+            outcome::ok(std::thread::current().name().unwrap_or(""))
+        })))
+    });
+    let mut read = Some(read);
+    let answers = std::rc::Rc::new(std::cell::Cell::new(0));
+    let counted = answers.clone();
+    start(&mut rig.world, TOOL, &ghost, req.reply, move |_| {
+        counted.set(counted.get() + 1);
+        read.take().map(|read| Step::Read(0, read))
+    });
+    let at_deposit = pending.try_answer().ok().flatten().map(|a| a.outcome);
+    let reads_at_deposit = reads.get();
+    let mut later = None;
+    rig.pump_input_until(|_| {
+        later = pending.try_answer().ok().flatten().map(|a| a.outcome);
+        later.is_some()
+    });
+    let down = rig.shutdown();
+
+    assert_eq!(
+        (
+            at_deposit,
+            reads_at_deposit,
+            later,
+            reads.get(),
+            answers.get(),
+            down
+        ),
+        (None, 0, Some(outcome::ok("mcp-encode")), 3, 1, true),
+        "（預けた直後の答え, 入口の後の口の回数, 届いた答え, 口の回数, answer の回数, 降ろせた）"
+    );
+}
+
+/// 装着待ちの覗きで `answer` が `Read` を返したら、同じ覗きの中で読み出しの口を 1 度呼び、口の失敗の
+/// 答えをそのまま返す。記録は口が出した 1 件だけ（要件 1.5）。
+///
+/// # 非空虚性
+/// 失敗の答えを捨てる・別の文言にすると答えが違って赤。覗く関数の側でも記録すると ERROR 2 件で赤。
+#[test]
+fn read_failure_after_attachment_answers_the_reader_outcome_with_one_error() {
+    let mut rig = rig_with(r"\0A\e");
+
+    let ((_, later), levels) = log_capture_kit::count_levels(|| {
+        deposit_and_answer(&mut rig, || {
+            Step::Read(0, counted_reader(1, || Err(fail(TOOL, 0, "わざと"))).0)
+        })
+    });
+    let down = rig.shutdown();
+
+    assert_eq!(
+        (later, levels.error, down),
+        (Some(outcome::ng("わざと")), 1, true),
+        "（届いた答え, ERROR, 降ろせた）"
     );
 }

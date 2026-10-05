@@ -36,12 +36,18 @@ const ENCODE_THREAD: &str = "mcp-encode";
 /// 別のスレッドで行う残りの仕事。引数は UI スレッドの側の所要時間（成功の記録に載せる）。
 pub(in crate::mcp) type Job = Box<dyn FnOnce(Duration) -> ToolOutcome + Send>;
 
+/// 文字の面の読み出しを待つ口。覗くたびに 1 度呼ぶ。`Ok(None)`＝まだ・`Ok(Some(job))`＝読めた・
+/// `Err`＝想定外の失敗の答え（`fail` で記録済み）。UI スレッドだけで呼ぶ（`Send` でない）。
+pub(in crate::mcp) type Reader = Box<dyn FnMut() -> Result<Option<Job>, ToolOutcome>>;
+
 /// UI スレッドの側の答え。
 pub(in crate::mcp) enum Step {
     /// その場で答える（判断で返す失敗・写しまでで起きた想定外の失敗）。
     Now(ToolOutcome),
     /// 写しまで済んだ成功（スコープ, 残りの仕事）。乗算の戻し・重ね合わせ・PNG・base64 と成功の記録を残す。
     Encode(u32, Job),
+    /// 文字の面の写しを積んだ（スコープ, 読み出しを待つ口）。`dump_balloon` だけが返す。
+    Read(u32, Reader),
 }
 
 /// 今答えられればその場で（成功は別のスレッドから）、装着の相がまだなら `later` に預けて答える（要件 6.1）。
@@ -49,8 +55,8 @@ pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: 
     start(world, TOOL, ghost, reply, move |w| answer(w, &args));
 }
 
-/// 2 本のツールの入口。`answer` を 1 度呼び、答えられれば [`reply_elsewhere`] で、装着の前（`None`）なら
-/// 覗く関数（[`Wait`]）にして `later` へ預ける。
+/// 2 本のツールの入口。`answer` を 1 度呼び、`Now`／`Encode` は [`reply_elsewhere`] で、`Read` と
+/// 装着の前（`None`）は覗く関数（[`Wait`]）にして `later` へ預ける。
 pub(in crate::mcp) fn start(
     world: &mut World,
     tool: &'static str,
@@ -59,20 +65,20 @@ pub(in crate::mcp) fn start(
     mut answer: impl FnMut(&World) -> Option<Step> + 'static,
 ) {
     let started = Instant::now();
-    match answer(world) {
-        Some(step) => reply_elsewhere(tool, step, started, reply),
-        None => {
-            let mut wait = Wait {
-                tool,
-                ghost: ghost.clone(),
-                stage: Stage::Attaching,
-                answer,
-                carry: started.elapsed(),
-                ui_max: Duration::ZERO,
-            };
-            super::later(world, reply, move |w| wait.poll(w));
-        }
-    }
+    let stage = match answer(world) {
+        None => Stage::Attaching,
+        Some(Step::Read(scope, read)) => Stage::Reading(scope, read),
+        Some(step) => return reply_elsewhere(tool, step, started, reply),
+    };
+    let mut wait = Wait {
+        tool,
+        ghost: ghost.clone(),
+        stage,
+        answer,
+        carry: started.elapsed(),
+        ui_max: Duration::ZERO,
+    };
+    super::later(world, reply, move |w| wait.poll(w));
 }
 
 /// 覗く関数の状態（1 フレームで済まない仕事を、待たずに毎フレーム 1 段ずつ進める・要件 1.4・3.1）。
@@ -91,6 +97,8 @@ struct Wait<A> {
 enum Stage {
     /// 装着待ち。覗くたびにゴーストを確かめてから `answer` をやり直す。
     Attaching,
+    /// 読み出し待ち（スコープ, 読み出しを待つ口）。
+    Reading(u32, Reader),
     /// 符号化待ち（スコープ, 答えの受け取り口）。
     Encoding(u32, mpsc::Receiver<ToolOutcome>),
 }
@@ -103,16 +111,18 @@ impl<A: FnMut(&World) -> Option<Step>> Wait<A> {
         let carry = std::mem::take(&mut self.carry);
         let ui_max = self.ui_max;
         let ui = move || ui_max.max(carry + began.elapsed());
-        let answered = match self.stage {
+        // 段は取り出して進め、待ち続ける段は進めた先で置き直す。
+        let answered = match std::mem::replace(&mut self.stage, Stage::Attaching) {
             Stage::Attaching => self.attach(world, ui),
-            Stage::Encoding(scope, ref rx) => receive(self.tool, scope, rx),
+            Stage::Reading(scope, read) => self.take(Step::Read(scope, read), ui),
+            Stage::Encoding(scope, rx) => self.encoding(scope, rx),
         };
         self.ui_max = ui();
         answered
     }
 
-    /// 装着待ちの 1 段。写す前にゴーストが替わっていたら断る（要件 4.1・4.2）。写しまで済んだら
-    /// 符号化を起こし、同じ覗きの中で受け取り口を 1 度覗く。
+    /// 装着待ちの 1 段。写す前にゴーストが替わっていたら断る（要件 4.1・4.2）。答えの種は同じ覗きの
+    /// 中で進める限り進める。
     fn attach(&mut self, world: &World, ui: impl FnOnce() -> Duration) -> Option<ToolOutcome> {
         if resolve::active(world).as_ref() != Some(&self.ghost) {
             debug!(
@@ -122,16 +132,35 @@ impl<A: FnMut(&World) -> Option<Step>> Wait<A> {
             );
             return Some(outcome::ng(resolve::NOT_ACTIVE));
         }
-        match (self.answer)(world)? {
-            Step::Now(outcome) => Some(outcome),
-            Step::Encode(scope, job) => {
-                let (tx, rx) = mpsc::channel();
-                encode_elsewhere(self.tool, scope, job, ui, tx, send_back);
-                let answered = receive(self.tool, scope, &rx);
-                self.stage = Stage::Encoding(scope, rx);
-                answered
-            }
-        }
+        let step = (self.answer)(world)?;
+        self.take(step, ui)
+    }
+
+    /// 答えの種を 1 段進める。`Read` は読み出しの口を 1 度呼び（要件 1.2・1.5）、まだなら読み出し待ちに
+    /// 置く。写しまで済んだら符号化を起こし、同じ覗きの中で受け取り口を 1 度覗く。
+    fn take(&mut self, step: Step, ui: impl FnOnce() -> Duration) -> Option<ToolOutcome> {
+        let (scope, job) = match step {
+            Step::Now(outcome) => return Some(outcome),
+            Step::Encode(scope, job) => (scope, job),
+            Step::Read(scope, mut read) => match read() {
+                Ok(None) => {
+                    self.stage = Stage::Reading(scope, read);
+                    return None;
+                }
+                Err(outcome) => return Some(outcome),
+                Ok(Some(job)) => (scope, job),
+            },
+        };
+        let (tx, rx) = mpsc::channel();
+        encode_elsewhere(self.tool, scope, job, ui, tx, send_back);
+        self.encoding(scope, rx)
+    }
+
+    /// 符号化待ちに置き、受け取り口を 1 度覗く。
+    fn encoding(&mut self, scope: u32, rx: mpsc::Receiver<ToolOutcome>) -> Option<ToolOutcome> {
+        let answered = receive(self.tool, scope, &rx);
+        self.stage = Stage::Encoding(scope, rx);
+        answered
     }
 }
 
@@ -165,6 +194,12 @@ pub(in crate::mcp) fn reply_elsewhere(
         Step::Encode(scope, job) => {
             encode_elsewhere(tool, scope, job, || started.elapsed(), reply, ReplyTo::send)
         }
+        // `start` は渡さない（預ける）。渡されたら黙らせず想定外の失敗で答える。
+        Step::Read(scope, _) => reply.send(fail(
+            tool,
+            scope,
+            "the text read was handed to the wrong path",
+        )),
     }
 }
 
