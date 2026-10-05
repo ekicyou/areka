@@ -97,7 +97,7 @@
 3. The areka shall SSP と同じ 10 本を、今と同じ並びで一覧の先頭に返し、独自のツールをその後に置く。
 4. The areka shall SSP と同じ 10 本の `name`・`title`・`description`・`inputSchema` と、呼び出したときの振る舞いを変えない（`doc/ssp-mcp/tools-list-ssp-2.9.05.json` との逐語一致を固定している既存のテストは、書き換えずに緑のまま）。
 5. The areka shall 独自のツールそれぞれに、`name`・`title`・`description`・`inputSchema` を持たせ、`description` は英文で、SSP に無い areka 独自のツールであることと、ゴーストに何もさせないことを書く。
-6. The areka shall 設計の段で、後続の spec が独自のツールを 1 本足すときに触るファイルを固定し、`.kiro/steering/roadmap.md` の干渉の記述に書く（SSP の 10 本の表と、その逐語一致のテストは触らずに足せる形）。
+6. The areka shall 設計の段で、後続の spec が独自のツールを 1 本足すときに触るファイルを固定し、`.kiro/steering/roadmap.md` の干渉の記述に書く（SSP の 10 本の表と、その逐語一致のテストは触らずに足せる形）。同じ文書の「MCP の 3 段目の約束」（`mcp/mod.rs`・`handler.rs` は触らない）は、本 spec が共有ファイルを触るので、合わせて書き直す。
 7. If `tools/call` の名前が 13 本のどれでもない, then the areka shall 今と同じく JSON-RPC のエラー `-32602` で答える。
 
 ### Requirement 2: 独自のツールに共通の振る舞い
@@ -130,7 +130,7 @@
 8. The areka shall 台本の字面から決まることだけを診断し、再生しないと決まらないこと（`\![raise]` の先の台本・`\![change,shell]` の後の surface・SHIORI が置き換える `%` の中身など）は診断しない（誤って「無い」と答える診断 0 件を優先する）。
 9. The areka shall 影響の段を結果に載せない（`script-impact-tiers` が着地するときに足す）。
 10. The areka shall areka が知っているタグについて、対応の状態（何もしない・縮退）を理由にした診断を出さない（状態は `areka_list_capabilities` で調べる）。
-11. The areka shall `areka_check_script` が「知らない」と答えるタグ・`\!` のコマンドと、同じ台本を再生したときに areka が「知らない」として扱うものを一致させる（検査だけが通して再生で落ちる・検査だけが落として再生で通る、のどちらも 0 件）。
+11. The areka shall `areka_check_script` が「知らない」と答えるタグ・`\!` のコマンドと、同じ台本を再生したときに areka が「知らない」として扱うものを一致させる（検査だけが通して再生で落ちる・検査だけが落として再生で通る、のどちらも 0 件）。ここでの「再生」は、SHIORI から来た台本の再生の経路を指す（MCP の `sakurascript` は 2026-10-05 の時点で未実装のため、比べる相手にしない）。
 12. The areka shall 診る種類（3.2〜3.4）の全数を spec 単位の 1 つの表で持ち、表の各行に対して「診断が出る台本」と「診断が出ない台本」の決定論テストを置く。
 
 ### Requirement 4: 対応しているものの一覧（`areka_list_capabilities`）
