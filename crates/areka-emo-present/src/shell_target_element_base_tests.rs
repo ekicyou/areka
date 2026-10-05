@@ -13,8 +13,11 @@
 //!   固定する。判定を戻すと ⑵ は前提（`shadowed` の内訳）で、⑷ は脱落の記録の件数で赤になり、
 //!   ⑶ は `base` を含まないので緑のままである。
 //!
-//! fs には触れない。画像はメモリ上の復号器（[`MemoryDecoder`]）に実寸と色で登録し、
+//! ⑴〜⑷ は fs に触れない。画像はメモリ上の復号器（[`MemoryDecoder`]）に実寸と色で登録し、
 //! シェルのフォルダは実在しないパスでよい（`shell_target_base_image_tests.rs` と同じ形）。
+//!
+//! 末尾の 3 本は入口 [`load_shell_target`] の警告（描けない行 1 行につき `warn!` 1 行・読み込み
+//! 1 回につき 1 度）を見る。こちらは surfaces.txt を `TempPath` に置いて読ませる。
 
 use super::*;
 
@@ -23,6 +26,9 @@ use std::path::{Path, PathBuf};
 use areka_emo_atlas::MemoryDecoder;
 use areka_emo_compose::{BindSet, ComposeError, Composer, PatternState};
 use areka_parsers::shell::parse;
+use temp_path_kit::TempPath;
+
+use super::test_support::{CapturedEvent, capture_events};
 
 /// 画像 1 枚の登録内容（ファイル名・実寸・全画素の色＝premultiplied BGRA 不透明）。
 type Image = (&'static str, (u32, u32), [u8; 4]);
@@ -284,4 +290,105 @@ fn unreadable_base_image_is_recorded_like_overlay_and_the_part_is_drawn() {
         .is_empty(),
         "較正: `missing.png` を入れれば脱落は 0 件"
     );
+}
+
+// ── 入口の警告（要件 2.1・2.2・2.3・2.6・4.2）──────────────────────────────────────
+//
+// ここから先は `load_shell_target` を通すので fs に触れる。surfaces.txt は `TempPath` に置き、
+// 描ける行が指す絵（`body.png`・`face.png`）はすべて復号器に入れる——焼く段の脱落の `warn!` が
+// 混ざると、本 spec の警告の数が数えられなくなるためである。
+
+/// 本 spec の警告の本文。
+const UNDRAWN_WARN: &str = "shell: areka が描けない描画メソッドの element定義を描かない";
+
+/// 描ける語の行だけの文面（`balloon` の行には正しい `balloon.*`ブレスを添え、箱の警告を出さない）。
+const DRAWABLE_ONLY: &str = concat!(
+    "charset,UTF-8\n",
+    "balloon.ok\n{\nsize,10,10\n}\n",
+    "surface0,1\n{\n",
+    "element0,base,body.png,0,0\n",
+    "element1,overlay,face.png,1,1\n",
+    "element3,balloon,ok,0,0\n",
+    "}\n",
+);
+
+/// [`DRAWABLE_ONLY`] に描けない行 `element2,replace,x.png` を 1 行足した文面。
+const WITH_UNDRAWN: &str = concat!(
+    "charset,UTF-8\n",
+    "balloon.ok\n{\nsize,10,10\n}\n",
+    "surface0,1\n{\n",
+    "element0,base,body.png,0,0\n",
+    "element1,overlay,face.png,1,1\n",
+    "element2,replace,x.png,0,0\n",
+    "element3,balloon,ok,0,0\n",
+    "}\n",
+);
+
+/// `text` を surfaces.txt として置き、`load_shell_target` を `times` 回呼んだ間の記録を返す。
+fn load_events(text: &str, times: usize) -> Vec<CapturedEvent> {
+    let dir = TempPath::new("shell-target-element-base-warn");
+    std::fs::write(dir.child("surfaces.txt"), text).expect("記述ファイル作成");
+    let mut dec = MemoryDecoder::new();
+    insert_solid(&mut dec, dir.path(), ("body.png", BODY, COLOR_BODY));
+    insert_solid(&mut dec, dir.path(), ("face.png", FACE, COLOR_FACE));
+    let ((), events) = capture_events(|| {
+        for _ in 0..times {
+            load_shell_target(dir.path(), &dec).expect("シェルは読める");
+        }
+    });
+    events
+}
+
+/// `warn` 以上の記録を「本文|欄=値…」の文字列にする（`message` 以外の欄は名前の昇順）。
+fn warn_or_worse(events: &[CapturedEvent]) -> Vec<String> {
+    events
+        .iter()
+        .filter(|e| e.level <= tracing::Level::WARN)
+        .map(|e| {
+            let mut line = e.message().to_string();
+            for (name, value) in e.fields_map() {
+                if name != "message" {
+                    line.push_str(&format!("|{name}={value}"));
+                }
+            }
+            line
+        })
+        .collect()
+}
+
+/// 本 spec の警告の件数。
+fn undrawn_count(events: &[CapturedEvent]) -> usize {
+    events
+        .iter()
+        .filter(|e| e.message() == UNDRAWN_WARN)
+        .count()
+}
+
+/// 要件 2.1・2.2・2.3: 複数の番号の見出しの下の描けない行 1 行は、見出しの原文・element番号・
+/// 語を持つ `warn!` 1 行だけになる（展開した番号の数だけ出ない・ほかの `warn` 以上は 0 行）。
+#[test]
+fn undrawable_line_warns_once_with_heading_element_and_method() {
+    let events = load_events(WITH_UNDRAWN, 1);
+    assert_eq!(
+        warn_or_worse(&events),
+        vec![format!(
+            "{UNDRAWN_WARN}|element=\"2\"|heading=\"surface0,1\"|method=\"replace\""
+        )]
+    );
+}
+
+/// 要件 2.6: 描ける語（`overlay`・`base`・`balloon`）だけの文面では `warn` 以上が 0 行。
+#[test]
+fn drawable_only_shell_warns_nothing() {
+    let events = load_events(DRAWABLE_ONLY, 1);
+    assert_eq!(warn_or_worse(&events), Vec::<String>::new());
+}
+
+/// 要件 4.2: 警告は読み込み 1 回につき 1 行 1 件——2 回読むとちょうど 2 倍になる。
+#[test]
+fn undrawable_warning_repeats_once_per_load() {
+    let once = undrawn_count(&load_events(WITH_UNDRAWN, 1));
+    let twice = undrawn_count(&load_events(WITH_UNDRAWN, 2));
+    assert_eq!(once, 1, "読み込み 1 回で 1 件");
+    assert_eq!(twice, 2 * once, "読み込み 2 回でちょうど 2 倍");
 }

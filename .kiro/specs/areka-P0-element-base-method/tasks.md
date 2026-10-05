@@ -2,7 +2,7 @@
 
 > 用語: 「描ける語」＝ element定義で areka が描く描画メソッドの語（`overlay`・`base`、箱として読む areka 独自の `balloon`）。「描けない行」＝ `surface*`ブレス・`surface.append*`ブレスの中の、第 2 欄が描ける語でない element定義の行（欄が空の行を含む）。「3 つの転記」＝画像の読み手（`Element`）・箱の転記（`parse_boxes`）・描けない行の転記（`parse_undrawn_elements`）。いずれも design.md と同じ。
 >
-> 共通の決まり: テストは実装と同じフォルダの兄弟ファイルに置き、本番ファイルには `#[cfg(test)] #[path = "…"] mod …;` の接続の宣言だけを足す。1 ファイル 1,000 行以下。読み手は記録を出さない（記録は `load_shell_target` の 1 か所だけ）。画像は `MemoryDecoder`、記録の捕捉は `test_support::capture_events`、一時フォルダは `temp-path-kit` で決定論的に回す。実機の根・検体の写し・一時フォルダはワークツリーの `target\` の下だけに置く。
+> 共通の決まり: テストは実装と同じフォルダの兄弟ファイルに置き、本番ファイルには `#[cfg(test)] #[path = "…"] mod …;` の接続の宣言だけを足す。1 ファイル 1,000 行以下。読み手は記録を出さない（記録は `load_shell_target` の 1 か所だけ）。画像は `MemoryDecoder`、記録の捕捉は `test_support::capture_events`、一時フォルダは `temp-path-kit` で決定論的に回す。実機の確認（4.2）の根・検体の写し・一時フォルダはワークツリーの `target\` の下だけに置く（単体テストの `TempPath` は Drop で消える既存の窓口なのでそのまま使う）。
 >
 > 触らないファイルの振る舞い（設計の Out of Boundary）: `fold.rs` の処理・`base_image.rs`・`plan.rs`・`blit.rs`・`method.rs` の `is_implemented`／`known_method`・`boxes.rs`・`manifest.rs`・`build_shell_target*` の署名・`Element`／`Shell`／`ShellTarget` の型。既存のテストの期待値は、下の 1.1 で付け替える 3 本を除いて 1 本も書き換えない。
 >
@@ -37,7 +37,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.7, 2.4, 2.5, 3.2, 3.4, 4.1_
   - _Depends: 1.1_
 
-- [ ] 2.2 `load_shell_target` で描けない行を読み込み 1 回につき 1 行 1 件 `warn!` する
+- [x] 2.2 `load_shell_target` で描けない行を読み込み 1 回につき 1 行 1 件 `warn!` する
   - `load_shell_target` が、`parse`・`parse_boxes` に渡すのと同じ文面で `parse_undrawn_elements` を 1 度呼び、入れ子・箱の報告と同じ場所で 1 件につき `warn!` を 1 行出す。本文「shell: areka が描けない描画メソッドの element定義を描かない」、欄は `heading`・`element`・`method`。`ShellTarget` と `build_shell_target*` は変えない
   - 2.1 のファイルに足す（`TempPath` に surfaces.txt を置き `capture_events` の中で呼ぶ。焼く段の脱落の `warn!` が混ざらないよう、どちらの文面でも描ける行が指す画像はすべて `MemoryDecoder` に入れる）: `surface0,1` の見出しの下に描けない行 1 行と `overlay`・`base`・`balloon` の行（`balloon` には正しい `balloon.*`ブレスを添える）を置いた文面で、`warn` 以上の記録が本 spec の 1 行だけ（`heading`・`element`・`method` の値まで一致）／描ける語だけの文面で `warn` 以上が 0 行／同じ文面で `load_shell_target` を 2 回呼ぶと本 spec の記録がちょうど 2 倍
   - 完了の姿: 上のテストが緑で、`warn!` の 1 行を消すと赤になる
