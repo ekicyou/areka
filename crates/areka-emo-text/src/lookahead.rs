@@ -76,13 +76,6 @@ struct Section {
 }
 
 /// 配置に使う字の列（[`TalkLookahead::basis`] の答え）。
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "タスク 4.2 で arrange_lines の文節の枝から読むまで"
-    )
-)]
 pub(crate) enum Basis<'a> {
     /// 区間の全文で配置する（届いた内容は全文の先頭と一致している）。
     Full {
@@ -303,13 +296,6 @@ impl TalkLookahead {
 
     /// 配置に使う字の列を答える。全文が無い・食い違うときは [`Basis::Arrived`] を返し、
     /// （場所, 区間）ごとに初回だけ warn を残す。届いた内容に字が 1 つも無ければ warn しない。
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "タスク 4.2 で arrange_lines の文節の枝から読むまで"
-        )
-    )]
     pub(crate) fn basis(&mut self, place: &PlaceKey, arrived: &ActorTextState) -> Basis<'_> {
         let key = (place.clone(), self.counts.number(place));
         let reason = match self.sections.get(&key) {

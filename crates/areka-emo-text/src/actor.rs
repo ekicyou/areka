@@ -497,6 +497,7 @@ impl TextLayerRuntime {
         let resolved = self.layout_input.get(place)?;
         present::arrange_lines(
             &self.state,
+            &mut self.lookahead,
             &mut self.cursor_warn,
             place,
             resolved,

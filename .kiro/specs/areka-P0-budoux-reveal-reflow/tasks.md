@@ -106,7 +106,7 @@
   - _Boundary: TextLayerRuntime（actor.rs）_
   - _Depends: 1.3, 3.3_
 
-- [ ] 4.2 文節の枝で区間の全文を配置へ渡す
+- [x] 4.2 文節の枝で区間の全文を配置へ渡す
   - `arrange_lines` に区間の全文の持ち主を渡す引数を足し、`present_actor` と `arrange_for_test` から実行時の欄を渡す
   - 1 字ずつの枝は今の呼び方のまま、区間の全文に触れない。文節の枝は `basis` を聞き、全文のときは全文の字の列・全文の区切り・装飾（番号・表・字の無い行の丈に使う「今の見た目」もすべて全文の側から）で配置し、見える数だけは届いた内容の表示の時刻から出す。「届いた字で」のときは今の呼び方
   - あふれの窓・選択肢の範囲（届いた内容から）・描画・クリックの範囲は同じ行の列を今のまま使う
@@ -183,7 +183,7 @@
 ## Implementation Notes
 
 - 1.3: `spawn_emo_text` の説明に「先渡しを実行時へ渡す口は後のタスク」と書いてある。4.1 で `preview_talk` へつなぐときにこの記述も直す。
-- 2.1: 検査 1（`actor::lookahead_tests::emo2_boot_talk_reveals_without_moving_glyphs`）は 4.2 まで赤。それまで `cargo test -p areka-emo-text` は `--no-fail-fast` で回して、ほかが緑であることを確かめる。`actor_*_tests.rs` の接続宣言はこのクレートの慣例で actor.rs に置く（lib.rs は一覧への登録だけ）。
+- 2.1: 検査 1（`actor::lookahead_tests::emo2_boot_talk_reveals_without_moving_glyphs`）は 4.2 で書き換えなしに緑になった。`actor_*_tests.rs` の接続宣言はこのクレートの慣例で actor.rs に置く（lib.rs は一覧への登録だけ）。
 - 3.1・3.3・4.1: 広い `expect(dead_code)` は 4.1 で外した。残りは `basis`・`Basis`（4.2 で外す）と `reinstall`・`forget_boxes`（4.3 で外す）。`TalkLookahead::number` は `#[cfg(test)]`（本番から読むなら外す）。
 - 3.2: `\s` を読まないときの debug の発生元は `areka_emo_text::lookahead` に変わった。実機（7.2）で `RUST_LOG` を絞るときは `areka_emo_text` 全体を debug まで開ける。
 - 3.3・3.4: 空回しが（場所, 0）の全文を求め直した場所は warn 済みの印を捨て、何も足さず全文を持ち越す場所だけ印も持ち越す（install 手順 7・reinstall 手順 2 と同じ考え方）。`install_carries_the_warned_mark_only_with_the_carried_section` で固定。`Basis` にも 4.1・4.2 までの `expect(dead_code)` が付いている。
