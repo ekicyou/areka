@@ -158,7 +158,8 @@ crates/areka/src/
 ### Modified Files
 
 - `crates/areka-emo-text/tests/staysee_balloon_fixture/bake.rs` — `build_balloon_target_from_faces` の呼び出しに値を足す（`balloon::load_balloon_use_self_alpha` で読んだ値）。
-- `crates/areka-emo-present/src/shell_target_base_image_tests.rs`・`shell_target_boxes_tests.rs` — 核の呼び出しに `UseSelfAlpha::On` を足す。
+- `crates/areka-emo-present/src/shell_target_base_image_tests.rs`・`shell_target_boxes_tests.rs`・`shell_target_load_tests.rs` — 核（`build_shell_target*`）の直呼びに `UseSelfAlpha::On` を足す。
+- 入口（`load_shell_target`・`build_balloon_target`）を一時フォルダで通す既存のテスト（`balloon_target_tests.rs`・`shell_target_load_tests.rs`・`shell_target_boxes_tests.rs`・`shell_target_nesting_tests.rs` など） — 一時フォルダに `seriko.use_self_alpha,1`／`use_self_alpha,1` の descript.txt を置く（下の「書き換え・削除する既存のテスト」）。
 - `dist/README.txt` — 「◆ 既知の制限: 半透明を前提に作られたバルーンだけが正しく表示されます」の節を書き直す（見出しも実態に合わせる）。
 - `doc/ukadoc-coverage/ledger/assets.toml` — `ukadoc:descript_shell:seriko.use_self_alpha_2c_5024:1` と `ukadoc:descript_balloon:use_self_alpha_2c_5024:1` の 2 行。
 - `doc/ukadoc-coverage/report/` — 手では直さない。`cargo run -p ukadoc-survey -- report` と `report-summary` で作り直す。
@@ -180,7 +181,7 @@ flowchart TD
     FullA -->|はい| Keep
     FullA -->|いいえ| Opaque[全画素の α を 255 にする]
     D -->|0| Off[全画素の α を 255 にしてから左上と同じ色を抜く]
-    D -->|宣言なし| AutoA{α を持ち 255 未満の画素が 1 つ以上}
+    D -->|宣言なし| AutoA{α が 255 未満の画素が 1 つ以上}
     AutoA -->|はい| Keep
     AutoA -->|いいえ| Key
 ```
@@ -319,7 +320,7 @@ pub(crate) fn apply(bgra: &mut [u8], width: u32, height: u32, stride: u32, rule:
 | `Full` | `has_alpha` が真 | 偽 | 無し |
 | `Full` | `has_alpha` が偽 | 真 | 無し |
 | `Off` | どちらでも | 真 | 左上の B・G・R と α=255 |
-| `Undeclared` | `has_alpha` が真で、α が 255 未満の画素が 1 つ以上 | 偽 | 無し |
+| `Undeclared` | α が 255 未満の画素が 1 つ以上（`has_alpha` は見ない） | 偽 | 無し |
 | `Undeclared` | 上のほか | 偽 | 左上の 4 バイト |
 
 - Preconditions: `img.bgra.len() == img.stride * img.height`（読み手の今の約束）。
@@ -328,13 +329,13 @@ pub(crate) fn apply(bgra: &mut [u8], width: u32, height: u32, stride: u32, rule:
   - `Off` の結果は、どの画素も α が 255 か 0（半透明なし）。抜かれるのは「α を 255 にした後の左上」と 4 バイトとも同じ画素だけ。
   - `Full` × `has_alpha` 偽の結果は、全画素 α=255。
   - 幅か高さが 0 の絵は `key` を持たない（今と同じ）。
-- Invariants: 「α を持つ絵」は読み手が返す `has_alpha` で決める（今の `On` と同じ物差し）。`Undeclared` の「透明または半透明の画素」は α<255 の画素を行ごとに探し、1 つ見つけたら止める。
+- Invariants: `On`・`Full` の「α を持つ絵」は読み手が返す `has_alpha` で決める（今の `On` と同じ物差し）。`Undeclared` は `has_alpha` を見ず、届いた画素だけで決める: α<255 の画素を行ごとに探し、1 つ見つけたら止める。α を持たない絵は全画素 α=255 で届くので抜き色の側になる（要件 9 の 3）。`has_alpha` の出どころは静止画（WIC の画素形式の一覧）と動く絵（`image` クレートの色の形式）で違うので、挟むと同じ種類の絵の扱いが分かれうる。挟まなければ分かれない。
 
 **Implementation Notes**
 
 - Integration: `clear_key_color` は今のまま使う。「α を 255 にする」は行ごとに 4 バイト目を書くだけの数行。
 - Validation: 表の 7 行を 1 行 1 テストで固定する（`normalize_rule_tests.rs`）。`On` の 2 行は「入力と出力のバイトが今の期待と同じ」ことを見る。
-- Risks: パレットの PNG に透明の情報（`tRNS`）が付いた絵は、WIC の画素形式の一覧（`wic_arm.rs` の `pixel_format_has_alpha`）に索引つきの形式が無いので `has_alpha` が偽で届く見込みで、α<255 の画素を含みうる。`Full` と `Off` は α を 255 に書くので、この絵でも要件 4 の 2・5 の 6 は読み手の返し方に依らず成り立つ（透明だった所は乗算済みの色＝多くは黒で出る）。`On` と `Undeclared` では今と同じ（抜き色の枝を通り、α<255 の画素はそのまま残る）。読み手は変えない。
+- Risks: パレットの PNG に透明の情報（`tRNS`）が付いた絵は、WIC の画素形式の一覧（`wic_arm.rs` の `pixel_format_has_alpha`）に索引つきの形式が無いので `has_alpha` が偽で届く見込みで、α<255 の画素を含みうる。`Full` と `Off` は α を 255 に書くので、この絵でも要件 4 の 2・5 の 6 は読み手の返し方に依らず成り立つ（透明だった所は乗算済みの色＝多くは黒で出る）。`On` では今と同じ（抜き色の枝を通り、α<255 の画素はそのまま残る）。`Undeclared` は届いた画素を見るので、この絵は α の側になり、透明の情報がそのまま使われる（要件 9 の 1 のとおり）。読み手は変えない。
 
 #### Bake・Pending（`crates/areka-emo-atlas/src/lib.rs`・`animated.rs`）
 
@@ -433,7 +434,7 @@ fn parse(value: &str) -> Option<UseSelfAlpha>;
 **Responsibilities & Constraints**
 
 - `load_shell_target(shell_dir, decoder)` の署名は変えない。呼び手（起動・切り替え・採寸・examples）は無変更で、起動と採寸が別々の値を持つ余地が無い。
-- 入口は呼ばれるたびに `shell_dir/descript.txt` を読む（状態を持たないので、切り替えで前の宣言は残らない）。キーは `seriko.use_self_alpha`。
+- 入口は呼ばれるたびに `shell_dir/descript.txt` を読む（状態を持たないので、切り替えで前の宣言は残らない）。キーは `seriko.use_self_alpha`。読み方は `emo2_boot::assets::build_shell_assets` の前例と同じく `std::fs::read` → `areka_parsers::charset::decode(…, DefaultEncoding::Ansi)`（`read_to_string` は使わない。Shift_JIS の descript.txt は昔からのシェルでは普通で、UTF-8 として読むと宣言が届かなくなる）。
 - `descript.txt` が読めないときは `warn!` を出し、宣言なしとして続ける（ここでは失敗にしない。descript.txt の無いシェルを起動の失敗にしている 2 か所は別の場所に在り、今のまま働く）。
 - fs を触らない核 `build_shell_target` と `build_shell_target_with_boxes` は、末尾に引数 `use_self_alpha: UseSelfAlpha` を足して受ける（決め打ちの `On` を消す）。
 - 記録を出すのは今までどおり `load_shell_target` だけ。
@@ -547,7 +548,7 @@ pub fn build_balloon_target_from_faces(balloon_dir: &Path, decoder: &impl Elemen
 
 ### Unit Tests
 
-1. `normalize_rule_tests.rs` — `plan` の表の 7 行を 1 行ずつ（3.1・3.2・4.1・4.2・5.1・5.2・9.1・9.2・9.3）。宣言なし × α なしの `AlphaRule` が `On` × α なしと等しいこと（8.2・9.5）。
+1. `normalize_rule_tests.rs` — `plan` の表の 7 行を 1 行ずつ（3.1・3.2・4.1・4.2・5.1・5.2・9.1・9.2・9.3）。宣言なしは `has_alpha` が偽でも α<255 の画素が在れば α の側になること。宣言なし × α なしの `AlphaRule` が `On` × α なしと等しいこと（8.2・9.5）。
 2. 同 — `Off` × α ありの絵の結果: 半透明・完全な透明だった画素が不透明になり、α を 255 にした後の左上と 4 バイトとも同じ画素だけが `0,0,0,0`、α は 255 か 0 だけ（5.2・5.3・5.4・5.6）。色が 1 だけ違う画素は抜かれない（5.4）。
 3. 同 — `Full` × α なしで、左上と同じ色の画素も α=255 のまま（4.2）。`has_alpha` が偽なのに α<255 の画素を持つ入力でも全画素 α=255 になる（パレットの絵の備え）。
 4. 同 — `On` の 2 行は入力と出力のバイトが今の期待と一致（3.3）。行の詰め物（`stride > width * 4`）を触らない。
@@ -558,7 +559,7 @@ pub fn build_balloon_target_from_faces(balloon_dir: &Path, decoder: &impl Elemen
 1. `animated_tests.rs` — `Off` の動く絵: 1 枚目の左上の色が全部のコマから抜け、どのコマにも半透明が無い（5.5）。`Full` × α なしの動く絵: 全部のコマが不透明（4.4）。宣言なし: 1 枚目が透明な画素を持てば全部のコマが α のまま、持たなければ全部のコマから 1 枚目の左上の色が抜ける（9.4）。
 2. `animated_tests.rs`・`lib.rs` のテスト — `.pna` を添えた絵（α なし）が、`On`・`Full`・`Off`・宣言なしのどれでも `.pna` が無いときと同じ画素で載り、失敗の一覧が空で、`ignored_pna` が添えた数に等しい（3.3・4.3・5.7）。
 3. `shell_target_image_only_tests.rs` — `surfaces.txt` が無い＋`surface0.png`／空の `surfaces.txt`＋`surface0.png`／波括弧 0 個の `surfaces.txt`＋画像、のそれぞれで読み込みが成功し面 0 が在る（6.1・6.2・6.3）。画像も無ければ `Empty`、`surfaces.txt` がフォルダなら `Read`（6.5・6.6）。画像だけで組んだときの `info!` が 1 行で面の数を持つ（7.3）。
-4. 同 — `descript.txt` に `seriko.use_self_alpha,full` と書いた一時フォルダのシェルで、α なしの面の画像の左上が抜かれない／`0` と書けば α ありの絵が不透明になる／行が無ければ宣言なしの決まりになる（1.1・1.3・1.4・1.5・6.4）。同じフォルダの `descript.txt` を書き換えて入口を呼び直すと、後の宣言で描く（1.7）。`use_self_alpha,full`（バルーンのキー）だけを書いたシェルは宣言なしになる（2.8）。
+4. 同 — `descript.txt` に `seriko.use_self_alpha,full` と書いた一時フォルダのシェルで、α なしの面の画像の左上が抜かれない／`0` と書けば α ありの絵が不透明になる／行が無ければ宣言なしの決まりになる（1.1・1.3・1.4・1.5・6.4）。同じフォルダの `descript.txt` を書き換えて入口を呼び直すと、後の宣言で描く（1.7）。日本語の行を含む Shift_JIS の `descript.txt` に書いた `seriko.use_self_alpha,full` が読める（文字コードの読み方の固定）。`use_self_alpha,full`（バルーンのキー）だけを書いたシェルは宣言なしになる（2.8）。
 5. `balloon_alpha_tests.rs` — `descript.txt` に `use_self_alpha,0`、`balloons0s.txt` に `use_self_alpha,1` と書いたバルーンで、`load_balloon_use_self_alpha` が `Off` を返す（2.1・2.4・2.7）。`seriko.use_self_alpha,full` だけを書いたバルーンは宣言なし（2.8）。`.pna` を 2 つ置くと `warn!` が 1 行で数が 2、1 つも無ければ出ない（5.7）。`build_balloon_target_from_faces` に `Full` を渡すと α なしの面の左上が抜かれない（2.3）。
 6. `shell_target_load_tests.rs`（既存の直し） — `missing_surfaces_txt_yields_read_error` と `surfaces_txt_without_any_surface_yields_empty_error` を新しい条件に合わせる。`every_record_is_emitted_once_per_load` と `emo2_shell_records_two_shadowed_images_and_no_warnings` に、宣言の `info!` 1 行を足す。
 
@@ -573,6 +574,7 @@ pub fn build_balloon_target_from_faces(balloon_dir: &Path, decoder: &impl Elemen
 - `normalize_key_color_tests.rs`: `key_color_is_some_only_on_the_key_color_arm` を `plan` の `key` を見る形へ。
 - `animated_tests.rs`: `picture_dropped_by_normalize_is_not_counted_in_the_total` を削除（枝が無くなる）。
 - `AlphaParams { use_self_alpha: UseSelfAlpha::On }` を直に組んでいる約 40 のテストファイルは、`AlphaParams` の形を変えないので無変更。
+- **入口を一時フォルダで通す既存のテストの棚卸し（タスクに 1 つ立てる）**: descript.txt を置かない一時フォルダは「宣言なし」になる。そこで使う絵はほぼ「全画素不透明・1 色」（例: `balloon_target_tests.rs` の `opaque_1x1()`）なので、宣言なしの表では抜き色の側に当たり、絵が全部透明になってテストが赤くなる（例: `build_balloon_target_end_to_end_frames_only`）。`areka-emo-present` で `load_shell_target`・`build_balloon_target` を一時フォルダで呼ぶテストを洗い出し、フォルダに `seriko.use_self_alpha,1`／`use_self_alpha,1` の descript.txt を置く（今までの `On` 固定と同じ条件に戻る。descript.txt が読めない `warn!` も出なくなる）。`areka` クレートの側の一時フォルダの検体は えも？？ の写し（宣言 `1`）なので変わらない見込みだが、同じ棚卸しで確かめる。
 
 ## Performance & Scalability
 
@@ -581,7 +583,7 @@ pub fn build_balloon_target_from_faces(balloon_dir: &Path, decoder: &impl Elemen
 
 ## 設計ディスカッションへの申し送り
 
-設計で決めを置いた点。どれも設計は書き切ってあるが、開発者の確認を受けたい。
+設計で決めを置いた点。**設計ディスカッション（2026-10-05）で 7 件とも精査し、開発者へ出す議題は無かった**（1〜5 は設計のとおり確定。6 は要件の文面を直した。7 は既存のテストの棚卸しで `warn!` ごと消える）。検証レポートの 3 件（赤くなる既存のテストの棚卸し・シェルの descript.txt の文字コード・宣言なしの判定から `has_alpha` を外す）は本文へ反映済み。
 
 1. **`full` × α なしは α を 255 に書く**（そのまま渡すのではなく）。α の無い絵は元から全画素 α=255 のはずなので普通は何も変わらないが、パレットの PNG に透明の情報が付いた絵（`has_alpha` が偽で届く見込み）でも要件 4 の 2 が成り立つようにした。その絵は透明だった所が黒などで出る。読み手の `has_alpha` の決め方は変えていない。
 2. **`.pna` の数え方がシェルとバルーンで違う**。シェルは「焼いた絵のうち `.pna` が添えてあった数」（サブフォルダの絵も含めて正確）。バルーンは「フォルダ直下の `.pna` のファイルの数」（スコープごとに焼くので、1 回だけ数えられる場所がここになる）。
