@@ -52,6 +52,7 @@ pub mod cursor_tag;
 pub mod draw;
 pub mod layout;
 pub mod look;
+mod lookahead;
 pub mod place;
 pub mod region;
 pub mod segment;
@@ -274,6 +275,7 @@ mod tests {
         ("color_tests.rs", include_str!("color_tests.rs")),
         ("look.rs", include_str!("look.rs")),
         ("look_tests.rs", include_str!("look_tests.rs")),
+        ("lookahead.rs", include_str!("lookahead.rs")),
         (
             "look_font_tag_tests.rs",
             include_str!("look_font_tag_tests.rs"),
@@ -442,7 +444,7 @@ mod tests {
     fn pure_layer_modules_have_no_windows_imports() {
         // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
         // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
-        assert_eq!(PURE_SOURCES.len(), 71, "走査する純粋層モジュールの母数");
+        assert_eq!(PURE_SOURCES.len(), 72, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",

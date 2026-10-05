@@ -24,6 +24,7 @@ use tracing::debug;
 use crate::choice::ResolvedChoiceStyle;
 use crate::cursor_tag::CursorWarnGuard;
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, DWriteMetrics, ResolvedFont};
+use crate::lookahead::advance_state;
 use crate::place::PlaceKey;
 use crate::region::{ScaleContract, TextRegion};
 use crate::sink::{EmoTextSink, TextMsg, handle_text_msg_with};
@@ -341,18 +342,12 @@ impl TextLayerRuntime {
                 // 箱を隠す印は次の台詞の頭まで（design.md「箱を数に入れた表示の判断」）。
                 self.hidden_boxes.clear();
             }
-            // `\s` は解決の閉包で番号に解いて行き先へ渡す（要件 4.1）。閉包が無いあいだは
-            // 読まない＝行き先は普通のバルーンのまま（要件 5.4）。
-            CueCommand::Emote { key } => match &self.surface_resolver {
-                Some(resolve) => self.state.route_surface(&cue.actor, resolve(key)),
-                None => {
-                    debug!(actor = %cue.actor, key, "解決の閉包が無い——\\s を読まない（行き先は普通のバルーン）")
-                }
-            },
             // 他コマンドは描画実行部への全域クリアを要さない（グリフ更新は present_frame が
             // リビール進行として描き、非担当コマンドは reveal を汚さない）。`Cursor` の
             // warn-once 良性スキップ・記録は純粋層 `state.apply_cue` が担う（本口は clear 要否のみ）。
-            CueCommand::Text(_)
+            // `\s` の行き先への受け渡しは下段の `advance_state` が担う（空回しと同じ規則・要件 2.2）。
+            CueCommand::Emote { .. }
+            | CueCommand::Text(_)
             | CueCommand::Choice { .. }
             | CueCommand::EntityRef(_)
             | CueCommand::Custom { .. }
@@ -361,7 +356,7 @@ impl TextLayerRuntime {
             | CueCommand::BalloonSurface { .. }
             | CueCommand::Wait => {}
         }
-        self.state.apply_cue(cue);
+        advance_state(&mut self.state, self.surface_resolver.as_deref(), cue);
         // `\c`・台詞の頭で文字が無くなった箱を、提示を待たずに写しから外す。`\s` の受け取りは
         // 行き先だけを替え、箱の置き場所は絵の番号に従う（次の箱の同期が決める）ので外さない。
         self.prune_shown_boxes();

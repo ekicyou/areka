@@ -61,7 +61,7 @@
   - _Requirements: 2.8, 3.5_
   - _Boundary: TextLayerState（state.rs・state_route.rs・state_decoration.rs）_
 
-- [ ] 3.2 合図 1 つで状態を進める規則を 1 つの関数にまとめ、本番の適用をそれに替える
+- [x] 3.2 合図 1 つで状態を進める規則を 1 つの関数にまとめ、本番の適用をそれに替える
   - 新しい純粋なファイル `lookahead.rs` に `advance_state`（`\s` は解決の閉包で番号に解いて行き先へ渡し、閉包が無ければ今と同じ文面の `debug!` を残して読まない、そのあと状態の合図の適用）を置く
   - 実行時の合図の適用の、状態を進める部分を `advance_state` の呼び出しに替える。描画の全消し要求・選択肢の写しの後始末などほかの腕は今のまま
   - `lib.rs` に `mod lookahead;` を足し、`PURE_SOURCES` へ登録して母数の定数を合わせる
@@ -185,3 +185,4 @@
 - 1.3: `spawn_emo_text` の説明に「先渡しを実行時へ渡す口は後のタスク」と書いてある。4.1 で `preview_talk` へつなぐときにこの記述も直す。
 - 2.1: 検査 1（`actor::lookahead_tests::emo2_boot_talk_reveals_without_moving_glyphs`）は 4.2 まで赤。それまで `cargo test -p areka-emo-text` は `--no-fail-fast` で回して、ほかが緑であることを確かめる。`actor_*_tests.rs` の接続宣言はこのクレートの慣例で actor.rs に置く（lib.rs は一覧への登録だけ）。
 - 3.1: `TextLayerState::rehearsal_copy` に `#[cfg_attr(not(test), expect(dead_code, ...))]` が付いている。3.3 で本番から呼ぶようになったら外す。
+- 3.2: `\s` を読まないときの debug の発生元は `areka_emo_text::lookahead` に変わった。実機（7.2）で `RUST_LOG` を絞るときは `areka_emo_text` 全体を debug まで開ける。
