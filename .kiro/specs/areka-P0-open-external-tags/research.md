@@ -345,3 +345,8 @@ mod.rs が綴る 4 点（§1）を変えずに済む最小形:
 - [ShellExecuteW function (shellapi.h)](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew) — COM の初期化・動詞・戻り値・作業フォルダ。
 - ukadoc さくらスクリプトリスト（§2.8 の 6 つの URL）。
 - `doc/ssp-mcp/log-convention.md`（記録の種別の取り決め）・`doc/ukadoc-coverage/README.md` §3（証拠の書き方）。
+
+### 設計ディスカッションでの並走の調整（2026-10-05）
+
+- `mcp-author-tools`（C4-⑨）も `consumer_ledger.rs`（2 行・`#![allow(dead_code)]` の除去・一致のテスト `consumer_ledger_agreement_tests.rs`）と `decode.rs`（本体を「範囲つきのトークン列 → 命令＋範囲＋印」へ組み替え・腕は足さない）を変える。roadmap の C4 の約束とは食い違うが、相手のセッションが同意した（相手の tasks.md 2.3・`f63acc77`）: 後から main へ入る側が、相手の変種・登記・一致のテストの見本を足し直し、総数とモジュールの doc の行数を実物から数え直す。`decode.rs` の腕も後から入る側が新しい形に合わせて置き直す。着地の順は未定。
+- 本 spec の `"j"` の腕は `Raw` を作らないので、相手の印 `UnknownTag` が `\j[…]` に付かなくなるだけで整合する。
