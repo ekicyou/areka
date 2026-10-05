@@ -2,7 +2,8 @@
 //!
 //! 根の直下 `ghost/`・`balloon/` と、ゴーストの `shell/` を**直下 1 段だけ**走査し、
 //! ゴースト・シェル・バルーンを素性（要件 2.4 の 7 項目）付きで返す。同梱バルーン名
-//! （`install.txt` の `balloon.directory`）と「そのフォルダはゴーストか」の判定も持つ。
+//! （`install.txt` の同梱の最初の 1 個＝無印 → `balloon0` の `*.directory`）と「そのフォルダは
+//! ゴーストか」の判定も持つ。
 //!
 //! - descript は `charset::decode`（既定 `Ansi`）＋`kv::parse_kv` で読み、鍵は ASCII
 //!   小文字化して引く。`menu`／`type` の**値**は trim＋ASCII 小文字化して比べる（R5）。
@@ -12,7 +13,7 @@
 //! - 失敗は縮退（`warn!`＋除外）で、列挙は `Result` を返さない。格納フォルダが無いのは 0 件。
 //! - 並びはフォルダ名のバイト順（`String::cmp`）。`recommended.*` は使わない（要件 2.5）。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use areka_parsers::charset::{DefaultEncoding, decode};
@@ -173,8 +174,13 @@ pub fn list_balloons(root: &BasewareRoot) -> Vec<BalloonEntry> {
         .collect()
 }
 
-/// `<ゴースト>/install.txt` の `balloon.directory`（鍵は小文字化・値は trim）。
-/// 無い／読めない → None（読めないときは `warn!`）。番号付きの鍵は読まない。
+/// `<ゴースト>/install.txt` の同梱の最初の 1 個の `*.directory` の値（鍵は小文字化・値は trim）。
+///
+/// 探索は無印 → `balloon0` で、行が在るものを最初の 1 個とする（空の値の行も「見つかった」に
+/// 数え、その先へは進まない）。`balloon0` が無ければ `balloon1` 以降は最初の 1 個になり得ない
+/// （探索は最初に無い番号で止まる）ので、引く鍵はこの 2 つだけ。先頭に 0 を付けた綴りは引かない。
+/// 値が空 → None。無い／読めない → None（読めないときは `warn!`）。探索の順は ukadoc「Install設定」
+/// と完了 `areka-P0-install-companion-reading` に依る。
 pub fn companion_balloon(ghost_dir: &Path) -> Option<String> {
     let path = ghost_dir.join("install.txt");
     let bytes = match std::fs::read(&path) {
@@ -190,7 +196,15 @@ pub fn companion_balloon(ghost_dir: &Path) -> Option<String> {
             return None;
         }
     };
-    lowercased(&bytes).remove("balloon.directory")
+    // 行の有無は空の値を落とさずに見る（`lowercased` は空の値の鍵を落とすので使えない）。
+    let lines: BTreeSet<String> = parse_kv(&decode(&bytes, DefaultEncoding::Ansi))
+        .into_keys()
+        .map(|key| key.to_ascii_lowercase())
+        .collect();
+    let first = ["balloon.directory", "balloon0.directory"]
+        .into_iter()
+        .find(|key| lines.contains(*key))?;
+    lowercased(&bytes).remove(first)
 }
 
 /// `<ゴースト>/ghost/master/descript.txt` の `sakura.name`（切替先の本体側の名前・要件 8.7）。
@@ -369,6 +383,9 @@ fn identity(folder: String, top: &Path, descript: &BTreeMap<String, String>) -> 
 #[cfg(test)]
 #[path = "catalog_all_shells_tests.rs"]
 mod all_shells_tests;
+#[cfg(test)]
+#[path = "catalog_standard_balloon_tests.rs"]
+mod standard_balloon_tests;
 #[cfg(test)]
 #[path = "catalog_test_support.rs"]
 mod test_support;

@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. ゴーストのフォルダから標準のバルーンの指定を読む
-- [ ] 1.1 同梱のバルーンを「最初の 1 個」（無印 → `balloon0`）で読むようにする
+- [x] 1.1 同梱のバルーンを「最初の 1 個」（無印 → `balloon0`）で読むようにする
   - 無印の行が在ればその値（空なら無し・`balloon0` へ進まない）、無印の行が無ければ `balloon0` の行の値（空なら無し・`balloon1` へ進まない）、どちらの行も無ければ無しを返す。行の有無は空の値を落とさない読み方で見て、値は今の小文字化した表から引く
   - 小文字化した表を作る関数そのものは変えず、他の読み手の「空の値は無し」を保つ
   - 共有なしで開いて「読めない」を作るテストの補助を、テストの共通の置き場へ移し、既存のテストからもそこを使う。読み手の説明と既存テストの「番号付きは読まない」というコメントを今の読み方へ直す
@@ -82,3 +82,7 @@
   - A: 記憶が無いことを確かめて起動 → 「バルーンを決めました」が `route=Companion` で `\balloon\claudia`、画面のバルーンが `claudia`。B: そのまま起動し直す → `route=Memory`。C: 記憶を消し descript に `balloon` を 1 行足して起動 → `route=Descript` で `\balloon\claudia_vertical`、記憶を消し値を在りもしない名前に変えて起動 → `descript_balloon_not_found`（`key=balloon`）1 件で `route=Companion`
   - 完了の状態: A〜C のログの行と画面の確認結果が記録されている
   - _Requirements: 1.4, 2.6, 2.12, 3.3, 3.4, 3.5, 5.1, 5.2_
+
+## Implementation Notes
+
+- 1.1: 既存の `companion_balloon_reads_one_key` に「番号付きは読まない」のコメントはもともと無かった（設計の前提違い）。今の読み方を説明する doc コメントを足した。`crates/areka/src/boot_resolve.rs` の鎖の説明に残る「install.txt の balloon.directory」は 2.2 で直す
