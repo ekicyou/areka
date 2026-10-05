@@ -1,6 +1,6 @@
 # 設計の検証レポート: areka-P0-element-base-method
 
-- 対象: `.kiro/specs/areka-P0-element-base-method/design.md`（要件は確定済み）
+- 対象: `.kiro/specs/completed/areka-P0-element-base-method/design.md`（要件は確定済み）
 - 実施: 2026-10-05・対話なし（設計の文面を信じず、引用されたコードを実際に読んで照合した）
 - 判定: **GO**（下の 3 件は設計の討議とタスク生成で拾えば足りる。作り直しは要らない）
 
