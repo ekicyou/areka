@@ -34,7 +34,7 @@
 - **行き先を取り出す関数** `link_destinations(script) -> Vec<Destination>`。
 - **受け口の自己選別の広げ**: `ReadmeCueSink` が受理する組を `("open", readme|file|browser|explorer|editor|mailer)` と運搬名 `\j` まで広げる。
 - **開く処理の 1 か所**: 行き先の解決（相対パス・環境変数・名前だけの実行ファイル・`種類,名前`）・OS へ渡す呼び出し・成功と失敗の記録・開く専用のスレッド。
-- **OS の境界**: `ShellExecuteW` と環境変数の読み取りを 1 つの trait に閉じ、本物 1 つと偽物（テスト）を持つ。`ShellExecuteW` を綴るファイルは本 spec の 1 ファイルだけ。
+- **OS の境界**: `ShellExecuteExW`（`SEE_MASK_FLAG_NO_UI`）と環境変数の読み取りを 1 つの trait に閉じ、本物 1 つと偽物（テスト）を持つ。`ShellExecute` を綴るファイルは本 spec の 1 ファイルだけ。
 - **記録の振り分け**: 成功の `info` を `get_log` の `status` 種別へ入れる規則の 1 行。
 - **台帳と表**: 網羅台帳の 6 行・受け取り手の表の 6 行・`doc/COMPAT_ARCHITECTURE.md` §8 の裁量の行。
 
@@ -90,7 +90,7 @@ graph TB
     Channel2 --> Worker[open external thread]
     Worker --> Resolve[opener resolve]
     Worker --> Port[OsPort]
-    Port --> Shell[ShellExecuteW]
+    Port --> Shell[ShellExecuteExW NO_UI]
     Extract[link destinations] --> Rule
     LaterSpecs[link context copy and hover] --> Extract
 ```
@@ -108,7 +108,7 @@ graph TB
 |-------|------------------|-----------------|-------|
 | 読み込み | `areka-parsers`（既存） | `\j` の腕・運搬名の定数 | 新しい依存なし |
 | アプリ層 | `areka`（Rust 2024・`bevy_ecs` 0.19） | 受け口・取り出し・開く処理・スレッド | `std::thread::Builder`・`std::sync::mpsc` |
-| OS | `windows` 0.62（既に有効な `Win32_UI_Shell`・`Win32_System_Com`） | `ShellExecuteW`・`CoInitializeEx` | 機能の追加 0 |
+| OS | `windows` 0.62（既に有効な `Win32_UI_Shell`・`Win32_System_Com`） | `ShellExecuteExW`・`CoInitializeEx` | 機能の追加 0 |
 | 記録 | `tracing`・`log_history`（既存） | `info`／`warn`／`error` と `get_log` の振り分け | 規則の表に 1 行 |
 
 ## File Structure Plan
@@ -121,7 +121,7 @@ crates/areka/src/
 └── readme/                       # 新設（readme.rs の子）
     ├── destination.rs            # 行き先の規則（純粋）: OpenKind・Store・Target・Destination・Rejected・classify・link_destinations
     ├── destination_tests.rs      # 規則と取り出しの表のテスト（要件 8・10.3・10.4）
-    ├── os_port.rs                # OS の境界: Verb・OsCall・trait OsPort・本物 WindowsShell・COM の初期化（ShellExecuteW を綴る唯一のファイル）
+    ├── os_port.rs                # OS の境界: Verb・OsCall・trait OsPort・本物 WindowsShell・COM の初期化（ShellExecuteExW を綴る唯一のファイル）
     ├── opener.rs                 # 開く処理の 1 か所: OpenContext・OpenJob・OpenFailure・resolve・execute・serve・Opener（スレッド）・submit
     ├── opener_tests.rs           # 解決・記録・失敗経路・順序のテスト（偽の OsPort・要件 2〜7・10）
     └── opener_test_support.rs    # 偽の OsPort（呼ばれた OsCall を記録し、指定の符号を返す）と一時ゴーストの組み立て
@@ -225,7 +225,7 @@ flowchart TB
 | 5.1 | 「編集」の関連付けで開く | Destination・Opener | `Target::Edit`→`Verb::Edit` | 解決の分かれ道 |
 | 5.2 | 表示行を無視 | Destination | `classify`（第 3 引数以降を読まない） | — |
 | 5.3 | 相対は `ghost/master` 基準 | Opener | `resolve` | 解決の分かれ道 |
-| 5.4 | 関連付けが無い・無い → `error!` | Opener | `OpenFailure::Os`（`SE_ERR_NOASSOC`）・`NotFound` | — |
+| 5.4 | 関連付けが無い・無い → `error!` | Opener | `OpenFailure::Os`（`ERROR_NO_ASSOCIATION`＝1155）・`NotFound` | — |
 | 6.1 | 宛先の新しいメール | Opener | `Target::Mail`→`mailto:` を付ける | — |
 | 6.2 | `mailto:` 付きはそのまま | Opener | `resolve`（大文字小文字を区別しない前置きの判定） | — |
 | 6.3 | 引数なし → `warn!` | Destination・ReadmeCueSink | `Rejection::MissingArgument` | — |
@@ -264,7 +264,7 @@ flowchart TB
 | ReadmeCueSink（変更） | 台本のスレッドの受け口 | 開く系を選別・分類して UI へ送る・断りを記録 | 1.5, 1.7, 2.6, 3.2, 4.7, 6.3, 7.5, 8.6 | Destination（P0）・readme channel（P0） | Event |
 | ReadmeDrain（変更） | UI スレッドの取り出し | 要求を取り出して開く処理へ渡す・説明書も同じ道へ | 7.1, 7.5 | Opener（P0） | Service, State |
 | Opener | 開く処理の 1 か所 | 文脈の写し・解決・記録・開く専用のスレッド | 1.1-1.4, 2.1-2.5, 3.1, 3.3, 4.1-4.6, 4.8, 5.1, 5.3, 5.4, 6.1, 6.2, 6.4, 7.1-7.8 | OsPort（P0）・catalog（P1）・GhostSlot（P0）・BootContext（P1） | Service, Batch, State |
-| OsPort | OS の境界 | `ShellExecuteW` と環境変数を 1 か所に閉じる | 2.3, 7.1, 7.7, 10.1 | `windows`（P0） | Service |
+| OsPort | OS の境界 | `ShellExecuteExW` と環境変数を 1 か所に閉じる | 2.3, 7.1, 7.7, 10.1 | `windows`（P0） | Service |
 | ConsumerLedger（変更） | 受け取り手の表 | 開く系 6 組を `ReadmeSink` に登記 | 1.5, 9.2, 9.3 | — | State |
 | LogRule（変更） | 記録の振り分け | 成功の `info` を `status` へ | 7.3 | `log_history::RULES`（P0） | State |
 
@@ -480,7 +480,7 @@ pub(crate) fn register_readme_drain(world: &mut World);
   - `NamedFolder` → `Ghost`: `list_ghosts(root)` を `resolve_switch_target(&entries, &GhostSpec::Name(name))` で引く（`\![change,ghost,名前]` と同じ引き方）。`Balloon`: `balloon_candidates(root)`、`Shell`: `shell_candidates(ghost_dir)` を「descript の `name` → フォルダ名」の順・大文字小文字を区別して引く（`random`・`lastinstalled` などの特別な名前は解かない）。当たらなければ `NoMatch`、根が無ければ `NoBasewareRoot`、当たったフォルダが無ければ `NotFound`。当たれば `open` でそのフォルダ。
   - `Path`・`Program`（パスに解けたもの）を開くときの作業フォルダは、そのファイルのあるフォルダ（エクスプローラーでダブルクリックしたときと同じ）。それ以外は無し。
 - **実行 `execute`（開く専用のスレッド）**: 解決に失敗 → `error!`。成功 → `info!` 1 行（OS へ渡す時点）→ `OsPort::shell_execute` → 失敗の符号なら `error!`。メッセージボックスは出さない（要件 7.6）。
-- **スレッド `serve`／`Opener::spawn`**: 名前 `open-external` の 1 本。起動時に COM を STA で 1 度初期化してから（`ShellExecuteW` の公式の注記どおり）`for job in rx { execute(&mut port, job) }`。World を落とすと送信端が落ちて受信が終わり、スレッドは自然に終わる。
+- **スレッド `serve`／`Opener::spawn`**: 名前 `open-external` の 1 本。起動時に COM を STA で 1 度初期化してから（`ShellExecuteExW` の公式の注記どおり）`for job in rx { execute(&mut port, job) }`。World を落とすと送信端が落ちて受信が終わり、スレッドは自然に終わる。
   - スレッドが持つ OS の口は `#[cfg(not(test))]` では本物の `WindowsShell`、`#[cfg(test)]` では「OS を呼ばずに断る口」（`shell_execute` は呼ばれた `OsCall` をプロセス共有の記録へ積み、`Err` を返す・`env_var` は `None`）。COM の初期化も `#[cfg(not(test))]` だけ。これで後続の spec がテストの組み立てで開く系の台本を流しても、開発者の机で本物のアプリは起きない（要件 10.1）。`spawn` で起こしたスレッドへ 1 件送ると、断る口の記録に積まれ、`error!` 1 行（`reason = "os"`）が残ることを 1 本のテストで固定する。
 
 **記録の形**（`kind`＝`OpenKind::as_str`・`destination` は解決した行き先・`tag` は元の綴り）
@@ -489,7 +489,7 @@ pub(crate) fn register_readme_drain(world: &mut World);
 |---|---|---|---|
 | OS へ渡す（要件 7.2・7.3） | `info!`・既定（`areka::readme::opener`＝規則の表で `status`） | `open_external` | `kind`・`destination`・`ghost`・`tag`・`verb` |
 | 解決に失敗（要件 2.5・4.8・5.4・7.4） | `error!(target: TARGET_ERROR, ghost = %名, …)` | `open_external_failed` | `kind`・`destination`（書かれた綴り）・`tag`・`reason`（`not_found`／`no_match`／`no_baseware_root`） |
-| OS が断った（要件 2.5・3.3・5.4・6.4・7.4） | 同上 | `open_external_failed` | `kind`・`destination`・`tag`・`reason = "os"`・`code`（`ShellExecuteW` の符号） |
+| OS が断った（要件 2.5・3.3・5.4・6.4・7.4） | 同上 | `open_external_failed` | `kind`・`destination`・`tag`・`reason = "os"`・`code`（`GetLastError` の Win32 の符号） |
 | 入口で捨てた（ゴースト無し・スレッド無し・送れない） | `error!(target: TARGET_ERROR, …)`（ゴーストが居れば `ghost = %名` も付ける） | `open_external_dropped` | `kind`・`destination`・`tag`・`reason` |
 
 **Contracts**: Service [x] / Batch [x] / State [x]
@@ -543,7 +543,7 @@ pub(crate) fn submit(world: &World, destination: Destination);
 **Implementation Notes**
 - Integration: `serve` と `execute` はテストから同じスレッドで呼ぶ（`log_capture_kit` は呼んだスレッドの記録しか拾わない）。`Opener::spawn` のスレッドの閉包だけが COM の初期化と本物の `WindowsShell` を持つ。
 - Validation: 解決の全分岐・記録の全行を `opener_tests.rs` で偽の `OsPort` と一時フォルダ（`temp_path_kit`）で判定する。
-- Risks: 開く専用のスレッドが `ShellExecuteW` で長く待つと後ろの要求も待つ（順序を守るための代償・画面は止まらない）。アプリの終了時に溜まっている要求は捨てられる（終了を待たない）。文脈（ゴースト名・フォルダ）は台本を出した時点でなく UI で取り出した時点の `GhostSlot` から写すので、ゴーストの切り替えの境目の 1 tick に出た要求は、切り替え後のゴーストの名前・フォルダで解かれうる（取り出しは毎 tick なので境目だけ）。
+- Risks: 開く専用のスレッドが `ShellExecuteExW` で長く待つと後ろの要求も待つ（順序を守るための代償・画面は止まらない）。アプリの終了時に溜まっている要求は捨てられる（終了を待たない）。文脈（ゴースト名・フォルダ）は台本を出した時点でなく UI で取り出した時点の `GhostSlot` から写すので、ゴーストの切り替えの境目の 1 tick に出た要求は、切り替え後のゴーストの名前・フォルダで解かれうる（取り出しは毎 tick なので境目だけ）。
 
 ### OS の境界
 
@@ -555,9 +555,9 @@ pub(crate) fn submit(world: &World, destination: Destination);
 | Requirements | 2.3, 7.1, 7.7, 10.1 |
 
 **Responsibilities & Constraints**
-- 本 spec の中で `ShellExecuteW` と `CoInitializeEx` を綴るのは `readme/os_port.rs` だけ（`CoInitializeEx` は既存のテスト `emo2_boot/assets_tests.rs` などにもあるので、見張るのは `ShellExecute` の綴りだけ）。`crates/areka/src` で `ShellExecute` の綴りがこのファイル以外に無いことをテストが見張る（要件 7.1）。
+- 本 spec の中で `ShellExecuteExW` と `CoInitializeEx` を綴るのは `readme/os_port.rs` だけ（`CoInitializeEx` は既存のテスト `emo2_boot/assets_tests.rs` などにもあるので、見張るのは `ShellExecute` の綴りだけ）。`crates/areka/src` で `ShellExecute` の綴りがこのファイル以外に無いことをテストが見張る（要件 7.1）。
 - 動詞は `open` と `edit` の 2 つだけ（OS の既定・areka 独自の設定値 0・要件 7.7）。窓の表示は `SW_SHOWNORMAL`、親の窓は無し。
-- `ShellExecuteW` の戻り値が 32 以下なら `Err(符号)`。
+- 呼ぶのは `ShellExecuteExW`。`fMask` は `SEE_MASK_FLAG_NO_UI`（OS のエラーの窓も「開く方法を選ぶ」窓も出さない・2026-10-05 開発者裁定＝設計ディスカッション議題 1）。戻り値が偽なら `Err(GetLastError の符号)`（例: 見つからない 2・関連付けが無い 1155）。窓が出ないので、開く専用のスレッドが利用者の操作を待って止まることも無い。
 
 **Contracts**: Service [x]
 
@@ -569,7 +569,7 @@ pub(crate) enum Verb { Open, Edit }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct OsCall {
     pub verb: Verb,
-    /// ShellExecuteW の lpFile（URL・パス・名前だけの実行ファイル・explorer.exe）。
+    /// SHELLEXECUTEINFOW の lpFile（URL・パス・名前だけの実行ファイル・explorer.exe）。
     pub file: std::ffi::OsString,
     /// lpParameters（explorer.exe の /select だけが使う）。
     pub params: Option<std::ffi::OsString>,
@@ -578,13 +578,13 @@ pub(crate) struct OsCall {
 }
 
 pub(crate) trait OsPort {
-    /// OS へ渡す。失敗は ShellExecuteW の符号（32 以下）。
+    /// OS へ渡す。失敗は GetLastError の Win32 の符号。
     fn shell_execute(&mut self, call: &OsCall) -> Result<(), u32>;
     /// 環境変数（Windows の規則で大文字小文字を区別しない）。
     fn env_var(&self, name: &str) -> Option<String>;
 }
 
-/// 本物（ShellExecuteW・std::env::var）。
+/// 本物（ShellExecuteExW（SEE_MASK_FLAG_NO_UI）・std::env::var）。
 pub(crate) struct WindowsShell;
 impl OsPort for WindowsShell { /* … */ }
 
@@ -638,7 +638,7 @@ pub(crate) fn init_com_for_shell();
 | ゴーストが居ない・開く専用のスレッドが無い・送れない | `submit` | `error!` `open_external_dropped` | 開かない |
 | 行き先が無い（要件 2.5・4.8・5.4） | `execute` | `error!(target: TARGET_ERROR)` `reason=not_found` | 開かない |
 | 名前に当たらない・根が無い（要件 4.8） | `execute` | 同上 `reason=no_match`／`no_baseware_root` | 開かない |
-| OS が断った（関連付けが無い `SE_ERR_NOASSOC`＝31 など） | `execute` | `info` の後に `error!(target: TARGET_ERROR)` `reason=os`・`code` | OS 次第 |
+| OS が断った（関連付けが無い `ERROR_NO_ASSOCIATION`＝1155 など・OS の窓は出ない） | `execute` | `info` の後に `error!(target: TARGET_ERROR)` `reason=os`・`code` | OS 次第 |
 | COM の初期化に失敗 | スレッドの起動 | `warn!` | 続ける（多くの場合 COM なしでも開ける） |
 | スレッドを起こせない | `register_readme_drain` | `error!` `open_external_spawn_failed` | 以後は `submit` が要求ごとに `error!` |
 
@@ -661,7 +661,7 @@ pub(crate) fn init_com_for_shell();
 ### Integration Tests（開く処理・`opener_tests.rs`）
 - 6 つの形の解決（要件 10.2）: `\j` の URL・`mailto:`・`file:///` 絶対と相対／`open,file` の絶対・相対・`%TEMP%` 形の展開と未定義の変数の据え置き・`ghost/master` に在る名前だけ・無い名前だけ（名前のまま渡る）／`open,browser`／`open,explorer` のフォルダ・ファイル（`explorer.exe` と `/select,"…"`）・`ghost`／`balloon`／`shell` の名前（name とフォルダ名）／`open,editor`（動詞 `edit`）／`open,mailer` の付け足しと二重に付けないこと。偽物が記録した動詞・対象・引数・作業フォルダで判定する。
 - 記録（要件 7.2・7.3）: 成功で `info` 1 行に `kind`・`destination`・`ghost`・`tag` が在る。捕捉した出来事のレベルと target を `log_history::classify` に通すと `status`、失敗の行は `error` で名がゴースト名になる。
-- 失敗の経路 0 漏れ（要件 7.4・10.5）: `OpenFailure` の全変種と、偽物に `Err(2)`・`Err(31)` を返させた場合のそれぞれで `error!` がちょうど 1 行（`reason`・`code`）。OS を呼ばない失敗では偽物の記録が 0 件。
+- 失敗の経路 0 漏れ（要件 7.4・10.5）: `OpenFailure` の全変種と、偽物に `Err(2)`・`Err(1155)` を返させた場合のそれぞれで `error!` がちょうど 1 行（`reason`・`code`）。OS を呼ばない失敗では偽物の記録が 0 件。
 - 順序（要件 7.8）: 3 件の `OpenJob` を送って送信端を落とし、同じスレッドで `serve` を呼ぶと、偽物の記録が送った順。
 - 入口（要件 7.1）: `Opener::from_sender` の送り先で、`submit` が文脈（ゴースト名・フォルダ・根）を写した `OpenJob` を 1 件送る・ゴーストが居ない／`Opener` が無いと `error!` 1 行で送らない。
 - 見張り（要件 7.1）: `crates/areka/src` の下で `ShellExecute` を綴るのは `readme/os_port.rs` だけ（見張りのテストファイル自身は除く）。
@@ -694,3 +694,4 @@ pub(crate) fn init_com_for_shell();
 | `\![open,explorer,種類,名前]` の特別な名前（`random` など） | 解かない（名指しだけ・ukadoc の例も名指し） |
 | 環境変数の展開 | ukadoc が書く `\![open,file]` だけで行う。未定義の変数はそのまま残す |
 | `\![open,file]` の作業フォルダ | 開くファイルのあるフォルダ（エクスプローラーでダブルクリックしたときと同じ）。名前だけでパス探索に任せるときは指定しない |
+| 開けなかったときの OS の窓 | 出さない（`SEE_MASK_FLAG_NO_UI`）。「見つかりません」の窓も、関連付けの無いファイルで「開く方法を選ぶ」窓も出ず、`error!` の記録だけで伝える（2026-10-05 開発者裁定）。選ぶ窓が欲しいという要望が出たら、関連付けが無い符号のときだけ動詞 `openas` で呼び直す形を足す |
