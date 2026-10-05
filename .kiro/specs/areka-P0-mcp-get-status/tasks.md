@@ -66,3 +66,4 @@
 ## Implementation Notes
 - 3.2: 切替の途中に届いた答えは実機で見られなかった（同梱のゴーストが 1 体・computer-use の許可なし・MCP から切替を起こす口がまだ無い）。文言は決定論テスト M3 で固定済み。
 - 範囲外（起票候補）: `tools/package.ps1` は Git Bash から起こした pwsh だと `cargo metadata` の日本語の説明を読み違えて終了コード 3（「版を読めない」）で落ちる。PowerShell から起こせば緑。
+- 完了時の棚卸（2026-10-06）: その場で解決 0 件・起票 0 件。`package.ps1` の件は main で `tools-utf8-child-output`（バグ）として起票済み。切替の途中の実機確認ができなかった件は、MCP から切替を起こす `sakurascript` が `mcp-kanade-tools` の持ち物。要件 2.4（`online`）を問い合わせで確かめるテストは無いが、答える位置が `sync_online` の後であることと SHIORI 側の既存のテストで足りる（要件 5.1 の場面に `online` は無い）。
