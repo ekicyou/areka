@@ -43,6 +43,7 @@ surface26
 - **Adjacent expectations**:
   - 描画メソッドが `overlay` の element定義について今ある振る舞い——画像を置く書き方、ファイル名の欄が数字だけの書き方（areka 独自・`surface-element-nesting`）、areka 独自の描画メソッド `balloon`（`shell-balloon`）、サーフェスの番号の画像（`surface*.png`）を土台に敷く規則——はそのまま使い、変えない。
   - `base` の element定義の位置と外形は、同じ行を `overlay` と書いたときのものに従う。外形の規則そのものを直すのは `extent-element-offset` で、その修正が入れば `base` の行も同じ規則に乗る。
+  - 描けない描画メソッドの `element0` を持つサーフェスで `surface*.png` が土台に残ること（正典の字面では破棄）は、今ある既知のずれで、`self-alpha-declaration` の議題が持つ（roadmap の「`shell-implicit-surface` の着地で残したもの」⑹）。本 spec は直さず、今の見え方を保つ（要件 2.5）。
   - `extent-element-offset`・`element-clipping-option`・`animated-image-playback` は同じ場所を触るので、本 spec と同時には走らせない。
 
 ## Requirements
@@ -67,9 +68,9 @@ surface26
 
 #### Acceptance Criteria
 
-1. If element定義の描画メソッドが、areka が element定義で描けるもの（`overlay`・`base`・areka 独自の `balloon`）のどれでもない場合, the areka shall サーフェスの番号・element番号・書かれていた描画メソッドの語を含む警告を、その行について 1 件ログに残す
+1. If element定義の描画メソッドが、areka が element定義で描けるもの（`overlay`・`base`・areka 独自の `balloon`）のどれでもない場合, the areka shall ブレスの見出しに書かれたサーフェスの番号（複数の番号を並べた見出しではそのすべて）・element番号・書かれていた描画メソッドの語を含む警告を、その行について 1 件ログに残す
 2. If element定義の描画メソッドの欄が空である、または ukadoc に無い語である場合, the areka shall 要件 2.1 と同じ形の警告を 1 件ログに残す
-3. The areka shall 要件 2.1・2.2 の警告を、シェルを 1 回読み込むごとに該当する行 1 行につき 1 件だけ出し、描画やアニメーションのたびに繰り返さない
+3. The areka shall 要件 2.1・2.2 の警告を、シェルを 1 回読み込むごとに該当する行 1 行につき 1 件だけ出し（見出しが複数の番号を並べていても 1 行は 1 件）、描画やアニメーションのたびに繰り返さない
 4. If 描けない描画メソッドの element定義がサーフェスにある場合, the areka shall その行だけを描かず、同じサーフェスの他の element定義は描く
 5. The areka shall 描けない描画メソッドの element定義を持つサーフェスの見え方（絵と大きさ）を、本 spec の前と同じに保つ（増えるのは警告の記録だけ）
 6. When シェルのどの element定義も areka が描ける描画メソッドで書かれている場合, the areka shall 要件 2.1・2.2 の警告を 1 件も出さない
@@ -81,7 +82,7 @@ surface26
 #### Acceptance Criteria
 
 1. The areka shall 描画メソッドが `overlay` の element定義だけで書かれたサーフェスの絵と大きさを、本 spec の前と同じに保つ
-2. When `element0` が `base` で自分のサーフェスの番号の画像（`element0,base,surfaceN.png,0,0`）を指している場合, the areka shall そのサーフェスを本 spec の前と同じ絵・同じ大きさで描く
+2. When `element0` が `base` で自分のサーフェスの番号の画像（`element0,base,surfaceN.png,0,0`）を指している場合, the areka shall そのサーフェスを本 spec の前と同じ絵・同じ大きさで描く（縛るのは絵と大きさ。`surface*.png` を「使った」「`element0` が在るので使わなかった」の記録の内訳は変わってよい）
 3. The areka shall pattern定義（`animation*.pattern*`）の描画メソッド `base` の振る舞い（描かずに警告を残す）を、本 spec の前と同じに保つ
 4. The areka shall `element0` を持たないサーフェスで、サーフェスの番号の画像（`surface*.png`）を土台に敷く振る舞いを、本 spec の前と同じに保つ
 5. The areka shall サーフェスの外形を決める規則を変えず、`base` の element定義を、外形の計算で `overlay` の同じ行と同じに扱う
