@@ -469,6 +469,27 @@ impl TextLayerRuntime {
     pub(super) fn set_surface_resolver(&mut self, resolve: SurfaceKeyResolver) {
         self.surface_resolver = Some(resolve);
     }
+
+    /// 検査用の読み口: その場所の配置の入力を引いて [`present::arrange_lines`] を呼ぶだけ
+    /// （`present_actor` が冒頭でしている引き当てと同じ）。配置の入力か状態が無ければ `None`。
+    /// 字幅は呼び手が渡す（決まった字幅で GPU の資源なしに本番と同じ手順の行の列を取る）。
+    #[cfg(test)]
+    pub(super) fn arrange_for_test(
+        &mut self,
+        place: &PlaceKey,
+        metrics: &dyn crate::layout::GlyphMetrics,
+        talk_time: f64,
+    ) -> Option<Vec<crate::layout::PositionedLine>> {
+        let resolved = self.layout_input.get(place)?;
+        present::arrange_lines(
+            &self.state,
+            &mut self.cursor_warn,
+            place,
+            resolved,
+            metrics,
+            talk_time,
+        )
+    }
 }
 
 /// 結線 API（UI スレッド＝pump スレッドから呼ぶ・design.md「TextLayerActor」正本）:

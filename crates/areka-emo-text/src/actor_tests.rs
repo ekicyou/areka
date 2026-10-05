@@ -77,3 +77,43 @@ fn binding_degrades_invalid_scale_to_identity() {
     );
     assert_eq!(binding.image_size, (320, 240));
 }
+
+/// 検査用の読み口（`arrange_for_test`）は決まった字幅だけで本番と同じ配置の手順を通る（GPU の資源なし）。
+/// 配置の入力の無い場所は `None`。
+#[test]
+fn arrange_for_test_lays_out_with_fixed_metrics_without_gpu() {
+    use super::test_support::{cue, geo_model};
+    use super::{ResolvedBalloonText, TextLayerRuntime};
+    use crate::layout::FixedMetrics;
+    use crate::place::PlaceKey;
+    use crate::state::TextLayerConfig;
+    use areka_sakura::contract::{ActorKey, CueCommand};
+
+    let mut world = World::new();
+    let slot = world.spawn_empty().id();
+    let window = world.spawn_empty().id();
+    let actor = ActorKey::from("0");
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("あいう".into())));
+    let image = (120u32, 60u32);
+    rt.register_actor(
+        actor.clone(),
+        TextSlotBinding::new(slot, window, 1.0, image, image),
+        ResolvedBalloonText::resolve(&geo_model(), image),
+    );
+
+    let lines = rt
+        .arrange_for_test(&PlaceKey::balloon(&actor), &FixedMetrics, 10.0)
+        .expect("配置の入力と状態のある場所は行の列を返す");
+    let glyphs: usize = lines.iter().map(|line| line.glyphs.len()).sum();
+    assert_eq!(glyphs, 3, "出終わった時刻には届いた 3 字がすべて並ぶ");
+    assert!(
+        rt.arrange_for_test(
+            &PlaceKey::balloon(&ActorKey::from("1")),
+            &FixedMetrics,
+            10.0
+        )
+        .is_none(),
+        "配置の入力の無い場所は None"
+    );
+}
