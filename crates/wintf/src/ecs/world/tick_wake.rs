@@ -14,6 +14,7 @@
 //!
 //! - [`POINTER`] — ポインタ入力の投入（`pointer/buffers.rs`）とポインタ系メッセージの受理
 //! - [`DRAG`] — ドラッグ中（毎画面更新で回す必要があるので、tick の末尾で自分で立て直す）
+//!   World を借りられない間のドラッグの扱い（`drag/reentry.rs`）は、受けたメッセージを配送表と同じ写像で立てる
 //! - [`WINDOW_CMD`] — 窓書込指令の積み上げ（`command.rs` の enqueue）
 //! - [`ZORDER`] — Z 順の要求（`window/zorder_pair_maintain.rs` の `ReassertZOrder` 維持・
 //!   areka 側 `emo2_boot/zorder_cue.rs` のタグ入口）

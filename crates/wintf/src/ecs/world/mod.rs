@@ -110,7 +110,7 @@ impl EcsWorld {
         crate::ecs::layout::initialize_layout_root(&mut world);
 
         // ドラッグ累積器の登録
-        world.insert_resource(crate::ecs::drag::DragAccumulatorResource::new());
+        crate::ecs::drag::install_drag_accumulator(&mut world);
 
         // ドラッグコンテキスト（ECS→wndprocスレッド間転送用）の登録
         world.insert_resource(crate::ecs::drag::WindowDragContextResource::new());

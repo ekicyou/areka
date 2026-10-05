@@ -1,5 +1,9 @@
 use super::*;
-use crate::ecs::drag::{WindowDragContext, WindowDragContextResource};
+use crate::ecs::drag::{
+    DragAccumulatorResource, DragTransition, WindowDragContext, WindowDragContextResource,
+    install_drag_accumulator,
+};
+use bevy_ecs::world::World;
 
 // NOTE: `DRAG_STATE` is a thread_local。テストワーカースレッドは再利用され得るため、
 // 各テストは Idle へ強制リセットしてから開始する（前のテストが残した状態への依存を排除）。
@@ -270,7 +274,14 @@ fn test_end_dragging_from_preparing() {
     force_idle();
     let e = entity(7);
     start_preparing(e, PhysicalPoint::new(40, 50), null_hwnd());
-    end_dragging(PhysicalPoint::new(41, 52), false);
+    assert_eq!(
+        end_dragging(PhysicalPoint::new(41, 52), false),
+        DragClose::Closed {
+            entity: e,
+            notified: false
+        },
+        "準備中からは種を積まない"
+    );
 
     match snapshot_drag_state() {
         DragStateSnapshot::JustEnded {
@@ -319,7 +330,10 @@ fn test_end_dragging_from_dragging_preserves_cancelled_flag() {
 #[test]
 fn test_end_dragging_noop_when_idle() {
     force_idle();
-    end_dragging(PhysicalPoint::new(1, 1), false);
+    assert_eq!(
+        end_dragging(PhysicalPoint::new(1, 1), false),
+        DragClose::NotActive
+    );
     assert!(matches!(snapshot_drag_state(), DragStateSnapshot::Idle));
     force_idle();
 }
@@ -358,7 +372,7 @@ fn test_cancel_dragging_uses_start_pos_and_sets_cancelled() {
 #[test]
 fn test_cancel_dragging_noop_when_idle() {
     force_idle();
-    cancel_dragging();
+    assert_eq!(cancel_dragging(), DragClose::NotActive);
     assert!(matches!(snapshot_drag_state(), DragStateSnapshot::Idle));
     force_idle();
 }
@@ -535,5 +549,264 @@ fn test_cancel_rests_until_next_press() {
         DragStateSnapshot::Preparing { entity: e, .. } => assert_eq!(e, entity(24)),
         other => panic!("expected Preparing, got {}", variant_name(&other)),
     }
+    force_idle();
+}
+
+// --- 休ませた結果と終了の種（要件 2.1・2.2・3.1〜3.3・4.1〜4.3） -------------
+
+/// このスレッドの控えへ新しい累積器を置き、World の資源と同じ実体の複製を返す（種を数えるため）。
+fn install_handle() -> DragAccumulatorResource {
+    let mut world = World::new();
+    install_drag_accumulator(&mut world);
+    world.resource::<DragAccumulatorResource>().clone()
+}
+
+/// 開始の種を手で積む（開始の種は `mouse_move.rs` が積み、`start_dragging` は積まない）。
+fn push_started(acc: &DragAccumulatorResource, e: Entity) {
+    acc.set_transition(DragTransition::Started {
+        entity: e,
+        start_pos: PhysicalPoint::new(0, 0),
+        timestamp: Instant::now(),
+    });
+}
+
+/// flush して終了の種だけを (対象, 位置, 取り消しか) で並べる。
+fn ended_seeds(acc: &DragAccumulatorResource) -> Vec<(Entity, (i32, i32), bool)> {
+    acc.flush()
+        .expect("flush")
+        .transitions
+        .into_iter()
+        .filter_map(|t| match t {
+            DragTransition::Ended {
+                entity,
+                end_pos,
+                cancelled,
+            } => Some((entity, (end_pos.x, end_pos.y), cancelled)),
+            DragTransition::Started { .. } => None,
+        })
+        .collect()
+}
+
+/// 押し → 閾値越え（`dragging` なら配る段の写し `update_dragging` で Dragging）まで進める。
+fn drive_to(e: Entity, dragging: bool) {
+    start_preparing(e, PhysicalPoint::new(10, 10), null_hwnd());
+    start_dragging(PhysicalPoint::new(20, 10));
+    if dragging {
+        update_dragging(PhysicalPoint::new(30, 15), None);
+    }
+}
+
+/// 休ませる 4 つの関数（離しは捕捉を取った窓＝空の窓・位置なし）。
+const CLOSERS: [(&str, fn() -> DragClose); 4] = [
+    ("end_dragging", || {
+        end_dragging(PhysicalPoint::new(1, 1), false)
+    }),
+    ("cancel_dragging", cancel_dragging),
+    ("capture_lost", cancel_dragging_on_capture_lost),
+    ("release", || end_dragging_on_release(HWND::default(), None)),
+];
+
+/// 開始済み（JustStarted・Dragging）からの `end_dragging` は、休ませて終了の種をちょうど 1 件積む。
+#[test]
+fn test_end_dragging_from_started_states_pushes_exactly_one_end_seed() {
+    for dragging in [false, true] {
+        force_idle();
+        let acc = install_handle();
+        let e = entity(30);
+        push_started(&acc, e);
+        drive_to(e, dragging);
+
+        let result = end_dragging(PhysicalPoint::new(60, 70), false);
+
+        assert_eq!(
+            result,
+            DragClose::Closed {
+                entity: e,
+                notified: true
+            },
+            "dragging={dragging}"
+        );
+        assert_eq!(ended_seeds(&acc), vec![(e, (60, 70), false)]);
+        assert_held("JustEnded", false);
+    }
+    force_idle();
+}
+
+/// 開始済みからの `cancel_dragging` は、押した位置・取り消しの印つきの種を 1 件積む。
+#[test]
+fn test_cancel_dragging_from_started_states_pushes_cancelled_seed_at_press() {
+    for dragging in [false, true] {
+        force_idle();
+        let acc = install_handle();
+        let e = entity(31);
+        push_started(&acc, e);
+        drive_to(e, dragging);
+
+        assert_eq!(
+            cancel_dragging(),
+            DragClose::Closed {
+                entity: e,
+                notified: true
+            },
+            "dragging={dragging}"
+        );
+        assert_eq!(ended_seeds(&acc), vec![(e, (10, 10), true)]);
+    }
+    force_idle();
+}
+
+/// 準備中（閾値前）からは休ませるが種は積まない（4 つの関数とも）。
+/// 累積器が終了を受け付ける形（開始を積んである）にしておき、積めば見える状態で確かめる。
+#[test]
+fn test_closing_from_preparing_pushes_no_seed() {
+    for (name, close) in CLOSERS {
+        force_idle();
+        let acc = install_handle();
+        let e = entity(32);
+        push_started(&acc, e);
+        start_preparing(e, PhysicalPoint::new(10, 10), null_hwnd());
+
+        assert_eq!(
+            close(),
+            DragClose::Closed {
+                entity: e,
+                notified: false
+            },
+            "{name}"
+        );
+        assert_held("JustEnded", false);
+        assert!(ended_seeds(&acc).is_empty(), "{name}: 準備中から種を積んだ");
+    }
+    force_idle();
+}
+
+/// 押していない（Idle・JustEnded）ときは、4 つの関数とも何もせず NotActive。種も積まない。
+#[test]
+fn test_closing_when_not_held_returns_not_active() {
+    for (name, close) in CLOSERS {
+        force_idle();
+        let acc = install_handle();
+        assert_eq!(close(), DragClose::NotActive, "{name}: Idle");
+        assert_held("Idle", false);
+
+        let e = entity(33);
+        push_started(&acc, e);
+        drive_to(e, true);
+        end_dragging(PhysicalPoint::new(5, 5), false);
+        let _ = ended_seeds(&acc);
+        assert_eq!(close(), DragClose::NotActive, "{name}: JustEnded");
+        assert!(ended_seeds(&acc).is_empty(), "{name}: 休んだ後に種を積んだ");
+    }
+    force_idle();
+}
+
+/// 捕捉を取った窓と違う窓の離しは何もしない（OtherWindow・状態はそのまま）。同じ窓なら休ませる。
+#[test]
+fn test_release_on_other_window_returns_other_window_and_keeps_state() {
+    let other = HWND(0x1 as *mut _);
+    for dragging in [false, true] {
+        force_idle();
+        let acc = install_handle();
+        let e = entity(34);
+        push_started(&acc, e);
+        drive_to(e, dragging);
+        let before = variant_name(&snapshot_drag_state());
+
+        assert_eq!(
+            end_dragging_on_release(other, Some(PhysicalPoint::new(1, 1))),
+            DragClose::OtherWindow
+        );
+        assert_eq!(variant_name(&snapshot_drag_state()), before);
+        assert!(ended_seeds(&acc).is_empty());
+
+        assert_eq!(
+            end_dragging_on_release(null_hwnd(), Some(PhysicalPoint::new(40, 50))),
+            DragClose::Closed {
+                entity: e,
+                notified: true
+            }
+        );
+        assert_eq!(ended_seeds(&acc), vec![(e, (40, 50), false)]);
+    }
+    // 準備中でも同じ判断（窓が違えば何もしない）
+    force_idle();
+    start_preparing(entity(35), PhysicalPoint::new(1, 1), null_hwnd());
+    assert_eq!(end_dragging_on_release(other, None), DragClose::OtherWindow);
+    assert_held("Preparing", true);
+    force_idle();
+}
+
+/// 離しに位置が無いときは、状態が持つ最後の画面の座標で終える
+/// （JustStarted・Dragging は current_pos、Preparing は start_pos）。取り消しの印は付けない。
+#[test]
+fn test_release_without_position_uses_last_screen_position() {
+    for (dragging, last) in [(false, (20, 10)), (true, (30, 15))] {
+        force_idle();
+        let acc = install_handle();
+        let e = entity(36);
+        push_started(&acc, e);
+        drive_to(e, dragging);
+
+        end_dragging_on_release(null_hwnd(), None);
+
+        match snapshot_drag_state() {
+            DragStateSnapshot::JustEnded {
+                position,
+                cancelled,
+                ..
+            } => {
+                assert_eq!((position.x, position.y), last);
+                assert!(!cancelled);
+            }
+            other => panic!("expected JustEnded, got {}", variant_name(&other)),
+        }
+        assert_eq!(ended_seeds(&acc), vec![(e, last, false)]);
+    }
+
+    force_idle();
+    start_preparing(entity(37), PhysicalPoint::new(7, 8), null_hwnd());
+    end_dragging_on_release(null_hwnd(), None);
+    match snapshot_drag_state() {
+        DragStateSnapshot::JustEnded { position, .. } => {
+            assert_eq!((position.x, position.y), (7, 8))
+        }
+        other => panic!("expected JustEnded, got {}", variant_name(&other)),
+    }
+    force_idle();
+}
+
+/// 捕捉の喪失は、捕捉の守りに解放済みの印を付けてから取り消す
+/// （守りが落ちても `ReleaseCapture` を呼ばない）。ふつうの取り消しは呼ぶ。
+#[test]
+fn test_capture_lost_marks_guard_released_before_cancelling() {
+    let released_via_drop = |events: &[log_capture_kit::CapturedEvent]| {
+        events
+            .iter()
+            .filter(|e| e.message().contains("Capture released via Drop"))
+            .count()
+    };
+
+    force_idle();
+    start_preparing(entity(38), PhysicalPoint::new(3, 4), null_hwnd());
+    let (result, events) = log_capture_kit::capture(cancel_dragging_on_capture_lost);
+    assert!(matches!(result, DragClose::Closed { .. }), "{result:?}");
+    assert_eq!(released_via_drop(&events), 0, "{events:?}");
+    match snapshot_drag_state() {
+        DragStateSnapshot::JustEnded {
+            position,
+            cancelled,
+            ..
+        } => {
+            assert!(cancelled);
+            assert_eq!((position.x, position.y), (3, 4));
+        }
+        other => panic!("expected JustEnded, got {}", variant_name(&other)),
+    }
+
+    // 対照: ふつうの取り消しは守りが落ちるときに ReleaseCapture を呼ぶ
+    force_idle();
+    start_preparing(entity(39), PhysicalPoint::new(3, 4), null_hwnd());
+    let (_, events) = log_capture_kit::capture(cancel_dragging);
+    assert_eq!(released_via_drop(&events), 1, "{events:?}");
     force_idle();
 }

@@ -21,11 +21,14 @@ use crate::ecs::window::Window;
 use crate::ecs::world::EcsWorld;
 use crate::executor::util::WindowMessage;
 
-/// 累積器を入れ、窓の印（`Window`）を持つ entity を 1 つ作る。
+/// 窓の印（`Window`）を持つ entity を 1 つ作り、World の累積器の複製と一緒に返す。
+///
+/// 累積器は `EcsWorld::new` が資源と wndproc 側の控えへ同じ実体で置いたものを使う
+/// （入れ直すと控えとずれ、休ませる関数が積む終了の種が見えなくなる）。
 ///
 /// 素の `EcsWorld` では当たり判定が取れないので、左解放は `handle_button_message` の予備の枝を通る。
-/// 予備の枝の `should_end` は `find_owner_window(entity) == Some(window_entity)` を見るため、
-/// 同じ entity を窓として渡す。
+/// 離しを終えるかは `end_dragging_on_release` が「離した窓の `hwnd` が捕捉を取った窓の `hwnd` と
+/// 同じか」で決めるため、押し（`start_preparing`）と離しのメッセージに同じ `hwnd`（空）を渡す。
 fn setup() -> (Rc<RefCell<EcsWorld>>, Entity, DragAccumulatorResource) {
     // DRAG_STATE は thread_local。前のテストの残りを JustEnded へ落としてから始める。
     cancel_dragging();
@@ -34,8 +37,7 @@ fn setup() -> (Rc<RefCell<EcsWorld>>, Entity, DragAccumulatorResource) {
     let (entity, accumulator) = {
         let mut w = world.borrow_mut();
         let w = w.world_mut();
-        let accumulator = DragAccumulatorResource::new();
-        w.insert_resource(accumulator.clone());
+        let accumulator = w.resource::<DragAccumulatorResource>().clone();
         (w.spawn(Window::default()).id(), accumulator)
     };
     (world, entity, accumulator)

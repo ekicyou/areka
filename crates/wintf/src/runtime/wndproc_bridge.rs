@@ -22,6 +22,13 @@
 //! クロージャは `world.upgrade()`→`None`（破棄中）と World の `try_borrow` 失敗
 //! （再入）をいずれも `None`（既定手続き委譲）で安全スキップする。これは現行ハンドラの
 //! `try_borrow` 規律を踏襲し、ライブラリ側 `RefCell` 再入防止と二重防御になる。
+//!
+//! 【例外・`areka-P0-drag-cancel-borrow-miss`】`try_borrow` 失敗（再入）のときも、ドラッグを
+//! 終える 5 種（ESC の押下〔`WM_KEYDOWN`〕・`WM_CANCELMODE`・非活性化の `WM_ACTIVATE`・
+//! `WM_CAPTURECHANGED`・`WM_LBUTTONUP`）だけは捨てずに、World を使わないドラッグの扱い
+//! （`crate::ecs::drag::handle_message_while_world_busy`）へ渡してから `None` を返す。
+//! 画面更新の途中の非活性化などでドラッグの状態が休まず残るのを防ぐため。5 種以外は今どおり
+//! 何もせずに飛ばす。World の破棄中（`upgrade()`→`None`）は例外なく飛ばす。
 
 use std::cell::RefCell;
 use std::pin::Pin;
@@ -34,6 +41,7 @@ use windows::Win32::Foundation::LRESULT;
 use windows::Win32::UI::WindowsAndMessaging::WM_ENDSESSION;
 
 use crate::ecs::dispatch_window_message;
+use crate::ecs::drag::handle_message_while_world_busy;
 use crate::ecs::world::EcsWorld;
 
 /// wndproc クロージャが生成時に capture する共有状態。
@@ -62,6 +70,9 @@ pub(crate) struct WndState {
 /// 2. `world.upgrade()`→`None` なら `None`（破棄中・安全スキップ）。
 /// 3. World を `try_borrow`。失敗（再入）なら `None`（安全スキップ）。ただし `WM_ENDSESSION`（wParam 真）
 ///    だけは受け手を呼べない帰結を `warn!(os_session_end_world_busy)` に残してから飛ばす。
+///    その後、ドラッグを終える 5 種（ESC の押下・`WM_CANCELMODE`・非活性化の `WM_ACTIVATE`・
+///    `WM_CAPTURECHANGED`・`WM_LBUTTONUP`）は `handle_message_while_world_busy(entity, &msg)` で
+///    World を使わずにドラッグの状態を休ませる（戻り値は使わない）。どの場合も `None` を返す。
 /// 4. 成功時のみ `dispatch_window_message(&world, entity, &msg)` を呼ぶ。
 //
 // `EcsWindowFactory::create_window`（`create_windows` 経由）がウィンドウ生成時に呼び、
@@ -87,6 +98,9 @@ pub(crate) fn make_wndproc() -> impl Fn(Pin<&WndState>, WindowMessage) -> Option
                      後始末をせずに終わるので起動中の印が残り、次の起動は前回落ちた扱い（Ref6/7 付き）になる"
                 );
             }
+            // ドラッグを終える 5 種だけは捨てずに、World を使わないドラッグの扱いへ渡す。
+            // 戻り値（扱ったか）は使わず、どの場合も既定の手続きへ委ねる。
+            handle_message_while_world_busy(entity, &msg);
             return None;
         }
 
@@ -94,6 +108,18 @@ pub(crate) fn make_wndproc() -> impl Fn(Pin<&WndState>, WindowMessage) -> Option
         dispatch_window_message(&world, entity, &msg)
     }
 }
+
+#[cfg(test)]
+#[path = "wndproc_bridge_drag_test_support.rs"]
+mod wndproc_bridge_drag_test_support;
+
+#[cfg(test)]
+#[path = "wndproc_bridge_drag_cancel_tests.rs"]
+mod wndproc_bridge_drag_cancel_tests;
+
+#[cfg(test)]
+#[path = "wndproc_bridge_drag_release_tests.rs"]
+mod wndproc_bridge_drag_release_tests;
 
 #[cfg(test)]
 mod tests {
