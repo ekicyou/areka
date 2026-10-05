@@ -281,6 +281,16 @@ impl<T: Clone + Debug> TimedSchedule<T> {
         self.entries.len()
     }
 
+    /// まだ配っていない中身（区切りと配送の制御を除く）を配る順に返す。
+    ///
+    /// `entries` は降順（末尾から取り出す）ゆえ後ろから読む。
+    pub(crate) fn pending_payloads(&self) -> impl Iterator<Item = &T> {
+        self.entries.iter().rev().filter_map(|entry| match entry {
+            Entry::Payload(_, payload) => Some(payload),
+            Entry::Barrier(..) | Entry::Routing(..) => None,
+        })
+    }
+
     /// 占有終了（完了）判定: 全エントリ消費済み・バリア中でない・かつ現在時刻が
     /// 占有 horizon に達している。
     ///
