@@ -119,12 +119,14 @@ crates/areka-kanade/src/schedule/
   - `CascadePlan::Unsupported` を `CascadePlan::Script` に改名し、説明を「`script:` の後ろの台本を新しいトークとして始める」に替える。
   - `plan_cascade` の `script:` の腕は、子の `script::body(id).is_some()` で判定する（`"script:"` の綴りを 1 か所に置く）。この腕の定義行に、正典 URL のコメント 1 行（`// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1`）を置く（網羅台帳の `implemented` の根拠）。
   - 子のファイルの宣言 `#[path = "choice_script.rs"] pub(super) mod script;` を置く（`schedule/mod.rs` に宣言を足さない）。
+  - ファイルの先頭の説明（「判断の分かれ道だけ・記録も出さない」）、`CascadePlan` と `plan_cascade` の説明（「未対応」「裁定 7」の句）、近い綴りのテストの言い回しを今の動きに合わせる。
   - ファイル内のテスト `plan_cascade_unsupported_for_script_prefix` と、`script:` を含む決定論のテストを新しい名前に合わせる（境目の ID `script`・`Script:x`・`xscript:y` が通常の選択肢になる確認は今のまま残す）。
 - `crates/areka-kanade/src/schedule/choice_script.rs`（新規）— 下の「Components and Interfaces」の 3 つの関数。末尾に `#[cfg(test)] #[path = "choice_script_tests.rs"] mod tests;`。
 - `crates/areka-kanade/src/schedule/choice_script_tests.rs`（新規）— 「Testing Strategy」の kanade の項目。
 - `crates/areka-kanade/src/schedule/steady.rs`
   - `on_choice` の `CascadePlan::Unsupported` の腕を、`choice::script::begin` を呼んで `resolve_choice` と並べる数行に替える（警告 `choice_unsupported_category` と結果の語 `"unsupported"` は消える）。
   - `use` の行、`on_choice` の説明の該当の 1 項、`resolve_choice` の説明の「未対応カテゴリの即時解決」の句を今の動きに合わせる。
+  - 受理の記録 `choice_accepted` は event 名も欄も変えない。添えた文言「カスケードを開始」だけ、`script:` にも当たる言い回しに直す。
 
 **ウェーブ C4 の約束の外（開発者の調整が要るもの）**
 
@@ -194,7 +196,7 @@ sequenceDiagram
 | 6.3 | 台帳の検査が通る | 文書 | `report`・`report-summary` の作り直しと `cargo test -p ukadoc-survey` | — |
 | 7.1 | `\e` の例のテスト | `choice_script_tests.rs` | テスト 1 | — |
 | 7.2 | 入れ子の例のテスト | `decode_tests.rs`・`choice_script_tests.rs` | テスト 2・テスト 6 | — |
-| 7.3 | 空・余分な引数・境目の ID のテスト | `choice_script_tests.rs`・`choice.rs` のテスト | テスト 3・4・5 | — |
+| 7.3 | 空・余分な引数・境目の ID のテスト | `choice_script_tests.rs`・`choice.rs` のテスト | テスト 3・4・5・5b | — |
 | 7.4 | 古い前提のテストを残さない | 既存のテスト 3 本 | 改名 1 本・削除 2 本 | — |
 
 ## Components and Interfaces
@@ -290,7 +292,7 @@ pub(in crate::schedule) fn start_talk(
 
 **Responsibilities & Constraints**
 
-- `choice::script::begin(&mut state, talk_id, &input)` を呼ぶ。
+- `choice::script::begin(&mut state, talk_id, &input)` を**先に**呼ぶ（`resolve_choice` は解決の記録 `choice_resolved` を出すので、後に呼ぶことで下の表の記録の順になる）。
 - 結果の語を決める: 戻り値が `Some` なら `"script"`、`None` なら `"script_empty"`。
 - `resolve_choice(talk_id, input.id, 結果の語)` を先頭に、再生開始の行動があればその後ろに並べて返す。帳簿（`ledger`）は戻さない。
 - 警告 `choice_unsupported_category` と結果の語 `"unsupported"` は消す。
@@ -320,6 +322,7 @@ pub(in crate::schedule) fn start_talk(
   2. 翻訳（`OnTranslate`・MAKOTO）に通さない。理由＝選択肢を含んでいた元の台本が翻訳を通るときに一部として 1 回通っており、もう一度通すと台本全体を置き換える翻訳が二重に掛かる。併記＝タグの中を避けて翻訳するゴーストでは、`script:` の台本は翻訳されないまま再生される。
   3. 第 3 引数以降は使わない（台本に含めず、どこへも渡さず、数を警告に残す）。
   4. 空の `script:` は新しいトークを始めず、警告を出して待ちを閉じるだけ（元のトークが続く）。
+  - 同じ文書の下の方にある根拠の表にも 7a の行があるので、上の書き替えと食い違わないように合わせる。
 - **`doc/COMPAT_ARCHITECTURE.md`**: 選択肢の行の列挙から `script:` の縮退を外し、「`script:` 前置の正典が黙っている所の決めごと（イベントなし・翻訳なし・余分な引数・空）」を挙げる（詳細は `choice-cascade-compat.md` を指すまま）。
 
 ## Error Handling
@@ -352,7 +355,11 @@ pub(in crate::schedule) fn start_talk(
 
 ### kanade（`choice.rs` のファイル内のテスト）
 
-5. **判定の境目**（要件 7.3・1.6）: `plan_cascade` が `script:\e`・`script:`・`script:OnFoo` を `CascadePlan::Script`、`script`・`Script:x`・`xscript:y` を `CascadePlan::Canonical` にすること（既存のテストの名前と期待の型名を直す。境目の ID が通常の選択肢の流れに入った後の動きと記録は、完了済みの通常の選択肢のテストが持つ）。
+5. **判定の境目**（要件 7.3・1.6）: `plan_cascade` が `script:\e`・`script:`・`script:OnFoo` を `CascadePlan::Script`、`script`・`Script:x`・`xscript:y` を `CascadePlan::Canonical` にすること（既存のテストの名前と期待の型名を直す）。
+
+### kanade（`choice_script_tests.rs` にもう 1 本）
+
+5b. **境目の ID の扱いと記録**（要件 7.3）: 最上位の `schedule::step` から ID `Script:x` を選ぶと、返る一括が `OnChoiceSelectEx` の依頼 1 つ（解決も再生開始も無い）で、記録に `choice_script_started`・`choice_script_empty`・`choice_script_unused_args` が 1 つも無いこと。`script`・`xscript:y` は同じ腕を通るので、判定はテスト 5 に任せて繰り返さない。
 
 ### 読み込み（`crates/areka-parsers/src/sakura/decode_tests.rs` に 1 本）
 
@@ -361,7 +368,7 @@ pub(in crate::schedule) fn start_talk(
 ### 消すテスト（要件 7.4）
 
 - `steady_choice_tests.rs` の `unsupported_choice_resolves_without_emitting_any_event`（テスト 1・3 が置き換える）。
-- `schedule_log_firing_tests.rs` の `warn_choice_unsupported_category_logs`（テスト 3・4 が置き換える）。
+- `schedule_log_firing_tests.rs` の `warn_choice_unsupported_category_logs`（テスト 3・4 が置き換える。新しい警告 2 つの確認は `choice_script_tests.rs` に置き、このファイルには足さない）。
 
 ### 文書の検査（要件 6.3）
 
