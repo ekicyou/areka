@@ -388,6 +388,8 @@ pub fn has_saved_char_pos(entries: &[(PersistKey, String)], scope: usize) -> boo
 
 ### 並べ直しから記憶まで（`emo2_boot/frame_chain_finalize_persist_tests.rs`）
 
+> タスク生成で 1,000 行の上限に合わせて分けた: 13・14 は `frame_chain_finalize_persist_restart_tests.rs`、15 は `frame_chain_finalize_persist_nowrite_tests.rs`、共有の部品（記憶の送り口を置く・任意の配置から幅を変えて窓を作る・最小のゴーストを植える）は `frame_chain_finalize_persist_test_support.rs`。
+
 9. 2 スコープ・記憶なし・相方が動く大きさで `finalize_chain_once_with` を回す → 両方の位置が書かれ、相方の値は並べ直した後の位置（1.1）。
 10. 同じ World でもう一度回す → 記憶は前後で同じ（1 度だけ）。
 11. 相方の絵が出ていないまま何フレーム回しても、記憶は空のまま（1.6）。
