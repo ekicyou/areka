@@ -10,3 +10,8 @@ mod geometry;
     expect(dead_code, reason = "公開の口（system.rs）から使い始める")
 )]
 mod ranges;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "画面更新ごとの判定（system.rs）から使い始める")
+)]
+mod turn;
