@@ -268,7 +268,14 @@ fn decode_tag(word: String, args: Vec<String>) -> Instruction {
         // 転記するだけで、意味はそれぞれの所有仕様（areka-P0-text-align-shadow-canon・
         // areka-P0-choice-marker-styling・areka-P0-anchor-tag-canon）が後から与える。
         "f" => Instruction::Font { args },
-        // subset 外タグ（`\i` `\j` 等）はタスク 4.2 のパススルー領分。
+        // ジャンプ `\j[ID]`（open-external-tags 要件 1.5/1.6）: 運搬名の汎用コマンドへ
+        // 引数列を記述順のまま転記する。ID の意味付け（URL・ファイル・イベント）は消費側。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_j_ID_
+        "j" => Instruction::GenericCommand {
+            name: super::model::JUMP_TAG_CARRIER.to_owned(),
+            raw_args: args,
+        },
+        // subset 外タグ（`\i` 等）はタスク 4.2 のパススルー領分。
         _ => decode_passthrough_tag(word, args),
     }
 }
