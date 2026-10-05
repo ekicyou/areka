@@ -398,6 +398,7 @@ mod tests {
         "actor_decoration.rs",
         "actor_decoration_frame_tests.rs",
         "actor_decoration_tests.rs",
+        "actor_lookahead_tests.rs",
         "actor_region_warn_tests.rs",
         "actor_route_tests.rs",
         "actor_runtime_frame_tests.rs",

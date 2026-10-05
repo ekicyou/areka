@@ -580,6 +580,10 @@ mod scroll_retain_tests;
 mod route_tests;
 
 #[cfg(test)]
+#[path = "actor_lookahead_tests.rs"]
+mod lookahead_tests;
+
+#[cfg(test)]
 #[path = "actor_box_tests.rs"]
 mod box_tests;
 

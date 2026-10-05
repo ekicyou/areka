@@ -41,8 +41,8 @@
   - _Boundary: arrange_lines（actor_present.rs）、arrange_for_test（actor.rs の検査用の口）_
   - 1.3 と同じ actor.rs を触るので並べない
 
-- [ ] 2. 本番と同じ経路を歩く検査で、修正前の赤を記録する
-- [ ] 2.1 emo2 の初回起動トークの写しを本番の経路で流し、各段階を判定する検査を書いて赤を確かめる
+- [x] 2. 本番と同じ経路を歩く検査で、修正前の赤を記録する
+- [x] 2.1 emo2 の初回起動トークの写しを本番の経路で流し、各段階を判定する検査を書いて赤を確かめる
   - 新しい検査ファイル `actor_lookahead_tests.rs` を置き、`lib.rs` の接続宣言と `SOURCES_OUTSIDE_THE_PURE_SCAN` に登録する
   - 歩く経路の支え: 台本の文字列 → 解析 → コンパイル → 刻印（絶対の開始時刻）→ 再生機を作る → 本物の文字の層の受け手を登録 → `tick(時刻)` → `spawn_emo_text` の取り出し（1.3 の新しい形・先渡しを読み飛ばす `handle_text_msg` を使わない）→ 既存の汲み出し（`pump_until_idle`）→ `arrange_for_test` に決まった字幅を渡して行の列を取る。再生機は検査のスレッドで回す
   - 判定の関数: 行の列を「行ごとの字の並び」に直し、(a) 前の段階で見えていた字が同じ行の同じ番目にある、(b) 出終わったときの行の列の、その字までの部分と同じ、を判定して違えば失敗する（表示するだけにしない）
@@ -183,3 +183,4 @@
 ## Implementation Notes
 
 - 1.3: `spawn_emo_text` の説明に「先渡しを実行時へ渡す口は後のタスク」と書いてある。4.1 で `preview_talk` へつなぐときにこの記述も直す。
+- 2.1: 検査 1（`actor::lookahead_tests::emo2_boot_talk_reveals_without_moving_glyphs`）は 4.2 まで赤。それまで `cargo test -p areka-emo-text` は `--no-fail-fast` で回して、ほかが緑であることを確かめる。`actor_*_tests.rs` の接続宣言はこのクレートの慣例で actor.rs に置く（lib.rs は一覧への登録だけ）。
