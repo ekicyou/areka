@@ -78,3 +78,11 @@
 
 - 据え置きのままでよい。10-02 の後に `crates/areka/src/emo2_boot/frame/dpi.rs`（`run_dpi_phase`）と `crates/areka-emo-present/src/presenter/refresh.rs`（`refresh_scale`）を触ったコミットは 0。開発者の許容も変わらない。
 - 規模・切り方・触るファイルは 10-02 のまま（着手するなら最初は測り直し・跳ねが無ければ取り下げ）。議題・穴: なし。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: S〜M のまま（最初の 1 タスクは測り直し・跳ねが無ければ取り下げ）。切らない。
+- 前提の状態: 据え置きのままでよい（開発者の許容は変わらない）。C3 の後も `crates/areka/src/emo2_boot/frame/dpi.rs`（`run_dpi_phase`）・`crates/areka-emo-present/src/presenter/refresh.rs`（`refresh_scale`）・`crates/areka/src/placement/transition_judge_verdict.rs` を触ったコミットは 0。
+- 崩れた前提／古くなった位置: 無し。画面更新の相の並びは C3 で末尾に 1 つ増えただけ（`shell-balloon-frame-align` が提示の後に「見えているバルーンの組」を kanade へ届ける相を足した・`emo2_boot/frame.rs` の `emo2_frame_system`）。拡大率の相（dpi）と窓の書き込みの順は変わっていない。`placement/follow/` は C3 で古い注記と `#[allow]` を消しただけ（振る舞い不変）。
+- 触るファイル（着手するなら）: `crates/areka/src/emo2_boot/frame/dpi.rs`・`emo2_boot/frame.rs`（相の順）・`crates/areka-emo-present/src/presenter/refresh.rs`・決定論の檻（`placement/transition_*_tests.rs`）。
+- 議題・穴: なし。

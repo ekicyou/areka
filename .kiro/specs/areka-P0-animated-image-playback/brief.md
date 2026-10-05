@@ -132,3 +132,31 @@
 - メモリの山は `bake` 1 回の中で決まり、起動でシェルを 2 回焼いても重ならない（㋒ いっぱいで 2.0 GiB・設計の見積もり約 2.25 GiB の内）。読む量と時間は 2 倍になる。
 - **採寸の側の直しは要る**と判断した: 採寸の 1 回目は全コマを読んで寸法を測った後に捨てるので、㋑ いっぱいの絵 1 つで約 1.5 秒、㋒ いっぱいで約 6.7 秒を起動に足している。読み込みの側の完了時に `/kiro-discovery` で起票する（採寸では動く絵の全コマを読まない。バルーンも採寸と資産組み立てで scope ごとに焼かれ、scope 2 つで 4 回になる点を同じ直しで扱うかは起票のときに決める）。
 - **直しても残るもの**（再生の側が知っておくこと）: 資産組み立ての 1 回で全コマを起動の中で読む代価——release で 1 コマ約 5 ms、㋑ いっぱいの絵 1 つで約 1.4 秒、㋒ いっぱいで約 6.5 秒。今のリポジトリの検体には動く絵が 0 枚なので、今の起動で増えるのは見出しを読む分（起動 1 回で約 +6〜10 ms）だけ。
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: `import` まで含めると 18〜22 タスク（下の穴の分だけ増えた）。**`import` を別の spec へ切り出すことを推す**（理由は数でなく、`import` だけが読み手・鍵の一覧・合成の命令という別の場所を触るため）。切れば本体（自動アニメーション・`always`・バルーンの面）は 14〜17、`import` は 6〜9。
+- 前提の状態: `animated-image-decode`・`surface-element-nesting` とも着地済み＝今すぐ着手できる。ファイルを分け合う `seriko-trigger-intervals`（seriko の表と時計）とはどちらかが先。
+- 崩れた前提／古くなった位置:
+  - `AtlasTable::animation` を本番で呼ぶ所は 0（試験だけ）。本 spec が最初の使い手になる。2 枚目以降のコマは鍵が親と同じ（`AtlasTable::key` は親を返す）ので、合成のサーフェスの element は鍵でなくコマの番号（`ElementId`）で結ぶ口が `atlas_bind.rs` に要る。
+  - 分解の置き場の目安: 面の表に絵を結ぶ `EmoWorld::bind_atlas`（`world.rs` → `atlas_bind.rs`）の直後に置けば、シェル（`shell_target.rs` の `build_world`）とバルーン（`balloon.rs` の `build_balloon_target_from_faces`）の両方へ届き、seriko の表（`emo2_boot/assets.rs` の `AnimationTable::from_world`）も今の呼び方のまま合成のサーフェスを拾う＝emo-present と `assets.rs` を触らずに済む見込み。`surface*.png` の土台は `base_image.rs` が普通の画像の element として足すので、同じ分解で扱える。
+  - seriko: 引き金の型 `LoopTrigger` は `Random`・`BindRandom` の 2 つで、一番上の面の抽選（`looper.rs` の `on_tick`）と部品の門（`parts.rs` の `gate`）が全部の腕を数える＝`always` を足すと両方に腕が要る。部品の時計 `PartAnim::Playing` は開始の時刻を持つので、繰り返しは経過の剰余で求められる（`surface-element-nesting` の申し送りどおり）。
+- 触るファイル（並走の照合用・`import` を切った本体）:
+  - `crates/areka-seriko/src/{table.rs, looper.rs, parts.rs, timeline.rs}` と兄弟のテスト
+  - `crates/areka-emo-compose/src/{world.rs, atlas_bind.rs}`・分解の新しいモジュール
+  - `doc/ukadoc-coverage/ledger/assets.toml`（`element*`・`always`）・検体（`crates/areka-emo-atlas/src/testdata/animated/` を流用）
+  - `import` を含めるなら＋`crates/areka-parsers/src/shell/{model.rs, decode.rs}`・`crates/areka-emo-atlas/src/manifest.rs`・`crates/areka-emo-compose/src/{plan.rs, method.rs}`
+- 議題（答えで作業が変わるものだけ）:
+  1. `import` を切り出すか（推し: 切る。本体が読み手・`manifest.rs`・`plan.rs` を触らなくなり、`element-base-method`・`extent-element-offset` と同じウェーブに置ける）。
+  2. 棚卸⑳のまま（合成のサーフェスの番号の空間／ファイルの繰り返し回数を守るか／`CAPACITY` を変えるか）。加えて待ち時間 0 の扱い（読み込みの側から預かったもの）。
+- 見つけた穴: **`import` の行の名前が読み手で消える**。`decode_animations` は pattern の 3 つ目の欄を数として読む（`Pattern.surface_id` は整数）ので、`animation*.pattern*,import,ファイル名,…` のファイル名は 0 に化け、記録も出ない（転記層は語を落とさない決まりに反する）。`import` のファイルは element でないので、鍵の一覧を作る `ManifestDeriver::derive` にも載らず焼かれない。直すのは `import` を持つ spec。
+
+### 棚卸㉒の裁定（2026-10-05）
+
+- `import` を `animated-image-import`（S〜M・6〜9）へ切り出した。本 spec は自動再生・`always`・バルーンの面だけ＝14〜17 タスク。parsers の `shell/{model,decode}.rs`・atlas の `manifest.rs`・compose の `plan.rs`・`method.rs` には触らない（触るなら止めて報告）。これで `element-base-method`・`self-alpha-declaration` と同じウェーブ C4 に置ける。
+- `seriko-trigger-intervals` は働きの上で本 spec に依存しない（棚卸㉒の再測定）が、seriko の `table`・`looper`・`parts` を分け合うので同じウェーブには置かない。
+
+### 同じウェーブ C4 の約束（2026-10-05 棚卸㉒・破るなら止めて報告）
+
+- parsers の `shell/`・atlas の `manifest.rs`・compose の `plan.rs`・`fold.rs`・`method.rs`（`element-base-method`）・emo-present・`emo2_boot/assets.rs` に触らない。分解は `bind_atlas` の直後。

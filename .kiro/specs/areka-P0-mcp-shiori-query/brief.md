@@ -116,5 +116,15 @@ areka 独自のツール 1 本（仮名 `query_shiori`）。**SSTP NOTIFY と同
 - SSTP NOTIFY が SHIORI へ `GET` で届くこと（返った台本を再生するため）は推定。要件の段で SSP の実測か ukadoc の原文で確かめる。
 - MCP の返事の待ちは最長 10 秒。SHIORI が遅いときは `mcp::later` に預ける。
 - 規模の見立て: M（10〜14 タスク）。
-</content>
-</invoke>
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模（タスク数）と切るかどうか: M（10〜14）。ただし下の「SHIORI の呼び出しの口の形」を変えると影響の範囲が大きい＝M〜L（12〜16）に上振れの見込み。切らない。
+- 前提の状態: **待ち**。`mcp-author-tools`（独自ツールの登録口）が未着手。C3 は本 spec の触るファイル（`crates/shiori-host32-host/`・`crates/areka-kanade/src/shiori/`）を変えていない（`shiori_inproc.rs` は 4 行だけ・別の所）。
+- 崩れた前提／古くなった位置:
+  - SHIORI への要求の組み立ては `crates/shiori-host32-host/src/shiori3.rs` の `build_request` が `SecurityLevel: local` を直に書き、`SenderType`・`SecurityOrigin`・`X-SSTP-PassThru` は送らない（同関数の説明）。応答は同ファイルの `parse_response` が読む。
+  - **運ぶ道が長い**: kanade の `ShioriCall`（`msg.rs` の列挙の定義・`Get`／`Notify` は `id`・`references`・`status` だけ）→ `src/shiori/real.rs` の `handle_call` → 呼び出しの口 `ShioriBackend`（同ファイルのトレイトの定義・`get`／`notify` は `id`・`references`・`status` だけ）→ `areka-ghost/src/shiori_inproc.rs` と `shiori-host32-host/src/client.rs` → `build_request`。応答の側は `ShioriOutcome`（`Value`／`NoContent`／`Notified`／`Failed`）がヘッダを運ばない。**`ShioriBackend` を実装している型は 19 か所**（本物 2・テストの偽物 17）＝`get`／`notify` の引数を変えると全部に波及する。既定の実装つきの新しいメソッドを足す形なら波及を止められる。
+  - 同じ道（要求に欄を足す）を `script-security-level`（`SecurityLevel`・`SenderType`）と `property-query-channels`（`SenderType: property`）も通る＝**3 本が同じ口を広げる**。入れ物（要求に添える追加のヘッダ）は先に着手した 1 本が作り、残りはそれに値を足すだけにする。
+- 触るファイル（並走の照合用・見込み）: `crates/areka-kanade/src/{msg.rs, actor.rs, shiori/real.rs}`・`crates/shiori-host32-host/src/{shiori3.rs, client.rs}`・`crates/areka-ghost/src/shiori_inproc.rs`・（引数を変えるなら）`ShioriBackend` の実装 19 か所・新規のツールのファイル（`mcp-author-tools` の登録口）・台帳 `shiori.toml` の `X-SSTP-PassThru` の 2 行。
+- 議題（答えで作業が変わるものだけ）: 要求に添える追加のヘッダの入れ物を、`script-security-level`・`property-query-channels` のどれが先に作るか（＝3 本の順）。
+- 見つけた穴: なし。すぐ直せる軽微な修正: この brief の末尾の前に道具の残りかす `</content>`・`</invoke>` の 2 行が紛れている（消してよい）。
