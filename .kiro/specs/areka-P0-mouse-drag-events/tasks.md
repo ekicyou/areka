@@ -84,7 +84,7 @@
   - _Boundary: 台帳と文書_
   - _Depends: 2.5_
 
-- [ ] 4. 全体の検証
+- [x] 4. 全体の検証
 
 - [x] 4.1 ワークスペース全体のテスト
   - `tools/test-all.ps1` の手順を通す。触ったファイルがどれも 1,000 行未満であること（番人を含む）
@@ -92,7 +92,7 @@
   - _Requirements: 9.4_
   - _Depends: 1.3, 2.4, 2.5, 3.1, 3.2_
 
-- [ ] 4.2 実機でクローディアの反応を確かめる
+- [x] 4.2 実機でクローディアの反応を確かめる
   - 根と一時フォルダはワークツリーの `target\` の下。検体は `sample-ghost-kit` の `claudia`。記録は `kanade=trace`・`areka=debug` まで開ける
   - R1〜R7 を 1 項目ずつ、開発者の GO を待って行う: 本体と相方のドラッグで絵が `\s[29]`／`\s[19]` になり離すと台詞・当たり判定の外や箱の上から・クリックとダブルクリックだけでは 0 件で、ダブルクリックの 2 回目を押したまま動かすと `OnMouseDoubleClick` → 開始 → 終了・右ボタンとバルーン窓では 0 件・ESC の取り消しで窓が戻り終了 1 件・再起動で動かした位置に立つ
   - 記録に `shiori_request` の `OnMouseDragStart` → `OnMouseDragEnd` が各 1 件・この順にあることを照合し、7 項目の結果を記録する
@@ -106,3 +106,5 @@
 - 範囲外（完了の棚卸で起票の要否を判断）: 負荷の高いときの `cargo test -p areka` 全体で、実時間の期限で待つテスト（ghost_session の切替・既定へ戻す・記憶、install の desk 上書き、session_end の sync_send、emo2_boot::ghost_switch の boot_event_tests）が回ごとに違う 4〜8 件落ちた（単独・別の回では緑）。また `cargo test -p areka --bin areka -- --test-threads=4` は drag のテストを外しても STATUS_ACCESS_VIOLATION で落ちる（既定のスレッド数では落ちない）。どちらも本 spec の経路を通らない。
 - 2.5（決定 D7）: バルーン窓もドラッグを許す窓なので、ダブルクリックの 2 回目を押したまま動かすとバルーンも動くようになった（話の中断・選択肢の確定は押下の知らせで動くので影響なし。areka はバルーンのドラッグを知らせない＝要件 3.3）。実機 R4 で一緒に見る。並走の `drag-cancel-borrow-miss` が `mouse_click.rs` を作り変えて先に着地したら、取り込みの後で W1・W2 と A1〜A9 を流し直す。
 - 4.1: `steady.rs` は 947 行で上限まで 53 行。次に `schedule/` へ足す spec は新しいファイルへ置くこと。
+- 範囲外・起票対象（4.2 の実機で判明・開発者 2026-10-05「実機で areka が未対応だったためにうまくいかなかった件はすべて起票」）: ⑴ element定義の描画メソッド `base` を描けない。`areka-parsers` の `shell::decode_elements` が `overlay` 以外の element定義の行を読み捨て（台帳の element定義の行は縮退・担当は完了済みの `areka-P0-shell-parse`）、合成器 `areka-emo-compose` も `ComposeMethod::is_implemented` が `overlay` だけ（台帳の `base` の行は担当なし）。両方を直さないと描けない。`element0,base,<別の絵>` ＋ `overlay` の面（クローディアの surface6・11・26）が上乗せの部品の大きさ（100×56・71×42）だけで描かれ、キャラクターが消える。起動直後の `\s[26]` でも起きる。台帳 `assets.toml` に既知のずれとして載るが進行中の担当 spec が無い。4.2 は根の写しの `surfaces.txt` だけ `base`→`overlay` に書き替えて進めた（製品と検体は無改変）。⑵ `collisionex` を読まない（`areka-parsers` の `shell::decode`）。`collisionex` だけで当たり判定を書くクローディアでは、マウスのイベントの Reference4 がいつも空になる。
+- 範囲外・起票対象（4.2 の R7 で判明・開発者 2026-10-05「起票として記憶しておいて」）: ⑶ キャラクター窓の位置を記憶に書くのはドラッグの終了（`placement::persist::persist_entries`・`drag_follow.rs` の `on_char_drag_end` から）だけで、終了するときや最初に並べ終えたときには書かない。一度もドラッグしていない相方は記憶に位置が無く、起動のたびに既定の位置から `chain_finalize`（`emo2_boot/frame/drain_resnap.rs`）で本体の左隣へ並べ直されるので、本体だけを動かして再起動すると相方が付いてくる（R7b: `scope=1 from_x=1548 to_x=503`）。「前回閉じたときの並び」で立ち上がらないのは不自然（開発者）。完了 spec `position-persist` の設計の抜け。
