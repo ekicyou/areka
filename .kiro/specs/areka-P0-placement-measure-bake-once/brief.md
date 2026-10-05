@@ -12,6 +12,7 @@
 - 採寸 `crates/areka/src/placement/measure.rs` の `measure_native_scope_sizes` は、シェル読み込みの入口 `load_shell_target`（`crates/areka-emo-present/src/shell_target.rs`）を 1 回呼んでシェルを全部焼き、`compose_size` で寸法だけを使って、焼いた結果を捨てる。
 - 起動の資産組み立て `crates/areka/src/emo2_boot/assets.rs` の `build_boot_assets` が、同じシェルをもう 1 回焼く。動く絵は 2 回とも全コマを読む。
 - バルーンは、採寸の `measure_balloon_surface0` が scope ごとに `build_balloon_target_from_faces` を（面 0 だけで）呼び、資産組み立ての `build_balloon_assets` も scope ごとに（全部の面で）呼ぶ。scope 2 つで 4 回焼く。emo2 のバルーンは静止画だけなので 1 回 11〜12 ms で、今は小さい。
+- 採寸と資産組み立ての 2 回の `load_shell_target` は、読み込みの警告（焼くときの脱落・箱・`surface-element-nesting` の入れ子の 3 種）もそれぞれ 1 度ずつ出すので、起動 1 回で同じ警告が 2 行ずつ出る（2026-10-05 `surface-element-nesting` の実機で N=2 を確認・完了 spec の `real-machine-check.md`）。焼くのを 1 回にすれば 1 行ずつになる。
 - メモリの山は `bake` 1 回の中で決まり、2 回焼いても重ならない（9.14 節の測定）。重なるのは時間と読む量だけ。
 
 ## Desired Outcome

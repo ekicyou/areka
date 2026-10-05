@@ -1,14 +1,15 @@
 //! 当たり判定（`ClientHit`・`EmoPresenter::hit_region`・`EmoPresenter::hit_region_client`）——native
 //! サーフェス px 直接照合と、窓 client 物理 px を実適用 k で縮約する正準判定入口。
 
-use super::{EmoPresenter, RegionPriority, ScaleRatio, TargetId, hit_region_scaled};
+use super::{EmoPresenter, RegionPriority, ScaleRatio, TargetId};
+use areka_emo_compose::hit::{hit_region_in, hit_region_scaled_in};
 
 /// 窓 client 物理 px の点に対する当たり判定結果（[`EmoPresenter::hit_region_client`] の戻り値）。
 ///
 /// 所有権を持たない借用ビューであり、寿命は presenter の不変借用に従う（マウス移動ごとの割当を
 /// 生まない）。フィールドは 2 つとも「同一の判定 1 回」から生まれた対であり、呼び手は
 /// **両者を分離して再計算してはならない**——[`surface_point`] は縮約の結果そのもの（唯一の生成点は
-/// [`areka_emo_compose::hit_region_scaled`]、未表示縮退時のみ `hit_region_client` 内の直接呼出）で
+/// [`areka_emo_compose::hit::hit_region_scaled_in`]、未表示縮退時のみ `hit_region_client` 内の直接呼出）で
 /// あり、下流は横流しするのみである（二重縮約の構造的排除・design §Data Models 不変条件 (1)）。
 ///
 /// [`surface_point`]: Self::surface_point
@@ -21,7 +22,7 @@ pub struct ClientHit<'a> {
 }
 
 impl EmoPresenter {
-    /// 現サーフェスの当たり判定領域名を解決する（`current_surface_id` → `EmoWorld::surface` → 純関数・R4.1/4.4）。
+    /// 現サーフェスの当たり判定領域名を解決する（`current_surface_id` → `EmoWorld::hit_regions` → 純関数・R4.1/4.4）。
     ///
     /// 座標は **native サーフェス px**（k 適用前の合成座標系）で解釈される。窓 client 物理 px は k 倍
     /// された座標系ゆえ、k≠1.0 では呼び手が渡す前に ÷k する必要がある——**その変換は本メソッドの責務
@@ -33,12 +34,13 @@ impl EmoPresenter {
     /// `Hide`／空合成
     /// 縮退／未登録 target）は `None`（R4.4）。重なりは画家のアルゴリズム（後定義が手前・[`RegionPriority::Painter`]）で
     /// 解決する。`EmoWorld` を presenter 外へ露出しない（`&SurfaceMaster` を外へ出さない）ため純関数
-    /// [`areka_emo_compose::hit_region`] の呼出は本メソッド内で閉じ、戻り値の寿命は `&self` に従う
+    /// [`areka_emo_compose::hit::hit_region_in`] の呼出は本メソッド内で閉じ、戻り値の寿命は `&self` に従う
     /// （マウス移動ごとの割当を生まない・design §CurrentSurfaceRead Service Interface）。
     pub fn hit_region(&self, target: TargetId, x: i64, y: i64) -> Option<&str> {
         let t = self.targets.get(&target)?;
-        let master = t.emo_world.surface(t.current_surface_id?)?;
-        areka_emo_compose::hit_region(master, x, y, RegionPriority::Painter)
+        // 子から持ち込んだ領域が在ればその列（surface-element-nesting 要件 4.1・4.2）。
+        let regions = t.emo_world.hit_regions(t.current_surface_id?)?;
+        hit_region_in(regions, x, y, RegionPriority::Painter)
     }
 
     /// 窓 client 物理 px の点を**実適用 k で縮約**して当たり判定を解決する（DPI 追従の正準判定入口・
@@ -77,22 +79,24 @@ impl EmoPresenter {
     /// `RUST_LOG=areka_emo_present=debug` でこの 1 行を grep して決定論的に判定する。
     ///
     /// 縮約の丸め権威は [`ScaleRatio::unscale_coord`] ただ 1 本であり、本メソッドはその式を持たない
-    /// （正常経路は [`areka_emo_compose::hit_region_scaled`] へ委譲・未表示縮退時のみ座標を得るために
+    /// （正常経路は [`areka_emo_compose::hit::hit_region_scaled_in`] へ委譲・未表示縮退時のみ座標を得るために
     /// 直接呼ぶ）。`&self` のみを取り World・GPU に依存しないため、判定はマウス移動ごとに安全に呼べる。
     pub fn hit_region_client(&self, target: TargetId, x: i64, y: i64) -> ClientHit<'_> {
         // k の真実源は私有 `applied` の直読ただ 1 つ（f32 非経由・`derive_scale` 再呼出なし）。
         // 判定ごとに読むため k 更新へ自動追従する（スナップショットを持たない＝要件 1.7）。
         // 現サーフェスも同じ不変借用から引く（`region` が引けない縮退でも座標契約は保つ）。
-        let (applied, master) = match self.targets.get(&target) {
+        // 判定の列は子から持ち込んだ領域が在ればその列（surface-element-nesting 要件 4.1・4.2）。
+        let (applied, regions) = match self.targets.get(&target) {
             Some(t) => (
                 t.applied,
-                t.current_surface_id.and_then(|id| t.emo_world.surface(id)),
+                t.current_surface_id
+                    .and_then(|id| t.emo_world.hit_regions(id)),
             ),
             // 未登録 target は正常縮退（判定対象が存在しない＝異常ではない）。
             None => (None, None),
         };
 
-        let k = match (applied, master.is_some()) {
+        let k = match (applied, regions.is_some()) {
             (Some(k), _) => k,
             // 正常縮退（未登録／未表示）: k が無いのは当然ゆえ鳴らさない（マウス移動ごとの警告を作らない）。
             (None, false) => ScaleRatio::ONE,
@@ -108,10 +112,10 @@ impl EmoPresenter {
             }
         };
 
-        let (region, surface_point) = match master {
+        let (region, surface_point) = match regions {
             // 正常経路: 縮約＋照合を合成純関数へ完全委譲（÷k の式を本層に持たない）。
-            Some(master) => {
-                let hit = hit_region_scaled(master, x, y, k, RegionPriority::Painter);
+            Some(regions) => {
+                let hit = hit_region_scaled_in(regions, x, y, k, RegionPriority::Painter);
                 (hit.region, hit.surface_point)
             }
             // 未表示縮退: 照合先が無いので座標だけ丸め権威で縮約する（式は持たず権威を呼ぶ）。
@@ -136,3 +140,7 @@ impl EmoPresenter {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../presenter_nesting_hit_tests.rs"]
+mod nesting_hit_tests;

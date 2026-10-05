@@ -151,29 +151,35 @@ impl ComposeMethod {
     pub fn from_name(name: &str) -> ComposeMethod {
         // 正規化は [`canonical_method_name`] 1 か所に置く（同じ規則を引く
         // `EmoWorld::dangling_pattern_targets` と静かにずれないため）。
-        let canon = canonical_method_name(name);
-        match canon.as_str() {
-            // overlay 同義群（ukadoc 同義明文）。
-            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#overlay:1
-            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#add:1
-            "overlay" | "add" | "bind" => ComposeMethod::Overlay,
-            "overlayfast" => ComposeMethod::OverlayFast,
-            "interpolate" => ComposeMethod::Interpolate,
-            "replace" => ComposeMethod::Replace,
-            "asis" => ComposeMethod::Asis,
-            "base" => ComposeMethod::Base,
-            "reduce" => ComposeMethod::Reduce,
-            "auto" => ComposeMethod::Auto,
-            other => {
-                if let Some(blend) = parse_blend(other) {
-                    ComposeMethod::Blend(blend)
-                } else {
-                    warn!(method = %name, "未知の合成メソッド名: Unknown シームへ吸収");
-                    ComposeMethod::Unknown(name.into())
-                }
-            }
-        }
+        known_method(&canonical_method_name(name)).unwrap_or_else(|| {
+            warn!(method = %name, "未知の合成メソッド名: Unknown シームへ吸収");
+            ComposeMethod::Unknown(name.into())
+        })
     }
+}
+
+/// 正規化済みの語を [`ComposeMethod`] へ写像する（記録を出さない・未知の語は `None`）。
+fn known_method(canon: &str) -> Option<ComposeMethod> {
+    Some(match canon {
+        // overlay 同義群（ukadoc 同義明文）。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#overlay:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#add:1
+        "overlay" | "add" | "bind" => ComposeMethod::Overlay,
+        "overlayfast" => ComposeMethod::OverlayFast,
+        "interpolate" => ComposeMethod::Interpolate,
+        "replace" => ComposeMethod::Replace,
+        "asis" => ComposeMethod::Asis,
+        "base" => ComposeMethod::Base,
+        "reduce" => ComposeMethod::Reduce,
+        "auto" => ComposeMethod::Auto,
+        other => ComposeMethod::Blend(parse_blend(other)?),
+    })
+}
+
+/// 記録を出さずに「この描画メソッドの語が描かれるか」を答える
+/// （`ComposeMethod::from_name(name).is_implemented()` と同じ答え・未知の語で `warn!` を出さない）。
+pub(crate) fn is_implemented_name(name: &str) -> bool {
+    known_method(&canonical_method_name(name)).is_some_and(|m| m.is_implemented())
 }
 
 /// 正規化済み（小文字・区切り除去）メソッド名を [`BlendMode`] へ写像する。

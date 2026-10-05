@@ -29,6 +29,7 @@ use bevy_ecs::prelude::Resource;
 use bevy_ecs::world::World;
 
 use crate::method::ComposeMethod;
+use crate::nesting::ElementKind;
 use crate::normalized::{NormalizedElement, SurfaceMaster, Transform};
 use crate::world::{SurfaceId, SurfaceIndex};
 
@@ -108,13 +109,14 @@ pub(crate) fn apply_base_images(
     report
 }
 
-/// 面の画像 1 枚を表す層 0 の element（位置 (0,0)・`Overlay`・要件 2.5）。
+/// 面の画像 1 枚を表す層 0 の element（位置 (0,0)・`Overlay`・置くものは画像・要件 2.5）。
 fn base_element(file: &str) -> NormalizedElement {
     NormalizedElement {
         layer: 0,
         path: ElementPath::new(file.to_string()),
         transform: Transform::translate(0, 0),
         method: ComposeMethod::Overlay,
+        kind: ElementKind::Image,
     }
 }
 

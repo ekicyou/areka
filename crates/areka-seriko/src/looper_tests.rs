@@ -75,14 +75,14 @@ pub(crate) fn table_single(
 // ── 注入乱数（消費回数を計数する列 rng） ──────────────────────────────────
 
 #[derive(Default)]
-struct RngProbe {
-    calls: usize,
+pub(crate) struct RngProbe {
+    pub(crate) calls: usize,
     values: std::collections::VecDeque<u32>,
 }
 
 /// 指定した値列を順に返し、呼ばれた回数を計数する rng を作る（尽きたら 1 を返す＝非発火）。
 /// 返す `Arc` から消費回数・残量を照合できる（bind OFF での**非消費**の檻・要件 3.1）。
-fn counting_rng(values: &[u32]) -> (LoopRng, Arc<Mutex<RngProbe>>) {
+pub(crate) fn counting_rng(values: &[u32]) -> (LoopRng, Arc<Mutex<RngProbe>>) {
     let probe = Arc::new(Mutex::new(RngProbe {
         calls: 0,
         values: values.iter().copied().collect(),

@@ -1,0 +1,161 @@
+charset,UTF-8
+// surface-nesting 検体（areka-P0-surface-element-nesting・要件 8.2）: element定義でサーフェスを置く試験用シェル
+//
+// element定義のファイル名の欄が半角の数字だけなら、その数はサーフェスの番号（子を置く）。
+// 「親」＝置く側、「子」＝置かれる側。位置は親の位置＋ element定義の X,Y。
+//
+// ── 仕込んだ読み飛ばし（後続のテストが件数で比べる。行を足し引きしたらここも直す） ──
+//   無い番号        : 2 件（surface50 の element1＝9999・element2＝4294967296〔u32 を超える〕）
+//   循環の辺        : 3 件（surface60 の element1＝自分自身・surface61 の element1 と surface62 の element1＝2 つの相互）
+//   子の中の箱      : 1 件（surface71 が置く子 70 の element1,balloon,fuda）
+//   上の他の誤りは 0 件（pattern定義の先はすべて在る・箱のブレスは正しく書いてある）。
+//
+// ── 画像（このフォルダの PNG・単色） ──
+//   body.png 100x200 / eye.png 20x10 / eye_closed.png 20x10 / part.png 10x10
+//   mouth.png 16x8 / mouth_open.png 16x8
+//   surface2.png 100x200（ファイル名の慣習・surface2 の element0 に隠されて使われない）
+//   surface11.png 12x12（ファイル名の慣習だけで建つ子 11・ブレスは無い）
+//
+// ── 正しい入れ子（どの番号が何の役か） ──
+//   0  親 A: 子 10 を (20,30)・3 段の入れ子の頭 30 を (5,5) に置く。着せ替え animation100 の pattern0 が 40 を指す。
+//   1  親 B: 子 10 を (90,50) に置く（親の画像の右へはみ出す）。surface.append1 で 30 を (60,100) に置く。
+//   2  親 C: element0 が子 10 を指す（surface2.png は使われない）。ブレスの無い子 11 を (50,50) に置く。
+//   10 子: まばたき（animation0）と当たり判定（Head＝親 A と同じ名前・Eye＝親 A に無い名前）を持つ。
+//   12 まばたきの閉じ目（10 の pattern定義が指す）。
+//   30 → 31 → 32  3 段の入れ子（30 が 31 を (3,4)、31 が 32 を (2,1)。親 A から見た 32 は (10,10)）。
+//   40 pattern定義が指すサーフェス（自分のアニメーション animation0 を持ち、41 を指す）。
+//   41 40 の口開き。
+//   50・60・61・62・70・71 は上の「仕込んだ読み飛ばし」のためのもの。
+
+descript
+{
+version,1
+}
+
+// ── 箱のブレス（子 70 の中の箱が指す） ──
+balloon.fuda
+{
+size,40,20
+}
+
+// ── 親 ──
+
+surface0
+{
+element0,overlay,body.png,0,0
+element1,overlay,10,20,30
+element2,overlay,30,5,5
+collision0,0,0,100,60,Head
+collision1,0,60,100,200,Body
+animation100.interval,bind
+animation100.pattern0,overlay,40,0,30,120
+}
+
+surface1
+{
+element0,overlay,body.png,0,0
+element1,overlay,10,90,50
+}
+
+surface2
+{
+element0,overlay,10,0,0
+element1,overlay,11,50,50
+}
+
+// ── 子 ──
+
+surface10
+{
+element0,overlay,eye.png,0,0
+collision0,0,0,20,10,Head
+collision1,5,0,15,10,Eye
+animation0.interval,random,2
+animation0.pattern0,overlay,12,50,0,0
+animation0.pattern1,overlay,-1,50,0,0
+}
+
+surface12
+{
+element0,overlay,eye_closed.png,0,0
+}
+
+surface30
+{
+element0,overlay,part.png,0,0
+element1,overlay,31,3,4
+}
+
+surface31
+{
+element0,overlay,part.png,0,0
+element1,overlay,32,2,1
+}
+
+surface32
+{
+element0,overlay,part.png,0,0
+}
+
+surface40
+{
+element0,overlay,mouth.png,0,0
+animation0.interval,random,3
+animation0.pattern0,overlay,41,100,0,0
+animation0.pattern1,overlay,-1,100,0,0
+}
+
+surface41
+{
+element0,overlay,mouth_open.png,0,0
+}
+
+// ── 仕込んだ読み飛ばし ──
+
+// 無い番号 2 件（9999 は面の表に無い・4294967296 は番号として扱える範囲を超える）。element0 は描かれる。
+surface50
+{
+element0,overlay,part.png,0,0
+element1,overlay,9999,0,0
+element2,overlay,4294967296,0,0
+}
+
+// 循環: 自分自身（1 件）。
+surface60
+{
+element0,overlay,part.png,0,0
+element1,overlay,60,0,0
+}
+
+// 循環: 2 つの相互（61→62 と 62→61 の 2 件）。
+surface61
+{
+element0,overlay,part.png,0,0
+element1,overlay,62,0,0
+}
+
+surface62
+{
+element0,overlay,part.png,0,0
+element1,overlay,61,0,0
+}
+
+// 描画メソッド balloon の element定義（箱）を持つ子。番号は画像の element より大きくする。
+surface70
+{
+element0,overlay,part.png,0,0
+element1,balloon,fuda,0,0
+}
+
+// 箱を持つ子 70 を置く親（子の中の箱 1 件）。
+surface71
+{
+element0,overlay,body.png,0,0
+element1,overlay,70,10,10
+}
+
+// ── surface.append*ブレス: サーフェスを置く行だけ（画像の element定義は書かない・design.md「残した」） ──
+surface.append1
+{
+element2,overlay,30,60,100
+}

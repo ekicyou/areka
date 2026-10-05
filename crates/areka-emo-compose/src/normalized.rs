@@ -6,6 +6,7 @@
 //! X,Y のみの平行移動を単位行列の特例として扱う（回転・拡縮は行列表現に予約）。
 
 use crate::method::ComposeMethod;
+use crate::nesting::ElementKind;
 use bevy_ecs::component::Component;
 
 /// 2D 変換（M1 実挙動は恒等＋平行移動のみ。回転・拡縮は予約の口）。
@@ -98,6 +99,10 @@ pub struct NormalizedElement {
     ///
     /// [`Overlay`]: crate::method::ComposeMethod::Overlay
     pub method: ComposeMethod,
+    /// 置くもの（画像か、サーフェスの番号か）。`path` から [`element_kind`] で読み分けた結果。
+    ///
+    /// [`element_kind`]: crate::nesting::element_kind
+    pub kind: ElementKind,
 }
 
 #[cfg(test)]
@@ -130,6 +135,7 @@ mod tests {
             path: ElementPath::new("surface0.png".to_string()),
             transform: Transform::translate(10, 20),
             method: ComposeMethod::Overlay,
+            kind: ElementKind::Image,
         };
         let master = SurfaceMaster {
             id: 1000,
