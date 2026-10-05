@@ -56,6 +56,7 @@
    - 字の無い「むらさき：＠通常」の行が `\n[150]` を 1 つ余分に出し、さくら側の「つまり、、」の前で 2 つ重なる（3 行ぶんの空き）。
    - areka は書かれたとおりに描いているだけ。直す場所は pasta（別リポジトリ `ekicyou/pasta`）。なお pasta は送り手が areka のとき自前の BudouX 改行を外している（`scripts/pasta/shiori/event/boot.lua` の `apply_baseware_policy`・`OnFirstBoot` でも呼ばれる・実機の `pasta.log` で確認）。
    - SSP でも同じ空きになるかは未確認。
+   - **pasta 側で起票済み（2026-10-05）**: spec `paragraph-break-tag-only-talk`（ekicyou/pasta#66・マージ待ち）。pasta の現行 main でも S3 の分岐は同じで、マニュアル `reference/pasta-toml.md` の `spot_newlines`（「すでに台詞を出したスポット」）とも食い違うと確認された。「＠単語」は正規の書き方なので、ゴースト（emo2）側の回避は不要。
 2. **行頭の「‥‥」（禁則）**: BudouX が「‥‥ええと、」をひとまとめにするため、最終形でも「‥‥」が行頭に来る。UAX #14 の LB22（「‥」「…」の前では切らない）に当たる。`text-typesetting` の担当で、既定 `anywhere` のままでは直らない。
 
 ## Boundary Candidates
