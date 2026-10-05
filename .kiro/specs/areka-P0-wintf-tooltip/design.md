@@ -579,9 +579,9 @@ impl TipWindow {
 | Requirements | 1.3, 1.10, 1.11, 2.4, 2.9, 3.2, 6.1, 6.2, 6.5, 6.7, 7.2 |
 
 **Responsibilities & Constraints**
-- 持ちもの: NonSend の資源 `TooltipSession`（`TurnMachine`・`Option<TipWindow>`・今の出す番の控え＝知らせの関数の写し・基準の位置・文字の出どころ）。
+- 持ちもの: NonSend の資源 `TooltipSession`（`TurnMachine`・今の出す番の控え＝知らせの関数の写し・基準の位置）。表示の窓 `TipWindow` は UI スレッドの thread_local に 1 枚置き、1 回の show・hide の間だけ借りる（4.3 で判明: 知らせの中から入れ子で `supply_text` を呼ぶと、資源から窓を取り出す形では窓が資源に無く 2 枚目を作ってしまうため）。窓の寿命は World でなく UI スレッドの寿命。
 - 回す段: `FrameFinalize`（レイアウトの後。その回に起きた絵や当たり判定の変化を、同じ回のうちに見るため）。排他の系（`&mut World`）として登録する。
-- **早戻り**: 範囲の部品が 1 つも無く、状態が `Idle` なら、OS を 1 回も呼ばずに戻る（要件 1.11）。戻る前に押下の印は倒す（範囲が無い間の古い押下を、後で登録した最初の判定が拾って、理由なく「入り直すまで出さない」にならないため）。
+- **早戻り**: 中身のある範囲の表が 1 つも無く、状態が `Idle` なら、OS を 1 回も呼ばずに戻る（要件 1.11）。戻る前に押下の印は倒す（範囲が無い間の古い押下を、後で登録した最初の判定が拾って、理由なく「入り直すまで出さない」にならないため）。
 - **集める**（`collect`・窓なしでテストできる）: `TooltipRanges` を持つ窓のうち、配下に `PointerState` を持つエンティティがある窓を足元の候補にする。マウスの画面の位置から `WindowPos` の `position` を引いて窓の中の位置にし、`hit_test_in_window` が `Some`・窓が見えている（`is_visible`）なら「マウスを受けている」（追っている範囲の `receives` も、`PointerState` を含むこの 3 つの条件で決める）。窓の `DPI` で論理の位置に直して `TooltipRanges::hit` で範囲を決める。追っている範囲については、窓のエンティティの有無・登録の有無・可視・範囲の画面の矩形（論理の矩形×DPI＋`position`。窓の全体なら `WindowPos` の `size`）から `Tracked` を作る。
 - **適用**: `Effect` を順に適用する。`ArmDeadline` → `tick_wake::arm_deadline`。`TurnStarted` で `stored` が真 → 預けた文字を `TipWindow::show`（失敗は `warn`・状態は続ける）→ `set_tip`。`Hide` → `TipWindow::hide`＋`debug`。知らせは溜めておき、資源を World に戻してから順に呼ぶ。
 - 知らせの関数は、出す番が来たときに窓の部品 `OnTooltip` から写しを取って控える。窓が壊れて終わるときも、その写しで終わりの知らせを呼べる。
@@ -607,8 +607,15 @@ pub(crate) fn decide(
     hover_time: &mut dyn FnMut() -> Duration,
 ) -> Vec<Effect>;
 
-/// 「すること」を OS と利用側へ適用する（OS を呼ぶ）。
-pub(crate) fn apply(world: &mut World, effects: Vec<Effect>, now: Instant);
+/// 画面更新ごとの系の本体（判定→適用）。本物は `tooltip_frame`＝`with_os_tip` で本物の Tip を渡す包み。
+pub(crate) fn frame_with(
+    world: &mut World,
+    now: Instant,
+    sample: &mut dyn FnMut() -> OsSample,
+    visible: &dyn Fn(&World, Entity) -> bool,
+    hover_time: &mut dyn FnMut() -> Duration,
+    tip: &mut Tip<'_>,
+);
 
 /// 表示の出入口。本物は TipWindow の show／hide を呼ぶ。テストは記録するだけの閉包を渡す。
 pub(crate) struct Tip<'a> {
@@ -617,7 +624,7 @@ pub(crate) struct Tip<'a> {
 }
 
 /// apply と公開の関数（supply_text・dismiss・unregister）の中身。判断の分岐は全部ここに置く。
-/// 外側は、資源から TipWindow を取り出して本物の Tip を渡すだけの薄い包みにする。
+/// 外側は、UI スレッドの TipWindow を 1 回の show・hide の間だけ借りる本物の Tip を渡すだけの薄い包みにする。
 pub(crate) fn apply_with(world: &mut World, effects: Vec<Effect>, now: Instant, tip: &mut Tip<'_>);
 pub(crate) fn supply_text_with(world: &mut World, token: TooltipTurnToken, text: &str, now: Instant, tip: &mut Tip<'_>) -> TooltipSupply;
 pub(crate) fn dismiss_with(world: &mut World, token: TooltipTurnToken, now: Instant, tip: &mut Tip<'_>) -> bool;
@@ -750,8 +757,8 @@ pub(crate) fn note_button_press();
 
 ### Logical Data Model
 - `TooltipRanges`（窓のエンティティの部品）: `Vec<(TooltipRangeId, TooltipRange)>`（登録の順。`hit` が窓を引数に取らずに持ち手を返せるよう持ち手ごと持つ）＋次の通し番号（u64＝一回りして使い回さない）。
-- `TooltipSession`（NonSend の資源・1 つ）: `TurnMachine`（状態・次の印・最後にツールチップが消えた時刻）・`Option<TipWindow>`・今の出す番の控え（知らせの関数の写し・基準の位置）。
-- 押下の印: UI スレッドの `Cell<bool>`（`mod.rs` の中）。
+- `TooltipSession`（NonSend の資源・1 つ）: `TurnMachine`（状態・次の印・最後にツールチップが消えた時刻）・今の出す番の控え（知らせの関数の写し・基準の位置）。`TipWindow` は UI スレッドの thread_local に 1 枚。
+- 押下の印: UI スレッドの `Cell<bool>`（`system.rs` の中）。
 
 ## Error Handling
 
@@ -817,7 +824,7 @@ pub(crate) fn note_button_press();
 - 画面の端・DPI の違う画面・複数行・長い URL（3.3〜3.7）。出ている間、キーボードの入力先が変わらない（3.9）。5 秒以上置いても消えない（3.14）。
 
 ## Performance & Scalability
-- 範囲も続きも無い間は、画面更新ごとの費用は部品の有無を見る 1 回の問い合わせだけ。
+- 範囲も続きも無い間は、画面更新ごとの費用は部品の有無を見る 1 回の問い合わせだけ（全部取り消して空になった表は、通し番号を使い回さないため部品を残すが、「中身のある表」が無ければ範囲が無いとみなす）。
 - `Waiting` の間は、期限に 1 回起きる。`Active` の間だけ 100 ミリ秒ごとに起きる（ツールチップが出ている間の毎秒 10 回の判定）。それ以外に定期の起床は足さない。
 - 範囲の当たりは窓ごとの `Vec` の線形の探索。後続の 2 本の使い方（1 つの窓に数個〜数十個）で足りる。
 

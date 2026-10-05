@@ -92,13 +92,6 @@ pub(crate) enum Effect {
 }
 
 /// 消した理由（記録用）。
-#[cfg_attr(
-    test,
-    expect(
-        dead_code,
-        reason = "利用側の求め・空の文字は殻（apply・dismiss）の記録から使う"
-    )
-)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum HideReason {
     End(TooltipEndReason),

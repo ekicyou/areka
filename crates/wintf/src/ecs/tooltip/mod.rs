@@ -4,18 +4,21 @@
     not(test),
     expect(
         dead_code,
-        reason = "OS の境界（os.rs）が使うが、os.rs は公開の口（system.rs）から使い始める"
+        reason = "安全地帯の判定は画面更新の系（tooltip_frame）からしか届かない。系の登録は後の段で足す"
     )
 )]
 mod geometry;
 #[expect(
     dead_code,
-    reason = "公開の口（system.rs）から使い始める。テストも純粋な部分しか使わない"
+    reason = "OS の読み取りは画面更新の系（tooltip_frame）から使う。系の登録は後の段で足す。テストは窓を作らない"
 )]
 mod os;
 #[cfg_attr(
     not(test),
-    expect(dead_code, reason = "公開の口（system.rs）から使い始める")
+    expect(
+        dead_code,
+        reason = "当たりは画面更新の系（tooltip_frame）から使う。系の登録は後の段で足す"
+    )
 )]
 mod ranges;
 #[cfg_attr(
@@ -28,7 +31,10 @@ mod ranges;
 mod system;
 #[cfg_attr(
     not(test),
-    expect(dead_code, reason = "画面更新ごとの判定（system.rs）から使い始める")
+    expect(
+        dead_code,
+        reason = "状態機械を進めるのは画面更新の系（tooltip_frame）。系の登録は後の段で足す"
+    )
 )]
 mod turn;
 
@@ -129,11 +135,32 @@ pub fn update(world: &mut World, id: TooltipRangeId, range: TooltipRange) -> boo
     replaced
 }
 
+/// 登録を取り消す（続いている出す番があれば、戻る前にツールチップを消して終わりを知らせる）。
+/// 無ければ偽。
+pub fn unregister(world: &mut World, id: TooltipRangeId) -> bool {
+    system::with_os_tip(|tip| system::unregister_with(world, id, Instant::now(), tip))
+}
+
+/// 続いている出す番に文字を渡す。その出す番で初めて出した位置に出す（まだ出していなければ、
+/// 最後の判定の時のマウスの位置。出す番の間の判定は 100 ミリ秒ごとなので、知らせの外で渡すと
+/// その分だけ古いことがある）。印の出す番が終わっていれば [`TooltipSupply::StaleTurn`]。
+pub fn supply_text(world: &mut World, token: TooltipTurnToken, text: &str) -> TooltipSupply {
+    system::with_os_tip(|tip| system::supply_text_with(world, token, text, Instant::now(), tip))
+}
+
+/// 続いている出す番のツールチップを消す（出す番は続く）。印が続いていれば真。
+pub fn dismiss(world: &mut World, token: TooltipTurnToken) -> bool {
+    system::with_os_tip(|tip| system::dismiss_with(world, token, Instant::now(), tip))
+}
+
 /// マウスが動かないままでも、次の画面更新で判定が回るよう期限を預ける。
 fn wake_next_frame() {
     crate::ecs::world::tick_wake::arm_deadline(Instant::now());
 }
 
+#[cfg(test)]
+#[path = "system_apply_tests.rs"]
+mod system_apply_tests;
 #[cfg(test)]
 #[path = "system_tests.rs"]
 mod system_tests;

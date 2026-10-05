@@ -79,6 +79,11 @@ impl TooltipRanges {
         self.entries.len() != before
     }
 
+    /// 登録が 1 つも無いか。
+    pub(crate) fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
     /// 持ち手の指す登録の中身。
     pub(crate) fn get(&self, id: TooltipRangeId) -> Option<&TooltipRange> {
         self.entries.iter().find(|(k, _)| *k == id).map(|(_, r)| r)
