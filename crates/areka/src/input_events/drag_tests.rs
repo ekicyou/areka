@@ -1,11 +1,16 @@
-//! ドラッグの開始・終了の知らせが届く・届かないの基本（areka-P0-mouse-drag-events・
-//! design「Testing Strategy > areka」A1・A2・A3・A5・A8）。
+//! ドラッグの開始・終了の知らせが届く・届かないの基本と、終了の座標・位置の保存
+//! （areka-P0-mouse-drag-events・design「Testing Strategy > areka」A1〜A8）。
 //!
 //! 土台は [`super::test_support::Rig`]（本番の順で組んだ窓と受け口）。期待する知らせは偽の当たり判定
 //! （[`fake_hit`]）へ「押した位置 − 窓の位置」を渡して作る（受け口の座標・当たり判定から、
 //! 渡した位置が正しいことを読み戻す）。
+//!
+//! 終了の座標を見るテスト（A4・A6）と保存を比べるテスト（A7）は、開始を配った直後に
+//! `DraggingState.initial_inset` を開始時の窓位置で上書きし（偽の窓では `(0,0)` のまま入るため）、
+//! ドラッグの間の窓の移動は窓の位置を直に書いて作る（[`begin_drag`]）。
 
 use areka_kanade::{MouseButton, MouseEventKind, MouseInput};
+use areka_sylphya::PersistKey;
 use wintf::ecs::Point;
 use wintf::ecs::drag::{DraggingState, OnDragStart};
 use wintf::ecs::pointer::{DoubleClick, Phase, PointerState};
@@ -192,4 +197,186 @@ fn drag_bypasses_closed_move_throttle_and_leaves_it_untouched() {
     assert_eq!(throttle(&rig), before, "間引きの状態が変わった");
 
     rig.close();
+}
+
+/// ドラッグの間に窓を動かす量（下端へ寄せる置き方なので横へだけ）。
+const WINDOW_SHIFT: Point = Point { x: 300, y: 0 };
+/// A6 で押した位置から離した位置までの動き（横と縦）。
+const RELEASE_BY: Point = Point { x: 150, y: 40 };
+
+/// 開始を配り、`initial_inset` を開始時の窓位置にしてから、窓を [`WINDOW_SHIFT`] だけ動かす
+/// （最後の移動の知らせが配られず 1 つ古い位置に残った窓も兼ねる）。
+/// 開始時の窓位置・押した位置・開始の配りで届いた知らせを返す。
+fn begin_drag(rig: &mut Rig) -> (Point, Point, Vec<MouseInput>) {
+    let char_w = rig.char_w;
+    let start_win = rig.position_of(char_w);
+    let press = offset(start_win, PRESS_LOCAL);
+    rig.put(started(char_w, press));
+    rig.tick();
+    rig.set_initial_inset(char_w, start_win);
+    rig.move_window(char_w, offset(start_win, WINDOW_SHIFT));
+    (start_win, press, rig.drain())
+}
+
+/// A4（要件 2.2・4.2・9.1 ⑶⑸）: 開始 → 窓を動かす → 取り消しの終了（位置＝押した位置）。
+/// 窓が開始の位置へ戻り、`DragEnd` が 1 件届き、座標と当たり判定が `DragStart` と同じ値。
+/// 保存の前の窓の位置から引くと、動かした先の窓から見た値になって赤。
+#[test]
+fn cancelled_drag_end_reports_the_start_coordinates() {
+    let mut rig = Rig::new();
+    let (start_win, press, after_start) = begin_drag(&mut rig);
+    assert_ne!(
+        rig.position_of(rig.char_w),
+        start_win,
+        "前提: ドラッグの間に窓が動いている"
+    );
+
+    rig.put(ended(rig.char_w, press, true));
+    rig.tick();
+
+    assert_eq!(
+        rig.position_of(rig.char_w),
+        start_win,
+        "取り消しで窓が開始の位置へ戻っていない"
+    );
+    assert_eq!(
+        after_start,
+        vec![expected(MouseEventKind::DragStart, press, start_win)]
+    );
+    assert_eq!(
+        rig.drain(),
+        vec![expected(MouseEventKind::DragEnd, press, start_win)],
+        "取り消しの終了は開始と同じ座標・当たり判定で 1 件"
+    );
+
+    rig.close();
+}
+
+/// A6（要件 4.2・9.1 ⑸・決定 D1）: 下端へ寄せる置き方の窓で、押した位置から横と縦へ動かして離す
+/// （窓は横へだけ動く）。`DragEnd` の座標は「離した位置 − 保存の後の窓の位置」と一致し、
+/// 「離した位置 − 保存の前の窓の位置」とは違う。
+#[test]
+fn drag_end_coordinates_use_the_window_position_after_the_save() {
+    let mut rig = Rig::new();
+    let (start_win, press, _) = begin_drag(&mut rig);
+    let before_save = rig.position_of(rig.char_w);
+    let release = offset(press, RELEASE_BY);
+
+    rig.put(ended(rig.char_w, release, false));
+    rig.tick();
+
+    let after_save = rig.position_of(rig.char_w);
+    assert_eq!(
+        after_save,
+        Point {
+            x: start_win.x + RELEASE_BY.x,
+            y: start_win.y
+        },
+        "前提: 下端へ寄せる置き方の窓は横へだけ動く"
+    );
+    let ends = rig.drain();
+    assert_eq!(
+        ends,
+        vec![expected(MouseEventKind::DragEnd, release, after_save)]
+    );
+    assert_ne!(
+        ends,
+        vec![expected(MouseEventKind::DragEnd, release, before_save)],
+        "前提: 保存の前と後で引いた値が区別できる"
+    );
+
+    rig.close();
+}
+
+/// A7 の操作。
+#[derive(Clone, Copy, Debug)]
+enum Gesture {
+    /// 動かして離す。
+    Release,
+    /// 動かしてから取り消す。
+    Cancel,
+    /// 動かさないクリック（開始の無い終了）。
+    Click,
+}
+
+/// A7 の包みを付けた側の 3 通り。
+#[derive(Clone, Copy, Debug)]
+enum Wrapped {
+    /// 送り先あり。
+    Sends,
+    /// `MouseWiring` なし。
+    NoWiring,
+    /// 受け口を落として送出に失敗。
+    SendFails,
+}
+
+/// 操作をして、窓の位置・記憶へ書かれた組・届いた知らせの件数を返す（土台は閉じる）。
+fn perform(mut rig: Rig, gesture: Gesture) -> (Point, Vec<(PersistKey, String)>, usize) {
+    let char_w = rig.char_w;
+    let mut sent = 0;
+    match gesture {
+        Gesture::Click => {
+            let press = offset(rig.position_of(char_w), PRESS_LOCAL);
+            rig.put(ended(char_w, press, false));
+        }
+        Gesture::Release | Gesture::Cancel => {
+            let (_, press, after_start) = begin_drag(&mut rig);
+            sent += after_start.len();
+            let cancelled = matches!(gesture, Gesture::Cancel);
+            let end = if cancelled {
+                press
+            } else {
+                offset(press, RELEASE_BY)
+            };
+            rig.put(ended(char_w, end, cancelled));
+        }
+    }
+    rig.tick();
+    sent += rig.drain().len();
+    let result = (rig.position_of(char_w), rig.saved(), sent);
+    rig.close();
+    result
+}
+
+/// A7（要件 6.1・6.2・6.3・9.1 ⑺）: 包みを付けない窓（本 spec の前）と包みを付けた窓で同じ操作
+/// （離す・取り消す・動かさないクリック）をすると、窓の位置と記憶へ書かれた組が一致する。
+/// 包みの側は送り先あり・`MouseWiring` なし・送出に失敗の 3 通り。動かさないクリックでは
+/// どちらも保存 0 件。保存を呼ばない・送り先が無いと戻る、にすると赤。
+#[test]
+fn wrapper_keeps_window_position_and_saved_pairs_unchanged() {
+    for gesture in [Gesture::Release, Gesture::Cancel, Gesture::Click] {
+        let (base_pos, base_saved, base_sent) = perform(Rig::without_wrapper(), gesture);
+        assert_eq!(base_sent, 0, "前提: 包みの無い窓は知らせを送らない");
+        assert_eq!(
+            base_saved.is_empty(),
+            matches!(gesture, Gesture::Click),
+            "前提: ドラッグは保存し、動かさないクリックは保存しない（{gesture:?}: {base_saved:?}）"
+        );
+
+        for wrapped in [Wrapped::Sends, Wrapped::NoWiring, Wrapped::SendFails] {
+            let mut rig = Rig::new();
+            match wrapped {
+                Wrapped::Sends => {}
+                Wrapped::NoWiring => {
+                    rig.world
+                        .remove_non_send::<MouseWiring>()
+                        .expect("前提: MouseWiring がある");
+                }
+                Wrapped::SendFails => rig.drop_receiver(),
+            }
+            let (pos, saved, sent) = perform(rig, gesture);
+
+            assert_eq!(
+                (pos, &saved),
+                (base_pos, &base_saved),
+                "{gesture:?}・{wrapped:?}: 窓の位置か記憶へ書かれた組が包みの無い窓と違う"
+            );
+            // 前提: 包みが付いている（送り先があればドラッグは開始と終了の 2 件・クリックは 0 件）。
+            let want = match (wrapped, gesture) {
+                (Wrapped::Sends, Gesture::Release | Gesture::Cancel) => 2,
+                _ => 0,
+            };
+            assert_eq!(sent, want, "{gesture:?}・{wrapped:?}: 届いた知らせの件数");
+        }
+    }
 }

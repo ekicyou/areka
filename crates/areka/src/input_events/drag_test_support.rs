@@ -3,24 +3,27 @@
 //! 本番と同じ順に組む: 本物の `spawn_ghost_windows`（本体と相方）→ 偽の `WindowHandle` →
 //! [`attach_char_pointer_handlers`]。wintf のドラッグの資源・`MonitorSnapshot`・偽の記憶の書き手
 //! （`FakePersistIo`）を持つ `PersistWiring`・当たり判定の偽物（`RegionSource::Mock`）と止めた時計を
-//! 入れた `MouseWiring` と、その受け口（kanade の受信箱の代わり）を持つ。
+//! 入れた `MouseWiring` と、その受け口（kanade の受信箱の代わり）を持つ。比べるために、包みを
+//! 付けない本 spec の前の組み方（[`Rig::without_wrapper`]）も持つ。
 //!
 //! 知らせは wndproc の代わりに wintf の運ぶ箱（`DragAccumulatorResource`）へ種を積み、
 //! `dispatch_drag_events` で配る（本番と同じ配りの経路で、Tunnel と Bubble の 2 回の呼び出しも通る）。
 
-use std::path::PathBuf;
-use std::sync::mpsc;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
 use areka_kanade::{KanadeMsg, MouseInput};
-use areka_sylphya::persist::FakePersistIo;
-use areka_sylphya::{ScopeRoots, SylphyaInit, SylphyaParts, spawn_sylphya};
+use areka_sylphya::persist::{FakePersistIo, PersistIo};
+use areka_sylphya::{
+    PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope, spawn_sylphya,
+};
 use bevy_ecs::message::Messages;
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use wintf::ecs::drag::{
     DragAccumulatorResource, DragEndEvent, DragEvent, DragStartEvent, DragTransition,
-    WindowDragContextResource, dispatch_drag_events,
+    DraggingState, WindowDragContextResource, dispatch_drag_events,
 };
 use wintf::ecs::{PhysicalPoint, Point, WindowHandle, WindowPos};
 
@@ -99,12 +102,25 @@ fn fake_handle(raw: usize) -> WindowHandle {
     }
 }
 
+/// アクターへ渡す口と観測する口が同じストアを指す偽の記憶の書き手。
+struct SharedFakeIo(Arc<FakePersistIo>);
+impl PersistIo for SharedFakeIo {
+    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
+        self.0.read(path)
+    }
+    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
+        self.0.commit(path, content)
+    }
+}
+
 /// 本番の順で組んだ 2 スコープのゴースト窓と、マウスの知らせの受け口。
 pub(super) struct Rig {
     pub(super) world: World,
     /// kanade の受信箱の代わり。
     pub(super) rx: mpsc::Receiver<KanadeMsg>,
     parts: SylphyaParts,
+    roots: ScopeRoots,
+    store: Arc<FakePersistIo>,
     /// 相方のキャラ窓。
     pub(super) char_w: Entity,
     /// 相方のバルーン窓。
@@ -112,13 +128,25 @@ pub(super) struct Rig {
 }
 
 impl Rig {
+    /// 本番の付け方（`spawn_ghost_windows` → [`attach_char_pointer_handlers`]）。
     pub(super) fn new() -> Self {
+        Self::build(true)
+    }
+
+    /// 本 spec の前の付け方（`spawn_ghost_windows` だけ＝位置の保存の受け手を包まない）。
+    pub(super) fn without_wrapper() -> Self {
+        Self::build(false)
+    }
+
+    fn build(attach: bool) -> Self {
+        let store = Arc::new(FakePersistIo::new());
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
         let parts = spawn_sylphya(SylphyaInit {
-            roots: ScopeRoots {
-                ghost: Some(PathBuf::from("/g")),
-                ..ScopeRoots::default()
-            },
-            io: Box::new(FakePersistIo::new()),
+            roots: roots.clone(),
+            io: Box::new(SharedFakeIo(store.clone())),
             runtime_sink: None,
         });
 
@@ -152,7 +180,9 @@ impl Rig {
                 raw += 0x10;
             }
         }
-        attach_char_pointer_handlers(&mut world);
+        if attach {
+            attach_char_pointer_handlers(&mut world);
+        }
 
         // 止めた時計（間引きの時間の窓は開かない）。
         let (tx, rx) = mpsc::channel();
@@ -166,6 +196,8 @@ impl Rig {
             world,
             rx,
             parts,
+            roots,
+            store,
             char_w: gw.char_window(SCOPE).unwrap(),
             balloon: gw.balloon_window(SCOPE).unwrap(),
         }
@@ -189,6 +221,42 @@ impl Rig {
             .get::<WindowPos>(entity)
             .and_then(|wp| wp.position)
             .expect("WindowPos.position があるはず")
+    }
+
+    /// 窓の手続きの代わりに窓の位置を直に書く（ドラッグの間の窓の移動）。
+    pub(super) fn move_window(&mut self, entity: Entity, to: Point) {
+        self.world
+            .get_mut::<WindowPos>(entity)
+            .expect("WindowPos があるはず")
+            .position = Some(to);
+    }
+
+    /// 開始の配りで入った `DraggingState.initial_inset` を窓の位置にする（製品と同じ意味の値）。
+    ///
+    /// 偽の HWND では wintf の開始の腕の枠の座標変換が失敗し、`(0,0)` のまま入る。
+    pub(super) fn set_initial_inset(&mut self, entity: Entity, at: Point) {
+        self.world
+            .get_mut::<DraggingState>(entity)
+            .expect("開始が配られて DraggingState があるはず")
+            .initial_inset = (at.x as f32, at.y as f32);
+    }
+
+    /// 受け口を落とす（以後の送出は失敗する）。
+    pub(super) fn drop_receiver(&mut self) {
+        self.rx = mpsc::channel().1;
+    }
+
+    /// 投函済みの保存が書き終わってから、記憶（Ghost スコープ）に書かれた組を読む。
+    pub(super) fn saved(&self) -> Vec<(PersistKey, String)> {
+        self.parts
+            .publisher
+            .barrier()
+            .expect("アクターが生きている間は barrier が返るはず");
+        load_scope(
+            PersistScope::Ghost,
+            &self.roots,
+            &SharedFakeIo(self.store.clone()),
+        )
     }
 
     /// 受け口に溜まったマウスの知らせを全部取り出す（マウス以外が来たら落とす）。

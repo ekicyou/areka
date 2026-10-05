@@ -44,7 +44,7 @@
   - 5 本が緑で、Bubble だけ送る決まりを外すと A1 が 2 件ずつになって赤になる
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 4.2, 4.4, 4.5, 9.1, 9.2_
 
-- [ ] 2.3 終了の座標と位置の保存のテスト
+- [x] 2.3 終了の座標と位置の保存のテスト
   - 終了の座標を見るテストは、開始を配った直後に `DraggingState.initial_inset` を開始時の窓位置で上書きし（偽の窓では `(0,0)` のまま入るため）、ドラッグの間の窓の移動は窓の位置を直に書いて作る
   - A4: 開始 → 窓を別の位置へ動かし、窓の位置が開始と違うことを確かめる → 取り消しの終了。窓が開始の位置へ戻り、終了が 1 件届き、座標と当たり判定が開始と同じ値
   - A6: 下端へ寄せる置き方の窓で横と縦へ動かして離すと、終了の座標が「離した位置 − 保存の後の窓の位置」と一致し、「保存の前の窓の位置」から引いた値とは違う
@@ -95,4 +95,4 @@
 
 - 1.3: kanade は Boot 1 通の中で起動の系列を Steady まで同期で走り切るので、受信箱から「起動の途中」へ知らせを差し込める窓は Boot の前（`Phase::Idle`）だけ。起動の途中の段そのものは K8（`step` を直に呼ぶ）が受け持つ。
 - 2.2: 土台は `drag_test_support.rs`（`Rig`）。偽の窓では `initial_inset` が `(0,0)` のままで終了の配りで窓が跳ぶので、A1・A2・A8 の終了の期待は「保存の後の窓の位置」から作る。2.3 は `initial_inset` の上書き・包みなしの窓・`MouseWiring` なし・受け口を落とす・`FakePersistIo` の書いた値を読む口を `Rig` に足す。
-- 範囲外（完了の棚卸で起票の要否を判断）: 負荷の高いときの `cargo test -p areka` 全体で、実時間の期限で待つテスト（ghost_session の切替・既定へ戻す・記憶、install の desk 上書き、session_end の sync_send）が回ごとに違う 4〜8 件落ちた（単独・別の回では緑）。また `cargo test -p areka --bin areka -- --test-threads=4` は drag のテストを外しても STATUS_ACCESS_VIOLATION で落ちる（既定のスレッド数では落ちない）。どちらも本 spec の経路を通らない。
+- 範囲外（完了の棚卸で起票の要否を判断）: 負荷の高いときの `cargo test -p areka` 全体で、実時間の期限で待つテスト（ghost_session の切替・既定へ戻す・記憶、install の desk 上書き、session_end の sync_send、emo2_boot::ghost_switch の boot_event_tests）が回ごとに違う 4〜8 件落ちた（単独・別の回では緑）。また `cargo test -p areka --bin areka -- --test-threads=4` は drag のテストを外しても STATUS_ACCESS_VIOLATION で落ちる（既定のスレッド数では落ちない）。どちらも本 spec の経路を通らない。
