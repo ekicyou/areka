@@ -40,7 +40,7 @@
   - 完了の状態: テスト全体が緑で、変えた行に clippy の警告が 0。`git diff --stat main...HEAD -- crates Cargo.lock` に一覧のファイルだけが出る
   - _Requirements: 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 5.4_
 
-- [ ] 5. 実機で survey §7.4 の各行を当て、記録を残す
+- [x] 5. 実機で survey §7.4 の各行を当て、記録を残す
   - タスク 4 の後のコードで配布形を作り直し、ワークツリーの `target\` の下へ展開する（絶対パス）。展開先の emo2 の descript の `name` だけを `えも2DEBUG` に Edit で書き替えてから、有界の自動終了つきで起こす。自分が起こしていないプロセスは止めない
   - design.md の「当てる指定」の各行を `get_status`・`get_expression_table`・`get_log` へ `tools/call` で当て、一覧の値の往復と、記録だけのために `ghost_name: null` を当てる
   - SSP が動けば同じ指定と未実測の細部（全角の英字の大小・全角の空白とタブ・`sakura.name2`・`null`）を当てて並べる。動かなければそのことを書く。要件の表と違う答えが出たら止めて報告する
@@ -58,3 +58,4 @@
 
 - タスク 4 の確認（10-06）: `cargo test --no-fail-fast -p areka -p areka-mcp` は bin 2,678 通過・2 赤（`ghost_session::switch_tests::fallback_tests` の `default_ghost_fault_after_fallback_exits_through_shiori_fault_path` と `async_target_fault_before_window_closure_leaves_only_default_windows`）。2 本とも単独で回し直すと 5 本すべて緑で、並走の負荷で落ちる既知の揺れ（起票済み `areka-P0-ghost-session-test-load-flake`）に当たる。本 spec の差分とは無関係。統合テスト 3 本・areka-mcp 100 は緑。fmt 緑。clippy は変えた行に警告 0（`mcp_tests.rs` の `ok().expect()` 4 件は 10-03 からある行）。`git diff --stat main...HEAD -- crates Cargo.toml Cargo.lock` は design の一覧の 14 ファイルだけ（本番 2・テスト 12・最大 810 行）。
 - ディスク満杯（C: の空き 6 GB）で一度ビルドが `no space on device` で落ち、`target\` が消えた。空きが戻った後に i686 の補助 exe 2 つから建て直した。
+- タスク 5 の実機確認（10-06・`1da1e04` dirty=0）: survey §7.4 の全行を 3 本へ当てて 49 件すべて表どおり・ERROR 0。SSP はこの机で動いていなかったので SSP の列と未実測の細部（全角の英字の大小・全角の空白とタブ・`sakura.name2`・`null`）は未実測のまま。範囲外の気付き 2 件: ①本番のコードに `get_log` の取り決めの target（`TARGET_SCRIPT`・`TARGET_ERROR`）で記録を出す箇所が無く、`get_log` で絞った答えは実機ではいつも `(no log entries)`（要件 1.5 の中身の同一性は決定論テストが受け持つ）②Git Bash から `tools/package.ps1` を呼ぶと `cargo metadata` の JSON が読めず落ちる（PowerShell からは通る・起票済み `tools-utf8-child-output` と同類か要確認）。
