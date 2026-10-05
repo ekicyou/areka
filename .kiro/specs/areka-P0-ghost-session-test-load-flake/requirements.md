@@ -37,6 +37,7 @@ areka のテストの実行ファイル（`cargo test -p areka --bin areka`）�
   - 全体テストの手順（`tools/test-all.ps1`）の並列度の変更、回し直しの仕組みを足して赤を隠すこと。
   - `zorder-chain-residue` に残る族（実窓の重なり順の間欠赤・檻の片側性と文書）と、すでに隔離済みの wintf の vblank の締切。
   - `--test-threads=4` で実行ファイルごと落ちる件（`areka-test-threads-av` の範囲）。
+  - 赤の観測が無い待ち（他の crate の同じ名前の `run_bounded`／`join_bounded`・`install/` が自前で持つ `join_bounded`・その他のテストのファイルが自前で持つ締切つきの待ち）。要件 1 の再現の手順で赤になったものだけを対象に加える。
 - **Adjacent expectations**:
   - 同じウェーブで並走する spec の持ち物である本番のファイル（`emo2_boot/mod.rs`・`frame/` の下・`ghost_switch.rs`）は触らない。本物の競合の修正にこれらを触る必要が出たときは、触る前に止めて報告する。
   - ワークスペース全体の見張り（1 ファイル 1,000 行の番人とその例外表・テスト用一時パスの窓口の迂回の見張り）は、本 spec の後も緑のまま保ち、例外表は増やさない。
@@ -53,7 +54,7 @@ areka のテストの実行ファイル（`cargo test -p areka --bin areka`）�
 1. The 本 spec の作業 shall 対象の族のテストを、CPU を食う並走の負荷を付けて回す手順を 1 つ定め、負荷の作り方・回す範囲・回数・1 回の上限の時間を、始める前に spec の記録へ書く。
 2. When 再現の手順を回したとき, the 本 spec の作業 shall 赤になったテストの名前・失敗の文言・その時に待っていた部品と締切を、回ごとに spec の記録へ残す。
 3. The 再現の手順 shall 一時のファイルと負荷の子プロセスの作業場所を、ワークツリーの `target\` の下だけに置き、終わったときに自分が起こした負荷の子プロセスを止める。
-4. When 着手したとき, the 本 spec の作業 shall 待ちの部品（`spin_wait_until`・`run_bounded`・`join_bounded`・`wait_steady`・`pump_talking_until` と、テストのファイルが自前で持つ締切つきの待ち）を使うファイル（本番のファイルの中の利用を含む）と、切替の足場を使うファイルを全数で数え上げ、起票時の数（足場 28 本ほか）と違えば差を記録する。
+4. When 着手したとき, the 本 spec の作業 shall 待ちの部品（`spin_wait_until`・締切の定数 `SPIN_WAIT`・`run_bounded`・`join_bounded`・`wait_steady`・`pump_until`・`pump_talking_until`・`pump_input_until` と、テストのファイルが自前で持つ締切つきの待ち）を使うファイル（本番のファイルの中の利用を含む）と、切替の足場を使うファイルを全数で数え上げ、起票時の数（足場 28 本・`spin_wait_until` か `SPIN_WAIT` を名指しするファイル 20 本）と違えば差を記録する。
 
 ### Requirement 2: 負荷で遅いだけでは赤にならない
 
@@ -66,6 +67,7 @@ areka のテストの実行ファイル（`cargo test -p areka --bin areka`）�
 3. The 修正 shall 一定時間の sleep を足すこと、締切の秒数を延ばすことだけ、1 フレーム遅らせることのいずれでも直さない。
 4. The 修正 shall 対象の族のテストを無視の印で走らせなくすること、本数を減らすことで赤を消さない。
 5. While 同じテストの実行ファイルの中で多数のテストが同時に待っている, the 待ちの部品 shall 待っている間に、待っている相手の進みを妨げるほど CPU を占めない。
+6. While 待ちの部品が台詞の時計などの合成の時刻を注入しながら待っている, the 待ちの部品 shall 注入する合成の時刻を、待っている相手がそれまでの時刻を処理し終えた観測より先へ進めない（相手が飢えている間に合成の締切だけが切れる赤を作らない）。
 
 ### Requirement 3: 止まったときの失敗は見分けられる
 
