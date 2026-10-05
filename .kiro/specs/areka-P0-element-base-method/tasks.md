@@ -71,7 +71,7 @@
   - _Depends: 2.2_
 
 - [ ] 4. 通しの確認
-- [ ] 4.1 ワークスペースの全テストと静的検査を通す
+- [x] 4.1 ワークスペースの全テストと静的検査を通す
   - `cargo test --workspace`・`cargo clippy --workspace --all-targets` を回す。pattern定義の `base`（描かずに警告）の既存テストと、`overlay` だけのサーフェスの既存テスト（golden を含む）が期待値を変えずに通ることを確かめる
   - 完了の姿: 全テストが緑で、本 spec の差分に clippy の警告が 0 件、1.1 で付け替えた 3 本のほかに期待値の書き換えが無い
   - _Requirements: 3.1, 3.3, 3.4, 3.5_
@@ -89,3 +89,5 @@
 - 1.1: `replace` に付け替えたテストは隣に `base` の行を 1 本置かないと判定を戻しても赤にならない。檻は「判定を戻すと赤」を変異で確かめてから閉じる。
 - 1.2: 3 つの転記の見出しの範囲はどれも「`surface` で始まる」で同じ（`kero.surface.alias` は完全一致で先に外れる・閉じないブレスは字句解析が `Raw` にする）。`undrawn.rs` は 1 本の `starts_with("surface")` で、判定の順の入れ替えは外から見えない。
 - 3.2: 台帳の担当や状態を動かすと `doc/ukadoc-coverage/briefing.md`（barrier・owner_completed の数）と `roadmap-draft.md`（`[[spec]]`・段階 A の表・`[briefs].count`）も手で合わせないと `cargo test -p ukadoc-survey` の consistency が赤（前例 PR#240）。完了時に担当を追跡用 spec へ移すときも同じ 3 か所を直す。
+- 完了時の申し送り: squash マージの後に animated-image-playback のセッション（名前 "animated image playback"）へ SendMessage でマージを知らせる約束（10-05・向こうは着地を待って main を取り込む）。
+- 4.1（範囲外・完了時に起票）: `cargo clippy --workspace --all-targets` が `crates/areka-kanade/src/actor_raise_reply_tests.rs` の `loop`（`never_loop`・error）で止まる。本 spec は kanade に触れておらず、最後の変更は PR#226。clippy の版が上がって出たものと見られる。本 spec の差分のファイルへの警告は 0 件（触った 4 crate を個別に clippy して確認）。
