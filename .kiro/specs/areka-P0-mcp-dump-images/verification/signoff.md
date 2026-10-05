@@ -15,7 +15,7 @@
 |---|---|---|
 | ⑴ | `dump_surface`（省略）が今の姿の透過 PNG を返し、開いて画面と同じに見える | **合**（走行 3・`b222af2e`。走行 1 の `de80f039` でも合。下記） |
 | ⑵ | 表情を変えた後は、変わった姿が返る | **合**（走行 3。`sakurascript` が未実装のため、キャラクターのダブルクリックで表情を変える代わりの手順。下記） |
-| ⑶ | `surface` を指定しても画面は変わらず、その surface が返る | 未実施 |
+| ⑶ | `surface` を指定しても画面は変わらず、その surface が返る | **合**（走行 3。下記） |
 | ⑷ | 台詞の後の `dump_balloon` に背景と文字が入り、消えた後も同じ絵が返る | 未実施 |
 | ⑸ | 拡大率が 1 でない画面で ⑴ と ⑷ が原寸で返る | ⑴ の側は **合**（拡大率 200% の画面で 382×547＝原寸。下記）。⑷ の側は未実施 |
 | ⑹ | 無いスコープと無い surface ID が要件 4.1・4.2 の文言で返る | 未実施 |
@@ -105,3 +105,22 @@ DEBUG areka::mcp::dump_surface: [mcp] 絵を返す tool="dump_surface" scope=0 s
 ```
 
 返った PNG は、変わった後の画面と同じ姿（目を開き、青いリボン、手を下ろした姿）だった。surface の ID は 1000 のまま。emo2 は同じ surface の中のアニメーションと着せ替えで表情を変えており、表示の層の記録にも `ShowSurface` の `surface_id=1000` しか出ていない。本文が言う「動いているアニメーションと着せ替えを含む今の見た目」が写っている。
+
+### ⑶
+
+ゴーストは自分から話していて表情が動くので、画面の見比べに加えて、指定の呼び出しの前後で「今の surface」を省略の呼び出しで聞き、表示の層の記録に指定の surface を表示した行が出ないことを見た。
+
+```
+前（省略）: OK:scope 0, surface 1000 as currently shown (with running animations and dressups, before scaling and transparency)
+指定 1101: OK:scope 0, surface 1101 rendered alone in its initial state (not what is on the screen now)
+後（省略）: OK:scope 0, surface 1000 as currently shown (with running animations and dressups, before scaling and transparency)
+
+DEBUG ... 絵を返す tool="dump_surface" scope=0 surface_id=1000 ... base64_len=168000 ui_us=238 encode_us=23292
+DEBUG ... 絵を返す tool="dump_surface" scope=0 surface_id=1101 ... base64_len=159292 ui_us=2226 encode_us=19863
+DEBUG ... 絵を返す tool="dump_surface" scope=0 surface_id=1000 ... base64_len=168000 ui_us=233 encode_us=13787
+```
+
+- 前と後の省略の呼び出しの PNG はバイト列まで同じ（SHA256 の頭 16 字 `351D4B65A7C14F10`）。今の surface は 1000 のまま。
+- 表示の層の `apply(ShowSurface)` の記録に `surface_id=1101` の行は 0 件（走行 3 の始めから終わりまで）。呼んだ直後の画面でも、右のキャラクターはそのまま話し続けていた。
+- 返った 1101 の PNG（382×547）は、目鼻の無い体だけの絵だった。検体の `surfaces.txt` の `surface1101` は `element0,overlay,purple/0/base2.png,0,0` の 1 枚だけで、顔は別の surface を重ねて描く作りなので、単体で合成した初期状態の絵として正しい。
+- 指定の呼び出しは単体の合成を UI スレッドで行うので、`ui_us` は 2,226 µs（2.2 ms）だった。線（16 ms）の内。
