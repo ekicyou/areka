@@ -53,7 +53,7 @@
   - _Requirements: 6.2_
   - _Boundary: doc の互換の記録_
 
-- [ ] 5. 全体の確かめ
+- [x] 5. 全体の確かめ
   - `cargo test -p areka-kanade`・`cargo test -p areka-parsers`・`cargo test -p ukadoc-survey`・`cargo clippy -p areka-kanade`・触った crate の `cargo fmt --check` が通る
   - 調停のファイルが 1,000 行未満、ウェーブの約束の外で触ったのが設計に挙げた 4 ファイルだけ（`lib.rs`・`msg.rs`・`actor.rs`・`Cargo.*` に差分なし）
   - 完了の状態: 上のコマンドがすべて緑で、`git diff --stat main` が設計のファイル一覧（作り直した報告 `doc/ukadoc-coverage/report/sakura-script.md`・`summary.md` を含む）と一致する
@@ -65,3 +65,4 @@
 - 2.1: `cargo clippy -p areka-kanade --all-targets` は触っていない `actor_raise_reply_tests.rs` に既存のエラー 1 件と他ファイルの既存の警告がある（本仕様の範囲外・完了時の棚卸の候補）
 - 4.1: 台帳の owner を本仕様にすると `ukadoc-survey` の検査（`owner_destination_findings`）が `doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` を求めるので、設計の一覧に無いが前例（mouse-drag-events）どおり足した（`[briefs]` の count 42→43 は手書きの数・並走のマージで同じ数を書く枝があれば後から入る側が数え直す）
 - 4.1: `doc/ukadoc-coverage/briefing-sakura-script.md` の調査時点の写しはこの項目を「一部だけが効かない」のまま残す（検査の対象外・完了時に書き添えるかを判断）
+- 5: `cargo clippy -p areka-kanade` の警告は触っていない `shiori/real.rs:234`（collapsible_if）の既存の 1 件だけ。`git diff --stat main` は設計の一覧＋`roadmap-draft.md`（4.1 の注）と一致
