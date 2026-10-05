@@ -19,10 +19,10 @@ use std::rc::Rc;
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
-use areka_sakura::contract::ActorKey;
+use areka_sakura::contract::{ActorKey, CueCommand};
 use areka_sakura::sysvar::SystemVarSnapshot;
 use bevy_ecs::prelude::World;
-use dola::cue::{CuePlayer, CueSink, TalkCue};
+use dola::cue::{CuePayload, CuePlayer, CueSink, TalkCue};
 use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::pump_until_idle;
@@ -44,6 +44,15 @@ const NINE_WIDE: (u32, u32) = (190, 200);
 /// 文節の折り返し（`budoux_newline,1`）のバルーン。描画範囲・折り返しの基準は面の全域
 /// （validrect・wordwrappoint を書かない＝右辺で折り返す）、原点は (0,0)。
 pub(super) fn budoux_model() -> BalloonModel {
+    model_with_budoux(Some("1"))
+}
+
+/// `budoux_newline` の無い（1 字ずつの折り返しの）バルーン。ほかは [`budoux_model`] と同じ。
+pub(super) fn char_by_char_model() -> BalloonModel {
+    model_with_budoux(None)
+}
+
+fn model_with_budoux(budoux_newline: Option<&str>) -> BalloonModel {
     BalloonModel::new(
         WindowPosition::new(None, None),
         Origin::new(Some(0), Some(0)),
@@ -51,7 +60,7 @@ pub(super) fn budoux_model() -> BalloonModel {
         ValidRect::new(None, None, None, None),
         Font::new(None, Some(FONT_HEIGHT), FontColor::new(None, None, None)),
         None,
-        Some("1".to_string()),
+        budoux_newline.map(str::to_string),
     )
 }
 
@@ -101,6 +110,21 @@ pub(super) fn walk_with(
     image: (u32, u32),
     delivery: Delivery,
 ) -> Vec<Stage> {
+    walk_injecting(script, actor, model, image, delivery, None)
+}
+
+/// [`walk_with`] に、台本に無い合図を同じ場所へ直接 1 つ流す口を足した形。`stray = Some((i, 命令))`
+/// なら、i 番目の判定の時刻の `tick` と汲み出しの後で、その時刻・長さ 0 の合図を本物の
+/// [`EmoTextSink`](crate::sink::EmoTextSink) の複製へ `emit` して汲み出してから行の列を取る
+/// （再生機が流すのと同じ UI の待ち行列を通る）。
+pub(super) fn walk_injecting(
+    script: &str,
+    actor: &str,
+    model: &BalloonModel,
+    image: (u32, u32),
+    delivery: Delivery,
+    mut stray: Option<(usize, CueCommand)>,
+) -> Vec<Stage> {
     let talk = areka_sakura::compile(
         &areka_parsers::sakura::parse(script),
         &SystemVarSnapshot::default(),
@@ -133,6 +157,7 @@ pub(super) fn walk_with(
     );
     let (sink, _handle) =
         spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
+    let mut direct = sink.clone();
     if delivery == Delivery::WithoutPreview {
         player.register_sink(Box::new(EmitOnly(sink)));
     } else {
@@ -147,9 +172,18 @@ pub(super) fn walk_with(
     }
 
     let mut stages = Vec::new();
-    for t in times {
+    for (i, t) in times.into_iter().enumerate() {
         if delivery != Delivery::AllAtOnce {
             player.tick(ANCHOR + t);
+            pump_until_idle();
+        }
+        if let Some((_, command)) = stray.take_if(|(at, _)| *at == i) {
+            direct.emit(TalkCue {
+                at: t,
+                actor: actor.clone(),
+                command,
+                duration: 0.0,
+            });
             pump_until_idle();
         }
         let lines = runtime
@@ -362,4 +396,168 @@ fn delivering_everything_in_one_tick_matches_the_staged_talk() {
         "まとめて届くと行の列が違う:\n{}",
         differ.join("\n")
     );
+}
+
+/// 捕まえた記録のうち warn だけ。
+fn warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .collect()
+}
+
+/// 段階の列を行の列（1 行ずつの文字列）の列にする（失敗の出力と比べ合わせ用）。
+fn rows_of(stages: &[Stage]) -> Vec<Vec<String>> {
+    stages.iter().map(|s| show(&s.rows)).collect()
+}
+
+/// 検査 5 の消去の前に置く待ち。消去の時刻を、消去の前の字が出終わる時刻から離す。
+const PAUSE_BEFORE_CLEAR: &str = "\\_w[300]";
+/// 検査 5 の消去の後の字（検査 1 と同じ分かれ方で、字が違う）。
+const AFTER_CLEAR: &str = "イイジャン？\\_w[450]‥\\_w[150]‥\\_w[150]ええと。";
+
+/// 検査 5: 途中に `\c` のある台本。消去の前の段階は、消去の前の字だけの台本（検査 1 の台本）の
+/// 段階と 1 対 1 で同じ時刻・同じ行の列。消去の時刻から後の段階は、消去の後の字だけの台本の段階と
+/// 1 対 1 で同じ行の列（どちらの台本も各合図の発火時刻ちょうどで刻むので、番目で対応づける）。
+/// 消去の前の字は消去の後の区切りに効かない（要件 4.1・5.4）。
+#[test]
+fn clear_splits_the_talk_into_independent_sections() {
+    let script = format!("{EMO2_BOOT_TALK}{PAUSE_BEFORE_CLEAR}\\c{AFTER_CLEAR}");
+    let clear_at = areka_sakura::compile(
+        &areka_parsers::sakura::parse(&script),
+        &SystemVarSnapshot::default(),
+    )
+    .sheet
+    .cues()
+    .iter()
+    .find(|c| matches!(c.payload, CuePayload::Command(CueCommand::Clear)))
+    .expect("消去の合図がある")
+    .start_time;
+    let both = walk(&script, "1", &budoux_model(), NINE_WIDE);
+    let before = walk(EMO2_BOOT_TALK, "1", &budoux_model(), NINE_WIDE);
+    let after = walk(
+        &format!("\\1{AFTER_CLEAR}"),
+        "1",
+        &budoux_model(),
+        NINE_WIDE,
+    );
+
+    // 前提: それぞれの字だけの台本は単独で安定している。
+    for (name, stages) in [("消去の前の字だけ", &before), ("消去の後の字だけ", &after)]
+    {
+        let violations = reveal_violations(stages);
+        assert!(
+            violations.is_empty(),
+            "{name}の台本で表示済みの字が動いた:\n{}",
+            violations.join("\n")
+        );
+    }
+
+    let (pre, post): (Vec<Stage>, Vec<Stage>) = both.into_iter().partition(|s| s.time < clear_at);
+    let line = |s: &Stage| format!("t={:?} {:?}", s.time, show(&s.rows));
+    let lines = |stages: &[Stage]| stages.iter().map(line).collect::<Vec<_>>();
+    assert_eq!(
+        pre.iter().map(|s| (s.time, &s.rows)).collect::<Vec<_>>(),
+        before.iter().map(|s| (s.time, &s.rows)).collect::<Vec<_>>(),
+        "消去の前の段階が字だけの台本と 1 対 1 で同じでない:\n通し {:#?}\n字だけ {:#?}",
+        lines(&pre),
+        lines(&before)
+    );
+    assert_eq!(
+        rows_of(&post),
+        rows_of(&after),
+        "消去の後の段階が字だけの台本と 1 対 1 で同じでない:\n通し {:#?}\n字だけ {:#?}",
+        lines(&post),
+        lines(&after)
+    );
+}
+
+/// 検査 6 で台本に無い字の合図を流す段階（検査 1 の台本の「イイジャン！」が出終わった t=0.3）。
+const STRAY_AFTER_STAGE: usize = 1;
+/// 検査 6 で流す台本に無い字。
+const STRAY_TEXT: &str = "ね";
+
+/// 検査 6: 先渡しの後、台本に無い字の合図を同じ場所へ直接 1 つ流す。届いた字が行の列に全部あり、
+/// 修正前の呼び方（先渡しを落とした同じ流れ）の結果と全段階で同じで、warn が「食い違う」の 1 件
+/// （要件 2.7・5.4）。
+#[test]
+fn a_stray_cue_falls_back_to_the_arrived_text_without_losing_glyphs() {
+    let stray = || Some((STRAY_AFTER_STAGE, CueCommand::Text(STRAY_TEXT.to_string())));
+    let (stages, events) = capture(|| {
+        walk_injecting(
+            EMO2_BOOT_TALK,
+            "1",
+            &budoux_model(),
+            NINE_WIDE,
+            Delivery::Staged,
+            stray(),
+        )
+    });
+    let old = walk_injecting(
+        EMO2_BOOT_TALK,
+        "1",
+        &budoux_model(),
+        NINE_WIDE,
+        Delivery::WithoutPreview,
+        stray(),
+    );
+    let last = stages.last().expect("段階がある");
+    assert_eq!(
+        show(&last.rows).concat(),
+        format!("イイジャン！{STRAY_TEXT}‥‥ええと、"),
+        "届いた字が 1 つも欠けていない"
+    );
+    assert_eq!(
+        rows_of(&stages),
+        rows_of(&old),
+        "修正前の呼び方（先渡しなし）と同じ"
+    );
+    let warns = warns(&events);
+    assert_eq!(
+        warns.len(),
+        1,
+        "warn は食い違った場所・区間につき 1 件: {:?}",
+        warns.iter().map(|e| e.message()).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        warns[0].field_str("reason"),
+        Some("届いた字が先渡しと食い違う")
+    );
+}
+
+/// 検査 7: `budoux_newline` の無いバルーンで検査 1 の台本。各段階で安定し、修正前の呼び方
+/// （先渡しを落とす＝届いた字で 1 字ずつの折り返し）と全段階で同じ。先渡しを落としても warn が 0 件
+/// （1 字ずつの折り返しは区間の全文に触れない・要件 3.3・3.4・5.4）。
+#[test]
+fn char_by_char_wrap_is_stable_and_never_consults_the_lookahead() {
+    let (staged, staged_events) =
+        capture(|| walk(EMO2_BOOT_TALK, "1", &char_by_char_model(), NINE_WIDE));
+    let (old, old_events) = capture(|| {
+        walk_with(
+            EMO2_BOOT_TALK,
+            "1",
+            &char_by_char_model(),
+            NINE_WIDE,
+            Delivery::WithoutPreview,
+        )
+    });
+    let violations = reveal_violations(&staged);
+    assert!(
+        violations.is_empty(),
+        "1 字ずつの折り返しで表示済みの字が動いた:\n{}",
+        violations.join("\n")
+    );
+    assert_eq!(
+        rows_of(&staged),
+        rows_of(&old),
+        "修正前の呼び方（1 字ずつの折り返し）と同じ"
+    );
+    for (name, events) in [("先渡しあり", &staged_events), ("先渡しなし", &old_events)] {
+        let warns = warns(events);
+        assert!(
+            warns.is_empty(),
+            "{name}で warn が出た（1 字ずつの折り返しが区間の全文に触れた）: {:?}",
+            warns.iter().map(|e| e.message()).collect::<Vec<_>>()
+        );
+    }
 }

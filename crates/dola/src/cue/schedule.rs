@@ -55,9 +55,15 @@ pub struct TimedSchedule<T> {
     routing_buffer: Vec<RoutingCommand>,
     /// 現在停止中のバリア
     current_barrier: Option<BarrierKind>,
-    /// 現在の相対オフセット位置（前回 tick 時点）
-    current_offset: f64,
-    /// バリアタイムアウトの絶対オフセット（barrier_offset + timeout_duration）
+    /// 前回 tick の絶対時刻（構築・clear の直後はアンカー `start_time`）。
+    ///
+    /// 到達・期限・完了の判定はすべて「アンカー＋相対」の足し算で作った絶対時刻とこの値を
+    /// 比べる（絶対の発火時刻の定義 [`CueSheet::absolute_fire_time`](crate::cue::CueSheet::absolute_fire_time)
+    /// と同じ形）。「現在時刻−アンカー」の引き算で相対へ戻すと、丸めでその時刻ちょうどの
+    /// tick が届かないことがあるため、引き算は使わない。
+    current_time: f64,
+    /// バリアタイムアウトの相対オフセット（barrier_offset + timeout_duration）。
+    /// 期限の判定はアンカーを足した絶対時刻 `start_time + この値` で行う。
     barrier_timeout_offset: Option<f64>,
     /// 占有終了 horizon（相対オフセット・0 ベース）。台本の全 cue の
     /// `max(start_time + duration)` を canonical 変換が焼き込む（D6）。
@@ -67,8 +73,8 @@ pub struct TimedSchedule<T> {
     /// この horizon に達して初めて**占有終了＝完了とみなす（末尾 Wait・最終 Text の
     /// duration を終端で落とさない・早期終了しない）。
     ///
-    /// [`new`](Self::new) の既定は 0.0。`current_offset` は常に非負（`tick` の負値ガード）
-    /// ゆえ horizon=0.0 は `current_offset >= horizon` を常に満たし、
+    /// [`new`](Self::new) の既定は 0.0。`current_time` は常にアンカー以上（`tick` の手前ガード）
+    /// ゆえ horizon=0.0 は `current_time >= start_time + horizon` を常に満たし、
     /// [`is_completed`](Self::is_completed) は「entries 枯渇かつ barrier なし」の
     /// 旧挙動に一致する（手組みスケジュールの後方互換）。
     horizon: f64,
@@ -91,7 +97,7 @@ impl<T: Clone + Debug> TimedSchedule<T> {
             ready_buffer: Vec::new(),
             routing_buffer: Vec::new(),
             current_barrier: None,
-            current_offset: 0.0,
+            current_time: start_time,
             barrier_timeout_offset: None,
             horizon,
         }
@@ -144,27 +150,26 @@ impl<T: Clone + Debug> TimedSchedule<T> {
 
     /// Phase 1: 新たな時刻を入力としてランタイムの時刻を進める。
     ///
-    /// `current_time` は絶対時刻。内部で `current_time - start_time` に変換して
-    /// 相対オフセットとして扱う。
+    /// `current_time` は絶対時刻。各エントリの到達は `start_time + オフセット` の絶対時刻と
+    /// 比べて判定する（相対へ引き戻さない・`current_time` 欄の説明を参照）。
     ///
     /// 時刻到達済みの Payload を `ready_buffer` に、Routing を `routing_buffer` に
     /// 蒐集しながら進行。Barrier 到達（外部解決が必要）または末尾到達で停止。
     /// Routing は通過（停止しない）。冪等（同一時刻の再呼び出し安全）。
     ///
-    /// NOTE(D3-V): `current_time`（または start_time）が NaN の場合 offset は NaN
-    /// となり、下の全ガード（負値チェック・冪等性チェック）と本体の
-    /// `entry_offset > offset` 比較がすべて false になるため、最初のバリアまでの
+    /// NOTE(D3-V): `current_time`（または start_time）が NaN の場合、下の全ガード
+    /// （手前チェック・冪等性チェック）と本体の `start_time + entry_offset > current_time`
+    /// 比較がすべて false になるため、最初のバリアまでの
     /// 全エントリが即時配信される（時刻入力の有限性は検証されない — P25 参照。
     /// tests/cue/schedule_test.rs::tick_with_nan_time_delivers_all_pending_payloads
     /// で特性化済み）。
     pub fn tick(&mut self, current_time: f64) {
-        let offset = current_time - self.start_time;
-        if offset < 0.0 {
+        if current_time < self.start_time {
             return;
         }
 
-        // 冪等性: 同一オフセットで再呼び出し → バッファを変更しない
-        if offset <= self.current_offset && !self.ready_buffer.is_empty() {
+        // 冪等性: 同一時刻で再呼び出し → バッファを変更しない
+        if current_time <= self.current_time && !self.ready_buffer.is_empty() {
             return;
         }
 
@@ -172,7 +177,7 @@ impl<T: Clone + Debug> TimedSchedule<T> {
         if self.current_barrier.is_some() {
             // タイムアウト自動解除チェック
             if let Some(timeout_offset) = self.barrier_timeout_offset {
-                if offset >= timeout_offset {
+                if current_time >= self.start_time + timeout_offset {
                     // タイムアウト解除
                     self.current_barrier = None;
                     self.barrier_timeout_offset = None;
@@ -186,14 +191,14 @@ impl<T: Clone + Debug> TimedSchedule<T> {
             }
         }
 
-        self.current_offset = offset;
+        self.current_time = current_time;
         self.ready_buffer.clear();
         self.routing_buffer.clear();
 
         // entries は降順ソート → 末尾からpopして時刻到達を消費
         while let Some(entry) = self.entries.last() {
             let entry_offset = entry.offset();
-            if entry_offset > offset {
+            if self.start_time + entry_offset > current_time {
                 break; // まだ到達していない
             }
 
@@ -218,7 +223,7 @@ impl<T: Clone + Debug> TimedSchedule<T> {
                     // タイムアウト解除チェック（全バリア種別共通）
                     if let Some(dur) = timeout_dur {
                         let timeout_abs = barrier_offset + dur;
-                        if offset >= timeout_abs {
+                        if current_time >= self.start_time + timeout_abs {
                             // 既にタイムアウト → スキップ
                             continue;
                         }
@@ -298,12 +303,14 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     /// `[start, start+duration)` と見て**占有終了 horizon**（`max(start+duration)`）到達まで
     /// 完了扱いしない（末尾 Wait・最終 Text の duration を終端で落とさない・D6/R2.5）。
     ///
-    /// horizon=0.0（[`new`](Self::new) 既定）では `current_offset >= 0.0` が常に真ゆえ
+    /// 閾値は [`occupancy_horizon`](Self::occupancy_horizon) と同じ `start_time + horizon`。
+    ///
+    /// horizon=0.0（[`new`](Self::new) 既定）では `current_time >= start_time` が常に真ゆえ
     /// 「entries 枯渇かつ barrier なし」の旧挙動に一致する（手組みスケジュールの後方互換）。
     pub fn is_completed(&self) -> bool {
         self.entries.is_empty()
             && self.current_barrier.is_none()
-            && self.current_offset >= self.horizon
+            && self.current_time >= self.start_time + self.horizon
     }
 
     /// 全エントリとバッファをクリア（horizon も 0.0 へリセット＝clear 済みは完了状態）。
@@ -312,7 +319,7 @@ impl<T: Clone + Debug> TimedSchedule<T> {
         self.ready_buffer.clear();
         self.routing_buffer.clear();
         self.current_barrier = None;
-        self.current_offset = 0.0;
+        self.current_time = self.start_time;
         self.barrier_timeout_offset = None;
         self.horizon = 0.0;
     }
