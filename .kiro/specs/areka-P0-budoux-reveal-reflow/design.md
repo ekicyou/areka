@@ -64,6 +64,7 @@
 
 - `CueSink` の先渡しの口の形、または `CuePlayer` が呼ぶ時点を変えるとき → `areka-emo-text` の受け手と、受け手を包む飾り（`ClockedTextSink`）を見直す。
 - `CueSink` を包んで内側へ転送する受け手を新しく作るとき → 先渡しも転送しているかを確かめる（転送しないと、文字の層は黙って修正前の動きになり、warn が出る）。
+- `TimedSchedule` の到達・区切りの期限・完了の比べ方を変えるとき、または時刻を付け替える（早送りなど）とき → 判定が `CueSheet::absolute_fire_time` と同じ「開始＋相対」の足し算の形を保つかを確かめる（引き算へ戻すと、発火時刻ちょうどの `tick` で合図を取りこぼす。`crates/dola/tests/cue/schedule_test.rs` の境目の検査が赤になる）。
 - `compile` が台詞の頭の全消去（`ClearAll`）を先頭に置かなくなる、または 1 本の台本に全消去を複数置くようになるとき → 「区間の番号」の数え方と要件 2.6 の持ち越しの規則を見直す。
 - `TextLayerState::apply_cue` に、記録（warn）を出す箇所を足すとき → 「空回し」の印で止めているかを確かめる（止めないと同じ warn が 2 回出る）。
 - 合図以外の出来事で文字の層の状態（行き先・箱の表・既定の見た目）を変える口を足すとき → 区間の全文と食い違いうるので、その口の直後で空回しをやり直す（`TextLayerRuntime::rehearse_again` を呼ぶ）か、少なくとも見分けの式で拾えるかを確かめる。
@@ -184,6 +185,7 @@ crates/areka/src/emo2_boot/
 
 - `crates/dola/src/cue/sink.rs` — `CueSink::preview` を足す。説明は `dola` の言葉（合図・受け手）だけで書く。
 - `crates/dola/src/cue/schedule.rs` — `TimedSchedule` に、まだ配っていない中身（`Entry::Payload`）を配る順に返す読み口を足す（`pub(crate)`）。区切り（`Barrier`）と配送の制御（`Routing`）は含めない。予定表の欄 `entries` は後ろから取り出す並び（同じ時刻は先に入れたものが先に出る）なので、後ろから読んで配る順にする。
+  - **実装中の改訂（タスク 5.2）**: 到達・区切りの期限・完了の判定を、`current_time - start_time` と相対の時刻で比べる形から、`current_time >= start_time + offset`（`CueSheet::absolute_fire_time` と同じ足し算）で比べる形へ改めた。引き算の形では、浮動小数の丸めのため、文書どおりの発火時刻ちょうどの `tick` で合図を取りこぼすことがあった（例: 台本の頭から 2.5999999999999996 秒の合図を開始 100 で刻印すると、(100+t)−100 が t より小さくなる）。境界の含み方（より大きければまだ・以上なら到達）は同じ。欄 `current_offset` は絶対の `current_time` に替わった。振る舞いが変わるのは丸めの境目ちょうどの `tick` と、`start_time` が NaN のときの作ったばかりの `is_completed`（真から偽）だけ。
 - `crates/dola/src/cue/runtime.rs` — `register_sink` が、登録の前に上の読み口で合図の列を作り、`sink.preview` を 1 度呼ぶ。`tick` は変えない。
 - `crates/areka-emo-text/src/sink.rs` — `TextMsg` に `Upcoming(Vec<TalkCue>)` を足す。`EmoTextSink` が `preview` を実装して待ち行列へ積む。取り出しの写像に、先渡しの受け取りを差し込める形を足す（今の `handle_text_msg` の呼び方は残す）。
 - `crates/areka-emo-text/src/state.rs` — `TextLayerState` に「空回し」の印（私有の欄・既定は偽）と、印を立てた写しを返す口を足す。選択肢の字が空の warn を、印が立っていれば出さない。
@@ -299,7 +301,7 @@ stateDiagram-v2
 - `register_sink` は、受け手を登録の列へ足す**前**に、その時点でまだ配っていない合図（中身のあるものだけ・配る順）を列にして `preview` を 1 度呼ぶ。登録より後の `emit` は必ず `preview` より後になる（`emit` は登録済みの受け手にしか行かないため）。
 - 最初の `tick` の前に登録した受け手には、台本の合図の全部が渡る（本番はこの形だけ）。途中で登録した受け手には、残りの合図が渡る＝「この受け手にこれから `emit` で届くもの」と常に一致する。
 - 渡す合図は `emit` で届くものと同じ値（`at` は台本の頭からの秒、`duration` は丸め済み）。区切り（選択待ちなど）と配送の制御は含めない。選択待ちの後ろの合図も含む。
-- `tick`・`ready`・区切りの解決・`stop` は変えない。配る合図・時刻・順は 1 つも変わらない。
+- 先渡しのために `tick`・`ready`・区切りの解決・`stop` は変えない。配る合図・時刻・順は 1 つも変わらない。（別の理由で、予定表の到達の判定は絶対時刻の足し算へ改めた。Modified Files の `schedule.rs` の項を参照。）
 - `dola` は渡すだけで、受け手が何に使うかを知らない。説明に上の層の言葉を書かない。
 
 **Contracts**: Service [x]
