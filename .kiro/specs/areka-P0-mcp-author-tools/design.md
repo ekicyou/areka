@@ -160,13 +160,9 @@ crates/areka-emo-present/src/presenter/
 └── snapshot_tests.rs           # 追記: 上のテスト 1 本
 
 crates/areka-mcp/src/
-├── registry.rs                 # 追記: register_own・own_summaries（help に載せる 1 行を預かる）
-├── registry_tests.rs           # 追記: 上のテスト
 ├── handler.rs                  # 変更: INSTRUCTIONS に独自のツールの 1 文を足す
-├── help.rs                     # 変更: help_html が独自のツールの一覧を受けて 1 節を足す
-├── help_tests.rs               # 変更: 呼び出しの引数と、新しい節のテスト
-├── dispatch.rs                 # 変更: State が独自のツールの一覧を持ち、help へ渡す
-├── server.rs                   # 変更: start が登録表から一覧を取り出して State へ渡す
+├── help.rs                     # 変更: help_html が OWN_TABLE を回して 1 節を足す（引数は今のまま）
+├── help_tests.rs               # 追記: 新しい節のテスト（既存の呼び出しは変えない）
 └── tools/
     ├── mod.rs                  # 追記: ToolCall::CheckScript・OWN_TABLE・all_entrances
     ├── check_script.rs         # 新規: 定義・Args・parse・help の 1 行・Diagnostic・Kind・render
@@ -275,7 +271,7 @@ sequenceDiagram
 | 3.13 | タグ 1 つの台本・説明に用途を書く | `check_script` の入口 | `DEFINITION` の `description` | — |
 | 4.1 | 指示文に独自のツール | 指示文 | `INSTRUCTIONS` | — |
 | 4.2 | help に名前と日本語の 1 行 | help | `help_html` | — |
-| 4.3 | help の名前は登録した定義から | 登録口・help | `register_own`・`own_summaries` | — |
+| 4.3 | help の名前は登録した定義から | 独自のツールの表・help | `OWN_TABLE` を help が直接読む | — |
 | 5.1 | 11 本の並びと先頭 10 本の一致（実ソケット） | テスト | `tools_own_socket_tests.rs` | — |
 | 5.2 | 引数の検査と「何もさせない」のテスト | テスト | `tools_own_socket_tests.rs`・`check_script_tests.rs` | — |
 | 5.3 | ネットに出ない・固定のポートなし | テスト | `testkit::serve`（空きポート） | — |
@@ -291,7 +287,7 @@ sequenceDiagram
 | 別名の表の写し | `areka-emo-present` | 表示の層から対象の別名の表を取り出す | 3.3 | `EmoWorld::alias_snapshot`（P0） | Service |
 | 独自のツールの表と登録 | `areka-mcp`（`tools`） | 10 本に続けて独自のツールを登録する | 1.1, 1.3, 1.4, 4.3 | `ToolRegistry`（P0）・`bridge::call`（P0） | Service |
 | `check_script` の入口 | `areka-mcp`（`tools`） | 定義・引数・結果の形 | 1.2, 1.5, 2.1, 3.5, 3.6, 3.7, 3.9, 3.13 | `serde_json`（P0） | API |
-| 指示文と help | `areka-mcp` | 独自のツールを案内する | 4.1, 4.2, 4.3 | 登録表（P0） | API |
+| 指示文と help | `areka-mcp` | 独自のツールを案内する | 4.1, 4.2, 4.3 | `OWN_TABLE`（P0） | API |
 | `check_script` の処理 | `areka`（`mcp`） | 事実を集め、判断を呼び、答える | 2.2, 2.3, 2.4, 2.5, 2.7, 3.1 | `Emo2Wiring`（P1）・`later`（P1） | Service |
 | `check_script` の判断 | `areka`（`mcp`） | 読み取りの列と事実から診断を決める | 3.2, 3.3, 3.4, 3.8, 3.10, 3.12 | 再生の 4 つの関数（P0） | Service |
 | 文書 | `doc/`・steering | 約束の正本・後続の手順 | 1.6, 3.4, 3.5, 5.4 | — | — |
@@ -370,7 +366,7 @@ pub fn parse(input: &str) -> Vec<Instruction>; // parse_noted から命令だけ
 
 **Implementation Notes**
 
-- Integration: `lex` と並べて、範囲つきのトークン列を返す入口を足す（`scan` が既に範囲を渡している）。意味の段の本体は範囲つきの列を受けて `Read` の列を返す形にする。既存の `lex(input)` と `decode(tokens)` は、引数と戻り値をそのままにして新しい本体の上に載せる（`decode_tests.rs`・`decode_font_tests.rs` が `decode(lex(input))` の形で呼んでいるため）。経路は 1 本のままで、写しは作らない。
+- Integration: `lex` と並べて、範囲つきのトークン列を返す入口を足す（`scan` が既に範囲を渡している）。意味の段の本体は範囲つきの列を受けて `Read` の列を返す形にする。既存の `lex(input)` と `decode(tokens)` は、引数と戻り値をそのままにして新しい本体の上に載せる（`decode_tests.rs`・`decode_font_tests.rs` が `decode(lex(input))` の形で呼んでいるため）。経路は 1 本のままで、写しは作らない。載せ替えの後、残した `lex`・`decode` を呼ぶのがテストだけになるなら `#[cfg(test)]` を付ける（本番のビルドに未使用の警告を残さない）。
 - Validation: 既存の `parse`・`decode`・`lexer` のテスト（約 3,000 行）は書き換えずに通る。新しいテストは `parse_noted_tests.rs`。
 - Risks: `\n[]`（引数が 0 個）は素の `\n` と同じ値になるので印を付けない。`\_l` の欠けた座標・`\s[]` は読む段では落とさず下流へ運ぶので印を付けない（`\s[]` は判断の側で「無い surface」になる）。
 
@@ -415,7 +411,7 @@ impl ConsumerLedger {
 `emo2_boot` の 8 つの受け口（`MoveCueSink`・`ZOrderCueSink`・`ReadmeCueSink`・`NoUserBreakCueSink`・`ChangeCueSink`・`SwitchCueSink`・`InstallCueSink`・`UpdateCueSink`）を、それぞれ本物の送信端つきで組み、`\!` の cue を渡して、送信端に指令が届くかを見る。
 
 - 表が「担当は S」と言う出現（各行に、受け口の既存のテストから取った引数つきの見本を 1 つ）→ S に届き、他の 7 つには届かない。
-- 表が「担当なし」と言う出現（表に無い名前・表に在る名前の別の第 1 引数・第 1 引数なし）→ 8 つのどれにも届かない。
+- 表が「担当なし」と言う出現 → 8 つのどれにも届かない。見本は手で選ばず、表に出てくる名前の全部 × 表に出てくる第 1 引数の全部（＋第 1 引数なし＋どこにも無い語）の掛け合わせから、表に無い組を全部作る（受け口が表に無い組を拾っていれば赤になる）。
 
 `emo2_boot` の外の 4 行は、名前の定数を共有していること（`\f`・`PROP_SET_CUE_NAME`）と、それぞれのクレートの既存のテスト（seriko の `bind`・`compile` の `set,choicetimeout`）で結ばれている。
 
@@ -456,7 +452,7 @@ impl EmoPresenter {
 
 - `TABLE`・`entrances` は変えない（10 本のまま返す）。本番の起動だけが `all_entrances` を呼ぶ。
 - 登録の順は `TABLE` の 10 行 → `OWN_TABLE` の行。登録の順がそのまま `tools/list` の並びになる。
-- 独自の行は、help に載せる日本語の 1 行を定義の隣に持つ。登録口がそれを預かり、help が読む。
+- 独自の行は、help に載せる日本語の 1 行を定義の隣に持つ。help は同じクレートの `OWN_TABLE` を直接読む（登録口 `ToolRegistry` は変えない）。
 
 **Contracts**: Service [x]
 
@@ -476,13 +472,6 @@ pub(crate) const OWN_TABLE: [(&str, Parse, &str); 1] =
 /// SSP と同じ 10 本に続けて独自のツールを登録し、アプリ本体が汲む受け口を返す（本番の入口）。
 pub fn all_entrances(reply_wait: Duration) -> (ToolRegistry, Receiver<ToolRequest>);
 
-// crates/areka-mcp/src/registry.rs
-impl ToolRegistry {
-    /// `register` と同じ。加えて、help に載せる 1 行を名前（`spec.name`）と対で預かる。
-    pub fn register_own(&mut self, spec: ToolSpec, handler: ToolHandler, summary_ja: &str);
-    /// 預かった（名前, 1 行）を登録順で返す。
-    pub(crate) fn own_summaries(&self) -> &[(String, String)];
-}
 ```
 
 - Postconditions: `all_entrances` の登録表は 11 本・名前の重複 0・先頭の 10 本は `entrances` と同じ並びと定義。受け口は 1 本（10 本と独自のツールが同じ受け口へ届く）。
@@ -491,7 +480,7 @@ impl ToolRegistry {
 **Implementation Notes**
 
 - Integration: `register_rows` の中の「行を 1 つ登録する」部分を内側の関数に切り出し、送信端を外から渡せるようにする。`register_rows` の引数と戻り値は変えない（既存のテストが呼んでいる）。
-- Validation: `tools_own_tests.rs` が 11 本・並び・重複 0・`own_summaries` の中身を見る。
+- Validation: `tools_own_tests.rs` が 11 本・並び・重複 0 と、`OWN_TABLE` の各行が登録表に同じ名前で在ることを見る。
 - Risks: 独自のツールの名前が SSP の 10 本と重なると、登録口の「後勝ち」で 10 本の側が置き換わる。重複 0 のテストが赤で知らせる。
 
 #### `check_script` の入口
@@ -594,9 +583,8 @@ pub fn render(diagnostics: &[Diagnostic], unchecked: Option<&str>) -> ToolOutcom
 | Requirements | 4.1, 4.2, 4.3 |
 
 - `INSTRUCTIONS`（`handler.rs`）: 今の 3 文を残し、「SSP と同じツールを出す」の文の後に 1 文を足す。足す文は「SSP に無い areka 独自のツールとして `check_script` が在り、台本を再生せずに（ゴーストに何もさせずに）確かめるので、`sakurascript` の前に使う」の意味の英文。`not implemented yet` の文はそのまま残す。
-- `help_html`（`help.rs`）: 引数に `own: &[(String, String)]`（名前, 日本語の 1 行）を足す。空でなければ「areka 独自のツール」の節を 1 つ足し、各行を `<code>名前</code> — 1 行` の形で並べる。空なら節を出さない（今の 5 項目のまま）。
-- 名前は登録した定義から来る（`register_own` が `spec.name` を写す）。日本語の 1 行は入口のファイルの定数 `SUMMARY_JA`（定義の隣）に在る。名前を手で 2 か所に書く所は無い。
-- 道筋: `start`（`server.rs`）が、登録表を `ArekaHandler::new` へ渡す前に `own_summaries` の写しを取り、`State::new`（`dispatch.rs`）へ渡す。`State` がそれを持ち、help の応答で `help_html` へ渡す。
+- `help_html`（`help.rs`）: 引数は今のまま（ポート番号だけ）。中で `OWN_TABLE` を回して「areka 独自のツール」の節を 1 つ足し、各行を `<code>名前</code> — 1 行` の形で並べる。名前は各行の定義（`spec_from_definition` が読む `name`）から、1 行は同じ行の `SUMMARY_JA` から取る。
+- 名前は登録するのと同じ定義から来る（`all_entrances` も help も `OWN_TABLE` の同じ行を読む）。名前を手で 2 か所に書く所は無い。`registry.rs`・`server.rs`・`dispatch.rs` は触らない（設計の検証の指摘 3 で、値を 4 つのファイルに運ぶ形から縮めた）。
 - 埋め込む値はどちらも areka のソースの定数なので、HTML のエスケープは要らないままになる。`SUMMARY_JA` に `<`・`>`・`&` を書かないことを入口のファイルの注記に書く。
 
 ### areka（mcp）
@@ -686,10 +674,11 @@ pub(in crate::mcp) fn diagnose(
 - スコープに絵やバルーンが無い（`shell_has`・`balloon_has` が `None`）ときは診ない。
 - `%` の変数・文字・`\![raise]` の先の台本の中身は診ない（`\![raise]` 自体は、今は誰も拾わないので `unknown_command` になる）。
 - どの規則も「診ない」側へ倒れるだけで、誤って「無い」と答える枝は作らない。
+- `\e`・`\-` の後ろも診る（`compile` はそこで走査を打ち切るので再生はされないが、書いてある誤りを知らせて害は無い）。打ち切らないことを `areka-tools.md` に書く。
 
 **Implementation Notes**
 
-- Integration: 位置は、`Read::span`（バイト）を台本の先頭からの文字の数へ直して `Diagnostic` に入れる。`text` は `&script[span]`。
+- Integration: 位置は、`Read::span`（バイト）を台本の先頭からの文字の数へ直して `Diagnostic` に入れる。診断は台本の順に出るので、換算は前から 1 回だけ数える（診断ごとに先頭から数え直さない）。`text` は `&script[span]`。
 - Validation: `check_script_judge_tests.rs` が、種類の表の 13 行すべてに「出る台本」「出ない台本」を置く。事実は手書きの表で答える。
 - Risks: 1 つの命令に印が 2 つ付く場合（`\![*]\q[題]`）は診断が 2 件出て、位置は同じ範囲になる。
 
@@ -728,9 +717,9 @@ pub(in crate::mcp) fn diagnose(
 1. **`parse_noted`**（`parse_noted_tests.rs`）: 印の表の 4 行それぞれの「付く台本」「付かない台本」／`span` が該当の綴りを指す（日本語を含む台本で文字の境界に在る）／畳んだ命令の `span`／`parse` と命令の列が等しい／`Raw` と印の同値。— 3.2, 3.4, 3.10, 3.11
 2. **判断**（`check_script_judge_tests.rs`）: 種類の表の 13 行すべての「出る台本」「出ない台本」／位置が文字の数で返る／切替の後の `\s`・`\b` を診ない／事実なし（窓なし）で surface とバルーンを診ない／スコープを追う（`\1\s[…]` が相方の側の絵で判定される）。— 3.2〜3.4, 3.8, 3.10, 3.12, 3.13
 3. **`render`**（`areka-mcp` の `check_script_tests.rs`）: 0 件は 1 行だけ／n 件は 1 行目の数と n 行の JSON／綴りに改行・引用符・日本語が在っても 1 件が 1 行に収まる／注記つきの 1 行目／どれも `isError: false`。— 3.5, 3.6, 3.7, 3.9
-4. **登録**（`tools_own_tests.rs`）: `all_entrances` が 11 本・先頭 10 本が `entrances` と同じ・名前の重複 0・`own_summaries` が `check_script` の 1 行／`entrances` は 10 本のまま。— 1.1, 1.3, 1.4, 4.3
+4. **登録**（`tools_own_tests.rs`）: `all_entrances` が 11 本・先頭 10 本が `entrances` と同じ・名前の重複 0・`OWN_TABLE` の各行が登録表に在る／`entrances` は 10 本のまま。— 1.1, 1.3, 1.4, 4.3
 5. **`\!` の表の一致**（`consumer_ledger_agreement_tests.rs`）: 上の「一致のテスト」。— 3.11
-6. **help**（`help_tests.rs`）: 一覧つきで節と名前と 1 行が出る・空なら節が出ない。— 4.2, 4.3
+6. **help**（`help_tests.rs`）: 節と、`OWN_TABLE` の各行の名前と 1 行が出る。既存のテストは変えない。— 4.2, 4.3
 
 ### Integration Tests
 
