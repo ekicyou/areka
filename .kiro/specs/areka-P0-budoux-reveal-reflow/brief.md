@@ -24,6 +24,15 @@
 - `evidence/04-pasta-blank-lines.jpg`: さくらの欄の「そこ自分でいう‥‥。」と「つまり、、」の間の大きな空き（pasta の余分な改行・範囲外）。
 - `evidence/05-ok-alone.jpg`: 「つまり、、エモを弄ってれば／OK？」＝「OK？」が 1 つで行に残る。BudouX の文節「弄ってれば｜OK？」で幅が足りないための正しい折り返しで、本 spec の対象ではない（禁則でも直らない）。
 
+### SSP との比べ（2026-10-05・開発者が起動した SSP の「えも2DEBUG」へ MCP の `raise_event` で OnFirstBoot を投げて撮影）
+
+- 返った台本の逐語は `evidence/ssp-onfirstboot-script.txt`。送り手が SSP なので、pasta は自前の BudouX 改行 `\n` を入れている（「イイジャン！\_w[450]\n‥」「エモを弄ってれば\nOK？」など）。areka では `apply_baseware_policy` がこれを外し、areka 自身が `budoux_newline,1` で折り返す。
+- `evidence/11-ssp-leading-dots.jpg`: SSP でも「イイジャン！／‥‥ええと、」＝**行頭の「‥‥」は SSP でも同じ**（pasta が「‥」の前に `\n` を入れるため）。
+- `evidence/12-ssp-pasta-blank-lines.jpg`: SSP でも「そこ自分でいう‥‥。」と「つまり、、」の間に同じ空き＝**pasta の余分な改行は SSP でも出る**（台本にも `\p[0]\n[150]\s[1000]…\p[1]…\p[0]\n[150]…つまり` と 2 つ並ぶ）。
+- `evidence/13-ssp-ok-alone.jpg`: SSP でも「つまり、、エモを弄ってれば／OK？」。
+- **SSP では字が飛ばない**: 改行は台本に `\n` として先に書かれていて、表示中に折り返しを計算し直さないため。**areka だけの症状は本 spec の飛びだけ**で、最終形の見た目は SSP とほぼ同じ（エモ側の「クール系の可愛い娘。」が SSP では 1 行・areka では「クール系の／可愛い娘。」になる差は、pasta の幅の設定と areka の実測の幅の違いで、本 spec の対象外）。
+- 注意: 撮影した SSP のゴーストは開発版（えも2DEBUG）で、areka の検体（emo2.nar・pasta.dll 0.3.7）と版が同じとは限らない。
+
 ## Desired Outcome
 
 - 合図がいくつに分かれて届いても、**一度表示された字の行は動かない**（`budoux-newline` 要件 7.2 を実際の届き方で満たす）。
@@ -55,7 +64,7 @@
    - エモの最初の `＠通常　\1\![move,…]` だけでエモの欄が「字あり」になり、最初の台詞「僕はエモ。」の前に `\n[150]` が付く（エモの欄の頭に 1.5 行の空き・3 行しか入らない欄なので 2 行目であふれてスクロールする）。
    - 字の無い「むらさき：＠通常」の行が `\n[150]` を 1 つ余分に出し、さくら側の「つまり、、」の前で 2 つ重なる（3 行ぶんの空き）。
    - areka は書かれたとおりに描いているだけ。直す場所は pasta（別リポジトリ `ekicyou/pasta`）。なお pasta は送り手が areka のとき自前の BudouX 改行を外している（`scripts/pasta/shiori/event/boot.lua` の `apply_baseware_policy`・`OnFirstBoot` でも呼ばれる・実機の `pasta.log` で確認）。
-   - SSP でも同じ空きになるかは未確認。
+   - SSP でも同じ空きになる（上の「SSP との比べ」で撮影済み）。
    - **pasta 側で起票済み（2026-10-05）**: spec `paragraph-break-tag-only-talk`（ekicyou/pasta#66・マージ待ち）。pasta の現行 main でも S3 の分岐は同じで、マニュアル `reference/pasta-toml.md` の `spot_newlines`（「すでに台詞を出したスポット」）とも食い違うと確認された。「＠単語」は正規の書き方なので、ゴースト（emo2）側の回避は不要。
 2. **行頭の「‥‥」（禁則）**: BudouX が「‥‥ええと、」をひとまとめにするため、最終形でも「‥‥」が行頭に来る。UAX #14 の LB22（「‥」「…」の前では切らない）に当たる。`text-typesetting` の担当で、既定 `anywhere` のままでは直らない。
 
