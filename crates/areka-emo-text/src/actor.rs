@@ -26,7 +26,7 @@ use crate::cursor_tag::CursorWarnGuard;
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, DWriteMetrics, ResolvedFont};
 use crate::place::PlaceKey;
 use crate::region::{ScaleContract, TextRegion};
-use crate::sink::{EmoTextSink, TextMsg, handle_text_msg};
+use crate::sink::{EmoTextSink, TextMsg, handle_text_msg_with};
 use crate::state::{SurfaceKeyOutcome, TextLayerConfig, TextLayerState};
 use crate::surface::TextSurface;
 use crate::viewbox_draw::{DrawStats, ViewboxExecutor};
@@ -475,7 +475,8 @@ impl TextLayerRuntime {
 /// `spawn_ui` で UI ドレインを起動し、受信口 [`EmoTextSink`] と drain の join ハンドルを返す。
 ///
 /// handler は `runtime` の `Rc` clone を捕捉し（`!Send` handler・基盤許容）、
-/// [`handle_text_msg`]（終了規律の正準写像）へ委譲して cue を純粋状態へ適用する。
+/// [`handle_text_msg_with`]（終了規律の正準写像）へ委譲して cue を純粋状態へ適用する。
+/// 先渡し（`TextMsg::Upcoming`）はこの時点では受け取って使わない（実行時へ渡す口は後のタスク）。
 /// 終了経路はちょうど 2 つ——`TextMsg::Close` 受領＝`Ok(Break)`・全 `UiSender`
 /// （＝全 [`EmoTextSink`] クローン）drop＝drain 正常終了（R1.4・error ログなし）。
 /// 個別 cue の適用失敗（runtime 借用競合など）は `Err` 戻し→基盤が `error!`＋継続する
@@ -489,18 +490,22 @@ pub fn spawn_emo_text(
     runtime: Rc<RefCell<TextLayerRuntime>>,
 ) -> Result<(EmoTextSink, wintf_winmsg_executor::JoinHandle<()>), UiSpawnError> {
     let (tx, handle) = areka_actor::spawn_ui("emo-text", move |msg: TextMsg| {
-        handle_text_msg(msg, |cue| match runtime.try_borrow_mut() {
-            Ok(mut rt) => {
-                rt.apply_cue(&cue);
-                Ok(())
-            }
-            // 借用競合（UI スレッド上の別処理が runtime を保持中）——panic せず Err 戻しで
-            // 基盤の error!＋継続に乗せる（当該 cue は失われるが後続の受理は破壊しない・R1.5）。
-            Err(_) => Err(format!(
-                "TextLayerRuntime が借用中のため cue を適用できない（actor={}, at={}）——当該 cue は失われる",
-                cue.actor, cue.at
-            )),
-        })
+        handle_text_msg_with(
+            msg,
+            |cue| match runtime.try_borrow_mut() {
+                Ok(mut rt) => {
+                    rt.apply_cue(&cue);
+                    Ok(())
+                }
+                // 借用競合（UI スレッド上の別処理が runtime を保持中）——panic せず Err 戻しで
+                // 基盤の error!＋継続に乗せる（当該 cue は失われるが後続の受理は破壊しない・R1.5）。
+                Err(_) => Err(format!(
+                    "TextLayerRuntime が借用中のため cue を適用できない（actor={}, at={}）——当該 cue は失われる",
+                    cue.actor, cue.at
+                )),
+            },
+            |_upcoming| Ok(()),
+        )
     })?;
     Ok((EmoTextSink::new(tx), handle))
 }

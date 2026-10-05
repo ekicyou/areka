@@ -25,6 +25,9 @@ use areka_sakura::contract::TalkCue;
 pub enum TextMsg {
     /// sakura からの cue（後出し優先で即時適用される）。
     Cue(TalkCue),
+    /// 再生の前に渡された、これから届く合図の全部（[`dola::cue::CueSink::preview`] の写し）。
+    /// 同じ送り手が続けて積む最初の合図より必ず前に届く。
+    Upcoming(Vec<TalkCue>),
     /// 終了指示（結線側が talk 経路の畳み込みで送る・`Ok(Break)` 経路）。
     Close,
 }
@@ -96,6 +99,17 @@ impl dola::cue::CueSink for EmoTextSink {
     fn emit(&mut self, cue: TalkCue) {
         self.deliver(cue);
     }
+
+    /// 先渡しを写して [`TextMsg::Upcoming`] として合図と同じ口へ積む（要件 2.1）。
+    /// 積めなかったとき（UI ドレイン停止後）は `emit`・`close` と同じく `error!` 1 行のみ・panic しない。
+    fn preview(&mut self, upcoming: &[TalkCue]) {
+        if self.tx.send(TextMsg::Upcoming(upcoming.to_vec())).is_err() {
+            tracing::error!(
+                cues = upcoming.len(),
+                "EmoTextSink::preview: UI text drain already stopped; upcoming cues dropped"
+            );
+        }
+    }
 }
 
 /// 終了規律の正準写像（design.md 結線層——drain handler の器）。
@@ -110,13 +124,28 @@ impl dola::cue::CueSink for EmoTextSink {
 ///
 /// 個別 cue の処理失敗は `Err` として返し、基盤が `error!`＋継続する（R1.5——
 /// **失敗は終了経路ではない**・ループを殺さない）。
+///
+/// 先渡し（[`TextMsg::Upcoming`]）は読み飛ばす（字は `Cue` で届くので失われない）。
+/// 先渡しを使う取り出しは [`handle_text_msg_with`] を用いる。
 pub fn handle_text_msg<E>(
     msg: TextMsg,
     on_cue: impl FnOnce(TalkCue) -> Result<(), E>,
 ) -> Result<ControlFlow<()>, E> {
+    handle_text_msg_with(msg, on_cue, |_| Ok(()))
+}
+
+/// [`handle_text_msg`] に先渡しの受け取り `on_upcoming` を差し込める形（終了規律は同じ）。
+///
+/// 先渡しの受け取りの失敗も `Err` として返し、基盤が `error!`＋継続する。
+pub fn handle_text_msg_with<E>(
+    msg: TextMsg,
+    on_cue: impl FnOnce(TalkCue) -> Result<(), E>,
+    on_upcoming: impl FnOnce(Vec<TalkCue>) -> Result<(), E>,
+) -> Result<ControlFlow<()>, E> {
     match msg {
         TextMsg::Close => Ok(ControlFlow::Break(())),
         TextMsg::Cue(cue) => on_cue(cue).map(|()| ControlFlow::Continue(())),
+        TextMsg::Upcoming(upcoming) => on_upcoming(upcoming).map(|()| ControlFlow::Continue(())),
     }
 }
 
@@ -131,7 +160,7 @@ mod tests {
     use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
     use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
-    use super::{EmoTextSink, TextMsg, handle_text_msg};
+    use super::{EmoTextSink, TextMsg, handle_text_msg, handle_text_msg_with};
 
     // ── ログ捕捉（WARN/ERROR 件数の集計は共有機構 `log-capture-kit` へ委譲） ──
 
@@ -400,6 +429,108 @@ mod tests {
         assert_eq!(
             errors, 3,
             "停止後の emit/close は 1 呼び出しにつき error 1 件のみ（panic なし・受理継続）"
+        );
+    }
+
+    // ── 先渡し（TextMsg::Upcoming・budoux-reveal-reflow task 1.3・要件 2.1） ──
+
+    /// 今の形 `handle_text_msg` は先渡しを読み飛ばす（`Ok(Continue)`・on_cue は呼ばれない）。
+    #[test]
+    fn handle_text_msg_skips_upcoming() {
+        let result = handle_text_msg::<String>(
+            TextMsg::Upcoming(vec![cue("0", 0.0, CueCommand::Clear)]),
+            |_| panic!("on_cue must not be called for Upcoming"),
+        );
+        assert_eq!(result, Ok(ControlFlow::Continue(())));
+    }
+
+    /// 新しい形 `handle_text_msg_with` は先渡しを無変形で on_upcoming へ渡し、失敗は `Err` で返す。
+    #[test]
+    fn handle_text_msg_with_routes_upcoming_and_propagates_failure() {
+        let list = vec![cue("0", 0.0, CueCommand::Text("アヒル".into()))];
+        let got = std::cell::RefCell::new(None);
+        let result = handle_text_msg_with::<String>(
+            TextMsg::Upcoming(list.clone()),
+            |_| panic!("on_cue must not be called for Upcoming"),
+            |u| {
+                *got.borrow_mut() = Some(u);
+                Ok(())
+            },
+        );
+        assert_eq!(result, Ok(ControlFlow::Continue(())));
+        assert_eq!(got.into_inner(), Some(list.clone()), "先渡しは無変形で渡る");
+
+        let failed = handle_text_msg_with(
+            TextMsg::Upcoming(list),
+            |_| -> Result<(), String> { panic!("on_cue must not be called") },
+            |_| Err("busy".to_string()),
+        );
+        assert_eq!(failed, Err("busy".to_string()));
+    }
+
+    /// 実 channel: `preview` の後に `emit` した順で、先渡しの便りが合図より前に取り出される。
+    #[test]
+    fn preview_is_drained_before_subsequent_cues() {
+        let ((), _warns, errors) = with_log_cage(|| {
+            let records = Arc::new(Mutex::new(Vec::new()));
+            let recs = Arc::clone(&records);
+            let (tx, _detached_drain) = areka_actor::spawn_ui(
+                "emo-text-preview-test",
+                move |msg: TextMsg| -> Result<ControlFlow<()>, String> {
+                    handle_text_msg_with(
+                        msg,
+                        |c| {
+                            recs.lock().expect("records lock").push(TextMsg::Cue(c));
+                            Ok(())
+                        },
+                        |u| {
+                            recs.lock()
+                                .expect("records lock")
+                                .push(TextMsg::Upcoming(u));
+                            Ok(())
+                        },
+                    )
+                },
+            )
+            .expect("spawn_ui on the test (pump) thread must succeed");
+            let mut sink = EmoTextSink::new(tx);
+
+            let c0 = cue("0", 0.0, CueCommand::Text("アヒルや".into()));
+            let c1 = cue("0", 0.1, CueCommand::Clear);
+            sink.preview(&[c0.clone(), c1.clone()]);
+            sink.emit(c0.clone());
+            sink.emit(c1.clone());
+            sink.close();
+
+            pump_until_idle();
+
+            assert_eq!(
+                *records.lock().expect("records lock"),
+                vec![
+                    TextMsg::Upcoming(vec![c0.clone(), c1.clone()]),
+                    TextMsg::Cue(c0),
+                    TextMsg::Cue(c1),
+                ],
+                "先渡しは写しとして合図より前に、合図は積んだ順に届く"
+            );
+        });
+        assert_eq!(errors, 0, "正常な先渡しは error ログを伴わない");
+    }
+
+    /// 停止後の `preview` は panic せず error 1 件だけを残す（`emit`・`close` と同じ規律）。
+    #[test]
+    fn preview_after_drain_stop_logs_one_error_without_panic() {
+        let (mut sink, terminated, _records) = spawn_recording_drain(None);
+        sink.close();
+        pump_until_idle();
+        assert!(terminated.load(Ordering::SeqCst), "前提: drain は停止済み");
+
+        let ((), _warns, errors) = with_log_cage(|| {
+            sink.preview(&[cue("0", 1.0, CueCommand::Text("届かない".into()))]);
+        });
+        assert_eq!(
+            errors, 1,
+            "停止後の preview は error 1 件のみ（panic なし）"
         );
     }
 }
