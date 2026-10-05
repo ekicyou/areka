@@ -22,7 +22,7 @@
   - _Depends: 1.1_
 
 - [ ] 2. MCP の `get_status` を本物にする
-- [ ] 2.1 (P) `get_status` が宛先のゴーストの kanade へ問い合わせ、後から答える口で返事を待つ
+- [x] 2.1 (P) `get_status` が宛先のゴーストの kanade へ問い合わせ、後から答える口で返事を待つ
   - 宛先の解決は既存のまま使い、その失敗の文言を「降りた」の答えとして取っておく
   - ゴーストの置き場から kanade の送り口を引き、無ければ `NG:Status is not available`・`isError: true` で答えて warn を 1 件残す
   - 送れなかったとき、返事の前に返信端が落ちたときは、宛先の解決の失敗と同じ文言・`isError: true` で答え、記録は debug まで
