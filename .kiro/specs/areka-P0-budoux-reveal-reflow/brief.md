@@ -16,6 +16,14 @@
 - `budoux-newline` の設計（design.md の INV-1「入力は常に全 `items`（可視 prefix ではない）」・`segment.rs` の冒頭の注記）は「全 items＝台詞の全文」を前提にしているが、合図が分かれて届くとこの前提が崩れる。同 spec の決定論テストは 1 つの合図に全文が入った形しか踏んでいない見込み（要件の段で確かめる）。
 - 再現の計算（起票時・調査用の一時テストで実行済み・削除済み）: 本物の `parse` → `compile` → `TextLayerState::apply_cue` → `segment_plan` → `LayoutEngine::layout` を、実フォント Yu Gothic UI・`emo2-kakukaku` の 2 層の定義で回した。エモ側は合図が届くたびに上記の飛びが出た。さくら側の最終形には飛びが無かった。
 
+### 実機の撮影（2026-10-05・main `fa12dba7` のデバッグ版・DPI 192・emo2 を `target\lb-repro3` へ写して profile を消した初回起動）
+
+- `evidence/01-before-jump.jpg`: エモの欄が「可愛い娘。／イイジャン！‥」＝「‥」は「イイジャン！」と同じ行に出ている。
+- `evidence/02-after-jump.jpg`: 0.3 秒ほど後に「‥‥ええと、／僕は日常か」＝**出ていた「‥」が次の行の頭へ移った**（欄が 3 行しか入らないので上へ送られている）。本 spec の飛びを実機で確認。
+- `evidence/03-final-leading-dots.jpg`: 全部出た後も「イイジャン！／‥‥ええと、」＝行頭の「‥‥」（禁則・範囲外）。
+- `evidence/04-pasta-blank-lines.jpg`: さくらの欄の「そこ自分でいう‥‥。」と「つまり、、」の間の大きな空き（pasta の余分な改行・範囲外）。
+- `evidence/05-ok-alone.jpg`: 「つまり、、エモを弄ってれば／OK？」＝「OK？」が 1 つで行に残る。BudouX の文節「弄ってれば｜OK？」で幅が足りないための正しい折り返しで、本 spec の対象ではない（禁則でも直らない）。
+
 ## Desired Outcome
 
 - 合図がいくつに分かれて届いても、**一度表示された字の行は動かない**（`budoux-newline` 要件 7.2 を実際の届き方で満たす）。
