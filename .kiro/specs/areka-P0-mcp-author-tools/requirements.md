@@ -46,7 +46,7 @@
 
 | # | 議題 | 暫定の裁定 | 根拠 | 載せた要件 |
 |---|---|---|---|---|
-| 1 | ツール名の接頭辞（brief の議題） | **付ける**。名前は `areka_check_script`・`areka_list_capabilities`・`areka_validate_ghost` | brief の起票時の推し。SSP が将来同じ名前を足しても衝突しない | 1.2 |
+| 1 | ツール名の接頭辞（brief の議題） | **付けない**（2026-10-05 開発者の裁定「ツール命名に areka を入れないで」）。名前は `check_script`・`list_capabilities`・`validate_ghost` | SSP の 10 本と同じ名付けの流儀に揃える。SSP が将来同じ名前を足したときは、そのときに扱いを決める | 1.2 |
 | 2 | `tools/list` の並び | SSP の 10 本を先に SSP の並びで返し、その後に独自のツールを続ける | SSP 向けの手順が先頭の 10 本をそのまま読める | 1.3 |
 | 3 | 台本を確かめるツールが診る種類 | strict の 6 類（無い surface・無いアニメーション・無いバルーン・未知のタグ・未知の `\!` コマンド・未知の `\&` 実体参照）と、引数を読めない箇所 | brief の「知らないタグ・不正な引数・無い surface・アニメーション・バルーン」と「strict の文言と揃える」を合わせた | 3.2〜3.4 |
 | 4 | strict の文言との揃え方 | `mcp-strict-errors` が未着手なので、**本 spec が種類の名前と文言の形を先に決めて文書に残し**、`mcp-strict-errors` がそれに揃える | 先に着地する側が正本を作る。後から 2 つの文言を突き合わせるより安い | 3.5・7.4 |
@@ -93,7 +93,7 @@
 #### Acceptance Criteria
 
 1. When `tools/list` が届く, the areka shall SSP と同じ 10 本に続けて、独自のツール 3 本を返す（合計 13 本・重複する名前 0）。
-2. The areka shall 独自のツールの名前をすべて `areka_` で始める（`areka_check_script`・`areka_list_capabilities`・`areka_validate_ghost`）。
+2. The areka shall 独自のツールの名前を `check_script`・`list_capabilities`・`validate_ghost` とし、`areka` などの接頭辞を付けない（SSP の 10 本と同じく、小文字の英単語を `_` でつなぐ）。
 3. The areka shall SSP と同じ 10 本を、今と同じ並びで一覧の先頭に返し、独自のツールをその後に置く。
 4. The areka shall SSP と同じ 10 本の `name`・`title`・`description`・`inputSchema` と、呼び出したときの振る舞いを変えない（`doc/ssp-mcp/tools-list-ssp-2.9.05.json` との逐語一致を固定している既存のテストは、書き換えずに緑のまま）。
 5. The areka shall 独自のツールそれぞれに、`name`・`title`・`description`・`inputSchema` を持たせ、`description` は英文で、SSP に無い areka 独自のツールであることと、ゴーストに何もさせないことを書く。
@@ -114,13 +114,13 @@
 6. If 独自のツールの返事が 10 秒のうちに出ない, then the areka shall SSP と同じ 10 本と同じ時間切れの結果（`NG:areka did not respond within 10 seconds`・`isError: true`）で答える。
 7. When 独自のツールに答える, the areka shall SSP と同じ 10 本と同じ形の記録を 1 件残す（ツール名・解決の結果・`isError`）。
 
-### Requirement 3: 台本を再生せずに確かめる（`areka_check_script`）
+### Requirement 3: 台本を再生せずに確かめる（`check_script`）
 
 **Objective:** As a AI エージェントとゴーストを作る作者, I want 台本を再生せずに、areka で動かない箇所を知ること, so that ゴーストを喋らせる前に誤りを直せる
 
 #### Acceptance Criteria
 
-1. When `areka_check_script` が台本（必須）と `ghost_name`（任意）で呼ばれる, the areka shall 台本を再生せずに解釈し、宛先のゴーストが今使っているシェルとバルーンに照らして診断の一覧を返す。
+1. When `check_script` が台本（必須）と `ghost_name`（任意）で呼ばれる, the areka shall 台本を再生せずに解釈し、宛先のゴーストが今使っているシェルとバルーンに照らして診断の一覧を返す。
 2. If 台本に areka が知らないタグ・知らない `\!` のコマンド・知らない `\&` の実体参照がある, then the areka shall その箇所ごとに診断を 1 件返す。
 3. If 台本が、宛先のゴーストの今のシェルに無い surface（`\s`）・無いアニメーション（`\i`）、今のバルーンに無いバルーン（`\b`）を指している, then the areka shall その箇所ごとに診断を 1 件返す。
 4. If 台本に、areka が引数を読めずにタグを捨てる・既定の値へ落とす箇所がある, then the areka shall その箇所ごとに診断を 1 件返す。
@@ -129,17 +129,17 @@
 7. When 診断が 1 件以上ある, the areka shall 検査そのものは成功として答える（`isError: false`。`isError: true` は検査ができなかったときだけ）。
 8. The areka shall 台本の字面から決まることだけを診断し、再生しないと決まらないこと（`\![raise]` の先の台本・`\![change,shell]` の後の surface・SHIORI が置き換える `%` の中身など）は診断しない（誤って「無い」と答える診断 0 件を優先する）。
 9. The areka shall 影響の段を結果に載せない（`script-impact-tiers` が着地するときに足す）。
-10. The areka shall areka が知っているタグについて、対応の状態（何もしない・縮退）を理由にした診断を出さない（状態は `areka_list_capabilities` で調べる）。
-11. The areka shall `areka_check_script` が「知らない」と答えるタグ・`\!` のコマンドと、同じ台本を再生したときに areka が「知らない」として扱うものを一致させる（検査だけが通して再生で落ちる・検査だけが落として再生で通る、のどちらも 0 件）。ここでの「再生」は、SHIORI から来た台本の再生の経路を指す（MCP の `sakurascript` は 2026-10-05 の時点で未実装のため、比べる相手にしない）。
+10. The areka shall areka が知っているタグについて、対応の状態（何もしない・縮退）を理由にした診断を出さない（状態は `list_capabilities` で調べる）。
+11. The areka shall `check_script` が「知らない」と答えるタグ・`\!` のコマンドと、同じ台本を再生したときに areka が「知らない」として扱うものを一致させる（検査だけが通して再生で落ちる・検査だけが落として再生で通る、のどちらも 0 件）。ここでの「再生」は、SHIORI から来た台本の再生の経路を指す（MCP の `sakurascript` は 2026-10-05 の時点で未実装のため、比べる相手にしない）。
 12. The areka shall 診る種類（3.2〜3.4）の全数を spec 単位の 1 つの表で持ち、表の各行に対して「診断が出る台本」と「診断が出ない台本」の決定論テストを置く。
 
-### Requirement 4: 対応しているものの一覧（`areka_list_capabilities`）
+### Requirement 4: 対応しているものの一覧（`list_capabilities`）
 
 **Objective:** As a AI エージェントとゴーストを作る作者, I want areka が対応しているタグ・`\!` コマンド・SHIORI イベントと、その状態を一覧で得ること, so that areka で動くものだけを使って書ける
 
 #### Acceptance Criteria
 
-1. When `areka_list_capabilities` が呼ばれる, the areka shall さくらスクリプトのタグ・`\!` のコマンド・SHIORI イベントの項目の一覧を返す。
+1. When `list_capabilities` が呼ばれる, the areka shall さくらスクリプトのタグ・`\!` のコマンド・SHIORI イベントの項目の一覧を返す。
 2. The areka shall 項目ごとの状態を、網羅台帳の状態の語（`implemented`・`vocabulary-only`・`degraded`・`absent`・`alias`・`not-applicable`・`unclassified`）のまま返し、各語の意味をツールの `description` に英文で書く。
 3. The areka shall 項目ごとに、ukadoc の見出しの綴り・種類・状態・ukadoc の URL を載せる（`alias` の項目には指す先の綴りも載せる。台帳の備考は載せない）。
 4. Where 種類の指定（タグ・`\!` コマンド・SHIORI イベント）がある, the areka shall その種類の項目だけを返す。
@@ -150,13 +150,13 @@
 9. The areka shall `ghost_name` を受けず、ゴーストが起動していなくても答える。
 10. If `\!` の対応表（`crates/areka/src/emo2_boot/consumer_ledger.rs`）に載っているコマンドが、一覧で `absent` と返る, then the areka shall それを決定論テストで名指しして赤にする（台帳の側の誤りなら台帳を直さず、`coverage-roadmap-refresh` へ申し送る）。
 
-### Requirement 5: ゴーストの設定ファイルの検査（`areka_validate_ghost`）
+### Requirement 5: ゴーストの設定ファイルの検査（`validate_ghost`）
 
 **Objective:** As a AI エージェントとゴーストを作る作者, I want ゴーストの descript.txt・surfaces.txt・バルーンの descript.txt の誤りを、読み込ませる前に知ること, so that 起動してから壊れた見た目で気付く手戻りが無くなる
 
 #### Acceptance Criteria
 
-1. When `areka_validate_ghost` が `ghost_name` で呼ばれ、起動中のゴーストに当たる（省略を含む）, the areka shall そのゴーストの設定ファイルを検査して診断の一覧を返す。
+1. When `validate_ghost` が `ghost_name` で呼ばれ、起動中のゴーストに当たる（省略を含む）, the areka shall そのゴーストの設定ファイルを検査して診断の一覧を返す。
 2. When `ghost_name` が起動中のゴーストに当たらず、実在するフォルダのフルパスである, the areka shall そのフォルダをゴーストの根またはバルーンのフォルダとして検査する（ゴーストが 1 体も起動していなくてもよい）。どちらとも見分けられないフォルダには、理由を書いた `NG:` の結果で答える。
 3. The areka shall ゴーストの根の検査で、ゴーストの descript.txt と、そのゴーストが持つ全部のシェルの descript.txt・surfaces.txt を診る。起動中のゴーストでは、今使っているバルーンの descript.txt も診る。
 4. If 設定ファイルが読めない・文法として読めない行がある・設定が指すファイル（画像など）が無い, then the areka shall それぞれを「誤り」の診断として 1 件ずつ返す。
@@ -173,7 +173,7 @@
 
 #### Acceptance Criteria
 
-1. The areka shall サーバーの指示文（`initialize`・`server/discover` の `instructions`）に、`areka_` で始まるツールが SSP に無い areka 独自のもので、ゴーストを動かさずに確かめるためのものであることを英文で書く（今ある案内＝先に `get_active_ghost_list` を呼ぶ・未実装の結果の形、は残す）。
+1. The areka shall サーバーの指示文（`initialize`・`server/discover` の `instructions`）に、独自のツールを名前で挙げ、それらが SSP に無い areka 独自のもので、ゴーストを動かさずに確かめるためのものであることを英文で書く（今ある案内＝先に `get_active_ghost_list` を呼ぶ・未実装の結果の形、は残す）。
 2. The areka shall 登録案内（help の HTML）に、独自のツール 3 本の名前と、それぞれが何をするかの 1 行を日本語で載せる。
 3. The areka shall 登録案内の独自のツールの名前を、登録した定義から組む（名前を手で 2 か所に書かない）。
 
@@ -187,4 +187,4 @@
 2. The areka shall 独自のツール 3 本それぞれについて、引数の検査（全部ある・必須が無い・型違い）と、要件 2.4 の「何もさせない」を決定論テストで固定する。
 3. The areka shall 常時テストでネットへ出ず、固定のポート番号を束ねない。
 4. The areka shall `doc/ssp-mcp/` の下に、独自のツール 3 本の約束（名前・引数・結果の形・診断の種類と文言・SSP との違い）を書いた文書を置く。
-5. The areka shall 実機で確かめ、結果を本 spec の `verification/signoff.md` に残す: ⑴ 配布形の `areka.exe` を既定ゴースト（emo2）で起動し、Claude Code から `tools/list` に 13 本が出る、⑵ 誤りを含む台本（知らないタグ・無い surface）を `areka_check_script` に渡すと診断が返り、ゴーストは喋らない、⑶ `areka_list_capabilities` が一覧を返す、⑷ `areka_validate_ghost` を起動中のゴーストと、起動していないゴーストのフォルダのフルパスの両方で呼んで診断が返る、⑸ 呼んでいる間もゴーストの描画と会話が止まらない。
+5. The areka shall 実機で確かめ、結果を本 spec の `verification/signoff.md` に残す: ⑴ 配布形の `areka.exe` を既定ゴースト（emo2）で起動し、Claude Code から `tools/list` に 13 本が出る、⑵ 誤りを含む台本（知らないタグ・無い surface）を `check_script` に渡すと診断が返り、ゴーストは喋らない、⑶ `list_capabilities` が一覧を返す、⑷ `validate_ghost` を起動中のゴーストと、起動していないゴーストのフォルダのフルパスの両方で呼んで診断が返る、⑸ 呼んでいる間もゴーストの描画と会話が止まらない。
