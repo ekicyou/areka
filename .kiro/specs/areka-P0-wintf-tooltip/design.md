@@ -157,7 +157,7 @@ crates/areka/
 ```
 
 - 2 つの `build.rs` は同じ形で、依存を足さない: 対象が MSVC のとき（`CARGO_CFG_TARGET_ENV` が `msvc`）だけ、`/MANIFEST:EMBED` と `/MANIFESTINPUT:<マニフェストの絶対パス>` をリンカへ渡し、マニフェストと自分自身を `rerun-if-changed` に挙げる。MSVC でなければ何もしない。
-- 指示の届く先を絞る: wintf は `rustc-link-arg-examples`（wintf を使う側の exe には何も足さない。申告は exe の持ち主が決めること）、areka は `rustc-link-arg-bins`（テストの exe には足さない＝既存のテストの振る舞いを変えない）。
+- 指示の届く先を絞る: wintf は `rustc-link-arg-examples`（wintf を使う側の exe には何も足さない。申告は exe の持ち主が決めること）、areka は `rustc-link-arg-bins`（サンプルと結合テストの exe には足さない。ただし Cargo は bin の指示を bin のユニットテストの exe にも当てるため、areka のユニットテストの exe には入る。build.rs からは見分けられず、`Cargo.toml` を変えずに避ける手は無い。areka のユニットテストは版 6 の下でも全部緑であることを実装で確かめた。wintf のテストの exe には入らない）。
 - マニフェストの中身は comctl32 の版 6 への依存の 1 項目だけ（他の項目は Out of Boundary）。
 
 依存の向きは `geometry` → `ranges` → `turn` → `os` → `system` → `mod`。どのファイルも 1,000 行未満に収める（見込みは最大の `system.rs`・`os.rs` で 400〜500 行）。

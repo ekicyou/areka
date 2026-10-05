@@ -4,9 +4,9 @@
 
 - [ ] 1. 土台: exe の申告とモジュールの骨組み
 
-- [ ] 1.1 (P) areka.exe と wintf のサンプルに、標準の部品の新しい版の申告を埋める
+- [x] 1.1 (P) areka.exe と wintf のサンプルに、標準の部品の新しい版の申告を埋める
   - wintf と areka のそれぞれに、標準の部品の新しい版（comctl32 の版 6）への依存の 1 項目だけを書いたマニフェストと、それをリンカへ渡すビルドスクリプトを足す
-  - 指示はリンカが MSVC のときだけ出し、wintf はサンプルの exe だけ、areka は本体の exe だけに届ける（テストの exe と、wintf を使う側の exe には何も足さない）
+  - 指示はリンカが MSVC のときだけ出し、wintf はサンプルの exe だけ、areka は本体の exe だけに届ける（wintf のテストの exe と、wintf を使う側の exe には何も足さない。areka の bin のユニットテストの exe には Cargo の仕様で入る＝実装で判明・受け入れ）
   - マニフェストとビルドスクリプト自身が変わったときだけ作り直されるようにする
   - 完了の状態: wintf のサンプルと areka.exe のビルドが通り、出来た exe の資源にマニフェストが入っている（道具で取り出して版 6 の依存が読める）。areka の既存のテストが緑のまま。areka.exe が emo2 で今までどおり起動する（試し S1 のうちビルドと起動の分）
   - _Requirements: 3.15, 3.8_
@@ -127,3 +127,8 @@
   - 新しいファイルがどれも 1,000 行未満・新しいファイルに `tick_wake::mark` の文字列が無い・`Cargo.toml` と既存の公開の構造体が変わっていない・areka の型への依存が無いことを検索と差分で確かめる
   - 完了の状態: 上の検査がすべて通ったことを示すコマンドの出力がある
   - _Requirements: 7.1, 7.2, 7.3, 7.6, 7.7_
+
+## Implementation Notes
+
+- 1.1: 新しいワークツリーでは areka のテストの前に i686 の `shiori-host32-helper` と `shiori-host32-testdll-loadu` を `--target i686-pc-windows-msvc` でビルドしておく（無いと `mcp_get_log_real_run`・`smoke_boot_loop_exit` が赤）
+- 1.1（範囲外・完了の棚卸で起票）: 明示したときだけ走る `AREKA_EMO2_REAL_RUN=1` の `emo2_real_run` が `crates/areka/tests/emo2_real_run.rs` の `wrap=BudouxWordWrap` の待ちで赤。マニフェストを外しても同じく赤＝この spec の前からの問題。192 DPI の debug ビルドで文字の取り付けが起動から約 2.5 秒かかり、3 秒の自動終了に間に合わない見込み
