@@ -8,7 +8,7 @@
 
 **Users**: 既存のゴーストを areka で動かす利用者と、そのゴーストの作者。SSP 向けに書かれた辞書（左ボタンか・本体か相方か・どの当たり判定か、の判定）がそのまま働く。
 
-**Impact**: 新しい仕組みは作らない。既にある `OnMouseDoubleClick` の経路（areka の `MouseWiring` → `KanadeMsg::Mouse` → kanade の `steady::on_mouse` → `events.rs` の組み立て → 送ってよい表）へ、種類を 2 つ足す。areka 側は、キャラクター窓に開始の受け手を新しく付け、終了の受け手を「今の位置の保存を呼んでから知らせる」包みに付け替える。wintf と位置の保存の中身（`placement`）には触れない。
+**Impact**: 新しい仕組みは作らない。既にある `OnMouseDoubleClick` の経路（areka の `MouseWiring` → `KanadeMsg::Mouse` → kanade の `steady::on_mouse` → `events.rs` の組み立て → 送ってよい表）へ、種類を 2 つ足す。areka 側は、キャラクター窓に開始の受け手を新しく付け、終了の受け手を「今の位置の保存を呼んでから知らせる」包みに付け替える。位置の保存の中身（`placement`）には触れない。wintf は、ダブルクリックの 2 回目の押下からもドラッグの準備を始める 1 か所だけを直す（決定 D7）。
 
 ### Goals
 
@@ -24,7 +24,7 @@
 - 右ボタンのドラッグ・バルーン窓のドラッグ・タッチとペン。
 - `OnMouseClick`・`OnMouseDown`／`OnMouseUp` など、まだ無い他のマウスのイベント。
 - ドラッグの間の `OnMouseMove` の送り方（変えない）。
-- 押下とドラッグを突き合わせる仕組み（ダブルクリックの 2 回目の押下のまま動かしたら、`OnMouseDoubleClick` の後に `OnMouseDragStart` が出る。要件 3.2 のとおり）。
+- 押下とドラッグを突き合わせる仕組み（ダブルクリックの 2 回目の押下のまま動かしたら、`OnMouseDoubleClick` の後に `OnMouseDragStart` が出る。要件 3.2 のとおり。2 回目の押下からドラッグの準備を始めるのは wintf の 1 か所の改修で、決定 D7）。
 - areka 側で「開始を送ったか」を覚えておく仕組み（決定 D2）。
 - ドラッグの最中に絵の大きさが変わるゴーストでの窓の置き直し（今の仕組みの持ち物。危険の節に書く）。
 
@@ -36,11 +36,12 @@
 - 定常でないときにマウスの知らせを捨てる記録（`mouse_input_ignored`）へ、捨てた知らせの中身を足すこと（決定 D3）。
 - areka のキャラクター窓での開始・終了の捕まえ方: 新しいファイル `input_events/drag.rs`（開始の受け手・終了の包み・送らないときの記録）と、`attach_char_pointer_handlers` での付け方。
 - 「終了の包みは、位置の保存の受け手を必ず先に、今までと同じ引数で呼ぶ」という約束。
+- wintf のダブルクリックの押下（`WM_LBUTTONDBLCLK`）の受け手で、普通の押下（`WM_LBUTTONDOWN`）と同じ決まりでドラッグの準備を始めること（決定 D7）と、そのテスト W1・W2。
 - 決定論のテスト、網羅の台帳の 2 行と生成物、台帳に連動する文書（`briefing.md` の状態の数・`roadmap-draft.md` の本 spec の行）、`doc/COMPAT_ARCHITECTURE.md` §8 への追記、実機での確認。
 
 ### Out of Boundary
 
-- wintf のドラッグの仕組み（閾値・状態の進め方・知らせを運ぶ箱・配る所・取り消しの知らせが運ぶ位置）。完了 spec `event-drag-system`・`areka-P0-drag-click-without-move` と、同じウェーブの `areka-P0-drag-cancel-borrow-miss` の持ち場。
+- wintf のドラッグの仕組み（閾値・状態の進め方・知らせを運ぶ箱・配る所・取り消しの知らせが運ぶ位置）。決定 D7 の 1 か所（ダブルクリックの押下で準備を始めること）だけを除く。完了 spec `event-drag-system`・`areka-P0-drag-click-without-move` と、同じウェーブの `areka-P0-drag-cancel-borrow-miss` の持ち場。
 - 位置の保存の中身（`placement/follow/drag_follow.rs` の `on_char_drag_end`・`persist_entries`）と、`placement/spawn.rs` がキャラクター窓へ付ける部品。1 文字も変えない。
 - `emo2_boot/`・`frame/`（同じウェーブの約束）。
 - 「いつ送ってよいか」の決まりそのもの（定常だけ・終了の握手の待ちは送らない・往復は一度に 1 つ）と、SHIORI の失敗の扱い。今のものをそのまま使う。
@@ -62,6 +63,7 @@
 - `on_char_drag_end` が窓の最終位置を `WindowPos.position` へ書かなくなったとき、または取り消しで押した位置から窓の位置を引き直さなくなったとき（決定 D1 の前提。テスト A4 が赤になる）。
 - `areka-P0-drag-cancel-borrow-miss` が、終了を積み損ねた後に運ぶ箱へ残る「ドラッグ中の対象」を片づけない形で着地したとき（遅れた終了が残る。決定 D2 を見直す）。
 - `steady::on_mouse` の先頭の防御や、横断の腕の「定常だけ」の決まりを変えるとき（`sakura-time-critical`・パッシブモードの spec）。2 つのイベントも同じ決まりに従う。
+- `areka-P0-drag-cancel-borrow-miss` が wintf の押下・離しの受け手（`mouse_click.rs`）を作り変えて着地したとき。決定 D7 は同じファイルの `find_ancestor_with_drag_config` を借りるので、取り込みで重なりを解き、W1・W2 を流し直す。
 - `MouseEventKind` へ種類を足すとき（`on_mouse` の `match` は網羅なので、足した側がコンパイルで気付く）。
 - 3 体目以降のキャラクター窓を作れるようにするとき（`char_scope` の `scope <= 1` の前提を、他のマウスのイベントと一緒に直す）。
 
@@ -153,6 +155,11 @@ crates/areka-kanade/
 ├── tests/kanade/mouse_test.rs                 # 変更。接続宣言 1 つ
 └── tests/kanade/mouse_test_drag_tests.rs      # 新規。mock SHIORI を通す決定論のテスト
 
+crates/wintf/src/ecs/window_proc/
+├── mouse_dblclick_wheel.rs        # 変更。左のダブルクリックの押下でドラッグの準備を始める（決定 D7）
+├── mouse_dblclick_wheel_tests.rs  # 新規。W1・W2（接続宣言は mouse_dblclick_wheel.rs の末尾）
+└── mouse_click.rs                 # 変更。find_ancestor_with_drag_config を pub(super) にする（1 行）
+
 doc/
 ├── COMPAT_ARCHITECTURE.md                     # 変更。§8 の表へ追記
 └── ukadoc-coverage/
@@ -176,8 +183,11 @@ doc/
 | `crates/areka-kanade/src/lib.rs` | `pub mod events` の `pub use` に 2 関数 | +1 |
 | kanade のテスト 4 本 | 下の Testing Strategy | — |
 | 台帳と文書 | 下の「台帳と文書」の部品 | — |
+| `crates/wintf/src/ecs/window_proc/mouse_dblclick_wheel.rs` | 左のダブルクリックの押下で、普通の押下と同じ決まり（祖先の `DragConfig` が有効で左ボタンを許す）で `start_preparing` を呼ぶ・doc（決定 D7） | 234 → 260 前後 |
+| `crates/wintf/src/ecs/window_proc/mouse_dblclick_wheel_tests.rs`（新規） | テスト W1・W2 | 100〜200 |
+| `crates/wintf/src/ecs/window_proc/mouse_click.rs` | `find_ancestor_with_drag_config` を `pub(super)` にする（押下の受け手の中身は変えない） | ±0 |
 
-触らないことを約束するファイル: `crates/wintf/` の全部、`crates/areka/src/placement/` の全部、`crates/areka/src/emo2_boot/`、`crates/areka/src/ghost_session.rs`（`attach_char_pointer_handlers` の呼び出しは今のまま）。
+触らないことを約束するファイル: `crates/wintf/` の全部（決定 D7 の上の 3 ファイルを除く）、`crates/areka/src/placement/` の全部、`crates/areka/src/emo2_boot/`、`crates/areka/src/ghost_session.rs`（`attach_char_pointer_handlers` の呼び出しは今のまま）。
 
 ## System Flows
 
@@ -222,7 +232,7 @@ sequenceDiagram
 | 2.4 | 終了は開始より後 | 送り口の先入れ先出し・kanade の 1 つの受信箱 | — | A1・A2・K3 |
 | 2.5 | 終了を間引かない | `notify_drag` | — | A8 |
 | 3.1 | 動かさないクリックで送らない | wintf の約束（開始の無い終了は来ない）に乗る | — | A3 |
-| 3.2 | ダブルクリックで送らない | 同上。`on_char_pointer_pressed` は変えない | — | A3 |
+| 3.2 | ダブルクリックで送らない・2 回目の押下のまま動かせばドラッグ | 同上。`on_char_pointer_pressed` は変えない。2 回目の押下からの準備は wintf のダブルクリックの押下の受け手（決定 D7） | — | A3・W1・W2・実機 R4 |
 | 3.3 | バルーン窓で送らない | `attach_char_pointer_handlers`（キャラクター窓にだけ付ける） | — | A5 |
 | 3.4 | 右ボタンで送らない | wintf の `DragConfig` の既定（左だけ）に乗る。areka は変えない | — | 実機 R5 |
 | 4.1 | Reference は 7 つ・`OnMouseDoubleClick` と同じ並び | `on_mouse_drag_start`・`on_mouse_drag_end` | — | K1 |
@@ -469,6 +479,7 @@ fn notify_drag(
 - **D3. 捨てたときの記録は、kanade では今の水準（trace）のまま、定常でないときの記録に知らせの中身を足す。** 理由: 捨てるのは普通に起きる入力（起動や終了の途中のドラッグ）で、異常ではない。種類ごとに水準を変えると、kanade の横断の腕に種類の分岐が入る。中身を足すだけなら 4 種類共通の 1 行で、どのイベントを捨てたかが分かる。実機の照合は送出の記録（`shiori_request`・trace）のために元々 `kanade=trace` まで開ける。areka 側の捨て方は上の表のとおり debug／warn。
 - **D4. 位置の保存が前と同じであることは、`input_events/drag_tests.rs` の中で「包みを付けた窓」と「包みを付けない窓（本 spec の前の付け方）」を同じ操作で動かし、窓の位置と記憶へ書かれた値を比べて見る。** 理由: 「前と同じ」をそのまま判定にできる。窓は本物の `spawn_ghost_windows` で作るので、置き換えの順も通る。`placement` のテストの土台（`follow_drag_end_gate_tests.rs` の私有の型）は動かさない（`placement` のファイルに触れない約束と、同じウェーブの他の spec との重なりを避けるため）。保存の中身そのものの判定は、触らない `on_char_drag_end` に対する既存のテストが持ち続ける。
 - **D5. `roadmap-draft.md` の行は `stage = "A"`・`bundle = "撫で"`・`owner_count = 2`・`wave = "C3-④"`。** `[briefs].count` のぶつかりは、後から取り込む側が数え直す（上の「台帳と文書」）。
+- **D7. ダブルクリックの 2 回目の押下からもドラッグの準備を始める（wintf の 1 か所を直す）。** 2026-10-05 開発者の裁定（案 B）。事情: 窓のクラスはダブルクリックを受け取る設定なので、2 回目の押下は `WM_LBUTTONDOWN` でなく `WM_LBUTTONDBLCLK` として届く。今の wintf では `start_preparing` を呼ぶのが `mouse_click.rs` の押下の受け手だけで、`mouse_dblclick_wheel.rs` の受け手は呼ばない。そのため要件 3.2 の後半（2 回目の押下のまま動かしたらドラッグとして扱う）が成り立っていなかった（タスク 3.2 の審査で判明）。直し方: ダブルクリックの受け手が、左ボタンのときに普通の押下と同じ決まり（`find_ancestor_with_drag_config` で祖先の `DragConfig` を探し、有効で左ボタンを許すなら、押した位置の画面座標で `start_preparing`）を呼ぶ。決まりは借りて 1 つに保つ（同じ探し方を 2 か所に書かない）。普通の押下の受け手の中身は変えない（並走の `areka-P0-drag-cancel-borrow-miss` が同じファイルの離しの側を作り変えているので、重なりを 1 行に抑える）。閾値を越えずに離せば、普通のクリックと同じく開始も終了も積まれない（要件 3.2 前半・3.1）。wintf を使う他の窓でも、ドラッグを許している窓ならダブルクリックの 2 回目から動かせるようになる。
 - **D6. `briefing.md` 7-7 節の手書きの数は直さない。** 理由: この節は 2026-09 に撮った写真で、その後に状態が変わった項目（`OnChoiceTimeout`・`OnTranslate` など）でも直されていない。見張る検査も無い。2 件だけ直すと、撮った日の違う数が混ざる。撮り直すなら節ごと、別の作業で行う。
 
 ## Error Handling
@@ -530,6 +541,13 @@ fn notify_drag(
 
 要件 9.1 の ⑴〜⑼ と番号の対応: ⑴ A1・A2・K3／⑵ A3・A5／⑶ A4／⑷ A1・A2／⑸ A1・A4・A6・K1・K3／⑹ K5〜K9／⑺ A7／⑻ A8／⑼ K2・K3。
 
+### wintf（`crates/wintf/src/ecs/window_proc/mouse_dblclick_wheel_tests.rs`）
+
+| 番号 | 見ること | 要件 | 外すと赤になる決まり |
+|---|---|---|---|
+| W1 | ドラッグを許した窓へ左のダブルクリックの押下（`WM_LBUTTONDBLCLK`）を入れる。ドラッグの状態が準備に入り、押した位置が画面座標で入る。閾値を越えて動かすと開始の種が積まれ、閾値を越えずに離すと開始も終了も積まれない | 3.2 | ダブルクリックの受け手から準備を始める決まり（外すと準備に入らず赤）／閾値を越えない離しで積まない決まり |
+| W2 | ドラッグを許していない窓（`DragConfig` が無い・無効）と、右ボタンのダブルクリック（`WM_RBUTTONDBLCLK`）。ドラッグの状態は準備に入らない | 3.2・3.4 | 普通の押下と同じ条件で絞る決まり（絞りを外すと赤） |
+
 ### 台帳
 
 - `cargo test -p ukadoc-survey`（台帳・証拠の URL・`briefing.md`・`roadmap-draft.md` の突き合わせ）が緑。
@@ -544,7 +562,7 @@ fn notify_drag(
 | R1 | 本体をドラッグして離す | ドラッグの間に絵が `\s[29]`、離すと台詞。記録に `shiori_request` の `OnMouseDragStart` → `OnMouseDragEnd` が各 1 件・この順 |
 | R2 | 相方をドラッグして離す | 絵が `\s[19]`、離すと相方の台詞。Reference3 が `1` |
 | R3 | 当たり判定の外から、また（箱を出しているなら）シェルの絵の中の箱の上からドラッグ | 送られる（Reference4 は空か、その位置の当たり判定） |
-| R4 | 本体をクリックだけ・ダブルクリックだけ | 2 つのイベントの記録が 0 件。ダブルクリックは今どおり |
+| R4 | 本体をクリックだけ・ダブルクリックだけ。続けて、ダブルクリックの 2 回目を押したまま動かして離す | クリックだけ・ダブルクリックだけでは 2 つのイベントの記録が 0 件で、ダブルクリックは今どおり。2 回目を押したまま動かすと窓が動き、`OnMouseDoubleClick` → `OnMouseDragStart` → `OnMouseDragEnd` がこの順に 1 件ずつ（決定 D7） |
 | R5 | 右ボタンで押したまま動かす・バルーン窓をドラッグ | 0 件 |
 | R6 | ドラッグの途中で ESC | 窓が開始の位置へ戻り、`OnMouseDragEnd` が 1 件。座標は開始と同じ |
 | R7 | ドラッグして離した後に終了し、起動し直す | 動かした位置に立つ（位置の保存が今どおり）。ドラッグ中に絵が替わっても窓が跳ねない |
@@ -555,6 +573,7 @@ fn notify_drag(
 
 ## 危険と手当て
 
+- **wintf の 1 か所（決定 D7）と並走の `drag-cancel-borrow-miss`**: 向こうは `mouse_click.rs` の離しの側を作り変えている。こちらは同じファイルでは `find_ancestor_with_drag_config` の見える範囲の 1 行だけを変え、中身はダブルクリックの受け手（向こうが触らない `mouse_dblclick_wheel.rs`）に置く。先に着地した側を取り込むときに W1・W2 と A1〜A9 を流し直す。
 - **`drag-cancel-borrow-miss` の穴**: 並走の修正が入るまで、まれに取り消しや離しの終了が来ず、ゴーストが開始だけを受ける（クローディアなら浮いた絵のまま、次の台詞まで戻らない）。その後の動かさないクリックで、遅れた `OnMouseDragEnd` が 1 回だけ出る（要件 3.1・6.3 に反する形で見える）。条件は「画面更新が World を借りている最中に同期で届くメッセージ」で、実機ではまだ見られていない。受ける側では手当てしない（D2）。並走の修正が着地すれば両方とも消える。実機でこの形を見たら、本 spec の不具合ではなく向こうの持ち場として扱う。
 - **取り消しで窓が戻ることは `placement` の側の振る舞い**: 要件 4.2 の「取り消しの終了は開始と同じ値」は、wintf が取り消しの終了に押した位置を載せ、`on_char_drag_end` がその位置から窓の最終位置を引き直す（結果として開始の位置になる）ことに乗っている。`placement` の既存のテストには取り消しを配るものが無いので、A4 がこの振る舞いを固定する唯一のテストになる。`on_char_drag_end` の doc は「開始位置への復元は将来領分」と書いていて今の振る舞いと合っていないが、`placement` に触れない約束なので本 spec では直さない（完了の報告に載せる）。`DraggingState` が読めない防御の腕（今の作りでは通らない）では窓は戻らず、終了の座標は動かした先の窓から見た値になる。この腕のための手当ては足さない。
 - **ドラッグ中に絵の大きさが変わるゴースト**: 開始の応答で絵が替わり、大きさが違うと、毎フレームの置き直し（`resnap_from_sizes` → `resize_window_to`）が窓の位置を書く。これは今も、ドラッグ中に他の応答（`OnSecondChange` の台詞など）で絵が替われば起きることで、本 spec が作る経路ではない。クローディアの絵はどれも 333×500 で、置き直しは同じ大きさでは働かない。実機 R7 で跳ねないことを見る。大きさの違う絵で不具合が見つかったら、範囲の外として起票する。
