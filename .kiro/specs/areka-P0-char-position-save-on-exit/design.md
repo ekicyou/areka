@@ -66,6 +66,8 @@
 
 開発者の裁定は「受け入れず、別の spec として起票」。この spec では直さず、`areka-P0-dpi-realign-remembered-chain`（`.kiro/specs/areka-P0-dpi-realign-remembered-chain/brief.md`・roadmap の台帳に登録済み）が持つ。この spec の本体（書く関数・見分けの直し）は変わらない。実機の確認（Testing Strategy）では拡大率を変えない。`verification/real-machine.md` にこの後退と起票先を 1 行書く。
 
+実装のときに足した 1 件（要件 1.7 の是正）: 並べ終える前に台本が縦にだけ動かした相方は、並べ直しのあとも既定の y が元のまま残り「動かされた」と扱われるので、同じ起動の中の拡大率の詰め直しの対象からも外れる（並べ終えた後に台本で動かした窓と同じ扱い）。これも `areka-P0-dpi-realign-remembered-chain` で詰め直しの対象の決め方を見直すときに合わせて扱う。
+
 ## Architecture
 
 ### Existing Architecture Analysis
