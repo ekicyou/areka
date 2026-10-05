@@ -32,6 +32,9 @@ use crate::msg::{
 };
 use crate::talk::{StartTalk, TalkDone, TalkId};
 
+#[path = "steady_choice_script.rs"]
+mod choice_script;
+
 /// 定常運転（Steady）のフェーズ分岐。
 ///
 /// [`Phase::Steady`] にルーティングされた入力（Tick／ShioriReply／
@@ -222,9 +225,10 @@ pub(super) fn on_choice_waiting(
 ///
 /// # 受理（規則 2）
 /// [`plan_cascade`] が段列を一意に決める（本層で再判定しない・Req2.5）:
-/// - [`CascadePlan::Script`]（`script:` 前置）→ SHIORI イベントを発行せず
-///   `choice_unsupported_category`（warn）を記録し、[`Action::ResolveChoice`] のみ発行して帳簿を
-///   消す（会話を停止させない・Req2.7・裁定 7）。
+/// - [`CascadePlan::Script`]（`script:` 前置）→ SHIORI イベントも翻訳も発行せず、結末を
+///   `choice_script::begin` に決めさせて帳簿を消す。台本があれば
+///   `[ResolveChoice, StartTalk(新)]` をこの順で、空なら [`Action::ResolveChoice`] のみを返す
+///   （空でも会話を止めない）。
 /// - [`CascadePlan::Named`]（`On` 始まり）→ 任意名イベント **1 段のみ**を発行する
 ///   （`OnChoiceSelectEx`／`OnChoiceSelect` を先行発火しない・Req2.1・裁定 1）。残段なし。
 /// - [`CascadePlan::Canonical`] → `OnChoiceSelectEx` を先行段として発行し、残段に無印 1 段
@@ -302,7 +306,7 @@ pub(super) fn on_choice(mut state: State, input: ChoiceInput) -> (State, Vec<Act
         reference_count = input.references.len(),
         plan = ?plan,
         talk_id = talk_id.0,
-        "選択確定を受理——カスケードを開始（C4 規則 2）"
+        "選択確定を受理——判定した結論へ進む（C4 規則 2）"
     );
     // GET の共通ヘッダは送出時点の運行状態から導出する（Req3.6・DD-IT-3）。帳簿は検証のため
     // 手元（`ledger`）へ取り出し済みで `state.choice` は空なので、選択待ち継続中であることを
@@ -311,18 +315,17 @@ pub(super) fn on_choice(mut state: State, input: ChoiceInput) -> (State, Vec<Act
     let snapshot = state.snapshot_with_choice(true);
     let (call, next) = match plan {
         CascadePlan::Script => {
-            // M1 未対応カテゴリ（裁定 7）: イベントを発行せず解決だけ行う（Req2.7）。
-            tracing::warn!(
-                target: "kanade",
-                event = "choice_unsupported_category",
-                choice_id = %input.id,
-                talk_id = talk_id.0,
-                "M1 未対応カテゴリの選択肢 ID——イベントを発行せず選択解決のみ行う（Req2.7）"
-            );
-            return (
-                state,
-                vec![resolve_choice(talk_id, input.id, "unsupported")],
-            );
+            // イベントを発行せず、台本があれば新しいトークを始める。結末の記録を解決の記録より
+            // 先に出すため `begin` を先に呼ぶ。帳簿は戻さない（待ちとタイムアウトはここで終わる）。
+            let start = choice_script::begin(&mut state, talk_id, &input);
+            let outcome = if start.is_some() {
+                "script"
+            } else {
+                "script_empty"
+            };
+            let mut actions = vec![resolve_choice(talk_id, input.id, outcome)];
+            actions.extend(start);
+            return (state, actions);
         }
         // 任意名 1 段のみ（先行 Ex／無印を発行しない・裁定 1）。ID はイベント名側が運ぶため
         // Reference には付随参照列のみを載せる（Req3.3）。
@@ -490,7 +493,7 @@ fn on_cascade_reply(
 /// [`Action::ResolveChoice`] を組み立て、発行を info で記録する（Req5.1・単一の発行点）。
 ///
 /// 呼び出しごとにちょうど 1 つの解決指示を返すため、「1 選択＝高々 1 解決」（Req5.4）は
-/// 呼び出し点（未対応カテゴリの即時解決・カスケード終端）が排他であることで成立する。
+/// 呼び出し点（`script:` の選択肢の解決・カスケード終端）が排他であることで成立する。
 fn resolve_choice(talk_id: TalkId, id: String, outcome: &'static str) -> Action {
     tracing::info!(
         target: "kanade",
