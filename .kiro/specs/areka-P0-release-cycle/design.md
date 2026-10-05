@@ -251,7 +251,7 @@ flowchart TD
 ### 段 4: 版上げの PR
 
 1. `git add Cargo.toml Cargo.lock THIRD-PARTY-NOTICES.md dist/README.txt` と、名前を挙げて足す（`git add -A`・`git add .` は使わない。`tasks.md` は足さない）。コミットの題は `chore(release): v{版}`。
-2. このときの `{remote}/main` の先端のコミットを「確かめた main」として覚える。
+2. 「確かめた main」は、段 1 で取り込んだときの `{remote}/main` の先端のコミット（`git rev-parse {remote}/main`）とする。段 3 はこの main を取り込んだ作業木で回すので、途中で `fetch` が挟まっても、確かめていない main を「確かめた」と取り違えない。
 3. `git push --quiet {remote} HEAD` の後、`gh pr create --base main --title "chore(release): v{版}"`。本文には、版・4 ファイルの `--numstat`・段 3 の a〜e の結果を書く。初回は「spec の文書を同じ PR に載せている」と書く。
 4. PR の中身を読み直す: `gh pr view {番号} --json files`。2 回目以降は上の 4 ファイルだけ（4.2）。初回は 4 ファイルと、この spec のフォルダの下のファイルだけ（4.4）。違えば止まる。
 5. **承認 A**: PR の URL・差分の数・確かめの結果を示し、「squash マージしてよいか」を開発者に聞いて止まる（4.3）。初回は、乾いた走りの結果（緑・省いた）も添える。
