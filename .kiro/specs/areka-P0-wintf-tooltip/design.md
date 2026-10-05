@@ -21,7 +21,7 @@
 - OS の振る舞いのうち実機でしか確かめられない点を、最初のタスク（小さな試し）で潰し、判定の基準と逃げ道を先に決めておく。
 
 ### Non-Goals
-- areka 側の配線（どの範囲に何を出すか）。areka のクレートには触れない。
+- areka 側の配線（どの範囲に何を出すか）。areka のクレートのソース（`src/`）には触れない（足すのは exe の申告のための `build.rs` とマニフェストの 2 ファイルだけ）。
 - 範囲を登録していない所での「止まった」の知らせ・キーボードやタッチで出すツールチップ・見た目の着せ替え・文字以外の中身・待ち時間の独自設定（要件の Out of scope のとおり）。
 - 既存のポインタの追跡（`WM_MOUSEMOVE`／`WM_MOUSELEAVE` の受け手・`PointerState`・透過の答え）の作り直し。読むだけで変えない。
 - 表示の裏側を差し替えられる抽象。実装が 1 つしか無い口は作らない（逃げ道が要るときは OS の 1 ファイルを書き換える）。
@@ -36,12 +36,14 @@
 - 動的な使い方の口（印を添えて文字を渡す・消す）と、その結果の型。
 - この機能の記録（`debug`／`trace`／`warn`）と、クレートの文書（モジュールの冒頭）。
 - 実機確認用のサンプル `tooltip_demo`。
+- comctl32 の版 6 の申告を exe に埋める仕掛け（areka.exe と wintf のサンプルの `build.rs` とマニフェスト）。
 
 ### Out of Boundary
-- areka のクレート・SHIORI への問い合わせ・バルーンの行の追跡（`crates/areka/src/input_events/balloon.rs`）。
+- areka のクレートのソース（`crates/areka/src/`）・SHIORI への問い合わせ・バルーンの行の追跡（`crates/areka/src/input_events/balloon.rs`）。
 - 既存のポインタの追跡・当たり判定・クリック透過・ドラッグ・重なりの維持（`zorder_pair_maintain.rs`・持ち主の鎖）の振る舞い。
 - `Cargo.toml`（根も wintf も）。`windows` クレートの機能は足さない。
-- ツールチップ以外の comctl32 の部品の見た目（版 6 の切り替えはツールチップの窓を作る瞬間だけに効かせる）。
+- マニフェストに書く、comctl32 の版 6 の申告より他の項目（DPI・対応する OS・長いパス・文字コードなど）。DPI は今のとおり wintf が実行時に設定する。文字コードの指定は読み込む SHIORI の DLL に響きうるので、要るなら別の spec で検討する。
+- `shiori-host32-helper` など、areka.exe と wintf のサンプルより他の exe のマニフェスト。
 
 ### Allowed Dependencies
 - wintf の中の既存の部品を**読む**こと: `PointerState`・`WindowPos`・`DPI`・`WindowHandle`・`Window`・`find_owner_window`・`hit_test_in_window`・`tick_wake::arm_deadline`。
@@ -55,7 +57,7 @@
 - 「範囲に入っている」の拠り所（`PointerState` が窓の配下にあること＋ `hit_test_in_window`）を変えたとき、またはポインタの追跡側がその意味を変えたとき。
 - 判定を回す段（`FrameFinalize`）や、知らせを同期で呼ぶ決まりを変えたとき。
 - 表示の裏側を標準のツールチップから自前の窓へ替えたとき（見た目・重なり・マウスの素通しを確かめ直す）。
-- `Cargo.toml` に触れられるようになり、手書きの宣言（版 6 の切り替え用の 4 関数）を `windows` クレートの定義へ替えたとき。
+- areka.exe や wintf のサンプルのマニフェストに項目を足したとき、またはマニフェストの埋め込み方（`build.rs` からリンカへ渡す指示）を替えたとき（見た目と、他の標準の部品への効き方を確かめ直す）。
 
 ## Architecture
 
@@ -71,7 +73,7 @@
 - **窓に関数を差す部品**: `crates/wintf/src/ecs/window/components.rs` の `OnCloseRequest(pub fn(world: &mut World, entity: Entity))` が先例。World を借りたまま同期で呼ばれる。
 - **モジュールが自分で World に入る型**: `crates/wintf/src/ecs/drag/accumulator.rs` の関数 `install_drag_accumulator` を `EcsWorld::new` が 1 行で呼ぶ。`ecs/world/mod.rs` は 941 行なので、系の登録はこの型で 1 か所の呼び出しに閉じる。
 - **スレッドに縛られる資源**: `crates/wintf/src/ecs/clickthrough/controller.rs` の `ClickThroughRegistryHandle` が NonSend の資源の先例。ツールチップの窓のハンドルも同じ持ち方にする。
-- **版 6**: リポジトリにマニフェストも `build.rs` も無い。`CreateActCtxW` などは `windows` クレートの機能 `Win32_System_ApplicationInstallationAndServicing` にあり、根の `Cargo.toml` では有効でない。
+- **版 6**: 標準のツールチップを今風の見た目にするには、exe が comctl32 の版 6 を使うと申告する必要がある。リポジトリには exe のマニフェストもビルドスクリプトの `build.rs` も無い（`git ls-files` で確認。`crates/ukadoc-survey/src/catalog/build.rs` は同名の普通のソース）。他の spec の brief・要件・設計に exe のマニフェストを扱うものは無く（`winget-manifest-submission` などの「マニフェスト」は winget の配布用の別物）、開いている PR も無い（2026-10-05 に確認）。
 
 ### Architecture Pattern & Boundary Map
 
@@ -122,9 +124,9 @@ graph TB
 
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
-| 表示 | comctl32 の `TOOLTIPS_CLASS`（追跡型 `TTF_TRACK`＋`TTF_ABSOLUTE`） | ツールチップの窓 1 枚 | 追跡型は呼ぶ側が消すまで出たまま（Microsoft の文書で確認）。版 6 は実行時の切り替えで選ぶ |
+| 表示 | comctl32 の `TOOLTIPS_CLASS`（追跡型 `TTF_TRACK`＋`TTF_ABSOLUTE`） | ツールチップの窓 1 枚 | 追跡型は呼ぶ側が消すまで出たまま（Microsoft の文書で確認）。版 6 は exe のマニフェストで選ぶ |
 | OS の読み取り | `SystemParametersInfoW`・`GetCursorPos`・`GetAsyncKeyState`・`IsWindowVisible`・`MonitorFromPoint`・`GetMonitorInfoW`・`GetDpiForMonitor`・`SystemParametersInfoForDpi` | 待ち時間の設定・マウスの位置・ボタン・窓の可視・作業領域・DPI・字体 | すべて根で有効な `windows` 0.62 の機能で呼べる |
-| 版 6 の切り替え | `CreateActCtxW`・`ActivateActCtx`・`DeactivateActCtx`・`ReleaseActCtx`（kernel32） | ツールチップの窓を作る間だけ版 6 を選ぶ | `windows` クレートの機能が無効なので `os.rs` に手書きで宣言する（4 関数＋構造体 1 つ）。`Cargo.toml` に触れられるようになったら置き換える |
+| 版 6 の申告 | exe のマニフェスト（`Microsoft.Windows.Common-Controls` 6.0.0.0 への依存）を、`build.rs` からリンカへの指示（`/MANIFEST:EMBED`・`/MANIFESTINPUT:`）で埋め込む | areka.exe と wintf のサンプルが、標準の部品の今風の見た目を得る | Microsoft の想定する正規の方法。新しい依存は無く、`Cargo.toml` は変わらない（`build.rs` は置くだけで認識される）。MSVC のリンカのときだけ指示を出す |
 | 状態と配線 | `bevy_ecs`（既存）・`tracing`（既存）・`thiserror`（既存） | 範囲の部品・NonSend の資源・末尾の系・記録・失敗の型 | 新しい依存は無い |
 
 ## File Structure Plan
@@ -140,12 +142,22 @@ crates/wintf/
 │   ├── ranges_tests.rs
 │   ├── turn.rs             # 出す番の状態機械 TurnMachine（純粋・時刻と入力は引数）
 │   ├── turn_tests.rs
-│   ├── os.rs               # unsafe はここだけ: OS の読み取り・標準のツールチップの窓・版 6 の切り替え・字体
+│   ├── os.rs               # unsafe はここだけ: OS の読み取り・標準のツールチップの窓・字体
 │   ├── system.rs           # 画面更新ごとの判定（集める→状態機械→適用）・知らせの配り・記録
 │   └── system_tests.rs     # 窓なしの World で「集める→すること」を確かめる
-└── examples/
-    └── tooltip_demo.rs     # 実機確認用（静的・動的・透過・いつも手前・DPI・試しの項目）
+├── examples/
+│   └── tooltip_demo.rs     # 実機確認用（静的・動的・透過・いつも手前・DPI・試しの項目）
+├── build.rs                # 新規: wintf のサンプル（examples）にだけマニフェストを埋める（rustc-link-arg-examples）
+└── examples.manifest       # 新規: comctl32 の版 6 の申告だけを書いたマニフェスト
+
+crates/areka/
+├── build.rs                # 新規: areka.exe（bin）にだけマニフェストを埋める（rustc-link-arg-bins）
+└── areka.manifest          # 新規: comctl32 の版 6 の申告だけを書いたマニフェスト
 ```
+
+- 2 つの `build.rs` は同じ形で、依存を足さない: 対象が MSVC のとき（`CARGO_CFG_TARGET_ENV` が `msvc`）だけ、`/MANIFEST:EMBED` と `/MANIFESTINPUT:<マニフェストの絶対パス>` をリンカへ渡し、マニフェストと自分自身を `rerun-if-changed` に挙げる。MSVC でなければ何もしない。
+- 指示の届く先を絞る: wintf は `rustc-link-arg-examples`（wintf を使う側の exe には何も足さない。申告は exe の持ち主が決めること）、areka は `rustc-link-arg-bins`（テストの exe には足さない＝既存のテストの振る舞いを変えない）。
+- マニフェストの中身は comctl32 の版 6 への依存の 1 項目だけ（他の項目は Out of Boundary）。
 
 依存の向きは `geometry` → `ranges` → `turn` → `os` → `system` → `mod`。どのファイルも 1,000 行未満に収める（見込みは最大の `system.rs`・`os.rs` で 400〜500 行）。
 
@@ -157,6 +169,8 @@ crates/wintf/
 `Cargo.toml`・`README.md`・`tick_wake.rs`・`tick_gate_tests.rs`・ポインタやドラッグのファイルには触れない。
 
 brief のウェーブ C4 の約束は「触るのは `crates/wintf/src/` だけ」だが、要件 7.4 がサンプルを求めるので、`crates/wintf/examples/tooltip_demo.rs` の新規の 1 ファイルだけを `src/` の外に置く（サンプルは自動で見つかるので `Cargo.toml` は変わらず、他の spec のファイルとも重ならない）。この例外は 2026-10-05 の設計の討議で開発者に報告し、認められた。
+
+同じ討議で、今風の見た目は実行時の切り替え（手書きの宣言と `shell32.dll` の資源を借りる手）ではなく、**exe のマニフェストで申告する**と決まった（開発者「exe にマーク入れる方がよい」「マニフェスト入れるのは他の spec と競合しない」）。このため新規の 4 ファイル（`crates/wintf/build.rs`・`crates/wintf/examples.manifest`・`crates/areka/build.rs`・`crates/areka/areka.manifest`）も `src/` の外に置く。どれも新規で、`Cargo.toml` は変わらず、他の spec のファイルと重ならない（Existing Architecture Analysis の「版 6」のとおり確認済み）。
 
 ## System Flows
 
@@ -241,13 +255,14 @@ sequenceDiagram
 | 3.5 | 作業領域の中に収める | geometry | `place` | — |
 | 3.6 | 透過・いつも手前の窓より手前 | os | `WS_EX_TOPMOST`＋出すたびに最前面へ | — |
 | 3.7 | 画面の DPI に合った字 | os | `SystemParametersInfoForDpi`＋`WM_SETFONT` | — |
-| 3.8 | OS の標準の見た目 | os | 標準のツールチップ＋版 6 の切り替え | — |
+| 3.8 | OS の標準の見た目 | os・2 つの `build.rs` | 標準のツールチップ＋exe のマニフェスト（areka.exe・wintf のサンプル） | — |
 | 3.9 | 入力先と手前の窓を変えない | os | `WS_EX_NOACTIVATE`・`SWP_NOACTIVATE` | — |
 | 3.10 | ツールチップがボタンを横取りしない | os | `TTF_TRANSPARENT`＋`WS_EX_TRANSPARENT` | — |
 | 3.11 | 同時に 1 つまで | os・TurnMachine | 窓は 1 枚・Active は 1 つ | — |
 | 3.12 | 空の文字は出さない（出ていれば消す） | TurnMachine | `supply`（空 → 消す） | — |
 | 3.13 | 出す番が終わったら消す | TurnMachine・system | `Effect::Hide` | 状態 |
 | 3.14 | 時間だけでは消さない | os | 追跡型（時間切れ無し） | — |
+| 3.15 | areka.exe と wintf のサンプルが版 6 を申告する | 2 つの `build.rs`・マニフェスト | リンカへの指示（`rustc-link-arg-bins`・`rustc-link-arg-examples`） | 最初の試し S1 |
 | 4.1 | 窓ごとに複数の範囲 | ranges | `register` | — |
 | 4.2 | 窓の全体を範囲に | ranges | `TooltipArea::WholeWindow` | — |
 | 4.3 | 預けた文字は何もしなくても出る | TurnMachine・system | `Effect::Show` の出どころ＝預けた文字 | 流れ |
@@ -510,7 +525,7 @@ impl TurnMachine {
 **Responsibilities & Constraints**
 - ツールチップの窓は UI スレッドに 1 枚。最初に出すときに作り、プロセスの終わりまで持つ（`Drop` で壊す）。wintf の窓のエンティティにはしない（窓の数・終了の判断・クリック透過の登録に入らない）。持ち主の窓は付けない。
 - 作り方: `tooltips_class32`・`WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP`・`WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT`。道具は 1 つだけ登録し、旗は `TTF_TRACK | TTF_ABSOLUTE | TTF_TRANSPARENT`。
-- 版 6: 作る間だけ、版 6 を指す実行時の切り替え（`CreateActCtxW` → `ActivateActCtx` → `LoadLibraryW("comctl32.dll")` → `CreateWindowExW` → `DeactivateActCtx`）を効かせる。切り替えの元は、システムの `shell32.dll` が持つマニフェストの資源（番号 124）を使う。切り替えに失敗したら `warn` を 1 回残し、切り替え無し（古い見た目）で作る。
+- 版 6: このファイルは何もしない。今風の見た目は exe のマニフェストの申告で決まる（areka.exe と wintf のサンプルは `build.rs` で埋める）。申告の無い exe から使われた場合は古い見た目で出るだけで、動きは変わらない。このことをクレートの文書に書く。
 - 字体: 出す前に、マウスのある画面の DPI を `MonitorFromPoint`＋`GetDpiForMonitor` で取り、`SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS)` の `lfStatusFont` から字体を作って `WM_SETFONT` で渡す。DPI が前回と同じなら作り直さない。
 - 最大の幅: `geometry::max_tip_width` の値を `TTM_SETMAXTIPWIDTH` で渡す。改行の整えは `geometry::normalize_newlines`。計算は `geometry` に置き、このファイルは OS に渡すだけにする（窓なしでテストするため）。
 - 待ち時間の設定を読めなかったときの代わりの値（400 ミリ秒）は `turn.rs` の定数に置く。`warn` はプロセスで 1 回だけ出す（数え始めるたびに読むので、毎回出すと記録が埋まる）。
@@ -519,7 +534,7 @@ impl TurnMachine {
 - OS の読み取り: `read_hover_time`（`SPI_GETMOUSEHOVERTIME`。失敗は 400 ミリ秒＋`warn`）・`sample`（`GetCursorPos` と、左・右・中・拡張 2 つの `GetAsyncKeyState`）・`is_visible`（`IsWindowVisible`）。
 
 **Dependencies**
-- External: comctl32（標準のツールチップ）— 表示 (P0)。user32・gdi32・shcore — 読み取りと字体 (P0)。kernel32 の実行時の切り替え — 版 6 (P1・失敗しても動く)。
+- External: comctl32（標準のツールチップ）— 表示 (P0)。user32・gdi32・shcore — 読み取りと字体 (P0)。
 
 ##### Service Interface
 ```rust
@@ -549,7 +564,7 @@ impl TipWindow {
 - Invariants: 窓は 1 枚。入力先と手前の窓を変える呼び出しをしない。
 
 **Implementation Notes**
-- Integration: 実行時の切り替えの 4 関数と構造体 `ACTCTXW` は、`windows` クレートの機能が無効なので、このファイルに手書きで宣言する（`Cargo.toml` に触れないというウェーブ C4 の約束による）。宣言の所に、置き換えの条件を註釈で残す。手書きの `ACTCTXW` は、並びの誤りを見た目の試し（S1）だけに頼らないよう、大きさをコンパイル時に確かめる 1 行（64 ビットで 56 バイト）を添える。
+- Integration: 使う OS の関数はすべて、根で既に有効な `windows` クレートの機能にある。手書きの宣言は置かない。
 - Validation: このファイルの振る舞いは窓なしのテストでは確かめない。下の「最初の試し」の項目を `tooltip_demo` で確かめる。
 - Risks: 下の「最初の試し」の表のとおり。
 
@@ -696,7 +711,7 @@ pub(crate) fn note_button_press();
 **Implementation Notes**
 - `install` は、NonSend の資源 `TooltipSession` を置き、`FrameFinalize` に `tooltip_frame` を足す。
 - `note_button_press` は、UI スレッドの `Cell<bool>` に「前回の判定の後に押された」を立てるだけ（World を借りない）。`dispatch_window_message` が 5 種のボタンの押下とダブルクリックのメッセージで呼ぶ。`tooltip_frame` が読んで倒す。押してすぐ離した（次の画面更新までに離した）場合を、`GetAsyncKeyState` の読み取りだけでは取りこぼすため。既存の `PointerState` の押下の旗（1 フレームだけ立つ）を読む案は採らない（`PointerState` が付いていない所の押下を落とすため）。
-- クレートの文書（要件 7.5）は `mod.rs` の冒頭に書く: 使い方の例（静的・動的）、待ち時間は OS の設定の 2 倍（出し直しは 1 倍）、安全地帯、消えるきっかけ、印の意味、終わった印へ渡したときの結果、説明を出し分けたい単位で範囲を登録すること、既知の限界。`README.md` には触れない。
+- クレートの文書（要件 7.5）は `mod.rs` の冒頭に書く: 使い方の例（静的・動的）、待ち時間は OS の設定の 2 倍（出し直しは 1 倍）、安全地帯、消えるきっかけ、印の意味、終わった印へ渡したときの結果、説明を出し分けたい単位で範囲を登録すること、今風の見た目には exe のマニフェストで comctl32 の版 6 を申告すること（書き方の例つき）、既知の限界。`README.md` には触れない。
 
 #### tooltip_demo（サンプル）
 
@@ -708,7 +723,7 @@ pub(crate) fn note_button_press();
 - 窓は 2 枚: 透過でいつも手前の窓（絵のある所だけマウスを受ける）と、もう 1 枚のいつも手前の窓。
 - 範囲: 預けた文字（1 行・複数行・切れ目の無い長い URL・日本語の長い 1 行）／預けない範囲で、知らせの中からすぐ渡す／預けない範囲で、1 秒後に渡す（期限を `tick_wake::arm_deadline` で預けて `Update` の系で渡す）／重なった 2 つの範囲。
 - キーで切り替え: 絵と当たり判定を消す（要件 2.9）・範囲の取り消し・もう 1 枚の窓の重なりの立て直し（`ReassertZOrder`）。
-- マニフェストは持たない（版 6 の実行時の切り替えを通る）。記録は `RUST_LOG` で `trace` まで開けられる。一時ファイルは作らない。
+- マニフェストは `crates/wintf/build.rs` が埋める（comctl32 の版 6 の申告）。記録は `RUST_LOG` で `trace` まで開けられる。一時ファイルは作らない。
 
 ### 最初の試し（実機でしか決まらない点）
 
@@ -716,7 +731,7 @@ pub(crate) fn note_button_press();
 
 | # | 確かめること | 満たした、の基準 | 満たさないときの逃げ道 |
 |---|---|---|---|
-| S1 | 版 6 の実行時の切り替え（`shell32.dll` の資源 124）で、今風の見た目になるか | 切り替えが成功し、`GetWindowTheme(ツールチップの窓)` が空でない | 切り替え無しで作る（古い見た目）＋`warn`。要件 3.8 を満たせないので**止めて報告** |
+| S1 | `build.rs` からのリンカへの指示で exe にマニフェストが埋まり、今風の見た目になるか（wintf のサンプルと areka.exe の両方） | ビルドが通り、exe の資源にマニフェストが入っている。サンプルで `GetWindowTheme(ツールチップの窓)` が空でなく、見た目が今風。areka.exe が今までどおり起動し、既存のテストが緑 | リンカが既定のマニフェストとぶつかるなら `/MANIFEST:NO` と資源のファイルで埋める形に替える。それでも駄目なら**止めて報告** |
 | S2 | 追跡型＋`TTF_ABSOLUTE` で、渡した位置が左上になるか・出す前に大きさを問い合わせられるか | `GetWindowRect` の左上が渡した位置と一致し、`TTM_GETBUBBLESIZE` が出す前に 0 でない値を返す | 画面の外で一度出して `GetWindowRect` で測り、`TTM_TRACKPOSITION` で動かす |
 | S3 | 出しても入力先と手前の窓が変わらないか | 出す前後で `GetForegroundWindow` と `GetFocus` が同じ | `SWP_NOACTIVATE` 付きの `SetWindowPos` だけで出す形に替える。駄目なら**止めて報告** |
 | S4 | ツールチップの上のボタンの操作が、下の窓（同じスレッド・別プロセス）へ届くか | メモ帳の上に重ねたツールチップを押すと、メモ帳が押下を受ける | `WS_EX_LAYERED` を足して `SetLayeredWindowAttributes` で不透明にする。駄目なら**止めて報告** |
@@ -742,7 +757,6 @@ pub(crate) fn note_button_press();
 ### Error Strategy
 - **OS の表示の失敗**（窓を作れない・出せない）: `TooltipOsError` を作り、`warn` に残す。動的な使い方では `TooltipSupply::Failed` で返す。静的な使い方では記録だけ。出す番の検出と知らせは続ける（要件 6.6・6.7）。プロセスは止めない。
 - **OS の値の読み取りの失敗**: 待ち時間の設定 → 400 ミリ秒で続けて `warn`（要件 1.6）。マウスの位置 → その回は「位置が分からない」として、待ちは進めず、続いている出す番は終わらせない（`trace`）。画面の情報 → 作業領域に収める処理を飛ばして出し、`warn`。
-- **版 6 の切り替えの失敗**: `warn` を 1 回。古い見た目で作る。
 - **利用側の誤り**: 無い窓への登録 → `TooltipRegisterError::NoSuchWindow`。無い持ち手の差し替え・取り消し → 偽。終わった印 → `TooltipSupply::StaleTurn`／`dismiss` は偽。どれも落とさない。
 - `panic` する経路は作らない。
 
@@ -757,7 +771,6 @@ pub(crate) fn note_button_press();
 | `trace` | `tooltip_turn` | 判定の分岐 | 何が起きたか（入った・数え始め・来た・来なかった・終わり）・範囲・使った待ち時間・理由 |
 | `warn` | `tooltip_hover_time_unreadable` | 設定を読めなかった（1 回だけ） | 失敗の中身 |
 | `warn` | `tooltip_show_failed` | 表示の失敗 | 段・失敗の中身・印 |
-| `warn` | `tooltip_visual_style_unavailable` | 版 6 の切り替えの失敗（1 回だけ） | 失敗の中身 |
 
 ## Testing Strategy
 
