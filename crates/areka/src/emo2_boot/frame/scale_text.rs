@@ -78,9 +78,11 @@ use super::{
 ///
 /// # 箱の同期（areka-P0-shell-balloon 要件 3.5・6.8・design.md「箱の束の結線」）
 ///
-/// 同じ走査で各 scope のシェルの窓の `text_slot_view(shell_target(scope))` を集め、最後に
-/// [`TextLayerRuntime::sync_boxes`] を 1 回呼ぶ（拡大率・サーフェス・シェルの切替に箱の面を合わせる）。
-/// シェルの窓が未確立の scope は `None` を渡す（最初の `\s` までは箱を面にしない）。未確立は
+/// 同じ走査で各 scope のシェルの窓の `text_slot_view(shell_target(scope))` と、その窓がいま表示
+/// している絵の番号（`current_surface_id`）を組にして集め、最後に [`TextLayerRuntime::sync_boxes`] を
+/// 1 回呼ぶ（拡大率・絵・シェルの切替に箱の面を合わせる・areka-P0-shell-balloon-frame-align 要件 1.7）。
+/// シェルの窓が未確立の scope と、差し込み口はあるが絵が非表示（`Hide`・全透明退化）で番号の無い
+/// scope は `None` を渡す（箱の登録を外す・要件 1.3）。未確立は
 /// 起動直後の正常な状態ゆえ記録しない（毎フレーム鳴らさない）。`present_frame` の上流なので、
 /// 合わせた登録は同じフレームの描画に効く。
 pub fn run_text_scale_phase(wiring: &mut Emo2Wiring, world: &mut World) -> Vec<u32> {
@@ -105,8 +107,13 @@ pub fn run_text_scale_phase(wiring: &mut Emo2Wiring, world: &mut World) -> Vec<u
         // actor 引き当ては attach（`run_attach_phase` の `connect_balloon_text` 呼び）と**同一の写像**。
         // 別式で組むと存在しない actor を指し、7.1 の未登録 skip で静かに何も起きなくなる。
         let actor = ActorKey::from(scope.to_string());
-        // 箱の同期の材料（シェルの窓が未確立なら None）。バルーンの縮退 skip より前に集める。
-        shell_views.push((actor.clone(), presenter.text_slot_view(shell_target(scope))));
+        // 箱の同期の材料（差し込み口と絵の番号の組・どちらかが無ければ None）。バルーンの縮退
+        // skip より前に集める。
+        let shell = shell_target(scope);
+        let shown = presenter
+            .text_slot_view(shell)
+            .zip(presenter.current_surface_id(shell));
+        shell_views.push((actor.clone(), shown));
         let Some(view) = presenter.text_slot_view(target) else {
             // 表示未確立（初回 ShowSurface が成立していない）。毎フレーム走査ゆえ scope ごとに 1 回だけ鳴らす。
             if text_scale_warned.insert(scope) {

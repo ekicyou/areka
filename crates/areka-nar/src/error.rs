@@ -264,6 +264,16 @@ pub enum ManifestWarning {
     /// mask の要素が 1 階層のファイル名として使えない。
     #[error("mask の要素が不正なので読み飛ばした: {key} = {value}")]
     InvalidMaskEntry { key: String, value: String },
+    /// `*.source.directory` から `..` か空の段を取り除いた。
+    #[error("取り出し元から .. か空の段を取り除いた: {key} = {written} → {read}")]
+    SourceDirectoryCleaned {
+        key: String,
+        written: String,
+        read: String,
+    },
+    /// 探索で読まなかった同梱のバルーンの鍵（打ち切りの後ろの番号・先頭に 0 を付けた綴り）。
+    #[error("同梱のバルーンの探索で読まなかったので読み飛ばした: {key}")]
+    CompanionNotSearched { key: String },
 }
 
 /// 書庫の 1 要素の相対パスと `install.txt` のフォルダ名に共通の、パスの長さの

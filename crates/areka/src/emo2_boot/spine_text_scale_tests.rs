@@ -173,6 +173,9 @@ fn spine_dpi_change_while_balloon_hidden_lands_on_next_show() {
 /// 箱の場所は登録されず、文字を持っていても面にならない（`shown_boxes` が空のまま）。
 ///
 /// 面 0 に箱 `talk` を置いた束を渡し、`\s[0]` と文字を当てて、相 → 提示の順に 1 フレーム回す。
+/// 続けて絵を隠し（差し込み口は残り、絵の番号だけが無くなる）、もう 1 フレーム回して箱の登録が
+/// 外れることを確かめる——相は差し込み口と絵の番号を組にして渡す（areka-P0-shell-balloon-frame-align
+/// 要件 1.3・1.7）。
 #[test]
 fn text_scale_phase_syncs_boxes_on_the_shell_window() {
     use areka_sakura::ActorKey;
@@ -208,6 +211,14 @@ element1,balloon,talk,10,10
             .text_slot_view(shell_target(0))
             .is_some(),
         "前提: シェルの窓の文字の差し込み口が確立している"
+    );
+    assert_eq!(
+        harness
+            .wiring
+            .presenter()
+            .current_surface_id(shell_target(0)),
+        Some(0),
+        "前提: シェルの窓が絵（面 0）を表示している"
     );
 
     let text_world = areka_emo_compose::EmoWorld::build(&areka_parsers::shell::parse(SHELL));
@@ -252,6 +263,30 @@ element1,balloon,talk,10,10
         shown,
         vec!["talk".to_owned()],
         "拡大率の相が箱を同期し、提示が箱 talk を面にする"
+    );
+
+    // 絵を隠す（`\s[-1]` 相当）。差し込み口は残るが絵の番号は無くなる（areka-P0-shell-balloon-frame-align
+    // 要件 1.3）。拡大率の相が差し込み口だけを渡していれば、登録が残って箱が出続ける。
+    harness.wiring.apply_present(
+        &mut harness.world,
+        PresentCommand::Hide {
+            target: shell_target(0),
+            reply: None,
+        },
+    );
+    assert!(
+        harness
+            .wiring
+            .presenter()
+            .text_slot_view(shell_target(0))
+            .is_some(),
+        "前提: 非表示でも差し込み口は残る"
+    );
+    run_text_scale_phase(&mut harness.wiring, &mut harness.world);
+    run_text_phase(&mut harness.wiring, &mut harness.world, Some(10.0));
+    assert!(
+        harness.runtime.borrow().shown_boxes(&actor).is_empty(),
+        "絵の番号が無いスコープの箱は、拡大率の相の同期で登録が外れて出なくなる"
     );
 
     harness.shutdown_bounded();

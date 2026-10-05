@@ -1,0 +1,23 @@
+{
+  "feature_name": "areka-P0-mcp-log-history",
+  "created_at": "2026-10-04T04:45:09Z",
+  "updated_at": "2026-10-05T00:00:00Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-04T04:45:09Z"
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true
+}

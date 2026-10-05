@@ -28,6 +28,9 @@
 //!   1 フレームに 2 つ（dpi 相の `refresh_scale`／drain 相の `apply_show`）あるため、**両者の下流**・
 //!   text 相の**上流**に置く。
 //! - text: `TalkClock::talk_time` が `Some` のとき `present_frame` を呼ぶ（`Err` は `error!`＋継続）。
+//! - status-report: 提示の**後**（相の並びの最後）に、窓の可視と箱の写しから「見えているバルーンの組」を
+//!   作り、変わったときだけ kanade へ届ける（areka-P0-shell-balloon-frame-align 要件 2.3）。実装は
+//!   `frame/status_report.rs`。
 //!
 //! `plan_attachments`（`GhostWindows::scopes()` を正とする純関数・DD-12）も本モジュールに属する。
 //!
@@ -260,7 +263,7 @@ pub(super) fn ghost_quit_system(world: &mut World) {
 ///
 /// `Emo2Wiring`（NonSend）を [`World::remove_non_send`] で取り出してから
 /// attach→dpi→drain→差し替え→balloon-visibility→窓寸 reconcile→move-drain→resnap→連鎖確定→連鎖再解決→
-/// text-scale→text
+/// text-scale→text→status-report
 /// の順に各フェーズを駆動し、[`World::insert_non_send`] で戻す。
 /// remove→insert は `&mut World` を各フェーズへ排他に渡すための donor 慣行（借用衝突回避・
 /// `examples/emo-present.rs::boot_present_system` と同型）。本番の text フェーズは override 無し
@@ -382,6 +385,11 @@ pub fn emo2_frame_system(world: &mut World) {
     // で走る（旧寸の文字が 1 フレーム残らない）。戻り値（再構築 scope）は観測用ゆえ本番は捨てる。
     let _ = run_text_scale_phase(&mut wiring, world);
     run_text_phase(&mut wiring, world, None); // 本番: override なし（FrameTime＋clock で解決）。
+    // `Status` の `balloon(ID群)` の届け（areka-P0-shell-balloon-frame-align 要件 2.3）: 提示の**直後**
+    // ＝相の並びの最後に置く。窓の可視（可視性の相が発行済み）と箱の写し（直前の提示で作り直し
+    // 済み）がどちらもこのフレームの最終の姿になってから組を作るので、届けが画面から 1 フレーム
+    // 遅れない。可視性の相の中で届けると、箱の同期と提示より前なので写しが 1 フレーム古い。
+    status_report::run_status_report_phase(&mut wiring, world);
     world.insert_non_send(wiring);
 }
 

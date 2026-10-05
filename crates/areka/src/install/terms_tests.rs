@@ -1,10 +1,10 @@
 //! 利用条件の本文のテスト（design「Testing Strategy / 判断（find_terms）」・要件 4.1〜4.3・4.9〜4.11・12.15）。
 //!
-//! 書庫は `sample_ghost_kit` の `nar_writer` で組み、一時フォルダに置いて本物の
-//! `NarArchive::open` で開く。
+//! 書庫は `sample_ghost_kit` の `nar_writer` で組み、ワークツリーの `target\` の下の
+//! 作業フォルダ（`WorkDir`）に置いて本物の `NarArchive::open` で開く。OS の一時フォルダは
+//! 使わない（`areka-P0-install-companion-reading` 要件 8.5）。
 
-use sample_ghost_kit::{NarBuilder, install_txt};
-use temp_path_kit::TempPath;
+use sample_ghost_kit::{NarBuilder, WorkDir, install_txt};
 
 use super::*;
 
@@ -34,8 +34,8 @@ fn ghost() -> NarBuilder {
 }
 
 fn open(builder: NarBuilder) -> NarArchive {
-    let work = TempPath::new("terms");
-    let path = work.child("ghost.nar");
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let path = work.path().join("ghost.nar");
     std::fs::write(&path, builder.bytes()).expect("固定入力を置ける");
     NarArchive::open(&path).expect("無傷の書庫は開ける")
 }
@@ -197,4 +197,38 @@ fn top_level_terms_are_shown_and_nested_ones_are_listed() {
     let archive = with(&[("terms.txt", b"top\r\n"), ("kaku/terms.md", b"md\r\n")]);
     assert_eq!(find_terms(&archive), body("terms.txt", "top"));
     assert_eq!(nested_terms(&archive), vec!["kaku/terms.md".to_owned()]);
+}
+
+#[test]
+fn terms_directly_under_a_nested_source_are_listed_but_not_its_parent() {
+    // `\` で書いた階層付きの取り出し元は `/` 区切りで読まれ、その直下だけを見る
+    // （`areka-P0-install-companion-reading` 要件 2.7・8.4）。
+    let archive = open(
+        NarBuilder::new()
+            .file(
+                "install.txt",
+                &install_txt(&[
+                    "type,ghost",
+                    "name,テスト",
+                    "directory,tester",
+                    "balloon.directory,kaku",
+                    "balloon.source.directory,extra\\bal1",
+                ]),
+            )
+            .done()
+            .file("ghost/master/descript.txt", b"charset,Shift_JIS\r\n")
+            .done()
+            .file("extra/bal1/descript.txt", b"charset,Shift_JIS\r\n")
+            .done()
+            .file("extra/bal1/terms.txt", b"balloon\r\n")
+            .done()
+            .file("extra/terms.txt", b"parent\r\n")
+            .done(),
+    );
+    assert_eq!(find_terms(&archive), None, "最上位には無い");
+    assert_eq!(
+        nested_terms(&archive),
+        vec!["extra/bal1/terms.txt".to_owned()],
+        "取り出し元の直下だけ・途中のフォルダは見ない"
+    );
 }

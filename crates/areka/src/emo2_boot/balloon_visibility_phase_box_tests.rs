@@ -1,8 +1,11 @@
 // =============================================================================
 // 表示の相の観測と発行に箱をつなぐ配線の決定論テスト（areka-P0-shell-balloon task 10.3）
 //
-// 観測: 文字の数は「普通のバルーンの窓に今出ている文字の数」、「箱に文字が出ている」は
-// 四角の写し（`shown_boxes`）から、滞在は「バルーンの窓の上、または文字の出ている箱の上」。
+// 観測: 「箱に文字が出ている」は四角の写し（`shown_boxes`）から、滞在は「バルーンの窓の上、
+// または文字の出ている箱の上」。文字の数（普通のバルーンの窓に今出ている数）はシェルの窓の
+// 絵の番号で決まり、ここの表示層（`attach_headless`）はシェルの窓も絵の番号も持たないので、
+// 数の判断は文字の層の檻が、番号を渡すことは枠の檻（`frame_shell_box_integration_tests.rs`）が持つ
+// （areka-P0-shell-balloon-frame-align）。
 // 箱の上の滞在は観測の直前に毎フレーム整える。発行: 隠す契機が箱に届くなら箱を隠す印も立てる。
 //
 // 写しは提示（GPU）でしか埋まらないので、写しを受け取る箱の観測は 1 スコープ分の関数へ
@@ -116,59 +119,6 @@ fn box_hover_errors(events: &[crate::placement::test_support::LogEvent]) -> usiz
 // ---------------------------------------------------------------------------
 // 観測
 // ---------------------------------------------------------------------------
-
-/// 文字の数は普通のバルーンの窓に今出ている数: 今のサーフェスに箱があるスコープは 0、
-/// 無いスコープは見えている文字の数（要件 5.1〜5.3・6.4・6.9）。
-#[test]
-fn glyph_count_is_the_one_shown_in_the_balloon_window() {
-    let mut world = world_at(1.0);
-    world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
-    let mut presenter = EmoPresenter::new();
-    for scope in [0, 1] {
-        attach_headless(&mut presenter, &mut world, scope);
-    }
-    let runtime = runtime_with_boxes(&mut world);
-    {
-        let mut rt = runtime.borrow_mut();
-        for scope in [0, 1] {
-            rt.apply_cue(&cue(scope, CueCommand::Text("あい".into())));
-        }
-        // scope 0 だけ箱のあるサーフェスへ（普通のバルーンの文字は保持したまま窓に出さない）。
-        rt.apply_cue(&cue(0, CueCommand::Emote { key: "0".into() }));
-        assert_eq!(
-            rt.state()
-                .visible_glyphs(&areka_sakura::ActorKey::from("0"), 1.0),
-            2,
-            "較正: 普通のバルーンの場所の文字は残っている"
-        );
-    }
-    let mut state = BalloonVisibilityState::default();
-
-    let observed = collect_observations(
-        &presenter,
-        &runtime,
-        &mut world,
-        &[0, 1],
-        Some(1.0),
-        Vec::new(),
-        &mut state,
-    );
-
-    assert_eq!(
-        observed.scopes[&0].visible_glyphs.map(|g| g.count),
-        Some(0),
-        "箱のあるサーフェスでは窓に出ている文字は 0"
-    );
-    assert_eq!(
-        observed.scopes[&1].visible_glyphs.map(|g| g.count),
-        Some(2),
-        "箱の無いスコープは見えている文字の数のまま"
-    );
-    assert!(
-        !observed.scopes[&0].box_showing && !observed.scopes[&1].box_showing,
-        "提示していないので写しは空＝箱に文字は出ていない"
-    );
-}
 
 /// 箱の観測は写しから「文字が出ているか」を、整えた後の記録から滞在を読む（要件 6.10・6.11）。
 #[test]

@@ -39,8 +39,8 @@ use crate::input_events::balloon::BalloonWiring;
 use crate::input_events::shell_box::{ShellBoxHover, settle_box_hover};
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
-use super::super::frame::{Emo2Wiring, resolve_talk_time, status_report};
-use super::super::target_map::balloon_target;
+use super::super::frame::{Emo2Wiring, resolve_talk_time};
+use super::super::target_map::{balloon_target, shell_target};
 use super::{
     BalloonVisibilityState, GlyphObservation, ScopeObservation, TalkLifecycleSignal,
     VisibilityAction, VisibilityLogEvent, VisibilityObservations, VisibilityTrigger,
@@ -75,7 +75,6 @@ pub(in crate::emo2_boot) fn run_balloon_visibility_phase(
         presenter,
         lifecycle_rx,
         balloon_visibility: state,
-        balloon_status,
         balloon_models,
         clock,
         ..
@@ -127,13 +126,6 @@ pub(in crate::emo2_boot) fn run_balloon_visibility_phase(
         &decision.actions,
     );
     hidden.extend(issued.hidden.iter().copied());
-
-    // 本フレームの表示・非表示が照会に反映された後で、見えている組の差分を kanade へ届ける
-    // （判断は持たない・areka-P0-status-execution-states 要件 4.1／4.5）。
-    // 借りられないフレームは `borrow_runtime` が誤りを 1 回記録し、届けを次のフレームへ回す。
-    if let Some(runtime) = borrow_runtime(&runtime, state) {
-        status_report::report_balloons(presenter, &runtime, world, balloon_status, &scopes);
-    }
 
     emit_visibility_logs(&decision.logs, &issued.not_shown);
     clear_hover_residency(world, &hidden);
@@ -301,12 +293,17 @@ fn collect_observations(
                 //
                 // 消去の回数は数と同じ借用・同じ条件でだけ組にして運ぶ（片方だけが進む記憶を作らない）。
                 //
-                // 数は普通のバルーンの窓に今出ている文字の数（今のサーフェスに箱があれば 0）。
-                // 箱のあるサーフェスでは窓を出さず、箱の無いサーフェスへ移ると出る
-                // （areka-P0-shell-balloon 要件 5.1〜5.3・6.4・6.9）。
+                // 数は普通のバルーンの窓に今出ている文字の数（シェルの窓がいま表示している絵に
+                // 箱があれば 0）。箱のある絵では窓を出さず、箱の無い絵へ替わると出る
+                // （areka-P0-shell-balloon 要件 5.1〜5.3・6.4・6.9）。絵の番号は表示層から引き、
+                // 台本の `\s` の受け取りには従わない（areka-P0-shell-balloon-frame-align 要件 1.8）。
                 visible_glyphs: runtime.as_ref().zip(now_talk_time).map(|(rt, t)| {
                     GlyphObservation {
-                        count: rt.balloon_shown_glyphs(&actor, t),
+                        count: rt.balloon_shown_glyphs(
+                            &actor,
+                            presenter.current_surface_id(shell_target(scope)),
+                            t,
+                        ),
                         clear_count: rt.state().clear_count(&actor),
                     }
                 }),

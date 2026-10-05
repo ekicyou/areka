@@ -88,18 +88,19 @@ debug!("[deferred_surface_creation] Creating Surface for Entity={}, size={}x{}",
 ## Subscriber初期化（アプリケーション側）
 
 ```rust
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 fn main() {
-    // RUST_LOG環境変数対応、未設定時はinfoレベル
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info"))
-        )
+    // RUST_LOG環境変数対応、未設定時はinfoレベル（フィルタは標準出力の層にだけ掛ける）
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        ))
         .init();
 }
 ```
+
+areka は `log_history::init()`（`crates/areka/src/log_history.rs`）がこれに履歴の層（`get_log` が読む・`RUST_LOG` と独立）を `.with(...)` で足す。
 
 ## 環境変数によるフィルタリング
 
