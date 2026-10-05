@@ -27,24 +27,44 @@
 //! シーム関数へ委ねる（`\q` 旧 2 連形・`\![*]` マーカーはシーケンス依存ゆえ
 //!   `fold_*` 群が捕捉する。いずれも実装済み）。
 
-// `decode` は `parse`（タスク 5）から非テスト経路で結線済み。タスク 4.2 の
+// 本体 `decode_noted` は `parse_noted`（→ `parse`）から非テスト経路で結線済み
+// （範囲なしの `decode` はその上に載せた、テストだけの入口）。タスク 4.2 の
 // シーム関数（`decode_passthrough_*`）も `decode_token` / `decode_tag` / `decode_bang`
 // 経由で到達されるため、モジュール全体の dead_code 抑止は不要（除去済み）。
 
 use super::lexer::Token;
-use super::model::{Choice, Instruction, MoveArgs, NewLineRatio, SurfaceArg};
+use super::model::{Choice, Instruction, MoveArgs, NewLineRatio, Read, SurfaceArg};
 use std::iter::Peekable;
+use std::ops::Range;
 use std::time::Duration;
 use std::vec;
+
+/// 範囲つきのトークン列を先読みしながら走査する型（`decode_noted` と `fold_*` 群が共有）。
+type SpannedTokens = Peekable<vec::IntoIter<(Token, Range<usize>)>>;
 
 /// 1 ウェイト単位（`\wN` の n に乗ずる基準。ukadoc 確定: 50ms）。
 const WAIT_UNIT_MS: u64 = 50;
 
-/// 構文トークン列を値正規化済みの `Instruction` 列へ写像する（mod 内・`parse` が結線）。
+/// 構文トークン列を値正規化済みの `Instruction` 列へ写像する（呼び手はテストだけ）。
 ///
-/// - 入力 `tokens` は lexer 出力（構文区切り済み）。
+/// 本体は `decode_noted` で、ここは範囲と印を落としたもの（経路は 1 本・写しを作らない）。
+/// 範囲は持たないので空の範囲を添えて渡す。
+#[cfg(test)]
+pub(crate) fn decode(tokens: Vec<Token>) -> Vec<Instruction> {
+    let spanned = tokens.into_iter().map(|tok| (tok, 0..0)).collect();
+    decode_noted(spanned)
+        .into_iter()
+        .map(|read| read.instruction)
+        .collect()
+}
+
+/// 範囲つきの構文トークン列を、値正規化済みの `Instruction` と範囲・印の列へ写像する
+/// （mod 内・`parse_noted` が結線）。
+///
+/// - 入力 `tokens` は lexer 出力（構文区切り済み・`lex_spanned`）。
 /// - 全 `Token` がいずれかの `Instruction` へ写像され、未デコード文字列断片は残さない
 ///   （要件 1.2）。出力順は入力順（要件 1.3）。
+/// - 各 `Read::span` は元のトークンの範囲。畳んだ命令は畳んだ全部を覆う。
 /// - 失敗しない（`Vec` を返す・`Result` でない・要件 10.2）。
 ///
 /// **シーケンス認識（タスク 4.2）**: 大半のトークンは 1:1 写像だが、
@@ -54,24 +74,31 @@ const WAIT_UNIT_MS: u64 = 50;
 /// - 選択肢マーカー `\![*]`（`Tag{!,["*"]}`）＋ 直後の現行 `\q[...]` → マーカーを
 ///   Choice へ畳む（要件 5.4）。単独なら `GenericCommand`。
 ///
-/// そのため `Vec<Token>` を peekable に走査する（`map` でなく明示ループ）。
-pub(crate) fn decode(tokens: Vec<Token>) -> Vec<Instruction> {
+/// そのため `Vec<(Token, Range)>` を peekable に走査する（`map` でなく明示ループ）。
+pub(crate) fn decode_noted(tokens: Vec<(Token, Range<usize>)>) -> Vec<Read> {
     let mut out = Vec::with_capacity(tokens.len());
     let mut it = tokens.into_iter().peekable();
-    while let Some(token) = it.next() {
-        match token {
+    while let Some((token, span)) = it.next() {
+        // 畳んだ命令は、畳んだトークンの末尾まで範囲を伸ばす。
+        let mut end = span.end;
+        let instruction = match token {
             // 選択肢マーカー `\![*]`: 直後が現行 `\q[...]` なら畳んで Choice、単独なら
             // GenericCommand（要件 5.4・design L425）。
             Token::Tag { word, args } if is_choice_marker(&word, &args) => {
-                out.push(fold_choice_marker(&mut it));
+                fold_choice_marker(&mut it, &mut end)
             }
             // 旧 2 連 `\q[ID][タイトル]` / `\q*[...]`: 直後 `Text("[...]")` を併せて
             // 単一 `Raw` に吸収（Choice 化しない・要件 5.3）。
             Token::Tag { word, args } if is_legacy_q_head(&word, &args, it.peek()) => {
-                out.push(fold_legacy_q(&word, &args, &mut it));
+                fold_legacy_q(&word, &args, &mut it, &mut end)
             }
-            other => out.push(decode_token(other)),
-        }
+            other => decode_token(other),
+        };
+        out.push(Read {
+            instruction,
+            span: span.start..end,
+            notes: Vec::new(),
+        });
     }
     out
 }
@@ -84,12 +111,13 @@ fn is_choice_marker(word: &str, args: &[String]) -> bool {
 /// 選択肢マーカー `\![*]` を解決する。直後が現行 `\q[...]`（`Tag{q,..}`）なら
 /// その `\q` を Choice として消化し、マーカーを畳んで未デコード文字列を残さない
 /// （要件 5.4）。直後が現行 `\q` でなければ単独マーカー＝`GenericCommand { name:"*" }`。
-fn fold_choice_marker(it: &mut Peekable<vec::IntoIter<Token>>) -> Instruction {
-    if let Some(Token::Tag { word, .. }) = it.peek()
+fn fold_choice_marker(it: &mut SpannedTokens, end: &mut usize) -> Instruction {
+    if let Some((Token::Tag { word, .. }, _)) = it.peek()
         && word == "q"
     {
         // 現行 `\q[...]`（単一ブラケット）を消化して Choice 化（マーカーを吸収）。
-        if let Some(Token::Tag { args, .. }) = it.next() {
+        if let Some((Token::Tag { args, .. }, span)) = it.next() {
+            *end = span.end;
             return decode_choice(args);
         }
     }
@@ -111,10 +139,10 @@ fn fold_choice_marker(it: &mut Peekable<vec::IntoIter<Token>>) -> Instruction {
 /// `q*` は word 自体が現行 `q` と異なるため、後続 Text が無くとも現行 Choice には
 /// ならない（`decode_tag` の subset 外 → Raw 経路へ）。本判定が拾うのは「現行 `q` の
 /// 綴りだが直後に浮く `[...]` がある」旧形と、「`q*` ＋ 浮く `[...]`」旧形の双方。
-fn is_legacy_q_head(word: &str, args: &[String], next: Option<&Token>) -> bool {
+fn is_legacy_q_head(word: &str, args: &[String], next: Option<&(Token, Range<usize>)>) -> bool {
     (word == "q" || word == "q*")
         && args.len() == 1
-        && matches!(next, Some(Token::Text(t)) if t.starts_with('[') && t.ends_with(']'))
+        && matches!(next, Some((Token::Text(t), _)) if t.starts_with('[') && t.ends_with(']'))
 }
 
 /// 旧 2 連 `\q` を単一 `Raw` へ畳む。先頭タグ（`\q[ID]` / `\q*[ID]`）と直後の浮く
@@ -123,12 +151,14 @@ fn is_legacy_q_head(word: &str, args: &[String], next: Option<&Token>) -> bool {
 fn fold_legacy_q(
     word: &str,
     args: &[String],
-    it: &mut Peekable<vec::IntoIter<Token>>,
+    it: &mut SpannedTokens,
+    end: &mut usize,
 ) -> Instruction {
     // 先頭タグの概形（`\q[ID]` 等）を復元。
     let mut raw = reconstruct_tag(word, args);
     // 直後の浮く `Text("[...]")` を取り込む（判定済みなので必ず存在する）。
-    if let Some(Token::Text(t)) = it.next() {
+    if let Some((Token::Text(t), span)) = it.next() {
+        *end = span.end;
         raw.push_str(&t);
     }
     Instruction::Raw(raw)

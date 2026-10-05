@@ -120,3 +120,29 @@ pub struct MoveArgs {
     /// move コマンドの生引数列（意味割当は下流 window-placement の責務）。
     pub args: Vec<String>,
 }
+
+/// 台本を読む段が、命令 1 つについて自分で下した扱いの印。
+///
+/// 印は「読む段が自分でしたこと」だけを言う（意味づけ・シェルの事実・`\!` の行き先は知らない）。
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReadNote {
+    /// 腕の無い綴りなので `Raw` にした（知らないタグ）。
+    UnknownTag,
+    /// 閉じていない `[`／`"` なので、そこから入力の末尾までを `Raw` にした。
+    Unclosed,
+    /// 引数が無い・読めないので、既定の値へ落とした。
+    ArgumentDefaulted,
+    /// 選択肢マーカー `\![*]` を受け取ったが、何も作らない。
+    MarkerIgnored,
+}
+
+/// 命令 1 つと、その台本の中の位置・印（`parse_noted` の 1 要素）。
+#[derive(Clone, Debug, PartialEq)]
+pub struct Read {
+    pub instruction: Instruction,
+    /// 台本の中のバイト範囲（先頭を含み末尾を含まない）。`&input[span]` が該当する綴り。
+    pub span: std::ops::Range<usize>,
+    /// 無ければ空。
+    pub notes: Vec<ReadNote>,
+}
