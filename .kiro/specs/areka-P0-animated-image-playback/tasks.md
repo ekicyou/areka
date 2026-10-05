@@ -232,3 +232,4 @@
 ## Implementation Notes
 - 1.2: 検体は `tests/fixtures/animated-playback/{shell,balloon}/`。面とバルーンの面は `.png` の名前しか拾わないので、`surface1.png`＝`basic.apng`・`surface2.png`／`balloons0.png`＝`rgb.apng`・`balloons1.png`＝`alpha.webp` の中身の写し。`rgb.*` は α を持たず左上の白が抜き色になる＝決め手の画素は写し元 `crates/areka-emo-atlas/src/testdata/animated/` の README の表を正本に選ぶ（5.4）
 - 並走（10-06 調べ）: `areka-P0-self-alpha-declaration`（セッションなし・tasks 生成済み）は `build_balloon_target_from_faces` に値を 1 つ足し、`build_shell_target*` の直呼びに `UseSelfAlpha::On` を足す。後から main に入る側が、1.2 の `shell_target_animated_fixture_tests.rs` と 5.4 の E2E の呼び出しを合わせる。`mcp-get-status` は `frame/status_report.rs` を読むだけの見込み（問い合わせ中）
+- 7.1: 台帳を書き替えたら `doc/ukadoc-coverage/report/summary.md` は手で直さず `ukadoc-survey` の report と report-summary を回し直して作る（並走の choice-script-prefix・element-base-method も同じ表を作り直すので、後から入る側が回し直す）
