@@ -197,6 +197,14 @@ fn open(path: &Path) -> windows::core::Result<()> {
     Ok(())
 }
 
+// OS の境界（areka-P0-open-external-tags task 1.2）。4.1 で結線されるまで呼び手が無い
+// （本物 WindowsShell と COM の初期化はテストでも呼ばないので not(test) に限らず許す・4.1 で外す）。
+#[allow(dead_code)]
+mod os_port;
+
+#[cfg(test)]
+mod opener_test_support;
+
 #[cfg(test)]
 #[path = "readme_tests.rs"]
 mod readme_tests;

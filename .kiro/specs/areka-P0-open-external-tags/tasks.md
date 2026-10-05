@@ -9,7 +9,7 @@
   - _Requirements: 1.5, 1.6_
   - _Boundary: JumpTagArm_
 
-- [ ] 1.2 (P) OS の境界と、テスト用の偽物を作る
+- [x] 1.2 (P) OS の境界と、テスト用の偽物を作る
   - 動詞（開く・編集）・1 回分の呼び出し（対象・引数・作業フォルダ）・境界の trait を `readme` の子のファイルに置き、本物は `ShellExecuteExW` を `SEE_MASK_FLAG_NO_UI`・`SW_SHOWNORMAL`・親の窓なしで呼び、偽なら `GetLastError` の符号を返す。環境変数は大文字小文字を区別せず読む
   - `readme.rs` には OS の境界とテスト用の偽物の 2 つの子の宣言だけを足す（規則・開く処理の宣言は 2.1・3.1 が足す）。4.1 で結線されるまで呼び手が無いので、一時的な `#[cfg_attr(not(test), allow(dead_code))]` を許し、4.1・4.2 で外す（2.x・3.x も同じ）
   - 開く専用のスレッドの最初に 1 度だけ呼ぶ COM の初期化（STA・OLE1DDE 無効）を置き、失敗は `warn!` を残して続ける
@@ -118,3 +118,8 @@
   - emo2 の台本（絶対パスで起動・置き場はワークツリーの `target\` の下）で `\j[https://…]`・`\![open,file,%SystemRoot%\notepad.exe]`・`\![open,file,notepad.exe]`・`\![open,explorer,…]`（フォルダ・ファイル）・`\![open,editor,…]`・`\![open,mailer,…]` と、関連付けの無いファイルを流す
   - 完了の姿: それぞれが開く（関連付けの無いファイルは OS の窓が出ず記録だけ）・`get_log` の `status` と `error` に行が出る・開いている間も吹き出しが動く、を記録に残す
   - _Requirements: 1.1, 2.1, 3.1, 4.1, 4.2, 5.1, 6.1, 7.2, 7.3, 7.5, 7.6_
+
+## Implementation Notes
+- 1.2: `readme.rs` の `mod os_port;` は `#[allow(dead_code)]`（テストのビルドでも呼び手が無いため）。4.1 で必ず外す。
+- この toolchain（clippy 0.1.99）では `cargo clippy -p areka -- -D warnings` が `readme/` の外の既存コードで約 73 件赤い。clippy は触ったファイルから出る警告だけで判定する。
+- このワークツリーには i686 の helper が無く、実走の結合テスト 4 本（`mcp_get_log_real_run` ほか）が赤い＝環境のせいで本 spec の退行ではない。全体の確認は `tools/test-all.ps1`（i686 を先にビルドする）で行う。
