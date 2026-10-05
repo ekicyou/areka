@@ -176,7 +176,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 | `mcp-ghost-name-match`（**10-04 起票**・`mcp-get-property` の要件ディスカッションから） | 優先 | MCP の `ghost_name` の照合を SSP 2.9.07 に合わせる（英字の大小・本体側名・名前の前後の空白・空文字＝survey §7.4）。`mcp-tool-entrances` の裁定 6・7 を上書き | S（3〜5） | MCP の 3 段目の後（共有の `resolve.rs`・`resolve_tests.rs`） | `mcp-tool-entrances`・3 段目の着地 | − |
 | `mcp-author-tools`（**10-05 起票**・`/kiro-discovery`「エージェント目線の MCP ツール」） | 優先 | areka 独自ツールの登録口と橋（SSP の 10 本は変えない）＋読むだけの 3 本＝`check_script`（台本を再生せずに解釈）・`list_capabilities`（対応タグの一覧）・`validate_ghost`（設定ファイルの検査）。ツール名の接頭辞は要件の議題 | M〜L（14〜20・超えたら `validate_ghost` を切る） | C5 の候補（MCP の共有ファイルを触る＝共有ファイルを触る MCP の spec と同じウェーブに置かない） | `mcp-tool-entrances` | ○ |
 | `mcp-user-response`（**10-05 起票**・同） | 優先 | 選択肢・入力欄の答えと、なでる・クリックなどの操作を、`since_id` 付きでエージェントへ返すツール 1 本（さくらスクリプトでは届かない返り道・SSP にも無い） | M〜L（12〜18） | kanade の列（choice とマウスの配線） | `mcp-author-tools`・`mcp-kanade-tools`・`mouse-drag-events` | ○ |
-| `mcp-shiori-query`（**10-05 起票**・同・開発者「SHIORI への情報要求が無い・raise_event はトークになるだけ」） | 優先 | ゴーストへ情報を問うツール 1 本＝SHIORI リソースを任意の ID で読み、Value をデータとして返す／イベントで問い、応答の Value と `X-SSTP-PassThru-*` を返す（既定は再生しない＝要件の議題）。`X-SSTP-PassThru-*` の要求・応答の運搬も持つ | M〜L（12〜18） | kanade の列（`actor_resources` の隣・host32-host の `shiori3.rs` も触る＝`script-security-level` と同じウェーブに置かない） | `mcp-author-tools` | ○ |
+| `mcp-shiori-query`（**10-05 起票**・同・開発者「SHIORI への情報要求が無い・raise_event はトークになるだけ」） | 優先 | ゴーストへ情報を問うツール 1 本＝SSTP NOTIFY と同じ振る舞いに `X-SSTP-PassThru-*` の往復を足す（正典の作法・ghost_terminal の `ShioriEcho` 系が実例）。データはヘッダで返り、台本が空なら喋らない。SHIORI リソースを外から直接読む形は正典に無い＝要件の議題（推しは採らない） | M（10〜14） | kanade の列（`actor_resources` の隣・host32-host の `shiori3.rs` も触る＝`script-security-level` と同じウェーブに置かない） | `mcp-author-tools` | ○ |
 | `script-security-level`（**10-05 起票**・同・開発者「セキュリティレベルでさくらスクリプトに制約が出る・areka に未実装」） | 優先 | 台本とイベントに出どころを付けて運ぶ。SHIORI へ `SecurityLevel`・`SenderType` を正典の値で渡し、応答の `SecurityLevel` を読み、ukadoc が「外部からは不可」と書いたタグを止める（MCP は SSP と同じく Owned SSTP＝`local`） | M〜L（12〜18） | C5 の候補・kanade の列（host32-host の `shiori3.rs` も触る） | なし | ○ |
 | `script-impact-tiers`（**10-05 起票**・同） | 優先 | タグの影響の段＝高（ベースウェアの外）・中（ベースウェアの中で演技を超えるもの）・低（アクターの演技の範疇・ゴースト切替を含む＝**制約なし**・開発者確定）の正本の表と、出どころごとの扱い（中・高は要件の議題） | M（10〜14） | `script-security-level` の後 | `script-security-level`・`mcp-kanade-tools` | ○ |
 | `coverage-roadmap-refresh`（**10-02 に覚え書き `ukadoc-coverage-custody` を合流**） | その他 | 網羅台帳の手書きの数と持ち主が黙って偽になるのを止める（検査が `completed/` を走査・128 行の持ち主の付け替え・実在しない仕様名 107 項目） | M（14〜18） | C5 の候補（台帳を触る spec が 1 本も走らない席） | なし | − |
@@ -445,7 +445,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
     - 「ゴースト切り替えも低。アクター同士の演技の範疇であれば制約なし」。
     - 中・高で何をするかは `script-impact-tiers` の要件の議題。
   - ⑶ 正典の `SecurityLevel`／`SenderType`（ukadoc の spec_shiori3・spec_sstp）が areka に無いこと（SHIORI へは `local` 固定）を開発者が指摘し、`script-security-level` を起票した。影響の段とは別の軸。MCP は SSP と同じく Owned SSTP＝`local` なので、正典の制約は MCP には掛からない。
-  - ⑷ 開発者の指摘（同日）「今の MCP ツールは SHIORI への情報要求が無い。raise_event はトークになるだけで MCP 応答にはならない」。SSP の `raise_event` の結果の本文には返り台本が入るが、再生され、データではない。正典の SHIORI リソース（GET の Value）と `X-SSTP-PassThru-*`（SHIORI の応答のヘッダを SSTP の応答へ中継）を MCP へ写す `mcp-shiori-query` を起票した。
+  - ⑷ 開発者の指摘（同日）「今の MCP ツールは SHIORI への情報要求が無い。raise_event はトークになるだけで MCP 応答にはならない」。SSP の `raise_event` の結果の本文には返り台本が入るが、再生され、データではない。正典で外とゴーストがデータを往復させる口 `X-SSTP-PassThru-*`（要求のヘッダを SHIORI へ通し、SHIORI の応答のヘッダを SSTP の応答へ中継・ghost_terminal の `ShioriEcho` 系が実例）を MCP へ写す `mcp-shiori-query` を起票した。開発者裁定「正典寄りの形」＝台本が返れば NOTIFY と同じく再生し、データはヘッダで返す（areka 独自の「再生しない」は持たない）。
 - **採らなかった案（理由）**:
   - ゴーストの検索（SSP 側のオンライン MCP がある）。
   - 声（areka に音の層が無い・別テーマ）。
@@ -460,7 +460,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 - [ ] areka-P0-script-security-level -- 出どころの運搬・SHIORI の `SecurityLevel`／`SenderType`・ukadoc のタグの制約。Dependencies: none
 - [ ] areka-P0-script-impact-tiers -- 影響の段（高・中・低）の正本の表と出どころごとの扱い。Dependencies: areka-P0-script-security-level, areka-P0-mcp-kanade-tools
 - [ ] areka-P0-mcp-user-response -- 選択肢・入力・操作をエージェントへ返す。Dependencies: areka-P0-mcp-author-tools, areka-P0-mcp-kanade-tools, areka-P0-mouse-drag-events
-- [ ] areka-P0-mcp-shiori-query -- ゴーストへ情報を問う（SHIORI リソース・イベント＋`X-SSTP-PassThru-*`）。Dependencies: areka-P0-mcp-author-tools
+- [ ] areka-P0-mcp-shiori-query -- ゴーストへ情報を問う（SSTP NOTIFY 相当＋`X-SSTP-PassThru-*` の往復）。Dependencies: areka-P0-mcp-author-tools
 
 ### 配布と公開（winget・crates.io・2026-10-02 `/kiro-discovery` で起票）
 
