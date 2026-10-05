@@ -63,7 +63,7 @@
 3. When `seriko.use_self_alpha` の値が `full` のとき, the areka shall そのシェルを要件 4 の扱いで描く。
 4. When `seriko.use_self_alpha` の値が `0` のとき, the areka shall そのシェルを要件 5 の扱いで描く。
 5. If シェルの descript.txt に `seriko.use_self_alpha` の行が無い、またはシェルの descript.txt が無いとき, then the areka shall 正典の既定どおり `0` と書いてあるものとして扱う。
-6. If `seriko.use_self_alpha` の値が `1`・`true`・`full`・`0` のどれでもないとき, then the areka shall 行が無いときと同じに扱い、読めなかった値を記録に残す。
+6. If `seriko.use_self_alpha` の値が `1`・`true`・`full`・`0` のどれでもないとき, then the areka shall 行が無いときと同じに扱い、読めなかった値を記録に残す。値は前後の空白を除き、英字の大文字と小文字を区別せずに比べる（`TRUE`・`Full` は読める。`false` など 4 つ以外の語は読めない値）。
 7. When ゴーストを切り替える、またはシェルを切り替えるとき, the areka shall 切り替えた先のシェルの宣言で描き、前のシェルの宣言を持ち越さない。
 
 ### Requirement 2: バルーンの透過の宣言を読む
@@ -77,7 +77,7 @@
 3. When `use_self_alpha` の値が `full` のとき, the areka shall そのバルーンを要件 4 の扱いで描く。
 4. When `use_self_alpha` の値が `0` のとき, the areka shall そのバルーンを要件 5 の扱いで描く。
 5. If バルーンの descript.txt に `use_self_alpha` の行が無いとき, then the areka shall 正典の既定どおり `0` と書いてあるものとして扱う。
-6. If `use_self_alpha` の値が `1`・`true`・`full`・`0` のどれでもないとき, then the areka shall 行が無いときと同じに扱い、読めなかった値を記録に残す。
+6. If `use_self_alpha` の値が `1`・`true`・`full`・`0` のどれでもないとき, then the areka shall 行が無いときと同じに扱い、読めなかった値を記録に残す。値の比べ方は要件 1 の 6 と同じ。
 7. The areka shall バルーンの透過の扱いを descript.txt の宣言 1 つだけで決め、バルーンの絵ごとの設定ファイル（`balloons0s.txt` など）に同じ名前の行が書いてあっても、それで上書きしない（正典「この設定はバルーン全体の一括設定のみで、オーバーライドはできない」）。
 8. The areka shall シェルの `seriko.use_self_alpha` とバルーンの `use_self_alpha` を別々の宣言として扱い、片方の値をもう片方の絵に当てない。
 
@@ -138,7 +138,7 @@
 
 #### Acceptance Criteria
 
-1. When シェルまたはバルーンを読み込んだとき, the areka shall 採った透過の扱い（`1`・`full`・`0` のどれか）と、それが宣言によるものか既定によるものかを、読み込み 1 回につき 1 度だけ記録に残す。
+1. When シェルまたはバルーンを読み込んだとき, the areka shall 採った透過の扱い（`1`・`full`・`0` のどれか）と、それが宣言によるものか既定によるものかを、読み込み 1 回につき 1 度だけ記録に残す。「読み込み 1 回」は読み込みの入口を 1 回呼ぶことを指し、起動・切り替えの読み込みと、窓の置き場所を決めるための採寸の読み込みは別々に数える。バルーンではスコープごとに繰り返さない。
 2. If 透過の宣言の値を読めなかったとき（要件 1 の 6・要件 2 の 6）, then the areka shall 書いてあった値と、既定として扱ったことを記録に残す。
 3. When `surfaces.txt` が無い、または面を 1 つも定義しないシェルを画像だけで組んだとき, the areka shall そのことと、認めた面の数を、読み込み 1 回につき 1 度だけ記録に残す。
 4. The areka shall 本仕様で足す失敗の経路・表示をやめる経路のすべてに、理由の分かる記録を伴わせる（記録の無い失敗を作らない）。
