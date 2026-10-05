@@ -14,9 +14,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use areka_sakura::contract::{CueCommand, TalkCue};
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::place::PlaceKey;
+use crate::segment::{SegmentPlan, segment_plan};
 use crate::state::{ActorTextState, SurfaceKeyOutcome, TextLayerState};
 
 /// 合図 1 つで状態を進める。`\s` は `resolve` で番号に解いて行き先へ渡し（閉包が無ければ読まない）、
@@ -67,6 +68,39 @@ impl ClearCounts {
     }
 }
 
+/// 区間の全文 1 つ: その区間が終わる時点の内容の写しと、その区切り（最初に要ったときに 1 度だけ計算）。
+#[derive(Debug)]
+struct Section {
+    content: ActorTextState,
+    plan: Option<SegmentPlan>,
+}
+
+/// 配置に使う字の列（[`TalkLookahead::basis`] の答え）。
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "タスク 4.2 で arrange_lines の文節の枝から読むまで"
+    )
+)]
+pub(crate) enum Basis<'a> {
+    /// 区間の全文で配置する（届いた内容は全文の先頭と一致している）。
+    Full {
+        content: &'a ActorTextState,
+        plan: &'a SegmentPlan,
+    },
+    /// 届いた字だけで配置する（修正前の動き）。
+    Arrived,
+}
+
+/// `full` の先頭が届いた内容 `arrived` と一致するか: 字の列（改行・カーソル移動を含む）・
+/// 字ごとの装飾番号・装飾の表の 3 つとも、届いたぶんが全文の先頭と同じ。
+fn begins_with(full: &ActorTextState, arrived: &ActorTextState) -> bool {
+    full.items().starts_with(arrived.items())
+        && full.glyph_styles().starts_with(arrived.glyph_styles())
+        && full.styles().starts_with(arrived.styles())
+}
+
 /// 先渡しの空回しで求めた区間の全文の持ち主（design.md「`TalkLookahead`」）。
 ///
 /// 正本ではない（届いた字の正本は `TextLayerState`）。本番の状態を書き換えない。
@@ -79,8 +113,8 @@ impl ClearCounts {
 )]
 #[derive(Default)]
 pub(crate) struct TalkLookahead {
-    /// 場所 × 区間の番号 → その区間が終わる時点の内容の写し。
-    sections: BTreeMap<(PlaceKey, u64), ActorTextState>,
+    /// 場所 × 区間の番号 → その区間の全文。
+    sections: BTreeMap<(PlaceKey, u64), Section>,
     /// 先渡しを受け取ってからの消去の数え（本番の合図で進む）。
     counts: ClearCounts,
     /// warn を出し済みの（場所, 区間の番号）。
@@ -108,7 +142,7 @@ impl TalkLookahead {
     ) {
         // 1. 持ち越し: 場所ごとに今の区間の全文と warn 済みの印だけを取り置く。
         let counts = std::mem::take(&mut self.counts);
-        let carried: Vec<(PlaceKey, ActorTextState)> = std::mem::take(&mut self.sections)
+        let carried: Vec<(PlaceKey, Section)> = std::mem::take(&mut self.sections)
             .into_iter()
             .filter(|((place, n), _)| *n == counts.number(place))
             .map(|((place, _), content)| (place, content))
@@ -155,11 +189,17 @@ impl TalkLookahead {
         }
         // 6. 本番の数えはここから。
         self.counts = ClearCounts::default();
-        // 7. 持ち越しを番号 0 へ（空回しが番号 0 に控えた場所は空回しの側を採る）。
-        for (place, content) in carried {
-            self.sections.entry((place, 0)).or_insert(content);
+        // 7. 持ち越しを番号 0 へ（空回しが番号 0 に控えた場所は空回しの側を採る）。warn 済みの
+        //    印も持ち越しの一部なので、空回しが全文を求め直した場所では空回しの側（印なし）を採る
+        //    ＝新しい全文との食い違いは改めて 1 度記録する（`reinstall` が印を消すのと同じ考え）。
+        self.warned = warned
+            .into_iter()
+            .map(|place| (place, 0))
+            .filter(|key| !self.sections.contains_key(key))
+            .collect();
+        for (place, section) in carried {
+            self.sections.entry((place, 0)).or_insert(section);
         }
-        self.warned = warned.into_iter().map(|place| (place, 0)).collect();
         // 8. やり直しのために列を覚える。
         self.upcoming = Some(upcoming.to_vec());
         self.delivered = 0;
@@ -185,12 +225,60 @@ impl TalkLookahead {
         self.counts.number(place)
     }
 
-    /// 写しの場所の内容を、今の番号の区間の全文として控える。
+    /// 写しの場所の内容を、今の番号の区間の全文として控える（区切りは `basis` で要ったときに）。
     fn keep(&mut self, copy: &TextLayerState, place: PlaceKey) {
         if let Some(content) = copy.place_state(&place) {
             let n = self.counts.number(&place);
-            self.sections.insert((place, n), content.clone());
+            let section = Section {
+                content: content.clone(),
+                plan: None,
+            };
+            self.sections.insert((place, n), section);
         }
+    }
+
+    /// 配置に使う字の列を答える。全文が無い・食い違うときは [`Basis::Arrived`] を返し、
+    /// （場所, 区間）ごとに初回だけ warn を残す。届いた内容に字が 1 つも無ければ warn しない。
+    pub(crate) fn basis(&mut self, place: &PlaceKey, arrived: &ActorTextState) -> Basis<'_> {
+        let key = (place.clone(), self.counts.number(place));
+        let reason = match self.sections.get(&key) {
+            None => "先渡しが無い",
+            Some(section) if !begins_with(&section.content, arrived) => {
+                "届いた字が先渡しと食い違う"
+            }
+            Some(_) => {
+                return self
+                    .sections
+                    .get_mut(&key)
+                    .map_or(Basis::Arrived, |section| {
+                        let plan = section
+                            .plan
+                            .get_or_insert_with(|| segment_plan(section.content.items()));
+                        Basis::Full {
+                            content: &section.content,
+                            plan,
+                        }
+                    });
+            }
+        };
+        // 字の数は装飾番号の列の長さ（字ごとに 1 つ・改行とカーソル移動は数えない）。
+        let arrived_glyphs = arrived.glyph_styles().len();
+        if arrived_glyphs > 0 && !self.warned.contains(&key) {
+            let full_glyphs = self
+                .sections
+                .get(&key)
+                .map_or(0, |section| section.content.glyph_styles().len());
+            warn!(
+                actor = %place.actor,
+                place = ?place.place,
+                reason,
+                arrived_glyphs,
+                full_glyphs,
+                "文節の折り返しで区間の全文を使えない——届いた字だけで区切って配置する（修正前の動き）"
+            );
+            self.warned.insert(key);
+        }
+        Basis::Arrived
     }
 }
 

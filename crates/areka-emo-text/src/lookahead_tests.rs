@@ -2,16 +2,19 @@
 //!
 //! 本番の側は `note_cue` → `advance_state` の順に合図を流す（実行時の `apply_cue` と同じ並び）。
 //! 区間の全文は私有の欄を直接読んで、場所 × 区間の番号の表をまるごと比べる。
+//! 記録の件数は `log-capture-kit` で数える（捕捉は呼んだスレッドだけ＝検査は全部このスレッドで回す）。
 
 use std::collections::BTreeMap;
 
 use areka_emo_compose::{EmoWorld, fold_boxes};
 use areka_parsers::shell::{parse, parse_boxes};
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
+use log_capture_kit::{CapturedEvent, capture};
 
 use super::*;
 use crate::look::LookLayers;
 use crate::place::TextPlace;
+use crate::segment::segment_plan;
 use crate::state::TextItem;
 
 /// 箱の構成: サーフェス 0 は element1=a・element2=b（既定は a）。
@@ -65,6 +68,18 @@ fn text(actor: &str, at: f64, s: &str) -> TalkCue {
     cue(actor, at, CueCommand::Text(s.to_owned()))
 }
 
+/// `\f[…]` の合図。
+fn font(actor: &str, tokens: &[&str]) -> TalkCue {
+    cue(
+        actor,
+        0.0,
+        CueCommand::command_carrier(
+            FONT_TAG_CARRIER,
+            tokens.iter().map(|t| (*t).to_owned()).collect(),
+        ),
+    )
+}
+
 fn place(actor: &str, place: TextPlace) -> PlaceKey {
     PlaceKey {
         actor: ActorKey::from(actor),
@@ -105,6 +120,14 @@ fn content(state: &TextLayerState, key: &PlaceKey) -> ActorTextState {
     state.place_state(key).expect("場所に状態がある").clone()
 }
 
+/// 区間の全文の表を、場所 × 番号 → 内容の表として読む（区切りの覚えは見ない）。
+fn contents(look: &TalkLookahead) -> BTreeMap<(PlaceKey, u64), ActorTextState> {
+    look.sections
+        .iter()
+        .map(|(key, section)| (key.clone(), section.content.clone()))
+        .collect()
+}
+
 /// 1. 行き先が本番と同じ（要件 2.2）: `\s`・名前の `\b` で箱へ行く列を、空回しと本番で流す。
 /// 空回しの控えた全文（場所 × 番号）が、本番の出終わった状態の字のある場所と過不足なく同じ。
 #[test]
@@ -143,7 +166,7 @@ fn rehearsal_destinations_match_production() {
         ((b.clone(), 1), content(&state, &b)),
         ((kero.clone(), 1), content(&state, &kero)),
     ]);
-    assert_eq!(look.sections, expected);
+    assert_eq!(contents(&look), expected);
 }
 
 /// 2. 区間の番号（要件 4.1）: 頭の全消去と途中の `\c` で全文が分かれる。先渡しと頭の全消去の
@@ -174,20 +197,21 @@ fn section_numbers_split_on_clears_and_survive_place_creation() {
         state.clear_count(&actor)
     );
     assert_eq!(
-        look.sections.get(&(balloon.clone(), 1)),
+        contents(&look).get(&(balloon.clone(), 1)),
         Some(&content(&state, &balloon))
     );
 
     deliver(&mut look, &mut state, None, &talk[2..]);
     assert_eq!(look.number(&balloon), 2, "途中の \\c の後の番号");
     assert_eq!(
-        look.sections.get(&(balloon.clone(), 2)),
+        contents(&look).get(&(balloon.clone(), 2)),
         Some(&content(&state, &balloon))
     );
-    let before_clear = look
+    let before_clear = &look
         .sections
         .get(&(balloon.clone(), 1))
-        .expect("消去の前の区間");
+        .expect("消去の前の区間")
+        .content;
     assert_eq!(
         before_clear.items(),
         &[TextItem::glyph("あ")],
@@ -213,7 +237,7 @@ fn sections_carry_over_until_replaced_or_cleared() {
     deliver(&mut look, &mut state, None, &first);
     let kero_first = content(&state, &kero);
     assert_eq!(
-        look.sections,
+        contents(&look),
         BTreeMap::from([
             ((sakura.clone(), 1), content(&state, &sakura)),
             ((kero.clone(), 1), kero_first.clone()),
@@ -225,7 +249,7 @@ fn sections_carry_over_until_replaced_or_cleared() {
     look.install(&state, None, &second);
     deliver(&mut look, &mut state, None, &second);
     assert_eq!(
-        look.sections,
+        contents(&look),
         BTreeMap::from([
             // 足した区間は空回しの側（前の字＋足した字）に置き換わる。
             ((sakura.clone(), 0), content(&state, &sakura)),
@@ -237,7 +261,306 @@ fn sections_carry_over_until_replaced_or_cleared() {
     // 相方側は消されて区間が進んだ＝次の install で前の区間の全文は消える。
     look.install(&state, None, &[]);
     assert_eq!(
-        look.sections,
+        contents(&look),
         BTreeMap::from([((sakura.clone(), 0), content(&state, &sakura))])
+    );
+}
+
+/// 捕捉した記録のうち `warn` だけ。
+fn warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .collect()
+}
+
+/// 先渡しの無い状態へ `cues` を本番と同じ規則で流した、本体側の普通のバルーンの内容。
+fn arrive(cues: &[TalkCue]) -> ActorTextState {
+    let mut state = TextLayerState::default();
+    for c in cues {
+        advance_state(&mut state, None, c);
+    }
+    state
+        .place_state(&place("0", TextPlace::Balloon))
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// `basis` が全文を返したか。
+fn is_full(basis: &Basis<'_>) -> bool {
+    matches!(basis, Basis::Full { .. })
+}
+
+/// 先渡し `talk` を空回しし、届いた内容 `arrived` で本体側の `basis` を 2 度聞く。
+/// 返すのは 2 度の答え（全文か）と、2 度の間に出た `warn`。
+fn judge(talk: &[TalkCue], arrived: &ActorTextState) -> ([bool; 2], Vec<CapturedEvent>) {
+    let sakura = place("0", TextPlace::Balloon);
+    let mut look = TalkLookahead::default();
+    look.install(&TextLayerState::default(), None, talk);
+    let (answers, events) = capture(|| {
+        [
+            is_full(&look.basis(&sakura, arrived)),
+            is_full(&look.basis(&sakura, arrived)),
+        ]
+    });
+    (answers, warns(&events).into_iter().cloned().collect())
+}
+
+/// 4. 見分け（要件 2.7）: 字の列・字ごとの装飾番号・装飾の表の 3 つとも届いたぶんが全文の
+/// 先頭と一致するときだけ全文。それぞれ 1 つだけが食い違う入力で「届いた字で」になり、
+/// warn は（場所, 区間）につき 1 度。字の無い場所は warn しない（印も使わない）。
+#[test]
+fn basis_requires_all_three_prefixes_and_warns_once_per_section() {
+    let sakura = place("0", TextPlace::Balloon);
+
+    // 一致（対照）: 全文は「あ」→ 太字 →「い」、届いたのは「あ」まで。区切りは初めて要ったときに 1 度。
+    let talk = [
+        text("0", 0.0, "あ"),
+        font("0", &["bold", "1"]),
+        text("0", 0.1, "い"),
+    ];
+    let mut look = TalkLookahead::default();
+    look.install(&TextLayerState::default(), None, &talk);
+    let full = look.sections[&(sakura.clone(), 0)].content.clone();
+    assert!(
+        look.sections[&(sakura.clone(), 0)].plan.is_none(),
+        "区切りは空回しでは計算しない"
+    );
+    let (answer, events) = capture(|| match look.basis(&sakura, &arrive(&talk[..1])) {
+        Basis::Full { content, plan } => Some((content.clone(), plan.clone())),
+        Basis::Arrived => None,
+    });
+    assert_eq!(
+        answer,
+        Some((full.clone(), segment_plan(full.items()))),
+        "届いたぶんが先頭と一致すれば全文と全文の区切り"
+    );
+    assert_eq!(warns(&events).len(), 0, "一致では warn しない");
+    assert_eq!(
+        look.sections[&(sakura.clone(), 0)].plan,
+        Some(segment_plan(full.items())),
+        "区切りは全文に対して覚える"
+    );
+    assert!(
+        is_full(&look.basis(&sakura, &full)),
+        "出終わった（全文と同じ）内容も一致"
+    );
+
+    // 食い違い 3 種: それぞれ他の 2 つは先頭と一致していることを確かめてから聞く。
+    let cases: [(&str, Vec<TalkCue>, Vec<TalkCue>, usize, usize); 3] = [
+        (
+            "字の列",
+            vec![text("0", 0.0, "あい")],
+            vec![text("0", 0.0, "かき")],
+            0,
+            2,
+        ),
+        (
+            "字ごとの装飾番号",
+            talk.to_vec(),
+            vec![font("0", &["bold", "1"]), text("0", 0.0, "あ")],
+            1,
+            1,
+        ),
+        (
+            "装飾の表",
+            vec![font("0", &["bold", "1"]), text("0", 0.0, "あい")],
+            vec![font("0", &["italic", "1"]), text("0", 0.0, "あ")],
+            2,
+            1,
+        ),
+    ];
+    for (what, talk, arrived_cues, broken, arrived_glyphs) in cases {
+        let arrived = arrive(&arrived_cues);
+        let mut rehearsed = TalkLookahead::default();
+        rehearsed.install(&TextLayerState::default(), None, &talk);
+        let full = &rehearsed.sections[&(sakura.clone(), 0)].content;
+        let prefixes = [
+            full.items().starts_with(arrived.items()),
+            full.glyph_styles().starts_with(arrived.glyph_styles()),
+            full.styles().starts_with(arrived.styles()),
+        ];
+        let mut expected = [true; 3];
+        expected[broken] = false;
+        assert_eq!(
+            prefixes, expected,
+            "{what}: 前提＝食い違うのはこの 1 つだけ"
+        );
+        let full_glyphs = full.glyph_styles().len();
+
+        let (answers, warned) = judge(&talk, &arrived);
+        assert_eq!(answers, [false, false], "{what}: 届いた字で");
+        assert_eq!(warned.len(), 1, "{what}: 2 度聞いても warn は 1 度");
+        let fields = warned[0].fields_map();
+        assert_eq!(
+            warned[0].field_str("reason"),
+            Some("届いた字が先渡しと食い違う")
+        );
+        assert_eq!(fields.get("actor"), Some(&"0"));
+        assert_eq!(fields.get("place"), Some(&"Balloon"));
+        assert_eq!(
+            fields.get("arrived_glyphs"),
+            Some(&arrived_glyphs.to_string().as_str())
+        );
+        assert_eq!(
+            fields.get("full_glyphs"),
+            Some(&full_glyphs.to_string().as_str())
+        );
+    }
+
+    // 先渡しが無い・区間ごと・場所ごと・字の無い場所。
+    let kero = place("1", TextPlace::Balloon);
+    let mut look = TalkLookahead::default();
+    let glyph = arrive(&[text("0", 0.0, "か")]);
+    let no_glyph = arrive(&[cue("0", 0.0, CueCommand::NewLine { ratio: 1.0 })]);
+    assert!(no_glyph.glyph_styles().is_empty() && !no_glyph.items().is_empty());
+    let (answers, events) = capture(|| {
+        let mut answers = Vec::new();
+        // 字の無い内容は warn しない・印も使わない。
+        answers.push(is_full(&look.basis(&sakura, &no_glyph)));
+        answers.push(is_full(&look.basis(&sakura, &ActorTextState::default())));
+        answers.push(is_full(&look.basis(&sakura, &glyph)));
+        answers.push(is_full(&look.basis(&sakura, &glyph)));
+        // 別の場所は別に 1 度。
+        answers.push(is_full(&look.basis(&kero, &glyph)));
+        // `\c` で区間が進めば、同じ場所でも次の区間で 1 度。
+        look.note_cue(&cue("0", 0.0, CueCommand::Clear), &sakura);
+        answers.push(is_full(&look.basis(&sakura, &glyph)));
+        answers.push(is_full(&look.basis(&sakura, &glyph)));
+        answers
+    });
+    assert_eq!(answers, vec![false; 7], "全文が無ければ届いた字で");
+    let warned: Vec<(Option<&str>, Option<&str>, Option<&str>)> = warns(&events)
+        .iter()
+        .map(|e| {
+            (
+                e.field("actor"),
+                e.field_str("reason"),
+                e.field("full_glyphs"),
+            )
+        })
+        .collect();
+    let none = (Some("0"), Some("先渡しが無い"), Some("0"));
+    assert_eq!(
+        warned,
+        vec![none, (Some("1"), Some("先渡しが無い"), Some("0")), none],
+        "（場所, 区間）につき 1 度・字の無い内容では出さない"
+    );
+}
+
+/// 4（続き）. `install` の持ち越しと warn 済みの印: 何も足さない区間は全文と印をそのまま
+/// 持ち越す（同じ食い違いを 2 度記録しない）。空回しが番号 0 の全文を求め直した場所は、
+/// 全文と同じく印も空回しの側（印なし）を採る＝新しい全文との食い違いは改めて 1 度記録する。
+#[test]
+fn install_carries_the_warned_mark_only_with_the_carried_section() {
+    let sakura = place("0", TextPlace::Balloon);
+    let mut state = TextLayerState::default();
+    let mut look = TalkLookahead::default();
+    let first = [text("0", 0.0, "あ")];
+    look.install(&state, None, &first);
+    // 先渡しに無い字が届く（食い違い）。
+    deliver(&mut look, &mut state, None, &[text("0", 0.0, "か")]);
+
+    let count = |look: &mut TalkLookahead, state: &TextLayerState| {
+        let arrived = content(state, &sakura);
+        let (full, events) = capture(|| is_full(&look.basis(&sakura, &arrived)));
+        assert!(!full, "前提: 食い違っている");
+        warns(&events).len()
+    };
+    assert_eq!(count(&mut look, &state), 1, "初回の食い違い");
+    assert_eq!(count(&mut look, &state), 0, "同じ区間では 2 度目を出さない");
+
+    // 何も足さない先渡し: 全文（「あ」）と印を持ち越す。
+    look.install(&state, None, &[]);
+    assert_eq!(
+        contents(&look),
+        BTreeMap::from([((sakura.clone(), 0), arrive(&first))])
+    );
+    assert_eq!(count(&mut look, &state), 0, "持ち越した区間の印は残る");
+
+    // 足す先渡し: 今の状態（「か」）から求め直す。そこへまた先渡しに無い字が届く。
+    look.install(&state, None, &[text("0", 1.0, "う")]);
+    deliver(&mut look, &mut state, None, &[text("0", 1.0, "さ")]);
+    assert_eq!(
+        count(&mut look, &state),
+        1,
+        "求め直した全文との食い違いは改めて 1 度"
+    );
+    assert_eq!(count(&mut look, &state), 0);
+}
+
+/// 5. 空回しは無言（要件 2.8）: 状態の層が warn を出す 4 つ（選択肢の字が空・箱の無い
+/// `\b[名前]`・適用できない `\f`・上下付きのまま字を足す）を含む列で、`install` の間の warn が
+/// 0 件。続く本番の適用の warn は、先渡し無しで同じ列を流したときと同じ。
+#[test]
+fn rehearsal_is_silent_and_production_warns_are_unchanged() {
+    let talk = [
+        cue(
+            "0",
+            0.0,
+            CueCommand::Choice {
+                id: "OnPick".to_owned(),
+                text: String::new(),
+                references: Vec::new(),
+            },
+        ),
+        cue(
+            "0",
+            0.1,
+            CueCommand::BalloonSurface {
+                key: "nobox".to_owned(),
+            },
+        ),
+        font("0", &["bold", "yes"]),
+        font("0", &["sub", "1"]),
+        text("0", 0.2, "あ"),
+    ];
+    let messages = |events: &[CapturedEvent]| -> Vec<String> {
+        warns(events)
+            .iter()
+            .map(|e| e.message().to_owned())
+            .collect()
+    };
+
+    // 先渡し無し（対照）: 4 つの発行点がどれも出る＝捕捉が空振りしていない
+    // （`\f[sub,1]` は指定そのものも「表示は変えない」と記録するので、件数は 5）。
+    let ((), without) = capture(|| {
+        let mut state = TextLayerState::default();
+        for c in &talk {
+            advance_state(&mut state, None, c);
+        }
+    });
+    for needle in [
+        "Choice cue の text が空",
+        "\\b[名前] の箱が今のサーフェスに無い",
+        "\\f の指定を適用できない",
+        "上下付きが有効なまま文字を追記した",
+    ] {
+        assert!(
+            messages(&without).iter().any(|m| m.contains(needle)),
+            "対照: 「{needle}」が出る {:?}",
+            messages(&without)
+        );
+    }
+
+    let mut state = TextLayerState::default();
+    let mut look = TalkLookahead::default();
+    let ((), rehearsal) = capture(|| look.install(&state, None, &talk));
+    assert_eq!(
+        messages(&rehearsal),
+        Vec::<String>::new(),
+        "空回しの間は warn しない"
+    );
+    assert_eq!(
+        contents(&look).len(),
+        1,
+        "前提: 空回しは列を流しきって全文を控えた"
+    );
+
+    let ((), production) = capture(|| deliver(&mut look, &mut state, None, &talk));
+    assert_eq!(
+        messages(&production),
+        messages(&without),
+        "本番の warn は先渡し無しのときと同じ"
     );
 }

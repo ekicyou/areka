@@ -78,7 +78,7 @@
   - _Requirements: 1.3, 1.7, 2.2, 2.5, 2.6, 4.1_
   - _Boundary: TalkLookahead（lookahead.rs・lookahead_tests.rs）_
 
-- [ ] 3.4 届いた内容と全文を突き合わせ、配置に使う字の列を答える
+- [x] 3.4 届いた内容と全文を突き合わせ、配置に使う字の列を答える
   - 装飾の表に「この表の先頭が、渡した表と一致するか」の読み口を 1 つ足す（look.rs）
   - `basis` は、全文があり、字の列（改行・カーソル移動を含む）・字ごとの装飾番号・装飾の表の 3 つとも届いたぶんが全文の先頭と一致すれば全文と区切りを返し、区切りはそのとき全文に対して 1 度だけ計算して覚える。それ以外は「届いた字で」を返す
   - 「届いた字で」のときは、届いた内容に字が 1 つ以上あるときだけ（場所, 区間）ごとに初回 1 度 `warn!` を残す。欄: スコープ・場所・理由（先渡しが無い／届いた字が先渡しと食い違う）・届いた字の数・全文の字の数
@@ -186,4 +186,4 @@
 - 2.1: 検査 1（`actor::lookahead_tests::emo2_boot_talk_reveals_without_moving_glyphs`）は 4.2 まで赤。それまで `cargo test -p areka-emo-text` は `--no-fail-fast` で回して、ほかが緑であることを確かめる。`actor_*_tests.rs` の接続宣言はこのクレートの慣例で actor.rs に置く（lib.rs は一覧への登録だけ）。
 - 3.1・3.3: `TextLayerState::rehearsal_copy` と `TalkLookahead`（構造体と impl）に `#[cfg_attr(not(test), expect(dead_code, ...))]` が付いている。4.1 で実行時から呼ぶようになったら 3 つとも外す。
 - 3.2: `\s` を読まないときの debug の発生元は `areka_emo_text::lookahead` に変わった。実機（7.2）で `RUST_LOG` を絞るときは `areka_emo_text` 全体を debug まで開ける。
-- 3.3: `install` は番号 0 へ持ち越す場所の warn 済みの印も持ち越す（空回しが全文を控え直した場所でも）。3.4 の `basis` で「控え直した（場所, 0）の印を残すか消すか」を決め、検査 4（warn は（場所, 区間）につき 1 度）で固定する。
+- 3.3・3.4: 空回しが（場所, 0）の全文を求め直した場所は warn 済みの印を捨て、何も足さず全文を持ち越す場所だけ印も持ち越す（install 手順 7・reinstall 手順 2 と同じ考え方）。`install_carries_the_warned_mark_only_with_the_carried_section` で固定。`Basis` にも 4.1・4.2 までの `expect(dead_code)` が付いている。
