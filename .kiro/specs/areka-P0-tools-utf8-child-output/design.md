@@ -334,14 +334,14 @@ function Invoke-Utf8Child {
 
 **1. 判定の較正**（本文の規則が正しく通し・正しく落とすことを、埋めた見本で先に確かめる。見本の日本語は `` `u{…} `` で組み立て、判定のスクリプト自身は ASCII のまま）
 - 見本は判定のスクリプトの中では文字列として持ち（単一引用符か連結。`$LOG_MARKER_*` を含む見本を二重引用符で書くと判定のスクリプト自身が規則 B に当たる）、`Parser.ParseInput` に掛けて判定する。
-- 落とすべき見本: `$x = @(cargo metadata --no-deps 2>&1)`（素の呼び出し）・`Write-Host '<日本語>'`・`"<日本語> $y"`・`[Console]::OutputEncoding = [Text.Encoding]::UTF8`・`$OutputEncoding = …`・`chcp 65001`・`"$LOG_MARKER_A 件"`（目印の差し込み）・`run: |` の中の `Write-Host '<日本語>'` を持つ YAML。
-- 通すべき見本: `# <日本語>` の注記・`<# <日本語> #>`・`$LOG_MARKER_A = '<日本語>'`・`$LOG_MARKER_B = @('<日本語>', 'x')`・`Invoke-Utf8Child cargo @('metadata')`・`- name: <日本語>` と `# <日本語>` だけを持つ YAML・`defaults:` → `run:` → `shell: pwsh` を持つ YAML（写像の `run:` を本文にしない）。
+- 落とすべき見本: `$x = @(cargo metadata --no-deps 2>&1)`（素の呼び出し）・`Write-Host '<日本語>'`・`"<日本語> $y"`・`[Console]::OutputEncoding = [Text.Encoding]::UTF8`・`$OutputEncoding = …`・`chcp 65001`・`pwsh -NoProfile -Command '[Console]::OutputEncoding = [Text.Encoding]::UTF8; & ./tools/package.ps1'`（子の PowerShell へ渡す文字列の中の書き替え）・`pwsh -c "chcp 65001"`・`"$LOG_MARKER_A 件"`（目印の差し込み）・`run: |` の中の `Write-Host '<日本語>'` を持つ YAML。
+- 通すべき見本: `# <日本語>` の注記・`<# <日本語> #>`・`$LOG_MARKER_A = '<日本語>'`・`$LOG_MARKER_B = @('<日本語>', 'x')`・`Invoke-Utf8Child cargo @('metadata')`・`pwsh -NoProfile -NonInteractive -File ./tools/package.ps1 -Arch all`（書き替えを持たない子の PowerShell）・`- name: <日本語>` と `# <日本語>` だけを持つ YAML・`defaults:` → `run:` → `shell: pwsh` を持つ YAML（写像の `run:` を本文にしない）。
 
 **2. 本文の判定**（対象＝`tools/*.ps1`（`tools/perf/` を除く・この 2 本の新しいスクリプトも含む）と、`.github/workflows/*.yml` の各 `run:` の本文）
 - `run:` の本文の取り出し: 取り出すのは `steps` の要素の `run:` で、値が `|` のブロックか 1 行のスカラーのものだけ。`run: |` の行から、その行より深い字下げの行（と空の行）が続く間を本文とする。`run: <1 行>` はその 1 行。`defaults:` の下の `run:` のように値が写像（`shell: pwsh`）の `run:` は本文にしない。取り出した本文は pwsh として構文解析する（どちらの workflow も `defaults.run.shell: pwsh`）。構文の誤りは不合格。
 - 規則 A（ASCII・8.5）: `Parser.ParseInput` の字句のうち、種類が注記でない字句の原文（`Extent.Text`。解いた値 `.Value` は見ない＝判定のスクリプト自身の `` `u{…} `` の見本は原文が ASCII なので当たらない）が、タブ・改行・`0x20〜0x7E` の外を含めば不合格（ファイル名と行を示す）。例外: 左辺が `$LOG_MARKER_*` の代入の右辺の中の字句（areka の記録を探す日本語の目印・印字しない）。YAML の `run:` の外（段の名前・注記・入力の説明）は見ない（8.7）。
 - 規則 B（目印を文に差し込まない）: `$LOG_MARKER_*` の変数が、差し込みのある文字列（`"…"`・ヒアストリング）の中に現れたら不合格。
-- 規則 C（書き替え禁止・3.1）: 構文木で、左辺が `[Console]::OutputEncoding`・`[Console]::InputEncoding`（`[System.Console]` の綴りも）・`$OutputEncoding` の代入、名前が `chcp`／`chcp.com` のコマンドがあれば不合格。字面の検索はしない（判定のスクリプト自身が較正の見本と規則の文字列にこの綴りを持つため。見本は文字列なので構文木の代入にもコマンドにもならない）。例外は `tools/encoding-check.ps1` の関数 `Set-OwnConsoleCp932` の中だけ（`-Cp932Child` のときにだけ呼ばれる）。
+- 規則 C（書き替え禁止・3.1）: 構文木で、左辺が `[Console]::OutputEncoding`・`[Console]::InputEncoding`（`[System.Console]` の綴りも）・`$OutputEncoding` の代入、名前が `chcp`／`chcp.com` のコマンドがあれば不合格。字面の検索はしない（判定のスクリプト自身が較正の見本と規則の文字列にこの綴りを持つため。見本は文字列なので構文木の代入にもコマンドにもならない）。例外は `tools/encoding-check.ps1` の関数 `Set-OwnConsoleCp932` の中だけ（`-Cp932Child` のときにだけ呼ばれる）。子の PowerShell（`pwsh`／`powershell`）へ `-Command`／`-c` で渡す文字列も構文解析して同じ構文木の判定を掛ける（要件 3.1 が名指しする「zip を作る」の子の中の書き替えの戻りを拾う）。字面の検索はしない。
 - 規則 D（素の呼び出しの禁止・5.2）: コマンド名が `cargo`／`cargo.exe` で、要素に `metadata` か `nar-sample-path` を含むコマンド（`&` 付きも含む）があれば不合格。
 - 規則 E（呼び出しの在処・1.5・5.2）: 次の所に、名前が `Invoke-Utf8Child` で本文に `metadata`（または `nar-sample-path`）を含む呼び出しが 1 つ以上無ければ不合格: `tools/package.ps1`（`metadata` と `nar-sample-path` の両方）・`tools/crates-io.ps1`（`metadata`）・`.github/workflows/release.yml` の `run:`（`metadata`）。
 
