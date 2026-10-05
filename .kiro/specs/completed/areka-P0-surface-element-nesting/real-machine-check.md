@@ -28,7 +28,7 @@
 ### 準備（済み・作り直すときだけ）
 
 ```
-pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-translate-pipeline-2cf68b\.kiro\specs\areka-P0-surface-element-nesting\real-machine-run.ps1" -Prepare
+pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-translate-pipeline-2cf68b\.kiro\specs\completed\areka-P0-surface-element-nesting\real-machine-run.ps1" -Prepare
 ```
 
 `CARGO_INCREMENTAL=0` で `areka`（debug）と補助プロセスを組み、C: の空きが 3 GB 未満ならビルドせずに止まる。
@@ -36,7 +36,7 @@ pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-translat
 ### 起動と判定（開発者の GO の後）
 
 ```
-pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-translate-pipeline-2cf68b\.kiro\specs\areka-P0-surface-element-nesting\real-machine-run.ps1" -Run
+pwsh -NoProfile -File "C:\home\maz\git\areka\.claude\worktrees\areka-p0-translate-pipeline-2cf68b\.kiro\specs\completed\areka-P0-surface-element-nesting\real-machine-run.ps1" -Run
 ```
 
 約 85 秒で自動で終わり、続けて判定の一覧と `RESULT: PASS`／`RESULT: FAIL` を出す（不合格があれば終了コード 1）。走行のあいだ検体の小さな絵（単色の四角）が出て、8 秒ごとに形が替わる。触らなくてよい。判定だけをやり直すときは `-Run` の代わりに `-Check`。

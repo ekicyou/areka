@@ -18,9 +18,9 @@
   ゴースト自身の台詞（ランダムトーク・マウス・シェル切替など）はこの回のあいだ黙らせる。
 
 .EXAMPLE
-  pwsh -NoProfile -File .kiro/specs/areka-P0-surface-element-nesting/real-machine-run.ps1 -Prepare
-  pwsh -NoProfile -File .kiro/specs/areka-P0-surface-element-nesting/real-machine-run.ps1 -Run
-  pwsh -NoProfile -File .kiro/specs/areka-P0-surface-element-nesting/real-machine-run.ps1 -Check
+  pwsh -NoProfile -File .kiro/specs/completed/areka-P0-surface-element-nesting/real-machine-run.ps1 -Prepare
+  pwsh -NoProfile -File .kiro/specs/completed/areka-P0-surface-element-nesting/real-machine-run.ps1 -Run
+  pwsh -NoProfile -File .kiro/specs/completed/areka-P0-surface-element-nesting/real-machine-run.ps1 -Check
 #>
 param(
     [switch]$Prepare,
@@ -30,7 +30,7 @@ param(
     [string]$RustLog = 'info,areka_seriko=info,areka_emo_present::shell_target=info'
 )
 $ErrorActionPreference = 'Stop'
-$wt = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+$wt = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
 $root = Join-Path $wt 'target\nest'
 $shell = Join-Path $root 'ghost\emo2\shell\master'
 $log = Join-Path $root 'run.log'
