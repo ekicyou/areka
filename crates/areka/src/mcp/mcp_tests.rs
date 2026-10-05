@@ -120,6 +120,25 @@ fn eight_with_a_wrong_name_cannot_find() {
     }
 }
 
+/// 空文字・空白だけは省略ではなく何にも当たらない名前（1 体でも 0 体でも外れ・2.4・5.3）。
+#[test]
+fn eight_with_empty_or_blank_cannot_find() {
+    let g = ghost();
+    for given in ["", "   "] {
+        for active in [Some(&g), None] {
+            for call in eight(Some(given)) {
+                let name = call.name();
+                let count = usize::from(active.is_some());
+                assert_eq!(
+                    dispatch_text(active, call),
+                    ng(CANNOT_FIND),
+                    "{name}・{given:?}・{count} 体"
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn get_log_and_seven_omitted_do_not_answer_with_a_resolve_failure() {
     let g = ghost();
@@ -349,5 +368,71 @@ fn logsink_fallen_unit_is_active() {
         (fallen, active, down),
         (Some((true, true)), Some(Some("A".to_owned())), true),
         "（倒れた旗と実行系・起動中のゴーストの名前・降ろせた）"
+    );
+}
+
+/// 本物の単位の読み口は本体側名を読み、相方の名前と `sakura.name2` を読まない（1.2・1.4・3.1・3.2・5.1）。
+/// 純粋なテストでは見えない配線の唯一の檻。
+#[test]
+fn real_unit_resolves_by_sakura_name_and_ascii_case() {
+    use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+    use crate::ghost_session::GhostSlot;
+
+    let mut rig = SwitchRig::new(vec![(
+        "A",
+        FakeShiori::Scripted(Box::new(|| standard_script(r"\0A\e"))),
+    )]);
+    // 検体にもリグの書き替えにも `sakura.name2` の行は無いので、このテストの中だけで足す（改行は CRLF）。
+    let descript = rig
+        .cfg("A")
+        .ghost_root
+        .join("ghost")
+        .join("master")
+        .join("descript.txt");
+    let mut text = std::fs::read_to_string(&descript).expect("descript.txt は UTF-8");
+    if !text.ends_with('\n') {
+        text.push_str("\r\n");
+    }
+    text.push_str("sakura.name2,Aのべつめい\r\n");
+    std::fs::write(&descript, text).expect("descript.txt へ sakura.name2 を足す");
+    rig.boot("A");
+
+    let active = resolve::active(&rig.world);
+    let others = rig
+        .world
+        .non_send::<GhostSlot>()
+        .0
+        .as_ref()
+        .and_then(|s| s.names())
+        .map(|n| (n.kero_name.clone(), n.sakura_name2.clone()));
+    let down = rig.shutdown();
+
+    let active = active.expect("起動中のゴーストが読める");
+    let (kero, name2) = others.expect("名前情報が読める");
+    let kero = kero.expect("相方の名前に値がある");
+    let name2 = name2.expect("sakura.name2 に値がある");
+    let found = |given: &str| {
+        resolve::resolve(Some(&active), Some(given), resolve::Omitted::Reject)
+            .map(|g| g.name.clone())
+    };
+    let a = Ok(Some("A".to_owned()));
+    assert_eq!(
+        (
+            active.sakura_name.as_deref(),
+            found("Aのさくら"),
+            found("a"),
+            found(&kero),
+            found(&name2),
+            down
+        ),
+        (
+            Some("Aのさくら"),
+            a.clone(),
+            a,
+            Err(CANNOT_FIND),
+            Err(CANNOT_FIND),
+            true
+        ),
+        "（本体側名・本体側名で解決・大小違いで解決・相方の名前で外れ・sakura.name2 で外れ・降ろせた）"
     );
 }
