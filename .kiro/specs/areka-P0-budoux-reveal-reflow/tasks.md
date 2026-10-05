@@ -69,7 +69,7 @@
   - _Requirements: 2.2_
   - _Boundary: advance_state（lookahead.rs）、TextLayerRuntime::apply_cue（actor.rs）、lib.rs の一覧_
 
-- [ ] 3.3 先渡しを空回しして、場所 × 区間の番号ごとの全文を覚える
+- [x] 3.3 先渡しを空回しして、場所 × 区間の番号ごとの全文を覚える
   - `TalkLookahead` を足し、`install` を design.md の手順 1〜8 どおりに作る: 今の区間の全文と warn 済みの印を取り置く → 数えを 0 → 印つきの写しで、行き先を求め・消去の前に「この区間に足した」場所の内容を控え・数えを進め・`advance_state` で進め・字／選択肢／改行／カーソル移動なら「足した」印 → 最後に控える → 数えを 0 → 持ち越しを番号 0 へ（空回しが控えた場所は空回しの側）→ 先渡しの列の写しを覚え、届いた数を 0
   - 区間の番号は「先渡しからの全消去の回数（場所に状態があるかに関わらず）＋その場所の `\c` の回数」。状態が持つ消去の回数は使わない。`note_cue` は行き先を受けてこの数えを進め、合図が先渡しの列の次と同じなら届いた数を 1 進める
   - 空回しを `debug_span!("rehearsal")` で囲む
@@ -184,5 +184,6 @@
 
 - 1.3: `spawn_emo_text` の説明に「先渡しを実行時へ渡す口は後のタスク」と書いてある。4.1 で `preview_talk` へつなぐときにこの記述も直す。
 - 2.1: 検査 1（`actor::lookahead_tests::emo2_boot_talk_reveals_without_moving_glyphs`）は 4.2 まで赤。それまで `cargo test -p areka-emo-text` は `--no-fail-fast` で回して、ほかが緑であることを確かめる。`actor_*_tests.rs` の接続宣言はこのクレートの慣例で actor.rs に置く（lib.rs は一覧への登録だけ）。
-- 3.1: `TextLayerState::rehearsal_copy` に `#[cfg_attr(not(test), expect(dead_code, ...))]` が付いている。3.3 で本番から呼ぶようになったら外す。
+- 3.1・3.3: `TextLayerState::rehearsal_copy` と `TalkLookahead`（構造体と impl）に `#[cfg_attr(not(test), expect(dead_code, ...))]` が付いている。4.1 で実行時から呼ぶようになったら 3 つとも外す。
 - 3.2: `\s` を読まないときの debug の発生元は `areka_emo_text::lookahead` に変わった。実機（7.2）で `RUST_LOG` を絞るときは `areka_emo_text` 全体を debug まで開ける。
+- 3.3: `install` は番号 0 へ持ち越す場所の warn 済みの印も持ち越す（空回しが全文を控え直した場所でも）。3.4 の `basis` で「控え直した（場所, 0）の印を残すか消すか」を決め、検査 4（warn は（場所, 区間）につき 1 度）で固定する。
