@@ -1,4 +1,4 @@
-//! 宛先のゴーストの解決（spec: areka-P0-mcp-tool-entrances）。
+//! 宛先のゴーストの解決（spec: areka-P0-mcp-tool-entrances・areka-P0-mcp-ghost-name-match）。
 //!
 //! World から起きているゴーストを読む薄い配線と、`ghost_name` を解く純粋な判断を置く。
 
@@ -19,7 +19,7 @@ pub(crate) struct ActiveGhost {
     pub root: PathBuf,
 }
 
-/// `ghost_name` が無い・空のときの扱い。
+/// `ghost_name` が無いときの扱い（空文字は含まない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Omitted {
     /// 起動中の 1 体へ解決する。
@@ -50,24 +50,29 @@ pub(crate) fn active(world: &World) -> Option<ActiveGhost> {
     })
 }
 
-/// 解決の判断（純粋・要件 3.2〜3.6）。失敗は `NG:` の後ろに付ける理由。
-/// 渡された文字列は絶対化しない（相対パス・フォルダ名だけは一致しない）。別名は見ない。
+/// 解決の判断（純粋・mcp-tool-entrances の要件 3.2〜3.6 を mcp-ghost-name-match の要件 1・2・4 が上書き）。失敗は `NG:` の後ろに付ける理由。
+/// 名前と本体側名は、渡された文字列の前後の空白を除き半角の英字の大小を同じとみなして比べる。
+/// フルパスは渡された文字列のまま比べ、絶対化しない（相対パス・フォルダ名だけは一致しない）。
+/// 相方の名前・`sakura.name2` は見ない。空文字・空白だけは何にも当たらず `CANNOT_FIND`。
+/// 返すのは起動中のゴーストの値そのもの（綴りは残らない）。
 pub(crate) fn resolve<'a>(
     active: Option<&'a ActiveGhost>,
     ghost_name: Option<&str>,
     omitted: Omitted,
 ) -> Result<&'a ActiveGhost, &'static str> {
-    let given = match ghost_name {
-        None | Some("") => {
-            return match omitted {
-                Omitted::Reject => Err(NOT_ACTIVE),
-                Omitted::UseActive => active.ok_or(NOT_ACTIVE),
-            };
-        }
-        Some(given) => given,
+    let Some(given) = ghost_name else {
+        return match omitted {
+            Omitted::Reject => Err(NOT_ACTIVE),
+            Omitted::UseActive => active.ok_or(NOT_ACTIVE),
+        };
+    };
+    let trimmed = given.trim();
+    let same_name = |n: &Option<String>| {
+        n.as_deref()
+            .is_some_and(|n| n.eq_ignore_ascii_case(trimmed))
     };
     active
-        .filter(|g| g.name.as_deref() == Some(given) || same_path(given, &g.root))
+        .filter(|g| same_name(&g.name) || same_name(&g.sakura_name) || same_path(given, &g.root))
         .ok_or(CANNOT_FIND)
 }
 
