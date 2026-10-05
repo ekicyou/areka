@@ -1,0 +1,171 @@
+# Requirements Document
+
+## Project Description (Input)
+
+（出どころは同じフォルダの `brief.md`。2026-10-04 棚卸㉑で起票。）
+
+- **誰が困っているか**
+  - 利用者: 説明書 `dist/README.txt` の「◆ 既知の制限: 半透明を前提に作られたバルーンだけが正しく表示されます」のとおり、「半透明を使わない」と書いたバルーンは、ふちや影が作者の意図どおりに出ない。
+  - ゴースト作者: シェルの `seriko.use_self_alpha` とバルーンの `use_self_alpha` を何と書いても、areka は常に `1` として扱う。`surfaces.txt` が無い、または波括弧が 0 個で画像だけのシェルは起動に失敗する。
+- **今の状況**
+  - 透過の扱いを表す 3 通り（`1`・`full`・`0`）は型としては在るが、描けるのは `1` の下の 2 つ（絵の α を使う・左上の色を抜く）だけ。`full` の全面不透明と `0` の下の抜き色は未実装。
+  - 絵を焼く側はどこも `1` を決め打ちで渡しており、宣言を読む経路が無い。
+  - シェルの読み込みは、`surfaces.txt` が読めないとき・面を 1 つも産まないときに失敗する。
+- **何を変えるか**
+  - シェルの `seriko.use_self_alpha` とバルーンの `use_self_alpha` の宣言を読み、`1`・`full`・`0`（既定）をそれぞれ正典どおりに描く。
+  - `surfaces.txt` が無い、または波括弧 0 個のシェルでも、`surface<数字>.png` だけで起動できるようにする。
+  - 説明書の該当の節と、網羅台帳の該当行を実態に合わせて直す。
+
+## Introduction
+
+伺かの絵の透過は、シェルなら descript.txt の `seriko.use_self_alpha`、バルーンなら descript.txt の `use_self_alpha` で決まる。正典（ukadoc）の定めは次のとおりで、シェルとバルーンで同じ文面である。
+
+- `1` または `true`: 「透明度のある画像（アルファチャンネル付きPNG）および.pnaのある画像はアルファチャンネルを参照して透明度として使用する。アルファチャンネルも.pnaも存在しない場合は画像左上の色をキー色とする従来挙動になる。」
+- `full`: 「上記に加え、アルファチャンネルのない画像も全て不透明として扱う（左上のキー色透過を行わない）。」
+- 既定は `0`。
+- バルーンだけの但し書き: 「この設定はバルーン全体の一括設定のみで、オーバーライドはできない。」
+
+出どころ: <https://ssp.shillest.net/ukadoc/manual/descript_shell.html#seriko.use_self_alpha%2C%E5%80%A4>・<https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#use_self_alpha%2C%E5%80%A4>
+
+今の areka はこの宣言を読まず、何と書いてあっても `1` として描く。本仕様は宣言を読んで 3 通りを描き分ける。あわせて、正典のシェルの作り方（<https://ssp.shillest.net/ukadoc/manual/dev_shell.html>「「surface○○.png」（○○部分には0以上の数字が入る）という名前の画像を用意するか、後述のsurfaces.txtで複数の画像を合成する事で用意します」）が認めている「画像だけのシェル」を起動できるようにする。
+
+本書でいう「α を持つ絵」は、アルファチャンネルを持つ画像のこと。「抜き色」は、絵の左上の 1 画素と同じ色の画素を完全に透明にする扱い（正典の「画像左上の色をキー色とする従来挙動」）のことである。
+
+## Boundary Context
+
+- **In scope**:
+  - シェルの descript.txt の `seriko.use_self_alpha` と、バルーンの descript.txt の `use_self_alpha` を読むこと。
+  - `1`（今までどおり）・`full`（α の無い絵を全面不透明に）・`0`（絵の α を使わず抜き色）の描き分け。
+  - `surfaces.txt` が無いシェル、`surfaces.txt` が面を 1 つも定義しないシェルを、`surface<数字>.png` だけで起動すること。
+  - 上の振る舞いの記録（ログ）、説明書 `dist/README.txt`・網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8 の該当行の更新、手持ちの検体での見た目の確かめ。
+- **Out of scope**:
+  - `.pna` の画素を透明度として使うこと（開発者方針で非対応のまま。説明書と台帳の `.pna` の記述は保つ）。
+  - バルーンの `use_input_alpha`（入力ボックス系のバルーン）と、`paint_transparent_region_black`／`seriko.paint_transparent_region_black`。
+  - 全画素が透明になる面を表示したときの窓・当たり判定の確かめ（roadmap 覚え書きの ⑷）。
+  - `overlay` 以外の描画メソッドの `element0` を持つ面で画像が土台に使われるずれ（同 ⑹）と、`surface.append` の行にだけ現れる絵のファイル名。
+  - 合成の描画メソッドそのもの（`overlay` 以外のメソッドの中身）。
+- **Adjacent expectations**:
+  - 面の画像の慣習（`surface<数字>.png` を面として認める・番号の重複や桁溢れの扱い）は、完了 `areka-P0-shell-implicit-surface` の決まりをそのまま使う。本仕様は変えない。
+  - `1` の下の抜き色の決まり（左上の 1 画素と完全に同じ色だけを抜く・許容幅 0）と、抜き色で透明になった所がクリックを通す扱いは、完了済みの決まりをそのまま使う。
+  - 動く絵（APNG・動く WebP）の読み込みは完了 `areka-P0-animated-image-decode` のもの。本仕様は「どの透過の扱いで焼くか」だけを渡す。
+  - 透過の宣言はシェル全体・バルーン全体で 1 つ。シェルの中のバルーン（`balloon.*`ブレス）は背景の絵を持たないので、本仕様の対象にならない。
+
+## Requirements
+
+### Requirement 1: シェルの透過の宣言を読む
+
+**Objective:** As a ゴースト作者, I want シェルの descript.txt に書いた `seriko.use_self_alpha` が絵の描き方に届くこと, so that 自分の絵の作り方（半透明あり・抜き色・全面不透明）に合った表示を選べる
+
+#### Acceptance Criteria
+
+1. When シェルを読み込むとき, the areka shall そのシェルの descript.txt の `seriko.use_self_alpha` の値を読み、そのシェルの絵すべて（面の画像・`element` で指す画像・アニメーションのパーツの画像・動く絵の全部のコマ）に同じ透過の扱いを当てる。
+2. When `seriko.use_self_alpha` の値が `1` または `true` のとき, the areka shall そのシェルを要件 3 の扱いで描く。
+3. When `seriko.use_self_alpha` の値が `full` のとき, the areka shall そのシェルを要件 4 の扱いで描く。
+4. When `seriko.use_self_alpha` の値が `0` のとき, the areka shall そのシェルを要件 5 の扱いで描く。
+5. If シェルの descript.txt に `seriko.use_self_alpha` の行が無い、またはシェルの descript.txt が無いとき, then the areka shall 正典の既定どおり `0` と書いてあるものとして扱う。
+6. If `seriko.use_self_alpha` の値が `1`・`true`・`full`・`0` のどれでもないとき, then the areka shall 行が無いときと同じに扱い、読めなかった値を記録に残す。
+7. When ゴーストを切り替える、またはシェルを切り替えるとき, the areka shall 切り替えた先のシェルの宣言で描き、前のシェルの宣言を持ち越さない。
+
+### Requirement 2: バルーンの透過の宣言を読む
+
+**Objective:** As a バルーン作者, I want バルーンの descript.txt に書いた `use_self_alpha` が絵の描き方に届くこと, so that 半透明を使わない前提で作ったバルーンも、ふちや影が意図どおりに出る
+
+#### Acceptance Criteria
+
+1. When バルーンを読み込むとき, the areka shall そのバルーンの descript.txt の `use_self_alpha` の値を読み、そのバルーンの絵すべてに同じ透過の扱いを当てる。
+2. When `use_self_alpha` の値が `1` または `true` のとき, the areka shall そのバルーンを要件 3 の扱いで描く。
+3. When `use_self_alpha` の値が `full` のとき, the areka shall そのバルーンを要件 4 の扱いで描く。
+4. When `use_self_alpha` の値が `0` のとき, the areka shall そのバルーンを要件 5 の扱いで描く。
+5. If バルーンの descript.txt に `use_self_alpha` の行が無いとき, then the areka shall 正典の既定どおり `0` と書いてあるものとして扱う。
+6. If `use_self_alpha` の値が `1`・`true`・`full`・`0` のどれでもないとき, then the areka shall 行が無いときと同じに扱い、読めなかった値を記録に残す。
+7. The areka shall バルーンの透過の扱いを descript.txt の宣言 1 つだけで決め、バルーンの絵ごとの設定ファイル（`balloons0s.txt` など）に同じ名前の行が書いてあっても、それで上書きしない（正典「この設定はバルーン全体の一括設定のみで、オーバーライドはできない」）。
+8. The areka shall シェルの `seriko.use_self_alpha` とバルーンの `use_self_alpha` を別々の宣言として扱い、片方の値をもう片方の絵に当てない。
+
+### Requirement 3: `1`（`true`）のときの描き方は今までと変えない
+
+**Objective:** As a 利用者, I want `1` と宣言してあるシェルとバルーンが今までと同じに見えること, so that 同梱のゴーストとバルーンの見た目が本仕様で変わらない
+
+#### Acceptance Criteria
+
+1. While 透過の宣言が `1` または `true` のとき, when α を持つ絵を描くとき, the areka shall 絵の α をそのまま透明度として使う。
+2. While 透過の宣言が `1` または `true` のとき, when α を持たず、同じ名前の `.pna` も無い絵を描くとき, the areka shall 抜き色で描く（左上の 1 画素と完全に同じ色の画素だけを透明にする）。
+3. While 透過の宣言が `1` または `true` のとき, the areka shall 本仕様の前に `1` 固定で描いていたときと 1 画素も違わない絵を出す。
+
+### Requirement 4: `full` のときは α の無い絵を全面不透明で描く
+
+**Objective:** As a ゴースト作者, I want `full` と宣言したとき、α の無い絵が左上の色で抜かれずにそのまま出ること, so that 正典が `full` を勧めている描画メソッド向けの絵や、角まで塗った絵を意図どおりに出せる
+
+#### Acceptance Criteria
+
+1. While 透過の宣言が `full` のとき, when α を持つ絵を描くとき, the areka shall `1` のときと同じく、絵の α をそのまま透明度として使う。
+2. While 透過の宣言が `full` のとき, when α を持たない絵を描くとき, the areka shall すべての画素を不透明として描き、左上の色と同じ色の画素も透明にしない。
+3. While 透過の宣言が `full` のとき, when α を持たない絵を描くとき, the areka shall 同じ名前の `.pna` が在っても無くても同じ結果（全面不透明）を出す。
+4. While 透過の宣言が `full` のとき, when α を持たない動く絵を描くとき, the areka shall 全部のコマを全面不透明として描く。
+5. While 透過の宣言が `full` のとき, when α を持たない絵の上を利用者がクリックしたとき, the areka shall 絵の矩形の中のどこでもキャラクター（またはバルーン）へのクリックとして受ける（透明として下へ通さない）。
+
+### Requirement 5: `0`（既定）のときは絵の α を使わず抜き色で描く
+
+**Objective:** As a ゴースト作者, I want `0` と宣言した（または何も宣言しない）とき、絵が正典の「従来挙動」で出ること, so that 半透明を使わない前提で作った昔からのシェルとバルーンが意図どおりに見える
+
+#### Acceptance Criteria
+
+1. While 透過の宣言が `0` のとき, when α を持たず、同じ名前の `.pna` も無い絵を描くとき, the areka shall 抜き色で描く（結果は `1` のときと同じ）。
+2. While 透過の宣言が `0` のとき, when α を持つ絵を描くとき, the areka shall 絵の α を透明度として使わず、すべての画素を絵に書かれた色のまま不透明として扱ったうえで、抜き色で描く。
+3. While 透過の宣言が `0` のとき, when α を持つ絵を抜き色で描くとき, the areka shall 左上の 1 画素と色（α を除いた赤・緑・青）が完全に同じ画素だけを透明にし、それ以外の画素は、元が半透明や完全な透明であっても不透明で描く。
+4. While 透過の宣言が `0` のとき, the areka shall 抜き色の比べ方に許容幅を持たせない（`1` のときの抜き色と同じ決まり）。
+5. While 透過の宣言が `0` のとき, when 動く絵を描くとき, the areka shall 1 枚目のコマの左上の色を抜き色として、全部のコマからその色を抜く（α を持たない動く絵の今の決まりと同じ）。
+6. While 透過の宣言が `0` のとき, the areka shall 半透明の画素を 1 つも出さない（どの画素も完全に不透明か完全に透明のどちらかになる）。
+7. If 透過の宣言が `0` で、絵と同じ名前の `.pna` が在るとき, then the areka shall その絵を表示せず、`.pna` に対応していないためであることを記録に残す（正典ではこの組合せで `.pna` が透明度の出どころになるが、areka は `.pna` の画素を使わない。`1` のときに α の無い絵へ `.pna` を添えた場合の今の扱いと同じ）。
+8. When 抜き色で透明になった所を利用者がクリックしたとき, the areka shall `1` のときの抜き色と同じく、クリックを下の窓へ通す。
+
+### Requirement 6: 画像だけのシェルを起動できる
+
+**Objective:** As a ゴースト作者, I want `surfaces.txt` を書かずに `surface<数字>.png` を置いただけのシェルが起動すること, so that 正典の作り方の説明どおりの、いちばん簡単な形のシェルを動かせる
+
+#### Acceptance Criteria
+
+1. When シェルのフォルダに `surfaces.txt` が無く、`surface<数字>.png` の形の画像が 1 つ以上在るとき, the areka shall それらの画像だけで面を組み、起動を失敗にしない。
+2. When シェルのフォルダの `surfaces.txt` が面を 1 つも定義せず（中身が空・波括弧が 0 個など）、`surface<数字>.png` の形の画像が 1 つ以上在るとき, the areka shall それらの画像だけで面を組み、起動を失敗にしない。
+3. While 画像だけで面を組んだシェルを表示しているとき, the areka shall それぞれの面を、`surfaces.txt` に何も書かれていない面を画像から認めるときの今の決まり（番号の読み方・同じ番号の重複・大きすぎる数字の扱い）と同じ決まりで扱う。
+4. While 画像だけで面を組んだシェルを表示しているとき, the areka shall 要件 1 の透過の宣言（無ければ既定の `0`）で絵を描く。
+5. If シェルのフォルダに `surfaces.txt` が無く（または面を 1 つも定義せず）、`surface<数字>.png` の形の画像も 1 つも無いとき, then the areka shall シェルの読み込みを失敗とし、面が 1 つも無いことを記録に残す。
+6. If `surfaces.txt` が在るのに読み取りに失敗したとき（無いのではなく、読めない）, then the areka shall 今までどおりシェルの読み込みを失敗とし、理由を記録に残す。
+7. When `surfaces.txt` が面を 1 つ以上定義しているとき, the areka shall 今までと同じ読み込みをする（本仕様で結果を変えない）。
+
+### Requirement 7: 何を読んでどう扱ったかを記録に残す
+
+**Objective:** As a ゴースト作者・開発者, I want 透過の宣言がどう読まれたかをログで確かめられること, so that 見た目が思ったとおりでないときに、宣言の書き間違いか areka の非対応かを切り分けられる
+
+#### Acceptance Criteria
+
+1. When シェルまたはバルーンを読み込んだとき, the areka shall 採った透過の扱い（`1`・`full`・`0` のどれか）と、それが宣言によるものか既定によるものかを、読み込み 1 回につき 1 度だけ記録に残す。
+2. If 透過の宣言の値を読めなかったとき（要件 1 の 6・要件 2 の 6）, then the areka shall 書いてあった値と、既定として扱ったことを記録に残す。
+3. When `surfaces.txt` が無い、または面を 1 つも定義しないシェルを画像だけで組んだとき, the areka shall そのことと、認めた面の数を、読み込み 1 回につき 1 度だけ記録に残す。
+4. The areka shall 本仕様で足す失敗の経路・表示をやめる経路のすべてに、理由の分かる記録を伴わせる（記録の無い失敗を作らない）。
+
+### Requirement 8: 手持ちの資産の見た目と、説明書・台帳の記述
+
+**Objective:** As a 利用者・開発者, I want 既定が `0` に変わっても同梱の資産の見た目が変わらないことと、説明書・台帳が実態どおりであること, so that 配布物を安心して更新でき、作者が areka の対応状況を正しく知れる
+
+#### Acceptance Criteria
+
+1. The areka shall 同梱のゴースト えも？？ のシェルと同梱のバルーン Balloon for Staysee Syncfield（どちらも `1` を宣言している）を、本仕様の前と同じ見た目で表示する。
+2. The areka shall `vendors/sample_ghost/` の検体のうち、透過を宣言せず α を持つ絵も持たないシェル（`R_POST_and_KOMAINU`・`konnoyayame`）を、本仕様の前と同じ見た目で表示する。
+3. The areka shall `vendors/sample_ghost/` の検体のうち `1` を宣言しているシェルとバルーン（`claudia`・`emo2-kakukaku` の各版）を、本仕様の前と同じ見た目で表示する。
+4. When 本仕様が着地したとき, the 説明書 `dist/README.txt` shall 「◆ 既知の制限: 半透明を前提に作られたバルーンだけが正しく表示されます」の節から「設定を読まない」「常に半透明を使うものとして表示する」という記述を無くし、宣言どおりに表示すること・宣言が無いバルーンは「半透明を使わない」ものとして表示することを書く。
+5. When 本仕様が着地したとき, the 説明書 `dist/README.txt` shall `.pna` の中身を表示に使わないという既知の制限を、実態（要件 5 の 7 を含む）に合う形で残す。
+6. When 本仕様が着地したとき, the 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` shall シェルの `seriko.use_self_alpha` の行とバルーンの `use_self_alpha` の行の状態・担当・説明を、宣言を読んで 3 通りを描き分ける実態（および `.pna` は使わないという残り）に合わせる。
+7. When 本仕様が着地したとき, the 開発者向けの文書（`doc/COMPAT_ARCHITECTURE.md` §8 のバルーンの透過の行・`.kiro/steering/tech.md` の「宣言に依らず常に `use_self_alpha,1` 相当」の記述） shall 「宣言を読まず常に `1`」という記述を実態に合わせて直す。
+8. The areka shall バルーンの `use_input_alpha` を今までどおり読まず、本仕様でその扱いを変えない。
+
+## 要件ディスカッションへの申し送り
+
+brief の議題 3 つと、要件を書く中で決めを置いた点。どれも要件は書き切ってあるが、開発者の確認を受けたい。
+
+1. **brief 議題 1（`0` のときの抜き色を、デコードの段で α を捨てるか、正規化の段でまっすぐの α に戻すか）**: やり方は設計で決める。要件は結果だけを縛った（要件 5 の 2・3・6＝絵に書かれた色のまま不透明として扱い、左上と同じ色だけを抜く）。
+2. **brief 議題 2（roadmap 覚え書きの ⑹ と `surface.append` の行にだけ現れるファイル名）**: brief の Scope が Out に置いているので、本要件も範囲外とした。
+3. **brief 議題 3（既定を `0` にしたとき宣言の無い資産の見た目が変わる場合）**: 手持ちの資産を調べたところ、α を持つ絵を含むものはすべて `1` を宣言しており、宣言の無いシェル 2 体（`R_POST_and_KOMAINU`・`konnoyayame`）の PNG は α を持たない（色の型が RGB とパレットで、`tRNS` も 0 件）。したがって手持ちの資産では見た目は変わらない見込みで、要件 8 の 1〜3 に「変わらない」と書いた。手持ちの外の「宣言が無く α 付きの絵を使うシェル・バルーン」は、正典どおり α が無視されて今と見た目が変わる（要件 1 の 5・要件 2 の 5）。
+4. **`0` の下で `.pna` が在る絵**（要件 5 の 7）: 正典ではこの組合せで `.pna` が透明度の出どころになるが、areka は `.pna` 非対応なので「表示せず記録する」とした（今の `1` × α 無し × `.pna` 在りと同じ扱い）。**今は表示できている「α 付きの絵 ＋ `.pna` 在り ＋ 宣言なし」の資産が、本仕様の後は表示されなくなる**点が変化である。`.pna` を無視して抜き色で描く案もありうる。
+5. **宣言の値が読めないとき**（要件 1 の 6・要件 2 の 6）: 正典に定めが無いので、既定（`0`）として扱い記録する、とした。
+6. **`surfaces.txt` が在るのに読めないとき**（要件 6 の 6）: 「無い」とは区別して、今までどおり失敗のままとした。
+7. **全画素が透明になる面（roadmap 覚え書きの ⑷）**: brief が「要件の段で確かめる項目に入れるかを決める」としている。本要件では範囲外に置いた。入れる場合は確かめの項目を足す。
