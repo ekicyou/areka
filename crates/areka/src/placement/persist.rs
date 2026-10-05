@@ -326,6 +326,32 @@ pub fn apply_restored_placements(
         .collect()
 }
 
+/// 保存 WindowPos の x・y が**両方とも** [`parse_px`] できたときだけ、その値（x は原点基準の
+/// まま）を返す。片方だけ・数字でない値・鍵なしは `None`（[`merge_scope`] と
+/// [`has_saved_char_pos`] が共有する唯一の読み取り＝判定を 2 か所に書かない）。
+fn saved_char_pos(entries: &[(PersistKey, String)], scope: u32) -> Option<PointPx> {
+    Some(PointPx {
+        x: saved_axis(entries, scope, Axis::X)?,
+        y: saved_axis(entries, scope, Axis::Y)?,
+    })
+}
+
+/// 保存 WindowPos の 1 軸を [`parse_px`] で読む（採否は決めない＝判定は [`saved_char_pos`]
+/// だけが持つ。復元ログが軸ごとの読みを出すためにも使う）。
+fn saved_axis(entries: &[(PersistKey, String)], scope: u32, axis: Axis) -> Option<i32> {
+    entry_value(entries, PersistKey::WindowPos { scope, axis }).and_then(parse_px)
+}
+
+/// スコープのキャラクター窓の位置（x・y の両方）が記憶にあるか
+/// （char-position-save-on-exit 2.4/2.6・design RestoredScopes）。
+///
+/// [`merge_scope`] が記憶の値を採るスコープで、かつそのときだけ真。記憶の値が既定と
+/// 同じでも真（値の違いでなく記憶の有無で決める・2.6）。
+#[allow(dead_code)] // 呼び手（main.rs の restore_merged_placements）はタスク 2.2 で付く・付いたら外す
+pub fn has_saved_char_pos(entries: &[(PersistKey, String)], scope: usize) -> bool {
+    saved_char_pos(entries, scope as u32).is_some()
+}
+
 /// 1 scope 分の復元 merge（[`apply_restored_placements`] の要素写像・純関数）。
 fn merge_scope(
     placement: ScopePlacement,
@@ -335,34 +361,19 @@ fn merge_scope(
     let scope = placement.scope as u32;
 
     // --- char_pos: 保存 WindowPos が両軸とも parse できたときのみ差替え＋再射影（1.4/1.5/6.1）---
-    let saved_x = entry_value(
-        entries,
-        PersistKey::WindowPos {
-            scope,
-            axis: Axis::X,
-        },
-    )
-    .and_then(parse_px);
-    let saved_y = entry_value(
-        entries,
-        PersistKey::WindowPos {
-            scope,
-            axis: Axis::Y,
-        },
-    )
-    .and_then(parse_px);
-    let char_pos = match (saved_x, saved_y) {
+    let saved_window = saved_char_pos(entries, scope);
+    let char_pos = match saved_window {
         // 両軸そろったときのみ保存値を採用し、毎起動 live 再射影（アンカー再解決＋域内 clamp）。
         // 保存 x は**原点＝下端中央**基準（Bottom）ゆえ、現寸の左上へ戻してから射影へ渡す
         // （寸法が保存時と異なっても原点が一致する＝キャラもバルーンも横へずれない）。
-        (Some(x), Some(y)) => project_restore(
+        Some(saved) => project_restore(
             placement.anchor,
-            char_pos_from_origin_x(placement.anchor, PointPx { x, y }, placement.char_size),
+            char_pos_from_origin_x(placement.anchor, saved, placement.char_size),
             placement.char_size,
             snapshot,
         ),
         // 片軸でも欠損/非数値 → resolver 既定 char_pos を保持（1.5/6.1）。
-        _ => placement.char_pos,
+        None => placement.char_pos,
     };
 
     // --- balloon: 保存 offset があれば基準逆変換で導出、無ければ既定 offset 保持（2.3/2.4）---
@@ -420,7 +431,8 @@ fn merge_scope(
         target: "areka::persist::restore",
         scope = placement.scope,
         anchor = ?placement.anchor,
-        saved_win_x = ?saved_x, saved_win_y = ?saved_y,
+        saved_win_x = ?saved_axis(entries, scope, Axis::X),
+        saved_win_y = ?saved_axis(entries, scope, Axis::Y),
         default_char_x = placement.char_pos.x, default_char_y = placement.char_pos.y,
         char_x = char_pos.x, char_y = char_pos.y,
         char_w = placement.char_size.w, char_h = placement.char_size.h,
