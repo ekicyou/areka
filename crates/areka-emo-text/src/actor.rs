@@ -482,6 +482,15 @@ impl TextLayerRuntime {
     #[cfg(test)]
     pub(super) fn set_surface_resolver(&mut self, resolve: SurfaceKeyResolver) {
         self.surface_resolver = Some(resolve);
+        self.rehearse_again();
+    }
+
+    /// 空回しをやり直す（要件 2.2・2.7）: 空回しの出発点（状態か `\s` の解決の閉包）を合図と
+    /// 無関係に変えた口の直後に呼ぶ。今の状態と解決の閉包で `reinstall` を呼ぶだけで、先渡しを
+    /// 受け取っていなければ何も起きない。
+    fn rehearse_again(&mut self) {
+        self.lookahead
+            .reinstall(&self.state, self.surface_resolver.as_deref());
     }
 
     /// 検査用の読み口: その場所の配置の入力を引いて [`present::arrange_lines`] を呼ぶだけ

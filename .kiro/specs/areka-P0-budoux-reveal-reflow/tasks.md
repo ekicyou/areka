@@ -96,7 +96,7 @@
   - _Requirements: 2.2, 2.7_
   - _Boundary: TalkLookahead（lookahead.rs・lookahead_tests.rs）_
 
-- [ ] 4. 実行時への結線（緑にする）
+- [x] 4. 実行時への結線（緑にする）
 - [x] 4.1 実行時が先渡しを空回しへ入れ、合図ごとに消去を数える
   - 実行時に区間の全文の持ち主の欄を足し、`preview_talk` で空回しを始める。受け取ったことを `debug!` 1 行（合図の数・求めた区間の数）で残す
   - 合図の適用は、状態を進める前にその合図の行き先を求めて `note_cue` へ渡す
@@ -115,7 +115,7 @@
   - _Boundary: arrange_lines・present_actor（actor_present.rs）、arrange_for_test（actor.rs）_
   - _Depends: 2.1, 3.4_
 
-- [ ] 4.3 空回しの出発点が変わる 3 か所で空回しをやり直す
+- [x] 4.3 空回しの出発点が変わる 3 か所で空回しをやり直す
   - 実行時に私有の `rehearse_again`（今の状態と解決の閉包で `reinstall` を呼ぶだけ）を足す
   - 呼ぶ 3 か所: 装着の登録の中で既定の見た目を状態へ差し込んだ直後（actor_attach.rs）・箱の束の差し替えの中で箱の表と解決の閉包を入れ替えた直後（actor_box.rs。その前の箱の場所の後始末に `forget_boxes` を足す）・解決の閉包だけを差し込む口の直後（actor.rs の検査専用の口）
   - 完了の状態: `cargo test -j 2 -p areka-emo-text` が緑（箱・装着・行き先の既存の検査を含む）。3 か所の呼び出しが経路の検査で踏まれることは 5.3 の検査 11 で判定する
@@ -184,8 +184,9 @@
 
 - 1.3: `spawn_emo_text` の説明に「先渡しを実行時へ渡す口は後のタスク」と書いてある。4.1 で `preview_talk` へつなぐときにこの記述も直す。
 - 2.1: 検査 1（`actor::lookahead_tests::emo2_boot_talk_reveals_without_moving_glyphs`）は 4.2 で書き換えなしに緑になった。`actor_*_tests.rs` の接続宣言はこのクレートの慣例で actor.rs に置く（lib.rs は一覧への登録だけ）。
-- 3.1・3.3・4.1: 広い `expect(dead_code)` は 4.1 で外した。残りは `basis`・`Basis`（4.2 で外す）と `reinstall`・`forget_boxes`（4.3 で外す）。`TalkLookahead::number` は `#[cfg(test)]`（本番から読むなら外す）。
+- 3.1・3.3・4.1〜4.3: 「後のタスクまで」の `expect(dead_code)` はすべて外した。`TalkLookahead::number` は `#[cfg(test)]`（本番から読むなら外す）。
 - 3.2: `\s` を読まないときの debug の発生元は `areka_emo_text::lookahead` に変わった。実機（7.2）で `RUST_LOG` を絞るときは `areka_emo_text` 全体を debug まで開ける。
 - 3.3・3.4: 空回しが（場所, 0）の全文を求め直した場所は warn 済みの印を捨て、何も足さず全文を持ち越す場所だけ印も持ち越す（install 手順 7・reinstall 手順 2 と同じ考え方）。`install_carries_the_warned_mark_only_with_the_carried_section` で固定。`Basis` にも 4.1・4.2 までの `expect(dead_code)` が付いている。
 - 3.5: `forget_boxes` は箱の場所の全文・`\c` の数えに加えて warn 済みの印も捨てる（数えが下がった後も「（場所, 区間）につき 1 度」を保つため）。`reinstall` の最初の「足した」印は内容の空でない場所だけ。
 - 4.1: 受け取りの記録は `debug!("先渡しを受け取った——空回しで区間の全文を求めた", cues, sections)`（6.2 はこの本文で判定する）。`sections` は前のトークから持ち越した区間も含む、持っている区間の全部の数。
+- 4.3: `register_actor` は DPI の再追従（`refresh_actor_binding`）からも合流するので、値が本当に変わったときは空回しもやり直す（設計どおり）。

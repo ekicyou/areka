@@ -174,13 +174,6 @@ impl TalkLookahead {
     /// 空回しをやり直す: 今の状態の写しから、先渡しの列のまだ届いていない残りを流し、
     /// 今の区間とそれより後の区間の全文を入れ替える（design.md の手順 1〜5）。
     /// 先渡しの列が無ければ何もしない。
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "タスク 4.3 で実行時の rehearse_again から呼ぶまで"
-        )
-    )]
     pub(crate) fn reinstall(
         &mut self,
         state: &TextLayerState,
@@ -215,13 +208,6 @@ impl TalkLookahead {
     }
 
     /// 箱の場所の区間の全文と数えを捨てる（箱の束の差し替え）。warn 済みの印も区間と一緒に捨てる。
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "タスク 4.3 で箱の束の差し替え（set_box_layout）から呼ぶまで"
-        )
-    )]
     pub(crate) fn forget_boxes(&mut self) {
         let is_box = |key: &PlaceKey| matches!(key.place, TextPlace::Box(_));
         self.sections.retain(|(place, _), _| !is_box(place));
