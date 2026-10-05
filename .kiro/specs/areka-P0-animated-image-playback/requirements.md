@@ -66,7 +66,7 @@
   - **element定義のオプション**（`--clipping`・`--alpha`・`--source`・`--scaling`）。`--clipping` を付けた element定義では動く絵として読まない決まり（C2）は `areka-P0-element-clipping-option` が持つ。本 spec はオプションを読まない（要件 10.4）。
   - **台本の再生**（さくらスクリプトの再生と、その土台の時刻つきの台本）。触らない。`\i[ID]` の意味も変えない。
   - **起動の採寸で全コマを読む時間の直し**（`areka-P0-placement-measure-bake-once`）。
-- **同じウェーブ C4 の約束**（2026-10-05 棚卸㉒・brief。破るなら止めて開発者へ報告する）: `areka-parsers` の `shell/`・`areka-emo-atlas` の `manifest.rs`・`areka-emo-compose` の `plan.rs`・`fold.rs`・`method.rs`・`areka-emo-present`・`crates/areka/src/emo2_boot/assets.rs` に触らない。動く絵の分解は、面の表に絵を結ぶ手順（`bind_atlas`）の直後に置く。
+- **同じウェーブ C4 の約束は解いた**（2026-10-05 設計討議・開発者裁定「本質的な案で設計せよ。スコープが膨らむなら関係しそうな他セッションと調整」）。棚卸㉒の brief は「`areka-parsers` の `shell/`・`areka-emo-atlas` の `manifest.rs`・`areka-emo-compose` の `plan.rs`・`fold.rs`・`method.rs`・`areka-emo-present`・`crates/areka/src/emo2_boot/assets.rs` に触らない」と約束していたが、動く絵を子サーフェスへ分解する形を根から作るために、`plan.rs` と `areka-emo-present` には触る。触る場所の一覧と、ほかのセッション（`areka-P0-element-base-method`・`areka-P0-balloon-lifecycle-events`）と決めた取り込みの順は design.md に記す。未着手の `areka-P0-extent-element-offset` へは、外形の計算の置き場が変わることを brief で申し送る。
 - **Adjacent expectations**:
   - **`areka-P0-animated-image-import`（後続・2026-10-05 棚卸㉒で本 spec から切り出し）**: pattern定義の描画メソッド `import` を持つ。動く絵を `import` したときは、本 spec の分解と繰り返しの仕組みに載る（要件 5）。
   - **`areka-P0-animated-image-decode`（前提・完了）**: 動く絵ごとに、重ね済みの全部のコマ・コマごとの待ち時間（ミリ秒・0 は 0 のまま）・繰り返し回数（終わりなし／合計 N 回）を渡す。各コマは絵の全体の寸法で揃っている。同 spec の要件の Out of scope は「バルーンの絵のコマを時間で切り替える仕組みは本 spec でも後続でも作らない」と書いているが、**本 spec の裁定（2026-10-05・要件 6）がこれを上書きする**。完了した文書は書き換えず、上書きしたことを対応表に記す（要件 10.2）。
