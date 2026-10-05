@@ -98,3 +98,5 @@
 - 3.1: GPU のテストの時計は 2 つ。台本の待ちと指令は注入する Tick の時刻（`answer_of` は止める）、字の現れは実時間（`FrameTime`）。4.1 で「台詞を進める」ときは Tick を進める口（`frames_until(step_ms>0, ..)`）を使う。
 - 3.3: 読み出しの口が読めた後にもう一度呼ばれた腕に、設計に無い文言 `the text read was already taken` を置いた（`Wait` は読めた後に口を呼ばないので届かない・黙らせないため）。面の大きさの検査は「積む前に面の大きさ」「読めた後にバイト数」に分かれ、装置の失敗と大きさの食い違いが同時に起きたときだけ答えの文言が前と入れ替わる（どちらも想定外の失敗の `NG:` と ERROR 1 件）。
 - 4.2（10-06）: `cargo test -p areka-emo-text` 緑・`cargo test -p areka --bin areka` 2687 件緑（無視 2）・fmt 緑。clippy（`-p areka -p areka-emo-text --bins --lib --tests --no-deps -D warnings`）は 127 件の指摘がすべて触っていないファイルにあり、この spec で変えたファイルへの指摘は 0 件。`mod.rs`・`log-capture-kit`・`areka-emo-text/src/lib.rs` は分岐点からの差分 0。判断の文言を `fail` へ渡す所は 0 件（`as_str` は `refuse` の中だけ）。
+- 最終検証（10-06・`/kiro-validate-impl`）: GO。`tools/test-all.ps1` は `25e5bfe8` で全段 緑（x64 ワークスペース全テストは 10,361 件・失敗 0）。その前の 2 回は C ドライブの満杯（`no space on device`・LNK1318）で組み立てが止まっただけで、テストの赤ではない。タスクをまたぐ整合は Critical・Warning とも 0。
+- 完了の棚卸へ（Info）: 要件 4.5（写した後にゴーストが替わっても写した時点の絵を返す）は `Wait` の形で守られているが、固定するテストは無い（7.1 の一覧の外）。`PendingReadBack::size()` は本番の呼び手が無い（文字の層のテストだけが使う）。
