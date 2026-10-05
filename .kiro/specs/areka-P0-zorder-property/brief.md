@@ -86,3 +86,12 @@ ukadoc プロパティ **`currentghost.seriko.zorder`**（SSP 2.8.78・[SET有�
   - `doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/ledger/property.toml`（1 行）
 - 議題（答えで作業が変わるものだけ）: 前回の 2 つ（「全部置き換える」口・空文字で descript の基本の組も消すか）に加えて、`RuntimeCommandSink` の届け先の登録を本 spec が作るか、`property-query-channels`（書く道）か `currentghost-property-tree` が作るか（最初に要る spec が作る、が素直）。
 - 見つけた穴: なし。並走の照合: `currentghost-property-tree`・`property-catalog-lists` と sylphya の `actor.rs`・`dotted.rs` を分け合う＝直列。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: S（5〜8）・書き込みの届け先を作るなら S〜M（8〜11）のまま。切る: なし。
+- 前提の状態: `currentghost-property-tree`（動く値の口）はまだ＝着手は待ち。読む道は `mcp-get-property`（✅ 10-04）でできた。書く道（`\![set,property]`）の `property-query-channels` はまだ。
+- 崩れた前提／古くなった位置: なし。`crates/areka/src/placement/zorder_group_ledger.rs`（633）は C3 で変わっていない（文字列へ戻す関数と「全部置き換える」口は無いまま）。先回りの見張り `placement/zorder_property_deferral_tests.rs` の `t_zpd40_the_property_system_sources_never_mention_the_name` は在る。sylphya の `actor.rs` の `RuntimeCommandSink` は説明文の言い換えだけで、届け先は未登録のまま。
+- 触るファイル: `crates/areka/src/placement/{zorder_group_ledger.rs, zorder_property_deferral_tests.rs}` と兄弟のテスト・`crates/areka-sylphya/src/{actor.rs, vocab/dotted.rs}`・届け先を UI へつなぐ所（`crates/areka-ghost/src/sylphya_wiring.rs`・`crates/areka/src/emo2_boot/mod.rs` の見込み）・`doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/ledger/property.toml`（1 行）。
+- 議題（答えで作業が変わるものだけ）: 前回の 3 つのまま（全部置き換える口・空文字で descript の基本の組も消すか・`RuntimeCommandSink` の届け先の登録をどの spec が作るか）。
+- 見つけた穴: `property-name-case-fold` の調べで、SET の仕分け `classify_set` は `SET_EFFECTIVE` と大小まで一致する名前だけを運行の値に回す。本 spec が `seriko.zorder` を `SET_EFFECTIVE` に載せた後も、`CURRENTGHOST.SERIKO.ZORDER` は自由な名前として保存へ落ちる（向こうが着地すれば解ける）。

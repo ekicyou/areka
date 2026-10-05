@@ -60,3 +60,15 @@
 - 触るファイル: `crates/areka-sakura/src/compile.rs`・`crates/areka-sakura/src/drive.rs`・`crates/dola/src/cue/`・`crates/areka-kanade/src/{msg.rs, actor.rs, schedule/}`・`doc/ukadoc-coverage/ledger/sakura-script.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
 - 共有しうる相手: `anchor-tag-canon`・`talk-fast-forward`・`sakura-time-directives`（`compile.rs`）、`mouse-drag-events`・`balloon-lifecycle-events`・`sakura-time-critical`（kanade の `schedule/`）。
 - 議題: 待ちの間に利用者の中断・マウスの返事の置き換えが来たときの扱い（差し込みを捨てるか）。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（10〜14）のまま。切る: なし。
+- 前提の状態: `property-query-channels` はまだ＝着手できない。C3 は `areka-sakura`・`dola` に触れていない（`compile.rs` 411・`drive.rs` 565 は前回と同じ）。
+- 崩れた前提／古くなった位置:
+  - `SenderType: embed` を送る口の持ち主が変わりうる: 10-05 起票の `script-security-level`（優先・前提なし）が出どころ（`\![embed]` を含む）と `SenderType` の運搬を持つ。どちらが運んでも、本 spec は「出どころ `embed` を付けて送る」だけで済む。上流に `script-security-level` を足す。
+  - kanade の行数: `schedule/steady.rs` 947・`schedule/mod.rs` 938・`msg.rs` 909。再生中の往復は新しいファイル（例 `schedule/embed.rs`）に置き、上の 2 本へは呼び出しの数行だけにする。
+  - 共有の相手から `mouse-drag-events` は着地で外れた（✅ 10-05）。
+- 触るファイル: `crates/areka-sakura/src/{compile.rs, drive.rs}`・`crates/dola/src/cue/`・`crates/areka-kanade/src/{msg.rs, actor.rs}`・`schedule/`＋新規ファイル・`doc/ukadoc-coverage/ledger/sakura-script.toml`（`\![embed,…]` の 1 行）・`doc/COMPAT_ARCHITECTURE.md` §8。
+- 議題（答えで作業が変わるものだけ）: 前回の 1 つ（待ちの間の中断・置き換え）のまま。
+- 見つけた穴: 網羅台帳の `\![embed,…]` の行の持ち主が今も `property-query-channels`（実害なし・すぐ直せる）。

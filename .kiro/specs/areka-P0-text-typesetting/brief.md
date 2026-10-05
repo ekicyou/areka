@@ -89,3 +89,20 @@
   - `doc/COMPAT_ARCHITECTURE.md` §8
 - 議題（答えで作業が変わるものだけ）: 棚卸⑳の 2 件のまま（禁則の表を手で書くか UAX#14 のクレートか／縦中横を自前で描く方式）。
 - 見つけた穴: なし。
+
+
+---
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M〜L（14〜18 タスク）。今は切らない（20 を超えるなら㉑の切り方＝禁則とぶら下げが先、縦中横と字の向きが後）。
+- 前提の状態: 列の上で `budoux-reveal-reflow`（バグ・10-05 起票）の後に入った。向こうは「一度出した字の行を、後から届いた字で動かさない」約束を文字の層に作り、本 spec の禁則はその上に乗る（向こうの brief の Downstream）＝**向こうの着地を待つ**。ほかの前提（`emo-text-file-split`・`shell-balloon`）は満たす。
+- 崩れた前提／古くなった位置:
+  - C3 は配置の層（`layout.rs` 489 行・`layout_scan.rs` 428 行・`layout_scan_glyph.rs` 174 行・`wrap.rs`・`segment.rs`・`region.rs`）に触れていない。`writing.rs` は注記の「M2 予約」→「予約」の書き換えだけで、予約キーの定数（`RESERVED_KEY_TEXT_ORIENTATION`・`RESERVED_KEY_TEXT_COMBINE_UPRIGHT`）は在る。`draw.rs` も注記だけ。
+  - **禁則と「行を動かさない」約束がぶつかりうる**: 行頭禁則は「前の字を次の行へ追い出す」ので、すでに出した字を動かすことがある。`budoux-reveal-reflow` の案 1（固定した字より前へ組み直さない）の後で、禁則がどこまで効けるか（固定された字の前では追い出さない等）を要件で決める。向こうの設計を読んでから。
+  - `budoux-reveal-reflow` の調査で、emo2 の初回起動トークの行頭の「‥‥」は BudouX が「‥‥ええと、」をひとまとめにするためで、UAX #14 の LB22（「‥」「…」の前では切らない）に当たり、本 spec の担当と記録された（SSP でも同じ見た目）。禁則の決定論テストの実例に使える。既定 `anywhere` のままでは直らない。
+  - `lib.rs` は src の全部の `.rs`（テストの兄弟ファイルも）を一覧に載せないと赤（純粋の数は 71 で固定）＝禁則の表の新しいファイルを足すと `lib.rs` を触る（㉑のとおり）。
+- 触るファイル（並走の照合用）: ㉑のまま＝`crates/areka-emo-text/src/{layout_scan_glyph.rs, layout_scan.rs, layout.rs, wrap.rs, segment.rs, region.rs, writing.rs, actor.rs, state.rs, draw.rs, draw_line_store.rs, draw_metrics.rs, viewbox_draw_render.rs, lib.rs}`＋新規（禁則の表）・`crates/areka-parsers/src/balloon/{model.rs, parse.rs}`・`doc/COMPAT_ARCHITECTURE.md` §8。`budoux-reveal-reflow` の固定の記憶が `actor_present.rs` の折り返しの計画に入るなら、それを読むために `actor_present.rs` も触る見込み。
+- 議題（答えで作業が変わるものだけ）: ⑳の 2 件のまま。⑶（新）禁則の追い出しと「出した字の行を動かさない」約束のどちらを優先するか（`budoux-reveal-reflow` の設計の後に）。
+- 見つけた穴: なし。
+- 並走の判定（厳しめ）: `budoux-reveal-reflow`（`segment.rs`・`state.rs`・順序の依存）・`balloon-font-file`（`draw.rs`・`draw_metrics.rs`・`viewbox_draw_render.rs`・`actor.rs`）・`anchor-tag-canon`・`talk-fast-forward`（`state.rs`・`balloon/{model,parse}.rs`）・`balloon-markers`（`layout.rs`・`state.rs`・`balloon/{model,parse}.rs`）とは重なる＝並べない。`balloon-lifecycle-events`・`balloon-canon-residue` とは重なり 0。

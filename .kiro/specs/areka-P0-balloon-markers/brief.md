@@ -93,3 +93,29 @@
   1. 箱の印の画像をどのフォルダから引くか（シェルのフォルダ／今のバルーンのフォルダ）。答えで系列の解決の入力が変わる。
   2. 手動で戻している最中に新しい文字が来たときの扱い（最新へ戻すか、戻したままか）。`balloon-scroll-fade` の押し出しの判定にも効く。
 - 見つけた穴: なし。
+
+
+---
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: L（16〜20 タスク）。要件の段で 20 を超えたら㉑の切り方（① 矢印と手動スクロール＋装飾の系列の土台 → ② 通信中・数字・SSTP の印）で切る。
+- 前提の状態: 満たす（`shell-balloon`）。列の上では `talk-fast-forward` の後。`clickwait*` の系列は先に着地した方が作る（列の順なら `talk-fast-forward`）。
+- 崩れた前提／古くなった位置:
+  - **㉑の「箱への押下は `judge_box_click` を通る・ここに足す」は不正確**（C3 の前からこの形）。押下の結論（「シェルの操作／選択で使った／中断を禁じる区間／中断」の 4 値）の順を決めるのは `input_events/shell_box.rs` の `judge_box_press`、呼び手は `input_events/user_break.rs` の `on_box_press`。`judge_box_click` は選択肢の確定だけを返す。箱の矢印のクリックは `judge_box_press` に結論を足す＝**`user_break.rs` も触る**。
+  - **ホイール**: wintf の `PointerState` には 1 フレームだけ有効な `wheel`（`WheelDelta`・`ecs/pointer/systems.rs` が毎フレーム消す）が既にある。受け手の型（押下の `OnPointerPressed` のようなもの）は無く、areka はどこでも読んでいない。バルーン窓と箱の `PointerState.wheel` を毎フレーム読む仕組みを areka 側に足せば wintf は触らずに済む見込み（受け手の型を wintf に足すなら wintf も触る）。
+  - 印をどこで描くかの材料: MCP の `dump_balloon`（C3・`mcp-dump-images`）は背景の絵に**文字の面だけ**を重ねて返す（`mcp/dump_balloon_overlay.rs` の `overlay_text`）。印を文字の面の中に描けば写り、emo-present の別の絵で重ねると写らない（`talk-fast-forward` の印と同じ答えにする）。
+  - C3 は emo-text の `viewbox.rs`（注記だけ・460 行）と `actor.rs`・`actor_box.rs`（`shell-balloon-frame-align`）を書き換えた。Constraints の「`viewbox.rs` 871 行・`layout.rs` 977 行」は分割の前の数（今は `layout.rs` 489 行）。箱の四角は `actor_box.rs` の `shown_boxes`（C3 の後は「シェルの窓がいま表示している絵」に従う）。
+  - キーは今もパーサに無い・既定バルーンの画像の有無（`clickwait*` と数字の画像は無い）は㉑のまま。emo-present の `balloon.rs` の `SeriesFamily` は本体の系列だけで、注記に `arrows`→`arrow` の旧名の段の書き方がある。
+  - `lib.rs` は src の全部の `.rs`（テストの兄弟ファイルも）を一覧に載せないと赤（純粋の数は 71 で固定）＝印の配置の新しいファイルを足すと `lib.rs` を触る。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-parsers/src/balloon/{model.rs（774 行＝新しいファイルへ）, parse.rs, validation_tests.rs}`
+  - `crates/areka-emo-present/src/balloon.rs`（`SeriesFamily` の行）
+  - `crates/areka-emo-text/src/{layout.rs, viewbox.rs, viewbox_diff.rs, viewbox_draw_render.rs, actor.rs, actor_present.rs, actor_box.rs, state.rs, lib.rs}`＋新規（印の配置）
+  - `crates/areka/src/input_events/{balloon.rs, balloon_pressed.rs, shell_box.rs, shell_box_handler.rs, user_break.rs}`＋ホイールの新しい受け口（`input_events/mod.rs` の結線に 1 行の見込み）
+  - `crates/areka/src/emo2_boot/update_cue.rs` か `crates/areka/src/update/`
+  - 印を文字の面の外で描くなら `crates/areka/src/mcp/dump_balloon*.rs`
+  - 検体・`doc/ukadoc-coverage/ledger/assets.toml`
+- 議題（答えで作業が変わるものだけ）: ㉑の 2 件のまま。⑶ 印を文字の面の中で描くか emo-present で重ねるか（`talk-fast-forward` が先に決めていればそれに従う）。
+- 見つけた穴: なし。軽微: ㉑の「`judge_box_click` に足す」の書き方と Constraints の古い行数（上記）。
+- 並走の判定（厳しめ）: `budoux-reveal-reflow`（`actor_present.rs`・`state.rs`）・`balloon-font-file`（`actor.rs`・`actor_box.rs`・`viewbox_draw_render.rs`）・`anchor-tag-canon`・`talk-fast-forward`・`text-typesetting`・`balloon-canon-residue`（emo-present の `balloon.rs`）とは重なる＝並べない。`balloon-lifecycle-events` とは重なり 0。
