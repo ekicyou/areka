@@ -349,7 +349,6 @@ fn saved_axis(entries: &[(PersistKey, String)], scope: u32, axis: Axis) -> Optio
 ///
 /// [`merge_scope`] が記憶の値を採るスコープで、かつそのときだけ真。記憶の値が既定と
 /// 同じでも真（値の違いでなく記憶の有無で決める・2.6）。
-#[allow(dead_code)] // 呼び手（main.rs の restore_merged_placements）はタスク 2.2 で付く・付いたら外す
 pub fn has_saved_char_pos(entries: &[(PersistKey, String)], scope: usize) -> bool {
     saved_char_pos(entries, scope as u32).is_some()
 }

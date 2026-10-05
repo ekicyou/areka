@@ -716,9 +716,6 @@ fn restore_merged_placements(
 ) {
     // 唯一の IO 点（design C1・A1 シーム）: mount 解決 → Ghost スコープ永続 entries 先読み。
     let entries = placement::persist::load_restored_state(ghost_root, default_encoding);
-    // resolver 既定のキャラ位置を merge 前に控える（scg 7.3 の「既定配置か否か」判定の基準）。
-    let defaults: Vec<(usize, placement::resolver::PointPx)> =
-        placements.iter().map(|p| (p.scope, p.char_pos)).collect();
     // 純関数 merge（永続不書込・保存位置優先 → project_restore → balloon 導出）。
     let merged = placement::persist::apply_restored_placements(placements, &entries, snapshot);
     // 起動時関門（areka-P0-windowposition-limit design C6・要件 2.2/4.7/4.9/5.5/6.1）:
@@ -727,15 +724,14 @@ fn restore_merged_placements(
     // 一切変えないためであり、補正は `balloon_pos`（表示位置）だけに作用する
     // ——`balloon_offset`（論理相対位置）は生値のまま（DD6・補正を焼き付けない）。
     let merged = placement::balloon_limit::apply_balloon_limit(merged, snapshot);
-    // 保存位置が採用された（＝resolver 既定から動いた）スコープ集合。これらは**利用者の意思に
-    // よる配置**であって既定配置ではないため、連鎖の再解決から常に除外される（scg 7.3）。
-    // 保存値がたまたま既定と同値だった場合は差が出ないが、その位置は既定そのものゆえ
-    // 既定配置として扱って差し支えない。
+    // 記憶に位置（x・y の両方）があるスコープ集合。これらは**利用者の意思による配置**で
+    // あって既定配置ではないため、連鎖の再解決から常に除外される（scg 7.3）。値の違いでなく
+    // 記憶の有無で決める＝記憶の値がたまたま既定と同じでも記憶として扱う
+    // （char-position-save-on-exit 2.6・判定は merge と同じ読み取り `has_saved_char_pos`）。
     let restored: std::collections::BTreeSet<usize> = merged
         .iter()
-        .zip(defaults.iter())
-        .filter(|(m, (_, d))| m.char_pos != *d)
-        .map(|(m, _)| m.scope)
+        .map(|m| m.scope)
+        .filter(|&scope| placement::persist::has_saved_char_pos(&entries, scope))
         .collect();
     (merged, restored)
 }
