@@ -128,7 +128,7 @@ crates/areka-kanade/src/schedule/
   - 子のファイルの宣言 `#[path = "steady_choice_script.rs"] mod choice_script;` を置く（`schedule/mod.rs` に宣言を足さない）。
   - 受理の記録 `choice_accepted` は event 名も欄も変えない。添えた文言「カスケードを開始」だけ、`script:` にも当たる言い回しに直す。
 
-**ウェーブ C4 の約束の外（開発者の調整が要るもの）**
+**ウェーブ C4 の約束の外（2026-10-05 設計ディスカッション議題 2 で開発者が 4 つとも了解）**
 
 | ファイル | 触り方 | 理由 | 並走との重なり |
 |---|---|---|---|

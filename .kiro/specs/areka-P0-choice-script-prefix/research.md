@@ -224,3 +224,4 @@
 ## 10. 設計ディスカッションの決定（2026-10-05）
 
 - **議題 1（状態を書き替える関数の置き場）= (b)**: `script:` の後ろを取り出す純粋な関数 `script_body` は `choice.rs` に置く。結末を決める `begin` と、トークを始める `start_talk` は `steady.rs` の子の `steady_choice_script.rs`（モジュール `schedule::steady::choice_script`）に置く。理由＝`choice.rs` は「判断の分かれ道だけ・記録も出さない」層で、その子に状態を書く関数を置くと名乗りと中身が食い違う。`schedule/mod.rs` には触らない。上の 4 節・9 節にある `choice_script.rs`・`schedule::choice::script` の置き場の記述はこの決定で読み替える。
+- **議題 2（C4 の約束の外で触るファイル）= (a) 4 つとも触る**: `schedule/steady_choice_tests.rs`・`schedule/schedule_log_firing_tests.rs`（古い前提のテストを各 1 本消す）・`areka-parsers` の `sakura/decode_tests.rs`（読みのテストを 1 本足す）・`schedule/mod.rs`（`Action::ResolveChoice` の説明の 1 句だけ・コードは変えない）。`mod.rs` は `balloon-lifecycle-events` と重なるが、1 行の競合は後に入る側が直す。
