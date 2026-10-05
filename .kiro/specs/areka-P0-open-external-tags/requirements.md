@@ -12,7 +12,7 @@
 本書で使う語:
 
 - **行き先**: タグが開こうとしているもの。URL・ファイルのパス・フォルダのパス・メールの宛先のいずれか。
-- **出どころ**: その台本を出したゴースト（ゴースト名）と、台本がどこから来たか（SHIORI の応答・選択肢の `script:`・MCP のツール など）。
+- **出どころ**: その台本を出したゴースト（ゴースト名）。台本がどこから来たか（SHIORI の応答・選択肢の `script:`・MCP のツール など）は本 spec では記録しない。
 - **開く処理**: 行き先を OS に渡して既定のアプリを起こす、areka の中の 1 か所。
 - **`ghost/master`**: 実行中のゴーストのフォルダの中の `ghost/master`。ukadoc が相対パスの基準として定める場所。
 
@@ -28,7 +28,8 @@
   - 外部アプリの設定画面・設定ファイル（開発者裁定＝作らない。OS の既定のアプリだけを使う）。
   - 同意の窓・影響の段による制限（`script-impact-tiers`）。本 spec は開く処理の 1 か所を用意するところまでで、同意を求めない。
   - `\![open,help]`・`\![open,configurationdialog]`・`\![open,ghostexplorer]` など SSP 自身の窓を開く形（今までどおり受け取り手なし）。
-  - `\![execute,http-get,…]` などネットワーク系・`\![open,readme]`（実装済み・変えない）。
+  - `\![execute,http-get,…]` などネットワーク系。
+  - `\![open,readme]` のふるまい（実装済み・何を開くかは変えない）。ただし OS へ渡す通り道は要件 7.1 の 1 か所へ寄せ、要件 7.5 のとおり UI を止めない形に移す。
   - 選択肢の `script:` の実行（`choice-script-prefix`）・右クリックのコピー（`link-context-copy`）・ホバー（`balloon-link-hover`）・`\_a` の働き（`anchor-tag-canon`）。
 - **Adjacent expectations**:
   - 台本がどこから来ても（SHIORI の応答・`choice-script-prefix` が着地した後の選択肢の `script:`・`mcp-kanade-tools` が着地した後の MCP の `sakurascript`）、開く系のタグは同じ開く処理の 1 か所を通る。本 spec は出どころを増やさず、どの出どころでも同じふるまいになることだけを約束する。
@@ -87,7 +88,7 @@
 4. When 台本に `\![open,explorer,種類,名前]` があり、種類が `ghost`, the areka shall ベースウェアの目録でその名前のゴーストを引き、そのゴーストのフォルダを開く（名前の引き方は `\![change,ghost,名前]` と同じ）。
 5. When 台本に `\![open,explorer,種類,名前]` があり、種類が `balloon`, the areka shall ベースウェアの目録でその名前のバルーンを引き、そのフォルダを開く。
 6. When 台本に `\![open,explorer,種類,名前]` があり、種類が `shell`, the areka shall 実行中のゴーストの `shell` の中からその名前のシェルのフォルダを開く。
-7. If 種類が `headline`・`plugin`（areka に無い仕組み）または上のどれでもない, then the areka shall 何も開かず `warn!` で種類と名前を 1 行記録する（暫定＝下の「未決の項目」）。
+7. If 種類が `headline`・`plugin`（areka に無い仕組み）または上のどれでもない, then the areka shall 何も開かず `warn!` で種類と名前を 1 行記録する（台帳では縮退として書く）。
 8. If 名前に当たるゴースト・バルーン・シェルが無い、または解決した先が存在しない, then the areka shall 何も開かず `error!` で種類・名前・理由を 1 行記録し、ゴーストの動作を続ける。
 
 ### Requirement 5: `\![open,editor,ファイル,表示行]` でファイルを編集用に開く
@@ -177,5 +178,8 @@
 ## 未決の項目（要件ディスカッションで決める・暫定の要件で先へ進める）
 
 1. **`\j[ID]` の ID が URL でも `file:///` でも `mailto:` でもないとき（旧来の「ID にジャンプする」）**（要件 1.7）。暫定: 何も開かず `warn!` 1 行。ukadoc は「IDにジャンプする」とだけ書き、何へのジャンプかを定めていない。選択肢の例: ⒜ 暫定どおり開かず記録だけ（台帳は `degraded`）・⒝ 選択肢を選んだときと同じ扱い（`OnChoiceSelect` 系のイベントへ ID を渡す）・⒞ `http://` 省略の URL とみなす。答えで台帳の `status` と kanade への接触の有無が変わる。
-2. **`\![open,explorer,種類,名前]` の `headline`・`plugin`**（要件 4.7）。areka に無い仕組みなので暫定は開かず `warn!`。`ghost`・`shell`・`balloon` の名前解決を本 spec で持つか、`\![open,readme,種類,名前]` と同じく「語彙は受理して `warn!` 1 行」の縮退に留めるかで規模（M の上限）が動く。
-3. **成功の記録を `get_log` のどの種別に入れるか**（要件 7.3）。取り決めの 5 種別（error・script・network・update・status）に「開いた」の居場所が無く、今の `\![open,readme]` の成功の `info` も表に無い target なので履歴に残っていない。`status` に寄せるか、取り決めの表に行を足すか。設計で決めてよいが、取り決めの表を変えるなら `log-convention.md` とそのテストも動く。
+
+### 要件ディスカッションで片付いた項目
+
+- **`\![open,explorer,種類,名前]` の名前解決の範囲**（要件 4.4〜4.7）: `ghost`・`balloon`・`shell` の名前解決は本 spec で持つ（要件 4.4〜4.6 のまま）。名前から 1 つを引く純粋な関数は 3 つとも既にあり（ギャップ分析 §2.5）、足すのは結線だけ。`headline`・`plugin` は areka に仕組みが無いので `warn!` 1 行の縮退（要件 4.7）。
+- **成功の記録を `get_log` のどの種別に入れるか**（要件 7.3）: 要件は「`get_log` で読める」ことだけを約束し、種別は設計で決める（ギャップ分析 §6.3）。
