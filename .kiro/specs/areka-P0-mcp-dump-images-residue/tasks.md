@@ -2,8 +2,8 @@
 
 > 設計は [design.md](design.md)。コードの名前は design.md の Components の節に従う。触るファイルは design.md「File Structure Plan」の一覧の内だけで、`crates/areka/src/mcp/mod.rs`・`crates/log-capture-kit/`・`crates/areka-emo-text/src/lib.rs` には触らない（触る要が出たら止めて報告する）。
 
-- [ ] 1. 文字の層に待たない読み戻しを足す
-- [ ] 1.1 (P) 文字の面の写しを積む口と、待たずに読む口を足す
+- [x] 1. 文字の層に待たない読み戻しを足す
+- [x] 1.1 (P) 文字の面の写しを積む口と、待たずに読む口を足す
   - 呼び出しごとに CPU で読める写し先を作り、今の front 面の写しを積んで GPU へ送る口を足す。GPU の終わりは待たない
   - 写し先を待たずに開く口を足す。GPU がまだ使っていれば「まだ」を返し、開けたら密な BGRA の配列へ行ごとに写して閉じる。開いたまま戻らない
   - 2 つの口は記録を出さず、失敗を返すだけにする（例外であることを文書注釈に書く）。写し先の作り方と行ごとの写しは今の読み戻しと共用し、今の読み戻しの結果と記録の出し方は変えない
@@ -85,3 +85,8 @@
   - 件 5（預けている間にゴーストが替わる）の確かめの結果を、定義の名前で再び確かめられる形で記録に載せる
   - 記録・応答・PNG を `target\` の下にだけ置き、`verification/signoff.md` に合否が書かれている。2 ms を超えたら否とし、design.md の実機確認の節の手順（`/kiro-discovery` での起票）に従う
   - _Requirements: 1.1, 1.4, 4.3, 7.2, 7.3_
+
+## Implementation Notes
+
+- 1.1: `surface.rs` は 994 行で上限 1,000 の手前。後のタスクはこのファイルに足さない。
+- 1.1: 今の道具（clippy 0.1.99・2026-09-28）では `cargo clippy -p areka-emo-text --all-targets -- -D warnings` が、このブランチで触っていないファイル（`choice.rs`・`viewbox*.rs`・`draw_line_store.rs`・各 `*_tests.rs` など）の約 36 件と `dola` の組み立てで赤になる。この spec の外の問題（完了の棚卸で起票）。タスクの判定は `--no-deps` で回し、触ったファイルの指摘だけを見る。

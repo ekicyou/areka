@@ -23,12 +23,13 @@ use bevy_ecs::prelude::*;
 
 use windows::UI::Composition::{Compositor, SpriteVisual, Visual as WucVisual};
 use windows::Win32::Graphics::Direct3D11::{
-    D3D11_BIND_RENDER_TARGET, D3D11_BOX, D3D11_CPU_ACCESS_READ, D3D11_MAP_READ,
-    D3D11_MAPPED_SUBRESOURCE, D3D11_SUBRESOURCE_DATA, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
-    D3D11_USAGE_STAGING, ID3D11Device, ID3D11DeviceContext, ID3D11Resource, ID3D11Texture2D,
+    D3D11_BIND_RENDER_TARGET, D3D11_BOX, D3D11_CPU_ACCESS_READ, D3D11_MAP_FLAG_DO_NOT_WAIT,
+    D3D11_MAP_READ, D3D11_MAPPED_SUBRESOURCE, D3D11_SUBRESOURCE_DATA, D3D11_TEXTURE2D_DESC,
+    D3D11_USAGE_DEFAULT, D3D11_USAGE_STAGING, ID3D11Device, ID3D11DeviceContext, ID3D11Resource,
+    ID3D11Texture2D,
 };
 use windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_SAMPLE_DESC};
-use windows::Win32::Graphics::Dxgi::{DXGI_PRESENT, IDXGISwapChain1};
+use windows::Win32::Graphics::Dxgi::{DXGI_ERROR_WAS_STILL_DRAWING, DXGI_PRESENT, IDXGISwapChain1};
 use windows::Win32::System::WinRT::Composition::ICompositorInterop;
 use windows::core::Interface;
 use windows_numerics::Vector2;
@@ -104,13 +105,35 @@ fn create_transparent_source_tex(
     tex.ok_or_else(|| none_err("CreateTexture2D(source_tex) returned None"))
 }
 
+/// 記録を出さない [`TextLayerError::Device`] への写像（待たない読み戻しの口専用・記録は呼び手が 1 件だけ出す）。
+fn quiet_err(context: &'static str) -> impl FnOnce(windows::core::Error) -> TextLayerError {
+    move |e| TextLayerError::Device {
+        hresult: e.code().0,
+        context,
+    }
+}
+
+/// `Map` の失敗が「GPU がまだ使っている」（`DXGI_ERROR_WAS_STILL_DRAWING`）か——「まだ」と失敗の分かれ目。
+fn still_drawing(code: windows::core::HRESULT) -> bool {
+    code == DXGI_ERROR_WAS_STILL_DRAWING
+}
+
 /// CPU_READ の staging テクスチャを作る（readback 用）。
 fn create_staging(
     d3d: &ID3D11Device,
     width: u32,
     height: u32,
 ) -> Result<ID3D11Texture2D, TextLayerError> {
-    let desc = D3D11_TEXTURE2D_DESC {
+    let desc = staging_desc(width, height);
+    let mut tex: Option<ID3D11Texture2D> = None;
+    unsafe { d3d.CreateTexture2D(&desc, None, Some(&mut tex)) }
+        .map_err(device_err("CreateTexture2D(staging)"))?;
+    tex.ok_or_else(|| none_err("CreateTexture2D(staging) returned None"))
+}
+
+/// staging テクスチャの記述（`read_back` の 1 枚と待たない読み戻しの写し先で共用）。
+fn staging_desc(width: u32, height: u32) -> D3D11_TEXTURE2D_DESC {
+    D3D11_TEXTURE2D_DESC {
         Width: width,
         Height: height,
         MipLevels: 1,
@@ -124,11 +147,85 @@ fn create_staging(
         BindFlags: 0,
         CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
         MiscFlags: 0,
-    };
-    let mut tex: Option<ID3D11Texture2D> = None;
-    unsafe { d3d.CreateTexture2D(&desc, None, Some(&mut tex)) }
-        .map_err(device_err("CreateTexture2D(staging)"))?;
-    tex.ok_or_else(|| none_err("CreateTexture2D(staging) returned None"))
+    }
+}
+
+/// 開いた staging を `stride = width*4` の密 BGRA へ行ごとに写す（記録を出さない・`Unmap` は呼び手）。
+/// RowPitch は stride 以上（GPU が行を余分にパディングし得る）。逆は想定外＝デバイス異常。
+///
+/// # Safety
+/// `mapped` は `width`×`height` の B8G8R8A8 を `Map(READ)` で開いたままの写像であること。
+unsafe fn copy_rows(
+    mapped: &D3D11_MAPPED_SUBRESOURCE,
+    width: u32,
+    height: u32,
+) -> Result<Vec<u8>, TextLayerError> {
+    let stride = (width * 4) as usize;
+    let row_pitch = mapped.RowPitch as usize;
+    if row_pitch < stride {
+        return Err(TextLayerError::Device {
+            hresult: 0,
+            context: "RowPitch < stride",
+        });
+    }
+    let mut dense = vec![0u8; stride * height as usize];
+    let base = mapped.pData as *const u8;
+    for y in 0..height as usize {
+        // SAFETY: 行 y の先頭は base + y*row_pitch・stride バイトは写像の内（row_pitch ≥ stride）。
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                base.add(y * row_pitch),
+                dense.as_mut_ptr().add(y * stride),
+                stride,
+            );
+        }
+    }
+    Ok(dense)
+}
+
+/// 待たない読み戻しの札（呼び出しごとの写し先と文脈の参照だけを持つ・`TextSurface` を借りない・
+/// UI スレッド専有）。`Map` を開いたまま持たないので、落としても後始末は要らない。
+pub struct PendingReadBack {
+    /// 呼び出しごとに作った写し先（CPU_READ・積んだ時点の面と同寸）。
+    staging: ID3D11Texture2D,
+    /// immediate context（`Map` の発行先）。
+    context: ID3D11DeviceContext,
+    /// 写し先の大きさ（物理 px）。
+    size: (u32, u32),
+}
+
+impl PendingReadBack {
+    /// 待たずに読む（`Map(READ, DO_NOT_WAIT)`）。GPU がまだ使っていれば `Ok(None)`。読めたら
+    /// `stride = 幅×4` の密 BGRA を返し、`Unmap` してから戻る。
+    ///
+    /// **記録を出さない**——「記録して `Err`」の決まりの例外。失敗は
+    /// [`TextLayerError::Device`] を返すだけで、記録は呼び手が 1 件だけ出す（要件 1.5）。
+    pub fn try_finish(&self) -> Result<Option<Vec<u8>>, TextLayerError> {
+        let res: ID3D11Resource = self
+            .staging
+            .cast()
+            .map_err(quiet_err("staging->Resource cast"))?;
+        let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+        let flags = D3D11_MAP_FLAG_DO_NOT_WAIT.0 as u32;
+        match unsafe {
+            self.context
+                .Map(&res, 0, D3D11_MAP_READ, flags, Some(&mut mapped))
+        } {
+            Err(e) if still_drawing(e.code()) => return Ok(None),
+            Err(e) => return Err(quiet_err("Map(READ, DO_NOT_WAIT)")(e)),
+            Ok(()) => {}
+        }
+        let (w, h) = self.size;
+        // SAFETY: 直前の Map 成功で w×h の写し先が開いている。
+        let dense = unsafe { copy_rows(&mapped, w, h) };
+        unsafe { self.context.Unmap(&res, 0) };
+        dense.map(Some)
+    }
+
+    /// 写し先の大きさ（物理 px・積んだ時点の面の大きさ）。
+    pub fn size(&self) -> (u32, u32) {
+        self.size
+    }
 }
 
 /// `\_b --option=fixed` 固定層（スクロールに追従しない画像層）の差し込み点の**型シーム**
@@ -373,30 +470,45 @@ impl TextSurface {
         }
         .map_err(device_err("Map(READ)"))?;
 
-        let stride = (w * 4) as usize;
-        let row_pitch = mapped.RowPitch as usize;
-
-        // RowPitch は stride 以上（GPU が行を余分にパディングし得る）。逆は想定外＝デバイス異常。
-        if row_pitch < stride {
-            unsafe { self.context.Unmap(&staging_res, 0) };
+        // SAFETY: 直前の Map 成功で w×h の staging が開いている。
+        let dense = unsafe { copy_rows(&mapped, w, h) };
+        unsafe { self.context.Unmap(&staging_res, 0) };
+        dense.inspect_err(|_| {
+            let (row_pitch, stride) = (mapped.RowPitch as usize, (w * 4) as usize);
             tracing::error!(row_pitch, stride, "RowPitch < stride（想定外）");
-            return Err(TextLayerError::Device {
-                hresult: 0,
-                context: "RowPitch < stride",
-            });
-        }
+        })
+    }
 
-        let mut dense = vec![0u8; stride * h as usize];
+    /// 今の front 面を**呼び出しごとの写し先**へ写す仕事を積み、`Flush` で GPU へ送って札を返す
+    /// （GPU の終わりを待たない）。積んだ後に front が描き替わっても、札が読むのは積んだ時点の front。
+    ///
+    /// **記録を出さない**——「記録して `Err`」の決まりの例外。失敗は
+    /// [`TextLayerError::Device`] を返すだけで、記録は呼び手が 1 件だけ出す（要件 1.5）。
+    pub fn begin_read_back(&self) -> Result<PendingReadBack, TextLayerError> {
+        let (w, h) = self.size;
+        let d3d = unsafe { self.context.GetDevice() }.map_err(quiet_err("GetDevice"))?;
+        let mut staging: Option<ID3D11Texture2D> = None;
+        unsafe { d3d.CreateTexture2D(&staging_desc(w, h), None, Some(&mut staging)) }
+            .map_err(quiet_err("CreateTexture2D(pending staging)"))?;
+        let staging = staging.ok_or(TextLayerError::Device {
+            hresult: 0,
+            context: "CreateTexture2D(pending staging) returned None",
+        })?;
+        let src_res: ID3D11Resource = self.sources[self.front]
+            .cast()
+            .map_err(quiet_err("front->Resource cast"))?;
+        let staging_res: ID3D11Resource = staging
+            .cast()
+            .map_err(quiet_err("staging->Resource cast"))?;
         unsafe {
-            let base = mapped.pData as *const u8;
-            for y in 0..h as usize {
-                let src_row = base.add(y * row_pitch);
-                let dst_row = dense.as_mut_ptr().add(y * stride);
-                std::ptr::copy_nonoverlapping(src_row, dst_row, stride);
-            }
-            self.context.Unmap(&staging_res, 0);
+            self.context.CopyResource(&staging_res, &src_res);
+            self.context.Flush();
         }
-        Ok(dense)
+        Ok(PendingReadBack {
+            staging,
+            context: self.context.clone(),
+            size: self.size,
+        })
     }
 
     /// 現在の供給面サイズ（物理 px）。
@@ -813,5 +925,70 @@ mod tests {
             bytes, pattern,
             "固定層予約は read_back（front）を変えない——pixel golden の外（R7.4）"
         );
+    }
+
+    /// 「まだ」と失敗の分かれ目（1.5）: GPU がまだ使っているだけの `DXGI_ERROR_WAS_STILL_DRAWING`
+    /// は「まだ」、それ以外（`E_FAIL`）は失敗。
+    #[test]
+    fn still_drawing_separates_not_yet_from_failure() {
+        use windows::Win32::Graphics::Dxgi::DXGI_ERROR_WAS_STILL_DRAWING;
+        assert!(still_drawing(DXGI_ERROR_WAS_STILL_DRAWING));
+        // E_FAIL（`Win32_Foundation` の機能を足さずに値で書く）。
+        assert!(!still_drawing(windows::core::HRESULT(
+            0x8000_4005_u32 as i32
+        )));
+    }
+
+    /// 待たない読み戻しの往復（1.3 の層の側）: front へ模様 P を直に書き、`begin_read_back` の後に
+    /// front を模様 Q で描き替えても、`try_finish` が読めたときの中身は積んだ時点の P と全バイト一致。
+    #[test]
+    fn pending_read_back_returns_front_as_of_begin() {
+        let (_dq, compositor) = make_dispatcher_and_compositor();
+        let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
+
+        let mut world = World::new();
+        let (window, slot) = spawn_reserved_slot(&mut world);
+        let binding = TextSlotBinding::new(slot, window, 1.0, (10, 8), (10, 8));
+        let (w, h) = (5u32, 4u32);
+        let surface =
+            TextSurface::attach(&mut world, &binding, &compositor, &core, (w, h), (0.0, 0.0))
+                .expect("TextSurface::attach 失敗");
+
+        let write_front = |bytes: &[u8]| {
+            let res: ID3D11Resource = surface.front_tex().cast().expect("front->Resource cast");
+            unsafe {
+                surface.context.UpdateSubresource(
+                    &res,
+                    0,
+                    None,
+                    bytes.as_ptr() as *const _,
+                    w * 4,
+                    0,
+                );
+            }
+        };
+        let p = premul_pattern(w, h);
+        let q: Vec<u8> = p.iter().map(|b| b ^ 0x5A).collect();
+        assert_ne!(p, q, "P と Q は異なる");
+
+        write_front(&p);
+        let pending = surface.begin_read_back().expect("begin_read_back 失敗");
+        assert_eq!(pending.size(), (w, h));
+        write_front(&q);
+
+        // 有界に覗く（WARP でも GPU の終わりは短い・上限は約 5 秒）。
+        let mut got = None;
+        for _ in 0..5000 {
+            if let Some(bytes) = pending.try_finish().expect("try_finish 失敗") {
+                got = Some(bytes);
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        let bytes = got.expect("try_finish が有界の回数の内に読めない");
+        assert_eq!(bytes, p, "積んだ時点の front（P）が全バイト一致で読める");
+
+        // 今の read_back は描き替えた後の front（Q）を読む（結果を変えていない）。
+        assert_eq!(surface.read_back().expect("read_back 失敗"), q);
     }
 }
