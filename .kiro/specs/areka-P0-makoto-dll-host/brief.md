@@ -142,3 +142,16 @@ x64 in-proc（COM `IShiori`）の MAKOTO 版は作らない（そのような DL
 - 残した範囲: ⒜ descript の `makoto,`（ゴースト・シェル）・MAKOTO/2.0 の組み立てと読み・DLL 1 本につき helper 1 つ・起動時の鎖（ゴースト側→シェル側）を `TranslateSeams.makoto` へ差すこと・テスト DLL と e2e・実機の確認（付け外しの往復を除く）。鎖は後続が中身を差し替えられる入れ物の形で作っておく。
 - 規模: L（15〜18 タスク）。
 - 移した先: `\![load|unload|reload,makoto]`・シェルの切替と更新の読み直しの後の付け直し・`mcp-reload` の `target: "makoto"` の口は新しい spec `areka-P0-makoto-reload-directives` へ（本 spec が前提）。網羅台帳の命令 3 行の持ち主は向こうが着地するときに直す。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: L（15〜18）のまま。切る: なし（一度切り出した spec）。
+- 前提の状態: 中身の前提（`translate-pipeline`・`charset-canon`・`shiori-loadu`）は全部着地済み。待つのは host32-host の列の順だけで、触るファイルが重なるのは `crates/areka-ghost/src/runtime.rs`（受け口の登録の並びと `TranslateSeams` の結線）と `Cargo.lock`・workspace の members。`shiori3.rs`・`client.rs` には触れない。
+- 崩れた前提／古くなった位置:
+  - 差し込む口は今も `crates/areka-kanade/src/translate.rs` の `MakotoChain` の定義行（44 行のファイル）・本番の結線は `runtime.rs` の `TranslateSeams` を組む所の `makoto: TranslateSeams::passthrough().makoto` の 1 行。`runtime.rs` は 788 行（`mcp-get-property` が `sylphya_reader()` を足して +5）。
+  - host32-host の列の相手が増えた: 10-05 起票の `script-security-level`・`mcp-shiori-query`（どちらも優先）が `shiori3.rs` の `build_request` を触る。本 spec はそこに触れないので、文字の衝突は `runtime.rs` だけ。
+  - `host32-testdll-marker-race`（✅ 10-04）が偽の DLL `crates/shiori-host32-testdll/src/lib.rs` の印の書き方を直した（自分の置き場の印だけを書く）。新設の `shiori-host32-makoto-testdll` も同じ作り（置き場ごとの印・テストの揺れ）を最初から写す。
+  - `resolve.rs` 866・`model.rs` 457・`charset.rs` 286 は前回と同じ。
+- 触るファイル: `crates/areka-parsers/src/package/{model,resolve}.rs`・新規 `crates/shiori-host32-host/src/makoto.rs`・`crates/shiori-host32-host/src/lib.rs`・新規 `crates/shiori-host32-makoto-testdll/`・`crates/areka-ghost/src/runtime.rs`＋新規 `crates/areka-ghost/src/makoto_wiring.rs`・`crates/areka/src/boot_config.rs`・`Cargo.toml`（members）・`Cargo.lock`・`doc/COMPAT_ARCHITECTURE.md` §5／§8・`doc/ukadoc-coverage/ledger/assets.toml`。
+- 議題（答えで作業が変わるものだけ）: なし。
+- 見つけた穴: なし。並走の照合: `runtime.rs` を触る spec（`property-query-channels`・`mcp-*` で実行系に口を足すもの）と同時に走らせない。新しいクレートで `Cargo.lock` が動く＝「依存を足す spec は 1 ウェーブに 1 本」の席を使う。

@@ -76,3 +76,19 @@ surfaces.txt の `point.basepos.x/y` 宣言が parse で転記され、move 解�
   - `doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/ledger/assets.toml`
 - 議題（答えで作業が変わるものだけ）: 着手のときに、転記を `parse_boxes` と同じ 2 つ目の転記にするか、画像の読み手（`decode.rs`）へ足すか（推し: 前者）。
 - 見つけた穴: 無し。
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: S（5〜8 タスク）。切らない。段は据え置きのまま。
+- 前提の状態: 着手の条件（`point.basepos` を宣言する実シェルの適合が要ること）は未。同梱の検体でシェルを持つ 4 本（`vendors/sample_ghost/` の emo2・claudia・konnoyayame・R_POST_and_KOMAINU）の `surfaces.txt` に `basepos` は 0 件。
+- 崩れた前提／古くなった位置:
+  - `crates/areka/src/emo2_boot/move_cue.rs` の `BaseposResolver`（`fn basepos(&self, window_size: SizeI)`）・`CanonDefaultBasepos`・`resolve_move_target_position`・`apply_move_directive` は棚卸㉑のまま（同ファイルの最後の変更は C3 より前）。`basepos` を読む所は parsers・emo-compose・emo-present に 0 件。棚卸⑳の訂正（trait の形を変える・値に拡大率を掛ける）も有効。
+  - `surfaces.txt` の行を画像の読み手とは別に拾う前例が 2 つになった（`shell/boxes.rs` の `parse_boxes` に加え、`mcp-expression-table` の `shell/surfacetable.rs`。どちらも `shell/mod.rs` に 1 行足しただけ）。2 つ目の転記にすれば、`shell/{model,decode}.rs` を分け合う `element-base-method`・`collisionex-regions`・`seriko-trigger-intervals`・`element-clipping-option` の並びを待たずに済む。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-parsers/src/shell/` の新しい転記のファイルと `shell/mod.rs` の 1 行（前者を採れば）
+  - `crates/areka-emo-present/src/shell_target.rs`（面ごとの basepos の表を運ぶなら＝`self-alpha-declaration`・`placement-measure-bake-once` の案 B と同じファイル）
+  - `crates/areka/src/emo2_boot/move_cue.rs` と `move_cue_tests.rs`
+  - `doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/ledger/assets.toml` の `point.basepos.x`・`.y` の 2 行
+- 議題（答えで作業が変わるものだけ）: 棚卸㉑のまま（2 つ目の転記にするか・推しは前者）。
+- 見つけた穴: 無し。

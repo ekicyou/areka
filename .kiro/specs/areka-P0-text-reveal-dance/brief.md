@@ -75,3 +75,19 @@
   - `crates/areka-parsers/src/balloon/{model.rs, parse.rs}`（`text_reveal` の値の追加）
 - 議題（答えで作業が変わるものだけ）: なし（フェードとの組み合わせの可否は要件で決める＝brief のまま）。
 - 見つけた穴: なし。
+
+
+---
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（8〜11 タスク）のまま。切らない。夢・任意（据え置き）のまま。
+- 前提の状態: `text-reveal-fade`（現れ方の枠・描き直しの口）は今も未着手＝未。
+- 崩れた前提／古くなった位置:
+  - C3 で `state.rs`・`viewbox_diff.rs`（`derive_dirty_with_overhangs`・`LineOverhang`）・`viewbox_draw_render.rs`（`expand_overhang_for_band`）・`actor_present.rs`（`glyph_cells`）は無変更。`viewbox.rs` は注記の言い換え（「M2」→「α 後」）だけで、`DIRTY_GUARD_IMG_PX` の考え方はそのまま＝棚卸㉑の見立てが当たる。
+  - 箱の写し（`actor_box.rs` の `refresh_shown_boxes`）が「見えている字の数」で箱を数えるのは `text-reveal-fade` と同じ論点。動いている途中の字の当たりは `text-reveal-fade` の答えに揃える。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-text/src/{state.rs, viewbox.rs, viewbox_diff.rs, viewbox_draw_render.rs, actor_present.rs}`＋`text-reveal-fade` が作る新しいファイル
+  - `crates/areka-parsers/src/balloon/{model.rs, parse.rs}`
+- 議題: なし。
+- 見つけた穴: なし。
