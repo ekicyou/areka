@@ -18,7 +18,7 @@
   - _Depends: 1.1_
 
 - [ ] 2. バルーンを決める鎖に descript の段を足す
-- [ ] 2.1 鎖の入力の形を変える（判断は変えない）
+- [x] 2.1 鎖の入力の形を変える（判断は変えない）
   - 鎖へ渡す列挙を、フォルダ名の列からバルーンの一覧の戻りそのまま（フォルダ名と `name` の組）に変え、descript の 2 鍵の欄を足す。決まった段の腕に「descript」を記憶と同梱の間に足す（`Companion` の綴りは変えない）
   - 起動の入口の引数の腕と入力を集める口は、新しい 2 欄に無しを渡し、列挙をそのまま渡す（この時点では descript を読まない）
   - 既存の鎖のテストは、フォルダ名の列を一覧の形へ直す補助関数 1 か所だけを追随させ、本体は差分 0 行
@@ -86,3 +86,4 @@
 ## Implementation Notes
 
 - 1.1: 既存の `companion_balloon_reads_one_key` に「番号付きは読まない」のコメントはもともと無かった（設計の前提違い）。今の読み方を説明する doc コメントを足した。`crates/areka/src/boot_resolve.rs` の鎖の説明に残る「install.txt の balloon.directory」は 2.2 で直す
+- 2.1: `BalloonRoute::Descript` と新しい 2 欄は 2.2 まで dead_code の警告 2 件になる（CI に `-D warnings` は無い）。2.2 で警告 0 件を確かめる。煙テストは i686 の helper と testdll-loadu のビルドが要る（この worktree ではビルド済み）。`ghost_session::switch_tests::fallback_tests` は全体を並列で回すと負荷で赤になることがあり、単独では緑

@@ -44,6 +44,8 @@ pub(crate) enum GhostRoute {
 pub(crate) enum BalloonRoute {
     Argv,
     Memory,
+    /// ゴーストの descript.txt の `default.balloon.path`・`balloon` で決まった。
+    Descript,
     Companion,
     Only,
     Default,
@@ -98,15 +100,30 @@ pub(crate) struct BalloonInputs<'a> {
     pub argv: Option<&'a Path>,
     /// 起動するゴーストの Ghost スコープ `areka.last.balloon`
     pub memory: Option<&'a str>,
+    /// ゴーストの descript.txt の `default.balloon.path`
+    pub default_balloon_path: Option<&'a str>,
+    /// ゴーストの descript.txt の `balloon`
+    pub balloon_name: Option<&'a str>,
     /// `<ゴースト>/install.txt` の `balloon.directory`
     pub companion: Option<&'a str>,
-    /// `list_balloons` の folder（昇順）
-    pub listed: &'a [String],
+    /// `list_balloons` の戻り（フォルダ名の昇順）
+    pub listed: &'a [areka_ghost::catalog::BalloonEntry],
 }
 
 /// `name` が列挙に在ればその名を返す（在る・無いの判定だけ。並びは見ない）。
 fn find<'a>(listed: &'a [String], name: &str) -> Option<&'a str> {
     listed.iter().find(|f| *f == name).map(String::as_str)
+}
+
+/// [`find`] のバルーンの一覧版（フォルダ名で突き合わせる）。
+fn find_balloon<'a>(
+    listed: &'a [areka_ghost::catalog::BalloonEntry],
+    name: &str,
+) -> Option<&'a str> {
+    listed
+        .iter()
+        .map(|e| e.identity.folder.as_str())
+        .find(|f| *f == name)
 }
 
 /// 段 1〜5＋0 体（要件 4.1〜4.7）。`pick` は「候補数 n（≥ 2）→ 0..n の添字」。純粋。
@@ -186,7 +203,7 @@ pub(crate) fn resolve_balloon(
     };
     // 段 2: ゴーストごとの記憶（同梱より先＝裁定 4）。
     if let Some(memory) = inputs.memory {
-        match find(listed, memory) {
+        match find_balloon(listed, memory) {
             Some(folder) => return Ok(at(BalloonRoute::Memory, folder)),
             None => tracing::warn!(
                 event = "last_balloon_not_found",
@@ -198,7 +215,7 @@ pub(crate) fn resolve_balloon(
     }
     // 段 3: ゴーストの同梱（install.txt の balloon.directory）。
     if let Some(companion) = inputs.companion {
-        match find(listed, companion) {
+        match find_balloon(listed, companion) {
             Some(folder) => return Ok(at(BalloonRoute::Companion, folder)),
             None => tracing::warn!(
                 event = "companion_balloon_not_found",
@@ -214,14 +231,14 @@ pub(crate) fn resolve_balloon(
             balloon_store: inputs.root.balloon_store(),
         }),
         // 段 4: 唯一。
-        [only] => Ok(at(BalloonRoute::Only, only)),
+        [only] => Ok(at(BalloonRoute::Only, &only.identity.folder)),
         _ => {
             // 段 5: 既定（DEFAULT_BALLOON_FOLDER を参照するのはこの段だけ）。
-            if let Some(folder) = find(listed, DEFAULT_BALLOON_FOLDER) {
+            if let Some(folder) = find_balloon(listed, DEFAULT_BALLOON_FOLDER) {
                 return Ok(at(BalloonRoute::Default, folder));
             }
             // 段 6: 無作為。
-            let folder = listed[pick(listed.len())].as_str();
+            let folder = listed[pick(listed.len())].identity.folder.as_str();
             tracing::info!(
                 event = "balloon_picked_randomly",
                 folder,

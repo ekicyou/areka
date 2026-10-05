@@ -348,6 +348,8 @@ pub(crate) fn resolve_boot_from(
                 root: &root,
                 argv: Some(argv),
                 memory: None,
+                default_balloon_path: None,
+                balloon_name: None,
                 companion: None,
                 listed: &[],
             },
@@ -378,15 +380,14 @@ pub(crate) fn resolve_balloon_for_ghost(
 
     let memory = boot_resolve::read_last_balloon(ghost_dir);
     let companion = catalog::companion_balloon(ghost_dir);
-    let listed: Vec<String> = catalog::list_balloons(root)
-        .into_iter()
-        .map(|e| e.identity.folder)
-        .collect();
+    let listed = catalog::list_balloons(root);
     boot_resolve::resolve_balloon(
         &BalloonInputs {
             root,
             argv: None,
             memory: memory.as_deref(),
+            default_balloon_path: None,
+            balloon_name: None,
             companion: companion.as_deref(),
             listed: &listed,
         },
