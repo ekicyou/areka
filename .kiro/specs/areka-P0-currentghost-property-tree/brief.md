@@ -104,3 +104,16 @@
 - 残した範囲: ⒜ 動く値を出す口（sylphya に足す・「変わるたびに出す」か「読む時に問い合わせる」かは本 spec の議題）と、`currentghost.balloon.scope(ID).*`・`balloon.汎用`・`balloon.count` の 19 項目・scope ID の列挙と未解決スコープの表し方。**動く値の口の持ち主は本 spec**（`system-property-values`・`currentghost-property-others`・`zorder-property` はこれを使う）。
 - 規模: M（13〜16 タスク）。
 - 移した先: `currentghost.scope(ID).*`・`mousecursor.*`・`seriko.*`（`zorder` を除く）・`shelllist.*`・`status`・`汎用` は新しい spec `areka-P0-currentghost-property-others` へ（本 spec が前提）。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（13〜16）のまま。切る: なし（一度切り出した spec）。
+- 前提の状態: **読む道ができた**＝`mcp-get-property`（✅ 10-04・PR#230）が sylphya の読み手 `GhostRuntime::sylphya_reader()` で値を読む。出した値を実機で端から端まで確かめられる（MCP の `get_property` に `currentghost.balloon.scope(0).validwidth` などを聞く）。`property-query-channels` を待つ理由は無くなった＝中身の前提は満たす。待つのは `emo2_boot` の結線の列の順（`balloon-font-file`〔C4〕ほか）だけ。
+- 崩れた前提／古くなった位置:
+  - sylphya の出す口は今も `publish_static`・`publish_shiori`・`persist_put` の 3 つ（`crates/areka-sylphya/src/actor.rs`・C3 は説明文の「M2」→「α 後」の言い換えだけ）。動く値の口は無い（前回どおり）。
+  - `RuntimeCommandSink` の届け先は未登録のまま（`actor.rs` の `run_actor` の `RuntimeCommandReserved` の腕）。
+  - 行数: `emo2_boot/mod.rs` 883・`ghost_switch.rs` 891・`shell_balloon_switch.rs` 442・`frame/switch.rs` 635・`areka-ghost/src/runtime.rs` 788（+5）・`sylphya_wiring.rs` 415・`mirror.rs` 248。
+  - `mcp-get-property` の実行系のテスト（`crates/areka/src/mcp/get_property_tests.rs` の `reads_values_through_the_ghost_own_asker_on_a_real_runtime`）は `currentghost.name` が値なしになることを期待する。本 spec の 19 項目には入らないので赤にならない（`currentghost-property-others` の側で効く）。
+- 触るファイル: `crates/areka-sylphya/src/{actor.rs, mirror.rs, vocab/dotted.rs, vocab/mod.rs}`・`crates/areka-ghost/src/{sylphya_wiring.rs, runtime.rs}`・`crates/areka/src/emo2_boot/{mod.rs, ghost_switch.rs, shell_balloon_switch.rs, frame/switch.rs}`＋新規（例 `crates/areka/src/property/`）・`doc/ukadoc-coverage/ledger/property.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
+- 議題（答えで作業が変わるものだけ）: 動く値を「変わるたびに出す」か「読む時に問い合わせる」か（前回どおり・後続 3 本の形が決まる）。
+- 見つけた穴: なし。並走の照合: `property-name-case-fold`（`key.rs`・`reader.rs`・`actor.rs` の分類）とは `actor.rs` を分け合う見込み＝同時に走らせない。

@@ -67,5 +67,19 @@
 - 選択肢の正典: `\q`・`OnChoiceSelect`・`OnChoiceSelectEx`・`\![open,inputbox]`・`OnUserInput`・`OnUserInputCancel`。出典は https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html と https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html 。
 - クリック待ちを自動で作らない（開発者裁定「クリック待ちは台本の明示 `\x` だけ」）。このツールは、待つ主体がエージェントの側にあり、ゴーストの再生は止めない。
 - 規模の見立て: M〜L（12〜18 タスク）。
-</content>
-</invoke>
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模（タスク数）と切るかどうか: M〜L（12〜18）。今は切らない。ただし下の 2 つの穴を本 spec で埋めるなら 20 を超えうる＝埋めずに別 spec にする前提で見積もる。
+- 前提の状態: **待ち**。`mouse-drag-events`（PR#240）は着地。`mcp-author-tools`（独自ツールの登録口）と `mcp-kanade-tools`（`sakurascript` が実際に再生される）が未着手。
+- 崩れた前提／古くなった位置:
+  - 「後から答える仕組み `mcp::later` はある（まだ使う側は無い）」は古い＝`dump_surface`・`dump_balloon` が使っている（`crates/areka/src/mcp/dump_surface.rs` の `handle`）。
+  - 履歴の手本 `crates/areka/src/log_history.rs`（`get_log` の 5 種別・通し番号）は C3 で着地した。
+  - **入力欄は areka に無い**: `\![open,inputbox]`・`OnUserInput`・`OnUserInputCancel` は網羅台帳でどれも `absent`・`owner` が空（`sakura-script.toml`・`shiori.toml`）。コードにも 0 件。持ち主の spec が無い。
+  - **単押しのクリックは SHIORI へ送っていない**: kanade の送るマウスの出来事は `OnMouseMove`・`OnMouseDoubleClick`・`OnMouseDragStart`・`OnMouseDragEnd` の 4 つだけ（`schedule/events.rs`）。`OnMouseClick`・`OnMouseClickEx`・`OnMouseWheel` は台帳で `absent`・`owner` が空。
+  - 選択の結果は UI 側の `crates/areka/src/input_events/choice_drain.rs` が `KanadeMsg::Choice` で kanade へ送る。ドラッグは `input_events/drag.rs`、移動とダブルクリックは `input_events/mod.rs` から `KanadeMsg::Mouse`。**履歴を UI 側（送る所）で積めば kanade に触らずに済む**＝kanade の進行の列から外せる見込み。
+- 触るファイル（並走の照合用・見込み）: 新規の応答の履歴のファイル（`crates/areka/src/` の下）・新規のツールのファイル（`mcp-author-tools` の登録口へ）・`input_events/{choice_drain.rs, mod.rs, drag.rs}`（積む 1 行ずつ）。エージェント由来の選択を kanade で見分けるなら `crates/areka-kanade/src/schedule/choice.rs`（346 行）も。
+- 議題（答えで作業が変わるものだけ）:
+  - 入力欄（`\![open,inputbox]`）と単押しのクリック（`OnMouseClick`）を本 spec の前に別 spec で作るか、本 spec の範囲を「選択肢・ダブルクリック・なでる（移動）・ドラッグ」に絞るか。
+  - 履歴を UI 側で積むか（kanade に触らない）、kanade が SHIORI へ送った出来事で積むか。
+- 見つけた穴: 入力欄と単押しのクリックの持ち主が無い（上記）。開発者の決まり「実機で未対応のためにうまくいかない件は範囲外でもすべて起票」に当たる＝`/kiro-discovery` で起票の候補。すぐ直せる軽微な修正: この brief の末尾の前に道具の残りかす `</content>`・`</invoke>` の 2 行が紛れている（消してよい）。

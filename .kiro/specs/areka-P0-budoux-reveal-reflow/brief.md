@@ -95,3 +95,17 @@
 - 決定論テストは「分かれて届く」経路を踏ませる（`apply_cue` を複数回・時刻を進めて）。表示するだけでなく行の割り当てを判定する。
 - 実機の根・検体はワークツリーの `target\` の下だけ。emo2 は絶対パスで起動。
 - 規模の見立て: S（4〜7 タスク）。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: S（4〜7）のまま。切らない。
+- 前提の状態: 上流（完了 `budoux-newline`）のみ・今すぐ着手できる。起票（`0a8f75cd`・本文の file:line は `fa12dba7`）の後に `crates/areka-emo-text/`・`crates/areka-sakura/`・`crates/dola/` を触ったコミットは 0＝本文の位置はそのまま使える。
+- 崩れた前提／古くなった位置: 無し。`actor_present.rs` の `present_frame` の折り返しの腕（`WrapMode::BudouxWordWrap` で `segment_plan(actor_state.items())` を呼ぶ所）・`state.rs` の `TextLayerState::items` の定義・`segment.rs` は変わっていない（`actor_present.rs` 362 行・`state.rs` 655 行・`segment.rs` 487 行＝行数の上限には遠い）。`mcp-dump-images` の `dump_balloon` は描いた結果を読むだけで、折り返しの計算には触れていない。
+- 触るファイル（案 1 の見込み）: `crates/areka-emo-text/src/actor_present.rs`（区切りの計算を呼ぶ所）・`state.rs`（固定した行の割り当ての記憶・`\c` やあふれでの消し方）・`segment.rs`（冒頭の INV-1 の注記だけ）・新しい決定論テストのファイル（`layout_segmented_tests.rs` の隣に「分かれて届く」形）。`layout*.rs` は純関数の形を保つ見込み（固定を配置へ渡す口を足すなら `layout.rs`／`layout_scan.rs` も）。
+- 並走の照合（C4 の候補と）: `balloon-font-file`（C4-②）の列挙（`draw*.rs`・`viewbox_draw*.rs`・`actor.rs`・`actor_box.rs`・`look.rs`・`actor_decoration.rs`）とは重ならない。**`anchor-tag-canon`（C4-⑦）とは `state.rs`・`actor_present.rs` が重なる**＝同じウェーブに置かない。
+- 議題: 本文の「決めること」（固定の単位が届いた字か表示された字か・`\c`・あふれのスクロール・選択肢の再配置との関係・`budoux-newline` 要件 7.3 の読み替え）のまま。案 2 は過去の裁定（compile と合図の語彙を触らない）を覆すので、要件の段で案 1 を確かめてから出す。
+- 見つけた穴: なし。
+
+### 同じウェーブ C4 の約束（2026-10-05 棚卸㉒・破るなら止めて報告）
+
+- emo-text に新しいファイルを足すのは C4 では本 spec だけ（`lib.rs` の純粋な一覧の数の行）。`mcp-dump-images-residue` は emo-text の `surface.rs` を触るので、本 spec は `surface.rs` に触らない。

@@ -89,3 +89,55 @@
   2. **`README.md` の「まだ GitHub Releases での配布はしていない」の行**（「## 入手と起動」の最初の箇条・PR#222 で書いた）。`v0.0.2` の Release が出た時点で偽になる。本 spec の触る範囲（Constraints）に `README.md` が無く、次に触る `winget-manifest-submission` は C3＝間に偽の期間ができる。初回だけ本 spec が直すか、偽の期間を許して winget に任せるか。
   3. （既存）版上げを cargo-edit の `cargo set-version` に頼るか、根の 2 行を書き換える小さなスクリプトにするか。`set-version --workspace` が `[workspace.dependencies]` の `dola` の `version` も動かすかは未確認のまま。
 - 見つけた穴: なし（上の `README.md` の行は議題 2）。
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: XS〜S（初回 8〜11 タスク・2 回目からは手順 6 本）。切る: なし。
+- 前提の状態: **今すぐ着手できる**。C3 の 11 本はすべて着地し、GitHub の開いている PR は 0 本（10-05 に `gh pr list` で確かめた）。上流の物は main に揃っている:
+  - `.github/workflows/release.yml`（タグ `v*` の push と手での起動・Rust は `1.99.0` に固定・テストは回さず、組み立てと zip と Release だけ）
+  - `.github/workflows/crates-io.yml`（タグの push を自分で受け、同じコミットの `release` の走りの緑を最長 120 分待つ・`id-token: write`）
+  - `tools/package.ps1`（726 行）・`tools/crates-io.ps1`（出すのは `dola` → `wintf` の順）・手順書 `doc/crates-io-publish.md`
+  - 根の `Cargo.toml` の版は 2 行＝`[workspace.package]` の `version = "0.0.1"` と、`[workspace.dependencies]` の `dola = { version = "0.0.1", path = "crates/dola" }`。30 クレートすべてが `version.workspace = true`。`wintf` は `dola = { workspace = true }` でこの 2 行目を使う（各クレートの `wintf`・`dola` の行に版の指定は無い）。
+  - タグは `v0.0.1` だけ。`release.yml` が実行環境で走ったのは 10-03 の作業の枝の 1 回（緑）だけで、`crates-io.yml` は一度も走っていない。
+- C3 で変わったこと:
+  - `animated-image-decode` が根の `Cargo.toml` に `[patch.crates-io]`（`image-webp` を GitHub のコミットに固定）を、`deny.toml` に `allow-git` を足した。`wintf` は開発用の依存で `image`（webp）を引く。同 spec は `tools/crates-io.ps1 -Verify -Version 0.0.1` を取り込みつきで通し、包んだ `wintf` の `Cargo.lock` は crates.io の `image-webp` 0.2.4 のままと記録した（`completed/areka-P0-animated-image-decode/research.md`）＝公開の段への影響は無い見込み。
+  - ただし git の取り込みを足した後の main で、`release.yml`（実行環境での git の取得・`cargo deny`・`cargo about`）はまだ一度も走っていない。
+  - `dist/README.txt` に「■ 動く絵の上限」の節が足された（10-05）。冒頭の「この説明書は 2026-10-01 時点の内容です。」は据え置きのまま＝日付も中身も古い。
+- 版上げが触るファイル（並走の照合用・数えた結果）:
+  - `Cargo.toml` の 2 行（上の 2 行）
+  - `Cargo.lock` の 30 行（ワークスペースの 30 クレートの `version = "0.0.1"`。`crates-io-publish` の調べで「版の行だけが動く」を確かめ済み）
+  - `THIRD-PARTY-NOTICES.md` の 30 行（MIT の「対象 crate」の一覧に `areka 0.0.1` 〜 `wintf 0.0.1` の 30 行がある。zip に入る謝辞は `tools/package.ps1` が毎回作り直すので配布物は正しいが、リポジトリの写しは古くなり、`tools/test-all.ps1 -License` が黄色で知らせる）
+  - `dist/README.txt` の冒頭の「時点」の行
+  - `README.md` の「## 入手と起動」の最初の箇条（議題で取るなら）
+  - `.kiro/steering/roadmap.md`（記録 1 行・タグの後）・本 spec のフォルダ
+- 「開いている PR 0 本」の本当の要件:
+  - 版上げとぶつかるのは `Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md` を触る枝だけ。とくに**新しいクレートや依存を足す枝**（例 `mcp-stdio-bridge`）は、版上げの前に作った `Cargo.lock` に新しいクレートが `0.0.1` で載ったまま、字の上では衝突せずにマージされうる＝`--locked` の組み立てが落ちる。そういう枝は版上げの後に取り込み直して `Cargo.lock` を作り直す。
+  - `Cargo.*` に触らない枝（`dist/README.txt` の別の節・`README.md` の別の行だけを触る枝を含む）は、版上げと同じウェーブで走らせてよい。各 spec は squash の 1 PR なので、作業中の枝の中身はリリースに入らない。
+  - 残る危険は「タグを打つコミットの中身が、手元の全体テストで確かめた物と同じか」だけ。Release の段はテストを回さない。版上げの枝の全体テストの後、マージまでに main へ別の PR が入ったら、取り込んで全体テストを回し直す。タグは版上げの squash のコミットに打つので、その後に入った PR は入らない。
+  - 手順 1 の言い換えの案: 「`Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md` を触る開いた PR が 0 本。版上げの PR のマージまで main が動かない（動いたら取り込んで全体テストを回し直す）」。
+- `cargo set-version` の確かめ（インストールも実行もせず、ソースを読んだ）:
+  - 開発者の手元に cargo-edit 0.13.13 が入っている（`c:\rust\cargo\bin\cargo-set-version.exe`・10-02）。ソースは `c:\rust\cargo\registry\src\` の下の `cargo-edit-0.13.13`。
+  - `--workspace` は `[workspace.package]` の `version` を上げ、続けて各クレートについて「依存している側の版の指定を合わせる」処理（`set_version.rs` の `update_dependents`）を呼ぶ。この処理は根の `Cargo.toml` も見る。表を集める関数（`manifest.rs` の `get_dependency_tables_mut`）は `[workspace.dependencies]` も返し、`path` がそのクレートを指して `version` を持つ行を新しい版に書き換える（`version.rs` の `upgrade_requirement`。`"0.0.1"` は `"0.0.2"` になる）。
+  - `dola` の行はこれに当たる＝**2 行目も動く見込み**。最後に `cargo metadata` を走らせて `Cargo.lock` も書き直す。`wintf-winmsg-executor = "=0.0.5"` は `path` の無い crates.io の依存なので動かない。
+  - 実際に動かしての確かめは実装の段で行う（`git diff --stat` が `Cargo.toml` の 2 行と `Cargo.lock` の 30 行になること）。`dola` の行を動かし忘れても `cargo check` が「failed to select a version for the requirement `dola = "^0.0.1"`」で落ちる（`crates-io-publish` の調べで確かめ済み）＝見落とせない。
+- 開発者の手が要るもの（初回）:
+  1. crates.io で `wintf`・`dola` のそれぞれに Trusted Publishing を足す（持ち主 `ekicyou`・リポジトリ `areka`・workflow `crates-io.yml`・environment は空。`doc/crates-io-publish.md` の 2 節）。タグの push より前に。
+  2. 手元の `tools/test-all.ps1` と `tools/package.ps1 -Check`（窓が出る起動の確かめ・x64）。
+  3. 版上げの PR の squash マージと、タグ `v0.0.2` の push。
+  4. 赤のときの Re-run の判断。
+  5. （勧め）タグの前に、main で `release.yml` を手で起動する乾いた走りを 1 回（Release は作らない）。git の取り込みを足した後の main で、実行環境の組み立てを先に確かめられる。`release-ci-workflow` の申し送りの 5（マージ後の乾いた走り）もここで消せる。
+  - シークレットの登録は要らない。winget の PAT と winget-pkgs のフォークは `winget-manifest-submission` の番。
+- 議題（答えで作業が変わるものだけ）:
+  1. （既存）初回の PR の分け方。
+  2. （既存）`README.md` の「まだ GitHub Releases での配布はしていない」の行を本 spec で直すか。
+  3. （既存）cargo-edit に頼るか＝上の読みで「cargo-edit で足りる・道具を足さない」に傾いた。
+  4. 手順 1 を上の言い換えに緩めるか。緩めれば、`Cargo.*` を触らない spec と同じウェーブに置ける。
+  5. 版上げの PR で `THIRD-PARTY-NOTICES.md` を作り直すか（推し: 作り直す。リポジトリの謝辞が出した版と合う）。
+- 見つけた穴: brief の Constraints と手順 2 の触るファイルに `THIRD-PARTY-NOTICES.md` が無い（上）。
+- すぐ直せる軽微な修正: なし（brief の文の直しは要件の段で足りる）。
+
+### 同じウェーブ C4 の約束（2026-10-05 棚卸㉒・破るなら止めて報告）
+
+- 版上げの PR を出すとき、`Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md` を触る開いた PR は 0 本（C4 のほかの 12 本はどれも触らない約束）。版上げの全体テストの後に main が動いたら、取り込んで全体テストを回し直してからタグを打つ（Release の段はテストを回さない）。
+- `dist/README.txt` は「時点」の行だけ（`self-alpha-declaration` が既知の制限の行を直す＝別の行）。

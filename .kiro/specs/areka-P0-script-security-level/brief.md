@@ -83,5 +83,23 @@ areka はこの「出どころ」を運ばない。そのため、ゴースト�
   - https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html （各タグの「外部から送られたスクリプトでは実行できない」の注記）
 - 正典の制約の一覧は ukadoc の注記を全件たどって作る（この brief の列挙は検索で拾えたものだけ・要件の段で引き直す）。
 - 規模の見立て: M〜L（12〜18 タスク）。
-</content>
-</invoke>
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模（タスク数）と切るかどうか: M〜L（12〜18）。運ぶ道（下）が長いので 18〜22 に上振れしうる。20 を超えたら、⒜ SHIORI へのヘッダ（`SecurityLevel`・`SenderType`）と応答の `SecurityLevel` の読み取り、⒝ 台本（talk）への出どころの印とタグの制約、に切る（⒜ → ⒝）。
+- 前提の状態: 上流なし＝着手できる。ただし kanade の進行の列と host32-host の列の両方に触る。
+- 崩れた前提／古くなった位置:
+  - ヘッダの組み立ては `crates/shiori-host32-host/src/shiori3.rs` の `build_request`（`SecurityLevel: local` を直に書く）。x64 の組み立ては `crates/areka-ghost/src/shiori_inproc.rs` の共通の組み立て、32bit は `client.rs` の 2 か所。どちらも呼び出しの口 `ShioriBackend`（`crates/areka-kanade/src/shiori/real.rs` のトレイトの定義・`get`／`notify` は `id`・`references`・`status` だけ）の下にある。**`ShioriBackend` の実装は 19 か所**（本物 2・テストの偽物 17）＝引数を変えると全部に波及。既定の実装つきの新しいメソッドで足す形を設計で選ぶ。
+  - kanade の呼び出しの型 `ShioriCall`（`msg.rs` の列挙の定義）に出どころの欄が要る。台本の起動 `StartTalk`（`crates/areka-talk/src/lib.rs` の構造体の定義・`talk_id`・`script`・`epilogue`）の構築点は kanade の `schedule/{boot.rs 3, change.rs 2, close.rs 2, steady.rs 4}` と `talk.rs` の 1 か所＝11 か所。
+  - `\![enter,nouserbreakmode]` の消費者は `crates/areka/src/emo2_boot/user_break_cue.rs`（台帳の登記は `consumer_ledger.rs`）。
+  - **`SenderType` を同じ道で送る spec が 2 本ある**: `property-query-channels`（`SenderType: property`・`shiori3.rs`・`client.rs`・`shiori_inproc.rs`・`msg.rs` の `ShioriCall` を触る）と本 spec。さらに `mcp-shiori-query` が同じ道に `X-MCP-PassThru-*` を足す。入れ物は 1 本が作る。
+- 触るファイル（並走の照合用・見込み）: `crates/shiori-host32-host/src/{shiori3.rs, client.rs}`・`crates/areka-ghost/src/shiori_inproc.rs`・`crates/areka-kanade/src/{msg.rs, shiori/real.rs, actor.rs, talk.rs}`・`schedule/{steady,boot,change,close,translate}.rs`（`steady.rs` 947 行・新しい処理は別ファイルへ）・`crates/areka-talk/src/lib.rs`・`crates/areka/src/emo2_boot/user_break_cue.rs`・台帳 `shiori.toml` の `SecurityLevel`・`SenderType`・`SecurityOrigin` の行。
+- 議題（答えで作業が変わるものだけ）:
+  - `SenderType` の入れ物を本 spec と `property-query-channels` のどちらが作るか（＝2 本の順。本 spec は優先の段・`property-query-channels` はその他の段）。
+  - `mcp-kanade-tools` より先に着地させるか（先なら MCP の台本は最初から出どころ付きで流れる・後なら `mcp-kanade-tools` の作った外からの台本の口へ値を足す）。どちらも kanade の進行の列で同時には走らせない。
+- 見つけた穴: なし。すぐ直せる軽微な修正: この brief の末尾の前に道具の残りかす `</content>`・`</invoke>` の 2 行が紛れている（消してよい）。
+
+### 棚卸㉒の裁定（2026-10-05）
+
+- `SenderType`・`SecurityLevel` を SHIORI へ運ぶ仕組みの持ち主は本 spec（`property-query-channels` から寄せた）。網羅台帳 `shiori.toml` の `ukadoc:spec_shiori3:SenderType…` の行（持ち主が空）を要件の段で登記する。
+- SHIORI への要求に追加のヘッダを運ぶ道は、本 spec・`property-query-channels`・`mcp-shiori-query` の 3 本が要る。入れ物は先に着手した 1 本が作り、`ShioriBackend` の引数を変えずに既定の実装を持つ新しいメソッドを足す形を推す（実装 19 か所への波及を止める）。

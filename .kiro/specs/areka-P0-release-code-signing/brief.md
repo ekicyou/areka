@@ -80,3 +80,17 @@
   - `README.md`・`dist/README.txt`（署名の方針と既知の制限）
 - 議題（答えで作業が変わるものだけ）: ⑴（既存）受理されなかったときに有料へ行くか。⑵ `tools/package.ps1` を本 spec の境界に入れてよいか（入れないなら、zip を一度作ってから展開・署名・詰め直す形を `release.yml` に書くことになり、`.sha256` と `BUILD-INFO.txt` の作り方を二重に持つ）。
 - 見つけた穴: なし。
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: S（6〜9 タスク）。切る: なし。段は据え置き（任意）のまま。
+- 前提の状態: **待ち**。リリースの実績はまだ 0 回（タグは `v0.0.1` だけ・`release.yml` は main で本番の走りをしていない）。SignPath Foundation の条件「リリース済み・活発」は、`release-cycle` を何回か回した後に満たし始める。
+- 崩れた前提／古くなった位置:
+  - C3 で `.github/workflows/release.yml` と `tools/package.ps1` は 1 行も変わっていない。棚卸㉑の指摘（段「zip を作る」は `tools/package.ps1 -Arch all` を 1 回呼ぶだけで、組み立てと詰める段の間に外から手を入れる口が無い）はそのまま。
+  - 署名の相手を数え直した: zip に入る実行ファイルは `tools/package.ps1` の `$ALLOWED_EXECUTABLES` の 3 つ＝`areka.exe`（x64 と arm64 で別の物）・`shiori-host32-helper.exe`（i686 の 1 つを両方の zip に入れる）・`ghost/emo2/ghost/master/pasta.dll`（i686）。自分で組む物は 3 つ（x64 の本体・arm64 の本体・helper）。
+  - `pasta.dll` は同梱のゴースト emo2 の物で、本 spec が署名する相手ではない見込み。Smart App Control は DLL の読み込みも止めうる（要確認）＝exe に署名しても、未署名の `pasta.dll` が残る。
+  - C4 の候補 `mcp-stdio-bridge` が中継の exe を zip に足すと、自分で組む物が増える（x64・arm64）。
+- 触るファイル（並走の照合用）: 棚卸㉑のまま＝`.github/workflows/release.yml`・`tools/package.ps1`・`doc/SIGNING.md`（新規）・`README.md`・`dist/README.txt`（「■ 既知の制限」の「署名がありません」の行）。
+- 議題（答えで作業が変わるものだけ）: ⑴⑵ は棚卸㉑のまま。加えて ⑶ `pasta.dll` を含め「zip の中の未署名の物」を説明書にどう書くか（Smart App Control が DLL も止めるかを要件の段で確かめてから）。
+- 見つけた穴: なし（`pasta.dll` は議題 ⑶。確かめる前なので穴とは書かない）。

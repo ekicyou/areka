@@ -85,3 +85,26 @@
   1. `talk` の「数値分の文字」の数え方。書記素クラスタで数えるか。`\_q`（一括表示）や早送りのときに口をどう動かすか。
   2. 文字の到着を seriko へ知らせる経路（台本の cue に載せるか、文字の層から送るか）。0 フレームで揃える形を設計で決める。
   3. 最初の 1 本の範囲。`\i[ID,wait]` を別途に回すことでよいか。
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M〜L（16〜20 タスク）。変わらず。切らない（議題 4 は大きさでなく列の都合の問い）。
+- 前提の状態: **`animated-image-playback` を待つ必要は無い**。`talk`・`runonce`・`periodic`・`yen-e`・`never`（と `\i`）はどれも「引き金が来たら 1 回流す」で、一番上の面の抽選（`looper.rs` の `on_tick`）が今している「当たったら再生を登録して 1 回流す」形にそのまま乗る。繰り返し（`always`）を要るのは playback の側だけ。待つのは触るファイルの重なりだけ＝playback とは seriko の表・時計（`table.rs`・`looper.rs`・`parts.rs`）、`element-base-method`・`collisionex-regions` とは読み手（`shell/model.rs`・`shell/decode.rs`）、`anchor-tag-canon` とは台本のコンパイル（`compile.rs`・`sakura/decode.rs`）。**列の中で playback より前へ出せる**（口が動かないのは利用者の目に見える）。
+- 段: 優先のまま。壊れたのではなく正典の語が未実装。同梱の検体でシェルを持つ 4 本（`vendors/sample_ghost/` の emo2・claudia・konnoyayame・R_POST_and_KOMAINU の `surfaces.txt`）はどれも `talk`・`runonce`・`periodic`・`yen-e`・`never`・`always` を書いていない＝同梱では症状が出ない（`element-base-method` がバグなのは同梱のクローディアでキャラクターが消えるから）。
+- 崩れた前提／古くなった位置:
+  - 読み手 `normalize_interval` は `talk,数値`・`periodic,数値` の**数値を落とす**（`Interval::Other` は語だけを持つ）。型 `Interval` に欄か腕を足す必要がある。
+  - **文字の到着は、もう seriko に届いている**。seriko は全部の cue を受け取り、cue の受け口（`actor.rs` の `handle_message` の分類）が `Text` を「担当外」として `debug!` で読み飛ばしている。`Text` は 1 続きの文字列と、その再生時間（`areka-sakura` の `text_playback_duration` が文字数から求める）を持つ＝seriko の中で「N 文字ごとの時刻」を求められ、新しい知らせの口は要らない見込み（議題 2 の答えが変わる）。
+  - `\e` は `compile.rs` の終端の腕で cue を出さずに台本を切り詰めるだけ、`\i` は `sakura/decode.rs` で `Raw` になり `compile.rs` が捨てる。`yen-e`・`\i` だけが台本のコンパイルの列に触る。
+  - `surface-element-nesting` が部品の時計（`parts.rs` の `PartClocks`）を足した。子や pattern の先の `talk` も動かすなら、部品の門 `gate` と進め方 `advance` にも引き金を足す。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-parsers/src/shell/{model.rs, decode.rs}`（`Interval`）
+  - `crates/areka-seriko/src/{table.rs, looper.rs, parts.rs, actor.rs, timeline.rs}`（`runonce` の切替の瞬間に `state.rs` も）と兄弟のテスト
+  - `crates/areka-parsers/src/sakura/decode.rs`・`crates/areka-sakura/src/compile.rs`（`\e`・`\i`）
+  - `doc/ukadoc-coverage/ledger/{assets,sakura-script}.toml`・口パクの検体（新しく作る）
+- 議題（答えで作業が変わるものだけ）:
+  1. 起票時のまま（数え方・`\_q`・早送り）。
+  2. 推しを足す: seriko が受け取っている `Text` の cue から自分で数える（emo-text・dola に触らない）。
+  3. 起票時のまま。
+  4. `yen-e`・`never`＋`\i` を後回しにして、台本のコンパイルの列から切り離すか。切れば seriko と読み手だけで口パク（`talk`・`runonce`・`periodic`）を先に出せる。
+- 見つけた穴: 実機の確かめに使える口パクの検体が同梱に無い（作る必要がある）。

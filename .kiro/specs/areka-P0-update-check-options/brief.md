@@ -85,3 +85,17 @@
   1. `testonly`・`recovery` の意味（ukadoc の「更新オプション指定」の節を URL と逐語で引く）。応えるか、記録だけにするか。
   2. `\![execute,install,url,URL,homeurl]`（https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cinstall_2curl_2cURL_2c_7a2e_5225_5d:1 の種別 `homeurl`＝「そのURLをhomeurlとみなしてネットワーク更新を実行する」）を同居させるか。
   3. `other_homeurl_override` を聞くのは、シェル・バルーンだけか、`\![updateother]` の全対象か（正典の Reference0 は「shell,balloon,headline,plugin,languageなど」）。
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（10〜14 タスク）。切る: なし。
+- 前提の状態: **待ち＝`network-update-canon-order`**（未着手）。同じ `crates/areka/src/update/` と `update_cue.rs` を組み替えるので直列のまま。
+- 崩れた前提／古くなった位置:
+  - 起票の指し先はすべてそのまま: `emo2_boot/update_cue.rs` の `UPDATE_OPTIONS`（`checkonly`・`testonly`・`recovery`）と接頭辞 `--option=`（受けて記録だけ残す）・kanade の `schedule/events.rs` の更新の表のコメント（`OnUpdateCheck*` 4 語は載せない・要件 2.15）・`dist/README.txt` の「■ 既知の制限」の 2 行（更新のオプション・更新先の差し替え）。`crates/areka/src/update/`・`update_cue.rs`・`crates/areka-update/` は C3 で 0 行。
+  - kanade の `schedule/events.rs` は `mouse-drag-events` でドラッグの 2 語が足されて 733 行。本 spec が 4 語を足しても上限には遠い。`schedule/resources.rs`（359 行）は棚卸㉑の PR でコメント 1 行だけ変わった（`SEAM(M2…)` が `SEAM(α 後…)` に）＝`ALLOWED_RESOURCE_IDS` へ 1 語足す形はそのまま。
+  - `events.rs` と `resources.rs` は kanade の進行の列のファイル。本 spec は列に名前が無いが、`balloon-lifecycle-events`（`schedule/events.rs`）・`sakura-time-critical`・`property-query-channels`・`script-security-level`（10-05 起票・kanade の列）と同じウェーブに置くなら、表の別の行に足すだけかを着手の前に照合する。
+- 触るファイル（並走の照合用）: 起票のまま＝`crates/areka/src/emo2_boot/update_cue.rs`・`crates/areka/src/update/{mod, procedure, desk}.rs`・`crates/areka-update/src/`（確かめるだけで止める口）・`crates/areka-kanade/src/schedule/{events, resources}.rs`・`doc/ukadoc-coverage/ledger/{sakura-script, shiori}.toml`・`dist/README.txt`（「■ 既知の制限」の 2 行）。
+- 共有しうる相手: `network-update-canon-order`（直列）・上の kanade の列の spec（`events.rs`）・「■ 既知の制限」を触る配布の列（`winget-manifest-submission`・`release-code-signing`・`install-live-target-hazards`）・`coverage-roadmap-refresh`（台帳）。
+- 議題（答えで作業が変わるものだけ）: 起票のまま 3 つ。
+- 見つけた穴: なし。

@@ -60,3 +60,8 @@
 
 - kanade の列（roadmap「直列の列」）。`steady.rs` を 1,000 行未満に保つ。
 - 段: 優先（バルーン関係）。規模の見込み S（5〜8）。
+
+### 同じウェーブ C4 の約束（2026-10-05 棚卸㉒・破るなら止めて報告）
+
+- 触るのは kanade の `schedule/choice.rs`・`schedule/steady.rs` の `on_choice`（呼び出しの付け替えだけ）と、`choice.rs` の子として置く新しいファイル（`schedule/mod.rs` に宣言を足さない）。`schedule/mod.rs`・`lib.rs`（`balloon-lifecycle-events`）と `msg.rs`・`actor.rs`（`mcp-get-status`）に触らない。
+- `script:` の台本をトークとして走らせる口は、後の `mcp-kanade-tools` の `sakurascript` が使い回せる形にする（設計の段で一言）。
