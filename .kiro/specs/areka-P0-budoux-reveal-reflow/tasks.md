@@ -194,3 +194,4 @@
 - 5.3: 検査 8 の選択肢の範囲は、`present_actor` を通さず本番の `annotate_lines` → `line_bands` → `derive_hit_rows` を同じ順で呼んで出す（`present_frame` は DWrite の実測の字幅で要件 5.5 と食い違うため）。本番がこの 3 つへ同じ `lines` を渡すことは構造で確かめた。3 つを 1 つの本番の関数にまとめれば檻で固定できる（範囲外・完了時の棚卸で扱う）。縦書きの形は幅を 70 に狭め、縦書きの指定が効かなければ赤になることを確かめた。
 - 6.2: emo2-kakukaku は `budoux_newline,1` を持つので、起動の通しの検査の warn 0 件も判定になっている（転送を外す変異で「先渡しが無い」が 1 件出た）。ただし繰り返しは受け取りの行が出た回で止まり、字が提示されたことは判定していない。
 - 7.1: `cargo test -j 2 --no-fail-fast -p dola -p areka-emo-text -p areka -p areka-sakura -p areka-ghost -p areka-seriko -p log-capture-kit` は 52 個の検査の束で 5,086 件通過・0 件失敗・終了コード 0・警告 0。`Cargo.*` の変更 0・dola の本番のコードに上の層の言葉 0・本番のコードに記録の捕捉先を差し替える呼び出し 0。
+- 7.2（記録の半分・撮影はまだ）: デバッグ版で `target\lb-repro3` の emo2（profile を消した初回起動）と kakukaku を絶対パスで起動し、`RUST_LOG=info,areka_emo_text=debug`・自動終了 120 秒で終了コード 0。起動トークの先渡しの受け取り（cues=107）が最初の本番の字の適用より前に出た。「先渡しが無い」「食い違う」の warn は 0 件（areka_emo_text の warn は折返し基準が描画範囲の外という既存のバルーン設定の 1 件だけ）。撮影は画面操作の許可が得られず未了。
