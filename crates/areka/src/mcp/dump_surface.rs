@@ -426,7 +426,7 @@ impl WaitAnswer for areka_mcp::tools::Pending {
 
 #[cfg(test)]
 #[path = "dump_surface_tests.rs"]
-mod dump_surface_tests;
+pub(in crate::mcp) mod dump_surface_tests;
 
 #[cfg(all(test, target_pointer_width = "64"))]
 #[path = "dump_surface_gpu_test_support.rs"]
