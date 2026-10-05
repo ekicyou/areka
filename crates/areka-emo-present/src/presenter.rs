@@ -51,6 +51,7 @@ mod read;
 mod refresh;
 mod replace;
 mod show;
+mod snapshot;
 mod target;
 mod timing;
 mod transition_record;

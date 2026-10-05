@@ -1,7 +1,7 @@
 //! `dump_balloon` の決定論テスト。
 //!
-//! 空の World と作ったゴースト・引数で呼ぶと `NG:not implemented yet`（isError: true）を返す
-//! （空の World で答えられる＝ゴーストに何もさせていない・要件 5.1・5.2・5.4）。
+//! 結線状態の無い空の World で呼ぶと、その場で `NG:This ghost has no window`（isError: true・
+//! content は本文 1 つ）を返す（要件 4.5・4.8・7.5）。
 
 use std::path::PathBuf;
 
@@ -11,7 +11,7 @@ use areka_mcp::tools::{ToolCall, ToolRequest};
 use super::*;
 
 #[test]
-fn answers_not_implemented_yet_with_an_empty_world() {
+fn answers_no_window_with_an_empty_world() {
     let ghost = ActiveGhost {
         name: Some("Emily/Phase4.5".to_string()),
         root: PathBuf::from(r"C:\ssp\ghost\emily4"),
@@ -27,7 +27,7 @@ fn answers_not_implemented_yet_with_an_empty_world() {
     let answer = pending.try_answer().ok().flatten().expect("その場で答える");
     assert_eq!(
         answer.outcome.content,
-        vec![ToolContent::Text("NG:not implemented yet".to_string())]
+        vec![ToolContent::Text("NG:This ghost has no window".to_string())]
     );
     assert!(answer.outcome.is_error);
 }

@@ -109,8 +109,6 @@ pub(crate) fn dispatch(world: &mut World, active: Option<&ActiveGhost>, request:
 /// その場で答えられない処理が、返事と「覗く関数」を預ける。覗く関数は毎フレーム呼ばれ、
 /// `Some` を返したらその結果が送られて組は外れる。置き場が無い（`install` の前・`close` の後）
 /// なら組をその場で落とす＝"shutting down" と答える。
-// 呼び手は 3 段目のツールの spec（後から答える処理）。生えるまで未使用の警告を抑える。
-#[allow(dead_code)]
 pub(crate) fn later(
     world: &mut World,
     reply: ReplyTo,

@@ -48,3 +48,8 @@
 - 同じ族の赤をもう 1 回観測した。`cargo test -j 2 -p areka --bin areka`（全体・他のセッションと並走）で `install::desk::overwrite_tests` の 3 本と `ghost_session::switch_translate_tests` の 1 本が、`spin_wait_until`（30 秒）の期限切れで赤になった。どちらも足場 `ghost_switch_test_support.rs` を使うテスト。
 - 2 つのモジュールだけを回し直すと、落ちたのは別の 2 本だった。`--test-threads=1` では 8 本すべて緑。直後の `tools/test-all.ps1`（`-j 4`）は全段緑。
 - 対象の族に `install/desk_overwrite_tests.rs` も数える（足場を使うファイルは `git grep ghost_switch_test_support -- crates/areka/src` で 9 本）。
+
+## 2026-10-05 `mcp-dump-images` の完了前の観測
+
+- 他のセッションの cargo が 25〜35 本動く机で `tools/test-all.ps1` を回すと、同じ族の 4 本がときどき赤になった: `ghost_session_switch_fallback_tests.rs` の `default_ghost_fault_after_fallback_exits_through_shiori_fault_path`、`ghost_session_switch_tests.rs` の `script_change_tag_switches_a_to_b_and_reaches_steady`・`switch_to_b_without_boot_record_sends_first_boot_not_ghost_changed`、`emo2_boot/frame_ghost_quit_switch_tests.rs` の `stop_with_handoff_under_reservation_switches_without_exit`（4 本目も足場 `ghost_switch_test_support` を使う＝対象の族に数える）。
+- 1 本ずつ流すと緑。`mcp-dump-images` の新しいテストを外した対照でも出た。静かな机の `tools/test-all.ps1` は全段緑（`b222af2e`）。
