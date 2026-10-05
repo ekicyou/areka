@@ -1,16 +1,16 @@
 {
   "feature_name": "areka-P0-element-base-method",
   "created_at": "2026-10-05T08:56:09Z",
-  "updated_at": "2026-10-05T08:56:09Z",
+  "updated_at": "2026-10-05T10:55:43Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {

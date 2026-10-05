@@ -211,3 +211,65 @@
 
 - 要件の討議（`/kiro-requirements-discussion areka-P0-element-base-method`）で 5 章の 9 項目を扱う。
 - その後 `/kiro-design areka-P0-element-base-method`。
+
+---
+
+## 9. 設計の段の追記（2026-10-05・`/kiro-spec-design`）
+
+- 調べの種類: 軽い調べ（今ある仕組みの拡張）。新しい依存クレートは 0。
+- 行番号は 2026-10-05 のワークツリー（`9417a238`）で実際に読んだもの。
+
+### 9.1 持ち越した調べもの（7 章）の結果
+
+| 調べもの | 結果 | 場所 |
+|---|---|---|
+| 字句解析が欄の前後の空白を落とすか | 落とす。`split_csv` は欄を積むたびに `trim()` する。行そのものも `lex` が `trim()` してから切る。大文字小文字は変えない。よって ` base ` は読み手に `base` として届き、`Base` は `Base` のまま届く | `crates/areka-parsers/src/shell/lexer.rs:195-222`（`trim()` は `:214`・`:220`）・`:76` |
+| ukadoc の `add`・`bind` が element定義について何と書くか | `add` の項: 「ベースレイヤに新規レイヤを着せ替えパーツとして重ねる。処理の内容はoverlayと同義。着せ替えでないアニメーション・elementでの使用は未定義」。element定義では未定義なので描かない側でよい。`bind` は ukadoc MCP の写しでは単独の項として引けなかった（`ukadoc:descript_shell_surfaces:bind` は無し）——台帳には `bind:1` の行があるので、台帳の注記を書くときは `add` の項だけを引用し、`bind` は「`add` と同じ扱い」と書くにとどめる | `ukadoc:descript_shell_surfaces:add` |
+| ほかの描画メソッドの element定義での扱い（追加で引いた） | `interpolate`・`asis`・`blend-*` の各項は「着せ替え・elementでも使用できる」と書く。正典では element定義で描けるはずの語で、追跡用の spec の対象になる | `ukadoc:descript_shell_surfaces:interpolate`・`:asis`・`:blend-add` ほか |
+| `base` の項の原文（引き直し） | 「ベースサーフェスを新規レイヤで完全に置き換える。…この描画メソッドが指定されたpattern定義では、XY座標は無視される。着せ替えおよびelementでは、baseメソッドは最初（element0、pattern0）にしか用いることができない。それ以外はoverlayに読み変えられる。」要件の引用と一致 | `ukadoc:descript_shell_surfaces:base` |
+| `areka-emo-present/src/balloon.rs:614` の `parse` | バルーンの絵のために areka 自身が組んだ文面（`synthetic_surfaces_txt`）を読む。`overlay` だけで書かれるので本 spec の影響を受けない。警告の対象にもしない | `crates/areka-emo-present/src/balloon.rs:612-625` |
+| `areka-seriko/src/resolve.rs:226` の `parse` | テストの中（emo2 の alias の写しを確かめる）。`Surface.elements` は使わない | `crates/areka-seriko/src/resolve.rs:216-248` |
+| 製品でシェルの surfaces.txt を読む入口 | `load_shell_target` の 1 か所（`shell_target.rs:287-288`）。ほかの `parse` の呼び出しはバルーンの合成用の文面・テスト・試験用の入口。`load_shell_target` 自体は起動（`crates/areka/src/emo2_boot/assets.rs:392`）と窓の配置の測定（`crates/areka/src/placement/measure.rs:329`）から呼ばれる | 左記 |
+| リポジトリの中の `element*,base` の文面 | `areka-parsers` のテスト 3 本だけ（`decode_tests_lenient_input_tests.rs:29`・`:285`・`validation_tests.rs:568`。`:219` は `unknown.block.head` の中で読まれない）。合成の照合用の検体（emo2 ほか）には無いので、既存の絵の照合は動かない | `element\w*,(base\|add\|…)` で `target`・`.kiro`・`vendors`・`doc` を除いて探した |
+| `surface.append*`ブレスにしか現れない絵が焼かれない件 | 実在を確かめた（焼く一覧は `shell.surfaces` の複製だけ＝`shell_target.rs:394`）。持ち主は既に決まっている——roadmap「`shell-implicit-surface` の着地で残したもの」⑹（`self-alpha-declaration` の議題 2）。本 spec では起票しない | `.kiro/steering/roadmap.md:227` |
+| テストの道具 | `load_shell_target` を `capture_events` で包み、`TempPath` と `MemoryDecoder` で `warn` 以上の行を 1 本ずつ突き合わせる型が既にある。外形と画素は `build_shell_target`＋`Composer` の型がある | `crates/areka-emo-present/src/shell_target_nesting_tests.rs:129-161`・`shell_target_base_image_tests.rs:1-125` |
+| 台帳の状態の語 | `absent`・`alias`・`degraded`・`implemented`・`vocabulary-only` の 5 語。台帳を触ったら報告を道具で作り直し `cargo test -p ukadoc-survey` を通す | `doc/ukadoc-coverage/README.md:42-53`・`:524-525` |
+
+### 9.2 5 章の 9 項目の決定
+
+| 項目 | 決定 | 理由 |
+|---|---|---|
+| 1 `Element` に欄を足すか | **足さない（案 A）**。brief の Scope（In）からの外れ | 下の 9.3 |
+| 2 `base` を `overlay` と同じにする場所 | 読み手（`decode_elements` の語の集合） | 下流が区別できない形にすれば「同じ見え方」が作りで成り立つ。合成器で `Base` を実装済みにすると pattern定義の門が連動する（要件 3.3） |
+| 3 描けない行を落とす場所・運ぶ値・記録の場所 | 落とすのは読み手（今のまま `Element` にしない）。運ぶ値は新しい転記 `parse_undrawn_elements` の `UndrawnElementLine`。記録は `load_shell_target` | 面の表と焼く一覧に入らないことが保たれる。`ShellTarget` には載せない（読む者が記録だけ） |
+| 4 複数番号の見出しと追記の数え方 | 1 行 1 件。見出しは原文のまま 1 本の文字列で持つ。相手の無い `surface.append*`ブレスの行も載せる | 展開しなければ 1 行が複数件になりようがない。見出しの原文は書かれた番号をすべて含み、作者が文面で探せる |
+| 5 語の比べ方 | 今のまま完全一致（小文字）。前後の空白は字句解析が落とす | 緩めると今描かれていない `Overlay` が描かれ始める（要件 3.1・2.5）。大文字の綴りは書かれた語のまま警告に載る |
+| 6 `element0,base,surfaceN.png` の記録の数 | 変わることを認める（`used`→`shadowed`） | 要件 3.2 が絵と大きさだけを縛ると明記 |
+| 7 台帳の状態と担当 | element定義の行は `degraded` のまま・注記と記録を直す・担当は追跡用の spec（完了時。それまでは本 spec）。`base` の行は `vocabulary-only`→`degraded`・担当は本 spec | element定義の行の縮退の残りは「ほかの描画メソッド」。`base` の行の残りは pattern定義 |
+| 8 今の縮退を固定しているテスト | 3 本を付け替える（`base` は値になる／吸収の例は `replace`）。`boxes_tests.rs` は説明文だけ | 消さずに新しい約束へ |
+| 9 element番号が数字でない行 | 警告には `element` に続く文字列を原文のまま載せる。`Element` 側の「数字でなければ 0」は今のまま | 箱の転記と同じ持ち方。`overlay` と同じ扱いに合う |
+
+### 9.3 案の比べ（6 章の続き）と、brief から外れる理由
+
+| 案 | 判定 | 決め手 |
+|---|---|---|
+| A 読み手だけを広げる | **採る** | 「`overlay` と同じ」が同じ値になることで成り立つ・罠 (a)(b)(c) に入る道が無い・合成器と面の表は差分 0 |
+| B `Element` に欄を足し畳み込みでふるう | 採らない | 欄を読む者が本 spec にいない。生の `Shell.surfaces[].elements` を読む所の全部にふるいが要り、漏れが見た目の変化になる。構造体リテラル 46 か所の書き足し |
+| C B＋合成器で `Base` を実装済みに | 採らない | pattern定義の門と共用で要件 3.3 に反する。画素の式は `Overlay` と同じで得るものが無い。描画メソッドごとの専用コードを足さない方針にも反する |
+
+- brief は「読み手の `Element` へ描画メソッドの欄を足すこと」を範囲に入れていた。採らない理由は design.md の「設計上の決定 1」に書いた（要件が縛っていない・下流に読む者がいない・後続の欄の形は追跡用の spec と `element-clipping-option` が決める・差分が広い）。
+- 後続への継ぎ目: ⑴ 語の集合の定義点は `decode.rs` の `is_image_element_method` 1 つ ⑵ 描けない行の転記は語を原文で運び、語の集合を広げた分だけ対象から外れる。追跡用の spec はここを広げ、そのとき `Element` に欄を足す。
+- roadmap の本 spec の行（`.kiro/steering/roadmap.md:140`「読み手に描画メソッドの欄を足して」）は、完了時に実際の形へ直す。
+
+### 9.4 まとめ直し（一般化・ある物を使う・削る）
+
+- 一般化: 要件 1.1・1.3〜1.7・3.5 は「`base` の行が `overlay` の行と同じ値になる」1 つの事実の言い換え。テストも `parse(文面) == parse(base を overlay に書き替えた文面)` の 1 本に寄せる。
+- ある物を使う: 2 つ目の転記の型（`parse_boxes`）・入口の記録の場所・`capture_events`／`MemoryDecoder`／`TempPath`。新しい仕組みは作らない。
+- 削ったもの: `Element` の欄・`ShellTarget` の報告の欄・合成器の `Base` の枝・語の比べ方の緩和・見出しの番号の展開。
+
+### 9.5 リスクと手当て
+
+- 語の判定が 3 か所（画像・箱・描けない行）に分かれてずれる — 画像と描けない行は同じ関数を使い、3 つの転記が行を漏れなく重なりなく分けることを数で確かめるテストを 1 本置く。
+- `load_shell_target` が 1 回の起動で複数回呼ばれ、同じ警告が呼び出しの数だけ出る — 入れ子・箱の報告と同じ今の型。要件 2.3 の「読み込み 1 回につき」に合う。まとめるのは `placement-measure-bake-once` の持ち物。
+- 台帳の報告の数を手で直してずれる — 道具で作り直し、`cargo test -p ukadoc-survey` で判定する。
+- 並走: `extent-element-offset`・`element-clipping-option`・`animated-image-playback` は `decode_elements` や `plan.rs` を触るので同時に走らせない（要件の境界のとおり）。本設計が触る製品コードは `decode.rs`・`undrawn.rs`（新規）・`mod.rs`・`shell_target.rs` の 4 つ。
