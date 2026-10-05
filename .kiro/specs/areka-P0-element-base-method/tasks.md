@@ -27,7 +27,7 @@
   - _Requirements: 2.1, 2.2, 2.6, 4.2_
 
 - [ ] 2. 入口で警告を出し、絵と大きさを通しで固定する
-- [ ] 2.1 `base` の土台に `overlay` を重ねた外形と画素、今の見え方の不変を檻にする
+- [x] 2.1 `base` の土台に `overlay` を重ねた外形と画素、今の見え方の不変を檻にする
   - `crates/areka-emo-present/src/shell_target_element_base_tests.rs` を新設し、`shell_target.rs` の末尾に接続の宣言を足す
   - ⑴ `surface26 { element0,base,body.png,0,0 / element1,overlay,face.png,X,Y }` を `build_shell_target` で焼いて合成し、外形が `body.png` の実寸、土台の位置の画素が `body.png` の色、部品の位置の画素が `face.png` の色。`surface26.png` を大きさも色も違う絵として復号器に入れ、それが使われない（外形が動かない・`shadowed` に 26 が載る）ことを較正にする
   - ⑵ `element0,base,surfaceN.png,0,0` を持つ文面と、そのブレスごと除いた文面（`surface*.png` が土台に敷かれる経路）とで、合成した外形と画素が等しい
