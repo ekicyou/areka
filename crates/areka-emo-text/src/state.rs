@@ -404,9 +404,28 @@ pub struct TextLayerState {
     box_index: BTreeMap<u32, Vec<areka_emo_compose::BoxName>>,
     /// 箱の名前 → 既定の見た目と種類（[`TextLayerState::set_box_traits`]・無ければ既定の層でスコープに従う）。
     box_traits: BTreeMap<areka_emo_compose::BoxName, BoxTraits>,
+    /// 「空回し」の印（既定は偽）。立てる口は [`TextLayerState::rehearsal_copy`] だけで、
+    /// 本番の状態では決して立たない。立っている間は状態の層の warn 4 か所を出さない
+    /// （本番の適用が同じ warn を出すので、空回しが出すと 2 回になる・要件 2.8）。
+    rehearsal: bool,
 }
 
 impl TextLayerState {
+    /// 印を立てた写しを返す（空回し専用）。印の立った状態は warn を出さない。
+    ///
+    /// 止めるのは warn だけで、`debug!` と warn 済みの記録の集合の更新は本番と同じ
+    /// （集合は写しの中だけで進み、本番の集合には触れない）。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "タスク 3.3 の TalkLookahead::install が呼ぶまで")
+    )]
+    pub(crate) fn rehearsal_copy(&self) -> TextLayerState {
+        TextLayerState {
+            rehearsal: true,
+            ..self.clone()
+        }
+    }
+
     /// cue の純粋適用（DirectWrite 非依存・決定論）。
     ///
     /// 後出し優先の即時適用: `Text`＝追記・`NewLine`＝改行マーカー追記・
@@ -428,6 +447,8 @@ impl TextLayerState {
             actor: cue.actor.clone(),
             place: self.destination(&cue.actor),
         };
+        // 空回しの写しでは warn を出さない（場所の状態へは真偽 1 つで渡す・要件 2.8）。
+        let quiet = self.rehearsal;
         match &cue.command {
             CueCommand::Text(text) => {
                 let glyph_units: Vec<&str> = clusters(text).collect();
@@ -447,7 +468,7 @@ impl TextLayerState {
                     .extend(glyph_units.iter().map(|c| TextItem::glyph(c)));
                 state.reveal.extend_chunk(glyph_count, cue.at, interval);
                 // 追記した文字にいま効いている見た目の番号を与える（R3.2/R3.3）。
-                state.push_current_style(&cue.actor, glyph_count);
+                state.push_current_style(&cue.actor, glyph_count, quiet);
             }
             CueCommand::NewLine { ratio } => {
                 tracing::debug!(actor = %cue.actor, ratio, "NewLine cue 適用（改行マーカー追記）");
@@ -510,7 +531,10 @@ impl TextLayerState {
                     .count();
                 if glyph_count == 0 {
                     // R1.5 縮退: 空範囲スパンのみ記録（グリフ追記・リビール拡張なし・行を生まない）。
-                    tracing::warn!(actor = %cue.actor, id = %id, "Choice cue の text が空——空範囲スパンを記録（グリフ追記なし・R1.5 縮退）");
+                    // 空回しの写しでは記録しない（本番の適用が記録する・要件 2.8）。
+                    if !quiet {
+                        tracing::warn!(actor = %cue.actor, id = %id, "Choice cue の text が空——空範囲スパンを記録（グリフ追記なし・R1.5 縮退）");
+                    }
                 } else {
                     tracing::debug!(actor = %cue.actor, id = %id, len = glyph_count, at = cue.at, duration = cue.duration, interval, "Choice cue 適用（グリフ追記＋配送 duration 由来のリビール時刻確定＋スパン記録）");
                     state
@@ -518,7 +542,7 @@ impl TextLayerState {
                         .extend(glyph_units.iter().map(|c| TextItem::glyph(c)));
                     state.reveal.extend_chunk(glyph_count, cue.at, interval);
                     // 選択肢の文字にもそのときの装飾状態を与える（R3.5）。
-                    state.push_current_style(&cue.actor, glyph_count);
+                    state.push_current_style(&cue.actor, glyph_count, quiet);
                 }
                 let ordinal = state.choices.len();
                 state.choices.push(ChoiceSpan {
@@ -546,7 +570,8 @@ impl TextLayerState {
             CueCommand::Custom { .. } => match font_tag_tokens(&cue.command) {
                 Some(tokens) => {
                     tracing::debug!(actor = %cue.actor, ?tokens, "\\f cue 適用（以降に追記される文字へ効く）");
-                    self.place_entry(&dest).apply_font_args(&cue.actor, &tokens);
+                    self.place_entry(&dest)
+                        .apply_font_args(&cue.actor, &tokens, quiet);
                 }
                 None => {
                     tracing::debug!(actor = %cue.actor, command = ?cue.command, "文字状態機械が消費しない cue を無視（上流 routing の対象外流入）");

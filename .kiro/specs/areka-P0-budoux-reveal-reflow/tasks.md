@@ -53,7 +53,7 @@
   - _Depends: 1.3, 1.4_
 
 - [ ] 3. 空回しと区間の全文（純粋な部品）
-- [ ] 3.1 状態の層に「空回し」の印を足し、空回しの間は 4 か所の warn を出さない
+- [x] 3.1 状態の層に「空回し」の印を足し、空回しの間は 4 か所の warn を出さない
   - 状態に私有の印（既定は偽）と、印を立てた写しを返す口を足す。本番の状態で印を立てる口は作らない
   - 止めるのは 4 か所だけ: 選択肢の字が空（state.rs）・`\b[名前]` の箱が無い（state_route.rs の `route_select`、公開の引数は変えない）・`\f` を適用できない／上下付きのまま字を足した（state_decoration.rs の 2 つの warn。`push_current_style`・`apply_font_args` へ「黙る」かどうかを 1 つ渡す。`apply_font_args` の名前と `match` の形は変えない）
   - warn 済みの記録の集合は今のまま更新する。`debug!` は止めない。本番の記録は件数も文面も変えない
@@ -184,3 +184,4 @@
 
 - 1.3: `spawn_emo_text` の説明に「先渡しを実行時へ渡す口は後のタスク」と書いてある。4.1 で `preview_talk` へつなぐときにこの記述も直す。
 - 2.1: 検査 1（`actor::lookahead_tests::emo2_boot_talk_reveals_without_moving_glyphs`）は 4.2 まで赤。それまで `cargo test -p areka-emo-text` は `--no-fail-fast` で回して、ほかが緑であることを確かめる。`actor_*_tests.rs` の接続宣言はこのクレートの慣例で actor.rs に置く（lib.rs は一覧への登録だけ）。
+- 3.1: `TextLayerState::rehearsal_copy` に `#[cfg_attr(not(test), expect(dead_code, ...))]` が付いている。3.3 で本番から呼ぶようになったら外す。
