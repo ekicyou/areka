@@ -51,7 +51,7 @@
 4. When 台本に `\j[ID]` があり ID が `mailto:` で始まる, the areka shall その宛先の新しいメールを OS の既定のメールソフトで開く。
 5. The areka shall `\j[ID]` を読んだ結果を、`\![open,…]` と同じ受け取り手が受け取れる形にする（dola の `CueCommand` に新しい種類は 0 個）。
 6. While 台本の再生中に `\j[ID]` に達した, the areka shall 台本の文字の表示や待ち時間を変えない（`\j` は表示に何も出さず、時間も消費しない）。
-7. If 台本に `\j[ID]` があり ID が上の 3 つの形のどれでもない（空を含む）, then the areka shall 何も開かず、`warn!` で ID と理由を 1 行記録する（**暫定＝要件ディスカッションの議題**: 旧来の「ID にジャンプする」の扱い。下の「未決の項目」を参照）。
+7. If 台本に `\j[ID]` があり ID が上の 3 つの形のどれでもない（空を含む）, then the areka shall 何も開かず、`warn!` で ID と理由を 1 行記録する（ukadoc は「ID にジャンプする」の行き先を定めていないので、推測で動かさない。補った URL として開くことも、選択肢として扱うこともしない）。
 
 ### Requirement 2: `\![open,file,ファイル名]` でファイルを実行する
 
@@ -147,7 +147,7 @@
 
 #### Acceptance Criteria
 
-1. When 本 spec が完了する, the 網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml` shall `\j[ID]`・`\![open,browser,…]`・`\![open,file,…]`・`\![open,explorer,…]`・`\![open,editor,…]`・`\![open,mailer,…]` の 6 行の `status` を `absent` から実装に合う語（`implemented`、または旧来のジャンプを実装しない `\j[ID]` と `headline`・`plugin` を開かない `\![open,explorer,…]` が縮退に当たるなら `degraded`）に改め、`owner` を本 spec とし、`note` に壊れ方とログの実態を書き直す。`implemented` にした行は、台帳の検査（`ukadoc-survey`）が求める `/// ukadoc: <URL>` の出典コメントを実装のソースに持つ。
+1. When 本 spec が完了する, the 網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml` shall `\j[ID]`・`\![open,browser,…]`・`\![open,file,…]`・`\![open,explorer,…]`・`\![open,editor,…]`・`\![open,mailer,…]` の 6 行の `status` を `absent` から実装に合う語（URL・`file:///`・`mailto:` 以外の ID を開かない `\j[ID]` と、`headline`・`plugin` を開かない `\![open,explorer,…]` は `degraded`、残りの 4 行は `implemented`）に改め、`owner` を本 spec とし、`note` に壊れ方とログの実態を書き直す。`implemented` にした行は、台帳の検査（`ukadoc-survey`）が求める `/// ukadoc: <URL>` の出典コメントを実装のソースに持つ。
 2. The 受け取り手の表（`consumer_ledger.rs` の正準台帳） shall `("open","file")`・`("open","browser")`・`("open","explorer")`・`("open","editor")`・`("open","mailer")` の受け取り手を登記し、`("open","readme")` の登記はそのまま残す。
 3. The 受け取り手の表の既存テスト（`("open","browser")` に受け取り手が無いことを固定しているものと、登記の総数 15 を固定しているもの） shall 新しい登記に合わせて書き替え、`("open","help")` など本 spec の範囲外の第 1 引数は受け取り手なしのままであることを固定する。
 4. When 本 spec が正典の沈黙や SSP との差を裁量で決めた（外部アプリの設定を写さない・`表示行` を無視する・`headline`／`plugin` を開かない・`\j[ID]` の旧来のジャンプ）, the `doc/COMPAT_ARCHITECTURE.md` §8 shall その裁量を 1 行ずつ登記する。
@@ -175,11 +175,9 @@
 - 常時テストで実際に起こす OS のアプリ: **0**。
 - `main.rs`・`emo2_boot/mod.rs` への変更: **0**（同じウェーブ C4 の約束）。
 
-## 未決の項目（要件ディスカッションで決める・暫定の要件で先へ進める）
+## 要件ディスカッションで片付いた項目
 
-1. **`\j[ID]` の ID が URL でも `file:///` でも `mailto:` でもないとき（旧来の「ID にジャンプする」）**（要件 1.7）。暫定: 何も開かず `warn!` 1 行。ukadoc は「IDにジャンプする」とだけ書き、何へのジャンプかを定めていない。選択肢の例: ⒜ 暫定どおり開かず記録だけ（台帳は `degraded`）・⒝ 選択肢を選んだときと同じ扱い（`OnChoiceSelect` 系のイベントへ ID を渡す）・⒞ `http://` 省略の URL とみなす。答えで台帳の `status` と kanade への接触の有無が変わる。
-
-### 要件ディスカッションで片付いた項目
+- **`\j[ID]` の ID が URL でも `file:///` でも `mailto:` でもないとき**（要件 1.7・2026-10-05 開発者裁定「http とかが無ければ処理できない方がよい」）: 何も開かず `warn!` 1 行。ukadoc は「IDにジャンプする」とだけ書き、何へ跳ぶかを定めていない（URL・`file:///`・`mailto:` 以外の意味は正典に無い）。選択肢を選んだときと同じ扱いにする案・`http://` を補う案は取らない。台帳の `\j[ID]` は `degraded`、kanade には触れない。
 
 - **`\![open,explorer,種類,名前]` の名前解決の範囲**（要件 4.4〜4.7）: `ghost`・`balloon`・`shell` の名前解決は本 spec で持つ（要件 4.4〜4.6 のまま）。名前から 1 つを引く純粋な関数は 3 つとも既にあり（ギャップ分析 §2.5）、足すのは結線だけ。`headline`・`plugin` は areka に仕組みが無いので `warn!` 1 行の縮退（要件 4.7）。
 - **成功の記録を `get_log` のどの種別に入れるか**（要件 7.3）: 要件は「`get_log` で読める」ことだけを約束し、種別は設計で決める（ギャップ分析 §6.3）。
