@@ -50,7 +50,7 @@
   - _Depends: 1.1, 2.1_
 
 - [ ] 3. SSP との差の一覧と実機の確認
-- [ ] 3.1 (P) SSP との差の一覧を書く
+- [x] 3.1 (P) SSP との差の一覧を書く
   - 設計の表の 6 行（`changing`・出どころの無い 5 語・切替の途中・各旗の条件・SHIORI が考えている間・お別れの台詞の再生中）を、項目・areka・SSP・SSP の印の形で書き、`NG:Status is not available` が SSP に対応物の無い areka の内部の知らせであることを補足に 1 行書く
   - `doc/ssp-mcp/get-status-diff-areka.md` があり、6 行それぞれに SSP の印が付いている
   - _Requirements: 2.1, 2.6, 2.7, 5.5_
