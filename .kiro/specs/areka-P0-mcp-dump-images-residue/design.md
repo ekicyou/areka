@@ -220,7 +220,7 @@ sequenceDiagram
 | 4.4 | 起きなくても振る舞いを保つ | `Wait` | — | — |
 | 4.5 | 写した後は写した時点の絵 | `Wait`（Reading・Encoding では確かめない） | — | 状態図 |
 | 5.1 | 両スレッドの ERROR を判定 | テスト: `finish` を捕まえる・答えで判定 | `count_levels`・`capture` | — |
-| 5.2 | 捕まえる道具の較正 | テスト: わざと失敗させる仕事 | `finish` | — |
+| 5.2 | 捕まえる道具の較正 | テスト: わざと失敗させる仕事（Unit Test 2・Integration Test 2） | `finish`・`is_picture` | — |
 | 5.3 | 成功の記録の `ui_us`・`encode_us` | `picture` の仕事・`dump_balloon` の仕事・`Wait`（`ui` の算出） | `debug!` の欄 | — |
 | 6.1 | 前の振る舞いを保つ | 全部品（文言・順・画像の形は変えない） | — | — |
 | 6.2 | 前のテストを緑のまま | `GpuRig` の待ち方の口 | — | — |
@@ -375,7 +375,7 @@ impl<A: FnMut(&World) -> Option<Step>> Wait<A> {
   - `Reading`: `Reader` を 1 度呼ぶ。`Ok(None)` → まだ。`Err(o)` → 答える（1.5）。`Ok(Some(job))` → 符号化を起こして `Encoding`。
   - `Encoding`: `try_recv`。届いた → 答える。空 → まだ。切れた（届けずにスレッドが終わった・`finish` が必ず届けるので届かない）→ `fail(tool, scope, "the encoding thread is gone")`。
 - 同じ ゴースト の見分けは `ActiveGhost` の等しさ（名前とルートフォルダ）。同じゴーストを起こし直したときは同じと見なす（4.2 の決まり）。
-- 時間の数え方（5.3・1.1）: 1 回の `poll` の始めから戻るまでを 1 フレームの時間とし、最初の `poll` には `carry` を足す（本番では `handle` と最初の覗きは同じ汲みの中で起きるので、足したものが 1 フレームの時間になる。テストのように汲みの外で `handle` を呼ぶと多めに数えるが、判定の側に倒れる）。戻るたびに `ui_max` を更新し、符号化を起こすときに `max(ui_max, 今の覗きのここまで)` を `Job` に渡す。符号化を起こした後の覗きは受け取り口を覗くだけなので数えない。
+- 時間の数え方（5.3・1.1）: 1 回の `poll` の始めから戻るまでを 1 フレームの時間とし、最初の `poll` には `carry` を足す（本番では `handle` と最初の覗きは同じ汲みの中で起きるので、足したものが 1 フレームの時間になる。テストのように汲みの外で `handle` を呼ぶと多めに数えるが、判定の側に倒れる）。戻るたびに `ui_max` を更新する。符号化を起こすときは、`encode_elsewhere` が**スレッドを起こし終えた後**（手渡しの直前）に `max(ui_max, 今の覗きのここまで)` を測り、仕事・届け先と一緒に手渡す（スレッドを起こす時間も `ui_us` に入る・設計の検証の指摘 1）。値に入らないのは、手渡しの 1 回の送り（チャンネルへ 1 件積むだけ）と、手渡した後のフレームの受け取り口の覗き（`try_recv` 1 回）だけ。どちらも値を手渡した後に起きるので入れようがなく、その旨を成功の記録の欄の説明（Monitoring）にも書く。
 - 待たない: どの段も GPU・スレッド・チャンネルの終わりを待たない（1.4）。描画の段とは別の、汲む系の最後で呼ばれる。
 - 待つ側が去った・終了が始まった: `mod.rs` の `poll_later`・`close` が `Wait` ごと落とす。札（写し先）・受け取り口・`answer` が落ちるだけで、記録は出さない（1.6・3.5）。
 
@@ -387,14 +387,15 @@ impl<A: FnMut(&World) -> Option<Step>> Wait<A> {
 | Requirements | 3.1, 3.3, 3.4, 3.5, 5.1, 5.2 |
 
 ```rust
-/// 符号化のスレッド（名前 `mcp-encode`）を起こし、仕事と届け先を手渡す。起こせなければ
+/// 符号化のスレッド（名前 `mcp-encode`）を起こし、起こし終えた後に `ui()` で UI スレッドの側の
+/// 時間を測って、(仕事, 届け先, 時間) を手渡す。起こせなければ
 /// `deliver(to, fail(tool, scope, 理由))`。手渡しの前にスレッドが消えていたら
 /// `deliver(to, fail(tool, scope, "the encoding thread is gone"))`。必ず 1 度だけ届ける。
 fn encode_elsewhere<T: Send + 'static>(
     tool: &'static str,
     scope: u32,
     job: Job,
-    ui: Duration,
+    ui: impl FnOnce() -> Duration,
     to: T,
     deliver: fn(T, ToolOutcome),
 );
@@ -407,6 +408,7 @@ pub(in crate::mcp) fn finish(tool: &'static str, scope: u32, job: Job, ui: Durat
 pub(in crate::mcp) fn send_back(tx: Sender<ToolOutcome>, outcome: ToolOutcome);
 ```
 - 届け先は 2 つ: 装着の後の `dump_surface`（`reply_elsewhere`）は `ReplyTo` と `ReplyTo::send`、`Wait` は `Sender<ToolOutcome>` と `send_back`。
+- 時間の測り方 `ui` は、`reply_elsewhere` が `|| started.elapsed()`、`Wait` が「`max(ui_max, carry ＋ 今の覗きの始めから)`」を渡す。今の `reply_elsewhere` はスレッドを起こす前に測っているので、装着の後の `dump_surface` の `ui_us` もこの直しで起こす時間を含むようになる。
 - 符号化のスレッドで走るのは、手渡しを受け取る 1 行と `deliver(to, finish(...))` だけ。符号化のスレッドで記録を出しうるのは `finish` の中（仕事の中の成功の `debug!`・`fail` の `error!`・panic を受けた `fail` の `error!`）だけで、`send_back`・`ReplyTo::send` は記録しない。これが要件 5.1 の判定の前提（Testing Strategy）。
 - 待つ側が去った後に仕事が panic したときの `error!` は残る（3.5 の但し書き）。
 
@@ -497,7 +499,7 @@ fn balloon_job(scope: u32, canvas: Vec<u8>, size: (u32, u32), layer: Option<Text
 
 ### Monitoring
 
-- 成功の記録 `[mcp] 絵を返す`（`debug!`）の欄 `ui_us`（1 フレームで UI スレッドを塞いだ時間の最大・µs）と `encode_us`（符号化のスレッドの時間・µs）を、実機確認で `RUST_LOG=info,areka::mcp=debug,areka_mcp=debug` で読む。
+- 成功の記録 `[mcp] 絵を返す`（`debug!`）の欄 `ui_us`（1 フレームで UI スレッドを塞いだ時間の最大・µs。符号化のスレッドを起こす時間を含み、手渡しの 1 回の送りと手渡した後の受け取り口の覗きは含まない）と `encode_us`（符号化のスレッドの時間・µs）を、実機確認で `RUST_LOG=info,areka::mcp=debug,areka_mcp=debug` で読む。
 
 ## Testing Strategy
 
@@ -507,7 +509,7 @@ GPU を要するテストは、このリポジトリの定石（常時テスト�
 
 - 符号化のスレッドで走るのは手渡しの 1 行と `deliver(to, finish(...))` だけ（Components の `encode_elsewhere` 節）。よって、
   - **仕事を直接捕まえる**: 本物の仕事（GPU を通るテストでは `answer` の `Step::Encode`、`dump_balloon` は `Step::Read` の `Reader` をフレームを回して `Ok(Some(job))` まで進めたもの）を、テストのスレッドで `count_levels(|| finish(...))` の中で走らせ、ERROR 0 件を判定する。
-  - **答えで判定する**: 本番の入口を通るテストは、答えが `NG:` でない（画像つきの成功）ことを判定する。符号化のスレッドで出る `error!` は必ず `fail` を通って `NG:` の答えになるので、答えが成功なら符号化のスレッドの `error!` は 0 件。
+  - **答えで判定する**: 本番の入口を通るテストは、答えが `NG:` でない（画像つきの成功）ことを判定する。符号化のスレッドで出る `error!` は必ず `fail` を通って `NG:` の答えになるので、答えが成功なら符号化のスレッドの `error!` は 0 件。この判定は 1 つの関数 `is_picture(&ToolOutcome) -> bool`（`dump_surface_tests.rs` に置き、GPU のテストからも使う）にまとめ、Integration Test 2 で本物の符号化のスレッドの失敗に対して偽を返すことを較正する（5.2・設計の検証の指摘 3）。
   - UI スレッドの記録は今どおり、呼び出しとフレームを回す部分を `count_levels` で囲んで数える。
 
 ### Unit Tests（窓も GPU も要らない）
@@ -524,7 +526,7 @@ GPU を要するテストは、このリポジトリの定石（常時テスト�
 `SwitchRig` で A を起こし（窓を作らないので装着は起きない）、`mcp::install` で置き場を据え、本番の `start`（または `handle`）に呼び出しを渡し、`rig` の巡（`Input` の段の汲む系が `poll_later` を回す）で進める。
 
 1. 装着の前に預けた呼び出しの符号化（7.1 ⑶・3.1・3.2）: `start` に、2 回目の覗きで `Step::Encode`（自分の走ったスレッドの名前を本文に書く仕事）を返す `answer` を渡す。答えの本文が `OK:mcp-encode` で、預けた巡の中では答えていない。
-2. 装着の前に預けた呼び出しの panic（7.1 ⑷・3.3）: 上と同じで仕事が panic → 本文 `NG:the encoding thread panicked`。
+2. 装着の前に預けた呼び出しの panic（7.1 ⑷・3.3・5.2）: 上と同じで仕事が panic → 本文 `NG:the encoding thread panicked`。同じ答えを `is_picture` に通すと偽になる（本物の `mcp-encode` での失敗に、答えで判定する側が赤を返すことの較正）。比べに、1×1 の絵を返す仕事を同じ形で預けた答えでは `is_picture` が真になることも確かめる（判定が常に偽を返す誤りを除く）。
 3. 待つ側が去った後（7.1 ⑸・3.5）: 仕事を止め札（チャンネル）で止めたまま `Encoding` まで進め、`Pending` を落として巡を 1 回回すと、置き場（`McpLater` の列・`mcp` の子のモジュールから読める）の組が 0 件になる（覗く関数ごと落ちた）。その後に仕事を放して巡を回しても、UI スレッドの ERROR は 0 件で panic しない（符号化のスレッドの側の「送れなくても黙る」は Unit Test 3 が判定する）。
 4. 預けている間にゴーストが替わる（7.1 ⑹・4.2）: A の `OnBoot` の台本を `\0A\![change,ghost,B]\e` にし、起こした直後（巡の前）に本物の `dump_surface::handle` を A で呼ぶ。B が定常に達するまで巡を回すと、答えが `NG:Specified ghost is not active`・`isError: true` で、`[mcp]` の記録に ERROR が無い（切り替えの手順そのものの記録は判定に入れない）。
 5. 同じゴーストの起こし直し（4.2 の「同じと見なす」）: A の台本を `\0A\![change,ghost,A]\e` にすると、A が起こし直されて定常に達しても答えは届かない（まだ装着待ち）。
