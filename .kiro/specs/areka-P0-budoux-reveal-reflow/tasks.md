@@ -165,14 +165,14 @@
   - _Boundary: areka の起動の通しの検査（spine_boot_smoke_tests.rs）_
   - _Depends: 1.2, 4.1, 4.2_
 
-- [ ] 7. 最終確認
+- [x] 7. 最終確認
 - [x] 7.1 触ったクレートの全部の検査を回す
   - `cargo test -j 2 -p dola -p areka-emo-text -p areka -p areka-sakura -p areka-ghost -p areka-seriko -p log-capture-kit` を 1 度回し、すべて緑であること（受け手の約束の追加で、十数個のほかの受け手が書き換えなしでコンパイルできること、1 ファイル 1,000 行の番人を含む）
   - `Cargo.toml` がどれも変わっていないこと、`dola` の説明に上の層の言葉が無いこと、本番のコードに記録の捕捉先を差し替える呼び出しが無いことを確かめる
   - 完了の状態: 上のコマンドの結果がすべて緑で、確かめた 3 点を報告に残す
   - _Requirements: 2.8, 3.5, 4.2, 4.3_
 
-- [ ] 7.2 実機（emo2 の初回起動トーク）で確かめる
+- [x] 7.2 実機（emo2 の初回起動トーク）で確かめる
   - デバッグ版の `areka` を `cargo build -j 2 --bin areka` で建て、emo2 をワークツリーの `target\` の下の短いパスへ写し、profile を消して初回起動にし、絶対パスで起動する。記録は `areka_emo_text` を debug まで開ける
   - 見るもの: エモ側の「‥」が最初から「ええと、」と同じ行（2 行目の頭）に出て、「ええと、」が届いた後も同じ行にあること。「‥」が出た直後と「ええと、」が出た後の 2 枚を撮って spec の `evidence/` へ置く
   - 記録で見るもの: 最初の字の適用より前に先渡しの受け取りの行があること（空回しの行は区切りの印 `rehearsal` の中に出るので除いて読む）・「先渡しが無い」「食い違う」の warn が 0 件
@@ -194,4 +194,4 @@
 - 5.3: 検査 8 の選択肢の範囲は、`present_actor` を通さず本番の `annotate_lines` → `line_bands` → `derive_hit_rows` を同じ順で呼んで出す（`present_frame` は DWrite の実測の字幅で要件 5.5 と食い違うため）。本番がこの 3 つへ同じ `lines` を渡すことは構造で確かめた。3 つを 1 つの本番の関数にまとめれば檻で固定できる（範囲外・完了時の棚卸で扱う）。縦書きの形は幅を 70 に狭め、縦書きの指定が効かなければ赤になることを確かめた。
 - 6.2: emo2-kakukaku は `budoux_newline,1` を持つので、起動の通しの検査の warn 0 件も判定になっている（転送を外す変異で「先渡しが無い」が 1 件出た）。ただし繰り返しは受け取りの行が出た回で止まり、字が提示されたことは判定していない。
 - 7.1: `cargo test -j 2 --no-fail-fast -p dola -p areka-emo-text -p areka -p areka-sakura -p areka-ghost -p areka-seriko -p log-capture-kit` は 52 個の検査の束で 5,086 件通過・0 件失敗・終了コード 0・警告 0。`Cargo.*` の変更 0・dola の本番のコードに上の層の言葉 0・本番のコードに記録の捕捉先を差し替える呼び出し 0。
-- 7.2（記録の半分・撮影はまだ）: デバッグ版で `target\lb-repro3` の emo2（profile を消した初回起動）と kakukaku を絶対パスで起動し、`RUST_LOG=info,areka_emo_text=debug`・自動終了 120 秒で終了コード 0。起動トークの先渡しの受け取り（cues=107）が最初の本番の字の適用より前に出た。「先渡しが無い」「食い違う」の warn は 0 件（areka_emo_text の warn は折返し基準が描画範囲の外という既存のバルーン設定の 1 件だけ）。撮影は画面操作の許可が得られず未了。
+- 7.2: デバッグ版で `target\lb-repro3` の emo2（profile を消した初回起動）と kakukaku を絶対パスで起動し、`RUST_LOG=info,areka_emo_text=debug`・自動終了 120 秒で終了コード 0。起動トークの先渡しの受け取り（cues=107）が最初の本番の字の適用より前に出た。「先渡しが無い」「食い違う」の warn は 0 件（areka_emo_text の warn は折返し基準が描画範囲の外という既存のバルーン設定の 1 件だけ）。撮影は画面操作の許可が得られなかったので、areka の MCP の `dump_balloon`（scope 1）を待受へ直に繰り返し投げ、変わった絵だけを時刻付きで残して取った（画面には触れない）。2 回目の起動（profile を消した初回起動・自動終了 90 秒）でも先渡しの受け取りが最初の字の適用より前・2 種の warn は 0 件。`evidence/21-after-fix-dots-on-line2.png`＝「イイジャン！」の直後、最初の「‥」が最初から 2 行目の頭に出た・`22-after-fix-eeto-same-line.png`＝「ええと、」が届いた後も「‥‥ええと、」が同じ行。検体の `targetb-repro3` は消した。
