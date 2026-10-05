@@ -163,7 +163,7 @@ crates/areka/
 依存の向きは `geometry` → `ranges` → `turn` → `os` → `system` → `mod`。どのファイルも 1,000 行未満に収める（見込みは最大の `system.rs`・`os.rs` で 400〜500 行）。
 
 ### Modified Files
-- `crates/wintf/src/ecs/mod.rs` — `pub mod tooltip;` と公開の型・関数の `pub use` を足す（足すだけ）。
+- `crates/wintf/src/ecs/mod.rs` — `pub mod tooltip;` と公開の型の `pub use` を足す（足すだけ）。関数（`register`・`update`・`unregister`・`supply_text`・`dismiss`）は名前が一般的で根では意味がぼやける（`wintf::ecs::update` など）ので持ち上げず、`wintf::ecs::tooltip::` から呼ぶ（4.1 で判明・クレートの文書の例も `tooltip::register(...)` の形で書く）。
 - `crates/wintf/src/ecs/world/mod.rs` — `EcsWorld::new` の既定の系の登録の後に `crate::ecs::tooltip::install(&mut world);` を 1 回呼ぶ（註釈込みで 3 行以内・941 行 → 944 行）。
 - `crates/wintf/src/ecs/window_proc/mod.rs` — 関数 `dispatch_window_message` の冒頭で、ボタンの押下のメッセージなら `crate::ecs::tooltip::note_button_press()` を呼ぶ（数行）。既存の配送は変えない。
 

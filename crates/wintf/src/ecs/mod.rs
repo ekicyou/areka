@@ -37,6 +37,10 @@ pub use pointer::{
     PointerLeave, PointerState, WheelDelta, WindowPointerTracking, clear_transient_pointer_state,
     debug_pointer_leave, debug_pointer_state_changes, dispatch_pointer_events,
 };
+pub use tooltip::{
+    OnTooltip, TooltipArea, TooltipEndReason, TooltipNotice, TooltipOsError, TooltipRange,
+    TooltipRangeId, TooltipRegisterError, TooltipSupply, TooltipTurn, TooltipTurnToken,
+};
 pub use widget::{
     BitmapSource, BitmapSourceGraphics, BitmapSourceResource, BoxedCommand, CommandSender, WicCore,
     WintfTaskPool, draw_bitmap_sources,
