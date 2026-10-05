@@ -175,3 +175,42 @@ grep（`CANNOT_FIND`・`NOT_ACTIVE`・`Cannot find`・`is not active`・`Some(""
 
 - 要件ディスカッション（`/kiro-requirements-discussion areka-P0-mcp-ghost-name-match`）で上の 1・2 を先に決める（触るファイルの範囲が決まらないと設計が書けない）。
 - 決まったら `/kiro-design areka-P0-mcp-ghost-name-match` で設計へ。
+
+## 10. 設計の段（2026-10-05・`/kiro-spec-design -y`）
+
+### 10.1 要約
+
+- **調べの種類**: 軽い調べ（既存の仕組みの拡張）。照合は `resolve.rs` の 1 か所に閉じ、外の依存・新しい道具は無い。調べの補助のエージェントは使わず、実物（`resolve.rs`・`resolve_tests.rs`・`mcp_tests.rs`・`get_log.rs`・`get_log_tests.rs`・`GhostNames`・`SwitchRig`・survey §7.4・`mcp-get-property` の `verification/signoff.md`）を直に読んだ。
+- **主な所見**:
+  - 判断は「欄が無い（`None`）だけを省略の腕へ」「`given.trim()` を `name`・`sakura_name` と `eq_ignore_ascii_case` で」「`given` をそのまま `same_path` で」の 3 点で要件 1〜4 の答えがそろう。空文字・空白だけのための腕は要らない（何にも当たらず `CANNOT_FIND`）。
+  - 字面の数え直し: `ActiveGhost { … }` の字面は約束の内 5（`resolve.rs` 1・`resolve_tests.rs` 3・`mcp_tests.rs` 1）＋外 12＝**17 か所**。4.2 節の表の「16」は内側の足し算の誤り（外の 10 ファイル 12 か所は正しい）。
+  - 配布形の emo2 の名前は `えも？？`（`mcp-get-property` の実機確認の記録）で半角の英字を含まない＝要件 6.2 のために、展開先の descript の `name` の行を survey と同じ `えも2DEBUG` に書き替えて起こす。
+  - `SwitchRig` が使う emo2 の検体は `kero.name` を持つ見込み（placement のテストが emo2 の descript を `kero.name,エモ` として扱う）＝本物の単位のテストで相方の名前が外れることを判定できる。
+  - `get_status` は今の main では `NG:not implemented yet` を返す（⑥ `mcp-get-status` の着地まで）。振り分けは解決を先に通すので、実機確認の「見つかる」は「解決の失敗の文言でないこと」で判定する。
+
+### 10.2 8.1 で設計へ送られた項目の決定
+
+| 項目 | 決定 | 理由 |
+|---|---|---|
+| 8 節の 4（本体側名が空） | `name` と同じく空文字は `None` に落とす（`active` の中） | 型の上の約束（`Some` なら空でない）を 2 つの欄でそろえる。答えはどちらでも同じ（空の `ghost_name` は何にも当たらない） |
+| 8 節の 5（SSP の未実測の細部） | 着地の条件にしない。要件の表の推奨案で実装し、実機確認で SSP が動けば並べて記録する。違えば要件を改める | 8.1 の振り分けのまま |
+| 8 節の 6（`null` の行） | 実機確認で記録だけ取る。SSP と食い違えば `/kiro-discovery` で起票 | プロトコル側の扱いは範囲外 |
+| 7 節の 3（`str::trim` の範囲と SSP の差） | 5 と同じ扱い | 同上 |
+| 7 節の 4（実機確認の手順と置き場） | 配布形を `target\signoff-ghost-name\x\` へ展開・記録は `target\signoff-ghost-name\logs\`・結果は `verification/signoff.md`（`mcp-get-property` と同じ形）・curl の `tools/call` で `get_status`・`get_expression_table`・`get_log` に survey §7.4 の各行を当てる | 前例の手順がそのまま使える。置き場はワークツリーの `target\` の下の決まりどおり |
+
+### 10.3 統合の 3 つの見方（Design Synthesis）
+
+- **一般化**: 「名前」と「本体側名」は同じ比べ方の 2 つの相手で、比べ方を 1 つの閉包にまとめれば済む。「空文字・空白だけは外れ」は「前後を除いた値が何にも当たらない」の特別な場合で、別の腕にしない。
+- **作るか借りるか**: 標準ライブラリの `str::trim`（descript の読み取りと同じ空白の範囲＝要件 2.1 の字義どおり）と `str::eq_ignore_ascii_case`（半角の英字だけを畳む＝要件 1.3 どおり）を借りる。Unicode の大小の畳み（`to_lowercase`）は範囲が広すぎて SSP で外れる指定が当たる恐れがあるので取らない。
+- **削る**: テスト用の作り手（選択肢 A′）は作らない（今の字面は数行で、作り手を挟む理由が無い）。`get_log.rs` の空文字の腕は無くても同じ答えになるが、要件ディスカッションで決めた触る範囲（注釈だけ）に合わせて残す。照合の外れの記録も足さない（今も記録の段を持たない）。
+
+### 10.4 危険と手当て
+
+- **並走との字面の衝突**（⑥・⑧・⑨）: 後から着地する側が rebase で 1 行足す（要件ディスカッション 議題 1 の決定）。足し忘れはコンパイルが落ちるので見落とされない。
+- **SSP の未実測の細部が推奨案と違う**: 実機確認の SSP の列で見つける。見つかったら要件の「要件の段で決めた細部」1・2・4 と設計の比べ方を改める。
+- **本体側名を読む配線の退行**: 純粋なテストでは見えない＝`mcp_tests.rs` の本物の単位のテストで `active` の `sakura_name` を判定する。
+
+### 10.5 設計の審査（review gate）
+
+- 機械の検査: 要件の番号 1.1〜6.3 の全 23 件が対応の表にある・境界の 4 節は埋まっている・File Structure Plan は具体のパス・境界と触るファイルは一致（本番は `resolve.rs` と `get_log.rs` の注釈だけ）・部品 3 つ（`ActiveGhost`・`active`・`resolve`）はどれも `resolve.rs` にある。
+- 判断の検査: 要件の空き・矛盾は見つからなかった。修理は 0 回で通った。
