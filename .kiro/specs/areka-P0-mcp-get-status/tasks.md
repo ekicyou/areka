@@ -49,16 +49,20 @@
   - _Requirements: 1.1, 2.1, 3.4, 4.2, 4.3_
   - _Depends: 1.1, 2.1_
 
-- [ ] 3. SSP との差の一覧と実機の確認
+- [x] 3. SSP との差の一覧と実機の確認
 - [x] 3.1 (P) SSP との差の一覧を書く
   - 設計の表の 6 行（`changing`・出どころの無い 5 語・切替の途中・各旗の条件・SHIORI が考えている間・お別れの台詞の再生中）を、項目・areka・SSP・SSP の印の形で書き、`NG:Status is not available` が SSP に対応物の無い areka の内部の知らせであることを補足に 1 行書く
   - `doc/ssp-mcp/get-status-diff-areka.md` があり、6 行それぞれに SSP の印が付いている
   - _Requirements: 2.1, 2.6, 2.7, 5.5_
   - _Boundary: doc/ssp-mcp_
 
-- [ ] 3.2 実機で `get_status` を確かめて記録する
+- [x] 3.2 実機で `get_status` を確かめて記録する
   - Claude Code から既定のゴースト（emo2）へ、何も話していない間・話している間（話し始めて 1 フレーム以上たってから）・起動していない名前の 3 通りで呼び、答えを記録する
   - 呼んでいる間も会話と描画が止まらず、warn 以上の記録が増えないことをログで確かめ、切替の途中に届いたときの答えと話し始めの直後のバルーンの遅れも見たまま書く
   - 本 spec の `verification/signoff.md` に 4 項目の結果が残っている
   - _Requirements: 4.3, 4.4, 5.6_
   - _Depends: 2.1, 2.3_
+
+## Implementation Notes
+- 3.2: 切替の途中に届いた答えは実機で見られなかった（同梱のゴーストが 1 体・computer-use の許可なし・MCP から切替を起こす口がまだ無い）。文言は決定論テスト M3 で固定済み。
+- 範囲外（起票候補）: `tools/package.ps1` は Git Bash から起こした pwsh だと `cargo metadata` の日本語の説明を読み違えて終了コード 3（「版を読めない」）で落ちる。PowerShell から起こせば緑。
