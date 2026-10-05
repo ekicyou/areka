@@ -20,17 +20,21 @@
 //! - [`hit_region`]: サーフェス px の点を照合する**素の純照合関数**（÷k は呼び手責務・契約不変）。
 //! - [`hit_region_scaled`]: 窓 client 物理 px の点を k で縮約してから [`hit_region`] へ
 //!   **完全委譲**する合成純関数。重なり・反転・閉区間の意味論を再実装しない。
+//! - [`hit_region_in`]・[`hit_region_scaled_in`]: 上の 2 関数の本体で、サーフェスの代わりに
+//!   領域の列を直に受ける（子から持ち込んだ列＝`EmoWorld::hit_regions` を渡すための形）。
+//!   持ち込んだ列は 256 矩形を超えうるが、線形走査のままでよい。
 
 use crate::normalized::SurfaceMaster;
 use crate::scale::ScaleRatio;
+use areka_parsers::shell::Collision;
 
 /// 当たり判定の重なり解決規則（型シーム・要件 2.3）。
 ///
 /// 本 spec は `Painter` のみを実装する。SSP `collision-sort`（none/ascend/descend）の
 /// 忠実解決は行わない（要件 2.2・正典確定表 C3 の意図的逸脱）。
 ///
-/// **シームの機序**: variant を追加すると [`hit_region`] 内の**網羅 match がコンパイルエラー**
-/// となり実装漏れを機械的に検出する。これを成立させるため [`hit_region`] の match に
+/// **シームの機序**: variant を追加すると [`hit_region_in`] 内の**網羅 match がコンパイルエラー**
+/// となり実装漏れを機械的に検出する。これを成立させるため [`hit_region_in`] の match に
 /// `_`（ワイルドカード）アームを置いてはならない（実装制約＝レビュー担保・design
 /// 「Testing Strategy」の注記どおりテストでは担保できない唯一の口）。`#[non_exhaustive]` は
 /// 定義 crate 内では効かないため検出機序ではない（下流 crate に wildcard を強制する副作用が
@@ -78,13 +82,30 @@ pub fn hit_region(
     y: i64,
     priority: RegionPriority,
 ) -> Option<&str> {
+    hit_region_in(&master.collisions, x, y, priority)
+}
+
+/// 領域の列 `collisions` を直に受けて、サーフェス px 座標 `(x, y)` が属する領域名を返す
+/// （`surface-element-nesting` 要件 4.2）。
+///
+/// [`hit_region`] の照合の本体であり、規則（閉区間・画家則・反転/退化矩形は当たらない・
+/// α／`collision-sort`／DPI を参照しない）は [`hit_region`] の doc のとおり。サーフェスを
+/// 受ける [`hit_region`] は `&master.collisions` を渡して本関数へ委譲するだけである。
+///
+/// 子のサーフェスから持ち込んだ領域を含む列（転記のままの `SurfaceMaster.collisions` では
+/// ない列）で判定する呼び手のための形。戻り値の寿命は `collisions` に従う（割当なし）。
+pub fn hit_region_in(
+    collisions: &[Collision],
+    x: i64,
+    y: i64,
+    priority: RegionPriority,
+) -> Option<&str> {
     // NOTE(要件 2.3): この match に `_`（ワイルドカード）アームを置いてはならない。
     // variant 追加時に網羅漏れをコンパイルエラーで検出する唯一の機序であり、テストでは
     // 担保できない（レビュー担保・RegionPriority の doc 参照）。
     match priority {
         // 画家則: 逆順走査で最初に当たった領域を返す（後定義が手前・要件 2.1）。
-        RegionPriority::Painter => master
-            .collisions
+        RegionPriority::Painter => collisions
             .iter()
             .rev()
             .find(|c| c.left <= x && x <= c.right && c.top <= y && y <= c.bottom)
@@ -140,15 +161,36 @@ pub fn hit_region_scaled<'a>(
     k: ScaleRatio,
     priority: RegionPriority,
 ) -> ScaledHit<'a> {
+    hit_region_scaled_in(&master.collisions, x, y, k, priority)
+}
+
+/// 領域の列 `collisions` を直に受け、窓 client 物理 px の点を表示スケール `k` で縮約してから
+/// [`hit_region_in`] へ委譲する合成純関数（`surface-element-nesting` 要件 2.8・4.2）。
+///
+/// [`hit_region_scaled`] の本体であり、縮約（[`ScaleRatio::unscale_coord`] の単一権威）・
+/// 照合の完全委譲・事前／事後条件は [`hit_region_scaled`] の doc のとおり。サーフェスを
+/// 受ける [`hit_region_scaled`] は `&master.collisions` を渡して本関数へ委譲するだけである。
+/// `region` の寿命は `collisions` に従う（割当なし）。
+pub fn hit_region_scaled_in<'a>(
+    collisions: &'a [Collision],
+    x: i64,
+    y: i64,
+    k: ScaleRatio,
+    priority: RegionPriority,
+) -> ScaledHit<'a> {
     // 2 軸を縮約（丸め規約は unscale_coord の単一権威・ここでは式を持たない）。
     let sx = k.unscale_coord(x);
     let sy = k.unscale_coord(y);
     ScaledHit {
-        // 照合は既存純関数へ完全委譲（重なり・反転・閉区間の意味論を再実装しない）。
-        region: hit_region(master, sx, sy, priority),
+        // 照合は列を受ける純関数へ完全委譲（重なり・反転・閉区間の意味論を再実装しない）。
+        region: hit_region_in(collisions, sx, sy, priority),
         surface_point: (sx, sy),
     }
 }
+
+#[cfg(test)]
+#[path = "hit_in_tests.rs"]
+mod hit_in_tests;
 
 #[cfg(test)]
 mod tests {

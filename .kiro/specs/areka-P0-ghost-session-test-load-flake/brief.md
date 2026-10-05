@@ -41,3 +41,9 @@
 ## Constraints
 - sleep を足して直さない・1 フレーム遅らせる解を取らない（状態の持ち方で解く）。
 - 実機の一時フォルダはワークツリーの `target\` の下だけ。
+
+## 2026-10-05 `shell-balloon-frame-align` の完了前の観測
+
+- 同じ族の赤をもう 1 回観測した。`cargo test -j 2 -p areka --bin areka`（全体・他のセッションと並走）で `install::desk::overwrite_tests` の 3 本と `ghost_session::switch_translate_tests` の 1 本が、`spin_wait_until`（30 秒）の期限切れで赤になった。どちらも足場 `ghost_switch_test_support.rs` を使うテスト。
+- 2 つのモジュールだけを回し直すと、落ちたのは別の 2 本だった。`--test-threads=1` では 8 本すべて緑。直後の `tools/test-all.ps1`（`-j 4`）は全段緑。
+- 対象の族に `install/desk_overwrite_tests.rs` も数える（足場を使うファイルは `git grep ghost_switch_test_support -- crates/areka/src` で 9 本）。

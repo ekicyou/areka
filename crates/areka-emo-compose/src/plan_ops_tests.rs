@@ -29,7 +29,17 @@ fn ops_ordered_by_layer_ascending() {
     world.bind_atlas(&atlas, SetId(0));
 
     let mut ops = Vec::new();
-    push_static_element_ops(&mut ops, &world, &atlas, 1000, 0, 0);
+    push_static_element_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &BindSet::default(),
+        &PatternState::default(),
+        0,
+        0,
+    );
 
     let paths: Vec<&str> = ops
         .iter()
@@ -61,7 +71,17 @@ fn same_layer_keeps_appearance_order() {
     world.bind_atlas(&atlas, SetId(0));
 
     let mut ops = Vec::new();
-    push_static_element_ops(&mut ops, &world, &atlas, 1, 0, 0);
+    push_static_element_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1,
+        &BindSet::default(),
+        &PatternState::default(),
+        0,
+        0,
+    );
 
     let paths: Vec<&str> = ops
         .iter()
@@ -89,9 +109,29 @@ fn derivation_is_deterministic() {
     world.bind_atlas(&atlas, SetId(0));
 
     let mut ops1 = Vec::new();
-    push_static_element_ops(&mut ops1, &world, &atlas, 1000, 0, 0);
+    push_static_element_ops(
+        &mut ops1,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &BindSet::default(),
+        &PatternState::default(),
+        0,
+        0,
+    );
     let mut ops2 = Vec::new();
-    push_static_element_ops(&mut ops2, &world, &atlas, 1000, 0, 0);
+    push_static_element_ops(
+        &mut ops2,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &BindSet::default(),
+        &PatternState::default(),
+        0,
+        0,
+    );
 
     assert_eq!(ops1, ops2, "同一入力→同一 ops（バイト等価）");
     assert_eq!(ops1.len(), 3);
@@ -113,7 +153,17 @@ fn unresolved_binding_is_skipped() {
     world.bind_atlas(&atlas, SetId(0));
 
     let mut ops = Vec::new();
-    push_static_element_ops(&mut ops, &world, &atlas, 1000, 0, 0);
+    push_static_element_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &BindSet::default(),
+        &PatternState::default(),
+        0,
+        0,
+    );
 
     // bogus.png は None ゆえスキップ＝命令は known.png の1本のみ。
     assert_eq!(ops.len(), 1);
@@ -131,7 +181,17 @@ fn transform_propagates_as_translation() {
     world.bind_atlas(&atlas, SetId(0));
 
     let mut ops = Vec::new();
-    push_static_element_ops(&mut ops, &world, &atlas, 7, 0, 0);
+    push_static_element_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        7,
+        &BindSet::default(),
+        &PatternState::default(),
+        0,
+        0,
+    );
 
     assert_eq!(ops.len(), 1);
     assert_eq!(ops[0].transform, Transform::translate(12, -8));
@@ -158,7 +218,17 @@ fn appends_without_clearing() {
         method: ComposeMethod::Overlay,
     };
     let mut ops = vec![sentinel.clone()];
-    push_static_element_ops(&mut ops, &world, &atlas, 1, 0, 0);
+    push_static_element_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1,
+        &BindSet::default(),
+        &PatternState::default(),
+        0,
+        0,
+    );
 
     // 先頭 sentinel が残り、末尾へ element 命令が追記される。
     assert_eq!(ops.len(), 2);
@@ -172,7 +242,17 @@ fn missing_surface_pushes_nothing() {
     // surface 不在ゆえ atlas は引かれない（空 atlas で足りる）。
     let atlas = bake_atlas(Path::new("shell/master"), &["dummy.png"]);
     let mut ops = Vec::new();
-    push_static_element_ops(&mut ops, &world, &atlas, 9999, 0, 0);
+    push_static_element_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        9999,
+        &BindSet::default(),
+        &PatternState::default(),
+        0,
+        0,
+    );
     assert!(ops.is_empty());
 }
 

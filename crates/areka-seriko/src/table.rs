@@ -31,7 +31,7 @@
 
 use std::collections::BTreeMap;
 
-use areka_emo_compose::{ComposeMethod, EmoWorld};
+use areka_emo_compose::{ComposeMethod, EmoWorld, NestTable};
 
 /// 駆動トリガ（採録は 2 種のみ・要件 8.1）。
 ///
@@ -80,13 +80,22 @@ pub struct LoopAnimation {
 ///
 /// 内部表現は `BTreeMap<u32, Vec<LoopAnimation>>`（キー＝表示 surface id）。実行中に変化しない
 /// （ghost 再読込は再構築＝spawn し直し）。`Send`・全アニメ frames 非空・`k >= 1` を事後条件とする。
+///
+/// 入れ子（spec: areka-P0-surface-element-nesting 要件 5.1・7.2・7.3）のために、構築のときに
+/// 面の表の [`NestTable`] の写しと「動く部品が在るか」を持つ。seriko は実行中に `EmoWorld` を
+/// 見ない（写しだけを引く）。部品で動く animation は [`AnimationTable::animations`] を部品の番号で
+/// 引いたものそのまま（一番上に表示したときと同じ列・要件 5.1）。
 #[derive(Debug, Clone, Default)]
-pub struct AnimationTable(BTreeMap<u32, Vec<LoopAnimation>>);
+pub struct AnimationTable {
+    animations: BTreeMap<u32, Vec<LoopAnimation>>,
+    nest: NestTable,
+    has_animated_parts: bool,
+}
 
 impl AnimationTable {
     /// 空表を返す（scope 資産が空のときの明示的な既定・design assets.rs）。
     pub fn empty() -> AnimationTable {
-        AnimationTable(BTreeMap::new())
+        AnimationTable::default()
     }
 
     /// [`EmoWorld`] から read-only スナップショットを一度きり構築する（要件 8.1-8.4）。
@@ -212,23 +221,64 @@ impl AnimationTable {
             }
         }
 
-        AnimationTable(table)
+        // 部品になりうるサーフェス: 参照の表の子・着せ替えの pattern0 の先と、採った animation の
+        // コマが指す 0 以上の番号（描画メソッドでは絞らない・design.md「Table」の字句どおり。
+        // 広めに取っても偽にすべき表を真にするだけで、部品の経路の答えは変わらない）。
+        let nest = world.nest_table();
+        let nested = world
+            .surface_ids()
+            .filter_map(|id| nest.parts(id))
+            .flat_map(|p| {
+                p.children
+                    .iter()
+                    .copied()
+                    .chain(p.bind_targets.iter().map(|&(_, target)| target))
+            });
+        let framed = table
+            .values()
+            .flatten()
+            .flat_map(|a| &a.frames)
+            .filter_map(|f| u32::try_from(f.surface_id).ok());
+        let has_animated_parts = nested.chain(framed).any(|id| table.contains_key(&id));
+
+        AnimationTable {
+            animations: table,
+            nest,
+            has_animated_parts,
+        }
     }
 
     /// 指定 surface id の採録済みアニメ列を引く（不在は空スライス）。
     pub fn animations(&self, surface_id: u32) -> &[LoopAnimation] {
-        self.0.get(&surface_id).map_or(&[][..], Vec::as_slice)
+        self.animations
+            .get(&surface_id)
+            .map_or(&[][..], Vec::as_slice)
     }
 
     /// 採録済みアニメを 1 本も持たない（表が空）か。
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.animations.is_empty()
+    }
+
+    /// 構築のときに受け取った面の表の参照の表の写し（入れ子の無いシェルでは空）。
+    pub fn nest_table(&self) -> &NestTable {
+        &self.nest
+    }
+
+    /// 部品になりうるサーフェスのうち、採った animation を 1 本でも持つものが在るか
+    /// （偽なら刻みも切り替えも部品の経路を通らない・要件 7.2・7.3）。
+    pub fn has_animated_parts(&self) -> bool {
+        self.has_animated_parts
     }
 }
 
 #[cfg(test)]
 #[path = "table_interval_words_tests.rs"]
 mod interval_words_tests;
+
+#[cfg(test)]
+#[path = "table_parts_tests.rs"]
+mod parts_tests;
 
 #[cfg(test)]
 mod tests {

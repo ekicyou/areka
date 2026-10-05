@@ -8,6 +8,7 @@ use areka_emo_atlas::{AtlasTable, ElementId, SetId};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 
+use crate::nesting::ElementKind;
 use crate::normalized::SurfaceMaster;
 use crate::world::AtlasBinding;
 
@@ -17,7 +18,8 @@ use crate::world::AtlasBinding;
 /// resolve は本関数（構築時）でのみ呼ぶ（design Postconditions「束縛後の compose 経路に
 /// resolve 呼び出しが存在しない」）。`ElementPath.as_str()` は無改変で `AtlasTable` の
 /// `rel_path` キーと同一規約ゆえ、bake 済みの既知パスは `Some(ElementId)`・未知パスは
-/// `None`＋`warn` になる（design Risks）。パニックしない。
+/// `None`＋`warn` になる（design Risks）。パニックしない。画像でない element
+/// （[`ElementKind`] が `Image` 以外）は引かずに `None` を置き、警告も出さない。
 ///
 /// `AtlasBinding.0` は `SurfaceMaster.elements` と同じ添字で並ぶ（index 対応の契約）。
 pub(crate) fn bind_atlas(world: &mut World, atlas: &AtlasTable, set: SetId) {
@@ -29,6 +31,11 @@ pub(crate) fn bind_atlas(world: &mut World, atlas: &AtlasTable, set: SetId) {
             .elements
             .iter()
             .map(|element| {
+                // 画像でない element（サーフェスの番号・範囲を超える数）はアトラスから引かない。
+                // 画像ではないので未束縛の警告も出さない（記録は読み込みの入口の役目・要件 1.5/3.5）。
+                if element.kind != ElementKind::Image {
+                    return None;
+                }
                 let rel_path = element.path.as_str();
                 match atlas.resolve(set, rel_path) {
                     Some(id) => Some(id),

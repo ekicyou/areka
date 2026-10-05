@@ -83,4 +83,4 @@
 ## 2026-10-04 ウェーブ C3-②（棚卸㉑）
 
 - 段は「バグ」。C3 は 11 本並走（`roadmap.md`「ウェーブ編成」の C3 の行が正本）。着手は最新の main から。
-- 同じウェーブの約束: 触るのは `crates/wintf/src/ecs/` の `window_proc/{keyboard,mouse_click}.rs`・`drag/`・`world/mod.rs` の 1 行とそのテストだけ。`mouse-drag-events`（C3-④）は wintf に触らない。
+- 同じウェーブの約束: 触るのは `crates/wintf/src/runtime/wndproc_bridge.rs`（10-04 の要件ディスカッションの議題 1 で追加）と `crates/wintf/src/ecs/` の `window_proc/{keyboard,mouse_click}.rs`・`drag/`・`world/mod.rs` の 1 行とそのテストだけ。`mouse-drag-events`（C3-④）は wintf に触らない。

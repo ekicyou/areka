@@ -99,7 +99,22 @@ impl EmoWorld {
         emo.populate_from_shell(shell);
         let report = crate::base_image::apply_base_images(&mut emo.world, images);
         emo.world.insert_resource(report);
+        // 子の当たり判定の領域を親へ持ち込む（持ち込みが在るサーフェスにだけ付く・要件 4.1〜4.10）。
+        crate::hit_import::attach_hit_regions(&mut emo);
         emo
+    }
+
+    /// 当たり判定に使う領域の列（要件 4.1・4.2）。子から持ち込んだ分が在ればその列
+    /// （［持ち込み］→［直接書いた領域］）、無ければ転記のままの `SurfaceMaster.collisions`。
+    /// 存在しない番号は `None`。
+    pub fn hit_regions(&self, id: u32) -> Option<&[areka_parsers::shell::Collision]> {
+        let entity = *self.world.resource::<SurfaceIndex>().0.get(&id)?;
+        if let Some(regions) = self.world.get::<crate::hit_import::HitRegions>(entity) {
+            return Some(&regions.0);
+        }
+        self.world
+            .get::<SurfaceMaster>(entity)
+            .map(|m| m.collisions.as_slice())
     }
 
     /// 土台の絵の決定の結果（層 0 として使った画像と、`element0` が在って使わなかった画像）。
@@ -142,6 +157,19 @@ impl EmoWorld {
             }
         }
         dangling
+    }
+
+    /// サーフェスごとの静的な参照の表（要件 5.11・5.13）。ファイル名の慣習だけで建つ面も「在る」に数える。
+    ///
+    /// 面の表を 1 度なめるだけで、毎フレームの経路ではない。記録は出さない。
+    pub fn nest_table(&self) -> crate::nesting::NestTable {
+        crate::nesting::NestTable::from_world(self)
+    }
+
+    /// 入れ子の無い番号と循環の報告（要件 1.8・1.9・3.1・3.2・3.4）。ファイル名の慣習だけで建つ面も
+    /// 「在る」に数える。面の表を 1 度なめるだけで、記録は出さない（出すのは fs を触る入口）。
+    pub fn nest_report(&self) -> crate::nesting::NestReport {
+        crate::nesting::NestReport::from_world(self)
     }
 
     /// fold による entity 常駐段（single-pass fold への唯一の呼び出し口）。
@@ -239,7 +267,7 @@ impl EmoWorld {
 /// （[`EmoWorld::dangling_pattern_targets`] は記録を出さない）。
 ///
 /// [`ComposeMethod::from_name`]: crate::method::ComposeMethod::from_name
-fn targets_animation_id(method: &str) -> bool {
+pub(crate) fn targets_animation_id(method: &str) -> bool {
     // 正規化は `ComposeMethod::from_name` と同じ 1 本（`method::canonical_method_name`）を引く。
     // `from_name` 自体は未知の語で `warn!` を出すのでこの照会からは呼ばない（要件 3.5）。
     let canon = crate::method::canonical_method_name(method);

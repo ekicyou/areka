@@ -2,6 +2,7 @@
 
 use crate::ecs::pointer::PhysicalPoint;
 use bevy_ecs::prelude::*;
+use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -158,15 +159,35 @@ impl DragAccumulatorResource {
     }
 
     /// 状態遷移を設定（wndprocから呼ばれる）
+    ///
+    /// 錠が毒化していたら積めないので `warn!` を残す。
     pub fn set_transition(&self, transition: DragTransition) {
-        if let Ok(mut acc) = self.inner.lock() {
-            acc.set_transition(transition);
+        match self.inner.lock() {
+            Ok(mut acc) => acc.set_transition(transition),
+            Err(_) => tracing::warn!(
+                event = "drag_accumulator_poisoned",
+                op = "set_transition",
+                transition = ?transition,
+                "[DragAccumulator] mutex poisoned, transition dropped"
+            ),
         }
     }
 
     /// 累積量と遷移をflush（dispatch_drag_eventsから呼ばれる）
+    ///
+    /// 錠が毒化していたら配れないので `warn!` を残して None。
     pub fn flush(&self) -> Option<FlushResult> {
-        self.inner.lock().ok().map(|mut acc| acc.flush())
+        match self.inner.lock() {
+            Ok(mut acc) => Some(acc.flush()),
+            Err(_) => {
+                tracing::warn!(
+                    event = "drag_accumulator_poisoned",
+                    op = "flush",
+                    "[DragAccumulator] mutex poisoned, nothing flushed"
+                );
+                None
+            }
+        }
     }
 }
 
@@ -174,6 +195,42 @@ impl Default for DragAccumulatorResource {
     fn default() -> Self {
         Self::new()
     }
+}
+
+thread_local! {
+    /// wndproc 側の控え。World の資源と同じ実体（同じ `Arc`）を指す。
+    /// World を借りられないとき（再入）でも、ここから累積器へ終了の種を渡せる。
+    static WNDPROC_ACCUMULATOR: RefCell<Option<DragAccumulatorResource>> =
+        const { RefCell::new(None) };
+}
+
+/// 新しい累積器を作り、World の資源と、このスレッドの wndproc 側の控えの両方へ同じ実体を置く。
+///
+/// 複数の World があれば、最後にこれを通った World が勝つ。
+pub fn install_drag_accumulator(world: &mut World) {
+    let accumulator = DragAccumulatorResource::new();
+    WNDPROC_ACCUMULATOR.with(|h| *h.borrow_mut() = Some(accumulator.clone()));
+    world.insert_resource(accumulator);
+}
+
+/// 控えを通して終了の種を積む。控えが無ければ warn! を出して false。
+pub(crate) fn push_ended_seed(entity: Entity, end_pos: PhysicalPoint, cancelled: bool) -> bool {
+    // 控えの RefCell は複製を取り出す間だけ借りる（借りたまま累積器を呼ばない）
+    let Some(accumulator) = WNDPROC_ACCUMULATOR.with(|h| h.borrow().clone()) else {
+        tracing::warn!(
+            event = "drag_end_seed_unreachable",
+            entity = ?entity,
+            cancelled,
+            "[DragAccumulator] no wndproc handle on this thread, Ended seed not pushed"
+        );
+        return false;
+    };
+    accumulator.set_transition(DragTransition::Ended {
+        entity,
+        end_pos,
+        cancelled,
+    });
+    true
 }
 
 #[cfg(test)]

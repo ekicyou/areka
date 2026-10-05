@@ -35,8 +35,9 @@ fn deactivation_right_after_the_threshold_cancels_the_drag() {
     let (entity, accumulator) = {
         let mut w = world.borrow_mut();
         let w = w.world_mut();
-        let accumulator = DragAccumulatorResource::new();
-        w.insert_resource(accumulator.clone());
+        // EcsWorld::new が資源と wndproc 側の控えへ同じ累積器を置いている。入れ直すと控えとずれるので、
+        // 資源の複製（同じ実体）を使う。
+        let accumulator = w.resource::<DragAccumulatorResource>().clone();
         (w.spawn_empty().id(), accumulator)
     };
 
@@ -94,12 +95,8 @@ fn setup_preparing() -> (Rc<RefCell<EcsWorld>>, Entity) {
     cancel_dragging();
 
     let world = Rc::new(RefCell::new(EcsWorld::new()));
-    let entity = {
-        let mut w = world.borrow_mut();
-        let w = w.world_mut();
-        w.insert_resource(DragAccumulatorResource::new());
-        w.spawn_empty().id()
-    };
+    // 累積器は EcsWorld::new が資源と wndproc 側の控えへ置いたものをそのまま使う（入れ直すと控えとずれる）。
+    let entity = world.borrow_mut().world_mut().spawn_empty().id();
     start_preparing(entity, PhysicalPoint::new(10, 20), HWND::default());
     assert!(matches!(
         snapshot_drag_state(),
