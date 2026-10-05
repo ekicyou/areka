@@ -216,6 +216,8 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 
 **製品の穴**
 
+- **`check_script` が診ない引数の誤り**（M・2026-10-05 `mcp-author-tools` の要件ディスカッションで登記）。各機能の受け口が自分で読む引数（`\![move]`・`\![set,zorder]`・`\f`・`\_l`・`change`・`update`・`install` など）は、判定が受け口のファイルに散らばりログ出力と一体なので、`check_script` は診ない。判定を純粋な関数へ取り出せば足せる。診ていないタグの一覧は `mcp-author-tools` が `doc/ssp-mcp/` の文書に書く。
+
 - **設定の読み取りが捨てた行を言えない**（M・優先度は低い・2026-10-05 `mcp-author-tools` の要件ディスカッションで登記）。`parse_kv`・`shell::parse`・`balloon::parse`（`crates/areka-parsers`）は、読めない行・読まなかったキーを黙って捨て、行番号もログも残さない（値で返す前例は `SurfaceTable::unreadable` だけ）。作者は壊れた見た目から原因を推理するしかない。読み取りが捨てたものをログへ出せば、`reload`＋`get_log` で確かめられる。設定ファイルを検査する MCP のツール（起票時の `validate_ghost`）は、その後でまだ要れば足す。調べた中身は `mcp-author-tools` の research.md の 2.5 節。
 
 - **`present-write-coherence` の未達 40 件**（性能・L）。完了仕様が自ら「引受先なし・新規仕様の起票が必要」と書いた残量＝`visualize_to_write_us` が上限 16,667µs の 12.6〜18.4 倍・32 窓中 0 窓が上限以下。開発者裁定で「未達のまま GO」済み。着手前に測り直す。
