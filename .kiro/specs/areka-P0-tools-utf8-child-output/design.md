@@ -292,7 +292,7 @@ function Invoke-Utf8Child {
 | Intent | `Invoke-Utf8Child cargo @('run', '-q', '--locked', '-p', 'sample-ghost-kit', '--bin', 'nar-sample-path', '--', $Sample)` の `Out` を行に分け、`key=` で始まる行からパスを読む |
 | Requirements | 2.1, 2.2, 2.3, 8.4 |
 
-- 子の標準エラー（`cargo run -q` の警告など）は `ErrLines` を `Write-Host` でそのまま写す（今は段の `2>&1` が拾って画面に出ている。見え方を保つ＝ギャップ分析 7-2 の答え）。中身は子の物なので書き替えない（8.4）。
+- 子の標準エラー（`cargo run -q` の警告など）は `ErrLines` を `Write-Host` でそのまま写す（今は段の `2>&1` が拾って画面に出ている。見え方を保つ＝ギャップ分析 7-2 の答え）。中身は子の物なので書き替えない（8.4）。ただし `Write-Host` の行は段 `Step` の `2>&1` に入らず「出力の末尾」に残らないので、終了コードの失敗の文に `ErrLines` の最後の行を添える（版を読む所と同じ形）。子が終わるまで標準エラーが出ない（逐次の表示が消える）ことは認める（`cargo run -q` が出す物は少ない）。
 - 失敗の文 3 つ（終了コード・鍵が無い・実在しない）は意味を変えずに英語へ（文の一覧）。終了コードの判定は `$LASTEXITCODE` でなく `Code` で行う。
 - パスは `Test-Path -LiteralPath … -PathType Container` で確かめる（ASCII の外の字も字のまま渡る＝2.2）。
 
@@ -335,11 +335,11 @@ function Invoke-Utf8Child {
 **1. 判定の較正**（本文の規則が正しく通し・正しく落とすことを、埋めた見本で先に確かめる。見本の日本語は `` `u{…} `` で組み立て、判定のスクリプト自身は ASCII のまま）
 - 見本は判定のスクリプトの中では文字列として持ち（単一引用符か連結。`$LOG_MARKER_*` を含む見本を二重引用符で書くと判定のスクリプト自身が規則 B に当たる）、`Parser.ParseInput` に掛けて判定する。
 - 落とすべき見本: `$x = @(cargo metadata --no-deps 2>&1)`（素の呼び出し）・`Write-Host '<日本語>'`・`"<日本語> $y"`・`[Console]::OutputEncoding = [Text.Encoding]::UTF8`・`$OutputEncoding = …`・`chcp 65001`・`"$LOG_MARKER_A 件"`（目印の差し込み）・`run: |` の中の `Write-Host '<日本語>'` を持つ YAML。
-- 通すべき見本: `# <日本語>` の注記・`<# <日本語> #>`・`$LOG_MARKER_A = '<日本語>'`・`$LOG_MARKER_B = @('<日本語>', 'x')`・`Invoke-Utf8Child cargo @('metadata')`・`- name: <日本語>` と `# <日本語>` だけを持つ YAML。
+- 通すべき見本: `# <日本語>` の注記・`<# <日本語> #>`・`$LOG_MARKER_A = '<日本語>'`・`$LOG_MARKER_B = @('<日本語>', 'x')`・`Invoke-Utf8Child cargo @('metadata')`・`- name: <日本語>` と `# <日本語>` だけを持つ YAML・`defaults:` → `run:` → `shell: pwsh` を持つ YAML（写像の `run:` を本文にしない）。
 
 **2. 本文の判定**（対象＝`tools/*.ps1`（`tools/perf/` を除く・この 2 本の新しいスクリプトも含む）と、`.github/workflows/*.yml` の各 `run:` の本文）
-- `run:` の本文の取り出し: `run: |` の行から、その行より深い字下げの行（と空の行）が続く間を本文とする。`run: <1 行>` はその 1 行。取り出した本文は pwsh として構文解析する（どちらの workflow も `defaults.run.shell: pwsh`）。構文の誤りは不合格。
-- 規則 A（ASCII・8.5）: `Parser.ParseInput` の字句のうち、種類が注記でない字句の字が、タブ・改行・`0x20〜0x7E` の外を含めば不合格（ファイル名と行を示す）。例外: 左辺が `$LOG_MARKER_*` の代入の右辺の中の字句（areka の記録を探す日本語の目印・印字しない）。YAML の `run:` の外（段の名前・注記・入力の説明）は見ない（8.7）。
+- `run:` の本文の取り出し: 取り出すのは `steps` の要素の `run:` で、値が `|` のブロックか 1 行のスカラーのものだけ。`run: |` の行から、その行より深い字下げの行（と空の行）が続く間を本文とする。`run: <1 行>` はその 1 行。`defaults:` の下の `run:` のように値が写像（`shell: pwsh`）の `run:` は本文にしない。取り出した本文は pwsh として構文解析する（どちらの workflow も `defaults.run.shell: pwsh`）。構文の誤りは不合格。
+- 規則 A（ASCII・8.5）: `Parser.ParseInput` の字句のうち、種類が注記でない字句の原文（`Extent.Text`。解いた値 `.Value` は見ない＝判定のスクリプト自身の `` `u{…} `` の見本は原文が ASCII なので当たらない）が、タブ・改行・`0x20〜0x7E` の外を含めば不合格（ファイル名と行を示す）。例外: 左辺が `$LOG_MARKER_*` の代入の右辺の中の字句（areka の記録を探す日本語の目印・印字しない）。YAML の `run:` の外（段の名前・注記・入力の説明）は見ない（8.7）。
 - 規則 B（目印を文に差し込まない）: `$LOG_MARKER_*` の変数が、差し込みのある文字列（`"…"`・ヒアストリング）の中に現れたら不合格。
 - 規則 C（書き替え禁止・3.1）: 構文木で、左辺が `[Console]::OutputEncoding`・`[Console]::InputEncoding`（`[System.Console]` の綴りも）・`$OutputEncoding` の代入、名前が `chcp`／`chcp.com` のコマンドがあれば不合格。字面の検索はしない（判定のスクリプト自身が較正の見本と規則の文字列にこの綴りを持つため。見本は文字列なので構文木の代入にもコマンドにもならない）。例外は `tools/encoding-check.ps1` の関数 `Set-OwnConsoleCp932` の中だけ（`-Cp932Child` のときにだけ呼ばれる）。
 - 規則 D（素の呼び出しの禁止・5.2）: コマンド名が `cargo`／`cargo.exe` で、要素に `metadata` か `nar-sample-path` を含むコマンド（`&` 付きも含む）があれば不合格。
@@ -477,7 +477,7 @@ function Invoke-Utf8Child {
 | `  拒否表に当たる: …` | `  matches the deny list: $($denied -join ', ')` | — |
 | 機種が違うか、VC++ ランタイムの DLL を読んでいる（…） | `wrong machine or loads a VC++ runtime DLL (+crt-static not effective)` | — |
 | 謝辞の出力が無い: … | `third-party notices output missing: $script:Notices` | — |
-| nar-sample-path $Sample が終了コード N | `nar-sample-path $Sample exited with code $($r.Code)` | — |
+| nar-sample-path $Sample が終了コード N | `nar-sample-path $Sample exited with code $($r.Code): $($r.ErrLines \| Select-Object -Last 1)` | — |
 | nar-sample-path $Sample の出力に $key= が無い | `nar-sample-path $Sample output has no $key=` | — |
 | nar-sample-path $Sample の $key= が実在しない: $path | `nar-sample-path $Sample ${key}= does not exist: $path` | — |
 | 1 必須の項目が無い: $r | `1 required entry missing: $r` | — |

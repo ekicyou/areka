@@ -25,7 +25,7 @@
   - `tools/` の中（`tools/perf/` を除く）で、子の出力を素で受けて字面・JSON・値として判定に使う所の棚卸と、見つかった所の直し
   - コードページ 932 の条件で版が読めることの合否の判定
   - `tools/` のスクリプト（`tools/perf/` を除く）と `release.yml`・`crates-io.yml` の段の本文が、自分で端末へ出す文（進みの表示・失敗の文・判定の結果の行）を ASCII だけにすること
-  - workflow の各段の先頭にある端末の書き替え（`release.yml` の 9 か所＋段「zip を作る」の子の中の 1 か所・`crates-io.yml` の 5 か所）の撤去
+  - workflow の各段の先頭にある端末の書き替え（`release.yml` の段の先頭 8 か所＋段「zip を作る」の子の中の 1 か所・`crates-io.yml` の 5 か所）の撤去
 - **Out of scope**:
   - 版上げそのもの・タグ・Release（`release-cycle` の持ち物）
   - `tools/perf/`（既に端末に頼らない読み方になっている）
