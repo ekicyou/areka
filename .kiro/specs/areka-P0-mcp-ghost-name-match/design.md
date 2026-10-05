@@ -147,7 +147,7 @@ flowchart TD
 | 1.1 | 名前の英字の大小違いで解決 | `resolve` の名前の比べ方（`eq_ignore_ascii_case`） |
 | 1.2 | 本体側名で解決・`name` が無くても本体側名で解決 | `ActiveGhost.sakura_name`・`active` が `GhostNames.sakura_name` を読む・`resolve` が `sakura_name` とも比べる |
 | 1.3 | かな・全角と半角・全角の英字の大小の違いは外れ | `eq_ignore_ascii_case` が半角の英字しか畳まないこと |
-| 1.4 | `kero.name`・`sakura.name2` は外れ | `active` がこの 2 つを読まないこと |
+| 1.4 | `kero.name`・`sakura.name2` は外れ | `active` がこの 2 つを読まないこと（檻は `mcp_tests.rs` の `real_unit_resolves_by_sakura_name_and_ascii_case`） |
 | 1.5 | `get_log` は綴りによらず同じ記録 | `resolve` が同じ `ActiveGhost` を返し、`get_log` の `answer` がそれを `listed_value` で絞る（`get_log.rs` は変えない） |
 | 2.1 | 名前との照合では前後の空白を除く | `resolve` が `str::trim` した値を名前と比べる |
 | 2.2 | 途中の空白は除かない | `str::trim` が前後だけを除くこと |
@@ -252,7 +252,7 @@ pub(crate) fn resolve<'a>(
 
 | テスト | 入力 | 期待 | 要件 |
 |---|---|---|---|
-| `other_names_do_not_resolve` | 相方の名前に当たる `エモ`・`sakura.name2` に当たる別の綴り | `CANNOT_FIND` | 1.4 |
+| `non_name_strings_do_not_resolve` | 名前でも本体側名でもない文字列（`エモ` など） | `CANNOT_FIND` | 1.4（`ActiveGhost` は `kero.name`・`sakura.name2` を持たないので、純粋なテストではただの外れの名前。この 2 つを読まないことの檻は下の本物の単位のテスト） |
 | `kana_width_and_fullwidth_case_differences_do_not_resolve` | 名前 `えもＡＢＣ` の見本へ `エモＡＢＣ`（かな）・`えもａｂｃ`（全角の英字の大小）・`えもABC`（全角と半角） | `CANNOT_FIND` | 1.3 |
 | `name_with_surrounding_whitespace_resolves` | `named()` へ前後に半角の空白・タブ・全角の空白を付けた名前と本体側名 | 解決 | 2.1 |
 | `inner_whitespace_difference_does_not_resolve` | 名前 `Emily Phase` の見本へ `Emily  Phase`・`Emily　Phase`・`EmilyPhase` | `CANNOT_FIND` | 2.2 |
@@ -270,7 +270,7 @@ pub(crate) fn resolve<'a>(
 
 ### 本物の単位で通す（`mcp_tests.rs`・要件 1.2・1.4）
 
-- 新しい `real_unit_resolves_by_sakura_name_and_ascii_case`: `SwitchRig` で `A` を起こし、`resolve::active(&rig.world)` の `sakura_name` が `Some("Aのさくら")` であること、`Aのさくら` と `a`（名前 `A` の大小違い）で解決すること、`GhostSession::names()` の `kero_name` の値（検体に在ることを先に確かめ、無ければ赤）で `CANNOT_FIND` になることを 1 本で判定する。`active` が本体側名を読む配線は純粋なテストでは見えないので、ここが唯一の檻になる。
+- 新しい `real_unit_resolves_by_sakura_name_and_ascii_case`: `SwitchRig::new` の後・`rig.boot("A")` の前に、`rig.cfg("A").ghost_root` の下の `ghost\master\descript.txt` の末尾へ `sakura.name2,Aのべつめい` の 1 行を足す（検体にも `copy_ghost` の書き替えにも `sakura.name2` の行は無い。リグは変えず、足すのはこのテストの中だけ）。起こした後、`resolve::active(&rig.world)` の `sakura_name` が `Some("Aのさくら")` であること、`Aのさくら` と `a`（名前 `A` の大小違い）で解決すること、`GhostSession::names()` の `kero_name` の値と `sakura_name2` の値（どちらも `Some` であることを先に確かめ、無ければ赤）でそれぞれ `CANNOT_FIND` になることを 1 本で判定する。`active` が本体側名を読み、相方の名前と `sakura.name2` を読まない配線は純粋なテストでは見えないので、ここが唯一の檻になる（要件 1.4・5.1）。
 
 ### `get_log`（`get_log_tests.rs`・要件 1.5・5.2）
 
