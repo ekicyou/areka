@@ -104,7 +104,7 @@ ukadoc が書いていないことは次のとおりで、本 spec が決める�
 3. The areka shall `default.balloon.path` の値を、根のバルーンの置き場（`<根>/balloon/`）の直下のフォルダ名 1 段として読み、置き場に列挙されるバルーンのフォルダ名と、大文字と小文字を区別する完全一致で突き合わせる（2026-10-05 開発者の決め）。
 4. If `default.balloon.path` の値が `..`・絶対パス・パス区切り（`\`・`/`）を含むとき, then the areka shall 値を読み替えず（区切りの取り除き・`_` への置き換えは 0 か所）、当たらなかったものとして扱う（例: `../balloon/claudia`・`balloon/claudia`・`claudia/`・`C:\balloon\claudia` はどれも当たらない）。
 5. The areka shall `default.balloon.path` の指す先を、ゴーストのフォルダの中（`<ゴースト>/balloon/` を含む）に探さない（変更 0。ゴーストの中の `balloon/` は `areka-P0-ghost-inner-balloon` が扱う）。
-6. The areka shall `balloon` の値を、実行中の `\![change,balloon,バルーン名]` が名前から切替先を決めるのと同じ決め方で、根のバルーンの置き場に列挙されるバルーンと突き合わせる（2026-10-05 開発者の決め）。
+6. The areka shall `balloon` の値を、実行中の `\![change,balloon,バルーン名]` が、ふつうの名前（`random`・`lastinstalled` 以外）から切替先を決めるときと同じ次の 4 点で、根のバルーンの置き場に列挙されるバルーンと突き合わせる（2026-10-05 開発者の決め。この 2 語の扱いは 8 項）。
    - まず、バルーンの descript.txt の `name` が値と一致するバルーンを探す。
    - `name` が一致するバルーンが 1 つも無いときに限り、フォルダ名が値と一致するバルーンを探す。
    - どちらの一致も、大文字と小文字を区別する完全一致とする。
@@ -173,10 +173,10 @@ brief の推し「記憶 → descript → 同梱 → 唯一 → 既定 → 無�
    - `default.balloon.path` の起点は根のバルーンの置き場で、値はフォルダ名 1 段。`..`・絶対パス・パス区切りを含む値は当たらないものとし、読み替えない。
    - 両方が書かれているときは `default.balloon.path` を先に、当たらなければ `balloon`。
 3. The `doc/COMPAT_ARCHITECTURE.md` §8 shall 完了 `areka-P0-baseware-root-layout` の要件 5.3（同梱は無印の `balloon.directory`）を本 spec が上書きしたことを記す。
-4. The 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` shall `descript_ghost` の `balloon` と `default.balloon.path` の 2 行で、本 spec の後の読み方と記録の仕方を述べ、もう無い関数（`boot_config::default_balloon_root`）を指す注記を残さない。
+4. The 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` shall `descript_ghost` の `balloon` と `default.balloon.path` の 2 行で、本 spec の後の読み方と記録の仕方を述べ、もう無い関数（`boot_config::default_balloon_root`・`boot_config::resolve_config_inputs`）を指す注記を残さない。
 5. The 網羅台帳 shall `descript_install` の `*.directory` の行で、起動時に同梱の最初の 1 個が標準のバルーンになることを述べる。
 6. The `doc/COMPAT_ARCHITECTURE.md` §8 shall 「ゴーストの中の `balloon/` は見ない・`ghost-inner-balloon` が扱う」ことを記す。
-7. The 網羅台帳 shall 範囲外の `descript_ghost` の `recommended.balloon` と `recommended.balloon.path` の 2 行で、status を `absent` のまま変えず、注記の文だけを直して、もう無い関数（`boot_config::default_balloon_root`）を指す記述を残さない（残り 0 か所。2026-10-05 開発者の決め）。
+7. The 網羅台帳 shall 範囲外の `descript_ghost` の `recommended.balloon` と `recommended.balloon.path` の 2 行で、status を `absent` のまま変えず、注記の文だけを直して、もう無い関数（`boot_config::default_balloon_root`・`boot_config::resolve_config_inputs`）を指す記述を残さない（残り 0 か所。2026-10-05 開発者の決め）。
 
 ### Requirement 7: 決定論の自動テスト
 
