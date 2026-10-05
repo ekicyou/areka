@@ -174,6 +174,9 @@ crates/areka-emo-present/src/
 - `crates/areka-emo-compose/src/method.rs` — `ComposeMethod::Base` の注記だけ（「XY 無視」は pattern定義の話で、element定義の `base` はこの値を通らないこと）。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 の表に 1 行（要件 4.4）。
 - `doc/ukadoc-coverage/ledger/assets.toml` と `doc/ukadoc-coverage/report/*.md` — 台帳 2 行の書き換えと、道具による報告の作り直し（要件 4.5）。
+- `doc/ukadoc-coverage/briefing.md`・`doc/ukadoc-coverage/roadmap-draft.md` — 台帳の状態と担当が動いた分の数と担当の一覧を合わせる（`ukadoc-survey` の整合の検査が求める・実装時に追加・前例 PR#240）。
+- `crates/areka-parsers/src/shell/decode_tests_method_matrix_tests.rs` — `base` の行が `overlay` と同じ値になること・描けない行が吸収されることの 2 本を足す（タスク 1.1）。
+- `crates/areka-emo-present/src/shell_target_test_support.rs` — 無改変のクローディアのシェルのフォルダを返す受け口（タスク 2.3）。
 
 ## System Flows
 
