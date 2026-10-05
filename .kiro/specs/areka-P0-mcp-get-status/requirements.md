@@ -113,7 +113,7 @@
 #### Acceptance Criteria
 
 1. The areka shall `get_status` の処理で、SHIORI へイベントを送らず、台本を再生せず、ゴーストの運行（トーク・選択待ち・切替・終了の進み）と実行の状態を変えない（どれも 0 回）。
-2. While そのゴーストが台本を再生している、または選択肢を待っている, when `get_status` が届く, the areka shall 再生や選択の終わりを待たずに、その時点の状態を返す。
+2. While そのゴーストが台本を再生している、または選択肢を待っている, when `get_status` が届く, the areka shall 再生や選択の終わりを待たずに、その時点の状態を返す（ただし kanade が SHIORI との往復の最中に届いた呼び出しは、その往復が終わってから答える。往復が 10 秒を超えたときは要件 3.3 の待ちの上限の答えになる）。
 3. While `get_status` の答えを待っている, the areka shall 描画・アニメーション・クリックの受け取りを止めない（返事を待って UI を塞がない）。
 4. The areka shall 成功の答え（要件 1）で warn 以上の記録を出さない。
 
@@ -123,9 +123,9 @@
 
 #### Acceptance Criteria
 
-1. The areka shall kanade が問い合わせに今の状態を返すことを、kanade に実際の入力（起動・台本の再生・選択肢の提示・状態の知らせ）を与えてその状態へ進めたうえで決定論テストに固定する: ⑴ 何も無い＝値なし、⑵ 再生中＝`talking`、⑶ 選択待ち＝`talking,choosing`、⑷ 中断の無効化モードの知らせ＋再生中＝`nouserbreak` を含む・再生していなければ含まない、⑸ バルーンの知らせ＝`balloon(…)` を含む、⑹ 問い合わせの前後で運行の状態が変わらない（要件 4.1）。
+1. The areka shall kanade が問い合わせに今の状態を返すことを、kanade に実際の入力（起動・台本の再生・選択肢の提示・状態の知らせ）を与えてその状態へ進めたうえで決定論テストに固定する: ⑴ 何も無い＝値なし、⑵ 再生中＝`talking`、⑶ 選択待ち＝`talking,choosing`、⑷ 中断の無効化モードの知らせ＋再生中＝`nouserbreak` を含む・再生していなければ含まない、⑸ バルーンの知らせ＝`balloon(…)` を含む、⑹ 問い合わせの前後で運行の状態（運行の相・選択待ちの帳簿・再生中のトーク）が変わらない（要件 4.1。殻がどの知らせの前にも行う通信中の数の写しの更新は既存の振る舞いであり、比べる対象に入れない）。
 2. The areka shall MCP の側の答えを決定論テストに固定する: ⑴ 値なし＝空の本文・`isError: false`、⑵ 値あり＝その値そのままの本文・`isError: false`、⑶ 答える前に宛先が降りた＝要件 3.2 の文言（`ghost_name` の有無の 2 通り）・`isError: true`。
 3. The areka shall 要件 1.2 を決定論テストに固定する: 少なくとも再生中の場面で、`get_status` の本文と、同じ状態で SHIORI へ送る要求の `Status` の値が一致すること。
 4. The areka shall `mcp-tool-entrances` が置いたダミーのテスト（`NG:not implemented yet` を固定するもの）を、本 spec の振る舞いを固定するテストへ書き換える。
-5. The areka shall SSP との差の一覧（`doc/ssp-mcp/get-status-diff-areka.md`）に、⑴ `changing` を出さないこと（裁定 1）、⑵ 出どころの無い 5 語を出さないこと、⑶ 切替の途中は状態の語でなく `NG:` で答えること、⑷ SSP の各旗の出る条件が未実測であること、を「SSP の印」（実測・未実測・対応物なし）とともに書く。
-6. The areka shall 実機で確かめ、結果を本 spec の `verification/signoff.md` に残す: Claude Code から既定のゴースト（emo2）へ ⑴ 何も話していない間に `get_status` を呼ぶと `talking` を含まない答え（空、またはバルーンが見えていれば `balloon(…)` だけ）が返る、⑵ ゴーストが話している間（クリックや自発の会話で話させる）に呼ぶと `talking` と `balloon(…)` を含む答えが返る、⑶ 起動していない名前を渡すと `NG:Cannot find active ghost from specified name` が返る、⑷ 呼んでいる間も会話と描画が止まらず、warn 以上の記録が増えない。
+5. The areka shall SSP との差の一覧（`doc/ssp-mcp/get-status-diff-areka.md`）に、⑴ `changing` を出さないこと（裁定 1）、⑵ 出どころの無い 5 語を出さないこと、⑶ 切替の途中は状態の語でなく `NG:` で答えること、⑷ SSP の各旗の出る条件が未実測であること、⑸ ゴーストの SHIORI が考えている間に届いた呼び出しは、その答えが返ってから答えること（要件 4.2）、を「SSP の印」（実測・未実測・対応物なし）とともに書く。
+6. The areka shall 実機で確かめ、結果を本 spec の `verification/signoff.md` に残す: Claude Code から既定のゴースト（emo2）へ ⑴ 何も話していない間に `get_status` を呼ぶと `talking` を含まない答え（空、またはバルーンが見えていれば `balloon(…)` だけ）が返る、⑵ ゴーストが話している間（クリックや自発の会話で話させ、話し始めて 1 フレーム以上たってから。見えているバルーンの組は 1 フレーム遅れて kanade に届くため）に呼ぶと `talking` と `balloon(…)` を含む答えが返る、⑶ 起動していない名前を渡すと `NG:Cannot find active ghost from specified name` が返る、⑷ 呼んでいる間も会話と描画が止まらず、warn 以上の記録が増えない。
