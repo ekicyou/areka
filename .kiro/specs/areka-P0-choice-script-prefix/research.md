@@ -220,3 +220,7 @@
 
 - 報告の `summary.md` は台帳を触るどの spec も作り直すので、並走の spec と重なったら後に入る側が作り直す。
 - 実装の段で確かめること: `on_choice` の腕で `state` を書き替えられること（`snapshot` は値で持っているので借用は残らない見込み）、証拠の走査（`cargo run -p ukadoc-survey -- evidence`）に `choice.rs` の行が載ること。
+
+## 10. 設計ディスカッションの決定（2026-10-05）
+
+- **議題 1（状態を書き替える関数の置き場）= (b)**: `script:` の後ろを取り出す純粋な関数 `script_body` は `choice.rs` に置く。結末を決める `begin` と、トークを始める `start_talk` は `steady.rs` の子の `steady_choice_script.rs`（モジュール `schedule::steady::choice_script`）に置く。理由＝`choice.rs` は「判断の分かれ道だけ・記録も出さない」層で、その子に状態を書く関数を置くと名乗りと中身が食い違う。`schedule/mod.rs` には触らない。上の 4 節・9 節にある `choice_script.rs`・`schedule::choice::script` の置き場の記述はこの決定で読み替える。

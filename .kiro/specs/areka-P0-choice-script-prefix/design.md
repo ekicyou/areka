@@ -47,7 +47,7 @@
 - `schedule/mod.rs` が公開している型と欄（`State` の `phase`・`next_talk_id`・`choice_prev_talk`、`ActiveTalk`、`Action::StartTalk`、`Phase::Steady`）を読む・書く。
 - `crate::talk` の `StartTalk`・`TalkId`、`crate::msg` の `ChoiceInput`。
 - `steady.rs` の `resolve_choice`（解決を発行する唯一の関数）は `steady.rs` の中からだけ呼ぶ。新しいファイルからは呼ばない。
-- テストでは `schedule/log_capture.rs`（`capture`・`assert_logged`・`assert_not_logged`）を使う。`steady.rs` の `test_support` の補助（`steady_with_ledger`・`choice_input_of`）は `steady` の中からしか見えない作りなので使わず、同じ形の小さな補助（待ちの帳簿つきの `Steady` の状態・`ChoiceInput` の組み立て）を新しいテストのファイルの中に持つ（`steady_test_support.rs` の見える範囲は広げない）。
+- テストでは `schedule/log_capture.rs`（`capture`・`assert_logged`・`assert_not_logged`）を使う。新しいテストは `steady` の子の子になるので、`steady.rs` の `test_support` の補助（`steady_with_ledger`・`choice_input_of`）をそのまま使う（見える範囲は広げない）。
 - `Cargo.*` には触らない（依存を足さない）。`areka-kanade` から `areka-parsers` への依存は作らない。
 
 ### Revalidation Triggers
@@ -67,7 +67,7 @@
 - 選択肢のイベントが何も返さなかったとき（同じ関数の末尾の、残りの段が無い腕）は `[resolve_choice(元)]` だけを返し、元のトークが続く。**空の `script:` はこの形を使う**。
 - 翻訳の出口の規則（`translate.rs` の `capture`）は、`translate::before` が作る材料の `script` が `Some` のとき＝入力が `Input::ShioriReply` で結果が台本のときだけ働く。`Input::Choice` から出す `Action::StartTalk` は捕まえられないので、何も足さなくても `script:` の台本は翻訳に通らない（要件 1.7）。
 - `on_choice` は検証のために帳簿（`State::choice`）を `take()` で取り出しており、受理の後に戻さなければ帳簿（期限を含む）はそのまま消える（要件 1.3 のタイムアウトの計測の終わり）。
-- `steady.rs` は 947 行。本仕様の後は `Unsupported` の腕が短くなるので行数は増えない（1,000 行未満を保つ）。
+- `steady.rs` は 947 行。本仕様の後は `Unsupported` の腕が短くなり、子のファイルの宣言が 2 行増える（950 行前後＝1,000 行未満を保つ）。
 
 ### Architecture Pattern & Boundary Map
 
@@ -76,8 +76,8 @@ flowchart TD
     A[Input::Choice] --> B[steady::on_choice 受け付けの検証と受理の記録]
     B --> C{choice::plan_cascade}
     C -->|Named / Canonical| D[SHIORI イベントの流れ 変えない]
-    C -->|Script| E[choice::script::begin]
-    E -->|台本が 1 文字以上| F[choice::script::start_talk 採番と枠の差し替え]
+    C -->|Script| E[choice_script::begin]
+    E -->|台本が 1 文字以上| F[choice_script::start_talk 採番と枠の差し替え]
     F --> G[resolve_choice 結果 script と Action::StartTalk]
     E -->|台本が空| H[resolve_choice 結果 script_empty だけ]
     G --> I[dispatcher 元のトークを閉じて新しいトークを始める 変えない]
@@ -86,10 +86,10 @@ flowchart TD
 
 **Architecture Integration**:
 
-- 選んだ形: 既存の「純粋な判定（`choice.rs`）＋調停（`steady.rs`）」の分け方を保ち、`script:` の結末だけを `choice.rs` の子の新しいファイルへ置く。`on_choice` の腕は呼び出しの付け替えだけになる。
+- 選んだ形: 既存の「純粋な判定（`choice.rs`）＋調停（`steady.rs`）」の分け方を保ち、`script:` の後ろを取り出す純粋な関数は `choice.rs` に、状態を書き替えて記録を出す結末は `steady.rs` の子の新しいファイルへ置く（`choice.rs` は「判断の分かれ道だけ・記録も出さない」層のまま。設計ディスカッション議題 1）。`on_choice` の腕は呼び出しの付け替えだけになる。
 - 解決（`Action::ResolveChoice`）を発行する場所は `steady.rs` の `resolve_choice` の 1 か所のまま（「1 回の選択につき解決は高々 1 回」を、発行する場所が 1 つであることで保つ）。新しいファイルは解決を作らない。
 - 新しい再生の仕組み・新しい入力・新しい状態の欄は作らない。
-- 依存の向き: `choice_script.rs` → `schedule/mod.rs` の型（読む・書く）。`steady.rs` → `choice.rs`・`choice_script.rs`（呼ぶ）。逆向きの呼び出しは作らない。
+- 依存の向き: `steady_choice_script.rs` → `schedule/mod.rs` の型（読む・書く）。`steady_choice_script.rs` → `choice.rs` の `script_body`（呼ぶ）。`steady.rs` → `choice.rs`・`steady_choice_script.rs`（呼ぶ）。逆向きの呼び出しは作らない。
 
 ### Technology Stack
 
@@ -105,10 +105,10 @@ flowchart TD
 
 ```
 crates/areka-kanade/src/schedule/
-├── choice.rs                 # 変更: 結論の名前を Script に・子のファイルの宣言・正典 URL の行
-├── choice_script.rs          # 新規: script: の結末（body・begin・start_talk）
-├── choice_script_tests.rs    # 新規: 上のテスト（最上位の step から通す）
-└── steady.rs                 # 変更: on_choice の Script の腕を呼び出しに付け替え
+├── choice.rs                 # 変更: 結論の名前を Script に・純粋な関数 script_body・正典 URL の行
+├── steady_choice_script.rs          # 新規: script: の結末（begin・start_talk）
+├── steady_choice_script_tests.rs    # 新規: 上のテスト（最上位の step から通す）
+└── steady.rs                 # 変更: on_choice の Script の腕を呼び出しに付け替え・子のファイルの宣言
 ```
 
 ### Modified Files
@@ -117,15 +117,15 @@ crates/areka-kanade/src/schedule/
 
 - `crates/areka-kanade/src/schedule/choice.rs`
   - `CascadePlan::Unsupported` を `CascadePlan::Script` に改名し、説明を「`script:` の後ろの台本を新しいトークとして始める」に替える。
-  - `plan_cascade` の `script:` の腕は、子の `script::body(id).is_some()` で判定する（`"script:"` の綴りを 1 か所に置く）。この腕の定義行に、正典 URL のコメント 1 行（`// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1`）を置く（網羅台帳の `implemented` の根拠）。
-  - 子のファイルの宣言 `#[path = "choice_script.rs"] pub(super) mod script;` を置く（`schedule/mod.rs` に宣言を足さない）。
+  - 純粋な関数 `script_body` を足し、`plan_cascade` の `script:` の腕は `script_body(id).is_some()` で判定する（`"script:"` の綴りを 1 か所に置く）。この腕の定義行に、正典 URL のコメント 1 行（`// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1`）を置く（網羅台帳の `implemented` の根拠）。
   - ファイルの先頭の説明（「判断の分かれ道だけ・記録も出さない」）、`CascadePlan` と `plan_cascade` の説明（「未対応」「裁定 7」の句）、近い綴りのテストの言い回しを今の動きに合わせる。
   - ファイル内のテスト `plan_cascade_unsupported_for_script_prefix` と、`script:` を含む決定論のテストを新しい名前に合わせる（境目の ID `script`・`Script:x`・`xscript:y` が通常の選択肢になる確認は今のまま残す）。
-- `crates/areka-kanade/src/schedule/choice_script.rs`（新規）— 下の「Components and Interfaces」の 3 つの関数。末尾に `#[cfg(test)] #[path = "choice_script_tests.rs"] mod tests;`。
-- `crates/areka-kanade/src/schedule/choice_script_tests.rs`（新規）— 「Testing Strategy」の kanade の項目。
+- `crates/areka-kanade/src/schedule/steady_choice_script.rs`（新規）— 下の「Components and Interfaces」の `begin`・`start_talk`。末尾に `#[cfg(test)] #[path = "steady_choice_script_tests.rs"] mod tests;`。
+- `crates/areka-kanade/src/schedule/steady_choice_script_tests.rs`（新規）— 「Testing Strategy」の kanade の項目。
 - `crates/areka-kanade/src/schedule/steady.rs`
-  - `on_choice` の `CascadePlan::Unsupported` の腕を、`choice::script::begin` を呼んで `resolve_choice` と並べる数行に替える（警告 `choice_unsupported_category` と結果の語 `"unsupported"` は消える）。
+  - `on_choice` の `CascadePlan::Unsupported` の腕を、`choice_script::begin` を呼んで `resolve_choice` と並べる数行に替える（警告 `choice_unsupported_category` と結果の語 `"unsupported"` は消える）。
   - `use` の行、`on_choice` の説明の該当の 1 項、`resolve_choice` の説明の「未対応カテゴリの即時解決」の句を今の動きに合わせる。
+  - 子のファイルの宣言 `#[path = "steady_choice_script.rs"] mod choice_script;` を置く（`schedule/mod.rs` に宣言を足さない）。
   - 受理の記録 `choice_accepted` は event 名も欄も変えない。添えた文言「カスケードを開始」だけ、`script:` にも当たる言い回しに直す。
 
 **ウェーブ C4 の約束の外（開発者の調整が要るもの）**
@@ -133,8 +133,8 @@ crates/areka-kanade/src/schedule/
 | ファイル | 触り方 | 理由 | 並走との重なり |
 |---|---|---|---|
 | `crates/areka-kanade/src/schedule/mod.rs` | `Action::ResolveChoice` の説明のコメントの 1 句（「未対応カテゴリの即時解決」→「`script:` の選択肢の解決」）。コードは変えない | 説明が今の動きと食い違うのを残さない | `balloon-lifecycle-events` が同じファイルを触る。コメント 1 行なので、重なるなら後に入る側が直せば済む |
-| `crates/areka-kanade/src/schedule/steady_choice_tests.rs` | テスト `unsupported_choice_resolves_without_emitting_any_event` を消す（消すだけ） | 要件 7.4（古い前提のテストを残さない）。同じ確認は新しい `choice_script_tests.rs` が持つ | なしの見込み |
-| `crates/areka-kanade/src/schedule/schedule_log_firing_tests.rs` | テスト `warn_choice_unsupported_category_logs` を消す（消すだけ） | 同上。新しい警告の確認は `choice_script_tests.rs` が持つ | なしの見込み |
+| `crates/areka-kanade/src/schedule/steady_choice_tests.rs` | テスト `unsupported_choice_resolves_without_emitting_any_event` を消す（消すだけ） | 要件 7.4（古い前提のテストを残さない）。同じ確認は新しい `steady_choice_script_tests.rs` が持つ | なしの見込み |
+| `crates/areka-kanade/src/schedule/schedule_log_firing_tests.rs` | テスト `warn_choice_unsupported_category_logs` を消す（消すだけ） | 同上。新しい警告の確認は `steady_choice_script_tests.rs` が持つ | なしの見込み |
 | `crates/areka-parsers/src/sakura/decode_tests.rs` | 正典の入れ子の記述例の読みのテストを 1 本足す（本番のコードは変えない） | 要件 2.2・7.2 の「読み」は読み込みの層でしか確かめられない（kanade は読み込みに依存しない） | `open-external-tags` が同じ列（`decode.rs`）を触る。テストのファイルに 1 本足すだけ |
 
 **文書（要件 6）**
@@ -171,45 +171,45 @@ sequenceDiagram
 
 | Requirement | Summary | Components | Interfaces | Flows |
 |-------------|---------|------------|------------|-------|
-| 1.1 | `script:` の後ろを新しいトークで再生 | `choice::script` | `begin`・`start_talk` | 分岐図の Script の枝 |
+| 1.1 | `script:` の後ろを新しいトークで再生 | `steady::choice_script` | `begin`・`start_talk` | 分岐図の Script の枝 |
 | 1.2 | SHIORI のイベントを起こさない | `on_choice` の Script の腕 | 返す一括に `Action::ShioriRequest`・`Action::Translate` を含めない | 流れ図 |
 | 1.3 | 待ちを同じときに閉じる | `on_choice` の Script の腕 | `[resolve_choice, StartTalk]` を 1 つの一括で返す・帳簿を戻さない | 流れ図 |
-| 1.4 | 元のトークを置き換える | `choice::script` | `start_talk`（枠の差し替え）・`begin`（`choice_prev_talk` の控え） | 既存の dispatcher の動き |
-| 1.5 | 応答の台本と同じ読み方・再生 | `choice::script` | 台本の文字列を加工せず `StartTalk` に渡す | — |
-| 1.6 | 小文字の `script:` だけ | `choice.rs` | `script::body`・`plan_cascade` | — |
+| 1.4 | 元のトークを置き換える | `steady::choice_script` | `start_talk`（枠の差し替え）・`begin`（`choice_prev_talk` の控え） | 既存の dispatcher の動き |
+| 1.5 | 応答の台本と同じ読み方・再生 | `steady::choice_script` | 台本の文字列を加工せず `StartTalk` に渡す | — |
+| 1.6 | 小文字の `script:` だけ | `choice.rs` | `script_body`・`plan_cascade` | — |
 | 1.7 | 翻訳に通さない | （既存の `translate.rs` の規則のまま） | `Input::Choice` 由来の `StartTalk` は捕まえられない | — |
-| 2.1 | `\e` の例 | `choice::script` | `begin`（台本 `\e`） | — |
+| 2.1 | `\e` の例 | `steady::choice_script` | `begin`（台本 `\e`） | — |
 | 2.2 | 入れ子の第 2 引数の読み | （既存の読み込み・変更なし） | `decode_tests.rs` のテストで固定 | — |
-| 2.3 | 「その１」→ 選択肢「その２」 | `choice::script` | `begin` | 流れ図の 1 段目 |
-| 2.4 | 「その２」→「その３はない」 | `choice::script` | `begin` | 流れ図の 2 段目 |
-| 2.5 | 開く系のタグは応答の台本と同じ | `choice::script` | 台本を加工しない（1.5 と同じ） | — |
-| 3.1 | 空の `script:` は始めず警告・待ちを閉じる | `choice::script`・Script の腕 | `begin` が `None`・`choice_script_empty`・`resolve_choice(…, "script_empty")` | 分岐図の空の枝 |
+| 2.3 | 「その１」→ 選択肢「その２」 | `steady::choice_script` | `begin` | 流れ図の 1 段目 |
+| 2.4 | 「その２」→「その３はない」 | `steady::choice_script` | `begin` | 流れ図の 2 段目 |
+| 2.5 | 開く系のタグは応答の台本と同じ | `steady::choice_script` | 台本を加工しない（1.5 と同じ） | — |
+| 3.1 | 空の `script:` は始めず警告・待ちを閉じる | `steady::choice_script`・Script の腕 | `begin` が `None`・`choice_script_empty`・`resolve_choice(…, "script_empty")` | 分岐図の空の枝 |
 | 3.2 | 空なら元のトークを続ける | Script の腕 | `[resolve_choice]` だけ・枠を変えない | 分岐図の空の枝 |
-| 3.3 | 第 3 引数以降は使わず数を記録 | `choice::script` | `begin` が `input.references` をどこへも渡さない・`choice_script_unused_args`（`count`） | — |
-| 4.1 | 元と同じ出どころ・制限を足さない | `choice::script` | `start_talk`（他のトークと同じ `Action::StartTalk` の入口） | — |
-| 4.2 | 区別が無い間は応答の台本と同じ扱い | `choice::script` | 同上 | — |
-| 5.1 | 実行の記録 1 件 | `choice::script` | `choice_script_started`（info・`choice_id`・`talk_id`・`prev_talk_id`） | — |
+| 3.3 | 第 3 引数以降は使わず数を記録 | `steady::choice_script` | `begin` が `input.references` をどこへも渡さない・`choice_script_unused_args`（`count`） | — |
+| 4.1 | 元と同じ出どころ・制限を足さない | `steady::choice_script` | `start_talk`（他のトークと同じ `Action::StartTalk` の入口） | — |
+| 4.2 | 区別が無い間は応答の台本と同じ扱い | `steady::choice_script` | 同上 | — |
+| 5.1 | 実行の記録 1 件 | `steady::choice_script` | `choice_script_started`（info・`choice_id`・`talk_id`・`prev_talk_id`） | — |
 | 5.2 | 未対応の警告を出さない | `steady.rs` | `choice_unsupported_category` を消す | — |
-| 5.3 | 記録なしで終わる道が無い | `choice::script`・Script の腕 | 下の「結末と記録の表」 | — |
+| 5.3 | 記録なしで終わる道が無い | `steady::choice_script`・Script の腕 | 下の「結末と記録の表」 | — |
 | 6.1 | 網羅台帳の行 | 文書 | `sakura-script.toml`・`choice.rs` の正典 URL の行 | — |
 | 6.2 | 互換の記録 | 文書 | `choice-cascade-compat.md`・`COMPAT_ARCHITECTURE.md` | — |
 | 6.3 | 台帳の検査が通る | 文書 | `report`・`report-summary` の作り直しと `cargo test -p ukadoc-survey` | — |
-| 7.1 | `\e` の例のテスト | `choice_script_tests.rs` | テスト 1 | — |
-| 7.2 | 入れ子の例のテスト | `decode_tests.rs`・`choice_script_tests.rs` | テスト 2・テスト 6 | — |
-| 7.3 | 空・余分な引数・境目の ID のテスト | `choice_script_tests.rs`・`choice.rs` のテスト | テスト 3・4・5・5b | — |
+| 7.1 | `\e` の例のテスト | `steady_choice_script_tests.rs` | テスト 1 | — |
+| 7.2 | 入れ子の例のテスト | `decode_tests.rs`・`steady_choice_script_tests.rs` | テスト 2・テスト 6 | — |
+| 7.3 | 空・余分な引数・境目の ID のテスト | `steady_choice_script_tests.rs`・`choice.rs` のテスト | テスト 3・4・5・5b | — |
 | 7.4 | 古い前提のテストを残さない | 既存のテスト 3 本 | 改名 1 本・削除 2 本 | — |
 
 ## Components and Interfaces
 
 | Component | Domain/Layer | Intent | Req Coverage | Key Dependencies | Contracts |
 |-----------|--------------|--------|--------------|------------------|-----------|
-| `choice.rs` の `plan_cascade`／`CascadePlan::Script` | kanade・純粋な判定 | `script:` の ID を「台本を実行する」結論にする | 1.6 | `script::body`（P0） | Service |
-| `choice_script.rs`（`schedule::choice::script`） | kanade・結末 | 台本の取り出し・空と余分な引数の判定・新しいトークの開始・記録 | 1.1, 1.4, 1.5, 2.1, 2.3, 2.4, 2.5, 3.1, 3.3, 4.1, 4.2, 5.1, 5.3 | `State`・`ActiveTalk`・`StartTalk`（P0） | Service, State |
-| `steady.rs` の `on_choice` の Script の腕 | kanade・調停 | 結末を受けて解決と並べて返す | 1.2, 1.3, 3.1, 3.2, 5.2, 5.3 | `choice::script::begin`・`resolve_choice`（P0） | Service |
+| `choice.rs` の `plan_cascade`／`CascadePlan::Script` | kanade・純粋な判定 | `script:` の ID を「台本を実行する」結論にする | 1.6 | `script_body`（P0） | Service |
+| `steady_choice_script.rs`（`schedule::steady::choice_script`） | kanade・結末 | 空と余分な引数の判定・新しいトークの開始・記録 | 1.1, 1.4, 1.5, 2.1, 2.3, 2.4, 2.5, 3.1, 3.3, 4.1, 4.2, 5.1, 5.3 | `State`・`ActiveTalk`・`StartTalk`（P0） | Service, State |
+| `steady.rs` の `on_choice` の Script の腕 | kanade・調停 | 結末を受けて解決と並べて返す | 1.2, 1.3, 3.1, 3.2, 5.2, 5.3 | `choice_script::begin`・`resolve_choice`（P0） | Service |
 
 ### kanade の選択肢
 
-#### `choice_script.rs`（モジュール `schedule::choice::script`）
+#### `steady_choice_script.rs`（モジュール `schedule::steady::choice_script`）
 
 | Field | Detail |
 |-------|--------|
@@ -225,8 +225,8 @@ sequenceDiagram
 
 **Dependencies**
 
-- Inbound: `steady.rs` の `on_choice` — Script の腕から `begin` を呼ぶ（P0）。`choice.rs` の `plan_cascade` — `body` を呼ぶ（P0）。
-- Outbound: `schedule/mod.rs` の `State`・`ActiveTalk`・`Phase`・`Action`（P0）。`crate::talk` の `StartTalk`・`TalkId`（P0）。
+- Inbound: `steady.rs` の `on_choice` — Script の腕から `begin` を呼ぶ（P0）。
+- Outbound: `choice.rs` の `script_body`（P0）。`schedule/mod.rs` の `State`・`ActiveTalk`・`Phase`・`Action`（P0）。`crate::talk` の `StartTalk`・`TalkId`（P0）。
 
 **Contracts**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [x]
 
@@ -234,8 +234,8 @@ sequenceDiagram
 
 ```rust
 /// 選択肢の ID が `script:` で始まるとき、その後ろの台本を返す（純粋・記録なし）。
-/// 判定はバイト列の前方一致で、大文字小文字を区別する。
-pub(in crate::schedule) fn body(id: &str) -> Option<&str>;
+/// 判定はバイト列の前方一致で、大文字小文字を区別する。置き場は `choice.rs`（純粋な層）。
+pub(crate) fn script_body(id: &str) -> Option<&str>;
 
 /// `script:` の選択肢を受け付けた後の結末を決める。
 /// 台本が 1 文字以上なら新しいトークを始めて `Some(Action::StartTalk(..))` を返し、
@@ -254,7 +254,7 @@ pub(in crate::schedule) fn start_talk(
 ) -> (TalkId, Action);
 ```
 
-**`body`**
+**`script_body`**
 
 - 事後条件: `id` が `script:` で始まれば `Some(残り)`（残りが空なら `Some("")`）。それ以外（`script`・`Script:x`・`xscript:y`・空文字列）は `None`。
 
@@ -292,7 +292,7 @@ pub(in crate::schedule) fn start_talk(
 
 **Responsibilities & Constraints**
 
-- `choice::script::begin(&mut state, talk_id, &input)` を**先に**呼ぶ（`resolve_choice` は解決の記録 `choice_resolved` を出すので、後に呼ぶことで下の表の記録の順になる）。
+- `choice_script::begin(&mut state, talk_id, &input)` を**先に**呼ぶ（`resolve_choice` は解決の記録 `choice_resolved` を出すので、後に呼ぶことで下の表の記録の順になる）。
 - 結果の語を決める: 戻り値が `Some` なら `"script"`、`None` なら `"script_empty"`。
 - `resolve_choice(talk_id, input.id, 結果の語)` を先頭に、再生開始の行動があればその後ろに並べて返す。帳簿（`ledger`）は戻さない。
 - 警告 `choice_unsupported_category` と結果の語 `"unsupported"` は消す。
@@ -346,7 +346,7 @@ pub(in crate::schedule) fn start_talk(
 
 実機なしで毎回同じ結果になるテストだけを置く。固定するのは判定の分かれ道で、既存の配線（dispatcher が元のトークを閉じる・再生が `\e` で閉じる・再生が選択肢の待ちに入る）は確かめ直さない。
 
-### kanade（`choice_script_tests.rs`・最上位の `schedule::step` から `Input::Choice` を通す）
+### kanade（`steady_choice_script_tests.rs`・最上位の `schedule::step` から `Input::Choice` を通す）
 
 1. **`\q[バルーンを閉じる,script:\e]`**（要件 7.1・1.1〜1.4・1.7・2.1・5.1・5.2）: 候補 `script:\e` の待ちがある状態で ID `script:\e` を選ぶ。返る一括がちょうど `[ResolveChoice{元, "script:\e"}, StartTalk{新, "\e"}]` であること（`Action::ShioriRequest`・`Action::Translate` が無い）、帳簿が消えること、枠が新しいトーク（台本 `\e`・`origin = "choice_script"`）であること、`choice_prev_talk` が元のトークであること、採番が 1 進むこと。記録に info `choice_script_started`（3 つの欄）と `choice_resolved`（`outcome = "script"`）があり、`choice_unsupported_category` と `choice_script_unused_args` が無いこと。
 2. **入れ子の例の 2 段**（要件 7.2・2.3・2.4）: ID `script:\q[その２,script:その３はない]` を選ぶと `StartTalk` の台本が `\q[その２,script:その３はない]` であること。続けて、新しいトークの選択肢の待ちの知らせ（`Input::ChoiceWaiting`・候補 `script:その３はない`）を入れ、ID `script:その３はない` を選ぶと `StartTalk` の台本が `その３はない` であること。
@@ -357,7 +357,7 @@ pub(in crate::schedule) fn start_talk(
 
 5. **判定の境目**（要件 7.3・1.6）: `plan_cascade` が `script:\e`・`script:`・`script:OnFoo` を `CascadePlan::Script`、`script`・`Script:x`・`xscript:y` を `CascadePlan::Canonical` にすること（既存のテストの名前と期待の型名を直す）。
 
-### kanade（`choice_script_tests.rs` にもう 1 本）
+### kanade（`steady_choice_script_tests.rs` にもう 1 本）
 
 5b. **境目の ID の扱いと記録**（要件 7.3）: 最上位の `schedule::step` から ID `Script:x` を選ぶと、返る一括が `OnChoiceSelectEx` の依頼 1 つ（解決も再生開始も無い）で、記録に `choice_script_started`・`choice_script_empty`・`choice_script_unused_args` が 1 つも無いこと。`script`・`xscript:y` は同じ腕を通るので、判定はテスト 5 に任せて繰り返さない。
 
@@ -368,7 +368,7 @@ pub(in crate::schedule) fn start_talk(
 ### 消すテスト（要件 7.4）
 
 - `steady_choice_tests.rs` の `unsupported_choice_resolves_without_emitting_any_event`（テスト 1・3 が置き換える）。
-- `schedule_log_firing_tests.rs` の `warn_choice_unsupported_category_logs`（テスト 3・4 が置き換える。新しい警告 2 つの確認は `choice_script_tests.rs` に置き、このファイルには足さない）。
+- `schedule_log_firing_tests.rs` の `warn_choice_unsupported_category_logs`（テスト 3・4 が置き換える。新しい警告 2 つの確認は `steady_choice_script_tests.rs` に置き、このファイルには足さない）。
 
 ### 文書の検査（要件 6.3）
 
