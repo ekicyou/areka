@@ -240,3 +240,108 @@ mod.rs が綴る 4 点（§1）を変えずに済む最小形:
 12. `\![open,explorer,種類,名前]` の名前に特別な名前（`random`・`lastinstalled`・`sequential`）が来たときに引かない判断と、そのときの記録（§6.2・ukadoc の例は名指しだけ）。
 
 > 要件ディスカッション（2026-10-05）の結果: 未決 1（§6.1）は ⒜（開かず `warn!` 1 行・台帳は `degraded`・開発者「http とかが無ければ処理できない方がよい」）、未決 2（§6.2）は「名前解決を本 spec で持つ・headline/plugin は縮退」で片付いた。未決 3（§6.3）は上の 10 のうち設計で決める項目として残す。
+
+---
+
+# 設計フェーズの記録（2026-10-05 `/kiro-spec-design -y`）
+
+## Summary
+
+- **Feature**: `areka-P0-open-external-tags`
+- **Discovery Scope**: Extension（既存の汎用の `\!` の運び手・受け口・説明書の開き方を広げる。新しい外部依存は 0）＝軽い調査（light）。
+- **Key Findings**:
+  - `emo2_boot/mod.rs` が綴るのは `crate::readme::ReadmeRequest` の型名・`ReadmeCueSink::new`・`resolve_path`・`wire_readme` の署名だけ（`mod.rs:491-492`・`:717-719`）。型の中身と関数の中身を変えれば `mod.rs` に触らずに開く系全体へ広げられる。開く専用のスレッドは `register_readme_drain`（`ghost_session.rs:61` からプロセスに 1 回）で起こせる。
+  - `mcp/mod.rs:6` は `mod resolve;`（非公開）なので `mcp::resolve::active` は `readme` から使えない。ゴースト名と根は `GhostSlot`（`ghost_session.rs:390`・`pub(crate)`）から直に読み、名の決め方だけを `get_active_ghost_list` と揃える。
+  - `ShellExecuteW` の公式の説明（Microsoft Learn「ShellExecuteW function」Remarks）は「COM を先に初期化するのがよい・`CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE)`」と書く。フォルダは `open` で開ける・`edit` は文書でなければ失敗・32 以下が失敗の符号（`SE_ERR_NOASSOC` を含む）。`Win32_System_Com` と `Win32_UI_Shell` は既に有効。
+
+## Research Log
+
+### 開く専用のスレッドと COM
+- **Context**: 要件 7.5（固まらない）・7.8（順序）。今は UI スレッドで World を借りたまま `ShellExecuteW`（`readme.rs:154-158`・`:165-198`）。
+- **Sources**: Microsoft Learn `nf-shellapi-shellexecutew`（Remarks・Return value・lpDirectory）。先例 `install/fetch_url.rs` の `thread::Builder::new().name("install-fetch")`。
+- **Findings**: 1 本のスレッド＋mpsc で順序と非停止を両立。COM は起動時に 1 度だけ STA で初期化する。lpDirectory を NULL にすると呼び手のプロセスの作業フォルダになる。
+- **Implications**: `Opener::spawn` のスレッドの閉包だけが COM と本物の OS を持つ。`serve`・`execute` はテストから同じスレッドで呼ぶ（`log_capture_kit` は呼んだスレッドだけ）。
+
+### ゴースト名と文脈の読み口
+- **Context**: 要件 7.2 の「出どころのゴースト名」・`ghost/master` 基準の解決・`種類,名前` の目録。
+- **Findings**: `GhostSlot`（置き場）→ `names().name`・`ghost_dir()`。`BootContext.root`（`BasewareRoot`・`Clone`）。名前から 1 つを引く関数は `resolve_switch_target`（`ghost_switch.rs:170`）・`shell_candidates`（`shell_balloon_resolve.rs:93`）・`balloon_candidates`（`:110`）。`resolve_skin_target` は `random`・`lastinstalled` を先に解くので、`balloon`・`shell` の名前の照合は候補の列に対して「name → フォルダ名」を直に行う。
+- **Implications**: UI スレッドは文脈（名・フォルダ・根）を写すだけ。目録の読み取り（fs）は開く専用のスレッドで行う。
+
+### 記録の振り分け
+- **Context**: 要件 7.3・7.4。`log_history.rs:113` の `RULES` に `areka::readme` が無い。
+- **Findings**: `rule("areka::readme", Kind::Status, false)` を足せば `areka::readme::opener` の `info` が `status` に入る。`log_history_convention_tests.rs` の `locate` は `areka::readme` → `src/readme.rs` で通る。失敗は `TARGET_ERROR`（`areka::log::error`）に `ghost` を付ければ `error` 種別で名がゴースト名になる（本番で初めての利用）。
+- **Implications**: 表（`doc/ssp-mcp/log-convention.md`）・`RULES` の 2 か所を同時に 1 行ずつ。「13 行」の数は 14 へ。
+
+### 網羅台帳の証拠の形
+- **Context**: 要件 9.1。
+- **Findings**: 証拠は定義箇所の `/// ukadoc: <URL>` 1 行（`doc/ukadoc-coverage/README.md` §3）。URL は entry の鍵の後半を `list_sakura_script.html#` に続けた形（既存の `ReadmeSink` の doc と同じ）。
+- **Implications**: `destination.rs` の `classify` の腕に 6 行を置く。
+
+## Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| 開く専用の 1 本のスレッド（採用） | 受け口は分類して送る・UI は文脈を写す・解決と OS はスレッドで | 固まらない・順序が保たれる・COM 1 回 | 長く待つ要求の後ろが待つ・終了時の未処理は捨てる | ギャップ分析 §4.3 案 A |
+| 要求ごとにスレッド | 最短 | — | 順序が崩れる（7.8） | 不採用 |
+| 台本のスレッドで直接 | 結線が最小 | — | 台本の再生が止まる・World が読めない | 不採用 |
+| UI で同期（今） | 変更なし | — | 7.5 に反する | 不採用 |
+
+## Design Decisions
+
+### Decision: `\j` は運搬名 `"\j"` の汎用コマンドへ写す
+- **Alternatives**: ⑴ 運搬名（採用）⑵ `\![open,j,ID]` 風（正典に無い語彙）⑶ decode で http/file/mailto に分類（元の綴りが失われ・転記層の規律に反する）
+- **Selected**: `decode_tag` に `"j"` の 1 腕。定数 `JUMP_TAG_CARRIER` は `areka-parsers` の `sakura/model.rs` に置き公開。腕の中は完全なパスで書き、`decode.rs` の `use` 行も変えない（`anchor-tag-canon` との接触を腕 1 本に留める）。
+- **Follow-up**: `compile.rs` の既存の汎用の腕が時間 0 を与えることは既に固定済み（`compile_arm_tests.rs` の `catch_all_ignored_set_is_raw_only` 等）なので再テストしない。
+
+### Decision: 規則は 1 関数 `classify`、受け口と取り出しの両方が呼ぶ
+- **Context**: 要件 8.6。
+- **Selected**: `readme/destination.rs` の `classify(name, args) -> Option<Result<Destination, Rejected>>`。受け口は実行時に、`link_destinations` は `parse` の結果に対して呼ぶ。
+- **Trade-offs**: 「元の綴り」は名前と引数から組み直した綴り（引用符と `\]` は戻らない）。後続 2 本は値だけを使うので足りる（ギャップ分析 §4.5）。lexer の範囲を公開する改修はしない。
+- **解釈**: 要件 8.1 は「`\j[X]` と `\![open,…,X]` の X を返す」、8.2 は「各項目に種類（5 つ）を添える」。種類を持てない断られる入力（3 形以外の `\j`・引数なし・`headline`／`plugin`）は一覧に含めない＝「開く処理が実際に開こうとする行き先」と一致させる（8.6）。
+
+### Decision: 断りは受け口で `warn!`、解決と OS は開く専用のスレッドで
+- **Selected**: 断り（要件 1.7・2.6・3.2・4.7・6.3）は台本のスレッドで分類した時点で `warn!` 1 行・送らない。解決（fs）と OS の呼び出しと成功・失敗の記録は `execute` の 1 か所。
+- **Rationale**: 断りに World は要らない。OS を呼ばないことが構造で明らか（送らない）。
+
+### Decision: 受け取り手の表は `ReadmeSink` のまま 6 行を足す
+- **Context**: ギャップ分析 §7 の 2。
+- **Selected**: 受け口の型名 `ReadmeCueSink` は `mod.rs` が綴るので変えない。表の変種もそれに合わせて `ReadmeSink` のまま、doc を「開く系（説明書を含む）」へ。運搬名 `\j` も選別子なしで登記する（`\f` の運搬名と同じく、表が実際の担当を正しく映すため）。本 spec の分は +6。
+
+### Decision: 開く専用のスレッドは `register_readme_drain` で 1 度起こし、持ち物 `Opener` に送信端
+- **Alternatives**: `wire_readme`（ゴーストごと＝何度も呼ばれる）・`static`（終わりが無い）
+- **Selected**: プロセスに 1 回の登録で起こし、World の持ち物にする。World が落ちれば送信端が落ちてスレッドは自然に終わる。
+
+### Decision: 成功の記録は `status` 種別（`RULES` に `areka::readme` を 1 行）
+- **Context**: ギャップ分析 §6.3 の未決 3（設計で決める）。
+- **Selected**: 案①。`info` は OS へ渡す時点で 1 行（渡したこと自体を必ず残す）。失敗は `TARGET_ERROR`＋`ghost` で `error` 種別・名がゴースト名。
+- **Trade-offs**: `status` は取り決めの target でないので、成功の行の `ghost` は本文に残る（`get_log` の `ghost_name` で絞れるのは失敗の行だけ）。案④（新しい取り決めの target）は取り決めを増やすので取らない。
+
+### Decision: 解決の細部
+- `\j[file:///…]` はパーセント符号化を復号しない（ukadoc の例に無い・`%` を含むファイル名を壊さない）。絶対かどうかは `Path::is_absolute`。残りが空なら断る。
+- 前置き（`http://`・`https://`・`file:///`・`mailto:`）は大文字小文字を区別しない。
+- 環境変数の展開は ukadoc が書く `\![open,file]` だけ。`%名前%` を `OsPort::env_var` で置き換え、未定義はそのまま残す（`ExpandEnvironmentStringsW` と同じふるまい。機能 `Win32_System_Environment` は未有効なので使わない）。
+- 名前だけ（`\`・`/`・`:` を含まない）で `ghost/master` に無ければ、名前のまま `open` へ渡して OS のパス探索に任せる（`\![open,file]` だけ）。
+- ファイルを選んだ状態は `explorer.exe` に `/select,"<パス>"`（`SHOpenFolderAndSelectItems` は未有効の機能を要する）。
+- `\![open,browser,X]` は X の形を判定しない（要件 3.1「URL として渡す」・推測を足さない＝1.7 の裁定と同じ方針）。
+- `\![open,file]` で開くファイルの作業フォルダはそのファイルのあるフォルダ（エクスプローラーのダブルクリックと同じ）。
+- `\![open,explorer,種類,名前]` の特別な名前（`random` など）は解かない。`ghost` は `resolve_switch_target`（`\![change,ghost,名前]` と同じ引き方）。
+
+## Synthesis
+
+- **一般化**: 6 つの形は「行き先の綴り → 解決の規則 → OS の動詞」の 1 つの問題の変種。`Target` の変種を「解決の規則」ごとに分け（`Url`・`Mail`・`Path`・`Program`・`Folder`・`NamedFolder`・`Edit`）、説明書も `Path` の 1 件として同じ道へ載せた。
+- **作るか使うか**: 既定のアプリの選択は OS（関連付け）を使う。名前の引き方は既存の目録と純粋な関数を使う。環境変数の展開だけは `std::env::var` で 10 行ほどを書く（OS の関数は未有効の機能を要し、`Cargo.toml` 非接触の約束がある）。
+- **簡素化**: 説明書専用の `open()` を削り、OS を綴るファイルを 1 つにした。`ReadmeSink` の改名・新しい受け口・新しい結線はしない（`mod.rs` 非接触で済む最小）。取り出しの関数は `areka-sakura` へ置かず `readme/` の子に置く（規則と同じ場所＝8.6 が構造で保たれる）。
+
+## Risks & Mitigations
+
+- 開く専用のスレッドが OS で長く待つと後ろの要求が待つ — 画面と台本は止まらない。順序（7.8）を守る代償として受容。
+- アプリの終了時に溜まった要求は捨てられる — 開く要求は使い捨てで、終了を待たせる理由が無い。
+- `\![open,file]`・`\![open,browser]` は台本から実行ファイルを起こせる — 正典どおり。開くたびに必ず記録し、同意の窓は `script-impact-tiers` が `submit` へ差し込む。
+- 受け取り手の表の総数は `balloon-lifecycle-events` と同時に動く — 後から main へ入る側が実物を数え直す（要件 9.3）。
+- 本物の `ShellExecuteW` が「関連付けの無い拡張子」で OS の「アプリを選ぶ」窓を出すことがある — OS の受け口のふるまいであり areka のメッセージボックスではない（要件 7.6 は areka が出さないことを約束する）。実機確認で見る。
+
+## References
+
+- [ShellExecuteW function (shellapi.h)](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew) — COM の初期化・動詞・戻り値・作業フォルダ。
+- ukadoc さくらスクリプトリスト（§2.8 の 6 つの URL）。
+- `doc/ssp-mcp/log-convention.md`（記録の種別の取り決め）・`doc/ukadoc-coverage/README.md` §3（証拠の書き方）。
