@@ -1,5 +1,6 @@
 use super::{
-    RecordedCall, SpineHarness, capture_logs, count_level, run_attach_phase, spin_wait_until,
+    RecordedCall, SpineHarness, capture_logs, count_level, run_attach_phase, run_text_phase,
+    spin_wait_until,
 };
 
 // ===========================================================================
@@ -90,5 +91,58 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
     harness.inject_dispatcher_tick(2);
 
     // ── 後片付け: 正規終了＋全ハンドル有界 join（hang させない・R8.3 の観測点＝有界 join のみ） ──
+    harness.shutdown_bounded();
+}
+
+// ===========================================================================
+// budoux-reveal-reflow task 6.2: 先渡しが本番の鎖を通って文字の層へ届く
+// ===========================================================================
+
+/// 観測可能な完了条件（budoux-reveal-reflow tasks.md 6.2・要件 2.1）: 本番の鎖（トークごとの写し →
+/// 時刻の受け手の飾り `ClockedTextSink` → 文字の層の受け手 `EmoTextSink`）を通ったトークで、
+/// 文字の層が先渡しを受け取った `debug!` 行が 1 件以上あり、「先渡しが無い」の warn が 0 件である。
+///
+/// 「先渡しが無い」の warn は文節の折り返しのバルーンで字を出すときだけ出る。この検査の土台の
+/// バルーン（emo2-kakukaku）は `budoux_newline,1` を持つので、装着してから字を提示すれば warn の
+/// 分岐を踏む。それでも warn 0 件は「出なかった」ことしか言えないので、判定の主は受け取りの行が
+/// 1 件以上あること（飾りが先渡しを内側へ通さないと受け取りが 0 件になり、warn も 1 件出て赤になる）。
+///
+/// 文字の層の受け手の吸い出しはテストスレッド（＝UI pump スレッド）で回るので、捕捉は
+/// このスレッドの `capture_logs` で足りる。先渡しはトークの初回 Tick で登録されるとき別スレッドから
+/// 積まれるので、Tick・吸い出し・提示を 1 回ずつ捕捉しながら、受け取りの行が現れるまで待つ。
+#[test]
+fn spine_preview_reaches_text_layer_through_production_chain() {
+    let mut harness = SpineHarness::boot(r"\s[0]こんにちは\e");
+
+    // 字の提示（文節の折り返しなら warn の分岐）を踏めるよう、先に装着しておく。
+    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
+    assert_eq!(
+        count_level(&logs, "ERROR"),
+        0,
+        "attach で ERROR なし: {logs:?}"
+    );
+
+    let mut logs: Vec<String> = Vec::new();
+    let mut now = 1;
+    let reached = spin_wait_until(|| {
+        logs.extend(capture_logs(|| {
+            harness.inject_dispatcher_tick(now);
+            harness.pump_text();
+            run_text_phase(&mut harness.wiring, &mut harness.world, Some(10.0));
+        }));
+        now += 10;
+        logs.iter()
+            .any(|l| l.contains("target=areka_emo_text") && l.contains("先渡しを受け取った"))
+    });
+    assert!(
+        reached,
+        "先渡しの受け取り（「先渡しを受け取った」の debug! 行）が文字の層に現れない——飾り（ClockedTextSink）か受け手（EmoTextSink）が先渡しを通していない: {logs:?}"
+    );
+    let missing = logs
+        .iter()
+        .filter(|l| l.contains("level=WARN") && l.contains("先渡しが無い"))
+        .count();
+    assert_eq!(missing, 0, "「先渡しが無い」の warn が出た: {logs:?}");
+
     harness.shutdown_bounded();
 }

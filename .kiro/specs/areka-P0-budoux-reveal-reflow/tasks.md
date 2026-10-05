@@ -150,14 +150,14 @@
   - _Boundary: actor_lookahead_tests.rs（と必要なら兄弟の検査ファイル）_
   - _Depends: 4.3_
 
-- [ ] 6. 説明の書き直しと、起動の通しの見張り
+- [x] 6. 説明の書き直しと、起動の通しの見張り
 - [x] 6.1 (P) 「入力は常に台詞の全文」という前提の説明を書き直す
   - `segment.rs` の冒頭・`layout.rs`・`layout_line_ops.rs` の文節の幅の合計・`actor_present.rs` の説明を、字が分かれて届くことと、再生の前に知らされた台本の全部（区間の全文）で区切ること、食い違えば届いた字で区切ることを反映した内容にする。判定のコードは変えない
   - 完了の状態: 4 ファイルの差分が説明の文だけで、`cargo test -j 2 -p areka-emo-text` が緑
   - _Requirements: 5.7_
   - _Boundary: 説明の文（segment.rs・layout.rs・layout_line_ops.rs・actor_present.rs）_
 
-- [ ] 6.2 (P) 起動の通しの検査で、本番の鎖を通って先渡しが文字の層へ届くことを判定する
+- [x] 6.2 (P) 起動の通しの検査で、本番の鎖を通って先渡しが文字の層へ届くことを判定する
   - 起動の通しの検査 `crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs`（記録の捕捉を持つ）で、`areka_emo_text` を debug まで捕捉し、本番の鎖（トークごとの写し → 時刻の受け手の飾り → 文字の層の受け手）を通ったトークで、4.1 の「先渡しを受け取った」の `debug!` 行が 1 件以上あることと、「先渡しが無い」の warn が 0 件であることを判定する
   - 「先渡しが無い」の warn は文節の折り返しのバルーンで字を出すときだけ出るので、この検査の土台のバルーンが `budoux_newline` を持たない場合は warn 0 件だけでは判定にならない。正の判定（受け取りの行が 1 件以上）を必ず置く
   - 完了の状態: その検査が緑で、飾りの先渡しの転送を外すと受け取りの行が 0 件になって赤になる（変異を戻した後は touch して回し直す）
@@ -192,3 +192,4 @@
 - 4.3: `register_actor` は DPI の再追従（`refresh_actor_binding`）からも合流するので、値が本当に変わったときは空回しもやり直す（設計どおり）。
 - 5.2: 検査 5 を厳密に比べる中で dola の欠陥が見つかり、根本を直した。`TimedSchedule` は到達・区切りの期限・完了を `current_time - start_time` と相対の時刻で比べていたため、`CueSheet::absolute_fire_time`（`start + offset`）ちょうどの tick で合図を取りこぼすことがあった（例: 2.5999999999999996 @ 100）。今は絶対の `current_time` を持ち、すべて `start_time + offset` で判定する。境界の含み方は同じ。残り: 既存の `schedule_test.rs` の注釈に、もう無い欄の名前 `current_offset` が残る（既存の検査は書き換えない約束で残した）。`start_time` が NaN のとき、作ったばかりの `is_completed` が true から false に変わる（もともと tick 後は false で一貫していなかった）。
 - 5.3: 検査 8 の選択肢の範囲は、`present_actor` を通さず本番の `annotate_lines` → `line_bands` → `derive_hit_rows` を同じ順で呼んで出す（`present_frame` は DWrite の実測の字幅で要件 5.5 と食い違うため）。本番がこの 3 つへ同じ `lines` を渡すことは構造で確かめた。3 つを 1 つの本番の関数にまとめれば檻で固定できる（範囲外・完了時の棚卸で扱う）。縦書きの形は幅を 70 に狭め、縦書きの指定が効かなければ赤になることを確かめた。
+- 6.2: emo2-kakukaku は `budoux_newline,1` を持つので、起動の通しの検査の warn 0 件も判定になっている（転送を外す変異で「先渡しが無い」が 1 件出た）。ただし繰り返しは受け取りの行が出た回で止まり、字が提示されたことは判定していない。
