@@ -21,6 +21,10 @@
 - 起票時の再現（2026-10-05・main `44fc0a61`・端末に触れずに確かめた）: `cargo metadata --no-deps --locked --format-version 1` の出力（30 クレート）を UTF-8 で解けば JSON は通る。同じバイト列をコードページ 932 で解くと `packages[5].description` で JSON が壊れる。クレートごとに見ると、少なくとも `areka-nar`・`areka-ghost`・`areka-mcp` の `description` で壊れる。
   - 壊れるかどうかは字の並びしだい（Shift_JIS の 1 バイト目に見えるバイトが、文字列を閉じる `"` を飲み込むと壊れる）。日本語の `description` は 13 クレートにあるが、壊れるのは一部だけ＝今まで通っていたのは偶然で、`description` を 1 字直すだけで赤にも緑にもなる。
   - α の完成判定（10-02）で `-Check` が緑だった理由は調べていない（その後に足された `areka-mcp` の `description` が初めて当たった見込み）。要件の段で確かめなくてよい（読み方を直せば理由に依らず直る）。
+- `release-cycle` のセッションから聞き取った事実（2026-10-05・起票のときに相談）:
+  - 赤になった環境は pwsh 7.6.6・コンソールは `shift_jis`。止まっているのは手順の 3.3（`-Check`）だけで、3.1・3.2（全体テストほか）と 3.4（`crates-io.ps1 -Verify -Version 0.0.2`）は緑。3.4 が緑なのは `crates-io.ps1` が自分でコンソールを書き替えているから。
+  - 壊れた `description` は版上げの前から在る＝main でも同じく赤のはず（main の上では回していない）。
+  - `tools/package.ps1` には、子の出力を素で受けて**値として使う**所がもう 1 か所ある: `Read-SamplePaths`（`cargo run … --bin nar-sample-path` の出力の `key=value` からパスを読み、`Test-Path` に掛ける）。作業ツリーのパスに日本語が入れば同じ穴になりうる（今の開発者のパスは英数字だけなので表に出ていない）。
 - 手本が main に在る: `tools/perf/perf-loop.common.ps1` の `Invoke-Child`（`ProcessStartInfo` の `StandardOutputEncoding` を UTF-8 に固定して読み、端末のコードページには触らない。注記に理由が書いてある）。
 
 ## Desired Outcome
@@ -40,6 +44,7 @@
 
 - **In**:
   - `tools/package.ps1`・`tools/crates-io.ps1`・`release.yml` の段「版の検査」の、`cargo metadata` の読み方
+  - `tools/package.ps1` の `Read-SamplePaths`（`nar-sample-path` の出力からパスを読む所）を同じ読み方に
   - `tools/crates-io.ps1` の冒頭の `[Console]::OutputEncoding` の書き替えの撤去（消した後に `-Verify`・`-Pending` の日本語の出力と、`crates-io.yml` が受け取るクレート名の並びが変わらないことの確かめ）
   - コードページ 932 の条件での判定（上の Desired Outcome の最後）
   - `tools/` のほかのスクリプトに同じ読み方（子の出力を素で受けて字面や JSON として判定する所）が無いかの棚卸。在れば同じ形に直す（表示するだけの所は対象外＝下）
@@ -73,7 +78,10 @@
 ## Constraints
 
 - コンソールの文字コードを書き替えない（`[Console]::OutputEncoding`・`[Console]::InputEncoding`・`chcp`・`$OutputEncoding` を道具の中から変えない）。
-- `Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md` に触らない（C4 の版上げの席を使わない＝`release-cycle` と並べられる）。
+- `Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`dist/README.txt` に触らない。版を上げない・依存を足さない（`release-cycle` の作業木に残る版上げの 4 ファイルと重ねない）。
+- `crates-io.ps1` の冒頭の書き替えを消すのは、読み方の直しと**同じ PR**で（先に消すと公開前の確かめ `-Verify` が赤になる）。
+- 直った確かめは、コンソールを `shift_jis` のままにして `tools/package.ps1 -Check` を最後まで緑にすること（版を読む段を越えた後にも同じ穴が無いことを見る。窓が出るので開発者の手元で）。
+- **`release-cycle` との約束**: 初回リリースはこの直しのマージを待つ。マージの後、`release-cycle` のワークツリーで `/kiro-impl areka-P0-release-cycle` を打ち直す（1.2 で main を取り込み、3.1 の全体テストから回し直す）。
 - `release.yml` は「入力は環境変数だけ・手元でも同じ本文を回せる」形を崩さない。直した後、`package.ps1` の読み方と写しのままにするか、1 つの出どころへ寄せるかは議題 1。
 - 終了コードの約束（`package.ps1` の 3＝引数・前提の誤り）と失敗の文は変えない。
 - 秘密を印字しない（子の環境変数を表示させない）。
