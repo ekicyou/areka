@@ -131,8 +131,8 @@ graph TB
 | 論点 | 決定 |
 |---|---|
 | 1 直し方の向き | 両方。打ち切りを「進みの無い時間」で決め（観測）、届かなかったときは文言で見分ける |
-| 2 文言の出し場所 | 新しい芯は型つきの失敗 `WaitFailure` を返す。`bool` を返す古い呼び名（`spin_wait_until`・足場の `pump_*`・`wait_steady`）は形を保ち、打ち切ったときに失敗の文言を標準エラーへ 1 行出してから `false` を返す（テストの実行器は赤のテストの標準エラーを失敗の報告に載せる）。`run_bounded`・`join_bounded` は今どおり panic の文言に入れる |
-| 3 進みの目印 | 単調に増える数 1 つ（`u64`）。足場は「起こした回数＋起こした全部の偽の SHIORI が受けた呼び出しの数（状態の問い合わせも含む）」。目印を持てない呼び手は「目印なし」と明示する |
+| 2 文言の出し場所 | 新しい芯は型つきの失敗 `WaitFailure` を返す。`bool` を返す古い呼び名（`spin_wait_until`・足場の `pump_*`・`wait_steady`）は形を保ち、打ち切ったときに失敗の文言を `eprintln!` で標準エラーへ 1 行出してから `false` を返す（テストの実行器が拾える出し方に限る。実行器は赤のテストの標準エラーを失敗の報告に載せる）。`run_bounded`・`join_bounded` は今どおり panic の文言に入れる |
+| 3 進みの目印 | 単調に増える数 1 つ（`u64`）。足場は「ゴーストの作り口が呼ばれた回数＋起こした全部の偽の SHIORI が受けた呼び出しの数（状態の問い合わせは除く）」。状態の問い合わせを除くのは、SHIORI のアクターが手の空いている間 500 ms ごとに問い合わせる（`areka-kanade` の `run_shiori_loop`・`IDLE_INTERVAL`）ので、数えると止まっていても目印が増え続けるからである。目印を持てない呼び手は「目印なし」と明示する |
 | 4 「止まった」までの時間 | 進みの無い時間の上限 `SPIN_WAIT` ＝ 30 秒（今の定数をそのまま使う）。総時間の上限 `WAIT_CAP` ＝ 300 秒。目印なしの待ちは `SPIN_WAIT` を総時間として使う（今と同じ） |
 | 5 CPU を占めない | 空回しの予算を回数から時間へ変える（`DENSE_SPIN` ＝ 60 ms）。それを過ぎたら 1 回ごとに `BACKOFF_SLEEP`（1 ms）で CPU を返す。受け口を待てる所（`wait_steady`・`run_bounded`）は `recv_timeout` で眠って待つ。足場の同時の数を絞るのは 2.7 の条件を満たしたときだけ |
 | 6 合成の時計の頭打ちの形 | 数値の頭打ちは置かない。足場が注入する時刻の受け手を「届いた順に消化し、締切を持たない相手」（dispatcher から再生中の台詞へ）だけに限る構造で守り、檻で固定する（下の「2.6 の満たし方」） |
@@ -179,10 +179,11 @@ tools/
 
 ### Modified Files
 
-- `crates/areka/src/emo2_boot/spine.rs` — `SPIN_WAIT`・`SPIN_YIELD_BUDGET`・`BACKOFF_SLEEP`・`spin_wait_until`・`run_bounded`・`join_bounded`（と各 doc）を `spine_wait.rs` へ移し、`#[path = "spine_wait.rs"] mod wait;` と `use self::wait::{…}`／`pub(crate) use self::wait::{…}` で同じ名前を出し直す（`super::SPIN_WAIT` と書いている兄弟のテストはそのまま通る）。`settle_bounded`・`settle_bounded_with` は残す。`ScriptedShioriHandle` に、受けた呼び出しの総数を返す口 `call_count()` を足す。`SpineHarness::shutdown_bounded` のゴーストの降ろしを、偽の SHIORI の数を目印にした待ちへ替える。移した後は 850 行前後になる。
+- `crates/areka/src/emo2_boot/spine.rs` — `SPIN_WAIT`・`SPIN_YIELD_BUDGET`・`BACKOFF_SLEEP`・`spin_wait_until`・`run_bounded`・`join_bounded`（と各 doc）を `spine_wait.rs` へ移し、`#[path = "spine_wait.rs"] mod wait;` と `use self::wait::{…}`／`pub(crate) use self::wait::{…}` で同じ名前を出し直す（`super::SPIN_WAIT` と書いている兄弟のテストはそのまま通る）。`settle_bounded`・`settle_bounded_with` は残す。`ScriptedShioriHandle` に、状態の問い合わせを除いた呼び出しの数を返す口 `call_count()` を足す。`SpineHarness::shutdown_bounded` のゴーストの降ろしを、偽の SHIORI の数を目印にした待ちへ替える。移した後は 920 行前後になる（上限 1,000 行までの余裕は 80 行ほど）。
 - `crates/areka/src/emo2_boot/ghost_switch_test_support.rs` — 下の「SwitchRig の待ち」。426 行から 500 行前後。末尾に `ghost_switch_talk_clock_tests.rs` の宣言（`#[path]`）を足す。
 - `crates/areka/src/emo2_boot/frame_ghost_quit_switch_tests.rs`・`crates/areka/src/ghost_session_restart_tests.rs` — 自前の待ちを芯へ寄せる（確かめの内容は変えない）。
-- 条件つき（再現で赤になった・または目印を渡す必要が出たファイルだけ）: `ghost_session_switch_tests.rs`・`ghost_session_switch_fallback_tests.rs`・`install/desk_overwrite_tests.rs`・`session_end_sync_send_tests.rs`・`emo2_boot/ghost_switch_boot_event_tests.rs`・`emo2_boot/frame/switch_tests.rs`（テストのファイル）。足場の呼び名を保つので、既定では触らない。
+- 対象の族で `spin_wait_until` を直接呼んでいて、足場か偽の SHIORI の観測口が手元にあるファイル — 再現を待たずに、目印つきの待ち（足場があれば `SwitchRig::wait_for`、無ければ `wait_until` に `ScriptedShioriHandle::call_count()` の目印）へ移す（6.4: 定義の名前で確かめられる欠け）。設計の時点の数え: `ghost_session_switch_fallback_tests.rs`（2 か所）・`session_end_sync_send_tests.rs`（2 か所）・`shell_balloon_switch_session_tests.rs`（2 か所）・`shell_balloon_switch_session_lap_tests.rs`（1 か所）。最初の作業の数え上げ（1.4）で取り直し、全数を移す。
+- 条件つき（再現で赤になったファイルだけ）: `ghost_session_switch_tests.rs`・`install/desk_overwrite_tests.rs`・`emo2_boot/ghost_switch_boot_event_tests.rs`・`emo2_boot/frame/switch_tests.rs`（テストのファイル）。足場の呼び名を保つので、既定では触らない。
 - 条件つき（5.2）: `crates/sample-ghost-kit/src/devroot.rs` と兄弟のテスト `devroot_sweep_tests.rs`。
 
 ### 同じウェーブの約束の外で触るファイル
@@ -218,7 +219,7 @@ flowchart TD
 ```
 
 - 条件の確かめは打ち切りの判定より先に行う。届いていれば、どれだけ時間がかかっていても成功である。
-- 目印は条件の確かめの直後に読む。足場の条件はその中でゴーストを同期で起こすことがあり（`run_ghost_quit_phase` の中の `boot_ghost`）、長くかかっても、戻ったときには起こした回数が増えているので「進んだ」と数えられる。
+- 目印は条件の確かめの直後に読む。足場の条件はその中でゴーストを同期で起こすことがあり（`run_ghost_quit_phase` の中の `boot_ghost`）、長くかかっても、戻ったときには作り口が呼ばれた回数が増えているので（どの `FakeShiori` で起こしても 1 つ増える）「進んだ」と数えられる。
 
 ## Requirements Traceability
 
@@ -228,7 +229,7 @@ flowchart TD
 | 1.2 | 赤の名前・文言・待ちを回ごとに記録 | LoadRepro・WaitCore | 回ごとの出力のフォルダ・`WaitFailure` の文言 | — |
 | 1.3 | 作業場所は `target\` の下・負荷の子を止める | LoadRepro | `target\load-flake\`・`finally` での停止 | — |
 | 1.4 | 待ちと足場の利用の数え上げ | LoadRepro | `load-repro.md` の「数え上げ」 | — |
-| 2.1 | 進んでいる限り赤にしない | WaitCore・SwitchRig の待ち | `Progress::Count`・`SPIN_WAIT` の読み替え | 打ち切りの決め方 |
+| 2.1 | 進んでいる限り赤にしない | WaitCore・SwitchRig の待ち | `Progress::Count`・`SPIN_WAIT` の読み替え。目印を作れない待ちは下の「2.1 の例外」 | 打ち切りの決め方 |
 | 2.2 | 到達で判定・確かめを弱めない | SwitchRig の待ち | `pump_*` の `done` は今のまま | — |
 | 2.3 | sleep・延長だけ・1 フレーム遅らせで直さない | WaitCore | 打ち切りの基準を進みへ変える（秒数の延長ではない） | — |
 | 2.4 | 無視・本数減らしで消さない | 全体 | テストの削除・`#[ignore]` を足さない | — |
@@ -253,6 +254,16 @@ flowchart TD
 | 7.1 | 1,000 行以下・例外表を増やさない | File Structure Plan | `spine.rs` からの切り出し | — |
 | 7.2 | 一時パスは窓口を通す | WaitCore・LoadRepro | 新しい Rust のコードは一時パスを作らない | — |
 | 7.3 | 部品の形を変えたら全利用者を移す | WaitCore | 古い呼び名は形を保つ・変える所は全数 | — |
+
+### 2.1 の例外（目印を作れない待ち）
+
+次の待ちは進みの目印を持てないので、総時間で打ち切る（文言は `［進みは不明］`、`run_bounded`／`join_bounded` は今の文言）。再現で赤になったら、目印に使える観測を探して対象に加える。
+
+| 待ち | 目印を作れない理由 |
+|---|---|
+| `ghost_session_restart_tests.rs` の `run_input_until` | 待つ相手が作業プールで、進みを数える口がテストの側に無い。総時間は 10 秒から共通の `SPIN_WAIT`（30 秒）になり、空回しは 60 ms で CPU を返す形になる |
+| `spine_*_tests.rs` が `spin_wait_until` を直接呼ぶ待ち・自前の Tick 注入の待ち（約 20 か所） | 待つ相手が描画と台詞の再生で、SHIORI の呼び出しを伴わない。赤の観測も無い（Non-Goals） |
+| `join_bounded("spine seriko join", …)` と、古い呼び名 `run_bounded` の残りの呼び手 | スレッドの合流を待つだけで、途中の進みを外から読めない |
 
 ## Components and Interfaces
 
@@ -386,8 +397,9 @@ fn wait_until_with(
 
 **Responsibilities & Constraints**
 
-- 進みの目印 `progress_probe()`: 「起こした回数（起動の台帳 `boots` の長さ）＋台帳の全部の `ScriptedShioriHandle::call_count()` の和」を返す関数を作る。台帳（`Rc`）の写しだけを掴み、World を借りない（条件の関数が World を可変で借りている間も読める）。
+- 進みの目印 `progress_probe()`: 「ゴーストの作り口（`GhostBootInputsSource` の閉包）が呼ばれた回数＋台帳の全部の `ScriptedShioriHandle::call_count()` の和」を返す関数を作る。作り口の回数は、台帳 `boots` の長さでなく専用の数え（`Rc<Cell<u64>>`）で持つ。台帳へ足すのは `FakeShiori::Scripted` と `ScriptedThenConnectFail` の最初の 1 回だけで、`ConnectFail`・`WiringFail`・`BalloonMissing` で起こした回（切替の失敗から既定ゴーストへ戻るテスト）が台帳の長さには入らないからである。数えと台帳（`Rc`）の写しだけを掴み、World を借りない（条件の関数が World を可変で借りている間も読める）。
 - `pump_until`・`pump_talking_until`・`pump_input_until`: 引数・戻り値（`bool`）・`done` の中身は今のまま。中で `wait_until(呼び出しの場所, Progress::Count(目印), …)` を呼び、`Err` なら文言を標準エラーへ出して `false`。`#[track_caller]` で `what` に呼び出しの場所を入れる。
+- `wait_for`（新規）: 足場を持つテストが `spin_wait_until` を直接呼んでいる所の移し先。`wait_until(呼び出しの場所, Progress::Count(目印), cond)` を呼び、`Err` なら文言を出して `false`。
 - `wait_steady`: `wait_recv` で待つ。届いた通知が `Steady` でなければ、届いた通知を `{:?}` で標準エラーへ出して `false`（今は捨てている）。
 - `shutdown`: `run_bounded_watching("置き場のゴーストを降ろす", Progress::Count(目印), …)`。
 - 時刻の注入: `pump_talking_until` の中の「時計を進めて dispatcher へ `Tick` を送る」部分を私的な関数 1 つにまとめ、送り先は `DispatcherMsg::Tick` だけと doc に書く。進め方（1 ms ごとに 100 ms）は変えない。
@@ -404,17 +416,19 @@ fn wait_until_with(
 
 ```rust
 impl SwitchRig {
-    /// 進みの目印（起こした回数＋偽の SHIORI が受けた呼び出しの総数）を数える関数。
+    /// 進みの目印（作り口が呼ばれた回数＋偽の SHIORI が受けた、状態の問い合わせを除く呼び出しの数）を数える関数。
     pub(crate) fn progress_probe(&self) -> impl Fn() -> u64 + 'static;
 
     #[track_caller] pub(crate) fn pump_until(&mut self, done: impl FnMut(&Self) -> bool) -> bool;
     #[track_caller] pub(crate) fn pump_talking_until(&mut self, done: impl FnMut(&Self) -> bool) -> bool;
     #[track_caller] pub(crate) fn pump_input_until(&mut self, done: impl FnMut(&Self) -> bool) -> bool;
     #[track_caller] pub(crate) fn wait_steady(&self) -> bool;
+    /// 段を回さずに条件だけを待つ（別スレッドの到着を読むだけの待ち）。進みの目印つき。
+    #[track_caller] pub(crate) fn wait_for(&self, cond: impl FnMut() -> bool) -> bool;
     pub(crate) fn shutdown(&mut self) -> bool;
 }
 impl ScriptedShioriHandle {
-    /// 受けた呼び出しの総数（状態の問い合わせも数える・写しを作らない）。
+    /// 受けた呼び出しの数（`Get`・`Notify`・`Unload`。状態の問い合わせ `Status` は除く・写しを作らない）。
     pub(crate) fn call_count(&self) -> u64;
 }
 ```
@@ -562,17 +576,18 @@ flowchart TD
 
 8. 時計の先行の檻（`ghost_switch_talk_clock_tests.rs`・2.6）: A の台本で B への切替を始め、切替の握手の SHIORI の呼び出しを `HoldAt` で固める（相手が進めない状態を、時間でなく固まりで作る）。固まっている間に足場の時計を 30,000 ms（`close_talk_deadline_ms`）を大きく越えて進める。解いた後、B が定常に着き、A と B の呼び出しの並びが固めない場合の期待と同じで、error の記録（`change_deadline_exceeded` を含む）が 0 件であること。足場の時刻が kanade の合成の締切に届く結線が後から入ると赤になる。
 9. 足場の待ちが届かないとき、標準エラーに出す文言の元（`WaitFailure`）が `what` に呼び出しの場所を持つ（`pump_until` を、決して真にならない条件と、差し替えた短い上限で呼ぶ私的な口で確かめる。30 秒は待たない）。
+10. 進みの目印の檻: 偽の SHIORI の `status()` を何回呼んでも `call_count()` と足場の目印が増えないこと。`ConnectFail` で起こした回でも目印が 1 つ増えること（時間を待たずに確かめる・3.2）。
 
 ### 後片付けの檻（5.2 を直すときだけ・`devroot_sweep_tests.rs`）
 
-10. `WorkDir` の破棄で、木を消している最中に札が消せないこと（破棄の手順を「木を消す関数」を受け取る私的な関数に分け、その関数の中から札の削除を試みて共有違反になることを確かめる）。
-11. `discard_tree` の後、棚に `gc-…` の木も `gc-….lock` も残らない。握られた `gc-….lock` のある `gc-` の木を `sweep` が退避しない。
+11. `WorkDir` の破棄で、木を消している最中に札が消せないこと（破棄の手順を「木を消す関数」を受け取る私的な関数に分け、その関数の中から札の削除を試みて共有違反になることを確かめる）。
+12. `discard_tree` の後、棚に `gc-…` の木も `gc-….lock` も残らない。握られた `gc-….lock` のある `gc-` の木を `sweep` が退避しない。
 
 ### 既存のテストと全体
 
-12. 待ちの部品を移した直後（中身は同じ）と、差し替えた後のそれぞれで、`cargo test -p areka --bin areka` が同じ本数で緑（7.3・2.4: テストの本数は減らさない）。
-13. 負荷の下の再現: 直す前と同じ引数で `待ちの打ち切り` の赤が 0 件（6.1）。
-14. 静かな机の `tools/test-all.ps1` が、1 ファイル 1,000 行の番人・一時パスの見張りを含めて緑（6.3・7.1・7.2）。
+13. 待ちの部品を移した直後（中身は同じ）と、差し替えた後のそれぞれで、`cargo test -p areka --bin areka` が同じ本数で緑（7.3・2.4: テストの本数は減らさない）。
+14. 負荷の下の再現: 直す前と同じ引数で `待ちの打ち切り` の赤が 0 件（6.1）。
+15. 静かな机の `tools/test-all.ps1` が、1 ファイル 1,000 行の番人・一時パスの見張りを含めて緑（6.3・7.1・7.2）。
 
 ## Performance
 
