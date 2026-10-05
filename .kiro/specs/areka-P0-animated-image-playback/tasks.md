@@ -7,8 +7,8 @@
 > 触らないファイル: `areka-emo-atlas` の全ファイル・`areka-parsers`・`areka-emo-compose` の `fold.rs`・`method.rs`・`atlas_bind.rs`・`boxes.rs`・`hit_import.rs`・`base_image.rs`・`areka-emo-present` の `presenter/show.rs`（`apply_show`）・`cache.rs`（`CAPACITY`）・`crates/areka/src/emo2_boot/` の `spine.rs`・`assets.rs`・`frame.rs`・`frame/wiring.rs`。`mod.rs` の `let clock = TalkClock::new(clock_fn);` の名前・型・持ち主は変えない（`areka-P0-balloon-lifecycle-events` が使う）。`emo2` の照合（焼いた結果・合成の結果・まばたきの決定論テスト）は期待値を 1 本も書き換えない（呼び出しの形の変更に合わせた書き換えは数えない）。
 
 - [ ] 1. 着手前の確認と検体
-- [ ] 1.1 main を取り込み、先に入った 2 本の後の形を引き直して、前の数字を採る
-  - `areka-P0-element-base-method`・`areka-P0-balloon-lifecycle-events` が main に入っていることを確かめ、取り込む（入っていなければ止まって開発者へ知らせる）
+- [ ] 1.1 main を取り込み、先に入った `element-base-method` の後の形を引き直して、前の数字を採る
+  - `areka-P0-element-base-method` が main に入っていることを確かめ、取り込む（入っていなければ止まって開発者へ知らせる）。`areka-P0-balloon-lifecycle-events` は待たない（2026-10-05 開発者裁定で本 spec が先に入る。`mod.rs` の `clock: TalkClock` の名前・型・持ち主を変えない約束はそのまま）
   - 取り込んだ後のコードで、design.md「触るファイルと並走の重なり」の行（`plan.rs` の `push_static_element_ops`・`flatten_surface`・`flatten_extent`、`mod.rs` の `spawn_seriko(` と `LoopTickerConfig` の所、`hub.rs` の `ShowSurface` の腕、`visibility.rs` の `show_target`）を読み直し、design の前提と食い違う所があれば research.md に書いてから進む
   - 実装の前の HEAD で、`emo2` の 1 コマの時間を `areka-P0-recompose-budget` の測り方で採り、機械と測り方を添えて research.md に記す
   - 完了の姿: 取り込みのコミットがあり、全テストが緑で、research.md に「前の数字」と「引き直した結果（食い違い 0 件、または件数と中身）」が載っている

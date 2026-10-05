@@ -498,7 +498,7 @@ brief の Approach 1 は「コマを 1 枚ずつ持ち `always` で順に指す�
 ### 調整で確かめた事実（ほかのセッションから・design.md の同名の節が正本）
 
 - `areka-P0-element-base-method` は `plan.rs` に触らない。先に main へ入る。このウェーブで `plan.rs` の重なりは 0。
-- `areka-P0-balloon-lifecycle-events` は `emo2_boot/mod.rs` の 1〜3 行だけ（今ある `clock: TalkClock` の写しを渡す）。その `clock` の名前・型・持ち主を変えない。先に main へ入る。
+- `areka-P0-balloon-lifecycle-events` は `emo2_boot/mod.rs` の 1〜3 行だけ（今ある `clock: TalkClock` の写しを渡す）。その `clock` の名前・型・持ち主を変えない。2026-10-05 の実装の頭で順を入れ替え、本 spec の後に main へ入る（同 spec はまだ要件の段だった）。
 - `areka-P0-extent-element-offset` は未着手。本 spec が先。`flatten_extent` を `plan_extent.rs` へ移したことを申し送る。
 
 ### 軽い直し（設計書へ入れたもの）

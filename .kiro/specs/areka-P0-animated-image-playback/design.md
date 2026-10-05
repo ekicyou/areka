@@ -299,10 +299,10 @@ doc/・.kiro/                        # 台帳・対応表・後続 2 本の brie
 #### 調整で確かめた事実（2026-10-05・ほかのセッションから）
 
 - **`areka-P0-element-base-method`**: `crates/areka-emo-compose/src/plan.rs` には**触らない**（同 spec の tasks.md が `plan.rs`・`blit.rs`・`base_image.rs`・`method.rs` の `is_implemented`／`known_method` を「触らない」に挙げている）。触るのは、読み手の `shell/`（`decode.rs` の `is_image_element_method`・新しい `undrawn.rs`）・合成の `fold.rs` の `normalize_element` と `method.rs` の `ComposeMethod::Base` の注記だけ・表示層の `shell_target.rs` の `load_shell_target`（`warn!` 1 つとテストの接続）・対応表 §8 の 1 行・台帳 `assets.toml` の 2 行。**同 spec が先に main へ入り、本 spec は後**。このウェーブで `plan.rs` の重なりは 0。
-- **`areka-P0-balloon-lifecycle-events`**: `crates/areka/src/emo2_boot/mod.rs` の 1〜3 行だけ（今ある `let clock = TalkClock::new(clock_fn);` の写しを `BalloonLifecycleSink::new(lifecycle_tx)` へ渡す）。`spawn_seriko(` の所・刻みの起動・テストの接続宣言・`frame/status_report.rs` には触らない。**本 spec への縛り: その `clock: TalkClock` の名前・型・持ち主を変えない**。seriko の時計は別の名前（`seriko_clock`）の別の値として足す。**同 spec が先に main へ入り、本 spec は後**。
+- **`areka-P0-balloon-lifecycle-events`**: `crates/areka/src/emo2_boot/mod.rs` の 1〜3 行だけ（今ある `let clock = TalkClock::new(clock_fn);` の写しを `BalloonLifecycleSink::new(lifecycle_tx)` へ渡す）。`spawn_seriko(` の所・刻みの起動・テストの接続宣言・`frame/status_report.rs` には触らない。**本 spec への縛り: その `clock: TalkClock` の名前・型・持ち主を変えない**。seriko の時計は別の名前（`seriko_clock`）の別の値として足す。**順は入れ替えた（2026-10-05 実装の頭の開発者裁定）: 同 spec はまだ要件の段なので待たず、本 spec が先に main へ入る**。後から入る同 spec が `mod.rs` の小さな競合を解く。同 spec のセッションへ知らせ済み。
 - **`areka-P0-extent-element-offset`**: 未着手（セッションなし）。本 spec が先。同 spec の brief へ「`compute_extent`・`flatten_extent` は `plan_extent.rs` へ移した」「足したのは `always` の全部の pattern と動く絵の子の 2 か所」「画像の element と動く絵の子は同じ 1 行で数えているので、X,Y の直しはその 1 行に入れる」を申し送る（文面は「申し送りの文面」）。
 
-残る調整は文書だけ: roadmap の同じウェーブの行（本 spec の触るファイル・約束・規模）と `flatten_extent` の持ち主の書き直し。タスクの頭に「main を取り込んで、先に入った 2 本の後の形を引き直す」を置く。
+残る調整は文書だけ: roadmap の同じウェーブの行（本 spec の触るファイル・約束・規模）と `flatten_extent` の持ち主の書き直し。タスクの頭に「main を取り込んで、先に入った `areka-P0-element-base-method` の後の形を引き直す」を置く（`areka-P0-balloon-lifecycle-events` は上のとおり本 spec の後）。
 
 ## System Flows
 
@@ -917,7 +917,7 @@ impl ScopeStates {
 
 - 合成の先送りは「外から所有される・見えていない・面の番号が同じ・着せ替えが同じ」の 4 つが揃ったときだけ効く。条件を広げすぎると、隠れている間に変わった面が確立されない。表示層のテストで条件の縁を固定する。
 - 出番の世代は「seriko の出口が 1 つの FIFO で、合図の後の指令は合図の後に着く」ことに立つ。seriko から表示層までの道（単一の発行点 → 橋渡し → 1 本の受け口 → フレームの取り出し）が順を保つことを E2E で 1 本固定する。道が 2 本になる変更をするときは見直す（Revalidation Triggers に当たる）。
-- 本 spec は `areka-P0-element-base-method`・`areka-P0-balloon-lifecycle-events` の後に main へ入る。タスクの頭で main を取り込み、先に入った形を引き直す（`plan.rs` の重なりは 0）。
+- 本 spec は `areka-P0-element-base-method` の後に main へ入る。タスクの頭で main を取り込み、先に入った形を引き直す（`plan.rs` の重なりは 0）。`areka-P0-balloon-lifecycle-events` は本 spec の後（2026-10-05 実装の頭の開発者裁定で順を入れ替えた）。
 - 欄の読みの種類が増え、合成と見える部品の求め方がずれる。突き合わせのテスト（Unit Tests 5）で固定する。
 - コマが 4 枚以上の絵で合成が 16 ミリ秒に収まらない場合は、数字を添えて報告する（席の数は変えない）。
 
