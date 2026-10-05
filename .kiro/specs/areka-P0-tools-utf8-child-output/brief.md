@@ -20,11 +20,14 @@
   - `release.yml` の段「zip を作る」は子の pwsh の中で書き替えてから `package.ps1` を呼ぶ（子の中だけ）。
 - 起票時の再現（2026-10-05・main `44fc0a61`・端末に触れずに確かめた）: `cargo metadata --no-deps --locked --format-version 1` の出力（30 クレート）を UTF-8 で解けば JSON は通る。同じバイト列をコードページ 932 で解くと `packages[5].description` で JSON が壊れる。クレートごとに見ると、少なくとも `areka-nar`・`areka-ghost`・`areka-mcp` の `description` で壊れる。
   - 壊れるかどうかは字の並びしだい（Shift_JIS の 1 バイト目に見えるバイトが、文字列を閉じる `"` を飲み込むと壊れる）。日本語の `description` は 13 クレートにあるが、壊れるのは一部だけ＝今まで通っていたのは偶然で、`description` を 1 字直すだけで赤にも緑にもなる。
-  - α の完成判定（10-02）で `-Check` が緑だった理由は調べていない（その後に足された `areka-mcp` の `description` が初めて当たった見込み）。要件の段で確かめなくてよい（読み方を直せば理由に依らず直る）。
+  - α の完成判定（10-02）で `-Check` が緑だった理由は調べていない。壊れる `areka-nar` の `description` は 09-19（`nar-install`）から在るので、字が後から足されたせいではない＝回した端末の文字コードが違った見込み（今回は Claude Code の Bash〔Git Bash〕から pwsh を起こした形で、コンソールが `shift_jis`）。要件の段で確かめなくてよい（読み方を直せば理由に依らず直る）。
+- 赤の実物（`release-cycle` の初回・`pwsh -NoProfile -File tools/package.ps1 -Check`・段「==> 前提の確認」・終了コード 3＝`$EXIT_BAD_ARGS`）: 「版を読めない（cargo metadata の出力が JSON として読めない: JSON からの変換が次のエラーで失敗しました: After parsing a value an unexpected character was encountered: s. Path 'packages[5].description', line 1, position 24246.）」。`packages[5]` は `areka-nar`。環境は pwsh 7.6.6・`[Console]::OutputEncoding`＝`shift_jis`・`[Text.Encoding]::Default`＝`utf-8`。
 - `release-cycle` のセッションから聞き取った事実（2026-10-05・起票のときに相談）:
   - 赤になった環境は pwsh 7.6.6・コンソールは `shift_jis`。止まっているのは手順の 3.3（`-Check`）だけで、3.1・3.2（全体テストほか）と 3.4（`crates-io.ps1 -Verify -Version 0.0.2`）は緑。3.4 が緑なのは `crates-io.ps1` が自分でコンソールを書き替えているから。
   - 壊れた `description` は版上げの前から在る＝main でも同じく赤のはず（main の上では回していない）。
-  - `tools/package.ps1` には、子の出力を素で受けて**値として使う**所がもう 1 か所ある: `Read-SamplePaths`（`cargo run … --bin nar-sample-path` の出力の `key=value` からパスを読み、`Test-Path` に掛ける）。作業ツリーのパスに日本語が入れば同じ穴になりうる（今の開発者のパスは英数字だけなので表に出ていない）。
+  - `tools/package.ps1` には、子の出力を素で受けて**値として使う**所がもう 1 か所ある: `Read-SamplePaths`（`cargo run … --bin nar-sample-path` の出力の `key=value` からパスを読み、`Test-Path` に掛ける）。作業ツリーのパスに日本語が入れば同じ穴になりうる（今の開発者のパスは英数字だけなので表に出ていない）。`@(git status --porcelain)` の 2 か所は `core.quotepath` で ASCII になるので対象外でよい。
+  - `-Check` は最初の段で止まったので、その後の段に文字コードで落ちる所があるかは実走では見ていない。
+  - `crates-io.ps1` の読み方は `tools/test-all.ps1` の「crates.io 公開前の確認」からも通る（書き替えだけを先に消すと、そこも赤になる）。
 - 手本が main に在る: `tools/perf/perf-loop.common.ps1` の `Invoke-Child`（`ProcessStartInfo` の `StandardOutputEncoding` を UTF-8 に固定して読み、端末のコードページには触らない。注記に理由が書いてある）。
 
 ## Desired Outcome
