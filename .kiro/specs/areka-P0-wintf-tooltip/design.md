@@ -603,7 +603,7 @@ pub(crate) fn decide(
     session: &mut TooltipSession,
     now: Instant,
     sample: &mut dyn FnMut() -> OsSample,
-    visible: &dyn Fn(Entity) -> bool,
+    visible: &dyn Fn(&World, Entity) -> bool,   // 本物は World から WindowHandle を引いて IsWindowVisible に問う（decide が &mut World を借りているので World を引数で渡す）
     hover_time: &mut dyn FnMut() -> Duration,
 ) -> Vec<Effect>;
 

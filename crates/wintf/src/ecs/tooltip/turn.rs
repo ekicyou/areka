@@ -398,6 +398,20 @@ impl TurnMachine {
             _ => None,
         }
     }
+
+    /// 出す番の始まりの範囲の場所（出す番のときだけ）。殻が Tracked の矩形を作るために読む
+    /// （途中の差し替えは次の出す番から効くので、今の登録ではなくこちらを使う）。
+    pub(crate) fn active_area(&self) -> Option<TooltipArea> {
+        match &self.state {
+            State::Active(t) => Some(t.area),
+            _ => None,
+        }
+    }
+
+    /// 何もない状態か（待ち・出す番・押したので休み、のどれでもない）。
+    pub(crate) fn is_idle(&self) -> bool {
+        matches!(self.state, State::Idle)
+    }
 }
 
 /// 位置に依らず、追っている範囲を続けられない理由（消えた・隠れた・押した）。

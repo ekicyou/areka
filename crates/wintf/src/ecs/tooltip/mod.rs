@@ -20,6 +20,14 @@ mod os;
 mod ranges;
 #[cfg_attr(
     not(test),
+    expect(
+        dead_code,
+        reason = "画面更新の末尾への配線（tooltip_frame の登録）と押下の印の呼び出しは後の段で足す"
+    )
+)]
+mod system;
+#[cfg_attr(
+    not(test),
     expect(dead_code, reason = "画面更新ごとの判定（system.rs）から使い始める")
 )]
 mod turn;
