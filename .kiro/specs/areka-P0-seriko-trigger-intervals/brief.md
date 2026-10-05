@@ -85,3 +85,16 @@
   1. `talk` の「数値分の文字」の数え方。書記素クラスタで数えるか。`\_q`（一括表示）や早送りのときに口をどう動かすか。
   2. 文字の到着を seriko へ知らせる経路（台本の cue に載せるか、文字の層から送るか）。0 フレームで揃える形を設計で決める。
   3. 最初の 1 本の範囲。`\i[ID,wait]` を別途に回すことでよいか。
+
+
+## 2026-10-05 `animated-image-playback` からの申し送り（同 spec の要件討議・議題 4／要件 10.5）
+
+> この節は `areka-P0-animated-image-playback` が生きている間（要件 → 設計 → 実装 → 完了）、同 spec の側で正しく保つ（開発者指示 2026-10-05）。設計・完了の段で形が決まるたびに書き足す。着手時に引き直すこと。
+
+- **優先度**: 開発者指示（2026-10-05）で roadmap の段を「優先（高）」へ上げた。`animated-image-playback` の着地の直後に着手する。
+- **引き受けるもの（本 spec の In へ足す）**: interval の **`always` を含む組み合わせ**（`bind+always` ほか）。正典は「SSPのみ+区切りで列挙する事で組み合わせ指定が可能」（[descript_shell_surfaces `animation*.interval`](https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#animation*.interval%2C%E3%82%A4%E3%83%B3%E3%82%BF%E3%83%BC%E3%83%90%E3%83%AB)）と書くだけで、相手や語順を限らない。決めることは ⑴ `bind+always`＝着せ替えが有効な間だけ繰り返す ⑵ `+` の語順の違い（`always+bind`）⑶ 3 語以上の組み合わせをどこまで読むか。
+- **`animated-image-playback` が入れるもの**: `always` の**単独**（完全一致）だけ。表示と同時に始まり、最後のコマの後に頭へ戻って繰り返す。一番上のサーフェスでは切り替えで頭から、子のサーフェスでは子の時計の決まり（巻き戻らない）。途中の終わりのコマ（`-1`）は消してから頭へ戻る。待ち時間の合計 0 は繰り返さずに記録を残す。
+- **`animated-image-playback` が残すもの（変更 0）**: `always` を含む組み合わせは、今までどおり元の綴りを添えた記録を残して駆動しない（同 spec の要件 4.9）。`runonce`・`never`・`yen-e`・`talk`・`periodic`・`bind` 単独 ほかも同じ（同 4.8）。
+- **着せ替えの種類かを見ている場所**（起票時の実測・`animated-image-playback` の research.md 5 章 議題 4）: 合成の `is_bind_interval`（`crates/areka-emo-compose/src/plan.rs`）・`NestTable` の `bind_ids`（`crates/areka-emo-compose/src/nesting.rs`）・seriko の着せ替えの番人（`crates/areka-seriko/src/parts.rs` の `gate`・`looper.rs`）。読み手 `normalize_interval`（`crates/areka-parsers/src/shell/decode.rs`）は完全一致で見分ける。
+- **時刻の決まり**: 時刻は正確に扱う（開発者 2026-10-05）。待ち時間は丸めない・画面の更新が遅れたら過ぎた時間の分だけ進める。繰り返しの仕組みの上に載る語も同じ。
+- **繰り返しの仕組みの形**（型・関数の名前）: 設計の段で決まりしだい、ここへ書き足す（未記入）。
