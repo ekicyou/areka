@@ -619,6 +619,10 @@ mod route_tests;
 mod lookahead_tests;
 
 #[cfg(test)]
+#[path = "actor_lookahead_shapes_tests.rs"]
+mod lookahead_shapes_tests;
+
+#[cfg(test)]
 #[path = "actor_box_tests.rs"]
 mod box_tests;
 

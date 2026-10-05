@@ -27,39 +27,44 @@ use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::pump_until_idle;
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, spawn_emo_text};
-use crate::layout::FixedMetrics;
+use crate::layout::{FixedMetrics, PositionedLine};
 use crate::place::PlaceKey;
+use crate::sink::EmoTextSink;
 use crate::state::TextLayerConfig;
 
 // ── 経路を歩く支え ──
 
 /// 刻印する絶対の開始時刻。0 でない値にして、絶対の時刻と相対の時刻の取り違えを拾う。
-const ANCHOR: f64 = 100.0;
+pub(super) const ANCHOR: f64 = 100.0;
 /// 字の丈（`FixedMetrics` では全角 1 字の送り幅＝字の丈）。
 const FONT_HEIGHT: u32 = 20;
 /// 欄の幅: 全角 9 字（180）が入り、10 字目（200）が入らない値。
 /// 「イイジャン！‥‥」の 8 字は 1 行に入り、「‥‥ええと、」の 6 字は「イイジャン！」の後ろに入らない。
-const NINE_WIDE: (u32, u32) = (190, 200);
+pub(super) const NINE_WIDE: (u32, u32) = (190, 200);
 
 /// 文節の折り返し（`budoux_newline,1`）のバルーン。描画範囲・折り返しの基準は面の全域
 /// （validrect・wordwrappoint を書かない＝右辺で折り返す）、原点は (0,0)。
 pub(super) fn budoux_model() -> BalloonModel {
-    model_with_budoux(Some("1"))
+    balloon_model(None, Some("1"))
 }
 
 /// `budoux_newline` の無い（1 字ずつの折り返しの）バルーン。ほかは [`budoux_model`] と同じ。
 pub(super) fn char_by_char_model() -> BalloonModel {
-    model_with_budoux(None)
+    balloon_model(None, None)
 }
 
-fn model_with_budoux(budoux_newline: Option<&str>) -> BalloonModel {
+/// 書字方向（`writing_mode`）と `budoux_newline` を選べるバルーン。ほかは [`budoux_model`] と同じ。
+pub(super) fn balloon_model(
+    writing_mode: Option<&str>,
+    budoux_newline: Option<&str>,
+) -> BalloonModel {
     BalloonModel::new(
         WindowPosition::new(None, None),
         Origin::new(Some(0), Some(0)),
         WordWrapPoint::new(None, None),
         ValidRect::new(None, None, None, None),
         Font::new(None, Some(FONT_HEIGHT), FontColor::new(None, None, None)),
-        None,
+        writing_mode.map(str::to_string),
         budoux_newline.map(str::to_string),
     )
 }
@@ -88,6 +93,110 @@ struct EmitOnly<S>(S);
 impl<S: CueSink> CueSink for EmitOnly<S> {
     fn emit(&mut self, cue: TalkCue) {
         self.0.emit(cue);
+    }
+}
+
+/// 経路の土台: 本物の実行時と受け口（[`spawn_emo_text`]）と、装着先を作るための `World`。
+/// 装着の登録（[`attach`](Self::attach)）と再生機の登録（[`play`](Self::play)）の順は検査が選ぶ。
+pub(super) struct Rig {
+    pub(super) runtime: Rc<RefCell<TextLayerRuntime>>,
+    pub(super) world: World,
+    sink: EmoTextSink,
+    _drain: wintf_winmsg_executor::JoinHandle<()>,
+}
+
+impl Rig {
+    pub(super) fn new() -> Rig {
+        let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        )));
+        let (sink, drain) =
+            spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
+        Rig {
+            runtime,
+            world: World::new(),
+            sink,
+            _drain: drain,
+        }
+    }
+
+    /// 装着の登録（本番の `register_actor`＝バルーンの定義の見た目が状態へ入る）。
+    pub(super) fn attach(&mut self, actor: &str, model: &BalloonModel, image: (u32, u32)) {
+        let slot = self.world.spawn_empty().id();
+        let window = self.world.spawn_empty().id();
+        self.runtime.borrow_mut().register_actor(
+            ActorKey::from(actor),
+            TextSlotBinding::new(slot, window, 1.0, image, image),
+            ResolvedBalloonText::resolve(model, image),
+        );
+    }
+
+    /// 台本を `parse` → `compile` → 刻印（`anchor`）→ `from_sheet` し、受け口を登録して汲み出す
+    /// （`Staged`・`AllAtOnce` はここで先渡しが届く）。`tick` はまだしない。
+    pub(super) fn play(&self, script: &str, anchor: f64, delivery: Delivery) -> Talk {
+        let talk = areka_sakura::compile(
+            &areka_parsers::sakura::parse(script),
+            &SystemVarSnapshot::default(),
+        );
+        // 合図が届く時刻（相対）と、その合図が出終わる時刻を判定の時刻にする。
+        let mut times: Vec<f64> = talk
+            .sheet
+            .cues()
+            .iter()
+            .flat_map(|c| [c.start_time, c.start_time + c.duration])
+            .collect();
+        times.sort_by(f64::total_cmp);
+        times.dedup();
+        let mut player = CuePlayer::from_sheet(&talk.sheet.with_absolute_start_time(anchor));
+        let sink = self.sink.clone();
+        if delivery == Delivery::WithoutPreview {
+            player.register_sink(Box::new(EmitOnly(sink)));
+        } else {
+            player.register_sink(Box::new(sink));
+        }
+        pump_until_idle();
+        Talk {
+            player,
+            anchor,
+            times,
+        }
+    }
+
+    /// 台本に無い合図を、再生機が流すのと同じ UI の待ち行列へ直接 1 つ流して汲み出す。
+    pub(super) fn emit(&self, cue: TalkCue) {
+        self.sink.clone().emit(cue);
+        pump_until_idle();
+    }
+
+    /// 場所の行の列（本番の提示と同じ `arrange_lines` に決まった字幅を渡す）。状態が無ければ空。
+    pub(super) fn lines(&self, place: &PlaceKey, t: f64) -> Vec<PositionedLine> {
+        self.runtime
+            .borrow_mut()
+            .arrange_for_test(place, &FixedMetrics, t)
+            .unwrap_or_default()
+    }
+
+    /// 場所の行ごとの字の並び。
+    pub(super) fn rows(&self, place: &PlaceKey, t: f64) -> Vec<Vec<String>> {
+        self.lines(place, t)
+            .iter()
+            .map(|line| line.glyphs.iter().map(|g| g.text.to_string()).collect())
+            .collect()
+    }
+}
+
+/// 刻印済みの再生機 1 つと、その台本の判定の時刻（トークの頭からの秒・昇順）。
+pub(super) struct Talk {
+    player: CuePlayer,
+    anchor: f64,
+    pub(super) times: Vec<f64>,
+}
+
+impl Talk {
+    /// トークの頭から `t` 秒の絶対時刻で `tick` し、UI の待ち行列を汲み出す。
+    pub(super) fn tick(&mut self, t: f64) {
+        self.player.tick(self.anchor + t);
+        pump_until_idle();
     }
 }
 
@@ -125,82 +234,40 @@ pub(super) fn walk_injecting(
     delivery: Delivery,
     mut stray: Option<(usize, CueCommand)>,
 ) -> Vec<Stage> {
-    let talk = areka_sakura::compile(
-        &areka_parsers::sakura::parse(script),
-        &SystemVarSnapshot::default(),
-    );
-    // 合図が届く時刻（相対）と、その合図が出終わる時刻を判定の時刻にする。
-    let mut times: Vec<f64> = talk
-        .sheet
-        .cues()
-        .iter()
-        .flat_map(|c| [c.start_time, c.start_time + c.duration])
-        .collect();
-    times.sort_by(f64::total_cmp);
-    times.dedup();
-
-    let sheet = talk.sheet.with_absolute_start_time(ANCHOR);
-    let mut player = CuePlayer::from_sheet(&sheet);
-
+    let mut rig = Rig::new();
+    rig.attach(actor, model, image);
+    let mut talk = rig.play(script, ANCHOR, delivery);
     let actor = ActorKey::from(actor);
     let place = PlaceKey::balloon(&actor);
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
-        TextLayerConfig::default(),
-    )));
-    let mut world = World::new();
-    let slot = world.spawn_empty().id();
-    let window = world.spawn_empty().id();
-    runtime.borrow_mut().register_actor(
-        actor.clone(),
-        TextSlotBinding::new(slot, window, 1.0, image, image),
-        ResolvedBalloonText::resolve(model, image),
-    );
-    let (sink, _handle) =
-        spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
-    let mut direct = sink.clone();
-    if delivery == Delivery::WithoutPreview {
-        player.register_sink(Box::new(EmitOnly(sink)));
-    } else {
-        player.register_sink(Box::new(sink));
-    }
-    pump_until_idle();
     if delivery == Delivery::AllAtOnce
-        && let Some(&end) = times.last()
+        && let Some(&end) = talk.times.last()
     {
-        player.tick(ANCHOR + end);
-        pump_until_idle();
+        talk.tick(end);
     }
 
     let mut stages = Vec::new();
-    for (i, t) in times.into_iter().enumerate() {
+    for (i, t) in talk.times.clone().into_iter().enumerate() {
         if delivery != Delivery::AllAtOnce {
-            player.tick(ANCHOR + t);
-            pump_until_idle();
+            talk.tick(t);
         }
         if let Some((_, command)) = stray.take_if(|(at, _)| *at == i) {
-            direct.emit(TalkCue {
+            rig.emit(TalkCue {
                 at: t,
                 actor: actor.clone(),
                 command,
                 duration: 0.0,
             });
-            pump_until_idle();
         }
-        let lines = runtime
-            .borrow_mut()
-            .arrange_for_test(&place, &FixedMetrics, t)
-            .unwrap_or_default();
-        let rows = lines
-            .iter()
-            .map(|line| line.glyphs.iter().map(|g| g.text.to_string()).collect())
-            .collect();
-        stages.push(Stage { time: t, rows });
+        stages.push(Stage {
+            time: t,
+            rows: rig.rows(&place, t),
+        });
     }
     stages
 }
 
 /// 行ごとの字の並びを (行, 番目, 字) の列へ平らにする。
-fn cells(rows: &[Vec<String>]) -> Vec<(usize, usize, &str)> {
+pub(super) fn cells(rows: &[Vec<String>]) -> Vec<(usize, usize, &str)> {
     rows.iter()
         .enumerate()
         .flat_map(|(line, row)| {
@@ -212,7 +279,7 @@ fn cells(rows: &[Vec<String>]) -> Vec<(usize, usize, &str)> {
 }
 
 /// 行の列を 1 行ずつの文字列で見せる（失敗の出力用）。
-fn show(rows: &[Vec<String>]) -> Vec<String> {
+pub(super) fn show(rows: &[Vec<String>]) -> Vec<String> {
     rows.iter().map(|row| row.concat()).collect()
 }
 
@@ -255,9 +322,9 @@ pub(super) fn reveal_violations(stages: &[Stage]) -> Vec<String> {
 // ── 検査 ──
 
 /// 検査 1 の台本: emo2 の初回起動トークの写し（エモ側）。
-const EMO2_BOOT_TALK: &str = "\\1イイジャン！\\_w[450]‥\\_w[150]‥\\_w[150]ええと、";
+pub(super) const EMO2_BOOT_TALK: &str = "\\1イイジャン！\\_w[450]‥\\_w[150]‥\\_w[150]ええと、";
 /// 検査 1 の台本の出終わったときの区切り（欄の幅の選び方の前提）。
-const EMO2_BOOT_FINAL: [&str; 2] = ["イイジャン！", "‥‥ええと、"];
+pub(super) const EMO2_BOOT_FINAL: [&str; 2] = ["イイジャン！", "‥‥ええと、"];
 
 /// 検査 1: emo2 の初回起動トークの写し（エモ側）。「イイジャン！」「‥」「‥」「ええと、」が
 /// 待ちのタグで別々の合図になって届いても、表示済みの字は動かず、「‥」は最初から
@@ -399,7 +466,7 @@ fn delivering_everything_in_one_tick_matches_the_staged_talk() {
 }
 
 /// 捕まえた記録のうち warn だけ。
-fn warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
+pub(super) fn warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
     events
         .iter()
         .filter(|e| e.level == tracing::Level::WARN)
@@ -407,7 +474,7 @@ fn warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
 }
 
 /// 段階の列を行の列（1 行ずつの文字列）の列にする（失敗の出力と比べ合わせ用）。
-fn rows_of(stages: &[Stage]) -> Vec<Vec<String>> {
+pub(super) fn rows_of(stages: &[Stage]) -> Vec<Vec<String>> {
     stages.iter().map(|s| show(&s.rows)).collect()
 }
 
