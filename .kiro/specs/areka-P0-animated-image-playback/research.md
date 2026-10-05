@@ -244,7 +244,7 @@ brief の Approach 1 は「コマを 1 枚ずつ持ち `always` で順に指す�
 
 ---
 
-# 設計の段の調査（2026-10-05・main `82607b5f` を取り込んだ後）
+# 設計の段の調査（2026-10-05・main `82607b5f` を取り込んだ後）【選んだ形は却下・末尾の「作り直し」が上書き】
 
 > コードを読んで確かめた（ビルドとテストは回していない）。コードは「何の定義か＋ファイル」で指す。
 
@@ -365,3 +365,108 @@ brief の Approach 1 は「コマを 1 枚ずつ持ち `always` で順に指す�
 - [descript_shell_surfaces `always`](https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#always) — C5
 - `.kiro/specs/completed/areka-P0-animated-image-decode/` — コマ・待ち時間・繰り返し回数の渡し方
 - `.kiro/specs/completed/areka-P0-surface-element-nesting/` — 部品の時計の決まり
+
+
+---
+
+# 設計の段の調査（作り直し・2026-10-05 設計討議の裁定の後）
+
+> 上の「設計の段の調査」が選んだ形（合成の後で絵の番号を差し替える）は、設計討議で**却下された**。開発者「いや、本質的な案で設計せよ。スコープが膨らむなら関係しそうな他セッションと調整。」上の節は、子サーフェスの形が今のコードのどこでつまずくかの材料として残す（「Research Log」の事実は今も正しい）。選んだ形・Design Decisions は、この節が上書きする。
+> 同じウェーブの約束（`plan.rs`・`areka-emo-present` ほかに触らない）は設計の縛りから外れた。触るファイルは design.md の「触るファイルと並走の重なり」に全部挙げた。
+
+## Summary
+
+- **Feature**: `areka-P0-animated-image-playback`
+- **Discovery Scope**: Extension（合成・seriko・表示層・結線にまたがる）
+- **Key Findings**:
+  - 子サーフェスの形の 4 つのつまずきは、どれも「`always` というものを合成が知らない」ことから来る。`always` を合成・外形・見える部品の 3 か所で根から扱えば、手書きの `always` と自動の分解が同じ決まりで動く。
+  - pattern定義が指せるのは番号だけなので、コマ 1 枚ごとのサーフェスを作らない限り、子の定義は読み手の型（`Animation`）では書けない。部品を指す鍵に 2 つ目の種類を足し、子のコマは絵を直接指す形にした。番号の空間の問題はこれで形から消える。
+  - バルーンを出すとき、表示層は最後の入力で通し直す作りになっている（`show_target`）。隠れている間の指令を「入力の記録だけ替える」にすれば、出た瞬間に正しいコマが見え、隠れている間の合成は 0 回になる。
+
+## Research Log
+
+### 子の形の 2 つを比べる
+
+- **Context**: 「コマ 1 枚ごとにサーフェス」と「絵 1 つにつき子 1 つ・コマは絵を直接指す」のどちらが、自動で書かれた定義として本当か。
+- **Findings**:
+  - 読み手の `Pattern.surface_id` は整数で、サーフェスの番号しか運べない。面の表の `SurfaceMaster.animations` は読み手の `Animation` の列である。この型のまま子を書くには、コマ 1 枚ごとに番号つきのサーフェスが要る。
+  - 番号つきのサーフェスは、面の索引（`SurfaceIndex`）・`surface_ids` をなめる 7 か所（相手の無いコマ・入れ子の報告・箱の表・当たり判定の持ち込み・箱の束の番号・見える部品・seriko の表）・`\s[番号]` の全部に現れる。上限いっぱいの絵 1 つで 1,025 個。
+  - 正規化した型（seriko の `LoopFrame`・合成の `PatternFrame`）は読み手の型と別なので、子の定義を正規化した形で持てば、コマは絵を直接指せる。
+- **Implications**: 絵 1 つにつき子 1 つを採る。子は面の索引に載せず、別の鍵（`PartKey::Film`）で指す。seriko の表では子は `always` を 1 本持つ部品そのものになり、部品の時計の同じ経路を通る。
+
+### 「載っていない」と「消えている」を分ける必要
+
+- **Context**: コマが無ければ経過 0 を描く、と決めると、`always` の途中の終わりのコマ（`-1`）の後に「何も出さない」を表せなくなる。
+- **Findings**: `PatternState` の欄は「在る・無い」の 2 値。経過 0 のコマが在る `always`（最初の待ちが 0）に `-1` が続く定義は普通に書ける（出す → 待つ → 消す → 待つ → 繰り返す）。
+- **Implications**: 欄の意味を 3 つにする（載っていない＝経過 0・コマ・消えている）。seriko は経過 0 と同じコマを載せないことにすると、空の `PatternState` が「全部が経過 0」と等しくなり、合成の鍵が揃う。`PatternFrame` の型と今の関数の署名は変えずに、関数を足して表す（表示層と `areka` のテストの書き換えを 0 にするため）。
+
+### 時刻をどこまで正確にできるか
+
+- **Sources Consulted**: `spawn_loop_ticker`・`LoopTickerConfig`（`crates/areka-ghost/src/ticker.rs`）／`SerikoMsg`・`spawn_seriko`（`crates/areka-seriko/src/actor.rs`）／`show_target`（`crates/areka-emo-present/src/presenter/visibility.rs`）／`apply_show`（`presenter/show.rs`）／`SerikoLoopConfig` を書き下している所（`mod.rs`・`spine.rs`・seriko のテスト）。
+- **Findings**:
+  - 刻みの時計は差し替えられるクロージャ（既定は OS の起動からのミリ秒）。seriko に同じ時計を渡せば、合図を処理した時刻で時計を作れる。`SerikoLoopConfig` に欄を足すと `spine.rs`（1,000 行ちょうど）の書き下しが壊れるので、時計つきの起動を別の関数にして、今の起動は署名を変えずに残す。
+  - 窓の見える・見えないは UI スレッドが決める。送り手が同じ時計を読んで知らせに載せれば、知らせの到着が遅れても開始の時刻は正確になる。
+  - `show_target` は最後の入力（`last_show`）で `apply_show` を通し直す。`apply_show` は外から所有される対象でも合成までは必ず行う。
+  - 残る遅れは 2 つ: seriko → UI のスレッドの境（全部の指令に同じだけ掛かる）と、コマの替わり目を見つける刻み（16 ミリ秒）。後ろは刻みの出し手を「次の切り替えの時刻で起こす」形に作り替えれば消せるが、今のアニメーション全部に関わる。
+- **Implications**: 時計の開始は出来事の時刻にする。隠れている対象の合成は先送りする。刻みの作り替えは開発者に問う（design.md の Open Questions 1）。
+
+### 外形と `areka-P0-extent-element-offset`
+
+- **Findings**: `flatten_extent` の画像の element の行は、累積のオフセットに原寸を足すだけで、その element 自身の X,Y を足していない（同 spec が直すバグ）。動く絵の子を別の行で数えると、直しが片方にしか入らない。
+- **Implications**: 画像と動く絵の子を同じ 1 行で数える。順は本 spec が先。roadmap の「`flatten_extent` は `extent-element-offset` の持ち物」の約束を直す。
+
+## Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+| --- | --- | --- | --- | --- |
+| 合成の後で絵の番号を差し替える（前の版） | `PatternState` に絵のコマの欄・`Composer` で差し替え | 触るファイルが少ない | 自動の分解が定義にならない。手書きの `always` と別の経路 | **却下**（開発者裁定 2026-10-05） |
+| コマ 1 枚ごとにサーフェス | 読み手の型のまま書ける | 手書きと字面まで同じ | 番号の空間・1,025 個・面の一覧の全部に現れる | 不採用 |
+| 絵 1 つにつき子 1 つ・コマは絵を直接指す（採用） | 鍵の種類を足す・子は `always` を 1 本持つ | 番号を作らない・大きさが増えない・`import` が同じ口に載る・手書きの `always` と同じ時計と計算 | 欄の読みに種類が増える（`Cell`）。`plan.rs` を同じウェーブの spec と分け合う | — |
+
+## Design Decisions
+
+### Decision: `always` を合成が知る（経過 0・外形・見える部品）
+
+- **Context**: つまずき a・b。
+- **Selected Approach**: コマの欄に何も無い `always` は、経過 0 の pattern を定義から描く。外形は全部の pattern の和集合。見える部品にも経過 0 の先を入れる。見分けは `is_always_interval`、経過 0 は `rest_index` の 1 関数ずつ。
+- **Rationale**: 最初の指令から絵が出る（0 フレーム）。手書きと自動に同じ決まりが効く。合計 0 の `always` は時計なしで描ける。
+- **Trade-offs**: 今 `always` を書いているシェルは外形が広がりうる（Open Questions 3）。
+
+### Decision: 部品を指す鍵に種類を足す（`PartKey::Film`）
+
+- **Context**: つまずき c・d、要件 1.12。
+- **Alternatives Considered**: `u32` の上の方を予約する（作者が書ける・`\s` で呼べる）／コマごとのサーフェス。
+- **Selected Approach**: 子は番号を持たず、面の索引に載せない。`ElementKind::Film` は読み分け（`element_kind`）からは出ない。
+- **Rationale**: 当たる・隠す・呼べる道が型から無くなる。遮る検査が要らない。
+
+### Decision: 1 つの計算 `always_at` を手書きと子が共有する
+
+- **Selected Approach**: 子の pattern の待ちを「出す前の待ち」に直し（0, d0, d1, …）、最後のコマを出しておく時間は周期に入れる。回数は引き金が持つ。
+- **Rationale**: 関数が 1 つで済む。回数つきの始め直しも「回数を持つ時計は見えなくなったら捨てる」という、子に限らない決まりになる。
+
+### Decision: 時計の開始は出来事の時刻・隠れている対象は合成を先送り
+
+- **Context**: 検証の指摘 3（1 フレーム遅らせる解・時刻は正確に）。
+- **Selected Approach**: `SerikoClock` を刻みと seriko に同じものを渡す。窓の知らせは送り手が時刻を載せる。`apply_show` は、隠れている・外から所有される・面と着せ替えが同じ指令を、入力の記録の差し替えだけで済ませる。
+- **Rationale**: 窓が出た瞬間に正しいコマが見える。隠れている間の合成は 0 回。回数つきの絵は、窓が出たフレームの時刻から始まる。
+- **Trade-offs**: 隠れている間も指令は流れる（Open Questions 2）。
+
+### Decision: 窓の知らせは届けの相（`status_report.rs`）に置く
+
+- **Context**: 検証の指摘 1。
+- **Alternatives Considered**: 新しい相（`frame.rs`・`frame/wiring.rs` に触る）／可視性の相が出す・隠すときに送る（`\b[-1]` など別の道を拾えない・`areka-P0-balloon-lifecycle-events` の持ち物）。
+- **Selected Approach**: 表示層の照会の差で拾う。照会・台帳・ゴーストごとの作り直しを既に持つ届けの相に足す。
+- **Rationale**: 真実が 1 つ（表示層）で、変える道がいくつ在っても 1 か所で拾える。
+
+### 設計の 3 つの見直し（まとめる・作るか使うか・削る）
+
+- **まとめる**: 手書きの `always`（一番上・部品）と動く絵の子は、同じ引き金・同じ計算・同じ経過 0 の決まり。シェルとバルーンは鍵に面の種類を持つだけ。
+- **作るか使うか**: 部品の入口・見える部品・部品の時計・`commit_pattern`・`show_target` の通し直し・届けの相を、そのまま使う。
+- **削る**: 番号の割り当てと遮る検査・コマごとのサーフェス・動く絵だけの計算（`film_frame_at`）・新しい相・表示層での時刻の計算は作らない。
+
+## Risks & Mitigations
+
+- `plan.rs` を `areka-P0-element-base-method` と分け合う — 取り込みの順を先に決める。外形の移動はどちらか一方だけが行う。
+- 合成の先送りの条件を広げすぎる — 表示層のテストで条件の縁（面が違う・見えている・命令で見える対象）を固定する。
+- 欄の読みの種類が増え、合成と見える部品の求め方がずれる — 同じ検体で「合成が描いた先」と「見える部品」を突き合わせるテストを置く（今ある `nesting_fixture_tests.rs` の型）。
+- コマが 4 枚以上の絵で合成が 16 ミリ秒に収まらない — 測って報告する（席の数は変えない）。
