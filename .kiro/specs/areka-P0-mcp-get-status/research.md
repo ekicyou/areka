@@ -102,3 +102,68 @@ a は既存の口をそのまま使え、スレッドを増やさない。
 - **後続の `currentghost.status` との相乗り。** `currentghost-property-others` の brief は「`get_status` と先に着地した方の読み口を使う」と書く。プロパティの読みが同期で答えを要るなら、問い合わせの往復（A・B）は合わず、C の置き場が要るかもしれない。本 spec では決めず、後続が決める点として記録だけ残す。
 - **切替の途中に `get_status` が届く時機。** `resolve.rs` の `active` は「切替の途中は置き場が空」と書く。置き場に古いゴーストが残っている間に問い合わせを送り、その kanade が別れの台詞の相で答える場面（事実 3 と重なる）がどれくらいの長さあるかは、実機確認のときに見る。
 - **バルーンの写しの 1 フレームの遅れ。** 見えているバルーンの組は、フレームの終わりの届けの相（`crates/areka/src/emo2_boot/frame/status_report.rs` の `run_status_report_phase`）が kanade へ送る。MCP の要求を汲む系は Input の段なので、同じフレームで変わったバルーンは次のフレームの問い合わせから載る。kanade が SHIORI へ送る `Status` も同じ写しを使うので要件 1.2 は崩れないが、実機確認で「話し始めの直後に呼ぶと `balloon(…)` がまだ無い」ことがありうる。
+
+## 8. 設計の段の決定（2026-10-05・`/kiro-spec-design`）
+
+> 調べ方: 既存の仕組みへの足し込みなので軽い調べ（Extension）。コードを読むだけで確かめた（ビルド・テストは回していない）。語の一覧は ukadoc `Status [SSP拡張]`（SHIORI/3.0 の要求のヘッダ）を ukadoc の検索で引き直し、10 語と `opening`・`balloon` の `/` 区切りが要件の書き方と合うことを確かめた。新しい依存は無い。
+
+### 8.1 設計の段で新しく確かめた事実
+
+11. **知らせの間の `State::snapshot()` は、どの相でも SHIORI へ送る値の素と食い違わない。** 握手のイベントは `State::snapshot_without_talk()` を使うが、握手を始める処理（`schedule/steady.rs` の `begin_close`・`schedule/change.rs` の `begin_change`・`schedule/mod.rs` の `force_quit`）は、同じ 1 件の処理の中で `clear_choice_ledger` を呼んで選択待ちの帳簿を消し、相を握手の相へ移す。握手の相では `talk_active_of` が偽。だから知らせの間に撮る `snapshot()` は、握手の相では `snapshot_without_talk()` と同じ値になる。問い合わせは知らせの間でしか処理されないので、相ごとに作り方を分ける必要は無い。
+12. **`mcp_tests.rs` に、空の World へ `get_status` を振り分けるテストがある。** `crates/areka/src/mcp/mcp_tests.rs` の `get_log_and_seven_omitted_do_not_answer_with_a_resolve_failure` は、起動中のゴーストを渡しつつ空の World（置き場なし）へ振り分け、答えが `NOT_ACTIVE`・`CANNOT_FIND` の文言で**ない**ことを見る。「置き場に問い合わせ先が無い」を要件 3.2 の「降りた」に混ぜると、このテストが赤になる（`mcp_tests.rs` は同じウェーブの `mcp-ghost-name-match` が触るファイル）。
+13. **実行系があれば kanade の送り口もある。** `GhostSession` の `kanade` の欄は起動の処理が実行系から写して入れ、`resolve::active` は実行系のある置き場だけを起動中と読む。解決を通った呼び出しで送り口が無いのは、本番では起きない食い違い。
+14. **`ExecutionStatus` は外から語を読む口を持たない。** 公開されているのは `derive` と `render` だけ（`status.rs`）。SHIORI への要求（`ShioriCall`）が運ぶのもこの型。
+15. **kanade の統合テストの土台が、要件 5.1 の場面をそのまま作れる。** `crates/areka-kanade/tests/kanade/common/` の `spawn_harness_gated`（再生の完了を保留できる偽の sakura）と、呼出を `Status` の値つきで記録する偽の shiori（`RecordedCall` の `status`）。`external_status_test.rs` が同じ土台でバルーン・中断の無効化・通信中の `Status` を逐語で突き合わせている。選択待ちを作る補助（`choice_test_test_support.rs` の `establish_choice_wait`）は `choice_test` の内側だけに見えるので、新しいテストは `KanadeMsg::ChoiceWaiting` を直に送る。
+16. **アプリ本体のテストの土台は、SHIORI が受けた `Status` の値を外へ出していない。** `SwitchRig` の `calls` は名前と Reference だけを返し、進行の状態の記録を読む関数は `crates/areka/src/emo2_boot/spine.rs` の中に閉じている（`spine.rs` は 1,000 行ちょうどで、同じウェーブの `ghost-session-test-load-flake` の持ち物）。だから「本文と線の値の一致」（要件 5.3）は kanade の統合テストで線の値と比べ、アプリ本体の側は「kanade の答えと本文の一致」と「本物の単位で端から端まで」を受け持つ。
+
+### 8.2 決定
+
+#### 決定 1: 殻の腕は `actor.rs` に直に置く（6 節の 1）
+
+- **比べた案**: A＝`actor.rs` に直に／B＝新しいファイルを `actor.rs` の中から `#[path]` で読み込む／B'＝新しいファイルを `lib.rs` に `mod` で宣言する（`actor_resources` と同じ並び）。
+- **選んだ案**: A。振り分けの腕と、`&State` を受ける関数 `answer_status` の 2 つを `actor.rs` に足す。
+- **理由**: 中身は「撮る・導く・送る」の数行で、SHIORI への往復も、相による判断も無い（事実 11）。`actor_resources` が別ファイルなのは往復・許可の表・結果の写しを持つからで、こちらには分ける中身が無い。B は `lib.rs` に触れないためだけの形で、分室の宣言場所が 2 通りになって読み手が迷う。B' は本質の形として成り立つが、数行の関数のために `lib.rs` を触る理由が無い。
+- **約束との関係**: 本質の形で `lib.rs`・`schedule/` に触る必要が無い（約束を守るために形を曲げたのではない）。brief・roadmap の「新規 `actor_status.rs`」は作らない。
+- **行数**: `actor.rs` 876 → 900 行弱・`msg.rs` 909 → 920 行前後（上限 1,000 の内）。後続の `mcp-kanade-tools` が `actor.rs` に足す分は、その spec が自分の中身に合わせて置き場を決める。
+
+#### 決定 4: 返信端の型は `ExecutionStatus`（6 節の 4）
+
+- **比べた案**: `Option<String>`（`render()` の値）／`ExecutionStatus`。
+- **選んだ案**: `ExecutionStatus`。
+- **理由**: SHIORI への要求が運ぶ型と同じ（事実 14）なので、「同じ素・同じ型」がそのまま要件 1.2 の裏付けになる。文字列にする所は `render` の 1 か所のまま。後続（`mcp-user-response`・`mcp-author-tools`）が語の有無を読みたくなったら `status.rs` に読み口を足せば済み、知らせの形は変わらない（文字列で返すと、読む側が文字列を切り直すことになる）。MCP の側の手間は `render().unwrap_or_default()` の 1 回。
+
+#### 決定 5: 要件 3.2 の文言は `resolve::resolve` の `Err` から取る（6 節の 5）
+
+- **選んだ案**: `handle` の入口で `resolve(None, args.ghost_name.as_deref(), Omitted::UseActive)` を呼び、`Err` の理由を取っておく。
+- **理由**: 省略・空文字・名前ありの分け方が入口の解決と同じ 1 か所から出る。`mcp-ghost-name-match` が空文字の扱いを直しても追従する。`handle` の中で `ghost_name` の有無を直に分けると、同じ判断が 2 か所になる。
+
+#### 決定 7: 返事は `mcp::later` で待つ（6 節の 7）
+
+- **比べた案**: a＝`mcp::later` に預けて毎フレーム `try_recv`／b＝問い合わせごとにスレッドを起こして `recv` し、そこから答える／c＝kanade に「答える関数」を渡して kanade のスレッドから答えさせる。
+- **選んだ案**: a。
+- **理由**: 既存の口をそのまま使え、スレッドを増やさない。終了の途中は置き場ごと落ちて `NG:areka is shutting down`（要件 3.3 のまま）になる。b は終了の途中の答えが「降りた」の文言に変わり、呼び出しごとにスレッドが要る。c は kanade の知らせの規約（返信端 1 本）から外れ、答えずに落ちたときの始末（落ちた時に `NG:` を送る仕掛け）が要る。
+- **答えの遅れ**: 覗くのは毎フレームの汲む系の終わりなので、kanade の手が空いていれば同じフレームか次のフレームで答える。状態そのものを遅らせているのではなく、返事を運ぶ便の間隔である。
+
+#### 決定: 「置き場に問い合わせ先が無い」は「降りた」と別に扱う
+
+- **選んだ案**: 解決を通ったのに置き場に kanade の送り口が無いときは、`error!` 1 件＋`NG:Status is not available`（areka 独自の文言）。
+- **理由**: 本番では起きない食い違い（事実 13）で、黙って「降りた」（`debug!` だけ）に混ぜると記録に残らない。`get_property` が実行系の無いときに独自の文言と記録で答えるのと同じ並び。あわせて、`mcp_tests.rs` の既存のテスト（事実 12）が緑のまま残り、同じウェーブの他の spec のファイルに触らずに済む。
+- **要件との関係**: 要件 3.2 は「宛先を解決した後、答える前に降りた」場面の文言で、そちらは「送れない」「返信端が落ちた」の 2 通りで受ける（要件 3.5 のとおり `debug!` まで）。この決定は要件に無い場面（起きないはずの食い違い）の扱いで、要件を変えない。
+
+#### 決定: `currentghost.status` との相乗り（7 節の 1 つ目）
+
+- **選んだ案**: 本 spec は問い合わせの口（`KanadeMsg::StatusQuery`）だけを作る。kanade の状態を UI の側へ写して置く仕組み（4 節の候補 C）は作らない。
+- **理由**: プロパティの読み（記憶の読み手の `resolve_dotted_str`）は待たずに値を返すので、`currentghost.status` には「kanade が変わるたびに値を出す」形が要る見込みで、それは `currentghost-property-tree` の動く値の口と kanade の進行に乗る別の仕事（`currentghost-property-others` の brief の議題のまま）。今ここで写しを作ると使い手が居らず、SHIORI との往復中の値が「往復の前の値」になって要件 1.2（同じ時点の値）が揺れる。後続が写しを作った後も、問い合わせの口は「その時点の値」を返す口として残せる。
+
+### 8.3 まとめ直し（一般化・既存の利用・削ったもの）
+
+- **一般化**: 「殻がその場で答える問い合わせ」は `ResourceQuery` に続く 2 本目。共通の枠は作らない（2 本で形が違う。片方は SHIORI へ往復し、片方は読むだけ）。
+- **既存の利用**: 状態の素（`State::snapshot`）・書式（`ExecutionStatus`）・返事の器（`reply_channel`）・待つ口（`mcp::later`）・文言（`resolve`）・テストの土台（kanade の統合テストの `common/`・`GhostSession::for_test`・`SwitchRig`）。新しく作る型・仕組みは無い。
+- **削ったもの**: 新しい本番のファイル（`actor_status.rs`）・状態の写しの置き場・返事を待つスレッド・相ごとの作り分け。
+
+### 8.4 危ない点と手当て
+
+- **SHIORI が長く考えている間は答えが遅れる**（事実 5）。手当ては差の一覧の 1 行と、橋の上限（既存）。直すなら kanade の往復の作りを変える仕事で、本 spec の外。
+- **`farewell-talk-status` が着地すると、差の一覧の 1 行が古くなる。** design.md の Revalidation Triggers に書いた（その spec が行を消す）。
+- **アプリ本体の端から端までのテスト（design.md の M6）は、起動の挨拶の再生が「台詞の時計を進めるまで終わらない」ことに頼る。** `SwitchRig` の `pump_talking_until` と `GhostSession` の dispatcher の説明（時計を止めて起こした実行系）がそう書くが、実装の最初に 1 度確かめる。違っていたら、再生を保留できる形（偽の SHIORI の台本に長い待ちを入れる等）へ直す。
+- **kanade の統合テストの束ね（`tests/kanade.rs`）に宣言を 1 行足す。** brief の「触るファイル」に無いが、並走の約束（`schedule/`・`lib.rs`・`mod.rs`・`handler.rs`）には当たらない。同じウェーブでこのファイルに行を足す spec が他にあれば、行の追加どうしの競合になる（中身は 1 行）。
