@@ -219,3 +219,48 @@
 - ゴーストの descript.txt の文字コード: `lowercased` は `charset::decode`（既定は ANSI）を通す。`balloon,バルーン名` の値が日本語のとき、バルーンの descript.txt の `name`（同じ関数で読む）と同じ文字列になることを、文字コードの違う 2 ファイル（Shift_JIS のゴーストと UTF-8 のバルーン）で 1 場面確かめる価値があるか。
 - 実機の確認の段取り（設計か実装の段）: `claudia` を記憶なしで起こして `claudia` のバルーンで出ること・手で `balloon,…` を足した検体で descript の段が効くこと。どちらも根はワークツリーの `target\` の下に作る。
 - 外部の依存の調べものは無い（新しいクレートを足さない）。
+
+## 9. 設計の段の発見と決め（2026-10-05 `/kiro-spec-design`）
+
+> 調べ方は「拡張」向けの軽い調査（今のソースを読んで確かめただけ。ビルドとテストは走らせていない。外部の依存の調べものは 0）。決めの正本は `design.md` の「設計の決め」。ここには経緯と、採らなかった案の理由を残す。
+
+### 9.1 まとめ
+
+- **種別**: 既存の仕組みの拡張。調査は軽い型（light）。
+- **効いた発見**:
+  - 同梱の最初の 1 個は「無印か `balloon0` か無し」の 3 通りしか無い。探索は最初に無い番号で止まるので、`balloon0` が無ければ `balloon1` 以降は読まれない。起動の側は 2 鍵を順に引くだけで足り、ループも共有の関数も要らない。
+  - `lowercased` の「空を落とす」と「鍵を小文字化して集める」の順を入れ替えると、大文字と小文字だけが違う同じ鍵が 2 行在り片方が空、という場面で無印の結果が変わる。だから `lowercased` は変えず、行の有無だけを別に見る（値は今の式で引く）。要件 1 の 13 項を崩さないための形である。
+  - 台帳の束の帰属・順位・数は、対象の 4 状態（`implemented`・`vocabulary-only`・`degraded`・`absent`）をまとめて数える（`crates/ukadoc-survey/src/documents/derive.rs` の `priorities`・`crates/ukadoc-survey/tests/consistency/linkage_checks.rs` の数え直し）。`absent` から状態を変えても `linkage.md`・`briefing.md`・`priority` は動かない。§8 の 1 つ目の持ち越しはこれで閉じる。
+  - 切替の経路（`ghost_switch.rs` の `boot_into`）で決まったバルーンを判定している既存のテストは 0 本（`ghost_switch*_tests.rs` に今のバルーンの段・フォルダを見る行が無い）。要件 7 の 6 項は切替の土台（`SwitchRig`）で踏む。土台は `root` を公開していて、検体の複製の中へファイルを足せる。
+  - `tools/package.ps1` は「バルーンを決めました」を含む**最初の行**を見る。切替の記録の文面がこの綴りを含むと紛れるので、切替の文面は「切替先のバルーンが決まりました」にする。
+
+### 9.2 決め（D1〜D7 と切替の記録）
+
+| 決め | 採ったもの | 採らなかったもの |
+|---|---|---|
+| D1 | ⒜ の縮めた形。`companion_balloon` の中で `balloon.directory` → `balloon0.directory` の 2 鍵を順に引く | ⒝ `areka-parsers` へ移す（境界の外の `manifest.rs` を触る・共有する中身が 2 鍵しか無い）。⒞ `areka-nar` への依存（`catalog.rs` の決まりに反する） |
+| D2 | ⒜ 鎖に「`name` の最初 → フォルダ名」を書き、`resolve_skin_target` と同じ答えになることを突き合わせのテスト 1 本で固定。`shell_balloon_resolve.rs` は差分 0 行 | ⒝ 共有の関数（候補の型が違い、取り出し方を渡す関数は置き換える 2 行より長い・完了 spec のファイルを触る） |
+| D3 | ⒝ `listed: &[catalog::BalloonEntry]`（`list_balloons` の戻りをそのまま） | ⒜ 新しい組の型（使い手 1 つ）。⒞ `SkinCandidate`（`boot_resolve` → `emo2_boot` の依存になり向きが逆） |
+| D4 | `standard_balloon_keys` が descript.txt を 1 回読み、2 鍵を `StandardBalloonKeys` で返す | 鍵ごとの読み手 2 つ（読めないとき記録が 2 件） |
+| D5 | ⒝ 名前は 1 つ `descript_balloon_not_found`・欄は `key`・`value`・`balloon_store`。値は切り詰めない。腕は `BalloonRoute::Descript` の 1 つ | ⒜ 鍵ごとの名前。値の切り詰め（同じ関数の既存の 2 つの警告と扱いが割れる） |
+| D6 | `balloon` は `implemented`・`default.balloon.path` は `degraded`（相対パスのうち置き場の直下 1 段だけ）。担当は本 spec。正典 URL は `StandardBalloonKeys` の欄の上。`priority` と「束: …」は触らない | `default.balloon.path` も `implemented`（区切りを含む相対パスを読まないので正典どおりとは書けない） |
+| D7 | 兄弟の新しいテストファイル 4 本（`catalog_standard_balloon_tests.rs`・`boot_resolve_balloon_tests.rs`・`boot_config_balloon_tests.rs`・`ghost_switch_balloon_tests.rs`）。`hold_exclusive` は `catalog_test_support.rs` へ移す | 既存のテストファイルへ足す（824 行・988 行で番人に近い）。切替を `main_config_input_tests.rs` の口のテストだけで済ます（切替の経路と記録を踏まない） |
+| 切替の記録 | `ghost_switch.rs` の `boot_into` に `switch_balloon_resolved` を 1 件。起動の `balloon_resolved` は差分 0 行 | `resolve_balloon_for_ghost` の中で `balloon_resolved` を出す（起動の引数の腕にも同じ記録をもう 1 か所書くことになり、起動の 1 件を 2 か所で保つ形になる・配布物の検査が探す文面が切替のたびに増える） |
+
+### 9.3 まとめ直し（一般化・作るか使うか・削る）
+
+- **一般化**: descript の 2 鍵は「値 → 候補」の決め方だけが違う同じ段なので、段は 1 つ・警告の名前も 1 つにした。同梱・記憶と同じ `find`（フォルダ名の完全一致）を `default.balloon.path` に使い回す。
+- **作るか使うか**: 新しく作る型は `StandardBalloonKeys` の 1 つだけ。候補の型は `catalog::BalloonEntry` を借りる。外部の部品は 0。
+- **削る**: 値の検査（`..`・絶対パス・区切り）は書かない（完全一致で当たらないので警告 1 件になる）。番号を数えるループは書かない。共有の関数は作らない。本番の新しいファイルは 0。
+
+### 9.4 §8 の持ち越しの行き先
+
+- 台帳の束と順位: 9.1 の 3 つ目で閉じた（動かない）。
+- 文字コードの違う 2 ファイルの突き合わせ: テストは足さない。ゴーストの descript.txt もバルーンの descript.txt も同じ `lowercased`（`charset::decode`）を通って文字列になり、その復号は既存の `identity_reads_seven_items_and_decodes_shift_jis` が固定している。
+- 実機の確認: `design.md` の「実機の確認」A〜C。
+
+### 9.5 気を付ける所
+
+- `switch_balloon_resolved` の文面に「バルーンを決めました」を含めない。
+- 実機の確認 C の 2 回目は、1 回目の起動が書いた記憶を消してから（記憶が勝つため）。
+- `areka-P0-shell-companion-balloon` は同じ 3 ファイルと `BalloonInputs`・`BalloonRoute` を触る（直列）。
