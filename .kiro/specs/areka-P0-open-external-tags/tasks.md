@@ -107,14 +107,14 @@
   - _Boundary: Docs_
   - _Depends: 4.2_（台帳が実装より先に `implemented` を名乗らない）
 
-- [ ] 6. 確かめ
+- [x] 6. 確かめ
 - [x] 6.1 全体の決定論テストと零の確認
   - `areka-parsers`・`areka-sakura`・`areka` と `ukadoc-survey` のテスト・clippy を x64 で回し、実際の OS のアプリが 1 つも起きないことを確かめる
   - `main.rs`・`emo2_boot/mod.rs`・`compile.rs`・dola・`mcp/`・`Cargo.toml`／`Cargo.lock` の差分が 0、`decode.rs` の差分が腕 1 本と注記 1 行だけであることを `git diff` で確かめる
   - 完了の姿: 上のテストがすべて緑で、零の項目の差分がすべて 0
   - _Requirements: 1.5, 7.7, 10.1, 10.6_
 
-- [ ] 6.2 実機で開く系の 6 つの形を確かめる
+- [x] 6.2 実機で開く系の 6 つの形を確かめる
   - emo2 の台本（絶対パスで起動・置き場はワークツリーの `target\` の下）で `\j[https://…]`・`\![open,file,%SystemRoot%\notepad.exe]`・`\![open,file,notepad.exe]`・`\![open,explorer,…]`（フォルダ・ファイル）・`\![open,editor,…]`・`\![open,mailer,…]` と、関連付けの無いファイルを流す
   - 完了の姿: それぞれが開く（関連付けの無いファイルは OS の窓が出ず記録だけ）・`get_log` の `status` と `error` に行が出る・開いている間も吹き出しが動く、を記録に残す
   - _Requirements: 1.1, 2.1, 3.1, 4.1, 4.2, 5.1, 6.1, 7.2, 7.3, 7.5, 7.6_
