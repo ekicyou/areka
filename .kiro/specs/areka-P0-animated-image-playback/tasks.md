@@ -160,7 +160,7 @@
   - 完了の姿: 並びを数え上げるテストが緑で、並びの数がテストの中で明示の値として確かめられている
   - _Requirements: 2.3, 3.3_
 
-- [ ] 5. 窓の知らせと結線（seriko・表示層・`areka` をつなぐ）
+- [x] 5. 窓の知らせと結線（seriko・表示層・`areka` をつなぐ）
 - [x] 5.1 seriko が窓の知らせを受け、新しい出番では合図を先に出し、合図を表示層へ写す
   - 統合のタスク（seriko の `actor.rs`・`output.rs` と、`areka` の `adapter.rs` を同じコミットで触る。`map_display_command` は網羅の `match` なので、`DisplayCommand` に腕を足した時点で写す腕が無いとビルドが止まる）
   - `SerikoMsg::Stage { note, at_ms }`・`SerikoSink::send_stage` を足す（受け手が消えた後は `debug!`）。`output.rs` の `DisplayCommand` に `StageAck { scope, generation }` を 1 種だけ足す。今ある 5 種の欄は変えない
@@ -185,7 +185,7 @@
   - _Depends: 4.3, 5.1_
   - _Requirements: 2.3, 6.1_
 
-- [ ] 5.4 本物の読み手から合成まで、シェルとバルーンを 2 形式で通す
+- [x] 5.4 本物の読み手から合成まで、シェルとバルーンを 2 形式で通す
   - 兄弟の `film_playback_e2e_tests.rs` で、検体のシェルを `load_shell_target` で読み、`build_world` → `AnimationTable::from_world` → 時計つきの seriko（出力は捕まえるだけ）→ `\s[0]` → 刻みと進め、出た `PatternState` を合成して、決め手の画素が検体のコマと一致することを APNG と動く WebP の両方で確かめる。最初の指令の絵が経過 0 のコマであることも確かめる
   - バルーンは `resolve_balloon_faces` → `build_balloon_target_from_faces` で同じことをする
   - `map_display_command` を通して、閉じる → 出すの競り合いを 1 本踏む（指令の道が順を保つことの固定）。隠れているバルーンで `dump_balloon` が失敗しないことを 1 本確かめる
@@ -252,3 +252,4 @@
 - 4.3: `PresentCommand` は `#[non_exhaustive]`＝`crates/areka` に足した腕は 0（`spine_display_tests.rs`・`spine_conformance_support.rs` は知らない種類を「その他」に振る＝5.1 で `StageAck` が流れたら確かめる）。外しは預かる判定の前。`presenter_film_tests.rs` の補助 `shown()` は出した後に今の世代の `StageAck` を送る（追い付いた状態）。5.1・5.3 の結線までは本番で合図を送る者がいない＝回数つきは経過 0 で止まって見える（途中の状態）
 - 5.1: actor の `on_stage`＝世代が新しければ `StageAck` → `LoopRuntime::drop_finite(scope, Balloon)` → `note_stage`（世代は max で覚える・初めは 0）→ `refresh` → 発行。閉じた知らせの回数つきの捨ては `refresh` の閉じた窓の決まりに任せる。`send_stage` は送るときに時計を読む。5.3 への申し送り: `spine_conformance_support.rs` の `project_display` は `StageAck` を `DisplayProjection::Unknown` として列に残す＝本番の知らせがつながるとバルーンを含む spine の照合が赤になる→射影の腕を足すか期待値を合わせる
 - 5.3: 窓の知らせは `report_stages`（文字の層を借りる手前・昇順・組が違うときだけ送り、送った後に台帳へ書く）。隠れているときの面は今の番号→前に送った面→0（0 で代えると閉じている間の `ShowBalloon` が `last_show` とずれて 4.2 の預かりを外れる）。5.1 の申し送りは不要と確かめた: `send_stage` を呼ぶのは `status_report.rs` だけで、spine の檻は `emo2_frame_system` を回さない＝`project_display` に `StageAck` は届かない（`areka` の bin 全件 2681 緑）
+- 5.4: E2E は `crates/areka/src/emo2_boot/film_playback_e2e_tests.rs`（3 本・競り合いは GPU の世界が要る＝WARP で可）。`self-alpha-declaration` が入ったら `load_balloon()` の `build_balloon_target_from_faces` の呼び出しを合わせる

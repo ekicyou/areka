@@ -81,6 +81,11 @@ mod frame_schedule_tests;
 #[path = "seriko_clock_tests.rs"]
 mod seriko_clock_tests;
 
+// 本物の読み手から合成まで、動く絵をシェルとバルーンで通す（areka-P0-animated-image-playback task 5.4）。
+#[cfg(test)]
+#[path = "film_playback_e2e_tests.rs"]
+mod film_playback_e2e_tests;
+
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
