@@ -200,7 +200,7 @@
   - 完了の姿: 上のテストを含むワークスペースの全テストが緑で、`emo2` の照合の期待値の差分が 0
   - _Requirements: 7.1, 7.2, 7.4, 7.7, 9.2, 9.3_
 
-- [ ] 6.2 1 コマの時間と合成の回数を測って残す
+- [x] 6.2 1 コマの時間と合成の回数を測って残す
   - `emo2` の 1 コマの時間を、1.1 と同じ機械・同じ測り方で採り、前の数字と並べる
   - 検体の動く絵 1 つを表示しているシェルで、合成し直す回数と 1 コマの時間を測る（コマが 3 枚以下と 4 枚以上の両方）。16 ミリ秒に収まらなければ数字と対処を開発者へ報告する
   - 合成の結果を覚える席の数は変えない（変更 0 と記す）
@@ -253,3 +253,4 @@
 - 5.1: actor の `on_stage`＝世代が新しければ `StageAck` → `LoopRuntime::drop_finite(scope, Balloon)` → `note_stage`（世代は max で覚える・初めは 0）→ `refresh` → 発行。閉じた知らせの回数つきの捨ては `refresh` の閉じた窓の決まりに任せる。`send_stage` は送るときに時計を読む。5.3 への申し送り: `spine_conformance_support.rs` の `project_display` は `StageAck` を `DisplayProjection::Unknown` として列に残す＝本番の知らせがつながるとバルーンを含む spine の照合が赤になる→射影の腕を足すか期待値を合わせる
 - 5.3: 窓の知らせは `report_stages`（文字の層を借りる手前・昇順・組が違うときだけ送り、送った後に台帳へ書く）。隠れているときの面は今の番号→前に送った面→0（0 で代えると閉じている間の `ShowBalloon` が `last_show` とずれて 4.2 の預かりを外れる）。5.1 の申し送りは不要と確かめた: `send_stage` を呼ぶのは `status_report.rs` だけで、spine の檻は `emo2_frame_system` を回さない＝`project_display` に `StageAck` は届かない（`areka` の bin 全件 2681 緑）
 - 5.4: E2E は `crates/areka/src/emo2_boot/film_playback_e2e_tests.rs`（3 本・競り合いは GPU の世界が要る＝WARP で可）。`self-alpha-declaration` が入ったら `load_balloon()` の `build_balloon_target_from_faces` の呼び出しを合わせる
+- 6.2: 1.1 の「8 月より桁で遅い」は機械の負荷だった（A/B 交互で前 p50 0.9〜1.5 ms・後 1.5 ms 前後＝目に見えて落ちていない）。範囲外（完了時に起票）: 全体の約 1.2% の適用が 16 ms を超え（最大 315〜360 ms）、全部が `show.rs` の最後に記録した段（不命中は `MaskGen`・命中は `CacheLookup`）〜 `emit` の測っていない区間。本 spec の前の実行体にも同じ割合で出る。動く絵は適用を約 13 倍にするので本数も比例して増える。数字は research.md「後の数字」
