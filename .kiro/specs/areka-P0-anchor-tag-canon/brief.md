@@ -133,3 +133,26 @@
   - `balloon-link-hover`（`OnAnchorHover` と、アンカーの上に止まったときの行き先の説明）。
   範囲の当たりは、選択肢の範囲にも使い回せる形で作ると後が楽になる（設計の段で検討）。
 - **OS 連携部の可否**（Out の 3 つ目）: アンカーから URL などを開くのは、ゴーストが `OnAnchorSelect(Ex)` の応答で `\j[…]` などを返す正典の作法で足りる。`\j` と `\![open,…]` は `open-external-tags` が作る。本 spec はアンカーの既定の動作で OS を呼ばない。
+
+---
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（12〜15 タスク）。切らない（装飾は `anchor-style-canon` へ切り出し済み）。
+- 前提の状態: 満たす。C3 は本 spec の触るファイルのうち `actor.rs`（注記）・`actor_box.rs`（`shell-balloon-frame-align`）、`input_events/mod.rs`（ドラッグの受け手）・kanade の `msg.rs`・`schedule/{events.rs, steady.rs の on_mouse}`・`lib.rs` の `pub use`（`mouse-drag-events`）を書き換えた。中身はどれもアンカーの道と独立。
+- 崩れた前提／古くなった位置:
+  - **㉑の「`judge_box_click`・`BoxPressVerdict` は今 2 値」は誤り**（C3 の前からこの形）。`BoxPressVerdict`（`input_events/shell_box.rs` の定義）は「シェルの操作／選択で使った／中断を禁じる区間／中断」の 4 値で、順を決めるのは同じファイルの `judge_box_press`（⑴この押下が選択 ⑵左ダブルクリックでない→シェル ⑶直前の押下が選択 ⑷話していない→シェル ⑸中断を禁じる区間 ⑹中断）。呼び手は `input_events/user_break.rs` の `on_box_press`。`judge_box_click` は「選択肢の確定か」を返すだけ（呼び手は `shell_box_handler.rs` の `on_box_pointer_pressed`）。アンカーの結論は ⑴ の隣に足す＝**`user_break.rs` も触る**。今、箱の上の単クリックは ⑵ で「シェルの操作」になる。
+  - kanade: `msg.rs` は 909 行（`mouse-drag-events` が `MouseEventKind` に 2 つ足した）＝新しい入力の型は新しいファイルへ。選択の受け口は `schedule/mod.rs` の `Input::Choice` の腕と `steady.rs` の選択の帳簿で、`steady.rs` 947 行・`schedule/mod.rs` 938 行＝アンカーの受理は `schedule/choice.rs`（346 行）に倣う新しいファイルに置き、`mod.rs` には腕を 1 本足すだけにする。`events.rs` は 733 行。
+  - `\_a[OnID,…]` の任意の名前は固定の表 `ALLOWED_EVENT_IDS` に載らない＝選択の `is_allowed_choice_event` と同じ「出所別の受理規則」が要る。
+  - dola の `CueCommand` に種類を足すなら、連鎖の match の 1 つ `areka-seriko/src/actor.rs` は C3（`surface-element-nesting`）で部品の時計が入り 660 行になった。
+  - 入口は変わらず: `input_events/balloon_moved.rs`・`balloon_pressed.rs` の冒頭に「足す予定の spec: anchor-tag-canon」の注記がある。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-parsers/src/sakura/{decode.rs, model.rs}`・`crates/areka-sakura/src/compile.rs`（＋`drive.rs` の見込み）
+  - dola に種類を足すなら `crates/dola/src/cue/command.rs` と連鎖（emo-text `actor.rs`／`state.rs`・`areka-ghost/src/{sink.rs, prop_sink.rs}`・`areka-seriko/src/actor.rs`・`areka-sakura/src/contract.rs`・`dola/src/sink.rs`）
+  - `crates/areka-emo-text/src/{state.rs, actor.rs, actor_present.rs, viewbox_draw_render.rs, choice.rs}`・`lib.rs`（新しいファイル）
+  - `crates/areka/src/input_events/{balloon.rs, balloon_moved.rs, balloon_pressed.rs, choice_drain.rs, shell_box.rs, shell_box_handler.rs, user_break.rs}`
+  - `crates/areka-kanade/src/{msg.rs, lib.rs, schedule/events.rs, schedule/mod.rs（腕 1 本）}`＋新しいファイル（`schedule/choice.rs` に倣う）
+  - `doc/ukadoc-coverage/ledger/{sakura-script,shiori}.toml`（`\_a` と `OnAnchorSelect(Ex)` の行）・`doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）: ㉑の 3 件のまま（dola の種類／既定の見た目／話している最中のクリック）。
+- 見つけた穴: なし。軽微: ㉑の節と「棚卸㉑で切った後の範囲」の節にある「`judge_box_click` の結論・2 値」の書き方を上のとおり読み替える。
+- 並走の判定（厳しめ）: `budoux-reveal-reflow`（`state.rs`・`actor_present.rs`）・`balloon-font-file`（`actor.rs`・`viewbox_draw_render.rs`）・`balloon-lifecycle-events`（kanade の `events.rs`・`schedule/mod.rs`・`lib.rs`）・`talk-fast-forward`・`balloon-markers`・`text-typesetting` とは重なる＝並べない。`balloon-canon-residue` とは、dola に種類を足さなければ 0（足すと `areka-seriko/src/actor.rs` で重なる）。

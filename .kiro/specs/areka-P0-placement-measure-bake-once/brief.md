@@ -61,5 +61,19 @@
 
 1. 案 A と案 B のどちらを取るか（焼く回数を減らすか、採寸だけ全コマを読まないか）。
 2. シェルの着替え（`switch_assets.rs`）とバルーンの着替えも同じ直しに含めるか。
-</content>
-</invoke>
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: 案 A なら 10〜14、案 B なら 5〜8 タスク。8〜12 の幅で見積もりのまま。切らない。
+- 前提の状態: `animated-image-decode` は着地済み＝今すぐ着手できる。ただし外形（採寸の元）を変える `extent-element-offset` が先に着地すると、本 spec の「採寸の結果が今と同じ」の固定がその後の値で書ける（後になるなら、固定は「1 回焼きと 2 回焼きの答えが一致する」の形で書く）。
+- 崩れた前提／古くなった位置:
+  - Current State は今も正しい。採寸の `measure_native_scope_sizes`（`placement/measure.rs`）が自前の `build_shell_assets` から `load_shell_target` を 1 回、`measure_balloon_surface0` が scope ごとに `build_balloon_target_from_faces`。資産組み立ては `emo2_boot/assets.rs` の `build_shell_assets`・`build_balloon_assets`。C3 で `placement/` に入ったのは `#[allow(dead_code)]` の注記の外しだけ。
+  - 2 回の焼きは呼ばれる場所が離れている。採寸は `placement/mod.rs` の `prepare_stages_for_shell`（`ghost_session.rs` の窓を作る準備から）、資産は `emo2_boot/mod.rs` の `build_boot_assets_for`（`boot_ghost` の手順 1）。placement の結果は窓を作る閉包へ移されて同期では読めない（`derive_scopes` の doc）＝案 A は `ghost_session.rs` の段取りに触れる。
+  - 議題 2 の答えが出た: シェルの着替え（`switch_assets.rs`）は `build_shell_assets` だけを呼び、採寸をしない＝「同じ形」ではないので範囲外でよい。ゴーストの切替は起動と同じ道（`ghost_session.rs` の準備 → 資産組み立て）を通るので、案 A は起動と切替を一緒に直す。
+- 触るファイル（並走の照合用）:
+  - 案 A: `crates/areka/src/placement/{mod.rs, measure.rs}`・`crates/areka/src/ghost_session.rs`・`crates/areka/src/emo2_boot/{mod.rs, assets.rs}` と兄弟のテスト
+  - 案 B: `crates/areka/src/placement/measure.rs`・`crates/areka-emo-present/src/shell_target.rs`（`load_shell_target` に上限を渡す口）・必要なら `balloon.rs`。署名を変えると試験の支え `crates/areka/src/mcp/dump_surface_gpu_test_support.rs` も
+  - 共有しうる相手: 案 A は `extra-character-windows`（`placement/mod.rs`・`measure.rs`・`emo2_boot/mod.rs`）と `balloon-font-file`（`assets.rs`）。案 B は `self-alpha-declaration`・`surfaces-basepos`（`shell_target.rs`）。
+- 議題（答えで作業が変わるものだけ）: 1（案 A か案 B か）だけが残る。2 は上のとおり答えが出た。
+- すぐ直せる軽微な修正: この brief の「要件の段で決める議題」の直後に、起票のときの書き損じの 2 行（`</content>`・`</invoke>`）が紛れ込んでいる。消すだけ。

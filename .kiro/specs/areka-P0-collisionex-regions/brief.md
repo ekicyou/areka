@@ -50,3 +50,22 @@ ukadoc の `collisionex` の書式（`descript_shell_surfaces`）を引き直し
 ## Constraints
 
 - 段は**優先**（シェルの element の列・既存のゴーストの当たり判定がまるごと効かない）。
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: S〜M（7〜10 タスク）。切らない。
+- 前提の状態: 働きの前提（`surface-element-nesting`）は着地済み。roadmap の依存 `element-base-method` は働きの依存ではなく、読み手の 2 ファイル（`shell/model.rs`・`shell/decode.rs`）を分け合うための順番待ち。`element-base-method` の着地の後に着手できる。
+- 崩れた前提／古くなった位置:
+  - Current State は今も正しい。読み手の `decode_collisions` は番号が数字だけの行だけを `Collision` にし、`collisionex0` のような行は記録なしに飛ばす。キャラクター窓の押下のハンドラ `on_char_pointer_pressed` の doc にも「collisionex は実装しない（7.4）」が残る。
+  - `surface-element-nesting` が子の当たり判定を親へ持ち込む `hit_import.rs` を足した。その中の `regions_of` は矩形の 4 辺へ位置のずれを直接足して写す＝形を足すと、ここも形ごとにずらす必要がある（brief の「入れ子にも同じ型で乗せる」の実体）。
+  - 表示層の `presenter/hit.rs` は点の側を縮めてから `hit_region_in`／`hit_region_scaled_in` に渡す＝形が増えても縮め方は変わらない。
+  - クローディア（`vendors/sample_ghost/claudia.nar`）の `surfaces.txt` は `collisionex` が 93 行・`element*,base` が 5 行（実数え）。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-parsers/src/shell/{model.rs, decode.rs}`（`Collision` の型・`decode_collisions`）
+  - `crates/areka-emo-compose/src/{hit.rs, hit_import.rs}` と兄弟のテスト（型を別の列にするなら `normalized.rs`・`fold.rs`・`world.rs` も）
+  - `crates/areka/src/input_events/mod.rs`（doc の 1 行だけ）
+  - `doc/ukadoc-coverage/ledger/assets.toml`（`collisionex*` の行と、`collision*` の行の注記）・`doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）:
+  1. 今の `Collision` に形の欄を足すか、別の型の別の列にするか。推しは前者。`collision` と `collisionex` の重なりを「後に書いたものが手前」に揃えるには、2 つを書いた順に 1 つの列へ並べる必要があり、別の列では順が失われる。前者なら構造体リテラルの直しは本番 2 か所（`decode.rs`・`hit_import.rs`）と試験の約 10 ファイル。
+- 見つけた穴: 無し。

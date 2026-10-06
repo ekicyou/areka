@@ -50,3 +50,21 @@
 ## Constraints
 
 - 段は**バグ**（再起動で並びが崩れる・開発者「不自然」）。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: S（4〜8）のまま。切らない。
+- 前提の状態: 上流は全部完了・今すぐ着手できる。起票（`1bb449ae`）の後に `crates/areka/src/placement/`・`emo2_boot/frame/drain_resnap.rs`・`session_end*.rs`・`main.rs` を触ったコミットは 0。
+- 崩れた前提／古くなった位置: 無し。書く所は今も `placement/follow/drag_follow.rs` の `on_char_drag_end`（キャラクターの位置）と同じファイルのバルーンのドラッグの終わり（バルーンの相対位置）の 2 か所だけ。書く口 `placement/persist.rs` の `persist_entries` は sylphya のアクターへ投げっぱなし（返事を待たない）で、その送り口 `PersistWiring` は `main.rs` の `insert_persist_wiring` と `ghost_session.rs` の切替の結線で**ゴーストごとに差し替わる**。
+- 見つけた穴（要件の段で確かめる）:
+  1. ゴーストの切替でも同じ問題が起きる見込み（切替で降ろしたゴーストの相方の位置も書かれない）。書く時機を「アプリの終了」だけにすると切替が漏れる。
+  2. 投げっぱなしの書き込みが、降ろすときの sylphya のアクターの確定より先に届くことを、順序で保証する必要がある（終了の通知 `KanadeNotice::Stopped` を受けて窓を閉じる `emo2_boot/frame.rs` の `quit_as_today` の時点では、ゴーストの側はもう降りている見込み＝そこで書いても届かない恐れ）。
+- 触るファイル: `crates/areka/src/placement/persist.rs`（全キャラクターの位置を集めて書く口）・`placement/follow/drag_follow.rs`（発火規律の doc の改訂）・終了と切替で降ろす前の 1 か所（`emo2_boot/frame.rs` か `emo2_boot/ghost_switch.rs`、または kanade の終了の系列に入る前の areka の側）・`session_end.rs`（OS のセッションの終了も同じ口を通すなら）・兄弟のテスト（`placement/persist_entries_tests.rs` か新規）・完了 `position-persist` の Req1.9 の改訂の記録（`doc/COMPAT_ARCHITECTURE.md` §8）。
+- 議題:
+  1. 書く時機: ゴーストを降ろす共通の入口（終了・切替・OS のセッションの終了）にするか、アプリの終了だけか。
+  2. きれいに終わらなかった回（`session-running-mark`）は書けないまま＝前回の位置で立つのでよいか。
+- 同時に走らせない: `placement/` を触る spec（今は列に無い）・`extra-character-windows`（3 体目以降も同じ口）。
+
+### 同じウェーブ C4 の約束（2026-10-05 棚卸㉒・破るなら止めて報告）
+
+- `emo2_boot/mod.rs`・`spine.rs`・`frame/wiring.rs` に触らない（`balloon-lifecycle-events`・`ghost-session-test-load-flake` の持ち物）。終了やゴーストを降ろす前の共通の入口が `spine.rs` にあると分かったら止めて報告。

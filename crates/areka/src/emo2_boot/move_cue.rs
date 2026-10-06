@@ -29,13 +29,6 @@
 //!   （[`MoveDirective::m1_degradations`] が `UnsupportedBase` として surface）。
 //! - `time>0` は最終位置へ即時反映＋記録（`Ok` のまま `duration_ms` 保持・R5.4）。
 
-// task 7.1/7.2 が純粋な型＋parse＋basepos シーム＋座標算出、task 7.3 が talk スレッド側消費
-// `MoveCueSink` を載せる。残る UI 末端の消費点（`apply_move_directive`＝7.4・`mod.rs` の channel
-// 配線＝9.1）は後続タスクが足す。それまで `MoveCueSink`／`resolve_move_target_position` 等は
-// 非 test ビルド（bin 本体）から未参照ゆえ dead_code が出るが、これは段階実装の想定内であり、
-// 後続タスクの結線（9.1）で解消される（本 allow は wiring 着地時に撤去する）。
-#![allow(dead_code)]
-
 use std::sync::mpsc::Sender;
 
 use bevy_ecs::prelude::World;
@@ -143,7 +136,8 @@ impl RefPoint {
         x: RefX::Left,
         y: RefY::Top,
     };
-    /// 裸 `base` の展開先（`base.base`・R5.2 の等価則）。
+    /// 裸 `base` の展開先（`base.base`・R5.2 の等価則）。テストが期待値に使う。
+    #[cfg(test)]
     pub const BASE_BASE: RefPoint = RefPoint {
         x: RefX::Base,
         y: RefY::Base,
@@ -534,6 +528,12 @@ impl dola::cue::CueSink for MoveCueSink {
         let tokens: Vec<String> = tokens.iter().map(|s| s.to_string()).collect();
         match parse_move_directive(scope, &tokens) {
             Ok(directive) => {
+                for degradation in directive.m1_degradations() {
+                    warn!(
+                        ?degradation,
+                        "MoveCueSink: \\![move] を縮退して受理（語彙保持・R5.4）"
+                    );
+                }
                 if self.tx.send(directive).is_err() {
                     // 受信端（Emo2Wiring）切断は talk を殺さない（log-first・非 panic・R5.5）。
                     warn!("MoveCueSink: MoveDirective の送出に失敗（受信端切断）");

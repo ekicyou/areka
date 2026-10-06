@@ -1,7 +1,8 @@
 //! `shell_target` の檻が共有する受け口（検体・COM 初期化・ログの捕捉窓）。
 //!
-//! 本ファイルを使う檻は 5 本（`shell_target_load_tests.rs`・`shell_target_base_image_tests.rs`・
-//! `shell_target_template_tests.rs`・`shell_target_emo2_tests.rs`・
+//! 本ファイルを使う檻は 8 本（`shell_target_load_tests.rs`・`shell_target_base_image_tests.rs`・
+//! `shell_target_template_tests.rs`・`shell_target_emo2_tests.rs`・`shell_target_boxes_tests.rs`・
+//! `shell_target_nesting_tests.rs`・`shell_target_element_base_tests.rs`・
 //! `presenter_keycolor_clickthrough_tests.rs`）に分かれるが、検体の複製と
 //! COM の初期化は**テストバイナリに 1 つ**で足りる。各ファイルが自前で持つと、その数だけ
 //! 検体の木が複製される（`areka-seriko` の `sample_test_support.rs` と同じ理由）。
@@ -81,6 +82,10 @@ static R_POST_AND_KOMAINU: LazyLock<SampleRoot> = LazyLock::new(|| {
 static KONNOYAYAME: LazyLock<SampleRoot> =
     LazyLock::new(|| SampleRoot::acquire("konnoyayame").expect("konnoyayame は登記済みの検体"));
 
+/// クローディア `claudia` 検体（element定義の `base` を使う無改変の実ゴースト）。
+static CLAUDIA: LazyLock<SampleRoot> =
+    LazyLock::new(|| SampleRoot::acquire("claudia").expect("claudia は登記済みの検体"));
+
 /// `emo2` のシェル（`shell/master/`）のフォルダ。
 pub(super) fn emo2_shell_dir() -> PathBuf {
     EMO2.folder().join("shell").join("master")
@@ -96,7 +101,12 @@ pub(crate) fn konnoyayame_shell_dir() -> PathBuf {
     KONNOYAYAME.folder().join("shell").join("master")
 }
 
-/// 3 つの受け口が実在するシェルのフォルダを指す（`surfaces.txt` が在る）。
+/// `claudia` のシェル（`shell/master/`）のフォルダ。
+pub(super) fn claudia_shell_dir() -> PathBuf {
+    CLAUDIA.folder().join("shell").join("master")
+}
+
+/// 4 つの受け口が実在するシェルのフォルダを指す（`surfaces.txt` が在る）。
 ///
 /// 受け口そのものの較正である——検体の登記名や木の形が変わると、これを使う檻は「読めない」の
 /// 一言で赤くなって原因が見えなくなる。ここが先に赤くなれば、原因が受け口側だと分かる。
@@ -106,6 +116,7 @@ fn every_sample_receptor_points_at_a_real_shell_folder() {
         ("emo2", emo2_shell_dir()),
         ("R_POST_and_KOMAINU", r_post_and_komainu_shell_dir()),
         ("konnoyayame", konnoyayame_shell_dir()),
+        ("claudia", claudia_shell_dir()),
     ] {
         assert!(
             dir.join("surfaces.txt").is_file(),

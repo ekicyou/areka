@@ -85,3 +85,21 @@ AI エージェントは辞書やシェルを書き換えたら、ゴースト�
   - 知らせなしの起動を kanade に足すか（足すなら `mcp-kanade-tools` と同時に走らせない）、kanade に触らず UI 側だけで済ませる形があるか。
 - 見つけた穴: `\![reload,balloon]` の持ち主の二重（上記）。
 - **裁定（棚卸㉑・roadmap の裁定 5）**: `\![reload,balloon]` は本 spec が持つ（`balloon-canon-residue` の項目 4 から移した）。切替の仕組み（`shell_balloon_switch.rs`）に載せる。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模（タスク数）と切るかどうか: L（15〜20）のまま。20 をまたいだときだけ前回の案（`\![reload,shiori]` を別 spec へ）で切る。それ以上は削らない。
+- 前提の状態: 満たす。C3 は本 spec の触るファイル（`emo2_boot/{ghost_switch,shell_balloon_switch,consumer_ledger,mod}.rs`・kanade の `src/change.rs`・`schedule/boot.rs`）を 1 行も変えていない（`634032f6..f26aa1c1` の差分 0）。`reload` は今も `NG:not implemented yet` で答える 4 本の 1 つ（`crates/areka/src/mcp/reload.rs` の `handle`）。
+- 崩れた前提／古くなった位置:
+  - 起動の由来 `BootOrigin`（kanade の `src/change.rs` の列挙の定義）は今も `Plain`／`ChangedFrom`／`Halted`／`Updated` の 4 つ＝知らせを送らない由来は無い（前回どおり）。
+  - 同じゴーストへの載せ替えの既存の道は `crates/areka/src/update/desk.rs` の `fn reload` のまま。
+  - `\![reload,makoto]` は `makoto-reload-directives` も持つ（同 brief）。本 spec は縮退の `NG:` の口だけ、という分担は変わらない。消費者の台帳 `consumer_ledger.rs` の `reload` の行を 2 本が書くので、後着が行を足し直す。
+  - kanade の進行の列では `mcp-kanade-tools` の後ろだが、kanade で触るのは `src/change.rs`（`BootOrigin` の変種 1 つ）と `schedule/boot.rs`（その腕）だけ。`mcp-kanade-tools` が台本つきの結果を `src/change.rs` に置かず、`schedule/boot.rs` にも触らないと約束すれば、**2 本は触るファイルの重なり 0 で並べられる**。
+- 触るファイル（並走の照合用）:
+  - `crates/areka/src/mcp/reload.rs`・`reload_tests.rs`
+  - 新規 `crates/areka/src/emo2_boot/reload_cue.rs`＋兄弟テスト・`emo2_boot/consumer_ledger.rs`（859 行）・`emo2_boot/mod.rs`（883 行）・`emo2_boot/ghost_switch.rs`（891 行）・`emo2_boot/shell_balloon_switch.rs`（442 行）
+  - `crates/areka-kanade/src/change.rs`（175 行）・`schedule/boot.rs`（345 行）・降ろす側の扱い（`schedule/close.rs` か `msg.rs`。`msg.rs` に触ると `mcp-get-status`／`mcp-kanade-tools` と重なる）
+  - ⒝ を含めるなら `crates/areka-ghost/src/runtime.rs`
+  - `doc/ukadoc-coverage/ledger/sakura-script.toml` の `\![reload,…]` の行
+- 議題（答えで作業が変わるものだけ）: 前回の 2 つ（`\![reload,shiori]` を含めるか・知らせなしの起動を kanade に足すか）。加えて、降ろす側を `msg.rs` に触らずに済ませるか（済めば MCP の kanade の 2 本と並べられる）。
+- 見つけた穴: なし。

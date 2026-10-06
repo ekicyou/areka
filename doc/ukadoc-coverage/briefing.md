@@ -1044,8 +1044,8 @@ not_applicable = 0
 [[barrier]]
 page = "descript_shell_surfaces"
 implemented = 7
-vocabulary_only = 55
-degraded = 4
+vocabulary_only = 54
+degraded = 5
 absent = 67
 alias = 4
 not_applicable = 0
@@ -1810,7 +1810,7 @@ items = 3
 
 [[owner_completed]]
 spec = "areka-P0-shell-parse"
-items = 4
+items = 3
 
 [[owner_completed]]
 spec = "areka-P0-sylphya"
