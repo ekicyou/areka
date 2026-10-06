@@ -220,6 +220,8 @@ fn classify_jump(id: &str, tag: String) -> Result<Destination, Rejected> {
 
 /// 台本の文字列から、開く系の行き先を現れた順に返す（断られるものは含めない・task 2.2・
 /// 要件 8.1〜8.5）。汎用コマンドを順に [`classify`] へ通すだけの 1 回の線形走査。
+// 本番の呼び手は後続（`link-context-copy`・`balloon-link-hover`）が足す＝それまでテストだけが呼ぶ。
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn link_destinations(script: &str) -> Vec<Destination> {
     areka_parsers::sakura::parse(script)
         .into_iter()

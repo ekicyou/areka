@@ -24,8 +24,6 @@ pub(crate) enum ReadmeRequest {
     /// （引数付きの `\![open,readme,種類,名前]` は送出側が警告して捨てる・要件 4.6）。
     Readme,
     /// 開く系の行き先（受け口が規則で分類済み）。
-    // 受け口が送るのは 4.2 から＝それまで本番のビルドに作り手が無い（4.2 で外す）。
-    #[cfg_attr(not(test), allow(dead_code))]
     Open(destination::Destination),
 }
 
@@ -198,8 +196,7 @@ pub(crate) fn drain_readme_requests(world: &mut World) {
 // OS の境界（areka-P0-open-external-tags task 1.2）。
 mod os_port;
 
-// 行き先の規則（task 2.1）。受け口の結線（4.2）まで本番のビルドに呼び手が無い（4.2 で外す）。
-#[cfg_attr(not(test), allow(dead_code))]
+// 行き先の規則（task 2.1）。台本の受け口と台本からの取り出しが同じ関数を呼ぶ。
 pub(crate) mod destination;
 
 // 開く処理の 1 か所（task 3.1〜3.4）。
