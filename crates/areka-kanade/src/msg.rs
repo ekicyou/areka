@@ -249,6 +249,13 @@ pub enum KanadeMsg {
     },
     /// 外から届いた実行状態の知らせ（UI → kanade）。状態の写しを更新するだけで運行は変えない。
     ExecutionState(crate::status::ExecutionStateUpdate),
+    /// 時間切れでバルーンを隠した知らせ（表示の側の可視性の相 → kanade）。additive 増分。
+    ///
+    /// 殻は `Input::BalloonTimeout` へそのまま写し、送るかどうかは運行表がトークの番号の照合で決める。
+    BalloonTimeout {
+        /// 時間切れで隠れたバルーンに出ていたトークの番号（表示の側が再生の開始で受けた番号）。
+        talk_id: crate::talk::TalkId,
+    },
 }
 
 /// shiori アクター inbox（real／mock が同一型を受ける＝Req 5.1 の差し替え面）。
@@ -639,6 +646,8 @@ mod tests {
                 KanadeMsg::AwaitTalkGap { .. } => "AwaitTalkGap",
                 // 外から届いた実行状態の知らせ（additive・既存の判別結果を変えない）。
                 KanadeMsg::ExecutionState(_) => "ExecutionState",
+                // 時間切れの知らせ（additive・既存の判別結果を変えない）。
+                KanadeMsg::BalloonTimeout { talk_id: _ } => "BalloonTimeout",
             }
         }
         let existing = [

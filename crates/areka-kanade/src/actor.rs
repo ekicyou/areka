@@ -191,6 +191,7 @@ pub fn spawn_kanade_translating(
                     Input::AwaitTalkGap { raise }
                 }
                 KanadeMsg::ExecutionState(update) => Input::ExecutionState(update),
+                KanadeMsg::BalloonTimeout { talk_id } => Input::BalloonTimeout { talk_id },
             };
             let (flow, first_reply) = drive_translating(
                 &mut state,

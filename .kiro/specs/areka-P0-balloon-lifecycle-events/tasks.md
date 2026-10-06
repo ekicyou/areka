@@ -47,7 +47,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 4.4, 4.5, 7.1, 7.2_
   - _Depends: 2.3_
 
-- [ ] 2.5 時間切れの知らせの受け口（表 D）と、kanade への入口
+- [x] 2.5 時間切れの知らせの受け口（表 D）と、kanade への入口
   - kanade のメッセージに時間切れの知らせ（トークの番号を運ぶ変種）を末尾に足し、殻の振り分けの腕 1 本で運行表の新しい入力へそのまま写す。メッセージの変種の網羅のテストと、運行表の入力の変種を並べたテストに 1 行ずつ足す（足すだけ・並びは移さない）。
   - 表 D の 6 行を裁く: 定常でない／番号が控えと違う（「次のトークが既に始まっていた」）／終了の保留中／送り済み・預かり済み、は送らず理由を記録／そのトークがまだ再生中なら預かり、預かったことを記録／再生中のトークの無い定常なら `OnBalloonTimeout`。
   - 完了の状態: 表 D の全行の檻（番号が合い定常なら 1 本・次のトークが再生中・次のトークが始まって終わっていた・定常でない・終了の保留中・2 通目は出ない・完了より先に届いた知らせは預かって完了で送る・cue の無いトークを挟んだ 1 つ古い番号は捨てる）と、殻にメッセージを送ると GET が 1 本出る檻が緑。
@@ -141,3 +141,6 @@
 - 1.1: 新しいワークツリーでは `crates/areka/tests/smoke_boot_loop_exit.rs`・`mcp_get_log_real_run.rs` が「i686 の helper が見つかりません」で赤になる。先に `cargo build -p shiori-host32-helper -p shiori-host32-testdll -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` を回す（`tools/test-all.ps1` の 1 段目と同じ）。
 - 2.2: `take_user_break_quit` は `take_break`（帳簿を必ず空にし、相手がこのトークのときだけ控えを返す）と `is_break_quit`（今と同じ終了の判定）に分けた。`translate_path_tests.rs` の `step_untranslated` は `step` の写しなので、`step` の出口を変えたら写しにも同じ変更を入れる（今回は `settle` を足した）。
 - 2.3: 表 B の檻は `balloon_events_done_tests.rs` に置いた（`balloon_events_tests.rs` の補助は `pub(super)` で共有）。表 C・D の檻も 1,000 行を見て兄弟のファイルへ分ける。3 つの入口に共通する門 `steady_idle` と記録の `log_not_sent` は `balloon_events.rs` にある。番号の食い違いは設計の Invariants どおり error、控えが無いのは warn。
+- 2.5: 翻訳を待っている間は相が `Steady{talk: Some(新)}` なのに控え `shown` は前のトークのまま（`settle` は `StartTalk` でしか置き換えない）。控えと再生中のトークが同じとは限らないので、番号の照合は `current_talk_id` と控えの両方で見る（表 D の D2 はこの窓も `next_talk_started` で断る）。
+- 2.5（範囲外・完了の棚卸で起票）: `cargo clippy -p areka-kanade --all-targets` が既存の `actor_raise_reply_tests.rs:95`「this loop never actually loops」の誤りで止まる。本 spec は触っていない。
+- 道具: Bash の python へヒアドキュメントで日本語の置換を渡すと、照合が黙って外れることがある（2.5 で 1 回）。日本語を含む置換は Edit で行い、結果を grep で確かめる。

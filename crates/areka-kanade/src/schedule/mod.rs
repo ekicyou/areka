@@ -121,6 +121,10 @@ pub(crate) enum Input {
     ExecutionState(ExecutionStateUpdate),
     /// 殻が [`Action::Translate`] を実行した結果（殻が即時再投入）。判断は [`translate::on_done`] が持つ。
     TranslateDone(translate::TranslateResult),
+    /// 時間切れでバルーンを隠した知らせ（表示の側 → kanade）。判断は [`balloon_events::on_timeout_notice`] が持つ。
+    BalloonTimeout {
+        talk_id: TalkId,
+    },
 }
 
 /// 運行フェーズ（可視化は System Flows の状態機械図）。各待ち点は「直前に発行した
@@ -568,6 +572,9 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
 
         // TranslateDone: 預けた一括の再開・故障・帳簿なしの判断ごと translate::on_done へ渡す。
         Input::TranslateDone(result) => translate::on_done(state, result),
+
+        // BalloonTimeout: 番号の照合と送るかどうかごと balloon_events::on_timeout_notice へ渡す（表 D）。
+        Input::BalloonTimeout { talk_id } => balloon_events::on_timeout_notice(state, talk_id),
 
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 

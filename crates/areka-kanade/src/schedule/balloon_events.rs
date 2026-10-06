@@ -3,7 +3,7 @@
 //!
 //! ここが持つのは 2 つの控えと、[`super::step`] の出口の処理 [`settle`]、トークの完了の後の判断
 //! [`after_talk_done`]（設計の表 B）、再生中のトークが無いときのダブルクリックの判断
-//! [`on_idle_double_click`]（表 C）である。
+//! [`on_idle_double_click`]（表 C）、時間切れの知らせの判断 [`on_timeout_notice`]（表 D）である。
 //! - [`ShownTalk`]（`State.shown`）——最後に再生を始めたトークの番号と最終の台本。3 つのイベントの
 //!   Reference0 の源で、古い時間切れの知らせを退ける照合の相手。
 //! - [`BreakNote`]（`State.user_break_talk`）——利用者の中断を出した相手のトークと、ダブルクリック
@@ -194,6 +194,60 @@ pub(super) fn on_idle_double_click(mut state: State) -> (State, Vec<Action>) {
     (state, actions)
 }
 
+/// 時間切れでバルーンを隠した知らせ（設計の表 D。上から最初に当たった行だけを採る）。`talk_id` は
+/// 表示の側が隠したバルーンに出ていたトークの番号で、控えのトーク（最後に再生を始めたトーク）と比べる。
+///
+/// - D1: 相が定常でない → 送らず理由を記録する（要件 2.6・4.4）。
+/// - D2: 番号が控えと違う（控えが無い場合を含む）、または別のトークが再生中（台本を翻訳へ預けている
+///   間は控えが前のトークのまま）→ 次のトークが既に始まっていた。送らず記録する（2.6）。
+/// - D3: 終了の要求を保留している → 送らず理由を記録する。
+/// - D4: 控えのトークで送り済み・預かり済み → 送らず理由を記録する（要件 4.5）。
+/// - D5: そのトークがまだ再生中（完了の知らせが未着）→ 預かって記録する。完了で表 B の B5 が裁く。
+/// - D6: 再生中のトークの無い定常 → `OnBalloonTimeout`（Reference0＝控えの台本・Reference1＝`0`）。
+pub(super) fn on_timeout_notice(mut state: State, talk_id: TalkId) -> (State, Vec<Action>) {
+    let shown = state
+        .shown
+        .as_ref()
+        .filter(|shown| shown.talk_id == talk_id);
+    let refused = if !matches!(state.phase, Phase::Steady { .. }) {
+        Some("not_steady")
+    } else if shown.is_none()
+        || current_talk_id(&state.phase).is_some_and(|current| current != talk_id)
+    {
+        Some("next_talk_started")
+    } else if state.pending_close.is_some() {
+        Some("close_pending")
+    } else if shown.is_some_and(|shown| shown.timeout_sent) {
+        Some("already_sent")
+    } else if shown.is_some_and(|shown| shown.timeout_pending) {
+        Some("already_deferred")
+    } else {
+        None
+    };
+    if let Some(reason) = refused {
+        log_not_sent(&state, Cause::Timeout.id(), reason, Some(talk_id));
+        return (state, Vec::new());
+    }
+    // ここまでで、再生中のトークがあればそれはこのトークである（別のトークは D2 で断った。翻訳へ
+    // 預けている間は控えが前のトークのままなので、控えの番号だけでは決められない）。
+    if matches!(state.phase, Phase::Steady { talk: Some(_) }) {
+        if let Some(shown) = state.shown.as_mut() {
+            shown.timeout_pending = true;
+        }
+        tracing::info!(
+            target: "kanade",
+            event = "balloon_timeout_deferred",
+            talk_id = talk_id.0,
+            "時間切れの知らせを預かった——そのトークの完了で裁く（表 D の D5）"
+        );
+        return (state, Vec::new());
+    }
+    let actions = send(&mut state, Cause::Timeout, Some(talk_id))
+        .into_iter()
+        .collect();
+    (state, actions)
+}
+
 /// 3 つの入口に共通する門（要件 4.4・設計 D8）: 相が `Steady{talk: None}` で、終了の要求を保留して
 /// いないこと。送れなければ記録に載せる理由を返す。
 fn steady_idle(state: &State) -> Result<(), &'static str> {
@@ -274,3 +328,8 @@ mod done_tests;
 #[cfg(test)]
 #[path = "balloon_events_idle_tests.rs"]
 mod idle_tests;
+
+/// 時間切れの知らせ（表 D）の檻。
+#[cfg(test)]
+#[path = "balloon_events_timeout_tests.rs"]
+mod timeout_tests;
