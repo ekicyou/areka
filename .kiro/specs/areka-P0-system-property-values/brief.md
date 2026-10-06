@@ -57,3 +57,12 @@ Win32 の採り口を 1 か所に集め（偽の値を差せる継ぎ目つき�
 - 触るファイル: 新規の Win32 の採り口（例 `crates/areka/src/property/system_env.rs`）・`crates/wintf/src/ecs/window/monitor.rs`（読むだけ）・`crates/areka-sylphya/src/{vocab/dotted.rs, key.rs}`・`crates/areka-ghost/src/sylphya_wiring.rs`・`crates/areka/src/emo2_boot/mod.rs`・`doc/ukadoc-coverage/ledger/property.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
 - 共有しうる相手: `currentghost-property-tree`・`currentghost-property-others`・`property-catalog-lists`・`mcp-get-property`。
 - 議題: `system.cpu.*`・`memory.*` などの読みを毎回 Win32 へ問い合わせるか、間隔を置いて採るか（動く値の口の形しだい）。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M〜L（14〜18）のまま。切る: なし（一度切り出した spec）。
+- 前提の状態: `currentghost-property-tree`（動く値の口）はまだ＝着手できない。読む道は `mcp-get-property`（✅ 10-04）でできた＝着地後は MCP の `get_property` で `system.monitor.count` などを実機で確かめられる。
+- 崩れた前提／古くなった位置: なし。`crates/wintf/src/ecs/window/monitor.rs`（424）は C3 で変わっていない（`Monitor` の `bounds`・`work_area`・`dpi`・`is_primary`）。sylphya の `BackingLayer::SystemEnv` は縮退のまま。`system.dnd.mode` は投げ込み（ファイルのドラッグ）の様子で、`mouse-drag-events` の窓のドラッグとは別物。
+- 触るファイル: 新規の Win32 の採り口（例 `crates/areka/src/property/system_env.rs`）・`crates/wintf/src/ecs/window/monitor.rs`（読むだけ）・`crates/areka-sylphya/src/{vocab/dotted.rs, key.rs}`・`crates/areka-ghost/src/sylphya_wiring.rs`・`crates/areka/src/emo2_boot/mod.rs`・`doc/ukadoc-coverage/ledger/property.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
+- 議題（答えで作業が変わるものだけ）: 前回の 1 つ（毎回問い合わせるか間隔を置くか・動く値の口の形しだい）。
+- 見つけた穴: なし。

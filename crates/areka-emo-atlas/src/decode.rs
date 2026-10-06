@@ -7,7 +7,7 @@
 //! 既定手段を上位へ露出しない（R2.3）。デコード出力は premultiplied BGRA を
 //! 想定し、変換前フレームのピクセルフォーマット由来の α 有無を保持する。
 //!
-//! （trait 署名・型は本タスク 1.4 で定義。既定 WIC 腕は後続タスク 2.2。）
+//! 既定の腕は、静止画が [`wic_arm`]、動く絵が `image_arm`。
 //!
 //! 動く絵（コマが 2 枚以上の APNG・WebP）は「見出しを聞く」（`probe_animation`）→
 //! 「全コマを読む」（`decode_frames`）／「動きの 1 枚目だけを読む」（`decode_first_frame`）
@@ -106,7 +106,7 @@ pub trait ElementDecoder {
     /// 失敗（不在・破損）は `DecodeError`（パス付き）で返す。副作用はファイル読取のみ。
     fn decode(&self, path: &Path) -> Result<DecodedImage, DecodeError>;
 
-    /// 同名 `.pna` の有無（正規化の腕選択に供給・emo2 は常に false）。
+    /// 同名 `.pna` の有無（焼きの段が数えるだけで、透過の決定には使わない・emo2 は常に false）。
     fn probe_pna(&self, _path: &Path) -> bool {
         false
     }

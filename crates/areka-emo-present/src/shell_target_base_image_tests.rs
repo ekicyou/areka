@@ -131,7 +131,7 @@ fn build_table_target() -> ShellTarget {
 
     let shell = parse(&surfaces_txt());
     let selection = select_surface_images(&FILE_NAMES);
-    let target = build_shell_target(shell, selection, &dir, &dec);
+    let target = build_shell_target(shell, selection, &dir, &dec, UseSelfAlpha::On);
     assert!(
         target.bake_errors().is_empty(),
         "前提: 登録済みの絵だけを焼くので脱落は 0 件: {:?}",

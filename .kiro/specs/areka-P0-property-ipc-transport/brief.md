@@ -75,3 +75,16 @@
   - 輸送を作るなら: `crates/shiori-host32-ipc/src/lib.rs`・`crates/shiori-host32-host/src/`・`crates/shiori-host32-helper/src/`・`crates/shiori-abi/src/interface.rs`・`crates/areka/src/shiori_host.rs`・`crates/areka-ghost/src/shiori_inproc.rs`
 - 議題（答えで作業が変わるものだけ）: なし（1 段目の裁定そのものが本 spec の仕事）。
 - 見つけた穴: 上の網羅台帳の持ち主のずれ（実害なし）。並走の照合: 1 段目は文書だけ＝どの spec とも並べられる。輸送を作るなら `makoto-dll-host`・`property-query-channels`（`SenderType` のため `shiori-host32-host` を触る）と同時に走らせない。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: 1 段目（調べて裁定・文書だけ）XS〜S（2〜4）／輸送を作るなら M（10〜14）。切る: なし。
+- 前提の状態: 前提は無い＝いつでも着手できる（段は据え置きのまま）。
+- 崩れた前提／古くなった位置:
+  - 通信の札 `crates/shiori-host32-ipc/src/lib.rs` の `MsgTag`（5 つ）・`crates/shiori-abi/src/interface.rs` の `GetProperty`／`SetProperty` は変わらない。`crates/areka/src/main.rs` は 953 行（`mcp-log-history` が記録の初期化を `log_history::init()` へ移して −4）。
+  - 外から読む道 `mcp-get-property`（✅ 10-04）は着地した。開発者向けで、SHIORI から読む道ではない（前回どおり役割は重ならない）。
+  - 10-05 起票の `mcp-shiori-query` は「MCP からゴーストへ問う」（areka → SHIORI の向き・`X-MCP-PassThru-*`）で、本 spec の「SHIORI から areka へ問う」とは向きが逆＝重ならない。裁定の文書に「ゴーストへ問う道はこちら」と書き分けておくと迷わない。
+  - 網羅台帳 `shiori.toml` の `property.get:1`・`property.set:1` の持ち主は今も `property-query-channels`（前回どおり・1 段目で直す）。
+- 触るファイル: 1 段目＝`doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/ledger/shiori.toml`（2 行）。輸送を作るなら前回の一覧どおり（`shiori-host32-ipc`・`shiori-host32-host`・`shiori-host32-helper`・`shiori-abi`・`crates/areka/src/shiori_host.rs`・`crates/areka-ghost/src/shiori_inproc.rs`）。
+- 議題（答えで作業が変わるものだけ）: なし。
+- 見つけた穴: なし（台帳の持ち主のずれは前回の記録どおり）。

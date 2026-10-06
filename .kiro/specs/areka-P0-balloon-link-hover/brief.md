@@ -69,4 +69,5 @@
 ## Constraints
 
 - 文字とバルーンの列と kanade の列（イベント・SHIORI リソースの問い合わせ）に掛かる。着手の前に両列の先頭と照合する。
+- `crates/areka/src/readme/destination.rs` の `link_destinations` に付けた `#[cfg_attr(not(test), allow(dead_code))]` は、本 spec が本番の呼び手になったら外す（`link-context-copy` が先に外していれば何もしない・`open-external-tags` の完了時の申し送り・2026-10-06）。
 - 段: 優先（バルーン関係）。規模の見込み M（8〜12）。

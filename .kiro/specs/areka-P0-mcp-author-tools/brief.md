@@ -80,5 +80,22 @@
 - SSP 互換の 10 本は逐語一致を保つ（`doc/ssp-mcp/` が正本）。
 - MCP は rmcp で、無状態・JSON 単発。返事の待ちは最長 10 秒。
 - 規模の見立て: M〜L（14〜20 タスク・超えたら `validate_ghost` を切る）。
-</content>
-</invoke>
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模（タスク数）と切るかどうか: M〜L（14〜20）。今は切らない。20 を超えたら起票時の案どおり `validate_ghost` を別 spec へ。
+- 前提の状態: 満たす（`mcp-tool-entrances` 着地済み）。kanade の再生を要さない 3 本なので、kanade の進行の列とは独立。
+- 崩れた前提／古くなった位置:
+  - 起票の文の位置はすべて今も正しい（`crates/areka-mcp/src/tools/tools_tests.rs` の `TABLE.len()==10`・`tools/mod.rs` の `ToolCall` の 10 変種と `TABLE: [(&str, Parse); 10]`・`ToolRegistry::register`）。
+  - 登録の流れ: `crates/areka/src/main.rs` が `areka_mcp::tools::entrances(REPLY_WAIT)` で表と受け口を 1 組受け取り、`areka_mcp::start` に渡す。`entrances` が呼ぶ `register_rows` は**呼ぶたびに別の受け口（チャネル）を作る**＝独自の表を `register_rows` でもう 1 組作ると受け口が 2 つになり、`crates/areka/src/mcp/mod.rs` の `McpInbox` も 2 つ要る。`ToolCall` に変種を足すか、受け口を 1 つに保つ別の入口を作るかは設計の分かれ目。
+  - `list_capabilities` の材料のうち網羅台帳（`doc/ukadoc-coverage/ledger/*.toml`）は配布物に入らない。実行時に読むなら埋め込み（ビルド時に取り込む）が要る。`\!` の対応表 `emo2_boot/consumer_ledger.rs` は一覧を外へ出す公開の関数を持たない＝足すなら同ファイルを触る（`mcp-reload`・`mcp-strict-errors`・`script-impact-tiers` と重なる）。
+- 触るファイル（並走の照合用・見込み）: `crates/areka-mcp/src/{tools/mod.rs, tools/bridge.rs, handler.rs, help.rs, registry.rs}` と各テスト（`tools_tests.rs` は触らない）・新規の独自ツールの定義のファイル・`crates/areka/src/mcp/mod.rs`（振り分け）・新規 `crates/areka/src/mcp/` の 3 本のファイル＋兄弟テスト・`crates/areka/src/main.rs`（受け口を増やすなら）・`emo2_boot/consumer_ledger.rs`（一覧の口を足すなら）。
+  - 重なり: `handler.rs` の `INSTRUCTIONS` を `mcp-strict-errors` も触る／`help.rs` を `mcp-stdio-bridge` も触る／`mcp/mod.rs` を `mcp-dump-images-residue` が触るかもしれない／`mcp_tests.rs` に足すなら `mcp-ghost-name-match` と重なる。
+- 議題（答えで作業が変わるものだけ）:
+  - ツール名に接頭辞（`areka_` など）を付けるか（起票時の推しは「付ける」）。
+  - `list_capabilities` の材料に網羅台帳を埋め込むか、コードの表（`consumer_ledger.rs` など）だけから作るか。
+- 見つけた穴／すぐ直せる軽微な修正: この brief の「Constraints」の後に、書き込みの道具の残りかす `</content>`・`</invoke>` の 2 行が紛れている（本文ではない・消してよい）。
+
+### 同じウェーブ C4 の約束（2026-10-05 棚卸㉒・破るなら止めて報告）
+
+- `crates/areka/src/mcp/mcp_tests.rs`（`mcp-ghost-name-match`）・`get_status.rs`（`mcp-get-status`）・`dump_*.rs`（`mcp-dump-images-residue`）・`emo2_boot/consumer_ledger.rs` に触らない。依存を足さない（`Cargo.lock` は `release-cycle` の席）。
