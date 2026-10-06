@@ -18,7 +18,7 @@ areka は、ログ（`tracing` のマクロで出す行）のうち意味のあ�
 | `script` | `areka::log::script` へ info 以上で出した出来事（再生した台本） |
 | `network` | 取得の通信の info の出来事 |
 | `update` | 更新・インストールの info の出来事 |
-| `status` | 起動・終了・ゴーストの切り替えの節目の info の出来事 |
+| `status` | 起動・終了・ゴーストの切り替えの節目と、外のもの（説明書・ファイル・URL・フォルダ・メール）を開いた info の出来事 |
 
 1 つの出来事は 1 つの種別にだけ入る。次の順に当て、最初に当たったものに決まる。
 
@@ -35,7 +35,7 @@ target の照合は 2 通りある。
 
 ## 2. 規則の表
 
-取り決めの target の 2 行と、info の行を振り分ける 13 行。判定の順に並べた（`network` の行は `update` の行より先に当てる）。この表はテスト（`crates/areka/src/log_history_convention_tests.rs`）が読み、実装の規則と 1 行でも食い違うと赤になる。表を変えるときは実装（`log_history.rs` の `RULES`・`TARGET_SCRIPT`・`TARGET_ERROR`）も同時に変える。
+取り決めの target の 2 行と、info の行を振り分ける 14 行。判定の順に並べた（`network` の行は `update` の行より先に当てる）。この表はテスト（`crates/areka/src/log_history_convention_tests.rs`）が読み、実装の規則と 1 行でも食い違うと赤になる。表を変えるときは実装（`log_history.rs` の `RULES`・`TARGET_SCRIPT`・`TARGET_ERROR`）も同時に変える。
 
 <!-- log-rules:begin -->
 | 種別 | target | 照合 |
@@ -55,6 +55,7 @@ target の照合は 2 通りある。
 | status | `areka::emo2_boot::ghost_switch` | 下も含む |
 | status | `ghost-boot` | 下も含む |
 | status | `ghost-shutdown` | 下も含む |
+| status | `areka::readme` | 下も含む |
 <!-- log-rules:end -->
 
 - `ghost-boot`・`ghost-shutdown` は `crates/areka-ghost/src/runtime.rs` が `target: "…"` で明示している target で、ゴースト自体の起動と終了の節目。

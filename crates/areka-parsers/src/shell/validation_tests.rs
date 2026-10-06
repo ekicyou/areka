@@ -543,7 +543,7 @@ kero.surface.alias
 /// 公開 facade を通す**補完で、emo2 風の実在感ある断片を用いる（重複ではない）。
 ///
 /// 断片は認識可能ブロックの「間」に subset 外を挟む:
-/// - 非 overlay element メソッド（`element1,base,...`）→ 吸収（overlay 兄弟は残る・要件 4.5）。
+/// - element定義の `base`（`element0,base,...`）→ overlay と同じ値（element-base-method 要件 1.1）。
 /// - 非 overlay pattern メソッド（`pattern0,replace,...`）→ 忠実転記（method を落とさない・要件 4.6/8.4）。
 /// - 3 種以外の interval（`sometimes`）→ `Interval::Other(原文)` へ忠実転記（要件 8.2・討議 #1）。
 /// - `collisionex`（円/楕円/多角形）→ 吸収（純 collision は残る・要件 6.3）。
@@ -564,7 +564,7 @@ animation0.pattern0,overlay,200,0,0,0
 // 間に挟む subset 外を含む surface。valid 行のみ materialize される。
 surface200
 {
-// 非 overlay element メソッド（base）は吸収され、overlay 兄弟は残る（要件 4.5）。
+// element定義の base は overlay と同じ値になり、overlay 兄弟と並ぶ（element-base-method 要件 1.1）。
 element0,base,bg.png,0,0
 element1,overlay,face.png,0,0
 
@@ -618,14 +618,12 @@ element0,overlay,tail.png,7,8
         .find(|s| s.id == 200)
         .expect("中間 surface200 が消えた");
 
-    // element: base 吸収・overlay のみ残る。転記した唯一の overlay は face.png（layer 1）。
-    assert_eq!(
-        s200.elements.len(),
-        1,
-        "非 overlay element が吸収されていない"
-    );
-    assert_eq!(s200.elements[0].layer, 1);
-    assert_eq!(s200.elements[0].path.as_str(), "face.png");
+    // element: base は値になり、土台 bg.png（layer 0）・overlay の face.png（layer 1）の順。
+    assert_eq!(s200.elements.len(), 2, "base の element が値になっていない");
+    assert_eq!(s200.elements[0].layer, 0);
+    assert_eq!(s200.elements[0].path.as_str(), "bg.png");
+    assert_eq!(s200.elements[1].layer, 1);
+    assert_eq!(s200.elements[1].path.as_str(), "face.png");
 
     // collision: collisionex 吸収・純 collision のみ残る。
     assert_eq!(s200.collisions.len(), 1, "collisionex が吸収されていない");
