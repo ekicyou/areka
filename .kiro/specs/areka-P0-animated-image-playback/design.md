@@ -214,16 +214,16 @@ graph TB
 ```
 crates/areka-emo-compose/
 ├── src/
-│   ├── film.rs                    # 新規: FilmId・FilmSheet・FilmSheets・decompose（分解）・検査
+│   ├── film.rs                    # 新規: FilmSheet・FilmSheets・FilmSkip・decompose（分解）・検査（FilmId は nesting.rs）
 │   ├── film_tests.rs              # 新規
-│   ├── nesting.rs                 # 変更: PartKey・ElementKind::Film・NestTable の films と always の欄
+│   ├── nesting.rs                 # 変更: FilmId・PartKey・ElementKind::Film・rest_index・rest_pattern（経過 0 の pattern の求め方）・NestTable の films と always の欄
 │   ├── nesting_film_tests.rs      # 新規
 │   ├── pattern.rs                 # 変更: 欄の 3 つの意味（載っていない・コマ・消えている）・動く絵の子の欄
 │   ├── pattern_cell_tests.rs      # 新規
 │   ├── plan.rs                    # 変更: Film の element・always の経過 0・絵を指すコマ
-│   ├── plan_always.rs             # 新規: 経過 0 の pattern の求め方・動く絵の子の平坦化
+│   ├── plan_always.rs             # 新規: push_film_op（動く絵の子の平坦化）・always_rest_target（always の経過 0 の先。求め方は nesting.rs の rest_pattern を呼ぶ）
 │   ├── plan_always_tests.rs       # 新規
-│   ├── plan_extent.rs             # 新規: compute_extent・flatten_extent を plan.rs から移す＋ b の 2 つ
+│   ├── plan_extent.rs             # 新規: plan の子のモジュール（plan.rs の #[path] mod extent）。compute_extent・flatten_extent を plan.rs から移す＋ b の 2 つ
 │   ├── plan_extent_film_tests.rs  # 新規（既存の plan_extent_tests.rs・plan_nesting_extent_tests.rs は接続先だけ替える）
 │   ├── world.rs                   # 変更: bind_atlas の直後に分解・film_sheets の読み口
 │   └── lib.rs                     # 変更: 公開の接続
@@ -253,17 +253,21 @@ crates/areka-emo-present/src/presenter/
 ├── hub.rs                         # 変更: 指令の入口（ShowSurface の腕）で、隠れている対象のコマを預かる・世代が追い付くまで回数つきの欄を外す・StageAck の腕
 ├── target.rs                      # 変更: 預かったコマの欄 1 つ
 ├── visibility.rs                  # 変更: show_target が預かったコマで通し直す・回数つきの子の欄を外す
+├── replace.rs                     # 変更: 対象の差し替えで DetachedState が出番の世代・追い付いた世代を引き継ぐ
 ├── timing.rs                      # 変更: compose_key_hash が部品の欄も混ぜる
 ├── （show.rs の apply_show は変更 0）
-└── （兄弟）presenter_film_tests.rs  # 新規（接続宣言は presenter.rs）
+├── （兄弟）presenter_film_tests.rs  # 新規（接続宣言は presenter.rs）
+└── （../shell_target.rs）          # 変更: テストの接続宣言 1 つ（shell_target_animated_fixture_tests.rs）
 crates/areka/src/emo2_boot/
 ├── adapter.rs                     # 変更: map_display_command に StageAck の腕 1 つ
-├── frame/status_report.rs         # 変更: 窓の知らせ（seriko へ・出番の世代つき）
+├── frame/status_report.rs         # 変更: 窓の知らせ（新しい関数 report_stages・seriko へ・出番の世代つき）
 ├── frame/status_report_stage_tests.rs  # 新規
 ├── mod.rs                         # 変更: 時計を 1 つ作って刻みと seriko へ渡す・E2E の接続宣言
 └── film_playback_e2e_tests.rs     # 新規
 doc/・.kiro/                        # 台帳・対応表・後続 2 本の brief・roadmap の行
 ```
+
+- 置き場は実装に合わせて直した（2026-10-06）: `FilmId`・`PartKey`・経過 0 の pattern の求め方 `rest_pattern`（`pub(crate)`）は `nesting.rs`。`plan_always.rs` はそれを呼ぶ側。`plan_extent.rs` は `plan` の子のモジュール。`replace.rs`・`shell_target.rs` を足した。
 
 ### Modified Files
 
@@ -279,15 +283,17 @@ doc/・.kiro/                        # 台帳・対応表・後続 2 本の brie
 | ファイル | 触る所 | 印 |
 | --- | --- | --- |
 | `crates/areka-emo-compose/src/plan.rs` | `push_static_element_ops`（`ElementKind` の振り分けに `Film` の腕）・`flatten_surface`（重ねる番号に `always` を足す・コマが無ければ経過 0・コマが絵を指す腕・「消えている」の腕）・`compute_extent`／`flatten_extent` を `plan_extent.rs` へ移す | **約**。同じウェーブでの重なりは **0**（`areka-P0-element-base-method` は `plan.rs` に触らないと確かめた・下の「調整で確かめた事実」）。`flatten_extent` は未着手の `areka-P0-extent-element-offset` の持ち物とされているので、移したことを申し送る |
-| `crates/areka-emo-compose/src/plan_extent.rs`・`plan_always.rs` | 新規 | — |
-| `crates/areka-emo-compose/src/nesting.rs` | `ElementKind` に `Film`・`PartKey`・`SurfaceParts` に 2 欄・`NestTable::walk`・`NestReport::from_world` の `ElementKind` の振り分け | — |
+| `crates/areka-emo-compose/src/plan_extent.rs`・`plan_always.rs` | 新規（`plan_extent.rs` は `plan` の子のモジュール・`plan_always.rs` は `push_film_op`・`always_rest_target`） | — |
+| `crates/areka-emo-compose/src/nesting.rs` | `ElementKind` に `Film`・`FilmId`・`PartKey`・`rest_index`・`rest_pattern`・`SurfaceParts` に 2 欄・`NestTable::walk`・`NestReport::from_world` の `ElementKind` の振り分け | — |
 | `crates/areka-emo-compose/src/pattern.rs`・`world.rs`・`lib.rs`・`film.rs` | 欄・`bind_atlas` の直後の 1 行と読み口・公開の接続・新規 | — |
 | `crates/areka-emo-compose/src/{fold,method,atlas_bind,boxes,hit_import,base_image}.rs` | 変更 0 | — |
 | `crates/areka-seriko/src/{table,looper,parts,timeline}.rs` | 上の File Structure のとおり | 棚卸の一覧どおり。後続 `areka-P0-seriko-trigger-intervals` と分け合う（同じウェーブではない） |
 | `crates/areka-seriko/src/{state,actor,lib}.rs` | `ScopeStates` に窓と面の覚え・`commit_pattern` のバルーンの腕・`SerikoMsg` に 1 種・`SerikoSink` に 2 関数・時計つきの起動 | 棚卸の一覧に無い（ほかの spec の一覧にも無い） |
-| `crates/areka-emo-present/src/presenter/hub.rs`・`target.rs`・`visibility.rs` | 指令の入口の `ShowSurface` の腕（預かる）・`PresentTarget` に欄 1 つ・`show_target`（預かったコマで通し直す・回数つきの子の欄を外す）。`show.rs` の `apply_show` は変更 0 | **約**。`areka-P0-self-alpha-declaration` は `shell_target.rs`・`balloon.rs`、`areka-P0-element-base-method` は `shell_target.rs` の `load_shell_target` だけなので重ならない |
+| `crates/areka-emo-present/src/presenter/hub.rs`・`target.rs`・`visibility.rs` | 指令の入口の `ShowSurface` の腕（預かる）・`PresentTarget` に欄 1 つ・`show_target`（預かったコマで通し直す・回数つきの子の欄を外す）。`show.rs` の `apply_show` は変更 0 | **約**。`areka-P0-self-alpha-declaration` は `shell_target.rs`・`balloon.rs`、`areka-P0-element-base-method` は `shell_target.rs` の `load_shell_target` だけなので、この 3 つでは重ならない（`shell_target.rs` は下の行） |
+| `crates/areka-emo-present/src/presenter/replace.rs` | 対象の差し替えで `DetachedState` に出番の世代・追い付いた世代の 2 欄を足して引き継ぐ（実装に合わせて足した・2026-10-06） | **約** |
+| `crates/areka-emo-present/src/shell_target.rs` | テストの接続宣言 1 つ（`#[cfg(test)] #[path = "shell_target_animated_fixture_tests.rs"] mod animated_fixture_tests;` の 4 行）。本体は変更 0（実装に合わせて足した・2026-10-06） | **他**: `areka-P0-element-base-method`（先に main へ入った・接続宣言が隣り合うだけ）・`areka-P0-self-alpha-declaration`（`build_balloon_target_from_faces` の署名を変える）。後から main に入る側が、この検体のテストと E2E（`film_playback_e2e_tests.rs` の `load_balloon()`）の呼び出しを合わせる |
 | `crates/areka-emo-present/src/presenter/timing.rs`・`presenter.rs` | `compose_key_hash`・テストの接続宣言 1 つ | **約** |
-| `crates/areka/src/emo2_boot/frame/status_report.rs` | `run_status_report_phase`・`report_balloons`・`BalloonStatusLedger` に欄（出番の世代を含む） | ほかの spec の一覧に無い |
+| `crates/areka/src/emo2_boot/frame/status_report.rs` | 新しい関数 `report_stages`（`run_status_report_phase` が文字の層を借りる手前で呼ぶ）・`BalloonStatusLedger` に欄 `last_stage`（出番の世代を含む）。`report_balloons` は変更 0（実装に合わせて直した・2026-10-06） | ほかの spec の一覧に無い |
 | `crates/areka-seriko/src/output.rs` | `DisplayCommand` に `StageAck` を 1 種（今ある 5 種の欄は変えない） | ほかの spec の一覧に無い |
 | `crates/areka-emo-present/src/command.rs`・`presenter/read.rs` | `PresentCommand` に `StageAck` を 1 種・読み口 `stage_generation` | **約**。ほかの spec の一覧に無い |
 | `crates/areka/src/emo2_boot/adapter.rs` | `map_display_command` に腕 1 つ（`DisplayCommand` を網羅して突き合わせる所。足さないとコンパイルで止まる） | ほかの spec の一覧に無い |
@@ -551,6 +557,7 @@ pub fn rest_index(waits_ms: impl Iterator<Item = u32>) -> Option<usize>;
 ```
 
 - `NestReport::from_world` は `ElementKind::Film` を読み飛ばす（無い番号でも循環でもない）。
+- `FilmId`・`PartKey` と、経過 0 の pattern の求め方 `rest_pattern`（`pub(crate)`・index の昇順に並べて `rest_index`）もこのファイルに置く。分解（`film.rs`）は `rest_index` を、合成（`plan_always.rs`）は `rest_pattern` を呼び、2 つ目を作らない（実装に合わせて直した・2026-10-06）。
 
 #### PatternState の欄（`pattern.rs`）
 
@@ -673,7 +680,8 @@ impl AnimationTable {
 - 評価する部品 ＝ 今の見える部品（`visible_parts`）＋ 見えている動く絵の子（`visible_films`）。部品 1 つの評価は今の 1 本の経路（`part_animations` を番号の昇順に）で、動く絵の子もそこを通る。
 - 着せ替えの番人 `gate` は 3 通り（抽選する K・`always`・対象外）を返す。`always` は乱数を引かない。時計が無ければ、渡された時刻で作る。`always_at` の答えを欄へ書く: 経過 0 のコマと同じなら載せない／別のコマならコマ（絵を指すなら `set_film`）／何も出さないなら、経過 0 のコマが在るときだけ「消えている」。
 - 回数つき（`laps` が在る）の時計は、評価のとき見えていなければ捨てる。**評価は刻みだけでなく、面の切り替え・着せ替えの変化・窓の知らせの直後の `refresh` でも行う**（`\s[A]` → `\s[B]` → `\s[A]` が刻みの間に続いても、B で見えなくなった時計は捨てられ、A に戻ると頭から始まる）。面が隠れた（`\s[-1]`・`\b[-1]`・窓が閉じた知らせ）ときは、その入れ物の回数つきの時計を全部捨てる。
-- 抽選の animation の決まり（境界の抽選・`peek` は時計を作らない・末尾の保持）は変更 0。
+- 抽選の animation の決まり（境界の抽選・刻みの外の作り直しは抽選の時計を作らない・末尾の保持）は変更 0。
+- 刻みの外の作り直しは `PartClocks::refresh`（今の `peek` を置き換えた 1 本）。見える部品の求め方は刻みの評価と同じで、見えている `always` の時計が無ければ出来事の時刻で作り、回数つきの見えなくなった時計を捨てる。抽選の animation の時計と乱数には触らない。時刻が無い（刻みが 1 度も来ていない）ときは時計を作らず経過 0 で読む。窓が閉じていれば時計を作らず、回数つきの時計を全部捨てる（実装に合わせて直した・2026-10-06）。
 - 記録: `always` の時計が生まれた・捨てられたとき `debug!`。
 
 **Contracts**: State [x] — seriko のスレッドだけが触る。
@@ -686,7 +694,7 @@ impl AnimationTable {
 - 進行の対象は `stage_slots`（下）。面ごとに: 一番上の再生（今のまま。加えて、一番上の `always` に再生が無ければ作り、`always_at` で欄を置く。末尾でも負の番号でも再生は捨てない）→ 表に動く部品が在れば部品の欄を作り直す（今はシェルの面だけ → 面の種類を問わない。バルーンの面の着せ替えの集合は空）→ `commit_pattern` を 1 回。
 - バルーンの面は、窓が閉じていても評価する。ただし閉じている間は時計を作らず、回数つきの時計は無い（捨ててある）。動くのは、窓が開いていたときに生まれた終わりなしの時計だけ。
 - 飛ばす条件: 今の条件に「一番上に `always` が無い」を足す。`is_continuous()` が偽の表では今と同じ行だけを通る。
-- `refresh(scope, slot, at_ms)`: 今の `refresh_parts` を広げる。面の切り替え・着せ替えの変化・窓の知らせの直後に呼び、見えている `always` の時計を `at_ms` で作り、欄を作り直して `commit_pattern` する。抽選の animation には触らない（今の `peek` のまま）。
+- `refresh(scope, slot, at_ms: Option<u64>, states)`: 今の `refresh_parts` を置き換える（実装に合わせて直した・2026-10-06）。面の切り替え・着せ替えの変化・窓の知らせの直後に呼び、一番上の `always` に再生が無ければ `at_ms`（`None` なら直前の刻みの時刻）で作り、部品の欄は `PartClocks::refresh` で作り直して `commit_pattern` する。抽選の animation の時計と乱数には触らない。面が無い（`\s[-1]`・`\b[-1]` の後）なら、その面の回数つきの時計を捨てて何も返さない。
 - 表の差し替え: シェルの表ならシェルの面の時計、バルーンの表ならバルーンの面の時計を捨てる。差し替えの後、見えている面の時計は次の出来事（シェルは差し替えの合図の後の最初の刻み・窓が開いたままのバルーンも次の刻み）の時刻で生まれる。
 - **出来事の時刻は、刻みの単調性の番人（`last_seen`）に入れない**。`last_seen` は刻みの時刻だけで進める。入れると、別スレッドが僅かに前に読んだ刻みが「非単調」として捨てられる。
 
@@ -775,8 +783,9 @@ impl ScopeStates {
 
 **Contracts**: Event [x]
 
+- 置き場: 新しい関数 `report_stages`。`run_status_report_phase` が文字の層を借りる手前で呼ぶ。今ある `report_balloons` は変えない（実装に合わせて直した・2026-10-06）。
 - Trigger: 届けの相（`run_status_report_phase`）の中で、文字の層を借りる**手前**。装着済みのバルーンのスコープ（昇順）ごとに `target_visible`・`current_surface_id`・`stage_generation` を読み、前に知らせた（開いているか, 面の番号, 出番の世代）と違うときだけ `SerikoSink::send_stage` を呼ぶ。
-- 台帳: `BalloonStatusLedger` に「スコープ → 前に知らせた値」を 1 欄足す（ゴーストごとに新しく作られる）。置き場のゴーストが居ないフレームは台帳を変えずに見送る（運行の側への届けと同じ扱い）。
+- 台帳: `BalloonStatusLedger` に「スコープ → 前に知らせた値」を 1 欄（`last_stage`）足す（ゴーストごとに新しく作られる）。置き場のゴーストが居ないフレームは台帳を変えずに見送る（運行の側への届けと同じ扱い）。
 - 置き場所の理由: 見える・見えないの真実は表示層の照会で、変える道は複数ある（可視性の相・`\b[-1]`・時間切れ・利用者の中断）。照会の差で拾えば 1 か所で全部を拾える。照会と台帳とゴーストごとの作り直しは、この相が既に持っている。届けは窓が変わったフレームの終わりに出る（同じフレーム）。
 
 ## Data Models
