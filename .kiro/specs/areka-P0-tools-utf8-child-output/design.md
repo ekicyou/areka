@@ -53,7 +53,7 @@
 
 ### Revalidation Triggers
 
-- `Invoke-Utf8Child` の引数・返り値の形が変わる: 呼ぶ 4 か所と判定の静的な規則（呼び出しの形を見る）を見直す。
+- `Invoke-Utf8Child` の引数・返り値の形が変わる: 呼ぶ所（版の 3 か所・`Read-SamplePaths`・`package.ps1` の `Invoke-Utf8Step`・`encoding-check.ps1`）と判定の静的な規則（呼び出しの形を見る）を見直す。
 - 判定の対象（`tools/*.ps1`・`.github/workflows/*.yml` の `run:`）に新しいファイルが入る: そのファイルも ASCII の規則・書き替え禁止の規則に従う。`winget-manifest-submission` の `winget.yml` はここで判定に入る。`run:` の本文は pwsh として構文解析するので、pwsh 以外の shell の段を足すときは判定の作りを見直す。
 - `$LOG_MARKER_*`（areka の記録の日本語の目印）を増やす・名前を変える: 判定の例外は変数名の前置き `LOG_MARKER_` で決まる。
 - 道具の段の名前・出す文を変える: `doc/crates-io-publish.md` の引用と、`release-cycle` の記録の読み替えを見直す。
@@ -116,7 +116,7 @@ tools/
 
 ### Modified Files
 
-- `tools/package.ps1` — `utf8-child.ps1` を読み込む。段「前提の確認」の版を読む所と `Read-SamplePaths` を `Invoke-Utf8Child` へ。端末へ出す文と段の名前を英語へ。`Test-RunLog` の `Detail` から目印の文言を外す（目印は変数名で示す）。
+- `tools/package.ps1` — `utf8-child.ps1` を読み込む。段「前提の確認」の版を読む所と `Read-SamplePaths` を `Invoke-Utf8Child` へ。端末へ出す文と段の名前を英語へ。`Test-RunLog` の `Detail` から目印の文言を外す（目印は変数名で示す）。段 `license check`・`generate third-party notices` の子（`cargo deny`・`cargo about`）を関数 `Invoke-Utf8Step`（`Invoke-Utf8Child` で読み、行として段へ流し `$LASTEXITCODE` を置く）で回す（手元の確かめで罫線の化けが見つかったための追加・棚卸の結果を参照）。進捗バーを出さない（`$ProgressPreference`）。
 - `tools/crates-io.ps1` — 冒頭の `[Console]::OutputEncoding` の行と注記を消す。`utf8-child.ps1` を読み込み、版を読む所を `Invoke-Utf8Child` へ。端末へ出す文・較正の見本の名前・較正が探す文の切れ端・較正の見本の中身（`# 理由`・`# 説明`・`# 権限`）を ASCII へ。
 - `tools/test-all.ps1` — 段 `encoding check` を足す（「crates.io 公開前の確認」の後・`-License` の前）。段の名前と結果の一覧の文を英語へ。
 - `.github/workflows/release.yml` — 8 段の先頭の書き替えの行を消す。段「zip を作る」を `-File` 呼び出しへ（子の中の書き替えを消す）。段「版の検査」を `Invoke-Utf8Child` へ。段「既存の Release の検査」のタグの一覧の `--jq` を末尾が ASCII の欄の形へ。`run:` の文を英語へ。
@@ -235,7 +235,7 @@ sequenceDiagram
 - `-OwnConsole` のときだけ `CreateNoWindow` を立てる（子は窓の無い自分だけの端末を持つ）。既定は立てない（cargo の長い組み立てを Ctrl+C で道連れに止められるよう、端末を分け合う今の形を保つ）。
 
 **Dependencies**
-- Inbound: `package.ps1`（版・検体のパス）・`crates-io.ps1`（版）・`release.yml` 段「版の検査」・`encoding-check.ps1` — P0
+- Inbound: `package.ps1`（版・検体のパス・`Invoke-Utf8Step` の 2 段）・`crates-io.ps1`（版）・`release.yml` 段「版の検査」・`encoding-check.ps1` — P0
 - External: `System.Diagnostics.ProcessStartInfo` — P0
 
 **Contracts**: Service [x]

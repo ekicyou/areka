@@ -108,10 +108,11 @@
   - _Requirements: 1.3, 3.2, 3.7, 6.1, 6.2, 6.3, 6.4, 7.3_
 
 ## Implementation Notes
-- 2.2: 932 の端末で段 `license check` の `cargo deny` の罫線が `━E` のように崩れて出る（子の出力をそのまま写す所の表示だけの文字化け・合否に効かない・8.4 で書き替えない）。6.3 の棚卸で表示だけの文字化けの記録（4.3）に載せる。
+- 2.2: 932 の端末で段 `license check` の `cargo deny` の罫線が `━E` のように崩れて出る（子の出力をそのまま写す所の表示だけの文字化け・合否に効かない・8.4 で書き替えない）。6.3 の棚卸で表示だけの文字化けの記録（4.3）に載せる。 → その後（10-06）、開発者の手元の `-Check` でも同じ化けが出たので、原因（段 `Step` の `2>&1 |` で子の UTF-8 を端末の文字コードで解く）を直した: `package.ps1` の `Invoke-Utf8Step` で `cargo deny`・`cargo about` を `Invoke-Utf8Child` で読む（research 12.1）。要件 4.3 と Out of scope に例外の一文を足した。
 - 外から見える形を変えない（release cycle セッションの手順が頼っている・10-06 協議）: `package.ps1 -Check` は終了コード 0 が緑／`crates-io.ps1 -Verify -Version {版}`・`-Pending -Version {版}` は引数名そのまま・全部公開済みなら `-Pending` は終了コード 0 で標準出力 0 行（案内は標準エラーかホストへ）／`test-all.ps1 -License` は終了コード 0・THIRD-PARTY-NOTICES.md を作り直す働きはそのまま／release.yml のきっかけ（タグ v* と workflow_dispatch）・版の不一致で止まる働き・Release に添える 4 つの物はそのまま／crates-io.yml のきっかけと Release の緑を待つ形はそのまま。変える必要が出たらマージの前に release cycle へ知らせる。
 - 3.2: crates-io.yml の注記「子の人が読む行（在る・無い）」は crates-io.ps1 の英語の出力 `present`／`absent` とずれた。4.2 で注記を揃える。
 - 5.1: 規則 C は子の PowerShell へ `-Command`／`-c` で渡す文字列も構文解析して見る（レビューの指摘で設計に追記・要件 3.1 の「zip を作る」の戻りを拾う）。`-Command:` のコロン形・`-EncodedCommand`・変数渡し・省略形は見ない（今の本文に無い）。
 - 5.2: `[Console]::OutputEncoding` は .NET が値を覚えておくので、親の前後比較は `chcp` による外からの変化を見ない（設計どおり）。端末を守る本当の保証は「子は `-OwnConsole` の自分だけの端末」と規則 C。判定 1 回は約 40 秒。
 - 6.1: 変更はレビュー承認済み・判定の単独実行は `all passed`。全体テストは段 `x64 workspace tests` が C ドライブの満杯（`no space on device`）で落ちた（コードの失敗ではない）。ディスクを空けてから全段緑を取り直してから `[x]` にする。
 - 6.1（追記・10-06）: ディスクを空けた後の 2 回目は x64 の段で `areka` 本体の起動・切替・インストールのテスト 10 件が時間切れ等で赤（段は 55 分・並走の負荷）。同じ群を単独で回すと 48/48 合格。3 回目の全体テストは全段緑（commit `4d4a3eda`・`encoding check: all passed`・禁止の 4 ファイルは `git diff main` に 0 件）。
+- 完了の棚卸へ（validate-impl の H）: `.claude/skills/kiro-complete/SKILL.md` の全体テストの段の一覧が古い（日本語の段の名前のまま・`crates.io pre-publish check`／`encoding check` が無い）→ スキルドキュメント同期で直す。`tools/perf/` の `Invoke-PwshChild` の注記と実際のずれ（design の Non-Goals）は `/kiro-discovery` で起票。release cycle セッションへマージの知らせ（PR 番号・squash の SHA・7 の結果＝932 の `-Check` 緑）。
