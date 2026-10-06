@@ -5,7 +5,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 authors = ["ekicyou <dot.station@gmail.com>"]
 license = "MIT"
@@ -31,7 +31,7 @@ event-listener = "5"
 async-channel = "2"
 bitflags = "2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-dola = { version = "0.0.1", path = "crates/dola" }
+dola = { version = "0.0.2", path = "crates/dola" }
 
 [workspace.dependencies.bevy_app]
 version = "0.19"
