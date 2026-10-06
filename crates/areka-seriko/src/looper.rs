@@ -666,6 +666,9 @@ mod always_tests;
 #[path = "looper_balloon_tests.rs"]
 mod balloon_tests;
 #[cfg(test)]
+#[path = "looper_film_count_tests.rs"]
+mod film_count_tests;
+#[cfg(test)]
 #[path = "looper_parts_emo2_tests.rs"]
 pub(crate) mod parts_emo2_tests;
 #[cfg(test)]
