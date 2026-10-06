@@ -103,7 +103,7 @@
   - _Boundary: ConsumerLedger_
 
 - [ ] 5. 結線: 表示の側から kanade へ
-- [ ] 5.1 可視性の相が時間切れの知らせを kanade へ送る
+- [x] 5.1 可視性の相が時間切れの知らせを kanade へ送る
   - 判断の後、隠す発行を済ませてから、知らせがあれば kanade へ時間切れのメッセージを送る。送出端はゴーストの置き場から取り出す（結線の束は変えない）。
   - 送ったら番号つきで 1 行、ゴーストが置き場に無い・受け手が消えた場合は送れなかった理由を 1 行記録する。配線の層に判断の分岐は足さない。
   - 完了の状態: 相の檻で、時間切れのフレームに知らせが 1 通送られること、ゴーストが置き場に無いときは送らず記録されること、ゴーストの切替の直後に前のゴーストのトークの番号の知らせが新しいゴーストの kanade へ届かないこと、が緑。
@@ -148,3 +148,4 @@
 - 2.3 の取りこぼし（4.1 で発見）: kanade の振る舞いを変えるタスクでも、本体のクレート（`cargo test -p areka`）の台本つきの檻（ScriptedShioriBackend）が新しい GET で赤になる。kanade を触ったら本体のクレートも回す。
 - 4.1: `BalloonLifecycleNotice` の言及が doc/COMPAT_ARCHITECTURE.md・台帳 shiori.toml・briefing に残っている（6.1 で書き直す）。
 - 4.2: テストの補助 `Frame::ended_at(end)` が占有終端とトークの終わりを一緒に積む（`Frame::talk_started()` は `TalkId(1)` つき）。新しい檻の置き場は `balloon_visibility_talk_end_tests.rs`（4.3 で広げる）。4.3 へ回したもの: 相の側のログの水準と欄の檻（`StoppedAt` の info と `stopped_at` 欄・`StopTimeMissing` の warn・`balloon_timeout_notice_failed`／`no_talk_id` の warn）。
+- 5.1: 相の檻は本物の `decide` と `notify_timeout` を相の順に呼ぶだけで、`run_balloon_visibility_phase` の中の呼び出しの 1 行は通らない（headless の表示層は可視にならず、時間切れまで届かない）。5.2 の通しの檻は、本物の相を可視のバルーンで回し、kanade の受け端に番号つきの知らせが 1 通届くことまで主張する（可視を作れる前例は実 GPU の `frame_visibility_integration_tests.rs` の `seat_ghost`）。
