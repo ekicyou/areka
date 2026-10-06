@@ -90,7 +90,7 @@
   - _Requirements: 1.5, 1.7, 2.6, 3.2, 4.7, 6.3, 7.5, 8.6, 10.3_
   - _Depends: 2.2, 4.1_
 
-- [ ] 5. 表と台帳
+- [x] 5. 表と台帳
 - [x] 5.1 (P) 受け取り手の表に開く系 6 組を登記する
   - 正準の台帳に `("open", file|browser|explorer|editor|mailer)` と運搬名 `\j`（選別子なし）の 6 行を説明書の受け口の変種で登記し、その変種の doc を「開く系の受け口（説明書を含む）」に改める
   - 「`("open","browser")` に受け取り手が無い」檻を書き替え、`("open","help")`・`("open", None)` が担当なしである檻を足す。総数の檻は main を取り込んだ後の実物の行を数え直して書く（並走の `balloon-lifecycle-events`・`mcp-author-tools` の行が先に入っていれば落とさず、一致のテストが在れば本 spec の 6 行の見本＝`\j` は `http://` の URL・`open` の 5 組は引数つき、を足す）
@@ -99,7 +99,7 @@
   - _Boundary: ConsumerLedger_
   - _Depends: 4.2_
 
-- [ ] 5.2 (P) 網羅台帳の 6 行と正典の裁量の登記を書き替える
+- [x] 5.2 (P) 網羅台帳の 6 行と正典の裁量の登記を書き替える
   - 網羅台帳の 6 行の `status` を設計の表どおり（`\j` と `explorer` は `degraded`・残り 4 行は `implemented`）、`owner` を本 spec、`note` を既存の `\![open,readme]` の行に倣って壊れ方とログの実態に書き直す
   - 互換の設計文書の §8 に、設計の「正典の沈黙と裁量」の 9 行を登記する
   - 完了の姿: 台帳の検査（`ukadoc-survey`）が緑で、`implemented` の行の出典コメントが 2.1 の実装に見つかる
