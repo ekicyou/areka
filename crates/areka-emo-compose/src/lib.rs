@@ -56,6 +56,7 @@ pub use boxes::{
 };
 pub mod fold;
 pub mod plan;
+mod plan_always;
 pub use plan::BlitOp;
 pub mod blit;
 pub mod hit;

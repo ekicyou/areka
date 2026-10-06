@@ -42,9 +42,10 @@ use bevy_ecs::entity::Entity;
 use crate::bind::BindSet;
 use crate::error::ComposeError;
 use crate::method::ComposeMethod;
-use crate::nesting::ElementKind;
+use crate::nesting::{ElementKind, PartKey, is_always_interval};
 use crate::normalized::{SurfaceMaster, Transform};
 use crate::pattern::PatternState;
+use crate::plan_always::{always_rest_target, push_film_op};
 use crate::world::{AtlasBinding, EmoWorld, SurfaceIndex};
 
 /// バックエンド非依存の転写命令（これがバックエンド差替えシーム＝design 決定1）。
@@ -145,7 +146,19 @@ pub(crate) fn push_static_element_ops(
         let skip_reason = match element.kind {
             ElementKind::Image => None,
             ElementKind::SurfaceOutOfRange => Some("番号として扱える範囲を超える数"),
-            ElementKind::Film(_) => Some("動く絵の子の定義が無い"),
+            // 動く絵の子: 同じ順の位置で今のコマ 1 枚を、置いた element の描画メソッドで描く。
+            ElementKind::Film(film) => {
+                push_film_op(
+                    out_ops,
+                    world,
+                    atlas,
+                    film,
+                    pattern,
+                    &element.method,
+                    Transform::translate(offset_x + ex, offset_y + ey),
+                );
+                continue;
+            }
             ElementKind::Surface(child) if world.surface(child).is_none() => {
                 Some("面の表に無い番号")
             }
@@ -371,10 +384,14 @@ fn flatten_surface(
         };
         let frames = (pattern.iter().filter(|_| is_top_level))
             .chain(pattern.part(surface_id).filter(|_| !is_top_level));
+        // `always` は欄が無くても経過 0 を描くので、いつも重ねる対象に入れる（順は同じ規則）。
         let mut merged_ids: Vec<u32> = master
             .animations
             .iter()
-            .filter(|a| is_bind_interval(&a.interval) && binds.contains(a.id))
+            .filter(|a| {
+                (is_bind_interval(&a.interval) && binds.contains(a.id))
+                    || is_always_interval(&a.interval)
+            })
             .map(|a| a.id)
             .collect();
         // 現在コマの id を合流（有効 bind pattern0 を持たない id も含む）。重複は既存を優先し
@@ -458,6 +475,26 @@ fn flatten_surface(
             let Some(anim) = master.animations.iter().find(|a| a.id == id) else {
                 continue;
             };
+            // `always`: 欄が「載っていない」なら経過 0 の pattern を今のコマと同じやり方で描き、
+            // 「消えている」なら描かない（要件 3.1・4.1・4.5・4.6）。
+            if is_always_interval(&anim.interval) {
+                let key = (!is_top_level).then_some(PartKey::Surface(surface_id));
+                if let Some(p) = always_rest_target(anim, pattern.cell(key, id), surface_id) {
+                    flatten_surface(
+                        out_ops,
+                        visited,
+                        world,
+                        atlas,
+                        p.surface_id as u32,
+                        binds,
+                        pattern,
+                        offset_x + p.x,
+                        offset_y + p.y,
+                        false,
+                    );
+                }
+                continue;
+            }
             // pattern0＝厳密に index==0 の pattern のみ（要件 9.2・D12）。疎 index の最小値へフォールバック
             // しない: pattern0 を持たない bind animation（まばたき等の `interval,bind+random` 再生アニメ・
             // pattern1 以降のみ）は静的土台を持たず、それらのフレームは seriko-loop（M-life）が再生する

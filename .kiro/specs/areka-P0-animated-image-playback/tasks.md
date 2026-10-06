@@ -54,7 +54,7 @@
   - 完了の姿: 検体の各サーフェスについて、見える部品と見える子の答えが期待どおりで、動く絵も `always` も無い表の答えが本 spec の前と同じ
   - _Requirements: 1.9, 3.7_
 
-- [ ] 2.5 合成で、動く絵の子と `always` の経過 0 を描く
+- [x] 2.5 合成で、動く絵の子と `always` の経過 0 を描く
   - `push_static_element_ops` の振り分けに `ElementKind::Film` の腕を足し、`ElementKind::Surface` と同じ場所・同じ順で子を平坦化する。子の平坦化（新しい `plan_always.rs`）は、欄を読んで「絵を指すコマならその絵・載っていなければ経過 0 の絵・消えていれば何も」を 1 枚の命令にし、置いた element の描画メソッドを運ぶ。全透明のコマは命令にしない
   - `flatten_surface` の重ねる対象に、そのサーフェスの `always` の animation を足す。欄が無ければ経過 0 の pattern を今のコマと同じやり方で描き、「消えている」なら描かない。`always` でない animation の扱いと重ねる順は変えない
   - 欄の絵の番号が子のコマに無いときは経過 0 を描いて `debug!`、子の定義が無い `Film` は描かずに `error!`
@@ -239,3 +239,4 @@
 - 2.3: `FilmId` は親の `ElementId` の値。経過 0 は `rest_index(once(0).chain(delays[..n-1]))`（pattern i の待ち＝コマ i−1 の待ち時間）。`surface<数字>.png` は `apply_base_images` が足す層 0 の画像の element として同じ分解に乗る。2.5 までは検体の子は `plan.rs` の仮の腕で描かれない
 - 範囲外（完了時に確かめる）: `cargo clippy -p areka-emo-compose --all-targets -- -D warnings` が既存のテスト 5 か所の `chunks_exact`（`blit_transparent_alpha_tests.rs`・`golden_tests_surface1000_bind_tests.rs`・`golden_tests_test_support.rs`・`composer_tests.rs` ×2）で赤。ツールチェーンの新しい警告。`clippy-199-lints` の持ち物か確かめて起票
 - 2.4: 経過 0 の pattern の求め方 `rest_pattern(anim)` は `nesting.rs` に置いた（`pub(crate)`・index の昇順に並べて `rest_index`）。2.5 の `plan_always.rs` はこれを呼び 2 つ目を作らない。seriko（3.2）は `table.rs` の同じ並べ方の待ち時間に公開の `rest_index` を当てる＝並べ方を変えるなら両方を揃える。`always_rest` の先はまだ `has_animated_parts` に数えない（3.2 の `is_continuous()` の仕事）
+- 2.5: 仮の `Film` の腕は `plan_always::push_film_op` に置き換えた（子の定義が無いときだけ `error!`）。経過 0 の pattern の描画メソッドが動かないときは `debug!`（周ごとに巡るので `warn!` だと刻みごとの記録になる）。動く絵だけのサーフェス（検体の 1 番）は 2.6 まで外形 0×0＝`build_plan` が `EmptyComposition`
