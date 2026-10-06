@@ -3,8 +3,8 @@
 use areka_emo_atlas::AtlasTable;
 
 use super::{Extent, is_bind_interval, surface_and_binding};
-use crate::nesting::ElementKind;
-use crate::world::EmoWorld;
+use crate::nesting::{ElementKind, is_always_interval};
+use crate::world::{EmoWorld, targets_animation_id};
 
 #[cfg(test)]
 use super::*;
@@ -106,22 +106,33 @@ fn flatten_extent(
                 }
                 continue;
             }
-            let Some(element_id) = binding.0.get(i).copied().flatten() else {
-                // 未束縛（原寸不明）は外形に寄与できない。ops 側でも skip 済み。
+            // 原寸を先に決め、数える式は下の 1 行（animated-image-playback design b-1）: 画像は束縛した
+            // 絵の原寸、動く絵の子は子の原寸（全部のコマに共通＝静止画だったときと同じ値）。未束縛
+            // （原寸不明）は外形に寄与できない（ops 側でも skip 済み）。子の定義が無い（起きないはず）
+            // ときは数えず、`error!` は命令の経路が合成 1 回につき 1 行出す。
+            let original = match element.kind {
+                ElementKind::Film(film) => world.film_sheet(film).map(|sheet| sheet.original),
+                _ => binding.0.get(i).copied().flatten().map(|element_id| {
+                    let original = atlas.entry(element_id).original;
+                    (original.w, original.h)
+                }),
+            };
+            let Some((w, h)) = original else {
                 continue;
             };
-            let original = atlas.entry(element_id).original;
             // 負オフセットは原点でクリップ（外形は (0,0) を左上に固定・負方向はみ出しは転写時クリップ）。
-            *max_x = (*max_x).max((offset_x + original.w as i64).max(0));
-            *max_y = (*max_y).max((offset_y + original.h as i64).max(0));
+            *max_x = (*max_x).max((offset_x + w as i64).max(0));
+            *max_y = (*max_y).max((offset_y + h as i64).max(0));
         }
 
         // **全** bind animation の pattern0 を母集合として辿る（有効/非有効を問わない・6.5 の核心）。
+        // `always` の animation は表示中ずっと全部のコマを通るので、**全部**の pattern を同じやり方で
+        // 辿る（animated-image-playback design b-2・外形はコマに依らない静的な量のまま）。
         // 描画順は外形に無関係（max の和集合ゆえ順序不変）だが、決定性のため id 昇順で走査する。
         let mut bind_ids: Vec<u32> = master
             .animations
             .iter()
-            .filter(|a| is_bind_interval(&a.interval))
+            .filter(|a| is_bind_interval(&a.interval) || is_always_interval(&a.interval))
             .map(|a| a.id)
             .collect();
         bind_ids.sort_unstable();
@@ -131,24 +142,37 @@ fn flatten_extent(
             let Some(anim) = master.animations.iter().find(|a| a.id == id) else {
                 continue;
             };
-            let Some(pattern0) = anim.patterns.iter().min_by_key(|p| p.index) else {
-                continue;
+            let always = is_always_interval(&anim.interval);
+            let patterns = if always {
+                &anim.patterns[..]
+            } else {
+                let pattern0 = anim.patterns.iter().min_by_key(|p| p.index);
+                pattern0.map_or(&[][..], std::slice::from_ref)
             };
-            if pattern0.surface_id < 0 {
-                // センチネル（非描画）は外形に寄与しない（ops 経路と一致）。
-                continue;
+            for pattern in patterns {
+                // センチネル（非描画）は外形に寄与しない（ops 経路と一致）。`always` の欄 2 が
+                // animation の番号になる 7 語（`start` 等）の先は面ではなく、`move` はサーフェスの
+                // 番号を無視する（ukadoc）ので数えない。
+                if pattern.surface_id < 0
+                    || (always
+                        && (targets_animation_id(pattern.method.as_str())
+                            || crate::method::canonical_method_name(pattern.method.as_str())
+                                == "move"))
+                {
+                    continue;
+                }
+                let nested_id = pattern.surface_id as u32;
+                flatten_extent(
+                    max_x,
+                    max_y,
+                    visited,
+                    world,
+                    atlas,
+                    nested_id,
+                    offset_x + pattern.x,
+                    offset_y + pattern.y,
+                );
             }
-            let nested_id = pattern0.surface_id as u32;
-            flatten_extent(
-                max_x,
-                max_y,
-                visited,
-                world,
-                atlas,
-                nested_id,
-                offset_x + pattern0.x,
-                offset_y + pattern0.y,
-            );
         }
     }
 
@@ -168,3 +192,7 @@ mod extent_tests;
 #[cfg(test)]
 #[path = "plan_nesting_extent_tests.rs"]
 mod nesting_extent_tests;
+
+#[cfg(test)]
+#[path = "plan_extent_film_tests.rs"]
+mod film_tests;

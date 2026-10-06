@@ -196,7 +196,7 @@ graph TB
 
 - `flatten_extent`（今は `plan.rs`。本 spec で `plan_extent.rs` へ移す）に 2 つ足す。
   1. element の輪: `ElementKind::Film` の element は、子の定義の原寸を、**画像の element と同じ 1 行**で数える（「束縛した絵の原寸」か「子の原寸」かを先に決め、数える式は 1 つ）。全部のコマは原寸が同じなので、静止画だったときと同じ値になる（要件 1.7）。
-  2. animation の輪: `always` の animation は、**全部の pattern** の先（番号が 0 以上で、欄 2 が animation の番号になる 7 語でないもの）を、着せ替えの pattern0 と同じやり方で数える。`always` は表示されている間ずっと全部のコマを通るので、和集合が正しい外形である。外形はコマに依らない静的な量のまま。
+  2. animation の輪: `always` の animation は、**全部の pattern** の先（番号が 0 以上で、欄 2 が animation の番号になる 7 語でも、サーフェスの番号を無視する `move`（ukadoc）でもないもの。`move` は 2026-10-06 の実装のレビューで足した）を、着せ替えの pattern0 と同じやり方で数える。`always` は表示されている間ずっと全部のコマを通るので、和集合が正しい外形である。外形はコマに依らない静的な量のまま。
 - 後続 `areka-P0-extent-element-offset`（未着手・同じ関数を直す）との関係: 同 spec が直すのは「画像の element の X,Y を外形に数えていない」1 点。本 spec は画像と動く絵の子を同じ 1 行で数えるので、その 1 行を直せば両方が直る。**順は本 spec が先**（同 spec は本 spec の後に置かれている）。roadmap の「`flatten_extent` は `extent-element-offset` の持ち物」の約束は、本 spec が 2 つを足すことを書き足して直す。関数を `plan_extent.rs` へ移すことも申し送る。
 
 ### c. 透ける → 子は element を持たない

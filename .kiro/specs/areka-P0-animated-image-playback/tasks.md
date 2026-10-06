@@ -62,7 +62,7 @@
   - 完了の姿: コマの欄が空の `PatternState` で検体のサーフェスを合成すると経過 0 の絵が出て、`emo2` の合成の照合が期待値を変えずに緑
   - _Requirements: 1.4, 3.1, 4.1, 4.5, 4.6, 7.1_
 
-- [ ] 2.6 外形の計算を移し、動く絵の子と `always` を数える
+- [x] 2.6 外形の計算を移し、動く絵の子と `always` を数える
   - `compute_extent`・`flatten_extent` を中身を変えずに新しい `plan_extent.rs` へ移し、既存の `plan_extent_tests.rs`・`plan_nesting_extent_tests.rs` の接続先だけを替える（移した時点で全テストが緑であることを先にコミットする）
   - 足すのは 2 か所: 画像の element と子の原寸を同じ 1 行で数える／`always` の animation の全部の pattern の先を、着せ替えの pattern0 と同じやり方で数える。着せ替えの pattern0 を「index が最小」で取る今の食い違いは直さない
   - 兄弟の `plan_extent_film_tests.rs` で: 動く絵を置いたサーフェスの外形が同じ寸法の静止画のときと同じ／動く `surface0.png` だけのサーフェスが 0×0 にならない／手書きの `always` は全部の pattern の和集合／コマの欄を替えても外形は同じ
@@ -240,3 +240,4 @@
 - 範囲外（完了時に確かめる）: `cargo clippy -p areka-emo-compose --all-targets -- -D warnings` が既存のテスト 5 か所の `chunks_exact`（`blit_transparent_alpha_tests.rs`・`golden_tests_surface1000_bind_tests.rs`・`golden_tests_test_support.rs`・`composer_tests.rs` ×2）で赤。ツールチェーンの新しい警告。`clippy-199-lints` の持ち物か確かめて起票
 - 2.4: 経過 0 の pattern の求め方 `rest_pattern(anim)` は `nesting.rs` に置いた（`pub(crate)`・index の昇順に並べて `rest_index`）。2.5 の `plan_always.rs` はこれを呼び 2 つ目を作らない。seriko（3.2）は `table.rs` の同じ並べ方の待ち時間に公開の `rest_index` を当てる＝並べ方を変えるなら両方を揃える。`always_rest` の先はまだ `has_animated_parts` に数えない（3.2 の `is_continuous()` の仕事）
 - 2.5: 仮の `Film` の腕は `plan_always::push_film_op` に置き換えた（子の定義が無いときだけ `error!`）。経過 0 の pattern の描画メソッドが動かないときは `debug!`（周ごとに巡るので `warn!` だと刻みごとの記録になる）。動く絵だけのサーフェス（検体の 1 番）は 2.6 まで外形 0×0＝`build_plan` が `EmptyComposition`
+- 2.6: `plan_extent.rs` は `plan` の子のモジュール（`#[path]`・`pub(crate) use extent::compute_extent`）。移動は `d7755372`。`always` の外形は負の番号・7 語・`move`（ukadoc「サーフェスIDは無視される」）を数えない。見える部品（2.4）は `is_implemented_name` で `move` を既に外している
