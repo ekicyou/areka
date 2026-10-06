@@ -11,7 +11,7 @@ use std::cell::Cell;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tracing::warn;
-use windows::Win32::Foundation::{E_FAIL, HWND, LPARAM, POINT, RECT, SIZE, WPARAM};
+use windows::Win32::Foundation::{COLORREF, E_FAIL, HWND, LPARAM, POINT, RECT, SIZE, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     CreateFontIndirectW, DeleteObject, GetDC, GetMonitorInfoW, GetTextExtentExPointW, HFONT,
     MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint, ReleaseDC, SelectObject,
@@ -20,7 +20,7 @@ use windows::Win32::UI::Controls::{
     ICC_BAR_CLASSES, INITCOMMONCONTROLSEX, InitCommonControlsEx, TOOLTIPS_CLASS, TTF_ABSOLUTE,
     TTF_TRACK, TTF_TRANSPARENT, TTM_ADDTOOLW, TTM_ADJUSTRECT, TTM_GETBUBBLESIZE,
     TTM_SETMAXTIPWIDTH, TTM_TRACKACTIVATE, TTM_TRACKPOSITION, TTM_UPDATETIPTEXTW, TTS_ALWAYSTIP,
-    TTS_NOPREFIX, TTTOOLINFOW,
+    TTS_NOANIMATE, TTS_NOFADE, TTS_NOPREFIX, TTTOOLINFOW,
 };
 use windows::Win32::UI::HiDpi::{
     GetDpiForMonitor, GetSystemMetricsForDpi, MDT_EFFECTIVE_DPI, SystemParametersInfoForDpi,
@@ -30,10 +30,10 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, GetCursorPos, GetWindowRect, HWND_TOPMOST, IsWindowVisible,
-    NONCLIENTMETRICSW, SM_CYCURSOR, SPI_GETMOUSEHOVERTIME, SPI_GETNONCLIENTMETRICS, SWP_NOACTIVATE,
-    SWP_NOMOVE, SWP_NOSIZE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SendMessageW, SetWindowPos,
-    SystemParametersInfoW, WINDOW_STYLE, WM_SETFONT, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
-    WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    LWA_ALPHA, NONCLIENTMETRICSW, SM_CYCURSOR, SPI_GETMOUSEHOVERTIME, SPI_GETNONCLIENTMETRICS,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SendMessageW,
+    SetLayeredWindowAttributes, SetWindowPos, SystemParametersInfoW, WINDOW_STYLE, WM_SETFONT,
+    WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
 use windows::core::{PCWSTR, PWSTR};
 
@@ -270,13 +270,25 @@ impl TipWindow {
         // 失敗しても次の CreateWindowExW が失敗して誤りになるので、結果は見ない。
         let _ = unsafe { InitCommonControlsEx(&icc) };
         // 持ち主の窓は付けない。マウスを素通しし、入力先を取らず、タスクバーに出さない。
+        //
+        // 素通しは WS_EX_LAYERED と WS_EX_TRANSPARENT の組で効かせる（最初の試し S4）。ツールチップは
+        // マウスの当たりの問い合わせに「透明」と答えるが、OS がそれで下へ回すのは同じスレッドの窓だけ
+        // で、別のアプリ（メモ帳）の窓への押下は捨てられる。層の窓にして初めて別のプロセスへ素通しする。
+        // 標準のツールチップはフェードが有効だと出すたび（TTM_TRACKACTIVATE）に WS_EX_LAYERED を
+        // 外すので、TTS_NOFADE と TTS_NOANIMATE を付けて作り、外されないようにする。
         // SAFETY: Win32 境界。標準の種類の窓を作るだけ。
         let hwnd = unsafe {
             CreateWindowExW(
-                WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT,
+                WS_EX_TOPMOST
+                    | WS_EX_NOACTIVATE
+                    | WS_EX_TOOLWINDOW
+                    | WS_EX_TRANSPARENT
+                    | WS_EX_LAYERED,
                 TOOLTIPS_CLASS,
                 PCWSTR::null(),
-                WINDOW_STYLE(WS_POPUP.0 | TTS_NOPREFIX | TTS_ALWAYSTIP),
+                WINDOW_STYLE(
+                    WS_POPUP.0 | TTS_NOPREFIX | TTS_ALWAYSTIP | TTS_NOFADE | TTS_NOANIMATE,
+                ),
                 0,
                 0,
                 0,
@@ -288,6 +300,13 @@ impl TipWindow {
             )
         }
         .map_err(TooltipOsError::Create)?;
+        // 層の窓は不透明度を決めるまで描かれないので、不透明（255）にする。
+        // SAFETY: Win32 境界。作ったばかりの自分の窓の不透明度を決める。
+        if let Err(e) = unsafe { SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_ALPHA) } {
+            // SAFETY: Win32 境界。作ったばかりの自分の窓を壊す。
+            let _ = unsafe { DestroyWindow(hwnd) };
+            return Err(TooltipOsError::Create(e));
+        }
         let mut empty = [0u16];
         let mut ti = tool_info(hwnd, PWSTR(empty.as_mut_ptr()));
         // SAFETY: Win32 境界。手元の TTTOOLINFOW を渡す（文字は窓の側に写される）。
@@ -369,6 +388,10 @@ impl Drop for TipWindow {
 }
 
 /// 道具 1 つを指す TTTOOLINFOW。
+///
+/// 道具の窓（`hwnd`）はツールチップの窓自身。`TTF_TRANSPARENT` は受けたマウスのメッセージを道具の
+/// 窓へ回すので自分へ回りうるが、層の窓で素通しするため、ツールチップのスレッドへマウスの
+/// メッセージは届かず、その回し先の道は通らない（最初の試し S4 の上での移動で確かめた）。
 fn tool_info(hwnd: HWND, text: PWSTR) -> TTTOOLINFOW {
     TTTOOLINFOW {
         // 末尾の lpReserved を含めない大きさにする。含めると、版 6 の申告の無い exe（古い版）で

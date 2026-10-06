@@ -16,7 +16,7 @@ use std::process::{Child, Command};
 use std::sync::Arc;
 use std::time::Instant;
 use windows::Win32::Graphics::Gdi::{
-    EnumDisplayMonitors, GetObjectW, GetTextExtentPoint32W, HDC, HMONITOR, LOGFONTW,
+    EnumDisplayMonitors, GetObjectW, GetPixel, GetTextExtentPoint32W, HDC, HMONITOR, LOGFONTW,
 };
 use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
@@ -26,10 +26,11 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     MOUSEINPUT, SendInput,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    DispatchMessageW, EnumWindows, GA_ROOT, GUITHREADINFO, GW_HWNDPREV, GetAncestor, GetClassNameW,
-    GetForegroundWindow, GetGUIThreadInfo, GetWindow, GetWindowTextW, GetWindowThreadProcessId,
-    IsWindow, MSG, PM_REMOVE, PeekMessageW, PostMessageW, SW_SHOWNOACTIVATE, SWP_SHOWWINDOW,
-    SetCursorPos, ShowWindow, TranslateMessage, WM_CLOSE, WS_BORDER, WindowFromPoint,
+    DispatchMessageW, EnumWindows, GA_ROOT, GUITHREADINFO, GW_HWNDPREV, GWL_EXSTYLE, GetAncestor,
+    GetClassNameW, GetForegroundWindow, GetGUIThreadInfo, GetLayeredWindowAttributes, GetWindow,
+    GetWindowLongPtrW, GetWindowTextW, GetWindowThreadProcessId, IsWindow, MSG, PM_REMOVE,
+    PeekMessageW, PostMessageW, SW_SHOWNOACTIVATE, SWP_SHOWWINDOW, SetCursorPos, ShowWindow,
+    TranslateMessage, WM_CLOSE, WS_BORDER, WindowFromPoint,
 };
 use windows::core::{BOOL, w};
 
@@ -310,7 +311,18 @@ fn s2_given_position_is_top_left_and_size_is_known_before_placing() {
         assert_eq!((rect.left, rect.top), (want.x, want.y), "渡した位置が左上");
     }
     tip.hide();
-    assert!(!is_visible(tip.hwnd.expect("窓")), "消える");
+    let hwnd = tip.hwnd.expect("窓");
+    assert!(!is_visible(hwnd), "消える");
+    // 出ていないときに測ると、本当に画面の外（PARKED）で追跡を始めている。
+    set_text_and_measure(hwnd, "画面の外で測る").expect("測る");
+    let parked = hwnd_rect(hwnd);
+    println!("[S2] 出ていないときに測った位置={parked:?}");
+    assert_eq!(
+        (parked.left, parked.top),
+        (PARKED.x, PARKED.y),
+        "画面の外に置いて測った"
+    );
+    tip.hide();
 }
 
 #[test]
@@ -463,6 +475,24 @@ fn top_windows() -> Vec<(HWND, String, String)> {
         .collect()
 }
 
+/// 画面に映っている r の内側の色を、縦 4 × 横 8 の格子の点で読む（ふちを避けて内側だけ）。
+fn screen_colours(r: RectPx) -> Vec<u32> {
+    let mut out = Vec::new();
+    // SAFETY: Win32 境界。画面の DC を借りて点の色を読み、返す。
+    unsafe {
+        let hdc = GetDC(None);
+        for row in 0..4 {
+            for col in 0..8 {
+                let x = r.left + 3 + (r.right - r.left - 6) * col / 7;
+                let y = r.top + 3 + (r.bottom - r.top - 6) * row / 3;
+                out.push(GetPixel(hdc, x, y).0);
+            }
+        }
+        ReleaseDC(None, hdc);
+    }
+    out
+}
+
 fn root_at(pt: PointPx) -> HWND {
     // SAFETY: Win32 境界。点の下の窓と、その最上位の窓を読むだけ。
     unsafe { GetAncestor(WindowFromPoint(POINT { x: pt.x, y: pt.y }), GA_ROOT) }
@@ -542,9 +572,37 @@ fn s4_press_on_tooltip_reaches_notepad_beneath_and_hover_does_not_recurse() {
     tip.hide();
     pump_for(Duration::from_millis(100));
     assert_eq!(root_at(press), notepad.hwnd, "前提: 押す点の下はメモ帳");
+    let hidden = screen_colours(rect);
     let rect_again = tip.show(text, anchor).expect("出し直す");
     assert_eq!(rect_again, rect);
     pump_for(Duration::from_millis(200));
+    // 別のプロセスへの素通しは層の窓でだけ効く。出すたびに外されていないか（フェードが外す）。
+    // SAFETY: Win32 境界。自分の窓の拡張の形を読むだけ。
+    let ex = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) } as u32;
+    assert!(
+        ex & WS_EX_LAYERED.0 != 0,
+        "出した後も層の窓のまま: ex={ex:#x}"
+    );
+    // 層の窓は不透明度を決めないと描かれない（見えないまま素通しだけする）。不透明と、本当に映ったかを見る。
+    let (mut alpha, mut flags) = (0u8, Default::default());
+    // SAFETY: Win32 境界。自分の窓の層の設定を手元の変数へ読むだけ。
+    unsafe { GetLayeredWindowAttributes(hwnd, None, Some(&mut alpha), Some(&mut flags)) }
+        .expect("層の設定を読む");
+    assert!(
+        alpha == 255 && flags.contains(LWA_ALPHA),
+        "不透明の層の窓: alpha={alpha} flags={flags:?}"
+    );
+    let shown = screen_colours(rect);
+    let distinct = |v: &[u32]| v.iter().collect::<std::collections::HashSet<_>>().len();
+    println!(
+        "[S4] 色の数 隠した時={} 出した時={}",
+        distinct(&hidden),
+        distinct(&shown)
+    );
+    assert!(
+        shown.iter().any(|c| !hidden.contains(c)),
+        "ツールチップが画面に映った（隠した時に無い色がある）: hidden={hidden:x?} shown={shown:x?}"
+    );
     let from_point = root_at(press);
 
     // ツールチップの上でマウスを何度か動かす（道具の窓＝自分への再帰が無いことを見る）。

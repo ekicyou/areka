@@ -258,7 +258,7 @@ sequenceDiagram
 | 3.7 | 画面の DPI に合った字 | os | `SystemParametersInfoForDpi`＋`WM_SETFONT` | — |
 | 3.8 | OS の標準の見た目 | os・2 つの `build.rs` | 標準のツールチップ＋exe のマニフェスト（areka.exe・wintf のサンプル） | — |
 | 3.9 | 入力先と手前の窓を変えない | os | `WS_EX_NOACTIVATE`・`SWP_NOACTIVATE` | — |
-| 3.10 | ツールチップがボタンを横取りしない | os | `TTF_TRANSPARENT`＋`WS_EX_TRANSPARENT` | — |
+| 3.10 | ツールチップがボタンを横取りしない | os | `TTF_TRANSPARENT`＋`WS_EX_TRANSPARENT`＋`WS_EX_LAYERED` | — |
 | 3.11 | 同時に 1 つまで | os・TurnMachine | 窓は 1 枚・Active は 1 つ | — |
 | 3.12 | 空の文字は出さない（出ていれば消す） | TurnMachine | `supply`（空 → 消す） | — |
 | 3.13 | 出す番が終わったら消す | TurnMachine・system | `Effect::Hide` | 状態 |
@@ -525,7 +525,7 @@ impl TurnMachine {
 
 **Responsibilities & Constraints**
 - ツールチップの窓は UI スレッドに 1 枚。最初に出すときに作り、プロセスの終わりまで持つ（`Drop` で壊す）。wintf の窓のエンティティにはしない（窓の数・終了の判断・クリック透過の登録に入らない）。持ち主の窓は付けない。
-- 作り方: `tooltips_class32`・`WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP`・`WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT`。道具は 1 つだけ登録し、旗は `TTF_TRACK | TTF_ABSOLUTE | TTF_TRANSPARENT`。
+- 作り方: `tooltips_class32`・`WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP | TTS_NOFADE | TTS_NOANIMATE`・`WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_LAYERED`。作った直後に `SetLayeredWindowAttributes` で不透明（255）にする（別のプロセスの窓へ押下を素通しするのは層の窓だけ。フェードが有効だと出すたびに `WS_EX_LAYERED` が外されるので、フェードと動きを止める。最初の試し S4）。道具は 1 つだけ登録し、旗は `TTF_TRACK | TTF_ABSOLUTE | TTF_TRANSPARENT`。
 - 版 6: このファイルは何もしない。今風の見た目は exe のマニフェストの申告で決まる（areka.exe と wintf のサンプルは `build.rs` で埋める）。申告の無い exe から使われた場合は古い見た目で出るだけで、動きは変わらない。このことをクレートの文書に書く。
 - 字体: 出す前に、マウスのある画面の DPI を `MonitorFromPoint`＋`GetDpiForMonitor` で取り、`SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS)` の `lfStatusFont` から字体を作って `WM_SETFONT` で渡す。DPI が前回と同じなら作り直さない。
 - 最大の幅: `geometry::max_tip_width` の値を `TTM_SETMAXTIPWIDTH` で渡す。改行の整えは `geometry::normalize_newlines`。計算は `geometry` に置き、このファイルは OS に渡すだけにする（窓なしでテストするため）。
@@ -742,7 +742,7 @@ pub(crate) fn note_button_press();
 | S1 | `build.rs` からのリンカへの指示で exe にマニフェストが埋まり、今風の見た目になるか（wintf のサンプルと areka.exe の両方） | ビルドが通り、exe の資源にマニフェストが入っている。サンプルで `GetWindowTheme(ツールチップの窓)` が空でなく、見た目が今風。areka.exe が今までどおり起動し、既存のテストが緑 | リンカが既定のマニフェストとぶつかるなら `/MANIFEST:NO` と資源のファイルで埋める形に替える。それでも駄目なら**止めて報告** |
 | S2 | 追跡型＋`TTF_ABSOLUTE` で、渡した位置が左上になるか・出す前に大きさを問い合わせられるか | `GetWindowRect` の左上が渡した位置と一致し、`TTM_GETBUBBLESIZE` が出す前に 0 でない値を返す | 画面の外で一度出して測り、`TTM_TRACKPOSITION` で動かす（3.2 で当てた形: 出ていなければ画面の外 (-32000,-32000) で追跡を始めてから `TTM_GETBUBBLESIZE` で測る。測った大きさが `GetWindowRect` の大きさと一致することを S2 で確かめた） |
 | S3 | 出しても入力先と手前の窓が変わらないか | 出す前後で `GetForegroundWindow` と `GetFocus` が同じ | `SWP_NOACTIVATE` 付きの `SetWindowPos` だけで出す形に替える。駄目なら**止めて報告** |
-| S4 | ツールチップの上のボタンの操作が、下の窓（同じスレッド・別プロセス）へ届くか | メモ帳の上に重ねたツールチップを押すと、メモ帳が押下を受ける | `WS_EX_LAYERED` を足して `SetLayeredWindowAttributes` で不透明にする。駄目なら**止めて報告** |
+| S4 | ツールチップの上のボタンの操作が、下の窓（同じスレッド・別プロセス）へ届くか | メモ帳の上に重ねたツールチップを押すと、メモ帳が押下を受ける | `WS_EX_LAYERED` を足して `SetLayeredWindowAttributes` で不透明にする。駄目なら**止めて報告**。（3.2 で当てた形）作るときに `WS_EX_LAYERED`＋`TTS_NOFADE`｜`TTS_NOANIMATE`・不透明 255。字面どおりに後から足すと出すたびに外される（フェードが有効だと標準のツールチップが外す。research.md 13.1） |
 | S5 | 最大の幅で、日本語の長い 1 行と、切れ目の無い URL がどう折り返されるか | 日本語が幅で折り返す。URL が幅を越えたら `force_break` が効いて収まる | `force_break` を、幅を越えたかに関わらず全部の行に当てる |
 | S6 | DPI の違う画面で、字とふちの大きさが合うか | 150% の画面で、字の高さが 100% の画面の約 1.5 倍 | ふちが合わなければ `TTM_SETMARGIN` で DPI に合わせて渡す |
 | S7 | 他の wintf のいつも手前の窓が重なりを立て直した後も、ツールチップが手前に残るか | `ReassertZOrder` の後もツールチップが隠れない | `Active` の間の見回り（100 ミリ秒）のたびに `SetWindowPos(HWND_TOPMOST)` を当て直す |
