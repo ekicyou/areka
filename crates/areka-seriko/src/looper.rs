@@ -29,15 +29,16 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use areka_emo_compose::PatternFrame;
+use areka_emo_compose::{PatternFrame, PatternState};
 use areka_sakura::ActorKey;
 
 use crate::output::DisplayCommand;
 use crate::parts::PartClocks;
 use crate::state::{PatternApplyOutcome, ScopeStates, Slot};
-use crate::table::{AnimationTable, LoopFrame, LoopTrigger};
+use crate::table::{AnimationTable, LoopAnimation, LoopFrame, LoopTrigger};
 use crate::timeline::{
-    FrameStatus, LoopRng, LotteryBoundary, current_frame_index, frame_at, seeded_rng, should_fire,
+    AlwaysView, FrameStatus, LoopRng, LotteryBoundary, always_at, current_frame_index, frame_at,
+    seeded_rng, should_fire,
 };
 
 /// SERIKO ループ構成（シェル表 1 面＋scope 別バルーン表＋乱数注入シーム）。boot 時に組み立てて
@@ -127,6 +128,62 @@ pub(crate) fn pattern_frame(f: &LoopFrame) -> PatternFrame {
         x: f.x,
         y: f.y,
     }
+}
+
+/// 一番上の `always` の経過 `elapsed_ms` の答えを欄へ置く: 経過 0 のコマと同じなら載せない／
+/// コマならコマ／何も出さないなら「消えている」（spec: areka-P0-animated-image-playback 要件 4.1・
+/// 4.2・4.5・7.4）。再生は末尾でも負の番号でも捨てない（周の頭へ戻って続く）。
+fn put_top_always(pattern: &mut PatternState, anim: &LoopAnimation, elapsed_ms: u64) {
+    let LoopTrigger::Always { period_ms, laps } = anim.trigger else {
+        return;
+    };
+    let rest = always_at(&anim.frames, period_ms, laps, 0);
+    match always_at(&anim.frames, period_ms, laps, elapsed_ms) {
+        now if now == rest => pattern.remove(anim.id),
+        AlwaysView::Frame(i) => pattern.set(anim.id, pattern_frame(&anim.frames[i])),
+        AlwaysView::Nothing => pattern.set_blank(anim.id),
+    }
+}
+
+/// 一番上 `surface_id` の `always` に再生が無ければ `at_ms` で作る（乱数を引かない・要件 4.1）。
+fn start_top_always(
+    playback: &mut HashMap<(ActorKey, Slot), SlotPlayback>,
+    table: &AnimationTable,
+    scope: &ActorKey,
+    slot: Slot,
+    surface_id: u32,
+    at_ms: u64,
+) {
+    for anim in table.animations(surface_id) {
+        if !matches!(anim.trigger, LoopTrigger::Always { .. }) {
+            continue;
+        }
+        let slot_playback = playback.entry((scope.clone(), slot)).or_default();
+        if slot_playback.contains_key(&anim.id) {
+            continue;
+        }
+        slot_playback.insert(
+            anim.id,
+            Playback {
+                started_at_ms: at_ms,
+            },
+        );
+        tracing::debug!(
+            scope = scope.as_str(),
+            slot = ?slot,
+            animation_id = anim.id,
+            "seriko: loop 一番上の always の再生が生まれた"
+        );
+    }
+}
+
+/// 一番上 `surface_id` が `always` を持つか（`is_continuous()` が偽の表では必ず偽・要件 7.2）。
+fn top_has_always(table: &AnimationTable, surface_id: u32) -> bool {
+    table.is_continuous()
+        && table
+            .animations(surface_id)
+            .iter()
+            .any(|a| matches!(a.trigger, LoopTrigger::Always { .. }))
 }
 
 impl LoopRuntime {
@@ -269,8 +326,16 @@ impl LoopRuntime {
             // 再生中エントリを持たない slot（Idle/IdleResidual のみ）は残留を保ったまま無評価・無発行。
             let has_playback = playback.get(&key).is_some_and(|pb| !pb.is_empty());
             let with_parts = parts_on && *slot == Slot::Shell;
-            // 一番上の再生が無くても、見える部品に動くものが在れば部品の時計を進める。
+            let table: &AnimationTable = match slot {
+                Slot::Shell => &*shell_table,
+                // 抽選相と同一の scope キー表引き（要件 5.6）。不在 scope は空表ゆえ下の
+                // 「表に無い」防御腕へ落ち、playback とコマが除去される（panic なし）。
+                Slot::Balloon => balloon_tables.get(scope).unwrap_or(&empty_balloon_table),
+            };
+            let has_always = top_has_always(table, *sid);
+            // 一番上の再生が無くても、一番上に `always` が在るか、見える部品に動くものが在れば通す。
             if !has_playback
+                && !has_always
                 && !(with_parts
                     && parts.moving_visible(
                         *sid,
@@ -281,12 +346,10 @@ impl LoopRuntime {
             {
                 continue;
             }
-            let table: &AnimationTable = match slot {
-                Slot::Shell => &*shell_table,
-                // 抽選相と同一の scope キー表引き（要件 5.6）。不在 scope は空表ゆえ下の
-                // 「表に無い」防御腕へ落ち、playback とコマが除去される（panic なし）。
-                Slot::Balloon => balloon_tables.get(scope).unwrap_or(&empty_balloon_table),
-            };
+            // 一番上の `always` は抽選を待たず、再生が無ければこの刻みの時刻で始まる（要件 4.1）。
+            if has_always {
+                start_top_always(playback, table, scope, *slot, *sid, now_ms);
+            }
 
             // 残留（非再生アニメのコマ）を保つため現 PatternState から開始し、再生中アニメのみを更新する。
             // 再発火したアニメは playback を持つのでここで frame_at のみに従い更新される＝残留の即時クリア。
@@ -306,7 +369,8 @@ impl LoopRuntime {
                 let Some(started_at) = started_at else {
                     continue;
                 };
-                let elapsed = now_ms - started_at;
+                // 出来事の時刻で生まれた再生は刻みより僅かに後に始まりうるので 0 で止める。
+                let elapsed = now_ms.saturating_sub(started_at);
 
                 // 表示中 surface のアニメ列から当該 id のコマ列を引く。
                 let Some(anim) = table.animations(*sid).iter().find(|a| a.id == anim_id) else {
@@ -317,6 +381,12 @@ impl LoopRuntime {
                     new_pattern.remove(anim_id);
                     continue;
                 };
+
+                // `always` は周の頭へ戻って続く（末尾でも負の番号でも再生を捨てない・要件 4.2・4.5）。
+                if matches!(anim.trigger, LoopTrigger::Always { .. }) {
+                    put_top_always(&mut new_pattern, anim, elapsed);
+                    continue;
+                }
 
                 // 進行相の bind 判定（bindopt 7.3/7.4・D9-2）: bind 種（`BindRandom`）でありながら現在の
                 // bind 集合に属さない ID は、再生中であっても停止相当（コマ除去＋playback 除去）へ落とす。
@@ -447,42 +517,76 @@ impl LoopRuntime {
     pub(crate) fn replace_shell_table(&mut self, table: AnimationTable) {
         self.config.shell_table = table;
         self.forget_slot_kind(Slot::Shell);
-        // 部品の時計もシェルの表の差し替えでだけ捨てる（spec: areka-P0-surface-element-nesting 要件 5.8）。
-        self.parts.clear();
     }
 
-    /// 面の切り替え・着せ替えの変化の直後に呼ぶ（spec: areka-P0-surface-element-nesting 要件 5.6）。
+    /// 面の切り替え・着せ替えの変化の直後に呼ぶ（spec: areka-P0-surface-element-nesting 要件 5.6・
+    /// spec: areka-P0-animated-image-playback 要件 2.3・3.1・4.1・4.3）。
     ///
-    /// 動く部品の在る表で、`scope` のシェル面が表示中のときだけ、保持している [`PatternState`] の写しの
-    /// 部品の欄を直前の刻みの時刻のコマで作り直し（[`PartClocks::peek`]・時計も乱数も触らない）、
-    /// `commit_pattern` が変化を返したらその `Show` を返す。時計は刻みの `advance` でだけ生まれるので、
-    /// 刻みが 1 度も来ていなければ時計が無く、部品のコマも無い。
-    ///
-    /// [`PatternState`]: areka_emo_compose::PatternState
-    pub(crate) fn refresh_parts(
+    /// 繰り返しの経路を通す表（[`AnimationTable::is_continuous`]）で、`scope` の `slot` の面が
+    /// 表示中なら、保持している [`PatternState`] の写しを出来事の時刻 `at_ms`（無ければ直前の刻みの
+    /// 時刻）で作り直す: 一番上の `always` の再生が無ければその時刻で作って欄を置き、部品の欄は
+    /// [`PartClocks::refresh`]（見えている `always` の時計を作る・回数つきの見えなくなった時計を捨てる・
+    /// 抽選の時計と乱数は触らない）で作り直す。`commit_pattern` が変化を返したらその `Show` を返す。
+    /// 面が表示中でない（`\s[-1]`・`\b[-1]` の後）なら、その面の回数つきの時計を捨てて何も返さない。
+    /// 出来事の時刻は刻みの単調性の番人（`last_seen`）に入れない。刻みが 1 度も来ておらず `at_ms` も
+    /// 無ければ時計を作らない（次の刻みで生まれる）。
+    pub(crate) fn refresh(
         &mut self,
         scope: &ActorKey,
+        slot: Slot,
+        at_ms: Option<u64>,
         states: &mut ScopeStates,
     ) -> Option<DisplayCommand> {
-        let table = &self.config.shell_table;
-        if !table.has_animated_parts() {
+        let LoopRuntime {
+            config,
+            playback,
+            parts,
+            last_seen,
+            ..
+        } = self;
+        let table = match slot {
+            Slot::Shell => &config.shell_table,
+            Slot::Balloon => config.balloon_tables.get(scope)?,
+        };
+        if !table.is_continuous() {
             return None;
         }
-        let (_, _, sid) = states
+        let Some((_, _, sid)) = states
             .shown_slots()
             .into_iter()
-            .find(|(s, slot, _)| s == scope && *slot == Slot::Shell)?;
-        let mut pattern = states.current_pattern(scope, Slot::Shell).clone();
-        self.parts.peek(
-            scope,
-            Slot::Shell,
-            sid,
-            states.current_binds(scope),
-            table,
-            self.last_seen.unwrap_or(0),
-            &mut pattern,
-        );
-        match states.commit_pattern(scope, Slot::Shell, pattern) {
+            .find(|(s, sl, _)| s == scope && *sl == slot)
+        else {
+            parts.drop_finite(scope, slot, table);
+            return None;
+        };
+        let at_ms = at_ms.or(*last_seen);
+        let mut pattern = states.current_pattern(scope, slot).clone();
+        if let Some(at) = at_ms {
+            start_top_always(playback, table, scope, slot, sid, at);
+            let key = (scope.clone(), slot);
+            let always = table
+                .animations(sid)
+                .iter()
+                .filter(|a| matches!(a.trigger, LoopTrigger::Always { .. }));
+            for anim in always {
+                if let Some(p) = playback.get(&key).and_then(|pb| pb.get(&anim.id)) {
+                    put_top_always(&mut pattern, anim, at.saturating_sub(p.started_at_ms));
+                }
+            }
+        }
+        // 部品は今はシェルの面だけ（バルーンの面の部品は task 3.6）。
+        if slot == Slot::Shell && table.has_animated_parts() {
+            parts.refresh(
+                scope,
+                slot,
+                sid,
+                states.current_binds(scope),
+                table,
+                at_ms,
+                &mut pattern,
+            );
+        }
+        match states.commit_pattern(scope, slot, pattern) {
             PatternApplyOutcome::Changed(cmd) => Some(cmd),
             PatternApplyOutcome::Unchanged => None,
         }
@@ -497,13 +601,19 @@ impl LoopRuntime {
         self.forget_slot_kind(Slot::Balloon);
     }
 
-    /// 全 scope の `slot` 種の再生状態と warn! 記録を捨てる（表の差し替えの共通後段）。
+    /// 全 scope の `slot` 種の再生状態（一番上の `always` を含む）・部品の時計・warn! 記録を捨てる
+    /// （表の差し替えの共通後段・spec: areka-P0-surface-element-nesting 要件 5.8・
+    /// spec: areka-P0-animated-image-playback 要件 3.6）。
     fn forget_slot_kind(&mut self, slot: Slot) {
         self.playback.retain(|(_, s), _| *s != slot);
         self.warned_negative.retain(|(_, s, _)| *s != slot);
+        self.parts.clear(slot);
     }
 }
 
+#[cfg(test)]
+#[path = "looper_always_tests.rs"]
+mod always_tests;
 #[cfg(test)]
 #[path = "looper_parts_emo2_tests.rs"]
 mod parts_emo2_tests;

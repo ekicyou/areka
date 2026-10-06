@@ -101,7 +101,7 @@
   - 完了の姿: 上のテストが緑で、既存の部品の時計のテスト（`looper_parts_emo2_tests.rs` を含む）が期待値を変えずに緑
   - _Requirements: 2.3, 2.7, 2.8, 3.1, 3.2, 3.3, 3.4, 3.5, 4.4, 6.6, 7.4_
 
-- [ ] 3.4 一番上の `always`・出来事の直後の評価・表の差し替えを進行に入れる
+- [x] 3.4 一番上の `always`・出来事の直後の評価・表の差し替えを進行に入れる
   - 進行の面ごとの処理に、一番上の `always` の再生（無ければ作り、`always_at` で欄を置き、末尾でも負の番号でも捨てない）を足す。抽選の輪は変えず、`Always` は乱数を引く前に飛ばす
   - 飛ばす条件に「一番上に `always` が無い」を足し、`is_continuous()` が偽の表では今と同じ行だけを通す
   - `refresh_parts` を `refresh(scope, slot, at_ms)` へ広げ、面の切り替え・着せ替えの変化の直後に呼ぶ（見えている `always` の時計を `at_ms` で作り、回数つきの見えなくなった時計を捨て、欄を作り直して `commit_pattern`）
@@ -245,3 +245,4 @@
 - 3.2: 子の行は animation 0・`LoopFrame { surface_id: -1, picture: Some(ElementId の値) }`（`FilmSheet.frames` の値をそのまま）＝3.3 は `set_film(film, frame.picture)` と書けば合成の `push_film_op` と一致する。`from_world` は `from_world_and_films(world, sheets, skips)` へ委ねる（seriko は atlas に依らないのでテストは手で組んだ子の定義）。`has_animated_parts` は `always_rest` の先と子の行を持つサーフェスも数える。looper の抽選は `Always` を乱数の前で飛ばし、parts の `gate` は `Always` に `None`（再生は 3.3・3.4）
 - 3.3: 鍵の付け替えは `59b03474`。`PartClocks::drop_finite(scope, slot, table)` は本番で未使用のため `#[cfg_attr(not(test), allow(dead_code))]`＝3.4（`\s[-1]`）・3.6（`\b[-1]`）・5.1 で呼んだら外す。`peek`（`refresh_parts`）は `always` の時計を作らない＝出来事の時刻で作るのは 3.4 の `refresh`。`rebuild` が見えている部品の「消えている」を落としていた不具合を直した
 - 範囲外（完了時に確かめる）: `rebuild` は `clear_parts` 直後の 1 回目に、経過 0 の辺・着せ替えの辺の先の部品も評価するので、外側が別のコマに居る刻みでも見えていない部品の抽選が回ることがある（`surface-element-nesting` からの性質・引く乱数の数は本 spec の前と同じ）
+- 3.4: `refresh_parts` は `LoopRuntime::refresh(scope, slot, at_ms: Option<u64>, states)`（`None` なら直前の刻みの時刻・`last_seen` に入れない）。`\s`・着せ替え・`\b` の 3 か所から呼ぶ。`\b[-1]` → `drop_finite(Balloon)` の道は既に通した＝3.6 で 2 本目を作らない。`drop_finite` の `allow(dead_code)` は外した。表の差し替えは `clear(slot)` でその面の種類の時計だけ捨てる。バルーンの面の部品の欄の作り直しはまだシェルの面だけ（3.6 で外す）

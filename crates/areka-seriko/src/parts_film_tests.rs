@@ -20,9 +20,9 @@ use crate::table::AnimationTable;
 use crate::timeline::LoopRng;
 
 /// 終わりなしの子（コマ 10・11・12、各 100ms・周期 300）。
-const ENDLESS: FilmId = FilmId(10);
+pub(crate) const ENDLESS: FilmId = FilmId(10);
 /// 合計 1 回の子（コマ 20・21、各 100ms・周期 200）。
-const ONCE: FilmId = FilmId(20);
+pub(crate) const ONCE: FilmId = FilmId(20);
 
 /// 0 と 1 は `a.png`（終わりなし）を置き、1 は `b.png`（合計 1 回）も置く。2 は何も置かない。
 /// 3 は `b.png` だけ。4 は子 100 を置き、100 が `a.png` を置く。
@@ -45,7 +45,7 @@ fn sheet(id: FilmId, delays_ms: &[u32], laps: Option<u32>) -> FilmSheet {
     }
 }
 
-fn table() -> AnimationTable {
+pub(crate) fn table() -> AnimationTable {
     let mut world = EmoWorld::build(&areka_parsers::shell::parse(SHELL));
     let w = world.world_mut();
     let mut q = w.query::<&mut SurfaceMaster>();

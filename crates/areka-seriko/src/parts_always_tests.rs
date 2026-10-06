@@ -2,7 +2,7 @@
 //! tasks.md 3.3）。
 //!
 //! 表は `surfaces.txt` の本文から解析 → 畳み込み → [`AnimationTable::from_world`] の実経路で組む。
-//! 時刻は `advance`／`peek` の `now_ms`、乱数は呼ばれた回数を数える注入列で、どちらも決定論。
+//! 時刻は `advance`／`refresh` の時刻、乱数は呼ばれた回数を数える注入列で、どちらも決定論。
 
 use areka_emo_compose::{Cell, EmoWorld, PartKey, PatternState};
 use areka_sakura::ActorKey;
@@ -136,24 +136,35 @@ fn always_in_child_does_not_rewind_when_parent_switches() {
     assert_eq!(clocks.clock(&scope(), 100, 0), playing(1000));
 }
 
-/// `peek` は時計を作らず、在る時計の今のコマだけを書く。
+/// 出来事の直後の `refresh` は、見えている `always` の時計が無ければ出来事の時刻で作り（経過 0＝欄に
+/// 載せない）、在れば今のコマを書く。時刻が分からない（`None`）ときは作らない（tasks.md 3.4）。
 #[test]
-fn peek_reads_always_clock_without_creating_one() {
+fn refresh_creates_always_clock_at_event_time() {
     let table = table_of(ALWAYS);
-    let (mut rng, _probe) = counting_rng(&[]);
+    let (mut rng, probe) = counting_rng(&[]);
     let mut clocks = PartClocks::default();
     let b = areka_emo_compose::BindSet::default();
 
     let mut p = PatternState::default();
-    clocks.peek(&scope(), Slot::Shell, 0, &b, &table, 1200, &mut p);
+    clocks.refresh(&scope(), Slot::Shell, 0, &b, &table, None, &mut p);
     assert!(p.is_empty());
-    assert_eq!(clocks.clock(&scope(), 100, 0), None);
+    assert_eq!(
+        clocks.clock(&scope(), 100, 0),
+        None,
+        "時刻が分からなければ作らない"
+    );
 
-    tick(&mut clocks, &table, 0, 1000, true, &mut rng);
     let mut p = PatternState::default();
-    clocks.peek(&scope(), Slot::Shell, 1, &b, &table, 1200, &mut p);
-    assert_eq!(cell_of(&p, 100), Some(Some(102)));
+    clocks.refresh(&scope(), Slot::Shell, 0, &b, &table, Some(1000), &mut p);
+    assert!(p.is_empty(), "経過 0 のコマは欄に載らない");
     assert_eq!(clocks.clock(&scope(), 100, 0), playing(1000));
+
+    let mut p = PatternState::default();
+    clocks.refresh(&scope(), Slot::Shell, 1, &b, &table, Some(1200), &mut p);
+    assert_eq!(cell_of(&p, 100), Some(Some(102)), "在る時計は続き");
+    assert_eq!(clocks.clock(&scope(), 100, 0), playing(1000));
+    tick(&mut clocks, &table, 0, 1250, true, &mut rng);
+    assert_eq!(probe.lock().unwrap().calls, 0, "乱数を引かない");
 }
 
 /// 同じ部品の `random` の抽選は、`always` が在っても同じ回数だけ乱数を引く（要件 4.7）。

@@ -525,7 +525,7 @@ fn handle_message<O: SurfaceOutput>(
                             // 部品のコマを新しい着せ替えで載せ直した Show があればそれを、無ければ
                             // apply の指令を 1 件だけ出す（spec: areka-P0-surface-element-nesting 要件 5.12）。
                             let command = loop_runtime
-                                .refresh_parts(&cue.actor, states)
+                                .refresh(&cue.actor, Slot::Shell, None, states)
                                 .unwrap_or(command);
                             emit_display(out, command); // 単一発行点（R3.5）
                             // 実機サインオフの grep マーカー（R7.1・有界 auto-exit＋ログ grep 流儀）。
@@ -585,10 +585,15 @@ fn handle_message<O: SurfaceOutput>(
         };
         // 状態更新（2.2 の鏡映）＋発行: 状態が実際に変化したときだけ単一発行点から発行する（冪等・R4.3）。
         if let ApplyOutcome::Changed(command) = states.apply_balloon(&cue.actor, target) {
-            emit_display(out, command); // 単一発行点共用（R4.1/4.2/4.3）
             // バルーン面切替／Hide でループ再生をリセット（当該 slot の playback 全除去・R2.3 表示従属）。
             // PatternState クリアは apply_balloon の責務、playback クリアはループ統括器の責務。
             loop_runtime.on_surface_changed(&cue.actor, Slot::Balloon);
+            // 一番上の `always` を出来事の時刻で始めた絵が在ればそれを、無ければ apply の指令を 1 件だけ
+            // 出す（spec: areka-P0-animated-image-playback 要件 4.1・4.3）。
+            let command = loop_runtime
+                .refresh(&cue.actor, Slot::Balloon, None, states)
+                .unwrap_or(command);
+            emit_display(out, command); // 単一発行点共用（R4.1/4.2/4.3）
         }
         return ControlFlow::Continue(());
     }
@@ -635,7 +640,7 @@ fn handle_message<O: SurfaceOutput>(
         // 部品のコマが在ればそれを載せた Show に差し替えて、切り替えの発行は 1 件だけ
         // （spec: areka-P0-surface-element-nesting 要件 5.6・5.9）。
         let command = loop_runtime
-            .refresh_parts(&cue.actor, states)
+            .refresh(&cue.actor, Slot::Shell, None, states)
             .unwrap_or(command);
         emit_display(out, command);
     }

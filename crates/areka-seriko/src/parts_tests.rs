@@ -466,9 +466,10 @@ const HOLD: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\nsurface1\n{\n}\n\
     animation0.pattern0,overlay,101,50,0,0\n\
     animation0.pattern1,overlay,102,50,0,0\n}\n";
 
-/// 時計を書き換えない口で部品の欄を作り直した結果を返す。
+/// 時計を書き換えない口（出来事の直後の `refresh`・抽選の時計は書き換えない）で部品の欄を作り直した
+/// 結果を返す。
 fn peek_at(
-    clocks: &PartClocks,
+    clocks: &mut PartClocks,
     table: &AnimationTable,
     top: u32,
     binds: &BindSet,
@@ -476,13 +477,13 @@ fn peek_at(
     top_pattern: &PatternState,
 ) -> PatternState {
     let mut pattern = top_pattern.clone();
-    clocks.peek(
+    clocks.refresh(
         &scope(),
         Slot::Shell,
         top,
         binds,
         table,
-        now_ms,
+        Some(now_ms),
         &mut pattern,
     );
     pattern
@@ -509,7 +510,7 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
     // 時計が 1 本も無いうちは欄が空になる（前の写しの欄も消える）。
     let mut stale = PatternState::default();
     stale.set_part(100, 0, overlay(999));
-    assert!(peek_at(&clocks, &table, 0, &b, 900, &stale).is_empty());
+    assert!(peek_at(&mut clocks, &table, 0, &b, 900, &stale).is_empty());
 
     tick(&mut clocks, &table, 0, &b, 1000, true, &mut rng, &top);
     assert_eq!(calls(&probe), 1);
@@ -519,21 +520,21 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
 
     for _ in 0..3 {
         assert!(
-            part_frames(&peek_at(&clocks, &table, 0, &b, 1000, &top), 100).is_empty(),
+            part_frames(&peek_at(&mut clocks, &table, 0, &b, 1000, &top), 100).is_empty(),
             "Pending はコマ無し"
         );
         assert_eq!(
-            part_frames(&peek_at(&clocks, &table, 0, &b, 1060, &stale), 100),
+            part_frames(&peek_at(&mut clocks, &table, 0, &b, 1060, &stale), 100),
             vec![(0, 101)],
             "前の写しの欄は作り直される"
         );
         // 末尾の時刻: コマは出すが時計は `Playing` のまま。
         assert_eq!(
-            part_frames(&peek_at(&clocks, &table, 0, &b, 1100, &top), 100),
+            part_frames(&peek_at(&mut clocks, &table, 0, &b, 1100, &top), 100),
             vec![(0, 102)]
         );
         // 見えない面では何も書かない。
-        assert!(peek_at(&clocks, &table, 1, &b, 1100, &stale).is_empty());
+        assert!(peek_at(&mut clocks, &table, 1, &b, 1100, &stale).is_empty());
         assert_eq!(clocks.clock(&scope(), 100, 0), playing);
     }
     assert_eq!(calls(&probe), 1, "時計を書き換えない口は乱数を呼ばない");
@@ -550,7 +551,7 @@ fn peek_draws_no_rng_and_leaves_clocks_unchanged() {
     // 保っている間も同じ。
     for _ in 0..3 {
         assert_eq!(
-            part_frames(&peek_at(&clocks, &table, 0, &b, 1500, &top), 100),
+            part_frames(&peek_at(&mut clocks, &table, 0, &b, 1500, &top), 100),
             vec![(0, 102)]
         );
     }
@@ -581,13 +582,13 @@ fn peek_does_not_write_inactive_bind_random_frames() {
 
     tick(&mut clocks, &table, 0, &on, 1000, true, &mut rng, &top);
     assert_eq!(
-        part_frames(&peek_at(&clocks, &table, 0, &on, 1050, &top), 100),
+        part_frames(&peek_at(&mut clocks, &table, 0, &on, 1050, &top), 100),
         vec![(5, 101), (6, 103)]
     );
 
     // 外した直後: 5 のコマは書かず、`random` の 6 は書く。5 の時計は残る。
     assert_eq!(
-        part_frames(&peek_at(&clocks, &table, 0, &off, 1050, &top), 100),
+        part_frames(&peek_at(&mut clocks, &table, 0, &off, 1050, &top), 100),
         vec![(6, 103)]
     );
     assert_eq!(
@@ -638,10 +639,10 @@ fn clear_drops_clocks_of_every_scope() {
     assert!(clocks.clock(&scope(), 100, 0).is_some());
     assert!(clocks.clock(&other, 100, 0).is_some());
 
-    clocks.clear();
+    clocks.clear(Slot::Shell);
     assert_eq!(clocks.clock(&scope(), 100, 0), None);
     assert_eq!(clocks.clock(&other, 100, 0), None);
-    assert!(peek_at(&clocks, &table, 0, &b, 1060, &PatternState::default()).is_empty());
+    assert!(peek_at(&mut clocks, &table, 0, &b, 1060, &PatternState::default()).is_empty());
 }
 
 fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
@@ -729,7 +730,7 @@ fn negative_id_other_than_minus_one_warns_once_per_scope_part_animation() {
     );
 
     // 捨てた後は初回に戻る。
-    clocks.clear();
+    clocks.clear(Slot::Shell);
     let lines = capture_logs(|| {
         tick(&mut clocks, &table, 0, &b, 5000, true, &mut rng, &top);
         tick(&mut clocks, &table, 0, &b, 5050, false, &mut rng, &top);
@@ -761,8 +762,8 @@ fn part_fire_hold_and_stop_lines_carry_the_part_number() {
     let lines = capture_logs(|| {
         tick(&mut clocks, &table, 0, &on, 1000, true, &mut rng, &top);
         for _ in 0..3 {
-            peek_at(&clocks, &table, 0, &on, 1100, &top);
-            peek_at(&clocks, &table, 0, &off, 1100, &top);
+            peek_at(&mut clocks, &table, 0, &on, 1100, &top);
+            peek_at(&mut clocks, &table, 0, &off, 1100, &top);
         }
         tick(&mut clocks, &table, 0, &on, 1100, false, &mut rng, &top);
         tick(&mut clocks, &table, 0, &off, 1150, false, &mut rng, &top);
