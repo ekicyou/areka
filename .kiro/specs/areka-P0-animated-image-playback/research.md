@@ -537,3 +537,78 @@ brief の Approach 1 は「コマを 1 枚ずつ持ち `always` で順に指す�
 ### 残る遅れ
 
 - スレッドの境（seriko が決めたコマを UI が当てるまで）と、16 ミリ秒の刻みだけ。出し直しの直後は、seriko が始め直した後のコマが着くまで経過 0 の絵のまま（古い絵は出ない）。
+
+## 実装前の引き直し（2026-10-06・main `3d6b0629` 取り込み後・タスク 1.1）
+
+> 取り込みのコミットは `96be31d2`（`origin/main` の `3d6b0629`＝`areka-P0-element-base-method` の squash を含む）。`areka-P0-balloon-lifecycle-events` は待たない（2026-10-05 開発者裁定）。本ブランチの分かれ目 `54d2abc3` から `3d6b0629` までに入ったコードの変更は `element-base-method` の 1 本だけで、触ったのは `areka-parsers` の `shell/{decode,model,mod,undrawn}.rs`・`areka-emo-compose` の `fold.rs`（注記だけ）と `method.rs`（注記だけ）・`areka-emo-present` の `shell_target.rs`（`load_shell_target` に `warn!` 1 つとテストの接続）と、その兄弟のテスト。
+
+### 引き直した所と結果
+
+**食い違いは 0 件**。design.md「触るファイルと並走の重なり」の行を、取り込んだ後のコードで 1 つずつ読み直した。
+
+| 所 | design の前提 | 取り込んだ後の実物 | 結果 |
+| --- | --- | --- | --- |
+| `plan.rs` の `push_static_element_ops` | `ElementKind` の振り分け（`Image`・`SurfaceOutOfRange`・`Surface`）で、数字だけの element定義は `flatten_surface` を `is_top_level=false` で再帰・画像は束縛と `placement` を見て `BlitOp` を積み、描画メソッドは `element.method` をそのまま運ぶ | 同じ（署名 `(out_ops, visited, world, atlas, surface_id, binds, pattern, offset_x, offset_y)`・振り分けの 3 腕・`method: element.method.clone()`）。`54d2abc3..3d6b0629` で `plan.rs` の差分は 0 行 | 一致 |
+| `plan.rs` の `flatten_surface` | 重ねる番号＝「有効な着せ替えの pattern0」∪「この段にコマを持つ id」・animation-sort の 2 段・コマが在ればコマ、無ければ index が 0 の pattern0・一番上と部品は読む欄（`get`／`part_get`）だけが違う | 同じ（`merged_ids` の作り方・`frame_of` の 2 つの読み・`find(|p| p.index == 0)`） | 一致 |
+| `plan.rs` の `compute_extent`・`flatten_extent` | 数えるのは束縛の在る画像の element の原寸・element定義の子（X,Y を足して再帰）・全部の着せ替えの pattern0（`min_by_key(index)`）。画像の element の X,Y は数えない（後続 `extent-element-offset`）。命令の経路と pattern0 の取り方が食い違う（既存・直さない） | 同じ（`min_by_key(|p| p.index)` と命令の経路の `index == 0` の食い違いもそのまま）。`plan.rs` は 821 行 | 一致 |
+| `emo2_boot/mod.rs` の `spawn_seriko(` | `spawn_seriko(resolver, static_binds, bind_resolver, loop_config, out)` の 5 引数。台本の時計 `let clock = TalkClock::new(clock_fn);` が別に在る | 同じ（`crates/areka-seriko/src/actor.rs` の `pub fn spawn_seriko<O>` の 5 引数・`mod.rs` の呼び出し 1 か所・`TalkClock` の行も同じ） | 一致 |
+| `emo2_boot/mod.rs` の `LoopTickerConfig` | 刻みの起動の `LoopTickerConfig::clock` に `seriko_clock` を渡す | `spawn_loop_ticker(LoopTickerConfig::default(), …)`。`LoopTickerConfig` は `interval: Duration`・`clock: Box<dyn Fn() -> MonotonicMs + Send>` の 2 欄とも `pub` | 一致（下の補足 2） |
+| `presenter/hub.rs` の `ShowSurface` の腕 | 指令の入口で `apply_show` へ渡すだけの腕。`apply_show` を呼ぶのは 4 か所（`hub.rs`・`visibility.rs` の `show_target`・`refresh.rs`・`replace.rs`） | 同じ（腕は `self.apply_show(world, target, surface_id, binds, pattern, reply)` の 1 行・呼び出しは 4 か所）。`PresentCommand` は `ShowSurface`・`Hide`・`InvalidateCache`・`ReplaceTarget` の 4 種 | 一致 |
+| `presenter/visibility.rs` の `show_target` | `last_show`（面・着せ替え・コマの 3 つ組）で `apply_show` を通し直し、応答を読んでから見えるようにする。`PresentTarget` に `ownership`（`VisibilityOwnership::External`）・`visible`・`current_surface_id`・`last_show` が在る | 同じ（`show_target(&mut self, world, target) -> Result<(), PresentError>`・`last_show.clone()` → `apply_show(..., Some(tx))` → `rx.recv()`） | 一致 |
+
+あわせて、設計が「変更 0」「同じ形」と前提する所の差分も 0 行だった: `areka-seriko` の全ファイル・`areka-emo-compose` の `nesting.rs`・`pattern.rs`・`world.rs`・`lib.rs`・`areka-emo-present` の `presenter/`・`command.rs`・`areka` の `src/` 全部・`areka-emo-atlas`。`spine.rs` は 1,000 行ちょうどのまま。
+
+### 補足（食い違いではないが、実装で踏む所）
+
+1. **element定義の `base` の行も動く絵の分解の入力になる**: `element-base-method` で読み手の `decode_elements` が `is_image_element_method`（`overlay`・`base` の 2 語）の行を同じ `Element` にし、`fold.rs` の `normalize_element` はどちらも `ComposeMethod::Overlay` で置く。したがって `elementN,base,<動く絵>,X,Y` も `overlay` の行と同じに分解され、子を置く element の描画メソッドは `Overlay` を運ぶ。設計（「置いた element の描画メソッドをそのまま運ぶ」・分解は描画メソッドを見ない）のままで正しく、直しは要らない。検体（タスク 1.2）に `base` の行は無い。
+2. **刻みの時計は `areka-ghost` の私的な関数**: `LoopTickerConfig::default()` の時計は `crates/areka-ghost/src/ticker.rs` の `fn real_clock()`（`GetTickCount64`・`pub` でない）。「刻みと同じ時計を 1 つ作って両方へ渡す」は、`mod.rs` で `GetTickCount64` を読む `seriko_clock` を作り、`LoopTickerConfig { interval: 16 ms, clock: Box::new(move || MonotonicMs(seriko_clock())) }` と書けば `areka-ghost` に触らずに済む（`areka` は `windows` の `Win32::System::SystemInformation` を `log_history.rs` で既に使っている）。触るファイルの表は変わらない。
+3. **新しく起票された `areka-P0-draw-methods-canon`**（`element-base-method` の完了時の棚卸・優先）は、残りの描画メソッドを `method.rs`・`plan.rs` ほかで描く spec。同じウェーブで並走していないので本 spec の重なりは 0。本 spec の Non-Goal「`overlay` 以外の描画メソッド」とも矛盾しない。
+
+### 前の数字（`emo2` の 1 コマの時間・要件 7.3）
+
+**測り方**: 完了 `areka-P0-recompose-budget` の道具（`tools/perf/`）と同じ手順。短時間水準（7 分）・release・実の `pasta.dll` を 32bit のヘルパで載せた `emo2`＋バルーン `emo2-kakukaku`・`RUST_LOG=info,areka_emo_present=debug`（採取スクリプトの固定値）。1 コマの時間は `perf(apply_show): 段階別計時` の行の `t_total_us`（表示の指令 1 回の適用の始めから記録までの全区間）を、開始 60 秒を除いた定常状態で数える（`remeasure-2026-08-15.md` §2 と同じ数え方）。
+
+```powershell
+cargo build -p areka --release
+cargo build -p shiori-host32-helper --target i686-pc-windows-msvc --release
+# ヘルパを target\release\ へ写す（README §13 の注意どおり）
+cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2   # 検体は target\nar-samples\manual\emo2 に展開される
+pwsh -File tools/perf/invoke-perf-run.ps1 -Profile short -Build release `
+    -GhostRoot <wt>\target\nar-samples\manual\emo2\ghost\emo2 `
+    -BalloonRoot <wt>\target\nar-samples\manual\emo2\balloon\emo2-kakukaku `
+    -OutDir <wt>\target\perf\p0ap-before-short-release-2 -AutoQuiet
+python tools/perf/judge-perf.py <out>\run.log <out>\cpu.csv --mode baseline --build release --emit-metrics
+```
+
+- **採った日時**: 2026-10-06 02:19〜02:27（日本時間・UTC 2026-10-05T17:19:34Z〜17:27:04Z）・実走 432 秒・areka の終了コード 0
+- **ソース**: `git_head = 96be31d2`（本 spec の実装の前・main `3d6b0629` 取り込み後）。`git_dirty_files = 1` は本 research.md の書きかけだけ（コードの変更 0）
+- **機械**: `NAGI`・Intel Core Ultra 9 185H（物理 16・論理 22）・メモリ 32 GB・Intel Arc Graphics（ドライバ 32.0.101.8860）・Windows 11 Pro 10.0.26300・PowerShell 7.6.6
+- **画面**: primary_dpi 192・作者基準 96 → k = 2.0。キャラの面 382×547 → 764×1094（8 月の計測と同じ条件）
+- **静かさ**: `-AutoQuiet` の起動前の確認で `QUIET`（マシン全体の CPU 平均 9.8%・最大 26.6%・重いプロセス 0）。確かめるのは起動前だけで、走行中の他のセッションの負荷は道具が見ていない
+- **生データ**: `target\perf\p0ap-before-short-release-2\`（リポジトリ外・`target` の下）。判定の全文は `target\perf\p0ap-before-verdict.txt`
+- **`emo2` の中身の確認**: 展開した検体に `element*,base`・`interval,always`・動く絵（APNG・WebP・GIF）は 0 件。本 spec の足す経路を `emo2` は通らない前提のとおり
+
+**数字（定常状態・344 適用・nearest-rank）**
+
+| 段 | p50 | p95 | 最大 | 平均 |
+| --- | ---: | ---: | ---: | ---: |
+| `t_cache_us` | 6 µs | 11 µs | 90 µs | 7 µs |
+| `t_compose_us` | 0 µs | 5,272 µs | 7,290 µs | 1,396 µs |
+| `t_mask_us` | 0 µs | 732 µs | 1,072 µs | 175 µs |
+| `t_upload_us` | 0 µs | 666 µs | 872 µs | 191 µs |
+| **`t_total_us`（1 コマの時間）** | **69,084 µs** | **604,897 µs** | 2,572,976 µs | 164,520 µs |
+
+- 命中率 55.2%（190／344）（定常）・キャラ面（`TargetId(0)`／1000）は 42.1%（全区間・適用 316 回／合計 416 回の内訳）。合成し直し（不命中）は定常で 154 回
+- コマ適用間隔（判定式⑴の窓 C・キャラ面）: p50 92.2 ms・p95 370.1 ms（n=49）
+- catch-up（`loop_ticker`）: 定常 252 件・全区間 257 件
+- 新規確保（定常）: `alloc_compose_dst` 1・`alloc_mask` 1
+- areka の CPU（1 コア換算・定常）: 平均 18.7%・p50 17.0%・p95 38.6%
+- `--mode verdict --build release` の総合は不合格（⑴⑵⑶⑷a）。合否は本 spec の要件ではなく、前後の比べの材料として残す
+
+**読むときの注意（後の数字と比べる前に）**
+
+1. **この走行は 8 月より桁で遅い**: `draw-load-parity` の最終（2026-08-23・長時間水準）は `t_total_us` の定常 p50 2,784 µs・p95 26,520 µs、catch-up 96 件だった。今回は p50 69 ms・p95 605 ms・catch-up 252 件。しかも段の 4 つ（照会・合成・マスク・転写）の和は不命中の行でも 3 ms 前後で、`t_total_us` との差の大部分は**どの段にも入っていない**（`show.rs` で最後の `mark(Stage::MaskGen)` の後から `emit` までの、装着への書き込みと `info!` の区間。`present-gpu-transform-scale` でリサンプルの段が無くなった後は、段の和が合計を覆わない）。原因は本 spec の範囲外で、ここでは調べていない。
+2. **機械は他のセッションと共有している**: 同じ測り方を 3 回起こし、1 回目（00:39〜00:44）と 3 回目（02:30〜02:35）は起動前の確認が 4 回とも `NOT_QUIET`（全体の CPU 平均 13〜86%・他のワークツリーの `rustc`・`link`、1 回目は別の `areka` も働いていた）で起動しなかった。採れたのは 2 回目の 1 本だけで、走行中に負荷が戻った可能性は消せない。1 本の数字はばらつきの大きさを語らない。
+3. **後の数字の採り方の提案**: 実装の後は、同じ道具の交互取得（`perf-loop.ps1 prepare-ab`／`measure-ab`＝実装の前の実行体を `bin-A` へ退避し A→B→A→B を同じセッションで 7 分ずつ）で比べると、上の 1・2 の影響を同じ条件で打ち消せる。本節の 1 本は「同じ機械・同じ測り方の前の数字」の記録として残す。
+
+> 注: 上の証拠のファイル（`target\perf\p0ap-*`・`target\p0ap-test.log`）は 2026-10-06 の全ワークツリーの `target\` の掃除で消えた。数字はレビューが掃除の前に判定ファイルと突き合わせて一致を確かめている。

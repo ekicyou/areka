@@ -7,7 +7,7 @@
 > 触らないファイル: `areka-emo-atlas` の全ファイル・`areka-parsers`・`areka-emo-compose` の `fold.rs`・`method.rs`・`atlas_bind.rs`・`boxes.rs`・`hit_import.rs`・`base_image.rs`・`areka-emo-present` の `presenter/show.rs`（`apply_show`）・`cache.rs`（`CAPACITY`）・`crates/areka/src/emo2_boot/` の `spine.rs`・`assets.rs`・`frame.rs`・`frame/wiring.rs`。`mod.rs` の `let clock = TalkClock::new(clock_fn);` の名前・型・持ち主は変えない（`areka-P0-balloon-lifecycle-events` が使う）。`emo2` の照合（焼いた結果・合成の結果・まばたきの決定論テスト）は期待値を 1 本も書き換えない（呼び出しの形の変更に合わせた書き換えは数えない）。
 
 - [ ] 1. 着手前の確認と検体
-- [ ] 1.1 main を取り込み、先に入った `element-base-method` の後の形を引き直して、前の数字を採る
+- [x] 1.1 main を取り込み、先に入った `element-base-method` の後の形を引き直して、前の数字を採る
   - `areka-P0-element-base-method` が main に入っていることを確かめ、取り込む（入っていなければ止まって開発者へ知らせる）。`areka-P0-balloon-lifecycle-events` は待たない（2026-10-05 開発者裁定で本 spec が先に入る。`mod.rs` の `clock: TalkClock` の名前・型・持ち主を変えない約束はそのまま）
   - 取り込んだ後のコードで、design.md「触るファイルと並走の重なり」の行（`plan.rs` の `push_static_element_ops`・`flatten_surface`・`flatten_extent`、`mod.rs` の `spawn_seriko(` と `LoopTickerConfig` の所、`hub.rs` の `ShowSurface` の腕、`visibility.rs` の `show_target`）を読み直し、design の前提と食い違う所があれば research.md に書いてから進む
   - 実装の前の HEAD で、`emo2` の 1 コマの時間を `areka-P0-recompose-budget` の測り方で採り、機械と測り方を添えて research.md に記す
@@ -233,3 +233,4 @@
 - 1.2: 検体は `tests/fixtures/animated-playback/{shell,balloon}/`。面とバルーンの面は `.png` の名前しか拾わないので、`surface1.png`＝`basic.apng`・`surface2.png`／`balloons0.png`＝`rgb.apng`・`balloons1.png`＝`alpha.webp` の中身の写し。`rgb.*` は α を持たず左上の白が抜き色になる＝決め手の画素は写し元 `crates/areka-emo-atlas/src/testdata/animated/` の README の表を正本に選ぶ（5.4）
 - 並走（10-06 調べ）: `areka-P0-self-alpha-declaration`（セッションなし・tasks 生成済み）は `build_balloon_target_from_faces` に値を 1 つ足し、`build_shell_target*` の直呼びに `UseSelfAlpha::On` を足す。後から main に入る側が、1.2 の `shell_target_animated_fixture_tests.rs` と 5.4 の E2E の呼び出しを合わせる。`mcp-get-status` は `frame/status_report.rs` を読むだけの見込み（問い合わせ中）
 - 7.1: 台帳を書き替えたら `doc/ukadoc-coverage/report/summary.md` は手で直さず `ukadoc-survey` の report と report-summary を回し直して作る（並走の choice-script-prefix・element-base-method も同じ表を作り直すので、後から入る側が回し直す）
+- 1.1（範囲外・完了時に起票）: `emo2` の 1 コマの時間が 8 月の draw-load-parity（p50 2.8 ms・p95 26.5 ms）より桁で遅い（10-06 main で p50 69 ms・p95 605 ms・catch-up 96→252）。差のほとんどが `show.rs` の最後の `mark(MaskGen)` から `emit` までの、どの段にも入らない区間。本 spec の前からの問題。6.2 の前後比較は `perf-loop.ps1 prepare-ab`／`measure-ab` の交互取得を必須にする
