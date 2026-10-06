@@ -18,6 +18,7 @@ use std::time::Instant;
 use windows::Win32::Graphics::Gdi::{
     EnumDisplayMonitors, GetObjectW, GetPixel, GetTextExtentPoint32W, HDC, HMONITOR, LOGFONTW,
 };
+use windows::Win32::UI::Controls::TTM_GETTEXTW;
 use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
 };
@@ -103,15 +104,7 @@ fn center(r: RectPx) -> PointPx {
 }
 
 fn hwnd_rect(hwnd: HWND) -> RectPx {
-    let mut rc = RECT::default();
-    // SAFETY: Win32 境界。書き込み先は手元の RECT。
-    unsafe { GetWindowRect(hwnd, &mut rc) }.expect("窓の矩形");
-    RectPx {
-        left: rc.left,
-        top: rc.top,
-        right: rc.right,
-        bottom: rc.bottom,
-    }
+    window_rect(hwnd).expect("窓の矩形")
 }
 
 /// 主画面の作業領域と DPI。
@@ -263,11 +256,6 @@ impl Drop for Watchdog {
     }
 }
 
-/// 出ているツールチップの大きさを問い合わせ直す（show の中の問い合わせと同じ経路）。
-fn bubble_size(hwnd: HWND, text: &str) -> SizePx {
-    set_text_and_measure(hwnd, &normalize_newlines(text)).expect("大きさ")
-}
-
 #[test]
 #[ignore = "実機の画面とマウスを使う（--ignored で明示して走らせる）"]
 fn s2_given_position_is_top_left_and_size_is_known_before_placing() {
@@ -294,21 +282,38 @@ fn s2_given_position_is_top_left_and_size_is_known_before_placing() {
             false,
         ),
     ];
-    for (text, anchor, keep_shown) in cases {
-        if !keep_shown {
-            tip.hide();
-        }
+    for (i, &(text, anchor, _)) in cases.iter().enumerate() {
         let rect = tip.show(text, anchor).expect("出す");
         pump_for(Duration::from_millis(150));
         let hwnd = tip.hwnd.expect("窓");
-        let size = bubble_size(hwnd, text);
-        let want = expected_top_left(anchor, size);
-        println!(
-            "[S2] dpi={dpi} anchor={anchor:?} 問い合わせ={size:?} rect={rect:?} want={want:?}"
-        );
         assert!(is_visible(hwnd), "出ている");
-        assert_eq!(size_of_rect(rect), size, "問い合わせた大きさで出た");
-        assert_eq!((rect.left, rect.top), (want.x, want.y), "渡した位置が左上");
+        assert_eq!(hwnd_rect(hwnd), rect, "返した矩形は出ている窓の矩形");
+        // 出た窓の本当の大きさで置き場所を計算し直す。show の中で測った大きさが本当の大きさと
+        // 1 でも違えば（版 6 の TTM_GETBUBBLESIZE は 1 大きい）、真上に出す回の上の位置がずれる。
+        let want = expected_top_left(anchor, size_of_rect(rect));
+        // 消えている所から同じ文字を測り直す（画面の外の経路）。出ていた大きさと同じになる。
+        tip.hide();
+        let parked = set_text_and_measure(hwnd, &normalize_newlines(text)).expect("測り直す");
+        println!(
+            "[S2] dpi={dpi} anchor={anchor:?} rect={rect:?} want={want:?} 画面の外で測った={parked:?}"
+        );
+        assert_eq!(
+            (rect.left, rect.top),
+            (want.x, want.y),
+            "測った大きさで置いた（渡した位置が左上）"
+        );
+        assert_eq!(parked, size_of_rect(rect), "画面の外で測った大きさで出た");
+        if cases
+            .get(i + 1)
+            .is_some_and(|&(_, _, keep_shown)| keep_shown)
+        {
+            // 次の回は出ているまま入れ替える経路なので、出し直しておく。
+            assert_eq!(
+                tip.show(text, anchor).expect("出し直す"),
+                rect,
+                "同じ所に出る"
+            );
+        }
     }
     tip.hide();
     let hwnd = tip.hwnd.expect("窓");
@@ -693,6 +698,108 @@ fn s5_long_japanese_line_and_url_wrap_within_max_width() {
         assert!(size.width <= limit, "{name}: 最大の幅（＋ふち）に収まる");
         assert!(size.height > one_line, "{name}: 複数の行に折り返した");
     }
+}
+
+/// hwnd の DC で、font のまま text の幅を測る。
+fn text_width(hwnd: HWND, font: HFONT, text: &str) -> i32 {
+    let wide: Vec<u16> = text.encode_utf16().collect();
+    let mut size = SIZE::default();
+    // SAFETY: Win32 境界。自分の窓の DC を借り、字体を選んで測り、元に戻して返す。
+    unsafe {
+        let hdc = GetDC(Some(hwnd));
+        let old = SelectObject(hdc, font.into());
+        let _ = GetTextExtentPoint32W(hdc, &wide, &mut size);
+        SelectObject(hdc, old);
+        ReleaseDC(Some(hwnd), hdc);
+    }
+    size.cx
+}
+
+/// 英字だけで、幅がちょうど target の 1 語を作る（字ごとの幅の組み合わせを数え上げる）。
+fn word_exactly(hwnd: HWND, font: HFONT, target: i32) -> Option<String> {
+    let letters: Vec<(char, usize)> = ('a'..='z')
+        .chain('A'..='Z')
+        .map(|c| (c, text_width(hwnd, font, &c.to_string()) as usize))
+        .filter(|&(_, w)| w > 0)
+        .collect();
+    let target = usize::try_from(target).ok()?;
+    // last[n] = 幅 n を作れたときの最後の字。
+    let mut last: Vec<Option<char>> = vec![None; target + 1];
+    for n in 1..=target {
+        last[n] = letters
+            .iter()
+            .find(|&&(_, w)| w <= n && (w == n || last[n - w].is_some()))
+            .map(|&(c, _)| c);
+    }
+    let mut word = String::new();
+    let mut n = target;
+    while n > 0 {
+        let c = last[n]?;
+        word.push(c);
+        n -= letters.iter().find(|&&(l, _)| l == c)?.1;
+    }
+    // 字を並べた幅が字ごとの幅の和と同じ（字の間の詰めが無い）ことを確かめてから使う。
+    (text_width(hwnd, font, &word) == target as i32).then_some(word)
+}
+
+/// 出ているツールチップの文字を読み戻す。
+fn tip_text(hwnd: HWND) -> String {
+    // 古い版は受け皿の大きさを見ずに写すので、十分に大きく取る。
+    let mut buf = vec![0u16; 8192];
+    let mut ti = tool_info(hwnd, PWSTR(buf.as_mut_ptr()));
+    // SAFETY: Win32 境界。手元の TTTOOLINFOW と受け皿を渡す。
+    unsafe {
+        SendMessageW(
+            hwnd,
+            TTM_GETTEXTW,
+            Some(WPARAM(buf.len())),
+            Some(LPARAM((&raw mut ti) as isize)),
+        );
+    }
+    let len = buf.iter().position(|&u| u == 0).unwrap_or(buf.len());
+    String::from_utf16_lossy(&buf[..len])
+}
+
+/// OS が折り返した一番長い行が最大の幅ちょうどのとき、窓は上限ちょうどの幅で、語の途中で割らない。
+///
+/// 測った大きさが本当の窓より 1 でも大きいと（版 6 の `TTM_GETBUBBLESIZE`）、上限を越えたと見て
+/// `force_break` が残りの行を語の途中で割る。版 5 のテストの exe では差が出ないので、ここで檻に
+/// 入れるのは境い目の比べ（越えたら割る・ちょうどなら割らない）。
+#[test]
+#[ignore = "実機の画面とマウスを使う（--ignored で明示して走らせる）"]
+fn line_wrapped_to_exactly_max_width_is_not_force_broken() {
+    per_monitor_aware();
+    let mut tip = TipWindow::default();
+    let (work, dpi) = primary();
+    let anchor = center(work);
+    tip.show("あ", anchor).expect("字体を作る");
+    let hwnd = tip.hwnd.expect("窓");
+    let (font, _) = tip.font.expect("字体");
+    let max_width = max_tip_width(dpi, work);
+    let limit = window_width_for(hwnd, max_width);
+    let first = word_exactly(hwnd, font, max_width).expect("最大の幅ちょうどの語を作れる");
+    // 続く 2 語は、それぞれは 1 行に入り、2 つ並べると入らない長さ。割られると 3 語目の途中で切れる。
+    let mut rest = String::new();
+    while text_width(hwnd, font, &rest) * 2 <= max_width {
+        rest.push_str("wrap");
+    }
+    let text = format!("{first} {rest} {rest}");
+    let rect = tip.show(&text, anchor).expect("出す");
+    pump_for(Duration::from_millis(150));
+    let shown = tip_text(hwnd);
+    tip.hide();
+    println!(
+        "[境い目] dpi={dpi} max_width={max_width} limit={limit} rect={:?} 1語目={} 割った={}",
+        size_of_rect(rect),
+        first.len(),
+        shown != text
+    );
+    assert_eq!(
+        size_of_rect(rect).width,
+        limit,
+        "一番長い行が最大の幅ちょうど"
+    );
+    assert_eq!(shown, text, "語の途中で割らない（OS の折り返しのまま）");
 }
 
 /// 字体の em の高さ（LOGFONTW の lfHeight の絶対値）。

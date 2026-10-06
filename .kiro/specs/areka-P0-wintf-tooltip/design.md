@@ -530,7 +530,7 @@ impl TurnMachine {
 - 字体: 出す前に、マウスのある画面の DPI を `MonitorFromPoint`＋`GetDpiForMonitor` で取り、`SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS)` の `lfStatusFont` から字体を作って `WM_SETFONT` で渡す。DPI が前回と同じなら作り直さない。
 - 最大の幅: `geometry::max_tip_width` の値を `TTM_SETMAXTIPWIDTH` で渡す。改行の整えは `geometry::normalize_newlines`。計算は `geometry` に置き、このファイルは OS に渡すだけにする（窓なしでテストするため）。
 - 待ち時間の設定を読めなかったときの代わりの値（400 ミリ秒）は `turn.rs` の定数に置く。`warn` はプロセスで 1 回だけ出す（数え始めるたびに読むので、毎回出すと記録が埋まる）。
-- 出す手順: 字体 → 最大の幅 → 文字（改行は CR LF に整える）→ 大きさを問い合わせる（`TTM_GETBUBBLESIZE`）→ 幅が最大の幅を越えていたら（`TTM_GETBUBBLESIZE` はふちと余白を含むので、最大の幅に `TTM_ADJUSTRECT(TRUE)` でふちを足した窓の幅と比べる。ふちを含む大きさを最大の幅とそのまま比べると、OS が折り返せた英語の行まで語の途中で割ってしまう）`geometry::force_break`（入る文字数は `GetTextExtentExPointW` で測る）で割って入れ直す → `geometry::place` → `TTM_TRACKPOSITION` → `TTM_TRACKACTIVATE(TRUE)` → `SetWindowPos(HWND_TOPMOST, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE)` → 実際の矩形を `GetWindowRect` で読んで返す。
+- 出す手順: 字体 → 最大の幅 → 文字（改行は CR LF に整える）→ 大きさを測る（追跡の始まった窓の `GetWindowRect`。出ていなければ画面の外で追跡を始めてから測る。`TTM_GETBUBBLESIZE` は使わない＝版 5 は追跡の前に送ると落ち、版 6 は実際の窓より幅・高さとも 1 大きい）→ 幅が最大の幅を越えていたら（測った大きさはふちと余白を含むので、最大の幅に `TTM_ADJUSTRECT(TRUE)` でふちを足した窓の幅と比べる。ふちを含む大きさを最大の幅とそのまま比べると、OS が折り返せた英語の行まで語の途中で割ってしまう）`geometry::force_break`（入る文字数は `GetTextExtentExPointW` で測る）で割って入れ直す → `geometry::place` → `TTM_TRACKPOSITION` → `TTM_TRACKACTIVATE(TRUE)` → `SetWindowPos(HWND_TOPMOST, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE)` → 実際の矩形を `GetWindowRect` で読んで返す。
 - 消す: `TTM_TRACKACTIVATE(FALSE)`。
 - OS の読み取り: `read_hover_time`（`SPI_GETMOUSEHOVERTIME`。失敗は 400 ミリ秒＋`warn`）・`sample`（`GetCursorPos` と、左・右・中・拡張 2 つの `GetAsyncKeyState`）・`is_visible`（`IsWindowVisible`）。
 
@@ -740,7 +740,7 @@ pub(crate) fn note_button_press();
 | # | 確かめること | 満たした、の基準 | 満たさないときの逃げ道 |
 |---|---|---|---|
 | S1 | `build.rs` からのリンカへの指示で exe にマニフェストが埋まり、今風の見た目になるか（wintf のサンプルと areka.exe の両方） | ビルドが通り、exe の資源にマニフェストが入っている。サンプルで `GetWindowTheme(ツールチップの窓)` が空でなく、見た目が今風。areka.exe が今までどおり起動し、既存のテストが緑 | リンカが既定のマニフェストとぶつかるなら `/MANIFEST:NO` と資源のファイルで埋める形に替える。それでも駄目なら**止めて報告** |
-| S2 | 追跡型＋`TTF_ABSOLUTE` で、渡した位置が左上になるか・出す前に大きさを問い合わせられるか | `GetWindowRect` の左上が渡した位置と一致し、`TTM_GETBUBBLESIZE` が出す前に 0 でない値を返す | 画面の外で一度出して測り、`TTM_TRACKPOSITION` で動かす（3.2 で当てた形: 出ていなければ画面の外 (-32000,-32000) で追跡を始めてから `TTM_GETBUBBLESIZE` で測る。測った大きさが `GetWindowRect` の大きさと一致することを S2 で確かめた） |
+| S2 | 追跡型＋`TTF_ABSOLUTE` で、渡した位置が左上になるか・出す前に大きさを問い合わせられるか | `GetWindowRect` の左上が渡した位置と一致し、`TTM_GETBUBBLESIZE` が出す前に 0 でない値を返す | 画面の外で一度出して測り、`TTM_TRACKPOSITION` で動かす（当てた形: 出ていなければ画面の外 (-32000,-32000) で追跡を始めてから、窓の `GetWindowRect` で測る。出ていればその場で入れ替えて測る。3.2 では `TTM_GETBUBBLESIZE` で測り、版 5 では `GetWindowRect` と一致したが、6.1 の版 6 では幅・高さとも 1 大きく置き場所が 1 ずれたので、`GetWindowRect` に替えた。research.md 14.4） |
 | S3 | 出しても入力先と手前の窓が変わらないか | 出す前後で `GetForegroundWindow` と `GetFocus` が同じ | `SWP_NOACTIVATE` 付きの `SetWindowPos` だけで出す形に替える。駄目なら**止めて報告** |
 | S4 | ツールチップの上のボタンの操作が、下の窓（同じスレッド・別プロセス）へ届くか | メモ帳の上に重ねたツールチップを押すと、メモ帳が押下を受ける | `WS_EX_LAYERED` を足して `SetLayeredWindowAttributes` で不透明にする。駄目なら**止めて報告**。（3.2 で当てた形）作るときに `WS_EX_LAYERED`＋`TTS_NOFADE`｜`TTS_NOANIMATE`・不透明 255。字面どおりに後から足すと出すたびに外される（フェードが有効だと標準のツールチップが外す。research.md 13.1） |
 | S5 | 最大の幅で、日本語の長い 1 行と、切れ目の無い URL がどう折り返されるか | 日本語が幅で折り返す。URL が幅を越えたら `force_break` が効いて収まる | `force_break` を、幅を越えたかに関わらず全部の行に当てる |

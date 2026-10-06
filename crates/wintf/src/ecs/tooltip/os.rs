@@ -18,9 +18,9 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::UI::Controls::{
     ICC_BAR_CLASSES, INITCOMMONCONTROLSEX, InitCommonControlsEx, TOOLTIPS_CLASS, TTF_ABSOLUTE,
-    TTF_TRACK, TTF_TRANSPARENT, TTM_ADDTOOLW, TTM_ADJUSTRECT, TTM_GETBUBBLESIZE,
-    TTM_SETMAXTIPWIDTH, TTM_TRACKACTIVATE, TTM_TRACKPOSITION, TTM_UPDATETIPTEXTW, TTS_ALWAYSTIP,
-    TTS_NOANIMATE, TTS_NOFADE, TTS_NOPREFIX, TTTOOLINFOW,
+    TTF_TRACK, TTF_TRANSPARENT, TTM_ADDTOOLW, TTM_ADJUSTRECT, TTM_SETMAXTIPWIDTH,
+    TTM_TRACKACTIVATE, TTM_TRACKPOSITION, TTM_UPDATETIPTEXTW, TTS_ALWAYSTIP, TTS_NOANIMATE,
+    TTS_NOFADE, TTS_NOPREFIX, TTTOOLINFOW,
 };
 use windows::Win32::UI::HiDpi::{
     GetDpiForMonitor, GetSystemMetricsForDpi, MDT_EFFECTIVE_DPI, SystemParametersInfoForDpi,
@@ -222,10 +222,11 @@ impl TipWindow {
                 Some(LPARAM(max_width as isize)),
             );
         }
-        // ③ CR LF に揃えた文字 → ④ 大きさを問い合わせる。
+        // ③ CR LF に揃えた文字 → ④ 大きさを測る。
         let mut text = normalize_newlines(text);
         let mut size = set_text_and_measure(hwnd, &text)?;
-        // 最大の幅は文字の幅なので、ふちを足した窓の幅と比べる。越えていれば分けられない語が残っている。
+        // 最大の幅は文字の幅なので、ふちを足した窓の幅と比べる（測った大きさと同じ窓の矩形の単位）。
+        // 越えていれば分けられない語が残っている。
         if size.width > window_width_for(hwnd, max_width) {
             text = break_long_lines(hwnd, font, &text, max_width)?;
             size = set_text_and_measure(hwnd, &text)?;
@@ -245,16 +246,7 @@ impl TipWindow {
         // ⑦ いつも手前の最前へ。
         self.keep_on_top()?;
         // ⑧ 実際の矩形。
-        let mut rc = RECT::default();
-        // SAFETY: Win32 境界。書き込み先は手元の RECT。
-        unsafe { GetWindowRect(hwnd, &mut rc) }
-            .map_err(|_| TooltipOsError::Show { stage: "rect" })?;
-        Ok(RectPx {
-            left: rc.left,
-            top: rc.top,
-            right: rc.right,
-            bottom: rc.bottom,
-        })
+        window_rect(hwnd)
     }
 
     /// 窓が無ければ作り、道具を 1 つ登録する。
@@ -425,12 +417,14 @@ fn track_at(hwnd: HWND, pos: PointPx) {
     }
 }
 
-/// 文字を入れ直し、置き場所へ動かす前の大きさを問い合わせる。
+/// 文字を入れ直し、置き場所へ動かす前の窓の大きさを測る。
 ///
-/// 古い版（版 5）は、追跡を始める前（出ていないとき）の `TTM_GETBUBBLESIZE` で落ちる（最初の試し
-/// S2）。出ていなければ画面の外で追跡を始めてから測り、置き場所へは後で動かす（設計の S2 の逃げ道）。
-/// 出ていればその場で入れ替えて測る（画面の外へ外すと、出ているものが一瞬消えうる）。追跡は文字が
-/// 入ってからでないと始まらないので、文字の後に始める。始まらなければ問い合わせずに誤りにする。
+/// 大きさは追跡の始まった窓の `GetWindowRect` で測る（設計の S2 の逃げ道）。`TTM_GETBUBBLESIZE` は
+/// 使わない: 古い版（版 5）は追跡を始める前に送るとプロセスごと落ち、新しい版（版 6）は実際の窓より
+/// 幅・高さとも 1 大きい値を返す（最初の試し S2・6.1 の実機）。出ていなければ画面の外で追跡を始めて
+/// から測り、置き場所へは後で動かす。出ていればその場で入れ替えて測る（画面の外へ外すと、出ている
+/// ものが一瞬消えうる）。追跡は文字が入ってからでないと始まらないので、文字の後に始める。始まらな
+/// ければ測らずに誤りにする。
 fn set_text_and_measure(hwnd: HWND, text: &str) -> Result<SizePx, TooltipOsError> {
     let mut wide: Vec<u16> = text.encode_utf16().chain([0]).collect();
     let mut ti = tool_info(hwnd, PWSTR(wide.as_mut_ptr()));
@@ -449,23 +443,28 @@ fn set_text_and_measure(hwnd: HWND, text: &str) -> Result<SizePx, TooltipOsError
             return Err(TooltipOsError::Show { stage: "track" });
         }
     }
-    // SAFETY: Win32 境界。追跡の始まった自分のツールチップの窓へ、手元の TTTOOLINFOW を渡す。
-    let packed = unsafe {
-        SendMessageW(
-            hwnd,
-            TTM_GETBUBBLESIZE,
-            Some(WPARAM(0)),
-            Some(LPARAM((&raw mut ti) as isize)),
-        )
-    };
+    let rc = window_rect(hwnd)?;
     let size = SizePx {
-        width: (packed.0 & 0xFFFF) as i32,
-        height: ((packed.0 >> 16) & 0xFFFF) as i32,
+        width: rc.right - rc.left,
+        height: rc.bottom - rc.top,
     };
-    if size.width == 0 || size.height == 0 {
+    if size.width <= 0 || size.height <= 0 {
         return Err(TooltipOsError::Show { stage: "size" });
     }
     Ok(size)
+}
+
+/// 窓の矩形（画面の物理ピクセル）。
+fn window_rect(hwnd: HWND) -> Result<RectPx, TooltipOsError> {
+    let mut rc = RECT::default();
+    // SAFETY: Win32 境界。書き込み先は手元の RECT。
+    unsafe { GetWindowRect(hwnd, &mut rc) }.map_err(|_| TooltipOsError::Show { stage: "rect" })?;
+    Ok(RectPx {
+        left: rc.left,
+        top: rc.top,
+        right: rc.right,
+        bottom: rc.bottom,
+    })
 }
 
 /// 文字の幅 text_width を出すのに要る窓の幅（ふちと余白を足す）。読めなければ text_width。
