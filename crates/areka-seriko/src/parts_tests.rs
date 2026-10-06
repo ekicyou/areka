@@ -14,6 +14,7 @@ use log_capture_kit::{LineFormat, capture_lines};
 
 use super::{PartAnim, PartClocks};
 use crate::looper::tests::{RngProbe, counting_rng};
+use crate::state::Slot;
 use crate::table::AnimationTable;
 use crate::timeline::LoopRng;
 
@@ -73,6 +74,7 @@ fn tick(
     let mut pattern = top_pattern.clone();
     clocks.advance(
         &scope(),
+        Slot::Shell,
         top,
         binds,
         table,
@@ -474,7 +476,15 @@ fn peek_at(
     top_pattern: &PatternState,
 ) -> PatternState {
     let mut pattern = top_pattern.clone();
-    clocks.peek(&scope(), top, binds, table, now_ms, &mut pattern);
+    clocks.peek(
+        &scope(),
+        Slot::Shell,
+        top,
+        binds,
+        table,
+        now_ms,
+        &mut pattern,
+    );
     pattern
 }
 
@@ -602,9 +612,29 @@ fn clear_drops_clocks_of_every_scope() {
     let other = ActorKey::from("1");
 
     let mut p = PatternState::default();
-    clocks.advance(&scope(), 0, &b, &table, 1000, true, &mut rng, &mut p);
+    clocks.advance(
+        &scope(),
+        Slot::Shell,
+        0,
+        &b,
+        &table,
+        1000,
+        true,
+        &mut rng,
+        &mut p,
+    );
     let mut p = PatternState::default();
-    clocks.advance(&other, 0, &b, &table, 1000, true, &mut rng, &mut p);
+    clocks.advance(
+        &other,
+        Slot::Shell,
+        0,
+        &b,
+        &table,
+        1000,
+        true,
+        &mut rng,
+        &mut p,
+    );
     assert!(clocks.clock(&scope(), 100, 0).is_some());
     assert!(clocks.clock(&other, 100, 0).is_some());
 
@@ -654,9 +684,29 @@ fn negative_id_other_than_minus_one_warns_once_per_scope_part_animation() {
         // 別のスコープは別に数える。
         for base in [1000u64, 2000] {
             let mut p = PatternState::default();
-            clocks.advance(&other, 0, &b, &table, base, true, &mut rng, &mut p);
+            clocks.advance(
+                &other,
+                Slot::Shell,
+                0,
+                &b,
+                &table,
+                base,
+                true,
+                &mut rng,
+                &mut p,
+            );
             let mut p = PatternState::default();
-            clocks.advance(&other, 0, &b, &table, base + 50, false, &mut rng, &mut p);
+            clocks.advance(
+                &other,
+                Slot::Shell,
+                0,
+                &b,
+                &table,
+                base + 50,
+                false,
+                &mut rng,
+                &mut p,
+            );
         }
     });
     let warn = ["level=WARN", "seriko: part", "part=100", "surface_id=-2"];

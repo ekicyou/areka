@@ -407,6 +407,7 @@ impl LoopRuntime {
             if with_parts {
                 parts.advance(
                     scope,
+                    *slot,
                     *sid,
                     states.current_binds(scope),
                     shell_table,
@@ -474,6 +475,7 @@ impl LoopRuntime {
         let mut pattern = states.current_pattern(scope, Slot::Shell).clone();
         self.parts.peek(
             scope,
+            Slot::Shell,
             sid,
             states.current_binds(scope),
             table,
