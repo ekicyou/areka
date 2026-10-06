@@ -94,11 +94,12 @@ pub enum StageNote {
     },
 }
 
-/// 知らせで覚えたバルーンの窓（開いているか・表示層が確立している面の番号）。
+/// 知らせで覚えたバルーンの窓（開いているか・表示層が確立している面の番号・知った出番の世代）。
 #[derive(Clone, Copy, Debug)]
 struct BalloonWindow {
     open: bool,
     face: u32,
+    generation: u64,
 }
 
 /// [`ScopeStates::commit_pattern`] の適用結果（pattern 進行状態変化に応じた表示発行の判定・要件 6.1/6.2）。
@@ -640,18 +641,28 @@ impl ScopeStates {
 
     /// 窓の知らせを覚える（spec: areka-P0-animated-image-playback 要件 6.1）。窓の開け閉めは
     /// いつも知らせに従い、面の番号は `\b[番号]` を受けていないスコープでだけ使う
-    /// （[`ScopeStates::stage_slots`]）。世代の扱いは task 5.1。
+    /// （[`ScopeStates::stage_slots`]）。出番の世代は大きい方を覚える（古い知らせで戻さない）。
     pub fn note_stage(&mut self, note: &StageNote) {
         let StageNote::Balloon {
-            scope, open, face, ..
+            scope,
+            open,
+            face,
+            generation,
         } = note;
+        let generation = (*generation).max(self.stage_generation(scope));
         self.balloon_windows.insert(
             scope.clone(),
             BalloonWindow {
                 open: *open,
                 face: *face,
+                generation,
             },
         );
+    }
+
+    /// `scope` のバルーンで覚えている出番の世代（知らせが 1 度も無ければ 0＝表示層の始まりの値）。
+    pub fn stage_generation(&self, scope: &ActorKey) -> u64 {
+        self.balloon_windows.get(scope).map_or(0, |w| w.generation)
     }
 
     /// `scope` のバルーンの面の番号: `\b[番号]` を受けていればその番号（`\b[-1]` なら面なし）、

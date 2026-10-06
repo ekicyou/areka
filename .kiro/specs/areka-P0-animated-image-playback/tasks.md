@@ -161,7 +161,7 @@
   - _Requirements: 2.3, 3.3_
 
 - [ ] 5. 窓の知らせと結線（seriko・表示層・`areka` をつなぐ）
-- [ ] 5.1 seriko が窓の知らせを受け、新しい出番では合図を先に出し、合図を表示層へ写す
+- [x] 5.1 seriko が窓の知らせを受け、新しい出番では合図を先に出し、合図を表示層へ写す
   - 統合のタスク（seriko の `actor.rs`・`output.rs` と、`areka` の `adapter.rs` を同じコミットで触る。`map_display_command` は網羅の `match` なので、`DisplayCommand` に腕を足した時点で写す腕が無いとビルドが止まる）
   - `SerikoMsg::Stage { note, at_ms }`・`SerikoSink::send_stage` を足す（受け手が消えた後は `debug!`）。`output.rs` の `DisplayCommand` に `StageAck { scope, generation }` を 1 種だけ足す。今ある 5 種の欄は変えない
   - `Stage` を受けたら順に: 世代が覚えている値より新しければ `StageAck` を先に 1 件出し、3.3 の口でそのスコープのバルーンの面の回数つきの時計を全部捨てる → `note_stage` → `refresh(scope, Slot::Balloon, at_ms)` → 返った指令を出す。どれも今の単一の発行点から出す。閉じた知らせでも回数つきの時計を捨てる
@@ -250,3 +250,4 @@
 - 3.6: `StageNote::Balloon` は state.rs（`note_stage` は世代をまだ覚えない＝5.1 で足す）。知らせが 1 度も来ていないスコープは開いた窓とみなす。窓が閉じている間は一番上の `always`・部品の `always`・部品の抽選の時計を作らず、回数つきを評価の前に捨てる（一番上の抽選は `shown_slots` のまま）。閉じていても終わりなしの子のコマが替われば `ShowBalloon` を出す（4.2 で表示層が預かる）
 - 4.2: 預かる条件は 5 つ（外から所有・見えていない・`last_show` が在り面の番号と着せ替えが同じ・コマが `last_show` と違う）。比べ先は `current_surface_id` でなく `last_show`＝本物の `Hide` の直後の 1 件目も預かる（`current_surface_id`・`apply_hide` は変えない＝預かっている間は `None` のまま・5.3 で覚えておく）。`show_target` が回数つきの欄を外すのは見えていなかったときだけ（要件 2.8）。外す関数は `visibility.rs` の `strip_finite_films`＝4.3 も同じ関数を使う
 - 4.3: `PresentCommand` は `#[non_exhaustive]`＝`crates/areka` に足した腕は 0（`spine_display_tests.rs`・`spine_conformance_support.rs` は知らない種類を「その他」に振る＝5.1 で `StageAck` が流れたら確かめる）。外しは預かる判定の前。`presenter_film_tests.rs` の補助 `shown()` は出した後に今の世代の `StageAck` を送る（追い付いた状態）。5.1・5.3 の結線までは本番で合図を送る者がいない＝回数つきは経過 0 で止まって見える（途中の状態）
+- 5.1: actor の `on_stage`＝世代が新しければ `StageAck` → `LoopRuntime::drop_finite(scope, Balloon)` → `note_stage`（世代は max で覚える・初めは 0）→ `refresh` → 発行。閉じた知らせの回数つきの捨ては `refresh` の閉じた窓の決まりに任せる。`send_stage` は送るときに時計を読む。5.3 への申し送り: `spine_conformance_support.rs` の `project_display` は `StageAck` を `DisplayProjection::Unknown` として列に残す＝本番の知らせがつながるとバルーンを含む spine の照合が赤になる→射影の腕を足すか期待値を合わせる

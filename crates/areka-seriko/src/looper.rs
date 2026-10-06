@@ -627,6 +627,19 @@ impl LoopRuntime {
         }
     }
 
+    /// `scope` の `slot` の面の回数つきの時計を全部捨てる（窓が閉じた知らせ・新しい出番・spec:
+    /// areka-P0-animated-image-playback 要件 2.3・6.1）。表が無ければ何もしない。
+    pub(crate) fn drop_finite(&mut self, scope: &ActorKey, slot: Slot) {
+        let table = match slot {
+            Slot::Shell => &self.config.shell_table,
+            Slot::Balloon => match self.config.balloon_tables.get(scope) {
+                Some(table) => table,
+                None => return,
+            },
+        };
+        self.parts.drop_finite(scope, slot, table);
+    }
+
     /// バルーンの表の差し替え（spec: areka-P0-shell-balloon-switch 要件 3.5）。
     ///
     /// 全 scope のバルーン slot の再生中のループを捨て、次の抽選から新しい表で始め直す。
@@ -654,7 +667,7 @@ mod always_tests;
 mod balloon_tests;
 #[cfg(test)]
 #[path = "looper_parts_emo2_tests.rs"]
-mod parts_emo2_tests;
+pub(crate) mod parts_emo2_tests;
 #[cfg(test)]
 #[path = "looper_parts_tests.rs"]
 mod parts_tests;

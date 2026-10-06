@@ -48,7 +48,7 @@ use crate::bind::{
 use crate::looper::{LoopRuntime, SerikoLoopConfig};
 use crate::output::{DisplayCommand, RebaseKind, RebasedShow, SurfaceOutput};
 use crate::resolve::{BalloonResolve, SurfaceResolver, SurfaceTarget, resolve_balloon_key};
-use crate::state::{ApplyOutcome, BindApplyOutcome, ScopeStates, Slot};
+use crate::state::{ApplyOutcome, BindApplyOutcome, ScopeStates, Slot, StageNote};
 use crate::table::AnimationTable;
 
 /// seriko アクターの inbox メッセージ（areka-actor inbox 規約・投函経路は inbox 一貫）。
@@ -67,6 +67,11 @@ pub enum SerikoMsg {
     ///
     /// [`spawn_seriko`] の受信の閉包が [`handle_message`] より先に捌く（定義を所有する殻の仕事）。
     Replace(Box<SerikoReplace>),
+    /// 表示層からの窓の知らせ（spec: areka-P0-animated-image-playback 要件 2.3・6.1）。
+    ///
+    /// `at_ms` は送り手が送るときに読んだ時計の値（時計が無ければ `None`＝直前の刻みの時刻）。
+    /// [`SerikoSink::send_stage`] が橋渡しする。
+    Stage { note: StageNote, at_ms: Option<u64> },
     /// kanade 由来の停止指令（areka-actor 停止規約の Close 相当・正常終了させる）。
     Close,
 }
@@ -115,6 +120,8 @@ impl std::fmt::Debug for SerikoReplace {
 #[derive(Clone)]
 pub struct SerikoSink {
     tx: std::sync::mpsc::Sender<SerikoMsg>,
+    /// 窓の知らせに載せる時刻を読む時計（[`spawn_seriko_clocked`] が渡したもの・無ければ `None`）。
+    clock: Option<SerikoClock>,
 }
 
 impl SerikoSink {
@@ -123,7 +130,7 @@ impl SerikoSink {
     /// 後続 3.2 の `spawn_seriko` がアクター inbox の送信端から構築する。std mpsc の
     /// `Sender` は `Clone`（複製すれば複数 sink 口へ配れる）だが、本タスクでは単一送出端で足りる。
     pub(crate) fn new(tx: std::sync::mpsc::Sender<SerikoMsg>) -> Self {
-        Self { tx }
+        Self { tx, clock: None }
     }
 
     /// アクターへ [`SerikoMsg::Close`] を送り、正常停止を要求する（R1.4）。
@@ -147,6 +154,20 @@ impl SerikoSink {
             tracing::debug!(
                 now_ms,
                 "seriko: inbox が消失; tick を配送できず破棄した（shutdown 中の期待事象・PresentBridge 先例・R7.5）"
+            );
+        }
+    }
+
+    /// 窓の知らせを inbox へ送る（spec: areka-P0-animated-image-playback 要件 2.3・6.1）。
+    ///
+    /// 時計が在れば、送るときの時刻を載せる。受信端消失（アクター停止後）は shutdown 中の期待事象
+    /// ゆえ [`SerikoSink::send_tick`] と同じく `debug!` で観測して戻る。
+    pub fn send_stage(&self, note: StageNote) {
+        let at_ms = self.clock.as_ref().map(|clock| clock());
+        if let Err(err) = self.tx.send(SerikoMsg::Stage { note, at_ms }) {
+            tracing::debug!(
+                msg = ?err.0,
+                "seriko: inbox が消失; 窓の知らせを配送できず破棄した（shutdown 中の期待事象）"
             );
         }
     }
@@ -270,6 +291,7 @@ pub fn spawn_seriko_clocked<O>(
 where
     O: SurfaceOutput + Send + 'static,
 {
+    let sink_clock = clock.clone();
     let (tx, actor) = areka_actor::spawn_actor::<SerikoMsg, _>("seriko", move |rx| {
         let mut states = ScopeStates::new(static_binds);
         let mut out = out;
@@ -323,7 +345,11 @@ where
         });
     });
 
-    (SerikoSink::new(tx), actor)
+    let sink = SerikoSink {
+        clock: sink_clock,
+        ..SerikoSink::new(tx)
+    };
+    (sink, actor)
 }
 
 /// 差し替えの後の最初の表示を載せた合図（spec: areka-P0-shell-balloon-switch 要件 2.6・3.5）。
@@ -360,6 +386,37 @@ fn rebased(
     DisplayCommand::Rebased { epoch, kind, shows }
 }
 
+/// 窓の知らせ（spec: areka-P0-animated-image-playback 要件 2.3・6.1・design「ScopeStates・アクター」）。
+///
+/// 順に: ①世代が覚えている値より新しければ合図 `StageAck` を先に 1 件出し、回数つきの時計を捨てる
+/// （閉じた知らせを見ていなくても新しい出番は始め直し）②`note_stage` ③`refresh`（閉じた知らせなら
+/// ここで回数つきを捨てる＝[`LoopRuntime::refresh`] の閉じた窓の決まり）④返った指令を出す。発行はどれも [`emit_display`] から（出口は 1 つ）。
+fn on_stage<O: SurfaceOutput>(
+    states: &mut ScopeStates,
+    loop_runtime: &mut LoopRuntime,
+    out: &mut O,
+    note: StageNote,
+    at_ms: Option<u64>,
+) {
+    let StageNote::Balloon {
+        scope, generation, ..
+    } = &note;
+    if *generation > states.stage_generation(scope) {
+        emit_display(
+            out,
+            DisplayCommand::StageAck {
+                scope: scope.clone(),
+                generation: *generation,
+            },
+        );
+        loop_runtime.drop_finite(scope, Slot::Balloon);
+    }
+    states.note_stage(&note);
+    if let Some(command) = loop_runtime.refresh(scope, Slot::Balloon, at_ms, states) {
+        emit_display(out, command);
+    }
+}
+
 /// inbox メッセージ 1 件を処理し、`run_inbox` 用の [`ControlFlow`] を返す。
 ///
 /// - [`SerikoMsg::Close`] → `Break`（正常終了・1.4）。
@@ -394,6 +451,10 @@ fn handle_message<O: SurfaceOutput>(
                 ?replace,
                 "seriko: 差し替えの依頼が殻を経ずに届いたので捨てる（定義は不変）"
             );
+            return ControlFlow::Continue(());
+        }
+        SerikoMsg::Stage { note, at_ms } => {
+            on_stage(states, loop_runtime, out, note, at_ms);
             return ControlFlow::Continue(());
         }
         SerikoMsg::Cue(cue) => cue,
@@ -697,6 +758,9 @@ mod parts_tests;
 #[cfg(test)]
 #[path = "actor_replace_tests.rs"]
 mod replace_tests;
+#[cfg(test)]
+#[path = "actor_stage_tests.rs"]
+mod stage_tests;
 #[cfg(test)]
 #[path = "actor_test_support.rs"]
 mod test_support;
