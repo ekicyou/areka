@@ -233,11 +233,8 @@ fn body(outcome: &ToolOutcome) -> String {
     }
 }
 
-/// 問い直す回数の上限（台詞の時計を進めながら `talking` が消えるまで）。
-const REASK_LIMIT: usize = 200;
-
 /// M6: 本物の単位で端から端まで。起動の挨拶つきのゴーストを起こし、受け口へ `get_status` を送る。
-/// 台詞の時計を進めない間は本文が `talking` で始まり、進めながら問い直すと上限の内に `talking` を
+/// 台詞の時計を進めない間は本文が `talking` で始まり、進めながら問い直すと期限の内に `talking` を
 /// 含まない答えが返る。どの答えも `isError: false` で `not implemented yet` を含まない
 /// （要件 1.1・2.1・3.4・4.2・4.3）。
 #[test]
@@ -268,12 +265,14 @@ fn m6_real_unit_answers_talking_then_not_after_the_talk_ends() {
         let Some(answer) = pending.try_answer().ok().flatten() else {
             return false;
         };
+        // 上限は答えの回数でなく土台の時刻の期限（`spin_wait_until`）で取る。回数で数えると、
+        // 並べて回すテストの負荷で台詞の時計の進みより答えが速く届き、終わる前に使い切る。
         let done = !body(&answer.outcome).contains("talking");
         seen.push(answer.outcome);
-        if !done && seen.len() < REASK_LIMIT {
+        if !done {
             pending = ask(&inbox);
         }
-        done || seen.len() >= REASK_LIMIT
+        done
     });
     let down = rig.shutdown();
 
@@ -288,13 +287,13 @@ fn m6_real_unit_answers_talking_then_not_after_the_talk_ends() {
     );
     assert!(
         ended,
-        "上限の内に答えが届き続ける（{} 回届いた）",
+        "期限の内に talking が消える答えが届く（{} 回届いた）",
         seen.len()
     );
     let last = seen.last().expect("答えが 1 つ以上ある");
     assert!(
         !body(last).contains("talking"),
-        "{REASK_LIMIT} 回の内に talking が消える（{} 回目: {last:?}）",
+        "期限の内に talking が消える（{} 回目: {last:?}）",
         seen.len()
     );
     for outcome in std::iter::once(&first).chain(&seen) {
