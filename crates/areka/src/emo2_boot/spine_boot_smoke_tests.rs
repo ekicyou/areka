@@ -122,21 +122,34 @@ fn spine_preview_reaches_text_layer_through_production_chain() {
         "attach で ERROR なし: {logs:?}"
     );
 
+    // 受け取りの行の後に本番の字の適用が届き、その後の回で提示まで回したら止める（空回しの字の適用は
+    // 受け取りの行より前に出る）。warn 0 件の判定が、字を提示した後の回まで覆うようにするため。
     let mut logs: Vec<String> = Vec::new();
     let mut now = 1;
-    let reached = spin_wait_until(|| {
+    let mut text_seen = false;
+    let mut presented_after_text = false;
+    spin_wait_until(|| {
         logs.extend(capture_logs(|| {
             harness.inject_dispatcher_tick(now);
             harness.pump_text();
             run_text_phase(&mut harness.wiring, &mut harness.world, Some(10.0));
         }));
         now += 10;
-        logs.iter()
-            .any(|l| l.contains("target=areka_emo_text") && l.contains("先渡しを受け取った"))
+        presented_after_text = text_seen;
+        text_seen = logs
+            .iter()
+            .position(|l| l.contains("target=areka_emo_text") && l.contains("先渡しを受け取った"))
+            .is_some_and(|i| logs[i..].iter().any(|l| l.contains("Text cue 適用")));
+        presented_after_text
     });
     assert!(
-        reached,
+        logs.iter()
+            .any(|l| l.contains("target=areka_emo_text") && l.contains("先渡しを受け取った")),
         "先渡しの受け取り（「先渡しを受け取った」の debug! 行）が文字の層に現れない——飾り（ClockedTextSink）か受け手（EmoTextSink）が先渡しを通していない: {logs:?}"
+    );
+    assert!(
+        presented_after_text,
+        "受け取りの後に本番の字が届いて提示されるところまで進まない: {logs:?}"
     );
     let missing = logs
         .iter()
