@@ -21,10 +21,10 @@
              中身（日本語）は target\sad-rm\check-detail.txt へ書く。不合格があれば終了コード 1。
 
 .EXAMPLE
-  pwsh -NoProfile -File .kiro/specs/areka-P0-self-alpha-declaration/real-machine-run.ps1 -Prepare
-  pwsh -NoProfile -File .kiro/specs/areka-P0-self-alpha-declaration/real-machine-run.ps1 -Run all -Build head
-  pwsh -NoProfile -File .kiro/specs/areka-P0-self-alpha-declaration/real-machine-run.ps1 -Run all -Build base
-  pwsh -NoProfile -File .kiro/specs/areka-P0-self-alpha-declaration/real-machine-run.ps1 -Check
+  pwsh -NoProfile -File .kiro/specs/completed/areka-P0-self-alpha-declaration/real-machine-run.ps1 -Prepare
+  pwsh -NoProfile -File .kiro/specs/completed/areka-P0-self-alpha-declaration/real-machine-run.ps1 -Run all -Build head
+  pwsh -NoProfile -File .kiro/specs/completed/areka-P0-self-alpha-declaration/real-machine-run.ps1 -Run all -Build base
+  pwsh -NoProfile -File .kiro/specs/completed/areka-P0-self-alpha-declaration/real-machine-run.ps1 -Check
 #>
 param(
     [switch]$Prepare,
@@ -38,7 +38,7 @@ param(
     [string]$RustLog = 'info,areka_emo_atlas=debug,areka::mcp=debug'
 )
 $ErrorActionPreference = 'Stop'
-$wt = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+$wt = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
 $base = Join-Path $wt 'target\sad-rm'
 $pristine = Join-Path $base 'pristine'
 $baselineRev = '4db4b666^'

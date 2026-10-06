@@ -25,10 +25,10 @@
 | 記録 | `run\<場合>-<版>\run.log`（標準出力）・`run.err.log`・`out\*.png`・`out\answers.txt`（撮影ごとの答えの本文）・`exit.txt`、走行の一覧は `target\sad-rm\runs.txt` |
 
 ```
-pwsh -NoProfile -File .kiro/specs/areka-P0-self-alpha-declaration/real-machine-run.ps1 -Prepare
-pwsh -NoProfile -File .kiro/specs/areka-P0-self-alpha-declaration/real-machine-run.ps1 -Run all -Build head
-pwsh -NoProfile -File .kiro/specs/areka-P0-self-alpha-declaration/real-machine-run.ps1 -Run all -Build base
-pwsh -NoProfile -File .kiro/specs/areka-P0-self-alpha-declaration/real-machine-run.ps1 -Check
+pwsh -NoProfile -File .kiro/specs/completed/areka-P0-self-alpha-declaration/real-machine-run.ps1 -Prepare
+pwsh -NoProfile -File .kiro/specs/completed/areka-P0-self-alpha-declaration/real-machine-run.ps1 -Run all -Build head
+pwsh -NoProfile -File .kiro/specs/completed/areka-P0-self-alpha-declaration/real-machine-run.ps1 -Run all -Build base
+pwsh -NoProfile -File .kiro/specs/completed/areka-P0-self-alpha-declaration/real-machine-run.ps1 -Check
 ```
 
 ### 場合
