@@ -35,6 +35,19 @@ pub(super) fn balloon_root() -> PathBuf {
         .to_path_buf()
 }
 
+/// えも？？ の絵を写した一時フォルダへ、本物の えも？？ と同じ透過の宣言 `1` だけを書いた
+/// `descript.txt` を置く。写しが宣言なしの決まりに当たり、絵の中身しだいで結果が変わることを
+/// 防ぐ（下の合成の補助も同じ宣言を書く・spec: areka-P0-self-alpha-declaration 設計
+/// 「入口を一時フォルダで通す既存のテストの棚卸し」）。`key` はシェルなら
+/// `seriko.use_self_alpha`、バルーンなら `use_self_alpha`。
+pub(super) fn write_self_alpha_one_descript(dir: &Path, key: &str) {
+    fs::write(
+        dir.join("descript.txt"),
+        format!("charset,UTF-8\n{key},1\n"),
+    )
+    .expect("descript.txt に透過の宣言 1 を書く");
+}
+
 /// 決定論テスト用の合成 work area（物理 px・resolver T-R 群と同流儀）。
 pub(super) const WA: RectPx = RectPx {
     left: 0,
@@ -88,7 +101,7 @@ pub(super) fn synth_balloon_dir(root: &TempDir, name: &str, extra_lines: &str) -
     fs::create_dir_all(&balloon_dir).expect("create balloon dir");
     fs::write(
         balloon_dir.join("descript.txt"),
-        format!("charset,UTF-8\ndpi,96\n{extra_lines}"),
+        format!("charset,UTF-8\ndpi,96\nuse_self_alpha,1\n{extra_lines}"),
     )
     .expect("balloon descript");
     fs::copy(
@@ -137,7 +150,7 @@ pub(super) fn synth_declared_dpi_ghost(
     fs::write(
         shell_master.join("descript.txt"),
         format!(
-            "charset,UTF-8\nseriko.dpi,{shell_dpi}\nseriko.alignmenttodesktop,bottom\nsakura.defaultx,0\nkero.defaultx,0\nsakura.balloon.alignment,left\nkero.balloon.alignment,right\n"
+            "charset,UTF-8\nseriko.dpi,{shell_dpi}\nseriko.use_self_alpha,1\nseriko.alignmenttodesktop,bottom\nsakura.defaultx,0\nkero.defaultx,0\nsakura.balloon.alignment,left\nkero.balloon.alignment,right\n"
         ),
     )
     .expect("shell descript");
@@ -159,7 +172,7 @@ pub(super) fn synth_declared_dpi_ghost(
     };
     fs::write(
         balloon_dir.join("descript.txt"),
-        format!("charset,UTF-8\ndpi,{balloon_dpi}\n{windowposition}"),
+        format!("charset,UTF-8\ndpi,{balloon_dpi}\nuse_self_alpha,1\n{windowposition}"),
     )
     .expect("balloon descript");
     fs::copy(
