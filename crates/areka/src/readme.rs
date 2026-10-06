@@ -202,6 +202,10 @@ fn open(path: &Path) -> windows::core::Result<()> {
 #[allow(dead_code)]
 mod os_port;
 
+// 行き先の規則（task 2.1）。受け口の結線（4.2）まで本番のビルドに呼び手が無い（4.2 で外す）。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) mod destination;
+
 #[cfg(test)]
 mod opener_test_support;
 

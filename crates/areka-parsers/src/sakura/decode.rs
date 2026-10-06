@@ -270,7 +270,7 @@ fn decode_tag(word: String, args: Vec<String>) -> Instruction {
         "f" => Instruction::Font { args },
         // ジャンプ `\j[ID]`（open-external-tags 要件 1.5/1.6）: 運搬名の汎用コマンドへ
         // 引数列を記述順のまま転記する。ID の意味付け（URL・ファイル・イベント）は消費側。
-        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_j_ID_
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cj_5bID_5d:1
         "j" => Instruction::GenericCommand {
             name: super::model::JUMP_TAG_CARRIER.to_owned(),
             raw_args: args,
