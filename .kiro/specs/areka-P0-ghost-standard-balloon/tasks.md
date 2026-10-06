@@ -62,7 +62,7 @@
   - _Requirements: 6.1, 6.2, 6.3, 6.6, 6.8_
   - _Boundary: doc/COMPAT_ARCHITECTURE.md_
   - _Depends: 2.3, 4_
-- [ ] 5.2 (P) 網羅台帳の 5 行と、数え直す 2 か所を直して報告を作り直す
+- [x] 5.2 (P) 網羅台帳の 5 行と、数え直す 2 か所を直して報告を作り直す
   - `descript_ghost` の `balloon` を `implemented`・`default.balloon.path` を `degraded`（根の置き場の直下 1 段だけ・区切りのある相対パスは当たらない・ゴーストの中は別 spec）にし、担当を本 spec にする。`descript_install` の `*.directory` に同梱の最初の 1 個が標準のバルーンになる 1 文を足す。`recommended.*` の 2 行は `absent` のまま注記の文だけを直す。`priority` と「束: …」の文は触らない
   - 整合のテストが数え直す `briefing.md` の `descript_ghost` のページ別の数（着手時の値を読み直してから implemented +1・degraded +1・absent −2）と、`roadmap-draft.md` の本 spec の `[[spec]]` 1 行（`owner_count = 2`）・件数・日付・説明の段落を、完了 `areka-P0-mouse-drag-events` と同じ形で同じコミットで直す
   - 道具で報告を作り直し（食い違いを指されたら全体の報告も）、報告は手で直さない
@@ -89,3 +89,4 @@
 - 2.1: `BalloonRoute::Descript` と新しい 2 欄は 2.2 まで dead_code の警告 2 件になる（CI に `-D warnings` は無い）。2.2 で警告 0 件を確かめる。煙テストは i686 の helper と testdll-loadu のビルドが要る（この worktree ではビルド済み）。`ghost_session::switch_tests::fallback_tests` は全体を並列で回すと負荷で赤になることがあり、単独では緑
 - 2.2: descript の段は 2 鍵を（鍵名・欄・突き合わせの関数）の配列で回し、警告の出口を 1 か所にした。`boot_config.rs` の段の並びの説明が古いのはタスク 3 で直す
 - 3: `temp_path_kit::TempPath::new` は OS の一時フォルダに作るので要件 7.7 に反する。共有の `TempPath::under_target`（ワークツリーの `target\test-roots`）を足し、本 spec の新しいテスト（1.1・1.2・3）を移した。タスク 4 の根もこれを使う。設計の Testing Strategy の記述も直した。引数の腕が読まないこと（3.2）は、ゴーストのファイルを共有なしで握って warn 0 件で固定する
+- 5.2: origin/main（`element-base-method`・`mcp-get-status`）を取り込み、roadmap-draft の数を数え直した（44 行・束を持つ行 30・`none = true` 14）。steering の roadmap は 81 本（優先 44）。完了時の棚卸へ: 台帳の `balloon`・`default.balloon.path` の「束: 既定で着せる吹き出し（読む経路が無い）」の小分類「読む経路が無い」が古い（本 spec は触らない約束）。`priority` の付け直しと一緒に coverage の棚卸で扱う
