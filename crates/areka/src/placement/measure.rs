@@ -26,10 +26,11 @@
 
 use std::path::Path;
 
-use areka_emo_atlas::{AtlasTable, WicDecoderArm};
+use areka_emo_atlas::{AtlasTable, UseSelfAlpha, WicDecoderArm};
 use areka_emo_compose::{BindSet, Composer, EmoWorld, PatternState, ScaleRatio};
 use areka_emo_present::balloon::{
-    ResolvedFace, build_balloon_target_from_faces, resolve_balloon_faces,
+    ResolvedFace, build_balloon_target_from_faces, load_balloon_use_self_alpha,
+    resolve_balloon_faces,
 };
 use areka_emo_present::shell_target::load_shell_target;
 use tracing::{error, warn};
@@ -176,6 +177,8 @@ fn measure_native_scope_sizes(
             PlacementError::Measure { scope: 0, reason }
         })?;
 
+    // バルーンの透過の宣言は 1 回だけ読む（記録をスコープの数だけ出さない・起動側と同じ入口）。
+    let balloon_alpha = load_balloon_use_self_alpha(balloon_root);
     let mut scopes = Vec::with_capacity(scope_ids.len());
     for &scope in scope_ids {
         let char_size = if scope == 0 {
@@ -209,7 +212,8 @@ fn measure_native_scope_sizes(
         };
         // バルーンは **当該 scope が解決した系列の面 0**（全 scope 共通の 1 回へ畳まない・
         // 要件 3.1）。失敗は代替根拠が無く hard Err で、帰属は実 scope 番号。
-        let balloon_size = measure_balloon_surface0(balloon_root, &decoder, &mut composer, scope)?;
+        let balloon_size =
+            measure_balloon_surface0(balloon_root, &decoder, &mut composer, scope, balloon_alpha)?;
         scopes.push(ScopeInput {
             scope,
             char_size,
@@ -365,6 +369,7 @@ fn measure_balloon_surface0(
     decoder: &WicDecoderArm,
     composer: &mut Composer,
     scope: usize,
+    use_self_alpha: UseSelfAlpha,
 ) -> Result<SizePx, PlacementError> {
     let balloon_err = |reason: String| {
         error!(
@@ -390,8 +395,9 @@ fn measure_balloon_surface0(
     // 採寸対象は面 0 のみ（採用面列の残りは bake しない）。
     let face0: Vec<ResolvedFace> = faces.into_iter().filter(|f| f.surface_id == 0).collect();
 
-    let (world, atlas) = build_balloon_target_from_faces(balloon_root, decoder, &face0)
-        .map_err(|e| balloon_err(format!("面 0 の採寸資産の構築に失敗: {e}")))?;
+    let (world, atlas) =
+        build_balloon_target_from_faces(balloon_root, decoder, &face0, use_self_alpha)
+            .map_err(|e| balloon_err(format!("面 0 の採寸資産の構築に失敗: {e}")))?;
 
     compose_size(composer, &world, &atlas, 0).map_err(balloon_err)
     // world／atlas はここで破棄される（採寸後破棄の契約）。

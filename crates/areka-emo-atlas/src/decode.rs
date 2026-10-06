@@ -106,7 +106,7 @@ pub trait ElementDecoder {
     /// 失敗（不在・破損）は `DecodeError`（パス付き）で返す。副作用はファイル読取のみ。
     fn decode(&self, path: &Path) -> Result<DecodedImage, DecodeError>;
 
-    /// 同名 `.pna` の有無（正規化の腕選択に供給・emo2 は常に false）。
+    /// 同名 `.pna` の有無（焼きの段が数えるだけで、透過の決定には使わない・emo2 は常に false）。
     fn probe_pna(&self, _path: &Path) -> bool {
         false
     }

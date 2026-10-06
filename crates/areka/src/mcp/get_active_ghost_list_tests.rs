@@ -25,6 +25,7 @@ fn answer(active: Option<&ActiveGhost>) -> (String, bool) {
 fn named_ghost_lists_its_name() {
     let ghost = ActiveGhost {
         name: Some("Emily/Phase4.5".to_string()),
+        sakura_name: None,
         root: PathBuf::from(r"C:\ssp\ghost\emily4"),
     };
     assert_eq!(answer(Some(&ghost)), ("Emily/Phase4.5".to_string(), false));
@@ -34,6 +35,7 @@ fn named_ghost_lists_its_name() {
 fn unnamed_ghost_lists_full_path_without_trailing_separator() {
     let ghost = ActiveGhost {
         name: None,
+        sakura_name: None,
         root: PathBuf::from(r"C:\ssp\ghost\emily4\"),
     };
     assert_eq!(

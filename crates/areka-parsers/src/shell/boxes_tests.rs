@@ -177,7 +177,7 @@ fn transcription_is_deterministic() {
 }
 
 /// 箱を含む文面でも、画像の読み手の結果は箱の行を除いた文面と同じ（要件 1.7・2.8）。
-/// 画像の element は `overlay` だけで、描画メソッド `balloon` の行は画像に入らない。
+/// 画像の element は `overlay` と `base` の行だけで、描画メソッド `balloon` の行は画像に入らない。
 #[test]
 fn image_reader_ignores_box_lines() {
     let with = parse(WITH_BOXES);

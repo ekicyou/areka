@@ -1,6 +1,6 @@
 //! # segment — 分かち書き境界の計算（純粋層・budouy 消費の唯一の場所）
 //!
-//! `TextItem` 列（追記正本）を **run**（`TextItem::LineBreak` で区切られた極大 `Glyph`
+//! `TextItem` 列を **run**（`TextItem::LineBreak` で区切られた極大 `Glyph`
 //! 列）単位で budouy によりセグメント化し、glyph 通し番号上の塊境界列 [`SegmentPlan`] へ
 //! 写す。budouy への依存はこのモジュールに封じ込め、layout は [`SegmentPlan`] 値のみを
 //! 消費する（budouy 非依存で判断分岐を全網羅できる・[test-only-decision-branches] 適用）。
@@ -19,8 +19,13 @@
 //!   塊」へ入れて `(start, len)` へ写す。チャンクの境界がクラスタの途中に落ちても（例:
 //!   「か゚」の結合文字の手前）クラスタは前の塊に入り割れず、空になった塊は生まないので、
 //!   写像は無損失（全グリフをちょうど一度ずつ被覆）。
-//! - **全文 lookahead（R7.1・INV-1）**: 入力は常に全 `items`（可視 prefix ではない）。
-//!   構造的に [`segment_plan`] は全 items を受け取る。
+//! - **何で区切るか（R7.1・INV-1）**: [`segment_plan`] は渡された `items` の全部で区切る
+//!   （見えている字だけには切らない）。ただし字は台本のタグとタグの間のひと続きごとに、
+//!   それぞれの時刻に分かれて届くので、届いた字の列は台詞の途中までのことが多い。何を渡すかは
+//!   呼び手が決める——再生の前に知らされた台本の全部から作った区間の全文（`lookahead.rs` の
+//!   `TalkLookahead` が区間ごとに 1 度だけ区切る）と、行を割り当てる関数 `arrange_lines`
+//!   （`actor_present.rs`）が全文を持たないとき・届いた字の列が全文の先頭と食い違うときに
+//!   区切る届いた字の列の 2 通りである。後者は字が届くたびに末尾の塊が変わりうる。
 //! - **budouy Parser のライフサイクル（R8.1）**: `static PARSER: OnceLock<budouy::Parser>` を
 //!   モジュール内部に持ち、初回のみ `budouy::model::load_default_japanese_parser()`（infallible・
 //!   vendored-models 同梱データのロードのみ＝ネットワーク/ファイル I/O なし）でロードして
@@ -87,7 +92,8 @@ impl SegmentPlan {
 /// よい（`thread_local!` への退避は不要）。`load_default_japanese_parser` は infallible。
 static PARSER: OnceLock<budouy::Parser> = OnceLock::new();
 
-/// 全 items（追記正本）から run 別に分かち書き境界を計算する（純関数・決定論・R2.1/2.5/7.1/8.1）。
+/// 渡された items の全部（区間の全文、または届いた字の列——モジュール doc「何で区切るか」）から
+/// run 別に分かち書き境界を計算する（純関数・決定論・R2.1/2.5/7.1/8.1）。
 ///
 /// run（`TextItem::LineBreak` 区切りの極大 `Glyph` 列）ごとに独立して budouy にかけ、
 /// 各チャンクを glyph 通し番号（全 items 中の `Glyph` のみを 0 起点で数えた値）上の塊へ写す。
