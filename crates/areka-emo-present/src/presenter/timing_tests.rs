@@ -440,3 +440,108 @@ fn compose_key_hash_is_stable_and_separates_every_key_element() {
         "Blend の -fast 変種差が key_hash に現れていない"
     );
 }
+
+/// 要件 7.5（task 4.1）: 部品の欄・動く絵の子の欄・「消えている」も鍵に混ざる。どれか 1 つだけが
+/// 違う形で鍵が分かれないと、動く部品と動く絵の異なりキー数が過少になる。
+///
+/// 一番上の欄だけの `PatternState` の鍵は、混ぜる欄を足す前（task 4.1 の前の HEAD で採った値）と
+/// 同じ値に固定する——前の run の perf の行と異なりキー数を比べられるようにするため。
+#[test]
+fn compose_key_hash_mixes_part_film_and_blank_cells_and_keeps_top_only_keys() {
+    use areka_emo_compose::FilmId;
+
+    let frame = |surface_id: u32| PatternFrame {
+        surface_id,
+        method: ComposeMethod::Overlay,
+        x: 3,
+        y: -4,
+    };
+    let binds = BindSet::from_ids([1, 2, 3]);
+    let top_only = {
+        let mut p = PatternState::default();
+        p.set(5, frame(20));
+        p.set(7, frame(30));
+        p
+    };
+
+    // 一番上の欄だけの鍵は前と同じ値（task 4.1 の前の HEAD で採った値）。
+    assert_eq!(
+        compose_key_hash(1000, &binds, &top_only),
+        TOP_ONLY_KEY_BEFORE_4_1,
+        "一番上の欄だけの鍵が前の値から変わった"
+    );
+    assert_eq!(
+        compose_key_hash(1000, &binds, &PatternState::default()),
+        EMPTY_KEY_BEFORE_4_1,
+        "空の pattern の鍵が前の値から変わった"
+    );
+
+    let with = |edit: &dyn Fn(&mut PatternState)| {
+        let mut p = top_only.clone();
+        edit(&mut p);
+        compose_key_hash(1000, &binds, &p)
+    };
+
+    // ⑴ 部品の欄だけが違う（在る／無い・コマ違い・部品の番号違い）。
+    let part_a = with(&|p| p.set_part(40, 0, frame(41)));
+    assert_ne!(
+        part_a,
+        compose_key_hash(1000, &binds, &top_only),
+        "部品の欄の有無が鍵に現れていない"
+    );
+    assert_ne!(
+        part_a,
+        with(&|p| p.set_part(40, 0, frame(42))),
+        "部品の欄のコマ違いが鍵に現れていない"
+    );
+    assert_ne!(
+        part_a,
+        with(&|p| p.set_part(43, 0, frame(41))),
+        "部品の番号違いが鍵に現れていない"
+    );
+
+    // ⑵ 動く絵の子の欄だけが違う（在る／無い・絵の番号違い・子の番号違い）。
+    let film_a = with(&|p| p.set_film(FilmId(1), 3));
+    assert_ne!(
+        film_a,
+        compose_key_hash(1000, &binds, &top_only),
+        "子の欄の有無が鍵に現れていない"
+    );
+    assert_ne!(
+        film_a,
+        with(&|p| p.set_film(FilmId(1), 4)),
+        "子の欄の絵の番号違いが鍵に現れていない"
+    );
+    assert_ne!(
+        film_a,
+        with(&|p| p.set_film(FilmId(2), 3)),
+        "子の番号違いが鍵に現れていない"
+    );
+
+    // ⑶ 「消えている」だけが違う（一番上・部品の両方。消えている欄と載っていない欄を分ける）。
+    assert_ne!(
+        with(&|p| p.set_blank(9)),
+        compose_key_hash(1000, &binds, &top_only),
+        "一番上の「消えている」が鍵に現れていない"
+    );
+    assert_ne!(
+        with(&|p| p.set_blank(9)),
+        with(&|p| p.set_blank(8)),
+        "「消えている」の animation の番号違いが鍵に現れていない"
+    );
+    assert_ne!(
+        with(&|p| p.set_part_blank(40, 0)),
+        compose_key_hash(1000, &binds, &top_only),
+        "部品の「消えている」が鍵に現れていない"
+    );
+    assert_ne!(
+        with(&|p| p.set_part_blank(40, 0)),
+        part_a,
+        "部品の「消えている」とコマの違いが鍵に現れていない"
+    );
+}
+
+/// task 4.1 の前の HEAD（`fb2fe2da`）で採った、一番上の欄だけの鍵（`top_only`）。
+const TOP_ONLY_KEY_BEFORE_4_1: u64 = 14_085_681_545_705_343_205;
+/// 同じく、空の pattern の鍵。
+const EMPTY_KEY_BEFORE_4_1: u64 = 15_420_910_580_374_833_391;
