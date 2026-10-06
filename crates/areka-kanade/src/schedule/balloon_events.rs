@@ -333,3 +333,8 @@ mod idle_tests;
 #[cfg(test)]
 #[path = "balloon_events_timeout_tests.rs"]
 mod timeout_tests;
+
+/// 完了を通らずに相が変わる経路での控えの後始末の檻。
+#[cfg(test)]
+#[path = "balloon_events_cleanup_tests.rs"]
+mod cleanup_tests;
