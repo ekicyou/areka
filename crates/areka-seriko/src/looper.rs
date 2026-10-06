@@ -32,6 +32,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use areka_emo_compose::{PatternFrame, PatternState};
 use areka_sakura::ActorKey;
 
+use crate::actor::SerikoClock;
 use crate::output::DisplayCommand;
 use crate::parts::PartClocks;
 use crate::state::{PatternApplyOutcome, ScopeStates, Slot};
@@ -107,6 +108,9 @@ pub(crate) struct LoopRuntime {
     /// 部品の時計（spec: areka-P0-surface-element-nesting・シェル面だけ）。シェルの表が
     /// [`AnimationTable::has_animated_parts`] で偽なら 1 度も触らない（要件 7.2・7.3）。
     parts: PartClocks,
+    /// 刻みと同じ時計（spec: areka-P0-animated-image-playback 要件 1.6・3.1）。台本の合図を処理する
+    /// ときに読む（[`LoopRuntime::event_ms`]）。無ければ出来事の時刻は直前の刻みの時刻。
+    clock: Option<SerikoClock>,
 }
 
 /// 固定消費順のための slot ランク（Shell を Balloon より前に置く・D-7）。
@@ -196,7 +200,20 @@ impl LoopRuntime {
             last_seen: None,
             warned_negative: HashSet::new(),
             parts: PartClocks::default(),
+            clock: None,
         }
+    }
+
+    /// 時計つきにする（[`crate::actor::spawn_seriko_clocked`] の起動とテストの注入の口）。
+    pub(crate) fn with_clock(mut self, clock: Option<SerikoClock>) -> Self {
+        self.clock = clock;
+        self
+    }
+
+    /// 台本の合図を処理する今の時刻（時計が無ければ `None`＝[`LoopRuntime::refresh`] が直前の刻みの
+    /// 時刻を使う・design「時計の開始の時刻」）。
+    pub(crate) fn event_ms(&self) -> Option<u64> {
+        self.clock.as_ref().map(|clock| clock())
     }
 
     /// 1 tick の統括。発行すべき指令列（通常 0〜2 件）を返す。発行自体は actor が行う（要件 6.3）。

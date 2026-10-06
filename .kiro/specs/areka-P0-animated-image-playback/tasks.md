@@ -110,7 +110,7 @@
   - 完了の姿: 上のテストが緑で、`spine_seriko_loop_tests.rs` ほか既存の seriko の決定論テストが期待値を変えずに緑
   - _Requirements: 3.6, 4.1, 4.3, 4.7, 7.2_
 
-- [ ] 3.5 時計つきの起動で、出来事の時刻から時計を始める
+- [x] 3.5 時計つきの起動で、出来事の時刻から時計を始める
   - `SerikoClock` と `spawn_seriko_clocked` を足し、今の `spawn_seriko` は署名を変えずに時計なしでそこへ委ねる
   - 台本の合図（`\s`・`\b`・着せ替え）を処理するとき時計を読み、その時刻で `refresh` する。時計が無ければ直前の刻みの時刻を使う。経過は「今の時刻 − 開始の時刻」を 0 で止めて求める
   - 兄弟のテストで: 時計を注入すると、時計の開始が合図を処理した時刻になる（刻みの時刻ではない）／刻みの時刻が開始より僅かに前でも経過が負にならない／時計なしの起動は今と同じ指令の列
@@ -246,3 +246,4 @@
 - 3.3: 鍵の付け替えは `59b03474`。`PartClocks::drop_finite(scope, slot, table)` は本番で未使用のため `#[cfg_attr(not(test), allow(dead_code))]`＝3.4（`\s[-1]`）・3.6（`\b[-1]`）・5.1 で呼んだら外す。`peek`（`refresh_parts`）は `always` の時計を作らない＝出来事の時刻で作るのは 3.4 の `refresh`。`rebuild` が見えている部品の「消えている」を落としていた不具合を直した
 - 範囲外（完了時に確かめる）: `rebuild` は `clear_parts` 直後の 1 回目に、経過 0 の辺・着せ替えの辺の先の部品も評価するので、外側が別のコマに居る刻みでも見えていない部品の抽選が回ることがある（`surface-element-nesting` からの性質・引く乱数の数は本 spec の前と同じ）
 - 3.4: `refresh_parts` は `LoopRuntime::refresh(scope, slot, at_ms: Option<u64>, states)`（`None` なら直前の刻みの時刻・`last_seen` に入れない）。`\s`・着せ替え・`\b` の 3 か所から呼ぶ。`\b[-1]` → `drop_finite(Balloon)` の道は既に通した＝3.6 で 2 本目を作らない。`drop_finite` の `allow(dead_code)` は外した。表の差し替えは `clear(slot)` でその面の種類の時計だけ捨てる。バルーンの面の部品の欄の作り直しはまだシェルの面だけ（3.6 で外す）
+- 3.5: `pub type SerikoClock = Arc<dyn Fn() -> u64 + Send + Sync>`・`spawn_seriko_clocked(..., Option<SerikoClock>)`。時計は `LoopRuntime` が持ち（`with_clock`・`event_ms()`）、合図を処理するたびに読む。5.2 は同じ `Arc` を `Box::new(move || MonotonicMs(c()))` と包んで `LoopTickerConfig::clock` へ渡せば単位が揃う

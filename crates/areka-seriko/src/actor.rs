@@ -241,6 +241,35 @@ pub fn spawn_seriko<O>(
 where
     O: SurfaceOutput + Send + 'static,
 {
+    spawn_seriko_clocked(
+        resolver,
+        static_binds,
+        bind_resolver,
+        loop_config,
+        out,
+        None,
+    )
+}
+
+/// 刻みと同じ時計（単調・ミリ秒・spec: areka-P0-animated-image-playback 要件 1.6・2.9・3.1）。
+pub type SerikoClock = std::sync::Arc<dyn Fn() -> u64 + Send + Sync>;
+
+/// 時計つきの起動（[`spawn_seriko`] は `clock = None` でここへ委ねる）。
+///
+/// 台本の合図（`\s`・`\b`・着せ替え）を処理するときに `clock` を読み、その時刻で時計を始める。
+/// `clock` が無ければ直前の刻みの時刻を使う（design「時計の開始の時刻」）。経過は「今の時刻 −
+/// 開始の時刻」を 0 で止めて求める（別スレッドが読んだ刻みの時刻が開始より僅かに前でも負にならない）。
+pub fn spawn_seriko_clocked<O>(
+    resolver: SurfaceResolver,
+    static_binds: areka_emo_compose::BindSet,
+    bind_resolver: BindResolver,
+    loop_config: SerikoLoopConfig,
+    out: O,
+    clock: Option<SerikoClock>,
+) -> (SerikoSink, areka_actor::ActorHandle)
+where
+    O: SurfaceOutput + Send + 'static,
+{
     let (tx, actor) = areka_actor::spawn_actor::<SerikoMsg, _>("seriko", move |rx| {
         let mut states = ScopeStates::new(static_binds);
         let mut out = out;
@@ -249,7 +278,7 @@ where
         let mut bind_resolver = bind_resolver;
         // アクター本体が SERIKO ループ統括器を単独所有する（スレッド内・ロック不要・単一所有者）。
         // 表・乱数は `loop_config` から構築して以後この 1 スレッドで進める（発見 C の値渡し解消）。
-        let mut loop_runtime = LoopRuntime::new(loop_config);
+        let mut loop_runtime = LoopRuntime::new(loop_config).with_clock(clock);
         areka_actor::run_inbox::<SerikoMsg, std::convert::Infallible>(rx, move |msg| {
             // 差し替えの依頼は定義を所有するこの殻が先に捌く（handle_message の署名は不変）。
             if let SerikoMsg::Replace(replace) = msg {
@@ -524,8 +553,10 @@ fn handle_message<O: SurfaceOutput>(
                         BindApplyOutcome::Changed(command) => {
                             // 部品のコマを新しい着せ替えで載せ直した Show があればそれを、無ければ
                             // apply の指令を 1 件だけ出す（spec: areka-P0-surface-element-nesting 要件 5.12）。
+                            // 時計は合図を処理する今読む（spec: areka-P0-animated-image-playback 要件 3.1）。
+                            let at_ms = loop_runtime.event_ms();
                             let command = loop_runtime
-                                .refresh(&cue.actor, Slot::Shell, None, states)
+                                .refresh(&cue.actor, Slot::Shell, at_ms, states)
                                 .unwrap_or(command);
                             emit_display(out, command); // 単一発行点（R3.5）
                             // 実機サインオフの grep マーカー（R7.1・有界 auto-exit＋ログ grep 流儀）。
@@ -589,9 +620,10 @@ fn handle_message<O: SurfaceOutput>(
             // PatternState クリアは apply_balloon の責務、playback クリアはループ統括器の責務。
             loop_runtime.on_surface_changed(&cue.actor, Slot::Balloon);
             // 一番上の `always` を出来事の時刻で始めた絵が在ればそれを、無ければ apply の指令を 1 件だけ
-            // 出す（spec: areka-P0-animated-image-playback 要件 4.1・4.3）。
+            // 出す（spec: areka-P0-animated-image-playback 要件 4.1・4.3）。時計は合図を処理する今読む（要件 3.1）。
+            let at_ms = loop_runtime.event_ms();
             let command = loop_runtime
-                .refresh(&cue.actor, Slot::Balloon, None, states)
+                .refresh(&cue.actor, Slot::Balloon, at_ms, states)
                 .unwrap_or(command);
             emit_display(out, command); // 単一発行点共用（R4.1/4.2/4.3）
         }
@@ -638,9 +670,11 @@ fn handle_message<O: SurfaceOutput>(
         // PatternState クリアは apply の責務、playback クリアはループ統括器の責務。部品の時計は捨てない。
         loop_runtime.on_surface_changed(&cue.actor, Slot::Shell);
         // 部品のコマが在ればそれを載せた Show に差し替えて、切り替えの発行は 1 件だけ
-        // （spec: areka-P0-surface-element-nesting 要件 5.6・5.9）。
+        // （spec: areka-P0-surface-element-nesting 要件 5.6・5.9）。時計は合図を処理する今読む
+        // （spec: areka-P0-animated-image-playback 要件 3.1）。
+        let at_ms = loop_runtime.event_ms();
         let command = loop_runtime
-            .refresh(&cue.actor, Slot::Shell, None, states)
+            .refresh(&cue.actor, Slot::Shell, at_ms, states)
             .unwrap_or(command);
         emit_display(out, command);
     }
@@ -651,6 +685,9 @@ fn handle_message<O: SurfaceOutput>(
 #[cfg(test)]
 #[path = "actor_bind_loop_tests.rs"]
 mod bind_loop_tests;
+#[cfg(test)]
+#[path = "actor_clock_tests.rs"]
+mod clock_tests;
 #[cfg(test)]
 #[path = "actor_dispatch_tests.rs"]
 mod dispatch_tests;
