@@ -125,7 +125,7 @@
   - _Depends: 5.2_
 
 - [ ] 7. 検証
-- [ ] 7.1 全体の決定論のテストと行数の検査
+- [x] 7.1 全体の決定論のテストと行数の検査
   - ワークスペースの決定論のテスト（x64・偽の境界）を通す。触ったファイルがすべて 1,000 行未満で、運行表の本体の足し分が 60 行以内であることを測る。
   - 完了の状態: ワークスペースのテストが緑で、触ったファイルの行数の一覧がすべて 1,000 未満。
   - _Requirements: 8.1, 8.2_
@@ -151,3 +151,4 @@
 - 5.1: 相の檻は本物の `decide` と `notify_timeout` を相の順に呼ぶだけで、`run_balloon_visibility_phase` の中の呼び出しの 1 行は通らない（headless の表示層は可視にならず、時間切れまで届かない）。5.2 の通しの檻は、本物の相を可視のバルーンで回し、kanade の受け端に番号つきの知らせが 1 通届くことまで主張する（可視を作れる前例は実 GPU の `frame_visibility_integration_tests.rs` の `seat_ghost`）。
 - 4.4 の取りこぼし（6.1 で発見・直した）: コードの ukadoc の注記の URL は、網羅の台帳のカタログの形（`#_5c_21_5b…:1`）で書く。違う形だと `ukadoc-survey check` が `SourceUrlNotInCatalog` で赤になる。ukadoc の注記を足したら `cargo test -p ukadoc-survey` も回す。design.md・requirements.md・research.md にも同じカタログに無い形の URL が残っている（spec 文書は検査の外）。
 - 6.1（範囲外・完了の棚卸で扱う）: `.kiro/specs/areka-P0-balloon-canon-residue/brief.md` の項目 8 が、消えた `BalloonLifecycleNotice` を今もあるものとして書いている。
+- 7.1: `tools/test-all.ps1` は全段が緑（2026-10-06）。触った Rust のファイルは `emo2_boot/spine.rs` の 1,000 行（取り込みの時点から 1,000 行・本 spec は 1 行を書き替えただけで増やしていない＝設計と調停役の約束どおり）を除いて、すべて 1,000 行未満。運行表の本体 `schedule/mod.rs` の足し分は +23/-6（差し引き +17・上限 60 の内）。
