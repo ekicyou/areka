@@ -2216,11 +2216,14 @@ note = """
 探す。区切りを含まない名前だけで ghost/master に無ければ、名前のまま OS のパス探索に任せる。作業フォルダは
 開くファイルのあるフォルダ。開く処理は専用のスレッドで行い、台本の再生は待たない。
 壊れ方: 無い。ファイルが無いときや OS が断ったときは開かないが、記録は残る（OS の窓は出さない）。
+関連付けの無いファイル（拡張子の無いファイルや、`.cpl` のように動詞 open を持たない種類を含む）は OS を
+呼ばずに開かず、code=1155 の失敗として記録する。
 ログ: 出る（OS へ渡すたびに info 1 行〔event=open_external・取得したログでは status の種別〕、引数が無い・空で
 warn! 1 行〔open_external_rejected〕、ファイルが無い・OS が断ったときに error! 1 行〔open_external_failed の
 reason=not_found／os〕、ゴーストが居ないなどで送れないときに error! 1 行〔open_external_dropped〕）。
 根拠の場所: crates/areka/src/readme/destination.rs の classify（行き先の規則）と crates/areka/src/readme/opener.rs
-の execute（開く処理の 1 か所）。受け口は crates/areka/src/emo2_boot/readme_cue.rs で、正準台帳
+の execute（開く処理の 1 か所）、関連付けの確認は crates/areka/src/readme/os_port.rs。受け口は
+crates/areka/src/emo2_boot/readme_cue.rs で、正準台帳
 （consumer_ledger.rs）が ("open","file") の 1 組を CommandConsumer::ReadmeSink で登記する。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
