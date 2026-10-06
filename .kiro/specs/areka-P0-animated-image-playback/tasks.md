@@ -171,7 +171,7 @@
   - _Depends: 3.6, 4.3_
   - _Requirements: 2.3, 6.1, 6.3, 6.7_
 
-- [ ] 5.2 時計を 1 つ作って刻みと seriko へ渡す
+- [x] 5.2 時計を 1 つ作って刻みと seriko へ渡す
   - `mod.rs` で新しい時計 `seriko_clock` を 1 つ作り、刻みの起動（`LoopTickerConfig::clock`）と `spawn_seriko_clocked` の両方へ同じものを渡す。`let clock = TalkClock::new(clock_fn);` は名前・型・持ち主を変えない
   - 完了の姿: `areka` がビルドされ、`spine.rs` の差分が 0 で、起動の既存テストが緑。刻みと seriko が同じ時計の値を読むことを兄弟のテスト 1 本で確かめる
   - _Depends: 3.5_
