@@ -206,7 +206,7 @@ pub struct ShellTarget {
     nest_report: NestReport,
     /// 焼いた絵のうち同じ名前の `.pna` が添えてあったものの数（`BakeResult::ignored_pna` の写し・
     /// `.pna` は使っていない・記録を出すのは [`load_shell_target`]・要件 5.7）。
-    pub ignored_pna: usize,
+    pub(crate) ignored_pna: usize,
 }
 
 impl ShellTarget {

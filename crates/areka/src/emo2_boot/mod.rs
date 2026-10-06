@@ -197,7 +197,7 @@ pub enum BootWiringError {
 ///
 /// - [`ShellLoadError::List`]（シェルのフォルダの一覧が取れない）→ [`BootWiringError::ShellRead`]。
 ///   `path` はシェルのフォルダそのものになる（読めなかった対象がファイルではなくフォルダ）。
-/// - [`ShellLoadError::Read`]（`surfaces.txt` が読めない）→ [`BootWiringError::ShellRead`]。
+/// - [`ShellLoadError::Read`]（`surfaces.txt` が在るのに読めない）→ [`BootWiringError::ShellRead`]。
 /// - [`ShellLoadError::Empty`]（シェルに面が 1 つも無い）→ [`BootWiringError::ShellEmpty`]。
 ///   `path` はシェルのフォルダのまま運ぶ。
 impl From<ShellLoadError> for BootWiringError {

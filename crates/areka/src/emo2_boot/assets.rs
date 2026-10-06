@@ -250,7 +250,7 @@ pub struct BootAssets {
 /// # 失敗（log-first・panic しない・R7.3）
 /// - `resolve_with_shell` 失敗 → [`BootWiringError::Mount`]（`StartPointMissing` 系は呼び手が warn 分類）。
 /// - WIC デコーダ生成失敗 → [`BootWiringError::Decoder`]。
-/// - シェルのフォルダの一覧失敗／`surfaces.txt`・`descript.txt` 読取失敗
+/// - シェルのフォルダの一覧失敗／`surfaces.txt` が在るのに読めない／`descript.txt` 読取失敗
 ///   → [`BootWiringError::ShellRead`]（シェル側は `ShellLoadError` からの写し替え・枝の追加 0）。
 /// - シェルに面が 1 つも無い（`surfaces.txt` が無いか面を定義せず、面の画像も無い）
 ///   → [`BootWiringError::ShellEmpty`]。
