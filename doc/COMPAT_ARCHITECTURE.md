@@ -342,10 +342,11 @@ ukadoc が沈黙/曖昧な箇所を areka 裁量で決定した記録（§2 沈�
 | **当たり判定の外・シェルの絵の中の箱（シェルの中のバルーン）の上から始めたドラッグ**（正典は `OnMouseDragStart` を送る条件に沈黙） | **送る**。窓のドラッグが始まったかどうかだけで決め、当たり判定の有無で分けない。当たり判定が無ければ Reference4 は空。定義点＝`crates/areka/src/input_events/drag.rs` の `notify_drag`（箱の扱いは押下の受け手にあり、ドラッグの受け手を通らない） | **areka 裁量**。ゴーストが窓のドラッグを、押した場所に関わらず知れるようにする。判定は `crates/areka/src/input_events/drag_tests.rs` の `drag_start_then_end_each_arrive_once_in_order`（開始は当たり判定のある位置、終了は無い位置で送り、終了も知らせが 1 件届く。開始と終了は同じ `notify_drag` を通り、`notify_drag` は当たり判定の有無で分けない）、`crates/areka-kanade/src/schedule/events_tests.rs` の `on_mouse_drag_start_and_end_build_the_double_click_left_layout`（当たり判定なしは空）。当たり判定の外から始めたドラッグと、箱の上から始めたドラッグは実機で確かめる（設計の実機の手順 R3） | areka-P0-mouse-drag-events（要件 1.3・4.5・7.4） |
 | **ダブルクリックの 2 回目の押下のまま動かしたとき**（正典はダブルクリックとドラッグが重なるときに沈黙） | **`OnMouseDoubleClick` の後に `OnMouseDragStart` を送る**。2 回目の押下（`WM_LBUTTONDBLCLK`）からも、普通の押下と同じ決まり（ドラッグを許した窓で、左ボタン）でドラッグの準備を始め、閾値を越えて動かせば窓のドラッグとして始まる。押下とドラッグを突き合わせる仕組みは作らない（ダブルクリックは押下の受け手〔`crates/areka/src/input_events/mod.rs` の `on_char_pointer_pressed`〕、ドラッグは `crates/areka/src/input_events/drag.rs` の `on_char_drag_start` が、互いを見ずに送る）。どの押下も動かさずに離したダブルクリックでは、ドラッグの 2 つは送らない。定義点＝`crates/wintf/src/ecs/window_proc/mouse_dblclick_wheel.rs` の `handle_double_click_message`（左ボタンなら `find_ancestor_with_drag_config` でドラッグを許した窓を探し、`start_preparing` を呼ぶ） | **areka 裁量**（設計の決定 D7・2026-10-05）。2 回目の押下から閾値を越えて動かせば、それは窓のドラッグとして始まっている。判定は `crates/wintf/src/ecs/window_proc/mouse_dblclick_wheel_tests.rs` の `w1_left_dblclick_prepares_and_crossing_threshold_starts`（2 回目の押下で準備に入り、閾値を越えて動かすと開始が 1 件）・`w1_left_dblclick_released_without_move_dispatches_nothing`（閾値を越えずに離すと開始も終了も 0 件）・`w2_left_dblclick_on_window_without_drag_does_not_prepare`・`w2_right_dblclick_does_not_prepare`（ドラッグを許さない窓と右ボタンでは準備に入らない）、`crates/areka/src/input_events/drag_tests.rs` の `click_without_move_and_double_click_send_no_drag`（ダブルクリックの押下と開始の無い終了ではドラッグの知らせが 0 件・ダブルクリックは 1 件）。`OnMouseDoubleClick` → `OnMouseDragStart` → `OnMouseDragEnd` の順に届くことは実機で確かめる（設計の実機の手順 R4） | areka-P0-mouse-drag-events（要件 3.2・7.4） |
 | **element定義の描画メソッド `base` の X,Y**（`elementN,base,ファイル名,X,Y`。ukadoc の `base` の項は「この描画メソッドが指定されたpattern定義では、XY座標は無視される」と pattern定義に限って書き、element定義の X,Y には沈黙） | **`overlay` の element定義と同じに扱う（位置として使う）**。`base` の行は、どの element番号でも、`surface*`ブレスでも `surface.append*`ブレスでも、同じ行を `overlay` と書いたときと同じ絵・同じ位置・同じ大きさで描く。pattern定義の `base`（X,Y を無視する方）は今までどおり未対応のまま。定義点＝`crates/areka-parsers/src/shell/decode.rs` の `is_image_element_method`（画像の element定義として値にする語を `overlay` と `base` の 2 語にする）と、`crates/areka-emo-compose/src/fold.rs` の `normalize_element`（届いた行を描画メソッドに関係なく `Overlay` で置き、X,Y を位置にする） | 同じ `base` の項は、着せ替えと element では `base` は最初（element0）にしか使えず、それ以外は overlay に読み替えると書く。`element0` では置き換えられる側がまだ空なので `overlay` と同じ絵になり、`element1` 以降は正典が `overlay` に読み替えるので、どちらも `overlay` と同じ扱いになる（https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#base ）。判定は `crates/areka-parsers/src/shell/decode_tests_method_matrix_tests.rs` の `base_element_lines_decode_like_overlay_lines`（`element0`・`element1` 以降・`surface.append*`ブレスの `base` が `overlay` と書いた同じ行と同じ値）、`crates/areka-emo-present/src/shell_target_element_base_tests.rs` の `base_element_zero_underlays_the_overlay_part`（`base` の土台に `overlay` の部品を重ねた外形と画素）・`base_pointing_at_own_surface_image_looks_the_same_as_the_image_alone`（`element0,base,surfaceN.png` の面が、そのブレスを除いて `surfaceN.png` を土台に敷いた面と同じ絵） | areka-P0-element-base-method（要件 1.1・4.4） |
+| **【上書き】バルーンの面の動く絵を動かす**（正典の element定義の項の「SERIKO 定義を書かなくても自動的にアニメーションする」はシェルの `surface*.png` と element定義だけを名指しし、バルーンの絵には沈黙。完了 spec `areka-P0-animated-image-decode` の要件の範囲外の節〔バルーンの絵のコマを時間で切り替える仕組みは本 spec でも後続でも作らない〕を上書きする） | バルーンの面の絵が APNG・動く WebP なら、シェルの動く絵と同じ決まりで動かす（決まりは下の節「動く絵と `always` の再生」）。再生の仕組みはシェルと同じ 1 本で、バルーンだけのための再生の仕組みは 0 個。コマが進んでも、バルーンの大きさ・位置・文字の配置・選択肢の当たり判定と、見える・見えないの決まりは変えない。進み具合はスコープごとに持ち、同じスコープのシェルの動く絵とも混ぜない。静止画だけのバルーン（`emo2` のバルーンを含む）の見た目と合成し直す回数は変わらない | 開発者裁定 2026-10-05（要件討議の議題 1「シェルとバルーンに、設計上の違いはないはず。定義ファイルの入り口が違うだけ」）。完了した文書は書き換えず、上書きしたことをここに記す。判定は `crates/areka/src/emo2_boot/film_playback_e2e_tests.rs` の `balloon_films_play_from_the_real_reader_to_the_composer`（本物の読み手から合成まで・APNG と動く WebP）、`crates/areka-seriko/src/looper_balloon_tests.rs` の `shell_and_balloon_clocks_do_not_mix`、`crates/areka-emo-present/src/presenter_film_tests.rs` の `a_still_only_balloon_composes_once_as_before`・`frame_changes_keep_the_slot_and_size_and_follow_the_transparency` | areka-P0-animated-image-playback（要件 6.1〜6.7・10.2） |
 
 ### 動く絵（APNG・動く WebP）の読み込み（正典は読み方の細部に沈黙）
 
-ukadoc の element定義の項は、surface*.png や element定義に動く絵を指定すると SERIKO 定義なしで自動的にアニメーションする（SSP 2.7.38〜）と書くが、透過・待ち時間の端数・繰り返し回数・大きすぎる絵の扱いには触れない。areka は次を裁量で定めた。再生（自動アニメーション）はまだ無く、ここに書くのは読み込みとアトラスへの載せ方だけである（再生は `areka-P0-animated-image-playback` の担当）。
+ukadoc の element定義の項は、surface*.png や element定義に動く絵を指定すると SERIKO 定義なしで自動的にアニメーションする（SSP 2.7.38〜）と書くが、透過・待ち時間の端数・繰り返し回数・大きすぎる絵の扱いには触れない。areka は次を裁量で定めた。ここに書くのは読み込みとアトラスへの載せ方だけである。再生（自動アニメーション）は 2026-10-06 に `areka-P0-animated-image-playback` が入れた（決まりは下の節「動く絵と `always` の再生」）。
 
 - **動く GIF は動く絵として扱わない**（開発者裁定 2026-10-04・理由: 古い形式）。GIF は今までどおり 1 枚の絵として読む。網羅台帳の `element*` の項にも同じ注記がある。
 - **動く絵の見分け**: 拡張子ではなく中身で見る。APNG は `IDAT` より前の `acTL` が 2 枚以上を宣言するもの、WebP は `VP8X` の動きの旗が立ち `ANMF` が 2 個以上あるもの。それ以外（コマが 1 枚だけのものを含む）は今までどおり 1 枚の絵として読む。
@@ -366,6 +367,53 @@ ukadoc の element定義の項は、surface*.png や element定義に動く絵�
 - **残る場合**: 新しい読み手が 1 枚目も読めない絵（16 ビットの APNG・1 枚目から壊れている絵）だけは、今までの WIC の 1 枚読みへ落ちる。このときに限り、既定の絵を持つ APNG は既定の絵が出て、透明度の旗を持たない WebP は抜き色が効かず、WebP は Windows の拡張機能が無ければ今までどおり読めない絵（その絵だけ表に載らない）になる。`warn!` は 2 回出る。
 - リポジトリ内の検体（`vendors/sample_ghost/` の `.nar` の中身を含む）に動く絵は 0 枚なので、既存の検体で見た目が変わる絵は 0 枚である（`areka-P0-animated-image-decode` の `research.md` 4 節）。
 - 出典 spec: `areka-P0-animated-image-decode`（2026-10-04 裁定・要件 2.3・2.5・3.3・3.4・4.3・6.1・6.2・6.4・6.9・6.10・9.1）。
+
+### 動く絵と `always` の再生（正典は繰り返しと時刻の細部に沈黙）
+
+ukadoc は、element定義と `surface*.png` に動く絵を置くと SERIKO 定義なしで自動的にアニメーションする（element定義の項）、`always` は「そのサーフェスである間ループ再生」（`always` の項・https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#always ）とだけ書く。自動アニメーションでファイルの繰り返し回数を守るか、待ち時間 0 のコマ、サーフェスを切り替えたときに巻き戻すか、`always` の途中で絵を消すコマ、バルーンの絵には触れない。areka は次を定めた。どれも「時刻は正確に扱う（待ち時間を丸めない・更新が遅れたら過ぎた時間の分だけ進める）」という設計の大原則に沿う。
+
+**何が動くか**
+
+- 描画メソッド `overlay`・`base` の element定義が指す動く絵と、`element0` を持たないサーフェスの `surface<数字>.png` の動く絵が、SERIKO 定義なしで動く。`element0` を持つサーフェスの `surface<数字>.png` は今までどおり描かず、動かさない。対応するのは APNG と動く WebP の 2 形式で、動く GIF と、読み込みの側で 1 枚へ縮んだ絵は静止画のまま（上の節）。
+- 動く絵は、`always` を 1 本だけ持つ部品（子）へ分解して動かす（`crates/areka-emo-compose/src/film.rs` の `decompose`）。手書きの `always` と動く絵の子は、今のコマを同じ 1 つの関数（`crates/areka-seriko/src/timeline.rs` の `always_at`）で決め、違いは表が渡す値（1 周の長さと繰り返し回数）だけである。今のコマは開始の時刻からの経過だけで決まり、乱数を使わない。
+- 単独の `always`（小文字の完全一致・`crates/areka-emo-compose/src/nesting.rs` の `is_always_interval`）を駆動する。`bind+always` のような `always` を含む組み合わせは、今までどおり元の綴りを添えた `debug!` を残して駆動しない（後続 `areka-P0-seriko-trigger-intervals` が引き受ける）。
+- element定義のオプション（座標より後ろの欄）は読まないので、`--clipping` を付けた element定義の動く絵も動く絵として読み、動かす（正典は `--clipping` を使うとアニメーションの読み込みが無効になると書く）。このずれは `areka-P0-element-clipping-option` が着地するまで残る。
+- バルーンの面の動く絵も、シェルと同じこの決まりで動く（完了 `areka-P0-animated-image-decode` の「本 spec でも後続でも作らない」を上書きした。上の表の【上書き】の行）。
+
+**繰り返し回数と始め直し**
+
+- **ファイルの繰り返し回数を守る**（開発者裁定 2026-10-05）。「終わりなし」の絵は表示されている間ずっと繰り返す。「合計 N 回」の絵は N 回目の最後のコマを出したまま止まる。
+- **回数つきの絵は、どこにも表示されていなかった状態から表示されるたびに 1 枚目・1 回目から始め直す**（サーフェスの切り替えで現れる・隠れていたバルーンが出る を含む）。サーフェスの切り替えの前後で途切れずに表示され続けているなら始め直さず、続きから進む（止まっていれば止まったまま）。始め直すかどうかは繰り返し回数が「終わりなし」か「合計 N 回」かだけで決める。部品の時計（`crates/areka-seriko/src/parts.rs` の `PartClocks`）は、回数つきの時計を見えなくなった評価で捨て、次に見えた出来事の時刻で作り直す。1 回の刻みの間に離れて戻った場合も始め直す。
+- **終わりなしの絵は、サーフェスを切り替えても巻き戻さない**（開発者確定）。同じ絵を置いた別のサーフェスへ切り替えても、置いていないサーフェスを挟んで戻っても、見えなかった間も止まらずに進んでいたものとして続きから動く。**SSP と見え方が違いうる** areka の決まりである（正典は切り替えのときの振る舞いに触れず、SSP の振る舞いには合わせていない）。時計は（スコープ、シェルの面かバルーンの面か）ごとに、部品と animation の番号を鍵に持つ。同じ絵を表示中の絵の複数の位置に置けば同じコマで揃い、`\0` と `\1`、シェルとバルーンは互いに影響しない。シェルが切り替わるとき・ゴーストが降りるときに、そのスコープの時計を捨てる。
+
+**待ち時間**
+
+- **待ち時間は丸めない**。読み込みの側が渡したミリ秒（0 は 0 のまま）をそのまま使う。待ち時間 0 のコマや刻みより短いコマは、同じ刻みの中で通り過ぎたら出さずに飛ばす（待ち 0 のコマは次のコマと同じ時刻を共有し、後ろのコマが勝つ）。
+- **画面の更新が遅れたら、実際に過ぎた時間の分だけ進め、遅れを後へ持ち越さない**（1 秒に 1 回しか更新されなければ、1 回の更新で 1 秒ぶん進む）。今のコマを開始からの経過で求めるので、遅れは積み上がらない。
+- **待ち時間の合計が 0 の絵は動かさない**。動く絵は分解せずに 1 枚目のコマの静止画のまま出し、相対パスと理由を `warn!` で 1 回出す（コマの並びが崩れた絵も同じ）。手書きの `always` は駆動せずに 1 周だけ評価した絵（待ち 0 で並んだ最後の pattern）を出し、サーフェスの番号・animation の番号を添えた `warn!` を 1 回出す。どちらも記録は表を作るときだけで、刻みごとの記録は無い（`crates/areka-seriko/src/table.rs` の `AnimationTable::from_world`）。
+- **コマの切り替えは 16 ミリ秒の刻みで見つける**（刻みの周期は `areka-ghost` の `LoopTickerConfig` の既定のまま）。切り替えを見つけるのが多くて 16 ミリ秒遅れることはあるが、積み上がらない。刻みと seriko は同じ時計（OS 起動からの経過ミリ秒）を読む。まばたきなど今のアニメーションも同じ刻みで動いている。
+
+**`always`**
+
+- サーフェスが表示されると、抽選を待たずに最初のコマから始め、最後のコマの後は最初のコマへ戻って繰り返す。同じサーフェスの `random`・`bind+random`・`sometimes`・`rarely` の抽選と進み方は変えない（`always` は乱数を引かない）。
+- 一番上のサーフェス自身の `always` は、別のサーフェスへ切り替えると止まり、新しいサーフェス自身の `always` が最初から始まる（一番上のアニメーションの今の決まりと同じ）。子のサーフェス・pattern定義が指すサーフェスの `always` は部品の時計で回り、親の切り替えで巻き戻らない。
+- **途中の終わりのコマ**: `always` の途中にサーフェス番号 `-1`（負の番号）のコマが在れば、そのコマに居る間だけ絵を消し、次のコマから続ける。周の終わりまで進んだら最初のコマへ戻って繰り返す。最後のコマが `-1` なら、次の周の最初の待ちが終わるまで何も出ない。
+- **合計 0**: 上の「待ち時間」のとおり、繰り返さずに 1 周だけ評価した絵を出す。
+- **経過 0 の絵**: 表示を始めた瞬間の絵（待ち 0 で並んだ先頭の pattern のうち最後のもの）は、seriko からコマが届くのを待たずに合成が定義から描く（`crates/areka-emo-compose/src/plan_always.rs`）。seriko は経過 0 と同じコマを欄に載せない。pattern0 から待つ `always` は、1 周目の最初の待ちが終わるまで何も出さず、2 周目以降の最初の待ちの間は前の周の最後のコマを出す。
+- **外形**: `always` の animation は、全部の pattern の先（負の番号・animation の番号を指す語・`move` を除く）を外形（窓の大きさのもとになる範囲）に数える（`crates/areka-emo-compose/src/plan_extent.rs` の `flatten_extent`）。表示している間ずっと見える絵が外形で切れないためで、今 `always` を書いているシェルは、これまで動かなかった絵のぶん外形が広がりうる。動く絵の子は絵の原寸（静止画だったときと同じ値）で数える。外形・窓の位置・作者が定義した当たり判定はコマが進んでも変わらない。
+- **手書きの `always` で pattern0 の待ちが 0 のとき、最後のコマは 0 ミリ秒しか出ない**。pattern の待ちは「そのコマを出す前の待ち」なので、最後のコマに番が来た時刻はちょうど 1 周の終わりで、次の周の pattern0 が同じ時刻に勝つ。最後のコマを見せたいときは、pattern0 に待ちを置く。動く絵の子はコマ i の前の待ちをコマ i−1 の待ち時間にしてあるので、この形にならない。
+
+**隠れている間と、出したとき**
+
+- 隠れているバルーンへもコマの指令は流れ続けるが、表示層が最新のコマを預かり、合成・転送・描画は 0 回である（見えなかった間も進んでいたものとして、出た瞬間に正しいコマを見せるため）。預かるのは、見える・見えないを外から決められる対象（バルーン）が見えておらず、最後に出した絵が在り、面の番号と着せ替えがその絵と同じで、コマだけが違う指令に限る（`crates/areka-emo-present/src/presenter/hub.rs` の `show_or_hold`）。閉じているバルーンでは、seriko は `always` と部品の時計を新しく作らず、部品の抽選もしない。窓の知らせが一度も来ていないスコープは開いているとみなす。
+- **隠れていたバルーンを出すとき、回数つきの絵は必ず 1 枚目から**始まる。出すときに回数つきの子の欄を外して経過 0 へ戻し（`crates/areka-emo-present/src/presenter/visibility.rs` の `strip_finite_films`・見えていた対象への重ねがけでは外さない）、seriko は窓が開いた知らせの時刻で回数つきの時計を作り直す。出し直しの前に決まったコマの指令が後から届いても、出番の世代で見分けて回数つきの欄を外すので、古いコマは出ない。
+- **バルーンの動く絵の記録はスコープごとに 1 回出る**。バルーンの表はスコープごとに別の系列から作る（シェルの表は 1 つ）ので、同じ絵の `warn!` がスコープの数だけ出る。「読み込み 1 回につき原因 1 つあたり 1 回」（要件 8.4）は、スコープごとの読み込みを 1 回と数える。
+
+**残る遅れ**: seriko（別スレッド）が決めたコマを UI スレッドが当てるまで多くて UI の 1 フレーム、刻みで多くて 16 ミリ秒。どちらも全部の指令に同じだけ掛かり、積み上がらない。バルーンを出し直した直後は、seriko が始め直した後の最初のコマが着くまで、回数つきの絵は経過 0 の絵のままである。
+
+判定は `crates/areka-seriko/src/timeline_repeat_tests.rs`（`film_switches_exactly_at_frame_delays`・`one_ms_waits_are_not_rounded`・`finite_laps_stop_on_last_frame`・`zero_delay_frame_is_skipped_alpha_webp`・`film_jump_of_one_second_advances_one_second`・`negative_frame_hides_then_returns`・`written_zero_first_wait_last_frame_shows_zero_ms`・`elapsed_zero_matches_compose_rest_index`）、`crates/areka-seriko/src/table_always_tests.rs`（`exact_always_is_adopted_with_period_and_no_laps`・`combinations_and_other_words_keep_the_debug_arm`・`zero_total_always_is_not_adopted_and_warns_once`）、`crates/areka-seriko/src/parts_film_tests.rs`（`endless_film_continues_across_surfaces_and_while_hidden`・`finite_film_is_dropped_when_hidden_and_restarts_from_head`・`finite_film_continuously_visible_keeps_going_and_stays_stopped`・`clocks_are_separate_per_scope_and_face_kind`）、`crates/areka-seriko/src/looper_always_tests.rs`（`top_always_starts_without_lottery_and_restarts_from_head_on_switch`・`adding_always_keeps_random_fire_times`・`top_always_blanks_on_negative_frame_and_keeps_looping`）、`crates/areka-seriko/src/parts_always_tests.rs` の `always_in_child_does_not_rewind_when_parent_switches`、`crates/areka-emo-compose/src/plan_extent_film_tests.rs` の `hand_written_always_extent_is_union_of_all_patterns`・`cells_do_not_change_extent`、`crates/areka-emo-present/src/presenter_film_tests.rs` の `hidden_frame_changes_are_held_and_the_last_one_is_shown`・`a_stopped_finite_film_restarts_from_rest_when_shown_again`・`show_target_on_a_visible_target_keeps_the_finite_frame`、`crates/areka/src/emo2_boot/film_playback_e2e_tests.rs` の `shell_films_play_from_the_real_reader_to_the_composer`・`close_then_show_race_keeps_order_through_the_bridge`。
+
+- 出典 spec: `areka-P0-animated-image-playback`（開発者裁定 2026-10-05・要件 1・2・3・4・6・8.4・10.2・10.3）。
 
 ### areka 裁量の性能目標（正典は負荷に沈黙）
 

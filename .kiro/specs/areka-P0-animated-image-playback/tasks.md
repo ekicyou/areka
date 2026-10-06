@@ -215,7 +215,7 @@
   - _Requirements: 9.5, 10.6_
 
 - [ ] 7. 記録と申し送り
-- [ ] 7.1 (P) 網羅台帳と対応表を、着地した振る舞いに合わせる
+- [x] 7.1 (P) 網羅台帳と対応表を、着地した振る舞いに合わせる
   - `assets.toml` の `always` の項を「単独の `always` は駆動する。組み合わせは駆動しない」へ、`element*` の項に自動アニメーションが動くこと・動く GIF は非対応のまま・`--clipping` を付けても動く絵として読むこと（`areka-P0-element-clipping-option` が着地するまで）を書く。`import` の項は触らない
   - `doc/COMPAT_ARCHITECTURE.md` §8 に 1 節: design.md「文書の更新」に挙げた全項（繰り返し回数と始め直し・待ち時間・巻き戻さない・途中の終わりのコマと合計 0・経過 0 と外形・バルーンの面と完了 spec の上書き・16 ミリ秒の刻み・pattern0 の待ち 0・スコープごとの記録・出したときの 1 枚目）
   - 完了の姿: 台帳の検査（`ukadoc-survey` ほか）が緑で、§8 の節に design.md の全項が載っている
@@ -254,3 +254,4 @@
 - 5.3: 窓の知らせは `report_stages`（文字の層を借りる手前・昇順・組が違うときだけ送り、送った後に台帳へ書く）。隠れているときの面は今の番号→前に送った面→0（0 で代えると閉じている間の `ShowBalloon` が `last_show` とずれて 4.2 の預かりを外れる）。5.1 の申し送りは不要と確かめた: `send_stage` を呼ぶのは `status_report.rs` だけで、spine の檻は `emo2_frame_system` を回さない＝`project_display` に `StageAck` は届かない（`areka` の bin 全件 2681 緑）
 - 5.4: E2E は `crates/areka/src/emo2_boot/film_playback_e2e_tests.rs`（3 本・競り合いは GPU の世界が要る＝WARP で可）。`self-alpha-declaration` が入ったら `load_balloon()` の `build_balloon_target_from_faces` の呼び出しを合わせる
 - 6.2: 1.1 の「8 月より桁で遅い」は機械の負荷だった（A/B 交互で前 p50 0.9〜1.5 ms・後 1.5 ms 前後＝目に見えて落ちていない）。範囲外（完了時に起票）: 全体の約 1.2% の適用が 16 ms を超え（最大 315〜360 ms）、全部が `show.rs` の最後に記録した段（不命中は `MaskGen`・命中は `CacheLookup`）〜 `emit` の測っていない区間。本 spec の前の実行体にも同じ割合で出る。動く絵は適用を約 13 倍にするので本数も比例して増える。数字は research.md「後の数字」
+- 7.1: 台帳の `always` は「縮退」・担当 `areka-P0-seriko-trigger-intervals`（組み合わせが動かないのが縮退の理由。実装済みにするにはソースに正典 URL のコメントが要る）。§8 は新しい節「動く絵と `always` の再生」と【上書き】の行。briefing.md・roadmap-draft.md は検査が要求する数を合わせた。`briefing-assets.md` の写しは element-base-method の時点から古いまま（検査の外）

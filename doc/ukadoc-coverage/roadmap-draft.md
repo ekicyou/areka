@@ -288,6 +288,19 @@ spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 
 束を持つ行が **29 行**・`none = true` の行が **14 行**のまま変わらない（3 つとも数え直した値で、引き算では
 出していない）。`[briefs].count` は 43 のまま、`snapshot_on` は **2026-10-05** のままにした。
 
+**2026-10-06 の追加**: `areka-P0-seriko-trigger-intervals` の行を 1 行足した。`areka-P0-animated-image-playback` が
+単独の `always` を駆動するようにし、`bind+always` のような `always` を含む組み合わせだけを駆動しないまま残したので、
+台帳 `ledger/assets.toml` の `always` の項目（`ukadoc:descript_shell_surfaces:always:1`）を語彙のみから縮退へ移し、
+組み合わせを引き受けるこの spec を宛先として登記したからである（それまで宛先は空だった）。この項目は `linkage.md` の
+束「サーフェスアニメーション」に属するので、束の欄には「サーフェスアニメーション」を書き、段階 A の表と節の
+「サーフェスアニメーション」の行にこの spec を件数付きで足した。束の構成は **47 件**（`linkage.md` の `members` を
+数えた）で、この spec の 1 件は ⑴（全数）にも ⑵（過半）にも当たらないので、候補 spec 名の案の欄は変えていない。
+足した行の中身は `stage = "A"`・`bundle = "サーフェスアニメーション"`・`owner_count = 1`・`wave = "C5 の候補"` で、
+段階は「サーフェスアニメーション」が順位表で置かれている段階の写し、ウェーブは正本のロードマップの写しである。
+行数は **44 行**（`[[spec]]` の塊を数えた）で、うち束を持つ行が **30 行**・`none = true` の行が **14 行**である
+（3 つとも数え直した値で、引き算では出していない）。`[briefs].count` はこの 44 に合わせ、`snapshot_on` は
+行の集合に最後に手を入れた日として **2026-10-06** にした。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -321,8 +334,8 @@ spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 
 
 ```toml
 [briefs]
-count = 43
-snapshot_on = "2026-10-05"
+count = 44
+snapshot_on = "2026-10-06"
 ```
 
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
@@ -665,6 +678,13 @@ stage = "A"
 bundle = "絵の重ね方"
 owner_count = 2
 wave = "シェルの element の列（element-base-method の後）"
+
+[[spec]]
+name = "areka-P0-seriko-trigger-intervals"
+stage = "A"
+bundle = "サーフェスアニメーション"
+owner_count = 1
+wave = "C5 の候補"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -682,7 +702,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 3 | 名前の記憶 | `areka-P0-user-name-memory` | `areka-P0-currentghost-property-tree`（W15・1 件）／`areka-P0-package-mount`（完了・2 件）／`areka-P0-sylphya`（完了・2 件）／`areka-P0-sakura-dialogue-tags`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件） | 第 1 波（先頭ウェーブ） |
 | 4 | 起動と挨拶 | `areka-P0-boot-greeting-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-package-mount`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・3 件） | 第 1 波（先頭ウェーブ） |
 | 5 | バルーンの文字 | `areka-P0-balloon-font-canon`（残余） | `areka-P0-currentghost-property-tree`（W15・13 件）／`areka-P0-text-align-shadow-canon`（W15・9 件）／`areka-P0-text-decoration-canon`（完了・16 件）／`areka-P0-balloon-font-descript-keys`（完了・7 件）／`areka-P0-balloon-parse`（完了・5 件）／`areka-P0-balloon-vertical-canon`（完了・4 件）／`areka-P0-cursor-tag-canon`（完了・1 件） | 第 1 波（先頭ウェーブ） |
-| 6 | サーフェスアニメーション | `areka-P0-seriko-animation-canon` | `areka-P0-currentghost-property-tree`（W15・6 件）／`areka-P0-shell-parse`（完了・2 件） | 第 1 波（先頭ウェーブ） |
+| 6 | サーフェスアニメーション | `areka-P0-seriko-animation-canon` | `areka-P0-currentghost-property-tree`（W15・6 件）／`areka-P0-shell-parse`（完了・2 件）／`areka-P0-seriko-trigger-intervals`（C5 の候補・1 件） | 第 1 波（先頭ウェーブ） |
 | 7 | 入力窓とダイアログ | `areka-P0-inputbox-dialog` | **0 本** | 第 2 波 |
 | 7 | 自発発話 | `areka-P0-idle-talk-canon` | **0 本** | 第 2 波 |
 | 8 | 終了 | `areka-P0-shutdown-canon` | **0 本** | 第 2 波 |
@@ -1157,10 +1177,10 @@ spec 台帳で、この表はそれを写した写真である。
 **3 行の要約**
 
 - 問題: 目も口も動かない止め絵のまま立ち、まばたきも面の切り替えも作者の定義どおりには動かない。
-- 現状: 構成 47 件の状態は実装済み 2・未対応 27・語彙のみ 16・縮退 2 で、壊れる 75 件のうち 4 件がここにある。M1 の実機一周はこの束を 3 項目（項目 3・4・10）で見て合格しているが、それは emo2 が使う範囲の再生である。
+- 現状（棚卸の時点の数。2026-10-06 の `animated-image-playback` の後の台帳では実装済み 4・語彙のみ 13・縮退 3）: 構成 47 件の状態は実装済み 2・未対応 27・語彙のみ 16・縮退 2 で、壊れる 75 件のうち 4 件がここにある。M1 の実機一周はこの束を 3 項目（項目 3・4・10）で見て合格しているが、それは emo2 が使う範囲の再生である。
 - 何が変わるか: シェルの定義に書かれた再生の指定が一通り効き、面の切り替えと重ね絵が作者の意図どおりに動く。
 
-**依存する既存 spec**: `areka-P0-currentghost-property-tree`（W15・6 件）／`areka-P0-shell-parse`（完了・2 件）
+**依存する既存 spec**: `areka-P0-currentghost-property-tree`（W15・6 件）／`areka-P0-shell-parse`（完了・2 件）／`areka-P0-seriko-trigger-intervals`（C5 の候補・1 件）
 
 **構成 id（全 47 件）**
 
