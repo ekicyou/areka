@@ -17,7 +17,7 @@ use crate::talk::{TalkDone, TalkEndReason, TalkId};
 use tracing::Level;
 
 /// 完了の知らせを組む。
-fn done(talk_id: TalkId, reason: TalkEndReason, quit_reserved: bool) -> Input {
+pub(super) fn done(talk_id: TalkId, reason: TalkEndReason, quit_reserved: bool) -> Input {
     Input::TalkDone(TalkDone {
         talk_id,
         reason,
@@ -26,14 +26,14 @@ fn done(talk_id: TalkId, reason: TalkEndReason, quit_reserved: bool) -> Input {
 }
 
 /// 入力を捕捉つきで入れる。
-fn feed_capturing(s: &mut State, input: Input) -> (Vec<Action>, Vec<CapturedEvent>) {
+pub(super) fn feed_capturing(s: &mut State, input: Input) -> (Vec<Action>, Vec<CapturedEvent>) {
     let mut out = Vec::new();
     let ev = capture(|| out = feed(s, input));
     (out, ev)
 }
 
 /// 指示の列の中の GET（ID と Reference）。
-fn gets(actions: &[Action]) -> Vec<(&str, &[String])> {
+pub(super) fn gets(actions: &[Action]) -> Vec<(&str, &[String])> {
     actions
         .iter()
         .filter_map(|a| match a {
@@ -46,7 +46,7 @@ fn gets(actions: &[Action]) -> Vec<(&str, &[String])> {
 }
 
 /// 3 つのイベントの GET が 1 本も無い。
-fn assert_no_balloon_event(actions: &[Action], at: &str) {
+pub(super) fn assert_no_balloon_event(actions: &[Action], at: &str) {
     assert!(
         gets(actions)
             .iter()
@@ -56,12 +56,12 @@ fn assert_no_balloon_event(actions: &[Action], at: &str) {
 }
 
 /// 記録のフィールドの値。
-fn field<'a>(line: &'a CapturedEvent, name: &str) -> Option<&'a str> {
+pub(super) fn field<'a>(line: &'a CapturedEvent, name: &str) -> Option<&'a str> {
     line.fields.get(name).map(String::as_str)
 }
 
 /// 送らなかった記録がちょうど 1 行あり、イベント名と理由と相が期待どおり。
-fn assert_not_sent(ev: &[CapturedEvent], id: &str, reason: &str, phase: &str) {
+pub(super) fn assert_not_sent(ev: &[CapturedEvent], id: &str, reason: &str, phase: &str) {
     let line = logged_once(ev, Level::INFO, "balloon_event_not_sent");
     assert_eq!(
         (

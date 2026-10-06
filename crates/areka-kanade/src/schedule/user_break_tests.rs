@@ -117,10 +117,12 @@ fn assert_no_shiori_request(actions: &[Action], at: &str) {
 
 // --- 判断分岐 ⑵: 止める再生が無い（要件 2.2・6.2） ---
 
-/// 再生中のトークが無ければ、中断の要求は何も止めず、状態も指示も変えない（要件 2.2）。
-/// 場面で振り分けない（要件 2.5）ので、定常でない場面でも同じ結果になる。
+/// 再生中のトークが無ければ、中断の要求は何も止めず、状態を変えない（要件 2.2）。場面で
+/// 振り分けない（要件 2.5）ので、定常でない場面でも止めない。読み終えたバルーンを閉じた知らせ
+/// `OnBalloonClose` だけは定常で 1 本出る（表 C・areka-P0-balloon-lifecycle-events。行ごとの檻は
+/// `balloon_events_idle_tests.rs`）。
 #[test]
-fn user_break_without_playing_talk_changes_nothing() {
+fn user_break_without_playing_talk_stops_nothing() {
     let phases: [(&str, fn() -> Phase); 4] = [
         ("Steady{None}", || Phase::Steady { talk: None }),
         ("Idle", || Phase::Idle),
@@ -136,7 +138,22 @@ fn user_break_without_playing_talk_changes_nothing() {
             Input::UserBreak { scope: 1 },
             &config(),
         );
-        assert!(actions.is_empty(), "{label}: 指示を 1 つも出さない");
+        let expected: &[&str] = if label == "Steady{None}" {
+            &["OnBalloonClose"]
+        } else {
+            &[]
+        };
+        assert_eq!(
+            actions
+                .iter()
+                .map(|a| match a {
+                    Action::ShioriRequest(ShioriCall::Get { id, .. }) => id.as_str(),
+                    _ => "止める指示など",
+                })
+                .collect::<Vec<_>>(),
+            expected,
+            "{label}: 止めない。定常でだけ OnBalloonClose を 1 本送る（表 C）"
+        );
         assert_eq!(
             std::mem::discriminant(&next.phase),
             std::mem::discriminant(&phase()),
@@ -286,7 +303,9 @@ fn scope_number_does_not_change_the_verdict() {
             &cfg,
         );
         assert!(
-            actions.is_empty(),
+            !actions
+                .iter()
+                .any(|a| matches!(a, Action::CancelChoice { .. })),
             "scope={scope}: 再生中でなければどのスコープでも止めない（要件 2.5）"
         );
         assert!(next.user_break_talk.is_none());

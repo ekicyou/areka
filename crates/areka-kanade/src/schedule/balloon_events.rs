@@ -2,7 +2,8 @@
 //! を送るかどうかの判断を 1 か所に集める（areka-P0-balloon-lifecycle-events）。
 //!
 //! ここが持つのは 2 つの控えと、[`super::step`] の出口の処理 [`settle`]、トークの完了の後の判断
-//! [`after_talk_done`]（設計の表 B）である。
+//! [`after_talk_done`]（設計の表 B）、再生中のトークが無いときのダブルクリックの判断
+//! [`on_idle_double_click`]（表 C）である。
 //! - [`ShownTalk`]（`State.shown`）——最後に再生を始めたトークの番号と最終の台本。3 つのイベントの
 //!   Reference0 の源で、古い時間切れの知らせを退ける照合の相手。
 //! - [`BreakNote`]（`State.user_break_talk`）——利用者の中断を出した相手のトークと、ダブルクリック
@@ -53,7 +54,7 @@ pub(super) fn settle(state: &mut State, actions: &[Action]) {
         && Some(note.talk_id) != current
     {
         state.user_break_talk = None;
-        log_not_sent(state, "OnBalloonBreak", "talk_gone", note.talk_id);
+        log_not_sent(state, "OnBalloonBreak", "talk_gone", Some(note.talk_id));
     }
     if let Some(shown) = state.shown.as_mut()
         && shown.timeout_pending
@@ -61,7 +62,7 @@ pub(super) fn settle(state: &mut State, actions: &[Action]) {
     {
         shown.timeout_pending = false;
         let talk_id = shown.talk_id;
-        log_not_sent(state, "OnBalloonTimeout", "talk_gone", talk_id);
+        log_not_sent(state, "OnBalloonTimeout", "talk_gone", Some(talk_id));
     }
     if let Some(start) = actions.iter().rev().find_map(|action| match action {
         Action::StartTalk(start) => Some(start),
@@ -77,14 +78,14 @@ pub(super) fn settle(state: &mut State, actions: &[Action]) {
     }
 }
 
-/// 送る場面に当たったが送らなかった、の 1 行（要件 7.2）。
-fn log_not_sent(state: &State, id: &'static str, reason: &'static str, talk_id: TalkId) {
+/// 送る場面に当たったが送らなかった、の 1 行（要件 7.2）。`talk_id` は控えが無いとき載せない。
+fn log_not_sent(state: &State, id: &'static str, reason: &'static str, talk_id: Option<TalkId>) {
     tracing::info!(
         target: "kanade",
         event = "balloon_event_not_sent",
         id,
         reason,
-        talk_id = talk_id.0,
+        talk_id = talk_id.map(|t| t.0),
         phase = phase_label(&state.phase),
         "バルーンのイベントを送らなかった（要件 7.2）"
     );
@@ -155,14 +156,41 @@ pub(super) fn after_talk_done(
     };
     if let Err(reason) = steady_idle(&state) {
         for cause in &causes {
-            log_not_sent(&state, cause.id(), reason, done.talk_id);
+            log_not_sent(&state, cause.id(), reason, Some(done.talk_id));
         }
         return (state, actions);
     }
     for cause in rest {
-        log_not_sent(&state, cause.id(), "superseded_by_break", done.talk_id);
+        log_not_sent(
+            &state,
+            cause.id(),
+            "superseded_by_break",
+            Some(done.talk_id),
+        );
     }
-    actions.extend(send(&mut state, first, done.talk_id));
+    actions.extend(send(&mut state, first, Some(done.talk_id)));
+    (state, actions)
+}
+
+/// 再生中のトークが無いときに届いた中断の合図（設計の表 C。上から最初に当たった行だけを採る）。
+/// 読み終えたバルーンをダブルクリックで閉じた、の知らせで、相手は控えのトーク（直前に終えたトーク）。
+///
+/// - C1・C2: 再生中のトークの無い定常でない・終了の要求を保留している → 送らず理由を記録する
+///   （要件 3.4・4.4）。
+/// - C3: 控えのトークで `OnBalloonClose` を送り済み → 送らず理由を記録する（要件 4.5）。
+/// - C4: それ以外 → `OnBalloonClose`（Reference0＝控えの台本。控えが無ければ空で送って警告）。
+///
+/// 中断の受理の規則（止める・二重に止めない）には触れない。scope は呼び手
+/// [`super::user_break::on_user_break`] の記録に載っているので、ここでは受け取らない。
+pub(super) fn on_idle_double_click(mut state: State) -> (State, Vec<Action>) {
+    let talk_id = state.shown.as_ref().map(|shown| shown.talk_id);
+    if let Err(reason) = steady_idle(&state) {
+        log_not_sent(&state, Cause::Close.id(), reason, talk_id);
+        return (state, Vec::new());
+    }
+    let actions = send(&mut state, Cause::Close, talk_id)
+        .into_iter()
+        .collect();
     (state, actions)
 }
 
@@ -180,12 +208,12 @@ fn steady_idle(state: &State) -> Result<(), &'static str> {
 
 /// `talk_id` のトークについて `cause` のイベントを組み立てて返す。`OnBalloonClose`・
 /// `OnBalloonTimeout` はそのトークで送り済みなら送らず理由を記録し、送るなら印を立てる（設計 D10）。
-fn send(state: &mut State, cause: Cause, talk_id: TalkId) -> Option<Action> {
+fn send(state: &mut State, cause: Cause, talk_id: Option<TalkId>) -> Option<Action> {
     let already = match (cause, state.shown.as_mut()) {
-        (Cause::Close, Some(shown)) if shown.talk_id == talk_id => {
+        (Cause::Close, Some(shown)) if Some(shown.talk_id) == talk_id => {
             std::mem::replace(&mut shown.close_sent, true)
         }
-        (Cause::Timeout, Some(shown)) if shown.talk_id == talk_id => {
+        (Cause::Timeout, Some(shown)) if Some(shown.talk_id) == talk_id => {
             std::mem::replace(&mut shown.timeout_sent, true)
         }
         _ => false,
@@ -210,7 +238,7 @@ fn send(state: &mut State, cause: Cause, talk_id: TalkId) -> Option<Action> {
         id = cause.id(),
         cause = cause.label(),
         scope,
-        talk_id = talk_id.0,
+        talk_id = talk_id.map(|t| t.0),
         "バルーンのイベントを送る（要件 7.1）"
     );
     Some(Action::ShioriRequest(call))
@@ -218,15 +246,16 @@ fn send(state: &mut State, cause: Cause, talk_id: TalkId) -> Option<Action> {
 
 /// `talk_id` のトークの台本（Reference0 の源）。控えが無い・番号が食い違う（構造上は起きない）
 /// ときは空を返して記録する（出来事そのものは起きているので送る・設計 D9）。
-fn shown_script(state: &State, id: &'static str, talk_id: TalkId) -> String {
+fn shown_script(state: &State, id: &'static str, talk_id: Option<TalkId>) -> String {
+    let talk_id = talk_id.map(|t| t.0);
     match &state.shown {
-        Some(shown) if shown.talk_id == talk_id => shown.script.clone(),
+        Some(shown) if Some(shown.talk_id.0) == talk_id => shown.script.clone(),
         Some(shown) => {
-            tracing::error!(target: "kanade", event = "balloon_event_script_missing", id, talk_id = talk_id.0, shown_talk_id = shown.talk_id.0, "トークの控えの番号が食い違う——Reference0 を空で送る（設計 D9）");
+            tracing::error!(target: "kanade", event = "balloon_event_script_missing", id, talk_id, shown_talk_id = shown.talk_id.0, "トークの控えの番号が食い違う——Reference0 を空で送る（設計 D9）");
             String::new()
         }
         None => {
-            tracing::warn!(target: "kanade", event = "balloon_event_script_missing", id, talk_id = talk_id.0, "トークの控えが無い——Reference0 を空で送る（設計 D9）");
+            tracing::warn!(target: "kanade", event = "balloon_event_script_missing", id, talk_id, "トークの控えが無い——Reference0 を空で送る（設計 D9）");
             String::new()
         }
     }
@@ -240,3 +269,8 @@ mod tests;
 #[cfg(test)]
 #[path = "balloon_events_done_tests.rs"]
 mod done_tests;
+
+/// 再生中のトークが無いときのダブルクリック（表 C）の檻。
+#[cfg(test)]
+#[path = "balloon_events_idle_tests.rs"]
+mod idle_tests;

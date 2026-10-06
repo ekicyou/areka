@@ -1,7 +1,9 @@
 //! user_break — 利用者の中断（バルーンの左ダブルクリック）の受理規則。
 //!
 //! [`super::step`] の横断の腕 `Input::UserBreak` から、場面を問わず呼ばれる。規則は 1 つ
-//! ——「再生中なら止める／同じ相手へ二重に止めない／再生中でなければ何もしない」である。
+//! ——「再生中なら止める／同じ相手へ二重に止めない／再生中でなければ何も止めない」である。
+//! 再生中でないときの合図は、読み終えたバルーンを閉じた知らせとして
+//! [`super::balloon_events::on_idle_double_click`]（表 C）へ渡す。
 //! 場面（起動の挨拶・定常のトーク・別れの台詞）でもスコープ番号でも結論を変えない（要件 2.5）。
 //!
 //! 止めるのは既存の単一の閉じ口（[`Action::CancelChoice`]）であり、第 2 の停止経路は作らない
@@ -9,7 +11,7 @@
 //! 完了の後に `OnBalloonBreak`（行き違いでは `OnBalloonClose`）を送るかは
 //! [`super::balloon_events::after_talk_done`] が決める（areka-P0-balloon-lifecycle-events が約束を改めた）。
 
-use super::balloon_events::BreakNote;
+use super::balloon_events::{self, BreakNote};
 use super::{Action, State, clear_choice_ledger, current_talk_id, phase_label};
 use crate::talk::{TalkDone, TalkEndReason};
 
@@ -29,7 +31,7 @@ pub(super) fn on_user_break(mut state: State, scope: u32) -> (State, Vec<Action>
             phase = phase_label(&state.phase),
             "中断の要求を受けたが再生中のトークが無い——何も止めない（要件 2.2）"
         );
-        return (state, Vec::new());
+        return balloon_events::on_idle_double_click(state);
     };
 
     if state

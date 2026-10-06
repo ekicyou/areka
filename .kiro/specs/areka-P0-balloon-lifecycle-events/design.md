@@ -448,7 +448,7 @@ pub(super) fn after_talk_done(
 ) -> (State, Vec<Action>);
 
 /// 再生中のトークが無いときに届いた中断の合図（表 C）。
-pub(super) fn on_idle_double_click(state: State, scope: u32) -> (State, Vec<Action>);
+pub(super) fn on_idle_double_click(state: State) -> (State, Vec<Action>);
 
 /// 時間切れの知らせ（表 D）。
 pub(super) fn on_timeout_notice(state: State, talk_id: TalkId) -> (State, Vec<Action>);
