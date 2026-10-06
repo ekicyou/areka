@@ -67,14 +67,17 @@ fn user_break_in_either_farewell_cancels_back_to_steady_even_with_quit_reserved(
                     .all(|e| e.event.as_deref() != Some("talk_done_break_quit")),
                 "{label}: 切替の相では `\\-` の予約を終了へ結ばない"
             );
+            // 中止の通知が先、その後に定常へ戻った中断の `OnBalloonBreak` の GET が 1 本
+            // （降ろす要求は出ない・areka-P0-balloon-lifecycle-events 要件 1.1・設計 E）。
             assert!(
                 matches!(
-                    actions.as_slice(),
-                    [Action::Notice(KanadeNotice::ChangeCancelled {
+                    actions.first(),
+                    Some(Action::Notice(KanadeNotice::ChangeCancelled {
                         reason: CancelReason::UserBreak
-                    })]
-                ),
-                "{label}/{quit_reserved}: 中止の通知 1 件だけ（降ろす要求は出ない）"
+                    }))
+                ) && sent_events(&actions[1..]) == ["OnBalloonBreak"]
+                    && actions.len() == 2,
+                "{label}/{quit_reserved}: 中止の通知の後に OnBalloonBreak の GET 1 本だけ"
             );
             assert!(
                 matches!(s.phase, Phase::Steady { talk: None }),

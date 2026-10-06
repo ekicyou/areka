@@ -99,7 +99,11 @@ fn assert_no_choice_timeout(actions: &[Action], at: &str) {
     );
 }
 
-/// 指示の列に SHIORI への要求が 1 件も無いことを表明する（要件 3.9・9.1）。
+/// 受理の指示の列に SHIORI への要求が 1 件も無いことを表明する（要件 3.9・9.1）。
+///
+/// 受理そのものは何も送らない。中断を理由に送る `OnBalloonBreak` は、止めたトークの完了の後に
+/// 定常へ戻ったときだけ出る（areka-P0-balloon-lifecycle-events が約束を改めた。場面ごとの期待は
+/// 完了の檻と `balloon_events_done_tests.rs`）。
 fn assert_no_shiori_request(actions: &[Action], at: &str) {
     assert_eq!(
         actions
@@ -107,7 +111,7 @@ fn assert_no_shiori_request(actions: &[Action], at: &str) {
             .filter(|a| matches!(a, Action::ShioriRequest(_)))
             .count(),
         0,
-        "{at}: 中断を理由とするイベントを SHIORI へ 1 件も送らない（要件 3.9）"
+        "{at}: 受理では SHIORI へ 1 件も送らない（要件 3.9）"
     );
 }
 
@@ -403,7 +407,8 @@ fn user_break_with_reserved_quit_ends_the_ghost() {
     );
 }
 
-/// 予約が無ければ、中断は従来どおり定常へ戻るだけで終了しない（要件 3.4）。
+/// 予約が無ければ、中断は従来どおり定常へ戻るだけで終了しない（要件 3.4）。定常へ戻ったので
+/// `OnBalloonBreak` の GET が 1 本だけ出る（areka-P0-balloon-lifecycle-events 要件 1.1）。
 #[test]
 fn user_break_without_reserved_quit_returns_to_steady() {
     let cfg = config();
@@ -412,7 +417,13 @@ fn user_break_without_reserved_quit_returns_to_steady() {
         matches!(next.phase, Phase::Steady { talk: None }),
         "予約なしの中断は定常へ戻る（要件 3.4）"
     );
-    assert!(actions.is_empty(), "終了の要求は出さない");
+    assert!(
+        matches!(
+            actions.as_slice(),
+            [Action::ShioriRequest(ShioriCall::Get { id, .. })] if id.as_str() == "OnBalloonBreak"
+        ),
+        "終了の要求は出さず、OnBalloonBreak の GET 1 本だけ"
+    );
     assert!(next.user_break_talk.is_none(), "中断の帳簿は空になる");
 }
 

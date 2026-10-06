@@ -28,7 +28,7 @@
   - _Requirements: 1.2, 1.3, 1.8, 1.9, 2.2, 3.2, 7.2_
   - _Boundary: ShownTalk, BreakNote_
 
-- [ ] 2.3 トークの完了の後の判断（表 B）
+- [x] 2.3 トークの完了の後の判断（表 B）
   - 2.2 で作った判断のファイルに、完了の振り分けが返った直後に呼ぶ入口を置き、運行表の本体の完了の受け口の末尾から呼ぶ（振り分けの腕そのものは変えない）。
   - 表 B の 5 行を上から順に裁く: 控えも預かりも無ければ何もしない／完了の後が「再生中のトークの無い定常」でない・終了の要求を保留しているなら送らず理由を記録／控えがあり中断で終わったら `OnBalloonBreak`／控えがあり自分で終わっていたら `OnBalloonClose`（送り済みでなければ）／預かりがあれば `OnBalloonTimeout`（送り済みでなければ）。B3 と B5 が同時なら B3 を採り、預かりを捨てた記録を残す。
   - GET は渡された指示の列の末尾に高々 1 本足し、送ったら控えに印を立て、送った記録を 1 行出す。控えが無い・番号が食い違うときは Reference0 を空で送り警告を出す。
@@ -140,3 +140,4 @@
 
 - 1.1: 新しいワークツリーでは `crates/areka/tests/smoke_boot_loop_exit.rs`・`mcp_get_log_real_run.rs` が「i686 の helper が見つかりません」で赤になる。先に `cargo build -p shiori-host32-helper -p shiori-host32-testdll -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` を回す（`tools/test-all.ps1` の 1 段目と同じ）。
 - 2.2: `take_user_break_quit` は `take_break`（帳簿を必ず空にし、相手がこのトークのときだけ控えを返す）と `is_break_quit`（今と同じ終了の判定）に分けた。`translate_path_tests.rs` の `step_untranslated` は `step` の写しなので、`step` の出口を変えたら写しにも同じ変更を入れる（今回は `settle` を足した）。
+- 2.3: 表 B の檻は `balloon_events_done_tests.rs` に置いた（`balloon_events_tests.rs` の補助は `pub(super)` で共有）。表 C・D の檻も 1,000 行を見て兄弟のファイルへ分ける。3 つの入口に共通する門 `steady_idle` と記録の `log_not_sent` は `balloon_events.rs` にある。番号の食い違いは設計の Invariants どおり error、控えが無いのは warn。

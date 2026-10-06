@@ -4,7 +4,7 @@
 //! ここではトークの控え（`State.shown`）と中断の控え（`State.user_break_talk`）の出入りを固定する
 //! ——翻訳の後の最終の台本が控えに入ること、切替の `OnClose` の別れの台詞も控えに入ること、
 //! 別の応答による置き換えで中断の控えが捨てられ理由の記録が 1 行出ること（要件 1.2・1.3・1.8・
-//! 2.2・3.2・7.2）。以降の表 B〜D の檻もこのファイルへ足す。
+//! 2.2・3.2・7.2）。表 B の檻は `balloon_events_done_tests.rs` に置き、ここの補助を使う。
 
 use super::super::log_capture::{capture, logged_once};
 use super::super::steady::test_support::base_state;
@@ -19,16 +19,16 @@ use crate::talk::TalkId;
 use tracing::Level;
 
 /// SHIORI が返す元の台本。
-const ORIGINAL: &str = "\\0元の台本\\e";
+pub(super) const ORIGINAL: &str = "\\0元の台本\\e";
 /// 翻訳の結果（最終の台本）。
-const FINAL: &str = "\\0最終の台本\\e";
+pub(super) const FINAL: &str = "\\0最終の台本\\e";
 
-fn cfg() -> KanadeConfig {
+pub(super) fn cfg() -> KanadeConfig {
     KanadeConfig::new("master", "1.0.0")
 }
 
 /// `Steady{talk: None}`（終了の保留なし・控えなし・次の番号 5）。
-fn steady_none() -> State {
+pub(super) fn steady_none() -> State {
     State {
         phase: Phase::Steady { talk: None },
         last_now: Some(MonotonicMs(1_000)),
@@ -38,7 +38,7 @@ fn steady_none() -> State {
 }
 
 /// 入力を最上位の [`step`] に入れ、状態を進めて指示の列を返す。
-fn feed(s: &mut State, input: Input) -> Vec<Action> {
+pub(super) fn feed(s: &mut State, input: Input) -> Vec<Action> {
     let state = std::mem::replace(s, State::initial());
     let (state, actions) = step(state, input, &cfg());
     *s = state;
@@ -46,7 +46,7 @@ fn feed(s: &mut State, input: Input) -> Vec<Action> {
 }
 
 /// 台本の応答を入れる（出所は応答を待っている GET の ID）。
-fn reply_value(s: &mut State, script: &str, origin: &'static str) -> Vec<Action> {
+pub(super) fn reply_value(s: &mut State, script: &str, origin: &'static str) -> Vec<Action> {
     feed(
         s,
         Input::ShioriReply {
@@ -56,7 +56,7 @@ fn reply_value(s: &mut State, script: &str, origin: &'static str) -> Vec<Action>
     )
 }
 
-fn started(actions: &[Action]) -> (TalkId, &str) {
+pub(super) fn started(actions: &[Action]) -> (TalkId, &str) {
     actions
         .iter()
         .find_map(|a| match a {
@@ -67,7 +67,7 @@ fn started(actions: &[Action]) -> (TalkId, &str) {
 }
 
 /// 毎秒のポンプの応答で `ORIGINAL` を返し、翻訳の結果 `final_script` で再生を始める。
-fn start_translated(s: &mut State, now: u64, final_script: &str) -> TalkId {
+pub(super) fn start_translated(s: &mut State, now: u64, final_script: &str) -> TalkId {
     feed(
         s,
         Input::Tick {

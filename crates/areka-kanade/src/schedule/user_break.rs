@@ -5,7 +5,9 @@
 //! 場面（起動の挨拶・定常のトーク・別れの台詞）でもスコープ番号でも結論を変えない（要件 2.5）。
 //!
 //! 止めるのは既存の単一の閉じ口（[`Action::CancelChoice`]）であり、第 2 の停止経路は作らない
-//! （要件 3.2）。中断を理由とする SHIORI への要求は 1 件も積まない（要件 3.9・裁定 1）。
+//! （要件 3.2）。受理そのものは SHIORI への要求を 1 件も積まない（要件 3.9・裁定 1）。止めたトークの
+//! 完了の後に `OnBalloonBreak`（行き違いでは `OnBalloonClose`）を送るかは
+//! [`super::balloon_events::after_talk_done`] が決める（areka-P0-balloon-lifecycle-events が約束を改めた）。
 
 use super::balloon_events::BreakNote;
 use super::{Action, State, clear_choice_ledger, current_talk_id, phase_label};
@@ -15,8 +17,8 @@ use crate::talk::{TalkDone, TalkEndReason};
 ///
 /// `scope`（どのバルーンで起きたか）は記録と控え（`OnBalloonBreak` の Reference1 の源）へ載せる
 /// だけで、受理の判断には使わない（要件 2.5）。
-/// `pending_close` の有無でも断らない——中断は SHIORI へ何も出さないため、マウス入力の
-/// 「close 保留中は GET を出さない」規則の対象外である。
+/// `pending_close` の有無でも断らない——受理は SHIORI へ何も出さないため、マウス入力の
+/// 「close 保留中は GET を出さない」規則の対象外である（完了の後のイベントは終了の保留を見て送らない）。
 pub(super) fn on_user_break(mut state: State, scope: u32) -> (State, Vec<Action>) {
     let Some(talk_id) = current_talk_id(&state.phase) else {
         tracing::debug!(

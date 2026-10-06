@@ -659,9 +659,14 @@ fn user_break_of_the_marked_talk_is_cancelled_by_user_even_with_quit_reserved() 
             matches!(s.phase, Phase::Steady { talk: None }),
             "quit_reserved={quit_reserved}: 定常に戻る"
         );
+        // 終了系列の指示は 0。定常へ戻った中断なので `OnBalloonBreak` の GET が 1 本だけ出る
+        // （areka-P0-balloon-lifecycle-events 要件 1.1）。
         assert!(
-            actions.is_empty(),
-            "quit_reserved={quit_reserved}: 終了系列の指示は 0"
+            matches!(
+                actions.as_slice(),
+                [Action::ShioriRequest(ShioriCall::Get { id, .. })] if id.as_str() == "OnBalloonBreak"
+            ),
+            "quit_reserved={quit_reserved}: OnBalloonBreak の GET 1 本だけ"
         );
         assert!(
             s.user_break_talk.is_none(),

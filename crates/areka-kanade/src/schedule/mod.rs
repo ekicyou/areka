@@ -714,7 +714,7 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
             let break_quit = user_break::is_break_quit(broke, &done)
                 && !change::is_change_phase(&state.phase)
                 && !marked_break;
-            match done.reason {
+            let (state, actions) = match done.reason {
                 TalkEndReason::Quit => {
                     // 既知 talk の Quit → 終了系列（Quit）へ直行（Req 4.3）。
                     tracing::info!(target: "kanade", event = "talk_done_quit", talk_id = done.talk_id.0, "reason=Quit——終了系列（Quit）へ");
@@ -746,7 +746,9 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
                     // Ended（定常復帰・close talk 完了）はフェーズ固有遷移へ委譲。
                     dispatch_phase(state, Input::TalkDone(done), config)
                 }
-            }
+            };
+            // 振り分けの後の相を見て、バルーンの 3 つのイベントを送るかを決める（表 B）。
+            balloon_events::after_talk_done(state, actions, &done, broke)
         }
         Some(_) | None => {
             // 1 世代 stale 防御（C4 規則 9・F1 残余レース・Req1.6）: choice 起因の slot 差替直後は、
