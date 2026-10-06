@@ -163,3 +163,7 @@ mod film_tests;
 #[cfg(test)]
 #[path = "presenter_stage_generation_tests.rs"]
 mod stage_generation_tests;
+
+#[cfg(test)]
+#[path = "presenter_stage_tests.rs"]
+mod stage_tests;
