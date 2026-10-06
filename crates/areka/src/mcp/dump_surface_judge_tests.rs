@@ -51,7 +51,7 @@ impl ShellFacts for Everything {
     }
 }
 
-fn surface(scope: Option<i64>, id: Option<i64>) -> Result<SurfacePlan, &'static str> {
+fn surface(scope: Option<i64>, id: Option<i64>) -> Result<SurfacePlan, Refusal> {
     judge_surface(Some(&GHOST), scope, id)
 }
 

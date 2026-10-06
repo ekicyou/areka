@@ -78,19 +78,18 @@ fn hand_surface(id: u32, rel: &str) -> Surface {
 ///
 /// `surfaces.txt` が参照する 55 の distinct element 画像は全て実在する。そのうち
 /// ちょうど 1 枚 `purple/a/null.png`（382×547）は **α チャンネルを持たない** PNG
-/// （かつ同名 `.pna` 兄弟も無い）ゆえ、`use_self_alpha=On` の下では正規化器が
-/// 優先順位（α ＞ .pna ＞ キーカラー）に従い**抜き色の腕**を選ぶ。この絵は全画素が
+/// ゆえ、`use_self_alpha=On` の下では正規化器が**左上の色を抜く**。この絵は全画素が
 /// 左上の画素と同じ色なので、抜き色の結果は**全画素が透明**になり、トリム後 0 寸の
 /// 空エントリ（`placement == None`）として索引表に載る。失敗ではない（R5.5/5.6）。
-/// 残る 54 枚は α チャンネルの腕を通る。すなわち本 fixture の bake は**失敗 0 件**で、
+/// 残る 54 枚は α をそのまま使う。すなわち本 fixture の bake は**失敗 0 件**で、
 /// 55 の manifest key が全て索引表に載る。
-const SHELL_NORMALIZE_SEAM_KEY: &str = "purple/a/null.png";
+const SHELL_KEY_COLOR_KEY: &str = "purple/a/null.png";
 
 /// テスト①: emo2 shell — 全 element が索引表に載り頁が生成される（1.1/6.1/6.2＋
 /// 5.5/5.6 を実 fixture で行使）。
 ///
 /// 実 `surfaces.txt` を parse → SurfaceSet として bake。参照 element は全て実在するため
-/// デコード失敗は無く、α 無しの `purple/a/null.png` も抜き色の腕を通って全透明の絵として
+/// デコード失敗は無く、α 無しの `purple/a/null.png` も左上の色を抜かれて全透明の絵として
 /// 載るので、**失敗は 0 件**・全 manifest key が resolve→Some、頁生成、surface0.png が
 /// 配置される。
 #[test]
@@ -129,8 +128,8 @@ fn emo2_shell_all_elements_baked() {
         manifest
             .keys
             .iter()
-            .any(|k| k.set == SetId(0) && k.rel_path == SHELL_NORMALIZE_SEAM_KEY),
-        "manifest contains the documented key-color key {SHELL_NORMALIZE_SEAM_KEY}"
+            .any(|k| k.set == SetId(0) && k.rel_path == SHELL_KEY_COLOR_KEY),
+        "manifest contains the documented key-color key {SHELL_KEY_COLOR_KEY}"
     );
 
     with_com_initialized(|| {
@@ -143,8 +142,8 @@ fn emo2_shell_all_elements_baked() {
         };
         let result = bake(std::slice::from_ref(&set), &dec, PackConfig::default());
 
-        // 実在ファイルのみ参照ゆえデコード失敗は 0。α 無しの null.png も抜き色の腕を
-        // 通るので正規化の失敗も 0。すなわち失敗は 1 件も出ない（R5.5/5.6）。
+        // 実在ファイルのみ参照ゆえデコード失敗は 0。正規化は失敗しないので、
+        // 失敗は 1 件も出ない（R5.5/5.6）。
         assert!(
             result.errors.is_empty(),
             "emo2 shell bakes with zero failures, got {:?}",
@@ -170,17 +169,17 @@ fn emo2_shell_all_elements_baked() {
         // 382×547 のまま、トリム後 0 寸ゆえ placement は None（R5.5）。
         let null_id = result
             .table
-            .resolve(SetId(0), SHELL_NORMALIZE_SEAM_KEY)
-            .unwrap_or_else(|| panic!("{SHELL_NORMALIZE_SEAM_KEY} resolves in the table"));
+            .resolve(SetId(0), SHELL_KEY_COLOR_KEY)
+            .unwrap_or_else(|| panic!("{SHELL_KEY_COLOR_KEY} resolves in the table"));
         let null_entry = result.table.entry(null_id);
         assert_eq!(
             (null_entry.original.w, null_entry.original.h),
             (382, 547),
-            "{SHELL_NORMALIZE_SEAM_KEY} keeps its original extent"
+            "{SHELL_KEY_COLOR_KEY} keeps its original extent"
         );
         assert!(
             null_entry.placement.is_none(),
-            "{SHELL_NORMALIZE_SEAM_KEY} is fully transparent after key-color → empty placement"
+            "{SHELL_KEY_COLOR_KEY} is fully transparent after key-color → empty placement"
         );
 
         // 頁が生成されている（6.1）。

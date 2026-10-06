@@ -55,7 +55,7 @@ environment を空にするのは、公開の段が GitHub の environment（人
 
 開発者は見守るだけでよい。終わったら次の節で確かめる。
 
-`release.yml` が main に無い間（Release を作る workflow ができる前）は、タグの push で `release` の回が始まらないので、段「release を待つ」が 120 分待ってから「まだ始まっていない」と示して止まる（何も上げていない。`release.yml` が GitHub に一度も登録されていなければ「`release.yml` が無い」ですぐ止まる）。そのときは Release を手で公開してから、5 節の「Run workflow」で版を渡して起動する。
+`release.yml` が main に無い間（Release を作る workflow ができる前）は、タグの push で `release` の回が始まらないので、段「release を待つ」が 120 分待ってから `not started yet`（まだ始まっていない）と示して止まる（何も上げていない。`release.yml` が GitHub に一度も登録されていなければ `release.yml ... is not in the repository`（`release.yml` が無い）ですぐ止まる）。そのときは Release を手で公開してから、5 節の「Run workflow」で版を渡して起動する。
 
 ## 4. 出たことを確かめる
 
@@ -63,15 +63,15 @@ environment を空にするのは、公開の段が GitHub の environment（人
 
 ```powershell
 $left = pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version 0.0.2
-"終了コード $LASTEXITCODE・残り: $left"
+"exit code $LASTEXITCODE, left: $left"
 ```
 
-- 画面に「在る dola 0.0.2」「在る wintf 0.0.2」が出て、終了コードが 0、残りが空なら、2 クレートともその版で出ている。
-- 「OK 判定「版」」や「在る・無い」の行は人が読むための行で、標準エラーに出る。標準出力（`$left`）には、まだ出ていないクレートの名前だけが 1 行ずつ出る。
+- 画面に `present dola 0.0.2`・`present wintf 0.0.2` が出て、終了コードが 0、残りが空なら、2 クレートともその版で出ている。
+- `OK check 'version'` や `present`・`absent` の行は人が読むための行で、標準エラーに出る。標準出力（`$left`）には、まだ出ていないクレートの名前だけが 1 行ずつ出る。
 - ワークスペースの版が `-Version` と違うときは、索引を読む前に二つの版を示して失敗する。違うコミットに居るので、その版のコミットへ移ってから走らせる。
-- 公開の段の実行の要約（段「記録」が書く）でも、2 クレートの在る・無いを見られる。
+- 公開の段の実行の要約（段「記録」が書く）でも、2 クレートの `present`・`absent` を見られる。
 
-上げた直後は、crates.io の索引への反映が少し遅れることがある。「無い」と出たら、時間を置いてもう一度走らせる。
+上げた直後は、crates.io の索引への反映が少し遅れることがある。`absent` と出たら、時間を置いてもう一度走らせる。
 
 ## 5. 止まったときのやり直し
 
@@ -86,7 +86,7 @@ $left = pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version 0.0.2
 
 どこで止まったかは、GitHub の Actions の画面で、その回の段ごとの結果と実行の要約を見る。止まり方ごとに、次のとおり切り分ける。
 
-- **release が赤で止まった**（段「release を待つ」が「release が failure で終わった」などと示す）: 何も上がっていない。先に release を緑にする。緑になったら、止まった `crates-io` の回を「Re-run」する（段「release を待つ」がすぐ緑を読んで先へ進む）。「Run workflow」で同じ版を渡してもよい。release をその版でやり直さずに次の版で出すなら、この回は止まったままでよい。
+- **release が赤で止まった**（段「release を待つ」が `release for v0.0.2 finished with failure` などと示す）: 何も上がっていない。先に release を緑にする。緑になったら、止まった `crates-io` の回を「Re-run」する（段「release を待つ」がすぐ緑を読んで先へ進む）。「Run workflow」で同じ版を渡してもよい。release をその版でやり直さずに次の版で出すなら、この回は止まったままでよい。
 - **120 分待っても release が緑にならない**: release の回が終わるのを待ち、緑で終わったら、止まった `crates-io` の回を「Re-run」する。
 - **`release` の回が始まらない・`release.yml` が無い**: 3 節の末尾に従う。
 - **workflow のファイルの誤り**（段の書き方・権限・入力の扱いなど）: タグの push で動いた回と、その回の「Re-run」は、**タグのコミットに在る** workflow のファイルで動く。`main` で直しても「Re-run」には効かない。`main` で直してから、「Run workflow」（`main` から）で同じ版を渡す。
@@ -127,13 +127,13 @@ $left = pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version 0.0.2
 
    ```powershell
    $left = pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version 0.0.2
-   "終了コード $LASTEXITCODE・残り: $left"
+   "exit code $LASTEXITCODE, left: $left"
    ```
 
    - 終了コードが 0 で残りが空なら、出す物は無い。ここで終わる。
    - 終了コードが 0 で残りが在るなら、残りの名前が出す物である。
-   - 終了コードが 0 でなければ、画面の「失敗」の行を読む。
-     - 新しく足したクレートが「crates.io に 1 つも版が無い」と示されたなら、そのクレートも出す物に加え、手順 4 の `-p` に足す。判定はそこで止まるので、公開する一覧のうち「在る」と出なかったクレートはすべて出す物にする。
+   - 終了コードが 0 でなければ、画面の `FAIL` の行を読む。
+     - 新しく足したクレートが `has no version on crates.io yet`（crates.io に 1 つも版が無い）と示されたなら、そのクレートも出す物に加え、手順 4 の `-p` に足す。判定はそこで止まるので、公開する一覧のうち `present` と出なかったクレートはすべて出す物にする。
      - それ以外の失敗（索引を読めない・版が違うなど）なら、ここで止まり、原因を直してから 1 からやり直す。
 2. crates.io の **Account Settings** の **API Tokens** で、新しい鍵を作る。
    - 期限を切る（その日のうちに切れる短さ）。
@@ -160,7 +160,7 @@ $left = pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version 0.0.2
    ```
 
 6. crates.io の **API Tokens** で、作った鍵を取り消す（Revoke）。
-7. 4 節の確かめ方で、2 クレートとも「在る」になったことを確かめる。
+7. 4 節の確かめ方で、2 クレートとも `present` になったことを確かめる。
 
 鍵は、開発者の手元の cargo の設定にだけ置く。リポジトリにも、GitHub の秘密の置き場（Secrets）にも置かない。
 

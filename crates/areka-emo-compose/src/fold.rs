@@ -276,8 +276,12 @@ fn normalize_surface(id: u32, surface: &Surface) -> SurfaceMaster {
     }
 }
 
-/// 転記 element を正規化 element へ写す（x,y→[`Transform`]・method は M1 固定 [`Overlay`]・
-/// 置くものは [`element_kind`] の読み分け＝`surface*`・`surface.append*` の両方がここを通る・要件 1.1/1.2）。
+/// 転記 element を正規化 element へ写す（x,y→[`Transform`]・置くものは [`element_kind`] の読み分け
+/// ＝`surface*`・`surface.append*` の両方がここを通る・要件 1.1/1.2）。
+///
+/// 読み手が届ける element定義は描画メソッドが `overlay` と `base` の行だけで、どちらも
+/// [`Overlay`] で置き、X,Y は必ず位置として使う（`base` の「XY 無視」は pattern定義の話で、
+/// element定義には当てない・areka-P0-element-base-method 要件 1.1・4.4）。
 ///
 /// [`Overlay`]: ComposeMethod::Overlay
 fn normalize_element(element: &Element) -> NormalizedElement {
