@@ -25,6 +25,7 @@ use crate::bind::BindSet;
 use crate::method::ComposeMethod;
 use crate::normalized::SurfaceMaster;
 use crate::pattern::{PatternFrame, PatternState};
+use crate::plan::{BlitOp, derive_ops};
 use crate::world::{EmoWorld, SurfaceIndex};
 
 fn other(s: &str) -> Interval {
@@ -132,8 +133,19 @@ fn solid(c: u8) -> DecodedImage {
 /// 検体のシェルを、検体の README のコマ・待ち時間・繰り返しの動く絵（中身は 2×2 の単色）で焼いて
 /// 束縛する（本物の分解を通す）。`surface2.png` は element0 が在るので土台にしない（本番と同じ）。
 fn fixture_world() -> (EmoWorld, AtlasTable) {
+    fixture_world_with("")
+}
+
+/// 検体の文面の後ろに `extra` を足して [`fixture_world`] と同じに焼く（`marker.png` も焼いておく）。
+fn fixture_world_with(extra: &str) -> (EmoWorld, AtlasTable) {
     let mut dec = MemoryDecoder::default();
-    let stills = ["body.png", "part.png", "yellow.png", "cyan.png"];
+    let stills = [
+        "body.png",
+        "part.png",
+        "yellow.png",
+        "cyan.png",
+        "marker.png",
+    ];
     for rel in stills {
         dec.insert(Path::new(BASE).join(rel), 2, 2, 8, solid(9).bgra, true);
     }
@@ -197,7 +209,8 @@ fn fixture_world() -> (EmoWorld, AtlasTable) {
     );
     assert!(baked.errors.is_empty(), "{:?}", baked.errors);
     let images = BTreeMap::from([(1, "surface1.png".to_string())]);
-    let mut world = EmoWorld::build_with_images(&parse(FIXTURE), &images);
+    let text = format!("{FIXTURE}{extra}");
+    let mut world = EmoWorld::build_with_images(&parse(&text), &images);
     world.bind_atlas(&baked.table, SetId(0));
     assert!(world.film_skips().is_empty(), "{:?}", world.film_skips());
     (world, baked.table)
@@ -378,4 +391,109 @@ fn tables_without_films_or_always_keep_new_columns_empty() {
         }
         assert_eq!(visible(&table, id, &PatternState::default()).1, vec![]);
     }
+}
+
+// ---- 合成がたどった先との突き合わせ（task 2.7・要件 1.9・3.7） ----
+//
+// 見える部品・見える子（`walk`・`visible_films`）と合成の平坦化（`flatten_surface`・`push_film_op`）は
+// 別々に書いてあるので、片方だけを変えるとずれる。nesting_visible_tests の一致の檻と同じ型で、検体の
+// 全サーフェスを一番上にし、欄の組ごとに「部品 X に目印のコマを足すと命令列が変わる」⇔「X が見える
+// 部品に在る」、「子 F のコマを替えると命令列が変わる」⇔「F が見える子に在る」を確かめる。
+
+/// 目印のサーフェス（どこからも指されない・目印の画像を 1 枚だけ持つ）。
+const MARKER: u32 = 900;
+/// 目印のコマを置く animation の番号（検体に無い番号）。
+const MARK_ANIM: u32 = 9999;
+
+fn ops(world: &EmoWorld, atlas: &AtlasTable, top: u32, pattern: &PatternState) -> Vec<BlitOp> {
+    let (mut ops, mut visited) = (Vec::new(), Vec::new());
+    derive_ops(
+        &mut ops,
+        &mut visited,
+        world,
+        atlas,
+        top,
+        &BindSet::default(),
+        pattern,
+    );
+    ops
+}
+
+/// 欄の組: 空・経過 0 と違うコマ・子を置くサーフェスを指すコマ・消えている・部品の経過 0 と
+/// 部品の消えている・子のコマ（一番上は今までの欄、20 と 10 は部品の欄）。
+fn walk_patterns(world: &EmoWorld) -> Vec<(&'static str, PatternState)> {
+    let mut rows = vec![("空", PatternState::default())];
+    let mut p = PatternState::default();
+    p.set(0, frame(30));
+    p.set_part(20, 0, frame(31));
+    rows.push(("経過 0 と違うコマ", p));
+    let mut p = PatternState::default();
+    p.set(0, frame(3));
+    p.set_part(20, 0, frame(1));
+    rows.push(("子を置くサーフェスを指すコマ", p));
+    let mut p = PatternState::default();
+    p.set_blank(0);
+    p.set_part_blank(20, 0);
+    rows.push(("消えている", p));
+    let mut p = PatternState::default();
+    p.set(0, frame(10));
+    rows.push(("部品の経過 0", p.clone()));
+    p.set_part_blank(10, 0);
+    rows.push(("部品の消えている", p));
+    let mut p = PatternState::default();
+    for sheet in world.film_sheets() {
+        p.set_film(sheet.id, *sheet.frames.last().unwrap());
+    }
+    rows.push(("子のコマ", p));
+    rows
+}
+
+/// 要件 1.9・3.7: 合成がたどったサーフェスと子の集合＝`visible_parts`＋`visible_films` の答え。
+#[test]
+fn compose_walk_equals_visible_parts_and_films() {
+    let marker = format!(
+        "
+surface{MARKER}
+{{
+element0,overlay,marker.png,0,0
+}}
+"
+    );
+    let (world, atlas) = fixture_world_with(&marker);
+    let table = world.nest_table();
+    let ids: Vec<u32> = world.surface_ids().filter(|&id| id != MARKER).collect();
+    let films: Vec<FilmId> = world.film_sheets().map(|s| s.id).collect();
+    assert_eq!(films.len(), 4, "検体の動く絵は 4 つ");
+    let (mut seen, mut unseen) = ([0; 2], [0; 2]);
+    for (name, pattern) in walk_patterns(&world) {
+        for &top in &ids {
+            let base = ops(&world, &atlas, top, &pattern);
+            let (parts, visible_films) = visible(&table, top, &pattern);
+            let at = format!(
+                "欄 {name}・一番上 {top}・見える部品 {parts:?}・見える子 {visible_films:?}"
+            );
+            for &x in &ids {
+                let mut marked = pattern.clone();
+                marked.set_part(x, MARK_ANIM, frame(MARKER));
+                let walked = ops(&world, &atlas, top, &marked) != base;
+                let listed = parts.binary_search(&x).is_ok();
+                assert_eq!(walked, listed, "{at}・部品 {x}");
+                if listed { seen[0] += 1 } else { unseen[0] += 1 }
+            }
+            for &f in &films {
+                let walked = world.film_sheet(f).unwrap().frames.iter().any(|&p| {
+                    let mut marked = pattern.clone();
+                    marked.set_film(f, p);
+                    ops(&world, &atlas, top, &marked) != base
+                });
+                let listed = visible_films.binary_search(&f).is_ok();
+                assert_eq!(walked, listed, "{at}・子 {f:?}");
+                if listed { seen[1] += 1 } else { unseen[1] += 1 }
+            }
+        }
+    }
+    assert!(
+        seen.iter().chain(&unseen).all(|&n| n > 0),
+        "部品と子の両側の行が在る: 見える {seen:?}・見えない {unseen:?}"
+    );
 }

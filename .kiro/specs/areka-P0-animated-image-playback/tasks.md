@@ -6,7 +6,7 @@
 >
 > 触らないファイル: `areka-emo-atlas` の全ファイル・`areka-parsers`・`areka-emo-compose` の `fold.rs`・`method.rs`・`atlas_bind.rs`・`boxes.rs`・`hit_import.rs`・`base_image.rs`・`areka-emo-present` の `presenter/show.rs`（`apply_show`）・`cache.rs`（`CAPACITY`）・`crates/areka/src/emo2_boot/` の `spine.rs`・`assets.rs`・`frame.rs`・`frame/wiring.rs`。`mod.rs` の `let clock = TalkClock::new(clock_fn);` の名前・型・持ち主は変えない（`areka-P0-balloon-lifecycle-events` が使う）。`emo2` の照合（焼いた結果・合成の結果・まばたきの決定論テスト）は期待値を 1 本も書き換えない（呼び出しの形の変更に合わせた書き換えは数えない）。
 
-- [ ] 1. 着手前の確認と検体
+- [x] 1. 着手前の確認と検体
 - [x] 1.1 main を取り込み、先に入った `element-base-method` の後の形を引き直して、前の数字を採る
   - `areka-P0-element-base-method` が main に入っていることを確かめ、取り込む（入っていなければ止まって開発者へ知らせる）。`areka-P0-balloon-lifecycle-events` は待たない（2026-10-05 開発者裁定で本 spec が先に入る。`mod.rs` の `clock: TalkClock` の名前・型・持ち主を変えない約束はそのまま）
   - 取り込んだ後のコードで、design.md「触るファイルと並走の重なり」の行（`plan.rs` の `push_static_element_ops`・`flatten_surface`・`flatten_extent`、`mod.rs` の `spawn_seriko(` と `LoopTickerConfig` の所、`hub.rs` の `ShowSurface` の腕、`visibility.rs` の `show_target`）を読み直し、design の前提と食い違う所があれば research.md に書いてから進む
@@ -20,7 +20,7 @@
   - 完了の姿: 検体がリポジトリにあり、シェルは今の読み手と `load_shell_target` で、バルーンの面は `resolve_balloon_faces` で読んで失敗せず、第三者の著作物が 0 件で、ワークスペースの見張りのテストが緑のまま
   - _Requirements: 9.4_
 
-- [ ] 2. 合成の側: 子の定義・欄・経過 0・外形
+- [x] 2. 合成の側: 子の定義・欄・経過 0・外形
 - [x] 2.1 部品の鍵の 2 つ目の種類と、`always` の見分け・経過 0 の求め方を置く
   - `nesting.rs` に `PartKey`（作者のサーフェス／動く絵の子）・`FilmId`・`ElementKind::Film` を足す。作者の欄の読み分け（`element_kind`）は `Film` を返さない
   - `is_always_interval`（`always` の単独・小文字の完全一致）と `rest_index`（待ち時間の累積が 0 の最後の番号）を 1 つずつ置き、合成・見える部品・seriko の表が同じ関数を使える形で公開する
@@ -69,7 +69,7 @@
   - 完了の姿: 移した後の差分が「関数の置き場所と 2 か所の追加」だけで、`emo2` の外形が前と同じ値
   - _Requirements: 1.2, 1.7, 6.2, 7.1_
 
-- [ ] 2.7 合成がたどった先と見える部品の答えを突き合わせる
+- [x] 2.7 合成がたどった先と見える部品の答えを突き合わせる
   - 今ある `nesting_fixture_tests.rs` の型で、検体の全サーフェスと、欄の組（空・経過 0 と違うコマ・消えている・子のコマ）について、合成が平坦化でたどったサーフェスと子の集合が `visible_parts`＋`visible_films` の答えと一致することを確かめる
   - 完了の姿: 突き合わせのテストが緑で、片方だけを壊す変異（経過 0 の辺を外す等）で赤になることを 1 度確かめてから戻している
   - _Requirements: 1.9, 3.7_
