@@ -558,6 +558,7 @@ pub(crate) fn submit(world: &World, destination: Destination);
 - 本 spec の中で `ShellExecuteExW` と `CoInitializeEx` を綴るのは `readme/os_port.rs` だけ（`CoInitializeEx` は既存のテスト `emo2_boot/assets_tests.rs` などにもあるので、見張るのは `ShellExecute` の綴りだけ）。`crates/areka/src` で `ShellExecute` の綴りがこのファイル以外に無いことをテストが見張る（要件 7.1）。
 - 動詞は `open` と `edit` の 2 つだけ（OS の既定・areka 独自の設定値 0・要件 7.7）。窓の表示は `SW_SHOWNORMAL`、親の窓は無し。
 - 呼ぶのは `ShellExecuteExW`。`fMask` は `SEE_MASK_FLAG_NO_UI`（OS のエラーの窓も「開く方法を選ぶ」窓も出さない・2026-10-05 開発者裁定＝設計ディスカッション議題 1）。戻り値が偽なら `Err(GetLastError の符号)`（例: 見つからない 2・関連付けが無い 1155）。窓が出ないので、開く専用のスレッドが利用者の操作を待って止まることも無い。
+- `SEE_MASK_FLAG_NO_UI` だけでは足りない（実機 6.2）。`HKCR\Unknown\shell\Open`（OpenWith）があると関連付けの無い拡張子でも ShellExecuteExW が成功して「アプリの選択」の窓が出たので、OS を呼ぶ前に AssocQueryStringW（ASSOCF_INIT_IGNOREUNKNOWN）で動詞の関連付けを引き、無ければ 1155 として返す。引くのは実在するファイル（絶対パス）だけで、URL・`mailto:`・フォルダ・名前だけの実行ファイル・`explorer.exe` は引かない。拡張子の無いファイルは関連付けが無いとみなす。動詞はコマンド行（`ASSOCSTR_COMMAND`）か DelegateExecute（`ASSOCSTR_DELEGATEEXECUTE`・フォトなど）のどちらかが引ければ在るとする。ショートカット（`.lnk`）は動詞を持たず OS がリンク先を解くので引かない。
 
 **Contracts**: Service [x]
 
@@ -694,4 +695,4 @@ pub(crate) fn init_com_for_shell();
 | `\![open,explorer,種類,名前]` の特別な名前（`random` など） | 解かない（名指しだけ・ukadoc の例も名指し） |
 | 環境変数の展開 | ukadoc が書く `\![open,file]` だけで行う。未定義の変数はそのまま残す |
 | `\![open,file]` の作業フォルダ | 開くファイルのあるフォルダ（エクスプローラーでダブルクリックしたときと同じ）。名前だけでパス探索に任せるときは指定しない |
-| 開けなかったときの OS の窓 | 出さない（`SEE_MASK_FLAG_NO_UI`）。「見つかりません」の窓も、関連付けの無いファイルで「開く方法を選ぶ」窓も出ず、`error!` の記録だけで伝える（2026-10-05 開発者裁定）。選ぶ窓が欲しいという要望が出たら、関連付けが無い符号のときだけ動詞 `openas` で呼び直す形を足す |
+| 開けなかったときの OS の窓 | 出さない（`SEE_MASK_FLAG_NO_UI`＋呼ぶ前の関連付けの照会・実機 6.2 で NO_UI だけでは OpenWith の窓が出たため）。「見つかりません」の窓も、関連付けの無いファイルで「開く方法を選ぶ」窓も出ず、`error!` の記録だけで伝える（2026-10-05 開発者裁定）。選ぶ窓が欲しいという要望が出たら、関連付けが無い符号のときだけ動詞 `openas` で呼び直す形を足す |

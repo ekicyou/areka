@@ -128,3 +128,4 @@
 - 4.1: `ReadmeRequest::Open` と `mod destination;` の一時的な dead_code の許可は 4.2 で外す。`os_port.rs` の `WindowsShell` 等の `#[cfg_attr(test, allow(dead_code))]` は恒久（テストのビルドは本物の口を持たない設計の帰結）。
 - 4.2: `link_destinations` は本番の呼び手が後続の spec（`link-context-copy`・`balloon-link-hover`）なので、その関数 1 つだけに `#[cfg_attr(not(test), allow(dead_code))]` を残す（呼び手ができたら外す）。
 - 5.1: main 取り込み後の受け取り手の表は 15 行→本 spec で 21 行。並走の `balloon-lifecycle-events`・`mcp-author-tools` は後から入る側が数え直す（本 spec の 6 行の見本＝`\j` は `http://` の URL・`open` の 5 組は引数つき）。
+- 6.2 実機: `HKCR\Unknown\shell\Open`（OpenWith）があると関連付けの無い拡張子でも ShellExecuteExW が成功して「アプリの選択」の窓が出た。OS を呼ぶ前に `AssocQueryStringW`（`ASSOCF_INIT_IGNOREUNKNOWN`・COMMAND か DELEGATEEXECUTE）で動詞を引き、無ければ 1155。`.lnk` は照会の外。`.cpl`（動詞 `cplopen` だけ）は 1155 で断られる＝要望が出たら既定の動詞で引き直す。
