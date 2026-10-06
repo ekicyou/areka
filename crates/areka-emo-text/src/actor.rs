@@ -24,9 +24,10 @@ use tracing::debug;
 use crate::choice::ResolvedChoiceStyle;
 use crate::cursor_tag::CursorWarnGuard;
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, DWriteMetrics, ResolvedFont};
+use crate::lookahead::{TalkLookahead, advance_state};
 use crate::place::PlaceKey;
 use crate::region::{ScaleContract, TextRegion};
-use crate::sink::{EmoTextSink, TextMsg, handle_text_msg};
+use crate::sink::{EmoTextSink, TextMsg, handle_text_msg_with};
 use crate::state::{SurfaceKeyOutcome, TextLayerConfig, TextLayerState};
 use crate::surface::TextSurface;
 use crate::viewbox_draw::{DrawStats, ViewboxExecutor};
@@ -262,6 +263,9 @@ pub struct TextLayerRuntime {
     /// 箱を隠す印・箱の同期が登録を外した箱）はその場で外す。台本の `\s` の受け取りでは外さない
     /// （置き場所は絵の番号に従い、絵が替わった同期で外れる）。
     shown_boxes: HashMap<ActorKey, Vec<ShownBox>>,
+    /// 先渡しの空回しで求めた区間の全文の持ち主（[`preview_talk`](Self::preview_talk) が入れ、
+    /// 合図の適用が消去と届いた数を数える）。正本ではない（届いた字の正本は `state`）。
+    lookahead: TalkLookahead,
 }
 
 impl TextLayerRuntime {
@@ -290,6 +294,7 @@ impl TextLayerRuntime {
             box_overflow_warned: BTreeSet::new(),
             box_definition_warned: BTreeSet::new(),
             shown_boxes: HashMap::new(),
+            lookahead: TalkLookahead::default(),
         }
     }
 
@@ -306,15 +311,17 @@ impl TextLayerRuntime {
     ///   R6.4/R7.4）。上流は残存スコープを列挙できないため、全消しは本ランタイムが自己完結して
     ///   行う（`state.rs::apply_cue` の全 `actor_states` 消去と対）。
     pub fn apply_cue(&mut self, cue: &TalkCue) {
+        // 状態を進める前の行き先（`\c` が消すのは今の行き先の場所だけ＝純粋状態の `apply_cue` と
+        // 同じ宛先）。先渡しの区間の番号は空回しと同じく、この行き先で消去を数える（要件 4.1）。
+        let place = PlaceKey {
+            actor: cue.actor.clone(),
+            place: self.state.destination(&cue.actor),
+        };
+        self.lookahead.note_cue(cue, &place);
         // catch-all を置かず variant を明示し、将来 dola が clear 系 variant を追加した際に
         // コンパイラへ描画実行部側の再検討を強制する（no-catch-all 規律）。
         match &cue.command {
             CueCommand::Clear => {
-                // `\c` が消すのは今の行き先の場所だけ（純粋状態の `apply_cue` と同じ宛先）。
-                let place = PlaceKey {
-                    actor: cue.actor.clone(),
-                    place: self.state.destination(&cue.actor),
-                };
                 if let Some(render) = self.surfaces.get_mut(&place) {
                     render.executor.request_clear();
                 }
@@ -341,18 +348,12 @@ impl TextLayerRuntime {
                 // 箱を隠す印は次の台詞の頭まで（design.md「箱を数に入れた表示の判断」）。
                 self.hidden_boxes.clear();
             }
-            // `\s` は解決の閉包で番号に解いて行き先へ渡す（要件 4.1）。閉包が無いあいだは
-            // 読まない＝行き先は普通のバルーンのまま（要件 5.4）。
-            CueCommand::Emote { key } => match &self.surface_resolver {
-                Some(resolve) => self.state.route_surface(&cue.actor, resolve(key)),
-                None => {
-                    debug!(actor = %cue.actor, key, "解決の閉包が無い——\\s を読まない（行き先は普通のバルーン）")
-                }
-            },
             // 他コマンドは描画実行部への全域クリアを要さない（グリフ更新は present_frame が
             // リビール進行として描き、非担当コマンドは reveal を汚さない）。`Cursor` の
             // warn-once 良性スキップ・記録は純粋層 `state.apply_cue` が担う（本口は clear 要否のみ）。
-            CueCommand::Text(_)
+            // `\s` の行き先への受け渡しは下段の `advance_state` が担う（空回しと同じ規則・要件 2.2）。
+            CueCommand::Emote { .. }
+            | CueCommand::Text(_)
             | CueCommand::Choice { .. }
             | CueCommand::EntityRef(_)
             | CueCommand::Custom { .. }
@@ -361,10 +362,23 @@ impl TextLayerRuntime {
             | CueCommand::BalloonSurface { .. }
             | CueCommand::Wait => {}
         }
-        self.state.apply_cue(cue);
+        advance_state(&mut self.state, self.surface_resolver.as_deref(), cue);
         // `\c`・台詞の頭で文字が無くなった箱を、提示を待たずに写しから外す。`\s` の受け取りは
         // 行き先だけを替え、箱の置き場所は絵の番号に従う（次の箱の同期が決める）ので外さない。
         self.prune_shown_boxes();
+    }
+
+    /// 先渡し（再生の前に渡された、これから届く合図の全部）を受け取る: 今の状態の写しで空回しし、
+    /// 区間の全文を入れ替える（要件 2.1）。受け取ったことを `debug!` 1 行（合図の数・求めた区間の数）で
+    /// 残す——実機の確かめは、最初の字の適用より前にこの行があることを読む（design.md「Monitoring」）。
+    fn preview_talk(&mut self, upcoming: &[TalkCue]) {
+        let sections =
+            self.lookahead
+                .install(&self.state, self.surface_resolver.as_deref(), upcoming);
+        debug!(
+            cues = upcoming.len(),
+            sections, "先渡しを受け取った——空回しで区間の全文を求めた"
+        );
     }
 
     /// 純粋状態機械（可視グリフ数・actor 状態の読み取り口）。
@@ -468,6 +482,37 @@ impl TextLayerRuntime {
     #[cfg(test)]
     pub(super) fn set_surface_resolver(&mut self, resolve: SurfaceKeyResolver) {
         self.surface_resolver = Some(resolve);
+        self.rehearse_again();
+    }
+
+    /// 空回しをやり直す（要件 2.2・2.7）: 空回しの出発点（状態か `\s` の解決の閉包）を合図と
+    /// 無関係に変えた口の直後に呼ぶ。今の状態と解決の閉包で `reinstall` を呼ぶだけで、先渡しを
+    /// 受け取っていなければ何も起きない。
+    fn rehearse_again(&mut self) {
+        self.lookahead
+            .reinstall(&self.state, self.surface_resolver.as_deref());
+    }
+
+    /// 検査用の読み口: その場所の配置の入力を引いて [`present::arrange_lines`] を呼ぶだけ
+    /// （`present_actor` が冒頭でしている引き当てと同じ）。配置の入力か状態が無ければ `None`。
+    /// 字幅は呼び手が渡す（決まった字幅で GPU の資源なしに本番と同じ手順の行の列を取る）。
+    #[cfg(test)]
+    pub(super) fn arrange_for_test(
+        &mut self,
+        place: &PlaceKey,
+        metrics: &dyn crate::layout::GlyphMetrics,
+        talk_time: f64,
+    ) -> Option<Vec<crate::layout::PositionedLine>> {
+        let resolved = self.layout_input.get(place)?;
+        present::arrange_lines(
+            &self.state,
+            &mut self.lookahead,
+            &mut self.cursor_warn,
+            place,
+            resolved,
+            metrics,
+            talk_time,
+        )
     }
 }
 
@@ -475,7 +520,8 @@ impl TextLayerRuntime {
 /// `spawn_ui` で UI ドレインを起動し、受信口 [`EmoTextSink`] と drain の join ハンドルを返す。
 ///
 /// handler は `runtime` の `Rc` clone を捕捉し（`!Send` handler・基盤許容）、
-/// [`handle_text_msg`]（終了規律の正準写像）へ委譲して cue を純粋状態へ適用する。
+/// [`handle_text_msg_with`]（終了規律の正準写像）へ委譲して cue を純粋状態へ適用する。
+/// 先渡し（`TextMsg::Upcoming`）は実行時の `preview_talk` へ渡し、空回しで区間の全文を求める。
 /// 終了経路はちょうど 2 つ——`TextMsg::Close` 受領＝`Ok(Break)`・全 `UiSender`
 /// （＝全 [`EmoTextSink`] クローン）drop＝drain 正常終了（R1.4・error ログなし）。
 /// 個別 cue の適用失敗（runtime 借用競合など）は `Err` 戻し→基盤が `error!`＋継続する
@@ -489,18 +535,33 @@ pub fn spawn_emo_text(
     runtime: Rc<RefCell<TextLayerRuntime>>,
 ) -> Result<(EmoTextSink, wintf_winmsg_executor::JoinHandle<()>), UiSpawnError> {
     let (tx, handle) = areka_actor::spawn_ui("emo-text", move |msg: TextMsg| {
-        handle_text_msg(msg, |cue| match runtime.try_borrow_mut() {
-            Ok(mut rt) => {
-                rt.apply_cue(&cue);
-                Ok(())
-            }
-            // 借用競合（UI スレッド上の別処理が runtime を保持中）——panic せず Err 戻しで
-            // 基盤の error!＋継続に乗せる（当該 cue は失われるが後続の受理は破壊しない・R1.5）。
-            Err(_) => Err(format!(
-                "TextLayerRuntime が借用中のため cue を適用できない（actor={}, at={}）——当該 cue は失われる",
-                cue.actor, cue.at
-            )),
-        })
+        handle_text_msg_with(
+            msg,
+            |cue| match runtime.try_borrow_mut() {
+                Ok(mut rt) => {
+                    rt.apply_cue(&cue);
+                    Ok(())
+                }
+                // 借用競合（UI スレッド上の別処理が runtime を保持中）——panic せず Err 戻しで
+                // 基盤の error!＋継続に乗せる（当該 cue は失われるが後続の受理は破壊しない・R1.5）。
+                Err(_) => Err(format!(
+                    "TextLayerRuntime が借用中のため cue を適用できない（actor={}, at={}）——当該 cue は失われる",
+                    cue.actor, cue.at
+                )),
+            },
+            |upcoming| match runtime.try_borrow_mut() {
+                Ok(mut rt) => {
+                    rt.preview_talk(&upcoming);
+                    Ok(())
+                }
+                // 借用競合——cue と同じく Err 戻しで基盤の error!＋継続に乗せる（そのトークは
+                // 先渡し無し＝修正前の動きになり、文節の折り返しでは warn が出る）。
+                Err(_) => Err(format!(
+                    "TextLayerRuntime が借用中のため先渡しを受け取れない（cues={}）——そのトークは先渡し無し",
+                    upcoming.len()
+                )),
+            },
+        )
     })?;
     Ok((EmoTextSink::new(tx), handle))
 }
@@ -552,6 +613,14 @@ mod scroll_retain_tests;
 #[cfg(test)]
 #[path = "actor_route_tests.rs"]
 mod route_tests;
+
+#[cfg(test)]
+#[path = "actor_lookahead_tests.rs"]
+mod lookahead_tests;
+
+#[cfg(test)]
+#[path = "actor_lookahead_shapes_tests.rs"]
+mod lookahead_shapes_tests;
 
 #[cfg(test)]
 #[path = "actor_box_tests.rs"]

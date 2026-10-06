@@ -257,12 +257,13 @@ impl ActorTextState {
     /// 上位で 0 文字を分岐するのでここへ来ない。
     ///
     /// `actor` は R6.3 の記録（上下付きが有効なまま文字が追記された）に使う——ここが
-    /// 「文字が追記された」ことを知る唯一の地点だからである。
-    pub(super) fn push_current_style(&mut self, actor: &ActorKey, glyph_count: usize) {
+    /// 「文字が追記された」ことを知る唯一の地点だからである。`quiet` が真（空回しの写し）なら
+    /// その `warn!` を出さない（記録済みの集合は同じく更新する・要件 2.8）。
+    pub(super) fn push_current_style(&mut self, actor: &ActorKey, glyph_count: usize, quiet: bool) {
         if glyph_count == 0 {
             return;
         }
-        self.warn_script_once(actor);
+        self.warn_script_once(actor, quiet);
         let id = self
             .styles
             .intern(&self.decor.current, &self.decor.layers.default);
@@ -317,7 +318,8 @@ impl ActorTextState {
     /// [`crate::look::apply_font_tag`] の担当で、本関数は「戻す操作へ回すか」「所有外キーを
     /// 保持するか」「何を記録するか」だけを決める。記録なしで失敗を飲み込む経路は無い
     /// （`Err` と記録すべき [`Note`] は必ず `warn!`・所有外キーは `debug!`）。
-    pub(super) fn apply_font_args(&mut self, actor: &ActorKey, tokens: &[&str]) {
+    /// `quiet` が真（空回しの写し）なら `warn!` だけを出さない（記録済みの集合と `debug!` は同じ・要件 2.8）。
+    pub(super) fn apply_font_args(&mut self, actor: &ActorKey, tokens: &[&str], quiet: bool) {
         // 一括の戻し（`\f[default]`）は「戻す操作」1 か所を通す（要件 10.3）——
         // 見た目だけを置き換える apply_font_tag の腕では所有外キーの保持が残ってしまう。
         // ゆえに `look.rs::apply_font_tag` の `key == "default"` の腕は本番経路から到達しない
@@ -370,6 +372,7 @@ impl ActorTextState {
                     key,
                     &tokens[1..],
                     "語彙として受理したが表示は変えない",
+                    quiet,
                 );
             }
             Ok(Some(Note::StylesheetKeyword)) => {
@@ -378,6 +381,7 @@ impl ActorTextState {
                     "height",
                     &tokens[1..],
                     "スタイルシートの大きさの語は語彙のみ——大きさを変えない",
+                    quiet,
                 );
             }
             Ok(Some(Note::AnchorColorAsDefault)) => {
@@ -386,6 +390,7 @@ impl ActorTextState {
                     "color",
                     &tokens[1..],
                     "アンカーの色定義がまだ無い——default と同じ色を適用した",
+                    quiet,
                 );
             }
             Err(issue) => {
@@ -394,7 +399,7 @@ impl ActorTextState {
                 // キーが空の失敗（要件 2.6）では `tokens` 自体が空になりうるので `get(1..)` で取る。
                 let key = issue.key.clone();
                 let rest = tokens.get(1..).unwrap_or(&[]);
-                self.warn_once(actor, &key, rest, issue.reason);
+                self.warn_once(actor, &key, rest, issue.reason, quiet);
             }
         }
     }
@@ -404,13 +409,22 @@ impl ActorTextState {
     /// 記録の本文には値の列をカンマで繋いだ読みやすい綴りを載せるが、**鍵は列のまま**である
     /// （要件 13.5——綴りを鍵にすると、引用符がカンマを守るせいで `\f[bold,"x,y"]` と
     /// `\f[bold,x,y]` が同じ鍵へ潰れ、片方が無記録で消える）。
-    fn warn_once(&mut self, actor: &ActorKey, key: &str, values: &[&str], reason: &str) {
+    /// `quiet` が真（空回しの写し）なら集合だけを更新して `warn!` を出さない。
+    fn warn_once(
+        &mut self,
+        actor: &ActorKey,
+        key: &str,
+        values: &[&str],
+        reason: &str,
+        quiet: bool,
+    ) {
         let text = values.join(",");
         let owned: Vec<String> = values.iter().map(|value| (*value).to_owned()).collect();
         if self
             .decor
             .warned
             .insert((RECORD_FONT_ARG, key.to_owned(), owned))
+            && !quiet
         {
             tracing::warn!(actor = %actor, key, value = text, reason, "\\f の指定を適用できない——当該項目は変えずに再生を続ける");
         }
@@ -426,7 +440,7 @@ impl ActorTextState {
     /// 追記の記録を無記録で飲み込む（逆順なら `warn_once` の側が消える・要件 13.5）。
     /// 文面を分けているのは、利用者が「指定が通らない」のか「指定は通ったが表示に出ない」のかを
     /// ログから見分けられるようにするためである。
-    fn warn_script_once(&mut self, actor: &ActorKey) {
+    fn warn_script_once(&mut self, actor: &ActorKey, quiet: bool) {
         let key = match self.decor.current.script {
             Script::None => return,
             Script::Sub => "sub",
@@ -436,6 +450,7 @@ impl ActorTextState {
             .decor
             .warned
             .insert((RECORD_SCRIPT_APPEND, key.to_owned(), Vec::new()))
+            && !quiet
         {
             tracing::warn!(actor = %actor, key, reason = "上下付きは語彙のみ——基線も大きさも送り幅も変えない", "上下付きが有効なまま文字を追記した——表示は変わらない");
         }
