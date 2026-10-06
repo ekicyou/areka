@@ -93,7 +93,7 @@
   - _Depends: 2.1, 2.3_
   - _Requirements: 2.5, 4.1, 4.6, 4.8, 4.9, 8.1, 8.3, 8.4_
 
-- [ ] 3.3 部品の時計に `always` と回数つきの決まりを入れる
+- [x] 3.3 部品の時計に `always` と回数つきの決まりを入れる
   - 先に、時計の入れ物の鍵を（スコープ, 面の種類）、中の鍵を（`PartKey`, animation の番号）に替えるだけの変更を、既存テストが緑のままでコミットする。評価する部品は見える部品＋見える子
   - 着せ替えの番人 `gate` を 3 通り（抽選・`always`・対象外）にする。`always` は乱数を引かず、時計が無ければ渡された時刻で作り、`always_at` の答えを欄へ書く（経過 0 と同じなら載せない・絵を指すなら `set_film`・何も出さないなら、経過 0 のコマが在るときだけ「消えている」）
   - 回数つきの時計は、評価のとき見えていなければ捨てる。入れ物 1 つの回数つきの時計を全部捨てる口（面が隠れたとき用）を `parts.rs` に置く。この口を呼ぶのは後のタスク（`\s[-1]` は 3.4、`\b[-1]` は 3.6、窓が閉じた知らせと新しい出番は 5.1）。終わりなしの時計は捨てない。抽選の animation の決まりは変えない。生まれた・捨てたは `debug!`
@@ -243,3 +243,5 @@
 - 2.6: `plan_extent.rs` は `plan` の子のモジュール（`#[path]`・`pub(crate) use extent::compute_extent`）。移動は `d7755372`。`always` の外形は負の番号・7 語・`move`（ukadoc「サーフェスIDは無視される」）を数えない。見える部品（2.4）は `is_implemented_name` で `move` を既に外している
 - 3.1: `current_frame_index` は `timeline.rs`（`pub(crate)`）へ移し、`frame_at` もこれを通る（Repeat は末端・`looper` を参照しない）。`always_at(…, 0)` は合成の `rest_index` と一致（テストで固定）＝3.3 の「経過 0 と同じなら欄に載せない」の前提。絵を指すコマは `Nothing` にならない。seriko の clippy の赤 2 件（`actor.rs` の large_enum_variant・`looper.rs` の collapsible_if）と `dola` の 21 件は前からのもの（完了時に起票の対象）
 - 3.2: 子の行は animation 0・`LoopFrame { surface_id: -1, picture: Some(ElementId の値) }`（`FilmSheet.frames` の値をそのまま）＝3.3 は `set_film(film, frame.picture)` と書けば合成の `push_film_op` と一致する。`from_world` は `from_world_and_films(world, sheets, skips)` へ委ねる（seriko は atlas に依らないのでテストは手で組んだ子の定義）。`has_animated_parts` は `always_rest` の先と子の行を持つサーフェスも数える。looper の抽選は `Always` を乱数の前で飛ばし、parts の `gate` は `Always` に `None`（再生は 3.3・3.4）
+- 3.3: 鍵の付け替えは `59b03474`。`PartClocks::drop_finite(scope, slot, table)` は本番で未使用のため `#[cfg_attr(not(test), allow(dead_code))]`＝3.4（`\s[-1]`）・3.6（`[-1]`）・5.1 で呼んだら外す。`peek`（`refresh_parts`）は `always` の時計を作らない＝出来事の時刻で作るのは 3.4 の `refresh`。`rebuild` が見えている部品の「消えている」を落としていた不具合を直した
+- 範囲外（完了時に確かめる）: `rebuild` は `clear_parts` 直後の 1 回目に、経過 0 の辺・着せ替えの辺の先の部品も評価するので、外側が別のコマに居る刻みでも見えていない部品の抽選が回ることがある（`surface-element-nesting` からの性質・引く乱数の数は本 spec の前と同じ）

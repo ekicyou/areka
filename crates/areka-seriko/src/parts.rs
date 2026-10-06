@@ -7,24 +7,34 @@
 //! 時計の入れ物の鍵は (スコープ, 面の種類)、中の鍵は ([`PartKey`], animation の番号)（spec:
 //! areka-P0-animated-image-playback 要件 3.5・6.6）。element定義の子も pattern定義の先も同じ鍵を
 //! 使うので、同じ番号は 1 つの時計で揃って動く（要件 5.3・5.4・5.14）。評価する部品は見える部品と、
-//! 一番上と見える部品に置かれた動く絵の子（[`NestTable::visible_films`]）。見えない部品には触らない
-//! （抽選・進行・欄への書き込みのどれもしない・要件 5.11）。`Playing` は開始の時刻を持ち続けるので、
-//! 見えなかった間も進んでいた扱いになり、戻った刻みに経過から今のコマが決まる（要件 5.7）。
+//! 一番上と見える部品に置かれた動く絵の子（[`areka_emo_compose::NestTable::visible_films`]）。見えない
+//! 部品には触らない（抽選・進行・欄への書き込みのどれもしない・要件 5.11）。`Playing` は開始の時刻を
+//! 持ち続けるので、見えなかった間も進んでいた扱いになり、戻った刻みに経過から今のコマが決まる（要件 5.7）。
+//!
+//! `always`（手書きと動く絵の子・spec: areka-P0-animated-image-playback 要件 2.3・2.7・2.8・3.1〜3.5・
+//! 4.4・7.4）は抽選せず乱数も引かない。時計が無ければ評価の時刻で生まれ、[`always_at`] の答えを欄へ
+//! 書く（経過 0 と同じなら載せない）。回数つき（`laps` が在る）の時計は、評価のとき見えていなければ
+//! 捨てる（次に見えたら頭から）。面が隠れたときは [`PartClocks::drop_finite`] で入れ物 1 つの回数つきの
+//! 時計を全部捨てる。終わりなしの時計は捨てない。
 //!
 //! 時計を動かすのは刻みの [`PartClocks::advance`] だけ。面の切り替え・着せ替えの変化の直後は
-//! [`PartClocks::peek`] が時計を書き換えず抽選もせずに今のコマを求める（要件 5.6）。時計は
-//! [`PartClocks::clear`]（シェルの表の差し替え）でだけ捨てる（要件 5.8）。発火・停止・末尾での保持の
-//! 記録は `advance` だけが出す（`peek` は状態を変えないので記録しない）。
+//! [`PartClocks::peek`] が時計を書き換えず抽選もせずに今のコマを求める（要件 5.6）。抽選の時計は
+//! [`PartClocks::clear`]（シェルの表の差し替え）でだけ捨てる（要件 5.8）。発火・停止・末尾での保持・
+//! `always` の時計の誕生と破棄の記録は `advance`（と `drop_finite`）だけが出す（`peek` は状態を変えない
+//! ので記録しない）。
 
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::num::{NonZeroU32, NonZeroU64};
 
-use areka_emo_compose::{BindSet, FilmId, PartKey, PatternFrame, PatternState};
+use areka_emo_compose::{BindSet, Cell, FilmId, PartKey, PatternFrame, PatternState};
 use areka_sakura::ActorKey;
 
 use crate::looper::pattern_frame;
 use crate::state::Slot;
 use crate::table::{AnimationTable, LoopAnimation, LoopTrigger};
-use crate::timeline::{FrameStatus, LoopRng, current_frame_index, frame_at, should_fire};
+use crate::timeline::{
+    AlwaysView, FrameStatus, LoopRng, always_at, current_frame_index, frame_at, should_fire,
+};
 
 /// animation 1 本の時計。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,13 +113,79 @@ fn look(anim: &LoopAnimation, clock: Option<PartAnim>, now_ms: u64) -> Look {
     }
 }
 
-/// 着せ替えの番人: 抽選の頻度 K を返す。`bind+random` で `binds` に無いものは `None`（要件 5.12）。
-fn gate(anim: &LoopAnimation, binds: &BindSet) -> Option<u32> {
+/// 着せ替えの番人の答え。
+enum Gate {
+    /// 抽選する（頻度 K）。
+    Lottery(u32),
+    /// `always`（抽選しない・乱数を引かない）。
+    Always {
+        period_ms: NonZeroU64,
+        laps: Option<NonZeroU32>,
+    },
+    /// 対象外（`bind+random` で `binds` に無い・要件 5.12）。
+    Off,
+}
+
+fn gate(anim: &LoopAnimation, binds: &BindSet) -> Gate {
     match anim.trigger {
-        LoopTrigger::Random { k } => Some(k),
-        LoopTrigger::BindRandom { k } => binds.contains(anim.id).then_some(k),
-        // `always` は抽選の対象外（部品の時計での再生は task 3.3）。
-        LoopTrigger::Always { .. } => None,
+        LoopTrigger::Random { k } => Gate::Lottery(k),
+        LoopTrigger::BindRandom { k } if binds.contains(anim.id) => Gate::Lottery(k),
+        LoopTrigger::BindRandom { .. } => Gate::Off,
+        LoopTrigger::Always { period_ms, laps } => Gate::Always { period_ms, laps },
+    }
+}
+
+/// `part` の animation `id` が回数つきの `always` か（見えなくなったら時計を捨てる対象）。
+fn is_finite(table: &AnimationTable, part: PartKey, id: u32) -> bool {
+    table
+        .part_animations(part)
+        .iter()
+        .any(|a| a.id == id && matches!(a.trigger, LoopTrigger::Always { laps: Some(_), .. }))
+}
+
+/// 入れ物 1 つの回数つきの時計のうち、`drop(部品)` が真のものを捨てる（捨てたら `debug!`）。
+fn drop_finite_where(
+    clocks: &mut BTreeMap<ClockKey, PartAnim>,
+    table: &AnimationTable,
+    scope: &ActorKey,
+    slot: Slot,
+    drop: impl Fn(PartKey) -> bool,
+) {
+    clocks.retain(|&(part, id), _| {
+        if !drop(part) || !is_finite(table, part, id) {
+            return true;
+        }
+        tracing::debug!(
+            scope = scope.as_str(),
+            slot = ?slot,
+            part = %Label(part),
+            animation_id = id,
+            "seriko: part 回数つきの時計を捨てた"
+        );
+        false
+    });
+}
+
+/// `always` の経過 `elapsed_ms` の答えを欄へ書く: 経過 0 のコマと同じなら載せない（要件 7.4）／
+/// コマならコマ（絵を指すなら子の欄）／何も出さないなら、経過 0 のコマが在るときだけ「消えている」。
+fn write_always(
+    pattern: &mut PatternState,
+    part: PartKey,
+    anim: &LoopAnimation,
+    period_ms: NonZeroU64,
+    laps: Option<NonZeroU32>,
+    elapsed_ms: u64,
+) {
+    let rest = always_at(&anim.frames, period_ms, laps, 0);
+    match always_at(&anim.frames, period_ms, laps, elapsed_ms) {
+        now if now == rest => {}
+        AlwaysView::Frame(i) => write(pattern, part, anim, i),
+        AlwaysView::Nothing => {
+            // 子のコマは全部が絵を指すので「何も出さない」は来ない（子の欄は「消えている」を持てない）。
+            if let PartKey::Surface(id) = part {
+                pattern.set_part_blank(id, anim.id);
+            }
+        }
     }
 }
 
@@ -158,13 +234,22 @@ fn rebuild(
     }
 
     if evaluated.len() > visible.len() {
-        let kept: Vec<(u32, u32, PatternFrame)> = visible
-            .iter()
-            .flat_map(|&p| pattern.part(p).map(move |(id, f)| (p, id, f.clone())))
+        // コマと「消えている」の両方を残す（`None` が「消えている」）。
+        let kept: Vec<(u32, u32, Option<PatternFrame>)> = pattern
+            .cells()
+            .filter_map(|(key, id, cell)| match (key, cell) {
+                (Some(PartKey::Surface(p)), Cell::Frame(f)) => Some((p, id, Some(f.clone()))),
+                (Some(PartKey::Surface(p)), Cell::Blank) => Some((p, id, None)),
+                _ => None,
+            })
+            .filter(|(p, ..)| visible.binary_search(p).is_ok())
             .collect();
         pattern.clear_parts();
         for (p, id, f) in kept {
-            pattern.set_part(p, id, f);
+            match f {
+                Some(f) => pattern.set_part(p, id, f),
+                None => pattern.set_part_blank(p, id),
+            }
         }
     }
 
@@ -229,17 +314,46 @@ impl PartClocks {
                 let anim = &anims[i];
                 let key = (part, anim.id);
                 let label = Label(part);
-                // 着せ替えの種類で有効でないものは抽選せず、時計を消す（要件 5.12）。
-                let Some(k) = gate(anim, binds) else {
-                    if clocks.remove(&key).is_some() {
-                        tracing::info!(
-                            scope = scope.as_str(),
-                            part = %label,
-                            animation_id = anim.id,
-                            "seriko: part bind から外れた ID の再生を停止（保持コマ除去・要件 5.12）"
-                        );
+                let k = match gate(anim, binds) {
+                    Gate::Lottery(k) => k,
+                    // 着せ替えの種類で有効でないものは抽選せず、時計を消す（要件 5.12）。
+                    Gate::Off => {
+                        if clocks.remove(&key).is_some() {
+                            tracing::info!(
+                                scope = scope.as_str(),
+                                part = %label,
+                                animation_id = anim.id,
+                                "seriko: part bind から外れた ID の再生を停止（保持コマ除去・要件 5.12）"
+                            );
+                        }
+                        continue;
                     }
-                    continue;
+                    // `always`: 乱数を引かず、時計が無ければこの時刻で作る（要件 3.1・4.1・4.4）。
+                    Gate::Always { period_ms, laps } => {
+                        let started = match clocks.get(&key) {
+                            Some(PartAnim::Playing { started_at_ms }) => *started_at_ms,
+                            _ => {
+                                clocks.insert(
+                                    key,
+                                    PartAnim::Playing {
+                                        started_at_ms: now_ms,
+                                    },
+                                );
+                                tracing::debug!(
+                                    scope = scope.as_str(),
+                                    slot = ?slot,
+                                    part = %label,
+                                    animation_id = anim.id,
+                                    finite = laps.is_some(),
+                                    "seriko: part always の時計が生まれた"
+                                );
+                                now_ms
+                            }
+                        };
+                        let elapsed = now_ms.saturating_sub(started);
+                        write_always(pattern, part, anim, period_ms, laps, elapsed);
+                        continue;
+                    }
                 };
                 // 境界を跨いだ刻みで再生中でなければ抽選（保っているコマは当たれば捨てる）。
                 let playing = matches!(clocks.get(&key), Some(PartAnim::Playing { .. }));
@@ -298,6 +412,13 @@ impl PartClocks {
         rebuild(
             table, surface_id, binds, pattern, visible, evaluated, films, evaluate,
         );
+
+        // 回数つきの時計は、今の絵に見えていなければ捨てる（次に見えたら頭から・要件 2.3・2.7）。
+        let seen = |part: PartKey| match part {
+            PartKey::Surface(id) => visible.binary_search(&id).is_ok(),
+            PartKey::Film(film) => films.binary_search(&film).is_ok(),
+        };
+        drop_finite_where(clocks, table, scope, slot, |part| !seen(part));
     }
 
     /// 時計を書き換えず、抽選もせずに、`now_ms` の時点の部品のコマで `pattern` の部品の欄を作り直す
@@ -322,10 +443,19 @@ impl PartClocks {
             sort_by_id(anims, &mut order);
             for &i in order.iter() {
                 let anim = &anims[i];
-                if gate(anim, binds).is_none() {
-                    continue;
-                }
                 let clock = clocks.and_then(|c| c.get(&(part, anim.id))).copied();
+                match gate(anim, binds) {
+                    Gate::Lottery(_) => {}
+                    Gate::Off => continue,
+                    // 時計は作らない（無ければ経過 0＝欄に載せない）。
+                    Gate::Always { period_ms, laps } => {
+                        if let Some(PartAnim::Playing { started_at_ms }) = clock {
+                            let elapsed = now_ms.saturating_sub(started_at_ms);
+                            write_always(pattern, part, anim, period_ms, laps, elapsed);
+                        }
+                        continue;
+                    }
+                }
                 if let Look::Frame(i) | Look::Finished(i) = look(anim, clock, now_ms) {
                     write(pattern, part, anim, i);
                 }
@@ -370,6 +500,16 @@ impl PartClocks {
             .any(|&f| !table.part_animations(PartKey::Film(f)).is_empty())
     }
 
+    /// `scope` の `slot` の面の回数つきの時計を全部捨てる（面が隠れたとき・終わりなしは残す・
+    /// 要件 2.3）。呼ぶのは `\s[-1]`（task 3.4）・`\b[-1]`（task 3.6）・窓が閉じた知らせと新しい出番
+    /// （task 5.1）。
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn drop_finite(&mut self, scope: &ActorKey, slot: Slot, table: &AnimationTable) {
+        if let Some(clocks) = self.clocks.get_mut(scope).and_then(|c| c.get_mut(&slot)) {
+            drop_finite_where(clocks, table, scope, slot, |_| true);
+        }
+    }
+
     /// 全スコープ・全部の面の種類の時計と、負の番号の `warn!` の記録を捨てる（シェルの表の差し替え・
     /// 要件 5.8）。
     pub(crate) fn clear(&mut self) {
@@ -387,6 +527,22 @@ impl PartClocks {
             .copied()
     }
 
+    /// `scope` の `slot` の面の (部品, animation の番号) の時計を引く（テストの観測用）。
+    #[cfg(test)]
+    pub(crate) fn clock_at(
+        &self,
+        scope: &ActorKey,
+        slot: Slot,
+        part: PartKey,
+        animation_id: u32,
+    ) -> Option<PartAnim> {
+        self.clocks
+            .get(scope)?
+            .get(&slot)?
+            .get(&(part, animation_id))
+            .copied()
+    }
+
     /// 最後の `clear` の後（または作ってから）`advance` がどのスコープでも 1 度も走っていないか
     /// （テストの観測用・`advance` はスコープの入れ物を先に作る）。
     #[cfg(test)]
@@ -398,3 +554,11 @@ impl PartClocks {
 #[cfg(test)]
 #[path = "parts_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "parts_always_tests.rs"]
+mod always_tests;
+
+#[cfg(test)]
+#[path = "parts_film_tests.rs"]
+mod film_tests;
