@@ -1,11 +1,14 @@
 //! 開く処理の 1 か所（areka-P0-open-external-tags task 3.1・要件 1.1〜1.4・2.1〜2.4・3.1・
-//! 4.1〜4.6・4.8・5.1・5.3・6.1・6.2・10.2・task 3.2）。
+//! 4.1〜4.6・4.8・5.1・5.3・6.1・6.2・10.2・task 3.2・task 3.3＝要件 2.5・3.3・5.4・6.4・7.2〜7.4・
+//! 7.6・7.8・10.5）。
 //!
 //! 行き先（[`Destination`]）と文脈（[`OpenContext`]）から OS への 1 回分の呼び出し（[`OsCall`]）を
 //! 作る [`resolve`] を置く。fs は読むが OS は呼ばない（呼ぶのは開く専用のスレッドの実行だけ）。
+//! [`execute`] は 1 件を記録して OS へ渡し、[`serve`] は受信端が閉じるまでそれを繰り返す。
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::Receiver;
 
 use super::destination::{Destination, Store, Target};
 use super::os_port::{OsCall, OsPort, Verb};
@@ -13,6 +16,7 @@ use crate::emo2_boot::ghost_switch::{GhostSpec, resolve_switch_target};
 use crate::emo2_boot::shell_balloon_resolve::{
     SkinCandidate, balloon_candidates, shell_candidates,
 };
+use crate::log_history::TARGET_ERROR;
 
 /// 開く文脈（UI スレッドで World から写す）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,6 +38,92 @@ pub(crate) enum OpenFailure {
     NoMatch { store: Store, name: String },
     /// 目録を引く根（ベースウェアの根）が無い。
     NoBasewareRoot,
+}
+
+impl OpenFailure {
+    /// 記録の欄 `reason` の値。
+    fn reason(&self) -> &'static str {
+        match self {
+            OpenFailure::NotFound(_) => "not_found",
+            OpenFailure::NoMatch { .. } => "no_match",
+            OpenFailure::NoBasewareRoot => "no_baseware_root",
+        }
+    }
+}
+
+/// 開く専用のスレッドへ送る 1 件。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OpenJob {
+    pub destination: Destination,
+    pub context: OpenContext,
+}
+
+/// 1 件を解決して記録し OS へ渡す。失敗の経路は必ず `error!` 1 行を残す（要件 7.2〜7.4）。
+///
+/// メッセージボックスは出さない（要件 7.6）。
+pub(crate) fn execute(port: &mut dyn OsPort, job: OpenJob) {
+    let OpenJob {
+        destination: dest,
+        context: ctx,
+    } = job;
+    let kind = dest.target.kind().as_str();
+    let call = match resolve(&dest, &ctx, port) {
+        Ok(call) => call,
+        Err(failure) => {
+            tracing::error!(
+                target: TARGET_ERROR,
+                ghost = %ctx.ghost,
+                event = "open_external_failed",
+                kind,
+                destination = %dest.written,
+                tag = %dest.tag,
+                reason = failure.reason(),
+                ?failure,
+                "[readme] could not resolve the destination to open"
+            );
+            return;
+        }
+    };
+    // 解決した行き先（explorer の /select は選ぶファイルまで見せる）。
+    let mut resolved = call.file.clone();
+    if let Some(params) = &call.params {
+        resolved.push(" ");
+        resolved.push(params);
+    }
+    let resolved = resolved.to_string_lossy().into_owned();
+    let verb = match call.verb {
+        Verb::Open => "open",
+        Verb::Edit => "edit",
+    };
+    tracing::info!(
+        event = "open_external",
+        kind,
+        destination = %resolved,
+        ghost = %ctx.ghost,
+        tag = %dest.tag,
+        verb,
+        "[readme] handed the destination to the OS"
+    );
+    if let Err(code) = port.shell_execute(&call) {
+        tracing::error!(
+            target: TARGET_ERROR,
+            ghost = %ctx.ghost,
+            event = "open_external_failed",
+            kind,
+            destination = %resolved,
+            tag = %dest.tag,
+            reason = "os",
+            code,
+            "[readme] the OS refused to open the destination"
+        );
+    }
+}
+
+/// 受信端が閉じるまで 1 件ずつ [`execute`] する（開く専用のスレッドの中身・要件 7.8）。
+pub(crate) fn serve(rx: Receiver<OpenJob>, port: &mut dyn OsPort) {
+    for job in rx {
+        execute(port, job);
+    }
 }
 
 /// `mailto:` の前置き（大文字小文字を区別しない）。
@@ -199,3 +289,7 @@ fn expand_env(s: &str, port: &dyn OsPort) -> String {
 #[cfg(test)]
 #[path = "opener_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "opener_execute_tests.rs"]
+mod execute_tests;
