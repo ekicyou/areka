@@ -46,7 +46,7 @@
   - 完了の姿: 検体のシェルを読むと、動く絵の element が子を置く element に替わり、`element*` から `film_sheet` が必ず引け、`emo2` の面の表には子の定義が載らない
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.11, 2.5, 3.4, 7.1, 8.2, 8.3_
 
-- [ ] 2.4 見える部品に、動く絵の子と `always` の経過 0 の先を数える
+- [x] 2.4 見える部品に、動く絵の子と `always` の経過 0 の先を数える
   - `SurfaceParts` に `films` と `always_rest` の 2 欄を足し、行を載せる条件にもこの 2 欄を足す（動く絵だけを置いたサーフェスの行が載るように）
   - 見える部品の求め方に、`always` の animation に欄が無ければ経過 0 の先へ進む辺を足す（「消えている」なら進まない）
   - 読み口 `visible_films(top, parts, out)` を足す。`visible_parts` の署名は変えない
@@ -238,3 +238,4 @@
 - 2.2: 走査の口は `cells()`（一番上も含む「載っていない」以外の全部）。4.1 は `iter()` を先に混ぜ、一番上でない欄と一番上の「消えている」を在るときだけ足して、一番上だけの鍵を前と同じ値に保つ。子の欄は「消えている」を持てない（`films: BTreeMap<FilmId,u32>`）＝3.3 で子の `always_at` が「何も出さない」を返す場面があれば欄の形を見直す
 - 2.3: `FilmId` は親の `ElementId` の値。経過 0 は `rest_index(once(0).chain(delays[..n-1]))`（pattern i の待ち＝コマ i−1 の待ち時間）。`surface<数字>.png` は `apply_base_images` が足す層 0 の画像の element として同じ分解に乗る。2.5 までは検体の子は `plan.rs` の仮の腕で描かれない
 - 範囲外（完了時に確かめる）: `cargo clippy -p areka-emo-compose --all-targets -- -D warnings` が既存のテスト 5 か所の `chunks_exact`（`blit_transparent_alpha_tests.rs`・`golden_tests_surface1000_bind_tests.rs`・`golden_tests_test_support.rs`・`composer_tests.rs` ×2）で赤。ツールチェーンの新しい警告。`clippy-199-lints` の持ち物か確かめて起票
+- 2.4: 経過 0 の pattern の求め方 `rest_pattern(anim)` は `nesting.rs` に置いた（`pub(crate)`・index の昇順に並べて `rest_index`）。2.5 の `plan_always.rs` はこれを呼び 2 つ目を作らない。seriko（3.2）は `table.rs` の同じ並べ方の待ち時間に公開の `rest_index` を当てる＝並べ方を変えるなら両方を揃える。`always_rest` の先はまだ `has_animated_parts` に数えない（3.2 の `is_continuous()` の仕事）

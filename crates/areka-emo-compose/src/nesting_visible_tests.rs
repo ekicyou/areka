@@ -114,6 +114,7 @@ fn fixture_table_lists_children_and_bind_targets() {
             children: vec![10, 30],
             bind_targets: vec![(100, 40)],
             bind_ids: vec![100],
+            ..Default::default()
         })
     );
 }
@@ -212,6 +213,7 @@ element0,overlay,eye.png,0,0
             children: vec![],
             bind_targets: vec![],
             bind_ids: vec![7],
+            ..Default::default()
         })
     );
 
@@ -277,6 +279,7 @@ element0,overlay,eye.png,0,0
             children: vec![],
             bind_targets: vec![(5, 3)],
             bind_ids: vec![1, 2, 3, 4, 5],
+            ..Default::default()
         })
     );
     assert_eq!(
