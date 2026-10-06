@@ -21,7 +21,7 @@
   - _Requirements: 9.4_
 
 - [ ] 2. 合成の側: 子の定義・欄・経過 0・外形
-- [ ] 2.1 部品の鍵の 2 つ目の種類と、`always` の見分け・経過 0 の求め方を置く
+- [x] 2.1 部品の鍵の 2 つ目の種類と、`always` の見分け・経過 0 の求め方を置く
   - `nesting.rs` に `PartKey`（作者のサーフェス／動く絵の子）・`FilmId`・`ElementKind::Film` を足す。作者の欄の読み分け（`element_kind`）は `Film` を返さない
   - `is_always_interval`（`always` の単独・小文字の完全一致）と `rest_index`（待ち時間の累積が 0 の最後の番号）を 1 つずつ置き、合成・見える部品・seriko の表が同じ関数を使える形で公開する
   - `NestReport::from_world` は `ElementKind::Film` を「無い番号」にも「循環」にも数えない
@@ -234,3 +234,4 @@
 - 並走（10-06 調べ）: `areka-P0-self-alpha-declaration`（セッションなし・tasks 生成済み）は `build_balloon_target_from_faces` に値を 1 つ足し、`build_shell_target*` の直呼びに `UseSelfAlpha::On` を足す。後から main に入る側が、1.2 の `shell_target_animated_fixture_tests.rs` と 5.4 の E2E の呼び出しを合わせる。`mcp-get-status` は `frame/status_report.rs` を読むだけの見込み（問い合わせ中）
 - 7.1: 台帳を書き替えたら `doc/ukadoc-coverage/report/summary.md` は手で直さず `ukadoc-survey` の report と report-summary を回し直して作る（並走の choice-script-prefix・element-base-method も同じ表を作り直すので、後から入る側が回し直す）
 - 1.1（範囲外・完了時に起票）: `emo2` の 1 コマの時間が 8 月の draw-load-parity（p50 2.8 ms・p95 26.5 ms）より桁で遅い（10-06 main で p50 69 ms・p95 605 ms・catch-up 96→252）。差のほとんどが `show.rs` の最後の `mark(MaskGen)` から `emit` までの、どの段にも入らない区間。本 spec の前からの問題。6.2 の前後比較は `perf-loop.ps1 prepare-ab`／`measure-ab` の交互取得を必須にする
+- 2.1: `FilmId` は `nesting.rs` に置いた（2.3 で `film.rs` を作っても 2 つ目を作らない）。`plan.rs` の `ElementKind::Film(_)` は網羅のための仮の腕（全部を `debug!` で飛ばす）＝2.3 から 2.5 の間は本番で届く。2.5 で design の誤りの表どおり（子の定義が無いときだけ `error!`）に置き換え、そのレビューで確かめる

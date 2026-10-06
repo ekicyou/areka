@@ -145,6 +145,7 @@ pub(crate) fn push_static_element_ops(
         let skip_reason = match element.kind {
             ElementKind::Image => None,
             ElementKind::SurfaceOutOfRange => Some("番号として扱える範囲を超える数"),
+            ElementKind::Film(_) => Some("動く絵の子の定義が無い"),
             ElementKind::Surface(child) if world.surface(child).is_none() => {
                 Some("面の表に無い番号")
             }

@@ -9,7 +9,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use areka_parsers::shell::ElementPath;
+use areka_parsers::shell::{ElementPath, Interval};
 
 use crate::bind::BindSet;
 use crate::method::is_implemented_name;
@@ -26,6 +26,34 @@ pub enum ElementKind {
     Surface(u32),
     /// 欄は半角の数字だけだが u32 に収まらない。画像としては読まない（要件 1.9）。
     SurfaceOutOfRange,
+    /// 動く絵から作った子を置く（分解が画像の element を替える）。作者の欄の読み分け
+    /// （[`element_kind`]）からは出ない（要件 1.12）。
+    Film(FilmId),
+}
+
+/// 動く絵の子の番号（親の絵の番号＝同じ画像は同じ子）。作者のサーフェスの番号とは別の空間。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FilmId(pub u32);
+
+/// 部品を指す鍵。作者のサーフェスと動く絵の子は種類が違うので、番号が当たることが無い（要件 1.12）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum PartKey {
+    /// 作者が書いたサーフェス（番号）。
+    Surface(u32),
+    /// 動く絵から作った子。
+    Film(FilmId),
+}
+
+/// interval が `always` の単独（小文字の完全一致）か。`bind+always` などの組み合わせ・大文字・
+/// 空白つきは偽（要件 4.8・4.9）。合成・見える部品・seriko の表がこの 1 関数を使う。
+pub fn is_always_interval(interval: &Interval) -> bool {
+    matches!(interval, Interval::Other(s) if &**s == "always")
+}
+
+/// 経過 0 のコマ＝待ち時間の累積が 0 の最後の番号（先頭から待つなら `None`）。
+/// 合成と seriko が同じ関数を使う。
+pub fn rest_index(waits_ms: impl Iterator<Item = u32>) -> Option<usize> {
+    waits_ms.take_while(|&w| w == 0).count().checked_sub(1)
 }
 
 /// 欄が空でなく、全部が半角の数字（0〜9）なら番号として読む。`0100` は 100。
@@ -270,7 +298,8 @@ impl NestReport {
             // elements は element定義の番号の昇順・同じ番号は書いた順。
             for e in &master.elements {
                 let child = match e.kind {
-                    ElementKind::Image => continue,
+                    // 子は先を持たない（無い番号でも循環でもない）。
+                    ElementKind::Image | ElementKind::Film(_) => continue,
                     ElementKind::Surface(c) if edges.contains_key(&c) => c,
                     _ => {
                         issues.push(NestIssue::MissingTarget {
@@ -327,3 +356,7 @@ mod report_tests;
 #[cfg(test)]
 #[path = "nesting_fixture_tests.rs"]
 mod fixture_tests;
+
+#[cfg(test)]
+#[path = "nesting_film_tests.rs"]
+mod film_tests;
