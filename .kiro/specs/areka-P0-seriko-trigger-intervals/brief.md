@@ -118,17 +118,18 @@
 - **引き受けるもの（本 spec の In へ足す）**: interval の **`always` を含む組み合わせ**（`bind+always` ほか）。正典は「SSPのみ+区切りで列挙する事で組み合わせ指定が可能」（[descript_shell_surfaces `animation*.interval`](https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#animation*.interval%2C%E3%82%A4%E3%83%B3%E3%82%BF%E3%83%BC%E3%83%90%E3%83%AB)）と書くだけで、相手や語順を限らない。決めることは ⑴ `bind+always`＝着せ替えが有効な間だけ繰り返す ⑵ `+` の語順の違い（`always+bind`）⑶ 3 語以上の組み合わせをどこまで読むか。組み合わせだけは `animated-image-playback` の繰り返しの仕組みに働きの上で依存する（棚卸㉒の「働きの依存は無い」は、組み合わせを引き受ける前の `talk` ほかについての話）。
 - **`animated-image-playback` が入れるもの**: `always` の**単独**（完全一致）だけ。表示と同時に始まり、最後のコマの後に頭へ戻って繰り返す。一番上のサーフェスでは切り替えで頭から、子のサーフェスでは子の時計の決まり（巻き戻らない）。途中の終わりのコマ（`-1`）は消してから頭へ戻る。待ち時間の合計 0 は繰り返さずに記録を残す。
 - **`animated-image-playback` が残すもの（変更 0）**: `always` を含む組み合わせは、今までどおり元の綴りを添えた記録を残して駆動しない（同 spec の要件 4.9）。`runonce`・`never`・`yen-e`・`talk`・`periodic`・`bind` 単独 ほかも同じ（同 4.8）。
-- **着せ替えの種類かを見ている場所**（起票時の実測・`animated-image-playback` の research.md 5 章 議題 4）: 合成の `is_bind_interval`（`crates/areka-emo-compose/src/plan.rs`）・`NestTable` の `bind_ids`（`crates/areka-emo-compose/src/nesting.rs`）・seriko の着せ替えの番人（`crates/areka-seriko/src/parts.rs` の `gate`・`looper.rs`）。読み手 `normalize_interval`（`crates/areka-parsers/src/shell/decode.rs`）は完全一致で見分ける。
+- **着せ替えの種類かを見ている場所**（起票時の実測・`animated-image-playback` の research.md 5 章 議題 4）: 合成の `is_bind_interval`（`crates/areka-emo-compose/src/plan.rs`）・`NestTable` の 1 行 `SurfaceParts` の `bind_ids`（`crates/areka-emo-compose/src/nesting.rs`）・seriko の着せ替えの番人（`crates/areka-seriko/src/parts.rs` の `gate`・`looper.rs`）。読み手 `normalize_interval`（`crates/areka-parsers/src/shell/decode.rs`）は完全一致で見分ける。`animated-image-playback` の実装の後（2026-10-06）は、外形の `flatten_extent`（`crates/areka-emo-compose/src/plan_extent.rs`）も `is_bind_interval` を見る（場所は下の「繰り返しの仕組みの形」）。
 - **時刻の決まり**: 時刻は正確に扱う（開発者 2026-10-05）。待ち時間は丸めない・画面の更新が遅れたら過ぎた時間の分だけ進める。繰り返しの仕組みの上に載る語も同じ。
-- **繰り返しの仕組みの形**（型・関数の名前）: 設計の段で決まりしだい、ここへ書き足す→ 下の「繰り返しの仕組みの形」に記した（2026-10-05）。
+- **繰り返しの仕組みの形**（型・関数の名前）: 下の「繰り返しの仕組みの形」に記した（2026-10-05 に設計から写し、2026-10-06 に実装した実物と照らして書き直した）。
 
-### 繰り返しの仕組みの形（2026-10-05 設計の確定時点・`animated-image-playback` の design.md から写し。実装で変わったら同 spec が書き直す）
+### 繰り返しの仕組みの形（2026-10-06 `animated-image-playback` の実装の後・実物と照らした名前）
 
-- 引き金: `LoopTrigger::Always { period_ms, laps }`（`crates/areka-seriko/src/table.rs`）。見分けは `is_always_interval`（`crates/areka-emo-compose/src/nesting.rs`）の 1 関数。
-- 計算: `lap_of`・`always_at`（`crates/areka-seriko/src/timeline.rs`）。開始の時刻からの経過だけで今のコマを決める。
-- 時計: 一番上は `LoopRuntime` の再生の表、部品は `PartClocks`。「見えたと分かった出来事の時刻で、乱数を引かずに生まれる」。時刻は `SerikoClock`（刻みと同じ時計）。
-- 経過 0 の絵は合成が定義から描く（`rest_index`・`plan.rs` の `flatten_surface`）。seriko は経過 0 と同じコマを欄に載せない。欄の意味は 3 つ（`Cell`: 載っていない・コマ・消えている）。
-- `always` は外形に全部の pattern が入る（`plan_extent.rs` の `flatten_extent`）。見える部品にも経過 0 の先が入る（`NestTable`）。
-- 抽選の対象から外す場所は 2 つ: `LoopRuntime::on_tick` の抽選の輪と、`parts.rs` の `gate`。
-- `bind+always` を入れるときは、`is_always_interval`（経過 0 を描くか・外形に数えるか）と「着せ替えの種類か」（`plan.rs` の `is_bind_interval`・`nesting.rs` の `bind_ids`・`parts.rs` の `gate`）の両方に載せ、着せ替えが無効の間は経過 0 の絵も描かない形にする。
-- バルーンの面でも部品の経路が回る。時計の鍵に面の種類が入った。
+- **引き金**: `LoopTrigger::Always { period_ms, laps }`（`crates/areka-seriko/src/table.rs`）。手書きの `always` は `laps` が常に `None`、動く絵の子はファイルの回数を持つ。interval の見分けは `is_always_interval`（`crates/areka-emo-compose/src/nesting.rs`・`always` の単独の小文字の完全一致）の 1 関数で、合成・見える部品・seriko の表が共有する。表を組むのは `AnimationTable::from_world_and_films`（`from_world` はここへ委ねる）。その中の interval の `match` で `is_always_interval` の腕が先に来て、組み合わせ（`bind+always` ほか）は `Interval::Other` の腕で元の綴りを添えた記録を出して採らない。
+- **表の門**: 表に `always` も動く絵の子も無ければ `AnimationTable::is_continuous()` が偽で、足した道を通らない（動かないシェルの合成の回数を増やさない）。
+- **計算**: `lap_of`・`always_at`（`crates/areka-seriko/src/timeline.rs`・答えは `AlwaysView`＝`Frame(コマ)` か `Nothing`）。開始の時刻からの経過だけで今のコマを決める。コマの探し方は同じファイルの `current_frame_index`（`pub(crate)`・今までの `frame_at` もこれを通る）。
+- **時計**: 一番上のサーフェスの `always` は `LoopRuntime`（`crates/areka-seriko/src/looper.rs`）の再生の表（`start_top_always` で生まれ、`put_top_always` で欄へ置く）。部品と動く絵の子は `PartClocks`（`crates/areka-seriko/src/parts.rs`）。時計の鍵は (スコープ, 面の種類 `Slot`) × (部品 `PartKey`, animation の番号)。時計は「見えたと分かった出来事の時刻で、乱数を引かずに生まれる」＝ `LoopRuntime::refresh(scope, slot, at_ms, states)` を `\s`・着せ替え・`\b`・窓の知らせの 4 か所から呼ぶ（`at_ms` が `None` なら直前の刻みの時刻）。出来事の時刻は `SerikoClock`（`crates/areka-seriko/src/actor.rs`・`spawn_seriko_clocked` で注入・`crates/areka/src/emo2_boot/mod.rs` が刻みと同じ時計を渡す）。回数つきの時計は、見えなくなったら `LoopRuntime::drop_finite`（中で `PartClocks::drop_finite`）で捨てる。
+- **経過 0**: 経過 0 の絵は合成が定義から描く。求め方は `rest_index`・`rest_pattern`（`nesting.rs`）、描くのは `crates/areka-emo-compose/src/plan_always.rs` の `always_rest_target`（手書きの `always`・`plan.rs` の `flatten_surface` から呼ぶ）と `push_film_op`（動く絵の子・`plan.rs` の `push_static_element_ops` から呼ぶ）。seriko は `always_at(…, 0)` と同じコマを欄に載せない。欄の読みは `Cell`（`crates/areka-emo-compose/src/pattern.rs`）の 4 つ: `Rest`（載っていない）・`Frame`（サーフェスを指すコマ）・`Picture`（絵を直接指すコマ＝動く絵の子だけ）・`Blank`（消えている）。
+- **外形**: `always` は全部の pattern が入る（`plan_extent.rs` の `flatten_extent`・`plan` の子のモジュール）。負の番号・animation の番号を指す 7 語・`move` は数えない。見える部品にも経過 0 の先が入る（`NestTable` の 1 行 `SurfaceParts` の `always_rest`・`NestTable::visible_parts` がたどる）。
+- **抽選の対象から外す場所は 2 つ**: `LoopRuntime::on_tick` の抽選の輪（`LoopTrigger::Always` を乱数の前で飛ばす）と、`parts.rs` の `gate`（`Gate::Always` を返す）。
+- **`bind+always` を入れるとき**: `is_always_interval`（経過 0 を描くか・外形に数えるか・表に採るか）と「着せ替えの種類か」（`plan.rs` の `is_bind_interval`・`plan_extent.rs` の `flatten_extent`・`SurfaceParts` の `bind_ids`・`parts.rs` の `gate`・`looper.rs` の `on_tick` の抽選の着せ替えの番人と進行の着せ替えの判定）の両方に載せ、着せ替えが無効の間は経過 0 の絵も描かない形にする。今の `LoopTrigger::Always` は着せ替えの印を持たない。
+- **バルーンの面**: 部品の経路はバルーンの面でも回る（時計の鍵の `Slot::Balloon`）。窓の知らせ `StageNote::Balloon { scope, open, face, generation }`（`crates/areka-seriko/src/state.rs`）を `SerikoSink::send_stage` が `SerikoMsg::Stage` で運び、`ScopeStates::note_stage` が覚える。窓が閉じている間は時計を作らない。送るのは `crates/areka/src/emo2_boot/frame/status_report.rs` の `report_stages`。

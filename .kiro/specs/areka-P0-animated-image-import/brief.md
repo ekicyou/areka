@@ -64,7 +64,7 @@ SERIKO の pattern定義の描画メソッド `import`（`animation*.pattern*,im
   - 時刻は正確に扱う（開発者 2026-10-05）。待ち時間は丸めない。画面の更新が遅れたら過ぎた時間の分だけ進める。
   - シェルとバルーンに設計上の違いは無い（開発者 2026-10-05）。面の種類で能力を仕切らない。
   - 置くだけで動く自動アニメーションはファイルの繰り返し回数を守る（「合計 N 回」の絵は表示のたびに始め直す）。`import` は正典どおり回数を使わない。この違いは対応表（`doc/COMPAT_ARCHITECTURE.md` §8）に並べて書く。
-- **繰り返しの仕組みと、動く絵をコマの列へ分解する仕組みの形**（型・関数の名前）: `animated-image-playback` の設計の段で決まりしだい、ここへ書き足す→ 下の「繰り返しと分解の仕組みの形」に記した（2026-10-05）。
+- **繰り返しの仕組みと、動く絵をコマの列へ分解する仕組みの形**（型・関数の名前）: 下の「繰り返しと分解の仕組みの形」に記した（2026-10-05 に設計から写し、2026-10-06 に `animated-image-playback` が実装した実物と照らして書き直した）。同 spec は `import` の読み手（`crates/areka-parsers/`）と描画メソッドの表（`crates/areka-emo-compose/src/method.rs`）に変更 0 で終わった＝`import` の今の扱いは切り出しの時点のまま。
 - **ギャップ分析の材料**: `animated-image-playback` の research.md 3.2 節（`import` の今の読まれ方と、直さないと残る 3 か所）・6 章の 6（末尾のコマ・混在・`surface.append` の行にだけ現れる絵）。
 
 ### 渡す受け入れ基準の下書き（`animated-image-playback` の旧 要件 5・原文のまま）
@@ -86,17 +86,17 @@ SERIKO の pattern定義の描画メソッド `import`（`animation*.pattern*,im
 9. The areka shall `import` のファイルに、読み込みの側の 3 つの上限（コマの枚数・絵 1 つの画素の量・シェルの合計の画素の量）を、element定義の動く絵と同じに効かせる。
 10. The areka shall 1 つのアニメーションに `import` の pattern定義とほかの pattern定義が混ざっているときの振る舞いを設計で定め、正典が黙っている箇所の記録（要件 10.2）に記す。どう定めても、記録を残さずに pattern定義を捨てる経路は 0 本とする。
 
-### 繰り返しと分解の仕組みの形（2026-10-05 設計の確定時点・`animated-image-playback` の design.md から写し。実装で変わったら同 spec が書き直す）
+### 繰り返しと分解の仕組みの形（2026-10-06 `animated-image-playback` の実装の後・実物と照らした名前）
 
-- 引き金: `LoopTrigger::Always { period_ms, laps }`（`crates/areka-seriko/src/table.rs`）。見分けは `is_always_interval`（`crates/areka-emo-compose/src/nesting.rs`）の 1 関数。
-- 計算: `lap_of`・`always_at`（`crates/areka-seriko/src/timeline.rs`）。開始の時刻からの経過だけで今のコマを決める。
-- 時計: 一番上は `LoopRuntime` の再生の表、部品は `PartClocks`。「見えたと分かった出来事の時刻で、乱数を引かずに生まれる」。時刻は `SerikoClock`（刻みと同じ時計）。
-- 経過 0 の絵は合成が定義から描く（`rest_index`・`plan.rs` の `flatten_surface`）。seriko は経過 0 と同じコマを欄に載せない。欄の意味は 3 つ（`Cell`: 載っていない・コマ・消えている）。
-- `always` は外形に全部の pattern が入る（`plan_extent.rs` の `flatten_extent`）。見える部品にも経過 0 の先が入る（`NestTable`）。
-- 抽選の対象から外す場所は 2 つ: `LoopRuntime::on_tick` の抽選の輪と、`parts.rs` の `gate`。
-- 動く絵は「子」になる: 子の定義 `FilmSheet`（`EmoWorld::film_sheet`・`crates/areka-emo-compose/src/film.rs`）、鍵 `PartKey::Film(FilmId)`、子を置く element `ElementKind::Film`。子は `always` を 1 本持ち、部品の時計で回る。
-- `import` は「**pattern定義が動く絵の子を指す**」形に載れる。今、pattern定義が指せるのは作者のサーフェスの番号だけなので、足すのは ①読み手が `import` のファイル名を落とさずに運ぶこと ②そのファイルを焼く一覧に載せること ③コマの指す先に「動く絵の子」を足すこと（`PatternFrame`・`LoopFrame`・`flatten_surface` のコマの腕・`NestTable` のコマの辺）。子が見える部品になれば、時計・欄・経過 0・外形は本 spec のものがそのまま効く。
+- **引き金**: `LoopTrigger::Always { period_ms, laps }`（`crates/areka-seriko/src/table.rs`）。interval の見分けは `is_always_interval`（`crates/areka-emo-compose/src/nesting.rs`・`always` の単独の完全一致）の 1 関数を、合成・見える部品・seriko の表が共有する。表を組むのは `AnimationTable::from_world_and_films`（`from_world` はここへ委ねる）。表に `always` も動く絵の子も無ければ `AnimationTable::is_continuous()` が偽で、足した道を通らない。
+- **計算**: `lap_of`・`always_at`（`crates/areka-seriko/src/timeline.rs`・答えは `AlwaysView`）。開始の時刻からの経過だけで今のコマを決める。
+- **時計**: 一番上のサーフェスの `always` は `LoopRuntime`（`crates/areka-seriko/src/looper.rs`）の再生の表、部品と動く絵の子は `PartClocks`（`crates/areka-seriko/src/parts.rs`）。時計の鍵は (スコープ, 面の種類 `Slot`) × (部品 `PartKey`, animation の番号)。時計は「見えたと分かった出来事の時刻で、乱数を引かずに生まれる」＝ `LoopRuntime::refresh(scope, slot, at_ms, states)`。出来事の時刻は `SerikoClock`（`crates/areka-seriko/src/actor.rs`・`spawn_seriko_clocked` で注入・刻みと同じ時計）。回数つきの時計は見えなくなったら `LoopRuntime::drop_finite` で捨てる。
+- **経過 0**: 経過 0 の絵は合成が定義から描く。求め方は `rest_index`・`rest_pattern`（`nesting.rs`）、描くのは `crates/areka-emo-compose/src/plan_always.rs` の `always_rest_target`（手書きの `always`）と `push_film_op`（動く絵の子）。seriko は `always_at(…, 0)` と同じコマを欄に載せない。欄の読みは `Cell`（`crates/areka-emo-compose/src/pattern.rs`）の 4 つ: `Rest`（載っていない）・`Frame`（サーフェスを指すコマ）・`Picture`（絵を直接指すコマ）・`Blank`（消えている）。
+- **外形**: `always` は全部の pattern が入る（`plan_extent.rs` の `flatten_extent`・`plan` の子のモジュール）。動く絵の子は子の原寸（`FilmSheet::original`）を、画像の element と同じ 1 行で数える。見える部品にも経過 0 の先が入る（`NestTable` の 1 行 `SurfaceParts` の `always_rest`）。
+- **抽選の対象から外す場所は 2 つ**: `LoopRuntime::on_tick` の抽選の輪と、`parts.rs` の `gate`。
+- **動く絵は「子」になる**: 分解は `crates/areka-emo-compose/src/film.rs` の `decompose`（`EmoWorld::bind_atlas` の束縛の直後に呼ぶ）。子の定義は `FilmSheet`（`id`・`path`・`frames`・`delays_ms`・`laps`・`original`・`rest`）で、面の表 1 つぶんを Resource の `FilmSheets` が持ち、`EmoWorld::film_sheet`・`film_sheets`・`film_skips` で引く。分解しなかった絵は `FilmSkip`（理由 `FilmSkipReason`）。子の番号 `FilmId`（親の絵の `ElementId` の値）・鍵 `PartKey::Film(FilmId)`・子を置く element の種類 `ElementKind::Film(FilmId)` は `nesting.rs` に在る。子は seriko の表で animation 0 の `always` を 1 本持ち（コマは `LoopFrame { surface_id: -1, picture: Some(絵の番号), .. }`）、部品の時計で回る。合成は `push_film_op` が欄の `Cell::Picture` の絵を置く（`PatternState::set_film` で欄に載る）。
+- **`import` は「pattern定義が動く絵の子を指す」形に載れる**。今、pattern定義のコマが指せるのは作者のサーフェスの番号だけである（絵を直接指す `LoopFrame::picture`・`Cell::Picture` は子の中のコマ 1 枚で、子そのものを指すコマは無い）。足すのは ①読み手が `import` のファイル名を落とさずに運ぶこと ②そのファイルを焼く一覧に載せること ③コマの指す先に「動く絵の子」を足すこと（`PatternFrame`（`pattern.rs`）・`LoopFrame`（`table.rs`）・`plan.rs` の `flatten_surface` のコマの腕・`NestTable::visible_parts` のコマの辺）。子が見える部品になれば、時計・欄・経過 0・外形は `animated-image-playback` のものがそのまま効く。
 - そのままでは合わない所が 3 つ:
   - **冒頭の待ち**: `import` の pattern のウエイトは、子の時計とは別に pattern の側で持つ。
-  - **繰り返し回数を使わない**（正典）: 子の定義は回数を持つ。`import` が指す子は回数なしで回す必要がある。
-  - **同じ画像を element定義と `import` の両方で使うとき**: 子の鍵は画像 1 つにつき 1 つ（要件 3.4 のため）なので、時計も欄も 1 つになり、2 つは同じコマで揃ってしまう。`import` は始まりも回数も違うので、`import` の子は別の鍵（例: `PartKey::Film` に「どの pattern が取り込んだか」を足す）にする。鍵を広げるのは `import` の側の仕事である。
+  - **繰り返し回数を使わない**（正典）: 子の定義は回数を持つ（`FilmSheet::laps` → `LoopTrigger::Always` の `laps`）。`import` が指す子は回数なし（`laps: None`）で回す必要がある。
+  - **同じ画像を element定義と `import` の両方で使うとき**: 子の鍵は画像 1 つにつき 1 つ（`FilmId`＝親の絵の番号・`animated-image-playback` の要件 3.4 のため）なので、時計も欄も 1 つになり、2 つは同じコマで揃ってしまう。`import` は始まりも回数も違うので、`import` の子は別の鍵（例: `PartKey::Film` に「どの pattern が取り込んだか」を足す）にする。鍵を広げるのは `import` の側の仕事である。
