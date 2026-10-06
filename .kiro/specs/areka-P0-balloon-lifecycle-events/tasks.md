@@ -152,3 +152,5 @@
 - 4.4 の取りこぼし（6.1 で発見・直した）: コードの ukadoc の注記の URL は、網羅の台帳のカタログの形（`#_5c_21_5b…:1`）で書く。違う形だと `ukadoc-survey check` が `SourceUrlNotInCatalog` で赤になる。ukadoc の注記を足したら `cargo test -p ukadoc-survey` も回す。design.md・requirements.md・research.md にも同じカタログに無い形の URL が残っている（spec 文書は検査の外）。
 - 6.1（範囲外・完了の棚卸で扱う）: `.kiro/specs/areka-P0-balloon-canon-residue/brief.md` の項目 8 が、消えた `BalloonLifecycleNotice` を今もあるものとして書いている。
 - 7.1: `tools/test-all.ps1` は全段が緑（2026-10-06）。触った Rust のファイルは `emo2_boot/spine.rs` の 1,000 行（取り込みの時点から 1,000 行・本 spec は 1 行を書き替えただけで増やしていない＝設計と調停役の約束どおり）を除いて、すべて 1,000 行未満。運行表の本体 `schedule/mod.rs` の足し分は +23/-6（差し引き +17・上限 60 の内）。
+- 7.2（範囲外・完了の棚卸で起票）: SHIORI に繋がらないと「SHIORI が動かなくなりました」の窓が出て、`AREKA_APP_SMOKE_EXIT_MS` の自動終了（`origin=Smoke`）が記録されてもプロセスが終わらない（R1・検体の辞書の誤りで LOAD が断られたとき）。SHIORI が壊れていると実機走行が有界にならない。
+- 7.2: ⑵・⑷ は R2 で確認済み。⑴・⑶ はダブルクリックが要り、確認のあいだ入力デスクトップが `Screen-saver` のままで SendInput を送れなかった。ロックが解けたら `real-machine-run.ps1 -Run R4 -Clicks Break,Close -TimeoutMs 15000 -ExitMs 90000` の 1 本で取れる。
