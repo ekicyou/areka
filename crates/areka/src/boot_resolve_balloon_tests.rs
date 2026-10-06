@@ -1,7 +1,8 @@
-//! バルーンを決める鎖の descript の段の決定論テスト（areka-P0-ghost-standard-balloon 要件 7.2・7.3・7.5）。
+//! バルーンを決める鎖の descript の段の決定論テスト（areka-P0-ghost-standard-balloon 要件 7.2〜7.5）。
 //!
 //! 確かめること: 段の並び（引数 → 記憶 → descript → 同梱 → 唯一 → 既定 → 無作為）と、
-//! 当たらなかった段の記録の件数と欄。鎖は I/O を持たないので、根は実在を問わず、
+//! 当たらなかった段の記録の件数と欄、descript の 2 鍵の突き合わせの各場面、実行中のバルーンの
+//! 切替の決め方との一致。鎖は I/O を持たないので、根は実在を問わず、
 //! 一覧はフォルダ名と `name` の組をテストの中で組む。プロセス・fs・乱数には触れない。
 
 use std::path::{Path, PathBuf};
@@ -324,4 +325,249 @@ fn argv_ignores_everything_else() {
         })
     );
     assert!(events.is_empty(), "{events:?}");
+}
+
+// ---------------------------------------------------------------- descript の突き合わせ（要件 2・7.4）
+
+/// 突き合わせの場面に使う候補の並び（フォルダ名の昇順＝`list_balloons` の並び）。
+/// `shared` はフォルダ名、`zz_named` は `name` が同じ綴り（フォルダ名の側が並びで先）。
+fn matching(root: &BasewareRoot) -> Vec<BalloonEntry> {
+    entries(
+        root,
+        &[
+            ("Claudia", Some("Claudia")),
+            ("a_folder", Some("名前A")),
+            ("bundled", None),
+            ("dup1", Some("dup")),
+            ("dup2", Some("dup")),
+            ("folder_only", None),
+            ("shared", None),
+            ("x", None),
+            ("zz_named", Some("shared")),
+        ],
+    )
+}
+
+/// descript の 2 鍵を渡し、同梱 `bundled` を後ろに置いて鎖を回す（無作為の添字は呼ばれない）。
+fn descript(
+    root: &BasewareRoot,
+    path: Option<&str>,
+    name: Option<&str>,
+) -> (Result<BalloonDecision, NoBalloon>, Vec<CapturedEvent>) {
+    let given = Given {
+        path,
+        name,
+        companion: Some("bundled"),
+        ..Default::default()
+    };
+    chain(root, given, &matching(root), no_pick)
+}
+
+/// `default.balloon.path` だけ: フォルダ名に当たれば descript（記録 0 件）、当たらなければ警告 1 件で
+/// 同梱へ。`name` とは突き合わせない（`名前A` は `name` に在ってもフォルダ名に無いので当たらない）（要件 2.3・2.12）。
+#[test]
+fn default_balloon_path_alone_hits_folder_or_warns_once() {
+    let root = root();
+    let (got, events) = descript(&root, Some("folder_only"), None);
+    assert_eq!(got, Ok(at(&root, BalloonRoute::Descript, "folder_only")));
+    assert!(events.is_empty(), "{events:?}");
+
+    for value in ["gone", "名前A"] {
+        let (got, events) = descript(&root, Some(value), None);
+        assert_eq!(got, Ok(at(&root, BalloonRoute::Companion, "bundled")));
+        assert_eq!(
+            descript_misses(&root, &events),
+            vec![pair("default.balloon.path", value)]
+        );
+        assert_eq!(events.len(), 1, "{events:?}");
+    }
+}
+
+/// `default.balloon.path` の値が `..`・区切り・絶対パスを含む: 読み替えず（`x` を当てない）、
+/// 値そのままの警告 1 件で同梱へ（要件 2.4・5.2）。
+#[test]
+fn default_balloon_path_with_parent_separator_or_absolute_is_not_rewritten() {
+    let root = root();
+    for value in ["../balloon/x", "balloon/x", "x/", r"C:\balloon\x"] {
+        let (got, events) = descript(&root, Some(value), None);
+        assert_eq!(
+            got,
+            Ok(at(&root, BalloonRoute::Companion, "bundled")),
+            "{value}"
+        );
+        assert_eq!(
+            descript_misses(&root, &events),
+            vec![pair("default.balloon.path", value)]
+        );
+        assert_eq!(events.len(), 1, "{events:?}");
+    }
+}
+
+/// `balloon` だけ: `name` で当たる・フォルダ名で当たる（記録 0 件）・どちらにも当たらない（警告 1 件で
+/// 同梱へ）（要件 2.6・2.11・2.12）。
+#[test]
+fn balloon_name_hits_by_name_or_folder_or_warns_once() {
+    let root = root();
+    for (value, want) in [("名前A", "a_folder"), ("folder_only", "folder_only")] {
+        let (got, events) = descript(&root, None, Some(value));
+        assert_eq!(got, Ok(at(&root, BalloonRoute::Descript, want)), "{value}");
+        assert!(events.is_empty(), "{events:?}");
+    }
+    let (got, events) = descript(&root, None, Some("gone"));
+    assert_eq!(got, Ok(at(&root, BalloonRoute::Companion, "bundled")));
+    assert_eq!(
+        descript_misses(&root, &events),
+        vec![pair("balloon", "gone")]
+    );
+    assert_eq!(events.len(), 1, "{events:?}");
+}
+
+/// `name` と別のバルーンのフォルダ名の両方に一致 → 並びで先のフォルダ名でなく `name` の側。
+/// 同じ `name` が複数 → 列挙の並びで最初（要件 2.6・2.7）。
+#[test]
+fn balloon_name_prefers_name_then_first_in_listing() {
+    let root = root();
+    for (value, want) in [("shared", "zz_named"), ("dup", "dup1")] {
+        let (got, events) = descript(&root, None, Some(value));
+        assert_eq!(got, Ok(at(&root, BalloonRoute::Descript, want)), "{value}");
+        assert!(events.is_empty(), "{events:?}");
+    }
+}
+
+/// 大文字と小文字だけ違う: どちらの鍵も当たらず、鍵ごとに警告 1 件（要件 2.3・2.6）。
+#[test]
+fn descript_match_is_case_sensitive() {
+    let root = root();
+    let (got, events) = descript(&root, Some("claudia"), Some("claudia"));
+    assert_eq!(got, Ok(at(&root, BalloonRoute::Companion, "bundled")));
+    assert_eq!(
+        descript_misses(&root, &events),
+        vec![
+            pair("default.balloon.path", "claudia"),
+            pair("balloon", "claudia"),
+        ]
+    );
+    assert_eq!(events.len(), 2, "{events:?}");
+}
+
+/// `random`・`lastinstalled` は特別に解かない: その `name` のバルーンが在れば当たり、無ければ警告 1 件。
+/// どちらも無作為の添字は呼ばれない（`no_pick`）（要件 2.8）。
+#[test]
+fn balloon_name_random_and_lastinstalled_are_plain_names() {
+    let root = root();
+    for word in ["random", "lastinstalled"] {
+        let named = entries(&root, &[("a", None), ("b", Some(word)), ("bundled", None)]);
+        let given = Given {
+            name: Some(word),
+            companion: Some("bundled"),
+            ..Default::default()
+        };
+        let (got, events) = chain(&root, given, &named, no_pick);
+        assert_eq!(got, Ok(at(&root, BalloonRoute::Descript, "b")), "{word}");
+        assert!(events.is_empty(), "{events:?}");
+
+        let (got, events) = descript(&root, None, Some(word));
+        assert_eq!(
+            got,
+            Ok(at(&root, BalloonRoute::Companion, "bundled")),
+            "{word}"
+        );
+        assert_eq!(descript_misses(&root, &events), vec![pair("balloon", word)]);
+        assert_eq!(events.len(), 1, "{events:?}");
+    }
+}
+
+/// 両方が書かれた 3 通り: `default.balloon.path` が当たる → `balloon` が別に当たっても記録 0 件／
+/// 先が外れ `balloon` が当たる → 警告 1 件／どちらも外れる → 警告 2 件で同梱へ（要件 2.9〜2.12・5.5）。
+#[test]
+fn both_keys_path_first_then_name() {
+    let root = root();
+    let (got, events) = descript(&root, Some("folder_only"), Some("名前A"));
+    assert_eq!(got, Ok(at(&root, BalloonRoute::Descript, "folder_only")));
+    assert!(events.is_empty(), "{events:?}");
+
+    let (got, events) = descript(&root, Some("gone_path"), Some("名前A"));
+    assert_eq!(got, Ok(at(&root, BalloonRoute::Descript, "a_folder")));
+    assert_eq!(
+        descript_misses(&root, &events),
+        vec![pair("default.balloon.path", "gone_path")]
+    );
+    assert_eq!(events.len(), 1, "{events:?}");
+
+    let (got, events) = descript(&root, Some("gone_path"), Some("gone_name"));
+    assert_eq!(got, Ok(at(&root, BalloonRoute::Companion, "bundled")));
+    assert_eq!(
+        descript_misses(&root, &events),
+        vec![
+            pair("default.balloon.path", "gone_path"),
+            pair("balloon", "gone_name"),
+        ]
+    );
+    assert_eq!(events.len(), 2, "{events:?}");
+}
+
+/// どちらも書かれていない: descript の段は記録 0 件で同梱へ（要件 2.13・5.6）。
+#[test]
+fn no_descript_keys_is_silent() {
+    let root = root();
+    let (got, events) = descript(&root, None, None);
+    assert_eq!(got, Ok(at(&root, BalloonRoute::Companion, "bundled")));
+    assert!(events.is_empty(), "{events:?}");
+}
+
+// ---------------------------------------------------------------- 実行中の決め方との一致（要件 2.6・4.2）
+
+/// 同じ一覧と同じ名前で、鎖の descript の段（`balloon`）と、実行中のバルーンの切替の決め方
+/// （`resolve_skin_target` に `SkinSpec::Name`）が同じフォルダを選ぶ（当たらないときはどちらも外れ）。
+/// 候補の列は、鎖へ渡す一覧 1 つから本番の `balloon_candidates` と同じ写し方（1 件 → 1 件）で作る
+/// （本番の候補づくりは根を列挙する I/O を持つので呼ばない）。
+#[test]
+fn descript_balloon_agrees_with_runtime_switch() {
+    use crate::emo2_boot::shell_balloon_resolve::{
+        NotFoundReason, SkinCandidate, resolve_skin_target,
+    };
+    use crate::emo2_boot::shell_balloon_switch::SkinSpec;
+
+    let root = root();
+    let listed = matching(&root);
+    let candidates: Vec<SkinCandidate> = listed
+        .iter()
+        .map(|e| SkinCandidate {
+            dir: e.dir.clone(),
+            folder: e.identity.folder.clone(),
+            name: e.identity.name.clone(),
+            hidden: false,
+        })
+        .collect();
+    for (value, want) in [
+        ("名前A", Some("a_folder")),
+        ("folder_only", Some("folder_only")),
+        ("shared", Some("zz_named")),
+        ("dup", Some("dup1")),
+        ("gone", None),
+    ] {
+        let given = Given {
+            name: Some(value),
+            companion: Some("bundled"),
+            ..Default::default()
+        };
+        let (chained, _) = chain(&root, given, &listed, no_pick);
+        let chained = chained
+            .ok()
+            .filter(|d| d.route == BalloonRoute::Descript)
+            .and_then(|d| d.folder);
+        let runtime = match resolve_skin_target(
+            &candidates,
+            &SkinSpec::Name(value.to_owned()),
+            None,
+            Err(NotFoundReason::LastInstalledNone),
+            no_pick,
+        ) {
+            Ok(c) => Some(c.folder),
+            Err(NotFoundReason::NoMatch) => None,
+            Err(other) => panic!("{value}: 予期しない外れ {other:?}"),
+        };
+        assert_eq!(chained.as_deref(), want, "鎖: {value}");
+        assert_eq!(runtime, chained, "実行中と鎖が食い違う: {value}");
+    }
 }
