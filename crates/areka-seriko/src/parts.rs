@@ -232,6 +232,20 @@ fn drop_unseen_finite(
     drop_finite_where(clocks, table, scope, slot, |part| !seen(part));
 }
 
+/// 窓が閉じていれば、評価の前に回数つきの時計を全部捨てる（閉じている間は回数つきの時計が無く、
+/// 欄は経過 0 へ戻る・spec: areka-P0-animated-image-playback 要件 2.3・6.1）。
+fn drop_finite_if_closed(
+    clocks: &mut BTreeMap<ClockKey, PartAnim>,
+    table: &AnimationTable,
+    scope: &ActorKey,
+    slot: Slot,
+    open: bool,
+) {
+    if !open {
+        drop_finite_where(clocks, table, scope, slot, |_| true);
+    }
+}
+
 /// `anims` を animation の番号の昇順に回す添字を `order` に入れる。
 fn sort_by_id(anims: &[LoopAnimation], order: &mut Vec<usize>) {
     order.clear();
@@ -319,7 +333,9 @@ fn write(pattern: &mut PatternState, part: PartKey, anim: &LoopAnimation, i: usi
 
 impl PartClocks {
     /// 刻み 1 回。`scope` の `slot` の面の見える部品を抽選（境界を跨いだ刻みだけ）・進行させ、
-    /// `pattern` の部品の欄を今の絵の分で作り直す。
+    /// `pattern` の部品の欄を今の絵の分で作り直す。`open` が偽（バルーンの窓が閉じている）なら
+    /// 時計を作らず（抽選もしない）、回数つきの時計を全部捨てる＝今ある終わりなしの時計だけが進む
+    /// （spec: areka-P0-animated-image-playback 要件 6.1）。
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn advance(
         &mut self,
@@ -330,6 +346,7 @@ impl PartClocks {
         table: &AnimationTable,
         now_ms: u64,
         crossed: bool,
+        open: bool,
         rng: &mut LoopRng,
         pattern: &mut PatternState,
     ) {
@@ -348,6 +365,7 @@ impl PartClocks {
             return;
         };
         let clocks = clocks.entry(slot).or_default();
+        drop_finite_if_closed(clocks, table, scope, slot, open);
 
         // 部品 1 つの評価（animation の番号の昇順・design.md「部品 1 つの評価」）。
         let evaluate = |part: PartKey, pattern: &mut PatternState| {
@@ -372,18 +390,20 @@ impl PartClocks {
                         continue;
                     }
                     // `always`: 乱数を引かず、時計が無ければこの時刻で作る（要件 3.1・4.1・4.4）。
+                    // 窓が閉じている間は作らない（無ければ経過 0）。
                     Gate::Always { period_ms, laps } => {
-                        let started =
-                            always_start(clocks, key, Some(now_ms), scope, slot, laps.is_some())
-                                .unwrap_or(now_ms);
+                        let at = open.then_some(now_ms);
+                        let started = always_start(clocks, key, at, scope, slot, laps.is_some())
+                            .unwrap_or(now_ms);
                         let elapsed = now_ms.saturating_sub(started);
                         write_always(pattern, part, anim, period_ms, laps, elapsed);
                         continue;
                     }
                 };
                 // 境界を跨いだ刻みで再生中でなければ抽選（保っているコマは当たれば捨てる）。
+                // 窓が閉じている間は時計を作らないので抽選もしない。
                 let playing = matches!(clocks.get(&key), Some(PartAnim::Playing { .. }));
-                if crossed && !playing && should_fire(k, rng) {
+                if crossed && open && !playing && should_fire(k, rng) {
                     clocks.insert(
                         key,
                         PartAnim::Playing {
@@ -448,7 +468,8 @@ impl PartClocks {
     /// 時計を捨てる。抽選の animation の時計は書き換えない（末尾に着いたコマ・負の番号のコマも、時計を
     /// 移さず・消さずに、出す・出さないだけを決める）。`bind+random` で `binds` に無い animation の
     /// コマは書かない（時計を消すのは次の `advance`・要件 5.12）。`at_ms` が無い（刻みが 1 度も来て
-    /// いない）ときは時計を作らず、経過 0 の時刻で読む。
+    /// いない）ときは時計を作らず、経過 0 の時刻で読む。`open` が偽なら `advance` と同じく時計を
+    /// 作らず、回数つきの時計を全部捨てる。
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn refresh(
         &mut self,
@@ -458,6 +479,7 @@ impl PartClocks {
         binds: &BindSet,
         table: &AnimationTable,
         at_ms: Option<u64>,
+        open: bool,
         pattern: &mut PatternState,
     ) {
         let PartClocks {
@@ -473,7 +495,10 @@ impl PartClocks {
             .or_default()
             .entry(slot)
             .or_default();
+        drop_finite_if_closed(clocks, table, scope, slot, open);
         let now_ms = at_ms.unwrap_or(0);
+        // 窓が閉じている間は時計を作らない（今ある時計を読むだけ）。
+        let create_at = at_ms.filter(|_| open);
         let evaluate = |part: PartKey, pattern: &mut PatternState| {
             let anims = table.part_animations(part);
             sort_by_id(anims, order);
@@ -485,7 +510,7 @@ impl PartClocks {
                     Gate::Off => continue,
                     Gate::Always { period_ms, laps } => {
                         if let Some(started) =
-                            always_start(clocks, key, at_ms, scope, slot, laps.is_some())
+                            always_start(clocks, key, create_at, scope, slot, laps.is_some())
                         {
                             let elapsed = now_ms.saturating_sub(started);
                             write_always(pattern, part, anim, period_ms, laps, elapsed);

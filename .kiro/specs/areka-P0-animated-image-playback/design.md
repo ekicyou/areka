@@ -727,6 +727,7 @@ impl ScopeStates {
 
 - バルーンの面の番号: seriko が `\b[番号]` を受けていればその番号（`\b[-1]` なら面なし）。受けていなければ知らせの `face`（seriko 自身の状態が在るときは使わない＝古い知らせで上書きしない）。
 - `stage_slots`: シェルは `shown_slots` と同じ（見えている＝真）。バルーンは面の番号が分かるスコープの全部（見えている＝窓が開いている）。`commit_pattern` のバルーンの腕は同じ面の番号を使う。`shown_slots`・`apply`・`apply_balloon`・着せ替えの決まりは変更 0。
+- 知らせが 1 度も来ていないスコープでは、`\b` で表示中の面を開いた窓とみなす（5.3 の結線より前と emo2 の振る舞いを保つ）。
 - `Stage` を受けたら、順に: ①知らせの世代が、そのスコープで覚えている世代より新しければ、**合図 `DisplayCommand::StageAck { scope, generation }` を先に 1 件出し**、そのスコープのバルーンの面の回数つきの時計を全部捨てる（閉じた知らせを見ていなくても、新しい出番は必ず始め直し）②`note_stage` ③`refresh(scope, Slot::Balloon, at_ms)` ④返った指令を出す。どれも今の単一の発行点から出す（出口は 1 つのまま）。世代が同じか古い知らせでは合図を出さない。
 - `DisplayCommand`（`output.rs`）に足すのは `StageAck` の 1 種だけ。`Show`・`Hide`・`ShowBalloon`・`HideBalloon`・`Rebased` の欄は変えない（今ある書き下しとテストの書き換え 0）。受け手が消えた後の `send_stage` は `debug!`（`send_tick` と同じ扱い）。
 

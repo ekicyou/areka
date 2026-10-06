@@ -80,6 +80,27 @@ pub enum Slot {
     Balloon,
 }
 
+/// 表示層からの窓の知らせ（spec: areka-P0-animated-image-playback 要件 6.1・2.3）。運ぶ口
+/// （`SerikoMsg::Stage`）と世代の扱いは task 5.1。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum StageNote {
+    /// `scope` のバルーンの窓の見える・見えないと、表示層が今確立している面の番号。
+    /// `generation` は表示層の出番の世代（隠れていた窓を出すたびに 1 つ進む）。
+    Balloon {
+        scope: ActorKey,
+        open: bool,
+        face: u32,
+        generation: u64,
+    },
+}
+
+/// 知らせで覚えたバルーンの窓（開いているか・表示層が確立している面の番号）。
+#[derive(Clone, Copy, Debug)]
+struct BalloonWindow {
+    open: bool,
+    face: u32,
+}
+
 /// [`ScopeStates::commit_pattern`] の適用結果（pattern 進行状態変化に応じた表示発行の判定・要件 6.1/6.2）。
 ///
 /// [`commit_bind`] を鏡映した冪等ガード（同値なら書き込まず [`PatternApplyOutcome::Unchanged`]）＋
@@ -134,6 +155,9 @@ pub struct ScopeStates {
     ///
     /// [`current_pattern`]: ScopeStates::current_pattern
     pattern_states: HashMap<(ActorKey, Slot), PatternState>,
+    /// 窓の知らせで覚えたバルーンの窓（[`ScopeStates::note_stage`]・spec:
+    /// areka-P0-animated-image-playback 要件 6.1）。
+    balloon_windows: HashMap<ActorKey, BalloonWindow>,
 }
 
 impl ScopeStates {
@@ -152,6 +176,7 @@ impl ScopeStates {
             // 空で起動。pattern の書き込みは SERIKO ループ評価（commit_pattern）の責務。未格納の
             // (scope, slot) は current_pattern が空を返す（従来と観測等価・要件 5.4）。
             pattern_states: HashMap::new(),
+            balloon_windows: HashMap::new(),
         }
     }
 
@@ -554,13 +579,18 @@ impl ScopeStates {
         self.pattern_states
             .insert((scope.clone(), slot), new.clone());
 
-        // (3) 発行判定: 対象 slot の表示状態で決める（表示中 slot にのみ Show/ShowBalloon を発行）。
-        let shown = match slot {
-            Slot::Shell => self.scopes.get(scope),
-            Slot::Balloon => self.balloon.get(scope),
+        // (3) 発行判定: 対象 slot の面で決める（面の在る slot にのみ Show/ShowBalloon を発行）。
+        // バルーンの面は `stage_slots` と同じ番号（`\b` が無ければ知らせの面・spec:
+        // areka-P0-animated-image-playback 要件 6.1）。
+        let face = match slot {
+            Slot::Shell => match self.scopes.get(scope) {
+                Some(&ScopeState::Shown(sid)) => Some(sid),
+                Some(ScopeState::Hidden) | None => None,
+            },
+            Slot::Balloon => self.balloon_face(scope),
         };
-        match shown {
-            Some(&ScopeState::Shown(sid)) => {
+        match face {
+            Some(sid) => {
                 let cmd = match slot {
                     // シェル面は現在 bind 集合を同梱（Show・要件 6.1）。
                     Slot::Shell => DisplayCommand::Show {
@@ -578,8 +608,8 @@ impl ScopeStates {
                 };
                 PatternApplyOutcome::Changed(cmd)
             }
-            // 非表示または未知 slot → 防御的非発行（表示中ゲート 2.1 で通常運用は非到達・要件 6.2）。
-            Some(&ScopeState::Hidden) | None => PatternApplyOutcome::Unchanged,
+            // 面の無い slot → 防御的非発行（表示中ゲート 2.1 で通常運用は非到達・要件 6.2）。
+            None => PatternApplyOutcome::Unchanged,
         }
     }
 
@@ -607,6 +637,58 @@ impl ScopeStates {
         }
         out
     }
+
+    /// 窓の知らせを覚える（spec: areka-P0-animated-image-playback 要件 6.1）。窓の開け閉めは
+    /// いつも知らせに従い、面の番号は `\b[番号]` を受けていないスコープでだけ使う
+    /// （[`ScopeStates::stage_slots`]）。世代の扱いは task 5.1。
+    pub fn note_stage(&mut self, note: &StageNote) {
+        let StageNote::Balloon {
+            scope, open, face, ..
+        } = note;
+        self.balloon_windows.insert(
+            scope.clone(),
+            BalloonWindow {
+                open: *open,
+                face: *face,
+            },
+        );
+    }
+
+    /// `scope` のバルーンの面の番号: `\b[番号]` を受けていればその番号（`\b[-1]` なら面なし）、
+    /// 受けていなければ知らせの面（seriko 自身の状態が在れば古い知らせで上書きしない）。
+    fn balloon_face(&self, scope: &ActorKey) -> Option<u32> {
+        match self.balloon.get(scope) {
+            Some(ScopeState::Shown(id)) => Some(*id),
+            Some(ScopeState::Hidden) => None,
+            None => self.balloon_windows.get(scope).map(|w| w.face),
+        }
+    }
+
+    /// 進行の対象の面。4 つ目は「画面に見えているか」（spec: areka-P0-animated-image-playback
+    /// 要件 6.1）。
+    ///
+    /// シェルは [`ScopeStates::shown_slots`] と同じ（見えている＝真）。バルーンは面の番号が分かる
+    /// スコープの全部で、見えているかは知らせの窓（知らせが 1 度も無ければ、今までどおり `\b` で
+    /// 表示中の面を開いた窓とみなす）。並びはスコープの昇順 → シェル → バルーン。
+    pub fn stage_slots(&self) -> Vec<(ActorKey, Slot, u32, bool)> {
+        let scopes: std::collections::BTreeSet<&ActorKey> = self
+            .scopes
+            .keys()
+            .chain(self.balloon.keys())
+            .chain(self.balloon_windows.keys())
+            .collect();
+        let mut out = Vec::new();
+        for scope in scopes {
+            if let Some(ScopeState::Shown(sid)) = self.scopes.get(scope) {
+                out.push((scope.clone(), Slot::Shell, *sid, true));
+            }
+            if let Some(face) = self.balloon_face(scope) {
+                let open = self.balloon_windows.get(scope).is_none_or(|w| w.open);
+                out.push((scope.clone(), Slot::Balloon, face, open));
+            }
+        }
+        out
+    }
 }
 
 /// 未格納 (scope, slot) 用の空 [`PatternState`]（プロセス共有・不変）。
@@ -624,6 +706,9 @@ mod bind_pattern_tests;
 #[cfg(test)]
 #[path = "state_rebase_tests.rs"]
 mod rebase_tests;
+#[cfg(test)]
+#[path = "state_stage_tests.rs"]
+mod stage_tests;
 #[cfg(test)]
 #[path = "state_surface_tests.rs"]
 mod surface_tests;

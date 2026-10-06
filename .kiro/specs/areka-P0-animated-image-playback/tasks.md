@@ -74,7 +74,7 @@
   - 完了の姿: 突き合わせのテストが緑で、片方だけを壊す変異（経過 0 の辺を外す等）で赤になることを 1 度確かめてから戻している
   - _Requirements: 1.9, 3.7_
 
-- [ ] 3. seriko の側: 繰り返しの計算・表・時計・バルーンの面
+- [x] 3. seriko の側: 繰り返しの計算・表・時計・バルーンの面
 - [x] 3.1 (P) 経過からコマを決める純粋な計算を置く
   - `LoopFrame` に「絵を指すコマの絵の番号」の欄（`picture`）を足し、seriko の中の書き下しを直す（子の形のテストに要るので、表の仕事より先に置く）
   - `timeline.rs` に `lap_of`（何周目か・周の頭からの経過）と `AlwaysView`・`always_at`（今のコマ）を足す。回数つきで経過が「周期 × N」以上なら最後のコマ。最初の待ちの前は、1 周目なら何も出さず、2 周目以降は前の周の最後のコマ。負の番号のコマに居る間は何も出さない。丸めず、状態も乱数も持たない
@@ -117,7 +117,7 @@
   - 完了の姿: 時計つき・時計なしの両方の起動で上のテストが緑で、`spine.rs` に変更が 0
   - _Requirements: 1.6, 2.9, 3.1_
 
-- [ ] 3.6 バルーンの面でも部品と `always` を回す
+- [x] 3.6 バルーンの面でも部品と `always` を回す
   - 知らせの値 `StageNote::Balloon { scope, open, face, generation }` を定義する（運ぶ口と世代の扱いは 5.1）
   - `ScopeStates` にバルーンの窓（開いているか）と面の番号の覚えを足し、`note_stage`・`stage_slots` を置く。`\b[-1]` のときは 3.3 の口でバルーンの面の回数つきの時計を捨てる。バルーンの面の番号は、`\b[番号]` を受けていればその番号、受けていなければ知らせの面（古い知らせで上書きしない）
   - 進行の対象を `stage_slots` にし、部品の欄の作り直しを面の種類を問わず行う。窓が閉じている間は評価しても時計を作らない
@@ -247,3 +247,4 @@
 - 範囲外（完了時に確かめる）: `rebuild` は `clear_parts` 直後の 1 回目に、経過 0 の辺・着せ替えの辺の先の部品も評価するので、外側が別のコマに居る刻みでも見えていない部品の抽選が回ることがある（`surface-element-nesting` からの性質・引く乱数の数は本 spec の前と同じ）
 - 3.4: `refresh_parts` は `LoopRuntime::refresh(scope, slot, at_ms: Option<u64>, states)`（`None` なら直前の刻みの時刻・`last_seen` に入れない）。`\s`・着せ替え・`\b` の 3 か所から呼ぶ。`\b[-1]` → `drop_finite(Balloon)` の道は既に通した＝3.6 で 2 本目を作らない。`drop_finite` の `allow(dead_code)` は外した。表の差し替えは `clear(slot)` でその面の種類の時計だけ捨てる。バルーンの面の部品の欄の作り直しはまだシェルの面だけ（3.6 で外す）
 - 3.5: `pub type SerikoClock = Arc<dyn Fn() -> u64 + Send + Sync>`・`spawn_seriko_clocked(..., Option<SerikoClock>)`。時計は `LoopRuntime` が持ち（`with_clock`・`event_ms()`）、合図を処理するたびに読む。5.2 は同じ `Arc` を `Box::new(move || MonotonicMs(c()))` と包んで `LoopTickerConfig::clock` へ渡せば単位が揃う
+- 3.6: `StageNote::Balloon` は state.rs（`note_stage` は世代をまだ覚えない＝5.1 で足す）。知らせが 1 度も来ていないスコープは開いた窓とみなす。窓が閉じている間は一番上の `always`・部品の `always`・部品の抽選の時計を作らず、回数つきを評価の前に捨てる（一番上の抽選は `shown_slots` のまま）。閉じていても終わりなしの子のコマが替われば `ShowBalloon` を出す（4.2 で表示層が預かる）

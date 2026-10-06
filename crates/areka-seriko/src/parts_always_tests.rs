@@ -40,6 +40,7 @@ fn tick(
         table,
         now_ms,
         crossed,
+        true,
         rng,
         &mut p,
     );
@@ -146,7 +147,7 @@ fn refresh_creates_always_clock_at_event_time() {
     let b = areka_emo_compose::BindSet::default();
 
     let mut p = PatternState::default();
-    clocks.refresh(&scope(), Slot::Shell, 0, &b, &table, None, &mut p);
+    clocks.refresh(&scope(), Slot::Shell, 0, &b, &table, None, true, &mut p);
     assert!(p.is_empty());
     assert_eq!(
         clocks.clock(&scope(), 100, 0),
@@ -155,12 +156,30 @@ fn refresh_creates_always_clock_at_event_time() {
     );
 
     let mut p = PatternState::default();
-    clocks.refresh(&scope(), Slot::Shell, 0, &b, &table, Some(1000), &mut p);
+    clocks.refresh(
+        &scope(),
+        Slot::Shell,
+        0,
+        &b,
+        &table,
+        Some(1000),
+        true,
+        &mut p,
+    );
     assert!(p.is_empty(), "経過 0 のコマは欄に載らない");
     assert_eq!(clocks.clock(&scope(), 100, 0), playing(1000));
 
     let mut p = PatternState::default();
-    clocks.refresh(&scope(), Slot::Shell, 1, &b, &table, Some(1200), &mut p);
+    clocks.refresh(
+        &scope(),
+        Slot::Shell,
+        1,
+        &b,
+        &table,
+        Some(1200),
+        true,
+        &mut p,
+    );
     assert_eq!(cell_of(&p, 100), Some(Some(102)), "在る時計は続き");
     assert_eq!(clocks.clock(&scope(), 100, 0), playing(1000));
     tick(&mut clocks, &table, 0, 1250, true, &mut rng);

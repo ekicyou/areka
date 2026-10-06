@@ -90,6 +90,7 @@ fn tick_at(
         table,
         now_ms,
         true,
+        true,
         rng,
         &mut p,
     );

@@ -49,7 +49,7 @@ pub use looper::SerikoLoopConfig;
 pub use output::{DisplayCommand, MockSurfaceOutput, RebaseKind, RebasedShow, SurfaceOutput};
 pub use resolve::{SurfaceResolver, SurfaceTarget};
 pub use state::{
-    ApplyOutcome, BindApplyOutcome, PatternApplyOutcome, ScopeState, ScopeStates, Slot,
+    ApplyOutcome, BindApplyOutcome, PatternApplyOutcome, ScopeState, ScopeStates, Slot, StageNote,
 };
 pub use table::{AnimationTable, LoopAnimation, LoopFrame, LoopTrigger};
 pub use timeline::{

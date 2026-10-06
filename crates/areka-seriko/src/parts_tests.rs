@@ -80,6 +80,7 @@ fn tick(
         table,
         now_ms,
         crossed,
+        true,
         rng,
         &mut pattern,
     );
@@ -484,6 +485,7 @@ fn peek_at(
         binds,
         table,
         Some(now_ms),
+        true,
         &mut pattern,
     );
     pattern
@@ -621,6 +623,7 @@ fn clear_drops_clocks_of_every_scope() {
         &table,
         1000,
         true,
+        true,
         &mut rng,
         &mut p,
     );
@@ -632,6 +635,7 @@ fn clear_drops_clocks_of_every_scope() {
         &b,
         &table,
         1000,
+        true,
         true,
         &mut rng,
         &mut p,
@@ -693,6 +697,7 @@ fn negative_id_other_than_minus_one_warns_once_per_scope_part_animation() {
                 &table,
                 base,
                 true,
+                true,
                 &mut rng,
                 &mut p,
             );
@@ -705,6 +710,7 @@ fn negative_id_other_than_minus_one_warns_once_per_scope_part_animation() {
                 &table,
                 base + 50,
                 false,
+                true,
                 &mut rng,
                 &mut p,
             );

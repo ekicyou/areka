@@ -29,7 +29,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use areka_emo_compose::{PatternFrame, PatternState};
+use areka_emo_compose::{BindSet, PatternFrame, PatternState};
 use areka_sakura::ActorKey;
 
 use crate::actor::SerikoClock;
@@ -105,7 +105,7 @@ pub(crate) struct LoopRuntime {
     /// `-1` 以外の負 surface に対する warn! を (scope, slot, anim id) ごとに 1 回だけ発火するための記録
     /// （初回のみ warn!・要件 8.2）。
     warned_negative: HashSet<(ActorKey, Slot, u32)>,
-    /// 部品の時計（spec: areka-P0-surface-element-nesting・シェル面だけ）。シェルの表が
+    /// 部品の時計（spec: areka-P0-surface-element-nesting・シェルとバルーンの面）。面の表が
     /// [`AnimationTable::has_animated_parts`] で偽なら 1 度も触らない（要件 7.2・7.3）。
     parts: PartClocks,
     /// 刻みと同じ時計（spec: areka-P0-animated-image-playback 要件 1.6・3.1）。台本の合図を処理する
@@ -181,6 +181,15 @@ fn start_top_always(
     }
 }
 
+/// `slot` の面の着せ替えの集合（シェルはスコープの今の集合・バルーンの面は空・design「LoopRuntime」）。
+fn slot_binds<'a>(states: &'a ScopeStates, scope: &ActorKey, slot: Slot) -> &'a BindSet {
+    static EMPTY: std::sync::OnceLock<BindSet> = std::sync::OnceLock::new();
+    match slot {
+        Slot::Shell => states.current_binds(scope),
+        Slot::Balloon => EMPTY.get_or_init(BindSet::default),
+    }
+}
+
 /// 一番上 `surface_id` が `always` を持つか（`is_continuous()` が偽の表では必ず偽・要件 7.2）。
 fn top_has_always(table: &AnimationTable, surface_id: u32) -> bool {
     table.is_continuous()
@@ -226,12 +235,16 @@ impl LoopRuntime {
     /// →コマ搬送・`Stopped`→除去＋playback 除去・`FinishedResidual`→コマ残留のまま playback 除去）。
     /// (4) slot ごとに `commit_pattern` し `Changed` を集約。
     ///
-    /// 部品（spec: areka-P0-surface-element-nesting 要件 5.1・7.2・7.3）: シェルの表が
-    /// [`AnimationTable::has_animated_parts`] で真のときだけ、シェル面の (3) の後に
-    /// [`PartClocks::advance`] で部品の欄を作り直してから (4) を 1 回行う。部品の抽選は一番上の抽選
-    /// （全スコープぶん）の後に、スコープの昇順 → 繰り返しの回 → 部品の番号 → animation の番号の順で
-    /// 引く。一番上の再生が無い slot は、見える部品に動くものが在るときだけ通す。偽の表と
-    /// バルーン面は今までの経路のまま。
+    /// 部品（spec: areka-P0-surface-element-nesting 要件 5.1・7.2・7.3）: 面の表が
+    /// [`AnimationTable::has_animated_parts`] で真のときだけ、(3) の後に [`PartClocks::advance`] で
+    /// 部品の欄を作り直してから (4) を 1 回行う。部品の抽選は一番上の抽選（全スコープぶん）の後に、
+    /// スコープの昇順 → 面の種類 → 繰り返しの回 → 部品の番号 → animation の番号の順で引く。一番上の
+    /// 再生が無い slot は、一番上に `always` が在るか見える部品に動くものが在るときだけ通す。偽の表は
+    /// 今までの経路のまま。
+    ///
+    /// 進行の対象は [`ScopeStates::stage_slots`]（spec: areka-P0-animated-image-playback 要件 6.1）:
+    /// 抽選の輪は今までどおり `shown_slots`。バルーンの面は窓が閉じていても評価するが、閉じている間は
+    /// 時計を作らない（一番上の `always` の再生も部品の時計も・回数つきは捨てる）。
     pub(crate) fn on_tick(&mut self, now_ms: u64, states: &mut ScopeStates) -> Vec<DisplayCommand> {
         // (1) 単調性ガード（防御・実クロックでは非発生）。非単調 tick は状態を変えず無発行。
         if let Some(last) = self.last_seen {
@@ -271,9 +284,6 @@ impl LoopRuntime {
         // 不在 scope へ貸す空表（抽選対象ゼロ・乱数非消費・panic なし＝`disabled()` と同じ不活性・
         // 要件 5.6）。`BTreeMap::new()` は確保を伴わないため tick ごとの構築コストは無い。
         let empty_balloon_table = AnimationTable::empty();
-        // 部品の経路を通す表か（偽なら以下で部品の行を 1 つも通らない・要件 7.2・7.3）。
-        let parts_on = shell_table.has_animated_parts();
-
         // 表示中 slot を列挙し、固定消費順（scope 昇順→Shell→Balloon）へ整列する（D-7）。
         let mut shown = states.shown_slots();
         shown.sort_by(|a, b| {
@@ -336,19 +346,21 @@ impl LoopRuntime {
             }
         }
 
-        // (3)+(4) 進行と commit（表示中 slot のうち再生中エントリを持つもの・部品の経路では動く部品が見えるものだけ）。
+        // (3)+(4) 進行と commit（進行の対象の面のうち再生中エントリを持つもの・一番上に `always` が在るもの・
+        // 部品の経路では動く部品が見えるものだけ）。
         let mut commands = Vec::new();
-        for (scope, slot, sid) in &shown {
+        for (scope, slot, sid, open) in &states.stage_slots() {
             let key = (scope.clone(), *slot);
             // 再生中エントリを持たない slot（Idle/IdleResidual のみ）は残留を保ったまま無評価・無発行。
             let has_playback = playback.get(&key).is_some_and(|pb| !pb.is_empty());
-            let with_parts = parts_on && *slot == Slot::Shell;
             let table: &AnimationTable = match slot {
                 Slot::Shell => &*shell_table,
                 // 抽選相と同一の scope キー表引き（要件 5.6）。不在 scope は空表ゆえ下の
                 // 「表に無い」防御腕へ落ち、playback とコマが除去される（panic なし）。
                 Slot::Balloon => balloon_tables.get(scope).unwrap_or(&empty_balloon_table),
             };
+            // 部品の経路を通す表か（偽なら部品の行を 1 つも通らない・要件 7.2・7.3）。
+            let with_parts = table.has_animated_parts();
             let has_always = top_has_always(table, *sid);
             // 一番上の再生が無くても、一番上に `always` が在るか、見える部品に動くものが在れば通す。
             if !has_playback
@@ -356,15 +368,16 @@ impl LoopRuntime {
                 && !(with_parts
                     && parts.moving_visible(
                         *sid,
-                        states.current_binds(scope),
-                        shell_table,
+                        slot_binds(states, scope, *slot),
+                        table,
                         states.current_pattern(scope, *slot),
                     ))
             {
                 continue;
             }
             // 一番上の `always` は抽選を待たず、再生が無ければこの刻みの時刻で始まる（要件 4.1）。
-            if has_always {
+            // 窓が閉じている間は作らない。
+            if has_always && *open {
                 start_top_always(playback, table, scope, *slot, *sid, now_ms);
             }
 
@@ -496,10 +509,11 @@ impl LoopRuntime {
                     scope,
                     *slot,
                     *sid,
-                    states.current_binds(scope),
-                    shell_table,
+                    slot_binds(states, scope, *slot),
+                    table,
                     now_ms,
                     crossed,
+                    *open,
                     rng,
                     &mut new_pattern,
                 );
@@ -540,11 +554,12 @@ impl LoopRuntime {
     /// spec: areka-P0-animated-image-playback 要件 2.3・3.1・4.1・4.3）。
     ///
     /// 繰り返しの経路を通す表（[`AnimationTable::is_continuous`]）で、`scope` の `slot` の面が
-    /// 表示中なら、保持している [`PatternState`] の写しを出来事の時刻 `at_ms`（無ければ直前の刻みの
-    /// 時刻）で作り直す: 一番上の `always` の再生が無ければその時刻で作って欄を置き、部品の欄は
+    /// 進行の対象（[`ScopeStates::stage_slots`]・バルーンは知らせの面も）なら、保持している
+    /// [`PatternState`] の写しを出来事の時刻 `at_ms`（無ければ直前の刻みの時刻）で作り直す: 一番上の `always` の再生が無ければその時刻で作って欄を置き、部品の欄は
     /// [`PartClocks::refresh`]（見えている `always` の時計を作る・回数つきの見えなくなった時計を捨てる・
     /// 抽選の時計と乱数は触らない）で作り直す。`commit_pattern` が変化を返したらその `Show` を返す。
-    /// 面が表示中でない（`\s[-1]`・`\b[-1]` の後）なら、その面の回数つきの時計を捨てて何も返さない。
+    /// 面が無い（`\s[-1]`・`\b[-1]` の後）なら、その面の回数つきの時計を捨てて何も返さない。
+    /// バルーンの窓が閉じていれば時計を作らない（回数つきは捨てる）。
     /// 出来事の時刻は刻みの単調性の番人（`last_seen`）に入れない。刻みが 1 度も来ておらず `at_ms` も
     /// 無ければ時計を作らない（次の刻みで生まれる）。
     pub(crate) fn refresh(
@@ -568,10 +583,10 @@ impl LoopRuntime {
         if !table.is_continuous() {
             return None;
         }
-        let Some((_, _, sid)) = states
-            .shown_slots()
+        let Some((_, _, sid, open)) = states
+            .stage_slots()
             .into_iter()
-            .find(|(s, sl, _)| s == scope && *sl == slot)
+            .find(|(s, sl, ..)| s == scope && *sl == slot)
         else {
             parts.drop_finite(scope, slot, table);
             return None;
@@ -579,7 +594,9 @@ impl LoopRuntime {
         let at_ms = at_ms.or(*last_seen);
         let mut pattern = states.current_pattern(scope, slot).clone();
         if let Some(at) = at_ms {
-            start_top_always(playback, table, scope, slot, sid, at);
+            if open {
+                start_top_always(playback, table, scope, slot, sid, at);
+            }
             let key = (scope.clone(), slot);
             let always = table
                 .animations(sid)
@@ -591,15 +608,16 @@ impl LoopRuntime {
                 }
             }
         }
-        // 部品は今はシェルの面だけ（バルーンの面の部品は task 3.6）。
-        if slot == Slot::Shell && table.has_animated_parts() {
+        // 部品は面の種類を問わない（バルーンの面の着せ替えの集合は空）。
+        if table.has_animated_parts() {
             parts.refresh(
                 scope,
                 slot,
                 sid,
-                states.current_binds(scope),
+                slot_binds(states, scope, slot),
                 table,
                 at_ms,
+                open,
                 &mut pattern,
             );
         }
@@ -631,6 +649,9 @@ impl LoopRuntime {
 #[cfg(test)]
 #[path = "looper_always_tests.rs"]
 mod always_tests;
+#[cfg(test)]
+#[path = "looper_balloon_tests.rs"]
+mod balloon_tests;
 #[cfg(test)]
 #[path = "looper_parts_emo2_tests.rs"]
 mod parts_emo2_tests;
