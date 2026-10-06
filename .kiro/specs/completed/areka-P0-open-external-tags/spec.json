@@ -1,9 +1,9 @@
 {
   "feature_name": "areka-P0-open-external-tags",
   "created_at": "2026-10-05T12:08:25Z",
-  "updated_at": "2026-10-05T14:53:16Z",
+  "updated_at": "2026-10-06T09:33:14Z",
   "language": "ja",
-  "phase": "tasks-generated",
+  "phase": "completed",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -16,6 +16,10 @@
     "tasks": {
       "generated": true,
       "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-10-06T09:33:14Z"
     }
   },
   "ready_for_implementation": true
