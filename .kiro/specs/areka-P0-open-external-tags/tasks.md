@@ -108,7 +108,7 @@
   - _Depends: 4.2_（台帳が実装より先に `implemented` を名乗らない）
 
 - [ ] 6. 確かめ
-- [ ] 6.1 全体の決定論テストと零の確認
+- [x] 6.1 全体の決定論テストと零の確認
   - `areka-parsers`・`areka-sakura`・`areka` と `ukadoc-survey` のテスト・clippy を x64 で回し、実際の OS のアプリが 1 つも起きないことを確かめる
   - `main.rs`・`emo2_boot/mod.rs`・`compile.rs`・dola・`mcp/`・`Cargo.toml`／`Cargo.lock` の差分が 0、`decode.rs` の差分が腕 1 本と注記 1 行だけであることを `git diff` で確かめる
   - 完了の姿: 上のテストがすべて緑で、零の項目の差分がすべて 0
