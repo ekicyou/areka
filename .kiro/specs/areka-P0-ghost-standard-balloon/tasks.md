@@ -72,7 +72,7 @@
   - _Depends: 1.2, 2.3, 4_
 
 - [ ] 6. 全体の確かめと実機の確認
-- [ ] 6.1 全体の回帰を確かめる
+- [x] 6.1 全体の回帰を確かめる
   - ワークスペースのテスト（`cargo test -p ukadoc-survey` を含む）を回し、1 ファイル 1,000 行の番人・煙テストと配布物の検査が見る `route=Companion`・既存の切替と実行中のバルーンの切替のテストが緑であることを確かめる
   - 実行中のバルーンの切替・シェルの切替・記憶の読み書き・インストールのファイルが差分 0 行であることを `git diff` で確かめる
   - 完了の状態: テストが全部緑で、範囲外のファイルの差分が 0 行であることを記録した
@@ -90,3 +90,4 @@
 - 2.2: descript の段は 2 鍵を（鍵名・欄・突き合わせの関数）の配列で回し、警告の出口を 1 か所にした。`boot_config.rs` の段の並びの説明が古いのはタスク 3 で直す
 - 3: `temp_path_kit::TempPath::new` は OS の一時フォルダに作るので要件 7.7 に反する。共有の `TempPath::under_target`（ワークツリーの `target\test-roots`）を足し、本 spec の新しいテスト（1.1・1.2・3）を移した。タスク 4 の根もこれを使う。設計の Testing Strategy の記述も直した。引数の腕が読まないこと（3.2）は、ゴーストのファイルを共有なしで握って warn 0 件で固定する
 - 5.2: origin/main（`element-base-method`・`mcp-get-status`）を取り込み、roadmap-draft の数を数え直した（44 行・束を持つ行 30・`none = true` 14）。steering の roadmap は 81 本（優先 44）。完了時の棚卸へ: 台帳の `balloon`・`default.balloon.path` の「束: 既定で着せる吹き出し（読む経路が無い）」の小分類「読む経路が無い」が古い（本 spec は触らない約束）。`priority` の付け直しと一緒に coverage の棚卸で扱う
+- 6.1: 全体テスト（-j 2・1457 秒）は 10344 件緑・赤 2 件。赤は検体のパスの綴りの番人（`log-capture-kit` の `sample_path_guard_test`）で、`boot_resolve_balloon_tests.rs` の区切りの場面が検体名 `claudia` で `"x/claudia"`・`"claudia/"` と書いていたため。値を `mine` 系に替えて緑。テストの値に検体名でパスを組まない

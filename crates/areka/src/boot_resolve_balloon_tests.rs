@@ -284,12 +284,12 @@ fn companion_with_separator_is_not_rewritten() {
         &root,
         &[
             ("StayseeBalloon", None),
-            ("claudia", None),
-            ("x_claudia", None),
-            ("xclaudia", None),
+            ("mine", None),
+            ("x_mine", None),
+            ("xmine", None),
         ],
     );
-    for value in [r"x\claudia", "x/claudia", "claudia/"] {
+    for value in [r"x\mine", "x/mine", "mine/"] {
         let given = Given {
             companion: Some(value),
             ..Default::default()
