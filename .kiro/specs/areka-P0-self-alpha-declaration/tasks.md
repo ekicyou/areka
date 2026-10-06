@@ -87,7 +87,7 @@
   - _Requirements: 8.6_
   - _Boundary: 網羅台帳_
 
-- [ ] 5. 実機での確かめ
+- [x] 5. 実機での確かめ
   - `target\` の下の根で、同梱の えも？？ と Staysee、`R_POST_and_KOMAINU`・`konnoyayame`、`claudia` を起動し、見た目が今までと同じであることと、宣言の info 記録（起動と採寸で 1 行ずつ）を確かめる（判定の分岐が見える log level まで開ける）
   - `target\` の下に作った画像だけのシェル（descript.txt と `surface0.png`）が起動し、画像だけで組んだ記録が出る
   - バルーンの写しを `use_self_alpha,0`／`full` に書き換え、`0` で半透明が消えて左上の色が抜ける・`full` で抜かれない見た目と記録を確かめる
