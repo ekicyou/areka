@@ -56,7 +56,7 @@
   - _Requirements: 6.1, 6.2, 6.3, 6.5, 6.6, 6.7, 7.3, 7.4_
   - _Boundary: ShellTarget 入口_
 
-- [ ] 3. 呼び手への配線と見た目の回帰
+- [x] 3. 呼び手への配線と見た目の回帰
 - [x] 3.1 起動の配線の文言を直し、呼び手のクレートの検体が新しい決まりで緑であることを確かめる
   - 起動の配線の「シェルが空」の失敗の文言と doc を「シェルに面が 1 つも無い」に直す（写し方は変えない）
   - areka クレートの一時フォルダの検体（えも？？ の写し）が宣言 `1` を持ち、宣言なしの決まりで赤くならないことを確かめる
@@ -64,7 +64,7 @@
   - _Depends: 2.2, 2.4_
   - _Requirements: 1.7, 2.1, 7.1_
 
-- [ ] 3.2 宣言を読む経路で手持ちの資産の見た目が変わらないことを確かめる
+- [x] 3.2 宣言を読む経路で手持ちの資産の見た目が変わらないことを確かめる
   - 既存の golden と検体のテスト（atlas の えも？？ golden と e2e、present の えも？？ とテンプレート、emo-text の Staysee、areka の採寸のテンプレート）が、検体の descript.txt の宣言（`1` または宣言なし）を本物の経路で読んだ上で今と同じ結果を出す
   - 宣言の無い検体 `R_POST_and_KOMAINU`・`konnoyayame` を使う既存のテスト（抜き色のクリック透過・テンプレートの検体）が入口を通して緑のまま。入口を通して「面の左上の色が抜かれる」ことを見ているテストが 1 本も無ければ、1 本だけ足す
   - 上のテストがすべて緑
@@ -98,3 +98,4 @@
 ## Implementation Notes
 - 3.1: `cargo test -p areka` の結合テスト（`mcp_get_log_real_run`・`smoke_boot_loop_exit`）は、このワークツリーの `target\` に i686 の `shiori-host32-helper` と `shiori-host32-testdll-loadu` が無いと落ちる。先に `cargo build -p shiori-host32-helper -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` を回す。
 - 3.1: `crates/areka/src/placement/measure_tests.rs` は 993 行で、1,000 行の番人まで残り 7 行。足すテストは兄弟ファイルへ。
+- 3.2: コードの変更なし。atlas の えも？？ golden は依存の向き（present→atlas）のため `On` を直に渡し、本物の経路が `1` を読むことは present の `emo2_shell_records_two_shadowed_images_and_no_warnings` が判定する。宣言なしの検体の左上の抜きは `shell_target_template_tests.rs` と `presenter_keycolor_clickthrough_tests.rs` が入口を通して判定する（入口を `Full` に固定すると両方赤）。areka の採寸のテンプレートのテストの絞り込みは `-- measure::template_tests`。
