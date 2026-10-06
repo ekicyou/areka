@@ -55,6 +55,8 @@ pub enum LoopTrigger {
 pub struct LoopFrame {
     /// コマの参照 surface id。負値センチネルを保持する（`-1` 停止・他負値は非駆動・要件 5.5）。
     pub surface_id: i64,
+    /// 絵を直接指すコマなら絵の番号（動く絵の子だけ）。作者の pattern定義のコマは `None`。
+    pub picture: Option<u32>,
     /// 描画メソッド（完全語彙・要件 8.4）。合成の実駆動は `Overlay` のみ（下流 method ゲートが選別）。
     pub method: ComposeMethod,
     /// 前コマからこのコマへの遅延（1ms 単位・要件 4.5）。
@@ -196,6 +198,7 @@ impl AnimationTable {
                     .iter()
                     .map(|p| LoopFrame {
                         surface_id: p.surface_id,
+                        picture: None,
                         method: ComposeMethod::from_name(p.method.as_str()),
                         wait_ms: p.wait,
                         x: p.x,

@@ -75,7 +75,7 @@
   - _Requirements: 1.9, 3.7_
 
 - [ ] 3. seriko の側: 繰り返しの計算・表・時計・バルーンの面
-- [ ] 3.1 (P) 経過からコマを決める純粋な計算を置く
+- [x] 3.1 (P) 経過からコマを決める純粋な計算を置く
   - `LoopFrame` に「絵を指すコマの絵の番号」の欄（`picture`）を足し、seriko の中の書き下しを直す（子の形のテストに要るので、表の仕事より先に置く）
   - `timeline.rs` に `lap_of`（何周目か・周の頭からの経過）と `AlwaysView`・`always_at`（今のコマ）を足す。回数つきで経過が「周期 × N」以上なら最後のコマ。最初の待ちの前は、1 周目なら何も出さず、2 周目以降は前の周の最後のコマ。負の番号のコマに居る間は何も出さない。丸めず、状態も乱数も持たない
   - 兄弟の `timeline_repeat_tests.rs` で: 待ち時間どおりの境目／終わりなしの 2 周目と最初の待ちの間／合計 N 回で最後のコマに止まる／待ち時間 0 のコマを飛ばす（`alpha.webp` の 100・0・70）／経過が 1 秒飛んだら 1 秒ぶん進む（手書きの形と子の形の両方）／途中の `-1` で消えて次で戻る／同じ入力で同じ答え／pattern0 の待ちが 0 の手書きの `always` の周の境目（最後のコマは 0 ミリ秒しか出ない帰結を固定）
@@ -241,3 +241,4 @@
 - 2.4: 経過 0 の pattern の求め方 `rest_pattern(anim)` は `nesting.rs` に置いた（`pub(crate)`・index の昇順に並べて `rest_index`）。2.5 の `plan_always.rs` はこれを呼び 2 つ目を作らない。seriko（3.2）は `table.rs` の同じ並べ方の待ち時間に公開の `rest_index` を当てる＝並べ方を変えるなら両方を揃える。`always_rest` の先はまだ `has_animated_parts` に数えない（3.2 の `is_continuous()` の仕事）
 - 2.5: 仮の `Film` の腕は `plan_always::push_film_op` に置き換えた（子の定義が無いときだけ `error!`）。経過 0 の pattern の描画メソッドが動かないときは `debug!`（周ごとに巡るので `warn!` だと刻みごとの記録になる）。動く絵だけのサーフェス（検体の 1 番）は 2.6 まで外形 0×0＝`build_plan` が `EmptyComposition`
 - 2.6: `plan_extent.rs` は `plan` の子のモジュール（`#[path]`・`pub(crate) use extent::compute_extent`）。移動は `d7755372`。`always` の外形は負の番号・7 語・`move`（ukadoc「サーフェスIDは無視される」）を数えない。見える部品（2.4）は `is_implemented_name` で `move` を既に外している
+- 3.1: `current_frame_index` は `timeline.rs`（`pub(crate)`）へ移し、`frame_at` もこれを通る（Repeat は末端・`looper` を参照しない）。`always_at(…, 0)` は合成の `rest_index` と一致（テストで固定）＝3.3 の「経過 0 と同じなら欄に載せない」の前提。絵を指すコマは `Nothing` にならない。seriko の clippy の赤 2 件（`actor.rs` の large_enum_variant・`looper.rs` の collapsible_if）と `dola` の 21 件は前からのもの（完了時に起票の対象）

@@ -50,4 +50,7 @@ pub use state::{
     ApplyOutcome, BindApplyOutcome, PatternApplyOutcome, ScopeState, ScopeStates, Slot,
 };
 pub use table::{AnimationTable, LoopAnimation, LoopFrame, LoopTrigger};
-pub use timeline::{FrameStatus, LoopRng, LotteryBoundary, frame_at, seeded_rng, should_fire};
+pub use timeline::{
+    AlwaysView, FrameStatus, LoopRng, LotteryBoundary, always_at, frame_at, lap_of, seeded_rng,
+    should_fire,
+};

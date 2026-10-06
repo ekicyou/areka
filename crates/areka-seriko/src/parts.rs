@@ -19,9 +19,9 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use areka_emo_compose::{BindSet, PatternFrame, PatternState};
 use areka_sakura::ActorKey;
 
-use crate::looper::{current_frame_index, pattern_frame};
+use crate::looper::pattern_frame;
 use crate::table::{AnimationTable, LoopAnimation, LoopTrigger};
-use crate::timeline::{FrameStatus, LoopRng, frame_at, should_fire};
+use crate::timeline::{FrameStatus, LoopRng, current_frame_index, frame_at, should_fire};
 
 /// animation 1 本の時計。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

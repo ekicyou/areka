@@ -36,7 +36,9 @@ use crate::output::DisplayCommand;
 use crate::parts::PartClocks;
 use crate::state::{PatternApplyOutcome, ScopeStates, Slot};
 use crate::table::{AnimationTable, LoopFrame, LoopTrigger};
-use crate::timeline::{FrameStatus, LoopRng, LotteryBoundary, frame_at, seeded_rng, should_fire};
+use crate::timeline::{
+    FrameStatus, LoopRng, LotteryBoundary, current_frame_index, frame_at, seeded_rng, should_fire,
+};
 
 /// SERIKO ループ構成（シェル表 1 面＋scope 別バルーン表＋乱数注入シーム）。boot 時に組み立てて
 /// [`LoopRuntime`] へ値渡しする。
@@ -112,22 +114,6 @@ fn slot_rank(slot: Slot) -> u8 {
         Slot::Shell => 0,
         Slot::Balloon => 1,
     }
-}
-
-/// `frame_at` と同一の累積 wait デッドライン選択で現在コマ index を返す（`Stopped` の負 surface 値を
-/// warn! 用に取り出すためだけの補助・一番上と部品で共有・分岐判定の正典は [`frame_at`]）。
-pub(crate) fn current_frame_index(frames: &[LoopFrame], elapsed_ms: u64) -> Option<usize> {
-    let mut acc: u64 = 0;
-    let mut current: Option<usize> = None;
-    for (i, f) in frames.iter().enumerate() {
-        acc = acc.saturating_add(u64::from(f.wait_ms));
-        if acc <= elapsed_ms {
-            current = Some(i);
-        } else {
-            break;
-        }
-    }
-    current
 }
 
 /// 表のコマ 1 枚を合成へ渡すコマにする（一番上と部品で共有）。
