@@ -187,7 +187,7 @@ fn a_deadline_reached_after_a_user_break_produces_no_action() {
     let armed = Frame::new(&[(0, seen(2, false))])
         .at(0.0)
         .talk_started()
-        .display_end(0.0)
+        .ended_at(0.0)
         .timeout(TIMEOUT)
         .run(&mut state);
     assert_eq!(armed.actions, vec![show(0)], "前提: 表示が起きていない");

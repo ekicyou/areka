@@ -123,6 +123,8 @@ enum Signal {
     TalkStarted,
     /// 占有終端（[`ANCHOR`] からの相対秒）。
     DisplayEnd(f64),
+    /// 占有終端とトークの終わり（止まった時刻＝占有終端）を一緒に（[`ANCHOR`] からの相対秒）。
+    Ended(f64),
 }
 
 /// 本フレームの現在時刻。
@@ -248,6 +250,7 @@ fn expand(expect: &[Expect]) -> (Vec<VisibilityAction>, Vec<VisibilityLogEvent>)
                 display_end,
                 deadline,
             } => logs.push(VisibilityLogEvent::MeasurementStarted {
+                origin: MeasurementOrigin::DisplayEnd,
                 display_end: ANCHOR + display_end,
                 deadline: ANCHOR + deadline,
             }),
@@ -313,6 +316,7 @@ fn run(case: &Case, failures: &mut Vec<String>) {
             frame = match *signal {
                 Signal::TalkStarted => frame.talk_started(),
                 Signal::DisplayEnd(rel) => frame.display_end(ANCHOR + rel),
+                Signal::Ended(rel) => frame.ended_at(ANCHOR + rel),
             };
         }
 
@@ -444,6 +448,7 @@ fn expectation_times_are_anchored_on_the_display_end() {
     assert_eq!(
         logs,
         vec![VisibilityLogEvent::MeasurementStarted {
+            origin: MeasurementOrigin::DisplayEnd,
             display_end: ANCHOR,
             deadline: ANCHOR + TIMEOUT,
         }]

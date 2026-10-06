@@ -82,7 +82,12 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )));
-    let clock = TalkClock::new(std::sync::Arc::new(|| 0.0));
+    // 時刻源は手で進める（受け口が落ちる瞬間に止まった時刻を読むため）。
+    let wall = std::sync::Arc::new(std::sync::Mutex::new(0.0_f64));
+    let clock = TalkClock::new({
+        let wall = std::sync::Arc::clone(&wall);
+        std::sync::Arc::new(move || *wall.lock().expect("時計の錠"))
+    });
     let mut wiring = Emo2Wiring::new(
         EmoPresenter::new(),
         mpsc::channel().1,
@@ -155,6 +160,10 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
         duration: 0.5,
     });
     wiring.clock.observe_cue(0.0);
+    // 台本を最後まで流し終えたところで受け口が落ち、トークの終わり（止まった時刻＝占有終端）が
+    // 届く。時間切れの計測はこれが届いてから始まる（areka-P0-balloon-lifecycle-events 決定 D6）。
+    *wall.lock().expect("時計の錠") = horizon;
+    drop(player);
     let now = horizon + 1.0;
     world.insert_resource(FrameTime(now));
 

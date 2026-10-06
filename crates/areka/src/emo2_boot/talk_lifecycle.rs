@@ -87,9 +87,10 @@ pub(crate) enum TalkLifecycleSignal {
 }
 
 /// そのトークの時間切れまでの待ち時間（`\![set,balloontimeout,時間]` の読み）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TalkTimeout {
     /// 既定の待ち時間（30 秒か環境変数。決め方は判断の側が持つ）。
+    #[default]
     Default,
     /// そのミリ秒。
     Millis(u64),

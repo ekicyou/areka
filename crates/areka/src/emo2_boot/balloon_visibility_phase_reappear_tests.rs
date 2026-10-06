@@ -175,6 +175,11 @@ fn talk_started(end: f64) -> [TalkLifecycleSignal; 2] {
     ]
 }
 
+/// トークの終わりの合図（止まった時刻＝占有終端。時間切れの計測はこれが届いてから始まる）。
+fn ended(at: f64) -> TalkLifecycleSignal {
+    TalkLifecycleSignal::TalkEnded { at: Some(at) }
+}
+
 /// 台詞の始まり（全消去の後に scope 0 の文字）。
 fn new_talk(body: &str, duration: f64) -> [TalkCue; 2] {
     [clear_all(), text(0, 0.0, body, duration)]
@@ -226,7 +231,8 @@ fn shown_then_timed_out(rig: &mut Rig) -> Vec<FrameOutcome> {
         &talk_started(PREV_END),
         &[clear_all(), text(0, 0.0, PREV_TEXT, PREV_END)],
     );
-    rig.frame(Some(PREV_END), &[], &[]); // 5 文字が見え、計測が始まる
+    // 5 文字が見え、トークの終わりが届いて計測が始まる
+    rig.frame(Some(PREV_END), &[ended(PREV_END)], &[]);
     rig.frame(Some(PREV_END + TIMEOUT), &[], &[]); // 満了
     rig.frame(Some(4.0), &[], &[]);
     rig.frame(Some(5.0), &[], &[]);

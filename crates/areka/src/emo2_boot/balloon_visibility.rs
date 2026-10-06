@@ -28,15 +28,22 @@
 //!
 //! # 会話終了後のタイムアウト（Requirement 4）
 //!
-//! 満了予定の起点は**会話の占有終端**（待機を含む台本の終わり）である。正典のカウント起点
-//! 「スクリプトの表示が終わってから」に一致させるため、初期の確立式は
-//! `満了予定 = 占有終端 + 既定時間` であって、「計測が成り立った最初のフレームの現在時刻 +
-//! 既定時間」ではない——観測はフレーム単位で飛び飛びに入るため、後者では観測の遅れが
-//! そのまま満了のずれになる。現在時刻を起点に取り直すのは抑止が解けた瞬間だけである
-//! （Requirement 5.3）。
+//! 計測はトークの終わりの合図（`TalkEnded`）が届いてから始める。満了予定の起点は
+//! **実効の表示終了**＝会話の占有終端（待機を含む台本の終わり）と止まった時刻の早い方で、
+//! 止まった時刻が届かなければ占有終端である。正典のカウント起点「スクリプトの表示が終わって
+//! から」に一致させるため、初期の確立式は
+//! `満了予定 = 実効の表示終了（占有終端と止まった時刻の早い方）＋ このトークの待ち時間（既定は既定時間）`
+//! であって、「計測が成り立った最初のフレームの現在時刻 + 待ち時間」ではない——観測はフレーム
+//! 単位で飛び飛びに入るため、後者では観測の遅れがそのまま満了のずれになる。現在時刻を起点に
+//! 取り直すのは抑止が解けた瞬間だけである（Requirement 5.3）。
 //!
-//! 判断が迷う場面では常に**表示を保持する側**へ倒す——占有終端の信号が届かない間は計測を
-//! 始めず（Requirement 4.8）、現在時刻が分からないフレームは計測に触れず、抑止中の超過は
+//! 待ち時間はトークごとの指定（`\![set,balloontimeout,時間]`）で差し替わり、「なし」の指定では
+//! そのトークの計測をしない。時間切れで隠したフレームにだけトークの番号の知らせを返す。
+//! 完了 spec areka-P0-balloon-visibility では起点は占有終端だけで、占有終端の信号だけで計測が
+//! 立ったが、areka-P0-balloon-lifecycle-events がこう改めた（決定 D6・要件 2.1・5.1・9.1）。
+//!
+//! 判断が迷う場面では常に**表示を保持する側**へ倒す——占有終端かトークの終わりの信号が届かない
+//! 間は計測を始めず（Requirement 4.8）、現在時刻が分からないフレームは計測に触れず、抑止中の超過は
 //! 保留し続ける（Requirement 5.6）。唯一の例外が抑止の観測不能で、これは**抑止なし**として
 //! 扱う（Requirement 5.5）——観測が取れないことを抑止と読むと、消えないまま固着する側へ
 //! 倒れるためである。
@@ -64,7 +71,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::talk_lifecycle::TalkLifecycleSignal;
+use areka_sakura::TalkId;
+
+use super::talk_lifecycle::{TalkLifecycleSignal, TalkTimeout};
 
 #[path = "balloon_visibility_decision.rs"]
 mod decision;
@@ -207,8 +216,13 @@ pub(crate) enum VisibilityLogEvent {
         trigger: VisibilityTrigger,
         visible: bool,
     },
-    /// タイムアウト計測を開始した（Requirement 8.2: 起点＝占有終端・満了予定）。
-    MeasurementStarted { display_end: f64, deadline: f64 },
+    /// タイムアウト計測を開始した（Requirement 8.2: 占有終端・満了予定。
+    /// areka-P0-balloon-lifecycle-events 要件 7.3: 起点の採り方）。
+    MeasurementStarted {
+        origin: MeasurementOrigin,
+        display_end: f64,
+        deadline: f64,
+    },
     /// タイムアウト計測を破棄した（Requirement 8.2: 理由と破棄した満了予定）。
     MeasurementDiscarded {
         reason: MeasurementDiscardReason,
@@ -224,6 +238,45 @@ pub(crate) enum VisibilityLogEvent {
     /// 可視コンテンツが現れたのに会話の表示終了信号が 1 件も届いていない
     /// （Requirement 4.8・会話 1 回。表示は保持したまま記録だけ残す）。
     DisplayEndSignalMissing,
+    /// 時間切れで隠したが、いま出ている台詞のトークの番号が無いので知らせを載せなかった
+    /// （配送を通らない再生。本番では起きない・areka-P0-balloon-lifecycle-events 要件 2.1）。
+    TimeoutNoticeWithoutTalkId,
+}
+
+/// 時間切れの計測の起点をどう採ったか（areka-P0-balloon-lifecycle-events 要件 5.1・5.3・5.6・7.3）。
+///
+/// 記録の語に「中断」は使わない——最後まで流れたトークでも止まった時刻が終端より早く読まれうる。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum MeasurementOrigin {
+    /// 止まった時刻が占有区間の終端より早かったので、止まった時刻（talk 相対秒）を採った。
+    StoppedAt(f64),
+    /// 占有区間の終端を採った（止まった時刻が終端以後）。
+    DisplayEnd,
+    /// 止まった時刻が届かなかった（時刻源が起点を持たない）ので、占有区間の終端を採った。
+    StopTimeMissing,
+}
+
+impl MeasurementOrigin {
+    /// ログの `origin` フィールドへ書く語。
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            MeasurementOrigin::StoppedAt(_) => "stopped_at",
+            MeasurementOrigin::DisplayEnd => "display_end",
+            MeasurementOrigin::StopTimeMissing => "stop_time_missing",
+        }
+    }
+}
+
+/// 表示の側が知るトークの終わり（areka-P0-balloon-lifecycle-events 要件 5.1・5.6）。
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub(crate) enum TalkEnd {
+    /// まだ届いていない（時間切れの計測を始めない）。
+    #[default]
+    NotYet,
+    /// 届いた。受け口が落ちた瞬間の talk 相対秒。
+    At(f64),
+    /// 届いたが、時刻源が起点を持たず時刻が無い。
+    TimeUnknown,
 }
 
 /// 判断中核が配線層へ依頼する行動。
@@ -247,6 +300,10 @@ pub(crate) struct VisibilityDecision {
     /// ログ用の事象。並びは「信号の畳み込み → 中断の非表示（scope 昇順）→ 可視コンテンツ駆動の
     /// 遷移（scope 昇順）→ 計測と満了」で固定する。
     pub(crate) logs: Vec<VisibilityLogEvent>,
+    /// 時間切れで隠したフレームにだけ立つ、いま出ている台詞のトークの番号
+    /// （areka-P0-balloon-lifecycle-events 要件 2.1・2.4・2.5）。利用者の中断・内容の消去・
+    /// 外からの非表示・抑止の間は立たない。
+    pub(crate) timeout_notice: Option<TalkId>,
 }
 
 /// 1 scope・1 フレームの「可視の文字」の観測（同じ借用・同じ注入時刻で読んだ組）。
@@ -371,6 +428,12 @@ pub(crate) struct BalloonVisibilityState {
     display_end: Option<f64>,
     /// 非表示の満了予定（talk 相対秒）。`None` は計測なし。
     deadline: Option<f64>,
+    /// いまバルーンに出ている台詞のトークの番号（会話開始の信号で置き換える）。
+    talk_id: Option<TalkId>,
+    /// トークの終わり（会話開始の信号で `NotYet` へ戻す）。
+    talk_end: TalkEnd,
+    /// このトークの待ち時間（会話開始の信号で `Default` へ戻す・到着順に上書き）。
+    talk_timeout: TalkTimeout,
     /// 利用者の中断でバルーンを隠したので、内容の増加では出し直さない
     /// （areka-P0-balloon-break 要件 4.8）。次の会話開始の信号で解く。
     ///
@@ -465,8 +528,12 @@ mod forget_tests;
 #[path = "balloon_visibility_box_tests.rs"]
 mod box_tests;
 
-// 会話終了観測から判断中核までの端から端（task 6.6）。実台本の再生から占有終端が計測起点に
-// なるところまでを 1 本で通す。判断中核の私有状態を読むため親の内側に置く。
+#[cfg(test)]
+#[path = "balloon_visibility_talk_end_tests.rs"]
+mod talk_end_tests;
+
+// 会話終了観測から判断中核までの端から端（task 6.6）。実台本の再生から、受け口が落ちてトークの
+// 終わりが届き、占有終端（止まった時刻と同じ）が計測起点になるところまでを 1 本で通す。判断中核の私有状態を読むため親の内側に置く。
 #[cfg(test)]
 #[path = "balloon_visibility_lifecycle_e2e_tests.rs"]
 mod lifecycle_e2e_tests;

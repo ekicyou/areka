@@ -748,6 +748,7 @@ fn decision_events_are_written_with_the_agreed_level_and_fields() {
             visible: false,
         },
         VisibilityLogEvent::MeasurementStarted {
+            origin: MeasurementOrigin::DisplayEnd,
             display_end: 4.0,
             deadline: 34.0,
         },

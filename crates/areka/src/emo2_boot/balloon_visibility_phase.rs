@@ -42,9 +42,9 @@ use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 use super::super::frame::{Emo2Wiring, resolve_talk_time};
 use super::super::target_map::{balloon_target, shell_target};
 use super::{
-    BalloonVisibilityState, GlyphObservation, ScopeObservation, TalkLifecycleSignal,
-    VisibilityAction, VisibilityLogEvent, VisibilityObservations, VisibilityTrigger,
-    configured_timeout_secs, decide, hide_reaches_boxes,
+    BalloonVisibilityState, GlyphObservation, MeasurementOrigin, ScopeObservation,
+    TalkLifecycleSignal, VisibilityAction, VisibilityLogEvent, VisibilityObservations,
+    VisibilityTrigger, configured_timeout_secs, decide, hide_reaches_boxes,
 };
 
 /// バルーン可視性の相（`emo2_frame_system` の相順から毎フレーム呼ばれる配線）。
@@ -670,12 +670,30 @@ fn emit_visibility_logs(logs: &[VisibilityLogEvent], not_shown: &[u32]) {
                 );
             }
             VisibilityLogEvent::MeasurementStarted {
+                origin,
                 display_end,
                 deadline,
-            } => info!(
-                display_end,
-                deadline, "[balloon-visibility] タイムアウト計測を開始（起点＝会話の占有終端）"
-            ),
+            } => match origin {
+                MeasurementOrigin::StoppedAt(stopped_at) => info!(
+                    origin = origin.as_str(),
+                    stopped_at,
+                    display_end,
+                    deadline,
+                    "[balloon-visibility] タイムアウト計測を開始（起点＝止まった時刻）"
+                ),
+                MeasurementOrigin::DisplayEnd => info!(
+                    origin = origin.as_str(),
+                    display_end,
+                    deadline,
+                    "[balloon-visibility] タイムアウト計測を開始（起点＝会話の占有終端）"
+                ),
+                MeasurementOrigin::StopTimeMissing => warn!(
+                    origin = origin.as_str(),
+                    display_end,
+                    deadline,
+                    "[balloon-visibility] タイムアウト計測を開始（止まった時刻が届かず、起点＝会話の占有終端）"
+                ),
+            },
             VisibilityLogEvent::MeasurementDiscarded { reason, deadline } => info!(
                 reason = reason.as_str(),
                 deadline, "[balloon-visibility] タイムアウト計測を破棄"
@@ -693,6 +711,11 @@ fn emit_visibility_logs(logs: &[VisibilityLogEvent], not_shown: &[u32]) {
             ),
             VisibilityLogEvent::DisplayEndSignalMissing => warn!(
                 "[balloon-visibility] 可視コンテンツが現れたのに会話の表示終了信号が 1 件も届いていない → 計測を始めず表示を保持する"
+            ),
+            VisibilityLogEvent::TimeoutNoticeWithoutTalkId => warn!(
+                event = "balloon_timeout_notice_failed",
+                reason = "no_talk_id",
+                "[balloon-visibility] 時間切れで隠したが、トークの番号が無いので知らせを載せない"
             ),
         }
     }
