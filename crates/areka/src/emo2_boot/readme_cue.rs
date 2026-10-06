@@ -101,7 +101,7 @@ impl dola::cue::CueSink for ReadmeCueSink {
         }
 
         // 4) 送り出し。受信端が閉じていても台本は殺さない（記録して継続・非 panic）。
-        if self.tx.send(ReadmeRequest).is_err() {
+        if self.tx.send(ReadmeRequest::Readme).is_err() {
             warn!("ReadmeCueSink: 説明書の要求を送り出せなかった（受信端が閉じている）");
         }
     }

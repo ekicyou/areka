@@ -45,9 +45,14 @@ pub(crate) trait OsPort {
 }
 
 /// 本物（`ShellExecuteExW`（`SEE_MASK_FLAG_NO_UI`）・`std::env::var`）。
+///
+/// テストのビルドは本物の OS を呼ばない（`Opener::spawn` が断る口を持つ・要件 10.1）ので、
+/// 本物とその部品はテストのビルドに呼び手が無い。
+#[cfg_attr(test, allow(dead_code))]
 pub(crate) struct WindowsShell;
 
 /// 終端 0 付きの UTF-16 へ写す。
+#[cfg_attr(test, allow(dead_code))]
 fn wide(s: &std::ffi::OsStr) -> Vec<u16> {
     s.encode_wide().chain(std::iter::once(0)).collect()
 }
@@ -94,6 +99,8 @@ impl OsPort for WindowsShell {
 /// 開く専用のスレッドの最初に 1 度だけ呼ぶ（`COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE`）。
 ///
 /// 失敗は `warn!` を残して続ける（`ShellExecuteExW` は COM 無しでも多くの場合は動く）。
+/// テストのビルドでは呼ばない（[`WindowsShell`] と同じ）。
+#[cfg_attr(test, allow(dead_code))]
 pub(crate) fn init_com_for_shell() {
     // SAFETY: 予約の引数は None。対の CoUninitialize はスレッドの終わりまで呼ばない。
     let hr = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) };
