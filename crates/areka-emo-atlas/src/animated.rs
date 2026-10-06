@@ -13,7 +13,7 @@ use crate::decode::{
     AnimatedImage, AnimationFrame, AnimationInfo, DecodeError, DecodedImage, ElementDecoder,
 };
 use crate::limits::{AnimationLimits, Exceeded, judge};
-use crate::normalize::{NormalizedImage, clear_key_color};
+use crate::normalize::{AlphaRule, apply_to};
 use crate::pack::PackConfig;
 use crate::table::{Animation, AtlasKey, ElementId, LoopCount, Size};
 use crate::trim::{TrimResult, Trimmed, Trimmer};
@@ -23,7 +23,7 @@ pub(crate) enum Loaded {
     /// 1 枚の絵（静止画・1 枚へ縮めた動く絵）。今までの静止画の枝を通る。
     Still(DecodedImage),
     /// 全コマを読めた動く絵（コマは見出しどおりの枚数・寸法）と、その全コマの画素の数。
-    /// 画素の数は、呼び手が 0 番のコマの正規化を通して表に載せると決めたときだけ合計に足す。
+    /// 画素の数は呼び手が合計に足す。
     Frames(AnimatedImage, u64),
     /// 1 枚も読めなかった（今までの静止画の失敗と同じ扱い）。
     Failed(DecodeError),
@@ -153,38 +153,23 @@ pub(crate) struct PendingFrames {
 }
 
 impl PendingFrames {
-    /// 0 番のコマを外した動く絵の残りを、0 番と同じ透過に通して切り詰める（要件 3.1〜3.3・3.5）。
-    /// 0 番のコマは呼び手が静止画と同じ道で正規化を済ませているので、残りのコマは同じ `has_alpha`・
-    /// 同じ設定で恒等か、0 番の左上の色（`key_color`）を消すだけになる。
+    /// 0 番のコマを外した動く絵の残りに、0 番のコマで決めた扱い（`rule`）を当てて切り詰める
+    /// （要件 3.1〜3.3・3.5・spec: areka-P0-self-alpha-declaration 要件 4.4・5.5・9.4）。
+    /// コマごとに決め直さないので、全部のコマが 0 番と同じ側（α・不透明・抜き色）になる。
     pub(crate) fn new(
         parent: ElementId,
         key: AtlasKey,
         first_delay_ms: u32,
         rest: Vec<AnimationFrame>,
         loop_count: LoopCount,
-        key_color: Option<[u8; 4]>,
+        rule: AlphaRule,
     ) -> Self {
         let mut delays_ms = vec![first_delay_ms];
         let trims = rest
             .into_iter()
             .map(|frame| {
                 delays_ms.push(frame.delay_ms);
-                let DecodedImage {
-                    width,
-                    height,
-                    stride,
-                    mut bgra,
-                    ..
-                } = frame.image;
-                if let Some(color) = key_color {
-                    clear_key_color(&mut bgra, width, height, stride, color);
-                }
-                Trimmer.trim(&NormalizedImage {
-                    width,
-                    height,
-                    stride,
-                    pbgra: bgra,
-                })
+                Trimmer.trim(&apply_to(frame.image, rule))
             })
             .collect();
         Self {

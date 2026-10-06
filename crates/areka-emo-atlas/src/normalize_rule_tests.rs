@@ -44,8 +44,8 @@ const CLEAR: [u8; 4] = [0, 0, 0, 0];
 const KEY: [u8; 4] = [10, 20, 30, 255];
 const OTHER: [u8; 4] = [200, 100, 50, 255];
 
-/// 表の 1 行目（要件 3.1・3.3）: `On` × α あり → 扱いなし・画素は 1 バイトも変わらず、
-/// 今の `normalize`（そのまま渡す）の出力とも一致する。
+/// 表の 1 行目（要件 3.1・3.3）: `On` × α あり → 扱いなし・画素は 1 バイトも変わらない。
+/// `normalize` を通しても、今までの期待（入力のバイトそのまま）と一致する。
 #[test]
 fn row1_on_with_alpha_keeps_pixels_as_today() {
     let img = image(2, 2, true, &[PREMUL_RED_128, PREMUL_GREEN_64, WHITE, CLEAR]);
@@ -58,15 +58,14 @@ fn row1_on_with_alpha_keeps_pixels_as_today() {
             key: None
         }
     );
-    assert_eq!(out, img.bgra, "入力と出力のバイトが同じ");
-    let today = Normalizer
-        .normalize(img.clone(), params(UseSelfAlpha::On), false)
-        .expect("On × α ありは今も描ける");
-    assert_eq!(out, today.pbgra, "今の正規化の出力と同じ");
+    let expected: Vec<u8> = [PREMUL_RED_128, PREMUL_GREEN_64, WHITE, CLEAR].concat();
+    assert_eq!(out, expected, "入力と出力のバイトが同じ");
+    let normalized = Normalizer.normalize(img, params(UseSelfAlpha::On));
+    assert_eq!(normalized.pbgra, expected, "正規化の出力も今の期待と同じ");
 }
 
 /// 表の 2 行目（要件 3.2・3.3）: `On` × α なし → 左上の 4 バイトを抜く。
-/// 今の `normalize`（抜き色の腕）の出力とバイト単位で一致する。
+/// `normalize` を通しても、今までの抜き色の期待とバイト単位で一致する。
 #[test]
 fn row2_on_without_alpha_clears_top_left_color_as_today() {
     let img = image(2, 2, false, &[KEY, OTHER, OTHER, KEY]);
@@ -81,10 +80,8 @@ fn row2_on_without_alpha_clears_top_left_color_as_today() {
     );
     let expected: Vec<u8> = [CLEAR, OTHER, OTHER, CLEAR].concat();
     assert_eq!(out, expected, "左上と同じ色だけが 0,0,0,0");
-    let today = Normalizer
-        .normalize(img.clone(), params(UseSelfAlpha::On), false)
-        .expect("On × α なしは今も描ける");
-    assert_eq!(out, today.pbgra, "今の正規化の出力と同じ");
+    let normalized = Normalizer.normalize(img, params(UseSelfAlpha::On));
+    assert_eq!(normalized.pbgra, expected, "正規化の出力も今の期待と同じ");
 }
 
 /// 表の 3 行目（要件 4.1）: `Full` × α あり → α をそのまま使う。
