@@ -206,6 +206,10 @@ mod os_port;
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) mod destination;
 
+// 開く処理の 1 か所（task 3.1〜3.4）。結線（4.1）まで本番のビルドに呼び手が無い（4.1 で外す）。
+#[cfg_attr(not(test), allow(dead_code))]
+mod opener;
+
 #[cfg(test)]
 mod opener_test_support;
 
