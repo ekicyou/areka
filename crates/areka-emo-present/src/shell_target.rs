@@ -26,7 +26,9 @@
 //! 同じ番号の重複の `warn!`（R1.5）・桁溢れの `debug!`（R1.6）・相手の無いコマの `warn!`（R3.5）・
 //! 焼く段で落ちた絵の `warn!`・3 つの失敗の `error!`（R1.7・R6.4）、および箱の報告の各件の
 //! `warn!` と箱の数の `info!`（spec: areka-P0-shell-balloon 要件 10.1）、入れ子の報告（無い番号・
-//! 循環）の各件の `warn!`（spec: areka-P0-surface-element-nesting 要件 3.1・3.2）である。一覧の 1 件だけが
+//! 循環）の各件の `warn!`（spec: areka-P0-surface-element-nesting 要件 3.1・3.2）、descript.txt が
+//! 読めない `warn!` と添えてあった `.pna` の数の `warn!`（spec: areka-P0-self-alpha-declaration
+//! 要件 5.7・7.4・透過の扱いの `info!` は `self_alpha` の宛先で 1 行）である。一覧の 1 件だけが
 //! 取れないときは `warn!` を出してその 1 件を飛ばす（[`list_file_names`]）。
 //! [`ShellTarget::build_world`] は新しい記録を 1 本も出さない。
 //!
@@ -53,6 +55,9 @@ use crate::balloon::face_digits_of;
 
 /// シェルの面定義ファイル名（読むのは [`load_shell_target`] の 1 回だけ）。
 const SURFACES_TXT: &str = "surfaces.txt";
+
+/// シェルの設定ファイル名（透過の宣言 `seriko.use_self_alpha` を [`load_shell_target`] が読む）。
+const DESCRIPT_TXT: &str = "descript.txt";
 
 /// シェルの面画像の接頭辞（大小無視で比較される）。
 const SURFACE_PREFIX: &str = "surface";
@@ -196,6 +201,9 @@ pub struct ShellTarget {
     box_surfaces: usize,
     /// 入れ子の無い番号と循環の報告（記録を出すのは [`load_shell_target`]・要件 3.1・3.2）。
     nest_report: NestReport,
+    /// 焼いた絵のうち同じ名前の `.pna` が添えてあったものの数（`BakeResult::ignored_pna` の写し・
+    /// `.pna` は使っていない・記録を出すのは [`load_shell_target`]・要件 5.7）。
+    pub ignored_pna: usize,
 }
 
 impl ShellTarget {
@@ -296,7 +304,37 @@ pub fn load_shell_target(
         });
     }
 
-    let target = build_shell_target_with_boxes(shell, &boxes, selection, shell_dir, decoder);
+    // 透過の宣言は呼ばれるたびに読む（状態を持たないので切り替えで前の宣言を持ち越さない・要件 1.7）。
+    // 昔からのシェルの descript.txt は Shift_JIS が普通なので、UTF-8 として読まず ANSI を既定にする。
+    let descript_path = shell_dir.join(DESCRIPT_TXT);
+    let descript = match std::fs::read(&descript_path) {
+        Ok(bytes) => Some(decode(&bytes, DefaultEncoding::Ansi)),
+        Err(error) => {
+            tracing::warn!(
+                path = %descript_path.display(),
+                error = %error,
+                "shell: descript.txt が読めないので透過の宣言なしとして続ける"
+            );
+            None
+        }
+    };
+    let use_self_alpha = crate::self_alpha::read_use_self_alpha(
+        "shell",
+        "seriko.use_self_alpha",
+        shell_dir,
+        descript.as_deref(),
+    );
+
+    let target =
+        build_shell_target_with_boxes(shell, &boxes, selection, shell_dir, decoder, use_self_alpha);
+
+    if target.ignored_pna != 0 {
+        tracing::warn!(
+            shell_dir = %shell_dir.display(),
+            ignored_pna = target.ignored_pna,
+            "shell: 絵に添えてある .pna を使わずに表示する"
+        );
+    }
 
     for (&surface_id, file) in &target.base_images.shadowed {
         tracing::debug!(
@@ -350,15 +388,22 @@ pub fn load_shell_target(
 /// `elements` を無条件に集めるので、`SurfaceSet`・`ManifestDeriver`・`bake` の変更は要らない。
 /// 使わなかった画像は焼かない（索引表に載らない）。
 ///
-/// 透過の扱いは今までと同じ [`UseSelfAlpha::On`] 固定である（α を持たない絵は焼く段で
-/// 左上の色を抜く腕へ落ちる）。
+/// 透過の扱いは引数 `use_self_alpha`（入口がシェルの descript.txt から読んだ宣言）で決まる。
 pub fn build_shell_target(
     shell: Shell,
     selection: SurfaceImageSelection,
     shell_dir: &Path,
     decoder: &impl ElementDecoder,
+    use_self_alpha: UseSelfAlpha,
 ) -> ShellTarget {
-    build_shell_target_with_boxes(shell, &ShellBoxes::default(), selection, shell_dir, decoder)
+    build_shell_target_with_boxes(
+        shell,
+        &ShellBoxes::default(),
+        selection,
+        shell_dir,
+        decoder,
+        use_self_alpha,
+    )
 }
 
 /// [`build_shell_target`] に箱の転記（[`parse_boxes`] の結果）を足した fs を触らない核。
@@ -373,6 +418,7 @@ pub fn build_shell_target_with_boxes(
     selection: SurfaceImageSelection,
     shell_dir: &Path,
     decoder: &impl ElementDecoder,
+    use_self_alpha: UseSelfAlpha,
 ) -> ShellTarget {
     let images = selection.images;
 
@@ -407,9 +453,7 @@ pub fn build_shell_target_with_boxes(
     let set = SurfaceSet {
         surfaces: &surfaces,
         base_dir: shell_dir,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
+        alpha_params: AlphaParams { use_self_alpha },
     };
     let baked = bake(std::slice::from_ref(&set), decoder, PackConfig::default());
 
@@ -424,6 +468,7 @@ pub fn build_shell_target_with_boxes(
         box_report,
         box_surfaces,
         nest_report,
+        ignored_pna: baked.ignored_pna,
     }
 }
 
@@ -664,3 +709,7 @@ mod boxes_tests;
 #[cfg(test)]
 #[path = "shell_target_nesting_tests.rs"]
 mod nesting_tests;
+
+#[cfg(test)]
+#[path = "shell_target_image_only_tests.rs"]
+mod image_only_tests;

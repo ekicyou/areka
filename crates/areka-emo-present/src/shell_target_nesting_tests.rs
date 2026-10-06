@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use areka_emo_atlas::MemoryDecoder;
 use temp_path_kit::TempPath;
 
-use super::test_support::{CapturedEvent, capture_events};
+use super::test_support::{CapturedEvent, capture_events, write_descript};
 
 /// 本モジュールが出す記録の宛先（既定の target＝モジュールパス）。
 const SHELL_TARGET: &str = "areka_emo_present::shell_target";
@@ -178,6 +178,7 @@ fn balloon_element_with_digit_only_field_is_a_box_name() {
         ),
     )
     .expect("記述ファイル作成");
+    write_descript(dir.path());
     let dec = decoder_with(dir.path(), &["base.png", "8888"]);
 
     let (target, events) =
