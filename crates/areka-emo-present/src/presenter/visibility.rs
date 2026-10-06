@@ -64,7 +64,8 @@ impl EmoPresenter {
     /// 変化を取りこぼす。k が変わらなければ引き当てがヒットして再合成は起きない。
     ///
     /// 可視化は `VisualMount::set_visible` を通すため、枠の面と文字層スロットの双方が同時に可視・
-    /// 判定復帰する（Requirement 1.7/1.8 の契約と対）。
+    /// 判定復帰する（Requirement 1.7/1.8 の契約と対）。見えていなかった外から所有される対象を
+    /// 見えるようにしたときは出番の世代を 1 つ進める（`animated-image-playback` 要件 2.3）。
     ///
     /// # 失敗（いずれも `error!` ＋ `Err`・可視性は変えない）
     ///
@@ -93,8 +94,9 @@ impl EmoPresenter {
         // 隠れていた対象を出すときは回数つきの子を経過 0 から始める（見えている対象への重ねがけでは
         // 外さない＝続けて見えていれば続き・要件 2.8）。
         let (surface_id, binds) = (*surface_id, binds.clone());
+        let was_visible = t.visible;
         let mut pattern = t.held_pattern.as_ref().unwrap_or(shown).clone();
-        if !t.visible {
+        if !was_visible {
             strip_finite_films(&t.emo_world, &mut pattern);
         }
 
@@ -154,10 +156,16 @@ impl EmoPresenter {
         // 枠の面と文字層スロットの双方を同時に可視・判定復帰させる。
         mount.set_visible(world, true);
         t.visible = true;
+        // 見えていなかった外から所有される対象を出した＝新しい出番（要件 2.3）。命令で見える対象と
+        // 見えている対象への重ねがけでは進めない。
+        if !was_visible && t.ownership == VisibilityOwnership::External {
+            t.stage_generation += 1;
+        }
         tracing::debug!(
             ?target,
             surface_id,
             ownership = ?t.ownership,
+            stage_generation = t.stage_generation,
             "show_target: 可視化した"
         );
         Ok(())

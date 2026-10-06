@@ -24,7 +24,7 @@ use super::test_support::{
 
 const BASE: &str = "balloon";
 const INFO_LINE_MESSAGE: &str = "apply(ShowSurface): 表示・マスクを更新";
-const T: TargetId = TargetId(7);
+pub(super) const T: TargetId = TargetId(7);
 
 fn element(layer: u32, path: &str, x: i64) -> Element {
     Element {
@@ -82,7 +82,7 @@ fn film(dec: &mut MemoryDecoder, rel: &str, frames: Vec<DecodedImage>, laps: Opt
 }
 
 /// 面 0（回数つき＋終わりなし・当たり判定 1 つ）と面 1（静止画）の面の表。
-fn build_balloon() -> (EmoWorld, AtlasTable) {
+pub(super) fn build_balloon() -> (EmoWorld, AtlasTable) {
     let surfaces = vec![
         Surface {
             id: 0,
@@ -163,7 +163,7 @@ fn sheets(world: &EmoWorld) -> (FilmSheet, FilmSheet) {
 }
 
 /// 回数つきのコマ `fin`・終わりなしのコマ `end` を欄に載せたコマ（`None` は載せない＝経過 0）。
-fn frames(world: &EmoWorld, fin: Option<usize>, end: Option<usize>) -> PatternState {
+pub(super) fn frames(world: &EmoWorld, fin: Option<usize>, end: Option<usize>) -> PatternState {
     let (f, e) = sheets(world);
     let mut p = PatternState::default();
     if let Some(i) = fin {
@@ -175,12 +175,16 @@ fn frames(world: &EmoWorld, fin: Option<usize>, end: Option<usize>) -> PatternSt
     p
 }
 
-fn golden(surface_id: u32, binds: &BindSet, pattern: &PatternState) -> Vec<u8> {
+pub(super) fn golden(surface_id: u32, binds: &BindSet, pattern: &PatternState) -> Vec<u8> {
     let (world, atlas) = build_balloon();
     native_golden_with(&world, &atlas, surface_id, binds, pattern).0
 }
 
-fn attach(presenter: &mut EmoPresenter, world: &mut World, ownership: VisibilityOwnership) {
+pub(super) fn attach(
+    presenter: &mut EmoPresenter,
+    world: &mut World,
+    ownership: VisibilityOwnership,
+) {
     let window = spawn_window_with_dpi(world, 96);
     let (emo_world, atlas) = build_balloon();
     presenter
@@ -192,7 +196,7 @@ fn attach(presenter: &mut EmoPresenter, world: &mut World, ownership: Visibility
 }
 
 /// 指令を 1 つ適用し、応答がちょうど 1 回 `Ok` で返ることを確かめる。
-fn send(
+pub(super) fn send(
     presenter: &mut EmoPresenter,
     world: &mut World,
     surface_id: u32,
@@ -221,7 +225,7 @@ fn send(
 }
 
 /// (表示が成立した回数, そのうち合成した回数)。
-fn applies(events: &[CapturedEvent]) -> (usize, usize) {
+pub(super) fn applies(events: &[CapturedEvent]) -> (usize, usize) {
     let infos: Vec<_> = events
         .iter()
         .filter(|e| e.message() == INFO_LINE_MESSAGE)
@@ -234,7 +238,7 @@ fn applies(events: &[CapturedEvent]) -> (usize, usize) {
 }
 
 /// 外から所有されるバルーンを面 0（経過 0）で確立する（見えないまま）。
-fn established(world: &mut World) -> EmoPresenter {
+pub(super) fn established(world: &mut World) -> EmoPresenter {
     let mut presenter = EmoPresenter::new();
     attach(&mut presenter, world, VisibilityOwnership::External);
     send(
@@ -248,15 +252,28 @@ fn established(world: &mut World) -> EmoPresenter {
     presenter
 }
 
-/// 外から所有されるバルーンを面 0（経過 0）で出す。
-fn shown(world: &mut World) -> EmoPresenter {
+/// 外から所有されるバルーンを面 0（経過 0）で出し、合図を今の出番の世代に追い付かせる
+/// （seriko が新しい出番を知った後の状態・task 4.3）。
+pub(super) fn shown(world: &mut World) -> EmoPresenter {
     let mut presenter = established(world);
     presenter.show_target(world, T).expect("show_target");
     assert_eq!(presenter.target_visible(T), Some(true));
+    let generation = presenter.stage_generation(T).expect("装着済み");
+    ack(&mut presenter, world, T, generation);
     presenter
 }
 
-fn hide(presenter: &mut EmoPresenter, world: &mut World) {
+/// 合図 `StageAck` を 1 つ適用する（応答なし）。
+pub(super) fn ack(
+    presenter: &mut EmoPresenter,
+    world: &mut World,
+    target: TargetId,
+    generation: u64,
+) {
+    presenter.apply(world, PresentCommand::StageAck { target, generation });
+}
+
+pub(super) fn hide(presenter: &mut EmoPresenter, world: &mut World) {
     presenter.apply(
         world,
         PresentCommand::Hide {
