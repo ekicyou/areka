@@ -456,6 +456,98 @@ fn switch_to_another_ghost_answers_not_active_without_mcp_errors() {
     );
 }
 
+/// 写した後（読み出し待ち・符号化待ち）に台本の `\![change,ghost,B]` で本物の切り替えが通っても、
+/// ゴーストを確かめ直さず、放すと写した時点の答えを返す（要件 4.5）。
+///
+/// # 非空虚性
+/// 写した後の段でもゴーストを確かめると、どちらも `NG:Specified ghost is not active` で赤。
+/// 切り替えの前に答えてしまうと切り替えの前の答えが `Some` で赤。B の定常まで届いたことで、
+/// 切り替えが実際に起きたことを確かめる。
+#[test]
+fn switch_after_the_copy_still_answers_the_copied_picture() {
+    let mut rig = rig_with(r"\0A\![change,ghost,B]\e");
+    let ghost = active_ghost(&rig);
+
+    // 読み出し待ち: 入口で写しを積んだ（`Read`）。放されるまで「まだ」。
+    let freed = std::rc::Rc::new(std::cell::Cell::new(false));
+    let seen = freed.clone();
+    let mut read: Option<Reader> = Some(Box::new(move || {
+        Ok(seen
+            .get()
+            .then(|| -> Job { Box::new(|_| outcome::ok("読み出し待ちで写した絵")) }))
+    }));
+    let (req, reading) = ToolRequest::new(ToolCall::DumpSurface(current_look()));
+    start(&mut rig.world, TOOL, &ghost, req.reply, move |_| {
+        read.take().map(|read| Step::Read(0, read))
+    });
+
+    // 符号化待ち: 最初の覗きで写しまで済み、仕事は放されるまで止まる。
+    let (release_tx, release_rx) = mpsc::channel::<()>();
+    let mut release = Some(release_rx);
+    let mut calls = 0;
+    let (req, encoding) = ToolRequest::new(ToolCall::DumpSurface(current_look()));
+    start(&mut rig.world, TOOL, &ghost, req.reply, move |_| {
+        calls += 1;
+        let release = (calls >= 2).then(|| release.take()).flatten()?;
+        Some(Step::Encode(
+            0,
+            Box::new(move |_| {
+                let _ = release.recv();
+                outcome::ok("符号化待ちで写した絵")
+            }),
+        ))
+    });
+    rig.world.run_schedule(Input);
+
+    let steady = rig.wait_steady();
+    let welcomed = rig.pump_talking_until(|rig| {
+        rig.exit_requested()
+            || (!rig.calls("B").is_empty() && rig.world.get_non_send::<SwitchInFlight>().is_none())
+    });
+    let now = resolve::active(&rig.world).and_then(|g| g.name);
+    let before_release = (
+        reading.try_answer().ok().flatten().map(|a| a.outcome),
+        encoding.try_answer().ok().flatten().map(|a| a.outcome),
+    );
+
+    freed.set(true);
+    let _ = release_tx.send(());
+    let (mut read_answer, mut encode_answer) = (None, None);
+    rig.pump_input_until(|_| {
+        read_answer = read_answer
+            .take()
+            .or_else(|| reading.try_answer().ok().flatten().map(|a| a.outcome));
+        encode_answer = encode_answer
+            .take()
+            .or_else(|| encoding.try_answer().ok().flatten().map(|a| a.outcome));
+        read_answer.is_some() && encode_answer.is_some()
+    });
+    let down = rig.shutdown();
+
+    assert_eq!(
+        (
+            steady,
+            welcomed,
+            now,
+            before_release,
+            read_answer,
+            encode_answer,
+            down
+        ),
+        (
+            true,
+            true,
+            Some("B".to_owned()),
+            (None, None),
+            Some(outcome::ok("読み出し待ちで写した絵")),
+            Some(outcome::ok("符号化待ちで写した絵")),
+            true
+        ),
+        "（A の定常, B の定常まで届いた, 今のゴースト, 放す前の答え, 読み出し待ちの答え, \
+         符号化待ちの答え, 降ろせた）"
+    );
+}
+
 /// 台本の `\![change,ghost,A]` で同じゴーストを起こし直しても、同じゴーストと見なして断らず、
 /// 起こし直した A が定常に達しても答えは届かない（まだ装着待ち・要件 4.2）。
 ///

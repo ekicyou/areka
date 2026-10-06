@@ -275,8 +275,10 @@ impl TextSurface {
 impl PendingReadBack {
     /// 待たずに読む。まだなら Ok(None)。読めたら stride = 幅×4 の密な BGRA（記録しない）。
     pub fn try_finish(&self) -> Result<Option<Vec<u8>>, TextLayerError>;
-    /// 写し先の大きさ（物理 px・積んだ時点の面の大きさ）。
-    pub fn size(&self) -> (u32, u32);
+    /// 写し先の大きさ（物理 px・積んだ時点の面の大きさ）。本番の呼び手が無いのでテスト専用
+    /// （完了の棚卸・2026-10-06。`dump_balloon` は面の大きさを `TextSurface::size` で取る）。
+    #[cfg(test)]
+    fn size(&self) -> (u32, u32);
 }
 
 /// `Map` の失敗が「GPU がまだ使っている」か（`DXGI_ERROR_WAS_STILL_DRAWING`）。

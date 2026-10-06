@@ -222,8 +222,9 @@ impl PendingReadBack {
         dense.map(Some)
     }
 
-    /// 写し先の大きさ（物理 px・積んだ時点の面の大きさ）。
-    pub fn size(&self) -> (u32, u32) {
+    /// 写し先の大きさ（物理 px・積んだ時点の面の大きさ）。本番の呼び手は無い（テストだけが確かめる）。
+    #[cfg(test)]
+    fn size(&self) -> (u32, u32) {
         self.size
     }
 }
