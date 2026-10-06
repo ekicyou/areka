@@ -6,8 +6,18 @@
 //! 「Out of Boundary: 表示の実行手段の判断化」）。
 
 use super::{
-    EmoPresenter, PresentError, PresentOutcome, TargetId, VisibilityOwnership, World, reply_channel,
+    EmoPresenter, EmoWorld, PatternState, PresentError, PresentOutcome, TargetId,
+    VisibilityOwnership, World, reply_channel,
 };
+
+/// 回数つきの動く絵の子（面の表の `FilmSheet.laps` が在る子）の欄を外す＝経過 0 へ戻す
+/// （`animated-image-playback` 要件 2.3）。終わりなしの子の欄（要件 3.3）とほかの欄には触らない。
+/// 動く絵の無い面の表では何もしない。
+pub(super) fn strip_finite_films(emo_world: &EmoWorld, pattern: &mut PatternState) {
+    for sheet in emo_world.film_sheets().filter(|s| s.laps.is_some()) {
+        pattern.remove_film(sheet.id);
+    }
+}
 
 impl EmoPresenter {
     /// target の可視性の所有者を設定する（Requirement 6.8）。
@@ -46,7 +56,8 @@ impl EmoPresenter {
 
     /// [`VisibilityOwnership::External`] target の可視化（分離された可視化の唯一の入口・Requirement 6.6）。
     ///
-    /// **最後に確立した表示内容**（`last_show` ＝ surface id・bind 集合・pattern）で
+    /// **最後に確立した表示内容**（`last_show` ＝ surface id・bind 集合・pattern。pattern は隠れている
+    /// 間に預かったコマが在ればそちら・見えていなかった対象では回数つきの動く絵の子の欄を外す）で
     /// `apply_show` の単一漏斗を再通過してから可視性を付与する。漏斗を通すのは、不可視だった期間に
     /// 窓 DPI が変わっていた場合に**現在の** DPI から k を導出し直すためである（Requirement 6.6:
     /// 「その期間ずっと表示されていた場合と同一」）——「消したときの絵をそのまま出す」実装は不可視期間中の
@@ -71,13 +82,21 @@ impl EmoPresenter {
             tracing::error!(?target, "show_target: 未装着ターゲット");
             return Err(PresentError::TargetNotAttached(target));
         };
-        let Some((surface_id, binds, pattern)) = t.last_show.clone() else {
+        let Some((surface_id, binds, shown)) = t.last_show.as_ref() else {
             tracing::error!(
                 ?target,
                 "show_target: 表示が一度も確立していない（可視化する内容が無い）"
             );
             return Err(PresentError::TargetNotAttached(target));
         };
+        // 通し直すコマは、隠れている間に預かったコマ（最新）か、無ければ最後に成立した入力のコマ。
+        // 隠れていた対象を出すときは回数つきの子を経過 0 から始める（見えている対象への重ねがけでは
+        // 外さない＝続けて見えていれば続き・要件 2.8）。
+        let (surface_id, binds) = (*surface_id, binds.clone());
+        let mut pattern = t.held_pattern.as_ref().unwrap_or(shown).clone();
+        if !t.visible {
+            strip_finite_films(&t.emo_world, &mut pattern);
+        }
 
         // 単一漏斗の再通過（k 再導出・キャッシュヒットなら再合成なし）。結果は `reply` で受ける——
         // `apply_show` は全経路で高々 1 回応答してから戻るため、同期呼び出しの直後に必ず値が在る。
@@ -113,6 +132,8 @@ impl EmoPresenter {
             tracing::error!(?target, "show_target: 再通過後に target が消えた");
             return Err(PresentError::TargetNotAttached(target));
         };
+        // 預かったコマは通し直しで使い切った（失敗したときは上で戻るので残る）。
+        t.held_pattern = None;
         if t.current_surface_id.is_none() {
             // 全透明退化（Hide 縮退）。出す内容が無いため可視化しない（warn! は apply_show 側）。
             tracing::debug!(

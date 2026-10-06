@@ -136,7 +136,7 @@
   - _Requirements: 7.5_
   - _Boundary: 表示層の perf の記録_
 
-- [ ] 4.2 隠れているバルーンへの指令はコマを預かるだけにする
+- [x] 4.2 隠れているバルーンへの指令はコマを預かるだけにする
   - `PresentTarget` に「出すときに使うコマ」の欄を 1 つ足す。`hub.rs` の `ShowSurface` の腕で、外から所有され・見えておらず・面が確立済みで番号が同じ・着せ替えが同じ、の 4 つが揃えば欄に置いて成功の応答を 1 回返して戻る（`apply_show` を呼ばない）。1 つでも偽なら今までどおり通し、成立したら欄を空にする
   - `show_target` は「預かったコマ、無ければ `last_show` のコマ」から回数つきの子の欄を外して通し直す（外す関数は `visibility.rs` に 1 つ置く）。成立したら欄を空にし、失敗したら残す。対象の差し替え・`Hide` の後の別の面の確立では欄を空にする。`last_show` の意味と `apply_show` は変えない
   - 兄弟の `presenter_film_tests.rs` で: 隠れている対象へコマだけ違う指令を 3 回送ると合成 0 回で、`show_target` の後の絵が最後の指令のコマ／その後も `last_shown` が成立済みの絵を返し `read_back` が失敗しない／回数つきが止まった状態で隠し、戻しの指令なしで出すと最初の絵が経過 0（終わりなしの欄は外れない）／先送りの縁（面の番号が違う・着せ替えが違う・見えている・シェル）は今までどおり合成される／応答が必ず 1 回／コマを替えても文字のスロットと対象の寸法が同じ／透ける形が表示中のコマに従い、作者の当たり判定の矩形は同じ／静止画だけのバルーンの合成の回数が前と同じ
@@ -248,3 +248,4 @@
 - 3.4: `refresh_parts` は `LoopRuntime::refresh(scope, slot, at_ms: Option<u64>, states)`（`None` なら直前の刻みの時刻・`last_seen` に入れない）。`\s`・着せ替え・`\b` の 3 か所から呼ぶ。`\b[-1]` → `drop_finite(Balloon)` の道は既に通した＝3.6 で 2 本目を作らない。`drop_finite` の `allow(dead_code)` は外した。表の差し替えは `clear(slot)` でその面の種類の時計だけ捨てる。バルーンの面の部品の欄の作り直しはまだシェルの面だけ（3.6 で外す）
 - 3.5: `pub type SerikoClock = Arc<dyn Fn() -> u64 + Send + Sync>`・`spawn_seriko_clocked(..., Option<SerikoClock>)`。時計は `LoopRuntime` が持ち（`with_clock`・`event_ms()`）、合図を処理するたびに読む。5.2 は同じ `Arc` を `Box::new(move || MonotonicMs(c()))` と包んで `LoopTickerConfig::clock` へ渡せば単位が揃う
 - 3.6: `StageNote::Balloon` は state.rs（`note_stage` は世代をまだ覚えない＝5.1 で足す）。知らせが 1 度も来ていないスコープは開いた窓とみなす。窓が閉じている間は一番上の `always`・部品の `always`・部品の抽選の時計を作らず、回数つきを評価の前に捨てる（一番上の抽選は `shown_slots` のまま）。閉じていても終わりなしの子のコマが替われば `ShowBalloon` を出す（4.2 で表示層が預かる）
+- 4.2: 預かる条件は 5 つ（外から所有・見えていない・`last_show` が在り面の番号と着せ替えが同じ・コマが `last_show` と違う）。比べ先は `current_surface_id` でなく `last_show`＝本物の `Hide` の直後の 1 件目も預かる（`current_surface_id`・`apply_hide` は変えない＝預かっている間は `None` のまま・5.3 で覚えておく）。`show_target` が回数つきの欄を外すのは見えていなかったときだけ（要件 2.8）。外す関数は `visibility.rs` の `strip_finite_films`＝4.3 も同じ関数を使う
