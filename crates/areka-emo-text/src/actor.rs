@@ -372,12 +372,12 @@ impl TextLayerRuntime {
     /// 区間の全文を入れ替える（要件 2.1）。受け取ったことを `debug!` 1 行（合図の数・求めた区間の数）で
     /// 残す——実機の確かめは、最初の字の適用より前にこの行があることを読む（design.md「Monitoring」）。
     fn preview_talk(&mut self, upcoming: &[TalkCue]) {
-        self.lookahead
-            .install(&self.state, self.surface_resolver.as_deref(), upcoming);
+        let sections =
+            self.lookahead
+                .install(&self.state, self.surface_resolver.as_deref(), upcoming);
         debug!(
             cues = upcoming.len(),
-            sections = self.lookahead.section_count(),
-            "先渡しを受け取った——空回しで区間の全文を求めた"
+            sections, "先渡しを受け取った——空回しで区間の全文を求めた"
         );
     }
 

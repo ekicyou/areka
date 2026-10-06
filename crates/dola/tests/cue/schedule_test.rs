@@ -120,8 +120,8 @@ fn clear_resets_all_state() {
 // ============================================================================
 // 占有 horizon と is_completed（占有終了判定・D6 / R2.5）
 //
-// is_completed は「entries 枯渇かつ barrier なしかつ current_offset >= horizon」。
-// new(start) は horizon=0.0 を既定とし、current_offset は常に >=0 ゆえ horizon=0 は
+// is_completed は「entries 枯渇かつ barrier なしかつ current_time >= start_time + horizon」。
+// new(start) は horizon=0.0 を既定とし、current_time は常に >= start_time ゆえ horizon=0 は
 // 素通り＝「entries 枯渇かつ barrier なし」の旧挙動に一致する（手組みスケジュールの後方互換）。
 // ============================================================================
 
@@ -138,10 +138,10 @@ fn new_defaults_horizon_to_zero_preserving_legacy_is_completed() {
     );
 }
 
-/// horizon > 最終 entry offset のとき、entry を配り終えても current_offset が horizon に
+/// horizon > 最終 entry offset のとき、entry を配り終えても開始からの経過が horizon に
 /// 達するまで完了しない（占有終了判定）。
 #[test]
-fn with_horizon_defers_completion_until_current_offset_reaches_horizon() {
+fn with_horizon_defers_completion_until_elapsed_time_reaches_horizon() {
     let mut sched = TimedSchedule::<String>::with_horizon(0.0, 5.0);
     sched.insert(Entry::Payload(1.0, "a".into()));
 
@@ -149,7 +149,7 @@ fn with_horizon_defers_completion_until_current_offset_reaches_horizon() {
     assert_eq!(sched.remaining(), 0, "entry は配り終えた");
     assert!(
         !sched.is_completed(),
-        "current_offset(1.0) < horizon(5.0) ゆえ未完了"
+        "開始からの経過(1.0) < horizon(5.0) ゆえ未完了"
     );
 
     sched.tick(4.999);
@@ -175,7 +175,7 @@ fn with_horizon_not_completed_while_barrier_active_even_past_horizon() {
     sched.notify_barrier_resolved(None);
     assert!(
         sched.is_completed(),
-        "解除後 entries 空・current_offset>=horizon で完了"
+        "解除後 entries 空・開始からの経過>=horizon で完了"
     );
 }
 
@@ -582,7 +582,7 @@ fn tick_with_nan_time_stops_at_barrier_then_normal_tick_recovers() {
     assert!(sched.current_barrier().is_some());
     assert_eq!(sched.remaining(), 1);
 
-    // バリア解除後、正常時刻で進行再開できる（current_offset=NaN から復帰）
+    // バリア解除後、正常時刻で進行再開できる（current_time=NaN から復帰）
     sched.notify_barrier_resolved(None);
     sched.tick(3.0);
     assert_eq!(sched.ready(), &["after".to_string()]);

@@ -238,7 +238,11 @@ fn sections_carry_over_until_replaced_or_cleared() {
         text("0", 0.1, "あい"),
         text("1", 0.2, "かき"),
     ];
-    look.install(&state, None, &first);
+    assert_eq!(
+        look.install(&state, None, &first),
+        2,
+        "空回しが求めた区間の数"
+    );
     deliver(&mut look, &mut state, None, &first);
     let kero_first = content(&state, &kero);
     assert_eq!(
@@ -251,7 +255,12 @@ fn sections_carry_over_until_replaced_or_cleared() {
 
     // 2 本目は頭の全消去なしで本体側に足し、相方側を `\c` で消す。
     let second = [text("0", 1.0, "さし"), cue("1", 1.1, CueCommand::Clear)];
-    look.install(&state, None, &second);
+    // 求めた区間は本体側の 1 つだけ（持ち越した相方側の区間は数えない）。
+    assert_eq!(
+        look.install(&state, None, &second),
+        1,
+        "空回しが求めた区間の数"
+    );
     deliver(&mut look, &mut state, None, &second);
     assert_eq!(
         contents(&look),
@@ -550,7 +559,7 @@ fn rehearsal_is_silent_and_production_warns_are_unchanged() {
 
     let mut state = TextLayerState::default();
     let mut look = TalkLookahead::default();
-    let ((), rehearsal) = capture(|| look.install(&state, None, &talk));
+    let (_, rehearsal) = capture(|| look.install(&state, None, &talk));
     assert_eq!(
         messages(&rehearsal),
         Vec::<String>::new(),

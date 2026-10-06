@@ -113,12 +113,13 @@ pub(crate) struct TalkLookahead {
 
 impl TalkLookahead {
     /// 先渡しを受け取る: 今の状態の写しで空回しし、区間の全文を入れ替える（design.md の手順 1〜8）。
+    /// 返すのは空回しが求めた区間の数（前のトークから持ち越した区間は数えない）。
     pub(crate) fn install(
         &mut self,
         state: &TextLayerState,
         resolve: Option<&dyn Fn(&str) -> SurfaceKeyOutcome>,
         upcoming: &[TalkCue],
-    ) {
+    ) -> usize {
         // 1. 持ち越し: 場所ごとに今の区間の全文と warn 済みの印だけを取り置く。
         let counts = std::mem::take(&mut self.counts);
         let carried: Vec<(PlaceKey, Section)> = std::mem::take(&mut self.sections)
@@ -139,6 +140,7 @@ impl TalkLookahead {
             resolve,
             upcoming,
         );
+        let derived = self.sections.len();
         // 6. 本番の数えはここから（1 の take で 0 に戻したまま。空回しは自前の数えで番号を振った）。
         // 7. 持ち越しを番号 0 へ（空回しが番号 0 に控えた場所は空回しの側を採る）。warn 済みの
         //    印も持ち越しの一部なので、空回しが全文を求め直した場所では空回しの側（印なし）を採る
@@ -154,6 +156,7 @@ impl TalkLookahead {
         // 8. やり直しのために列を覚える。
         self.upcoming = Some(upcoming.to_vec());
         self.delivered = 0;
+        derived
     }
 
     /// 本番の合図 1 つを見て、消去と届いた数を数える（状態を進める前に呼ぶ）。`dest` はその合図の行き先。
@@ -219,11 +222,6 @@ impl TalkLookahead {
     #[cfg(test)]
     pub(crate) fn number(&self, place: &PlaceKey) -> u64 {
         self.counts.number(place)
-    }
-
-    /// 持っている区間の全文の数（先渡しの受け取りの記録に出す）。
-    pub(crate) fn section_count(&self) -> usize {
-        self.sections.len()
     }
 
     /// 写し `copy` で合図の列を空回しし、区間の全文を控える（`install` の手順 4〜5）。番号は
