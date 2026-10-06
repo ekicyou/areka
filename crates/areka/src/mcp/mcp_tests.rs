@@ -398,6 +398,13 @@ fn real_unit_resolves_by_sakura_name_and_ascii_case() {
     rig.boot("A");
 
     let active = resolve::active(&rig.world);
+    // 待つツール（dump の装着待ち）は預かった値と覗くたびの `active` を == で比べる。台詞を進めても揺れない。
+    let mut rounds = 0;
+    rig.pump_talking_until(|_| {
+        rounds += 1;
+        rounds >= 5
+    });
+    let again = resolve::active(&rig.world);
     let others = rig
         .world
         .non_send::<GhostSlot>()
@@ -423,6 +430,7 @@ fn real_unit_resolves_by_sakura_name_and_ascii_case() {
             found("a"),
             found(&kero),
             found(&name2),
+            again == Some(active.clone()),
             down
         ),
         (
@@ -431,8 +439,9 @@ fn real_unit_resolves_by_sakura_name_and_ascii_case() {
             a,
             Err(CANNOT_FIND),
             Err(CANNOT_FIND),
+            true,
             true
         ),
-        "（本体側名・本体側名で解決・大小違いで解決・相方の名前で外れ・sakura.name2 で外れ・降ろせた）"
+        "（本体側名・本体側名で解決・大小違いで解決・相方の名前で外れ・sakura.name2 で外れ・回しても同じ値・降ろせた）"
     );
 }

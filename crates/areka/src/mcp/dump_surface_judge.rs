@@ -1,11 +1,23 @@
 //! `dump_surface`／`dump_balloon` の判断（どの文言を返すか・何を撮るか）と成功の本文
 //! （spec: areka-P0-mcp-dump-images）。窓も GPU も要らない純粋な関数だけを置く。
 
-pub(in crate::mcp) const NO_WINDOW: &str = "This ghost has no window";
-pub(in crate::mcp) const NO_SUCH_SCOPE: &str = "No such scope in this ghost";
-pub(in crate::mcp) const NO_SUCH_SURFACE: &str =
-    "No such surface ID. Check get_expression_table tool";
-pub(in crate::mcp) const NOT_SHOWN_YET: &str = "No surface has been shown in this scope yet";
+/// 判断で返す断りの文言（spec: areka-P0-mcp-dump-images-residue 要件 2.2）。中身は非公開で、このモジュールの外では作れない
+/// （想定外の失敗の `fail` へ渡す書き方は組み立てで落ちる）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::mcp) struct Refusal(&'static str);
+
+impl Refusal {
+    pub(in crate::mcp) fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
+pub(in crate::mcp) const NO_WINDOW: Refusal = Refusal("This ghost has no window");
+pub(in crate::mcp) const NO_SUCH_SCOPE: Refusal = Refusal("No such scope in this ghost");
+pub(in crate::mcp) const NO_SUCH_SURFACE: Refusal =
+    Refusal("No such surface ID. Check get_expression_table tool");
+pub(in crate::mcp) const NOT_SHOWN_YET: Refusal =
+    Refusal("No surface has been shown in this scope yet");
 
 /// 判断に要る事実。本番は表示の層を読み、テストは手書きの表で答える。
 pub(in crate::mcp) trait ShellFacts {
@@ -31,7 +43,7 @@ pub(in crate::mcp) fn judge_surface(
     facts: Option<&dyn ShellFacts>,
     scope: Option<i64>,
     surface: Option<i64>,
-) -> Result<SurfacePlan, &'static str> {
+) -> Result<SurfacePlan, Refusal> {
     let (facts, scope) = facts_and_scope(facts, scope)?;
     match surface {
         Some(id) => match u32::try_from(id) {
@@ -51,7 +63,7 @@ pub(in crate::mcp) fn judge_surface(
 pub(in crate::mcp) fn judge_balloon(
     facts: Option<&dyn ShellFacts>,
     scope: Option<i64>,
-) -> Result<u32, &'static str> {
+) -> Result<u32, Refusal> {
     facts_and_scope(facts, scope).map(|(_, scope)| scope)
 }
 
@@ -60,7 +72,7 @@ pub(in crate::mcp) fn judge_balloon(
 fn facts_and_scope(
     facts: Option<&dyn ShellFacts>,
     scope: Option<i64>,
-) -> Result<(&dyn ShellFacts, u32), &'static str> {
+) -> Result<(&dyn ShellFacts, u32), Refusal> {
     let facts = facts.ok_or(NO_WINDOW)?;
     let scope = i32::try_from(scope.unwrap_or(0))
         .ok()
