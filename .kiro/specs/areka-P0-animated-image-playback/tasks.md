@@ -192,7 +192,7 @@
   - 完了の姿: E2E が 2 形式・シェルとバルーンの 4 通りで緑
   - _Requirements: 1.1, 1.2, 2.3, 6.1, 6.7, 9.1_
 
-- [ ] 6. 確かめ
+- [x] 6. 確かめ
 - [x] 6.1 合成し直す回数を数えるテストで、動かないシェルが変わらないことを固定する
   - 動く絵も `always` も無い表（`emo2` の表を含む）で、同じ刻みと乱数の列に対して出る指令の列が今の期待値のまま（既存の `spine_seriko_loop_tests.rs`・`looper_parts_emo2_tests.rs` を書き換えずに通す）
   - 動く絵 1 つの表で、待ち時間 100 ミリ秒のコマに 16 ミリ秒の刻みを 7 回与えて指令が 1 件だけ／面の表示の指令の直後の最初の刻みで指令が 0 件
@@ -207,7 +207,7 @@
   - 完了の姿: research.md に前後の数字・動く絵の数字・席の数の変更 0 が載っている
   - _Requirements: 7.3, 7.5, 7.6_
 
-- [ ] 6.3 実機で 2 形式を確かめる
+- [x] 6.3 実機で 2 形式を確かめる
   - 検体のシェルとバルーンを `emo2` の写しに足したゴーストを、ワークツリーの `target\` の下に作って起こす（絶対パス・`RUST_LOG` は判定の分かれ目の `debug!` まで開ける・有界の自動終了）
   - APNG と動く WebP のそれぞれで、自動アニメーション・`always`・サーフェスを切り替えても途切れないこと・バルーンの面が動くこと・隠れている間に合成が走らないこと・バルーンが出た瞬間のコマを、記録と `mcp-dump-images` の読み戻しで確かめる。`emo2` そのままの見た目が変わらないことも確かめる
   - 実機で areka の未対応のためにうまくいかなかった件は、範囲外でもすべて `/kiro-discovery` で起票する
@@ -255,3 +255,4 @@
 - 5.4: E2E は `crates/areka/src/emo2_boot/film_playback_e2e_tests.rs`（3 本・競り合いは GPU の世界が要る＝WARP で可）。`self-alpha-declaration` が入ったら `load_balloon()` の `build_balloon_target_from_faces` の呼び出しを合わせる
 - 6.2: 1.1 の「8 月より桁で遅い」は機械の負荷だった（A/B 交互で前 p50 0.9〜1.5 ms・後 1.5 ms 前後＝目に見えて落ちていない）。範囲外（完了時に起票）: 全体の約 1.2% の適用が 16 ms を超え（最大 315〜360 ms）、全部が `show.rs` の最後に記録した段（不命中は `MaskGen`・命中は `CacheLookup`）〜 `emit` の測っていない区間。本 spec の前の実行体にも同じ割合で出る。動く絵は適用を約 13 倍にするので本数も比例して増える。数字は research.md「後の数字」
 - 7.1: 台帳の `always` は「縮退」・担当 `areka-P0-seriko-trigger-intervals`（組み合わせが動かないのが縮退の理由。実装済みにするにはソースに正典 URL のコメントが要る）。§8 は新しい節「動く絵と `always` の再生」と【上書き】の行。briefing.md・roadmap-draft.md は検査が要求する数を合わせた。`briefing-assets.md` の写しは element-base-method の時点から古いまま（検査の外）
+- 6.3（範囲外・完了時に起票）: バルーンの文字の描画範囲が 0 以下に潰れると（8×8 の面と emo2-kakukaku の余白）、areka-emo-text が毎フレーム `create_composition_swap_chain` に失敗し（0x887A0001）、WARN 1 行と ERROR 2 行がゴーストが終わるまで出続ける（本 spec の前の実行体でも出る）。証拠は research.md「実機の確かめ」の要起票の項。MCP の `sakurascript`・`raise_event` が無いのは `areka-P0-mcp-kanade-tools` の受け持ち（起票済み）
