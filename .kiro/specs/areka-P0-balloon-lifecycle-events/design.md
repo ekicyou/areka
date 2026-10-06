@@ -664,7 +664,7 @@ pub(crate) struct VisibilityDecision {
 
 ### Integration Tests
 1. **配送から受け口へ**（`areka-ghost`）: `StartTalk` ごとに、複製された受け口が `begin_talk` でその番号を受け取る。置き換えでは古いトークの受け口が落ちてから新しい番号が渡る。
-2. **受け口から可視性の相へ**（`balloon_visibility_lifecycle_e2e_tests.rs` の拡張）: 本物の受け口と本物の判断で、台詞→トークの終わり→時刻の注入→隠す発行→知らせ、まで通す。
+2. **受け口から可視性の相へ**（実 GPU の檻 `frame_visibility_integration_tests.rs` の子 `frame_balloon_timeout_notice_e2e_tests.rs`。headless の `balloon_visibility_lifecycle_e2e_tests.rs` は表示層がバルーンを可視にできず時間切れまで届かないので、続きはこちらに置いた）: 本物の受け口と本物の判断で、台詞→トークの終わり→時刻の注入→隠す発行→知らせ、まで通す。
 3. **送出**: 可視性の相が知らせを `KanadeMsg::BalloonTimeout` として送る。ゴーストが置き場に無いときは送らず記録する。ゴーストの切替の直後のフレームに、前のゴーストのトークの番号の知らせが新しいゴーストの kanade へ届かないこと（トークの番号はゴーストごとに 1 から数え直すので、届くと偶然に合いうる）を 1 本見る。
 4. **殻**: `KanadeMsg::BalloonTimeout` が `Input::BalloonTimeout` として運行表に届き、GET が 1 本出る。
 5. **台帳**: `cargo test -p ukadoc-survey`（状態・持ち主・証拠の URL の検査）。

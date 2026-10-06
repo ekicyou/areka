@@ -13,6 +13,9 @@
 //
 // 表示層は headless（GPU 資源なし）で足りる——本項が見るのは時刻の鎖であって描画ではない。
 // 再生は注入時刻のみで駆動し、実時間の待機は用いない（Requirements 4.9 / 9.2 / 9.3）。
+//
+// 続き（時間切れで隠し、受け口の番号の知らせが kanade へ届くまで）は、バルーンを可視にできる
+// 実 GPU の檻 `frame_balloon_timeout_notice_e2e_tests.rs` が持つ（areka-P0-balloon-lifecycle-events task 5.2）。
 // =============================================================================
 
 use std::cell::RefCell;
