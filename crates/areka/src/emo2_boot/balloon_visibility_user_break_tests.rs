@@ -166,7 +166,7 @@ fn a_user_break_and_the_next_talk_in_the_same_round_hide_then_show() {
         &[(0, seen(5, true))],
         &[
             TalkLifecycleSignal::UserBreak,
-            TalkLifecycleSignal::TalkStarted,
+            TalkLifecycleSignal::TalkStarted { talk_id: None },
         ],
         None,
     );

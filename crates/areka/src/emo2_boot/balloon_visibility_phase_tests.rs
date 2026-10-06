@@ -382,7 +382,7 @@ fn lifecycle_signals_are_drained_in_full() {
     attach_headless(&mut harness.wiring.presenter, &mut world, 0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
 
-    harness.signal(TalkLifecycleSignal::TalkStarted);
+    harness.signal(TalkLifecycleSignal::TalkStarted { talk_id: None });
     harness.signal(TalkLifecycleSignal::DisplayEndAt(2.0));
     harness.signal(TalkLifecycleSignal::DisplayEndAt(5.0));
     harness.signal(TalkLifecycleSignal::DisplayEndAt(3.0));

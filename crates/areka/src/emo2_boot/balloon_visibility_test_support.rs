@@ -121,7 +121,9 @@ impl Frame {
 
     /// 会話開始の信号を本フレームに届ける。
     pub(crate) fn talk_started(mut self) -> Self {
-        self.obs.lifecycle.push(TalkLifecycleSignal::TalkStarted);
+        self.obs
+            .lifecycle
+            .push(TalkLifecycleSignal::TalkStarted { talk_id: None });
         self
     }
 

@@ -129,7 +129,10 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     );
 
     let mut player = CuePlayer::from_sheet(&compiled.sheet);
-    player.register_sink(Box::new(BalloonLifecycleSink::new(lifecycle_tx)));
+    player.register_sink(Box::new(BalloonLifecycleSink::new(
+        lifecycle_tx,
+        wiring.clock.clone(),
+    )));
     // 台本の発火時刻を昇順に辿り、最後に占有終端へ達する（sleep もスピンも使わない）。
     let mut tick_points: Vec<f64> = compiled
         .sheet

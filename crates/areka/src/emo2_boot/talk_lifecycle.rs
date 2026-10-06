@@ -19,27 +19,42 @@
 //! α の既知の弱点は要件の別条項が吸収する——sink は `Barrier` / `Routing` を受け取らないため
 //! 選択肢バリア中の horizon は過小になりうるが、Requirement 5.4 の抑止が非表示を防ぎ、バリア
 //! 解除後の cue が horizon を引き上げて計測が正しく再開する。中断（Requirement 4.6）も起点は
-//! 正常終了と同一値（占有 horizon）になり、誤差は**表示を保持する側**にのみ倒れる
-//! （Requirement 4.8 と同じ側）。中断時刻を起点に採る精密化は追跡 spec
-//! `areka-P0-balloon-lifecycle-events` が [`BalloonLifecycleNotice`] の実発火と一体で所有する。
+//! 正常終了と同一値（占有 horizon）になる。中断の時刻を起点に採るため、受け口は落ちる瞬間の
+//! talk 相対秒を [`TalkLifecycleSignal::TalkEnded`] で送る（areka-P0-balloon-lifecycle-events
+//! 要件 5.2・判断の側の採り方は `balloon_visibility_wait.rs`）。
 //!
 //! # 会話境界の自己検出
 //!
-//! dispatcher は talk 起動ごとに登録 sink を 1 回だけ複製する
-//! （`crates/areka-ghost/src/dispatcher.rs:290-294` の `clone_box`）。本 sink はこの複製を
-//! 会話境界そのものとして使い、複製後の初回 `emit` で [`TalkLifecycleSignal::TalkStarted`] を
-//! 送る——上流へ「talk が始まった」を問い合わせる口を新設しない。
+//! dispatcher は talk 起動ごとに登録 sink を 1 回だけ複製し、直後に
+//! [`BootCueSink::begin_talk`] でそのトークの番号を渡す（`crates/areka-ghost/src/dispatcher.rs`）。
+//! 本 sink はこの複製を会話境界そのものとして使い、複製後の初回 `emit` で番号つきの
+//! [`TalkLifecycleSignal::TalkStarted`] を、落ちるときに [`TalkLifecycleSignal::TalkEnded`] を
+//! 送る——上流へ「talk が始まった・終わった」を問い合わせる口を新設しない。
+//!
+//! # 待ち時間の指定
+//!
+//! `\![set,balloontimeout,時間]` の cue だけを拾い、時間の欄を [`parse_balloon_timeout`] で読んで
+//! [`TalkLifecycleSignal::BalloonTimeout`] を送る（要件 9.1〜9.4・7.5）。他の `\![set,…]` は
+//! 読み飛ばす。台本の順に配られた cue だけが届くので、指定に達する前に止まったトークでは
+//! 効かない（要件 9.8）。
 
 use std::sync::mpsc::Sender;
 
+use areka_ghost::sink::BootCueSink;
+use areka_sakura::TalkId;
 use dola::cue::TalkCue;
-use tracing::warn;
+use tracing::{info, warn};
 use wintf::ecs::world::tick_wake;
+
+use super::talk_clock::TalkClock;
 
 /// UI スレッドの可視性コントローラへ流れる表示ライフサイクル信号（design「Event Contract」）。
 ///
-/// 送り手は 2 つある——talk スレッドの受け口 [`BalloonLifecycleSink`]（会話の開始と占有終端）と、
-/// UI スレッドの押下ハンドラ（利用者の中断）。どちらも同じ 1 本の線へ流す。
+/// 送り手は 2 つある——talk スレッドの受け口 [`BalloonLifecycleSink`]（会話の開始・占有終端・
+/// 待ち時間の指定・会話の終わり）と、UI スレッドの押下ハンドラ（利用者の中断）。どちらも同じ
+/// 1 本の線へ流す。1 つのトークの中の順は `TalkStarted` →（`DisplayEndAt`・`BalloonTimeout` が
+/// 台本の順）→ `TalkEnded`。次のトークの `TalkStarted` は必ず前のトークの `TalkEnded` の後に届く
+/// （talk スレッドは受け口を落としてから完了を知らせる）。
 ///
 /// 時刻軸は **talk 相対秒**（`TalkClock::talk_time` と同一軸）。
 ///
@@ -54,10 +69,16 @@ pub(crate) enum TalkLifecycleSignal {
     /// この talk の観測が始まった（複製後の初回 `emit` で 1 回だけ・全 `DisplayEndAt` に先行）。
     ///
     /// 受信側はこれを進行中のタイムアウト計測の破棄契機として使う（Requirement 4.5）。
-    TalkStarted,
+    /// `talk_id` は配送から受け取った番号（受け取っていなければ `None`）。
+    TalkStarted { talk_id: Option<TalkId> },
     /// 待機を含む占有区間の終端（talk 相対秒）。既知最大が更新されたときだけ届く
     /// （Requirement 4.1）。
     DisplayEndAt(f64),
+    /// `\![set,balloontimeout,時間]` が配られた（このトークの待ち時間の指定）。
+    BalloonTimeout(TalkTimeout),
+    /// このトークの受け口が落ちた（最後まで・中断・置き換えのどれでも）。`at` は落ちた瞬間の
+    /// talk 相対秒で、時刻源が起点を持たないときは `None`。合図を 1 つでも送った複製だけが送る。
+    TalkEnded { at: Option<f64> },
     /// 利用者がバルーンを左ダブルクリックして再生を中断した（areka-P0-balloon-break 要件 4.1）。
     ///
     /// 送り手は UI スレッドの押下ハンドラで、この信号は `BalloonLifecycleSink` を経由しない。
@@ -65,11 +86,50 @@ pub(crate) enum TalkLifecycleSignal {
     UserBreak,
 }
 
+/// そのトークの時間切れまでの待ち時間（`\![set,balloontimeout,時間]` の読み）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TalkTimeout {
+    /// 既定の待ち時間（30 秒か環境変数。決め方は判断の側が持つ）。
+    Default,
+    /// そのミリ秒。
+    Millis(u64),
+    /// 時間切れで隠さない。
+    Never,
+}
+
+/// 時間の欄の読みの結果。`unreadable` は「整数として読めず既定にした」。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ParsedTimeout {
+    pub(crate) timeout: TalkTimeout,
+    pub(crate) unreadable: bool,
+}
+
+/// 時間の欄を読む（要件 9.1〜9.4）。省略・空は既定、正の整数はそのミリ秒、0 と負の整数は
+/// 時間切れなし、整数として読めない値（文字・小数・桁あふれ）は既定で `unreadable`。
+/// 前後の空白は落として読む。
+pub(crate) fn parse_balloon_timeout(value: Option<&str>) -> ParsedTimeout {
+    let value = value.map(str::trim).unwrap_or_default();
+    let (timeout, unreadable) = if value.is_empty() {
+        (TalkTimeout::Default, false)
+    } else {
+        match value.parse::<i64>() {
+            Ok(ms) if ms > 0 => (TalkTimeout::Millis(ms.unsigned_abs()), false),
+            Ok(_) => (TalkTimeout::Never, false),
+            Err(_) => (TalkTimeout::Default, true),
+        }
+    };
+    ParsedTimeout {
+        timeout,
+        unreadable,
+    }
+}
+
 /// 会話の表示終了時刻を UI へ届ける broadcast sink（`GhostBootOptions.sinks` の 4 本目・D4＝α）。
 ///
-/// broadcast 下では担当外の cue も全て届くが、本 sink は**コマンド名で選別しない**——占有区間の
+/// broadcast 下では担当外の cue も全て届くが、占有終端の集約は**コマンド名で選別しない**——占有区間の
 /// 終端は台本上の全 cue（`Text` / `Wait` / `ClearAll` / キャリア……）の `at + duration` の最大値
-/// として定義されるため、種別に依らず全件を集約対象にするのが正しい。cue を**観測するのみ**で
+/// として定義されるため、種別に依らず全件を集約対象にするのが正しい（名前で拾うのは
+/// `\![set,balloontimeout,…]` の待ち時間の指定だけ）。cue を**観測するのみ**で
 /// `duration` にも会話進行にも触れないため、duration honor 契約へ影響しない。
 ///
 /// # 送出契約（design「Event Contract」）
@@ -84,20 +144,55 @@ pub(crate) enum TalkLifecycleSignal {
 pub(crate) struct BalloonLifecycleSink {
     /// UI スレッド（frame 相 drain）への送出端。全 clone は単一受信端へ配送する。
     tx: Sender<TalkLifecycleSignal>,
+    /// 落ちた瞬間の talk 相対秒を読む時刻源（文字の受け口と共有・起点はそちらが決める）。
+    clock: TalkClock,
+    /// この複製が受け持つトークの番号（配送が `begin_talk` で渡す・複製ごとに `None` から）。
+    talk_id: Option<TalkId>,
     /// この talk で [`TalkLifecycleSignal::TalkStarted`] を送出済みか（複製ごとに `false` から）。
+    /// 立っていれば合図を 1 つ以上送っている＝落ちるときに `TalkEnded` を送る。
     started: bool,
     /// 既知最大の占有終端。未観測は `NEG_INFINITY` ゆえ、最初の有限値は必ず送出される。
     horizon: f64,
 }
 
 impl BalloonLifecycleSink {
-    /// mpsc 送信端（コントローラ側の `Receiver` と対・`wire_emo2_boot` が生成）から sink を構築する。
-    pub(crate) fn new(tx: Sender<TalkLifecycleSignal>) -> Self {
+    /// mpsc 送信端（コントローラ側の `Receiver` と対・`wire_emo2_boot` が生成）と時刻源から
+    /// sink を構築する。
+    pub(crate) fn new(tx: Sender<TalkLifecycleSignal>, clock: TalkClock) -> Self {
         Self {
             tx,
+            clock,
+            talk_id: None,
             started: false,
             horizon: f64::NEG_INFINITY,
         }
+    }
+
+    /// `\![set,balloontimeout,時間]` なら読んで待ち時間の指定を送る。他の cue は何もしない。
+    fn pick_balloon_timeout(&self, cue: &TalkCue) {
+        let Some(("set", params)) = cue.command.as_command_carrier() else {
+            return;
+        };
+        if params.first().copied() != Some("balloontimeout") {
+            return;
+        }
+        let raw = params.get(1).copied();
+        let parsed = parse_balloon_timeout(raw);
+        if parsed.unreadable {
+            warn!(
+                event = "balloon_timeout_set",
+                timeout = ?parsed.timeout,
+                unreadable = raw.unwrap_or_default(),
+                "BalloonLifecycleSink: 待ち時間の指定が整数として読めないので既定にする"
+            );
+        } else {
+            info!(
+                event = "balloon_timeout_set",
+                timeout = ?parsed.timeout,
+                "BalloonLifecycleSink: 待ち時間の指定を読んだ"
+            );
+        }
+        self.send(TalkLifecycleSignal::BalloonTimeout(parsed.timeout));
     }
 
     /// 1 信号を非ブロックで送る。受信端切断は `warn!` ＋継続——talk を殺さない
@@ -115,20 +210,45 @@ impl BalloonLifecycleSink {
     }
 }
 
-/// **状態を引き継がない複製**——`#[derive(Clone)]` ではなく手書きにしてある。
+/// **状態を引き継がない複製**——`Clone` を持たず、`BootCueSink` を自分で実装してある
+/// （一括の実装に乗らないので、配送から番号を受け取る `begin_talk` を上書きできる）。
 ///
-/// dispatcher は talk 起動ごとに登録 sink を 1 回だけ複製し（`dispatcher.rs:290-294`）、その
-/// 複製が当該 talk 専用インスタンスになる。複製で `started` / `horizon` を初期状態へ戻すことで、
+/// dispatcher は talk 起動ごとに登録 sink を 1 回だけ複製し、その複製が当該 talk 専用
+/// インスタンスになる。複製で `talk_id` / `started` / `horizon` を初期状態へ戻すことで、
 /// 「複製＝会話境界」を型の側で構造的に保証する——「登録 sink 自身は決して `emit` されない」と
 /// いう上流の暗黙不変条件に依存しない。前の talk の horizon を持ち越すと、次の会話の表示終了
 /// 時刻が**過大**に見えて非表示が遅れる（あるいは永久に来ない）ため、複製時のリセットは
 /// 保持側ではなく誤動作側へ倒れる欠陥を構造遮断する意味を持つ。
 ///
 /// talk 進行中に再複製されると `TalkStarted` が再送されるが、dispatcher の複製は talk 起動時の
-/// 1 回のみで、複製後の `Box<dyn CueSink + Send>` は `Clone` ですらないため、その経路は存在しない。
-impl Clone for BalloonLifecycleSink {
-    fn clone(&self) -> Self {
-        Self::new(self.tx.clone())
+/// 1 回のみで、複製後の `Box<dyn CueSink + Send>` は複製の口を持たないため、その経路は存在しない。
+impl BootCueSink for BalloonLifecycleSink {
+    fn clone_box(&self) -> Box<dyn BootCueSink> {
+        Box::new(Self::new(self.tx.clone(), self.clock.clone()))
+    }
+
+    fn begin_talk(&mut self, talk_id: TalkId) {
+        self.talk_id = Some(talk_id);
+    }
+}
+
+/// 落ちる＝このトークが終わった（最後まで・中断・置き換えのどれでも）。合図を 1 つでも送った
+/// 複製だけが、落ちた瞬間の talk 相対秒つきで `TalkEnded` を 1 回送る（登録の原本と cue の
+/// 来なかった複製は何も送らない・`NoUserBreakCueSink` の `Drop` と同じ型）。時刻はフレームに
+/// 丸めない（要件 5.2）。時刻源に起点が無ければ時刻無しで送り、記録を残す（要件 5.6）。
+impl Drop for BalloonLifecycleSink {
+    fn drop(&mut self) {
+        if !self.started {
+            return;
+        }
+        let at = self.clock.now_talk_time();
+        if at.is_none() {
+            warn!(
+                talk_id = ?self.talk_id,
+                "BalloonLifecycleSink: 止まった時刻が取れない（時刻源に起点が無い）——時刻無しで終わりを送る"
+            );
+        }
+        self.send(TalkLifecycleSignal::TalkEnded { at });
     }
 }
 
@@ -139,8 +259,13 @@ impl dola::cue::CueSink for BalloonLifecycleSink {
         //    切断時に毎 cue 再送するのは無意味なノイズになる（失敗自体は send 内で warn 済み）。
         if !self.started {
             self.started = true;
-            self.send(TalkLifecycleSignal::TalkStarted);
+            self.send(TalkLifecycleSignal::TalkStarted {
+                talk_id: self.talk_id,
+            });
         }
+
+        // 待ち時間の指定（`\![set,balloontimeout,…]` だけ・台本の順に届く）。
+        self.pick_balloon_timeout(&cue);
 
         // ⑵ 占有終端 = at + duration（dola の `to_talk_schedule` と同一式）。待機 cue も
         //    duration を運ぶ第一級 cue ゆえ、この式のまま horizon へ算入される（Requirement 4.1）。
@@ -168,45 +293,10 @@ impl dola::cue::CueSink for BalloonLifecycleSink {
     }
 }
 
-/// **Requirement 7.2 の予約型**——正典の `OnBalloonClose` / `OnBalloonTimeout` / `OnBalloonBreak`
-/// を発火するために、表示側から会話進行側（kanade）へ渡す必要のある情報を型として押さえたもの。
-///
-/// # 消費者ゼロである事実と、それでも実在する理由（Requirement 7.8）
-///
-/// 本 enum を構築する側も消費する側も**現時点で存在しない**。M1 はこれらの SHIORI イベントを
-/// 発火しない（Requirement 7.2）ため、実発火の配線——UI→kanade の口（`MouseWiring` /
-/// `ChoiceForwarder` と同型）——を敷くのは追跡 spec `areka-P0-balloon-lifecycle-events` の所有範囲
-/// である。ここに型だけを残すのは、語彙と Reference 割当（下記コメント）を実コードの側にも
-/// 固定し、「語彙だけが増えて配線の追跡が失われる」既知の失敗を繰り返さないため。
-///
-/// 棚卸で検出できる形にしてある——本注記と `#[allow(dead_code)]` の対が、消費者ゼロの予約口で
-/// あることの目印になる。実発火が着地したら `allow` ごと外れる。
-///
-/// # Reference 割当（互換対応表と同値・doc/COMPAT_ARCHITECTURE.md）
-///
-/// | variant | 正典イベント | Reference |
-/// |---|---|---|
-/// | [`Closed`](Self::Closed) | `OnBalloonClose` | Ref0＝閉じる際に表示されていたスクリプト |
-/// | [`TimedOut`](Self::TimedOut) | `OnBalloonTimeout` | Ref0＝スクリプト／Ref1＝残り時間 |
-/// | [`Broken`](Self::Broken) | `OnBalloonBreak` | Ref0＝スクリプト／Ref1＝scope 番号／Ref2＝中断位置 |
-///
-/// なお `OnBalloonClick` は正典に存在せず、クリックによる閉鎖は `OnBalloonClose` へ集約される
-/// （Requirement 7.3）——独自のクリック閉鎖 variant をここへ足してはならない。
-#[allow(dead_code)] // 消費者ゼロ（意図的予約・Requirement 7.8）: 実発火は areka-P0-balloon-lifecycle-events が所有
-pub(crate) enum BalloonLifecycleNotice {
-    /// `OnBalloonClose`。`script`＝閉じる際に表示されていたスクリプト（Ref0）。
-    Closed { script: String },
-    /// `OnBalloonTimeout`。`script`＝スクリプト（Ref0）／`remaining_ms`＝残り時間（Ref1）。
-    TimedOut { script: String, remaining_ms: u64 },
-    /// `OnBalloonBreak`。`script`＝スクリプト（Ref0）／`scope`＝scope 番号（Ref1）／
-    /// `break_position`＝中断位置（Ref2）。
-    Broken {
-        script: String,
-        scope: u32,
-        break_position: usize,
-    },
-}
-
 #[cfg(test)]
 #[path = "talk_lifecycle_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "talk_lifecycle_signals_tests.rs"]
+mod signals_tests;

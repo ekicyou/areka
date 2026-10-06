@@ -69,7 +69,7 @@
   - _Boundary: BootCueSink, Dispatcher_
 
 - [ ] 4. 表示の側: 合図・計測・知らせ
-- [ ] 4.1 talk スレッドの受け口が番号・終わりの時刻・待ち時間の指定を送る
+- [x] 4.1 talk スレッドの受け口が番号・終わりの時刻・待ち時間の指定を送る
   - 表示の側の時刻源に「今の talk 相対秒」を読む口を足す（起点が無ければ無し）。
   - 受け口を「複製のたびに番号を受け取る」形にし、最初の cue で番号つきの開始の合図を、落ちるときに（合図を 1 つでも送った複製だけ）落ちた瞬間の talk 相対秒つきの終わりの合図を 1 回送る。受け口を組む口は時刻源を取る。
   - `\![set,balloontimeout,時間]` の cue だけを拾って待ち時間の指定の合図を送る（他の `\![set,…]` は読み飛ばす）。時間の欄は 省略・空＝既定／正の整数＝そのミリ秒／0 と負の整数＝時間切れなし／読めない値＝既定、で読み、拾うたびに採った値と読めなかった値を 1 行記録する。
@@ -145,3 +145,5 @@
 - 2.5（範囲外・完了の棚卸で起票）: `cargo clippy -p areka-kanade --all-targets` が既存の `actor_raise_reply_tests.rs:95`「this loop never actually loops」の誤りで止まる。本 spec は触っていない。
 - 道具: Bash の python へヒアドキュメントで日本語の置換を渡すと、照合が黙って外れることがある（2.5 で 1 回）。日本語を含む置換は Edit で行い、結果を grep で確かめる。
 - 3.1: 自分で終わったトークは配送が join しないが、`areka-sakura/src/drive.rs` が完了を送る前に受け口を落とす（`drive_lifecycle_tests.rs` で固定）。だから前のトークの終わりの合図は、必ず次のトークの開始の合図より先に届く。4.1・4.2 はこの順を頼ってよい。
+- 2.3 の取りこぼし（4.1 で発見）: kanade の振る舞いを変えるタスクでも、本体のクレート（`cargo test -p areka`）の台本つきの檻（ScriptedShioriBackend）が新しい GET で赤になる。kanade を触ったら本体のクレートも回す。
+- 4.1: `BalloonLifecycleNotice` の言及が doc/COMPAT_ARCHITECTURE.md・台帳 shiori.toml・briefing に残っている（6.1 で書き直す）。

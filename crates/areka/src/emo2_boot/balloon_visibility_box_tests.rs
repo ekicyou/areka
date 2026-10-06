@@ -101,7 +101,7 @@ fn a_break_released_in_the_same_frame_does_not_reach_boxes() {
         &[(1, boxed(seen(0, false)))],
         &[
             TalkLifecycleSignal::UserBreak,
-            TalkLifecycleSignal::TalkStarted,
+            TalkLifecycleSignal::TalkStarted { talk_id: None },
         ],
         None,
     );
@@ -260,7 +260,7 @@ fn a_released_break_keeps_box_only_scopes_in_the_measurement() {
         &[(1, boxed(seen(0, false)))],
         &[
             TalkLifecycleSignal::UserBreak,
-            TalkLifecycleSignal::TalkStarted,
+            TalkLifecycleSignal::TalkStarted { talk_id: None },
             TalkLifecycleSignal::DisplayEndAt(0.0),
         ],
         Some(0.0),

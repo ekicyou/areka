@@ -170,7 +170,7 @@ fn clear_all() -> TalkCue {
 /// 新しい台詞の合図（本番の表示の合図の受け口と同じく、会話開始の後に占有終端を添える）。
 fn talk_started(end: f64) -> [TalkLifecycleSignal; 2] {
     [
-        TalkLifecycleSignal::TalkStarted,
+        TalkLifecycleSignal::TalkStarted { talk_id: None },
         TalkLifecycleSignal::DisplayEndAt(end),
     ]
 }

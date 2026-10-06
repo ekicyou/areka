@@ -110,7 +110,8 @@ fn apply_lifecycle_signals(
     let mut broke = false;
     for signal in &obs.lifecycle {
         match *signal {
-            TalkLifecycleSignal::TalkStarted => {
+            // 番号はまだ読まない（意味の変更は areka-P0-balloon-lifecycle-events task 4.2）。
+            TalkLifecycleSignal::TalkStarted { talk_id: _ } => {
                 // 次の会話が始まった。進行中の計測は破棄する（Requirement 4.5）。
                 if let Some(deadline) = state.deadline.take() {
                     logs.push(VisibilityLogEvent::MeasurementDiscarded {
@@ -156,6 +157,8 @@ fn apply_lifecycle_signals(
                     });
                 }
             }
+            // 待ち時間の指定とトークの終わりはまだ何もしない（意味の変更は task 4.2）。
+            TalkLifecycleSignal::BalloonTimeout(_) | TalkLifecycleSignal::TalkEnded { .. } => {}
         }
     }
     broke

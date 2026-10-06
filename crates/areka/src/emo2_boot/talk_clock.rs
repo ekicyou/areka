@@ -74,6 +74,12 @@ impl TalkClock {
         // epoch 未確立は None。負値（frame_now < epoch）は 0.0 へ clamp。
         epoch.map(|e| (frame_now - e).max(0.0))
     }
+
+    /// 今の talk 相対秒（注入された時計を読んで [`Self::talk_time`] に渡す・起点が無ければ `None`）。
+    /// talk スレッドの受け口が落ちた瞬間の時刻を、フレームに丸めずに読むための口。
+    pub fn now_talk_time(&self) -> Option<f64> {
+        self.talk_time((self.clock)())
+    }
 }
 
 /// 単一の出力契約 [`dola::cue::CueSink`] に talk 時刻観測を挟むデコレータ（design.md「時刻源 / talk_clock」）。
