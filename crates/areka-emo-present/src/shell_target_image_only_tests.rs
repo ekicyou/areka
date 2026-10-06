@@ -187,3 +187,125 @@ fn ignored_pna_is_recorded_once_with_the_count() {
     assert_eq!(warns.len(), 1, "{events:?}");
     assert_eq!(warns[0].field("ignored_pna"), Some("1"), "{warns:?}");
 }
+
+// ── 画像だけのシェル（要件 6.1・6.2・6.3・6.5・6.6・7.3）──────────────────────────
+
+/// `surfaces` を（`Some` なら）surfaces.txt に書き、`images` の名前の面の画像を置いた一時フォルダの
+/// シェル（descript.txt は `seriko.use_self_alpha,1`）。画像の画素は復号器が持つ。
+fn image_only_shell(
+    label: &str,
+    surfaces: Option<&str>,
+    images: &[&str],
+) -> (TempPath, MemoryDecoder) {
+    let dir = TempPath::new(label);
+    super::test_support::write_descript(dir.path());
+    if let Some(text) = surfaces {
+        std::fs::write(dir.child("surfaces.txt"), text).expect("記述ファイル作成");
+    }
+    let mut dec = MemoryDecoder::new();
+    for name in images {
+        std::fs::File::create(dir.child(name)).expect("プレースホルダ作成");
+        dec.insert(dir.child(name), 2, 1, 8, [PX, PX].concat(), true);
+    }
+    (dir, dec)
+}
+
+/// 画像だけで組んだ記録（`surfaces_txt` の欄を持つ `info!`）を集める。
+fn image_only_infos(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| {
+            e.target == SHELL_TARGET
+                && e.level == tracing::Level::INFO
+                && e.field("surfaces_txt").is_some()
+        })
+        .collect()
+}
+
+/// 読み込みが成功し面 0 が在ること、画像だけで組んだ記録が 1 行で `surfaces_txt` と面の数を持つ
+/// ことを確かめる。
+fn assert_image_only(dir: &TempPath, dec: &MemoryDecoder, surfaces_txt: &str, count: &str) {
+    let (target, events) =
+        capture_events(|| load_shell_target(dir.path(), dec).expect("画像だけで組める"));
+    let ids: Vec<u32> = target.build_world().surface_ids().collect();
+    assert!(ids.contains(&0), "面 0 が在る: {ids:?}");
+    let infos = image_only_infos(&events);
+    assert_eq!(infos.len(), 1, "{events:?}");
+    assert_eq!(
+        infos[0].field_str("surfaces_txt"),
+        Some(surfaces_txt),
+        "{infos:?}"
+    );
+    assert_eq!(infos[0].field("surfaces"), Some(count), "{infos:?}");
+}
+
+/// `surfaces.txt` が無く `surface0.png` だけのシェルが起動する（要件 6.1・6.3・7.3）。
+#[test]
+fn missing_surfaces_txt_with_an_image_builds_from_images() {
+    let (dir, dec) = image_only_shell("shell-image-only-missing", None, &["surface0.png"]);
+    assert_image_only(&dir, &dec, "missing", "1");
+}
+
+/// 空の `surfaces.txt`＋画像で起動し、記録の面の数は認めた画像の数（要件 6.2・6.3・7.3）。
+#[test]
+fn empty_surfaces_txt_with_images_builds_from_images() {
+    let (dir, dec) = image_only_shell(
+        "shell-image-only-empty",
+        Some(""),
+        &["surface0.png", "surface10.png"],
+    );
+    assert_image_only(&dir, &dec, "empty", "2");
+}
+
+/// 波括弧 0 個の `surfaces.txt`＋画像で起動する（要件 6.2）。
+#[test]
+fn surfaces_txt_without_braces_with_an_image_builds_from_images() {
+    let (dir, dec) = image_only_shell(
+        "shell-image-only-no-brace",
+        Some("charset,UTF-8\ndescript\n"),
+        &["surface0.png"],
+    );
+    assert_image_only(&dir, &dec, "empty", "1");
+}
+
+/// 面も画像も無ければ `Empty`（場所はシェルのフォルダ）で、`error!` を 1 行伴う（要件 6.5・7.4）。
+#[test]
+fn no_surface_and_no_image_yields_empty_at_the_shell_dir() {
+    for (label, surfaces) in [
+        ("shell-image-only-none-missing", None),
+        ("shell-image-only-none-empty", Some("charset,UTF-8\n")),
+    ] {
+        let (dir, dec) = image_only_shell(label, surfaces, &[]);
+        let (result, events) = capture_events(|| load_shell_target(dir.path(), &dec));
+        match result {
+            Err(ShellLoadError::Empty { path }) => assert_eq!(path, dir.path()),
+            other => panic!("{label}: 面が無い失敗は Empty でなければならない: {other:?}"),
+        }
+        let errors = events
+            .iter()
+            .filter(|e| e.target == SHELL_TARGET && e.level == tracing::Level::ERROR)
+            .count();
+        assert_eq!(errors, 1, "{label}: {events:?}");
+    }
+}
+
+/// `surfaces.txt` が在るのに読めない（フォルダ）なら、画像が在っても今までどおり `Read`（要件 6.6）。
+#[test]
+fn unreadable_surfaces_txt_yields_read_even_with_images() {
+    let (dir, dec) = image_only_shell("shell-image-only-unreadable", None, &["surface0.png"]);
+    std::fs::create_dir(dir.child("surfaces.txt")).expect("フォルダ作成");
+    match load_shell_target(dir.path(), &dec) {
+        Err(ShellLoadError::Read { path, .. }) => assert_eq!(path, dir.child("surfaces.txt")),
+        other => panic!("読めない surfaces.txt は Read でなければならない: {other:?}"),
+    }
+}
+
+/// 面を定義する `surfaces.txt` では画像だけで組んだ記録を出さない（要件 6.7 の対照）。
+#[test]
+fn defined_surfaces_do_not_record_image_only() {
+    let dir = shell_with("shell-image-only-control", b"seriko.use_self_alpha,1\n");
+    let dec = decoder(&dir, &[PX, PX], true);
+    let (_, events) =
+        capture_events(|| load_shell_target(dir.path(), &dec).expect("シェルは読める"));
+    assert!(image_only_infos(&events).is_empty(), "{events:?}");
+}

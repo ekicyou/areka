@@ -28,7 +28,8 @@
 //! `warn!` と箱の数の `info!`（spec: areka-P0-shell-balloon 要件 10.1）、入れ子の報告（無い番号・
 //! 循環）の各件の `warn!`（spec: areka-P0-surface-element-nesting 要件 3.1・3.2）、descript.txt が
 //! 読めない `warn!` と添えてあった `.pna` の数の `warn!`（spec: areka-P0-self-alpha-declaration
-//! 要件 5.7・7.4・透過の扱いの `info!` は `self_alpha` の宛先で 1 行）である。一覧の 1 件だけが
+//! 要件 5.7・7.4・透過の扱いの `info!` は `self_alpha` の宛先で 1 行）、画像だけで面を組んだ `info!`
+//! （同 要件 7.3）である。一覧の 1 件だけが
 //! 取れないときは `warn!` を出してその 1 件を飛ばす（[`list_file_names`]）。
 //! [`ShellTarget::build_world`] は新しい記録を 1 本も出さない。
 //!
@@ -153,7 +154,8 @@ pub enum ShellLoadError {
         #[source]
         source: std::io::Error,
     },
-    /// `surfaces.txt` が読めなかった（既存の失敗・変更 0）。
+    /// `surfaces.txt` が在るのに読めなかった（無いときは失敗にせず画像だけで組む・
+    /// spec: areka-P0-self-alpha-declaration 要件 6.1・6.6）。
     #[error("surfaces.txt の読み取りに失敗: {path}")]
     Read {
         /// 読もうとした `surfaces.txt` の絶対パス。
@@ -162,10 +164,11 @@ pub enum ShellLoadError {
         #[source]
         source: std::io::Error,
     },
-    /// `surfaces.txt` が面を 1 つも産まなかった（既存の失敗・変更 0）。
-    #[error("surfaces.txt が面を 1 つも産まなかった: {path}")]
+    /// シェルに面が 1 つも無い——`surfaces.txt` が無いか面を定義せず、面の画像も無い
+    /// （spec: areka-P0-self-alpha-declaration 要件 6.5）。
+    #[error("シェルに面が 1 つも無い: {path}")]
     Empty {
-        /// 面を産まなかった `surfaces.txt` の絶対パス。
+        /// シェルのフォルダ（`surfaces.txt` が無い場合があるため、そのファイルではない）。
         path: PathBuf,
     },
 }
@@ -246,9 +249,13 @@ impl ShellTarget {
 ///
 /// # Errors
 ///
-/// フォルダの一覧が取れない（[`ShellLoadError::List`]・R1.7）・`surfaces.txt` が読めない
-/// （[`ShellLoadError::Read`]）・面を 1 つも産まない（[`ShellLoadError::Empty`]）。
+/// フォルダの一覧が取れない（[`ShellLoadError::List`]・R1.7）・`surfaces.txt` が在るのに読めない
+/// （[`ShellLoadError::Read`]）・面が 1 つも無い（[`ShellLoadError::Empty`]）。
 /// 一覧の中の 1 件だけが取れない場合は、その 1 件を飛ばして続行する（失敗にしない）。
+///
+/// `surfaces.txt` が無い、または面を 1 つも定義しないときは、面の画像が 1 つ以上在れば画像だけで
+/// 面を組み、そのことと面の数を `info!` で 1 行残す（spec: areka-P0-self-alpha-declaration
+/// 要件 6.1・6.2・7.3）。
 ///
 /// # 記録
 ///
@@ -278,29 +285,37 @@ pub fn load_shell_target(
         );
     }
 
+    // `surfaces.txt` が無い（NotFound）ときは空の定義として続け、面の画像だけで組む（要件 6.1）。
+    // 在るのに読めないときだけ今までどおりの失敗である（要件 6.6）。
     let surfaces_path = shell_dir.join(SURFACES_TXT);
-    let content = std::fs::read(&surfaces_path)
-        .map(|bytes| decode(&bytes, DefaultEncoding::Ansi))
-        .map_err(|source| {
+    let (content, surfaces_txt) = match std::fs::read(&surfaces_path) {
+        Ok(bytes) => (decode(&bytes, DefaultEncoding::Ansi), "empty"),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => (String::new(), "missing"),
+        Err(source) => {
             tracing::error!(
                 path = %surfaces_path.display(),
                 error = %source,
                 "shell: surfaces.txt の読み取りに失敗"
             );
-            ShellLoadError::Read {
-                path: surfaces_path.clone(),
+            return Err(ShellLoadError::Read {
+                path: surfaces_path,
                 source,
-            }
-        })?;
+            });
+        }
+    };
     let shell = areka_parsers::shell::parse(&content);
     let boxes = parse_boxes(&content);
-    if shell.surfaces.is_empty() {
+    // 面を 1 つも定義しないときは、今の「書かれていない番号を画像から認める」枝
+    // （`EmoWorld::build_with_images`）が面の画像から面を組む（要件 6.2・6.3）。画像も無ければ失敗。
+    let image_only = shell.surfaces.is_empty();
+    if image_only && selection.images.is_empty() {
         tracing::error!(
-            path = %surfaces_path.display(),
-            "shell: surfaces.txt が面を 1 つも産まなかった"
+            shell_dir = %shell_dir.display(),
+            surfaces_txt,
+            "shell: シェルに面が 1 つも無い（surfaces.txt が面を定義せず、面の画像も無い）"
         );
         return Err(ShellLoadError::Empty {
-            path: surfaces_path,
+            path: shell_dir.to_path_buf(),
         });
     }
 
@@ -368,6 +383,14 @@ pub fn load_shell_target(
                 .count(),
             surfaces = target.box_surfaces,
             "shell: 箱を読んだ（書かれた balloon.*ブレスの数・箱の置き場所を持つサーフェスの数）"
+        );
+    }
+    if image_only {
+        tracing::info!(
+            shell_dir = %shell_dir.display(),
+            surfaces_txt,
+            surfaces = target.images.len(),
+            "shell: surfaces.txt が面を定義しないので、面の画像だけで面を組んだ（要件 7.3）"
         );
     }
     tracing::info!(
