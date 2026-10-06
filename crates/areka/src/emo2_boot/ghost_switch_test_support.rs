@@ -225,6 +225,20 @@ impl SwitchRig {
         self.app_memory.set(true);
     }
 
+    /// 根に既定のバルーンの複製 `balloon/<folder>` を足し、その descript.txt の `name` を `name` に
+    /// 書き換える（2 つ目のバルーン）。
+    pub(crate) fn add_balloon_copy(&self, folder: &str, name: &str) {
+        let to = self.root.balloon_dir(folder);
+        copy_tree(&self.root.balloon_dir(BALLOON), &to);
+        rewrite_lines(&to.join("descript.txt"), |line| {
+            if line.starts_with("name,") {
+                format!("name,{name}")
+            } else {
+                line.to_owned()
+            }
+        });
+    }
+
     /// 構成入力（ゴーストの根と既定のバルーン）。
     pub(crate) fn cfg(&self, folder: &str) -> ConfigInputs {
         ConfigInputs {
@@ -395,6 +409,23 @@ fn folder_of(ghost_root: &Path) -> String {
 /// 検体のゴーストを `to` へ複製し、`descript.txt` の `name` をフォルダ名に、`sakura.name` を
 /// 「フォルダ名のさくら」に書き換える（切替先の名前と本体側の名前を体ごとに見分ける）。
 fn copy_ghost(from: &Path, to: &Path, folder: &str) {
+    copy_tree(from, to);
+    rewrite_lines(
+        &to.join("ghost").join("master").join("descript.txt"),
+        |line| {
+            if line.starts_with("name,") {
+                format!("name,{folder}")
+            } else if line.starts_with("sakura.name,") {
+                format!("sakura.name,{folder}のさくら")
+            } else {
+                line.to_owned()
+            }
+        },
+    );
+}
+
+/// フォルダ `from` を `to` へ再帰で複製する。
+fn copy_tree(from: &Path, to: &Path) {
     let mut stack = vec![(from.to_path_buf(), to.to_path_buf())];
     while let Some((src, dst)) = stack.pop() {
         std::fs::create_dir_all(&dst).expect("複製のフォルダを作る");
@@ -408,19 +439,11 @@ fn copy_ghost(from: &Path, to: &Path, folder: &str) {
             }
         }
     }
-    let descript = to.join("ghost").join("master").join("descript.txt");
-    let text = std::fs::read_to_string(&descript).expect("descript.txt は UTF-8");
-    let rewritten: Vec<String> = text
-        .lines()
-        .map(|line| {
-            if line.starts_with("name,") {
-                format!("name,{folder}")
-            } else if line.starts_with("sakura.name,") {
-                format!("sakura.name,{folder}のさくら")
-            } else {
-                line.to_owned()
-            }
-        })
-        .collect();
-    std::fs::write(&descript, rewritten.join("\r\n")).expect("descript.txt を書き換える");
+}
+
+/// UTF-8 のテキスト `path` の各行を `map` で書き換え、CRLF でつないで書き戻す。
+fn rewrite_lines(path: &Path, map: impl Fn(&str) -> String) {
+    let text = std::fs::read_to_string(path).expect("テキストは UTF-8");
+    let rewritten: Vec<String> = text.lines().map(map).collect();
+    std::fs::write(path, rewritten.join("\r\n")).expect("テキストを書き換える");
 }
