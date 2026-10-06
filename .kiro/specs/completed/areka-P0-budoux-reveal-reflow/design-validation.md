@@ -1,6 +1,6 @@
 # 設計の検証レポート: areka-P0-budoux-reveal-reflow
 
-- 対象: `.kiro/specs/areka-P0-budoux-reveal-reflow/design.md`（要件は `requirements.md`、調べは `research.md`）
+- 対象: `.kiro/specs/completed/areka-P0-budoux-reveal-reflow/design.md`（要件は `requirements.md`、調べは `research.md`）
 - 検証日: 2026-10-05
 - 進め方: 対話なし。設計が当てにしているコードの事実を、設計書を信用せずにコードを読んで確かめた（実行はしていない）。
 
