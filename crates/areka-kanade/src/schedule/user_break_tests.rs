@@ -5,6 +5,7 @@
 // 入口は `schedule::step` の横断の腕で、殻（`actor.rs`）が `KanadeMsg::UserBreak` をそのまま
 // 写して渡す。ここでは `step` を直に呼び、返る状態と指示を見る。
 
+use super::super::balloon_events::BreakNote;
 use super::super::{
     Action, ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, State, TermCause, log_capture, step,
 };
@@ -189,7 +190,10 @@ fn user_break_while_playing_cancels_the_current_talk_in_every_phase() {
         assert_no_shiori_request(&actions, label);
         assert_eq!(
             next.user_break_talk,
-            Some(TalkId(3)),
+            Some(BreakNote {
+                talk_id: TalkId(3),
+                scope: 0
+            }),
             "{label}: 中断を出した相手を帳簿に控える（要件 2.4 の下地）"
         );
         assert_eq!(
@@ -230,7 +234,10 @@ fn second_user_break_for_the_same_talk_is_ignored() {
     );
     assert_eq!(
         next.user_break_talk,
-        Some(TalkId(3)),
+        Some(BreakNote {
+            talk_id: TalkId(3),
+            scope: 0
+        }),
         "2 件目は帳簿を書き換えない"
     );
     assert!(
@@ -261,7 +268,13 @@ fn scope_number_does_not_change_the_verdict() {
             matches!(actions.as_slice(), [Action::CancelChoice { talk_id }] if *talk_id == TalkId(3)),
             "scope={scope}: 再生中ならどのスコープでも止める（要件 2.5）"
         );
-        assert_eq!(next.user_break_talk, Some(TalkId(3)));
+        assert_eq!(
+            next.user_break_talk,
+            Some(BreakNote {
+                talk_id: TalkId(3),
+                scope
+            })
+        );
 
         let (next, actions) = step(
             not_playing(Phase::Steady { talk: None }),
@@ -490,7 +503,10 @@ fn user_break_ledger_is_emptied_by_any_completion_of_the_current_talk() {
         let mut state = playing(Phase::Steady {
             talk: Some(active(TalkId(3))),
         });
-        state.user_break_talk = Some(TalkId(3));
+        state.user_break_talk = Some(BreakNote {
+            talk_id: TalkId(3),
+            scope: 0,
+        });
         let (next, _actions) = step(
             state,
             Input::TalkDone(TalkDone {

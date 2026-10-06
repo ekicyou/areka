@@ -18,7 +18,7 @@
   - _Requirements: 1.4, 2.3, 3.5, 4.1, 6.4_
   - _Boundary: EventBuilders_
 
-- [ ] 2.2 (P) トークの控えと中断の控え
+- [x] 2.2 (P) トークの控えと中断の控え
   - 運行表の状態に「最後に再生を始めたトークの控え」（番号・最終の台本・送り済みの印 2 つ・預かりの印）を足し、状態を省略なしで組む既定とテストの全箇所に初めの値を入れる。
   - 中断の控えを「相手のトークの番号と scope」の形に改め、受理で立て、現行トークの完了で 1 回だけ取り出す口に置き換える。終了の予約の判断と切れ目の見張りの比べ方は、取り出した控えから今と同じ結果を作る（受理の規則は変えない）。
   - 控えの型と `step` の出口の処理は、3 つのイベントの判断を集める新しいファイル（`schedule/balloon_events.rs`）をこのタスクで作って置き、運行表の本体からモジュールとして宣言する。
@@ -139,3 +139,4 @@
 ## Implementation Notes
 
 - 1.1: 新しいワークツリーでは `crates/areka/tests/smoke_boot_loop_exit.rs`・`mcp_get_log_real_run.rs` が「i686 の helper が見つかりません」で赤になる。先に `cargo build -p shiori-host32-helper -p shiori-host32-testdll -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` を回す（`tools/test-all.ps1` の 1 段目と同じ）。
+- 2.2: `take_user_break_quit` は `take_break`（帳簿を必ず空にし、相手がこのトークのときだけ控えを返す）と `is_break_quit`（今と同じ終了の判定）に分けた。`translate_path_tests.rs` の `step_untranslated` は `step` の写しなので、`step` の出口を変えたら写しにも同じ変更を入れる（今回は `settle` を足した）。

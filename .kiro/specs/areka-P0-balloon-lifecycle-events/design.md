@@ -164,8 +164,8 @@ doc/
 ```
 
 ### Modified Files
-- `crates/areka-kanade/src/schedule/mod.rs`（938 → 約 955）— `Input::BalloonTimeout { talk_id }`、`State.shown: Option<balloon_events::ShownTalk>`、`State.user_break_talk` の型を `Option<user_break::BreakNote>` へ。`step` の出口で `balloon_events::settle`（控えの掃除と再生の開始の控え）、`on_talk_done` の現行トークの腕の末尾で `balloon_events::after_talk_done`、`route` に `BalloonTimeout` の腕。足し分は 20 行未満（60 行の閾値の内）で、分割は要らない。
-- `crates/areka-kanade/src/schedule/user_break.rs`（75 → 約 100）— `BreakNote { talk_id, scope }`。`take_user_break_quit` を「このトークの中断の控えを取り出して返す」`take_break` に替える。「再生中のトークが無い」腕は記録の後 `balloon_events::on_idle_double_click` へ渡す。受理の規則（止める・二重に止めない）は変えない。
+- `crates/areka-kanade/src/schedule/mod.rs`（938 → 約 955）— `Input::BalloonTimeout { talk_id }`、`State.shown: Option<balloon_events::ShownTalk>`、`State.user_break_talk` の型を `Option<balloon_events::BreakNote>` へ。`step` の出口で `balloon_events::settle`（控えの掃除と再生の開始の控え）、`on_talk_done` の現行トークの腕の末尾で `balloon_events::after_talk_done`、`route` に `BalloonTimeout` の腕。足し分は 20 行未満（60 行の閾値の内）で、分割は要らない。
+- `crates/areka-kanade/src/schedule/user_break.rs`（75 → 約 100）— 受理で `BreakNote { talk_id, scope }`（型は `balloon_events.rs`）を立てる。`take_user_break_quit` を「このトークの中断の控えを取り出して返す」`take_break` に替える。「再生中のトークが無い」腕は記録の後 `balloon_events::on_idle_double_click` へ渡す。受理の規則（止める・二重に止めない）は変えない。
 - `crates/areka-kanade/src/schedule/events.rs`（733 → 約 780）— 表に 3 行（ukadoc の URL の注記つき＝台帳の「実装済み」の証拠）、`on_balloon_break`・`on_balloon_close`・`on_balloon_timeout`。
 - `crates/areka-kanade/src/schedule/talk_gap.rs` — `is_marked_break` の中断の控えの比べ方を新しい型に合わせる（判断は変えない）。
 - `crates/areka-kanade/src/lib.rs` — `pub mod events` の `pub use` に 3 関数。

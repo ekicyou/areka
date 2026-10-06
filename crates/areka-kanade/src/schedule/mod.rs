@@ -25,6 +25,8 @@ use crate::msg::{
 use crate::status::{ExecutionSnapshot, ExecutionStateUpdate, ExternalStates};
 use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
+/// バルーンの 3 つのイベントを送るかどうかの判断と、その控え（トークの控え・中断の控え）。
+pub(crate) mod balloon_events;
 pub(crate) mod boot;
 pub(crate) mod change;
 pub(crate) mod choice;
@@ -233,8 +235,10 @@ pub(crate) struct State {
     /// （カスケード Value・タイムアウト Value）、消去点は現 talk の `TalkDone` 到達と
     /// 次の slot 差替（マウス由来の置換を含む）である。
     pub choice_prev_talk: Option<TalkId>,
-    /// 利用者の中断を出した相手のトーク（止めた応答＝完了通知を待っている間だけ `Some`）。
-    pub user_break_talk: Option<TalkId>,
+    /// 利用者の中断の控え（止めた相手と scope。完了通知を待っている間だけ `Some`）。
+    pub user_break_talk: Option<balloon_events::BreakNote>,
+    /// 最後に再生を始めたトークの控え（3 つのバルーンのイベントの Reference0 の源）。
+    pub shown: Option<balloon_events::ShownTalk>,
     /// 受理した切替（要求と `OnGhostChanging` の台本）。停止通知の切替の中身の源。
     pub change: Option<change::ChangeState>,
     /// 台詞の再生中に受けた切替の要求の保留（`pending_close` と同型）。
@@ -265,6 +269,7 @@ impl State {
             choice: None,
             choice_prev_talk: None,
             user_break_talk: None,
+            shown: None,
             change: None,
             pending_change: None,
             talk_gap: None,
@@ -445,6 +450,8 @@ pub(crate) fn step(mut state: State, input: Input, config: &KanadeConfig) -> (St
     let (mut state, actions) = route(state, input, config);
     let actions = translate::after(&mut state, replied, actions);
     talk_gap::observe(&mut state, marked_reply);
+    // 出口: 相手を失った控えの掃除と、再生を始めたトークの控え（最終の台本で取る）。
+    balloon_events::settle(&mut state, &actions);
     (state, actions)
 }
 
@@ -686,7 +693,7 @@ fn to_unloading_fault(mut state: State, fault: ShioriFault) -> (State, Vec<Actio
 ///
 /// `Ended` と `Interrupted` はいずれも非 quit としてフェーズ固有遷移（定常復帰・別れの台詞の
 /// 終了）へ委譲する（設計「kanade schedule の 3 値写像」）。例外は 1 つだけで、利用者の中断で止めた
-/// 台本が終了を予約していた `Interrupted`（[`user_break::take_user_break_quit`] が真）は `Quit` と
+/// 台本が終了を予約していた `Interrupted`（[`user_break::is_break_quit`] が真）は `Quit` と
 /// 同じ終了系列へ進む。dispatcher の slot 差替に伴う `Interrupted` は dispatcher が stale として
 /// 破棄するため、ここへ届く `Interrupted` は利用者の中断か選択肢の時間切れの解除である。
 /// いずれの場合も専用状態は起こさず、`info!` でどの reason だったかを観測する。
@@ -703,7 +710,8 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
             // 空にした結果が「利用者の中断で終わり、かつ終了の予約があった」かを持ち帰る（Req 3.8）。
             // 切替の相では予約を終了へ結ばない（中断は切替の中止＝切替の要件 5.4）。印の台詞の
             // 中断も終了へ結ばない（シェル切替の中止＝areka-P0-shell-balloon-switch 要件 5.2）。
-            let break_quit = user_break::take_user_break_quit(&mut state, &done)
+            let broke = user_break::take_break(&mut state, &done);
+            let break_quit = user_break::is_break_quit(broke, &done)
                 && !change::is_change_phase(&state.phase)
                 && !marked_break;
             match done.reason {
