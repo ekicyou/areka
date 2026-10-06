@@ -1,5 +1,5 @@
-//! 行き先の規則のテスト（areka-P0-open-external-tags task 2.1・要件 1.1・1.4・1.7・2.6・
-//! 3.2・4.7・5.2・6.3・8.2・8.3・10.3）。
+//! 行き先の規則のテスト（areka-P0-open-external-tags task 2.1・2.2・要件 1.1・1.4・1.7・2.6・
+//! 3.2・4.7・5.2・6.3・8.1〜8.5・10.3・10.4）。
 //!
 //! 設計の「分類の表」の全行を 1 つの表で判定する。
 
@@ -367,4 +367,64 @@ fn open_kind_strings_are_the_log_field_values() {
     for (kind, s) in all {
         assert_eq!(kind.as_str(), s);
     }
+}
+
+// ── 台本からの取り出し（task 2.2・要件 8.1〜8.5・10.4）
+
+/// 結果を (書かれた綴り, 種類, 元のタグ) の列にする。
+fn summary(script: &str) -> Vec<(String, OpenKind, String)> {
+    super::link_destinations(script)
+        .into_iter()
+        .map(|d| (d.written.clone(), d.target.kind(), d.tag))
+        .collect()
+}
+
+#[test]
+fn link_destinations_returns_six_forms_in_order_without_others() {
+    let script = concat!(
+        r"\0本文\![open,mailer,a@b.c]",
+        r"\![open,readme]\![open,help]",
+        r"\q[選ぶ,OnX]\_a[OnY]リンク\_a",
+        r"\j[https://a/]\![open,editor,x.txt,3]",
+        r"\![open,file,notepad.exe]\![open,explorer,ghost,emo2]",
+        r"\j[nope]\![open,browser]\![open,explorer,plugin,p]",
+        r"\![open,browser,http://b/]\j[file:///descript.txt]\e",
+    );
+    let s = |w: &str, k, t: &str| (w.to_owned(), k, t.to_owned());
+    assert_eq!(
+        summary(script),
+        vec![
+            s("a@b.c", OpenKind::Mail, r"\![open,mailer,a@b.c]"),
+            s("https://a/", OpenKind::Url, r"\j[https://a/]"),
+            s("x.txt", OpenKind::Editor, r"\![open,editor,x.txt,3]"),
+            s("notepad.exe", OpenKind::File, r"\![open,file,notepad.exe]"),
+            s(
+                "ghost,emo2",
+                OpenKind::Folder,
+                r"\![open,explorer,ghost,emo2]"
+            ),
+            s("http://b/", OpenKind::Url, r"\![open,browser,http://b/]"),
+            s(
+                "file:///descript.txt",
+                OpenKind::File,
+                r"\j[file:///descript.txt]"
+            ),
+        ]
+    );
+}
+
+#[test]
+fn link_destinations_is_empty_without_open_tags() {
+    let script = r"\0本文\![open,readme]\q[選ぶ,OnX]\_a[OnY]リンク\_a\e";
+    assert!(super::link_destinations(script).is_empty());
+    assert!(super::link_destinations("").is_empty());
+}
+
+#[test]
+fn link_destinations_keeps_written_spelling_and_is_pure() {
+    let script = r"\![open,explorer,%APPDATA%\x]\![open,file,..\a.txt]";
+    let first = super::link_destinations(script);
+    assert_eq!(first, super::link_destinations(script));
+    assert_eq!(first[0].target, Target::Folder(r"%APPDATA%\x".into()));
+    assert_eq!(first[1].target, Target::Program(r"..\a.txt".into()));
 }

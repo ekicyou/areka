@@ -1,5 +1,5 @@
-//! 行き先の規則（純粋・areka-P0-open-external-tags task 2.1・要件 1.1・1.4・1.7・2.6・
-//! 3.2・4.7・5.2・6.3・8.2・8.3）。
+//! 行き先の規則（純粋・areka-P0-open-external-tags task 2.1・2.2・要件 1.1・1.4・1.7・2.6・
+//! 3.2・4.7・5.2・6.3・8.1〜8.5）。
 //!
 //! 開く系のタグ（`\j[ID]` と `\![open,file|browser|explorer|editor|mailer,…]`）から、
 //! 行き先・種類・断りを決める唯一の規則 [`classify`] を置く。台本の受け口（実行時）と
@@ -9,7 +9,7 @@
 //! 環境変数の展開・`mailto:` の付け足しは行わず、書かれた綴りのまま持つ（解決は opener）。
 //! `\![open,readme]` は対象外（`None`）で、説明書は受け口が先に拾う（要件 8.3）。
 
-use areka_parsers::sakura::JUMP_TAG_CARRIER;
+use areka_parsers::sakura::{Instruction, JUMP_TAG_CARRIER};
 
 /// 開く系の種類（記録の欄 `kind`）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -216,6 +216,18 @@ fn classify_jump(id: &str, tag: String) -> Result<Destination, Rejected> {
         written: id.to_owned(),
         tag,
     })
+}
+
+/// 台本の文字列から、開く系の行き先を現れた順に返す（断られるものは含めない・task 2.2・
+/// 要件 8.1〜8.5）。汎用コマンドを順に [`classify`] へ通すだけの 1 回の線形走査。
+pub(crate) fn link_destinations(script: &str) -> Vec<Destination> {
+    areka_parsers::sakura::parse(script)
+        .into_iter()
+        .filter_map(|ins| match ins {
+            Instruction::GenericCommand { name, raw_args } => classify(&name, &raw_args)?.ok(),
+            _ => None,
+        })
+        .collect()
 }
 
 #[cfg(test)]
