@@ -107,6 +107,7 @@ fn verb_w(verb: Verb) -> PCWSTR {
 
 /// 拡張子にこの動詞の関連付けがあるか（レジストリを読むだけ・`Unknown` へは落とさない）。
 /// 動詞はコマンド行か DelegateExecute（フォト・メディア プレーヤーなど）のどちらかで持つ。
+#[cfg_attr(test, allow(dead_code))]
 fn has_verb(ext: &OsStr, verb: Verb) -> bool {
     let ext = wide(ext);
     [ASSOCSTR_COMMAND, ASSOCSTR_DELEGATEEXECUTE]

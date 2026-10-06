@@ -1,4 +1,5 @@
-//! 関連付けの確かめ（実機 6.2 の欠陥・要件 7.4・7.6・5.4）。OS へは渡さない（レジストリを読むだけ）。
+//! 関連付けの確かめ（実機 6.2 の欠陥・要件 7.4・7.6・5.4）。判定の純関数だけを見る。
+//! レジストリを引く `has_verb` は機械の登録に依るので常時のテストに入れず、実機（R3）で確かめた。
 
 use super::*;
 use std::path::Path;
@@ -48,13 +49,4 @@ fn dot_name_uses_the_whole_name_as_extension() {
 fn shortcut_is_left_to_the_shell() {
     // lnkfile は動詞を持たず、OS がリンク先を解く（関連付けの照会は常に失敗する）。
     assert_eq!(check(r"C:\a\b.LNK", true), AssocCheck::Skip);
-}
-
-#[test]
-fn real_registry_knows_txt_but_not_unknown_extension() {
-    assert!(has_verb(".txt".as_ref(), Verb::Open));
-    assert!(has_verb(".txt".as_ref(), Verb::Edit));
-    assert!(has_verb(".exe".as_ref(), Verb::Open));
-    assert!(!has_verb(".zzqqnoassoc".as_ref(), Verb::Open));
-    assert!(!has_verb(".zzqqnoassoc".as_ref(), Verb::Edit));
 }
