@@ -1,7 +1,7 @@
 # Implementation Plan
 
-- [ ] 1. 下準備: main の取り込みと数え直し
-- [ ] 1.1 main を取り込み、行数と手書きの数を測り直す
+- [x] 1. 下準備: main の取り込みと数え直し
+- [x] 1.1 main を取り込み、行数と手書きの数を測り直す
   - main を取り込み、競合があれば解く（同じウェーブ C4 の spec が先に着地している見込み）。
   - 先に着地した spec を確かめる——`areka-P0-animated-image-playback`（起動の束に時計を足す）・`areka-P0-mcp-get-status`（kanade のメッセージの末尾に変種と振り分けの腕）・`areka-P0-ghost-session-test-load-flake`（起動の背骨から待ちの部品を子のファイルへ）・`areka-P0-open-external-tags`（受け取り手の宣言表に行）。
   - 設計の「Existing Architecture Analysis」の行数（運行表の本体・定常の振り分け・イベントの組み立て・kanade のメッセージと殻・起動の背骨・起動の束・宣言表）と、手書きの数（送ってよいイベントの表の行数・受け取り手の宣言表の行数・運行表の状態を省略なしで組む所の数）を、取り込みの後の実物で数え直す。ずれがあれば以降のタスクの数はその値で読む。
@@ -135,3 +135,7 @@
   - 記録の照合で 4 つを確かめる: ⑴ 長い台詞の途中のダブルクリックで `OnBalloonBreak` が正しい scope で送られる ⑵ 放っておくとバルーンが消えて知らせと `OnBalloonTimeout` が出る ⑶ 台詞が終わったバルーンのダブルクリックで `OnBalloonClose` ⑷ `balloontimeout` の指定で表示が終わってから約 3 秒で消えて `OnBalloonTimeout`、次のトークでは既定へ戻り、計測の開始の記録がトークの終わりから大きく遅れていない。
   - 完了の状態: 4 つの場面それぞれについて、送った記録・送らなかった理由・起点の記録の該当行がログから取り出され、作業の記録に残っている。
   - _Requirements: 7.1, 7.2, 7.3, 7.5, 8.3_
+
+## Implementation Notes
+
+- 1.1: 新しいワークツリーでは `crates/areka/tests/smoke_boot_loop_exit.rs`・`mcp_get_log_real_run.rs` が「i686 の helper が見つかりません」で赤になる。先に `cargo build -p shiori-host32-helper -p shiori-host32-testdll -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` を回す（`tools/test-all.ps1` の 1 段目と同じ）。

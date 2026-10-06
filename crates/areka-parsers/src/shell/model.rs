@@ -65,7 +65,7 @@ pub struct Surface {
     /// ヘッダ記述子の忠実転記（単一形は `[Single(id)]`・多 id 形は列挙/範囲を保持・要件 12.5(b)）。
     /// 範囲展開・実 surface ツリーへの転記は下流の責務。
     pub targets: Vec<AppendTarget>,
-    /// element overlay 群（レイヤインデックス昇順・要件 4.4）。
+    /// element定義の `overlay` と `base` の行（どちらも同じ値・レイヤインデックス昇順・要件 4.4）。
     pub elements: Vec<Element>,
     /// collision 矩形群（出現順）。
     pub collisions: Vec<Collision>,
@@ -73,7 +73,7 @@ pub struct Surface {
     pub animations: Vec<Animation>,
 }
 
-/// element overlay 行 elementN,overlay,PATH,X,Y（要件 4.2）。
+/// element定義の `overlay` と `base` の行 elementN,overlay,PATH,X,Y（`base` も同じ値・要件 4.2）。
 #[derive(Clone, Debug, PartialEq)]
 pub struct Element {
     /// element の N（レイヤインデックス）。
