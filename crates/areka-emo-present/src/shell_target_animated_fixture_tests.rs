@@ -116,3 +116,76 @@ fn the_balloon_faces_resolve_and_bake_as_films() {
         );
     });
 }
+
+/// task 2.3（要件 1.1〜1.4・3.4）: 検体のシェルを読むと、動く絵の element が子を置く element に
+/// 替わり（番号・X,Y はそのまま）、どの `element*` からも子の定義が引ける。`element0` が在る面 2 は
+/// 土台を使わないので子を持たない。
+#[test]
+fn the_shell_films_become_child_elements() {
+    use areka_emo_compose::{ElementKind, FilmId};
+
+    with_com_initialized(|| {
+        let dir = fixture_dir("shell");
+        let arm = WicDecoderArm::new().expect("WIC の工場が作れる");
+        let target = load_shell_target(&dir, &arm).expect("検体のシェルは読める");
+        let atlas = target.atlas();
+        let world = target.build_world();
+        let film = |name: &str| ElementKind::Film(FilmId(atlas.resolve(SetId(0), name).unwrap().0));
+
+        // (面, element の番号) → (種類, X,Y)。
+        let placed = |sid: u32| -> Vec<(u32, ElementKind, (i64, i64))> {
+            world
+                .surface(sid)
+                .unwrap()
+                .elements
+                .iter()
+                .map(|e| (e.layer, e.kind, e.transform.offset()))
+                .collect()
+        };
+        assert_eq!(
+            placed(0),
+            vec![
+                (0, ElementKind::Image, (0, 0)),
+                (1, film("rgb.apng"), (0, 0)),
+                (2, film("rgb.apng"), (8, 0)),
+                (3, film("alpha.webp"), (0, 8)),
+                (4, ElementKind::Surface(20), (8, 8)),
+            ]
+        );
+        assert_eq!(placed(1), vec![(0, film("surface1.png"), (0, 0))]);
+        assert_eq!(placed(2), vec![(0, ElementKind::Image, (0, 0))]);
+        assert_eq!(
+            placed(3),
+            vec![
+                (0, ElementKind::Image, (0, 0)),
+                (1, film("rgb.apng"), (4, 4))
+            ]
+        );
+        assert_eq!(
+            placed(20),
+            vec![
+                (0, ElementKind::Image, (0, 0)),
+                (1, film("rgb.webp"), (0, 0))
+            ]
+        );
+
+        let mut films = 0;
+        for sid in world.surface_ids() {
+            for e in &world.surface(sid).unwrap().elements {
+                if let ElementKind::Film(id) = e.kind {
+                    films += 1;
+                    assert!(world.film_sheet(id).is_some(), "面 {sid} の {id:?}");
+                }
+            }
+        }
+        assert_eq!(films, 6, "較正: 子を置く element は 6 か所");
+        assert_eq!(
+            world
+                .film_sheets()
+                .map(|s| s.path.as_str())
+                .collect::<BTreeSet<_>>(),
+            BTreeSet::from(["alpha.webp", "rgb.apng", "rgb.webp", "surface1.png"])
+        );
+        assert!(world.film_skips().is_empty(), "{:?}", world.film_skips());
+    });
+}

@@ -37,7 +37,7 @@
   - 完了の姿: 4 つの読みが区別され、新しい欄を使わない既存の呼び出しの結果が本 spec の前と同じ
   - _Requirements: 1.10, 4.5, 7.4_
 
-- [ ] 2.3 動く絵を子へ分解し、子の定義を面の表に載せる
+- [x] 2.3 動く絵を子へ分解し、子の定義を面の表に載せる
   - 新しい `film.rs` に `FilmSheet`・`FilmSheets`・`FilmSkip`・`FilmSkipReason` と分解の手順を置き、`EmoWorld::bind_atlas` の中で束縛の次の行に呼ぶ（2 度呼ばれたら `debug_assert!`）。読み口 `film_sheet`・`film_sheets`・`film_skips` を足す
   - 束縛先が動く絵の親である画像の element を見つけ、絵ごとに 1 度だけ検査する（0 番が親自身・コマと待ち時間の数が同じ・全部の原寸が親と同じ・待ち時間の合計が 1 以上）。落ちた絵は分解せず、理由つきで `skipped` に載せる（画像の element のまま＝ 1 枚目の静止画）
   - 通った絵は子の定義を 1 つ作り、置いていた element の種類だけを `ElementKind::Film` に替える（番号・X,Y・描画メソッドはそのまま、束縛は空）。同じ画像は同じ子。経過 0 のコマを分解のときに決めておく
@@ -236,3 +236,5 @@
 - 1.1（範囲外・完了時に起票）: `emo2` の 1 コマの時間が 8 月の draw-load-parity（p50 2.8 ms・p95 26.5 ms）より桁で遅い（10-06 main で p50 69 ms・p95 605 ms・catch-up 96→252）。差のほとんどが `show.rs` の最後の `mark(MaskGen)` から `emit` までの、どの段にも入らない区間。本 spec の前からの問題。6.2 の前後比較は `perf-loop.ps1 prepare-ab`／`measure-ab` の交互取得を必須にする
 - 2.1: `FilmId` は `nesting.rs` に置いた（2.3 で `film.rs` を作っても 2 つ目を作らない）。`plan.rs` の `ElementKind::Film(_)` は網羅のための仮の腕（全部を `debug!` で飛ばす）＝2.3 から 2.5 の間は本番で届く。2.5 で design の誤りの表どおり（子の定義が無いときだけ `error!`）に置き換え、そのレビューで確かめる
 - 2.2: 走査の口は `cells()`（一番上も含む「載っていない」以外の全部）。4.1 は `iter()` を先に混ぜ、一番上でない欄と一番上の「消えている」を在るときだけ足して、一番上だけの鍵を前と同じ値に保つ。子の欄は「消えている」を持てない（`films: BTreeMap<FilmId,u32>`）＝3.3 で子の `always_at` が「何も出さない」を返す場面があれば欄の形を見直す
+- 2.3: `FilmId` は親の `ElementId` の値。経過 0 は `rest_index(once(0).chain(delays[..n-1]))`（pattern i の待ち＝コマ i−1 の待ち時間）。`surface<数字>.png` は `apply_base_images` が足す層 0 の画像の element として同じ分解に乗る。2.5 までは検体の子は `plan.rs` の仮の腕で描かれない
+- 範囲外（完了時に確かめる）: `cargo clippy -p areka-emo-compose --all-targets -- -D warnings` が既存のテスト 5 か所の `chunks_exact`（`blit_transparent_alpha_tests.rs`・`golden_tests_surface1000_bind_tests.rs`・`golden_tests_test_support.rs`・`composer_tests.rs` ×2）で赤。ツールチェーンの新しい警告。`clippy-199-lints` の持ち物か確かめて起票

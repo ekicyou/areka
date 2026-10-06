@@ -32,6 +32,8 @@ pub mod method;
 pub use method::{BlendKind, BlendMode, ComposeMethod};
 pub mod bind;
 pub mod composed;
+pub mod film;
+pub use film::{FilmSheet, FilmSheets, FilmSkip, FilmSkipReason};
 pub mod nesting;
 pub mod normalized;
 pub mod pattern;
