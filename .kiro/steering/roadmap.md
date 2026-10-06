@@ -90,6 +90,12 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 - M1 の持ち越しのうち残るのは `dpi-transition-two-tick-bounce`（開発者が許容）と `zorder-chain-residue` A-2（据え置き）だけ。M-dual は退役。
 - 個々の完了行の全文（種別・議題・完了時の所見）は history「2026-10-02 棚卸⑳退避」。
 
+### リリース
+
+| 版 | 日付 | GitHub Release | winget-pkgs の PR | 赤で起票した spec |
+|---|---|---|---|---|
+| v0.0.2 | 2026-10-06 | https://github.com/ekicyou/areka/releases/tag/v0.0.2 | — | — |
+
 ## ウェーブ編成（着手順の正本・2026-10-05 棚卸㉒）
 
 > 各ウェーブは**フルライフサイクル**（要件 → 設計 → タスク → 実装 → `/kiro-complete`＝PR の squash マージ）を完走してから次へ。1 spec ＝ 1 worktree ＝ 1 PR。**同じウェーブに入れるのは、棚卸㉒の実測で触るソースファイルの重なりが 0 の組だけ**。許す重なりは 5 つだけ＝表の末尾への追記（`doc/COMPAT_ARCHITECTURE.md` §8）・生成物（`THIRD-PARTY-NOTICES.md`・`doc/ukadoc-coverage/report/`＝手で直さず作り直す）・steering・網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の**別々の行**・説明書 `dist/README.txt` の**別々の行**（棚卸㉒で足した。同じ行を 2 本が書き換えるなら同じウェーブに置かない）。文書だけの段は置かない。
