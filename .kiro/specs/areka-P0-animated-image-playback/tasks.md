@@ -84,7 +84,7 @@
   - _Requirements: 1.5, 1.6, 2.1, 2.2, 2.4, 2.6, 2.9, 4.2, 4.5_
   - _Boundary: Repeat_
 
-- [ ] 3.2 seriko の表に `always` と子の行を採る
+- [x] 3.2 seriko の表に `always` と子の行を採る
   - `LoopTrigger::Always { period_ms, laps }` を足し、`is_always_interval` が真の animation を回数なしで採る。待ち時間の合計が 0 のものは採らず、サーフェスの番号・animation の番号・理由を `warn!` で 1 回出す。組み合わせとほかの語は今の `debug!` の腕のまま
   - 作者のサーフェスの輪の後に `film_sheets()` から子 1 つにつき `always` を 1 本採る（周期・回数はファイルの値）。`film_skips()` の 1 件ごとに相対パスと理由を `warn!` で 1 回出す
   - 部品の列の読み口を `PartKey` で引けるようにし、門 `is_continuous()`（動く部品が在る、または `always` を 1 本以上採った）を足す。腕を 2 つと決め打つ所（`from_world` の `k == 0` の検査ほか）と、既存テスト `only_random_and_bindrandom_are_recorded_others_debug_logged`（例の `always` を `runonce` へ）・`recorded_anims_satisfy_postconditions` を直す
@@ -242,3 +242,4 @@
 - 2.5: 仮の `Film` の腕は `plan_always::push_film_op` に置き換えた（子の定義が無いときだけ `error!`）。経過 0 の pattern の描画メソッドが動かないときは `debug!`（周ごとに巡るので `warn!` だと刻みごとの記録になる）。動く絵だけのサーフェス（検体の 1 番）は 2.6 まで外形 0×0＝`build_plan` が `EmptyComposition`
 - 2.6: `plan_extent.rs` は `plan` の子のモジュール（`#[path]`・`pub(crate) use extent::compute_extent`）。移動は `d7755372`。`always` の外形は負の番号・7 語・`move`（ukadoc「サーフェスIDは無視される」）を数えない。見える部品（2.4）は `is_implemented_name` で `move` を既に外している
 - 3.1: `current_frame_index` は `timeline.rs`（`pub(crate)`）へ移し、`frame_at` もこれを通る（Repeat は末端・`looper` を参照しない）。`always_at(…, 0)` は合成の `rest_index` と一致（テストで固定）＝3.3 の「経過 0 と同じなら欄に載せない」の前提。絵を指すコマは `Nothing` にならない。seriko の clippy の赤 2 件（`actor.rs` の large_enum_variant・`looper.rs` の collapsible_if）と `dola` の 21 件は前からのもの（完了時に起票の対象）
+- 3.2: 子の行は animation 0・`LoopFrame { surface_id: -1, picture: Some(ElementId の値) }`（`FilmSheet.frames` の値をそのまま）＝3.3 は `set_film(film, frame.picture)` と書けば合成の `push_film_op` と一致する。`from_world` は `from_world_and_films(world, sheets, skips)` へ委ねる（seriko は atlas に依らないのでテストは手で組んだ子の定義）。`has_animated_parts` は `always_rest` の先と子の行を持つサーフェスも数える。looper の抽選は `Always` を乱数の前で飛ばし、parts の `gate` は `Always` に `None`（再生は 3.3・3.4）

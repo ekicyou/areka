@@ -83,6 +83,8 @@ fn gate(anim: &LoopAnimation, binds: &BindSet) -> Option<u32> {
     match anim.trigger {
         LoopTrigger::Random { k } => Some(k),
         LoopTrigger::BindRandom { k } => binds.contains(anim.id).then_some(k),
+        // `always` は抽選の対象外（部品の時計での再生は task 3.3）。
+        LoopTrigger::Always { .. } => None,
     }
 }
 

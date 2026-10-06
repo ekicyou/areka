@@ -239,6 +239,8 @@ impl LoopRuntime {
                             }
                             k
                         }
+                        // `always` は抽選しない（乱数を引く前に飛ばす。再生は進行の側・task 3.4）。
+                        LoopTrigger::Always { .. } => continue,
                     };
                     // (c) 1/N 抽選（ここで初めて乱数を消費）。
                     if should_fire(k, rng) {
