@@ -251,7 +251,15 @@
 
 ## 12. 手元の確かめの記録（要件 6）
 
-（実装の後に開発者が記入する: 端末の文字コード・`tools/package.ps1 -Check` の終了コードと通った段・`tools/crates-io.ps1 -Verify` の終了コード・回す前後の `chcp` と `[Console]::OutputEncoding.CodePage`・見つかった文字化け）
+### 12.1 開発者の手元の `tools/package.ps1 -Check`（2026-10-06・端末 932）で見つかった表示の崩れと手当て
+
+- 段 `license check`: `cargo deny` の罫線が `笏娯楳`・`笏・` のように化け、2 行が 1 行に潰れた。原因は `package.ps1` の段 `Step` が子を `2>&1 |` で受けること（子の出力先がパイプになり、`cargo deny` が書いた UTF-8 を PowerShell が端末の文字コード 932 で解く）。段 `license check` と段 `generate third-party notices` の子を `Invoke-Utf8Child` で読んで行として段へ流す形（関数 `Invoke-Utf8Step`）に直した。
+  - 確かめ（Claude の 932 の端末）: 直す前の形 `& { cargo deny --locked check licenses } 2>&1 | ForEach-Object { Write-Host "$_" }` は `笏娯楳 …deny.toml:33:6`・`笏・33 笏・    "BSD-2-Clause",` と化けた。直した後の `pwsh -NoProfile -File tools/package.ps1 -Arch x64` は終了コード 0・最後の段まで緑で、段 `license check` の罫線が `┌─`・`│`・`━` と字のとおりに出た。`tools/encoding-check.ps1` は `all passed`。
+- 段 `x64 assemble` の後に `]` だけの行が残った。`Copy-Item -Recurse` の進捗バー（PowerShell 7 の簡易表示）の消し残り。`package.ps1` の冒頭で `$ProgressPreference = 'SilentlyContinue'` にした。
+
+### 12.2 確かめの残り
+
+（開発者が記入する: `tools/package.ps1 -Check` の終了コードと通った段・`tools/crates-io.ps1 -Verify` の終了コード・回す前後の `chcp` と `[Console]::OutputEncoding.CodePage`・release.yml の乾いた走りの結果）
 
 ## 13. 戻しの確かめの記録（タスク 6.2・2026-10-06）
 

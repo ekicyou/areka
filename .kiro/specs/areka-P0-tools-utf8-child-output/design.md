@@ -370,7 +370,8 @@ function Invoke-Utf8Child {
 | package.ps1 | `git status --porcelain`（始めと終わり） | 比べる | ASCII しか出ないので対象外（git が日本語のパスを ASCII の逃がし字で出す・要件の範囲外にも明記） |
 | package.ps1 | `cargo about --version`・`cargo deny --version` | 捨てる（終了コードだけ） | 字面に依らないので対象外 |
 | package.ps1 | `vswhere … -property installationPath` | 空かどうかだけ | 字面に依らないので対象外 |
-| package.ps1 | 段の中の子（`rustup`・`cargo build`・`cargo deny check`・`cargo about generate`） | 表示と、失敗のときの出力の末尾 | 表示だけで対象外 |
+| package.ps1 | 段の中の子（`rustup`・`cargo build`） | 表示と、失敗のときの出力の末尾 | 表示だけで対象外 |
+| package.ps1 | 段 `license check` の `cargo deny check licenses`・段 `generate third-party notices` の `cargo about generate` | 表示と、失敗のときの出力の末尾 | 直した（`Invoke-Utf8Step`＝`Invoke-Utf8Child` で読んで段へ行として流す。手元の確かめで罫線の化けが見つかったため） |
 | package.ps1 | `areka.exe`（`Start-Process -RedirectStandardOutput/-RedirectStandardError` → `Get-Content -Raw`） | 記録の判定 | 端末を通らないので対象外（子がファイルへ直に書き、pwsh 7 が UTF-8 で読む） |
 | crates-io.ps1 | `cargo metadata` | JSON | 直した |
 | crates-io.ps1 | `cargo publish --dry-run`・`cargo package` | 受けない（終了コードだけ） | 表示だけで対象外 |
@@ -382,7 +383,7 @@ function Invoke-Utf8Child {
 - 子のプロセスでない読み取り（`crates-io.ps1` の `Invoke-WebRequest`・`Get-Content -Raw` の Cargo.toml と workflow）は棚卸の対象外（端末を通らない）。
 - 直す所は 4 か所（上の表の「直した」3 行と `release.yml` 段「版の検査」）で、その外に **0 件**。
 - 引き直し（2026-10-06・タスク 6.3・実装の後の本文）: `tools/*.ps1`（`perf/` を除く）の外部コマンドの呼び出しをすべて拾い、上の表と突き合わせた。表に無かった所は `test-all.ps1` の `git diff --quiet`（終了コードだけ）の **1 件**で、扱いは対象外（表に足した）。直す所が増えた件は **0 件**。新しい 2 本は読み方そのもので数えないが、`encoding-check.ps1` の子の読み取りは `Invoke-Utf8Child` だけで、例外は較正の素の呼び出し 1 か所（壊れることを確かめるための物・意図どおり）。
-- 表示だけの文字化けの記録（4.3）: 設計の時点で見つかったのは `package.ps1` の道具自身の文の 3 行（`—`＝U+2014 を含む「展開先が長すぎる…」「展開した木を消せなかった…」と、`〜`＝U+301C を含む「判定 1〜8 すべて合」）。どれも要件 8 で ASCII の文になり解消する（実装の後の本文で道具自身の文の ASCII の外の字は **0 件**＝判定の規則 A が緑）。子の出力をそのまま写す所の文字化けは、設計の時点で 0 件だったが、実装の途中（タスク 2.2）で **1 件**見つかった: 932 の端末で `package.ps1` の段 `license check` の `cargo deny` が出す罫線（`━` など）が `━E` のように崩れて見える。子の出力の中身なので書き替えない（8.4）・合否に効かない（段の合否は終了コード）ので対象外のまま記録だけ残す（`test-all.ps1 -License` の段 `cargo deny check` も同じ子の同じ出力）。ほかの子（`cargo build`・`rustc`・`rustup`・`cargo about`・`cargo publish`／`cargo package`・`git`）の出力の文字化けは **0 件**（要件 6 の手元の確かめで見つかれば `research.md` の記録に足す）。
+- 表示だけの文字化けの記録（4.3）: 設計の時点で見つかったのは `package.ps1` の道具自身の文の 3 行（`—`＝U+2014 を含む「展開先が長すぎる…」「展開した木を消せなかった…」と、`〜`＝U+301C を含む「判定 1〜8 すべて合」）。どれも要件 8 で ASCII の文になり解消する（実装の後の本文で道具自身の文の ASCII の外の字は **0 件**＝判定の規則 A が緑）。子の出力をそのまま写す所の文字化けは、設計の時点で 0 件だったが、実装の途中（タスク 2.2）で **1 件**見つかった: 932 の端末で `package.ps1` の段 `license check` の `cargo deny` が出す罫線（`━` など）が `━E` のように崩れて見える。原因は読む側にある: `package.ps1` の段 `Step` は子を `2>&1 |` で受けるので子の出力先がパイプになり、`cargo deny` はパイプへ UTF-8 のバイトを書き、PowerShell がそれを端末の文字コードで解く（端末へ直接書くときは Rust が UTF-16 で書くので化けない）。開発者の手元の確かめ（タスク 7）でも同じ化けが出たので、記録だけでなく直した: 段 `license check` と段 `generate third-party notices` の子を `Invoke-Utf8Child` で読み、行として段へ流す（`package.ps1` の関数 `Invoke-Utf8Step`。中身は書き替えない＝8.4 のまま、正しく解くだけ）。`test-all.ps1 -License` の段 `cargo deny check` は子を端末へ直接書かせる（パイプに通さない）ので化けない。ほかの子（`cargo build`・`rustc`・`rustup`・`cargo about`・`cargo publish`／`cargo package`・`git`）の出力の文字化けは **0 件**（要件 6 の手元の確かめで見つかれば `research.md` の記録に足す）。
 - 参考（`tools/` の外・撤去の影響を受ける workflow の読み取り）: 上の「workflow の `gh` の読み方」のとおり。段「release を待つ」とタグの一覧を直し、他は ASCII の欄だけを読むので変えない。`gh` の外の子の読み取りも引き直しで見た: `release.yml` 段「改行の設定」の `git config --show-origin --get core.autocrlf`（表示だけ）・段「環境の記録」の `Show-Version`（先頭の 1 行を表示するだけ）と `vswhere`（空かどうかと表示だけ）・段「zip を作る」・`gh release create`・`gh api -X DELETE`（終了コードだけ）、`crates-io.yml` 段「残りの判定」の標準出力（クレート名＝ASCII）・段「記録」（標準エラーをファイルで受けて UTF-8 で読む）・段「公開」の `cargo publish`（表示だけ）。直す所は **0 件**。
 
 ## Error Handling

@@ -111,6 +111,8 @@ $SmokeExitMsGiven = $PSBoundParameters.ContainsKey('SmokeExitMs')
 $ErrorActionPreference = 'Stop'
 # 外部コマンドの標準エラー出力で例外を投げさせない。終了コードは自前で見る。
 $PSNativeCommandUseErrorActionPreference = $false
+# Copy-Item -Recurse などの進捗バーを出さない（簡易表示の消し残り「]」が段の出力に紛れる）
+$ProgressPreference = 'SilentlyContinue'
 # 判定に使う子の出力（版・検体のパス）は端末の文字コードを通さず UTF-8 で読む
 . (Join-Path $PSScriptRoot 'utf8-child.ps1')
 
@@ -416,13 +418,23 @@ Step 'check static linking' {
     if ($bad) { throw 'wrong machine or loads a VC++ runtime DLL (+crt-static not effective)' }
 }
 
-Step 'license check' { cargo deny --locked check licenses }
+# 子の出力を UTF-8 で読んで段へ行として流す。段の 2>&1 | を素の呼び出しが通ると、子がパイプへ書いた UTF-8 が
+# 端末の文字コードで解かれ、cargo deny・cargo about の罫線などが化ける。標準エラーの行を先に、標準出力の行を後に流す
+# （子が終わってからまとめて出る）。終了コードは $LASTEXITCODE に置く（段の判定はそれを見る）
+function Invoke-Utf8Step([string]$FilePath, [string[]]$ArgumentList) {
+    $r = Invoke-Utf8Child $FilePath $ArgumentList
+    $r.ErrLines
+    @($r.Out -split '\r?\n' | Where-Object { $_ -ne '' })
+    $global:LASTEXITCODE = $r.Code
+}
+
+Step 'license check' { Invoke-Utf8Step cargo @('deny', '--locked', 'check', 'licenses') }
 
 # -Arch に依らず全ターゲット（ARCHS の行＋helper）で 1 回。どの CPU 種別の zip にも同じ物を入れる
 Step 'generate third-party notices' {
     if (Test-Path -LiteralPath $script:Notices) { Remove-Item -LiteralPath $script:Notices -Force }
     $targets = @($ARCHS.Values | ForEach-Object Target) + $HELPER_TARGET | ForEach-Object { '--target', $_ }
-    cargo about generate --locked --workspace @targets about.hbs -o $script:Notices
+    Invoke-Utf8Step cargo (@('about', 'generate', '--locked', '--workspace') + $targets + @('about.hbs', '-o', $script:Notices))
     if ($LASTEXITCODE) { return }
     if (-not (Test-Path -LiteralPath $script:Notices)) { throw "third-party notices output missing: $script:Notices" }
 }
