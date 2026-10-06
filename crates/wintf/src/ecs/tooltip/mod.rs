@@ -201,18 +201,17 @@
 //! それをリンカへ渡す `build.rs`（`Cargo.toml` を変える必要は無い。MSVC のリンカのときだけ渡す）:
 //!
 //! ```no_run
-//! fn main() {
-//!     println!("cargo:rerun-if-changed=app.manifest");
-//!     println!("cargo:rerun-if-changed=build.rs");
-//!     if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() != Ok("msvc") {
-//!         return;
-//!     }
-//!     let manifest = std::path::Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap())
-//!         .join("app.manifest");
-//!     // bin の exe にだけ渡す（サンプルなら rustc-link-arg-examples）。
-//!     println!("cargo:rustc-link-arg-bins=/MANIFEST:EMBED");
-//!     println!("cargo:rustc-link-arg-bins=/MANIFESTINPUT:{}", manifest.display());
+//! // build.rs の main の中身
+//! println!("cargo:rerun-if-changed=app.manifest");
+//! println!("cargo:rerun-if-changed=build.rs");
+//! if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() != Ok("msvc") {
+//!     return;
 //! }
+//! let manifest = std::path::Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap())
+//!     .join("app.manifest");
+//! // bin の exe にだけ渡す（サンプルなら rustc-link-arg-examples）。
+//! println!("cargo:rustc-link-arg-bins=/MANIFEST:EMBED");
+//! println!("cargo:rustc-link-arg-bins=/MANIFESTINPUT:{}", manifest.display());
 //! ```
 //!
 //! 既にマニフェストを埋めている exe なら、その中の `<dependency>` に上の 1 項目を足せばよい。
