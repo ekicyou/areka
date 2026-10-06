@@ -4,7 +4,7 @@
 //! 同梱の最初の 1 個（`install.txt` の無印 → `balloon0`）の、番号付きの場面だけを足す。
 //! 無印だけ・無印と `balloon0` の両方・`install.txt` が無い・読めないは `catalog_tests.rs` が担う。
 //! descript の 2 鍵の読み手（`standard_balloon_keys`）の場面もここに置く。
-//! 一時フォルダは `temp-path-kit` の下（ワークツリーの `target\`・要件 7.7）。
+//! 一時フォルダは `TempPath::under_target`（ワークツリーの `target\test-roots\` の下・要件 7.7）。
 
 use super::test_support::{hold_exclusive, put, put_ghost};
 use super::*;
@@ -14,7 +14,7 @@ use temp_path_kit::TempPath;
 /// `install.txt` に `body` を置いたゴーストで `companion_balloon` を呼び、戻り値を返す。
 /// 記録は 0 件であること（要件 1.5・1.14）まで判定する。
 fn companion_of(label: &str, body: &str) -> Option<String> {
-    let tmp = TempPath::new(label);
+    let tmp = TempPath::under_target(label);
     let ghost = tmp.path().join("g");
     put(&ghost.join("install.txt"), body.as_bytes());
     let mut companion = Some("<未呼出>".to_owned());
@@ -86,7 +86,7 @@ fn empty_balloon0_stops_before_balloon1() {
 /// ゴーストの `ghost/master/descript.txt` に `descript` を置いて `standard_balloon_keys` を呼ぶ。
 /// 記録は 0 件であること（要件 2.13）まで判定する。
 fn keys_of(label: &str, descript: &str) -> StandardBalloonKeys {
-    let tmp = TempPath::new(label);
+    let tmp = TempPath::under_target(label);
     let root = BasewareRoot::new(tmp.path().to_path_buf());
     let ghost = put_ghost(&root, "g", descript);
     let mut keys = None;
@@ -154,7 +154,7 @@ fn standard_keys_treat_empty_values_as_absent() {
 /// descript.txt が読めない → 2 欄とも無しで、読めない記録がちょうど 1 件（要件 5.4）。
 #[test]
 fn standard_keys_unreadable_warns_exactly_once() {
-    let tmp = TempPath::new("catalog-standard-unreadable");
+    let tmp = TempPath::under_target("catalog-standard-unreadable");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
     let ghost = put_ghost(
         &root,

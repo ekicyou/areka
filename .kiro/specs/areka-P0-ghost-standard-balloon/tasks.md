@@ -37,7 +37,7 @@
   - 完了の状態: 突き合わせの全場面と一致のテストが緑で、警告の `key`・`value`・`balloon_store` が判定されている
   - _Requirements: 2.3, 2.4, 2.6, 2.7, 2.8, 2.9, 2.10, 2.11, 2.12, 4.2, 5.2, 5.5, 5.6, 7.4_
 
-- [ ] 3. 入力を集める口で descript の 2 鍵を渡す
+- [x] 3. 入力を集める口で descript の 2 鍵を渡す
   - 入力を集める口が、記憶 → descript の 2 鍵 → 同梱 → 根の一覧 を先にまとめて読み、鎖へ渡す（署名は変えない・ゴーストのフォルダの中のバルーンは読まない・ここでは記録を出さない）。関数の説明の段の並びを直す
   - 起動の入口の引数の腕は読み手を呼ばない。「バルーンを決めました」の記録の行は差分 0 行
   - 新しい兄弟のテストファイル（実ファイル・`target\` の下）で、`claudia` と同じ形の同梱（番号付きだけ・既定のバルーンも在る）→ 同梱の段で `balloon0` の値、descript の `balloon` と無印の同梱の両方 → descript の段、`default.balloon.path` と同じ名前のフォルダがゴーストの中の `balloon/` にだけ在る → 当たらず警告 1 件、を判定する
@@ -88,3 +88,4 @@
 - 1.1: 既存の `companion_balloon_reads_one_key` に「番号付きは読まない」のコメントはもともと無かった（設計の前提違い）。今の読み方を説明する doc コメントを足した。`crates/areka/src/boot_resolve.rs` の鎖の説明に残る「install.txt の balloon.directory」は 2.2 で直す
 - 2.1: `BalloonRoute::Descript` と新しい 2 欄は 2.2 まで dead_code の警告 2 件になる（CI に `-D warnings` は無い）。2.2 で警告 0 件を確かめる。煙テストは i686 の helper と testdll-loadu のビルドが要る（この worktree ではビルド済み）。`ghost_session::switch_tests::fallback_tests` は全体を並列で回すと負荷で赤になることがあり、単独では緑
 - 2.2: descript の段は 2 鍵を（鍵名・欄・突き合わせの関数）の配列で回し、警告の出口を 1 か所にした。`boot_config.rs` の段の並びの説明が古いのはタスク 3 で直す
+- 3: `temp_path_kit::TempPath::new` は OS の一時フォルダに作るので要件 7.7 に反する。共有の `TempPath::under_target`（ワークツリーの `target\test-roots`）を足し、本 spec の新しいテスト（1.1・1.2・3）を移した。タスク 4 の根もこれを使う。設計の Testing Strategy の記述も直した。引数の腕が読まないこと（3.2）は、ゴーストのファイルを共有なしで握って warn 0 件で固定する

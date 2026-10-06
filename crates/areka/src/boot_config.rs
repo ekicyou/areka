@@ -367,9 +367,14 @@ pub(crate) fn resolve_boot_from(
     Ok((cfg, ghost, balloon, mark, root))
 }
 
-/// argv 無しの分岐（そのゴーストの最後のバルーンの記憶 → 同梱 → 唯一 → 既定 → 無作為）で
+/// argv 無しの分岐（そのゴーストの最後のバルーンの記憶 → ゴーストの descript.txt の
+/// `default.balloon.path` → `balloon` → 同梱の最初の 1 個 → 唯一 → 既定 → 無作為）で
 /// 1 ゴースト分のバルーンを解く（起動前の解決の後半・切替先のバルーンの解決＝要件 4.7）。
 /// 初回起動の argv の第 2 引数はここへ届かない。
+///
+/// 記憶・descript の 2 鍵・同梱・根の一覧は、段が当たるかどうかに関わらず先にまとめて読み、
+/// 判断と「当たらなかった」の記録は鎖（`boot_resolve::resolve_balloon`）に任せる。候補は根の
+/// バルーンの置き場の列挙だけで、ゴーストのフォルダの中の `balloon/` は読まない。
 pub(crate) fn resolve_balloon_for_ghost(
     root: &areka_ghost::BasewareRoot,
     ghost_dir: &std::path::Path,
@@ -379,6 +384,7 @@ pub(crate) fn resolve_balloon_for_ghost(
     use areka_ghost::catalog;
 
     let memory = boot_resolve::read_last_balloon(ghost_dir);
+    let standard = catalog::standard_balloon_keys(ghost_dir);
     let companion = catalog::companion_balloon(ghost_dir);
     let listed = catalog::list_balloons(root);
     boot_resolve::resolve_balloon(
@@ -386,8 +392,8 @@ pub(crate) fn resolve_balloon_for_ghost(
             root,
             argv: None,
             memory: memory.as_deref(),
-            default_balloon_path: None,
-            balloon_name: None,
+            default_balloon_path: standard.default_balloon_path.as_deref(),
+            balloon_name: standard.balloon.as_deref(),
             companion: companion.as_deref(),
             listed: &listed,
         },
@@ -491,3 +497,7 @@ pub(crate) fn is_benign_boot_error(err: &areka_ghost::GhostBootError) -> bool {
 #[cfg(test)]
 #[path = "boot_config_exe_link_tests.rs"]
 mod exe_link_tests;
+
+#[cfg(test)]
+#[path = "boot_config_balloon_tests.rs"]
+mod balloon_tests;

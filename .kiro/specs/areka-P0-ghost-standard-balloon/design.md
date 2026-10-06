@@ -182,7 +182,7 @@ doc/
 | 7.1, 7.5 | 同梱の読み方と値 | テスト | `catalog_standard_balloon_tests.rs`・`boot_resolve_balloon_tests.rs` |
 | 7.2, 7.3, 7.4 | 段の並び・descript の突き合わせ | テスト | `boot_resolve_balloon_tests.rs`・`boot_config_balloon_tests.rs`・`catalog_standard_balloon_tests.rs` |
 | 7.6 | 切替 | テスト | `ghost_switch_balloon_tests.rs` |
-| 7.7 | 検体は `target\` の下だけ | テスト | `temp_path_kit::TempPath`・切替の土台の検体の複製 |
+| 7.7 | 検体は `target\` の下だけ | テスト | `temp_path_kit::TempPath::under_target`（`target\test-roots` の下）・切替の土台の検体の複製 |
 
 ## Components and Interfaces
 
@@ -395,7 +395,7 @@ descript の段（記憶の段の後・同梱の段の前）:
 
 ## Testing Strategy
 
-方針: 足した判断の分岐を全部踏む。すでに固定されている配線（同梱の段の警告・記憶の読み・`list_balloons` の文字コードの復号）は踏み直さない。記録は件数と欄の中身まで判定する（`log_capture_kit::capture`。捕まえるのは呼んだスレッドの記録）。検体と一時フォルダは `temp_path_kit::TempPath` か切替の土台の検体の複製で、どちらもワークツリーの `target\` の下（7.7）。
+方針: 足した判断の分岐を全部踏む。すでに固定されている配線（同梱の段の警告・記憶の読み・`list_balloons` の文字コードの復号）は踏み直さない。記録は件数と欄の中身まで判定する（`log_capture_kit::capture`。捕まえるのは呼んだスレッドの記録）。検体と一時フォルダは `temp_path_kit::TempPath::under_target`（`TempPath::new` は OS の一時フォルダに作るので使わない）か切替の土台の検体の複製で、どちらもワークツリーの `target\` の下（7.7）。
 
 ### 読み手（`crates/areka-ghost/src/catalog_standard_balloon_tests.rs`）
 
