@@ -259,7 +259,9 @@
 
 ### 12.2 確かめの残り
 
-（開発者が記入する: `tools/package.ps1 -Check` の終了コードと通った段・`tools/crates-io.ps1 -Verify` の終了コード・回す前後の `chcp` と `[Console]::OutputEncoding.CodePage`・release.yml の乾いた走りの結果）
+- `tools/package.ps1 -Check`（開発者の手元・端末 932・2026-10-06・12.1 の直しの後のコミット `a830060d`）: 開発者が回し直して OK（段 `finalize` まで緑・罫線の化けと `]` の行の消し残りが無いことを確かめた）。
+- `tools/crates-io.ps1 -Verify -Version 0.0.1`（Claude の端末 932・2026-10-06・コミット `a830060d`）: 終了コード 0。`OK check 'list'`・`'fields'`・`'reason'`・`'version'`・`'workflow shape'`・`OK package (cargo publish --dry-run)`・`OK check 'size'`・`green (publish list: dola, wintf)`。回す前後とも `[Console]::OutputEncoding.CodePage`／`InputEncoding.CodePage` は 932／932、`chcp` も 932 のまま。
+- release.yml の乾いた走り（workflow_dispatch）: （push の許しを得て回した結果を書く）
 
 ## 13. 戻しの確かめの記録（タスク 6.2・2026-10-06）
 
