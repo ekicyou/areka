@@ -772,3 +772,8 @@ mod reappear_tests;
 #[cfg(test)]
 #[path = "balloon_visibility_phase_box_tests.rs"]
 mod box_tests;
+
+// トークの終わりから計る時間切れの記録（起点の採り方・番号の無い知らせ）の水準と欄。
+#[cfg(test)]
+#[path = "balloon_visibility_phase_log_tests.rs"]
+mod log_tests;
