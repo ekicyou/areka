@@ -77,7 +77,7 @@
   - 実行中のバルーンの切替・シェルの切替・記憶の読み書き・インストールのファイルが差分 0 行であることを `git diff` で確かめる
   - 完了の状態: テストが全部緑で、範囲外のファイルの差分が 0 行であることを記録した
   - _Requirements: 3.9, 4.2, 4.3, 5.7, 1.13_
-- [ ] 6.2 実機で検体 `claudia` の起動を確かめる
+- [x] 6.2 実機で検体 `claudia` の起動を確かめる
   - 準備: `areka.exe` をビルドする。`target\` の下の短い絶対パスに根を作り、`vendors/sample_ghost/` の `claudia.nar` から `ghost\claudia`・`balloon\claudia`・`balloon\claudia_vertical` を、`StayseeBalloon.nar` から `balloon\StayseeBalloon` を展開して並べる。`AREKA_ROOT` にその根、`AREKA_PROFILE_DIR` に同じ `target\` の下の空のフォルダ、`AREKA_APP_SMOKE_EXIT_MS` に有界の自動終了の時間を渡し、判定はログの検索で行う
   - A: 記憶が無いことを確かめて起動 → 「バルーンを決めました」が `route=Companion` で `\balloon\claudia`、画面のバルーンが `claudia`。B: そのまま起動し直す → `route=Memory`。C: 記憶を消し descript に `balloon` を 1 行足して起動 → `route=Descript` で `\balloon\claudia_vertical`、記憶を消し値を在りもしない名前に変えて起動 → `descript_balloon_not_found`（`key=balloon`）1 件で `route=Companion`
   - 完了の状態: A〜C のログの行と画面の確認結果が記録されている
@@ -91,3 +91,4 @@
 - 3: `temp_path_kit::TempPath::new` は OS の一時フォルダに作るので要件 7.7 に反する。共有の `TempPath::under_target`（ワークツリーの `target\test-roots`）を足し、本 spec の新しいテスト（1.1・1.2・3）を移した。タスク 4 の根もこれを使う。設計の Testing Strategy の記述も直した。引数の腕が読まないこと（3.2）は、ゴーストのファイルを共有なしで握って warn 0 件で固定する
 - 5.2: origin/main（`element-base-method`・`mcp-get-status`）を取り込み、roadmap-draft の数を数え直した（44 行・束を持つ行 30・`none = true` 14）。steering の roadmap は 81 本（優先 44）。完了時の棚卸へ: 台帳の `balloon`・`default.balloon.path` の「束: 既定で着せる吹き出し（読む経路が無い）」の小分類「読む経路が無い」が古い（本 spec は触らない約束）。`priority` の付け直しと一緒に coverage の棚卸で扱う
 - 6.1: 全体テスト（-j 2・1457 秒）は 10344 件緑・赤 2 件。赤は検体のパスの綴りの番人（`log-capture-kit` の `sample_path_guard_test`）で、`boot_resolve_balloon_tests.rs` の区切りの場面が検体名 `claudia` で `"x/claudia"`・`"claudia/"` と書いていたため。値を `mine` 系に替えて緑。テストの値に検体名でパスを組まない
+- 6.2: 実機（2026-10-06・debug）で A `route=Companion`（`\balloon\claudia`）・B `route=Memory`・C1 `route=Descript`（`balloon,クローディア（頭上）`＝`name` で `\balloon\claudia_vertical`）・C2 `descript_balloon_not_found key=balloon` 1 件の後 `route=Companion`。画面は B が横の飾り枠、C1 が頭上の尾が下向きのバルーン。罠: 全体テストの後は `target\debug\shiori-host32-helper.exe` が x64 版に上書きされていて claudia の 32bit の yaya.dll が 0x800700C1 で読めない→areka.exe と i686 の helper を同じフォルダに並べて起動した。完了時の棚卸へ: debug 版の areka で MCP の `dump_balloon` が呼び出し側の時間切れ（"task cancelled"）で答えを返さなかった（原因は未調査）
