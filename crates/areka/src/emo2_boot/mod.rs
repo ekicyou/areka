@@ -165,10 +165,11 @@ pub enum BootWiringError {
         source: std::io::Error,
     },
 
-    /// `surfaces.txt` は読めたが surface を 1 つも産まなかった（bake/表示対象なし）。
-    #[error("surfaces.txt が surface 定義を産まなかった: {path}")]
+    /// シェルに面が 1 つも無い——`surfaces.txt` が無いか面を定義せず、面の画像も無い
+    /// （bake/表示対象なし・spec: areka-P0-self-alpha-declaration 要件 6.5）。
+    #[error("シェルに面が 1 つも無い: {path}")]
     ShellEmpty {
-        /// surface 定義が空だった `surfaces.txt` のパス。
+        /// シェルのフォルダ（`surfaces.txt` が無い場合があるため、そのファイルではない）。
         path: PathBuf,
     },
 
@@ -197,8 +198,8 @@ pub enum BootWiringError {
 /// - [`ShellLoadError::List`]（シェルのフォルダの一覧が取れない）→ [`BootWiringError::ShellRead`]。
 ///   `path` はシェルのフォルダそのものになる（読めなかった対象がファイルではなくフォルダ）。
 /// - [`ShellLoadError::Read`]（`surfaces.txt` が読めない）→ [`BootWiringError::ShellRead`]。
-/// - [`ShellLoadError::Empty`]（`surfaces.txt` が surface を 1 つも産まない）
-///   → [`BootWiringError::ShellEmpty`]。
+/// - [`ShellLoadError::Empty`]（シェルに面が 1 つも無い）→ [`BootWiringError::ShellEmpty`]。
+///   `path` はシェルのフォルダのまま運ぶ。
 impl From<ShellLoadError> for BootWiringError {
     fn from(error: ShellLoadError) -> Self {
         match error {

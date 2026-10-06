@@ -57,7 +57,7 @@
   - _Boundary: ShellTarget 入口_
 
 - [ ] 3. 呼び手への配線と見た目の回帰
-- [ ] 3.1 起動の配線の文言を直し、呼び手のクレートの検体が新しい決まりで緑であることを確かめる
+- [x] 3.1 起動の配線の文言を直し、呼び手のクレートの検体が新しい決まりで緑であることを確かめる
   - 起動の配線の「シェルが空」の失敗の文言と doc を「シェルに面が 1 つも無い」に直す（写し方は変えない）
   - areka クレートの一時フォルダの検体（えも？？ の写し）が宣言 `1` を持ち、宣言なしの決まりで赤くならないことを確かめる
   - `cargo test -p areka` と `cargo test -p areka-emo-text` が緑で、ワークスペース全体がビルドできる
@@ -94,3 +94,7 @@
   - 記録と見た目の確かめの結果を残し、areka を自分が起こしたものだけ終了させた
   - _Depends: 3.2, 4.1_
   - _Requirements: 2.3, 2.4, 6.1, 7.1, 7.3, 8.1, 8.2, 8.3_
+
+## Implementation Notes
+- 3.1: `cargo test -p areka` の結合テスト（`mcp_get_log_real_run`・`smoke_boot_loop_exit`）は、このワークツリーの `target\` に i686 の `shiori-host32-helper` と `shiori-host32-testdll-loadu` が無いと落ちる。先に `cargo build -p shiori-host32-helper -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` を回す。
+- 3.1: `crates/areka/src/placement/measure_tests.rs` は 993 行で、1,000 行の番人まで残り 7 行。足すテストは兄弟ファイルへ。
