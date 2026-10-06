@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use areka_parsers::sakura::JUMP_TAG_CARRIER;
 use temp_path_kit::TempPath;
 
-use super::super::destination::{Destination, classify};
+use super::super::destination::{Destination, Target, classify};
 use super::super::opener_test_support::{FakeOs, build_ghost_root};
 use super::super::os_port::{OsCall, Verb};
 use super::{OpenContext, OpenFailure, expand_env, resolve};
@@ -247,4 +247,123 @@ fn open_mailer_adds_mailto_once() {
         f.resolve(&dest("open", &["mailer", "MailTo:a@example.com"]), &os),
         Ok(want(Verb::Open, "MailTo:a@example.com", None, None))
     );
+}
+
+/// 目録で引く用の根（ゴースト `g`＝`G`・シェル 2 つ・バルーン 2 つ）と、その文脈。
+///
+/// シェル `a` の name は `b`、シェル `b` の name は `Other`＝名前が先に当たることを見る。
+fn named_fixture() -> (TempPath, OpenContext) {
+    let tmp = TempPath::new("open-ext-named");
+    let root = build_ghost_root(
+        &tmp,
+        ("g", "G"),
+        &[("a", "b"), ("b", "Other")],
+        &[("ba", "bb"), ("bb", "OtherB")],
+    );
+    let ctx = OpenContext {
+        ghost: "G".to_owned(),
+        ghost_dir: root.ghost_dir("g"),
+        baseware: Some(root),
+    };
+    (tmp, ctx)
+}
+
+fn named(kind: &str, name: &str) -> Destination {
+    dest("open", &["explorer", kind, name])
+}
+
+#[test]
+fn named_ghost_by_name_then_folder() {
+    let (_tmp, ctx) = named_fixture();
+    let os = FakeOs::default();
+    let dir = ctx.ghost_dir.clone();
+    assert_eq!(
+        resolve(&named("ghost", "G"), &ctx, &os),
+        Ok(want(Verb::Open, &dir, None, None))
+    );
+    assert_eq!(
+        resolve(&named("ghost", "g"), &ctx, &os),
+        Ok(want(Verb::Open, &dir, None, None))
+    );
+}
+
+#[test]
+fn named_shell_by_name_then_folder() {
+    let (_tmp, ctx) = named_fixture();
+    let os = FakeOs::default();
+    let shell = |f: &str| ctx.ghost_dir.join("shell").join(f);
+    // name の `b` はフォルダ `b` より先にシェル `a` に当たる。
+    assert_eq!(
+        resolve(&named("shell", "b"), &ctx, &os),
+        Ok(want(Verb::Open, shell("a"), None, None))
+    );
+    assert_eq!(
+        resolve(&named("shell", "a"), &ctx, &os),
+        Ok(want(Verb::Open, shell("a"), None, None))
+    );
+    assert_eq!(
+        resolve(&named("shell", "Other"), &ctx, &os),
+        Ok(want(Verb::Open, shell("b"), None, None))
+    );
+}
+
+#[test]
+fn named_balloon_by_name_then_folder() {
+    let (_tmp, ctx) = named_fixture();
+    let os = FakeOs::default();
+    let root = ctx.baseware.clone().unwrap();
+    assert_eq!(
+        resolve(&named("balloon", "bb"), &ctx, &os),
+        Ok(want(Verb::Open, root.balloon_dir("ba"), None, None))
+    );
+    assert_eq!(
+        resolve(&named("balloon", "ba"), &ctx, &os),
+        Ok(want(Verb::Open, root.balloon_dir("ba"), None, None))
+    );
+    assert_eq!(
+        resolve(&named("balloon", "OtherB"), &ctx, &os),
+        Ok(want(Verb::Open, root.balloon_dir("bb"), None, None))
+    );
+}
+
+#[test]
+fn named_miss_case_and_special_names_are_no_match() {
+    let (_tmp, ctx) = named_fixture();
+    let os = FakeOs::default();
+    // 大文字小文字を区別する・特別な名前は解かない。
+    for (kind, name) in [
+        ("ghost", "nope"),
+        ("ghost", "random"),
+        ("shell", "OTHER"),
+        ("shell", "random"),
+        ("balloon", "otherb"),
+        ("balloon", "lastinstalled"),
+    ] {
+        let dest = named(kind, name);
+        let Target::NamedFolder { store, .. } = dest.target else {
+            panic!("目録の行き先");
+        };
+        assert_eq!(
+            resolve(&dest, &ctx, &os),
+            Err(OpenFailure::NoMatch {
+                store,
+                name: name.to_owned()
+            }),
+            "{kind},{name}"
+        );
+    }
+}
+
+#[test]
+fn named_without_baseware_root_fails() {
+    let (_tmp, mut ctx) = named_fixture();
+    ctx.baseware = None;
+    let os = FakeOs::default();
+    for (kind, name) in [("ghost", "G"), ("shell", "a"), ("balloon", "ba")] {
+        assert_eq!(
+            resolve(&named(kind, name), &ctx, &os),
+            Err(OpenFailure::NoBasewareRoot),
+            "{kind}"
+        );
+    }
 }

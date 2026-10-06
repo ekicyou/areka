@@ -1,5 +1,5 @@
 //! 開く処理の 1 か所（areka-P0-open-external-tags task 3.1・要件 1.1〜1.4・2.1〜2.4・3.1・
-//! 4.1〜4.3・5.1・5.3・6.1・6.2・10.2）。
+//! 4.1〜4.6・4.8・5.1・5.3・6.1・6.2・10.2・task 3.2）。
 //!
 //! 行き先（[`Destination`]）と文脈（[`OpenContext`]）から OS への 1 回分の呼び出し（[`OsCall`]）を
 //! 作る [`resolve`] を置く。fs は読むが OS は呼ばない（呼ぶのは開く専用のスレッドの実行だけ）。
@@ -9,6 +9,10 @@ use std::path::{Path, PathBuf};
 
 use super::destination::{Destination, Store, Target};
 use super::os_port::{OsCall, OsPort, Verb};
+use crate::emo2_boot::ghost_switch::{GhostSpec, resolve_switch_target};
+use crate::emo2_boot::shell_balloon_resolve::{
+    SkinCandidate, balloon_candidates, shell_candidates,
+};
 
 /// 開く文脈（UI スレッドで World から写す）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +32,8 @@ pub(crate) enum OpenFailure {
     NotFound(PathBuf),
     /// `\![open,explorer,種類,名前]` の名前に当たらない。
     NoMatch { store: Store, name: String },
+    /// 目録を引く根（ベースウェアの根）が無い。
+    NoBasewareRoot,
 }
 
 /// `mailto:` の前置き（大文字小文字を区別しない）。
@@ -83,12 +89,45 @@ pub(crate) fn resolve(
             let path = existing(ctx, s)?;
             Ok(call(Verb::Edit, path, None, None))
         }
-        // 目録で名前を引くのは task 3.2。それまでは当たらない扱い。
-        Target::NamedFolder { store, name } => Err(OpenFailure::NoMatch {
-            store: *store,
-            name: name.clone(),
-        }),
+        Target::NamedFolder { store, name } => {
+            let dir = named_folder(*store, name, ctx)?;
+            if dir.is_dir() {
+                Ok(call(Verb::Open, dir, None, None))
+            } else {
+                Err(OpenFailure::NotFound(dir))
+            }
+        }
     }
+}
+
+/// `\![open,explorer,種類,名前]` の名前を目録で引く（要件 4.4〜4.6）。
+///
+/// ゴーストは `\![change,ghost,名前]` と同じ引き方、シェル・バルーンは descript の `name` →
+/// フォルダ名の順・大文字小文字を区別して引く。`random` などの特別な名前は解かない（名指しだけ）。
+fn named_folder(store: Store, name: &str, ctx: &OpenContext) -> Result<PathBuf, OpenFailure> {
+    let root = ctx.baseware.as_ref().ok_or(OpenFailure::NoBasewareRoot)?;
+    let hit = match store {
+        Store::Ghost => resolve_switch_target(
+            &areka_ghost::catalog::list_ghosts(root),
+            &GhostSpec::Name(name.to_owned()),
+        )
+        .map(|t| t.dir),
+        Store::Balloon => skin_by_name(balloon_candidates(root), name),
+        Store::Shell => skin_by_name(shell_candidates(&ctx.ghost_dir), name),
+    };
+    hit.ok_or_else(|| OpenFailure::NoMatch {
+        store,
+        name: name.to_owned(),
+    })
+}
+
+/// 候補から descript の `name` → フォルダ名の順で 1 つ引く。
+fn skin_by_name(candidates: Vec<SkinCandidate>, want: &str) -> Option<PathBuf> {
+    candidates
+        .iter()
+        .find(|c| c.name.as_deref() == Some(want))
+        .or_else(|| candidates.iter().find(|c| c.folder == want))
+        .map(|c| c.dir.clone())
 }
 
 /// 1 回分の呼び出しを組む。
