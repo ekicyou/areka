@@ -51,13 +51,6 @@ pub mod presenter;
 pub mod scale;
 /// 透過の宣言の読み（`read_use_self_alpha`）。descript.txt の本文から `use_self_alpha` 系の値を読み、
 /// 採った扱いを記録する。シェルとバルーンの入口が共用する `pub(crate)` 内部モジュール。
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "シェル・バルーンの入口への結線は task 2.2／2.3（それまでテストだけが呼ぶ）"
-    )
-)]
 pub(crate) mod self_alpha;
 /// シェルの読み込みの権威（`shell_target`）。シェルのフォルダから「焼いた絵＋面の表を必要な数だけ
 /// 組める値」（`ShellTarget`）を作る唯一の入口（`load_shell_target`）と、fs を触らない核
