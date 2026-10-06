@@ -177,7 +177,7 @@
   - _Depends: 3.5_
   - _Requirements: 1.6, 2.9_
 
-- [ ] 5.3 届けの相から、窓の見える・見えないと出番の世代を seriko へ知らせる
+- [x] 5.3 届けの相から、窓の見える・見えないと出番の世代を seriko へ知らせる
   - `run_status_report_phase` の中、文字の層を借りる手前で、装着済みのバルーンのスコープ（昇順）ごとに `target_visible`・`current_surface_id`・`stage_generation` を読み、前に知らせた組と違うときだけ `send_stage` を呼ぶ
   - `BalloonStatusLedger` に「スコープ → 前に知らせた組」の欄を足す。置き場のゴーストが居ないフレームは台帳を変えずに見送る
   - 兄弟の `status_report_stage_tests.rs` で: 前と同じなら送らない／文字の層を借りられないフレームでも送る／開いたままでも世代が進んでいれば送る（同じフレームの中の隠して出し直し）／ゴーストが居ないフレームは台帳が変わらない
@@ -251,3 +251,4 @@
 - 4.2: 預かる条件は 5 つ（外から所有・見えていない・`last_show` が在り面の番号と着せ替えが同じ・コマが `last_show` と違う）。比べ先は `current_surface_id` でなく `last_show`＝本物の `Hide` の直後の 1 件目も預かる（`current_surface_id`・`apply_hide` は変えない＝預かっている間は `None` のまま・5.3 で覚えておく）。`show_target` が回数つきの欄を外すのは見えていなかったときだけ（要件 2.8）。外す関数は `visibility.rs` の `strip_finite_films`＝4.3 も同じ関数を使う
 - 4.3: `PresentCommand` は `#[non_exhaustive]`＝`crates/areka` に足した腕は 0（`spine_display_tests.rs`・`spine_conformance_support.rs` は知らない種類を「その他」に振る＝5.1 で `StageAck` が流れたら確かめる）。外しは預かる判定の前。`presenter_film_tests.rs` の補助 `shown()` は出した後に今の世代の `StageAck` を送る（追い付いた状態）。5.1・5.3 の結線までは本番で合図を送る者がいない＝回数つきは経過 0 で止まって見える（途中の状態）
 - 5.1: actor の `on_stage`＝世代が新しければ `StageAck` → `LoopRuntime::drop_finite(scope, Balloon)` → `note_stage`（世代は max で覚える・初めは 0）→ `refresh` → 発行。閉じた知らせの回数つきの捨ては `refresh` の閉じた窓の決まりに任せる。`send_stage` は送るときに時計を読む。5.3 への申し送り: `spine_conformance_support.rs` の `project_display` は `StageAck` を `DisplayProjection::Unknown` として列に残す＝本番の知らせがつながるとバルーンを含む spine の照合が赤になる→射影の腕を足すか期待値を合わせる
+- 5.3: 窓の知らせは `report_stages`（文字の層を借りる手前・昇順・組が違うときだけ送り、送った後に台帳へ書く）。隠れているときの面は今の番号→前に送った面→0（0 で代えると閉じている間の `ShowBalloon` が `last_show` とずれて 4.2 の預かりを外れる）。5.1 の申し送りは不要と確かめた: `send_stage` を呼ぶのは `status_report.rs` だけで、spine の檻は `emo2_frame_system` を回さない＝`project_display` に `StageAck` は届かない（`areka` の bin 全件 2681 緑）
