@@ -131,3 +131,4 @@
 - 6.2 実機: `HKCR\Unknown\shell\Open`（OpenWith）があると関連付けの無い拡張子でも ShellExecuteExW が成功して「アプリの選択」の窓が出た。OS を呼ぶ前に `AssocQueryStringW`（`ASSOCF_INIT_IGNOREUNKNOWN`・COMMAND か DELEGATEEXECUTE）で動詞を引き、無ければ 1155。`.lnk` は照会の外。`.cpl`（動詞 `cplopen` だけ）は 1155 で断られる＝要望が出たら既定の動詞で引き直す。
 - 完了の棚卸へ回す（validate-impl 10-06）: ⑴ `.cpl` など既定の動詞が open でない種類が 1155 で断られる（要望が出たら既定の動詞で引き直す） ⑵ ドライブ文字の無い根付きパス（`\foo`・`file:////foo`）が `C:\foo` に解ける＝裁量として未登記 ⑶ `link_destinations` の dead_code の許可は `link-context-copy`・`balloon-link-hover` が呼び手になったら外す ⑷ roadmap の `popup-menu-residue` の行の「World 借用中の `ShellExecuteW`」は本 spec で解消＝完了時に外す ⑸ `os_port_tests.rs` のレジストリを読むテスト（`.txt` の edit）は機械の登録に依る。
 - 棚卸（areka棚卸の指示・10-06）: ⑴⑵ は COMPAT §8 に裁量として 2 行登記、⑶ は link-context-copy・balloon-link-hover の brief に申し送り、⑸ はレジストリを読むテストを外して判定の純関数だけを常時のテストにした（`has_verb` は実機 R3 で確認済み）、⑷ は完了の roadmap 更新で消す。
+- 完了の冒頭の棚卸（10-06）: その場で解決 4 件（⑴⑵ COMPAT §8 の裁量 2 行・⑶ 後続 brief 2 本への申し送り・⑸ 機械に依るテストを外す）、roadmap の更新で消すもの 1 件（⑷）、起票 0 件。
