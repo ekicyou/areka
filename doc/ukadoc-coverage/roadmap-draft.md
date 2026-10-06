@@ -288,6 +288,19 @@ spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 
 束を持つ行が **29 行**・`none = true` の行が **14 行**のまま変わらない（3 つとも数え直した値で、引き算では
 出していない）。`[briefs].count` は 43 のまま、`snapshot_on` は **2026-10-05** のままにした。
 
+**2026-10-06 の追加**: `areka-P0-open-external-tags` の行を 1 行足した。理由は上の ⑴ ⑵ ⑶ と同じで、この spec が
+台帳 `ledger/sakura-script.toml` の `\j[ID]`・`\![open,file,ファイル名]`・`\![open,browser,パラメータ]`・
+`\![open,explorer,ファイル]`・`\![open,editor,ファイル,表示行]`・`\![open,mailer,パラメータ]` の 6 項目を実装済み
+（`\j` と `explorer` は縮退）へ移し、自分の宛先として登記したからである（6 項目はそれまで宛先が空だったので、宛先を
+移された spec は無い）。6 項目は `linkage.md` の束「外部アプリ」に属するので、束の欄には「外部アプリ」を書き、
+段階 E の表の「外部アプリ」の行の「依存する既存 spec」を **0 本**からこの spec の件数付きへ替えた。「外部アプリ」の
+束の構成は **72 件**（`linkage.md` の `members` を数えた）で、この spec の 6 件は ⑴（全数）にも ⑵（過半）にも
+当たらないので、候補 spec 名の案の欄は変えていない。足した行の中身は `stage = "E"`・`bundle = "外部アプリ"`・
+`owner_count = 6`・`wave = "C4-⑮"` で、段階は「外部アプリ」が順位表で置かれている段階の写し、ウェーブは正本の
+ロードマップの写しである。行数は **44 行**（`[[spec]]` の塊を数えた）で、うち束を持つ行が **30 行**・
+`none = true` の行が **14 行**である（3 つとも数え直した値で、引き算では出していない）。`[briefs].count` はこの
+44 に合わせ、`snapshot_on` は行の集合に最後に手を入れた日として **2026-10-06** にした。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -321,8 +334,8 @@ spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 
 
 ```toml
 [briefs]
-count = 43
-snapshot_on = "2026-10-05"
+count = 44
+snapshot_on = "2026-10-06"
 ```
 
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
@@ -665,6 +678,13 @@ stage = "A"
 bundle = "絵の重ね方"
 owner_count = 2
 wave = "シェルの element の列（element-base-method の後）"
+
+[[spec]]
+name = "areka-P0-open-external-tags"
+stage = "E"
+bundle = "外部アプリ"
+owner_count = 6
+wave = "C4-⑮"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -767,7 +787,7 @@ spec 台帳で、この表はそれを写した写真である。
 
 | 順位 | 束 | 候補 spec 名の案 | 依存する既存 spec | 波の案 |
 | ---: | --- | --- | --- | --- |
-| 1 | 外部アプリ | `areka-P0-external-app-bridge` | **0 本** | 第 6 波 |
+| 1 | 外部アプリ | `areka-P0-external-app-bridge` | `areka-P0-open-external-tags`（C4-⑮・6 件） | 第 6 波 |
 | 2 | 開発者機能 | `areka-P0-developer-tools` | **0 本** | 第 6 波 |
 | 3 | ヘッドライン | `areka-P0-headline-host` | `areka-P0-property-catalog-lists`（W16・6 件） | 第 6 波 |
 | 4 | トランスレータ | `areka-P0-translator-canon`（残余） | `areka-P0-makoto-dll-host`（W16・4 件）／`areka-P0-translate-pipeline`（W15・2 件） | 第 6 波 |
