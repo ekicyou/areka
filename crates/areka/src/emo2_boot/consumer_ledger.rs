@@ -162,7 +162,7 @@ pub enum CommandConsumer {
     /// 決まらず、第 1 引数が `balloontimeout` の `set` の出現だけを担当する（時間切れまでの待ち時間の
     /// 差し替え・areka-P0-balloon-lifecycle-events 要件 8.1・9.10）。
     ///
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_!_set%2Cballoontimeout%2C%E6%99%82%E9%96%93_
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1
     LifecycleSink,
 }
 

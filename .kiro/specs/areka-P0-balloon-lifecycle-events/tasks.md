@@ -115,8 +115,8 @@
   - 完了の状態: 通しの檻が緑で、知らせに受け口が受けた番号が載っている。
   - _Requirements: 2.1, 5.1, 8.1, 8.2, 9.1_
 
-- [ ] 6. 互換対応表と網羅の台帳
-- [ ] 6.1 記録を実際の振る舞いに合わせ、生成物を作り直す
+- [x] 6. 互換対応表と網羅の台帳
+- [x] 6.1 記録を実際の振る舞いに合わせ、生成物を作り直す
   - 互換対応表の沈黙ルール対応表のうち、3 つのイベントの発火・中断で終わったときの時間切れの起点・既定の待ち時間の成立条件の一文・バルーンの中断の操作（完了 spec の約束の改め）・`balloontimeout` の寿命の側の行と、コンパイルの側の時間指令の行の追跡先を、設計の「文書・台帳」の節どおりに書き直す（根拠の区分・Reference2 の縮退と追跡先 `areka-P0-balloon-break-position`・残る行き違いの 2 つを含む）。
   - 網羅の台帳の 3 行（`OnBalloonClose`・`OnBalloonTimeout` は実装済み、`OnBalloonBreak` は縮退）と冒頭の群の説明、`balloontimeout` の行を、持ち主を本 spec へ直して書き直す。
   - 生成物は道具で作り直し、手で直さない。`areka-P0-sakura-time-directives` の brief に「`balloontimeout` は本 spec が持つ」の相互登記が残っていることを確かめる。
@@ -149,3 +149,5 @@
 - 4.1: `BalloonLifecycleNotice` の言及が doc/COMPAT_ARCHITECTURE.md・台帳 shiori.toml・briefing に残っている（6.1 で書き直す）。
 - 4.2: テストの補助 `Frame::ended_at(end)` が占有終端とトークの終わりを一緒に積む（`Frame::talk_started()` は `TalkId(1)` つき）。新しい檻の置き場は `balloon_visibility_talk_end_tests.rs`（4.3 で広げる）。4.3 へ回したもの: 相の側のログの水準と欄の檻（`StoppedAt` の info と `stopped_at` 欄・`StopTimeMissing` の warn・`balloon_timeout_notice_failed`／`no_talk_id` の warn）。
 - 5.1: 相の檻は本物の `decide` と `notify_timeout` を相の順に呼ぶだけで、`run_balloon_visibility_phase` の中の呼び出しの 1 行は通らない（headless の表示層は可視にならず、時間切れまで届かない）。5.2 の通しの檻は、本物の相を可視のバルーンで回し、kanade の受け端に番号つきの知らせが 1 通届くことまで主張する（可視を作れる前例は実 GPU の `frame_visibility_integration_tests.rs` の `seat_ghost`）。
+- 4.4 の取りこぼし（6.1 で発見・直した）: コードの ukadoc の注記の URL は、網羅の台帳のカタログの形（`#_5c_21_5b…:1`）で書く。違う形だと `ukadoc-survey check` が `SourceUrlNotInCatalog` で赤になる。ukadoc の注記を足したら `cargo test -p ukadoc-survey` も回す。design.md・requirements.md・research.md にも同じカタログに無い形の URL が残っている（spec 文書は検査の外）。
+- 6.1（範囲外・完了の棚卸で扱う）: `.kiro/specs/areka-P0-balloon-canon-residue/brief.md` の項目 8 が、消えた `BalloonLifecycleNotice` を今もあるものとして書いている。

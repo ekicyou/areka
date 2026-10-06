@@ -401,7 +401,7 @@
 | `set,balloonmarker` | 1 | 消費されない | — |
 | `set,balloonnum` | 1 | 消費されない | — |
 | `set,balloonoffset` | 1 | 消費されない | — |
-| `set,balloontimeout` | 1 | 消費されない | — |
+| `set,balloontimeout` | 1 | 消費される（2026-10-06 に `areka-P0-balloon-lifecycle-events` が実装。compile は転記するだけで、再生時にバルーンの寿命の受け口が第 1 引数 `balloontimeout` の出現だけを拾い、そのトークの時間切れまでの待ち時間を差し替える。調査時点は消費されない） | `BalloonLifecycleSink::emit` |
 | `set,balloonwait` | 1 | 消費されない | — |
 | `set,choicetimeout` | 1 | compile が読む（2026-10-03 に `areka-P0-choice-timeout-directive` が実装。運び役への転記はそのままで、受け手はいないが、compile が転記の後に時間の欄を読み、選択待ちの区切りへ秒で入れる。調査時点は消費されない） | `parse_choice_timeout` |
 | `set,otherghosttalk` | 1 | 消費されない | — |

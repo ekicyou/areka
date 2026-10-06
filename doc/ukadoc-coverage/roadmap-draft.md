@@ -288,6 +288,20 @@ spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 
 束を持つ行が **29 行**・`none = true` の行が **14 行**のまま変わらない（3 つとも数え直した値で、引き算では
 出していない）。`[briefs].count` は 43 のまま、`snapshot_on` は **2026-10-05** のままにした。
 
+**2026-10-06 の付け替え**: `areka-P0-balloon-lifecycle-events` の行を `none = true` から束を持つ行に替えた。
+この spec が `OnBalloonClose`・`OnBalloonTimeout`・`OnBalloonBreak` を送るようにし、`\![set,balloontimeout,時間]` を
+読むようにして、台帳 `ledger/shiori.toml` の 3 項目と `ledger/sakura-script.toml` の 1 項目を実装済み 3 件・縮退 1 件
+（`OnBalloonBreak`）へ移し、宛先を分割元の `areka-P0-balloon-canon-residue` からこの spec へ移したからである
+（是正候補の節の「表示寿命 5 件」のうち 4 件。残る `\x[noclear]` は分割元の宛先のまま）。このため
+`areka-P0-balloon-canon-residue` の `owner_count` は 26 から 22 へ、この spec は 0 から 4 へ変わった（台帳 4 本の
+宛先の欄をこの名前で引いて数え直した値）。4 項目は `linkage.md` の束「会話」に属するので、束の欄には「会話」を書き、
+段階 A の表と節の「会話」の行で `areka-P0-balloon-canon-residue` の件数を 5 件から 1 件へ直してこの spec を件数付きで
+足した。「会話」の束の構成は **46 件**で、この spec の 4 件は ⑴（全数）にも ⑵（過半）にも当たらないので、候補 spec
+名の案の欄は変えていない。替えた行の中身は `stage = "A"`・`bundle = "会話"`・`owner_count = 4`・`wave = "C4-⑩"` で、
+段階は「会話」が順位表で置かれている段階の写し、ウェーブは正本のロードマップの写しである。行数は **43 行**のまま、
+束を持つ行が **30 行**・`none = true` の行が **13 行**になった（3 つとも数え直した値で、引き算では出していない）。
+`[briefs].count` は 43 のまま、`snapshot_on` は **2026-10-06** にした。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -322,7 +336,7 @@ spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 
 ```toml
 [briefs]
 count = 43
-snapshot_on = "2026-10-05"
+snapshot_on = "2026-10-06"
 ```
 
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
@@ -404,7 +418,7 @@ wave = "W13"
 name = "areka-P0-balloon-canon-residue"
 stage = "A"
 bundle = "バルーンの付属画像"
-owner_count = 26
+owner_count = 22
 wave = "W14"
 
 [[spec]]
@@ -507,10 +521,10 @@ wave = "W15"
 
 [[spec]]
 name = "areka-P0-balloon-lifecycle-events"
-none = true
-reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。分割 ⑵ で受け持つ表示寿命 5 件は分割元の areka-P0-balloon-canon-residue の宛先のままである。是正候補の節にこの spec の行がある"
-owner_count = 0
-wave = "W17"
+stage = "A"
+bundle = "会話"
+owner_count = 4
+wave = "C4-⑩"
 
 [[spec]]
 name = "areka-P0-sylphya-set-ledger"
@@ -677,7 +691,7 @@ spec 台帳で、この表はそれを写した写真である。
 
 | 順位 | 束 | 候補 spec 名の案 | 依存する既存 spec | 波の案 |
 | ---: | --- | --- | --- | --- |
-| 1 | 会話 | `areka-P0-talk-script-canon` | `areka-P0-balloon-canon-residue`（W14・5 件）／`areka-P0-sakura-time-directives`（W16・4 件）／`areka-P0-anchor-tag-canon`（W17・1 件）／`areka-P0-sakura-time-critical`（C4 の候補・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件）／`areka-P0-choice-timeout-directive`（C1-②・1 件） | 第 1 波（先頭ウェーブ） |
+| 1 | 会話 | `areka-P0-talk-script-canon` | `areka-P0-balloon-lifecycle-events`（C4-⑩・4 件）／`areka-P0-sakura-time-directives`（W16・4 件）／`areka-P0-balloon-canon-residue`（W14・1 件）／`areka-P0-anchor-tag-canon`（W17・1 件）／`areka-P0-sakura-time-critical`（C4 の候補・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件）／`areka-P0-choice-timeout-directive`（C1-②・1 件） | 第 1 波（先頭ウェーブ） |
 | 2 | 窓の配置と重なり | `areka-P0-window-placement-canon` | `areka-P0-currentghost-property-tree`（W15・16 件）／`areka-P0-surfaces-basepos`（W13 任意／W14・2 件）／`areka-P0-sakura-time-directives`（W16・2 件）／`areka-P0-zorder-property`（W15・1 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件）／`areka-P0-sylphya-set-ledger`（完了・1 件） | 第 1 波（先頭ウェーブ） |
 | 3 | 名前の記憶 | `areka-P0-user-name-memory` | `areka-P0-currentghost-property-tree`（W15・1 件）／`areka-P0-package-mount`（完了・2 件）／`areka-P0-sylphya`（完了・2 件）／`areka-P0-sakura-dialogue-tags`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件） | 第 1 波（先頭ウェーブ） |
 | 4 | 起動と挨拶 | `areka-P0-boot-greeting-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-package-mount`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・3 件） | 第 1 波（先頭ウェーブ） |
@@ -805,10 +819,10 @@ spec 台帳で、この表はそれを写した写真である。
 **3 行の要約**
 
 - 問題: 台本を読み上げてバルーンへ文字を送る中核でありながら、送りと待ちと改行と選択の待ちに関わる正典の語彙の半分を超える分が未対応か語彙だけで、雛形が書く綴りに当たると黙って落ちる。
-- 現状: 構成 46 件の状態は実装済み 16・未対応 18・語彙のみ 10・縮退 2 で、`briefing.md` 7-7 が数えた「一般化で壊れる」75 件のうち 14 件がこの束にある。
+- 現状: 構成 46 件の状態は実装済み 20・未対応 18・語彙のみ 5・縮退 3（2026-10-06 に台帳から数え直した）で、`briefing.md` 7-7 が数えた「一般化で壊れる」75 件のうち 14 件がこの束にある。
 - 何が変わるか: 里々製・ヤヤ製の雛形が書く会話の綴りが素通りせずに再生され、バルーンの寿命と選択の待ちが台本の指定で決まるようになる。
 
-**依存する既存 spec**: `areka-P0-sakura-time-directives`（W16・5 件）／`areka-P0-balloon-canon-residue`（W14・5 件）／`areka-P0-anchor-tag-canon`（W17・1 件）／`areka-P0-sakura-time-critical`（C4 の候補・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件）
+**依存する既存 spec**: `areka-P0-sakura-time-directives`（W16・4 件）／`areka-P0-balloon-lifecycle-events`（C4-⑩・4 件）／`areka-P0-balloon-canon-residue`（W14・1 件）／`areka-P0-anchor-tag-canon`（W17・1 件）／`areka-P0-sakura-time-critical`（C4 の候補・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件）／`areka-P0-choice-timeout-directive`（完了・1 件）
 
 **構成 id（全 46 件）**
 
@@ -1344,7 +1358,7 @@ SHIORI の調査から届いた是正候補のうち、写真に写っている 
 | `areka-P0-text-decoration-canon` | `ukadoc:descript_balloon:font.outline_2c0_2f1:1` | 書体の欄を「基底 13 キー」ではなく **14** と書く。この 1 件が数に入っていない。分割先の説明書も同じ 13 を写しているので、両方を直す |
 | `areka-P0-balloon-font-descript-keys` | 書体の欄 14 件（下に全列挙） | 2026-09-11 の分割 ⑶ でこの spec の持ち分になったが、台帳の宛先は分割元の `areka-P0-text-decoration-canon` のままである。宛先をこの spec へ移すか、分割元の説明書が範囲から外れたことを書く |
 | `areka-P0-text-align-shadow-canon` | 寄せ 2 件と影 3 件（下に全列挙） | 分割 ⑵ でこの spec の持ち分になったが、台帳の宛先は分割元の `areka-P0-text-decoration-canon` のままである。宛先をこの spec へ移す |
-| `areka-P0-balloon-lifecycle-events` | 表示寿命 5 件（下に全列挙） | 分割 ⑵ でこの spec の持ち分になったが、台帳の宛先は分割元の `areka-P0-balloon-canon-residue` のままである。宛先をこの spec へ移す。台帳の備考と受け渡し口の注記が名指ししている所有者名も同じ読み替えが要る |
+| `areka-P0-balloon-lifecycle-events` | 表示寿命 5 件（下に全列挙） | 分割 ⑵ でこの spec の持ち分になったが、台帳の宛先は分割元の `areka-P0-balloon-canon-residue` のままである。宛先をこの spec へ移す。台帳の備考と受け渡し口の注記が名指ししている所有者名も同じ読み替えが要る（**2026-10-06 解消**: 3 つのイベントと `\![set,balloontimeout,時間]` の 4 件は、この spec が送る・読むようにして宛先をこの spec へ移し、台帳の備考を書き直した。受け渡し口の型 `BalloonLifecycleNotice` は消した。残る `\x[noclear]` は `areka-P0-talk-fast-forward` が持つ仕事で、宛先は分割元のまま） |
 | `areka-P0-status-execution-states` | `ukadoc:list_sakura_script:_5c_21_5benter_2cnouserbreakmode_5d:1` | 説明書が書いている綴りが正典のどの項目にも当たらない。正典の綴りへ直す。**この 1 件は重い**——その項目の担当を主張している説明書自身が違う綴りを書いている |
 | `areka-P0-charset-canon` | 宛先の欄が空の 6 件（下に全列挙） | 説明書は範囲にも範囲外にもこの 6 件を挙げていない。範囲に入れるか対象外と書くかを決める。**これは誤りではなく沈黙なので、台帳の備考には何も書かれていない** |
 | `areka-P0-sylphya-set-ledger` | サウンドの語彙 18 件（下に全列挙） | 説明書はサウンドの語彙族の登記と台帳の宛先の記入を自分の範囲だと書いているが、台帳の宛先は 18 件とも `areka-P0-property-catalog-lists` である。どちらが持つかを決める（**2026-09-17 解消**: 記録用の語彙表 `SOUND_PROP_NAMES` は `areka-P0-sylphya-set-ledger`〔PR#151〕、値の導出と台帳の宛先は `areka-P0-property-catalog-lists` のまま。正本は `doc/COMPAT_ARCHITECTURE.md` §8 の【所有の相互参照】行） |

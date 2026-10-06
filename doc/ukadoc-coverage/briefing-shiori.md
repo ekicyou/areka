@@ -167,32 +167,38 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
 
 ---
 
-### 群 2a — M1 で意図的に発火させていないバルーンのイベント
+### 群 2a — バルーンの寿命を知らせるイベント
 
 - **対象**: `OnBalloonClose`・`OnBalloonTimeout`・`OnBalloonBreak`。
 - **件数**: 3
-- **状態**: `vocabulary-only`
+- **状態**: `OnBalloonClose`・`OnBalloonTimeout` は `implemented`、`OnBalloonBreak` は `degraded`
+  （Reference2 の中断位置を空で送る）。調査時点は 3 件とも `vocabulary-only`（M1 で意図的に
+  発火させていなかった）で、2026-10-06 に `areka-P0-balloon-lifecycle-events` が送るようにした。
 - **テーマ**: 気配り
 - **優先度**: `C2`（仮置き）
-- **判断の根拠の場所**: `crates/areka/src/emo2_boot/talk_lifecycle.rs` の
-  `BalloonLifecycleNotice`（予約してある受け渡し口の型）。転記元は
-  `doc/COMPAT_ARCHITECTURE.md` の沈黙ルール対応表の行「`OnBalloonClose` ／ `OnBalloonTimeout` ／
-  `OnBalloonBreak` の SHIORI 発火」。
+- **判断の根拠の場所**: 送る判断は `crates/areka-kanade/src/schedule/balloon_events.rs`
+  （`after_talk_done`・`on_idle_double_click`・`on_timeout_notice`）。組み立ては
+  `crates/areka-kanade/src/schedule/events.rs` の `on_balloon_break`・`on_balloon_close`・
+  `on_balloon_timeout` と、送出許可集合 `ALLOWED_EVENT_IDS` の 3 行（正典 URL の注記＝証拠）。
+  転記元は `doc/COMPAT_ARCHITECTURE.md` の沈黙ルール対応表の行「`OnBalloonClose` ／
+  `OnBalloonTimeout` ／ `OnBalloonBreak` の SHIORI 発火」。
 - **共通 `note`**:
 
   ```
-  壊れ方: 黙って壊れる。バルーンが閉じた・時間切れになった・中断されたことは SHIORI へ伝わらず、
-  それに応じて喋る辞書はその場面で呼ばれない。
-  ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。理由は群 2 と同じ（この名前を
-  組み立てる構築関数が無い。ゴーストが \q の選択肢 ID に書いた場合だけ選択起源の経路で送出され得る
-  のも群 2 と同じで、そのときも状態は変わらない）。加えてこの群には第 2 の理由がある——表示側から
-  会話進行側へ渡す受け皿の型は用意してあるが、それを作る側も受け取る側もまだ存在しないため、
-  バルーンの開閉を起点とする経路そのものが動かない。
-  縮退の転記元: doc/COMPAT_ARCHITECTURE.md の沈黙ルール対応表の行「OnBalloonClose ／
-  OnBalloonTimeout ／ OnBalloonBreak の SHIORI 発火」。そこには M1 は発火させず、語彙・Reference の
-  割り当て・受け渡し口の型だけを残すと記録されている。解禁の条件は M2 で互換の範囲を広げるときで、
-  追跡先は areka-P0-balloon-canon-residue。
-  根拠の場所: crates/areka/src/emo2_boot/talk_lifecycle.rs の BalloonLifecycleNotice。
+  送り方: 会話の進行の側（kanade）の 1 か所 schedule/balloon_events.rs が、定常の間だけ、1 つの
+  出来事につき 1 回だけ GET で送る。応答の台本は他のイベントと同じく OnTranslate を通してから
+  新しいトークとして再生する。起動の途中・終了の握手の待ち・切替の途中・終了の要求を保留して
+  いる間は送らず、後で送るために積んでもおかない。
+  ログ: 送ったときは info のログ balloon_event_sent（イベント名・きっかけ・OnBalloonBreak なら
+  スコープ番号）、送る場面に当たって送らなかったときは info のログ balloon_event_not_sent が理由
+  つきで 1 行出る。送出の直前に trace のログ shiori_request も出る。毎フレームの判定そのものは
+  記録しない。
+  転記元: doc/COMPAT_ARCHITECTURE.md の沈黙ルール対応表の行「OnBalloonClose ／
+  OnBalloonTimeout ／ OnBalloonBreak の SHIORI 発火」（送る場面・Reference の入れ方・正典が
+  沈黙する点の areka 裁量・残る行き違い 2 つ）。
+  根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS の 3 行と構築関数
+  on_balloon_break・on_balloon_close・on_balloon_timeout の正典 URL の注記。送る判断は
+  crates/areka-kanade/src/schedule/balloon_events.rs。
   ```
 
 ---
@@ -804,6 +810,8 @@ id は `ukadoc:list_shiori_event:<名前>:1` の形。名前は次の 248 件（
 
 ### 群 2a — バルーンの開閉を知らせない 3 件
 
+> **2026-10-06 の追記——この 3 件はもう送っている。** 仕様 `areka-P0-balloon-lifecycle-events` が、利用者の中断の後に定常へ戻ったときの `OnBalloonBreak`、時間切れでバルーンが隠れたときの `OnBalloonTimeout`、再生中のトークが無いときに読み終えたバルーンを左ダブルクリックで閉じたときの `OnBalloonClose` を送るようにし、台帳の 3 行を `OnBalloonClose`・`OnBalloonTimeout` は**実装済み**、`OnBalloonBreak` は**縮退**（Reference2 の中断位置を空で送る。追跡先は `areka-P0-balloon-break-position`）へ移して自分を担当として登記した。下の「今ある物」に書いた受け皿の型 `BalloonLifecycleNotice` は使われないまま消し、送る判断は `crates/areka-kanade/src/schedule/balloon_events.rs`、組み立ては `crates/areka-kanade/src/schedule/events.rs` の `on_balloon_break`・`on_balloon_close`・`on_balloon_timeout` に置いた。本文は調査時点の写しのまま残した。
+
 **利用者に何が起きるか**
 
 吹き出しが閉じた・読まれないまま時間切れになった・途中で中断された、という出来事が SHIORI に
@@ -812,7 +820,8 @@ id は `ukadoc:list_shiori_event:<名前>:1` の形。名前は次の 248 件（
 **その群を成立させる最小の基盤**
 
 - **今ある物**: 表示側から会話進行側へ渡すための受け皿の型が
-  `crates/areka/src/emo2_boot/talk_lifecycle.rs` に用意してある（`BalloonLifecycleNotice`）。
+  `crates/areka/src/emo2_boot/talk_lifecycle.rs` に用意してあった（`BalloonLifecycleNotice`。2026-10-06 に
+  消した——今の根拠の場所は上の追記）。
   イベントの名前と参照値の割り当ても決まっている。
 - **足りない物**: その受け皿を作る側（吹き出しの開閉を見て通知を起こす側）と、受け取って SHIORI へ
   渡す側の両方。どちらも存在しないので、経路そのものが動かない。
@@ -1413,7 +1422,7 @@ OnSecondChange, basewareversion
 | 群 | 章のある部 | 件数 | 状態 |
 |---|---|---|---|
 | 2 | 第 1 部 | 248 | `absent` |
-| 2a | 第 1 部 | 3 | `vocabulary-only` |
+| 2a | 第 1 部 | 3 | `implemented` 2・`degraded` 1（調査時点は `vocabulary-only`） |
 | 4 | 第 1 部 | 25 | `absent` |
 | 8 | 第 1 部 | 27 | `vocabulary-only` |
 | 10 | 第 1 部 | 2 | `degraded` |
