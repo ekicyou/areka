@@ -91,7 +91,7 @@
   - _Depends: 2.2, 4.1_
 
 - [ ] 5. 表と台帳
-- [ ] 5.1 (P) 受け取り手の表に開く系 6 組を登記する
+- [x] 5.1 (P) 受け取り手の表に開く系 6 組を登記する
   - 正準の台帳に `("open", file|browser|explorer|editor|mailer)` と運搬名 `\j`（選別子なし）の 6 行を説明書の受け口の変種で登記し、その変種の doc を「開く系の受け口（説明書を含む）」に改める
   - 「`("open","browser")` に受け取り手が無い」檻を書き替え、`("open","help")`・`("open", None)` が担当なしである檻を足す。総数の檻は main を取り込んだ後の実物の行を数え直して書く（並走の `balloon-lifecycle-events`・`mcp-author-tools` の行が先に入っていれば落とさず、一致のテストが在れば本 spec の 6 行の見本＝`\j` は `http://` の URL・`open` の 5 組は引数つき、を足す）
   - 完了の姿: 受け取り手の表のテストが緑で、総数とモジュールの doc の行数が実物と一致
@@ -127,3 +127,4 @@
 - 3.1: `Target::NamedFolder` は仮に `NoMatch` を返し、`OpenFailure::NoBasewareRoot` はまだ無い＝3.2 で必ず差し替えて足す。ドライブ文字の無い根付きパス（`\foo`）は `join` で `C:\foo` になる（仕様は沈黙）。
 - 4.1: `ReadmeRequest::Open` と `mod destination;` の一時的な dead_code の許可は 4.2 で外す。`os_port.rs` の `WindowsShell` 等の `#[cfg_attr(test, allow(dead_code))]` は恒久（テストのビルドは本物の口を持たない設計の帰結）。
 - 4.2: `link_destinations` は本番の呼び手が後続の spec（`link-context-copy`・`balloon-link-hover`）なので、その関数 1 つだけに `#[cfg_attr(not(test), allow(dead_code))]` を残す（呼び手ができたら外す）。
+- 5.1: main 取り込み後の受け取り手の表は 15 行→本 spec で 21 行。並走の `balloon-lifecycle-events`・`mcp-author-tools` は後から入る側が数え直す（本 spec の 6 行の見本＝`\j` は `http://` の URL・`open` の 5 組は引数つき）。
