@@ -52,6 +52,34 @@ impl OsPort for FakeOs {
     }
 }
 
+/// 断る口が受けた呼び出しの `lpFile`（プロセス共有・テストのビルドの開く専用のスレッドが積む）。
+static REFUSED: std::sync::Mutex<Vec<std::ffi::OsString>> = std::sync::Mutex::new(Vec::new());
+
+/// テストのビルドの開く専用のスレッドが持つ口: OS を呼ばずに記録して断る（要件 10.1）。
+pub(crate) struct RefusingOs;
+
+/// 断る口が返す符号（ERROR_ACCESS_DENIED）。
+const REFUSED_CODE: u32 = 5;
+
+impl OsPort for RefusingOs {
+    fn shell_execute(&mut self, call: &OsCall) -> Result<(), u32> {
+        REFUSED
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(call.file.clone());
+        Err(REFUSED_CODE)
+    }
+
+    fn env_var(&self, _name: &str) -> Option<String> {
+        None
+    }
+}
+
+/// 断る口の記録の写し（他のテストも積みうるので、件数や位置でなく中身で判定する）。
+pub(crate) fn refused_files() -> Vec<std::ffi::OsString> {
+    REFUSED.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
 /// `dir/descript.txt` に `name` だけの descript を書く。
 fn write_descript(dir: &std::path::Path, name: &str) {
     std::fs::create_dir_all(dir).expect("フォルダを組む");

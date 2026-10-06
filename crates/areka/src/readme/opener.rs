@@ -1,21 +1,26 @@
 //! 開く処理の 1 か所（areka-P0-open-external-tags task 3.1・要件 1.1〜1.4・2.1〜2.4・3.1・
 //! 4.1〜4.6・4.8・5.1・5.3・6.1・6.2・10.2・task 3.2・task 3.3＝要件 2.5・3.3・5.4・6.4・7.2〜7.4・
-//! 7.6・7.8・10.5）。
+//! 7.6・7.8・10.5・task 3.4＝要件 7.1・7.5・10.1）。
 //!
 //! 行き先（[`Destination`]）と文脈（[`OpenContext`]）から OS への 1 回分の呼び出し（[`OsCall`]）を
 //! 作る [`resolve`] を置く。fs は読むが OS は呼ばない（呼ぶのは開く専用のスレッドの実行だけ）。
 //! [`execute`] は 1 件を記録して OS へ渡し、[`serve`] は受信端が閉じるまでそれを繰り返す。
+//! [`Opener`] はそのスレッドへの送信端（World の持ち物）、[`submit`] は UI スレッドの唯一の入口。
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{self, Receiver, Sender};
+
+use bevy_ecs::world::World;
 
 use super::destination::{Destination, Store, Target};
 use super::os_port::{OsCall, OsPort, Verb};
+use crate::boot_config::BootContext;
 use crate::emo2_boot::ghost_switch::{GhostSpec, resolve_switch_target};
 use crate::emo2_boot::shell_balloon_resolve::{
     SkinCandidate, balloon_candidates, shell_candidates,
 };
+use crate::ghost_session::GhostSlot;
 use crate::log_history::TARGET_ERROR;
 
 /// 開く文脈（UI スレッドで World から写す）。
@@ -123,6 +128,103 @@ pub(crate) fn execute(port: &mut dyn OsPort, job: OpenJob) {
 pub(crate) fn serve(rx: Receiver<OpenJob>, port: &mut dyn OsPort) {
     for job in rx {
         execute(port, job);
+    }
+}
+
+/// 開く専用のスレッドへの送信端（World の持ち物・task 3.4・要件 7.1・7.5・10.1）。
+///
+/// World を落とすと送信端が落ちて受信が終わり、スレッドは自然に終わる。
+#[derive(bevy_ecs::prelude::Resource)]
+pub(crate) struct Opener {
+    tx: Sender<OpenJob>,
+}
+
+impl Opener {
+    /// `open-external` という名の 1 本のスレッドを起こす。
+    ///
+    /// 本番のビルドは COM の初期化と本物の [`WindowsShell`] を、テストのビルドは OS を呼ばずに
+    /// 記録して断る口を持つ（COM の初期化も本番だけ・開発者の机で本物のアプリを起こさない）。
+    pub(crate) fn spawn() -> std::io::Result<Opener> {
+        let (tx, rx) = mpsc::channel();
+        std::thread::Builder::new()
+            .name("open-external".to_owned())
+            .spawn(move || {
+                #[cfg(not(test))]
+                {
+                    super::os_port::init_com_for_shell();
+                    serve(rx, &mut super::os_port::WindowsShell);
+                }
+                #[cfg(test)]
+                serve(rx, &mut super::opener_test_support::RefusingOs);
+            })?;
+        Ok(Opener { tx })
+    }
+
+    /// テストで送り先だけを差し込む（スレッドを起こさない）。
+    #[cfg(test)]
+    pub(crate) fn from_sender(tx: Sender<OpenJob>) -> Opener {
+        Opener { tx }
+    }
+}
+
+/// 唯一の入口（UI スレッド）。World から文脈を写して送るだけで、fs も OS も待たない。
+///
+/// ゴーストが居ない・[`Opener`] が無い・送れない（スレッドが落ちた）は `error!` 1 行で捨てる。
+pub(crate) fn submit(world: &World, destination: Destination) {
+    let Some(session) = world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+    else {
+        dropped(None, &destination, "no_ghost");
+        return;
+    };
+    let dir = session.ghost_dir();
+    let ghost_dir = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
+    let name = session.names().and_then(|n| n.name.as_deref());
+    let ghost = listed_name(name, &ghost_dir);
+    let Some(opener) = world.get_resource::<Opener>() else {
+        dropped(Some(&ghost), &destination, "no_opener");
+        return;
+    };
+    let context = OpenContext {
+        ghost,
+        ghost_dir,
+        baseware: world.get_resource::<BootContext>().map(|c| c.root.clone()),
+    };
+    if let Err(mpsc::SendError(job)) = opener.tx.send(OpenJob {
+        destination,
+        context,
+    }) {
+        dropped(Some(&job.context.ghost), &job.destination, "disconnected");
+    }
+}
+
+/// 入口で捨てた 1 件を記録する（ゴーストが居れば名も付ける）。
+fn dropped(ghost: Option<&str>, dest: &Destination, reason: &'static str) {
+    tracing::error!(
+        target: TARGET_ERROR,
+        ghost,
+        event = "open_external_dropped",
+        kind = dest.target.kind().as_str(),
+        destination = %dest.written,
+        tag = %dest.tag,
+        reason,
+        "[readme] dropped a request to open a destination"
+    );
+}
+
+/// 記録の `ghost` の名（`get_active_ghost_list` と同じ決め方: descript の `name`、空・無しなら
+/// ゴーストのフォルダの絶対パス・末尾の区切りなし）。
+///
+/// `mcp/resolve.rs` は非公開のモジュールなので同じ規則をここに置く。
+fn listed_name(name: Option<&str>, ghost_dir: &Path) -> String {
+    match name.filter(|n| !n.is_empty()) {
+        Some(name) => name.to_owned(),
+        None => ghost_dir
+            .display()
+            .to_string()
+            .trim_end_matches(['\\', '/'])
+            .to_owned(),
     }
 }
 
@@ -293,3 +395,7 @@ mod tests;
 #[cfg(test)]
 #[path = "opener_execute_tests.rs"]
 mod execute_tests;
+
+#[cfg(test)]
+#[path = "opener_submit_tests.rs"]
+mod submit_tests;
