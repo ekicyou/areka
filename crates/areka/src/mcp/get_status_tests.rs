@@ -19,6 +19,7 @@ use crate::mcp::{McpLater, drain, install};
 fn ghost() -> ActiveGhost {
     ActiveGhost {
         name: Some("Emily/Phase4.5".to_string()),
+        sakura_name: None,
         root: PathBuf::from(r"C:\ssp\ghost\emily4"),
     }
 }
