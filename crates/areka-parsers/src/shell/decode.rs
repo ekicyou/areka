@@ -30,7 +30,7 @@
 //!   `decode_animations` を再利用する（同一集約規則ゆえヘルパを共用）。
 //! - `kero.surface.alias` 写像 → タスク 4.5 が `decode_alias_block` を実装し
 //!   `Shell.aliases` を充填する（不透明キー・順序付き ID・重複保持）。
-//! - subset 外・不正の寛容吸収の最終化 → タスク 4.6 が確定。overlay 以外の
+//! - subset 外・不正の寛容吸収の最終化 → タスク 4.6 が確定。overlay・base（element）以外の
 //!   element/pattern メソッド・3 種以外の interval・collisionex・非数/欠損フィールドは
 //!   いずれも本ファイルの既存シーム（`.get()` ＋ `unwrap_or`・method/kind 判定による
 //!   スキップ）で値化せず passthrough 吸収し、既定値へ倒す。新規実装は不要で、4.6 は
@@ -159,17 +159,17 @@ fn dispatch_block(shell: &mut Shell, header: &[String], body: &[Vec<String>]) {
 /// surface ブロック本体（element/collision/animation 行）を対応型へ decode する。
 ///
 /// タスク 4.2 が element overlay ＋ collision（レイヤ昇順・矩形）を充填する。
-/// - element overlay: `elementN,overlay,PATH,X,Y` を `Element` へ（画像パスは無加工・
-///   レイヤ昇順で安定ソート・要件 4.2/4.3/4.4）。
+/// - element overlay・base: `elementN,overlay,PATH,X,Y`（`base` も同じ）を `Element` へ
+///   （画像パスは無加工・レイヤ昇順で安定ソート・要件 4.2/4.3/4.4）。
 /// - collision: `collisionN,始点X,始点Y,終点X,終点Y,ID` を `Collision` へ（left/top/
 ///   right/bottom ＋不透明領域名・出現順・要件 6.1/6.2）。
 ///
 /// animation 行（`animationN.interval` / `animationN.patternM`）は `decode_animations`
-/// が animation ID で集約する（タスク 4.3）。overlay 以外の element メソッド・
+/// が animation ID で集約する（タスク 4.3）。overlay・base 以外の element メソッド・
 /// collisionex 等は値化せず読み飛ばして passthrough 吸収する（タスク 4.6 が確認・
 /// パニックしない・要件 4.5/9.2）。
 fn decode_surface_body(body: &[Vec<String>]) -> (Vec<Element>, Vec<Collision>, Vec<Animation>) {
-    // element overlay は surface・append 双方で同一表現ゆえ共有ヘルパで decode する（要件 12.5(c)）。
+    // element overlay・base は surface・append 双方で同一表現ゆえ共有ヘルパで decode する（要件 12.5(c)）。
     let elements: Vec<Element> = decode_elements(body);
     // collision は surface・append 双方で同一表現ゆえ共有ヘルパで decode する（要件 6.1/6.2/7.3）。
     let collisions: Vec<Collision> = decode_collisions(body);
@@ -179,13 +179,15 @@ fn decode_surface_body(body: &[Vec<String>]) -> (Vec<Element>, Vec<Collision>, V
     (elements, collisions, animations)
 }
 
-/// 本体行群の `elementN,overlay,PATH,X,Y` を `Element` へ decode する（要件 4.2/4.3/4.4）。
+/// 本体行群の `elementN,overlay,PATH,X,Y`・`elementN,base,PATH,X,Y` を `Element` へ decode する
+/// （要件 4.2/4.3/4.4・areka-P0-element-base-method 要件 1.1）。
 ///
 /// surface 本体・`surface.append` 本体（要件 12.5(c)）双方から呼べる **再利用可能ヘルパ**。
 /// append の element も通常 surface と同一のモデル表現・同一集約規則で保持する。
 ///
-/// - element overlay 行のみ扱う（field[1] == "overlay"）。overlay 以外のメソッド（base/replace 等）は
-///   値化せず読み飛ばして passthrough 吸収する（現行転記契約・要件 4.5/10.4）。
+/// - 第 2 欄が `is_image_element_method` で真の行（`overlay` と `base`）だけを扱い、どちらも同じ
+///   `Element` にする。ほかのメソッド（replace 等）は値化せず読み飛ばして passthrough 吸収する
+///   （要件 4.5/10.4）。
 /// - 画像パス（field[2]）は無加工保持（区切り正規化なし・要件 4.3）。
 /// - element はレイヤインデックス昇順・安定ソート（同レイヤは出現順維持・要件 4.4）。
 fn decode_elements(body: &[Vec<String>]) -> Vec<Element> {
@@ -194,18 +196,17 @@ fn decode_elements(body: &[Vec<String>]) -> Vec<Element> {
     for fields in body {
         let key = fields.first().map(String::as_str).unwrap_or("");
 
-        if let Some(rest) = key.strip_prefix("element") {
-            let is_overlay = fields.get(1).map(String::as_str) == Some("overlay");
-            if is_overlay {
-                elements.push(Element {
-                    // element の N をレイヤインデックスに用いる。非数値は既定 0（要件 3.3）。
-                    layer: rest.parse::<u32>().unwrap_or(0),
-                    // 画像パス（field[2]）は無加工保持（区切り正規化なし・要件 4.3）。
-                    path: ElementPath::new(field_string(fields, 2)),
-                    x: field_i64(fields, 3),
-                    y: field_i64(fields, 4),
-                });
-            }
+        if let Some(rest) = key.strip_prefix("element")
+            && is_image_element_method(fields.get(1).map(String::as_str).unwrap_or(""))
+        {
+            elements.push(Element {
+                // element の N をレイヤインデックスに用いる。非数値は既定 0（要件 3.3）。
+                layer: rest.parse::<u32>().unwrap_or(0),
+                // 画像パス（field[2]）は無加工保持（区切り正規化なし・要件 4.3）。
+                path: ElementPath::new(field_string(fields, 2)),
+                x: field_i64(fields, 3),
+                y: field_i64(fields, 4),
+            });
         }
         // collision 行は `decode_collisions`・animation 行は `decode_animations` が別走査で
         // 処理する。その他 subset 外の行は値化せず passthrough 吸収する（要件 9.2/10.4）。
@@ -215,6 +216,16 @@ fn decode_elements(body: &[Vec<String>]) -> Vec<Element> {
     elements.sort_by_key(|e| e.layer);
 
     elements
+}
+
+/// 画像の element定義として値にする描画メソッドの語か（完全一致・`overlay` と `base`）。
+///
+/// element定義の `base` は、`element0` では置き換えられる側が空で、`element1` 以降は正典が
+/// `overlay` に読み替えるので、どの番号でも `overlay` と同じ値にする
+/// （`ukadoc:descript_shell_surfaces`・areka-P0-element-base-method 要件 1.1・1.4）。
+/// 大文字の綴り・空の欄・`add`・`bind`・`balloon` などは偽（描けない語は値にしない）。
+pub(super) fn is_image_element_method(word: &str) -> bool {
+    matches!(word, "overlay" | "base")
 }
 
 /// 本体行群の `collisionN,始点X,始点Y,終点X,終点Y,ID` を `Collision` へ decode する（要件 6.1/6.2）。
