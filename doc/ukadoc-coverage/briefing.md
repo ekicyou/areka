@@ -1015,10 +1015,10 @@ not_applicable = 0
 ```toml
 [[barrier]]
 page = "descript_ghost"
-implemented = 16
+implemented = 17
 vocabulary_only = 0
-degraded = 0
-absent = 58
+degraded = 1
+absent = 56
 alias = 0
 not_applicable = 0
 
