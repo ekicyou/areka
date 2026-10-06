@@ -29,7 +29,7 @@
   - 完了の姿: 3 つの型と 2 つの関数が公開され、既存の compose のテスト（golden を含む）が期待値を変えずに緑
   - _Requirements: 1.12, 4.8, 4.9_
 
-- [ ] 2.2 コマの欄に 3 つの意味と、動く絵の子の欄を持たせる
+- [x] 2.2 コマの欄に 3 つの意味と、動く絵の子の欄を持たせる
   - `pattern.rs` に、欄の読み `Cell`（載っていない＝経過 0／サーフェスを指すコマ／絵を指すコマ／消えている）と、`set_blank`・`set_part_blank`・`set_film`・`remove_film`・`cell` と、子の欄・「消えている」の欄を読むだけの走査の口を足す（表示層が回数つきの子の欄を外し、perf の鍵へ混ぜるのに使う）
   - 今の関数（`set`・`remove`・`get`・`iter`・`set_part`・`part_get`・`part`・`clear_parts`・`is_empty`）の署名と `PatternFrame` の欄は変えない。`clear_parts` は子の欄と部品の「消えている」も消す。空の内側の表は持たない
   - 等しさは足した欄も比べる（合成の鍵に自動で入る）
@@ -235,3 +235,4 @@
 - 7.1: 台帳を書き替えたら `doc/ukadoc-coverage/report/summary.md` は手で直さず `ukadoc-survey` の report と report-summary を回し直して作る（並走の choice-script-prefix・element-base-method も同じ表を作り直すので、後から入る側が回し直す）
 - 1.1（範囲外・完了時に起票）: `emo2` の 1 コマの時間が 8 月の draw-load-parity（p50 2.8 ms・p95 26.5 ms）より桁で遅い（10-06 main で p50 69 ms・p95 605 ms・catch-up 96→252）。差のほとんどが `show.rs` の最後の `mark(MaskGen)` から `emit` までの、どの段にも入らない区間。本 spec の前からの問題。6.2 の前後比較は `perf-loop.ps1 prepare-ab`／`measure-ab` の交互取得を必須にする
 - 2.1: `FilmId` は `nesting.rs` に置いた（2.3 で `film.rs` を作っても 2 つ目を作らない）。`plan.rs` の `ElementKind::Film(_)` は網羅のための仮の腕（全部を `debug!` で飛ばす）＝2.3 から 2.5 の間は本番で届く。2.5 で design の誤りの表どおり（子の定義が無いときだけ `error!`）に置き換え、そのレビューで確かめる
+- 2.2: 走査の口は `cells()`（一番上も含む「載っていない」以外の全部）。4.1 は `iter()` を先に混ぜ、一番上でない欄と一番上の「消えている」を在るときだけ足して、一番上だけの鍵を前と同じ値に保つ。子の欄は「消えている」を持てない（`films: BTreeMap<FilmId,u32>`）＝3.3 で子の `always_at` が「何も出さない」を返す場面があれば欄の形を見直す

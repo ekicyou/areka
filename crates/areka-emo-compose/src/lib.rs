@@ -42,7 +42,7 @@ pub use nesting::{
     is_always_interval, rest_index,
 };
 pub use normalized::{NormalizedElement, SurfaceMaster, Transform};
-pub use pattern::{PatternFrame, PatternState};
+pub use pattern::{Cell, PatternFrame, PatternState};
 pub mod world;
 pub use world::{AliasMap, AtlasBinding, EmoWorld, ShellSettings, SurfaceId, SurfaceIndex};
 pub mod atlas_bind;
