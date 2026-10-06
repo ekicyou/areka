@@ -71,7 +71,7 @@
   - _Depends: 2.4, 3.1_
   - _Requirements: 8.1, 8.2, 8.3_
 
-- [ ] 4. 説明書・台帳・開発者向けの文書
+- [x] 4. 説明書・台帳・開発者向けの文書
 - [x] 4.1 (P) 説明書と開発者向けの文書を実態に直す
   - `dist/README.txt` の既知の制限の節を、見出しごと宣言どおりに表示する内容へ書き直す（宣言の無いバルーンは透明な画素を持てば α・持たなければ左上の色を抜く／`.pna` は使わず添えてある絵は普通に表示して記録する）。「設定を読まない」「常に半透明」「表示をやめて理由を記録」を無くす
   - `doc/COMPAT_ARCHITECTURE.md` §8 のバルーンの透過の行を直し、宣言なしの決まりが areka 独自（開発者の裁定 2026-10-05）であることを登記する
@@ -80,7 +80,7 @@
   - _Requirements: 8.4, 8.5, 8.7_
   - _Boundary: 文書_
 
-- [ ] 4.2 (P) 網羅台帳の 2 行を直し、報告を作り直す
+- [x] 4.2 (P) 網羅台帳の 2 行を直し、報告を作り直す
   - シェルの `seriko.use_self_alpha` とバルーンの `use_self_alpha` の行を、状態 `degraded`・担当 本仕様・説明（読む場所・描き分け・残りの `.pna` と宣言なしの独自の決まり）に直す
   - 報告は手で直さず `ukadoc-survey` の `report`・`report-summary` で作り直す
   - `cargo test -p ukadoc-survey` が緑
@@ -99,3 +99,4 @@
 - 3.1: `cargo test -p areka` の結合テスト（`mcp_get_log_real_run`・`smoke_boot_loop_exit`）は、このワークツリーの `target\` に i686 の `shiori-host32-helper` と `shiori-host32-testdll-loadu` が無いと落ちる。先に `cargo build -p shiori-host32-helper -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` を回す。
 - 3.1: `crates/areka/src/placement/measure_tests.rs` は 993 行で、1,000 行の番人まで残り 7 行。足すテストは兄弟ファイルへ。
 - 3.2: コードの変更なし。atlas の えも？？ golden は依存の向き（present→atlas）のため `On` を直に渡し、本物の経路が `1` を読むことは present の `emo2_shell_records_two_shadowed_images_and_no_warnings` が判定する。宣言なしの検体の左上の抜きは `shell_target_template_tests.rs` と `presenter_keycolor_clickthrough_tests.rs` が入口を通して判定する（入口を `Full` に固定すると両方赤）。areka の採寸のテンプレートのテストの絞り込みは `-- measure::template_tests`。
+- 4.2: 台帳を動かしたので `doc/ukadoc-coverage/briefing.md`（4-1・descript_shell の囲み・4-3 の 0 の内訳）と `roadmap-draft.md`（本仕様の行・default-balloon-bundle を `none = true`・数 43/28/15）を検査の数え直しどおりに手で合わせた。roadmap-draft のウェーブ「C5 の候補」は正本 roadmap.md の写しで、完了のときに正本が動けば合わせる。範囲外の既知の古い数: `briefing-assets.md` の「シェルの descript 102 件のうち実装済み 11」（調査時点の写し・本仕様より前から）。

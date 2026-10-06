@@ -263,6 +263,20 @@ spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 
 `none = true` の行が **14 行**である（3 つとも数え直した値で、引き算では出していない）。`[briefs].count` はこの
 42 に合わせ、`snapshot_on` は行の集合に最後に手を入れた日として **2026-10-05** にした。
 
+**2026-10-06 の追加**: `areka-P0-self-alpha-declaration` の行を 1 行足した。この spec が台帳 `ledger/assets.toml` の
+シェルの `seriko.use_self_alpha` とバルーンの `use_self_alpha` の 2 項目を縮退へ直し、自分の宛先として登記したから
+である。シェルの項目はそれまで宛先が空だった。バルーンの項目の宛先は `areka-P0-default-balloon-bundle` から移した
+ので、同 spec の行の `owner_count` は 1 から 0 へ変わり（台帳 4 本の宛先の欄をこの名前で引いて数え直した値）、
+引くものが無くなったので束も段階も決まらない。その行は `none = true` と理由を持つ形へ直した。2 項目は `linkage.md`
+の束「絵の重ね方」に属するので、新しい行の束の欄には「絵の重ね方」を書き、段階 A の表の「絵の重ね方」の行は
+`areka-P0-default-balloon-bundle`（1 件）をこの spec（2 件）に置き換えた。「絵の重ね方」の束の構成は **75 件**
+（`linkage.md` の `members` を数えた）で、この spec の 2 件は ⑴（全数）にも ⑵（過半）にも当たらないので、候補
+spec 名の案の欄は変えていない。足した行の中身は `stage = "A"`・`bundle = "絵の重ね方"`・`owner_count = 2`・
+`wave = "C5 の候補"` で、段階は「絵の重ね方」が順位表で置かれている段階の写し、ウェーブは正本のロードマップの
+写しである。行数は **43 行**（`[[spec]]` の塊を数えた）で、うち束を持つ行が **28 行**・`none = true` の行が
+**15 行**である（3 つとも数え直した値で、引き算では出していない）。`[briefs].count` はこの 43 に合わせ、
+`snapshot_on` は行の集合に最後に手を入れた日として **2026-10-06** にした。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -296,8 +310,8 @@ spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 
 
 ```toml
 [briefs]
-count = 42
-snapshot_on = "2026-10-05"
+count = 43
+snapshot_on = "2026-10-06"
 ```
 
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
@@ -566,9 +580,9 @@ wave = "保留"
 
 [[spec]]
 name = "areka-P0-default-balloon-bundle"
-stage = "A"
-bundle = "絵の重ね方"
-owner_count = 1
+none = true
+reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。持っていた 1 件（バルーンの use_self_alpha）は 2026-10-06 に areka-P0-self-alpha-declaration へ移った"
+owner_count = 0
 wave = "A0"
 
 [[spec]]
@@ -633,6 +647,13 @@ stage = "A"
 bundle = "撫で"
 owner_count = 2
 wave = "C3-④"
+
+[[spec]]
+name = "areka-P0-self-alpha-declaration"
+stage = "A"
+bundle = "絵の重ね方"
+owner_count = 2
+wave = "C5 の候補"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -663,7 +684,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 13 | バルーンの付属画像 | `areka-P0-balloon-inline-image` | `areka-P0-balloon-canon-residue`（W14・9 件） | 第 2 波 |
 | 14 | イベントの呼び起こし | `areka-P0-raise-event-tag` | `areka-P0-property-query-channels`（W14・1 件） | 第 2 波 |
 | 14 | 選択肢の目印 | `areka-P0-choice-marker-rest`（残余） | `areka-P0-choice-marker-styling`（W16・39 件） | 第 2 波 |
-| 15 | 絵の重ね方 | `areka-P0-surface-composition-canon` | `areka-P0-shell-parse`（完了・1 件）／`areka-P0-default-balloon-bundle`（A0・1 件） | 第 2 波 |
+| 15 | 絵の重ね方 | `areka-P0-surface-composition-canon` | `areka-P0-shell-parse`（完了・1 件）／`areka-P0-self-alpha-declaration`（C5 の候補・2 件） | 第 2 波 |
 | 16 | 動作モードの出入り | `areka-P0-passive-mode-states` | `areka-P0-status-execution-states`（W15・2 件）／`areka-P0-balloon-break`（α 後・2 件） | 第 2 波 |
 | 17 | 定義ファイルの文字コード | なし（構成 2 件がどちらも実装済みで、作る仕事が残っていない） | **0 本** | 第 2 波 |
 | 17 | 組み込みの置換語 | `areka-P0-builtin-substitution` | **0 本** | 第 2 波 |
