@@ -14,7 +14,7 @@ use super::*;
 use crate::boot_resolve::{BalloonRoute, GhostRoute};
 use crate::emo2_boot::frame::KanadeNoticeRx;
 use crate::emo2_boot::sample_test_support::acquire_emo2;
-use crate::emo2_boot::spine::{SpineHarness, run_bounded};
+use crate::emo2_boot::spine::{SpineHarness, run_bounded, spin_wait_until};
 use crate::input_events::user_break::UserBreakWiring;
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring};
 use crate::placement::spawn::GhostWindowMarker;
@@ -63,20 +63,17 @@ fn open_ghost_windows_without_task_pool_fails_before_preparing() {
     );
 }
 
-/// 作業プールの閉包を回す `Input` 段を、`done` が真になるまで（10 秒まで）回す。
-/// 閉包は作業プールの別スレッドから届くので、届くまで待つ（有界・期限切れは `false`）。
+/// 作業プールの閉包を回す `Input` 段を、`done` が真になるまで回す。
+/// 閉包は作業プールの別スレッドから届くので、届くまで待つ。待ちは目印なしの芯（`spin_wait_until`）で、
+/// 総時間は共通の `SPIN_WAIT`・空回しは `DENSE_SPIN` の後に CPU を返す。作業プールの進みを数える口が
+/// テストの側に無いので目印は持てない（areka-P0-ghost-session-test-load-flake 設計「2.1 の例外」）。
+/// 打ち切ったら、呼び出しの場所を添えた文言を標準エラーへ 1 行出して `false`。
+#[track_caller]
 fn run_input_until(world: &mut World, done: impl Fn(&mut World) -> bool) -> bool {
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
-    loop {
+    spin_wait_until(|| {
         world.run_schedule(Input);
-        if done(world) {
-            return true;
-        }
-        if std::time::Instant::now() >= deadline {
-            return false;
-        }
-        std::thread::yield_now();
-    }
+        done(world)
+    })
 }
 
 fn ghost_window_count(world: &mut World) -> usize {

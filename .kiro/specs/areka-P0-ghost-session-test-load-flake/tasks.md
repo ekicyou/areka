@@ -89,7 +89,7 @@
   - _Boundary: frame_ghost_quit_switch_tests_
   - _Depends: 3.2_
 
-- [ ] 4.2 (P) 起こし直しのテストの自前の待ちを芯へ寄せる
+- [x] 4.2 (P) 起こし直しのテストの自前の待ちを芯へ寄せる
   - 10 秒・空回しだけの待ちを、目印なしの芯の待ちへ替える（総時間は共通の 30 秒・60 ms で CPU を返す）
   - 完了の姿: そのファイルのテストが同じ確かめの内容・同じ本数で緑で、自前の締切の定数が無くなっている
   - _Requirements: 2.5, 3.1, 7.3_
@@ -167,3 +167,4 @@
 - 3.2: 足場の `Input` の段を回す 1 回は 62〜93 µs（debug・22 CPU）で、旧い予算 100 万回は 60〜90 秒＝30 秒の締切まで 1 コアを回し続けていた。檻 9・10 は `ghost_switch_rig_wait_tests.rs`（足場の子）。`wait_for` は呼び手が入る 4.3 で `#[expect(dead_code)]` を外す。公開の `pump_*` の `#[track_caller]` は檻が見ていない（檻 9 は継ぎ目の `pump_until_with` を見る）。design の `wait_steady` の事後条件（「false のときは `待ちの打ち切り` で始まる 1 行」）と別の箇条（「届いた通知を `{:?}` で出して false」）が食い違う。実装は後者で、黙った false は無い
 - 3.3（design からの逸脱 2 件）: ①design の檻 8 は `HoldAt` で固めるとするが、`HoldGate::pass_get`（`spine_hold_support.rs`）は解かれた後に `RequestError::Timeout` を返して kanade を Fault に倒すので「並びが同じ」が成り立たない。足場の中に解いた後は台本へ渡す `Stall`／`FakeShiori::ScriptedStalled` を足した。②締切の error（`change_deadline_exceeded`）は kanade のスレッドで出て `log_capture_kit::capture` に映らないので、解いた直後に A の kanade へ状態の問い合わせを送って返事を待ち（往復は同期・受け口は届いた順）、A に UNLOAD が来ていないことで「締切が切れていない」を見る。呼び手のスレッドの error は捕捉窓で 0 件を見る。変異で、締切の発火を見分けるのはこの 1 欄だけと確かめた。`Stall` の待ちには上限が無い（解く前に panic しうるのは bool を返す `pump_talking_until` と注入のループだけで、Drop でスレッドを待たないのでバイナリは止まらない）。`wait_for` は檻で使うので `#[expect(dead_code)]` を外した
 - 4.1: `wait_recv` を繰り返して `Steady` 以外を読み飛ばす形は、総時間の上限（300 秒）が 1 回ごとに数え直しになる。このファイルでは kanade が `Steady` 以外を送り続ける道が無い（`Stopped` は 1 回だけ・`ChangeCancelled` は切替の頼みの返事だけ）ので据え置き。読み飛ばしの待ちが他にも要るなら、芯に「読み飛ばしつき・始まりの時刻 1 つ」の `wait_recv` を足す
+- 4.2: 起こし直しのテストの降ろしの `run_bounded` 20 秒（1.4 の待ち C で赤 1 回）は design「2.1 の例外」の「渡した総時間で打ち切る残りの呼び手」として残した。5.1 で赤が残れば目印つきへ移す。作業ツリーは CRLF で、Git Bash の `sed -i` は CR を落とす（書き替えは python の `newline=''` で）
