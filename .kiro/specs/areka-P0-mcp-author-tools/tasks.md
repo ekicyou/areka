@@ -41,7 +41,7 @@
   - _Requirements: 3.2, 3.11_
   - _Boundary: emo2_boot ConsumerLedger_
 
-- [ ] 3. (P) `check_script` の入口（定義・引数・結果の形）を作る
+- [x] 3. (P) `check_script` の入口（定義・引数・結果の形）を作る
   - `areka-mcp` の新しいファイルに、定義（名前 `check_script`・題・英文の説明 5 点・`script` 必須と `ghost_name` 任意の引数の型）、引数の型、help に載せる日本語の 1 行（`<`・`>`・`&` を書かない注記つき）、診断の種類と診断の型、結果を組み立てる関数を置く。ツールの振り分けの型への変種の追加と、引数の詰め替えは 5.1 で行う（ここではまだ登録しない）。`tools/mod.rs` へはこのファイルの `pub mod` の 1 行だけを足し、`TABLE`・`entrances` は変えない
   - 結果は 1 行目 `OK:<n> diagnostics`（窓の無いゴーストでは末尾に括弧の注記）、続けて診断 1 件につき 1 行の JSON（`kind`・`start`・`end`・`text`・`message`）、件数に依らず `isError: false`。影響の段の欄は作らない
   - 兄弟のテストで、0 件は 1 行だけ・n 件は 1 行目の数と n 行の JSON・綴りに改行・引用符・日本語が在っても 1 件が 1 行に収まる・注記つきの 1 行目・どれも `isError: false`・種類の名前 6 つの綴り、が緑

@@ -501,7 +501,7 @@ pub fn all_entrances(reply_wait: Duration) -> (ToolRegistry, Receiver<ToolReques
 | `name` | `check_script` |
 | `title` | `Check SakuraScript Without Playing` |
 | `description`（英文） | 次の 5 点を書く: ⑴ SSP に無い areka 独自のツール、⑵ 台本を再生せずに確かめ、ゴーストは喋らず・動かず・変わらない、⑶ 返すもの（知らないタグと `\!`・受け取るが何もしないもの・読めない引数・今のシェルとバルーンに無い `\s`／`\b` の ID）、⑷ タグ 1 つだけを渡せば、そのタグが areka で使えるかを確かめられる、⑸ `sakurascript` の前に使う |
-| `inputSchema` | `script`（string・必須・検査する台本）、`ghost_name`（string・任意・説明は 10 本と同じ「Target ghost name or full path of its root folder」） |
+| `inputSchema` | `script`（string・必須・検査する台本）、`ghost_name`（string・任意・説明は SSP の 10 本のうち `ghost_name` が任意の 8 本の中の 6 本と同じ「Optional: target ghost name or full path of its root folder」） |
 
 結果:
 
