@@ -296,7 +296,9 @@ fn hidden_balloon_returns_the_same_pixels() {
     let visible_before = balloon_visible(&gpu.rig.world);
     let pending = gpu.dump_balloon(None);
     let before = gpu.answer_of(&pending);
-    let hidden = gpu.frames_until(1, |world| balloon_visible(world) == Some(false));
+    // 字は現れ切った（`speak`）ので、残りの `\_w[1500]` は Tick を大きく刻んで進める（1 ms ずつでは
+    // 1,500 巡以上が要り、巡の遅い机で待ちが届かない・[`read_after_talk`] と同じ）。
+    let hidden = gpu.frames_until(100, |world| balloon_visible(world) == Some(false));
     let pending = gpu.dump_balloon(None);
     let after = gpu.answer_of(&pending);
     let background = gpu.balloon_composed(0);
