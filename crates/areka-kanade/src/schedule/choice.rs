@@ -5,7 +5,8 @@
 //! 配線は本層の外（設計 C3 の `schedule/events.rs` 側・C4 の `schedule/steady.rs` 側）が持つ。
 //!
 //! # 本層が確定する 2 つの写像
-//! 1. [`plan_cascade`]: 選択肢 ID → 発火段列（[`CascadePlan`] の 3 分岐・Req2.1/2.2/2.5/2.7）。
+//! 1. [`plan_cascade`]: 選択肢 ID → 発火段列（[`CascadePlan`] の 3 分岐・Req2.1/2.2/2.5）。
+//!    `script:` の後ろの台本は [`script_body`] が取り出す。
 //! 2. [`choice_deadline`]: タイムアウト指令 → 選択待ちの期限（DD-8 の 3 値語彙・Req7.6/7.7）。
 //!
 //! いずれも同一入力に対して常に同一の結果を返す（Req2.5）。外部状態を読まないため、
@@ -27,22 +28,31 @@ pub(crate) enum CascadePlan {
     ///
     /// 先行段が応答スクリプトを返したら後続段を発行しない（裁定 2・Req2.4）。
     Canonical,
-    /// M1 未対応カテゴリ（`script:` 前置）→ イベントを発行せず、警告のうえ選択待ちの解決のみ行う（Req2.7）。
+    /// `script:` で始まる ID → SHIORI のイベントを起こさず、`script:` の後ろの台本を
+    /// 新しいトークとして実行する。
     ///
-    /// 裁定 7（provenance=areka_discretion の明示縮退）。警告と解決は C4 の責務であり、
-    /// 本層は「未対応である」という判定だけを返す。
-    Unsupported,
+    /// 台本の取り出しは [`script_body`]、トークの開始と記録は調停側（`steady.rs`）の責務であり、
+    /// 本層は「台本を実行する」という判定だけを返す。
+    Script,
 }
 
-/// 選択肢 ID から発火段列を一意に決める（Req2.1/2.2/2.5/2.7・設計 C3）。
+/// 選択肢の ID が `script:` で始まるとき、その後ろの台本を返す（後ろが空なら `Some("")`）。
 ///
-/// # 判定規則（設計 C3 の記述をそのまま実装。この 3 分岐で全 ID を尽くす）
-/// 1. `id.starts_with("script:")` → [`CascadePlan::Unsupported`]
+/// 判定はバイト列の前方一致で、大文字小文字を区別する（`script`・`Script:x`・`xscript:y`・
+/// 空文字列は `None`）。`"script:"` の綴りはここ 1 か所にだけ置く。
+pub(crate) fn script_body(id: &str) -> Option<&str> {
+    id.strip_prefix("script:")
+}
+
+/// 選択肢 ID から発火段列を一意に決める（Req2.1/2.2/2.5・設計 C3）。
+///
+/// # 判定規則（この 3 分岐で全 ID を尽くす）
+/// 1. [`script_body`] が `Some` → [`CascadePlan::Script`]
 /// 2. `id.starts_with("On")` → [`CascadePlan::Named`]
 /// 3. それ以外 → [`CascadePlan::Canonical`]
 ///
 /// 判定順序は規則 1 を先に置く（`script:` は小文字始まりゆえ規則 2 とは実際には交差しないが、
-/// 未対応カテゴリの判定が常に最優先であることを裁定 7 の明示として構造で固定する）。
+/// `script:` の判定が常に先に効くことを構造で固定する）。
 ///
 /// # 境界の読み
 /// - `"On"` 単独は `starts_with("On")` に一致するため [`CascadePlan::Named`]。任意名イベント
@@ -55,8 +65,9 @@ pub(crate) enum CascadePlan {
 ///
 /// 外部状態を読まないため、同一 ID に対して常に同一の [`CascadePlan`] を返す（Req2.5）。
 pub(crate) fn plan_cascade(id: &str) -> CascadePlan {
-    if id.starts_with("script:") {
-        CascadePlan::Unsupported
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1
+    if script_body(id).is_some() {
+        CascadePlan::Script
     } else if id.starts_with("On") {
         CascadePlan::Named
     } else {
@@ -111,7 +122,7 @@ pub(crate) fn choice_deadline(
 mod tests {
     use super::*;
 
-    // === plan_cascade: 3 分岐の全網羅（Req2.1/2.2/2.5/2.7） ===
+    // === plan_cascade: 3 分岐の全網羅（Req2.1/2.2/2.5）と script_body ===
 
     /// Req2.1: `On` 始まりの任意名 ID は任意名 1 段（emo2 実物 `menu.pasta` の依存形）。
     #[test]
@@ -161,22 +172,41 @@ mod tests {
         assert_eq!(plan_cascade(""), CascadePlan::Canonical);
     }
 
-    /// Req2.7・裁定 7: `script:` 前置は M1 未対応カテゴリ。
+    /// `script:` で始まる ID は「台本を実行する」結論になる。
     #[test]
-    fn plan_cascade_unsupported_for_script_prefix() {
-        assert_eq!(plan_cascade("script:\\e"), CascadePlan::Unsupported);
-        // 前置のみ（後続が空）でも未対応カテゴリ。
-        assert_eq!(plan_cascade("script:"), CascadePlan::Unsupported);
-        // 未対応判定は `On` 判定より優先する（構造上の順序固定）。
-        assert_eq!(plan_cascade("script:OnFoo"), CascadePlan::Unsupported);
+    fn plan_cascade_script_for_script_prefix() {
+        assert_eq!(plan_cascade("script:\\e"), CascadePlan::Script);
+        // 後ろが空でも同じ結論（空の扱いは調停側が決める）。
+        assert_eq!(plan_cascade("script:"), CascadePlan::Script);
+        // `script:` の判定は `On` の判定より先に効く。
+        assert_eq!(plan_cascade("script:OnFoo"), CascadePlan::Script);
     }
 
-    /// 境界: 前置が不完全／大文字違い／途中出現なら未対応ではない（正典形へ落ちる）。
+    /// 境界: 前置が不完全／大文字違い／途中出現なら `script:` ではない（正典形へ落ちる）。
     #[test]
     fn plan_cascade_canonical_for_near_miss_script_prefix() {
         assert_eq!(plan_cascade("script"), CascadePlan::Canonical);
         assert_eq!(plan_cascade("Script:x"), CascadePlan::Canonical);
         assert_eq!(plan_cascade("xscript:y"), CascadePlan::Canonical);
+    }
+
+    /// `script_body`: `script:` の後ろをそのまま返す（空なら空文字列）。
+    #[test]
+    fn script_body_returns_text_after_prefix() {
+        assert_eq!(script_body("script:\\e"), Some("\\e"));
+        assert_eq!(script_body("script:"), Some(""));
+    }
+
+    /// `script_body`: 当たらない ID は `None`（小文字の `script:` で始まるときだけ）。
+    #[test]
+    fn script_body_none_for_near_miss_ids() {
+        for id in ["script", "Script:x", "xscript:y", ""] {
+            assert_eq!(
+                script_body(id),
+                None,
+                "{id:?} は `script:` に当たらないはず"
+            );
+        }
     }
 
     /// Req2.5: 同一入力に対して常に同一の列を導く（副作用も内部状態も持たない）。

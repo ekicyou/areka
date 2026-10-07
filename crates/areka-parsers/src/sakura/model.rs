@@ -68,6 +68,13 @@ pub enum Instruction {
     Raw(String),
 }
 
+/// `\j[ID]`（ジャンプ）を載せる汎用コマンドの運搬名（open-external-tags 要件 1.5）。
+///
+/// `\j[…]` は [`Instruction::GenericCommand`] の `name` にこの値を入れ、引数列を記述順の
+/// まま `raw_args` へ運ぶ。`\f` の運搬名（`"\\f"`）と同じ流儀で、バックスラッシュで始まる
+/// ため `\!` のコマンド名とは衝突しない。ID の意味付けは消費側の責務。
+pub const JUMP_TAG_CARRIER: &str = "\\j";
+
 /// `\s[...]` の不透明中身（NewType・surface 層が解釈）。要件 2.2/2.3。
 #[derive(Clone, Debug, PartialEq)]
 pub struct SurfaceArg(String);

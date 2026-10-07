@@ -39,7 +39,7 @@
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
 
-use areka_emo_compose::{BindSet, ComposeMethod, PatternState};
+use areka_emo_compose::{BindSet, Cell, ComposeMethod, PartKey, PatternFrame, PatternState};
 
 use super::budget::BudgetDelta;
 use crate::command::TargetId;
@@ -270,7 +270,7 @@ impl Hasher for Fnv1a {
 /// ときの入力は毎回ここから採る。
 ///
 /// `BindSet` と `PatternState` は `Hash` を実装しないため、公開アクセサ（昇順正準の `ids()`・
-/// animation id 昇順の `iter()`）から値等価と同じ順序で流し込む。`ComposeMethod` は
+/// animation id 昇順の `iter()`、ほかの欄は正準順の `cells()`）から値等価と同じ順序で流し込む。`ComposeMethod` は
 /// `#[non_exhaustive]` で網羅 match が書けないため判別子で混ぜる（同一 run 内で安定）。
 /// 走査は借用のみで、確保は行わない（毎フレーム経路で呼ばれる）。
 pub(super) fn compose_key_hash(surface_id: u32, binds: &BindSet, pattern: &PatternState) -> u64 {
@@ -283,20 +283,45 @@ pub(super) fn compose_key_hash(surface_id: u32, binds: &BindSet, pattern: &Patte
     frame_count.hash(&mut hasher);
     for (animation_id, frame) in pattern.iter() {
         animation_id.hash(&mut hasher);
-        frame.surface_id.hash(&mut hasher);
-        std::mem::discriminant(&frame.method).hash(&mut hasher);
-        // `Blend` は**内側の `BlendMode` が意味を分ける**ため判別子だけでは足りない
-        // （`Blend(Multiply)` と `Blend(Screen)` が同一値になる系統的衝突＝異なりキー数を
-        // 過少に見積もる向き）。`BlendKind` も `#[non_exhaustive]` ゆえ判別子で混ぜ、
-        // 直交軸の `fast` を併せて流す。
-        if let ComposeMethod::Blend(mode) = &frame.method {
-            std::mem::discriminant(&mode.kind).hash(&mut hasher);
-            mode.fast.hash(&mut hasher);
+        hash_frame(frame, &mut hasher);
+    }
+    // 一番上のコマ以外の欄（部品の欄・動く絵の子の欄・「消えている」・要件 7.5）。在るときだけ件数を
+    // 前置して足す——一番上のコマだけの `PatternState` の鍵は、これらを混ぜる前と同じ値に保つ
+    // （前の run の perf の行と異なりキー数を比べられる）。
+    let is_extra = |(part, _, cell): &(Option<PartKey>, u32, Cell<'_>)| {
+        part.is_some() || !matches!(cell, Cell::Frame(_))
+    };
+    let extra_count = pattern.cells().filter(is_extra).count() as u64;
+    if extra_count > 0 {
+        extra_count.hash(&mut hasher);
+        for (part, animation_id, cell) in pattern.cells().filter(is_extra) {
+            part.hash(&mut hasher);
+            animation_id.hash(&mut hasher);
+            std::mem::discriminant(&cell).hash(&mut hasher);
+            match cell {
+                Cell::Frame(frame) => hash_frame(frame, &mut hasher),
+                Cell::Picture(picture) => picture.hash(&mut hasher),
+                Cell::Rest | Cell::Blank => {}
+            }
         }
-        frame.x.hash(&mut hasher);
-        frame.y.hash(&mut hasher);
     }
     hasher.finish()
+}
+
+/// コマ 1 枚（サーフェス・描画メソッド・オフセット）を混ぜる。
+fn hash_frame(frame: &PatternFrame, hasher: &mut Fnv1a) {
+    frame.surface_id.hash(hasher);
+    std::mem::discriminant(&frame.method).hash(hasher);
+    // `Blend` は**内側の `BlendMode` が意味を分ける**ため判別子だけでは足りない
+    // （`Blend(Multiply)` と `Blend(Screen)` が同一値になる系統的衝突＝異なりキー数を
+    // 過少に見積もる向き）。`BlendKind` も `#[non_exhaustive]` ゆえ判別子で混ぜ、
+    // 直交軸の `fast` を併せて流す。
+    if let ComposeMethod::Blend(mode) = &frame.method {
+        std::mem::discriminant(&mode.kind).hash(hasher);
+        mode.fast.hash(hasher);
+    }
+    frame.x.hash(hasher);
+    frame.y.hash(hasher);
 }
 
 #[cfg(test)]

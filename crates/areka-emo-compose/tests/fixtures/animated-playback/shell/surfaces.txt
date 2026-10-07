@@ -1,0 +1,79 @@
+charset,UTF-8
+// animated-playback 検体（areka-P0-animated-image-playback・要件 9.4）: 動く絵と手書きの always を置いた試験用シェル
+// 各サーフェスの役と絵の出どころは同じフォルダの上の README.md。行を足し引きしたら README も直す。
+
+descript
+{
+version,1
+}
+
+// 0 一番上: element定義に置いた動く絵（rgb.apng を 2 か所・alpha.webp）・部品 20・手書きの always。
+surface0
+{
+element0,overlay,body.png,0,0
+element1,overlay,rgb.apng,0,0
+element2,overlay,rgb.apng,8,0
+element3,overlay,alpha.webp,0,8
+element4,overlay,20,8,8
+animation0.interval,always
+animation0.pattern0,overlay,30,100,0,0
+animation0.pattern1,overlay,31,100,0,0
+}
+
+// 1 surface1.png（中身は basic.apng）だけで絵が建つ。element定義は無い。
+surface1
+{
+collision0,0,0,8,8,Body
+}
+
+// 2 element0 が在るので surface2.png（中身は rgb.apng）は土台に使われない。
+surface2
+{
+element0,overlay,body.png,0,0
+}
+
+// 3 surface0 と同じ絵 rgb.apng を置くもう 1 つのサーフェス。
+surface3
+{
+element0,overlay,body.png,0,0
+element1,overlay,rgb.apng,4,4
+}
+
+// 10 待ち時間の合計が 0 の手書きの always。
+surface10
+{
+element0,overlay,body.png,0,0
+animation0.interval,always
+animation0.pattern0,overlay,30,0,0,0
+animation0.pattern1,overlay,31,0,0,0
+}
+
+// 11 bind+always（本 spec では駆動しない組み合わせ）。
+surface11
+{
+element0,overlay,body.png,0,0
+animation0.interval,bind+always
+animation0.pattern0,overlay,30,100,0,0
+animation0.pattern1,overlay,31,100,0,0
+}
+
+// 20 部品（surface0 の element4 が置く）: 動く絵 rgb.webp と手書きの always。
+surface20
+{
+element0,overlay,part.png,0,0
+element1,overlay,rgb.webp,0,0
+animation0.interval,always
+animation0.pattern0,overlay,30,50,0,0
+animation0.pattern1,overlay,31,50,0,0
+}
+
+// 30・31 手書きの always のコマが指すサーフェス。
+surface30
+{
+element0,overlay,yellow.png,0,0
+}
+
+surface31
+{
+element0,overlay,cyan.png,0,0
+}

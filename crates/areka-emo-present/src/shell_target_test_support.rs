@@ -54,6 +54,16 @@ pub(super) fn capture_events<T>(f: impl FnOnce() -> T) -> (T, Vec<CapturedEvent>
     log_capture_kit::capture(f)
 }
 
+/// 一時フォルダのシェルに `seriko.use_self_alpha,1` の descript.txt を置く（今までの `On` 固定と
+/// 同じ条件・descript.txt が読めない `warn!` も出ない・spec: areka-P0-self-alpha-declaration）。
+pub(super) fn write_descript(dir: &std::path::Path) {
+    std::fs::write(
+        dir.join("descript.txt"),
+        "charset,UTF-8\nseriko.use_self_alpha,1\n",
+    )
+    .expect("descript.txt 作成");
+}
+
 // ── 検体（`sample_ghost_kit::SampleRoot::acquire` 経由のみ・要件 7.11）────────────────
 //
 // 段 ③ で `Drop` が展開した複製を消すため、一時値にせずプロセス寿命で保持する。

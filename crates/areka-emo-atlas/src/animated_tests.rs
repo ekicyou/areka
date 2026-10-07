@@ -118,13 +118,22 @@ fn bake_in(
     limits: AnimationLimits,
     cfg: PackConfig,
 ) -> BakeResult {
+    bake_as(dec, names, UseSelfAlpha::On, limits, cfg)
+}
+
+/// 名前を並べたシェルを宣言・上限・設定つきで焼く（失敗の一覧は見ない）。
+fn bake_as(
+    dec: &MemoryDecoder,
+    names: &[&str],
+    use_self_alpha: UseSelfAlpha,
+    limits: AnimationLimits,
+    cfg: PackConfig,
+) -> BakeResult {
     let surfaces = shell_of(names);
     let sets = [SurfaceSet {
         surfaces: &surfaces,
         base_dir: Path::new(BASE),
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
+        alpha_params: AlphaParams { use_self_alpha },
     }];
     bake_with_limits(&sets, dec, cfg, limits)
 }
@@ -615,36 +624,6 @@ fn total_limit_shrinks_only_the_third_animation() {
     assert_eq!(animated_of(&result.table), [false, true, true]);
 }
 
-/// 全コマを読めても 0 番の正規化で落ちた絵（透明度なし＋同名 `.pna`＝未実装の腕）は表に載らない
-/// ので、合計に数えない。2 つ目・3 つ目は両方とも全コマで載る（設計「実際に載せた絵だけ」）。
-#[test]
-fn picture_dropped_by_normalize_is_not_counted_in_the_total() {
-    let limits = AnimationLimits {
-        max_total_pixels: 16,
-        ..AnimationLimits::default()
-    };
-    let mut dec = three_animations(None);
-    let opaque = animated(&[([K0; 4], 100), ([Y; 4], 50)], false);
-    insert_anim(
-        &mut dec,
-        "anim1.png",
-        2,
-        Ok(opaque.frames[0].image.clone()),
-        Ok(opaque),
-    );
-    dec.insert_pna(Path::new(BASE).join("anim1.png"));
-    let result = bake_in(&dec, &ANIMS, limits, PackConfig::default());
-    assert_eq!(result.errors.len(), 1, "{:?}", result.errors);
-    assert!(result.table.resolve(SetId(0), "anim1.png").is_none());
-    for rel in ["anim2.png", "anim3.png"] {
-        let id = result.table.resolve(SetId(0), rel).unwrap();
-        assert!(
-            result.table.animation(id).is_some(),
-            "{rel} keeps all frames"
-        );
-    }
-}
-
 /// 段 1 が `Err` なら段 2（今までの 1 枚読み）の絵が出て `warn!` は 2 回（2 回目に段 1 の理由）。
 /// 段 2 も `Err` なら段 3: 失敗の一覧に 1 件で、ほかの絵は載る（要件 6.4〜6.6）。
 #[test]
@@ -729,4 +708,132 @@ fn bake_without_limits_uses_the_default_limits() {
     let parent = table.resolve(SetId(0), "anim.png").unwrap();
     assert_eq!(table.animation(parent).unwrap().frames.len(), 3);
     assert_eq!(dump(&table), dump(&bake(&dec).table));
+}
+
+// ---- 宣言ごとの動く絵と `.pna`（spec: areka-P0-self-alpha-declaration 要件 3.3・4.3・4.4・5.5・5.7・9.4） ----
+
+/// 半透明（乗算済みの 0,0,64・α=128）。
+const H: Px = [0, 0, 64, 128];
+const KEYED: &str = "bake: element を抜き色（左上の 1 画素と同じ色）で透過しました";
+
+/// anim.png だけのシェルを宣言つきで焼き、全部のコマの画素とログを返す（失敗の一覧は空）。
+fn frames_as(anim: AnimatedImage, decl: UseSelfAlpha) -> (Vec<Vec<Px>>, String) {
+    let dec = with_animation(anim);
+    let mut result = None;
+    let log = crate::log_capture::capture_logs(|| {
+        result = Some(bake_as(
+            &dec,
+            &["anim.png"],
+            decl,
+            AnimationLimits::default(),
+            PackConfig::default(),
+        ));
+    });
+    let result = result.unwrap();
+    assert!(result.errors.is_empty(), "{decl:?}: {:?}", result.errors);
+    let table = result.table;
+    let parent = table.resolve(SetId(0), "anim.png").unwrap();
+    let frames = table
+        .animation(parent)
+        .expect("all frames kept")
+        .frames
+        .clone();
+    (frames.iter().map(|id| full(&table, *id)).collect(), log)
+}
+
+/// `0` の動く絵: 全部のコマで α を 255 にしてから、1 枚目の左上（α を 255 にした後）と同じ色を
+/// 全部のコマから抜く。どのコマにも半透明が無い（要件 5.5）。抜いた色を 1 回だけ記録する。
+#[test]
+fn off_animation_clears_frame_zero_top_left_from_every_frame_and_leaves_no_translucency() {
+    // 1 枚目の左上は半透明 H → 抜く色は 0,0,64,255。2 枚目の H も同じ色になって抜かれる。
+    let (frames, log) = frames_as(
+        animated(&[([H, X, K0, CLEAR], 100), ([K0, H, CLEAR, X], 50)], true),
+        UseSelfAlpha::Off,
+    );
+    let black = [0, 0, 0, 255];
+    assert_eq!(frames[0], vec![CLEAR, X, K0, black], "frame 0");
+    assert_eq!(frames[1], vec![K0, CLEAR, black, X], "frame 1");
+    for px in frames.concat() {
+        assert!(px[3] == 0 || px[3] == 255, "translucent pixel {px:?}");
+    }
+    assert_eq!(log.matches(KEYED).count(), 1, "{log}");
+}
+
+/// `full` × α なしの動く絵: 全部のコマが不透明で、左上と同じ色も抜かれない（要件 4.4）。
+/// 抜かないので抜いた色の記録は出ない。
+#[test]
+fn full_animation_without_alpha_is_opaque_in_every_frame() {
+    let (frames, log) = frames_as(
+        animated(&[([K0, X, X, K0], 100), ([K0, X, H, X], 50)], false),
+        UseSelfAlpha::Full,
+    );
+    assert_eq!(frames[0], vec![K0, X, X, K0], "frame 0");
+    assert_eq!(frames[1], vec![K0, X, [0, 0, 64, 255], X], "frame 1");
+    assert!(!log.contains(KEYED), "{log}");
+}
+
+/// 宣言なしの動く絵は 1 枚目の中身で決め、全部のコマが同じ側になる（要件 9.4）。
+/// 1 枚目が半透明を持てば、全部不透明な 2 枚目も抜かない。1 枚目が全部不透明なら、
+/// 半透明を持つ 2 枚目からも 1 枚目の左上の色を抜く。
+#[test]
+fn undeclared_animation_follows_frame_zero_in_every_frame() {
+    let (frames, log) = frames_as(
+        animated(&[([K0, H, X, X], 100), ([K0, K0, X, Y], 50)], true),
+        UseSelfAlpha::Undeclared,
+    );
+    assert_eq!(frames[0], vec![K0, H, X, X], "alpha side: frame 0");
+    assert_eq!(frames[1], vec![K0, K0, X, Y], "alpha side: frame 1");
+    assert!(!log.contains(KEYED), "{log}");
+
+    let (frames, log) = frames_as(
+        animated(&[([K0, X, X, K0], 100), ([K0, H, K0, X], 50)], true),
+        UseSelfAlpha::Undeclared,
+    );
+    assert_eq!(frames[0], vec![CLEAR, X, X, CLEAR], "key side: frame 0");
+    assert_eq!(frames[1], vec![CLEAR, H, CLEAR, X], "key side: frame 1");
+    assert_eq!(log.matches(KEYED).count(), 1, "{log}");
+}
+
+/// `.pna` を添えた α なしの絵（静止画と動く絵）は、4 通りの宣言のどれでも `.pna` が無いときと
+/// 同じ画素で載り、失敗の一覧は空で、`ignored_pna` は添えた枚数に等しい（要件 3.3・4.3・5.7）。
+#[test]
+fn pna_is_ignored_and_counted_for_every_declaration() {
+    let names = ["anim.png", "s.png"];
+    let decoder = |pna: bool| {
+        let mut dec = with_animation(opaque_frames());
+        insert_still(&mut dec, "s.png", image([K0, X, X, K0], false));
+        if pna {
+            for rel in names {
+                dec.insert_pna(Path::new(BASE).join(rel));
+            }
+        }
+        dec
+    };
+    for decl in [
+        UseSelfAlpha::On,
+        UseSelfAlpha::Full,
+        UseSelfAlpha::Off,
+        UseSelfAlpha::Undeclared,
+    ] {
+        let bake = |pna| {
+            bake_as(
+                &decoder(pna),
+                &names,
+                decl,
+                AnimationLimits::default(),
+                PackConfig::default(),
+            )
+        };
+        let (with, without) = (bake(true), bake(false));
+        assert!(with.errors.is_empty(), "{decl:?}: {:?}", with.errors);
+        assert!(without.errors.is_empty(), "{decl:?}: {:?}", without.errors);
+        assert_eq!(with.ignored_pna, names.len(), "{decl:?}");
+        assert_eq!(without.ignored_pna, 0, "{decl:?}");
+        assert_eq!(
+            with.table.len(),
+            4,
+            "{decl:?}: two keys and two more frames"
+        );
+        assert_eq!(dump(&with.table), dump(&without.table), "{decl:?}");
+    }
 }

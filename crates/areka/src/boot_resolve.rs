@@ -1,11 +1,14 @@
 //! 起動解決の純粋な判断（areka-P0-baseware-root-layout 要件 4・5）。
 //!
-//! 起動するゴースト（6 分岐）とバルーン（7 分岐）を「argv・記憶の値・同梱の名・列挙の名前」
-//! だけから決める。判断は I/O・時計・乱数源を持たず、無作為は「候補数 → 添字」の関数を
-//! 注入する（本番は [`pick_index`]）。列挙の並びは判断に使わない（裁定 3）。
+//! 起動するゴースト（6 分岐）とバルーン（8 分岐＝argv・記憶・descript・同梱・唯一・既定・
+//! 無作為・0）を「argv・記憶の値・ゴーストの descript の 2 鍵・同梱の名・列挙の素性」だけから
+//! 決める。判断は I/O・時計・乱数源を持たず、無作為は「候補数 → 添字」の関数を注入する
+//! （本番は [`pick_index`]）。列挙の並びは判断に使わない（裁定 3）。ただ 1 点、descript の
+//! `balloon` に `name` が一致するバルーンが複数在るときだけ、列挙の並び（フォルダ名の昇順）で
+//! 最初のものにする（areka-P0-ghost-standard-balloon 要件 2.6）。
 //!
 //! 既定の定数 [`DEFAULT_GHOST_FOLDER`]／[`DEFAULT_BALLOON_FOLDER`] はこのファイルだけが持ち、
-//! 解決の判断での参照はそれぞれゴーストの段 4・バルーンの段 5 の 1 か所だけ（要件 4.11・5.9）。
+//! 解決の判断での参照はそれぞれゴーストの段 4・バルーンの段 6 の 1 か所だけ（要件 4.11・5.9）。
 //! 判断の外では、切替の降ろした直後の記憶 [`write_switch_drop`] が既定ゴーストを最後のゴーストの
 //! 書き先に使う（要件 12.6）。
 
@@ -44,6 +47,8 @@ pub(crate) enum GhostRoute {
 pub(crate) enum BalloonRoute {
     Argv,
     Memory,
+    /// ゴーストの descript.txt の `default.balloon.path`・`balloon` で決まった。
+    Descript,
     Companion,
     Only,
     Default,
@@ -98,16 +103,47 @@ pub(crate) struct BalloonInputs<'a> {
     pub argv: Option<&'a Path>,
     /// 起動するゴーストの Ghost スコープ `areka.last.balloon`
     pub memory: Option<&'a str>,
-    /// `<ゴースト>/install.txt` の `balloon.directory`
+    /// ゴーストの descript.txt の `default.balloon.path`
+    pub default_balloon_path: Option<&'a str>,
+    /// ゴーストの descript.txt の `balloon`
+    pub balloon_name: Option<&'a str>,
+    /// `<ゴースト>/install.txt` の同梱の最初の 1 個（無印 → `balloon0`）の `*.directory`
     pub companion: Option<&'a str>,
-    /// `list_balloons` の folder（昇順）
-    pub listed: &'a [String],
+    /// `list_balloons` の戻り（フォルダ名の昇順）
+    pub listed: &'a [areka_ghost::catalog::BalloonEntry],
 }
 
 /// `name` が列挙に在ればその名を返す（在る・無いの判定だけ。並びは見ない）。
 fn find<'a>(listed: &'a [String], name: &str) -> Option<&'a str> {
     listed.iter().find(|f| *f == name).map(String::as_str)
 }
+
+/// [`find`] のバルーンの一覧版（フォルダ名で突き合わせる）。
+fn find_balloon<'a>(
+    listed: &'a [areka_ghost::catalog::BalloonEntry],
+    name: &str,
+) -> Option<&'a str> {
+    listed
+        .iter()
+        .map(|e| e.identity.folder.as_str())
+        .find(|f| *f == name)
+}
+
+/// descript の `balloon` の突き合わせ: `name` が一致する最初（列挙の並び＝フォルダ名の昇順）、
+/// 1 つも無いときに限りフォルダ名（実行中の `\![change,balloon,名前]` のふつうの名前と同じ・要件 2.6）。
+fn find_balloon_by_name<'a>(
+    listed: &'a [areka_ghost::catalog::BalloonEntry],
+    name: &str,
+) -> Option<&'a str> {
+    listed
+        .iter()
+        .find(|e| e.identity.name.as_deref() == Some(name))
+        .map(|e| e.identity.folder.as_str())
+        .or_else(|| find_balloon(listed, name))
+}
+
+/// descript の段で鍵ごとに使う突き合わせ（[`find_balloon`] か [`find_balloon_by_name`]）。
+type FindBalloon = for<'l> fn(&'l [areka_ghost::catalog::BalloonEntry], &str) -> Option<&'l str>;
 
 /// 段 1〜5＋0 体（要件 4.1〜4.7）。`pick` は「候補数 n（≥ 2）→ 0..n の添字」。純粋。
 pub(crate) fn resolve_ghost(
@@ -165,7 +201,8 @@ pub(crate) fn resolve_ghost(
     }
 }
 
-/// 段 1〜6＋0（要件 5.1〜5.8）。`pick` は「候補数 n（≥ 2）→ 0..n の添字」。純粋。
+/// 段 1〜7＋0（完了 spec の要件 5.1〜5.8 に areka-P0-ghost-standard-balloon の要件 3.1 の descript の段を
+/// 足した並び）。`pick` は「候補数 n（≥ 2）→ 0..n の添字」。純粋。
 pub(crate) fn resolve_balloon(
     inputs: &BalloonInputs<'_>,
     pick: impl FnOnce(usize) -> usize,
@@ -186,7 +223,7 @@ pub(crate) fn resolve_balloon(
     };
     // 段 2: ゴーストごとの記憶（同梱より先＝裁定 4）。
     if let Some(memory) = inputs.memory {
-        match find(listed, memory) {
+        match find_balloon(listed, memory) {
             Some(folder) => return Ok(at(BalloonRoute::Memory, folder)),
             None => tracing::warn!(
                 event = "last_balloon_not_found",
@@ -196,9 +233,33 @@ pub(crate) fn resolve_balloon(
             ),
         }
     }
-    // 段 3: ゴーストの同梱（install.txt の balloon.directory）。
+    // 段 3: ゴーストの descript.txt（`default.balloon.path` → `balloon`・当たった鍵より後ろは見ない）。
+    // 値は読み替えない（`..`・絶対パス・区切りはフォルダ名に完全一致しないので当たらない）。
+    // `random`・`lastinstalled` も他の値と同じく突き合わせるだけ（要件 2.8）。
+    let descript: [(&str, Option<&str>, FindBalloon); 2] = [
+        (
+            "default.balloon.path",
+            inputs.default_balloon_path,
+            find_balloon,
+        ),
+        ("balloon", inputs.balloon_name, find_balloon_by_name),
+    ];
+    for (key, value, find) in descript {
+        let Some(value) = value else { continue };
+        match find(listed, value) {
+            Some(folder) => return Ok(at(BalloonRoute::Descript, folder)),
+            None => tracing::warn!(
+                event = "descript_balloon_not_found",
+                key,
+                value,
+                balloon_store = %inputs.root.balloon_store().display(),
+                "[boot_resolve] ゴーストの descript.txt が指すバルーンが根に見つからないので次の候補へ進みます"
+            ),
+        }
+    }
+    // 段 4: ゴーストの同梱（install.txt の同梱の最初の 1 個＝無印 → `balloon0`）。
     if let Some(companion) = inputs.companion {
-        match find(listed, companion) {
+        match find_balloon(listed, companion) {
             Some(folder) => return Ok(at(BalloonRoute::Companion, folder)),
             None => tracing::warn!(
                 event = "companion_balloon_not_found",
@@ -213,15 +274,15 @@ pub(crate) fn resolve_balloon(
         [] => Err(NoBalloon {
             balloon_store: inputs.root.balloon_store(),
         }),
-        // 段 4: 唯一。
-        [only] => Ok(at(BalloonRoute::Only, only)),
+        // 段 5: 唯一。
+        [only] => Ok(at(BalloonRoute::Only, &only.identity.folder)),
         _ => {
-            // 段 5: 既定（DEFAULT_BALLOON_FOLDER を参照するのはこの段だけ）。
-            if let Some(folder) = find(listed, DEFAULT_BALLOON_FOLDER) {
+            // 段 6: 既定（DEFAULT_BALLOON_FOLDER を参照するのはこの段だけ）。
+            if let Some(folder) = find_balloon(listed, DEFAULT_BALLOON_FOLDER) {
                 return Ok(at(BalloonRoute::Default, folder));
             }
-            // 段 6: 無作為。
-            let folder = listed[pick(listed.len())].as_str();
+            // 段 7: 無作為。
+            let folder = listed[pick(listed.len())].identity.folder.as_str();
             tracing::info!(
                 event = "balloon_picked_randomly",
                 folder,
@@ -542,3 +603,7 @@ fn remembered<'a>(
 #[cfg(test)]
 #[path = "boot_resolve_tests.rs"]
 mod boot_resolve_tests;
+
+#[cfg(test)]
+#[path = "boot_resolve_balloon_tests.rs"]
+mod boot_resolve_balloon_tests;

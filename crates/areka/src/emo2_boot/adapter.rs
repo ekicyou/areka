@@ -32,6 +32,7 @@ use crate::emo2_boot::target_map::{balloon_target, scope_of, shell_target};
 ///   `surface_id` は seriko が解決済みの数値 id をそのまま転写し、**alias を再適用しない**（R5.3）。
 ///   `pattern` はシェル面 `Show` と同様に非改変で転写する（R5.1・cue 由来は空 pattern＝R5.4）。
 /// - `HideBalloon { scope }` → バルーン表示対象の `Hide`（R3.4／R5.2）。
+/// - `StageAck { scope, generation }` → バルーン表示対象の `StageAck`（世代はそのまま）。
 ///
 /// `reply` は常に `None`（撃ちっぱなし・fire-and-forget）。scope（`ActorKey`）が非数値のとき
 /// （`scope_of` が `None`）は本関数も `None` を返し、呼び手（`PresentBridge::send`）が `warn!` ＋
@@ -81,6 +82,11 @@ pub fn map_display_command(cmd: DisplayCommand) -> Option<PresentCommand> {
         // 定義を替えた合図は 1 件の命令へ写せない（scope ごとの置き換えは荷物と突き合わせて
         // `PresentBridge::send` が先に捌く）。純変換としては写す先が無い。
         DisplayCommand::Rebased { .. } => return None,
+        // 出番の世代を知った合図: バルーン表示対象へ（spec: areka-P0-animated-image-playback 要件 2.3・6.1）。
+        DisplayCommand::StageAck { scope, generation } => PresentCommand::StageAck {
+            target: balloon_target(scope_of(&scope)?),
+            generation,
+        },
     })
 }
 
@@ -229,6 +235,9 @@ const _: fn() = || {
 #[cfg(test)]
 #[path = "adapter_rebased_tests.rs"]
 mod rebased_tests;
+#[cfg(test)]
+#[path = "adapter_stage_tests.rs"]
+mod stage_tests;
 
 #[cfg(test)]
 mod tests {

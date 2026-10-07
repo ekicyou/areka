@@ -11,15 +11,18 @@ use crate::canvas::ContentCanvas;
 use crate::choice::{
     annotate_lines, decorate_canvas, derive_hit_rows, glyph_cells, line_bands, to_window_physical,
 };
-use crate::layout::{LayoutEngine, WrapPlan};
+use crate::cursor_tag::CursorWarnGuard;
+use crate::layout::{GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
+use crate::lookahead::{Basis, TalkLookahead};
 use crate::place::{PlaceKey, TextPlace};
 use crate::region::{ImagePx, ScaleContract};
 use crate::segment::segment_plan;
+use crate::state::TextLayerState;
 use crate::surface::TextSurface;
 use crate::wrap::WrapMode;
 
 use super::decoration;
-use super::{ActorRender, ChoiceHitRow, TextLayerRuntime};
+use super::{ActorRender, ChoiceHitRow, ResolvedBalloonText, TextLayerRuntime};
 
 /// フレーム提示ステップ（毎フレーム UI スレッドで呼ぶ・example/emo2-boot が駆動）:
 /// `talk_time` は注入時刻（talk 起点相対秒・実時間 sleep 不使用・R3.3）。
@@ -236,38 +239,23 @@ fn present_actor(
             context: "ActorRender missing after attach",
         });
     };
-    let Some(actor_state) = runtime.state.place_state(place) else {
+    // 「見える数 → 区切り → 配置」は [`arrange_lines`] の 1 回の呼び出し（検査も同じ関数を呼ぶ）。
+    let Some(lines) = arrange_lines(
+        &runtime.state,
+        &mut runtime.lookahead,
+        &mut runtime.cursor_warn,
+        place,
+        &resolved,
+        &render.metrics,
+        talk_time,
+    ) else {
         // present_frame は state 由来の場所だけを渡す——防御的に空フレーム扱い。
         return Ok(());
     };
-    let visible = actor_state.reveal().visible(talk_time);
-    // 折返し計画: ON（BudouxWordWrap）のときだけ分かち書き境界を全 items から計算し
-    // layout へ供給する。OFF（CharByChar）は plan を計算すらしない（R4.2 の構造保証——
-    // segment_plan を呼ぶのは Segmented アームだけ）。`plan` は ON アームでのみ束縛され、
-    // 借用 `&plan` が layout 呼出まで生存するよう遅延初期化パターンで宣言する。
-    let plan;
-    let wrap = match resolved.wrap {
-        WrapMode::CharByChar => WrapPlan::CharByChar,
-        WrapMode::BudouxWordWrap => {
-            plan = segment_plan(actor_state.items());
-            WrapPlan::Segmented(&plan)
-        }
+    let Some(actor_state) = runtime.state.place_state(place) else {
+        // 直前の arrange_lines が状態を引けている——構造上起こらない（防御的に空フレーム扱い）。
+        return Ok(());
     };
-    // `\_l` の座標解決の縮退（`CursorDegrade`・5.1〜5.3）の warn-once を production で有効化する持続 guard を渡す
-    // （純挙動は `layout` と完全同一——差は縮退ログの有無のみ・task 4.2 が本配線へ委譲）。
-    // 装飾入りの配置の入口（要件 14.1／14.2・番号列が既定だけなら従来と同一の出力）。
-    let lines = LayoutEngine::layout_styled(
-        actor_state.items(),
-        visible,
-        &resolved.region,
-        resolved.mode,
-        resolved.font.height,
-        &render.metrics,
-        wrap,
-        decoration::glyph_styles_of(actor_state, &resolved),
-        actor,
-        &mut runtime.cursor_warn,
-    );
     let window = LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode);
 
     // ── 選択肢パイプライン: 同一 lines を単一の源に 注釈→装飾→描画（表示とヒットの単一導出・R3.3/5.2） ──
@@ -359,4 +347,64 @@ fn present_actor(
         render.surface.present()?;
     }
     Ok(())
+}
+
+/// 場所 1 つの行の割り当てを作る（「見える数 → 区切り → 配置」の 1 つの手順）。場所に状態が無ければ `None`。
+///
+/// 本番の提示（[`present_actor`]）と検査（`TextLayerRuntime::arrange_for_test`）が同じ関数を呼ぶ。
+/// 字幅は引数で受けるので GPU の資源を要らない（検査は決まった字幅を渡す）。
+/// 同じ（状態・区間の全文・配置の入力・字幅・時刻）なら同じ行の列を返す（`cursor_warn` は縮退の
+/// warn の抑えだけで行の列には効かない）。
+///
+/// 見える数はいつも届いた内容の表示の時刻から出す（字の表示の時刻を変えない・要件 2.4）。文節の
+/// 折り返しで区間の全文があり、届いた内容がその先頭と一致するときは、全文の字の列・区切り・装飾で
+/// 配置する——見えている字の行は見える数だけで決まり、後から届く字で動かない（要件 1.1・1.2）。
+///
+/// 字は台本のタグとタグの間のひと続きごとに、それぞれの時刻に分かれて届くので、届いた内容は
+/// 台詞の途中までのことが多い。区間の全文は、再生の前に知らされた台本の全部を空回しして作る
+/// （持ち主は [`TalkLookahead`]）。全文が無い（先に知らされていない）か、届いた内容が全文の先頭と
+/// 食い違うときは、届いた字の列で区切って配置する修正前の動きで続ける（記録は持ち主が場所・区間
+/// ごとに 1 度だけ出す）。
+pub(super) fn arrange_lines(
+    state: &TextLayerState,
+    lookahead: &mut TalkLookahead,
+    cursor_warn: &mut CursorWarnGuard,
+    place: &PlaceKey,
+    resolved: &ResolvedBalloonText,
+    metrics: &dyn GlyphMetrics,
+    talk_time: f64,
+) -> Option<Vec<PositionedLine>> {
+    let arrived = state.place_state(place)?;
+    let visible = arrived.reveal().visible(talk_time);
+    // 配置に使う内容（字の列・装飾）と折返し計画。1 字ずつ（CharByChar）は今の呼び方のまま
+    // 区切りを計算せず、区間の全文にも触れない（R4.2・要件 3.3）。文節（BudouxWordWrap）は
+    // 区間の全文の持ち主に聞き、全文なら全文の側の字の列・区切り・装飾（番号・表・字の無い行の丈に
+    // 使う「今の見た目」も）で、そうでなければ届いた字で区切る（修正前の動き・warn は持ち主が出す）。
+    // `plan` は届いた字で区切る腕でだけ束縛し、借用 `&plan` が layout 呼出まで生存するよう遅延初期化する。
+    let plan;
+    let (content, wrap) = match resolved.wrap {
+        WrapMode::CharByChar => (arrived, WrapPlan::CharByChar),
+        WrapMode::BudouxWordWrap => match lookahead.basis(place, arrived) {
+            Basis::Full { content, plan } => (content, WrapPlan::Segmented(plan)),
+            Basis::Arrived => {
+                plan = segment_plan(arrived.items());
+                (arrived, WrapPlan::Segmented(&plan))
+            }
+        },
+    };
+    // `\_l` の座標解決の縮退（`CursorDegrade`・5.1〜5.3）の warn-once を production で有効化する持続 guard を渡す
+    // （純挙動は `layout` と完全同一——差は縮退ログの有無のみ・task 4.2 が本配線へ委譲）。
+    // 装飾入りの配置の入口（要件 14.1／14.2・番号列が既定だけなら従来と同一の出力）。
+    Some(LayoutEngine::layout_styled(
+        content.items(),
+        visible,
+        &resolved.region,
+        resolved.mode,
+        resolved.font.height,
+        metrics,
+        wrap,
+        decoration::glyph_styles_of(content, resolved),
+        &place.actor,
+        cursor_warn,
+    ))
 }

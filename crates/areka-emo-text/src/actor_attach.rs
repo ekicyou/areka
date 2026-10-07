@@ -99,6 +99,8 @@ impl TextLayerRuntime {
         // 常に「今装着されているバルーン定義」で解決した値になる。
         self.state
             .set_look_layers(&actor, resolved.font.looks.clone());
+        // 既定の見た目が変わった＝空回しの出発点が変わったので、区間の全文を求め直す（要件 2.2）。
+        self.rehearse_again();
         self.routing.insert(place.clone(), binding);
         self.layout_input.insert(place, resolved);
     }

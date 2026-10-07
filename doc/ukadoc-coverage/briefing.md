@@ -1007,18 +1007,19 @@ not_applicable = 0
 利用者に何も見えない。下の囲みの 4 行の `absent` と `vocabulary_only` が、その「引き当てない」側の
 量である。
 
-4 行のうち `descript_balloon` と `descript_shell_surfaces` は `degraded` が 0 でない。縮退は
-「読んではいるが正典どおりには効かない」状態で、無言で捨てる経路とは別の壊れ方である（状態の
-7 語の定義は `README.md`）。残る `descript_ghost` と `descript_shell` の `degraded` は 0 で、
-この 2 ページには縮退させた実装が 1 つも無い。
+4 行のうち `descript_balloon`・`descript_shell`・`descript_shell_surfaces` は `degraded` が 0 でない。
+縮退は「読んではいるが正典どおりには効かない」状態で、無言で捨てる経路とは別の壊れ方である（状態の
+7 語の定義は `README.md`）。残る `descript_ghost` の `degraded` は 0 で、このページには縮退させた
+実装が 1 つも無い。`descript_shell` の 1 は 2026-10-06 に `areka-P0-self-alpha-declaration` が
+`seriko.use_self_alpha` を未対応から縮退へ移したもので、それまでは 0 だった。
 
 ```toml
 [[barrier]]
 page = "descript_ghost"
-implemented = 16
+implemented = 17
 vocabulary_only = 0
-degraded = 0
-absent = 58
+degraded = 1
+absent = 56
 alias = 0
 not_applicable = 0
 
@@ -1035,16 +1036,16 @@ not_applicable = 0
 page = "descript_shell"
 implemented = 17
 vocabulary_only = 2
-degraded = 0
-absent = 83
+degraded = 1
+absent = 82
 alias = 0
 not_applicable = 0
 
 [[barrier]]
 page = "descript_shell_surfaces"
 implemented = 7
-vocabulary_only = 54
-degraded = 5
+vocabulary_only = 53
+degraded = 6
 absent = 67
 alias = 4
 not_applicable = 0
@@ -1052,15 +1053,16 @@ not_applicable = 0
 
 ### 4-3. 0 と書いた欄
 
-上の 2 つの囲みには 0 の欄が 16 ある（`not_applicable` 6・`degraded` 4・`alias` 4・`absent` 1・`vocabulary_only` 1）。
+上の 2 つの囲みには 0 の欄が 15 ある（`not_applicable` 6・`degraded` 3・`alias` 4・`absent` 1・`vocabulary_only` 1）。
 0 は「調べていない」ではなく「数えて 1 件も無かった」の印なので、内訳と理由を書く。数え方は
 いずれもこの節の冒頭と同じで、ページ別に数え直した結果である。
 
 - `not_applicable` は 6 行とも 0 である。台帳全体の対象外の項目（5-2 の `[priority_blank]` の
   `not_applicable`）は `list_shiori_event_ex`・`memo_shiorievent`・`list_sakura_script` の 3 ページ
   だけに乗っており、この 6 ページには 1 件も無い。
-- `degraded` は `list_shiori_event`・`list_shiori_resource`・`descript_ghost`・`descript_shell` の
-  4 行が 0 である。この 4 ページには縮退させた実装が 1 つも無い。
+- `degraded` は `list_shiori_event`・`list_shiori_resource`・`descript_ghost` の 3 行が 0 である。
+  この 3 ページには縮退させた実装が 1 つも無い。`descript_shell` は 2026-10-06 に
+  `areka-P0-self-alpha-declaration` が `seriko.use_self_alpha` を縮退へ移したので、この列挙から外れた。
 - `alias` は `list_shiori_resource`・`descript_ghost`・`descript_balloon`・`descript_shell` の
   4 行が 0 である。別名の項目がこの 4 ページに 1 件も無い。
 - `absent` は `list_shiori_resource` の 1 行が 0 である。理由は 4-1 に書いた。

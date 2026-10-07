@@ -19,7 +19,7 @@ use areka_emo_compose::FontFollow;
 use areka_parsers::shell::{parse, parse_boxes};
 use temp_path_kit::TempPath;
 
-use super::test_support::{CapturedEvent, capture_events};
+use super::test_support::{CapturedEvent, capture_events, write_descript};
 
 /// 本モジュールが出す記録の宛先（既定の target＝モジュールパス）。
 const SHELL_TARGET: &str = "areka_emo_present::shell_target";
@@ -126,6 +126,7 @@ fn erroneous_boxes_still_load_and_each_issue_is_logged_once() {
         ),
     )
     .expect("記述ファイル作成");
+    write_descript(dir.path());
     let dec = decoder_with(dir.path(), &["base.png"]);
 
     let (target, events) = capture_events(|| {
@@ -187,6 +188,7 @@ fn shell_without_boxes_keeps_result_and_records() {
     let text = "charset,UTF-8\nsurface0\n{\nelement0,overlay,base.png,0,0\n}\n";
     let dir = TempPath::new("shell-target-boxes-none");
     std::fs::write(dir.child("surfaces.txt"), text).expect("記述ファイル作成");
+    write_descript(dir.path());
     let dec = decoder_with(dir.path(), &["base.png"]);
 
     let (target, events) =
@@ -211,6 +213,7 @@ fn shell_without_boxes_keeps_result_and_records() {
         select_surface_images::<&str>(&[]),
         dir.path(),
         &dec,
+        UseSelfAlpha::On,
     );
     let with = build_shell_target_with_boxes(
         parse(text),
@@ -218,6 +221,7 @@ fn shell_without_boxes_keeps_result_and_records() {
         select_surface_images::<&str>(&[]),
         dir.path(),
         &dec,
+        UseSelfAlpha::On,
     );
     assert!(core.boxes().is_empty() && with.boxes().is_empty());
     assert_eq!(core.box_report, with.box_report);

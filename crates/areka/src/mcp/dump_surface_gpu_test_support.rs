@@ -25,7 +25,7 @@ use areka_emo_present::shell_target::load_shell_target;
 use areka_emo_text::actor::ResolvedBalloonText;
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_kanade::{KanadeMsg, MonotonicMs, RaiseOutcome, ShioriMethod};
-use areka_mcp::tools::{Pending, ToolCall, ToolRequest, dump_balloon, dump_surface};
+use areka_mcp::tools::{Answer, Pending, ToolCall, ToolRequest, dump_balloon, dump_surface};
 use bevy_ecs::world::World;
 use windows::Win32::Foundation::{GENERIC_READ, HINSTANCE, HWND};
 use windows::Win32::Graphics::Imaging::{
@@ -162,6 +162,21 @@ impl GpuRig {
         let ghost = resolve::active(&self.rig.world).expect("A は起動中");
         crate::mcp::dump_balloon::handle(&mut self.rig.world, &ghost, args, req.reply);
         pending
+    }
+
+    /// 台詞の時計を止めたまま本番の段を有界に回し、`pending` の答えを待つ（答えが後の巡で届いても、
+    /// その場で届いていても同じに使える）。期限切れ・答えずに手放したら `None`。
+    pub(in crate::mcp) fn answer_of(&mut self, pending: &Pending) -> Option<Answer> {
+        let mut got = None;
+        self.frames_until(0, |_| match pending.try_answer() {
+            Ok(Some(answer)) => {
+                got = Some(answer);
+                true
+            }
+            Ok(None) => false,
+            Err(_) => true,
+        });
+        got
     }
 
     /// 台詞の時計を止めたまま、本番の段を `n` 巡だけ回す（読み戻しの後に画面へ遅れて届く変化が

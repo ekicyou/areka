@@ -31,7 +31,9 @@ use areka_emo_compose::{BindSet, ComposeError, Composer, PatternState};
 use areka_parsers::shell::parse;
 use temp_path_kit::TempPath;
 
-use super::test_support::{CapturedEvent, capture_events, claudia_shell_dir, with_com_initialized};
+use super::test_support::{
+    CapturedEvent, capture_events, claudia_shell_dir, with_com_initialized, write_descript,
+};
 
 /// 画像 1 枚の登録内容（ファイル名・実寸・全画素の色＝premultiplied BGRA 不透明）。
 type Image = (&'static str, (u32, u32), [u8; 4]);
@@ -75,7 +77,13 @@ fn bake(text: &str, files: &[&str], images: &[Image]) -> ShellTarget {
     for &image in images {
         insert_solid(&mut dec, &dir, image);
     }
-    build_shell_target(parse(text), select_surface_images(files), &dir, &dec)
+    build_shell_target(
+        parse(text),
+        select_surface_images(files),
+        &dir,
+        &dec,
+        UseSelfAlpha::On,
+    )
 }
 
 /// 面 1 枚を素の状態（有効 bind もコマも無い）で合成し、外形と画素列にする。
@@ -331,6 +339,7 @@ const WITH_UNDRAWN: &str = concat!(
 fn load_events(text: &str, times: usize) -> Vec<CapturedEvent> {
     let dir = TempPath::new("shell-target-element-base-warn");
     std::fs::write(dir.child("surfaces.txt"), text).expect("記述ファイル作成");
+    write_descript(dir.path());
     let mut dec = MemoryDecoder::new();
     insert_solid(&mut dec, dir.path(), ("body.png", BODY, COLOR_BODY));
     insert_solid(&mut dec, dir.path(), ("face.png", FACE, COLOR_FACE));

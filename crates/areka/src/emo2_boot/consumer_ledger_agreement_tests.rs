@@ -24,6 +24,7 @@ use std::sync::Arc;
 use std::sync::mpsc::channel;
 
 use areka_ghost::prop_sink::PROP_SET_CUE_NAME;
+use areka_parsers::sakura::JUMP_TAG_CARRIER;
 use areka_sakura::contract::FONT_TAG_CARRIER;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 
@@ -56,6 +57,18 @@ fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)> {
         ("reset", Some("zorder"), vec!["zorder"]),
         // readme_cue_tests.rs の bare_open_readme_sends_exactly_one_request
         ("open", Some("readme"), vec!["readme"]),
+        // readme_cue_tests.rs の open_forms_and_jump_send_classified_destination
+        // （areka-P0-open-external-tags の 5 組と `\j`）
+        ("open", Some("file"), vec!["file", "notepad.exe"]),
+        (
+            "open",
+            Some("browser"),
+            vec!["browser", "https://example.com/"],
+        ),
+        ("open", Some("explorer"), vec!["explorer", r"C:\x"]),
+        ("open", Some("editor"), vec!["editor", "a.txt", "3"]),
+        ("open", Some("mailer"), vec!["mailer", "a@b.c"]),
+        (JUMP_TAG_CARRIER, None, vec!["http://example.com/"]),
         // user_break_cue_tests.rs の enter／leave
         ("enter", Some("nouserbreakmode"), vec!["nouserbreakmode"]),
         ("leave", Some("nouserbreakmode"), vec!["nouserbreakmode"]),

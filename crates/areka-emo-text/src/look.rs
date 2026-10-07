@@ -316,6 +316,11 @@ impl StyleTable {
         self.looks.is_empty()
     }
 
+    /// この表の先頭が `prefix` と一致するか（追記専用なので、同じ流れの途中の表は先頭が一致する）。
+    pub fn starts_with(&self, prefix: &StyleTable) -> bool {
+        self.looks.starts_with(&prefix.looks)
+    }
+
     /// 表を空にする（スコープの消去点で呼ぶ）。
     pub fn clear(&mut self) {
         self.looks.clear();

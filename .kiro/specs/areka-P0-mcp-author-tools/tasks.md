@@ -119,3 +119,4 @@
 ## Implementation Notes
 
 - 2.3: `\!` を拾う表（`consumer_ledger.rs`）は `open-external-tags` の spec でも行を足す。後からマージする側が、相手の担当の種類・表の行・見本（`consumer_ledger_agreement_tests.rs`）を足し直し、件数（17＋相手の分）とモジュールの doc を数え直す。相手が新しい受け口を足すなら、`emo2_sink_of` と `reached()` にも加える。
+- 2.3 の後の main の取り込み（10-08）: `open-external-tags` が先に main へ入っていたので、こちらが後から入る側として足し直した。表は 21＋2＝23 行（件数のテスト・モジュールの doc・共存の檻の 3 か所）、一致のテストの見本へ `open` の 5 組（引数つき）と `\j`（`http://` の URL）を足した。`decode.rs` の `\j` の腕は相手の形のまま、末尾の `decode_passthrough_tag` だけ印を渡す形にした。4.1 の判断では `\j` は表の担当あり（`ReadmeSink`）として扱われる。

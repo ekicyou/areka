@@ -32,14 +32,19 @@ pub mod method;
 pub use method::{BlendKind, BlendMode, ComposeMethod};
 pub mod bind;
 pub mod composed;
+pub mod film;
+pub use film::{FilmSheet, FilmSheets, FilmSkip, FilmSkipReason};
 pub mod nesting;
 pub mod normalized;
 pub mod pattern;
 pub use bind::BindSet;
 pub use composed::ComposedSurface;
-pub use nesting::{ElementKind, NestIssue, NestReport, NestTable, SurfaceParts, element_kind};
+pub use nesting::{
+    ElementKind, FilmId, NestIssue, NestReport, NestTable, PartKey, SurfaceParts, element_kind,
+    is_always_interval, rest_index,
+};
 pub use normalized::{NormalizedElement, SurfaceMaster, Transform};
-pub use pattern::{PatternFrame, PatternState};
+pub use pattern::{Cell, PatternFrame, PatternState};
 pub mod world;
 pub use world::{AliasMap, AtlasBinding, EmoWorld, ShellSettings, SurfaceId, SurfaceIndex};
 pub mod atlas_bind;
@@ -51,6 +56,7 @@ pub use boxes::{
 };
 pub mod fold;
 pub mod plan;
+mod plan_always;
 pub use plan::BlitOp;
 pub mod blit;
 pub mod hit;

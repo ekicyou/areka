@@ -25,6 +25,9 @@ mod decode;
 #[cfg(test)]
 mod decode_tests;
 
+#[cfg(test)]
+mod decode_jump_tests;
+
 mod parse;
 
 #[cfg(test)]
@@ -34,5 +37,7 @@ mod parse_tests;
 mod validation_tests;
 
 pub use lexer::substitute_system_vars;
-pub use model::{Choice, Instruction, MoveArgs, NewLineRatio, Read, ReadNote, SurfaceArg};
+pub use model::{
+    Choice, Instruction, JUMP_TAG_CARRIER, MoveArgs, NewLineRatio, Read, ReadNote, SurfaceArg,
+};
 pub use parse::{parse, parse_noted};
