@@ -137,6 +137,7 @@
   - クレートの文書の「切り替えたい範囲は重ねずに登録する」の案内を、新しい振る舞いの説明に替え、design.md の状態機械の節と要件の表を合わせる
   - 完了の状態: turn・system のテストが緑。サンプルの「重なった 2 つ」で外側から内側へ移ると内側の説明に切り替わることを実機で確かめ（記録の抜き出し）、`research.md` に残す
   - _Requirements: 2.5, 2.6, 2.10, 4.5_
+  - _Blocked:_ 実機の確かめは 2026-10-08 にスクリーンセーバー中で走らず（手前の窓が無い）。在席時に `pwsh -NoProfile -File target\tooltip_64_real\run_64.ps1` と S4（`cargo test -p wintf --lib tooltip::os -j 4 -- --ignored --test-threads=1 s4_`）を回し、research.md 14.6 に記録する
   - _Boundary: turn.rs・turn_tests.rs・system_tests.rs・mod.rs の文書_
 
 - [ ] 6.2 全体の検査
