@@ -5,6 +5,9 @@
 
 mod resolve;
 
+// 一時の許可: 判断を呼ぶ処理が本番の振り分けに結線されるのは 5.1。5.1 で外す。
+#[allow(dead_code)]
+mod check_script_judge;
 mod dump_balloon;
 mod dump_surface;
 mod get_active_ghost_list;
