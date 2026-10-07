@@ -174,3 +174,8 @@ ukadoc 網羅調査の文書（`doc/ukadoc-coverage/roadmap-draft.md`・`briefin
 
 - 台帳 `doc/ukadoc-coverage/ledger/assets.toml` の `descript_ghost` の `balloon`（実装済み）と `default.balloon.path`（縮退）の 2 項目は、備考の束の説明が「束: 既定で着せる吹き出し・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）」のまま。`ghost-standard-balloon` で読む経路ができたので、小分類「読む経路が無い」と「先に要る仕組み」はもう現状ではない。`ghost-standard-balloon` は束の組み替えを自分の範囲の外として触らなかった（束の名前と順位は `linkage.md`・`briefing.md` の数と結び付いている）。
 - 本 spec で束の説明を撮り直すとき、`priority` の付け直しと一緒にこの 2 行の小分類を直す。束「既定で着せる吹き出し」のほかの項目（シェルの descript の `balloon` など）が読む経路を持たないままかも、同じときに数え直す。
+
+## `areka-P0-animated-image-playback` からの申し送り（2026-10-07・完了時の棚卸）
+
+- `doc/ukadoc-coverage/briefing-assets.md` の「SERIKO/MAYUNA 世代別対応表」は「手で書いていない」「貼ったものと作り直したものが 1 バイトも違わない」と書くが、常設の検査の外にあり、`element-base-method`（2026-10-05）の時点から台帳 `ledger/assets.toml` と食い違ったまま。`animated-image-playback` が `always` を縮退へ移した分も載っていない。
+- 本 spec で、写しを撮り直すか、日付付きの写真と明記するか、検査に入れるかを決める。
