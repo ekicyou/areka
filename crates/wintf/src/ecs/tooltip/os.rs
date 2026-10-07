@@ -4,7 +4,8 @@
 //! 最大の幅・改行の揃え・はみ出す行の割り方）は `geometry` に置き、ここは OS に渡すだけ。
 
 use super::geometry::{
-    PlaceInput, PointPx, RectPx, SizePx, force_break, max_tip_width, normalize_newlines, place,
+    PlaceInput, PointPx, RectPx, SizePx, force_break, logical_max_width, max_tip_width,
+    normalize_newlines, place,
 };
 use super::turn::FALLBACK_HOVER_TIME;
 use std::cell::Cell;
@@ -17,13 +18,14 @@ use windows::Win32::Graphics::Gdi::{
     MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint, ReleaseDC, SelectObject,
 };
 use windows::Win32::UI::Controls::{
-    ICC_BAR_CLASSES, INITCOMMONCONTROLSEX, InitCommonControlsEx, TOOLTIPS_CLASS, TTF_ABSOLUTE,
-    TTF_TRACK, TTF_TRANSPARENT, TTM_ADDTOOLW, TTM_ADJUSTRECT, TTM_SETMAXTIPWIDTH,
+    CCM_GETVERSION, ICC_BAR_CLASSES, INITCOMMONCONTROLSEX, InitCommonControlsEx, TOOLTIPS_CLASS,
+    TTF_ABSOLUTE, TTF_TRACK, TTF_TRANSPARENT, TTM_ADDTOOLW, TTM_ADJUSTRECT, TTM_SETMAXTIPWIDTH,
     TTM_TRACKACTIVATE, TTM_TRACKPOSITION, TTM_UPDATETIPTEXTW, TTS_ALWAYSTIP, TTS_NOANIMATE,
     TTS_NOFADE, TTS_NOPREFIX, TTTOOLINFOW,
 };
 use windows::Win32::UI::HiDpi::{
-    GetDpiForMonitor, GetSystemMetricsForDpi, MDT_EFFECTIVE_DPI, SystemParametersInfoForDpi,
+    GetDpiForMonitor, GetDpiForWindow, GetSystemMetricsForDpi, MDT_EFFECTIVE_DPI,
+    SystemParametersInfoForDpi,
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, VIRTUAL_KEY, VK_LBUTTON, VK_MBUTTON, VK_RBUTTON, VK_XBUTTON1, VK_XBUTTON2,
@@ -31,9 +33,10 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, GetCursorPos, GetWindowRect, HWND_TOPMOST, IsWindowVisible,
     LWA_ALPHA, NONCLIENTMETRICSW, SM_CYCURSOR, SPI_GETMOUSEHOVERTIME, SPI_GETNONCLIENTMETRICS,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SendMessageW,
-    SetLayeredWindowAttributes, SetWindowPos, SystemParametersInfoW, WINDOW_STYLE, WM_SETFONT,
-    WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
+    SendMessageW, SetLayeredWindowAttributes, SetWindowPos, SystemParametersInfoW, WINDOW_STYLE,
+    WM_SETFONT, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+    WS_EX_TRANSPARENT, WS_POPUP,
 };
 use windows::core::{PCWSTR, PWSTR};
 
@@ -146,6 +149,10 @@ pub(crate) struct TipWindow {
     hwnd: Option<HWND>,
     /// 渡してある字体と、それを作った DPI。
     font: Option<(HFONT, u32)>,
+    /// 標準の部品の版 6 か。版 6 は `TTM_SETMAXTIPWIDTH` の幅に窓の DPI の倍率を掛けて折り返す
+    /// （版 5 は渡した幅のまま）。窓を作ったときに `CCM_GETVERSION` で見る（版 5 は 0、版 6 は 6
+    /// を返す。窓ごとに見るので、同じプロセスに両方の版があっても取り違えない）。
+    v6: bool,
 }
 
 impl TipWindow {
@@ -209,17 +216,45 @@ impl TipWindow {
             );
             (UNBOUNDED, 96)
         });
+        // ⓪ 窓の DPI を出す画面の DPI に揃える。版 6 は今の窓の DPI で並べ、窓が別の DPI の画面へ
+        // 動くとその DPI で並べ直す。画面の外 (PARKED) では最後に居た画面の DPI のまま。揃えずに
+        // 測ると、出した所で大きさが変わり、置き場所がずれる。隠したまま出す所へ動かすと、窓の DPI
+        // はその画面の DPI になり、画面の外へ移っても保たれる（6.3 の実機）。
+        // SAFETY: Win32 境界。自分の窓の DPI を読むだけ。
+        if unsafe { GetDpiForWindow(hwnd) } != dpi {
+            self.hide();
+            // SAFETY: Win32 境界。隠れている自分の窓の位置だけを変える（見せない・入力先を取らない）。
+            unsafe {
+                SetWindowPos(
+                    hwnd,
+                    None,
+                    anchor.x,
+                    anchor.y,
+                    0,
+                    0,
+                    SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOZORDER,
+                )
+            }
+            .map_err(|_| TooltipOsError::Show { stage: "dpi" })?;
+        }
         // ① 字体（DPI が前回と同じなら作り直さない）。
         let font = self.ensure_font(hwnd, dpi)?;
-        // ② 最大の幅。
+        // ② 最大の幅。版 6 には窓の DPI の倍率で割り戻した幅を渡す（OS が掛け戻して物理の幅で折る）。
         let max_width = max_tip_width(dpi, work_area);
+        // SAFETY: Win32 境界。自分の窓の DPI を読むだけ。
+        let window_dpi = unsafe { GetDpiForWindow(hwnd) };
+        let os_max_width = if self.v6 {
+            logical_max_width(max_width, window_dpi)
+        } else {
+            max_width
+        };
         // SAFETY: Win32 境界。自分のツールチップの窓へ値だけを渡す。
         unsafe {
             SendMessageW(
                 hwnd,
                 TTM_SETMAXTIPWIDTH,
                 Some(WPARAM(0)),
-                Some(LPARAM(max_width as isize)),
+                Some(LPARAM(os_max_width as isize)),
             );
         }
         // ③ CR LF に揃えた文字 → ④ 大きさを測る。
@@ -227,7 +262,7 @@ impl TipWindow {
         let mut size = set_text_and_measure(hwnd, &text)?;
         // 最大の幅は文字の幅なので、ふちを足した窓の幅と比べる（測った大きさと同じ窓の矩形の単位）。
         // 越えていれば分けられない語が残っている。
-        if size.width > window_width_for(hwnd, max_width) {
+        if size.width > width_limit(hwnd, max_width, window_dpi) {
             text = break_long_lines(hwnd, font, &text, max_width)?;
             size = set_text_and_measure(hwnd, &text)?;
         }
@@ -318,6 +353,9 @@ impl TipWindow {
                 "TTM_ADDTOOLW",
             )));
         }
+        // SAFETY: Win32 境界。自分の窓に標準の部品の版を問うだけ。
+        let version = unsafe { SendMessageW(hwnd, CCM_GETVERSION, None, None) }.0;
+        self.v6 = version >= 6;
         self.hwnd = Some(hwnd);
         Ok(hwnd)
     }
@@ -465,6 +503,18 @@ fn window_rect(hwnd: HWND) -> Result<RectPx, TooltipOsError> {
         right: rc.right,
         bottom: rc.bottom,
     })
+}
+
+/// 最大の幅 max_width の行を並べた窓の幅の上限。これを越えた窓には、OS が分けられなかった語がある。
+///
+/// ふちと余白は `TTM_ADJUSTRECT(TRUE)` で足し、遊びを 2 論理ピクセル足す。OS が並べた窓の幅は、
+/// ADJUSTRECT の答えより版 5 で 0〜1、版 6 で 1〜2 ピクセル広い（版 6 はふちの換算の差、両方とも
+/// 行の終わりの字のはみ出しの分。6.3 の実機の 200%・150%）。遊びが無いと、OS が最大の幅の内で
+/// 折り返せた英語の行まで越えたと見て、語の途中で割ってしまう。
+// ponytail: 遊びの分（2 論理ピクセル）だけ最大の幅を越える分けられない語は割らない（窓がその分
+// 広くなるだけ）。ぴったりにするなら、字体を作るたびに 1 行の見本を OS に並べさせてふちを測る。
+fn width_limit(hwnd: HWND, max_width: i32, window_dpi: u32) -> i32 {
+    window_width_for(hwnd, max_width) + scale(2, window_dpi)
 }
 
 /// 文字の幅 text_width を出すのに要る窓の幅（ふちと余白を足す）。読めなければ text_width。

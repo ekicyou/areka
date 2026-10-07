@@ -257,3 +257,22 @@ fn max_tip_width_scales_with_dpi_and_caps_at_work_area() {
     assert_eq!(max_tip_width(96, rect(0, 0, 300, 1080)), 300);
     assert_eq!(max_tip_width(144, rect(-1920, 0, -1500, 1080)), 420);
 }
+
+/// 版 6 には、窓の DPI の倍率を掛け戻すと物理の最大の幅に収まる幅を渡す（6.3）。
+#[test]
+fn logical_max_width_divides_back_without_exceeding_physical() {
+    assert_eq!(logical_max_width(640, 192), 320);
+    assert_eq!(logical_max_width(480, 144), 320);
+    assert_eq!(logical_max_width(320, 96), 320);
+    // 作業領域で頭打ちにした割り切れない幅は切り捨てる（掛け戻して 419.x ≦ 420）。
+    assert_eq!(logical_max_width(420, 144), 280);
+    assert_eq!(logical_max_width(421, 144), 280);
+    for (physical, dpi) in [(421, 144), (999, 120), (1001, 168), (333, 240)] {
+        // OS が四捨五入で掛け戻しても越えない。
+        let back = (i64::from(logical_max_width(physical, dpi)) * i64::from(dpi) + 48) / 96;
+        assert!(
+            back <= i64::from(physical),
+            "{physical}@{dpi}: 掛け戻して {back}"
+        );
+    }
+}

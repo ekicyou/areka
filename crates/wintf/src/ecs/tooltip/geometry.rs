@@ -207,6 +207,13 @@ pub(crate) fn max_tip_width(dpi: u32, work_area: RectPx) -> i32 {
     scaled.min(work) as i32
 }
 
+/// 版 6 の `TTM_SETMAXTIPWIDTH` に渡す幅。版 6 は渡した幅に窓の DPI の倍率（dpi / 96）を掛けて
+/// 折り返すので、物理の最大の幅を倍率で割り戻す。切り捨てて、掛け戻した幅が物理の幅を越えない
+/// ようにする（越えると OS が並べた行が最大の幅を越え、`force_break` が語の途中で割る）。
+pub(crate) fn logical_max_width(physical: i32, window_dpi: u32) -> i32 {
+    (i64::from(physical) * 96 / i64::from(window_dpi.max(1))) as i32
+}
+
 #[cfg(test)]
 #[path = "geometry_tests.rs"]
 mod geometry_tests;
