@@ -227,7 +227,7 @@ Provide output in the language specified in `spec.json` with the following struc
    - Requirements: confirm `requirements.md` was generated and the subagent's automated review gate passed.
    - Gap analysis: confirm the gap-analysis document was written (give its path).
    - Discussion: summarize the discussion outcome — counts for Category A (obvious fixes), Category B (design decisions deferred), and Category C (developer-resolved), or note "no issues found" / "stopped with open topics".
-6. **Next Step**: Command block showing `/kiro-spec-design <feature-name>` (gap analysis and the requirements discussion are already complete).
+6. **Next Step**: Command block showing `/kiro-spec-design <feature-name>` (gap analysis and the requirements discussion are already complete), followed by the discussion's design-model recommendation (**Fable 推奨** or **Opus で十分**, with its 1–2 line reason; criteria in kiro-requirements-discussion Phase 7).
 
 **Format Requirements**:
 - Use Markdown headings (##, ###)

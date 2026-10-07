@@ -135,3 +135,4 @@ SSP 2.9.07（`baseware.version` → `SSP/2.9.07 (20261001-0; Windows NT 10.0.263
 | ` C:\…\ghost\emo2\ `（パスの前後に空白） | `NG:Cannot find active ghost from specified name` |
 
 areka の宛先の解決（`crates/areka/src/mcp/resolve.rs` の `resolve`・`mcp-tool-entrances` の要件 3.2〜3.5）との違いは 4 つ: ⑴ 名前の英字の大小（areka は区別する）、⑵ 本体側名（areka は照合しない）、⑶ 名前の前後の空白（areka は削らない）、⑷ 空文字（areka は省略と同じに扱い、`get_expression_table` では `NG:Specified ghost is not active` と答える）。パスの照合（大小・区切り・末尾の区切りを同じとみなす・フォルダ名だけは不一致）は同じ。
+（2026-10-06 追記）この 4 つの違いは `areka-P0-mcp-ghost-name-match` の着地で無くなった。areka は上の表のどの行にも SSP と同じ答えを返す（実機の記録は同 spec の `verification/signoff.md`）。

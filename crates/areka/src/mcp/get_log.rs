@@ -40,7 +40,7 @@ fn answer(
             None => return outcome::ng(UNKNOWN_LOG_TYPE),
         },
     };
-    // 2. ゴースト。空は解決へ渡さない（解決は空を省略として扱う。SSP は空も Cannot find）。
+    // 2. ゴースト。空は解決へ渡さずに外す（解決へ渡しても何にも当たらず同じ Cannot find。SSP も同じ）。
     let name = match args.ghost_name.as_deref() {
         None => None,
         Some("") => return outcome::ng(CANNOT_FIND),

@@ -30,5 +30,8 @@ mod choice_delivery_tests;
 #[path = "runtime_test_occupancy_horizon_tests.rs"]
 mod occupancy_horizon_tests;
 #[cfg(test)]
+#[path = "runtime_test_preview_tests.rs"]
+mod preview_tests;
+#[cfg(test)]
 #[path = "runtime_test_test_support.rs"]
 mod test_support;

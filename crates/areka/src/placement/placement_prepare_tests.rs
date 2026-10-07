@@ -273,7 +273,7 @@ fn prepare_never_reads_or_writes_ghost_dat() {
         .expect("ghost descript");
         fs::write(
             shell_master.join("descript.txt"),
-            "charset,UTF-8\nseriko.alignmenttodesktop,bottom\nsakura.defaultx,0\nkero.defaultx,0\nsakura.balloon.alignment,left\nkero.balloon.alignment,right\n",
+            "charset,UTF-8\nseriko.use_self_alpha,1\nseriko.alignmenttodesktop,bottom\nsakura.defaultx,0\nkero.defaultx,0\nsakura.balloon.alignment,left\nkero.balloon.alignment,right\n",
         )
         .expect("shell descript");
         fs::write(

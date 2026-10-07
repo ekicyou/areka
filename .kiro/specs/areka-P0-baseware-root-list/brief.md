@@ -54,6 +54,7 @@
   - **この関数が `dev-folder-alias` との境目になる。** 後の spec は、この関数の手前にエイリアスの段を 1 枚足すだけで済む形にしておく。
 - 根の解決（`boot_config.rs`）は並びを返す形にする。`BootContext.root` は並びになる。インストールの「先頭の根」も、ここから取る。
 - 記憶の鍵を変えないので、`boot_resolve.rs` の判断（`listed: &[String]`＝フォルダ名の列）はほぼそのまま使える。
+  - **2026-10-07 の注記**（`ghost-standard-balloon` の完了時の棚卸）: バルーンの鎖の一覧は `ghost-standard-balloon` で `BalloonInputs::listed: &[areka_ghost::catalog::BalloonEntry]`（フォルダ名と descript の `name` の組）に変わった。`&[String]` のままなのはゴーストの一覧（`GhostInputs::listed`）だけ。バルーンの根を並びにするときは、`BalloonEntry` の列をどの根から集めたかを持たせる形で読み直すこと。
 - メニューの 2 項目は `menu/` に足す。フォルダ選択は Win32 の `IFileOpenDialog`（`FOS_PICKFOLDERS`）を使う。workspace の `windows` の機能に `Win32_UI_Shell`・`Win32_System_Com` はすでにある見込みで、要件の段で確かめる。
 
 ## Scope

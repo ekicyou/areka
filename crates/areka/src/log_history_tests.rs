@@ -106,6 +106,9 @@ fn status_rows_and_areka_is_exact_only() {
         "areka::emo2_boot::ghost_switch",
         "ghost-boot",
         "ghost-shutdown",
+        // 外のものを開いた記録（areka-P0-open-external-tags 要件 7.3）。
+        "areka::readme",
+        "areka::readme::opener",
     ] {
         assert_eq!(
             classify(Level::INFO, target),
@@ -133,7 +136,7 @@ fn unrelated_info_is_not_kept() {
 }
 
 #[test]
-fn rules_table_is_the_designed_thirteen_rows_in_order() {
+fn rules_table_is_the_designed_fourteen_rows_in_order() {
     let rows: Vec<(&str, Kind, bool)> = RULES.iter().map(|r| (r.target, r.kind, r.exact)).collect();
     assert_eq!(
         rows,
@@ -151,6 +154,7 @@ fn rules_table_is_the_designed_thirteen_rows_in_order() {
             ("areka::emo2_boot::ghost_switch", Kind::Status, false),
             ("ghost-boot", Kind::Status, false),
             ("ghost-shutdown", Kind::Status, false),
+            ("areka::readme", Kind::Status, false),
         ]
     );
 }
