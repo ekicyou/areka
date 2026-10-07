@@ -102,7 +102,7 @@
   - _Depends: 5.1_
 
 - [ ] 6. 文書と実機確認
-- [ ] 6.1 独自のツールの約束の正本と roadmap を書く
+- [x] 6.1 独自のツールの約束の正本と roadmap を書く
   - `doc/ssp-mcp/areka-tools.md` を新しく置き、⑴ 独自のツールとは ⑵ `check_script` の引数と結果の形・位置の単位 ⑶ 診断の種類の表と文面（4.1 の定数と同じ文面）・予約した種類 2 つ ⑷ 診ていないもの（受け口が読む引数・`\f` の値・`%` の変数・字面で決まらないもの・`\e`／`\-` の後ろも診ること・写し取った時点のシェルに対する答え・装着が済まないときと長い台本で 10 秒を超えたときは橋の時間切れになること）⑸ SSP との違い ⑹ 後続がツールを 1 本足す手順（design.md の表）を書く
   - `.kiro/steering/roadmap.md` の干渉の記述と「MCP の 3 段目の約束」を design.md の中身で書き直し、「`check_script` が診ない引数の誤り」の覚え書きに上の ⑷ への参照を足す（main の最新の roadmap に当てて書く）
   - `.kiro/specs/areka-P0-mcp-strict-errors/brief.md` に申し送り（種類の名前と文面は `areka-tools.md` に揃える・再生中の判定は `parse_noted` の印と `consumer_of` を引けば検査と同じ答え）を書く
