@@ -35,7 +35,7 @@
 - 台本を読む段の「位置と印つきの入口」（`areka_parsers::sakura::parse_noted`）。既存の `parse` はこの入口の上に載せ替える（結果は今と同じ）。
 - 「`\!` を再生の経路の誰が拾うか」の表を、検査が引ける形に仕上げること（`ConsumerLedger::canonical` に足りない 2 行を足し、受け口の選別と表の一致をテストで固定する）。
 - サーバーの指示文と登録案内（help）への、独自のツールの案内。
-- 検査が再生と同じ関数を呼ぶための、公開の範囲の 3 つの広げ（`areka-sakura` の `parse_choice_timeout`、`areka-emo-present` の `EmoPresenter::alias_snapshot` と `surface_ids`、`areka-emo-text` の「`apply_font_tag` の `Err` が、知らないキーかキーなしか」を答える小さな口。理由の定数 `REASON_UNKNOWN_KEY` などは今 `pub(crate)`）。どれも中身は変えない。
+- 検査が再生と同じ関数を呼ぶための、公開の範囲の 3 つの広げ（`areka-sakura` の `parse_choice_timeout`、`areka-emo-present` の `EmoPresenter::alias_snapshot` と `surface_ids`、`areka-emo-text` の「`apply_font_tag` の `Err` が、知らないキーかキーなしか」を答える小さな口。理由の定数 `REASON_UNKNOWN_KEY` などは今 `pub(crate)`）。どれも中身は変えない。実装では 4 つ目として、`areka-seriko` の `resolve.rs` で既に `pub` だった `resolve_balloon_key`・`BalloonResolve` をクレートの根から再公開した（tasks.md の Implementation Notes の 4.1）。
 
 ### Out of Boundary
 
@@ -134,7 +134,7 @@ graph TB
 | MCP の受け口 | rmcp（今の版のまま） | `tools/list`・`tools/call`・`-32602` | 使い方を変えない |
 | 結果の組み立て | `serde_json` 1（`areka-mcp` に既存） | 診断 1 件を JSON の 1 行にする | `areka` には足さない |
 | 台本の解釈 | `areka-parsers`（workspace） | 位置と印つきの入口 | 既存の `parse` と同じ経路 |
-| 判定の材料 | `areka-sakura`・`areka-seriko`・`areka-emo-text`・`areka-emo-present`（workspace） | 再生と同じ関数 | 公開の範囲を 2 か所だけ広げる |
+| 判定の材料 | `areka-sakura`・`areka-seriko`・`areka-emo-text`・`areka-emo-present`（workspace） | 再生と同じ関数 | 公開の範囲を広げるだけ（上の 3 つ＋実装で足した `areka-seriko` の再公開） |
 
 新しい依存は無い。
 
@@ -403,7 +403,7 @@ impl ConsumerLedger {
 }
 ```
 
-- Postconditions: `canonical()` の登記は 17 行（今の 15 行＋上の 2 行）。
+- Postconditions: `canonical()` の登記は 17 行（今の 15 行＋上の 2 行）。先に main へ入った `open-external-tags` の 6 行（`open` の 5 組と `\j`）を足し直し、実装では 23 行（tasks.md の Implementation Notes の 2.3 の後の取り込み）。
 - Invariants: 1 つの出現を拾う担当は高々 1 つ（既存の規則のまま）。
 
 **一致のテスト（`consumer_ledger_agreement_tests.rs`）**
