@@ -1160,7 +1160,7 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 | `\q[タイトル,ID1,ID2,ID3...]` | 一部だけが効かない | — | `ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID1_2cID2_2cID3..._5d:1` |
 | `\q[タイトル,ID,r2,r3...]` | 実装済み | — | `ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1` |
 | `\q[タイトル,OnID,r0,r1,...]` | 実装済み | — | `ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cOnID_2cr0_2cr1_2c..._5d:1` |
-| `\q[タイトル,script:実行内容]` | 一部だけが効かない | — | `ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1` |
+| `\q[タイトル,script:実行内容]` | 実装済み（2026-10-07 に `areka-P0-choice-script-prefix` が実装。選ぶと `script:` の後ろを新しいトークとして再生する。調査時点は一部だけが効かない） | — | `ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1` |
 | `\s[ID番号]` | 実装済み | — | `ukadoc:list_sakura_script:_5cs_5bID_756a_53f7_5d:1` |
 | `\v` | 未対応（書いてあるのに何も起きない） | キャラの移動と重なり | `ukadoc:list_sakura_script:_5cv:1` |
 | `\w時間` | 実装済み | — | `ukadoc:list_sakura_script:_5cw_6642_9593:1` |

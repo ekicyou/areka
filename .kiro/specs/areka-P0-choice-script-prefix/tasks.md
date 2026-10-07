@@ -66,3 +66,4 @@
 - 4.1: 台帳の owner を本仕様にすると `ukadoc-survey` の検査（`owner_destination_findings`）が `doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` を求めるので、設計の一覧に無いが前例（mouse-drag-events）どおり足した（`[briefs]` の count 42→43 は手書きの数・並走のマージで同じ数を書く枝があれば後から入る側が数え直す）
 - 4.1: `doc/ukadoc-coverage/briefing-sakura-script.md` の調査時点の写しはこの項目を「一部だけが効かない」のまま残す（検査の対象外・完了時に書き添えるかを判断）
 - 5: `cargo clippy -p areka-kanade` の警告は触っていない `shiori/real.rs:234`（collapsible_if）の既存の 1 件だけ。`git diff --stat main` は設計の一覧＋`roadmap-draft.md`（4.1 の注）と一致
+- 完了時の棚卸（2026-10-07）: その場で解決 1 件＝`doc/ukadoc-coverage/briefing-sakura-script.md` の `\q[タイトル,script:実行内容]` の行を実装済み（調査時点の判定は括弧書きで残す）へ直した。起票 0 件＝`cargo clippy -p areka-kanade --all-targets` の既存の指摘（`actor_raise_reply_tests.rs` の `never_loop`・`shiori/real.rs` の `collapsible_if` など）は起票済みの `areka-P0-clippy-199-lints` の範囲
