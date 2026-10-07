@@ -1,4 +1,4 @@
-//! 偽の SHIORI の「解かれるまで固まる」台本のテスト（要件 7.1）。
+//! 偽の SHIORI のテスト（「解かれるまで固まる」台本＝要件 7.1・呼び出しの数）。
 //!
 //! 固まった呼び出しは別スレッドで走らせ、`holding()` が立ったのを見てから解く。固まっている間は
 //! 呼び出しが戻れない（条件変数で待っている）ので、「解く前に戻っていない」の判定は時刻に依らない。
@@ -144,4 +144,27 @@ fn without_hold_at_nothing_holds() {
     assert!(matches!(backend.unload(), Ok(ExitKind::Clean)));
     assert!(!handle.holding());
     assert_eq!(handle.unblock_calls(), 0);
+}
+
+/// 呼び出しの数（待ちの進みの目印・areka-P0-ghost-session-test-load-flake 3.1）は、状態の問い合わせを
+/// 何回しても増えず、`Get`・`Notify`・`Unload` の 1 回ごとに 1 つ増える。
+#[test]
+fn call_count_skips_status_queries_and_counts_every_other_call() {
+    let (mut backend, handle) = scripted(None);
+    let status_then_count = |backend: &mut ScriptedShioriBackend| {
+        for _ in 0..5 {
+            backend.status();
+        }
+        handle.call_count()
+    };
+    assert_eq!(status_then_count(&mut backend), 0);
+    backend.get("OnBoot", &[], None).expect("scripted GET");
+    assert_eq!(status_then_count(&mut backend), 1);
+    backend
+        .notify("OnClose", &[], None)
+        .expect("scripted NOTIFY");
+    assert_eq!(status_then_count(&mut backend), 2);
+    backend.unload().expect("scripted UNLOAD");
+    assert_eq!(status_then_count(&mut backend), 3);
+    assert_eq!(handle.non_status_calls().len(), 3);
 }

@@ -337,6 +337,16 @@ impl ScriptedShioriHandle {
             .collect()
     }
 
+    /// 受けた呼び出し（`Get`・`Notify`・`Unload`）の数。状態の問い合わせ `Status` は数えず、記録の写しも
+    /// 作らない（待ちの進みの目印に毎回読む口・areka-P0-ghost-session-test-load-flake 3.1）。
+    pub(crate) fn call_count(&self) -> u64 {
+        let calls = self.calls.lock().expect("calls mutex poisoned");
+        calls
+            .iter()
+            .filter(|c| !matches!(c, RecordedCall::Status))
+            .count() as u64
+    }
+
     /// 進行状態の記録（呼出 id と組み立て済み進行状態の対）のスナップショットを返す（R3.8）。
     fn status_calls(&self) -> Vec<RecordedStatus> {
         snapshot_status_calls(&self.status_calls)
@@ -351,7 +361,7 @@ impl ScriptedShioriHandle {
 mod wait;
 
 // 待ちの部品は子のファイル `spine_wait.rs` に置き、同じ名前で出し直す（兄弟のテストは `super::SPIN_WAIT` などで引く）。
-use self::wait::{BACKOFF_SLEEP, SPIN_WAIT, join_bounded};
+use self::wait::{BACKOFF_SLEEP, SPIN_WAIT, join_bounded, run_bounded_watching};
 pub(crate) use self::wait::{Progress, WaitFailure, run_bounded, spin_wait_until, wait_until_with};
 
 /// 「尽きるのが正常」の回収（settle）が満たすべき**壁時計の最小持続**（要件 4.2・4.5）。
@@ -838,7 +848,10 @@ impl SpineHarness {
             sample,
         } = self;
 
-        run_bounded("spine ghost shutdown", Duration::from_secs(10), move || {
+        // 降ろしは偽の SHIORI の呼び出し（OnClose・Unload）の数を進みの目印にして待つ（要件 2.1・3.2）。
+        // 進んでいる限り負荷で遅いだけでは打ち切らず、30 秒進まなければ `［止まった］` で panic する。
+        let calls = || shiori_handle.call_count();
+        run_bounded_watching("spine ghost shutdown", Progress::Count(&calls), move || {
             // 正規 close（DD-10 と同じ User）。ForceQuit ゆえ OnClose は NOTIFY で消化される。
             let _ = ghost.shutdown(CloseReason::User { scope: 0 });
         });
