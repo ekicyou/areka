@@ -1,6 +1,6 @@
 # 実機での確認の記録（タスク 7.2）
 
-- 日付: 2026-10-06
+- 日付: 2026-10-06（R1〜R3）・2026-10-07（R4）
 - 対象: areka（debug・`HEAD` の `e9a5c945` から組んだもの）と適合ゴースト emo2
 - 走らせ方の正本: `.kiro/specs/areka-P0-balloon-lifecycle-events/real-machine-run.ps1`
 - 記録の置き場: ワークツリーの `target\ble-signoff\`（根は `target\ble-signoff\root`・走行ごとの記録は `run-Rn.log`・叩いた記録は `run-Rn.clicks.txt`・起動と終了の時刻は `runs.txt`）
@@ -80,21 +80,75 @@
 - 同じ型の 2 回目: talk_id=5（「時間切れ短縮」）は `balloon_timeout_set timeout=Millis(3000)`（05:01:57.092149Z）→ `steady_talk_done` 05:02:00.730648Z → 計測の開始 05:02:00.737858Z（7.2 ミリ秒後・`deadline=6.5885928999996395`＝3.5886＋3）→ 05:02:03.739154Z に `trigger="timeout"` で消え（計測の開始の 3.001 秒後）→ `balloon_timeout_notified talk_id=5` → `balloon_event_sent id="OnBalloonTimeout" cause="timeout" talk_id=5`。続く talk_id=6（指定なし）の満了予定は `deadline=13.093188200004079`＝5.0932＋8（既定）。
 - 送らなかった理由の記録: 0 行。
 
-### ⑴ 長い台詞の途中のダブルクリックで `OnBalloonBreak` が正しい scope で送られる — 未確認（入力を送れない）
+R4 では `OnBalloonClose` の台詞が運んだ ⑷ も確かめた（⑶ の節の後半）。
 
-### ⑶ 台詞が終わったバルーンのダブルクリックで `OnBalloonClose`（と、その台詞が運ぶ ⑷）— 未確認（入力を送れない）
+### ⑴ 長い台詞の途中のダブルクリックで `OnBalloonBreak` が正しい scope で送られる（R4・2026-10-07）
 
-- 2 つとも左ダブルクリックが要る。走らせ方のスクリプトに、記録を読みながら SendInput でバルーンを叩く手順（`-Clicks Break,Close`）を用意し、R3 で空運転した。
-  - 合図の行は取れている: Break は最初の `visible=true`（R3 では 05:02:55.342026Z の `scope=0 trigger="content" visible=true`）から 1.5 秒後、Close は次の `steady_talk_done`（05:03:12.363557Z）から 0.7 秒後に叩く手順まで進んだ。
-  - バルーン窓の見分けも取れている: 窓は 4 枚とも題名がキャラクターの名前（scope 0＝むらさき・scope 1＝エモ）で、同じ題名の 2 枚のうち面積の小さい方がバルーン。R3 では むらさき のバルーン窓が物理画素で `1796,352,2596,800`（800×448）で、記録の `balloon_size: SizePx { w: 800, h: 448 }` と一致した。
-- 叩けなかった理由: 入力デスクトップが確認の間ずっと `Screen-saver` だった（13:5x の最初の確認から 14:33:47 まで 30 分待ったが `Default` に戻らなかった）。スクリーンセーバー（またはロック）の間は SendInput がアプリへ届かないので、叩かずに記録だけを残した（`run-R3.clicks.txt` の「入力デスクトップが Default でないので叩かない」）。無理に叩いた結果や作った記録は載せていない。
-- 画面に戻ったら次の 1 本で ⑴ と ⑶（と `OnBalloonClose` の台詞が運ぶ ⑷）をまとめて取れる:
+起動のトーク（talk_id=1・`OnFirstBoot`）の途中で、むらさき（scope 0）のバルーンの中央（物理画素 2196,576）を左ダブルクリックした。
 
 ```
-pwsh -NoProfile -File .kiro/specs/areka-P0-balloon-lifecycle-events/real-machine-run.ps1 -Run R4 -Clicks Break,Close -TimeoutMs 15000 -ExitMs 90000
+14:10:51.350401Z [balloon-visibility] バルーンの可視状態が遷移した scope=0 trigger="content" visible=true
+14:10:53.193464Z wintf: [handle_double_click_message] Double-click detected window_entity=24v0 target_entity=32v0 double_click=Left x=400 y=224
+14:10:53.197320Z areka::input_events::user_break: バルーンの左ダブルクリックを検出 event="balloon_break_detected" scope=0
+14:10:53.197683Z kanade: 利用者の中断を受け入れた——現行のトークを止める（要件 2.1・6.1） event="balloon_break_accepted" scope=0 talk_id=1 phase="Steady"
+14:10:53.199070Z kanade: talk 完了——定常運転へ復帰 event="steady_talk_done"
+14:10:53.199355Z [balloon-visibility] バルーンの可視状態が遷移した scope=0 trigger="user_break" visible=false
+14:10:53.199530Z kanade: バルーンのイベントを送る（要件 7.1） event="balloon_event_sent" id="OnBalloonBreak" cause="break" scope=0 talk_id=1
+14:10:53.200249Z kanade: SHIORI 送出 event="shiori_request" method=GET id=OnBalloonBreak references=["\\p[1]\\s[静観]\\1\\![move,-353,,,0,base,base]\\p[0]…（talk_id=1 の台本）", "0", ""]
+14:10:53.205713Z kanade: 応答にスクリプト——再生起動 event="steady_talk" talk_id=2 origin="OnBalloonBreak"
 ```
 
-  - Break: 起動のトーク（約 17 秒）の 1.5 秒地点で むらさき（scope 0）のバルーンを叩く → 期待は `balloon_break_accepted scope=0 talk_id=1` → `balloon_event_sent id="OnBalloonBreak" cause="break" scope=0 talk_id=1`。
-  - Close: その応答（「止められてもた。」）が最後まで流れた `steady_talk_done` の 0.7 秒後に叩く（既定の待ち時間は 15 秒にしてあるので、まだ出ている）→ 期待は `balloon_break_no_talk` → `balloon_event_sent id="OnBalloonClose" cause="close"`。続く `OnBalloonClose` の台詞で `balloon_timeout_set timeout=Millis(3000)` → 約 3 秒で `trigger="timeout"` → `OnBalloonTimeout` → 次のトークの満了予定が 15 秒（既定）に戻る。
-  - 自動で叩けないときは手で叩いてよい: 上のコマンドを `-Clicks` なしで起こし、起動のトークの途中で むらさき のバルーンを左ダブルクリック（⑴）、その応答が流れ終わって残っているバルーンを左ダブルクリックし、すぐポインタをバルーンから外す（⑶。バルーンの上にポインタを残すと時間切れが抑止される）。
+- 送った記録: `balloon_event_sent id="OnBalloonBreak" cause="break" scope=0 talk_id=1`。叩いたバルーンの scope（0）がそのまま Reference1 に入り、Reference0 は止めたトークの台本、Reference2 は空。
+- 中断を受け入れてから送るまで 1.8 ミリ秒。中断で止まったトークに `OnBalloonTimeout`・`OnBalloonClose` は出ていない。
+- 応答の台詞（talk_id=2）が続けて流れた。
+- 起点の記録: 無い（正しい）。利用者の中断は見えている scope をすべて一度に隠すので（決定論のテスト `balloon_visibility_user_break_tests.rs` の `a_user_break_hides_every_visible_scope_in_one_action`。⑶ でも scope 0・1 が同時に隠れている）、中断で終わったトークには計測が始まらない。この走行では中断のとき見えていたのは scope 0 だけだった（scope 1 が初めて見えるのは 14:10:54.62）。
+- 送らなかった理由の記録: 0 行。
+
+### ⑶ 台詞が終わったバルーンのダブルクリックで `OnBalloonClose`（と、その台詞が運ぶ ⑷）（R4・2026-10-07）
+
+⑴ の応答（talk_id=2）が最後まで流れた `steady_talk_done` の 1.15 秒後、残っているむらさきのバルーンを同じ点で左ダブルクリックした（既定の待ち時間は 15 秒にしてあるので、まだ出ている）。
+
+```
+14:10:56.609738Z kanade: talk 完了——定常運転へ復帰 event="steady_talk_done"
+14:10:56.613274Z [balloon-visibility] タイムアウト計測を開始（起点＝止まった時刻） origin="stopped_at" stopped_at=3.348263899999438 display_end=3.3500000000000005 deadline=18.348263899999438
+14:10:57.762972Z areka::input_events::user_break: バルーンの左ダブルクリックを検出 event="balloon_break_detected" scope=0
+14:10:57.763765Z kanade: 中断の要求を受けたが再生中のトークが無い——何も止めない（要件 2.2） event="balloon_break_no_talk" scope=0 reason="not_playing" phase="Steady"
+14:10:57.764405Z kanade: バルーンのイベントを送る（要件 7.1） event="balloon_event_sent" id="OnBalloonClose" cause="close" talk_id=2
+14:10:57.764885Z kanade: SHIORI 送出 event="shiori_request" method=GET id=OnBalloonClose references=["\\p[0]\\s[1000]…止められてもた。\\_w[950]\\p[1]\\s[静観]中断の知らせ、\\_w[450]届いたよ。\\_w[950]\\e"]
+14:10:57.765597Z [balloon-visibility] バルーンの可視状態が遷移した scope=0 trigger="user_break" visible=false
+14:10:57.766531Z [balloon-visibility] バルーンの可視状態が遷移した scope=1 trigger="user_break" visible=false
+14:10:57.767598Z [balloon-visibility] タイムアウト計測を破棄 reason="no_visible_scope" deadline=18.348263899999438
+14:10:57.769390Z kanade: 応答にスクリプト——再生起動 event="steady_talk" talk_id=3 origin="OnBalloonClose"
+14:10:57.806026Z areka::emo2_boot::talk_lifecycle: BalloonLifecycleSink: 待ち時間の指定を読んだ event="balloon_timeout_set" timeout=Millis(3000)
+14:11:00.509176Z kanade: talk 完了——定常運転へ復帰 event="steady_talk_done"
+14:11:00.513068Z [balloon-visibility] タイムアウト計測を開始（起点＝会話の占有終端） origin="display_end" display_end=2.7 deadline=5.7
+14:11:03.521997Z [balloon-visibility] バルーンの可視状態が遷移した scope=1 trigger="timeout" visible=false
+14:11:03.523172Z [balloon-visibility] 時間切れで隠したことを運行の側へ知らせた event="balloon_timeout_notified" talk_id=3
+14:11:03.523197Z kanade: バルーンのイベントを送る（要件 7.1） event="balloon_event_sent" id="OnBalloonTimeout" cause="timeout" talk_id=3
+14:11:03.531099Z kanade: 応答にスクリプト——再生起動 event="steady_talk" talk_id=4 origin="OnBalloonTimeout"
+14:11:08.660999Z kanade: talk 完了——定常運転へ復帰 event="steady_talk_done"
+14:11:08.662524Z [balloon-visibility] タイムアウト計測を開始（起点＝止まった時刻） origin="stopped_at" stopped_at=5.097116000000824 display_end=5.1000000000000005 deadline=20.097116000000824
+```
+
+- 送った記録: `balloon_event_sent id="OnBalloonClose" cause="close" talk_id=2`。再生中のトークが無いので中断は何も止めず（`balloon_break_no_talk reason="not_playing"`）、読み終えたバルーンを閉じた。Reference0 は閉じたバルーンに出ていた台本（talk_id=2 の台本）で、Reference は 1 つだけ。
+- 閉じたことで時間切れの計測は破棄され（`reason="no_visible_scope"`）、talk_id=2 に `OnBalloonTimeout` は出ていない。
+- その台詞が運ぶ ⑷: `OnBalloonClose` の台詞（talk_id=3）が `balloon_timeout_set timeout=Millis(3000)` を記録し、計測の開始（14:11:00.513068）からちょうど 3.009 秒後に `trigger="timeout"` で消えた（満了予定 5.7 ＝ 占有終端 2.7 ＋ 3 秒）→ `balloon_timeout_notified talk_id=3` → `balloon_event_sent id="OnBalloonTimeout" cause="timeout" talk_id=3`。
+- 次のトークで既定へ戻った: 続く talk_id=4（指定なし）の満了予定は 20.0971 ＝ 5.0971 ＋ **15 秒**（この走行の既定）。
+- talk_id=3 の起点は `origin="display_end"`（占有終端の方が早かった）で、`stop_time_missing` の WARN ではない。
+- 送らなかった理由の記録（`balloon_event_not_sent`）・台本の控えが無い記録（`balloon_event_script_missing`）: R4 全体で 0 行。
+
+### R4 に至るまでの叩く手順の直し（2026-10-07）
+
+R4 は同じ名前で 3 回起こし、記録（`run-R4.log`・`run-R4.clicks.txt`）は 3 回目で上書きされている。上の照合はすべて 3 回目のもの。
+
+1. 1 回目（23:06:40 起動）: 入力デスクトップは `Default` だったが `sent=0`。スクリプトの `INPUT` 構造体に余計な 8 バイトの詰め物があり（48 バイト・x64 の正しい大きさは 40）、SendInput が引数ごと断っていた。areka は何も受け取っていない。詰め物を消した。
+2. 2 回目（23:08:41 起動）: ⑴ は取れた（`OnBalloonBreak scope=0 talk_id=1`）。⑶ は空振り。原因は 2 つ。Close の合図に中断そのものの `steady_talk_done` を拾い、中断への応答の台詞の最中に叩いた。押す 2 回の間にポインタが動き（2245,626 と 2256,653）、ダブルクリックにならなかった。Close の合図を「次のトークの開始（`steady_talk`）の後の `steady_talk_done`」に改め、各入力に絶対座標を載せた。
+3. 3 回目（23:10:48 起動）: ⑴・⑶・⑶ の台詞が運ぶ ⑷ をすべて取れた（上記）。
+
+## 走行の一覧（追記）
+
+| 走行 | コマンド（`real-machine-run.ps1` の引数） | 終了コード | ERROR | WARN | 内容 |
+|---|---|---|---|---|---|
+| R4（3 回目） | `-Run R4 -Clicks Break,Close -TimeoutMs 15000 -ExitMs 90000` | 0 | 0 | 4 | ⑴・⑶ と、`OnBalloonClose` の台詞が運ぶ ⑷ を確かめた。WARN の内訳は R2・R3 と同じ（素材由来 3 行＋自動終了の `force_quit` 1 行） |
+
 - 抜き出す行: `rg -e balloon_break_ -e balloon_event_ -e balloon_timeout_ -e "タイムアウト計測" -e "trigger=" -e steady_talk target\ble-signoff\run-R4.log`

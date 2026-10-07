@@ -107,7 +107,8 @@ public static class BleInput {
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
   [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
   [StructLayout(LayoutKind.Sequential)] struct MOUSEINPUT { public int dx, dy; public uint data, flags, time; public IntPtr extra; }
-  [StructLayout(LayoutKind.Sequential)] struct INPUT { public uint type; public MOUSEINPUT mi; public long pad; }
+  // x64 の INPUT は 40 バイト（type＋詰め物 4＋MOUSEINPUT 32）。大きさが違うと SendInput は 0 を返す。
+  [StructLayout(LayoutKind.Sequential)] struct INPUT { public uint type; public MOUSEINPUT mi; }
   delegate bool EnumProc(IntPtr h, IntPtr l);
   [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc f, IntPtr l);
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
@@ -138,14 +139,20 @@ public static class BleInput {
       o.Add(String.Format("{0}\t{1}\t{2}\t{3}\t{4},{5},{6},{7}", h.ToInt64(), IsWindowVisible(h) ? 1 : 0, c, t, r.L, r.T, r.R, r.B)); return true; }, IntPtr.Zero);
     return o;
   }
-  static INPUT Btn(uint f) { var i = new INPUT(); i.type = 0; i.mi.flags = f; return i; }
+  [DllImport("user32.dll")] static extern int GetSystemMetrics(int i);
+  // 各入力に絶対座標（仮想画面の正規化座標）を載せる。押す間に本物のマウスが動いても同じ点を叩く（R4 で 2 回目がずれた）。
+  static INPUT Btn(uint f, int x, int y) {
+    int vx = GetSystemMetrics(76), vy = GetSystemMetrics(77), vw = GetSystemMetrics(78), vh = GetSystemMetrics(79);
+    var i = new INPUT(); i.type = 0; i.mi.flags = f | 0x1 | 0x4000 | 0x8000;
+    i.mi.dx = (int)((x - vx) * 65535L / (vw - 1)); i.mi.dy = (int)((y - vy) * 65535L / (vh - 1)); return i;
+  }
   // (x,y) を左ダブルクリックし、ポインタを元の位置へ戻す。送れた件数を返す。
   public static uint DoubleClick(int x, int y) {
     PerMonitor(); POINT before; GetCursorPos(out before);
     SetCursorPos(x, y); System.Threading.Thread.Sleep(80);
     var size = Marshal.SizeOf(typeof(INPUT)); uint sent = 0;
-    sent += SendInput(2, new[] { Btn(0x2), Btn(0x4) }, size); System.Threading.Thread.Sleep(60);
-    sent += SendInput(2, new[] { Btn(0x2), Btn(0x4) }, size); System.Threading.Thread.Sleep(30);
+    sent += SendInput(2, new[] { Btn(0x2, x, y), Btn(0x4, x, y) }, size); System.Threading.Thread.Sleep(60);
+    sent += SendInput(2, new[] { Btn(0x2, x, y), Btn(0x4, x, y) }, size); System.Threading.Thread.Sleep(30);
     SetCursorPos(before.X, before.Y);
     return sent;
   }
@@ -178,12 +185,17 @@ if ($Run) {
     # 記録を読み進め、各手順の合図の行を待ってから叩く。合図は前の手順より後の行だけを見る。
     $seen = 0
     foreach ($step in ($Clicks -split ',' | Where-Object { $_ })) {
-        $pattern = if ($step -eq 'Break') { 'visible=true' } else { 'event="steady_talk_done"' }
+        # Close は「次のトークの開始」の後の完了を待つ。中断そのものの完了の行を拾うと、中断への応答の台詞の
+        # 最中に叩いてしまう（R4 の 1 回目）。
+        $patterns = if ($step -eq 'Break') { @('visible=true') } else { @('event="steady_talk" ', 'event="steady_talk_done"') }
         $hit = $null
-        while (-not $p.HasExited -and -not $hit) {
-            Start-Sleep -Milliseconds 100
-            $lines = @(Get-Content -LiteralPath $log -Encoding utf8 -ErrorAction SilentlyContinue)
-            for ($i = $seen; $i -lt $lines.Count; $i++) { if ($lines[$i] -match $pattern) { $hit = $lines[$i]; $seen = $i + 1; break } }
+        foreach ($pattern in $patterns) {
+            $hit = $null
+            while (-not $p.HasExited -and -not $hit) {
+                Start-Sleep -Milliseconds 100
+                $lines = @(Get-Content -LiteralPath $log -Encoding utf8 -ErrorAction SilentlyContinue)
+                for ($i = $seen; $i -lt $lines.Count; $i++) { if ($lines[$i] -match $pattern) { $hit = $lines[$i]; $seen = $i + 1; break } }
+            }
         }
         if (-not $hit) { Add-Content $note "${step}: areka が先に終わった"; break }
         Start-Sleep -Milliseconds $(if ($step -eq 'Break') { $BreakDelayMs } else { $CloseDelayMs })
