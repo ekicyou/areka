@@ -516,3 +516,22 @@ fn shell_switch_moves_shared_box_spec_to_balloon() {
     show(&mut state, "0", 3);
     assert_eq!(look_at(&state, "0", TextPlace::Balloon).color, (0, 0, 0));
 }
+
+/// 空回しの写しだけが印を持ち、元の状態の印は偽のまま（本番の状態で印は立たない・要件 2.8）。
+/// 無言であることの判定は `lookahead_tests.rs` の検査 5 が受け持つ。
+#[test]
+fn rehearsal_copy_marks_only_the_copy() {
+    let mut state = state_with_traits();
+    show(&mut state, "0", 0);
+    let copy = state.rehearsal_copy();
+    assert!(copy.rehearsal, "写しには印が立つ");
+    assert!(!state.rehearsal, "元の状態の印は偽のまま");
+    assert_eq!(
+        TextLayerState {
+            rehearsal: false,
+            ..copy
+        },
+        state,
+        "印のほかは元の状態と同じ"
+    );
+}

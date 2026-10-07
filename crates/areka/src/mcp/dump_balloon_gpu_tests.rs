@@ -1,5 +1,6 @@
 //! `dump_balloon` の実際の描画を通るテスト（spec: areka-P0-mcp-dump-images・要件 3.1・3.3・3.4・
-//! 3.7・3.9・4.1・6.2・7.4 ⑶⑷⑸・x64 だけ接続）。土台は `dump_surface` の側の
+//! 3.7・3.9・4.1・6.2・7.4 ⑶⑷⑸、spec: areka-P0-mcp-dump-images-residue・要件 1.3・5.1・7.1 ⑴・
+//! x64 だけ接続）。土台は `dump_surface` の側の
 //! [`crate::mcp::dump_surface::gpu_test_support`]。
 //!
 //! 台本の待ち（`\_w`）と指令は注入する Tick の時刻で届き、字は実時間の台詞の時刻
@@ -10,7 +11,10 @@
 //! までの字を消さないので、台詞の時刻は `L` を越える。巡の途中で届いた指令の分の 1 巡のずれを
 //! 見込み、2 巡続けて越えたら現れ切ったとする。
 
+use std::time::Duration;
+
 use areka_kanade::RaiseOutcome;
+use areka_mcp::tools::dump_balloon::Args;
 use areka_mcp::{ToolContent, ToolOutcome};
 use areka_sakura::ActorKey;
 use bevy_ecs::world::World;
@@ -20,16 +24,20 @@ use wintf::ecs::FrameTime;
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::spine::RecordedCall;
 use crate::emo2_boot::target_map::balloon_target;
-use crate::mcp::dump_surface::WaitAnswer;
+use crate::mcp::dump_surface::dump_surface_tests::is_picture;
 use crate::mcp::dump_surface::gpu_test_support::{FLUSH_EVENT, GpuRig, decode_png, unpremultiply};
+use crate::mcp::dump_surface::{Job, Step, finish};
 
-/// スコープ 0 が話す字（[`LINE`]・[`LINE_THEN_HIDE`] の本文）。
+/// スコープ 0 が話す字（[`LINE`]・[`LINE_THEN_HIDE`] の本文・[`LINE_THEN_ANOTHER`] の最初の本文）。
 const WORDS: &str = "表示の確かめ";
 /// スコープ 0 だけが話す台詞（surface は検体の `element0` 1 枚の 1101・`dump_surface` の側と同じ）。
 const LINE: &str = r"\0\s[1101]表示の確かめ\e";
 /// [`LINE`] の後、Tick の時刻で 1.5 秒待ってバルーンを隠す台詞（Tick を実時間ほどで刻めば、
 /// 字が実時間で現れ切った後に隠れる。先に隠すと、後から現れた字で表示が戻る）。
 const LINE_THEN_HIDE: &str = r"\0\s[1101]表示の確かめ\_w[1500]\b[-1]\e";
+/// [`LINE`] の後、Tick の時刻で 1.5 秒待って文字を消し、別の字を話す台詞（呼び出しの後に台詞を
+/// 進めて文字の面を変えるため。待ちの理由は [`LINE_THEN_HIDE`] と同じ）。
+const LINE_THEN_ANOTHER: &str = r"\0\s[1101]表示の確かめ\_w[1500]\c書き替えた\e";
 
 /// 成功の本文（要件 3.7）。
 fn ok_text(scope: u32) -> String {
@@ -177,7 +185,8 @@ fn balloon_text_lies_on_the_background_at_the_text_area_origin() {
     let mut gpu = GpuRig::new(LINE, 96);
     let spoke = speak(&mut gpu, 100);
     let text = text_surface(&gpu.rig.world, 0);
-    let answer = gpu.dump_balloon(None).wait_answer();
+    let pending = gpu.dump_balloon(None);
+    let answer = gpu.answer_of(&pending);
     let background = gpu.balloon_composed(0);
     let origin = gpu.text_area_origin(0, (background.0, background.1));
     let down = gpu.shutdown();
@@ -230,7 +239,8 @@ fn balloon_at_dpi_144_keeps_native_size_and_text_position() {
         let mut gpu = GpuRig::new(LINE, dpi);
         let spoke = speak(&mut gpu, 100);
         let text_size = text_surface(&gpu.rig.world, 0).map(|(size, _)| size);
-        let answer = gpu.dump_balloon(None).wait_answer();
+        let pending = gpu.dump_balloon(None);
+        let answer = gpu.answer_of(&pending);
         let background = gpu.balloon_composed(0);
         let down = gpu.shutdown();
         let answer = answer.expect("装着の後は上限のうちに答えが届く");
@@ -284,9 +294,11 @@ fn hidden_balloon_returns_the_same_pixels() {
     let mut gpu = GpuRig::new(LINE_THEN_HIDE, 96);
     let spoke = speak(&mut gpu, 1);
     let visible_before = balloon_visible(&gpu.rig.world);
-    let before = gpu.dump_balloon(None).wait_answer();
+    let pending = gpu.dump_balloon(None);
+    let before = gpu.answer_of(&pending);
     let hidden = gpu.frames_until(1, |world| balloon_visible(world) == Some(false));
-    let after = gpu.dump_balloon(None).wait_answer();
+    let pending = gpu.dump_balloon(None);
+    let after = gpu.answer_of(&pending);
     let background = gpu.balloon_composed(0);
     let down = gpu.shutdown();
 
@@ -330,7 +342,8 @@ fn hidden_balloon_returns_the_same_pixels() {
 fn never_spoken_scope_returns_only_the_background() {
     let mut gpu = GpuRig::new(LINE, 96);
     let spoke = speak(&mut gpu, 100);
-    let answer = gpu.dump_balloon(Some(1)).wait_answer();
+    let pending = gpu.dump_balloon(Some(1));
+    let answer = gpu.answer_of(&pending);
     let background = gpu.balloon_composed(1);
     let down = gpu.shutdown();
 
@@ -373,8 +386,10 @@ fn scope_two_is_no_such_scope_and_calls_do_not_disturb_the_ghost() {
     let first = gpu.flush_to_shiori();
     let before = gpu.calls();
     let (answers, levels) = count_levels(|| {
-        [None, Some(0), Some(1), Some(2), Some(-1)]
-            .map(|scope| gpu.dump_balloon(scope).wait_answer().map(|a| a.outcome))
+        [None, Some(0), Some(1), Some(2), Some(-1)].map(|scope| {
+            let pending = gpu.dump_balloon(scope);
+            gpu.answer_of(&pending).map(|a| a.outcome)
+        })
     });
     let second = gpu.flush_to_shiori();
     let after = gpu.calls();
@@ -430,5 +445,141 @@ fn scope_two_is_no_such_scope_and_calls_do_not_disturb_the_ghost() {
         ),
         "（字が現れ切った, 前の関所, 後の関所, 降ろせた, 前の列に OnBoot, 成功の 3 回の形, \
          スコープ 2・-1 の答え, ERROR の件数, 後の呼び出しの列）"
+    );
+}
+
+/// 呼び出しを受けた時点の期待の絵と、そのとき受けた読み出しの口を台詞を進めてから読んだ結果。
+struct ReadAfterTalk {
+    /// 最初の台詞の字が現れ切った。
+    spoke: bool,
+    /// 呼び出しの時点の文字の面に透明でない画素が在った。
+    inked: bool,
+    /// 読み出しを待つ間に、文字の面の読み戻しが呼び出しの時点と違うようになった。
+    changed: bool,
+    /// 置き場のゴーストを降ろせた。
+    down: bool,
+    /// 呼び出しの時点の背景と文字から組んだ期待の絵（乗算していない RGBA）。
+    expected: (u32, u32, Vec<u8>),
+    /// 読み出しの口の最後の結果（読めたら仕事・失敗なら答え・期限切れは `Ok(None)`）。
+    read: Result<Option<Job>, ToolOutcome>,
+}
+
+/// [`LINE_THEN_ANOTHER`] の最初の台詞を出し、そのときの背景の合成と文字の面から期待の絵を組んで、
+/// 本物の `answer` から読み出しを待つ種を受け取る。次に Tick を進めて文字の面が呼び出しの時点と
+/// 違うようになるまで台詞を進め、それから読み出しの口を読めるまで（有界に）呼ぶ。
+fn read_after_talk() -> ReadAfterTalk {
+    let mut gpu = GpuRig::new(LINE_THEN_ANOTHER, 96);
+    // Tick を実時間ほどで刻み、最初の字が現れ切ってから文字を消す（[`LINE_THEN_HIDE`] と同じ）。
+    let spoke = speak(&mut gpu, 1);
+    let text = text_surface(&gpu.rig.world, 0).expect("台詞の後は文字の面が在る");
+    let background = gpu.balloon_composed(0);
+    let origin = gpu.text_area_origin(0, (background.0, background.1));
+    assert_eq!(origin, (origin.0.trunc(), origin.1.trunc()), "原点は整数");
+    let args = Args {
+        scope: None,
+        ghost_name: None,
+    };
+    let Some(Step::Read(_, mut reader)) = super::answer(&gpu.rig.world, &args) else {
+        panic!("文字の面が在れば、答えの種は読み出しを待つ種");
+    };
+    let changed = gpu.frames_until(100, |world| {
+        text_surface(world, 0).is_some_and(|now| now != text)
+    });
+    let mut read = Ok(None);
+    gpu.frames_until(0, |_| {
+        read = reader();
+        !matches!(read, Ok(None))
+    });
+    let down = gpu.shutdown();
+
+    let expected = (
+        background.0,
+        background.1,
+        unpremultiply(&place_text(
+            &background,
+            &text,
+            (origin.0 as u32, origin.1 as u32),
+        )),
+    );
+    ReadAfterTalk {
+        spoke,
+        inked: has_ink(&text.1),
+        changed,
+        down,
+        expected,
+        read,
+    }
+}
+
+/// 呼び出しを受けた時点の絵（要件 1.3・7.1 ⑴）: 読み出しを待つ種を受け取った後に台詞を進めて
+/// 文字の面を変えても、読み出しの口から得た仕事を走らせた絵は、呼び出しの時点の背景と文字から
+/// 組んだ期待の絵と一致する。
+///
+/// # 非空虚性
+/// 呼び出しの時点の文字の面に字が在ることと、読む前に文字の面の読み戻しが呼び出しの時点と
+/// 違うようになったこと（`changed`）を確かめる。文字の面の写しを読み出しのフレームで取り直すと、
+/// 後の内容（消した後の別の字）が載って画素が食い違い赤。
+#[test]
+fn balloon_is_the_picture_at_the_call_even_after_the_talk_moves_on() {
+    let read = read_after_talk();
+
+    let job = read
+        .read
+        .expect("読み出しは失敗しない")
+        .expect("上限のうちに読める");
+    let answered = finish(super::TOOL, 0, job, Duration::ZERO);
+    let (is_error, body, mime, picture) = read_picture(&answered);
+    assert_eq!(
+        (
+            read.spoke,
+            read.inked,
+            read.changed,
+            read.down,
+            is_error,
+            body,
+            mime,
+            differing(&picture, &read.expected)
+        ),
+        (
+            true,
+            true,
+            true,
+            true,
+            false,
+            ok_text(0),
+            "image/png".to_owned(),
+            Some(0)
+        ),
+        "（字が現れ切った, 呼び出しの時点の文字の面に字が在った, 読む前に文字の面が変わった, \
+         降ろせた, isError, 本文, MIME, 期待の絵と食い違った画素の数）"
+    );
+}
+
+/// 符号化のスレッドの記録（要件 5.1）: 上と同じ形で得た `dump_balloon` の本物の仕事を、記録を
+/// 数える中で符号化のスレッドの体（`finish`）に通すと、ERROR が 0 件で画像つきの成功。
+///
+/// # 非空虚性
+/// 本物の重ね合わせ・PNG・base64 を通る（読めた仕事が在ることを確かめる）。判定の関数
+/// `is_picture` と `finish` の ERROR の数え方は `dump_surface_tests.rs` で較正済み。仕事の中で
+/// `fail` を呼ぶと件数と判定の両方で赤。
+#[test]
+fn balloon_job_runs_on_the_encoding_body_without_error() {
+    let read = read_after_talk();
+
+    let job = read
+        .read
+        .expect("読み出しは失敗しない")
+        .expect("上限のうちに読める");
+    let (answered, levels) = count_levels(|| finish(super::TOOL, 0, job, Duration::ZERO));
+    assert_eq!(
+        (
+            read.spoke,
+            read.changed,
+            read.down,
+            is_picture(&answered),
+            levels.error
+        ),
+        (true, true, true, true, 0),
+        "（字が現れ切った, 読む前に文字の面が変わった, 降ろせた, 画像つきの成功, ERROR の件数）"
     );
 }

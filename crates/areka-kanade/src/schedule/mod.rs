@@ -405,7 +405,7 @@ pub(crate) enum Action {
     /// 選択待ちバリアの解決指示（→ [`TalkCommand::ResolveChoice`](crate::talk::TalkCommand)）。
     ///
     /// `talk_id` は再生層／dispatcher の stale ガード用・`id` は確定した選択肢 ID。発行点は
-    /// [`steady`] の選択調停（未対応カテゴリの即時解決・カスケード終端）に単一化されている
+    /// [`steady`] の選択調停（`script:` の選択肢の解決・カスケード終端）に単一化されている
     /// （1 選択＝高々 1 解決・Req5.4）。
     ResolveChoice {
         talk_id: TalkId,

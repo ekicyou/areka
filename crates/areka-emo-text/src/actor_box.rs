@@ -68,6 +68,8 @@ impl TextLayerRuntime {
         self.box_overflow_warned.clear();
         self.box_definition_warned.clear();
         self.shown_boxes.clear();
+        // 箱の場所の区間の全文と数えも捨てる（新しい表では箱の場所が別物になる・要件 2.7）。
+        self.lookahead.forget_boxes();
 
         let index: BTreeMap<u32, Vec<BoxName>> = layout
             .surfaces()
@@ -112,6 +114,8 @@ impl TextLayerRuntime {
         self.state.set_box_traits(traits);
         self.state.set_box_index(index);
         self.surface_resolver = Some(resolve);
+        // 箱の表と解決の閉包が変わった＝空回しの出発点が変わったので、区間の全文を求め直す（要件 2.7）。
+        self.rehearse_again();
         self.box_font_dirs = font_dirs;
         self.box_layout = layout;
     }

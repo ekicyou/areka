@@ -78,3 +78,11 @@ dlp が建てた自走ループ（perf-loop）を**測定側 3 是正を先に�
 - 保留のままでよい。門は今も既定で切（`crates/wintf/src/ecs/world/mod.rs` の `tick_gate_enabled: false`・`AREKA_TICK_GATE` で上書き）。`tick_gate.rs`・`tick_gate_config.rs` を触ったコミットは 10-02 の後 0。
 - 基準の数（08-23）はさらに古くなった: C2 で毎フレームの処理に関わる変更が入った（`shell-balloon` のシェル内の箱の追従と描画・`translate-pipeline` の運行表の出口・`mcp-server-core`／`mcp-tool-entrances` の tokio の専用スレッドと UI への橋）。着手するなら測り直しから。計測を汚すので他の spec と並べない（10-02 のまま）。
 - 議題・穴: なし。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M〜L のまま（測り方の作り直しが先）。切るなら本文どおり「測る側の直し」と「門の既定を入れる側」の 2 つ。今は切らない。
+- 前提の状態: 保留のままでよい。門は今も既定で切（`crates/wintf/src/ecs/world/mod.rs` の `tick_gate_enabled: false`）。`tick_gate.rs`・`tick_gate_config.rs`・`tools/perf/` を触ったコミットは C3 でも 0。開発者方針「長い試行はしない」と本文の「夜間・25 分・n≥3」の衝突は解けていない＝着手の前に短い A/B の測り方を組む手順が先（10-02 のまま）。
+- 崩れた前提／古くなった位置: 基準の数（08-23）はさらに古い。C3 で毎フレームか常時の処理に関わる変更が入った: `surface-element-nesting` の部品ごとの時計（`crates/areka-seriko/src/looper.rs` ほか）・`animated-image-decode` のコマの表・`shell-balloon-frame-align` の画面更新の末尾の相（見えているバルーンの組を毎フレーム作る）・`mcp-log-history` の info 以上の出来事を常に残す層（`RUST_LOG` と独立）。`drag-cancel-borrow-miss` は `wintf/src/ecs/world/mod.rs` の 1 行（ドラッグの累積器の据え付け）を変えただけで門には触れていない。
+- 触るファイル（着手するなら）: `crates/wintf/src/ecs/world/{tick_gate.rs, mod.rs}`・`crates/areka/src/tick_gate_config.rs`・`crates/areka/src/main.rs`・`tools/perf/`。
+- 議題・穴: なし（保留の解除は開発者の判断）。

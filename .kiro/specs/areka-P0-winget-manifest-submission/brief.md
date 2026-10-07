@@ -89,3 +89,28 @@
   2. **上げ直し（`winget upgrade`）で利用者のゴースト・記憶が残るか**。portable の上げ直しは古い版を外してから新しい版を入れる。areka は利用者のゴースト（`ghost\`）・areka の記憶（`profile\areka\`）・ゴーストの記憶を入れ先の中に置く。winget が「自分が置いたファイルだけ」を消すなら残るが、同梱の `ghost\emo2` は新しい版で上書きされる。実測していない。⒜ 本 spec で手元の 2 版のマニフェスト（例 0.0.2 → 0.0.3 の名乗りで同じ zip）を使って上げ直しを 1 回確かめ、結果を説明書に書く ⒝ 確かめずに既知の制限として「上げ直しの前に ghost と profile を写しておく」と書く。消えると分かったら置き場を変える別の spec が要る（インストーラー版の `%APPDATA%` と同じ話）。
   3. （既存）`max-versions-to-keep` の数・Tags の語。
 - 見つけた穴: なし（議題 2 は実測していないので穴とは書かない）。
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: S（7〜10 タスク。上げ直しの実測を足すと +1〜2）。切る: なし。
+- 前提の状態: **待ち＝`release-cycle` の初回（`v0.0.2` の Release）**。Release の実在が要るのは確かに初回の手提出（Desired 3）だけ。`InstallerUrl` は Release の zip の URL、`InstallerSha256` はその `.sha256` の値で、どちらも Release が無いと書けない。雛形と手元の `--manifest` の確かめは Release なしで作れる（`release-package-versioned` の `verification/winget-local-check.md` は手元の http から zip を配った）。タグは今 `v0.0.1` だけ。
+- 新しく分かった順の制約:
+  - `winget.yml`（`release` の緑を受けて `winget-releaser` を回す）は、winget-pkgs に既に在る名乗りの更新しかできない（brief の「前提は既に 1 版が在ること」）。初回の提出が人の承認で取り込まれるまで（実例で 2 日）に次のタグを打つと、その走りの `winget.yml` が赤になる。
+  - 本 spec の PR（`winget.yml` を含む）が main に入ってから、winget-pkgs への初回の提出が取り込まれるまでの間は、リリースを打たない。または `winget.yml` だけを取り込みの後の別の PR に分ける。
+- 崩れた前提／古くなった位置:
+  - C3 の 11 本は `.github/`・`README.md` に触らなかった。`dist/README.txt` には `animated-image-decode` が「■ 動く絵の上限」の節を「■ 入手のしかた」と「■ 既知の制限」の間に足したが、本 spec が足す 2 つの節は変わっていない（「■ 入手のしかた」は箇条書きの zip の 1 行・「■ 既知の制限」の先頭は「areka.exe には署名がありません」）。
+  - `README.md` の「## 入手と起動」の最初の箇条は今も「まだ GitHub Releases での配布はしていないので…」。`release-cycle` がこの行を直さなければ本 spec が直す。
+  - zip の中身（`tools/package.ps1` の一覧）は変わっていない＝`areka.exe` は zip の根。`NestedInstallerFiles` の位置もそのまま。
+- 触るファイル（並走の照合用）:
+  - `dist/winget/**`（新規）
+  - `.github/workflows/winget.yml`（新規）
+  - `dist/README.txt`（「■ 入手のしかた」に 1 行・「■ 既知の制限」に 2 行）
+  - `README.md`（「## 入手と起動」の箇条）
+  - リポジトリの外: 開発者が secret に置く classic PAT（`public_repo`・`workflow`）と、開発者のアカウントの winget-pkgs のフォーク
+- 共有しうる相手:
+  - `release-cycle`（`README.md` の同じ行・`dist/README.txt` の冒頭）＝直列。
+  - `mcp-stdio-bridge`（`dist/README.txt`・`NestedInstallerFiles` に中継を入れるか）・`install-live-target-hazards`・`release-code-signing`（「■ 既知の制限」）。
+  - ほかに `dist/README.txt` の別の節を触る見込みの brief は `animated-image-playback`・`extra-character-windows`・`property-name-case-fold`・`self-alpha-declaration`・`update-check-options`。
+- 議題（答えで作業が変わるものだけ）: 棚卸㉑の 3 つのまま（`ArchiveBinariesDependOnPath` を付けるか・上げ直しで記憶が残るか・`max-versions-to-keep` と Tags）。加えて、`winget.yml` を同じ PR に入れるか、初回の提出の取り込みの後の PR に分けるか（上の順の制約）。
+- 見つけた穴: 上の順の制約が brief に書かれていない（Desired 4 は `winget.yml` を同じ spec の中で足す前提）。

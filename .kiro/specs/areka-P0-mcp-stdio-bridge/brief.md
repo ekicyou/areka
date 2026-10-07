@@ -93,3 +93,27 @@
   - help に中継の絶対パスを載せるか（載せるなら `mcp-server-core` の `start` の引数と `dispatch.rs` まで触る）。
   - （既存）exe の名前／ポートを引数でも渡せるか／arm64 の zip に入れるか／winget の `PortableCommandAlias` を付けるか。
 - 見つけた穴: 本文が前提にする「既定 9821」は今の実装（9801 が先）と逆。素朴に候補を辿る中継は、SSP が起動していると黙って SSP の MCP につながり、Desktop の利用者は SSP のゴーストを操作していることに気付けない。
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: S〜M（8〜12 タスク）。切る: なし。
+- 前提の状態: 前提の spec（`mcp-server-core`・`release-package-versioned`）は着地済みで、中身はすぐ書ける。ただし並べる順に 2 つの縛りがある:
+  1. **`release-cycle` の版上げと同時に走らせない**。新しいクレートは `Cargo.lock` に版の行を持つ。版上げの前に作った枝が `0.0.1` のまま入ると、字の上では衝突せずに `Cargo.lock` が古くなり、`--locked` の組み立てが落ちる。版上げの後に枝を切るか、版上げの後に取り込んで `Cargo.lock` と謝辞を作り直す。
+  2. 配布の列では `winget-manifest-submission` と `dist/README.txt` を分け合う（別の節なら同じウェーブでも可）。
+- 崩れた前提／古くなった位置:
+  - C3 の MCP の 4 本（`mcp-get-property`・`mcp-expression-table`・`mcp-log-history`・`mcp-dump-images`）は `crates/areka/src/mcp/` の各ツールのファイルだけを触り、`crates/areka-mcp/` は 0 行。棚卸㉑の指し先はそのまま正しい:
+    - `help.rs`（64 行）の Desktop の節は「中継は今後の版で用意します」の 1 文。
+    - `help_html(port)` の呼び手は `dispatch.rs` の 1 か所。
+    - `port.rs` の `DEFAULT_PORTS = [9801, 9821]`・`FALLBACK_STEPS = 9`。
+    - `handler.rs` の `SERVER_NAME = "areka-mcp-server"`（版は `CARGO_PKG_VERSION`＝版上げで変わる）。
+  - `crates/areka/src/main.rs` は 953 行（`mcp-log-history` が tracing の初期化で 8 行触った）。help に絶対パスを載せる案で `start` の引数を `main.rs` から渡すなら、1,000 行の上限に近い。
+  - `tools/package.ps1` は 726 行で変わっていない（同梱に変える 4 か所は棚卸㉑のとおり）。
+  - 10-05 に起票した `mcp-author-tools` も「help の更新」を持つ＝`help.rs`・`help_tests.rs` を分け合う見込み。同じウェーブに置くなら着手の前に照合する。
+- 触るファイル（並走の照合用）:
+  - **新規** `crates/areka-mcp-bridge/**`（名前は要件で決める・`publish = false # 理由`）
+  - `Cargo.lock`（パッケージの行 1 つ）・`THIRD-PARTY-NOTICES.md`（MIT の「対象 crate」の一覧に 1 行。外部依存を足さなくても、ワークスペースのクレートとして載る）
+  - `crates/areka-mcp/src/help.rs`・`help_tests.rs`。絶対パスを載せるなら `dispatch.rs`・`server.rs`／`lib.rs`（`start` の引数）・`crates/areka/src/main.rs`
+  - `tools/package.ps1`・`dist/README.txt`
+- 議題（答えで作業が変わるものだけ）: 棚卸㉑のまま（areka の見つけ方・定数の共有・help の絶対パス・exe の名前／引数／arm64／`PortableCommandAlias`）。
+- 見つけた穴: 棚卸㉑の触るファイルに `THIRD-PARTY-NOTICES.md` が無かった。ワークスペースのクレートは版つきで謝辞の一覧に載るので、新しいクレートを足すと 1 行増える（作り直しで足りる・手で書かない）。

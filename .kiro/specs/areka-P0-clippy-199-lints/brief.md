@@ -79,3 +79,23 @@ lint ごとに clippy の提案どおりの機械的な直しを当てる（`col
   1. （既存）`tools/test-all.ps1` に clippy の段を足すか。
   2. **2 段に分けて出すか**。⒜ 段 1 だけを 1 本目の PR として C3 の空き席で出し、段 2 は C3 の着地の後に同じ spec の 2 本目の PR で出す（1 spec 1 PR の決まりから外れる）⒝ spec 全体を C3 の着地の後まで待たせる（`areka` の `placement/*` と段 1 だけなら今でも重ならない）。1 本で出すなら ⒝。
 - 見つけた穴: なし。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+`cargo clippy` は走らせていない（共通の決まり）。git の履歴からの推定で、着手の最初のタスクで測り直す。
+
+- 規模: S〜M（8〜12）のまま。切らない。
+- 前提の状態: C3 は全部着地した＝㉑の議題 2 の ⒝（C3 の着地を待って 1 本で出す）の待ちは解けた。ただし次の C4 の候補が段 2 のクレートを触る（下）。
+- 崩れた前提／古くなった位置（`634032f6..f26aa1c1` の差分から）:
+  - 段 1（`dola`・`shiori-abi`・`shiori-host32-host/tests/`）は C3 でも触られていない＝列挙の位置はそのまま。
+  - `areka-emo-compose/src/plan.rs` は `surface-element-nesting` が約 230 行書き換えた＝列挙の `collapsible_if` の行は動いたか消えた見込み。`areka` の `emo2_boot/frame/wiring.rs`（`mcp-dump-images`）・`placement/{config,follow/window_move,persist,spawn}.rs`（㉑の直接修正で古い注記と `#[allow]` を消しただけ）も動いた。
+  - C3 で約 2.5 万行が入った（`crates/areka/src/mcp/` の 4 ツール・`areka-emo-atlas/src/decode/`・`areka-emo-compose` の `nesting.rs`・`hit_import.rs`・`areka-seriko` の部品の時計・`areka-parsers/src/shell/surfacetable.rs`・`areka-nar` ほか）。C3 の 11 本のうち 5 本（`mcp-get-property`・`mcp-expression-table`・`mcp-dump-images`・`animated-image-decode`・`host32-testdll-marker-race`）は「変えたファイルの指摘 0」を確かめた記録がある。残り 6 本の新しいファイルは未確認。
+- 触るファイル（並走の照合用・クレート単位）: 段 1 は㉑のまま。段 2 と C4 の候補の重なり: `areka-emo-compose`（`animated-image-playback` が `method.rs`・`plan.rs`・`atlas_bind.rs`）・`areka-kanade`（`balloon-lifecycle-events` が `schedule/`）・`areka` の `emo2_boot/`（`balloon-font-file`・`balloon-lifecycle-events`）・`boot_config.rs`（`ghost-standard-balloon`）。重ならない残り: `areka` の `placement/*`・`app_exit.rs`・`update/procedure.rs`・`input_events/balloon.rs`（`anchor-tag-canon` が `input_events/balloon*.rs` を触るなら外れる）。
+- 議題: ㉑の 1（test-all に clippy の段を足すか）は残る。㉑の 2 は「C4 と同じウェーブなら段 1＋重ならない `areka` のファイルだけ・それ以外は C4 の着地の後」と言い換わる＝1 本で出すならやはり C4 の着地の後。
+- 見つけた穴: なし。
+
+## `areka-P0-animated-image-playback` からの申し送り（2026-10-07・完了時の棚卸）
+
+- 実装中（2026-10-06）に `cargo clippy --all-targets -- -D warnings` で、上の列挙の外の赤を 2 件見た: `areka-seriko` の `actor.rs` の `large_enum_variant` と `looper.rs` の `collapsible_if`（どちらも本 spec の前から）。
+- 列挙済みの赤も 10-06 時点で残っている: `areka-emo-compose` のテスト 5 か所の `chunks_exact`（`blit_transparent_alpha_tests.rs`・`golden_tests_surface1000_bind_tests.rs`・`golden_tests_test_support.rs`・`composer_tests.rs` ×2）と `dola` の 21 件。
+- 本 spec は `areka-seriko` の `table.rs`・`looper.rs`・`parts.rs`・`timeline.rs`・`state.rs`・`actor.rs` を触ったので、着手のときに行の位置を引き直す。

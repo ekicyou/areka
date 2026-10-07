@@ -51,7 +51,7 @@
 
 ## 入手と起動
 
-- 配布物の zip を展開する（まだ GitHub Releases での配布はしていないので、今は手元で zip を組みます。下の「ビルド」）
+- GitHub Releases（https://github.com/ekicyou/areka/releases）から配布物の zip を入手して展開する。手元で組むこともできる（下の「ビルド」）
 
 zip を展開して `areka.exe` を開けば、同梱の えも？？ が立ちます。起動・終了・メニュー・`.nar` の入れ方・更新・記憶の置き場は、利用者向けの説明書 [dist/README.txt](dist/README.txt) にまとめてあります。
 
@@ -104,7 +104,7 @@ pwsh -NoProfile -File tools/package.ps1 -Check     # 組んだ zip を展開し�
 | ⑤ seriko | SERIKO のアニメーション | `areka-seriko` |
 | ⑥ emo | 画像の合成と表示・文字とバルーンの描画 | `areka-emo-*` |
 
-その下に共通の土台として、Windows の UI フレームワーク **`wintf`**（ECS（bevy_ecs）＋ WUC ＋ Direct2D ＋ DirectWrite・縦書き対応）と、時刻つきの台本を再生する **`dola`** があります。アプリ本体は `areka`（bin）で、`.nar` のインストールは `areka-nar`、ネットワーク更新は `areka-update`、MCP サーバ（`127.0.0.1`。ツールはこれから整備）は `areka-mcp` が受け持ちます。
+その下に共通の土台として、Windows の UI フレームワーク **`wintf`**（ECS（bevy_ecs）＋ WUC ＋ Direct2D ＋ DirectWrite・縦書き対応）と、時刻つきの台本を再生する **`dola`** があります。アプリ本体は `areka`（bin）で、`.nar` のインストールは `areka-nar`、ネットワーク更新は `areka-update`、MCP サーバ（`127.0.0.1`。SSP と同じツール 10 本のうち 6 本が動き、`get_status`・`sakurascript`・`raise_event`・`reload` はこれから）は `areka-mcp` が受け持ちます。
 
 詳しくは次を参照してください。
 

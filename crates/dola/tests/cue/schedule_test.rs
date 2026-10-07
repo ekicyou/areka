@@ -120,8 +120,8 @@ fn clear_resets_all_state() {
 // ============================================================================
 // 占有 horizon と is_completed（占有終了判定・D6 / R2.5）
 //
-// is_completed は「entries 枯渇かつ barrier なしかつ current_offset >= horizon」。
-// new(start) は horizon=0.0 を既定とし、current_offset は常に >=0 ゆえ horizon=0 は
+// is_completed は「entries 枯渇かつ barrier なしかつ current_time >= start_time + horizon」。
+// new(start) は horizon=0.0 を既定とし、current_time は常に >= start_time ゆえ horizon=0 は
 // 素通り＝「entries 枯渇かつ barrier なし」の旧挙動に一致する（手組みスケジュールの後方互換）。
 // ============================================================================
 
@@ -138,10 +138,10 @@ fn new_defaults_horizon_to_zero_preserving_legacy_is_completed() {
     );
 }
 
-/// horizon > 最終 entry offset のとき、entry を配り終えても current_offset が horizon に
+/// horizon > 最終 entry offset のとき、entry を配り終えても開始からの経過が horizon に
 /// 達するまで完了しない（占有終了判定）。
 #[test]
-fn with_horizon_defers_completion_until_current_offset_reaches_horizon() {
+fn with_horizon_defers_completion_until_elapsed_time_reaches_horizon() {
     let mut sched = TimedSchedule::<String>::with_horizon(0.0, 5.0);
     sched.insert(Entry::Payload(1.0, "a".into()));
 
@@ -149,7 +149,7 @@ fn with_horizon_defers_completion_until_current_offset_reaches_horizon() {
     assert_eq!(sched.remaining(), 0, "entry は配り終えた");
     assert!(
         !sched.is_completed(),
-        "current_offset(1.0) < horizon(5.0) ゆえ未完了"
+        "開始からの経過(1.0) < horizon(5.0) ゆえ未完了"
     );
 
     sched.tick(4.999);
@@ -175,7 +175,7 @@ fn with_horizon_not_completed_while_barrier_active_even_past_horizon() {
     sched.notify_barrier_resolved(None);
     assert!(
         sched.is_completed(),
-        "解除後 entries 空・current_offset>=horizon で完了"
+        "解除後 entries 空・開始からの経過>=horizon で完了"
     );
 }
 
@@ -582,7 +582,7 @@ fn tick_with_nan_time_stops_at_barrier_then_normal_tick_recovers() {
     assert!(sched.current_barrier().is_some());
     assert_eq!(sched.remaining(), 1);
 
-    // バリア解除後、正常時刻で進行再開できる（current_offset=NaN から復帰）
+    // バリア解除後、正常時刻で進行再開できる（current_time=NaN から復帰）
     sched.notify_barrier_resolved(None);
     sched.tick(3.0);
     assert_eq!(sched.ready(), &["after".to_string()]);
@@ -808,4 +808,108 @@ fn occupancy_horizon_matches_is_completed_threshold() {
         sched.is_completed(),
         "occupancy_horizon() が返す絶対時刻の到達で完了する"
     );
+}
+
+// ============================================================================
+// 絶対時刻ちょうどの到達（刻む時刻と判定の時刻を同じ足し算で作る）
+//
+// 絶対の発火時刻の定義は `CueSheet::absolute_fire_time` の「アンカー＋相対」の足し算だけ。
+// 到達の判定が「現在時刻−アンカー」の引き算で相対へ戻すと、丸めでその時刻ちょうどに
+// 届かないことがある（例: 100.0 + 2.5999999999999996 から 100.0 を引くと 2.5999999999999943）。
+// ============================================================================
+
+/// アンカーを刻んだときに、引き算で相対へ戻すと丸めで手前に落ちる相対時刻。
+const ROUNDS_DOWN: f64 = 2.5999999999999996;
+
+/// 前提: この値は引き算で相対へ戻すと元の値より手前に落ちる（検査が丸めを踏んでいる）。
+#[test]
+fn rounds_down_value_really_rounds_down_when_subtracted() {
+    assert!((100.0 + ROUNDS_DOWN) - 100.0 < ROUNDS_DOWN);
+}
+
+/// 中身の合図は「アンカー＋相対」の絶対時刻ちょうどの tick で配られる。
+#[test]
+fn payload_is_delivered_at_exact_absolute_fire_time() {
+    let mut sched = TimedSchedule::<String>::new(100.0);
+    sched.insert(Entry::Payload(ROUNDS_DOWN, "x".into()));
+
+    sched.tick(100.0 + ROUNDS_DOWN);
+    assert_eq!(sched.ready(), &["x".to_string()]);
+}
+
+/// 刻印した台本の `absolute_fire_time` ちょうどの tick で、再生機がその合図を配る。
+#[test]
+fn player_emits_cue_at_sheet_absolute_fire_time() {
+    use dola::cue::{Cue, CuePlayer, CueSheet, CueSink, TalkCue};
+    use std::sync::{Arc, Mutex};
+
+    struct Times(Arc<Mutex<Vec<f64>>>);
+    impl CueSink for Times {
+        fn emit(&mut self, cue: TalkCue) {
+            self.0.lock().unwrap().push(cue.at);
+        }
+    }
+
+    let sheet = CueSheet::new(vec![Cue {
+        actor: ActorKey::from("0"),
+        start_time: ROUNDS_DOWN,
+        payload: CueCommand::Text("x".into()).into(),
+        duration: 0.0,
+    }])
+    .with_absolute_start_time(100.0);
+    let fire = sheet.absolute_fire_time(&sheet.cues()[0]);
+    let received = Arc::new(Mutex::new(Vec::new()));
+    let mut player = CuePlayer::from_sheet(&sheet);
+    player.register_sink(Box::new(Times(Arc::clone(&received))));
+
+    player.tick(fire);
+    assert_eq!(*received.lock().unwrap(), vec![ROUNDS_DOWN]);
+}
+
+/// 占有の終わりは `occupancy_horizon()` の絶対時刻ちょうどの tick で完了になる。
+#[test]
+fn completion_is_reached_at_exact_occupancy_horizon() {
+    let mut sched = TimedSchedule::<String>::with_horizon(100.0, ROUNDS_DOWN);
+    sched.tick(sched.occupancy_horizon());
+    assert!(sched.is_completed());
+}
+
+/// 区切りの期限（区切りの相対時刻＋待ちの長さ）は、アンカーを足した絶対時刻ちょうどの tick で切れる。
+#[test]
+fn barrier_timeout_releases_at_exact_absolute_deadline() {
+    let mut sched = TimedSchedule::<String>::new(100.0);
+    sched.insert(Entry::Barrier(
+        0.0,
+        BarrierKind::Timeout {
+            duration: ROUNDS_DOWN,
+        },
+    ));
+    sched.insert(Entry::Payload(ROUNDS_DOWN, "after".into()));
+
+    sched.tick(100.0);
+    assert!(sched.current_barrier().is_some());
+
+    sched.tick(100.0 + ROUNDS_DOWN);
+    assert!(
+        sched.current_barrier().is_none(),
+        "期限ちょうどで区切りが切れる"
+    );
+    assert_eq!(sched.ready(), &["after".to_string()]);
+}
+
+/// 期限ちょうどの絶対時刻へ一気に飛んだ tick は、区切りを止まらずに通り過ぎる。
+#[test]
+fn barrier_already_past_at_exact_absolute_deadline_is_skipped() {
+    let mut sched = TimedSchedule::<String>::new(100.0);
+    sched.insert(Entry::Barrier(
+        0.0,
+        BarrierKind::Timeout {
+            duration: ROUNDS_DOWN,
+        },
+    ));
+    sched.insert(Entry::Payload(ROUNDS_DOWN, "after".into()));
+
+    sched.tick(100.0 + ROUNDS_DOWN);
+    assert!(sched.current_barrier().is_none());
+    assert_eq!(sched.ready(), &["after".to_string()]);
 }

@@ -86,3 +86,34 @@ MCP でいちばん使われるのは「台本を流して見る」（`sakurascr
   - MCP の `sakurascript` の台本を `OnTranslate` に通すか。通すなら Reference1 を欠番のままにするか SSP と同じ出どころの語にするか（SSP に同じ台本を送って `OnTranslate` の Reference1 を実測する）。答えで翻訳の経路と §8 の登記が変わる。
   - 許可表の迂回は `property-query-channels`（`\![get,property,<イベント名>]`）も要る＝先に着手した方が一度で作る（棚卸⑳の注記のまま）。kanade の列では `property-query-channels` が前なので、そちらが作った迂回を使う形になる見込み。
 - 見つけた穴: なし（`RaiseOutcome` を広げると呼び手 6 か所に波及する点は設計の注意）。
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模（タスク数）と切るかどうか: 3 本まとめて L（14〜19）。**切る提案（大きさでなく並走のため）**: `get_status` だけを新しい spec `mcp-get-status`（S・4〜6）へ出す。`get_status` は kanade の運行（`schedule/` の下）に触らず、殻がその場で答える形（`KanadeMsg::ResourceQuery` と同じ作り・`State::snapshot()` を読んで `ExecutionStatus::derive(..).render()` を返すだけ）で足りるので、kanade の進行の列を待たずに走れる。残る本 spec（`sakurascript`＋`raise_event`）は M〜L（11〜15）で、それ以上は切らない。
+- 前提の状態: 満たす。C3 で MCP のツール 4 本（`get_property`・`get_expression_table`・`get_log`・`dump_surface`／`dump_balloon`）が本物になり、今も `NG:not implemented yet` で答えるのは 4 本だけ＝本 spec の 3 本（`crates/areka/src/mcp/{get_status,sakurascript,raise_event}.rs` の `handle`）と `reload`。`mouse-drag-events`（PR#240）も着地済み。kanade の進行の列では今 `balloon-lifecycle-events` → `sakura-time-critical` → `property-query-channels` の後ろ。**優先度の 3 段（バグ → MCP など → その他）に照らすと、その他の段の `sakura-time-critical`・`property-query-channels` より前に出してよい**（許可の表の迂回は先に着手した本 spec が作り、`property-query-channels` がそれを使う）。
+- 崩れた前提／古くなった位置:
+  - 許可の表 `ALLOWED_EVENT_IDS`（`schedule/events.rs` の定数の定義）は 46 語 → **48 語**（`mouse-drag-events` が `OnMouseDragStart`・`OnMouseDragEnd` を足した）。
+  - `KanadeMsg::RaiseEvent` の返事つきの呼び手は 7 か所（棚卸㉑の 6 か所＋テストの支え `crates/areka/src/mcp/dump_surface_gpu_test_support.rs`）。`RaiseOutcome::` を読む所は `install/worker.rs`・`update/worker.rs`・同じテストの支えの 3 つ。台本つきの結果は別の型で返す方針のまま。
+  - `mcp::later`（`crates/areka/src/mcp/mod.rs`）は使う側ができた（`dump_surface`・`dump_balloon`）。`#[allow(dead_code)]` は外れた。手本は `dump_surface.rs` の `handle`。
+  - kanade のファイルの行数: `schedule/steady.rs` 947・`schedule/mod.rs` 938・`msg.rs` 909・`actor.rs` 876（上限 1,000）。`sakurascript` の起動の処理と `Input` の変種は新しいファイルへ置く前提のまま。
+  - 書き出しの約束（script 種別のログの 1 行）は `doc/ssp-mcp/log-convention.md` で確定済み（target `areka::log::script`）。
+- 触るファイル（並走の照合用）:
+  - 切った後の `mcp-get-status`: `crates/areka/src/mcp/get_status.rs`・`get_status_tests.rs`・`crates/areka-kanade/src/msg.rs`（変種 1 つと名前の腕）・`actor.rs`（振り分けの腕 1 つ）・新規 `actor_status.rs`＋兄弟テスト。`lib.rs`（`ExecutionStatus` は公開済み）・`schedule/` には触らない。
+  - 残る本 spec: `crates/areka/src/mcp/{sakurascript,raise_event}.rs`＋各 `_tests.rs`・`crates/areka-kanade/src/{msg.rs, actor.rs, lib.rs}`・新規の殻の処理（例 `actor_external.rs`）・`schedule/mod.rs`（`Input` の変種）・新規 `schedule/` の子・`schedule/events.rs`（迂回の印）・台本つきの結果の新しい型のファイル（`src/change.rs` に置かなければ `mcp-reload` と重ならない）・翻訳に通すなら `schedule/translate.rs`・`translate.rs`。
+  - 触らない: `crates/areka/src/mcp/mod.rs`・`resolve.rs`・`crates/areka-mcp/src/**`・`main.rs`・`ghost_session.rs`。
+- 議題（答えで作業が変わるものだけ）:
+  - `get_status` を `mcp-get-status` へ切るか（切れば C4 で `balloon-lifecycle-events` と並べられる）。
+  - SSP の旗には `changing`（survey §3 の表）があり、areka の 10 状態（`crates/areka-kanade/src/status.rs` の `ExecutionState`）にも ukadoc の SHIORI/3.0 の `Status` にも無い。足すか（足すなら `status.rs` と切替の写しの通り道を触る）。
+  - 前回からの 2 つ（`sakurascript` の台本を `OnTranslate` に通すか・許可の表の迂回の持ち主）はそのまま。
+- 見つけた穴: なし。
+
+### 棚卸㉒の裁定（2026-10-05）
+
+- `get_status` を `mcp-get-status`（S・4〜6）へ切り出した（並走のため）。本 spec は `sakurascript`＋`raise_event` だけ＝M〜L（11〜15）。`msg.rs`・`actor.rs` を分け合うので `mcp-get-status` と同じウェーブに置かない。
+- kanade の進行の列で、その他の段の `sakura-time-critical`・`property-query-channels` より前へ出した（優先度の 3 段）。許可の表を迂回して任意の名前のイベントを送る口は本 spec が作り、`property-query-channels`・`mcp-shiori-query` はそれを使う。
+
+## 2026-10-05 `mcp-dump-images-residue` からの引き継ぎ（実機確認 1 件）
+
+- 前の spec `areka-P0-mcp-dump-images` の要件 7.7 ⑵（`sakurascript` で表情を変えた後に `dump_surface` で撮ると、変わった姿が原寸で返る）は、`sakurascript` が無かったため、開発者の了承のうえキャラクターのダブルクリックで表情を変える代わりの手順で確かめた。
+- 本 spec の実機確認で、`sakurascript` で表情を変えてから `dump_surface` を 1 回呼び、変わった姿が返ることを本来の手順で撮り直し、本 spec の `verification/signoff.md` に残す。
+- 出どころ: `areka-P0-mcp-dump-images-residue` の要件（Boundary Context の Out of scope・件 6）。棚卸㉒の C4 の約束で、`mcp-dump-images-residue` は項目 1〜5 だけを持つ。

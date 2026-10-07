@@ -155,3 +155,15 @@ mod cache_capacity_tests;
 #[cfg(test)]
 #[path = "presenter_keycolor_clickthrough_tests.rs"]
 mod keycolor_clickthrough_tests;
+
+#[cfg(test)]
+#[path = "presenter_film_tests.rs"]
+mod film_tests;
+
+#[cfg(test)]
+#[path = "presenter_stage_generation_tests.rs"]
+mod stage_generation_tests;
+
+#[cfg(test)]
+#[path = "presenter_stage_tests.rs"]
+mod stage_tests;

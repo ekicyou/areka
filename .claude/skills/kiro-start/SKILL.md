@@ -183,7 +183,7 @@ This phase is **NOT delegated**: it requires turn-by-turn developer dialogue, an
 2. **Follow the discussion skill inline:** read `{skill-base}/kiro-requirements-discussion/SKILL.md` and execute its workflow (Phase 1–7) directly in the controller. When that skill references `gap-analysis.md`, substitute the resolved `{gap-doc}` path from Step 6 (this is the "取り込み" of the validate-gap output). When it references `requirements.md`, use the file ingested above.
 3. **Conduct the developer dialogue in the chat window:**
    - Category A (obvious fixes) and Category B (design decisions deferred) are handled exactly as the discussion skill directs, committing per its convention (`docs({feature-name}): ...`).
-   - Category C (developer-facing questions) MUST be asked as ordinary chat messages, **one topic at a time** (the skill's Phase 6 progression: topic number/total, target requirement IDs, the problem, 2–3 options, a recommendation). Do NOT batch them into an `AskUserQuestion` dialog — the developer answers in the chat. After each resolution, update the documents, commit per the skill's convention, and show the progress summary before moving to the next topic.
+   - Category C (developer-facing questions) MUST be asked as ordinary chat messages, **one topic at a time** (the skill's Phase 6 progression: topic number/total, target requirement IDs, why it must be decided, the problem, 2–3 options, a recommendation). Do NOT batch them into an `AskUserQuestion` dialog — the developer answers in the chat. After each resolution, update the documents, commit per the skill's convention, and show the progress summary before moving to the next topic.
    - If the developer stops responding or defers, summarize the remaining open topics and stop without guessing. Do not fabricate answers.
 4. The discussion skill commits its own changes per category. The controller does not duplicate those commits.
 
@@ -227,7 +227,7 @@ Provide output in the language specified in `spec.json` with the following struc
    - Requirements: confirm `requirements.md` was generated and the subagent's automated review gate passed.
    - Gap analysis: confirm the gap-analysis document was written (give its path).
    - Discussion: summarize the discussion outcome — counts for Category A (obvious fixes), Category B (design decisions deferred), and Category C (developer-resolved), or note "no issues found" / "stopped with open topics".
-6. **Next Step**: Command block showing `/kiro-spec-design <feature-name>` (gap analysis and the requirements discussion are already complete).
+6. **Next Step**: Command block showing `/kiro-spec-design <feature-name>` (gap analysis and the requirements discussion are already complete), followed by the discussion's design-model recommendation (**Fable 推奨** or **Opus で十分**, with its 1–2 line reason; criteria in kiro-requirements-discussion Phase 7).
 
 **Format Requirements**:
 - Use Markdown headings (##, ###)

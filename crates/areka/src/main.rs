@@ -122,7 +122,7 @@ pub(crate) use boot_config::{
 /// 告知の抑止（`AREKA_NO_ALERT`）。
 mod alert;
 
-/// 起動解決の純粋な判断（ゴースト 6 分岐・バルーン 7 分岐）と既定の定数。
+/// 起動解決の純粋な判断（ゴースト 6 分岐・バルーン 8 分岐）と既定の定数。
 /// 起動前の解決は `boot_config::resolve_boot` が、記憶の書き込みは boot 成功直後の `on_boot_ok` が結線する。
 mod boot_resolve;
 

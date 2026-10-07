@@ -99,7 +99,7 @@ dependencies = [
 
 [[package]]
 name = "areka"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "areka-actor",
  "areka-emo-atlas",
@@ -135,7 +135,7 @@ dependencies = [
 
 [[package]]
 name = "areka-actor"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "async-channel",
  "thiserror",
@@ -146,7 +146,7 @@ dependencies = [
 
 [[package]]
 name = "areka-emo-atlas"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "areka-parsers",
  "image",
@@ -159,7 +159,7 @@ dependencies = [
 
 [[package]]
 name = "areka-emo-compose"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "areka-emo-atlas",
  "areka-parsers",
@@ -172,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "areka-emo-present"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "areka-actor",
  "areka-emo-atlas",
@@ -191,7 +191,7 @@ dependencies = [
 
 [[package]]
 name = "areka-emo-text"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "areka-actor",
  "areka-emo-atlas",
@@ -215,7 +215,7 @@ dependencies = [
 
 [[package]]
 name = "areka-ghost"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "areka-actor",
  "areka-kanade",
@@ -239,7 +239,7 @@ dependencies = [
 
 [[package]]
 name = "areka-kanade"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "areka-actor",
  "areka-talk",
@@ -252,7 +252,7 @@ dependencies = [
 
 [[package]]
 name = "areka-mcp"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "areka-actor",
  "http-body-util",
@@ -269,7 +269,7 @@ dependencies = [
 
 [[package]]
 name = "areka-nar"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "areka-parsers",
  "encoding_rs",
@@ -282,7 +282,7 @@ dependencies = [
 
 [[package]]
 name = "areka-parsers"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "encoding_rs",
  "sample-ghost-kit",
@@ -292,7 +292,7 @@ dependencies = [
 
 [[package]]
 name = "areka-sakura"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "areka-actor",
  "areka-parsers",
@@ -306,7 +306,7 @@ dependencies = [
 
 [[package]]
 name = "areka-seriko"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "areka-actor",
  "areka-emo-compose",
@@ -320,7 +320,7 @@ dependencies = [
 
 [[package]]
 name = "areka-sylphya"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "areka-actor",
  "log-capture-kit",
@@ -332,11 +332,11 @@ dependencies = [
 
 [[package]]
 name = "areka-talk"
-version = "0.0.1"
+version = "0.0.2"
 
 [[package]]
 name = "areka-update"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "encoding_rs",
  "log-capture-kit",
@@ -906,7 +906,7 @@ checksum = "e90a5dd66beeca277ae954f8055b02a712792b6b6b43f2bc2f92b0b7d8291614"
 
 [[package]]
 name = "dola"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "interpolation",
  "rand",
@@ -1430,7 +1430,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "log-capture-kit"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "sample-ghost-kit",
  "tracing",
@@ -1613,7 +1613,7 @@ checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
 
 [[package]]
 name = "pilot"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "areka-emo-atlas",
  "areka-emo-compose",
@@ -1852,7 +1852,7 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "sample-ghost-kit"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "areka-nar",
  "miniz_oxide 0.9.1",
@@ -1993,7 +1993,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-abi"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "thiserror",
  "windows",
@@ -2002,7 +2002,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-host32-helper"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "shiori-host32-ipc",
  "thiserror",
@@ -2012,7 +2012,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-host32-host"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "encoding_rs",
  "event-listener",
@@ -2026,7 +2026,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-host32-ipc"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "thiserror",
  "windows",
@@ -2035,21 +2035,21 @@ dependencies = [
 
 [[package]]
 name = "shiori-host32-testdll"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "windows",
 ]
 
 [[package]]
 name = "shiori-host32-testdll-loadu"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "windows",
 ]
 
 [[package]]
 name = "shiori4-testdll"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "shiori-abi",
  "windows-core",
@@ -2191,7 +2191,7 @@ dependencies = [
 
 [[package]]
 name = "temp-path-kit"
-version = "0.0.1"
+version = "0.0.2"
 
 [[package]]
 name = "thiserror"
@@ -2440,7 +2440,7 @@ checksum = "bc7d623258602320d5c55d1bc22793b57daff0ec7efc270ea7d55ce1d5f5471c"
 
 [[package]]
 name = "ukadoc-survey"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "serde_json",
  "thiserror",
@@ -2772,7 +2772,7 @@ dependencies = [
 
 [[package]]
 name = "wintf"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "ambassador",
  "async-io",

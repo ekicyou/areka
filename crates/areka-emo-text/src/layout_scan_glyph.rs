@@ -88,7 +88,7 @@ impl Scan<'_, '_> {
                     self.seg_remaining -= 1;
                     false
                 } else if let Some(seg) = plan.segment_starting_at(self.placed) {
-                    // 塊先頭: 塊全体の advance 合計を全文 plan から左畳み込みで先決
+                    // 塊先頭: 塊全体の advance 合計を渡された items の plan から左畳み込みで先決
                     // （visible_count 非依存＝INV-1/7.1）。
                     let seg_sum = segment_advance_sum(
                         self.items,

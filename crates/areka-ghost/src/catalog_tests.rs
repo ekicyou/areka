@@ -4,7 +4,7 @@
 //! `catalog_test_support::temp_root`）、検体の根（`SampleRoot::acquire("emo2")`）を借りる。
 //! 足すテストは列挙の採否と素性の判断分岐に限る（要件 8.4）。
 
-use super::test_support::{TempRoot, put, put_ghost, temp_root};
+use super::test_support::{TempRoot, hold_exclusive, put, put_ghost, temp_root};
 use super::*;
 use crate::test_log_capture::{CapturedEvent, assert_logged_event, capture};
 use std::fs;
@@ -158,6 +158,8 @@ fn balloons_keep_absent_or_balloon_type_and_warn_on_others() {
     assert_logged_event(&events, Level::WARN, TARGET, "catalog_type_not_balloon");
 }
 
+/// 無印と `balloon0` の両方 → 無印が最初の 1 個（`balloon0` は読まれない）・install.txt が無い → 無し。
+/// 番号付きだけの場面は `catalog_standard_balloon_tests.rs`。
 #[test]
 fn companion_balloon_reads_one_key() {
     let tmp = TempPath::new("catalog-install");
@@ -229,16 +231,6 @@ fn catalog_warns(events: &[CapturedEvent]) -> Vec<&str> {
         .filter(|e| e.target == TARGET && e.level == Level::WARN)
         .map(|e| e.event.as_deref().unwrap_or("<event 無し>"))
         .collect()
-}
-
-/// 他者が読めないよう共有なしで開いたまま持つ（`fs::read` を I/O 失敗させる・有無の検査は通る）。
-fn hold_exclusive(path: &Path) -> fs::File {
-    use std::os::windows::fs::OpenOptionsExt;
-    fs::OpenOptions::new()
-        .read(true)
-        .share_mode(0)
-        .open(path)
-        .expect("共有なしで開く")
 }
 
 /// 要件 8.1 の一時の根: 件数・採否・7 項目・バイト順・Shift_JIS の復号を全部突き合わせる。

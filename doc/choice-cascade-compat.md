@@ -1,7 +1,7 @@
 # 選択関連イベント 互換対応表（カスケード則・Reference 割付・タイムアウト）
 
 > 出所 spec: `areka-P0-choice-select-events`（Req2.8 / Req7.8 / Req8.1 / Req8.2・設計裁定 DD-8 / DD-14 / DD-15）
-> 正本: 当該 spec の `design.md`「カスケード則の正典裁定」1〜8。**正典引用は同 spec の `research.md` §5（2026-07-31 に ukadoc MCP で実測した一次記述）から転記**しており、本書で新たな引用を創作していない。
+> 正本: 当該 spec の `design.md`「カスケード則の正典裁定」1〜8。**正典引用は同 spec の `research.md` §5（2026-07-31 に ukadoc MCP で実測した一次記述）から転記**しており、本書で新たな引用を創作していない。例外として、7a-ii・7a-iii・7a-v の引用は `areka-P0-choice-script-prefix` が ukadoc（MCP）から直接引き直したものである（§5 の「本表外の出所」の行）。
 > 位置づけ: `COMPAT_ARCHITECTURE.md` §2「沈黙ルール」（ukadoc が沈黙/曖昧な箇所は二次参照＋areka 裁量で決定し、判断を対応表に明記する）の運用実体のうち、**選択関連イベント領域の詳細台帳**。同書 §8 の横断表は要約・本書が詳細。
 > 生成物ではなく手編集の記録文書である（`shiori/fragments/` 配下は生成物ゆえ手編集不可・本書はその外に置く）。
 
@@ -50,8 +50,12 @@
 | 5c | タイムアウト既定値 | **30,000ms（30 秒）**（`KanadeConfig.choice_timeout_default_ms`） | `areka_discretion` | **正典は既定値の数値を規定していない**——research §5-e が ukadoc 実測により「既定値の数値は ukadoc に記載なし」と確認済み（Req7.8 の「正典が数値を規定していない旨とともに記録する」に対応） | SSP の de-facto 値の裏取りは得られなかった（research §8-2）。値を変える場合は下流 e2e（`areka-P0-emo2-conformance-e2e`）の期待値に波及する |
 | 5d | タイムアウトの権威の単一化 | 計測・発火・解除の権威は kanade に**一本化**する。`dola` の `TimedSchedule` が持つバリア自動解除機構（`barrier_timeout_offset`）は選択バリアには**構造として効かない**: 2026-10-03 に `areka-P0-choice-timeout-directive` で `TimedSchedule::tick`（`crates/dola/src/cue/schedule.rs`）の区切りに着いたときの判定が `WaitForChoice` の `timeout` を読まないようにした（`WaitForChoice { .. } => None`）ので、着いたときに飛ばす判定も、止まっている間の自動解除も、選択の区切りには働かない。区切りを解けるのは外からの `notify_barrier_resolved` だけで、`timeout` は kanade へ運ぶ指令である（`crates/dola/src/cue/command.rs` の `BarrierKind::WaitForChoice` の注記） | `areka_discretion` | 正典沈黙（実装内部の権威配置）。それまでは `CuePlayer::tick` が選択待ちで早期 return するため止まっている間の自動解除は到達しなかったが、時計を一度に大きく進めると区切りに着いた時点で「既に期限を過ぎた」として区切りを飛ばす判定には到達できた。台本の指定が流れるようになるとこの判定が実際に働くため、構造で塞いだ。自動解除は「無条件再開」で正典の `OnChoiceTimeout` GET → 204 で解除という手順と一致しない（research §10.1 の設計フェーズ実測） | 二重権威の禁止。将来 dola 側 seam を生かす場合は本行を改訂したうえで行うこと |
 | 6 | 選択待ち中の `Status` 複合値 | `talking,choosing`（選択待ち中もトーク slot を占有し続けるため `talking` は真のまま・正典順で連結） | `areka_discretion` | 正典は各状態語を定義するが、**選択待ち中に `talking` を降ろすか否かに沈黙**。連結順序・区切り・空集合省略は既存の送出契約（`crates/areka-kanade/src/status.rs` の正典順ソート）に従い、本 spec は書式を新設しない | 状態語の集合そのものは正典由来（**本表外の出所**: `emo2-conformance-scope.md:18` が emo2 の読むヘッダとして `Status`（talking/choosing/online 等 9 種）を記録）。適合対象ゴーストが `status == "talking"` の完全一致比較に依存する場合、複合値では自発トークが抑止されない可能性があるため、areka は**自身の調停のみで**選択待ち中の自発トークを抑止する（Req6.5） |
-| 7a-i | `script:` 前置形の存在 | 正典には `\q[タイトル,script:実行内容]` 形が存在する | `ukadoc` | research §5-a 実測（`\q` の 6 形）: 「`\q[タイトル,ID]` / `\q[タイトル,ID,r2,r3...]` / `\q[タイトル,ID1,ID2,ID3...]` / `\q[タイトル,OnID,r0,r1,...]` / `\q[タイトル,script:実行内容]` / `\q[ID][タイトル]`（旧仕様）」 | 語彙は完全な形で保持し、判定は「未対応カテゴリ」として第一級に表現する（次行） |
-| 7a-ii | `script:` 前置の M1 縮退 | **M1 非対応**。SHIORI イベントを発行せず、未対応である旨を警告に記録したうえで選択待ちの解決は実行し、会話を停止させない | `areka_discretion` | 正典は当該形のスクリプト直接実行を規定するが、areka は M1 で実装しない明示縮退（Req2.7）。判定は純関数の第一級カテゴリ（`crates/areka-kanade/src/schedule/choice.rs` の `CascadePlan::Unsupported`） | 縮退の 4 点セット: ①完全語彙＝`CascadePlan` の 3 分岐に未対応カテゴリを持つ ②縮退シーム＝当該分岐を実行経路に残す ③追跡＝本表 ④スコープ明記＝出所 spec の Non-Goals。emo2 は当該形を使用しないため実機一周に影響しない |
+| 7a-i | `script:` 前置形の存在 | 正典には `\q[タイトル,script:実行内容]` 形が存在する | `ukadoc` | research §5-a 実測（`\q` の 6 形）: 「`\q[タイトル,ID]` / `\q[タイトル,ID,r2,r3...]` / `\q[タイトル,ID1,ID2,ID3...]` / `\q[タイトル,OnID,r0,r1,...]` / `\q[タイトル,script:実行内容]` / `\q[ID][タイトル]`（旧仕様）」 | 判定は純関数の第一級カテゴリ `CascadePlan::Script`（`crates/areka-kanade/src/schedule/choice.rs`）で、結論は「台本を実行する」（次行）。当たるのは小文字の `script:` で始まる ID だけで、後ろの台本は `script_body` が取り出す。判定は `On` 始まりより先に行う（`script:OnFoo` も台本として扱う） |
+| 7a-ii | `script:` 前置の選択の結末 | **`script:` の後ろを新しいトークとして再生する**（`areka-P0-choice-script-prefix`）。選択肢の待ちを閉じる指示と再生の開始を同じ一括で出し、元のトークを置き換える。台本は SHIORI の応答の台本と同じ読み方で再生する | `ukadoc` | ukadoc `\q[タイトル,script:実行内容]` の項: 「選択後、script:以下の内容をさくらスクリプトとして実行する」・記述例 `\q[バルーンを閉じる,script:\e]`・入れ子 `\q[その１,"script:\q[その２,script:その３はない]"]` | 実装は `crates/areka-kanade/src/schedule/steady.rs` の `on_choice` の `CascadePlan::Script` の腕と、`crates/areka-kanade/src/schedule/steady_choice_script.rs` の `begin`。記録は `choice_script_started`。入れ子の例では、選んだ台本がまた選択肢を出し、2 段目の選択も同じ規則で台本を再生する |
+| 7a-iii | `script:` 前置の選択で SHIORI のイベントを起こすか | **起こさない**。`OnChoiceSelectEx`・`OnChoiceSelect`・`On` で始まる名前のイベントのどれも起こさない（SHIORI への往復は 0 回） | `areka_discretion` | 正典は「選択後、script:以下の内容をさくらスクリプトとして実行する」と述べるのみで、選択のイベントを併せて起こすか否かに沈黙 | 台本の実行は SHIORI を通さない形として書かれているため、イベントを足さない読みを採った。`on_choice` の `Script` の腕はイベントの一括を作らずに返る |
+| 7a-iv | `script:` の台本を翻訳に通すか | **通さない**。`OnTranslate`・MAKOTO に通さずにそのまま再生する | `areka_discretion` | 正典は `script:` の台本を翻訳に通すか否かに沈黙。理由: 選択肢を含んでいた元の台本が翻訳を通るときに、`script:` の台本はその一部として 1 回通っている。選んだ後にもう一度通すと、台本全体を置き換える翻訳が二重に掛かる | **併記**: タグの中を避けて翻訳するゴーストでは、`script:` の台本は翻訳されないまま再生される。実装は翻訳の出口の規則（`crates/areka-kanade/src/schedule/translate.rs` の `capture`）のままで、捕まえるのは SHIORI の応答の台詞の再生開始だけであり、選択の入力から始まる再生開始は捕まえない |
+| 7a-v | `script:` 前置の第 3 引数以降 | **使わない**。台本に含めず、どこへも渡さず、数を警告 `choice_script_unused_args` に残す | `areka_discretion` | 正典の形 `\q[タイトル,script:実行内容]` は 2 つの引数だけを示し、3 番目以降の扱いに沈黙 | 台本に `,` を含めるなら `"…"` で括る（正典の入れ子の記述例の書き方）。括り忘れに気付けるよう、数だけを警告に残す |
+| 7a-vi | 空の `script:` | **新しいトークを始めない**。警告 `choice_script_empty` を出して選択肢の待ちを閉じるだけで、元のトークが続く | `areka_discretion` | 正典は `script:` の後ろが空の場合に沈黙 | 待ちを閉じる指示はちょうど 1 回出す（裁定 3 と同じく、選択待ちのまま台本を止めない） |
 | 7b-i | CROW 複数 ID 形の存在 | 正典には `\q[タイトル,ID1,ID2,ID3...]` 形が存在し、追加 ID が Reference に格納される | `ssp_secondary` | research §5-d 実測: 「`\q[タイトル,ID1,ID2,ID3...]` は『ID* が Reference* に格納』＝OnChoiceSelect の Ref1 以降に追加 ID が載る形」。生成正本 `14.choice.toml` の `extra_choice_id`（`provenance = "ssp_secondary"`・「CROW のみ。選択肢の 2 番目以降の ID。」） | 二次情報（CROW 実装由来）であることを ukadoc 側も明示している |
 | 7b-ii | CROW 複数 ID 形の M1 縮退 | **M1 非対応**。areka のワイヤ形では Ex 形（`ID,r2,r3...`）と**区別不能**であるため、到来した追加 ID は付随参照列として扱う（`OnChoiceSelect` の Reference1 以降に追加 ID を載せる挙動は実装しない） | `areka_discretion` | research §5-d 実測: 「areka の `ChoiceSelection`／`CueCommand::Choice` は `id` ＋ `references` の 2 分割ゆえ、Ex 形（r2,r3…）と複数 ID 形をワイヤ形で区別できない」（DD-15） | 構造的縮退（判定材料がワイヤ形に存在しない）であり、意思による省略ではない。区別を可能にするには上流のコンパイル形（`\q` の分割規約）を変える必要があり、その改訂は本表と下流 e2e の期待値に波及する |
 | 8a | 選択起源の逐語発火 | `\q` の ID に書かれたイベント名を**逐語で**発行する（事前の固定登録を要さない） | `ukadoc` | research §5-b 実測（上表 R-3 に転記）: 「ID が "On" で始まっている場合は、選択後、SHIORI イベント OnID(**書いた通りのイベント**)が開始される。」 | `On` 接頭辞は名前の制約ではなく、Ex 形と任意名形を分けるディスパッチ判定子である（research §9-2 の正典再確認） |
@@ -78,7 +82,7 @@
 
 ## 5. 正典引用の出所一覧
 
-本表の「正典引用・根拠」欄に転記した一次記述は、すべて出所 spec の `research.md` §5（2026-07-31 ukadoc MCP 実測）および §9-2 の正典再確認に実在する。
+本表の「正典引用・根拠」欄に転記した一次記述は、すべて出所 spec の `research.md` §5（2026-07-31 ukadoc MCP 実測）および §9-2 の正典再確認に実在する。ただし 7a-ii・7a-iii・7a-v の引用だけは例外で、`areka-P0-choice-script-prefix` が ukadoc（MCP）から直接引き直したものである（下表の「本表外の出所」の行）。
 
 | 本表の行 | 転記元 |
 |---|---|
@@ -90,4 +94,5 @@
 | R-1・R-2・R-4・2a | research §5-f（Reference 割付・「OnChoiceSelect よりも先に開始」） |
 | R-3 の注記・8a の注記 | research §9-2（`\_a[OnID,…]` も同一規則・`On` 接頭はディスパッチ判定子） |
 | 5d | research §10.1（設計フェーズ実測・`TimedSchedule` の死んだ seam） |
+| 7a-ii・7a-iii・7a-v の引用（**本表外の出所**） | ukadoc `\q[タイトル,script:実行内容]` の項（2026-10-06 に ukadoc MCP で引き直し・`areka-P0-choice-script-prefix` の要件の冒頭にも同文）——research §5 には無い出所であることを明示する |
 | 6 の注記（**本表外の出所**） | `emo2-conformance-scope.md:18`（`Status` ヘッダの状態語 9 種）・`emo2-conformance-scope.md:27`（`OnTalk`/`OnHour` の送出禁止根拠）——research §5 には無い出所であることを明示する |

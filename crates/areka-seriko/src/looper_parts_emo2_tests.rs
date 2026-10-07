@@ -88,7 +88,7 @@ const RUN_MS: u64 = 60_000;
 const SWITCH_MS: u64 = 30_000;
 
 /// 実物の emo2 のシェルの表（本番と同じ `EmoWorld::build` → `AnimationTable::from_world`）。
-fn emo2_shell_table() -> AnimationTable {
+pub(crate) fn emo2_shell_table() -> AnimationTable {
     let path = crate::sample_test_support::emo2_root()
         .join("shell")
         .join("master")

@@ -144,3 +144,24 @@
   - `balloon-font-file` とは `frame/attach.rs`・`frame/switch.rs` が重なる＝**並べない**。
   - `shell-balloon-frame-align` とは、ファイルの重なりは 0 にできる（本 spec は emo-text・`frame/scale_text.rs`・`frame/status_report.rs`・`balloon_visibility_phase.rs` に触らない、と設計で約束する条件つき）。`Status` の `balloon(ID群)` の番号の出どころ（項目 2 が変える）を相手のテストが読むので、相手と同じウェーブなら項目 2 の番号の規則を先に相手へ知らせる。**条件つきで並べられる**。
 - **裁定（棚卸㉑・roadmap の裁定 5）**: `\![reload,balloon]` は `mcp-reload` が持つ。本 spec の項目 4 は範囲から外す（二重の持ち主を 1 つにした）。
+
+
+---
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（10〜14 タスク）。項目 4 が `mcp-reload` へ移ったので㉑の 12〜16 から下がった。残りは項目 2（面の偶数・奇数で左右のバルーンを選ぶ・普通のバルーンだけ）・3（`defaultsurface`）・5（`balloonc*` の kero 側）・6（多面の検体）。切らない。項目 2 を先に。
+- 前提の状態: 満たす。㉑の「条件つきで並べられる」相手 `shell-balloon-frame-align`（PR#236）は着地＝条件は消えた。`emo2_boot` の結線の列では `balloon-font-file` の後。
+- 崩れた前提／古くなった位置:
+  - 面の番号の `0` の直書きは今も `emo2_boot/frame/attach.rs` の装着の `PresentCommand::ShowSurface`（`surface_id: 0`）。C3 は `frame/attach.rs`・`frame/switch.rs`・`shell_balloon_switch.rs`・emo-present の `balloon.rs` に触れていない。
+  - `Status` の `balloon(…)` の番号は、C3 の後は表示層の絵の番号（`frame/status_report.rs` が presenter の `surface_id` を読み、届けはフレームの終わり）＝項目 2 で番号の選び方が変わっても `status_report.rs` は触らずに追従する。
+  - `areka-seriko/src/actor.rs` は C3（`surface-element-nesting`）で部品の時計が入り 660 行。`\b[数字]` の腕（`CueCommand::BalloonSurface`）は変わらず。`placement/config.rs`（706 行）・`resolver.rs`（491 行）は `mouse-drag-events` が使われない注記を消しただけで、`BalloonSide::Auto` の腕と `balloon_alignment` は変わらず。
+  - 本文の Scope（「上記 6 項目＋追加登記の 7〜10」）と Desired Outcome の `\![reload,balloon]` は古い＝今の範囲は項目 2・3・5・6。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-present/src/balloon.rs`（658 行・系列と面の解決・`balloonc*` の行）
+  - `crates/areka/src/emo2_boot/{frame/attach.rs, frame/switch.rs, shell_balloon_switch.rs}`
+  - `crates/areka/src/placement/{config.rs, resolver.rs}`・`crates/areka-seriko/src/actor.rs`
+  - `defaultsurface` を読む所（ゴーストの descript の読み手・要件で確定）・多面の検体（新規）・`doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）: 面の偶奇の自動切替の規則（キャラのどちら側に出たかで偶奇を選ぶ・`\b[数字]` で明示されたときの優先）だけ。
+- 見つけた穴: なし。軽微: 上記の Scope の古い書き方（着手のときに読み替える）。
+- 並走の判定（厳しめ）: `balloon-lifecycle-events`・`budoux-reveal-reflow`・`text-typesetting` とは重なり 0＝**並べられる**。`anchor-tag-canon` とは、向こうが dola に種類を足さなければ 0（足すと `areka-seriko/src/actor.rs`）。`balloon-font-file`（`frame/attach.rs`・`frame/switch.rs`）・`balloon-markers`（emo-present の `balloon.rs` の系列の表）・`talk-fast-forward`（同じ表の `clickwait` の行）・`shell-companion-balloon`（`frame/switch.rs`）とは重なる＝並べない。

@@ -82,3 +82,22 @@
   1. 窓の数を何から導くか（ゴーストの descript の `char{n}.*`／シェルの descript の `char{n}.*`／サーフェスの有無）。今の `detect_scopes` は ghost と shell の両方の `char{n}.` を見る。
   2. 3 人以上いる検体の入手（再配布の条件の明確なもの・`vendors/sample_ghost/` の決まりに従う）。
   3. `popup-menu-residue` の項目 9 のうち `char*.popupmenu.visible`（n≧2）を本 spec で引き取るか。
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M〜L（14〜20 タスク）。変わらず。切らない。
+- 前提の状態: 未。`emo2_boot` の結線の列で `balloon-font-file`（C4）→ `balloon-canon-residue` ∥ `shell-companion-balloon` の後。加えて、新しく起票されたバグ `char-position-save-on-exit` が同じ位置の記憶（`placement/persist.rs`・`placement/follow/drag_follow.rs`）を触る＝あちらが先に着地すれば、3 人目以降の位置の記憶も「終了で書く」の形の上に載る。
+- 崩れた前提／古くなった位置:
+  - 窓の数を 0・1 に固定する `derive_scopes`（`emo2_boot/mod.rs`）の呼び手は 2 か所＝起動の手順 1 と、シェル・バルーンの着替えの `emo2_boot/switch_assets.rs`。**後者が触るファイルに漏れていた**。
+  - `emo2_boot/mod.rs` は 883 行（起票時の 870 台から増えた）。足す分は兄弟ファイルへ出す方針のまま。
+  - `mouse-drag-events` が `input_events/drag.rs`（ドラッグの知らせ）を足した。スコープは `char_scope` から取るので、`char_scope` の `debug_assert!(scope <= 1, …)` を外せば 3 人目のドラッグも通る＝`drag.rs` 自体は触らない見込み。メニューの側の `debug_assert!`（`menu/captions.rs`）も起票時のまま。
+  - C3 で `placement/` に入ったのは `#[allow(dead_code)]` の注記の外しだけ（`config.rs`・`measure.rs`・`persist.rs`・`source.rs`・`spawn.rs` ほか）。`detect_scopes`・`char_scope_of` の形は変わらない。
+- 触るファイル（並走の照合用）:
+  - `crates/areka/src/emo2_boot/{mod.rs, switch_assets.rs, frame/attach.rs}` と兄弟
+  - `crates/areka/src/input_events/mod.rs`・`crates/areka/src/menu/captions.rs`
+  - `crates/areka/src/placement/{mod,config,source,measure,spawn,persist}.rs`
+  - `doc/ukadoc-coverage/ledger/shiori.toml`・`dist/README.txt`
+  - 共有しうる相手（増えた分）: `placement-measure-bake-once` の案 A（`placement/mod.rs`・`measure.rs`・`emo2_boot/mod.rs`）・`char-position-save-on-exit`（`placement/persist.rs`）。
+- 議題（答えで作業が変わるものだけ）: 起票時の 3 つのまま。
+- 見つけた穴: 触るファイルの一覧に `emo2_boot/switch_assets.rs` が無かった（上）。

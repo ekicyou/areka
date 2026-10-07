@@ -72,3 +72,20 @@
 - 議題（答えで作業が変わるものだけ）:
   1. `SetROP2` の描画方法（`anchormethod`）を Direct2D でどこまで再現するか（D2D に ROP2 は無い。`copypen` 以外を合成モードへ写すか、既定へ縮退して記録するか）。`choice-marker-styling` と同じ答えにする。
   2. 訪問済みをいつまで覚えるか（その台詞の間・バルーンが閉じるまで・ゴーストが起きている間）。
+
+
+---
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（10〜13 タスク）のまま。切らない（切り出したばかり）。
+- 前提の状態: `anchor-tag-canon`（働き・範囲と既定の見た目）は今も未着手（C4 の予定）＝未。これが着地するまで着手できない。列の上では `choice-marker-styling` の隣。
+- 崩れた前提／古くなった位置:
+  - 起票時の位置は全部当たる: `look.rs` の `is_unowned`（`starts_with("anchor")`）と `apply_color` の `Note::AnchorColorAsDefault`、`state_decoration.rs` の `unowned_vocab`・`reset_decoration`、`viewbox_draw_decoration.rs` の `apply_font_ranges`、`viewbox_draw_render.rs` の `render_styled`・`ChoiceDraw`・`highlight_rect`。C3 での変化は `look.rs` の注記 1 行（「M2 予約」→「予約」）だけ。
+  - descript の読み手: `areka-parsers/src/balloon/parse.rs` の完全一致の引きの注記と `parse_tests.rs` の「拾ってはいけない例」（`anchor.font.color.r`）は今もある。同じテストは `anchor.font.shadowcolor.r` も別の箇所で使っている＝影のキーの読みを足す `text-align-shadow-canon` と同じテストファイルを触る（列で後なので衝突はしない）。
+  - 行数: `look.rs` 771・`choice.rs` 744・`balloon/model.rs` 774・`balloon/parse.rs` 252 行。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-text/src/{look.rs, state_decoration.rs, viewbox_draw_render.rs, viewbox_draw_decoration.rs, balloon_overrides.rs}`（＋足す量によっては新規と `lib.rs`）・訪問済みの置き場所（`anchor-tag-canon` が作るアンカーの状態の隣）
+  - `crates/areka-parsers/src/balloon/{model.rs, parse.rs, parse_tests.rs}`・`doc/ukadoc-coverage/ledger/{sakura-script,assets}.toml`・`doc/COMPAT_ARCHITECTURE.md` §8
+- 議題: 起票時のまま 2 件（`anchormethod` の D2D での再現の範囲＝`choice-marker-styling` と同じ答え／訪問済みをいつまで覚えるか）。
+- 見つけた穴: なし。

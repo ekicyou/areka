@@ -81,3 +81,20 @@
   - `doc/COMPAT_ARCHITECTURE.md` §8
 - 議題（答えで作業が変わるものだけ）: 箱の当たりの矩形に、薄れている途中の字を入れるか。
 - 見つけた穴: なし。
+
+
+---
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（9〜12 タスク）のまま。切らない。
+- 前提の状態: 機能の前提は満たす。列の上では `text-ruby` の後・`balloon-scroll-fade` の前。早送り（`talk-fast-forward`）・`\_q`（`sakura-time-directives`）は今も未着手＝口だけ用意する形は棚卸⑳・㉑のまま。
+- 崩れた前提／古くなった位置:
+  - C3 で動いたのは `actor_box.rs`・`actor.rs`（`shell-balloon-frame-align`）だけ。`state.rs` の `TextLayerState::visible`（`partition_point`）・`actor_present.rs`（`present_actor`・末尾の `glyph_cells` → `set_hit_cells`）・`viewbox_diff.rs`・`viewbox_draw_render.rs`・`viewbox_draw.rs` は無変更＝棚卸㉑の位置がそのまま当たる。
+  - **「見えている字の数」を読む所が 2 つ増えて見えた**: 箱の写し（`actor_box.rs` の `refresh_shown_boxes`＝文字が 1 字以上見えている箱だけを並べる）と、普通のバルーンの窓を出すかの数（`actor_box.rs` の `balloon_shown_glyphs`・frame-align で引数に「いま表示している絵の番号」が足された・呼び手は `areka/src/emo2_boot/balloon_visibility_phase.rs`）。どちらも `visible(talk_time)` で数える＝透明度 0 に近い出始めの字も「見えている」に入る。当たりの議題と同じ答えに揃える（入れるなら今のまま・入れないなら両方を透明度で数え直す）。
+  - **`budoux-reveal-reflow`（バグ・列で先）が同じ `actor_present.rs`（折り返しの計画）と `state.rs` を触る**。あちらが「出した字の行を固定する」記憶を文字の層の状態に足すので、着手の前にその置き場所を読み直す。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-text/src/{state.rs, actor.rs, actor_box.rs（見えている数の数え方を替えるときだけ）, actor_present.rs, viewbox_diff.rs, viewbox_draw_render.rs, viewbox_draw.rs, viewbox_draw_plan.rs, lib.rs}`＋新規（透明度の仕組み）
+  - `crates/areka-parsers/src/balloon/{model.rs, parse.rs}`・`doc/COMPAT_ARCHITECTURE.md` §8
+- 議題: 箱の当たりの矩形と「見えている字の数」に、薄れている途中の字を入れるか（棚卸㉑の議題を、数の 2 か所まで広げた）。
+- 見つけた穴: なし。

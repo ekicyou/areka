@@ -103,3 +103,17 @@
   - kanade は触らない見込み（触るなら `schedule/talk_gap.rs`）
 - 議題（答えで作業が変わるものだけ）: 前回までのまま（対象ごとの読み直しの単位・自動更新〔差 5〕を本 spec で持つか）。新しく足すものは無い。
 - 見つけた穴: なし。並走の照合: `emo2_boot/{ghost_switch, shell_balloon_switch}.rs`・`ghost_session.rs` を触る spec（`makoto-dll-host` の ⒝・`mcp-reload`・`mcp-tool-entrances` の後続）と同時に走らせない。kanade を触らずに済めば、kanade の列の spec（`mouse-drag-events`・`balloon-lifecycle-events`・`property-query-channels`）とは並べられる。
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（10〜14 タスク）。切る: なし。
+- 前提の状態: **今すぐ着手できる**（前提の spec はすべて完了）。C5 の候補の席で、並べる相手との照合だけが要る。
+- 崩れた前提／古くなった位置:
+  - C3 で本 spec の触るファイルに入った変更は 0: `crates/areka/src/update/`（`procedure.rs` 383・`worker.rs` 263・`desk.rs` 703）・`emo2_boot/update_cue.rs`（217）・`ghost_session.rs`（873）・`emo2_boot/shell_balloon_switch.rs`（442）・`ghost_switch.rs`（891）・`crates/areka-update/src/lib.rs`（393）。kanade の `schedule/talk_gap.rs`（261）も 0 行＝棚卸㉑の「`AwaitTalkGap` で足りる見込み」はそのまま。
+  - kanade は `mouse-drag-events` で `msg.rs`・`schedule/{events, steady, mod}.rs`・`lib.rs` が少し変わった（ドラッグの 2 イベント）。本 spec は kanade を触らない見込みなので影響なし。`steady.rs` は 947 行・`schedule/mod.rs` は 938 行＝もし kanade に手を入れるなら新しいファイルへ。
+  - `crates/areka/src/update/desk.rs` は 703 行。手続きの順を組み替えて伸ばすなら、1,000 行の上限を見ながら兄弟のファイルへ出す。
+- 触るファイル（並走の照合用）: 棚卸㉑のまま＝`crates/areka/src/update/{procedure.rs, worker.rs, desk.rs}` と兄弟のテスト・`emo2_boot/update_cue.rs`・`ghost_session.rs`・（対象ごとに読み直すなら）`emo2_boot/{shell_balloon_switch, ghost_switch}.rs`・`crates/areka-update/src/{lib.rs, error.rs}`・`doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/ledger/shiori.toml` の備考。
+- 共有しうる相手: `update-check-options`（同じ `update/`・`update_cue.rs`＝本 spec の後に直列）・`shell-companion-balloon`（`shell_balloon_switch.rs`・`ghost_switch.rs`・`ghost_session.rs`）・`mcp-reload`（`ghost_session.rs`）・`coverage-roadmap-refresh`（台帳の `shiori.toml`）。
+- 議題（答えで作業が変わるものだけ）: 前回までのまま（対象ごとの読み直しの単位・自動更新〔差 5〕を本 spec で持つか）。
+- 見つけた穴: なし。

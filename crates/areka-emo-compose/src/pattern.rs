@@ -11,10 +11,16 @@
 use std::collections::BTreeMap;
 
 use crate::method::ComposeMethod;
+use crate::nesting::{FilmId, PartKey};
 
 /// pattern 進行状態: animation id → 現在コマ 1 枚（要件 4.2）。
 ///
-/// 内部表現は `BTreeMap<u32, PatternFrame>`（opaque）。`BTreeMap` の正準（キー昇順）順序により、
+/// 欄の意味は 3 つ（要件 1.10, 4.5, 7.4）: **載っていない＝経過 0**／**コマ**（サーフェスを指す
+/// [`PatternFrame`]、または動く絵の子の絵の番号）／**消えている**（`always` の途中の終わりのコマの後）。
+/// 読みは [`cell`](Self::cell) が [`Cell`] で返す。seriko は経過 0 と同じコマを載せないので、空の
+/// `PatternState` は「全部が経過 0」と同じ意味になる。
+///
+/// 内部表現は昇順の表（opaque）。`BTreeMap` の正準（キー昇順）順序により、
 /// 挿入順に依存せず [`Eq`] が安定する。これは `PatternState` が emo-present の `ComposeKey` に
 /// 組み込まれてキャッシュ等価判定に用いられるため決定論上必須である（要件 5.2/5.4）。
 ///
@@ -22,12 +28,52 @@ use crate::method::ComposeMethod;
 /// （要件 5.4）。`Send + 'static` 所有。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PatternState {
-    /// animation id → 現在コマ。各アニメは同時に最大 1 コマ（4.2「現在コマ 1 枚」）。
-    frames: BTreeMap<u32, PatternFrame>,
-    /// 部品のサーフェス番号 → animation id → 現在コマ（要件 5.3, 5.4, 5.10）。一番上の欄とは別。
+    /// animation id → 現在コマか「消えている」。各アニメは同時に最大 1 コマ（4.2「現在コマ 1 枚」）。
+    frames: BTreeMap<u32, Slot>,
+    /// 部品のサーフェス番号 → animation id → 現在コマか「消えている」（要件 5.3, 5.4, 5.10）。
+    /// 一番上の欄とは別。
     ///
-    /// どちらも昇順の表で、空の内側の表は持たない（入れた順・消した後に依らず [`Eq`] を安定させる）。
-    parts: BTreeMap<u32, BTreeMap<u32, PatternFrame>>,
+    /// どれも昇順の表で、空の内側の表は持たない（入れた順・消した後に依らず [`Eq`] を安定させる）。
+    parts: BTreeMap<u32, BTreeMap<u32, Slot>>,
+    /// 動く絵の子 → 今のコマ（絵の番号）。子は animation を 1 本（番号 0）しか持たないので 1 子 1 欄。
+    films: BTreeMap<FilmId, u32>,
+}
+
+/// 欄 1 つに載るもの（載っていない＝経過 0 は「表に無い」で表す）。コマと「消えている」は同じ欄で
+/// 入れ替わり、両方が残ることは無い。
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Slot {
+    Frame(PatternFrame),
+    Blank,
+}
+
+impl Slot {
+    fn frame(&self) -> Option<&PatternFrame> {
+        match self {
+            Slot::Frame(frame) => Some(frame),
+            Slot::Blank => None,
+        }
+    }
+
+    fn cell(&self) -> Cell<'_> {
+        match self {
+            Slot::Frame(frame) => Cell::Frame(frame),
+            Slot::Blank => Cell::Blank,
+        }
+    }
+}
+
+/// 欄 1 つの読み（要件 1.10, 4.5）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Cell<'a> {
+    /// 載っていない（`always` なら経過 0 のコマを定義から描く）。
+    Rest,
+    /// サーフェスを指すコマ（今までのコマ）。
+    Frame(&'a PatternFrame),
+    /// 絵を直接指すコマ（動く絵の子）。絵の番号。
+    Picture(u32),
+    /// 消えている（`always` の途中の終わりのコマの後）。
+    Blank,
 }
 
 /// pattern の現在コマ 1 枚。表示中 surface のアニメに属する transient な合成寄与。
@@ -48,29 +94,39 @@ pub struct PatternFrame {
 }
 
 impl PatternState {
-    /// pattern 寄与が無い（一番上の欄にも部品の欄にもコマを 1 枚も持たない）か。[`Default`] は真。
+    /// 全部の欄が「載っていない」（＝全部が経過 0・コマも「消えている」も子のコマも持たない）か。
+    /// [`Default`] は真。
     pub fn is_empty(&self) -> bool {
-        self.frames.is_empty() && self.parts.is_empty()
+        self.frames.is_empty() && self.parts.is_empty() && self.films.is_empty()
     }
 
-    /// 指定 animation id の現在コマを設定する（同 id の既存コマは置換＝現在コマ 1 枚・要件 4.2）。
+    /// 指定 animation id の現在コマを設定する（同 id の既存コマ・「消えている」は置換＝現在コマ 1 枚・
+    /// 要件 4.2）。
     pub fn set(&mut self, animation_id: u32, frame: PatternFrame) {
-        self.frames.insert(animation_id, frame);
+        self.frames.insert(animation_id, Slot::Frame(frame));
     }
 
-    /// 指定 animation id の現在コマを除去する（停止・ベース復帰時のクリア）。
+    /// 一番上の animation を「消えている」にする（同 id のコマは置換・要件 4.5）。
+    pub fn set_blank(&mut self, animation_id: u32) {
+        self.frames.insert(animation_id, Slot::Blank);
+    }
+
+    /// 指定 animation id の欄を「載っていない」へ戻す（停止・ベース復帰時のクリア。コマも
+    /// 「消えている」も消える）。
     pub fn remove(&mut self, animation_id: u32) {
         self.frames.remove(&animation_id);
     }
 
-    /// 指定 animation id の現在コマを引く（無ければ `None`）。
+    /// 指定 animation id の現在コマを引く（コマでなければ `None`。「消えている」もコマではない）。
     pub fn get(&self, animation_id: u32) -> Option<&PatternFrame> {
-        self.frames.get(&animation_id)
+        self.frames.get(&animation_id)?.frame()
     }
 
-    /// 現在コマを animation id 昇順（正準順序）で走査する。
+    /// 現在コマを animation id 昇順（正準順序）で走査する（「消えている」は現れない）。
     pub fn iter(&self) -> impl Iterator<Item = (u32, &PatternFrame)> {
-        self.frames.iter().map(|(&id, frame)| (id, frame))
+        self.frames
+            .iter()
+            .filter_map(|(&id, slot)| Some((id, slot.frame()?)))
     }
 
     /// 部品 `surface_id` の animation `animation_id` の今のコマを置く（同じ鍵の既存コマは置換）。
@@ -81,31 +137,96 @@ impl PatternState {
         self.parts
             .entry(surface_id)
             .or_default()
-            .insert(animation_id, frame);
+            .insert(animation_id, Slot::Frame(frame));
     }
 
-    /// 部品のコマを全部消す（一番上の欄は残す）。空の内側の表は残らない。
+    /// 部品 `part` の animation を「消えている」にする（同じ鍵のコマは置換・要件 4.5）。
+    pub fn set_part_blank(&mut self, part: u32, animation_id: u32) {
+        self.parts
+            .entry(part)
+            .or_default()
+            .insert(animation_id, Slot::Blank);
+    }
+
+    /// 部品の欄（コマと「消えている」）と動く絵の子の欄を全部消す（一番上の欄は残す）。空の内側の表は
+    /// 残らない。
     pub fn clear_parts(&mut self) {
         self.parts.clear();
+        self.films.clear();
     }
 
-    /// 部品 `surface_id` の animation `animation_id` の今のコマを引く（無ければ `None`）。
+    /// 部品 `surface_id` の animation `animation_id` の今のコマを引く（コマでなければ `None`）。
     pub fn part_get(&self, surface_id: u32, animation_id: u32) -> Option<&PatternFrame> {
-        self.parts.get(&surface_id)?.get(&animation_id)
+        self.parts.get(&surface_id)?.get(&animation_id)?.frame()
     }
 
-    /// 部品 `surface_id` のコマを animation の番号の昇順に走査する（無ければ空）。
+    /// 部品 `surface_id` のコマを animation の番号の昇順に走査する（無ければ空・「消えている」は
+    /// 現れない）。
     pub fn part(&self, surface_id: u32) -> impl Iterator<Item = (u32, &PatternFrame)> {
         self.parts
             .get(&surface_id)
             .into_iter()
-            .flat_map(|frames| frames.iter().map(|(&id, frame)| (id, frame)))
+            .flat_map(|slots| slots.iter())
+            .filter_map(|(&id, slot)| Some((id, slot.frame()?)))
+    }
+
+    /// 動く絵の子 `film` の今のコマ（絵の番号）を置く（同じ子の既存コマは置換）。
+    pub fn set_film(&mut self, film: FilmId, picture: u32) {
+        self.films.insert(film, picture);
+    }
+
+    /// 動く絵の子 `film` の欄を「載っていない」（経過 0）へ戻す。
+    pub fn remove_film(&mut self, film: FilmId) {
+        self.films.remove(&film);
+    }
+
+    /// 欄の読み。`part` が `None` なら一番上の欄。動く絵の子は animation 0 だけを持つので、他の番号は
+    /// [`Cell::Rest`]。
+    pub fn cell(&self, part: Option<PartKey>, animation_id: u32) -> Cell<'_> {
+        let slot = match part {
+            None => self.frames.get(&animation_id),
+            Some(PartKey::Surface(surface_id)) => self
+                .parts
+                .get(&surface_id)
+                .and_then(|slots| slots.get(&animation_id)),
+            Some(PartKey::Film(film)) => {
+                return match self.films.get(&film) {
+                    Some(&picture) if animation_id == 0 => Cell::Picture(picture),
+                    _ => Cell::Rest,
+                };
+            }
+        };
+        slot.map_or(Cell::Rest, Slot::cell)
+    }
+
+    /// 「載っていない」以外の欄を全部、読むだけで走査する（表示層が回数つきの子の欄を外す・perf の
+    /// 鍵へ混ぜるのに使う）。順は一番上 → 部品（番号の昇順）→ 動く絵の子（番号の昇順）、各々
+    /// animation の番号の昇順。子の animation の番号は 0。
+    pub fn cells(&self) -> impl Iterator<Item = (Option<PartKey>, u32, Cell<'_>)> {
+        let top = self
+            .frames
+            .iter()
+            .map(|(&id, slot)| (None, id, slot.cell()));
+        let parts = self.parts.iter().flat_map(|(&surface_id, slots)| {
+            slots
+                .iter()
+                .map(move |(&id, slot)| (Some(PartKey::Surface(surface_id)), id, slot.cell()))
+        });
+        let films = self
+            .films
+            .iter()
+            .map(|(&film, &picture)| (Some(PartKey::Film(film)), 0, Cell::Picture(picture)));
+        top.chain(parts).chain(films)
     }
 }
 
 #[cfg(test)]
 #[path = "pattern_parts_tests.rs"]
 mod parts_tests;
+
+#[cfg(test)]
+#[path = "pattern_cell_tests.rs"]
+mod cell_tests;
 
 #[cfg(test)]
 mod tests {

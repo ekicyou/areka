@@ -6,14 +6,15 @@
 //!
 //! # 採録規則（要件 8.1/8.2）
 //!
-//! `Interval::Random{k}`／`BindRandom{k}` を採録する（[`LoopTrigger`] 2 種）。加えて
+//! `Interval::Random{k}`／`BindRandom{k}` と、`always` の単独（[`is_always_interval`]・小文字の完全一致）を
+//! 採録する（[`LoopTrigger`] 3 種・spec: areka-P0-animated-image-playback 要件 4.1・4.8・4.9）。加えて
 //! `Interval::Other(語彙)` のうち **`sometimes`・`rarely` の 2 語は採録する**: `sometimes` は
 //! `random,2`・`rarely` は `random,4` と同じ引き金へ読み替え、以降の手順（`k == 0` の検査・コマの
 //! 整列・空の検査）へそのまま流す（小文字の完全一致・spec: areka-P0-shell-implicit-surface
 //! 要件 11.1/11.2）。読み替えたときは元の語（`vocab`）と読み替え先の `k` を `debug!` に残す
 //! （要件 11.7）。`Interval::Bind`（静的着せ替え）・**それ以外の** `Other` の語彙・`#[non_exhaustive]`
 //! の将来 variant は**採録せず `debug!` で記録**する。非採録の `Other` は**元語彙文字列込み**で記録
-//! するため、「`always` と書いたのに動かない」が診断可能になる（討議 #1 裁定・要件 11.4）。
+//! するため、「`runonce` と書いたのに動かない」が診断可能になる（討議 #1 裁定・要件 11.4）。
 //! 口パク（`interval,talk`）・`\i[N]`・動的 bind・talk cue は構造的に `Random`/`BindRandom` の
 //! interval アニメではないため、この採録フィルタが自然に除外する（要件 8.3）。
 //!
@@ -21,6 +22,16 @@
 //!
 //! - `k == 0`（`1/0` は定義不能）→ 非採録・`warn!`。
 //! - コマ列が空のアニメ → 非採録・`warn!`。
+//! - 待ち時間の合計が 0 の `always`（止まらない繰り返し）→ 非採録・`warn!`（絵は合成が経過 0 として
+//!   描く・spec: areka-P0-animated-image-playback 要件 4.6）。
+//!
+//! # 動く絵の子（spec: areka-P0-animated-image-playback 要件 2.5・8.1〜8.4）
+//!
+//! 作者のサーフェスの輪の後に、面の表の子の定義（[`EmoWorld::film_sheets`]）1 つにつき `always` を
+//! 1 本（animation の番号 0・周期と回数はファイルの値・コマは絵を指す）採る。鍵は
+//! [`PartKey::Film`] なので作者のサーフェスの番号とは当たらない。分解しなかった絵
+//! （[`EmoWorld::film_skips`]）は 1 件ごとに相対パスと理由を `warn!` で 1 回出す。記録は表を作る
+//! ときだけで、刻みごとの記録は無い。
 //!
 //! # method 解決（要件 8.4）
 //!
@@ -31,9 +42,13 @@
 
 use std::collections::BTreeMap;
 
-use areka_emo_compose::{ComposeMethod, EmoWorld, NestTable};
+use std::num::{NonZeroU32, NonZeroU64};
 
-/// 駆動トリガ（採録は 2 種のみ・要件 8.1）。
+use areka_emo_compose::{
+    ComposeMethod, EmoWorld, FilmId, FilmSheet, FilmSkip, NestTable, PartKey, is_always_interval,
+};
+
+/// 駆動トリガ（採録は 3 種のみ・要件 8.1）。
 ///
 /// `k` は 1/N 抽選の頻度パラメータ（`k == 0` は構築時ガードで弾かれるため、採録済み値は常に `k >= 1`）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +63,13 @@ pub enum LoopTrigger {
         /// 頻度パラメータ K（採録済みは `>= 1`）。
         k: u32,
     },
+    /// `interval,always`・動く絵の子: そのサーフェスである間ずっと繰り返す（抽選しない）。
+    Always {
+        /// 1 周の長さ（手書きは待ち時間の合計・子はコマの待ち時間の合計）。
+        period_ms: NonZeroU64,
+        /// 合計の回数（`None` は終わりなし。手書きは常に `None`）。
+        laps: Option<NonZeroU32>,
+    },
 }
 
 /// 1 コマ（method は構築時解決済みの完全形・`wait_ms` は 1ms 単位・要件 4.5/8.4）。
@@ -55,6 +77,8 @@ pub enum LoopTrigger {
 pub struct LoopFrame {
     /// コマの参照 surface id。負値センチネルを保持する（`-1` 停止・他負値は非駆動・要件 5.5）。
     pub surface_id: i64,
+    /// 絵を直接指すコマなら絵の番号（動く絵の子だけ）。作者の pattern定義のコマは `None`。
+    pub picture: Option<u32>,
     /// 描画メソッド（完全語彙・要件 8.4）。合成の実駆動は `Overlay` のみ（下流 method ゲートが選別）。
     pub method: ComposeMethod,
     /// 前コマからこのコマへの遅延（1ms 単位・要件 4.5）。
@@ -70,7 +94,7 @@ pub struct LoopFrame {
 pub struct LoopAnimation {
     /// animation ID（bind ゲート・合成整列のキー・要件 5.6）。
     pub id: u32,
-    /// 駆動トリガ（`Random`/`BindRandom`）。
+    /// 駆動トリガ（`Random`/`BindRandom`/`Always`）。
     pub trigger: LoopTrigger,
     /// pattern index 昇順・非空保証のコマ列（構築時ガード）。
     pub frames: Vec<LoopFrame>,
@@ -88,8 +112,12 @@ pub struct LoopAnimation {
 #[derive(Debug, Clone, Default)]
 pub struct AnimationTable {
     animations: BTreeMap<u32, Vec<LoopAnimation>>,
+    /// 動く絵の子 → その `always` 1 本。
+    films: BTreeMap<FilmId, LoopAnimation>,
     nest: NestTable,
     has_animated_parts: bool,
+    /// `always` を 1 本以上採ったか（手書き・子のどちらでも）。
+    has_always: bool,
 }
 
 impl AnimationTable {
@@ -107,6 +135,16 @@ impl AnimationTable {
     /// `k == 0`・コマ列空は `warn!` で記録して非採録。method は [`ComposeMethod::from_name`] で構築時
     /// 1 回解決し、コマ列は pattern index 昇順へ整列する。面種非依存（シェル/バルーン双方に同型適用）。
     pub fn from_world(world: &EmoWorld) -> AnimationTable {
+        AnimationTable::from_world_and_films(world, world.film_sheets(), world.film_skips())
+    }
+
+    /// [`AnimationTable::from_world`] の中身。子の定義と分解しなかった絵を引数で受ける（seriko は
+    /// 読み込みの側に依存しないので、テストは分解の結果と同じ形の値を手で組んで渡す）。
+    pub(crate) fn from_world_and_films<'a>(
+        world: &EmoWorld,
+        sheets: impl Iterator<Item = &'a FilmSheet>,
+        skips: &[FilmSkip],
+    ) -> AnimationTable {
         let mut table: BTreeMap<u32, Vec<LoopAnimation>> = BTreeMap::new();
 
         for surface_id in world.surface_ids() {
@@ -115,13 +153,17 @@ impl AnimationTable {
             };
 
             for anim in &master.animations {
-                // 採録は Random/BindRandom と、読み替える Other("sometimes")／Other("rarely") のみ。
+                // 採録は Random/BindRandom・always の単独と、読み替える Other("sometimes")／Other("rarely") のみ。
                 // Bind・それ以外の Other・将来 variant は debug! で非採録（要件 8.2・11.1/11.2・
                 // match は Bind/Other 明示腕＋catch-all で将来 additive シームを保つ）。
+                // `always` の単独は周期が要るので、コマを並べた後で引き金を作る（下・`None`）。
                 let trigger = match &anim.interval {
-                    areka_parsers::shell::Interval::Random { k } => LoopTrigger::Random { k: *k },
+                    i if is_always_interval(i) => None,
+                    areka_parsers::shell::Interval::Random { k } => {
+                        Some(LoopTrigger::Random { k: *k })
+                    }
                     areka_parsers::shell::Interval::BindRandom { k } => {
-                        LoopTrigger::BindRandom { k: *k }
+                        Some(LoopTrigger::BindRandom { k: *k })
                     }
                     areka_parsers::shell::Interval::Bind => {
                         tracing::debug!(
@@ -135,7 +177,7 @@ impl AnimationTable {
                         // `sometimes`／`rarely` は `random,2`／`random,4` と同じ引き金へ読み替えて
                         // 採録する（小文字の完全一致・spec: areka-P0-shell-implicit-surface
                         // 要件 11.1/11.2）。他の語は今までどおり元語彙込みで記録して非採録＝
-                        // 「always と書いたのに動かない」の診断は残る語について生きる（要件 11.4）。
+                        // 「runonce と書いたのに動かない」の診断は残る語について生きる（要件 11.4）。
                         let rewritten = match &**vocab {
                             // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#sometimes:1
                             "sometimes" => Some(2),
@@ -152,7 +194,7 @@ impl AnimationTable {
                                     k,
                                     "seriko table: 間隔の語を random,K と同じ引き金へ読み替えて採録（要件 11.1/11.2）"
                                 );
-                                LoopTrigger::Random { k }
+                                Some(LoopTrigger::Random { k })
                             }
                             None => {
                                 tracing::debug!(
@@ -177,8 +219,9 @@ impl AnimationTable {
                 };
 
                 // 縮退ガード（構築時 1 回・log-first・要件 8.3）: k==0 は 1/0 定義不能ゆえ非採録。
-                let (LoopTrigger::Random { k } | LoopTrigger::BindRandom { k }) = trigger;
-                if k == 0 {
+                if let Some(LoopTrigger::Random { k: 0 } | LoopTrigger::BindRandom { k: 0 }) =
+                    trigger
+                {
                     tracing::warn!(
                         surface_id,
                         animation_id = anim.id,
@@ -196,6 +239,7 @@ impl AnimationTable {
                     .iter()
                     .map(|p| LoopFrame {
                         surface_id: p.surface_id,
+                        picture: None,
                         method: ComposeMethod::from_name(p.method.as_str()),
                         wait_ms: p.wait,
                         x: p.x,
@@ -213,6 +257,27 @@ impl AnimationTable {
                     continue;
                 }
 
+                let trigger = match trigger {
+                    Some(t) => t,
+                    None => {
+                        // 待ち時間の合計が 0 の `always` は止まらない繰り返しになるので採らない
+                        // （絵は合成が経過 0 として描く・spec: areka-P0-animated-image-playback 要件 4.6）。
+                        let total: u64 = frames.iter().map(|f| u64::from(f.wait_ms)).sum();
+                        let Some(period_ms) = NonZeroU64::new(total) else {
+                            tracing::warn!(
+                                surface_id,
+                                animation_id = anim.id,
+                                "seriko table: always の待ち時間の合計が 0 ゆえ非採録（1 周だけ評価した絵のまま・要件 4.6）"
+                            );
+                            continue;
+                        };
+                        LoopTrigger::Always {
+                            period_ms,
+                            laps: None,
+                        }
+                    }
+                };
+
                 table.entry(surface_id).or_default().push(LoopAnimation {
                     id: anim.id,
                     trigger,
@@ -221,30 +286,87 @@ impl AnimationTable {
             }
         }
 
-        // 部品になりうるサーフェス: 参照の表の子・着せ替えの pattern0 の先と、採った animation の
-        // コマが指す 0 以上の番号（描画メソッドでは絞らない・design.md「Table」の字句どおり。
-        // 広めに取っても偽にすべき表を真にするだけで、部品の経路の答えは変わらない）。
+        // 動く絵の子: 子 1 つにつき `always` を 1 本（animation の番号 0）。pattern i の待ちはコマ i−1 の
+        // 待ち時間（pattern 0 は 0）、周期はコマの待ち時間の合計、回数はファイルの値。
+        let mut films: BTreeMap<FilmId, LoopAnimation> = BTreeMap::new();
+        for sheet in sheets {
+            let total: u64 = sheet.delays_ms.iter().map(|&d| u64::from(d)).sum();
+            let Some(period_ms) = NonZeroU64::new(total) else {
+                // 分解の検査が合計 0 を落とすので起きないはず（記録の無い失敗の経路を作らない）。
+                tracing::warn!(
+                    path = sheet.path.as_str(),
+                    "seriko table: 動く絵の子の待ち時間の合計が 0 ゆえ非採録（1 枚目の絵のまま）"
+                );
+                continue;
+            };
+            let waits = std::iter::once(0).chain(sheet.delays_ms.iter().copied());
+            let frames = sheet
+                .frames
+                .iter()
+                .zip(waits)
+                .map(|(&picture, wait_ms)| LoopFrame {
+                    // 絵を指すコマはサーフェスを指さない（番号の経路へ渡っても何も描かない値）。
+                    surface_id: -1,
+                    picture: Some(picture),
+                    method: ComposeMethod::Overlay,
+                    wait_ms,
+                    x: 0,
+                    y: 0,
+                })
+                .collect();
+            films.insert(
+                sheet.id,
+                LoopAnimation {
+                    id: 0,
+                    trigger: LoopTrigger::Always {
+                        period_ms,
+                        laps: sheet.laps,
+                    },
+                    frames,
+                },
+            );
+        }
+        // 分解しなかった絵: 1 件ごとに 1 回（面の表は絵ごとに 1 件だけ載せる・要件 2.5・8.4）。
+        for skip in skips {
+            tracing::warn!(
+                path = skip.path.as_str(),
+                reason = ?skip.reason,
+                "seriko table: 動く絵を分解しないので動かさない（1 枚目の静止画・要件 2.5・8.2）"
+            );
+        }
+
+        // 部品になりうるサーフェス: 参照の表の子・着せ替えの pattern0 の先・`always` の経過 0 の先と、
+        // 採った animation のコマが指す 0 以上の番号（描画メソッドでは絞らない・design.md「Table」の
+        // 字句どおり。広めに取っても偽にすべき表を真にするだけで、部品の経路の答えは変わらない）。
+        // 動く絵の子を置いたサーフェスが在れば、子は `always` を持つので真。
         let nest = world.nest_table();
-        let nested = world
-            .surface_ids()
-            .filter_map(|id| nest.parts(id))
-            .flat_map(|p| {
-                p.children
-                    .iter()
-                    .copied()
-                    .chain(p.bind_targets.iter().map(|&(_, target)| target))
-            });
+        let rows = || world.surface_ids().filter_map(|id| nest.parts(id));
+        let nested = rows().flat_map(|p| {
+            p.children
+                .iter()
+                .copied()
+                .chain(p.bind_targets.iter().map(|&(_, target)| target))
+                .chain(p.always_rest.iter().map(|&(_, target)| target))
+        });
         let framed = table
             .values()
             .flatten()
             .flat_map(|a| &a.frames)
             .filter_map(|f| u32::try_from(f.surface_id).ok());
-        let has_animated_parts = nested.chain(framed).any(|id| table.contains_key(&id));
+        let has_animated_parts = nested.chain(framed).any(|id| table.contains_key(&id))
+            || rows().any(|p| p.films.iter().any(|f| films.contains_key(f)));
+        let has_always = !films.is_empty()
+            || table
+                .values()
+                .flatten()
+                .any(|a| matches!(a.trigger, LoopTrigger::Always { .. }));
 
         AnimationTable {
             animations: table,
+            films,
             nest,
             has_animated_parts,
+            has_always,
         }
     }
 
@@ -255,7 +377,21 @@ impl AnimationTable {
             .map_or(&[][..], Vec::as_slice)
     }
 
-    /// 採録済みアニメを 1 本も持たない（表が空）か。
+    /// 部品の animation の列（作者のサーフェスでも動く絵の子でも・不在は空スライス）。
+    pub fn part_animations(&self, part: PartKey) -> &[LoopAnimation] {
+        match part {
+            PartKey::Surface(id) => self.animations(id),
+            PartKey::Film(film) => self.films.get(&film).map_or(&[][..], std::slice::from_ref),
+        }
+    }
+
+    /// 繰り返しの経路を通す表か: 動く部品が在る、または `always` を 1 本以上採った（偽の表では
+    /// 足した経路を通らない・spec: areka-P0-animated-image-playback 要件 7.1・7.2）。
+    pub fn is_continuous(&self) -> bool {
+        self.has_animated_parts || self.has_always
+    }
+
+    /// 作者のサーフェスの採録済みアニメを 1 本も持たない（表が空）か（動く絵の子の行は数えない）。
     pub fn is_empty(&self) -> bool {
         self.animations.is_empty()
     }
@@ -279,6 +415,14 @@ mod interval_words_tests;
 #[cfg(test)]
 #[path = "table_parts_tests.rs"]
 mod parts_tests;
+
+#[cfg(test)]
+#[path = "table_always_tests.rs"]
+mod always_tests;
+
+#[cfg(test)]
+#[path = "table_film_tests.rs"]
+mod film_tests;
 
 #[cfg(test)]
 mod tests {
@@ -354,7 +498,7 @@ mod tests {
 
     /// (1) kero(`interval,random,4`)＋sakura(`interval,bind+random,4`)＋非駆動(Bind/Other) を含む
     /// 世界から、採録されるのは Random/BindRandom の 2 アニメのみ。Bind と**読み替えの対象でない**
-    /// `Other` は非採録かつ `debug!` で記録され、`Other` は元語彙 `always` を含む（要件 8.1/8.2・
+    /// `Other` は非採録かつ `debug!` で記録され、`Other` は元語彙 `runonce` を含む（要件 8.1/8.2・
     /// 討議 #1）。読み替えの対象 2 語（`sometimes`・`rarely`）は採録側であり、別の檻
     /// `table_interval_words_tests.rs` が留める（要件 11.1/11.2/11.4）。
     #[test]
@@ -385,14 +529,14 @@ mod tests {
                 ],
             )],
         );
-        // 非駆動: surface30 に Bind（静的着せ替え）と Other("always")（読み替えの対象でない語彙）。
+        // 非駆動: surface30 に Bind（静的着せ替え）と Other("runonce")（読み替えの対象でない語彙）。
         let non_driven = surface_with(
             30,
             vec![
                 anim(1, Interval::Bind, vec![pat(0, "overlay", 1100, 0, 0, 0)]),
                 anim(
                     2,
-                    Interval::Other("always".into()),
+                    Interval::Other("runonce".into()),
                     vec![pat(0, "overlay", 1200, 0, 0, 0)],
                 ),
             ],
@@ -449,7 +593,7 @@ mod tests {
         // 全体で採録アニメは 2 本のみ（kero+sakura）。
         assert!(!table.is_empty());
 
-        // debug! ログ: Bind と Other が非採録として記録され、Other は元語彙 always を含む。
+        // debug! ログ: Bind と Other が非採録として記録され、Other は元語彙 runonce を含む。
         assert!(
             logs.contains("level=DEBUG"),
             "非採録は debug! で記録: {logs}"
@@ -459,11 +603,11 @@ mod tests {
             "Bind の非採録が debug! 記録される: {logs}"
         );
         assert!(
-            logs.contains("always"),
-            "Other の元語彙 always が debug! に記録される（討議 #1）: {logs}"
+            logs.contains("runonce"),
+            "Other の元語彙 runonce が debug! に記録される（討議 #1）: {logs}"
         );
         assert!(
-            logs.contains("vocab=\"always\""),
+            logs.contains("vocab=\"runonce\""),
             "元語彙は discriminating field vocab として載る: {logs}"
         );
     }
@@ -584,23 +728,42 @@ mod tests {
         assert!(t.animations(9999).is_empty());
     }
 
-    /// 採録済み表の全アニメは frames 非空・`k >= 1`（事後条件・design Postconditions）。
+    /// 採録済み表の全アニメは frames 非空・抽選は `k >= 1`・`always` は周期＝待ちの合計（≥ 1）
+    /// （事後条件・design Postconditions）。
     #[test]
     fn recorded_anims_satisfy_postconditions() {
         let kero = surface_with(
             10,
-            vec![anim(
-                0,
-                Interval::Random { k: 4 },
-                vec![pat(0, "overlay", 2106, 0, 0, 0)],
-            )],
+            vec![
+                anim(
+                    0,
+                    Interval::Random { k: 4 },
+                    vec![pat(0, "overlay", 2106, 0, 0, 0)],
+                ),
+                anim(
+                    1,
+                    Interval::Other("always".into()),
+                    vec![
+                        pat(0, "overlay", 2106, 0, 0, 0),
+                        pat(1, "overlay", 2110, 40, 0, 0),
+                    ],
+                ),
+            ],
         );
         let world = world_of(vec![kero]);
         let table = AnimationTable::from_world(&world);
+        assert_eq!(table.animations(10).len(), 2);
         for anim in table.animations(10) {
             assert!(!anim.frames.is_empty(), "採録アニメの frames は非空");
-            let (LoopTrigger::Random { k } | LoopTrigger::BindRandom { k }) = anim.trigger;
-            assert!(k >= 1, "採録アニメの k は >= 1");
+            match anim.trigger {
+                LoopTrigger::Random { k } | LoopTrigger::BindRandom { k } => {
+                    assert!(k >= 1, "採録アニメの k は >= 1");
+                }
+                LoopTrigger::Always { period_ms, .. } => {
+                    let total: u64 = anim.frames.iter().map(|f| u64::from(f.wait_ms)).sum();
+                    assert_eq!(period_ms.get(), total, "周期は待ちの合計");
+                }
+            }
         }
     }
 

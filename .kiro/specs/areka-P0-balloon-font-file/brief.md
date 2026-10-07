@@ -94,3 +94,25 @@
   2. 試験用フォントのライセンスの置き場所（`THIRD-PARTY-NOTICES.md` は生成物で手書きが消える）。
 - 見つけた穴: なし（実害のあるものは見つからなかった）。
 - 並走の判定（厳しめ）: `shell-balloon-frame-align` とは `actor.rs`・`actor_box.rs`（と新しいファイルを足すなら `lib.rs`）が重なる＝**並べない**。`balloon-canon-residue` とは `frame/attach.rs`・`frame/switch.rs` が重なる＝**並べない**。本 spec は文字の列で単独で走らせる。
+
+
+---
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（8〜11 タスク）。切らない。
+- 前提の状態: `shell-balloon-frame-align`（PR#236）が着地＝前提はすべて満たす。今すぐ着手できる。
+- 崩れた前提／古くなった位置:
+  - C3 の `shell-balloon-frame-align` は `actor.rs`（`shown_boxes` の欄の注記・`apply_cue` の末尾の注記）と `actor_box.rs`（`sync_boxes` が絵の番号を受け取る形・`balloon_shown_glyphs` の引数・`box_still_shown`）を書き換えた。本 spec が使う箱の探し場所の欄（`actor.rs` の `TextLayerRuntime` の `box_font_dirs`）・入れ口（`actor_box.rs` の `set_box_layout`）・読み口（同 `box_font_dirs`）は変わっていない。
+  - **箱の探し場所はまだ本番でどこからも読まれていない**（読み口の呼び手は 0）。㉑の「`actor_box.rs`（箱の `font.name` に `box_font_dirs` を渡す所）」はまだ無い＝本 spec が最初の読み手を作る。
+  - フォント集を作る 3 か所・書式を作る 3 か所は㉑のまま（C3 は `draw.rs` の注記の「M2 予約」→「予約」だけ）。`.ttf` などを読み飛ばす所も `draw_catalog.rs` の `FONT_FILE_EXTENSIONS` と `FontCatalog::pick` のまま。`frame/attach.rs`・`frame/switch.rs`・`emo2_boot/assets.rs` は C3 で変わっていない。
+  - **㉑の触るファイルの抜け**: `build_actor_render`（`actor_decoration.rs`）の呼び手はただ 1 つ、`actor_present.rs` の `present_frame` の装着の枝（`TextSurface::attach` の直後）。探し場所を引数で足すとここを触る。探し場所（か読み込んだフォント集）を `ResolvedBalloonText`（`actor.rs` の定義・普通のバルーンは `actor_attach.rs` の `register_actor`、箱は `actor_box.rs` の `register_box` で組む）に載せれば、すでに渡っている `&resolved.font` を通って届き、`actor_present.rs` を触らずに済む。列の約束（新しい値はバルーン定義ごと）にも合う。
+  - `lib.rs` は src の全部の `.rs`（テストの兄弟ファイルも）を `PURE_SOURCES` か `SOURCES_OUTSIDE_THE_PURE_SCAN` に載せないと赤（純粋の数は 71 で固定）。新しいファイルを 1 つでも足すと `lib.rs` を触る。
+- 触るファイル（並走の照合用）:
+  - `crates/areka-emo-text/src/{draw_catalog.rs, draw.rs, draw_metrics.rs, viewbox_draw.rs, viewbox_draw_render.rs, actor_decoration.rs, actor.rs, actor_attach.rs, actor_box.rs}`・`lib.rs`（新しいファイルを足すとき）・`actor_present.rs`（探し場所を引数で渡す設計のときだけ）
+  - `look.rs` は `\f[name,…]` を名前の列で運ぶだけで、解決は描画の `FontCatalog::pick`＝触らない見込み
+  - `crates/areka/src/emo2_boot/{frame/attach.rs, frame/switch.rs, assets.rs}`
+  - 試験用フォントの検体・ライセンス文（`about.hbs` か検体の隣）・`doc/ukadoc-coverage/ledger/assets.toml`（`font.name` の行）・`sakura-script.toml`（`\f[name]` の行）・`doc/COMPAT_ARCHITECTURE.md` §8
+- 議題（答えで作業が変わるものだけ）: ㉑の 2 件のまま。加えて ⑶ 探し場所を `build_actor_render` の引数で渡すか、`ResolvedBalloonText` に載せるか（後者なら `actor_present.rs` に触れず、`budoux-reveal-reflow` と重なるファイルが 1 つ減る）。
+- 見つけた穴: なし。軽微: ㉑の触るファイルにある「箱の `font.name` に `box_font_dirs` を渡す所」は実在しない（上記）。
+- 並走の判定（厳しめ）: `balloon-lifecycle-events` とは重なり 0＝**並べられる**。`budoux-reveal-reflow` とは `actor_present.rs`（引数で渡す設計のとき）と `lib.rs`（両方が新しいファイルを足すとき）が重なる＝既定では**並べない**（本 spec が `actor_present.rs` を触らず、新しいファイルを足すのが片方だけなら 0 にできる）。`balloon-canon-residue` とは `frame/attach.rs`・`frame/switch.rs`、`anchor-tag-canon` とは `actor.rs`・`viewbox_draw_render.rs`、`text-typesetting` とは `draw.rs`・`draw_metrics.rs`・`viewbox_draw_render.rs`・`actor.rs` が重なる＝並べない。

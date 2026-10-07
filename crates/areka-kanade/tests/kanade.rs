@@ -27,6 +27,8 @@ mod prefetch_test;
 mod real_helper_test;
 #[path = "kanade/resource_query_test.rs"]
 mod resource_query_test;
+#[path = "kanade/status_query_test.rs"]
+mod status_query_test;
 #[path = "kanade/steady_test.rs"]
 mod steady_test;
 #[path = "kanade/translate_test.rs"]

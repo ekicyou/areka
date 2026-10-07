@@ -144,3 +144,38 @@ ukadoc 網羅調査の文書（`doc/ukadoc-coverage/roadmap-draft.md`・`briefin
 - 議題（答えで作業が変わるものだけ）: 
   1. 上の `descript_install` の行（後継 3 本が触る）を本 spec の付け替えから外してよいか（外せば後継 3 本と並べやすいが、134 行の一部が残る）。
 - 見つけた穴: なし（製品の穴ではない）。
+
+
+## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
+
+- 規模: M（14〜18 タスク）。切る: なし。
+- 前提の状態: 上流なし。台帳の行を直す spec が 1 本も走らない席なら今すぐ取れる。
+- 数え直し（main `f26aa1c1`・10-04 の表の続き）:
+
+| 項目 | 10-04 | 今 |
+|---|---|---|
+| 台帳の持ち主が完了済みなのに `[[owner_completed]]` に居ない | 19 本・134 行 | **20 本・136 行**（`mouse-drag-events` の 2 行〔`shiori.toml` の `OnMouseDragStart`・`OnMouseDragEnd`〕が増えた。上位は変わらず） |
+| `briefing.md` の `[[owner_completed]]` | 14 | **14** |
+| `roadmap-draft.md` の `[[spec]]` が完了済みを載せる | 41 行のうち 23 | **42 行のうち 24**（`mouse-drag-events` の行が足されて完了した） |
+| 一度も起票されなかった仕様名を引く項目 | 107 | **107**（`assets.toml` の `areka-P0-seriko-runtime` 78・`areka-P0-balloon-loader` 27、`shiori.toml` の `areka-P0-shiori-host-32` 2） |
+| 持ち主が空（4 台帳の合計） | 1,231 | **1,229**（`assets.toml` 364・`sakura-script.toml` 248・`shiori.toml` 617・`property.toml` 0） |
+| `roadmap-draft.md` の波の欄の旧番号（W13〜W17）を含む行 | 70 | **70** |
+
+- 崩れた前提／古くなった位置:
+  - C3 で台帳を触ったのは 3 本: `install-companion-reading`（`assets.toml` の `descript_install` の同梱の 2 行の備考を書き換えた。持ち主の欄は完了 `nar-install` のまま＝自分の名前を登記していない）・`animated-image-decode`（`assets.toml` の `overlay` 以外の描き方の行に注記 1 行）・`mouse-drag-events`（`shiori.toml` の 2 行に自分を持ち主として登記して完了＝上の 136 行に入った）。`briefing.md`（手書きの数）・`roadmap-draft.md`（`[[spec]]` の行）・`report/`（作り直し）を動かしたのは `mouse-drag-events` だけ。
+  - 棚卸㉑の議題 1 の「後継 3 本」のうち `install-companion-reading` は着地した。残る `ghost-standard-balloon`（C4 の予定）・`shell-companion-balloon` が `descript_install` の同梱の行を書き換える。
+  - `emo-text-canon-residue` のフォルダは今も在り、`roadmap-draft.md` の `[[spec]]` の行も残っている（片付けは本 spec の範囲 6 のまま）。
+  - 台帳に触れると書く未完了の brief は 40 本を超える（`grep` で `ledger/` か「網羅台帳」を含む brief）。「台帳を触る spec が 1 本も走らない席」は今後さらに取りにくくなる。同じ行を取り合わない組なら同じウェーブに置ける決まり（roadmap のウェーブ編成の許す重なり）に寄せて、本 spec が直す行の一覧を要件の段で先に固め、並ぶ spec の行と照合する形が現実的。
+- 触るファイル（並走の照合用）: 棚卸㉑のまま＝`doc/ukadoc-coverage/{briefing.md, briefing-*.md, roadmap-draft.md, README.md}`・`ledger/{assets, shiori, sakura-script}.toml`・`report/*.md`（作り直し）・`crates/ukadoc-survey/tests/consistency/{spec_checks.rs, documents.rs, documents_non_vacuity.rs}`・`.kiro/specs/areka-P0-emo-text-canon-residue/`。
+- 議題（答えで作業が変わるものだけ）: 棚卸㉑の議題 1（`descript_install` の行を外すか）。加えて、「台帳を触る spec が走らない席」を待つか、直す行の一覧を先に固めて行の重なりで照合する形に改めるか。
+- 見つけた穴: なし（製品の穴ではない）。
+
+## `areka-P0-ghost-standard-balloon` からの申し送り（2026-10-07・完了時の棚卸）
+
+- 台帳 `doc/ukadoc-coverage/ledger/assets.toml` の `descript_ghost` の `balloon`（実装済み）と `default.balloon.path`（縮退）の 2 項目は、備考の束の説明が「束: 既定で着せる吹き出し・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）」のまま。`ghost-standard-balloon` で読む経路ができたので、小分類「読む経路が無い」と「先に要る仕組み」はもう現状ではない。`ghost-standard-balloon` は束の組み替えを自分の範囲の外として触らなかった（束の名前と順位は `linkage.md`・`briefing.md` の数と結び付いている）。
+- 本 spec で束の説明を撮り直すとき、`priority` の付け直しと一緒にこの 2 行の小分類を直す。束「既定で着せる吹き出し」のほかの項目（シェルの descript の `balloon` など）が読む経路を持たないままかも、同じときに数え直す。
+
+## `areka-P0-animated-image-playback` からの申し送り（2026-10-07・完了時の棚卸）
+
+- `doc/ukadoc-coverage/briefing-assets.md` の「SERIKO/MAYUNA 世代別対応表」は「手で書いていない」「貼ったものと作り直したものが 1 バイトも違わない」と書くが、常設の検査の外にあり、`element-base-method`（2026-10-05）の時点から台帳 `ledger/assets.toml` と食い違ったまま。`animated-image-playback` が `always` を縮退へ移した分も載っていない。
+- 本 spec で、写しを撮り直すか、日付付きの写真と明記するか、検査に入れるかを決める。
