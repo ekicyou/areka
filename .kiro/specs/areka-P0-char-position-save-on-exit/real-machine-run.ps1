@@ -3,8 +3,13 @@
   areka-P0-char-position-save-on-exit タスク 6.2（実機 emo2 で確かめる）の根づくり・起動・判定。
 
 .DESCRIPTION
-  -Prepare : areka（debug）と 32bit の補助プロセスを組み、検体 emo2 を nar-sample-path で展開して
-             ワークツリーの target\cpsoe に写す。製品のコードとリポジトリの検体には触れない。
+  -Sample  : 検体（emo2 か claudia・既定は emo2）。根は emo2 なら target\cpsoe、claudia なら target\cpsoc
+             （下の target\cpsoe は claudia では target\cpsoc と読む）。emo2 は起動の台詞で毎回
+             \1\![move,-353,,,0,base,base] を出して相方を本体の左へ動かす（SHIORI の移動の指示＝要件 1.7 で
+             覚えない）。相方が前回の位置に立つこと（要件 2.1）は、移動の指示を出さない claudia で確かめる
+             （開発者 2026-10-07）。
+  -Prepare : areka（debug）と 32bit の補助プロセスを組み、検体を nar-sample-path で展開して
+             ワークツリーの根に写す。製品のコードとリポジトリの検体には触れない。
   -Run Rn  : target\cpsoe で areka を起こし、終わるまで待ってから -Check Rn を行う。記録は target\cpsoe\run-Rn.log。
              R1 は起動の前に記憶（profile とゴーストの profile\areka）を消す。R2・R3 は前の回の記憶を残す。
              終わると記憶ファイル sylphya.toml を target\cpsoe\after-Rn.toml に写す。
@@ -20,8 +25,11 @@
 .EXAMPLE
   pwsh -NoProfile -File .kiro/specs/areka-P0-char-position-save-on-exit/real-machine-run.ps1 -Prepare
   pwsh -NoProfile -File .kiro/specs/areka-P0-char-position-save-on-exit/real-machine-run.ps1 -Run R1
+  pwsh -NoProfile -File .kiro/specs/areka-P0-char-position-save-on-exit/real-machine-run.ps1 -Sample claudia -Prepare
 #>
 param(
+    [ValidateSet('emo2', 'claudia')]
+    [string]$Sample = 'emo2',
     [switch]$Prepare,
     [ValidateSet('R1', 'R2', 'R3')]
     [string]$Run,
@@ -32,8 +40,8 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $wt = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
-$root = Join-Path $wt 'target\cpsoe'
-$ghost = Join-Path $root 'ghost\emo2'
+$root = Join-Path $wt $(if ($Sample -eq 'emo2') { 'target\cpsoe' } else { 'target\cpsoc' })
+$ghost = Join-Path $root "ghost\$Sample"
 $memory = Join-Path $ghost 'ghost\master\profile\areka\sylphya.toml'
 
 function Machine([string]$path) {
@@ -49,7 +57,7 @@ if ($Prepare) {
     try {
         cargo build -p areka --bin areka -j 2; if ($LASTEXITCODE) { throw "areka のビルドが失敗 ($LASTEXITCODE)" }
         cargo build -p shiori-host32-helper --target i686-pc-windows-msvc -j 2; if ($LASTEXITCODE) { throw "helper のビルドが失敗 ($LASTEXITCODE)" }
-        $printed = cargo run -q -p sample-ghost-kit --bin nar-sample-path -- emo2
+        $printed = cargo run -q -p sample-ghost-kit --bin nar-sample-path -- $Sample
         if ($LASTEXITCODE) { throw "nar-sample-path が失敗 ($LASTEXITCODE)" }
     } finally { Pop-Location }
     $manual = ($printed | Where-Object { $_ -like 'root=*' }) -replace '^root=', ''
@@ -67,7 +75,7 @@ if ($Prepare) {
 if ($Run) {
     if (-not (Test-Path (Join-Path $root 'areka.exe'))) { throw "根が無い——先に -Prepare" }
     if ($Run -eq 'R1') {
-        foreach ($p in 'profile', 'tmp', 'ghost\emo2\ghost\master\profile\areka') { $d = Join-Path $root $p; if (Test-Path $d) { Remove-Item -Recurse -Force $d } }
+        foreach ($p in 'profile', 'tmp', "ghost\$Sample\ghost\master\profile\areka") { $d = Join-Path $root $p; if (Test-Path $d) { Remove-Item -Recurse -Force $d } }
     } elseif (-not (Test-Path $memory)) {
         throw "前の回の記憶が無い: $memory（R1 から回す）"
     }
