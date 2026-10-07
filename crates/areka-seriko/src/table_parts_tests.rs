@@ -3,8 +3,9 @@
 //!
 //! 入力は `surfaces.txt` の本文そのもの（解析 → 畳み込みを経る実経路）で組む。
 //! 「部品になりうるサーフェス」は ① element定義の子 ② 着せ替えの pattern0 の先 ③ 採った animation の
-//! コマが指す 0 以上の番号（描画メソッドで絞らない・design.md「Table」の字句どおり）の 3 つの経路が
-//! あるので、経路ごとに 1 つだけ立てた本文で真を、どれも立たない本文で偽を確かめる。
+//! コマが指す 0 以上の番号（描画メソッドで絞らない・design.md「Table」の字句どおり）④ `always` の
+//! 経過 0 の pattern の先（spec: areka-P0-animated-image-playback）の 4 つの経路があるので、経路ごとに
+//! 1 つだけ立てた本文で真を、どれも立たない本文で偽を確かめる。
 
 use areka_emo_compose::EmoWorld;
 
@@ -57,6 +58,15 @@ fn each_part_path_decides_has_animated_parts() {
     let bind = "surface0\n{\nanimation5.interval,bind\nanimation5.pattern0,overlay,200,0,0,0\n}\n";
     let frame = "surface0\n{\nanimation1.interval,random,2\n\
                  animation1.pattern0,overlay,200,40,0,0\n}\n";
+    // 合計 0 の `always`（採らない）の経過 0 の pattern（pattern1）だけが 200 を指す（spec:
+    // areka-P0-animated-image-playback task 3.2・合成が経過 0 として描く先）。
+    let always_rest = "surface0
+{
+animation1.interval,always
+                       animation1.pattern0,overlay,201,0,0,0
+                       animation1.pattern1,overlay,200,0,0,0
+}
+";
     let unrelated = "surface0\n{\nanimation1.interval,random,2\n\
                      animation1.pattern0,overlay,201,40,0,0\n}\n";
 
@@ -65,12 +75,18 @@ fn each_part_path_decides_has_animated_parts() {
         (
             "element定義の子が動かない（採らない語）",
             child,
-            "always",
+            "runonce",
             false,
         ),
         ("着せ替えの pattern0 の先が動く", bind, "random,2", true),
         ("採った animation のコマの先が動く", frame, "random,2", true),
-        ("コマの先の animation が採らない語", frame, "always", false),
+        ("コマの先の animation が採らない語", frame, "runonce", false),
+        (
+            "採らない always の経過 0 の先が動く",
+            always_rest,
+            "random,2",
+            true,
+        ),
         (
             "動くサーフェスがどこからも指されない",
             unrelated,

@@ -93,3 +93,9 @@ lint ごとに clippy の提案どおりの機械的な直しを当てる（`col
 - 触るファイル（並走の照合用・クレート単位）: 段 1 は㉑のまま。段 2 と C4 の候補の重なり: `areka-emo-compose`（`animated-image-playback` が `method.rs`・`plan.rs`・`atlas_bind.rs`）・`areka-kanade`（`balloon-lifecycle-events` が `schedule/`）・`areka` の `emo2_boot/`（`balloon-font-file`・`balloon-lifecycle-events`）・`boot_config.rs`（`ghost-standard-balloon`）。重ならない残り: `areka` の `placement/*`・`app_exit.rs`・`update/procedure.rs`・`input_events/balloon.rs`（`anchor-tag-canon` が `input_events/balloon*.rs` を触るなら外れる）。
 - 議題: ㉑の 1（test-all に clippy の段を足すか）は残る。㉑の 2 は「C4 と同じウェーブなら段 1＋重ならない `areka` のファイルだけ・それ以外は C4 の着地の後」と言い換わる＝1 本で出すならやはり C4 の着地の後。
 - 見つけた穴: なし。
+
+## `areka-P0-animated-image-playback` からの申し送り（2026-10-07・完了時の棚卸）
+
+- 実装中（2026-10-06）に `cargo clippy --all-targets -- -D warnings` で、上の列挙の外の赤を 2 件見た: `areka-seriko` の `actor.rs` の `large_enum_variant` と `looper.rs` の `collapsible_if`（どちらも本 spec の前から）。
+- 列挙済みの赤も 10-06 時点で残っている: `areka-emo-compose` のテスト 5 か所の `chunks_exact`（`blit_transparent_alpha_tests.rs`・`golden_tests_surface1000_bind_tests.rs`・`golden_tests_test_support.rs`・`composer_tests.rs` ×2）と `dola` の 21 件。
+- 本 spec は `areka-seriko` の `table.rs`・`looper.rs`・`parts.rs`・`timeline.rs`・`state.rs`・`actor.rs` を触ったので、着手のときに行の位置を引き直す。

@@ -199,7 +199,7 @@ crates/areka-emo-atlas/
 - `doc/ukadoc-coverage/ledger/assets.toml` — `element*` の項（`ukadoc:descript_shell_surfaces:element_2a…:1`）に注記。段は変えない。
 - `dist/README.txt` — 上限の設定項目（名前・意味・既定・変え方）。
 - `crates/areka-emo-present/src/balloon_target_tests.rs` — テストを 1 本足す（縮んだ動く絵を面に持つバルーンが組み立てに成功する）。テストのファイルであり、呼び手 5 ファイル（`balloon.rs` の本体を含む）には触らない。
-- `.kiro/specs/areka-P0-animated-image-playback/brief.md` — 渡すもの・残したものの追記。
+- `.kiro/specs/completed/areka-P0-animated-image-playback/brief.md` — 渡すもの・残したものの追記。
 - `.kiro/specs/<--clipping を引き受ける spec>/brief.md` — 新規（起票は `/kiro-discovery` で行う。名前はそこで決める）。
 
 各ファイルは 1,000 行以内（今の最大は `lib.rs` の 614 行。足すのは 100 行前後。`decode.rs` は 238 行に 110 行前後、新規の `image_arm.rs` は 1 枚目だけを読む口を入れて 200 行前後、`animated.rs` は 3 段の落とし方を入れて 150 行前後の見込み）。

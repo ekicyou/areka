@@ -811,6 +811,13 @@ fn boot_into(
             return failed("balloon", balloon_store.display().to_string());
         }
     };
+    tracing::info!(
+        event = "switch_balloon_resolved",
+        ghost = %name,
+        route = ?balloon.route,
+        dir = %balloon.dir.display(),
+        "切替先のバルーンが決まりました"
+    );
     let cfg = ConfigInputs {
         ghost_root: ghost.dir.clone(),
         balloon_root: balloon.dir.clone(),
@@ -889,3 +896,7 @@ mod notice_tests;
 #[cfg(test)]
 #[path = "ghost_switch_boot_event_tests.rs"]
 mod boot_event_tests;
+
+#[cfg(test)]
+#[path = "ghost_switch_balloon_tests.rs"]
+mod balloon_tests;

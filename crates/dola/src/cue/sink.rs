@@ -28,6 +28,13 @@ pub trait CueSink {
     /// broadcast ゆえ演者は自分の担当外 cue も受け取る。action の選別は演者が
     /// [`cue_target_of`] で行い、担当外でも duration は honor する。
     fn emit(&mut self, cue: TalkCue);
+
+    /// 先渡し: 登録の時点で 1 度だけ呼ばれる。`upcoming` は、この受け手にこれから
+    /// [`emit`](Self::emit) で届く合図の全部（配る順・`emit` と同じ値）。区切りと配送の制御は
+    /// 含まない。既定は何もしない（上書きしない受け手の動きは変わらない）。
+    fn preview(&mut self, upcoming: &[TalkCue]) {
+        let _ = upcoming;
+    }
 }
 
 /// `CueCommand` → 配送先スロットの relevance 分類（**単一権威**・R11.3）。

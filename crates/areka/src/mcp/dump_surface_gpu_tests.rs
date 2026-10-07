@@ -1,14 +1,18 @@
 //! `dump_surface` の実際の描画を通るテスト（spec: areka-P0-mcp-dump-images・要件 1.1・1.3〜1.6・
-//! 2.1〜2.3・4.1〜4.3・4.6・5.2・5.3・6.1・6.2・7.4 ⑴⑵⑹・x64 だけ接続）。土台は
-//! [`super::gpu_test_support`]。
+//! 2.1〜2.3・4.1〜4.3・4.6・5.2・5.3・6.1・6.2・7.4 ⑴⑵⑹、spec: areka-P0-mcp-dump-images-residue・
+//! 要件 5.1・x64 だけ接続）。土台は [`super::gpu_test_support`]。
+
+use std::time::Duration;
 
 use areka_kanade::RaiseOutcome;
+use areka_mcp::tools::dump_surface::Args;
 use areka_mcp::{ToolContent, ToolOutcome};
 use bevy_ecs::world::World;
 use log_capture_kit::count_levels;
 
-use super::WaitAnswer;
+use super::dump_surface_tests::is_picture;
 use super::gpu_test_support::{FLUSH_EVENT, GpuRig, decode_png};
+use super::{Step, WaitAnswer, finish};
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::spine::RecordedCall;
 use crate::emo2_boot::target_map::shell_target;
@@ -490,5 +494,36 @@ fn calls_do_not_disturb_the_ghost() {
         (true, sent, sent, true, true, [true; 8], 0, expected),
         "（台本の surface が出た, 前の関所, 後の関所, 降ろせた, 前の列に OnBoot, 答えが届いた, \
          ERROR の件数, 後の呼び出しの列）"
+    );
+}
+
+/// 符号化のスレッドの記録（spec: areka-P0-mcp-dump-images-residue・要件 5.1）: 台本の surface が
+/// 出た後、本物の `answer` が返した写しまで済んだ仕事を、記録を数える中で符号化のスレッドの体
+/// （`finish`）に通すと、ERROR が 0 件で画像つきの成功。
+///
+/// # 非空虚性
+/// 種が写しまで済んだ成功（`Step::Encode`）であることを確かめる（その場の失敗なら赤）。判定の関数
+/// `is_picture` と `finish` の ERROR の数え方は `dump_surface_tests.rs` で較正済み。仕事の中で
+/// `fail` を呼ぶと件数と判定の両方で赤。
+#[test]
+fn surface_job_runs_on_the_encoding_body_without_error() {
+    let mut gpu = GpuRig::new(r"\0\s[1101]\e", 96);
+    let shown = gpu.frames_until(100, |world| is_shown(world, 0, SHOWN));
+    let args = Args {
+        scope: None,
+        surface: None,
+        ghost_name: None,
+    };
+    let step = super::answer(&gpu.rig.world, &args);
+    let down = gpu.shutdown();
+
+    let Some(Step::Encode(scope, job)) = step else {
+        panic!("台本の surface が出た後の今の見た目は、写しまで済んだ成功の種");
+    };
+    let (answered, levels) = count_levels(|| finish(super::TOOL, scope, job, Duration::ZERO));
+    assert_eq!(
+        (shown, down, scope, is_picture(&answered), levels.error),
+        (true, true, 0, true, 0),
+        "（台本の surface が出た, 降ろせた, スコープ, 画像つきの成功, ERROR の件数）"
     );
 }

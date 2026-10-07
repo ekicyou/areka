@@ -1,0 +1,2 @@
+charset,UTF-8
+seriko.use_self_alpha,1

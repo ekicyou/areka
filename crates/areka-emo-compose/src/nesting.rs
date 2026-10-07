@@ -9,11 +9,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use areka_parsers::shell::ElementPath;
+use areka_parsers::shell::{Animation, ElementPath, Interval, Pattern};
 
 use crate::bind::BindSet;
 use crate::method::is_implemented_name;
-use crate::pattern::PatternState;
+use crate::pattern::{Cell, PatternState};
 use crate::plan::is_bind_interval;
 use crate::world::{EmoWorld, targets_animation_id};
 
@@ -26,6 +26,42 @@ pub enum ElementKind {
     Surface(u32),
     /// 欄は半角の数字だけだが u32 に収まらない。画像としては読まない（要件 1.9）。
     SurfaceOutOfRange,
+    /// 動く絵から作った子を置く（分解が画像の element を替える）。作者の欄の読み分け
+    /// （[`element_kind`]）からは出ない（要件 1.12）。
+    Film(FilmId),
+}
+
+/// 動く絵の子の番号（親の絵の番号＝同じ画像は同じ子）。作者のサーフェスの番号とは別の空間。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FilmId(pub u32);
+
+/// 部品を指す鍵。作者のサーフェスと動く絵の子は種類が違うので、番号が当たることが無い（要件 1.12）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum PartKey {
+    /// 作者が書いたサーフェス（番号）。
+    Surface(u32),
+    /// 動く絵から作った子。
+    Film(FilmId),
+}
+
+/// interval が `always` の単独（小文字の完全一致）か。`bind+always` などの組み合わせ・大文字・
+/// 空白つきは偽（要件 4.8・4.9）。合成・見える部品・seriko の表がこの 1 関数を使う。
+pub fn is_always_interval(interval: &Interval) -> bool {
+    matches!(interval, Interval::Other(s) if &**s == "always")
+}
+
+/// 経過 0 のコマ＝待ち時間の累積が 0 の最後の番号（先頭から待つなら `None`）。
+/// 合成と seriko が同じ関数を使う。
+pub fn rest_index(waits_ms: impl Iterator<Item = u32>) -> Option<usize> {
+    waits_ms.take_while(|&w| w == 0).count().checked_sub(1)
+}
+
+/// animation の経過 0 の pattern（pattern の番号の昇順に並べ、待ちに [`rest_index`] を当てる）。
+/// 先頭から待つなら `None`。番号が負・描画メソッドが動かないかは呼び手が見る。
+pub(crate) fn rest_pattern(anim: &Animation) -> Option<&Pattern> {
+    let mut patterns: Vec<&Pattern> = anim.patterns.iter().collect();
+    patterns.sort_by_key(|p| p.index);
+    rest_index(patterns.iter().map(|p| p.wait)).map(|i| patterns[i])
 }
 
 /// 欄が空でなく、全部が半角の数字（0〜9）なら番号として読む。`0100` は 100。
@@ -44,8 +80,9 @@ pub fn element_kind(path: &ElementPath) -> ElementKind {
 
 /// サーフェスごとの静的な参照（要件 5.11・5.13）。面の表から 1 度作る不変の値（Send・seriko が写しを持つ）。
 ///
-/// `children`・`bind_targets`・`bind_ids` のどれかが空でない番号だけを載せる（載せる条件はこの 1 か所）。
-/// 入れ子も着せ替えの種類の animation も無いシェルでは空。
+/// `children`・`bind_targets`・`bind_ids`・`films`・`always_rest` のどれかが空でない番号だけを載せる
+/// （載せる条件はこの 1 か所）。入れ子も着せ替えの種類の animation も動く絵の子も `always` の経過 0 の
+/// 先も無いシェルでは空。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NestTable {
     surfaces: BTreeMap<u32, SurfaceParts>,
@@ -61,6 +98,11 @@ pub struct SurfaceParts {
     pub bind_targets: Vec<(u32, u32)>,
     /// 着せ替えの種類（`bind`・`bind+random`）の animation の番号（昇順・重複なし）。
     pub bind_ids: Vec<u32>,
+    /// element定義で置いた動く絵の子（昇順・重複なし）。
+    pub films: Vec<FilmId>,
+    /// `always` の animation の経過 0 の pattern が指すサーフェス（animation の番号, 番号）。
+    /// 経過 0 の pattern が在り・番号が 0 以上・描画メソッドが動くものだけ。animation の番号の昇順。
+    pub always_rest: Vec<(u32, u32)>,
 }
 
 impl NestTable {
@@ -103,15 +145,36 @@ impl NestTable {
             // （bind_ids は visible_parts が二分探索で引く）。
             bind_ids.sort_unstable();
             bind_targets.sort_unstable();
-            if !(children.is_empty() && bind_targets.is_empty() && bind_ids.is_empty()) {
-                surfaces.insert(
-                    id,
-                    SurfaceParts {
-                        children,
-                        bind_targets,
-                        bind_ids,
-                    },
-                );
+            let mut films: Vec<FilmId> = master
+                .elements
+                .iter()
+                .filter_map(|e| match e.kind {
+                    ElementKind::Film(f) => Some(f),
+                    _ => None,
+                })
+                .collect();
+            films.sort_unstable();
+            films.dedup();
+            // 合成と同じ辺: 経過 0 の pattern の番号が 0 以上・描画メソッドが動く。
+            let mut always_rest: Vec<(u32, u32)> = master
+                .animations
+                .iter()
+                .filter(|a| is_always_interval(&a.interval))
+                .filter_map(|a| {
+                    let p = rest_pattern(a).filter(|p| is_implemented_name(p.method.as_str()))?;
+                    Some((a.id, u32::try_from(p.surface_id).ok()?))
+                })
+                .collect();
+            always_rest.sort_unstable();
+            let row = SurfaceParts {
+                children,
+                bind_targets,
+                bind_ids,
+                films,
+                always_rest,
+            };
+            if row != SurfaceParts::default() {
+                surfaces.insert(id, row);
             }
         }
         NestTable { surfaces }
@@ -130,9 +193,10 @@ impl NestTable {
     /// 今の絵に出ている部品の番号を、昇順・重複なしで `out` へ入れる（`out` は先に空にする）。
     ///
     /// 一番上から ① `children` ② 有効な着せ替え（`binds` に在る）の `bind_targets`（同じ animation の
-    /// 番号にコマが在ればコマが置き換えるので数えない）③ そのサーフェスのコマ（一番上は今までの欄・
-    /// 部品は部品の欄）のうち描画メソッドが動くもので、着せ替えの種類なら `binds` に在るもの、の先を
-    /// 部品に数えてその先へ進む（`flatten_surface` と同じ辺）。先祖へ戻る辺は進まない。
+    /// 番号にコマが在ればコマが置き換えるので数えない）②' `always_rest`（その animation の欄が
+    /// 「載っていない」ときだけ・「消えている」なら進まず、コマなら③で数える）③ そのサーフェスのコマ
+    /// （一番上は今までの欄・部品は部品の欄）のうち描画メソッドが動くもので、着せ替えの種類なら `binds`
+    /// に在るもの、の先を部品に数えてその先へ進む（`flatten_surface` と同じ辺）。先祖へ戻る辺は進まない。
     ///
     /// 辺は「一番上か部品か」と番号だけで決まるので、たどれる番号の集合は「一番上から届く番号」と
     /// 同じになる。そこで `out` 自身を訪れた印に使い（二分探索で昇順に差し込む）、一番上と既に入った
@@ -177,6 +241,13 @@ impl NestTable {
                     self.enter(target, top, binds, pattern, out);
                 }
             }
+            // ②' `always` の経過 0（欄が「載っていない」ときだけ）。
+            let key = (!is_top).then_some(PartKey::Surface(surface));
+            for &(id, target) in &p.always_rest {
+                if pattern.cell(key, id) == Cell::Rest {
+                    self.enter(target, top, binds, pattern, out);
+                }
+            }
         }
         // ③ コマ。着せ替えの種類なら有効なものだけ。
         let is_bind = |id: u32| parts.is_some_and(|p| p.bind_ids.binary_search(&id).is_ok());
@@ -187,6 +258,19 @@ impl NestTable {
                 self.enter(frame.surface_id, top, binds, pattern, out);
             }
         }
+    }
+
+    /// 一番上と、求め済みの見える部品 `parts`（[`visible_parts`](Self::visible_parts) の答え）に置かれた
+    /// 動く絵の子を、昇順・重複なしで `out` へ入れる（`out` は先に空にする）。
+    pub fn visible_films(&self, top: u32, parts: &[u32], out: &mut Vec<FilmId>) {
+        out.clear();
+        for s in std::iter::once(top).chain(parts.iter().copied()) {
+            if let Some(p) = self.parts(s) {
+                out.extend_from_slice(&p.films);
+            }
+        }
+        out.sort_unstable();
+        out.dedup();
     }
 
     /// `target` を部品に数えて進む（一番上・既に数えた番号へは進まない）。
@@ -270,7 +354,8 @@ impl NestReport {
             // elements は element定義の番号の昇順・同じ番号は書いた順。
             for e in &master.elements {
                 let child = match e.kind {
-                    ElementKind::Image => continue,
+                    // 子は先を持たない（無い番号でも循環でもない）。
+                    ElementKind::Image | ElementKind::Film(_) => continue,
                     ElementKind::Surface(c) if edges.contains_key(&c) => c,
                     _ => {
                         issues.push(NestIssue::MissingTarget {
@@ -327,3 +412,7 @@ mod report_tests;
 #[cfg(test)]
 #[path = "nesting_fixture_tests.rs"]
 mod fixture_tests;
+
+#[cfg(test)]
+#[path = "nesting_film_tests.rs"]
+mod film_tests;

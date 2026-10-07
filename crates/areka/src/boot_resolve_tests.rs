@@ -75,12 +75,25 @@ fn balloon(
     listed: &[String],
     pick: impl FnOnce(usize) -> usize,
 ) -> (Result<BalloonDecision, NoBalloon>, Vec<CapturedEvent>) {
+    // フォルダ名の列を一覧の形（`name` 無し）へ直す。descript の 2 鍵は無し。
+    let listed: Vec<areka_ghost::catalog::BalloonEntry> = listed
+        .iter()
+        .map(|folder| areka_ghost::catalog::BalloonEntry {
+            dir: root.balloon_dir(folder),
+            identity: areka_ghost::catalog::Identity {
+                folder: folder.clone(),
+                ..Default::default()
+            },
+        })
+        .collect();
     let inputs = BalloonInputs {
         root,
         argv,
         memory,
+        default_balloon_path: None,
+        balloon_name: None,
         companion,
-        listed,
+        listed: &listed,
     };
     capture(|| resolve_balloon(&inputs, pick))
 }

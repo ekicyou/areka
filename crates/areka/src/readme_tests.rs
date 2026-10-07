@@ -1,18 +1,22 @@
 //! 説明書のファイルの決め方と在否の決定論テスト（要件 9.4）。
 //!
 //! 確かめること: `readme` キーがあるときと無いときのパス・ファイルを置く／置かないで
-//! 在否が変わること・「無い」の記録が初回だけであること・要求の取り出しが溜まった件数を
-//! 残さず返すこと・持ち物が無いときに黙って済ませないこと。
+//! 在否が変わること・「無い」の記録が初回だけであること・要求の取り出しが溜まった要求を
+//! 届いた順に残さず返すこと・持ち物が無いときに黙って済ませないこと。
 //!
-//! 既定のアプリで開く関数（`open`）は OS を触るので決定論テストに入れず、実機確認
-//! （要件 9.9 ⑵）へ回す。
+//! 開く処理へは差し込んだ送り先（`Opener::from_sender`）で「何を渡したか」だけを見る。
+//! 本物の OS を呼ぶテストは置かない（areka-P0-open-external-tags 要件 7.1・10.1）。
 
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc::{self, Receiver, Sender};
 
+use areka_parsers::sakura::JUMP_TAG_CARRIER;
 use log_capture_kit::{LineFormat, capture_lines};
 use temp_path_kit::TempPath;
 
+use super::destination::{Target, classify};
+use super::opener::{OpenJob, Opener};
 use super::*;
+use crate::ghost_session::{GhostSession, GhostSlot};
 
 /// 説明書の持ち物を World へ直に入れる（判断分岐だけを見るここでは結線 `wire_readme` を
 /// 通さない）。送出端は要求を送るために返す。
@@ -24,6 +28,23 @@ fn wired(world: &mut World, path: PathBuf) -> Sender<ReadmeRequest> {
         missing_logged: Cell::new(false),
     });
     tx
+}
+
+/// 置き場にゴーストを据え、開く処理の送り先を差し込む（受信端で「何を渡したか」を見る）。
+fn with_opener(world: &mut World, ghost_dir: PathBuf) -> Receiver<OpenJob> {
+    world.insert_non_send(GhostSlot(Some(GhostSession::for_test(None, ghost_dir))));
+    let (tx, rx) = mpsc::channel::<OpenJob>();
+    world.insert_resource(Opener::from_sender(tx));
+    rx
+}
+
+/// 開く系の行き先（`\j` の URL）。
+fn url_request(url: &str) -> ReadmeRequest {
+    ReadmeRequest::Open(
+        classify(JUMP_TAG_CARRIER, &[url])
+            .expect("開く系")
+            .expect("受理される"),
+    )
 }
 
 /// クロージャ実行中にこのスレッドで発火した記録を 1 行 1 件で返す。
@@ -60,7 +81,30 @@ fn register_readme_drain_alone_adds_one_system_to_the_input_schedule() {
     assert_eq!(input_systems_len(&world), 1, "取り出しの 1 本だけが載る");
     assert!(
         world.get_non_send::<ReadmeWiring>().is_none(),
-        "登録は持ち物を置かない"
+        "登録は説明書の持ち物を置かない"
+    );
+    assert!(
+        world.get_resource::<Opener>().is_some(),
+        "開く専用のスレッドの持ち物が入る（要件 7.5）"
+    );
+}
+
+/// 開く専用のスレッドの持ち物が既に在れば起こし直さない（1 度だけ・要件 7.5）。
+#[test]
+fn register_readme_drain_keeps_an_existing_opener() {
+    let mut world = World::new();
+    world.init_resource::<Schedules>();
+    let jobs = with_opener(&mut world, PathBuf::from("C:\\ghosts\\sample"));
+
+    register_readme_drain(&mut world);
+    let ReadmeRequest::Open(dest) = url_request("https://example.com/") else {
+        unreachable!("url_request は Open を返す");
+    };
+    opener::submit(&world, dest);
+
+    assert!(
+        jobs.try_recv().is_ok(),
+        "差し込んだ送り先へ届く＝登録が持ち物を差し替えていない"
     );
 }
 
@@ -164,16 +208,16 @@ fn is_available_follows_the_file_and_records_the_absence_only_once() {
 }
 
 // -------------------------------------------------------------------------
-// 要求の取り出し（要件 4.5 の受け口）
+// 要求の取り出し（要件 4.5 の受け口・areka-P0-open-external-tags 要件 7.1）
 // -------------------------------------------------------------------------
 
 /// 持ち物が無ければ取り出しは 0 件で、黙って済ませない。
 #[test]
-fn take_pending_is_zero_without_wiring_and_records_it() {
+fn take_pending_is_empty_without_wiring_and_records_it() {
     let world = World::new();
 
     let lines = capture(|| {
-        assert_eq!(take_pending(&world), 0, "ReadmeWiring 不在は 0 件");
+        assert!(take_pending(&world).is_empty(), "ReadmeWiring 不在は 0 件");
     });
     assert_eq!(
         lines_of(&lines, "readme_drain_no_wiring").len(),
@@ -184,32 +228,75 @@ fn take_pending_is_zero_without_wiring_and_records_it() {
 
 /// 要求が無ければ 0 件（毎 tick 走る取り出しの no-op 経路）。
 #[test]
-fn take_pending_is_zero_when_nothing_is_queued() {
+fn take_pending_is_empty_when_nothing_is_queued() {
     let mut world = World::new();
     let _tx = wired(&mut world, PathBuf::from("readme.txt"));
 
-    assert_eq!(take_pending(&world), 0, "要求が無ければ 0 件");
+    assert!(take_pending(&world).is_empty(), "要求が無ければ 0 件");
 }
 
-/// 溜まった要求は全件数えられ、受け口に 1 件も残らない（要件 4.5）。
+/// 溜まった要求は全件取り出され、受け口に 1 件も残らない（要件 4.5）。
 #[test]
-fn take_pending_counts_every_queued_request_and_leaves_none() {
+fn take_pending_returns_every_queued_request_and_leaves_none() {
     let mut world = World::new();
     let tx = wired(&mut world, PathBuf::from("readme.txt"));
     for _ in 0..3 {
-        tx.send(ReadmeRequest).expect("受信口は生存している");
+        tx.send(ReadmeRequest::Readme)
+            .expect("受信口は生存している");
     }
 
     assert_eq!(
-        take_pending(&world),
+        take_pending(&world).len(),
         3,
         "溜まった 3 件を全件返す（要件 4.5）"
     );
-    assert_eq!(
-        take_pending(&world),
-        0,
+    assert!(
+        take_pending(&world).is_empty(),
         "取り出した要求は残らない（同じ要求で二度開かない）"
     );
+}
+
+/// 取り出しは説明書と開く系を届いた順に開く処理へ渡す（説明書は台本の綴り・要件 7.1）。
+#[test]
+fn drain_hands_readme_and_open_requests_over_in_arrival_order() {
+    let dir = TempPath::new("readme-drain-order");
+    let readme = dir.child("readme.txt");
+    std::fs::write(&readme, "説明書").expect("一時ディレクトリへ書けるはず");
+    let mut world = World::new();
+    let tx = wired(&mut world, readme.clone());
+    let jobs = with_opener(&mut world, dir.path().to_path_buf());
+
+    tx.send(ReadmeRequest::Readme)
+        .expect("受信口は生存している");
+    tx.send(url_request("https://example.com/a"))
+        .expect("受信口は生存している");
+    tx.send(ReadmeRequest::Readme)
+        .expect("受信口は生存している");
+    drain_readme_requests(&mut world);
+
+    let got: Vec<(Target, String)> = jobs
+        .try_iter()
+        .map(|j| (j.destination.target, j.destination.tag))
+        .collect();
+    let readme_target = Target::Path(
+        std::path::absolute(&readme)
+            .expect("絶対パスにできる")
+            .to_string_lossy()
+            .into_owned(),
+    );
+    assert_eq!(
+        got,
+        vec![
+            (readme_target.clone(), SCRIPT_README_TAG.to_owned()),
+            (
+                Target::Url("https://example.com/a".to_owned()),
+                "\\j[https://example.com/a]".to_owned()
+            ),
+            (readme_target, SCRIPT_README_TAG.to_owned()),
+        ],
+        "届いた順に 3 件を渡す"
+    );
+    assert_eq!(SCRIPT_README_TAG, "\\![open,readme]", "台本の綴り");
 }
 
 // -------------------------------------------------------------------------
@@ -221,7 +308,7 @@ fn take_pending_counts_every_queued_request_and_leaves_none() {
 fn open_from_world_warns_without_wiring() {
     let world = World::new();
 
-    let lines = capture(|| open_from_world(&world));
+    let lines = capture(|| open_from_world(&world, MENU_TAG));
 
     let warned = lines_of(&lines, "readme_open_no_wiring");
     assert_eq!(
@@ -235,45 +322,42 @@ fn open_from_world_warns_without_wiring() {
     );
 }
 
-/// 開けなかった失敗はパスと符号を添えて `error!` で 1 行記録し、`Err` を返す（要件 4.4）。
-///
-/// 実在しないファイルを渡すので、開発者の机では何も開かない（`ShellExecuteW` は「見つからない」の
-/// 符号 2 を返すだけで、エラーの窓も出さない）。成功側はアプリが開くのでここでは踏まない。
+/// 説明書が在れば、絶対パスの行き先と綴りを開く処理へ 1 件渡す（OS は直接呼ばない・要件 7.1）。
 #[test]
-fn open_records_a_missing_file_as_an_error_and_returns_err() {
-    let dir = TempPath::new("readme-open-failure");
-    let path = dir.child("no-such-readme.txt");
+fn open_from_world_hands_the_absolute_readme_path_to_the_opener() {
+    let dir = TempPath::new("readme-open-present");
+    let readme = dir.child("readme.txt");
+    std::fs::write(&readme, "説明書").expect("一時ディレクトリへ書けるはず");
+    let mut world = World::new();
+    let _tx = wired(&mut world, readme.clone());
+    let jobs = with_opener(&mut world, dir.path().to_path_buf());
 
-    let mut result = Ok(());
-    let lines = capture(|| result = open(&path));
+    open_from_world(&world, MENU_TAG);
 
-    assert!(result.is_err(), "開けなければ Err（要件 4.4）");
-    let failed = lines_of(&lines, "readme_open_failed");
-    assert_eq!(failed.len(), 1, "失敗の記録は 1 行: {lines:?}");
-    assert!(
-        failed[0].contains("level=ERROR") && failed[0].contains("no-such-readme.txt"),
-        "error! でパスを添える: {lines:?}"
-    );
+    let job = jobs.try_recv().expect("1 件渡す");
+    let abs = std::path::absolute(&readme)
+        .expect("絶対パスにできる")
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(job.destination.target, Target::Path(abs.clone()));
+    assert_eq!(job.destination.written, abs, "書かれた行き先＝説明書のパス");
+    assert_eq!(job.destination.tag, MENU_TAG, "メニューの印を綴りに入れる");
+    assert!(jobs.try_recv().is_err(), "ちょうど 1 件");
 }
 
-/// 説明書のファイルが無ければ OS を呼ばず、パスを添えて `warn!` で 1 行記録する（要件 5.1・5.5）。
-///
-/// `readme_open_failed`（`error!`）も `readme_opened`（`info!`）も出ない＝`open` を通っていない。
+/// 説明書のファイルが無ければ開く処理へ渡さず、パスを添えて `warn!` で 1 行記録する（要件 5.1・5.5）。
 #[test]
-fn open_from_world_skips_a_missing_file_with_a_warning_and_no_os_call() {
+fn open_from_world_skips_a_missing_file_with_a_warning_and_no_submit() {
     let dir = TempPath::new("readme-open-missing");
     let mut world = World::new();
     let _tx = wired(&mut world, dir.child("readme.txt"));
+    let jobs = with_opener(&mut world, dir.path().to_path_buf());
 
-    let lines = capture(|| open_from_world(&world));
+    let lines = capture(|| open_from_world(&world, SCRIPT_README_TAG));
 
     assert!(
-        lines_of(&lines, "readme_open_failed").is_empty(),
-        "無いファイルで OS を呼ばない＝error! は 0 行（要件 5.1）: {lines:?}"
-    );
-    assert!(
-        lines_of(&lines, "readme_opened").is_empty(),
-        "開いた記録も 0 行: {lines:?}"
+        jobs.try_recv().is_err(),
+        "無いファイルは渡さない（要件 5.1）"
     );
     let skipped = lines_of(&lines, "readme_open_skipped_missing");
     assert_eq!(
@@ -284,5 +368,40 @@ fn open_from_world_skips_a_missing_file_with_a_warning_and_no_os_call() {
     assert!(
         skipped[0].contains("level=WARN") && skipped[0].contains("readme.txt"),
         "warn! でパスを添える（要件 5.1）: {skipped:?}"
+    );
+}
+
+// -------------------------------------------------------------------------
+// 見張り（areka-P0-open-external-tags 要件 7.1）
+// -------------------------------------------------------------------------
+
+/// `crates/areka/src` の下で OS の「開く」関数（Shell と Execute を繋いだ名）を綴るのは
+/// OS の境界のファイルだけ。
+///
+/// 針は連結で組み、このファイルには繋いだ綴りを書かない（見張り自身を数えないように）。
+#[test]
+fn only_the_os_port_spells_shell_execute() {
+    let needle = ["Shell", "Execute"].concat();
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut stack = vec![src.clone()];
+    let mut hits = Vec::new();
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).expect("src を読める") {
+            let path = entry.expect("項目を読める").path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|e| e == "rs")
+                && std::fs::read_to_string(&path)
+                    .expect("ソースを読める")
+                    .contains(&needle)
+            {
+                hits.push(path.strip_prefix(&src).expect("src の下").to_path_buf());
+            }
+        }
+    }
+    assert_eq!(
+        hits,
+        vec![Path::new("readme").join("os_port.rs")],
+        "綴るのは readme/os_port.rs だけ"
     );
 }

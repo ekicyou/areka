@@ -125,6 +125,8 @@ pub(crate) const RULES: &[Rule] = &[
     rule("areka::emo2_boot::ghost_switch", Kind::Status, false),
     rule("ghost-boot", Kind::Status, false),
     rule("ghost-shutdown", Kind::Status, false),
+    // 外のもの（説明書・ファイル・URL・フォルダ・メール）を開いた記録。
+    rule("areka::readme", Kind::Status, false),
 ];
 
 /// 出来事のレベルと target から種別を決める。どれにも当たらなければ None（残さない）。

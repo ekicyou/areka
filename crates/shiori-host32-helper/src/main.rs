@@ -582,6 +582,8 @@ mod load_ack_tests;
 #[path = "main_loopback_tests.rs"]
 mod loopback_tests;
 
-#[cfg(test)]
+// 約 42 秒の檻。判定は OS の振る舞いで CPU の種類に依らないため、helper を配る i686 の段でだけ走らせる
+// （x64 のワークスペース全テストで同じ 42 秒を重ねて払わない）。
+#[cfg(all(test, target_arch = "x86"))]
 #[path = "main_response_flavor_hung_cage_tests.rs"]
 mod response_flavor_hung_cage_tests;
