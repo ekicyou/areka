@@ -315,6 +315,18 @@ spec 名の案の欄は変えていない。足した行の中身は `stage = "A
 **15 行**である（3 つとも数え直した値で、引き算では出していない）。`[briefs].count` はこの 45 に合わせ、
 `snapshot_on` は行の集合に最後に手を入れた日として **2026-10-06** にした。
 
+**2026-10-06 の追加**: `areka-P0-ghost-standard-balloon` の行を 1 行足した。理由は上の ⑴ ⑵ ⑶ と同じで、この spec が
+台帳 `ledger/assets.toml` の `descript_ghost` の `balloon`（実装済みへ）と `default.balloon.path`（縮退へ）の 2 項目を
+自分の宛先として登記したからである（2 項目はそれまで宛先が空だったので、宛先を移された spec は無い）。2 項目は
+`linkage.md` の束「descript の転記」に属するので、束の欄には「descript の転記」を書き、段階 A の表の「descript の転記」の
+行にこの spec を件数付きで足した。「descript の転記」の束の構成は **15 件**（`linkage.md` の `members` を数えた）で、
+この spec の 2 件は ⑴（全数）にも ⑵（過半）にも当たらないので、候補 spec 名の案の欄は変えていない。足した行の中身は
+`stage = "A"`・`bundle = "descript の転記"`・`owner_count = 2`・`wave = "C4-⑪"` で、段階は「descript の転記」が
+順位表で置かれている段階の写し、ウェーブは正本のロードマップの写しである。行数は **46 行**（`[[spec]]` の塊を
+数えた）で、うち束を持つ行が **31 行**・`none = true` の行が **15 行**である（3 つとも数え直した値で、引き算では
+出していない）。`[briefs].count` はこの 46 に合わせ、`snapshot_on` は行の集合に最後に手を入れた日として
+**2026-10-07** にした。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -348,8 +360,8 @@ spec 名の案の欄は変えていない。足した行の中身は `stage = "A
 
 ```toml
 [briefs]
-count = 45
-snapshot_on = "2026-10-06"
+count = 46
+snapshot_on = "2026-10-07"
 ```
 
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
@@ -706,6 +718,13 @@ stage = "A"
 bundle = "絵の重ね方"
 owner_count = 2
 wave = "C4-⑬"
+
+[[spec]]
+name = "areka-P0-ghost-standard-balloon"
+stage = "A"
+bundle = "descript の転記"
+owner_count = 2
+wave = "C4-⑪"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -728,7 +747,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 7 | 自発発話 | `areka-P0-idle-talk-canon` | **0 本** | 第 2 波 |
 | 8 | 終了 | `areka-P0-shutdown-canon` | **0 本** | 第 2 波 |
 | 9 | キーとゲームパッド | `areka-P0-key-gamepad-events` | **0 本** | 第 2 波 |
-| 10 | descript の転記 | `areka-P0-descript-transcribe` | `areka-P0-balloon-canon-residue`（W14・4 件）／`areka-P0-package-mount`（完了・1 件） | 第 2 波 |
+| 10 | descript の転記 | `areka-P0-descript-transcribe` | `areka-P0-balloon-canon-residue`（W14・4 件）／`areka-P0-package-mount`（完了・1 件）／`areka-P0-ghost-standard-balloon`（C4-⑪・2 件） | 第 2 波 |
 | 10 | バルーンのリンク | `areka-P0-anchor-tag-canon`（既存 spec がそのまま引受先・構成 60 件の全数を `owner` に持つ） | `areka-P0-anchor-tag-canon`（W17・60 件） | 第 2 波 |
 | 10 | マウスの矢印 | `areka-P0-mouse-cursor-canon` | `areka-P0-currentghost-property-tree`（W15・15 件） | 第 2 波 |
 | 11 | メニュー | `areka-P0-ownerdraw-menu-canon` | `areka-P0-popup-menu-minimal`（A0・8 件）／`areka-P0-property-catalog-lists`（W16・4 件）／`areka-P0-shell-balloon-switch`（B8・2 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件）／`areka-P0-ghost-install`（B5-②・1 件）／`areka-P0-network-update`（B7・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・1 件） | 第 2 波 |

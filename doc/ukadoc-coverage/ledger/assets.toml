@@ -2575,21 +2575,19 @@ areka のバルーンの拡大率は、画面の DPI とバルーンの定義が
 """
 
 [entry."ukadoc:descript_ghost:balloon_2c_30d0_30eb_30fc_30f3_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-ghost-standard-balloon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はゴーストが標準として名指しするバルーンの名前を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-areka が使うバルーンの置き場所は起動の引数か既定の場所から決まる（areka の boot_config::resolve_config_inputs と areka の boot_config::default_balloon_root）。ゴーストの宣言はそこへ届かない。
-バルーンの所在を決める仕事は、完了 spec の areka-P0-package-mount が brief で自分の範囲の外だと宣言している（バルーンは利用者が選ぶ共有の資産で、ゴーストの宣言だけでは所在が決まらないため）。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
+実装済み。areka-ghost の catalog::standard_balloon_keys がゴーストの ghost/master/descript.txt を 1 回だけ読み、この欄を StandardBalloonKeys の balloon に持つ（鍵は大文字と小文字を区別せずに引き、値は前後の空白を落とすだけで読み替えない。空の値は書かれていないものとする）。起動時とゴーストの切替の両方で、areka の boot_config::resolve_balloon_for_ghost がこれを集めて boot_resolve::resolve_balloon の鎖へ渡す。鎖の段の並びは 起動の引数 → そのゴーストの前回の記憶 → descript の指定（default.balloon.path → この欄）→ 同梱の最初の 1 個 → 唯一 → 既定 → 無作為 で、この欄は default.balloon.path が書かれていないか当たらなかったときだけ突き合わせる。突き合わせは、根のバルーンの置き場（<根>/balloon/）に列挙されるバルーンの descript.txt の name が一致する最初のもの（列挙の並び＝フォルダ名の昇順）を先に、name が 1 つも一致しないときに限りフォルダ名が一致するものを採る（どちらも大文字と小文字を区別する完全一致で、実行中の \\![change,balloon,バルーン名] のふつうの名前と同じ答えになる）。random・lastinstalled は特別に解かず、他の値と同じに突き合わせる。当たればこの段で決まり、起動の記録 balloon_resolved とゴーストの切替の記録 switch_balloon_resolved の route に Descript が載る。ゴーストのフォルダの中の balloon/ は探さない（areka-P0-ghost-inner-balloon）。
+前回の記憶は起動が成功するたびに書かれるので、この指定が効くのは記憶を持たないゴーストだけである（一度起動したゴーストは、利用者がメニューで選び直すまで記憶のバルーンのまま）。段の並びと読み方は doc/COMPAT_ARCHITECTURE.md の §8 に登記した。
+壊れ方: 該当なし。areka はこの欄を読み、バルーンを決める段に使っている。記録: 当たらないとき warn!（descript_balloon_not_found・鍵 key=balloon・書かれていた値 value・バルーンの置き場 balloon_store）を 1 件残して次の段へ進む。
+担当 spec は areka-P0-ghost-standard-balloon。
 束: 既定で着せる吹き出し・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 34——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+根拠の場所: crates/areka-ghost/src/catalog.rs の StandardBalloonKeys の balloon の欄の上の正典 URL の行。
 """
 
 [entry."ukadoc:descript_ghost:char_2a.balloon.defaultsurface_2c_6570_5024:1"]
@@ -2790,21 +2788,20 @@ areka はマウスの矢印の絵をゴーストごとに差し替える仕組�
 """
 
 [entry."ukadoc:descript_ghost:default.balloon.path_2c_30d1_30b9:1"]
-status = "absent"
+status = "degraded"
 introduced = ""
-owner = ""
+owner = "areka-P0-ghost-standard-balloon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka は標準として使うバルーンの相対パスの宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-areka が使うバルーンの置き場所は起動の引数か既定の場所から決まる（areka の boot_config::resolve_config_inputs と areka の boot_config::default_balloon_root）。ゴーストの宣言はそこへ届かない。
-バルーンの所在を決める仕事は、完了 spec の areka-P0-package-mount が brief で自分の範囲の外だと宣言している（バルーンは利用者が選ぶ共有の資産で、ゴーストの宣言だけでは所在が決まらないため）。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
+壊れ方: 見た目の差（区切りを含む相対パスで書いたバルーンは選ばれず、次の段で決まったバルーンが着く）。記録: 当たらないとき warn!（descript_balloon_not_found・鍵 key=default.balloon.path・書かれていた値 value・バルーンの置き場 balloon_store）を 1 件残して次の段へ進む。
+areka-ghost の catalog::standard_balloon_keys がゴーストの ghost/master/descript.txt を 1 回だけ読み、この欄を StandardBalloonKeys の default_balloon_path に持つ（鍵は大文字と小文字を区別せずに引き、値は前後の空白を落とすだけで読み替えない。空の値は書かれていないものとする）。起動時とゴーストの切替の両方で、areka の boot_config::resolve_balloon_for_ghost がこれを集めて boot_resolve::resolve_balloon の鎖へ渡す。鎖の段の並びは 起動の引数 → そのゴーストの前回の記憶 → descript の指定（この欄 → balloon）→ 同梱の最初の 1 個 → 唯一 → 既定 → 無作為 で、balloon と両方が書かれていればこの欄を先に突き合わせ、当たらなかったときに限り balloon へ進む（当たれば balloon は突き合わせない）。当たればこの段で決まり、起動の記録 balloon_resolved とゴーストの切替の記録 switch_balloon_resolved の route に Descript が載る。
+正典との違い: 正典はこの欄を標準で使うバルーンの相対パスとしているが、areka は起点を根のバルーンの置き場（<根>/balloon/）とし、値をその直下のフォルダ名 1 段として、フォルダ名と大文字と小文字を区別する完全一致で突き合わせるだけである。..・絶対パス・区切り（\\ と /）を含む値（../balloon/x・balloon/x・x/・C:\\balloon\\x）は読み替えず、当たらなかったものとする。ゴーストのフォルダの中の balloon/ は探さない（別 spec の areka-P0-ghost-inner-balloon が扱う）。
+前回の記憶は起動が成功するたびに書かれるので、この指定が効くのは記憶を持たないゴーストだけである（一度起動したゴーストは、利用者がメニューで選び直すまで記憶のバルーンのまま）。段の並びと読み方は doc/COMPAT_ARCHITECTURE.md の §8 に登記した。
+担当 spec は areka-P0-ghost-standard-balloon。
 束: 既定で着せる吹き出し・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 34——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+根拠の場所: crates/areka-ghost/src/catalog.rs の StandardBalloonKeys の default_balloon_path の欄の上の正典 URL の行。
 """
 
 [entry."ukadoc:descript_ghost:don_27t_20need_20bind_2c_6570_5024:1"]
@@ -3279,7 +3276,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はゴーストが薦めるバルーンの相対パスを受け取る経路を持たない。
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-areka が使うバルーンの置き場所は起動の引数か既定の場所から決まる（areka の boot_config::resolve_config_inputs と areka の boot_config::default_balloon_root）。ゴーストの宣言はそこへ届かない。
+areka が使うバルーンは、起動時もゴーストの切替でも areka の boot_resolve::resolve_balloon の段の並び（起動の引数 → そのゴーストの前回の記憶 → ゴーストの descript.txt の default.balloon.path → balloon → 同梱の最初の 1 個 → 唯一 → 既定 → 無作為）で決まる。上に挙げた欄のほかに areka-ghost の catalog::standard_balloon_keys が default.balloon.path と balloon の 2 つを読むが、この欄は読まず、段にも入っていない。
 バルーンの所在を決める仕事は、完了 spec の areka-P0-package-mount が brief で自分の範囲の外だと宣言している（バルーンは利用者が選ぶ共有の資産で、ゴーストの宣言だけでは所在が決まらないため）。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -3297,7 +3294,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はゴーストが薦めるバルーンの名前を受け取る経路を持たない。
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-areka が使うバルーンの置き場所は起動の引数か既定の場所から決まる（areka の boot_config::resolve_config_inputs と areka の boot_config::default_balloon_root）。ゴーストの宣言はそこへ届かない。
+areka が使うバルーンは、起動時もゴーストの切替でも areka の boot_resolve::resolve_balloon の段の並び（起動の引数 → そのゴーストの前回の記憶 → ゴーストの descript.txt の default.balloon.path → balloon → 同梱の最初の 1 個 → 唯一 → 既定 → 無作為）で決まる。上に挙げた欄のほかに areka-ghost の catalog::standard_balloon_keys が default.balloon.path と balloon の 2 つを読むが、この欄は読まず、段にも入っていない。
 薦めから外れたバルーンへ切り替えたときに強い警告を出す仕掛けも無い。
 バルーンの所在を決める仕事は、完了 spec の areka-P0-package-mount が brief で自分の範囲の外だと宣言している（バルーンは利用者が選ぶ共有の資産で、ゴーストの宣言だけでは所在が決まらないため）。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
@@ -3829,7 +3826,7 @@ priority = "B1"
 values = []
 links = []
 note = """
-実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec のインストールの手続き（crates/areka/src/install/procedure.rs の run_order が書庫ごとに開いて InstallManifest を読み、accept の照合・宛先の判断・イベントの Reference の組み立ては crates/areka/src/install/judge.rs の judge_accept・destination_of・complete_ex_refs などが行う）。ghost・shell の書庫で、同時インストールのバルーンを無印（balloon）→ balloon0 → balloon1 … の順に探し、<接頭辞>.directory の行が在れば見つかったとし（値が空でも見つかったとして、検査で書庫ごと拒否する）、最初に見つからなかった番号で打ち切る（無印が無くても balloon0 から続ける）。先頭に 0 を付けた綴り（balloon01 など）は番号として数えない。見つかったものを宛先 balloon/<ディレクトリ名>/ に持ち、「何をインストールしたか」の列で本体の後ろに探索の順で並べる（balloon2 は balloon10 より前）。値が 1 階層の名前でなければ書庫ごと拒否する（区切りを _ へ置き換えない）。打ち切りの後ろの番号と先頭に 0 を付けた綴りの鍵は、その接頭辞の *.directory の行が在れば「探索で読まなかった」と鍵ごとに 1 件記録し、値は検査しない。headline・plugin・calendar.skin・calendar.plugin の接頭辞と、ghost・shell 以外の書庫に書かれたものは読み飛ばして記録する。探索の順と打ち切りは areka-P0-install-companion-reading が、完了 areka-P0-nar-install 要件 3.12（N は 0 以上の整数をすべて読む）を上書きして決めた。
+実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec のインストールの手続き（crates/areka/src/install/procedure.rs の run_order が書庫ごとに開いて InstallManifest を読み、accept の照合・宛先の判断・イベントの Reference の組み立ては crates/areka/src/install/judge.rs の judge_accept・destination_of・complete_ex_refs などが行う）。ghost・shell の書庫で、同時インストールのバルーンを無印（balloon）→ balloon0 → balloon1 … の順に探し、<接頭辞>.directory の行が在れば見つかったとし（値が空でも見つかったとして、検査で書庫ごと拒否する）、最初に見つからなかった番号で打ち切る（無印が無くても balloon0 から続ける）。先頭に 0 を付けた綴り（balloon01 など）は番号として数えない。見つかったものを宛先 balloon/<ディレクトリ名>/ に持ち、「何をインストールしたか」の列で本体の後ろに探索の順で並べる（balloon2 は balloon10 より前）。値が 1 階層の名前でなければ書庫ごと拒否する（区切りを _ へ置き換えない）。打ち切りの後ろの番号と先頭に 0 を付けた綴りの鍵は、その接頭辞の *.directory の行が在れば「探索で読まなかった」と鍵ごとに 1 件記録し、値は検査しない。headline・plugin・calendar.skin・calendar.plugin の接頭辞と、ghost・shell 以外の書庫に書かれたものは読み飛ばして記録する。探索の順と打ち切りは areka-P0-install-companion-reading が、完了 areka-P0-nar-install 要件 3.12（N は 0 以上の整数をすべて読む）を上書きして決めた。起動時とゴーストの切替では、ゴーストの install.txt の同梱の最初の 1 個（無印 → balloon0。areka-ghost の catalog::companion_balloon が読む）がそのゴーストの標準のバルーンになる（areka の boot_resolve::resolve_balloon の同梱の段・areka-P0-ghost-standard-balloon）。
 壊れ方: 明示エラー。記録: error!（[areka_nar] refused or failed）。書庫ごと拒否し、宛先には 1 バイトも触れない。読み飛ばしは warn!（[areka_nar] manifest entry skipped）。
 束: 配布ファイルを入れる指示・正典どおりに動く（先に要る仕組み: 配布と更新の仕組み。書庫の install.txt を読んで入れる側は、読み手 areka-nar〔areka-P0-nar-install〕と、それを呼ぶ本体の入口〔右クリックのメニューの「インストール…」と台本 \\![execute,install,path,…]・areka-P0-ghost-install〕で在る。網の先から取ってくる側と、更新の差分を当てる側はまだ無い）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」から実物に揃えた。順位 47 は下位区分が「読む経路が無い」だったときに付いた値のままで、priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 根拠の場所: crates/areka-nar/src/manifest.rs の COMPANION_SUFFIXES（同時インストールのキーの後半の表）の上の正典 URL の行。

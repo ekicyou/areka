@@ -5,7 +5,7 @@
 - `/kiro-impl areka-P0-release-cycle`（タスク番号なし）で始める。1 回の実行で、リリースを 1 回だけ行う。
 - `/kiro-impl` の自走の形は、`design.md` の「`/kiro-impl` の読み替え」の表のとおりに読み替える。
   - サブエージェントは起こさない（0 回）。主文脈がタスクを上から順に自分で行う。
-  - `[x]` は作業木に付けるだけで、コミットしない（`git add` に `tasks.md` を入れない。初回の記録のコミットだけ例外で、そのときも `[x]` は全部 `[ ]` に戻してから入れる）。
+  - `[x]` は作業木に付けるだけで、コミットしない（`git add` に `tasks.md` を入れない）。
   - タスクごとのコミットはしない。「Implementation Notes」へも書かない。
   - `/kiro-validate-impl` と `/kiro-complete` は使わない。
 - 各タスクの「判定」は、その場で取り直したコマンドの出力と終了コードで確かめてから `[x]` にする。
@@ -19,30 +19,22 @@
 ## Tasks
 
 - [ ] 1. 前提を確かめる
-- [ ] 1.1 （初回だけ）`spec.json` を実装中の段にしてコミットする
-  - 打ち直した回（セッションが切れた後）は、先に `design.md` の「再開のときの事実の読み方」に従う。下の止まり方は、新しく始めた回にだけ当てはめる。
-  - `git ls-remote --quiet --tags {remote} refs/tags/v0.0.2` が 1 行を返したら、初回の記録の相乗りがまだ main に入っていない。何も変えずに止まり、相乗りを先に済ませるよう開発者に頼む。
-  - `spec.json` の `phase` を `implementation` にし、`updated_at` をその時刻にする。ほかの欄は動かさない。
-  - `spec.json` だけを名前を挙げて `git add` し、題 `chore(areka-P0-release-cycle): mark spec as implementation` でコミットする。
-  - 判定: `git show --name-only --format= HEAD` が `spec.json` の 1 行だけを返す。
-  - _Requirements: 1.4_
-
-- [ ] 1.2 作業木と枝を確かめ、main の最新を取り込む
+- [ ] 1.1 作業木と枝を確かめ、main の最新を取り込む
   - `git status --porcelain` が 0 行であること（この spec の `tasks.md` の作業木だけのチェックは在ってよい）。
   - `git fetch --quiet {remote} main` の後、`git merge-base --is-ancestor {remote}/main HEAD` が 0 でなければ `git merge {remote}/main` で取り込む。衝突したら止まる。
-  - `git diff --name-only {remote}/main...HEAD` を読む。0 件であること（初回は、全部がこの spec のフォルダの下であること）。
+  - `git diff --name-only {remote}/main...HEAD` を読む。0 件であること。
   - `git rev-parse {remote}/main` を「確かめた main」として覚える（3 の確かめは、この main を取り込んだ作業木で回す）。
   - 判定: `git merge-base --is-ancestor {remote}/main HEAD` が終了コード 0 で、枝の差分が上の条件に当たり、「確かめた main」の SHA を覚えた。欠けたら、どれが欠けたかを報告して止まる。
   - _Requirements: 1.7, 2.1, 2.6, 4.2, 4.4_
 
-- [ ] 1.3 根の 3 つのファイルを触る開いた PR が 0 本であることを確かめる
+- [ ] 1.2 根の 3 つのファイルを触る開いた PR が 0 本であることを確かめる
   - `gh pr list --state open --limit 200 --json number,title,files` を読み、`files` に根の `Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md` を持つ PR を数える。
   - `files` がちょうど 100 件の PR は、`gh pr diff {番号} --name-only` で読み直す。
   - この 3 つを触らない PR が開いていても止まらない。
   - 判定: 当たる PR が 0 本。在れば、その PR の番号と題を示して止まる。
   - _Requirements: 2.2, 2.3, 2.6_
 
-- [ ] 1.4 今の版と次の版、それぞれのタグを確かめる
+- [ ] 1.3 今の版と次の版、それぞれのタグを確かめる
   - 根の `Cargo.toml` の `[workspace.package]` の `version` と `[workspace.dependencies]` の `dola` の `version` を読み、同じ値なら `{旧版}` とする。違えば止まる。
   - `git ls-remote --quiet --tags {remote} refs/tags/v{旧版}` が 1 行であること。0 行なら前の回が「マージの後・タグの前」で止まっている。版を上げずに止まり、題が `chore(release): v{旧版}` のマージ済みの PR を `gh pr list --state merged --search "chore(release): v{旧版} in:title" --json number,mergeCommit` で示して、その squash のコミットで段 5 から続けるかを開発者に聞く。
   - 次の版を決める。指示が無ければ `{旧版}` の 3 つ目の数字に 1 を足す。指示があればその版。数字 3 つを点でつないだ形でなければ聞き直す。
@@ -51,13 +43,6 @@
   - `cargo set-version --version` が終了コード 0 かを読み、2.1 のやり方（いつものやり方か代わりのやり方）を決めておく。
   - 判定: 2 行の版が一致し、`v{旧版}` が在り、`v{版}` が無く、`{版}` が数字 3 つの形である。
   - _Requirements: 1.1, 1.5, 2.6, 3.1, 3.2, 3.6, 3.7_
-
-- [ ] 1.5 （初回だけ）main の乾いた走りを始める
-  - 開発者が省くと決めた回は始めず、「省いた」として覚える。
-  - `gh workflow run release.yml --ref main` で始め、始めた時刻を覚える。
-  - `gh run list --workflow release.yml --event workflow_dispatch --branch main --limit 1 --json databaseId,headSha,createdAt` で、始めた時刻より後の 1 本の番号を取り、`gh run watch {番号} --exit-status --interval 60` を裏で回す（緑かどうかは 3.5 で確かめる）。
-  - 判定: 走りの番号が取れ、裏の待ちが回っている。
-  - _Requirements: 8.4_
 
 - [ ] 2. 版を上げる
 - [ ] 2.1 版上げの道具で根の `Cargo.toml` と `Cargo.lock` の版を上げる
@@ -98,29 +83,22 @@
   - 判定: 終了コード 0。赤なら版上げの PR を出さずに止まり、赤の理由を開発者へ報告する。
   - _Requirements: 3.8, 3.9_
 
-- [ ] 3.5 （初回だけ）main の乾いた走りの緑を確かめる
-  - 1.5 で始めた走りの終わりを待ち、`gh run view {番号} --json conclusion,url` を読む。省いた回は「省いた」のまま進む。
-  - 赤なら、版上げの PR を出さずに止まって報告する。起票が要るときも、作業の枝に起票のコミットを置かない。開発者が別のセッションで `/kiro-discovery` を打つ。
-  - 判定: `conclusion` が `success`（または省いた）。結果と走りの URL を覚える（承認 A と初回の記録に使う）。
-  - _Requirements: 2.6, 8.4_
-  - _Depends: 1.5_
-
 - [ ] 4. 版上げの PR を出し、squash マージする
 - [ ] 4.1 版上げをコミットし、PR を出して中身を読み直す
   - `git add Cargo.toml Cargo.lock THIRD-PARTY-NOTICES.md dist/README.txt` と名前を挙げて足す（`git add -A`・`git add .` は使わない。`tasks.md` は足さない）。題 `chore(release): v{版}` でコミットする。
-  - `git push --quiet {remote} HEAD` の後、`gh pr create --base main --title "chore(release): v{版}"`。本文に版・4 ファイルの `--numstat`・3.1〜3.4 の結果を書く。初回は「spec の文書を同じ PR に載せている」と書く。
-  - `gh pr view {番号} --json files` で PR のファイルを読み直す。4 ファイル（同じ日の 2 回目なら 3 ファイル）だけであること（初回は、それとこの spec のフォルダの下のファイルだけ）。違えば止まる。
+  - `git push --quiet {remote} HEAD` の後、`gh pr create --base main --title "chore(release): v{版}"`。本文に版・4 ファイルの `--numstat`・3.1〜3.4 の結果を書く。
+  - `gh pr view {番号} --json files` で PR のファイルを読み直す。4 ファイル（同じ日の 2 回目なら 3 ファイル）だけであること。違えば止まる。
   - 判定: PR が開いていて、ファイルの集まりが上の条件に当たる。
   - _Requirements: 4.1, 4.2, 4.4_
 
 - [ ] 4.2 承認 A を取る
-  - PR の URL・差分の数・3.1〜3.4 の結果を示し、「squash マージしてよいか」を開発者に聞いて止まる。初回は、乾いた走りの結果（緑・省いた）と URL も添える。
+  - PR の URL・差分の数・3.1〜3.4 の結果を示し、「squash マージしてよいか」を開発者に聞いて止まる。
   - 判定: 開発者がマージを明示に承認した。はっきりしなければ聞き直し、マージしない。
   - _Requirements: 4.3_
 
 - [ ] 4.3 main が動いていたら取り込んで確かめ直す
   - `git fetch --quiet {remote} main` の後、先端が 作業木と枝を確かめるタスクで覚えた「確かめた main」の SHA と同じなら何もしない。
-  - 違えば `design.md` の段 4 の 6 に従う。`git merge {remote}/main`（衝突したら止まる）→ 3.1 を回し直す（後で作業木が `tasks.md` を除いてきれいでなければ、コミットせずに止まって報告する）→ 3.2 を比べる相手を `{remote}/main HEAD` に読み替えて回し直す（初回は、この spec のフォルダの下のファイルが在ってよい）→ `git push --quiet {remote} HEAD` → 「確かめた main」を覚え直す。
+  - 違えば `design.md` の段 4 の 6 に従う。`git merge {remote}/main`（衝突したら止まる）→ 3.1 を回し直す（後で作業木が `tasks.md` を除いてきれいでなければ、コミットせずに止まって報告する）→ 3.2 を比べる相手を `{remote}/main HEAD` に読み替えて回し直す → `git push --quiet {remote} HEAD` → 「確かめた main」を覚え直す。
   - 取り込みの前と後で `git diff {remote}/main HEAD -- Cargo.toml Cargo.lock THIRD-PARTY-NOTICES.md dist/README.txt` の出力が 1 字でも違えば、承認 A を取り直す。
   - 判定: `{remote}/main` の先端が「確かめた main」の SHA と同じ。
   - _Requirements: 2.4, 2.7_
@@ -139,12 +117,7 @@
   - 判定: 3 つとも当たる。外れたら止まって報告する。
   - _Requirements: 3.7, 5.1, 5.3_
 
-- [ ] 5.2 （初回だけ）Trusted Publishing の設定を確かめる
-  - 5.3 の承認 B の問いに添えて、crates.io の `wintf`・`dola` の両方に Trusted Publishing を設定したかを聞く（値と手順は `doc/crates-io-publish.md` 2 節を指す。写さない）。
-  - 判定: 開発者が「済ませた」とはっきり答え、その日を覚えた。答えが無いうちは 5.3 の push へ進まない。
-  - _Requirements: 8.1, 8.2_
-
-- [ ] 5.3 承認 B を取り、タグを打って push する
+- [ ] 5.2 承認 B を取り、タグを打って push する
   - タグの名前と `{sha}` を示し、「このコミットにタグを打って push してよいか」を開発者に聞いて止まる。承認 A の答えをこの承認に使わない。
   - 承認を得たら、`git tag v{版} {sha}`（注釈なし）の後、`git push --quiet {remote} refs/tags/v{版}`。`--tags`・`--follow-tags`・`--force` は使わない（手元の `pre-rebase-5-1`・`pre-rebase-5-1b` を押し出さない）。
   - 手元にだけ同じ名前のタグが在るときは `design.md` の「再開のときの事実の読み方」に従う。
@@ -173,36 +146,20 @@
   - 判定: 赤が 0 件、または赤のすべてに開発者の判断があり、やり直しの結果が緑か、起票した spec の名前を覚えた。赤が無い回は何もしない。
   - _Requirements: 6.4, 6.5, 6.6, 6.7, 6.8_
 
-- [ ] 6.4 （初回だけ）申し送りの 6 項目を見守る
-  - `design.md` の段 6 の「申し送りの 6 項目」の表に従い、項目ごとに見た事実と結果（緑・赤・起きなかった・省いた）を覚える。
-  - 項目 5 の後半は、Release の走りと公開の走りが両方終わった後に 1 回だけ `gh workflow run release.yml --ref v0.0.2` で始め、緑かを見る。開発者が省くと決めたら「省いた」。
-  - その走りは `gh run list --workflow release.yml --event workflow_dispatch --branch v0.0.2 --limit 1 --json databaseId,headSha,createdAt` で始めた時刻より後の 1 本を取り、`gh run watch {番号} --exit-status --interval 60` を裏で回して待つ。
-  - 2・3・4 を見るために、わざと赤を起こさない。赤の項目は 6.3 と同じやり方で起票する。どれも完了の条件にしない。
-  - 判定: 6 項目すべてに結果が 1 つずつ決まった。
-  - _Requirements: 8.5, 8.6_
-
 - [ ] 7. 記録して受け渡す
 - [ ] 7.1 作業の枝に main を取り込む
   - `git fetch --quiet {remote} main` の後、`git merge {remote}/main`。
   - 判定: `git merge-base --is-ancestor {remote}/main HEAD` が 0 で、`git diff {remote}/main HEAD -- Cargo.toml Cargo.lock THIRD-PARTY-NOTICES.md dist/README.txt` が 0 行。
   - _Requirements: 7.3_
 
-- [ ] 7.2 （初回だけ）初回の記録を作り、初回だけのタスクを消す
-  - `.kiro/steering/roadmap.md` の「## 完了サマリ」の末尾（次の「## 」の前）に、小見出し「### リリース」と 5 列の表の見出しの行（`design.md` の「記録の形」）を作る。
-  - 6.2 で Release が公開の状態で在ると確かめた回だけ、根の `README.md` の「## 入手と起動」の最初の箇条の 1 行を、`design.md` の「README の 1 行（初回）」の中身に直す。公開なしの回は直さず、README の直しを次に公開できた回へ回すための起票（`/kiro-discovery`）を、最後の報告で開発者に頼む。
-  - `verification/first-run.md` を `design.md` の「初回の記録の形」の 4 節で作る。版上げの道具の節は、2.1 で覚えたやり方と、`git show {版上げのコミット} -- Cargo.toml` の 2 行の差分から書く。
-  - `tasks.md` から、見出しに「（初回だけ）」と付いたタスクを全部消し、同じ大きなタスクの中の番号を詰める（このタスクも消える）。本文の初回だけの言い回しも消す: 「走らせ方」の「初回の記録のコミットだけ例外で……入れる」の括弧書き、1.2・4.1・4.3 の「（初回は、……）」、4.1 の「初回は『spec の文書を同じ PR に載せている』と書く」、4.2 の「初回は、乾いた走りの……添える」、7.4 の「初回はそれに……足す」。この回の「記録をコミットして push する」タスクは、消す前の文のとおりに行う。
-  - 判定: roadmap に小見出しと表の見出しが在り、公開できた回は `README.md` から「まだ GitHub Releases での配布はしていない」が消え、`first-run.md` が 4 節を持ち、`tasks.md` に「（初回だけ）」の見出しが 0 個で、本文に「初回」の語が「走らせ方」の初回の決め方の文のほかに 0 個。
-  - _Requirements: 1.2, 8.3, 8.4, 8.5, 8.8_
-
-- [ ] 7.3 roadmap の「リリース」に 1 行を足す
+- [ ] 7.2 roadmap の「リリース」に 1 行を足す
   - 表の末尾に、版・タグを押した日・GitHub Release の URL・winget-pkgs の PR の URL・赤で起票した spec の名前の 5 列で 1 行を足す。無い物は「—」。Release が公開まで進まなかった回は Release の欄に「公開なし」と書き、起票した spec の名前を必ず書く。途中の行は動かさない。
   - 判定: 表の最後の行が今回の `v{版}` で、5 列すべてが埋まっている。
   - _Requirements: 7.1, 7.2_
 
-- [ ] 7.4 記録をコミットして push し、相乗りの頼みを渡す
+- [ ] 7.3 記録をコミットして push し、相乗りの頼みを渡す
   - `git add` の直前に、作業木の `tasks.md` の `[x]` を全部 `[ ]` に戻す（このタスク自身にも、以後 `[x]` を付けない）。
-  - 名前を挙げて `git add` する。毎回は `.kiro/steering/roadmap.md` だけ。初回はそれに `verification/first-run.md`・`tasks.md` と、直した回だけ `README.md` を足す。題 `docs(release): v{版} の記録` でコミットし、`git push --quiet {remote} HEAD`。
+  - 名前を挙げて `git add` する。`.kiro/steering/roadmap.md` だけ。題 `docs(release): v{版} の記録` でコミットし、`git push --quiet {remote} HEAD`。
   - 記録だけの PR は出さず、`/kiro-complete` も使わない。`design.md` の段 7 の 6 の頼みの 1 文を、枝・記録のコミット（起票があればそのコミットも）・記録の 1 行を埋めて開発者へ渡す。
   - この spec のフォルダは `.kiro/specs/` の直下に置いたまま、`spec.json` の `phase` は `implementation` のまま動かさない。
   - 判定: `git status --porcelain` が 0 行、`git show --name-only --format= HEAD` が上の名前だけを返し、`git ls-remote --quiet --heads {remote} {枝}` が記録のコミットを返す。`git show HEAD:.kiro/specs/areka-P0-release-cycle/tasks.md` に `[x]` が 0 個。
