@@ -11,7 +11,7 @@ use super::*;
 
 use std::num::NonZeroU32;
 
-use areka_emo_atlas::{LoopCount, WicDecoderArm};
+use areka_emo_atlas::{LoopCount, UseSelfAlpha, WicDecoderArm};
 
 use super::test_support::{capture_events, with_com_initialized};
 use crate::balloon::{build_balloon_target_from_faces, resolve_balloon_faces};
@@ -103,7 +103,7 @@ fn the_balloon_faces_resolve_and_bake_as_films() {
         );
 
         let arm = WicDecoderArm::new().expect("WIC の工場が作れる");
-        let Ok((_world, atlas)) = build_balloon_target_from_faces(&dir, &arm, &faces) else {
+        let Ok((_world, atlas)) = build_balloon_target_from_faces(&dir, &arm, &faces, UseSelfAlpha::On) else {
             panic!("バルーンの面は焼ける");
         };
         assert_eq!(

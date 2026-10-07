@@ -30,7 +30,7 @@
 //! （設計 System Flows の定め）。
 
 use areka_emo_atlas::{AtlasPage, AtlasTable, Rect, SetId, Size, WicDecoderArm};
-use areka_emo_present::balloon::build_balloon_target_from_faces;
+use areka_emo_present::balloon::{build_balloon_target_from_faces, load_balloon_use_self_alpha};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 use super::test_support::{EXPECTED_FACE_COUNT, expected_frame_size, resolve_faces, staysee_root};
@@ -151,8 +151,8 @@ fn census_face0(table: &AtlasTable, scope: u32, file_name: &str) -> AlphaCensus 
 /// 両 scope の面を起動時と同じ透過設定で焼き込み、面 0 の原寸・割り当て・半透明を固定する。
 ///
 /// 焼き込みは `resolve_balloon_faces` が返した系列をそのまま渡す経路（起動時の資産構築が
-/// 使うのと同じ公開 API）で行う。透過設定は本番側が `UseSelfAlpha::On` に固定しているので、
-/// テスト側で切り替えることはできない＝起動時と同じ扱いであることが構造から保証される。
+/// 使うのと同じ公開 API）で行う。透過の宣言も起動時と同じ入口 `load_balloon_use_self_alpha` で
+/// スコープのループの前に 1 回読んで渡す（検体の descript.txt の宣言を本物の経路で読む）。
 #[test]
 fn baked_face0_keeps_partial_alpha_for_both_scopes() {
     init_com_for_this_thread();
@@ -164,6 +164,7 @@ fn baked_face0_keeps_partial_alpha_for_both_scopes() {
         2,
         "焼き込む scope は本体側と相方側の 2 つであること"
     );
+    let use_self_alpha = load_balloon_use_self_alpha(&root);
     for (scope, face0_file) in EXPECTED_FACE0_FILES {
         let faces = resolve_faces(scope);
         assert_eq!(
@@ -182,13 +183,18 @@ fn baked_face0_keeps_partial_alpha_for_both_scopes() {
         );
 
         // 失敗すれば `error!` を出してから `Err` を返す実装なので、`Ok` が「失敗の記録 0 件」の判定である。
-        let (_world, table) = build_balloon_target_from_faces(&root, &decoder, &faces)
-            .unwrap_or_else(|e| {
-                panic!(
-                    "scope {scope}: {} 面の焼き込みが失敗した（失敗の記録が出る経路を踏んだ）: {e}",
-                    faces.len()
-                )
-            });
+        let (_world, table) = build_balloon_target_from_faces(
+            &root,
+            &decoder,
+            &faces,
+            use_self_alpha,
+        )
+        .unwrap_or_else(|e| {
+            panic!(
+                "scope {scope}: {} 面の焼き込みが失敗した（失敗の記録が出る経路を踏んだ）: {e}",
+                faces.len()
+            )
+        });
         assert_eq!(
             table.len(),
             faces.len(),

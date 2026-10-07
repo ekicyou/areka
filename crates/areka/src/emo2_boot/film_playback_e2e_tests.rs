@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
-use areka_emo_atlas::{AtlasTable, WicDecoderArm};
+use areka_emo_atlas::{AtlasTable, UseSelfAlpha, WicDecoderArm};
 use areka_emo_compose::{BindSet, ComposedSurface, Composer, EmoWorld, FilmSheet, PatternState};
 use areka_emo_present::balloon::{build_balloon_target_from_faces, resolve_balloon_faces};
 use areka_emo_present::presenter::VisibilityOwnership;
@@ -214,7 +214,7 @@ fn load_balloon() -> (EmoWorld, AtlasTable) {
     let dir = fixture("balloon");
     let faces = resolve_balloon_faces(&dir, 0).expect("面 0 は解決できる");
     let arm = WicDecoderArm::new().expect("WIC の工場が作れる");
-    let Ok(pair) = build_balloon_target_from_faces(&dir, &arm, &faces) else {
+    let Ok(pair) = build_balloon_target_from_faces(&dir, &arm, &faces, UseSelfAlpha::On) else {
         panic!("バルーンの面は焼ける");
     };
     pair

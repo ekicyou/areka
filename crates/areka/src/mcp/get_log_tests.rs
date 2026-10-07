@@ -321,6 +321,7 @@ fn since_id_and_max_count_together() {
 fn emily() -> ActiveGhost {
     ActiveGhost {
         name: Some("Emily/Phase4.5".to_string()),
+        sakura_name: None,
         root: PathBuf::from(r"C:\ssp\ghost\emily4"),
     }
 }
@@ -340,6 +341,8 @@ fn ghost_name_keeps_only_records_of_that_name() {
     let g = emily();
     assert_eq!(ghost_ids(Some(&g), "error", "Emily/Phase4.5"), [10]);
     assert_eq!(ghost_ids(Some(&g), "script", "Emily/Phase4.5"), [2]);
+    // 英字の大小違いでも名前そのもので指したときと同じ記録（要件 1.5）。
+    assert_eq!(ghost_ids(Some(&g), "error", "emily/phase4.5"), [10]);
 }
 
 #[test]
@@ -358,6 +361,7 @@ fn ghost_name_full_path_is_read_as_that_ghost() {
 fn nameless_ghost_matches_records_named_by_its_full_path() {
     let g = ActiveGhost {
         name: None,
+        sakura_name: None,
         root: PathBuf::from(r"C:\ssp\ghost\nameless\"),
     };
     let mut h = history();
@@ -381,12 +385,11 @@ fn nameless_ghost_matches_records_named_by_its_full_path() {
 #[test]
 fn unmatched_empty_and_no_ghost_are_cannot_find() {
     let g = emily();
-    let cases: [(Option<&ActiveGhost>, &str); 6] = [
+    let cases: [(Option<&ActiveGhost>, &str); 5] = [
         (Some(&g), "Nobody"),
-        // 大文字小文字の違い・フォルダ名だけは当たらない（他のツールと同じ解決）。
-        (Some(&g), "emily/phase4.5"),
+        // フォルダ名だけは当たらない（他のツールと同じ解決）。
         (Some(&g), "emily4"),
-        // 空は解決を呼ばずに Cannot find（解決へ渡すと 0 体で Specified ghost is not active になる）。
+        // 空は解決を呼ばずに Cannot find（解決へ渡しても 0 体・1 体とも同じ Cannot find になる）。
         (Some(&g), ""),
         (None, ""),
         // 0 体で名前あり。

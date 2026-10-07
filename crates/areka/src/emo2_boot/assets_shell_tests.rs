@@ -79,3 +79,29 @@ fn named_shell_builds_assets_from_that_shells_pictures() {
         "バルーンの側は名前に関わらず scope ごとに作られる"
     );
 }
+
+/// 面が 1 つも無いシェルの失敗は、場所（シェルのフォルダ）をそのまま運び、利用者に出る文言が
+/// 「シェルに面が 1 つも無い」になる（spec: areka-P0-self-alpha-declaration 要件 6.5・
+/// `surfaces.txt` が無い場合があるので、そのファイルの話にしない）。
+#[test]
+fn shell_without_any_surface_maps_to_shell_empty_with_folder_wording() {
+    use areka_emo_present::shell_target::ShellLoadError;
+
+    let folder = std::path::PathBuf::from(r"ghost\shell\master");
+    let error = BootWiringError::from(ShellLoadError::Empty {
+        path: folder.clone(),
+    });
+    let text = error.to_string();
+    assert!(
+        matches!(&error, BootWiringError::ShellEmpty { path } if *path == folder),
+        "Empty は ShellEmpty へ写り、場所はシェルのフォルダのまま: {error:?}"
+    );
+    assert!(
+        text.contains("シェルに面が 1 つも無い") && text.contains(r"ghost\shell\master"),
+        "文言は面が 1 つも無いことを言い、フォルダを示す: {text}"
+    );
+    assert!(
+        !text.contains("surfaces.txt"),
+        "surfaces.txt が無い場合もあるので、そのファイルの話にしない: {text}"
+    );
+}

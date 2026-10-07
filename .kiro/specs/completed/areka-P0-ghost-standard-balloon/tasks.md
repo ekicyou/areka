@@ -1,0 +1,97 @@
+# Implementation Plan
+
+- [x] 1. ゴーストのフォルダから標準のバルーンの指定を読む
+- [x] 1.1 同梱のバルーンを「最初の 1 個」（無印 → `balloon0`）で読むようにする
+  - 無印の行が在ればその値（空なら無し・`balloon0` へ進まない）、無印の行が無ければ `balloon0` の行の値（空なら無し・`balloon1` へ進まない）、どちらの行も無ければ無しを返す。行の有無は空の値を落とさない読み方で見て、値は今の小文字化した表から引く
+  - 小文字化した表を作る関数そのものは変えず、他の読み手の「空の値は無し」を保つ
+  - 共有なしで開いて「読めない」を作るテストの補助を、テストの共通の置き場へ移し、既存のテストからもそこを使う。読み手の説明と既存テストの「番号付きは読まない」というコメントを今の読み方へ直す
+  - 新しい兄弟のテストファイルで、番号付きだけ・`balloon1` だけ・先頭に 0 を付けた綴りだけ・`*.directory` の行が無く同じ接頭辞の他の鍵だけ・空の無印＋`balloon0`・空の `balloon0`＋`balloon1` の各場面を、戻り値と記録 0 件まで判定する
+  - 完了の状態: 新しいテストが緑で、既存の同梱のテスト（無印だけ・両方 → 無印・空の無印・読めない → 警告 1 件・検体 emo2）がテスト本体の差分 0 行（補助の移動とコメントだけ）で緑
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.10, 1.11, 1.12, 1.13, 1.14, 7.1, 7.5, 7.7_
+- [x] 1.2 ゴーストの descript.txt から `default.balloon.path` と `balloon` を 1 回で読む読み手を足す
+  - ゴーストの descript.txt を 1 回だけ読み、2 鍵を 1 つの値（2 つの欄）で返す。鍵が無い・値が空なら無し。値は前後の空白を落とすだけで読み替えない。`recommended.*` は引かない
+  - 2 つの欄の上に、ukadoc の正典 URL の行を置く（網羅台帳の `implemented` の証拠）
+  - 新しい兄弟のテストファイルで、2 鍵とも書かれている・片方だけ・鍵の大文字が混じる・値が空・descript.txt が読めない（2 欄とも無しで読めない記録がちょうど 1 件）を判定する
+  - 完了の状態: 読み手のテストが緑で、読めないときの記録が 1 件だけであることがテストで固定されている
+  - 1.1 が移した「読めない」を作る補助と、1.1 が作るテストファイルを使うので、1.1 の後に行う
+  - _Requirements: 2.1, 2.2, 2.13, 2.14, 5.4, 7.4, 7.7_
+  - _Depends: 1.1_
+
+- [x] 2. バルーンを決める鎖に descript の段を足す
+- [x] 2.1 鎖の入力の形を変える（判断は変えない）
+  - 鎖へ渡す列挙を、フォルダ名の列からバルーンの一覧の戻りそのまま（フォルダ名と `name` の組）に変え、descript の 2 鍵の欄を足す。決まった段の腕に「descript」を記憶と同梱の間に足す（`Companion` の綴りは変えない）
+  - 起動の入口の引数の腕と入力を集める口は、新しい 2 欄に無しを渡し、列挙をそのまま渡す（この時点では descript を読まない）
+  - 既存の鎖のテストは、フォルダ名の列を一覧の形へ直す補助関数 1 か所だけを追随させ、本体は差分 0 行
+  - 完了の状態: `areka` の既存テスト（鎖・入力を集める口の 5 本・煙テスト）が書き換えなしで緑で、無作為の段の添字が今と同じ
+  - _Requirements: 3.1, 3.6, 3.7_
+- [x] 2.2 descript の段の判断と警告を実装し、段の並びをテストで固定する
+  - 記憶の段の後・同梱の段の前で、`default.balloon.path` をフォルダ名の完全一致で、当たらなければ `balloon` を「`name` が一致する最初 → 無ければフォルダ名」で突き合わせる。当たった鍵より後ろは突き合わせない。欄が無しの鍵は記録 0 件
+  - 当たらなかった鍵ごとに、鍵・書かれていた値・バルーンの置き場を載せた警告を 1 件出す。値の検査（`..`・絶対パス・区切り）と `random`・`lastinstalled` の特別扱いは書かない
+  - 鎖の冒頭の説明（分岐の数・「列挙の並びは判断に使わない」を `name` の同着の 1 点を除く形へ・既定の段の番号）を直す
+  - 新しい兄弟のテストファイル（I/O なし）で段の並びを判定する: 記憶が descript と同梱に勝つ・descript が同梱に勝つ・同梱が既定に勝つ・同梱が無作為に勝つ（添字は呼ばれない）・記憶の先が無く descript へ・descript の先が無く同梱へ（警告は鍵の数だけ）・同梱の最初の 1 個が無く 2 個目の名前が在っても既定へ・引数が在れば当たらない他の欄を渡しても記録 0 件。同梱の値が区切りを含む場面（読み替えず警告 1 件）も足す
+  - 完了の状態: 各場面で決まったフォルダ・段・記録の件数と欄がテストで判定され、緑
+  - _Requirements: 1.7, 1.8, 1.9, 1.15, 2.9, 2.10, 2.11, 2.12, 3.1, 3.3, 3.4, 3.5, 3.6, 3.8, 5.2, 5.3, 5.5, 5.6, 5.7, 7.2, 7.3, 7.5_
+- [x] 2.3 descript の突き合わせの各場面と、実行中の決め方との一致をテストで固定する
+  - 2.2 の兄弟のテストファイルへ、`default.balloon.path` だけで当たる・当たらない、値が `../balloon/x`・`balloon/x`・`x/`・`C:\balloon\x`（どれも警告 1 件で次の段へ）、`balloon` が `name` で当たる・フォルダ名で当たる・どちらにも当たらない、`name` と別のフォルダ名の両方に一致 → `name` の側、同じ `name` が複数 → 並びで最初、大文字と小文字だけ違う → 当たらない、値が `random`（`name` が在れば当たり・無ければ警告 1 件・無作為の添字は呼ばれない）、両方が書かれた 3 通り（記録 0 件・警告 1 件・警告 2 件で同梱へ）、どちらも無し → 記録 0 件を足す
+  - 同じ候補と同じ名前の 5 通りについて、鎖が descript の段で決めたフォルダ名と、実行中のバルーンの切替の決め方に名前を渡した答えが一致することを判定する。実行中の側の候補の列は、鎖へ渡すのと同じ一覧 1 つから、本番の候補づくりと同じ写し方（一覧の 1 件 → 候補 1 件）をテストの中に書いて作る（本番の候補づくりは根を列挙する I/O を持つので、I/O なしのこのファイルからは呼ばない）。実行中の切替の決め方・名前の指定・候補の型がこのテストから見えること（今はどれも crate の中で公開）を確かめる。実行中の切替の決め方のファイルは差分 0 行
+  - 完了の状態: 突き合わせの全場面と一致のテストが緑で、警告の `key`・`value`・`balloon_store` が判定されている
+  - _Requirements: 2.3, 2.4, 2.6, 2.7, 2.8, 2.9, 2.10, 2.11, 2.12, 4.2, 5.2, 5.5, 5.6, 7.4_
+
+- [x] 3. 入力を集める口で descript の 2 鍵を渡す
+  - 入力を集める口が、記憶 → descript の 2 鍵 → 同梱 → 根の一覧 を先にまとめて読み、鎖へ渡す（署名は変えない・ゴーストのフォルダの中のバルーンは読まない・ここでは記録を出さない）。関数の説明の段の並びを直す
+  - 起動の入口の引数の腕は読み手を呼ばない。「バルーンを決めました」の記録の行は差分 0 行
+  - 新しい兄弟のテストファイル（実ファイル・`target\` の下）で、`claudia` と同じ形の同梱（番号付きだけ・既定のバルーンも在る）→ 同梱の段で `balloon0` の値、descript の `balloon` と無印の同梱の両方 → descript の段、`default.balloon.path` と同じ名前のフォルダがゴーストの中の `balloon/` にだけ在る → 当たらず警告 1 件、を判定する
+  - 同じファイルで起動の入口を踏む: 引数なしで descript が当たる起動 → 「バルーンを決めました」がちょうど 1 件で段が descript、引数でバルーンを渡し当たらない descript・同梱・記憶を置いた起動 → 引数の段・「当たらなかった」の記録 0 件・決めた記録 1 件
+  - 完了の状態: 新しいテストと既存の入力を集める口のテストが緑
+  - _Requirements: 2.5, 3.2, 3.9, 4.1, 5.1, 7.4, 7.7_
+  - _Depends: 1.1, 1.2_
+
+- [x] 4. ゴーストの切替で決まったバルーンを記録する
+  - 1 体を起こす共通の手順で、バルーンが決まった直後に「切替先のバルーンが決まりました」（info・切替先のフォルダ名・段・バルーンのフォルダ）を 1 件出す。文面は「バルーンを決めました」を含まない。0 個で決まらないときは今どおり起こせなかった記録だけ
+  - 新しい兄弟のテストファイル（切替の土台・検体の複製は `target\` の下）で、準備のたびに切替先に記憶が無いことを確かめたうえで、切替先の descript.txt に 2 つ目のバルーンの `name` を書いた場面 → 今のバルーンが 2 つ目・段が descript・記録がちょうど 1 件で段とフォルダが合う、切替先の install.txt を番号付きだけにした場面 → 2 つ目・同梱の段・記録 1 件、を判定する
+  - 切替の本体のファイルは 1,000 行の番人を越えない
+  - 完了の状態: 切替のテストが緑で、既存の切替のテストも書き換えなしで緑
+  - _Requirements: 4.1, 5.8, 7.6, 7.7_
+  - _Depends: 3_
+
+- [x] 5. 正典との対応の文書と網羅台帳
+- [x] 5.1 (P) 互換の設計文書の §8 に 2 行を足す
+  - 既存の「【上書き】」の行の型で、段の並びと理由・ゴーストの切替は引数を除いた同じ並び・同梱の最初の 1 個（繰り下げない・空と区切りは当たらない・空の無印も見つかった）・完了 `areka-P0-baseware-root-layout` の要件 5.3 の上書き（5.2 は崩さない）・記憶は起動のたびに書かれるので作者の指定が効くのは記憶の無いゴーストだけ、を 1 行目に書く
+  - 2 行目に、`balloon` は `name` → フォルダ名（`random`・`lastinstalled` は特別に解かない・`name` の同着は並びで最初＝同 spec の裁定 3 をこの点だけ上書き）・`default.balloon.path` は根の置き場の直下 1 段（`..`・絶対パス・区切りは当たらない）・両方なら `default.balloon.path` が先・ゴーストの中の `balloon/` は見ない（`areka-P0-ghost-inner-balloon`）・記録の名前と定義点、を書く
+  - 完了の状態: §8 に 2 行が在り、各行の主張が定義点とテストの置き場で裏付けられている
+  - _Requirements: 6.1, 6.2, 6.3, 6.6, 6.8_
+  - _Boundary: doc/COMPAT_ARCHITECTURE.md_
+  - _Depends: 2.3, 4_
+- [x] 5.2 (P) 網羅台帳の 5 行と、数え直す 2 か所を直して報告を作り直す
+  - `descript_ghost` の `balloon` を `implemented`・`default.balloon.path` を `degraded`（根の置き場の直下 1 段だけ・区切りのある相対パスは当たらない・ゴーストの中は別 spec）にし、担当を本 spec にする。`descript_install` の `*.directory` に同梱の最初の 1 個が標準のバルーンになる 1 文を足す。`recommended.*` の 2 行は `absent` のまま注記の文だけを直す。`priority` と「束: …」の文は触らない
+  - 整合のテストが数え直す `briefing.md` の `descript_ghost` のページ別の数（着手時の値を読み直してから implemented +1・degraded +1・absent −2）と、`roadmap-draft.md` の本 spec の `[[spec]]` 1 行（`owner_count = 2`）・件数・日付・説明の段落を、完了 `areka-P0-mouse-drag-events` と同じ形で同じコミットで直す
+  - 道具で報告を作り直し（食い違いを指されたら全体の報告も）、報告は手で直さない
+  - 完了の状態: `boot_config::default_balloon_root`・`boot_config::resolve_config_inputs` の綴りが台帳に 0 か所で、`cargo test -p ukadoc-survey` が緑
+  - _Requirements: 6.4, 6.5, 6.7_
+  - _Boundary: doc/ukadoc-coverage（ledger/assets.toml・briefing.md・roadmap-draft.md・道具が作る報告）_
+  - _Depends: 1.2, 2.3, 4_
+
+- [x] 6. 全体の確かめと実機の確認
+- [x] 6.1 全体の回帰を確かめる
+  - ワークスペースのテスト（`cargo test -p ukadoc-survey` を含む）を回し、1 ファイル 1,000 行の番人・煙テストと配布物の検査が見る `route=Companion`・既存の切替と実行中のバルーンの切替のテストが緑であることを確かめる
+  - 実行中のバルーンの切替・シェルの切替・記憶の読み書き・インストールのファイルが差分 0 行であることを `git diff` で確かめる
+  - 完了の状態: テストが全部緑で、範囲外のファイルの差分が 0 行であることを記録した
+  - _Requirements: 3.9, 4.2, 4.3, 5.7, 1.13_
+- [x] 6.2 実機で検体 `claudia` の起動を確かめる
+  - 準備: `areka.exe` をビルドする。`target\` の下の短い絶対パスに根を作り、`vendors/sample_ghost/` の `claudia.nar` から `ghost\claudia`・`balloon\claudia`・`balloon\claudia_vertical` を、`StayseeBalloon.nar` から `balloon\StayseeBalloon` を展開して並べる。`AREKA_ROOT` にその根、`AREKA_PROFILE_DIR` に同じ `target\` の下の空のフォルダ、`AREKA_APP_SMOKE_EXIT_MS` に有界の自動終了の時間を渡し、判定はログの検索で行う
+  - A: 記憶が無いことを確かめて起動 → 「バルーンを決めました」が `route=Companion` で `\balloon\claudia`、画面のバルーンが `claudia`。B: そのまま起動し直す → `route=Memory`。C: 記憶を消し descript に `balloon` を 1 行足して起動 → `route=Descript` で `\balloon\claudia_vertical`、記憶を消し値を在りもしない名前に変えて起動 → `descript_balloon_not_found`（`key=balloon`）1 件で `route=Companion`
+  - 完了の状態: A〜C のログの行と画面の確認結果が記録されている
+  - _Requirements: 1.4, 2.6, 2.12, 3.3, 3.4, 3.5, 5.1, 5.2_
+
+## Implementation Notes
+
+- 1.1: 既存の `companion_balloon_reads_one_key` に「番号付きは読まない」のコメントはもともと無かった（設計の前提違い）。今の読み方を説明する doc コメントを足した。`crates/areka/src/boot_resolve.rs` の鎖の説明に残る「install.txt の balloon.directory」は 2.2 で直す
+- 2.1: `BalloonRoute::Descript` と新しい 2 欄は 2.2 まで dead_code の警告 2 件になる（CI に `-D warnings` は無い）。2.2 で警告 0 件を確かめる。煙テストは i686 の helper と testdll-loadu のビルドが要る（この worktree ではビルド済み）。`ghost_session::switch_tests::fallback_tests` は全体を並列で回すと負荷で赤になることがあり、単独では緑
+- 2.2: descript の段は 2 鍵を（鍵名・欄・突き合わせの関数）の配列で回し、警告の出口を 1 か所にした。`boot_config.rs` の段の並びの説明が古いのはタスク 3 で直す
+- 3: `temp_path_kit::TempPath::new` は OS の一時フォルダに作るので要件 7.7 に反する。共有の `TempPath::under_target`（ワークツリーの `target\test-roots`）を足し、本 spec の新しいテスト（1.1・1.2・3）を移した。タスク 4 の根もこれを使う。設計の Testing Strategy の記述も直した。引数の腕が読まないこと（3.2）は、ゴーストのファイルを共有なしで握って warn 0 件で固定する
+- 5.2: origin/main（`element-base-method`・`mcp-get-status`）を取り込み、roadmap-draft の数を数え直した（44 行・束を持つ行 30・`none = true` 14）。steering の roadmap は 81 本（優先 44）。完了時の棚卸へ: 台帳の `balloon`・`default.balloon.path` の「束: 既定で着せる吹き出し（読む経路が無い）」の小分類「読む経路が無い」が古い（本 spec は触らない約束）。`priority` の付け直しと一緒に coverage の棚卸で扱う
+- 6.1: 全体テスト（-j 2・1457 秒）は 10344 件緑・赤 2 件。赤は検体のパスの綴りの番人（`log-capture-kit` の `sample_path_guard_test`）で、`boot_resolve_balloon_tests.rs` の区切りの場面が検体名 `claudia` で `"x/claudia"`・`"claudia/"` と書いていたため。値を `mine` 系に替えて緑。テストの値に検体名でパスを組まない
+- 6.2: 実機（2026-10-06・debug）で A `route=Companion`（`\balloon\claudia`）・B `route=Memory`・C1 `route=Descript`（`balloon,クローディア（頭上）`＝`name` で `\balloon\claudia_vertical`）・C2 `descript_balloon_not_found key=balloon` 1 件の後 `route=Companion`。画面は B が横の飾り枠、C1 が頭上の尾が下向きのバルーン。罠: 全体テストの後は `target\debug\shiori-host32-helper.exe` が x64 版に上書きされていて claudia の 32bit の yaya.dll が 0x800700C1 で読めない→areka.exe と i686 の helper を同じフォルダに並べて起動した。完了時の棚卸へ: debug 版の areka で MCP の `dump_balloon` が呼び出し側の時間切れ（"task cancelled"）で答えを返さなかった（原因は未調査）
+- 最終検証（GO）: 完了時の棚卸へ。⑴ `.kiro/specs/areka-P0-baseware-root-list/brief.md` が鎖の列挙を古い型 `listed: &[String]` で書いている（今は `&[catalog::BalloonEntry]`）。⑵ 既存のテストの `temp_path_kit::TempPath::new`（OS の一時フォルダ・約 75 ファイル）は「検体と一時フォルダは `target\` の下だけ」に反する。本 spec が頼る `catalog_tests.rs` の同梱のテスト 3 本もそう（1.1 の「本体は差分 0 行」のため触っていない）。`TempPath::under_target` への移行を起票する候補。⑶ 6.2 の i686 の helper の上書きと `dump_balloon` の時間切れ
+
+- 完了時の棚卸（2026-10-07・main `5b69f33c` を取り込んだ後）: その場で解決 1 件＝`baseware-root-list` の brief にバルーンの一覧の型（`&[BalloonEntry]`）の注記を足した。起票 3 件＝`dump-balloon-debug-timeout`（バグ）・`test-roots-under-target`（その他）・`dev-helper-x64-clobber`（その他）。申し送り 1 件＝台帳の束の小分類「読む経路が無い」の古さを `coverage-roadmap-refresh` の brief へ。`fallback_tests` の負荷の赤は既存の `ghost-session-test-load-flake` が持つので起票しない

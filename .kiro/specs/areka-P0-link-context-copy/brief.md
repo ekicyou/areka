@@ -72,4 +72,5 @@
 ## Constraints
 
 - 文字とバルーンの列（`input_events/` のバルーンと箱）。
+- `crates/areka/src/readme/destination.rs` の `link_destinations` に付けた `#[cfg_attr(not(test), allow(dead_code))]` は、本 spec が本番の呼び手になったら外す（`open-external-tags` の完了時の申し送り・2026-10-06）。
 - 段: 優先（バルーン関係）。規模の見込み S〜M（6〜10）。

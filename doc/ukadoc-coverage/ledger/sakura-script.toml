@@ -1937,16 +1937,24 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cbrowser_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-open-external-tags"
 priority = "E1"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、既定の閲覧ソフトが開かず、見せたかった頁が出ない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。\\![open,browser,パラメータ] のパラメータを判定せずにそのまま OS へ渡し、OS の既定の閲覧ソフト
+（URL の既定のアプリ）で開く。SSP の「外部アプリ」の設定は写さず、設定値も設定画面も持たない。開く処理は
+専用のスレッドで行い、台本の再生は待たない。
+壊れ方: 無い。OS が断ったときは開かないが、記録は残る（OS の窓は出さない）。
+ログ: 出る（OS へ渡すたびに info 1 行〔event=open_external・取得したログでは status の種別〕、引数が無い・空で
+warn! 1 行〔open_external_rejected〕、OS が断ったときに error! 1 行〔open_external_failed の reason=os〕、
+ゴーストが居ないなどで送れないときに error! 1 行〔open_external_dropped〕）。
+根拠の場所: crates/areka/src/readme/destination.rs の classify（行き先の規則）と crates/areka/src/readme/opener.rs
+の execute（開く処理の 1 か所）。受け口は crates/areka/src/emo2_boot/readme_cue.rs で、正準台帳
+（consumer_ledger.rs）が ("open","browser") の 1 組を CommandConsumer::ReadmeSink で登記する。
+[運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
 [頻度: 里々 18 / YAYA 6（wiki の作例の文書数＝弱い代理。数えた綴りは \\![open。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
 """
@@ -2127,16 +2135,26 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2ceditor_2c_30d5_30a1_30a4_30eb_2c_8868_793a_884c_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.5.16"
-owner = ""
+owner = "areka-P0-open-external-tags"
 priority = "E1"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、文字編集のソフトが開かず、名指しした行も示せない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。\\![open,editor,ファイル,表示行] のファイルを OS の「編集」の関連付けで開く（相対パスはゴーストの
+ghost/master から探す）。表示行は常に無視する（ukadoc の「エディタの指定がない場合」と同じ）。SSP の
+「外部アプリ」の設定は写さない。開く処理は専用のスレッドで行い、台本の再生は待たない。
+壊れ方: 無い。ファイルが無いときや OS が断ったとき（「編集」の関連付けが無いなど）は開かないが、記録は残る
+（OS の窓は出さない）。
+ログ: 出る（OS へ渡すたびに info 1 行〔event=open_external・verb=edit・取得したログでは status の種別〕、引数が
+無い・空で warn! 1 行〔open_external_rejected〕、ファイルが無い・OS が断ったときに error! 1 行
+〔open_external_failed の reason=not_found／os〕、ゴーストが居ないなどで送れないときに error! 1 行
+〔open_external_dropped〕）。
+根拠の場所: crates/areka/src/readme/destination.rs の classify（行き先の規則）と crates/areka/src/readme/opener.rs
+の execute（開く処理の 1 か所）。受け口は crates/areka/src/emo2_boot/readme_cue.rs で、正準台帳
+（consumer_ledger.rs）が ("open","editor") の 1 組を CommandConsumer::ReadmeSink で登記する。
+[運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
 [頻度: 里々 18 / YAYA 6（wiki の作例の文書数＝弱い代理。数えた綴りは \\![open。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
 """
@@ -2158,31 +2176,56 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cexplorer_2c_30d5_30a1_30a4_30eb_5d:1"]
-status = "absent"
+status = "degraded"
 introduced = "2.5.12"
-owner = ""
+owner = "areka-P0-open-external-tags"
 priority = "E1"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、ファイル管理の窓が開かず、置き場所を示せない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み（一部縮退）。\\![open,explorer,ファイル] は、フォルダならそのフォルダを開き、ファイルならエクスプローラーで
+選んだ状態にしてそのフォルダを開く（相対パスはゴーストの ghost/master から探す）。\\![open,explorer,種類,名前] の
+ghost・balloon・shell は、descript.txt の name かフォルダ名で名指しされたゴースト・バルーン・シェルのフォルダを
+開く（random などの特別な名前は解かない）。開く処理は専用のスレッドで行い、台本の再生は待たない。
+縮退: 種類が headline・plugin（と知らない種類）の形は areka にその仕組みが無いので、開かず warn! を 1 行残して
+何もしない。
+壊れ方: headline・plugin の形は開かないが、記録は残る。それ以外は、行き先が無い・名前に当たらないときに開かないが、
+記録は残る（OS の窓は出さない）。
+ログ: 出る（OS へ渡すたびに info 1 行〔event=open_external・取得したログでは status の種別〕、引数が無い・空と
+headline・plugin・知らない種類で warn! 1 行〔open_external_rejected〕、行き先が無い・名前に当たらない・目録を引く
+根が無い・OS が断ったときに error! 1 行〔open_external_failed の reason=not_found／no_match／no_baseware_root／os〕、
+ゴーストが居ないなどで送れないときに error! 1 行〔open_external_dropped〕）。
+根拠の場所: crates/areka/src/readme/destination.rs の classify（行き先の規則）と crates/areka/src/readme/opener.rs
+の execute と named_folder（開く処理の 1 か所）。受け口は crates/areka/src/emo2_boot/readme_cue.rs で、正準台帳
+（consumer_ledger.rs）が ("open","explorer") の 1 組を CommandConsumer::ReadmeSink で登記する。
+[運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
 [頻度: 里々 18 / YAYA 6（wiki の作例の文書数＝弱い代理。数えた綴りは \\![open。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cfile_2c_30d5_30a1_30a4_30eb_540d_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-open-external-tags"
 priority = "E1"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、関連付けられたソフトが開かず、渡したかったファイルが出ない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。\\![open,file,ファイル名] のファイルを既定の関連付けで開く（実行ファイルなら実行する）。
+%名前% の形の環境変数を先に展開し（未定義の変数はそのまま残す）、相対パスはゴーストの ghost/master から
+探す。区切りを含まない名前だけで ghost/master に無ければ、名前のまま OS のパス探索に任せる。作業フォルダは
+開くファイルのあるフォルダ。開く処理は専用のスレッドで行い、台本の再生は待たない。
+壊れ方: 無い。ファイルが無いときや OS が断ったときは開かないが、記録は残る（OS の窓は出さない）。
+関連付けの無いファイル（拡張子の無いファイルや、`.cpl` のように動詞 open を持たない種類を含む）は OS を
+呼ばずに開かず、code=1155 の失敗として記録する。
+ログ: 出る（OS へ渡すたびに info 1 行〔event=open_external・取得したログでは status の種別〕、引数が無い・空で
+warn! 1 行〔open_external_rejected〕、ファイルが無い・OS が断ったときに error! 1 行〔open_external_failed の
+reason=not_found／os〕、ゴーストが居ないなどで送れないときに error! 1 行〔open_external_dropped〕）。
+根拠の場所: crates/areka/src/readme/destination.rs の classify（行き先の規則）と crates/areka/src/readme/opener.rs
+の execute（開く処理の 1 か所）、関連付けの確認は crates/areka/src/readme/os_port.rs。受け口は
+crates/areka/src/emo2_boot/readme_cue.rs で、正準台帳
+（consumer_ledger.rs）が ("open","file") の 1 組を CommandConsumer::ReadmeSink で登記する。
+[運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
 [頻度: 里々 18 / YAYA 6（wiki の作例の文書数＝弱い代理。数えた綴りは \\![open。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
 """
@@ -2267,16 +2310,24 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cmailer_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-open-external-tags"
 priority = "E1"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、既定のメールソフトが開かず、宛先を渡せない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。\\![open,mailer,パラメータ] のパラメータの先頭に mailto: が無ければ付け（大文字小文字を区別せず、二重には
+付けない）、OS の既定のメールソフトで開く。SSP の「外部アプリ」の設定は写さない。開く処理は専用のスレッドで行い、
+台本の再生は待たない。
+壊れ方: 無い。OS が断ったとき（既定のメールソフトが無いなど）は開かないが、記録は残る（OS の窓は出さない）。
+ログ: 出る（OS へ渡すたびに info 1 行〔event=open_external・取得したログでは status の種別〕、引数が無い・空で
+warn! 1 行〔open_external_rejected〕、OS が断ったときに error! 1 行〔open_external_failed の reason=os〕、
+ゴーストが居ないなどで送れないときに error! 1 行〔open_external_dropped〕）。
+根拠の場所: crates/areka/src/readme/destination.rs の classify（行き先の規則）と crates/areka/src/readme/opener.rs
+の execute（開く処理の 1 か所）。受け口は crates/areka/src/emo2_boot/readme_cue.rs で、正準台帳
+（consumer_ledger.rs）が ("open","mailer") の 1 組を CommandConsumer::ReadmeSink で登記する。
+[運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
 [頻度: 里々 18 / YAYA 6（wiki の作例の文書数＝弱い代理。数えた綴りは \\![open。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
 """
@@ -5171,15 +5222,27 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5cj_5bID_5d:1"]
-status = "absent"
+status = "degraded"
 introduced = ""
-owner = ""
+owner = "areka-P0-open-external-tags"
 priority = "E1"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。指定先へ飛ばず、ブラウザもファイルも開かない。
-ログ: 出る（compile の catch-all の debug! 記録）。
+実装済み（一部縮退）。\\j[ID] の ID が http://・https://・mailto:（大文字小文字を区別しない）なら OS の既定の
+アプリで開き、file:/// なら残りをパスとして開く（相対パスはゴーストの ghost/master から探す。パーセント符号化は
+復号しない）。開く処理は専用のスレッドで行い、台本の再生は待たない。
+縮退: 旧来の「ID にジャンプ」の形（上の 4 つの前置き以外の ID）は開かず、warn! を 1 行残して何もしない
+（2026-10-05 開発者裁定）。
+壊れ方: 4 つの前置きの形は無い。それ以外の ID は飛ばないが、記録は残る（OS の窓は出さない）。
+ログ: 出る（OS へ渡すたびに info 1 行〔event=open_external・取得したログでは status の種別〕、知らない形の ID・空の
+ID・残りが空の file:/// で warn! 1 行〔open_external_rejected〕、ファイルが無い・OS が断ったときに error! 1 行
+〔open_external_failed の reason=not_found／os〕、ゴーストが居ないなどで送れないときに error! 1 行
+〔open_external_dropped〕）。
+根拠の場所: crates/areka/src/readme/destination.rs の classify_jump（行き先の規則）と crates/areka/src/readme/opener.rs
+の execute（開く処理の 1 か所）。タグは汎用の運び手（JUMP_TAG_CARRIER）に載り、受け口は
+crates/areka/src/emo2_boot/readme_cue.rs で、正準台帳（consumer_ledger.rs）が運び手の名前の 1 組を
+CommandConsumer::ReadmeSink で登記する。
 [群: 外部を開く・別窓]
 [頻度: 里々 3 / YAYA 2（wiki の作例の文書数＝弱い代理。数えた綴りは \\j。綴りが短く別の語の一部にも当たるぶん過大に出る）]
 """
@@ -5367,17 +5430,17 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1"]
-status = "degraded"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-script-prefix"
 priority = "A1"
 values = ["交わり"]
 links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnChoiceTimeout:1" },
 ]
 note = """
-壊れ方: 黙って壊れる — 本ドメインの 3 通りのいずれでもない第 4 の形で、選択肢は正典どおり出て選べるのに、選んだ後の実行内容だけが走らない。動く用法＝選択肢の表示と、選んだときに選択待ちが解けて会話が止まらないこと。動かない用法＝script: に書いたさくらスクリプトの実行で、plan_cascade が script: を最初に見て未対応と判定し、SHIORI イベントを 1 つも出さない。
-ログ: 出る（steady の choice_unsupported_category の warn! 記録）。
+壊れ方: 見た目の差 — 選ぶと script: の後ろを新しいトークとして再生し、選択肢を含んでいたトークの残りは再生しない（SHIORI のイベントも翻訳も通さない）。空の script: は新しいトークを始めず、警告を出して選択肢の待ちを閉じるだけで、元のトークが続く。第 3 引数以降は台本に含めずどこへも渡さず、その数を警告に残す（, を含む台本は \"…\" で括って書く）。
+ログ: 出る（始めたときは choice_script_started の info!、空のときは choice_script_empty の warn!、第 3 引数以降があるときは choice_script_unused_args の warn!。どの結末でも続けて選択肢の待ちを閉じる choice_resolved の info! が出て、その outcome は script／script_empty）。
 [転記元: doc/choice-cascade-compat.md の 7a-i／7a-ii。doc/COMPAT_ARCHITECTURE.md の「選択確定カスケードの正典沈黙分岐一式」の行がこの台帳を指している]
 [根が 2 つ: 根は 4 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID1_2cID2_2cID3..._5d:1・ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1・ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cOnID_2cr0_2cr1_2c..._5d:1]
 [テーマ: 選んでも書いた動きが走らず、利用者の返事に対する応えが返らない]

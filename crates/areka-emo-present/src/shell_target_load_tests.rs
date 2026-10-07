@@ -24,7 +24,9 @@ use areka_emo_atlas::{MemoryDecoder, SetId, WicDecoderArm};
 use areka_parsers::shell::parse;
 use temp_path_kit::TempPath;
 
-use super::test_support::{CapturedEvent, capture_events, emo2_shell_dir, with_com_initialized};
+use super::test_support::{
+    CapturedEvent, capture_events, emo2_shell_dir, with_com_initialized, write_descript,
+};
 
 /// 不透明 1×1 PBGRA スペック（bake が placement を必ず産む＝非退化）。
 fn opaque_1x1() -> (u32, u32, u32, Vec<u8>, bool) {
@@ -64,7 +66,7 @@ fn used_image_is_baked_under_the_same_spelling_as_layer_zero() {
         dec.insert(shell_dir.join(name), w, h, stride, bytes.clone(), has_alpha);
     }
 
-    let target = build_shell_target(shell, selection, &shell_dir, &dec);
+    let target = build_shell_target(shell, selection, &shell_dir, &dec, UseSelfAlpha::On);
 
     assert!(
         target.bake_errors().is_empty(),
@@ -158,6 +160,7 @@ fn directories_are_not_taken_as_surface_images() {
         "charset,UTF-8\nsurface0\n{\nelement1,overlay,parts.png,0,0\n}\n",
     )
     .expect("記述ファイル作成");
+    write_descript(dir.path());
     // 面 0 の画像（ファイル）と、面の画像の名前をしたフォルダ、その中の面 10 の名前のファイル。
     std::fs::File::create(dir.child("surface0000.png")).expect("プレースホルダ作成");
     std::fs::File::create(dir.child("parts.png")).expect("プレースホルダ作成");
@@ -198,10 +201,12 @@ fn missing_shell_dir_yields_list_error() {
     }
 }
 
-/// `surfaces.txt` が読めない（既存の失敗・変更 0）。フォルダの一覧は通る。
+/// `surfaces.txt` が在るのに読めない（無いのではなくフォルダ）なら今までどおり Read。フォルダの一覧は
+/// 通る（無いときは画像だけで組む・spec: areka-P0-self-alpha-declaration 要件 6.1・6.6）。
 #[test]
-fn missing_surfaces_txt_yields_read_error() {
+fn unreadable_surfaces_txt_yields_read_error() {
     let dir = TempPath::new("shell-target-no-surfaces-txt");
+    std::fs::create_dir(dir.child("surfaces.txt")).expect("フォルダ作成");
     let dec = MemoryDecoder::new();
 
     match load_shell_target(dir.path(), &dec) {
@@ -212,17 +217,17 @@ fn missing_surfaces_txt_yields_read_error() {
     }
 }
 
-/// `surfaces.txt` が面を 1 つも産まない（既存の失敗・変更 0）。
+/// `surfaces.txt` が面を 1 つも定義せず、面の画像も無ければ Empty（場所はシェルのフォルダ・
+/// 画像が在れば画像だけで組む・spec: areka-P0-self-alpha-declaration 要件 6.2・6.5）。
 #[test]
 fn surfaces_txt_without_any_surface_yields_empty_error() {
     let dir = TempPath::new("shell-target-empty-surfaces-txt");
-    // 面を 1 つも産まない `surfaces.txt` と、面の画像 1 枚（一覧は通るが面は 0 個）。
+    // 面を 1 つも産まない `surfaces.txt` だけ（面の画像は 0 枚）。
     std::fs::write(dir.child("surfaces.txt"), "charset,UTF-8\n").expect("記述ファイル作成");
-    std::fs::File::create(dir.child("surface0000.png")).expect("プレースホルダ作成");
     let dec = MemoryDecoder::new();
 
     match load_shell_target(dir.path(), &dec) {
-        Err(ShellLoadError::Empty { path }) => assert_eq!(path, dir.path().join("surfaces.txt")),
+        Err(ShellLoadError::Empty { path }) => assert_eq!(path, dir.path()),
         other => panic!("面 0 個の失敗は Empty でなければならない: {other:?}"),
     }
 }
@@ -258,6 +263,27 @@ fn only_from_shell_target<'a>(
     hits[0]
 }
 
+/// 透過の扱いの記録（宛先 `self_alpha`）が読み込み 1 回につき 1 行だけで、シェルのキーを読んだ
+/// ことを確かめ、採った扱い（`treatment`）を返す（spec: areka-P0-self-alpha-declaration 要件 7.1）。
+fn only_shell_self_alpha_info(events: &[CapturedEvent]) -> String {
+    let hits: Vec<&CapturedEvent> = events
+        .iter()
+        .filter(|e| e.target == "areka_emo_present::self_alpha")
+        .collect();
+    assert_eq!(hits.len(), 1, "透過の扱いの記録は 1 行: {hits:?}");
+    assert_eq!(hits[0].level, tracing::Level::INFO, "{hits:?}");
+    assert_eq!(hits[0].field_str("kind"), Some("shell"), "{hits:?}");
+    assert_eq!(
+        hits[0].field_str("key"),
+        Some("seriko.use_self_alpha"),
+        "{hits:?}"
+    );
+    hits[0]
+        .field_str("treatment")
+        .expect("treatment の欄が在る")
+        .to_string()
+}
+
 /// 6 種の記録が、**読み込み 1 回につきそれぞれ 1 度だけ**出る（要件 6.1・6.2・6.4）。
 ///
 /// 1 つのシェルに 6 つの事象を同居させてある——面 0 は同じ番号の画像が 2 枚（重複）で
@@ -277,6 +303,7 @@ fn every_record_is_emitted_once_per_load() {
         ),
     )
     .expect("記述ファイル作成");
+    write_descript(dir.path());
     for name in [
         "surface0.png",
         "surface0000.png",
@@ -321,6 +348,8 @@ fn every_record_is_emitted_once_per_load() {
         1,
         "読み込み 1 回につき `info!` は 1 行だけ"
     );
+    // 透過の宣言の `info!` は宛先 `self_alpha` で 1 行（spec: areka-P0-self-alpha-declaration）。
+    assert_eq!(only_shell_self_alpha_info(&events), "1");
 
     // 6.2: 使わなかった画像は面ごとに 1 行。
     let shadowed = only_from_shell_target(&events, tracing::Level::DEBUG, "element0");
@@ -414,6 +443,9 @@ fn list_failure_is_recorded_before_the_error() {
 #[test]
 fn read_failure_is_recorded_before_the_error() {
     let dir = TempPath::new("shell-target-records-no-surfaces-txt");
+    // 無いのではなく読めない（フォルダ）——無いときは画像だけで組む（spec:
+    // areka-P0-self-alpha-declaration 要件 6.6）。
+    std::fs::create_dir(dir.child("surfaces.txt")).expect("フォルダ作成");
     let dec = MemoryDecoder::new();
 
     let (result, events) = capture_events(|| load_shell_target(dir.path(), &dec));
@@ -433,17 +465,12 @@ fn empty_failure_is_recorded_before_the_error() {
     let (result, events) = capture_events(|| load_shell_target(dir.path(), &dec));
 
     assert!(matches!(result, Err(ShellLoadError::Empty { .. })));
-    let hit = only_from_shell_target(&events, tracing::Level::ERROR, "1 つも産まなかった");
+    let hit = only_from_shell_target(&events, tracing::Level::ERROR, "面が 1 つも無い");
     assert_eq!(
-        hit.field("path"),
-        Some(
-            dir.path()
-                .join("surfaces.txt")
-                .display()
-                .to_string()
-                .as_str()
-        )
+        hit.field("shell_dir"),
+        Some(dir.path().display().to_string().as_str())
     );
+    assert_eq!(hit.field_str("surfaces_txt"), Some("empty"));
 }
 
 /// 観測可能な完了（タスク 4.2）: `emo2` のシェルで `recognized=2 used=0 shadowed=2` の
@@ -462,6 +489,8 @@ fn emo2_shell_records_two_shadowed_images_and_no_warnings() {
         assert_eq!(summary.field("recognized"), Some("2"));
         assert_eq!(summary.field("used"), Some("0"));
         assert_eq!(summary.field("shadowed"), Some("2"));
+        // emo2 の descript.txt は `seriko.use_self_alpha,1` を宣言する（本物の経路で読む）。
+        assert_eq!(only_shell_self_alpha_info(&events), "1");
 
         let shadowed: Vec<(Option<&str>, Option<&str>)> = events
             .iter()

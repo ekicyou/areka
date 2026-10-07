@@ -12,6 +12,16 @@ pub(super) fn put(path: &Path, body: &[u8]) {
     fs::write(path, body).expect("書き込み");
 }
 
+/// 他者が読めないよう共有なしで開いたまま持つ（`fs::read` を I/O 失敗させる・有無の検査は通る）。
+pub(super) fn hold_exclusive(path: &Path) -> fs::File {
+    use std::os::windows::fs::OpenOptionsExt;
+    fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(path)
+        .expect("共有なしで開く")
+}
+
 /// `<根>/ghost/<folder>/ghost/master/descript.txt` を置き、ゴーストのフォルダを返す。
 pub(super) fn put_ghost(root: &BasewareRoot, folder: &str, descript: &str) -> PathBuf {
     let dir = root.ghost_dir(folder);

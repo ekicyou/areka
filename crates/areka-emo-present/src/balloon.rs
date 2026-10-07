@@ -15,9 +15,10 @@
 //!   `balloonc*`（入力ボックス）・`arrow*`（スクロール矢印）・`marker`（`\![*]` マーカー）・
 //!   `online*`（受信アニメ）はどの連鎖にも載らず列挙されない。相方側 `balloonk*` は
 //!   **scope 1 以上でのみ**採用される正規の面系列であり、scope 0 の連鎖には現れない。
-//! - **PNG α 尊重**（R5.2）: `use_self_alpha,1` 相当＝[`UseSelfAlpha::On`] で bake する。emo2 kakukaku は
-//!   `.pna` 無し・PNG α のみ（fixture 実測）で、`.pna` 対応は [`ElementDecoder::probe_pna`] の既存
-//!   seam に委ね本 spec では追加しない。
+//! - **透過の宣言**（spec: areka-P0-self-alpha-declaration 要件 2）: 基層の `descript.txt` の
+//!   `use_self_alpha` を [`load_balloon_use_self_alpha`] がバルーン 1 つにつき 1 回読み、焼く関数
+//!   [`build_balloon_target_from_faces`] が値を引数で受ける。面ごとの設定ファイルでは上書きしない。
+//!   `.pna` は表示に使わず、フォルダ直下の数を記録するだけである。
 //! - **surface id = ID**（`{接頭辞}{ID}` の ID をそのまま採用）。`balloon.defaultsurface` 既定 0 と整合。
 //!
 //! 失敗経路は log-first（`tracing::error!`＋`Err`・silent failure 禁止）。面 0 が解決できない／bake が
@@ -25,8 +26,6 @@
 //! （[`ComposeError::EmptyComposition`]）へ畳む。EmptyComposition は下流で Hide 縮退として許容される
 //! ため（設計ディスカッション #1）、バルーン構築失敗はゴーストごと殺さず穏当に縮退する。
 //!
-//! [`UseSelfAlpha::On`]: areka_emo_atlas::UseSelfAlpha::On
-//! [`ElementDecoder::probe_pna`]: areka_emo_atlas::ElementDecoder::probe_pna
 //! [`ComposeError::EmptyComposition`]: areka_emo_compose::ComposeError::EmptyComposition
 
 use std::collections::BTreeMap;
@@ -567,7 +566,8 @@ fn synthetic_surfaces_txt(faces: &[ResolvedFace]) -> String {
 /// 当該 `scope` のバルーン面を **シェルと同一の** compose/present 経路へ載せ
 /// `(EmoWorld, AtlasTable)` を返す。
 ///
-/// 系列解決（[`resolve_balloon_faces`]・R1.1/R1.2/R1.3）を内包する薄いラッパであり、構築本体は
+/// 系列解決（[`resolve_balloon_faces`]・R1.1/R1.2/R1.3）と透過の宣言の読み
+/// （[`load_balloon_use_self_alpha`]）を内包する 1 スコープ用の薄いラッパであり、構築本体は
 /// [`build_balloon_target_from_faces`] が担う。ゆえに **World の面は当該 scope が解決した系列の
 /// 面**であり、全 scope が本体側 `balloons` 系列へ畳み込まれることはない（scope 1 が
 /// `balloonk0.png` を採ったなら World の面 0 はその画像である）。
@@ -583,23 +583,65 @@ pub fn build_balloon_target(
     scope: u32,
 ) -> Result<(EmoWorld, AtlasTable), PresentError> {
     let faces = resolve_balloon_faces(balloon_dir, scope)?;
-    build_balloon_target_from_faces(balloon_dir, decoder, &faces)
+    let use_self_alpha = load_balloon_use_self_alpha(balloon_dir);
+    build_balloon_target_from_faces(balloon_dir, decoder, &faces, use_self_alpha)
+}
+
+/// バルーンの透過の宣言（`use_self_alpha`）を読む（spec: areka-P0-self-alpha-declaration 要件 2）。
+///
+/// バルーン 1 つの読み込みにつき 1 回呼ぶ（スコープのループの外）。記録はここで 1 度だけ出る。
+/// 読むのは基層の `descript.txt` だけで、面ごとの設定ファイル（`balloons0s.txt` など）と
+/// [`load_scope_balloon_model`] の 2 層の重ね合わせは通さないので、上書きは構造として起きない
+/// （要件 2.7）。シェルのキー `seriko.use_self_alpha` は読まない（要件 2.8）。
+///
+/// 同じ関数がフォルダ直下の `.pna`（拡張子の大小を区別しない）を数え、0 でなければ数つきの
+/// `warn!` を 1 行出す（要件 5.7）。`.pna` は表示に使わない。数には areka が読まない絵（矢印など）に
+/// 添えた物も含む。
+///
+/// `descript.txt` が読めないときは [`read_descript_layer`] の `warn!` を通して宣言なしとし、
+/// 一覧が取れないときは [`enumerate_file_names`] の `error!` を通して `.pna` の数を 0 として続ける
+/// （続く系列の解決が同じ理由で失敗を返す）。
+pub fn load_balloon_use_self_alpha(balloon_dir: &Path) -> UseSelfAlpha {
+    let descript = read_descript_layer(&balloon_dir.join(DESCRIPT_TXT));
+    let use_self_alpha = crate::self_alpha::read_use_self_alpha(
+        "balloon",
+        "use_self_alpha",
+        balloon_dir,
+        descript.as_deref(),
+    );
+    let ignored_pna = enumerate_file_names(balloon_dir)
+        .unwrap_or_default()
+        .iter()
+        .filter(|name| {
+            name.to_ascii_lowercase().ends_with(".pna") && balloon_dir.join(name).is_file()
+        })
+        .count();
+    if ignored_pna != 0 {
+        tracing::warn!(
+            balloon_dir = %balloon_dir.display(),
+            ignored_pna,
+            "balloon: フォルダ直下の .pna を使わずに表示する（数は areka が読まない絵に添えた物も含む）"
+        );
+    }
+    use_self_alpha
 }
 
 /// 解決済み面列から `(EmoWorld, AtlasTable)` を組む（構築本体・R5.1/R5.2/R5.3）。
 ///
-/// 採用面列 → synthetic surfaces.txt → `shell::parse` → `bake`（PNG α 尊重＝
-/// [`UseSelfAlpha::On`]・R5.2）→ `EmoWorld::build`＋`bind_atlas` と、直 WIC バイパス無しで
-/// シェルと同一機構に載せる（R5.1）。得た組を `attach_target` に渡すだけでバルーン target が
-/// シェルと同じ提示経路へ乗る。
+/// 採用面列 → synthetic surfaces.txt → `shell::parse` → `bake`（透過は引数 `use_self_alpha`）→
+/// `EmoWorld::build`＋`bind_atlas` と、直 WIC バイパス無しでシェルと同一機構に載せる（R5.1）。
+/// 得た組を `attach_target` に渡すだけでバルーン target がシェルと同じ提示経路へ乗る。
 ///
 /// 系列解決を引数として受け取るため、**どの scope の面列であるかは呼び出し側が決める**。
+/// 透過の宣言も同じく呼び出し側が [`load_balloon_use_self_alpha`] でスコープのループの外で
+/// 1 回読んで渡す（スコープごとに読むと記録がスコープの数だけ出るため）。
 /// 面列が空／bake がエラーを産んだ場合は log-first で真因をログし
 /// [`PresentError::Compose`]（[`ComposeError::EmptyComposition`]）を返す。
 pub fn build_balloon_target_from_faces(
     balloon_dir: &Path,
     decoder: &impl ElementDecoder,
     faces: &[ResolvedFace],
+    use_self_alpha: UseSelfAlpha,
 ) -> Result<(EmoWorld, AtlasTable), PresentError> {
     if faces.is_empty() {
         tracing::error!(
@@ -613,18 +655,16 @@ pub fn build_balloon_target_from_faces(
     let text = synthetic_surfaces_txt(faces);
     let shell = areka_parsers::shell::parse(&text);
 
-    // PNG α 尊重（use_self_alpha,1 相当・R5.2）で bake。base_dir は balloon_dir（実パスは
+    // 呼び手が読んだバルーンの宣言で bake。base_dir は balloon_dir（実パスは
     // base_dir.join(rel) で一度だけ実体化される）。
     let set = SurfaceSet {
         surfaces: &shell.surfaces,
         base_dir: balloon_dir,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
+        alpha_params: AlphaParams { use_self_alpha },
     };
     let baked = bake(&[set], decoder, PackConfig::default());
 
-    // bake の脱落（decode/normalize 失敗）は log-first で真因を出し、構築失敗として畳む。
+    // bake の脱落（decode 失敗）は log-first で真因を出し、構築失敗として畳む。
     // 採用面は解決済みの固定小集合ゆえ全枚デコード成功が前提＝脱落は制作者ミス/配置不備の兆候。
     if !baked.errors.is_empty() {
         for err in &baked.errors {
@@ -644,6 +684,9 @@ pub fn build_balloon_target_from_faces(
     Ok((world, baked.table))
 }
 
+#[cfg(test)]
+#[path = "balloon_alpha_tests.rs"]
+mod alpha_tests;
 #[cfg(test)]
 #[path = "balloon_model_tests.rs"]
 mod model_tests;

@@ -27,8 +27,10 @@
 //! 焼く段で落ちた絵の `warn!`・3 つの失敗の `error!`（R1.7・R6.4）、および箱の報告の各件の
 //! `warn!` と箱の数の `info!`（spec: areka-P0-shell-balloon 要件 10.1）、入れ子の報告（無い番号・
 //! 循環）の各件の `warn!`（spec: areka-P0-surface-element-nesting 要件 3.1・3.2）、描けない
-//! 描画メソッドの element定義の各行の `warn!`（spec: areka-P0-element-base-method 要件 2.1・4.2）
-//! である。一覧の 1 件だけが
+//! 描画メソッドの element定義の各行の `warn!`（spec: areka-P0-element-base-method 要件 2.1・4.2）、
+//! descript.txt が読めない `warn!` と添えてあった `.pna` の数の `warn!`
+//! （spec: areka-P0-self-alpha-declaration 要件 5.7・7.4・透過の扱いの `info!` は `self_alpha` の
+//! 宛先で 1 行）、画像だけで面を組んだ `info!`（同 要件 7.3）である。一覧の 1 件だけが
 //! 取れないときは `warn!` を出してその 1 件を飛ばす（[`list_file_names`]）。
 //! [`ShellTarget::build_world`] は新しい記録を 1 本も出さない。
 //!
@@ -56,6 +58,9 @@ use crate::balloon::face_digits_of;
 
 /// シェルの面定義ファイル名（読むのは [`load_shell_target`] の 1 回だけ）。
 const SURFACES_TXT: &str = "surfaces.txt";
+
+/// シェルの設定ファイル名（透過の宣言 `seriko.use_self_alpha` を [`load_shell_target`] が読む）。
+const DESCRIPT_TXT: &str = "descript.txt";
 
 /// シェルの面画像の接頭辞（大小無視で比較される）。
 const SURFACE_PREFIX: &str = "surface";
@@ -151,7 +156,8 @@ pub enum ShellLoadError {
         #[source]
         source: std::io::Error,
     },
-    /// `surfaces.txt` が読めなかった（既存の失敗・変更 0）。
+    /// `surfaces.txt` が在るのに読めなかった（無いときは失敗にせず画像だけで組む・
+    /// spec: areka-P0-self-alpha-declaration 要件 6.1・6.6）。
     #[error("surfaces.txt の読み取りに失敗: {path}")]
     Read {
         /// 読もうとした `surfaces.txt` の絶対パス。
@@ -160,10 +166,11 @@ pub enum ShellLoadError {
         #[source]
         source: std::io::Error,
     },
-    /// `surfaces.txt` が面を 1 つも産まなかった（既存の失敗・変更 0）。
-    #[error("surfaces.txt が面を 1 つも産まなかった: {path}")]
+    /// シェルに面が 1 つも無い——`surfaces.txt` が無いか面を定義せず、面の画像も無い
+    /// （spec: areka-P0-self-alpha-declaration 要件 6.5）。
+    #[error("シェルに面が 1 つも無い: {path}")]
     Empty {
-        /// 面を産まなかった `surfaces.txt` の絶対パス。
+        /// シェルのフォルダ（`surfaces.txt` が無い場合があるため、そのファイルではない）。
         path: PathBuf,
     },
 }
@@ -199,6 +206,9 @@ pub struct ShellTarget {
     box_surfaces: usize,
     /// 入れ子の無い番号と循環の報告（記録を出すのは [`load_shell_target`]・要件 3.1・3.2）。
     nest_report: NestReport,
+    /// 焼いた絵のうち同じ名前の `.pna` が添えてあったものの数（`BakeResult::ignored_pna` の写し・
+    /// `.pna` は使っていない・記録を出すのは [`load_shell_target`]・要件 5.7）。
+    pub(crate) ignored_pna: usize,
 }
 
 impl ShellTarget {
@@ -241,9 +251,13 @@ impl ShellTarget {
 ///
 /// # Errors
 ///
-/// フォルダの一覧が取れない（[`ShellLoadError::List`]・R1.7）・`surfaces.txt` が読めない
-/// （[`ShellLoadError::Read`]）・面を 1 つも産まない（[`ShellLoadError::Empty`]）。
+/// フォルダの一覧が取れない（[`ShellLoadError::List`]・R1.7）・`surfaces.txt` が在るのに読めない
+/// （[`ShellLoadError::Read`]）・面が 1 つも無い（[`ShellLoadError::Empty`]）。
 /// 一覧の中の 1 件だけが取れない場合は、その 1 件を飛ばして続行する（失敗にしない）。
+///
+/// `surfaces.txt` が無い、または面を 1 つも定義しないときは、面の画像が 1 つ以上在れば画像だけで
+/// 面を組み、そのことと面の数を `info!` で 1 行残す（spec: areka-P0-self-alpha-declaration
+/// 要件 6.1・6.2・7.3）。
 ///
 /// # 記録
 ///
@@ -273,34 +287,72 @@ pub fn load_shell_target(
         );
     }
 
+    // `surfaces.txt` が無い（NotFound）ときは空の定義として続け、面の画像だけで組む（要件 6.1）。
+    // 在るのに読めないときだけ今までどおりの失敗である（要件 6.6）。
     let surfaces_path = shell_dir.join(SURFACES_TXT);
-    let content = std::fs::read(&surfaces_path)
-        .map(|bytes| decode(&bytes, DefaultEncoding::Ansi))
-        .map_err(|source| {
+    let (content, surfaces_txt) = match std::fs::read(&surfaces_path) {
+        Ok(bytes) => (decode(&bytes, DefaultEncoding::Ansi), "empty"),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => (String::new(), "missing"),
+        Err(source) => {
             tracing::error!(
                 path = %surfaces_path.display(),
                 error = %source,
                 "shell: surfaces.txt の読み取りに失敗"
             );
-            ShellLoadError::Read {
-                path: surfaces_path.clone(),
+            return Err(ShellLoadError::Read {
+                path: surfaces_path,
                 source,
-            }
-        })?;
+            });
+        }
+    };
     let shell = areka_parsers::shell::parse(&content);
     let boxes = parse_boxes(&content);
     let undrawn = parse_undrawn_elements(&content);
-    if shell.surfaces.is_empty() {
+    // 面を 1 つも定義しないときは、今の「書かれていない番号を画像から認める」枝
+    // （`EmoWorld::build_with_images`）が面の画像から面を組む（要件 6.2・6.3）。画像も無ければ失敗。
+    let image_only = shell.surfaces.is_empty();
+    if image_only && selection.images.is_empty() {
         tracing::error!(
-            path = %surfaces_path.display(),
-            "shell: surfaces.txt が面を 1 つも産まなかった"
+            shell_dir = %shell_dir.display(),
+            surfaces_txt,
+            "shell: シェルに面が 1 つも無い（surfaces.txt が面を定義せず、面の画像も無い）"
         );
         return Err(ShellLoadError::Empty {
-            path: surfaces_path,
+            path: shell_dir.to_path_buf(),
         });
     }
 
-    let target = build_shell_target_with_boxes(shell, &boxes, selection, shell_dir, decoder);
+    // 透過の宣言は呼ばれるたびに読む（状態を持たないので切り替えで前の宣言を持ち越さない・要件 1.7）。
+    // 昔からのシェルの descript.txt は Shift_JIS が普通なので、UTF-8 として読まず ANSI を既定にする。
+    let descript_path = shell_dir.join(DESCRIPT_TXT);
+    let descript = match std::fs::read(&descript_path) {
+        Ok(bytes) => Some(decode(&bytes, DefaultEncoding::Ansi)),
+        Err(error) => {
+            tracing::warn!(
+                path = %descript_path.display(),
+                error = %error,
+                "shell: descript.txt が読めないので透過の宣言なしとして続ける"
+            );
+            None
+        }
+    };
+    let use_self_alpha = crate::self_alpha::read_use_self_alpha(
+        "shell",
+        "seriko.use_self_alpha",
+        shell_dir,
+        descript.as_deref(),
+    );
+
+    let target =
+        build_shell_target_with_boxes(shell, &boxes, selection, shell_dir, decoder, use_self_alpha);
+
+    if target.ignored_pna != 0 {
+        tracing::warn!(
+            shell_dir = %shell_dir.display(),
+            ignored_pna = target.ignored_pna,
+            "shell: 絵に添えてある .pna を使わずに表示する"
+        );
+    }
 
     for (&surface_id, file) in &target.base_images.shadowed {
         tracing::debug!(
@@ -344,6 +396,14 @@ pub fn load_shell_target(
             "shell: 箱を読んだ（書かれた balloon.*ブレスの数・箱の置き場所を持つサーフェスの数）"
         );
     }
+    if image_only {
+        tracing::info!(
+            shell_dir = %shell_dir.display(),
+            surfaces_txt,
+            surfaces = target.images.len(),
+            "shell: surfaces.txt が面を定義しないので、面の画像だけで面を組んだ（要件 7.3）"
+        );
+    }
     tracing::info!(
         shell_dir = %shell_dir.display(),
         recognized = target.images.len(),
@@ -362,15 +422,22 @@ pub fn load_shell_target(
 /// `elements` を無条件に集めるので、`SurfaceSet`・`ManifestDeriver`・`bake` の変更は要らない。
 /// 使わなかった画像は焼かない（索引表に載らない）。
 ///
-/// 透過の扱いは今までと同じ [`UseSelfAlpha::On`] 固定である（α を持たない絵は焼く段で
-/// 左上の色を抜く腕へ落ちる）。
+/// 透過の扱いは引数 `use_self_alpha`（入口がシェルの descript.txt から読んだ宣言）で決まる。
 pub fn build_shell_target(
     shell: Shell,
     selection: SurfaceImageSelection,
     shell_dir: &Path,
     decoder: &impl ElementDecoder,
+    use_self_alpha: UseSelfAlpha,
 ) -> ShellTarget {
-    build_shell_target_with_boxes(shell, &ShellBoxes::default(), selection, shell_dir, decoder)
+    build_shell_target_with_boxes(
+        shell,
+        &ShellBoxes::default(),
+        selection,
+        shell_dir,
+        decoder,
+        use_self_alpha,
+    )
 }
 
 /// [`build_shell_target`] に箱の転記（[`parse_boxes`] の結果）を足した fs を触らない核。
@@ -385,6 +452,7 @@ pub fn build_shell_target_with_boxes(
     selection: SurfaceImageSelection,
     shell_dir: &Path,
     decoder: &impl ElementDecoder,
+    use_self_alpha: UseSelfAlpha,
 ) -> ShellTarget {
     let images = selection.images;
 
@@ -419,9 +487,7 @@ pub fn build_shell_target_with_boxes(
     let set = SurfaceSet {
         surfaces: &surfaces,
         base_dir: shell_dir,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
+        alpha_params: AlphaParams { use_self_alpha },
     };
     let baked = bake(std::slice::from_ref(&set), decoder, PackConfig::default());
 
@@ -436,6 +502,7 @@ pub fn build_shell_target_with_boxes(
         box_report,
         box_surfaces,
         nest_report,
+        ignored_pna: baked.ignored_pna,
     }
 }
 
@@ -680,6 +747,10 @@ mod nesting_tests;
 #[cfg(test)]
 #[path = "shell_target_animated_fixture_tests.rs"]
 mod animated_fixture_tests;
+
+#[cfg(test)]
+#[path = "shell_target_image_only_tests.rs"]
+mod image_only_tests;
 
 #[cfg(test)]
 #[path = "shell_target_element_base_tests.rs"]
