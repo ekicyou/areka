@@ -26,7 +26,7 @@
   - 完了の姿: 直す前の 3 回の値と中央値・最大、全体テストの所要時間、テストの本数が記録にある
   - _Requirements: 6.5_
 
-- [ ] 1.4 負荷の下で直す前の再現を回して記録する
+- [x] 1.4 負荷の下で直す前の再現を回して記録する
   - 1.2 で書いた引数のとおりに `-Label before` で回す
   - 回ごとの赤のテストの名前・失敗の文言・その時に待っていた部品と締切・後片付けの os error 5 の行と、その回の赤との関わりを表にする
   - 赤が 0 件なら、何を試して 0 件だったかを書く
@@ -162,3 +162,4 @@
 - 1.1: libtest は成功したテストの `eprintln!` を捨てるので、`sample-ghost-kit:` の後片付けの失敗の行（`devroot.rs` の `report_cleanup`）と `待ちの打ち切り` の行は、赤のテストの分しか `round-N.log` に残らない。成功したテストの os error 5 を数えるには `--nocapture` が要る（1.2・1.4・4.4 で扱いを決める）
 - 1.2: 再現は `-NoCapture` つきで回す（1.1 の注のとおり）。fallback の `run_input_until` と lap の `LapRig::frames_until` は条件の中で足場を可変で借りるので、`wait_for(&self)` でなく先に `progress_probe()` を取ってから `wait_until(…, Progress::Count(&probe), …)` へ移す（4.3）。`frame/switch_tests.rs` の 5 秒の `yield_now` だけの待ちは要件 2.5 に反する形だが、`frame/` は同じウェーブの他の spec の持ち物なので設計どおり条件つき（5.4）
 - 1.3: 測る順は「静かさの確かめ → 先にビルド（i686 と `cargo test --workspace --no-run -j 4`）→ 本数 → 負荷なし 3 回 → 全体テスト」で、6.1 も同じ順にする（全体テストの時間にコンパイルを入れない）。`tools/perf/check-quiet.ps1` は重いプロセスが 0 件のとき `@()` が `$null` に化けて落ちていたので 1 行の守りを足した（`d6d77336`）。main から入った文字コードの検査（tools の字句は ASCII だけ）で `tools/load-flake.ps1` が赤になり、`summary.txt` の項目名を英数字にした（`0c046e92`）。`--nocapture` では後片付けの行が他のテストの出力に割り込まれ、行の頭で数える `summary.txt` の数が少なく出る（4.4 で数え方を決める）
+- 1.4: 直す前の負荷の再現は 5 回とも赤（12/9/5/37/18＝81 件・52 種類）。81 件のうち 80 件は待ちの締切で、足場の待ち（降ろす `shutdown` 20 秒・`pump_talking_until` など）が 67 件。1.2 の 2.1 の表は `shutdown` を数えていなかったので、降ろす待ちだけで赤になったファイル（`ghost_session_strict_tests.rs`・`install/desk_record_tests.rs`・`install/names_tests.rs`・`spine_text_scale_tests.rs`）と `spine_conformance_lap_tests.rs` が表に無い（足場の直しで替わるか 5.4 で見る）。対象の族の外の赤は GPU の足場（`GpuRig::frames_until`）4 件・spine の自前の待ち 5 件。待ちでない赤は `desk_overwrite_tests.rs:379` の 1 件（答えが `Ran(Ok)` でない・5.3）。赤の文言にファイルの拒否は 0 件で、os error 5 の行は赤の後にしか出ていない（4.4）

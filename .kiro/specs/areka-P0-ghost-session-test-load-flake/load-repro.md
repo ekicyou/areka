@@ -252,7 +252,272 @@ Windows は、中のファイルが開かれているフォルダの `rename` �
 
 ## 3. 直す前の記録
 
-タスク 1.4 で書く（`-Label before` の回ごとの赤・文言・待っていた部品と締切・後片付けの行と赤との関わり）。
+記録 `target\load-flake\before-20261008-001257\`（`conditions.txt`・`build.log`・`round-1.log`〜`round-5.log`・`summary.txt`）。上の「1. 手順」のコマンドのとおり `-Label before -Rounds 5 -Burners 44 -RoundTimeoutMin 30 -NoCapture` で回した。
+
+### 3.1 条件
+
+| 項目 | 値（`conditions.txt`・`summary.txt`） |
+|---|---|
+| コミット | `d6d77336`（未コミットの変更なし）。Rust のコードは今の `HEAD` と同じ（`d6d77336` からの差分は spec の文書と `tools/load-flake.ps1` だけ） |
+| 回したもの | `cargo test -p areka --bin areka -- --nocapture`（2,802 本・無視 2 本） |
+| 時刻 | 2026-10-08 00:12:57〜00:56:56 |
+| 論理 CPU・負荷の子 | 22・44 本（止めた後の残り 0） |
+| 負荷の前の CPU | 平均 2.5%・最大 5.2%（5 回の読み） |
+| 負荷の最中の CPU | 平均 91.0%・最大 92.6%（5 回の読み） |
+
+### 3.2 回ごとのまとめ
+
+| 回 | 所要時間（`wall_sec`） | うち cargo の準備（ログの 1 行目の `Finished … in`） | libtest の時間（`finished in`） | 結果 | 赤 | libtest の「60 秒を越えて走っている」の知らせ |
+|---|---|---|---|---|---|---|
+| 1 | 297.8 | 4.81 秒 | 251.83 秒 | 2,788 通過・12 失敗・2 無視 | 12 | 20 行 |
+| 2 | 819.2 | 8 分 15 秒 | 265.37 秒 | 2,791 通過・9 失敗・2 無視 | 9 | 14 行 |
+| 3 | 251.8 | 2.69 秒 | 219.87 秒 | 2,795 通過・5 失敗・2 無視 | 5 | 3 行 |
+| 4 | 666 | 10.67 秒 | 510.33 秒 | 2,763 通過・37 失敗・2 無視 | 37 | 53 行 |
+| 5 | 576.5 | 9.12 秒 | 461.53 秒 | 2,782 通過・18 失敗・2 無視 | 18 | 42 行 |
+| **計** | 中央値 576.5・最大 819.2 | | 中央値 265.37・最大 510.33 | 5 回とも赤 | **81** | 132 行 |
+
+- 5 回とも上限（30 分）を越えず、どの回も `test result:` の行まで出て終わった（果てしなく終わらない回は無い）。
+- `summary.txt` の `wait_cut_lines`（待ちの打ち切りの行）は 5 回とも 0。上の「読み方の注意」のとおり、直す前の待ちの部品は文言を出さないので 0 が正しい。待っていた部品と締切は、下の 3.3・3.4 で `panicked at` の場所から引いた。
+- 赤のテストの名前は、各回の末尾の `failures:` の一覧と `summary.txt` の一覧が一致する（12・9・5・37・18）。赤の 81 件は、どれも `thread '赤のテストの名前' panicked at …` の行がちょうど 1 つある（スレッドの名前で引いた）。
+- 2 回目の 819.2 秒のうち、cargo がテストを始める前に 8 分 15 秒かかっている（ログの 1 行目が ``Finished `test` profile … in 8m 15s``。`Compiling` の行は無い）。回ごとの所要時間を比べるときは libtest の時間を見る。
+
+### 3.3 待ちの部品の索引
+
+下の表の記号で、3.4・3.5 の「待ち」を書く。定義は 2.1 の表と同じ。
+
+| 記号 | 待ちの部品 | 締切 | 打ち切られたときの形 |
+|---|---|---|---|
+| A | `SwitchRig::shutdown`（`ghost_switch_test_support.rs`） | `run_bounded` の 20 秒 | `spine.rs:573` の `assert!` が `'置き場のゴーストを降ろす' did not complete within 20s (possible hang)` で落ちる |
+| B | `SpineHarness::shutdown_bounded`（`spine.rs`） | `run_bounded` の 10 秒 | 同じ場所が `'spine ghost shutdown' did not complete within 10s (possible hang)` で落ちる |
+| C | `ghost_session_restart_tests.rs` の自前の `shutdown_bounded` | `run_bounded` の 20 秒 | 同じ場所が `'1 周目を降ろす' did not complete within 20s (possible hang)` で落ちる |
+| D | `SwitchRig::pump_talking_until` | `spin_wait_until` の 30 秒（`SPIN_WAIT`） | `false` を返すだけ。呼び手の確かめが落ちる |
+| E | `SwitchRig::pump_until` | 同上 | 同上 |
+| F | `SwitchRig::wait_steady` | `recv_timeout` の 20 秒 | `false` を返すだけ（20 秒届かないときと、先に別の知らせが届いたときの両方） |
+| G | `LapRig::frames_until`（`shell_balloon_switch_session_lap_tests.rs`・合成の Tick を注入） | `spin_wait_until` の 30 秒 | `false` を返すだけ |
+| H | `GpuRig::frames_until`（`mcp/dump_surface_gpu_test_support.rs`・合成の Tick を注入） | `spin_wait_until` の 30 秒 | `false` を返すだけ |
+| I | `spin_wait_until` の直接の呼び出し | 30 秒 | `false` を返すだけ |
+| J | spine の族の自前の締切（`Instant::now() + SPIN_WAIT`・駆動器の `clock() + SPIN_WAIT`） | 30 秒 | 自前の文言で落ちる |
+| K | 待ちではない（待ちは届き、その後の確かめが食い違った） | — | — |
+
+### 3.4 `panicked at` の場所ごとの読み（34 か所）
+
+「偽になった値」は、`assert_eq!` の `left` と `right` を見比べて食い違った値。待ちの返り値が `false` だった値を書き、それに続いて食い違った値（待ちが届かなかったので、その後の状態がまだ来ていない値）は「続いて」として添える。
+
+| # | `panicked at` | 赤の数（回） | 文言の要点 | 偽になった値と待ち |
+|---|---|---|---|---|
+| 1 | `emo2_boot\spine.rs:573:5`（`run_bounded` の `assert!`） | 24（回 3・4・5） | `'置き場のゴーストを降ろす' … within 20s` 20 件・`'spine ghost shutdown' … within 10s` 3 件・`'1 周目を降ろす' … within 20s` 1 件 | 降ろしの待ちそのものの打ち切り。文言で A 20・B 3・C 1 に分かれ、呼び手はスレッドの名前で読む。降ろしは確かめの `assert_eq!` より前に呼ぶ作りなので、それより前の待ちが届いていたかはこの記録からは分からない |
+| 2 | `ghost_session_switch_fallback_tests.rs:153:5` | 3（回 1・2・4） | `切替先の失敗で既定ゴーストへ戻らない（…）` | 「既定の定常まで届いた」（`pump_to_welcomed`＝D）。続いて、既定の呼出列が空・予約が残る・今のゴーストが B・切替先の失敗の記録 0 件。3 回とも同じ形 |
+| 3 | `ghost_session_switch_fallback_tests.rs:219:5` | 2（回 4・5） | `既定ゴーストの無い根で致命にならない（…）` | 「終了の指示」（`pump_talking_until(exit_requested)`＝D）。続いて、最初の出所が無い・予約が残る・切替先の失敗と致命の記録 0 件 |
+| 4 | `ghost_session_switch_fallback_tests.rs:275:5` | 2（回 1・4） | `既定ゴーストの失敗が今日の失敗の経路で終わらない（…）` | 「終了の指示」（D）。回 1 は切替で起こした数 2（既定まで起きた）、回 4 は 1 |
+| 5 | `ghost_session_switch_fallback_tests.rs:434:5` | 3（回 1・4・5） | `同期の失敗で既定の窓だけにならない（…）` | 「既定の定常まで届いた」（`pump_to_default_steady`＝E）。回 1・4 は続いて既定の `OnBoot` がまだ無い |
+| 6 | `ghost_session_switch_fallback_tests.rs:501:5` | 2（回 1・4） | `切替先の閉包が着く前の失敗で孤児の窓が生えた（…）` | 「既定の定常まで届いた」（E）。回 4 はその前の「A の定常」（F）も偽 |
+| 7 | `ghost_session_switch_tests.rs:328:5` | 1（回 4） | `1 周が通らない（…）` | 「B の定常まで届いた」（`pump_to_welcomed`＝D）。続いて予約が残る |
+| 8 | `ghost_session_switch_tests.rs:414:5` | 3（回 2・4・5） | `起動記録の無い B の起動の根が OnFirstBoot でない（…）` | 「B の定常まで届いた」（D）・続いて予約が残る。回 2・4 は B の呼出列が空、回 5 は B の起動の系列（`OnFirstBoot` まで）は届いていた |
+| 9 | `ghost_session_switch_memory_tests.rs:296:5` | 1（回 4） | `既定へ戻す間と既定の定常のあとの記憶が崩れた（…）` | 「戻しの間」に届いた（`pump_to_welcoming`＝D） |
+| 10 | `ghost_session_switch_memory_tests.rs:327:5` | 1（回 4） | `致命のあとの記憶が崩れた（…）` | 「終了の指示」（D）。続いて後始末の判定が `no_exit_origin` |
+| 11 | `emo2_boot\frame_ghost_quit_switch_tests.rs:146:5` | 1（回 2） | `(A の定常・受理・再生の完了を届けた・予約が消えた・…)` | 「予約が消えた」（`SwitchRig::pump_until`＝E）。続いて切替の完了の記録 0 件 |
+| 12 | `emo2_boot\ghost_switch_balloon_tests.rs:65:5` | 1（回 2） | `assert_eq!(flow, (Accepted, true))`（文言は捕まえた記録） | `flow` の 2 つ目（`switch_to_b` の中の `pump_talking_until`＝D） |
+| 13 | `emo2_boot\ghost_switch_boot_event_tests.rs:191:5` | 1（回 2） | 同じ形 | `flow` の 2 つ目（`switch_to_a` の中の `pump_talking_until`＝D） |
+| 14 | `emo2_boot\ghost_switch_boot_event_tests.rs:62:5` | 2（回 4） | `A が定常に着く` | `running_a` の `wait_steady`（F） |
+| 15 | `shell_balloon_switch_session_tests.rs:97:5` | 1（回 4） | `(定常, 判定, 届いたか, OnShellChanging の Reference, 降ろせた)` | 「定常」（F）と「届いたか」（92 行目の `spin_wait_until` の直接の呼び出し＝I） |
+| 16 | `shell_balloon_switch_session_lap_tests.rs:637:5` | 1（回 4） | `((定常, 台詞が始まった, 受理, …), …)` | 「定常」（F）と「台詞が始まった」（`frames_until(CREEP)`＝G）。その後の待ちは届いた |
+| 17 | `shell_balloon_switch_session_balloon_tests.rs:275:5` | 4（回 1・2・4・5） | `((定常, 往復が終わった, 起動の回数, 呼出列), …)` | 「往復が終わった」（`frames_until(CREEP)`＝G）。4 回とも、2 つ目のバルーン（`emo2-kakukaku` へ戻る側）の記録が欠けた同じ形 |
+| 18 | `shell_balloon_switch_session_abort_tests.rs:427:5` | 2（回 1・5） | `(…, (ゴースト切替の判定, B が迎え入れられシェル切替の印も無い), …)` | 「B が迎え入れられ…」（`frames_until(UNBOUNDED)`＝G） |
+| 19 | `shell_balloon_switch_session_abort_tests.rs:493:5` | 2（回 1・5） | `((定常, 差し替わった, B が迎え入れられた), …)` | 「B が迎え入れられた」（`frames_until(UNBOUNDED)`＝G） |
+| 20 | `shell_balloon_switch_session_update_tests.rs:132:5` | 1（回 4） | `((定常, 差し替わった), …)` | 「差し替わった」（`swap_both`＝`frames_until(UNBOUNDED)`＝G） |
+| 21 | `shell_balloon_switch_session_update_tests.rs:218:5` | 1（回 4） | `((定常, 差し替わった, 読み直しが終わった), …)` | 「定常」（`steady_rig` の `wait_steady`＝F）と「差し替わった」（G）。読み直しは届いた |
+| 22 | `install\desk_overwrite_tests.rs:110:5` | 1（回 1） | `依頼が終わる（期限切れ）: [捕まえた記録]` | `finished`（`pump_talking_until`＝D） |
+| 23 | `install\desk_overwrite_tests.rs:368:5` | 1（回 2） | `(予約の間は待つ・下りた tick に頼み直す・頼んだ切替先・途中の要求・一周した): …` | 「一周した」（`pump_talking_until`＝D） |
+| 24 | `install\desk_overwrite_tests.rs:379:5` | 1（回 3） | `展開した結果が返る` | K。368 行の確かめは通っている（`pump_talking_until` は届き、答えも返った）が、返った答えが `Overwritten::Ran(Ok(_))` でない。文言に答えの中身が出ないので、`Ran(Err(_))`・`NotRunning`・`Closed` のどれだったかはこの記録からは分からない |
+| 25 | `install\desk_overwrite_tests.rs:590:5` | 2（回 1・5） | `依頼が終わり、終了しない: [捕まえた記録]`（`assert!(finished && !exited)`） | どちらが偽かは文言に出ない。捕まえた記録に終了の指示の記録（`app_exit`）が無いので、`finished`（`install_through` の中の `pump_talking_until`＝D）が偽と読む |
+| 26 | `update\desk_reload_tests.rs:545:5` | 2（回 2・3） | `既定ゴーストへ戻る: [捕まえた記録]`（`assert!(welcomed && !exited)`） | 同じ読みで `welcomed`（`pump_talking_until`＝D）。記録には切替先の失敗（`ghost_switch_target_fault`）と `ghost_switch_booted` 2 件まで載っている |
+| 27 | `mcp\dump_surface_tests.rs:432:5` | 4（回 1・2・3・5） | `（その場の答え, A の定常, B の定常まで届いた, …）` | 「B の定常まで届いた」（`pump_talking_until`＝D）。回 5 はその前の「A の定常」（F）も偽 |
+| 28 | `mcp\dump_surface_tests.rs:528:5` | 2（回 1・5） | `（A の定常, B の定常まで届いた, …）` | 「B の定常まで届いた」（D）。回 5 は「A の定常」（F）も偽 |
+| 29 | `mcp\dump_balloon_gpu_tests.rs:312:5` | 2（回 1・4） | `（字が現れ切った, 隠す前の可視, 隠れた, …）` | 「隠れた」（`GpuRig::frames_until`＝H） |
+| 30 | `mcp\dump_balloon_gpu_tests.rs:261:5` | 1（回 5） | `（96 の事実, 144 の事実, 96 の大きさ, 144 の大きさ）` | DPI 96 の回の「話し終えた」（`speak`＝`GpuRig::frames_until`＝H） |
+| 31 | `mcp\dump_surface_gpu_tests.rs:50:18` | 1（回 5） | `本文＋画像 1 枚の形ではない: [Text("NG:No surface has been shown in this scope yet")]` | 待ちの返り値 `shown`（`GpuRig::frames_until`＝H）は確かめずに先へ進む作り。答えが「面がまだ出ていない」なので、H が届かないまま打ち切られたと読む |
+| 32 | `emo2_boot\spine_hold_tests.rs:38:5` | 2（回 4） | `Get("OnBoot")`／`Notify("OnClose")`: `the call should be holding until unblocked` | 39 行目の `spin_wait_until(\|\| handle.holding())`（I）。固まる側のスレッドはその後 30 秒解かれずに落ちた（下の 3.7 の「赤でない `panicked at` の行」） |
+| 33 | `emo2_boot\spine_seriko_loop_tests.rs:214:5` | 2（回 4） | `OnBoot talk が scope0 shell surface 1000（require_bind=…）を有界内に表示しない（…）` | `drive_shell_shown` の自前の締切（`Instant::now() + SPIN_WAIT`・Tick を注入して 200 µs ずつ休む）（J） |
+| 34 | `emo2_boot\spine_conformance_lap_tests.rs:389:25` | 1（回 4） | `段「撫で」の完了条件が有界時間内に成立しない（注入 [28000, …]・採取 0 件・注入時刻 28000ms）` | 駆動器の自前の締切（`spine_conformance_support.rs` の `clock() + SPIN_WAIT`）（J）。注入の列は同じ 28000 ms が 8,446 個 |
+
+### 3.5 回ごとの赤
+
+「行」は `round-N.log` の `panicked at` の行。「作業フォルダ」は、赤の文言（`panicked at` の行から `stack backtrace:` まで）に出た `target\nar-samples\work\<番号>-<連番>`（そのテストが使った複製）と、同じ木を指す後片付けの失敗の行。文言にパスが出ないテストは照合できない（「出ない」）。
+
+#### 1 回目（`round-1.log`・赤 12）
+
+| テスト | 場所 | 待ち | 行 | 作業フォルダと後片付けの行 |
+|---|---|---|---|---|
+| `ghost_session::switch_tests::fallback_tests::target_connect_fail_boots_default_with_halt_and_no_alert` | 2 | D | 1408 | `27912-100`・1430 行の「残骸の退避」（赤の後） |
+| `ghost_session::shell_balloon_switch_session_balloon_tests::script_balloon_switch_round_trips_and_binds_the_next_talk_to_the_new_slot` | 17 | G | 1554 | `27912-70`・無し |
+| `ghost_session::switch_tests::fallback_tests::async_target_fault_before_window_closure_leaves_only_default_windows` | 6 | E | 1587 | `27912-96`・1623 行（赤の後） |
+| `ghost_session::switch_tests::fallback_tests::default_ghost_fault_after_fallback_exits_through_shiori_fault_path` | 4 | D | 1641 | `27912-97`・1679・1703〜1706 行の 5 行（赤の後） |
+| `mcp::dump_balloon::dump_balloon_gpu_tests::hidden_balloon_returns_the_same_pixels` | 29 | H | 1775 | 出ない |
+| `install::desk::overwrite_tests::overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again` | 22 | D | 1804 | `27912-123`・無し |
+| `ghost_session::switch_tests::fallback_tests::sync_target_boot_failure_leaves_only_default_windows` | 5 | E | 1821 | `27912-95`・無し |
+| `ghost_session::shell_balloon_switch_session_abort_tests::ghost_switch_while_waiting_wins_and_leaves_no_shell_switch_behind` | 18 | G | 1872 | 出ない |
+| `ghost_session::shell_balloon_switch_session_abort_tests::ghost_switch_after_a_shell_swap_unloads_the_session` | 19 | G | 1952 | 出ない |
+| `install::desk::overwrite_tests::an_overwritten_ghost_that_cannot_boot_falls_back_to_the_default_ghost` | 25 | D（読み） | 1982 | `27912-122`・無し |
+| `mcp::dump_surface::dump_surface_tests::switch_after_the_copy_still_answers_the_copied_picture` | 28 | D | 3270 | 出ない |
+| `mcp::dump_surface::dump_surface_tests::switch_to_another_ghost_answers_not_active_without_mcp_errors` | 27 | D | 3298 | 出ない |
+
+#### 2 回目（`round-2.log`・赤 9）
+
+| テスト | 場所 | 待ち | 行 | 作業フォルダと後片付けの行 |
+|---|---|---|---|---|
+| `emo2_boot::frame::ghost_quit_switch_tests::stop_with_handoff_under_reservation_switches_without_exit` | 11 | E | 925 | `34296-9`・948・951 行（赤の後） |
+| `emo2_boot::ghost_switch::balloon_tests::switching_to_a_ghost_whose_descript_names_a_balloon_uses_it_and_records_the_descript_route` | 12 | D | 975 | `34296-11`・1000 行（赤の後） |
+| `emo2_boot::ghost_switch::boot_event_tests::a_boot_event_is_not_delivered_to_the_default_ghost_when_the_target_fails` | 13 | D | 1018 | `34296-13`・1043・1045 行（赤の後） |
+| `ghost_session::switch_tests::fallback_tests::target_connect_fail_boots_default_with_halt_and_no_alert` | 2 | D | 1516 | `34296-109`・1563・1620・1621・1634 行（赤の後） |
+| `ghost_session::shell_balloon_switch_session_balloon_tests::script_balloon_switch_round_trips_and_binds_the_next_talk_to_the_new_slot` | 17 | G | 1541 | `34296-77`・1564・1625・1627・1635 行（赤の後） |
+| `ghost_session::switch_tests::switch_to_b_without_boot_record_sends_first_boot_not_ghost_changed` | 8 | D | 1995 | 出ない |
+| `install::desk::overwrite_tests::a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through` | 23 | D | 2295 | `34296-158`・2468 行（赤の後） |
+| `mcp::dump_surface::dump_surface_tests::switch_to_another_ghost_answers_not_active_without_mcp_errors` | 27 | D | 3251 | 出ない |
+| `update::desk::reload_tests::a_failed_reload_switch_drops_the_remembered_folder_and_the_tail` | 26 | D（読み） | 3293 | `34296-281`・無し |
+
+#### 3 回目（`round-3.log`・赤 5）
+
+| テスト | 場所 | 待ち | 行 | 作業フォルダと後片付けの行 |
+|---|---|---|---|---|
+| `emo2_boot::spine::boot_smoke_tests::spine_preview_reaches_text_layer_through_production_chain` | 1 | B | 770 | 出ない |
+| `emo2_boot::spine::conformance_support::driver_tests::kanade_tick_raises_one_second_change_where_the_waiting_injection_raises_none` | 1 | B | 791 | 出ない |
+| `install::desk::overwrite_tests::a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through` | 24 | K | 1357 | 出ない |
+| `mcp::dump_surface::dump_surface_tests::switch_to_another_ghost_answers_not_active_without_mcp_errors` | 27 | D | 3114 | 出ない |
+| `update::desk::reload_tests::a_failed_reload_switch_drops_the_remembered_folder_and_the_tail` | 26 | D（読み） | 3148 | `32492-260`・無し |
+
+#### 4 回目（`round-4.log`・赤 37）
+
+| テスト | 場所 | 待ち | 行 | 作業フォルダと後片付けの行 |
+|---|---|---|---|---|
+| `emo2_boot::ghost_switch::boot_event_tests::a_boot_event_is_not_delivered_to_the_default_ghost_when_the_target_fails` | 1 | A | 762 | 出ない |
+| `emo2_boot::spine::conformance_lap_tests::conformance_lap_walks_every_stage_to_its_completion` | 34 | J | 790 | 出ない |
+| `emo2_boot::ghost_switch::boot_event_tests::a_switch_without_a_boot_event_boots_the_target_with_on_ghost_changed_as_today` | 14 | F | 812 | 出ない |
+| `emo2_boot::ghost_switch::boot_event_tests::a_switch_with_a_boot_event_boots_the_target_with_that_event_instead_of_changed_or_boot` | 14 | F | 831 | 出ない |
+| `emo2_boot::spine::hold_support::tests::held_get_waits_until_unblocked_then_times_out` | 32 | I | 850 | 出ない |
+| `emo2_boot::spine::hold_support::tests::held_notify_waits_until_unblocked_then_times_out` | 32 | I | 869 | 出ない |
+| `emo2_boot::frame::ghost_quit_switch_tests::stop_with_handoff_under_reservation_switches_without_exit` | 1 | A | 892 | 出ない |
+| `ghost_session::shell_balloon_switch_session_tests::session_holding_seriko_sink_shuts_down_within_bound` | 1 | A | 1151 | 出ない |
+| `ghost_session::restart_tests::boots_twice_in_one_process_without_double_registration` | 1 | C | 1172 | 出ない |
+| `ghost_session::strict_tests::logsink_arm_sets_fallback_flag_and_uses_wiring_app_dir` | 1 | A | 1193 | 出ない |
+| `ghost_session::shell_balloon_switch_session_abort_tests::ghost_switch_while_waiting_wins_and_leaves_no_shell_switch_behind` | 1 | A | 1215 | 出ない |
+| `ghost_session::shell_balloon_switch_session_tests::menu_balloon_frame_marks_the_current_balloon_and_selecting_requests_a_switch` | 1 | A | 1236 | 出ない |
+| `ghost_session::shell_balloon_switch_session_tests::menu_shell_frame_marks_the_mounted_shell_and_selecting_requests_a_switch` | 1 | A | 1257 | 出ない |
+| `emo2_boot::spine::text_scale_tests::text_scale_phase_syncs_boxes_on_the_shell_window` | 1 | B | 1278 | 出ない |
+| `emo2_boot::spine::seriko_loop_tests::spine_e2e_sakura_blink_after_bind_one_cycle_golden` | 33 | J | 1299 | 出ない |
+| `emo2_boot::spine::seriko_loop_tests::spine_e2e_sakura_blink_default_off_emits_nothing` | 33 | J | 1318 | 出ない |
+| `ghost_session::shell_balloon_switch_session_lap_tests::script_shell_switch_round_trips_with_raise_event` | 1 | A | 1351 | 出ない |
+| `ghost_session::boot_shell_tests::missing_remembered_shell_boots_default_and_rewrites_memory` | 1 | A | 1372 | 出ない |
+| `ghost_session::boot_shell_tests::remembered_hidden_shell_reaches_all_resolutions_decided_once` | 1 | A | 1406 | 出ない |
+| `ghost_session::shell_balloon_switch_session_tests::menu_shell_request_raises_on_shell_changing_with_the_current_shell_as_ref1` | 15 | F・I | 1427 | `35832-120`・無し |
+| `ghost_session::shell_balloon_switch_session_lap_tests::plain_script_shell_switch_skips_changing_and_waits_for_the_script_end` | 16 | F・G | 1450 | `35832-104`・1478〜1483 行の 6 行（赤の後） |
+| `ghost_session::shell_balloon_switch_session_update_tests::a_reload_after_the_swaps_boots_with_the_remembered_shell_and_balloon` | 21 | F・G | 1486 | `35832-114`・無し |
+| `ghost_session::shell_balloon_switch_session_abort_tests::ghost_switch_after_a_shell_swap_unloads_the_session` | 1 | A | 1511 | 出ない |
+| `ghost_session::shell_balloon_switch_session_update_tests::update_targets_follow_the_swapped_shell_and_balloon` | 20 | G | 1537 | `35832-116`・無し |
+| `ghost_session::switch_tests::rig_boots_a_and_records_its_boot_sequence` | 1 | A | 1560 | 出ない |
+| `ghost_session::switch_tests::switch_to_b_without_boot_record_sends_first_boot_not_ghost_changed` | 8 | D | 1583 | 出ない |
+| `ghost_session::switch_tests::fallback_tests::async_target_fault_before_window_closure_leaves_only_default_windows` | 6 | F・E | 1616 | `35832-126`・無し |
+| `ghost_session::switch_tests::script_change_tag_switches_a_to_b_and_reaches_steady` | 7 | D | 1652 | `35832-142`・無し |
+| `ghost_session::shell_balloon_switch_session_balloon_tests::script_balloon_switch_round_trips_and_binds_the_next_talk_to_the_new_slot` | 17 | G | 1732 | `35832-110`・無し |
+| `ghost_session::switch_tests::fallback_tests::target_fault_without_default_ghost_is_fatal` | 3 | D | 1912 | `35832-131`・無し |
+| `ghost_session::switch_tests::fallback_tests::target_connect_fail_boots_default_with_halt_and_no_alert` | 2 | D | 1935 | `35832-133`・2031〜2033 行（赤の後） |
+| `ghost_session::switch_tests::memory_tests::switch_fatal_leaves_default_last_ghost_and_target_mark` | 10 | D | 1958 | 出ない |
+| `ghost_session::switch_tests::fallback_tests::default_ghost_fault_after_fallback_exits_through_shiori_fault_path` | 4 | D | 1983 | `35832-127`・2029・2030 行（赤の後） |
+| `ghost_session::switch_tests::fallback_tests::sync_target_boot_failure_leaves_only_default_windows` | 5 | E | 2007 | `35832-128`・2050〜2052 行（赤の後） |
+| `ghost_session::switch_tests::memory_tests::default_fallback_keeps_target_mark_until_default_steady` | 9 | D | 2159 | 出ない |
+| `install::desk::record_tests::several_ghosts_leave_the_last_in_last_installed` | 1 | A | 2623 | 出ない |
+| `mcp::dump_balloon::dump_balloon_gpu_tests::hidden_balloon_returns_the_same_pixels` | 29 | H | 2728 | 出ない |
+
+#### 5 回目（`round-5.log`・赤 18）
+
+| テスト | 場所 | 待ち | 行 | 作業フォルダと後片付けの行 |
+|---|---|---|---|---|
+| `emo2_boot::frame::ghost_quit_switch_tests::stop_with_handoff_under_reservation_switches_without_exit` | 1 | A | 576 | 出ない |
+| `ghost_session::shell_balloon_switch_session_lap_tests::plain_script_shell_switch_skips_changing_and_waits_for_the_script_end` | 1 | A | 1263 | 出ない |
+| `ghost_session::switch_translate_tests::switch_sends_each_on_translate_to_its_own_ghost` | 1 | A | 1284 | 出ない |
+| `emo2_boot::ghost_switch::boot_event_tests::a_boot_event_is_not_delivered_to_the_default_ghost_when_the_target_fails` | 1 | A | 1312 | 出ない |
+| `install::desk::record_tests::a_balloon_only_install_rewrites_the_running_ghosts_balloon_memory` | 1 | A | 1338 | 出ない |
+| `ghost_session::shell_balloon_switch_session_abort_tests::ghost_switch_while_waiting_wins_and_leaves_no_shell_switch_behind` | 18 | G | 1359 | 出ない |
+| `install::desk::overwrite_tests::an_overwritten_ghost_that_cannot_boot_falls_back_to_the_default_ghost` | 25 | D（読み） | 1411 | `27624-144`・無し |
+| `ghost_session::switch_tests::switch_to_b_without_boot_record_sends_first_boot_not_ghost_changed` | 8 | D | 1576 | 出ない |
+| `ghost_session::shell_balloon_switch_session_balloon_tests::script_balloon_switch_round_trips_and_binds_the_next_talk_to_the_new_slot` | 17 | G | 1615 | `27624-89`・1639・1643 行（赤の後） |
+| `ghost_session::switch_tests::fallback_tests::target_fault_without_default_ghost_is_fatal` | 3 | D | 1747 | `27624-123`・1833 行（赤の後） |
+| `ghost_session::shell_balloon_switch_session_abort_tests::ghost_switch_after_a_shell_swap_unloads_the_session` | 19 | G | 1885 | 出ない |
+| `ghost_session::switch_tests::fallback_tests::sync_target_boot_failure_leaves_only_default_windows` | 5 | E | 1970 | `27624-118`・無し |
+| `install::names::tests::reboot_reseeds_the_values_into_the_new_ghost` | 1 | A | 2041 | 出ない |
+| `mcp::mcp_tests::real_unit_resolves_by_sakura_name_and_ascii_case` | 1 | A | 2062 | 出ない |
+| `mcp::dump_surface::dump_surface_gpu_tests::shown_surface_matches_the_composed_pixels_at_native_size` | 31 | H（読み） | 2103 | 出ない |
+| `mcp::dump_surface::dump_surface_tests::switch_after_the_copy_still_answers_the_copied_picture` | 28 | F・D | 2928 | 出ない |
+| `mcp::dump_surface::dump_surface_tests::switch_to_another_ghost_answers_not_active_without_mcp_errors` | 27 | F・D | 3027 | 出ない |
+| `mcp::dump_balloon::dump_balloon_gpu_tests::balloon_at_dpi_144_keeps_native_size_and_text_position` | 30 | H | 3480 | 出ない |
+
+### 3.6 後片付けの失敗の行（os error 5）
+
+数え方は 5.4 と同じく 2 通りを並べる。「`summary.txt` の数」は道具のそのままの値（行の頭が `sample-ghost-kit:` で、同じ行に `os error 5` がある行）。「戻して読んだ数」は、ファイルの中の `（次の走行で回収する）`（`report_cleanup` の文の決まった部分）を 1 行 1 件として数え、os error 5 は `アクセスが拒否されました`（os error 5 の文）の数で数えた。どの回も 2 つの数は一致し、他の理由の失敗（別の os error の番号）は 0 件。
+
+| 回 | 行（`summary.txt`） | うち os error 5（`summary.txt`） | 行（戻して読んだ） | うち os error 5（戻して読んだ） | 残骸の退避 | 退避した残骸の削除 | 作業フォルダの後始末 | 生存の札の後始末 |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 45 | 45 | 45 | 45 | 45 | 0 | 0 | 0 |
+| 2 | 94 | 93 | 94 | 94 | 93 | 0 | 0 | 1（`34296-96.lock`） |
+| 3 | 63 | 63 | 64 | 64 | 62 | 1（`gc-32492-167`） | 0 | 1（`32492-188.lock`） |
+| 4 | 70 | 68 | 70 | 70 | 69 | 0 | 1（`35832-24`） | 0 |
+| 5 | 76 | 75 | 76 | 76 | 75 | 1（`gc-27624-109`） | 0 | 0 |
+| **計** | **348** | **344** | **349** | **349** | **344** | **2** | **1** | **2** |
+
+- 漏れの形（5.4 と同じく、他のテストの出力が行の途中に割り込む）。2 回目の 1041 行は行の頭の後に他のテストの名前、種類の名前の途中にその `ok` が入り（`残骸の退避okに失敗した`）、`(アクセスが拒否されました。 (os error 5))` が次の行にある。3 回目は 1514 行で行の頭がテストの名前の後ろに来て、本文が 1516 行にある。4 回目は 1127 行で文の途中に他のテストの `test … ok` が入り、`(os error` と `5))` が行をまたいで分かれている。2024 行は行の頭の直後に失敗の積み上げ（`stack backtrace`）の行が入って本文が 2029 行にある。5 回目の 1753 行は種類の名前の途中に積み上げの行が入り、`(アクセスが拒否されました。 (os error 5))` が次の行にある（パスの番号も混ざって読めない）。
+- 指す木: どの回も、パスの番号はその回のテストのプロセスの番号だけ（27912・34296・32492・35832・27624）。前のプロセスの残りを指す行（2.4 の組 D）は無い。`work\gc-…` を指す「残骸の退避」の行は 0 で、`gc-` を指すのは「退避した残骸の削除」の 2 行だけ。「残骸の退避」344 行はどれも `work\<番号>-<連番>` を指す。同じ木を何度も指す（別々のテストの掃除が同じ木の退避に続けて失敗する）ことが多く、指した木（札を含む）の数は 30・45・36・29・41。木の連番は 1 回のうちに 212〜281 まで進んでいる。
+- 静かな机（5.4）は 3 回で 633 行（戻して読んだ数で 1 回 191〜222 行）だったのに対し、負荷の下は 1 回 45〜94 行で、負荷の下の方が少ない。
+
+赤との関わり（調べ方と結果）:
+
+- 赤の文言が os error 5 やファイルの読み書きの失敗であるものは 0 件。赤 81 件の文言（`panicked at` の行から `stack backtrace:` まで）に `os error`・`アクセスが拒否`・`Access`・`denied` の語は 1 つも無い。ただし場所 24（`desk_overwrite_tests.rs:379`）は答えの中身が文言に出ないので、展開の失敗だったかどうかは文言からは分からない。
+- 同じ木: 赤の文言に自分の作業フォルダのパスが出たのは 81 件のうち 30 件。そのうち 15 件は、同じ木を指す「残骸の退避」の行がその回にあり、15 件とも行はその赤の `panicked at` の行より後に出ている（回ごとに 1 回目 3/7・2 回目 6/7・3 回目 0/1・4 回目 4/11・5 回目 2/4）。赤のテストの木を指す後片付けの行が、その赤より前に出た例は無い。
+- 前後の並び: 赤の `panicked at` の行の前 5 行以内にある後片付けの行は 13 行（9 件の赤の前）。どれも、その赤の文言に出た作業フォルダとは別の木を指す（作業フォルダが文言に出ない 1 件＝1 回目の 3298 行は照合できない）。
+- 回ごとの数は赤の数と並ばない（赤 12・9・5・37・18 に対して、後片付けの行 45・94・64・70・76）。
+
+### 3.7 回をまたいだまとめ
+
+**何回も赤になったテスト**（`summary.txt` の `failed_tests_by_name`）: 赤になったテストは 52 種類（2×4＋7×3＋9×2＋34×1＝81 件）。4 回が 2 種類（`mcp::dump_surface::dump_surface_tests::switch_to_another_ghost_answers_not_active_without_mcp_errors`・`ghost_session::shell_balloon_switch_session_balloon_tests::script_balloon_switch_round_trips_and_binds_the_next_talk_to_the_new_slot`）、3 回が 7 種類（`frame::ghost_quit_switch_tests::stop_with_handoff_under_reservation_switches_without_exit`・fallback の `sync_target_boot_failure_leaves_only_default_windows`・`target_connect_fail_boots_default_with_halt_and_no_alert`・abort の 2 本・`switch_to_b_without_boot_record_sends_first_boot_not_ghost_changed`・`boot_event_tests::a_boot_event_is_not_delivered_to_the_default_ghost_when_the_target_fails`）、2 回が 9 種類、1 回だけが 34 種類。同じテストでも回によって落ちる待ちが替わるものがある（例: `stop_with_handoff_under_reservation_switches_without_exit` は 2 回目が E、4・5 回目が A）。
+
+**待ちの部品ごとの赤の数**（1 件の赤に 2 つの待ちが偽のときは、先に偽になった方で数えた）:
+
+| 待ち | 1 回目 | 2 回目 | 3 回目 | 4 回目 | 5 回目 | 計 |
+|---|---|---|---|---|---|---|
+| A 足場の降ろし（20 秒） | 0 | 0 | 0 | 13 | 7 | 20 |
+| B spine の降ろし（10 秒） | 0 | 0 | 2 | 1 | 0 | 3 |
+| C 起こし直しのテストの降ろし（20 秒） | 0 | 0 | 0 | 1 | 0 | 1 |
+| D `pump_talking_until`（30 秒） | 6 | 7 | 2 | 7 | 3 | 25 |
+| E `pump_until`（30 秒） | 2 | 1 | 0 | 1 | 1 | 5 |
+| F `wait_steady`（20 秒） | 0 | 0 | 0 | 6 | 2 | 8 |
+| G `LapRig::frames_until`（30 秒） | 3 | 1 | 0 | 2 | 3 | 9 |
+| H `GpuRig::frames_until`（30 秒） | 1 | 0 | 0 | 1 | 2 | 4 |
+| I `spin_wait_until` の直接（30 秒） | 0 | 0 | 0 | 2 | 0 | 2 |
+| J spine の族の自前の締切（30 秒） | 0 | 0 | 0 | 3 | 0 | 3 |
+| K 待ちではない | 0 | 0 | 1 | 0 | 0 | 1 |
+| 計 | 12 | 9 | 5 | 37 | 18 | 81 |
+
+F が偽だった赤 8 件のうち 6 件は、後の待ち（E・G・D・I）も偽（F だけが偽なのは場所 14 の 2 件）。足場の待ち（A・D・E・F・G）で 67 件、spine の族（B・I の 2 件・J）で 8 件、MCP の描画の足場（H）で 4 件、起こし直し（C）で 1 件、待ちでないもの 1 件。降ろしの打ち切り（A・B・C）は 3〜5 回目にだけ出ている。
+
+**設計の対象の族に入っていない赤**（タスク 5.4 の材料）:
+
+| テスト | 赤の数 | 待ち | 2.1・2.3 での扱い |
+|---|---|---|---|
+| `mcp::dump_balloon::dump_balloon_gpu_tests::hidden_balloon_returns_the_same_pixels` | 2（回 1・4） | H | 2.3 の「移さない直接の呼び出し」（`GpuRig::frames_until`）。再現で赤になったら `LapRig::frames_until` と同じ移す先を使う、とした族 |
+| `mcp::dump_balloon::dump_balloon_gpu_tests::balloon_at_dpi_144_keeps_native_size_and_text_position` | 1（回 5） | H | 同上 |
+| `mcp::dump_surface::dump_surface_gpu_tests::shown_surface_matches_the_composed_pixels_at_native_size` | 1（回 5） | H（読み） | 同上 |
+| `emo2_boot::spine::hold_support::tests::held_get_waits_until_unblocked_then_times_out`・`…::held_notify_waits_until_unblocked_then_times_out` | 2（回 4） | I | 2.1 の spine の族の例外（ファイルは触らない）。spine の族の赤は降ろし（B）の側と見ていたが、降ろしでない直接の待ちで赤になった |
+| `emo2_boot::spine::seriko_loop_tests::spine_e2e_sakura_blink_after_bind_one_cycle_golden`・`…::spine_e2e_sakura_blink_default_off_emits_nothing` | 2（回 4） | J | 同上（自前の Tick 注入の締切。design の Non-Goals） |
+| `emo2_boot::spine::conformance_lap_tests::conformance_lap_walks_every_stage_to_its_completion` | 1（回 4） | J | `spine_conformance_lap_tests.rs` は 2.1 の表に無い（待ちは `spine_conformance_support.rs` の駆動器の自前の締切） |
+
+ほかに、待ちは足場の降ろし（A）か spine の降ろし（B）で、設計の直し（タスク 3.2・3.1）が届くが、ファイルが 2.1 の表に無いもの（2.1 は `shutdown` の語を数えていない）: `ghost_session_strict_tests.rs`（1）・`install/desk_record_tests.rs`（2）・`install/names_tests.rs`（1）・`emo2_boot/spine_text_scale_tests.rs`（1・B）。2.1 で「赤になればタスク 5.4」としたほかのファイル（`emo2_boot/frame/switch_tests.rs`・`frame_ghost_quit_logsink_tests.rs`・`install_cue_tests.rs`・`thread_roles_tests.rs`・`film_playback_e2e_tests.rs`・`readme/opener_submit_tests.rs`）は 5 回とも赤 0。特に見るとした `frame/switch_tests.rs` の `seriko_send_failure_empties_the_slot`（5 秒の空回しだけの待ち）は 5 回とも `ok`。`session_end_sync_send_tests.rs` と `session_end_deadline_tests.rs` も赤 0（後者は「60 秒を越えて走っている」の知らせが 4 行あるが緑）。
+
+**所要時間と赤の数**: libtest の時間の短い順に、3 回目 219.87 秒・赤 5、1 回目 251.83 秒・赤 12、2 回目 265.37 秒・赤 9、5 回目 461.53 秒・赤 18、4 回目 510.33 秒・赤 37。赤はおおむね時間の長い回ほど多い（ただし 1 回目と 2 回目は逆で、短い 1 回目の方が赤が多い）。「60 秒を越えて走っている」の知らせも同じ順に 3・20・14・42・53 行で、おおむね時間の長い回ほど多い（ただし 1 回目と 2 回目は逆）。静かな机（5.4）の 1 回は 62.4〜66.4 秒。
+
+**打ち切りでも確かめの食い違いでもないもの**:
+
+- 果てしなく終わらない回・上限越えは無い（上の 3.2）。
+- 待ちでない赤は場所 24 の 1 件だけ（3 回目 `a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through`。同じテストは 2 回目には D の打ち切りで赤）。
+- 赤でない `panicked at` の行: 1・2・3・5 回目は毎回同じ 8 行（緑のテストがわざと起こすもの。`placement\follow\window_move.rs:688` が 4 行・`emo2_boot\switch_assets_tests.rs:264`・`log_history_convention_tests.rs:123`・`mcp\dump_surface_tests.rs:139`・`mcp\dump_surface_tests.rs:316`）。4 回目はこれに 2 行足して 10 行で、足された 2 行は名前の無いスレッドの `emo2_boot\spine_hold_support.rs:90:13` `ScriptedShioriBackend: the held call was never unblocked within 30s`（1000 行・1029 行）。場所 32 の 2 件の赤（850 行・869 行）が固まりを解かずに終わった後、固まっていた側が 30 秒の上限で落ちたもの。
+- 2 回目は、cargo がテストを始めるまでに 8 分 15 秒かかった（上の 3.2）。
 
 ## 4. 直した後の記録
 
