@@ -34,7 +34,8 @@ param(
     [string]$RustLog = 'info,kanade=trace,areka::input_events=trace'
 )
 $ErrorActionPreference = 'Stop'
-$wt = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+# 根は git に尋ねる（`completed/` へ移しても段の数がずれない）
+$wt = (Resolve-Path (git -C $PSScriptRoot rev-parse --show-toplevel)).Path
 $base = Join-Path $wt 'target\ble-signoff'
 $root = Join-Path $base 'root'
 
