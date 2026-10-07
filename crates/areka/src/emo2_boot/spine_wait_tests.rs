@@ -1,7 +1,11 @@
 use std::cell::{Cell, RefCell};
+use std::sync::mpsc;
 
-use super::wait::{DENSE_SPIN, WAIT_CAP};
-use super::{BACKOFF_SLEEP, Duration, Instant, Progress, SPIN_WAIT, WaitFailure, wait_until_with};
+use super::wait::{DENSE_SPIN, WAIT_CAP, run_bounded_watching, wait_recv};
+use super::{
+    BACKOFF_SLEEP, Duration, Instant, Progress, SPIN_WAIT, WaitFailure, run_bounded,
+    wait_until_with,
+};
 
 // ===========================================================================
 // 待ちの芯の檻（areka-P0-ghost-session-test-load-flake タスク 2.2・要件 2.1・2.3・2.5・3.1〜3.3）
@@ -237,4 +241,58 @@ fn the_four_failures_read_differently() {
     heads.sort();
     heads.dedup();
     assert_eq!(heads.len(), cases.len(), "先頭の［…］が重なっている");
+}
+
+/// 檻 7: 受け口の待ち。届けばその値。送り手が何も送らずに居なくなれば `Disconnected`（何秒も待たない）。
+#[test]
+fn a_receiver_returns_the_value_or_reports_a_vanished_sender() {
+    let (tx, rx) = mpsc::channel();
+    tx.send(7u32).expect("受け口は生きている");
+    assert_eq!(wait_recv("値が届く", Progress::Unknown, &rx), Ok(7));
+
+    drop(tx);
+    match wait_recv("送り手が居なくなる", Progress::Unknown, &rx) {
+        Err(WaitFailure::Disconnected { what, waited }) => {
+            assert_eq!(what, "送り手が居なくなる");
+            assert!(
+                waited < SPIN_WAIT,
+                "居なくなったのに打ち切りまで待った: {waited:?}"
+            );
+        }
+        other => panic!("Disconnected のはず: {other:?}"),
+    }
+}
+
+/// 別スレッドの処理を待つ包みは、相手が panic して居なくなったら、すぐに `［相手が居ない］` の文言で
+/// panic する。古い呼び名 `run_bounded` は今の文を先頭に保ち、後ろに同じ文言を足す。
+#[test]
+fn a_vanished_worker_panics_with_the_partner_gone_text() {
+    let text = |r: std::thread::Result<()>| -> String {
+        let payload = r.expect_err("相手が居なくなったら panic する");
+        payload
+            .downcast_ref::<String>()
+            .cloned()
+            .unwrap_or_else(|| "（文字列でない panic）".into())
+    };
+
+    run_bounded_watching("終わる処理", Progress::Unknown, || {});
+
+    let watched = text(std::panic::catch_unwind(|| {
+        run_bounded_watching("落ちる処理", Progress::Unknown, || {
+            panic!("わざと落とす")
+        })
+    }));
+    assert!(
+        watched.starts_with("待ちの打ち切り［相手が居ない］: 「落ちる処理」"),
+        "{watched}"
+    );
+
+    let old = text(std::panic::catch_unwind(|| {
+        run_bounded("落ちる処理", SPIN_WAIT, || panic!("わざと落とす"))
+    }));
+    assert!(
+        old.starts_with("'落ちる処理' did not complete within 30s (possible hang)"),
+        "今の文が先頭に無い: {old}"
+    );
+    assert!(old.contains("待ちの打ち切り［相手が居ない］"), "{old}");
 }

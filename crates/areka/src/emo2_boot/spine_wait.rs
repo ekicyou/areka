@@ -1,7 +1,8 @@
 //! spine の有界待機の部品（締切・空回しの窓・休み・待ちの芯・`spin_wait_until`・`run_bounded`・`join_bounded`）。
 //!
-//! 締切から下は `spine.rs` から中身を変えずに移したもの。親の `spine.rs` が同じ名前で出し直すので、
-//! 兄弟のテストは `super::SPIN_WAIT` などの呼び名のまま使える。
+//! 締切から下は `spine.rs` から移したもの。親の `spine.rs` が同じ名前で出し直すので、
+//! 兄弟のテストは `super::SPIN_WAIT` などの呼び名のまま使える。古い呼び名（`spin_wait_until`・
+//! `run_bounded`・`join_bounded`）は形を保ったまま芯の上に載せ、打ち切りの文言を出すようにした。
 //!
 //! 待ちの芯 [`wait_until_with`] は、打ち切りを「待ち始めからの総時間」でなく「相手が状態を進めなかった
 //! 時間」で決め、届かなかった理由を [`WaitFailure`] の 4 つに分けて返す（areka-P0-ghost-session-test-load-flake）。
@@ -243,44 +244,120 @@ pub(crate) fn wait_until_with(
     }
 }
 
-/// `cond` が真になるまで [`SPIN_WAIT`] の範囲で待つ。真になったら `true`、期限切れなら `false`。
+/// 本物の時計で待つ [`wait_until_with`]。休みは本物の `sleep`。
+pub(crate) fn wait_until(
+    what: &str,
+    progress: Progress<'_>,
+    cond: impl FnMut() -> bool,
+) -> Result<(), WaitFailure> {
+    wait_until_with(Instant::now, std::thread::sleep, what, progress, cond)
+}
+
+/// 受け口に 1 件届くまで待ち、届いた値を返す。打ち切りの決め方は [`wait_until`] と同じ。
 ///
-/// 速い経路（通常はマイクロ秒）は `yield_now()` の密スピンで待ち time-to-detect を犠牲にしない。
-/// 待ち始めから [`DENSE_SPIN`] を過ぎたら [`BACKOFF_SLEEP`] の短い sleep へ落として**コア占有をやめる**。
+/// 空回しはしない。1 回ごとに `recv_timeout` で [`BACKOFF_SLEEP`] だけ眠り、届けばすぐ起きる。
+/// 区切って起きるのは進みの目印を読んで打ち切りを判じるため（要件 2.5）。送り手が何も送らずに
+/// 居なくなれば、待たずに [`WaitFailure::Disconnected`]。
+pub(crate) fn wait_recv<T>(
+    what: &str,
+    progress: Progress<'_>,
+    rx: &mpsc::Receiver<T>,
+) -> Result<T, WaitFailure> {
+    let started = Instant::now();
+    let mut got = None;
+    // 休みは受け口の `recv_timeout` が受け持つので、芯の休みは空にする。
+    wait_until_with(
+        Instant::now,
+        |_| {},
+        what,
+        progress,
+        || {
+            match rx.recv_timeout(BACKOFF_SLEEP) {
+                Ok(value) => got = Some(Ok(value)),
+                Err(mpsc::RecvTimeoutError::Disconnected) => got = Some(Err(())),
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+            }
+            got.is_some()
+        },
+    )?;
+    match got {
+        Some(Ok(value)) => Ok(value),
+        _ => Err(WaitFailure::Disconnected {
+            what: what.to_owned(),
+            waited: started.elapsed(),
+        }),
+    }
+}
+
+/// クロージャ `f` を別スレッドで走らせ、進みを見ながら終わるのを [`wait_recv`] で待つ。
+/// 届かなければ [`WaitFailure`] の文言で panic する（`f` が panic して居なくなれば `［相手が居ない］`）。
+pub(crate) fn run_bounded_watching<F: FnOnce() + Send + 'static>(
+    what: &str,
+    progress: Progress<'_>,
+    f: F,
+) {
+    let (done_tx, done_rx) = mpsc::sync_channel::<()>(1);
+    std::thread::spawn(move || {
+        f();
+        let _ = done_tx.send(());
+    });
+    if let Err(failure) = wait_recv(what, progress, &done_rx) {
+        panic!("{failure}");
+    }
+}
+
+/// `cond` が真になるまで待つ古い呼び名。目印なしで芯 [`wait_until`] を呼ぶ（総時間 [`SPIN_WAIT`]）。
+///
+/// 真になったら `true`。打ち切ったら、呼び出しの場所（ファイルと行）を「何を」にした文言を
+/// 標準エラーへ 1 行出して `false`（黙って `false` にしない・要件 3.1）。
 /// 本ファイルの「sleep 不使用」規律は *系を進める* Tick 注入ループの決定論を守るためのものであり、
 /// 別スレッドの進行を待つだけの本ヘルパには当たらない（待機は観測内容を変えない）。
-pub(crate) fn spin_wait_until(mut cond: impl FnMut() -> bool) -> bool {
-    let started = Instant::now();
-    loop {
-        if cond() {
-            return true;
-        }
-        let waited = started.elapsed();
-        if waited >= SPIN_WAIT {
-            return false;
-        }
-        if waited < DENSE_SPIN {
-            std::thread::yield_now();
-        } else {
-            std::thread::sleep(BACKOFF_SLEEP);
+#[track_caller]
+pub(crate) fn spin_wait_until(cond: impl FnMut() -> bool) -> bool {
+    let at = std::panic::Location::caller();
+    match wait_until(
+        &format!("{}:{}", at.file(), at.line()),
+        Progress::Unknown,
+        cond,
+    ) {
+        Ok(()) => true,
+        Err(failure) => {
+            eprintln!("{failure}");
+            false
         }
     }
 }
 
+/// 渡された総時間 `timeout` の待ちが届かなかった理由（古い呼び名の panic の文の後ろに足す）。
+fn bounded_failure(what: &str, started: Instant, e: mpsc::RecvTimeoutError) -> WaitFailure {
+    let (what, waited) = (what.to_owned(), started.elapsed());
+    match e {
+        mpsc::RecvTimeoutError::Timeout => WaitFailure::TimedOut { what, waited },
+        mpsc::RecvTimeoutError::Disconnected => WaitFailure::Disconnected { what, waited },
+    }
+}
+
 /// クロージャ `f` を別スレッドで実行し有界時間で完了を観測する（ghost spine の `run_bounded` 同旨）。
+///
+/// 打ち切りは今どおり渡された総時間。panic の文は今の文を先頭に保ち、後ろに [`WaitFailure`] の文言
+/// （届かない＝`［進みは不明］`・`f` が panic して居なくなった＝`［相手が居ない］`）を足す。
 pub(crate) fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F) {
     let (done_tx, done_rx) = mpsc::sync_channel::<()>(0);
     std::thread::spawn(move || {
         f();
         let _ = done_tx.send(());
     });
-    assert!(
-        done_rx.recv_timeout(timeout).is_ok(),
-        "'{what}' did not complete within {timeout:?} (possible hang)"
-    );
+    let started = Instant::now();
+    if let Err(e) = done_rx.recv_timeout(timeout) {
+        panic!(
+            "'{what}' did not complete within {timeout:?} (possible hang) — {}",
+            bounded_failure(what, started, e)
+        );
+    }
 }
 
 /// `ActorHandle::join` を有界時間で観測する（ghost spine の `join_bounded` 同旨）。
+/// 打ち切りと panic の文の形は [`run_bounded`] と同じ。
 pub(super) fn join_bounded(
     what: &str,
     timeout: Duration,
@@ -290,8 +367,12 @@ pub(super) fn join_bounded(
     std::thread::spawn(move || {
         let _ = res_tx.send(handle.join());
     });
+    let started = Instant::now();
     match res_rx.recv_timeout(timeout) {
         Ok(result) => result,
-        Err(_) => panic!("'{what}' join did not complete within {timeout:?} (possible hang)"),
+        Err(e) => panic!(
+            "'{what}' join did not complete within {timeout:?} (possible hang) — {}",
+            bounded_failure(what, started, e)
+        ),
     }
 }
