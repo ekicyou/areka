@@ -30,6 +30,9 @@ pub enum TooltipEndReason {
     WindowHidden,
     WindowDestroyed,
     RangeUnregistered,
+    /// 安全地帯の中のまま、別の範囲（重ねた内側・外側、通り道の上の範囲）に入った。
+    /// 安全地帯から出て別の範囲に入ったときは `LeftSafeZone`。
+    EnteredOtherRange,
 }
 
 /// 足元（どの窓のどの範囲に入っているか）。入っていなければ None を渡す。
@@ -277,14 +280,18 @@ impl TurnMachine {
             let Some(Tracked::Present { range_px, receives }) = input.tracked else {
                 return None;
             };
-            // 足元を ツールチップ → 範囲 → 通り道 → それ以外 の順に見る。
+            // 足元を ツールチップ → 範囲 → 通り道 → それ以外 の順に見る。ツールチップの上は、
+            // 下に別の範囲があっても続ける。範囲と通り道では、別の範囲に入っていれば切り替える。
             // （tip を渡さない in_safe_zone は「矩形の中か」と同じ。）
+            let other = input.over.is_some_and(|o| o.range != turn.range);
             if self.tip.is_some_and(|tip| in_safe_zone(p, tip, None)) {
                 None
-            } else if in_safe_zone(p, range_px, None) {
-                (!receives).then(|| left(input, moved))
+            } else if in_safe_zone(p, range_px, None) && !receives {
+                Some(left(input, moved))
+            } else if !in_safe_zone(p, range_px, self.tip) {
+                Some(TooltipEndReason::LeftSafeZone)
             } else {
-                (!in_safe_zone(p, range_px, self.tip)).then_some(TooltipEndReason::LeftSafeZone)
+                other.then_some(TooltipEndReason::EnteredOtherRange)
             }
         });
         let Some(reason) = reason else {

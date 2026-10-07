@@ -151,7 +151,7 @@ fn notice_callback_component_attaches_to_window() {
 /// 時刻は基準の時刻からのミリ秒で渡し、実際の時間は待たない。OS の見本・可視・待ち時間の
 /// 設定は閉包で渡し、呼ばれた回数を数える。待ち時間の設定は 400 ミリ秒（待ちは 800 ミリ秒）。
 mod decide_tests {
-    use super::super::geometry::PointPx;
+    use super::super::geometry::{PointPx, RectPx};
     use super::super::os::OsSample;
     use super::super::system::{TooltipSession, decide, note_button_press, notice};
     use super::super::turn::Effect;
@@ -536,6 +536,34 @@ mod decide_tests {
         };
         assert_eq!(run(true), vec![TooltipEndReason::LeftSafeZone]);
         assert!(run(false).is_empty(), "較正: 移らなければ続く");
+    }
+
+    #[test]
+    fn moving_into_a_later_registered_inner_range_switches() {
+        let (mut rig, w, _) = rig_with_window();
+        let whole = reg(&mut rig, w, TooltipArea::WholeWindow, Some("外"));
+        let inner = reg(&mut rig, w, rect(10.0, 10.0, 60.0, 40.0), Some("内"));
+        rig.at(0, 200, 100);
+        assert_eq!(
+            started(&rig.at(800, 200, 100)).map(|t| t.range),
+            Some(whole)
+        );
+        // 外側の説明が、内側の範囲の右半分に掛かって出たことにする（画面の位置）。
+        let tip = RectPx {
+            left: ORIGIN.0 + 40,
+            top: ORIGIN.1 + 10,
+            right: ORIGIN.0 + 60,
+            bottom: ORIGIN.1 + 40,
+        };
+        let shown_at = rig.t0 + Duration::from_millis(800);
+        rig.session.machine.set_tip(Some(tip), shown_at);
+        // ツールチップの上では、下に内側の範囲があっても続く。
+        assert!(ended(&rig.at(900, 50, 20)).is_empty());
+        // ツールチップの外の内側へ移ると外側が終わり、同じ回に内側の待ち（1 倍）に入る。
+        let fx = rig.at(1000, 30, 20);
+        assert_eq!(ended(&fx), vec![TooltipEndReason::EnteredOtherRange]);
+        assert_eq!(deadlines(&fx), vec![rig.t0 + Duration::from_millis(1400)]);
+        assert_eq!(rig.session.machine.tracked_range(), Some((w, inner)));
     }
 
     #[test]

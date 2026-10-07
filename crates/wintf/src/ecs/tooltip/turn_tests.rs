@@ -1,4 +1,5 @@
-//! `turn` の決定論テスト（待ち時間・来た・取り消し・安全地帯・終わり・入り直し・期限の預け直し・印の照合）。
+//! `turn` の決定論テスト（待ち時間・来た・取り消し・安全地帯・終わり・入り直し・別の範囲への切り替え・
+//! 期限の預け直し・印の照合）。
 //!
 //! 時刻は基準の時刻からのミリ秒で渡し、実際の時間は待たない。窓も作らない。
 //! 画面の位置と論理の位置は同じ（96 DPI）として組む。
@@ -10,13 +11,16 @@ use bevy_ecs::world::World;
 
 const SETTING: Duration = Duration::from_millis(400);
 
-/// 範囲 A（0..100）と範囲 B（200..300）の 2 つを持つ窓と、状態機械の組。
+/// 範囲 A（0..100）と範囲 B（200..300）、後から登録した A の内側の範囲 C と、A と TIP の間の
+/// 通り道の上の範囲 D を持つ窓と、状態機械の組。
 struct Rig {
     m: TurnMachine,
     t0: Instant,
     window: Entity,
     a: TooltipRangeId,
     b: TooltipRangeId,
+    c: TooltipRangeId,
+    d: TooltipRangeId,
     has_text: bool,
     setting: Duration,
     hover_reads: usize,
@@ -33,6 +37,20 @@ const RECT_B: RectPx = RectPx {
     top: 0,
     right: 300,
     bottom: 100,
+};
+/// A の内側（右下の隅）。後から登録したので、重なった所では C が勝つ。
+const RECT_C: RectPx = RectPx {
+    left: 70,
+    top: 70,
+    right: 90,
+    bottom: 90,
+};
+/// A と TIP の間の通り道の上。
+const RECT_D: RectPx = RectPx {
+    left: 25,
+    top: -25,
+    right: 35,
+    bottom: -15,
 };
 /// 範囲 A の真上に出たことにするツールチップ。
 const TIP: RectPx = RectPx {
@@ -64,13 +82,15 @@ impl Rig {
                 },
             )
         };
-        let (a, b) = (add(RECT_A), add(RECT_B));
+        let (a, b, c, d) = (add(RECT_A), add(RECT_B), add(RECT_C), add(RECT_D));
         Self {
             m: TurnMachine::default(),
             t0: Instant::now(),
             window,
             a,
             b,
+            c,
+            d,
             has_text: true,
             setting: SETTING,
             hover_reads: 0,
@@ -82,22 +102,30 @@ impl Rig {
     }
 
     fn rect_of(&self, id: TooltipRangeId) -> RectPx {
-        if id == self.a { RECT_A } else { RECT_B }
+        [(self.a, RECT_A), (self.b, RECT_B), (self.c, RECT_C)]
+            .into_iter()
+            .find_map(|(k, rc)| (k == id).then_some(rc))
+            .unwrap_or(RECT_D)
     }
 
-    /// 足元の範囲（位置から決める）。
+    /// 足元の範囲（位置から決める。重なった所では後から登録した範囲）。
     fn over_at(&self, x: i32, y: i32) -> Option<Over> {
         let p = PointPx { x, y };
-        [self.a, self.b]
+        [self.d, self.c, self.b, self.a]
             .into_iter()
             .find(|&id| in_safe_zone(p, self.rect_of(id), None))
-            .map(|range| Over {
-                window: self.window,
-                range,
-                area_logical: area(self.rect_of(range)),
-                has_text: self.has_text,
-                pos_logical: PointF::new(x as f32, y as f32),
-            })
+            .map(|range| self.over_of(range, x, y))
+    }
+
+    /// 範囲 range に入っている足元（殻はツールチップの下の範囲もこの形で渡す）。
+    fn over_of(&self, range: TooltipRangeId, x: i32, y: i32) -> Over {
+        Over {
+            window: self.window,
+            range,
+            area_logical: area(self.rect_of(range)),
+            has_text: self.has_text,
+            pos_logical: PointF::new(x as f32, y as f32),
+        }
     }
 
     /// 追っている範囲があれば、窓が受けている様子で渡す。
@@ -506,6 +534,102 @@ fn leaving_straight_into_another_range_starts_waiting_in_the_same_step() {
     assert_eq!(r.m.tracked_range(), Some((r.window, r.b)));
     let (_, range, _) = started(&r.at(1_800, 250, 50)).expect("B で来る");
     assert_eq!(range, r.b);
+}
+
+// ---- 出す番の間に別の範囲へ（2.5・2.6・2.10・4.5・1.4） ----
+
+#[test]
+fn moving_into_the_inner_range_switches_with_the_reshow_wait() {
+    let (mut r, token, fx) = end_while_active(true, |r| r.at(1_000, 80, 80));
+    let reason = TooltipEndReason::EnteredOtherRange;
+    assert_eq!(
+        fx,
+        vec![
+            Effect::Hide {
+                token,
+                reason: HideReason::End(reason),
+            },
+            Effect::TurnEnded {
+                token,
+                window: r.window,
+                range: r.a,
+                reason,
+            },
+            // 直前のツールチップが同じ回に消えたので、待ちは設定の 1 倍（1.4）。
+            Effect::ArmDeadline(r.t(1_000) + SETTING),
+        ]
+    );
+    assert_eq!(r.m.tracked_range(), Some((r.window, r.c)));
+    let (second, range, _) = started(&r.at(1_400, 85, 85)).expect("C で来る");
+    assert_eq!(range, r.c);
+    assert_eq!(second, TooltipTurnToken(token.0 + 1));
+}
+
+#[test]
+fn moving_from_the_inner_range_back_to_the_outer_switches() {
+    // C の説明が TIP に出ている。(75, 50) は A の中・C の外で、C と TIP の通り道の中。
+    // (10, 50) は A の中で、安全地帯の外。どちらでも A へ切り替わる。
+    use TooltipEndReason::*;
+    for (x, reason) in [(75, EnteredOtherRange), (10, LeftSafeZone)] {
+        let mut r = Rig::new();
+        r.at(0, 80, 80);
+        let token = started(&r.at(800, 80, 80)).expect("C で来る").0;
+        r.m.set_tip(Some(TIP), r.t(800));
+        let corridor = in_safe_zone(PointPx { x, y: 50 }, RECT_C, Some(TIP));
+        assert_eq!(corridor, reason == EnteredOtherRange, "較正: ({x}, 50)");
+        let fx = r.at(1_000, x, 50);
+        assert_eq!(ended(&fx), vec![(token, reason)], "({x}, 50)");
+        assert_eq!(fx.last(), Some(&Effect::ArmDeadline(r.t(1_000) + SETTING)));
+        assert_eq!(r.m.tracked_range(), Some((r.window, r.a)), "({x}, 50)");
+    }
+}
+
+#[test]
+fn on_the_tip_a_range_under_it_does_not_switch() {
+    let mut r = Rig::new();
+    r.active_on_a();
+    r.m.set_tip(Some(TIP), r.t(800));
+    // 殻は、ツールチップの下にある範囲（ここでは B とする）も足元として渡す。
+    let (over, tracked) = (Some(r.over_of(r.b, 50, -45)), r.present(true));
+    let fx = r.step(1_000, Some((50, -45)), false, over, tracked);
+    assert_eq!(fx, vec![Effect::ArmDeadline(r.t(1_100))]);
+    assert_eq!(r.m.tracked_range(), Some((r.window, r.a)));
+}
+
+#[test]
+fn entering_a_range_under_the_corridor_switches() {
+    // 通り道のうち D の無い所で続くことは moving_in_the_safe_zone_does_not_end が見る。
+    let (r, token, fx) = end_while_active(true, |r| r.at(1_000, 30, -20));
+    let reason = TooltipEndReason::EnteredOtherRange;
+    assert_eq!(hides(&fx), vec![HideReason::End(reason)]);
+    assert_eq!(ended(&fx), vec![(token, reason)]);
+    assert_eq!(r.m.tracked_range(), Some((r.window, r.d)));
+}
+
+#[test]
+fn switching_before_any_tip_was_shown_waits_twice_the_setting() {
+    // 文字がまだ渡されていない（動的）: 消えたツールチップが無いので出し直しではない（1.4）。
+    let (r, token, fx) = end_while_active(false, |r| r.at(1_000, 80, 80));
+    assert!(hides(&fx).is_empty());
+    assert_eq!(
+        ended(&fx),
+        vec![(token, TooltipEndReason::EnteredOtherRange)]
+    );
+    assert_eq!(
+        fx.last(),
+        Some(&Effect::ArmDeadline(r.t(1_000) + SETTING * 2))
+    );
+}
+
+#[test]
+fn not_receiving_without_moving_is_window_hidden_even_over_another_range() {
+    // 動かないまま受けなくなり、下の別の範囲（ここでは B とする）が足元になった（2.9 が先）。
+    let (r, token, fx) = end_while_active(true, |r| {
+        let (over, tracked) = (Some(r.over_of(r.b, 50, 50)), r.present(false));
+        r.step(1_000, Some((50, 50)), false, over, tracked)
+    });
+    assert_eq!(ended(&fx), vec![(token, TooltipEndReason::WindowHidden)]);
+    assert_eq!(r.m.tracked_range(), Some((r.window, r.b)));
 }
 
 // ---- 期限の預け直しと、位置が読めない回 ----
