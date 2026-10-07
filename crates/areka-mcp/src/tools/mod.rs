@@ -219,3 +219,7 @@ mod tools_socket_tests;
 #[cfg(test)]
 #[path = "tools_own_tests.rs"]
 mod tools_own_tests;
+
+#[cfg(test)]
+#[path = "tools_own_socket_tests.rs"]
+mod tools_own_socket_tests;
