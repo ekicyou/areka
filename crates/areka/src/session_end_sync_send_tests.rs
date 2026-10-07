@@ -44,7 +44,7 @@ use windows::core::w;
 use super::end_session_within;
 use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::emo2_boot::spine::hold_support::HoldAt;
-use crate::emo2_boot::spine::{RecordedCall, run_bounded, spin_wait_until};
+use crate::emo2_boot::spine::{Progress, RecordedCall, run_bounded, wait_until};
 
 /// 見張りが発火しない上限（後始末が戻るのは解き手が解いたときだけにする）。
 const HOUR: Duration = Duration::from_secs(3600);
@@ -158,13 +158,23 @@ fn reproduce() -> Observed {
     };
     // 送信が届いてから後始末に入る（join の間に送信が待っていることを時刻に依らず作る）。
     assert!(
-        spin_wait_until(send_pending),
+        rig.wait_for(send_pending),
         "送り手の送信が UI 役のキューに届かない"
     );
     let releaser = {
         let (sending, handle) = (Arc::clone(&sending), handle.clone());
         thread::spawn(move || {
-            let ready = spin_wait_until(|| sending.load(Ordering::SeqCst) && handle.holding());
+            // 足場を持ち込めない別のスレッドなので、偽の SHIORI が受けた呼び出しの数を進みの目印にする
+            // （areka-P0-ghost-session-test-load-flake 要件 2.1・2.2）。
+            let waited = wait_until(
+                "解き手: 送信の旗と偽の SHIORI の固まり",
+                Progress::Count(&|| handle.call_count()),
+                || sending.load(Ordering::SeqCst) && handle.holding(),
+            );
+            if let Err(failure) = &waited {
+                eprintln!("{failure}");
+            }
+            let ready = waited.is_ok();
             if ready {
                 handle.release();
             }

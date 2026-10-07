@@ -96,7 +96,7 @@
   - _Boundary: ghost_session_restart_tests_
   - _Depends: 2.3_
 
-- [ ] 4.3 (P) 足場か偽の SHIORI の観測口を持つ直接の呼び出しを目印つきの待ちへ移す
+- [x] 4.3 (P) 足場か偽の SHIORI の観測口を持つ直接の呼び出しを目印つきの待ちへ移す
   - 1.2 の一覧の全部（設計の時点で、切替の失敗からの戻り 2・終了の同期送り 2・シェルとバルーンの切替 2・その周回 1）を、足場があれば足場の目印つきの待ちへ、無ければ偽の SHIORI の数を目印にした芯の待ちへ移す
   - 条件の中身と確かめの内容は変えない
   - 完了の姿: 一覧の呼び出しが 0 か所になり、それらのファイルのテストが同じ本数で緑
@@ -168,3 +168,4 @@
 - 3.3（design からの逸脱 2 件）: ①design の檻 8 は `HoldAt` で固めるとするが、`HoldGate::pass_get`（`spine_hold_support.rs`）は解かれた後に `RequestError::Timeout` を返して kanade を Fault に倒すので「並びが同じ」が成り立たない。足場の中に解いた後は台本へ渡す `Stall`／`FakeShiori::ScriptedStalled` を足した。②締切の error（`change_deadline_exceeded`）は kanade のスレッドで出て `log_capture_kit::capture` に映らないので、解いた直後に A の kanade へ状態の問い合わせを送って返事を待ち（往復は同期・受け口は届いた順）、A に UNLOAD が来ていないことで「締切が切れていない」を見る。呼び手のスレッドの error は捕捉窓で 0 件を見る。変異で、締切の発火を見分けるのはこの 1 欄だけと確かめた。`Stall` の待ちには上限が無い（解く前に panic しうるのは bool を返す `pump_talking_until` と注入のループだけで、Drop でスレッドを待たないのでバイナリは止まらない）。`wait_for` は檻で使うので `#[expect(dead_code)]` を外した
 - 4.1: `wait_recv` を繰り返して `Steady` 以外を読み飛ばす形は、総時間の上限（300 秒）が 1 回ごとに数え直しになる。このファイルでは kanade が `Steady` 以外を送り続ける道が無い（`Stopped` は 1 回だけ・`ChangeCancelled` は切替の頼みの返事だけ）ので据え置き。読み飛ばしの待ちが他にも要るなら、芯に「読み飛ばしつき・始まりの時刻 1 つ」の `wait_recv` を足す
 - 4.2: 起こし直しのテストの降ろしの `run_bounded` 20 秒（1.4 の待ち C で赤 1 回）は design「2.1 の例外」の「渡した総時間で打ち切る残りの呼び手」として残した。5.1 で赤が残れば目印つきへ移す。作業ツリーは CRLF で、Git Bash の `sed -i` は CR を落とす（書き替えは python の `newline=''` で）
+- 4.3: lap の `frames_until`・`send_pending`・作業プールの待ちは、待つ相手が SHIORI を呼ばない間は目印が動かない。負荷の下で 30 秒を超えれば［止まった］と出るが、打ち切る時刻は旧（総時間 30 秒）と同じ。5.x でこの族が赤なら「目印の外の遅さ」と読む

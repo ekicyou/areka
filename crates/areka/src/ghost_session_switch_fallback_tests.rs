@@ -12,6 +12,7 @@
 //! 判定は集めてから 1 回・降ろすのは必ず有界に行う。
 
 use std::collections::BTreeSet;
+use std::panic::Location;
 
 use areka_kanade::ChangeOrigin;
 use bevy_ecs::entity::Entity;
@@ -28,7 +29,7 @@ use crate::boot_resolve::{DEFAULT_GHOST_FOLDER, GhostRoute};
 use crate::emo2_boot::ghost_switch::{
     GhostSpec, SwitchRequest, SwitchVerdict, request_ghost_switch,
 };
-use crate::emo2_boot::spine::{ScriptedShioriBackend, spin_wait_until};
+use crate::emo2_boot::spine::{Progress, ScriptedShioriBackend, wait_until};
 use crate::ghost_session::{GhostSlot, open_ghost_windows};
 use crate::placement::spawn::{GhostWindowMarker, GhostWindows};
 
@@ -363,11 +364,25 @@ fn one_bundle_covers_all(world: &mut World) -> bool {
 }
 
 /// `Input` 段を `done` が真になるまで有界に回す（作業プールの閉包は別スレッドから届く）。
+/// 条件の中で足場を書き換えるので、World を借りない進みの目印（`progress_probe`）を先に取ってから
+/// 芯の待ちへ渡す（areka-P0-ghost-session-test-load-flake 要件 2.1・2.2）。打ち切ったら、呼び出しの
+/// 場所を添えた文言を標準エラーへ 1 行出して `false`。
+#[track_caller]
 fn run_input_until(rig: &mut SwitchRig, mut done: impl FnMut(&mut World) -> bool) -> bool {
-    spin_wait_until(|| {
-        rig.world.run_schedule(Input);
-        done(&mut rig.world)
-    })
+    let probe = rig.progress_probe();
+    let caller = Location::caller();
+    let waited = wait_until(
+        &format!("{}:{}", caller.file(), caller.line()),
+        Progress::Count(&probe),
+        || {
+            rig.world.run_schedule(Input);
+            done(&mut rig.world)
+        },
+    );
+    if let Err(failure) = &waited {
+        eprintln!("{failure}");
+    }
+    waited.is_ok()
 }
 
 /// 既定ゴーストの窓の題（emo2 はスコープ 2 つ＝キャラ窓とバルーン窓で 4 枚）。
@@ -478,7 +493,7 @@ fn async_target_fault_before_window_closure_leaves_only_default_windows() {
     // 溜まった閉包（B の分・既定の分）を取り出し、投函順のまま 1 つのタスクで作業プールへ戻す
     // （別々のタスクだと着く順が揺れる）。そのうえで `Input` 段を回す。
     let mut pending: Vec<BoxedCommand> = Vec::new();
-    let both_queued = spin_wait_until(|| {
+    let both_queued = rig.wait_for(|| {
         pending.extend(rig.world.resource::<WintfTaskPool>().drain_commands());
         pending.len() >= 2
     });
