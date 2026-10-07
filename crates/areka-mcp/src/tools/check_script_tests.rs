@@ -116,3 +116,30 @@ fn kind_names_are_spelled_as_documented() {
         assert_eq!(kind.as_str(), name);
     }
 }
+
+/// (要件 1.7・2.1) 詰め替え: `script`・`ghost_name` を写す。`ghost_name` の省略と `null` は無し。
+#[test]
+fn parse_copies_script_and_ghost_name() {
+    let call = |v: Value| match v {
+        Value::Object(map) => parse(&map),
+        other => panic!("オブジェクトでない: {other}"),
+    };
+    let want = |ghost: Option<&str>| {
+        ToolCall::CheckScript(Args {
+            script: r"\h\s[0]こんにちは\e".to_owned(),
+            ghost_name: ghost.map(str::to_owned),
+        })
+    };
+    assert_eq!(
+        call(serde_json::json!({ "script": r"\h\s[0]こんにちは\e", "ghost_name": "emo2" })),
+        want(Some("emo2"))
+    );
+    assert_eq!(
+        call(serde_json::json!({ "script": r"\h\s[0]こんにちは\e" })),
+        want(None)
+    );
+    assert_eq!(
+        call(serde_json::json!({ "script": r"\h\s[0]こんにちは\e", "ghost_name": null })),
+        want(None)
+    );
+}

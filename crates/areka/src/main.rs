@@ -178,8 +178,9 @@ fn main() -> Result<()> {
     // MCP の待受（areka-P0-mcp-server-core 設計判断 B-3）。畳むのは取っ手の `Drop` で、`down?` の
     // 早い戻りを含む `main` のどの出口でも閉じる。`app` より先に宣言する＝`app` の後に落ちる。
     // 待受の失敗は `error!` に残すだけで終了コードには響かない（`start` は `Result` を返さない）。
-    // 10 本の登録表と受け口（受け口は `register_systems` の後で World へ置く・mcp-tool-entrances）。
-    let (mcp_tools, mcp_inbox) = areka_mcp::tools::entrances(areka_mcp::tools::REPLY_WAIT);
+    // SSP と同じ 10 本＋独自のツールの登録表と受け口（受け口は `register_systems` の後で World へ置く・
+    // mcp-tool-entrances・mcp-author-tools）。
+    let (mcp_tools, mcp_inbox) = areka_mcp::tools::all_entrances(areka_mcp::tools::REPLY_WAIT);
     let _mcp = areka_mcp::start(&areka_mcp::read_port_candidates(), mcp_tools);
 
     // 実行ファイル隣接の 32bit SHIORI helper パスを一度だけ解決する（起動の文脈と起動入力の作り口が

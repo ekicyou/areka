@@ -5,11 +5,7 @@
 
 mod resolve;
 
-// 一時の許可: 処理が本番の振り分けに結線されるのは 5.1。5.1 で外す。
-#[allow(dead_code)]
 mod check_script;
-// 一時の許可: 判断を呼ぶ処理が本番の振り分けに結線されるのは 5.1。5.1 で外す。
-#[allow(dead_code)]
 mod check_script_judge;
 mod dump_balloon;
 mod dump_surface;
@@ -107,6 +103,8 @@ pub(crate) fn dispatch(world: &mut World, active: Option<&ActiveGhost>, request:
         ToolCall::Reload(args) => resolved!(reload, args, Omitted::UseActive),
         ToolCall::DumpSurface(args) => resolved!(dump_surface, args, Omitted::UseActive),
         ToolCall::DumpBalloon(args) => resolved!(dump_balloon, args, Omitted::UseActive),
+        // areka 独自のツール（spec: areka-P0-mcp-author-tools）。解決の規則は 10 本と同じ。
+        ToolCall::CheckScript(args) => resolved!(check_script, args, Omitted::UseActive),
         // `get_log` は解決しない（要件 3.7）。
         ToolCall::GetLog(args) => get_log::handle(world, args, reply),
     }

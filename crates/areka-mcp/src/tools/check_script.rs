@@ -3,15 +3,13 @@
 //! SSP に無い areka 独自のツール（spec: areka-P0-mcp-author-tools）。台本を再生せずに確かめ、
 //! 診断の列を結果の本文にする。判断はアプリ本体の側（`crates/areka/src/mcp/check_script_judge.rs`）が持つ。
 
-use serde_json::json;
+use serde_json::{Map, Value, json};
 
-use super::outcome;
+use super::{ToolCall, outcome};
 use crate::ToolOutcome;
 
 /// このツールの定義。SSP の 10 本と同じ形で、説明の英文に 5 点
 /// （独自のツール・何もさせない・返すもの・タグ 1 つでも確かめられる・`sakurascript` の前に使う）を書く。
-// 一時の許可: 独自のツールの表（`OWN_TABLE`）から引かれるのは 5.1。5.1 で外す。
-#[allow(dead_code)]
 pub(super) const DEFINITION: &str = r##"{
     "name": "check_script",
     "title": "Check SakuraScript Without Playing",
@@ -35,8 +33,6 @@ pub(super) const DEFINITION: &str = r##"{
 }"##;
 
 /// help のページに載せる日本語の 1 行。help は HTML へエスケープせずに埋め込むので、`<`・`>`・`&` を書かない。
-// 一時の許可: 独自のツールの表（`OWN_TABLE`）から引かれるのは 5.1。5.1 で外す。
-#[allow(dead_code)]
 pub(super) const SUMMARY_JA: &str = "台本を再生せずに確かめ、areka で効かないタグ・コマンド、今のシェルとバルーンに無い ID を位置つきで返す（ゴーストには何もさせない）";
 
 /// 窓の無いゴーストで surface とバルーンを診なかったときに、1 行目の末尾へ括弧で足す注記。
@@ -48,6 +44,14 @@ pub const NO_WINDOW_NOTE: &str =
 pub struct Args {
     pub script: String,
     pub ghost_name: Option<String>,
+}
+
+/// 検査を通った arguments を型の付いた引数へ詰め替える（検査の後なので失敗しない）。
+pub(super) fn parse(args: &Map<String, Value>) -> ToolCall {
+    ToolCall::CheckScript(Args {
+        script: super::required_string(args, "script"),
+        ghost_name: super::optional_string(args, "ghost_name"),
+    })
 }
 
 /// 診断の種類。名前の正本は `doc/ssp-mcp/areka-tools.md`。

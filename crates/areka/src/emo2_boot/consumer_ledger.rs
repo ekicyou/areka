@@ -55,7 +55,6 @@
 //! テストがその組を名指しで固定する。`emo2_boot` の 8 つの受け口については、表の全行と、表に
 //! 無い組の掛け合わせを実際に配って一致を固定する（`consumer_ledger_agreement_tests.rs`・
 //! areka-P0-mcp-author-tools 要件 3.11）。
-#![allow(dead_code)]
 
 use std::collections::BTreeMap;
 
