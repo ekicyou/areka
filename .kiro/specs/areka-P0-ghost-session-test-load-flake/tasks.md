@@ -64,7 +64,7 @@
   - 完了の姿: 状態の問い合わせを何回しても数が増えないことを確かめる檻が緑で、spine の族のテストが同じ本数で緑
   - _Requirements: 2.1, 3.2_
 
-- [ ] 3.2 足場の待ちを全部、進みの目印つきの待ちへ替える
+- [x] 3.2 足場の待ちを全部、進みの目印つきの待ちへ替える
   - 足場の進みの目印を作る（ゴーストの作り口が呼ばれた回数の専用の数え＋起こした全部の偽の SHIORI の呼び出しの数）。World を借りずに読める
   - `pump_until`・`pump_talking_until`・`pump_input_until` は引数と戻り値と条件を変えずに芯へ載せ、呼び出しの場所を文言に入れる。`spin_wait_until` を直接呼ぶ所の移し先として、段を回さずに条件だけを目印つきで待つ口を足す
   - `wait_steady` は眠って待ち、`Steady` 以外が届いたら届いたものを標準エラーへ出して `false`。`shutdown` は目印つきのスレッドの待ちへ
@@ -164,3 +164,4 @@
 - 1.3: 測る順は「静かさの確かめ → 先にビルド（i686 と `cargo test --workspace --no-run -j 4`）→ 本数 → 負荷なし 3 回 → 全体テスト」で、6.1 も同じ順にする（全体テストの時間にコンパイルを入れない）。`tools/perf/check-quiet.ps1` は重いプロセスが 0 件のとき `@()` が `$null` に化けて落ちていたので 1 行の守りを足した（`d6d77336`）。main から入った文字コードの検査（tools の字句は ASCII だけ）で `tools/load-flake.ps1` が赤になり、`summary.txt` の項目名を英数字にした（`0c046e92`）。`--nocapture` では後片付けの行が他のテストの出力に割り込まれ、行の頭で数える `summary.txt` の数が少なく出る（4.4 で数え方を決める）
 - 1.4: 直す前の負荷の再現は 5 回とも赤（12/9/5/37/18＝81 件・52 種類）。81 件のうち 80 件は待ちの締切で、足場の待ち（降ろす `shutdown` 20 秒・`pump_talking_until` など）が 67 件。1.2 の 2.1 の表は `shutdown` を数えていなかったので、降ろす待ちだけで赤になったファイル（`ghost_session_strict_tests.rs`・`install/desk_record_tests.rs`・`install/names_tests.rs`・`spine_text_scale_tests.rs`）と `spine_conformance_lap_tests.rs` が表に無い（足場の直しで替わるか 5.4 で見る）。対象の族の外の赤は GPU の足場（`GpuRig::frames_until`）4 件・spine の自前の待ち 5 件。待ちでない赤は `desk_overwrite_tests.rs:379` の 1 件（答えが `Ran(Ok)` でない・5.3）。赤の文言にファイルの拒否は 0 件で、os error 5 の行は赤の後にしか出ていない（4.4）
 - 2.2: 檻のテストのパスは `emo2_boot::spine::wait_tests::…`（絞り込みは `spine::wait_tests`。`spine_wait` では 0 件）。`moves` は目印が増えた量の合計。本物の時計の `wait_until` は呼び手が入る 2.3 で足す（今足すと使われない警告）
+- 3.2: 足場の `Input` の段を回す 1 回は 62〜93 µs（debug・22 CPU）で、旧い予算 100 万回は 60〜90 秒＝30 秒の締切まで 1 コアを回し続けていた。檻 9・10 は `ghost_switch_rig_wait_tests.rs`（足場の子）。`wait_for` は呼び手が入る 4.3 で `#[expect(dead_code)]` を外す。公開の `pump_*` の `#[track_caller]` は檻が見ていない（檻 9 は継ぎ目の `pump_until_with` を見る）。design の `wait_steady` の事後条件（「false のときは `待ちの打ち切り` で始まる 1 行」）と別の箇条（「届いた通知を `{:?}` で出して false」）が食い違う。実装は後者で、黙った false は無い

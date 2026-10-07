@@ -9,9 +9,12 @@
 //! 通知の相と台本の切替要求の取り出しを [`SwitchRig::pump_until`] で有界に回す。台本の中の
 //! `\![change,ghost,…]` から切替を通すときは [`SwitchRig::pump_talking_until`] が、置き場の
 //! ゴーストの dispatcher へ合成の Tick を注入して台詞を進め、`Input` の段（登録済みの取り出しの系）を回す。
+//! 足場の待ちはどれも進みの目印（[`SwitchRig::progress_probe`]）を待ちの芯へ渡し、打ち切りを「相手が
+//! 進まなかった時間」で決める（areka-P0-ghost-session-test-load-flake）。
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::panic::Location;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::mpsc;
@@ -33,8 +36,9 @@ use super::frame::{KanadeNoticeRx, run_ghost_quit_phase};
 use super::ghost_switch::drain_change_requests;
 use super::sample_test_support::acquire_emo2;
 use super::spine::{
-    HOMEURL_RESOURCE, RecordedCall, ScriptedShioriBackend, ScriptedShioriBackendBuilder,
-    ScriptedShioriHandle, run_bounded, spin_wait_until,
+    HOMEURL_RESOURCE, Progress, RecordedCall, ScriptedShioriBackend, ScriptedShioriBackendBuilder,
+    ScriptedShioriHandle, WaitFailure, run_bounded_watching, wait_recv, wait_until,
+    wait_until_with,
 };
 use crate::ConfigInputs;
 use crate::boot_config::{BootContext, CurrentGhost};
@@ -96,6 +100,10 @@ pub(crate) struct SwitchRig {
     pub(crate) world: World,
     pub(crate) root: BasewareRoot,
     boots: BootLedger,
+    /// ゴーストの作り口（[`GhostBootInputsSource`] の閉包）が呼ばれた回数（進みの目印の片方）。
+    /// 台帳 `boots` の長さでは足りない: 台帳に載るのは台本つきの回だけで、`ConnectFail`・`WiringFail`・
+    /// `BalloonMissing` で起こした回（切替の失敗から既定ゴーストへ戻るテスト）が入らない。
+    factory_calls: Rc<Cell<u64>>,
     /// 起こす実行系に App スコープの置き場（[`SwitchRig::app_dir`]）を渡すか（既定は渡さない＝
     /// 最後に使ったゴーストと印を実行系の記憶の書き手が書かない）。[`SwitchRig::wire_app_memory`] で立てる。
     app_memory: Rc<Cell<bool>>,
@@ -135,11 +143,14 @@ impl SwitchRig {
             .map(|(folder, fake)| (folder.to_owned(), fake))
             .collect();
         let ledger = Rc::clone(&boots);
+        let factory_calls = Rc::new(Cell::new(0u64));
+        let calls = Rc::clone(&factory_calls);
         let app_memory = Rc::new(Cell::new(false));
         let app_dir = app_dir_of(sample.root());
         let wired_app = Rc::clone(&app_memory);
         world.insert_non_send(GhostBootInputsSource(Box::new(
             move |cfg: &ConfigInputs, origin: BootOrigin| {
+                calls.set(calls.get() + 1);
                 let folder = folder_of(&cfg.ghost_root);
                 let mut ghost_root = cfg.ghost_root.clone();
                 let mut balloon_root = cfg.balloon_root.clone();
@@ -190,6 +201,7 @@ impl SwitchRig {
             world,
             root,
             boots,
+            factory_calls,
             app_memory,
             talk_clock_ms: 0,
             sample,
@@ -312,26 +324,72 @@ impl SwitchRig {
             .unwrap_or_else(|| panic!("{folder} を台本つきで起こしていない"))
     }
 
-    /// 通知の相と台本の切替要求の取り出しを、`done` が真になるまで有界に回す（期限切れは `false`）。
-    pub(crate) fn pump_until(&mut self, mut done: impl FnMut(&Self) -> bool) -> bool {
-        spin_wait_until(|| {
-            run_ghost_quit_phase(&mut self.world);
-            drain_change_requests(&mut self.world);
-            done(self)
+    /// 進みの目印を数える関数: 作り口が呼ばれた回数＋起こした全部の偽の SHIORI が受けた呼び出しの数
+    /// （状態の問い合わせは除く＝SHIORI のアクターは手が空くと 500 ms ごとに問い合わせるので、数えると
+    /// 止まっていても増え続ける）。数えと台帳の写しだけを掴み World を借りないので、条件の関数が足場を
+    /// 可変で借りている間も読める（areka-P0-ghost-session-test-load-flake 要件 2.1・3.2）。
+    pub(crate) fn progress_probe(&self) -> impl Fn() -> u64 + 'static {
+        let (factory_calls, boots) = (Rc::clone(&self.factory_calls), Rc::clone(&self.boots));
+        move || {
+            let shiori_calls: u64 = boots.borrow().iter().map(|(_, h)| h.call_count()).sum();
+            factory_calls.get() + shiori_calls
+        }
+    }
+
+    /// 段を回す待ちの芯（時計 `now` と休み `pause` は檻のための継ぎ目）。`turn` が真になるまで回し、
+    /// 打ち切りは進みの目印 [`SwitchRig::progress_probe`] で決める。「何を」は呼び出しの場所。
+    #[track_caller]
+    fn pump_with(
+        &mut self,
+        now: impl FnMut() -> Instant,
+        pause: impl FnMut(Duration),
+        mut turn: impl FnMut(&mut Self) -> bool,
+    ) -> Result<(), WaitFailure> {
+        let probe = self.progress_probe();
+        wait_until_with(
+            now,
+            pause,
+            &place(Location::caller()),
+            Progress::Count(&probe),
+            || turn(self),
+        )
+    }
+
+    /// [`SwitchRig::pump_until`] の中身（時計と休みを差し替えられる・檻 9 が短い上限で呼ぶ）。
+    #[track_caller]
+    fn pump_until_with(
+        &mut self,
+        now: impl FnMut() -> Instant,
+        pause: impl FnMut(Duration),
+        mut done: impl FnMut(&Self) -> bool,
+    ) -> Result<(), WaitFailure> {
+        self.pump_with(now, pause, |rig| {
+            run_ghost_quit_phase(&mut rig.world);
+            drain_change_requests(&mut rig.world);
+            done(rig)
         })
+    }
+
+    /// 通知の相と台本の切替要求の取り出しを、`done` が真になるまで有界に回す（届かなければ打ち切りの
+    /// 文言を標準エラーへ 1 行出して `false`）。打ち切りは進みの目印で決める（進む限り時間だけでは打ち切らない）。
+    #[track_caller]
+    pub(crate) fn pump_until(&mut self, done: impl FnMut(&Self) -> bool) -> bool {
+        reported(self.pump_until_with(Instant::now, std::thread::sleep, done))
     }
 
     /// 台詞を進めながら回す: 置き場のゴーストの dispatcher へ合成の Tick を注入し（台本の cue が
     /// 受け口へ届き、再生の完了が kanade へ届く）、通知の相と `Input` の段（`register_systems` が
-    /// 登録した台本の切替要求の取り出しを含む）を `done` が真になるまで有界に回す（期限切れは `false`）。
+    /// 登録した台本の切替要求の取り出しを含む）を `done` が真になるまで有界に回す（届かなければ
+    /// [`SwitchRig::pump_until`] と同じく文言を出して `false`）。
+    #[track_caller]
     pub(crate) fn pump_talking_until(&mut self, mut done: impl FnMut(&Self) -> bool) -> bool {
         let mut last_tick: Option<Instant> = None;
-        spin_wait_until(|| {
+        reported(self.pump_with(Instant::now, std::thread::sleep, |rig| {
             if last_tick.is_none_or(|at| at.elapsed() >= TICK_EVERY) {
                 last_tick = Some(Instant::now());
-                self.talk_clock_ms += TICK_STEP_MS;
-                let now = MonotonicMs(self.talk_clock_ms);
-                if let Some(dispatcher) = self
+                rig.talk_clock_ms += TICK_STEP_MS;
+                let now = MonotonicMs(rig.talk_clock_ms);
+                if let Some(dispatcher) = rig
                     .world
                     .get_non_send::<GhostSlot>()
                     .and_then(|slot| slot.0.as_ref())
@@ -341,30 +399,56 @@ impl SwitchRig {
                     let _ = dispatcher.send(DispatcherMsg::Tick { now });
                 }
             }
-            run_ghost_quit_phase(&mut self.world);
-            self.world.run_schedule(Input);
-            done(self)
-        })
+            run_ghost_quit_phase(&mut rig.world);
+            rig.world.run_schedule(Input);
+            done(rig)
+        }))
     }
 
     /// 台詞の時計を進めずに回す: 通知の相と `Input` の段（登録済みの取り出しの系＝台本の切替要求と
-    /// インストールの窓口の取り出し）を、`done` が真になるまで有界に回す（期限切れは `false`）。
+    /// インストールの窓口の取り出し）を、`done` が真になるまで有界に回す（届かなければ
+    /// [`SwitchRig::pump_until`] と同じく文言を出して `false`）。
+    #[track_caller]
     pub(crate) fn pump_input_until(&mut self, mut done: impl FnMut(&Self) -> bool) -> bool {
-        spin_wait_until(|| {
-            run_ghost_quit_phase(&mut self.world);
-            self.world.run_schedule(Input);
-            done(self)
-        })
+        reported(self.pump_with(Instant::now, std::thread::sleep, |rig| {
+            run_ghost_quit_phase(&mut rig.world);
+            rig.world.run_schedule(Input);
+            done(rig)
+        }))
     }
 
-    /// 受け口から定常到達を 1 件待って読み捨てる（有界・届けば `true`・先に別の通知が届いたら
-    /// `false`）。台詞の時計を回す前に呼べば、台本の切替要求は必ず定常の kanade へ届く。
+    /// 段を回さずに `cond` だけを待つ（別スレッドの到着を読むだけの待ち・`spin_wait_until` を直に呼んで
+    /// いた所の移し先）。打ち切りは進みの目印で決め、届かなければ文言を標準エラーへ 1 行出して `false`。
+    #[track_caller]
+    #[expect(
+        dead_code,
+        reason = "呼び手（spin_wait_until を直に呼ぶ足場のテスト）はタスク 4.3 で移る"
+    )]
+    pub(crate) fn wait_for(&self, cond: impl FnMut() -> bool) -> bool {
+        let probe = self.progress_probe();
+        reported(wait_until(
+            &place(Location::caller()),
+            Progress::Count(&probe),
+            cond,
+        ))
+    }
+
+    /// 受け口から定常到達を 1 件待って読み捨てる（眠って待つ・進みの目印つき・届けば `true`）。
+    /// 先に別の通知が届いたら、届いたものを標準エラーへ出して `false`。届かなければ打ち切りの文言を
+    /// 出して `false`。台詞の時計を回す前に呼べば、台本の切替要求は必ず定常の kanade へ届く。
+    #[track_caller]
     pub(crate) fn wait_steady(&self) -> bool {
+        let probe = self.progress_probe();
         let rx = &self.world.non_send::<KanadeNoticeRx>().0;
-        matches!(
-            rx.recv_timeout(Duration::from_secs(20)),
-            Ok(KanadeNotice::Steady)
-        )
+        let what = place(Location::caller());
+        match wait_recv(&what, Progress::Count(&probe), rx) {
+            Ok(KanadeNotice::Steady) => true,
+            Ok(other) => {
+                eprintln!("定常到達を待っていた「{what}」に、先に別の通知が届いた: {other:?}");
+                false
+            }
+            Err(failure) => reported(Err(failure)),
+        }
     }
 
     /// 終了が指示されたか。
@@ -382,14 +466,32 @@ impl SwitchRig {
             return true;
         };
         let (tx, rx) = mpsc::channel();
-        run_bounded(
+        // 降ろしの OnClose・Unload が目印を進める。進んでいる限り負荷で遅いだけでは打ち切らない。
+        let probe = self.progress_probe();
+        run_bounded_watching(
             "置き場のゴーストを降ろす",
-            Duration::from_secs(20),
+            Progress::Count(&probe),
             move || {
                 let _ = tx.send(session.shutdown(CloseReason::User { scope: 0 }).is_ok());
             },
         );
         rx.recv().unwrap_or(false)
+    }
+}
+
+/// 待ちの「何を」に使う呼び出しの場所（ファイルと行）。
+fn place(at: &Location<'_>) -> String {
+    format!("{}:{}", at.file(), at.line())
+}
+
+/// 待ちの結果を `bool` へ畳む。打ち切りなら文言を標準エラーへ 1 行出して `false`（黙って `false` にしない）。
+fn reported(result: Result<(), WaitFailure>) -> bool {
+    match result {
+        Ok(()) => true,
+        Err(failure) => {
+            eprintln!("{failure}");
+            false
+        }
     }
 }
 
@@ -447,3 +549,7 @@ fn rewrite_lines(path: &Path, map: impl Fn(&str) -> String) {
     let rewritten: Vec<String> = text.lines().map(map).collect();
     std::fs::write(path, rewritten.join("\r\n")).expect("テキストを書き換える");
 }
+
+// 足場の待ちの檻（areka-P0-ghost-session-test-load-flake タスク 3.2・檻 9・10）。
+#[path = "ghost_switch_rig_wait_tests.rs"]
+mod rig_wait_tests;
