@@ -481,18 +481,6 @@ fn warn_choice_rejected_busy_logs() {
     }
 }
 
-/// Req2.7: `script:` 前置の明示縮退は warn 記録の上で選択解決のみを行う。
-#[test]
-fn warn_choice_unsupported_category_logs() {
-    let ev = run_step_state(
-        state_with_ledger(&["script:\\e"], ChoicePhase::Waiting),
-        choice_input_of("script:\\e"),
-    );
-    assert_logged(&ev, Level::WARN, "choice_unsupported_category");
-    // 未対応カテゴリでも選択解決は実行する（会話を止めない・Req2.7）。
-    assert_logged(&ev, Level::INFO, "choice_resolved");
-}
-
 /// Req1.6: 受理は info で記録し、判定した段列をフィールドに載せる。
 #[test]
 fn info_choice_accepted_logs_plan() {

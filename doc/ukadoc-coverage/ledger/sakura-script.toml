@@ -5430,17 +5430,17 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1"]
-status = "degraded"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-script-prefix"
 priority = "A1"
 values = ["交わり"]
 links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnChoiceTimeout:1" },
 ]
 note = """
-壊れ方: 黙って壊れる — 本ドメインの 3 通りのいずれでもない第 4 の形で、選択肢は正典どおり出て選べるのに、選んだ後の実行内容だけが走らない。動く用法＝選択肢の表示と、選んだときに選択待ちが解けて会話が止まらないこと。動かない用法＝script: に書いたさくらスクリプトの実行で、plan_cascade が script: を最初に見て未対応と判定し、SHIORI イベントを 1 つも出さない。
-ログ: 出る（steady の choice_unsupported_category の warn! 記録）。
+壊れ方: 見た目の差 — 選ぶと script: の後ろを新しいトークとして再生し、選択肢を含んでいたトークの残りは再生しない（SHIORI のイベントも翻訳も通さない）。空の script: は新しいトークを始めず、警告を出して選択肢の待ちを閉じるだけで、元のトークが続く。第 3 引数以降は台本に含めずどこへも渡さず、その数を警告に残す（, を含む台本は \"…\" で括って書く）。
+ログ: 出る（始めたときは choice_script_started の info!、空のときは choice_script_empty の warn!、第 3 引数以降があるときは choice_script_unused_args の warn!。どの結末でも続けて選択肢の待ちを閉じる choice_resolved の info! が出て、その outcome は script／script_empty）。
 [転記元: doc/choice-cascade-compat.md の 7a-i／7a-ii。doc/COMPAT_ARCHITECTURE.md の「選択確定カスケードの正典沈黙分岐一式」の行がこの台帳を指している]
 [根が 2 つ: 根は 4 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID1_2cID2_2cID3..._5d:1・ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1・ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cOnID_2cr0_2cr1_2c..._5d:1]
 [テーマ: 選んでも書いた動きが走らず、利用者の返事に対する応えが返らない]
