@@ -65,6 +65,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+# 待ちの部品の打ち切りの文言の頭「待ちの打ち切り」（tools の字句は ASCII だけ・encoding-check の規則 A）
+$WaitCutPrefix = "`u{5F85}`u{3061}`u{306E}`u{6253}`u{3061}`u{5207}`u{308A}"
 
 $COUNTER_PATH_MACHINE_CPU = '\Processor(_Total)\% Processor Time'
 $CPU_SAMPLE_SEC = 5
@@ -141,7 +143,7 @@ function Read-Round([string]$logPath) {
             if ($l -match '^    (\S+)$') { $names.Add($Matches[1]) }
             elseif ($l -ne '') { $inFailList = $false }
         }
-        if ($l.Contains('待ちの打ち切り')) { $r.WaitLines += $l }
+        if ($l.Contains($WaitCutPrefix)) { $r.WaitLines += $l }
         if ($l.TrimStart().StartsWith('sample-ghost-kit:')) {
             $r.CleanupLines += $l
             if ($l.Contains('os error 5')) { $r.OsError5++ }
@@ -264,14 +266,14 @@ try {
         $s.Add("== round $($r.Round) ==")
         $s.Add("exit_code: $($r.ExitCode)")
         $s.Add("wall_sec: $($r.WallSec)")
-        $s.Add("上限越え (timed_out): $(if ($r.TimedOut) { "yes (> $RoundTimeoutMin min)" } else { 'no' })")
+        $s.Add("timed_out: $(if ($r.TimedOut) { "yes (> $RoundTimeoutMin min)" } else { 'no' })")
         $s.Add("test_result: $(if ($r.ResultLines.Count) { $r.ResultLines -join ' | ' } else { '(no test result line)' })")
         $s.Add("passed: $($r.Passed)  failed: $($r.Failed)")
-        $s.Add("赤のテスト (failed_tests): $($r.FailedNames.Count)")
+        $s.Add("failed_tests: $($r.FailedNames.Count)")
         $r.FailedNames | ForEach-Object { $s.Add("  $_") }
-        $s.Add("待ちの打ち切り の行: $($r.WaitLines.Count)")
+        $s.Add("wait_cut_lines: $($r.WaitLines.Count)")
         $r.WaitLines | ForEach-Object { $s.Add("  $_") }
-        $s.Add("sample-ghost-kit: の行（後片付けの失敗）: $($r.CleanupLines.Count)  うち os error 5: $($r.OsError5)")
+        $s.Add("cleanup_lines (sample-ghost-kit:): $($r.CleanupLines.Count)  os_error_5: $($r.OsError5)")
         $r.CleanupLines | ForEach-Object { $s.Add("  $_") }
     }
     $walls = @($roundResults | ForEach-Object { [double]$_.WallSec })
