@@ -77,6 +77,15 @@ mod zorder_wiring_tests;
 #[path = "frame_schedule_tests.rs"]
 mod frame_schedule_tests;
 
+#[cfg(test)]
+#[path = "seriko_clock_tests.rs"]
+mod seriko_clock_tests;
+
+// 本物の読み手から合成まで、動く絵をシェルとバルーンで通す（areka-P0-animated-image-playback task 5.4）。
+#[cfg(test)]
+#[path = "film_playback_e2e_tests.rs"]
+mod film_playback_e2e_tests;
+
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -90,12 +99,12 @@ use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::ticker::{LoopTickerConfig, Tick, TickerMsg, spawn_loop_ticker};
 use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode};
-use areka_kanade::{BootOrigin, KanadeNotice};
+use areka_kanade::{BootOrigin, KanadeNotice, MonotonicMs};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::MountError;
 use areka_seriko::{
-    AnimationTable, BindResolver, SerikoLoopConfig, SerikoSink, SurfaceResolver, seeded_rng,
-    spawn_seriko,
+    AnimationTable, BindResolver, SerikoClock, SerikoLoopConfig, SerikoSink, SurfaceResolver,
+    seeded_rng, spawn_seriko_clocked,
 };
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
@@ -365,8 +374,8 @@ const _: fn() = || {
 ///    （UI スレッド前提。`Err` は [`BootWiringError::SpawnUi`] 分類＋`wired=false`）。
 /// 3. [`TalkClock::new`]（`dola::runtime::clock::now` 注入）／[`ClockedTextSink::new`]。
 /// 4. `mpsc::channel::<PresentCommand>()`／[`PresentBridge::new`]（差し替えの荷物の置き場を
-///    `Emo2Wiring` と共有）／[`spawn_seriko`]。
-///    **SurfaceResolver 突き合わせ（Task 4.1 申し送り）**: `resolver`（非 Clone）は `spawn_seriko`
+///    `Emo2Wiring` と共有）／[`spawn_seriko_clocked`]（時計 `seriko_clock` は刻みと共有）。
+///    **SurfaceResolver 突き合わせ（Task 4.1 申し送り）**: `resolver`（非 Clone）は `spawn_seriko_clocked`
 ///    が値消費し、`static_binds`（Clone）は clone して seriko へ渡す。`Emo2Wiring` が保持する
 ///    `BootAssets` の `resolver` は attach で読まれないため無害なプレースホルダ（空 alias 表）で埋める。
 /// 5. [`areka_ghost::boot`]（`surface_sink`＝[`SerikoSink`] を直渡し・`text_sink`＝`ClockedTextSink`・
@@ -452,8 +461,8 @@ pub fn wire_emo2_boot(
     let clock = TalkClock::new(clock_fn);
     let clocked_text_sink = ClockedTextSink::new(emo_text_sink, clock.clone());
 
-    // 手順4: mpsc＋PresentBridge→spawn_seriko。SurfaceResolver 突き合わせ（!Clone・Task 4.1 申し送り）:
-    // resolver（非 Clone）は spawn_seriko が値消費・static_binds（Clone）は clone して seriko と
+    // 手順4: mpsc＋PresentBridge→spawn_seriko_clocked。SurfaceResolver 突き合わせ（!Clone・Task 4.1 申し送り）:
+    // resolver（非 Clone）は spawn_seriko_clocked が値消費・static_binds（Clone）は clone して seriko と
     // Emo2Wiring の双方へ配る。Emo2Wiring 側 BootAssets の resolver は attach で読まれない（Task 4.1）
     // ため空 alias 表のプレースホルダで埋める（実 resolver は seriko が保持）。
     let (tx, rx) = std::sync::mpsc::channel::<PresentCommand>();
@@ -559,16 +568,20 @@ pub fn wire_emo2_boot(
     };
     // boot は S: dola::cue::CueSink + Clone を要求する。SerikoSink は upstream `areka-seriko` で
     // `CueSink` を実装し `#[derive(Clone)]` 済み（内側 mpsc::Sender は常に Clone・全 clone は単一 inbox
-    // 送信端で配送同一）ゆえ spawn_seriko の戻り値を直接 surface_sink として boot へ渡す（共有 shim は不要）。
+    // 送信端で配送同一）ゆえ spawn_seriko_clocked の戻り値を直接 surface_sink として boot へ渡す（共有 shim は不要）。
     // `bind_resolver`（BootAssets・task 7.1 が MountModel の名前転記から構築した実名前解決表）を
     // seriko の起動へ値渡しで配線する。bind cue（`\![bind]`）の着せ替え名解決はこの実表が担う（task 7.2）。
     // `loop_config`（上で組んだ実表＋実 entropy 乱数）を seriko へ値渡しし、SERIKO ループ統括器を起こす。
-    let (surface_sink, seriko_handle) = spawn_seriko(
+    // 刻みと seriko が読む 1 つの時計（spec: areka-P0-animated-image-playback 要件 1.6・2.9）。
+    // 刻みの既定と同じ `GetTickCount64`（ミリ秒）。台本の時計 `clock`（`TalkClock`）とは別の値。
+    let seriko_clock: SerikoClock = Arc::new(tick_count_ms);
+    let (surface_sink, seriko_handle) = spawn_seriko_clocked(
         resolver,
         static_binds.clone(),
         bind_resolver,
         loop_config,
         bridge,
+        Some(Arc::clone(&seriko_clock)),
     );
     let wiring_assets = BootAssets {
         shells,
@@ -736,13 +749,13 @@ pub fn wire_emo2_boot(
         ghost_runtime.kanade().clone(),
     );
 
-    // SERIKO ループ ticker 起動（design「本番は実時間・実 entropy 接続」・R7.4）: 16ms 実時計
-    // （LoopTickerConfig::default）で駆動し、各 Tick を tick_sink（SerikoSink クローン）経由で seriko
+    // SERIKO ループ ticker 起動（design「本番は実時間・実 entropy 接続」・R7.4）: 16ms で、seriko と
+    // 同じ時計 `seriko_clock`（[`loop_ticker_config`]）で駆動し、各 Tick を tick_sink（SerikoSink クローン）経由で seriko
     // へ届ける。ghost の loop ticker は seriko を一切知らず、クロージャがその継ぎ目（依存方向: areka が
     // ghost の spawn_loop_ticker を seriko の SerikoSink へ結線・ghost→seriko 依存は張らない）。
     // Tick.now は MonotonicMs（内側 u64・ms）ゆえ `.0` を send_tick へ渡す。
     let (loop_ticker_stop, _loop_ticker_handle) = spawn_loop_ticker(
-        LoopTickerConfig::default(),
+        loop_ticker_config(&seriko_clock),
         Box::new(move |tick: Tick| {
             tick_sink.send_tick(tick.now.0);
         }),
@@ -758,6 +771,21 @@ pub fn wire_emo2_boot(
         wired: true,
         loop_ticker: Some(loop_ticker_stop),
         seriko_sink: Some(session_sink),
+    }
+}
+
+/// 刻みの既定（`areka-ghost` の `LoopTickerConfig::default`）と同じ時刻の基準＝OS 起動からの経過ミリ秒。
+fn tick_count_ms() -> u64 {
+    // SAFETY: GetTickCount64 は引数もポインタも取らないカウンタの読み取りで、前提条件はない。
+    unsafe { windows::Win32::System::SystemInformation::GetTickCount64() }
+}
+
+/// SERIKO ループの刻みの構成を、seriko と同じ時計から組む（周期は既定のまま）。
+fn loop_ticker_config(clock: &SerikoClock) -> LoopTickerConfig {
+    let clock = Arc::clone(clock);
+    LoopTickerConfig {
+        clock: Box::new(move || MonotonicMs(clock())),
+        ..LoopTickerConfig::default()
     }
 }
 

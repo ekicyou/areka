@@ -745,6 +745,10 @@ mod boxes_tests;
 mod nesting_tests;
 
 #[cfg(test)]
+#[path = "shell_target_animated_fixture_tests.rs"]
+mod animated_fixture_tests;
+
+#[cfg(test)]
 #[path = "shell_target_image_only_tests.rs"]
 mod image_only_tests;
 

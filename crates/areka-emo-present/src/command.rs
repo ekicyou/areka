@@ -92,6 +92,17 @@ pub enum PresentCommand {
         /// 結果返信端（任意・`Some` のとき高々 1 回応答する）。
         reply: Option<areka_actor::ReplySender<PresentOutcome>>,
     },
+    /// 合図: seriko が出番の世代 `generation` を知った（`animated-image-playback` 要件 2.3）。
+    ///
+    /// 外から所有される対象の「追い付いた世代」を大きい方へ進めるだけで、合成・可視性には触らない
+    /// （応答なし）。追い付くまで、その対象へ着く `ShowSurface` は回数つきの動く絵の子の欄を外される
+    /// （出し直しの前に決めたコマを出さない）。出番の世代より大きい番号・未装着の対象は捨てる。
+    StageAck {
+        /// 適用先ターゲット（バルーン）。
+        target: TargetId,
+        /// seriko が知った出番の世代。
+        generation: u64,
+    },
 }
 
 /// 提示段の指令適用で観測し得る構造化エラー（失敗経路はログ＋`Err` で表現する）。

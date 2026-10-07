@@ -187,8 +187,44 @@ impl EmoWorld {
     /// `SurfaceMaster.elements` を `AtlasTable::resolve` で `ElementId` へ解決し、平行な
     /// [`AtlasBinding`] を各 entity へ挿入する。未解決 element はパニックせず `warn`＋`None`。
     /// 束縛後の compose 経路に `resolve` は現れない（毎フレーム O(1) の `entry` 引き）。
+    ///
+    /// 束縛の次に動く絵を子へ分解する（[`crate::film`]・要件 1.1〜1.4）。**同じ面の表に呼ぶのは
+    /// 1 度だけ**（2 度目は画像でなくなった element を束縛し直さず、子の定義が古いアトラスのまま
+    /// 残る）。
     pub fn bind_atlas(&mut self, atlas: &areka_emo_atlas::AtlasTable, set: areka_emo_atlas::SetId) {
+        debug_assert!(
+            self.world
+                .query::<&AtlasBinding>()
+                .iter(&self.world)
+                .next()
+                .is_none(),
+            "bind_atlas は同じ面の表に 1 度だけ呼ぶ"
+        );
         crate::atlas_bind::bind_atlas(&mut self.world, atlas, set);
+        crate::film::decompose(&mut self.world, atlas);
+    }
+
+    /// 動く絵の子の定義（無ければ `None`）。`ElementKind::Film(id)` の element が在れば必ず `Some`。
+    pub fn film_sheet(&self, id: crate::nesting::FilmId) -> Option<&crate::film::FilmSheet> {
+        self.world
+            .get_resource::<crate::film::FilmSheets>()?
+            .sheets
+            .get(&id)
+    }
+
+    /// 動く絵の子の定義を番号の昇順に。
+    pub fn film_sheets(&self) -> impl Iterator<Item = &crate::film::FilmSheet> {
+        self.world
+            .get_resource::<crate::film::FilmSheets>()
+            .into_iter()
+            .flat_map(|f| f.sheets.values())
+    }
+
+    /// 分解しなかった動く絵と理由（相対パスの昇順）。
+    pub fn film_skips(&self) -> &[crate::film::FilmSkip] {
+        self.world
+            .get_resource::<crate::film::FilmSheets>()
+            .map_or(&[], |f| f.skipped.as_slice())
     }
 
     /// 正規化 Surface 定義の公開クエリ（要件 1.3・存在しない id は `None`）。

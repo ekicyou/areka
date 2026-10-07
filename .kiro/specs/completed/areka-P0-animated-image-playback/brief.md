@@ -160,3 +160,10 @@
 ### 同じウェーブ C4 の約束（2026-10-05 棚卸㉒・破るなら止めて報告）
 
 - parsers の `shell/`・atlas の `manifest.rs`・compose の `plan.rs`・`fold.rs`・`method.rs`（`element-base-method`）・emo-present・`emo2_boot/assets.rs` に触らない。分解は `bind_atlas` の直後。
+
+
+## 2026-10-05 設計討議の裁定（棚卸㉒の約束を解いた）
+
+- 開発者裁定「本質的な案で設計せよ。スコープが膨らむなら関係しそうな他セッションと調整」。上の「同じウェーブ C4 の約束」（`plan.rs`・emo-present ほかに触らない）は**解いた**。Approach 1（子サーフェスへ分解）を根から作るため、`plan.rs`・`nesting.rs`・`pattern.rs`・emo-present の `presenter/`・`emo2_boot/mod.rs` の数行・`frame/status_report.rs` に触る。規模は 22〜26 タスク。
+- 調整の結果: `element-base-method` は `plan.rs` に触らない（先に main へ入る）。`balloon-lifecycle-events` は `emo2_boot/mod.rs` の別の 1〜3 行（台本用の時計 `clock` の複製を渡す。こちらはその時計の名前・型・持ち主を変えない。先に main へ入る）。`extent-element-offset` は未着手＝本 spec の後。
+- 正本は design.md と requirements.md の Boundary Context。

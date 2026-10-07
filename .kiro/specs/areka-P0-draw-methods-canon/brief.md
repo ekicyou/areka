@@ -67,3 +67,9 @@
 - 段は**優先**（シェルの element の列・アニメーション）。
 - 規模は大きい見込み（語の数と、合成を D2D へ移すかどうかで変わる）。要件の段で測り、20 タスクを大きく超えるなら分け方を議題にする。
 - 1 フレーム遅らせる解・時刻を丸める解は取らない（設計の大原則）。
+
+## `areka-P0-animated-image-playback` からの申し送り（2026-10-07・完了時の棚卸）
+
+- 手書きの `always` の animation のコマ（pattern定義）の描画メソッドが `overlay` 以外（`overlayfast`・`move` など）だと描かれない。`always` の再生は `animated-image-playback` で動くようになったので、この語の穴が目に見えるようになった。
+- あわせて、`crates/areka-emo-compose/src/plan.rs` の `flatten_surface` の「非 Overlay method の現在コマ: 不描画 skip」の `warn!` が合成のたびに出る。コマが 4 枚以上だと合成の覚えに当たらず、`always` の周ごとに出続ける（記録の洪水）。経路は `animated-image-playback` の前から。
+- 描画メソッドを描く側は本 spec の範囲。描けない語が残るとき、`warn!` を状態が変わったときの 1 回にするかは本 spec の要件で決める。

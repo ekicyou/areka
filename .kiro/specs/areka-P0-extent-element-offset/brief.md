@@ -67,3 +67,14 @@
   1. 案 A（和集合）か案 B（土台で切る・記録を出す）か（本文どおり・上の ukadoc の読みを添えて出す）。
   2. `element-base-method` との順: 両方が `plan.rs` を触り、`base` の意味（土台を置き換える）が外形の規則と直に絡む。**`element-base-method` を先に着地させ、その上で本 spec の裁定をする**のが自然（同時に走らせない）。
 - 同時に走らせない: `element-base-method`・`animated-image-playback`（C4・`plan.rs`）・`element-clipping-option`。
+
+
+## 2026-10-05 `animated-image-playback` からの申し送り（同 spec の設計・要件 10.6）
+
+> `animated-image-playback` が先に main へ入る（本 spec は未着手）。2026-10-06 に同 spec が実装した実物と照らして書き直した。着手時に引き直すこと。
+
+- **置き場**: `compute_extent`・`flatten_extent` は `crates/areka-emo-compose/src/plan.rs` から `crates/areka-emo-compose/src/plan_extent.rs` へ移した（移すコミット `d7755372` では中身を変えていない）。`plan_extent.rs` は `plan` の子のモジュール（`plan.rs` が `#[path = "plan_extent.rs"] mod extent;`・`pub(crate) use extent::compute_extent;` で宣言）で、`flatten_extent` はその中の非公開の関数。既存の外形のテスト `plan_extent_tests.rs`・`plan_nesting_extent_tests.rs` も `plan_extent.rs` の子へ移り、動く絵の子の外形のテスト `plan_extent_film_tests.rs` が足された。roadmap と本文の「`plan.rs` の `flatten_extent`」は `plan_extent.rs` と読み替える。命令の側 `push_static_element_ops` は `plan.rs` に残っている。
+- **`animated-image-playback` が `flatten_extent` に足したのは 2 か所**: `always` の animation の全部の pattern を数える輪（着せ替えの pattern0 と同じ輪で、`is_bind_interval` か `is_always_interval` の animation を辿る。負の番号・animation の番号を指す 7 語・`move` は数えない）と、動く絵の子（`ElementKind::Film`）の原寸（`EmoWorld::film_sheet` の `FilmSheet::original`）。
+- **画像の element と動く絵の子は同じ 1 行で数えている**: 原寸を `match element.kind` で決め（`ElementKind::Film` は子の原寸、ほかは束縛した絵の原寸）、その後の `max_x`・`max_y` を更新する 1 行で数える。画像の element の X,Y（`element.transform.offset()`）を外形に足す直しは、その 1 行に入れれば子にも効く。命令の側では動く絵の子も X,Y を足して置いている（`push_static_element_ops` の `ElementKind::Film` の腕が `push_film_op` に X,Y を渡す）ので、食い違いは画像の element と同じ形で子にもある。
+- **着せ替えの pattern0 の取り方の既存の食い違いは直していない**: 外形（`flatten_extent`）は「index が最小」の pattern を取り、命令（`plan.rs` の `flatten_surface`）と見える部品（`NestTable` の 1 行 `SurfaceParts` の `bind_targets`）は「index が 0」の pattern を取る。
+- 手書きの `always` の外形は全部の pattern の和集合にした（開発者 2026-10-05・理由: 自動で作る子と手書きは同じに振る舞う／ずっと見える絵が外形で切れてはいけない）。ほかのアニメーション（`random` ほか）のコマは今までどおり数えていない。はみ出す絵の一般の決まりは本 spec の裁定のまま。

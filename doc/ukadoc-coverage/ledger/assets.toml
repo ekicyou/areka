@@ -6046,18 +6046,19 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:always:1"]
-status = "vocabulary-only"
+status = "degraded"
 introduced = ""
-owner = ""
+owner = "areka-P0-seriko-trigger-intervals"
 priority = "A6"
 values = ["気配"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: debug!。areka-parsers の shell::normalize_interval が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけで、それ以外の語は元の綴りのまま持ち上げられ、areka-seriko の table まで届いたところで非駆動として落とされる。
-実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけである（`bind` は静的な着せ替えゆえ非駆動）。この語を書いてもコマは 1 枚も進まない。
-落とすときに元の綴りを添えた記録が出るが、その段は控えめで、areka の main が既定とする記録の水準では見えない。作者から見ると「書いたのに何も動かないし、何も言われない」という形になる。
-この縮小を引き受ける行が見直し表にある——`wintf-P0-animation-system`（再生をまばたきの 2 語だけにした）。ただし受け取る経路はあっても駆動する経路が無いので、状態は縮退ではなく語彙のみとした。同じページの間隔語 `bind` も同じ理由で語彙のみである（合成のしかたの側にある同じ綴りの項目とは別である）。
+壊れ方: 黙って壊れる。記録: debug!。単独の `always` は駆動する。組み合わせは駆動しない。
+単独の `always`（小文字の完全一致）は、2026-10-06 から駆動する（areka-P0-animated-image-playback）。areka-parsers の shell::normalize_interval はこの語を今までどおり元の綴りのまま持ち上げ、areka-emo-compose の nesting::is_always_interval の 1 関数が見分けて、areka-seriko の table::AnimationTable::from_world が全部の pattern の待ち時間の合計を 1 周の長さとする引き金 `LoopTrigger::Always` として採録する。そのサーフェスが表示されている間、抽選も乱数も使わずに最初のコマから最後のコマまでを繰り返す（今のコマは timeline::always_at が開始からの経過だけで決める）。
+組み合わせ（`bind+always` など、`+` で区切って `always` を含めた綴り）は、今までどおり元の綴りを添えた debug! を残して駆動しない。その段は控えめで、areka の main が既定とする記録の水準では見えないので、組み合わせを書いた作者には「書いたのに何も動かないし、何も言われない」形が残る。壊れ方の段を「黙って壊れる」のままにしたのはこのためで、状態も縮退とした。組み合わせは areka-P0-seriko-trigger-intervals が引き受ける（担当欄）。
+待ち時間の合計が 0 の単独の `always` は止まらない繰り返しになるので駆動せず、1 周だけ評価した絵のまま出し、サーフェスの番号・animation の番号を添えた warn! を表を作るときに 1 回出す。途中の `-1`・合計 0・pattern0 の待ちが 0 のとき・外形など正典が黙っている所の決めごとは doc/COMPAT_ARCHITECTURE.md の §8「動く絵と `always` の再生」に登記してある。
 束: アニメーションを始める間隔の語・名前を受けて控えめな記録だけ残す（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 24——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、この語が非駆動だった当時の仕分けの綴りをそのまま残している（同じ束の他の間隔語と揃えるため。優先度 A6 は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:animation-sort_2c_30bd_30fc_30c8_9806_5e8f:1"]
@@ -6097,7 +6098,7 @@ priority = "A6"
 values = ["気配"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: debug!。縮退の転記元: 見直し表の `areka-P0-seriko-runtime`。areka-parsers の shell::decode_animations が忠実に転記し、areka-seriko の table が実際に再生を駆動するのは `random`・`bind+random` と、2026-09-20 に加わった `sometimes`・`rarely` の 4 つである（後の 2 つは table::AnimationTable::from_world が `random,2`／`random,4` と同じ引き金へ読み替えて採録する。`areka-P0-shell-implicit-surface` の要件 11.1・11.2）。`bind` は静的な着せ替えゆえ非駆動、`always`／`runonce`／`never` などは元の語を添えて非駆動のままである。どちらも記録は控えめな段にしか出ず、既定の記録の水準（areka の main が既定とする段）では見えない。見出しの `*` は 1 個以上の数字。
+壊れ方: 黙って壊れる。記録: debug!。縮退の転記元: 見直し表の `areka-P0-seriko-runtime`。areka-parsers の shell::decode_animations が忠実に転記し、areka-seriko の table が実際に再生を駆動するのは `random`・`bind+random` と、2026-09-20 に加わった `sometimes`・`rarely` の 4 つである（後の 2 つは table::AnimationTable::from_world が `random,2`／`random,4` と同じ引き金へ読み替えて採録する。`areka-P0-shell-implicit-surface` の要件 11.1・11.2）。2026-10-06 からは単独の `always` も駆動する（`areka-P0-animated-image-playback`）。`bind` は静的な着せ替えゆえ非駆動、`runonce`／`never` などと、`bind+always` のように `+` で区切った組み合わせは元の語を添えて非駆動のままである。どちらも記録は控えめな段にしか出ず、既定の記録の水準（areka の main が既定とする段）では見えない。見出しの `*` は 1 個以上の数字。
 担当 spec は areka-P0-shell-parse。同 spec の brief は範囲の In に surfaces.txt の解析を挙げ、その中身として間隔の語を名指ししている。
 束: アニメーションの定義・引き受けたうえで縮めている（控えめな記録）（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 15——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
@@ -7020,6 +7021,10 @@ note = """
 2026-09-20 の実測: 面の画像と `overlay` の `element0` の関係は正典どおりになった。`overlay` 以外の描画メソッドが読み飛ばされる縮退は残り、その間は `overlay` 以外の `element0` を持つ面で画像が土台に使われる（正典では破棄。`areka-P0-shell-implicit-surface` の要件 2.7 の既知のずれ）。`element0` の無い面にファイル名だけの画像を層 0 として敷くのは areka-emo-compose の base_image::apply_base_images で、`element0` が在る面には手を出さない。状態と担当はこの実測では変えていない（縮退の根は `overlay` 以外の読み飛ばしのままだからである）。
 2026-10-04 の注記: 動く GIF の自動アニメーションは非対応（開発者裁定 2026-10-04・理由: 古い形式）。GIF は今までどおり 1 枚の絵として読む。APNG・動く WebP は areka-P0-animated-image-decode で全コマを読んでアトラスに載せるようになったが、自動アニメーションの再生はまだ無い（再生は areka-P0-animated-image-playback の担当）。状態と担当はこの注記では変えていない（縮退の根は上と同じだからである）。読み方の裁量は doc/COMPAT_ARCHITECTURE.md の §8「沈黙ルール対応表」に 1 節で登記してある。
 担当 spec は areka-P0-draw-methods-canon（2026-10-05）。areka-P0-element-base-method が `base` の element定義を描けるようにし、描けない描画メソッドの行に警告を出すようにした。残りの描画メソッドは areka-P0-draw-methods-canon が持つ。最初の担当は areka-P0-shell-parse で、同 spec の brief は範囲の In に surfaces.txt の解析を挙げ、その中身として重ね合わせの一覧を名指ししている。
+2026-10-06 の注記（areka-P0-animated-image-playback）: 自動アニメーションが動くようになった。描画メソッド `overlay`・`base` の element定義が指す APNG・動く WebP と、`element0` を持たないサーフェスの `surface<数字>.png` の動く絵は、SERIKO 定義が無くてもコマをファイルの順に切り替えて表示する。areka-emo-compose の film::decompose が動く絵 1 つを `always` を 1 本だけ持つ部品（子）へ分解し、areka-seriko の部品の時計が回す。待ち時間は丸めず、ファイルの繰り返し回数を守る。`element0` を持つサーフェスの `surface<数字>.png` は今までどおり描かず、動かさない。待ち時間の合計が 0 の絵・コマの並びが崩れた絵は分解せずに 1 枚目の静止画のまま出し、相対パスと理由を添えた warn! を表を作るときに 1 回出す。
+動く GIF は非対応のまま（開発者裁定 2026-10-04）で、今までどおり 1 枚の絵として読む。
+element定義のオプション（座標より後ろの欄）は読まないので、`--clipping` を付けた element定義の動く絵も動く絵として読み、動かす（正典は `--clipping` を使うとアニメーションの読み込みが無効になると書く）。このずれは areka-P0-element-clipping-option が着地するまで残る。
+上の 2026-10-04 の注記の「自動アニメーションの再生はまだ無い」は、この注記で古くなった。状態と担当はこの注記では変えていない（縮退の根は `overlay` と `base` 以外の描画メソッドの読み飛ばしのままだからである）。再生の決めごとは doc/COMPAT_ARCHITECTURE.md の §8「動く絵と `always` の再生」に 1 節で登記してある。
 束: 絵の重ね合わせの行・引き受けたうえで縮めている（記録なし）（先に要る仕組み: emo の合成器）。束の順位: 17——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -7488,7 +7493,7 @@ note = """
 areka-parsers の shell::normalize_interval が名前として認めるのは 3 つの語（`bind`・`random`・`bind+random`）だけなので、この語は元の綴りのまま `Interval::Other` へ忠実に転記される。それを areka-seriko の table::AnimationTable::from_world が `random,4` と同じ引き金（毎秒 4 分の 1 の確率）・同じコマの進め方へ読み替えて採録する。比べ方は小文字の完全一致で、`Rarely` のような大文字混じりの綴りは読み替えない。
 読み替えたときに元の綴りを添えた debug! が出る（欄: surface_id・animation_id・vocab・k）ので、どの面のどのアニメーションがどの引き金になったかがログから読める。段は控えめで、areka の main が既定とする記録の水準では見えない。
 実測（2026-09-20）: テンプレートゴースト `konnoyayame` の面 0 のまばたき（`animation0`）が `sometimes` を使っており、実機の走行で `k=2` の抽選が 101 回発火した。`rarely` を使う検体は手元に 0 件だが、読み替えは同じ 1 か所の腕で、`sometimes` と同型に採録される。
-`sometimes`・`rarely` 以外の間隔語（`always`・`runonce`・`never`・`endtalk`・`periodic,数値` など）は今までどおり元の綴りを添えた debug! を残して非駆動である。この 2 語を駆動側へ移したのは `areka-P0-shell-implicit-surface`（要件 11.1・11.2）で、正典 URL はその読み替えの腕（areka-seriko の table::AnimationTable::from_world）に置いた。
+`sometimes`・`rarely` 以外の間隔語（`runonce`・`never`・`endtalk`・`periodic,数値` など）は今までどおり元の綴りを添えた debug! を残して非駆動である（単独の `always` だけは 2026-10-06 から `areka-P0-animated-image-playback` が駆動する）。この 2 語を駆動側へ移したのは `areka-P0-shell-implicit-surface`（要件 11.1・11.2）で、正典 URL はその読み替えの腕（areka-seriko の table::AnimationTable::from_world）に置いた。
 束: アニメーションを始める間隔の語・名前を受けて控えめな記録だけ残す（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 24——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 束の名前と順位は、この語が非駆動だった当時の仕分けの綴りをそのまま残している（同じ束の他の間隔語と揃えるため。優先度 A6 は変えていない）。
 """
@@ -7588,7 +7593,7 @@ note = """
 areka-parsers の shell::normalize_interval が名前として認めるのは 3 つの語（`bind`・`random`・`bind+random`）だけなので、この語は元の綴りのまま `Interval::Other` へ忠実に転記される。それを areka-seriko の table::AnimationTable::from_world が `random,2` と同じ引き金（毎秒 2 分の 1 の確率）・同じコマの進め方へ読み替えて採録する。比べ方は小文字の完全一致で、`Sometimes` のような大文字混じりの綴りは読み替えない。
 読み替えたときに元の綴りを添えた debug! が出る（欄: surface_id・animation_id・vocab・k）ので、どの面のどのアニメーションがどの引き金になったかがログから読める。段は控えめで、areka の main が既定とする記録の水準では見えない。
 実測（2026-09-20）: テンプレートゴースト `konnoyayame` の面 0 のまばたき（`animation0`）が `sometimes` を使っており、実機の走行で `k=2` の抽選が 101 回発火した。`rarely` を使う検体は手元に 0 件だが、読み替えは同じ 1 か所の腕で、`sometimes` と同型に採録される。
-`sometimes`・`rarely` 以外の間隔語（`always`・`runonce`・`never`・`endtalk`・`periodic,数値` など）は今までどおり元の綴りを添えた debug! を残して非駆動である。この 2 語を駆動側へ移したのは `areka-P0-shell-implicit-surface`（要件 11.1・11.2）で、正典 URL はその読み替えの腕（areka-seriko の table::AnimationTable::from_world）に置いた。
+`sometimes`・`rarely` 以外の間隔語（`runonce`・`never`・`endtalk`・`periodic,数値` など）は今までどおり元の綴りを添えた debug! を残して非駆動である（単独の `always` だけは 2026-10-06 から `areka-P0-animated-image-playback` が駆動する）。この 2 語を駆動側へ移したのは `areka-P0-shell-implicit-surface`（要件 11.1・11.2）で、正典 URL はその読み替えの腕（areka-seriko の table::AnimationTable::from_world）に置いた。
 束: アニメーションを始める間隔の語・名前を受けて控えめな記録だけ残す（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 24——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 束の名前と順位は、この語が非駆動だった当時の仕分けの綴りをそのまま残している（同じ束の他の間隔語と揃えるため。優先度 A6 は変えていない）。
 """

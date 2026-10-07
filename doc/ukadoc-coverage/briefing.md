@@ -1044,8 +1044,8 @@ not_applicable = 0
 [[barrier]]
 page = "descript_shell_surfaces"
 implemented = 7
-vocabulary_only = 54
-degraded = 5
+vocabulary_only = 53
+degraded = 6
 absent = 67
 alias = 4
 not_applicable = 0

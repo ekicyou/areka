@@ -26,6 +26,10 @@ pub struct DetachedState {
     pub native_size: Option<(u32, u32)>,
     /// まだ取り出されていない窓寸の要求（引き継がないと窓寸合わせが失われる）。
     pub pending_resize: Option<(u32, u32)>,
+    /// 出番の世代（窓が同じなので引き継ぐ・`animated-image-playback` 要件 2.3）。
+    pub stage_generation: u64,
+    /// 追い付いた世代（同上）。
+    pub acked_generation: u64,
 }
 
 impl EmoPresenter {
@@ -53,6 +57,8 @@ impl EmoPresenter {
             applied: old.applied,
             native_size: old.native_size,
             pending_resize: old.pending_resize,
+            stage_generation: old.stage_generation,
+            acked_generation: old.acked_generation,
         })
     }
 }
@@ -104,6 +110,8 @@ impl EmoPresenter {
         target.applied = carried.applied;
         target.native_size = carried.native_size;
         target.pending_resize = carried.pending_resize;
+        target.stage_generation = carried.stage_generation;
+        target.acked_generation = carried.acked_generation;
         tracing::info!(
             ?target_id,
             author_dpi,
