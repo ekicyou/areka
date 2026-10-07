@@ -19,7 +19,7 @@
   - 完了の姿: `load-repro.md` に「手順」「数え上げ」の節があり、数の差と移す先の一覧が載っている
   - _Requirements: 1.1, 1.4, 5.1_
 
-- [ ] 1.3 静かな机で直す前の所要時間を測る
+- [x] 1.3 静かな机で直す前の所要時間を測る
   - 静かさを確かめる道具で机が静かなことを確かめ、その出力を記録に添える
   - `cargo test -p areka --bin areka` のテストの本数を記録する（以後の「同じ本数」の基準）
   - 負荷なしの再現の手順で対象の実行ファイルの全部を 3 回、全体テストを 1 回回し、所要時間を `load-repro.md` の「所要時間」に書く
@@ -161,3 +161,4 @@
 ## Implementation Notes
 - 1.1: libtest は成功したテストの `eprintln!` を捨てるので、`sample-ghost-kit:` の後片付けの失敗の行（`devroot.rs` の `report_cleanup`）と `待ちの打ち切り` の行は、赤のテストの分しか `round-N.log` に残らない。成功したテストの os error 5 を数えるには `--nocapture` が要る（1.2・1.4・4.4 で扱いを決める）
 - 1.2: 再現は `-NoCapture` つきで回す（1.1 の注のとおり）。fallback の `run_input_until` と lap の `LapRig::frames_until` は条件の中で足場を可変で借りるので、`wait_for(&self)` でなく先に `progress_probe()` を取ってから `wait_until(…, Progress::Count(&probe), …)` へ移す（4.3）。`frame/switch_tests.rs` の 5 秒の `yield_now` だけの待ちは要件 2.5 に反する形だが、`frame/` は同じウェーブの他の spec の持ち物なので設計どおり条件つき（5.4）
+- 1.3: 測る順は「静かさの確かめ → 先にビルド（i686 と `cargo test --workspace --no-run -j 4`）→ 本数 → 負荷なし 3 回 → 全体テスト」で、6.1 も同じ順にする（全体テストの時間にコンパイルを入れない）。`tools/perf/check-quiet.ps1` は重いプロセスが 0 件のとき `@()` が `$null` に化けて落ちていたので 1 行の守りを足した（`d6d77336`）。main から入った文字コードの検査（tools の字句は ASCII だけ）で `tools/load-flake.ps1` が赤になり、`summary.txt` の項目名を英数字にした（`0c046e92`）。`--nocapture` では後片付けの行が他のテストの出力に割り込まれ、行の頭で数える `summary.txt` の数が少なく出る（4.4 で数え方を決める）

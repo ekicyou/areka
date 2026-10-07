@@ -262,6 +262,103 @@ Windows は、中のファイルが開かれているフォルダの `rename` �
 
 直す前はタスク 1.3、直した後はタスク 6.1 で書く（静かな机で `--bin areka` の全部を 3 回・全体テストを 1 回）。
 
+### 5.1 測り方（6.1 も同じ順で測る）
+
+2026-10-07 23:55〜2026-10-08 00:13 に、次の順で続けて回した（記録 `target\load-flake\before-run-20261007-235604\progress.txt`）。
+
+1. 静かさの確かめ（`tools/perf/check-quiet.ps1`）。出力は下の 5.2。
+2. 先にビルドを済ませる。i686 の部品（`shiori-host32-helper`・`shiori-host32-testdll`）36 秒、x64 の `cargo test --workspace --no-run -j 4` 382 秒（`warm-i686.log`・`warm-x64.log`）。全体テストの所要時間にコンパイルの時間を入れないため。x64 が長いのは、main を取り込んで `Cargo.toml` の `[profile.dev]` が `debug = "line-tables-only"` に変わった後の最初のビルドだったから。
+3. テストの本数を数える（`cargo test -p areka --bin areka -- --list`）。下の 5.3。
+4. 負荷なしの 3 回（`pwsh -NoProfile -File tools/load-flake.ps1 -Label quiet-before -Rounds 3 -Burners 0 -RoundTimeoutMin 30 -NoCapture`）。下の 5.4。
+5. 全体テストを 1 回（`pwsh -NoProfile -File tools/test-all.ps1` を外から時間を測って回す）。下の 5.5。
+
+その後に負荷の下の再現（タスク 1.4）へ続けた。直した後（タスク 6.1）も、静かさの確かめ → 先にビルド → 本数 → 3 回 → 全体テストの順で測る。ビルドを先に済ませないと、全体テストの時間にコンパイルが入って前後が比べられない。
+
+### 5.2 静かさの確かめ
+
+測る直前（2026-10-07 23:55 JST）の `tools/perf/check-quiet.ps1` の出力（`target\load-flake\quiet-check\quiet-before.txt` の全文）:
+
+```
+[check-quiet] version=1.0.1
+stage=before
+time_utc=2026-10-07T14:55:46.922Z
+sample_sec=20
+machine_cpu_mean_pct=2.7
+machine_cpu_max_pct=5.8
+threshold_mean_pct=10.0
+heavy_process_names=cargo,rustc,rust-analyzer,msbuild,link,cl,areka,python
+heavy_processes_found=0
+heavy_process_list=-
+target_pid_excluded=-
+verdict=QUIET
+reason=ok
+heavy_process_cpu_min_pct=1.0
+heavy_process_presence=areka
+heavy_process_busy=-
+```
+
+机の CPU は平均 2.7%・最大 5.8%（線は平均 10%）、重いプロセスは 0 で、判定は静か（`QUIET`）。
+
+この道具は、重いプロセスが 1 つも無いときに止まっていた（空の一覧が関数から返ると空でなくなり、その中身の名前を読みに行って落ちる）。確かめの前にコミット `d6d77336` で 2 行の守りを足して直し、そのコミットの上で回した。
+
+### 5.3 テストの本数（以後の「同じ本数」の基準）
+
+| 項目 | 値 | 根拠 |
+|---|---|---|
+| `cargo test -p areka --bin areka` のテストの本数 | **2,802 本** | `target\load-flake\before-run-20261007-235604\list.txt`（`-- --list` の出力。`: test` で終わる行が 2,802 行、末尾に `2802 tests, 0 benchmarks`） |
+| うち走らせないもの（無視の印） | 2 本 | 下の 3 回の `test result:` の行が、どれも `2800 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out` |
+
+上の「1. 手順」にある「2,673 本」は 2026-10-06 の数。main を取り込んだ後の基準はこの 2,802 本で、直した後もこの本数で、無視は 2 本のままであることを確かめる（要件 2.4・7.3）。
+
+### 5.4 対象の族（`--bin areka` の全部・負荷なし 3 回）
+
+記録 `target\load-flake\quiet-before-20261008-000446\`（`conditions.txt`・`summary.txt`・`round-1.log`〜`round-3.log`）。条件はコミット `d6d77336`（未コミットの変更なし）、`nocapture: yes`、負荷の前の CPU は平均 4.4%・最大 7.1%（5 回の読み）。
+
+| 回 | 所要時間（秒） | 結果 | 後片付けの失敗の行（`summary.txt` の数） | うち os error 5（`summary.txt` の数） | 混ざりを戻して読んだ行 | うち os error 5（戻して読んだ数） |
+|---|---|---|---|---|---|---|
+| 1 | 66.4 | 緑（2,800 本通過・赤 0） | 222 | 222 | 222 | 222 |
+| 2 | 62.4 | 緑（2,800 本通過・赤 0） | 220 | 217 | 220 | 220 |
+| 3 | 64.1 | 緑（2,800 本通過・赤 0） | 189 | 189 | 191 | 191 |
+| **中央値** | **64.1** | | | | | |
+| **最大** | **66.4** | | 合計 631 | 合計 628 | 合計 633 | 合計 633 |
+
+- 所要時間は `summary.txt` の `wall_sec`（3 回とも上限越えなし、`待ちの打ち切り の行` は 0）。
+- 後片付けの失敗の行の「`summary.txt` の数」は道具が出したそのままの値で、下の数え方の漏れを含む。「戻して読んだ」数は、`round-N.log` を目で読み、他のテストの出力が割り込んで切れた行をつなぎ直して数えたもの。
+- 数え方の注意: `summary.txt`（`tools/load-flake.ps1` の数え方）は、行の頭が `sample-ghost-kit:` で、同じ行に `os error 5` がある行を数える。`--nocapture` では他のテストの出力が行の途中に割り込むので、次の形で漏れる。
+  - 2 回目（`round-2.log`）: 3 行が割り込みで切れ、`os error 5` が同じ行に無い。996 行目は `os error` と `5` の間に他のテストの `ok` が入っている。1698 行目は行の頭だけが残り（後ろは他のテストの名前と `ok`）、本文は 1700 行目に行の頭なしで出ている。3067 行目は `(` で切れ、`アクセスが拒否されました。 (os error 5))` が次の行にある。だから 220 行すべてが os error 5 で、`summary.txt` の 217 は 3 少ない。
+  - 3 回目（`round-3.log`）: 2 行が他のテストの出力と同じ行の途中から始まり、行の頭で数える `summary.txt` から漏れている（916 行目・1438 行目。本文はそれぞれ次の行）。ファイルの中で `sample-ghost-kit:` をどこでも探すと 191 行あり、すべて os error 5。
+  - 1 回目は割り込みが無く、どちらの読み方でも 222 行・すべて os error 5。
+- 戻して読むと、静かな机の 3 回で出た後片付けの失敗の行 633 行は、すべて os error 5（アクセスが拒否された）で、他の理由の失敗は 1 行も無い。文言の種類は「残骸の退避に失敗した」が 628 行、「退避した残骸の削除に失敗した」が 4 行（2 回目 3・3 回目 1）、「作業フォルダの後始末に失敗した」が 1 行（2 回目）。
+- os error 5 の行は、静かな机で 3 回とも緑の回でも出ている。ここでは数だけを残し、読み解きと、`tools/load-flake.ps1` の行の頭で数える数え方の扱いは、タスク 4.4（下の 6）で行う。
+- `summary.txt` の項目名は、この記録（直す前）では日本語（`上限越え (timed_out)`・`赤のテスト (failed_tests)` など）だが、コミット `0c046e92` 以後の走行では英数字（`timed_out`・`failed_tests`・`wait_cut_lines`・`cleanup_lines (sample-ghost-kit:)`・`os_error_5`）になる。中身は同じ。
+
+### 5.5 全体テスト（1 回）
+
+記録 `target\load-flake\before-run-20261007-235604\test-all.log`（末尾の結果の表）と `progress.txt`（`test-all exit=1 sec=290`）。コミット `d6d77336`（未コミットの変更なし）。
+
+| 段 | 時間（秒） | 結果 |
+|---|---|---|
+| i686 の部品の用意（`add i686 target`） | 0 | 緑 |
+| i686 の部品のビルド（`build i686 artifacts`） | 1 | 緑 |
+| 整形の確かめ（`fmt --check`） | 5 | 緑 |
+| x64 のワークスペースのテスト | 233 | 緑 |
+| i686 のテスト（host-32） | 43 | 緑 |
+| crates.io の公開前の確かめ | 2 | 緑 |
+| 文字コードの確かめ（`encoding check`） | 5 | 赤 |
+| **全体** | **290** | 終了コード 1 |
+
+- 赤は文字コードの確かめの 1 段だけ。この spec の `tools/load-flake.ps1`（タスク 1.1）が、main から入った新しい決まり（道具の文字列はコメントの外で英数字だけ）に反して日本語の文字列を持っていた（5 件）。テストはすべて緑で、どの段も最後まで走ったので、290 秒は所要時間として使える（赤の段は 5 秒の静的な確かめで、時間への影響は無い）。
+- `tools/load-flake.ps1` はコミット `0c046e92` で直し、`tools/encoding-check.ps1` は通るようになった。
+
+### 5.6 直した後の線（タスク 6.1 で使う）
+
+design の「Performance」の目安から、直す前の値で決まる線:
+
+| 測るもの | 直す前 | 「目立って延びた」の線 | 直した後が満たすこと |
+|---|---|---|---|
+| 対象の族（3 回の中央値） | 中央値 64.1 秒・最大 66.4 秒 | 64.1 × 1.10 ＝ 70.51 秒。前の最大 66.4 秒はこの線より下なので、線は 70.51 秒のまま | 後の中央値が 70.51 秒以下 |
+| 全体テスト | 290 秒 | 290 × 1.10 ＝ 319 秒 | 後が 319 秒以下 |
+
 ## 6. 競合・os error 5 の結論・試して赤が 0 件だったこと
 
 - 競合: タスク 5.3 で書く。
