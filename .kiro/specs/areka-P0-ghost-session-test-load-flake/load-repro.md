@@ -69,17 +69,17 @@ pwsh -NoProfile -File tools/load-flake.ps1 -Label quiet-before -Rounds 3 -Burner
 
 ## 2. 数え上げ
 
-2026-10-06 に `git grep -w` でワークスペース全体（本番のファイルを含む）を数えた。数えた時点のコミットは `95e8c4ab`。
+2026-10-06 に `git grep -w` でワークスペース全体（本番のファイルを含む）を数えた。数えた時点のコミットは `95e8c4ab`。2026-10-07 に main（`067375e3`・PR#249〜#261）を取り込んだ後（`47b66594`）に同じ検索で数え直し、増えた分を足した（取り込みで消えたファイルは 0）。
 
 ### 2.1 待ちの部品を使うファイル
 
 数えた語: `spin_wait_until`・`SPIN_WAIT`・`run_bounded`・`join_bounded`・`wait_steady`・`pump_until`・`pump_talking_until`・`pump_input_until`・`run_input_until`（テストのファイルが自前で持つ締切つきの待ちの名前）。加えて、テストのファイルが自前で持つ締切つきの待ちを、areka の crate の全部（`src` と `tests`）で `git grep -lE 'recv_timeout|Instant::now\(\) *\+|wait_timeout_while|wait_timeout\('` で探し、上の語の結果と突き合わせた。
 
-結果: areka の crate で 45 ファイル（語で当たった 39 と、自前の締切だけで当たった 6）、他の crate で 51 ファイル。
+結果: areka の crate で 51 ファイル（語で当たった 43 と、自前の締切だけで当たった 8）、他の crate で 52 ファイル。取り込み前は 45（39 と 6）と 51 で、増えた 6 つは表の末尾の「main の取り込みで増えた」の行。
 
 自前の締切の検索は本番のファイルにも当たる（`emo2_boot/balloon_visibility_phase.rs`・`exit_wait.rs`・`perf_thread_report.rs`）が、これらは本番の処理の待ちで待ちの部品の利用ではないので、数えに入れない。
 
-#### areka の crate（45 ファイル）
+#### areka の crate（51 ファイル）
 
 「足場経由」は、切替の足場 `SwitchRig` の待ち（`pump_until`・`pump_talking_until`・`pump_input_until`・`wait_steady`・`shutdown`）を呼ぶだけで、足場の直し（タスク 3.2）で待ち方が替わり、ファイルそのものは触らないもの。
 
@@ -130,10 +130,16 @@ pwsh -NoProfile -File tools/load-flake.ps1 -Label quiet-before -Rounds 3 -Burner
 | `thread_roles_tests.rs` | 自前の締切: `wait_for_role` が、スレッドの名簿に役割名が現れるまで呼び手の `limit`（5 秒）で待つ（5 ms ずつ休む） | 対象外（スレッドの名簿の族・赤の観測が無い）。赤になればタスク 5.4 |
 | `menu/trigger_show_tests.rs` | `Instant::now() + 60 秒` を、`a_ready_plan_without_the_outer_world_reference_is_dropped_with_one_warning` がメニューの返事待ちの締切の値として本番の型へ渡す | 対象外。テストは待たない（締切は本番の返事待ちの値で、`poll_menu_query` を 1 回呼ぶだけ） |
 | `menu/trigger_tests.rs` | `Instant::now() + QUERY_TIMEOUT`（1 秒）を、`in_flight_guard_lowers_the_flag_when_the_pending_query_is_dropped` が `PendingQuery::new` へ渡す | 対象外。同上（ほかのテストは基点の時刻を差し替えて判定し、実時間を待たない） |
+| `emo2_boot/ghost_switch_balloon_tests.rs`（main の取り込みで増えた） | `wait_steady`・`pump_talking_until` | 足場経由 |
+| `mcp/dump_surface_tests.rs`（同上） | `wait_steady`・`pump_talking_until`・`pump_input_until`（各 3）。ほかに自前の `recv_timeout` 20 秒（固まりを解いた後に裏の処理が終わった知らせ） | 足場経由。自前の 20 秒は対象外（`mcp/get_expression_table_tests.rs` と同じ扱い・赤の観測が無い） |
+| `mcp/get_status_tests.rs`（同上） | `wait_steady`・`pump_talking_until`・`pump_input_until`。`spin_wait_until` はコメントの中の名指しだけ | 足場経由 |
+| `mcp/mcp_tests.rs`（同上・足場は前から使っていた） | `pump_talking_until` | 足場経由 |
+| `emo2_boot/film_playback_e2e_tests.rs`（同上） | 自前の締切: `recv` が seriko の受け口から指令を `recv_timeout` 10 秒で 1 件受ける | 対象外（動く絵の族・赤の観測が無い）。赤になればタスク 5.4 |
+| `readme/opener_submit_tests.rs`（同上） | 自前の締切: 断る口の記録に URL が載るまで `Instant::now() + 10 秒` で待つ（1 ms ずつ休む） | 対象外（外へ開く口の族・赤の観測が無い）。赤になればタスク 5.4 |
 
 「spine の族」の自前の締切（`Instant::now() + SPIN_WAIT` の繰り返し）は Tick を注入する待ちで、design の Non-Goals と「2.1 の例外」に当たる。`SPIN_WAIT` の名前と値は `spine_wait.rs` から出し直されるので、これらのファイルは触らない。
 
-#### 他の crate（51 ファイル・すべて対象外）
+#### 他の crate（52 ファイル・すべて対象外）
 
 どれも areka の部品とは別物の、同じ名前の自前の `run_bounded`／`join_bounded` か、コメントの中の名指しだけ（requirements の Out of scope・design の Non-Goals）。
 
@@ -141,7 +147,7 @@ pwsh -NoProfile -File tools/load-flake.ps1 -Label quiet-before -Rounds 3 -Burner
 |---|---|---|
 | `areka-actor`（1） | `src/spawn.rs` | 本番のファイルの中のテストのモジュールの自前の `run_bounded` |
 | `areka-ghost`（17） | `src/relay.rs`（本番のファイルの中のテストのモジュール）・`src/dispatcher_choice_tests.rs`・`src/dispatcher_choice_timeout_tests.rs`・`src/dispatcher_slot_tests.rs`・`src/dispatcher_test_support.rs`・`src/runtime_tests.rs`・`src/ticker_tests.rs`・`tests/ghost/inproc_e2e_test.rs`・`tests/ghost/real_pasta_test.rs`・`tests/ghost/spine_e2e_test_s1_boot_success.rs`・`…_s2_connect_failure.rs`・`…_s3_helper_liveness_detected.rs`・`…_s4_close_handshake.rs`・`…_s5_close_deadline.rs`・`…_s6_full_disconnect.rs`・`…_s7_second_boot_record_present.rs`・`tests/ghost/sylphya_integration_test.rs` | 自前の `run_bounded`／`join_bounded`。s1・s3 の `spin_wait_until` はコメントの中の名指しだけ |
-| `areka-kanade`（33） | `src/actor_tests.rs` と、`tests/kanade/` の `common/`（`common_bounded.rs`・`common_mock_sakura.rs`・`common_smoke.rs`・`common_window_actor.rs`・`mod.rs`）・`boot_test.rs`・`choice_test*.rs`（8）・`close_test*.rs`（4）・`external_status_test.rs`・`failure_test.rs`・`full_run_test.rs`・`idle_pump_test.rs`・`mouse_test*.rs`（5）・`prefetch_test.rs`・`real_helper_test.rs`・`resource_query_test.rs`・`steady_test.rs`・`translate_test.rs` | 自前の `run_bounded`／`join_bounded`（`common_bounded.rs` の定義を共有） |
+| `areka-kanade`（34） | `src/actor_tests.rs` と、`tests/kanade/` の `common/`（`common_bounded.rs`・`common_mock_sakura.rs`・`common_smoke.rs`・`common_window_actor.rs`・`mod.rs`）・`boot_test.rs`・`choice_test*.rs`（8）・`close_test*.rs`（4）・`external_status_test.rs`・`failure_test.rs`・`full_run_test.rs`・`idle_pump_test.rs`・`mouse_test*.rs`（5）・`prefetch_test.rs`・`real_helper_test.rs`・`resource_query_test.rs`・`status_query_test.rs`（main の取り込みで増えた）・`steady_test.rs`・`translate_test.rs` | 自前の `run_bounded`／`join_bounded`（`common_bounded.rs` の定義を共有） |
 
 `wait_steady`・`pump_until`・`pump_talking_until`・`pump_input_until` を語として使うファイルは、areka の crate の外には無い（`areka-emo-text`・`shiori-host32-host` などに当たるのは `pump_until_idle` などの別の名前）。
 
@@ -149,18 +155,18 @@ pwsh -NoProfile -File tools/load-flake.ps1 -Label quiet-before -Rounds 3 -Burner
 
 | 数えたもの | 起票時 | 今 | 差 |
 |---|---|---|---|
-| 切替の足場 `SwitchRig` を名指しするファイル（定義の `ghost_switch_test_support.rs` を除く） | 28 | 28 | 0 |
-| `spin_wait_until` か `SPIN_WAIT` を名指しするファイル（areka の crate） | 20 | 20 | 0 |
+| 切替の足場 `SwitchRig` を名指しするファイル（定義の `ghost_switch_test_support.rs` を除く） | 28 | 31 | +3 |
+| `spin_wait_until` か `SPIN_WAIT` を名指しするファイル（areka の crate） | 20 | 21 | +1 |
 
-差は無い。補足:
+2026-10-06（`95e8c4ab`）の時点では差 0 だった。差はどれも 2026-10-07 の main の取り込みで増えたテストのファイルで、足場の +3 は `emo2_boot/ghost_switch_balloon_tests.rs`・`mcp/dump_surface_tests.rs`・`mcp/get_status_tests.rs`、名指しの +1 は `mcp/get_status_tests.rs`（コメントの中の名指しだけで、呼び出しは無い）。どれも足場経由で、直接の呼び出しは増えていない。補足:
 
-- 足場を名指しせずに使うファイルが 2 つある。`mcp/dump_surface_gpu_tests.rs` と `mcp/dump_balloon_gpu_tests.rs` は `GpuRig`（`mcp/dump_surface_gpu_test_support.rs`）の中の `SwitchRig` を使う。間接の利用を含めると 30。
-- `spin_wait_until` か `SPIN_WAIT` をワークスペース全体（`*.rs`）で語として探すと 22 ファイル（`spin_wait_until` だけなら 18 ＝ areka 16・areka-ghost 2）。areka の 20 から増えた 2 つは `areka-ghost` の `spine_e2e_test_s1_boot_success.rs`・`spine_e2e_test_s3_helper_liveness_detected.rs` で、どちらもコメントの中の名指しだけ（呼び出しは無い）。
-- 1.4 の要件の部品（`run_bounded`・`join_bounded`・`wait_steady`・`pump_*`・自前の待ち）まで広げると、areka の crate で 45 ファイル（上の 2.1）。
+- 足場を名指しせずに使うファイルが 2 つある。`mcp/dump_surface_gpu_tests.rs` と `mcp/dump_balloon_gpu_tests.rs` は `GpuRig`（`mcp/dump_surface_gpu_test_support.rs`）の中の `SwitchRig` を使う。間接の利用を含めると 33。
+- `spin_wait_until` か `SPIN_WAIT` をワークスペース全体（`*.rs`）で語として探すと 23 ファイル（`spin_wait_until` だけなら 19 ＝ areka 17・areka-ghost 2）。areka の 21 から増えた 2 つは `areka-ghost` の `spine_e2e_test_s1_boot_success.rs`・`spine_e2e_test_s3_helper_liveness_detected.rs` で、どちらもコメントの中の名指しだけ（呼び出しは無い）。
+- 1.4 の要件の部品（`run_bounded`・`join_bounded`・`wait_steady`・`pump_*`・自前の待ち）まで広げると、areka の crate で 51 ファイル（上の 2.1）。
 
 ### 2.3 直接の `spin_wait_until` のうち移すもの（移す先の一覧）
 
-対象の族のファイルで `spin_wait_until` を直接呼び、足場か偽の SHIORI の観測口（`ScriptedShioriHandle`）が手元にある呼び出し。取り直した数は 7 か所・4 ファイルで、設計の時点の数と同じ。
+対象の族のファイルで `spin_wait_until` を直接呼び、足場か偽の SHIORI の観測口（`ScriptedShioriHandle`）が手元にある呼び出し。取り直した数は 7 か所・4 ファイルで、設計の時点の数と同じ（main の取り込みの後も同じ）。
 
 移す先の決まり（design「SwitchRig の待ち」）:
 
@@ -205,7 +211,7 @@ pwsh -NoProfile -File tools/load-flake.ps1 -Label quiet-before -Rounds 3 -Burner
 
 #### 使うテストの数
 
-関数の呼び出しを、テストの関数から入口まで定義の名前でたどって数えた（`SwitchRig::new`・`SpineHarness::boot`／`boot_live`／`boot_with`・`acquire_emo2`・`LapRig` と `GpuRig` の作り口などを経由するもの）。たどりは字面の照合なので、`use super::*` などの取り込み越しの呼び出しを取りこぼしうる（少なめに出る向き）。「作って捨てる」はテストごとに複製を作り、終わりで `Drop` が木を消すもの。「共有の 1 つ」はプロセスに 1 つの `LazyLock` の複製を読むだけのもの。
+関数の呼び出しを、テストの関数から入口まで定義の名前でたどって数えた（`SwitchRig::new`・`SpineHarness::boot`／`boot_live`／`boot_with`・`acquire_emo2`・`LapRig` と `GpuRig` の作り口などを経由するもの）。この表は 2026-10-06（`95e8c4ab`）の数で、main の取り込みでは数え直していない（増えた足場のテストの分だけ、`areka` の「作って捨てる」が少し多くなる向き）。たどりは字面の照合なので、`use super::*` などの取り込み越しの呼び出しを取りこぼしうる（少なめに出る向き）。「作って捨てる」はテストごとに複製を作り、終わりで `Drop` が木を消すもの。「共有の 1 つ」はプロセスに 1 つの `LazyLock` の複製を読むだけのもの。
 
 | crate（テストのプロセス） | 作って捨てるテスト | 共有の 1 つだけ使うテスト | 入口 |
 |---|---|---|---|
