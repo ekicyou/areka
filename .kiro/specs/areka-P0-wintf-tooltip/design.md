@@ -6,7 +6,7 @@
 
 **Users**: wintf を使う開発者（当面は後続の `areka-P0-balloon-link-hover` と `areka-P0-shell-tooltip`）。静的な使い方（文字を預ける）と動的な使い方（出す番の知らせを受けてから文字を渡す）の両方を同じ口で使う。
 
-**Impact**: wintf に新しいモジュール `ecs::tooltip` を足す。既存の公開の口は変えない。既存ファイルへの変更は 3 か所・計 10 行前後（公開の口の列挙・系の登録・押下の印）に限る。
+**Impact**: wintf に新しいモジュール `ecs::tooltip` を足す。既存の公開の口は変えない。既存ファイルへの変更は 3 か所（公開の口の列挙・系の登録・押下の印。押下の印はテスト込みで約 50 行）に限る。
 
 設計の骨子は 3 つである。
 
@@ -39,7 +39,7 @@
 - comctl32 の版 6 の申告を exe に埋める仕掛け（areka.exe と wintf のサンプルの `build.rs` とマニフェスト）。
 
 ### Out of Boundary
-- areka のクレートのソース（`crates/areka/src/`）・SHIORI への問い合わせ・バルーンの行の追跡（`crates/areka/src/input_events/balloon.rs`）。
+- areka のクレートのソース（`crates/areka/src/`）（例外: 6.2 で、ワークスペースの同期の送信の検査 `crates/areka/src/session_end_sync_send_tests.rs` の一覧に 1 行と、`crates/areka/src/session_end.rs` の説明に 1 句を足した。この検査は wintf のソースも見るので、tooltip/os.rs の `SendMessageW` が掛かる。どれも呼ぶスレッドが自分で作ったツールチップの窓への送信で、終了の待ち合わせと輪にならない。2026-10-08）・SHIORI への問い合わせ・バルーンの行の追跡（`crates/areka/src/input_events/balloon.rs`）。
 - 既存のポインタの追跡・当たり判定・クリック透過・ドラッグ・重なりの維持（`zorder_pair_maintain.rs`・持ち主の鎖）の振る舞い。
 - `Cargo.toml`（根も wintf も）。`windows` クレートの機能は足さない。
 - マニフェストに書く、comctl32 の版 6 の申告より他の項目（DPI・対応する OS・長いパス・文字コードなど）。DPI は今のとおり wintf が実行時に設定する。文字コードの指定は読み込む SHIORI の DLL に響きうるので、要るなら別の spec で検討する。
@@ -49,7 +49,7 @@
 - wintf の中の既存の部品を**読む**こと: `PointerState`・`WindowPos`・`DPI`・`WindowHandle`・`Window`・`find_owner_window`・`hit_test_in_window`・`tick_wake::arm_deadline`。
 - `windows` クレートの、根で既に有効な機能（`Win32_UI_Controls`・`Win32_UI_WindowsAndMessaging`・`Win32_UI_HiDpi`・`Win32_UI_Input_KeyboardAndMouse`・`Win32_Graphics_Gdi`・`Win32_System_LibraryLoader`）。
 - `tracing`・`thiserror`・`bevy_ecs`（いずれも既存の依存）。開発用に `log-capture-kit`（既存）。
-- 依存の向き: `geometry` → `ranges` → `turn` → `os` → `system` → `mod`（左のものだけを使う。`turn`・`ranges`・`geometry` は `windows` クレートの関数を呼ばない）。
+- 依存の向き: `geometry` → `ranges` → `turn` → `os` → `system` → `mod`（左のものだけを使う（ただし公開の型は `mod` に置くので、`system` は `mod` の公開の型だけを使う）。`turn`・`ranges`・`geometry` は `windows` クレートの関数を呼ばない）。
 - 禁止: areka の型・`tick_wake::mark` の新しい呼び出し（名簿の検査を増やさないため）・既存の公開の構造体への欄の追加。
 
 ### Revalidation Triggers
@@ -144,8 +144,10 @@ crates/wintf/
 │   ├── turn_tests.rs
 │   ├── os.rs               # unsafe はここだけ: OS の読み取り・標準のツールチップの窓・字体
 │   ├── os_tests.rs         # 明示したときだけ走る（#[ignore]）実機の最初の試し S2〜S7（タスクの段で追加）
+│   ├── os_v6_tests.rs      # os_tests の子: 実行の文脈で版 6 の窓を作り、版 5・版 6 の両方で S2・S5・境い目・英語・DPI の切り替え（6.3）
 │   ├── system.rs           # 画面更新ごとの判定（集める→状態機械→適用）・知らせの配り・記録
-│   └── system_tests.rs     # 窓なしの World で「集める→すること」を確かめる
+│   ├── system_tests.rs     # 窓なしの World で「集める→すること」を確かめる
+│   └── system_apply_tests.rs # 窓なしで「すること→表示・知らせ・記録」を確かめる（差し込みの Tip で。mod.rs から読み込む）
 ├── examples/
 │   └── tooltip_demo.rs     # 実機確認用（静的・動的・透過・いつも手前・DPI・試しの項目）
 ├── build.rs                # 新規: wintf のサンプル（examples）にだけマニフェストを埋める（rustc-link-arg-examples）
@@ -160,12 +162,14 @@ crates/areka/
 - 指示の届く先を絞る: wintf は `rustc-link-arg-examples`（wintf を使う側の exe には何も足さない。申告は exe の持ち主が決めること）、areka は `rustc-link-arg-bins`（サンプルと結合テストの exe には足さない。ただし Cargo は bin の指示を bin のユニットテストの exe にも当てるため、areka のユニットテストの exe には入る。build.rs からは見分けられず、`Cargo.toml` を変えずに避ける手は無い。areka のユニットテストは版 6 の下でも全部緑であることを実装で確かめた。wintf のテストの exe には入らない）。
 - マニフェストの中身は comctl32 の版 6 への依存の 1 項目だけ（他の項目は Out of Boundary）。
 
-依存の向きは `geometry` → `ranges` → `turn` → `os` → `system` → `mod`。どのファイルも 1,000 行未満に収める（見込みは最大の `system.rs`・`os.rs` で 400〜500 行）。
+依存の向きは `geometry` → `ranges` → `turn` → `os` → `system` → `mod`（ただし公開の型は `mod` に置くので、`system` は `mod` の公開の型だけを使う）。どのファイルも 1,000 行未満に収める（見込みは最大の `system.rs`・`os.rs` で 400〜500 行）。
 
 ### Modified Files
 - `crates/wintf/src/ecs/mod.rs` — `pub mod tooltip;` と公開の型の `pub use` を足す（足すだけ）。関数（`register`・`update`・`unregister`・`supply_text`・`dismiss`）は名前が一般的で根では意味がぼやける（`wintf::ecs::update` など）ので持ち上げず、`wintf::ecs::tooltip::` から呼ぶ（4.1 で判明・クレートの文書の例も `tooltip::register(...)` の形で書く）。
 - `crates/wintf/src/ecs/world/mod.rs` — `EcsWorld::new` の既定の系の登録の後に `crate::ecs::tooltip::install(&mut world);` を 1 回呼ぶ（註釈込みで 3 行以内・941 行 → 944 行）。
 - `crates/wintf/src/ecs/window_proc/mod.rs` — 関数 `dispatch_window_message` の冒頭で、ボタンの押下のメッセージなら `crate::ecs::tooltip::note_button_press()` を呼ぶ（数行）。既存の配送は変えない。
+
+- `crates/areka/src/session_end_sync_send_tests.rs`・`crates/areka/src/session_end.rs` — 同期の送信の一覧に tooltip/os.rs の行を 1 つ足し、説明に 1 句を足す（6.2 で判明した例外。Out of Boundary の註のとおり）。
 
 `Cargo.toml`・`README.md`・`tick_wake.rs`・`tick_gate_tests.rs`・ポインタやドラッグのファイルには触れない。
 
@@ -351,6 +355,9 @@ pub(crate) fn normalize_newlines(text: &str) -> String;
 
 /// 最大の幅（物理ピクセル）＝ min(320 を dpi で換算した幅, 作業領域の幅)（要件 3.4）。
 pub(crate) fn max_tip_width(dpi: u32, work_area: RectPx) -> i32;
+
+/// 版 6 に渡す最大の幅＝物理の幅を窓の DPI の倍率で割り戻した値（切り捨て。版 6 が掛け戻しても物理の幅を越えない）（6.3）。
+pub(crate) fn logical_max_width(physical: i32, window_dpi: u32) -> i32;
 ```
 - Preconditions: 矩形は `left <= right`・`top <= bottom`。`fit` は 1 以上を返す。
 - Postconditions: `place` の結果は、ツールチップが作業領域より小さければ必ず作業領域の中に収まる。大きければ左上を作業領域の左上に合わせる。
