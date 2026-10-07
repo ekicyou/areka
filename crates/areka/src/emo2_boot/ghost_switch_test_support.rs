@@ -17,16 +17,18 @@ use std::collections::HashMap;
 use std::panic::Location;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::mpsc;
+use std::sync::{Arc, Condvar, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{BasewareRoot, ShioriWiring, TickerMode};
-use areka_kanade::{BootOrigin, CloseReason, KanadeNotice, MonotonicMs};
+use areka_kanade::{
+    BootOrigin, CloseReason, KanadeNotice, MonotonicMs, ShioriBackend, ShioriUnblock,
+};
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use sample_ghost_kit::SampleRoot;
-use shiori_host32_host::ExitKind;
+use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::AppExit;
 use wintf::ecs::Input;
@@ -72,6 +74,91 @@ pub(crate) enum FakeShiori {
     /// 経路で接続に失敗し、kanade は `Fault` で止まる）。[`FakeShiori::WiringFail`] と対で、倒れた先の
     /// 成功と失敗の両方を作る。
     BalloonMissing,
+    /// 台本どおりに答えるが、[`Stall`] の GET に入ったところで解かれるまで止まる。解いた後は台本どおりに
+    /// 答える（`hold_at` と違って失敗を返さない＝呼び出しの並びは止めない場合と同じになる）。
+    ScriptedStalled(Box<dyn Fn() -> ScriptedShioriBackendBuilder>, Stall),
+}
+
+/// 偽の SHIORI を 1 つの GET の入口で止める栓（相手が進めない状態を、時間でなく固まりで作る）。
+/// 解く手 [`Stall::release`] は一度呼べば下ろさない（以後の同じ GET は止まらない）。
+#[derive(Clone)]
+pub(crate) struct Stall {
+    at: &'static str,
+    /// （入ったか・解かれたか）と、解かれたことを知らせる条件変数。
+    state: Arc<(Mutex<(bool, bool)>, Condvar)>,
+}
+
+impl Stall {
+    /// `id` の GET で止まる栓。
+    pub(crate) fn at(id: &'static str) -> Self {
+        Self {
+            at: id,
+            state: Arc::default(),
+        }
+    }
+
+    /// 止まる GET に一度でも入ったか（後戻りしない観測）。
+    pub(crate) fn entered(&self) -> bool {
+        self.state.0.lock().expect("stall poisoned").0
+    }
+
+    /// 解く（止まっている GET を通し、以後は止めない）。
+    pub(crate) fn release(&self) {
+        self.state.0.lock().expect("stall poisoned").1 = true;
+        self.state.1.notify_all();
+    }
+
+    /// GET の入口（SHIORI のアクターのスレッド）。`id` が栓の GET なら解かれるまで待つ。
+    fn pass(&self, id: &str) {
+        if id != self.at {
+            return;
+        }
+        let (lock, released) = &*self.state;
+        let mut state = lock.lock().expect("stall poisoned");
+        state.0 = true;
+        let _released = released
+            .wait_while(state, |s| !s.1)
+            .expect("stall poisoned");
+    }
+}
+
+/// [`Stall`] を前に置いた台本の偽の SHIORI（止まるのは GET の入口だけ・ほかは台本へそのまま渡す）。
+struct StalledBackend {
+    inner: ScriptedShioriBackend,
+    stall: Stall,
+}
+
+impl ShioriBackend for StalledBackend {
+    fn get(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+    ) -> Result<Option<String>, RequestError> {
+        self.stall.pass(id);
+        self.inner.get(id, references, status)
+    }
+
+    fn notify(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+    ) -> Result<(), RequestError> {
+        self.inner.notify(id, references, status)
+    }
+
+    fn unload(&mut self) -> Result<ExitKind, ShutdownError> {
+        self.inner.unload()
+    }
+
+    fn status(&mut self) -> HelperStatus {
+        self.inner.status()
+    }
+
+    fn unblock_handle(&self) -> Option<ShioriUnblock> {
+        self.inner.unblock_handle()
+    }
 }
 
 /// 標準の台本: 起動系列（`OnInitialize`・`OnFirstBoot` 204・`OnBoot` は `on_boot`・
@@ -166,6 +253,17 @@ impl SwitchRig {
                         ledger.borrow_mut().push((folder, handle));
                         ShioriWiring::Custom(Box::new(move || {
                             Ok(Box::new(backend) as Box<dyn areka_kanade::ShioriBackend>)
+                        }))
+                    }
+                    Some(FakeShiori::ScriptedStalled(script, stall)) => {
+                        let (backend, handle) = script().build();
+                        ledger.borrow_mut().push((folder, handle));
+                        let stall = stall.clone();
+                        ShioriWiring::Custom(Box::new(move || {
+                            Ok(Box::new(StalledBackend {
+                                inner: backend,
+                                stall,
+                            }) as Box<dyn ShioriBackend>)
                         }))
                     }
                     Some(FakeShiori::ConnectFail) => {
@@ -381,28 +479,47 @@ impl SwitchRig {
     /// 受け口へ届き、再生の完了が kanade へ届く）、通知の相と `Input` の段（`register_systems` が
     /// 登録した台本の切替要求の取り出しを含む）を `done` が真になるまで有界に回す（届かなければ
     /// [`SwitchRig::pump_until`] と同じく文言を出して `false`）。
+    ///
+    /// `done` には後戻りしない観測（呼び出しの記録が増えた・切替の予約が下りた、など）だけを渡す。
+    /// 台詞の途中の状態を待たない: 台詞の時計は相手の処理を待たずに進むので（[`SwitchRig::inject_talk_tick`]）、
+    /// 途中の状態は観測する前に過ぎ去りうる（areka-P0-ghost-session-test-load-flake 要件 2.6）。
     #[track_caller]
     pub(crate) fn pump_talking_until(&mut self, mut done: impl FnMut(&Self) -> bool) -> bool {
         let mut last_tick: Option<Instant> = None;
         reported(self.pump_with(Instant::now, std::thread::sleep, |rig| {
             if last_tick.is_none_or(|at| at.elapsed() >= TICK_EVERY) {
                 last_tick = Some(Instant::now());
-                rig.talk_clock_ms += TICK_STEP_MS;
-                let now = MonotonicMs(rig.talk_clock_ms);
-                if let Some(dispatcher) = rig
-                    .world
-                    .get_non_send::<GhostSlot>()
-                    .and_then(|slot| slot.0.as_ref())
-                    .and_then(|session| session.dispatcher())
-                {
-                    // 降ろしている最中の dispatcher は閉じていてよい（次の反復で次のゴーストへ届く）。
-                    let _ = dispatcher.send(DispatcherMsg::Tick { now });
-                }
+                rig.inject_talk_tick();
             }
             run_ghost_quit_phase(&mut rig.world);
             rig.world.run_schedule(Input);
             done(rig)
         }))
+    }
+
+    /// 足場の時刻の注入の唯一の口: 台詞の時計を [`TICK_STEP_MS`] 進め、置き場のゴーストの dispatcher へ
+    /// `DispatcherMsg::Tick` を 1 つ送る。送り先は dispatcher の `Tick` だけで、kanade へは送らない
+    /// （足場は `TickerMode::Disabled` で起こすので、足場の kanade は Tick を 1 つも受け取らない）。
+    ///
+    /// dispatcher は Tick を届いた順に消化し、再生中の台詞へ「その台詞が最初に見た Tick からの経過」と
+    /// して渡すだけで、合成の締切も後戻りする状態も持たない。だから足場の時計が相手の処理より先へ
+    /// 進んでも（相手が飢えていても）、増えるのは順番待ちの列だけで、相手が見る時刻の並びは変わらず、
+    /// 合成の締切（kanade の `close_talk_deadline_ms` ＝ 30,000 ms）だけが切れる赤は作らない。これが
+    /// 「追い越しうる時刻には頭打ちを置く」（`spine_wait.rs`）の例外である理由で、時計の先行の檻
+    /// （`ghost_switch_talk_clock_tests.rs`）が固定する（areka-P0-ghost-session-test-load-flake 要件 2.6）。
+    /// kanade へ時刻を届ける送り先を足すと、この理由が崩れる。
+    fn inject_talk_tick(&mut self) {
+        self.talk_clock_ms += TICK_STEP_MS;
+        let now = MonotonicMs(self.talk_clock_ms);
+        if let Some(dispatcher) = self
+            .world
+            .get_non_send::<GhostSlot>()
+            .and_then(|slot| slot.0.as_ref())
+            .and_then(|session| session.dispatcher())
+        {
+            // 降ろしている最中の dispatcher は閉じていてよい（次の反復で次のゴーストへ届く）。
+            let _ = dispatcher.send(DispatcherMsg::Tick { now });
+        }
     }
 
     /// 台詞の時計を進めずに回す: 通知の相と `Input` の段（登録済みの取り出しの系＝台本の切替要求と
@@ -420,10 +537,6 @@ impl SwitchRig {
     /// 段を回さずに `cond` だけを待つ（別スレッドの到着を読むだけの待ち・`spin_wait_until` を直に呼んで
     /// いた所の移し先）。打ち切りは進みの目印で決め、届かなければ文言を標準エラーへ 1 行出して `false`。
     #[track_caller]
-    #[expect(
-        dead_code,
-        reason = "呼び手（spin_wait_until を直に呼ぶ足場のテスト）はタスク 4.3 で移る"
-    )]
     pub(crate) fn wait_for(&self, cond: impl FnMut() -> bool) -> bool {
         let probe = self.progress_probe();
         reported(wait_until(
@@ -553,3 +666,7 @@ fn rewrite_lines(path: &Path, map: impl Fn(&str) -> String) {
 // 足場の待ちの檻（areka-P0-ghost-session-test-load-flake タスク 3.2・檻 9・10）。
 #[path = "ghost_switch_rig_wait_tests.rs"]
 mod rig_wait_tests;
+
+// 時計の先行の檻（areka-P0-ghost-session-test-load-flake タスク 3.3・檻 8・要件 2.6）。
+#[path = "ghost_switch_talk_clock_tests.rs"]
+mod talk_clock_tests;
