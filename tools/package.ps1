@@ -111,6 +111,10 @@ $SmokeExitMsGiven = $PSBoundParameters.ContainsKey('SmokeExitMs')
 $ErrorActionPreference = 'Stop'
 # 外部コマンドの標準エラー出力で例外を投げさせない。終了コードは自前で見る。
 $PSNativeCommandUseErrorActionPreference = $false
+# Copy-Item -Recurse などの進捗バーを出さない（簡易表示の消し残り「]」が段の出力に紛れる）
+$ProgressPreference = 'SilentlyContinue'
+# 判定に使う子の出力（版・検体のパス）は端末の文字コードを通さず UTF-8 で読む
+. (Join-Path $PSScriptRoot 'utf8-child.ps1')
 
 # =============================================================================
 # 較正値（説明の一覧と対応。変更はここだけ）
@@ -227,31 +231,31 @@ function Step([string]$Name, [scriptblock]$Command) {
     $reason = $null
     try {
         & $Command 2>&1 | ForEach-Object { $line = "$_"; $out.Add($line); Write-Host $line }
-        if ($LASTEXITCODE) { $reason = "終了コード $LASTEXITCODE" }
+        if ($LASTEXITCODE) { $reason = "exit code $LASTEXITCODE" }
     } catch {
         $reason = "$_"
     }
     $sec = [int]$sw.Elapsed.TotalSeconds
     if ($null -eq $reason) {
-        Write-Host "OK   $Name（$sec 秒）" -ForegroundColor Green
+        Write-Host "OK   $Name ($sec s)" -ForegroundColor Green
         return
     }
     if ($out.Count) {
-        Write-Host "`n---- 出力の末尾（最大 $OUTPUT_TAIL_LINES 行） ----"
+        Write-Host "`n---- output tail (last $OUTPUT_TAIL_LINES lines) ----"
         $out | Select-Object -Last $OUTPUT_TAIL_LINES | ForEach-Object { Write-Host $_ }
     }
-    Exit-Script $EXIT_STAGE_FAILED "FAIL $Name（$sec 秒・$reason）"
+    Exit-Script $EXIT_STAGE_FAILED "FAIL $Name ($sec s, $reason)"
 }
 
 # =============================================================================
 # 段
 # =============================================================================
-Step '前提の確認' {
+Step 'preflight' {
     # 引数
     if ($SmokeExitMsGiven) {
         $ms = 0
         if (-not [int]::TryParse($SmokeExitMs, [ref]$ms) -or $ms -le 0) {
-            Exit-Script $EXIT_BAD_ARGS "-SmokeExitMs は正の整数で指定する（受け取った値: '$SmokeExitMs'）"
+            Exit-Script $EXIT_BAD_ARGS "-SmokeExitMs must be a positive integer (got: '$SmokeExitMs')"
         }
         $script:SmokeMs = $ms
     } else {
@@ -259,14 +263,14 @@ Step '前提の確認' {
     }
     $accepted = @($ARCHS.Keys) + 'all'
     if ($accepted -cnotcontains $Arch) {
-        Exit-Script $EXIT_BAD_ARGS ("-Arch は {0} のどれかで指定する（受け取った値: '{1}'）" -f ($accepted -join '・'), $Arch)
+        Exit-Script $EXIT_BAD_ARGS ("-Arch must be one of {0} (got: '{1}')" -f ($accepted -join ', '), $Arch)
     }
     $script:BuildArchs = ($Arch -eq 'all') ? @($ARCHS.Keys) : @($Arch)
     if ($Check -and $script:BuildArchs -cnotcontains 'x64') {
-        Exit-Script $EXIT_BAD_ARGS "-Check の起動確認には x64 の zip が要る（-Arch x64 か all と組み合わせる・受け取った値: '$Arch'）"
+        Exit-Script $EXIT_BAD_ARGS "-Check needs the x64 zip (combine with -Arch x64 or all; got: '$Arch')"
     }
     if ($CheckDir -and -not [IO.Path]::IsPathFullyQualified($CheckDir)) {
-        Exit-Script $EXIT_BAD_ARGS "-CheckDir は絶対パスで指定する（受け取った値: '$CheckDir'）"
+        Exit-Script $EXIT_BAD_ARGS "-CheckDir must be an absolute path (got: '$CheckDir')"
     }
     # リポジトリの中なら target\ の下だけ（一時フォルダは target\ の下に限る）。外は受け付ける
     $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')).TrimEnd('\') + '\'
@@ -274,7 +278,7 @@ Step '前提の確認' {
         $full = [IO.Path]::GetFullPath($CheckDir).TrimEnd('\') + '\'
         if ($full.StartsWith($repoRoot, [StringComparison]::OrdinalIgnoreCase) -and
             -not $full.StartsWith("${repoRoot}target\", [StringComparison]::OrdinalIgnoreCase)) {
-            Exit-Script $EXIT_BAD_ARGS "-CheckDir はリポジトリの中なら ${repoRoot}target\ の下を指定する（受け取った値: '$CheckDir'）"
+            Exit-Script $EXIT_BAD_ARGS "-CheckDir inside the repository must be under ${repoRoot}target\ (got: '$CheckDir')"
         }
     }
     # 既定の親はワークツリーの target\package（%TEMP% には何も作らない）
@@ -282,60 +286,58 @@ Step '前提の確認' {
     $script:ExpandDir = Join-Path $parent ('check-' + (Get-Date -Format 'HHmmss'))
     $script:LogDir = "$script:ExpandDir-logs"
     if (($Check -or $CheckDir) -and $script:ExpandDir.Length -gt $EXPAND_DIR_MAX_CHARS) {
-        Exit-Script $EXIT_BAD_ARGS ("展開先が長すぎる（{0} 文字・上限 {1}）: {2} — -CheckDir に短いパス（リポジトリの外か ${repoRoot}target\ の下）を指定するか、ワークツリーを短いパスに置く" -f $script:ExpandDir.Length, $EXPAND_DIR_MAX_CHARS, $script:ExpandDir)
+        Exit-Script $EXIT_BAD_ARGS ("expand path too long ({0} chars, limit {1}): {2} - pass a shorter -CheckDir (outside the repository or under ${repoRoot}target\) or move the worktree to a shorter path" -f $script:ExpandDir.Length, $EXPAND_DIR_MAX_CHARS, $script:ExpandDir)
     }
 
     # git（コミットは 7 桁固定。--short だけだと曖昧なとき 8 桁以上を返す）
     $script:Commit = git rev-parse --short=7 HEAD 2>$null
-    if ($LASTEXITCODE -or -not $script:Commit) { Exit-Script $EXIT_BAD_ARGS 'git が動かない（git を入れて PATH に通す）' }
+    if ($LASTEXITCODE -or -not $script:Commit) { Exit-Script $EXIT_BAD_ARGS 'git does not run (install git and add it to PATH)' }
     $script:StatusBefore = @(git status --porcelain)
     $script:Dirty = $script:StatusBefore.Count
 
     # 道具
     $null = cargo about --version 2>&1
-    if ($LASTEXITCODE) { Exit-Script $EXIT_BAD_ARGS 'cargo about が無い（cargo install cargo-about --version 0.9.2 --locked で入れる）' }
+    if ($LASTEXITCODE) { Exit-Script $EXIT_BAD_ARGS 'cargo about not found (install with: cargo install cargo-about --version 0.9.2 --locked)' }
     $null = cargo deny --version 2>&1
-    if ($LASTEXITCODE) { Exit-Script $EXIT_BAD_ARGS 'cargo deny が無い（cargo install cargo-deny --version 0.20.2 --locked で入れる）' }
-    if (-not (Test-Path -LiteralPath 'Cargo.lock')) { Exit-Script $EXIT_BAD_ARGS 'Cargo.lock が無い（追跡している Cargo.lock を git から戻す）' }
+    if ($LASTEXITCODE) { Exit-Script $EXIT_BAD_ARGS 'cargo deny not found (install with: cargo install cargo-deny --version 0.20.2 --locked)' }
+    if (-not (Test-Path -LiteralPath 'Cargo.lock')) { Exit-Script $EXIT_BAD_ARGS 'Cargo.lock not found (restore the tracked Cargo.lock from git)' }
     # arm64 のリンクに要る VS の部品（rustup のターゲットは欠けても後の段で足すので、ここでは見ない）
     if ($script:BuildArchs -ccontains 'arm64') {
         # vswhere.exe は PATH に載らないので固定の置き場を先に見る
         $vswhere = if (Test-Path -LiteralPath $VSWHERE_PATH -PathType Leaf) { $VSWHERE_PATH }
                    else { Get-Command vswhere -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source }
-        if (-not $vswhere) { Exit-Script $EXIT_BAD_ARGS "vswhere.exe が無い（探した場所: $VSWHERE_PATH と PATH。Visual Studio か Build Tools を入れる）" }
+        if (-not $vswhere) { Exit-Script $EXIT_BAD_ARGS "vswhere.exe not found (searched: $VSWHERE_PATH and PATH; install Visual Studio or Build Tools)" }
         $vs = & $vswhere -latest -products '*' -requires $ARM64_VS_COMPONENT -property installationPath 2>$null
-        if ($LASTEXITCODE -or -not $vs) { Exit-Script $EXIT_BAD_ARGS "arm64 のリンクに要る VS の部品が無い（VS Installer で $ARM64_VS_COMPONENT を追加する・vswhere: $vswhere）" }
+        if ($LASTEXITCODE -or -not $vs) { Exit-Script $EXIT_BAD_ARGS "VS component for arm64 linking not found (add $ARM64_VS_COMPONENT in VS Installer; vswhere: $vswhere)" }
     }
 
     # 版（正本は Cargo.toml の [workspace.package] version。areka パッケージ経由で読む）。3 で止まる検査の最後
-    $out = @(cargo metadata --no-deps --locked --format-version 1 2>&1)
-    $code = $LASTEXITCODE
-    $err = @($out | Where-Object { $_ -is [Management.Automation.ErrorRecord] } | ForEach-Object { "$_" })
-    if ($code) {
-        Exit-Script $EXIT_BAD_ARGS ("版を読めない（cargo metadata が終了コード {0}: {1}）" -f $code, ($err | Select-Object -Last 1))
+    $r = Invoke-Utf8Child cargo @('metadata', '--no-deps', '--locked', '--format-version', '1')
+    if ($r.Code) {
+        Exit-Script $EXIT_BAD_ARGS ('cannot read the version (cargo metadata exited with code {0}: {1})' -f $r.Code, ($r.ErrLines | Select-Object -Last 1))
     }
     try {
-        $meta = ($out | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] }) -join "`n" | ConvertFrom-Json
+        $meta = $r.Out | ConvertFrom-Json
     } catch {
-        Exit-Script $EXIT_BAD_ARGS "版を読めない（cargo metadata の出力が JSON として読めない: $_）"
+        Exit-Script $EXIT_BAD_ARGS "cannot read the version (cargo metadata output is not valid JSON: $_)"
     }
     $pkg = @($meta.packages | Where-Object { $_.name -ceq 'areka' })
-    if ($pkg.Count -ne 1) { Exit-Script $EXIT_BAD_ARGS "版を読めない（cargo metadata に areka のパッケージが $($pkg.Count) 件）" }
+    if ($pkg.Count -ne 1) { Exit-Script $EXIT_BAD_ARGS "cannot read the version (cargo metadata has $($pkg.Count) areka package(s))" }
     $script:Version = "$($pkg[0].version)"
-    if (-not $script:Version) { Exit-Script $EXIT_BAD_ARGS '版を読めない（areka の version が空。Cargo.toml の [workspace.package] version を書く）' }
+    if (-not $script:Version) { Exit-Script $EXIT_BAD_ARGS 'cannot read the version (areka version is empty; set [workspace.package] version in Cargo.toml)' }
     if ($script:Version -cnotmatch $VERSION_PATTERN) {
-        Exit-Script $EXIT_BAD_ARGS "版の形が違う（'$script:Version'・受け付ける形 $VERSION_PATTERN。+ の付記は付けない）"
+        Exit-Script $EXIT_BAD_ARGS "unexpected version format ('$script:Version'; accepted: $VERSION_PATTERN; no + suffix)"
     }
 
     # 前回の同名の組をビルドの前に消す（今回が失敗しても前回の物が完成品に見えて残らない）
     foreach ($a in $script:BuildArchs) {
         $n = Get-ArtifactNames $a
         foreach ($p in @($n.Zip, $n.Sha, $n.ZipTmp, $n.ShaTmp)) {
-            if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force; Write-Host "前回の物を消した: $p" }
+            if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force; Write-Host "removed previous artifact: $p" }
         }
     }
 
-    Write-Host "コミット $script:Commit・未コミットの変更 $script:Dirty 件・版 $script:Version・CPU 種別 $($script:BuildArchs -join '・')"
+    Write-Host "commit $script:Commit, uncommitted changes $script:Dirty, version $script:Version, arch $($script:BuildArchs -join ', ')"
 }
 
 $I686 = $HELPER_TARGET
@@ -350,12 +352,12 @@ function Read-PeInfo([byte[]]$Bytes) {
     $u16 = { param($o) [BitConverter]::ToUInt16($Bytes, $o) }
     $u32 = { param($o) [BitConverter]::ToUInt32($Bytes, $o) }
     $pe = & $u32 0x3c
-    if ((& $u32 $pe) -ne 0x4550) { throw 'PE の署名が無い' }
+    if ((& $u32 $pe) -ne 0x4550) { throw 'no PE signature' }
     $machine = & $u16 ($pe + 4)
     $sections = & $u16 ($pe + 6)
     $opt = $pe + 24
     $magic = & $u16 $opt
-    $dirs = switch ($magic) { 0x10b { $opt + 96 } 0x20b { $opt + 112 } default { throw ('知らない optional header の magic 0x{0:x}' -f $magic) } }
+    $dirs = switch ($magic) { 0x10b { $opt + 96 } 0x20b { $opt + 112 } default { throw ('unknown optional header magic 0x{0:x}' -f $magic) } }
     $importRva = & $u32 ($dirs + 8)   # データディレクトリの 1 番＝import
     $secTable = $opt + (& $u16 ($pe + 20))
     $toOffset = {
@@ -365,7 +367,7 @@ function Read-PeInfo([byte[]]$Bytes) {
             $va = & $u32 ($s + 12); $size = [Math]::Max((& $u32 ($s + 8)), (& $u32 ($s + 16)))
             if ($rva -ge $va -and $rva -lt $va + $size) { return $rva - $va + (& $u32 ($s + 20)) }
         }
-        throw ('RVA 0x{0:x} がどの節にも無い' -f $rva)
+        throw ('RVA 0x{0:x} is in no section' -f $rva)
     }
     $names = [Collections.Generic.List[string]]::new()
     if ($importRva) {
@@ -382,10 +384,10 @@ function Get-DeniedImports([string[]]$Imports) {
     $Imports | Where-Object { $n = $_; $DLL_DENY_PREFIXES | Where-Object { $n.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) } }
 }
 
-Step 'i686 ターゲット導入' { rustup target add $I686 }
+Step 'add i686 target' { rustup target add $I686 }
 # arm64 のターゲットは作るときだけ足す（-Arch x64 では道具の無い機械でも止まらない）
 if ($script:BuildArchs -ccontains 'arm64') {
-    Step 'arm64 ターゲット導入' { rustup target add $ARCHS['arm64'].Target }
+    Step 'add arm64 target' { rustup target add $ARCHS['arm64'].Target }
 }
 
 # RUSTFLAGS を置き換え、CARGO_ENCODED_RUSTFLAGS・CARGO_BUILD_RUSTFLAGS を外す（在ると cargo が RUSTFLAGS を無視する）。
@@ -393,56 +395,69 @@ if ($script:BuildArchs -ccontains 'arm64') {
 Set-EnvTemp 'RUSTFLAGS' $script:RustFlags
 Set-EnvTemp 'CARGO_ENCODED_RUSTFLAGS' $null
 Set-EnvTemp 'CARGO_BUILD_RUSTFLAGS' $null
-Step 'i686 helper ビルド' { cargo build --locked --release -p shiori-host32-helper --target $I686 --target-dir $OUT_DIR }
+Step 'build i686 helper' { cargo build --locked --release -p shiori-host32-helper --target $I686 --target-dir $OUT_DIR }
 foreach ($a in $script:BuildArchs) {
     $t = $ARCHS[$a].Target
-    Step "$a 本体ビルド" { cargo build --locked --release -p areka --target $t --target-dir $OUT_DIR }
+    Step "build $a areka" { cargo build --locked --release -p areka --target $t --target-dir $OUT_DIR }
 }
 Restore-Env
 
-Step '静的リンクの確認' {
+Step 'check static linking' {
     # 作った exe 全部（helper＋作る CPU 種別の本体）と、期待する機械種別
     $exes = [ordered]@{ $script:HelperExe = $HELPER_MACHINE }
     foreach ($a in $script:BuildArchs) { $exes["$OUT_DIR/$($ARCHS[$a].Target)/release/areka.exe"] = $ARCHS[$a].Machine }
     $bad = $false
     foreach ($exe in $exes.Keys) {
-        if (-not (Test-Path -LiteralPath $exe)) { throw "ビルドの出力が無い: $exe" }
+        if (-not (Test-Path -LiteralPath $exe)) { throw "build output missing: $exe" }
         $info = Read-PeInfo ([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $exe)))
         $denied = @(Get-DeniedImports $info.Imports)
-        Write-Host ('{0}: 機種 0x{1:x4}（期待 0x{2:x4}）・取り込み {3}' -f $exe, $info.Machine, $exes[$exe], ($info.Imports -join ', '))
-        if ($info.Machine -ne $exes[$exe]) { Write-Host '  機種が違う'; $bad = $true }
-        if ($denied.Count) { Write-Host "  拒否表に当たる: $($denied -join ', ')"; $bad = $true }
+        Write-Host ('{0}: machine 0x{1:x4} (expected 0x{2:x4}), imports {3}' -f $exe, $info.Machine, $exes[$exe], ($info.Imports -join ', '))
+        if ($info.Machine -ne $exes[$exe]) { Write-Host '  wrong machine'; $bad = $true }
+        if ($denied.Count) { Write-Host "  matches the deny list: $($denied -join ', ')"; $bad = $true }
     }
-    if ($bad) { throw '機種が違うか、VC++ ランタイムの DLL を読んでいる（+crt-static が効いていない）' }
+    if ($bad) { throw 'wrong machine or loads a VC++ runtime DLL (+crt-static not effective)' }
 }
 
-Step 'ライセンス検査' { cargo deny --locked check licenses }
+# 子の出力を UTF-8 で読んで段へ行として流す。段の 2>&1 | を素の呼び出しが通ると、子がパイプへ書いた UTF-8 が
+# 端末の文字コードで解かれ、cargo deny・cargo about の罫線などが化ける。標準エラーの行を先に、標準出力の行を後に流す
+# （子が終わってからまとめて出る）。終了コードは $LASTEXITCODE に置く（段の判定はそれを見る）
+function Invoke-Utf8Step([string]$FilePath, [string[]]$ArgumentList) {
+    $r = Invoke-Utf8Child $FilePath $ArgumentList
+    $r.ErrLines
+    @($r.Out -split '\r?\n' | Where-Object { $_ -ne '' })
+    $global:LASTEXITCODE = $r.Code
+}
+
+Step 'license check' { Invoke-Utf8Step cargo @('deny', '--locked', 'check', 'licenses') }
 
 # -Arch に依らず全ターゲット（ARCHS の行＋helper）で 1 回。どの CPU 種別の zip にも同じ物を入れる
-Step '謝辞の生成' {
+Step 'generate third-party notices' {
     if (Test-Path -LiteralPath $script:Notices) { Remove-Item -LiteralPath $script:Notices -Force }
     $targets = @($ARCHS.Values | ForEach-Object Target) + $HELPER_TARGET | ForEach-Object { '--target', $_ }
-    cargo about generate --locked --workspace @targets about.hbs -o $script:Notices
+    Invoke-Utf8Step cargo (@('about', 'generate', '--locked', '--workspace') + $targets + @('about.hbs', '-o', $script:Notices))
     if ($LASTEXITCODE) { return }
-    if (-not (Test-Path -LiteralPath $script:Notices)) { throw "謝辞の出力が無い: $script:Notices" }
+    if (-not (Test-Path -LiteralPath $script:Notices)) { throw "third-party notices output missing: $script:Notices" }
 }
 
 # nar-sample-path の出力（1 行 1 組の key=value）から $Keys の値を読む。鍵が無い・パスが実在しなければ throw。
 function Read-SamplePaths([string]$Sample, [string[]]$Keys) {
-    $lines = @(cargo run -q --locked -p sample-ghost-kit --bin nar-sample-path -- $Sample)
-    if ($LASTEXITCODE) { throw "nar-sample-path $Sample が終了コード $LASTEXITCODE" }
+    $r = Invoke-Utf8Child cargo @('run', '-q', '--locked', '-p', 'sample-ghost-kit', '--bin', 'nar-sample-path', '--', $Sample)
+    # 子の標準エラーは書き替えずにそのまま写す（Step の出力の末尾には入らないので、失敗の文に最後の行を添える）
+    foreach ($e in $r.ErrLines) { Write-Host $e }
+    if ($r.Code) { throw "nar-sample-path $Sample exited with code $($r.Code): $($r.ErrLines | Select-Object -Last 1)" }
+    $lines = @($r.Out -split '\r?\n')
     $paths = @{}
     foreach ($key in $Keys) {
         $line = $lines | Where-Object { $_.StartsWith("$key=") } | Select-Object -First 1
-        if (-not $line) { throw "nar-sample-path $Sample の出力に $key= が無い" }
+        if (-not $line) { throw "nar-sample-path $Sample output has no $key=" }
         $path = $line.Substring($key.Length + 1)
-        if (-not (Test-Path -LiteralPath $path -PathType Container)) { throw "nar-sample-path $Sample の $key= が実在しない: $path" }
+        if (-not (Test-Path -LiteralPath $path -PathType Container)) { throw "nar-sample-path $Sample ${key}= does not exist: $path" }
         $paths[$key] = $path
     }
     $paths
 }
 
-Step '検体の展開' {
+Step 'extract samples' {
     $emo2 = Read-SamplePaths 'emo2' @('folder', 'balloon.emo2-kakukaku')
     $script:GhostDir = $emo2['folder']
     $script:KakukakuDir = $emo2['balloon.emo2-kakukaku']
@@ -477,7 +492,7 @@ function Test-ZipContent([string]$ZipPath, [string]$Arch) {
         foreach ($r in @('areka.exe', 'shiori-host32-helper.exe', 'ghost/emo2/ghost/master/descript.txt', 'ghost/emo2/install.txt',
                 'balloon/emo2-kakukaku/descript.txt', 'balloon/StayseeBalloon/descript.txt',
                 'README.txt', 'LICENSE-MIT', 'THIRD-PARTY-NOTICES.md', 'BUILD-INFO.txt')) {
-            if (-not $map.ContainsKey($r)) { $bad.Add("1 必須の項目が無い: $r") }
+            if (-not $map.ContainsKey($r)) { $bad.Add("1 required entry missing: $r") }
         }
         # 2. 最上位・ghost/ 直下・balloon/ 直下の許可表
         $allowed = @{
@@ -488,45 +503,45 @@ function Test-ZipContent([string]$ZipPath, [string]$Arch) {
         foreach ($prefix in $allowed.Keys) {
             $kids = $names | Where-Object { $_.StartsWith($prefix, [StringComparison]::Ordinal) } |
                 ForEach-Object { $_.Substring($prefix.Length).Split('/')[0] } | Where-Object { $_ } | Sort-Object -Unique
-            $kids | Where-Object { $allowed[$prefix] -cnotcontains $_ } | ForEach-Object { $bad.Add("2 許可表に無い項目: $prefix$_") }
+            $kids | Where-Object { $allowed[$prefix] -cnotcontains $_ } | ForEach-Object { $bad.Add("2 entry not in the allow list: $prefix$_") }
         }
         # 3. 起動記録
         $prof = @($names | Where-Object { $_ -match '(^|/)profile/' })
-        if ($prof.Count) { $bad.Add("3 profile/ を含む項目が $($prof.Count) 件（最初: $($prof[0])）") }
+        if ($prof.Count) { $bad.Add("3 $($prof.Count) entries contain profile/ (first: $($prof[0]))") }
         # 4. 実行ファイルと DLL は許可表の 3 本だけ
         $execs = @($names | Where-Object { $_ -match '\.(exe|dll)$' })
-        $execs | Where-Object { $ALLOWED_EXECUTABLES -cnotcontains $_ } | ForEach-Object { $bad.Add("4 許可表に無い実行ファイル: $_") }
-        $ALLOWED_EXECUTABLES | Where-Object { $execs -cnotcontains $_ } | ForEach-Object { $bad.Add("4 実行ファイルが無い: $_") }
+        $execs | Where-Object { $ALLOWED_EXECUTABLES -cnotcontains $_ } | ForEach-Object { $bad.Add("4 executable not in the allow list: $_") }
+        $ALLOWED_EXECUTABLES | Where-Object { $execs -cnotcontains $_ } | ForEach-Object { $bad.Add("4 executable missing: $_") }
         # 5. PE の機種・6. 依存 DLL（本体と helper だけ）
         $machines = [ordered]@{ 'areka.exe' = $ARCHS[$Arch].Machine; 'shiori-host32-helper.exe' = $HELPER_MACHINE; 'ghost/emo2/ghost/master/pasta.dll' = $HELPER_MACHINE }
         foreach ($n in $machines.Keys) {
             if (-not $map.ContainsKey($n)) { continue }   # 無いことは 1／4 が言う
-            try { $info = Read-PeInfo (Read-ZipEntry $map[$n]) } catch { $bad.Add("5 PE として読めない: $n（$_）"); continue }
-            Write-Host ('{0}: 機種 0x{1:x4}・取り込み {2}' -f $n, $info.Machine, ($info.Imports -join ', '))
-            if ($info.Machine -ne $machines[$n]) { $bad.Add(('5 機種が違う: {0} は 0x{1:x4}（期待 0x{2:x4}）' -f $n, $info.Machine, $machines[$n])) }
+            try { $info = Read-PeInfo (Read-ZipEntry $map[$n]) } catch { $bad.Add("5 cannot read as PE: $n ($_)"); continue }
+            Write-Host ('{0}: machine 0x{1:x4}, imports {2}' -f $n, $info.Machine, ($info.Imports -join ', '))
+            if ($info.Machine -ne $machines[$n]) { $bad.Add(('5 wrong machine: {0} is 0x{1:x4} (expected 0x{2:x4})' -f $n, $info.Machine, $machines[$n])) }
             if ($n -like '*.exe') {
                 $denied = @(Get-DeniedImports $info.Imports)
-                if ($denied.Count) { $bad.Add("6 拒否表の DLL を読む: $n → $($denied -join ', ')") }
+                if ($denied.Count) { $bad.Add("6 imports a denied DLL: $n -> $($denied -join ', ')") }
             }
         }
         # 7. 説明書 2 本は emo2.nar の中身とバイトが同じ
         $nar = Get-ZipEntryMap (Resolve-Path -LiteralPath 'vendors/sample_ghost/emo2.nar')
         try {
             foreach ($pair in @(@('ghost/emo2/readme.txt', 'readme.txt'), @('ghost/emo2/shell/master/readme.txt', 'shell/master/readme.txt'))) {
-                if (-not $map.ContainsKey($pair[0])) { $bad.Add("7 説明書が無い: $($pair[0])"); continue }
-                if (-not $nar.Map.ContainsKey($pair[1])) { $bad.Add("7 emo2.nar に $($pair[1]) が無い"); continue }
-                if (-not (& $same (Read-ZipEntry $map[$pair[0]]) (Read-ZipEntry $nar.Map[$pair[1]]))) { $bad.Add("7 emo2.nar の $($pair[1]) とバイトが違う: $($pair[0])") }
+                if (-not $map.ContainsKey($pair[0])) { $bad.Add("7 readme missing: $($pair[0])"); continue }
+                if (-not $nar.Map.ContainsKey($pair[1])) { $bad.Add("7 emo2.nar has no $($pair[1])"); continue }
+                if (-not (& $same (Read-ZipEntry $map[$pair[0]]) (Read-ZipEntry $nar.Map[$pair[1]]))) { $bad.Add("7 bytes differ from $($pair[1]) in emo2.nar: $($pair[0])") }
             }
         } finally { $nar.Zip.Dispose() }
         # 8. README・ライセンス・謝辞は写す元とバイトが同じ・BUILD-INFO.txt の値
         foreach ($pair in @(@('README.txt', 'dist/README.txt'), @('LICENSE-MIT', 'LICENSE-MIT'), @('THIRD-PARTY-NOTICES.md', $script:Notices))) {
             if (-not $map.ContainsKey($pair[0])) { continue }   # 無いことは 1 が言う
-            if (-not (& $same (Read-ZipEntry $map[$pair[0]]) ([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $pair[1]))))) { $bad.Add("8 $($pair[1]) とバイトが違う: $($pair[0])") }
+            if (-not (& $same (Read-ZipEntry $map[$pair[0]]) ([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $pair[1]))))) { $bad.Add("8 bytes differ from $($pair[1]): $($pair[0])") }
         }
         if ($map.ContainsKey('BUILD-INFO.txt')) {
             $info = [Text.Encoding]::UTF8.GetString((Read-ZipEntry $map['BUILD-INFO.txt'])) -split "`r?`n"
             foreach ($want in @("version=$script:Version", "arch=$Arch", "commit=$script:Commit", "dirty=$script:Dirty")) {
-                if ($info -cnotcontains $want) { $bad.Add("8 BUILD-INFO.txt に $want が無い") }
+                if ($info -cnotcontains $want) { $bad.Add("8 BUILD-INFO.txt lacks $want") }
             }
         }
     } finally { $z.Zip.Dispose() }
@@ -535,7 +550,7 @@ function Test-ZipContent([string]$ZipPath, [string]$Arch) {
 
 foreach ($a in $script:BuildArchs) {
     $stage = "$OUT_DIR/stage-$a"
-    Step "$a 組み立て" {
+    Step "$a assemble" {
         if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
         $null = New-Item -ItemType Directory -Path "$stage/ghost", "$stage/balloon"
         # 設計の「zip の中身」の 9 行だけ（写す元が無ければ Copy-Item が throw）。areka.exe だけ CPU 種別ごと
@@ -559,7 +574,7 @@ foreach ($a in $script:BuildArchs) {
         [IO.File]::WriteAllLines((Join-Path (Resolve-Path -LiteralPath $stage) 'BUILD-INFO.txt'), $info)   # UTF-8（BOM 無し）
     }
 
-    Step "$a 圧縮" {
+    Step "$a compress" {
         $tmp = (Get-ArtifactNames $a).ZipTmp
         $script:TmpFiles.Add($tmp)
         if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force }
@@ -568,11 +583,11 @@ foreach ($a in $script:BuildArchs) {
         Write-Host $tmp
     }
 
-    Step "$a 中身の判定" {
+    Step "$a content check" {
         $bad = Test-ZipContent (Get-ArtifactNames $a).ZipTmp $a
-        if (-not $bad.Count) { Write-Host '判定 1〜8 すべて合'; return }
-        $bad | ForEach-Object { Write-Host "否 $_" }
-        throw "中身の判定で否が $($bad.Count) 件"
+        if (-not $bad.Count) { Write-Host 'content checks 1-8 all passed'; return }
+        $bad | ForEach-Object { Write-Host "FAIL $_" }
+        throw "content check: $($bad.Count) failure(s)"
     }
 
     Step "$a SHA256" {
@@ -592,13 +607,14 @@ function Test-RunLog([AllowEmptyString()][string]$Text, [int]$ExitCode, [bool]$W
     $count = { param($m) @($lines | Where-Object { $_.Contains($m) }).Count }
     $row = { param($name, $ok, $detail) [pscustomobject]@{ Name = $name; Ok = [bool]$ok; Detail = $detail } }
     $gate = & $count $LOG_MARKER_SMOKE_GATE
-    & $row '番犬で止めていない' (-not $WatchdogKilled) ($WatchdogKilled ? '番犬で止めた' : '自分で終わった')
-    & $row '有界で走った' ($gate -gt 0) "「$LOG_MARKER_SMOKE_GATE」$gate 件"
-    & $row '終了コード 0' ($ExitCode -eq 0) "終了コード $ExitCode"
+    # 目印の文言は印字しない（端末へは ASCII だけ）。詳細の文では目印を変数名で示す
+    & $row 'not killed by watchdog' (-not $WatchdogKilled) ($WatchdogKilled ? 'killed by watchdog' : 'exited by itself')
+    & $row 'ran bounded' ($gate -gt 0) "LOG_MARKER_SMOKE_GATE: $gate line(s)"
+    & $row 'exit code 0' ($ExitCode -eq 0) "exit code $ExitCode"
     $win = & $count $LOG_MARKER_WINDOWS
-    & $row 'ゴーストの窓が立った' ($win -gt 0) "「$LOG_MARKER_WINDOWS」$win 件"
-    $faults = @($LOG_MARKER_FAULTS | ForEach-Object { $n = & $count $_; if ($n) { "「$_」$n 件" } })
-    & $row 'SHIORI の接続の失敗が無い' (-not $faults.Count) ($faults.Count ? ($faults -join '・') : '失敗の目印 0 件')
+    & $row 'ghost window opened' ($win -gt 0) "LOG_MARKER_WINDOWS: $win line(s)"
+    $faults = @(for ($i = 0; $i -lt $LOG_MARKER_FAULTS.Count; $i++) { $n = & $count $LOG_MARKER_FAULTS[$i]; if ($n) { "LOG_MARKER_FAULTS[$i]: $n line(s)" } })
+    & $row 'no SHIORI connection failure' (-not $faults.Count) ($faults.Count ? ($faults -join '; ') : 'fault markers: 0 lines')
     # 204 側の「epilogue-only 起動記録トーク…」は同じ event="boot_talk" だが文言が違うので数えない
     # 自動終了より後の挨拶は数えない（完了 alpha-package の要件 3.3 の空振り）。両方とも run.log に出るので行の位置で比べる。
     # 自動終了の目印が無ければ全行を見る（そのときは「有界で走った」側か終了コードで落ちる）
@@ -606,34 +622,35 @@ function Test-RunLog([AllowEmptyString()][string]$Text, [int]$ExitCode, [bool]$W
     $before = ($exitAt -ge 0) ? @($lines | Select-Object -First $exitAt) : $lines
     $greet = @($before | Where-Object { $_.Contains($LOG_MARKER_GREETING) }).Count
     $all = & $count $LOG_MARKER_GREETING
-    & $row '会話が始まった' ($greet -gt 0) "「$LOG_MARKER_GREETING」$greet 件（自動終了より前）・全体 $all 件"
+    & $row 'talk started' ($greet -gt 0) "LOG_MARKER_GREETING: $greet line(s) before auto exit, $all in total"
     # 初回のバルーン: 最初の「バルーンを決めました」の行。dir= は行末までの値（パスに空白が入り得る）
     $b = @($lines | Where-Object { $_.Contains($LOG_MARKER_BALLOON) }) | Select-Object -First 1
     if (-not $b) {
-        & $row '初回のバルーンは同梱' $false "「$LOG_MARKER_BALLOON」の行が無い"
+        & $row 'first balloon is bundled' $false 'no LOG_MARKER_BALLOON line'
     } else {
         $dir = ($b -match 'dir=(.*)$') ? $Matches[1].Trim() : ''
-        $ok = $b.Contains($LOG_MARKER_BALLOON_ROUTE) -and $dir.EndsWith($LOG_MARKER_BALLOON_DIR, [StringComparison]::OrdinalIgnoreCase)
-        & $row '初回のバルーンは同梱' $ok ($b.Substring($b.IndexOf($LOG_MARKER_BALLOON)))
+        $companion = $b.Contains($LOG_MARKER_BALLOON_ROUTE)
+        $ok = $companion -and $dir.EndsWith($LOG_MARKER_BALLOON_DIR, [StringComparison]::OrdinalIgnoreCase)
+        & $row 'first balloon is bundled' $ok ($companion ? "route=Companion dir=$dir" : "route=other dir=$dir")
     }
 }
 
 $script:WatchdogKilled = $false   # 番犬が子を止めたか（記録の判定の合否の一覧に畳み込む）
 if ($Check) {
-    Step '短いパスへ展開' {
+    Step 'expand to short path' {
         # 展開先の長さは「前提の確認」で確かめ済み
-        if (Test-Path -LiteralPath $script:ExpandDir) { throw "展開先が既に在る: $script:ExpandDir" }
-        if (Test-Path -LiteralPath $script:LogDir) { throw "記録の置き場が既に在る: $script:LogDir" }
+        if (Test-Path -LiteralPath $script:ExpandDir) { throw "expand dir already exists: $script:ExpandDir" }
+        if (Test-Path -LiteralPath $script:LogDir) { throw "log dir already exists: $script:LogDir" }
         # 完成の改名より前なので x64 の仮の名前の zip を展開する（.tmp のままでも zip として読める）
         [IO.Compression.ZipFile]::ExtractToDirectory((Get-ArtifactNames 'x64').ZipTmp, $script:ExpandDir)
-        if ($script:BuildArchs -ccontains 'arm64') { Write-Host 'arm64 の zip は作ったが起動確認はしていない（起動確認は x64 の zip だけ）' }
+        if ($script:BuildArchs -ccontains 'arm64') { Write-Host 'built the arm64 zip but did not launch-check it (the launch check covers the x64 zip only)' }
         $null = New-Item -ItemType Directory -Path $script:LogDir
         $script:RunLog = Join-Path $script:LogDir 'run.log'
         $script:RunErrLog = Join-Path $script:LogDir 'run.stderr.log'
-        Write-Host "展開先: $script:ExpandDir"
+        Write-Host "expanded to: $script:ExpandDir"
     }
 
-    Step '起動' {
+    Step 'launch' {
         # AREKA_*／WINTF_* を全部外し、決めた 4 つだけ入れる。子へは継承で渡し、起こした直後に戻す。
         Get-ChildItem Env: | Where-Object { $_.Name -like 'AREKA_*' -or $_.Name -like 'WINTF_*' } |
             ForEach-Object { Set-EnvTemp $_.Name $null }
@@ -646,63 +663,63 @@ if ($Check) {
                 -RedirectStandardOutput $script:RunLog -RedirectStandardError $script:RunErrLog -NoNewWindow -PassThru
         } finally { Restore-Env }
         $null = $script:Child.Handle   # 取っ手を先に掴まないと終了後に ExitCode が読めない
-        Write-Host "子のプロセス番号: $($script:Child.Id)"
+        Write-Host "child process id: $($script:Child.Id)"
     }
 
-    Step '番犬' {
+    Step 'watchdog' {
         $limitMs = $script:SmokeMs + $WATCHDOG_MARGIN_SEC * 1000
         if (-not $script:Child.WaitForExit($limitMs)) {
             $script:WatchdogKilled = $true
-            Write-Host "番犬: $limitMs ミリ秒を超えたので自分が起こした子（プロセス番号 $($script:Child.Id)）だけを止めた"
+            Write-Host "watchdog: exceeded $limitMs ms; killed only the child this script started (process id $($script:Child.Id))"
             $script:Child.Kill()
             $null = $script:Child.WaitForExit(10000)
         }
-        Write-Host "子の終了コード: $($script:Child.ExitCode)"
+        Write-Host "child exit code: $($script:Child.ExitCode)"
         # 番犬で止めたことは次の段「記録の判定」の合否の一覧に畳み込む（ここでは止めない）
     }
 
-    Step '記録の判定' {
+    Step 'log check' {
         $text = (Get-Content -LiteralPath $script:RunLog -Raw) + "`n" + (Get-Content -LiteralPath $script:RunErrLog -Raw)
         $rows = Test-RunLog $text $script:Child.ExitCode $script:WatchdogKilled
-        $rows | ForEach-Object { Write-Host ('{0} {1}（{2}）' -f ($_.Ok ? '合' : '否'), $_.Name, $_.Detail) }
-        Write-Host "記録: $script:RunLog"
-        Write-Host "記録: $script:RunErrLog"
-        Write-Host "展開先: $script:ExpandDir"
+        $rows | ForEach-Object { Write-Host ('{0} {1} ({2})' -f ($_.Ok ? 'PASS' : 'FAIL'), $_.Name, $_.Detail) }
+        Write-Host "log: $script:RunLog"
+        Write-Host "log: $script:RunErrLog"
+        Write-Host "expanded to: $script:ExpandDir"
         $failed = @($rows | Where-Object { -not $_.Ok })
         if ($failed.Count) {
-            Exit-Script $EXIT_CHECK_FAILED ("起動確認の否（{0}）" -f (($failed | ForEach-Object Name) -join '・'))
+            Exit-Script $EXIT_CHECK_FAILED ("launch check failed ({0})" -f (($failed | ForEach-Object Name) -join ', '))
         }
     }
 
     # 判定の合格の後にだけ来る（否は上で 2 で終わり、木と記録を残す）。番犬の後なので自分の子は終わっている。
     # 掴みが残る間（本体の終了に道連れの補助 exe など）は再試行で待つ。プロセスは止めない。
-    Step '後片付け' {
+    Step 'cleanup' {
         if ($KeepExpanded) {
-            Write-Host "展開した木を残した（-KeepExpanded）: $script:ExpandDir"
+            Write-Host "kept the expanded tree (-KeepExpanded): $script:ExpandDir"
         } else {
             $last = $null
             for ($i = 1; $i -le $REMOVE_RETRY; $i++) {
                 try { Remove-Item -LiteralPath $script:ExpandDir -Recurse -Force; $last = $null; break }
                 catch { $last = $_; if ($i -lt $REMOVE_RETRY) { Start-Sleep -Seconds $REMOVE_RETRY_WAIT_SEC } }
             }
-            if ($last) { throw "展開した木を消せなかった（段「後片付け」・$REMOVE_RETRY 回試した）: $script:ExpandDir — $($last.Exception.Message)" }
-            Write-Host "展開した木を消した: $script:ExpandDir"
+            if ($last) { throw "could not remove the expanded tree (stage 'cleanup', tried $REMOVE_RETRY times): $script:ExpandDir - $($last.Exception.Message)" }
+            Write-Host "removed the expanded tree: $script:ExpandDir"
         }
-        Write-Host "記録（残す）: $script:LogDir"
+        Write-Host "log (kept): $script:LogDir"
     }
 }
 
-Step 'git status 不変の確認' {
+Step 'git status unchanged' {
     $after = @(git status --porcelain)
-    if ($LASTEXITCODE) { throw 'git status が失敗した' }
+    if ($LASTEXITCODE) { throw 'git status failed' }
     if (($script:StatusBefore -join "`n") -ceq ($after -join "`n")) { return }
-    $script:StatusBefore | Where-Object { $after -cnotcontains $_ } | ForEach-Object { Write-Host "消えた $_" }
-    $after | Where-Object { $script:StatusBefore -cnotcontains $_ } | ForEach-Object { Write-Host "増えた $_" }
-    throw 'git status --porcelain が始めと違う'
+    $script:StatusBefore | Where-Object { $after -cnotcontains $_ } | ForEach-Object { Write-Host "gone $_" }
+    $after | Where-Object { $script:StatusBefore -cnotcontains $_ } | ForEach-Object { Write-Host "new $_" }
+    throw 'git status --porcelain differs from the start'
 }
 
 # 起動確認が仮の名前の zip を展開するので、改名は起動確認と git status の確認の後
-Step '完成' {
+Step 'finalize' {
     foreach ($a in $script:BuildArchs) {
         $n = Get-ArtifactNames $a
         # 1 本ずつ改名の直後に登録する（途中で落ちたら済んだ分だけを後始末が消す）
@@ -718,9 +735,9 @@ Step '完成' {
         Write-Host "sha256: $($n.Sha)"
         Write-Host "version: $script:Version"
     }
-    Write-Host "コミット $script:Commit・未コミットの変更 $script:Dirty 件"
+    Write-Host "commit $script:Commit, uncommitted changes $script:Dirty"
 }
 
 Invoke-Cleanup $EXIT_OK
-Write-Host "`n全段 緑" -ForegroundColor Green
+Write-Host "`nall steps green" -ForegroundColor Green
 exit $EXIT_OK

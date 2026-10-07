@@ -28,10 +28,9 @@ jobs:
     steps:
       - name: 改行の設定
         run: |
-          [Console]::OutputEncoding = [Text.Encoding]::UTF8
           $origin = git config --show-origin --get core.autocrlf
-          if ($LASTEXITCODE -ne 0) { $origin = '(未設定)' }
-          Write-Host "core.autocrlf の元の値と出どころ: $origin"
+          if ($LASTEXITCODE -ne 0) { $origin = '(not set)' }
+          Write-Host "core.autocrlf original value and origin: $origin"
           git config --global core.autocrlf true
 
       - name: 取り出し
@@ -49,25 +48,24 @@ jobs:
       - name: 版の検査
         id: version
         run: |
-          [Console]::OutputEncoding = [Text.Encoding]::UTF8
           # 入力は環境変数だけ（GITHUB_REF_TYPE・GITHUB_REF_NAME）。手元でも差し替えて同じ本文を回せる
-          # 版の読み方は tools/package.ps1 と同じ（areka パッケージの version）
-          $out = @(cargo metadata --no-deps --locked --format-version 1 2>&1)
-          $code = $LASTEXITCODE
-          $err = @($out | Where-Object { $_ -is [Management.Automation.ErrorRecord] } | ForEach-Object { "$_" })
-          if ($code) {
-            Write-Host ("版を読めない（cargo metadata が終了コード {0}: {1}）" -f $code, ($err | Select-Object -Last 1))
+          # 版は tools/utf8-child.ps1 の Invoke-Utf8Child で読む（tools/package.ps1 と同じ・areka パッケージの version）
+          # 段は作業ツリーの根で回る（取り出しの後）ので ./tools から読み込める
+          . ./tools/utf8-child.ps1
+          $r = Invoke-Utf8Child cargo @('metadata', '--no-deps', '--locked', '--format-version', '1')
+          if ($r.Code) {
+            Write-Host ('cannot read the version (cargo metadata exited with code {0}: {1})' -f $r.Code, ($r.ErrLines | Select-Object -Last 1))
             exit 1
           }
           try {
-            $meta = ($out | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] }) -join "`n" | ConvertFrom-Json
+            $meta = $r.Out | ConvertFrom-Json
           } catch {
-            Write-Host "版を読めない（cargo metadata の出力が JSON として読めない: $_）"
+            Write-Host "cannot read the version (cargo metadata output is not valid JSON: $_)"
             exit 1
           }
           $pkg = @($meta.packages | Where-Object { $_.name -ceq 'areka' })
           if ($pkg.Count -ne 1) {
-            Write-Host "版を読めない（cargo metadata に areka のパッケージが $($pkg.Count) 件）"
+            Write-Host "cannot read the version (cargo metadata has $($pkg.Count) areka package(s))"
             exit 1
           }
           $version = "$($pkg[0].version)"
@@ -76,12 +74,12 @@ jobs:
             if ($tagVersion.StartsWith('v', [StringComparison]::Ordinal)) { $tagVersion = $tagVersion.Substring(1) }
             # 字のとおりに比べる（-ceq は文化に従い、BOM や幅のない字を無視する）
             if (-not [string]::Equals($tagVersion, $version, [StringComparison]::Ordinal)) {
-              Write-Host "タグの版と Cargo.toml の版が違う（タグの版 '$tagVersion'・Cargo.toml の版 '$version'）"
+              Write-Host "tag version differs from Cargo.toml version (tag '$tagVersion', Cargo.toml '$version')"
               exit 1
             }
-            Write-Host "タグの版と Cargo.toml の版が一致（'$version'）"
+            Write-Host "tag version matches Cargo.toml version ('$version')"
           } else {
-            Write-Host "タグが無いので比べを飛ばす（Cargo.toml の版 '$version'）"
+            Write-Host "no tag; skipping the comparison (Cargo.toml version '$version')"
           }
           "version=$version" >> $env:GITHUB_OUTPUT
 
@@ -92,7 +90,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          [Console]::OutputEncoding = [Text.Encoding]::UTF8
           # 入力は環境変数だけ（GITHUB_REF_TYPE・GITHUB_REF_NAME・GITHUB_REPOSITORY・PUBLISH・GH_TOKEN・VERSION）
           # 読むだけ。リポジトリにも Release にも書かない
           # 一つ前のタグを決める関数（API の呼び出しと分け、手元で並びを差し替えて回せるようにする）
@@ -116,27 +113,29 @@ jobs:
           # タグの名前で Release を探す行（後始末の段と 1 字違わず同じ）。下書きを含む一覧を全部取る
           $found = @(gh api --paginate "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | [.tag_name, .id, .html_url, .draft] | @tsv' | Where-Object { [string]::Equals($_.Split("`t")[0], $tag, [StringComparison]::Ordinal) })
           if ($LASTEXITCODE) {
-            Write-Host "Release の一覧を取れない（gh api が終了コード $LASTEXITCODE）"
+            Write-Host "cannot list releases (gh api exited with code $LASTEXITCODE)"
             exit 1
           }
           if ($found.Count) {
             foreach ($row in $found) {
               $f = $row.Split("`t")
-              Write-Host "タグ '$tag' の Release が既に在る（URL $($f[2])・下書き $($f[3])）"
+              Write-Host "release for tag '$tag' already exists (URL $($f[2]), draft $($f[3]))"
             }
             if ($env:PUBLISH -ceq 'true') { exit 1 }
-            Write-Host '乾いた走りなので止めずに続ける'
+            Write-Host 'dry run; continuing'
           } else {
-            Write-Host "タグ '$tag' の Release は無い（下書きを含めて 0 件）"
+            Write-Host "no release for tag '$tag' (0 including drafts)"
             'absent=true' >> $env:GITHUB_OUTPUT
           }
-          $names = @(gh api --paginate "repos/$env:GITHUB_REPOSITORY/tags?per_page=100" --jq '.[].name')
+          # 各行は「名前・タブ・コミットの SHA」。最後の欄が ASCII なので端末の文字コードに依らず行が読める。1 つ目の欄を名前に使う
+          $rows = @(gh api --paginate "repos/$env:GITHUB_REPOSITORY/tags?per_page=100" --jq '.[] | [.name, .commit.sha] | @tsv')
           if ($LASTEXITCODE) {
-            Write-Host "タグの一覧を取れない（gh api が終了コード $LASTEXITCODE）"
+            Write-Host "cannot list tags (gh api exited with code $LASTEXITCODE)"
             exit 1
           }
+          $names = @($rows | ForEach-Object { $_.Split("`t")[0] })
           $prevTag = Get-PrevTag $names $env:VERSION
-          Write-Host "一つ前のタグ: '$prevTag'"
+          Write-Host "previous tag: '$prevTag'"
           "prev_tag=$prevTag" >> $env:GITHUB_OUTPUT
 
       - name: 道具の用意
@@ -149,18 +148,17 @@ jobs:
 
       - name: 環境の記録
         run: |
-          [Console]::OutputEncoding = [Text.Encoding]::UTF8
           # 印字だけで合否は付けない（arm64 の道具が無いときに止めるのは配布スクリプトの終了コード 3）
           # 無い物は「無い」と印字して続け、最後は必ず exit 0
-          $imageOs = if ($env:ImageOS) { $env:ImageOS } else { '(無い)' }
-          $imageVersion = if ($env:ImageVersion) { $env:ImageVersion } else { '(無い)' }
-          Write-Host "実行環境のイメージ: $imageOs・版 $imageVersion"
+          $imageOs = if ($env:ImageOS) { $env:ImageOS } else { '(none)' }
+          $imageVersion = if ($env:ImageVersion) { $env:ImageVersion } else { '(none)' }
+          Write-Host "runner image: $imageOs, version $imageVersion"
           function Show-Version([string]$Label, [scriptblock]$Probe) {
             try {
               $out = @(& $Probe 2>&1 | ForEach-Object { "$_" })
-              $line = if ($LASTEXITCODE) { "(無い・終了コード $LASTEXITCODE)" } elseif ($out.Count) { $out[0] } else { '(無い・印字が空)' }
+              $line = if ($LASTEXITCODE) { "(none, exit code $LASTEXITCODE)" } elseif ($out.Count) { $out[0] } else { '(none, empty output)' }
             } catch {
-              $line = "(無い: $_)"
+              $line = "(none: $_)"
             }
             Write-Host "${Label}: $line"
           }
@@ -175,7 +173,7 @@ jobs:
           $vswhere = if (Test-Path -LiteralPath $VSWHERE_PATH -PathType Leaf) { $VSWHERE_PATH }
                      else { Get-Command vswhere -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source }
           if (-not $vswhere) {
-            Write-Host "arm64 のリンクの道具: 無い（vswhere.exe が無い・探した場所: $VSWHERE_PATH と PATH）"
+            Write-Host "arm64 link tools: none (vswhere.exe not found; searched: $VSWHERE_PATH and PATH)"
           } else {
             try {
               $vs = & $vswhere -latest -products '*' -requires $ARM64_VS_COMPONENT -property installationPath 2>$null
@@ -185,28 +183,27 @@ jobs:
               $code = "($_)"
             }
             if ($code -or -not $vs) {
-              Write-Host "arm64 のリンクの道具: 無い（$ARM64_VS_COMPONENT・vswhere: $vswhere・終了コード $code）"
+              Write-Host "arm64 link tools: none ($ARM64_VS_COMPONENT, vswhere: $vswhere, exit code $code)"
             } else {
-              Write-Host "arm64 のリンクの道具: 在る（$vs）"
+              Write-Host "arm64 link tools: present ($vs)"
             }
           }
           $root = if ($env:GITHUB_WORKSPACE) { $env:GITHUB_WORKSPACE } else { (Get-Location).Path }
           try {
             $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($root))
-            Write-Host ("作業ドライブ {0} の空き容量: {1:N1} GB" -f $drive.Name, ($drive.AvailableFreeSpace / 1GB))
+            Write-Host ("free space on work drive {0}: {1:N1} GB" -f $drive.Name, ($drive.AvailableFreeSpace / 1GB))
           } catch {
-            Write-Host "作業ドライブの空き容量: 読めない（$_）"
+            Write-Host "free space on work drive: unreadable ($_)"
           }
           exit 0
 
       - name: zip を作る
         timeout-minutes: 90
         run: |
-          [Console]::OutputEncoding = [Text.Encoding]::UTF8
-          # 配布スクリプトは別の PowerShell のプロセスで呼ぶ（-File では呼ぶ前に文字コードを設定できないので -Command）
-          # 子の出力の文字コードを UTF-8 にしてから、引数 -Arch all だけで呼ぶ（起動確認の引数は付けない）
+          # 配布スクリプトは別の PowerShell のプロセスで -File で呼ぶ（端末の文字コードは書き替えない。文は ASCII・版は UTF-8 で読む）
+          # 引数 -Arch all だけで呼ぶ（起動確認の引数は付けない）
           # 失敗の段の名前（FAIL {段の名前}）は配布スクリプトが印字する。この段は子の終了コードをそのまま返すだけ
-          pwsh -NoProfile -NonInteractive -Command '[Console]::OutputEncoding = [Text.Encoding]::UTF8; & ./tools/package.ps1 -Arch all; exit $LASTEXITCODE'
+          pwsh -NoProfile -NonInteractive -File ./tools/package.ps1 -Arch all
           $code = $LASTEXITCODE
           # この本文は GitHub が pwsh -command ". '{0}'" で回し、本文の exit の 0 と 1 以外の値は 1 に変わる。
           # 子の終了コード（3 など）をそのまま段の終了コードにするため、先にホストへ終了コードを渡してから exit する
@@ -217,7 +214,6 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          [Console]::OutputEncoding = [Text.Encoding]::UTF8
           # 入力は環境変数 VERSION だけ。置き場は今いるフォルダ（作業ツリーの根）からの target/package
           # 読むだけ。4 つのファイルを書き換えない・作り直さない
           $dir = Join-Path (Get-Location).Path 'target/package'
@@ -225,7 +221,7 @@ jobs:
           $names = @(foreach ($z in $zips) { $z; "$z.sha256" })
           $missing = @($names | Where-Object { -not (Test-Path -LiteralPath (Join-Path $dir $_) -PathType Leaf) })
           if ($missing.Count) {
-            foreach ($n in $missing) { Write-Host "無い: $n（置き場 $dir）" }
+            foreach ($n in $missing) { Write-Host "missing: $n (dir $dir)" }
             exit 1
           }
           # .sha256 は「小文字の 16 進 64 字・空白 2 つ・zip のファイル名・LF」の 1 行（tools/package.ps1 の書き方）。
@@ -245,21 +241,21 @@ jobs:
             # バイト列を UTF-8 の字にする（Encoding.GetString は BOM を外さず U+FEFF として残す）
             $actual = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes((Join-Path $dir "$z.sha256")))
             if (-not [string]::Equals($actual, $expected, [StringComparison]::Ordinal)) {
-              Write-Host "$z.sha256 が $z と合わない（期待 '$(Show-Text $expected)'・実際 '$(Show-Text $actual)'）"
+              Write-Host "$z.sha256 does not match $z (expected '$(Show-Text $expected)', actual '$(Show-Text $actual)')"
               $bad++
             }
           }
           if ($bad) { exit 1 }
           foreach ($z in $zips) {
-            Write-Host "揃った: $z（SHA256 $($hashes[$z])）"
-            Write-Host "揃った: $z.sha256"
+            Write-Host "ok: $z (SHA256 $($hashes[$z]))"
+            Write-Host "ok: $z.sha256"
           }
           $root = if ($env:GITHUB_WORKSPACE) { $env:GITHUB_WORKSPACE } else { (Get-Location).Path }
           try {
             $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($root))
-            Write-Host ("作業ドライブ {0} の空き容量: {1:N1} GB" -f $drive.Name, ($drive.AvailableFreeSpace / 1GB))
+            Write-Host ("free space on work drive {0}: {1:N1} GB" -f $drive.Name, ($drive.AvailableFreeSpace / 1GB))
           } catch {
-            Write-Host "作業ドライブの空き容量: 読めない（$_）"
+            Write-Host "free space on work drive: unreadable ($_)"
           }
           exit 0
 
@@ -271,7 +267,6 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           PREV_TAG: ${{ steps.guard.outputs.prev_tag }}
         run: |
-          [Console]::OutputEncoding = [Text.Encoding]::UTF8
           # 入力は環境変数だけ（GITHUB_REPOSITORY・GH_TOKEN・VERSION・PREV_TAG）
           # 渡すのは 4 つの確かめが見た同じ置き場の同じ 4 つ。タグは作らない（リモートに無ければ --verify-tag で gh が止まる）
           # gh は下書きで作り、4 つを載せ終えてから公開し、途中で失敗したら自分の下書きを消す。この段が成功の経路の最後の段
@@ -283,7 +278,7 @@ jobs:
           if ($env:PREV_TAG) { $opts += @('--notes-start-tag', $env:PREV_TAG) }
           gh release create $tag @files @opts
           $code = $LASTEXITCODE
-          if ($code) { Write-Host "Release を公開できない（gh release create が終了コード $code）" }
+          if ($code) { Write-Host "cannot publish the release (gh release create exited with code $code)" }
           # gh の終了コードをそのまま段の終了コードにする（-Command は 0 と 1 以外を 1 に潰すので先にホストへ渡す）
           $host.SetShouldExit($code)
           exit $code
@@ -294,7 +289,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          [Console]::OutputEncoding = [Text.Encoding]::UTF8
           # 入力は環境変数だけ（GITHUB_REF_NAME・GITHUB_REPOSITORY・GH_TOKEN）
           # 既存の Release の検査が「無い」と確かめた後に現れたこのタグの Release は、この走りの物（同じタグの走りは同時に 1 つ）
           # 在れば下書きでも公開でも Release の番号を名指しして消す。タグは消さない
@@ -302,12 +296,12 @@ jobs:
           $where = "https://github.com/$env:GITHUB_REPOSITORY/releases"
           $found = @(gh api --paginate "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | [.tag_name, .id, .html_url, .draft] | @tsv' | Where-Object { [string]::Equals($_.Split("`t")[0], $tag, [StringComparison]::Ordinal) })
           if ($LASTEXITCODE) {
-            Write-Host "Release の一覧を取れない（gh api が終了コード $LASTEXITCODE）"
-            Write-Host "タグ '$tag' の Release が残っているおそれがある。手で確かめる先: Release の一覧 $where"
+            Write-Host "cannot list releases (gh api exited with code $LASTEXITCODE)"
+            Write-Host "a release for tag '$tag' may remain; check manually: $where"
             exit 1
           }
           if (-not $found.Count) {
-            Write-Host "タグ '$tag' の Release は残っていない（下書きを含めて 0 件）"
+            Write-Host "no release left for tag '$tag' (0 including drafts)"
             exit 0
           }
           $bad = 0
@@ -316,14 +310,14 @@ jobs:
             gh api -X DELETE "repos/$env:GITHUB_REPOSITORY/releases/$($f[1])"
             $code = $LASTEXITCODE
             if ($code) {
-              Write-Host "Release を消せない（番号 $($f[1])・URL $($f[2])・下書き $($f[3])・gh api が終了コード $code）"
+              Write-Host "cannot delete release (id $($f[1]), URL $($f[2]), draft $($f[3]), gh api exited with code $code)"
               $bad++
             } else {
-              Write-Host "Release を消した（番号 $($f[1])・URL $($f[2])・下書き $($f[3])）。タグ '$tag' は残す"
+              Write-Host "deleted release (id $($f[1]), URL $($f[2]), draft $($f[3])); tag '$tag' kept"
             }
           }
           if ($bad) {
-            Write-Host "タグ '$tag' の Release が残っているおそれがある。手で確かめる先: Release の一覧 $where"
+            Write-Host "a release for tag '$tag' may remain; check manually: $where"
             exit 1
           }
           exit 0

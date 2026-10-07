@@ -297,7 +297,7 @@ pwsh -NoProfile -File tools/test-all.ps1 -Format -License   # Bash／PowerShell 
 ```
 
 - **必ず `run_in_background` で起動し、完了通知を待つ**（約 19 分・2026-09-24 実測で x64 全テストだけ 838 秒）。前面で回すとツールの時間切れで途中の結果しか残らないうえ、待ち時間に何もできない。起動したらすぐステップ6 へ進む。
-- **段**: i686 ターゲット導入 → i686 成果物ビルド（helper・偽 DLL 2 つ）→ `cargo fmt --all`（整形・`-Format`）→ fmt --check → x64 ワークスペース全テスト（`--no-fail-fast -j 4`）→ i686 テスト（host-32 系）→ `cargo deny check` → `cargo about generate`（`-License`）。
+- **段**（末尾の一覧に出る名前は英語）: `add i686 target`（i686 ターゲット導入）→ `build i686 artifacts`（helper・偽 DLL 2 つ）→ `cargo fmt (format)`（`cargo fmt --all`・`-Format`）→ `fmt --check` → `x64 workspace tests`（`--no-fail-fast -j 4`）→ `i686 tests (host-32)` → `crates.io pre-publish check (package only)`（`wintf`・`dola` の公開前の確認）→ `encoding check`（道具の文字コードの判定・`tools/encoding-check.ps1`・約 40 秒）→ `cargo deny check` → `cargo about generate`（この 2 段は `-License`）。
 - **Format Gate**: `-Format` が「`cargo fmt --all` で整形 → `--check` で確認」をテストの前の段で行う。整形差分はステップ7 のコミットに取り込む。`cargo fmt` が構文エラーで失敗したら中断して報告する（コンパイルできないコードが残っている）。Rust ワークスペースでないリポジトリはチェックリストに「(整形対象不在により省略)」と注記する。
 - **License Gate**: MIT 配布を守るライセンス健全性ゲート。`-License` がテストの後に直列で回す（テストと同時に回すと rustc がメモリ不足で落ちる）。
   - (a) 汚染ゲート `cargo deny check`: 強コピーレフト（GPL/LGPL/AGPL/MPL 等）や許可外ライセンスの混入を検出する（`deny.toml` があるときだけ意味を持つ）。
@@ -362,7 +362,7 @@ pwsh -NoProfile -File tools/test-all.ps1 -Format -License   # Bash／PowerShell 
 - **緑**: 7-2 へ進む。
 - **赤**: 赤の段のログを読んで原因を仕分ける。
   - **ファイルが見つからない系（spec 文書の実ファイル読み）**: ステップ4 の参照パスの追随漏れ。ステップ4-2／4-3 に戻って仕分けをやり直し、修正を追加コミットしてから全体テストを回し直す（7-4）。
-  - **`i686 成果物ビルド` が赤**: host32 の e2e も連鎖して赤になる（成果物が無いと panic する設計）。まず i686 のビルドを直す。
+  - **`build i686 artifacts`（i686 成果物ビルド）が赤**: host32 の e2e も連鎖して赤になる（成果物が無いと panic する設計）。まず i686 のビルドを直す。
   - **rustc の `memory allocation ... failed`・壊れた rmeta の `E0463`／`E0786`**: テストの失敗ではなくメモリ不足。並行レーンで `cargo` を回していないか確かめ、回し直す。
   - **`cargo deny check` が赤**: 下の「License Gate 失敗時」。
   - **それ以外（コードの赤）**: ワークフローを中断し開発者に報告する。コミットはすべてローカルなので、そのまま直して回し直せる。**赤のままステップ8（PR 作成・マージ）へ進まない。**

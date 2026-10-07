@@ -2356,18 +2356,19 @@ areka には入力ボックスのバルーンが無く、その半透明化を�
 [entry."ukadoc:descript_balloon:use_self_alpha_2c_5024:1"]
 status = "degraded"
 introduced = ""
-owner = "areka-P0-default-balloon-bundle"
+owner = "areka-P0-self-alpha-declaration"
 priority = "A15"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差（`0` と書いたバルーンでも 1 として扱う）。記録: なし。
-areka はこの欄を読まない。バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、宣言に何を書いても読まれず、記録も出ない。
-そのうえで焼き方は常に `use_self_alpha,1` 相当に固定されている。areka-emo-present の balloon::build_balloon_target_from_faces が areka-emo-atlas の normalize::UseSelfAlpha::On を決め打ちで渡しており、バルーンの絵をこの値で焼くのはこの 1 か所だけである（同じ値を決め打ちする場所がもう 1 つ、同じクレートの shell_target::build_shell_target にあるが、そちらが焼くのはシェルの絵であって、バルーンの 2 か所目ではない。2026-09-18 に実測し、2026-09-20 に綴りを引き直した——シェル側の決め打ちは当時 areka の emo2_boot::assets に在ったが、シェル読み込みの権威へ寄せられた）。
-したがって `use_self_alpha,0` と書いたバルーンも 1 として扱われる。正典どおりに動かない代わりに動きはするので、状態は縮退である。半透明を前提に描かれたバルーンだけが正しく表示される、というのが利用者から見える差である。
-シェルの descript にある `seriko.use_self_alpha` は綴りの違う別の項目である。名前が似ているだけで一緒に扱わないこと。
-裁量: この固定は黙って壊れているのではなく意図した扱いであり、doc/COMPAT_ARCHITECTURE.md の §8「沈黙ルール対応表」に 1 行で登記してある（開発者裁定 2026-09-18）。
-担当 spec は areka-P0-default-balloon-bundle。同 spec が §8 の行とこの記述を書いた。
+壊れ方: 見た目の差（`.pna` を使わない・宣言の無いバルーンを areka 独自の決まりで描く）。記録: あり（読めない値は値つきの `warn!`・採った扱いはバルーン 1 つにつき `info!` で 1 行・`.pna` の数は `warn!`）。
+areka はバルーンのフォルダ直下の descript.txt のこの欄を、バルーン 1 つにつき 1 回読む。面ごとの balloons*s.txt などに書いた `use_self_alpha` は見ない。読む場所は areka-emo-present の balloon::load_balloon_use_self_alpha で、値の読み取りは同じクレートの self_alpha::read_use_self_alpha を通る（シェルの `seriko.use_self_alpha` と同じ読み手）。値は前後の空白を除き、英字の大小を区別せずに比べる。
+描き分けは 4 通りで、扱いを決めるのは areka-emo-atlas の normalize::Normalizer::plan の 1 か所である。`1`／`true` は絵の α を使い、α の無い絵は左上 1 画素と同じ色を抜く。`full` は絵の α を使い、α の無い絵は全面を不透明にする（抜かない）。`0` は α を捨てて全面を不透明にしてから左上の色を抜く。宣言が無い（行が無い・値が読めない）ときは絵の中身を見て、α が 255 未満の画素が 1 つでもあれば α を使い、無ければ左上の色を抜く。
+正典どおりでない残りが 2 つあるので、状態は縮退である。⑴ `.pna` は使わない。添えてあっても `.pna` が無いときと同じに描き、フォルダ直下の `.pna` の数（areka が読まない絵に添えた物も含む）を `warn!` で残す（開発者方針）。⑵ 宣言が無いときの決まりは areka 独自である。正典の既定は `0` だが、areka は α を持つ絵を α どおりに描くことを先にした（開発者裁定 2026-10-05）。宣言が書いてあるときは正典どおりに描き分ける。
+この扱いは doc/COMPAT_ARCHITECTURE.md の §8「沈黙ルール対応表」のバルーンの透過の行に、シェルとバルーンで共通の決まりとして登記してある。
+シェルの descript にある `seriko.use_self_alpha` は綴りの違う別の項目である。決まりは同じだが、行は別に持つ。
+経緯: 2026-10-05 までは宣言を読まず、常に `use_self_alpha,1` 相当で描いていた（開発者裁定 2026-09-18・担当は areka-P0-default-balloon-bundle）。その裁定は 2026-10-05 の裁定で上書きされた。
+担当 spec は areka-P0-self-alpha-declaration。同 spec がこの欄を読む経路を作り、§8 の行とこの記述を書き直した。
 束: 透過とはみ出しの描き方・読む経路が無い（先に要る仕組み: emo の合成器）。束の順位: 9——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -5925,22 +5926,22 @@ note = """
 """
 
 [entry."ukadoc:descript_shell:seriko.use_self_alpha_2c_5024:1"]
-status = "absent"
+status = "degraded"
 introduced = ""
-owner = ""
+owner = "areka-P0-self-alpha-declaration"
 priority = "A15"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka は透過の扱いを宣言で切り替えられない。
-透過の扱いを表す語彙は areka-emo-atlas の normalize::UseSelfAlpha に正典どおり 3 通りそろっているが、どれを使うかは呼ぶ側が決め打ちで渡しており、シェルの descript の宣言からは来ない。だから `1` と書いたゴーストでは結果が偶然そろい、`0` や `full` と書いたゴーストでは宣言と違う扱いになる。
-2026-09-20 の実測: 宣言は今も読まず常に `1` 相当。その下で α の無い絵は正典どおり抜き色で描かれるようになった。`.pna` と `full` は未実装のまま。シェルの絵を焼くときに α を採る側の値を固定で渡す場所は、2026-09-20 に 1 か所へ寄った——areka-emo-present の shell_target::build_shell_target である（起動の areka の emo2_boot::assets も採寸の areka の placement::measure も、同 shell_target::load_shell_target を通るようになったため、自分では値を渡さない）。抜き色（`UseSelfAlpha::On` かつ α の無い絵で左上の色を透明にする）を実装したのは `areka-P0-shell-implicit-surface`（要件 4）で、`UseSelfAlpha::Off` の下の抜き色は未実装のまま残る。状態と担当はこの実測では変えていない（宣言を読む経路は 1 本も無いままだからである）。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-emo-atlas。同 spec の brief は読むべき正典としてシェルの descript のこの欄を名指しし、透過の正規化を自分の範囲に挙げている。ただし担当 spec の記述が古い——同 brief は「この欄はシェルの descript 由来の設定として注ぎ込む」と書いているが、着地した経路は決め打ちの値を渡しており、宣言は届いていない。
+壊れ方: 見た目の差（`.pna` を使わない・宣言の無いシェルを areka 独自の決まりで描く）。記録: あり（読めない値は値つきの `warn!`・採った扱いは読み込みのたびに `info!` で 1 行・`.pna` が添えてあった数は `warn!`）。
+areka はシェルの descript.txt のこの欄を、シェルを読み込むたびに読む。読む場所は areka-emo-present の shell_target::load_shell_target で、値の読み取りは同じクレートの self_alpha::read_use_self_alpha を通る（バルーンの `use_self_alpha` と同じ読み手）。値は前後の空白を除き、英字の大小を区別せずに比べる。
+描き分けは 4 通りで、扱いを決めるのは areka-emo-atlas の normalize::Normalizer::plan の 1 か所である。`1`／`true` は絵の α を使い、α の無い絵は左上 1 画素と同じ色を抜く。`full` は絵の α を使い、α の無い絵は全面を不透明にする（抜かない）。`0` は α を捨てて全面を不透明にしてから左上の色を抜く。宣言が無い（行が無い・値が読めない）ときは絵の中身を見て、α が 255 未満の画素が 1 つでもあれば α を使い、無ければ左上の色を抜く。動く絵は 1 枚目で決めた扱いを全部のコマに当てる。
+正典どおりでない残りが 2 つあるので、状態は縮退である。⑴ `.pna` は使わない。添えてあっても `.pna` が無いときと同じに描き、焼いた絵のうち `.pna` が添えてあった数を `warn!` で残す（開発者方針）。⑵ 宣言が無いときの決まりは areka 独自である。正典の既定は `0` だが、areka は α を持つ絵を α どおりに描くことを先にした（開発者裁定 2026-10-05）。宣言が書いてあるときは正典どおりに描き分ける。
+この扱いは doc/COMPAT_ARCHITECTURE.md の §8「沈黙ルール対応表」のバルーンの透過の行に、シェルとバルーンで共通の決まりとして登記してある。
+バルーンの descript にある `use_self_alpha` は綴りの違う別の項目である。決まりは同じだが、行は別に持つ。
+経緯: 2026-10-05 までは宣言を読まず、常に `1` 相当で描いていた（状態は未対応・担当は空）。
+担当 spec は areka-P0-self-alpha-declaration。同 spec がこの欄を読む経路を作り、この記述を書いた。
 束: 透過とはみ出しの描き方・読む経路が無い（先に要る仕組み: emo の合成器）。束の順位: 9——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-宛先: 担当の欄を空にした。宛先だった areka-P0-emo-atlas は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:seriko.zorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1"]

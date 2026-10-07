@@ -310,7 +310,7 @@ fn readme_item(world: &World, _ctx: &MenuContext) -> MenuItem {
 
 /// 「説明書」の動作。台本の `\![open,readme]` と同じ関数で開く（要件 4.2）。
 fn open_readme(world: &mut World, _ctx: &MenuContext) {
-    readme::open_from_world(world);
+    readme::open_from_world(world, readme::MENU_TAG);
 }
 
 /// ⑦「終了」の供給関数。常に選べる（要件 2.2）。

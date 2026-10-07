@@ -945,7 +945,7 @@ fn boot_read_honours_the_files_own_charset_declaration() {
     .expect("ghost descript");
     std::fs::write(
         shell_master.join("descript.txt"),
-        "charset,UTF-8\nseriko.dpi,96\n",
+        "charset,UTF-8\nseriko.dpi,96\nseriko.use_self_alpha,1\n",
     )
     .expect("shell descript");
     // シェル定義ファイルだけを Shift_JIS で置く（他ファイルの宣言は持ち込まれない・要件 6.2）。
@@ -958,8 +958,11 @@ fn boot_read_honours_the_files_own_charset_declaration() {
         )
         .unwrap_or_else(|e| panic!("{png} 複写: {e}"));
     }
-    std::fs::write(balloon_dir.join("descript.txt"), "charset,UTF-8\ndpi,96\n")
-        .expect("balloon descript");
+    std::fs::write(
+        balloon_dir.join("descript.txt"),
+        "charset,UTF-8\ndpi,96\nuse_self_alpha,1\n",
+    )
+    .expect("balloon descript");
     std::fs::copy(
         emo2_balloon_root().join("balloons0.png"),
         balloon_dir.join("balloons0.png"),
