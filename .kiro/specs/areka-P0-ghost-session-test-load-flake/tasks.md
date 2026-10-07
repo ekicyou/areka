@@ -34,7 +34,7 @@
   - _Requirements: 1.2, 5.1, 6.4_
 
 - [ ] 2. 待ちの芯を作る
-- [ ] 2.1 待ちの部品を中身を変えずに別のファイルへ移す
+- [x] 2.1 待ちの部品を中身を変えずに別のファイルへ移す
   - `spine.rs` から締切の定数・空回しの予算・休み・`spin_wait_until`・`run_bounded`・`join_bounded` を doc ごと子のファイルへ移し、同じ名前で出し直す。`emo2_boot/mod.rs` は触らない
   - 兄弟のテストが書いている呼び名（`super::SPIN_WAIT` など）は書き換えずに通る
   - 完了の姿: `cargo test -p areka --bin areka` が移す前と同じ本数で緑で、`spine.rs` は 1,000 行を十分に下回る
