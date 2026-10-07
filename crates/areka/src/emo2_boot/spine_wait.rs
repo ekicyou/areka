@@ -1,14 +1,22 @@
-//! spine の有界待機の部品（締切・空回しの予算・休み・`spin_wait_until`・`run_bounded`・`join_bounded`）。
+//! spine の有界待機の部品（締切・空回しの窓・休み・待ちの芯・`spin_wait_until`・`run_bounded`・`join_bounded`）。
 //!
-//! `spine.rs` から中身を変えずに移した。親の `spine.rs` が同じ名前で出し直すので、兄弟のテストは
-//! `super::SPIN_WAIT` などの呼び名のまま使える。
+//! 締切から下は `spine.rs` から中身を変えずに移したもの。親の `spine.rs` が同じ名前で出し直すので、
+//! 兄弟のテストは `super::SPIN_WAIT` などの呼び名のまま使える。
+//!
+//! 待ちの芯 [`wait_until_with`] は、打ち切りを「待ち始めからの総時間」でなく「相手が状態を進めなかった
+//! 時間」で決め、届かなかった理由を [`WaitFailure`] の 4 つに分けて返す（areka-P0-ghost-session-test-load-flake）。
 
+use std::fmt;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use areka_actor::{ActorError, ActorHandle};
 
-/// **別スレッドの進行を待つ**有界スピンの猶予（sleep 不使用・`yield_now` のみで回す協調ループ用）。
+/// **別スレッドの進行を待つ**有界待ちの基準の時間（30 秒）。
+///
+/// 進みの目印がある待ち（[`Progress::Count`]）では「相手が状態を進めなかった時間」の上限、目印の
+/// 無い待ち（[`Progress::Unknown`]・[`spin_wait_until`]）では待ち始めからの総時間の上限として使う。
+/// 目印がある待ちの総時間の上限は別に [`WAIT_CAP`] で置く。
 ///
 /// # 反復回数で打ち切ってはならない
 ///
@@ -33,6 +41,14 @@ use areka_actor::{ActorError, ActorHandle};
 ///   Clear cue の時刻を跨ぎ、リビール観測が間に合わないと**待っている条件そのものが破壊**されて
 ///   永久に不成立になる——並行実行時に約 2% 失敗し、期限を 30 秒に延ばしても 50 回中 3 回失敗した。
 ///   期限は「壊れていない条件を待つ」ためのものであり、条件が壊れるレースは期限では直らない。
+///
+///   **例外: 切替の足場（`ghost_switch_test_support.rs` の `SwitchRig`）の台詞の時計には頭打ちを置かない。**
+///   足場が注入する時刻は `DispatcherMsg::Tick` だけで、受け手は dispatcher とその先の再生中の台詞に
+///   限られる。台詞は「自分が最初に見た Tick からの経過」を届いた順に消化するので、注入の側の数が
+///   先へ行っても増えるのは順番待ちの列だけで、相手が見る時刻の並びは飢えていないときと変わらない。
+///   合成の締切を持つ kanade は足場では Tick を 1 つも受け取らない（`TickerMode::Disabled`）。受け手が
+///   締切も後戻りする状態も持たないので、追い越しで壊れる条件が無い（要件 2.6・設計「2.6 の満たし方」）。
+///   上の spine の族の Tick 注入の待ちは受け手が kanade なので、頭打ちの決まりはそのまま残る。
 /// - **非対象**: 別スレッドの進行を待たず、注入 Tick 列そのものが仕事量であるループ。時刻で打ち切ると
 ///   注入列が短くなり意味が変わる。
 ///
@@ -40,7 +56,13 @@ use areka_actor::{ActorError, ActorHandle};
 /// 落として原因を名指しするので hang しない。
 pub(super) const SPIN_WAIT: Duration = Duration::from_secs(30);
 
-/// `yield_now()` の密スピンを続ける上限反復数。これを超えたら [`BACKOFF_SLEEP`] へ落とす。
+/// 進みの目印がある待ちの、待ち始めからの総時間の上限。
+///
+/// 相手が進み続ける限り [`SPIN_WAIT`] では打ち切らないので、終わらない繰り返しでも必ず返るように
+/// 別の上限を置く（要件 3.3）。届いたら [`WaitFailure::CapReached`]（負荷で遅いか、終わらない繰り返し）。
+pub(super) const WAIT_CAP: Duration = Duration::from_secs(300);
+
+/// `yield_now()` の空回しで待つ窓（待ち始めからの時間）。過ぎたら反復ごとに [`BACKOFF_SLEEP`] 休む。
 ///
 /// # なぜ純 yield のままではいけないか
 /// `yield_now()` の密ループは **1 コアを占有し続ける**。反復上限だけで打ち切っていた旧実装は
@@ -50,35 +72,194 @@ pub(super) const SPIN_WAIT: Duration = Duration::from_secs(30);
 /// 230 秒→1490 秒へ悪化した）。待機は「速い経路を邪魔しない」と同時に「長引いたら CPU を返す」
 /// 必要がある。
 ///
-/// # 予算を旧実装の上限に揃える理由
-/// 予算を小さく取る（実測: 10_000）と、**正常でも数百 ms 待つ呼出点**が [`BACKOFF_SLEEP`] の
-/// 1ms 粒度に律速され、通常経路が 1 回 4.4 秒 → 10.3 秒へ倍増した。旧実装の最大予算（1_000_000）
-/// をそのまま踏襲すれば、**成功する待機は旧実装と完全に同じ密スピンで完了**し、予算を使い切った
-/// ——旧実装なら諦めて assert を落としていた——場合にのみ sleep へ落ちる。すなわち本ヘルパは
-/// 「旧挙動 ＋ 諦めずに時刻期限まで CPU を返しながら待つ」の純増であり、通常経路を一切遅くしない。
-pub(super) const SPIN_YIELD_BUDGET: u32 = 1_000_000;
+/// # 回数でなく時間で区切る理由
+/// 旧形は空回しの予算を回数（1_000_000 回）で持っていた。条件が読むだけの速い待ちなら 1 回は
+/// 一瞬だが、切替の足場の待ち（条件の中で毎回 ECS の段を回す）は 1 回が重く、100 万回を使い切る前に
+/// 待ちが終わるか期限に届く＝**待っている間ずっと 1 コアを使っていた**。回数は経過時間の代理に
+/// ならない（[`SPIN_WAIT`] の doc と同じ理由）ので、窓も時間で持つ。
+///
+/// # 60 ms の根拠
+/// `spine.rs` の `SETTLE_MIN` の doc の実測（本機 22 論理 CPU）で、`yield_now` 5,000 回は無負荷
+/// 0.31 ms。旧予算 1_000_000 回を同じ割合で時間に直すと約 62 ms になる。60 ms なら、速い待ちの
+/// 空回しは旧形とほぼ同じ長さのまま（**成功する待機を旧形より遅くしない**）、重い待ちだけが 60 ms で
+/// CPU を返すようになる。予算を小さく取ると、正常でも数百 ms 待つ呼出点が [`BACKOFF_SLEEP`] の粒度に
+/// 律速されて通常経路が延びる（実測: 回数の予算 10_000 で 1 回 4.4 秒 → 10.3 秒）ので、旧予算に揃える。
+/// 足場の待ちの 1 回の時間の実測は、足場の待ちを芯へ移すときに足す。
+pub(super) const DENSE_SPIN: Duration = Duration::from_millis(60);
 
-/// 密スピンを使い切った後の 1 回あたり待機。CPU を明け渡し、相手スレッドに実行機会を与える。
+/// 空回しの窓を過ぎた後の 1 回あたり待機。CPU を明け渡し、相手スレッドに実行機会を与える。
 pub(super) const BACKOFF_SLEEP: Duration = Duration::from_millis(1);
+
+/// 相手が状態を進めたかの数え方。
+pub(crate) enum Progress<'a> {
+    /// 目印を持てない待ち。総時間 [`SPIN_WAIT`] で打ち切り、失敗の文言は「進みは不明」と書く。
+    Unknown,
+    /// 単調に増える数。前回の読みより増えていれば「進んだ」。減らないことは呼び手が守る。
+    Count(&'a dyn Fn() -> u64),
+}
+
+/// 待ちが届かずに終わった理由。`Display` の先頭の `［…］` で 4 つを見分ける（要件 3.1・3.2）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum WaitFailure {
+    /// 相手が `idle` のあいだ 1 度も進まなかった＝止まった。
+    Stalled {
+        what: String,
+        waited: Duration,
+        idle: Duration,
+        /// 目印が増えた量の合計（目印の 1 つが呼び出し 1 回に当たる。読んだ回数ではない）。
+        moves: u64,
+    },
+    /// 相手は進み続けていたが、総時間の上限 [`WAIT_CAP`] に届いた。
+    CapReached {
+        what: String,
+        waited: Duration,
+        /// [`WaitFailure::Stalled`] の `moves` と同じ数え方。
+        moves: u64,
+        since_last_move: Duration,
+    },
+    /// 進みの目印が無い待ちが、総時間の上限 [`SPIN_WAIT`] に届いた。
+    TimedOut { what: String, waited: Duration },
+    /// 受け口の相手が、何も送らずに居なくなった。
+    Disconnected { what: String, waited: Duration },
+}
+
+impl fmt::Display for WaitFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = |d: &Duration| d.as_secs_f64();
+        match self {
+            Self::Stalled {
+                what,
+                waited,
+                idle,
+                moves,
+            } => write!(
+                f,
+                "待ちの打ち切り［止まった］: 「{what}」— 相手が {:.1} 秒のあいだ状態を進めなかった（待ち始めから {:.1} 秒・それまでの進み {moves} 回）",
+                s(idle),
+                s(waited),
+            ),
+            Self::CapReached {
+                what,
+                waited,
+                moves,
+                since_last_move,
+            } => write!(
+                f,
+                "待ちの打ち切り［進んではいた］: 「{what}」— 上限 {} 秒までに届かなかった（待ち始めから {:.1} 秒・進み {moves} 回・最後の進みは {:.1} 秒前）。負荷で遅いか、終わらない繰り返し",
+                WAIT_CAP.as_secs(),
+                s(waited),
+                s(since_last_move),
+            ),
+            Self::TimedOut { what, waited } => write!(
+                f,
+                "待ちの打ち切り［進みは不明］: 「{what}」— {:.1} 秒までに届かなかった（進みの目印の無い待ち）",
+                s(waited),
+            ),
+            Self::Disconnected { what, waited } => write!(
+                f,
+                "待ちの打ち切り［相手が居ない］: 「{what}」— {:.1} 秒待ったところで、相手が何も送らずに終わった",
+                s(waited),
+            ),
+        }
+    }
+}
+
+/// 待ちの芯。`cond` が真になるまで待ち、届かなければ理由を [`WaitFailure`] で返す。
+///
+/// 時計 `now` と休み `pause` を差し替えられる継ぎ目で、檻（`spine_wait_tests.rs`・足場の檻）は偽の時計を
+/// 渡して実時間を待たずに打ち切りを確かめる（`settle_bounded_with` と同じ型）。
+///
+/// 決め方（設計の流れ図）:
+/// - 条件の確かめが打ち切りの判定より先。届いていれば、どれだけ時間がかかっていても成功。
+///   最初の確かめで真なら時計を読まずに返る。
+/// - 目印は条件の確かめの直後に読む。前回より増えていれば進みの無い時間を 0 に戻す。
+///   増えないまま [`SPIN_WAIT`] に届けば `Stalled`、待ち始めから [`WAIT_CAP`] に届けば `CapReached`。
+/// - 目印なしは待ち始めから [`SPIN_WAIT`] に届けば `TimedOut`（旧 `spin_wait_until` と同じ総時間）。
+/// - 反復の間は、待ち始めから [`DENSE_SPIN`] までは `yield_now`、その後は毎回 `pause(BACKOFF_SLEEP)`
+///   で CPU を返す（要件 2.5）。この休みは時刻を進めるためのものではなく、観測の内容を変えない。
+pub(crate) fn wait_until_with(
+    mut now: impl FnMut() -> Instant,
+    mut pause: impl FnMut(Duration),
+    what: &str,
+    progress: Progress<'_>,
+    mut cond: impl FnMut() -> bool,
+) -> Result<(), WaitFailure> {
+    if cond() {
+        return Ok(());
+    }
+    let read = || match progress {
+        Progress::Unknown => 0,
+        Progress::Count(count) => count(),
+    };
+    let started = now();
+    let mut last = read();
+    let mut last_move = started;
+    let mut moves = 0u64;
+    let mut t = started;
+    loop {
+        if t.saturating_duration_since(started) < DENSE_SPIN {
+            std::thread::yield_now();
+        } else {
+            pause(BACKOFF_SLEEP);
+        }
+        if cond() {
+            return Ok(());
+        }
+        t = now();
+        let waited = t.saturating_duration_since(started);
+        let what = || what.to_owned();
+        if let Progress::Unknown = progress {
+            if waited >= SPIN_WAIT {
+                return Err(WaitFailure::TimedOut {
+                    what: what(),
+                    waited,
+                });
+            }
+            continue;
+        }
+        let count = read();
+        if count > last {
+            moves += count - last;
+            last = count;
+            last_move = t;
+        }
+        let idle = t.saturating_duration_since(last_move);
+        if idle >= SPIN_WAIT {
+            return Err(WaitFailure::Stalled {
+                what: what(),
+                waited,
+                idle,
+                moves,
+            });
+        }
+        if waited >= WAIT_CAP {
+            return Err(WaitFailure::CapReached {
+                what: what(),
+                waited,
+                moves,
+                since_last_move: idle,
+            });
+        }
+    }
+}
 
 /// `cond` が真になるまで [`SPIN_WAIT`] の範囲で待つ。真になったら `true`、期限切れなら `false`。
 ///
 /// 速い経路（通常はマイクロ秒）は `yield_now()` の密スピンで待ち time-to-detect を犠牲にしない。
-/// [`SPIN_YIELD_BUDGET`] を超えたら [`BACKOFF_SLEEP`] の短い sleep へ落として**コア占有をやめる**。
+/// 待ち始めから [`DENSE_SPIN`] を過ぎたら [`BACKOFF_SLEEP`] の短い sleep へ落として**コア占有をやめる**。
 /// 本ファイルの「sleep 不使用」規律は *系を進める* Tick 注入ループの決定論を守るためのものであり、
 /// 別スレッドの進行を待つだけの本ヘルパには当たらない（待機は観測内容を変えない）。
 pub(crate) fn spin_wait_until(mut cond: impl FnMut() -> bool) -> bool {
-    let deadline = Instant::now() + SPIN_WAIT;
-    let mut spun = 0u32;
+    let started = Instant::now();
     loop {
         if cond() {
             return true;
         }
-        if Instant::now() >= deadline {
+        let waited = started.elapsed();
+        if waited >= SPIN_WAIT {
             return false;
         }
-        if spun < SPIN_YIELD_BUDGET {
-            spun += 1;
+        if waited < DENSE_SPIN {
             std::thread::yield_now();
         } else {
             std::thread::sleep(BACKOFF_SLEEP);

@@ -10,7 +10,7 @@
 //! [`SPIN_WAIT`] で有界化してある。待機の形は**3 種**（いずれも期限は [`SPIN_WAIT`]）:
 //!
 //! - **純粋ポーリング**（各反復が系を進めない・別スレッドの到着を読むだけ）→ [`spin_wait_until`]。
-//!   密 yield（[`SPIN_YIELD_BUDGET`](wait::SPIN_YIELD_BUDGET)）で速い経路の検出遅延を犠牲にせず、予算超過後に
+//!   密 yield（[`DENSE_SPIN`](wait::DENSE_SPIN) の窓）で速い経路の検出遅延を犠牲にせず、窓を過ぎたら
 //!   [`BACKOFF_SLEEP`] へ落としてコア占有をやめる（PR #96 で導入）。
 //! - **ハイブリッド**（毎反復 Tick を注入して系を進めつつ別スレッドの結果も待つ）→ 各呼出点の
 //!   自前ループ＋`sleep(200µs)` の poll-backoff。[`spin_wait_until`] は純粋ポーリング専用ゆえ
@@ -352,7 +352,7 @@ mod wait;
 
 // 待ちの部品は子のファイル `spine_wait.rs` に置き、同じ名前で出し直す（兄弟のテストは `super::SPIN_WAIT` などで引く）。
 use self::wait::{BACKOFF_SLEEP, SPIN_WAIT, join_bounded};
-pub(crate) use self::wait::{run_bounded, spin_wait_until};
+pub(crate) use self::wait::{Progress, WaitFailure, run_bounded, spin_wait_until, wait_until_with};
 
 /// 「尽きるのが正常」の回収（settle）が満たすべき**壁時計の最小持続**（要件 4.2・4.5）。
 ///
@@ -902,3 +902,6 @@ mod test_support;
 #[cfg(test)]
 #[path = "spine_text_scale_tests.rs"]
 mod text_scale_tests;
+#[cfg(test)]
+#[path = "spine_wait_tests.rs"]
+mod wait_tests;

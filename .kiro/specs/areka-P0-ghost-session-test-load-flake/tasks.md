@@ -40,7 +40,7 @@
   - 完了の姿: `cargo test -p areka --bin areka` が移す前と同じ本数で緑で、`spine.rs` は 1,000 行を十分に下回る
   - _Requirements: 7.1, 7.3, 2.4_
 
-- [ ] 2.2 進みを見て打ち切りを決める待ちの芯を作る
+- [x] 2.2 進みを見て打ち切りを決める待ちの芯を作る
   - 進みの数え方（目印なし／単調に増える数）と、4 つの失敗（止まった・進んではいた・進みは不明・相手が居ない）の型と文言を作る。文言は何を・何秒・進みの回数を含み、先頭の `［…］` が互いに違う
   - 打ち切りの決め方は設計の流れ図のとおり（条件の確かめが先・目印が増えたら進みの無い時間を 0 に戻す・進みの無い時間の上限 30 秒・総時間の上限 300 秒・目印なしは 30 秒の総時間）
   - 空回しの予算を回数から時間（60 ms）へ変え、過ぎたら反復ごとに 1 ms 休んで CPU を返す。値の根拠は今の `SETTLE_MIN` の doc の実測から doc に書く（足場の 1 回の時間の実測は 3.2 で足す）
@@ -163,3 +163,4 @@
 - 1.2: 再現は `-NoCapture` つきで回す（1.1 の注のとおり）。fallback の `run_input_until` と lap の `LapRig::frames_until` は条件の中で足場を可変で借りるので、`wait_for(&self)` でなく先に `progress_probe()` を取ってから `wait_until(…, Progress::Count(&probe), …)` へ移す（4.3）。`frame/switch_tests.rs` の 5 秒の `yield_now` だけの待ちは要件 2.5 に反する形だが、`frame/` は同じウェーブの他の spec の持ち物なので設計どおり条件つき（5.4）
 - 1.3: 測る順は「静かさの確かめ → 先にビルド（i686 と `cargo test --workspace --no-run -j 4`）→ 本数 → 負荷なし 3 回 → 全体テスト」で、6.1 も同じ順にする（全体テストの時間にコンパイルを入れない）。`tools/perf/check-quiet.ps1` は重いプロセスが 0 件のとき `@()` が `$null` に化けて落ちていたので 1 行の守りを足した（`d6d77336`）。main から入った文字コードの検査（tools の字句は ASCII だけ）で `tools/load-flake.ps1` が赤になり、`summary.txt` の項目名を英数字にした（`0c046e92`）。`--nocapture` では後片付けの行が他のテストの出力に割り込まれ、行の頭で数える `summary.txt` の数が少なく出る（4.4 で数え方を決める）
 - 1.4: 直す前の負荷の再現は 5 回とも赤（12/9/5/37/18＝81 件・52 種類）。81 件のうち 80 件は待ちの締切で、足場の待ち（降ろす `shutdown` 20 秒・`pump_talking_until` など）が 67 件。1.2 の 2.1 の表は `shutdown` を数えていなかったので、降ろす待ちだけで赤になったファイル（`ghost_session_strict_tests.rs`・`install/desk_record_tests.rs`・`install/names_tests.rs`・`spine_text_scale_tests.rs`）と `spine_conformance_lap_tests.rs` が表に無い（足場の直しで替わるか 5.4 で見る）。対象の族の外の赤は GPU の足場（`GpuRig::frames_until`）4 件・spine の自前の待ち 5 件。待ちでない赤は `desk_overwrite_tests.rs:379` の 1 件（答えが `Ran(Ok)` でない・5.3）。赤の文言にファイルの拒否は 0 件で、os error 5 の行は赤の後にしか出ていない（4.4）
+- 2.2: 檻のテストのパスは `emo2_boot::spine::wait_tests::…`（絞り込みは `spine::wait_tests`。`spine_wait` では 0 件）。`moves` は目印が増えた量の合計。本物の時計の `wait_until` は呼び手が入る 2.3 で足す（今足すと使われない警告）
