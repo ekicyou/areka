@@ -48,7 +48,8 @@ pub(crate) struct SessionEnded;
 ///   dispatcher ほか）から UI への知らせはすべて `mpsc` の送信。shiori のスレッドの
 ///   `SendMessageTimeoutW` の宛先は 32bit の補助プロセスの message-only 窓（別プロセス）で、
 ///   補助プロセスからの応答の宛先は shiori のスレッドが持つ親窓。wintf の窓の操作は UI スレッド
-///   自身が行い、VSync のスレッドは窓に触らない。COM は MTA なので、別スレッドからの呼び出しが
+///   自身が行い、VSync のスレッドは窓に触らない。標準のツールチップ（wintf の `ecs/tooltip`）
+///   への `SendMessageW` も UI スレッドが自分で作った窓宛て＝直接の呼び出し。COM は MTA なので、別スレッドからの呼び出しが
 ///   メッセージで取り次がれない。したがって join が待つ相手は、UI スレッドを待たない。
 /// - 外から UI の窓へ同期に送る相手（IME・シェル・他のアプリ）は送り手の側が待つだけで、join は
 ///   それに依らないので輪にならない。その送信は後始末から戻った後に返る

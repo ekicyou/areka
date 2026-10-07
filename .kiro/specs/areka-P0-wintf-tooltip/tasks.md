@@ -140,7 +140,7 @@
   - _Blocked:_ 実機の確かめは 2026-10-08 にスクリーンセーバー中で走らず（手前の窓が無い）。在席時に `pwsh -NoProfile -File target\tooltip_64_real\run_64.ps1` と S4（`cargo test -p wintf --lib tooltip::os -j 4 -- --ignored --test-threads=1 s4_`）を回し、research.md 14.6 に記録する
   - _Boundary: turn.rs・turn_tests.rs・system_tests.rs・mod.rs の文書_
 
-- [ ] 6.2 全体の検査
+- [x] 6.2 全体の検査
   - ワークスペースの全テスト・clippy・`cargo doc` を通す
   - 新しいファイルがどれも 1,000 行未満・新しいファイルに `tick_wake::mark` の文字列が無い・`Cargo.toml` と既存の公開の構造体が変わっていない・areka の型への依存が無いことを検索と差分で確かめる
   - 完了の状態: 上の検査がすべて通ったことを示すコマンドの出力がある
@@ -168,3 +168,5 @@
 - 6.1: 版 6 では `TTM_GETBUBBLESIZE` が実際の窓より 1 大きい＝設計の S2 の逃げ道どおり `GetWindowRect` で測る形にした（真上 40・右の端 2880 に揃った）。y が負の画面が無いので負の y の詰め方は未確認
 - 6.4（2026-10-07）: 出す番の間も別の範囲に入れば切り替える（`check_active` の 1 か所・新しい終わりの理由 `EnteredOtherRange`・ツールチップの上は除く・2.9 の「窓が隠れた」が先）。切り替えの待ちは、出ていたツールチップが同じ回に消えるので 1 倍、まだ出していなければ 2 倍。crate 文書の「重ねずに登録」の案内を新しい振る舞いに替えた。実機の確かめ（サンプルの重なった 2 つ）は机が静かになった後
 - 6.3（2026-10-07）: 版は窓ごとに `CCM_GETVERSION`（版 5 は 0・版 6 は 6）で見分ける。版 6 は最大の幅に窓の DPI（`GetDpiForWindow`）の倍率を掛け、画面の外では最後の画面の DPI のまま。そのため出す前に、隠したまま出す画面へ動かして窓の DPI を揃え、割り戻した幅を渡す。「越えたか」の比べは ADJUSTRECT＋2 論理ピクセル。版 6 は切れ目の無い語も OS が割る。版 6 のテストは、テストの中で `examples.manifest` から作った実行の文脈で窓を作る（`os_v6_tests.rs`）。S4（マウスを動かす）は机が静かになった後に走らせ直す。research.md 14.5
+- 6.2（2026-10-08）: 最初のフルテストで areka の `session_end::sync_send_tests` が赤＝tooltip/os.rs の `SendMessageW(` 9 か所が同期の送信の一覧に無かった。9 か所とも呼ぶスレッドが自分で作ったツールチップの窓（thread_local の `TipWindow`）への送信で終了の待ち合わせと輪にならないので、一覧に 1 行足し session_end.rs の説明も合わせた。直した後の `tools/test-all.ps1` は全段緑（10453 本）。6.4 の実機の確かめ（コードを変えない）は残っている
+- 6.2（範囲外・完了の棚卸で起票）: `cargo clippy --workspace --all-targets` が deny の水準のエラー 5 件で止まる（areka-emo-text のテスト 4 ファイル・areka-kanade の `actor_raise_reply_tests.rs:95`。clippy 1.99 の `absurd_extreme_comparisons` など）。この spec の前からの問題で、このブランチは触っていない
