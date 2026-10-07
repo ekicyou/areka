@@ -22,7 +22,7 @@ load-flake.ps1 — CPU の負荷をかけて areka のテストを回し、回�
   build.log       ⑴ の cargo の出力
   round-N.log     回ごとの cargo test の出力（標準出力と標準エラーを合わせたもの）
   summary.txt     回ごとの終了コード・所要時間・上限越え・`test result:` の行と本数・
-                  赤のテストの名前・`待ちの打ち切り` の行・`sample-ghost-kit:` で始まる
+                  赤のテストの名前・`待ちの打ち切り` の行・`sample-ghost-kit:` を含む
                   後片付けの失敗の行（os error 5 の数）と、全回のまとめ（中央値・最大の所要時間）
   ファイルは UTF-8 で書く。端末へ出す文は ASCII だけ（どのコードページでも同じに読める）。
 
@@ -144,7 +144,8 @@ function Read-Round([string]$logPath) {
             elseif ($l -ne '') { $inFailList = $false }
         }
         if ($l.Contains($WaitCutPrefix)) { $r.WaitLines += $l }
-        if ($l.TrimStart().StartsWith('sample-ghost-kit:')) {
+        # 行の途中も探す（--nocapture では他のテストの出力が行の頭に割り込む）
+        if ($l.Contains('sample-ghost-kit:')) {
             $r.CleanupLines += $l
             if ($l.Contains('os error 5')) { $r.OsError5++ }
         }

@@ -602,3 +602,64 @@ struct Racer {
     mark: Vec<u8>,
     tree: std::collections::BTreeMap<String, Vec<u8>>,
 }
+
+// ---- 破棄と並走する掃除（spec: areka-P0-ghost-session-test-load-flake 要件 5.2） ----
+
+/// 木を消している最中も札は握られたままで、並走する掃除は札を消せない（檻 11）。
+///
+/// 札を閉じてから木を消すと、消している間の木は「持ち主の居ない組」に見え、同じ
+/// プロセスの別のテストの掃除が札を消して、消しかけの木を退けようとする（負荷の
+/// 再現の記録の os error 5 の「残骸の退避」の行）。
+#[test]
+fn a_work_dir_keeps_its_lease_while_its_tree_is_being_removed() {
+    let namespace = private_namespace();
+    let mut work = WorkDir::in_namespace(namespace.path()).expect("作業フォルダは取れるはず");
+    let lock = work.lock_path().to_path_buf();
+    let mut during = None;
+    work.release_with(|tree| {
+        during = Some(std::fs::remove_file(&lock));
+        std::fs::remove_dir_all(tree)
+    });
+
+    let during = during.expect("木を消す関数は呼ばれるはず");
+    assert_eq!(
+        during.as_ref().err().and_then(std::io::Error::raw_os_error),
+        Some(32),
+        "木を消している間、札は共有違反で削除を拒むこと: {during:?}"
+    );
+    assert_eq!(
+        shelf(namespace.path(), WORK),
+        Vec::<String>::new(),
+        "破棄の後は木も札も棚に残らないこと"
+    );
+}
+
+/// `gc-…` へ退けた木も、消している間は札が握られ、並走する掃除はその木を退けない。
+/// 消し終えたら `gc-…` の木も札も棚に残らない（檻 12）。
+#[test]
+fn a_tree_moved_aside_keeps_a_held_lease_until_it_is_removed() {
+    let namespace = private_namespace();
+    let tree = leftover(namespace.path(), "777777-1", false);
+    let mut during = None;
+    discard_tree_with(&namespace.path().join(WORK), &tree, "残骸", |gc| {
+        sweep(namespace.path());
+        during = Some((gc.to_path_buf(), gc.is_dir(), shelf(namespace.path(), WORK)));
+        std::fs::remove_dir_all(gc)
+    });
+
+    let (gc, stayed, listed) = during.expect("木を消す関数は呼ばれるはず");
+    let name = gc.file_name().expect("gc の名前").to_string_lossy();
+    assert!(
+        name.starts_with("gc-"),
+        "較正: 消しているのは退けた先の木: {name}"
+    );
+    assert!(
+        stayed && listed.contains(&format!("{name}{LOCK_SUFFIX}")),
+        "消している間は gc- の木に握られた札があり、並走する掃除が退けないこと: {listed:?}"
+    );
+    assert_eq!(
+        shelf(namespace.path(), WORK),
+        Vec::<String>::new(),
+        "消し終えたら gc- の木も札も棚に残らないこと"
+    );
+}
