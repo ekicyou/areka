@@ -103,7 +103,9 @@ fn the_balloon_faces_resolve_and_bake_as_films() {
         );
 
         let arm = WicDecoderArm::new().expect("WIC の工場が作れる");
-        let Ok((_world, atlas)) = build_balloon_target_from_faces(&dir, &arm, &faces, UseSelfAlpha::On) else {
+        let Ok((_world, atlas)) =
+            build_balloon_target_from_faces(&dir, &arm, &faces, UseSelfAlpha::On)
+        else {
             panic!("バルーンの面は焼ける");
         };
         assert_eq!(
