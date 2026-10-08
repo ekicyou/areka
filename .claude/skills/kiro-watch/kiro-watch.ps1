@@ -29,6 +29,7 @@
     merge    -Id -Name -Repo -Spec [-Bug] ask for the merge desk of Repo
     merged   -Id [-Pr] [-Sha]             merge finished (releases the merge desk; Id leaves)
     loadtest -Id -Name -Repo -Purpose     ask for the load-test desk
+    loadrunning -Id -Name -Repo -Purpose  record a load test that is ALREADY running (no stop requests)
     loaddone -Id                          load test finished (releases the load-test desk)
     stopped  -Id                          answer to a stop request
     cancel   -Id                          withdraw every request / desk of Id
@@ -41,7 +42,7 @@
 #Requires -Version 7
 param(
     [Parameter(Mandatory, Position = 0)]
-    [ValidateSet('join', 'leave', 'merge', 'merged', 'loadtest', 'loaddone', 'stopped', 'cancel', 'note', 'status', 'next')]
+    [ValidateSet('join', 'leave', 'merge', 'merged', 'loadtest', 'loadrunning', 'loaddone', 'stopped', 'cancel', 'note', 'status', 'next')]
     [string]$Command,
     [string]$Id,
     [string]$Name,
@@ -192,9 +193,11 @@ function Invoke-Plan {
             })
         $holderName = $state.participants[$candidate].name
         $purpose = if ($load.holder) { $load.holder.purpose } else { @($load.queue)[0].purpose }
+        # a load test recorded as already running (loadrunning) never triggers stop requests
+        $alreadyRunning = $load.holder -and $load.holder.Contains('running') -and $load.holder['running']
         foreach ($id in $needStop) {
             $p = $state.participants[$id]
-            if ($p.status -eq 'working') {
+            if ($p.status -eq 'working' -and -not $alreadyRunning) {
                 $p.status = 'stop-requested'; $p.since = $now
                 Add-Out $id 'stop' (Format-Msg 'stopRequest' @{ holder = $holderName; purpose = $purpose })
                 Add-Log "stop-request $id"
@@ -331,6 +334,17 @@ switch ($Command) {
         # a participant asking for a load test is not stopped for its own test
         $state.participants[$Id].status = 'working'
         $ack = 'load'
+    }
+    'loadrunning' {
+        Need 'Id', 'Repo', 'Purpose'
+        Join-Participant $Id $Name $Repo
+        if (-not $state.load.holder) {
+            $state.load.queue = @(@($state.load.queue) | Where-Object { $_.id -ne $Id })
+            $state.load.holder = [ordered]@{ id = $Id; purpose = $Purpose; requested = $now; granted = $now; running = $true }
+            Add-Log "load-running $Id"
+        }
+        else { Write-Host 'warn: the load-test desk already has a holder; nothing changed' }
+        $state.participants[$Id].status = 'working'
     }
     'loaddone' {
         Need 'Id'
