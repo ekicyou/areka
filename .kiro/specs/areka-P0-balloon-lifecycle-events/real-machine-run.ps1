@@ -171,6 +171,8 @@ if ($Run) {
     $env:NO_COLOR = '1'
     $env:RUST_LOG = $RustLog
     $env:AREKA_APP_SMOKE_EXIT_MS = "$ExitMs"
+    # SHIORI の失敗の知らせの窓は終了の最後に出て、閉じるまでプロセスが終わらない（R1）。抑えても記録は残る。
+    $env:AREKA_NO_ALERT = '1'
     $env:AREKA_BALLOON_TIMEOUT_MS = "$TimeoutMs"
     $env:AREKA_ROOT = $root
     $env:AREKA_PROFILE_DIR = Join-Path $root 'profile'
