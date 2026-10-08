@@ -94,3 +94,4 @@
 - 2.1: 「並べ終える前に動かされた」の見分けは `PointPx` の x・y の両方で比べる（並べ直しの `finalize_chain` は x だけを見るが、台本が縦にだけ動かした窓を書かないため）。
 - 2.1 の後（是正済み・起票しない）: 相方を台本の `\![move]` で縦にだけ動かしたあと並べ直しが x を動かす回、`drain_resnap.rs` が既定の位置を今の位置の y で揃えていたため、並べ終えた時点の保存がその位置を書いていた（要件 1.7 の取りこぼし）。既定の y を元の既定の位置から取るように直した（`finalize_chain` は変えていない＝相方は今までどおり横へ並べ直される）。テスト 11c（`partner_moved_only_vertically_by_shiori_before_finalize_is_not_written`）で固定。副作用として、その相方は同じ起動の中の拡大率の詰め直し（`chain_realign`）の対象から外れる（並べ終えた後に台本で動かした窓と同じ扱い）。
 - 3.2: 通しテストの一時フォルダは `<ワークツリー>\target\test-tmp\areka-cpsoe-*`（`MinimalGhost`）。`temp_path_kit::TempPath` は OS の一時フォルダに作るので使わない。記憶の送り口は本番の `crate::insert_persist_wiring` で置き、`PersistStore` は破棄で書き手を止めて待つ。書き込みを失敗させる口（`fail_next_commit`）は 3.3 のテスト 16 で足す。
+- 完了時にその場で解決: `areka-P0-dpi-realign-remembered-chain` の brief に、要件 1.7 の是正で台本が縦にだけ動かした相方が詰め直しの対象から外れる件を 1 行足した（design.md「知っている後退」の追記と対）。起票は 0 件。

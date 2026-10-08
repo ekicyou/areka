@@ -12,6 +12,7 @@
 - 拡大率が変わったあとの詰め直しは `crates/areka/src/placement/chain_realign.rs`（完了 spec `areka-P0-dpi-transition-atomicity` 要件 6.1〜6.3・6.6）。対象の決め方は起動の最後の並べ直しと同じ判定 `finalize_chain`（`placement/chain_finalize.rs`）をそのまま使い、「既定の位置」`GhostWindows::default_char_pos` が `None` のスコープ（＝記憶から戻したスコープ）を必ず外す。
 - `char-position-save-on-exit` は、起動の最後に並べ終えた時点で記憶に位置が無いキャラクターの位置を書く。次の起動からそのスコープは `None` になる。
 - 両方のキャラクターをドラッグ済みの利用者は、今でも詰め直されない（同じ隙間が開く）。
+- `char-position-save-on-exit` の実装のときに足した 1 件（要件 1.7 の是正）: 並べ終える前に台本が縦にだけ動かした相方は、並べ直しのあとも既定の y が元のまま残り「動かされた」と扱われるので、同じ起動の中の詰め直しの対象からも外れる（並べ終えた後に台本で動かした窓と同じ扱い。`emo2_boot/frame/drain_resnap.rs` の `finalize_chain_once_with` の既定の位置を揃える所）。対象の決め方を見直すときに合わせて扱う。
 
 ## Desired Outcome
 
