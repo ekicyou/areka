@@ -242,7 +242,7 @@ flowchart TD
 | 2.4 | 無視・本数減らしで消さない | 全体 | テストの削除・`#[ignore]` を足さない | — |
 | 2.5 | 待つ間 CPU を占めない | WaitCore | `DENSE_SPIN`・`BACKOFF_SLEEP`・`wait_recv` | 打ち切りの決め方 |
 | 2.6 | 合成の時刻の送り先を締切も後戻りも持たない相手に限る | SwitchRig の待ち | 時刻の注入の 1 か所化・時計の先行の檻・`pump_talking_until` の doc の決まり | — |
-| 2.7 | 条件つきで足場のスレッドの数と同時の数を絞る | 足場のスレッドの絞り | `WintfTaskPool::with_threads`・GPU の装置の許可（同時に 4 つ）・足場の同時の数の許可（RigPermit・論理 CPU の半分。main の取り込みの後の再現で `［進んではいた］` が残ったので入れた） | — |
+| 2.7 | 条件つきで足場のスレッドの数と同時の数を絞る | 足場のスレッドの絞り | `WintfTaskPool::with_threads`・GPU の装置の許可（同時に 4 つ）。足場の同時の数の許可（RigPermit）は試して外した（`load-repro.md` の 4.4） | — |
 | 3.1 | 文言に何を・何秒・進んだか | WaitCore | `WaitFailure` の `Display` | — |
 | 3.2 | 止まったら止まったと言う | WaitCore | `WaitFailure::Stalled` | 打ち切りの決め方 |
 | 3.3 | どの待ちにも上限 | WaitCore | `SPIN_WAIT`・`WAIT_CAP` | 打ち切りの決め方 |
@@ -413,7 +413,7 @@ fn wait_until_with(
 - `wait_steady`: `wait_recv` で待つ。届いた通知が `Steady` でなければ、届いた通知を `{:?}` で標準エラーへ出して `false`（今は捨てている）。
 - `shutdown`: `run_bounded_watching("置き場のゴーストを降ろす", Progress::Count(目印), …)`。
 - 時刻の注入: `pump_talking_until` の中の「時計を進めて dispatcher へ `Tick` を送る」部分を私的な関数 1 つにまとめ、送り先は `DispatcherMsg::Tick` だけと doc に書く。進め方（1 ms ごとに 100 ms）は変えない。
-- 条件つき（2.7）: 足場のスレッドの数と同時の数を絞る形は、下の「足場のスレッドの絞り」にまとめる。足場の同時の数の許可（RigPermit）は `SwitchRig::new` の最初で取り、`SwitchRig` の最後の欄として持つ（その 3）。
+- 条件つき（2.7）: 足場のスレッドの数と同時の数を絞る形は、下の「足場のスレッドの絞り」にまとめる。足場の同時の数の許可（RigPermit）は、そこでも今は入れない。
 
 **Dependencies**
 
@@ -479,14 +479,12 @@ impl ScriptedShioriHandle {
    - `mcp/dump_surface_gpu_test_support.rs` の `GpuRig::new`（`dump_surface_gpu_tests.rs`・`dump_balloon_gpu_tests.rs` の足場）
    - `shell_balloon_switch_session_lap_tests.rs` の `lap_rig_of`（lap の足場 `LapRig`。`shell_balloon_switch_session_abort_tests.rs` などからも呼ばれる）
    数えの置き場は `spine_wait.rs`（`std` だけで書け、どの足場からも届く）。`wintf` の中のテスト（別の実行ファイル）は対象外。
-3. **足場の同時の数（RigPermit）**: 1・2 の後の再現（`load-repro.md` の 4.3・main の取り込みの後）で `［進んではいた］` の赤が 1 件残ったので入れた。`SwitchRig::new` の最初（スレッドを持つものを作る前）でプロセスに 1 つの数えから許可を取り、`SwitchRig` の最後の欄として持って破棄で返す（ほかの欄が落ちた後に返る・巻き戻りでも同じ）。同時の数は `std::thread::available_parallelism()` の半分（最小 1・この机の 22 では 11）。許可を待つ時間は待ちの時間に数えない（待ちの関数の外で取る）。数えは GPU の装置の許可と同じ部品（`spine_wait.rs` の `Slots`・`Mutex` と `Condvar`）で、GPU の振る舞い（同時に 4 つ）は変えない。
-   - 1 つのスレッドで足場は 1 つ: 足場を持ったまま 2 つ目を待つテストが同時の数だけ並ぶと、互いに待ち合って全体が止まる（同時の数が 1 の机では 1 本で止まる）。そこで同じスレッドで 2 つ目の許可を取ろうとすると、数えを待たずに panic する（止まる代わりに赤になる）。実装の時点で 2 つの足場を同時に持っていたテストは 2 本（`main_session_mark_fallback_tests.rs` の `first_boot_falling_back_pins_mark_with_one_warn`、`session_end_deadline_tests.rs` の `assert_cut_at`）で、どちらも先の足場の観測を値で取り終えていたので、次の足場を作る前に先の足場を捨てる形にした。
-   - 取る順: 足場の許可と GPU の装置の許可の両方を持つ足場（`GpuRig::new`・`lap_rig_of`）は、どちらも `SwitchRig::new` の後に `GpuPermit::take` を呼ぶので、足場の許可が先。GPU の装置の許可を持ったまま足場を作るテストは無い（GPU の装置を作る 6 か所のうち残りの 4 か所は足場を作らない）。順が 1 つなので、互いに相手の許可を待ち合う形は無い。
+3. **足場の同時の数（RigPermit）**: 試して外した。main の取り込みの後に下の元の形で入れて全体の回（`load-repro.md` の 4.4）を回したが、負荷の下の赤は減らず（14 件）、静かな机は main の先端の 1.32 倍に延びたので外した（赤の元は足場の数でなく、プロセスに残る GPU のドライバの DLL がスレッドの生まれと消えのたびに錠の中で初期化を受けること・4.4）。元の形の記録: 1・2 の後の再現で `［進んではいた］` の赤が残ったときだけ、元の形で足す（`SwitchRig::new` の最初でプロセスに 1 つの数えから許可を取り、`SwitchRig` の最後の欄として持って破棄で返す。同時の数は `std::thread::available_parallelism()` の半分（最小 1）。許可を待つ時間は待ちの時間に数えない）。
 
 **Implementation Notes**
 
 - Integration: 呼び手の形（`SwitchRig`・`GpuRig`・`LapRig` の作り口の引数と戻り値）は変えない。許可は足場の中に隠す。
-- Validation: 檻 16・17・18（Testing Strategy「足場のスレッドの絞りの檻」）。直した後に同じ引数で負荷の下の再現を回し、待ちの打ち切りの赤が 0 件（6.1）。
+- Validation: 檻 16・17（Testing Strategy「足場のスレッドの絞りの檻」）。直した後に同じ引数で負荷の下の再現を回し、待ちの打ち切りの赤が 0 件（6.1）。
 - Risks: GPU のテストが 4 つずつしか並ばないので、負荷の下ではその族の時間が延びうる。静かな机の所要時間は 6.1 で測り、延びたら許可の数を増やす（Performance）。`mcp/dump_surface_tests.rs` はタスク 5.5 と同じファイルなので、5.5 の後に触る。
 
 ### 手順
@@ -600,7 +598,7 @@ flowchart TD
 
 - 「直す前」の測定（所要時間と再現）は、待ちの部品に手を入れる前に済ませる。後からは取り直せない。
 - 直す前の再現で赤が 0 件でも、待ちの芯・足場の待ち・檻（2.5・2.6・3 の欠け）は直す（6.4）。その場合、6.1 の確かめは行わない。
-- os error 5 の直しと 2.7（足場のスレッドの絞り）は、それぞれの条件が記録で満たされたときだけ入る。2.7 は直した後の 2 回目の再現（`load-repro.md` の 4.2）で満たされ、作業のプールのスレッドの数と GPU の装置の許可を入れる。足場の同時の数の許可（RigPermit）は、その後の再現（4.3・main の取り込みの後）にも `［進んではいた］` が残ったので入れた。
+- os error 5 の直しと 2.7（足場のスレッドの絞り）は、それぞれの条件が記録で満たされたときだけ入る。2.7 は直した後の 2 回目の再現（`load-repro.md` の 4.2）で満たされ、作業のプールのスレッドの数と GPU の装置の許可を入れる。足場の同時の数の許可（RigPermit）は、その後も `［進んではいた］` が残ったときだけ。
 
 ## Error Handling
 
@@ -642,7 +640,6 @@ flowchart TD
 
 16. GPU の装置の許可: 数えの上限まで取った後は次が取れず（檻は手元の 2 つの数えで確かめる）、1 つ返すと取れる（数えに待たずに取ろうとする私的な口を置いて確かめる。実時間は待たない）。
 17. `WintfTaskPool::with_threads(1)` のプールのスレッドの数が 1（`wintf` の兄弟のテスト）。
-18. 足場の同時の数の許可: 同時の数は論理 CPU の半分（最小 1）で、その数を取った後は次が取れず、1 つ返すと取れる。1 つのスレッドで 2 つ目を取ろうとすると、数えを待たずに panic する（檻 16 と同じく手元の数えと待たずに取る口で確かめる。実時間は待たない）。
 
 ## Performance
 
@@ -653,5 +650,5 @@ flowchart TD
 | 対象の族 | `tools/load-flake.ps1 -Burners 0`（`cargo test -p areka --bin areka` の全部） | 直す前 3 回・後 3 回 | 後の中央値 ＞ 前の中央値 × 1.20。ただし前の 3 回の最大がこの線より上なら、前の最大を線にする（机の揺れを延びと読まない） |
 | 全体テスト | `tools/test-all.ps1` | 直す前 1 回・後 1 回 | 後 ＞ 前 × 1.20 |
 
-- 延びたときの調整の順: ⑴ `DENSE_SPIN` を伸ばす（速い待ちが休みへ落ちる回数を減らす） ⑵ GPU の装置の許可の数（今は 4）を増やす ⑶ 足場の同時の数の許可（RigPermit・今は論理 CPU の半分＝`spine_wait.rs` の `rig_cap`）を増やす。調整の後に同じ測り方で取り直す。`SPIN_WAIT`・`WAIT_CAP` は所要時間に効かないので触らない。
+- 延びたときの調整の順: ⑴ `DENSE_SPIN` を伸ばす（速い待ちが休みへ落ちる回数を減らす） ⑵ GPU の装置の許可の数（今は 4）を増やす。調整の後に同じ測り方で取り直す。`SPIN_WAIT`・`WAIT_CAP` は所要時間に効かないので触らない。
 - 見込み: 緑の走行では、足場の待ちが 60 ms を過ぎてから反復ごとに約 1〜2 ms 休む。待ちの検出が最大でその分だけ遅れる一方、空回しをやめた分だけ相手のスレッドが早く進む。差し引きは実測で確かめる。

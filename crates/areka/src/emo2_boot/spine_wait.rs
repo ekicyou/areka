@@ -7,10 +7,8 @@
 //! 待ちの芯 [`wait_until_with`] は、打ち切りを「待ち始めからの総時間」でなく「相手が状態を進めなかった
 //! 時間」で決め、届かなかった理由を [`WaitFailure`] の 4 つに分けて返す（areka-P0-ghost-session-test-load-flake）。
 
-use std::cell::Cell;
 use std::fmt;
-use std::marker::PhantomData;
-use std::sync::{Condvar, LazyLock, Mutex, PoisonError, mpsc};
+use std::sync::{Condvar, Mutex, PoisonError, mpsc};
 use std::time::{Duration, Instant};
 
 use areka_actor::{ActorError, ActorHandle};
@@ -398,37 +396,24 @@ pub(super) fn join_bounded(
     }
 }
 
-/// 同時に持てる数を決めた数え（areka-P0-ghost-session-test-load-flake 要件 2.7・設計「足場のスレッドの絞り」）。
-/// GPU の装置の許可（[`GpuPermit`]）と足場の許可（[`RigPermit`]）が同じ形で使う。
+/// GPU の装置を同時に持てる数の数え（areka-P0-ghost-session-test-load-flake 要件 2.7・設計「足場のスレッドの絞り」）。
 ///
-/// D3D11 の装置は装置ごとにドライバのスレッドを生み、ゴーストを起こす足場はアクターのスレッドを生む。
-/// Windows ではスレッドの始まりと終わりがプロセスに 1 つのローダーの錠を取るので、負荷の下でこれらが
-/// 多く並ぶと、起こしたばかりのゴーストのスレッドが始まれずに待ちの打ち切りの赤になった
-/// （`load-repro.md` の 4.2・4.3）。数えは `std` だけで書き、どの足場からも届くここに置く。
-pub(super) struct Slots {
+/// D3D11 の装置は装置ごとにドライバのスレッドを生み、Windows ではスレッドの始まりと終わりがプロセスに
+/// 1 つのローダーの錠を取る。負荷の下で装置が多く並ぶと、起こしたばかりのゴーストのスレッドが始まれずに
+/// 待ちの打ち切りの赤になった（`load-repro.md` の 4.2）。数えは `std` だけで書き、どの足場からも届く
+/// ここに置く。
+pub(super) struct GpuSlots {
     held: Mutex<usize>,
     freed: Condvar,
     cap: usize,
 }
 
-/// GPU の装置のプロセスに 1 つの数え（同時に 4 つ）。2 つでは負荷の下の赤が 0 件でも静かな机の `--bin areka` の
+/// テストのプロセスに 1 つの数え（同時に 4 つ）。2 つでは負荷の下の赤が 0 件でも静かな机の `--bin areka` の
 /// 全部が中央値 95.2 秒に延び（直す前 64.1 秒）、8 つでは 64.7 秒でも負荷の下に赤が 2 件残った。間の 4 つを、
 /// 所要時間の線（直す前の 1.20 倍）とともに選んだ（`load-repro.md` の 5）。
-static GPU_SLOTS: Slots = Slots::new(4);
+static GPU_SLOTS: GpuSlots = GpuSlots::new(4);
 
-/// 足場（`SwitchRig`）のプロセスに 1 つの数え（同時の数は [`rig_cap`]）。
-static RIG_SLOTS: LazyLock<Slots> = LazyLock::new(|| {
-    Slots::new(rig_cap(
-        std::thread::available_parallelism().map_or(1, usize::from),
-    ))
-});
-
-/// 足場の同時の数: 論理 CPU の数の半分（最小 1）。
-pub(super) fn rig_cap(parallelism: usize) -> usize {
-    (parallelism / 2).max(1)
-}
-
-impl Slots {
+impl GpuSlots {
     pub(super) const fn new(cap: usize) -> Self {
         Self {
             held: Mutex::new(0),
@@ -438,101 +423,46 @@ impl Slots {
     }
 
     /// 空きが出るまで眠って待ち、許可を取る。
-    fn take(&'static self) -> SlotPermit {
+    fn take(&'static self) -> GpuPermit {
         let held = self.held.lock().unwrap_or_else(PoisonError::into_inner);
         let mut held = self
             .freed
             .wait_while(held, |held| *held >= self.cap)
             .unwrap_or_else(PoisonError::into_inner);
         *held += 1;
-        SlotPermit(self)
+        GpuPermit(self)
     }
 
-    /// 待たずに取る（空きが無ければ `None`）。檻 16・18 が実時間を待たずに数えを確かめるための口。
-    pub(super) fn try_take(&'static self) -> Option<SlotPermit> {
+    /// 待たずに取る（空きが無ければ `None`）。檻 16 が実時間を待たずに数えを確かめるための口。
+    pub(super) fn try_take(&'static self) -> Option<GpuPermit> {
         let mut held = self.held.lock().unwrap_or_else(PoisonError::into_inner);
         if *held >= self.cap {
             return None;
         }
         *held += 1;
-        Some(SlotPermit(self))
+        Some(GpuPermit(self))
     }
 }
 
-/// 数えから取った 1 つ。捨てると数えへ返り、待っている足場を 1 つ起こす。
-pub(super) struct SlotPermit(&'static Slots);
-
-impl Drop for SlotPermit {
-    fn drop(&mut self) {
-        *self.0.held.lock().unwrap_or_else(PoisonError::into_inner) -= 1;
-        self.0.freed.notify_one();
-    }
-}
-
-/// GPU の装置を持ってよい許可。
+/// GPU の装置を持ってよい許可。捨てると数えへ返り、待っている足場を 1 つ起こす。
 ///
 /// `GraphicsCore::new()` の直前に [`GpuPermit::take`] で取る（待ちの関数の外・装置を作る前なので、
 /// 許可を待つ時間は待ちの時間に数えない）。装置より後に捨てるよう、足場の構造体では**最後の欄**に、
 /// 組で返すときは**先頭**に置く（構造体の欄は宣言の順に、`let` の組の束縛は後のものから捨てられる）。
 /// 1 つのテストで 2 つ取ると、同じことをするテストが並んだとき互いに待ち合って止まりうる。2 つ取る
 /// テストは `new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch` の 1 本だけにしておくこと。
-/// 足場の許可（[`RigPermit`]）と両方を持つ足場（`GpuRig`・`LapRig`）は、足場の許可を先に取る
-/// （取る順を 1 つに決めて、互いに相手の許可を待ち合う形を作らない）。
-pub(crate) struct GpuPermit {
-    _slot: SlotPermit,
-}
+pub(crate) struct GpuPermit(&'static GpuSlots);
 
 impl GpuPermit {
     /// プロセスに 1 つの数えから許可を取る（空きが出るまで待つ）。
     pub(crate) fn take() -> Self {
-        Self {
-            _slot: GPU_SLOTS.take(),
-        }
+        GPU_SLOTS.take()
     }
 }
 
-thread_local! {
-    /// このスレッドが足場の許可を持っているか。
-    static HOLDS_RIG: Cell<bool> = const { Cell::new(false) };
-}
-
-/// 足場（`SwitchRig`）を持ってよい許可（areka-P0-ghost-session-test-load-flake タスク 5.2・設計「足場の
-/// スレッドの絞り」の 3）。
-///
-/// `SwitchRig::new` の最初に [`RigPermit::take`] で取り（スレッドを持つものを作る前・待ちの関数の外なので、
-/// 許可を待つ時間は待ちの時間に数えない）、`SwitchRig` の最後の欄として持って破棄で返す。GPU の装置の
-/// 許可より先に取る（[`GpuPermit`]）。1 つのスレッドで 2 つ目を取ろうとすると panic する: 足場を持った
-/// まま 2 つ目を待つテストが同時の数だけ並ぶと、互いに待ち合って全体が止まる（同時の数が 1 の机では
-/// 1 本で止まる）。2 つ目の足場を作る前に 1 つ目を捨てること。
-pub(crate) struct RigPermit {
-    _slot: SlotPermit,
-    /// スレッドの印を戻すのは取ったスレッドなので、ほかのスレッドへ渡さない（`!Send`）。
-    _not_send: PhantomData<*const ()>,
-}
-
-impl RigPermit {
-    /// プロセスに 1 つの数えから許可を取る（空きが出るまで待つ）。このスレッドが既に持っていれば panic。
-    pub(crate) fn take() -> Self {
-        Self::take_from(&RIG_SLOTS)
-    }
-
-    /// `slots` から取る（檻 18 は手元の数えで、本物と同じスレッドの印の確かめを通す）。
-    pub(super) fn take_from(slots: &'static Slots) -> Self {
-        assert!(
-            !HOLDS_RIG.get(),
-            "足場（SwitchRig）を持ったまま 2 つ目を作ろうとした。同時の数の許可を待ち合って止まりうるので、先の足場を捨ててから作る"
-        );
-        let slot = slots.take();
-        HOLDS_RIG.set(true);
-        Self {
-            _slot: slot,
-            _not_send: PhantomData,
-        }
-    }
-}
-
-impl Drop for RigPermit {
+impl Drop for GpuPermit {
     fn drop(&mut self) {
-        HOLDS_RIG.set(false);
+        *self.0.held.lock().unwrap_or_else(PoisonError::into_inner) -= 1;
+        self.0.freed.notify_one();
     }
 }
