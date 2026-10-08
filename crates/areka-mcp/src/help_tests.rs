@@ -2,6 +2,7 @@
 
 use super::help_html;
 use crate::port::{DEFAULT_PORTS, FALLBACK_STEPS, PORT_ENV};
+use crate::tools::{OWN_TABLE, spec_from_definition};
 
 /// (要件 6.1, 6.2, 2.7) 既定でない番号で組むと 5 項目が実番号で載り、
 /// 既定の番号（9801・9821）の URL は無く、⑷ は既定の順（先頭 2 つ → 隣 … 末尾 2 つ）を説明する。
@@ -64,4 +65,25 @@ fn help_html_lists_five_items_with_actual_port() {
     for port in DEFAULT_PORTS {
         assert!(!html.contains(&format!("127.0.0.1:{port}")), "{html}");
     }
+}
+
+/// (要件 4.2, 4.3) 「areka 独自のツール」の節があり、独自のツールの表の各行の名前（登録する定義から読む）と
+/// 日本語の 1 行が `<code>名前</code> — 1 行` の形で節の中に出る（spec: areka-P0-mcp-author-tools）。
+#[test]
+fn help_html_lists_own_tools_from_table() {
+    let html = help_html(12345);
+
+    let section = html
+        .split_once("<h2>areka 独自のツール</h2>")
+        .map(|(_, rest)| rest)
+        .unwrap_or_else(|| panic!("節が無い: {html}"));
+    assert!(!OWN_TABLE.is_empty());
+    for (definition, _, summary) in OWN_TABLE {
+        let name = spec_from_definition(definition).expect("定義が読める").name;
+        assert!(
+            section.contains(&format!("<li><code>{name}</code> — {summary}</li>")),
+            "{name}: {html}"
+        );
+    }
+    assert!(section.contains("<code>check_script</code>"), "{html}");
 }

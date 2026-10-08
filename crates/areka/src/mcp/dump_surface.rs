@@ -128,7 +128,7 @@ impl<A: FnMut(&World) -> Option<Step>> Wait<A> {
             debug!(
                 tool = self.tool,
                 reason = resolve::NOT_ACTIVE,
-                "[mcp] 撮れない"
+                "[mcp] 答えられない"
             );
             return Some(outcome::ng(resolve::NOT_ACTIVE));
         }
@@ -379,7 +379,7 @@ pub(in crate::mcp) fn refuse(
 
 /// 想定外の失敗。`error!` 1 件にツール名・スコープ・理由を載せ、画像なしの `NG:` を返す（要件 4.7・4.8）。
 pub(in crate::mcp) fn fail(tool: &str, scope: u32, reason: &str) -> ToolOutcome {
-    error!(tool, scope, reason, "[mcp] 絵を返せなかった");
+    error!(tool, scope, reason, "[mcp] 答えを返せなかった");
     outcome::ng(reason)
 }
 

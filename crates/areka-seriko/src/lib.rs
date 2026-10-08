@@ -47,7 +47,7 @@ pub use bind::{
 };
 pub use looper::SerikoLoopConfig;
 pub use output::{DisplayCommand, MockSurfaceOutput, RebaseKind, RebasedShow, SurfaceOutput};
-pub use resolve::{SurfaceResolver, SurfaceTarget};
+pub use resolve::{BalloonResolve, SurfaceResolver, SurfaceTarget, resolve_balloon_key};
 pub use state::{
     ApplyOutcome, BindApplyOutcome, PatternApplyOutcome, ScopeState, ScopeStates, Slot, StageNote,
 };
