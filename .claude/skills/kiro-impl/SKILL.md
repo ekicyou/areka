@@ -230,9 +230,10 @@ When a session titled **kiro-watch** (not archived) appears in the session list 
   repo: <repository name>
   内容: <what will run and roughly how long>
   ```
+  Ordinary per-task test runs (crate tests, clippy, `tools/test-all.ps1`) are not load tests and need no request.
   While waiting, continue with tasks that do not need the desk; if none remain, report "waiting for kiro-watch" and end the turn. When the measurement is done, send `【kiro-watch】済みました` at once — every other participant is stopped until then.
-- **Stop requests**: when kiro-watch asks this session to stop, finish the current task iteration through its commit (implementer → review → verify → mark `[x]` → commit). Never cut a running test or a subagent in the middle. Then send `【kiro-watch】停止しました`, report "stopped for kiro-watch" to the developer and end the turn. Continue from the next task only when `再開してよい` (or the cancel message) arrives.
-- **Leaving without completing** (the run is abandoned): send `【kiro-watch】抜けます`. Completion itself is coordinated by `/kiro-complete` (merge desk), which also ends the participation.
+- **Stop requests**: when kiro-watch asks this session to stop, finish the current task iteration through its commit (implementer → review → verify → mark `[x]` → commit). Never cut a running test or a subagent in the middle. Then send `【kiro-watch】停止しました`, report "stopped for kiro-watch" to the developer and end the turn. Continue from the next task only when `再開してよい` (or the cancel message) arrives. Do not start Step 4 (final validation) while stopped.
+- **Leaving without completing** (the run is abandoned or ends BLOCKED): send `【kiro-watch】抜けます`. Completion itself is coordinated by `/kiro-complete` (merge desk), which also ends the participation.
 
 ## Critical Constraints
 - **Out-of-scope findings go to the completion inventory, not to chips**: when implementation, review, debug or validation finds a problem outside the current spec (another crate's flaky test, an unrelated bug), do NOT call the harness `spawn_task` chip tool. Record it in `## Implementation Notes` of tasks.md; `/kiro-complete`'s opening inventory tickets it with `/kiro-discovery` (brief.md + roadmap row). Chips make the developer click and instruct each one and never reach the roadmap (developer, 2026-10-04).
