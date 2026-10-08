@@ -140,7 +140,7 @@ crates/areka/src/
 ├── main.rs                                # 変更: 集合の決め方（953 行・行数は減る）
 └── main_restore_seam_tests.rs             # 変更: 要件 2.6 のテストを足す
 doc/COMPAT_ARCHITECTURE.md                 # 変更: 8 章の表に 1 行
-.kiro/specs/areka-P0-char-position-save-on-exit/
+.kiro/specs/completed/areka-P0-char-position-save-on-exit/
 └── verification/real-machine.md           # 新規: 実機の確認の手順と結果
 ```
 

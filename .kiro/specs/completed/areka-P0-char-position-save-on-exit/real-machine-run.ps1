@@ -23,9 +23,9 @@
   拡大率（DPI）は変えない（拡大率の詰め直しの後退は areka-P0-dpi-realign-remembered-chain の持ち分）。
 
 .EXAMPLE
-  pwsh -NoProfile -File .kiro/specs/areka-P0-char-position-save-on-exit/real-machine-run.ps1 -Prepare
-  pwsh -NoProfile -File .kiro/specs/areka-P0-char-position-save-on-exit/real-machine-run.ps1 -Run R1
-  pwsh -NoProfile -File .kiro/specs/areka-P0-char-position-save-on-exit/real-machine-run.ps1 -Sample claudia -Prepare
+  pwsh -NoProfile -File .kiro/specs/completed/areka-P0-char-position-save-on-exit/real-machine-run.ps1 -Prepare
+  pwsh -NoProfile -File .kiro/specs/completed/areka-P0-char-position-save-on-exit/real-machine-run.ps1 -Run R1
+  pwsh -NoProfile -File .kiro/specs/completed/areka-P0-char-position-save-on-exit/real-machine-run.ps1 -Sample claudia -Prepare
 #>
 param(
     [ValidateSet('emo2', 'claudia')]
@@ -39,7 +39,7 @@ param(
     [string]$RustLog = 'info,areka::persist::save=info,areka::persist::restore=info'
 )
 $ErrorActionPreference = 'Stop'
-$wt = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+$wt = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
 $root = Join-Path $wt $(if ($Sample -eq 'emo2') { 'target\cpsoe' } else { 'target\cpsoc' })
 $ghost = Join-Path $root "ghost\$Sample"
 $memory = Join-Path $ghost 'ghost\master\profile\areka\sylphya.toml'

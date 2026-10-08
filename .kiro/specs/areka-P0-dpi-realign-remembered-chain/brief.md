@@ -1,6 +1,6 @@
 # Brief: areka-P0-dpi-realign-remembered-chain
 
-> 2026-10-05 起票（`/kiro-discovery`）。出どころは spec `areka-P0-char-position-save-on-exit` の設計の検証（`.kiro/specs/areka-P0-char-position-save-on-exit/design-validation.md` 3 章 議題 1）と設計ディスカッション 議題 1。開発者の裁定は「案イ＝受け入れず、別の spec として起票」。
+> 2026-10-05 起票（`/kiro-discovery`）。出どころは spec `areka-P0-char-position-save-on-exit` の設計の検証（`.kiro/specs/completed/areka-P0-char-position-save-on-exit/design-validation.md` 3 章 議題 1）と設計ディスカッション 議題 1。開発者の裁定は「案イ＝受け入れず、別の spec として起票」。
 
 ## Problem
 
