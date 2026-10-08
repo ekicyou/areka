@@ -114,6 +114,7 @@ fn step_untranslated(state: State, input: Input, config: &KanadeConfig) -> (Stat
     let marked_reply = talk_gap::marked_reply(&state, &input);
     let (mut state, actions) = route(state, input, config);
     talk_gap::observe(&mut state, marked_reply);
+    balloon_events::settle(&mut state, &actions);
     (state, actions)
 }
 
@@ -222,7 +223,7 @@ fn state_shape(s: &State) -> String {
         s.next_talk_id,
         s.pending_close,
         s.choice_prev_talk.map(|t| t.0),
-        s.user_break_talk.map(|t| t.0),
+        s.user_break_talk.map(|note| note.talk_id.0),
         s.pending_change,
     )
 }

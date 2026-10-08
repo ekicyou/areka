@@ -38,12 +38,12 @@
 //!    同居すると `\![set,zorder,…]` の 1 出現に 2 つの担当が作用してしまうため、
 //!    [`LedgerError::SelectorConflict`] で拒む。順序はどちらでも同じく拒む。
 //!
-//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 23 行（`move`・`bind`・
+//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 24 行（`move`・`bind`・
 //! `(set,zorder)`・`(reset,zorder)`・`\f`・`(open,readme)`・`(open,file)`・`(open,browser)`・
 //! `(open,explorer)`・`(open,editor)`・`(open,mailer)`・`\j`・`(enter,nouserbreakmode)`・
 //! `(leave,nouserbreakmode)`・`(change,ghost)`・`(change,shell)`・`(change,balloon)`・
 //! `(execute,install)`・`updatebymyself`・`update`・`updateother`・`(set,choicetimeout)`・
-//! `areka.prop.set`）を登記し、違反があれば構築時に panic する（正準表は一意
+//! `areka.prop.set`・`(set,balloontimeout)`）を登記し、違反があれば構築時に panic する（正準表は一意
 //! ゆえ実際には発火しない・回帰檻）。
 //!
 //! # 宣言する表であって、選別する機構ではない
@@ -180,6 +180,13 @@ pub enum CommandConsumer {
     /// [`PROP_SET_CUE_NAME`](areka_ghost::prop_sink::PROP_SET_CUE_NAME) で自己選別する）。
     /// 第 1 引数は書き込む key であって担当を分けないので、登記は選別子なしの 1 行である。
     PropertyWrite,
+    /// バルーンの寿命の受け口の担当消費者
+    /// （[`BalloonLifecycleSink`](super::talk_lifecycle::BalloonLifecycleSink)）。名前だけでは
+    /// 決まらず、第 1 引数が `balloontimeout` の `set` の出現だけを担当する（時間切れまでの待ち時間の
+    /// 差し替え・areka-P0-balloon-lifecycle-events 要件 8.1・9.10）。
+    ///
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1
+    LifecycleSink,
 }
 
 /// 選別子を記録本文へ書くときの見え方（「無い」側も読める形にする——片側だけの本文では
@@ -324,7 +331,8 @@ impl ConsumerLedger {
     /// `(execute, install)` → [`CommandConsumer::InstallSink`]・`updatebymyself`・`update`・
     /// `updateother` → [`CommandConsumer::UpdateSink`]・`(set, choicetimeout)` →
     /// [`CommandConsumer::ScriptCompile`]・運搬名 `areka.prop.set` →
-    /// [`CommandConsumer::PropertyWrite`]）。
+    /// [`CommandConsumer::PropertyWrite`]・`(set, balloontimeout)` →
+    /// [`CommandConsumer::LifecycleSink`]）。
     ///
     /// zorder の 2 行は `ZOrderCueSink` が自己選別する組とちょうど同じである（表は宣言し、受け口は
     /// 自ら選別する——実行時に受け口が本表を引くわけではない）。中断の無効化の 2 行と
@@ -410,6 +418,13 @@ impl ConsumerLedger {
                 CommandConsumer::PropertyWrite,
             )
             .expect("正準台帳: 'areka.prop.set'（選別子なし）は一意（重複・排他違反は編集ミス）");
+        ledger
+            .try_register(
+                "set",
+                Some("balloontimeout"),
+                CommandConsumer::LifecycleSink,
+            )
+            .expect("正準台帳: ('set','balloontimeout') は一意（重複・排他違反は編集ミス）");
         ledger
     }
 }
@@ -709,17 +724,22 @@ mod tests {
     /// 増減は本檻と本 doc の 2 か所を明示的に編集させる。
     #[test]
     fn canonical_builds_without_duplicate() {
-        // canonical() は内部 try_register（23 行）が Ok（重複なら expect が panic する）。
+        // canonical() は内部 try_register（24 行）が Ok（重複なら expect が panic する）。
         let ledger = ConsumerLedger::canonical();
         assert_eq!(
             ledger.entry_count(),
-            23,
-            "正準台帳の登記は 23 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
+            24,
+            "正準台帳の登記は 24 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
              (open,readme)／(open,file)／(open,browser)／(open,explorer)／(open,editor)／\
              (open,mailer)／運搬名 \\j／(enter,nouserbreakmode)／(leave,nouserbreakmode)／\
              (change,ghost)／(change,shell)／(change,balloon)／(execute,install)／\
              updatebymyself／update／updateother／(set,choicetimeout)／\
-             areka.prop.set）——増減させたら本檻と doc の 2 か所を編集すること"
+             areka.prop.set／(set,balloontimeout)）——増減させたら本檻と doc の 2 か所を編集すること"
+        );
+        // 待ち時間の指定は受け口 LifecycleSink に結び付く（areka-P0-balloon-lifecycle-events 要件 9.10）。
+        assert_eq!(
+            ledger.consumer_of("set", Some("balloontimeout")),
+            Some(CommandConsumer::LifecycleSink)
         );
         assert_eq!(
             ledger.consumer_of("move", None),
@@ -738,7 +758,7 @@ mod tests {
             Some(CommandConsumer::ZOrderSink)
         );
 
-        // 23 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
+        // 24 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
         // 検出される。
         let mut ext = ledger.clone();
         let err = ext
@@ -750,7 +770,7 @@ mod tests {
                 name: "bind".to_string(),
                 selector: None,
             },
-            "23 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
+            "24 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
         );
         // 既登記の担当は据え置き（上書きしない）。
         assert_eq!(ext.consumer_of("bind", None), Some(CommandConsumer::Seriko));

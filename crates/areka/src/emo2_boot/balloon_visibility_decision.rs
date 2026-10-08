@@ -3,15 +3,15 @@
 
 use super::wait::decide_timeout;
 use super::{
-    BalloonVisibilityState, ContentDecisions, MeasurementDiscardReason, ScopeVisibility,
-    TalkLifecycleSignal, VisibilityAction, VisibilityDecision, VisibilityLogEvent,
+    BalloonVisibilityState, ContentDecisions, MeasurementDiscardReason, ScopeVisibility, TalkEnd,
+    TalkLifecycleSignal, TalkTimeout, VisibilityAction, VisibilityDecision, VisibilityLogEvent,
     VisibilityObservations, VisibilityTrigger,
 };
 
 /// 本フレームの可視性遷移を決める（純関数・`World` / GPU / 時計に触れない）。
 ///
 /// 判定は 4 段で、この順に依存する——⑴ 表示ライフサイクル信号の畳み込み（会話の開始・占有
-/// 終端・利用者の中断）、⑵ 利用者の中断による非表示、⑶ 可視コンテンツ駆動の表示・非表示、
+/// 終端・待ち時間の指定・トークの終わり・利用者の中断）、⑵ 利用者の中断による非表示、⑶ 可視コンテンツ駆動の表示・非表示、
 /// ⑷ タイムアウトの計測・抑止・満了。⑵ が ⑶ より前にあるのは、中断で隠した scope を ⑶ 以降が
 /// 不可視として扱うためである。⑷ が最後にあるのは、満了で消す対象が「本フレームの発行を
 /// 反映したあとに可視である scope」だからである。
@@ -30,7 +30,7 @@ pub(crate) fn decide(
     let broke = apply_lifecycle_signals(state, obs, now_talk_time, &mut logs);
     let broken = decide_user_break(state, obs, broke, &mut logs);
     let content = decide_content(state, obs, &broken, &mut logs);
-    let timed_out = decide_timeout(
+    let (timed_out, timeout_notice) = decide_timeout(
         state,
         obs,
         now_talk_time,
@@ -72,7 +72,11 @@ pub(crate) fn decide(
         });
     }
 
-    VisibilityDecision { actions, logs }
+    VisibilityDecision {
+        actions,
+        logs,
+        timeout_notice,
+    }
 }
 
 /// 隠す発行が箱（シェル内バルーン）の文字にも届くかを決める（areka-P0-shell-balloon 要件 6.10）。
@@ -96,7 +100,11 @@ pub(super) fn hide_reaches_boxes(trigger: VisibilityTrigger, break_latch: bool) 
 }
 
 /// 表示ライフサイクル信号を会話単位の状態へ畳み込み、**本フレームに利用者の中断があったか**を
-/// 返す（Requirements 4.1 / 4.5・areka-P0-balloon-break 要件 4.1 / 4.7）。
+/// 返す（Requirements 4.1 / 4.5・areka-P0-balloon-break 要件 4.1 / 4.7・
+/// areka-P0-balloon-lifecycle-events 要件 5.1・9.5・9.6）。
+///
+/// 占有終端だけでは計測は立たない——トークの終わり（`TalkEnded`）を畳み込んで初めて計測の
+/// 成立条件がそろう（`decide_timeout`）。
 ///
 /// 信号の受け取りは配線層の仕事だが、受け取った信号が計測へ及ぼす作用は判断である。
 /// 畳み込みは**線の上の到着順どおり**に進める——同じフレームに中断と次の会話の開始が届いた
@@ -110,7 +118,12 @@ fn apply_lifecycle_signals(
     let mut broke = false;
     for signal in &obs.lifecycle {
         match *signal {
-            TalkLifecycleSignal::TalkStarted => {
+            TalkLifecycleSignal::TalkStarted { talk_id } => {
+                // トークの番号・終わり・待ち時間を初めの値へ戻す
+                // （areka-P0-balloon-lifecycle-events 要件 9.6）。
+                state.talk_id = talk_id;
+                state.talk_end = TalkEnd::NotYet;
+                state.talk_timeout = TalkTimeout::Default;
                 // 次の会話が始まった。進行中の計測は破棄する（Requirement 4.5）。
                 if let Some(deadline) = state.deadline.take() {
                     logs.push(VisibilityLogEvent::MeasurementDiscarded {
@@ -155,6 +168,16 @@ fn apply_lifecycle_signals(
                         deadline,
                     });
                 }
+            }
+            TalkLifecycleSignal::BalloonTimeout(timeout) => {
+                // 待ち時間の指定は到着順に上書きし、最後に届いた値が残る（要件 9.5）。計測は
+                // トークの終わりの後にしか立たず、終わりの後には指定が届かないので、立っている
+                // 計測を捨てる相手は構造上無い。
+                state.talk_timeout = timeout;
+            }
+            TalkLifecycleSignal::TalkEnded { at } => {
+                // 止まった時刻を丸めずに記す。時刻が無ければ「時刻なし」（要件 5.2・5.6）。
+                state.talk_end = at.map_or(TalkEnd::TimeUnknown, TalkEnd::At);
             }
         }
     }

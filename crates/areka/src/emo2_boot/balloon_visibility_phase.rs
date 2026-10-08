@@ -9,7 +9,8 @@
 //!
 //! ⑴ 表示ライフサイクル信号を全件取り出す → ⑵ scope ごとの観測を集める → ⑶ 自分が発行して
 //! いない可視性の変化を前フレームとの差分で検出する → ⑷ [`decide`] を呼ぶ → ⑸ 返った行動を
-//! 発行する → ⑹ 返った事象をログへ写す → ⑺ 不可視へ落ちた scope のポインタ滞在記録を掃除する。
+//! 発行する → ⑹ 返った事象をログへ写し、時間切れの知らせがあれば置き場のゴーストの kanade へ
+//! 送る → ⑺ 不可視へ落ちた scope のポインタ滞在記録を掃除する。
 //!
 //! ⑶ が ⑷ より前にあるのは順序の都合ではなく必然である——[`decide`] は自分が積んだ遷移を
 //! `prev_visible` へ書き込むため、その後で差分を取ると自分の発行が「外から来た変化」に化ける。
@@ -28,13 +29,15 @@ use std::time::{Duration, Instant};
 
 use areka_emo_present::{EmoPresenter, PresentCommand};
 use areka_emo_text::actor::{ShownBox, TextLayerRuntime};
-use areka_sakura::ActorKey;
+use areka_kanade::KanadeMsg;
+use areka_sakura::{ActorKey, TalkId};
 use bevy_ecs::prelude::{Entity, With};
 use bevy_ecs::world::World;
 use tracing::{error, info, warn};
 use wintf::ecs::world::tick_wake;
 use wintf::ecs::{FrameTime, WindowDragging};
 
+use crate::ghost_session::GhostSlot;
 use crate::input_events::balloon::BalloonWiring;
 use crate::input_events::shell_box::{ShellBoxHover, settle_box_hover};
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
@@ -42,9 +45,9 @@ use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 use super::super::frame::{Emo2Wiring, resolve_talk_time};
 use super::super::target_map::{balloon_target, shell_target};
 use super::{
-    BalloonVisibilityState, GlyphObservation, ScopeObservation, TalkLifecycleSignal,
-    VisibilityAction, VisibilityLogEvent, VisibilityObservations, VisibilityTrigger,
-    configured_timeout_secs, decide, hide_reaches_boxes,
+    BalloonVisibilityState, GlyphObservation, MeasurementOrigin, ScopeObservation,
+    TalkLifecycleSignal, VisibilityAction, VisibilityLogEvent, VisibilityObservations,
+    VisibilityTrigger, configured_timeout_secs, decide, hide_reaches_boxes,
 };
 
 /// バルーン可視性の相（`emo2_frame_system` の相順から毎フレーム呼ばれる配線）。
@@ -128,6 +131,8 @@ pub(in crate::emo2_boot) fn run_balloon_visibility_phase(
     hidden.extend(issued.hidden.iter().copied());
 
     emit_visibility_logs(&decision.logs, &issued.not_shown);
+    // 知らせは隠す発行を済ませた後に送る（design「VisibilityPhase の送出」）。
+    notify_timeout(world, decision.timeout_notice);
     clear_hover_residency(world, &hidden);
 }
 
@@ -670,12 +675,30 @@ fn emit_visibility_logs(logs: &[VisibilityLogEvent], not_shown: &[u32]) {
                 );
             }
             VisibilityLogEvent::MeasurementStarted {
+                origin,
                 display_end,
                 deadline,
-            } => info!(
-                display_end,
-                deadline, "[balloon-visibility] タイムアウト計測を開始（起点＝会話の占有終端）"
-            ),
+            } => match origin {
+                MeasurementOrigin::StoppedAt(stopped_at) => info!(
+                    origin = origin.as_str(),
+                    stopped_at,
+                    display_end,
+                    deadline,
+                    "[balloon-visibility] タイムアウト計測を開始（起点＝止まった時刻）"
+                ),
+                MeasurementOrigin::DisplayEnd => info!(
+                    origin = origin.as_str(),
+                    display_end,
+                    deadline,
+                    "[balloon-visibility] タイムアウト計測を開始（起点＝会話の占有終端）"
+                ),
+                MeasurementOrigin::StopTimeMissing => warn!(
+                    origin = origin.as_str(),
+                    display_end,
+                    deadline,
+                    "[balloon-visibility] タイムアウト計測を開始（止まった時刻が届かず、起点＝会話の占有終端）"
+                ),
+            },
             VisibilityLogEvent::MeasurementDiscarded { reason, deadline } => info!(
                 reason = reason.as_str(),
                 deadline, "[balloon-visibility] タイムアウト計測を破棄"
@@ -694,7 +717,55 @@ fn emit_visibility_logs(logs: &[VisibilityLogEvent], not_shown: &[u32]) {
             VisibilityLogEvent::DisplayEndSignalMissing => warn!(
                 "[balloon-visibility] 可視コンテンツが現れたのに会話の表示終了信号が 1 件も届いていない → 計測を始めず表示を保持する"
             ),
+            VisibilityLogEvent::TimeoutNoticeWithoutTalkId => warn!(
+                event = "balloon_timeout_notice_failed",
+                reason = "no_talk_id",
+                "[balloon-visibility] 時間切れで隠したが、トークの番号が無いので知らせを載せない"
+            ),
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 時間切れの知らせ（areka-P0-balloon-lifecycle-events 要件 2.1・7.2）
+// ---------------------------------------------------------------------------
+
+/// 判断が立てた時間切れの知らせを、置き場のゴーストの kanade へ `BalloonTimeout` として送る。
+///
+/// 送出端は `frame/status_report.rs` と同じく `GhostSlot` から取り出す（結線の束は変えない）。
+/// ここが持つ分岐は「送出端があるか」と「送れたか」だけで、送るかどうかは判断と kanade の表 D が
+/// 決める。ゴーストの切替は置き場と可視性の状態（ゴーストごとの結線）を一緒に入れ替えるので、
+/// 前のゴーストのトークの番号は新しいゴーストへ届かない。
+fn notify_timeout(world: &World, notice: Option<TalkId>) {
+    let Some(talk_id) = notice else {
+        return;
+    };
+    let Some(kanade) = world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .and_then(|session| session.kanade())
+    else {
+        warn!(
+            event = "balloon_timeout_notice_failed",
+            reason = "no_ghost",
+            talk_id = talk_id.0,
+            "[balloon-visibility] 時間切れで隠したが、置き場にゴーストが無いので知らせを送らない"
+        );
+        return;
+    };
+    if kanade.send(KanadeMsg::BalloonTimeout { talk_id }).is_ok() {
+        info!(
+            event = "balloon_timeout_notified",
+            talk_id = talk_id.0,
+            "[balloon-visibility] 時間切れで隠したことを運行の側へ知らせた"
+        );
+    } else {
+        error!(
+            event = "balloon_timeout_notice_failed",
+            reason = "receiver_gone",
+            talk_id = talk_id.0,
+            "[balloon-visibility] 時間切れの知らせを渡せない（受け手が消えている）"
+        );
     }
 }
 
@@ -749,3 +820,13 @@ mod reappear_tests;
 #[cfg(test)]
 #[path = "balloon_visibility_phase_box_tests.rs"]
 mod box_tests;
+
+// トークの終わりから計る時間切れの記録（起点の採り方・番号の無い知らせ）の水準と欄。
+#[cfg(test)]
+#[path = "balloon_visibility_phase_log_tests.rs"]
+mod log_tests;
+
+// 時間切れの知らせを置き場のゴーストの kanade へ送る配線（送った・送れなかったの記録と切替の直後）。
+#[cfg(test)]
+#[path = "balloon_visibility_phase_notice_tests.rs"]
+mod notice_tests;

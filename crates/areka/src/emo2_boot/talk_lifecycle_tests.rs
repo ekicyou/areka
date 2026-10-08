@@ -47,6 +47,11 @@ fn wait_cue(at: f64, duration: f64) -> TalkCue {
     cue(at, duration, CueCommand::Wait)
 }
 
+/// 起点を持たない時刻源（本檻は終わりの合図の時刻を見ない・それは `talk_lifecycle_signals_tests.rs`）。
+fn test_clock() -> crate::emo2_boot::talk_clock::TalkClock {
+    crate::emo2_boot::talk_clock::TalkClock::new(std::sync::Arc::new(|| 0.0))
+}
+
 /// 受信端から届いた信号を全件取り出す（非ブロック・実時間待機なし）。
 fn drain(rx: &std::sync::mpsc::Receiver<TalkLifecycleSignal>) -> Vec<TalkLifecycleSignal> {
     rx.try_iter().collect()
@@ -58,7 +63,7 @@ fn ends(rx: &std::sync::mpsc::Receiver<TalkLifecycleSignal>) -> Vec<f64> {
         .into_iter()
         .filter_map(|s| match s {
             TalkLifecycleSignal::DisplayEndAt(h) => Some(h),
-            TalkLifecycleSignal::TalkStarted | TalkLifecycleSignal::UserBreak => None,
+            _ => None,
         })
         .collect()
 }
@@ -96,7 +101,7 @@ fn count_level(logs: &[String], level: &str) -> usize {
 #[test]
 fn talk_started_is_emitted_once_and_precedes_display_end() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let mut sink = BalloonLifecycleSink::new(tx);
+    let mut sink = BalloonLifecycleSink::new(tx, test_clock());
 
     sink.emit(text_cue(0.0, 0.5));
     sink.emit(text_cue(0.5, 0.25));
@@ -104,13 +109,13 @@ fn talk_started_is_emitted_once_and_precedes_display_end() {
     let signals = drain(&rx);
     assert_eq!(
         signals.first(),
-        Some(&TalkLifecycleSignal::TalkStarted),
+        Some(&TalkLifecycleSignal::TalkStarted { talk_id: None }),
         "初回 emit の先頭は TalkStarted（Ordering 契約）: {signals:?}"
     );
     assert_eq!(
         signals
             .iter()
-            .filter(|s| **s == TalkLifecycleSignal::TalkStarted)
+            .filter(|s| **s == TalkLifecycleSignal::TalkStarted { talk_id: None })
             .count(),
         1,
         "TalkStarted は talk につき 1 回のみ: {signals:?}"
@@ -118,7 +123,7 @@ fn talk_started_is_emitted_once_and_precedes_display_end() {
     // TalkStarted は全 DisplayEndAt に先行する（添字比較で位置関係を直接主張する）。
     let started_at = signals
         .iter()
-        .position(|s| *s == TalkLifecycleSignal::TalkStarted)
+        .position(|s| *s == TalkLifecycleSignal::TalkStarted { talk_id: None })
         .expect("TalkStarted が存在する");
     let first_end = signals
         .iter()
@@ -135,7 +140,7 @@ fn talk_started_is_emitted_once_and_precedes_display_end() {
 #[test]
 fn display_end_is_monotonic_max_of_at_plus_duration() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let mut sink = BalloonLifecycleSink::new(tx);
+    let mut sink = BalloonLifecycleSink::new(tx, test_clock());
 
     // 終端が 0.5 → 2.0 → （後退 1.0）→ （同値 2.0）→ 3.0 と推移する入力列。
     sink.emit(text_cue(0.0, 0.5)); // end = 0.5（増加）
@@ -164,7 +169,7 @@ fn display_end_is_monotonic_max_of_at_plus_duration() {
 #[test]
 fn wait_cue_duration_is_included_in_occupancy_horizon() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let mut sink = BalloonLifecycleSink::new(tx);
+    let mut sink = BalloonLifecycleSink::new(tx, test_clock());
 
     // 文字 @0.0（D=0.5）→ 待機 @0.5（D=1.25）。占有終端 = 0.5 + 1.25 = 1.75。
     sink.emit(text_cue(0.0, 0.5));
@@ -184,7 +189,7 @@ fn wait_cue_duration_is_included_in_occupancy_horizon() {
 #[test]
 fn horizon_matches_dola_occupancy_definition() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let mut sink = BalloonLifecycleSink::new(tx);
+    let mut sink = BalloonLifecycleSink::new(tx, test_clock());
 
     let cues = vec![
         cue(0.0, 0.0, CueCommand::ClearAll),
@@ -216,29 +221,29 @@ fn horizon_matches_dola_occupancy_definition() {
 #[test]
 fn clone_resets_talk_boundary_so_next_talk_re_emits_talk_started() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let mut registered = BalloonLifecycleSink::new(tx);
+    let mut registered = BalloonLifecycleSink::new(tx, test_clock());
 
     // 1 本目の talk（登録 sink の clone）。
-    let mut talk1 = registered.clone();
+    let mut talk1 = registered.clone_box();
     talk1.emit(text_cue(0.0, 2.0));
     let talk1_signals = drain(&rx);
     assert_eq!(
         talk1_signals,
         vec![
-            TalkLifecycleSignal::TalkStarted,
+            TalkLifecycleSignal::TalkStarted { talk_id: None },
             TalkLifecycleSignal::DisplayEndAt(2.0),
         ],
         "1 本目の talk: TalkStarted 先行＋占有終端"
     );
 
     // 2 本目の talk（同じ登録 sink をもう一度 clone）。
-    let mut talk2 = registered.clone();
+    let mut talk2 = registered.clone_box();
     talk2.emit(text_cue(0.0, 0.5));
     let talk2_signals = drain(&rx);
     assert_eq!(
         talk2_signals,
         vec![
-            TalkLifecycleSignal::TalkStarted,
+            TalkLifecycleSignal::TalkStarted { talk_id: None },
             TalkLifecycleSignal::DisplayEndAt(0.5),
         ],
         "2 本目の talk でも TalkStarted が再送され、horizon は前 talk（2.0）を持ち越さない"
@@ -246,12 +251,12 @@ fn clone_resets_talk_boundary_so_next_talk_re_emits_talk_started() {
 
     // 会話境界の状態は clone で必ずリセットされる——emit 済みインスタンスからの clone でも同じ
     // （登録 sink が emit されないという上流の暗黙不変条件に依存しない）。
-    let mut talk3 = talk1.clone();
+    let mut talk3 = talk1.clone_box();
     talk3.emit(text_cue(0.0, 0.25));
     assert_eq!(
         drain(&rx),
         vec![
-            TalkLifecycleSignal::TalkStarted,
+            TalkLifecycleSignal::TalkStarted { talk_id: None },
             TalkLifecycleSignal::DisplayEndAt(0.25),
         ],
         "emit 済みインスタンスからの clone も会話境界をリセットする"
@@ -262,7 +267,7 @@ fn clone_resets_talk_boundary_so_next_talk_re_emits_talk_started() {
     assert_eq!(
         drain(&rx),
         vec![
-            TalkLifecycleSignal::TalkStarted,
+            TalkLifecycleSignal::TalkStarted { talk_id: None },
             TalkLifecycleSignal::DisplayEndAt(0.1),
         ],
         "登録 sink 自身も未 emit 状態から始まる"
@@ -278,7 +283,7 @@ fn clone_resets_talk_boundary_so_next_talk_re_emits_talk_started() {
 #[test]
 fn send_failure_after_receiver_drop_is_logged_and_non_fatal() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let mut sink = BalloonLifecycleSink::new(tx);
+    let mut sink = BalloonLifecycleSink::new(tx, test_clock());
     drop(rx);
 
     let logs = capture_logs(|| {
@@ -309,7 +314,7 @@ fn send_failure_after_receiver_drop_is_logged_and_non_fatal() {
 #[test]
 fn non_finite_cue_times_are_skipped_with_a_record() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let mut sink = BalloonLifecycleSink::new(tx);
+    let mut sink = BalloonLifecycleSink::new(tx, test_clock());
 
     let logs = capture_logs(|| {
         sink.emit(text_cue(0.0, 1.0)); // end = 1.0
@@ -336,14 +341,14 @@ fn non_finite_cue_times_are_skipped_with_a_record() {
 #[test]
 fn instantaneous_talk_still_reports_zero_horizon() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let mut sink = BalloonLifecycleSink::new(tx);
+    let mut sink = BalloonLifecycleSink::new(tx, test_clock());
 
     sink.emit(cue(0.0, 0.0, CueCommand::ClearAll));
 
     assert_eq!(
         drain(&rx),
         vec![
-            TalkLifecycleSignal::TalkStarted,
+            TalkLifecycleSignal::TalkStarted { talk_id: None },
             TalkLifecycleSignal::DisplayEndAt(0.0),
         ],
         "占有終端 0.0 も信号として届く（信号欠落と区別できる）"
@@ -358,7 +363,7 @@ fn instantaneous_talk_still_reports_zero_horizon() {
 #[test]
 fn construction_and_clone_emit_nothing() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
-    let sink = BalloonLifecycleSink::new(tx);
+    let sink = BalloonLifecycleSink::new(tx, test_clock());
 
     assert_eq!(
         rx.try_recv(),
@@ -367,8 +372,8 @@ fn construction_and_clone_emit_nothing() {
     );
 
     // dispatcher が talk 起動ごとに行う複製（clone_box 相当）を 2 回踏んでも、emit が無い限り無音。
-    let clone1 = sink.clone();
-    let _clone2 = clone1.clone();
+    let clone1 = sink.clone_box();
+    let _clone2 = clone1.clone_box();
     assert_eq!(
         rx.try_recv(),
         Err(TryRecvError::Empty),
@@ -435,7 +440,7 @@ fn ends_of(signals: &[TalkLifecycleSignal]) -> Vec<f64> {
         .iter()
         .filter_map(|s| match s {
             TalkLifecycleSignal::DisplayEndAt(end) => Some(*end),
-            TalkLifecycleSignal::TalkStarted | TalkLifecycleSignal::UserBreak => None,
+            _ => None,
         })
         .collect()
 }
@@ -462,7 +467,10 @@ fn script_ending_with_a_wait_reports_occupancy_end_that_only_the_wait_determines
     let wait_seconds = Duration::from_millis(9 * WAIT_UNIT_MS).as_secs_f64();
     let expected_end = text_seconds + wait_seconds;
 
-    let compiled = play_script(r"\0あい\w9\e", Box::new(BalloonLifecycleSink::new(tx)));
+    let compiled = play_script(
+        r"\0あい\w9\e",
+        Box::new(BalloonLifecycleSink::new(tx, test_clock())),
+    );
 
     // 前提①: 待機が効いている台本であること——待機以外の cue の終端は占有終端に届かない。
     // （待機の後ろに文字が続く台本ではここが等しくなり、待機の検証にならない。）
@@ -491,7 +499,7 @@ fn script_ending_with_a_wait_reports_occupancy_end_that_only_the_wait_determines
     let started_positions: Vec<usize> = signals
         .iter()
         .enumerate()
-        .filter(|(_, s)| **s == TalkLifecycleSignal::TalkStarted)
+        .filter(|(_, s)| **s == TalkLifecycleSignal::TalkStarted { talk_id: None })
         .map(|(i, _)| i)
         .collect();
     assert_eq!(
@@ -536,7 +544,8 @@ fn script_ending_with_a_wait_reports_occupancy_end_that_only_the_wait_determines
 fn per_talk_clone_box_resets_the_conversation_boundary_between_two_scripts() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
     // `GhostBootOptions.sinks` へ登録される形（複製元）。
-    let registered: Box<dyn BootCueSink> = Box::new(BalloonLifecycleSink::new(tx.clone()));
+    let registered: Box<dyn BootCueSink> =
+        Box::new(BalloonLifecycleSink::new(tx.clone(), test_clock()));
 
     // 1 本目 `\0あいうえお\w9\e`: 文字 5 × 50ms = 0.25 ＋ 待機 9 × 50ms = 0.45 → 終端 0.7。
     // （`\wN` の N は 1 桁のみ——`\w20` は `\w2` ＋ 文字 "0" になる。長い待ちは `\_w[ms]` 形。）
@@ -558,7 +567,7 @@ fn per_talk_clone_box_resets_the_conversation_boundary_between_two_scripts() {
     );
     assert_eq!(
         first_signals.first(),
-        Some(&TalkLifecycleSignal::TalkStarted),
+        Some(&TalkLifecycleSignal::TalkStarted { talk_id: None }),
         "1 本目: 会話開始の通知が先行する: {first_signals:?}"
     );
     assert_eq!(
@@ -576,7 +585,7 @@ fn per_talk_clone_box_resets_the_conversation_boundary_between_two_scripts() {
     );
     assert_eq!(
         second_signals.first(),
-        Some(&TalkLifecycleSignal::TalkStarted),
+        Some(&TalkLifecycleSignal::TalkStarted { talk_id: None }),
         "2 本目: 複製ごとに会話開始の通知が改めて出る: {second_signals:?}"
     );
     assert_eq!(
@@ -587,7 +596,7 @@ fn per_talk_clone_box_resets_the_conversation_boundary_between_two_scripts() {
 
     // 3 本目: 1 本目の cue を実際に浴びたインスタンスから複製する。複製元の既知最大は 0.7 まで
     // 上がっているため、境界を引き継ぐ複製では 2 本目と同じ台本（終端 0.05）で通知が 1 件も出ない。
-    let mut used = BalloonLifecycleSink::new(tx);
+    let mut used = BalloonLifecycleSink::new(tx, test_clock());
     for cue in first.sheet.cues() {
         if let CuePayload::Command(command) = &cue.payload {
             used.emit(TalkCue {
@@ -610,7 +619,7 @@ fn per_talk_clone_box_resets_the_conversation_boundary_between_two_scripts() {
     let third_signals = drain(&rx);
     assert_eq!(
         third_signals.first(),
-        Some(&TalkLifecycleSignal::TalkStarted),
+        Some(&TalkLifecycleSignal::TalkStarted { talk_id: None }),
         "3 本目: 使用済みインスタンスからの複製でも会話開始の通知が出る: {third_signals:?}"
     );
     assert_eq!(

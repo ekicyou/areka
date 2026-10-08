@@ -483,7 +483,7 @@ pub fn wire_emo2_boot(
     // 送出端の複製（areka-P0-balloon-break task 3.3）: 中断を受け入れた UI が同じ線へ
     // 「中断された」を送る。受信端は 1 本のままなので、バルーン可視性相が同じ取り出しで読む。
     let user_break_lifecycle_tx = lifecycle_tx.clone();
-    let lifecycle_sink = BalloonLifecycleSink::new(lifecycle_tx);
+    let lifecycle_sink = BalloonLifecycleSink::new(lifecycle_tx, clock.clone());
     // 重なりの channel（move channel と同型の配線・areka-P0-scope-zorder-pinning task 6.2）:
     // talk スレッドの ZOrderCueSink が送出端、UI スレッドの Emo2Wiring が受信端（frame 相の
     // 取り出し＝run_zorder_drain_phase が消費）を保持する。運ばれるのは解釈前のトークン列で

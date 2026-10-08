@@ -5,12 +5,14 @@ use std::sync::OnceLock;
 
 use tracing::{info, warn};
 
+use areka_sakura::TalkId;
+
 use super::decision::hide_reaches_boxes;
 
 use super::{
     BalloonVisibilityState, ContentDecisions, DEFAULT_BALLOON_TIMEOUT_SECS,
-    MeasurementDiscardReason, SuppressionKinds, TIMEOUT_ENV_KEY, TimeoutSource, VisibilityLogEvent,
-    VisibilityObservations, VisibilityTrigger,
+    MeasurementDiscardReason, MeasurementOrigin, SuppressionKinds, TIMEOUT_ENV_KEY, TalkEnd,
+    TalkTimeout, TimeoutSource, VisibilityLogEvent, VisibilityObservations, VisibilityTrigger,
 };
 
 /// 環境変数の値から短縮指定のミリ秒を読み取る純関数（環境変数へ触れない・単体テスト可能）。
@@ -71,8 +73,37 @@ pub(crate) fn configured_timeout_secs() -> f64 {
     *RESOLVED.get_or_init(|| resolve_timeout_secs(std::env::var(TIMEOUT_ENV_KEY).ok().as_deref()).0)
 }
 
-/// タイムアウトの計測・抑止・満了を判定し、満了で非表示にする scope を返す
-/// （Requirements 4.3 / 4.5 / 4.6 / 4.8 / 4.9 / 5.1〜5.3 / 5.5 / 5.6）。
+/// このトークの待ち時間（秒）を決める（areka-P0-balloon-lifecycle-events 要件 9.1〜9.3・9.9）。
+///
+/// 既定は引数で渡された値（30 秒か環境変数。決め方は変えない）。ミリ秒の指定は環境変数と同じ式
+/// （1,000 で 1 回割る）で秒へ写し、丸めない。`None` は時間切れで隠さない。
+fn talk_timeout_secs(timeout: TalkTimeout, default_secs: f64) -> Option<f64> {
+    match timeout {
+        TalkTimeout::Default => Some(default_secs),
+        TalkTimeout::Millis(ms) => Some(ms as f64 / 1000.0),
+        TalkTimeout::Never => None,
+    }
+}
+
+/// 実効の表示終了と起点の採り方を決める（areka-P0-balloon-lifecycle-events 要件 5.1・5.3・5.6）。
+///
+/// トークの終わりが届くまでは `None`（計測を始めない）。届いていれば占有区間の終端と止まった
+/// 時刻の早い方で、ちょうど同じなら終端を採る。時刻が無ければ終端。
+fn effective_display_end(display_end: f64, talk_end: TalkEnd) -> Option<(f64, MeasurementOrigin)> {
+    match talk_end {
+        TalkEnd::NotYet => None,
+        TalkEnd::At(stopped) if stopped < display_end => {
+            Some((stopped, MeasurementOrigin::StoppedAt(stopped)))
+        }
+        TalkEnd::At(_) => Some((display_end, MeasurementOrigin::DisplayEnd)),
+        TalkEnd::TimeUnknown => Some((display_end, MeasurementOrigin::StopTimeMissing)),
+    }
+}
+
+/// タイムアウトの計測・抑止・満了を判定し、満了で非表示にする scope と、そのフレームの
+/// 時間切れの知らせ（トークの番号）を返す
+/// （Requirements 4.3 / 4.5 / 4.6 / 4.8 / 4.9 / 5.1〜5.3 / 5.5 / 5.6・
+/// areka-P0-balloon-lifecycle-events 要件 2.1・2.4・2.5・5.1・5.3・5.5・5.6・7.3・9.1〜9.3・9.7）。
 pub(super) fn decide_timeout(
     state: &mut BalloonVisibilityState,
     obs: &VisibilityObservations,
@@ -81,11 +112,11 @@ pub(super) fn decide_timeout(
     broken: &[u32],
     content: &ContentDecisions,
     logs: &mut Vec<VisibilityLogEvent>,
-) -> Vec<u32> {
+) -> (Vec<u32>, Option<TalkId>) {
     // 現在時刻が分からないフレームは計測に一切触れない（起点未確立）。抑止の持ち越しも
     // 止めるため、時刻が戻ったフレームで解除エッジが改めて立つ——表示を保持する側の縮退。
     let Some(now) = now_talk_time else {
-        return Vec::new();
+        return (Vec::new(), None);
     };
 
     // 本フレームの発行を反映した可視 scope。真実源はあくまで観測値で、そこへ本フレームに
@@ -134,10 +165,17 @@ pub(super) fn decide_timeout(
         });
     }
 
-    // 計測が成り立つ条件: 占有終端が確立し、現在時刻がそこに達し、消す対象が居ること。
-    // 占有終端が未確立の間は計測を始めない＝表示を保持する（Requirement 4.8）。
-    let eligible_display_end = match state.display_end {
-        Some(end) if now >= end && !visible.is_empty() => Some(end),
+    // 計測が成り立つ条件: 占有終端が確立し、トークの終わりが届き、このトークの待ち時間が
+    // 「なし」でなく、現在時刻が実効の表示終了に達し、消す対象が居ること。占有終端かトークの
+    // 終わりが未着の間は計測を始めない＝表示を保持する（Requirement 4.8・
+    // areka-P0-balloon-lifecycle-events 決定 D6）。
+    let wait_secs = talk_timeout_secs(state.talk_timeout, timeout_secs);
+    let eligible = match (state.display_end, wait_secs) {
+        (Some(end), Some(wait)) if !visible.is_empty() => {
+            effective_display_end(end, state.talk_end)
+                .filter(|&(effective, _)| now >= effective)
+                .map(|(effective, origin)| (end, effective, origin, wait))
+        }
         _ => None,
     };
 
@@ -145,39 +183,43 @@ pub(super) fn decide_timeout(
     state.prev_suppressed = suppressed;
 
     if released {
-        // 抑止が全て解けた。ここからは既定時間を**現在時刻起点で改めて**計り直す
-        // （Requirement 5.3——抑止前の残り時間を再開しない）。
+        // 抑止が全て解けた。ここからはこのトークの待ち時間を**現在時刻起点で改めて**計り直す
+        // （Requirement 5.3——抑止前の残り時間を再開しない・areka-P0-balloon-lifecycle-events 要件 9.7）。
         state.suppress_logged = false;
-        if eligible_display_end.is_some() {
-            let deadline = now + timeout_secs;
+        if let Some((_, _, _, wait)) = eligible {
+            let deadline = now + wait;
             state.deadline = Some(deadline);
             logs.push(VisibilityLogEvent::MeasurementRestarted { now, deadline });
         }
-    } else if let Some(display_end) = eligible_display_end
+    } else if let Some((display_end, effective, origin, wait)) = eligible
         && state.deadline.is_none()
     {
-        // 初期確立の起点は**占有終端**である（Requirement 4.1 の正典起点「スクリプトの表示が
-        // 終わってから」）。「計測が成り立った最初のフレームの現在時刻 + 既定時間」ではない
-        // ——観測はフレーム単位で飛び飛びに入るため、そちらを採ると観測の遅れがそのまま
-        // 満了のずれになる。中断による終了（Requirement 4.6）も占有終端が起点で、中断のみを
-        // 理由とする即時非表示の経路はこの段には無い。利用者のダブルクリックによる中断だけは
-        // 例外で、[`decide`] の別の段（[`decide_user_break`]）が占有終端を待たずに隠す
-        // （areka-P0-balloon-break 要件 4.1）。
-        let deadline = display_end + timeout_secs;
+        // 初期確立の起点は**実効の表示終了**＝占有終端と止まった時刻の早い方で、止まった時刻が
+        // 届かなければ占有終端である（Requirement 4.1 の正典起点「スクリプトの表示が終わって
+        // から」・areka-P0-balloon-lifecycle-events 要件 5.1・5.3・5.6）。完了 spec
+        // areka-P0-balloon-visibility では起点は占有終端だけだったが、本 spec がこう改めた。
+        // 「計測が成り立った最初のフレームの現在時刻 + 待ち時間」ではない——観測はフレーム単位で
+        // 飛び飛びに入るため、そちらを採ると観測の遅れがそのまま満了のずれになる。中断で終わった
+        // トーク（Requirement 4.6）は止まった時刻が占有終端より早いので、止まった時刻が起点になる。
+        // 中断のみを理由とする即時非表示の経路はこの段には無い。利用者のダブルクリックによる
+        // 中断だけは例外で、[`decide`] の別の段（[`decide_user_break`]）が計測を待たずに隠す
+        // （areka-P0-balloon-break 要件 4.1）。起点の採り方は 1 件記録する（毎フレームは記録しない）。
+        let deadline = effective + wait;
         state.deadline = Some(deadline);
         logs.push(VisibilityLogEvent::MeasurementStarted {
+            origin,
             display_end,
             deadline,
         });
     }
 
     let Some(deadline) = state.deadline else {
-        return Vec::new();
+        return (Vec::new(), None);
     };
     // 非数の現在時刻はどちらの比較も偽になり、満了しない側（表示を保持する側）へ倒れる。
     let expired = now >= deadline;
     if !expired {
-        return Vec::new();
+        return (Vec::new(), None);
     }
 
     if suppressed {
@@ -190,11 +232,11 @@ pub(super) fn decide_timeout(
                 deadline,
             });
         }
-        return Vec::new();
+        return (Vec::new(), None);
     }
 
     // 満了。本フレームに表示したばかりの scope は対象から外す——出してすぐ消す行動の対を
-    // 同じフレームで作らないための縮退で、表示を保持する側へ倒れる。外した scope は占有終端が
+    // 同じフレームで作らないための縮退で、表示を保持する側へ倒れる。外した scope は実効の表示終了が
     // 据え置かれたままなら次フレームで計測が立ち直り、そこで改めて満了する（消えないまま
     // 固着はしない）。なお本番では、コンテンツを運ぶ cue そのものが配信時点で占有終端を先へ
     // 押し出すため、この分岐は信号を失ったときにしか通らない。
@@ -203,7 +245,7 @@ pub(super) fn decide_timeout(
         .filter(|scope| !content.shown.contains(scope))
         .collect();
     if targets.is_empty() {
-        return Vec::new();
+        return (Vec::new(), None);
     }
 
     state.deadline = None;
@@ -217,7 +259,12 @@ pub(super) fn decide_timeout(
             visible: false,
         });
     }
-    targets
+    // 隠す対象が居たフレームにだけ、いま出ている台詞のトークの番号を知らせに載せる
+    // （areka-P0-balloon-lifecycle-events 要件 2.1）。番号が無ければ載せず警告の事象を積む。
+    if state.talk_id.is_none() {
+        logs.push(VisibilityLogEvent::TimeoutNoticeWithoutTalkId);
+    }
+    (targets, state.talk_id)
 }
 
 /// 本フレームに成立している抑止条件を数える（design「可視性の判断フロー」の抑止の式）。

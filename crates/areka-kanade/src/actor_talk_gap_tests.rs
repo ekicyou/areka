@@ -142,6 +142,26 @@ fn second_request_drops_the_first_sender_and_watches_the_new_one() {
     close(rig);
 }
 
+/// 殻は時間切れの知らせ（`KanadeMsg::BalloonTimeout`）を運行表へそのまま写し、終えたトークの番号なら
+/// `OnBalloonTimeout` の GET が 1 本出る（areka-P0-balloon-lifecycle-events 要件 2.1・設計 D4）。
+/// 台詞の切れ目の檻のトークの組み立てを借りる。
+#[test]
+fn balloon_timeout_message_reaches_shiori_as_one_get() {
+    let (rig, talk) = talking_rig();
+    talk_ended(&rig, talk);
+    settle(&rig);
+    while rig.calls.try_recv().is_ok() {}
+    rig.kanade
+        .send(KanadeMsg::BalloonTimeout { talk_id: talk })
+        .expect("kanade に届く");
+    settle(&rig);
+    assert_eq!(
+        rig.calls.try_iter().collect::<Vec<_>>(),
+        vec!["GET OnBalloonTimeout".to_string()]
+    );
+    close(rig);
+}
+
 /// 2 つ目の依頼で `warn!` を 1 件残す（呼出スレッドで同期に走る控えの口を直接見る）。
 #[test]
 fn replacing_the_held_sender_leaves_one_warn() {

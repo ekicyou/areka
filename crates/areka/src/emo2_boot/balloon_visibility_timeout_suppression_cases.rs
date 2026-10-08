@@ -21,7 +21,7 @@ pub(super) const CASES: &[Case] = &[
         rows: &[
             // 会話が始まり、占有終端が届く。現在時刻はまだ占有終端より手前。
             Row {
-                signals: &[Signal::TalkStarted, Signal::DisplayEnd(0.0)],
+                signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
                 scopes: &[
                     (0, 3, false, Watch::Off, Watch::Off),
                     (1, 0, false, Watch::Off, Watch::Off),
@@ -129,7 +129,7 @@ pub(super) const CASES: &[Case] = &[
         name: "占有終端の引き上げが現在時刻を越えなければ計測は生きたまま",
         rows: &[
             Row {
-                signals: &[Signal::TalkStarted, Signal::DisplayEnd(0.0)],
+                signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
                 scopes: &[(0, 3, false, Watch::Off, Watch::Off)],
                 dragging: false,
                 now: Now::At(-5.0),
@@ -228,9 +228,9 @@ pub(super) const CASES: &[Case] = &[
                 expect: &[Expect::Shown(0), Expect::SignalMissing],
                 after: &[After::NoDeadline],
             },
-            // 遅れて占有終端が届く。現在時刻はまだそこへ達していない。
+            // 遅れて占有終端とトークの終わりが届く。現在時刻はまだそこへ達していない。
             Row {
-                signals: &[Signal::DisplayEnd(0.0)],
+                signals: &[Signal::Ended(0.0)],
                 scopes: &[
                     (0, 4, true, Watch::Off, Watch::Off),
                     (1, 0, false, Watch::Off, Watch::Off),
@@ -272,7 +272,7 @@ pub(super) const CASES: &[Case] = &[
         name: "抑止の記録は満了後にだけ出て、抑止のたびに武装し直る",
         rows: &[
             Row {
-                signals: &[Signal::TalkStarted, Signal::DisplayEnd(0.0)],
+                signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
                 scopes: &[(0, 3, false, Watch::Off, Watch::Off)],
                 dragging: false,
                 now: Now::At(-5.0),
@@ -386,7 +386,7 @@ pub(super) const CASES: &[Case] = &[
         name: "同時に成立した抑止は 1 件へ全種別が載り、一部の観測不能は残りを殺さない",
         rows: &[
             Row {
-                signals: &[Signal::TalkStarted, Signal::DisplayEnd(0.0)],
+                signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
                 scopes: &[
                     (0, 3, false, Watch::Off, Watch::Off),
                     (1, 0, false, Watch::Off, Watch::Off),
@@ -475,7 +475,7 @@ pub(super) const CASES: &[Case] = &[
         name: "本フレームに表示した scope への滞在は抑止になる",
         rows: &[
             Row {
-                signals: &[Signal::TalkStarted, Signal::DisplayEnd(0.0)],
+                signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
                 scopes: &[
                     (0, 3, false, Watch::Off, Watch::Off),
                     (1, 0, false, Watch::Off, Watch::Off),
@@ -531,7 +531,7 @@ pub(super) const CASES: &[Case] = &[
         name: "本フレームに全消去で消した scope への滞在は抑止にならない",
         rows: &[
             Row {
-                signals: &[Signal::TalkStarted, Signal::DisplayEnd(0.0)],
+                signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
                 scopes: &[
                     (0, 3, false, Watch::Off, Watch::Off),
                     (1, 2, false, Watch::Off, Watch::Off),
@@ -583,7 +583,7 @@ pub(super) const CASES: &[Case] = &[
         name: "現在時刻が分からないフレームは抑止の持ち越しを止めない",
         rows: &[
             Row {
-                signals: &[Signal::TalkStarted, Signal::DisplayEnd(0.0)],
+                signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
                 scopes: &[(0, 3, false, Watch::Off, Watch::Off)],
                 dragging: false,
                 now: Now::At(-5.0),
@@ -650,7 +650,7 @@ pub(super) const CASES: &[Case] = &[
         rows: &[
             // 占有終端は届いたが、この時点で可視コンテンツは 1 つも無い。
             Row {
-                signals: &[Signal::TalkStarted, Signal::DisplayEnd(0.0)],
+                signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
                 scopes: &[(0, 0, false, Watch::Off, Watch::Off)],
                 dragging: false,
                 now: Now::At(-5.0),
