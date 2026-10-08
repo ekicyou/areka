@@ -72,6 +72,7 @@ Which desk a "済みました" closes: check `status.md` (merge holder or load-t
 ## Developer instructions
 - A note for a session's next grant (e.g. "merge origin/main first; spec X changed the signature of Y"): `note -Id <id> -Text "<note>"`. It is appended to that session's next "どうぞ".
 - A load test that is **already running** (a session reports it without asking first, and the developer tells you to record it): `loadrunning -Id <id> -Name <name> -Repo <repo> -Purpose "<内容>"`. It only records the holder; **no stop requests are sent**. Stop requests are for "これから負荷テストを始めたい" (`loadtest`) only. While it is held, no merge starts; when the session reports "済みました", run `loaddone`. Never record one without the developer's say-so.
+- "Stop requests are not needed / revoke them" (e.g. the participants only do light local work): `unstop` (everyone) or `unstop -Id <id>`. It sets them back to working and queues the "止まらなくてよい" message for the outbox. Do not edit `state.json` by hand for this.
 - "Remove session X" / "X is gone": `cancel -Id <id>` or `leave -Id <id>`.
 - Message limit: after one developer message, roughly 10 messages can be sent to other sessions. If an outbox has more, send 10, tell the developer, and send the rest after their next message.
 
