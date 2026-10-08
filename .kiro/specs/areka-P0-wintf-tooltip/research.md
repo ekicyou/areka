@@ -452,6 +452,42 @@ $env:RUST_LOG="info,wintf::ecs::tooltip=trace"; .\target\debug\examples\tooltip_
 - **変異の確かめ**: 割り戻しを外すと、単体のテストと版 6 の英語（200% で窓 652、語の途中で割った）が赤になった。DPI の揃えを外すと、版 6 の DPI の切り替えが赤になった（192→144 で左上が (-1514,835)、期待は (-1466,810)）。版 5 は緑のまま。
 - **残り**: 100% と 200% を越える画面は無いので測っていない。2 論理ピクセルの遊びはこの 2 つの DPI から決めた。
 
+### 14.6 重ねた範囲の切り替え（2026-10-07・タスク 6.4）
+
+開発者の裁定（要件 2.5・2.6・2.10 の改め、WinUI 3 に合わせる）により、出す番が続いている間でも、マウスが（ツールチップの上を除き）別の範囲に入れば説明を切り替える。直し方: `turn.rs` の `check_active` の 1 か所。足元を ①ツールチップの上 → 続ける ②範囲の矩形の中で窓が受けていない → 動いていなければ「窓が隠れた」・動いていれば「安全地帯から出た」（2.9 が先） ③安全地帯の外 → 「安全地帯から出た」 ④安全地帯の中で足元が別の範囲 → 「別の範囲に入った」（`EnteredOtherRange`） ⑤それ以外 → 続ける、の順に見る。切り替えの待ちは、出ていたツールチップが同じ回に消えるので 1 倍、文字をまだ渡していない出す番からなら 2 倍。turn のテスト 6 本と殻のテスト 1 本で固定し、5 通りの変異で赤を確かめた。
+
+**実機（2026-10-08・HEAD `8c7eed1f`・版 6 の `tooltip_demo`）**: 14.4 と同じ画面・同じ道具（`target\tooltip_demo_real\lib.ps1`）で、透過の窓を物理 (200,200)・DPI 192 に置いて走らせた。範囲は論理の座標で、外側 (20,180) 340×160、内側 (110,240) 160×60（後から登録）。道具と記録と画像は `target\tooltip_64_real\` の下（`run_64.ps1`・各回の `*.log`／`*.notes.txt`・`*.png`）。3 回とも終了コード 0。
+
+- **1 回目（`run_64`）と 3 回目（`run_64c`）の 1〜3 は人の手の入力が混ざったので、判定に使わない**。1 回目は、内側の待ちが始まって 83 ミリ秒後に `来なかった … reason=LeftSafeZone` で外れ、内側の説明が出なかった。同じ回に、道具が送っていない左の押下（`[handle_button_message] … screen_x=580 screen_y=860 … is_down=true`）が記録され、手前の窓も変わった。この回は位置を見張っていなかったので、手の動きとは言い切れない。そこで 2 回目からは、待つ間の実際の位置を 50 ミリ秒ごとに記録した。3 回目は、内側の真ん中 (580,740) で待つはずの間に (163,1041)・(98,286) などが見えたので、手の動きが混ざったと分かる。2 回目（`run_64b`）は、待つ間の位置がずっと道具の置いた所（`cursor seen: 580,740`・`580,860`）だった。
+- **2 回目の記録**（`tooltip_turn|tooltip_hidden|tooltip_shown` の抜き出し。時刻は UTC）:
+
+```
+00:42:45.817098Z [tooltip_turn] 範囲に入った・数え始め range=…serial: 6 } wait_ms=800 reshow=false
+00:42:46.624528Z [tooltip_turn] 来た range=…serial: 6 } token=1 stored=true
+00:42:46.644892Z [tooltip_shown] ツールチップを出した window=19v0 token=TooltipTurnToken(1) source="stored" chars=12
+00:42:48.125474Z [tooltip_turn] 終わり range=…serial: 6 } token=1 reason=EnteredOtherRange
+00:42:48.129033Z [tooltip_turn] 範囲に入った・数え始め range=…serial: 7 } wait_ms=400 reshow=true
+00:42:48.131330Z [tooltip_hidden] ツールチップを消した window=19v0 token=TooltipTurnToken(1) reason=End(EnteredOtherRange)
+00:42:48.528874Z [tooltip_turn] 来た range=…serial: 7 } token=2 stored=true
+00:42:48.546193Z [tooltip_shown] ツールチップを出した window=19v0 token=TooltipTurnToken(2) source="stored" chars=22
+00:42:49.550715Z [tooltip_turn] 終わり range=…serial: 7 } token=2 reason=LeftSafeZone
+00:42:49.554194Z [tooltip_turn] 範囲に入った・数え始め range=…serial: 6 } wait_ms=400 reshow=true
+00:42:49.557198Z [tooltip_hidden] ツールチップを消した window=19v0 token=TooltipTurnToken(2) reason=End(LeftSafeZone)
+00:42:49.957934Z [tooltip_turn] 来た range=…serial: 6 } token=3 stored=true
+00:42:49.968478Z [tooltip_shown] ツールチップを出した window=19v0 token=TooltipTurnToken(3) source="stored" chars=12
+00:42:52.233543Z [tooltip_turn] 終わり range=…serial: 6 } token=3 reason=LeftSafeZone
+```
+
+| 段 | 結果 | 証拠 |
+|---|---|---|
+| 1. 外側だけの所（論理 (40,215)）で止まる | **満たした** | 外側（serial 6）が `wait_ms=800 reshow=false`、807 ミリ秒後に `来た token=1`、外側の説明（12 文字）が出た（`run_64b_step1_outer.png`） |
+| 較正: 出たまま外側の中を動く（内側に入らない） | **満たした（終わらない）** | (70,225)・(50,210) へ動かしても `終わり` は出ず、ツールチップは出たまま |
+| 2. 内側の真ん中（論理 (190,270)）へ移る | **満たした（切り替わる）** | 内側に入った回に `終わり … token=1 reason=EnteredOtherRange`・内側（serial 7）が `wait_ms=400 reshow=true`・`[tooltip_hidden] … End(EnteredOtherRange)`。400 ミリ秒後に `来た token=2`、内側の説明（22 文字）が出た（`run_64b_step2_inner.png`）。0.2 秒の時点では出ていない |
+| 3. 内側から外側（内側の下、論理 (190,330)）へ戻る | **満たした** | `終わり … token=2 reason=LeftSafeZone`（内側のツールチップは内側の上に出ているので、下へ出ると安全地帯の外＝③が④より先）。外側が `wait_ms=400 reshow=true`、404 ミリ秒後に `来た token=3`、外側の説明が出た（`run_64b_step3_outer.png`） |
+| 4. 別の範囲の上に出たツールチップの上に居る | **満たした（続ける）** | 3 回目（`run_64c`）のこの段は手の入力が混ざっていない（`step4 cursor seen: 584,793` だけ）。外側のツールチップは論理 (122,293)〜(258.5,311.5) で、内側（下端 300）と重なる。その重なった所（論理 (192,296.5)）に約 5.7 秒居たが、`終わり` は出ず、離れたときに初めて `終わり … token=2 reason=LeftSafeZone`。その点の `WindowFromPoint` の最上位は demo の窓（ツールチップは `WS_EX_TRANSPARENT` なので、足元は内側になる）。2 回目のこの段はツールチップの真ん中（論理 (190,301)＝内側の下端のすぐ外）だったので、この判定には使わない |
+
+**S4 の回し直し（タスク 6.3 の後）**: `cargo test -p wintf --lib tooltip::os -j 4 -- --ignored --test-threads=1 s4_`。この絞り方は「`tooltip::os` を含む」か「`s4_` を含む」かのどちらかに当たる 15 本を走らせる。1 回目は S2・S3 などの後、S4 の途中でテストの exe が `0xc0000409`（`STATUS_STACK_BUFFER_OVERRUN`）で落ちた。出力を捕まえていなかったので、落ちた理由は分からない。直前の `run_64c` で人の手の入力が混ざっていたので、それが原因だった見込みがある。メモ帳は残っていなかった。続けて S4 を 1 本だけ（`--exact`・`--nocapture`）走らせて緑: `[S4] … press=PointPx { x: 760, y: 739 } WindowFromPoint の最上位=HWND(0x820c00) before=HWND(0xb30b32) after=HWND(0x820c00) reached=true`。同じ 15 本の絞り方を `--nocapture` で回し直しても 15 本とも緑で、S4 は `reached=true`（`test result: ok. 15 passed`）。版 6 の S4（`os_v6_tests.rs`）は無い。記録は `target\tooltip_64_real\s4.log`（落ちた回）・`s4b.log`・`s4c.log`。
+
 ## 15. 実機の通しの後の開発者の裁定（2026-10-07）
 
 - **版 6 の最大の幅**: この spec の中で直す（14.4 の「残した点」）。版 6 では、版 6 が掛ける倍率で割り戻した幅を `TTM_SETMAXTIPWIDTH` に渡し、英語の文を語の途中で割らない。タスク 6.3。
