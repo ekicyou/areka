@@ -66,6 +66,8 @@ fn first_boot_falling_back_pins_mark_with_one_warn() {
     let fallen_memory = memory_a(&fallen);
     let fallen_plain = boot_and_read(&mut fallen, fallen_memory, false);
     let fallen_argv = boot_and_read(&mut fallen, argv, true);
+    // 足場は 1 つのスレッドに 1 つ（`RigPermit`）。先の足場を捨ててから次を作る。
+    drop(fallen);
     let mut wired = rig_with(scripted_a());
     let wired_memory = memory_a(&wired);
     let wired_plain = boot_and_read(&mut wired, wired_memory, false);

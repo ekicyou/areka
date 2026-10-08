@@ -188,6 +188,8 @@ fn held_stage(hold: HoldAt) -> (bool, Option<ShioriCut>, usize) {
 fn assert_cut_at(hold: HoldAt, stage: &'static str, on_close_ref0: Vec<String>) {
     let mut rig = boot_held(hold);
     let observed = end_session(&mut rig, WIDE, true);
+    // 足場は 1 つのスレッドに 1 つ（`RigPermit`）。`held_stage` が次の足場を作る前に捨てる。
+    drop(rig);
     assert_eq!(
         observed,
         Observed {

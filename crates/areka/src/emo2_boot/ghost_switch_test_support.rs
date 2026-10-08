@@ -38,9 +38,9 @@ use super::frame::{KanadeNoticeRx, run_ghost_quit_phase};
 use super::ghost_switch::drain_change_requests;
 use super::sample_test_support::acquire_emo2;
 use super::spine::{
-    HOMEURL_RESOURCE, Progress, RecordedCall, ScriptedShioriBackend, ScriptedShioriBackendBuilder,
-    ScriptedShioriHandle, WaitFailure, run_bounded_watching, wait_recv, wait_until,
-    wait_until_with,
+    HOMEURL_RESOURCE, Progress, RecordedCall, RigPermit, ScriptedShioriBackend,
+    ScriptedShioriBackendBuilder, ScriptedShioriHandle, WaitFailure, run_bounded_watching,
+    wait_recv, wait_until, wait_until_with,
 };
 use crate::ConfigInputs;
 use crate::boot_config::{BootContext, CurrentGhost};
@@ -196,14 +196,19 @@ pub(crate) struct SwitchRig {
     app_memory: Rc<Cell<bool>>,
     /// 注入した Tick の合成の時刻（単調増加・ゴーストをまたいでも戻さない）。
     talk_clock_ms: u64,
-    /// 根の木の寿命（捨てると木が消えるので最後に落ちる欄に置く）。
+    /// 根の木の寿命（捨てると木が消えるので、許可の前に落ちる欄に置く）。
     sample: SampleRoot,
+    /// 足場の同時の数の許可（[`RigPermit`]）。ほかの欄（World・ゴーストのスレッド・根の木）が
+    /// 落ちた後に返すので欄の最後（巻き戻りでも同じ）。
+    _permit: RigPermit,
 }
 
 impl SwitchRig {
     /// 根を組み、World を組み立てる（系の登録 1 回・作り口・終了の指示の受け口）。
     /// `scripts` はフォルダ名ごとの偽の SHIORI（無いフォルダを起こすと panic）。
     pub(crate) fn new(scripts: Vec<(&str, FakeShiori)>) -> Self {
+        // スレッドを持つものを作る前に、待ちの関数の外で取る（許可を待つ時間は待ちの時間に数えない）。
+        let permit = RigPermit::take();
         // SAFETY: 資産の焼き込み（WIC）に要る COM 初期化（既初期化の S_FALSE 等は無視）。
         unsafe {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
@@ -303,6 +308,7 @@ impl SwitchRig {
             app_memory,
             talk_clock_ms: 0,
             sample,
+            _permit: permit,
         }
     }
 

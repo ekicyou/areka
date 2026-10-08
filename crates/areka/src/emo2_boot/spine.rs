@@ -363,8 +363,8 @@ mod wait;
 // 待ちの部品は子のファイル `spine_wait.rs` に置き、同じ名前で出し直す（兄弟のテストは `super::SPIN_WAIT` などで引く）。
 use self::wait::{BACKOFF_SLEEP, SPIN_WAIT, join_bounded};
 pub(crate) use self::wait::{
-    GpuPermit, Progress, WaitFailure, run_bounded, run_bounded_watching, spin_wait_until,
-    wait_recv, wait_until, wait_until_with,
+    GpuPermit, Progress, RigPermit, WaitFailure, run_bounded, run_bounded_watching,
+    spin_wait_until, wait_recv, wait_until, wait_until_with,
 };
 
 /// 「尽きるのが正常」の回収（settle）が満たすべき**壁時計の最小持続**（要件 4.2・4.5）。

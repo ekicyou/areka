@@ -1,7 +1,10 @@
 use std::cell::{Cell, RefCell};
-use std::sync::mpsc;
+use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::{LazyLock, mpsc};
 
-use super::wait::{DENSE_SPIN, GpuSlots, WAIT_CAP, run_bounded_watching, wait_recv};
+use super::wait::{
+    DENSE_SPIN, RigPermit, Slots, WAIT_CAP, rig_cap, run_bounded_watching, wait_recv,
+};
 use super::{
     BACKOFF_SLEEP, Duration, Instant, Progress, SPIN_WAIT, WaitFailure, run_bounded,
     wait_until_with,
@@ -323,7 +326,7 @@ fn a_vanished_worker_panics_with_the_partner_gone_text() {
 /// 2 つ取った後は 3 つ目が取れず、1 つ返すと取れる。
 #[test]
 fn gpu_slots_hold_at_most_the_capacity_and_a_returned_permit_frees_one() {
-    static SLOTS: GpuSlots = GpuSlots::new(2);
+    static SLOTS: Slots = Slots::new(2);
     let first = SLOTS.try_take().expect("1 つ目は取れる");
     let _second = SLOTS.try_take().expect("2 つ目は取れる");
     assert!(
@@ -336,4 +339,39 @@ fn gpu_slots_hold_at_most_the_capacity_and_a_returned_permit_frees_one() {
         SLOTS.try_take().is_none(),
         "返した分だけ空く（2 つ持っている）"
     );
+}
+
+// ===========================================================================
+// 足場の同時の数の許可の檻（areka-P0-ghost-session-test-load-flake タスク 5.2・檻 18・要件 2.7）
+//
+// 檻 16 と同じく手元の数えを置き、待たずに取る口で確かめる（実時間は待たない）。
+// ===========================================================================
+
+/// 同時の数は論理 CPU の半分（最小 1）で、その数を取った後は次が取れず、1 つ返すと取れる。
+/// 1 つのスレッドで 2 つ目を取ろうとすると、数えを待たずに panic する（待ち合いで止まらない）。
+#[test]
+fn rig_slots_hold_half_the_cpus_and_one_thread_holds_one_rig_at_a_time() {
+    assert_eq!(
+        [1, 2, 3, 4, 22].map(rig_cap),
+        [1, 1, 1, 2, 11],
+        "論理 CPU の半分・最小 1"
+    );
+    static SLOTS: LazyLock<Slots> = LazyLock::new(|| Slots::new(rig_cap(4)));
+    let first = SLOTS.try_take().expect("1 つ目は取れる");
+    let second = SLOTS.try_take().expect("2 つ目は取れる");
+    assert!(
+        SLOTS.try_take().is_none(),
+        "同時に 2 つまで（3 つ目は取れない）"
+    );
+    drop(first);
+    assert!(SLOTS.try_take().is_some(), "1 つ返すと取れる");
+    drop(second);
+
+    let held = RigPermit::take_from(&SLOTS);
+    assert!(
+        catch_unwind(AssertUnwindSafe(|| RigPermit::take_from(&SLOTS))).is_err(),
+        "足場を持ったスレッドの 2 つ目は panic する"
+    );
+    drop(held);
+    let _again = RigPermit::take_from(&SLOTS);
 }
