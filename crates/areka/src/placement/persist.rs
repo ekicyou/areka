@@ -6,7 +6,13 @@
 //! （形式・原子性・寛容読取・スコープ分離）は sylphya の領分であり、本モジュールは
 //! その契約（[`areka_sylphya::PersistKey`]／[`areka_sylphya::Axis`]）を消費するのみ。
 //!
-//! 本モジュールは永続への書込 API を持たない（保存の投函口は上位の結線層が持つ）。
+//! 記憶への送り口は [`persist_entries`] 1 つで、キャラ窓の位置を書く時機はドラッグの確定
+//! （`follow::drag_follow` の `on_char_drag_end`）と、起動の最後に並べ終えた時点
+//! （[`persist_unremembered_char_positions`]・記憶に位置が無いキャラだけ）の 2 つ。戻す側
+//! （[`apply_restored_placements`]）は純関数のままで、送り口に届かない。
+//! 2 つ目の時機は、完了 spec `areka-P0-position-persist` の要件 1.9（ドラッグの確定でだけ
+//! 書く）を `areka-P0-char-position-save-on-exit` で改めたもの。一度もドラッグしていない
+//! キャラが起動のたびに並べ直されないようにするため（記録は `doc/COMPAT_ARCHITECTURE.md` 8 章）。
 //! task 1.1（Foundation）で用意するのは決定論的な変換のみ——寛容 parse（[`parse_px`]）
 //! と保存 entries 構築（[`char_pos_entries`]／[`balloon_offset_entries`]）。復元 merge・
 //! 再射影・`PersistWiring` は後続タスクで本モジュールへ追加する。
@@ -24,10 +30,12 @@ use areka_parsers::package::resolve;
 use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{Axis, PersistKey, PersistScope, ScopeRoots, SylphyaPublisher, load_scope};
 use bevy_ecs::world::World;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
+use wintf::ecs::WindowPos;
 
-use super::follow::{MonitorSnapshot, OffsetBase, project_anchor, work_area_for_window};
+use super::follow::{Anchored, MonitorSnapshot, OffsetBase, project_anchor, work_area_for_window};
 use super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
+use super::spawn::GhostWindows;
 
 /// 永続値の寛容 parse（design C1・6.1）。
 ///
@@ -326,6 +334,31 @@ pub fn apply_restored_placements(
         .collect()
 }
 
+/// 保存 WindowPos の x・y が**両方とも** [`parse_px`] できたときだけ、その値（x は原点基準の
+/// まま）を返す。片方だけ・数字でない値・鍵なしは `None`（[`merge_scope`] と
+/// [`has_saved_char_pos`] が共有する唯一の読み取り＝判定を 2 か所に書かない）。
+fn saved_char_pos(entries: &[(PersistKey, String)], scope: u32) -> Option<PointPx> {
+    Some(PointPx {
+        x: saved_axis(entries, scope, Axis::X)?,
+        y: saved_axis(entries, scope, Axis::Y)?,
+    })
+}
+
+/// 保存 WindowPos の 1 軸を [`parse_px`] で読む（採否は決めない＝判定は [`saved_char_pos`]
+/// だけが持つ。復元ログが軸ごとの読みを出すためにも使う）。
+fn saved_axis(entries: &[(PersistKey, String)], scope: u32, axis: Axis) -> Option<i32> {
+    entry_value(entries, PersistKey::WindowPos { scope, axis }).and_then(parse_px)
+}
+
+/// スコープのキャラクター窓の位置（x・y の両方）が記憶にあるか
+/// （char-position-save-on-exit 2.4/2.6・design RestoredScopes）。
+///
+/// [`merge_scope`] が記憶の値を採るスコープで、かつそのときだけ真。記憶の値が既定と
+/// 同じでも真（値の違いでなく記憶の有無で決める・2.6）。
+pub fn has_saved_char_pos(entries: &[(PersistKey, String)], scope: usize) -> bool {
+    saved_char_pos(entries, scope as u32).is_some()
+}
+
 /// 1 scope 分の復元 merge（[`apply_restored_placements`] の要素写像・純関数）。
 fn merge_scope(
     placement: ScopePlacement,
@@ -335,34 +368,19 @@ fn merge_scope(
     let scope = placement.scope as u32;
 
     // --- char_pos: 保存 WindowPos が両軸とも parse できたときのみ差替え＋再射影（1.4/1.5/6.1）---
-    let saved_x = entry_value(
-        entries,
-        PersistKey::WindowPos {
-            scope,
-            axis: Axis::X,
-        },
-    )
-    .and_then(parse_px);
-    let saved_y = entry_value(
-        entries,
-        PersistKey::WindowPos {
-            scope,
-            axis: Axis::Y,
-        },
-    )
-    .and_then(parse_px);
-    let char_pos = match (saved_x, saved_y) {
+    let saved_window = saved_char_pos(entries, scope);
+    let char_pos = match saved_window {
         // 両軸そろったときのみ保存値を採用し、毎起動 live 再射影（アンカー再解決＋域内 clamp）。
         // 保存 x は**原点＝下端中央**基準（Bottom）ゆえ、現寸の左上へ戻してから射影へ渡す
         // （寸法が保存時と異なっても原点が一致する＝キャラもバルーンも横へずれない）。
-        (Some(x), Some(y)) => project_restore(
+        Some(saved) => project_restore(
             placement.anchor,
-            char_pos_from_origin_x(placement.anchor, PointPx { x, y }, placement.char_size),
+            char_pos_from_origin_x(placement.anchor, saved, placement.char_size),
             placement.char_size,
             snapshot,
         ),
         // 片軸でも欠損/非数値 → resolver 既定 char_pos を保持（1.5/6.1）。
-        _ => placement.char_pos,
+        None => placement.char_pos,
     };
 
     // --- balloon: 保存 offset があれば基準逆変換で導出、無ければ既定 offset 保持（2.3/2.4）---
@@ -420,7 +438,8 @@ fn merge_scope(
         target: "areka::persist::restore",
         scope = placement.scope,
         anchor = ?placement.anchor,
-        saved_win_x = ?saved_x, saved_win_y = ?saved_y,
+        saved_win_x = ?saved_axis(entries, scope, Axis::X),
+        saved_win_y = ?saved_axis(entries, scope, Axis::Y),
         default_char_x = placement.char_pos.x, default_char_y = placement.char_pos.y,
         char_x = char_pos.x, char_y = char_pos.y,
         char_w = placement.char_size.w, char_h = placement.char_size.h,
@@ -457,7 +476,8 @@ fn merge_scope(
 ///
 /// [`SylphyaPublisher`] は `Clone + Send`（内部 `std::sync::mpsc::Sender`）だが `Sync` を仮定せず、
 /// UI スレッド専有の規律とも一致するため **NonSend** リソースとして World に持たせる（design C1
-/// State Management・軸B）。DragEnd 観測点（[`super::follow`] の task 2.2/2.3 フック）が
+/// State Management・軸B）。ドラッグの確定（[`super::follow`] の task 2.2/2.3 フック）と、起動の
+/// 最後に並べ終えた時点（[`persist_unremembered_char_positions`]・キャラ窓の位置だけ）の 2 つが
 /// [`persist_entries`] 経由でこの publisher の clone 送信端から保存 entries を投函する。
 pub struct PersistWiring {
     /// sylphya アクターへの変異投函の送信端（`persist_put` の fire-and-forget 投函に用いる）。
@@ -490,12 +510,127 @@ pub fn persist_entries(world: &World, entries: Vec<(PersistKey, String)>) {
     wiring.publisher.persist_put(PersistScope::Ghost, entries);
 }
 
+/// 並べ終えた時点の保存（areka-P0-char-position-save-on-exit 要件 1.1・1.2・1.4・1.5・1.7・
+/// 4.1〜4.3・design FinalizeSave）。
+///
+/// 起動の最後の並べ直しが済んだ直後に 1 度だけ呼ばれ、記憶に位置が無いキャラクター窓の位置を
+/// 記憶へ送る。[`GhostWindows`] に居る全スコープを昇順に回り（数を決め打ちしない・1.4）、
+/// 書くのは次の 2 つを満たすスコープだけ:
+///
+/// - 既定の位置 [`GhostWindows::default_char_pos`] が `Some`＝記憶に位置が無い。`None` は
+///   記憶から戻したスコープで、書き換えない（寄せ直して表示している場合を含む・1.2）。
+/// - 今の位置（x・y）が既定の位置と同じ。違うのは並べ終える前にドラッグされた窓（ドラッグの
+///   確定が書く）か、SHIORI の移動の指示で動いた窓（その回かぎり・1.7）で、どちらも書かない。
+///   並べ直し（`chain_finalize::finalize_chain`）は横の並びだけを見るので x だけで比べるが、
+///   ここは台本が縦にだけ動かした窓（例: 並べ直しが動かさない連鎖の起点）も見逃さないよう
+///   x・y の両方で比べる。システムの置き直しは既定の位置を x・y とも一緒に運ぶので
+///   （`follow::window_move` の既定の位置の追随）、ふだんの流れで書き漏れは起きない。
+///
+/// 位置は [`WindowPos`] の位置と大きさから読み、ドラッグの確定と同じ [`char_pos_to_origin_x`]
+/// で下端の中央の x へ直す。送る鍵は [`PersistKey::WindowPos`] の x・y だけで（1.5）、全スコープの
+/// 分を 1 つの束にして [`persist_entries`] を 1 回呼ぶ（待たない。書き込みの失敗は送った先が
+/// 記録し、UI の側へは戻らない＝起動は続く・4.1）。読めない窓は `warn!` を出して飛ばし、
+/// 残りを書く（4.2）。書いた・書かなかったは target `areka::persist::save` に残す（4.3）。
+///
+/// World は変えず（`&World`）、panic しない。戻す側の [`apply_restored_placements`] は
+/// 純関数で World を持たないので、ここへは届かない（寄せ直した位置を書き戻さない構造を保つ）。
+pub fn persist_unremembered_char_positions(world: &World) {
+    if world.get_non_send::<PersistWiring>().is_none() {
+        // 結線は成り立ったが実行系が無い回。スコープごとの行は出さない。
+        info!(
+            target: "areka::persist::save",
+            "並べ終えた時点の保存: 記憶の送り口が無いので書かない"
+        );
+        return;
+    }
+    let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
+        // 並べ直しの直後には起きない（防御）。
+        debug!(
+            target: "areka::persist::save",
+            "並べ終えた時点の保存: GhostWindows が無いので書かない"
+        );
+        return;
+    };
+
+    let mut entries = Vec::new();
+    for scope in ghost_windows.scopes() {
+        let Some(default_pos) = ghost_windows.default_char_pos(scope) else {
+            info!(
+                target: "areka::persist::save",
+                scope,
+                "並べ終えた時点の保存: 記憶に位置があるので書かない"
+            );
+            continue;
+        };
+        let skip = |missing: &str| {
+            warn!(
+                target: "areka::persist::save",
+                scope,
+                missing,
+                "並べ終えた時点の保存: 読めないので飛ばす"
+            );
+        };
+        let Some(entity) = ghost_windows.char_window(scope) else {
+            skip("キャラ窓");
+            continue;
+        };
+        let Some(window_pos) = world.get::<WindowPos>(entity) else {
+            skip("WindowPos");
+            continue;
+        };
+        let Some(pos) = window_pos.position else {
+            skip("位置");
+            continue;
+        };
+        let current = PointPx { x: pos.x, y: pos.y };
+        if current != default_pos {
+            info!(
+                target: "areka::persist::save",
+                scope,
+                current_x = current.x, current_y = current.y,
+                default_x = default_pos.x, default_y = default_pos.y,
+                "並べ終えた時点の保存: 並べ終える前に動かされたので書かない"
+            );
+            continue;
+        }
+        let Some(size) = window_pos.size else {
+            skip("大きさ");
+            continue;
+        };
+        let Some(anchor) = world.get::<Anchored>(entity).map(|a| a.0) else {
+            skip("揃え方");
+            continue;
+        };
+        let char_size = SizePx {
+            w: size.width,
+            h: size.height,
+        };
+        let saved = char_pos_to_origin_x(anchor, current, char_size);
+        info!(
+            target: "areka::persist::save",
+            scope,
+            char_x = current.x, char_y = current.y,
+            saved_x = saved.x, saved_y = saved.y,
+            char_w = char_size.w,
+            ?anchor,
+            "並べ終えた時点の保存: 書いた"
+        );
+        entries.extend(char_pos_entries(scope as u32, saved));
+    }
+    if !entries.is_empty() {
+        persist_entries(world, entries);
+    }
+}
+
 #[cfg(test)]
 #[path = "balloon_offset_persist_roundtrip_tests.rs"]
 mod balloon_offset_persist_roundtrip_tests;
 #[cfg(test)]
 #[path = "persist_entries_tests.rs"]
 mod entries_tests;
+#[cfg(test)]
+#[path = "persist_finalize_save_tests.rs"]
+mod finalize_save_tests;
 #[cfg(test)]
 #[path = "persist_io_wiring_tests.rs"]
 mod io_wiring_tests;

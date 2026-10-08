@@ -236,7 +236,7 @@ impl StageSink for LapSink<'_> {
             for signal in self.harness.wiring.drain_lifecycle_signals() {
                 match signal {
                     // 会話境界（talk 起動ごとに 1 回）。占有終端の計測をここでやり直す。
-                    TalkLifecycleSignal::TalkStarted => {
+                    TalkLifecycleSignal::TalkStarted { .. } => {
                         observed.talks_started += 1;
                         observed.talk_base_ms = Some(self.last_inject_ms);
                         observed.talk_horizon_ms = 0;
@@ -249,6 +249,9 @@ impl StageSink for LapSink<'_> {
                     }
                     // 利用者の中断は押下の線から届くもので、本テストは押下を作らない。
                     TalkLifecycleSignal::UserBreak => {}
+                    // 待ち時間の指定と会話の終わりは本テストの観測の対象外。
+                    TalkLifecycleSignal::BalloonTimeout(_)
+                    | TalkLifecycleSignal::TalkEnded { .. } => {}
                 }
             }
             // 移動指令の受信端を実 frame 相で drain し、対象窓の位置を読み直す（design D1 位置調整段）。

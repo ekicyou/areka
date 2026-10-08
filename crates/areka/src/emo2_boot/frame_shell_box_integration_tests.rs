@@ -346,9 +346,17 @@ fn timeout_raises_the_hide_boxes_flag_and_the_box_text_disappears() {
     let timeout_secs = configured_timeout_secs();
     let mut cage = Cage::boot(SHELL, &[0]);
     let display_end = 5.0;
-    cage.lifecycle_tx
-        .send(TalkLifecycleSignal::DisplayEndAt(display_end))
-        .expect("受信端は結線資源が保持している");
+    // 時間切れの計測はトークの終わりが届いてから始まる（areka-P0-balloon-lifecycle-events 決定 D6）。
+    for signal in [
+        TalkLifecycleSignal::DisplayEndAt(display_end),
+        TalkLifecycleSignal::TalkEnded {
+            at: Some(display_end),
+        },
+    ] {
+        cage.lifecycle_tx
+            .send(signal)
+            .expect("受信端は結線資源が保持している");
+    }
 
     cage.picture(0, BOX_SURFACE_ID);
     cage.surface(0, BOX_SURFACE);

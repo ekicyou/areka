@@ -1,6 +1,7 @@
 //! 登録案内の HTML（日本語・5 項目）。
 
 use crate::port::{DEFAULT_PORTS, FALLBACK_STEPS, PORT_ENV};
+use crate::tools::{OWN_TABLE, spec_from_definition};
 
 /// 登録手順の日本語 HTML を実際の番号 `port` で組む（要件 6.1・6.2）。
 ///
@@ -10,8 +11,18 @@ use crate::port::{DEFAULT_PORTS, FALLBACK_STEPS, PORT_ENV};
 /// （設定例は後続 `mcp-stdio-bridge` が足す）。
 /// URL とコマンド例の番号は引数から取り、既定の順の説明は [`DEFAULT_PORTS`]・[`FALLBACK_STEPS`]
 /// から組む（数を手で書かない）。
-/// 埋め込む値は数と定数だけなので HTML のエスケープは要らない。
+/// 続けて「areka 独自のツール」の節に [`OWN_TABLE`] の各行を `<code>名前</code> — 1 行` で並べる
+/// （名前は登録と同じ定義から読む・spec: areka-P0-mcp-author-tools）。
+/// 埋め込む値は数と定数（名前と 1 行は `<`・`>`・`&` を含まない）なので HTML のエスケープは要らない。
 pub fn help_html(port: u16) -> String {
+    // 読めない定義は登録の側（`register_row`）が `error!` で記録して登録しないので、ここでも載せない。
+    let own_tools: String = OWN_TABLE
+        .iter()
+        .filter_map(|&(definition, _, summary)| {
+            let name = spec_from_definition(definition).ok()?.name;
+            Some(format!("<li><code>{name}</code> — {summary}</li>\n"))
+        })
+        .collect();
     let url = format!("http://127.0.0.1:{port}/api/mcp/v1");
     let [first, second] = DEFAULT_PORTS;
     let (first_next, second_next) = (first + 1, second + 1);
@@ -53,6 +64,11 @@ pub fn help_html(port: u16) -> String {
 
 <h2>Claude Desktop</h2>
 <p>Claude Desktop は HTTP の MCP サーバを設定に直接書けないため、stdio との中継が要ります。中継は今後の版で用意します。</p>
+
+<h2>areka 独自のツール</h2>
+<p>SSP と同じツールに加えて、SSP に無い次のツールを出しています。</p>
+<ul>
+{own_tools}</ul>
 </body>
 </html>
 "#

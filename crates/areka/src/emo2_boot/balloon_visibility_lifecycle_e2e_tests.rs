@@ -13,6 +13,9 @@
 //
 // 表示層は headless（GPU 資源なし）で足りる——本項が見るのは時刻の鎖であって描画ではない。
 // 再生は注入時刻のみで駆動し、実時間の待機は用いない（Requirements 4.9 / 9.2 / 9.3）。
+//
+// 続き（時間切れで隠し、受け口の番号の知らせが kanade へ届くまで）は、バルーンを可視にできる
+// 実 GPU の檻 `frame_balloon_timeout_notice_e2e_tests.rs` が持つ（areka-P0-balloon-lifecycle-events task 5.2）。
 // =============================================================================
 
 use std::cell::RefCell;
@@ -82,7 +85,12 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )));
-    let clock = TalkClock::new(std::sync::Arc::new(|| 0.0));
+    // 時刻源は手で進める（受け口が落ちる瞬間に止まった時刻を読むため）。
+    let wall = std::sync::Arc::new(std::sync::Mutex::new(0.0_f64));
+    let clock = TalkClock::new({
+        let wall = std::sync::Arc::clone(&wall);
+        std::sync::Arc::new(move || *wall.lock().expect("時計の錠"))
+    });
     let mut wiring = Emo2Wiring::new(
         EmoPresenter::new(),
         mpsc::channel().1,
@@ -129,7 +137,10 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     );
 
     let mut player = CuePlayer::from_sheet(&compiled.sheet);
-    player.register_sink(Box::new(BalloonLifecycleSink::new(lifecycle_tx)));
+    player.register_sink(Box::new(BalloonLifecycleSink::new(
+        lifecycle_tx,
+        wiring.clock.clone(),
+    )));
     // 台本の発火時刻を昇順に辿り、最後に占有終端へ達する（sleep もスピンも使わない）。
     let mut tick_points: Vec<f64> = compiled
         .sheet
@@ -152,6 +163,10 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
         duration: 0.5,
     });
     wiring.clock.observe_cue(0.0);
+    // 台本を最後まで流し終えたところで受け口が落ち、トークの終わり（止まった時刻＝占有終端）が
+    // 届く。時間切れの計測はこれが届いてから始まる（areka-P0-balloon-lifecycle-events 決定 D6）。
+    *wall.lock().expect("時計の錠") = horizon;
+    drop(player);
     let now = horizon + 1.0;
     world.insert_resource(FrameTime(now));
 

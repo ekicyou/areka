@@ -590,3 +590,8 @@ fn new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch() {
 // 置き場のゴースト）をそのまま使うため子に置く。
 #[path = "frame_shell_box_integration_tests.rs"]
 mod shell_box_integration_tests;
+
+// 受け口から可視性の相までの通し（areka-P0-balloon-lifecycle-events task 5.2）。時間切れの知らせが
+// 置き場のゴーストの kanade へ届くまでを、本ファイルの檻をそのまま使って見るため子に置く。
+#[path = "frame_balloon_timeout_notice_e2e_tests.rs"]
+mod balloon_timeout_notice_e2e_tests;

@@ -116,6 +116,9 @@ fn marked_talk_break_cancels_the_shell_switch_without_quitting() {
     let mut lap = rig_a(|| {
         standard_script(BOOT_TO_SECOND)
             .get("OnShellChanging", Ok(Some(CHANGING_WITH_QUIT.to_owned())))
+            // 印の台詞の中断で定常へ戻ると `OnBalloonBreak` が 1 本出る
+            // （areka-P0-balloon-lifecycle-events 表 B の B3）。応答は 204。
+            .get("OnBalloonBreak", Ok(None))
             .get("OnShellChanging", Ok(None))
             .get("OnShellChanged", Ok(None))
     });
@@ -178,6 +181,7 @@ fn marked_talk_break_cancels_the_shell_switch_without_quitting() {
                     "NOTIFY basewareversion".to_owned(),
                     "GET OnShellChanging".to_owned(),
                     "GET OnTranslate".to_owned(),
+                    "GET OnBalloonBreak".to_owned(),
                 ],
                 Some(false),
                 false,

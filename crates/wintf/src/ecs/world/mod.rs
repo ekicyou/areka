@@ -395,6 +395,9 @@ impl EcsWorld {
             );
         }
 
+        // ツールチップ（資源と FrameFinalize の判定）の登録
+        crate::ecs::tooltip::install(&mut world);
+
         Self {
             world,
             has_systems: true, // デフォルトシステムがあるのでtrue

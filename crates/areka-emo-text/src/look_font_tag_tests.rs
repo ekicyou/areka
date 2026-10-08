@@ -516,6 +516,39 @@ fn a_missing_key_leaves_the_look_unchanged() {
     }
 }
 
+/// 適用できなかった `\f` の分類（[`FontTagIssue::failure`]）は、本物の `apply_font_tag` が返す
+/// `Err` から「知らないキー」「キーなし」「値の誤り」の 3 通りを見分ける
+/// （`areka-P0-mcp-author-tools` 要件 3.4・3.10。検査は前の 2 つだけを `unknown_tag` にする）。
+/// 値の誤りは理由の定数ごとに 1 行以上（色の書式の誤りは `color.rs` の理由）を並べ、
+/// 「知らないキー・キーなし以外は全部値の誤り」が理由の追加で崩れないことを見る。
+#[test]
+fn a_failed_font_tag_tells_unknown_key_missing_key_or_bad_value() {
+    let layers = split_layers();
+    let failure_of = |args: &[&str]| {
+        let mut look = styled_look();
+        apply_font_tag(&mut look, &layers, args)
+            .expect_err(&format!("{args:?} は拒まれる"))
+            .failure()
+    };
+    let rows: [(&[&str], FontTagFailure); 12] = [
+        (&["colour", "red"], FontTagFailure::UnknownKey),
+        (&["Bold", "1"], FontTagFailure::UnknownKey),
+        (&[], FontTagFailure::NoKey),
+        (&[""], FontTagFailure::NoKey),
+        (&["", "1"], FontTagFailure::NoKey),
+        (&["bold"], FontTagFailure::BadValue),
+        (&["bold", "abc"], FontTagFailure::BadValue),
+        (&["sub", "abc"], FontTagFailure::BadValue),
+        (&["height", "abc"], FontTagFailure::BadValue),
+        (&["height", "0"], FontTagFailure::BadValue),
+        (&["name"], FontTagFailure::BadValue),
+        (&["color", "notacolor"], FontTagFailure::BadValue),
+    ];
+    for (args, want) in rows {
+        assert_eq!(failure_of(args), want, "{args:?} の分類");
+    }
+}
+
 // ------------------------------------------------------------------ §11 較正（3.3）
 
 /// 較正: 「当該項目の既定戻しが他項目も戻す」誤り（`\f[bold,default]` の腕で見た目を

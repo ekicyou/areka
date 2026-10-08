@@ -266,7 +266,10 @@ type SendKey = (String, &'static str, bool);
 ///   補助プロセス → shiori のスレッドの親窓の応答の両方が、この 1 か所を通る。
 /// - 親窓のテスト: 不正なフレームを親窓へ自分のスレッドから送る（ファイル内のテストの
 ///   モジュールの中＝本番のビルドには入らない）。
-const ALLOWED_SYNC_SENDS: [(&str, &str, bool, usize); 2] = [
+/// - 標準のツールチップ（areka-P0-wintf-tooltip）: UI スレッドが自分で作ったツールチップの窓へ
+///   `TTM_*` などを送る。宛先が同じスレッドの窓なので送信は窓の手続きの直接の呼び出しになり、
+///   キューを通らない＝join と輪にならない。
+const ALLOWED_SYNC_SENDS: [(&str, &str, bool, usize); 3] = [
     (
         "crates/shiori-host32-ipc/src/lib.rs",
         "SendMessageTimeoutW(",
@@ -278,6 +281,12 @@ const ALLOWED_SYNC_SENDS: [(&str, &str, bool, usize); 2] = [
         "SendMessageW(",
         true,
         1,
+    ),
+    (
+        "crates/wintf/src/ecs/tooltip/os.rs",
+        "SendMessageW(",
+        false,
+        9,
     ),
 ];
 

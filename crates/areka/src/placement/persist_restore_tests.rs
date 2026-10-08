@@ -785,6 +785,80 @@ fn apply_is_deterministic() {
     assert_eq!(a, b, "同一入力→同一出力");
 }
 
+/// char-position-save-on-exit 2.4/2.6（design テスト 6）: `has_saved_char_pos` は x・y の
+/// 両方が数字のときだけ真で、`merge_scope` が記憶の値を採るかどうかと全部の組で一致する。
+#[test]
+fn has_saved_char_pos_agrees_with_merge_scope() {
+    let snap = snapshot_of(vec![]); // identity（採れば保存値がそのまま出る）
+    let default = PointPx { x: 100, y: 100 };
+    let cases: Vec<(&str, Vec<(PersistKey, String)>, bool)> = vec![
+        (
+            "両方数字",
+            vec![wp(0, Axis::X, "800"), wp(0, Axis::Y, "500")],
+            true,
+        ),
+        (
+            "前後空白",
+            vec![wp(0, Axis::X, " 800 "), wp(0, Axis::Y, "500")],
+            true,
+        ),
+        ("x のみ", vec![wp(0, Axis::X, "800")], false),
+        ("y のみ", vec![wp(0, Axis::Y, "500")], false),
+        (
+            "y が数字でない",
+            vec![wp(0, Axis::X, "800"), wp(0, Axis::Y, "abc")],
+            false,
+        ),
+        (
+            "x が空",
+            vec![wp(0, Axis::X, ""), wp(0, Axis::Y, "500")],
+            false,
+        ),
+        ("鍵なし", vec![], false),
+        (
+            "他スコープの鍵",
+            vec![wp(1, Axis::X, "800"), wp(1, Axis::Y, "500")],
+            false,
+        ),
+        (
+            "バルーンの鍵だけ",
+            vec![bo(0, Axis::X, "800"), bo(0, Axis::Y, "500")],
+            false,
+        ),
+    ];
+    for (name, entries, expected) in cases {
+        let saved = has_saved_char_pos(&entries, 0);
+        assert_eq!(saved, expected, "{name}: 判定の真偽");
+        let out = apply_restored_placements(
+            vec![placement(
+                0,
+                Anchor::Free,
+                default,
+                CSZ,
+                PointPx { x: 0, y: 0 },
+                BSZ,
+            )],
+            &entries,
+            &snap,
+        );
+        assert_eq!(
+            out[0].char_pos != default,
+            saved,
+            "{name}: merge_scope が記憶の値を採るかどうかと判定が食い違う"
+        );
+    }
+    // 2.6: 記憶の値が既定と同じでも「記憶あり」（値の違いで判定しない）。
+    assert!(
+        has_saved_char_pos(&[wp(0, Axis::X, "100"), wp(0, Axis::Y, "100")], 0),
+        "既定と同じ値の記憶が「記憶なし」に倒れている（2.6）"
+    );
+    // scope の usize と PersistKey の u32 の一致取り。
+    assert!(has_saved_char_pos(
+        &[wp(3, Axis::X, "77"), wp(3, Axis::Y, "88")],
+        3
+    ));
+}
+
 // ------------------------------------------------------------------
 // キーワード再導出の素材と保存値の優先順位（要件 4.7・2026-08-14 実機是正）
 //

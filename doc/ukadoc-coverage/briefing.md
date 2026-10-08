@@ -981,9 +981,9 @@ items = 166
 ```toml
 [[barrier]]
 page = "list_shiori_event"
-implemented = 48
-vocabulary_only = 3
-degraded = 0
+implemented = 50
+vocabulary_only = 0
+degraded = 1
 absent = 236
 alias = 3
 not_applicable = 0
@@ -1007,11 +1007,11 @@ not_applicable = 0
 利用者に何も見えない。下の囲みの 4 行の `absent` と `vocabulary_only` が、その「引き当てない」側の
 量である。
 
-4 行のうち `descript_balloon`・`descript_shell`・`descript_shell_surfaces` は `degraded` が 0 でない。
+4 行とも `degraded` が 0 でない。
 縮退は「読んではいるが正典どおりには効かない」状態で、無言で捨てる経路とは別の壊れ方である（状態の
-7 語の定義は `README.md`）。残る `descript_ghost` の `degraded` は 0 で、このページには縮退させた
-実装が 1 つも無い。`descript_shell` の 1 は 2026-10-06 に `areka-P0-self-alpha-declaration` が
-`seriko.use_self_alpha` を未対応から縮退へ移したもので、それまでは 0 だった。
+7 語の定義は `README.md`）。`descript_shell` の 1 は 2026-10-06 に `areka-P0-self-alpha-declaration` が
+`seriko.use_self_alpha` を未対応から縮退へ移したもの、`descript_ghost` の 1 は 2026-10-07 に
+`areka-P0-ghost-standard-balloon` が `default.balloon.path` を縮退として登記したもので、どちらもそれまでは 0 だった。
 
 ```toml
 [[barrier]]
@@ -1053,22 +1053,28 @@ not_applicable = 0
 
 ### 4-3. 0 と書いた欄
 
-上の 2 つの囲みには 0 の欄が 15 ある（`not_applicable` 6・`degraded` 3・`alias` 4・`absent` 1・`vocabulary_only` 1）。
+上の 2 つの囲みには 0 の欄が 14 ある（`not_applicable` 6・`alias` 4・`vocabulary_only` 2・`degraded` 1・`absent` 1）。
 0 は「調べていない」ではなく「数えて 1 件も無かった」の印なので、内訳と理由を書く。数え方は
 いずれもこの節の冒頭と同じで、ページ別に数え直した結果である。
 
 - `not_applicable` は 6 行とも 0 である。台帳全体の対象外の項目（5-2 の `[priority_blank]` の
   `not_applicable`）は `list_shiori_event_ex`・`memo_shiorievent`・`list_sakura_script` の 3 ページ
   だけに乗っており、この 6 ページには 1 件も無い。
-- `degraded` は `list_shiori_event`・`list_shiori_resource`・`descript_ghost` の 3 行が 0 である。
-  この 3 ページには縮退させた実装が 1 つも無い。`descript_shell` は 2026-10-06 に
-  `areka-P0-self-alpha-declaration` が `seriko.use_self_alpha` を縮退へ移したので、この列挙から外れた。
+- `degraded` は `list_shiori_resource` の 1 行が 0 である。このページには縮退させた実装が 1 つも無い。
+  ほかの 3 ページはこの列挙から外れた。`descript_shell` は 2026-10-06 に `areka-P0-self-alpha-declaration` が
+  `seriko.use_self_alpha` を縮退へ移したから、`list_shiori_event` は 2026-10-06 に
+  `areka-P0-balloon-lifecycle-events` が `OnBalloonBreak` を中断位置（Reference2）を空で送る縮退として
+  送り始めたから、`descript_ghost` は 2026-10-07 に `areka-P0-ghost-standard-balloon` が
+  `default.balloon.path` を縮退として登記したからである。
 - `alias` は `list_shiori_resource`・`descript_ghost`・`descript_balloon`・`descript_shell` の
   4 行が 0 である。別名の項目がこの 4 ページに 1 件も無い。
 - `absent` は `list_shiori_resource` の 1 行が 0 である。理由は 4-1 に書いた。
-- `vocabulary_only` は `descript_ghost` の 1 行が 0 である。このページで語彙のみだった唯一の項目
+- `vocabulary_only` は `list_shiori_event`・`descript_ghost` の 2 行が 0 である。`descript_ghost` は、
+  このページで語彙のみだった唯一の項目
   `name,ゴースト名` を、2026-09-24 に `areka-P0-baseware-root-layout` がゴーストの列挙の読み手
-  （`areka-ghost` の `catalog::list_ghosts`）を置いて実装済みへ移したからである。
+  （`areka-ghost` の `catalog::list_ghosts`）を置いて実装済みへ移したからである。`list_shiori_event` は、
+  語彙のみだった 3 件（`OnBalloonClose`・`OnBalloonTimeout`・`OnBalloonBreak`）を 2026-10-06 に
+  `areka-P0-balloon-lifecycle-events` が送るようにし、実装済み 2 件と縮退 1 件へ移したからである。
 
 ## 5. 根拠表への参照
 

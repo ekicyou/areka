@@ -8,6 +8,7 @@ pub mod layout;
 pub mod pointer;
 #[cfg(test)]
 pub(crate) mod test_support;
+pub mod tooltip;
 pub mod types;
 pub mod visual;
 pub mod widget;
@@ -35,6 +36,10 @@ pub use pointer::{
     OnPointerPressed, OnPointerReleased, Phase, PhysicalPoint, PointerButton, PointerEventHandler,
     PointerLeave, PointerState, WheelDelta, WindowPointerTracking, clear_transient_pointer_state,
     debug_pointer_leave, debug_pointer_state_changes, dispatch_pointer_events,
+};
+pub use tooltip::{
+    OnTooltip, TooltipArea, TooltipEndReason, TooltipNotice, TooltipOsError, TooltipRange,
+    TooltipRangeId, TooltipRegisterError, TooltipSupply, TooltipTurn, TooltipTurnToken,
 };
 pub use widget::{
     BitmapSource, BitmapSourceGraphics, BitmapSourceResource, BoxedCommand, CommandSender, WicCore,

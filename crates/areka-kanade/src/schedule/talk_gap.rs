@@ -124,7 +124,7 @@ pub(super) fn is_marked_break(state: &State, done: &TalkDone) -> bool {
         Some(GapWatch { marked: Marked::Talk(t), outcome: None })
             if *t == done.talk_id
                 && done.reason == TalkEndReason::Interrupted
-                && state.user_break_talk == Some(*t)
+                && state.user_break_talk.is_some_and(|note| note.talk_id == *t)
     )
 }
 

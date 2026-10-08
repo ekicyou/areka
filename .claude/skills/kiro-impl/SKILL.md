@@ -215,6 +215,26 @@ For tasks that add or change behavior, enforce RED → GREEN with a feature flag
 
 **Skip this protocol for**: refactoring, configuration, documentation, or tasks with no behavioral change.
 
+## Coordination with kiro-watch (only when the coordinator is running)
+
+When a session titled **kiro-watch** (not archived) appears in the session list (`mcp__ccd_session_mgmt__list_sessions`), this session takes part in its desk coordination (developer, 2026-10-08). If there is no such session, skip this whole section. Send to its `local_...` id with SendMessage (or `mcp__ccd_session_mgmt__send_message`). Message texts stay in Japanese exactly as below.
+
+- **Join** once at the start of the run (Step 1), before dispatching the first task:
+  ```
+  【kiro-watch】参加します
+  repo: <repository name, e.g. areka>
+  ```
+- **Load tests**: before any step that needs the machine to itself (a quiet-CPU measurement, a deliberate CPU-load reproduction, a timing benchmark), request the load-test desk and do not start that step until "どうぞ" arrives:
+  ```
+  【kiro-watch】テストしたい
+  repo: <repository name>
+  内容: <what will run and roughly how long>
+  ```
+  Ordinary per-task test runs (crate tests, clippy, `tools/test-all.ps1`) are not load tests and need no request.
+  While waiting, continue with tasks that do not need the desk; if none remain, report "waiting for kiro-watch" and end the turn. When the measurement is done, send `【kiro-watch】済みました` at once — every other participant is stopped until then.
+- **Stop requests**: when kiro-watch asks this session to stop, finish the current task iteration through its commit (implementer → review → verify → mark `[x]` → commit). Never cut a running test or a subagent in the middle. Then send `【kiro-watch】停止しました`, report "stopped for kiro-watch" to the developer and end the turn. Continue from the next task only when `再開してよい` (or the cancel message) arrives. Do not start Step 4 (final validation) while stopped.
+- **Leaving without completing** (the run is abandoned or ends BLOCKED): send `【kiro-watch】抜けます`. Completion itself is coordinated by `/kiro-complete` (merge desk), which also ends the participation.
+
 ## Critical Constraints
 - **Out-of-scope findings go to the completion inventory, not to chips**: when implementation, review, debug or validation finds a problem outside the current spec (another crate's flaky test, an unrelated bug), do NOT call the harness `spawn_task` chip tool. Record it in `## Implementation Notes` of tasks.md; `/kiro-complete`'s opening inventory tickets it with `/kiro-discovery` (brief.md + roadmap row). Chips make the developer click and instruct each one and never reach the roadmap (developer, 2026-10-04).
 - **Strict Handoff Parsing**: Never infer implementer `STATUS` or reviewer `VERDICT` from surrounding prose; only the exact structured fields count

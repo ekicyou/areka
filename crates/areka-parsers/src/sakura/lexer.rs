@@ -79,9 +79,20 @@ const SHORTHAND_WORDS: &[char] = &['w', 'b', 'p'];
 /// - トークンは入力順を保持する（要件 9.2/1.3）。
 /// - エスケープ（`\\`/`\%`/角内 `\]`）・引数クォート（`"..."`/`""`）・未閉じ境界の
 ///   `Raw` 吸収を解決する（タスク 3.2・要件 13.4-13.8/10.3）。解析は中断しない。
+///
+/// 本体は `lex_spanned` で、ここは範囲を落としたもの（呼び手はテストだけ）。
+#[cfg(test)]
 pub(crate) fn lex(input: &str) -> Vec<Token> {
-    let mut tokens: Vec<Token> = Vec::new();
-    scan(input, &mut |tok, _| tokens.push(tok));
+    lex_spanned(input).into_iter().map(|(tok, _)| tok).collect()
+}
+
+/// `lex` と同じトークン列を、各トークンが占める入力のバイト範囲つきで返す（mod 内非公開）。
+///
+/// 範囲は `scan` が渡すものをそのまま捨てずに持つ。範囲は入力の順に並び、重ならず、
+/// 文字の境界に在る（`parse_noted` の `span` の出どころ）。
+pub(crate) fn lex_spanned(input: &str) -> Vec<(Token, Range<usize>)> {
+    let mut tokens = Vec::new();
+    scan(input, &mut |tok, span| tokens.push((tok, span)));
     tokens
 }
 

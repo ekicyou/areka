@@ -8,6 +8,7 @@ pub mod outcome;
 
 pub use bridge::{Answer, Pending, ReplyTo, ToolRequest};
 
+pub mod check_script;
 pub mod dump_balloon;
 pub mod dump_surface;
 pub mod get_active_ghost_list;
@@ -20,7 +21,7 @@ pub mod reload;
 pub mod sakurascript;
 
 use std::sync::Arc;
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Duration;
 
 use serde_json::{Map, Value};
@@ -45,6 +46,8 @@ pub enum ToolCall {
     Reload(reload::Args),
     DumpSurface(dump_surface::Args),
     DumpBalloon(dump_balloon::Args),
+    /// areka 独自のツール（spec: areka-P0-mcp-author-tools）。
+    CheckScript(check_script::Args),
 }
 
 impl ToolCall {
@@ -61,6 +64,7 @@ impl ToolCall {
             ToolCall::Reload(_) => "reload",
             ToolCall::DumpSurface(_) => "dump_surface",
             ToolCall::DumpBalloon(_) => "dump_balloon",
+            ToolCall::CheckScript(_) => "check_script",
         }
     }
 }
@@ -88,6 +92,14 @@ pub(crate) const TABLE: [(&str, Parse); 10] = [
     (dump_balloon::DEFINITION, dump_balloon::parse),
 ];
 
+/// areka 独自のツールの表（定義, 詰め替え, help に載せる日本語の 1 行）。SSP の 10 本の後に登録する
+/// （spec: areka-P0-mcp-author-tools）。後続のツールはここへ 1 行足す。
+pub(crate) const OWN_TABLE: [(&str, Parse, &str); 1] = [(
+    check_script::DEFINITION,
+    check_script::parse,
+    check_script::SUMMARY_JA,
+)];
+
 /// 定義の文字列（MCP のツール定義 1 個ぶん）を `ToolSpec` にする。`name` と `inputSchema`（object）は必須。
 pub(crate) fn spec_from_definition(definition: &str) -> Result<ToolSpec, String> {
     let value: Value = serde_json::from_str(definition).map_err(|e| e.to_string())?;
@@ -111,6 +123,20 @@ pub fn entrances(reply_wait: Duration) -> (ToolRegistry, Receiver<ToolRequest>) 
     register_rows(&TABLE, reply_wait)
 }
 
+/// SSP と同じ 10 本に続けて独自のツールを登録し、アプリ本体が汲む受け口を返す（本番の入口・
+/// spec: areka-P0-mcp-author-tools）。受け口は 1 本で、10 本と独自のツールが同じ受け口へ届く。
+pub fn all_entrances(reply_wait: Duration) -> (ToolRegistry, Receiver<ToolRequest>) {
+    let (tx, rx) = mpsc::channel();
+    let mut registry = ToolRegistry::default();
+    for &(definition, parse) in &TABLE {
+        register_row(&mut registry, &tx, definition, parse, reply_wait);
+    }
+    for &(definition, parse, _) in &OWN_TABLE {
+        register_row(&mut registry, &tx, definition, parse, reply_wait);
+    }
+    (registry, rx)
+}
+
 /// 表の行を順に登録する。定義が読めない行は `error!` 1 件で登録しない（本番の表では起きない）。
 pub(crate) fn register_rows(
     rows: &[(&str, Parse)],
@@ -119,25 +145,36 @@ pub(crate) fn register_rows(
     let (tx, rx) = mpsc::channel();
     let mut registry = ToolRegistry::default();
     for &(definition, parse) in rows {
-        let spec = match spec_from_definition(definition) {
-            Ok(spec) => spec,
-            Err(reason) => {
-                error!(%reason, "MCP: ツールの定義が読めない。この行は登録しない");
-                continue;
-            }
-        };
-        let tx = tx.clone();
-        let handler: ToolHandler = Arc::new(move |args: Value| -> ToolFuture {
-            // object でない arguments は handler の検査が先に弾く。ここでは空として読む。
-            let args = match args {
-                Value::Object(map) => map,
-                _ => Map::new(),
-            };
-            Box::pin(bridge::call(tx.clone(), parse(&args), reply_wait))
-        });
-        registry.register(spec, handler);
+        register_row(&mut registry, &tx, definition, parse, reply_wait);
     }
     (registry, rx)
+}
+
+/// 行を 1 つ登録する。呼び出しは送信端 `tx` を通って橋へ渡る。定義が読めない行は `error!` 1 件で登録しない。
+fn register_row(
+    registry: &mut ToolRegistry,
+    tx: &Sender<ToolRequest>,
+    definition: &str,
+    parse: Parse,
+    reply_wait: Duration,
+) {
+    let spec = match spec_from_definition(definition) {
+        Ok(spec) => spec,
+        Err(reason) => {
+            error!(%reason, "MCP: ツールの定義が読めない。この行は登録しない");
+            return;
+        }
+    };
+    let tx = tx.clone();
+    let handler: ToolHandler = Arc::new(move |args: Value| -> ToolFuture {
+        // object でない arguments は handler の検査が先に弾く。ここでは空として読む。
+        let args = match args {
+            Value::Object(map) => map,
+            _ => Map::new(),
+        };
+        Box::pin(bridge::call(tx.clone(), parse(&args), reply_wait))
+    });
+    registry.register(spec, handler);
 }
 
 // 以下は各ツールの `parse` が使う読み方。`parse` は検査（`check_arguments`）を通った後にしか呼ばれないので
@@ -178,3 +215,11 @@ mod tools_tests;
 #[cfg(test)]
 #[path = "tools_socket_tests.rs"]
 mod tools_socket_tests;
+
+#[cfg(test)]
+#[path = "tools_own_tests.rs"]
+mod tools_own_tests;
+
+#[cfg(test)]
+#[path = "tools_own_socket_tests.rs"]
+mod tools_own_socket_tests;

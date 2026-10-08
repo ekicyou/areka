@@ -364,7 +364,7 @@ fn armed_state() -> BalloonVisibilityState {
     let armed = Frame::new(&[(0, seen(2, false)), (1, seen(0, false))])
         .at(0.0)
         .talk_started()
-        .display_end(0.0)
+        .ended_at(0.0)
         .timeout(TIMEOUT)
         .run(&mut state);
     assert_eq!(armed.actions, vec![show(0)], "前提: 表示が起きていない");
@@ -373,6 +373,7 @@ fn armed_state() -> BalloonVisibilityState {
         vec![
             shown_log(0),
             VisibilityLogEvent::MeasurementStarted {
+                origin: MeasurementOrigin::DisplayEnd,
                 display_end: 0.0,
                 deadline: TIMEOUT,
             }
@@ -403,7 +404,7 @@ fn deadline_is_anchored_on_display_end_not_on_the_first_eligible_frame() {
     let shown = Frame::new(&[(0, seen(3, false))])
         .at(1.0)
         .talk_started()
-        .display_end(DISPLAY_END)
+        .ended_at(DISPLAY_END)
         .timeout(TIMEOUT)
         .run(&mut state);
     assert_eq!(shown.actions, vec![show(0)]);
@@ -419,6 +420,7 @@ fn deadline_is_anchored_on_display_end_not_on_the_first_eligible_frame() {
     assert_eq!(
         armed.logs,
         vec![VisibilityLogEvent::MeasurementStarted {
+            origin: MeasurementOrigin::DisplayEnd,
             display_end: DISPLAY_END,
             deadline: DISPLAY_END + TIMEOUT,
         }]
@@ -463,7 +465,7 @@ fn timeout_hides_every_visible_scope_and_leaves_the_silent_ones() {
     ])
     .at(0.0)
     .talk_started()
-    .display_end(0.0)
+    .ended_at(0.0)
     .timeout(TIMEOUT)
     .run(&mut state);
     Frame::new(&[(0, seen(2, true)), (1, seen(4, false)), (2, seen(0, false))])
@@ -694,7 +696,7 @@ fn display_end_raised_into_the_future_discards_the_deadline() {
 
     let raised = Frame::new(&[(0, seen(2, true)), (1, seen(0, false))])
         .at(5.0)
-        .display_end(50.0)
+        .ended_at(50.0)
         .timeout(TIMEOUT)
         .run(&mut state);
     assert!(raised.actions.is_empty(), "占有終端の更新で発行が起きた");
@@ -725,6 +727,7 @@ fn display_end_raised_into_the_future_discards_the_deadline() {
     assert_eq!(
         rearmed.logs,
         vec![VisibilityLogEvent::MeasurementStarted {
+            origin: MeasurementOrigin::DisplayEnd,
             display_end: 50.0,
             deadline: 80.0,
         }]
@@ -824,7 +827,7 @@ fn a_negative_display_end_is_rounded_up_to_zero_before_anchoring() {
     let armed = Frame::new(&[(0, seen(2, false))])
         .at(0.0)
         .talk_started()
-        .display_end(-5.0)
+        .ended_at(-5.0)
         .timeout(TIMEOUT)
         .run(&mut state);
     assert_eq!(armed.actions, vec![show(0)]);
@@ -833,6 +836,7 @@ fn a_negative_display_end_is_rounded_up_to_zero_before_anchoring() {
         vec![
             shown_log(0),
             VisibilityLogEvent::MeasurementStarted {
+                origin: MeasurementOrigin::DisplayEnd,
                 display_end: 0.0,
                 deadline: TIMEOUT,
             }
@@ -866,7 +870,7 @@ fn a_non_number_display_end_is_rounded_up_to_zero_before_anchoring() {
     let armed = Frame::new(&[(0, seen(2, false))])
         .at(0.0)
         .talk_started()
-        .display_end(f64::NAN)
+        .ended_at(f64::NAN)
         .timeout(TIMEOUT)
         .run(&mut state);
     assert_eq!(
@@ -874,6 +878,7 @@ fn a_non_number_display_end_is_rounded_up_to_zero_before_anchoring() {
         vec![
             shown_log(0),
             VisibilityLogEvent::MeasurementStarted {
+                origin: MeasurementOrigin::DisplayEnd,
                 display_end: 0.0,
                 deadline: TIMEOUT,
             }
@@ -921,7 +926,7 @@ fn identical_timed_observation_sequences_yield_identical_decisions() {
             Frame::new(&[(0, seen(0, false)), (1, seen(0, false))])
                 .at(0.0)
                 .talk_started()
-                .display_end(4.0)
+                .ended_at(4.0)
                 .timeout(TIMEOUT)
                 .run(&mut state),
         );
@@ -966,6 +971,7 @@ fn identical_timed_observation_sequences_yield_identical_decisions() {
     assert_eq!(
         first[2].logs,
         vec![VisibilityLogEvent::MeasurementStarted {
+            origin: MeasurementOrigin::DisplayEnd,
             display_end: 4.0,
             deadline: 34.0,
         }]

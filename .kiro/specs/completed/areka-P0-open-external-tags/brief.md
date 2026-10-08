@@ -75,3 +75,8 @@
 
 - 開く処理の新しいファイルは `readme.rs` の子に置く（`main.rs` は `mcp-author-tools` が触る見込み）。`emo2_boot/mod.rs`（`balloon-lifecycle-events`）に触らない。dola の `CueCommand` に種類を足さない（`\j` は汎用の `\!` の運び手へ写す。足さないと済まないと分かったら止めて報告）。
 - `decode.rs`・`compile.rs` は C5 の `anchor-tag-canon` が次に触る＝本 spec の腕は既存の腕の並びに 1 本足す形に留める。
+
+
+---
+
+> **📌 2026-10-05 相互登記（`areka-P0-balloon-lifecycle-events` の要件の討議）**——同じウェーブの `balloon-lifecycle-events` も、`\![` の受け取り手の宣言表 `crates/areka/src/emo2_boot/consumer_ledger.rs` に `("set","balloontimeout")` の受け取り手（種類 1 つ・`canonical()` の登録 1 行）を足す。中身は独立しているが、書く場所が隣り合う。**後からマージする側が、受け取り手の種類・登録の行・表の行数のテストを手で足し直し、数は取り込んだ後に数え直す**（両方が同じ数に書き換えると git が黙って誤った数にまとめる）。

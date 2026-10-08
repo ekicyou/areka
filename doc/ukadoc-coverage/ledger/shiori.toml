@@ -132,32 +132,38 @@
 #
 # ---
 #
-# ### 群 2a — M1 で意図的に発火させていないバルーンのイベント
+# ### 群 2a — バルーンの寿命を知らせるイベント
 #
 # - **対象**: `OnBalloonClose`・`OnBalloonTimeout`・`OnBalloonBreak`。
 # - **件数**: 3
-# - **状態**: `vocabulary-only`
+# - **状態**: `OnBalloonClose`・`OnBalloonTimeout` は `implemented`、`OnBalloonBreak` は `degraded`
+#   （Reference2 の中断位置を空で送る）。調査時点は 3 件とも `vocabulary-only`（M1 で意図的に
+#   発火させていなかった）で、2026-10-06 に `areka-P0-balloon-lifecycle-events` が送るようにした。
 # - **テーマ**: 気配り
 # - **優先度**: `C2`（仮置き）
-# - **判断の根拠の場所**: `crates/areka/src/emo2_boot/talk_lifecycle.rs` の
-#   `BalloonLifecycleNotice`（予約してある受け渡し口の型）。転記元は
-#   `doc/COMPAT_ARCHITECTURE.md` の沈黙ルール対応表の行「`OnBalloonClose` ／ `OnBalloonTimeout` ／
-#   `OnBalloonBreak` の SHIORI 発火」。
+# - **判断の根拠の場所**: 送る判断は `crates/areka-kanade/src/schedule/balloon_events.rs`
+#   （`after_talk_done`・`on_idle_double_click`・`on_timeout_notice`）。組み立ては
+#   `crates/areka-kanade/src/schedule/events.rs` の `on_balloon_break`・`on_balloon_close`・
+#   `on_balloon_timeout` と、送出許可集合 `ALLOWED_EVENT_IDS` の 3 行（正典 URL の注記＝証拠）。
+#   転記元は `doc/COMPAT_ARCHITECTURE.md` の沈黙ルール対応表の行「`OnBalloonClose` ／
+#   `OnBalloonTimeout` ／ `OnBalloonBreak` の SHIORI 発火」。
 # - **共通 `note`**:
 #
 #   ```
-#   壊れ方: 黙って壊れる。バルーンが閉じた・時間切れになった・中断されたことは SHIORI へ伝わらず、
-#   それに応じて喋る辞書はその場面で呼ばれない。
-#   ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。理由は群 2 と同じ（この名前を
-#   組み立てる構築関数が無い。ゴーストが \q の選択肢 ID に書いた場合だけ選択起源の経路で送出され得る
-#   のも群 2 と同じで、そのときも状態は変わらない）。加えてこの群には第 2 の理由がある——表示側から
-#   会話進行側へ渡す受け皿の型は用意してあるが、それを作る側も受け取る側もまだ存在しないため、
-#   バルーンの開閉を起点とする経路そのものが動かない。
-#   縮退の転記元: doc/COMPAT_ARCHITECTURE.md の沈黙ルール対応表の行「OnBalloonClose ／
-#   OnBalloonTimeout ／ OnBalloonBreak の SHIORI 発火」。そこには M1 は発火させず、語彙・Reference の
-#   割り当て・受け渡し口の型だけを残すと記録されている。解禁の条件は M2 で互換の範囲を広げるときで、
-#   追跡先は areka-P0-balloon-canon-residue。
-#   根拠の場所: crates/areka/src/emo2_boot/talk_lifecycle.rs の BalloonLifecycleNotice。
+#   送り方: 会話の進行の側（kanade）の 1 か所 schedule/balloon_events.rs が、定常の間だけ、1 つの
+#   出来事につき 1 回だけ GET で送る。応答の台本は他のイベントと同じく OnTranslate を通してから
+#   新しいトークとして再生する。起動の途中・終了の握手の待ち・切替の途中・終了の要求を保留して
+#   いる間は送らず、後で送るために積んでもおかない。
+#   ログ: 送ったときは info のログ balloon_event_sent（イベント名・きっかけ・OnBalloonBreak なら
+#   スコープ番号）、送る場面に当たって送らなかったときは info のログ balloon_event_not_sent が理由
+#   つきで 1 行出る。送出の直前に trace のログ shiori_request も出る。毎フレームの判定そのものは
+#   記録しない。
+#   転記元: doc/COMPAT_ARCHITECTURE.md の沈黙ルール対応表の行「OnBalloonClose ／
+#   OnBalloonTimeout ／ OnBalloonBreak の SHIORI 発火」（送る場面・Reference の入れ方・正典が
+#   沈黙する点の areka 裁量・残る行き違い 2 つ）。
+#   根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS の 3 行と構築関数
+#   on_balloon_break・on_balloon_close・on_balloon_timeout の正典 URL の注記。送る判断は
+#   crates/areka-kanade/src/schedule/balloon_events.rs。
 #   ```
 #
 # ---
@@ -1295,26 +1301,30 @@ absent のまま変わらない。
 """
 
 [entry."ukadoc:list_shiori_event:OnBalloonBreak:1"]
-status = "vocabulary-only"
+status = "degraded"
 introduced = ""
-owner = "areka-P0-balloon-canon-residue"
+owner = "areka-P0-balloon-lifecycle-events"
 priority = "A1"
 values = ["気配り"]
 links = []
 note = """
-壊れ方: 黙って壊れる。バルーンが閉じた・時間切れになった・中断されたことは SHIORI へ伝わらず、
-それに応じて喋る辞書はその場面で呼ばれない。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。理由は群 2 と同じ（この名前を
-組み立てる構築関数が無い。ゴーストが \\q の選択肢 ID に書いた場合だけ選択起源の経路で送出され得る
-のも群 2 と同じで、そのときも状態は変わらない）。加えてこの群には第 2 の理由がある——表示側から
-会話進行側へ渡す受け皿の型は用意してあるが、それを作る側も受け取る側もまだ存在しないため、
-バルーンの開閉を起点とする経路そのものが動かない。
-縮退の転記元: doc/COMPAT_ARCHITECTURE.md の沈黙ルール対応表の行「OnBalloonClose ／
-OnBalloonTimeout ／ OnBalloonBreak の SHIORI 発火」。そこには M1 は発火させず、語彙・Reference の
-割り当て・受け渡し口の型だけを残すと記録されている。解禁の条件は M2 で互換の範囲を広げるときで、
-追跡先は areka-P0-balloon-canon-residue。
-根拠の場所: crates/areka/src/emo2_boot/talk_lifecycle.rs の BalloonLifecycleNotice。
-Reference 割当（転記元の記録の写し）: Ref0＝中断の操作が起きたスクリプト・Ref1＝中断が
+壊れ方: 一部だけ正典どおりでない。利用者がバルーンを左ダブルクリックして再生中のトークを止め、
+その後に定常へ戻ったとき（起動の挨拶・定常のトーク・切替の送り出しの台詞のどれを止めても、切替が
+中止されて定常へ戻るなら）に、止まり終えてから GET で 1 回送る。Ref0＝止めたトークの台本
+（OnTranslate を通した後のもの）・Ref1＝ダブルクリックされたバルーンの scope 番号（箱ならその箱が
+属するキャラクターの番号）は正典どおり。縮退は Ref2（中断位置）で、常に空で送る——台本の中の位置を
+字句から台本のコンパイル・再生・完了の知らせまで通す工事が要るため。追跡先は
+areka-P0-balloon-break-position。止めた台本が終了を予約していた・終了の握手の別れの台詞を止めた・
+保留の終了や保留の切替へ進むとき・終了の要求を保留している間は送らない。
+ログ: 送ったときは info のログ balloon_event_sent（cause=break・scope 付き）、送る場面に当たって
+送らなかったときは info のログ balloon_event_not_sent が理由つきで 1 行出る。送出の直前に trace の
+ログ shiori_request も出る。
+転記元: doc/COMPAT_ARCHITECTURE.md の沈黙ルール対応表の行「OnBalloonClose ／
+OnBalloonTimeout ／ OnBalloonBreak の SHIORI 発火」（Ref2 の縮退と追跡先もそこに書いてある）。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+同じファイルの構築関数 on_balloon_break が組み立てる（どちらにも正典 URL の注記がある）。送る判断は
+crates/areka-kanade/src/schedule/balloon_events.rs の after_talk_done。
+Reference 割当（正典）: Ref0＝中断の操作が起きたスクリプト・Ref1＝中断が
 起きたバルーンの scope 番号（本体側 0・相方側 1・以降も）・Ref2＝中断位置（スクリプト
 先頭からの文字数・さくらスクリプトのタグを含む）。
 テーマの直し: 索引の群 2a はこの群の既定を装いとしているが、装いの定義は「見た目を選び替えられること」
@@ -1343,26 +1353,29 @@ crates/areka/src/emo2_boot/frame/switch.rs の finish_balloon が出す。
 """
 
 [entry."ukadoc:list_shiori_event:OnBalloonClose:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = "areka-P0-balloon-canon-residue"
+owner = "areka-P0-balloon-lifecycle-events"
 priority = "A1"
 values = ["気配り"]
 links = []
 note = """
-壊れ方: 黙って壊れる。バルーンが閉じた・時間切れになった・中断されたことは SHIORI へ伝わらず、
-それに応じて喋る辞書はその場面で呼ばれない。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。理由は群 2 と同じ（この名前を
-組み立てる構築関数が無い。ゴーストが \\q の選択肢 ID に書いた場合だけ選択起源の経路で送出され得る
-のも群 2 と同じで、そのときも状態は変わらない）。加えてこの群には第 2 の理由がある——表示側から
-会話進行側へ渡す受け皿の型は用意してあるが、それを作る側も受け取る側もまだ存在しないため、
-バルーンの開閉を起点とする経路そのものが動かない。
-縮退の転記元: doc/COMPAT_ARCHITECTURE.md の沈黙ルール対応表の行「OnBalloonClose ／
-OnBalloonTimeout ／ OnBalloonBreak の SHIORI 発火」。そこには M1 は発火させず、語彙・Reference の
-割り当て・受け渡し口の型だけを残すと記録されている。解禁の条件は M2 で互換の範囲を広げるときで、
-追跡先は areka-P0-balloon-canon-residue。
-根拠の場所: crates/areka/src/emo2_boot/talk_lifecycle.rs の BalloonLifecycleNotice。
-Reference 割当（転記元の記録の写し）: Ref0＝閉じる際に表示されていたスクリプト。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。再生中のトークが無い定常で、
+出ている普通のバルーンを利用者が左ダブルクリックして隠したときに GET で 1 回送る（areka の
+バルーンには閉じるボタンが無く、同じ操作を再生中なら中断、表示だけが残っていれば「読み終えた
+バルーンを閉じた」と読む）。中断を出したがトークが止める指示より先に自分で最後まで流れて終わって
+いた行き違い（箱でも起きる）でも送る。Ref0＝閉じたバルーンに出ていた台本。1 つのトークにつき
+高々 1 回。話していない箱のダブルクリックはシェルへの OnMouseDoubleClick のままで、これは送らない。
+定常でない間・終了の要求を保留している間は送らない。
+ログ: 送ったときは info のログ balloon_event_sent（cause=close）、送る場面に当たって送らなかった
+ときは info のログ balloon_event_not_sent が理由つきで 1 行出る。送出の直前に trace のログ
+shiori_request も出る。
+転記元: doc/COMPAT_ARCHITECTURE.md の沈黙ルール対応表の行「OnBalloonClose ／
+OnBalloonTimeout ／ OnBalloonBreak の SHIORI 発火」（送る場面は areka 裁量・残る行き違い 2 つ）。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+同じファイルの構築関数 on_balloon_close が組み立てる（どちらにも正典 URL の注記がある）。送る判断は
+crates/areka-kanade/src/schedule/balloon_events.rs の on_idle_double_click と after_talk_done。
+Reference 割当（正典）: Ref0＝閉じる際に表示されていたスクリプト。
 テーマの直し: 索引の群 2a はこの群の既定を装いとしているが、装いの定義は「見た目を選び替えられること」
 であり、吹き出しが閉じた出来事はそれに当たらない。テーマの正本 doc/ukadoc-coverage/values.md は同じ
 群の OnBalloonTimeout を気配りの代表として挙げ、気配りの「無いと失うもの」に「読まれないまま消えた吹
@@ -1393,26 +1406,34 @@ absent のまま変わらない。
 """
 
 [entry."ukadoc:list_shiori_event:OnBalloonTimeout:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = "areka-P0-balloon-canon-residue"
+owner = "areka-P0-balloon-lifecycle-events"
 priority = "A1"
 values = ["気配り"]
 links = []
 note = """
-壊れ方: 黙って壊れる。バルーンが閉じた・時間切れになった・中断されたことは SHIORI へ伝わらず、
-それに応じて喋る辞書はその場面で呼ばれない。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。理由は群 2 と同じ（この名前を
-組み立てる構築関数が無い。ゴーストが \\q の選択肢 ID に書いた場合だけ選択起源の経路で送出され得る
-のも群 2 と同じで、そのときも状態は変わらない）。加えてこの群には第 2 の理由がある——表示側から
-会話進行側へ渡す受け皿の型は用意してあるが、それを作る側も受け取る側もまだ存在しないため、
-バルーンの開閉を起点とする経路そのものが動かない。
-縮退の転記元: doc/COMPAT_ARCHITECTURE.md の沈黙ルール対応表の行「OnBalloonClose ／
-OnBalloonTimeout ／ OnBalloonBreak の SHIORI 発火」。そこには M1 は発火させず、語彙・Reference の
-割り当て・受け渡し口の型だけを残すと記録されている。解禁の条件は M2 で互換の範囲を広げるときで、
-追跡先は areka-P0-balloon-canon-residue。
-根拠の場所: crates/areka/src/emo2_boot/talk_lifecycle.rs の BalloonLifecycleNotice。
-Reference 割当（転記元の記録の写し）: Ref0＝タイムアウトした際に表示されていた
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。会話の後の時間切れで出ていた
+バルーンが隠れたとき、表示の側が隠したトークの番号を KanadeMsg::BalloonTimeout で kanade へ知らせ、
+kanade が GET で 1 回送る（隠れたスコープの数によらず 1 回・1 つのトークにつき高々 1 回）。
+Ref0＝時間切れで隠れたバルーンに出ていた台本・Ref1＝0（時間切れの時点で待ち時間の残りは無い。
+areka 裁量）。抑止の間は送らず、抑止が解けて実際に隠れたときに送る。次のトークが既に始まって
+いた・定常でない・終了の要求を保留しているときは送らない。完了の知らせより先に届いた知らせは
+預かり、そのトークの完了で送る。選択肢の時間切れでは送らない（OnChoiceTimeout のまま）。
+時間切れの計測はトークの終わりが表示の側に届いてから始め、起点は占有区間の終端と止まった時刻の
+早い方。待ち時間は既定（30 秒）か、台本の \\![set,balloontimeout,時間] の値。
+ログ: 送ったときは info のログ balloon_event_sent（cause=timeout）、送る場面に当たって送らなかった
+ときは info のログ balloon_event_not_sent、預かったときは info のログ balloon_timeout_deferred が
+1 行出る。表示の側は知らせを送ったとき info のログ balloon_timeout_notified を残す。送出の直前に
+trace のログ shiori_request も出る。
+転記元: doc/COMPAT_ARCHITECTURE.md の沈黙ルール対応表の行「OnBalloonClose ／
+OnBalloonTimeout ／ OnBalloonBreak の SHIORI 発火」（Ref1＝0 は areka 裁量）と、起点の行「会話が
+中断で終わったときのタイムアウト起点」。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+同じファイルの構築関数 on_balloon_timeout が組み立てる（どちらにも正典 URL の注記がある）。送る判断は
+crates/areka-kanade/src/schedule/balloon_events.rs の on_timeout_notice と after_talk_done。知らせの
+送り手は crates/areka/src/emo2_boot/balloon_visibility_phase.rs の notify_timeout。
+Reference 割当（正典）: Ref0＝タイムアウトした際に表示されていた
 スクリプト・Ref1＝残り時間。
 テーマの直し: 索引の群 2a はこの群の既定を装いとしているが、テーマの正本
 doc/ukadoc-coverage/values.md はこの項目を気配りの代表として名指ししているので気配りに直した。

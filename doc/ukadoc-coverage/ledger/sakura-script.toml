@@ -3068,18 +3068,19 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = "areka-P0-balloon-canon-residue"
+owner = "areka-P0-balloon-lifecycle-events"
 priority = "A1"
 values = ["気配り"]
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンが閉じるまでの時間が変わらず、既定の待ち時間のままになる）。
-ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
-語彙の登記: doc/COMPAT_ARCHITECTURE.md の「compile 側時間指令 allowlist」の行が、M1 は非実導出で語彙保持＋縮退のみと明記し、この綴りを逐語で名指ししている。
-語彙の登記（2 つ目）: doc/COMPAT_ARCHITECTURE.md の「\\![set,balloontimeout,時間]（バルーン表示のタイムアウト時間指定）のバルーン寿命側の実導出」の行が、M1 非受理で完全な語彙と意味論の記録のみと明記している。同じ綴りを compile 側の行とバルーン寿命側の行が別の側面から扱っている。
-[分担: compile 側の allowlist は areka-P0-sakura-time-directives、バルーン寿命側の実導出は owner の areka-P0-balloon-canon-residue。上の 2 つの登記がその住み分けに当たる]
+壊れ方: 該当なし。compile は今までどおり汎用の \\! コマンドとして汎用のキャリアへ転記するだけで、再生時にバルーンの寿命の受け口 BalloonLifecycleSink（crates/areka/src/emo2_boot/talk_lifecycle.rs）が set の第 1 引数 balloontimeout の出現だけを拾い、parse_balloon_timeout で時間の欄を読んで表示の側へ渡す。正の整数はそのミリ秒（1,000 で 1 回割って秒へ写し、丸めない）、0 と負の数はすべて時間切れなし（そのトークでは時間切れで隠さず OnBalloonTimeout も送らない）、省略・空は既定、整数として読めない値（文字・小数・桁あふれ）は既定として扱う。効くのはそのトークの中だけで、次のトークが始まると既定へ戻る。1 本のトークに複数あれば最後に届いた値を使い、抑止が解けた後の計り直しもこの値で計る。中断でタグに達する前に止まったトークでは効かない。既定の待ち時間（30 秒・環境変数での上書きを含む）の決め方は変えず、その上に重ねる。
+ログ: 出る（読めた値は info!、整数として読めない値は warn! の記録 balloon_timeout_set を読めなかった値付きで 1 件残す。他の受け口は今までどおり担当外の名前として debug! を残す。compile の catch-all は通らない）。
+語彙の登記: doc/COMPAT_ARCHITECTURE.md の「compile 側時間指令 allowlist」の行がこの綴りを逐語で名指ししており、compile はこの綴りを読まない（先読みは足さない）と書いてある。
+転記元: doc/COMPAT_ARCHITECTURE.md の「\\![set,balloontimeout,時間]（バルーン表示のタイムアウト時間指定）のバルーン寿命側の実導出」の行（読み方と、正典の「0 または負数」と「0 か -1」の割れの解き方）。
+根拠の場所: \\![ の受け取り手の宣言表 crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::LifecycleSink（正典 URL の注記）と、登録の行 ("set", Some("balloontimeout"))。
+[分担: compile 側もバルーン寿命側も owner の areka-P0-balloon-lifecycle-events が丸ごと持つ（同 spec の要件の討議 点 C・開発者裁定 2026-10-05）。areka-P0-sakura-time-directives の brief に相互登記がある。調査時点の分担は compile 側を areka-P0-sakura-time-directives、バルーン寿命側を areka-P0-balloon-canon-residue としていた]
 [テーマ: 吹き出しが閉じるまでの長さを決められず、読み終える前に消えたり読んだ後も残り続けたりする]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
 """

@@ -752,7 +752,7 @@ impl SpineHarness {
         // lifecycle_rx（バルーン可視性相＝task 4.4 が drain）を保持する。production と同じ 4-sink 構成を
         // spine でも忠実に再現するため、throwaway ではなく実 sink を登録する。
         let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
-        let lifecycle_sink = BalloonLifecycleSink::new(lifecycle_tx);
+        let lifecycle_sink = BalloonLifecycleSink::new(lifecycle_tx, clock.clone());
 
         // ── scripted boot（実 sink 注入・TickerMode::Disabled＝Tick 注入で駆動・R8.3） ──
         // sinks は broadcast 登録先で surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）／
