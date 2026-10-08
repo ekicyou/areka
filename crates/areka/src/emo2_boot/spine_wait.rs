@@ -115,6 +115,9 @@ pub(crate) enum WaitFailure {
         idle: Duration,
         /// 目印が増えた量の合計（目印の 1 つが呼び出し 1 回に当たる。読んだ回数ではない）。
         moves: u64,
+        /// 最後の 1 回の確かめ（前の時計の読みから今の読みまで）にかかった時間。打ち切りは確かめと
+        /// 確かめの間でしか判じられないので、1 回が同期で長く塞がると打ち切りもその分遅れる。
+        last_step: Duration,
     },
     /// 相手は進み続けていたが、総時間の上限 [`WAIT_CAP`] に届いた。
     CapReached {
@@ -123,6 +126,8 @@ pub(crate) enum WaitFailure {
         /// [`WaitFailure::Stalled`] の `moves` と同じ数え方。
         moves: u64,
         since_last_move: Duration,
+        /// [`WaitFailure::Stalled`] の `last_step` と同じ。
+        last_step: Duration,
     },
     /// 進みの目印が無い待ちが、総時間の上限 [`SPIN_WAIT`] に届いた。
     TimedOut { what: String, waited: Duration },
@@ -139,23 +144,27 @@ impl fmt::Display for WaitFailure {
                 waited,
                 idle,
                 moves,
+                last_step,
             } => write!(
                 f,
-                "待ちの打ち切り［止まった］: 「{what}」— 相手が {:.1} 秒のあいだ状態を進めなかった（待ち始めから {:.1} 秒・それまでの進み {moves} 回）",
+                "待ちの打ち切り［止まった］: 「{what}」— 相手が {:.1} 秒のあいだ状態を進めなかった（待ち始めから {:.1} 秒・それまでの進み {moves} 回・最後の 1 回の確かめに {:.1} 秒）",
                 s(idle),
                 s(waited),
+                s(last_step),
             ),
             Self::CapReached {
                 what,
                 waited,
                 moves,
                 since_last_move,
+                last_step,
             } => write!(
                 f,
-                "待ちの打ち切り［進んではいた］: 「{what}」— 上限 {} 秒までに届かなかった（待ち始めから {:.1} 秒・進み {moves} 回・最後の進みは {:.1} 秒前）。負荷で遅いか、終わらない繰り返し",
+                "待ちの打ち切り［進んではいた］: 「{what}」— 上限 {} 秒までに届かなかった（待ち始めから {:.1} 秒・進み {moves} 回・最後の進みは {:.1} 秒前・最後の 1 回の確かめに {:.1} 秒）。負荷で遅いか、終わらない繰り返し",
                 WAIT_CAP.as_secs(),
                 s(waited),
                 s(since_last_move),
+                s(last_step),
             ),
             Self::TimedOut { what, waited } => write!(
                 f,
@@ -212,7 +221,9 @@ pub(crate) fn wait_until_with(
         if cond() {
             return Ok(());
         }
+        let before = t;
         t = now();
+        let last_step = t.saturating_duration_since(before);
         let waited = t.saturating_duration_since(started);
         let what = || what.to_owned();
         if let Progress::Unknown = progress {
@@ -237,6 +248,7 @@ pub(crate) fn wait_until_with(
                 waited,
                 idle,
                 moves,
+                last_step,
             });
         }
         if waited >= WAIT_CAP {
@@ -245,6 +257,7 @@ pub(crate) fn wait_until_with(
                 waited,
                 moves,
                 since_last_move: idle,
+                last_step,
             });
         }
     }

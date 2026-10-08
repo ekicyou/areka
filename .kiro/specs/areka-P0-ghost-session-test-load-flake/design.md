@@ -21,7 +21,7 @@
 
 - 本番のゴーストの切り替え・起こし直し・降ろしの振る舞いの変更（再現で本物の競合が見つかった場合を除く）。
 - `tools/test-all.ps1` の並列度の変更、回し直しで赤を隠す仕組み。
-- 赤の観測が無い待ち（他の crate の同じ名前の `run_bounded`／`join_bounded`・`install/` の自前の `join_bounded`・`spine_*_tests.rs` が自前で持つ Tick 注入の待ち・`session_end_deadline_tests.rs` が確かめる本番の実時間の締切）。再現の手順で赤になったものだけを対象に加える（例: 通しの巡回の段の駆動器は再現で赤だったので加えた・5.4）。
+- 赤の観測が無い待ち（他の crate の同じ名前の `run_bounded`／`join_bounded`・`install/` の自前の `join_bounded`・`spine_*_tests.rs` が自前で持つ Tick 注入の待ち・`session_end_deadline_tests.rs` が確かめる本番の実時間の締切）。再現の手順で赤になったものだけを対象に加える（例: 通しの巡回の段の駆動器は再現で赤だったので加えた・5.4。main の取り込みの後の再現（`load-repro.md` の 4.3）で赤だった `spine_talk_close_tests.rs` の S2 の待ちと S5 の起動の 5 呼び出しの待ちも加え、`session_end_sync_send_tests.rs` の送信の 10 秒の期限は外した・5.4）。
 - `zorder-chain-residue` に残る族、`areka-test-threads-av` の範囲。
 
 ## Boundary Commitments
@@ -269,8 +269,9 @@ flowchart TD
 | 待ち | 目印を作れない理由 |
 |---|---|
 | `ghost_session_restart_tests.rs` の `run_input_until` | 待つ相手が作業プールで、進みを数える口がテストの側に無い。総時間は 10 秒から共通の `SPIN_WAIT`（30 秒）になり、空回しは 60 ms で CPU を返す形になる |
-| `spine_*_tests.rs` が `spin_wait_until` を直接呼ぶ待ち・自前の Tick 注入の待ち（約 20 か所） | 待つ相手が描画と台詞の再生で、SHIORI の呼び出しを伴わない。赤の観測も無い（Non-Goals）。ただし通しの巡回の段の駆動器（`spine_conformance_support.rs` の `run_stage_with`）は除く。直す前の再現で赤だった（`load-repro.md` の 3.7 の場所 34・4.3）ので、この例外から外して待ちの芯へ移した。目印は SHIORI の呼び出しの数（`Status` を除く）と台詞の起動・表示指令の数の和（5.4） |
-| `join_bounded("spine seriko join", …)` と、古い呼び名 `run_bounded` の残りの呼び手 | スレッドの合流を待つだけで、途中の進みを外から読めない |
+| `spine_*_tests.rs` が `spin_wait_until` を直接呼ぶ待ち・自前の Tick 注入の待ち（約 20 か所） | 待つ相手が描画と台詞の再生で、SHIORI の呼び出しを伴わない。赤の観測も無い（Non-Goals）。ただし通しの巡回の段の駆動器（`spine_conformance_support.rs` の `run_stage_with`）は除く。直す前の再現で赤だった（`load-repro.md` の 3.7 の場所 34・4.3）ので、この例外から外して待ちの芯へ移した。目印は SHIORI の呼び出しの数（`Status` を除く）と台詞の起動・表示指令の数の和（5.4）。`spine_talk_close_tests.rs` の S2 の 1 つ目の待ち（シェル面指令＋テキスト cue の到達）と S5 の起動の 5 呼び出しの待ちも除く。main の取り込みの後の再現で `［進みは不明］` と文言の無い赤だった（`load-repro.md` の 4.3）ので待ちの芯へ移した。目印は S2 が SHIORI の呼び出しの数と受けた表示指令の数の和、S5 が SHIORI の呼び出しの数（5.4） |
+| `session_end_sync_send_tests.rs` の送信（例外ではなく、時刻の締切を外した待ち） | 送信の 10 秒の期限が「輪になった」の見分けの代わりになっていて、負荷で解き手のスレッドの始まりが遅れると輪でないのに期限で切れて赤だった（`load-repro.md` の 4.3）。送信は期限なし、見分けは順序（後始末の戻りと送信の戻りの前後・後始末の後に送信がまだ待っているか）だけ、固まりは外側の `run_bounded` が切る（5.4） |
+| `join_bounded("spine seriko join", …)` と、古い呼び名 `run_bounded` の残りの呼び手 | 数えられる進みが無い（スレッドが終わるのを待つだけ） |
 
 ## Components and Interfaces
 
@@ -296,6 +297,7 @@ flowchart TD
 - 打ち切りを決めるのはここだけ。呼び手は「何を待つか」「進みの数え方」「条件」を渡す。
 - 進みの目印は「単調に増える数」とだけ約束する。中身（SHIORI の呼び出しか、起こした回数か）は知らない。
 - 時刻を進めるための sleep はしない。待っている間の `BACKOFF_SLEEP` は、今の `spine.rs` の規律と同じ「CPU を返すための短い休み」で、観測の内容を変えない。
+- 上限（300 秒）と止まり（30 秒）は確かめと確かめの間で判じる。足場の 1 段が同期で塞がっている間は打ち切れない（`load-repro.md` の 4.3 の `desk_reload` の 534.7 秒の例）。そのため `［止まった］` と `［進んではいた］` の文言には、最後の 1 回の確かめにかかった時間も書く。
 - 一時パスを作らない。プロセスの番号を読まない（一時パスの見張りの語に当たらない）。
 
 **Contracts**: Service [x]
@@ -323,9 +325,9 @@ pub(crate) enum Progress<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum WaitFailure {
     /// 相手が `idle` のあいだ 1 度も進まなかった＝止まった。
-    Stalled { what: String, waited: Duration, idle: Duration, moves: u64 },
+    Stalled { what: String, waited: Duration, idle: Duration, moves: u64, last_step: Duration },
     /// 相手は進み続けていたが、総時間の上限に届いた。
-    CapReached { what: String, waited: Duration, moves: u64, since_last_move: Duration },
+    CapReached { what: String, waited: Duration, moves: u64, since_last_move: Duration, last_step: Duration },
     /// 進みの目印が無い待ちが、上限に届いた。
     TimedOut { what: String, waited: Duration },
     /// 受け口の相手が、何も送らずに居なくなった。
@@ -378,8 +380,8 @@ fn wait_until_with(
 
 | 失敗 | 文言の形 |
 |---|---|
-| `Stalled` | `待ちの打ち切り［止まった］: 「{what}」— 相手が {idle} 秒のあいだ状態を進めなかった（待ち始めから {waited} 秒・それまでの進み {moves} 回）` |
-| `CapReached` | `待ちの打ち切り［進んではいた］: 「{what}」— 上限 {WAIT_CAP} 秒までに届かなかった（進み {moves} 回・最後の進みは {since_last_move} 秒前）。負荷で遅いか、終わらない繰り返し` |
+| `Stalled` | `待ちの打ち切り［止まった］: 「{what}」— 相手が {idle} 秒のあいだ状態を進めなかった（待ち始めから {waited} 秒・それまでの進み {moves} 回・最後の 1 回の確かめに {last_step} 秒）` |
+| `CapReached` | `待ちの打ち切り［進んではいた］: 「{what}」— 上限 {WAIT_CAP} 秒までに届かなかった（待ち始めから {waited} 秒・進み {moves} 回・最後の進みは {since_last_move} 秒前・最後の 1 回の確かめに {last_step} 秒）。負荷で遅いか、終わらない繰り返し` |
 | `TimedOut` | `待ちの打ち切り［進みは不明］: 「{what}」— {waited} 秒までに届かなかった（進みの目印の無い待ち）` |
 | `Disconnected` | `待ちの打ち切り［相手が居ない］: 「{what}」— {waited} 秒待ったところで、相手が何も送らずに終わった` |
 

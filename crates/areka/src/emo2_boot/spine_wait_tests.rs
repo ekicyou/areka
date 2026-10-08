@@ -117,6 +117,7 @@ fn a_moving_partner_is_never_cut_off_before_the_cap() {
             waited: WAIT_CAP,
             moves: u64::from(caps + 1) / 10,
             since_last_move: Duration::from_secs(1),
+            last_step: step,
         })
     );
 }
@@ -137,6 +138,7 @@ fn a_partner_that_stops_moving_is_reported_as_stalled() {
             waited: SPIN_WAIT,
             idle: SPIN_WAIT,
             moves: 0,
+            last_step: step,
         })
     );
 
@@ -154,6 +156,7 @@ fn a_partner_that_stops_moving_is_reported_as_stalled() {
             waited: step * (19 + idle_steps),
             idle: SPIN_WAIT,
             moves: 1,
+            last_step: step,
         })
     );
 }
@@ -198,9 +201,16 @@ fn the_four_failures_read_differently() {
                 waited: Duration::from_millis(45_500),
                 idle: Duration::from_secs(30),
                 moves: 7,
+                last_step: Duration::from_millis(14_900),
             },
             "待ちの打ち切り［止まった］",
-            vec!["「止まる待ち」", "30.0 秒", "45.5 秒", "7 回"],
+            vec![
+                "「止まる待ち」",
+                "30.0 秒",
+                "45.5 秒",
+                "7 回",
+                "最後の 1 回の確かめに 14.9 秒",
+            ],
         ),
         (
             WaitFailure::CapReached {
@@ -208,9 +218,16 @@ fn the_four_failures_read_differently() {
                 waited: Duration::from_secs(300),
                 moves: 1234,
                 since_last_move: Duration::from_millis(2_500),
+                last_step: Duration::from_millis(234_700),
             },
             "待ちの打ち切り［進んではいた］",
-            vec!["「長い待ち」", "300.0 秒", "1234 回", "2.5 秒"],
+            vec![
+                "「長い待ち」",
+                "300.0 秒",
+                "1234 回",
+                "2.5 秒",
+                "最後の 1 回の確かめに 234.7 秒",
+            ],
         ),
         (
             WaitFailure::TimedOut {
