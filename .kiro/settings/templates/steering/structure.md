@@ -1,7 +1,3 @@
----
-inclusion: always
----
-
 # Project Structure
 
 ## Organization Philosophy
