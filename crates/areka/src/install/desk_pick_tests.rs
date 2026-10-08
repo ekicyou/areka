@@ -21,6 +21,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::*;
+use crate::emo2_boot::spine::{Progress, wait_until};
 use crate::install::judge::{ScriptRequest, script_request};
 use crate::install::{InstallOrigin, register};
 use crate::menu::{Frame, MenuContext, MenuWiring, install_frame, wire_menu};
@@ -54,14 +55,19 @@ fn item_enabled(world: &World) -> Option<bool> {
 }
 
 /// 選ぶ画面のスレッドの終わりを上限つきで待つ。
+/// 見張りのスレッドは生まず、body の終わり（`is_finished`）を目印に待ちの芯で待ってから同じスレッドで
+/// `join` する（負荷の下で見張りのスレッドが始まれず文言の無い赤になった・areka-P0-ghost-session-test-load-flake）。
 fn join_bounded(handle: JoinHandle<()>) {
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
-        let _ = tx.send(handle.join().is_ok());
-    });
-    assert_eq!(
-        rx.recv_timeout(BOUND),
-        Ok(true),
+    let finished = || u64::from(handle.is_finished());
+    if let Err(failure) = wait_until(
+        "選ぶ画面のスレッドの終わり",
+        Progress::Count(&finished),
+        || handle.is_finished(),
+    ) {
+        panic!("{failure}");
+    }
+    assert!(
+        handle.join().is_ok(),
         "選ぶ画面のスレッドが終わらないか panic した"
     );
 }

@@ -358,6 +358,9 @@ fn abandoned_while_encoding_drops_the_pair_without_ui_errors() {
     let (req, pending) = ToolRequest::new(ToolCall::DumpSurface(current_look()));
     let (release_tx, release_rx) = mpsc::channel::<()>();
     let (ran_tx, ran_rx) = mpsc::channel::<()>();
+    // 仕事のスレッドが走り始めた数（待ちの目印・スレッドが始まれなければ 0 のまま［止まった］）。
+    let entered = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let entered_in_job = std::sync::Arc::clone(&entered);
     let mut parts = Some((release_rx, ran_tx));
     let mut calls = 0;
     start(&mut rig.world, TOOL, &ghost, req.reply, move |_| {
@@ -366,9 +369,11 @@ fn abandoned_while_encoding_drops_the_pair_without_ui_errors() {
             return None;
         }
         let (release, ran) = parts.take()?;
+        let entered = std::sync::Arc::clone(&entered_in_job);
         Some(Step::Encode(
             0,
             Box::new(move |_| {
+                entered.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 // 放されるまで（または止め札が落ちるまで）止まる。
                 let _ = release.recv();
                 let _ = ran.send(());
@@ -384,7 +389,14 @@ fn abandoned_while_encoding_drops_the_pair_without_ui_errors() {
         rig.world.run_schedule(Input);
         let held_after_leave = held(&rig);
         let _ = release_tx.send(());
-        let ran = ran_rx.recv_timeout(Duration::from_secs(20)).is_ok();
+        let started = || entered.load(std::sync::atomic::Ordering::SeqCst);
+        let ran = crate::emo2_boot::spine::wait_recv(
+            "放した符号化の仕事が走り終える",
+            crate::emo2_boot::spine::Progress::Count(&started),
+            &ran_rx,
+        )
+        .map_err(|failure| eprintln!("{failure}"))
+        .is_ok();
         for _ in 0..3 {
             rig.world.run_schedule(Input);
         }

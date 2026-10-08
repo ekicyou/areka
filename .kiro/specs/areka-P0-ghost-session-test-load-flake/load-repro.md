@@ -1103,6 +1103,35 @@ F が偽だった赤 8 件のうち 6 件は、後の待ち（E・G・D・I）�
 
 全体テスト（静かな机・`tools/test-all.ps1`・同じコミット）: 2 回回した。1 回目は 462 秒・終了コード 0 だが、x64 のワークスペースのテストの段に他の crate のテストのビルド（1 分 54 秒）が入っていた（計測の温めは `--bin areka` だけだった）ので所要時間には使わない（`test-all.log`）。先に `cargo test --workspace --no-run -j 4` を済ませた 2 回目は **295 秒**・終了コード 0・すべての段が緑（`fmt --check` 8 秒・x64 のワークスペースのテスト 240 秒・i686 のテスト（host-32）41 秒・`encoding check` 5 秒など・`test-all-2.log`・`test-all-2-result.txt`）。1,000 行の番人・一時パスの見張りを含めて緑で、例外表に行は足していない。直す前の 290 秒に対して 1.02 倍で、線 348 秒の内。
 
+### 4.5 今のコードの負荷の回（閉じる前のレビューの差し戻しの後）
+
+閉じる前のレビューが、4.4 の負荷の下 5 回は RigPermit つきの `c597a8f1` のもので、今のコードを負荷の下で回していないと差し戻した。同じレビューで、記録つきの例外だった `join_bounded`（「spine seriko join」）が負荷の下で `［進みは不明］` を出しうる（案 A の 6.1 で許さない）ことも差し戻された。そこで 5.4 の 3 度目の開き直しで `join_bounded` を芯の上へ移し（`9d69acba`）、調停役の「どうぞ」を受けて同じ引数で 5 回回した。
+
+記録 `target\load-flake\after-20261009-075612\`（`progress.txt` は `target\load-flake\final-load-20261009-075611\`・`commit 9d69acba dirty=0`）。2026-10-09 07:56〜08:44。引数は 4.1 と同じ（`rounds: 5`・`burners: 44`・`round_timeout_min: 30`・`nocapture: yes`・`filter: (none: whole binary)`・`logical_cpus: 22`）。負荷の前の CPU は平均 4.2%・最大 10.1%、最中は平均 89.7%・最大 91.4%。止めた後の負荷の子の残りは 0。
+
+| 回 | 所要時間（秒） | 結果 | `［止まった］` | `［進んではいた］` | `［進みは不明］` | 後片付けの行（うち os error 5） |
+|---|---|---|---|---|---|---|
+| 1 | 458.7 | 2,894 通過・0 失敗 | 0 | 0 | 0 | 0 |
+| 2 | 581.0 | 2,890 通過・4 失敗 | 3 | 0 | 0 | 0 |
+| 3 | 448.0 | 2,894 通過・0 失敗 | 0 | 0 | 0 | 0 |
+| 4 | 484.9 | 2,888 通過・6 失敗 | 5 | 0 | 0 | 3（3） |
+| 5 | 894.7 | 2,872 通過・22 失敗 | 21 | 0 | 0 | 0 |
+
+`［相手が居ない］` は各回 2 行（檻 `a_vanished_worker_panics_with_the_partner_gone_text` の出力・緑）。
+
+読み分け（赤 32 件・どの赤も `thread '<名前>'` の行か、待ちの行の「何を」の呼び出しの場所で持ち主を突き合わせた）:
+
+- **許す赤 28 件**: どれも自分の `［止まった］` の行を持つ。切替・lap・バルーン・更新・中止・上書き（`desk_overwrite_tests.rs:236` の 6 件と `:103` の 1 件）・記憶・名前・MCP の GPU（`dump_surface_gpu`・`dump_balloon_gpu`）・`get_property`・`get_status`・`check_script`・install の worker。進みは 0〜8 回、待ち始めから 30.0〜61.9 秒。確かめの食い違いは、どれも待ちが届かなかった印（定常・差し替わった・迎え入れられた・終了の指示）だけで、呼び出しの列は期待と同じかその頭の部分。並びの入れ替えは 0 件。
+- **許さない赤 4 件**（どれも待ちの文言が無い）:
+  1. 2 回目 `mcp::dump_balloon::dump_balloon_gpu_tests::balloon_text_lies_on_the_background_at_the_text_area_origin` と 5 回目 `…::hidden_balloon_returns_the_same_pixels`: 降ろせた＝false だけが違う。GPU の足場の時計は実時間なので、負荷で台詞の後から降ろすまでが 30 秒（バルーンの時間切れの既定）を越え、本番どおり `OnBalloonTimeout` が SHIORI へ行った。偽の SHIORI（`ScriptedShioriBackend::get`）は台本に無い名前で panic し（2 回目 1694 行・5 回目 2072 行）、降ろしが `Err` を返した。本番の欠陥ではなく、偽の SHIORI の答えの欠け。
+  2. 4 回目 `mcp::dump_surface::dump_surface_tests::abandoned_while_encoding_drops_the_pair_without_ui_errors`: テストの中の自前の `recv_timeout(20 秒)` が切れた（仕事が走り終えた＝false）。芯を通らない待ち。
+  3. 5 回目 `install::desk::pick_tests::menu_order_is_the_script_order_with_only_the_origin_changed`: `desk_pick_tests.rs` の自前の `join_bounded`（見張りのスレッドを生んで `recv_timeout(10 秒)`）が切れた。5.4 の 3 度目の開き直しで直した spine の `join_bounded` と同じ形。
+- 後片付けの行（4 回目の 3 行）: `sample-ghost-kit: 残骸の退避に失敗した（次の走行で回収する）: …\target\nar-samples\work\30680-106 (… os error 5)`。走行の途中で、別のテストが検体を取るときの掃除（`devroot.rs` の `sweep()`）が、生存の札の無い木の名前替えを 3 回とも拒まれた。掃除の失敗は取得を失敗にしないので、この行で赤になったテストは無い。直前に降ろしの止まりで打ち切られた `install::names::tests::reboot_reseeds_the_values_into_the_new_ghost` の残ったスレッドがファイルを握っていた形と読める（確かめてはいない）。打ち切られたテストの後の掃除は「次の走行で回収する」の設計どおり。
+
+直し（5.4 の 4 度目の開き直し）: ⑴ 偽の SHIORI は台本に無い `OnBalloonTimeout` に 204 で答える（`homeurl`・`OnTranslate` と同じ扱い・台本があれば台本が先）。⑵ `abandoned_while_encoding…` の待ちを芯の `wait_recv` へ移し、仕事の閉包に入った数を目印にする。⑶ `desk_pick_tests.rs` と、同じ形の `fetch_url_tests.rs` の自前の `join_bounded` を、spine の `join_bounded` と同じく見張りのスレッドをやめて芯で待つ形にした。静かな机で `--bin areka` の全部が 2,896 本で緑。
+
+LOAD_RERUN_RESULT
+
 ## 5. 所要時間
 
 直す前はタスク 1.3、直した後はタスク 6.1 で書く（静かな机で `--bin areka` の全部を 3 回・全体テストを 1 回）。main の取り込みの後の最後の値（main の先端との交互の比べ）は、4.4 の「最後の所要時間（RigPermit を外した後）」に書く。

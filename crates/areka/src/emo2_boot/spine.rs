@@ -261,7 +261,12 @@ impl ShioriBackend for ScriptedShioriBackend {
             .get_mut(id)
             .and_then(VecDeque::pop_front)
             // 回数は定常到達・台詞の数で決まる＝台本に無ければ homeurl も OnTranslate も 204 で答える。
-            .or_else(|| (id == HOMEURL_RESOURCE || id == "OnTranslate").then_some(Ok(None)))
+            // OnBalloonTimeout も同じ: 台詞の後のバルーンの時間切れ（既定 30 秒）は実時間で決まり、負荷の下では
+            // 降ろす前に越えうる（areka-P0-ghost-session-test-load-flake の最後の負荷の回）。
+            .or_else(|| {
+                (id == HOMEURL_RESOURCE || id == "OnTranslate" || id == "OnBalloonTimeout")
+                    .then_some(Ok(None))
+            })
             .unwrap_or_else(|| {
                 panic!("ScriptedShioriBackend::get(\"{id}\"): no scripted response left")
             })
