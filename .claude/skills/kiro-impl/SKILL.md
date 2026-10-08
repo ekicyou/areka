@@ -41,6 +41,21 @@ Select skills for the current task even when steering/spec context is already av
 
 #### Preflight
 
+**Determine dispatch model policy** (added by areka-P0-draw-load-parity; revised 2026-09-12 by developer request — choose per task difficulty, not a fixed downgrade):
+- Read your own system prompt line "You are powered by the model named <NAME>" and record `OWN_MODEL` (Fable / Opus / Sonnet / Haiku; `unknown` if the line cannot be found).
+- If `OWN_MODEL` is Opus or lower → every dispatch inherits (omit the `model` argument). Do not spend effort tiering.
+- If `OWN_MODEL` is Fable or `unknown` → pick the model **per dispatch** from the task's difficulty. The developer's intent: judgment stays at Fable grade, mechanical work goes to cheaper models, and nothing is downgraded merely because the caller is Fable.
+
+  | Tier | Choose when | `model` |
+  |---|---|---|
+  | judgment | the task is an explicit integration task or crosses `_Boundary:_` scopes; it changes a contract other tasks depend on (funnel, cache key, public API); the design leaves a decision to the implementer; or it is a **re-dispatch after a REJECTED review or a debug round** (always escalate one tier from the previous attempt) | `"fable"` |
+  | standard (default) | ordinary implementation inside one boundary whose design section fully specifies the change | `"opus"` |
+  | mechanical | signature/rename/import follow-ups, manifest or registration edits, doc rewrites whose wording the design already gives, test re-derivation whose expected values are stated in the design | `"sonnet"` |
+
+- Reviewer (Step 3c): never lower than the implementer of the same task; judgment-tier tasks get a `"fable"` reviewer. Debugger (Step 3g): same tier as the failing implementer, escalated once on the second debug round of the same task.
+- Record every decision in the run output, one line per dispatch: `dispatch model: <task id> <role> → <model> (<tier>: <one-phrase reason>)`.
+- Pass the policy on to `/kiro-validate-impl` (Step 4) as `DISPATCH_POLICY=tiered OWN_MODEL=<name>`.
+
 **Validate approvals**:
 - Verify tasks are approved in spec.json (stop if not, see Safety & Fallback)
 
@@ -48,6 +63,7 @@ Select skills for the current task even when steering/spec context is already av
 - Inspect repository-local sources of truth in this order: project scripts/manifests (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, app manifests), task runners (`Makefile`, `justfile`), CI/workflow files, existing e2e/integration configs, then `README*`
 - Derive a canonical validation set for this repo: `TEST_COMMANDS`, `BUILD_COMMANDS`, and `SMOKE_COMMANDS`
 - Prefer commands already used by repo automation over ad hoc shell pipelines
+- If the repo's full-suite script has a format stage (areka: `tools/test-all.ps1` runs `cargo fmt --all -- --check`), add that format check to the `TEST_COMMANDS` given to implementers and reviewers. Crate-level tests do not check formatting, so a misformatted line otherwise first turns red in the final validation (areka-P0-frame-phases-after-exit, 2026-09-28)
 - For `SMOKE_COMMANDS`, choose the lightest trustworthy runtime-liveness check for the app shape (for example: root URL load, Electron launch, CLI `--help`, service health endpoint, mobile simulator/e2e harness if one already exists)
 - Keep the full command set in the parent context, and pass only the task-relevant subset to implementer and reviewer subagents
 
@@ -97,7 +113,7 @@ For each task (one at a time):
   - **Previous learnings**: Include any `## Implementation Notes` entries from tasks.md that are relevant to this task's boundary or dependencies (e.g., "better-sqlite3 requires separate rebuild for Electron"). This prevents the same mistakes from recurring.
 - The implementer subagent will read the spec files and build its own Task Brief (acceptance criteria, completion definition, design constraints, verification method) before implementation
 - Preserve this task context, including selected skill guidance, on every implementer re-dispatch (context requests, review remediation, and debug retries); append the new context or feedback.
-- Dispatch via **Agent tool** as a fresh subagent
+- Dispatch via **Agent tool** as a fresh subagent; set `model` from the Preflight tier for this task and role (omit it when `OWN_MODEL` is Opus or lower)
 
 **b) Handle implementer status**:
 - Parse implementer status only from the exact `## Status Report` block and `- STATUS:` field.
@@ -117,7 +133,7 @@ For each task (one at a time):
   - The reviewer must apply the `kiro-review` protocol to this task-local review.
   - Preserve the existing task-specific context: task text, spec refs, `_Boundary:_` scope, validation commands, implementer report, and the actual `git diff` as the primary source of truth.
   - The reviewer subagent will run `git diff` itself to read the actual code changes and verify against the spec
-  - Dispatch via **Agent tool** as a fresh subagent
+  - Dispatch via **Agent tool** as a fresh subagent; set `model` from the Preflight tier for this task and role (omit it when `OWN_MODEL` is Opus or lower)
 - If review mode is `inline`:
   - Apply `kiro-review` in the parent context using the same task evidence and the actual `git diff`
 - If review mode is `off`:
@@ -150,7 +166,7 @@ For each task (one at a time):
 - Resolve `../kiro-debug/SKILL.md` relative to this skill's directory and pass its absolute path as `DEBUG_PROTOCOL_PATH`
 - Supply the task brief/boundary, exact spec references, failure output, reviewer findings, current changed files/diff, and relevant Implementation Notes/runtime constraints
 - Include attempted fixes and their observed results concisely, without copying the failed workers' conversation history
-- Dispatch via **Agent tool** as a fresh subagent; it reads the canonical `kiro-debug` procedure itself
+- Dispatch via **Agent tool** as a fresh subagent; it reads the canonical `kiro-debug` procedure itself. Set `model` from the Preflight tier for this task and role (omit it when `OWN_MODEL` is Opus or lower)
 
 **Handle debug report**:
 - Require a `## Debug Report` and parse its exact `- NEXT_ACTION:` field (`RETRY_TASK | BLOCK_TASK | STOP_FOR_HUMAN`). If the protocol or a valid report is missing, stop this feature and report the missing input; do not guess a next action or dispatch another implementer.
@@ -194,6 +210,7 @@ Before writing any code, read the relevant sections of requirements.md and desig
 
 **Autonomous mode**:
 - After all tasks complete, run `/kiro-validate-impl {feature}` as a GO/NO-GO gate
+- Pass the Preflight policy along: state `DISPATCH_POLICY=tiered OWN_MODEL=<name>` in the `/kiro-validate-impl` invocation so its own subagent dispatches follow the same tiering
 - If validation returns GO → before reporting feature success, apply `kiro-verify-completion` to the feature-level claim using the validation result and fresh supporting evidence
 - If validation returns NO-GO:
   - Fix only concrete findings from the validation report
@@ -215,7 +232,28 @@ For tasks that add or change behavior, enforce RED → GREEN with a feature flag
 
 **Skip this protocol for**: refactoring, configuration, documentation, or tasks with no behavioral change.
 
+## Coordination with kiro-watch (only when the coordinator is running)
+
+When a session titled **kiro-watch** (not archived) appears in the session list (`mcp__ccd_session_mgmt__list_sessions`), this session takes part in its desk coordination (developer, 2026-10-08). If there is no such session, skip this whole section. Send to its `local_...` id with SendMessage (or `mcp__ccd_session_mgmt__send_message`). Message texts stay in Japanese exactly as below.
+
+- **Join** once at the start of the run (Step 1), before dispatching the first task:
+  ```
+  【kiro-watch】参加します
+  repo: <repository name, e.g. areka>
+  ```
+- **Load tests**: before any step that needs the machine to itself (a quiet-CPU measurement, a deliberate CPU-load reproduction, a timing benchmark), request the load-test desk and do not start that step until "どうぞ" arrives:
+  ```
+  【kiro-watch】テストしたい
+  repo: <repository name>
+  内容: <what will run and roughly how long>
+  ```
+  Ordinary per-task test runs (crate tests, clippy, `tools/test-all.ps1`) are not load tests and need no request.
+  While waiting, continue with tasks that do not need the desk; if none remain, report "waiting for kiro-watch" and end the turn. When the measurement is done, send `【kiro-watch】済みました` at once — every other participant is stopped until then.
+- **Stop requests**: when kiro-watch asks this session to stop, finish the current task iteration through its commit (implementer → review → verify → mark `[x]` → commit). Never cut a running test or a subagent in the middle. Then send `【kiro-watch】停止しました`, report "stopped for kiro-watch" to the developer and end the turn. Continue from the next task only when `再開してよい` (or the cancel message) arrives. Do not start Step 4 (final validation) while stopped.
+- **Leaving without completing** (the run is abandoned or ends BLOCKED): send `【kiro-watch】抜けます`. Completion itself is coordinated by `/kiro-complete` (merge desk), which also ends the participation.
+
 ## Critical Constraints
+- **Out-of-scope findings go to the completion inventory, not to chips**: when implementation, review, debug or validation finds a problem outside the current spec (another crate's flaky test, an unrelated bug), do NOT call the harness `spawn_task` chip tool. Record it in `## Implementation Notes` of tasks.md; `/kiro-complete`'s opening inventory tickets it with `/kiro-discovery` (brief.md + roadmap row). Chips make the developer click and instruct each one and never reach the roadmap (developer, 2026-10-04).
 - **Strict Handoff Parsing**: Never infer implementer `STATUS` or reviewer `VERDICT` from surrounding prose; only the exact structured fields count
 - **No Destructive Reset**: Never use `git checkout .`, `git reset --hard`, or similar destructive rollback inside the implementation loop
 - **Selective Staging**: NEVER use `git add -A` or `git add .`; always stage explicit file paths

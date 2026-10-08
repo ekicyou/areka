@@ -82,6 +82,8 @@ The following validation dimensions are independent and can be dispatched as **s
 
 For simple features (few tasks, small scope), run checks in main context without subagent dispatch.
 
+**Dispatch model** (added by areka-P0-draw-load-parity; revised 2026-09-12 — per difficulty): determine `OWN_MODEL` from your own system prompt line "You are powered by the model named <NAME>" (or take it from the caller's `DISPATCH_POLICY=tiered OWN_MODEL=<name>`). If `OWN_MODEL` is Opus or lower → inherit (omit `model`). If Fable or unknown → this is the feature-level judgment gate, so dispatches that **judge** (cross-task contract verification, requirement coverage, the GO/NO-GO verdict) use `model: "fable"`; dispatches that only **collect evidence** (running commands, grepping, counting) use `model: "sonnet"`. Record one line per dispatch: `dispatch model: <role> → <model> (<reason>)`.
+
 If the implementation run explicitly skipped task-local review (for example `--review off`), tighten scrutiny on obvious task-level gaps that surface during integration validation and call out that reduced review coverage in the report.
 
 #### Mechanical Checks (run commands, use results)
