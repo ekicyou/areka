@@ -51,6 +51,7 @@ updated_at: 2026-10-02
 - `pointer/` - ポインター入力のバッファリングと配信
 - `drag/` - ドラッグ状態管理とディスパッチ
 - `clickthrough/` - 別プロセスへのクリック透過（`WS_EX_TRANSPARENT` 動的トグル＋αマスク）
+- `tooltip/` - マウスが止まったことの検出と標準のツールチップ（範囲の登録・出す番の状態機械・OS の境界〔`unsafe` は `os.rs` だけ〕・画面更新の末尾の判定。`completed/areka-P0-wintf-tooltip`）
 - `visual/` - Visual の描画内容・変換・クリップ・更新版の追跡
 - `dola/` - DolaRuntimeのECS Component化
 - `world/` - schedule labels、vsync、フレーム進行
