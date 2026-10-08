@@ -395,9 +395,10 @@ pub(super) struct GpuSlots {
     cap: usize,
 }
 
-/// テストのプロセスに 1 つの数え（同時に 8 つ）。2 つでは静かな机の `--bin areka` の全部が中央値 95.2 秒に
-/// 延び（直す前 64.1 秒）、4・8・16 の計時（`load-repro.md` の 5）で所要時間の線に収まるいちばん小さい数が 8。
-static GPU_SLOTS: GpuSlots = GpuSlots::new(8);
+/// テストのプロセスに 1 つの数え（同時に 4 つ）。2 つでは負荷の下の赤が 0 件でも静かな机の `--bin areka` の
+/// 全部が中央値 95.2 秒に延び（直す前 64.1 秒）、8 つでは 64.7 秒でも負荷の下に赤が 2 件残った。間の 4 つを、
+/// 所要時間の線（直す前の 1.20 倍）とともに選んだ（`load-repro.md` の 5）。
+static GPU_SLOTS: GpuSlots = GpuSlots::new(4);
 
 impl GpuSlots {
     pub(super) const fn new(cap: usize) -> Self {
