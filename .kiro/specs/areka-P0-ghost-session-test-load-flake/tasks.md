@@ -164,6 +164,15 @@
   - _Depends: 5.1_
   - _Boundary: mcp/dump_surface_tests.rs_
 
+- [x] 5.6 上書きのテストで、起動したゴーストの記憶の書き込みと上書きが競り合う赤を直す
+  - 負荷の下の比べ（`target\load-flake\ab-load-20261008-183836\` の `run-cur-3.log`）の赤 `install::desk::overwrite_tests::a_running_ghost_missing_from_the_catalog_is_installed_elsewhere_and_closed_once`（`desk_overwrite_tests.rs` の閉じの確かめ・完了の代わりに `OnInstallFailure`）。待ちの文言は無く、失敗の理由はテストが捕まえた記録に閉じ込められて出ていない
+  - 読み（確かめていない）: 起動の後に A のプロパティの役者が書く記憶（LastShell・LastBalloon は A のフォルダの下）が、負荷で遅れて、上書きの入れ替え（`areka-nar` の `commit_one` の 2 つの名前替え）とぶつかった。本番の上書きの順序の取り違えではなく、テストの足場の `running()` が定常だけを待って書き込みを待たない形
+  - 直し方（テストだけ）: 閉じの確かめが外れたときに、捕まえた記録（失敗の理由）を文言に出す。`running()` で定常の後に、起動したゴーストの記憶の書き込みを済ませてから上書きへ進む。確かめの内容と本数は変えない。本番のファイルには触らない
+  - 完了の姿: 確かめが変わらず緑で、外れたときは理由が文言に出る
+  - _Requirements: 2.6, 2.2, 4.4_
+  - _Depends: 5.1_
+  - _Boundary: install/desk_overwrite_tests.rs_
+
 - [ ] 6. 静かな机の全体テストと所要時間
 - [ ] 6.1 直した後の所要時間を測り、延びていれば調整して全体テストを緑で終える
   - 1.3 と同じ測り方（負荷なしで対象の実行ファイルの全部を 3 回・全体テストを 1 回）で直した後を測り、`load-repro.md` の「所要時間」に並べる
@@ -189,3 +198,4 @@
 - 5.5: 直しは `rig_answering(on_boot, on_changed)` を足して `rig_with` をそれに寄せ、問題のテストだけ A の `OnGhostChanged` に `\0A\e` を持たせた（`0be2e402`）。kanade の起動の段は起動のイベントが台本を返すと `OnBoot` を飛ばすので、切替の頼みが流れるのは最初の起動の 1 回だけになる。単体で 20 回・15 回とも緑
 - 5.2（実装・レビュー済み、完了は 4.3 の回し直しの後）: `WintfTaskPool::with_threads(n)` を足し、プールを汲み出さない切替の足場の 16 か所を 1 本にした（汲み出す `ghost_session_restart_tests.rs` の 2 か所と `ghost_session_switch_fallback_tests.rs` の 1 か所は `new()` のまま）。GPU の装置の許可 `GpuPermit`（同時に 2 つ・`spine_wait.rs`）を 6 か所の `GraphicsCore::new()` の直前で取る。世界を返す 4 つの関数は許可を組の先頭で返し、呼び手は名前で受ける（素の `_` だとその場で返る）。`SpineHarness` を欄ごとに分ける所は許可を先頭で束縛する（巻き戻りでも装置より後に返す）。2 つの装置を同時に持つのは `new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch` だけで、増やすと待ち合いで止まりうる。静かな机の所要時間（6.1）で延びていれば、最初に許可の数を上げる
 - 5.4 の開き直し（3 回目の再現・`load-repro.md` の 4.3）: 許可 4 の後の負荷の再現は 5 回中 1 回だけ赤 1 件で、`［止まった］` などの文言の無い `conformance_lap_walks_every_stage_to_its_completion`（段「サブメニューと戻り」）。読みは負荷で遅いだけ（選択の照会 1 件・台詞は始まり再生の終わり 650 ms を知らせ、関門が開いて余韻に入った所で段の駆動器 `run_stage_with` の自前の 30 秒が切れた）で、順序の取り違えではない。1.4 の記録（3.7 の場所 34）で赤だったのに移していなかった待ちなので 5.4 を開き直し、駆動器を芯の `wait_until_with` へ移した。目印は巡回の足場が渡す SHIORI の呼び出しの数（Status を除く）＋台詞の起動＋表示の数。芯の休みは何もしない `|_| {}` で、反復の末尾の 200 µs の眠りを残す（`wait_recv` と同じ形・余韻の 300 回の実時間を変えない）。打ち切りの文言は芯の見出しで始まる。`spine_conformance_lap_tests.rs` は 999 行で上限まで 1 行
+- 5.6: 読みは当たった。起動の直後に A のプロパティの役者が A のフォルダの下（`ghost/master/profile/areka/sylphya.toml`）へ LastShell・LastBalloon を書き、上書きの間その中にファイルが開いていると宛先のフォルダの名前替えが拒まれる（試しにファイルを開いたまま持つと、負荷の下の赤と同じ `OnInstallBegin`→`OnInstallFailure` の列が出た）。`running()` で定常の後に `PersistWiring` の publisher の `barrier()` を `run_bounded_watching`（目印なし・30 秒）で済ませる。役者は保存を同期で済ませてから `Barrier` に返事をする。外れたときは起動ごとの呼び出し・`OnInstallFailure` の Reference・UI スレッドの warn 以上を文言に出す。背景のスレッド `install` の記録（パスと OS のエラー）は、捕まえる仕組みが子のスレッドへ引き継がれない（`areka-actor` の `spawn_actor`）ので出せない＝範囲外の起票の候補（`/kiro-complete` の棚卸で）
