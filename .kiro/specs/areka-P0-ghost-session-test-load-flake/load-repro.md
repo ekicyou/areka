@@ -521,7 +521,7 @@ F が偽だった赤 8 件のうち 6 件は、後の待ち（E・G・D・I）�
 
 ## 4. 直した後の記録
 
-直した後は赤が残った（下の 4.1）。残った赤の直しはタスク 5.4 で行い、その後に同じ引数で回し直したものを 4.2 に書く。
+直した後は赤が残った（下の 4.1）。残った赤はタスク 5.4 で直し、同じ引数で回し直した 2 回目を 4.2 に書いた。2 回目にも赤が残った（テストのプロセスの中のスレッドの生まれと消えの取り合い・テストの台本の競り合い）ので、タスク 5.2・5.5 の後に同じ引数で回す 3 回目を 4.3 に書く。
 
 ### 4.1 直した後の 1 回目
 
@@ -631,9 +631,127 @@ F が偽だった赤 8 件のうち 6 件は、後の待ち（E・G・D・I）�
   - `emo2_boot::spine::hold_support::tests::call_count_skips_status_queries_and_counts_every_other_call`
 - 無視は 2 本のまま（5 回の `test result:` が `2 ignored`）。`git diff d6d77336 498446d7 -- crates/areka/src` に `#[ignore` を足し引きした行は 0。テストの削除や無視の印で赤を消してはいない。
 
-### 4.2 直した後の 2 回目（タスク 5.4 の後・未記入）
+### 4.2 直した後の 2 回目（タスク 5.4 の後）
 
-タスク 5.4 で `GpuRig::frames_until` の待ちを対象に加えた後に、4.1 と同じ引数（`-Label after -Rounds 5 -Burners 44 -RoundTimeoutMin 30 -NoCapture`）で回し、ここに書く。タスク 5.1 の完了の姿（直した後の記録で待ちの打ち切りの赤が 0 件）は、この 2 回目で確かめる。赤が残れば、4.1 と同じく文言の先頭で読み分けの表に当てて回す。
+記録 `target\load-flake\after-20261008-084021\`（`conditions.txt`・`build.log`・`round-1.log`〜`round-5.log`・`summary.txt`）。タスク 5.4 で `GpuRig::frames_until` の待ちを対象に加えた後に、4.1 と同じ引数 `-Label after -Rounds 5 -Burners 44 -RoundTimeoutMin 30 -NoCapture` で回した（`conditions.txt` の `rounds: 5`・`burners: 44`・`round_timeout_min: 30`・`nocapture: yes`・`filter: (none: whole binary)`・`test_threads: (not passed)`）。4.1 と同じく、静かな机の 3 回（`target\load-flake\quiet-after-20261008-083222\`）と全体テストの後に続けて回した（`target\load-flake\after-run-20261008-083203\progress.txt`）。
+
+#### 条件
+
+| 項目 | 2 回目（`conditions.txt`・`summary.txt`） | 1 回目（4.1） |
+|---|---|---|
+| コミット | `893fab43`（`dirty: no`）。タスク 5.4 までの直しが入ったコミット | `498446d7` |
+| 回したもの | `cargo test -p areka --bin areka -- --nocapture`（2,814 本・無視 2 本。下の「テストの本数」） | 2,814 本・無視 2 本 |
+| 時刻 | 2026-10-08 08:40:21〜09:13:44 | 2026-10-08 07:42:39〜08:06:32 |
+| 論理 CPU・負荷の子 | 22・44 本（止めた後の残り 0） | 22・44 本（残り 0） |
+| 負荷の前の CPU | 読めなかった。`cpu_before_load: n/a (分母の値が負のカウンターが検出されました。)`。`progress.txt` では、全体テストが終わった秒（08:40:21）にそのまま始まっている | 読めなかった（同じ文） |
+| 負荷の最中の CPU | 平均 91.6%・最大 97.7%（5 回の読み） | 平均 90.9%・最大 91.0% |
+
+負荷の前の CPU は 1 回目と同じく比べられない。負荷の最中の CPU は平均でほぼ同じ。
+
+#### 回ごとのまとめ
+
+| 回 | 所要時間（`wall_sec`） | うち cargo の準備（ログの 1 行目の `Finished … in`） | libtest の時間（`finished in`） | 結果 | 赤 | libtest の「60 秒を越えて走っている」の知らせ |
+|---|---|---|---|---|---|---|
+| 1 | 362.7 | 10.79 秒 | 327.16 秒 | 2,812 通過・0 失敗・2 無視 | 0 | 29 行 |
+| 2 | 389.8 | 1.88 秒 | 345.21 秒 | 2,810 通過・2 失敗・2 無視 | 2 | 38 行 |
+| 3 | 384.6 | 11.16 秒 | 323.28 秒 | 2,809 通過・3 失敗・2 無視 | 3 | 32 行 |
+| 4 | 348.3 | 2.37 秒 | 303.19 秒 | 2,810 通過・2 失敗・2 無視 | 2 | 29 行 |
+| 5 | 488.4 | 1.94 秒 | 406.32 秒 | 2,796 通過・16 失敗・2 無視 | 16 | 51 行 |
+| **計** | 中央値 384.6・最大 488.4 | | 中央値 327.16・最大 406.32 | 4 回が赤（1 回目は緑） | **23** | 179 行 |
+
+- 5 回とも上限（30 分）を越えず（`rounds_timed_out: 0`）、どの回も `test result:` の行まで出て終わった。
+- 「60 秒を越えて走っている」の知らせは、`round-N.log` の `has been running for over 60 seconds` の行の数（4.1 の 8・10・12・10・10 行も同じ数え方で数え直して一致を確かめた）。
+- 赤は 16 種類（3 回が 3 種類・2 回が 1 種類・1 回だけが 12 種類＝3×3＋2×1＋12×1＝23 件）。各回の末尾の `failures:` の一覧と `summary.txt` の `failed_tests_by_name` が一致する。
+  - 3 回: `emo2_boot::ghost_switch::balloon_tests::switching_to_a_ghost_with_numbered_companions_uses_the_first_and_records_the_companion_route`・`emo2_boot::ghost_switch::boot_event_tests::a_switch_with_a_boot_event_boots_the_target_with_that_event_instead_of_changed_or_boot`・`…::a_switch_without_a_boot_event_boots_the_target_with_on_ghost_changed_as_today`
+  - 2 回: `emo2_boot::frame::ghost_quit_switch_tests::stop_with_handoff_under_reservation_switches_without_exit`
+  - 1 回（どれも 5 回目）: `ghost_switch::balloon_tests::switching_to_a_ghost_whose_descript_names_a_balloon_uses_it_and_records_the_descript_route`・abort の 2 本（`ghost_switch_after_a_shell_swap_unloads_the_session`・`ghost_switch_while_waiting_wins_and_leaves_no_shell_switch_behind`）・`fallback_tests::target_fault_without_default_ghost_is_fatal`・`install::desk::record_tests::a_shell_install_only_records_names`・`install::worker::worker_tests::production_path_sends_no_legacy_complete_after_a_complete_ex_script`・`mcp::dump_balloon::dump_balloon_gpu_tests::` の 3 本（`balloon_at_dpi_144_keeps_native_size_and_text_position`・`balloon_job_runs_on_the_encoding_body_without_error`・`scope_two_is_no_such_scope_and_calls_do_not_disturb_the_ghost`）・`mcp::dump_surface::dump_surface_gpu_tests::` の 3 本（`before_attachment_answers_after_the_frames_run`・`calls_do_not_disturb_the_ghost`・`hidden_character_returns_the_picture_before_hiding`）
+- 16 種類のうち 8 種類（boot_event の 2 本・`stop_with_handoff_under_reservation_switches_without_exit`・descript のバルーンの 1 本・abort の 2 本・`target_fault_without_default_ghost_is_fatal`・`balloon_at_dpi_144_keeps_native_size_and_text_position`）は直す前の記録（3.7）でも赤だった。1 回目（4.1）ではどれも赤でない。前からある揺れが、1 回目では出なかったと読む。
+- 5.4 で直した `mcp::dump_balloon::dump_balloon_gpu_tests::hidden_balloon_returns_the_same_pixels` は、5 回とも `... ok`。
+- 所要時間は 1 回目より長い（`wall_sec` の中央値 285.3 → 384.6 秒・最大 294.2 → 488.4 秒、libtest の時間の中央値 251.74 → 327.16 秒・最大 270.15 → 406.32 秒、「60 秒を越えて走っている」の知らせ 50 → 179 行）。
+
+#### 待ちの打ち切りの行
+
+`summary.txt` の `wait_cut_lines` は 2・4・6・4・18 行（計 34 行）。`round-N.log` の全体を、行のどこかにある文言の先頭で数えると次のとおりで、`summary.txt` と同じもの。
+
+| 文言の先頭 | 1 回目 | 2 回目 | 3 回目 | 4 回目 | 5 回目 | 計 |
+|---|---|---|---|---|---|---|
+| `［止まった］` | 0 | 2 | 4 | 2 | 16 | 24 |
+| `［進んではいた］` | 0 | 0 | 0 | 0 | 0 | 0 |
+| `［進みは不明］` | 0 | 0 | 0 | 0 | 0 | 0 |
+| `［相手が居ない］` | 2 | 2 | 2 | 2 | 2 | 10 |
+
+- `［相手が居ない］` の各回 2 行は、4.1 と同じ檻のテスト（`a_vanished_worker_panics_with_the_partner_gone_text`）がわざと起こすもの。
+- 4.1 の `［進みは不明］`（`GpuRig::frames_until`）は 0 行になった（5.4 で芯へ移した）。
+- `［止まった］` の 24 行を待ちの種類で分けると次のとおり（`what` は文言の「」の中。足場の待ちは呼び出しの場所が入る）。
+
+| 待ち | `what` と回 | 行 | 進み 0 回 | 進み 1 回以上 |
+|---|---|---|---|---|
+| 起こした直後の定常の待ち（`SwitchRig::wait_steady`・`frame_ghost_quit_switch_tests.rs` の自前の待ち「A の定常到達」） | `ghost_switch_balloon_tests.rs:39`（2・4・5 回目×2）・`ghost_switch_boot_event_tests.rs:62`（2・3・4 回目）・`install\worker_tests.rs:466`（5 回目）・「A の定常到達」（3 回目） | 9 | 9 | 0 |
+| 切替の途中の段を回す待ち（`pump_until`・`pump_talking_until`・`LapRig::frames_until`） | `frame_ghost_quit_switch_tests.rs:140`（3・5 回目）・`ghost_switch_boot_event_tests.rs:81`（3 回目・5 回目×2）・`ghost_session_switch_fallback_tests.rs:207`（5 回目）・`shell_balloon_switch_session_abort_tests.rs:417`・`:485`（5 回目） | 8 | 4 | 4（進み 2〜4 回・待ち始めから 58.7〜71.1 秒） |
+| 降ろしの待ち（`SwitchRig::shutdown`「置き場のゴーストを降ろす」） | 5 回目×5 | 5 | 1 | 4（進み 2〜7 回・待ち始めから 30.0〜41.0 秒） |
+| GPU の足場の答えの待ち（`GpuRig` の `answer_of`） | `mcp\dump_balloon_gpu_tests.rs:393`・`:243`（5 回目） | 2 | 2 | 0 |
+| 計 | | 24 | 16 | 8 |
+
+- 進み 0 回の 16 行は、どれも「待ち始めから 30.0 秒」（進みの無い時間の上限ちょうど）。待つ側は時間どおりに起きて打ち切っている。
+- 赤との結び付け: 23 件の赤は、どれも自分の待ちの `［止まった］` の行を持つ（3 回目の `stop_with_handoff_under_reservation_switches_without_exit` は「A の定常到達」と `:140` の 2 行、ほかは 1 行ずつ）。18 件は `bool` を返す待ちが出した行で、その赤の `panicked at` の行より前にある。5 回目の降ろしの 5 件は `spine_wait.rs:311:9`（`run_bounded_watching` の panic）で、行は panic の文言そのもの（`panicked at` の次の行）。そのテストは `dump_balloon_gpu_tests` の `balloon_job_runs_on_the_encoding_body_without_error`、`dump_surface_gpu_tests` の 3 本、`install::desk::record_tests::a_shell_install_only_records_names`。
+- 時刻の固まり: 2〜4 回目の `［止まった］` の行はどれもログの 604〜667 行、5 回目は 609〜658 行に 5 行・1609〜1728 行に 10 行・2265 行に 1 行で、切替・GPU・インストールの別々のテストが同じ時間帯にまとめて止まっている。
+- 待ちの文言の無い赤・`［進んではいた］` の赤・`［進みは不明］` の赤は 0 件。
+
+#### 赤の読み
+
+**負荷の下の 23 件（`［止まった］`）: テストのプロセスの中のスレッドの生まれと消えの取り合い。行き先はタスク 5.2（改めた要件 2.7）。**
+
+- 進み 0 回の意味: 足場がゴーストを起こす `boot_ghost` が戻ってから、kanade が定常の知らせ（`KanadeNotice::Steady`）を送るまでの起動の鎖（`crates/areka-kanade/src/schedule/boot.rs`: `OnInitialize` の通知 → `username` の取得 → `OnBoot` → `basewareversion` → 定常）は、どの段も偽の SHIORI（`ScriptedShioriBackend`）の呼び出しで、足場の目印に数えられる。進み 0 回で 30 秒は、新しく起こした kanade と SHIORI のスレッドが Rust のコードを 1 行も走らせられなかったことを意味する。
+- スレッドのスタック（調べのために別に回した記録。コードは変えていない）: 同じコミット・同じ負荷（`-Rounds 3`）の再現 `target\load-flake\dbg-stacks-20261008-092736\` の最中に、テストのプロセスの全部のスレッドのスタックを 20 秒前後ごとに取った（`target\dbg-stacks\run1\scan.log` と、その中の 3 回を書き出した `dump-1.txt`〜`dump-3.txt`）。
+
+| 書き出し | 時刻 | スレッド | 始まり（`LdrInitializeThunk`）の中で `NtWaitForSingleObject` に止まっている | 終わり（`LdrShutdownThread`）を含む | 描画装置のドライバ（`igd10umt64xe.DLL`）を含む | `TaskPool (n)` |
+|---|---|---|---|---|---|---|
+| `dump-1.txt` | 09:28:55 | 223 | 6 | 9 | 52 | 110 |
+| `dump-2.txt` | 09:30:01 | 269 | 18 | 8 | 132 | 66 |
+| `dump-3.txt` | 09:37:37 | 360 | 11 | 15 | 210 | 88 |
+
+  - Windows では、スレッドの始まりと終わりがプロセスに 1 つのローダーの錠を取る。始まりで止まっているスレッドは、その錠を待っている。同じスレッドが続けて取った 2 回の読みでも始まりで止まったままだった（`dump-1.txt` の頭の `persist=[34484]` は 09:28:34 と 09:28:55 の読み、`dump-2.txt` の `persist=[12624]` は 09:29:31 と 09:30:01 の読みで同じスレッド）。`scan.log` の読みでは、プロセスのスレッドは最大 552 本。
+  - 生まれと消えの多い出どころ: GPU のテストの D3D11 の装置ごとの描画装置のドライバのスレッド（`wintf` の `GraphicsCore` は、テストの debug ビルドでは装置を確かめの層つきで作る）・`WintfTaskPool::new()`（`crates/wintf/src/ecs/widget/bitmap_source/task_pool.rs`）が論理 CPU の数（22 本）だけ作るスレッド（閉包を 1 つも走らせない足場でも作る）・起こしたゴーストごとのアクターのスレッド。
+- 待つ側の飢えではない: 進み 0 回の 16 行はどれも待ち始めから 30.0 秒ちょうどで、待つ側は時間どおりに起きている。止まった赤は、関係の無いテストどうし（切替・GPU・インストール）で同じ時間帯に固まって出る（上の「時刻の固まり」）。プロセス全体の錠の列と合う。
+- 切替の途中・降ろしの待ち（進み 0〜7 回）も同じ読み: 降ろすときのスレッドの終わりと、切替で起こし直すときのスレッドの始まりが、同じ錠を待つ。
+- 対照: 同じ負荷で `-Filter ghost_switch` だけを回した `target\load-flake\dbg-switchonly-20261008-094253\`（50 本・5 回・`-RoundTimeoutMin 10`）は、5 回とも緑で `wait_cut_lines` は 0。libtest の時間は 186.54・158.04・110.84・247.73・107.00 秒。切替のテストだけなら、負荷の下でも遅いだけで止まらない。
+- 注意: スタックを取った再現の 2 回目は 47.4 秒で `0xc0000005`（`exit_code: -1073741819`）で終わった。既知の `areka-test-threads-av` か、スタックを取る道具の揺さぶりかは分けられない。1・3 回目の赤（`ghost_session::restart_tests::boots_twice_in_one_process_without_double_registration` の「1 周目を降ろす」20 秒・`emo2_boot::spine::text_scale_tests::spine_dpi_change_while_balloon_hidden_lands_on_next_show` の「spine seriko join」10 秒、どちらも `［進みは不明］`）も含めて、この記録は調べのためだけに使い、直した後の数には入れない。
+- 1 回目（4.1）で出なかった理由の見立て（確かめていない）: 5.4 で GPU のテストの待ちが長くなり、GPU のテストが切替のテストと重なる時間が増えた。
+- 本番の順序の取り違えは見当たらない（0 回の止まりは相手が 1 度も動けなかったもので、相手の処理の順序を見る材料が無い）。タスク 5.3 はこの結論で閉じる。
+- 要件 2.7（改めた文）の条件に当たる: 待ち方の直しの後に、6.1 の負荷の条件で待ちの打ち切りの赤が残り、文言は `［止まった］` で、相手のスレッドが始まれなかった・終われなかった根拠（上のスタック）がある。行き先はタスク 5.2（作業のプールのスレッドの数と、GPU の装置の同時の数を絞る。2026-10-08 に開発者が選んだ案 A）。`［進んではいた］` の赤は 0 件なので、足場の同時の数の許可（RigPermit）は入れない。
+
+**静かな机の 1 件（文言なし）: テストの台本の競り合い。行き先はタスク 5.5。**
+
+- 同じコミットの静かな机の 3 回（`target\load-flake\quiet-after-20261008-083222\`）の 3 回目に、赤が 1 件あった（1・2 回目は緑）。`mcp::dump_surface::dump_surface_tests::switch_to_the_same_ghost_keeps_waiting_for_attachment` が `dump_surface_tests.rs:579:5` で、`（A の定常, 起こし直した A の定常まで届いた, A の起動の回数, …）` の 3 つ目が `left` 3・`right` 2（`round-3.log` の 2788 行）。待ちの打ち切りの行は無い（各回の 2 行は檻の `［相手が居ない］`）。
+- 原因: どの起動でも台本 `\0A\![change,ghost,A]\e` を使う。起こし直した A は `OnGhostChanged` に 204 を返すので `OnBoot` へ進み、同じ切替の頼みをもう一度流す。その台詞は定常より先に始まり、定常で切替の予約（`SwitchInFlight`）が外れたのと同じ段の回りで頼みが汲み出されると受け付けられ、3 度目の起動になる。待ちの届いた条件（`calls >= 2` かつ予約なし）が後戻りしない観測になっていない（要件 2.6）。テストの側の競り合いで、本番の順序の取り違えではない。
+- 直し方（タスク 5.5・テストだけ）: A に `\0A\e` を返す `OnGhostChanged` を持たせ、起こし直した A が何も頼まないようにする。確かめは変えない。
+- この静かな机の 3 回と全体テスト（緑・286 秒・`after-run-20261008-083203\progress.txt` の `test-all exit=0 sec=286`）の所要時間の比べは、タスク 6.1 が 5 に書く。
+
+#### 後片付けの失敗の行（os error 5）
+
+数え方は 4.1 と同じ。`summary.txt` の `cleanup_lines`・`（次の走行で回収する）` の数・`アクセスが拒否されました` の数は、どの回も一致した。
+
+| 記録 | 回 | 行 | うち os error 5 | 行の場所・種類・指す木 |
+|---|---|---|---|---|
+| 負荷の下（`after-20261008-084021`） | 1・3・5 | 0 | 0 | — |
+| 負荷の下 | 2 | 1 | 1 | 121 行・残骸の退避・`work\9028-1` |
+| 負荷の下 | 4 | 1 | 1 | 122 行・退避した残骸の削除・`work\gc-26480-1` |
+| 静かな机（`quiet-after-20261008-083222`） | 1 | 1 | 1 | 125 行・退避した残骸の削除・`work\gc-9996-0` |
+| 静かな机 | 2・3 | 0 | 0 | — |
+| **計** | | 負荷の下 2・静かな机 1 | 負荷の下 2・静かな机 1 | |
+
+- 3 行とも回の始まり（ログの 121〜125 行。それより前の `... ok` の行は 116・117・120 行）に出ている。4.1 の 3 行と同じ位置。
+- 番号 9028・26480・9996 は、それぞれのログの他の所に出ないので、どのプロセスの木かは記録からは決められない。4.1 と同じく、直した後の決まり（6 の「直したこと」・檻 11・12）では、その回のプロセスの木と `gc-` の木は消し終えるまで札が握られるので、前の回の残りへの掃除の重なりか外の手（見分けの表の 3）と読む。直す対象にはしない（要件 5.3）。
+- 見分けの表の 1・2（同じプロセスの中の妨げ合い）に当たる行は 0 行（直す前は静かな机 632 行・負荷の下 349 行）。
+- 赤との関わり: ログの中の `アクセスが拒否されました` は、上の後片付けの行の分だけ。23 件の赤の文言にファイルの拒否は出ない。
+
+#### テストの本数（要件 2.4）
+
+- `cargo test -p areka --bin areka -- --list`（`target\load-flake\after-run-20261008-083203\list.txt`）は `: test` の行が 2,814 行（`progress.txt` の `areka bin test count=2814`）。名前の一覧は 4.1 の `list.txt` と同じ（差 0）。
+- 5 回の `test result:` も、通過＋失敗＋無視（2）＝2,814 本。
+- `git diff 498446d7 893fab43 -- crates/areka/src` に `#[ignore` を足し引きした行は 0。テストの削除や無視の印で赤を消してはいない。
+
+タスク 5.1 の完了の姿（待ちの打ち切りの赤 0 件）は、この 2 回目では満たされない。タスク 5.2（スレッドの絞り）と 5.5（台本の競り合い）の後に、同じ引数で 3 回目を回して 4.3 に書く。
 
 ## 5. 所要時間
 
