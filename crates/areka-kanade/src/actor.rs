@@ -43,6 +43,7 @@ use crate::schedule::resources::ResourceSink;
 use crate::schedule::translate::TranslateResult;
 use crate::schedule::{Action, Input, Phase, State, TermCause, step};
 use crate::shiori::real::ABSENT_REFERENCE;
+use crate::status::ExecutionStatus;
 use crate::talk::TalkCommand;
 use crate::translate::TranslateSeams;
 
@@ -144,6 +145,11 @@ pub fn spawn_kanade_translating(
                 // 乗らない・運行状態は読むだけ）。
                 KanadeMsg::ResourceQuery { ids, reply } => {
                     crate::actor_resources::answer(&state, &shiori, ids, reply);
+                    return Ok(ControlFlow::Continue(()));
+                }
+                // 実行の状態の問い合わせも step を経ずその場で答える（運行は 1 歩も進めない）。
+                KanadeMsg::StatusQuery { reply } => {
+                    answer_status(&state, reply);
                     return Ok(ControlFlow::Continue(()));
                 }
                 KanadeMsg::Boot => Input::Boot,
@@ -330,6 +336,23 @@ fn sync_online(online: &OnlineCounter, state: &mut State) {
     if state.external.online != online {
         tracing::debug!(target: "kanade", event = "online_changed", online, "通信中の写しを更新");
         state.external.online = online;
+    }
+}
+
+/// 今の実行の状態に答える（読むだけ・`KanadeMsg::StatusQuery`）。
+///
+/// SHIORI への要求に載せる `Status` と同じ素（`State::snapshot`）・同じ導き方（`ExecutionStatus::derive`）で
+/// 作り、返信端へ 1 回送る。受け手がもう居ない（上限で待つのをやめた）のは異常ではないので `debug!` だけ。
+fn answer_status(state: &State, reply: ReplySender<ExecutionStatus>) {
+    if reply
+        .send(ExecutionStatus::derive(&state.snapshot()))
+        .is_err()
+    {
+        tracing::debug!(
+            target: "kanade",
+            event = "status_query_reply_dropped",
+            "状態の問い合わせの受け手は既に待ちを諦めている——答えを捨てる"
+        );
     }
 }
 

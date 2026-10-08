@@ -58,6 +58,12 @@ pub enum DisplayCommand {
         kind: RebaseKind,
         shows: Vec<RebasedShow>,
     },
+    /// 出番の世代を知った合図（spec: areka-P0-animated-image-playback 要件 2.3・6.1・design
+    /// 「出し直しの前に出た指令を見分ける」）。
+    ///
+    /// seriko が `scope` のバルーンの新しい出番（`generation`）の知らせを受けた点に 1 件並ぶ。同じ
+    /// 流れの FIFO ゆえ、前の指令はその出番を知る前に、後の指令は知った後に決めたコマである。
+    StageAck { scope: ActorKey, generation: u64 },
 }
 
 /// [`DisplayCommand::Rebased`] の種別（どちらの定義を替えたか）。

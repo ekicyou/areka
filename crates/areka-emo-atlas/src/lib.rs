@@ -34,20 +34,22 @@ pub mod trim;
 /// `bake` の成果物（索引表＋失敗集合・channel 非依存・R6.5）。
 ///
 /// `table` は成功・空エントリの密 `AtlasTable`（頁バッファ内包）、`errors` は
-/// デコード/正規化で脱落したエントリの診断可能な集合。値・共有参照として直接返す
+/// デコードで脱落したエントリの診断可能な集合。値・共有参照として直接返す
 /// （通信機構を介さない・R6.5）。
 pub struct BakeResult {
     /// 生存エントリ（Placed / Empty）の密索引表＋頁バッファ。
     pub table: AtlasTable,
     /// 脱落エントリの診断可能なエラー集合（R2.2）。空でも成功扱い。
     pub errors: Vec<crate::error::BakeError>,
+    /// 焼いた絵のうち、同じ名前の `.pna` が添えてあったものの数（`.pna` は使っていない）。
+    pub ignored_pna: usize,
 }
 
 /// 素材基盤層の公開入口（emo 三段直列 1/3・契約正本）。
 ///
 /// マニフェスト導出 → デコード → 正規化 → トリム → packing → 焼付の各段を単一の
 /// 入口関数として結線し、複数の入力集合（shell 用・balloon 用など）をまとめて処理する。
-/// デコード/正規化に失敗したエントリは索引表に載せず、失敗内容を [`BakeResult::errors`]
+/// デコードに失敗したエントリは索引表に載せず、失敗内容を [`BakeResult::errors`]
 /// へ集約しつつ他エントリの処理を継続する（R2.2）。索引表と頁バッファは通信機構を
 /// 介さず値・共有参照として直接返す（R6.5）。
 ///
@@ -78,10 +80,12 @@ pub fn bake_with_limits(
     let mut errors: Vec<crate::error::BakeError> = Vec::new();
     // この呼び出しで全コマを載せた動く絵の画素の合計（上限 ㋒・呼び出しごとに 0 から）。
     let mut used_pixels = 0u64;
+    // 同じ名前の `.pna` が添えてあった絵の数（`.pna` は使わない）。
+    let mut ignored_pna = 0usize;
     // 2 枚目以降のコマ（親の番号の昇順）。全部の鍵を回った後に番号を振る。
     let mut pending_frames: Vec<animated::PendingFrames> = Vec::new();
 
-    // 生存エントリ（デコード・正規化を通過）を manifest 順で密に積む。
+    // 生存エントリ（デコードを通過）を manifest 順で密に積む。
     //   survivor_keys[final] ↔ 最終 ElementId(final)
     //   original は全生存で保持（Empty も原寸記録・R4.2/4.5）
     //   Placed のみ placed_items へ（packing/焼付対象）。
@@ -115,28 +119,20 @@ pub fn bake_with_limits(
                 }
             };
 
-        let has_pna = decoder.probe_pna(&path);
+        // `.pna` は使わず、添えてあった絵を数えるだけ（spec: areka-P0-self-alpha-declaration 要件 5.7）。
+        if decoder.probe_pna(&path) {
+            ignored_pna += 1;
+        }
 
-        // 抜き色の腕が選ばれたときの抜いた色（正規化の前＝画像を move する前に聞く）。
-        // spec: areka-P0-shell-implicit-surface 要件 6.3。
-        let key_color = Normalizer::key_color(&decoded, set.alpha_params, has_pna);
-
-        // 正規化（emo2 経路では成功・シーム到達は診断可能に集約・継続・3.5）。
-        let normalized = match Normalizer.normalize(decoded, set.alpha_params, has_pna) {
-            Ok(n) => n,
-            Err(source) => {
-                errors.push(crate::error::BakeError::Normalize {
-                    key: key.clone(),
-                    source,
-                });
-                continue;
-            }
-        };
-        // 表に載ると決まった動く絵だけを合計に足す（正規化で落ちた絵は数えない・要件 6.8）。
+        // 画素の扱いは絵ごとに 1 枚目で 1 回だけ決め、動く絵なら残りのコマにも同じ扱いを当てる
+        // （同 要件 9.4）。正規化は失敗しないので、読めた動く絵は必ず合計に足す
+        // （spec: areka-P0-animated-image-decode 要件 6.8）。
+        let rule = Normalizer::plan(&decoded, set.alpha_params);
+        let normalized = normalize::apply_to(decoded, rule);
         used_pixels += frames_pixels;
 
-        // 抜き色で扱った絵は、抜いた色を記録する（要件 6.3）。
-        if let Some([b, g, r, a]) = key_color {
+        // 抜き色で扱った絵は、抜いた色を記録する（spec: areka-P0-shell-implicit-surface 要件 6.3）。
+        if let Some([b, g, r, a]) = rule.key {
             tracing::debug!(
                 target: "areka_emo_atlas",
                 set = key.set.0,
@@ -153,7 +149,7 @@ pub fn bake_with_limits(
         let trim = Trimmer.trim(&normalized);
         let final_id = ElementId(survivor_keys.len() as u32);
 
-        // 動く絵の残りのコマを 0 番と同じ透過（0 番の左上の色）に通して切り詰める（要件 3.1〜3.3）。
+        // 動く絵の残りのコマに 0 番と同じ扱いを当てて切り詰める（要件 3.1〜3.3）。
         let frames = animation.map(|(first_delay_ms, rest, loop_count)| {
             animated::PendingFrames::new(
                 final_id,
@@ -161,7 +157,7 @@ pub fn bake_with_limits(
                 first_delay_ms,
                 rest,
                 loop_count,
-                key_color,
+                rule,
             )
         });
 
@@ -231,7 +227,11 @@ pub fn bake_with_limits(
     let table = AtlasTable::with_frames(survivor_keys, entries, pages_vec, animations);
 
     // 8. 値で直接返す（channel 非依存・R6.5）。
-    BakeResult { table, errors }
+    BakeResult {
+        table,
+        errors,
+        ignored_pna,
+    }
 }
 
 // 成果物契約の正本型（D3・R6）。下流 emo-compose はこれらを import する。
@@ -259,7 +259,7 @@ pub use manifest::{Manifest, ManifestDeriver, SurfaceSet};
 pub use normalize::{AlphaParams, UseSelfAlpha};
 
 // 正規化層（use_self_alpha 解釈・premultiplied BGRA 統一・R3・D5/D8）。
-pub use normalize::{AlphaSource, NormalizeError, NormalizedImage, Normalizer};
+pub use normalize::{NormalizedImage, Normalizer};
 
 // トリム層（α>0 タイト bbox・オフセット記録・全透明→空・R4・D8）。
 pub use trim::{TrimResult, Trimmed, Trimmer};
@@ -678,7 +678,7 @@ mod bake_entry_tests {
         let sets = [set(&shell, base)];
 
         // 値としてそのまま move・分解（channel も Future も経由しない）。
-        let BakeResult { table, errors } = bake(&sets, &dec, PackConfig::default());
+        let BakeResult { table, errors, .. } = bake(&sets, &dec, PackConfig::default());
         assert!(errors.is_empty());
         assert_eq!(table.len(), 1);
         assert!(table.resolve(SetId(0), "only.png").is_some());

@@ -156,7 +156,16 @@ impl CuePlayer {
     /// relevance 判定**（[`cue_target_of`](super::sink::cue_target_of) が単一権威）が行い、
     /// 担当外 cue でも duration は honor する——この振り分けは演者の責務であり本ランタイムは
     /// 中央 router として事前振り分けしない（D4）。
-    pub fn register_sink(&mut self, sink: Box<dyn CueSink>) {
+    ///
+    /// 登録の列へ足す**前**に、その時点でまだ配っていない合図の列を
+    /// [`CueSink::preview`] で 1 度渡す（先渡し）。`emit` は登録済みの受け手にしか行かないので、
+    /// 先渡しは必ずその受け手への最初の `emit` より前になり、中身はこれから `emit` で届く列と
+    /// 一致する（途中で登録すれば残りだけ）。
+    pub fn register_sink(&mut self, mut sink: Box<dyn CueSink>) {
+        // ponytail: 登録のたびに列を写す（受け手 1 つにつき 1 回）。受け手は十数個・合図は
+        // 多くて数百なので足りる。重くなったら再生機に 1 度だけ作って持たせる形へ替える。
+        let upcoming: Vec<TalkCue> = self.schedule.pending_payloads().cloned().collect();
+        sink.preview(&upcoming);
         self.sinks.push(sink);
     }
 

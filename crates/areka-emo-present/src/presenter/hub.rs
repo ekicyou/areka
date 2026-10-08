@@ -5,10 +5,11 @@
 //! 分かれる（いずれも同一型 `EmoPresenter` の別 `impl` ブロック）。
 
 use super::budget::FrameBudget;
+use super::visibility::strip_finite_films;
 use super::{
-    AtlasTable, ComposeCache, Composer, EmoWorld, Entity, HashMap, PhantomData, PresentCommand,
-    PresentError, PresentOutcome, PresentTarget, ReplySender, ScalePolicy, ScaleRatio, TargetId,
-    VisibilityOwnership, World,
+    AtlasTable, BindSet, ComposeCache, Composer, EmoWorld, Entity, HashMap, PatternState,
+    PhantomData, PresentCommand, PresentError, PresentOutcome, PresentTarget, ReplySender,
+    ScalePolicy, ScaleRatio, TargetId, VisibilityOwnership, World, reply_channel,
 };
 
 /// 指令適用の統括ハブ（合成・キャッシュ・表示・マスクの一点結線・UI スレッド専有）。
@@ -81,6 +82,9 @@ impl EmoPresenter {
                 applied: None,
                 native_size: None,
                 last_show: None,
+                held_pattern: None,
+                stage_generation: 0,
+                acked_generation: 0,
                 pending_resize: None,
             },
         );
@@ -99,7 +103,7 @@ impl EmoPresenter {
                 binds,
                 pattern,
                 reply,
-            } => self.apply_show(world, target, surface_id, binds, pattern, reply),
+            } => self.show_or_hold(world, target, surface_id, binds, pattern, reply),
             PresentCommand::Hide { target, reply } => self.apply_hide(world, target, reply),
             PresentCommand::InvalidateCache { target, reply } => {
                 self.apply_invalidate(target, reply)
@@ -112,7 +116,100 @@ impl EmoPresenter {
                 show,
                 reply,
             } => self.apply_replace(world, target, *emo_world, atlas, author_dpi, show, reply),
+            PresentCommand::StageAck { target, generation } => {
+                self.apply_stage_ack(target, generation)
+            }
         }
+    }
+
+    /// 合図 `StageAck` の適用: 追い付いた世代を「今の値と受けた番号の大きい方」にするだけ（合成・
+    /// 可視性には触らない・応答なし・`animated-image-playback` 要件 2.3）。出番の世代より大きい
+    /// 番号・未装着の対象（ゴーストの入れ替えの継ぎ目）は `debug!` を出して捨てる。
+    fn apply_stage_ack(&mut self, target_id: TargetId, generation: u64) {
+        let Some(t) = self.targets.get_mut(&target_id) else {
+            tracing::debug!(
+                ?target_id,
+                generation,
+                attached = false,
+                "apply(StageAck): 捨てた"
+            );
+            return;
+        };
+        if generation > t.stage_generation {
+            tracing::debug!(
+                ?target_id,
+                generation,
+                stage_generation = t.stage_generation,
+                attached = true,
+                "apply(StageAck): 捨てた"
+            );
+            return;
+        }
+        t.acked_generation = t.acked_generation.max(generation);
+    }
+
+    /// 外からの `ShowSurface` の入口: 隠れている外から所有される対象へのコマだけが違う指令は預かる
+    /// だけにし（合成 0 回・`animated-image-playback` 要件 6.4・3.7）、それ以外は `apply_show` へ通す。
+    ///
+    /// 預かるのは、外から所有され・見えておらず・表示が一度成立していて（`last_show` が在る）・指令の
+    /// 面の番号と着せ替えが `last_show` と同じで・コマが `last_show` と違う、の 5 つが揃うときだけ。
+    /// 面の比べ先は `current_surface_id` でなく `last_show` なので、`Hide`（今の面を消す）の直後の
+    /// コマだけの指令も預かる。応答は成功を 1 回返す。コマまで同じ指令は今までどおり通す（引き当てが
+    /// 当たるので合成しない・隠れている間の DPI の変化も今までどおり拾う＝静止画だけのバルーンは
+    /// 本 spec の前と同じ・要件 6.5）。通した指令で表示が成立したら預かったコマは捨てる（最後の
+    /// 指令が勝つ）。失敗したら残す。
+    /// その判定の前に、外から所有され・合図が出番の世代に追い付いていない対象なら、指令のコマから
+    /// 回数つきの子の欄を外す（`strip_finite_films`・`show_target` と同じ関数）。
+    /// `show_target`・`refresh_scale`・差し替えは `apply_show` を直接呼ぶので、ここを通らない。
+    fn show_or_hold(
+        &mut self,
+        world: &mut World,
+        target_id: TargetId,
+        surface_id: u32,
+        binds: BindSet,
+        mut pattern: PatternState,
+        reply: Option<ReplySender<PresentOutcome>>,
+    ) {
+        // 合図が今の出番の世代に追い付くまでは、出し直しの前に決めたコマかもしれないので回数つきの
+        // 子の欄を外す（指令そのものは捨てない・預かるかの判定より前・要件 2.3）。
+        if let Some(t) = self.targets.get(&target_id)
+            && t.ownership == VisibilityOwnership::External
+            && t.acked_generation < t.stage_generation
+        {
+            strip_finite_films(&t.emo_world, &mut pattern);
+        }
+        if let Some(t) = self.targets.get_mut(&target_id)
+            && t.ownership == VisibilityOwnership::External
+            && !t.visible
+            && t.last_show
+                .as_ref()
+                .is_some_and(|(shown_id, shown_binds, shown_frame)| {
+                    *shown_id == surface_id && *shown_binds == binds && *shown_frame != pattern
+                })
+        {
+            t.held_pattern = Some(pattern);
+            Self::reply(reply, Ok(()));
+            return;
+        }
+
+        // 成否は応答で読む（状態の後追いで推測しない・`show_target` と同じ）。
+        let (tx, rx) = reply_channel::<PresentOutcome>();
+        self.apply_show(world, target_id, surface_id, binds, pattern, Some(tx));
+        let outcome = rx.recv().unwrap_or_else(|e| {
+            tracing::error!(
+                ?target_id,
+                surface_id,
+                error = %e,
+                "apply(ShowSurface): 適用結果の応答が失われた"
+            );
+            Err(PresentError::TargetNotAttached(target_id))
+        });
+        if outcome.is_ok()
+            && let Some(t) = self.targets.get_mut(&target_id)
+        {
+            t.held_pattern = None;
+        }
+        Self::reply(reply, outcome);
     }
 
     /// `Hide`（`\s[-1]` 相当）の適用: visual 非表示＋当たり判定停止。装着・キャッシュは保持する（R3.3）。

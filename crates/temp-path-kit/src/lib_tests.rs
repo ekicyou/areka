@@ -82,6 +82,38 @@ fn dropping_removes_the_directory_and_its_contents() {
     assert!(!child.exists(), "破棄しても中身が残っている");
 }
 
+/// `under_target` は `<ワークスペース>\target\test-roots` の直下に作り、破棄で消える。
+///
+/// ワークスペースの根は「`crates/temp-path-kit/Cargo.toml` を持つフォルダ」で確かめる
+/// （置き場を求める式をそのまま使い回すと、式が壊れても一致してしまう）。
+#[test]
+fn under_target_lives_in_workspace_target_test_roots_and_is_removed_on_drop() {
+    let dir = TempPath::under_target("under-target-check");
+    let kept = dir.path().to_path_buf();
+    let roots = kept.parent().expect("置き場の下にある");
+    let target = roots.parent().expect("target の下にある");
+    let workspace = target.parent().expect("ワークスペースの下にある");
+    assert_eq!(
+        (
+            roots.file_name().and_then(|n| n.to_str()),
+            target.file_name().and_then(|n| n.to_str()),
+        ),
+        (Some("test-roots"), Some("target"))
+    );
+    assert!(
+        workspace
+            .join("crates")
+            .join("temp-path-kit")
+            .join("Cargo.toml")
+            .is_file(),
+        "target の親がワークスペースの根でない: {}",
+        workspace.display()
+    );
+    assert!(kept.is_dir(), "破棄前にディレクトリが無い");
+    drop(dir);
+    assert!(!kept.exists(), "破棄してもディレクトリが残っている");
+}
+
 /// `child` は配られたディレクトリの下を指す（宛先の種類を増やさない形）。
 #[test]
 fn child_points_under_the_handed_directory() {

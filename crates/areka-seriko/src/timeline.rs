@@ -11,8 +11,11 @@
 //!   ghost [`crate`] 外の `BoundarySchedule` と同じ「1 回だけ発火・次境界へスナップ」政策。
 //! - [`frame_at`]／[`FrameStatus`] — 再生開始からの経過 `elapsed_ms` に対する現在コマ判定
 //!   （累積 wait デッドライン列・`-1` 停止・末尾残留のデファクト 2 点を焼き込む・4.1–4.4/9.4）。
+//! - [`lap_of`]／[`always_at`]／[`AlwaysView`] — `always`（手書きと動く絵の子）の繰り返しの計算
+//!   （spec: areka-P0-animated-image-playback・経過を周期で割る・丸めない）。
 
 use crate::table::LoopFrame;
+use std::num::{NonZeroU32, NonZeroU64};
 
 /// 乱数注入シーム（クロック注入と同型・7.1）。`[0, bound)` の一様整数を返す。
 pub type LoopRng = Box<dyn FnMut(u32) -> u32 + Send>;
@@ -100,19 +103,7 @@ pub enum FrameStatus {
 /// （末尾残留・恒久・4.4/9.4）、それ以外は [`FrameStatus::Active`]。デッドラインは単調非減少ゆえ、超過時点で
 /// 走査を打ち切れる（`wait == 0` 連鎖は同一デッドラインを共有し末尾 index が現在コマになる）。
 pub fn frame_at(frames: &[LoopFrame], elapsed_ms: u64) -> FrameStatus {
-    let mut acc: u64 = 0;
-    let mut current: Option<usize> = None;
-    for (i, f) in frames.iter().enumerate() {
-        acc = acc.saturating_add(u64::from(f.wait_ms));
-        if acc <= elapsed_ms {
-            current = Some(i);
-        } else {
-            // デッドラインは以降も非減少ゆえ、超過した時点で以降のコマも未到達。
-            break;
-        }
-    }
-
-    match current {
+    match current_frame_index(frames, elapsed_ms) {
         None => FrameStatus::Pending,
         Some(i) => {
             if frames[i].surface_id < 0 {
@@ -126,6 +117,72 @@ pub fn frame_at(frames: &[LoopFrame], elapsed_ms: u64) -> FrameStatus {
     }
 }
 
+/// 経過を周期で割った「何周目か（0 始まり）」と「その周の頭からの経過」（丸めない）。
+pub fn lap_of(elapsed_ms: u64, period_ms: NonZeroU64) -> (u64, u64) {
+    (elapsed_ms / period_ms.get(), elapsed_ms % period_ms.get())
+}
+
+/// 累積 wait デッドライン `t_k <= elapsed_ms` を満たす最大のコマ index（誰も満たさなければ `None`）。
+///
+/// [`frame_at`]・[`always_at`] と、`Stopped` の負 surface 値を warn! 用に取り出す一番上・部品の再生が
+/// 共有する唯一の選び方。デッドラインは単調非減少ゆえ、超過した時点で走査を打ち切る。
+pub(crate) fn current_frame_index(frames: &[LoopFrame], elapsed_ms: u64) -> Option<usize> {
+    let mut acc: u64 = 0;
+    let mut current: Option<usize> = None;
+    for (i, f) in frames.iter().enumerate() {
+        acc = acc.saturating_add(u64::from(f.wait_ms));
+        if acc <= elapsed_ms {
+            current = Some(i);
+        } else {
+            break;
+        }
+    }
+    current
+}
+
+/// `always` の今のコマ（[`always_at`] の答え）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlwaysView {
+    /// 何も出さない（1 周目の最初の待ちの前・負の番号のコマに居る間）。
+    Nothing,
+    /// このコマを出す。
+    Frame(usize),
+}
+
+/// `always` の今のコマ（要件 1.5・1.6・2.1・2.2・2.4・2.6・2.9・4.2・4.5）。
+///
+/// `period_ms` は 1 周の長さ、`laps` は合計の回数（`None` は終わりなし）。手書きの `always` と動く絵の
+/// 子は同じこの関数を通り、違いは表が渡す値だけ。開始からの経過だけで決まる（状態・乱数・丸めなし）。
+///
+/// - 回数つきで経過が「周期 × N」以上なら最後のコマ。
+/// - そうでなければ周の頭からの経過で [`frame_at`] と同じ累積の待ちを引く（待ち 0 のコマは同じ時刻を
+///   共有し後ろが勝つ）。最初の待ちの前は、1 周目なら何も出さず、2 周目以降は前の周の最後のコマ。
+/// - 負の番号のコマ（絵を指すコマは除く）に居る間は何も出さない。
+pub fn always_at(
+    frames: &[LoopFrame],
+    period_ms: NonZeroU64,
+    laps: Option<NonZeroU32>,
+    elapsed_ms: u64,
+) -> AlwaysView {
+    let Some(last) = frames.len().checked_sub(1) else {
+        return AlwaysView::Nothing;
+    };
+    let (lap, in_lap) = lap_of(elapsed_ms, period_ms);
+    let index = if laps.is_some_and(|n| lap >= u64::from(n.get())) {
+        Some(last)
+    } else {
+        current_frame_index(frames, in_lap).or((lap > 0).then_some(last))
+    };
+    match index {
+        Some(i) if frames[i].picture.is_some() || frames[i].surface_id >= 0 => AlwaysView::Frame(i),
+        _ => AlwaysView::Nothing,
+    }
+}
+
+#[cfg(test)]
+#[path = "timeline_repeat_tests.rs"]
+mod repeat_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,6 +192,7 @@ mod tests {
     fn frame(surface_id: i64, wait_ms: u32) -> LoopFrame {
         LoopFrame {
             surface_id,
+            picture: None,
             method: ComposeMethod::Overlay,
             wait_ms,
             x: 0,

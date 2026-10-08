@@ -285,3 +285,13 @@ fn directive_value_changes_only_the_barrier_timeout() {
         "abc と 700",
     );
 }
+
+/// 検査（`areka-P0-mcp-author-tools` の `check_script`）が再生と同じ読み取りを引けるよう、
+/// 読み取りの関数と結果の型はクレートの根から届く（要件 3.4）。
+#[test]
+fn reader_is_reachable_from_the_crate_root() {
+    use crate::{ChoiceTimeoutDirective as Root, parse_choice_timeout as root_parse};
+    assert_eq!(root_parse(&args(&["abc"])), Root::Unreadable);
+    assert_eq!(root_parse(&args(&[])), Root::Default);
+    assert_eq!(root_parse(&args(&["500"])), Root::Secs(0.5));
+}

@@ -12,6 +12,9 @@
 //!
 //! 箱に文字が出ているスコープ（文字の層の `shown_boxes` が空でない）も、普通のバルーンの窓が
 //! 見えているときと同じ形で組に載せる（areka-P0-shell-balloon 要件 5.5・5.6）。
+//!
+//! 同じ相の、文字の層を借りる手前で、窓の知らせ（開いているか・面の番号・出番の世代）も前と違う
+//! scope だけ置き場のゴーストの seriko へ送る（areka-P0-animated-image-playback 要件 2.3・6.1）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -19,6 +22,7 @@ use areka_emo_present::EmoPresenter;
 use areka_emo_text::actor::TextLayerRuntime;
 use areka_kanade::{BalloonBinding, ExecutionStateUpdate, KanadeMsg};
 use areka_sakura::ActorKey;
+use areka_seriko::StageNote;
 use bevy_ecs::world::World;
 use tracing::{debug, error, warn};
 
@@ -36,6 +40,20 @@ pub(in crate::emo2_boot) struct BalloonStatusLedger {
     last_surface: BTreeMap<u32, u32>,
     /// 文字の層を借りられない旨を記録済みか。
     runtime_busy_logged: bool,
+    /// スコープ → 前に seriko へ知らせた窓の組（animated-image-playback 要件 2.3・6.1）。
+    last_stage: BTreeMap<u32, StageTuple>,
+}
+
+/// 窓の知らせの組（開いているか, 面の番号, 出番の世代）。
+type StageTuple = (bool, u32, u64);
+
+/// 1 scope の窓の観測（表示層の照会 3 本・表示層に装着済みの scope だけ）。
+#[derive(Clone)]
+pub(in crate::emo2_boot) struct StageObservation {
+    scope: u32,
+    open: bool,
+    surface_id: Option<u32>,
+    generation: u64,
 }
 
 /// 1 scope の観測（表示層の照会 2 本と、箱に文字が出ているか）。
@@ -79,6 +97,7 @@ pub(in crate::emo2_boot) fn collect_bindings(
 
 /// 届けの相。装着済みバルーンのスコープ（昇順）について照会 → 組 → 差分 → 送出 → 記録。
 ///
+/// 文字の層を借りる手前で、窓の知らせ（[`report_stages`]）を seriko へ送る。
 /// スコープの一覧は相の中で自分で作る（可視性の相の手元の一覧は使わない）。文字の層を借りられない
 /// フレームは誤りの段で 1 度だけ記録して届けを次のフレームへ回し、借りられたら記録の印を戻す。
 pub(in crate::emo2_boot) fn run_status_report_phase(wiring: &mut Emo2Wiring, world: &World) {
@@ -86,6 +105,8 @@ pub(in crate::emo2_boot) fn run_status_report_phase(wiring: &mut Emo2Wiring, wor
     let mut scopes: Vec<u32> = wiring.balloon_models.keys().copied().collect();
     scopes.sort_unstable();
     let ledger = &mut wiring.balloon_status;
+    // 窓の知らせは文字の層を借りる手前（借りられないフレームでも届ける・animated-image-playback 要件 2.3）。
+    report_stages(&wiring.presenter, world, ledger, &scopes);
     let Ok(runtime) = wiring.runtime.try_borrow() else {
         if !ledger.runtime_busy_logged {
             ledger.runtime_busy_logged = true;
@@ -98,6 +119,78 @@ pub(in crate::emo2_boot) fn run_status_report_phase(wiring: &mut Emo2Wiring, wor
     };
     ledger.runtime_busy_logged = false;
     report_balloons(&wiring.presenter, &runtime, world, ledger, &scopes);
+}
+
+/// 窓の知らせ（animated-image-playback 要件 2.3・6.1・design「窓の知らせ」）。装着済みバルーンの
+/// スコープ（昇順）ごとに表示層の照会 3 本（`target_visible`・`current_surface_id`・
+/// `stage_generation`）を読み、前に知らせた組と違うときだけ置き場のゴーストの seriko へ送る。
+///
+/// 表示層に未装着の scope は知らせない（装着されたフレームで知らせる）。
+pub(in crate::emo2_boot) fn report_stages(
+    presenter: &EmoPresenter,
+    world: &World,
+    ledger: &mut BalloonStatusLedger,
+    scopes: &[u32],
+) {
+    let observed: Vec<StageObservation> = scopes
+        .iter()
+        .filter_map(|&scope| {
+            let target = balloon_target(scope);
+            Some(StageObservation {
+                scope,
+                open: presenter.target_visible(target)?,
+                surface_id: presenter.current_surface_id(target),
+                generation: presenter.stage_generation(target)?,
+            })
+        })
+        .collect();
+    let sink = world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .and_then(|session| session.seriko_sink());
+    report_stage_observed(
+        ledger,
+        &observed,
+        sink.map(|sink| |note| sink.send_stage(note)),
+    );
+}
+
+/// 観測から先（組 → 差分 → 送出 → 記録）。送り手が無い（置き場にゴーストが居ない）フレームは
+/// 台帳を変えずに見送り、ゴーストが据わった最初のフレームで送る。
+fn report_stage_observed(
+    ledger: &mut BalloonStatusLedger,
+    observed: &[StageObservation],
+    send: Option<impl FnMut(StageNote)>,
+) {
+    let changed: Vec<(u32, StageTuple)> = observed
+        .iter()
+        .filter_map(|o| {
+            let last = ledger.last_stage.get(&o.scope);
+            // 隠すと表示層は今の面の番号を消す（`Hide`）。閉じた知らせは前に知らせた番号を運ぶ。
+            let face = o.surface_id.or(last.map(|t| t.1)).unwrap_or(0);
+            let tuple = (o.open, face, o.generation);
+            (last != Some(&tuple)).then_some((o.scope, tuple))
+        })
+        .collect();
+    if changed.is_empty() {
+        return;
+    }
+    let Some(mut send) = send else {
+        debug!(
+            event = "balloon_stage_no_ghost",
+            "置き場にゴーストが無いので、窓の知らせを seriko へ送るのを見送る"
+        );
+        return;
+    };
+    for (scope, tuple @ (open, face, generation)) in changed {
+        send(StageNote::Balloon {
+            scope: ActorKey::from(scope.to_string()),
+            open,
+            face,
+            generation,
+        });
+        ledger.last_stage.insert(scope, tuple);
+    }
 }
 
 /// 照会の配線。照会（表示層 2 本＋文字の層の `shown_boxes`）→ 純関数 → 差分 →
@@ -189,3 +282,7 @@ fn report_observed(
 #[cfg(test)]
 #[path = "status_report_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "status_report_stage_tests.rs"]
+mod stage_tests;

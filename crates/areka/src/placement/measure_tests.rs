@@ -6,7 +6,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
 use crate::placement::PlacementError;
-use crate::placement::shared_test_support::{balloon_root, emo2_root};
+use crate::placement::shared_test_support::{
+    balloon_root, emo2_root, write_self_alpha_one_descript,
+};
 use crate::placement::test_support::{ExpectField, capture_logs, expect_one};
 
 /// COM 初期化下でクロージャを実行する（`WicDecoderArm` は COM 必須・
@@ -235,6 +237,7 @@ fn failed_scope_substitutes_scope0_size() {
             "surface0\n{\nelement0,overlay,surface0.png,0,0\n}\n",
         )
         .expect("surfaces.txt の書出し");
+        write_self_alpha_one_descript(shell.path(), "seriko.use_self_alpha");
 
         let out = measure_scope_sizes(
             shell.path(),
@@ -254,10 +257,12 @@ fn failed_scope_substitutes_scope0_size() {
     });
 }
 
-/// surfaces.txt が読めない（scope0 の採寸自体が成立しない）場合は
-/// `PlacementError::Measure`（代替根拠なし→呼び手の `main` が「起動窓を開けない」を告知して終える）。
+/// シェルに面が 1 つも無い（空のフォルダ＝`surfaces.txt` も面の画像も無い・scope0 の採寸自体が
+/// 成立しない）場合は `PlacementError::Measure`（代替根拠なし→呼び手の `main` が「起動窓を開けない」
+/// を告知して終える）。`surfaces.txt` が無いだけなら画像だけで組むので、失敗の理由は「面が無い」
+/// である（spec: areka-P0-self-alpha-declaration 要件 6.1・6.5）。
 #[test]
-fn missing_surfaces_txt_is_measure_error() {
+fn shell_without_any_surface_is_measure_error() {
     with_com_initialized(|| {
         let empty_shell = TempDir::new();
 
@@ -267,9 +272,13 @@ fn missing_surfaces_txt_is_measure_error() {
             &[0],
             &MeasureScaling::IDENTITY,
         ) {
-            Ok(_) => panic!("surfaces.txt 不在で Ok は誤成功"),
-            Err(PlacementError::Measure { scope, .. }) => {
-                assert_eq!(scope, 0, "shell 全体の失敗は scope0 起点で報告")
+            Ok(_) => panic!("面が 1 つも無いシェルで Ok は誤成功"),
+            Err(PlacementError::Measure { scope, reason }) => {
+                assert_eq!(scope, 0, "shell 全体の失敗は scope0 起点で報告");
+                assert!(
+                    reason.contains("シェルに面が 1 つも無い"),
+                    "理由は面が 1 つも無いこと（surfaces.txt の読取失敗ではない）: {reason}"
+                );
             }
             Err(other) => panic!("Measure であるべき: {other:?}"),
         }
@@ -291,6 +300,7 @@ fn balloonk_absent_yields_identical_size_for_all_scopes() {
             balloon.path().join("balloons0.png"),
         )
         .expect("balloons0.png の複写");
+        write_self_alpha_one_descript(balloon.path(), "use_self_alpha");
 
         let out = measure_scope_sizes(
             &emo2("shell/master"),
@@ -332,6 +342,7 @@ fn scope0_balloon_size_matches_pre_spec_fixed_name_measurement() {
             control_dir.path().join("balloons0.png"),
         )
         .expect("balloons0.png の複写");
+        write_self_alpha_one_descript(control_dir.path(), "use_self_alpha");
         let control = measure_scope_sizes(
             &emo2("shell/master"),
             control_dir.path(),
@@ -941,6 +952,7 @@ fn placement_read_honours_the_files_own_charset_declaration() {
         .expect("surface0.png の複写");
         std::fs::write(shell.path().join("surfaces.txt"), SHIFT_JIS_SURFACES_TXT)
             .expect("surfaces.txt の書出し");
+        write_self_alpha_one_descript(shell.path(), "seriko.use_self_alpha");
 
         let out = measure_scope_sizes(
             shell.path(),

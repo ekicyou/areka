@@ -49,6 +49,15 @@
 //! 配置対象とする。リビール時刻の解決（`visible_glyphs(actor, t)`）は state 層の
 //! 領分で、本層は個数だけを受け取る。
 //!
+//! 渡される items は届いた字の列とは限らない。字は台本のタグとタグの間のひと続きごとに
+//! 分かれて届くため、分かち書きの折返しでは呼び手（`actor_present.rs` の `arrange_lines`）が、
+//! 再生の前に知らされた台本の全部から作った区間の全文（届いた字の列はその先頭）を渡し、
+//! 見える数で切らせる。全文が無い・届いた字の列が全文の先頭と食い違うときは届いた字の列を
+//! 渡す。どちらでも本層の規則は同じである。`visible_count` より後ろの items が効くのは、
+//! 分かち書きの塊の幅の合計（見えている字が塊の途中で切れても、塊全体の幅で塊の前の行送りを
+//! 決める）と、見えている最後の字の後ろの改行・カーソル移動を先に読むこと（次の字が置かれる
+//! まで保留されるだけで、行の割り当てには出ない）の 2 つだけである。
+//!
 //! ## 改行の遅延（deferred newline・SSP 準拠・areka-P0-newline-defer）
 //!
 //! 改行マーカー（`NewLine{ratio}`）は「文字書き込み位置を次行先頭へ動かす予約
@@ -258,7 +267,8 @@ pub struct LayoutEngine;
 impl LayoutEngine {
     /// 折返し・行送りを解決して行列（[`PositionedLine`] 列）を得る（純粋・決定論）。
     ///
-    /// - `items`: 追記順の正本（state 層の `ActorTextState::items`）。
+    /// - `items`: 追記順の字の列（state 層の `ActorTextState::items`）。届いた字の列か、
+    ///   届いた字の列を先頭に持つ区間の全文（モジュール doc「可視 prefix 規則」）。
     /// - `visible_count`: 可視グリフ数（state 層 `visible_glyphs` の出力）。
     ///   可視 prefix 規則（モジュール doc）で配置対象を切る。
     /// - `wrap`: 折返し計画（[`WrapPlan`]）。**ゲート③（折返し判定）だけ**をこの引数で
@@ -268,8 +278,8 @@ impl LayoutEngine {
     ///     （`行内位置＋次グリフ幅 > 折返し基準`）。この引数を [`WrapPlan::CharByChar`] にした
     ///     出力は本機能導入前の layout と byte 等価（非回帰の構造保証・R4.1/4.3/8.3——
     ///     `SegmentPlan` を一切参照しないため境界値の算出自体が起きない・R4.2）。
-    ///   - [`WrapPlan::Segmented`]: 塊先決——塊先頭で塊全体の advance 合計を全文 plan から
-    ///     求め、残り行幅（`cap_rem`）に収まれば継続配置、行頭からの行幅（`cap_full`）まで
+    ///   - [`WrapPlan::Segmented`]: 塊先決——塊先頭で塊全体の advance 合計を、plan の塊の
+    ///     範囲と渡された `items` から求め、残り行幅（`cap_rem`）に収まれば継続配置、行頭からの行幅（`cap_full`）まで
     ///     なら塊の前で行送りしてから配置、それも超える長大塊は当該塊のみ文字単位規則へ
     ///     縮退する（3.1/3.2）。塊内の残グリフは残数カウンタで追跡し追加判定なしで配置
     ///     （2.1/2.3・浮動丸めでの途中分割を構造排除）。plan に被覆されないグリフ（不整合）
@@ -283,7 +293,10 @@ impl LayoutEngine {
     ///   行を送らず保留へ累算し、次の可視グリフ配置の直前に一括実体化する。保留のみ
     ///   では空行を出さず・末尾の保留改行は蒸発する。
     ///
-    /// 塊先決は `visible_count` に依存しない（seg_sum は全 `items` から算出・INV-1/7.1）。
+    /// 塊先決は `visible_count` に依存しない（seg_sum は渡された `items` の全部から算出・INV-1/7.1）。
+    /// 渡された字の列と plan が同じなら、見える数を増やしても前の字の行は動かない。字が届くたびに
+    /// 字の列そのものが伸びる呼び方（届いた字の列で区切って渡す）ではこの性質は成り立たないので、
+    /// 分かち書きの折返しの呼び手は区間の全文を渡す（モジュール doc「可視 prefix 規則」）。
     /// ゲート①が④より先にあるため、塊途中で可視が切れても配置済み prefix の行は動かない
     /// （INV-2/7.2/7.3）。塊前行送りは行頭では `cap_rem == cap_full` ゆえ不発火＝空行を
     /// 作らない（INV-3）。縦書きは行内軸の `inline_pos`/`advance`/折返し基準/遠辺の演算のみゆえ
@@ -291,8 +304,8 @@ impl LayoutEngine {
     ///
     /// 同一入力→同一出力（R2.5 系）。失敗経路なし（全入力で値を返す純関数）。
     ///
-    /// **本番の呼び手は [`layout_styled`](Self::layout_styled) へ移った**（`actor.rs` の
-    /// `present_actor` が唯一の本番呼出点）。本関数の本番の呼び手は 0 で、残しているのは
+    /// **本番の呼び手は [`layout_styled`](Self::layout_styled) へ移った**（`actor_present.rs` の
+    /// `arrange_lines` が唯一の本番呼出点で、`present_actor` はそれを呼ぶ）。本関数の本番の呼び手は 0 で、残しているのは
     /// 非回帰の檻（`layout_styled_tests.rs` が「装飾なしの出力が装飾導入前と 1 ビットも
     /// 変わらない」を本関数の出力と突き合わせる）をはじめとする多数の決定論テスト
     /// （`canvas.rs`／`layout_*_tests.rs`／`viewbox_draw_*_tests.rs`／`draw_oracle_tests.rs`／
@@ -338,7 +351,7 @@ impl LayoutEngine {
     /// 行出力に一切影響しない）。
     ///
     /// **本番の呼び手は [`layout_styled`](Self::layout_styled) へ移った**。ランタイムが持つ
-    /// guard は `present_actor` から `layout_styled` の引数として渡っており、本関数を経由
+    /// guard は `present_actor` から `arrange_lines` を経て `layout_styled` の引数として渡っており、本関数を経由
     /// **しない**（guard の所有者は変わらないが、受け取る関数は 1 段先である）。本関数の
     /// 本番の呼び手は 0 で、残しているのは非回帰の檻（`layout_cursor_tests.rs`／
     /// `layout_cursor_wiring_tests.rs`）が呼ぶ委譲の入口としてである。

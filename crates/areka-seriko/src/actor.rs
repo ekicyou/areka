@@ -48,7 +48,7 @@ use crate::bind::{
 use crate::looper::{LoopRuntime, SerikoLoopConfig};
 use crate::output::{DisplayCommand, RebaseKind, RebasedShow, SurfaceOutput};
 use crate::resolve::{BalloonResolve, SurfaceResolver, SurfaceTarget, resolve_balloon_key};
-use crate::state::{ApplyOutcome, BindApplyOutcome, ScopeStates, Slot};
+use crate::state::{ApplyOutcome, BindApplyOutcome, ScopeStates, Slot, StageNote};
 use crate::table::AnimationTable;
 
 /// seriko アクターの inbox メッセージ（areka-actor inbox 規約・投函経路は inbox 一貫）。
@@ -67,6 +67,11 @@ pub enum SerikoMsg {
     ///
     /// [`spawn_seriko`] の受信の閉包が [`handle_message`] より先に捌く（定義を所有する殻の仕事）。
     Replace(Box<SerikoReplace>),
+    /// 表示層からの窓の知らせ（spec: areka-P0-animated-image-playback 要件 2.3・6.1）。
+    ///
+    /// `at_ms` は送り手が送るときに読んだ時計の値（時計が無ければ `None`＝直前の刻みの時刻）。
+    /// [`SerikoSink::send_stage`] が橋渡しする。
+    Stage { note: StageNote, at_ms: Option<u64> },
     /// kanade 由来の停止指令（areka-actor 停止規約の Close 相当・正常終了させる）。
     Close,
 }
@@ -115,6 +120,8 @@ impl std::fmt::Debug for SerikoReplace {
 #[derive(Clone)]
 pub struct SerikoSink {
     tx: std::sync::mpsc::Sender<SerikoMsg>,
+    /// 窓の知らせに載せる時刻を読む時計（[`spawn_seriko_clocked`] が渡したもの・無ければ `None`）。
+    clock: Option<SerikoClock>,
 }
 
 impl SerikoSink {
@@ -123,7 +130,7 @@ impl SerikoSink {
     /// 後続 3.2 の `spawn_seriko` がアクター inbox の送信端から構築する。std mpsc の
     /// `Sender` は `Clone`（複製すれば複数 sink 口へ配れる）だが、本タスクでは単一送出端で足りる。
     pub(crate) fn new(tx: std::sync::mpsc::Sender<SerikoMsg>) -> Self {
-        Self { tx }
+        Self { tx, clock: None }
     }
 
     /// アクターへ [`SerikoMsg::Close`] を送り、正常停止を要求する（R1.4）。
@@ -147,6 +154,20 @@ impl SerikoSink {
             tracing::debug!(
                 now_ms,
                 "seriko: inbox が消失; tick を配送できず破棄した（shutdown 中の期待事象・PresentBridge 先例・R7.5）"
+            );
+        }
+    }
+
+    /// 窓の知らせを inbox へ送る（spec: areka-P0-animated-image-playback 要件 2.3・6.1）。
+    ///
+    /// 時計が在れば、送るときの時刻を載せる。受信端消失（アクター停止後）は shutdown 中の期待事象
+    /// ゆえ [`SerikoSink::send_tick`] と同じく `debug!` で観測して戻る。
+    pub fn send_stage(&self, note: StageNote) {
+        let at_ms = self.clock.as_ref().map(|clock| clock());
+        if let Err(err) = self.tx.send(SerikoMsg::Stage { note, at_ms }) {
+            tracing::debug!(
+                msg = ?err.0,
+                "seriko: inbox が消失; 窓の知らせを配送できず破棄した（shutdown 中の期待事象）"
             );
         }
     }
@@ -241,6 +262,36 @@ pub fn spawn_seriko<O>(
 where
     O: SurfaceOutput + Send + 'static,
 {
+    spawn_seriko_clocked(
+        resolver,
+        static_binds,
+        bind_resolver,
+        loop_config,
+        out,
+        None,
+    )
+}
+
+/// 刻みと同じ時計（単調・ミリ秒・spec: areka-P0-animated-image-playback 要件 1.6・2.9・3.1）。
+pub type SerikoClock = std::sync::Arc<dyn Fn() -> u64 + Send + Sync>;
+
+/// 時計つきの起動（[`spawn_seriko`] は `clock = None` でここへ委ねる）。
+///
+/// 台本の合図（`\s`・`\b`・着せ替え）を処理するときに `clock` を読み、その時刻で時計を始める。
+/// `clock` が無ければ直前の刻みの時刻を使う（design「時計の開始の時刻」）。経過は「今の時刻 −
+/// 開始の時刻」を 0 で止めて求める（別スレッドが読んだ刻みの時刻が開始より僅かに前でも負にならない）。
+pub fn spawn_seriko_clocked<O>(
+    resolver: SurfaceResolver,
+    static_binds: areka_emo_compose::BindSet,
+    bind_resolver: BindResolver,
+    loop_config: SerikoLoopConfig,
+    out: O,
+    clock: Option<SerikoClock>,
+) -> (SerikoSink, areka_actor::ActorHandle)
+where
+    O: SurfaceOutput + Send + 'static,
+{
+    let sink_clock = clock.clone();
     let (tx, actor) = areka_actor::spawn_actor::<SerikoMsg, _>("seriko", move |rx| {
         let mut states = ScopeStates::new(static_binds);
         let mut out = out;
@@ -249,7 +300,7 @@ where
         let mut bind_resolver = bind_resolver;
         // アクター本体が SERIKO ループ統括器を単独所有する（スレッド内・ロック不要・単一所有者）。
         // 表・乱数は `loop_config` から構築して以後この 1 スレッドで進める（発見 C の値渡し解消）。
-        let mut loop_runtime = LoopRuntime::new(loop_config);
+        let mut loop_runtime = LoopRuntime::new(loop_config).with_clock(clock);
         areka_actor::run_inbox::<SerikoMsg, std::convert::Infallible>(rx, move |msg| {
             // 差し替えの依頼は定義を所有するこの殻が先に捌く（handle_message の署名は不変）。
             if let SerikoMsg::Replace(replace) = msg {
@@ -294,7 +345,11 @@ where
         });
     });
 
-    (SerikoSink::new(tx), actor)
+    let sink = SerikoSink {
+        clock: sink_clock,
+        ..SerikoSink::new(tx)
+    };
+    (sink, actor)
 }
 
 /// 差し替えの後の最初の表示を載せた合図（spec: areka-P0-shell-balloon-switch 要件 2.6・3.5）。
@@ -331,6 +386,37 @@ fn rebased(
     DisplayCommand::Rebased { epoch, kind, shows }
 }
 
+/// 窓の知らせ（spec: areka-P0-animated-image-playback 要件 2.3・6.1・design「ScopeStates・アクター」）。
+///
+/// 順に: ①世代が覚えている値より新しければ合図 `StageAck` を先に 1 件出し、回数つきの時計を捨てる
+/// （閉じた知らせを見ていなくても新しい出番は始め直し）②`note_stage` ③`refresh`（閉じた知らせなら
+/// ここで回数つきを捨てる＝[`LoopRuntime::refresh`] の閉じた窓の決まり）④返った指令を出す。発行はどれも [`emit_display`] から（出口は 1 つ）。
+fn on_stage<O: SurfaceOutput>(
+    states: &mut ScopeStates,
+    loop_runtime: &mut LoopRuntime,
+    out: &mut O,
+    note: StageNote,
+    at_ms: Option<u64>,
+) {
+    let StageNote::Balloon {
+        scope, generation, ..
+    } = &note;
+    if *generation > states.stage_generation(scope) {
+        emit_display(
+            out,
+            DisplayCommand::StageAck {
+                scope: scope.clone(),
+                generation: *generation,
+            },
+        );
+        loop_runtime.drop_finite(scope, Slot::Balloon);
+    }
+    states.note_stage(&note);
+    if let Some(command) = loop_runtime.refresh(scope, Slot::Balloon, at_ms, states) {
+        emit_display(out, command);
+    }
+}
+
 /// inbox メッセージ 1 件を処理し、`run_inbox` 用の [`ControlFlow`] を返す。
 ///
 /// - [`SerikoMsg::Close`] → `Break`（正常終了・1.4）。
@@ -365,6 +451,10 @@ fn handle_message<O: SurfaceOutput>(
                 ?replace,
                 "seriko: 差し替えの依頼が殻を経ずに届いたので捨てる（定義は不変）"
             );
+            return ControlFlow::Continue(());
+        }
+        SerikoMsg::Stage { note, at_ms } => {
+            on_stage(states, loop_runtime, out, note, at_ms);
             return ControlFlow::Continue(());
         }
         SerikoMsg::Cue(cue) => cue,
@@ -524,8 +614,10 @@ fn handle_message<O: SurfaceOutput>(
                         BindApplyOutcome::Changed(command) => {
                             // 部品のコマを新しい着せ替えで載せ直した Show があればそれを、無ければ
                             // apply の指令を 1 件だけ出す（spec: areka-P0-surface-element-nesting 要件 5.12）。
+                            // 時計は合図を処理する今読む（spec: areka-P0-animated-image-playback 要件 3.1）。
+                            let at_ms = loop_runtime.event_ms();
                             let command = loop_runtime
-                                .refresh_parts(&cue.actor, states)
+                                .refresh(&cue.actor, Slot::Shell, at_ms, states)
                                 .unwrap_or(command);
                             emit_display(out, command); // 単一発行点（R3.5）
                             // 実機サインオフの grep マーカー（R7.1・有界 auto-exit＋ログ grep 流儀）。
@@ -585,10 +677,16 @@ fn handle_message<O: SurfaceOutput>(
         };
         // 状態更新（2.2 の鏡映）＋発行: 状態が実際に変化したときだけ単一発行点から発行する（冪等・R4.3）。
         if let ApplyOutcome::Changed(command) = states.apply_balloon(&cue.actor, target) {
-            emit_display(out, command); // 単一発行点共用（R4.1/4.2/4.3）
             // バルーン面切替／Hide でループ再生をリセット（当該 slot の playback 全除去・R2.3 表示従属）。
             // PatternState クリアは apply_balloon の責務、playback クリアはループ統括器の責務。
             loop_runtime.on_surface_changed(&cue.actor, Slot::Balloon);
+            // 一番上の `always` を出来事の時刻で始めた絵が在ればそれを、無ければ apply の指令を 1 件だけ
+            // 出す（spec: areka-P0-animated-image-playback 要件 4.1・4.3）。時計は合図を処理する今読む（要件 3.1）。
+            let at_ms = loop_runtime.event_ms();
+            let command = loop_runtime
+                .refresh(&cue.actor, Slot::Balloon, at_ms, states)
+                .unwrap_or(command);
+            emit_display(out, command); // 単一発行点共用（R4.1/4.2/4.3）
         }
         return ControlFlow::Continue(());
     }
@@ -633,9 +731,11 @@ fn handle_message<O: SurfaceOutput>(
         // PatternState クリアは apply の責務、playback クリアはループ統括器の責務。部品の時計は捨てない。
         loop_runtime.on_surface_changed(&cue.actor, Slot::Shell);
         // 部品のコマが在ればそれを載せた Show に差し替えて、切り替えの発行は 1 件だけ
-        // （spec: areka-P0-surface-element-nesting 要件 5.6・5.9）。
+        // （spec: areka-P0-surface-element-nesting 要件 5.6・5.9）。時計は合図を処理する今読む
+        // （spec: areka-P0-animated-image-playback 要件 3.1）。
+        let at_ms = loop_runtime.event_ms();
         let command = loop_runtime
-            .refresh_parts(&cue.actor, states)
+            .refresh(&cue.actor, Slot::Shell, at_ms, states)
             .unwrap_or(command);
         emit_display(out, command);
     }
@@ -647,6 +747,9 @@ fn handle_message<O: SurfaceOutput>(
 #[path = "actor_bind_loop_tests.rs"]
 mod bind_loop_tests;
 #[cfg(test)]
+#[path = "actor_clock_tests.rs"]
+mod clock_tests;
+#[cfg(test)]
 #[path = "actor_dispatch_tests.rs"]
 mod dispatch_tests;
 #[cfg(test)]
@@ -655,6 +758,9 @@ mod parts_tests;
 #[cfg(test)]
 #[path = "actor_replace_tests.rs"]
 mod replace_tests;
+#[cfg(test)]
+#[path = "actor_stage_tests.rs"]
+mod stage_tests;
 #[cfg(test)]
 #[path = "actor_test_support.rs"]
 mod test_support;

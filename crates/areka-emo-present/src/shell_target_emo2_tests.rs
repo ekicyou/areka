@@ -122,6 +122,9 @@ fn emo2_every_surface_is_identical_with_and_without_base_images() {
 
         // A: 権威経由（面の画像の対応を渡して組む）。
         let a = target.build_world();
+        // animated-image-playback task 2.3（要件 7.1）: 動く絵の無い emo2 の面の表に子の定義は載らない。
+        assert_eq!(a.film_sheets().count(), 0);
+        assert!(a.film_skips().is_empty(), "{:?}", a.film_skips());
 
         // B: 適用前と同じ（画像 0 件で組み、**同じ**索引表を装着する）。
         let mut b = EmoWorld::build(&target.shell);

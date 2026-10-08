@@ -129,9 +129,9 @@ pub(crate) fn on_char_drag(
 /// `mapped` 確定・`enqueue_window_set_pos`・`follow_balloon` の**後**に、当該窓の
 /// [`CharWindowMarker`]`.scope`（`usize`→`u32`）で `mapped` を [`char_pos_entries`]→
 /// [`persist_entries`] へ渡し、Ghost 永続スコープへ即時 write-through する（fire-and-forget・
-/// 非ブロッキング）。marker 不在（防御）は `debug!`＋skip（panic しない）。永続の
-/// 窓位置を書くのはこの DragEnd 観測点のみ——`on_char_drag`（ドラッグ中）・
-/// [`move_window_to`]・[`resize_window_to`]・復元時再射影は書かない（発火規律・Req1.9）。
+/// 非ブロッキング）。marker 不在（防御）は `debug!`＋skip（panic しない）。キャラ窓の位置を記憶に書く時機は、
+/// このドラッグの確定と、起動の最後に並べ終えた時点（[`crate::placement::persist::persist_unremembered_char_positions`]）の
+/// 2 つ——`on_char_drag`（ドラッグ中）・[`move_window_to`]・[`resize_window_to`]・復元時再射影は書かない。
 pub(crate) fn on_char_drag_end(
     world: &mut World,
     _sender: Entity,
@@ -184,7 +184,7 @@ pub(crate) fn on_char_drag_end(
             // 保存フック（1.1/1.9/7.1・design C2）: mapped 確定後に当該スコープの
             // WindowPos entries を Ghost 永続スコープへ即時 write-through 投函する。
             // スコープは CharWindowMarker から逆引き（usize→u32）。marker 不在（防御）は
-            // debug＋skip（panic しない）。発火はこの DragEnd 観測点のみ（Req1.9）。
+            // debug＋skip（panic しない）。ドラッグ中は書かない（書く時機は上の説明の 2 つ）。
             match world.get::<CharWindowMarker>(entity).map(|m| m.scope) {
                 Some(scope) => {
                     // 原点（下端中央）基準へ移してから保存する。左上 x のまま保存すると、

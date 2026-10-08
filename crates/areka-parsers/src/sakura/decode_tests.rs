@@ -207,6 +207,37 @@ fn choice_extra_references_order_preserved() {
     );
 }
 
+/// 正典の入れ子の記述例 `\q[その１,"script:\q[その２,script:その３はない]"]` の読み
+/// （ukadoc `\q[タイトル,script:実行内容]` の記述例）。`"…"` の括りの中の `,` と `]` は
+/// 区切りにせず、第 2 引数は `script:\q[その２,script:その３はない]` の 1 つになる。
+/// その ID から `script:` を外した台本を読むと、ID が `script:その３はない` の選択肢になる。
+#[test]
+fn choice_nested_script_example_reads_as_canon() {
+    let outer = dec(r#"\q[その１,"script:\q[その２,script:その３はない]"]"#);
+    assert_eq!(
+        outer,
+        vec![Instruction::Choice(Choice {
+            disp: "その１".to_string(),
+            target: r"script:\q[その２,script:その３はない]".to_string(),
+            references: vec![],
+        })],
+    );
+
+    // 選んだときに動く台本（ID から `script:` を外したもの）を読む。
+    let Instruction::Choice(choice) = &outer[0] else {
+        unreachable!("上で選択肢 1 つと確かめた");
+    };
+    let script = choice.target.strip_prefix("script:").unwrap();
+    assert_eq!(
+        dec(script),
+        vec![Instruction::Choice(Choice {
+            disp: "その２".to_string(),
+            target: "script:その３はない".to_string(),
+            references: vec![],
+        })],
+    );
+}
+
 // ── カーソル位置と制御命令（要件 6）───────────────────────────
 
 /// `\_l[x,y]` → カーソル絶対位置（x/y は文字列のまま・要件 6.1）。

@@ -62,6 +62,8 @@ fn synthetic_text_transcribes_face_id_and_path() {
 #[test]
 fn build_balloon_target_end_to_end_frames_only() {
     let dir = TempDir::new();
+    // 1 色・全画素不透明の絵が宣言なしの決まりで抜かれないよう、今までの扱い（`1`）を宣言する。
+    dir.write(DESCRIPT_TXT, "use_self_alpha,1\n");
     // 面 2 枚 ＋ 非面 3 種を同ディレクトリへ配置。
     dir.touch("balloons0.png");
     dir.touch("balloons1.png");
@@ -127,6 +129,8 @@ fn build_balloon_target_end_to_end_frames_only() {
 #[test]
 fn build_balloon_target_enumerates_multiple_even_id_faces() {
     let dir = TempDir::new();
+    // 1 色・全画素不透明の絵が宣言なしの決まりで抜かれないよう、今までの扱い（`1`）を宣言する。
+    dir.write(DESCRIPT_TXT, "use_self_alpha,1\n");
     // 偶数 id の面 2 枚（1 を欠く飛び番）を test-local fixture として自前用意（R5.5）。
     dir.touch("balloons0.png");
     dir.touch("balloons2.png");
@@ -295,7 +299,8 @@ fn shrunk_animated_face_builds_and_shows_first_frame() {
         tier: ChainTier::Own,
         file_name: "balloons0.png".to_string(),
     }];
-    let Ok((world, table)) = build_balloon_target_from_faces(dir, &dec, &faces) else {
+    let Ok((world, table)) = build_balloon_target_from_faces(dir, &dec, &faces, UseSelfAlpha::On)
+    else {
         panic!("縮んだ動く絵の面でも組み立ては成功する（要件 6.6）");
     };
 
@@ -380,8 +385,10 @@ fn scope_digest(
         .iter()
         .map(|f| (f.surface_id, f.file_name.clone()))
         .collect();
+    // 本番と同じく、宣言は入口 `load_balloon_use_self_alpha` で読んで渡す。
     let (world, table) =
-        build_balloon_target_from_faces(dir, dec, &faces).expect("採用面列からの構築は成功する");
+        build_balloon_target_from_faces(dir, dec, &faces, load_balloon_use_self_alpha(dir))
+            .expect("採用面列からの構築は成功する");
     let resident: Vec<u32> = (0..8u32)
         .filter(|id| world.surface(*id).is_some())
         .collect();
@@ -413,6 +420,8 @@ fn scope_digest(
 #[test]
 fn balloonk_absent_converges_to_pre_spec_faces_and_target_for_all_scopes() {
     let dir = TempDir::new();
+    // 1 色・全画素不透明の絵が宣言なしの決まりで抜かれないよう、今までの扱い（`1`）を宣言する。
+    dir.write(DESCRIPT_TXT, "use_self_alpha,1\n");
     for name in ["balloons0.png", "balloons1.png", "balloons2.png"] {
         dir.touch(name);
     }

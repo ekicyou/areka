@@ -1,0 +1,22 @@
+{
+  "feature_name": "areka-P0-release-cycle",
+  "created_at": "2026-10-05T08:58:00Z",
+  "updated_at": "2026-10-05T11:45:42Z",
+  "language": "ja",
+  "phase": "implementation",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true
+}
