@@ -2,7 +2,8 @@
 //!
 //! 締切から下は `spine.rs` から移したもの。親の `spine.rs` が同じ名前で出し直すので、
 //! 兄弟のテストは `super::SPIN_WAIT` などの呼び名のまま使える。古い呼び名（`spin_wait_until`・
-//! `run_bounded`・`join_bounded`）は形を保ったまま芯の上に載せ、打ち切りの文言を出すようにした。
+//! `run_bounded`）は形を保ったまま芯の上に載せ、打ち切りの文言を出すようにした。`join_bounded` は
+//! 見張りのスレッドをやめ、body の終わりを目印に芯で待つ形にした（総時間の引数は無くした）。
 //!
 //! 待ちの芯 [`wait_until_with`] は、打ち切りを「待ち始めからの総時間」でなく「相手が状態を進めなかった
 //! 時間」で決め、届かなかった理由を [`WaitFailure`] の 4 つに分けて返す（areka-P0-ghost-session-test-load-flake）。
@@ -375,25 +376,18 @@ pub(crate) fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Dur
     }
 }
 
-/// `ActorHandle::join` を有界時間で観測する（ghost spine の `join_bounded` 同旨）。
-/// 打ち切りと panic の文の形は [`run_bounded`] と同じ。
-pub(super) fn join_bounded(
-    what: &str,
-    timeout: Duration,
-    handle: ActorHandle,
-) -> Result<(), ActorError> {
-    let (res_tx, res_rx) = mpsc::sync_channel::<Result<(), ActorError>>(0);
-    std::thread::spawn(move || {
-        let _ = res_tx.send(handle.join());
-    });
-    let started = Instant::now();
-    match res_rx.recv_timeout(timeout) {
-        Ok(result) => result,
-        Err(e) => panic!(
-            "'{what}' join did not complete within {timeout:?} (possible hang) — {}",
-            bounded_failure(what, started, e)
-        ),
+/// `ActorHandle::join` を芯 [`wait_until`] の上で待つ。目印は body が終わったか（`is_finished` の 0→1）で、
+/// 30 秒立たなければ `［止まった］` で panic する。立った後の `join` は OS のスレッドの後始末だけを待つので
+/// 打ち切らない（負荷の下ではローダーの錠を待って遅れうるが、待つ相手の処理はもう終わっている）。
+/// 見張りのスレッドは生まない（生まれるスレッドもローダーの錠を待ち、負荷の下で `［進みは不明］` の赤になった・
+/// `load-repro.md` の 4.3 の 7）。目印は条件と同時にしか増えないので、打ち切りの文言の進みは常に 0 回で、
+/// 出口は 30 秒の `［止まった］`（相手のスレッドが終われなかった・要件 2.7 の読み）だけ。
+pub(super) fn join_bounded(what: &str, handle: ActorHandle) -> Result<(), ActorError> {
+    let finished = || u64::from(handle.is_finished());
+    if let Err(failure) = wait_until(what, Progress::Count(&finished), || handle.is_finished()) {
+        panic!("'{what}' join did not complete (possible hang) — {failure}");
     }
+    handle.join()
 }
 
 /// GPU の装置を同時に持てる数の数え（areka-P0-ghost-session-test-load-flake 要件 2.7・設計「足場のスレッドの絞り」）。

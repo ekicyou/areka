@@ -362,7 +362,7 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
     // (c) seriko worker が有界 join で完了する（timeout=panic ゆえ hang すれば test FAIL・R8.3）。
     // shutdown が ghost 一式を join→dispatcher 保持の SerikoSink クローンを drop→seriko inbox 切断→
     // 自然終了、という連鎖の末端をここで有界 join して観測する。
-    join_bounded("spine s5 seriko join", Duration::from_secs(10), seriko).expect(
+    join_bounded("spine s5 seriko join", seriko).expect(
         "S5: seriko worker は shutdown 後、SerikoSink クローン全 drop で有界時間内に終了する",
     );
 

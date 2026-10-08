@@ -1,7 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::sync::mpsc;
 
-use super::wait::{DENSE_SPIN, GpuSlots, WAIT_CAP, run_bounded_watching, wait_recv};
+use super::wait::{DENSE_SPIN, GpuSlots, WAIT_CAP, join_bounded, run_bounded_watching, wait_recv};
 use super::{
     BACKOFF_SLEEP, Duration, Instant, Progress, SPIN_WAIT, WaitFailure, run_bounded,
     wait_until_with,
@@ -312,6 +312,23 @@ fn a_vanished_worker_panics_with_the_partner_gone_text() {
         "今の文が先頭に無い: {old}"
     );
     assert!(old.contains("待ちの打ち切り［相手が居ない］"), "{old}");
+}
+
+/// アクターの終わりを待つ `join_bounded` は、body が終われば `Ok`、body が panic していれば
+/// `ActorError::Panicked` を返す（握り潰さない）。
+#[test]
+fn join_bounded_returns_the_actor_result() {
+    let (_tx, ends) = areka_actor::spawn_actor::<(), _>("ends", |_rx| {});
+    assert!(join_bounded("終わるアクター", ends).is_ok());
+
+    let (_tx, falls) = areka_actor::spawn_actor::<(), _>("falls", |_rx| panic!("わざと落とす"));
+    match join_bounded("落ちるアクター", falls) {
+        Err(areka_actor::ActorError::Panicked { actor, message }) => {
+            assert_eq!(actor, "falls");
+            assert!(message.contains("わざと落とす"), "{message}");
+        }
+        other => panic!("panic を ActorError::Panicked で返す: {other:?}"),
+    }
 }
 
 // ===========================================================================

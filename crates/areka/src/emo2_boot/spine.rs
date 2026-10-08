@@ -868,7 +868,7 @@ impl SpineHarness {
         // SerikoSink クローンを drop しても、ハーネス保持の tick_sink clone が生きていると seriko inbox が
         // 切断されず worker が終了しない。全 Sender drop で自然終了させるため seriko join の前に drop する。
         drop(tick_sink);
-        join_bounded("spine seriko join", Duration::from_secs(10), seriko).expect(
+        join_bounded("spine seriko join", seriko).expect(
             "seriko worker should terminate once all SerikoSink clones drop after shutdown",
         );
 
