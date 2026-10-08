@@ -63,7 +63,7 @@ $dir = Join-Path $root 'target/kiro-watch'
 $statePath = Join-Path $dir 'state.json'
 $outboxPath = Join-Path $dir 'outbox.json'
 $statusPath = Join-Path $dir 'status.md'
-$msg = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'messages.json') -Raw -Encoding utf8 | ConvertFrom-Json -AsHashtable
+$msg = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'messages.json') -Raw -Encoding utf8 | ConvertFrom-Json -AsHashtable -DateKind String
 $now = (Get-Date).ToString('yyyy-MM-ddTHH:mm:ssK')
 $out = [System.Collections.Generic.List[object]]::new()
 
@@ -80,7 +80,7 @@ function New-State {
 
 function Read-State {
     if (-not (Test-Path -LiteralPath $statePath)) { return New-State }
-    $s = Get-Content -LiteralPath $statePath -Raw -Encoding utf8 | ConvertFrom-Json -AsHashtable
+    $s = Get-Content -LiteralPath $statePath -Raw -Encoding utf8 | ConvertFrom-Json -AsHashtable -DateKind String
     if ($null -eq $s.load.queue) { $s.load.queue = @() }
     foreach ($r in @($s.merge.Keys)) { if ($null -eq $s.merge[$r].queue) { $s.merge[$r].queue = @() } }
     if ($null -eq $s.log) { $s.log = @() }
@@ -313,10 +313,12 @@ switch ($Command) {
                 Add-Log "merged $repo $Id pr=$Pr sha=$Sha"
             }
         }
-        if (-not $found) { Write-Host "warn: $Id holds no merge desk" }
-        # a completed spec ends the session's participation (it rejoins from /kiro-impl if it runs again)
-        Remove-From $Id
-        if ($state.participants.Contains($Id)) { $state.participants.Remove($Id); Add-Log "leave $Id (merged)" }
+        if (-not $found) { Write-Host "warn: $Id holds no merge desk; nothing changed" }
+        else {
+            # a completed spec ends the session's participation (it rejoins from /kiro-impl if it runs again)
+            Remove-From $Id
+            if ($state.participants.Contains($Id)) { $state.participants.Remove($Id); Add-Log "leave $Id (merged)" }
+        }
     }
     'loadtest' {
         Need 'Id', 'Repo', 'Purpose'
