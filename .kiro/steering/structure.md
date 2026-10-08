@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-10-02
+updated_at: 2026-10-08
 ---
 
 # Project Structure
@@ -393,7 +393,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 ### Temp Path Kit Crate（temp-path-kit）
 **Location**: `/crates/temp-path-kit/`
 **Purpose**: テスト用の一時パスを**プロセス間で一意**に組み立てる窓口を**唯一定義する**テスト専用 leaf（`areka-P0-test-cage-determinism` 2026-08-27）。同じテストを複数プロセスで同時に走らせたとき、固定名の一時パスが互いの前提ファイルを消し合って赤になる形を消す（是正前は同時 4 プロセス × 40 反復で 30.0% が赤）。**発明ではなく移植**——既に正しく書けていた型（連番＋プロセス識別子＋破棄時の再帰削除）を crate をまたいで引ける位置へ出したもの。
-**Pattern**: 名前は `areka-{札}-{プロセス識別子}-{連番}` を組む内部関数 1 つで作り、実際に作る入口がその関数を通る。**一意性と後始末は別の性質**で、識別子があっても破棄が無ければ `%TEMP%` に積み上がる（実例あり）ので、破棄は型が持つ。宛先の種類は増やさず、単一ファイルはディレクトリの下に取る。
+**Pattern**: 名前は `areka-{札}-{プロセス識別子}-{連番}` を組む内部関数 1 つで作り、実際に作る入口がその関数を通る。**一意性と後始末は別の性質**で、識別子があっても破棄が無ければ `%TEMP%` に積み上がる（実例あり）ので、破棄は型が持つ。宛先の種類は増やさず、単一ファイルはディレクトリの下に取る。置き場は 2 つ＝`TempPath::new`（OS の一時フォルダ）と `TempPath::under_target`（ワークスペースの `target\test-roots\`・実機の根・検体・一時フォルダをワークツリーの `target\` の下だけに作ると決めたテストが使う・2026-10-07 `areka-P0-ghost-standard-balloon`）。名前・一意性・破棄はどちらも同じ内部関数を通る。
 **Modules**: `lib.rs`（入口・名前組立・破棄）＋ `lib_tests.rs`（自己テスト）
 **Dependencies**: **依存 0**（`[dependencies]` 節そのものが無く std のみ）・`publish = false`
 **Consumers**: テスト専用（`[dev-dependencies]`）で `areka`・`areka-emo-present`・`areka-ghost`・`areka-parsers`・`areka-sylphya`。**迂回の検知は本 crate ではなく `log-capture-kit/tests/temp_path_guard_test.rs` にある**（走査部品を複製しないため。**窓口と見張りが別 crate に分かれるのは意図的な設計**）

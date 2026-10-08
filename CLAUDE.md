@@ -41,9 +41,10 @@ Kiro-style Spec-Driven Development on an agentic SDLC
       - `/kiro-spec-tasks {feature} [-y]`
   - Without discovery / quick path: `/kiro-spec-quick {feature} [--auto]` or `/kiro-spec-init "description"` → `/kiro-spec-requirements {feature}`
   - Multi-spec: `/kiro-spec-batch` — creates all specs from roadmap.md in parallel by dependency wave
-- Phase 2 (Implementation): `/kiro-impl {feature} [tasks]`
+- Phase 2 (Implementation): `/kiro-impl {feature} [tasks] [--review required|inline|off]`
   - Without task numbers: autonomous mode (subagent per task + independent review + final validation)
   - With task numbers: manual mode (selected tasks in main context, still reviewer-gated before completion)
+  - `--review off` skips task-local review; use it intentionally and keep `/kiro-validate-impl {feature}` as the final quality gate
   - `/kiro-validate-impl {feature}` (standalone re-validation)
 - Completion (explicit approval required): `/kiro-complete {feature}` — static DoD gate → archive to `completed/` → one full test run after the archive (docs updated in parallel while it runs) → final commit → **PR create + squash merge** (the only path into `main`). Use only when the developer explicitly approves.
 - Progress check: `/kiro-spec-status {feature}` (use anytime)
@@ -60,7 +61,9 @@ Skills are located in `.claude/skills/kiro-*/SKILL.md`
 - `kiro-review` — task-local adversarial review protocol used by reviewer subagents
 - `kiro-debug` — root-cause-first debug protocol used by debugger subagents
 - `kiro-verify-completion` — fresh-evidence gate before success or completion claims
-- **If there is even a 1% chance a skill applies to the current task, invoke it.** Do not skip skills because the task seems simple.
+- Use skills explicitly requested by the user and skills relevant to the task's domain, including design, accessibility, and UX.
+- Select skills from their descriptions or metadata first, then read only the selected skills and the references needed for the task.
+- Follow explicit host and project rules and retain required workflow checks. Do not skip relevant skills just because the task is small.
 
 ## Development Rules
 - 3-phase approval workflow: Requirements → Design → Tasks → Implementation
@@ -69,6 +72,7 @@ Skills are located in `.claude/skills/kiro-*/SKILL.md`
 - Follow the user's instructions precisely, and within that scope act autonomously: gather the necessary context and complete the requested work end-to-end in this run, asking questions only when essential information is missing or the instructions are critically ambiguous.
 
 ## Steering Configuration
-- Load entire `.kiro/steering/` as project memory
+- For spec and implementation work, load the core steering files below from `.kiro/steering/`. Reuse current context rather than rereading unchanged files.
+- Load additional steering only when required by project rules or relevant to the task.
 - Default files: `product.md`, `tech.md`, `structure.md`
 - Custom files are supported (managed via `/kiro-steering-custom`)

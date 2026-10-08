@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-10-02
+updated_at: 2026-10-08
 ---
 
 # Technology Stack
@@ -142,6 +142,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **シェルの面はファイル名の慣習でも建つ（2026-09-20・`areka-P0-shell-implicit-surface`）**: `surfaces.txt` に `element` 行が無くても `surface<数字>.png` を面の層 0 として認める（里々／YAYA 標準テンプレートの流儀）。`surfaces.txt` が無い・面を 1 つも定義しないシェルも面の画像だけで組む（画像も無ければ「シェルに面が 1 つも無い」の失敗）。
 - **透過は宣言どおりに描き分ける（2026-10-05・`areka-P0-self-alpha-declaration`）**: シェルは descript.txt の `seriko.use_self_alpha` を読み込みのたびに、バルーンはフォルダ直下の descript.txt の `use_self_alpha` をバルーン 1 つにつき 1 回読む（面ごとの `balloons*s.txt` では上書きしない）。`1`／`true`＝α を使い、α の無い絵は**左上 1 画素と 32bit 完全一致の色を抜く**（許容幅 0）・`full`＝α を使い、α の無い絵は全面不透明・`0`＝α を捨てて全面不透明にしてから左上の色を抜く。**宣言が無い（読めない値を含む）ときは areka 独自の決まり**（開発者の裁定 2026-10-05・正典の既定 `0` には従わない）＝届いた画素に α<255 が在れば α、無ければ左上の色を抜く。動く絵は 1 枚目で決めて全コマに当てる。`.pna` は使わない（添えてあっても絵はそのまま描き、数を `warn!` で残す）。正規化は失敗せず、宣言を理由に絵を落とさない。扱いを決めるのは `Normalizer::plan` の 1 か所。`use_input_alpha`・`paint_transparent_region_black` は読まない。
 - **ネットワーク更新の HTTP と MD5 は OS の機能で賄う（2026-09-23・`areka-P0-update-engine`）**: HTTP は WinHTTP（`Win32_Networking_WinHttp`）、MD5 は CNG の `BCryptHash`（`Win32_Security_Cryptography`）で、**HTTP クレートも `md-5` も足さない**（外部クレートの追加 0・機能フラグは `areka-update` 自身の `Cargo.toml` で上乗せ）。
+- **外のものを開くのは OS の既定のアプリ（2026-10-06・`areka-P0-open-external-tags`）**: `\j`・`\![open,…]` の URL・ファイルは `ShellExecuteExW` で OS の関連付けに渡す。SSP の外部アプリの設定（ブラウザ・メーラーの指定など）は写さない（要望が出たら足す）。実在するファイルは先に `AssocQueryStringW` で動詞の関連付けを引き、無ければ開かずに断る（関連付けの無いファイルで「プログラムから開く」の窓を出さない）。OS へ渡す呼び出しは `crates/areka/src/readme/os_port.rs` の trait 1 つに閉じ、`crates/areka/src` で `ShellExecute` を綴るのはこのファイルだけ。テストは偽物の OS で回す。
 - **検体は配布形 `.nar` のまま保管し、テストは窓口越しに引く**: `vendors/sample_ghost/*.nar`＋`sample-ghost-kit`（structure.md）。第三者の検体は出どころとライセンスを同フォルダの README に登記し、**改変禁止のものは畳み直さず areka の配布物へも入れない**（`konnoyayame`）。配布物へ入れてよいのは CC0 の既定バルーン `StayseeBalloon` のように再配布条件が明確なものだけ。**`THIRD-PARTY-NOTICES.md` は `cargo about` の自動生成で cargo 依存でない資産は載らない**ので、資産の出典告知は第三者向け README（`areka-P0-alpha-release-signoff`）が担う。
 
 ---
