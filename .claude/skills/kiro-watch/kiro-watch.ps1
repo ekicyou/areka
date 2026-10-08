@@ -32,6 +32,9 @@
     loadrunning -Id -Name -Repo -Purpose  record a load test that is ALREADY running (no stop requests)
     loaddone -Id                          load test finished (releases the load-test desk)
     stopped  -Id                          answer to a stop request
+    unstop   [-Id]                        revoke stop requests (all stop-requested / stopped sessions, or just Id);
+                                          they get the resumeCancel message. Only lasts while the load-test holder
+                                          was recorded with loadrunning; a queued loadtest asks them to stop again
     cancel   -Id                          withdraw every request / desk of Id
     note     -Id -Text                    text appended to Id's next grant message
     status                                write status.md, print counts
@@ -42,7 +45,7 @@
 #Requires -Version 7
 param(
     [Parameter(Mandatory, Position = 0)]
-    [ValidateSet('join', 'leave', 'merge', 'merged', 'loadtest', 'loadrunning', 'loaddone', 'stopped', 'cancel', 'note', 'status', 'next')]
+    [ValidateSet('join', 'leave', 'merge', 'merged', 'loadtest', 'loadrunning', 'loaddone', 'stopped', 'unstop', 'cancel', 'note', 'status', 'next')]
     [string]$Command,
     [string]$Id,
     [string]$Name,
@@ -361,6 +364,21 @@ switch ($Command) {
             Add-Log "stopped $Id"
         }
         else { Write-Host "warn: $Id was not asked to stop" }
+    }
+    'unstop' {
+        $targets = @($state.participants.Keys | Where-Object {
+                ((-not $Id) -or $_ -eq $Id) -and $state.participants[$_].status -ne 'working'
+            })
+        if ($targets.Count -eq 0) { Write-Host 'warn: nobody to unstop' }
+        if (-not ($state.load.holder -and $state.load.holder.Contains('running') -and $state.load.holder['running']) -and
+            ($state.load.holder -or @($state.load.queue).Count -gt 0)) {
+            Write-Host 'warn: a load test that is not recorded as already running is wanted; the plan will ask them to stop again'
+        }
+        foreach ($t in $targets) {
+            $state.participants[$t].status = 'working'; $state.participants[$t].since = $now
+            Add-Out $t 'resume' $msg.resumeCancel
+            Add-Log "unstop $t"
+        }
     }
     'cancel' {
         Need 'Id'
