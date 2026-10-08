@@ -26,7 +26,12 @@ use super::styled::glyph_style_advance;
 /// glyph 通し番号 `[start_serial, start_serial + len)`（`items` 中の `Glyph` のみを
 /// 0 起点で数えた範囲）のグリフ送り幅を、通し番号昇順＝**左畳み込み順**で合計する
 /// （配置も同順ゆえ浮動小数の順序依存を実装と一致させる・design Service Interface）。
-/// 全 `items` を走るため合計は `visible_count` に依存しない（INV-1/7.1）。
+/// 渡された `items` の全部を走るため合計は `visible_count` に依存しない（INV-1/7.1）。
+/// 字は台本のタグとタグの間のひと続きごとに分かれて届くので、届いた字の列だけを渡すと塊の
+/// 後ろの字がまだ無く、字が届くたびに合計が変わりうる。分かち書きの折返しでは呼び手
+/// （`actor_present.rs` の `arrange_lines`）が、再生の前に知らされた台本の全部から作った区間の
+/// 全文を渡すので合計は届き方に依らない。全文が無い・届いた字の列が全文の先頭と食い違うときは
+/// 届いた字の列が渡り、届いたぶんだけで合計する。
 pub(super) fn segment_advance_sum(
     items: &[TextItem],
     start_serial: usize,

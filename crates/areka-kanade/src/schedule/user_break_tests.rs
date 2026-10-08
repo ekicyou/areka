@@ -5,6 +5,7 @@
 // 入口は `schedule::step` の横断の腕で、殻（`actor.rs`）が `KanadeMsg::UserBreak` をそのまま
 // 写して渡す。ここでは `step` を直に呼び、返る状態と指示を見る。
 
+use super::super::balloon_events::BreakNote;
 use super::super::{
     Action, ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, State, TermCause, log_capture, step,
 };
@@ -98,7 +99,11 @@ fn assert_no_choice_timeout(actions: &[Action], at: &str) {
     );
 }
 
-/// 指示の列に SHIORI への要求が 1 件も無いことを表明する（要件 3.9・9.1）。
+/// 受理の指示の列に SHIORI への要求が 1 件も無いことを表明する（要件 3.9・9.1）。
+///
+/// 受理そのものは何も送らない。中断を理由に送る `OnBalloonBreak` は、止めたトークの完了の後に
+/// 定常へ戻ったときだけ出る（areka-P0-balloon-lifecycle-events が約束を改めた。場面ごとの期待は
+/// 完了の檻と `balloon_events_done_tests.rs`）。
 fn assert_no_shiori_request(actions: &[Action], at: &str) {
     assert_eq!(
         actions
@@ -106,16 +111,18 @@ fn assert_no_shiori_request(actions: &[Action], at: &str) {
             .filter(|a| matches!(a, Action::ShioriRequest(_)))
             .count(),
         0,
-        "{at}: 中断を理由とするイベントを SHIORI へ 1 件も送らない（要件 3.9）"
+        "{at}: 受理では SHIORI へ 1 件も送らない（要件 3.9）"
     );
 }
 
 // --- 判断分岐 ⑵: 止める再生が無い（要件 2.2・6.2） ---
 
-/// 再生中のトークが無ければ、中断の要求は何も止めず、状態も指示も変えない（要件 2.2）。
-/// 場面で振り分けない（要件 2.5）ので、定常でない場面でも同じ結果になる。
+/// 再生中のトークが無ければ、中断の要求は何も止めず、状態を変えない（要件 2.2）。場面で
+/// 振り分けない（要件 2.5）ので、定常でない場面でも止めない。読み終えたバルーンを閉じた知らせ
+/// `OnBalloonClose` だけは定常で 1 本出る（表 C・areka-P0-balloon-lifecycle-events。行ごとの檻は
+/// `balloon_events_idle_tests.rs`）。
 #[test]
-fn user_break_without_playing_talk_changes_nothing() {
+fn user_break_without_playing_talk_stops_nothing() {
     let phases: [(&str, fn() -> Phase); 4] = [
         ("Steady{None}", || Phase::Steady { talk: None }),
         ("Idle", || Phase::Idle),
@@ -131,7 +138,22 @@ fn user_break_without_playing_talk_changes_nothing() {
             Input::UserBreak { scope: 1 },
             &config(),
         );
-        assert!(actions.is_empty(), "{label}: 指示を 1 つも出さない");
+        let expected: &[&str] = if label == "Steady{None}" {
+            &["OnBalloonClose"]
+        } else {
+            &[]
+        };
+        assert_eq!(
+            actions
+                .iter()
+                .map(|a| match a {
+                    Action::ShioriRequest(ShioriCall::Get { id, .. }) => id.as_str(),
+                    _ => "止める指示など",
+                })
+                .collect::<Vec<_>>(),
+            expected,
+            "{label}: 止めない。定常でだけ OnBalloonClose を 1 本送る（表 C）"
+        );
         assert_eq!(
             std::mem::discriminant(&next.phase),
             std::mem::discriminant(&phase()),
@@ -189,7 +211,10 @@ fn user_break_while_playing_cancels_the_current_talk_in_every_phase() {
         assert_no_shiori_request(&actions, label);
         assert_eq!(
             next.user_break_talk,
-            Some(TalkId(3)),
+            Some(BreakNote {
+                talk_id: TalkId(3),
+                scope: 0
+            }),
             "{label}: 中断を出した相手を帳簿に控える（要件 2.4 の下地）"
         );
         assert_eq!(
@@ -230,7 +255,10 @@ fn second_user_break_for_the_same_talk_is_ignored() {
     );
     assert_eq!(
         next.user_break_talk,
-        Some(TalkId(3)),
+        Some(BreakNote {
+            talk_id: TalkId(3),
+            scope: 0
+        }),
         "2 件目は帳簿を書き換えない"
     );
     assert!(
@@ -261,7 +289,13 @@ fn scope_number_does_not_change_the_verdict() {
             matches!(actions.as_slice(), [Action::CancelChoice { talk_id }] if *talk_id == TalkId(3)),
             "scope={scope}: 再生中ならどのスコープでも止める（要件 2.5）"
         );
-        assert_eq!(next.user_break_talk, Some(TalkId(3)));
+        assert_eq!(
+            next.user_break_talk,
+            Some(BreakNote {
+                talk_id: TalkId(3),
+                scope
+            })
+        );
 
         let (next, actions) = step(
             not_playing(Phase::Steady { talk: None }),
@@ -269,7 +303,9 @@ fn scope_number_does_not_change_the_verdict() {
             &cfg,
         );
         assert!(
-            actions.is_empty(),
+            !actions
+                .iter()
+                .any(|a| matches!(a, Action::CancelChoice { .. })),
             "scope={scope}: 再生中でなければどのスコープでも止めない（要件 2.5）"
         );
         assert!(next.user_break_talk.is_none());
@@ -390,7 +426,8 @@ fn user_break_with_reserved_quit_ends_the_ghost() {
     );
 }
 
-/// 予約が無ければ、中断は従来どおり定常へ戻るだけで終了しない（要件 3.4）。
+/// 予約が無ければ、中断は従来どおり定常へ戻るだけで終了しない（要件 3.4）。定常へ戻ったので
+/// `OnBalloonBreak` の GET が 1 本だけ出る（areka-P0-balloon-lifecycle-events 要件 1.1）。
 #[test]
 fn user_break_without_reserved_quit_returns_to_steady() {
     let cfg = config();
@@ -399,7 +436,13 @@ fn user_break_without_reserved_quit_returns_to_steady() {
         matches!(next.phase, Phase::Steady { talk: None }),
         "予約なしの中断は定常へ戻る（要件 3.4）"
     );
-    assert!(actions.is_empty(), "終了の要求は出さない");
+    assert!(
+        matches!(
+            actions.as_slice(),
+            [Action::ShioriRequest(ShioriCall::Get { id, .. })] if id.as_str() == "OnBalloonBreak"
+        ),
+        "終了の要求は出さず、OnBalloonBreak の GET 1 本だけ"
+    );
     assert!(next.user_break_talk.is_none(), "中断の帳簿は空になる");
 }
 
@@ -490,7 +533,10 @@ fn user_break_ledger_is_emptied_by_any_completion_of_the_current_talk() {
         let mut state = playing(Phase::Steady {
             talk: Some(active(TalkId(3))),
         });
-        state.user_break_talk = Some(TalkId(3));
+        state.user_break_talk = Some(BreakNote {
+            talk_id: TalkId(3),
+            scope: 0,
+        });
         let (next, _actions) = step(
             state,
             Input::TalkDone(TalkDone {

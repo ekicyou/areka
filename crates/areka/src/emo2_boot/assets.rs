@@ -18,7 +18,8 @@ use areka_emo_atlas::{AtlasTable, WicDecoderArm};
 use areka_emo_compose::{BindSet, ComposeError, EmoWorld};
 use areka_emo_present::PresentError;
 use areka_emo_present::balloon::{
-    build_balloon_target_from_faces, load_scope_balloon_model, resolve_balloon_faces,
+    build_balloon_target_from_faces, load_balloon_use_self_alpha, load_scope_balloon_model,
+    resolve_balloon_faces,
 };
 use areka_emo_present::shell_target::load_shell_target;
 use areka_parsers::balloon::BalloonModel;
@@ -249,9 +250,10 @@ pub struct BootAssets {
 /// # 失敗（log-first・panic しない・R7.3）
 /// - `resolve_with_shell` 失敗 → [`BootWiringError::Mount`]（`StartPointMissing` 系は呼び手が warn 分類）。
 /// - WIC デコーダ生成失敗 → [`BootWiringError::Decoder`]。
-/// - シェルのフォルダの一覧失敗／`surfaces.txt`・`descript.txt` 読取失敗
+/// - シェルのフォルダの一覧失敗／`surfaces.txt` が在るのに読めない／`descript.txt` 読取失敗
 ///   → [`BootWiringError::ShellRead`]（シェル側は `ShellLoadError` からの写し替え・枝の追加 0）。
-/// - `surfaces.txt` が surface を産まない → [`BootWiringError::ShellEmpty`]。
+/// - シェルに面が 1 つも無い（`surfaces.txt` が無いか面を定義せず、面の画像も無い）
+///   → [`BootWiringError::ShellEmpty`]。
 /// - バルーン系列解決／target 構築失敗（走査失敗・面 0 不在・bake 脱落）
 ///   → [`BootWiringError::Balloon`]（`#[from] PresentError`・真因ログは権威側が既に出す）。
 #[allow(dead_code)] // 本番の起動はシェル名つきの兄弟を通る（呼び手はテスト）
@@ -492,9 +494,13 @@ pub fn build_balloon_assets(
         || balloon_root.display().to_string(),
         |n| n.to_string_lossy().into_owned(),
     );
+    // 透過の宣言はバルーン 1 つにつき 1 回だけ読む（記録をスコープの数だけ出さない）。切り替えは
+    // 本関数を呼び直すので、切り替えた先のバルーンの宣言で描く。
+    let use_self_alpha = load_balloon_use_self_alpha(balloon_root);
     for &scope in scopes {
         let faces = resolve_balloon_faces(balloon_root, scope)?;
-        let (emo_world, atlas) = build_balloon_target_from_faces(balloon_root, decoder, &faces)?;
+        let (emo_world, atlas) =
+            build_balloon_target_from_faces(balloon_root, decoder, &faces, use_self_alpha)?;
         // 面 0 必在（R1.7）は `resolve_balloon_faces` が権威として施行済みゆえ先頭は必ず存在する。
         // 万一の不在は権威の契約違反であり、log-first で真因を残して構築失敗に畳む（無言で
         // 定義なしのバルーンを組まない）。

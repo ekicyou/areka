@@ -145,7 +145,8 @@ pub fn finalize_chain(states: &[ScopeChainState]) -> Vec<ChainMove> {
 
 /// 再解決後の既定位置（[`ChainMove`] を反映した [`PointPx`]）を組む補助。
 ///
-/// Y は再解決の対象外ゆえ呼び手が持つ現在の Y をそのまま載せる（7.2）。
+/// Y は再解決の対象外ゆえ呼び手が渡した位置の Y をそのまま載せる（7.2）。起動時の確定は
+/// 元の既定位置を渡す（台本が縦に動かした Y を既定へ入れない・char-position-save-on-exit 要件 1.7）。
 pub fn moved_default_pos(current: PointPx, new_x: i32) -> PointPx {
     PointPx {
         x: new_x,

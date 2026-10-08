@@ -230,7 +230,7 @@ fn bind_change_emits_one_show_without_the_removed_side_frames() {
     assert!(rig.tick(1700).is_empty(), "同じ Show を二重に出さない");
 }
 
-/// 時計を書き換えない口（`peek`）は `-1` 以外の負の番号のコマを書かない（tasks.md 7.3 の申し送り）。
+/// 時計を書き換えない口（出来事の直後の `refresh`）は `-1` 以外の負の番号のコマを書かない（tasks.md 7.3 の申し送り）。
 /// 見えない間に負のコマへ着いた子の面へ戻ると、部品のコマの無い `Show` が 1 件だけ出る。
 #[test]
 fn switch_back_onto_a_negative_frame_carries_no_part_frame() {

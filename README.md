@@ -51,7 +51,7 @@
 
 ## 入手と起動
 
-- 配布物の zip を展開する（まだ GitHub Releases での配布はしていないので、今は手元で zip を組みます。下の「ビルド」）
+- GitHub Releases（https://github.com/ekicyou/areka/releases）から配布物の zip を入手して展開する。手元で組むこともできる（下の「ビルド」）
 
 zip を展開して `areka.exe` を開けば、同梱の えも？？ が立ちます。起動・終了・メニュー・`.nar` の入れ方・更新・記憶の置き場は、利用者向けの説明書 [dist/README.txt](dist/README.txt) にまとめてあります。
 

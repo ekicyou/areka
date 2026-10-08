@@ -29,11 +29,9 @@ fn params(use_self_alpha: UseSelfAlpha) -> AlphaParams {
     AlphaParams { use_self_alpha }
 }
 
-/// 抜き色の腕（`On` ＋ α なし ＋ `.pna` なし）を通す。
+/// 抜き色の腕（`On` ＋ α なし）を通す。
 fn key_out(img: DecodedImage) -> NormalizedImage {
-    Normalizer
-        .normalize(img, params(UseSelfAlpha::On), false)
-        .expect("On ＋ α なし ＋ .pna なしは抜き色の腕（要件 4.1）")
+    Normalizer.normalize(img, params(UseSelfAlpha::On))
 }
 
 /// 要件 4.3: 左上とつながっていない離れた同じ色の画素も透明になる。
@@ -95,9 +93,7 @@ fn image_with_alpha_channel_is_byte_identical() {
     let src = image(2, 2, true, &[a, b, a, b]);
     let expected = src.bgra.clone();
 
-    let out = Normalizer
-        .normalize(src, params(UseSelfAlpha::On), false)
-        .expect("α 付きは既存の素通しの腕");
+    let out = Normalizer.normalize(src, params(UseSelfAlpha::On));
 
     assert_eq!(
         out.pbgra, expected,
@@ -185,39 +181,32 @@ fn zero_sized_image_passes_through() {
     assert_eq!(out.height, 0);
 }
 
-/// `Normalizer::key_color` は抜き色の腕（`On` ＋ α なし ＋ `.pna` なし）のときだけ
-/// 左上の 4 バイトを返す。他の腕（α 付き・`.pna` あり・`Full`・`Off`）では `None`。
+/// `Normalizer::plan` が抜く色（`key`）を持つのは、抜き色の側に当たる宣言と絵のときだけで、
+/// その色は左上の 4 バイト（`0` は α を 255 にした後の左上）。α を使う側と `full` では持たない。
 #[test]
-fn key_color_is_some_only_on_the_key_color_arm() {
+fn plan_has_a_key_only_on_the_key_color_side() {
     let key = [10u8, 20, 30, 255];
     let px = [key, [200, 100, 50, 255], [0, 0, 0, 255], key];
+    let key_of = |has_alpha, decl| Normalizer::plan(&image(2, 2, has_alpha, &px), params(decl)).key;
 
-    // 抜き色の腕。
+    // 抜き色の側（`1` ＋ α なし・`0`・宣言なし ＋ 全画素不透明）。
+    assert_eq!(key_of(false, UseSelfAlpha::On), Some(key), "要件 3.2");
+    assert_eq!(key_of(true, UseSelfAlpha::Off), Some(key), "要件 5.2");
+    assert_eq!(key_of(false, UseSelfAlpha::Off), Some(key), "要件 5.1");
     assert_eq!(
-        Normalizer::key_color(&image(2, 2, false, &px), params(UseSelfAlpha::On), false),
+        key_of(true, UseSelfAlpha::Undeclared),
         Some(key),
-        "On ＋ α なし ＋ .pna なしだけが抜き色（要件 4.1）"
+        "要件 9.2"
     );
-    // α 付き＝α の腕（要件 4.4）。
     assert_eq!(
-        Normalizer::key_color(&image(2, 2, true, &px), params(UseSelfAlpha::On), false),
-        None
+        key_of(false, UseSelfAlpha::Undeclared),
+        Some(key),
+        "要件 9.3"
     );
-    // `.pna` あり＝`.pna` の腕（未実装のまま・要件 4.9）。
-    assert_eq!(
-        Normalizer::key_color(&image(2, 2, false, &px), params(UseSelfAlpha::On), true),
-        None
-    );
-    // `Full`＝全面不透明の腕（未実装のまま・要件 4.9）。
-    assert_eq!(
-        Normalizer::key_color(&image(2, 2, false, &px), params(UseSelfAlpha::Full), false),
-        None
-    );
-    // `Off` の下の抜き色は実装しない（設計 areka-emo-atlas 節・要件 5.6 後段）。
-    assert_eq!(
-        Normalizer::key_color(&image(2, 2, false, &px), params(UseSelfAlpha::Off), false),
-        None
-    );
+    // α を使う側と `full`。
+    assert_eq!(key_of(true, UseSelfAlpha::On), None, "要件 3.1");
+    assert_eq!(key_of(true, UseSelfAlpha::Full), None, "要件 4.1");
+    assert_eq!(key_of(false, UseSelfAlpha::Full), None, "要件 4.2");
     // 左上の画素が無い（幅か高さが 0）絵は抜き色を持てない。
     let empty = DecodedImage {
         width: 0,
@@ -226,8 +215,5 @@ fn key_color_is_some_only_on_the_key_color_arm() {
         bgra: Vec::new(),
         has_alpha: false,
     };
-    assert_eq!(
-        Normalizer::key_color(&empty, params(UseSelfAlpha::On), false),
-        None
-    );
+    assert_eq!(Normalizer::plan(&empty, params(UseSelfAlpha::On)).key, None);
 }

@@ -8,10 +8,15 @@
 
 use std::collections::BTreeMap;
 
+use areka_sakura::TalkId;
+
 use super::{
     BalloonVisibilityState, DEFAULT_BALLOON_TIMEOUT_SECS, GlyphObservation, ScopeObservation,
     TalkLifecycleSignal, VisibilityDecision, VisibilityObservations, decide,
 };
+
+/// [`Frame::talk_started`] が運ぶトークの番号。
+pub(crate) const TALK_ID: TalkId = TalkId(1);
 
 /// 観測できた scope（可視グリフ数と実可視）。抑止条件はいずれも「観測できて不成立」。
 /// 消去の回数は 0 で一定（回数の変わらない観測の列は今と同じ答えを返す）。
@@ -119,9 +124,11 @@ impl Frame {
         self
     }
 
-    /// 会話開始の信号を本フレームに届ける。
+    /// 会話開始の信号を本フレームに届ける。番号は本番と同じく配送が付けた [`TALK_ID`]。
     pub(crate) fn talk_started(mut self) -> Self {
-        self.obs.lifecycle.push(TalkLifecycleSignal::TalkStarted);
+        self.obs.lifecycle.push(TalkLifecycleSignal::TalkStarted {
+            talk_id: Some(TALK_ID),
+        });
         self
     }
 
@@ -130,6 +137,25 @@ impl Frame {
         self.obs
             .lifecycle
             .push(TalkLifecycleSignal::DisplayEndAt(end));
+        self
+    }
+
+    /// 占有終端とトークの終わり（止まった時刻＝占有終端）を本フレームに一緒に届ける。
+    ///
+    /// 時間切れの計測はトークの終わりが届いてから始まる（areka-P0-balloon-lifecycle-events
+    /// 決定 D6）。止まった時刻は判断中核が丸めた後の終端（下限 0.0・数でなければ 0.0）と同じに
+    /// するので、起点は終端のままで満了の時刻は変わらない。
+    pub(crate) fn ended_at(self, end: f64) -> Self {
+        let mut frame = self.display_end(end);
+        frame.obs.lifecycle.push(TalkLifecycleSignal::TalkEnded {
+            at: Some(end.max(0.0)),
+        });
+        frame
+    }
+
+    /// 任意の合図を本フレームに届ける（到着順に積む）。
+    pub(crate) fn signal(mut self, signal: TalkLifecycleSignal) -> Self {
+        self.obs.lifecycle.push(signal);
         self
     }
 

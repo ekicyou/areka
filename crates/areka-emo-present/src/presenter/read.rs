@@ -199,6 +199,14 @@ impl EmoPresenter {
         self.targets.get(&target)?.current_surface_id
     }
 
+    /// target の**出番の世代**（`animated-image-playback` 要件 2.3）。未登録は `None`。
+    ///
+    /// 外から所有される対象を見えていない状態から [`Self::show_target`] で出すたびに 1 つ進む
+    /// （命令で見える対象は 0 のまま）。届けの相が窓の知らせに載せて seriko へ渡す。
+    pub fn stage_generation(&self, target: TargetId) -> Option<u64> {
+        Some(self.targets.get(&target)?.stage_generation)
+    }
+
     /// target がいま**可視か**（`areka-P0-balloon-visibility` Requirement 6.8 の可視性の単一真実源）。
     ///
     /// 未登録 target は `None`、登録済みなら `Some(可視か)` を返す。真実源は `PresentTarget.visible`

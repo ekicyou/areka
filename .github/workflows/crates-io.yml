@@ -40,23 +40,22 @@ jobs:
           TAG: ${{ github.ref_name }}
           INPUT: ${{ inputs.version }}
         run: |
-          [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)  # 日本語のログを化けさせない
           if ($env:EVENT -ceq 'push') {
             if ($env:TAG -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+\z') {
-              Write-Host "::error::タグ $($env:TAG | ConvertTo-Json) が v と数字 3 つの版の形でない（例 v0.0.2）。何も上げていない"
+              Write-Host "::error::tag $($env:TAG | ConvertTo-Json) is not v followed by three numbers (e.g. v0.0.2); nothing published"
               exit 1
             }
             $version = $env:TAG.Substring(1)
           } else {
             if ($env:INPUT -cnotmatch '^[0-9]+\.[0-9]+\.[0-9]+\z') {
-              Write-Host "::error::入力 version $($env:INPUT | ConvertTo-Json) が数字 3 つの版の形でない（v を付けない・例 0.0.2）。何も上げていない"
+              Write-Host "::error::input version $($env:INPUT | ConvertTo-Json) is not three numbers (no v, e.g. 0.0.2); nothing published"
               exit 1
             }
             $version = $env:INPUT
           }
           # 形を確かめた値だけを後の段へ渡す
           "VERSION=$version" >> $env:GITHUB_ENV
-          Write-Host "版: $version（きっかけ: $env:EVENT）"
+          Write-Host "version: $version (trigger: $env:EVENT)"
 
       - name: release を待つ
         # タグの push のときだけ。手での起動は、次の「Release の確認」が同じことを確かめる
@@ -65,7 +64,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)  # 日本語のログを化けさせない
           # 待つ長さ（変えるのはこの 2 行だけ）
           $LIMIT_MINUTES = 120
           $POLL_SECONDS = 30
@@ -73,34 +71,38 @@ jobs:
           $until = [DateTime]::UtcNow.AddMinutes($LIMIT_MINUTES)
           while ($true) {
             # 同じコミット・同じタグの push で始まった release.yml の回（新しい順）
-            $out = @(gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/release.yml/runs?event=push&head_sha=$env:GITHUB_SHA" 2>&1)
+            # ブランチ名・状態・結論の 3 つの欄（どれも ASCII）だけに絞って読む。回の題やコミットの文は読まない
+            # （端末の文字コードに依らず行が混ざらない）。結論が null のときは文字 null
+            $out = @(gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/release.yml/runs?event=push&head_sha=$env:GITHUB_SHA" --jq '.workflow_runs[] | [.head_branch, .status, (.conclusion | tostring)] | @tsv' 2>&1)
             $code = $LASTEXITCODE
             $err = ($out | Where-Object { $_ -is [Management.Automation.ErrorRecord] }) -join ' '
             if ($code -and $err -match 'HTTP 404') {
-              Write-Host "::error::release.yml（Release を作る workflow）がリポジトリに無い。$tag は何も上げていない"
+              Write-Host "::error::release.yml (the workflow that creates the Release) is not in the repository; nothing published for $tag"
               exit 1
             }
             if ($code) {
               # 一時的な失敗は待つ側に数える。gh の文はそのまま出さない（状態の番号だけ）
-              $state = "読めない（$([regex]::Match($err, 'HTTP [0-9]+').Value)）"
+              $state = "unreadable ($([regex]::Match($err, 'HTTP [0-9]+').Value))"
             } else {
-              $runs = @((($out | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] }) -join "`n" | ConvertFrom-Json).workflow_runs)
-              $run = $runs | Where-Object { $_.head_branch -ceq $tag } | Select-Object -First 1
-              if (-not $run) { $state = 'まだ始まっていない' }
-              elseif ($run.status -cne 'completed') { $state = $run.status }
-              elseif ($run.conclusion -ceq 'success') {
-                Write-Host "release が緑で終わった（$tag）"
+              # 1 つ目の欄がタグと字のとおり同じ最初の行（新しい順なので最新の回）
+              $run = $out | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] } |
+                ForEach-Object { , ([string]$_ -split "`t") } | Where-Object { $_[0] -ceq $tag } | Select-Object -First 1
+              if (-not $run) { $state = 'not started yet' }
+              elseif ($run[1] -cne 'completed') { $state = $run[1] }
+              elseif ($run[2] -ceq 'success') {
+                Write-Host "release finished green ($tag)"
                 exit 0
               } else {
-                Write-Host "::error::$tag の release が $($run.conclusion) で終わった。何も上げていない。release を緑にしてから、この回を Re-run する"
+                $conclusion = $run[2]
+                Write-Host "::error::release for $tag finished with $conclusion; nothing published. Make release green, then re-run this run"
                 exit 1
               }
             }
             if ([DateTime]::UtcNow -ge $until) {
-              Write-Host "::error::$LIMIT_MINUTES 分待っても $tag の release が緑で終わらない（最後の様子: $state）。何も上げていない"
+              Write-Host "::error::release for $tag is not green after $LIMIT_MINUTES minutes (last state: $state); nothing published"
               exit 1
             }
-            Write-Host "待つ: $tag の release は $state"
+            Write-Host "waiting: release for $tag is $state"
             Start-Sleep -Seconds $POLL_SECONDS
           }
 
@@ -116,14 +118,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)  # 日本語のログを化けさせない
           $draft = gh release view "v$env:VERSION" --json isDraft --jq .isDraft
           if ($LASTEXITCODE) {
-            Write-Host "::error::v$env:VERSION の GitHub Release が無い（下書きは読めない権限なので、下書きのときもここで止まる）。Release を公開してから起動し直す。何も上げていない"
+            Write-Host "::error::GitHub Release v$env:VERSION not found (drafts are not readable with this permission, so a draft also stops here). Publish the Release, then start again. Nothing published"
             exit 1
           }
           if ($draft -ne 'false') {
-            Write-Host "::error::v$env:VERSION の GitHub Release が下書き。Release を公開してから起動し直す。何も上げていない"
+            Write-Host "::error::GitHub Release v$env:VERSION is a draft. Publish the Release, then start again. Nothing published"
             exit 1
           }
 
@@ -136,12 +137,11 @@ jobs:
       - name: 残りの判定
         id: pending
         run: |
-          [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)  # 日本語のログを化けさせない
           # 標準出力はまだ出ていないクレートの名前だけ（人が読む行は標準エラー）。混ぜない
           $names = @(pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version $env:VERSION)
           # 途中で落ちると名前が一部だけ出ていることがあるので、終了コードを先に見る
           if ($LASTEXITCODE) { exit 1 }
-          Write-Host "残り: $(if ($names) { $names -join ' ' } else { 'なし（すべて出ている）' })"
+          Write-Host "pending: $(if ($names) { $names -join ' ' } else { 'none (all published)' })"
           "names=$($names -join ' ')" >> $env:GITHUB_OUTPUT
 
       - name: 鍵
@@ -164,19 +164,18 @@ jobs:
         env:
           CHECKOUT: ${{ steps.checkout.outcome }}
         run: |
-          [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)  # 日本語のログを化けさせない
           if ($env:CHECKOUT -ne 'success') {
-            '取り出しまで（版の形・release を待つ・取り出し）で止まった・何も上げていない' >> $env:GITHUB_STEP_SUMMARY
+            'stopped before checkout (version format, wait for release, checkout); nothing published' >> $env:GITHUB_STEP_SUMMARY
             exit 0
           }
-          # 子の人が読む行（在る・無い）は UTF-8 で標準エラーへ出る。名前（標準出力）と分けて受け取る
+          # 子の人が読む行（present・absent）は UTF-8 で標準エラーへ出る。名前（標準出力）と分けて受け取る
           $errFile = Join-Path $env:RUNNER_TEMP 'crates-io-pending.txt'
           $names = @(pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version $env:VERSION 2> $errFile)
           $code = $LASTEXITCODE
           $lines = @(Get-Content -LiteralPath $errFile -Encoding utf8 -ErrorAction Ignore)
           $summary = @("## crates.io v$env:VERSION", '') + @($lines | ForEach-Object { "- $_" }) + ''
-          if ($code) { $summary += "残りの判定が失敗した（終了コード $code）" }
-          elseif ($names) { $summary += "まだ出ていない: $($names -join ' ')" }
-          else { $summary += 'すべて出ている' }
+          if ($code) { $summary += "pending check failed (exit code $code)" }
+          elseif ($names) { $summary += "not yet published: $($names -join ' ')" }
+          else { $summary += 'all published' }
           $summary >> $env:GITHUB_STEP_SUMMARY
           if ($code -or $names) { exit 1 }

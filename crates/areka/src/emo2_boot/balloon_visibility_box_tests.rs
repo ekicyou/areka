@@ -101,7 +101,7 @@ fn a_break_released_in_the_same_frame_does_not_reach_boxes() {
         &[(1, boxed(seen(0, false)))],
         &[
             TalkLifecycleSignal::UserBreak,
-            TalkLifecycleSignal::TalkStarted,
+            TalkLifecycleSignal::TalkStarted { talk_id: None },
         ],
         None,
     );
@@ -122,13 +122,14 @@ fn timeout_measures_and_hides_a_scope_showing_only_boxes() {
     let armed = Frame::new(&[(0, boxed(seen(0, false)))])
         .at(0.0)
         .talk_started()
-        .display_end(0.0)
+        .ended_at(0.0)
         .timeout(TIMEOUT)
         .run(&mut state);
     assert!(armed.actions.is_empty(), "箱だけの scope で窓が出た");
     assert_eq!(
         armed.logs,
         vec![VisibilityLogEvent::MeasurementStarted {
+            origin: MeasurementOrigin::DisplayEnd,
             display_end: 0.0,
             deadline: TIMEOUT,
         }]
@@ -149,7 +150,7 @@ fn timeout_measures_and_hides_a_scope_showing_only_boxes() {
         let plain = Frame::new(&[(0, seen(0, false))])
             .at(now)
             .talk_started()
-            .display_end(0.0)
+            .ended_at(0.0)
             .timeout(TIMEOUT)
             .run(&mut state);
         assert!(plain.actions.is_empty());
@@ -165,7 +166,7 @@ fn hover_on_a_box_holds_the_expired_deadline() {
     Frame::new(&[(0, boxed(seen(0, false)))])
         .at(0.0)
         .talk_started()
-        .display_end(0.0)
+        .ended_at(0.0)
         .timeout(TIMEOUT)
         .run(&mut state);
 
@@ -194,7 +195,7 @@ fn clearing_the_window_keeps_the_measurement_while_boxes_show() {
     Frame::new(&[(0, seen(2, false))])
         .at(0.0)
         .talk_started()
-        .display_end(0.0)
+        .ended_at(0.0)
         .timeout(TIMEOUT)
         .run(&mut state);
 
@@ -227,7 +228,7 @@ fn a_latched_break_takes_box_only_scopes_out_of_the_measurement() {
     Frame::new(&[(0, boxed(seen(0, false)))])
         .at(0.0)
         .talk_started()
-        .display_end(0.0)
+        .ended_at(0.0)
         .timeout(TIMEOUT)
         .run(&mut state);
 
@@ -260,8 +261,9 @@ fn a_released_break_keeps_box_only_scopes_in_the_measurement() {
         &[(1, boxed(seen(0, false)))],
         &[
             TalkLifecycleSignal::UserBreak,
-            TalkLifecycleSignal::TalkStarted,
+            TalkLifecycleSignal::TalkStarted { talk_id: None },
             TalkLifecycleSignal::DisplayEndAt(0.0),
+            TalkLifecycleSignal::TalkEnded { at: Some(0.0) },
         ],
         Some(0.0),
     );
@@ -273,6 +275,7 @@ fn a_released_break_keeps_box_only_scopes_in_the_measurement() {
         decision
             .logs
             .contains(&VisibilityLogEvent::MeasurementStarted {
+                origin: MeasurementOrigin::DisplayEnd,
                 display_end: 0.0,
                 deadline: TIMEOUT,
             }),

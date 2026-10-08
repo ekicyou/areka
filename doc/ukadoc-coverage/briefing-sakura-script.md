@@ -401,7 +401,7 @@
 | `set,balloonmarker` | 1 | 消費されない | — |
 | `set,balloonnum` | 1 | 消費されない | — |
 | `set,balloonoffset` | 1 | 消費されない | — |
-| `set,balloontimeout` | 1 | 消費されない | — |
+| `set,balloontimeout` | 1 | 消費される（2026-10-06 に `areka-P0-balloon-lifecycle-events` が実装。compile は転記するだけで、再生時にバルーンの寿命の受け口が第 1 引数 `balloontimeout` の出現だけを拾い、そのトークの時間切れまでの待ち時間を差し替える。調査時点は消費されない） | `BalloonLifecycleSink::emit` |
 | `set,balloonwait` | 1 | 消費されない | — |
 | `set,choicetimeout` | 1 | compile が読む（2026-10-03 に `areka-P0-choice-timeout-directive` が実装。運び役への転記はそのままで、受け手はいないが、compile が転記の後に時間の欄を読み、選択待ちの区切りへ秒で入れる。調査時点は消費されない） | `parse_choice_timeout` |
 | `set,otherghosttalk` | 1 | 消費されない | — |
@@ -916,7 +916,7 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 | 一部だけが効かない | 2 |
 | **合計** | **242** |
 
-> **2026-09-29 の追記**: 上の数は調査時点の写しで、数え直していない。この 242 件のうち `\![execute,install,path,ファイル名]`・`%lastghostname`・`%lastobjectname` の 3 件は、2026-09-29 に `areka-P0-ghost-install` が担当として引き受けて実装済みにした（下の表の該当行に書き添えた）。2026-09-30 には `\![execute,install,url,…]`・`\![update,更新対象…]`・`\![updatebymyself…]`・`\![updateother,…]` の 4 件を `areka-P0-network-update` が担当として引き受けて実装済みにした（同じく下の表の該当行に書き添えた。`\![update,platform]` は引き受けていない）。2026-10-01 には `\![change,shell,…]`・`\![change,balloon,…]` の 2 件を `areka-P0-shell-balloon-switch` が担当として引き受けて実装済みにした（同じく下の表の該当行に書き添えた）。いまの状態は台帳 `ledger/sakura-script.toml` と報告 `report/sakura-script.md` が正本である。
+> **2026-09-29 の追記**: 上の数は調査時点の写しで、数え直していない。この 242 件のうち `\![execute,install,path,ファイル名]`・`%lastghostname`・`%lastobjectname` の 3 件は、2026-09-29 に `areka-P0-ghost-install` が担当として引き受けて実装済みにした（下の表の該当行に書き添えた）。2026-09-30 には `\![execute,install,url,…]`・`\![update,更新対象…]`・`\![updatebymyself…]`・`\![updateother,…]` の 4 件を `areka-P0-network-update` が担当として引き受けて実装済みにした（同じく下の表の該当行に書き添えた。`\![update,platform]` は引き受けていない）。2026-10-01 には `\![change,shell,…]`・`\![change,balloon,…]` の 2 件を `areka-P0-shell-balloon-switch` が担当として引き受けて実装済みにした（同じく下の表の該当行に書き添えた）。2026-10-06 には `\j[ID]` と `\![open,file|browser|explorer|editor|mailer,…]` の 6 件を `areka-P0-open-external-tags` が担当として引き受け、4 件を実装済み・`\j[ID]` と `\![open,explorer,…]` の 2 件を一部だけが効かない形にした（同じく下の表の該当行に書き添えた）。いまの状態は台帳 `ledger/sakura-script.toml` と報告 `report/sakura-script.md` が正本である。
 
 全数を項目の id まで並べる。
 
@@ -1028,7 +1028,7 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 | `\![open,archiveviewer,(ファイル名)]` | 未対応（書いてあるのに何も起きない） | SSP の管理窓とビューア | `ukadoc:list_sakura_script:_5c_21_5bopen_2carchiveviewer_2c_28_30d5_30a1_30a4_30eb_540d_29_5d:1` |
 | `\![open,backlogviewer]` | 未対応（書いてあるのに何も起きない） | SSP の管理窓とビューア | `ukadoc:list_sakura_script:_5c_21_5bopen_2cbacklogviewer_5d:1` |
 | `\![open,balloonexplorer]` | 未対応（書いてあるのに何も起きない） | SSP の管理窓とビューア | `ukadoc:list_sakura_script:_5c_21_5bopen_2cballoonexplorer_5d:1` |
-| `\![open,browser,パラメータ]` | 未対応（書いてあるのに何も起きない） | 外部のアプリに渡す | `ukadoc:list_sakura_script:_5c_21_5bopen_2cbrowser_2c_30d1_30e9_30e1_30fc_30bf_5d:1` |
+| `\![open,browser,パラメータ]` | 実装済み（2026-10-06 に `areka-P0-open-external-tags` が実装。パラメータを OS の既定の閲覧ソフトで開く〔SSP の外部アプリの設定は写さない〕。調査時点は未対応） | 外部のアプリに渡す | `ukadoc:list_sakura_script:_5c_21_5bopen_2cbrowser_2c_30d1_30e9_30e1_30fc_30bf_5d:1` |
 | `\![open,calendar]` | 未対応（書いてあるのに何も起きない） | SSP の管理窓とビューア | `ukadoc:list_sakura_script:_5c_21_5bopen_2ccalendar_5d:1` |
 | `\![open,communicatebox]` | 未対応（書いてあるのに何も起きない） | 通信箱と教え込み箱 | `ukadoc:list_sakura_script:_5c_21_5bopen_2ccommunicatebox_5d:1` |
 | `\![open,configurationdialog,ダイアログID]` | 未対応（書いてあるのに何も起きない） | SSP の管理窓とビューア | `ukadoc:list_sakura_script:_5c_21_5bopen_2cconfigurationdialog_2c_30c0_30a4_30a2_30ed_30b0ID_5d:1` |
@@ -1039,16 +1039,16 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 | `\![open,dialog,open,パラメータ]` | 未対応（書いてあるのに何も起きない） | 入力窓とダイアログ | `ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2copen_2c_30d1_30e9_30e1_30fc_30bf_5d:1` |
 | `\![open,dialog,save,パラメータ]` | 未対応（書いてあるのに何も起きない） | 入力窓とダイアログ | `ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2csave_2c_30d1_30e9_30e1_30fc_30bf_5d:1` |
 | `\![open,dressupexplorer]` | 未対応（書いてあるのに何も起きない） | SSP の管理窓とビューア | `ukadoc:list_sakura_script:_5c_21_5bopen_2cdressupexplorer_5d:1` |
-| `\![open,editor,ファイル,表示行]` | 未対応（書いてあるのに何も起きない） | 外部のアプリに渡す | `ukadoc:list_sakura_script:_5c_21_5bopen_2ceditor_2c_30d5_30a1_30a4_30eb_2c_8868_793a_884c_5d:1` |
+| `\![open,editor,ファイル,表示行]` | 実装済み（2026-10-06 に `areka-P0-open-external-tags` が実装。ファイルを OS の「編集」の関連付けで開く。表示行は無視する。調査時点は未対応） | 外部のアプリに渡す | `ukadoc:list_sakura_script:_5c_21_5bopen_2ceditor_2c_30d5_30a1_30a4_30eb_2c_8868_793a_884c_5d:1` |
 | `\![open,errorlog]` | 未対応（書いてあるのに何も起きない） | 開発と診断の窓 | `ukadoc:list_sakura_script:_5c_21_5bopen_2cerrorlog_5d:1` |
-| `\![open,explorer,ファイル]` | 未対応（書いてあるのに何も起きない） | 外部のアプリに渡す | `ukadoc:list_sakura_script:_5c_21_5bopen_2cexplorer_2c_30d5_30a1_30a4_30eb_5d:1` |
-| `\![open,file,ファイル名]` | 未対応（書いてあるのに何も起きない） | 外部のアプリに渡す | `ukadoc:list_sakura_script:_5c_21_5bopen_2cfile_2c_30d5_30a1_30a4_30eb_540d_5d:1` |
+| `\![open,explorer,ファイル]` | 一部だけが効かない（2026-10-06 に `areka-P0-open-external-tags` が実装。フォルダは開き、ファイルは選んだ状態でそのフォルダを開く。`種類,名前` の `ghost`・`balloon`・`shell` は名指しで引いて開き、`headline`・`plugin` は開かず `warn!` を残す。調査時点は未対応） | 外部のアプリに渡す | `ukadoc:list_sakura_script:_5c_21_5bopen_2cexplorer_2c_30d5_30a1_30a4_30eb_5d:1` |
+| `\![open,file,ファイル名]` | 実装済み（2026-10-06 に `areka-P0-open-external-tags` が実装。環境変数を展開し、相対パスはゴーストの `ghost/master` から探して OS の関連付けで開く〔名前だけならパス探索に任せる〕。調査時点は未対応） | 外部のアプリに渡す | `ukadoc:list_sakura_script:_5c_21_5bopen_2cfile_2c_30d5_30a1_30a4_30eb_540d_5d:1` |
 | `\![open,ghostexplorer]` | 未対応（書いてあるのに何も起きない） | SSP の管理窓とビューア | `ukadoc:list_sakura_script:_5c_21_5bopen_2cghostexplorer_5d:1` |
 | `\![open,headlinesensorexplorer]` | 未対応（書いてあるのに何も起きない） | ヘッドラインセンサ | `ukadoc:list_sakura_script:_5c_21_5bopen_2cheadlinesensorexplorer_5d:1` |
 | `\![open,help,ダイアログID]` | 未対応（書いてあるのに何も起きない） | SSP の管理窓とビューア | `ukadoc:list_sakura_script:_5c_21_5bopen_2chelp_2c_30c0_30a4_30a2_30ed_30b0ID_5d:1` |
 | `\![open,inputbox,ID,表示時間,テキスト,オプション,...]` | 未対応（書いてあるのに何も起きない） | 入力窓とダイアログ | `ukadoc:list_sakura_script:_5c_21_5bopen_2cinputbox_2cID_2c_8868_793a_6642_9593_2c_30c6_30ad_30b9_30c8_2c_30aa_30d7_30b7_30e7_30f3_2c..._5d:1` |
 | `\![open,ipinput,ID,表示時間,IP1桁目,IP2桁目,IP3桁目,IP4桁目,オプション]` | 未対応（書いてあるのに何も起きない） | 入力窓とダイアログ | `ukadoc:list_sakura_script:_5c_21_5bopen_2cipinput_2cID_2c_8868_793a_6642_9593_2cIP1_6841_76ee_2cIP2_6841_76ee_2cIP3_6841_76ee_2cIP4_6841_76ee_2c_3:1` |
-| `\![open,mailer,パラメータ]` | 未対応（書いてあるのに何も起きない） | 外部のアプリに渡す | `ukadoc:list_sakura_script:_5c_21_5bopen_2cmailer_2c_30d1_30e9_30e1_30fc_30bf_5d:1` |
+| `\![open,mailer,パラメータ]` | 実装済み（2026-10-06 に `areka-P0-open-external-tags` が実装。`mailto:` が無ければ付けて OS の既定のメールソフトで開く。調査時点は未対応） | 外部のアプリに渡す | `ukadoc:list_sakura_script:_5c_21_5bopen_2cmailer_2c_30d1_30e9_30e1_30fc_30bf_5d:1` |
 | `\![open,messenger]` | 未対応（書いてあるのに何も起きない） | SSP の管理窓とビューア | `ukadoc:list_sakura_script:_5c_21_5bopen_2cmessenger_5d:1` |
 | `\![open,passwordinput,ID,表示時間,テキスト,オプション]` | 未対応（書いてあるのに何も起きない） | 入力窓とダイアログ | `ukadoc:list_sakura_script:_5c_21_5bopen_2cpasswordinput_2cID_2c_8868_793a_6642_9593_2c_30c6_30ad_30b9_30c8_2c_30aa_30d7_30b7_30e7_30f3_5d:1` |
 | `\![open,pictureviewer,(ファイル名)]` | 未対応（書いてあるのに何も起きない） | SSP の管理窓とビューア | `ukadoc:list_sakura_script:_5c_21_5bopen_2cpictureviewer_2c_28_30d5_30a1_30a4_30eb_540d_29_5d:1` |
@@ -1151,7 +1151,7 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 | `\e` | 実装済み | — | `ukadoc:list_sakura_script:_5ce:1` |
 | `\i[ID,wait]` | 未対応（書いてあるのに何も起きない） | サーフェスアニメーション | `ukadoc:list_sakura_script:_5ci_5bID_2cwait_5d:1` |
 | `\i[ID番号]` | 未対応（書いてあるのに何も起きない） | サーフェスアニメーション | `ukadoc:list_sakura_script:_5ci_5bID_756a_53f7_5d:1` |
-| `\j[ID]` | 未対応（書いてあるのに何も起きない） | 外部を開く・別窓 | `ukadoc:list_sakura_script:_5cj_5bID_5d:1` |
+| `\j[ID]` | 一部だけが効かない（2026-10-06 に `areka-P0-open-external-tags` が実装。`http://`・`https://`・`file:///`・`mailto:` の ID は OS の既定のアプリで開き、それ以外の ID〔旧来の「ID にジャンプ」〕は開かず `warn!` を残す。調査時点は未対応） | 外部を開く・別窓 | `ukadoc:list_sakura_script:_5cj_5bID_5d:1` |
 | `\m[umsg,wparam,lparam]` | 未対応（書いてあるのに何も起きない） | 外部を開く・別窓 | `ukadoc:list_sakura_script:_5cm_5bumsg_2cwparam_2clparam_5d:1` |
 | `\n` | 実装済み | — | `ukadoc:list_sakura_script:_5cn:1` |
 | `\n[パーセント]` | 実装済み | — | `ukadoc:list_sakura_script:_5cn_5b_30d1_30fc_30bb_30f3_30c8_5d:1` |
@@ -1160,7 +1160,7 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 | `\q[タイトル,ID1,ID2,ID3...]` | 一部だけが効かない | — | `ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID1_2cID2_2cID3..._5d:1` |
 | `\q[タイトル,ID,r2,r3...]` | 実装済み | — | `ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1` |
 | `\q[タイトル,OnID,r0,r1,...]` | 実装済み | — | `ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cOnID_2cr0_2cr1_2c..._5d:1` |
-| `\q[タイトル,script:実行内容]` | 一部だけが効かない | — | `ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1` |
+| `\q[タイトル,script:実行内容]` | 実装済み（2026-10-07 に `areka-P0-choice-script-prefix` が実装。選ぶと `script:` の後ろを新しいトークとして再生する。調査時点は一部だけが効かない） | — | `ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1` |
 | `\s[ID番号]` | 実装済み | — | `ukadoc:list_sakura_script:_5cs_5bID_756a_53f7_5d:1` |
 | `\v` | 未対応（書いてあるのに何も起きない） | キャラの移動と重なり | `ukadoc:list_sakura_script:_5cv:1` |
 | `\w時間` | 実装済み | — | `ukadoc:list_sakura_script:_5cw_6642_9593:1` |
@@ -1615,7 +1615,7 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 #### 外部のアプリに渡す（5 件）
 
 - **利用者に何が起きるか**: 見せたかった頁も、開かせたかったファイルも、宛先を入れたメールの下書きも出ない。
-- **その群を成立させる最小の基盤**: 外のアプリケーションへ引き渡す部分と、その指示を名前で受け取る口。
+- **その群を成立させる最小の基盤**: 外のアプリケーションへ引き渡す部分と、その指示を名前で受け取る口（調査時点。2026-10-06 に `areka-P0-open-external-tags` が OS の既定のアプリで開く 1 か所の処理と受け口を足し、この 5 件を開けるようにした。`\![open,explorer,…]` の `headline`・`plugin` だけは開かない）。
 - **台帳の項目 id**:
   - `\![open,browser,パラメータ]` — `ukadoc:list_sakura_script:_5c_21_5bopen_2cbrowser_2c_30d1_30e9_30e1_30fc_30bf_5d:1`
   - `\![open,editor,ファイル,表示行]` — `ukadoc:list_sakura_script:_5c_21_5bopen_2ceditor_2c_30d5_30a1_30a4_30eb_2c_8868_793a_884c_5d:1`
@@ -1657,7 +1657,7 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 #### 外部を開く・別窓（4 件）
 
 - **利用者に何が起きるか**: 飛ばしたかった先が開かない。伝言箱・教え込みの窓も、別のソフトへの受け渡しも起きない。
-- **その群を成立させる最小の基盤**: 外部を開く道と、その区間・引数を読み取る分岐。
+- **その群を成立させる最小の基盤**: 外部を開く道と、その区間・引数を読み取る分岐（調査時点。2026-10-06 に `areka-P0-open-external-tags` が `\j[ID]` を読み取る分岐と開く道を足し、`http://`・`https://`・`file:///`・`mailto:` の ID を開けるようにした）。
 - **台帳の項目 id**:
   - `\__c` — `ukadoc:list_sakura_script:_5c__c:1`
   - `\__t` — `ukadoc:list_sakura_script:_5c__t:1`

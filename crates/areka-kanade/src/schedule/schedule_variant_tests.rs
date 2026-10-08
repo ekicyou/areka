@@ -113,6 +113,8 @@ fn input_variants_are_existing_eight_plus_choice_two() {
             Input::ExecutionState(_) => "ExecutionState",
             // translate-pipeline で翻訳の結果（`TranslateDone`）の腕を足した。
             Input::TranslateDone(_) => "TranslateDone",
+            // balloon-lifecycle-events で時間切れの知らせ（`BalloonTimeout`）の腕を足した。
+            Input::BalloonTimeout { .. } => "BalloonTimeout",
         }
     }
     assert_eq!(tag(&Input::Boot), "Boot");

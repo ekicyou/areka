@@ -34,6 +34,7 @@ fn ask(world: &mut World, ghost: &ActiveGhost, property_name: &str) -> Option<To
 fn answers_unavailable_and_warns_once_without_a_runtime() {
     let ghost = ActiveGhost {
         name: Some("emily4".to_string()),
+        sakura_name: None,
         root: PathBuf::from(r"C:\ssp\ghost\emily4"),
     };
     let mut world = World::new();

@@ -15,6 +15,7 @@ use super::*;
 fn an_empty_world_answers_the_15_defaults_with_one_warning() {
     let ghost = ActiveGhost {
         name: Some("Emily/Phase4.5".to_string()),
+        sakura_name: None,
         root: PathBuf::from(r"C:\ssp\ghost\emily4"),
     };
     let args = Args {

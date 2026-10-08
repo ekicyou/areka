@@ -87,19 +87,23 @@ fn shell_table_replacement_discards_part_clocks_but_surface_switch_does_not() {
     assert!(rt.parts.is_empty(), "差し替えの後に部品の時計が空");
 }
 
-/// `refresh_parts`: 時計も乱数も触らずに、直前の刻みの時刻の部品のコマを載せた `Show` を返す。
+/// `refresh`: 抽選の時計も乱数も触らずに、直前の刻みの時刻の部品のコマを載せた `Show` を返す。
 /// 刻みが 1 度も来ていない・シェル面が表示中でない・子を置いていない面では何も返さない（要件 5.6）。
 #[test]
-fn refresh_parts_reloads_part_frames_at_last_tick_time() {
+fn refresh_reloads_part_frames_at_last_tick_time() {
     let (rng, probe) = counting_rng(&[0]);
     let mut rt = LoopRuntime::new(cfg(table_of(CHILD), rng));
     let mut states = ScopeStates::new(no_binds());
     let scope = ActorKey::from("0");
 
-    assert_eq!(rt.refresh_parts(&scope, &mut states), None, "表示中でない");
+    assert_eq!(
+        rt.refresh(&scope, Slot::Shell, None, &mut states),
+        None,
+        "表示中でない"
+    );
     states.apply(&scope, SurfaceTarget::Show(0));
     assert_eq!(
-        rt.refresh_parts(&scope, &mut states),
+        rt.refresh(&scope, Slot::Shell, None, &mut states),
         None,
         "刻みが来ていない"
     );
@@ -112,13 +116,13 @@ fn refresh_parts_reloads_part_frames_at_last_tick_time() {
     // 子を置いていない面へ: 載せる部品が無い。
     states.apply(&scope, SurfaceTarget::Show(1));
     rt.on_surface_changed(&scope, Slot::Shell);
-    assert_eq!(rt.refresh_parts(&scope, &mut states), None);
+    assert_eq!(rt.refresh(&scope, Slot::Shell, None, &mut states), None);
 
-    // 戻る: 切り替えの Show は空のコマ。refresh_parts が 1600 の時点の 102 を載せた Show を返す。
+    // 戻る: 切り替えの Show は空のコマ。refresh が 1600 の時点の 102 を載せた Show を返す。
     states.apply(&scope, SurfaceTarget::Show(0));
     rt.on_surface_changed(&scope, Slot::Shell);
     let cmd = rt
-        .refresh_parts(&scope, &mut states)
+        .refresh(&scope, Slot::Shell, None, &mut states)
         .expect("部品のコマを載せた Show");
     let (sid, pattern) = show_of(&cmd);
     assert_eq!(sid, 0);
@@ -132,7 +136,7 @@ fn refresh_parts_reloads_part_frames_at_last_tick_time() {
     );
     assert_eq!(probe.lock().unwrap().calls, 1, "乱数を呼ばない");
     assert_eq!(
-        rt.refresh_parts(&scope, &mut states),
+        rt.refresh(&scope, Slot::Shell, None, &mut states),
         None,
         "同じ内容は二度出さない"
     );
@@ -164,7 +168,7 @@ fn table_without_animated_parts_never_enters_part_path() {
         if now == 3050 {
             states.apply(&scope, SurfaceTarget::Show(1));
             rt.on_surface_changed(&scope, Slot::Shell);
-            assert_eq!(rt.refresh_parts(&scope, &mut states), None);
+            assert_eq!(rt.refresh(&scope, Slot::Shell, None, &mut states), None);
         }
         for cmd in rt.on_tick(now, &mut states) {
             assert!(

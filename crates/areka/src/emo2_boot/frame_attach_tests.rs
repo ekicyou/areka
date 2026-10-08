@@ -537,7 +537,10 @@ fn talk_playback_reaches_emo2_wiring_lifecycle_receiver() {
     );
 
     let mut player = CuePlayer::from_sheet(&compiled.sheet);
-    player.register_sink(Box::new(BalloonLifecycleSink::new(lifecycle_tx)));
+    player.register_sink(Box::new(BalloonLifecycleSink::new(
+        lifecycle_tx,
+        wiring.clock.clone(),
+    )));
 
     // 台本の発火時刻を昇順に辿り、最後に占有終端へ達する（sleep もスピンも使わない）。
     let mut tick_points: Vec<f64> = compiled
@@ -555,7 +558,7 @@ fn talk_playback_reaches_emo2_wiring_lifecycle_receiver() {
     let signals = wiring.drain_lifecycle_signals();
     assert_eq!(
         signals.first(),
-        Some(&TalkLifecycleSignal::TalkStarted),
+        Some(&TalkLifecycleSignal::TalkStarted { talk_id: None }),
         "会話の開始通知が先行する（Ordering 契約・Requirement 4.5 の計測破棄契機）"
     );
 
@@ -563,7 +566,7 @@ fn talk_playback_reaches_emo2_wiring_lifecycle_receiver() {
         .iter()
         .filter_map(|signal| match signal {
             TalkLifecycleSignal::DisplayEndAt(end) => Some(*end),
-            TalkLifecycleSignal::TalkStarted | TalkLifecycleSignal::UserBreak => None,
+            _ => None,
         })
         .collect();
     assert!(

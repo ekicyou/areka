@@ -111,3 +111,9 @@ MCP でいちばん使われるのは「台本を流して見る」（`sakurascr
 
 - `get_status` を `mcp-get-status`（S・4〜6）へ切り出した（並走のため）。本 spec は `sakurascript`＋`raise_event` だけ＝M〜L（11〜15）。`msg.rs`・`actor.rs` を分け合うので `mcp-get-status` と同じウェーブに置かない。
 - kanade の進行の列で、その他の段の `sakura-time-critical`・`property-query-channels` より前へ出した（優先度の 3 段）。許可の表を迂回して任意の名前のイベントを送る口は本 spec が作り、`property-query-channels`・`mcp-shiori-query` はそれを使う。
+
+## 2026-10-05 `mcp-dump-images-residue` からの引き継ぎ（実機確認 1 件）
+
+- 前の spec `areka-P0-mcp-dump-images` の要件 7.7 ⑵（`sakurascript` で表情を変えた後に `dump_surface` で撮ると、変わった姿が原寸で返る）は、`sakurascript` が無かったため、開発者の了承のうえキャラクターのダブルクリックで表情を変える代わりの手順で確かめた。
+- 本 spec の実機確認で、`sakurascript` で表情を変えてから `dump_surface` を 1 回呼び、変わった姿が返ることを本来の手順で撮り直し、本 spec の `verification/signoff.md` に残す。
+- 出どころ: `areka-P0-mcp-dump-images-residue` の要件（Boundary Context の Out of scope・件 6）。棚卸㉒の C4 の約束で、`mcp-dump-images-residue` は項目 1〜5 だけを持つ。

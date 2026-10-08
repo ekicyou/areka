@@ -74,6 +74,16 @@ fn compose_name(label: &str, process_id: u32, serial: u32) -> String {
     format!("areka-{label}-{process_id}-{serial}")
 }
 
+/// [`TempPath::under_target`] の置き場（`<ワークスペース>\target\test-roots`）。
+fn target_test_roots() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("crates/temp-path-kit の 2 つ上がワークスペースの根")
+        .join("target")
+        .join("test-roots")
+}
+
 /// 破棄時に自身を再帰削除する、プロセス間で一意な一時ディレクトリ。
 pub struct TempPath {
     path: PathBuf,
@@ -89,8 +99,26 @@ impl TempPath {
     ///
     /// ディレクトリを作れないとき（黙って縮退しない）。
     pub fn new(label: &str) -> Self {
+        Self::in_base(&std::env::temp_dir(), label)
+    }
+
+    /// ワークスペースの `target\test-roots\` の下に一時ディレクトリを作って配る。
+    ///
+    /// [`TempPath::new`] は OS の一時フォルダの下に作るが、検体と一時フォルダを
+    /// ワークツリーの `target\` の下だけに作ると決めたテスト（掃除漏れを OS の一時フォルダへ
+    /// 残さない）はこちらを使う。名前・一意性・破棄での削除は [`TempPath::new`] と同じ。
+    /// 置き場は本 crate の `CARGO_MANIFEST_DIR` の 2 つ上（ワークスペースの根）の `target`。
+    ///
+    /// # Panics
+    ///
+    /// ディレクトリを作れないとき（黙って縮退しない）。
+    pub fn under_target(label: &str) -> Self {
+        Self::in_base(&target_test_roots(), label)
+    }
+
+    fn in_base(base: &Path, label: &str) -> Self {
         let serial = NEXT_SERIAL.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(compose_name(label, std::process::id(), serial));
+        let path = base.join(compose_name(label, std::process::id(), serial));
         std::fs::create_dir_all(&path)
             .unwrap_or_else(|err| panic!("一時ディレクトリ作成: {} ({err})", path.display()));
         TempPath { path }

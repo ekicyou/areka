@@ -63,6 +63,9 @@
 //! | `OnTranslate` | GET | Ref0=展開済みの台詞・Ref1=欠番・Ref2=元のイベントの ID・Ref3=元の Reference をバイト値 1 で連ねたもの |
 //! | `OnMouseDragStart` | GET | Ref0/1=押した位置の x/y・Ref2=`"0"`・Ref3=スコープ・Ref4=当たり判定（無ければ空）・Ref5=`"0"`（左）・Ref6=`mouse` |
 //! | `OnMouseDragEnd` | GET | Ref0/1=終わった位置の x/y（取り消しは押した位置）・Ref2〜6 は `OnMouseDragStart` と同じ |
+//! | `OnBalloonBreak` | GET | Ref0=止めたトークの台本・Ref1=スコープ番号・Ref2=空（中断位置は作らない） |
+//! | `OnBalloonClose` | GET | Ref0=閉じたバルーンに出ていた台本 |
+//! | `OnBalloonTimeout` | GET | Ref0=時間切れで隠れたバルーンに出ていた台本・Ref1=`0` |
 
 use crate::change::{BootOrigin, ChangeRequest, ChangedFrom, ShioriMethod};
 use crate::msg::{CloseReason, EventId, KanadeConfig, MonotonicMs, MouseButton, ShioriCall};
@@ -213,6 +216,15 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnMouseDragStart",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseDragEnd:1
     "OnMouseDragEnd",
+    // バルーンの寿命の 3 語（areka-P0-balloon-lifecycle-events 要件 3.5・6.4・48→51 語）。利用者の
+    // 中断の後・読み終えたバルーンを閉じたとき・時間切れで隠れたときに送る。クリックで閉じたことは
+    // `OnBalloonClose` だけで知らせ、正典に無い `OnBalloonClick` は載せない。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonBreak:1
+    "OnBalloonBreak",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonClose:1
+    "OnBalloonClose",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonTimeout:1
+    "OnBalloonTimeout",
 ];
 
 /// `id` が送出許可集合（[`ALLOWED_EVENT_IDS`]）に属するかを判定する（Req3.1）。
@@ -724,6 +736,50 @@ pub fn on_choice_timeout(script: &str, snapshot: &ExecutionSnapshot) -> ShioriCa
     }
 }
 
+// ---------------------------------------------------------------------------
+// バルーンの寿命の 3 イベント（areka-P0-balloon-lifecycle-events 要件 1〜4）
+// ---------------------------------------------------------------------------
+//
+// どれも GET（要件 4.1）。送るかどうかの判断は `schedule/balloon_events.rs` が持ち、本節は
+// Reference の並びだけを持つ。Status は送る時点の状態から導く（[`on_choice_timeout`] と同じ）。
+
+/// `OnBalloonBreak`（GET・Ref0=止めたトークの台本・Ref1=スコープ番号の十進・Ref2=空）。
+///
+/// Reference は常に 3 個。Ref2（中断位置）は今は作らず空で送り、位置は保つ（要件 1.4・
+/// 縮退の追跡先は `areka-P0-balloon-break-position`）。
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonBreak:1
+pub fn on_balloon_break(script: &str, scope: u32, snapshot: &ExecutionSnapshot) -> ShioriCall {
+    ShioriCall::Get {
+        id: EventId::Static("OnBalloonBreak"),
+        references: vec![script.to_string(), scope.to_string(), String::new()],
+        status: ExecutionStatus::derive(snapshot),
+    }
+}
+
+/// `OnBalloonClose`（GET・Ref0=閉じたバルーンに出ていた台本）。
+///
+/// Reference は常に 1 個（要件 3.2）。
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonClose:1
+pub fn on_balloon_close(script: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
+    ShioriCall::Get {
+        id: EventId::Static("OnBalloonClose"),
+        references: vec![script.to_string()],
+        status: ExecutionStatus::derive(snapshot),
+    }
+}
+
+/// `OnBalloonTimeout`（GET・Ref0=時間切れで隠れたバルーンに出ていた台本・Ref1=`0`）。
+///
+/// 時間切れの時点で待ち時間の残りは無いので Ref1 は常に `0`（要件 2.3）。
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonTimeout:1
+pub fn on_balloon_timeout(script: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
+    ShioriCall::Get {
+        id: EventId::Static("OnBalloonTimeout"),
+        references: vec![script.to_string(), "0".to_string()],
+        status: ExecutionStatus::derive(snapshot),
+    }
+}
+
 #[cfg(test)]
 #[path = "events_tests.rs"]
 mod tests;
@@ -731,3 +787,7 @@ mod tests;
 #[cfg(test)]
 #[path = "events_change_tests.rs"]
 mod change_tests;
+
+#[cfg(test)]
+#[path = "events_balloon_tests.rs"]
+mod balloon_tests;

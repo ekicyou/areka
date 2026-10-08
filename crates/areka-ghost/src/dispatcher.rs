@@ -287,10 +287,16 @@ impl DispatcherState {
         // 凍結像の刻印点（design.md「GhostBootOptions S-3」）: 保持する各 sink を per-talk に
         // clone_box して独立インスタンスの `Vec<Box<dyn CueSink + Send>>` を組む（登録順＝broadcast 順）。
         // `Box<dyn BootCueSink>` は上位境界 `CueSink + Send` を持つため upcast できる。
+        // 複製の直後、talk スレッドへ渡す前にこのトークの番号を渡す（要件 2.6・begin_talk）。
+        // 古いトークの複製は上の close_active_if_any の join で既に落ちている。
         let sinks: Vec<Box<dyn CueSink + Send>> = self
             .sinks
             .iter()
-            .map(|sink| sink.clone_box() as Box<dyn CueSink + Send>)
+            .map(|sink| {
+                let mut sink = sink.clone_box();
+                sink.begin_talk(talk_id);
+                sink as Box<dyn CueSink + Send>
+            })
             .collect();
 
         // 凍結像の刻印点（design.md「GhostBootOptions S-3＋provider」・R7.3/7.4）: provider を
@@ -418,6 +424,9 @@ pub fn spawn_dispatcher(
     (tx, handle)
 }
 
+#[cfg(test)]
+#[path = "dispatcher_begin_talk_tests.rs"]
+mod begin_talk_tests;
 #[cfg(test)]
 #[path = "dispatcher_choice_tests.rs"]
 mod choice_tests;

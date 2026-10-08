@@ -10,7 +10,7 @@ use std::time::Duration;
 // 共通 fixture: `\s[10]hello\_w[100]\q[選択A,targetA]\e`。compile 後（アンカー 0）:
 //   ClearAll@0 / Emote{10}@0 / hello@0(D=0.25) / Wait@0.25(0.1) / Choice@0.35(id=targetA) /
 //   Barrier@0.35（選択待ち・R2.1/2.2）。占有 horizon=0.35。barrier が**最終 horizon 要素**（menu
-//   ケース）ゆえ、Tick(0.5) で barrier 到達後に解決すると、既に current_offset(0.5) ≥ horizon(0.35)
+//   ケース）ゆえ、Tick(0.5) で barrier 到達後に解決すると、既に開始からの経過(0.5) ≥ horizon(0.35)
 //   で **その場で** 完了する（次 Tick を待たない・settle_after_tick と同型の後始末を共用）。
 
 const MENU_SCRIPT: &str = r"\s[10]hello\_w[100]\q[選択A,targetA]\e";

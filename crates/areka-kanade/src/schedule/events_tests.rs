@@ -205,8 +205,10 @@ fn on_close_notify_is_notify_with_reason_and_derived_status() {
 /// 翻訳の `OnTranslate` は translate-pipeline 2.1 で同じ前例に倣い足した（45→46・正典固定 ID）。
 /// ドラッグの 2 語（OnMouseDragStart/OnMouseDragEnd）は mouse-drag-events 7.1 で同じ前例に倣い
 /// 足した（46→48・いずれも正典固定 ID）。
+/// バルーンの寿命の 3 語（OnBalloonBreak/OnBalloonClose/OnBalloonTimeout）は balloon-lifecycle-events 2.1 で
+/// 同じ前例に倣い足した（48→51・いずれも正典固定 ID・正典に無い `OnBalloonClick` は載せない）。
 #[test]
-fn allowed_event_ids_are_exactly_the_forty_eight_and_exclude_ontalk_onhour() {
+fn allowed_event_ids_are_exactly_the_fifty_one_and_exclude_ontalk_onhour() {
     assert_eq!(
         ALLOWED_EVENT_IDS,
         &[
@@ -258,6 +260,9 @@ fn allowed_event_ids_are_exactly_the_forty_eight_and_exclude_ontalk_onhour() {
             "OnTranslate",
             "OnMouseDragStart",
             "OnMouseDragEnd",
+            "OnBalloonBreak",
+            "OnBalloonClose",
+            "OnBalloonTimeout",
         ]
     );
     assert!(

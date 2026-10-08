@@ -38,10 +38,12 @@
 //!    同居すると `\![set,zorder,…]` の 1 出現に 2 つの担当が作用してしまうため、
 //!    [`LedgerError::SelectorConflict`] で拒む。順序はどちらでも同じく拒む。
 //!
-//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 15 行（`move`・`bind`・
-//! `(set,zorder)`・`(reset,zorder)`・`\f`・`(open,readme)`・`(enter,nouserbreakmode)`・
+//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 24 行（`move`・`bind`・
+//! `(set,zorder)`・`(reset,zorder)`・`\f`・`(open,readme)`・`(open,file)`・`(open,browser)`・
+//! `(open,explorer)`・`(open,editor)`・`(open,mailer)`・`\j`・`(enter,nouserbreakmode)`・
 //! `(leave,nouserbreakmode)`・`(change,ghost)`・`(change,shell)`・`(change,balloon)`・
-//! `(execute,install)`・`updatebymyself`・`update`・`updateother`）を登記し、違反があれば構築時に panic する（正準表は一意
+//! `(execute,install)`・`updatebymyself`・`update`・`updateother`・`(set,choicetimeout)`・
+//! `areka.prop.set`・`(set,balloontimeout)`）を登記し、違反があれば構築時に panic する（正準表は一意
 //! ゆえ実際には発火しない・回帰檻）。
 //!
 //! # 宣言する表であって、選別する機構ではない
@@ -50,8 +52,9 @@
 //! （消費者は自らの名前と選別子で自己選別する）。両者は一致していなければならないが、
 //! 依存はしない——`ZOrderCueSink` が受理する組と、正準台帳に載る zorder の 2 行
 //! （`("set", Some("zorder"))`・`("reset", Some("zorder"))`）が同じであることは、本モジュールの
-//! テストがその組を名指しで固定する。
-#![allow(dead_code)]
+//! テストがその組を名指しで固定する。`emo2_boot` の 8 つの受け口については、表の全行と、表に
+//! 無い組の掛け合わせを実際に配って一致を固定する（`consumer_ledger_agreement_tests.rs`・
+//! areka-P0-mcp-author-tools 要件 3.11）。
 
 use std::collections::BTreeMap;
 
@@ -74,9 +77,10 @@ type LedgerKey = (String, Option<String>);
 /// - [`ZOrderSink`](CommandConsumer::ZOrderSink): 重なり指定・重なり解除を消費する
 ///   [`ZOrderCueSink`](super::zorder_cue::ZOrderCueSink)。正準台帳が `(set, zorder)`・
 ///   `(reset, zorder)` の 2 組を登記する（要件 11.2）。
-/// - [`ReadmeSink`](CommandConsumer::ReadmeSink): `\![open,readme]` を消費する
-///   [`ReadmeCueSink`](super::readme_cue::ReadmeCueSink)。正準台帳が `(open, readme)` の 1 組を
-///   登記する（要件 4.5）。
+/// - [`ReadmeSink`](CommandConsumer::ReadmeSink): 開く系の受け口（説明書を含む）
+///   [`ReadmeCueSink`](super::readme_cue::ReadmeCueSink)。正準台帳が `(open, readme|file|browser|
+///   explorer|editor|mailer)` の 6 組と運搬名 `\j`（選別子なし）を登記する（要件 4.5・
+///   areka-P0-open-external-tags 要件 9.2）。
 /// - [`UserBreakSink`](CommandConsumer::UserBreakSink): 中断の無効化の区間の出入りを消費する
 ///   [`NoUserBreakCueSink`](super::user_break_cue::NoUserBreakCueSink)。正準台帳が
 ///   `(enter, nouserbreakmode)`・`(leave, nouserbreakmode)` の 2 組を登記する
@@ -97,6 +101,13 @@ type LedgerKey = (String, Option<String>);
 /// - [`UpdateSink`](CommandConsumer::UpdateSink): `\![updatebymyself]`・`\![update,…]`・
 ///   `\![updateother,…]` を消費する [`UpdateCueSink`](super::update_cue::UpdateCueSink)。正準台帳が
 ///   3 つの名前を選別子なしで登記する（areka-P0-network-update 要件 1.5〜1.8）。
+/// - [`ScriptCompile`](CommandConsumer::ScriptCompile): `\![set,choicetimeout,…]` を読む台本の
+///   組み立て（`areka_sakura::compile`）。正準台帳が `(set, choicetimeout)` の 1 組を登記する
+///   （areka-P0-mcp-author-tools 要件 3.2）。
+/// - [`PropertyWrite`](CommandConsumer::PropertyWrite): プロパティの書き込みの cue を消費する
+///   `areka_ghost` の `PropSetCueSink`。正準台帳が運搬名
+///   [`PROP_SET_CUE_NAME`](areka_ghost::prop_sink::PROP_SET_CUE_NAME) を選別子なしで登記する
+///   （areka-P0-mcp-author-tools 要件 3.2）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandConsumer {
     /// `\![move]` の担当消費者（[`MoveCueSink`](super::move_cue::MoveCueSink)）。
@@ -107,9 +118,11 @@ pub enum CommandConsumer {
     /// （[`ZOrderCueSink`](super::zorder_cue::ZOrderCueSink)）。名前だけでは決まらず、
     /// 第 1 引数が `zorder` の出現だけを担当する（要件 11.2）。
     ZOrderSink,
-    /// 説明書を開くタグの担当消費者
-    /// （[`ReadmeCueSink`](super::readme_cue::ReadmeCueSink)）。名前だけでは決まらず、
-    /// 第 1 引数が `readme` の出現だけを担当する（他の第 1 引数は将来の担当の余地・要件 4.5）。
+    /// 開く系の受け口（説明書を含む）の担当消費者
+    /// （[`ReadmeCueSink`](super::readme_cue::ReadmeCueSink)）。`open` は名前だけでは決まらず、
+    /// 第 1 引数が `readme`・`file`・`browser`・`explorer`・`editor`・`mailer` の出現だけを担当する
+    /// （作り付けの窓の `help` などは将来の担当の余地・要件 4.5）。運搬名 `\j` は選別子なしで
+    /// 担当する（areka-P0-open-external-tags 要件 1.5・9.2）。
     ///
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bopen_2creadme_5d:1
     ReadmeSink,
@@ -157,6 +170,23 @@ pub enum CommandConsumer {
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bupdate_2c_66f4_65b0_5bfe_8c61_28_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._29_5d:1
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bupdateother_2c_66f4_65b0_5bfe_8c61_2f_30aa_30d7_30b7_30e7_30f3_7fa4_2c..._5d:1
     UpdateSink,
+    /// 選択肢の時間切れの指定 `\![set,choicetimeout,時間]` の担当（台本の組み立て
+    /// `areka_sakura::compile` が `set,choicetimeout` だけを読み、選択待ちの区切りへ秒を書く）。
+    /// 第 1 引数が `choicetimeout` の出現だけを担当する（`set` の他の第 1 引数は別の担当か担当なし）。
+    ///
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1
+    ScriptCompile,
+    /// プロパティの書き込みの cue の担当（`areka_ghost` の `PropSetCueSink` が運搬名
+    /// [`PROP_SET_CUE_NAME`](areka_ghost::prop_sink::PROP_SET_CUE_NAME) で自己選別する）。
+    /// 第 1 引数は書き込む key であって担当を分けないので、登記は選別子なしの 1 行である。
+    PropertyWrite,
+    /// バルーンの寿命の受け口の担当消費者
+    /// （[`BalloonLifecycleSink`](super::talk_lifecycle::BalloonLifecycleSink)）。名前だけでは
+    /// 決まらず、第 1 引数が `balloontimeout` の `set` の出現だけを担当する（時間切れまでの待ち時間の
+    /// 差し替え・areka-P0-balloon-lifecycle-events 要件 8.1・9.10）。
+    ///
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1
+    LifecycleSink,
 }
 
 /// 選別子を記録本文へ書くときの見え方（「無い」側も読める形にする——片側だけの本文では
@@ -293,12 +323,16 @@ impl ConsumerLedger {
     /// 正準台帳を構築する（現行登記＝`move` → [`CommandConsumer::MoveSink`]・`bind` →
     /// [`CommandConsumer::Seriko`]・`(set, zorder)` と `(reset, zorder)` →
     /// [`CommandConsumer::ZOrderSink`]・運搬名 `\f` →
-    /// [`CommandConsumer::TextLayer`]・`(open, readme)` → [`CommandConsumer::ReadmeSink`]・
+    /// [`CommandConsumer::TextLayer`]・`(open, readme|file|browser|explorer|editor|mailer)` と
+    /// 運搬名 `\j` → [`CommandConsumer::ReadmeSink`]・
     /// `(enter, nouserbreakmode)` と `(leave, nouserbreakmode)` →
     /// [`CommandConsumer::UserBreakSink`]・`(change, ghost)` → [`CommandConsumer::ChangeSink`]・
     /// `(change, shell)` と `(change, balloon)` → [`CommandConsumer::SwitchSink`]・
     /// `(execute, install)` → [`CommandConsumer::InstallSink`]・`updatebymyself`・`update`・
-    /// `updateother` → [`CommandConsumer::UpdateSink`]）。
+    /// `updateother` → [`CommandConsumer::UpdateSink`]・`(set, choicetimeout)` →
+    /// [`CommandConsumer::ScriptCompile`]・運搬名 `areka.prop.set` →
+    /// [`CommandConsumer::PropertyWrite`]・`(set, balloontimeout)` →
+    /// [`CommandConsumer::LifecycleSink`]）。
     ///
     /// zorder の 2 行は `ZOrderCueSink` が自己選別する組とちょうど同じである（表は宣言し、受け口は
     /// 自ら選別する——実行時に受け口が本表を引くわけではない）。中断の無効化の 2 行と
@@ -321,9 +355,18 @@ impl ConsumerLedger {
         ledger
             .try_register("reset", Some("zorder"), CommandConsumer::ZOrderSink)
             .expect("正準台帳: ('reset','zorder') は一意（重複・排他違反は編集ミス）");
+        for selector in ["readme", "file", "browser", "explorer", "editor", "mailer"] {
+            ledger
+                .try_register("open", Some(selector), CommandConsumer::ReadmeSink)
+                .expect("正準台帳: 開く系の ('open',…) 6 組は一意（重複・排他違反は編集ミス）");
+        }
         ledger
-            .try_register("open", Some("readme"), CommandConsumer::ReadmeSink)
-            .expect("正準台帳: ('open','readme') は一意（重複・排他違反は編集ミス）");
+            .try_register(
+                areka_parsers::sakura::JUMP_TAG_CARRIER,
+                None,
+                CommandConsumer::ReadmeSink,
+            )
+            .expect("正準台帳: '\\j'（選別子なし）は一意（重複・排他違反は編集ミス）");
         ledger
             .try_register(
                 "enter",
@@ -366,11 +409,29 @@ impl ConsumerLedger {
                 );
         }
         ledger
+            .try_register("set", Some("choicetimeout"), CommandConsumer::ScriptCompile)
+            .expect("正準台帳: ('set','choicetimeout') は一意（重複・排他違反は編集ミス）");
+        ledger
+            .try_register(
+                areka_ghost::prop_sink::PROP_SET_CUE_NAME,
+                None,
+                CommandConsumer::PropertyWrite,
+            )
+            .expect("正準台帳: 'areka.prop.set'（選別子なし）は一意（重複・排他違反は編集ミス）");
+        ledger
+            .try_register(
+                "set",
+                Some("balloontimeout"),
+                CommandConsumer::LifecycleSink,
+            )
+            .expect("正準台帳: ('set','balloontimeout') は一意（重複・排他違反は編集ミス）");
+        ledger
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use areka_parsers::sakura::JUMP_TAG_CARRIER;
     use areka_sakura::contract::FONT_TAG_CARRIER;
 
     use super::*;
@@ -627,7 +688,7 @@ mod tests {
     }
 
     /// 別のコマンド名どうしは互いに干渉しない（排他は同一名の中だけの規則）。
-    /// 排他の実装が名前をまたいで効いてしまうと、正準台帳の 9 行がそもそも組めなくなる。
+    /// 排他の実装が名前をまたいで効いてしまうと、正準台帳がそもそも組めなくなる。
     #[test]
     fn exclusion_applies_only_within_the_same_name() {
         let mut ledger = ConsumerLedger::new();
@@ -663,15 +724,22 @@ mod tests {
     /// 増減は本檻と本 doc の 2 か所を明示的に編集させる。
     #[test]
     fn canonical_builds_without_duplicate() {
-        // canonical() は内部 try_register（15 行）が Ok（重複なら expect が panic する）。
+        // canonical() は内部 try_register（24 行）が Ok（重複なら expect が panic する）。
         let ledger = ConsumerLedger::canonical();
         assert_eq!(
             ledger.entry_count(),
-            15,
-            "正準台帳の登記は 15 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
-             (open,readme)／(enter,nouserbreakmode)／(leave,nouserbreakmode)／(change,ghost)／\
-             (change,shell)／(change,balloon)／(execute,install)／updatebymyself／update／\
-             updateother）——増減させたら本檻と doc の 2 か所を編集すること"
+            24,
+            "正準台帳の登記は 24 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
+             (open,readme)／(open,file)／(open,browser)／(open,explorer)／(open,editor)／\
+             (open,mailer)／運搬名 \\j／(enter,nouserbreakmode)／(leave,nouserbreakmode)／\
+             (change,ghost)／(change,shell)／(change,balloon)／(execute,install)／\
+             updatebymyself／update／updateother／(set,choicetimeout)／\
+             areka.prop.set／(set,balloontimeout)）——増減させたら本檻と doc の 2 か所を編集すること"
+        );
+        // 待ち時間の指定は受け口 LifecycleSink に結び付く（areka-P0-balloon-lifecycle-events 要件 9.10）。
+        assert_eq!(
+            ledger.consumer_of("set", Some("balloontimeout")),
+            Some(CommandConsumer::LifecycleSink)
         );
         assert_eq!(
             ledger.consumer_of("move", None),
@@ -690,7 +758,7 @@ mod tests {
             Some(CommandConsumer::ZOrderSink)
         );
 
-        // 15 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
+        // 24 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
         // 検出される。
         let mut ext = ledger.clone();
         let err = ext
@@ -702,7 +770,7 @@ mod tests {
                 name: "bind".to_string(),
                 selector: None,
             },
-            "15 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
+            "24 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
         );
         // 既登記の担当は据え置き（上書きしない）。
         assert_eq!(ext.consumer_of("bind", None), Some(CommandConsumer::Seriko));
@@ -736,28 +804,40 @@ mod tests {
         );
     }
 
-    /// task 4.2／要件 4.5: 正準台帳は `\![open,readme]` を説明書の受け口の担当として登記する。
+    /// task 4.2／要件 4.5 と areka-P0-open-external-tags 要件 1.5・9.2・9.3: 正準台帳は
+    /// `open` の 6 組（`readme`・`file`・`browser`・`explorer`・`editor`・`mailer`）と運搬名 `\j`
+    /// （選別子なし）を、開く系の受け口（説明書を含む）の担当として登記する。
     ///
-    /// 登記のキーは名前＋第 1 引数（`("open", "readme")`）——`open` は他の第 1 引数
-    /// （作り付けの窓など）を将来 別の担当へ割り当てられるよう、名前まるごとでは登記しない。
-    /// 受け口 `ReadmeCueSink` が自己選別する組とちょうど一致していること。
+    /// `open` は名前＋第 1 引数で登記する——作り付けの窓（`help` など）は将来 別の担当へ割り当て
+    /// られるよう、名前まるごとでは登記しない。`\j` は第 1 引数が行き先そのもの（URL）なので
+    /// 選別子なし。受け口 `ReadmeCueSink` が自己選別する組とちょうど一致していること。
     #[test]
-    fn canonical_registers_open_readme_for_the_readme_sink() {
+    fn canonical_registers_the_open_family_for_the_readme_sink() {
         let ledger = ConsumerLedger::canonical();
+        for selector in ["readme", "file", "browser", "explorer", "editor", "mailer"] {
+            assert_eq!(
+                ledger.consumer_of("open", Some(selector)),
+                Some(CommandConsumer::ReadmeSink),
+                "正準台帳は (open, {selector}) → ReadmeSink を登記している（要件 9.2）"
+            );
+        }
         assert_eq!(
-            ledger.consumer_of("open", Some("readme")),
-            Some(CommandConsumer::ReadmeSink),
-            "正準台帳は (open, readme) → ReadmeSink を登記している（要件 4.5）"
+            [
+                ledger.consumer_of(JUMP_TAG_CARRIER, None),
+                ledger.consumer_of(JUMP_TAG_CARRIER, Some("http://example.com/")),
+            ],
+            [Some(CommandConsumer::ReadmeSink); 2],
+            "運搬名 \\j（選別子なし）→ ReadmeSink・第 1 引数によらず同じ担当（要件 1.5）"
+        );
+        assert_eq!(
+            ledger.consumer_of("open", Some("help")),
+            None,
+            "作り付けの窓の open,help は担当なし＝将来の担当のための余地（要件 9.3）"
         );
         assert_eq!(
             ledger.consumer_of("open", None),
             None,
-            "第 1 引数の無い裸の open は担当なし（名前まるごとの登記ではない・要件 11.2）"
-        );
-        assert_eq!(
-            ledger.consumer_of("open", Some("browser")),
-            None,
-            "名簿に無い第 1 引数は担当なし＝将来の担当のための余地（要件 11.3）"
+            "第 1 引数の無い裸の open は担当なし（名前まるごとの登記ではない・要件 9.3）"
         );
     }
 
@@ -857,3 +937,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "consumer_ledger_agreement_tests.rs"]
+mod agreement_tests;

@@ -74,6 +74,12 @@ impl TalkClock {
         // epoch 未確立は None。負値（frame_now < epoch）は 0.0 へ clamp。
         epoch.map(|e| (frame_now - e).max(0.0))
     }
+
+    /// 今の talk 相対秒（注入された時計を読んで [`Self::talk_time`] に渡す・起点が無ければ `None`）。
+    /// talk スレッドの受け口が落ちた瞬間の時刻を、フレームに丸めずに読むための口。
+    pub fn now_talk_time(&self) -> Option<f64> {
+        self.talk_time((self.clock)())
+    }
 }
 
 /// 単一の出力契約 [`dola::cue::CueSink`] に talk 時刻観測を挟むデコレータ（design.md「時刻源 / talk_clock」）。
@@ -99,12 +105,19 @@ impl<T: dola::cue::CueSink + Clone> ClockedTextSink<T> {
 /// 演者非依存の単一出力契約 [`dola::cue::CueSink`] を実装する（`areka_ghost::boot` の broadcast
 /// 登録先が要求する形・task 7.1）。broadcast 下では担当外 cue（`Emote` 等）も本 sink へ届くが、
 /// `observe_cue` は `cue.at` 一貫で epoch を単調 max 推定するため無害（設計 §Revalidation Triggers）。
-/// 内側 sink（本番は `EmoTextSink`）へ `CueSink::emit` で非改変転送する。
+/// 内側 sink（本番は `EmoTextSink`）へ `CueSink::emit` で非改変転送し、先渡し（`preview`）も
+/// 時刻を観測せずに内側へ通す。
 impl<T: dola::cue::CueSink + Clone> dola::cue::CueSink for ClockedTextSink<T> {
     fn emit(&mut self, cue: TalkCue) {
         // emit ごとに cue.at を観測して epoch を推定し、cue は非改変で内側へ透過転送する。
         self.clock.observe_cue(cue.at);
         dola::cue::CueSink::emit(&mut self.inner, cue);
+    }
+
+    fn preview(&mut self, upcoming: &[TalkCue]) {
+        // 先渡しは「その時刻に届いた」出来事ではないので時刻は観測しない（トークの頭の時刻の
+        // 見積もりに混ぜない）。内側へそのまま通すだけ（通さないと文字の層へ届かない）。
+        dola::cue::CueSink::preview(&mut self.inner, upcoming);
     }
 }
 
@@ -134,13 +147,23 @@ mod tests {
     #[derive(Clone)]
     struct RecordingTextSink {
         cues: Arc<Mutex<Vec<TalkCue>>>,
+        /// 先渡しで受け取った列（呼ばれた回数ぶん積む）。
+        previews: Arc<Mutex<Vec<Vec<TalkCue>>>>,
     }
 
     impl RecordingTextSink {
         fn new() -> Self {
             Self {
                 cues: Arc::new(Mutex::new(Vec::new())),
+                previews: Arc::new(Mutex::new(Vec::new())),
             }
+        }
+
+        fn previewed(&self) -> Vec<Vec<TalkCue>> {
+            self.previews
+                .lock()
+                .expect("recording sink mutex poisoned")
+                .clone()
         }
 
         fn recorded(&self) -> Vec<TalkCue> {
@@ -157,6 +180,13 @@ mod tests {
                 .lock()
                 .expect("recording sink mutex poisoned")
                 .push(cue);
+        }
+
+        fn preview(&mut self, upcoming: &[TalkCue]) {
+            self.previews
+                .lock()
+                .expect("recording sink mutex poisoned")
+                .push(upcoming.to_vec());
         }
     }
 
@@ -316,6 +346,58 @@ mod tests {
             (t - 5.0).abs() < 1e-9,
             "observed at should make talk_time ~cue.at at emit wall-time, got {t}"
         );
+    }
+
+    /// `ClockedTextSink::preview` は (a) 内側へ列を非改変で 1 度だけ通し、(b) 時刻を観測しない
+    /// （先渡しは「その時刻に届いた」出来事ではないので、トークの頭の時刻の見積もりに混ぜない）。
+    #[test]
+    fn clocked_sink_passes_preview_through_without_observing() {
+        let (now, clock) = controllable_clock();
+        let tc = TalkClock::new(clock);
+        let inner = RecordingTextSink::new();
+        let mut sink = ClockedTextSink::new(inner.clone(), tc.clone());
+
+        let upcoming = vec![
+            TalkCue {
+                at: 0.0,
+                actor: ActorKey::from("0"),
+                command: CueCommand::Text("イイジャン！".into()),
+                duration: 0.0,
+            },
+            TalkCue {
+                at: 1.5,
+                actor: ActorKey::from("1"),
+                command: CueCommand::Text("‥‥ええと、".into()),
+                duration: 0.0,
+            },
+        ];
+
+        // 見積もりが未確立のまま先渡しを通す: 観測すれば epoch が立ってしまう。
+        set_now(&now, 300.0);
+        sink.preview(&upcoming);
+        assert_eq!(
+            inner.previewed(),
+            vec![upcoming.clone()],
+            "inner sink must receive the preview list UNCHANGED, exactly once"
+        );
+        assert_eq!(
+            tc.talk_time(300.0),
+            None,
+            "preview must not observe time (epoch stays unestablished)"
+        );
+        assert!(inner.recorded().is_empty(), "preview must not emit cues");
+
+        // 見積もりが立った後でも、先渡しの前後で値が変わらない。
+        sink.emit(upcoming[0].clone());
+        let before = tc.talk_time(10_000.0);
+        set_now(&now, 900.0);
+        sink.preview(&upcoming);
+        assert_eq!(
+            tc.talk_time(10_000.0),
+            before,
+            "preview must not move the established epoch"
+        );
+        assert_eq!(inner.previewed().len(), 2);
     }
 
     /// `ClockedTextSink<T>` が boot 型境界（`Send + Clone + 'static`）を満たすことをコンパイル時表明。

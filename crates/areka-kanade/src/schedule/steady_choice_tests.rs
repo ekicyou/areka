@@ -195,32 +195,6 @@ fn canonical_choice_emits_choice_select_ex_with_canonical_layout() {
     }
 }
 
-/// Req2.7・裁定 7: `script:` 前置はイベントを発行せず選択解決のみを行う。
-#[test]
-fn unsupported_choice_resolves_without_emitting_any_event() {
-    let s = steady_with_ledger(TalkId(3), 6, &["script:\\e"], ChoicePhase::Waiting);
-    let (next, actions) = step(
-        s,
-        Input::Choice(choice_input_of("script:\\e", "実行", &[])),
-        &config(),
-    );
-    assert!(
-        !actions
-            .iter()
-            .any(|a| matches!(a, Action::ShioriRequest(_))),
-        "未対応カテゴリは SHIORI イベントを発行しない（Req2.7）"
-    );
-    match actions.as_slice() {
-        [Action::ResolveChoice { talk_id, id }] => {
-            assert_eq!(*talk_id, TalkId(3));
-            assert_eq!(id, "script:\\e");
-        }
-        _ => panic!("未対応カテゴリは ResolveChoice のみを発行する"),
-    }
-    assert!(next.choice.is_none(), "解決で帳簿は消える");
-    assert_eq!(next.next_talk_id, 6, "未対応カテゴリは talk を起動しない");
-}
-
 // --- C. カスケード応答（規則 3・DD-4） ---
 
 /// Req4.3／4.6／5.1・DD-4: 応答スクリプトは `[ResolveChoice, StartTalk]` をこの順で同一バッチに載せる。

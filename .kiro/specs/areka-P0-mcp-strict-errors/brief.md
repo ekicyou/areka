@@ -86,3 +86,27 @@ AI が書いた台本は、存在しない surface 番号や綴りを誤った�
 - 触るファイル（並走の照合用）: 前回の一覧に加えて `crates/areka-mcp/src/handler.rs`（`INSTRUCTIONS` の 1 文）と `server_protocol_tests.rs`（その文言を読む）。`crates/areka/src/log_history.rs` は読むだけ。
 - 議題: 前回の 1 つ（印を台本に載せて運ぶか、talk の ID で拾うか）。加えて、`script-security-level` が台本に出どころの印を載せるなら、strict の印も同じ入れ物に載せるか（載せるなら `script-security-level` の後に回す）。
 - 見つけた穴: なし。
+
+## 2026-10-08 `mcp-author-tools` からの申し送り
+
+`mcp-author-tools` が、台本を再生せずに確かめる独自のツール `check_script` を作った。strict の記録はこれに揃える（要件の議論で「先に着地する側が種類の名前と文面の正本を作り、後の側が揃える」と決めた）。
+
+- **種類の名前と文面は `doc/ssp-mcp/areka-tools.md` に揃える**（「⑶ 診断の種類と文面」が正本）。上の 6 類との対応:
+
+  | 6 類 | 種類の名前 | 文面 |
+  |---|---|---|
+  | 無い surface（`\s`） | `missing_surface` | `no such surface in the current shell; playback does not change the surface` |
+  | 無いアニメーション（`\i`） | `missing_animation`（名前だけ予約。areka が `\i` に対応するまでは `unknown_tag`） | 未定（対応するときに `areka-tools.md` へ足す） |
+  | 無いバルーン（`\b`） | `missing_balloon` | `no such balloon ID in the current balloon; playback does not change the balloon` |
+  | 未知のタグ | `unknown_tag` | `areka does not know this tag; playback drops it` |
+  | 未知の `\!` | `unknown_command` | `no part of areka handles this \! command; playback ignores it` |
+  | 未知の `\&` | `unknown_entity`（名前だけ予約。areka が `\&` に対応するまでは `unknown_tag`） | 未定（同上） |
+
+  `check_script` はほかに `unreadable_argument`（閉じていない括弧・既定の値へ落とした引数）と `ignored`（受け取るが何もしないもの）も返す。strict の 6 類に入れるかは本 spec の議題にしてよいが、入れるなら名前と文面は同じものを使う。文面の定数は `crates/areka/src/mcp/check_script_judge.rs` の `MSG_*`（文書を写したもの・一致はテストで見ていない）。
+- **再生中の判定は、検査と同じ関数を引けば同じ答えになる**。`check_script` は判定を自分で持たず、再生が使う関数の答えを種類へ写しているだけ（`check_script_judge.rs` の `diagnose`）。
+  - 未知のタグ・閉じていない括弧・既定の値へ落とした引数・選択肢マーカー → `areka_parsers::sakura::parse_noted` が命令ごとに付ける印（`ReadNote::UnknownTag`・`Unclosed`・`ArgumentDefaulted`・`MarkerIgnored`）と、台本の中の位置（`Read::span`・バイト）。再生が使う `parse` は `parse_noted` から命令だけを取り出したものなので、経路は 1 本。
+  - 未知の `\!` → `crates/areka/src/emo2_boot/consumer_ledger.rs` の `ConsumerLedger::canonical()` を引いて `consumer_of(名前, 第 1 引数)` が `None`。表は 23 組で、各受け口の選別との一致は `consumer_ledger_agreement_tests.rs` が固定している。
+  - 無い surface・バルーン → `SurfaceResolver::resolve`・`resolve_balloon_key`（`areka-seriko`）と、表示の層の `EmoPresenter::has_surface`・`surface_ids`（`areka-emo-present`）。
+  - `\f` の知らないキー・キーなし → `areka_emo_text::look::apply_font_tag` の `Err` の `failure()`（`FontTagFailure::UnknownKey`・`NoKey`）。
+- **検査と再生中の記録の違いとして残るもの**: `check_script` は `\e`・`\-` の後ろも診るが、再生は `compile` がそこで止まるので、再生中の記録には出ない。`check_script` は字面で決まらないもの（シェルやバルーンの切替の後ろの `\s`・`\b`、名前の形の `\b[名前]` など）を診ないが、再生中は実際の答えが分かるので記録できる。
+- **`INSTRUCTIONS` の重なり**: `mcp-author-tools` は `handler.rs` の `INSTRUCTIONS` に独自のツールの 1 文を「not implemented yet」の文の前に足した。本 spec は最後の「not implemented yet」の 1 文だけを消し、独自のツールの 1 文は残す。2026-10-08 の時点で `NG:not implemented yet` を返すのは `sakurascript`・`raise_event`・`reload` の 3 本（`get_status` は `mcp-get-status` で着地済み）。

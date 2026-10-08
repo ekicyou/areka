@@ -316,6 +316,11 @@ impl StyleTable {
         self.looks.is_empty()
     }
 
+    /// この表の先頭が `prefix` と一致するか（追記専用なので、同じ流れの途中の表は先頭が一致する）。
+    pub fn starts_with(&self, prefix: &StyleTable) -> bool {
+        self.looks.starts_with(&prefix.looks)
+    }
+
     /// 表を空にする（スコープの消去点で呼ぶ）。
     pub fn clear(&mut self) {
         self.looks.clear();
@@ -390,6 +395,32 @@ pub struct FontTagIssue {
     pub value: String,
     /// 何が受け付けられなかったか（記録用の短い日本語）。
     pub reason: &'static str,
+}
+
+/// 適用できなかった `\f` が、キーの段で拒まれたか値の段で拒まれたか（[`FontTagIssue::failure`]）。
+///
+/// 台本の検査（`areka-P0-mcp-author-tools` の `check_script`）は前の 2 つだけを「知らないタグ」
+/// として返し、値の誤りは診ない。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FontTagFailure {
+    /// 43 形のいずれでもないキー（要件 2.6）。
+    UnknownKey,
+    /// キーが無い——`\f`／`\f[]`／`\f[""]`（要件 2.6）。
+    NoKey,
+    /// キーは知っているが値が受け付けられなかった（色の書式の誤りを含む）。
+    BadValue,
+}
+
+impl FontTagIssue {
+    /// 理由の定数から、知らないキー・キーなし・値の誤りのどれかを答える
+    /// （理由の定数は `pub(crate)` のまま、分類だけを外へ出す）。
+    pub fn failure(&self) -> FontTagFailure {
+        match self.reason {
+            REASON_UNKNOWN_KEY => FontTagFailure::UnknownKey,
+            REASON_NO_KEY => FontTagFailure::NoKey,
+            _ => FontTagFailure::BadValue,
+        }
+    }
 }
 
 /// `\f`／`\f[]`／`\f[""]`——キーが無い（要件 2.6）。

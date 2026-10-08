@@ -15,7 +15,7 @@ use super::*;
 fn shown_and_measuring() -> BalloonVisibilityState {
     let mut state = BalloonVisibilityState::default();
     Frame::new(&[(0, seen(5, false)), (1, seen(3, false))])
-        .display_end(1.0)
+        .ended_at(1.0)
         .at(0.5)
         .run(&mut state);
     Frame::new(&[(0, seen(5, true)), (1, seen(3, true))])

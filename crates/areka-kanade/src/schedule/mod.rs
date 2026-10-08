@@ -25,6 +25,8 @@ use crate::msg::{
 use crate::status::{ExecutionSnapshot, ExecutionStateUpdate, ExternalStates};
 use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
+/// バルーンの 3 つのイベントを送るかどうかの判断と、その控え（トークの控え・中断の控え）。
+pub(crate) mod balloon_events;
 pub(crate) mod boot;
 pub(crate) mod change;
 pub(crate) mod choice;
@@ -119,6 +121,10 @@ pub(crate) enum Input {
     ExecutionState(ExecutionStateUpdate),
     /// 殻が [`Action::Translate`] を実行した結果（殻が即時再投入）。判断は [`translate::on_done`] が持つ。
     TranslateDone(translate::TranslateResult),
+    /// 時間切れでバルーンを隠した知らせ（表示の側 → kanade）。判断は [`balloon_events::on_timeout_notice`] が持つ。
+    BalloonTimeout {
+        talk_id: TalkId,
+    },
 }
 
 /// 運行フェーズ（可視化は System Flows の状態機械図）。各待ち点は「直前に発行した
@@ -233,8 +239,10 @@ pub(crate) struct State {
     /// （カスケード Value・タイムアウト Value）、消去点は現 talk の `TalkDone` 到達と
     /// 次の slot 差替（マウス由来の置換を含む）である。
     pub choice_prev_talk: Option<TalkId>,
-    /// 利用者の中断を出した相手のトーク（止めた応答＝完了通知を待っている間だけ `Some`）。
-    pub user_break_talk: Option<TalkId>,
+    /// 利用者の中断の控え（止めた相手と scope。完了通知を待っている間だけ `Some`）。
+    pub user_break_talk: Option<balloon_events::BreakNote>,
+    /// 最後に再生を始めたトークの控え（3 つのバルーンのイベントの Reference0 の源）。
+    pub shown: Option<balloon_events::ShownTalk>,
     /// 受理した切替（要求と `OnGhostChanging` の台本）。停止通知の切替の中身の源。
     pub change: Option<change::ChangeState>,
     /// 台詞の再生中に受けた切替の要求の保留（`pending_close` と同型）。
@@ -265,6 +273,7 @@ impl State {
             choice: None,
             choice_prev_talk: None,
             user_break_talk: None,
+            shown: None,
             change: None,
             pending_change: None,
             talk_gap: None,
@@ -405,7 +414,7 @@ pub(crate) enum Action {
     /// 選択待ちバリアの解決指示（→ [`TalkCommand::ResolveChoice`](crate::talk::TalkCommand)）。
     ///
     /// `talk_id` は再生層／dispatcher の stale ガード用・`id` は確定した選択肢 ID。発行点は
-    /// [`steady`] の選択調停（未対応カテゴリの即時解決・カスケード終端）に単一化されている
+    /// [`steady`] の選択調停（`script:` の選択肢の解決・カスケード終端）に単一化されている
     /// （1 選択＝高々 1 解決・Req5.4）。
     ResolveChoice {
         talk_id: TalkId,
@@ -445,6 +454,8 @@ pub(crate) fn step(mut state: State, input: Input, config: &KanadeConfig) -> (St
     let (mut state, actions) = route(state, input, config);
     let actions = translate::after(&mut state, replied, actions);
     talk_gap::observe(&mut state, marked_reply);
+    // 出口: 相手を失った控えの掃除と、再生を始めたトークの控え（最終の台本で取る）。
+    balloon_events::settle(&mut state, &actions);
     (state, actions)
 }
 
@@ -561,6 +572,9 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
 
         // TranslateDone: 預けた一括の再開・故障・帳簿なしの判断ごと translate::on_done へ渡す。
         Input::TranslateDone(result) => translate::on_done(state, result),
+
+        // BalloonTimeout: 番号の照合と送るかどうかごと balloon_events::on_timeout_notice へ渡す（表 D）。
+        Input::BalloonTimeout { talk_id } => balloon_events::on_timeout_notice(state, talk_id),
 
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 
@@ -686,7 +700,7 @@ fn to_unloading_fault(mut state: State, fault: ShioriFault) -> (State, Vec<Actio
 ///
 /// `Ended` と `Interrupted` はいずれも非 quit としてフェーズ固有遷移（定常復帰・別れの台詞の
 /// 終了）へ委譲する（設計「kanade schedule の 3 値写像」）。例外は 1 つだけで、利用者の中断で止めた
-/// 台本が終了を予約していた `Interrupted`（[`user_break::take_user_break_quit`] が真）は `Quit` と
+/// 台本が終了を予約していた `Interrupted`（[`user_break::is_break_quit`] が真）は `Quit` と
 /// 同じ終了系列へ進む。dispatcher の slot 差替に伴う `Interrupted` は dispatcher が stale として
 /// 破棄するため、ここへ届く `Interrupted` は利用者の中断か選択肢の時間切れの解除である。
 /// いずれの場合も専用状態は起こさず、`info!` でどの reason だったかを観測する。
@@ -703,10 +717,11 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
             // 空にした結果が「利用者の中断で終わり、かつ終了の予約があった」かを持ち帰る（Req 3.8）。
             // 切替の相では予約を終了へ結ばない（中断は切替の中止＝切替の要件 5.4）。印の台詞の
             // 中断も終了へ結ばない（シェル切替の中止＝areka-P0-shell-balloon-switch 要件 5.2）。
-            let break_quit = user_break::take_user_break_quit(&mut state, &done)
+            let broke = user_break::take_break(&mut state, &done);
+            let break_quit = user_break::is_break_quit(broke, &done)
                 && !change::is_change_phase(&state.phase)
                 && !marked_break;
-            match done.reason {
+            let (state, actions) = match done.reason {
                 TalkEndReason::Quit => {
                     // 既知 talk の Quit → 終了系列（Quit）へ直行（Req 4.3）。
                     tracing::info!(target: "kanade", event = "talk_done_quit", talk_id = done.talk_id.0, "reason=Quit——終了系列（Quit）へ");
@@ -738,7 +753,9 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
                     // Ended（定常復帰・close talk 完了）はフェーズ固有遷移へ委譲。
                     dispatch_phase(state, Input::TalkDone(done), config)
                 }
-            }
+            };
+            // 振り分けの後の相を見て、バルーンの 3 つのイベントを送るかを決める（表 B）。
+            balloon_events::after_talk_done(state, actions, &done, broke)
         }
         Some(_) | None => {
             // 1 世代 stale 防御（C4 規則 9・F1 残余レース・Req1.6）: choice 起因の slot 差替直後は、
