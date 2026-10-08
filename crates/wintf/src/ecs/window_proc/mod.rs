@@ -42,6 +42,9 @@ pub(crate) fn dispatch_window_message(
 
     // 入来したメッセージを起床の旗へ写す（表に無い種は `FORCE`＝疑わしいときは回す）。
     tick_wake::mark(tick_wake::wake_bits_for_message(msg.msg));
+    if is_button_press(msg.msg) {
+        crate::ecs::tooltip::note_button_press();
+    }
 
     match msg.msg {
         WM_ERASEBKGND => lifecycle::WM_ERASEBKGND(world, entity, hwnd, wparam, lparam),
@@ -85,6 +88,21 @@ pub(crate) fn dispatch_window_message(
         WM_DROPFILES => drop_files::WM_DROPFILES(world, entity, hwnd, wparam, lparam),
         _ => None,
     }
+}
+
+/// ボタン（左・右・中・拡張）の押下とダブルクリックか（ツールチップの押下の印を立てる種）。
+fn is_button_press(msg: u32) -> bool {
+    matches!(
+        msg,
+        WM_LBUTTONDOWN
+            | WM_RBUTTONDOWN
+            | WM_MBUTTONDOWN
+            | WM_XBUTTONDOWN
+            | WM_LBUTTONDBLCLK
+            | WM_RBUTTONDBLCLK
+            | WM_MBUTTONDBLCLK
+            | WM_XBUTTONDBLCLK
+    )
 }
 
 #[cfg(test)]
@@ -330,5 +348,33 @@ mod tests {
             ret.is_none(),
             "WM_NCDESTROY は配送表に無く None（DefWindowProcW 委譲）であるべき（破棄は registry drop 駆動）"
         );
+    }
+
+    /// ツールチップの押下の印を立てる種は、4 種のボタンの押下とダブルクリックだけ。
+    #[test]
+    fn button_press_kinds_are_downs_and_double_clicks() {
+        for m in [
+            WM_LBUTTONDOWN,
+            WM_RBUTTONDOWN,
+            WM_MBUTTONDOWN,
+            WM_XBUTTONDOWN,
+            WM_LBUTTONDBLCLK,
+            WM_RBUTTONDBLCLK,
+            WM_MBUTTONDBLCLK,
+            WM_XBUTTONDBLCLK,
+        ] {
+            assert!(is_button_press(m), "{m:#x}");
+        }
+        for m in [
+            WM_LBUTTONUP,
+            WM_RBUTTONUP,
+            WM_MBUTTONUP,
+            WM_XBUTTONUP,
+            WM_MOUSEMOVE,
+            WM_MOUSEWHEEL,
+            WM_NCLBUTTONDOWN,
+        ] {
+            assert!(!is_button_press(m), "{m:#x}");
+        }
     }
 }
