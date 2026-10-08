@@ -284,6 +284,10 @@ pub struct ScopeWindows {
     /// 利用者の意思による配置であって resolver 既定ではない）。`None` のスコープは
     /// 連鎖の再解決から**常に除外**され、既定位置へ引き戻されない（scg 7.3）。
     /// システム由来の再アンカーでも `None` は `None` のままである（D9）。
+    ///
+    /// `None` は記憶に位置があるスコープでもある。起動の最後に並べ終えた時点の保存
+    /// （`placement::persist::persist_unremembered_char_positions`）は、この値が残っている
+    /// スコープだけを書く。
     pub default_char_pos: Option<PointPx>,
 }
 
@@ -328,6 +332,10 @@ impl GhostWindows {
     /// **`None` は 2 通り**——未知スコープ、または当該スコープが
     /// そもそも既定配置ではない（保存位置の復元）。連鎖の再解決はどちらの `None` も
     /// 「対象外」として同じに扱えばよい。
+    ///
+    /// 既知スコープの `None` は記憶に位置があるスコープ。起動の最後に並べ終えた時点の保存
+    /// （`placement::persist::persist_unremembered_char_positions`）は、この値が残っている
+    /// スコープだけを書く。
     pub fn default_char_pos(&self, scope: usize) -> Option<PointPx> {
         self.windows.get(&scope).and_then(|w| w.default_char_pos)
     }
