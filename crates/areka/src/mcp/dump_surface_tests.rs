@@ -230,12 +230,20 @@ fn current_look() -> Args {
 /// 装着は起きない）。A・B とも起動記録あり（`OnBoot` から始まる）で、切替で起きた側の
 /// `OnGhostChanged` は 204。
 fn rig_with(on_boot: &'static str) -> SwitchRig {
-    let fake = |on_boot: &'static str| {
+    rig_answering(on_boot, None)
+}
+
+/// [`rig_with`] の A の `OnGhostChanged` の応答を `on_changed` にした土台（`None` は 204）。
+fn rig_answering(on_boot: &'static str, on_changed: Option<&'static str>) -> SwitchRig {
+    let fake = |on_boot: &'static str, on_changed: Option<&'static str>| {
         FakeShiori::Scripted(Box::new(move || {
-            standard_script(on_boot).get("OnGhostChanged", Ok(None))
+            standard_script(on_boot).get("OnGhostChanged", Ok(on_changed.map(str::to_owned)))
         }))
     };
-    let mut rig = SwitchRig::new(vec![("A", fake(on_boot)), ("B", fake(r"\0B\e"))]);
+    let mut rig = SwitchRig::new(vec![
+        ("A", fake(on_boot, on_changed)),
+        ("B", fake(r"\0B\e", None)),
+    ]);
     // 切替先の窓の準備が閉包を投函する先（`Input` の段に作業プールの取り出しの系は無いので走らない）。
     rig.world.insert_resource(WintfTaskPool::new());
     rig.plant_boot_record("A");
@@ -554,10 +562,16 @@ fn switch_after_the_copy_still_answers_the_copied_picture() {
 ///
 /// # 非空虚性
 /// ゴーストの見分けを起こし直しで変わるもの（実行系そのもの等）で行うと断りが届いて赤。
-/// A の起動が 2 回であることで、起こし直しが実際に起きたことを確かめる。
+/// A の起動が 2 回であることで、起こし直しが実際に起きたことを確かめる（1 回なら起こし直しが
+/// 起きていない）。
+///
+/// 起こし直した A の `OnGhostChanged` は切替を求めない台詞で答える。204 だと `OnBoot` へ落ちて
+/// 同じ `\![change,ghost,A]` をもう一度流し、定常で切替の印が外れた直後の同じ巡でその合図を
+/// 汲むと 3 回目の起動が起きる（待ちの条件が戻りうる観測になり、回数が揺れる・要件 2.6）。
+/// 切替を求めるのは最初の A の台本だけなので、起動の回数は 2 で決まる。
 #[test]
 fn switch_to_the_same_ghost_keeps_waiting_for_attachment() {
-    let mut rig = rig_with(r"\0A\![change,ghost,A]\e");
+    let mut rig = rig_answering(r"\0A\![change,ghost,A]\e", Some(r"\0A\e"));
     let ghost = active_ghost(&rig);
     let (req, pending) = ToolRequest::new(ToolCall::DumpSurface(current_look()));
     handle(&mut rig.world, &ghost, current_look(), req.reply);
