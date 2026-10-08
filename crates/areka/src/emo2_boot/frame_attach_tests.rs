@@ -230,19 +230,22 @@ fn run_attach_phase_without_gpu_does_not_attach_or_consume_assets() {
 /// attach ゲートは `GhostWindows`＋`GraphicsCore`＋`WucGraphicsResource::is_valid()` の連言ゆえ、
 /// 本番 attach を駆動するにはこの 3 点が要る。本番 UI スレッドと同じ MTA で COM を初期化する
 /// （記憶: areka WUC は MTA スレッドで動く）。WARP 可（`GraphicsCore::new()`）。
-fn gpu_attach_world() -> (World, GhostWindows) {
+///
+/// 先頭は GPU の装置の許可（`GpuPermit`）。組の束縛は後のものから捨てられるので、先頭に置くと装置より後に返る。
+fn gpu_attach_world() -> (crate::emo2_boot::spine::GpuPermit, World, GhostWindows) {
     // SAFETY: WIC デコード／D3D に要る COM の MTA 初期化
     // （既初期化の S_FALSE／RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
     let (mut world, gw) = resnap_world();
+    let gpu = crate::emo2_boot::spine::GpuPermit::take();
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
     let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
     let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
     world.insert_resource(core);
     world.insert_resource(wuc);
-    (world, gw)
+    (gpu, world, gw)
 }
 
 /// 観測可能な完了条件（tasks.md task 3.3・R4.1/4.2）: **相方側 scope の文字描画領域が相方側
@@ -260,7 +263,7 @@ fn gpu_attach_world() -> (World, GhostWindows) {
 /// 相方側定義に対して `true`（＝装着が別定義だった証跡）を返して落ちる。
 #[test]
 fn attach_supplies_each_scope_its_own_balloon_model_to_map_and_text_layer() {
-    let (mut world, _gw) = gpu_attach_world();
+    let (_gpu, mut world, _gw) = gpu_attach_world();
     let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
     assert_eq!(
@@ -355,7 +358,7 @@ fn attach_supplies_each_scope_its_own_balloon_model_to_map_and_text_layer() {
 /// 総当たりするため、先頭 scope だけを不可視化する部分適用も落ちる（Requirement 1.6）。
 #[test]
 fn attach_establishes_balloons_invisible_with_slot_and_surface() {
-    let (mut world, _gw) = gpu_attach_world();
+    let (_gpu, mut world, _gw) = gpu_attach_world();
     let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
     let mut wiring = Emo2Wiring::new(
@@ -636,7 +639,7 @@ fn connect_balloon_text_hands_the_background_over_before_attaching() {
 /// 逆順側の `true` が非空虚性を保証する——「何をしても `false`」ではない。
 #[test]
 fn connect_balloon_text_resolves_text_with_the_background_at_attach_time() {
-    let (mut world, _gw) = gpu_attach_world();
+    let (_gpu, mut world, _gw) = gpu_attach_world();
     let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
     let kero = assets.balloons[1].model.clone();
@@ -804,7 +807,7 @@ fn every_production_scan_of_the_actor_map_is_registered() {
 fn attach_hands_the_box_bundle_and_the_balloon_folder_name_to_the_text_layer() {
     use std::io::Write as _;
 
-    let (mut world, _gw) = gpu_attach_world();
+    let (_gpu, mut world, _gw) = gpu_attach_world();
     let rpost =
         sample_ghost_kit::SampleRoot::acquire("R_POST_and_KOMAINU").expect("登記済みの検体");
     let shell_dir = rpost.folder().join("shell").join("master");

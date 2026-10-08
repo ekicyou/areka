@@ -245,7 +245,7 @@ fn rig_answering(on_boot: &'static str, on_changed: Option<&'static str>) -> Swi
         ("B", fake(r"\0B\e", None)),
     ]);
     // 切替先の窓の準備が閉包を投函する先（`Input` の段に作業プールの取り出しの系は無いので走らない）。
-    rig.world.insert_resource(WintfTaskPool::new());
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("A");
     rig.plant_boot_record("B");
     rig.boot("A");

@@ -107,7 +107,7 @@ fn reservation(stage: SwitchStage) -> SwitchInFlight {
 fn stop_with_handoff_under_reservation_switches_without_exit() {
     let mut rig = SwitchRig::new(vec![("A", silent_script()), ("B", silent_script())]);
     // 窓を作る閉包の投函先（切替先の窓の準備に要る・閉包は走らせない）。
-    rig.world.insert_resource(WintfTaskPool::new());
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("B");
     rig.boot("A");
     let steady = wait_steady(&mut rig);

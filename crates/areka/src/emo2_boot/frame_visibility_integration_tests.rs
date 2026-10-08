@@ -43,20 +43,27 @@ use super::*;
 ///
 /// ポインタ配線（`BalloonWiring`）も本番同様に置く。不在でも「抑止なし」へ倒れるだけだが、
 /// その縮退の誤りログが相順の観測窓へ毎回混ざるため、観測を濁さないために揃えておく。
-fn gpu_frame_world() -> (World, crate::placement::spawn::GhostWindows) {
+///
+/// 先頭は GPU の装置の許可（`GpuPermit`）。組の束縛は後のものから捨てられるので、先頭に置くと装置より後に返る。
+fn gpu_frame_world() -> (
+    crate::emo2_boot::spine::GpuPermit,
+    World,
+    crate::placement::spawn::GhostWindows,
+) {
     // SAFETY: WIC デコード／D3D に要る COM の MTA 初期化
     // （既初期化の S_FALSE／RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
     let (mut world, gw) = dpi_world();
+    let gpu = crate::emo2_boot::spine::GpuPermit::take();
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
     let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
     let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
     world.insert_resource(core);
     world.insert_resource(wuc);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
-    (world, gw)
+    (gpu, world, gw)
 }
 
 /// 実 emo2 資産で結線資源を組む（本番 `wire_emo2_boot` 手順 6 と同じ構築点）。
@@ -176,7 +183,7 @@ fn assert_established_but_invisible(world: &World, wiring: &Emo2Wiring, scope: u
 /// **相順が何を観測するか**であり、可視化の契機まで本檻に持ち込むと観測点が二重になる。
 #[test]
 fn visibility_phase_judges_the_state_left_by_this_frames_display_commands() {
-    let (mut world, _gw) = gpu_frame_world();
+    let (_gpu, mut world, _gw) = gpu_frame_world();
     let (present_tx, present_rx) = mpsc::channel::<PresentCommand>();
     // 送出端は檻が保持し続ける（drop すると受信端が切断され、相が誤りレベルで 1 行鳴らす）。
     let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
@@ -252,7 +259,7 @@ fn visibility_phase_judges_the_state_left_by_this_frames_display_commands() {
 /// フレームでは旧寸のまま据え置かれて落ちる。
 #[test]
 fn show_transition_lands_the_new_window_size_within_the_same_frame() {
-    let (mut world, gw) = gpu_frame_world();
+    let (_gpu, mut world, gw) = gpu_frame_world();
     let (_present_tx, present_rx) = mpsc::channel::<PresentCommand>();
     let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
     let mut wiring = boot_wiring(present_rx, lifecycle_rx);
@@ -334,7 +341,7 @@ fn show_transition_lands_the_new_window_size_within_the_same_frame() {
 /// 「そもそも何をしても可視にならない」実装では、この最後の主張が落ちる。
 #[test]
 fn every_frame_from_boot_to_the_first_visible_content_keeps_balloons_invisible() {
-    let (mut world, _gw) = gpu_frame_world();
+    let (_gpu, mut world, _gw) = gpu_frame_world();
     let (_present_tx, present_rx) = mpsc::channel::<PresentCommand>();
     let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
     let mut wiring = boot_wiring(present_rx, lifecycle_rx);
@@ -392,7 +399,7 @@ fn every_frame_from_boot_to_the_first_visible_content_keeps_balloons_invisible()
 /// 可視グリフ数は 0 のままとなり、装着と不可視が同時に成り立つフレームが作れる。
 #[test]
 fn text_slot_stays_invisible_after_the_text_layer_attaches_its_surface() {
-    let (mut world, _gw) = gpu_frame_world();
+    let (_gpu, mut world, _gw) = gpu_frame_world();
     let (_present_tx, present_rx) = mpsc::channel::<PresentCommand>();
     let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
     let mut wiring = boot_wiring(present_rx, lifecycle_rx);
@@ -481,7 +488,7 @@ fn balloon_reports(rx: &mpsc::Receiver<areka_kanade::KanadeMsg>) -> Vec<Vec<(u32
 /// 見えたフレームで組が 1 回だけ届き、見えている間は送り直さず、消えたフレームで空の組が届く。
 #[test]
 fn visible_balloon_is_reported_once_and_its_disappearance_as_an_empty_set() {
-    let (mut world, _gw) = gpu_frame_world();
+    let (_gpu, mut world, _gw) = gpu_frame_world();
     let reports = seat_ghost(&mut world);
     let (present_tx, present_rx) = mpsc::channel::<PresentCommand>();
     let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
@@ -534,7 +541,7 @@ fn visible_balloon_is_reported_once_and_its_disappearance_as_an_empty_set() {
 #[test]
 fn new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch() {
     // 前のゴースト: scope 0 が見えて組が届いた状態で降りる。
-    let (mut old_world, _old_gw) = gpu_frame_world();
+    let (_old_gpu, mut old_world, _old_gw) = gpu_frame_world();
     let old_reports = seat_ghost(&mut old_world);
     let (_old_present_tx, old_present_rx) = mpsc::channel::<PresentCommand>();
     let (_old_lifecycle_tx, old_lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
@@ -552,7 +559,7 @@ fn new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch() {
     drop(old_wiring);
 
     // 新しいゴースト: 新しい置き場と新しい結線状態（本番の切替と同じく `Emo2Wiring::new`）。
-    let (mut world, _gw) = gpu_frame_world();
+    let (_gpu, mut world, _gw) = gpu_frame_world();
     let reports = seat_ghost(&mut world);
     let (_present_tx, present_rx) = mpsc::channel::<PresentCommand>();
     let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();

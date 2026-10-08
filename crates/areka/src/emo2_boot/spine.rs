@@ -363,8 +363,8 @@ mod wait;
 // 待ちの部品は子のファイル `spine_wait.rs` に置き、同じ名前で出し直す（兄弟のテストは `super::SPIN_WAIT` などで引く）。
 use self::wait::{BACKOFF_SLEEP, SPIN_WAIT, join_bounded};
 pub(crate) use self::wait::{
-    Progress, WaitFailure, run_bounded, run_bounded_watching, spin_wait_until, wait_recv,
-    wait_until, wait_until_with,
+    GpuPermit, Progress, WaitFailure, run_bounded, run_bounded_watching, spin_wait_until,
+    wait_recv, wait_until, wait_until_with,
 };
 
 /// 「尽きるのが正常」の回収（settle）が満たすべき**壁時計の最小持続**（要件 4.2・4.5）。
@@ -434,11 +434,12 @@ fn settle_bounded_with(mut now: impl FnMut() -> Instant, mut step: impl FnMut() 
 /// `GraphicsCore`＋`WucGraphicsResource` を実資源として載せた wintf World（headless GPU・R8.4）。
 ///
 /// 本番 UI スレッドは MTA（記憶: areka WUC は MTA スレッドで動く）。WARP 可（`GraphicsCore::new()`）。
-fn make_world_with_gpu() -> World {
+fn make_world_with_gpu() -> (GpuPermit, World) {
     // SAFETY: COM の MTA 初期化（S_FALSE/RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
+    let gpu = GpuPermit::take();
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
     let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
     let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
@@ -449,7 +450,7 @@ fn make_world_with_gpu() -> World {
     // 終了系列の完了は `quit_app` を通る。本番の `WinApp` と同じく受け口を据える
     // （無いと `app_exit_unwired` の error を残す）。
     world.insert_non_send(wintf::AppExit::new());
-    world
+    (gpu, world)
 }
 
 /// scope0/scope1 の 2 スコープぶんの合成配置（placement::spawn テストの emo2 相当値を踏襲）。
@@ -587,6 +588,8 @@ pub(crate) struct SpineHarness {
     /// ある。順を守る理由は、木が在るうちに畳むほうが、後から観測を足したときに驚きが
     /// 少ないことだけである。
     sample: SampleRoot,
+    /// GPU の装置の許可（[`GpuPermit`]）。World の装置より後に返すので欄の最後。
+    gpu: GpuPermit,
 }
 
 impl SpineHarness {
@@ -635,7 +638,7 @@ impl SpineHarness {
         driver: LoopDriver,
     ) -> SpineHarness {
         // ── headless GPU World（MTA COM＋WARP 可・R8.4）＋合成 GhostWindows（scope [0,1]） ──
-        let mut world = make_world_with_gpu();
+        let (gpu, mut world) = make_world_with_gpu();
         spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
 
         // ── 構築入力（実 emo2 検体・COM は make_world_with_gpu で初期化済み） ──
@@ -805,6 +808,7 @@ impl SpineHarness {
             text_pump,
             tick_sink,
             sample,
+            gpu,
         }
     }
 
@@ -839,7 +843,9 @@ impl SpineHarness {
     /// join し、dispatcher が保持する `SerikoSink` クローンを drop する→seriko worker の inbox 切断→
     /// 自然終了。続けて seriko を有界 join する（ghost spine S1/S2 の後片付け技法）。
     fn shutdown_bounded(self) {
+        // 許可を先頭で束縛する（巻き戻りでも後から束縛した装置の世界より後に返る）。
         let SpineHarness {
+            gpu,
             world,
             wiring,
             runtime,
@@ -874,6 +880,7 @@ impl SpineHarness {
         let _ = shiori_handle;
         // 検体の複製は最後に捨てる（`SpineHarness::sample` の用心・テストの裏付けは無い）。
         drop(sample);
+        drop(gpu);
     }
 }
 

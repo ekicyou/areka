@@ -1,7 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::sync::mpsc;
 
-use super::wait::{DENSE_SPIN, WAIT_CAP, run_bounded_watching, wait_recv};
+use super::wait::{DENSE_SPIN, GpuSlots, WAIT_CAP, run_bounded_watching, wait_recv};
 use super::{
     BACKOFF_SLEEP, Duration, Instant, Progress, SPIN_WAIT, WaitFailure, run_bounded,
     wait_until_with,
@@ -295,4 +295,28 @@ fn a_vanished_worker_panics_with_the_partner_gone_text() {
         "今の文が先頭に無い: {old}"
     );
     assert!(old.contains("待ちの打ち切り［相手が居ない］"), "{old}");
+}
+
+// ===========================================================================
+// GPU の装置の許可の檻（areka-P0-ghost-session-test-load-flake タスク 5.2・檻 16・要件 2.7）
+//
+// プロセスに 1 つの数え（足場が使う）とは別の数えを置き、待たずに取る口だけで確かめる（実時間は待たない）。
+// ===========================================================================
+
+/// 2 つ取った後は 3 つ目が取れず、1 つ返すと取れる。
+#[test]
+fn gpu_slots_hold_at_most_the_capacity_and_a_returned_permit_frees_one() {
+    static SLOTS: GpuSlots = GpuSlots::new(2);
+    let first = SLOTS.try_take().expect("1 つ目は取れる");
+    let _second = SLOTS.try_take().expect("2 つ目は取れる");
+    assert!(
+        SLOTS.try_take().is_none(),
+        "同時に 2 つまで（3 つ目は取れない）"
+    );
+    drop(first);
+    let _third = SLOTS.try_take().expect("1 つ返すと取れる");
+    assert!(
+        SLOTS.try_take().is_none(),
+        "返した分だけ空く（2 つ持っている）"
+    );
 }

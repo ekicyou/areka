@@ -309,7 +309,9 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
     );
 
     // 分解して所有ハンドルを得る（shutdown_bounded と同型・shiori_handle は照合のため保持）。
+    // 許可は先頭で束縛する（巻き戻りでも装置の世界より後に返る）。
     let SpineHarness {
+        gpu,
         world,
         wiring,
         runtime,
@@ -371,4 +373,5 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
     drop(text_pump);
     // 検体の複製は最後に捨てる（`shutdown_bounded` と同じ用心・テストの裏付けは無い）。
     drop(sample);
+    drop(gpu);
 }

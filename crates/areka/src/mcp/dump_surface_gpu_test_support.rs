@@ -46,7 +46,7 @@ use wintf::ecs::{DPI, FrameTime, GraphicsCore, Input, Update, WindowHandle, WucG
 use crate::emo2_boot::ghost_switch_test_support::{
     BALLOON, FakeShiori, SwitchRig, standard_script,
 };
-use crate::emo2_boot::spine::{Progress, RecordedCall, wait_until};
+use crate::emo2_boot::spine::{GpuPermit, Progress, RecordedCall, wait_until};
 use crate::ghost_session::GhostSlot;
 use crate::mcp::resolve;
 use crate::placement::follow::MonitorSnapshot;
@@ -72,6 +72,8 @@ pub(in crate::mcp) struct GpuRig {
     pub(in crate::mcp) rig: SwitchRig,
     /// 注入した Tick の合成の時刻（単調増加）。
     clock_ms: u64,
+    /// GPU の装置の許可（[`GpuPermit`]）。`rig` の World の装置より後に返すので欄の最後。
+    _gpu: GpuPermit,
 }
 
 impl GpuRig {
@@ -90,6 +92,7 @@ impl GpuRig {
         )]);
         rig.plant_boot_record("A");
         spawn_windows(&mut rig, dpi);
+        let gpu = GpuPermit::take();
         let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
         let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
         let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
@@ -99,7 +102,11 @@ impl GpuRig {
         let (_, inbox) = mpsc::channel();
         crate::mcp::install(&mut rig.world, inbox);
         rig.boot("A");
-        Self { rig, clock_ms: 0 }
+        Self {
+            rig,
+            clock_ms: 0,
+            _gpu: gpu,
+        }
     }
 
     /// 本番の `Input`・`Update` の段を `done` が真になるまで有界に回す（期限切れは `false`）。
@@ -119,7 +126,7 @@ impl GpuRig {
         step_ms: u64,
         mut done: impl FnMut(&World) -> bool,
     ) -> bool {
-        let Self { rig, clock_ms } = self;
+        let Self { rig, clock_ms, .. } = self;
         let mut last_tick: Option<Instant> = None;
         let probe = rig.progress_probe();
         let at = Location::caller();

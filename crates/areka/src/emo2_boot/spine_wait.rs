@@ -8,7 +8,7 @@
 //! 時間」で決め、届かなかった理由を [`WaitFailure`] の 4 つに分けて返す（areka-P0-ghost-session-test-load-flake）。
 
 use std::fmt;
-use std::sync::mpsc;
+use std::sync::{Condvar, Mutex, PoisonError, mpsc};
 use std::time::{Duration, Instant};
 
 use areka_actor::{ActorError, ActorHandle};
@@ -380,5 +380,74 @@ pub(super) fn join_bounded(
             "'{what}' join did not complete within {timeout:?} (possible hang) — {}",
             bounded_failure(what, started, e)
         ),
+    }
+}
+
+/// GPU の装置を同時に持てる数の数え（areka-P0-ghost-session-test-load-flake 要件 2.7・設計「足場のスレッドの絞り」）。
+///
+/// D3D11 の装置は装置ごとにドライバのスレッドを生み、Windows ではスレッドの始まりと終わりがプロセスに
+/// 1 つのローダーの錠を取る。負荷の下で装置が多く並ぶと、起こしたばかりのゴーストのスレッドが始まれずに
+/// 待ちの打ち切りの赤になった（`load-repro.md` の 4.2）。数えは `std` だけで書き、どの足場からも届く
+/// ここに置く。
+pub(super) struct GpuSlots {
+    held: Mutex<usize>,
+    freed: Condvar,
+    cap: usize,
+}
+
+/// テストのプロセスに 1 つの数え（同時に 2 つ）。
+static GPU_SLOTS: GpuSlots = GpuSlots::new(2);
+
+impl GpuSlots {
+    pub(super) const fn new(cap: usize) -> Self {
+        Self {
+            held: Mutex::new(0),
+            freed: Condvar::new(),
+            cap,
+        }
+    }
+
+    /// 空きが出るまで眠って待ち、許可を取る。
+    fn take(&'static self) -> GpuPermit {
+        let held = self.held.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut held = self
+            .freed
+            .wait_while(held, |held| *held >= self.cap)
+            .unwrap_or_else(PoisonError::into_inner);
+        *held += 1;
+        GpuPermit(self)
+    }
+
+    /// 待たずに取る（空きが無ければ `None`）。檻 16 が実時間を待たずに数えを確かめるための口。
+    pub(super) fn try_take(&'static self) -> Option<GpuPermit> {
+        let mut held = self.held.lock().unwrap_or_else(PoisonError::into_inner);
+        if *held >= self.cap {
+            return None;
+        }
+        *held += 1;
+        Some(GpuPermit(self))
+    }
+}
+
+/// GPU の装置を持ってよい許可。捨てると数えへ返り、待っている足場を 1 つ起こす。
+///
+/// `GraphicsCore::new()` の直前に [`GpuPermit::take`] で取る（待ちの関数の外・装置を作る前なので、
+/// 許可を待つ時間は待ちの時間に数えない）。装置より後に捨てるよう、足場の構造体では**最後の欄**に、
+/// 組で返すときは**先頭**に置く（構造体の欄は宣言の順に、`let` の組の束縛は後のものから捨てられる）。
+/// 1 つのテストで 2 つ取ると、同じことをするテストが並んだとき互いに待ち合って止まりうる。2 つ取る
+/// テストは `new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch` の 1 本だけにしておくこと。
+pub(crate) struct GpuPermit(&'static GpuSlots);
+
+impl GpuPermit {
+    /// プロセスに 1 つの数えから許可を取る（空きが出るまで待つ）。
+    pub(crate) fn take() -> Self {
+        GPU_SLOTS.take()
+    }
+}
+
+impl Drop for GpuPermit {
+    fn drop(&mut self) {
+        *self.0.held.lock().unwrap_or_else(PoisonError::into_inner) -= 1;
+        self.0.freed.notify_one();
     }
 }

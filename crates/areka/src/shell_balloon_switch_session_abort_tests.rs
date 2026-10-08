@@ -390,7 +390,9 @@ fn welcomed_b(rig: &SwitchRig) -> bool {
 #[test]
 fn ghost_switch_while_waiting_wins_and_leaves_no_shell_switch_behind() {
     let mut lap = rig_ab(|| standard_script(BOOT_TO_SECOND_PLAIN));
-    lap.rig.world.insert_resource(WintfTaskPool::new());
+    lap.rig
+        .world
+        .insert_resource(WintfTaskPool::with_threads(1));
     let steady = lap.rig.wait_steady();
     let mut log = LookLog::default();
     let windows = lap.windows.clone();
@@ -475,7 +477,9 @@ fn ghost_switch_after_a_shell_swap_unloads_the_session() {
             Ok(Some(r"\0\_w[3000]\![change,ghost,B]\e".to_owned())),
         )
     });
-    lap.rig.world.insert_resource(WintfTaskPool::new());
+    lap.rig
+        .world
+        .insert_resource(WintfTaskPool::with_threads(1));
     let steady = lap.rig.wait_steady();
 
     // 差し替えまでは 1 ms ずつ（応答の台本の `\_w[3000]` の間に差し替えの完了を見る）。

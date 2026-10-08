@@ -187,7 +187,9 @@ fn reloaded(rig: &SwitchRig) -> bool {
 fn a_reload_after_the_swaps_boots_with_the_remembered_shell_and_balloon() {
     let (mut lap, steady) = steady_rig();
     // 起こし直すときの窓の準備が閉包を投函する先。
-    lap.rig.world.insert_resource(WintfTaskPool::new());
+    lap.rig
+        .world
+        .insert_resource(WintfTaskPool::with_threads(1));
     let swapped = swap_both(&mut lap);
     let a_dir = lap.rig.root.ghost_dir("A");
 

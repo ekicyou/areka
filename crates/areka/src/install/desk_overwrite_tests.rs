@@ -76,7 +76,7 @@ fn overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again() {
         })),
     )]);
     // 起こし直すときの窓の準備が閉包を投函する先（`Input` の段では走らない）。
-    rig.world.insert_resource(WintfTaskPool::new());
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("A");
     rig.boot("A");
     assert!(rig.wait_steady(), "A が定常に着く");
@@ -206,7 +206,7 @@ fn running(folder: &'static str, others: &[&'static str]) -> SwitchRig {
     let mut scripts = vec![(folder, installing(folder))];
     scripts.extend(others.iter().map(|other| (*other, installing(other))));
     let mut rig = SwitchRig::new(scripts);
-    rig.world.insert_resource(WintfTaskPool::new());
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
     for name in std::iter::once(&folder).chain(others) {
         rig.plant_boot_record(name);
     }

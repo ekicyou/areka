@@ -64,7 +64,7 @@ fn ghost_a() -> FakeShiori {
 fn running_a(local: Option<&[u8]>) -> SwitchRig {
     let mut rig = SwitchRig::new(vec![("A", ghost_a()), ("B", ghost_a())]);
     // 起こし直すときの窓の準備が閉包を投函する先（`Input` の段では走らない）。
-    rig.world.insert_resource(WintfTaskPool::new());
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
     let a_dir = rig.root.ghost_dir("A");
     let descript = a_dir.join("ghost").join("master").join("descript.txt");
     let text = std::fs::read_to_string(&descript).expect("descript.txt は UTF-8");

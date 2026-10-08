@@ -37,7 +37,9 @@ use crate::emo2_boot::shell_balloon_switch::{
     SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinSwitchInFlight, SkinSwitchStage, SkinVerdict,
     request_skin_switch,
 };
-use crate::emo2_boot::spine::{Progress, RecordedCall, ScriptedShioriBackendBuilder, wait_until};
+use crate::emo2_boot::spine::{
+    GpuPermit, Progress, RecordedCall, ScriptedShioriBackendBuilder, wait_until,
+};
 use crate::emo2_boot::target_map::shell_target;
 use crate::input_events::user_break::UserBreakWiring;
 use crate::placement::follow::MonitorSnapshot;
@@ -99,6 +101,8 @@ pub(super) struct LapRig {
     pub(super) windows: GhostWindows,
     /// 注入した Tick の合成の時刻（単調増加）。
     clock_ms: u64,
+    /// GPU の装置の許可（[`GpuPermit`]）。`rig` の World の装置より後に返すので欄の最後。
+    _gpu: GpuPermit,
 }
 
 /// A（起動記録あり＝`OnBoot` の台本から始まる）を `script` の偽の SHIORI で、2 つ目のシェル・
@@ -120,6 +124,7 @@ pub(super) fn lap_rig_of(ghosts: Vec<(&str, FakeShiori)>, shells: &[&str]) -> La
         add_rpost_shell(&rig.root.ghost_dir("A"), shell);
     }
     let windows = spawn_windows(&mut rig);
+    let gpu = GpuPermit::take();
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
     let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
     let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
@@ -130,6 +135,7 @@ pub(super) fn lap_rig_of(ghosts: Vec<(&str, FakeShiori)>, shells: &[&str]) -> La
         rig,
         windows,
         clock_ms: 0,
+        _gpu: gpu,
     }
 }
 
