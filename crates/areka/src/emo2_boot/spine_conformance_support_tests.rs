@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use super::{
     ClosedInboxes, Inbox, Injection, LapDriver, LapStage, PresentCommand, RecordedCall,
-    StageFailure, StagePlan, StageSink, WaitInjection, injection_kind,
+    StageFailure, StagePlan, StageSink, WaitFailure, WaitInjection, injection_kind,
 };
 use super::{ExitKind, LoopDriver, ScriptedShioriBackend, ScriptedShioriHandle, SpineHarness};
 use super::{shell_target, spin_wait_until};
@@ -118,7 +118,8 @@ fn stage_driver_returns_named_timeout_instead_of_silent_success() {
     let mut sink = FakeStageSink::silent();
     let mut driver = LapDriver::new();
 
-    // 1 反復 10 秒進む時計＝3 反復目に SPIN_WAIT（30 秒）へ届く。
+    // 1 回読むごとに 10 秒進む時計。待ちの芯は 1 反復目の後に待ち始めの時刻を読み、以後は反復ごとに
+    // 1 回読むので、4 反復目の後に 30 秒（目印の無い待ちの上限）へ届く。
     let outcome = driver.run_stage_with(
         stepping_clock(Duration::from_secs(10)),
         &mut sink,
@@ -137,16 +138,26 @@ fn stage_driver_returns_named_timeout_instead_of_silent_success() {
     assert_eq!(
         failure,
         StageFailure::Timeout {
+            wait: Box::new(WaitFailure::TimedOut {
+                what: "自発会話".to_string(),
+                waited: Duration::from_secs(30),
+            }),
             stage: "自発会話",
-            injected_at_ms: vec![1_000, 2_000],
+            injected_at_ms: vec![1_000, 2_000, 3_000, 4_000],
             collected: 0,
-            now_ms: 3_000,
+            now_ms: 5_000,
         },
         "有界時間が尽きたことが段名つきで呼び手へ返っていない"
     );
     assert!(
         failure.to_string().contains("自発会話"),
         "失敗の文面が段名を名指ししていない: {failure}"
+    );
+    assert!(
+        failure
+            .to_string()
+            .starts_with("待ちの打ち切り［進みは不明］"),
+        "打ち切りの文言が待ちの芯の見出しで始まっていない: {failure}"
     );
 }
 

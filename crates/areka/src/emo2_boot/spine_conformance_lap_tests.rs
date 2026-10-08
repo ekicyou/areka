@@ -259,6 +259,15 @@ impl StageSink for LapSink<'_> {
         self.observed.borrow_mut().displays_seen += collected.len();
         collected
     }
+
+    /// 段の待ちの進みの目印＝SHIORI の呼び出し（`Status` を除く）・台詞の起動・表示指令の数の和。
+    fn progress_probe(&self) -> Option<Box<dyn Fn() -> u64>> {
+        let (handle, observed) = (self.handle.clone(), Rc::clone(&self.observed));
+        Some(Box::new(move || {
+            let seen = observed.borrow();
+            handle.call_count() + (seen.talks_started + seen.displays_seen) as u64
+        }))
+    }
 }
 
 /// 占有終端（talk 相対秒）をミリ秒へ切り上げる。

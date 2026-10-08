@@ -21,7 +21,7 @@
 
 - 本番のゴーストの切り替え・起こし直し・降ろしの振る舞いの変更（再現で本物の競合が見つかった場合を除く）。
 - `tools/test-all.ps1` の並列度の変更、回し直しで赤を隠す仕組み。
-- 赤の観測が無い待ち（他の crate の同じ名前の `run_bounded`／`join_bounded`・`install/` の自前の `join_bounded`・`spine_*_tests.rs` が自前で持つ Tick 注入の待ち・`session_end_deadline_tests.rs` が確かめる本番の実時間の締切）。再現の手順で赤になったものだけを対象に加える。
+- 赤の観測が無い待ち（他の crate の同じ名前の `run_bounded`／`join_bounded`・`install/` の自前の `join_bounded`・`spine_*_tests.rs` が自前で持つ Tick 注入の待ち・`session_end_deadline_tests.rs` が確かめる本番の実時間の締切）。再現の手順で赤になったものだけを対象に加える（例: 通しの巡回の段の駆動器は再現で赤だったので加えた・5.4）。
 - `zorder-chain-residue` に残る族、`areka-test-threads-av` の範囲。
 
 ## Boundary Commitments
@@ -269,7 +269,7 @@ flowchart TD
 | 待ち | 目印を作れない理由 |
 |---|---|
 | `ghost_session_restart_tests.rs` の `run_input_until` | 待つ相手が作業プールで、進みを数える口がテストの側に無い。総時間は 10 秒から共通の `SPIN_WAIT`（30 秒）になり、空回しは 60 ms で CPU を返す形になる |
-| `spine_*_tests.rs` が `spin_wait_until` を直接呼ぶ待ち・自前の Tick 注入の待ち（約 20 か所） | 待つ相手が描画と台詞の再生で、SHIORI の呼び出しを伴わない。赤の観測も無い（Non-Goals） |
+| `spine_*_tests.rs` が `spin_wait_until` を直接呼ぶ待ち・自前の Tick 注入の待ち（約 20 か所） | 待つ相手が描画と台詞の再生で、SHIORI の呼び出しを伴わない。赤の観測も無い（Non-Goals）。ただし通しの巡回の段の駆動器（`spine_conformance_support.rs` の `run_stage_with`）は除く。直す前の再現で赤だった（`load-repro.md` の 3.7 の場所 34・4.3）ので、この例外から外して待ちの芯へ移した。目印は SHIORI の呼び出しの数（`Status` を除く）と台詞の起動・表示指令の数の和（5.4） |
 | `join_bounded("spine seriko join", …)` と、古い呼び名 `run_bounded` の残りの呼び手 | スレッドの合流を待つだけで、途中の進みを外から読めない |
 
 ## Components and Interfaces
