@@ -15,9 +15,9 @@
              入力デスクトップが Default でない（画面のロック・スクリーンセーバー）ときは叩かずに記録だけ残す。
 
 .EXAMPLE
-  pwsh -NoProfile -File .kiro/specs/areka-P0-balloon-lifecycle-events/real-machine-run.ps1 -Prepare
-  pwsh -NoProfile -File .kiro/specs/areka-P0-balloon-lifecycle-events/real-machine-run.ps1 -Run R1
-  pwsh -NoProfile -File .kiro/specs/areka-P0-balloon-lifecycle-events/real-machine-run.ps1 -Run R2 -Clicks Break,Close -TimeoutMs 15000
+  pwsh -NoProfile -File .kiro/specs/completed/areka-P0-balloon-lifecycle-events/real-machine-run.ps1 -Prepare
+  pwsh -NoProfile -File .kiro/specs/completed/areka-P0-balloon-lifecycle-events/real-machine-run.ps1 -Run R1
+  pwsh -NoProfile -File .kiro/specs/completed/areka-P0-balloon-lifecycle-events/real-machine-run.ps1 -Run R2 -Clicks Break,Close -TimeoutMs 15000
 #>
 param(
     [switch]$Prepare,

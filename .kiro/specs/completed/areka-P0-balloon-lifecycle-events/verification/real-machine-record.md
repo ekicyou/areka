@@ -2,7 +2,7 @@
 
 - 日付: 2026-10-06（R1〜R3）・2026-10-07（R4）
 - 対象: areka（debug・`HEAD` の `e9a5c945` から組んだもの）と適合ゴースト emo2
-- 走らせ方の正本: `.kiro/specs/areka-P0-balloon-lifecycle-events/real-machine-run.ps1`
+- 走らせ方の正本: `.kiro/specs/completed/areka-P0-balloon-lifecycle-events/real-machine-run.ps1`
 - 記録の置き場: ワークツリーの `target\ble-signoff\`（根は `target\ble-signoff\root`・走行ごとの記録は `run-Rn.log`・叩いた記録は `run-Rn.clicks.txt`・起動と終了の時刻は `runs.txt`）
 
 ## 検体
