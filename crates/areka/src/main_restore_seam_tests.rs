@@ -146,6 +146,48 @@ fn restore_seam_without_persist_is_identity_default() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// char-position-save-on-exit 2.6・5.2（design RestoredScopes・テスト 7）:
+/// 記憶の位置が既定の位置と**同じ値**でも、そのスコープは「記憶から戻した」集合に入る
+/// （値の違いでなく記憶の有無で決める）。値の比較で決めていたら集合は空になり赤になる。
+#[test]
+fn restore_seam_reports_saved_scope_even_when_equal_to_default() {
+    let temp = unique_temp_dir("saved-equals-default");
+    let root = temp.path().to_path_buf();
+    plant_minimal_ghost(&root);
+    let profile = profile_areka_root(&root.join("ghost").join("master"));
+    std::fs::create_dir_all(&profile).expect("create profile/areka");
+    std::fs::write(
+        profile.join("sylphya.toml"),
+        "format-version = 1\n[window.0]\nx = \"100\"\ny = \"100\"\n".as_bytes(),
+    )
+    .expect("plant sylphya.toml");
+
+    // 既定は記憶の値と同じ位置。広い work area ゆえ再射影は恒等。
+    let default_char_pos = PointPx { x: 100, y: 100 };
+    let placements = vec![synthetic_placement(default_char_pos)];
+    let snapshot = MonitorSnapshot {
+        work_areas: vec![RectPx {
+            left: 0,
+            top: 0,
+            right: 3840,
+            bottom: 2160,
+        }],
+    };
+
+    let (out, restored) =
+        restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi);
+
+    assert_eq!(
+        out[0].char_pos, default_char_pos,
+        "記憶の値＝既定の値なので位置は同じ（前提の確認）"
+    );
+    assert_eq!(
+        restored.iter().copied().collect::<Vec<_>>(),
+        vec![0usize],
+        "記憶の値が既定と同じでも記憶から戻したスコープとして報告される（2.6・5.2）"
+    );
+}
+
 /// areka-P0-windowposition-limit 2.2/4.7/6.1・design C6/DD6:
 /// **起動時関門が復元合流シームに実際に結線されている**ことの証明。
 ///

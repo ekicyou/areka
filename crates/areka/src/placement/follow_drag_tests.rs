@@ -604,9 +604,8 @@ fn on_char_drag_end_persists_free_anchor_raw_position_for_scope() {
 }
 
 /// Task 8.3 発火規律の統合檻（Req1.9・8.4・design C2/C3・Testing Strategy Integration §2）:
-/// 永続の窓位置・バルーン相対オフセットを書くのは **DragEnd の観測点のみ**であり、
-/// 自動再射影（`resize_window_to`）・`\![move]` 消費経路（`move_window_to`）・復元時
-/// 再射影（`apply_restored_placements`・純関数）・**連続ドラッグ**（`on_char_drag`）は
+/// 永続の窓位置を書くのは **ドラッグの確定と、起動の最後に並べ終えた時点の 2 つ**（バルーン相対
+/// オフセットはドラッグの確定だけ）で、自動再射影（`resize_window_to`）・`\![move]` 消費経路（`move_window_to`）・復元時再射影（`apply_restored_placements`・純関数）・**連続ドラッグ**（`on_char_drag`）は
 /// 永続ストアを一切書き換えないことを、ストア内容のバイト等価で決定論固定する。
 ///
 /// # 檻の噛み方（意味のある不変チェックにするための seed）

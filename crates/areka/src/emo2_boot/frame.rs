@@ -501,6 +501,24 @@ mod chain_finalize_tests;
 #[path = "frame_chain_finalize_restart_tests.rs"]
 mod chain_finalize_restart_tests;
 
+// 並べ直しから記憶まで（areka-P0-char-position-save-on-exit タスク 3.2〜4.2）。共有の部品と、
+// それを使う 3 つのテストファイル（1,000 行の上限に合わせて分けた）。
+#[cfg(test)]
+#[path = "frame_chain_finalize_persist_test_support.rs"]
+mod chain_finalize_persist_test_support;
+
+#[cfg(test)]
+#[path = "frame_chain_finalize_persist_tests.rs"]
+mod chain_finalize_persist_tests;
+
+#[cfg(test)]
+#[path = "frame_chain_finalize_persist_restart_tests.rs"]
+mod chain_finalize_persist_restart_tests;
+
+#[cfg(test)]
+#[path = "frame_chain_finalize_persist_nowrite_tests.rs"]
+mod chain_finalize_persist_nowrite_tests;
+
 #[cfg(test)]
 #[path = "frame_dpi_tests.rs"]
 mod dpi_tests;
