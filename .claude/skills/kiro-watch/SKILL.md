@@ -39,6 +39,7 @@ Inside one repo, merges go bug first, then by request time. Load tests go by req
 - The script prints ASCII only. Read the outbox and status files with the Read tool.
 
 ## Start
+0. **First, set this session's title to exactly `kiro-watch`** (`mcp__ccd_session_mgmt__set_session_title` with `session_id: "self"`; skip only if it already is). Other sessions find the coordinator by that exact title, so a different one (e.g. "Kiro watch") leaves them lost.
 1. Run `pwsh -NoProfile -File .claude/skills/kiro-watch/kiro-watch.ps1 status` and read `status.md`.
 2. If `state.json` was expected but is missing (e.g. `target/` was cleaned), tell the developer and rebuild it by replaying the requests you know of (`join` / `merge` / `loadtest` ...). Do not guess.
 3. Report the status to the developer in a few lines and wait for messages.
