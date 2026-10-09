@@ -381,15 +381,17 @@ impl Race {
     }
 }
 
-fn gpu_world() -> World {
+/// 先頭は GPU の装置の許可（`GpuPermit`）。組の束縛は後のものから捨てられるので、先頭に置くと装置より後に返る。
+fn gpu_world() -> (crate::emo2_boot::spine::GpuPermit, World) {
     com_init();
+    let gpu = crate::emo2_boot::spine::GpuPermit::take();
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
     let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
     let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
     let mut world = World::new();
     world.insert_resource(core);
     world.insert_resource(wuc);
-    world
+    (gpu, world)
 }
 
 /// 回数つきの `alpha.webp`（面 1）が 2 番に居る状態から「隠す → 出す」を行い、その間に seriko が
@@ -402,7 +404,7 @@ fn gpu_world() -> World {
 fn close_then_show_race_keeps_order_through_the_bridge() {
     let race = Race::new();
     let (emo_world, atlas) = load_balloon();
-    let mut world = gpu_world();
+    let (_gpu, mut world) = gpu_world();
     let t = balloon_target(0);
     let mut presenter = EmoPresenter::new();
     let window = world.spawn(DPI::from_dpi(96, 96)).id();

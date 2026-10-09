@@ -66,11 +66,13 @@ struct Cage {
     lifecycle_tx: mpsc::Sender<TalkLifecycleSignal>,
     reports: mpsc::Receiver<areka_kanade::KanadeMsg>,
     _gw: crate::placement::spawn::GhostWindows,
+    /// GPU の装置の許可。`world` の装置より後に返すので欄の最後。
+    _gpu: crate::emo2_boot::spine::GpuPermit,
 }
 
 impl Cage {
     fn boot(shell: &str, shell_scopes: &[u32]) -> Self {
-        let (mut world, gw) = gpu_frame_world();
+        let (gpu, mut world, gw) = gpu_frame_world();
         // 本番は `wire_balloon_choice` が入れる。無いと箱に文字が出たフレームで観測の欠落が 1 行鳴る。
         world.insert_non_send(ShellBoxHover::default());
         let reports = seat_ghost(&mut world);
@@ -105,6 +107,7 @@ impl Cage {
             lifecycle_tx,
             reports,
             _gw: gw,
+            _gpu: gpu,
         };
         for &scope in shell_scopes {
             cage.picture(scope, 0);

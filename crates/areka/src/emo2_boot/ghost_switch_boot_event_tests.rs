@@ -54,7 +54,7 @@ fn running_a(scripts: Vec<(&str, FakeShiori)>) -> SwitchRig {
     let folders: Vec<String> = scripts.iter().map(|(f, _)| (*f).to_owned()).collect();
     let mut rig = SwitchRig::new(scripts);
     // 起こし直すときの窓の準備が閉包を投函する先。
-    rig.world.insert_resource(WintfTaskPool::new());
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
     for folder in &folders {
         rig.plant_boot_record(folder);
     }

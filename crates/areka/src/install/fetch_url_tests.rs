@@ -19,6 +19,7 @@ use tracing::Level;
 use super::{
     DownloadError, MakeFetch, download, download_dir, fetch_and_send, spawn_download_with,
 };
+use crate::emo2_boot::spine::{Progress, wait_until};
 use crate::install::fetch_url_test_support::FakeFetch;
 use crate::install::{InstallOrigin, RawInstallRequest};
 
@@ -74,14 +75,19 @@ fn set_mtime(path: &Path, at: SystemTime) {
         .expect("更新時刻を据えられる");
 }
 
+/// 見張りのスレッドは生まず、body の終わり（`is_finished`）を目印に待ちの芯で待ってから同じスレッドで
+/// `join` する（負荷の下で見張りのスレッドが始まれず文言の無い赤になった・areka-P0-ghost-session-test-load-flake）。
 fn join_bounded(handle: JoinHandle<()>) {
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let _ = tx.send(handle.join().is_ok());
-    });
-    assert_eq!(
-        rx.recv_timeout(BOUND),
-        Ok(true),
+    let finished = || u64::from(handle.is_finished());
+    if let Err(failure) = wait_until(
+        "install-fetch の終わり",
+        Progress::Count(&finished),
+        || handle.is_finished(),
+    ) {
+        panic!("{failure}");
+    }
+    assert!(
+        handle.join().is_ok(),
         "install-fetch が終わらないか panic した"
     );
 }

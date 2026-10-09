@@ -9,6 +9,7 @@
 //! 注入して進める（止めれば台詞の時計は進まない）。判定は集めてから 1 回・降ろすのは有界に行う。
 
 use std::collections::BTreeSet;
+use std::panic::Location;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -36,7 +37,9 @@ use crate::emo2_boot::shell_balloon_switch::{
     SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinSwitchInFlight, SkinSwitchStage, SkinVerdict,
     request_skin_switch,
 };
-use crate::emo2_boot::spine::{RecordedCall, ScriptedShioriBackendBuilder, spin_wait_until};
+use crate::emo2_boot::spine::{
+    GpuPermit, Progress, RecordedCall, ScriptedShioriBackendBuilder, wait_until,
+};
 use crate::emo2_boot::target_map::shell_target;
 use crate::input_events::user_break::UserBreakWiring;
 use crate::placement::follow::MonitorSnapshot;
@@ -98,6 +101,8 @@ pub(super) struct LapRig {
     pub(super) windows: GhostWindows,
     /// 注入した Tick の合成の時刻（単調増加）。
     clock_ms: u64,
+    /// GPU の装置の許可（[`GpuPermit`]）。`rig` の World の装置より後に返すので欄の最後。
+    _gpu: GpuPermit,
 }
 
 /// A（起動記録あり＝`OnBoot` の台本から始まる）を `script` の偽の SHIORI で、2 つ目のシェル・
@@ -119,6 +124,7 @@ pub(super) fn lap_rig_of(ghosts: Vec<(&str, FakeShiori)>, shells: &[&str]) -> La
         add_rpost_shell(&rig.root.ghost_dir("A"), shell);
     }
     let windows = spawn_windows(&mut rig);
+    let gpu = GpuPermit::take();
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
     let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
     let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
@@ -129,6 +135,7 @@ pub(super) fn lap_rig_of(ghosts: Vec<(&str, FakeShiori)>, shells: &[&str]) -> La
         rig,
         windows,
         clock_ms: 0,
+        _gpu: gpu,
     }
 }
 
@@ -204,6 +211,12 @@ impl LapRig {
     /// この呼び出しの中で置き場のゴーストの dispatcher へ合成の Tick を `ticks` のとおり注入して
     /// 台詞を進め、回数を使い切った後は Tick なしでフレームだけを回す。巡ごとに本番の巡と同じく
     /// `FrameTime` を置き、スレッドのメッセージを配る（文字の層の cue の適用とバルーンの表示が進む）。
+    ///
+    /// 条件の中で足場を書き換えるので、World を借りない進みの目印（`progress_probe`）を先に取ってから
+    /// 芯の待ちへ渡す（areka-P0-ghost-session-test-load-flake 要件 2.1・2.2）。打ち切りは目印で決め、
+    /// 打ち切ったら呼び出しの場所を添えた文言を標準エラーへ 1 行出して `false`。時刻の送り先は
+    /// dispatcher の `DispatcherMsg::Tick` だけ（足場の時刻の注入と同じ決まり・要件 2.6）。
+    #[track_caller]
     pub(super) fn frames_until(
         &mut self,
         ticks: Ticks,
@@ -212,31 +225,41 @@ impl LapRig {
         let Self { rig, clock_ms, .. } = self;
         let mut last_tick: Option<Instant> = None;
         let mut sent = 0;
-        spin_wait_until(|| {
-            if sent < ticks.max && last_tick.is_none_or(|at| at.elapsed() >= TICK_EVERY) {
-                sent += 1;
-                last_tick = Some(Instant::now());
-                *clock_ms += ticks.step_ms;
-                if let Some(dispatcher) = rig
-                    .world
-                    .get_non_send::<GhostSlot>()
-                    .and_then(|slot| slot.0.as_ref())
-                    .and_then(|session| session.dispatcher())
-                {
-                    let _ = dispatcher.send(DispatcherMsg::Tick {
-                        now: MonotonicMs(*clock_ms),
-                    });
+        let probe = rig.progress_probe();
+        let caller = Location::caller();
+        let waited = wait_until(
+            &format!("{}:{}", caller.file(), caller.line()),
+            Progress::Count(&probe),
+            || {
+                if sent < ticks.max && last_tick.is_none_or(|at| at.elapsed() >= TICK_EVERY) {
+                    sent += 1;
+                    last_tick = Some(Instant::now());
+                    *clock_ms += ticks.step_ms;
+                    if let Some(dispatcher) = rig
+                        .world
+                        .get_non_send::<GhostSlot>()
+                        .and_then(|slot| slot.0.as_ref())
+                        .and_then(|session| session.dispatcher())
+                    {
+                        let _ = dispatcher.send(DispatcherMsg::Tick {
+                            now: MonotonicMs(*clock_ms),
+                        });
+                    }
                 }
-            }
-            // 本番の巡と同じく、巡ごとに `FrameTime` を dola の時計で置く（台詞の文字の現れと
-            // バルーンの表示を UI が決める時刻・`TalkClock` と同じ時計）。
-            rig.world
-                .insert_resource(FrameTime(dola::runtime::clock::now()));
-            pump_messages();
-            rig.world.run_schedule(Input);
-            rig.world.run_schedule(Update);
-            done(rig)
-        })
+                // 本番の巡と同じく、巡ごとに `FrameTime` を dola の時計で置く（台詞の文字の現れと
+                // バルーンの表示を UI が決める時刻・`TalkClock` と同じ時計）。
+                rig.world
+                    .insert_resource(FrameTime(dola::runtime::clock::now()));
+                pump_messages();
+                rig.world.run_schedule(Input);
+                rig.world.run_schedule(Update);
+                done(rig)
+            },
+        );
+        if let Err(failure) = &waited {
+            eprintln!("{failure}");
+        }
+        waited.is_ok()
     }
 }
 

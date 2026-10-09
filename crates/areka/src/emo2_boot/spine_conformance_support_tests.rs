@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use super::{
     ClosedInboxes, Inbox, Injection, LapDriver, LapStage, PresentCommand, RecordedCall,
-    StageFailure, StagePlan, StageSink, WaitInjection, injection_kind,
+    StageFailure, StagePlan, StageSink, WaitFailure, WaitInjection, injection_kind,
 };
 use super::{ExitKind, LoopDriver, ScriptedShioriBackend, ScriptedShioriHandle, SpineHarness};
 use super::{shell_target, spin_wait_until};
@@ -118,7 +118,8 @@ fn stage_driver_returns_named_timeout_instead_of_silent_success() {
     let mut sink = FakeStageSink::silent();
     let mut driver = LapDriver::new();
 
-    // 1 反復 10 秒進む時計＝3 反復目に SPIN_WAIT（30 秒）へ届く。
+    // 1 回読むごとに 10 秒進む時計。待ちの芯は 1 反復目の後に待ち始めの時刻を読み、以後は反復ごとに
+    // 1 回読むので、4 反復目の後に 30 秒（目印の無い待ちの上限）へ届く。
     let outcome = driver.run_stage_with(
         stepping_clock(Duration::from_secs(10)),
         &mut sink,
@@ -137,16 +138,26 @@ fn stage_driver_returns_named_timeout_instead_of_silent_success() {
     assert_eq!(
         failure,
         StageFailure::Timeout {
+            wait: Box::new(WaitFailure::TimedOut {
+                what: "自発会話".to_string(),
+                waited: Duration::from_secs(30),
+            }),
             stage: "自発会話",
-            injected_at_ms: vec![1_000, 2_000],
+            injected_at_ms: vec![1_000, 2_000, 3_000, 4_000],
             collected: 0,
-            now_ms: 3_000,
+            now_ms: 5_000,
         },
         "有界時間が尽きたことが段名つきで呼び手へ返っていない"
     );
     assert!(
         failure.to_string().contains("自発会話"),
         "失敗の文面が段名を名指ししていない: {failure}"
+    );
+    assert!(
+        failure
+            .to_string()
+            .starts_with("待ちの打ち切り［進みは不明］"),
+        "打ち切りの文言が待ちの芯の見出しで始まっていない: {failure}"
     );
 }
 
@@ -854,4 +865,95 @@ fn close_request_that_lands_during_boot_is_honored_without_any_second_change() {
     );
 
     harness.shutdown_bounded();
+}
+
+// ===========================================================================
+// 据え置きの門の受け入れ確認（task 3.1 の再提出・design D6 の危険欄・R2.10）
+// ===========================================================================
+
+/// 据え置きの門だけを検査する投函先（起動を伴わずに駆動器の時刻の進め方を見る）。
+struct HoldingSink {
+    /// 投函の記録（注入時刻・投函順）。
+    injected: Vec<u64>,
+    /// 残りの据え置き回数（0 になったら注入時刻を進めてよい）。
+    hold_rounds: std::cell::Cell<usize>,
+}
+
+impl StageSink for HoldingSink {
+    fn inject(&mut self, _injection: &Injection, now_ms: u64) -> Result<(), Inbox> {
+        self.injected.push(now_ms);
+        Ok(())
+    }
+
+    fn collect(&mut self) -> Vec<PresentCommand> {
+        Vec::new()
+    }
+
+    fn may_advance_clock(&self) -> bool {
+        let left = self.hold_rounds.get();
+        if left > 0 {
+            self.hold_rounds.set(left - 1);
+            false
+        } else {
+            true
+        }
+    }
+}
+
+/// 駆動器の 2 つの門——**着地待ちの据え置き**と**余韻での注入停止**——を 1 本の投函列で固定する。
+///
+/// 檻に入れる判断分岐:
+/// - **据え置き中も投函は続くこと**: 再生側 Tick が止まると、待っている会話は永久に起動しない
+///   （駆動器が注入をやめると再生が凍る＝design D6 の危険欄）。
+/// - **据え置き中は時刻が 1 ミリ秒も動かないこと**: 動くと予算が減り、着地が遅いと上限へ達して
+///   同じ凍り方をする。実測ではこれが高負荷で装着段・選択確定段を赤くしていた。
+/// - **門が開いたら刻みどおり進むこと**: 据え置きが解けない実装は再生を進める相へ進めない。
+/// - **完了条件が成立した後は 1 本も投函しないこと**: 余韻のあいだ注入が続くと、選択待ちのまま
+///   止まっているはずの台本へ再生が流し込まれ、次段の選択確定が棄却される。
+///
+/// 期待する投函列は「据え置き 5 本（すべて下限）＋前進 4 本（刻みどおり）＋余韻 0 本」である。
+/// 区間は 19 本ぶん取ってあるので、余韻で注入が続けば必ず 4 本ぶん余計に並ぶ。
+#[test]
+fn stage_driver_holds_the_injection_clock_until_the_landing_is_observed() {
+    let stage = LapStage {
+        name: "門の検査",
+        begin_ms: 1_000,
+        limit_ms: 20_000,
+    };
+    let mut sink = HoldingSink {
+        injected: Vec::new(),
+        hold_rounds: std::cell::Cell::new(5),
+    };
+    let mut driver = LapDriver::new();
+    let mut rounds = 0usize;
+    let observed = driver
+        .run_stage(
+            &mut sink,
+            &StagePlan {
+                stage: &stage,
+                once: Vec::new(),
+                waiting: WaitInjection::DispatcherTickThenObserve { settle_rounds: 4 },
+            },
+            |_| {
+                rounds += 1;
+                rounds > 9
+            },
+        )
+        .expect("門は待ち切れを起こさない");
+
+    assert_eq!(
+        observed.injected_at_ms,
+        vec![
+            1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 2_000, 3_000, 4_000
+        ],
+        "据え置き 5 本（下限に釘付け）→ 前進 4 本（刻みどおり）→ 余韻 0 本、になっていない"
+    );
+    assert!(
+        observed
+            .injected_at_ms
+            .iter()
+            .all(|at| (stage.begin_ms..=stage.limit_ms).contains(at)),
+        "投函が段の区間の外へ出ている: {:?}",
+        observed.injected_at_ms
+    );
 }

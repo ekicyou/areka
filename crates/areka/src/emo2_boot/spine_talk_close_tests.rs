@@ -1,8 +1,10 @@
+use std::cell::Cell;
+
 use super::test_support::{opaque_count, variant_name};
 use super::{
-    ActorKey, CloseReason, Duration, Instant, PresentCommand, RecordedCall, SPIN_WAIT,
-    SpineHarness, capture_logs, count_level, join_bounded, run_attach_phase, run_bounded,
-    run_text_phase, shell_target, spin_wait_until,
+    ActorKey, CloseReason, Duration, Instant, PresentCommand, Progress, RecordedCall, SPIN_WAIT,
+    SpineHarness, capture_logs, count_level, join_bounded, run_attach_phase, run_bounded_watching,
+    run_text_phase, shell_target, wait_until, wait_until_with,
 };
 
 // ===========================================================================
@@ -109,12 +111,11 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     // 観測窓の手前）。**警告**: 台本のテキスト長を変えると Clear 時刻が 0.05+文字数×0.05+1.00 で動くので、
     // 頭打ち値を再計算すること。
     const TICK_MAX_MS: u64 = 1_040;
-    // ポンプ回数の上限は壁時計 deadline（[`SPIN_WAIT`]）＋200µs poll-backoff sleep で与える（R7.9・根拠は
+    // ポンプ回数の上限は待ちの芯の打ち切り（下）＋200µs poll-backoff sleep で与える（R7.9・根拠は
     // [`drive_shell_shown`] の doc）。観測を壊す Clear の解放は上記 TICK_MAX_MS の頭打ちが防いでおり
     // （R7.8 の是正は適用済み）、待機時間の延長は観測に有利にしか働かない。
     let mut show_cmds: Vec<PresentCommand> = Vec::new();
     let mut now = TICK_BASE_MS;
-    let mut text_reached = false;
     // ── 是正は 2 段（PR #96 の `talk_started` ゲート ＋ 本 spec の頭打ち・R7.8） ─────────────
     //
     //  (1) **talk 起動を観測するまで `now` を進めない**。dispatcher の `base_now` は「talk が active に
@@ -131,43 +132,54 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     // 本 spec の 1_040ms も、いずれも真の境界 1.40s の手前ゆえ**両者とも是正として正しく機能する**
     // （#96 の判定が変わるわけではない）。ここでは根拠が実測で裏取りされている本 spec の定数へ統一する。
     //
-    // 打ち切りは反復回数でなく [`SPIN_WAIT`] の時刻期限（頭打ち後は反復が仕事量を表さないため）。
+    // 打ち切りは待ちの芯（`wait_until_with`）が決める（頭打ち後は反復が仕事量を表さないため回数では
+    // 区切らない）。進みの目印は SHIORI の呼び出しの数（`Status` を除く）と受けた表示指令の数の和で、
+    // 相手が 30 秒進まなければ `［止まった］`（areka-P0-ghost-session-test-load-flake 要件 2.1・2.2・
+    // `load-repro.md` の 4.3 で自前の締切が赤だった）。芯の休みは渡さず、反復の末尾の 200µs の sleep で
+    // CPU を返す（`run_stage_with` と同じ形・要件 2.5）。
     let mut talk_started = false;
-    let deadline = Instant::now() + SPIN_WAIT;
-    while Instant::now() < deadline {
-        if talk_started {
-            // 小刻みに進め、テキスト到達（at=0.05）を解放する（頭打ちゆえ Clear@1.40 へ届かない）。
-            now = (now + 5).min(TICK_MAX_MS);
-        }
-        harness.inject_dispatcher_tick(now);
-        show_cmds.extend(harness.wiring.drain_received());
-        if !talk_started {
-            // この talk 由来の Emote@0.0 が present まで抜けた＝base_now は据え置き値で確定済み。
-            talk_started = show_cmds.iter().any(|c| {
-                matches!(c, PresentCommand::ShowSurface { target, surface_id, .. }
-                    if *target == shell_target(0) && *surface_id == 2100)
-            });
-        }
-        harness.pump_text();
-        // テキスト cue 到達確認: 完全リビール域 t=0.30 で非透明になれば runtime へ流入済み。
-        run_text_phase(&mut harness.wiring, &mut harness.world, Some(0.30));
-        if talk_started && text_surface_opaque(&harness, &actor) > 0 {
-            text_reached = true;
-            break;
-        }
-        if !show_cmds.is_empty() {
-            // talk 起動を観測してから小刻みに進め、TICK_MAX_MS で頭打ちにする（Clear 域へ到達しない）。
-            now = (now + 5).min(TICK_MAX_MS);
-        }
-        if Instant::now() >= deadline {
-            break;
-        }
-        std::thread::sleep(Duration::from_micros(200));
-    }
-    assert!(
-        text_reached,
-        "S2: シェル面指令＋テキスト cue が有界内に runtime へ到達しない（boot→talk→sink 経路不通）"
+    let shiori = harness.shiori_handle.clone();
+    let shown = Cell::new(0u64);
+    let probe = || shiori.call_count() + shown.get();
+    let reached = wait_until_with(
+        Instant::now,
+        |_| {},
+        "S2: シェル面指令＋テキスト cue の到達",
+        Progress::Count(&probe),
+        || {
+            if talk_started {
+                // 小刻みに進め、テキスト到達（at=0.05）を解放する（頭打ちゆえ Clear@1.40 へ届かない）。
+                now = (now + 5).min(TICK_MAX_MS);
+            }
+            harness.inject_dispatcher_tick(now);
+            show_cmds.extend(harness.wiring.drain_received());
+            shown.set(show_cmds.len() as u64);
+            if !talk_started {
+                // この talk 由来の Emote@0.0 が present まで抜けた＝base_now は据え置き値で確定済み。
+                talk_started = show_cmds.iter().any(|c| {
+                    matches!(c, PresentCommand::ShowSurface { target, surface_id, .. }
+                        if *target == shell_target(0) && *surface_id == 2100)
+                });
+            }
+            harness.pump_text();
+            // テキスト cue 到達確認: 完全リビール域 t=0.30 で非透明になれば runtime へ流入済み。
+            run_text_phase(&mut harness.wiring, &mut harness.world, Some(0.30));
+            if talk_started && text_surface_opaque(&harness, &actor) > 0 {
+                return true;
+            }
+            if !show_cmds.is_empty() {
+                // talk 起動を観測してから小刻みに進め、TICK_MAX_MS で頭打ちにする（Clear 域へ到達しない）。
+                now = (now + 5).min(TICK_MAX_MS);
+            }
+            std::thread::sleep(Duration::from_micros(200));
+            false
+        },
     );
+    if let Err(failure) = reached {
+        panic!(
+            "{failure}／S2: シェル面指令＋テキスト cue が有界内に runtime へ到達しない（boot→talk→sink 経路不通）"
+        );
+    }
 
     // ── (1) シェル面切替（R2.4/R3.1）: 受信列に ShowSurface{shell_target(0),2100} が現れる ──
     let idx = match show_cmds.iter().position(|c| {
@@ -297,19 +309,28 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
 
     // boot 系列（非 Status 5 呼出）が届くまで有界スピン（OnClose を boot ノイズと分離・sleep 不使用）。
     // task 8.2 の username prefetch GET（OnInitialize 後・OnFirstBoot 前・R9.1/9.2）が加わり 4→5 呼出。
-    // 打ち切りは反復回数でなく [`spin_wait_until`] の時刻期限（反復は経過時間の代理にならない）。
+    // 打ち切りは待ちの芯（[`wait_until`]）が決める。進みの目印は SHIORI の呼び出しの数（`Status` を除く）
+    // で、相手が 30 秒進まなければ `［止まった］`（`load-repro.md` の 4.3 で目印なしの待ちが赤だった）。
+    let calls = || harness.shiori_handle.call_count();
     let mut boot_calls = Vec::new();
-    spin_wait_until(|| {
-        boot_calls = harness.shiori_handle.non_status_calls();
-        boot_calls.len() >= 5
-    });
+    let waited = wait_until(
+        "S5 前提: boot 系列 5 呼出",
+        Progress::Count(&calls),
+        || {
+            boot_calls = harness.shiori_handle.non_status_calls();
+            boot_calls.len() >= 5
+        },
+    );
+    let failure = waited.err().map(|f| format!("{f}／")).unwrap_or_default();
     assert!(
         boot_calls.len() >= 5,
-        "S5 前提: boot 系列 5 呼出（OnInitialize/username/OnFirstBoot/OnBoot/basewareversion）が有界内に発火する: {boot_calls:?}"
+        "{failure}S5 前提: boot 系列 5 呼出（OnInitialize/username/OnFirstBoot/OnBoot/basewareversion）が有界内に発火する: {boot_calls:?}"
     );
 
     // 分解して所有ハンドルを得る（shutdown_bounded と同型・shiori_handle は照合のため保持）。
+    // 許可は先頭で束縛する（巻き戻りでも装置の世界より後に返る）。
     let SpineHarness {
+        gpu,
         world,
         wiring,
         runtime,
@@ -322,9 +343,12 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
     } = harness;
 
     // (b) shutdown(User) が有界時間で Ok を返す（hang しない・ForceQuit→OnClose NOTIFY→Unload）。
-    run_bounded(
+    // 偽の SHIORI の呼び出し（OnClose・Unload）の数を進みの目印にして待つ（shutdown_bounded と同じ・
+    // 総時間 10 秒の古い呼び名は負荷の下で［進みは不明］の赤だった・load-repro の 4.6）。
+    let calls = || shiori_handle.call_count();
+    run_bounded_watching(
         "spine s5 ghost shutdown",
-        Duration::from_secs(10),
+        Progress::Count(&calls),
         move || {
             let result = ghost.shutdown(CloseReason::User { scope: 0 });
             assert!(
@@ -341,7 +365,7 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
     // (c) seriko worker が有界 join で完了する（timeout=panic ゆえ hang すれば test FAIL・R8.3）。
     // shutdown が ghost 一式を join→dispatcher 保持の SerikoSink クローンを drop→seriko inbox 切断→
     // 自然終了、という連鎖の末端をここで有界 join して観測する。
-    join_bounded("spine s5 seriko join", Duration::from_secs(10), seriko).expect(
+    join_bounded("spine s5 seriko join", seriko).expect(
         "S5: seriko worker は shutdown 後、SerikoSink クローン全 drop で有界時間内に終了する",
     );
 
@@ -371,4 +395,5 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
     drop(text_pump);
     // 検体の複製は最後に捨てる（`shutdown_bounded` と同じ用心・テストの裏付けは無い）。
     drop(sample);
+    drop(gpu);
 }

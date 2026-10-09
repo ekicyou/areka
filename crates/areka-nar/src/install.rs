@@ -28,7 +28,7 @@ use std::ffi::OsStr;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 /// 根の直下に掘る作業フォルダの棚。入れ替えが `rename` で済むよう根と同じボリュームに置く。
 const WORK: &str = ".nar-work";
@@ -447,20 +447,20 @@ fn commit_one(
     at(parent, std::fs::create_dir_all(parent))?;
 
     if existing == ExistingState::New {
-        at(dest, std::fs::rename(area.stage(k), dest))?;
+        at(dest, rename_patiently(&area.stage(k), dest))?;
         undo.push(Undo::Remove(dest.clone()));
         return Ok(());
     }
 
     // 宛先の中のファイルが他のプロセスに掴まれていると、Windows はここを拒む
-    // （要件 6.6）。解放は試みない。宛先は 1 バイトも動いていない。
+    // （要件 6.6）。解放は試みない（短い掴みを待つだけ）。宛先は 1 バイトも動いていない。
     let old = area.retired(k);
-    at(dest, std::fs::rename(dest, &old))?;
+    at(dest, rename_patiently(dest, &old))?;
     undo.push(Undo::Restore {
         old,
         dest: dest.clone(),
     });
-    at(dest, std::fs::rename(area.stage(k), dest))
+    at(dest, rename_patiently(&area.stage(k), dest))
 }
 
 /// 確定済みを逆順に元へ戻し、呼び手へ返す失敗を組む。
@@ -521,7 +521,7 @@ fn unwind(undo: Vec<Undo>) -> Unwound {
             Undo::Restore { old, dest } => {
                 // 新しく置いた木が在れば先に退ける。2 手目の `rename` が失敗した直後は
                 // 宛先が空いているので、その場合は何もせずに戻しへ進む。
-                let result = remove_tree(&dest).and_then(|()| std::fs::rename(&old, &dest));
+                let result = remove_tree(&dest).and_then(|()| rename_patiently(&old, &dest));
                 if result.is_err() && old.is_dir() {
                     survivors.push(SurvivingTree {
                         destination: dest.clone(),
@@ -536,6 +536,28 @@ fn unwind(undo: Vec<Undo>) -> Unwound {
         }
     }
     Unwound { stuck, survivors }
+}
+
+/// フォルダを `rename` する。外のプロセスの**短い**掴みだけは待ち切る。
+///
+/// Windows は配下のファイルを誰かが開いているフォルダの `rename` を拒む（os error 5＝
+/// アクセス拒否、32＝共有違反）。書いたばかりのファイルはウイルス対策などの外の
+/// プロセスが一瞬開くことがあり、負荷の下ではそれが入れ替えと重なる（spec:
+/// `areka-P0-ghost-session-test-load-flake` の負荷の再現 4.6）。その 2 つだけ、50 ms
+/// 刻みで約 2 秒まで試し直す。それより長い掴み（起動中の `shiori.dll`）は待ち切った後に
+/// 最後の失敗をそのまま返す——解放は試みない（要件 6.6）。他の失敗は待たずに返す。
+fn rename_patiently(from: &Path, to: &Path) -> io::Result<()> {
+    const STEP: Duration = Duration::from_millis(50);
+    const PATIENCE: Duration = Duration::from_secs(2);
+    let deadline = Instant::now() + PATIENCE;
+    loop {
+        match std::fs::rename(from, to) {
+            Err(err) if matches!(err.raw_os_error(), Some(5 | 32)) && Instant::now() < deadline => {
+                std::thread::sleep(STEP);
+            }
+            other => return other,
+        }
+    }
 }
 
 /// 木ごと消す。既に無いのは消えている状態として通す。

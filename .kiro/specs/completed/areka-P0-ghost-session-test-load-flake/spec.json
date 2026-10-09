@@ -1,0 +1,28 @@
+{
+  "feature_name": "areka-P0-ghost-session-test-load-flake",
+  "created_at": "2026-10-05T12:07:32Z",
+  "updated_at": "2026-10-09T20:56:51Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-05T12:20:00Z"
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-05T14:23:05Z"
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-10-09T20:56:51Z"
+    }
+  },
+  "ready_for_implementation": true
+}

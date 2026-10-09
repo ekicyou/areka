@@ -4,7 +4,7 @@
 //! Input scheduleでdrain_and_apply。
 
 use bevy_ecs::prelude::*;
-use bevy_tasks::TaskPool;
+use bevy_tasks::{TaskPool, TaskPoolBuilder};
 use std::future::Future;
 use std::sync::Mutex;
 use std::sync::mpsc;
@@ -41,7 +41,18 @@ pub struct WintfTaskPool {
 impl WintfTaskPool {
     /// 新しいWintfTaskPoolを作成
     pub fn new() -> Self {
-        let pool = TaskPool::new();
+        Self::from_pool(TaskPool::new())
+    }
+
+    /// スレッドの数を指定してWintfTaskPoolを作成
+    ///
+    /// `new()` は論理CPUの数だけスレッドを作る。閉包を走らせないテストの足場など、
+    /// スレッドを多く持つ必要が無い呼び手が数を絞るための作り口。
+    pub fn with_threads(n: usize) -> Self {
+        Self::from_pool(TaskPoolBuilder::new().num_threads(n).build())
+    }
+
+    fn from_pool(pool: TaskPool) -> Self {
         let (sender, receiver) = mpsc::channel();
         Self {
             pool,
@@ -106,3 +117,8 @@ impl Default for WintfTaskPool {
         Self::new()
     }
 }
+
+/// `with_threads` の檻（structure.md のテスト分離規約）
+#[cfg(test)]
+#[path = "task_pool_tests.rs"]
+mod tests;

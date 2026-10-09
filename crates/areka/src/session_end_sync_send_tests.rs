@@ -9,19 +9,24 @@
 //!   SHIORI で A を起こし、送信が自分のキューに届いたのを見てから、大きな上限で
 //!   [`end_session_within`] を呼ぶ（見張りは発火しない）。後始末が戻ったら連番を取り、
 //!   メッセージを 1 回だけ覗く（送られてきたメッセージが配られ、送信が返る）。
-//! - 送り手: 「送る」の旗を立ててから UI 役の窓へ期限つきで同期に送る。返ったら連番を取る。
+//! - 送り手: 「送る」の旗を立ててから UI 役の窓へ期限なしで同期に送る。返ったら連番を取る。
 //! - 解き手: 旗と偽の SHIORI の固まりを見てから偽の SHIORI を解く（送信の返りは待たない）。
 //! - ゴーストの実行系のスレッド（kanade・shiori ほか）: UI 役が join で待つ相手。
 //!
-//! 緑の意味: 後始末は送信に依らず戻り（連番で 後始末の戻り < 送信の戻り）、送信は UI 役が次に
-//! メッセージを取り出した時点で期限内に返る。join が送信を待つ形（輪）に変わると、送信は期限で
-//! 切れ、後始末はその後にしか戻れないので赤になる。join の最中に送られてきたメッセージを配る形に
-//! 変わると、送信が後始末より先に返るので赤になる（受け手の説明「送られてきたメッセージは配らない」
-//! が崩れた）。
+//! 緑の意味: 後始末は送信に依らず戻り（連番で 後始末の戻り < 送信の戻り）、後始末が戻った時点で
+//! 送信はまだ UI 役のキューで待っていて、UI 役が次にメッセージを覗いた時点で返る。見分けは順序だけで
+//! 決め、時刻は使わない。join の最中に送られてきたメッセージを配る形に変わると、送信が後始末より先に
+//! 返り、後始末の後のキューも空なので赤になる（受け手の説明「送られてきたメッセージは配らない」が
+//! 崩れた）。join が送信を待つ形（輪）に変わると、送信も後始末も返らないので、全体を囲む
+//! [`run_bounded`] が [`WHOLE`] で打ち切って赤になる。
+//!
+//! 送信に期限を付けない理由: 送信の期限は「輪になった」の見分けの代わりにならない。負荷の下で解き手の
+//! スレッドの始まりが遅れると後始末が送信の期限より長くかかり、輪でないのに送信が期限で切れて後始末
+//! より先に返った（`load-repro.md` の 4.3・areka-P0-ghost-session-test-load-flake）。固まりを切るのは
+//! 外側の [`run_bounded`] の 1 つだけにする。
 //!
 //! 順序は sleep で作らない: 送信が UI 役のキューに届いたことは `GetQueueStatus`（配らずに読む）で、
-//! 偽の SHIORI の固まりは `holding()` で見る。走行ごと固まらないよう、全体を [`run_bounded`] で
-//! 囲み、送信にも期限（[`SEND_TIMEOUT_MS`]）を付ける。
+//! 偽の SHIORI の固まりは `holding()` で見る。
 //!
 //! 後半はワークスペースの本番ソースの同期の送信を許可表（[`ALLOWED_SYNC_SENDS`]）と突き合わせる
 //! 検査と、その較正（task 6.2・要件 5.4・7.5）。
@@ -34,23 +39,21 @@ use std::thread;
 use std::time::Duration;
 
 use log_capture_kit::capture;
-use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, GetQueueStatus, HWND_MESSAGE, MSG, PM_NOREMOVE, PeekMessageW, QS_SENDMESSAGE,
-    SMTO_NORMAL, SendMessageTimeoutW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_NULL,
+    SendMessageW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_NULL,
 };
 use windows::core::w;
 
 use super::end_session_within;
 use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::emo2_boot::spine::hold_support::HoldAt;
-use crate::emo2_boot::spine::{RecordedCall, run_bounded, spin_wait_until};
+use crate::emo2_boot::spine::{Progress, RecordedCall, run_bounded, wait_until};
 
 /// 見張りが発火しない上限（後始末が戻るのは解き手が解いたときだけにする）。
 const HOUR: Duration = Duration::from_secs(3600);
-/// 送り手の同期の送信の期限（切れたら赤＝輪になった）。
-const SEND_TIMEOUT_MS: u32 = 10_000;
-/// 再現の全体の上限（走行ごと固まらない）。
+/// 再現の全体の上限（走行ごと固まらない・輪になったらここで赤）。
 const WHOLE: Duration = Duration::from_secs(120);
 
 /// UI 役のスレッドで見える結果。
@@ -60,8 +63,6 @@ struct Observed {
     pending_after_teardown: bool,
     /// 後始末の戻りが送信の戻りより先か（連番）。
     teardown_before_send: bool,
-    /// 送信が期限内に返ったか（`SendMessageTimeoutW` の戻り値が 0 でない）。
-    send_ok: bool,
     /// 解く手が呼ばれた回数（解き手の 1 回だけ＝見張りは発火していない）。
     unblock_calls: usize,
     /// `OnClose` の NOTIFY の Reference0（届いた分だけ）。
@@ -100,23 +101,11 @@ fn create_ui_window() -> isize {
     hwnd.0 as isize
 }
 
-/// 窓 `hwnd` へ `WM_NULL` を期限つき・応答なし判定なし（`SMTO_NORMAL`）で同期に送り、
-/// 戻り値が 0 でないか（期限内に返ったか）を返す。
-fn send_null(hwnd: isize) -> bool {
-    let mut result = 0usize;
-    // SAFETY: ポインタを運ばない問い合わせ。宛先の窓は UI 役のスレッドが生かしている。
-    let ret = unsafe {
-        SendMessageTimeoutW(
-            HWND(hwnd as *mut _),
-            WM_NULL,
-            WPARAM(0),
-            LPARAM(0),
-            SMTO_NORMAL,
-            SEND_TIMEOUT_MS,
-            Some(&mut result as *mut usize),
-        )
-    };
-    ret.0 != 0
+/// 窓 `hwnd` へ `WM_NULL` を期限なしで同期に送り、UI 役が受け取るまで戻らない。
+fn send_null(hwnd: isize) {
+    // SAFETY: ポインタを運ばない問い合わせ。宛先の窓は UI 役のスレッドが生かしている
+    // （UI 役のスレッドが終われば窓も消え、送信は返る）。
+    let _ = unsafe { SendMessageW(HWND(hwnd as *mut _), WM_NULL, None, None) };
 }
 
 /// 呼出列のうち `OnClose` の NOTIFY の Reference0（届いた分だけ）。
@@ -152,19 +141,29 @@ fn reproduce() -> Observed {
         let (seq, sending) = (Arc::clone(&seq), Arc::clone(&sending));
         thread::spawn(move || {
             sending.store(true, Ordering::SeqCst);
-            let ok = send_null(hwnd);
-            (ok, seq.fetch_add(1, Ordering::SeqCst))
+            send_null(hwnd);
+            seq.fetch_add(1, Ordering::SeqCst)
         })
     };
     // 送信が届いてから後始末に入る（join の間に送信が待っていることを時刻に依らず作る）。
     assert!(
-        spin_wait_until(send_pending),
+        rig.wait_for(send_pending),
         "送り手の送信が UI 役のキューに届かない"
     );
     let releaser = {
         let (sending, handle) = (Arc::clone(&sending), handle.clone());
         thread::spawn(move || {
-            let ready = spin_wait_until(|| sending.load(Ordering::SeqCst) && handle.holding());
+            // 足場を持ち込めない別のスレッドなので、偽の SHIORI が受けた呼び出しの数を進みの目印にする
+            // （areka-P0-ghost-session-test-load-flake 要件 2.1・2.2）。
+            let waited = wait_until(
+                "解き手: 送信の旗と偽の SHIORI の固まり",
+                Progress::Count(&|| handle.call_count()),
+                || sending.load(Ordering::SeqCst) && handle.holding(),
+            );
+            if let Err(failure) = &waited {
+                eprintln!("{failure}");
+            }
+            let ready = waited.is_ok();
             if ready {
                 handle.release();
             }
@@ -179,7 +178,7 @@ fn reproduce() -> Observed {
     // SAFETY: 今のスレッドのキューを 1 回覗くだけ（取り除かない）。待っている送信はここで配られる。
     let _ = unsafe { PeekMessageW(&mut msg, None, 0, 0, PM_NOREMOVE) };
 
-    let (send_ok, send_seq) = sender.join().expect("送り手は panic しない");
+    let send_seq = sender.join().expect("送り手は panic しない");
     assert!(
         releaser.join().expect("解き手は panic しない"),
         "解き手が送信の旗と偽の SHIORI の固まりを見られない"
@@ -187,7 +186,6 @@ fn reproduce() -> Observed {
     Observed {
         pending_after_teardown,
         teardown_before_send: teardown_seq < send_seq,
-        send_ok,
         unblock_calls: handle.unblock_calls(),
         on_close_ref0: on_close_ref0(&rig.calls("A").last().cloned().unwrap_or_default()),
         shiori_cut: events
@@ -199,7 +197,7 @@ fn reproduce() -> Observed {
 }
 
 /// join の最中に別スレッドから UI の窓へ同期の送信が重なっても、後始末は送信に依らず戻り、
-/// 送信は後始末の後に UI 役が 1 回覗いた時点で期限内に返る（要件 5.2・5.4・7.5）。
+/// 送信は後始末の後に UI 役が 1 回覗いた時点で返る（要件 5.2・5.4・7.5）。輪になったら全体の上限で赤。
 /// `OnClose` は Ref0＝`system` で 1 件のまま（要件 5.5）。
 #[test]
 fn teardown_join_does_not_wait_for_a_sync_send_to_the_ui_window() {
@@ -216,12 +214,11 @@ fn teardown_join_does_not_wait_for_a_sync_send_to_the_ui_window() {
         Observed {
             pending_after_teardown: true,
             teardown_before_send: true,
-            send_ok: true,
             unblock_calls: 1,
             on_close_ref0: vec!["system".to_owned()],
             shiori_cut: Some("false".to_owned()),
         },
-        "join と同期の送信が重なった（後始末が送信を待った・join の間に配った・送信が期限で切れた）"
+        "join と同期の送信が重なった（join の間に送られてきたメッセージを配った）"
     );
 }
 

@@ -154,7 +154,7 @@ fn namespace_dir() -> Result<PathBuf, SampleError> {
 pub struct WorkDir {
     path: PathBuf,
     lock: PathBuf,
-    /// 生存の札。[`Drop`] で**先に**閉じる（開いたままでは自分でも消せない）。
+    /// 生存の札。[`Drop`] で木を消し終えてから閉じて消す（開いたままでは自分でも消せない）。
     lease: Option<File>,
 }
 
@@ -191,22 +191,16 @@ impl WorkDir {
             NEXT_SERIAL.fetch_add(1, Ordering::Relaxed)
         );
         let lock = work.join(format!("{stem}{LOCK_SUFFIX}"));
-        let lease = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .share_mode(FILE_SHARE_READ)
-            .open(&lock)
-            .map_err(|source| SampleError::Io {
-                what: "生存の札の作成",
-                path: lock.clone(),
-                source,
-            })?;
+        let lease = open_lease(&lock).map_err(|source| SampleError::Io {
+            what: "生存の札の作成",
+            path: lock.clone(),
+            source,
+        })?;
 
         let path = work.join(&stem);
         if let Err(source) = std::fs::create_dir(&path) {
             // 札だけが残らないよう、作れなかったときはその場で畳む。
-            drop(lease);
-            report_cleanup("生存の札の後始末", std::fs::remove_file(&lock), &lock);
+            retire_lease(Some(lease), &lock);
             return Err(SampleError::Io {
                 what: "作業フォルダの作成",
                 path,
@@ -237,22 +231,40 @@ impl WorkDir {
     }
 }
 
-impl Drop for WorkDir {
-    fn drop(&mut self) {
-        // 札を開いたままでは削除できない（削除を共有していないため）。先に閉じる。
-        drop(self.lease.take());
+impl WorkDir {
+    /// 破棄の手順。木を消す関数を受け取るのは、消している最中の棚を兄弟テストが
+    /// 覗くため（本番は [`Drop`] が `remove_dir_all` を渡す）。
+    ///
+    /// 順は「木を消す → 札を閉じる → 札を消す」。札を先に閉じると、消している間の木が
+    /// 持ち主の居ない組に見え、並走する掃除が札を消して消しかけの木を退けようとする
+    /// （spec: `areka-P0-ghost-session-test-load-flake` 要件 5.2・檻
+    /// `a_work_dir_keeps_its_lease_while_its_tree_is_being_removed`）。
+    fn release_with(&mut self, remove_tree: impl FnOnce(&Path) -> std::io::Result<()>) {
         // 原本として `cache/` へ移した後は木が既に無い（`NotFound`）。それは後始末の
         // 目的が達成された状態なので、札だけを閉じて消す。
-        report_cleanup(
-            "作業フォルダの後始末",
-            std::fs::remove_dir_all(&self.path),
-            &self.path,
-        );
-        report_cleanup(
-            "生存の札の後始末",
-            std::fs::remove_file(&self.lock),
-            &self.lock,
-        );
+        report_cleanup("作業フォルダの後始末", remove_tree(&self.path), &self.path);
+        retire_lease(self.lease.take(), &self.lock);
+    }
+}
+
+/// 生存の札を開く。読むことだけを共有する（＝持ち主が居る間は誰も消せない）。
+fn open_lease(lock: &Path) -> std::io::Result<File> {
+    OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .share_mode(FILE_SHARE_READ)
+        .open(lock)
+}
+
+/// 札を閉じてから消す（開いたままでは削除を共有していないので自分でも消せない）。
+fn retire_lease(lease: Option<File>, lock: &Path) {
+    drop(lease);
+    report_cleanup("生存の札の後始末", std::fs::remove_file(lock), lock);
+}
+
+impl Drop for WorkDir {
+    fn drop(&mut self) {
+        self.release_with(|tree| std::fs::remove_dir_all(tree));
     }
 }
 
@@ -431,20 +443,38 @@ fn reclaim_stale(namespace: &Path, cache: &Path, name: &str, keep: &str) {
 /// （共有モードに書き込みと削除を足しても同じ）。掴まれている木は最初の一歩で失敗する
 /// ので無傷のまま残り、次の取得で改めて片付けられる。
 fn discard_tree(shelf: &Path, tree: &Path, what: &str) {
-    let gc = shelf.join(format!(
+    discard_tree_with(shelf, tree, what, |gc| std::fs::remove_dir_all(gc));
+}
+
+/// [`discard_tree`] の手順。木を消す関数を受け取るのは [`WorkDir::release_with`] と同じ理由。
+///
+/// 退けた先の `gc-…` にも、移す**前に**札を作り、木を消し終えてから閉じて消す。札の無い
+/// `gc-` の木は、消している間に並走する掃除から「札の無い残骸」に見え、同じ木を別の
+/// `gc-` へ移そうとされる（spec: `areka-P0-ghost-session-test-load-flake` 要件 5.2・檻
+/// `a_tree_moved_aside_keeps_a_held_lease_until_it_is_removed`）。
+fn discard_tree_with(
+    shelf: &Path,
+    tree: &Path,
+    what: &str,
+    remove_tree: impl FnOnce(&Path) -> std::io::Result<()>,
+) {
+    let stem = format!(
         "gc-{}-{}",
         std::process::id(),
         NEXT_SERIAL.fetch_add(1, Ordering::Relaxed)
-    ));
-    if let Err(err) = std::fs::rename(tree, &gc) {
-        report_cleanup(&format!("{what}の退避"), Err(err), tree);
-        return;
-    }
-    report_cleanup(
-        &format!("退避した{what}の削除"),
-        std::fs::remove_dir_all(&gc),
-        &gc,
     );
+    let gc = shelf.join(&stem);
+    let lock = shelf.join(format!("{stem}{LOCK_SUFFIX}"));
+    let lease = match open_lease(&lock) {
+        Ok(lease) => lease,
+        // 札が無いまま移すと上の窓が開く。移さずに残し、次の取得の掃除に任せる。
+        Err(err) => return report_cleanup(&format!("{what}の退避の札の作成"), Err(err), &lock),
+    };
+    match std::fs::rename(tree, &gc) {
+        Ok(()) => report_cleanup(&format!("退避した{what}の削除"), remove_tree(&gc), &gc),
+        Err(err) => report_cleanup(&format!("{what}の退避"), Err(err), tree),
+    }
+    retire_lease(Some(lease), &lock);
 }
 
 /// 札を消そうとした結果から、相方の木を消してよいかを決める（要件 7.5・7.7）。

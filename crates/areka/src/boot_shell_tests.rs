@@ -33,7 +33,7 @@ fn rig_a() -> SwitchRig {
         "A",
         FakeShiori::Scripted(Box::new(|| standard_script("\\0A\\e"))),
     )]);
-    rig.world.insert_resource(WintfTaskPool::new());
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig
 }
 

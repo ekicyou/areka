@@ -51,12 +51,14 @@ struct Cage {
     kanade: mpsc::Receiver<KanadeMsg>,
     _present_tx: mpsc::Sender<PresentCommand>,
     _gw: crate::placement::spawn::GhostWindows,
+    /// GPU の装置の許可。欄は宣言の順に落ちるので、最後に置いて装置の世界より後に返す。
+    _gpu: crate::emo2_boot::spine::GpuPermit,
 }
 
 impl Cage {
     /// 檻を組み、装着のフレームまで回す。talk 相対秒＝壁時刻（起点 0）。
     fn boot() -> Self {
-        let (mut world, gw) = gpu_frame_world();
+        let (gpu, mut world, gw) = gpu_frame_world();
         let kanade = seat_ghost(&mut world);
         let (present_tx, present_rx) = mpsc::channel::<PresentCommand>();
         let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
@@ -75,6 +77,7 @@ impl Cage {
             kanade,
             _present_tx: present_tx,
             _gw: gw,
+            _gpu: gpu,
         };
         cage.frame_at(0.0);
         assert_eq!(

@@ -61,3 +61,12 @@
 - 触るファイル（見込み・原因しだい）: 上の GPU・COM を使うテストのファイルとその土台（`emo2_boot/ghost_switch_test_support.rs`・`mcp/dump_surface_gpu_test_support.rs`・`placement/placement_shared_test_support.rs`）。順番に並べる錠を足すなら新しい小さな共有ファイル 1 本。wintf の GPU 資源の作り方が原因なら `crates/wintf/src/ecs/graphics/` も。
 - 議題: なし（直し方は原因が分かってから決まる）。
 - 同時に走らせない: `ghost-session-test-load-flake`（同じ実行ファイル・負荷を互いに汚す）。
+
+## 2026-10-10 `ghost-session-test-load-flake` からの申し送り（既定のスレッドの数でも落ちた）
+
+- 負荷の再現（論理 CPU 22・負荷の子 44 本・`--test-threads` は渡さない＝既定の数）の下で、`cargo test -p areka --bin areka` が `0xc0000005`（`STATUS_ACCESS_VIOLATION`）で 3 度落ちた。panic も「60 秒を越えた」の行も無く、どのテストかは出ない。
+  - `load-repro.md` の 4.7 の 4 回目（94 秒・ok 522 本・`frame::transition_branch_tests` の後）
+  - 4.8 の 3 回目（18.7 秒・`frame::text_scale_tests` の後）
+  - 4.9 の 5 回目（65.9 秒）
+- 落ちる頃に走っていたのは、名前の順で `frame::visibility_integration_tests`（各スレッドで `CoInitializeEx(MULTITHREADED)` を呼び、`GraphicsCore::new` から MTA の Compositor を作る）の先頭の十数本。上の「`--test-threads=4` でだけ再現」の前提は崩れた＝既定のスレッドの数でも、負荷でスレッドの重なりが増えると起きる。
+- 記録の置き場: `.kiro/specs/completed/areka-P0-ghost-session-test-load-flake/load-repro.md` の 4.7〜4.9（`target\load-flake\after-20261009-*\round-N.log`）。

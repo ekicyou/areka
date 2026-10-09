@@ -72,7 +72,7 @@ fn plant_committed(ghost_dir: &Path, run: &str) -> PathBuf {
 fn running_a() -> SwitchRig {
     let mut rig = SwitchRig::new(vec![("A", reloading("A")), ("B", reloading("B"))]);
     // 起こし直すときの窓の準備が閉包を投函する先（`Input` の段では走らない）。
-    rig.world.insert_resource(WintfTaskPool::new());
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("A");
     rig.plant_boot_record("B");
     rig.boot("A");
@@ -520,7 +520,7 @@ fn a_failed_reload_switch_drops_the_remembered_folder_and_the_tail() {
             .get("OnUpdateResult", Ok(None))
     }));
     let mut rig = SwitchRig::new(vec![("A", a_script), (DEFAULT_GHOST_FOLDER, default)]);
-    rig.world.insert_resource(WintfTaskPool::new());
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("A");
     rig.plant_boot_record(DEFAULT_GHOST_FOLDER);
     rig.boot("A");

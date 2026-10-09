@@ -189,6 +189,8 @@ function Select-HeavyProcesses {
     $hits = @()
     $busy = @()
     foreach ($c in @($Candidates)) {
+        # 候補 0 件の @() は関数の戻りで $null に化け、@($null) は要素 1 つ（$null）になる。
+        if ($null -eq $c) { continue }
         $isPresence = ($presence -contains ([string]$c.name).ToLowerInvariant())
         $isBusy     = ($null -eq $c.pct) -or ([double]$c.pct -ge $CpuMinPct)
         if ($isBusy) { $busy += [pscustomobject]@{ pid = [int]$c.pid; name = [string]$c.name; pct = $c.pct } }

@@ -11,7 +11,7 @@ use crate::emo2_boot::shell_balloon_switch::{
     SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinSwitchInFlight, SkinVerdict,
     request_skin_switch,
 };
-use crate::emo2_boot::spine::{RecordedCall, spin_wait_until};
+use crate::emo2_boot::spine::RecordedCall;
 
 /// seriko の送り手の複製は結線ありのセッションだけが持ち（テスト用の組み立ては持たない）、
 /// 持ったセッションを降ろしても seriko の join が止まらずに戻る（要件 8.5）。複製を降ろす最初の
@@ -89,7 +89,7 @@ fn menu_shell_request_raises_on_shell_changing_with_the_current_shell_as_ref1() 
             })
             .collect()
     };
-    let arrived = spin_wait_until(|| !changing().is_empty());
+    let arrived = rig.wait_for(|| !changing().is_empty());
     let got = changing();
     let shutdown_ok = rig.shutdown();
 
@@ -182,7 +182,7 @@ fn menu_shell_frame_marks_the_mounted_shell_and_selecting_requests_a_switch() {
         .get_non_send::<SkinSwitchInFlight>()
         .map(|f| (f.kind, f.target.folder.clone()));
     let handle = rig.handle("A");
-    let arrived = spin_wait_until(|| {
+    let arrived = rig.wait_for(|| {
         handle
             .non_status_calls()
             .iter()

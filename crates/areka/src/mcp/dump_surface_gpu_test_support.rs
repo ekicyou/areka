@@ -10,6 +10,7 @@
 //! 比べる前に通す関所（kanade へ返事つきの印の NOTIFY）も持つ。ERROR の記録を捕まえる口は
 //! 土台に持たず、呼ぶ側のテストが `log_capture_kit`（`capture`・`count_levels`）を直接使う。
 
+use std::panic::Location;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
@@ -45,7 +46,7 @@ use wintf::ecs::{DPI, FrameTime, GraphicsCore, Input, Update, WindowHandle, WucG
 use crate::emo2_boot::ghost_switch_test_support::{
     BALLOON, FakeShiori, SwitchRig, standard_script,
 };
-use crate::emo2_boot::spine::{RecordedCall, spin_wait_until};
+use crate::emo2_boot::spine::{GpuPermit, Progress, RecordedCall, wait_until};
 use crate::ghost_session::GhostSlot;
 use crate::mcp::resolve;
 use crate::placement::follow::MonitorSnapshot;
@@ -71,6 +72,8 @@ pub(in crate::mcp) struct GpuRig {
     pub(in crate::mcp) rig: SwitchRig,
     /// 注入した Tick の合成の時刻（単調増加）。
     clock_ms: u64,
+    /// GPU の装置の許可（[`GpuPermit`]）。`rig` の World の装置より後に返すので欄の最後。
+    _gpu: GpuPermit,
 }
 
 impl GpuRig {
@@ -89,6 +92,7 @@ impl GpuRig {
         )]);
         rig.plant_boot_record("A");
         spawn_windows(&mut rig, dpi);
+        let gpu = GpuPermit::take();
         let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
         let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
         let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
@@ -98,41 +102,64 @@ impl GpuRig {
         let (_, inbox) = mpsc::channel();
         crate::mcp::install(&mut rig.world, inbox);
         rig.boot("A");
-        Self { rig, clock_ms: 0 }
+        Self {
+            rig,
+            clock_ms: 0,
+            _gpu: gpu,
+        }
     }
 
     /// 本番の `Input`・`Update` の段を `done` が真になるまで有界に回す（期限切れは `false`）。
     /// 巡ごとに置き場のゴーストの dispatcher へ `step_ms` 進めた合成の Tick を注入して台詞を進め
     /// （0 なら台詞の時計は止まったまま）、本番の巡と同じく `FrameTime` を置き、メッセージを配る。
+    ///
+    /// 打ち切りは足場の進みの目印（`SwitchRig::progress_probe`・SHIORI の呼び出しの数）で決め、打ち切ったら
+    /// 呼び出しの場所を添えた文言を標準エラーへ 1 行出して `false`（lap の `LapRig::frames_until` と同じ形・
+    /// areka-P0-ghost-session-test-load-flake 要件 2.1）。台詞の再生（dispatcher が Tick を消化する進み）は
+    /// テストの側から読めないので、SHIORI を呼ばずに台詞だけが進む間は目印が動かない（30 秒で［止まった］）。
+    /// 合成の時刻は 1 巡に高々 `step_ms` しか進まない（時刻が観測を追い越さない）ので、台本の待ちを
+    /// `step_ms` 1 で進めると待ちの ms と同じ数の巡が要り、巡が遅い机では届かない。`step_ms` 1（実時間
+    /// ほど）で刻むのは字が現れ切るまでに限り、その後の台本の待ちは大きな `step_ms` で進める。
+    #[track_caller]
     pub(in crate::mcp) fn frames_until(
         &mut self,
         step_ms: u64,
         mut done: impl FnMut(&World) -> bool,
     ) -> bool {
-        let Self { rig, clock_ms } = self;
+        let Self { rig, clock_ms, .. } = self;
         let mut last_tick: Option<Instant> = None;
-        spin_wait_until(|| {
-            if step_ms > 0 && last_tick.is_none_or(|at| at.elapsed() >= TICK_EVERY) {
-                last_tick = Some(Instant::now());
-                *clock_ms += step_ms;
-                if let Some(dispatcher) = rig
-                    .world
-                    .get_non_send::<GhostSlot>()
-                    .and_then(|slot| slot.0.as_ref())
-                    .and_then(|session| session.dispatcher())
-                {
-                    let _ = dispatcher.send(DispatcherMsg::Tick {
-                        now: MonotonicMs(*clock_ms),
-                    });
+        let probe = rig.progress_probe();
+        let at = Location::caller();
+        let waited = wait_until(
+            &format!("{}:{}", at.file(), at.line()),
+            Progress::Count(&probe),
+            || {
+                if step_ms > 0 && last_tick.is_none_or(|at| at.elapsed() >= TICK_EVERY) {
+                    last_tick = Some(Instant::now());
+                    *clock_ms += step_ms;
+                    if let Some(dispatcher) = rig
+                        .world
+                        .get_non_send::<GhostSlot>()
+                        .and_then(|slot| slot.0.as_ref())
+                        .and_then(|session| session.dispatcher())
+                    {
+                        let _ = dispatcher.send(DispatcherMsg::Tick {
+                            now: MonotonicMs(*clock_ms),
+                        });
+                    }
                 }
-            }
-            rig.world
-                .insert_resource(FrameTime(dola::runtime::clock::now()));
-            pump_messages();
-            rig.world.run_schedule(Input);
-            rig.world.run_schedule(Update);
-            done(&rig.world)
-        })
+                rig.world
+                    .insert_resource(FrameTime(dola::runtime::clock::now()));
+                pump_messages();
+                rig.world.run_schedule(Input);
+                rig.world.run_schedule(Update);
+                done(&rig.world)
+            },
+        );
+        if let Err(failure) = &waited {
+            eprintln!("{failure}");
+        }
+        waited.is_ok()
     }
 
     /// `dump_surface` を要求として作り、本番の `handle` へ渡す（答えは返事を受ける側から覗く）。
@@ -166,6 +193,7 @@ impl GpuRig {
 
     /// 台詞の時計を止めたまま本番の段を有界に回し、`pending` の答えを待つ（答えが後の巡で届いても、
     /// その場で届いていても同じに使える）。期限切れ・答えずに手放したら `None`。
+    #[track_caller]
     pub(in crate::mcp) fn answer_of(&mut self, pending: &Pending) -> Option<Answer> {
         let mut got = None;
         self.frames_until(0, |_| match pending.try_answer() {
@@ -181,6 +209,7 @@ impl GpuRig {
 
     /// 台詞の時計を止めたまま、本番の段を `n` 巡だけ回す（読み戻しの後に画面へ遅れて届く変化が
     /// 無いことを見るため）。
+    #[track_caller]
     pub(in crate::mcp) fn frames(&mut self, n: usize) {
         let mut left = n;
         self.frames_until(0, |_| {
@@ -193,6 +222,7 @@ impl GpuRig {
     /// 返事が届くまで巡を回す。定常でないと断られたら送り直す。kanade は依頼を届いた順に 1 つずつ
     /// 済ませるので、送れた（`NoReply`）返事が届いた時点で、それより前に届いた依頼はみな SHIORI まで
     /// 済み、印も呼び出しの列に載っている。返るのは最後の返事（期限切れ・送れなければ `None`）。
+    #[track_caller]
     pub(in crate::mcp) fn flush_to_shiori(&mut self) -> Option<RaiseOutcome> {
         let mut waiting: Option<ReplyReceiver<RaiseOutcome>> = None;
         let mut last = None;

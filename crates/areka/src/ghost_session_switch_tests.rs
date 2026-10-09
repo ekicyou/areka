@@ -189,7 +189,7 @@ fn ghost_b() -> FakeShiori {
 fn lap_rig(a: FakeShiori, b: FakeShiori) -> SwitchRig {
     let mut rig = SwitchRig::new(vec![("A", a), ("B", b)]);
     // 切替先の窓の準備が閉包を投函する先（`Input` の段に作業プールの取り出しの系は無いので走らない）。
-    rig.world.insert_resource(WintfTaskPool::new());
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("A");
     rig
 }

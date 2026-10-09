@@ -18,8 +18,8 @@ use std::time::{Duration, Instant};
 
 use super::conformance_script::{LapStage, TICK_STEP_MS};
 use super::{
-    ExitKind, LoopDriver, RecordedCall, SPIN_WAIT, ScriptedShioriBackend, ScriptedShioriHandle,
-    ShioriBackend, SpineHarness, shell_target, spin_wait_until,
+    ExitKind, LoopDriver, Progress, RecordedCall, ScriptedShioriBackend, ScriptedShioriHandle,
+    ShioriBackend, SpineHarness, WaitFailure, shell_target, spin_wait_until, wait_until_with,
 };
 use areka_emo_present::PresentCommand;
 use areka_ghost::dispatcher::DispatcherMsg;
@@ -334,6 +334,8 @@ pub(super) enum StageFailure {
     /// 完了条件が成立しないまま有界時間が尽きた（R1.6）。注入の時刻列と採取件数を持つので、
     /// 「注入が届いていない」のか「注入は届いたが観測が成立しない」のかを読み分けられる。
     Timeout {
+        /// 待ちの芯が打ち切った理由（文言の先頭の `［止まった］`・`［進みは不明］` など）。
+        wait: Box<WaitFailure>,
         stage: &'static str,
         injected_at_ms: Vec<u64>,
         collected: usize,
@@ -367,13 +369,14 @@ impl std::fmt::Display for StageFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             StageFailure::Timeout {
+                wait,
                 stage,
                 injected_at_ms,
                 collected,
                 now_ms,
             } => write!(
                 f,
-                "段「{stage}」の完了条件が有界時間内に成立しない（注入 {injected_at_ms:?}・採取 {collected} 件・注入時刻 {now_ms}ms）"
+                "{wait}／段「{stage}」の完了条件が有界時間内に成立しない（注入 {injected_at_ms:?}・採取 {collected} 件・注入時刻 {now_ms}ms）"
             ),
             StageFailure::StartsBeforeStage {
                 stage,
@@ -427,6 +430,13 @@ pub(super) trait StageSink {
     /// 据え置きは安全側であり、予算は ⑵ に必要なぶんだけで足りるようになる。
     fn may_advance_clock(&self) -> bool {
         true
+    }
+
+    /// 段の待ちの進みの目印（単調に増える数）。既定は `None`＝目印なしで、待ちは総時間 30 秒で
+    /// 打ち切る（`［進みは不明］`）。目印を渡すと、相手が 30 秒のあいだ進まなかったときに打ち切る
+    /// （`［止まった］`・areka-P0-ghost-session-test-load-flake 要件 2.1・2.2）。
+    fn progress_probe(&self) -> Option<Box<dyn Fn() -> u64>> {
+        None
     }
 }
 
@@ -482,8 +492,9 @@ impl LapDriver {
     }
 
     /// 時計を注入できる [`Self::run_stage`] の内側（檻専用の継ぎ目・`settle_bounded_with` と同旨）。
-    /// 打ち切りの上限は `SPIN_WAIT`（30 秒）ゆえ、実時計で「尽きる側」を檻に入れると 1 本 30 秒
-    /// かかる。反復の中身（注入・採取・完了判定）は実時計のときと 1 行も変わらない。
+    /// 打ち切りは待ちの芯（`wait_until_with`）が決める——目印なしは総時間 30 秒、目印ありは進まない
+    /// 時間 30 秒（総時間の上限 300 秒）。実時計で「尽きる側」を檻に入れると 1 本 30 秒かかる。
+    /// 反復の中身（注入・採取・完了判定）は実時計のときと 1 行も変わらない。
     pub(super) fn run_stage_with<S: StageSink>(
         &mut self,
         mut clock: impl FnMut() -> Instant,
@@ -515,7 +526,6 @@ impl LapDriver {
             });
         }
 
-        let deadline = clock() + SPIN_WAIT;
         self.now_ms = begin_ms;
 
         let mut collected: Vec<CollectedCommand> = Vec::new();
@@ -525,136 +535,154 @@ impl LapDriver {
         let mut closed = ClosedInboxes::default();
         // 完了条件が成立してから観測だけで回した反復の回数（余韻を持つ待ち方でのみ使う）。
         let mut settled_rounds: Option<usize> = None;
+        // 反復の中で見つけた駆動器の自己検査の失敗（見つけたら待ちを抜けて呼び手へ返す）。
+        let mut broken: Option<StageFailure> = None;
+        // 余韻を持つ待ち方では、完了条件が成立してからさらに `settle_rounds` 回、**注入せずに**
+        // 観測だけを続ける。
+        let settle_target = match plan.waiting {
+            WaitInjection::DispatcherTickThenObserve { settle_rounds } => Some(settle_rounds),
+            _ => None,
+        };
+        let probe = sink.progress_probe();
+        let progress = match &probe {
+            Some(count) => Progress::Count(count.as_ref()),
+            None => Progress::Unknown,
+        };
 
-        loop {
-            // ── 採取（毎反復）＋駆動器の自己検査（design D3・製品の判定ではない） ──
-            for command in sink.collect() {
-                if self.now_ms < begin_ms || self.now_ms > limit_ms {
-                    return Err(StageFailure::CollectedOutsideInterval {
-                        stage: name,
+        // 1 反復（採取・完了の判定・注入）を待ちの芯で回す。打ち切りは芯が「相手が状態を進めなかった
+        // 時間」で決める（areka-P0-ghost-session-test-load-flake 要件 2.1・2.2）。芯の休みは渡さない
+        // ——反復の末尾で毎回 200µs 眠って CPU を返しており（要件 2.5）、芯の最初の 60 ms の空回しの
+        // あいだも反復の速さが今までと変わらない（余韻の反復の回数が実時間で縮まない）。
+        let waited = wait_until_with(
+            &mut clock,
+            |_| {},
+            name,
+            progress,
+            || {
+                // ── 採取（毎反復）＋駆動器の自己検査（design D3・製品の判定ではない） ──
+                for command in sink.collect() {
+                    if self.now_ms < begin_ms || self.now_ms > limit_ms {
+                        broken = Some(StageFailure::CollectedOutsideInterval {
+                            stage: name,
+                            collected_at_ms: self.now_ms,
+                            begin_ms,
+                            limit_ms,
+                        });
+                        return true;
+                    }
+                    collected.push(CollectedCommand {
+                        command,
                         collected_at_ms: self.now_ms,
-                        begin_ms,
-                        limit_ms,
                     });
                 }
-                collected.push(CollectedCommand {
-                    command,
-                    collected_at_ms: self.now_ms,
-                });
-            }
 
-            let holds = complete(&StageProgress {
-                collected: &collected,
-                now_ms: self.now_ms,
-                kanade_probes,
-                closed,
-            });
-            // 余韻を持つ待ち方では、完了条件が成立してからさらに `settle_rounds` 回、**注入せずに**
-            // 観測だけを続ける。成立が崩れたら数え直す（一瞬の成立を完了と誤認しない）。
-            let settle_target = match plan.waiting {
-                WaitInjection::DispatcherTickThenObserve { settle_rounds } => Some(settle_rounds),
-                _ => None,
-            };
-            match settle_target {
-                None => {
-                    if holds {
-                        return Ok(StageObservation {
-                            stage: name,
-                            collected,
-                            injected_at_ms,
-                            once_pending: plan.once.len() - once_next,
-                            kanade_probes,
-                            closed,
-                        });
-                    }
-                }
-                Some(target) => {
-                    if holds {
-                        let rounds = settled_rounds.map_or(1, |done: usize| done + 1);
-                        settled_rounds = Some(rounds);
-                        if rounds >= target {
-                            return Ok(StageObservation {
-                                stage: name,
-                                collected,
-                                injected_at_ms,
-                                once_pending: plan.once.len() - once_next,
-                                kanade_probes,
-                                closed,
-                            });
-                        }
-                    } else {
-                        settled_rounds = None;
-                    }
-                }
-            }
-
-            // ── 有界時間が尽きたら必ず呼び手へ返す（素通りさせない） ──
-            if clock() >= deadline {
-                return Err(StageFailure::Timeout {
-                    stage: name,
-                    injected_at_ms,
-                    collected: collected.len(),
+                let holds = complete(&StageProgress {
+                    collected: &collected,
                     now_ms: self.now_ms,
+                    kanade_probes,
+                    closed,
                 });
-            }
-
-            // ── 受信端の開閉の探り（design D1 の終了段） ──
-            //
-            // 頭打ちの対象外である。頭打ちが在るのは注入時刻が観測を追い越すと待っている条件が
-            // 壊れるためだが、探りは**注入時刻を運ばない**ので追い越しようがない。一方で
-            // 「閉じた」と分かった後は投げ続ける意味が無いので止める。
-            let probing = once_next >= plan.once.len()
-                && matches!(plan.waiting, WaitInjection::DispatcherTickAndKanadeProbe);
-            if probing && !closed.kanade {
-                if sink.inject(&Injection::KanadeProbe, self.now_ms).is_err() {
-                    closed.kanade = true;
-                }
-                kanade_probes += 1;
-            }
-
-            // ── 注入（上限に達したら以後は注入せず観測だけを待つ＝不変条件） ──
-            // 投函の可否は 3 つの門で決まる。
-            //  ⑴ 余韻に入ったら**何も注入しない**（呼び手が何回数えようと注入が続くと、待っている
-            //     状態が余計な再生で壊れる）。
-            //  ⑵ 実 async の着地待ち（[`StageSink::may_advance_clock`] が偽）のあいだは、**時刻を
-            //     据え置いたまま**再生側 Tick を投函し続ける。予算は 1 本も減らない。
-            //  ⑶ それ以外は上限まで通常どおり注入し、上限に達したら注入をやめる。
-            let holding = !sink.may_advance_clock();
-            let picked = if settled_rounds.is_some() {
-                None
-            } else {
-                match plan.once.get(once_next) {
-                    Some(injection) => {
-                        once_next += 1;
-                        Some(injection)
-                    }
-                    None if holding || self.now_ms < limit_ms => match plan.waiting {
-                        WaitInjection::DispatcherTick
-                        | WaitInjection::DispatcherTickAndKanadeProbe
-                        | WaitInjection::DispatcherTickThenObserve { .. } => {
-                            Some(&Injection::DispatcherTick)
+                // 余韻の数え方: 成立が崩れたら数え直す（一瞬の成立を完了と誤認しない）。
+                match settle_target {
+                    None => {
+                        if holds {
+                            return true;
                         }
-                        WaitInjection::Idle => None,
-                    },
-                    None => None,
-                }
-            };
-            if let Some(injection) = picked {
-                if let Err(inbox) = sink.inject(injection, self.now_ms) {
-                    match inbox {
-                        Inbox::Kanade => closed.kanade = true,
-                        Inbox::Dispatcher => closed.dispatcher = true,
+                    }
+                    Some(target) => {
+                        if holds {
+                            let rounds = settled_rounds.map_or(1, |done: usize| done + 1);
+                            settled_rounds = Some(rounds);
+                            if rounds >= target {
+                                return true;
+                            }
+                        } else {
+                            settled_rounds = None;
+                        }
                     }
                 }
-                injected_at_ms.push(self.now_ms);
-                if !holding {
-                    // 刻みが上限を跨ぐときは上限で止める（注入時刻は段の上限を超えない）。
-                    self.now_ms = self.now_ms.saturating_add(TICK_STEP_MS).min(limit_ms);
-                }
-            }
 
-            std::thread::sleep(Duration::from_micros(200));
+                // ── 受信端の開閉の探り（design D1 の終了段） ──
+                //
+                // 頭打ちの対象外である。頭打ちが在るのは注入時刻が観測を追い越すと待っている条件が
+                // 壊れるためだが、探りは**注入時刻を運ばない**ので追い越しようがない。一方で
+                // 「閉じた」と分かった後は投げ続ける意味が無いので止める。
+                let probing = once_next >= plan.once.len()
+                    && matches!(plan.waiting, WaitInjection::DispatcherTickAndKanadeProbe);
+                if probing && !closed.kanade {
+                    if sink.inject(&Injection::KanadeProbe, self.now_ms).is_err() {
+                        closed.kanade = true;
+                    }
+                    kanade_probes += 1;
+                }
+
+                // ── 注入（上限に達したら以後は注入せず観測だけを待つ＝不変条件） ──
+                // 投函の可否は 3 つの門で決まる。
+                //  ⑴ 余韻に入ったら**何も注入しない**（呼び手が何回数えようと注入が続くと、待っている
+                //     状態が余計な再生で壊れる）。
+                //  ⑵ 実 async の着地待ち（[`StageSink::may_advance_clock`] が偽）のあいだは、**時刻を
+                //     据え置いたまま**再生側 Tick を投函し続ける。予算は 1 本も減らない。
+                //  ⑶ それ以外は上限まで通常どおり注入し、上限に達したら注入をやめる。
+                let holding = !sink.may_advance_clock();
+                let picked = if settled_rounds.is_some() {
+                    None
+                } else {
+                    match plan.once.get(once_next) {
+                        Some(injection) => {
+                            once_next += 1;
+                            Some(injection)
+                        }
+                        None if holding || self.now_ms < limit_ms => match plan.waiting {
+                            WaitInjection::DispatcherTick
+                            | WaitInjection::DispatcherTickAndKanadeProbe
+                            | WaitInjection::DispatcherTickThenObserve { .. } => {
+                                Some(&Injection::DispatcherTick)
+                            }
+                            WaitInjection::Idle => None,
+                        },
+                        None => None,
+                    }
+                };
+                if let Some(injection) = picked {
+                    if let Err(inbox) = sink.inject(injection, self.now_ms) {
+                        match inbox {
+                            Inbox::Kanade => closed.kanade = true,
+                            Inbox::Dispatcher => closed.dispatcher = true,
+                        }
+                    }
+                    injected_at_ms.push(self.now_ms);
+                    if !holding {
+                        // 刻みが上限を跨ぐときは上限で止める（注入時刻は段の上限を超えない）。
+                        self.now_ms = self.now_ms.saturating_add(TICK_STEP_MS).min(limit_ms);
+                    }
+                }
+
+                std::thread::sleep(Duration::from_micros(200));
+                false
+            },
+        );
+
+        if let Some(failure) = broken {
+            return Err(failure);
         }
+        // ── 有界時間が尽きたら必ず呼び手へ返す（素通りさせない） ──
+        if let Err(wait) = waited {
+            return Err(StageFailure::Timeout {
+                wait: Box::new(wait),
+                stage: name,
+                injected_at_ms,
+                collected: collected.len(),
+                now_ms: self.now_ms,
+            });
+        }
+        Ok(StageObservation {
+            stage: name,
+            collected,
+            injected_at_ms,
+            once_pending: plan.once.len() - once_next,
+            kanade_probes,
+            closed,
+        })
     }
 }
 

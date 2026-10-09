@@ -36,9 +36,10 @@ use crate::emo2_boot::ghost_switch::{
     SwitchTarget, SwitchVerdict, request_ghost_switch,
 };
 use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::emo2_boot::spine::RecordedCall;
+use crate::emo2_boot::spine::{Progress, RecordedCall, run_bounded_watching};
 use crate::install::procedure::Overwritten;
 use crate::install::{InstallOrder, InstallOrigin, SubmitVerdict, submit};
+use crate::placement::persist::PersistWiring;
 
 /// 書庫が置くファイル（宛先のゴーストのフォルダからの相対）と中身。
 const MARKER: &str = "ghost/master/overwritten.txt";
@@ -62,6 +63,26 @@ fn first(events: &[CapturedEvent], name: &str) -> Option<usize> {
         .position(|e| e.field_str("event") == Some(name))
 }
 
+/// 呼び出しの列の確かめに添える手がかり: 起こした回ごとの列・`OnInstallFailure` の Reference・捕まえた
+/// 記録のうち warn 以上。手続きの失敗の詳しい記録（`install_failed`・`areka_nar` の失敗）は背景の
+/// スレッド `install` で出るので、呼び手のスレッドだけを捕える `capture` には映らない。Reference の語
+/// （`extraction` は展開か確定の入出力の失敗）がその代わりになる。
+fn clues(rig: &SwitchRig, folder: &str, events: &[CapturedEvent]) -> String {
+    let failures: Vec<_> = rig
+        .calls(folder)
+        .iter()
+        .filter_map(|c| refs_of(c, "OnInstallFailure"))
+        .collect();
+    let troubles: Vec<_> = events
+        .iter()
+        .filter(|e| e.level <= tracing::Level::WARN)
+        .collect();
+    format!(
+        "{:?}／OnInstallFailure の Reference: {failures:?}／warn 以上の記録: {troubles:?}",
+        boots_of(rig, folder)
+    )
+}
+
 /// 起動中のゴースト A（`directory,A` の `ghost`）へ、ファイルを 1 つ足す書庫を本番の道筋で入れる。
 #[test]
 fn overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again() {
@@ -76,7 +97,7 @@ fn overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again() {
         })),
     )]);
     // 起こし直すときの窓の準備が閉包を投函する先（`Input` の段では走らない）。
-    rig.world.insert_resource(WintfTaskPool::new());
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("A");
     rig.boot("A");
     assert!(rig.wait_steady(), "A が定常に着く");
@@ -121,10 +142,11 @@ fn overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again() {
         .get_resource::<LastInstalledGhost>()
         .map(|g| g.0.clone());
     let body = std::fs::read(&marker).ok();
+    let clue = clues(&rig, "A", &events);
     assert!(rig.shutdown());
 
     // 同じゴーストが起き直す（ほかのゴーストは起こさない）。予約は定常到達で下りている。
-    assert_eq!(boots.len(), 2, "A を 1 回起こし直す: {boots:?}");
+    assert_eq!(boots.len(), 2, "A を 1 回起こし直す: {clue}");
     assert_eq!(current.as_deref(), Some("A"));
     assert!(!reserved, "予約は残らない");
     // 知らせを送らない切替（要件 7.2）。
@@ -153,7 +175,7 @@ fn overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again() {
     assert_eq!(
         second[booted + 1..],
         ["OnInstallCompleteEx", "OnInstallComplete"],
-        "{boots:?}"
+        "{clue}"
     );
     // 降ろした後に宛先の中身が替わる（全窓を閉じた後・起こす前に展開する＝要件 7.3）。
     assert_eq!(body.as_deref(), Some(MARKER_BODY));
@@ -206,12 +228,23 @@ fn running(folder: &'static str, others: &[&'static str]) -> SwitchRig {
     let mut scripts = vec![(folder, installing(folder))];
     scripts.extend(others.iter().map(|other| (*other, installing(other))));
     let mut rig = SwitchRig::new(scripts);
-    rig.world.insert_resource(WintfTaskPool::new());
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
     for name in std::iter::once(&folder).chain(others) {
         rig.plant_boot_record(name);
     }
     rig.boot(folder);
     assert!(rig.wait_steady(), "{folder} が定常に着く");
+    // 起動の直後の記憶（`LastShell`・`LastBalloon`＝ゴーストのフォルダの下の `profile/areka`）は投函だけで
+    // 待たない。負荷で書き手が遅れると、定常の後に始めた展開（宛先のフォルダの名前替え）と書き込みが
+    // 重なって確定が拒まれる。書き手のフェンスで書き込みを済ませてから渡す。
+    let publisher = rig.world.non_send::<PersistWiring>().publisher.clone();
+    run_bounded_watching(
+        "起動の直後の記憶の書き込み",
+        Progress::Unknown,
+        move || {
+            publisher.barrier().expect("記憶の書き手が生きている");
+        },
+    );
     rig
 }
 
@@ -472,6 +505,7 @@ fn a_running_ghost_missing_from_the_catalog_is_installed_elsewhere_and_closed_on
     let exited = rig.exit_requested();
     let boots = boots_of(&rig, "A");
     let body = std::fs::read(rig.root.ghost_dir("A").join(MARKER)).ok();
+    let clue = clues(&rig, "A", &events);
     assert!(rig.shutdown());
 
     assert!(finished && !exited, "依頼が終わり、終了しない: {events:?}");
@@ -483,7 +517,7 @@ fn a_running_ghost_missing_from_the_catalog_is_installed_elsewhere_and_closed_on
         named(&events, "ghost_switch_requested").is_empty(),
         "{events:?}"
     );
-    assert_eq!(boots.len(), 1, "降ろさない: {boots:?}");
+    assert_eq!(boots.len(), 1, "降ろさない: {clue}");
     let closing: Vec<&String> = boots[0]
         .iter()
         .filter(|id| id.starts_with("OnInstallComplete") || *id == "OnInstallFailure")
@@ -491,7 +525,7 @@ fn a_running_ghost_missing_from_the_catalog_is_installed_elsewhere_and_closed_on
     assert_eq!(
         closing,
         ["OnInstallCompleteEx", "OnInstallComplete"],
-        "{boots:?}"
+        "{clue}"
     );
     assert_eq!(body.as_deref(), Some(MARKER_BODY), "よそへの展開で入る");
 }
@@ -523,12 +557,13 @@ fn a_failed_commit_boots_the_same_ghost_with_its_old_contents_and_reports_failur
     let touched = rig.root.ghost_dir("A").join(MARKER).exists();
     let kept = std::fs::read(&held).ok();
     let (current, work_root) = (current_of(&rig), rig.root.dir().join(".nar-work"));
+    let clue = clues(&rig, "A", &events);
     assert!(rig.shutdown());
 
     assert!(finished && !exited, "依頼が終わり、終了しない: {events:?}");
-    assert_eq!(boots.len(), 2, "同じゴーストを 1 回起こし直す: {boots:?}");
+    assert_eq!(boots.len(), 2, "同じゴーストを 1 回起こし直す: {clue}");
     assert_eq!(current.as_deref(), Some("A"));
-    assert_eq!(after_boot(&boots[1]), ["OnInstallFailure"], "{boots:?}");
+    assert_eq!(after_boot(&boots[1]), ["OnInstallFailure"], "{clue}");
     assert_eq!(
         failure
             .as_ref()
@@ -585,6 +620,7 @@ fn an_overwritten_ghost_that_cannot_boot_falls_back_to_the_default_ghost() {
         .calls(DEFAULT_GHOST_FOLDER)
         .first()
         .and_then(|c| refs_of(c, "OnBoot"));
+    let clue = clues(&rig, DEFAULT_GHOST_FOLDER, &events);
     assert!(rig.shutdown());
 
     assert!(finished && !exited, "依頼が終わり、終了しない: {events:?}");
@@ -592,7 +628,7 @@ fn an_overwritten_ghost_that_cannot_boot_falls_back_to_the_default_ghost() {
     assert_eq!(failed.len(), 1, "{events:?}");
     assert_eq!(failed[0].field("ghost"), Some("A"));
     assert_eq!(current.as_deref(), Some(DEFAULT_GHOST_FOLDER));
-    assert_eq!(defaults.len(), 1, "{defaults:?}");
+    assert_eq!(defaults.len(), 1, "{clue}");
     let on_boot = on_boot.expect("既定ゴーストの OnBoot");
     assert_eq!(
         (
@@ -605,7 +641,7 @@ fn an_overwritten_ghost_that_cannot_boot_falls_back_to_the_default_ghost() {
     assert_eq!(
         after_boot(&defaults[0]),
         ["OnInstallCompleteEx", "OnInstallComplete"],
-        "{defaults:?}"
+        "{clue}"
     );
 }
 

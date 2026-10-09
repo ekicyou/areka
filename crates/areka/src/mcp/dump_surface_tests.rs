@@ -230,14 +230,22 @@ fn current_look() -> Args {
 /// 装着は起きない）。A・B とも起動記録あり（`OnBoot` から始まる）で、切替で起きた側の
 /// `OnGhostChanged` は 204。
 fn rig_with(on_boot: &'static str) -> SwitchRig {
-    let fake = |on_boot: &'static str| {
+    rig_answering(on_boot, None)
+}
+
+/// [`rig_with`] の A の `OnGhostChanged` の応答を `on_changed` にした土台（`None` は 204）。
+fn rig_answering(on_boot: &'static str, on_changed: Option<&'static str>) -> SwitchRig {
+    let fake = |on_boot: &'static str, on_changed: Option<&'static str>| {
         FakeShiori::Scripted(Box::new(move || {
-            standard_script(on_boot).get("OnGhostChanged", Ok(None))
+            standard_script(on_boot).get("OnGhostChanged", Ok(on_changed.map(str::to_owned)))
         }))
     };
-    let mut rig = SwitchRig::new(vec![("A", fake(on_boot)), ("B", fake(r"\0B\e"))]);
+    let mut rig = SwitchRig::new(vec![
+        ("A", fake(on_boot, on_changed)),
+        ("B", fake(r"\0B\e", None)),
+    ]);
     // 切替先の窓の準備が閉包を投函する先（`Input` の段に作業プールの取り出しの系は無いので走らない）。
-    rig.world.insert_resource(WintfTaskPool::new());
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("A");
     rig.plant_boot_record("B");
     rig.boot("A");
@@ -350,6 +358,9 @@ fn abandoned_while_encoding_drops_the_pair_without_ui_errors() {
     let (req, pending) = ToolRequest::new(ToolCall::DumpSurface(current_look()));
     let (release_tx, release_rx) = mpsc::channel::<()>();
     let (ran_tx, ran_rx) = mpsc::channel::<()>();
+    // 仕事のスレッドが走り始めた数（待ちの目印・スレッドが始まれなければ 0 のまま［止まった］）。
+    let entered = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let entered_in_job = std::sync::Arc::clone(&entered);
     let mut parts = Some((release_rx, ran_tx));
     let mut calls = 0;
     start(&mut rig.world, TOOL, &ghost, req.reply, move |_| {
@@ -358,9 +369,11 @@ fn abandoned_while_encoding_drops_the_pair_without_ui_errors() {
             return None;
         }
         let (release, ran) = parts.take()?;
+        let entered = std::sync::Arc::clone(&entered_in_job);
         Some(Step::Encode(
             0,
             Box::new(move |_| {
+                entered.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 // 放されるまで（または止め札が落ちるまで）止まる。
                 let _ = release.recv();
                 let _ = ran.send(());
@@ -376,7 +389,14 @@ fn abandoned_while_encoding_drops_the_pair_without_ui_errors() {
         rig.world.run_schedule(Input);
         let held_after_leave = held(&rig);
         let _ = release_tx.send(());
-        let ran = ran_rx.recv_timeout(Duration::from_secs(20)).is_ok();
+        let started = || entered.load(std::sync::atomic::Ordering::SeqCst);
+        let ran = crate::emo2_boot::spine::wait_recv(
+            "放した符号化の仕事が走り終える",
+            crate::emo2_boot::spine::Progress::Count(&started),
+            &ran_rx,
+        )
+        .map_err(|failure| eprintln!("{failure}"))
+        .is_ok();
         for _ in 0..3 {
             rig.world.run_schedule(Input);
         }
@@ -554,10 +574,16 @@ fn switch_after_the_copy_still_answers_the_copied_picture() {
 ///
 /// # 非空虚性
 /// ゴーストの見分けを起こし直しで変わるもの（実行系そのもの等）で行うと断りが届いて赤。
-/// A の起動が 2 回であることで、起こし直しが実際に起きたことを確かめる。
+/// A の起動が 2 回であることで、起こし直しが実際に起きたことを確かめる（1 回なら起こし直しが
+/// 起きていない）。
+///
+/// 起こし直した A の `OnGhostChanged` は切替を求めない台詞で答える。204 だと `OnBoot` へ落ちて
+/// 同じ `\![change,ghost,A]` をもう一度流し、定常で切替の印が外れた直後の同じ巡でその合図を
+/// 汲むと 3 回目の起動が起きる（待ちの条件が戻りうる観測になり、回数が揺れる・要件 2.6）。
+/// 切替を求めるのは最初の A の台本だけなので、起動の回数は 2 で決まる。
 #[test]
 fn switch_to_the_same_ghost_keeps_waiting_for_attachment() {
-    let mut rig = rig_with(r"\0A\![change,ghost,A]\e");
+    let mut rig = rig_answering(r"\0A\![change,ghost,A]\e", Some(r"\0A\e"));
     let ghost = active_ghost(&rig);
     let (req, pending) = ToolRequest::new(ToolCall::DumpSurface(current_look()));
     handle(&mut rig.world, &ghost, current_look(), req.reply);

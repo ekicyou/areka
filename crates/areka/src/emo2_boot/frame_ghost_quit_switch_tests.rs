@@ -13,7 +13,6 @@
 //!    終了になる（警告は出ない・要件 5.5・8.11）。
 
 use std::sync::mpsc;
-use std::time::Duration;
 
 use areka_kanade::{
     CancelReason, ChangeHandoff, ChangeOrigin, KanadeMsg, KanadeNotice, KanadeStopCause,
@@ -30,7 +29,7 @@ use crate::emo2_boot::ghost_switch::{
     request_ghost_switch,
 };
 use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig};
-use crate::emo2_boot::spine::ScriptedShioriBackend;
+use crate::emo2_boot::spine::{Progress, ScriptedShioriBackend, wait_recv};
 use crate::ghost_session::GhostSlot;
 
 fn levels_of(events: &[CapturedEvent], event: &str) -> Vec<tracing::Level> {
@@ -57,24 +56,27 @@ fn silent_script() -> FakeShiori {
     }))
 }
 
-/// 受け口から定常到達を 1 件待って読み捨てる（切替の要求を定常で受けさせるため）。
-fn wait_steady(world: &mut World) -> bool {
-    let rx = world
+/// 受け口から定常到達を 1 件待って読み捨てる（切替の要求を定常で受けさせるため）。先に届いた別の通知は
+/// 読み飛ばす。受け口を World から外して眠って待ち（`wait_recv`）、打ち切りは足場の進みの目印で決める
+/// （areka-P0-ghost-session-test-load-flake 要件 2.1・2.2）。届かなければ打ち切りの文言を標準エラーへ
+/// 1 行出して `false`。
+fn wait_steady(rig: &mut SwitchRig) -> bool {
+    let probe = rig.progress_probe();
+    let rx = rig
+        .world
         .remove_non_send::<KanadeNoticeRx>()
         .expect("土台が受け口を据えている");
-    let deadline = std::time::Instant::now() + Duration::from_secs(20);
-    let mut steady = false;
-    while let Some(left) = deadline.checked_duration_since(std::time::Instant::now()) {
-        match rx.0.recv_timeout(left) {
-            Ok(KanadeNotice::Steady) => {
-                steady = true;
-                break;
-            }
+    let steady = loop {
+        match wait_recv("A の定常到達", Progress::Count(&probe), &rx.0) {
+            Ok(KanadeNotice::Steady) => break true,
             Ok(_) => {}
-            Err(_) => break,
+            Err(failure) => {
+                eprintln!("{failure}");
+                break false;
+            }
         }
-    }
-    world.insert_non_send(rx);
+    };
+    rig.world.insert_non_send(rx);
     steady
 }
 
@@ -105,10 +107,10 @@ fn reservation(stage: SwitchStage) -> SwitchInFlight {
 fn stop_with_handoff_under_reservation_switches_without_exit() {
     let mut rig = SwitchRig::new(vec![("A", silent_script()), ("B", silent_script())]);
     // 窓を作る閉包の投函先（切替先の窓の準備に要る・閉包は走らせない）。
-    rig.world.insert_resource(WintfTaskPool::new());
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("B");
     rig.boot("A");
-    let steady = wait_steady(&mut rig.world);
+    let steady = wait_steady(&mut rig);
     let verdict = request_ghost_switch(
         &mut rig.world,
         SwitchRequest {

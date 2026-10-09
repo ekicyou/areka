@@ -26,7 +26,7 @@ fn running_a() -> SwitchRig {
     }));
     let mut rig = SwitchRig::new(vec![("A", a), ("B", b)]);
     // 切替先を起こすときの窓の準備が閉包を投函する先。
-    rig.world.insert_resource(WintfTaskPool::new());
+    rig.world.insert_resource(WintfTaskPool::with_threads(1));
     rig.plant_boot_record("A");
     rig.plant_boot_record("B");
     rig.add_balloon_copy(SECOND, SECOND_NAME);
