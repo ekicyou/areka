@@ -46,7 +46,7 @@
 - `std` だけ（`std::sync::mpsc`・`std::time`・`std::panic::Location`）。新しい crate は足さない。`Cargo.toml`・`Cargo.lock` に触らない。
 - 進みの目印は、テストの持ち物（偽の SHIORI の記録 `ScriptedShioriHandle`・足場の起動の台帳）からだけ数える。本番のコードに数え口を足さない。
 - 条件つき（2.7）: `wintf` には `WintfTaskPool` の作り口 `with_threads(n)` を 1 つ足すだけ（足し算。今の `new()` と本番の呼び手は変えない）。下の「足場のスレッドの絞り」。
-- 向き: `spine_wait.rs`（何にも依存しない）← `spine.rs`（出し直し）← `ghost_switch_test_support.rs` ← 各テスト。`spine_wait.rs` は `SwitchRig` や偽の SHIORI を知らない。
+- 向き: `spine_wait.rs`（`std` と、`join_bounded` のための `areka_actor` の `ActorHandle`／`ActorError` だけに依存）← `spine.rs`（出し直し）← `ghost_switch_test_support.rs` ← 各テスト。`spine_wait.rs` は `SwitchRig` や偽の SHIORI を知らない。
 
 ### Revalidation Triggers
 
@@ -201,6 +201,7 @@ tools/
 - `crates/areka-nar/src/install.rs`・`crates/areka-nar/src/install_commit_tests.rs` — 競合の修正（5.3 の開き直し・設計の決定「上書きの確定の名前替えと外のプロセス」）。`rename_patiently` を足して確定（`commit_one`）と巻き戻し（`unwind`）の名前替えを通し、檻 `a_destination_held_briefly_by_another_process_still_commits` を兄弟のテストに足す。
 - `tools/perf/check-quiet.ps1` — 重いプロセスが 0 件のときに落ちていたので、守りの 2 行を足す（タスク 1.3）。
 - `.kiro/steering/tech.md` — Testing の節に、テストの待ちの決まりと、負荷の下で許す赤・許さない赤の注を足す（設計の決定「負荷の下に残る赤」）。
+- 実装の中で足した・移したテストのファイル（上の木に無いもの）: `emo2_boot/ghost_switch_rig_wait_tests.rs`（足場の待ちの檻・3.2）・`crates/wintf/src/ecs/widget/bitmap_source/task_pool_tests.rs`（檻 17）・`emo2_boot/spine_conformance_support_tests.rs` と `spine_conformance_lap_tests.rs`（巡回の段の駆動器を芯へ移した檻の合わせと、1,000 行に収めるための引っ越し・5.4）・`emo2_boot/frame_balloon_timeout_notice_e2e_tests.rs`（main から入った GPU の足場に許可を持たせた）・`install/desk_pick_tests.rs`・`install/fetch_url_tests.rs`・`mcp/dump_surface_tests.rs`・`emo2_boot/spine_hold_tests.rs`（5.4 の 4〜6 度目の開き直し）。
 
 ### 同じウェーブの約束の外で触るファイル
 
