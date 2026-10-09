@@ -3,7 +3,7 @@ use std::cell::Cell;
 use super::test_support::{opaque_count, variant_name};
 use super::{
     ActorKey, CloseReason, Duration, Instant, PresentCommand, Progress, RecordedCall, SPIN_WAIT,
-    SpineHarness, capture_logs, count_level, join_bounded, run_attach_phase, run_bounded,
+    SpineHarness, capture_logs, count_level, join_bounded, run_attach_phase, run_bounded_watching,
     run_text_phase, shell_target, wait_until, wait_until_with,
 };
 
@@ -343,9 +343,12 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
     } = harness;
 
     // (b) shutdown(User) が有界時間で Ok を返す（hang しない・ForceQuit→OnClose NOTIFY→Unload）。
-    run_bounded(
+    // 偽の SHIORI の呼び出し（OnClose・Unload）の数を進みの目印にして待つ（shutdown_bounded と同じ・
+    // 総時間 10 秒の古い呼び名は負荷の下で［進みは不明］の赤だった・load-repro の 4.6）。
+    let calls = || shiori_handle.call_count();
+    run_bounded_watching(
         "spine s5 ghost shutdown",
-        Duration::from_secs(10),
+        Progress::Count(&calls),
         move || {
             let result = ghost.shutdown(CloseReason::User { scope: 0 });
             assert!(

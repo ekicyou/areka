@@ -356,6 +356,56 @@ fn a_destination_in_use_fails_the_commit_and_leaves_it_byte_identical() {
     drop(handle);
 }
 
+/// 宛先の中のファイルを外の誰かが**短く**掴んで放すなら、確定は待ち切って通る。
+///
+/// 負荷の下で、書いたばかりのファイルをウイルス対策が一瞬開くのと入れ替えが重なった
+/// 再現（spec: `areka-P0-ghost-session-test-load-flake` の負荷の再現 4.6）。⑴と同じ
+/// 掴み方で 1 手目の退避を確かに拒ませ、約 200 ms 後に別のスレッドで放す。ずっと
+/// 掴んだままの⑴は今までどおり失敗する（待つ分だけ約 2 秒遅くなる）。
+#[test]
+fn a_destination_held_briefly_by_another_process_still_commits() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let destination = work.path().join("balloon").join("test-balloon");
+    make_tree(&destination, &[("descript.txt", b"old descript")]);
+    let request = InstallRequest {
+        root: work.path(),
+        target_ghost: None,
+    };
+    let prepared = prepare(balloon_archive(&[]), &request);
+    let area = WorkArea::create(work.path()).expect("作業フォルダを作れる");
+    let states = stage_into(&area, &prepared);
+    // 組み上げの後に掴む。掴んでから確定に入るまでに放してしまうと、待ちを踏まない。
+    let handle = hold(&destination.join("descript.txt"));
+    // 掴みが確かに `rename` を拒むことを、ここで 1 度確かめる（効いていなければ待ちを
+    // 踏まずに緑になる）。
+    let probe = work.path().join("probe");
+    let refused = fs::rename(&destination, &probe).expect_err("掴まれている間は動かせない");
+    assert_eq!(refused.raw_os_error(), Some(5), "アクセス拒否で拒まれる");
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(200));
+        drop(handle);
+    });
+
+    let outcome = commit_all(&area, &prepared.manifest, &prepared.plan, &states);
+    release.join().expect("放す側は落ちない");
+    let outcome = outcome.expect("短い掴みは待ち切って確定できる");
+
+    assert_eq!(
+        outcome
+            .installed
+            .iter()
+            .map(|e| e.existing)
+            .collect::<Vec<_>>(),
+        vec![ExistingState::Overlaid],
+        "既存の宛先を入れ替えた"
+    );
+    assert_eq!(
+        tree(&destination).get("descript.txt").map(Vec::as_slice),
+        Some(&b"new descript"[..]),
+        "宛先は書庫の中身になった"
+    );
+}
+
 // ---- ⑵ 2 手目の失敗で退避が戻る ----
 
 /// 「作業フォルダ → 宛先」が失敗したら、退避した木を宛先へ戻す。

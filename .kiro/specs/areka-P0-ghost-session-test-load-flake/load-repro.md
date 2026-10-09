@@ -1130,7 +1130,28 @@ F が偽だった赤 8 件のうち 6 件は、後の待ち（E・G・D・I）�
 
 直し（5.4 の 4 度目の開き直し）: ⑴ 偽の SHIORI は台本に無い `OnBalloonTimeout` に 204 で答える（`homeurl`・`OnTranslate` と同じ扱い・台本があれば台本が先）。⑵ `abandoned_while_encoding…` の待ちを芯の `wait_recv` へ移し、仕事の閉包に入った数を目印にする。⑶ `desk_pick_tests.rs` と、同じ形の `fetch_url_tests.rs` の自前の `join_bounded` を、spine の `join_bounded` と同じく見張りのスレッドをやめて芯で待つ形にした。静かな机で `--bin areka` の全部が 2,896 本で緑。
 
-LOAD_RERUN_RESULT
+### 4.6 4 件を直した後の負荷の回
+
+記録 `target\load-flake\after-20261009-090345\`（`progress.txt` は `target\load-flake\final-load-20261009-090344\`・`commit 125704dd dirty=0`）。2026-10-09 09:03〜09:50。調停役の「どうぞ」を受けて、4.1 と同じ引数で回した。負荷の前の CPU は平均 4.0%・最大 7.6%、最中は平均 90.9%・最大 91.0%。止めた後の負荷の子の残りは 0。
+
+| 回 | 所要時間（秒） | 結果 | `［止まった］` | `［進んではいた］` | `［進みは不明］` | 後片付けの行（うち os error 5） |
+|---|---|---|---|---|---|---|
+| 1 | 450.7 | 2,894 通過・0 失敗 | 0 | 0 | 0 | 0 |
+| 2 | 477.8 | 2,894 通過・0 失敗 | 0 | 0 | 0 | 0 |
+| 3 | 457.5 | 2,894 通過・0 失敗 | 0 | 0 | 0 | 0 |
+| 4 | 524.8 | 2,894 通過・0 失敗 | 0 | 0 | 0 | 0 |
+| 5 | 851.8 | 2,892 通過・2 失敗 | 0 | 0 | 1 | 1（1） |
+
+`［相手が居ない］` は各回 2 行（檻の出力・緑）。赤は 5 回目の 2 件だけで、どちらも許さない赤:
+
+1. `emo2_boot::spine::talk_close_tests::spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded`: `'spine s5 ghost shutdown' did not complete within 10s (possible hang) — 待ちの打ち切り［進みは不明］`（1115 行）。S5 の降ろしが、総時間 10 秒の古い呼び名 `run_bounded` のまま残っていた（2.1 の例外の「`run_bounded` の残りの呼び手」）。
+2. `install::desk::overwrite_tests::an_overwritten_ghost_that_cannot_boot_falls_back_to_the_default_ghost`: 待ちの文言なし（`desk_overwrite_tests.rs:628`・`ghost_switch_boot_failed` が 0 件）。捕まえた記録では、A を降ろした（1401 ms）直後の展開の確定で `areka_nar` が `Commit で I/O に失敗: …\ghost\A: アクセスが拒否されました。 (os error 5)`（巻き戻し・確定 0）になり、上書きが `ok=false` で終わって A が古い中身のまま起き直した（だから既定ゴーストへ戻らない）。
+
+後片付けの 1 行（212 行）は 5 回目の始まりの掃除が前の回の残骸 `20188-160` の名前替えを拒まれたもので、赤ではない（「次の走行で回収する」の設計どおり）。
+
+直し（5.4 の 5 度目の開き直し）: ⑴ S5 の降ろしを `run_bounded_watching` へ移し、偽の SHIORI の呼び出しの数を目印にする（spine の `shutdown_bounded` と同じ形）。⑵ 同じ形の `ghost_session_restart_tests.rs` の `shutdown_bounded`（総時間 20 秒・4.3 の 7 のスタックを取った回で `［進みは不明］` だった）も、偽の SHIORI の観測口を返すようにして同じ形へ移した。これで areka の `--bin areka` の古い呼び名 `run_bounded` の呼び手は、`session_end_sync_send_tests.rs` の外側の 120 秒（固まりを切るだけ・5.4）と檻だけになった。⑶ 上書きの確定の os error 5 は 本番の名前替えが外のプロセスと競り合ったもので、areka の中の順序の取り違えではない。A を降ろした後に A のフォルダの中を開いている者は areka の中に居ない（調べで外れた）。拒んだのは外のプロセス（Windows Defender のリアルタイム保護と読む）で、書いたばかりのファイルを一瞬開くのが、負荷の下で上書きの入れ替えと重なった。`areka-nar` の `commit_one` は名前替えを 1 回しか試みず、Windows は配下のファイルが誰かに開かれているフォルダの名前替えを拒む（os error 5・ときに 32）。利用者の机でも起こりうる（上書きが失敗する。悪ければ巻き戻しの名前替えも失敗して、元の木が `.nar-work` に取り残される）。直しは境界を広げて `install.rs` に `rename_patiently` を足し、確定の 3 つの名前替えと巻き戻しの戻しの 1 つをそれに通した（os error 5・32 のときだけ 50 ms 刻みで約 2 秒まで試し直し、過ぎたら最後の失敗をそのまま返す・解放は試みない）。檻は `install::tests::commit::a_destination_held_briefly_by_another_process_still_commits`（宛先の中のファイルを約 200 ms 掴んで放すと確定が通る・待ちを 0 にすると赤）。5.3 の開き直しとして design の「設計の決定」に書いた。
+
+LOAD_RERUN2_RESULT
 
 ## 5. 所要時間
 

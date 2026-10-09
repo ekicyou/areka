@@ -2,7 +2,6 @@
 
 use std::rc::Rc;
 use std::sync::mpsc::TryRecvError;
-use std::time::Duration;
 
 use areka_kanade::CloseReason;
 use sample_ghost_kit::SampleRoot;
@@ -14,7 +13,9 @@ use super::*;
 use crate::boot_resolve::{BalloonRoute, GhostRoute};
 use crate::emo2_boot::frame::KanadeNoticeRx;
 use crate::emo2_boot::sample_test_support::acquire_emo2;
-use crate::emo2_boot::spine::{SpineHarness, run_bounded, spin_wait_until};
+use crate::emo2_boot::spine::{
+    Progress, ScriptedShioriHandle, SpineHarness, run_bounded_watching, spin_wait_until,
+};
 use crate::input_events::user_break::UserBreakWiring;
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring};
 use crate::placement::spawn::GhostWindowMarker;
@@ -203,9 +204,13 @@ fn commit_without_task_pool_logs_error() {
 
 /// 偽の SHIORI（標準の台本）・検体の複製・時計なし・記憶の置き場なしで入力の束を組む。
 /// 台本は呼ぶたびに新しい（周ごとに `OnInitialize` から `Unload` までを 1 本ずつ消費する）。
-fn scripted_inputs(sample: &SampleRoot, kanade_stop: Sender<KanadeNotice>) -> GhostBootInputs {
-    let (backend, _handle) = SpineHarness::standard_backend("\\s[0]\\e");
-    GhostBootInputs {
+/// 偽の SHIORI の観測口も返す（降ろしの待ちの目印＝呼び出しの数）。
+fn scripted_inputs(
+    sample: &SampleRoot,
+    kanade_stop: Sender<KanadeNotice>,
+) -> (GhostBootInputs, ScriptedShioriHandle) {
+    let (backend, handle) = SpineHarness::standard_backend("\\s[0]\\e");
+    let inputs = GhostBootInputs {
         wiring: emo2_boot::Emo2BootInputs {
             ghost_root: sample.folder().to_path_buf(),
             balloon_root: emo2_balloon(sample),
@@ -219,7 +224,8 @@ fn scripted_inputs(sample: &SampleRoot, kanade_stop: Sender<KanadeNotice>) -> Gh
         // 結線ありの腕を通すので使われない（fallback に落ちたら判定の説明書の面が赤になる）。
         helper_exe: PathBuf::from("ghost_session_restart_tests/使わない/helper.exe"),
         kanade_stop,
-    }
+    };
+    (inputs, handle)
 }
 
 fn emo2_balloon(sample: &SampleRoot) -> PathBuf {
@@ -234,7 +240,7 @@ fn boot_round(
     world: &mut World,
     sample: &SampleRoot,
     kanade_stop: Sender<KanadeNotice>,
-) -> GhostSession {
+) -> (GhostSession, ScriptedShioriHandle) {
     let descript = StartupDescriptValues {
         author_dpi: placement::AuthorDpi::DEFAULT,
         zorder_raw: None,
@@ -249,18 +255,16 @@ fn boot_round(
         dir: emo2_balloon(sample),
         folder: None,
     };
-    boot_ghost(
-        world,
-        scripted_inputs(sample, kanade_stop),
-        &descript,
-        &ghost,
-        &balloon,
-    )
+    let (inputs, handle) = scripted_inputs(sample, kanade_stop);
+    let session = boot_ghost(world, inputs, &descript, &ghost, &balloon);
+    (session, handle)
 }
 
-/// 降ろすのを有界に行う（seriko の join を含む・hang したら期限切れで赤）。
-fn shutdown_bounded(what: &str, session: GhostSession) {
-    run_bounded(what, Duration::from_secs(20), move || {
+/// 降ろすのを有界に行う（seriko の join を含む）。偽の SHIORI の呼び出し（OnClose・Unload）の数を進みの
+/// 目印にして待ち、30 秒進まなければ［止まった］で赤（spine の shutdown_bounded と同じ形）。
+fn shutdown_bounded(what: &str, session: GhostSession, shiori: &ScriptedShioriHandle) {
+    let calls = || shiori.call_count();
+    run_bounded_watching(what, Progress::Count(&calls), move || {
         session
             .shutdown(CloseReason::User { scope: 0 })
             .expect("降ろすのは成功する");
@@ -307,7 +311,7 @@ fn boots_twice_in_one_process_without_double_registration() {
 
     // ── 1 周目 ──
     let sample1 = acquire_emo2();
-    let session1 = boot_round(&mut world, &sample1, kanade_stop_tx.clone());
+    let (session1, shiori1) = boot_round(&mut world, &sample1, kanade_stop_tx.clone());
     // 1 周目のメニューへ余分な登記（7 枠すべてが本番で登記されるので一覧には現れない。残っていれば、
     // 2 周目の「シェル」枠の登記が置き換えの記録 `menu_registration_replaced` を残す＝0 件で新品と判定する）。
     crate::menu::register(
@@ -329,14 +333,14 @@ fn boots_twice_in_one_process_without_double_registration() {
     let round1_frames = world
         .get_non_send::<MenuWiring>()
         .map(|w| w.registry.registered_frames());
-    shutdown_bounded("1 周目を降ろす", session1);
+    shutdown_bounded("1 周目を降ろす", session1, &shiori1);
     // 窓を作る側は通さないので証は読んで落とす（消費先の型検査は本番の呼び手側で効く）。
     let closed = app_exit::close_windows_for_restart(&mut world);
     let closed_count = closed.closed();
 
     // ── 2 周目（新しい台本・新しい複製） ──
     let sample2 = acquire_emo2();
-    let (session2, round2_events) =
+    let ((session2, shiori2), round2_events) =
         capture_logs(|| boot_round(&mut world, &sample2, kanade_stop_tx.clone()));
     let round2_replaced = round2_events
         .iter()
@@ -379,7 +383,7 @@ fn boots_twice_in_one_process_without_double_registration() {
     );
 
     // ── 後片付け（有界） ──
-    shutdown_bounded("2 周目を降ろす", session2);
+    shutdown_bounded("2 周目を降ろす", session2, &shiori2);
     let _ = app_exit::close_windows_for_restart(&mut world);
 
     assert_eq!(
