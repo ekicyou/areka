@@ -109,3 +109,12 @@
 - 共有しうる相手: 「■ 既知の制限」を触る `winget-manifest-submission`・`release-code-signing`・`update-check-options`（同じ節の別の行）。`crates/areka-nar/` は今も触らない約束。
 - 議題（答えで作業が変わるものだけ）: 棚卸㉑のまま（⑴ 掴みを外すか既知の制限か／⑵ 窓 0 枚の区間に受け手を残すか説明書か／Windows を本当に終える実機の 1 回を開発者が行うか／⑴ を `balloon-font-file` の後に測るか）。加えて、⑵ だけを先に（`balloon-font-file` を待たずに）回すか。
 - 見つけた穴: なし。
+
+## 2026-10-10 `ghost-session-test-load-flake` からの申し送り（`areka-nar` の確定の名前替えに試し直しが入った）
+
+- `crates/areka-nar/src/install.rs` が変わった（87 行・105 行の「`install.rs` は変わっていない／触れていない」は古い）。確定（`commit_one`）の 3 つの名前替えと巻き戻し（`unwind`）の戻しの名前替えが、`rename_patiently` を通る。os error 5（アクセス拒否）と 32（共有違反）のときだけ 50 ms 刻みで約 2 秒まで試し直し、過ぎたら最後の失敗をそのまま返す。長く掴まれた宛先は今までどおり失敗する（nar-install の要件 6.6「解放は試みない」は保つ）。檻は `install::tests::commit::a_destination_held_briefly_by_another_process_still_commits`。
+- 元: 負荷の下で、上書きインストールの確定の `ghost\A` の名前替えが、外のプロセス（Windows Defender のリアルタイム保護が濃厚）が新しく書かれたファイルを一瞬開いたのと重なって拒まれ、インストールが失敗した（`.kiro/specs/completed/areka-P0-ghost-session-test-load-flake/load-repro.md` の 4.6 の 2）。
+- この spec の ⑴ に効くこと:
+  - 長く掴まれた宛先では、名前替え 1 つにつき約 2 秒待ってから失敗する。上書きの展開（`install/overwrite.rs` の `run_between`）は UI スレッドの上で同期に走るので、UI がその間（約 2 秒 × 拒まれた名前替えの数）塞がる。配置 1 つでも 3 つ続けば約 6 秒で、「応答なし」の 5 秒を越えうる。
+  - 背景のスレッドの展開（`install/worker.rs`）では、終了の後始末の待ちの上限 `EXIT_WAIT_LIMIT`（3 秒・完了 `ghost-install` 要件 8.1〜8.3）を、名前替えが 2 つ拒まれ続けると越えうる。⑵ の「終了と展開の重なり」を測るときは、この待ちも数に入れる。
+  - 「どちらの `rename` で止まるか」の問いは、試し直しの後も同じ形で残る（止まり方が「すぐ失敗」から「約 2 秒後に失敗」に変わっただけ）。
