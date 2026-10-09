@@ -15,12 +15,12 @@ SSP の課題管理（MantisBT・https://bts.shillest.net/ ）には、利用者
 - areka の側には、正典（ukadoc）の拾い残しを追う `doc/ukadoc-coverage/`（台帳と報告）と、SSP の MCP を調べた `doc/ssp-mcp/survey.md` がある。BTS を扱った文書は無い。
 
 ## Desired Outcome
-`doc/ssp-bts/` に、BTS の要望を areka の目線で整理した台帳がある。
+この spec のフォルダの中に、BTS の要望を areka の目線で整理した台帳がある。完了すると spec ごと `.kiro/specs/completed/areka-P0-ssp-bts-salvage/` へ移り、そこが最終の置き場になる。
 
-- 開発者やエージェントが「BTS の台帳を見て」と言われれば、`doc/ssp-bts/README.md` から辿って、主題ごとに要望を引ける。
+- エージェントが「BTS の台帳を見て」と言われれば、steering の 1 行から `.kiro/specs/completed/areka-P0-ssp-bts-salvage/bts-ledger.md` へ辿って、主題ごとに要望を引ける。
 - 各行から、SSP 側の結末（実装済みとその版・未対応・却下など）と、areka との関係（実装済み・brief あり・未着手・方針とぶつかる・対象外）が分かる。
 - 台帳の先頭に、いつ・どこまで（最新の番号）を見たかが書いてあり、後で続きから拾い直せる。
-- ふだんの spec 作業では読み込まれない（steering には置かない）。steering の `structure.md` に在りかを 1 行だけ書く。
+- ふだんの spec 作業では読み込まれず、開発者の目にも付かない。steering の `structure.md` に在りかと使いどころを 1〜2 行だけ書く。
 
 ## Approach
 **1 回きりの調査として、エージェントが読んで台帳を書く。取得や分類の道具（クレート・スクリプト）は作らない。**
@@ -31,12 +31,12 @@ SSP の課題管理（MantisBT・https://bts.shillest.net/ ）には、利用者
    - 「仕様どおり」「修正不要」などで閉じられていて、正典（ukadoc）が黙っている挙動を作者が言葉で説明していそうなもの。
    それ以外のバグ（SSP の実装の不具合）は、areka の不具合ではないので読まない。
 3. **中身を読む**: 対象の課題だけ、頁を開いて説明とコメントを読む。
-4. **台帳を書く**: 1 件 1 行。areka との関係は、`doc/ukadoc-coverage/` の台帳・`.kiro/steering/roadmap.md`・`.kiro/specs/`（完了分を含む）・記憶にある開発者の裁定と照らして決める。
-5. **起票の候補を挙げる**: 「未着手で、areka の方針とぶつからず、デスクトップマスコットの枠に収まる」ものを、README の末尾に短い一覧として挙げる。起票そのものはしない。
+4. **台帳を書く**（spec フォルダの `bts-ledger.md`）: 1 件 1 行。areka との関係は、`doc/ukadoc-coverage/` の台帳・`.kiro/steering/roadmap.md`・`.kiro/specs/`（完了分を含む）・記憶にある開発者の裁定と照らして決める。
+5. **起票の候補を挙げる**: 「未着手で、areka の方針とぶつからず、デスクトップマスコットの枠に収まる」ものを、台帳の末尾に短い一覧として挙げる。起票そのものはしない。
 
-置き場所の判断（2026-10-10 の起票時・要件の段で覆してよい）:
-- **本体は `doc/ssp-bts/`**。調査資料を `doc/` の下に置く先例（`doc/ukadoc-coverage/`・`doc/ssp-mcp/`）に合わせる。
-- **steering には置かない**。steering は spec 作業のたびに読まれる前提の場所で、数百行の台帳を置くと毎回の読み込みが膨らむ。代わりに `structure.md` に在りかを 1 行書き、指示されたエージェントが辿れるようにする。
+置き場所の判断（2026-10-10 開発者「目立つところに置きたくない。spec の最終置き場〔completed〕へ移ることを前提に、steering に指示を出す」）:
+- **本体はこの spec のフォルダの中**（`bts-ledger.md`。読み方・採り方・見た日付と最新の番号は同じファイルの先頭に書く）。完了のときに spec ごと `completed/` へ移る。完了済みの spec に調査の記録を残す先例がある（`completed/areka-P0-ghost-session-test-load-flake` の `load-repro.md`）。`doc/` の下には置かない（目立つ）。
+- **steering には本体を置かず、在りかの指示だけ書く**。`structure.md` に「SSP の BTS の要望を調べるときはここを読む」と、**完了後のパス**（`.kiro/specs/completed/areka-P0-ssp-bts-salvage/bts-ledger.md`）で書く。完了のときのフォルダ移動でパスがずれないよう、初めから移動後のパスで書き、完了の手順の参照パス修正で実在を確かめる。
 
 却下した案:
 - 取得と分類の道具を `ukadoc-survey` のように作る案 — 正典の増減を自動で追う仕組みは持たない、という決まりに反する。1 回の調査に対して大きすぎる。
@@ -46,10 +46,9 @@ SSP の課題管理（MantisBT・https://bts.shillest.net/ ）には、利用者
 ## Scope
 - **In**:
   - 全 808 件の一覧の通読と、上のふるい分け。
-  - 対象の課題の読み込みと、台帳（`doc/ssp-bts/`）の作成。
-  - 台帳の読み方・採り方・見た日付と最新の番号を書いた `doc/ssp-bts/README.md`。
-  - 起票の候補の短い一覧（README の末尾）。
-  - `.kiro/steering/structure.md` への在りかの 1 行。
+  - 対象の課題の読み込みと、台帳（spec フォルダの `bts-ledger.md`）の作成。先頭に読み方・採り方・見た日付と最新の番号を書く。
+  - 起票の候補の短い一覧（台帳の末尾）。
+  - `.kiro/steering/structure.md` への在りかの指示（完了後のパスで 1〜2 行）。
 - **Out**: 下の「Out of Boundary」。
 
 ## Boundary Candidates
