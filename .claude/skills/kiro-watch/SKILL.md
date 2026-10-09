@@ -74,10 +74,10 @@ Which desk a "済みました" closes: check `status.md` (merge holder or load-t
 - A load test that is **already running** (a session reports it without asking first, and the developer tells you to record it): `loadrunning -Id <id> -Name <name> -Repo <repo> -Purpose "<内容>"`. It only records the holder; **no stop requests are sent**. Stop requests are for "これから負荷テストを始めたい" (`loadtest`) only. While it is held, no merge starts; when the session reports "済みました", run `loaddone`. Never record one without the developer's say-so.
 - "Stop requests are not needed / revoke them" (e.g. the participants only do light local work): `unstop` (everyone) or `unstop -Id <id>`. It sets them back to working and queues the "止まらなくてよい" message for the outbox. Do not edit `state.json` by hand for this.
 - "Remove session X" / "X is gone": `cancel -Id <id>` or `leave -Id <id>`.
-- Message limit: the app stops sending to other sessions after about 10 messages since the developer last typed (error: "Paused until your user's next message"; the limit is undocumented and cannot be changed by any setting). When a send is refused:
+- Message limit: the app stops sending to other sessions after about 10 messages since the developer last typed (error: "Paused until your user's next message"; the limit is undocumented and no setting changes it). **An AskUserQuestion answer does NOT reset the counter** (tried 2026-10-09: still refused afterwards); only a message the developer types in this chat does. When a send is refused:
   1. Do not retry. Record the state change with the script as usual (the desk bookkeeping must not wait), and keep the unsent outbox entries.
-  2. Ask the developer with AskUserQuestion, **only to reset the counter**: one neutral question such as "送信が上限に達しました。続けてよろしいですか？" with the options "続ける" and "続ける（同）" (two options are required; treat both the same). Put no message content or decision in the options; the answer counts as the developer's next input.
-  3. After the answer, send the held entries in order. If the send is still refused, tell the developer in chat (the counter was not reset) and wait for their next typed message.
+  2. Tell the developer in chat, in one or two lines, who is waiting for what, and ask for any short message (e.g. "どうぞ").
+  3. After their message, send the held entries in order, most urgent first (a "どうぞ" before acknowledgements).
 
 ## Watching for stalls (only when a message arrives or the developer asks)
 - A merge holder that has not reported: check `gh pr list --state all --limit 5` in that repo (`-R owner/repo` for another repo). If the PR is merged, run `merged` with its number and the new main commit and tell the holder you recorded it.
