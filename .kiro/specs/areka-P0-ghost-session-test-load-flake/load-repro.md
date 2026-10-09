@@ -1151,7 +1151,26 @@ F が偽だった赤 8 件のうち 6 件は、後の待ち（E・G・D・I）�
 
 直し（5.4 の 5 度目の開き直し）: ⑴ S5 の降ろしを `run_bounded_watching` へ移し、偽の SHIORI の呼び出しの数を目印にする（spine の `shutdown_bounded` と同じ形）。⑵ 同じ形の `ghost_session_restart_tests.rs` の `shutdown_bounded`（総時間 20 秒・4.3 の 7 のスタックを取った回で `［進みは不明］` だった）も、偽の SHIORI の観測口を返すようにして同じ形へ移した。これで areka の `--bin areka` の古い呼び名 `run_bounded` の呼び手は、`session_end_sync_send_tests.rs` の外側の 120 秒（固まりを切るだけ・5.4）と檻だけになった。⑶ 上書きの確定の os error 5 は 本番の名前替えが外のプロセスと競り合ったもので、areka の中の順序の取り違えではない。A を降ろした後に A のフォルダの中を開いている者は areka の中に居ない（調べで外れた）。拒んだのは外のプロセス（Windows Defender のリアルタイム保護と読む）で、書いたばかりのファイルを一瞬開くのが、負荷の下で上書きの入れ替えと重なった。`areka-nar` の `commit_one` は名前替えを 1 回しか試みず、Windows は配下のファイルが誰かに開かれているフォルダの名前替えを拒む（os error 5・ときに 32）。利用者の机でも起こりうる（上書きが失敗する。悪ければ巻き戻しの名前替えも失敗して、元の木が `.nar-work` に取り残される）。直しは境界を広げて `install.rs` に `rename_patiently` を足し、確定の 3 つの名前替えと巻き戻しの戻しの 1 つをそれに通した（os error 5・32 のときだけ 50 ms 刻みで約 2 秒まで試し直し、過ぎたら最後の失敗をそのまま返す・解放は試みない）。檻は `install::tests::commit::a_destination_held_briefly_by_another_process_still_commits`（宛先の中のファイルを約 200 ms 掴んで放すと確定が通る・待ちを 0 にすると赤）。5.3 の開き直しとして design の「設計の決定」に書いた。
 
-LOAD_RERUN2_RESULT
+### 4.7 2 件を直した後の負荷の回
+
+記録 `target\load-flake\after-20261009-182658\`（`progress.txt` は `target\load-flake\final-load-20261009-182655\`・`commit 844c15dd dirty=0`）。2026-10-09 18:26〜19:13。4.1 と同じ引数。負荷の前の CPU は平均 3.3%・最大 6.8%、最中は平均 92.0%・最大 96.0%。止めた後の負荷の子の残りは 0。この回から、開発者の指示で調停役の許可は取らずに回した。
+
+| 回 | 所要時間（秒） | 結果 | `［止まった］` | `［進んではいた］` | `［進みは不明］` | 後片付けの行（うち os error 5） |
+|---|---|---|---|---|---|---|
+| 1 | 528.4 | 2,890 通過・4 失敗 | 4 | 0 | 0 | 0 |
+| 2 | 530.2 | 2,894 通過・0 失敗 | 0 | 0 | 0 | 0 |
+| 3 | 592.1 | 2,894 通過・0 失敗 | 0 | 0 | 0 | 1（1） |
+| 4 | 94（落ちた） | `0xc0000005`（`STATUS_ACCESS_VIOLATION`） | 0 | 0 | 0 | 1（1） |
+| 5 | 1004.7 | 2,865 通過・29 失敗 | 31 | 0 | 0 | 0 |
+
+- 1 回目の 4 件と 5 回目の 27 件は許す赤。どれも自分の `［止まった］` の行（31 行がすべて持ち主に付いた）を持ち、確かめの食い違いは待ちが届かなかった印だけ。呼び出しの列は期待と同じかその頭の部分で、並びの入れ替えは 0 件。
+- 許さない赤 2 件（5 回目・待ちの文言なし）: `shell_balloon_switch_session_lap_tests::menu_switch_to_the_current_shell_rebuilds_and_raises_both_events` と `dump_balloon_gpu_tests::scope_two_is_no_such_scope_and_calls_do_not_disturb_the_ghost`。旗はどれも期待どおりで、呼び出しの列に `GET OnBalloonTimeout` が 1 件割り込んだだけ。4.5 の直しで偽の SHIORI は台本に無い `OnBalloonTimeout` に 204 で答えるようになったので panic はしなくなったが、記録には載るので、時刻しだいで列の比べが食い違った。
+- 4 回目は 94 秒で `0xc0000005` で落ちた（ok 522 本・60 秒を越えた行も panic も無い）。落ちる前は `frame::transition_branch_tests` で、続く `visibility_integration_tests`（各スレッドで MTA の Compositor を作る）の頃と読める。範囲外の既知の `areka-test-threads-av`（`.kiro/specs/areka-P0-areka-test-threads-av/brief.md`・この記録の 4.2 と同じ扱い）。この回は赤の数に入れない。
+- 後片付けの行（3・4 回目の 1 行ずつ）は、検体の作業フォルダの残骸の名前替えが外の掴みで拒まれたもの（「次の走行で回収する」）。赤にはつながっていない。仕込み以外の `areka_nar` の確定の失敗は 5 回とも 0 件（5 回目の 1 件は、宛先を掴み続けて確定の失敗を確かめる `a_failed_commit_…` の想定どおりの記録）。
+
+直し（5.4 の 6 度目の開き直し）: 偽の SHIORI（`ScriptedShioriBackend::get`）は、台本に無い `OnBalloonTimeout` を記録にも門にも載せずに 204 で答える。台詞の後のバルーンの時間切れは実時間で決まり、来るかどうかが時刻しだいの呼び出しで、足場のテストが確かめる列の外にある（送る正しさは areka-kanade のテストが固定）。台本に書いたテストには今までどおり記録する。檻 `an_unscripted_balloon_timeout_is_answered_without_a_record`（`spine_hold_tests.rs`）を足した。静かな机で `--bin areka` の全部が 2,897 本で緑。
+
+LOAD_RERUN3_RESULT
 
 ## 5. 所要時間
 

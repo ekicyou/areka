@@ -248,6 +248,13 @@ impl ShioriBackend for ScriptedShioriBackend {
         references: &[String],
         status: Option<&str>,
     ) -> Result<Option<String>, RequestError> {
+        // 台本に無い OnBalloonTimeout は、記録にも門にも載せずに 204 で答える。台詞の後のバルーンの時間切れ
+        // （既定 30 秒）は実時間で決まり、負荷の下では降ろす前や呼び出しの列の途中に割り込む＝来るかどうかが
+        // 時刻しだいの呼び出しで、足場のテストが確かめる列の外（送る正しさは areka-kanade のテストが固定）。
+        // 台本に書いたテストには今までどおり記録する（areka-P0-ghost-session-test-load-flake の負荷の回）。
+        if id == "OnBalloonTimeout" && self.get_scripts.get(id).is_none_or(VecDeque::is_empty) {
+            return Ok(None);
+        }
         record_status(&self.status_calls, id, status);
         self.calls
             .lock()
@@ -261,12 +268,7 @@ impl ShioriBackend for ScriptedShioriBackend {
             .get_mut(id)
             .and_then(VecDeque::pop_front)
             // 回数は定常到達・台詞の数で決まる＝台本に無ければ homeurl も OnTranslate も 204 で答える。
-            // OnBalloonTimeout も同じ: 台詞の後のバルーンの時間切れ（既定 30 秒）は実時間で決まり、負荷の下では
-            // 降ろす前に越えうる（areka-P0-ghost-session-test-load-flake の最後の負荷の回）。
-            .or_else(|| {
-                (id == HOMEURL_RESOURCE || id == "OnTranslate" || id == "OnBalloonTimeout")
-                    .then_some(Ok(None))
-            })
+            .or_else(|| (id == HOMEURL_RESOURCE || id == "OnTranslate").then_some(Ok(None)))
             .unwrap_or_else(|| {
                 panic!("ScriptedShioriBackend::get(\"{id}\"): no scripted response left")
             })

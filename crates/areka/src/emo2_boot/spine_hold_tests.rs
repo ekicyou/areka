@@ -168,3 +168,28 @@ fn call_count_skips_status_queries_and_counts_every_other_call() {
     assert_eq!(status_then_count(&mut backend), 3);
     assert_eq!(handle.non_status_calls().len(), 3);
 }
+
+/// 台本に無い `OnBalloonTimeout`（実時間のバルーンの時間切れ）は、記録に載せずに 204 で答える。
+/// 台本に書いた `OnBalloonTimeout` は今までどおり記録して台本の応答を返す。
+#[test]
+fn an_unscripted_balloon_timeout_is_answered_without_a_record() {
+    let refs = ["\\0台詞\\e".to_string(), "0".to_string()];
+    let (mut plain, plain_handle) = scripted(None);
+    assert!(matches!(
+        plain.get("OnBalloonTimeout", &refs, None),
+        Ok(None)
+    ));
+    assert_eq!(plain_handle.call_count(), 0, "記録に載らない");
+
+    let (mut asked, asked_handle) = ScriptedShioriBackend::builder()
+        .get("OnBalloonTimeout", Ok(Some("台本".to_string())))
+        .build();
+    assert!(matches!(asked.get("OnBalloonTimeout", &refs, None), Ok(Some(s)) if s == "台本"));
+    assert_eq!(
+        asked_handle.non_status_calls(),
+        [RecordedCall::Get {
+            id: "OnBalloonTimeout".to_string(),
+            references: refs.to_vec(),
+        }]
+    );
+}
