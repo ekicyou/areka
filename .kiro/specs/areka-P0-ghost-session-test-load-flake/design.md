@@ -21,7 +21,7 @@
 
 - 本番のゴーストの切り替え・起こし直し・降ろしの振る舞いの変更（再現で本物の競合が見つかった場合を除く）。
 - `tools/test-all.ps1` の並列度の変更、回し直しで赤を隠す仕組み。
-- 赤の観測が無い待ち（他の crate の同じ名前の `run_bounded`／`join_bounded`・`install/` の自前の `join_bounded`・`spine_*_tests.rs` が自前で持つ Tick 注入の待ち・`session_end_deadline_tests.rs` が確かめる本番の実時間の締切）。再現の手順で赤になったものだけを対象に加える（例: 通しの巡回の段の駆動器は再現で赤だったので加えた・5.4。main の取り込みの後の再現（`load-repro.md` の 4.3）で赤だった `spine_talk_close_tests.rs` の S2 の待ちと S5 の起動の 5 呼び出しの待ちも加え、`session_end_sync_send_tests.rs` の送信の 10 秒の期限は外した・5.4）。
+- 赤の観測が無い待ち（他の crate の同じ名前の `run_bounded`／`join_bounded`・`spine_*_tests.rs` が自前で持つ Tick 注入の待ち・`session_end_deadline_tests.rs` が確かめる本番の実時間の締切）。再現の手順で赤になったものだけを対象に加える（例: 通しの巡回の段の駆動器は再現で赤だったので加えた・5.4。main の取り込みの後の再現（`load-repro.md` の 4.3）で赤だった `spine_talk_close_tests.rs` の S2 の待ちと S5 の起動の 5 呼び出しの待ちも加え、`session_end_sync_send_tests.rs` の送信の 10 秒の期限は外した・5.4。負荷の回（`load-repro.md` の 4.5）で赤だった `install/desk_pick_tests.rs` の自前の `join_bounded` を加え、同じ形の `install/fetch_url_tests.rs` も同じく芯で待つ形にした。`mcp/dump_surface_tests.rs` の `abandoned_while_encoding_drops_the_pair_without_ui_errors` の自前の 20 秒の待ちは、仕事の閉包に入った数を目印にした `wait_recv` へ移した（4.5）・5.4）。
 - `zorder-chain-residue` に残る族、`areka-test-threads-av` の範囲。
 
 ## Boundary Commitments
@@ -143,7 +143,7 @@ graph TB
 | 10 os error 5 | 再現の記録で原因を見分けてから。同時の利用によるなら 2 か所を直す（下の「WorkDirCleanup」） |
 | 所要時間の目安（6.5） | 直した後が直す前の 1.20 倍を超えたら「目立って延びた」（下の「Performance」。初めは 1.10 倍だったが、2026-10-08 に開発者が 1.20 倍へ改めた＝GPU の装置の許可の数との釣り合い・`load-repro.md` の 5） |
 | 負荷の下に残る赤（6.1） | 2026-10-09 に開発者が案 A を選んだ。負荷の再現（論理 CPU の 2 倍の負荷）の下に残る、ゴーストの足場と GPU の足場を使うテストの `［止まった］`（多くは進み 0 回・待ち始めから 30.0 秒）は、既知の残りとして許す。元は、最初の GPU のテストの後にプロセスに残る Intel のドライバの DLL と D3D の検証層が、どのスレッドの生まれと消えでもローダーの錠の中で初期化を受けること（`load-repro.md` の 4.4）。装置の使い回しと検証層を外すことは効かず、WARP への置き換えは採らない（テストは実の GPU）。GPU のテストを別のプロセスへ分けても、負荷は同じなので消えない。許さない赤は、待ちの文言の無い赤・`［進みは不明］`・`［進んではいた］`・取り違えのある `［止まった］` と、静かな机と `tools/test-all.ps1` のすべての赤 |
-| 上書きの確定の名前替えと外のプロセス（5.3 の開き直し） | 最後の負荷の回（`load-repro.md` の 4.6 の 2）の上書きの赤は、`areka-nar` の確定の名前替えを外のプロセス（ウイルス対策のリアルタイム保護と読む）が一瞬拒んだもので、本番の競り合いだった。`areka-nar` は並走の spec が触らないので、境界を広げて根から直す。`install.rs` の `rename_patiently` が、確定（`commit_one`）の 3 つの名前替えと巻き戻し（`unwind`）の戻しの 1 つを、os error 5（アクセス拒否）と 32（共有違反）のときだけ 50 ms 刻みで約 2 秒（`Instant` で測る期限）まで試し直し、過ぎたら最後の失敗をそのまま返す。他の失敗は待たない。上書きの展開は UI スレッドの上で同期に走るので、長く掴まれた宛先では UI が最大で約 2 秒（2 手目の失敗と戻しの両方なら約 4 秒）塞がる（「応答なし」の 5 秒には届かない）。nar-install の要件 6.6（解放は試みない）は保つ: 掴み手に手を出さず短い掴みを待つだけで、長く掴まれた宛先（起動中の `shiori.dll`）は今までどおり失敗する（約 2 秒遅れるだけ）。テストの待ちではなく本番の名前替えなので要件 2.3 の外で、要件 4.4 の「本物の競合の修正」に当たる。切替・起こし直し・降ろしの振る舞いは変えない。檻は `a_destination_held_briefly_by_another_process_still_commits`（直す前に赤・直した後に緑＝要件 4.1） |
+| 上書きの確定の名前替えと外のプロセス（5.3 の開き直し） | 負荷の回（`load-repro.md` の 4.6 の 2）の上書きの赤は、`areka-nar` の確定の名前替えを外のプロセス（ウイルス対策のリアルタイム保護と読む）が一瞬拒んだもので、本番の競り合いだった。`areka-nar` は並走の spec が触らないので、境界を広げて根から直す。`install.rs` の `rename_patiently` が、確定（`commit_one`）の 3 つの名前替えと巻き戻し（`unwind`）の戻しの 1 つを、os error 5（アクセス拒否）と 32（共有違反）のときだけ 50 ms 刻みで約 2 秒（`Instant` で測る期限）まで試し直し、過ぎたら最後の失敗をそのまま返す。他の失敗は待たない。上書きの展開は UI スレッドの上で同期に走るので、拒まれ続けた名前替え 1 つにつき UI が最大で約 2 秒塞がる。1 回の上書きの名前替えは、配置（本体 1 つと同梱のバルーンごとに 1 つ・`plan.rs` の `build_plan`）ごとに確定で最大 2 つ（宛先が在れば「宛先 → 退避」「作業フォルダ → 宛先」、無ければ 1 つ）と、確定が失敗したときに退避した配置ごとの戻しで 1 つ。確定は最初の失敗で止まるが、試し直しの末に通った名前替えもそれぞれ最大で約 2 秒かかりうるので、上限は「約 2 秒 × 名前替えの数」になる（配置 1 つなら名前替えは最大 3 つ）。ふつうの長い掴み（起動中の `shiori.dll`）は本体の 1 手目で失敗し、戻すものが無いので約 2 秒。nar-install の要件 6.6（解放は試みない）は保つ: 掴み手に手を出さず短い掴みを待つだけで、長く掴まれた宛先（起動中の `shiori.dll`）は今までどおり失敗する（約 2 秒遅れるだけ）。テストの待ちではなく本番の名前替えなので要件 2.3 の外で、要件 4.4 の「本物の競合の修正」に当たる。切替・起こし直し・降ろしの振る舞いは変えない。檻は `a_destination_held_briefly_by_another_process_still_commits`（直す前に赤・直した後に緑＝要件 4.1） |
 
 ### 2.6 の満たし方
 
@@ -162,6 +162,12 @@ graph TB
 
 - `spine_wait.rs` へ移す `SPIN_WAIT` まわりの doc の「追い越しうる時刻には必ず頭打ちを置く」の文に、足場の時計はその例外であること（受け手が締切も後戻りする状態も持たない）と理由を足す。`spine` の族の Tick 注入の待ち（受け手が kanade で、頭打ちが要る）の決まりは変えない。
 - `pump_talking_until` の doc に「`done` には後戻りしない観測（呼び出しの記録が増えた・切替の予約が下りた、など）だけを渡す。台詞の途中の状態を待たない」と書く。これは doc の約束で、檻では固定しない（今の呼び手 9 ファイルの条件は、設計の検証で後戻りしないことを確かめてある）。
+
+時刻しだいの呼び出しの扱い（偽の SHIORI の決まり）:
+
+- 台本に無い `OnBalloonTimeout` は、記録にも門にも載せずに 204 で答える（`spine.rs` の `ScriptedShioriBackend::get`）。台本に書いた `OnBalloonTimeout` は今までどおり記録する。
+- 理由: 台詞の後のバルーンの時間切れは実時間で決まるので、来るかどうかが壁時計しだいの呼び出しになり、足場のテストが確かめる呼び出しの列の外にある。送る正しさは areka-kanade のテストが固定している。
+- 檻は `an_unscripted_balloon_timeout_is_answered_without_a_record`（`spine_hold_tests.rs`）。経緯は `load-repro.md` の 4.5（台本に無い名前で偽の SHIORI が panic した）と 4.7（204 で答えても記録に載り、列の比べが食い違った）。
 
 ## File Structure Plan
 
@@ -192,6 +198,9 @@ tools/
 - 条件つき（再現で赤になったファイルだけ）: `ghost_session_switch_tests.rs`・`install/desk_overwrite_tests.rs`・`emo2_boot/ghost_switch_boot_event_tests.rs`・`emo2_boot/frame/switch_tests.rs`（テストのファイル）。足場の呼び名を保つので、既定では触らない。
 - 条件つき（5.2）: `crates/sample-ghost-kit/src/devroot.rs` と兄弟のテスト `devroot_sweep_tests.rs`。
 - 条件つき（2.7）: `crates/wintf/src/ecs/widget/bitmap_source/task_pool.rs`（作り口の足し算）と、下の「足場のスレッドの絞り」が挙げる、作業のプールと GPU の装置を作るテストのファイル。
+- `crates/areka-nar/src/install.rs`・`crates/areka-nar/src/install_commit_tests.rs` — 競合の修正（5.3 の開き直し・設計の決定「上書きの確定の名前替えと外のプロセス」）。`rename_patiently` を足して確定（`commit_one`）と巻き戻し（`unwind`）の名前替えを通し、檻 `a_destination_held_briefly_by_another_process_still_commits` を兄弟のテストに足す。
+- `tools/perf/check-quiet.ps1` — 重いプロセスが 0 件のときに落ちていたので、守りの 2 行を足す（タスク 1.3）。
+- `.kiro/steering/tech.md` — Testing の節に、テストの待ちの決まりと、負荷の下で許す赤・許さない赤の注を足す（設計の決定「負荷の下に残る赤」）。
 
 ### 同じウェーブの約束の外で触るファイル
 
@@ -203,6 +212,9 @@ tools/
 | `crates/sample-ghost-kit/src/devroot.rs`・`devroot_sweep_tests.rs` | 変更 | 再現の記録が同時の利用による os error 5 を示したときだけ。触る前に、同じウェーブでこの crate を触る spec が無いことを確かめる |
 | `crates/wintf/src/ecs/widget/bitmap_source/task_pool.rs` | 変更（足し算だけ） | 2.7 の条件が記録で満たされたときだけ。触る前に、同じウェーブでこのファイルを触る spec が無いことを確かめる |
 | GPU の装置を作るテストのファイル（`emo2_boot/frame_visibility_integration_tests.rs`・`emo2_boot/frame_attach_tests.rs`・`emo2_boot/film_playback_e2e_tests.rs`・`mcp/dump_surface_gpu_test_support.rs`）と、作業のプールを作る切替の族の外のテストのファイル（`boot_shell_tests.rs`・`mcp/dump_surface_tests.rs`・`update/` の下の 2 つ） | 変更（テストの持ち物だけ） | 同上。`emo2_boot/frame/` の下ではない（`emo2_boot/` の直下のテストのファイル） |
+| `crates/areka-nar/src/install.rs`・`crates/areka-nar/src/install_commit_tests.rs` | 変更（本番の競合の修正と檻） | 負荷の回（`load-repro.md` の 4.6 の 2）で外のプロセスとの競り合いが見つかったとき。並走の spec がこの crate を触らないので境界を広げた |
+| `tools/perf/check-quiet.ps1` | 変更（守りの 2 行） | 静かさの確かめが、重いプロセス 0 件のときに落ちたので（タスク 1.3） |
+| `.kiro/steering/tech.md` | 変更（Testing の注） | 開発者の裁定（案 A・6.1）で、許す赤と許さない赤を書く |
 
 ## System Flows
 
@@ -248,10 +260,10 @@ flowchart TD
 | 3.1 | 文言に何を・何秒・進んだか | WaitCore | `WaitFailure` の `Display` | — |
 | 3.2 | 止まったら止まったと言う | WaitCore | `WaitFailure::Stalled` | 打ち切りの決め方 |
 | 3.3 | どの待ちにも上限 | WaitCore | `SPIN_WAIT`・`WAIT_CAP` | 打ち切りの決め方 |
-| 4.1 | 本物の競合はテストを添えて直す | 競合の扱い | 「競合の扱い」の手順 | — |
+| 4.1 | 本物の競合はテストを添えて直す | 競合の扱い | 「競合の扱い」の手順・檻 `a_destination_held_briefly_by_another_process_still_commits`（`areka-nar`） | — |
 | 4.2 | 決定論で起こせなければ経路を記録 | 競合の扱い | `load-repro.md` の「競合」 | — |
 | 4.3 | 他の spec の本番のファイルに触る前に止める | 競合の扱い | 止めて報告 | — |
-| 4.4 | 競合の修正を除き本番を変えない | 全体 | 本番のファイルの差分 0 | — |
+| 4.4 | 競合の修正を除き本番を変えない | 全体 | 競合の修正（areka-nar）と 2.7 の足し算を除き差分 0 | — |
 | 5.1 | 展開の後片付けの利用の数え上げと関わり | LoadRepro・WorkDirCleanup | `load-repro.md` の「os error 5」 | — |
 | 5.2 | 同時の利用なら妨げない形へ | WorkDirCleanup | 破棄の順・`gc-` の札 | — |
 | 5.3 | テストの側でなければ記録して外す | WorkDirCleanup | 見分けの表 | — |
@@ -271,9 +283,10 @@ flowchart TD
 | 待ち | 目印を作れない理由 |
 |---|---|
 | `ghost_session_restart_tests.rs` の `run_input_until` | 待つ相手が作業プールで、進みを数える口がテストの側に無い。総時間は 10 秒から共通の `SPIN_WAIT`（30 秒）になり、空回しは 60 ms で CPU を返す形になる |
-| `spine_*_tests.rs` が `spin_wait_until` を直接呼ぶ待ち・自前の Tick 注入の待ち（約 20 か所） | 待つ相手が描画と台詞の再生で、SHIORI の呼び出しを伴わない。赤の観測も無い（Non-Goals）。ただし通しの巡回の段の駆動器（`spine_conformance_support.rs` の `run_stage_with`）は除く。直す前の再現で赤だった（`load-repro.md` の 3.7 の場所 34・4.3）ので、この例外から外して待ちの芯へ移した。目印は SHIORI の呼び出しの数（`Status` を除く）と台詞の起動・表示指令の数の和（5.4）。`spine_talk_close_tests.rs` の S2 の 1 つ目の待ち（シェル面指令＋テキスト cue の到達）と S5 の起動の 5 呼び出しの待ちも除く。main の取り込みの後の再現で `［進みは不明］` と文言の無い赤だった（`load-repro.md` の 4.3）ので待ちの芯へ移した。目印は S2 が SHIORI の呼び出しの数と受けた表示指令の数の和、S5 が SHIORI の呼び出しの数（5.4） |
+| `spine_*_tests.rs` が `spin_wait_until` を直接呼ぶ待ち・自前の Tick 注入の待ち（約 20 か所） | 待つ相手が描画と台詞の再生で、SHIORI の呼び出しを伴わない。赤の観測も無い（Non-Goals）。ただし通しの巡回の段の駆動器（`spine_conformance_support.rs` の `run_stage_with`）は除く。直す前の再現で赤だった（`load-repro.md` の 3.4 の場所 34・4.3）ので、この例外から外して待ちの芯へ移した。目印は SHIORI の呼び出しの数（`Status` を除く）と台詞の起動・表示指令の数の和（5.4）。`spine_talk_close_tests.rs` の S2 の 1 つ目の待ち（シェル面指令＋テキスト cue の到達）と S5 の起動の 5 呼び出しの待ちも除く。main の取り込みの後の再現で `［進みは不明］` と文言の無い赤だった（`load-repro.md` の 4.3）ので待ちの芯へ移した。目印は S2 が SHIORI の呼び出しの数と受けた表示指令の数の和、S5 が SHIORI の呼び出しの数（5.4） |
 | `session_end_sync_send_tests.rs` の送信（例外ではなく、時刻の締切を外した待ち） | 送信の 10 秒の期限が「輪になった」の見分けの代わりになっていて、負荷で解き手のスレッドの始まりが遅れると輪でないのに期限で切れて赤だった（`load-repro.md` の 4.3）。送信は期限なし、見分けは順序（後始末の戻りと送信の戻りの前後・後始末の後に送信がまだ待っているか）だけ、固まりは外側の `run_bounded` が切る（5.4） |
-| 古い呼び名 `run_bounded` の残りの呼び手 | 数えられる進みが無い（別のスレッドの処理が終わるのを待つだけ）。`join_bounded`（「spine seriko join」・S5 の seriko join）は除く。負荷の下で見張りのスレッドが始まれず `［進みは不明］` の赤だった（`load-repro.md` の 4.3 の 7）ので、見張りのスレッドをやめ、body が終わったか（`ActorHandle::is_finished` の 0→1）を目印に芯の `wait_until` で待つ形にした。終わった後の `join` は OS のスレッドの後始末だけで打ち切らない（5.4） |
+| 古い呼び名 `run_bounded` の残りの呼び手 | 数えられる進みが無い（別のスレッドの処理が終わるのを待つだけ）。`join_bounded`（「spine seriko join」・S5 の seriko join）は除く。負荷の下で見張りのスレッドが始まれず `［進みは不明］` の赤だった（`load-repro.md` の 4.3 の 7）ので、見張りのスレッドをやめ、body が終わったか（`ActorHandle::is_finished` の 0→1）を目印に芯の `wait_until` で待つ形にした。終わった後の `join` は OS のスレッドの後始末だけで打ち切らない（5.4）。S5 の降ろしと、起こし直しのテストの `shutdown_bounded` も除く。負荷の回で `［進みは不明］` だった（`load-repro.md` の 4.6）ので `run_bounded_watching` へ移し、偽の SHIORI の呼び出しの数を目印にした（5.4）。残る呼び手は `session_end_sync_send_tests.rs` の外側の 120 秒（固まりを切るだけ）と檻だけ |
+| `install/desk_overwrite_tests.rs` の `running()` の、起動の後の記憶の書き込みの待ち | `PersistWiring` の publisher の `barrier()` を `run_bounded_watching` で `Progress::Unknown` として待つ（5.6）。barrier は書き手が書き終えたら返事をするだけで、数えられる進みが無い |
 
 ## Components and Interfaces
 
@@ -446,7 +459,7 @@ impl ScriptedShioriHandle {
 }
 ```
 
-- Postconditions: 戻り値の意味は今と同じ（届けば `true`）。`false` のときは必ず、標準エラーに `待ちの打ち切り` で始まる 1 行がある。
+- Postconditions: 戻り値の意味は今と同じ（届けば `true`）。`false` のときは必ず、標準エラーに理由の 1 行がある。待ちが届かなかったときは `待ちの打ち切り` で始まる 1 行。`wait_steady` に `Steady` 以外の通知が先に届いたときは、届いた通知を `{:?}` で書いた 1 行（`定常到達を待っていた「…」に、先に別の通知が届いた: …`）。
 
 **Implementation Notes**
 
@@ -482,7 +495,7 @@ impl ScriptedShioriHandle {
    - `mcp/dump_surface_gpu_test_support.rs` の `GpuRig::new`（`dump_surface_gpu_tests.rs`・`dump_balloon_gpu_tests.rs` の足場）
    - `shell_balloon_switch_session_lap_tests.rs` の `lap_rig_of`（lap の足場 `LapRig`。`shell_balloon_switch_session_abort_tests.rs` などからも呼ばれる）
    数えの置き場は `spine_wait.rs`（`std` だけで書け、どの足場からも届く）。`wintf` の中のテスト（別の実行ファイル）は対象外。
-3. **足場の同時の数（RigPermit）**: 試して外した。main の取り込みの後に下の元の形で入れて全体の回（`load-repro.md` の 4.4）を回したが、負荷の下の赤は減らず（14 件）、静かな机は main の先端の 1.32 倍に延びたので外した（赤の元は足場の数でなく、プロセスに残る GPU のドライバの DLL がスレッドの生まれと消えのたびに錠の中で初期化を受けること・4.4）。元の形の記録: 1・2 の後の再現で `［進んではいた］` の赤が残ったときだけ、元の形で足す（`SwitchRig::new` の最初でプロセスに 1 つの数えから許可を取り、`SwitchRig` の最後の欄として持って破棄で返す。同時の数は `std::thread::available_parallelism()` の半分（最小 1）。許可を待つ時間は待ちの時間に数えない）。
+3. **足場の同時の数（RigPermit）**: 試して外した。main の取り込みの後に下の元の形で入れて全体の回（`load-repro.md` の 4.4）を回したが、負荷の下の赤は減らず（14 件）、静かな机は main の先端の 1.32 倍に延びたので外した（赤の元は足場の数でなく、プロセスに残る GPU のドライバの DLL がスレッドの生まれと消えのたびに錠の中で初期化を受けること・4.4）。元の形の記録: 1・2 の後の再現で `［進んではいた］` の赤が残ったときだけ、元の形で足すとしていた（試して外した・4.4）。元の形は、`SwitchRig::new` の最初でプロセスに 1 つの数えから許可を取り、`SwitchRig` の最後の欄として持って破棄で返す。同時の数は `std::thread::available_parallelism()` の半分（最小 1）。許可を待つ時間は待ちの時間に数えない。
 
 絞りの後の残り: 1・2 の後も、負荷の再現の下ではゴーストの足場と GPU の足場を使うテストに `［止まった］` の赤が残る（5 回に十数件・`load-repro.md` の 4.4）。スレッドの生まれと消えの数を減らしても、プロセスに残る GPU のドライバの DLL が 1 回ごとに錠の中で初期化を受ける形は変わらないためで、これ以上はテストの側で絞らない。この残りは 6.1 の許す赤として記録する（設計の決定「負荷の下に残る赤」）。
 
@@ -627,7 +640,7 @@ flowchart TD
 
 ### 足場の檻
 
-8. 時計の先行の檻（`ghost_switch_talk_clock_tests.rs`・2.6）: A の台本で B への切替を始め、切替の握手の SHIORI の呼び出しを `HoldAt` で固める（相手が進めない状態を、時間でなく固まりで作る）。固まっている間に足場の時計を 30,000 ms（`close_talk_deadline_ms`）を大きく越えて進める。解いた後、B が定常に着き、A と B の呼び出しの並びが固めない場合の期待と同じで、error の記録（`change_deadline_exceeded` を含む）が 0 件であること。足場の時刻が kanade の合成の締切に届く結線が後から入ると赤になる。
+8. 時計の先行の檻（`ghost_switch_talk_clock_tests.rs`・2.6）: A の台本で B への切替を始め、切替の握手の `GET OnGhostChanging` を足場の栓 `Stall`（`FakeShiori::ScriptedStalled`）で止める（相手が進めない状態を、時間でなく固まりで作る）。`Stall` は解かれた後は台本どおりに答えるので、呼び出しの並びは止めない回と同じになる（spine の `HoldAt` は解かれた後に時間切れの失敗を返して kanade を止めるので使わない・tasks の 3.3 の注）。止まっている間に足場の時計を 30,000 ms（`close_talk_deadline_ms`）の 3 倍以上進める。解いた直後、時計をそれ以上進める前に A の kanade へ状態の問い合わせを送って返事を待ち、A に UNLOAD が来ていないこと（締切 `change_deadline_exceeded` が切れていない証。その error は kanade のスレッドで出て捕捉に映らないので、呼び出しの記録で見る）を確かめる。その後、B が定常に着き、A と B の呼び出しの並びが止めない回と同じで、呼び手のスレッドの error の記録が 0 件であること。足場の時刻が kanade の合成の締切に届く結線が後から入ると赤になる。
 9. 足場の待ちが届かないとき、標準エラーに出す文言の元（`WaitFailure`）が `what` に呼び出しの場所を持つ（`pump_until` を、決して真にならない条件と、差し替えた短い上限で呼ぶ私的な口で確かめる。30 秒は待たない）。
 10. 進みの目印の檻: 偽の SHIORI の `status()` を何回呼んでも `call_count()` と足場の目印が増えないこと。`ConnectFail` で起こした回でも目印が 1 つ増えること（時間を待たずに確かめる・3.2）。
 
