@@ -76,7 +76,7 @@ graph TB
     Store --> Files[(home state.json state.lock alive status.md log)]
 ```
 
-**依存の向き**（左から右へだけ読み込む。逆向きは誤り）: `error` → `state` → `plan` → `home`／`presence`／`status` → `store` → `wait` → `cli` → `main`。`plan` は `std::fs`・`std::time`・`std::process`・`tracing` を読み込まない（構造テストで見張る）。
+**依存の向き**（左から右へだけ読み込む。逆向きは誤り）: `error` → `state` → `plan` → `home`／`presence`／`status` → `store` → `wait` → `cli` → `main`。`plan` は `std::fs`・`std::time`・`std::process`・`tracing` を読み込まない（構造テストで見張る）。生死の口のトレイト `Presence` は `plan.rs` に置き、`presence.rs` はその実装だけを持つ（`plan` が `presence` を読む逆向きを作らない）。
 
 **責任の分け方**:
 - `plan` だけが「誰が持ち主になるか・誰に停止要請を出すか・誰を回収するか」を決める。他のファイルはこの関数を呼んで結果を書くだけ。
@@ -109,7 +109,7 @@ graph TB
 | 1 | セッションを代表するプロセス | **見張り `watch` のプロセスが「居る」印**。`hold` は置かない（要件の討議で裁定済み） | 印は 1 種類だけ・作業中も待ちも持ち主の間も見張りは走り続ける |
 | 2 | 生死の確認の方式 | **B-std＝参加者ごとのロックファイル** `alive/<id>.watch.lock` を見張りが排他で握る。確認は `try_lock` が成功するか（成功＝居ない）。成功したら直ちに `unlock` | 標準ライブラリだけ・ロックはプロセスの死と一緒に OS が解くのでプロセス番号の使い回し（7.4）が問題にならない・権限の違いに左右されない |
 | 3 | 待ちの方式 | **1 秒ごとの読み直し**。読む前に状態ファイルの更新時刻と大きさを見て、変わっていなければ中身を読まない（10 回に 1 回は必ず読む）。30 回に 1 回「周期の一回り」（排他の中で回収と再計画）を行う | 標準ライブラリだけ・1 秒に 1 回の `metadata` は静かな机の計測を乱さない・セッションは起こさない（13.1・13.5）。「周期の一回り」が無いと、待っている者しか居ないときに落ちた持ち主を誰も回収しない |
-| 4 | 排他の形 | 状態ファイルとは別の `state.lock` 1 つ。状態を変えるコマンドは排他ロックの中で「読む → `plan::apply` → 置き換え書き → `status.md` 書き」。読むだけ（`status`・待ちの読み直し）はロックを取らない。ロックの待ちは `try_lock` を 10 ms 間隔で最長 10 秒、超えたら失敗（終了コード 1） | 置き換え（`rename`）の相手はロックできない・読むだけの側は置き換え書きのおかげで常に一貫した中身を見る（8.1・8.2・6.6） |
+| 4 | 排他の形 | 状態ファイルとは別の `state.lock` 1 つ。状態を変えるコマンドは排他ロックの中で「読む → `plan::apply` → 置き換え書き → `status.md` 書き」。読むだけ（`status`・待ちの読み直し）はロックを取らない。ロックの待ちは `try_lock` を 10 ms 間隔で最長 10 秒、超えたら失敗（終了コード 1）。一時ファイルの名前はプロセス番号入り（`state.json.<pid>.tmp`・`status.md.<pid>.tmp`）で、ロック無しの `status` と状態を変える呼び出しが同時に `status.md` を書いてもぶつからない。`rename` は 20 ms × 5 回まで試す（読む側がロック無しで開いている一瞬のため） | 置き換え（`rename`）の相手はロックできない・読むだけの側は置き換え書きのおかげで常に一貫した中身を見る（8.1・8.2・6.6） |
 | 5 | 状態ファイルの版 | 最上位に `"version": 1`。知らない版は読まず上書きもせず ASCII の文で終了コード 1。壊れたファイルは `state.json.broken-<UTC>` へ改名して空から始める | 8.5〜8.7 のとおり |
 | 6 | 終了コードの表 | **0＝できた（番が来た・停止要請が出た・再開した・変えた）／1＝失敗（環境変数・状態ファイル・ロック・読み書き）／2＝使い方の誤り／3＝当てはまらなかった（番は来なかった＝取り下げ・離脱・回収・`clear` で消えた、または条件に合わず状態を変えなかった）**。環境変数の失敗を 1 から分けない | Bash の `$?` で 3 通りに読み分けられれば足りる（6.5）。「持ち主でない」「停止要請中でない」の断り（3.10・4.9・4.11・5.7）も 3 に載せると、呼び出し側が「状態は変わっていない」と一律に読める |
 | 7 | 日本語の値の読ませ方 | 置き場所の下に `status.md`（UTF-8）を、状態を変えるたびと `status` のたびに書く。端末には ASCII の要約だけ。名前（`--name`）と内容（`--purpose`）は端末へ出さない。識別・リポジトリ名・spec 名は ASCII に限る（下の「引数の形」） | `kiro-watch` と同じ前例・Claude は `Read` で読める（9.2・9.3・13.2） |
@@ -166,15 +166,17 @@ graph TB
 
 同じ情報を 2 度呼ばせない: 「直前のマージ」は①の終わりの出力に載る（3.9）。「止まった参加者」も①の終わりの出力に載る（4.7）。停止要請の理由は `watch` の終わりに載る（5.5）。待ちを始め直しても申し込みは二重にならない（6.2）。
 
+参加の終わり（`merged`／`leave`）では、走っていた `watch` が 3 で終わるのでセッションがもう 1 回起きる（行動は要らない）。この 1 回は「居る印を見張りのプロセスで表す」以上避けられないので、表には数えず、ここに書いておく。
+
 ## File Structure Plan
 
 ### Directory Structure
 ```
 crates/areka-impl-watch/
-├── Cargo.toml                  # bin・publish = false # 開発の道具（中ほどの行）・依存は serde serde_json thiserror tracing tracing-subscriber・dev は temp-path-kit
+├── Cargo.toml                  # bin・publish = false # 開発の道具（中ほどの行）・依存は serde = { version = "1", features = ["derive"] } と serde_json = "1"（根の [workspace.dependencies] に無いのでクレート側で書く・dola と同じ）・thiserror / tracing / tracing-subscriber は workspace = true・dev は temp-path-kit
 └── src/
     ├── main.rs                 # 引数 → cli::run → 終了コード（判断を持たない）・main_layering_tests.rs の接続
-    ├── main_layering_tests.rs  # 構造テスト: plan.rs が std::fs / std::time / std::process / tracing を綴らない・cli.rs と status.rs の文字列リテラルが ASCII
+    ├── main_layering_tests.rs  # 構造テスト: plan.rs が std::fs / std::time / std::process / tracing を綴らない（走査は plan.rs だけ。兄弟の plan_*_tests.rs と plan_test_support.rs はテストなので時刻や偽の口を使ってよく、対象に入れない）・cli.rs と status.rs の文字列リテラルが ASCII
     ├── error.rs                # 失敗の型 WatchError（thiserror・文は ASCII）
     ├── cli.rs                  # 引数の解釈・コマンドの表・--help・終了コードへの写像・各コマンドの手順（store と wait を呼ぶ）
     ├── cli_tests.rs            # 引数の誤り（2）・環境変数の無い警告終了（1）・出力が ASCII だけ
@@ -267,7 +269,7 @@ stateDiagram-v2
 流れの決めごと:
 - 判断は全部 `plan::apply` の中で起きる。待ちのプロセスは「自分の条件を状態から読む」だけで、他人の状態を変えない（「周期の一回り」のときだけ `apply(Tick)` を呼ぶ）。
 - `apply` は毎回 ①回収 → ②コマンドの処理 → ③再計画（停止要請の発行 → 負荷テストの番 → 再開 → マージの番）の順。`Invoke-Plan` と同じで、何度呼んでも同じ結果。
-- 回収は「作業中」かつ見張りの印が無い参加者だけ（停止要請中・止まったは回収しない＝7.7）。いま呼んでいる識別（`caller`）は同じ呼び出しでは回収しない（`merge` が自分の参加を作った直後に自分を回収しないため）。
+- 回収は「作業中」かつ見張りの印が無い参加者だけ（停止要請中・止まったは回収しない＝7.7）。いま呼んでいる識別（`caller`）は同じ呼び出しでは回収しない（`merge` が自分の参加を作った直後に自分を回収しないため）。**再開した直後の参加者（`awaiting_watch_since` の印つき）も回収しない**: 再開は `stopped --wait` の終わりでセッションを起こし、セッションが `watch` を立て直すまでに LLM の往復（秒〜分）があるので、その間に他の呼び出しが来ても落ちたとは見なさない。印は再計画の再開の段と `unstop` で付け、`Command::Watch` で消す。印が付いたまま見張りが居ると分かったとき（回収の確認で `is_present` が真）も消す。印の付いた参加者は「作業中」なので停止要請の対象になり、その場合は立て直した `watch` が直ちに 0 で終わる（5.4）。`status` は `awaiting-watch` の印で示す。
 - 回収や離脱で参加者が消えたら、その識別の待ちの記録（`waits`）も消す。待ちの記録のうち、ロックファイルが解かれているもの（殺された待ち）も回収で消す（6.7）。
 
 ## Requirements Traceability
@@ -317,9 +319,9 @@ stateDiagram-v2
 | 7.4 | プロセス番号の使い回し | `presence.rs` | ロックは番号を見ない |
 | 7.5 | 同じ呼び出しで番を決め直す | `plan.rs` | `reclaim` の後に必ず `replan` |
 | 7.6 | 手で外す | `cli.rs`（`cancel`・`leave`・`clear`） | 識別を指定 |
-| 7.7 | 停止要請中・止まったは回収しない・`absent` の印 | `plan.rs`・`status.rs` | `reclaim` は `Working` だけ・`status` は印だけ |
+| 7.7 | 停止要請中・止まった・再開して見張り待ちは回収しない・`absent` の印 | `plan.rs`・`status.rs` | `reclaim` は `Working` かつ `awaiting_watch_since` 無しだけ・`status` は `absent`／`awaiting-watch` の印だけ |
 | 8.1, 8.2 | 同時の変更を失わない・排他は短い | `store.rs`（`with_state`） | `state.lock` の排他の中で読む→`apply`→書く |
-| 8.3 | 書きかけを読ませない | `store.rs` | `state.json.tmp` → `sync_all` → `rename` |
+| 8.3 | 書きかけを読ませない | `store.rs` | `state.json.<pid>.tmp` → `sync_all` → `rename`（20 ms × 5 回） |
 | 8.4 | 無い → 作った記録 | `store.rs`・`plan.rs`（`Event::Recovered`） | `recent` とログ |
 | 8.5 | 壊れた → 退避して記録 | `store.rs` | `state.json.broken-<UTC>` |
 | 8.6, 8.7 | 版・知らない版は読まない | `state.rs`・`store.rs` | `version` だけ先に読む |
@@ -413,11 +415,11 @@ impl Home {
 
 #### `presence.rs`
 ```rust
-pub trait Presence { fn is_present(&self, id: &str, kind: WaitKind) -> bool; }
+// トレイト Presence は plan.rs に置く（層の向き plan → presence を守る）。ここは握る・探るの実装だけ
 pub struct Held { /* File を握ったまま。Drop で unlock */ }
 pub fn hold(path: &Path) -> Result<Option<Held>, io::Error>;   // create して try_lock を 20 ms 間隔で 5 回。None = 他のプロセスが握っている
 pub struct LockFilePresence { alive_dir: PathBuf }
-impl Presence for LockFilePresence { /* create 無しで open（無ければ false）→ try_lock → 成功なら unlock して false、WouldBlock なら true */ }
+impl plan::Presence for LockFilePresence { /* create 無しで open（無ければ false）→ try_lock → 成功なら unlock して false、WouldBlock なら true */ }
 ```
 - 不変: ロックファイルは消さない（Windows では握られているファイルの消去と作り直しが衝突するため）。ファイルの存在ではなくロックの有無だけを見る。探り（`is_present`）はファイルを作らない（`status` が読むだけで済むように）。
 - 探りが一瞬ロックを取るので、同時に始まった `watch` の `try_lock` が外れることがある → `hold` の 5 回の試しで吸収する。
@@ -438,7 +440,7 @@ impl Store {
 }
 ```
 - 読みの手順: `version` だけを先に `serde_json::Value` で読む → 無ければ `State::empty()`＋`Event::Recovered(Created)`、知らない版なら `Err(VersionMismatch{found})`（上書きしない）、JSON として読めない・形が合わないなら `state.json.broken-<UTC>` へ改名して `State::empty()`＋`Event::Recovered(Backed{path})`。
-- 書き: `state.json.tmp` に全部 → `sync_all` → `rename`（`FsPersistIo::commit` と同じ）。`status.md` も同じ形で書く。
+- 書き: `state.json.<pid>.tmp` に全部 → `sync_all` → `rename`（`FsPersistIo::commit` の形。前例は単一プロセス前提で固定の `.tmp` だが、ここは複数プロセスが書くのでプロセス番号を入れる）。`rename` は 20 ms × 5 回まで試す。`status.md` も同じ形（`status.md.<pid>.tmp`）で書く。`with_state` は `Applied.changed` が偽なら `state.json` も `status.md` も書かない（`Tick` で変化が無いときに、待っている者の数だけ書き直さないため）。
 - 排他: `state.lock` を `try_lock` で 10 ms 間隔・最長 10 秒。超えたら `Err(LockBusy)`（`error!`）。
 - ログ: `with_state` の中で `Applied.events` を 1 行ずつ `info!(command, id, "...")`。失敗は呼び手が `error!` で残す。subscriber は `open` で `try_init`（プロセスに 1 度だけ。同じプロセスで 2 度目の `open` は初期化を飛ばす＝テストが同じプロセスで複数の置き場所を開いても落ちない。ログの行き先は最初に開いた置き場所になるが、テストはログの中身でなく `Applied.events` を見る）。`tracing::subscriber::with_default` は呼ばない（ワークスペースの常設検査が禁じる）。
 
@@ -456,7 +458,8 @@ pub struct State {
     pub recent: Vec<Recent>,                  // 新しい順・最大 50
 }
 pub struct Participant { pub id: String, pub name: String, pub repo: String, pub status: ParticipantStatus, pub since: u64,
-                         pub stop_reason: Option<StopReason>, pub watch: Option<WatchInfo> }
+                         pub stop_reason: Option<StopReason>, pub watch: Option<WatchInfo>,
+                         pub awaiting_watch_since: Option<u64> }   // 再開してから watch を立て直すまでの印（回収しない）
 pub enum ParticipantStatus { Working, StopRequested, Stopped }
 pub struct StopReason { pub by: String, pub purpose: String }
 pub struct WatchInfo { pub pid: u32, pub since: u64 }           // 人が読むため。生死の判定には使わない
@@ -479,8 +482,9 @@ impl State { pub fn empty() -> Self; pub fn cleared(at: u64, backup: &Path) -> S
 
 #### `plan.rs`
 ```rust
+pub trait Presence { fn is_present(&self, id: &str, kind: WaitKind) -> bool; }   // 生死の口。実装は presence.rs（plan は実装を読まない）
 pub enum Command {
-    Watch { id, name, repo, pid },                        // 見張りの開始＝参加（無ければ登録・あれば更新）＋ participant.watch ＋ waits の Watch の記録を 1 回で
+    Watch { id, name, repo, pid },                        // 見張りの開始＝参加（無ければ登録・あれば更新）＋ participant.watch ＋ waits の Watch の記録を 1 回で。status は変えない（停止要請中・止まったはそのまま＝立て直した見張りが直ちに終わる）。awaiting_watch_since を消す
     Merge { id, name, repo, spec, bug }, Merged { id, pr, sha },
     LoadTest { id, name, repo, purpose }, LoadRunning { id, name, repo, purpose }, LoadDone { id },
     Stopped { id }, Unstop { id: Option<String> }, Cancel { id }, Leave { id },
@@ -497,7 +501,7 @@ pub struct Applied { pub changed: bool, pub verdict: Verdict, pub events: Vec<Ev
 pub fn apply(state: &mut State, cmd: &Command, caller: Option<&str>, now: u64, alive: &dyn Presence) -> Applied;
 ```
 - 手順: `reclaim(state, caller, now, alive)` → コマンドの処理 → `replan(state, now)`。`Tick` はコマンドの処理が空。
-- `reclaim`: `Working` かつ `caller` でなく `alive.is_present(id, Watch)` が偽 → `remove_from`＋記録を消す＋`Recent::Reclaimed`。`waits` のうち `alive.is_present(id, kind)` が偽のもの → 消す。
+- `reclaim`: `Working` かつ `awaiting_watch_since` が無く、`caller` でなく `alive.is_present(id, Watch)` が偽 → `remove_from`＋記録を消す＋`Recent::Reclaimed`。`awaiting_watch_since` が有って `is_present` が真なら印だけ消す。`waits` のうち `alive.is_present(id, kind)` が偽のもの → 消す。
 - `replan`（`Invoke-Plan` の写し）: 負荷テストが持たれ・待たれているなら ①候補（持ち主か先頭）・`need_stop`（候補・マージの持ち主・マージ待ちを除く参加者）を求め、走っている印が無ければ `Working` の者を `StopRequested` にして理由を付ける ②持ち主なし・マージの持ち主なし・`need_stop` 全員が `Stopped` なら先頭を持ち主にし `stopped` に識別を写し、持ち主を `Working` に戻す。負荷テストが無いなら `StopRequested`／`Stopped` の全員を `Working` へ戻す（理由を消す）。その後リポジトリごとに、持ち主が無く待ち行列があれば（バグ優先 → 申し込み時刻）先頭を持ち主にする（負荷テストが在るときはこの段へ来ない）。
 - 申し込み（`Merge`・`LoadTest`・`LoadRunning`）の先頭で `join`。`LoadTest` は自分の状態を `Working` に戻す（`kiro-watch.ps1` と同じ）。
 - `Merged`・`Leave` は記録を消す前に `waits` から識別の全部を消す（見張りと待ちが 3 で終わる根拠）。
@@ -519,7 +523,7 @@ pub trait WaitPort {
 pub fn judge(spec: &WaitSpec, state: &State) -> Option<WaitEnd>;   // 純粋。None = まだ待つ
 pub fn run(spec: &WaitSpec, port: &dyn WaitPort, held: Held) -> Result<WaitEnd, WatchError>;
 ```
-- `run` の手順: ① 呼び手が先に `presence::hold(alive/<id>.<kind>.lock)` を行い、`None` なら `Err(AlreadyRunning{id, kind})`。`Watch` なら `Command::Watch` を、他の 3 種なら `RegisterWait` を `change` で 1 回登録 ② `read` → `judge` → 終わるなら ③へ。終わらないなら `sleep`。以後 1 秒ごとに `fingerprint` を見て、変わっていたか 10 回目なら `read` → `judge`。30 回目ごとに `change(Tick)` を行い、続けて `read` → `judge` ③ `UnregisterWait` を `change`（記録が無ければ何もしない）→ `held` を落として戻る。
+- `run` の手順: ① 呼び手が先に `presence::hold(alive/<id>.<kind>.lock)` を行い、`None` なら `Err(AlreadyRunning{id, kind})`。`Watch` なら `Command::Watch` を、他の 3 種なら `RegisterWait` を `change` で 1 回登録 ② `read` → `judge` → 終わるなら ③へ。終わらないなら `sleep`。以後 1 秒ごとに `fingerprint` を見て、変わっていたか 10 回目なら `read` → `judge`。30 回目ごとに `change(Tick)` を行い、続けて `read` → `judge` ③ `UnregisterWait` を `change`（記録が無ければ何もしない）→ `held` を落として戻る。`change(Tick)` が `LockBusy` 等で失敗しても待ちは終えず、ログに残して次の周期へ（長い待ちを一時の混雑で 1 にしない。`read` の失敗＝壊れた・版違いは 1 で終える）。
 - `judge`:
   - `Watch`: 参加者が無い → `Gone("removed")`。`status != Working` → `Done("stop requested by <by>")`（`Stopped` なら `"already stopped; run stopped --wait or resume"`）。
   - `Merge`: 参加者が無い、または待ち行列にも持ち主にも居ない → `Gone("request gone")`。持ち主 → `Done("granted merge repo=<r>; last: …")`。
@@ -533,7 +537,7 @@ pub fn run(spec: &WaitSpec, port: &dyn WaitPort, held: Held) -> Result<WaitEnd, 
 #### `status.rs`
 ```rust
 pub fn render_markdown(state: &State, presence: &dyn Presence, now: u64) -> String;   // UTF-8。参加者の表（absent の印）・負荷テストの机・リポジトリごとのマージの机・走っている待ち・最近の回収と復旧
-pub fn render_terminal(state: &State, presence: &dyn Presence) -> String;             // ASCII だけ。参加者 1 行ずつ（id repo status absent?）・机の持ち主と待ちの数・待ちの数
+pub fn render_terminal(state: &State, presence: &dyn Presence) -> String;             // ASCII だけ。参加者 1 行ずつ（id repo status [absent|awaiting-watch]）・机の持ち主と待ちの数・待ちの数
 pub fn utc(secs: u64) -> String;          // 2026-10-10T12:34:56Z
 pub fn utc_compact(secs: u64) -> String;  // 20261010T123456Z（ファイル名）
 ```
@@ -558,7 +562,7 @@ status: C:\Users\me\.areka-impl-watch\status.md
   "version": 1,
   "participants": {
     "A": { "id": "A", "name": "A", "repo": "areka", "status": "working", "since": 1791000000,
-           "stop_reason": null, "watch": { "pid": 1234, "since": 1791000000 } }
+           "stop_reason": null, "watch": { "pid": 1234, "since": 1791000000 }, "awaiting_watch_since": null }
   },
   "merge": {
     "areka": { "holder": { "id": "A", "spec": "x", "bug": false, "requested": 1791000010, "granted": 1791000011 },
@@ -570,7 +574,7 @@ status: C:\Users\me\.areka-impl-watch\status.md
 }
 ```
 - 時刻は全部 UNIX 秒。`status` の列挙は小文字の綴り（`working` / `stop-requested` / `stopped`）。
-- 置き場所の下: `state.json`・`state.json.tmp`（書きかけ・置き換えで消える）・`state.lock`（空）・`alive/<id>.<kind>.lock`（空・消さない）・`status.md`・`impl-watch.log`・`state.json.broken-<UTC>`・`state.json.cleared-<UTC>`。
+- 置き場所の下: `state.json`・`state.json.<pid>.tmp`／`status.md.<pid>.tmp`（書きかけ・置き換えで消える）・`state.lock`（空）・`alive/<id>.<kind>.lock`（空・消さない）・`status.md`・`impl-watch.log`・`state.json.broken-<UTC>`・`state.json.cleared-<UTC>`。
 - `clear` の後の状態: `version: 1`・`participants` `merge` `load` `waits` は空・`recent` に `{kind: "cleared", detail: "<退避の道筋>"}` 1 件（要件 14.1 の「版だけ」は「参加者・机・待ち行列・停止要請・待ちの記録が全部無い」の意味に読み、14.2 の「消した記録」だけを残す）。
 
 ### 版の上げ方
@@ -610,7 +614,7 @@ pub enum WatchError {
 | JSON が読めない・形が合わない | `state.json.broken-<UTC>` へ改名、空から始め `Recent::Recovered(backed up)`＋ログ。`status` は退避せず 1 で「broken」 |
 | 版が違う | 読まず上書きせず 1。`status` も 1 |
 | `state.lock` が取れない | 10 秒で 1 |
-| 置き換え書きの途中で失敗 | `state.json.tmp` を消して 1。元の `state.json` は無傷 |
+| 置き換え書きの途中で失敗 | `state.json.<pid>.tmp` を消して 1。元の `state.json` は無傷 |
 | 待ちのプロセスが殺された | 記録が残る → 次の回収で消える。見張りなら参加者が回収される（作業中のときだけ） |
 | 同じ識別で `watch`（または同じ種類の待ち）を 2 つ | 後の方が `AlreadyRunning` で 1 |
 | 探りと `watch` の開始が同時 | `hold` の 5 回の試しで吸収。それでも外れたら 1（立て直せばよい） |
@@ -638,11 +642,11 @@ pub enum WatchError {
 
 ## 手順書の中身（`doc/impl-watch.md`）
 1. 何をするものか（机 2 種・規則 7 つ・調停役との違い）。
-2. 入れ方: `cargo build --release -p areka-impl-watch` → `target\release\areka-impl-watch.exe` を `%AREKA_IMPL_WATCH_HOME%` へコピー。環境変数はユーザー環境変数に 1 度だけ（例 `%USERPROFILE%\.areka-impl-watch`）。`cargo run` は開発中の試しだけ（待っている間 `target\` の exe が開かれたままになる・cargo の起動が計測を乱す・掃除で消える）。
+2. 入れ方: Rust 1.89 以上（`File::try_lock`。道具の版はファイルで固定していない）で `cargo build --release -p areka-impl-watch` → `target\release\areka-impl-watch.exe` を `%AREKA_IMPL_WATCH_HOME%` へコピー。環境変数はユーザー環境変数に 1 度だけ（例 `%USERPROFILE%\.areka-impl-watch`）。`cargo run` は開発中の試しだけ（待っている間 `target\` の exe が開かれたままになる・cargo の起動が計測を乱す・掃除で消える）。
 3. 更新: (a) `status` で `waits=0` を確かめて置き換える (b) 誰かが走らせている間は `areka-impl-watch.exe` を `areka-impl-watch.old.exe` に改名してから新しいものを置き、古い待ちが終わってから `.old.exe` を消す。版が上がった exe は古い状態ファイルを読まない（`version mismatch`）→ `clear` でやり直す。
 4. 呼び方の約束: `watch` を先に（バックグラウンド）→ 申し込み。待ちは `--wait` でバックグラウンド。停止要請で `watch` が終わったら、今のタスクのコミットの切れ目で `stopped --wait`、再開したら `watch` を立て直す。終わるときは `leave`（`merged` は離脱を兼ねる）。
-5. コマンドと引数と終了コードの表（この文書の表と同じ）。終了コードごとにセッションが取る行動。
-6. 困ったとき: 落ちたセッションを手で外す（`cancel --id`／`leave --id`）・全部消す（`clear`・退避ファイルから戻すには `state.json` へコピーして `tick`）・Claude のアプリを閉じたときに見張りが残ることがある（`status` の `waits` と `absent` で見分ける）。
+5. コマンドと引数と終了コードの表（この文書の表と同じ）。終了コードごとにセッションが取る行動（`stopped`・`resume`・`stopped --wait` が 3＝参加者の記録が無い → `watch` を立て直して続ける。`merge --wait`／`loadtest --wait` が 3 → `status` で消えた理由を見て、要るなら `watch` を立ててから申し込み直す）。
+6. 困ったとき: 落ちたセッションを手で外す（`cancel --id`／`leave --id`）・全部消す（`clear`・退避ファイルから戻すには `state.json` へコピーして `tick`）・Claude のアプリを閉じたときに見張りが残ることがある（`status` の `waits` と `absent` で見分ける）・同じ識別の `watch` が残っていると新しい `watch` が 1 で止まる（`status` の `waits` のプロセス番号で見分けて止める）。
 7. 置き場所の下のファイル一覧。
 
 ## スキル `kiro-watch-clear` の中身
