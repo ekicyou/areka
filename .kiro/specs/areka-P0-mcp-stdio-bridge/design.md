@@ -416,10 +416,11 @@ impl Config {
 - `receive`: `read_until(b'\n')`（上限なし）。末尾の `\r` と前後の空白を落とし、先頭の UTF-8 の BOM（最初の行に付くことがある）も落とす（rmcp の stdio の輸送と同じ）。空なら次へ。`serde_json::from_slice::<ClientJsonRpcMessage>` で読み、`Syntax`／`Eof` なら `-32700`・`id` は `null`、`Data`（配列・数・文字列・欄の形違い）なら `-32600` を**自分で標準出力へ 1 行書いて**次へ（rmcp の `AsyncRwTransport` は `Syntax` を黙って捨てるので使わない）。EOF で `None`。
 - `send`: `serde_json::to_vec`（改行を含まない）＋`\n`。書き手は `Arc<Mutex<W>>`（rmcp は `send` の未来を同時に走らせる）。
 - `R: AsyncRead + Unpin + Send`・`W: AsyncWrite + Unpin + Send + 'static` の総称（テストは `tokio::io::duplex` を差す）。
+- **取り消しへの備え**（実装で確かめた・タスク 3.1）: rmcp の `serve_inner` は `receive` を `tokio::select!` の枝で回し、ほかの枝が先に済むたびに未来を捨てて呼び直す。そのため ⑴ 読みかけの行（`line`）は行が揃うまで消さず、捨てられた後に入力が終わった読みかけも最後の 1 行として届ける。⑵ 行の形のエラーの行は `receive` の中で直に書かず（捨てられると行が途中で切れる）、別の仕事（`tokio::spawn`）で書き、その手（`replying`）を次の行を読む前・入力の終わり・`close` で待つ。⑶ BOM を落とすのは最初の行だけ（`first`）。`close` は書きかけのエラーを待ってから書き手を `shutdown` する。欄は `reader`・`writer`・`line`・`first`・`replying` の 5 つ。
 
 ##### Service Interface
 ```rust
-pub struct LineTransport<R, W> { /* reader: BufReader<R>, writer: Arc<Mutex<W>>, line: Vec<u8> */ }
+pub struct LineTransport<R, W> { /* reader: BufReader<R>, writer: Arc<Mutex<W>>, line: Vec<u8>, first: bool, replying: Option<JoinHandle<()>> */ }
 impl<R, W> LineTransport<R, W> { pub fn new(reader: R, writer: W) -> Self; }
 impl<R, W> rmcp::transport::Transport<RoleServer> for LineTransport<R, W> {
     type Error = std::io::Error;
