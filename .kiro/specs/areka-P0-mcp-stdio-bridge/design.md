@@ -616,7 +616,7 @@ pub fn invalid_json_response(status: u16, head: &str) -> ErrorData;            /
 
 - どのエラーでも中継は終了しない（4.6）。終了するのは標準入力が閉じたときだけ（1.9）。
 - 「書く前／後」の読み分けは `ServiceError::TransportSend(DynamicTransportError)` の `error`（`Box<dyn Error>`）を `StreamableHttpError<HttpError>` へ `downcast_ref` し、`Client(e)` の `e.written()` で行う。戻せない形（rmcp 自身の失敗）は書いた後として扱う（安全側＝送り直さない）。
-- 1.9 の掃き出しは rmcp の `serve_inner` が `QuitReason::Closed` で持つ 5 秒の上限による。`REPLY_WAIT`（30 秒）より短いので、標準入力が閉じた後に 5 秒を越えて続く要求の応答は書かれずに終わる（Desktop が標準入力を閉じるのは中継を畳むときで、読み手は居ない）。差の記録に載せる。
+- 1.9 の掃き出しは rmcp の `serve_inner` が `QuitReason::Closed` で持つ 5 秒の上限による（設定で変えられない）。`REPLY_WAIT`（30 秒）より短いので、標準入力が閉じた後に 5 秒を越えて続く要求の応答は書かれずに終わる（Desktop が標準入力を閉じるのは中継を畳むときで、読み手は居ない）。**開発者の裁定（議題 2・2026-10-10）: 要件 1.9 をこの事実に合わせた**（中継側で EOF を遅らせて 30 秒まで待つ形は、Desktop を畳む側を待たせるので採らない）。差の記録に載せる。
 
 ### Monitoring
 
