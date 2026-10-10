@@ -207,7 +207,41 @@ Microsoft はサードパーティのパッケージに対して責任を負わ�
 
 ## 名前の直しの数
 
-（タスク 5.2 で記入）
+結果: **直した行は 3・直さなかった行は 2**（要件 6.4。2026-10-10・タスク 5.2）。相手は `areka-P0-release-cycle` の `requirements.md` と `design.md` の 2 ファイルだけ。
+
+直す前の数（本仕様の名前が出る行。どの行も 1 行に 1 回なので、行の数と出る回数は同じ）:
+
+| ファイル | 短い名前 `winget-manifest-submission` | 長い名前 `areka-P0-winget-manifest-submission` |
+|---|---|---|
+| `requirements.md` | 4 行 | 0 行 |
+| `design.md` | 1 行 | 0 行 |
+
+相手の文書は本仕様を、頭の `areka-P0-` が無い短い名前で書いている。長い名前で数えると 0 件になる。直す前の 2 ファイルに `areka-P0-winget-release-automation` は 0 回。
+
+直した行（3 行。`winget.yml` の持ち主として本仕様の名前を挙げていた行）:
+
+- `requirements.md` の「Out of scope」の、workflow の中身を並べた行（`winget.yml`＝ の右の名前）。
+- `requirements.md` の「Adjacent expectations」の、「`winget.yml` を main へ入れた後の回から、見守る相手に winget-pkgs への PR が加わる」の行（行の頭の名前）。
+- `design.md` の「winget の見守りの細部」の行（かっこの中の頭の名前）。
+
+直さなかった行（2 行。どちらも初回の手提出のことを言っていて、それは本仕様の持ち物のまま）:
+
+- `requirements.md` の「Out of scope」の、「winget のマニフェストの形と初回の手提出」の行。
+- `requirements.md` の受け入れ条件の、「`winget.yml` が main に無い間は、初回の見守りの相手に winget を入れない（winget の初回の手提出は … の番）」の行。
+
+直した後の数:
+
+| ファイル | 短い名前（残り） | 長い名前 | `areka-P0-winget-release-automation` |
+|---|---|---|---|
+| `requirements.md` | 2 行 | 0 行 | 2 行 |
+| `design.md` | 0 行 | 0 行 | 1 行 |
+
+確かめたこと:
+
+- 差分は名前の置き換えだけ。`git diff --numstat` は `requirements.md` が 2 行足して 2 行消し、`design.md` が 1 行足して 1 行消し。語の単位の差分で、消えた語は `winget-manifest-submission` が 3 回・足した語は `areka-P0-winget-release-automation` が 3 回で、ほかは 0。直した後の 2 ファイルで新しい名前を古い名前へ戻すと、直す前（HEAD）と 1 バイトも違わない。
+- 手順の文は 1 字も変えていない（要件の「タグのコミットに `winget.yml` が在る」ときだけ winget-pkgs への PR を確かめる条件、「`winget.yml` が main に無い」間の条件、設計の見守りの表の winget の行と、その下の「`winget.yml` がタグのコミットに無い回」の文。どれも差分に出ない）。
+- `brief.md` は相手にしていない（差分 0）。`brief.md` には短い名前が 7 行あり、そのまま残る。`areka-P0-release-cycle` のほかのファイル（`design-validation.md`・`research.md`・`spec.json`・`tasks.md`・`verification/first-run.md`）は、短い名前も長い名前も 0 行で、触っていない。
+- 置き換えた名前は、頭の `areka-P0-` が付いた長い形。相手の文書は、隣の名前（`release-ci-workflow`・`crates-io-publish` など）を短い形で書いているので、ここだけ形がそろわない。要件 6.4 が直し先を `areka-P0-winget-release-automation` と名指ししているので、そのとおりにした。
 
 ## 範囲の確かめ
 
