@@ -14,7 +14,7 @@
 
 ## Current State
 
-今の木（main `ee3af616`）で確かめたこと。細かい名前は、切り出し元の brief（`.kiro/specs/areka-P0-seriko-trigger-intervals/brief.md`）の「`animated-image-playback` からの申し送り」と「繰り返しの仕組みの形」が正本（この spec がその 2 つの節を引き継ぐ）。
+今の木（main `ee3af616`）で確かめたこと。細かい名前は、切り出し元の brief（`.kiro/specs/completed/areka-P0-seriko-trigger-intervals/brief.md`）の「`animated-image-playback` からの申し送り」と「繰り返しの仕組みの形」が正本（この spec がその 2 つの節を引き継ぐ）。
 
 - 読み手: 綴りを型へ写す `normalize_interval`（`crates/areka-parsers/src/shell/decode.rs`）は、`bind`・`random`・`bind+random` を完全一致で見分け、ほかは元の綴りのまま `Interval::Other` に写す。`bind+always` は `Interval::Other("bind+always")` になる（語は落ちていない）。
 - `always` の単独かを見る 1 関数: `is_always_interval`（`crates/areka-emo-compose/src/nesting.rs`・小文字の完全一致）。合成・見える部品・seriko の表が共有する。
