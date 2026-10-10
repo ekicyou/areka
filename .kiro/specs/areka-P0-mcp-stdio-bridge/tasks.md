@@ -27,7 +27,7 @@
   - 完了の姿: 置き場を渡して起こした受け口の `GET /api/mcp/help` に、その絶対パスが `command` として載る（受け口のテスト 1 本で判定）。ワークスペースのビルドと areka の MCP のクレートのテストが緑
   - _Requirements: 6.1_
 
-- [ ] 2. 中継のクレートの土台
+- [x] 2. 中継のクレートの土台
 - [x] 2.1 中継のクレートを足して建つ状態にする
   - ワークスペースに新しいクレート（実行ファイル＋ライブラリ）を足す。crates.io へ出さない印と理由の行を付ける
   - 依存は設計の Allowed Dependencies のとおり（rmcp は既定機能を切って 3 つの機能だけ・tokio は中継に要る機能だけ・あとは `Cargo.lock` に既にある版）。`Cargo.lock` を作り直す
@@ -44,7 +44,7 @@
   - 完了の姿: 上のテストが緑
   - _Requirements: 2.1, 2.4, 2.5, 2.6, 2.8, 4.4, 8.2_
 
-- [ ] 2.3 テスト用の偽の受け口を用意する
+- [x] 2.3 テスト用の偽の受け口を用意する
   - ループバックの空きポート（OS が割り当てる）に束ね、方法ごとの台本で答える: 名乗りを変える・壊れた本文・空の本文・途中で閉じる・返事をしない・通知に 202・chunked の応答・状態 400 の JSON・遅れて答える（長い要求）
   - rmcp のクライアントの手順（`initialize` と、`notifications/initialized` への 202）に正しく応える
   - 止めて、同じ番号に別の名乗りで立て直す・別の番号で起こし直す、ができる
@@ -207,3 +207,6 @@
 - 2.2: 行の形のエラー（`-32700`・`-32600`）は要件 1.6・1.7 のとおり `"id": null`。rmcp 3.5.0 の `JsonRpcError` は `id` の欄を省くことしかできないので、`errors::parse_error`／`invalid_request` は `serde_json::Value` を返し、輸送（3.1）が `serde_json::to_vec`＋`\n` で自分で書く（設計の署名を要件に合わせて直した）。文は JSON-RPC 2.0 の綴り `Parse error`・`Invalid Request`。
 - 2.2: `LOCALAPPDATA` は絶対パスのときだけ使う（空・相対は「取れない」＝起こされた場所の下へ黙って書かない）。`AREKA_PROFILE_DIR` の空は areka 本体と同じく「設定あり」。
 - 2.2: SSE の応答の文は `Invalid JSON response from server: HTTP <状態> content-type text/event-stream`（3.4 は `NotJson.head` に `content-type text/event-stream` を入れ、本文は読まない。D-16 を直した）。ほかの `head` は本文の頭 256 バイトを `from_utf8_lossy` でそのまま（絞らない）。D-9 の候補と名乗りの整形は 4.3 の仕事。
+- 2.3: 偽の受け口（`tests/common/fake_server.rs`）は自分のスレッドと自分の tokio で回る。テストは `current_thread` の `#[tokio::test]` のままでよく、子プロセスを同期で待つ間も答える。届いたこと・閉じたことは `wait(|log| …)` で待ってから数える（`connections()` を直に見ると早すぎる）。「1 バイトも届かない」は `Conn { bytes: 0, closed: true }`。
+- 2.3: rmcp のクライアント（`ClientConfig::default()`）は `initialize` に `2026-07-28` を載せ、本物の受け口も偽の受け口も `2025-11-25` で答える（旧式の作法のまま進む）。偽が版をそのまま返すと rmcp は黙って `initialize` なしの版の作法へ切り替わり、全要求の `_meta` が変わるので、偽の既定の答えは本物と同じ版の決まりにしてある。
+- 2.3: `Reply::Text(状態, 文)` で 200 以外の平文を作れる。`rescript` の前に `wait` で「その要求が記録に載った」を待てば、答えている途中の要求は元の台本で答える（4.5 の長い要求の土台）。既定の `initialize` の結果を `Delayed`／`Chunked` で包む口は無い（要るテストは結果の JSON を `SERVER_NAME` と `2025-11-25` で自分で書く）。確かめの `initialize` と rmcp の手順の `initialize` は `Received.body` の `clientInfo` か `notifications/initialized` の数で見分ける。
