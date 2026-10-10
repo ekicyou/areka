@@ -36,20 +36,22 @@ areka の検体は、pasta（`emo2`）・里々（`R_POST_and_KOMAINU`）・YAYA
 
 受け取ったバイト列のまま `vendors/sample_ghost/dot_sakura.nar` に置き（畳み直さない）、登記表に 1 行足し、README に登記し、数を持つテストと文書を 8 へ直す。そのうえで実機で 1 回起こし、見えたことを記録する。**動くところまで直すのはこの spec の仕事にしない**（直しは起票した先）。
 
-置き方は議題 1 の答えで変わる。
+書庫はリポジトリに入れる（下の「決まったこと」）。
+
+## 決まったこと（2026-10-10 開発者）
+
+- **`.nar` はほかの検体と同じにリポジトリへ入れる。** `readme.txt` は「インターネット上は不可」と書くが、開発者「どっとさくらは私の実装なので、検体として利用する分には問題ない。私のサイトで公開してます」。README の登記には、この開発者の言葉と、areka の配布物には入れないこと・畳み直さないことを書く。
+- **検体を URL から取り寄せる形へ替えるのは別の spec**（`areka-P0-sample-url-fetch`・急がない）。この spec は今の形（書庫を置く）で足す。README の登記に取り寄せ元の URL と SHA-256 を書いておけば、後の spec がそのまま使える。
 
 ## 議題（要件の段で決める）
 
-1. **`.nar` をリポジトリに入れてよいか**（開発者の決めごと）。`readme.txt` は「インターネット上は不可」と書いていて、areka のリポジトリは公開である。
-   - 案 あ（推し）: ほかの検体と同じにコミットする。同じ書庫は開発者のサイト（公開の場所）にすでに置かれていて、置いた本人が管理者である。README に「areka の配布物には入れない・畳み直さない」と書く（`konnoyayame` と同じ扱い）。
-   - 案 い: リポジトリには入れず、URL と SHA-256 だけを持ち、手元で取り寄せる。検体が無い機械ではテストを飛ばす仕組みが `sample-ghost-kit` に要る（今は無い）。CI では走らなくなる。
-2. **見張りの語との当たり**。同梱バルーンの名前 `bottle` と検体の名前 `dot_sakura` が見張りの語になる。今のソースに同じ綴りが在れば `sample_path_guard_test` が赤くなる。先に数えて、当たるなら見張りの側の決まり（どこまでを当たりと見るか）で解く。
-3. **`install.txt` の読み**。`balloon.directory,bottle` だけで取り出し元を書かない形・最上位の `delete.txt`・`updates.txt` を、今の `areka-nar` がどう扱うか。入らないなら `emily4` と同じく登記を見送って起票する（その場合この spec は README の登記までで閉じる）。
-4. **華和梨の `shiori.dll` を今の 32bit の載せ台が動かせるか**。SHIORI の版が 2.x だけなら areka は話せない。実機の 1 回で分かったことを記録し、要るなら起票する。
+1. **見張りの語との当たり**。同梱バルーンの名前 `bottle` と検体の名前 `dot_sakura` が見張りの語になる。今のソースに同じ綴りが在れば `sample_path_guard_test` が赤くなる。先に数えて、当たるなら見張りの側の決まり（どこまでを当たりと見るか）で解く。
+2. **`install.txt` の読み**。`balloon.directory,bottle` だけで取り出し元を書かない形・最上位の `delete.txt`・`updates.txt` を、今の `areka-nar` がどう扱うか。入らないなら `emily4` と同じく登記を見送って起票する（その場合この spec は README の登記までで閉じる）。
+3. **華和梨の `shiori.dll` を今の 32bit の載せ台が動かせるか**。SHIORI の版が 2.x だけなら areka は話せない。実機の 1 回で分かったことを記録し、要るなら起票する。
 
 ## Scope
 
-- **In**: `dot_sakura.nar` の保管（議題 1 の答えの形）／登記表 `SAMPLES` の 1 行（同梱バルーン `bottle` つき）／`lib_tests.rs` の数と名前の一覧／`vendors/sample_ghost/README.md` の表と節／steering（`product.md` の検体の表・`structure.md` の顔ぶれ）と根の `README.md` の動作確認の表／実機で 1 回起こした記録／崩れの起票。
+- **In**: `dot_sakura.nar` の保管（リポジトリに入れる）／登記表 `SAMPLES` の 1 行（同梱バルーン `bottle` つき）／`lib_tests.rs` の数と名前の一覧／`vendors/sample_ghost/README.md` の表と節／steering（`product.md` の検体の表・`structure.md` の顔ぶれ）と根の `README.md` の動作確認の表／実機で 1 回起こした記録／崩れの起票。
 - **Out**: 起動・会話・メニューが通るところまでの直し（起票した先）／華和梨や SHIORI 2.x への対応／同梱バルーンの印（矢印・オンライン・SSTP）の表示（`areka-P0-balloon-markers`）／入力の箱 `balloonc*`（`areka-P0-balloon-canon-residue`・`areka-P0-inputbox-user-input`）／シェルの縮小版 2 つの見た目の確かめ／配布物への同梱（入れない）。
 
 ## Boundary Candidates
@@ -65,8 +67,8 @@ areka の検体は、pasta（`emo2`）・里々（`R_POST_and_KOMAINU`）・YAYA
 
 ## Upstream / Downstream
 
-- **Upstream**: なし（今すぐ着手できる）。議題 1 だけ開発者の答えが要る。
-- **Downstream**: `areka-P0-default-balloon-selfmade`（同梱バルーン `bottle` を見比べの元にする・登記表と数のテストを続けて触るので、こちらを先に着地させる）。`areka-P0-balloon-markers`（連番のオンラインの印 16 コマ・矢印・SSTP の印を持つ検体として使える）。`areka-P0-balloon-canon-residue`（面 0〜3 と面別の設定を持つ検体として使える）。
+- **Upstream**: なし（今すぐ着手できる）。
+- **Downstream**: `areka-P0-default-balloon-selfmade`（同梱バルーン `bottle` を見比べの元にする・登記表と数のテストを続けて触るので、こちらを先に着地させる）。`areka-P0-balloon-markers`（連番のオンラインの印 16 コマ・矢印・SSTP の印を持つ検体として使える）。`areka-P0-balloon-canon-residue`（面 0〜3 と面別の設定を持つ検体として使える）。`areka-P0-sample-url-fetch`（取り寄せ先がすでに在る最初の検体）。
 
 ## Existing Spec Touchpoints
 

@@ -114,7 +114,7 @@ communicatebox.x,8     communicatebox.y,21  communicatebox.width,385  communicat
 
 ## Boundary Candidates
 
-- バルーンの資産と作る道具（置き場は要件・設計で決める。検体の保管形は `vendors/sample_ghost/<名>.nar`）。
+- バルーンの資産と作る道具（置き場は要件・設計で決める。検体の保管形は `vendors/sample_ghost/<名>.nar`）。既定バルーンは配布物に必ず入る製品の資産なので、検体を URL から取り寄せる形（`areka-P0-sample-url-fetch`）へ替わった後もリポジトリが持つ。置き場を検体の置き場と分けるかは、ここで決める。
 - 既定の差し替え（`crates/areka/src/boot_resolve.rs` の定数・`tools/package.ps1`・`crates/sample-ghost-kit` の登記表と数のテスト）。
 - 文書と権利の記録（根の `README.md`・`dist/README.txt`・`vendors/sample_ghost/README.md`・steering）。
 - 確かめ（中身を固定するテスト・実機）。
