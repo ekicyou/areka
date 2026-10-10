@@ -641,7 +641,7 @@ pub fn invalid_json_response(status: u16, head: &str) -> ErrorData;            /
 
 ### Integration Tests（通し）
 
-- `real_receiver_test.rs`（1.2・1.10・8.2）: 本物の受け口（ツールを 1 本登録）に対し、5 版それぞれで「直接つないだ答え」と「中継ごしの答え」の `result`／`error` を `serde_json::Value` で比べる（`initialize`・`server/discover`・`tools/list`・`tools/call`・`ping`・未知のメソッド・`isError: true` の結果）。名乗りの一致は、この経路が通ること自体で判定される（`SERVER_NAME` を変えれば中継が受け口を飛ばして赤）。
+- `real_receiver_test.rs`（1.2・1.10・8.2）: 本物の受け口（ツールを 1 本登録）に対し、5 版それぞれで「直接つないだ答え」と「中継ごしの答え」の `result`／`error` を `serde_json::Value` で比べる（`initialize`・`server/discover`・`tools/list`・`tools/call`・`ping`・未知のメソッド・`isError: true` の結果）。名乗りの一致は、この経路が通ること自体で判定される（受け口が名乗る値と中継が見なす値は同じ定数 `SERVER_NAME` を読むので、定数を変えても両側が一緒に動く。片方だけが定数から外れれば中継が受け口を飛ばして赤）。
 - `exe_test.rs`（1.9・2.4・2.6・5.1・5.2）: 本物の exe を `AREKA_MCP_PORT=<偽の受け口の番号>`・`AREKA_PROFILE_DIR=<target の下>` で起こし、行を流して標準出力に応答の行だけが出ること（記録は標準エラーに出ること）・標準入力を閉じて終了コード 0・`AREKA_MCP_PORT=0` で全部エラー。読めない値と未設定は既定の 20 個へつなぎに行くので exe ごしには回さない（`config_tests.rs` の純粋な判定で固定）。
 
 ### 実機確認（8.5）
