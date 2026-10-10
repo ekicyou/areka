@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use areka_mcp::{MCP_PATH, McpServer, SERVER_NAME, ToolRegistry};
 use http::{HeaderName, HeaderValue};
@@ -15,11 +15,11 @@ use rmcp::transport::streamable_http_client::{
 };
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
+use tokio::net::{TcpSocket, TcpStream};
 
-use super::{HttpError, OwnHttp, read_reply, verify};
+use super::{HttpError, OwnHttp, check_request, read_reply, verify};
 use crate::config::Timeouts;
-use crate::fake_server::{FakeServer, Log, Reply, Script};
+use crate::fake_server::{Conn, FakeServer, Log, Reply, Script};
 
 /// 受け口が黙ったときにテストを止めずに赤にする上限。
 const DEADLINE: Duration = Duration::from_secs(10);
@@ -145,10 +145,17 @@ fn no_headers() -> HashMap<HeaderName, HeaderValue> {
 /// rmcp が呼ぶのと同じ口で 1 件送る。`uri` には別の機械を、セッションと認証には値を渡す:
 /// 送り手はどれも使わず、自分の番号の `127.0.0.1` へつなぐ（要件 2.7）。
 async fn post(port: u16, message: &Value, headers: HashMap<HeaderName, HeaderValue>) -> Posted {
-    let http = OwnHttp {
-        port,
-        timeouts: Timeouts::default(),
-    };
+    post_within(port, message, headers, Timeouts::default()).await
+}
+
+/// [`post`] と同じ。待つ時間を差し替える。
+async fn post_within(
+    port: u16,
+    message: &Value,
+    headers: HashMap<HeaderName, HeaderValue>,
+    timeouts: Timeouts,
+) -> Posted {
+    let http = OwnHttp { port, timeouts };
     let message: ClientJsonRpcMessage =
         serde_json::from_value(message.clone()).expect("要求の形として読める");
     http.post_message(
@@ -440,4 +447,291 @@ async fn chunk_extensions_and_trailers_are_skipped_and_the_next_reply_follows() 
     assert_eq!(second.content_type, "");
     assert_eq!(second.body, b"next");
     assert!(buf.is_empty() && stream.is_empty(), "余りが残った");
+}
+
+// ---- ここから下は失敗の読み分け: 「書く前」か「書いた後」か（設計 D-6） ----
+
+/// 1 件送って、送り手の失敗を取り出す（成功や、送り手の外の失敗なら赤）。送り手が戻らなければ、
+/// テストを止めずに赤にする。
+async fn failure_within(port: u16, message: &Value, timeouts: Timeouts) -> HttpError {
+    let posted = post_within(port, message, no_headers(), timeouts);
+    match tokio::time::timeout(DEADLINE, posted).await {
+        Ok(Err(StreamableHttpError::Client(error))) => error,
+        Ok(other) => panic!("送り手の失敗でない: {other:?}"),
+        Err(_) => panic!("送り手が {DEADLINE:?} のうちに戻らない"),
+    }
+}
+
+async fn failure(port: u16, message: &Value) -> HttpError {
+    failure_within(port, message, Timeouts::default()).await
+}
+
+fn is_not_areka(error: &HttpError, port: u16, name: &str) -> bool {
+    matches!(error, HttpError::NotAreka { port: p, name: n } if *p == port && n == name)
+}
+
+/// 「書く前」の裏づけ: 受け口に届いた要求は確かめの `initialize` の 1 つだけで、その接続が受けた
+/// バイトの数は確かめの要求の長さちょうど（本当の本文は 1 バイトも書かれていない）。
+async fn only_the_check_arrived(fake: &FakeServer) {
+    let log = finished(fake).await;
+    let check_only = Conn {
+        bytes: check_request(fake.port()).len(),
+        closed: true,
+    };
+    assert_eq!(log.connections, [check_only], "{log:?}");
+    let [check] = &log.requests[..] else {
+        panic!("届くのは確かめの 1 つだけのはず: {log:?}");
+    };
+    assert_eq!(check.method, "initialize", "{log:?}");
+    assert_eq!(check.body["id"], "identity-check", "{log:?}");
+    assert_eq!(
+        check.body["params"]["clientInfo"]["name"], "areka-mcp-bridge",
+        "{log:?}"
+    );
+}
+
+/// 名乗りが違う相手には本当の本文が届かない（要件 2.3・2.11）。失敗は番号と名乗りを持つ「書く前」。
+#[tokio::test]
+async fn a_peer_with_another_name_never_gets_the_real_request() {
+    let fake = FakeServer::start(Script::named("ssp-mcp-server"));
+
+    let error = failure(fake.port(), &call(json!(1))).await;
+    assert!(
+        is_not_areka(&error, fake.port(), "ssp-mcp-server"),
+        "{error:?}"
+    );
+    assert!(!error.written(), "{error:?}");
+
+    only_the_check_arrived(&fake).await;
+}
+
+/// 送る本文そのものが rmcp の手順の `initialize` で、答えの名乗りが違う: これも「書く前」
+/// （この `initialize` は Desktop の中身を持たず、確かめを兼ねる）。届くのはその 1 つだけ。
+#[tokio::test]
+async fn an_initialize_answered_with_another_name_is_a_failure_before_writing() {
+    let fake = FakeServer::start(Script::named("ssp-mcp-server"));
+    let sent = initialize("2025-11-25");
+
+    let error = failure(fake.port(), &sent).await;
+    assert!(
+        is_not_areka(&error, fake.port(), "ssp-mcp-server"),
+        "{error:?}"
+    );
+    assert!(!error.written(), "{error:?}");
+
+    let log = finished(&fake).await;
+    assert_eq!(log.connections.len(), 1, "{log:?}");
+    assert_eq!(log.requests.len(), 1, "{log:?}");
+    assert_eq!(log.requests[0].body, sent);
+}
+
+/// 確かめの答えから名乗りを読めない相手（平文・202・SSE・本文なし・途中で閉じる・壊れた JSON・
+/// JSON-RPC のエラー）は、空の名乗りの `NotAreka`。「書く前」で、本当の本文は届かない（要件 2.3）。
+#[tokio::test]
+async fn a_peer_whose_name_cannot_be_read_never_gets_the_real_request() {
+    let answers = [
+        Reply::Text(200, "hello"),
+        Reply::Accepted,
+        Reply::EventStream,
+        Reply::Empty,
+        Reply::CloseMidway,
+        Reply::Broken,
+        Reply::Error(json!({"code": -32601, "message": "Method not found"})),
+    ];
+    for answer in answers {
+        let fake = FakeServer::start(Script::areka().on("initialize", answer.clone()));
+
+        let error = failure(fake.port(), &call(json!(1))).await;
+        assert!(
+            is_not_areka(&error, fake.port(), ""),
+            "{answer:?}: {error:?}"
+        );
+        assert!(!error.written(), "{answer:?}");
+
+        only_the_check_arrived(&fake).await;
+    }
+}
+
+/// 接続は受けるが返事をしない相手へ 1 件送り、確かめの上限で見切ったこと（「書く前」）を判定して、
+/// その受け口を返す。
+async fn given_up_by_a_silent_peer(message: &Value) -> FakeServer {
+    let fake = FakeServer::start(Script::areka().on("initialize", Reply::Never));
+    let verify = Duration::from_millis(250);
+    let timeouts = Timeouts {
+        verify,
+        ..Timeouts::default()
+    };
+
+    let started = Instant::now();
+    let error = failure_within(fake.port(), message, timeouts).await;
+    let elapsed = started.elapsed();
+    assert!(
+        matches!(error, HttpError::VerifyTimeout(waited) if waited == verify),
+        "{error:?}"
+    );
+    assert!(!error.written(), "{error:?}");
+    // 上の限りはゆるく見る（負荷の下でも赤にしない）。
+    assert!(
+        verify <= elapsed && elapsed < Duration::from_secs(5),
+        "{elapsed:?}"
+    );
+    fake
+}
+
+/// 接続は受けるが返事をしない相手は、確かめの上限で見切る（要件 2.9）。「書く前」。
+#[tokio::test]
+async fn a_silent_peer_is_given_up_after_the_verify_wait() {
+    // 見切った後に書いたバイトも、偽の受け口は数える（黙っている間も読んでいる）。
+    let fake = given_up_by_a_silent_peer(&call(json!(1))).await;
+    only_the_check_arrived(&fake).await;
+
+    // 送る本文そのものが `initialize` でも、同じ上限で見切る。届くのはその 1 つだけ。
+    let sent = initialize("2025-11-25");
+    let fake = given_up_by_a_silent_peer(&sent).await;
+    let log = finished(&fake).await;
+    assert_eq!(log.requests.len(), 1, "{log:?}");
+    assert_eq!(log.requests[0].body, sent);
+}
+
+/// 誰も待ち受けていない番号へは接続できない。「書く前」（接続が無いので、書く先も無い）。
+#[tokio::test]
+async fn nobody_listening_is_a_connect_failure() {
+    // 番号を束ねたまま待ち受けない: 接続は通らず、並んで走るテストの受け口がこの番号を取ることもない。
+    let socket = TcpSocket::new_v4().expect("ソケットを作れる");
+    let any_port = "127.0.0.1:0".parse().expect("アドレスとして読める");
+    socket.bind(any_port).expect("空きポートを束ねられる");
+    let port = socket.local_addr().expect("番号が分かる").port();
+
+    let error = failure(port, &call(json!(1))).await;
+    // 断られるか、上限（300 ms）で見切るかは机による。どちらも同じ失敗。
+    assert!(matches!(error, HttpError::Connect(_)), "{error:?}");
+    assert!(!error.written(), "{error:?}");
+
+    // 番号 0 へは、待たずにその場で失敗する（上限で見切るのとは別の道）。
+    let error = failure(0, &call(json!(1))).await;
+    assert!(matches!(error, HttpError::Connect(_)), "{error:?}");
+    assert!(!error.written(), "{error:?}");
+}
+
+/// 本当の要求に本文なしで答える・答えの途中で閉じる（要件 4.1）: `NoResponse`。「書いた後」で、
+/// 本当の要求は 1 回だけ届いている（届いたかもしれないので、呼び手は送り直さない＝要件 4.5）。
+/// 本文なしは、JSON と名乗っていなくても（状態 500 の `text/plain`）`NoResponse` が先。
+#[tokio::test]
+async fn an_empty_or_cut_answer_is_no_response_after_writing() {
+    for reply in [Reply::Empty, Reply::Text(500, ""), Reply::CloseMidway] {
+        let fake = FakeServer::start(Script::areka().on("tools/call", reply.clone()));
+
+        let error = failure(fake.port(), &call(json!(1))).await;
+        assert!(
+            matches!(error, HttpError::NoResponse),
+            "{reply:?}: {error:?}"
+        );
+        assert!(error.written(), "{reply:?}");
+
+        finished(&fake).await;
+        assert_eq!(fake.requests_of("tools/call").len(), 1, "{reply:?}");
+    }
+}
+
+/// 本当の要求への答えの本文が JSON でない（要件 4.2）: HTTP の状態と本文の頭 256 バイトを持つ
+/// `NotJson`。「書いた後」。
+#[tokio::test]
+async fn a_body_that_is_not_json_keeps_the_status_and_the_first_256_bytes() {
+    let long: &'static str = "0123456789".repeat(30).leak();
+    // 中身は正しい JSON-RPC の応答でも、`text/plain` と名乗る本文は JSON として読まない。
+    let mislabeled = r#"{"jsonrpc":"2.0","id":1,"result":{}}"#;
+    let cases = [
+        (Reply::Text(500, "internal error"), 500, "internal error"),
+        (Reply::Text(200, mislabeled), 200, mislabeled),
+        (Reply::Text(415, long), 415, &long[..256]),
+        // `application/json` と名乗る、JSON として読めない本文。
+        (Reply::Broken, 200, r#"{"jsonrpc": "2.0", "id""#),
+    ];
+    for (reply, status, head) in cases {
+        let fake = FakeServer::start(Script::areka().on("tools/call", reply.clone()));
+
+        let error = failure(fake.port(), &call(json!(1))).await;
+        assert!(
+            matches!(&error, HttpError::NotJson { status: s, head: h } if *s == status && h == head),
+            "{reply:?}: {error:?}"
+        );
+        assert!(error.written(), "{reply:?}");
+
+        finished(&fake).await;
+        assert_eq!(fake.requests_of("tools/call").len(), 1, "{reply:?}");
+    }
+}
+
+/// `text/event-stream` の答えは、頭だけで JSON でないと決める（設計 D-16）。偽の受け口は 1 件
+/// 書いた後も接続を閉じないので、本文の終わりを待つ送り手は戻らない（`failure` の上限で赤）。
+#[tokio::test]
+async fn an_event_stream_answer_is_refused_on_its_header_without_reading_the_body() {
+    let fake = FakeServer::start(Script::areka().on("tools/call", Reply::EventStream));
+
+    let error = failure(fake.port(), &call(json!(1))).await;
+    assert!(
+        matches!(&error, HttpError::NotJson { status: 200, head } if head == "content-type text/event-stream"),
+        "{error:?}"
+    );
+    assert!(error.written(), "{error:?}");
+
+    finished(&fake).await;
+    assert_eq!(fake.requests_of("tools/call").len(), 1);
+}
+
+/// 「書いた後か」の真偽の表（失敗の 5 つの全部）。
+#[test]
+fn written_is_true_only_for_the_failures_after_the_real_body() {
+    let before = [
+        HttpError::Connect(std::io::ErrorKind::ConnectionRefused.into()),
+        HttpError::NotAreka {
+            port: 9801,
+            name: "ssp-mcp-server".into(),
+        },
+        HttpError::VerifyTimeout(Duration::from_secs(3)),
+    ];
+    let after = [
+        HttpError::NoResponse,
+        HttpError::NotJson {
+            status: 500,
+            head: "internal error".into(),
+        },
+    ];
+    for error in &before {
+        assert!(!error.written(), "{error:?}");
+    }
+    for error in &after {
+        assert!(error.written(), "{error:?}");
+    }
+}
+
+/// 日本語の入った本文は欠けずに届く: `Content-Length` はバイトの数（文字の数ではない）。
+#[tokio::test]
+async fn a_body_with_japanese_text_arrives_whole() {
+    let fake = FakeServer::start(Script::areka());
+    let script = r"\0こんにちは、世界。\e";
+    let sent = json!({
+        "jsonrpc": "2.0", "id": "日本語-1", "method": "tools/call",
+        "params": {"name": "sakurascript", "arguments": {"script": script}},
+    });
+    // 送り手が書くバイト列（rmcp の型を JSON にしたもの）。
+    let typed: ClientJsonRpcMessage = serde_json::from_value(sent.clone()).expect("要求の形");
+    let bytes = serde_json::to_vec(&typed).expect("JSON にできる");
+    let chars = String::from_utf8_lossy(&bytes).chars().count();
+    assert!(
+        bytes.len() > chars,
+        "バイトの数と文字の数が違う本文で確かめる"
+    );
+
+    // 台本に無い `tools/call` には、偽の受け口が JSON-RPC のエラーで答える（届いた印）。
+    let answer = json_of(post(fake.port(), &sent, no_headers()).await);
+    assert_eq!(answer["id"], "日本語-1", "{answer}");
+
+    let log = finished(&fake).await;
+    let real = &log.requests[1];
+    let length = bytes.len().to_string();
+    assert_eq!(real.header("content-length"), Some(length.as_str()));
+    let whole: Value = serde_json::from_slice(&bytes).expect("JSON");
+    assert_eq!(real.body, whole);
+    assert_eq!(real.body["params"]["arguments"]["script"], script);
 }

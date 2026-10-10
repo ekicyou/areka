@@ -315,7 +315,7 @@ async fn serve(mut stream: TcpStream, connection: usize, shared: &Shared) -> std
         if !body.is_object() {
             return refuse(&mut stream, 400, "the body is not a JSON object").await;
         }
-        if !respond(&mut stream, &body["id"], reply, close).await? {
+        if !respond(&mut stream, &body["id"], reply, close, connection, shared).await? {
             return Ok(());
         }
     }
@@ -400,6 +400,8 @@ async fn respond(
     id: &Value,
     mut reply: Reply,
     close: bool,
+    connection: usize,
+    shared: &Shared,
 ) -> std::io::Result<bool> {
     while let Reply::Delayed(delay, inner) = reply {
         tokio::time::sleep(delay).await;
@@ -430,7 +432,7 @@ async fn respond(
             return Ok(false);
         }
         Reply::Never => {
-            hold(stream).await;
+            hold(stream, connection, shared).await;
             return Ok(false);
         }
         Reply::Chunked(value) => {
@@ -460,7 +462,7 @@ async fn respond(
         Reply::EventStream => {
             let event = [b"data: ".as_slice(), &result(json!({})), b"\n\n"].concat();
             write(stream, 200, "text/event-stream", "", false, &event).await?;
-            hold(stream).await;
+            hold(stream, connection, shared).await;
             return Ok(false);
         }
         Reply::Delayed(..) => unreachable!("the delays are unwrapped above"),
@@ -506,10 +508,12 @@ async fn refuse(stream: &mut TcpStream, status: u16, why: &str) -> std::io::Resu
     .await
 }
 
-/// 相手が閉じるまで、何も書かずに接続を持つ。
-async fn hold(stream: &mut TcpStream) {
-    let mut sink = [0u8; 1024];
-    while matches!(stream.read(&mut sink).await, Ok(n) if n > 0) {}
+/// 相手が閉じるまで、何も書かずに接続を持つ。その間に届いたバイトは、数だけ記録に足して捨てる。
+async fn hold(stream: &mut TcpStream, connection: usize, shared: &Shared) {
+    let mut sink = Vec::new();
+    while matches!(read_more(stream, &mut sink, connection, shared).await, Ok(n) if n > 0) {
+        sink.clear();
+    }
 }
 
 #[cfg(test)]
