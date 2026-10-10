@@ -80,6 +80,9 @@
 | 道具の定義に `x-mcp-header` の印が在る `tools/call` | `Mcp-Param-*` の札も要る（areka の定義には今 0 件） | `param_header_annotations` |
 
 - 札を**組む**側の関数 `standard_request_headers` は rmcp の中だけの関数（`pub(crate)`・機能 `client-side-sse` の下）で、外からは呼べない。公式 SDK で札を付けるには、HTTP クライアントの輸送（機能 `transport-streamable-http-client`）ごと使うことになる。その輸送は HTTP クライアントの実装を別に要し、付属の実装は `reqwest`（機能 `transport-streamable-http-client-reqwest`）。**`reqwest` は `Cargo.lock` に無い**。stdio の側は機能 `transport-io`（tokio の `io-std`）。
+- **増える外部のクレートの数を測った**（2026-10-10・要件ディスカッションの中で。`target\mcp-stdio-bridge-req\deps-probe-*` に、ワークスペースの `Cargo.lock` を写した試しのクレートを置き、`cargo tree -e normal --target x86_64-pc-windows-msvc` の名前を `Cargo.lock` の名前と比べた。建ててはいない）:
+  - rmcp の `server`・`client`・`transport-io`・`transport-streamable-http-client-reqwest`（付属の `reqwest` の HTTP クライアント）: `Cargo.lock` に無い名前が **34 個**（`reqwest`・`url`・`idna`・`icu_*` の族・`tower`・`tower-http`・`want` など）。
+  - rmcp の `server`・`client`・`transport-io`・`transport-streamable-http-client`（HTTP を送る部分だけ自前で、rmcp の `StreamableHttpClient` の口に合わせて書く）: `Cargo.lock` に無い名前は **0 個**。この形で rmcp の口を満たせるか・exe の大きさは未確認。
 - 受け口は JSON の単発応答を優先するが、ツールの処理が途中で通知や要求を出すと SSE に切り替わる（`tower.rs` の無状態の経路の注釈）。areka のツールは今は出さない（0 件）。出すようになると、JSON 1 件だけを読む中継には「JSON でない本文」に見える。
 
 ### 2.6 SSP の中継の実測の記録（読んだだけ）
@@ -169,7 +172,7 @@ rmcp の `transport-io`（stdio の側）と `transport-streamable-http-client`�
 - 要件の裁定 1・2 で既に行の中身を読む所が 3 つある（`method` と `id` を読む・`serverInfo.name` を読む・控えの `id` を差し替える）。札で 2 つ増える（`params.name`・`params._meta` の版）。
 - **選択肢**:
   - ア. 「欄を読んで札へ写すだけで、MCP の意味は作らない」と見て、手書きで持つ（案 B）。札の決まりが rmcp と食い違えば、本物の受け口を相手にしたテストが赤になる形で守る。
-  - イ. 「解釈に当たる」と見て、公式 SDK で組む（案 C）。依存が増えるので、要件の決まりどおり止めて報告になる。
+  - イ. 「解釈に当たる」と見て、公式 SDK で組む（案 C）。付属の `reqwest` を使うと外部のクレートが 34 個増える。HTTP を送る部分だけ自前で書けば 0 個（2.5 の実測）だが、その部分（HTTP/1.1 の応答の読み手）は手書きのまま残る。brief の Approach は「写すだけで足りず MCP を解釈する必要が出たら、rmcp の stdio と HTTP クライアントで組む」と書いている。
   - ウ. `2026-07-28` を中継の範囲から外す（札を作らない＝要件 1.10 を 4 つの版に狭める）。Claude Desktop が `2026-07-28` で話すなら使えなくなるので、Desktop の話す版（調べ残し 3）が分かるまで選べない。
 - **札を作るときの細部**（ア を選んだ場合に設計で決める）: 札の値に使えない字（ASCII の外・前後の空白）が `params.name` に在るときは rmcp と同じ `=?base64?…?=` の形にするか（`base64` は `Cargo.lock` に在るが、手書きでも数十行）、札を付けずに送って areka の `-32020` をそのまま返すか。`Mcp-Param-*` は areka の定義に印が 0 件なので作らず、「印が 0 件であること」をテストで見張るか。
 
