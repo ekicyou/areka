@@ -885,7 +885,8 @@ pub(super) fn expected_statuses() -> Vec<RecordedStatus> {
         // ── 終了: 終了系列は運行を `Unloading` へ移してから発火する＝全状態が非アクティブ。
         //    出所: `crates/areka-kanade/src/schedule/mod.rs:484-492`。
         status("OnClose", None),
-        //    終了の挨拶の `OnTranslate` も終了の相の状態＝ヘッダ行なし。
-        status(TRANSLATE, None),
+        //    終了の挨拶の `OnTranslate` は、挨拶を再生する相へ移った後（再生を始める時点）の状態を
+        //    運ぶ。終了の挨拶の再生中も会話中に数えるので、普段の台詞の `OnTranslate` と同じ会話中。
+        status(TRANSLATE, Some(STATUS_TALKING)),
     ]
 }

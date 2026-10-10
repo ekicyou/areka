@@ -32,7 +32,7 @@
   - _Depends: 1.1, 1.2_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 3.5, 3.6, 4.8, 4.9_
 
-- [ ] 2.2 適合の一周の期待列を新しい振る舞いへ合わせる
+- [x] 2.2 適合の一周の期待列を新しい振る舞いへ合わせる
   - `crates/areka` の適合の一周の進行状態の期待列の最後の行（終了の挨拶の `OnTranslate`）を、行なしから `talking` へ書き換え、その上の注記を改める
   - 進行状態の記録を読む一周のテストだけを名前で絞って 1 回回す（GPU の足場を使う重いテストなので繰り返さない。`crates/areka` の全体は完了時の全体テストに任せる）
   - 完了の姿: 絞った一周のテストが緑。`cargo fmt --all --check` が通る
@@ -51,3 +51,5 @@
 - 段のテストの補助 `phases()` は 17 通り（相の 15 種類＋トークの有無）。先頭 6 つの並びは既存のテストが添字で使うので動かさない。相を足したら `plays_a_talk`（コンパイルが止まる）だけでなく `phases()` と件数の期待も直す。
 - 2.1 で、設計が挙げていなかった既存のテストが 1 本赤になった: `crates/areka-kanade/tests/kanade/external_status_test.rs` の、通信中の旗を落とした後の要求を「どれも `Status` の行なし」と見る表明（区間に終了の挨拶の `OnTranslate` が入る）。「`OnTranslate` だけ `talking`、ほかは行なし」へ書き換え、design.md・research.md の「2 か所」を「3 か所」へ改めた。
 - 範囲の外の気付き（完了時の棚卸しの材料）: `crates/areka-kanade/src/schedule/user_break_tests.rs` の `playing_states` の注記「3 つの場面（`fn current_talk_id` が `Some` を返す全て）」は、`current_talk_id` が 5 つの相で番号を返すので元から不正確（本 spec で偽になったものではない）。
+- 範囲の外の気付き（完了時の棚卸しの材料）: `crates/areka/src/emo2_boot/spine_conformance_script.rs` の `expected_statuses` の `OnClose` の行の注記（「終了系列は運行を `Unloading` へ移してから発火する」と行番号での出所）は、本 spec の前から不正確（実際は応答待ちの相へ移り、会話なしの作り方で送る。行番号もずれている）。`OnClose` が行なしという観測そのものは正しい。
+- 適合の一周のテストは `cargo test -p areka --bin areka emo2_boot::spine::conformance_lap_tests::conformance_lap_walks_every_stage_to_its_completion -- --exact`（`crates/areka` はバイナリだけなので `--lib` では絞れない。建った後の実行は数秒）。
