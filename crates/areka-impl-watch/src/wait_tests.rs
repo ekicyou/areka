@@ -3,43 +3,18 @@
 //! 組み立てる参加者の名前と負荷テストの内容は日本語（端末へ出てはならない値）。終わりの 1 行は
 //! [`judged`] が毎回「ASCII だけ・1 行」を確かめる。
 
+use super::test_support::{T0, load, merge, resume, watch};
 use super::{WaitEnd, WaitSpec, judge};
 use crate::state::{
     LastMerge, LoadHolder, LoadRequest, MergeDesk, MergeHolder, MergeRequest, Participant,
     ParticipantStatus, State, StopReason,
 };
 
-/// テストの時刻の起点（2026-10-03T04:00:00Z）。
-const T0: u64 = 1_791_000_000;
-
 const WORKING: ParticipantStatus = ParticipantStatus::Working;
 const STOP_REQUESTED: ParticipantStatus = ParticipantStatus::StopRequested;
 const STOPPED: ParticipantStatus = ParticipantStatus::Stopped;
 
 const ALREADY_STOPPED: &str = "already stopped; run stopped --wait or resume";
-
-fn watch(id: &str) -> WaitSpec {
-    WaitSpec::Watch {
-        id: id.to_owned(),
-        repo: "areka".to_owned(),
-        name: None,
-    }
-}
-
-fn merge(id: &str, repo: &str) -> WaitSpec {
-    WaitSpec::Merge {
-        id: id.to_owned(),
-        repo: repo.to_owned(),
-    }
-}
-
-fn load(id: &str) -> WaitSpec {
-    WaitSpec::Load { id: id.to_owned() }
-}
-
-fn resume(id: &str) -> WaitSpec {
-    WaitSpec::Resume { id: id.to_owned() }
-}
 
 fn done(line: &str) -> Option<WaitEnd> {
     Some(WaitEnd::Done(line.to_owned()))
