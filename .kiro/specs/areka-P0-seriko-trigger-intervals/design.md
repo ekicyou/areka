@@ -759,6 +759,8 @@ fn fire_part_triggers<'a>(clocks, armed, order, anims: &'a [LoopAnimation], scop
 - `always:1`: `owner = "areka-P0-seriko-interval-combinations"`（判定 `degraded` と note は不変）。
 - `yen-e:1`・`never:1`: 触らない。
 - `doc/ukadoc-coverage/roadmap-draft.md`: 上の File Structure Plan のとおり（見張りの腕 a・c・f）。
+- 実装で分かった見張りの要求（2026-10-10・タスク 8。上の「腕 a・c・f」だけでは足りなかった）: ⑴ `implemented` の項目は `crates/` の下のソースに正典 URL のコメント（`// ukadoc: <URL>`）が要る＝`crates/areka-seriko/src/table.rs` の `from_world_and_films` の 3 語の腕の上に 3 行（`sometimes`／`rarely` と同じ置き方）⑵ `doc/ukadoc-coverage/briefing.md` の `[[barrier]] descript_shell_surfaces` の数（`implemented` 7→10・`vocabulary_only` 53→50）⑶ 報告の作り直し（`cargo run -p ukadoc-survey -- report` と `-- report-summary`＝`report/assets.md`・`report/summary.md`。道具は LF で書き出すので CRLF へ戻す）。見張りは見ないが偽になる散文も最小で直した: `roadmap-draft.md` の段階 A の表・「サーフェスアニメーション」の節・日付つきの段落、`briefing-assets.md` の 3 行と内訳と注記 ⑴（駆動する間隔の語は 8 語）、`sometimes`／`rarely` の note の「名前として認める語」の数（3→6）。
+- `always:1` の note の末尾の 1 文「組み合わせは areka-P0-seriko-trigger-intervals が引き受ける（担当欄）」は、担当の付け替えで実態と合わなくなったが、要件 10.3 が note を変えないと決めているので触っていない（完了の棚卸で `areka-P0-seriko-interval-combinations` へ申し送る）。
 
 ## Open Questions / Risks
 

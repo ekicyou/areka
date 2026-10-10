@@ -97,7 +97,7 @@
   - _Depends: 6.1_
   - _Requirements: 1.5, 7.2, 9.6, 9.7, 11.1_
 
-- [ ] 8. (P) 網羅台帳を実装に合わせる
+- [x] 8. (P) 網羅台帳を実装に合わせる
   - 台帳の `talk,数値`・`runonce`・`periodic,数値` の 3 行を `implemented`・担当を本 spec にし、areka の裁量（`periodic` は切り替わった瞬間には鳴らさない・`talk` の数える単位と数え直しの時点・同じ時刻の区切りのまとめ・再生中の飛ばし・閉じたバルーンの窓の扱い・`+` の組み合わせは採らない）を note に書く
   - `sometimes`・`rarely` の note の古い 1 文を着地後の実態（3 語は駆動・`yen-e`・`never` は非駆動）に直す
   - `always` の行の担当を `areka-P0-seriko-interval-combinations` へ付け替える（判定と note は変えない）。`yen-e`・`never` の行には触れない
@@ -171,3 +171,6 @@
 - 7.1: 検体 `crates/areka-seriko/tests/fixtures/trigger-intervals/surfaces.txt` は面 9100〜9104（9100＝一番上に 3 語・9101＋9102＝部品にだけ `talk` と `runonce`・9103＝無効な数値 `talk,abc`／`periodic,0` と大文字混じり `Talk,3`・9104＝コマ列が空）。件数は採録の `debug!` 5（9100 の 0・1・2＋9102 の 0・1）・`warn!` 3（9103 の 0・1＋9104 の 0）。設計の表に足したもの: 9103・9104 の `element0,overlay,surface0.png,0,0`（実機で立ち絵が出るように）と 9103 のコマ行（「採らない」を観測できるように）。`descript` は置かない（emo2 の末尾へ書き足す断片）。
 - 7.1 → 9.2: emo2 の `surfaces.txt` の末尾へ丸ごと書き足しても件数は同じ（`warn!` 3・採録 5・emo2 単独は 0・0）で、番号は当たらず絵は全部 emo2 に在ることを E2E `fixture_appended_to_emo2_keeps_the_counts_and_finds_every_picture` が固定している。空のコマ列の記録の検索語は既存の文言「seriko table: コマ列が空のアニメは非採録（要件 8.3）」。
 - 7.1: アクターの檻の共有の足場（`ClockRig`・`cue`・`text`・`clear_all`・`frames`・`single_show`・`part_frames`・`top_frames`）は `actor_test_support.rs` へ移した（`actor_talk_tests.rs`・`actor_parts_tests.rs` のテスト本体は不変）。E2E の主な表明は同期の `handle_message`＋手で進める時計で、別スレッドのアクター（`spawn_seriko_clocked`）は 9100 の 1 本。
+- 8: 台帳の見張り（`cargo test -p ukadoc-survey`）は、設計が挙げた `assets.toml`・`roadmap-draft.md` のほかに ⑴ `implemented` の項目ごとの正典 URL のコメント（`table.rs` の 3 語の腕の上に 3 行）⑵ `briefing.md` の `[[barrier]]` の数 ⑶ 報告の作り直し（`cargo run -p ukadoc-survey -- report`／`-- report-summary`。道具は 5 本とも LF で書き出すので CRLF へ戻す）を求めた。1 回目の実装者は旧い境界で BLOCKED を返し、要件 10.2（見張りを緑に保つ）の内側として境界を広げて再依頼した。設計の台帳の節にも書き足した。
+- 8: 範囲を少し越えて直したもの（査読が受け入れ）— `briefing-assets.md` の表の `always`・`base` の 2 行を「語彙のみ」→「縮退」（別 spec の取り残し・数え直した内訳と表を合わせるため）、`sometimes`／`rarely` の note の「`normalize_interval` が名前として認めるのは 3 つの語」→「6 つの語」。
+- 8（完了の棚卸の候補）: ⑴ `always:1` の note の末尾「組み合わせは areka-P0-seriko-trigger-intervals が引き受ける（担当欄）」は担当の付け替えで実態と合わない（要件 10.3 が note を変えないと決めているので触っていない＝`areka-P0-seriko-interval-combinations` へ申し送る）。⑵ 触っていない行の古い決まり文句（`random,数値`・`endtalk`・`starttalk`・`never`・`yen-e` の note の「駆動するのは 2 語だけ」「名前として認めるのは駆動する 3 つの語」）、`briefing-assets.md` の注記 ⑵「駆動する 2 語の一方」と日付つきの行番号、`roadmap-draft.md` の本 spec の `wave = "C5 の候補"`、束「サーフェスアニメーション」の「依存する既存 spec」に `areka-P0-shell-implicit-surface`（2 件）が無いこと。

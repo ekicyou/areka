@@ -202,8 +202,10 @@ impl AnimationTable {
                     areka_parsers::shell::Interval::BindRandom { k } => {
                         Some(LoopTrigger::BindRandom { k: *k })
                     }
+                    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#runonce:1
                     areka_parsers::shell::Interval::Runonce => Some(LoopTrigger::Runonce),
                     // 読み手は 1 以上だけを型へ写すが、型は 0 を持てるので 0 は無効の数値として扱う。
+                    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#periodic_2c_6570_5024:1
                     areka_parsers::shell::Interval::Periodic { secs } => {
                         match NonZeroU64::new(u64::from(*secs) * 1000) {
                             Some(period_ms) => Some(LoopTrigger::Periodic { period_ms }),
@@ -213,6 +215,7 @@ impl AnimationTable {
                             }
                         }
                     }
+                    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#talk_2c_6570_5024:1
                     areka_parsers::shell::Interval::Talk { n } => match NonZeroU32::new(*n) {
                         Some(every) => Some(LoopTrigger::Talk { every }),
                         None => {
