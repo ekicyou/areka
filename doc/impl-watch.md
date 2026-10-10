@@ -293,7 +293,7 @@ EXE="$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe"
 | `state.lock is busy for 10 s; …` | 少し置いて呼び直す。続くなら、止まったままの `areka-impl-watch.exe` が無いか見る |
 | `io write state.json: PermissionDenied …`・`io set aside state.json: …` | 6 節の「ファイルを開いたままのアプリが居る」 |
 
-**`watch` が終了コード 1 で終わったら、直ちに立て直す。** 立て直すまでの間にほかの参加者の呼び出しが来ると、落ちたものとして外される。
+**`watch` が終了コード 1 で終わったら、直ちに立て直す。** 立て直すまでの間にほかの参加者の呼び出しが来ると、落ちたものとして外される。ただし、出た文が `a watch wait for <識別> is already running` のときは、前の見張りがまだ走っているので立て直さなくてよい。
 
 終了コード 2 は呼び方の誤りなので、引数を直して呼び直す。
 
