@@ -59,8 +59,9 @@ pub(crate) use pressed::on_balloon_pointer_pressed;
 /// `ordinal` はワイヤ形に含めない（漏洩防止・design 2.6）。
 ///
 /// 本番到達済み——発行は [`on_balloon_pointer_pressed`]→[`BalloonWiring::send_selection`]、
-/// 全フィールドの消費は `input_events/choice_drain.rs:42` の `to_choice_input`（`ChoiceInput` へ
-/// 不透明転写）。`resolve_choice` を本 crate から呼ばない点は現在も変わらない（発行までが本 mod の
+/// 全フィールドの消費は `input_events/choice_drain.rs` の `to_choice_input`（`ChoiceInput` へ
+/// 不透明転写）と、種類がアンカーのときの `to_anchor_input`（`AnchorInput` へ同じく転写）。
+/// `resolve_choice` を本 crate から呼ばない点は現在も変わらない（発行までが本 mod の
 /// 範囲・カスケードは kanade 側）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ChoiceSelection {
@@ -76,6 +77,17 @@ pub(crate) struct ChoiceSelection {
     pub scope: usize,
     /// `\q` 第 3 引数以降（参照列・不透明転写）。
     pub references: Vec<String>,
+}
+
+/// 選択の発行の記録の名前（送れたとき・送れなかったときの順）。
+///
+/// 選択肢は今までの名前のまま。アンカーは `anchor_` で始まる名前にして、ログで種類を見分ける
+/// （1 回の発行に両方の名前は出さない）。押下の 2 か所（普通のバルーン・箱）と送り口が同じ表を引く。
+pub(super) fn selection_events(kind: SpanKind) -> (&'static str, &'static str) {
+    match kind {
+        SpanKind::Choice => ("choice_selected", "choice_selection_send_failed"),
+        SpanKind::Anchor => ("anchor_selected", "anchor_selection_send_failed"),
+    }
 }
 
 /// バルーン選択肢対話の配線資源（NonSend・donor `MouseWiring` 同型・2.2）。
@@ -125,9 +137,10 @@ impl BalloonWiring {
     /// 5.3/5.4）。送出失敗（受け口消滅後の [`Sender`] エラー）は warn＋no-op（`false` 返し・log-first）。
     pub(crate) fn send_selection(&self, selection: ChoiceSelection) -> bool {
         let scope = selection.scope;
+        let (_, send_failed) = selection_events(selection.kind);
         if self.selection_tx.send(selection).is_err() {
             tracing::warn!(
-                event = "choice_selection_send_failed",
+                event = send_failed,
                 scope,
                 "ChoiceSelection 発行シンク送出失敗（受け口消滅後）: no-op で継続"
             );

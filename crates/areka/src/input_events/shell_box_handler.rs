@@ -28,7 +28,7 @@ use bevy_ecs::world::World;
 use wintf::ecs::pointer::{PointerLeave, PointerState, dispatch_pointer_events};
 use wintf::ecs::{Input, find_owner_window};
 
-use super::balloon::{BalloonWiring, ChoiceSelection, HoverAction, hover_action};
+use super::balloon::{BalloonWiring, ChoiceSelection, HoverAction, hover_action, selection_events};
 use super::shell_box::{
     BoxMove, BoxPressVerdict, ShellBoxHover, box_under_point, judge_box_click, judge_box_move,
     next_box_hover,
@@ -265,8 +265,10 @@ pub(super) fn press_with_point(
     verdict != BoxPressVerdict::ShellOp
 }
 
-/// 選択の確定を既存の送り口で送る（`balloon_pressed.rs` と同じ記録）。送れたら `true`。
+/// 選択の確定を既存の送り口で送る（`balloon_pressed.rs` と同じ記録・箱の印つき）。送れたら `true`。
+/// 記録の名前は種類で決まる（選択肢は `choice_selected`・アンカーは `anchor_selected`）。
 fn send_selection(world: &World, hit: &ShownBox, sel: ChoiceSelection) -> bool {
+    let (selected, send_failed) = selection_events(sel.kind);
     let (scope, id, label, references_len) = (
         sel.scope,
         sel.id.clone(),
@@ -283,7 +285,7 @@ fn send_selection(world: &World, hit: &ShownBox, sel: ChoiceSelection) -> bool {
     };
     if wiring.send_selection(sel) {
         tracing::info!(
-            event = "choice_selected",
+            event = selected,
             scope,
             id = %id,
             label = %label,
@@ -294,7 +296,7 @@ fn send_selection(world: &World, hit: &ShownBox, sel: ChoiceSelection) -> bool {
         true
     } else {
         tracing::error!(
-            event = "choice_selection_send_failed",
+            event = send_failed,
             scope,
             id = %id,
             "ChoiceSelection 発行シンク送出失敗（受け口消滅後）: no-op 縮退"

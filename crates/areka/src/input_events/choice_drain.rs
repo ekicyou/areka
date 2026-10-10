@@ -9,10 +9,15 @@
 //! 判断分岐は「送出失敗（kanade 停止後）で warn 記録して継続する」1 点のみ（Req1.6）で、
 //! それと写像純関数 [`to_choice_input`] だけが檻の対象（ECS 結線は再テストしない・steering
 //! `test-only-decision-branches-not-proven-wiring`）。
+//!
+//! 知らせの種類がアンカー（`\_a`）なら、選択肢の伝言でなく `KanadeMsg::Anchor` にして送る
+//! （areka-P0-anchor-tag-canon）。種類で伝言を選ぶこの 1 分岐のほかは選択肢と同じで、届いた
+//! アンカーの知らせも全件そのまま送る（kanade 側でも改めて照合しない・要件 4.12）。
 
 use std::sync::mpsc::{Receiver, Sender};
 
-use areka_kanade::{ChoiceInput, KanadeMsg};
+use areka_emo_text::state::SpanKind;
+use areka_kanade::{AnchorInput, ChoiceInput, KanadeMsg};
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
 use wintf::ecs::Input;
@@ -50,6 +55,19 @@ fn to_choice_input(sel: ChoiceSelection) -> ChoiceInput {
     }
 }
 
+/// アンカーの選択の知らせ → kanade の入力への写し（[`to_choice_input`] と同じく加工しない）。
+///
+/// 知らせの `label` はアンカーの範囲に表示された文字で、`text` へそのまま移す。`id`・`references`
+/// （`\_a` の 2 番目以降の引数）も記述のまま。`scope` は型合わせだけ。
+fn to_anchor_input(sel: ChoiceSelection) -> AnchorInput {
+    AnchorInput {
+        id: sel.id,
+        text: sel.label,
+        scope: sel.scope as u32,
+        references: sel.references,
+    }
+}
+
 /// 受信口を `try_recv` で drain し、到着順に全件を kanade へ転送する（Req1.2/1.6）。
 ///
 /// ECS から切り離した純粋な形（`Receiver` と `Sender` のみを取る）——排他システム
@@ -57,21 +75,33 @@ fn to_choice_input(sel: ChoiceSelection) -> ChoiceInput {
 ///
 /// - **判断・フィルタ・重複排除をしない**: 受領した通知は 1 件残らず送出を試みる（Req1.2）。
 /// - **送出失敗で止まらない**: `warn!(event = "choice_forward_failed")` を記録して**次の件へ継続**
-///   する（kanade 停止後は終了系で正常・Req1.6・log-first）。
+///   する（kanade 停止後は終了系で正常・Req1.6・log-first）。アンカーの知らせは同じ形の記録を
+///   `anchor_forward_failed` の名前で残す。
+/// - **種類で伝言を選ぶ**: 選択肢は `KanadeMsg::Choice`、アンカーは `KanadeMsg::Anchor`。
 ///
 /// 戻り値は送出に成功した件数（呼び手は使わないが檻の観測点）。
 fn forward_all(inbox: &Receiver<ChoiceSelection>, kanade: &Sender<KanadeMsg>) -> usize {
     let mut forwarded = 0usize;
     // try_recv ループ＝到着順に全件（滞留は 1 件も残さない・Req1.2）。
     while let Ok(sel) = inbox.try_recv() {
-        // scope は送出後に使えないため、ログ用へ先に控える（写像は所有権を消費する）。
+        // scope と id は送出後に使えないため、ログ用へ先に控える（写像は所有権を消費する）。
         let scope = sel.scope;
-        let input = to_choice_input(sel);
-        let id = input.id.clone();
-        if kanade.send(KanadeMsg::Choice(input)).is_err() {
+        let id = sel.id.clone();
+        // 種類で伝言を選ぶ（本層の振り分けはここだけ）。送れなかったときの記録の名前も種類ごと。
+        let (msg, forward_failed) = match sel.kind {
+            SpanKind::Choice => (
+                KanadeMsg::Choice(to_choice_input(sel)),
+                "choice_forward_failed",
+            ),
+            SpanKind::Anchor => (
+                KanadeMsg::Anchor(to_anchor_input(sel)),
+                "anchor_forward_failed",
+            ),
+        };
+        if kanade.send(msg).is_err() {
             // kanade 停止後（終了系では正常）。無記録で打ち切らず、記録して次の件へ継続する（Req1.6）。
             tracing::warn!(
-                event = "choice_forward_failed",
+                event = forward_failed,
                 scope,
                 id = %id,
                 "kanade Sender 送出失敗（actor 停止後）: 記録して次の通知へ継続"
@@ -141,7 +171,6 @@ pub(crate) fn register_choice_drain(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use areka_emo_text::state::SpanKind;
     use log_capture_kit::{LineFormat, capture_lines};
     use std::sync::mpsc::{self, TryRecvError};
 
@@ -424,5 +453,88 @@ mod tests {
                 "choice_forward_failed は warn レベル（design ログ語彙表）: {line}"
             );
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // 種類の振り分け（areka-P0-anchor-tag-canon 要件 4.11・4.12）
+    // -------------------------------------------------------------------------
+
+    /// [`dirty_selection`] と同じ中身で、種類だけがアンカーの知らせ。
+    fn dirty_anchor() -> ChoiceSelection {
+        ChoiceSelection {
+            kind: SpanKind::Anchor,
+            ..dirty_selection()
+        }
+    }
+
+    /// 選択肢とアンカーが混ざった知らせの列は、届いた順のまま、選択肢は選択肢の伝言・アンカーは
+    /// アンカーの伝言になる。アンカーの伝言の中身は知らせと同じ（ID・範囲の文字・スコープ・引数を
+    /// 加工しない）。同じアンカーの知らせが続いても間引かない（届いたものは全件そのまま送る）。
+    #[test]
+    fn forward_all_routes_each_kind_to_its_own_message_in_arrival_order() {
+        let (sel_tx, sel_rx) = mpsc::channel::<ChoiceSelection>();
+        let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
+        for sel in [
+            dirty_selection(),
+            dirty_anchor(),
+            dirty_anchor(),
+            dirty_selection(),
+        ] {
+            sel_tx.send(sel).expect("受信口は生存している");
+        }
+
+        assert_eq!(forward_all(&sel_rx, &kanade_tx), 4, "4 件とも送る");
+
+        let src = dirty_selection();
+        let anchor = AnchorInput {
+            id: src.id.clone(),
+            text: src.label.clone(),
+            scope: 1,
+            references: src.references.clone(),
+        };
+        let choice = to_choice_input(src);
+        let got: Vec<KanadeMsg> = kanade_rx.try_iter().collect();
+        assert!(
+            matches!(
+                &got[..],
+                [
+                    KanadeMsg::Choice(c0),
+                    KanadeMsg::Anchor(a1),
+                    KanadeMsg::Anchor(a2),
+                    KanadeMsg::Choice(c3),
+                ] if *c0 == choice && *a1 == anchor && *a2 == anchor && *c3 == choice
+            ),
+            "届いた順に、種類ごとの伝言へ（中身は知らせのまま）"
+        );
+    }
+
+    /// 送れなかったアンカーの知らせは、アンカーの名前で記録して次の件へ進む。選択肢の記録の名前は
+    /// 今までどおりで、種類が混ざらない。
+    #[test]
+    fn forward_all_records_a_failed_anchor_under_its_own_name() {
+        let (sel_tx, sel_rx) = mpsc::channel::<ChoiceSelection>();
+        let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
+        drop(kanade_rx);
+        for sel in [dirty_anchor(), dirty_selection(), dirty_anchor()] {
+            sel_tx.send(sel).expect("受信口は生存している");
+        }
+
+        let logs = capture_logs(|| {
+            forward_all(&sel_rx, &kanade_tx);
+        });
+
+        let count = |event: &str| {
+            logs.iter()
+                .filter(|l| l.contains(event) && l.contains("level=WARN"))
+                .count()
+        };
+        assert_eq!(
+            (
+                count("anchor_forward_failed"),
+                count("choice_forward_failed")
+            ),
+            (2, 1),
+            "アンカー 2 件・選択肢 1 件が、それぞれの名前で 1 行ずつ: {logs:?}"
+        );
     }
 }

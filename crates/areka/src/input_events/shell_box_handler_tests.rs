@@ -605,3 +605,120 @@ fn box_hover_change_logs_only_on_change() {
         "a へ・b へ・外へ: {events:?}"
     );
 }
+
+// ---------------------------------------------------------------- 選択の記録と kanade への伝言
+
+/// 箱 a の行を左の単押しで押し、その間の記録と、知らせの取り出しが kanade へ送った伝言を返す。
+fn press_row_and_drain(
+    point: BoxPoint,
+) -> (
+    Vec<crate::placement::test_support::LogEvent>,
+    Vec<KanadeMsg>,
+) {
+    use crate::input_events::choice_drain::{drain_choice_selections, wire_choice_drain};
+    let mut f = Fixture::new();
+    let (kanade_tx, kanade_rx) = mpsc::channel();
+    wire_choice_drain(&mut f.world, kanade_tx);
+    let (handled, events) = capture_logs(|| f.pressed(ROW, DoubleClick::None, point));
+    assert!(handled, "処理した");
+    drain_choice_selections(&mut f.world);
+    (events, kanade_rx.try_iter().collect())
+}
+
+/// 発行の記録 1 行の欄（名前と値）。選択肢とアンカーで違うのは `event` だけ。
+fn selected_fields(event: &str) -> BTreeMap<&'static str, String> {
+    BTreeMap::from([
+        ("event", format!("{event:?}")),
+        ("scope", "0".to_owned()),
+        ("id", "q0".to_owned()),
+        ("label", "label0".to_owned()),
+        ("references_len", "0".to_owned()),
+        ("box", "\"a\"".to_owned()),
+        (
+            "message",
+            "選択確定: ChoiceSelection を発行（箱）".to_owned(),
+        ),
+    ])
+}
+
+fn fields_of(event: &crate::placement::test_support::LogEvent) -> BTreeMap<&str, String> {
+    event
+        .fields_map()
+        .into_iter()
+        .map(|(name, value)| (name, value.to_owned()))
+        .collect()
+}
+
+/// 箱のアンカーの押下は `anchor_selected` を 1 行だけ残し（箱の印つき）、`choice_selected` は
+/// 残さない。知らせはアンカーの伝言として kanade へ届き、中身は当たった行のまま
+/// （areka-P0-anchor-tag-canon 要件 4.11・4.12）。
+#[test]
+fn box_anchor_press_records_anchor_selected_and_reaches_kanade_as_an_anchor() {
+    let (events, msgs) = press_row_and_drain(anchor_on_a());
+    let lines = lines_of(&events, "anchor_selected");
+    assert_eq!(lines.len(), 1, "発行 1 回で 1 行: {events:?}");
+    assert_eq!(lines[0].level, tracing::Level::INFO);
+    assert_eq!(fields_of(lines[0]), selected_fields("anchor_selected"));
+    assert!(
+        lines_of(&events, "choice_selected").is_empty(),
+        "選択肢の記録は残さない: {events:?}"
+    );
+    let expected = areka_kanade::AnchorInput {
+        id: "q0".to_owned(),
+        text: "label0".to_owned(),
+        scope: 0,
+        references: Vec::new(),
+    };
+    assert!(
+        matches!(&msgs[..], [KanadeMsg::Anchor(a)] if *a == expected),
+        "アンカーの伝言が 1 件"
+    );
+}
+
+/// 箱の選択肢の押下の記録と伝言は今までどおり（`choice_selected` が 1 行・欄も同じ・選択肢の伝言）。
+#[test]
+fn box_choice_press_still_records_choice_selected_and_reaches_kanade_as_a_choice() {
+    let (events, msgs) = press_row_and_drain(on_a(true));
+    let lines = lines_of(&events, "choice_selected");
+    assert_eq!(lines.len(), 1, "発行 1 回で 1 行: {events:?}");
+    assert_eq!(lines[0].level, tracing::Level::INFO);
+    assert_eq!(fields_of(lines[0]), selected_fields("choice_selected"));
+    assert!(lines_of(&events, "anchor_selected").is_empty());
+    assert!(
+        matches!(&msgs[..], [KanadeMsg::Choice(c)] if c.id == "q0" && c.label == "label0"),
+        "選択肢の伝言が 1 件"
+    );
+}
+
+/// 知らせの受け口が無くなっていて送れなかったら、種類の名前で error を 1 行残し、選択の記録は
+/// 残さない（選択肢は今までの名前のまま・アンカーは選択肢の名前を使わない）。
+#[test]
+fn box_selection_send_failure_is_recorded_under_the_kind() {
+    for (point, failed, other) in [
+        (
+            on_a(true),
+            "choice_selection_send_failed",
+            "anchor_selection_send_failed",
+        ),
+        (
+            anchor_on_a(),
+            "anchor_selection_send_failed",
+            "choice_selection_send_failed",
+        ),
+    ] {
+        let mut f = Fixture::new();
+        f.world.remove_non_send::<ChoiceSelectionInbox>();
+        let (_, events) = capture_logs(|| f.pressed(ROW, DoubleClick::None, point));
+        let errors = lines_of(&events, failed)
+            .into_iter()
+            .filter(|e| e.level == tracing::Level::ERROR)
+            .count();
+        assert_eq!(errors, 1, "{failed} の error が 1 行: {events:?}");
+        assert!(lines_of(&events, other).is_empty(), "{other}: {events:?}");
+        assert!(
+            lines_of(&events, "choice_selected").is_empty()
+                && lines_of(&events, "anchor_selected").is_empty(),
+            "送れなかった押下は選択の記録を残さない: {events:?}"
+        );
+    }
+}

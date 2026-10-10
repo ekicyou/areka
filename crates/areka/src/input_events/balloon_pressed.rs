@@ -11,7 +11,7 @@ use wintf::ecs::pointer::{Phase, PointerState};
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::placement::spawn::BalloonWindowMarker;
 
-use super::{BalloonWiring, click_selection};
+use super::{BalloonWiring, click_selection, selection_events};
 
 /// バルーン窓のポインタ押下ハンドラ（Bubble のみ処理・確定クリック発行・R2.1/2.3/2.4/2.5/2.6/3.1/3.2/4.2/5.1/8.4）。
 ///
@@ -38,7 +38,9 @@ use super::{BalloonWiring, click_selection};
 ///    R2.3/3.1・reason は `!active` なら `"inactive"`／それ以外は `"no_hit"`）。`Some(sel)` →
 ///    `BalloonWiring::send_selection` で高々 1 回発行。成功時 `info!(event = "choice_selected", scope, id,
 ///    label, references_len)` を **1 行**発火し `true`（DD-CI-7・R7.2 grep 対象）。送出失敗（受け口消滅）→
-///    `error!(event = "choice_selection_send_failed", scope, id)`＋`false`。
+///    `error!(event = "choice_selection_send_failed", scope, id)`＋`false`。当たった範囲がアンカーなら
+///    記録の名前だけが替わる（`anchor_selected`／`anchor_selection_send_failed`・欄は同じ・
+///    名前の表は [`selection_events`]）。
 ///
 /// `resolve_choice` は本 crate から呼ばない（発行まで・カスケードは W6・R2.6/5.4）。自前描画なし。
 /// `RefCell` は `try_borrow` のみ（panic しない・log-first）。座標は窓 client 物理 px を**無変換**で
@@ -149,6 +151,8 @@ pub(crate) fn on_balloon_pointer_pressed(
         // ヒット確定（R2.1/2.4）: 高々 1 回だけ発行する（send_selection は 1 send・二重発行なし）。
         Some(sel) => {
             // info! 用の値を send 前に控える（send_selection が selection の所有権を消費するため）。
+            // 記録の名前は種類で決まる（選択肢は今までの名前・アンカーは anchor_ で始まる名前）。
+            let (selected, send_failed) = selection_events(sel.kind);
             let id = sel.id.clone();
             let label = sel.label.clone();
             let references_len = sel.references.len();
@@ -160,7 +164,7 @@ pub(crate) fn on_balloon_pointer_pressed(
             if sent {
                 // 実機サインオフ導線（DD-CI-7・R7.2 grep 対象）: 発行 1 回につき 1 行。
                 tracing::info!(
-                    event = "choice_selected",
+                    event = selected,
                     scope,
                     id = %id,
                     label = %label,
@@ -172,7 +176,7 @@ pub(crate) fn on_balloon_pointer_pressed(
                 // 送出失敗（受け口消滅後の Sender エラー）は構成異常＝error!＋no-op 縮退
                 // （design Error Handling・R7 grep 対象と別導線）。
                 tracing::error!(
-                    event = "choice_selection_send_failed",
+                    event = send_failed,
                     scope,
                     id = %id,
                     "ChoiceSelection 発行シンク送出失敗（受け口消滅後）: no-op 縮退"
