@@ -262,9 +262,12 @@ fn online_rides_from_on_initialize_while_held_and_clears_from_the_next_tick_afte
         )),
         "守り手を落とした後の次の Tick から online は載らないはず: {recorded:?}"
     );
+    // 別れの台詞の `OnTranslate` だけは再生中の状態（`talking`）を帯びる。ほかは行なし。
     assert!(
-        recorded[first_pump..].iter().all(|c| c.status.is_none()),
-        "落とした後のリクエストはどれも Status 行なしのはず: {recorded:?}"
+        recorded[first_pump..]
+            .iter()
+            .all(|c| c.status.as_deref() == (c.id == "OnTranslate").then_some("talking")),
+        "落とした後のリクエストは別れの台詞の OnTranslate（talking）のほか Status 行なしのはず: {recorded:?}"
     );
     assert_eq!(
         recorded.last().expect("記録列は空でない"),

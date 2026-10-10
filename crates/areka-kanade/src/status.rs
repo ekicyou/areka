@@ -222,7 +222,8 @@ impl ExecutionStatus {
 /// `balloons` が `Vec` を持つため `Copy` は持たない（`Clone` で複製する）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionSnapshot {
-    /// トーク再生中か。源＝運行状態 `Phase::Steady{talk: Some(_)}`（Req2.4）。
+    /// トーク再生中か（Req2.4）。源＝運行の相から再生中のトークの番号が引けること——普段の会話・
+    /// 起動の挨拶・お別れの台詞（終了の挨拶・切り替えの送り出しの台詞・切り替えの別れの台詞）の再生中。
     /// `Status: talking`（Req2.4/2.7）と Reference3（Req1.4/1.5）の双方を駆動する。
     pub talk_active: bool,
     /// 選択待ちが継続中か。源＝kanade の選択帳簿 `State.choice`——その 3 段フェーズ
