@@ -14,11 +14,10 @@ use super::*;
 use crate::looper::tests::{always_fire, cfg};
 use crate::output::{DisplayCommand, MockSurfaceOutput};
 use areka_emo_compose::{BindSet, EmoWorld};
-use areka_sakura::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::CueCommand;
 use dola::cue::CueSink;
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 /// 面 0: 一番上に `talk,3` の口（animation 0＝601 → 40ms で 602 → 40ms で `-1`）。
 /// 面 1: 一番上に `talk,3` の口（animation 0＝601 → 40ms で `-1`）と `runonce`（animation 1＝701 →
@@ -47,91 +46,13 @@ fn config() -> SerikoLoopConfig {
     cfg(AnimationTable::from_world(&world), always_fire())
 }
 
-/// 同期 `handle_message` に cue と刻みを流す足場（統括器に偽の時計を注入する）。
-struct Rig {
-    resolver: SurfaceResolver,
-    bind_resolver: BindResolver,
-    states: ScopeStates,
-    rt: LoopRuntime,
-    out: MockSurfaceOutput,
-    records: Arc<Mutex<Vec<DisplayCommand>>>,
-    clock: Arc<AtomicU64>,
-}
+/// この檻の表で組んだ足場（本体は兄弟の足場 `ClockRig`）。
+type Rig = ClockRig;
 
 impl Rig {
     fn new() -> Self {
-        let clock = Arc::new(AtomicU64::new(0));
-        let read = Arc::clone(&clock);
-        let out = MockSurfaceOutput::new();
-        let records = out.records();
-        Self {
-            resolver: SurfaceResolver::new(BTreeMap::new()),
-            bind_resolver: BindResolver::empty(),
-            states: ScopeStates::new(BindSet::from_ids([])),
-            rt: LoopRuntime::new(config())
-                .with_clock(Some(Arc::new(move || read.load(Ordering::SeqCst)))),
-            out,
-            records,
-            clock,
-        }
+        Self::with_config(config())
     }
-
-    /// 時計が `ms` のときに `msg` が届く。そのメッセージで出た指令を返す。
-    fn send(&mut self, ms: u64, msg: SerikoMsg) -> Vec<DisplayCommand> {
-        self.clock.store(ms, Ordering::SeqCst);
-        let before = self.records.lock().unwrap().len();
-        let flow = handle_message(
-            &self.resolver,
-            &self.bind_resolver,
-            &mut self.states,
-            &mut self.rt,
-            &mut self.out,
-            msg,
-        );
-        assert_eq!(flow, ControlFlow::Continue(()));
-        self.records.lock().unwrap()[before..].to_vec()
-    }
-
-    fn tick(&mut self, ms: u64) -> Vec<DisplayCommand> {
-        self.send(ms, SerikoMsg::Tick { now_ms: ms })
-    }
-
-    /// 時計が `ms` のときに cue が届く。
-    fn hear(&mut self, ms: u64, cue: TalkCue) -> Vec<DisplayCommand> {
-        self.send(ms, SerikoMsg::Cue(cue))
-    }
-}
-
-fn cue(at: f64, scope: &str, command: CueCommand, duration: f64) -> TalkCue {
-    TalkCue {
-        at,
-        actor: ActorKey::from(scope),
-        command,
-        duration,
-    }
-}
-
-/// 台本の `at` 秒に始まる文字の cue（1 字 50 ms）。
-fn text(at: f64, scope: &str, s: &str) -> TalkCue {
-    let duration = s.chars().count() as f64 * 0.05;
-    cue(at, scope, CueCommand::Text(s.into()), duration)
-}
-
-/// 台詞の頭に前置される全消去（台本の 0 秒）。
-fn clear_all() -> TalkCue {
-    cue(0.0, "0", CueCommand::ClearAll, 0.0)
-}
-
-/// 指令（どれも `Show`）ごとの（スコープ, animation `anim` の欄の絵）。
-fn frames(cmds: &[DisplayCommand], anim: u32) -> Vec<(&str, Option<u32>)> {
-    cmds.iter()
-        .map(|c| match c {
-            DisplayCommand::Show { scope, pattern, .. } => {
-                (scope.as_str(), pattern.get(anim).map(|f| f.surface_id))
-            }
-            other => panic!("Show を期待: {other:?}"),
-        })
-        .collect()
 }
 
 /// 届いた文字で口のコマが出る。開始は刻みの時刻でなく文字が現れた時刻で、文字の数は待ちと塊を

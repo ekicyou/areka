@@ -1,0 +1,76 @@
+charset,UTF-8
+// 口パクの検体（areka-P0-seriko-trigger-intervals・要件 11.1）: talk,数値・runonce・periodic,数値 を書いた面
+//
+// 絵は持たない。同梱の emo2（vendors/sample_ghost/emo2.nar）の shell/master/ に在る絵を、emo2 の
+// surfaces.txt が定義している面の番号と画像のファイル名で指す。実機では emo2 の写しの surfaces.txt の
+// 末尾へこのファイルを丸ごと書き足して使う（番号は emo2 と当たらない 9100 から）。
+//
+// ── 仕込んだ記録（テストが件数で比べる。行を足し引きしたらここと README.md とテストも直す） ──
+//   採る 3 語        : 5 本（surface9100 の animation0・1・2／surface9102 の animation0・1）
+//   無効な数値       : 2 件（surface9103 の animation0＝talk,abc・animation1＝periodic,0）
+//   空のコマ列       : 1 件（surface9104 の animation0＝runonce）
+//   warn の記録は上の 3 件だけ。surface9103 の animation2＝Talk,3（大文字混じり）は debug の記録だけ。
+
+// ── 一番上に 3 語 ──
+// animation0: 3 文字ごとに口（1200 → 80ms で 1202 → 80ms で消す）
+// animation1: 面に切り替わった瞬間にキラリ（1700 → 300ms で消す）
+// animation2: 2 秒ごとに紅（1600 → 500ms で消す）
+surface9100
+{
+element0,overlay,surface0.png,0,0
+animation0.interval,talk,3
+animation0.pattern0,overlay,1200,0,0,0
+animation0.pattern1,overlay,1202,80,0,0
+animation0.pattern2,overlay,-1,80,0,0
+animation1.interval,runonce
+animation1.pattern0,overlay,1700,0,0,0
+animation1.pattern1,overlay,-1,300,0,0
+animation2.interval,periodic,2
+animation2.pattern0,overlay,1600,0,0,0
+animation2.pattern1,overlay,-1,500,0,0
+}
+
+// ── 部品に 3 語（一番上は 3 語を持たない） ──
+surface9101
+{
+element0,overlay,surface0.png,0,0
+element1,overlay,9102,0,0
+}
+
+// 部品（9101 が置く）
+// animation0: 2 文字ごとに口（1203 → 100ms で消す）
+// animation1: 見えた瞬間にキラリ（1701 → 300ms で消す）
+surface9102
+{
+element0,overlay,purple/2/mouthbase.png,0,0
+animation0.interval,talk,2
+animation0.pattern0,overlay,1203,0,0,0
+animation0.pattern1,overlay,-1,100,0,0
+animation1.interval,runonce
+animation1.pattern0,overlay,1701,0,0,0
+animation1.pattern1,overlay,-1,300,0,0
+}
+
+// ── 採らない書き方（何も動かない） ──
+// animation0・animation1: 数値が正の整数でない
+// animation2: 大文字混じり（talk とは別の語）
+surface9103
+{
+element0,overlay,surface0.png,0,0
+animation0.interval,talk,abc
+animation0.pattern0,overlay,1200,0,0,0
+animation0.pattern1,overlay,-1,80,0,0
+animation1.interval,periodic,0
+animation1.pattern0,overlay,1600,0,0,0
+animation1.pattern1,overlay,-1,500,0,0
+animation2.interval,Talk,3
+animation2.pattern0,overlay,1700,0,0,0
+animation2.pattern1,overlay,-1,300,0,0
+}
+
+// animation0: コマ（pattern定義）が 1 つも無い
+surface9104
+{
+element0,overlay,surface0.png,0,0
+animation0.interval,runonce
+}

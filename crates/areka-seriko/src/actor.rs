@@ -771,3 +771,6 @@ mod talk_tests;
 #[cfg(test)]
 #[path = "actor_test_support.rs"]
 mod test_support;
+#[cfg(test)]
+#[path = "actor_trigger_fixture_tests.rs"]
+mod trigger_fixture_tests;

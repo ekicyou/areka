@@ -89,8 +89,8 @@
   - _Depends: 4.2, 5.2_
   - _Requirements: 2.6, 4.8, 4.9, 4.10, 6.3, 9.2, 9.4, 9.6, 9.7_
 
-- [ ] 7. 口パクの検体と決定論の E2E
-- [ ] 7.1 3 語を書いた検体の面を用意し、本物の読み手と本物のアクターで通す
+- [x] 7. 口パクの検体と決定論の E2E
+- [x] 7.1 3 語を書いた検体の面を用意し、本物の読み手と本物のアクターで通す
   - seriko のテストの検体として、3 語を書いた一番上の面・部品を持つ面と部品の面・無効な数値の面・コマ列が空の面を持つ `surfaces.txt` と、面の役・絵の出どころ（同梱の emo2 の既存の絵を番号で指す・画像ファイルは足さない）・実機の手順への参照を書いた README を置く（合成の crate の下には置かない）
   - 検体を本物の読み手で読み、表を組み、偽の時計のアクターへ面の切り替え・文字・刻みを通して、出てくるコマを判定する E2E を兄弟のテストに置く
   - E2E で、一番上の面の 3 語が鳴ること・部品の面の `talk` と `runonce` が鳴ること・無効な数値の面が `warn!` 2 件で非採録・コマ列が空の面が `warn!` 1 件で非採録になることが緑になる
@@ -168,3 +168,6 @@
 - 5.2: 部品が見えた刻みの窓に区切りが入っていると、その刻みで鳴る（開始の時刻 t_k は部品の起点より前になりうる・1 刻み未満。`runonce`／`periodic` は起点より前に始まらないので、ここだけ非対称・設計に 1 文足した・この場面を固定する檻は無い）。行数 — `parts.rs` 893・`parts_trigger.rs` 127・`looper.rs` 931・`looper_talk_tests.rs` 893・`parts_trigger_tests.rs` 852。
 - 6.1: `actor.rs` の `handle_message` が cue を取り出した直後（種類の `match` の前）に `loop_runtime.observe_cue(&cue)` を 1 回。本番の配送は端から端まで繋がっている（`areka-sakura` の `drive.rs` が全 sink を選別なしで登録・`emo2_boot/mod.rs` は素の `SerikoSink` を入れている・時計は `spawn_seriko_clocked(.., Some(tick_count_ms))` で常に在る＝`emo2_boot` の変更は不要）。seriko に本 spec の `expect(dead_code)` は残っていない。行数 — `actor.rs` 773・`looper.rs` 924・`actor_talk_tests.rs` 353。
 - 6.1: 「非表示・`talk` の無い表で状態が増えない」の欄の水準の固定は `looper_talk_tests.rs`（`hidden_scope_keeps_no_state_and_counts_from_its_return`・`cues_change_nothing_when_the_table_has_no_talk`）に在り、アクターの檻は指令と記録の件数で見る。`cargo test -p areka --lib emo2_boot` は 6.1 では回していない（9.1 で確かめる）。
+- 7.1: 検体 `crates/areka-seriko/tests/fixtures/trigger-intervals/surfaces.txt` は面 9100〜9104（9100＝一番上に 3 語・9101＋9102＝部品にだけ `talk` と `runonce`・9103＝無効な数値 `talk,abc`／`periodic,0` と大文字混じり `Talk,3`・9104＝コマ列が空）。件数は採録の `debug!` 5（9100 の 0・1・2＋9102 の 0・1）・`warn!` 3（9103 の 0・1＋9104 の 0）。設計の表に足したもの: 9103・9104 の `element0,overlay,surface0.png,0,0`（実機で立ち絵が出るように）と 9103 のコマ行（「採らない」を観測できるように）。`descript` は置かない（emo2 の末尾へ書き足す断片）。
+- 7.1 → 9.2: emo2 の `surfaces.txt` の末尾へ丸ごと書き足しても件数は同じ（`warn!` 3・採録 5・emo2 単独は 0・0）で、番号は当たらず絵は全部 emo2 に在ることを E2E `fixture_appended_to_emo2_keeps_the_counts_and_finds_every_picture` が固定している。空のコマ列の記録の検索語は既存の文言「seriko table: コマ列が空のアニメは非採録（要件 8.3）」。
+- 7.1: アクターの檻の共有の足場（`ClockRig`・`cue`・`text`・`clear_all`・`frames`・`single_show`・`part_frames`・`top_frames`）は `actor_test_support.rs` へ移した（`actor_talk_tests.rs`・`actor_parts_tests.rs` のテスト本体は不変）。E2E の主な表明は同期の `handle_message`＋手で進める時計で、別スレッドのアクター（`spawn_seriko_clocked`）は 9100 の 1 本。
