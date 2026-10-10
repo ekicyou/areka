@@ -11,7 +11,9 @@
     expect(dead_code, reason = "使い手のモジュールは後のタスクで載る")
 )]
 
-use crate::state::{Participant, State, WaitKind, WaitRecord, WatchInfo};
+use crate::state::{
+    LastMerge, MergeHolder, MergeRequest, Participant, State, WaitKind, WaitRecord, WatchInfo,
+};
 
 /// 生死の口: その識別の、その種類の待ち（見張りを含む）のプロセスがいま居るか。
 /// 実装は口の層が持ち、ここは尋ねるだけ。
@@ -31,6 +33,17 @@ pub enum Command {
         repo: String,
         pid: u32,
     },
+    /// マージの机の申し込み。参加を兼ねる。同じリポジトリをすでに待っている・持っているなら
+    /// 二重に並べず、元の申し込みのままにする。
+    Merge {
+        id: String,
+        name: Option<String>,
+        repo: String,
+        spec: String,
+        bug: bool,
+    },
+    /// マージが済んだ: 持っている机を空け、直前のマージを記録し、参加を終える。
+    Merged { id: String, pr: String, sha: String },
     /// 取り下げ: 申し込みと机を外す。参加者の記録は残す。
     Cancel { id: String },
     /// 離脱: 申し込み・机・待ちの記録を外し、参加者の記録を消す。
@@ -42,13 +55,6 @@ pub enum Command {
 pub enum Verdict {
     Applied,
     /// 当てはまらなかった（状態は変えていない）。文は ASCII で、端末へそのまま出す。
-    #[cfg_attr(
-        test,
-        expect(
-            dead_code,
-            reason = "当てはまらない場合を持つコマンドは後のタスクで載る"
-        )
-    )]
     NotApplied(&'static str),
 }
 
@@ -65,6 +71,23 @@ pub enum Event {
     },
     Cancelled {
         id: String,
+    },
+    MergeRequested {
+        repo: String,
+        id: String,
+        spec: String,
+        bug: bool,
+    },
+    /// マージの番が来た。
+    MergeGranted {
+        repo: String,
+        id: String,
+    },
+    Merged {
+        repo: String,
+        id: String,
+        pr: String,
+        sha: String,
     },
 }
 
@@ -113,6 +136,60 @@ pub fn apply(
             );
             Verdict::Applied
         }
+        Command::Merge {
+            id,
+            name,
+            repo,
+            spec,
+            bug,
+        } => {
+            join(state, id, name.as_deref(), repo, now, &mut events);
+            // 二重の判定はリポジトリごと（別のリポジトリの机は独立に申し込める）。
+            let desk = state.merge.entry(repo.clone()).or_default();
+            let holds = desk.holder.as_ref().is_some_and(|holder| holder.id == *id);
+            if !holds && !desk.queue.iter().any(|request| request.id == *id) {
+                desk.queue.push(MergeRequest {
+                    id: id.clone(),
+                    spec: spec.clone(),
+                    bug: *bug,
+                    requested: now,
+                });
+                events.push(Event::MergeRequested {
+                    repo: repo.clone(),
+                    id: id.clone(),
+                    spec: spec.clone(),
+                    bug: *bug,
+                });
+            }
+            Verdict::Applied
+        }
+        Command::Merged { id, pr, sha } => {
+            let mut held = false;
+            for (repo, desk) in &mut state.merge {
+                if let Some(holder) = desk.holder.take_if(|holder| holder.id == *id) {
+                    held = true;
+                    desk.last = Some(LastMerge {
+                        pr: pr.clone(),
+                        sha: sha.clone(),
+                        spec: holder.spec,
+                        at: now,
+                    });
+                    events.push(Event::Merged {
+                        repo: repo.clone(),
+                        id: id.clone(),
+                        pr: pr.clone(),
+                        sha: sha.clone(),
+                    });
+                }
+            }
+            if held {
+                // 完了した spec のセッションは参加を終える。
+                depart(state, id, "merged", &mut events);
+                Verdict::Applied
+            } else {
+                Verdict::NotApplied("not the merge holder")
+            }
+        }
         Command::Cancel { id } => {
             if remove_from(state, id) {
                 events.push(Event::Cancelled { id: id.clone() });
@@ -120,23 +197,56 @@ pub fn apply(
             Verdict::Applied
         }
         Command::Leave { id } => {
-            // 待ちの記録も消す（その識別の見張りと待ちが「記録が消えた」で終わる根拠）。
-            let mut gone = remove_from(state, id);
-            gone |= drop_where(&mut state.waits, |wait| wait.id == *id);
-            gone |= state.participants.remove(id).is_some();
-            if gone {
-                events.push(Event::Left {
-                    id: id.clone(),
-                    why: "leave",
-                });
-            }
+            depart(state, id, "leave", &mut events);
             Verdict::Applied
         }
     };
+    replan(state, now, &mut events);
     Applied {
         changed: *state != before,
         verdict,
         events,
+    }
+}
+
+/// 番を決め直す。何度呼んでも同じ結果になる。
+fn replan(state: &mut State, now: u64, events: &mut Vec<Event>) {
+    // マージの番: 持ち主の居ないリポジトリごとに、バグ優先 → 申し込みの時刻が早い順で
+    // 1 人を持ち主にする。リポジトリ同士は独立。
+    for (repo, desk) in &mut state.merge {
+        if desk.holder.is_some() {
+            continue;
+        }
+        let order = |(_, request): &(usize, &MergeRequest)| (!request.bug, request.requested);
+        let Some((first, _)) = desk.queue.iter().enumerate().min_by_key(order) else {
+            continue;
+        };
+        let request = desk.queue.remove(first);
+        events.push(Event::MergeGranted {
+            repo: repo.clone(),
+            id: request.id.clone(),
+        });
+        desk.holder = Some(MergeHolder {
+            id: request.id,
+            spec: request.spec,
+            bug: request.bug,
+            requested: request.requested,
+            granted: now,
+        });
+    }
+}
+
+/// 参加を終える: 申し込み・机・待ちの記録を外し、参加者の記録を消す。何か消えたら出来事を 1 件。
+/// 待ちの記録が消えることが、その識別の見張りと待ちが「記録が消えた」で終わる根拠。
+fn depart(state: &mut State, id: &str, why: &'static str, events: &mut Vec<Event>) {
+    let mut gone = remove_from(state, id);
+    gone |= drop_where(&mut state.waits, |wait| wait.id == id);
+    gone |= state.participants.remove(id).is_some();
+    if gone {
+        events.push(Event::Left {
+            id: id.to_owned(),
+            why,
+        });
     }
 }
 

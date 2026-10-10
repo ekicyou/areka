@@ -1,8 +1,8 @@
 //! 机と待ち行列の判断（規則 1・3・4・6）の決定論テスト。時刻と生死は引数で渡し、眠らない。
 //!
-//! 組み立てる状態は、どれも「番を決め直しても動かない」姿にしてある（持ち主の居ない机に
-//! 待ち行列を残さない・負荷テストの机は走っている印つき）。主題でない段が状態を動かして、
-//! 判定が主題から外れないようにするため。
+//! 組み立てる状態は、番の到来を主題にするテストのほかは、どれも「番を決め直しても動かない」姿に
+//! してある（持ち主の居ない机に待ち行列を残さない・負荷テストの机は走っている印つき）。
+//! 主題でない段が状態を動かして、判定が主題から外れないようにするため。
 
 use super::test_support::{
     FakePresence, PID, REPO, T0, ask_to_stop, hold_merge, hold_running_load, queue_load,
@@ -10,7 +10,8 @@ use super::test_support::{
 };
 use super::{Applied, Command, Event, Verdict, apply};
 use crate::state::{
-    LoadDesk, MergeDesk, Participant, ParticipantStatus, State, WaitKind, WaitRecord, WatchInfo,
+    LastMerge, LoadDesk, MergeDesk, MergeHolder, MergeRequest, Participant, ParticipantStatus,
+    State, WaitKind, WaitRecord, WatchInfo,
 };
 
 fn watch(id: &str, name: Option<&str>, repo: &str, pid: u32) -> Command {
@@ -28,6 +29,78 @@ fn leave(id: &str) -> Command {
 
 fn cancel(id: &str) -> Command {
     Command::Cancel { id: id.to_owned() }
+}
+
+/// 名前を省いた、spec が `spec-<識別>` の申し込み（支えの組み立てる申し込みと同じ綴り）。
+fn merge(id: &str, repo: &str, bug: bool) -> Command {
+    Command::Merge {
+        id: id.to_owned(),
+        name: None,
+        repo: repo.to_owned(),
+        spec: format!("spec-{id}"),
+        bug,
+    }
+}
+
+fn merged(id: &str) -> Command {
+    Command::Merged {
+        id: id.to_owned(),
+        pr: "281".to_owned(),
+        sha: "414d43eb".to_owned(),
+    }
+}
+
+fn joined(id: &str) -> Event {
+    Event::Joined { id: id.to_owned() }
+}
+
+fn merge_requested(id: &str, repo: &str, bug: bool) -> Event {
+    Event::MergeRequested {
+        repo: repo.to_owned(),
+        id: id.to_owned(),
+        spec: format!("spec-{id}"),
+        bug,
+    }
+}
+
+fn merge_granted(id: &str, repo: &str) -> Event {
+    Event::MergeGranted {
+        repo: repo.to_owned(),
+        id: id.to_owned(),
+    }
+}
+
+/// [`merged`] の出来事。
+fn merge_done(id: &str, repo: &str) -> Event {
+    Event::Merged {
+        repo: repo.to_owned(),
+        id: id.to_owned(),
+        pr: "281".to_owned(),
+        sha: "414d43eb".to_owned(),
+    }
+}
+
+fn left_merged(id: &str) -> Event {
+    Event::Left {
+        id: id.to_owned(),
+        why: "merged",
+    }
+}
+
+/// マージの待ち行列の末尾へ、バグの申し込みを足す。
+fn queue_bug_merge(state: &mut State, repo: &str, id: &str, requested: u64) {
+    queue_merge(state, repo, id, requested);
+    let desk = state.merge.get_mut(repo).expect("机が在る");
+    desk.queue.last_mut().expect("いま足した").bug = true;
+}
+
+/// マージの机の持ち主（リポジトリ, 識別）の一覧。
+fn merge_holders(state: &State) -> Vec<(&str, &str)> {
+    state
+        .merge
+        .iter()
+        .filter_map(|(repo, desk)| Some((repo.as_str(), desk.holder.as_ref()?.id.as_str())))
+        .collect()
 }
 
 /// 全員が居る机で、判断を 1 回呼ぶ。
@@ -281,4 +354,274 @@ fn leave_and_cancel_of_an_unknown_identity_change_nothing() {
         assert_eq!(state, before, "{cmd:?}");
         assert_eq!(got, applied(false, vec![]), "{cmd:?}");
     }
+}
+
+#[test]
+fn a_merge_request_joins_and_waits_behind_the_holder() {
+    // C が areka の机を持っている。参加していない A が、バグの申し込みをする。
+    let mut state = state_with(&["C"]);
+    hold_merge(&mut state, "areka", "C");
+    let mut expected = state.clone();
+
+    let cmd = Command::Merge {
+        id: "A".to_owned(),
+        name: Some("えー".to_owned()),
+        repo: "areka".to_owned(),
+        spec: "spec-A".to_owned(),
+        bug: true,
+    };
+    let got = run(&mut state, &cmd, Some("A"), T0 + 5);
+
+    // 申し込みは参加を兼ねる（見張りはまだ無い）。持ち主が居る間は、バグの申し込みでも
+    // 持ち主にならず、申し込みの時刻とともに待ち行列に並ぶ。
+    expected.participants.insert(
+        "A".to_owned(),
+        Participant {
+            id: "A".to_owned(),
+            name: "えー".to_owned(),
+            repo: "areka".to_owned(),
+            since: T0 + 5,
+            ..Participant::default()
+        },
+    );
+    let desk = expected.merge.get_mut("areka").expect("机が在る");
+    desk.queue.push(MergeRequest {
+        id: "A".to_owned(),
+        spec: "spec-A".to_owned(),
+        bug: true,
+        requested: T0 + 5,
+    });
+    assert_eq!(state, expected);
+    let events = vec![joined("A"), merge_requested("A", "areka", true)];
+    assert_eq!(got, applied(true, events));
+}
+
+#[test]
+fn a_repeated_merge_request_keeps_the_first_one() {
+    // A は areka の机を持ち、pasta の机を C の後ろで待っている。どちらへ申し込み直しても
+    // （バグの印と時刻を変えても）元の申し込みのまま。
+    for repo in ["areka", "pasta"] {
+        let mut state = state_with(&["A", "C"]);
+        hold_merge(&mut state, "areka", "A");
+        hold_merge(&mut state, "pasta", "C");
+        queue_merge(&mut state, "pasta", "A", T0 + 1);
+        state.participants.get_mut("A").expect("A が居る").repo = repo.to_owned();
+        let before = state.clone();
+
+        let got = run(&mut state, &merge("A", repo, true), Some("A"), T0 + 9);
+
+        assert_eq!(state, before, "{repo}");
+        assert_eq!(got, applied(false, vec![]), "{repo}");
+    }
+}
+
+#[test]
+fn the_next_holder_is_a_bug_request_first_then_the_earlier_request() {
+    // 待ち行列の並びは、バグの順からも時刻の順からもわざと外してある。
+    let mut state = state_with(&["A", "B", "C", "D", "E"]);
+    hold_merge(&mut state, "areka", "C");
+    queue_merge(&mut state, "areka", "A", T0 + 2);
+    queue_bug_merge(&mut state, "areka", "B", T0 + 4);
+    queue_bug_merge(&mut state, "areka", "D", T0 + 3);
+    queue_merge(&mut state, "areka", "E", T0 + 1);
+
+    // 持ち主が机を手放すたびに、次の番が同じ呼び出しで出る。
+    let mut order = Vec::new();
+    for now in T0 + 10..T0 + 14 {
+        let holder = merge_holders(&state)[0].1.to_owned();
+        run(&mut state, &cancel(&holder), None, now);
+        order.push(merge_holders(&state)[0].1.to_owned());
+    }
+
+    assert_eq!(order, ["D", "B", "E", "A"]);
+    // 番の時刻は「いま」。申し込みの中身はそのまま持ち主へ写る。
+    let desk = MergeDesk {
+        holder: Some(MergeHolder {
+            id: "A".to_owned(),
+            spec: "spec-A".to_owned(),
+            bug: false,
+            requested: T0 + 2,
+            granted: T0 + 13,
+        }),
+        ..MergeDesk::default()
+    };
+    assert_eq!(state.merge["areka"], desk);
+}
+
+#[test]
+fn two_repos_are_held_at_the_same_time() {
+    let mut state = State::empty();
+    run(&mut state, &merge("A", "areka", false), Some("A"), T0);
+
+    let got = run(&mut state, &merge("B", "pasta", false), Some("B"), T0 + 1);
+
+    // areka に持ち主が居ても、pasta の番は同じ呼び出しで出る。
+    assert_eq!(merge_holders(&state), [("areka", "A"), ("pasta", "B")]);
+    let events = vec![
+        joined("B"),
+        merge_requested("B", "pasta", false),
+        merge_granted("B", "pasta"),
+    ];
+    assert_eq!(got, applied(true, events));
+
+    // 別のリポジトリの机を持っていても申し込める: areka を持ったまま、pasta の待ち行列に並ぶ。
+    run(&mut state, &merge("A", "pasta", false), Some("A"), T0 + 2);
+    assert_eq!(merge_holders(&state), [("areka", "A"), ("pasta", "B")]);
+    assert_eq!(state.merge["pasta"].queue.len(), 1);
+    assert_eq!(state.merge["pasta"].queue[0].id, "A");
+}
+
+#[test]
+fn waiting_in_one_repo_does_not_block_a_request_for_another() {
+    // 二重の判定はリポジトリごと。C が areka の机を持ち、A はその待ち行列で待っている。
+    let mut state = state_with(&["A", "C"]);
+    hold_merge(&mut state, "areka", "C");
+    queue_merge(&mut state, "areka", "A", T0 + 1);
+    let areka = state.merge["areka"].clone();
+
+    let got = run(&mut state, &merge("A", "pasta", false), Some("A"), T0 + 5);
+
+    // pasta は別の机なので二重に当たらず、空いているから同じ呼び出しで A の番になる。
+    // areka の待ち行列の申し込みはそのまま。
+    assert_eq!(merge_holders(&state), [("areka", "C"), ("pasta", "A")]);
+    assert_eq!(state.merge["areka"], areka);
+    let events = vec![
+        merge_requested("A", "pasta", false),
+        merge_granted("A", "pasta"),
+    ];
+    assert_eq!(got, applied(true, events));
+}
+
+#[test]
+fn every_freed_repo_gets_its_next_holder_in_the_same_call() {
+    // A が areka と pasta の机を両方持ち、それぞれに 1 人ずつ待っている。
+    for (cmd, gone) in [
+        (
+            leave("A"),
+            Event::Left {
+                id: "A".to_owned(),
+                why: "leave",
+            },
+        ),
+        (cancel("A"), Event::Cancelled { id: "A".to_owned() }),
+    ] {
+        let mut state = state_with(&["A", "B", "C"]);
+        hold_merge(&mut state, "areka", "A");
+        queue_merge(&mut state, "areka", "B", T0 + 1);
+        hold_merge(&mut state, "pasta", "A");
+        queue_merge(&mut state, "pasta", "C", T0 + 2);
+
+        let got = run(&mut state, &cmd, Some("A"), T0 + 10);
+
+        // 空いた 2 つの机の番が、1 回の呼び出しで両方出る。
+        assert_eq!(
+            merge_holders(&state),
+            [("areka", "B"), ("pasta", "C")],
+            "{cmd:?}"
+        );
+        let events = vec![
+            gone,
+            merge_granted("B", "areka"),
+            merge_granted("C", "pasta"),
+        ];
+        assert_eq!(got, applied(true, events), "{cmd:?}");
+    }
+}
+
+#[test]
+fn merged_frees_the_desk_records_the_last_merge_and_ends_the_participation() {
+    // A が areka の机を持ち、B がその後ろで待つ。A は C の持つ pasta の机にも並び、
+    // マージの待ちを走らせている。
+    let mut state = state_with(&["A", "B", "C"]);
+    hold_merge(&mut state, "areka", "A");
+    queue_merge(&mut state, "areka", "B", T0 + 1);
+    hold_merge(&mut state, "pasta", "C");
+    queue_merge(&mut state, "pasta", "A", T0 + 2);
+    state.waits.push(wait_record("A", WaitKind::Merge));
+
+    let got = run(&mut state, &merged("A"), Some("A"), T0 + 10);
+
+    // 参加者の記録も、見張りと待ちの記録も、ほかの机の申し込みも消える。
+    // 空いた机の次の番（B）は同じ呼び出しで出る。
+    let mut expected = state_with(&["B", "C"]);
+    hold_merge(&mut expected, "pasta", "C");
+    expected.merge.insert(
+        "areka".to_owned(),
+        MergeDesk {
+            holder: Some(MergeHolder {
+                id: "B".to_owned(),
+                spec: "spec-B".to_owned(),
+                bug: false,
+                requested: T0 + 1,
+                granted: T0 + 10,
+            }),
+            queue: Vec::new(),
+            last: Some(LastMerge {
+                pr: "281".to_owned(),
+                sha: "414d43eb".to_owned(),
+                spec: "spec-A".to_owned(),
+                at: T0 + 10,
+            }),
+        },
+    );
+    assert_eq!(state, expected);
+    let events = vec![
+        merge_done("A", "areka"),
+        left_merged("A"),
+        merge_granted("B", "areka"),
+    ];
+    assert_eq!(got, applied(true, events));
+}
+
+#[test]
+fn merged_by_a_non_holder_changes_nothing() {
+    // B は待っているだけ、Z は参加していない。
+    for id in ["B", "Z"] {
+        let mut state = state_with(&["A", "B"]);
+        hold_merge(&mut state, "areka", "A");
+        queue_merge(&mut state, "areka", "B", T0 + 1);
+        let before = state.clone();
+
+        let got = run(&mut state, &merged(id), Some(id), T0 + 10);
+
+        assert_eq!(state, before, "{id}");
+        assert!(!got.changed, "{id}");
+        assert!(got.events.is_empty(), "{id}: {:?}", got.events);
+        // 断りの文は端末へそのまま出すので ASCII。
+        let Verdict::NotApplied(text) = got.verdict else {
+            panic!("{id}: 当てはまらなかった、を返す: {:?}", got.verdict);
+        };
+        assert!(!text.is_empty() && text.is_ascii(), "{id}: {text}");
+    }
+}
+
+#[test]
+fn a_merge_round_trip_reports_one_event_per_change() {
+    let mut state = State::empty();
+
+    // 空いている机なら、申し込みと同じ呼び出しで番が来る。
+    let got = run(&mut state, &merge("A", "areka", false), Some("A"), T0);
+    let events = vec![
+        joined("A"),
+        merge_requested("A", "areka", false),
+        merge_granted("A", "areka"),
+    ];
+    assert_eq!(got, applied(true, events));
+
+    let got = run(&mut state, &merge("B", "areka", true), Some("B"), T0 + 1);
+    let events = vec![joined("B"), merge_requested("B", "areka", true)];
+    assert_eq!(got, applied(true, events));
+
+    let got = run(&mut state, &merged("A"), Some("A"), T0 + 2);
+    let events = vec![
+        merge_done("A", "areka"),
+        left_merged("A"),
+        merge_granted("B", "areka"),
+    ];
+    assert_eq!(got, applied(true, events));
+
+    let got = run(&mut state, &merged("B"), Some("B"), T0 + 3);
+    let events = vec![merge_done("B", "areka"), left_merged("B")];
+    assert_eq!(got, applied(true, events));
+    assert!(state.participants.is_empty());
 }
