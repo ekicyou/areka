@@ -51,7 +51,7 @@
 
 brief が要件討議へ回した議題は、下の仮置きで要件を書いた（答えで変わる条項を併記）。どれも範囲（何を In とするか）の食い違いではなく、範囲の中の値の決めである。
 
-- **議題 1 `ArchiveBinariesDependOnPath` を付けるか** → 仮置き＝**付ける**（brief の Desired Outcome の 1 と、steering の `roadmap.md`「配布と公開」のとおり）。付けると、winget はリンクを作らず、入れ先のフォルダを利用者の PATH に足す。付けないと、OS の開発者モードがオンの利用者はリンク、オフの利用者は PATH になり、利用者の環境で入り方が分かれる（2026-10-03 実測）。areka はリンクを解けるので、どちらでも起動はする。付ける側の代償は、PATH に areka のフォルダが丸ごと載ること。影響する条項: 要件 1.6・3.3・6.2。
+- **議題 1 `ArchiveBinariesDependOnPath` を付けるか** → **決定（2026-10-10 要件討議）＝付ける**（brief の Desired Outcome の 1 と、steering の `roadmap.md`「配布と公開」のとおり。どちらでも `areka` と打てば起動するが、付けると全員が同じ入り方に揃う）。付けると、winget はリンクを作らず、入れ先のフォルダを利用者の PATH に足す。付けないと、OS の開発者モードがオンの利用者はリンク、オフの利用者は PATH になり、利用者の環境で入り方が分かれる（2026-10-03 実測）。areka はリンクを解けるので、どちらでも起動はする。付ける側の代償は、PATH に areka のフォルダが丸ごと載ること。影響する条項: 要件 1.6・3.3・6.2。
 - **議題 2 Tags の語** → 仮置き＝brief が挙げた **`ukagaka`・`desktop-mascot` の 2 語だけ**。足す語は要件討議で決める。影響する条項: 要件 1.7。
 - **議題 3 提出する版** → **決定（2026-10-10 要件討議）＝`v0.0.2`**（要件 4 の実測の結果に関わらず、この版で出す。下の議題 5）。着手までに次の版が出ていたら、どの版で出すかを着手のときに開発者が決める。影響する条項: 要件 5.3。
 - **議題 4 説明文の言語（既定のロケール）** → **仮置きなし**。brief は「3 ファイル」（＝ロケールは 1 つ）と「ロケールの欄を手で整える」までしか決めていない。マニフェストを作る道具の既定は英語（en-US）。日本語にするか英語にするかで、`winget show` に出る説明の文が変わる。影響する条項: 要件 1.8。
@@ -78,7 +78,7 @@ brief が要件討議へ回した議題は、下の仮置きで要件を書い�
 3. The マニフェストの雛形 shall version・defaultLocale・installer の 3 ファイルで成り、3 つとも同じ名乗り・同じ版・同じ書式の版（brief の指定は 1.12.0。提出の時点で winget-pkgs が受け付ける版であること）を持つ。
 4. The マニフェストの雛形 shall 入れ物を zip、その中身をポータブルな exe とし、入れる exe を zip の根の `areka.exe` の 1 つ、コマンド名を `areka` とする（`InstallerType: zip`・`NestedInstallerType: portable`・`NestedInstallerFiles` に `areka.exe`・`PortableCommandAlias: areka`）。
 5. The マニフェストの雛形 shall x64 と arm64 の 2 項目を持ち、それぞれの `InstallerUrl` を GitHub Release のその版の `areka-{版}-{arch}.zip` を指す https の URL、`InstallerSha256` を同じ Release の `areka-{版}-{arch}.zip.sha256` に書かれた値と同じにする（大文字と小文字の違いは問わない）。
-6. The マニフェストの雛形 shall `ArchiveBinariesDependOnPath: true` を持つ（議題 1 の仮置き）。
+6. The マニフェストの雛形 shall `ArchiveBinariesDependOnPath: true` を持つ（議題 1 の決定）。
 7. The マニフェストの雛形 shall ライセンスを MIT とし、短い説明・Release の公開日（`ReleaseDate`）・タグを持ち、タグに `ukagaka` と `desktop-mascot` を含める（議題 2 の仮置き）。
 8. The マニフェストの雛形 shall ロケールのファイルを 1 つだけ持つ（説明文の言語は議題 4 で決める）。
 9. The マニフェストの雛形 shall 署名・インストーラー・スタートメニューのショートカット・ほかのパッケージへの依存を前提にした欄を持たない。
@@ -107,7 +107,7 @@ brief が要件討議へ回した議題は、下の仮置きで要件を書い�
 
 1. When 雛形ができる, the 開発者 shall x64 の実機で、提出するマニフェストそのもの（`InstallerUrl` は公開済みの Release の URL）を `winget install --manifest` で普段の利用者の権限から入れ、ハッシュの検証が通ってインストールが完了したことを記録に残す。
 2. When 入れた後に新しい端末で `areka` と打つ, the 実機の確かめ shall areka が起動してゴーストが立ったことを、起動の記録（`本物のゴースト窓を開きました` の行が 1 件以上・`root_resolved` の行の `root=` が winget の入れ先のフォルダ）で判定する。
-3. The 実機の確かめ shall `areka` の解決先（`(Get-Command areka).Source`）が winget の入れ先のフォルダの中の `areka.exe` でリンクではないことと、利用者の PATH に入れ先のフォルダが足されたことを記録に残す（議題 1 の仮置きの下での見るもの。`ArchiveBinariesDependOnPath` を付けないと決まったときは、解決先がリンクか PATH かと、そのときの OS の開発者モードの状態を記録する）。
+3. The 実機の確かめ shall `areka` の解決先（`(Get-Command areka).Source`）が winget の入れ先のフォルダの中の `areka.exe` でリンクではないことと、利用者の PATH に入れ先のフォルダが足されたことを記録に残す。
 4. Where 確かめのために winget や OS の設定を変える必要がある, the 開発者 shall 自分の手でその設定を変え、何を・いつ変えたかと、確かめの後に元へ戻したことを記録に残す（AI はこれらの設定を変えない）。
 5. The 実機の確かめ shall 確かめのために自分で作る物（確かめ専用のマニフェスト・起動の記録・検体）をワークツリーの `target\` の下に置き、リポジトリで追跡しない。
 6. When 実機の確かめ（要件 4 の実測を含む）が終わる, the 開発者 shall winget で入れた物を winget で外し、入れ先のフォルダ・コマンド名 `areka`・PATH に足された項目が残っていないことを確かめて記録に残す。
