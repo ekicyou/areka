@@ -100,7 +100,7 @@
   - 完了の姿: 上のテストが緑
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.9, 3.6, 8.1_
 
-- [ ] 4.2 つながっているときの答え: 要求を areka へ届け、最初の問い合わせに areka の今の情報で答える
+- [x] 4.2 つながっているときの答え: 要求を areka へ届け、最初の問い合わせに areka の今の情報で答える
   - 中継を rmcp のサービスとして実装し、標準入出力の輸送の上で「最初の問い合わせが失敗しても次の行を読み続ける」形で回す入口（テストが呼ぶ）を作る
   - つなぐ先が無ければ探索し、見つかったらつなぐ先として覚え、areka のサーバーの情報を控えに書く
   - `initialize`・`server/discover` は areka へ送らず、つないだときに得た areka の情報で答える。版は、要求の版が `initialize` を持つ 4 版のどれかならその版、それ以外は `2025-11-25`
@@ -227,3 +227,8 @@
 - 4.1: `scan`／`connect_one` の失敗は、Desktop の本文を 1 バイトも書いていないので常に「書く前」。`written()` で読み分けない（rmcp の手順の `notifications/initialized` の POST が失敗すると元の原因が消えて `NoResponse`＝`written()` が真になるため）。
 - 4.1: `connect_one` は設計とタスクが求めた口だが、Bridge の流れ（書く前の失敗 → 覚えを捨てて `scan`）に呼び手が居ない見込み。4.5 が使わなければ、最終の検証で口とテストごと消す候補。
 - 4.1: 既知の限界＝先に開いた接続は、前の候補の黙る相手 1 つにつき `VERIFY_WAIT`（3 秒）待たされる。areka の前に黙る相手が 10 個以上並ぶと受け口の 30 秒の上限で接続が閉じ、その回の探索では areka を飛ばす（SSP はすぐ名乗るので実机では起きない）。`scan_tests.rs` の `a_silent_peer_is_given_up_and_the_next_candidate_is_tried` は `verify` 1 秒なので、全体テストの負荷で赤が出たら 3 秒へ上げる。
+- 4.2: Desktop の要求の `_meta` は `PeerRequestOptions::with_meta(context.meta)` で付け直して届ける（rmcp の受け手が本文から外すため。areka は `2026-07-28` で `tools/list` の `ttlMs`・`cacheScope`・`resultType` と `ping` の `-32601` を変えるので、付け直さないと要件 1.10 を満たせない）。通知の `_meta` は `context.extensions` に入って来る。設計 D-3・D-13 に追記した。
+- 4.2: `notifications/cancelled` は areka へ届けない（`requestId` は Desktop の番号で areka では何も指さない・型のまま渡すと rmcp のクライアントが自分の別の要求を取り消す）。取り消された要求の応答の行は rmcp の受け手が出さず、中継は areka の応答を上限まで待って捨てる。設計 D-10 を直した。6.2 の差の記録に載せる行: 取り消された要求の応答の行は出ない・新しい `Link` での最初の `2026-07-28` の要求は 1 つだけで送られる・`2026-07-28` では rmcp のクライアントが `x-mcp-header` の注釈が壊れたツールを `tools/list` から外す（areka は今 0 件）・旧式の話し方の `server/discover` に中継は情報で答える（直接は `-32602`）。
+- 4.2: 4.3 への申し送り＝`tools.json` の形は最後に書いた話し方で変わる（2026 は `ttlMs`・`cacheScope`・`resultType` 付き・旧式は無し）。居ないときに `2026-07-28` の要求（`context.meta` の版）へ控えで答えるなら、この 3 欄を補う（無いと Claude Code が拒む＝areka の `tools_list_stateless_has_cache_hints` の注釈）。`ensure_link` の `Err` は `others`。仮の枝は 2 つ: 居ないとき（4.3）・`McpError` 以外の失敗（4.4／4.5）。
+- 4.2: 4.6 への申し送り＝入口は `areka_mcp_bridge::service::run`（`lib.rs` の再輸出は無い）。rmcp 自身が `info` で通知の本文（`received notification`）、`warn` でエラーの応答の中身（`response error`）を出すので、既定の絞りを決めるときに頭に置く。
+- 4.2: `service_tests.rs` の道具は `Desk::start(候補の列)`・`send`・`next`・`ask`・`close`・`cache()`・`arrived`・`handshakes`。短い応答の上限を差すには `Desk::start` に時間を渡す口を足す。D-13 のテストは遅い応答 2 秒に頼るので、全体テストの負荷で赤が出たら遅れを延ばす。5.1 は `server/discover` を `2026-07-28` だけで比べる。
