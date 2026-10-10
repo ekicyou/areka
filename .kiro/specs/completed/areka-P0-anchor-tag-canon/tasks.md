@@ -1,0 +1,249 @@
+# Implementation Plan
+
+> 並べ方: 依存の向き（読み手 → 合図 → compile → 文字の層 → kanade → 入力）の順。列挙型に種類を足す段は、下流の網羅の match に「ビルドを通すための腕」だけを同じ段で置き、中身は後ろの段で入れる（どの段の終わりでもワークスペース全体がビルドできる）。ファイル名・型名・関数名は `design.md` の「File Structure Plan」と「Components and Interfaces」が正本。
+
+- [x] 1. 読み手と合図の語彙を足す
+- [x] 1.1 (P) `\_a` の 4 つの形を読み手の命令にする
+  - 角括弧付きの `\_a[…]` を「アンカーの開き」（第 1 引数＝ID・第 2 引数以降＝引数の列・記述順のまま・空のトークンも潰さない）、角括弧の無い `\_a` を「アンカーの閉じ」として読む。どの形にも「知らないタグ」「読めなかった引数」の印を付けない。`\_a[]` は ID が空の開き（印なし）
+  - `On` 始まりかどうかは読み手で区別しない。腕の定義行に ukadoc の URL のコメントを置く（網羅台帳の実装済みの根拠・根 2 件 `\_a[ID,r2,r3...]` と `\_a[OnID,r0,r1...]`）
+  - 読み取りのテストを新しいファイルに置く: 4 形・空の ID・引数の空トークンの保持・区切りと引用が `\q[…]` と同じこと・印が付かないこと（台本の文字列だけから）
+  - 「`\_a` は知らないタグとして素通し」と固定している既存の検査 3 本を直す: 素通しの見本は `\_n`／`\_s` などの持ち主の無いタグへ置き換え、角括弧なしの綴りの一覧は 10 綴りに、開きと閉じの対の見本は「開き・文字・閉じ・文字」の期待へ書き換える
+  - 下流（compile・`check_script` の診断）は catch-all で受けるので、この段では触らない（腕の中身は 2.2 と 6.1）
+  - 完了の状態: `cargo test -p areka-parsers` が緑で、ワークスペース全体が警告なしでビルドできる
+  - _Boundary: areka-parsers の読み手_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.11, 6.1, 6.2, 8.1, 8.2_
+
+- [x] 1.2 (P) dola の合図に「アンカーの開き」「アンカーの閉じ」を足し、網羅の match を追随させる
+  - 開きは ID と引数の列を持つ（引数が空なら直列化で省く・選択肢の合図と同じ規約）。閉じは中身なし。どちらも宛先はバルーン
+  - 網羅の match の追随: dola の宛先の分類・ゴーストの合図の名前付け（`"AnchorBegin"`／`"AnchorEnd"`）・文字の層の「状態へ渡すだけ」の列。文字の層の状態の側は、この段では何もしない腕を置く（中身は 3.2）
+  - 檻の追随: 宛先の分類が全種類を覆う檻とゴーストの名前付けの檻に 2 種類を足し、手書きで「10 種」と数えている檻 2 本を 12 種へ揃える。ゴーストの結合テストで合図の全種類を catch-all なしで並べている檻（`spine_e2e_test_broadcast_relevance_partition.rs` の `every_cue_command`・設計の表に無い追随ファイル）にも 2 種類を足す
+  - 柵・時間切れ・待ちの選択肢を見る所（`matches!`／`if let` で選択肢だけを見る箇所）と `emo2_boot` には触らない
+  - 完了の状態: `cargo test -p dola -p areka-ghost` が緑で、ワークスペース全体が警告なしでビルドできる
+  - _Boundary: dola の合図・areka-ghost の合図の名前付け（＋文字の層の仮の腕）_
+  - _Requirements: 1.7_
+
+- [x] 2. 開きと閉じの対応を判定し、compile で合図にする
+- [x] 2.1 開きと閉じの対応の崩れを返す純粋な関数を作る
+  - 命令の列を先頭から見て、閉じの無い開き・開いている間の新たな開き・開いていないのに閉じ、の 3 種類を位置付きで返す。位置の昇順・同じ位置に同じ種類は重ならない（重なりの開きが閉じられないまま終わるときだけ、その位置に重なり → 閉じ無しの 2 件）・失敗の経路なし
+  - 台詞の終わり（`\e`）と終了（`\-`）で走査を止め、それより後ろは数えない（compile と同じ）
+  - テスト: 崩れなし・閉じ無し・重なり・迷子の閉じ・複数の崩れが混ざる台本・`\e` の後ろは数えない
+  - 完了の状態: 新しいテストが `cargo test -p areka-sakura` で緑
+  - _Depends: 1.1_
+  - _Requirements: 1.8, 1.9, 1.10_
+
+- [x] 2.2 compile がアンカーの合図を出し、崩れた形を補って警告する
+  - 走査の前に対応の判定を 1 回だけ呼ぶ。開きは 0 秒の「開き」の合図、閉じは 0 秒の「閉じ」の合図にする（あいだの文字・改行・装飾の合図は今までどおり流れる）
+  - 補い: 重なりの位置では「閉じ」を先に出してから新しい「開き」を出す／迷子の閉じは合図を出さない／閉じ無しは走査の終わり（`\e`・`\-`・末尾）で「閉じ」を出す
+  - 警告: 崩れ 1 件につき 1 件（`anchor_unclosed`／`anchor_reopened`／`anchor_stray_close`・位置と ID 付き）。compile は 1 台本 1 回なので下見と二重にならない
+  - 選択肢の答えを待つ柵の判定は変えない（アンカーだけの台本は柵を出さない）
+  - テストを新しいファイルに置く: 4 形 → 合図の種類・順・0 秒／補いの「閉じ」の位置／警告が各 1 件（記録を捕まえる道具で数える）／アンカーだけの台本に選択肢の柵が無い／崩れの無い台本に警告が無い
+  - 完了の状態: `cargo test -p areka-sakura` が緑（既存の compile の腕の檻を含む）
+  - _Depends: 1.1, 1.2, 2.1_
+  - _Requirements: 1.7, 1.8, 1.9, 1.10, 2.5, 2.10_
+
+- [x] 3. 文字の層にアンカーの範囲を持たせる
+- [x] 3.1 押せる範囲に「種類」（選択肢／アンカー）を乗せ、活性の問いを 2 つに分ける
+  - 範囲の記録と当たりの行に種類の欄を足し、当たりの行を組む所で種類を写す。既存の選択肢の記録はすべて「選択肢」になる
+  - 「選択肢の範囲があるか」（バルーンの時間切れの抑止が見る・意味は変えない）は種類が選択肢のものだけを数え、新しい「押せる範囲があるか」（種類を問わない）を足す
+  - 範囲の記録の説明を「選択肢とアンカーの共通の範囲。同じ種類の範囲は互いに素・アンカーは選択肢を包んでよい」に改める
+  - 種類の欄を足して壊れる既存の組み立て（文字の層のテストと、入力側のテスト・補助）は、この段で「選択肢」を入れて直す（入力側は欄の追随だけ・動きは変えない）
+  - テスト: アンカーの範囲だけがある列で「選択肢の範囲があるか」が偽・「押せる範囲があるか」が真
+  - 完了の状態: `cargo test -p areka-emo-text` が緑で、ワークスペース全体が警告なしでビルドできる
+  - _Depends: 1.2_
+  - _Requirements: 2.6, 2.9_
+
+- [x] 3.2 アンカーの範囲の開き・伸長・閉じ・消去を記録する
+  - 新しいファイルに置き、テストのファイルと一緒に文字の層の純粋なファイルの一覧へ登記する（母数 73 → 75）
+  - 開き: 今の文字の位置から始まる空の範囲（種類＝アンカー・通し番号は選択肢と共通）を足し「開いている」印を置く。既に開いていれば直前をそこで閉じる（到達しない防御・`debug!`）
+  - 伸長: 文字や選択肢の文字が追記されるたび、開いている範囲の終わりを伸ばし、範囲の文字（Reference0 になる）に書記素クラスタを継ぐ。改行・装飾の印は文字に含めない
+  - 閉じ: 印を外す。開いていなければ無視（防御・`debug!`）。本文の消去（1 人分・全員分）では範囲の列と一緒に印も消える
+  - 下見の空回しでは記録を出さない（選択肢の腕と同じ）
+  - テストを新しいファイルに置く: 開き → 文字 → 閉じで範囲と文字が合う／改行と装飾をまたいでも文字だけ継ぐ／選択肢を包むと選択肢の文字も含む／アンカー 2 つが別の通し番号／重なりと迷子の閉じの防御／消去で印と列が消える／空回しで記録が出ない
+  - 完了の状態: 新しいテストが `cargo test -p areka-emo-text` で緑（純粋なファイルの一覧の檻を含む）
+  - _Requirements: 1.7, 2.1, 2.7, 2.8, 2.10_
+
+- [x] 3.3 アンカーが開いている間の文字に既定の下線を付ける
+  - 文字の装飾を番号にする所で、アンカーが開いている間だけ「下線あり」の写しを番号にする。作者の今の装飾の状態そのものは変えない（`\f[default]` などで戻る対象にしない）
+  - 範囲の中で作者が下線を切ってもアンカーの下線が勝つ。`\f[anchor*]`・descript の `anchor.*` 族の受け取りと保持には触らない
+  - 描画と縦書きの位置は既存の下線のまま（描画の層は無改変）
+  - テスト: 下線の付いた番号が範囲の中の文字だけに付き、閉じた後の文字には付かない／範囲の中の下線切りに勝つ／作者の装飾の状態が閉じた後に元のまま／下見の空回しと本番で番号の並びが一致する
+  - 完了の状態: 上のテストが `cargo test -p areka-emo-text` で緑
+  - _Requirements: 5.1, 5.3, 5.4, 5.5_
+
+- [x] 3.4 範囲の当たりと消去を決まった字幅の配置で固定する
+  - 新しいテストのファイル（純粋なファイルの一覧へ登記・母数 75 → 76）: アンカーの範囲が折り返しをまたぐと 2 行それぞれに当たりの区間ができる／1 字ずつ出ている途中は出た所までで打ち切る／選択肢とアンカーが混ざる列で当たりの矩形と種類が合う／同じ種類の範囲は互いに素・アンカーは選択肢を包んでよい
+  - 消去の原子性の既存のテストに 1 件足す: アンカーを含む列が本文の消去で「押せる範囲があるか」が偽・当たりの行が空になる
+  - 本番のコードは変えない（純粋層の既存の関数が種類に関わらず働くことの固定）
+  - 完了の状態: `cargo test -p areka-emo-text` が緑で、純粋なファイルの一覧の母数が 76
+  - _Requirements: 2.1, 2.2, 2.3, 2.7, 2.8, 2.9, 8.4, 8.6_
+
+- [x] 4. kanade がアンカーの選択を受けてイベントを送る
+- [x] 4.1 (P) `OnAnchorSelectEx`／`OnAnchorSelect` の要求を組み立てる
+  - `OnAnchorSelectEx`: Reference0＝範囲の文字・Reference1＝ID・Reference2 以降＝引数（記述順・無ければ位置を作らない）。`OnAnchorSelect`: Reference0＝ID。どちらも他のイベントと同じ共通の要求ヘッダ（実行状態の行）を付ける
+  - 許可するイベントの表に 2 つを ukadoc の URL のコメント付きで足し、ファイル冒頭の Reference の表に 2 行足す。表の数の檻を 51 → 53 にする
+  - テスト: 2 つの要求の Reference の並び・引数なしで位置が無いこと・実行状態の行があること
+  - 完了の状態: `cargo test -p areka-kanade` が緑
+  - _Boundary: areka-kanade のイベントの組み立て_
+  - _Requirements: 4.1, 4.2, 4.6, 4.7_
+
+- [x] 4.2 アンカーの知らせの受理と 2 段の送出を作る
+  - 知らせの型（ID・範囲の文字・スコープ・引数）を新しいファイルに置き、UI からの伝言と状態機械の入力に種類を 1 つずつ足す（肥大ファイルには 1 行〜数行の腕だけ）
+  - 受理と段の記憶を新しいファイルに置く: ID が `On` で始まれば同じ名前のイベント（選択肢の `On` 始まりと同じ組み立てと受理規則・Reference0 以降＝引数）を 1 本、そうでなければ `OnAnchorSelectEx` を 1 本積み、応答待ちの段を覚える。帳簿・期限・照合の鍵は持たない。受理の記録（`anchor_accepted`）を出す
+  - 応答: 台本なら段の記憶を捨てて既存の応答の腕へ流す（話していなければ起動・話していれば単一の再生枠の規律で置き換え）。204・送信の失敗（`error!` `anchor_shiori_failed_as_204`）・想定外の応答（`warn!`）は、`OnAnchorSelectEx` の段なら `OnAnchorSelect` を積んで最終段へ、最終段なら何もしない
+  - 定常の運行中だけ受理し、それ以外は警告（`anchor_rejected_phase`）で棄却する。アンカーの応答待ちの間の送信の失敗が致命の扱いへ倒れないよう、既存の免除の条件に段の記憶を足す
+  - 欄と種類の追加で壊れる既存の所を追随させる（動きは変えない・設計の表に無い追随ファイルを含む）: 状態を全欄で組み立てている箇所（`close.rs`・運行の本体・既存のテスト。コンパイラが指す全箇所）に段の記憶「なし」を足し、伝言と入力の種類を catch-all なしで数えている檻 2 本に新しい種類を足す
+  - 選択肢の `On` 始まりのイベントの種類の説明を「作者が ID に書いた任意の名前（選択肢・アンカー）」に改める
+  - 完了の状態: `cargo build -p areka-kanade` が警告なしで通り、既存の `cargo test -p areka-kanade` が緑、肥大ファイル 4 本（運行の本体・定常・伝言・アクター）がどれも 1,000 行未満
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.8, 4.9, 4.10, 4.11, 4.12_
+
+- [x] 4.3 受理とカスケードを純粋な状態機械のテストで固定する
+  - 新しいテストのファイル（最上位の進行の入口から知らせと模擬の応答を入れる・実 SHIORI なし）
+  - `On` 始まりでない ID: 最初の一括が `OnAnchorSelectEx` 1 本（Reference の並び・引数なしは位置なし）／204 → `OnAnchorSelect` 1 本（Reference0＝ID）→ 204 で何も起きない／台本 → `OnAnchorSelect` を送らず台詞の起動が 1 回
+  - 話している最中に台本が返る → 置き換え（新しいトーク番号）／204 → 再生中の台詞がそのまま
+  - `On` 始まりの ID: その名前のイベント 1 本（Reference0 以降＝引数・範囲の文字と ID を含まない）で、`OnAnchorSelectEx`／`OnAnchorSelect` が無い
+  - 送信の失敗: 204 と同じ進み方で、`error!` が出て、致命の扱いへ倒れない
+  - 定常以外では棄却の警告だけ／選択待ちの印が立たない／1 回の知らせでイベントの列が 1 本・台詞の起動が高々 1 回
+  - 完了の状態: 新しいテストが `cargo test -p areka-kanade` で緑
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.8, 4.9, 4.10, 4.11, 8.3_
+
+- [x] 5. 入力をアンカーへつなぐ
+- [x] 5.1 当たりの順・ホバー・押下をアンカーに広げる
+  - 当たりの判定を種類の 2 段にする: 選択肢を後ろから見て、当たらなければアンカーを後ろから見る。選択の知らせに種類の欄を足して写す（知らせを kanade へ送る所は、この段ではどの種類も今までの選択肢の伝言のまま・振り分けは 5.2）
+  - 普通のバルーンの押下・移動・離脱と、箱の座標の読み取り・箱の窓の離脱で、「選択肢の範囲があるか」を見ている所を「押せる範囲があるか」に替える（強調の描き方・押下の結論の判定は無改変）。押下が範囲に当たれば種類を問わず「選択で使った」として扱い、同じ押下を中断やシェルの操作に重ねない
+  - 右・中ボタンと、範囲の外の押下の扱いは変えない。箱の押下の結論の説明を「選択肢・アンカーのどちらでも」に改める
+  - テスト（純粋な判定）: 重なる矩形で選択肢が勝つ（定義の順が逆でも）／アンカーだけに当たればアンカー／選択の知らせが種類を写す／箱でアンカーに当たると「選択で消費」／話している最中の単クリックでアンカーを選ぶと続く 2 打目が中断にならない／範囲の外は今までどおり
+  - 完了の状態: `cargo test -p areka` の入力のテスト（純粋な判定・箱・中断）が緑
+  - _Depends: 3.1_
+  - _Requirements: 2.4, 2.9, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 5.2, 8.5, 8.6_
+
+- [x] 5.2 選択の知らせを種類で振り分けて kanade へ送る
+  - 知らせの取り出しで、種類が選択肢なら今までの伝言、アンカーならアンカーの伝言（範囲の文字・ID・スコープ・引数）にして送る。判断はこの 1 分岐だけで、届いた知らせは全件そのまま送る
+  - 記録: アンカーの選択の発行（`anchor_selected`・スコープ・ID・文字・引数の数・箱なら箱の印）と、送出の失敗（選択肢と同型の `error!`）
+  - テスト: 選択肢とアンカーが混ざった知らせの列が、順を保ってそれぞれの伝言になる／アンカーの伝言の中身が知らせと一致する
+  - 完了の状態: `cargo test -p areka` の結線のテストが緑で、台本の `\_a` → 合図 → 範囲 → 押下 → kanade の伝言までがつながる
+  - _Depends: 2.2, 3.2, 4.2, 5.1_
+  - _Requirements: 4.11, 4.12_
+
+- [x] 6. 道具と記録を合わせる
+- [x] 6.1 (P) `check_script` がアンカーを誤診せず、崩れた形を診断する
+  - 診断の種類に「対応の崩れ」（名前 `unpaired_tag`）を足し、種類と名前の対応の表のテストに足す
+  - 診断の本体で対応の判定を 1 回呼び、開きと閉じの位置に、閉じ無し・重なり・迷子の閉じの診断を台本の順のまま出す（文言は設計の ASCII の 3 つ）。`\e` の後ろの開き／閉じには出さない（再生と同じ）
+  - 道具の説明の文書の診断の表に 3 行（15〜17 行目）を足す
+  - テスト: 4 つの形で「知らないタグ」「誰も拾わない命令」が 0 件／崩れた 3 形で種類と文言が合う／`\e` の後ろは出ない
+  - 完了の状態: `cargo test -p areka-mcp` と `cargo test -p areka` の診断のテストが緑
+  - _Boundary: areka-mcp の診断の種類・areka の診断の本体・道具の説明の文書_
+  - _Depends: 1.1, 2.1_
+  - _Requirements: 6.1, 6.2, 6.3, 8.7_
+
+- [x] 6.2 (P) 互換の記録を書く
+  - 新しい互換の記録（出どころを ukadoc／areka の裁定で見分ける）: §1 Reference の割付と順（正典の引用は `requirements.md` の冒頭から転記）・§2 areka の裁定（設計の「互換記録の骨子」の全項目＝話している最中のクリック・崩れた 3 形・空の ID・ID の綴り・`OnAnchorSelect` は 204 のときだけ・選択肢を先に判定・既定の見た目の借り元・下線切りに勝つ・Reference0 の文字の決め・引数なしの位置・2 回目の押下は割り込まない）・§3 後の 4 spec への波及と、dola の合図に 2 種類を足したこと（次の公開は API の追加）の申し送り
+  - 互換の全体の文書の §8 の横断表に 1 行足し、詳細は新しい記録へのポインタで引く
+  - 完了の状態: 要件 7.2 に挙がる 7 項目がすべて §2 に出どころ付きで載っている
+  - _Boundary: doc の互換の記録_
+  - _Requirements: 7.1, 7.2, 7.5_
+
+- [x] 6.3 網羅台帳・宛先の数・報告を合わせる（1 つの段でまとめて）
+  - さくらスクリプトの台帳: 根 2 件（`\_a[ID,r2,r3...]`・`\_a[OnID,r0,r1...]`）を実装済み・持ち主を本 spec に（別名の行 `\_a[ID]` は別名のまま持ち主なし）。`\f[anchor*]` 16 行の持ち主を `areka-P0-anchor-style-canon` へ
+  - 資産の台帳: descript の `anchor.*` 43 行の持ち主を `areka-P0-anchor-style-canon` へ。SHIORI の台帳: `OnAnchorSelect`・`OnAnchorSelectEx` を実装済み・持ち主を本 spec に
+  - 宛先の下書き: 本 spec の持ち物の数を数え直し（61 → 4）、`areka-P0-anchor-style-canon` の塊（段 A・束「バルーンのリンク」・持ち物 59）を足して brief の数を 1 増やす。概況の文書の SHIORI イベントの柵の数（実装済み 50 → 52・無い 236 → 234）を数え直す
+  - 報告 4 本は手で直さず `cargo run -p ukadoc-survey -- report` と `report-summary` で作り直す（他の台帳の行末だけの差分は戻す）
+  - 完了の状態: `cargo test -p ukadoc-survey` が緑（実装済みの根拠の URL・持ち物の数・brief の数・宛先の名前の実在・柵の数・報告の全文一致）
+  - _Depends: 1.1, 4.1_
+  - _Requirements: 7.3, 7.4_
+
+- [x] 7. 全体の確かめ
+- [x] 7.1 決定論テストと約束の照合
+  - 触った crate（`areka-parsers`・`dola`・`areka-sakura`・`areka-ghost`・`areka-emo-text`・`areka-kanade`・`areka-mcp`・`areka`・`ukadoc-survey`）の `cargo test`・`cargo clippy`・`cargo fmt --check` を通し、最後に全体テストを 1 回だけ回す
+  - 触ったファイルがどれも 1,000 行未満。ウェーブの約束で触らないファイル（`emo2_boot` の全部・`menu/`・seriko・`shell/` の読み手）と、設計が無改変とした所（装飾の `look.rs`・時間切れの抑止の観測・選択肢の柵と帳簿）に差分が無い
+  - 完了の状態: 上のコマンドがすべて緑で、`git diff --stat main` が設計の「File Structure Plan」の一覧（作り直した報告を含む）に、各タスクが名指しした追随ファイル（1.2 のゴーストの結合テストの檻・4.2 の状態の組み立てと檻・3.4 と 5.1 が足す既存のテストのファイル）を加えたものと一致する
+  - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7_
+
+- [x] 7.2 実機で 1 周を確かめる
+  - 検体: 辞書にアンカーを持つ検体ゴーストを選ぶ。無ければワークツリーの `target\` の下に、`\_a` を使う台詞と `OnAnchorSelectEx` の答えを持つ小さな検体を置く（検体・一時フォルダは `target\` の下だけ）
+  - `AREKA_NO_ALERT=1`・`RUST_LOG=warn,areka=info,kanade=info,areka_sakura=warn` で起動し、⑴ アンカーに下線が出てマウスを乗せると強調される、⑵ 押す → ゴーストが答える → 台詞が置き換わる、⑶ 話している最中に押しても台詞が中断されない、を人が見て、ログ（`anchor_selected`・`anchor_accepted`）で裏取りする
+  - areka の未対応のためにうまくいかなかった件が出たら、範囲外でも `/kiro-discovery` へ起票する
+  - 完了の状態: ⑴〜⑶ の結果とログの抜粋が、人が確認できる形で残っている
+  - _Requirements: 3.4, 4.8, 5.1, 8.8_
+
+## Implementation Notes
+
+- 1.1: ukadoc の URL のコメントは列挙型の側でなく `decode.rs` の `decode_tag` の腕 `"_a"` に置いた（既存の慣例・`ukadoc-survey` が拾う形）。
+- 1.1 → 6.3 への申し送り: `decode.rs` の `\f` の腕のコメント「アンカー 16 … areka-P0-anchor-tag-canon が後から与える」は、6.3 で持ち主を `areka-P0-anchor-style-canon` へ付け替えるときに 1 行直す。
+- 1.1 → 2.2 への申し送り: `areka-sakura` の檻 `catch_all_ignored_set_is_raw_only` は、2.2 で compile に腕が入るまで `Anchor`／`AnchorEnd` も catch-all に落ちる（緑のまま）。2.2 で説明を合わせる。
+- 1.2（範囲外・棚卸で扱う）: dola の手書きの数の檻 2 本（`cue_command_twelve_variants`・`sheet_test.rs` の「presentation コマンドは 12 種」）と `CueCommand` の doc「12 バリアント」は `Cursor` を数えておらず、実数は 13（本 spec の前から同じ 1 つ分のずれ・10 対 11）。本 spec はタスクの字面どおり +2 だけした。
+- 1.2（範囲外・棚卸で扱う）: `cargo clippy … -- -D warnings` は本 spec の前から赤（dola の `compile/resolve.rs`・`runtime/*`・`validate/*`、areka-kanade の `shiori/real.rs`、areka-ghost の `sink.rs` の既存テスト 1 件）。リポジトリの道具（`tools/test-all.ps1`・CI）に clippy の段は無い。以降の段と 7.1 の clippy は「本 spec が触った行に指摘が無いこと」で判定する。
+- 1.2 → 3.2 への申し送り: `areka-emo-text` の `state.rs::apply_cue` に `AnchorBegin`／`AnchorEnd` の何もしない腕（`debug!` 1 行）を置いてある。中身は 3.2 で入れる。
+- 2.1（設計の直し）: 設計の事後条件「同じ位置に 2 件は付かない」は、要件 1.8 と 1.9 が別々に警告 1 件を求めることと両立しなかった（`\_a[x]あ\_a[y]い` の 2 つ目の開きは重なりでも閉じ無しでもある）。要件の側を採り、その位置に `Reopened` → `Unclosed` の順で 2 件返す。`design.md` の `pair_anchors` の事後条件と本書 2.1 の文言を改めた。
+- 2.1 → 2.2・6.1 への申し送り: `pair_anchors` の結果を位置で引くときは 1 件だけ取らず、当該位置の全件を見る（開きの位置に `Reopened` と `Unclosed` の両方が付きうる）。compile に「ここで止まる」の共有の述語は無く、`End`／`Quit` の 2 種類を `pair_anchors` に写してある。
+- 2.2（設計の直し）: compile の警告は宛先を付けない（既定の `areka_sakura::compile`・同じ関数の既存の警告と同じ）。設計の `target: "sakura"` は `RUST_LOG=areka_sakura=warn` で拾えないので 1 行改めた。`id` は開きにだけ付く（`anchor_stray_close` は `index` だけ）。
+- 2.2: 中身の無い対（`\_a[x]\_a`）だけの台本は合図を持つので、先頭の `ClearAll` が付く（`\q`・`\f` だけの台本と同じ扱い。以前は空の台本だった）。迷子の閉じだけの台本は空のまま。
+- 2.2 → 3.2 への申し送り（要対応）: compile は開きも閉じも「その時点のスコープ」宛てに出す。文字の層の状態は場所（スコープ＋行き先）ごとなので、開いたままスコープや行き先が替わる台本（`\_a[x]あ\1い\_a\0う`）では、閉じが開いた場所と別の場所へ届く。3.2 は「閉じは、届いた場所に関わらず、開いている範囲を持つ場所を閉じる」形にして檻に入れる（さもないと開いた側が開いたままになり、後続の「う」が黙って範囲に入る）。
+- 3.1 → 3.2／3.4 への申し送り: アンカーの範囲をテストへ置くための `#[cfg(test)]` の口 `TextLayerState::push_span_for_test`（`state_test_support.rs`）を足した。3.2 で合図から範囲が組めるようになったら、これを使う 2 本（`anchor_only_scope_is_hit_active_but_not_choice_active`・`hit_rows_carry_the_kind_of_their_span`）を合図経由に書き直して口を消す。
+- 3.1 → 3.2 への申し送り: `ActorTextState` の欄 `choices` と読み口 `choices()` の説明がまだ「選択肢スパン」。3.2 で `anchor_open` を足すときに一緒に改める。
+- 3.1: `actor_choice_contract_tests.rs` は 991 行で上限に近い（本 spec では触らない）。種類の写しの檻は `actor_clear_atomicity_tests.rs` に置いた。
+- 3.2（設計の補い）: 開いた場所と閉じの届く場所のずれは集約（`TextLayerState::open_anchor`／`close_anchor`）で吸収した — 閉じは宛先に関わらず開いている範囲を閉じ、開きは先に全部の場所の印を外す。`design.md` の「`state_anchor.rs`」に 2 項を足し、コードブロックの署名を実物（`anchor_begin(id, references)`／`anchor_end()`・記録は集約の側）に合わせた。3.1 のテスト用の口 `push_span_for_test` は消した。
+- 3.2 → 6.2 への申し送り（互換記録 §2 に 1 行）: 開いたまま別のスコープや行き先へ寄り道した文字は、範囲にも Reference0 にも入らない（`\_a[x]あ\1い\_a` の範囲の文字は「あ」）。要件 1.7 の「開きから閉じまでに表示される文字」を場所ごとに読んだ areka の裁定。寄り道して戻れば範囲は続く。
+- 3.2 → 3.3 への申し送り: `ActorTextState::anchor_is_open()` は既にある（集約の閉じが本番で使うので未使用の警告は出ない）。空回しではアンカーの `debug!` 4 行も出さない（他の腕は warn だけ止める）。
+- 3.3: 下線は場所ごとの「開いている」印で決まるので、開いたまま別のスコープへ寄り道した文字には付かない（3.2 の範囲の裁定と同じ読み・「押せる所＝下線の所」）。6.2 の互換記録では 3.2 の申し送りと同じ行に書く。
+- 3.3 → 7.2 と棚卸への申し送り（設計由来の帰結・本 spec では直せない）: 見た目の装着（`set_look_layers`）より先にアンカーの中の文字が届くと、その字は「装着前の既定＋下線」の丸ごとの写しとして装飾の表に載り、装着の後もその字だけ装着前の既定の大きさ・色・フォントで描かれる。作者が `\f` で飾った字には本 spec の前からある性質（`attaching_after_an_explicit_look_still_lands_the_balloon_defaults` が再現する窓）だが、3.3 で `\f` を 1 つも書かない台本でも起こりうるようになった。7.2 の実機で起動直後の台詞のアンカーの字の大きさ・色を見る。崩れていれば `/kiro-discovery` で起票（`anchor-style-canon` が下線の解決を差し替える所でもある）。
+- 3.3（任意の檻・未実施）: 「アンカーが開いている最中に取った空回しの写し（`reinstall`）でも番号の並びが一致する」は、`anchor_open` が `derive(Clone)` で写るので構造で守られているが、檻としては未固定。
+- 3.4: 5 本とも既存のふるまいの固定で最初から緑。噛むことは変異 2 件（`annotate_lines` がアンカーを飛ばす／`Clear` の腕の当たりの行の無効化を `choice_active` で囲う）で確かめた（戻し済み・本番のロジックは無変更）。`choice.rs` の差分は `#[cfg(test)]` の載せる 4 行だけ。
+- 3.4（範囲外・棚卸で扱う）: `cargo clippy -p areka-emo-text --all-targets` は、結合テスト 3 本（`tests/choice_fixture_test.rs`・`emo2_fixture_e2e_test.rs`・`line_pitch_readback_test.rs`）が既定で deny の指摘でコンパイルできない（本 spec の前から・本 spec は触っていない）。1.2 の clippy の申し送りと同じ束。
+- 4.1: 選択肢の組み立て 2 関数の中身を非公開の共通の組み立て（`select_ex_get`／`select_get`・イベント名を引数に取る）へ移し、選択肢とアンカーが同じものを呼ぶ（選択肢の署名とふるまいは無変更）。設計の表に無い追随ファイル 2 本: `events_anchor_tests.rs`（新・テストの置き場）と `events_tests.rs`（全名の檻）。7.1 の照合で数える。
+- 4.1 → 4.2 への申し送り: `on_anchor_select_ex(text, id, references, snapshot)`／`on_anchor_select(id, snapshot)` は `pub` だが `lib.rs` の公開の窓口 `events` には足していない。結合テスト（`tests/`）から使う必要が出たら、そのとき足す。
+- 4.1 → 6.3 への申し送り: `doc/ukadoc-coverage/ledger/shiori.toml` の `OnAnchorSelect`／`OnAnchorSelectEx` は `absent` のままで、note の「許可表に名前が無く、構築関数も無い」はもう事実と合わない（survey は緑のまま）。
+- 4.1（範囲外・棚卸で扱う・1.2 の clippy の束へ追加）: `cargo clippy -p areka-kanade --all-targets` は `actor_raise_reply_tests.rs` の既定で deny の指摘（回らないループ）で lib のテストがコンパイルできない（本 spec の前から）。
+- 4.2（設計の直し）: ⑴ 最終段も ID を持つ（`AnchorStage::Final { id }`）— 空の ID は正当な形なので、失敗の記録で空文字を代用できない。記録には `stage`（`select_ex`／`final`）も載る。⑵ Steady の判定と `anchor_rejected_phase` は `anchor::on_anchor` の中（`mod.rs` の腕は 1 行）。⑶ 終了や切替の保留中もアンカーは受理する（選択肢と同じ）。`On` 始まりのアンカーの応答の出所ラベルは `"OnChoiceEvent"` のまま。`design.md` の該当箇所を改めた。
+- 4.2: 応答の帰属は殻の同期往復で保証される（`actor.rs` の `drive_translating` が 1 つの伝言の処理の中で `step` → 往復 → 応答の再投入を閉じる）。段の記憶 `State.anchor` はその連鎖の間しか `Some` でない。
+- 4.2 → 4.3 への申し送り（残り・すべて最上位の `step` から）: 引数なしで Reference2 以降の位置が無い／最初の応答が 204 の 2 段／話している最中の台本 → 置き換え（新しいトーク番号）と、そのとき選択待ちの帳簿が消えること／204 → 台詞そのまま・帳簿も残る／`On` 始まりで `OnAnchorSelectEx`・`OnAnchorSelect` が出ない／失敗を通したとき `anchor_shiori_failed_as_204` がちょうど 1 件で横断の `shiori_failed` が 0 件・致命へ倒れない（最終段と `On` 始まりでも）／定常以外の棄却／選択待ちの印が立たない／1 回の知らせでイベントの列 1 本・起動高々 1 回。既存の 11 本は `schedule/anchor_tests.rs`（346 行）。`failure_and_unexpected_reply_advance_like_no_content_with_a_record` の記録の表明は「ちょうど 1 件」へ締める。
+- 4.2 → 7.2 への申し送り（既存と同類の窓）: 再生が終わる瞬間にアンカーが押されると、置き換えの後に `unknown_talk_done`（error・状態は維持）が 1 件出うる。マウスや `raise_event` の置き換えと同じ窓で、本 spec が新しく作った種類ではない。
+- 4.3: 最上位の `step` から通す 8 本は兄弟の `schedule/anchor_step_tests.rs` に置いた（`anchor_tests.rs` の末尾から載せる・`change_tests.rs` と同じ形）。設計の表に無い追随ファイル 1 本として 7.1 の照合で数える。噛むことは変異 2 件（`steady::on_reply` の先頭の腕を無効にする／`on_anchor` の Status を選択待ちありに固定）で確かめた（戻し済み・本番のコードは無変更）。
+- 4.3（レビューを受けて親が足した）: 棄却の表に、別れ・切替の台詞がバルーンに出ていて利用者が実際にアンカーを押せる 3 相（`CloseTalkWait`・`ChangeTalkWait`・`ChangeCloseTalkWait`）を足した（計 9 相）。「台詞が出ている相なら受ける」方向へ述語を緩める変更が赤になる。
+- 4.3 → 6.2 への申し送り（互換記録 §2 に 1 行）: 別れ・切替の台詞の中のアンカーは押しても送らない（定常の運行中だけ受理・警告 `anchor_rejected_phase` を残して棄却）。
+- 4.3（任意の檻・未実施）: 「終了や切替の保留中も受理する」を固定するテストは無い（防御を足さないという不在の決めで、分岐が無い）。
+- 5.1: `input_events/` の下の `choice_active` の読み 5 か所はすべて `hit_active` へ替えた。`areka` に残る本番の読みは 2 か所だけ — `emo2_boot/balloon_visibility_phase.rs`（時間切れの抑止・要件 2.6 のため残す）と `emo2_boot/hover_inject.rs`（`AREKA_CHOICE_HOVER_INJECT` の実機用の巡回・実マウスの道ではない）。押下の結論の関数は無改変で 3.3／3.4／3.7 を満たす。設計の表に無い追随ファイル: `balloon_pointer_handler_tests.rs`・`balloon_leave_tests.rs`・`shell_box_handler_tests.rs`・`user_break_tests.rs`・`choice_drain.rs`（テストの中の `kind` の追随）。7.1 の照合で数える。
+- 5.1 → 5.2 への申し送り: 5.2 が入るまで、アンカーの押下は `choice_selected` と記録され `KanadeMsg::Choice` で届く（途中状態）。`anchor_selected` の記録に箱の印を載せるには、箱の名前が分かる `shell_box_handler.rs::send_selection`（普通のバルーンは `balloon_pressed.rs`）も触ることになる。
+- 5.1 → 7.2 への申し送り: アンカーの強調は実マウスで確かめる（`AREKA_CHOICE_HOVER_INJECT` の巡回はアンカーだけのバルーンでは回らない）。
+- 5.1 → 6.2 と開発者への確認（正典が黙る分岐）: アンカーの上の左ダブルクリックは 2 回の選択として送る — 選択の確定はダブルクリックかどうかを見ず（選択肢と同じ）、アンカーには帳簿が無い（要件 4.12）ので、最初の答えが 204 だとゴーストは `OnAnchorSelectEx`（→ `OnAnchorSelect`）を 2 回受ける。答えが台本なら 1 打目で台詞が置き換わって範囲が消えるので 2 回目は出ない。要件 4.11（知らせ 1 件につき列 1 本）とは矛盾しない。互換記録 §2 に 1 行書き、抑えるかどうかは完了の報告で開発者に見せる。
+- 5.2: 伝言の振り分けは `choice_drain.rs::forward_all` の 1 分岐だけ。記録の名前は `balloon.rs::selection_events(kind)` の表から引く（選択肢 `choice_selected`／`choice_selection_send_failed`・アンカー `anchor_selected`／`anchor_selection_send_failed`）ので、発行点のソースを `event = "anchor_selected"` で grep しても当たらない（名前は表に 1 か所）。取り出しから kanade へ送れなかったときは、選択肢の `choice_forward_failed` と同じ `warn!` の `anchor_forward_failed`（終了の流れでは kanade の停止が正常なので error にしない）。設計の表に無い追随ファイル: `balloon.rs`・`balloon_pressed.rs`・`shell_box_handler.rs`・`shell_box_handler_tests.rs`。
+- 5.2 → 7.2 への申し送り: 普通のバルーンの「当たり → 発行 → 記録」は頭なしでは踏めない（当たりの行は GPU の提示でしか埋まらない・以前からの制約）。実機では `anchor_selected` の `id`・`label` の欄の値と `anchor_accepted` を見て、範囲の文字と ID が押した所のものであることまで裏取りする。
+- 5.2（既存・棚卸の候補）: 送り口が消えたとき、送り口の `warn!` と呼び手の `error!` が同じ名前で 2 行出る（選択肢で既知の二重発火がアンカーにも写った）。
+- 6.1: 「誰も拾わない命令」の判定は `GenericCommand`／`Move` の腕だけが台帳を引くので、アンカーの台帳への登録は要らなかった。`diagnose` は `\e`・`\-` で打ち切らないが、対応の崩れだけは `pair_anchors` がそこで止まるので後ろに出ない（再生と一致）。道具の説明文（`DEFINITION` の英文の列挙）に「unpaired \_a anchor tags」を足した（レビューを受けて親が 1 句）。文書 `areka-tools.md` は 15〜17 行目のほか、同じ ⑶⑷ の数と例外の文も合わせた。
+- 6.2: 互換の記録 `doc/anchor-compat.md` は §2.1（設計までの裁定 13 行）・§2.2（実装で決めた D-1〜D-7）・§2.3（要件 7.2 の 7 項目の対応表）。`COMPAT_ARCHITECTURE.md` §8 の行は表の末尾に足した（他の文書が同ファイルを行番号で引いているので、途中に挿さない）。
+- 6.2（開発者への確認・完了の報告で見せる）: ⑴ D-4＝アンカーの左ダブルクリックは 2 回の選択として送る（抑えるかどうか）。⑵ Reference0 の文字は「押す直前までに文字の層へ届いた合図の分」— 合図は文字のかたまりで届くので、まだ 1 字ずつ出ている途中の字も入り、まだ届いていない後ろのかたまりの字は入らない。話している最中の押下の Reference0 を直に固定するテストは無い。
+- 6.2 → `release-cycle` への申し送り: dola の `CueCommand` は `#[non_exhaustive]` でないので、2 種類の追加は、全種類を catch-all なしで並べている外の利用側のビルドを壊す。設計は「API の追加」と書いたが、次の公開の版の上げ方は `release-cycle` の側で決める（0.0.x なので cargo の上ではどの版上げも非互換扱い）。
+- 6.2 → 7.1 への申し送り: `git diff --stat main` は main が先へ進んだ分が混ざる。照合は分岐点との比較（`git diff --stat main...HEAD`）で行う。
+- 6.3: 数え直しはタスクの数とすべて一致（本 spec 61 → 4＝さくらスクリプト 2・SHIORI 2／`areka-P0-anchor-style-canon` 59＝`\f[anchor*]` 16・descript `anchor.*` 43／SHIORI イベントの柵 実装済み 52・無い 234／brief 49）。報告は生成器で作り直した。中身が変わったのは 3 本（`report/assets.md` は持ち主を載せないので差分なし＝7.1 の照合では一覧に出ない）。生成器は LF で書くので、作り直すたびに CRLF へ書き戻す。
+- 6.3（開発者への確認・完了の報告で見せる）: 宛先の下書き `roadmap-draft.md` で、⑴ 本 spec の束を「バルーンのリンク」→「会話」に替えた（持ち物 4 件が会話 3・リンク 1・文書の決まり「いちばん多くを含む束」）、⑵ 段階 A の表の「バルーンのリンク」の引受先の案を `areka-P0-anchor-style-canon` にした（未対応 59 件の全数を持つ・裁定ではなく読み・次の棚卸で確かめる、と本文に明記）。
+- 6.3（範囲外・棚卸で扱う）: ⑴ アンカーの見た目の持ち主を本 spec と書いたままの所 — `crates/areka-emo-text/src/look.rs`（`Note::AnchorColorAsDefault` と `is_unowned` の説明・設計が無改変とした所）・`color.rs` の冒頭・`doc/COMPAT_ARCHITECTURE.md` の `\f[color,default.anchor]` の行の追跡先・`doc/emo2-conformance-scope.md`。⑵ `shiori.toml` の未対応の行の共通の note「`\q` の選択肢 ID にこの名前を書いた場合だけは別」は、`\_a[On…]` からも任意の名前が送れるようになったので「だけ」が不正確（正本は `briefing-shiori.md` の群の文面）。⑶ `roadmap-draft.md`「先頭ウェーブ」冒頭の「84 件／31 件」は 09-13 の写真のままで、実数（60／67）と大きくずれている。W-2「`anchor-tag-canon` を繰り上げるか」の候補も古い。⑷ `\f[anchor*]` 16 行の note の「ログ: 出る（compile の catch-all の debug!）」は本 spec の前から実態と違う（`anchor-style-canon` が書き直す所）。
+- 7.1（結果・2026-10-10・コミット `75e27ceb`・開始時の未コミット 0 件）: `tools/test-all.ps1` は全段緑（i686 の成果物 40 秒・`fmt --check`・x64 のワークスペース全テスト 258 秒・i686 のテスト 42 秒・crates.io 公開前の確認・文字コードの判定）。`git diff --name-only main...HEAD`（分岐点 `414d43eb` との比較・90 本）は、設計の「File Structure Plan」の一覧に、各タスクが名指しした追随ファイルと本書に記録した追随ファイルを加えたものと一致（`report/assets.md` は中身が変わらず一覧に出ない）。触らない約束の所（`emo2_boot/`・`menu/`・seriko・`shell/` の読み手）と、設計が無改変とした所（`look.rs`・時間切れの抑止の観測）に差分 0。触った `.rs` はどれも 1,000 行未満（最大 `schedule/mod.rs` 969）。clippy は本 spec が足した行への指摘 0 件（全体 358 件は以前から・リポジトリの道具に clippy の段は無い）。
+- 7.1: この段は差分を持たない確かめなので、タスクごとの独立レビューは置かず、独立の確かめは最後の `/kiro-validate-impl` に任せた。
+- 7.2（設計と本書の直し）: 実機の `RUST_LOG` は `warn,areka=info,kanade=info,areka_sakura=warn`。kanade の記録（`anchor_accepted` ほか）の宛先は `kanade`（`areka_kanade` ではない）、`anchor_selected` は `areka::input_events` なので `areka=info` も要る。当初の `areka_kanade=info,areka_sakura=warn` では 2 つとも出ない。
+- 7.2（下ごしらえ・2026-10-10）: 検体と道具は `target\anchor-signoff\`（追跡外）。`root` は `nar-sample-path emo2` で展開した emo2＋同梱バルーンに、アンカー 7 つの見本とハンドラを持つ `boot.lua` を差し替えたもの。起動は `pwsh -NoProfile -File "<ワークツリーの根の絶対パス>\target\anchor-signoff\run.ps1"`（絶対パスで呼ぶ・5 分で自動終了）、ログの判定は `check-log.ps1`。無人で確かめた分: 起動の記録に SHIORI の読み込みの失敗 0 件・`anchor_` の warn／error 0 件／`dump_balloon` の撮影（`out-auto\menu.png`）で 1〜3 行目のアンカーに下線・字の大きさと色はほかの字と同じ／実バイナリの `check_script` が崩れた 3 形と同じ位置の 2 件を `unpaired_tag` で返し、整った 4 形は 0 件。人が見る 3 点（下線と強調・押す → 答える → 置き換わる・話している最中の押下）と、本物の `anchor_selected`／`anchor_accepted` の行はまだ（押すまで出ない）。
+- 7.2（範囲外・起票する）: **文字の領域の下端に来た行の下線が出ない**。4 行目では作者の `\f[underline,1]` の下線もアンカーの下線も出ず、3 行目では両方出る（`out-probe2\menu.png`）。下線の位置は DirectWrite 任せ（`apply_font_ranges` の `SetUnderline`）で、行の上端 + 33 画素に出る（em の箱 28 より 5 画素下・行送り 30 より 3 画素下）。文字の面は validrect ちょうど（高さ 122）で、最下行の下線（123）が面の外になる。途中の行は次の行の帯に落ちるので見える。持ち主は下線の描画を入れた `areka-P0-text-decoration-canon`（完了済み）で、アンカー固有ではない。押せる範囲は描画と別に作るので、その行も押せるはず（実マウスで確かめる）。`anchor-style-canon` の「縦書きの下線の位置の決め直し」と同じ所を触る件。
+- 7.2（範囲外・既存の未対応）: areka の MCP の `raise_event`・`sakurascript` は未実装（`NG:not implemented yet`）で、押さずにゴーストの答えを画面で確かめる道が無い。pasta の `REG.OnSecondChange` は既定のハンドラが後から登録し直すので `boot.lua` からは黙らせられない（検体では辞書 2 本を外して対処）。台帳・roadmap に載っているかは完了時の棚卸で確かめる。
+- 検証（`/kiro-validate-impl`・2026-10-10）: 機械の検査は緑（全体テストは `75e27ceb` の緑を再利用・以後の差分は文書とコメントだけ／足した行に TODO 類 0・秘密の類 0／起動の煙は 7.2 の下ごしらえの走行で `boot_complete`・ERROR 0）。タスク横断の独立の確かめ: 欄ごとに追った結合は合っている・網羅の列挙の追随もれ 0・境界は差分 0・再確認の引き金 4 つは確かめ済み・受け入れ基準 62 件のうち 57 件がコードと檻で充足（2.7 の時間切れ／中断・5.2・5.3・5.4 は既存の仕組みに依る推論、8.8 は 7.2 待ち）。止める欠陥は無し。判定は「実機（7.2）待ち」。
+- 検証で見つけた記録もれ（直した）: アンカーが開いている間の `\c`（`\_a[x]あ\cい\_a`）— 本文の消去で範囲と印が一緒に消え、後ろの「い」は範囲の外・下線なし・押せない。対は整っているので警告も診断も出ない。互換記録に D-8 として足し、設計と `state_anchor.rs` の「到達しない」を「重なりは届かない・迷子の閉じは `\c` をまたぐと届く」に改めた。開発者へ見せる項目に加える（SSP は続きもアンカーにする可能性）。
+- 検証で直した設計の古い記述: `Final{id}`（「そのほかの決め」）／dola の版（「minor」を外し、`#[non_exhaustive]` でないことと `release-cycle` が決めることを 3 か所に）／`send_selection` の記録は種類ごとの名前／実機は 3 点／新しいファイルの一覧に `anchor_step_tests.rs`・`events_anchor_tests.rs`。
+- 7.2 に足す観点（検証から）: ⑴ バルーンが時間切れで消えた後、リンクのあった所を押しても `anchor_selected` が出ない（押せる範囲を持ったまま時間切れで隠れるのはアンカーが初めて・要件 2.7 のこの道は檻が無い）、⑵ アンカーがあっても時間切れが遅れない（要件 2.6）、⑶ 最下行のリンクは下線が無くても押せる。
+- 7.2（呼び方）: `target\anchor-signoff\` の道具（`run.ps1`・`check-log.ps1`・`auto.ps1`・`mcp.ps1`）は自分の置き場所を基準に動く（`$PSScriptRoot`・`git -C`・`Push-Location`）ので、どのディレクトリからでも絶対パスで呼べる。人へ渡すコマンドは相対パスでなく絶対パスで書く（開発者の指摘・2026-10-10）。
+- 7.2（結果・2026-10-10 20:14〜20:17・開発者が実機で操作）: 開発者の所見は「多分大丈夫」、`check-log.ps1` は `OK`。ログ（`target\anchor-signoff\run-human.log`・追跡外なので要点をここへ写す）: 押下 37 回で `anchor_selected` 37 件・`anchor_accepted` 37 件（id と文字は押した所のもの）・ERROR 0 件・`anchor_` の warn／error 0 件・中断の記録（`user_break`）0 件・`unknown_talk_done` 0 件。WARN は既存の 3 件だけ（`null.png` の全透明 2・折返し基準 1）。
+  - ⑵ 押す → 答える → 置き換わる: `id=detail label=くわしく` → `anchor_accepted plan=Canonical` → `steady_talk talk_id=2 origin="OnAnchorSelectEx"`／`id=item label=品物 references_len=2` → `steady_talk talk_id=4 origin="OnAnchorSelect"`（`OnAnchorSelectEx` が 204 → `OnAnchorSelect`）／`id=OnAnchorDemo label=デモ references_len=1` → `plan=Named` → `origin="OnChoiceEvent"`／`id=nohandler label=答えなし` は受理だけで台詞は始まらない／`id=wrap label=行をまたぐ`（改行は文字に入らない）→ `origin="OnAnchorSelect"`。
+  - ⑶ 話している最中: `talk_id=10`（「長い」・20:14:50）の最中、:52 に `id=nohandler label=答なし` → 置き換えなし・中断なし、:55 に `id=detail label=台本` → `steady_talk_replace talk_id=11 origin="OnAnchorSelectEx"`。別の回は最中の `id=item label=品物` → `steady_talk_replace talk_id=14 origin="OnAnchorSelect"`。
+  - ⑴ 下線は無人の撮影（`out-auto\menu.png`・1〜3 行目）で確認。マウスを乗せたときの強調は、記録（info）にも画像にも残らないので、開発者の目視（「多分大丈夫」）が根拠。
+  - 最下行のリンク（`OnAnchorLong`「長い」・`OnAnchorChoice`「比べる」）は下線が無くても押せた（複数回）。起動直後の台詞のアンカーの字の大きさと色は、撮影ではほかの字と同じだった（装着前の見た目の件は出なかった）。
+  - この走行で踏んでいないもの: バルーンが時間切れで消えた後の押下（台詞が置き換わり続けて時間切れが来なかった）・アンカーの左ダブルクリック（D-4）。どちらも檻または互換記録の記述が根拠のまま。
+
+### 完了時の棚卸（2026-10-10・`/kiro-complete` 冒頭ステップ）
+
+- main の取り込み: 完了の手続きの最初に `origin/main`（`a1942d0c`・4 本先）を取り込んだ（衝突なし）。取り込み後、ワークスペースのビルドは警告 0、`ukadoc-survey` と `areka-kanade`（main の 5 本が増えて単体 589 本）は緑、`cargo metadata --locked` は 0。
+- **その場で解決: 3 件**
+  1. アンカーの見た目の持ち主の書き残しを `areka-P0-anchor-style-canon` へ改めた（`crates/areka-emo-text/src/color.rs` の冒頭・`look.rs` の説明 2 か所・`doc/COMPAT_ARCHITECTURE.md` の `\f[color,default.anchor]` の行の追跡先・`doc/emo2-conformance-scope.md`。コメントと文書だけ）。
+  2. dola の手書きの「全種類」の檻 2 本と `CueCommand` の説明に `Cursor` を足し、実数の 13 に揃えた（以前から 1 つずれていた・本番のコードは無変更）。
+  3. 互換記録の「確認待ち」の印を外した（D-2・D-3・D-4・D-8 は 2026-10-10 に開発者へ見せ、変更の指示なしで実装完了の承認を受けた）。
+- **起票: 新しい spec 1 本＋既存の brief への追記 4 件**（`/kiro-discovery`）
+  - 新: `areka-P0-underline-bottom-row-clip`（バグ・文字の領域の下端に来た行の下線が出ない）。
+  - 追記: `areka-P0-anchor-style-canon`（装着前の見た目・下線の解決の差し替え点・`\f[anchor*]` の note）／`areka-P0-coverage-roadmap-refresh`（`shiori.toml` の共通の note・古い裁定候補・2 つの読み・調査時点の表）／`areka-P0-release-cycle`（dola の `CueCommand` の 2 種類と `#[non_exhaustive]` でないこと）／`areka-P0-range-choice-tag`（選択の送り口が消えたときの二重の記録を、ついでに直す候補として）。
+- 起票済みと確かめて、起票しなかったもの: clippy の既存の赤（`areka-P0-clippy-199-lints`）／areka の MCP の `raise_event`・`sakurascript` 未実装（`areka-P0-mcp-kanade-tools`）。
+- 起票しないと決めたもの: 任意の檻 2 本（開いている最中の空回しの取り直し・保留中の受理）は分岐を持たない配線なので足さない。バルーンが時間切れで隠れた後の押下は、箱は `shown_boxes` に無い箱を当たりに使わず、普通のバルーンは窓が隠れるので届かない（種類を問わない既存の仕組み）。pasta の `REG.OnSecondChange` を `boot.lua` から黙らせられない件は areka の未対応ではなく、検体作りの知見として 7.2 の記録に残す。
+- 調停役 kiro-watch: 運用の一時停止中のため省略。

@@ -12,112 +12,112 @@ pages = ["descript_balloon", "descript_ghost", "descript_headline", "descript_in
 [entry."ukadoc:descript_balloon:anchor.blendmethod_2c_30b3_30de_30f3_30c9:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの重ね方の指定を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの重ね方の指定を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.brush.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの塗りの色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.brush.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの塗りの色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.brush.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの塗りの色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.font.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの文字の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.font.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの文字の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.font.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの文字の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 この綴りは、正典キー font.color.r へ値が漏れないことを確かめる引っ掛けとして crates/areka-parsers/src/balloon/parse_tests.rs で使われている。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
@@ -125,576 +125,576 @@ areka-parsers の balloon::map_merged は読むキーを並べた表を完全一
 [entry."ukadoc:descript_balloon:anchor.font.shadowcolor.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.font.shadowcolor.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.font.shadowcolor.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
 status = "absent"
 introduced = "2.5.27"
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの文字の影の形を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの文字の影の形を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.brush.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの塗りの色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.brush.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの塗りの色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.brush.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの塗りの色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの文字の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの文字の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの文字の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.shadowcolor.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.shadowcolor.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.shadowcolor.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
 status = "absent"
 introduced = "2.5.27"
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの文字の影の形を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの文字の影の形を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.pen.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの枠の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.pen.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの枠の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.pen.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの枠の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.notselect.style_2c_5f62_72b6:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの目印の形を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれていない状態のリンクの目印の形を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.pen.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの枠の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.pen.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの枠の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.pen.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの枠の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.style_2c_5f62_72b6:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの目印の形を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、選ばれている状態のリンクの目印の形を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.brush.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの塗りの色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.brush.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの塗りの色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.brush.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの塗りの色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの塗りの色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの文字の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの文字の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの文字の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの文字の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.shadowcolor.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.shadowcolor.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.shadowcolor.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの文字の影の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
 status = "absent"
 introduced = "2.5.27"
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの文字の影の形を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの文字の影の形を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.pen.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの枠の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.pen.color.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの枠の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.pen.color.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの枠の色を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの枠の色を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:anchor.visited.style_2c_5f62_72b6:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
-本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの目印の形を宣言しても見た目は変わらない。
+本文中のリンクは既定の 1 種類の見た目だけで出るため、一度たどった状態のリンクの目印の形を宣言しても見た目は変わらない。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+担当 spec は areka-P0-anchor-style-canon（リンクの装飾一式を持つ。リンクの機能は areka-P0-anchor-tag-canon が持つ）。
 束: 吹き出しのリンクの見た目・読む経路が無い（先に要る仕組み: バルーンの中のリンク機能）。束の順位: 10——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 

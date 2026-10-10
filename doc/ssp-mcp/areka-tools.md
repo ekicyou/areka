@@ -1,4 +1,4 @@
-# areka 独自の MCP ツール（2026-10-08 時点）
+# areka 独自の MCP ツール（2026-10-10 時点）
 
 SSP の MCP サーバに無く、areka だけが出すツールの約束の正本。今は `check_script` の 1 本。ツールの名前・引数・結果の形・診断の種類と文面・SSP との違い・あとからツールを 1 本足す手順を書く。SSP と同じ 10 本の約束は [survey.md](survey.md)、輸送の差は [transport-diff-areka.md](transport-diff-areka.md) にある。
 
@@ -62,7 +62,7 @@ OK:3 diagnostics
 
 ## ⑶ 診断の種類と文面
 
-種類は 6 つ。文面の形は「何が起きているか; 再生でどうなるか」の英文 1 文（小文字で始め、句点なし）。
+種類は 7 つ。文面の形は「何が起きているか; 再生でどうなるか」の英文 1 文（小文字で始め、句点なし）。
 
 | `kind` | 場合 | `message` |
 |---|---|---|
@@ -73,6 +73,9 @@ OK:3 diagnostics
 | `unreadable_argument` | 閉じていない | `the bracket or quote is not closed; playback drops everything from here to the end` |
 | `unreadable_argument` | 既定の値へ落とす | `the argument is missing or unreadable; playback uses the default value` |
 | `ignored` | — | `areka accepts this but it has no effect yet` |
+| `unpaired_tag` | 閉じが無い | `the anchor is not closed; playback extends it to the end of the script` |
+| `unpaired_tag` | 開いている間の新しい開き | `a new anchor opens before the previous one closes; playback closes the previous one here` |
+| `unpaired_tag` | 開いていない所の閉じ | `no anchor is open; playback ignores this close` |
 
 何を診るか（全数）。どの行も、判定は再生が実際に使う関数の答えをそのまま使う（検査のための別の判定を持たない）ので、検査と再生の扱いは食い違わない。
 
@@ -92,10 +95,14 @@ OK:3 diagnostics
 | 12 | `ignored` | 選択肢マーカー | `\![*]` | `\q[題,ID]` |
 | 13 | `ignored` | 受け取るが表示を変えない `\f` のキー | `\f[sub,1]`・`\f[align,center]`・`\f[height,large]` | `\f[bold,1]` |
 | 14 | `unknown_tag` | 知らない `\f` のキー・キーの無い `\f`（値の誤りは診ない） | `\f[colour,red]`・`\f[]` | `\f[color,red]`・`\f[bold,abc]` |
+| 15 | `unpaired_tag` | 閉じ `\_a` の無いアンカーの開き（アンカーは台本の終わりまで続く） | `\_a[x]` | `\_a[x]あ\_a` |
+| 16 | `unpaired_tag` | アンカーが開いている間の新しい開き（診断は新しい開きに付く） | `\_a[x]あ\_a[y]い\_a` | `\_a[x]あ\_a\_a[y]い\_a` |
+| 17 | `unpaired_tag` | アンカーが開いていない所の閉じ | `\_a` | `\_a[x]あ\_a` |
 
 - 「誰も拾わない `\!`」は、名前と第 1 引数の組で決まる。拾う組の一覧は `crates/areka/src/emo2_boot/consumer_ledger.rs` の `ConsumerLedger::canonical`（今 23 組）で、各機能の処理が実際に拾う組と一致することをテスト（`consumer_ledger_agreement_tests.rs`）で固定している。
 - `\s`・`\b` は、その場の話し手（`\0`・`\1`・`\h`・`\u`・`\p[n]`）のシェルとバルーンで判定する。
-- 表の各行の「出る台本」「出ない台本」は `crates/areka/src/mcp/check_script_judge_tests.rs` の `row01`〜`row14` が固定している。
+- 表の各行の「出る台本」「出ない台本」は `crates/areka/src/mcp/check_script_judge_tests.rs` の `row01`〜`row17` が固定している。
+- `unpaired_tag`（15〜17 行目）は、再生が使うのと同じ判定（`areka_sakura::pair_anchors`）の答えを開き・閉じの位置に付けたもので、再生の警告と同じ所に同じ内容で出る。重なった開きが閉じられないまま終わる台本（`\_a[x]あ\_a[y]い`）では、2 つ目の開きに 16 行目・15 行目の順で 2 件付く。`\e`・`\-` の後ろの `\_a` には出さない（再生はそこで読むのをやめるので、開きも閉じも数えない）。
 
 **名前だけ予約した種類**（今は出さない）:
 
@@ -125,7 +132,7 @@ OK:3 diagnostics
 
 あわせて知っておくこと:
 
-- **`\e`・`\-` の後ろも診る**。再生はそこで止まるので後ろは再生されないが、書いてある誤りは知らせる。
+- **`\e`・`\-` の後ろも診る**。再生はそこで止まるので後ろは再生されないが、書いてある誤りは知らせる。アンカーの対応の崩れ（`unpaired_tag`）だけは別で、後ろの `\_a` には出さない（⑶）。
 - **答えは、呼んだ時点のシェルとバルーンに対するもの**。areka は呼ばれた時点のシェルとバルーンの事実を写し取ってから診るので、診ている間にシェルが切り替わっても、答えは写し取った時点のシェルに対するものになる。
 - **10 秒の上限に当たる場合がある**。起動の直後で表示の準備がまだ済んでいない間は、済むのを待ってから答える。準備がいつまでも済まないときと、診るのに 10 秒を超えるほど長い台本のときは、⑴ の時間切れ（`NG:areka did not respond within 10 seconds`・`isError: true`）になる。台本の長さの上限は別に置いていない（MCP の本文の上限 4 MiB だけ。超えると HTTP の 413）。
 

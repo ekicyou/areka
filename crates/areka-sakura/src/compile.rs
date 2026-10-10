@@ -24,6 +24,7 @@
 //! canonical 変換 [`dola::cue::to_talk_schedule`] も相対 `start_time` を保存するため、先頭待ちは
 //! 台本〜スケジュールを通して保存される。
 
+use crate::anchor_pair::{AnchorIssue, pair_anchors};
 use crate::contract::{
     ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, FONT_TAG_CARRIER, TalkEndReason,
 };
@@ -55,8 +56,20 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
     // `\![set,choicetimeout,時間]` の最後の値（`None`＝未指定）。読むたびに上書きし、走査後の
     // 選択待ちの区切りへ 1 回だけ入れる（要件 3.1/3.2/6.2）。関数の外に状態を持たない（4.1/4.2）。
     let mut last_choice_timeout: Option<f64> = None;
+    // アンカーの開き `\_a[…]` と閉じ `\_a` の対応の崩れ（位置の昇順）。走査の前に 1 回だけ判定し、
+    // 開きと閉じの腕が自分の位置の分を先頭から順に取り出す（anchor-tag-canon 要件 1.8〜1.10）。
+    // 判定も走査も `\e`・`\-` で止まるので、崩れの位置は必ずどちらかの腕を通る。
+    let anchor_findings = pair_anchors(instructions);
+    let mut anchor_findings = anchor_findings.iter().peekable();
+    let mut anchor_issue_at = |index: usize, issue: AnchorIssue| {
+        anchor_findings
+            .next_if(|f| f.index == index && f.issue == issue)
+            .is_some()
+    };
+    // 閉じの無い開きがある（走査の終わりで閉じを補う）。
+    let mut anchor_unclosed = false;
 
-    for instruction in instructions {
+    for (index, instruction) in instructions.iter().enumerate() {
         match instruction {
             // 明示ウェイトを offset へ吸収せず、action を持たず duration のみを持つ第一級 Wait cue
             // として当該 offset へ発行し、直後 offset を進める（末尾・単独でも台本に残る・R5.1/4.4・D3）。
@@ -228,16 +241,70 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
                     CueCommand::command_carrier(FONT_TAG_CARRIER, args.clone()),
                 ));
             }
+            // アンカーの開き `\_a[ID,…]`（→Balloon・anchor-tag-canon 要件 1.7〜1.9）。ID と引数の列を
+            // 解釈せずに運ぶ 0 秒の合図（`Choice` と同じ）。ここから閉じまでに流れる文字が押せる範囲に
+            // なる。同じ位置に重なりと閉じ無しの 2 件が付くことがあるので、両方を見る（判定が返す順）。
+            Instruction::Anchor(anchor) => {
+                // 開いている間の新たな開き: 直前のアンカーをここで閉じてから始める。
+                if anchor_issue_at(index, AnchorIssue::Reopened) {
+                    tracing::warn!(
+                        event = "anchor_reopened",
+                        index,
+                        id = %anchor.id,
+                        "[compile] アンカーが開いている間に新しい開きがあるので、直前のアンカーをここで閉じる"
+                    );
+                    cues.push(emit(scope, offset, 0.0, CueCommand::AnchorEnd));
+                }
+                // 閉じの無い開き: 範囲は表示の終わりまで（閉じは走査の終わりで補う）。
+                if anchor_issue_at(index, AnchorIssue::Unclosed) {
+                    tracing::warn!(
+                        event = "anchor_unclosed",
+                        index,
+                        id = %anchor.id,
+                        "[compile] アンカーの開きに閉じが無いので、表示の終わりまでを範囲にする"
+                    );
+                    anchor_unclosed = true;
+                }
+                cues.push(emit(
+                    scope,
+                    offset,
+                    0.0,
+                    CueCommand::AnchorBegin {
+                        id: anchor.id.clone(),
+                        references: anchor.references.clone(),
+                    },
+                ));
+            }
+            // アンカーの閉じ（角括弧の無い `\_a`・→Balloon・要件 1.7/1.10）。0 秒の合図。開いて
+            // いないのに閉じなら合図を出さず、警告を残して表示を続ける。
+            Instruction::AnchorEnd => {
+                if anchor_issue_at(index, AnchorIssue::StrayClose) {
+                    tracing::warn!(
+                        event = "anchor_stray_close",
+                        index,
+                        "[compile] アンカーが開いていないのに閉じがあるので無視する"
+                    );
+                } else {
+                    cues.push(emit(scope, offset, 0.0, CueCommand::AnchorEnd));
+                }
+            }
             // 残る除外（`Raw` および `#[non_exhaustive]` の未知 variant）は無視ログを記録し cue を
             // 生成せず継続する（寛容・非 panic・型シーム・R8.2/8.3/R11.2）。Choice/Cursor は task 4.1、
-            // Move/GenericCommand/SystemVar は task 4.2 で専用アームへ卒業したため、catch-all が無視
-            // する除外集合は Raw＋未知 variant のみへ縮小済み（`Instruction` は別 crate の
+            // Move/GenericCommand/SystemVar は task 4.2、Font と Anchor/AnchorEnd もその後に専用アームへ
+            // 卒業したため、catch-all が無視する除外集合は Raw＋未知 variant のみ（`Instruction` は別 crate の
             // `#[non_exhaustive]` ゆえ本 catch-all は構造上必須・未知 variant は防御経路）。Raw-only
             // 化の明文檻は `catch_all_ignored_set_is_raw_only`（task 4.3・R8.3）。
             other => {
                 tracing::debug!(instruction = ?other, "M-boot 外タグを無視");
             }
         }
+    }
+
+    // 閉じの無いアンカーは走査の終わり（`\e`・`\-`・末尾）で閉じる（anchor-tag-canon 要件 1.8）。
+    // 選択待ちの区切りを出す台本でも、閉じはその前に並ぶ。アンカーは下の区切りの判定に関わらない
+    // （`Choice` だけを数える・要件 2.5）。
+    if anchor_unclosed {
+        cues.push(emit(scope, offset, 0.0, CueCommand::AnchorEnd));
     }
 
     // 選択待ち barrier 発行（R2.1/2.2/2.5/2.6）: 走査終了（End/Quit 切詰め後の出力）に対し、choice
@@ -394,6 +461,9 @@ pub struct CompiledTalk {
     pub end: TalkEndReason,
 }
 
+#[cfg(test)]
+#[path = "compile_anchor_tests.rs"]
+mod anchor_tests;
 #[cfg(test)]
 #[path = "compile_arm_tests.rs"]
 mod arm_tests;

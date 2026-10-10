@@ -4053,7 +4053,7 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_a_5bID_2cr2_2cr3..._5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "areka-P0-anchor-tag-canon"
 priority = "A1"
@@ -4063,8 +4063,9 @@ links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnAnchorSelectEx:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。文がアンカーにならず、押しても何も起きない。
-ログ: 出る（compile の catch-all の debug! 記録）。
+壊れ方: 該当なし。decode_tag の \\_a の腕が ID と続く引数を記述順のまま Anchor へ転記し、角括弧の無い \\_a（閉じ）は decode_bare が AnchorEnd にする。compile が開きと閉じを対にして範囲の合図（AnchorBegin／AnchorEnd）を出し、文字の層がその範囲に下線を引いて押せる所にする（マウスを乗せると強調する）。押すと OnAnchorSelectEx（Ref0＝範囲の文字・Ref1＝ID・Ref2 以降＝続く引数）を送り、何も返らなかったときだけ OnAnchorSelect（Ref0＝ID）を続ける。台本が返れば、話している最中でもその台本へ置き換える。選択肢と違って答えの待ちも時間切れも作らない。見た目は既定の 1 種類だけで、作者の指定（\\f[anchor*]・descript の anchor.*）は areka-P0-anchor-style-canon が持つ。
+ログ: 出る（押したときは anchor_selected の info!、受理は anchor_accepted の info!。閉じの無い開きは anchor_unclosed・開きの重なりは anchor_reopened・開きの無い閉じは anchor_stray_close の warn!。定常以外で届いた選択は anchor_rejected_phase の warn! を残して送らない）。
+[転記元: doc/anchor-compat.md の §1（Reference の割付と順）と §2（正典が黙る分岐の裁定）。doc/COMPAT_ARCHITECTURE.md §8 の横断表の行がこの記録を指している]
 [根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_a_5bOnID_2cr0_2cr1..._5d:1]
 [群: アンカー]
 [テーマ: 文が押せる形にならず、利用者が言葉を選んで返す道が無くなる]
@@ -4085,21 +4086,22 @@ links = [
 ]
 note = """
 [別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び ID が、長い側の ID,r2,r3... の先頭と 1 語ずつ一致する]
-[狭さ: 付随参照を取らない 1 引数形。areka はこの綴りを decode_tag の既定の腕で受け、写像先と同じく Raw へ落とすので扱いは根と変わらない]
+[狭さ: 付随参照を取らない 1 引数形。areka はこの綴りを写像先と同じ decode_tag の \\_a の腕で受け、引数の列が空の Anchor にするので扱いは根と変わらない]
 [所有の主張: areka-P0-anchor-tag-canon がアンカーの 3 形を主張しているが、この行は別名なので owner は根の 2 件に付く]
 [頻度: 里々 2 / YAYA 3（wiki の作例の文書数＝弱い代理。数えた綴りは \\_a）]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_a_5bOnID_2cr0_2cr1..._5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "areka-P0-anchor-tag-canon"
 priority = "A10"
 values = ["交わり"]
 links = []
 note = """
-壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。任意の名前のイベントが起きず、押しても何も起きない。
-ログ: 出る（compile の catch-all の debug! 記録）。
+壊れ方: 該当なし。decode_tag の \\_a の腕は ID が On で始まるかどうかを読まずに Anchor へ転記し、押されたときに会話の進行の側（areka-kanade の schedule/anchor.rs の plan_anchor）が ID の頭の On を逐語で見て、ID と同じ名前のイベントを 1 本だけ送る（Ref0 以降＝ID に続く引数を記述順）。OnAnchorSelectEx・OnAnchorSelect は送らない。範囲の出し方・押せる所・見た目は兄弟の根と同じ。
+ログ: 出る（押したときは anchor_selected の info!、受理は anchor_accepted の info! で plan が Named。送出の直前に trace のログ shiori_request がその名前で 1 行出る）。
+[転記元: doc/anchor-compat.md の §1 の A-3]
 [根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_a_5bID_2cr2_2cr3..._5d:1]
 [群: アンカー]
 [テーマ: 押したときに好きな名前で受ける道が無く、返事を任意の話へ繋げられない]
@@ -4499,7 +4501,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchor.font.color_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = []
 links = [
@@ -4517,7 +4519,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorcolor_2c_8272_6307_5b9a_5d_3082_3057_304f_306f_5cf_5banchorbrushcolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = []
 links = [
@@ -4536,7 +4538,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorfontcolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = []
 links = [
@@ -4554,7 +4556,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchormethod_2c_63cf_753b_65b9_6cd5_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = []
 links = [
@@ -4570,7 +4572,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchornotselectcolor_2c_8272_6307_5b9a_5d_3082_3057_304f_306f_5cf_5banchornotselectbrushcolor_2c_8272_6307_5b9a_5:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = []
 links = [
@@ -4589,7 +4591,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchornotselectfontcolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = []
 links = [
@@ -4607,7 +4609,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchornotselectmethod_2c_63cf_753b_65b9_6cd5_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = []
 links = []
@@ -4621,7 +4623,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchornotselectpencolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = []
 links = [
@@ -4639,7 +4641,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchornotselectstyle_2c_5f62_72b6_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = []
 links = [
@@ -4655,7 +4657,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorpencolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = []
 links = [
@@ -4673,7 +4675,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorstyle_2c_5f62_72b6_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = []
 links = [
@@ -4689,7 +4691,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorvisitedcolor_2c_8272_6307_5b9a_5d_3082_3057_304f_306f_5cf_5banchorvisitedbrushcolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = []
 links = [
@@ -4708,7 +4710,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorvisitedfontcolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = []
 links = [
@@ -4726,7 +4728,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorvisitedmethod_2c_63cf_753b_65b9_6cd5_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = []
 links = []
@@ -4740,7 +4742,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorvisitedpencolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = []
 links = [
@@ -4758,7 +4760,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorvisitedstyle_2c_5f62_72b6_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-anchor-tag-canon"
+owner = "areka-P0-anchor-style-canon"
 priority = "A10"
 values = []
 links = [

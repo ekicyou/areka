@@ -1,7 +1,7 @@
 //! 命令モデル（下流共有 I/O 契約）。
 //!
 //! さくらスクリプトの 1 命令を表すフラットな単一 enum `Instruction` と、
-//! 付随する値型（`SurfaceArg` / `NewLineRatio` / `Choice` / `MoveArgs`）を定義する。
+//! 付随する値型（`SurfaceArg` / `NewLineRatio` / `Choice` / `Anchor` / `MoveArgs`）を定義する。
 //! これがクロスエンジン I/O 契約の片側であり、本パーサが生成者、
 //! 下流 `areka-P0-sakura-engine` が消費者となる（型の正本は本クレートが所有）。
 //!
@@ -64,6 +64,12 @@ pub enum Instruction {
     /// `["bold",""]`。キーの意味付け（43 形のうち本仕様が持つ 12 項目とそれ以外の
     /// 振り分け）は消費側（文字レンダリング層）の責務であり、本層は転記に徹する。
     Font { args: Vec<String> },
+    /// アンカーの開き `\_a[ID,…]`（転記のみ・anchor-tag-canon 要件 1.1〜1.3・1.11）。
+    Anchor(Anchor),
+    /// アンカーの閉じ（角括弧の無い `\_a`・anchor-tag-canon 要件 1.4）。
+    ///
+    /// 開きとの対応（閉じ無し・重なり・開いていない閉じ）は本層では見ない。
+    AnchorEnd,
     /// 寛容パススルー: 構文区切りできたが意味未対応／不正の生保持（要件 10/13.8）。
     Raw(String),
 }
@@ -115,6 +121,17 @@ pub struct Choice {
     /// 選択 ID（target）。
     pub target: String,
     /// 第 3 引数以降の追加 Reference（順序保持・要件 5.2）。
+    pub references: Vec<String>,
+}
+
+/// `\_a[ID,r…]`（アンカーの開き）の分離保持。anchor-tag-canon 要件 1.1〜1.3・1.11。
+///
+/// 意味は読まない: ID が `On` で始まるかどうかも、ID が空かどうかも本層では区別しない。
+#[derive(Clone, Debug, PartialEq)]
+pub struct Anchor {
+    /// 第 1 引数（ID）。`\_a[]` のように無ければ空の文字列。
+    pub id: String,
+    /// 第 2 引数以降（記述順・空のトークンも潰さない）。
     pub references: Vec<String>,
 }
 

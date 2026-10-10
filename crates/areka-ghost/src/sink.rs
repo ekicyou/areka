@@ -132,6 +132,8 @@ fn command_kind(command: &CueCommand) -> &'static str {
         CueCommand::Cursor { .. } => "Cursor",
         CueCommand::Wait => "Wait",
         CueCommand::ClearAll => "ClearAll",
+        CueCommand::AnchorBegin { .. } => "AnchorBegin",
+        CueCommand::AnchorEnd => "AnchorEnd",
     }
 }
 
@@ -316,6 +318,14 @@ mod tests {
         );
         assert_eq!(command_kind(&CueCommand::Wait), "Wait");
         assert_eq!(command_kind(&CueCommand::ClearAll), "ClearAll");
+        assert_eq!(
+            command_kind(&CueCommand::AnchorBegin {
+                id: "OnJump".into(),
+                references: vec![],
+            }),
+            "AnchorBegin"
+        );
+        assert_eq!(command_kind(&CueCommand::AnchorEnd), "AnchorEnd");
     }
 
     /// `LogSink` は無蓄積の unit 相当構造体ゆえ、`Clone` した 2 インスタンスを別々に

@@ -188,6 +188,8 @@ pub enum KanadeMsg {
     Close,
     /// 選択確定（UI 配線層 → kanade）。additive 増分（Req 4.4）。
     Choice(ChoiceInput),
+    /// アンカーの選択（UI 配線層 → kanade）。定常でだけ受理し、選択待ちの帳簿とは照合しない。
+    Anchor(crate::anchor_input::AnchorInput),
     /// 選択待ち成立の通知（talk → dispatcher → kanade）。additive 増分（Req 4.4）。
     ///
     /// 真実源は再生層（duration 権威直結・Req7.2）だが、**dispatcher が `base_now` で
@@ -298,7 +300,7 @@ pub enum ShioriMsg {
 pub enum EventId {
     /// スケジューラ起源の固定 ID（構築関数のみが構成・固定表で検証）。
     Static(&'static str),
-    /// 選択起源の任意名イベント（逐語・カテゴリ規則で検証）。
+    /// 作者が ID に書いた任意の名前（選択肢・アンカー）のイベント（逐語・カテゴリ規則で検証）。
     Choice(String),
 }
 
@@ -656,6 +658,8 @@ mod tests {
                 KanadeMsg::StatusQuery { reply: _ } => "StatusQuery",
                 // 時間切れの知らせ（additive・既存の判別結果を変えない）。
                 KanadeMsg::BalloonTimeout { talk_id: _ } => "BalloonTimeout",
+                // アンカーの選択（additive・既存の判別結果を変えない）。
+                KanadeMsg::Anchor(_) => "Anchor",
             }
         }
         let existing = [

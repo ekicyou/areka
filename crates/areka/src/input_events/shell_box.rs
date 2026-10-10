@@ -32,7 +32,8 @@ pub(crate) fn box_under_point(boxes: &[ShownBox], x: f32, y: f32) -> Option<&Sho
 pub(crate) enum BoxPressVerdict {
     /// シェルへの操作として既存の道へ（要件 9.1・9.7）。
     ShellOp,
-    /// この押下か直前の押下が選択の確定（要件 8.5）。
+    /// この押下か直前の押下が選択の確定（要件 8.5）。選択肢・アンカーのどちらでも同じ
+    /// （areka-P0-anchor-tag-canon 要件 3.3・3.7）。
     ConsumedBySelection,
     /// 中断を禁じる区間（止めず、シェルへも送らない・要件 9.6）。
     Disabled,
@@ -71,7 +72,7 @@ pub(crate) fn judge_box_press(
 pub(crate) enum BoxMove {
     /// 文字の出ている箱の四角の外 → 既存の道へ。
     Outside,
-    /// 選択肢の行の上 → 強調して、シェルへは送らない（要件 8.2）。
+    /// 選択肢の行の上 → 強調して、シェルへは送らない（要件 8.2）。アンカーの範囲の上も同じ。
     OverChoice { name: BoxName, ordinal: usize },
     /// 箱の中で行の上でない → 滞在だけ記録して既存の道へ（要件 9.1・9.7）。
     OverBody { name: BoxName },
