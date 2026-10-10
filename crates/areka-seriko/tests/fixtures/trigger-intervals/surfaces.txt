@@ -5,6 +5,10 @@ charset,UTF-8
 // surfaces.txt が定義している面の番号と画像のファイル名で指す。実機では emo2 の写しの surfaces.txt の
 // 末尾へこのファイルを丸ごと書き足して使う（番号は emo2 と当たらない 9100 から）。
 //
+// 立ち絵は emo2 の surface1000 が既定の着せ替えで出す絵を element定義で重ねたもの（体 base1.png・
+// 目 4/normal.png・眉 3/normal.png・髪飾り ribbon.png・口 2/niko.png）。口・紅・キラリの絵はこの
+// 立ち絵の上に載るように描かれているので、animation が重ねる絵は顔の上に出る。口は最後の element4。
+//
 // ── 仕込んだ記録（テストが件数で比べる。行を足し引きしたらここと README.md とテストも直す） ──
 //   採る 3 語        : 5 本（surface9100 の animation0・1・2／surface9102 の animation0・1）
 //   無効な数値       : 2 件（surface9103 の animation0＝talk,abc・animation1＝periodic,0）
@@ -17,7 +21,11 @@ charset,UTF-8
 // animation2: 2 秒ごとに紅（1600 → 500ms で消す）
 surface9100
 {
-element0,overlay,surface0.png,0,0
+element0,overlay,purple/0/base1.png,0,0
+element1,overlay,purple/4/normal.png,0,0
+element2,overlay,purple/3/normal.png,0,0
+element3,overlay,purple/a/ribbon.png,0,0
+element4,overlay,purple/2/niko.png,0,0
 animation0.interval,talk,3
 animation0.pattern0,overlay,1200,0,0,0
 animation0.pattern1,overlay,1202,80,0,0
@@ -31,18 +39,22 @@ animation2.pattern1,overlay,-1,500,0,0
 }
 
 // ── 部品に 3 語（一番上は 3 語を持たない） ──
+// 口は部品 9102 が出す。部品の animation が重ねる絵は部品の位置に入るので、目より後ろへ置く。
 surface9101
 {
-element0,overlay,surface0.png,0,0
-element1,overlay,9102,0,0
+element0,overlay,purple/0/base1.png,0,0
+element1,overlay,purple/4/normal.png,0,0
+element2,overlay,purple/3/normal.png,0,0
+element3,overlay,purple/a/ribbon.png,0,0
+element4,overlay,9102,0,0
 }
 
-// 部品（9101 が置く）
+// 部品（9101 が置く）＝閉じた口
 // animation0: 2 文字ごとに口（1203 → 100ms で消す）
 // animation1: 見えた瞬間にキラリ（1701 → 300ms で消す）
 surface9102
 {
-element0,overlay,purple/2/mouthbase.png,0,0
+element0,overlay,purple/2/niko.png,0,0
 animation0.interval,talk,2
 animation0.pattern0,overlay,1203,0,0,0
 animation0.pattern1,overlay,-1,100,0,0
@@ -56,7 +68,11 @@ animation1.pattern1,overlay,-1,300,0,0
 // animation2: 大文字混じり（talk とは別の語）
 surface9103
 {
-element0,overlay,surface0.png,0,0
+element0,overlay,purple/0/base1.png,0,0
+element1,overlay,purple/4/normal.png,0,0
+element2,overlay,purple/3/normal.png,0,0
+element3,overlay,purple/a/ribbon.png,0,0
+element4,overlay,purple/2/niko.png,0,0
 animation0.interval,talk,abc
 animation0.pattern0,overlay,1200,0,0,0
 animation0.pattern1,overlay,-1,80,0,0
@@ -71,6 +87,10 @@ animation2.pattern1,overlay,-1,300,0,0
 // animation0: コマ（pattern定義）が 1 つも無い
 surface9104
 {
-element0,overlay,surface0.png,0,0
+element0,overlay,purple/0/base1.png,0,0
+element1,overlay,purple/4/normal.png,0,0
+element2,overlay,purple/3/normal.png,0,0
+element3,overlay,purple/a/ribbon.png,0,0
+element4,overlay,purple/2/niko.png,0,0
 animation0.interval,runonce
 }

@@ -690,11 +690,13 @@ fn fire_part_triggers<'a>(clocks, armed, order, anims: &'a [LoopAnimation], scop
 
   | 番号 | 役 |
   |---|---|
-  | 9100 | 一番上。`element0,overlay,surface0.png,0,0`・`animation0.interval,talk,3`（`1200`→`1202`（80 ms）→`-1`（80 ms））・`animation1.interval,runonce`（`1700`→`-1`（300 ms））・`animation2.interval,periodic,2`（`1600`→`-1`（500 ms）） |
-  | 9101 | 一番上。`element0,overlay,surface0.png,0,0`・`element1,overlay,9102,0,0`（部品） |
-  | 9102 | 部品。`element0,overlay,purple/2/mouthbase.png,0,0`・`animation0.interval,talk,2`（`1203`→`-1`（100 ms））・`animation1.interval,runonce`（`1701`→`-1`（300 ms）） |
-  | 9103 | 無効: `animation0.interval,talk,abc`・`animation1.interval,periodic,0`・`animation2.interval,Talk,3`（読み手で `Other`・表で `warn!`／`debug!`） |
-  | 9104 | 一番上。`animation0.interval,runonce` のコマ列が空（表で `warn!`） |
+  | 9100 | 一番上。立ち絵＝`element0,overlay,purple/0/base1.png,0,0`（体）・`element1`＝`purple/4/normal.png`（目）・`element2`＝`purple/3/normal.png`（眉）・`element3`＝`purple/a/ribbon.png`（髪飾り）・`element4`＝`purple/2/niko.png`（閉じた口）。`animation0.interval,talk,3`（`1200`→`1202`（80 ms）→`-1`（80 ms））・`animation1.interval,runonce`（`1700`→`-1`（300 ms））・`animation2.interval,periodic,2`（`1600`→`-1`（500 ms）） |
+  | 9101 | 一番上。体・目・眉・髪飾りは 9100 と同じ `element0`〜`element3`、`element4,overlay,9102,0,0`（部品＝口。部品の animation の絵は部品の位置に入るので、目より後ろに置く） |
+  | 9102 | 部品。`element0,overlay,purple/2/niko.png,0,0`（閉じた口）・`animation0.interval,talk,2`（`1203`→`-1`（100 ms））・`animation1.interval,runonce`（`1701`→`-1`（300 ms）） |
+  | 9103 | 無効: 立ち絵は 9100 と同じ `element0`〜`element4`・`animation0.interval,talk,abc`・`animation1.interval,periodic,0`・`animation2.interval,Talk,3`（読み手で `Other`・表で `warn!`／`debug!`。採っていれば動く形にコマの行を持つ） |
+  | 9104 | 一番上。立ち絵は 9100 と同じ `element0`〜`element4`・`animation0.interval,runonce` のコマ列が空（表で `warn!`） |
+
+  立ち絵は、emo2 の surface1000 が既定の着せ替えで出す 5 枚（体・口・目・眉・髪飾り）を element定義で重ねる（2026-10-10・実機の確かめで直した）。初版は体を `surface0.png` にしていたが、それは 434×687 の別の 1 枚絵で、口・紅・キラリの絵（surface1000 の立ち絵 382×547 の顔に合わせて描かれている）が顔から外れて出た。
 
 - `README.md`: 上の表・絵の出どころ（emo2 の既存の絵・第三者の著作物 0）・決定論の E2E と実機の手順への参照。
 - 決定論の E2E（`actor_trigger_fixture_tests.rs`）: `areka_parsers::shell::parse(include_str!(..))` → `EmoWorld::build` → `AnimationTable::from_world` → `spawn_seriko_clocked`（偽の時計）→ `Emote{key:"9100"}`・`Text`・刻み → `Show` の `pattern` の判定（`film_playback_e2e_tests.rs` と同じ流儀・合成も GPU も要らない）。
@@ -704,8 +706,8 @@ fn fire_part_triggers<'a>(clocks, armed, order, anims: &'a [LoopAnimation], scop
 1. 置き場は全部ワークツリーの `target\` の下（絶対パス）。`cargo run -p sample-ghost-kit --bin nar-sample-path emo2` で検体を展開し、写し `target\p-trigger\ghost\emo2` を作る（検体そのものは書き替えない）。
 2. 写しの `shell\master\surfaces.txt` の末尾に検体の `surfaces.txt` の面（9100〜9104）を書き足す（絵は写しの中に既に在る）。
 3. `areka.exe` を `AREKA_APP_SMOKE_EXIT_MS`（有界の自動終了）・`AREKA_PROFILE_DIR`（走行ごと）・`NO_COLOR=1`・`RUST_LOG=info,areka_seriko=debug,areka_emo_text=debug` で起こす。
-4. MCP の `sakurascript`（`crates/areka/src/mcp/sakurascript.rs`）で `\s[9100]` と台詞（3 の倍数の文字・`\w8`・`\x`・選択肢を含む）・`\s[9101]`・`\s[0]`・`\s[9100]`（戻り）・`\s[-1]`→`\s[9100]` を送り、`dump_surface` を繰り返し撮る。
-5. 判定（記録の grep）: `trigger runonce を鳴らした` が 9100 へ入るたびに 1 回（着せ替え・同じ面の再指定では増えない）／`trigger periodic` が 2,000 ms ごと（起点は `面に入った` の `at_ms`）／`talk の区切りで再生開始` の `started_at_ms` が文字の層の `Text cue 適用` の `at`・`interval` から求めた t_k と 1 刻み（16 ms）以内で揃う／`WARN … talk/periodic の数値が無効` が 9103 で 2 行・`コマ列が空` が 9104 で 1 行／`emo2` の素の面（`surface0`・`1000`）の記録と見た目が前の実行体と同じ。
+4. MCP の `sakurascript`（`crates/areka/src/mcp/sakurascript.rs`）で `\s[9100]` と台詞（3 の倍数の文字・`\w8`・`\x`・選択肢を含む）・`\s[9101]`・`\s[0]`・`\s[9100]`（戻り）・`\s[-1]`→`\s[9100]` を送り、`dump_surface` を繰り返し撮る。 **実機の確かめ（2026-10-10）で分かったこと**: areka の MCP の `sakurascript` は中身が無く（`NG:not implemented yet`）、台本を MCP で送れない。`animated-image-playback` の前例と同じく、写しの `scripts\pasta\shiori\event\boot.lua` の `OnBoot`／`OnFirstBoot` が生の台本 1 本を返すようにして代えた（走行ごとに台本 1 本・面の切り替えの時刻は台本の `\_w[ms]`・`\x` はクリックを送れないので末尾に置き、途中は `\c` で代える）。
+5. 判定（記録の grep）: `trigger runonce を鳴らした` が 9100 へ入るたびに 1 回（着せ替え・同じ面の再指定では増えない）／`trigger periodic` が 2,000 ms ごと（起点は `面に入った` の `at_ms`）／`talk の区切りで再生開始` の `started_at_ms` が文字の層の `Text cue 適用` の `at`・`interval` から求めた t_k と 1 刻み（16 ms）以内で揃う／`WARN … talk/periodic の数値が無効` が 9103 で 2 行・`コマ列が空` が 9104 で 1 行／`emo2` の素の面（`surface0`・`1000`）の記録と見た目が前の実行体と同じ。 **実機の確かめ（2026-10-10）での読み替え**: 「前の実行体と同じ」は、前の実行体を建てずに「新しい実行体で素の emo2 を起こし、3 語の記録が 0 件・seriko の `WARN` が 0 件・記録の種類が増えていない（どれも基点のコミットのソースに在る文言）」で確かめた（抽選があるので件数は走行ごとに違う。乱数の並びの一致は既存の檻が固定している）。記録の文言は実装に合わせて読む（`talk` は「trigger talk を鳴らした」・部品は「part trigger …」）。
 6. 範囲外で動かなかった件は全部 `/kiro-discovery` で起票（要件 11.4）。
 
 ## Data Models
