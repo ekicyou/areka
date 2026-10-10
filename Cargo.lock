@@ -238,6 +238,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "areka-impl-watch"
+version = "0.0.2"
+dependencies = [
+ "serde",
+ "serde_json",
+ "temp-path-kit",
+ "thiserror",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "areka-kanade"
 version = "0.0.2"
 dependencies = [

@@ -1,0 +1,25 @@
+[package]
+name = "areka-impl-watch"
+workspace = "../.."
+description = "並んで走る実装セッションに「マージの机」と「負荷テストの机」を 1 度に 1 人へ貸し出すコンソールアプリ（spec: areka-P0-impl-watch）。実行ファイル 1 つで動き、areka の実行時コードからは参照されない leaf crate"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false # 開発の道具（areka の外へ出さない）
+repository.workspace = true
+
+[dependencies]
+# 状態ファイル state.json の読み書き。根の [workspace.dependencies] に無いので
+# 版はクレート側に書く（根の Cargo.toml を触らない・前例 crates/dola/Cargo.toml）。
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# WatchError の定義。全クレート共通の規約。
+thiserror = { workspace = true }
+# ログ impl-watch.log（追記のファイルへ・ANSI 無し）。
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+# テストの置き場所はワークツリーの target\test-roots\ の下だけ（TempPath::under_target）。
+temp-path-kit = { path = "../temp-path-kit" }
