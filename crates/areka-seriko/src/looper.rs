@@ -27,6 +27,7 @@
 //!
 //! bind の書込 API（`apply_bind` 等）は一切呼ばない（read-only 参照のみ・要件 3.3）。
 
+use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use areka_emo_compose::{BindSet, PatternFrame, PatternState};
@@ -41,6 +42,7 @@ use crate::timeline::{
     AlwaysView, FrameStatus, LoopRng, LotteryBoundary, always_at, current_frame_index, frame_at,
     seeded_rng, should_fire,
 };
+use crate::trigger::Armed;
 
 /// SERIKO ループ構成（シェル表 1 面＋scope 別バルーン表＋乱数注入シーム）。boot 時に組み立てて
 /// [`LoopRuntime`] へ値渡しする。
@@ -111,6 +113,10 @@ pub(crate) struct LoopRuntime {
     /// 刻みと同じ時計（spec: areka-P0-animated-image-playback 要件 1.6・3.1）。台本の合図を処理する
     /// ときに読む（[`LoopRuntime::event_ms`]）。無ければ出来事の時刻は直前の刻みの時刻。
     clock: Option<SerikoClock>,
+    /// 一番上の面の引き金の状態（spec: areka-P0-seriko-trigger-intervals 要件 2・3）。面に入ったときに
+    /// 生まれ、面が替わる・表を差し替えると消える。構える条件（一番上に `runonce`・`periodic`・`talk` が
+    /// 在る、または表に `talk` が在る）を満たさない面では生まれない（要件 8.1）。
+    armed: HashMap<(ActorKey, Slot), Armed>,
 }
 
 /// 固定消費順のための slot ランク（Shell を Balloon より前に置く・D-7）。
@@ -190,13 +196,111 @@ fn slot_binds<'a>(states: &'a ScopeStates, scope: &ActorKey, slot: Slot) -> &'a 
     }
 }
 
-/// 一番上 `surface_id` が `always` を持つか（`is_continuous()` が偽の表では必ず偽・要件 7.2）。
-fn top_has_always(table: &AnimationTable, surface_id: u32) -> bool {
-    table.is_continuous()
-        && table
-            .animations(surface_id)
-            .iter()
-            .any(|a| matches!(a.trigger, LoopTrigger::Always { .. }))
+/// `runonce`・`periodic`・`talk` の引き金か（spec: areka-P0-seriko-trigger-intervals）。
+fn is_trigger_word(anim: &&LoopAnimation) -> bool {
+    matches!(
+        anim.trigger,
+        LoopTrigger::Runonce | LoopTrigger::Periodic { .. } | LoopTrigger::Talk { .. }
+    )
+}
+
+/// 一番上 `surface_id` が（`always` を持つか, `runonce`・`periodic`・`talk` を持つか）。1 回の走査で
+/// 両方を求める（`is_continuous()` が偽の表では走査せず両方偽・要件 7.2・spec:
+/// areka-P0-seriko-trigger-intervals 要件 8.1）。
+fn top_kinds(table: &AnimationTable, surface_id: u32) -> (bool, bool) {
+    if !table.is_continuous() {
+        return (false, false);
+    }
+    let (mut always, mut trigger) = (false, false);
+    for anim in table.animations(surface_id) {
+        always |= matches!(anim.trigger, LoopTrigger::Always { .. });
+        trigger |= is_trigger_word(&anim);
+    }
+    (always, trigger)
+}
+
+/// `key` の面の引き金の状態を返す。無ければ `at_ms` を見え始めの時刻として構え（面に入った）、在れば
+/// 窓の開け閉めだけを写す: 閉じたら隠し、開いたら `at_ms` を新しい起点にして現す（`runonce` の印は
+/// 残るので開き直しでは鳴らない・spec: areka-P0-seriko-trigger-intervals 要件 2.1・3.2・5.5）。
+///
+/// 呼ぶのは構える条件（一番上に 3 語が在る、または表に `talk` が在る）を満たす面でだけ（要件 8.1）。
+fn arm_slot<'a>(
+    armed: &'a mut HashMap<(ActorKey, Slot), Armed>,
+    key: &(ActorKey, Slot),
+    surface_id: u32,
+    open: bool,
+    at_ms: u64,
+) -> &'a mut Armed {
+    match armed.entry(key.clone()) {
+        Entry::Occupied(entry) => {
+            let state = entry.into_mut();
+            match (open, state.is_visible()) {
+                (true, false) => state.show(at_ms, None),
+                (false, true) => state.hide(),
+                _ => {}
+            }
+            state
+        }
+        Entry::Vacant(entry) => {
+            tracing::debug!(
+                scope = key.0.as_str(),
+                slot = ?key.1,
+                surface_id,
+                at_ms,
+                "seriko: trigger 面に入った（引き金を構えた）"
+            );
+            entry.insert(Armed::arm(Some(at_ms), open, None))
+        }
+    }
+}
+
+/// 一番上の 3 語の animation `anims` を番号の昇順に判定し、始まるものを `playback` に入れる（開始の
+/// 時刻は判定が返した時刻＝`runonce` は見え始め・`periodic` は周の境目で、`now_ms` ではない・spec:
+/// areka-P0-seriko-trigger-intervals 要件 2.1・3.1・3.5・6.1）。始まった（animation, 開始の時刻）を返す。
+///
+/// 乱数は引かない。始めない経路（隠れている・再生中・境目の前）は記録しない（要件 5.7・7.5）。
+/// 始まった後の進み方は抽選の再生と同じ（`playback` に入るだけ・要件 5.1〜5.3）。
+fn fire_top_triggers<'a>(
+    state: &mut Armed,
+    playback: &mut HashMap<(ActorKey, Slot), SlotPlayback>,
+    key: &(ActorKey, Slot),
+    anims: impl Iterator<Item = &'a LoopAnimation>,
+    now_ms: u64,
+) -> Vec<(&'a LoopAnimation, u64)> {
+    let mut anims: Vec<&LoopAnimation> = anims.collect();
+    anims.sort_by_key(|a| a.id);
+    let mut fired = Vec::new();
+    for anim in anims {
+        let playing = playback
+            .get(key)
+            .is_some_and(|pb| pb.contains_key(&anim.id));
+        let Some(started_at_ms) = state.poll(anim, now_ms, playing, None) else {
+            continue;
+        };
+        playback
+            .entry(key.clone())
+            .or_default()
+            .insert(anim.id, Playback { started_at_ms });
+        match anim.trigger {
+            LoopTrigger::Runonce => tracing::info!(
+                scope = key.0.as_str(),
+                slot = ?key.1,
+                animation_id = anim.id,
+                started_at_ms,
+                "seriko: trigger runonce を鳴らした（再生開始・先頭コマから・要件 2.1）"
+            ),
+            LoopTrigger::Periodic { .. } => tracing::info!(
+                scope = key.0.as_str(),
+                slot = ?key.1,
+                animation_id = anim.id,
+                started_at_ms,
+                "seriko: trigger periodic を鳴らした（再生開始・先頭コマから・要件 3.1）"
+            ),
+            _ => {}
+        }
+        fired.push((anim, started_at_ms));
+    }
+    fired
 }
 
 impl LoopRuntime {
@@ -210,6 +314,7 @@ impl LoopRuntime {
             warned_negative: HashSet::new(),
             parts: PartClocks::default(),
             clock: None,
+            armed: HashMap::new(),
         }
     }
 
@@ -245,6 +350,13 @@ impl LoopRuntime {
     /// 進行の対象は [`ScopeStates::stage_slots`]（spec: areka-P0-animated-image-playback 要件 6.1）:
     /// 抽選の輪は今までどおり `shown_slots`。バルーンの面は窓が閉じていても評価するが、閉じている間は
     /// 時計を作らない（一番上の `always` の再生も部品の時計も・回数つきは捨てる）。
+    ///
+    /// 引き金（spec: areka-P0-seriko-trigger-intervals 要件 2・3・5.7・8.1）: 構える条件（一番上に
+    /// `runonce`・`periodic`・`talk` が在る、または表に `talk` が在る）を満たす面は、(3) の頭で引き金の
+    /// 状態を持つ（無ければこの刻みの時刻で構える・窓の開け閉めを写す）。一番上に 3 語の在る面では
+    /// 一番上の再生が無くても通し、`runonce`・`periodic` を乱数なしで判定して、始まるものを判定が返した
+    /// 開始の時刻で `playback` に入れる（その後は抽選の再生と同じ進行）。条件を満たさない面には状態が
+    /// 生まれない。
     pub(crate) fn on_tick(&mut self, now_ms: u64, states: &mut ScopeStates) -> Vec<DisplayCommand> {
         // (1) 単調性ガード（防御・実クロックでは非発生）。非単調 tick は状態を変えず無発行。
         if let Some(last) = self.last_seen {
@@ -274,6 +386,7 @@ impl LoopRuntime {
             playback,
             warned_negative,
             parts,
+            armed,
             ..
         } = self;
         let SerikoLoopConfig {
@@ -325,8 +438,8 @@ impl LoopRuntime {
                         }
                         // `always` は抽選しない（乱数を引く前に飛ばす。再生は進行の側・task 3.4）。
                         LoopTrigger::Always { .. } => continue,
-                        // `runonce`・`periodic`・`talk` も抽選しない（乱数を引く前に飛ばす・spec:
-                        // areka-P0-seriko-trigger-intervals 要件 5.7）。
+                        // `runonce`・`periodic`・`talk` も抽選しない（乱数を引く前に飛ばす。始めるかは進行の
+                        // 頭の判定が決める・spec: areka-P0-seriko-trigger-intervals 要件 5.7）。
                         LoopTrigger::Runonce
                         | LoopTrigger::Periodic { .. }
                         | LoopTrigger::Talk { .. } => continue,
@@ -366,10 +479,15 @@ impl LoopRuntime {
             };
             // 部品の経路を通す表か（偽なら部品の行を 1 つも通らない・要件 7.2・7.3）。
             let with_parts = table.has_animated_parts();
-            let has_always = top_has_always(table, *sid);
-            // 一番上の再生が無くても、一番上に `always` が在るか、見える部品に動くものが在れば通す。
+            let (has_always, has_trigger) = top_kinds(table, *sid);
+            // 引き金の状態は、構える条件（一番上に 3 語が在る、または表に `talk` が在る）を満たす面で
+            // だけ持つ。無ければこの刻みの時刻で構え（表の差し替えの後の最初の刻み）、窓の開け閉めを写す。
+            let state = (has_trigger || table.has_talk())
+                .then(|| arm_slot(armed, &key, *sid, *open, now_ms));
+            // 一番上の再生が無くても、一番上に `always` か 3 語が在るか、見える部品に動くものが在れば通す。
             if !has_playback
                 && !has_always
+                && !has_trigger
                 && !(with_parts
                     && parts.moving_visible(
                         *sid,
@@ -384,6 +502,12 @@ impl LoopRuntime {
             // 窓が閉じている間は作らない。
             if has_always && *open {
                 start_top_always(playback, table, scope, *slot, *sid, now_ms);
+            }
+            // 一番上の 3 語は抽選を待たずに判定する（一番上に 3 語の在る面でだけ回す）。始まった再生は
+            // 下の進行がこの刻みのうちに、開始の時刻からの経過の分だけ進める（要件 6.2）。
+            if let Some(state) = state.filter(|_| has_trigger) {
+                let anims = table.animations(*sid).iter().filter(is_trigger_word);
+                fire_top_triggers(state, playback, &key, anims, now_ms);
             }
 
             // 残留（非再生アニメのコマ）を保つため現 PatternState から開始し、再生中アニメのみを更新する。
@@ -535,12 +659,16 @@ impl LoopRuntime {
         commands
     }
 
-    /// surface 切替／Hide 連動: 当該 (scope, slot) の再生状態を全除去する（要件 2.3 の表示従属性）。
+    /// surface 切替／Hide 連動: 当該 (scope, slot) の再生状態と引き金の状態を全除去する（要件 2.3 の
+    /// 表示従属性）。
     ///
     /// ukadoc「そのサーフェスである間」＝再生とコマは表示中 surface に従属するため、面が変われば
     /// 再生状態は破棄される。PatternState のクリアは ScopeStates 側 apply の責務（本メソッドは playback のみ）。
     pub(crate) fn on_surface_changed(&mut self, scope: &ActorKey, slot: Slot) {
         self.playback.remove(&(scope.clone(), slot));
+        // 引き金の状態も捨てる＝次の評価が「面に入った」として構え直す（同じ面の再指定・着せ替えは
+        // ここへ来ないので構え直さない・spec: areka-P0-seriko-trigger-intervals 要件 2.3〜2.6・3.2）。
+        self.armed.remove(&(scope.clone(), slot));
         // 残留 warn! 記録も当該 slot ぶんは無効化（新面での負 surface は再度 1 回 warn! されるべき）。
         self.warned_negative
             .retain(|(s, sl, _)| !(s == scope && *sl == slot));
@@ -567,6 +695,11 @@ impl LoopRuntime {
     /// バルーンの窓が閉じていれば時計を作らない（回数つきは捨てる）。
     /// 出来事の時刻は刻みの単調性の番人（`last_seen`）に入れない。刻みが 1 度も来ておらず `at_ms` も
     /// 無ければ時計を作らない（次の刻みで生まれる）。
+    ///
+    /// 引き金（spec: areka-P0-seriko-trigger-intervals 要件 2・5.5・6.1）: 構える条件を満たす面に引き金の
+    /// 状態が無ければ（＝[`LoopRuntime::on_surface_changed`] が捨てた後＝面に入った）出来事の時刻で構え、
+    /// 一番上の `runonce` をその時刻で鳴らして頭のコマを載せる。状態が在れば（着せ替え・窓の知らせ）
+    /// 構え直さず、窓の開け閉めだけを写す。時刻が分からなければ構えない（次の刻みで構える）。
     pub(crate) fn refresh(
         &mut self,
         scope: &ActorKey,
@@ -579,6 +712,7 @@ impl LoopRuntime {
             playback,
             parts,
             last_seen,
+            armed,
             ..
         } = self;
         let table = match slot {
@@ -610,6 +744,23 @@ impl LoopRuntime {
             for anim in always {
                 if let Some(p) = playback.get(&key).and_then(|pb| pb.get(&anim.id)) {
                     put_top_always(&mut pattern, anim, at.saturating_sub(p.started_at_ms));
+                }
+            }
+            // 引き金: 構える条件を満たす面でだけ構え（面に入った）、`runonce` を出来事の時刻で鳴らして
+            // 頭のコマをこの評価の絵に載せる（待ちの在る頭は次の刻みが置く）。`periodic` は刻みで鳴らす。
+            let (_, has_trigger) = top_kinds(table, sid);
+            if has_trigger || table.has_talk() {
+                let state = arm_slot(armed, &key, sid, open, at);
+                let runonce = table
+                    .animations(sid)
+                    .iter()
+                    .filter(|a| a.trigger == LoopTrigger::Runonce);
+                for (anim, started) in fire_top_triggers(state, playback, &key, runonce, at) {
+                    if let FrameStatus::Active(i) | FrameStatus::FinishedResidual(i) =
+                        frame_at(&anim.frames, at.saturating_sub(started))
+                    {
+                        pattern.set(anim.id, pattern_frame(&anim.frames[i]));
+                    }
                 }
             }
         }
@@ -654,11 +805,12 @@ impl LoopRuntime {
         self.forget_slot_kind(Slot::Balloon);
     }
 
-    /// 全 scope の `slot` 種の再生状態（一番上の `always` を含む）・部品の時計・warn! 記録を捨てる
+    /// 全 scope の `slot` 種の再生状態（一番上の `always` を含む）・引き金の状態・部品の時計・warn! 記録を捨てる
     /// （表の差し替えの共通後段・spec: areka-P0-surface-element-nesting 要件 5.8・
     /// spec: areka-P0-animated-image-playback 要件 3.6）。
     fn forget_slot_kind(&mut self, slot: Slot) {
         self.playback.retain(|(_, s), _| *s != slot);
+        self.armed.retain(|(_, s), _| *s != slot);
         self.warned_negative.retain(|(_, s, _)| *s != slot);
         self.parts.clear(slot);
     }
@@ -685,3 +837,6 @@ mod replace_tests;
 #[cfg(test)]
 #[path = "looper_tests.rs"]
 pub(crate) mod tests;
+#[cfg(test)]
+#[path = "looper_trigger_tests.rs"]
+mod trigger_tests;

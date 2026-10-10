@@ -37,6 +37,13 @@ pub(crate) struct Armed {
 }
 
 /// スコープの文字の序数の数え。
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "読むのは一番上の面の文字の窓の配線（タスク 4.2）を入れるとき"
+    )
+)]
 pub(crate) struct TalkCursor {
     /// 構えた時点で現れていた文字の序数（ここから 0 と数える）。
     base: u64,
@@ -83,6 +90,12 @@ impl Armed {
         self.visible_since = Some(at_ms);
         self.last_lap.clear();
         self.talk = revealed.map(TalkCursor::starting_at);
+    }
+
+    /// 見えているか（隠れている＝バルーンの窓が閉じている間は偽）。窓の知らせを写す側が、隠す・現すを
+    /// 1 回ずつ呼ぶために読む。
+    pub(crate) fn is_visible(&self) -> bool {
+        self.visible_since.is_some()
     }
 
     /// 今の判定で `anim` を始めるなら、開始の時刻を返す。
@@ -134,6 +147,13 @@ impl Armed {
     ///
     /// 数えは単調: 今見えている数が減った刻み（消去で切り詰められた・起点が前へ飛んだ）は進めない。
     /// 数えを持たない状態（部品・表に `talk` が無い面）では何もしない。
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "読むのは一番上の面の文字の窓の配線（タスク 4.2）を入れるとき"
+        )
+    )]
     pub(crate) fn advance_talk(&mut self, now_seen: u64) {
         if let Some(cursor) = &mut self.talk {
             cursor.seen = cursor.seen.max(now_seen);
@@ -141,6 +161,13 @@ impl Armed {
     }
 
     /// 文字の窓を組むための（数え始めの序数, 数え済みの序数）。数えを持たなければ `None`。
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "読むのは一番上の面の文字の窓の配線（タスク 4.2）を入れるとき"
+        )
+    )]
     pub(crate) fn talk_window_bounds(&self) -> Option<(u64, u64)> {
         self.talk.as_ref().map(|cursor| (cursor.base, cursor.seen))
     }

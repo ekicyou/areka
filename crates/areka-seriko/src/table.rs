@@ -493,13 +493,6 @@ impl AnimationTable {
     }
 
     /// `talk` を 1 本でも採ったか（文字の cue を写すかの門・一番上でも部品でも）。
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "読むのは一番上の配線（文字の cue の写し）を入れるとき"
-        )
-    )]
     pub(crate) fn has_talk(&self) -> bool {
         self.has_talk
     }
