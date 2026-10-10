@@ -396,7 +396,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Pattern**: 名前は `areka-{札}-{プロセス識別子}-{連番}` を組む内部関数 1 つで作り、実際に作る入口がその関数を通る。**一意性と後始末は別の性質**で、識別子があっても破棄が無ければ `%TEMP%` に積み上がる（実例あり）ので、破棄は型が持つ。宛先の種類は増やさず、単一ファイルはディレクトリの下に取る。置き場は 2 つ＝`TempPath::new`（OS の一時フォルダ）と `TempPath::under_target`（ワークスペースの `target\test-roots\`・実機の根・検体・一時フォルダをワークツリーの `target\` の下だけに作ると決めたテストが使う・2026-10-07 `areka-P0-ghost-standard-balloon`）。名前・一意性・破棄はどちらも同じ内部関数を通る。
 **Modules**: `lib.rs`（入口・名前組立・破棄）＋ `lib_tests.rs`（自己テスト）
 **Dependencies**: **依存 0**（`[dependencies]` 節そのものが無く std のみ）・`publish = false`
-**Consumers**: テスト専用（`[dev-dependencies]`）で `areka`・`areka-emo-present`・`areka-ghost`・`areka-parsers`・`areka-sylphya`。**迂回の検知は本 crate ではなく `log-capture-kit/tests/temp_path_guard_test.rs` にある**（走査部品を複製しないため。**窓口と見張りが別 crate に分かれるのは意図的な設計**）
+**Consumers**: テスト専用（`[dev-dependencies]`）で `areka`・`areka-emo-present`・`areka-ghost`・`areka-parsers`・`areka-sylphya`・`areka-impl-watch`。**迂回の検知は本 crate ではなく `log-capture-kit/tests/temp_path_guard_test.rs` にある**（走査部品を複製しないため。**窓口と見張りが別 crate に分かれるのは意図的な設計**）
 
 ### Sample Ghost Kit Crate（sample-ghost-kit）
 **Location**: `/crates/sample-ghost-kit/`
@@ -413,6 +413,14 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Pattern**: 純粋層（文字列と値だけ）と入出力層（`io`・判断を持たない）の 2 層。入口は実行ファイル（`cli`）と常時テストの 2 つで、判定の実体は純粋層に 1 つ。互換機能を着地させた spec は、同じ PR で `doc/ukadoc-coverage/ledger/*.toml` の該当項目の判定も更新している（実例: PR#159・PR#162）。
 **Dependencies**: `toml`（読み取りのみ・書き出しは自前 `tomlout.rs`）・`thiserror`・`serde_json`
 **SSP の BTS の要望**: SSP の課題管理（BTS・https://bts.shillest.net/ ）の要望を調べるときは `.kiro/specs/completed/areka-P0-ssp-bts-salvage/bts-ledger.md` を読む（1 回きりの調査の台帳・いつどこまで見たかは台帳の先頭）。
+
+### Impl Watch Crate（areka-impl-watch）
+**Location**: `/crates/areka-impl-watch/`（手順書は `/doc/impl-watch.md`・スキルは `/.claude/skills/kiro-watch-clear/`）
+**Purpose**: 並んで走る実装セッション（Claude のセッション）へ、「マージの机」（リポジトリごとに 1 つ）と「負荷テストの机」（マシンに 1 つ）を 1 度に 1 人へ貸し出す**開発の道具**（`areka-P0-impl-watch` 2026-10-10）。各セッションが Bash から実行ファイルを直に呼び、待ちは「番が来たら終わるコマンド」。**areka の実行時コードからは 1 行も参照されない leaf の bin**・`publish = false`・配布物に入れない。
+**Pattern**: 判断の核と薄い口。`plan::apply(state, cmd, caller, now, alive)`（回収 → コマンド → 番の決め直し）は純粋で、`std::fs`・時計・`tracing` を綴らない（構造テスト `main_layering_tests.rs` が見張る）。口は置き場所（環境変数 `AREKA_IMPL_WATCH_HOME`・絶対パスだけ）・居る印（`alive/<識別>.<種類>.lock` を握りっぱなしにする）・`state.json`（`state.lock` の排他＋一時ファイルからの置き換え書き・版 1）・読み物 `status.md`・`impl-watch.log`。終了コードは 0 済み／1 失敗／2 使い方の誤り／3 当てはまらない・消えた。端末へ出す文は ASCII だけ。
+**Modules**: 層の順に `error` → `state` → `plan` → `home`／`presence`／`status` → `store` → `wait` → `cli` → `main`
+**Tests**: 常時テストは兄弟のファイル（`*_tests.rs`・`*_test_support.rs`）。本物の実行ファイルを通す実機テストは `tests/real.rs`（`#[ignore]`・`cargo test -p areka-impl-watch --test real -- --ignored`・約 30 秒）で、全体テストには入らない。**子プロセスを立てるときは、置き場所を必ずワークツリーの `target\` の下の Windows 形の絶対パスで上書きする**（開発者の機械には本物の置き場所が環境変数に設定されている）。
+**Dependencies**: `serde`・`serde_json`・`thiserror`・`tracing`・`tracing-subscriber`（どれもワークスペースに既に在る版）。dev は `temp-path-kit`。ワークスペース内の本番 crate への依存は 0。
 
 ### Vendored: pasta DSL Engine
 **Location**: `/vendors/pasta/`（git サブモジュール）  
