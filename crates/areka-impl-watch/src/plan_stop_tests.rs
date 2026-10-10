@@ -2,10 +2,11 @@
 
 use super::test_support::{
     PID, PURPOSE, REPO, T0, applied, ask_to_stop, assert_not_applied, hold_load, hold_merge,
-    load_done, load_test, queue_load, queue_merge, run, state_with, stop_for, stopped,
+    hold_running_load, load_done, load_test, queue_load, queue_merge, run, state_with, stop_for,
+    stopped,
 };
 use super::{Command, Event};
-use crate::state::{LoadDesk, LoadHolder, ParticipantStatus, State};
+use crate::state::{LoadDesk, LoadHolder, Participant, ParticipantStatus, State};
 
 use ParticipantStatus::{StopRequested, Stopped, Working};
 
@@ -40,6 +41,41 @@ fn resumed(id: &str, why: &'static str) -> Event {
         id: id.to_owned(),
         why,
     }
+}
+
+fn recorded_running(id: &str) -> Event {
+    Event::LoadRunning { id: id.to_owned() }
+}
+
+fn unstopped(id: &str) -> Event {
+    Event::Unstopped { id: id.to_owned() }
+}
+
+/// 名前を省いた、内容が [`PURPOSE`] の「すでに走っている負荷テスト」の記録。
+fn load_running(id: &str) -> Command {
+    Command::LoadRunning {
+        id: id.to_owned(),
+        name: None,
+        repo: REPO.to_owned(),
+        purpose: PURPOSE.to_owned(),
+    }
+}
+
+/// 停止要請の取り消し（`None` は全員）。
+fn unstop(id: Option<&str>) -> Command {
+    Command::Unstop {
+        id: id.map(str::to_owned),
+    }
+}
+
+/// C が「すでに走っている負荷テスト」の机を持ち、A は止まっていて、B は停止要請中のまま
+/// （C が記録する前に、別の負荷テストのために出ていた停止要請の残り）。
+fn c_runs_with_a_stopped_and_b_asked() -> State {
+    let mut state = state_with(&["A", "B", "C"]);
+    hold_running_load(&mut state, "C");
+    stop_for(&mut state, "A", "C");
+    ask_to_stop(&mut state, "B", "C");
+    state
 }
 
 /// 参加者の（状態, その状態になった時刻, 停止要請の主, 見張りを立て直すまでの印）。
@@ -331,5 +367,228 @@ fn stopped_from_a_participant_who_was_not_asked_to_stop_changes_nothing() {
 
         assert_eq!(state, before, "{id}");
         assert_not_applied(&got, id);
+    }
+}
+
+#[test]
+fn recording_a_running_load_test_takes_the_desk_without_asking_anyone_to_stop() {
+    // Z は参加していない。記録は参加の申し出を兼ねる。
+    let mut state = state_with(&["A", "B"]);
+    let mut expected = state.clone();
+
+    let got = run(&mut state, &load_running("Z"), Some("Z"), T0 + 5);
+
+    // A も B も「作業中」のまま、Z が走っている印つきの持ち主になる。
+    expected.participants.insert(
+        "Z".to_owned(),
+        Participant {
+            id: "Z".to_owned(),
+            name: "Z".to_owned(),
+            repo: REPO.to_owned(),
+            since: T0 + 5,
+            ..Participant::default()
+        },
+    );
+    expected.load.holder = Some(LoadHolder {
+        id: "Z".to_owned(),
+        purpose: PURPOSE.to_owned(),
+        requested: T0 + 5,
+        granted: T0 + 5,
+        running: true,
+        stopped: Vec::new(),
+    });
+    assert_eq!(state, expected);
+    let events = vec![Event::Joined { id: "Z".to_owned() }, recorded_running("Z")];
+    assert_eq!(got, applied(true, events));
+}
+
+#[test]
+fn while_the_running_mark_is_on_nobody_is_asked_to_stop_and_no_merge_grant_comes() {
+    let mut state = state_with(&["A", "B", "C"]);
+    hold_running_load(&mut state, "C");
+
+    // マージの申し込みは並ぶだけで、番は出ない。
+    let merge = Command::Merge {
+        id: "A".to_owned(),
+        name: None,
+        repo: "areka".to_owned(),
+        spec: "spec-A".to_owned(),
+        bug: false,
+    };
+    let got = run(&mut state, &merge, Some("A"), T0 + 6);
+    let requested = Event::MergeRequested {
+        repo: "areka".to_owned(),
+        id: "A".to_owned(),
+        spec: "spec-A".to_owned(),
+        bug: false,
+    };
+    assert_eq!(got, applied(true, vec![requested]));
+    assert_eq!(state.merge["areka"].holder, None);
+
+    // 後から参加した D にも停止要請は出ない（印の無い持ち主なら出る）。
+    let watch = Command::Watch {
+        id: "D".to_owned(),
+        name: None,
+        repo: REPO.to_owned(),
+        pid: PID,
+    };
+    let got = run(&mut state, &watch, Some("D"), T0 + 7);
+    assert_eq!(
+        got,
+        applied(true, vec![Event::Joined { id: "D".to_owned() }])
+    );
+    for id in ["A", "B", "C"] {
+        assert_eq!(seen(&state, id), (Working, T0, None, None), "{id}");
+    }
+    assert_eq!(seen(&state, "D"), (Working, T0 + 7, None, None));
+
+    // 持ち主が「済んだ」と言った呼び出しで、待たせていたマージの番が出る。
+    let got = run(&mut state, &load_done("C"), Some("C"), T0 + 8);
+    let granted = Event::MergeGranted {
+        repo: "areka".to_owned(),
+        id: "A".to_owned(),
+    };
+    assert_eq!(got, applied(true, vec![load_finished("C"), granted]));
+}
+
+#[test]
+fn recording_a_running_load_test_while_the_desk_is_held_changes_nothing() {
+    // 持ち主（C）に走っている印が在っても無くても断る。A は止まっている参加者、Z は参加して
+    // いない識別。断るときは名前・リポジトリの更新も、参加も、「作業中」への戻しもしない
+    // （元のスクリプトは断っても参加させて「作業中」へ戻す）。
+    let mut marked = c_holds_with_a_stopped(&["A", "C"]);
+    marked.load.holder.as_mut().expect("C が持つ").running = true;
+    for (held, label) in [
+        (c_holds_with_a_stopped(&["A", "C"]), "plain"),
+        (marked, "running"),
+    ] {
+        for id in ["A", "C", "Z"] {
+            let mut state = held.clone();
+            let cmd = Command::LoadRunning {
+                id: id.to_owned(),
+                name: Some("別の名前".to_owned()),
+                repo: "pasta".to_owned(),
+                purpose: "別の内容".to_owned(),
+            };
+
+            let got = run(&mut state, &cmd, Some(id), T0 + 9);
+
+            assert_eq!(state, held, "{label} {id}");
+            assert_not_applied(&got, id);
+        }
+    }
+}
+
+#[test]
+fn a_queued_requester_who_records_a_running_load_test_leaves_the_queue_and_goes_back_to_work() {
+    // A と B が並び、候補は A。B は A のための停止要請中、C は A のために止まっている。
+    let mut state = state_with(&["A", "B", "C"]);
+    queue_load(&mut state, "A", T0 + 1);
+    queue_load(&mut state, "B", T0 + 2);
+    ask_to_stop(&mut state, "B", "A");
+    stop_for(&mut state, "C", "A");
+
+    let cmd = Command::LoadRunning {
+        id: "B".to_owned(),
+        name: None,
+        repo: REPO.to_owned(),
+        purpose: "走っている計測".to_owned(),
+    };
+    let got = run(&mut state, &cmd, Some("B"), T0 + 9);
+
+    // B は待ち行列から外れて持ち主になり、自分の負荷テストのために「作業中」へ戻る。
+    let events = vec![recorded_running("B"), resumed("B", "load-running")];
+    assert_eq!(got, applied(true, events));
+    let holder = LoadHolder {
+        id: "B".to_owned(),
+        purpose: "走っている計測".to_owned(),
+        requested: T0 + 9,
+        granted: T0 + 9,
+        running: true,
+        stopped: Vec::new(),
+    };
+    assert_eq!(state.load.holder, Some(holder));
+    let queued: Vec<_> = state.load.queue.iter().map(|r| r.id.as_str()).collect();
+    assert_eq!(queued, ["A"]);
+    assert_eq!(seen(&state, "B"), (Working, T0 + 9, None, Some(T0 + 9)));
+    // ほかの参加者は記録の前のまま（新しい停止要請も、再開も無い）。
+    assert_eq!(seen(&state, "A"), (Working, T0, None, None));
+    assert_eq!(seen(&state, "C"), (Stopped, T0, Some("A"), None));
+}
+
+#[test]
+fn unstop_puts_the_stop_requested_and_the_stopped_back_to_work() {
+    let mut state = c_runs_with_a_stopped_and_b_asked();
+    let desk = state.load.clone();
+
+    let got = run(&mut state, &unstop(None), None, T0 + 9);
+
+    // 走っている印の持ち主の間は、取り消した後に停止要請を出し直さない。
+    assert_eq!(got, applied(true, vec![unstopped("A"), unstopped("B")]));
+    for id in ["A", "B"] {
+        let back = (Working, T0 + 9, None, Some(T0 + 9));
+        assert_eq!(seen(&state, id), back, "{id}");
+    }
+    assert_eq!(seen(&state, "C"), (Working, T0, None, None));
+    assert_eq!(state.load, desk);
+}
+
+#[test]
+fn unstop_of_one_identity_leaves_the_others_as_they_were() {
+    let mut state = c_runs_with_a_stopped_and_b_asked();
+
+    let got = run(&mut state, &unstop(Some("A")), None, T0 + 9);
+
+    assert_eq!(got, applied(true, vec![unstopped("A")]));
+    assert_eq!(seen(&state, "A"), (Working, T0 + 9, None, Some(T0 + 9)));
+    assert_eq!(seen(&state, "B"), (StopRequested, T0, Some("C"), None));
+}
+
+#[test]
+fn unstop_is_followed_by_new_stop_requests_while_a_load_test_without_the_mark_is_wanted() {
+    // 待たれているだけのとき。
+    let mut wanted = state_with(&["A", "B", "C"]);
+    queue_load(&mut wanted, "C", T0 + 1);
+    stop_for(&mut wanted, "A", "C");
+    ask_to_stop(&mut wanted, "B", "C");
+    // 番の来た（印の無い）持ち主が居るとき。B は後から参加して、まだ止まっていない。
+    let mut held = c_holds_with_a_stopped(&["A", "B", "C"]);
+    ask_to_stop(&mut held, "B", "C");
+
+    for (mut state, label) in [(wanted, "wanted"), (held, "held")] {
+        let desk = state.load.clone();
+
+        let got = run(&mut state, &unstop(None), None, T0 + 9);
+
+        // 取り消しと同じ呼び出しの番の決め直しが、停止要請を出し直す。
+        let events = vec![
+            unstopped("A"),
+            unstopped("B"),
+            stop_requested("A", "C"),
+            stop_requested("B", "C"),
+        ];
+        assert_eq!(got, applied(true, events), "{label}");
+        for id in ["A", "B"] {
+            let asked_again = (StopRequested, T0 + 9, Some("C"), Some(T0 + 9));
+            assert_eq!(seen(&state, id), asked_again, "{label} {id}");
+        }
+        assert_eq!(state.load, desk, "{label}");
+    }
+}
+
+#[test]
+fn unstop_with_nobody_to_put_back_changes_nothing() {
+    // 全員が「作業中」／名指しした C は「作業中」の持ち主／Z は参加していない。
+    for (before, id) in [
+        (state_with(&["A", "B"]), None),
+        (c_holds_with_a_stopped(&["A", "C"]), Some("C")),
+        (c_holds_with_a_stopped(&["A", "C"]), Some("Z")),
+    ] {
+        let mut state = before.clone();
+
+        let got = run(&mut state, &unstop(id), None, T0 + 9);
+
+        assert_eq!(state, before, "{id:?}");
+        assert_not_applied(&got, "unstop");
     }
 }

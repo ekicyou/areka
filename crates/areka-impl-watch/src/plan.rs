@@ -53,10 +53,20 @@ pub enum Command {
         repo: String,
         purpose: String,
     },
+    /// 「すでに走っている負荷テスト」の記録。参加を兼ねる。机に持ち主が居なければ、停止要請を
+    /// 出さずに持ち主にして走っている印を付ける。持ち主が居れば何も変えない（参加もさせない）。
+    LoadRunning {
+        id: String,
+        name: Option<String>,
+        repo: String,
+        purpose: String,
+    },
     /// 負荷テストが済んだ: 持っている机を空ける。
     LoadDone { id: String },
     /// 「止まった」の報告。当てはまるのは「停止要請中」の参加者だけ。
     Stopped { id: String },
+    /// 停止要請の取り消し: 「停止要請中」「止まった」の参加者を「作業中」へ戻す。`None` は全員。
+    Unstop { id: Option<String> },
     /// 取り下げ: 申し込みと机を外す。参加者の記録は残す。
     Cancel { id: String },
     /// 離脱: 申し込み・机・待ちの記録を外し、参加者の記録を消す。
@@ -110,6 +120,10 @@ pub enum Event {
         id: String,
         stopped: Vec<String>,
     },
+    /// 「すでに走っている負荷テスト」が持ち主として記録された。
+    LoadRunning {
+        id: String,
+    },
     LoadDone {
         id: String,
     },
@@ -125,6 +139,10 @@ pub enum Event {
     Resumed {
         id: String,
         why: &'static str,
+    },
+    /// 停止要請の取り消しで「作業中」へ戻った。
+    Unstopped {
+        id: String,
     },
 }
 
@@ -249,6 +267,32 @@ pub fn apply(
             }
             Verdict::Applied
         }
+        Command::LoadRunning {
+            id,
+            name,
+            repo,
+            purpose,
+        } => {
+            // 断るときは状態を変えない（参加もさせない）ので、机を見るのは `join` より先。
+            if state.load.holder.is_some() {
+                Verdict::NotApplied("the load-test desk already has a holder")
+            } else {
+                let participant = join(state, id, name.as_deref(), repo, now, &mut events);
+                events.push(Event::LoadRunning { id: id.clone() });
+                // 止まっていた者も、自分の負荷テストのために「作業中」へ戻る（番を受けた持ち主と同じ）。
+                resume(participant, "load-running", now, &mut events);
+                drop_where(&mut state.load.queue, |request| request.id == *id);
+                state.load.holder = Some(LoadHolder {
+                    id: id.clone(),
+                    purpose: purpose.clone(),
+                    requested: now,
+                    granted: now,
+                    running: true,
+                    stopped: Vec::new(),
+                });
+                Verdict::Applied
+            }
+        }
         Command::LoadDone { id } => {
             if state
                 .load
@@ -271,6 +315,25 @@ pub fn apply(
             }
             _ => Verdict::NotApplied("not asked to stop"),
         },
+        Command::Unstop { id } => {
+            // 走っている印の無い負荷テストがまだ持たれ・待たれていれば、この後の番の決め直しが
+            // 停止要請を出し直す。
+            let mut any = false;
+            for participant in state.participants.values_mut() {
+                let target = id.as_ref().is_none_or(|id| *id == participant.id);
+                if target && back_to_work(participant, now) {
+                    any = true;
+                    events.push(Event::Unstopped {
+                        id: participant.id.clone(),
+                    });
+                }
+            }
+            if any {
+                Verdict::Applied
+            } else {
+                Verdict::NotApplied("nobody to unstop")
+            }
+        }
         Command::Cancel { id } => {
             if remove_from(state, id) {
                 events.push(Event::Cancelled { id: id.clone() });
@@ -435,20 +498,28 @@ fn join<'a>(
     participant
 }
 
-/// 「停止要請中」「止まった」の参加者を「作業中」へ戻す: 理由を消し、見張りを立て直すまでの印を
-/// 付ける（見張りは停止要請で終わっているので、立て直すまでは回収しない）。「作業中」なら何もしない。
-fn resume(participant: &mut Participant, why: &'static str, now: u64, events: &mut Vec<Event>) {
+/// 「停止要請中」「止まった」の参加者を「作業中」へ戻す（戻すのはここだけ）: 理由を消し、見張りを
+/// 立て直すまでの印を付ける（見張りは停止要請で終わっているので、立て直すまでは回収しない）。
+/// 戻したら真。「作業中」なら何もせず偽。
+fn back_to_work(participant: &mut Participant, now: u64) -> bool {
     if participant.status == ParticipantStatus::Working {
-        return;
+        return false;
     }
     participant.status = ParticipantStatus::Working;
     participant.since = now;
     participant.stop_reason = None;
     participant.awaiting_watch_since = Some(now);
-    events.push(Event::Resumed {
-        id: participant.id.clone(),
-        why,
-    });
+    true
+}
+
+/// [`back_to_work`] で戻し、戻したら出来事 `Resumed` を 1 件。
+fn resume(participant: &mut Participant, why: &'static str, now: u64, events: &mut Vec<Event>) {
+    if back_to_work(participant, now) {
+        events.push(Event::Resumed {
+            id: participant.id.clone(),
+            why,
+        });
+    }
 }
 
 /// 待ちの記録を置く。同じ識別・同じ種類の記録が在れば、その場で置き換える。
