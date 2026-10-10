@@ -104,7 +104,7 @@
   - _Requirements: 9.4, 10.1, 10.2, 10.3, 14.1, 14.2_
 
 - [ ] 4. 長い待ち
-- [ ] 4.1 待ちの終わりの判定を作る
+- [x] 4.1 待ちの終わりの判定を作る
   - 見張り・マージの待ち・負荷テストの待ち・再開の待ちの 4 種について、「状態を見て、終わるか・まだ待つか」を決める純粋な判定を作る
   - 見張り: 参加者の記録が無い → 「消えた」。「作業中」でない → 「停止要請が出た」と誰のものか（すでに止まっていればその旨）
   - マージ・負荷テスト: 待ち行列にも持ち主にも居ない → 「消えた」。持ち主 → 「番が来た」。マージは直前のマージ（無ければ `none`）、負荷テストは止まった識別の列（無ければ `none`）を 1 行に載せる
@@ -244,3 +244,7 @@
 - 3.5 → 4.x／5.2: `clear`（と壊れたファイルの退避）は改名してから書くので、ロック無しの読み手が一瞬 `Ok(None)` を見うる。待ちの判定は `None` を「消えた」（3）に倒す。`status` は状態ファイルが無いとき `status.md` を書かない。`cli` は `store::open(home, "<コマンド名>")` と呼び、store 由来の失敗に 2 本目の `error!` を出さない（失敗の行に `command` は載っていない。要るなら `Store` に欄で持たせて 3 か所の `error!` に足す）。同じプロセスで `open` した置き場所には空の `impl-watch.log` ができるので、フォルダの中身を名前で比べるテストは 1 つ増える。
 - 3.5 → 6.1: 本物のログの口の配線（`write_line` とファイルの中身）は常時テストに檻が無い。6.1 は出来事の行の `command=`／`event=` と失敗の行（`[store] state change failed`／`read failed`／`clear failed`）を必ず判定する。置き換えと重なった `read_only` の一時的な OS の失敗に試し直しは無い（6.1 の「開いたままでも置き換えが通る」で実測）。
 - 3.5 → design.md の追い書き（裁定待ち 2 と一緒に）: `open` の署名／`Store` の欄／`Event::Recovered`・`Cleared` の形／順序（設計の文は「`status.md` 書き → ログ」）／退避の行は `warn!`。裁定待ち 7（`status.md` の失敗で `Err`）は `clear` にも及ぶ。
+- 4.1: `wait::judge(spec, state: Option<&State>) -> Option<WaitEnd>`（設計の署名は `&State`。`None`＝状態ファイル無しは「参加者の記録が無い」と同じ枝で「消えた」）。4.2 は `judge(spec, port.read()?.as_ref())` と呼ぶ。`WaitEnd::Done(String)`（ASCII の 1 行・最後に `error::escape_path` を通す）／`Gone(&'static str)`（見張り・再開＝`removed`、マージ・負荷＝`request gone`）。design.md の `wait.rs` の節へ追い書きが要る（裁定待ち 2 と一緒に）。
+- 4.1: 再開の終わる条件は設計どおり「`Working` だけ」で、`resume_is_over(status)` の 1 関数に閉じている（裁定待ち 3 で広げるならここと、`StopRequested` のときの行を足すだけ）。理由の無い・`by` が空の停止要請（手で直した状態）は `stop requested by ?` で終える。
+- 4.1 → 4.2: `WaitSpec::Watch` の `repo`／`name` の `#[cfg_attr(test, expect(dead_code))]` とモジュール先頭の `expect(dead_code)` は、ループが読んで「満たされない expect」の警告が出た時点で外す。`WaitKind` の ASCII 名の関数はまだ無い（要るなら `state.rs` に 1 つ置き `home.rs` の `alive_path` もそれを使う）。
+- 4.1（任意の残り）: `stopped:` の列の式（空なら `none`・あれば `", "` でつなぐ）が `status.rs` の読み物と `wait.rs` の 2 か所に在る。`status.rs` に次に触るタスクで 1 関数にまとめる。

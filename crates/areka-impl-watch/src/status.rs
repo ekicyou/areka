@@ -290,7 +290,7 @@ fn load_order(queue: &[LoadRequest]) -> Vec<&LoadRequest> {
 }
 
 /// 直前のマージの 1 行分（`PR#281 414d43eb impl-watch 2026-10-10T01:00:00Z`）。
-fn last_merge(last: Option<&LastMerge>) -> String {
+pub(crate) fn last_merge(last: Option<&LastMerge>) -> String {
     last.map_or(NONE.to_owned(), |last| {
         format!("PR#{} {} {} {}", last.pr, last.sha, last.spec, utc(last.at))
     })
