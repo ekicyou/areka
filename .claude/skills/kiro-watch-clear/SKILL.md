@@ -16,7 +16,7 @@ Empty the desk state of `areka-impl-watch` and tell the developer what happened,
 
 ## Rules
 - Tools: Bash and Read only. Run exactly the one command below, once.
-- Use the inherited `AREKA_IMPL_WATCH_HOME` as it is. Never set, change, rewrite or convert it (no `AREKA_IMPL_WATCH_HOME=...` prefix, no `/c/...` form, no `cd`). The exe does not reject a value that is not a `C:\...` absolute path; it would silently create another folder and split the desks.
+- Use the inherited `AREKA_IMPL_WATCH_HOME` as it is. Never set, change, rewrite or convert it (no `AREKA_IMPL_WATCH_HOME=...` prefix, no `/c/...` form, no `cd`). The exe refuses a value that is not a `C:\...` absolute path: it ends with exit code 1 and one standard-error line starting with `AREKA_IMPL_WATCH_HOME must be an absolute path`, and reads and writes nothing. Report that line as it is; do not repair the value.
 - Do not build, copy or install the exe from this skill. Do not edit files under the home folder by hand.
 
 ## Steps
@@ -48,8 +48,10 @@ The last line `exit=<n>` is the exit code of the last command that ran.
 
 The summary line is enough; Read the `status.md` named by `status:` only when that line is missing or the developer asks for details.
 
-**`exit=1` or `exit=2`** (a failure): report that it failed, which command failed, and attach the standard-error text unchanged. Do not retry and do not try to repair anything.
-- No `cleared; backup:` line in the output → `clear` reported the failure and `status` was not called. Do not say whether the state was cleared or kept: some failures happen after the state file was already replaced. Say it is unknown and that `areka-impl-watch.exe status` shows it once the cause is removed.
+**Any `exit=<n>` other than 0** (a failure; 1 and 2 are the usual values, and every other non-zero value is treated the same way): report that it failed, which command failed, and attach the standard-error text unchanged. Do not retry and do not try to repair anything.
+- No `cleared; backup:` line in the output → `clear` reported the failure and `status` was not called.
+  - The standard-error line starts with `AREKA_IMPL_WATCH_HOME must be an absolute path` (or `AREKA_IMPL_WATCH_HOME cannot be created`) → the exe stopped before it opened the state. Say that nothing was cleared and that the value of the environment variable has to be fixed (`doc/impl-watch.md` 「2. 入れ方」).
+  - Any other line → do not say whether the state was cleared or kept. Most failures happen before the state file is touched (it is kept), but one happens in between: the state file was already moved to `state.json.cleared-<UTC>` and the new empty state could not be written (then there is no `state.json`, and `status` prints `no state file`). Say it is unknown and that `areka-impl-watch.exe status` shows it once the cause is removed. A `status.md` that cannot be written is not such a failure: `clear` still ends with 0 and prints its line.
 - A `cleared; backup:` line is there → the clear succeeded (give the backup path) and `status` failed.
 
 ## Stopped without clearing

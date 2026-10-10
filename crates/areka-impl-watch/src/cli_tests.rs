@@ -788,6 +788,20 @@ fn usage_notes_of_the_resume_waits_say_that_0_is_resumed_or_a_stop_requested_aga
     }
 }
 
+/// 使い方の末尾: 0 に停止要請の出し直しが入り、1 に置き場所の失敗 3 つ（無い・絶対パスで
+/// ない・作れない）が並び、識別が小文字に寄ることを言う。
+#[test]
+fn usage_foot_names_the_reissued_stop_request_the_home_failures_and_the_id_folding() {
+    let lines: Vec<&str> = usage().lines().collect();
+    for line in [
+        "  0  done: granted, stop requested (or requested again), resumed, or the state was changed",
+        "  1  failure: AREKA_IMPL_WATCH_HOME unset, not absolute or not creatable, state file, lock, io, same wait already running",
+        "--id is folded to lower case: A and a are the same participant.",
+    ] {
+        assert!(lines.contains(&line), "{line}:\n{}", usage());
+    }
+}
+
 // ---- 終了コード ----
 
 #[test]

@@ -423,11 +423,12 @@ fn specs() -> impl Iterator<Item = &'static Spec> {
 /// 使い方の末尾（終了コードの対応と、置き場所）。
 const FOOT: &str = "
 exit codes:
-  0  done: granted, stop requested, resumed, or the state was changed
+  0  done: granted, stop requested (or requested again), resumed, or the state was changed
   1  failure: AREKA_IMPL_WATCH_HOME unset, not absolute or not creatable, state file, lock, io, same wait already running
   2  usage error: nothing is read or written
   3  not applied: the request or the record is gone, or the condition did not hold
 
+--id is folded to lower case: A and a are the same participant.
 The state lives in the folder AREKA_IMPL_WATCH_HOME points to. See doc/impl-watch.md";
 
 /// `--help` の本文（ASCII・末尾に改行なし）。表から組む。
@@ -601,12 +602,13 @@ fn wait_after(command: &plan::Command) -> Option<WaitSpec> {
 /// せず（状態を何も変えず）に失敗で返る。`request` は `--wait` の前半（申し込み・「止まった」の
 /// 記録）で、当てはまらなくても断らずに待ちへ進む（始め直した待ちは元の申し込みを引き継ぎ、
 /// 停止要請中でない `stopped --wait` は再開の待ちだけになる）。その時点でもう終わっていれば
-/// （番が来ている・作業中に戻っている・記録が無い）、待ちの記録を置かずに直ちに終わる。
-/// `request` の無い見張りと `resume` は、登録（見張りは参加を兼ねる）からループに任せる。
+/// （番が来ている・作業中に戻っている・停止要請が出し直されている・記録が無い）、待ちの記録を
+/// 置かずに直ちに終わる。`request` の無い見張りと `resume` は、登録（見張りは参加を兼ねる）
+/// からループに任せる（停止要請中の参加者の `resume` は、最初の判定で直ちに終わる）。
 ///
-/// 待っている間は何も出さない。出すのは終わりの文だけ: 番・停止要請・再開は標準出力で 0、
-/// 「消えた」は標準エラーへ `gone: <訳>` で 3。見張りの終わりには、停止要請の理由（内容は
-/// 日本語になりうる）を読める読み物の道筋を 2 行目に添える。
+/// 待っている間は何も出さない。出すのは終わりの文だけ: 番・停止要請・再開・停止要請の出し直しは
+/// 標準出力で 0、「消えた」は標準エラーへ `gone: <訳>` で 3。見張りの終わりには、停止要請の
+/// 理由（内容は日本語になりうる）を読める読み物の道筋を 2 行目に添える。
 fn waiting(
     home: Home,
     name: &'static str,
