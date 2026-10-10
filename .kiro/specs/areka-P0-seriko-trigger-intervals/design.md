@@ -133,7 +133,7 @@ graph TB
 - seriko の時計は今までどおり 1 本（本番は `crates/areka/src/emo2_boot/mod.rs` の `tick_count_ms`＝`GetTickCount64`・刻みと共有）。引き金の起点（面に入った時刻・窓が開いた時刻）は `event_ms()`（時計が在れば今・無ければ直前の刻み）で取り、刻みの境目に丸めない（要件 6.1）。再生中の経過は「今 − 開始」（要件 6.2）。
 - 文字の時刻は `talk.rs` が seriko の時計の読みから起点を見積もる（要件 6.3・6.4）。台本の時計（QPC）を seriko へ注入しない（T3 は採らない）。
 - **seriko の時計を QPC 由来に揃える案（研究項目 11）は採らない**。残る差は時計の種類の差（`GetTickCount64` の分解能 10〜16 ms）で、刻み自体が 16 ms なので利用者に見える差にならない。実機の確かめ（要件 11）で `talk` の開始時刻と文字の層の `Text cue 適用` の `at`・`interval` を突き合わせ、ずれが 1 刻みを超えて見えたら `emo2_boot/mod.rs` の結線 1 行（`seriko_clock`）の議題として起票する。
-- `started_at_ms` は `u64`（既存の `Playback`・`PartAnim::Playing` の欄）なので、文字の区切りの壁時刻（f64 ms）は **1 ms 未満を切り捨てて**入れる。時計の分解能（1 ms）より細かい値は持てないための切り捨てで、刻みの境目への丸めではない（経過が最大 1 ms 未満だけ多く数えられる）。
+- `started_at_ms` は `u64`（既存の `Playback`・`PartAnim::Playing` の欄）なので、文字の区切りの壁時刻（f64 ms）は **最も近い 1 ms へ丸めて**（`round`）入れる。起点 `epoch` も ms（f64）で持ち、浮動小数の誤差で t_k より 1 ms 小さい値にならないようにする。時計の分解能（1 ms）より細かい値は持てないための写しで、刻みの境目への丸めではない。
 
 ### Technology Stack
 
@@ -472,7 +472,7 @@ pub(crate) struct TalkWindow<'a> {
     base: u64,
     prev_seen: u64,
     now_seen: u64,
-    /// 序数 → 壁時刻（ms・1 ms 未満は切り捨て）。
+    /// 序数 → 壁時刻（ms・最も近い 1 ms へ丸める）。
     wall_ms: &'a dyn Fn(u64) -> u64,
 }
 
@@ -491,7 +491,8 @@ impl Armed {
         playing: bool,
         talk: Option<&TalkWindow<'_>>,
     ) -> Option<u64>;
-    /// `poll(Talk)` の後に数えた序数を進める（slot の窓 1 つにつき刻み 1 回）。
+    /// `poll(Talk)` の後に数えた序数を進める（slot の窓 1 つにつき刻み 1 回）。`seen = max(seen, now_seen)`
+    /// で単調に保つ（`Clear` の切り詰めで `now_seen` が減った刻みは進めず、`poll(Talk)` も鳴らさない）。
     pub(crate) fn advance_talk(&mut self, now_seen: u64);
     pub(crate) fn talk_window_bounds(&self) -> Option<(u64, u64)>; // (base, seen)
 }
@@ -528,13 +529,13 @@ impl Armed {
 
 ```rust
 /// 台本の秒と seriko の ms の起点の見積もり（`TalkClock` と同じ単調 max・プロセスに 1 つ）。
-pub(crate) struct TalkEpoch { epoch_s: Option<f64> }
+pub(crate) struct TalkEpoch { epoch_ms: Option<f64> }
 impl TalkEpoch {
-    /// 届いた cue ごと（種類を問わない）: `epoch = max(epoch, now_ms / 1000 − at)`。
+    /// 届いた cue ごと（種類を問わない）: `epoch_ms = max(epoch_ms, now_ms − at × 1000)`。
     pub(crate) fn observe(&mut self, at_s: f64, now_ms: u64);
     /// 今の台本の秒（`max(now − epoch, 0)`・起点が無ければ `None`）。
     pub(crate) fn talk_time(&self, now_ms: u64) -> Option<f64>;
-    /// 台本の秒を壁時刻（ms・1 ms 未満は切り捨て）に写す。
+    /// 台本の秒を壁時刻（ms・`epoch_ms + r_s × 1000` を最も近い 1 ms へ丸める）に写す。
     pub(crate) fn wall_ms(&self, r_s: f64) -> Option<u64>;
 }
 
@@ -551,8 +552,9 @@ impl TalkFeed {
     /// `Text`／`Choice{text}` 1 件: `count = cluster_count(text)`・`interval = duration / count`・
     /// `r_i = max(last + interval, at)`（`last` が無ければ `at`）を `count` 個追記する。`count == 0` は何もしない。
     pub(crate) fn push_chunk(&mut self, at_s: f64, duration_s: f64, count: usize);
-    /// `Clear`／`ClearAll`: 継ぎ目を初期化する（数えた序数は捨てない）。
-    pub(crate) fn restart_chain(&mut self);
+    /// `Clear`／`ClearAll`（台本の秒 `at_s`）: その時刻までに現れていない文字（`r_i > at_s`）を `times` の
+    /// 末尾から捨て、`last` を `None` に戻す（文字の層の `clear_content` の写し＝現れなかった文字で口は動かない）。
+    pub(crate) fn restart_chain(&mut self, at_s: f64);
     /// 台本の秒 `t` までに現れた文字の序数（`base + partition_point(r_i <= t)`）。
     pub(crate) fn revealed_until(&self, t_s: f64) -> u64;
     /// 序数 `g` の台本の秒（刈り込み済みなら `None`＝呼び手は `g >= base` を保つ）。
@@ -564,12 +566,12 @@ impl TalkFeed {
 
 - Preconditions: `duration_s` は dola の入口で有限・非負に clamp 済み（文字の層と同じ前提）。
 - Postconditions: `times` は単調非減少（`partition_point` の前提）。`push_chunk` の答えは `RevealSchedule::extend_chunk` と同じ列（`talk_tests.rs` が同じ入力で同じ `Vec<f64>` になることを固定する）。
-- Invariants: `base + times.len()` はそのスコープに届いた文字の総数（刈り込みで変わらない）。
+- Invariants: `base + times.len()` はそのスコープで現れた・現れる予定の文字の総数（`Clear` の切り詰めで減りうる・刈り込みでは変わらない）。`times` は `restart_chain` の後も単調非減少（残る `r_i ≤ at_s` と次の塊の `r_0 ≥ at_s`）。
 
 **Implementation Notes**
 - Integration: `LoopRuntime` が `epoch: TalkEpoch`（1 つ）・`feeds: HashMap<ActorKey, TalkFeed>` を持つ。刈り込みは刻みの最後に、そのスコープの `Armed` の `TalkCursor.seen` の最小（`Armed` が 1 つも無ければ `revealed_until(now)`）までを `prune_before`。
-- Validation: `talk_tests.rs`＝⑴ 同じ入力で `RevealSchedule` と同じ列（絵文字の列は 1 文字・`\w` の塊の継ぎ目・`duration = 0` の同時）⑵ `Clear` の後の塊は `at` から ⑶ `observe` の単調 max（新しいトークで前へ・小さい値は負けない）⑷ 刈り込み後の `revealed_until` と `time_of` の整合 ⑸ `count == 0` は何もしない。
-- Risks: 文字の層は `Clear` で schedule を初期化し、未リビールの文字も捨てる。seriko の写しは序数の数えを捨てない（要件 4.3 の「積み上げ」）。`Clear` の後に現れるはずだった未リビールの文字は文字の層では現れないが、seriko では序数に残る＝口が最大 1 区切り分だけ余分に動きうる。正典が沈黙する細部なので台帳の note に書く（`\c` の直後の口の 1 回）。
+- Validation: `talk_tests.rs`＝⑴ 同じ入力で `RevealSchedule` と同じ列（絵文字の列は 1 文字・`\w` の塊の継ぎ目・`duration = 0` の同時）⑵ `Clear` で未リビールの文字が捨てられ次の塊は `at` から・「中断→`ClearAll`（`at = 0`）→新しい塊」と「`\c` の後の塊」で `times` が単調のまま可視数が `RevealSchedule` と一致 ⑶ `observe` の単調 max（新しいトークで前へ・小さい値は負けない）⑷ 刈り込み後の `revealed_until` と `time_of` の整合 ⑸ `count == 0` は何もしない。
+- Risks: 台本は内容のある台詞ごとに先頭へ `ClearAll`（`at = 0`）が前置される（`crates/areka-sakura/src/compile.rs`）ので、中断された前の台詞の未リビールの文字を残すと `times` の単調性が破れ、新しい台詞の途中で口が勝手に動く（設計レビュー Critical Issue 1・2026-10-10 に切り詰めへ改めた）。切り詰めで文字の層と同じ可視数になるので、この経路に裁量の note は要らない。要件 4.3 の「積み上げ」は現れた文字の序数の話で、現れなかった文字は含まない。
 
 ### 一番上の配線（`areka-seriko/src/looper.rs`）
 
@@ -587,22 +589,22 @@ impl LoopRuntime {
     /// 届いた cue を 1 件写す（`actor.rs` の `handle_message` が `SerikoMsg::Cue` の先頭で呼ぶ）。
     /// `has_talk` が偽なら何もしない（要件 8.1・8.3）。真なら ⑴ `epoch.observe(cue.at, 今)`
     /// ⑵ `Text(text)`／`Choice{text,..}` は `feeds[actor].push_chunk(at, duration, cluster_count(text))`
-    /// ⑶ `Clear` はそのスコープ・`ClearAll` は全スコープの `restart_chain`。他の種類は ⑴ だけ。
+    /// ⑶ `Clear` はそのスコープ・`ClearAll` は全スコープの `restart_chain(cue.at)`。他の種類は ⑴ だけ。
     pub(crate) fn observe_cue(&mut self, cue: &TalkCue);
 }
 ```
 
 - 「今」＝`event_ms()`、時計が無ければ `last_seen`、どちらも無ければ写さない（刻みが 1 度も来ていない起動直後の cue は起点を作らない＝次の cue で作る。文字の層も epoch 未確立の間は何も見せない）。`observe_cue` は記録を出さない（文字ごとの記録を増やさない・要件 4.9・7.3。担当外の読み飛ばしの `debug!` は既存の腕がこれまでどおり 1 件出すだけ）。
 - `on_surface_changed(scope, slot)`: `playback` と `warned_negative` に加えて `armed.remove(key)`（要件 2.5・3.2・4.4）。
-- `refresh(scope, slot, at_ms, states)`: 面が在る slot で、`armed` に無ければ `Armed::arm(at_ms, open, revealed)` を入れて `debug!(scope, slot, surface_id, at_ms, "seriko: trigger 面に入った（引き金を構えた）")`。在れば `open` と `visible_since` の食い違いを `hide`／`show(at)` で直す（窓の知らせ）。次に、`at_ms` が在れば一番上の `Runonce` を `poll`（`playing = playback に在る`）し、`Some(at)` なら `playback` に入れて `info!(scope, slot, animation_id, "seriko: trigger runonce を鳴らした（再生開始・要件 2.1）")`、`frame_at(frames, 0)` が `Active`／`FinishedResidual` ならそのコマを `pattern` に置く（`Pending` なら次の刻みが置く）。`periodic`・`talk` は `refresh` では鳴らさない（周 0・窓なし）。面が無い（`\s[-1]` の後）なら今までどおり。
-- `on_tick` の (3): 門に `top_has_trigger(table, sid)`（`Runonce`／`Periodic`／`Talk` が 1 本でも在る）を足す。slot ごとに ⑴ `armed` が無ければ `now_ms` で構える（表の差し替えの後の最初の刻み）、`open` を同期 ⑵ その slot の表に `talk` が在り `armed.talk` と `feeds[scope]` と `epoch.talk_time(now)` が在れば `TalkWindow { base, prev_seen: seen, now_seen: revealed_until(t), wall_ms }` を作る ⑶ 一番上の 3 語の anim を番号の昇順に `poll`（`playing = playback に在る`）し、`Some(at)` なら `playback` に `Playback { started_at_ms: at }` を入れて記録（`runonce`／`periodic` は `info!`・`talk` は `debug!`・要件 7.3）⑷ 既存の進行（`frame_at(now − started)`）がそのまま続く ⑸ 部品へ `parts.advance(.., talk_window.as_ref(), ..)` ⑹ `armed.advance_talk(now_seen)`。刻みの最後に各スコープの `feeds` を刈り込む。
+- `refresh(scope, slot, at_ms, states)`: 面が在り、かつ**その面の表に 3 語が在る**（`top_has_trigger(table, sid)`）slot でだけ構える（無い slot は `armed` を作らず記録も出さない）。`armed` に無ければ `Armed::arm(at_ms, open, revealed)` を入れて `debug!(scope, slot, surface_id, at_ms, "seriko: trigger 面に入った（引き金を構えた）")`。在れば `open` と `visible_since` の食い違いを `hide`／`show(at)` で直す（窓の知らせ）。次に、`at_ms` が在れば一番上の `Runonce` を `poll`（`playing = playback に在る`）し、`Some(at)` なら `playback` に入れて `info!(scope, slot, animation_id, "seriko: trigger runonce を鳴らした（再生開始・要件 2.1）")`、`frame_at(frames, 0)` が `Active`／`FinishedResidual` ならそのコマを `pattern` に置く（`Pending` なら次の刻みが置く）。`periodic`・`talk` は `refresh` では鳴らさない（周 0・窓なし）。面が無い（`\s[-1]` の後）なら今までどおり。
+- `on_tick` の (3): 門に `top_has_trigger(table, sid)`（`Runonce`／`Periodic`／`Talk` が 1 本でも在る）を足す。`top_has_always` と `top_has_trigger` は `animations(sid)` の 1 回の走査で両方の真偽を返す（刻みごとに 2 度走査しない）。**`top_has_trigger` が偽の slot は ⑴〜⑶・⑹ を飛ばし `armed` を作らない**（`random` が再生中でも・動く部品が見えていても）。slot ごとに ⑴ `armed` が無ければ `now_ms` で構える（表の差し替えの後の最初の刻み）、`open` を同期 ⑵ その slot の表に `talk` が在り `feeds[scope]` と `epoch.talk_time(now)` が在れば `TalkWindow { base, prev_seen: seen, now_seen: revealed_until(t), wall_ms }` を作る（`armed.talk` が `None` のまま＝構えた時点で起点が未確立だったときは、ここで `TalkCursor { base: now_seen, seen: now_seen }` を遅延生成する）⑶ 一番上の 3 語の anim を番号の昇順に `poll`（`playing = playback に在る`）し、`Some(at)` なら `playback` に `Playback { started_at_ms: at }` を入れて記録（`runonce`／`periodic` は `info!`・`talk` は `debug!`・要件 7.3）⑷ 既存の進行（`frame_at(now − started)`）がそのまま続く ⑸ 部品へ `parts.advance(.., talk_window.as_ref(), ..)` ⑹ `armed.advance_talk(now_seen)`。刻みの最後に各スコープの `feeds` を刈り込む。
 - 進行相の記録: `FinishedResidual`／`Stopped` の `info!` は、`anim.trigger` が `Talk` のときだけ `debug!`（文言は同じ・要件 7.3）。`runonce`／`periodic` は `random` と同じ `info!`。
 - `forget_slot_kind(slot)`: `armed` のその slot 種を捨てる。`has_talk` は `shell_table.has_talk() || balloon_tables.values().any(has_talk)` で組み直す（`new`・`replace_*` の両方）。
-- 門（要件 8.1）: 3 語の無い表は `has_triggers = false`・`has_talk = false` なので、`observe_cue` は即戻り、`refresh` は `is_continuous()` の偽で即 `None`、(3) は今までどおりの条件で飛ばす。`armed` は作られない。
+- 門（要件 8.1）: 3 語の無い表は `has_triggers = false`・`has_talk = false` なので、`observe_cue` は即戻り、`refresh` は `is_continuous()` の偽で即 `None`、(3) は今までどおりの条件で飛ばす。`armed` は作られない。構える 3 か所（`refresh`・(3) ⑴・部品の 2 段目）はいずれも「その面／部品に 3 語が在る」を先に見るので、動く部品や `random` の再生で門を通る slot（emo2）でも `armed` も「面に入った」の `debug!` も生まれない（設計レビュー Critical Issue 2）。
 
 **Implementation Notes**
 - Integration: `looper.rs` は 682 行。足すのは `observe_cue`・構える／同期する補助・窓を作る補助・(3) の `poll` の輪で 120 行ほど（1,000 行以下）。
-- Validation: `looper_trigger_tests.rs`（`rt.on_tick(now, &mut states)` と `rt.refresh(..)` の直呼び・偽の刻み）＝`runonce` の最初の表示・戻ってきたとき・着せ替えの `refresh` で鳴らない／`periodic` の起点・N 秒ごと・面を離れた停止・再生中の飛ばし・2 周またぎ／`talk` の区切りと `started_at = t_k`・同時 2 区切り・再生中・面の切り替えの数え直し／3 語の無い表で `armed` が空のまま・乱数の消費 0／`talk` の終わりの記録が `debug!`。
+- Validation: `looper_trigger_tests.rs`（`rt.on_tick(now, &mut states)` と `rt.refresh(..)` の直呼び・偽の刻み）＝`runonce` の最初の表示・戻ってきたとき・着せ替えの `refresh` で鳴らない／`periodic` の起点・N 秒ごと・面を離れた停止・再生中の飛ばし・2 周またぎ／`talk` の区切りと `started_at = t_k`・同時 2 区切り・再生中・面の切り替えの数え直し／3 語の無い表で `armed` が空のまま（`random` が再生中でも・動く部品が見えていても）・乱数の消費 0・emo2 の既存の檻の記録の件数が変わらない／`talk` の終わりの記録が `debug!`。
 - Risks: `refresh` の `at_ms` が `None`（時計も刻みも無い）のときは構えない＝`runonce` は次の刻みで鳴る（本番は時計が常に在る）。
 
 ### 部品の配線（`areka-seriko/src/parts.rs`）
@@ -635,8 +637,8 @@ fn rebuild(.., evaluate: impl FnMut(PartKey, &mut PatternState), arm: impl FnMut
 ```
 
 - 1 段目 `evaluate` の `Gate::Trigger`: 抽選の塊（`crossed && open && !playing && should_fire`）を通らず、`look` の結果だけを書く（`Playing`→コマ・`Finished`→`Residual`・`Stopped`→時計を消す＝今の抽選の anim と同じ後半）。
-- 2 段目 `arm(part)`: 入れ物の `armed[PartKey::Surface(part)]` が無ければ `Armed::arm(Some(now_ms), open, None)` で構える（`debug!`）。在れば `open` を同期。その部品の 3 語の anim を番号の昇順に `poll(anim, now, playing = Playing が在る, talk)` し、`Some(at)` なら `clocks.insert(key, Playing { started_at_ms: at })`・`look` でコマを書く・記録（`runonce`／`periodic` は `info!`・`talk` は `debug!`）。コマを 1 つでも書いたら `true`。
-- `rebuild` の外側の輪: 1 段目の輪 → 見えない部品のコマを外す → 動く絵の子 → `visible` の各部品に `arm` → `true` が 1 つでもあれば 1 段目の輪へ戻る（`visible_parts` を引き直し、新しく見えた部品だけ `evaluate`）→ 無ければ終わり。
+- 2 段目 `arm(part)`: その部品の animation の列に `Runonce`／`Periodic`／`Talk` が 1 本も無ければ何もしない（`false`・`armed` を作らない）。在れば、入れ物の `armed[PartKey::Surface(part)]` が無ければ `Armed::arm(Some(now_ms), open, None)` で構える（`debug!`）。在れば `open` を同期。その部品の 3 語の anim を番号の昇順に `poll(anim, now, playing = Playing が在る, talk)` し、`Some(at)` なら `clocks.insert(key, Playing { started_at_ms: at })`・`look` でコマを書く・記録（`runonce`／`periodic` は `info!`・`talk` は `debug!`）。コマを 1 つでも書いたら `true`。
+- `rebuild` の外側の輪: 1 段目の輪 → 見えない部品のコマを外す → 動く絵の子 → `table.has_triggers()` が真のときだけ `visible` の各部品に `arm`（偽なら 2 段目を呼ばず輪は 1 回で終わる＝今の形） → `true` が 1 つでもあれば 1 段目の輪へ戻る（`visible_parts` を引き直し、新しく見えた部品だけ `evaluate`）→ 無ければ終わり。
 - `refresh`（切り替え直後・出来事の時刻）: 2 段目は `create_at`（開いていれば `at_ms`）で構え、`Runonce` だけが鳴る（`periodic` は周 0・`talk` は窓なし）。
 - 捨てる: `drop_unseen_finite` を `drop_unseen_transient` に広げ、見えない部品の「回数つきの `always`」と「3 語」の時計を捨て、見えない部品の `armed` も捨てる（要件 5.6・5.9）。`drop_finite_if_closed`（窓が閉じた）は 3 語の時計を捨て、`armed` は `hide`（`runonce` の印は残す）。`clear(slot)` は `armed` も捨てる。`drop_finite`（面が隠れた・`\s[-1]`）は 3 語の時計と `armed` を捨てる。
 - 乱数（要件 8.2）: 1 段目は今の順・今の条件のまま（3 語の anim は `should_fire` を呼ばない）。2 段目は乱数を読まない。
@@ -732,7 +734,7 @@ fn rebuild(.., evaluate: impl FnMut(PartKey, &mut PatternState), arm: impl FnMut
 
 ## 台帳の書き方（要件 10）
 
-- `talk_2c_6570_5024:1`・`runonce:1`・`periodic_2c_6570_5024:1`: `status = "implemented"`・`owner = "areka-P0-seriko-trigger-intervals"`。note に areka の裁量: `periodic` は切り替わった瞬間には再生しない（起点から数値秒後が最初）／`talk` は書記素クラスタで数え、面が切り替わったとき・窓が開き直したときに 0 から数え直す（選択肢の文字も数える・改行・消去・待ちは数えない）／同じ時刻に区切りが 2 つ以上来たら 1 回にまとめる／再生中の区切り・周は飛ばす／バルーンの窓が閉じている間は非表示（`periodic` は止まり、開き直しが新しい起点。`runonce` は開き直しでは鳴らさない）／`\c` の直後は文字の層が捨てた未表示の文字を口が数えることがある／`+` の組み合わせ（`bind+runonce` など）は採らない。
+- `talk_2c_6570_5024:1`・`runonce:1`・`periodic_2c_6570_5024:1`: `status = "implemented"`・`owner = "areka-P0-seriko-trigger-intervals"`。note に areka の裁量: `periodic` は切り替わった瞬間には再生しない（起点から数値秒後が最初）／`talk` は書記素クラスタで数え、面が切り替わったとき・窓が開き直したときに 0 から数え直す（選択肢の文字も数える・改行・消去・待ちは数えない）／同じ時刻に区切りが 2 つ以上来たら 1 回にまとめる／再生中の区切り・周は飛ばす／バルーンの窓が閉じている間は非表示（`periodic` は止まり、開き直しが新しい起点。`runonce` は開き直しでは鳴らさない）／`+` の組み合わせ（`bind+runonce` など）は採らない。
 - `sometimes:1`・`rarely:1` の note: 「`runonce`・`periodic,数値` などは非駆動」の文を「`talk,数値`・`runonce`・`periodic,数値` は `areka-P0-seriko-trigger-intervals` で駆動・`yen-e`・`never` は非駆動」に直す。
 - `always:1`: `owner = "areka-P0-seriko-interval-combinations"`（判定 `degraded` と note は不変）。
 - `yen-e:1`・`never:1`: 触らない。
@@ -751,6 +753,7 @@ fn rebuild(.., evaluate: impl FnMut(PartKey, &mut PatternState), arm: impl FnMut
 - 議題 10（検体の置き場）: `crates/areka-seriko/tests/fixtures/trigger-intervals/`（compose の下に置かない）。絵は emo2 の既存の絵を番号で指すので画像ファイルを足さない。E2E は seriko の中（合成・GPU 不要）。
 - 議題 11（時計の種類）: 変えない。実機で 1 刻みを超えるずれが見えたら起票。
 - 議題 12（最初の表示の `Changed`）: 既存の檻 `state_surface_tests.rs` の `show_same_surface_twice_second_is_unchanged` が 1 回目を `Changed` として固定している。新しい檻は要らない。
+- 設計レビュー（2026-10-10・GO 条件付き）の 2 件を反映: ⑴ `Clear`／`ClearAll` は未リビールの文字を切り詰める（文字の層と同じ可視数・`times` の単調性を保つ）⑵ `Armed` を構えるのは 3 語が在る面／部品だけ（emo2 で `armed` も記録も増えない）。ほかに `epoch` を ms で持ち `round` で写す・`TalkCursor` の遅延生成を足した。
 
 ### リスク
 - 文字と口のずれ: 時計の種類の差（`GetTickCount64` の分解能）と配送の経路の差は檻では固定できない。実機の確かめで突き合わせる（手順 5）。

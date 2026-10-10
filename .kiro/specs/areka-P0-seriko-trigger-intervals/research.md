@@ -212,7 +212,7 @@
 
 - **台帳の見張りが `roadmap-draft.md` を要求する**: `always` の担当を `areka-P0-seriko-interval-combinations` へ付け替える（要件 10.3）には、同 spec の `[[spec]]` 行が spec 表に無いので腕 f が赤になる。行を足し（`owner_count = 1`）、本 spec の `owner_count` を 1→3、`[briefs].count` を 48→49 にする。brief の「触るファイル」の列には無いが、約束（コードの範囲）の外ではない。
 - **`talk` の再生の終わり・停止の記録**: 既存の進行相は `FinishedResidual`／`Stopped` を `info!` で出す。口のコマは `-1` で終わるので、文字ごとに `info!` が出て要件 7.3 に反する。`anim.trigger` が `Talk` のときだけ `debug!` に下げる（文言は同じ）。
-- **`Clear` と序数**: 文字の層は `Clear` で schedule を初期化し未リビールの文字を捨てるが、seriko の写しは序数の数えを捨てない（要件 4.3）。`\c` の直後に口が最大 1 区切り分だけ余分に動きうる。正典が沈黙する細部＝台帳の note。
+- **`Clear` と序数**: ~~seriko の写しは序数の数えを捨てない~~ → **設計レビューで改めた（2026-10-10）**: 台本ごとに先頭へ `ClearAll`（`at = 0`）が前置される（`compile.rs`）ため、未リビールの文字を残すと `times` の単調性が破れ新しい台詞の途中で口が動く。`restart_chain(at_s)` で `r_i > at_s` の文字を切り詰め `last` を戻す（文字の層の `clear_content` の写し）。台帳の note は要らない。
 - **窓の開き直しと `runonce`**: 要件 5.5 は閉じた窓を 3.2・4.9 の非表示にだけ含めるので、`Armed::hide`／`show` は `runonce` の印を残す（開き直しでは鳴らさない）。台帳の note。
 - **表の差し替えの後**: `forget_slot_kind` が `Armed` を捨て、次の刻みが刻みの時刻で構え直す（`runonce` が鳴る・`periodic` の起点はその刻み）。切り替えの出来事の時刻は差し替えの経路には届かないので、ここだけ刻みの時刻。
 
