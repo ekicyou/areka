@@ -14,6 +14,7 @@ use rmcp::model::{
 use rmcp::service::{
     NotificationContext, PeerRequestOptions, QuitReason, RequestContext, serve_directly,
 };
+use rmcp::transport::streamable_http_client::StreamableHttpError;
 use rmcp::{ClientHandler, RoleServer, Service, ServiceError};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::Mutex;
@@ -22,6 +23,7 @@ use tracing::{debug, info, warn};
 use crate::cache::Cache;
 use crate::config::Config;
 use crate::errors;
+use crate::http::HttpError;
 use crate::scan::{Link, Scan, scan};
 use crate::stdio::LineTransport;
 
@@ -29,6 +31,8 @@ use crate::stdio::LineTransport;
 const DISABLED: &str = "AREKA_MCP_PORT=0 (areka does not listen)";
 /// 「居ない」エラーの文に載せる、areka でない相手の名乗りの長さの上限（字の数）。
 const PEER_NAME_MAX: usize = 64;
+/// 届けた要求に本文の無い応答が返った・応答の途中で接続が閉じた、ときのエラーの理由。
+const UNANSWERED: &str = "empty body or connection closed";
 
 /// areka の側へ立てる rmcp のクライアントの持ち主（設計 D-3）。名乗りは `areka-mcp-bridge` と
 /// 中継の版。areka から届く要求・通知には rmcp の既定で応える（areka は送ってこない）。
@@ -47,6 +51,15 @@ impl ClientHandler for BridgeClient {
 pub struct Linked {
     pub link: Link,
     pub port: u16,
+}
+
+/// areka へ届ける途中の失敗の読み分け（設計 D-6）。
+enum Failure {
+    /// 書く前: 本当の本文を 1 バイトも書いていない（要求は誰にも届いていない）。中身は理由。
+    BeforeWrite(String),
+    /// 書いた後・応答の上限・読み分けられない失敗: 届いたかもしれないので送り直さない。
+    /// 中身は Desktop へ返すエラー。
+    AfterWrite(ErrorData),
 }
 
 /// Desktop から届いた要求への答えを決める。
@@ -95,7 +108,7 @@ impl Bridge {
     /// 送り手の確かめの前提でもある＝設計 D-4）。ほかは areka へ届ける。
     async fn answer(
         &self,
-        linked: &Linked,
+        linked: &Arc<Linked>,
         request: ClientRequest,
         meta: RequestMetaObject,
     ) -> Result<ServerResult, ErrorData> {
@@ -156,9 +169,10 @@ impl Bridge {
     /// 外して渡してくるので、付け直して届ける（`2026-07-28` で話す Desktop の要求は、rmcp の
     /// クライアントがその版の札を付けて、areka にもその版の要求として届く＝要件 1.10）。
     /// `tools/list` のエラーでない結果は、返す前に控えに書く（要件 3.2）。
+    /// 届いたかもしれない要求は、どの失敗の後も送り直さない（要件 4.5）。
     async fn forward(
         &self,
-        linked: &Linked,
+        linked: &Arc<Linked>,
         request: ClientRequest,
         meta: RequestMetaObject,
     ) -> Result<ServerResult, ErrorData> {
@@ -183,10 +197,30 @@ impl Bridge {
                 );
                 Err(error)
             }
-            Err(error) => {
-                warn!(port = linked.port, %error, "[bridge] the request to areka failed");
-                Err(errors::no_response(&error.to_string()))
-            }
+            Err(error) => match classify(linked.port, &error) {
+                // 要求は誰にも届いていない。覚えた番号に areka が居ないので「居ない」エラーで答える。
+                Failure::BeforeWrite(reason) => {
+                    warn!(port = linked.port, %reason, "[bridge] the request did not reach areka");
+                    Err(errors::server_not_available(&reason))
+                }
+                Failure::AfterWrite(answer) => {
+                    // 働き手が終わったつなぎ先は二度と届けられない。次の要求が探し直す（要件 4.6）。
+                    if matches!(error, ServiceError::TransportClosed) {
+                        self.forget(linked).await;
+                    }
+                    Err(answer)
+                }
+            },
+        }
+    }
+
+    /// 覚えたつなぎ先が、自分の使ったこれのままなら捨てる（次の要求が探し直す）。別の要求が先に
+    /// 入れ替えていれば触らない。使っている途中の要求は `Arc` の写しを持つので、巻き添えにならない。
+    async fn forget(&self, used: &Arc<Linked>) {
+        let mut slot = self.link.lock().await;
+        if slot.as_ref().is_some_and(|now| Arc::ptr_eq(now, used)) {
+            info!(port = used.port, "[bridge] forgot the link to areka");
+            *slot = None;
         }
     }
 }
@@ -246,6 +280,37 @@ impl Service<RoleServer> for Bridge {
             Implementation::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
         )
     }
+}
+
+/// 届ける途中の失敗を読み分ける（設計 D-6）。書く前は、送り手の失敗に戻せて、本当の本文を書く前と
+/// 分かるものだけ。送り手の書いた後の失敗・応答の上限・送り手の失敗に戻せない形（rmcp 自身の失敗）は
+/// 書いた後（安全側＝送り直さない）で、要件 4.1・4.2・4.4 のエラーにして、理由を標準エラーに残す。
+fn classify(port: u16, error: &ServiceError) -> Failure {
+    let sent = match error {
+        ServiceError::TransportSend(sent) => sent.error.downcast_ref(),
+        _ => None,
+    };
+    let reason = match (sent, error) {
+        (Some(StreamableHttpError::<HttpError>::Client(sender)), _) => match sender {
+            before if !before.written() => return Failure::BeforeWrite(before.to_string()),
+            HttpError::NotJson { status, head } => {
+                warn!(
+                    port,
+                    status,
+                    ?head,
+                    "[bridge] the answer of areka is not JSON; the request is not sent again"
+                );
+                return Failure::AfterWrite(errors::invalid_json_response(*status, head));
+            }
+            _ => UNANSWERED.to_owned(),
+        },
+        (_, ServiceError::Timeout { timeout }) => format!("timed out after {timeout:?}"),
+        // 輸送の失敗は中の理由だけを載せる（外側の文には rmcp の型の長い名前が入る）。
+        (_, ServiceError::TransportSend(sent)) => sent.error.to_string(),
+        _ => error.to_string(),
+    };
+    warn!(port, %error, "[bridge] no answer from areka; the request is not sent again");
+    Failure::AfterWrite(errors::no_response(&reason))
 }
 
 /// 最初の問い合わせ（`initialize`・`server/discover`）の答えを、areka のサーバーの情報から組む。
@@ -330,3 +395,7 @@ where
 #[cfg(test)]
 #[path = "service_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "service_failure_tests.rs"]
+mod failure_tests;

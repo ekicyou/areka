@@ -22,11 +22,11 @@ use crate::fake_server::{FakeServer, Received, Reply, Script};
 
 const PIPE: usize = 64 * 1024;
 /// 待つ上限。過ぎたら panic でテストを赤にする。
-const WAIT: Duration = Duration::from_secs(10);
+pub(super) const WAIT: Duration = Duration::from_secs(10);
 const CACHE_DIR: &str = "mcp-bridge";
 
 /// Desktop の役: 中継の標準入力へ行を書き、標準出力の行を読む。
-struct Desk {
+pub(super) struct Desk {
     stdin: DuplexStream,
     stdout: BufReader<DuplexStream>,
     run: JoinHandle<QuitReason>,
@@ -37,7 +37,7 @@ struct Desk {
 impl Desk {
     /// この候補の列で中継を回す。確かめの上限は長く取る（負荷の下で偽の受け口の答えが遅れても
     /// areka を飛ばさない）。
-    fn start(candidates: Vec<u16>) -> Desk {
+    pub(super) fn start(candidates: Vec<u16>) -> Desk {
         Desk::start_at(TempPath::under_target("bridge-service"), candidates)
     }
 
@@ -48,6 +48,16 @@ impl Desk {
             verify: WAIT,
             ..Timeouts::default()
         };
+        Desk::launch(root, candidates, timeouts)
+    }
+
+    /// 待つ時間を差し替えて回す（短い応答の上限など）。
+    pub(super) fn start_with(candidates: Vec<u16>, timeouts: Timeouts) -> Desk {
+        let root = TempPath::under_target("bridge-service");
+        Desk::launch(root, candidates, timeouts)
+    }
+
+    fn launch(root: TempPath, candidates: Vec<u16>, timeouts: Timeouts) -> Desk {
         let config = Config::from_parts(candidates, Some(root.child(CACHE_DIR)), timeouts);
         let (stdin, bridge_in) = tokio::io::duplex(PIPE);
         let (bridge_out, stdout) = tokio::io::duplex(PIPE);
@@ -60,7 +70,7 @@ impl Desk {
     }
 
     /// 置き場にある控え（別の `Cache` で読む＝起動し直した中継が読むのと同じ）。
-    fn cache(&self) -> Cache {
+    pub(super) fn cache(&self) -> Cache {
         Cache::new(Some(self.root.child(CACHE_DIR)))
     }
 
@@ -79,14 +89,14 @@ impl Desk {
     }
 
     /// `id` 付きの要求を 1 つ送り、次の 1 行を返す。
-    async fn ask(&mut self, id: Value, method: &str, params: Value) -> Value {
+    pub(super) async fn ask(&mut self, id: Value, method: &str, params: Value) -> Value {
         self.send(request(id, method, params)).await;
         self.next().await
     }
 
     /// 標準入力を閉じる。中継は入力の終わりで終わり、標準出力に読んでいない行は残っていない
     /// （出るのは応答の行だけ＝通知には何も出ない）。控えの置き場の根を返す。
-    async fn close(mut self) -> TempPath {
+    pub(super) async fn close(mut self) -> TempPath {
         drop(self.stdin);
         let quit = tokio::time::timeout(WAIT, self.run).await;
         let quit = quit.expect("期限内に終わる").expect("入口が panic しない");
@@ -107,7 +117,7 @@ fn notification(method: &str, params: Value) -> Value {
     json!({"jsonrpc": "2.0", "method": method, "params": params})
 }
 
-fn result(id: Value, result: Value) -> Value {
+pub(super) fn result(id: Value, result: Value) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "result": result})
 }
 
@@ -142,7 +152,7 @@ fn stateless_meta() -> Value {
 }
 
 /// 偽の受け口が返すツールの一覧。
-fn tools() -> Value {
+pub(super) fn tools() -> Value {
     json!({"tools": [{"name": "get_status", "description": "d", "inputSchema": {"type": "object"}}]})
 }
 
@@ -155,7 +165,7 @@ async fn arrived(fake: &FakeServer, method: &str, count: usize) -> Vec<Received>
 }
 
 /// 受け口が受けた rmcp の手順の数（＝立てたつなぎ先の数）。
-fn handshakes(fake: &FakeServer) -> usize {
+pub(super) fn handshakes(fake: &FakeServer) -> usize {
     fake.requests_of("notifications/initialized").len()
 }
 

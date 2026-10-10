@@ -119,7 +119,7 @@
   - 完了の姿: 上のテストが緑
   - _Requirements: 2.6, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.6, 8.1_
 
-- [ ] 4.4 届けた後の失敗の答え: エラーで答えて送り直さない
+- [x] 4.4 届けた後の失敗の答え: エラーで答えて送り直さない
   - 「書いた後」の失敗・応答の上限・読み分けられない失敗は、`No response from server`／`Invalid JSON response from server` のエラーで答えて送り直さない。HTTP の状態と本文の頭は標準エラーに残す
   - テスト: 壊れた応答／本文なし／途中で閉じる／応答の上限（差し替えた短い時間で）の 4 つのエラーと、偽の受け口が受けた本当の要求が 1 回だけ・エラーの後も次の行が通る
   - 完了の姿: 上のテストが緑
@@ -236,3 +236,7 @@
 - 4.3: 控えの `tools/list` は要求の話し方に揃えて返す（`_meta` の版が `2026-07-28` 以上なら `resultType: "complete"`・`ttlMs: 0`・`cacheScope: "private"` を付け、旧式には 3 欄を外す）。居ないときの `ping` は話し方に関わらず `{}`（要件 3.7。つながっているときの `2026-07-28` の `ping` は areka の `-32601`）。居ない間は `id` を持つ要求ごとに探索が 1 回走り、同時の要求の探索は直列（1 回約 0.3 秒）。この 4 点は 6.2 の差の記録に載せる。
 - 4.3: `scan.rs` の `info!(port, %name, …)` は生の名乗りを出す（改行入りの名乗りで標準エラーの記録の行が割れうる・標準出力には触れない）。最終の検証で扱う（`{name:?}` に替えるのが最短）。
 - 4.3: `service_tests.rs` は 671 行。4.4・4.5 で 900 行を越えそうなら、`structure.md` の決まりどおりテーマ単位の兄弟ファイルに分け、共有の道具（`Desk`・`request`・`seed`・`nobody` など）を寄せる（`service.rs` の末尾の宣言を足すのは可・`lib.rs` と `Cargo.toml` は触らない）。`Desk` にはまだ時間を渡す口が無い。
+- 4.4: 失敗の読み分けは `service.rs` の `enum Failure`／`fn classify` の 1 か所。書く前になるのは `TransportSend` → `StreamableHttpError::<HttpError>::Client(e)` → `!e.written()` の 1 本道だけで、ほかは全部「書いた後」（送り直さない）。`Bridge::forget(&Arc<Linked>)` は覚えが自分の使ったつなぎ先のまま（`Arc::ptr_eq`）のときだけ空にする（4.5 がそのまま使う）。`TransportClosed`（働き手が終わった）はエラーで答えたうえで覚えを捨てる。
+- 4.4: 4.5 への申し送り＝書く前の枝は仮（`Server not available: <HttpError の文>`・`warn`・覚えは捨てない・テストなし）。4.5 はこの枝だけを差し替え、記録は設計どおり `info`。`HttpError::Connect` の文は OS の文（日本語の机では非 ASCII）なので Desktop への答えには載せず記録だけにする。
+- 4.4: 応答の上限を越えると rmcp のクライアントが areka へ自分の番号の `notifications/cancelled` を 1 件送る（設計の Error Strategy に追記）。`id` 付きの要求に areka が 202 を返すと上限まで待って `timed out` になる（テストなし）。この 2 点と「areka の debug の記録に確かめの `initialize` と通知の行が増える」は 6.2 の差の記録に載せる。
+- 4.4: `service_failure_tests.rs` の `a_request_not_answered_within_the_bound_gets_the_timeout_error_once` は応答の上限 300 ms で最後の `ping` も通すので、全体テストの負荷で赤が出たら上限を 1 秒へ延ばす。要件 4.2 の「標準エラーに残す」（`warn!` の `status`・`head`）を判定するテストは無いので、5.2 で壊れた応答の 1 行を exe の標準エラーに見る。テストの道具の共有は `use super::tests::{…}`＋`pub(super)`（areka-seriko・areka-kanade に前例）。
