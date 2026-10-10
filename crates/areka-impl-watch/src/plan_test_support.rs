@@ -1,6 +1,6 @@
 //! `plan` のテストの支え: 偽の生死・状態の組み立て・時刻の定数。
 
-use super::Presence;
+use super::{Applied, Command, Event, Presence, Verdict, apply};
 use crate::state::{
     LoadHolder, LoadRequest, MergeHolder, MergeRequest, Participant, ParticipantStatus, State,
     StopReason, WaitKind, WaitRecord, WatchInfo,
@@ -111,16 +111,22 @@ pub(super) fn queue_load(state: &mut State, id: &str, requested: u64) {
     });
 }
 
-/// 「すでに走っている負荷テスト」の持ち主にする（走っている印つき＝誰にも停止要請が出ない）。
-pub(super) fn hold_running_load(state: &mut State, id: &str) {
+/// 番の来た負荷テストの持ち主にする。`stopped` は番が来たときに止まっていた識別。
+pub(super) fn hold_load(state: &mut State, id: &str, stopped: &[&str]) {
     state.load.holder = Some(LoadHolder {
         id: id.to_owned(),
         purpose: PURPOSE.to_owned(),
         requested: T0,
         granted: T0,
-        running: true,
-        stopped: Vec::new(),
+        running: false,
+        stopped: stopped.iter().map(|id| (*id).to_owned()).collect(),
     });
+}
+
+/// 「すでに走っている負荷テスト」の持ち主にする（走っている印つき＝誰にも停止要請が出ない）。
+pub(super) fn hold_running_load(state: &mut State, id: &str) {
+    hold_load(state, id, &[]);
+    state.load.holder.as_mut().expect("いま置いた").running = true;
 }
 
 /// `by` の負荷テストのための「停止要請中」にする。
@@ -131,6 +137,53 @@ pub(super) fn ask_to_stop(state: &mut State, id: &str, by: &str) {
         by: by.to_owned(),
         purpose: PURPOSE.to_owned(),
     });
+}
+
+/// `by` の負荷テストのために「止まった」にする。
+pub(super) fn stop_for(state: &mut State, id: &str, by: &str) {
+    ask_to_stop(state, id, by);
+    state.participants.get_mut(id).expect("参加者が居る").status = ParticipantStatus::Stopped;
+}
+
+/// 名前を省いた、内容が [`PURPOSE`] の負荷テストの申し込み（支えの組み立てる申し込みと同じ綴り）。
+pub(super) fn load_test(id: &str) -> Command {
+    Command::LoadTest {
+        id: id.to_owned(),
+        name: None,
+        repo: REPO.to_owned(),
+        purpose: PURPOSE.to_owned(),
+    }
+}
+
+pub(super) fn load_done(id: &str) -> Command {
+    Command::LoadDone { id: id.to_owned() }
+}
+
+pub(super) fn stopped(id: &str) -> Command {
+    Command::Stopped { id: id.to_owned() }
+}
+
+/// 全員が居る机で、判断を 1 回呼ぶ。
+pub(super) fn run(state: &mut State, cmd: &Command, caller: Option<&str>, now: u64) -> Applied {
+    apply(state, cmd, caller, now, &FakePresence::all_present())
+}
+
+pub(super) fn applied(changed: bool, events: Vec<Event>) -> Applied {
+    Applied {
+        changed,
+        verdict: Verdict::Applied,
+        events,
+    }
+}
+
+/// 「当てはまらなかった」の返事: 状態を変えず、出来事も無い。断りの文は端末へそのまま出すので ASCII。
+pub(super) fn assert_not_applied(got: &Applied, label: &str) {
+    assert!(!got.changed, "{label}");
+    assert!(got.events.is_empty(), "{label}: {:?}", got.events);
+    let Verdict::NotApplied(text) = got.verdict else {
+        panic!("{label}: 当てはまらなかった、を返す: {:?}", got.verdict);
+    };
+    assert!(!text.is_empty() && text.is_ascii(), "{label}: {text}");
 }
 
 #[test]

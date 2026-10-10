@@ -12,7 +12,8 @@
 )]
 
 use crate::state::{
-    LastMerge, MergeHolder, MergeRequest, Participant, State, WaitKind, WaitRecord, WatchInfo,
+    LastMerge, LoadHolder, LoadRequest, MergeHolder, MergeRequest, Participant, ParticipantStatus,
+    State, StopReason, WaitKind, WaitRecord, WatchInfo,
 };
 
 /// 生死の口: その識別の、その種類の待ち（見張りを含む）のプロセスがいま居るか。
@@ -44,6 +45,18 @@ pub enum Command {
     },
     /// マージが済んだ: 持っている机を空け、直前のマージを記録し、参加を終える。
     Merged { id: String, pr: String, sha: String },
+    /// 負荷テストの机の申し込み。参加を兼ねる。すでに待っている・持っているなら二重に並べず、
+    /// 元の申し込みのままにする。申し込んだ者は「作業中」へ戻る。
+    LoadTest {
+        id: String,
+        name: Option<String>,
+        repo: String,
+        purpose: String,
+    },
+    /// 負荷テストが済んだ: 持っている机を空ける。
+    LoadDone { id: String },
+    /// 「止まった」の報告。当てはまるのは「停止要請中」の参加者だけ。
+    Stopped { id: String },
     /// 取り下げ: 申し込みと机を外す。参加者の記録は残す。
     Cancel { id: String },
     /// 離脱: 申し込み・机・待ちの記録を外し、参加者の記録を消す。
@@ -88,6 +101,30 @@ pub enum Event {
         id: String,
         pr: String,
         sha: String,
+    },
+    LoadRequested {
+        id: String,
+    },
+    /// 負荷テストの番が来た。`stopped` はそのとき止まっていた識別。
+    LoadGranted {
+        id: String,
+        stopped: Vec<String>,
+    },
+    LoadDone {
+        id: String,
+    },
+    /// 停止要請が出た。`by` は負荷テストの候補（机の持ち主か、待ち行列の先頭）。
+    StopRequested {
+        id: String,
+        by: String,
+    },
+    Stopped {
+        id: String,
+    },
+    /// 「作業中」へ戻った。`why` は戻った訳の ASCII の名前。
+    Resumed {
+        id: String,
+        why: &'static str,
     },
 }
 
@@ -190,6 +227,50 @@ pub fn apply(
                 Verdict::NotApplied("not the merge holder")
             }
         }
+        Command::LoadTest {
+            id,
+            name,
+            repo,
+            purpose,
+        } => {
+            // 自分の負荷テストのために自分は止まらない（元のスクリプトと同じ）。候補でなければ、
+            // この後の番の決め直しが、候補の負荷テストのための停止要請を出し直す。
+            let participant = join(state, id, name.as_deref(), repo, now, &mut events);
+            resume(participant, "load-request", now, &mut events);
+            let desk = &mut state.load;
+            let holds = desk.holder.as_ref().is_some_and(|holder| holder.id == *id);
+            if !holds && !desk.queue.iter().any(|request| request.id == *id) {
+                desk.queue.push(LoadRequest {
+                    id: id.clone(),
+                    purpose: purpose.clone(),
+                    requested: now,
+                });
+                events.push(Event::LoadRequested { id: id.clone() });
+            }
+            Verdict::Applied
+        }
+        Command::LoadDone { id } => {
+            if state
+                .load
+                .holder
+                .take_if(|holder| holder.id == *id)
+                .is_some()
+            {
+                events.push(Event::LoadDone { id: id.clone() });
+                Verdict::Applied
+            } else {
+                Verdict::NotApplied("not the load-test holder")
+            }
+        }
+        Command::Stopped { id } => match state.participants.get_mut(id) {
+            Some(participant) if participant.status == ParticipantStatus::StopRequested => {
+                participant.status = ParticipantStatus::Stopped;
+                participant.since = now;
+                events.push(Event::Stopped { id: id.clone() });
+                Verdict::Applied
+            }
+            _ => Verdict::NotApplied("not asked to stop"),
+        },
         Command::Cancel { id } => {
             if remove_from(state, id) {
                 events.push(Event::Cancelled { id: id.clone() });
@@ -209,8 +290,16 @@ pub fn apply(
     }
 }
 
-/// 番を決め直す。何度呼んでも同じ結果になる。
+/// 番を決め直す（元のスクリプトの `Invoke-Plan` の写し）: 停止要請の発行 → 負荷テストの番 →
+/// 再開 → マージの番。何度呼んでも同じ結果になる。
 fn replan(state: &mut State, now: u64, events: &mut Vec<Event>) {
+    // 負荷テストが持たれている・待たれている間は、誰も再開せず、どのリポジトリのマージの番も出ない。
+    if plan_load(state, now, events) {
+        return;
+    }
+    for participant in state.participants.values_mut() {
+        resume(participant, "no-load", now, events);
+    }
     // マージの番: 持ち主の居ないリポジトリごとに、バグ優先 → 申し込みの時刻が早い順で
     // 1 人を持ち主にする。リポジトリ同士は独立。
     for (repo, desk) in &mut state.merge {
@@ -234,6 +323,76 @@ fn replan(state: &mut State, now: u64, events: &mut Vec<Event>) {
             granted: now,
         });
     }
+}
+
+/// 負荷テストの段: 停止要請の発行 → 負荷テストの番。負荷テストが持たれても待たれてもいなければ
+/// 何もせずに偽を返す。
+fn plan_load(state: &mut State, now: u64, events: &mut Vec<Event>) -> bool {
+    let load = &state.load;
+    // 待ち行列の先頭＝申し込みの時刻がいちばん早い者（同じ時刻なら行列の前）。
+    let by_time = |(_, request): &(usize, &LoadRequest)| request.requested;
+    let first = load.queue.iter().enumerate().min_by_key(by_time);
+    // 候補＝机の持ち主か、居なければ待ち行列の先頭。
+    let (candidate, purpose, running) = match (&load.holder, first) {
+        (Some(holder), _) => (holder.id.clone(), holder.purpose.clone(), holder.running),
+        (None, Some((_, request))) => (request.id.clone(), request.purpose.clone(), false),
+        (None, None) => return false,
+    };
+    let first = first.map(|(index, _)| index);
+
+    // 止まる必要のある参加者: 候補・マージの持ち主・マージ待ち（どのリポジトリでも）を除く全員。
+    // そのうち「作業中」の者に停止要請を出す。すでに走っている負荷テスト（走っている印）は出さない。
+    let in_merge = |id: &str| {
+        state.merge.values().any(|desk| {
+            desk.holder.as_ref().is_some_and(|holder| holder.id == id)
+                || desk.queue.iter().any(|request| request.id == id)
+        })
+    };
+    let mut need_stop = Vec::new();
+    let mut all_stopped = true;
+    for (id, participant) in &mut state.participants {
+        if *id == candidate || in_merge(id) {
+            continue;
+        }
+        if participant.status == ParticipantStatus::Working && !running {
+            participant.status = ParticipantStatus::StopRequested;
+            participant.since = now;
+            participant.stop_reason = Some(StopReason {
+                by: candidate.clone(),
+                purpose: purpose.clone(),
+            });
+            events.push(Event::StopRequested {
+                id: id.clone(),
+                by: candidate.clone(),
+            });
+        }
+        all_stopped &= participant.status == ParticipantStatus::Stopped;
+        need_stop.push(id.clone());
+    }
+
+    // 負荷テストの番: 持ち主なし・どのリポジトリにもマージの持ち主なし・止まる必要のある全員が
+    // 「止まった」で、先頭を持ち主にする。
+    let merging = state.merge.values().any(|desk| desk.holder.is_some());
+    if let Some(first) = first.filter(|_| state.load.holder.is_none() && !merging && all_stopped) {
+        let request = state.load.queue.remove(first);
+        events.push(Event::LoadGranted {
+            id: request.id.clone(),
+            stopped: need_stop.clone(),
+        });
+        // 止まっていた者が番を受けたら、自分の負荷テストのために「作業中」へ戻る。
+        if let Some(participant) = state.participants.get_mut(&request.id) {
+            resume(participant, "load-granted", now, events);
+        }
+        state.load.holder = Some(LoadHolder {
+            id: request.id,
+            purpose: request.purpose,
+            requested: request.requested,
+            granted: now,
+            running: false,
+            stopped: need_stop,
+        });
+    }
+    true
 }
 
 /// 参加を終える: 申し込み・机・待ちの記録を外し、参加者の記録を消す。何か消えたら出来事を 1 件。
@@ -276,6 +435,22 @@ fn join<'a>(
     participant
 }
 
+/// 「停止要請中」「止まった」の参加者を「作業中」へ戻す: 理由を消し、見張りを立て直すまでの印を
+/// 付ける（見張りは停止要請で終わっているので、立て直すまでは回収しない）。「作業中」なら何もしない。
+fn resume(participant: &mut Participant, why: &'static str, now: u64, events: &mut Vec<Event>) {
+    if participant.status == ParticipantStatus::Working {
+        return;
+    }
+    participant.status = ParticipantStatus::Working;
+    participant.since = now;
+    participant.stop_reason = None;
+    participant.awaiting_watch_since = Some(now);
+    events.push(Event::Resumed {
+        id: participant.id.clone(),
+        why,
+    });
+}
+
 /// 待ちの記録を置く。同じ識別・同じ種類の記録が在れば、その場で置き換える。
 fn put_wait(state: &mut State, record: WaitRecord) {
     let same = |wait: &&mut WaitRecord| wait.id == record.id && wait.kind == record.kind;
@@ -315,3 +490,7 @@ mod test_support;
 #[cfg(test)]
 #[path = "plan_desk_tests.rs"]
 mod desk_tests;
+
+#[cfg(test)]
+#[path = "plan_stop_tests.rs"]
+mod stop_tests;
