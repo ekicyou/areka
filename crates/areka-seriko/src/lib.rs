@@ -33,13 +33,6 @@ mod resolve;
 mod state;
 mod table;
 // 文字が現れる時刻の写し（spec: areka-P0-seriko-trigger-intervals）。使うのは一番上の面の配線。
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "呼ぶのは文字の知らせの受け口の配線（タスク 4.2）を入れるとき"
-    )
-)]
 mod talk;
 mod timeline;
 // 引き金の判定（spec: areka-P0-seriko-trigger-intervals）。使うのは一番上と部品の配線。

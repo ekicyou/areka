@@ -7,72 +7,15 @@
 
 use std::collections::BTreeMap;
 
-use areka_emo_compose::{BindSet, EmoWorld};
-use log_capture_kit::{LineFormat, capture_lines};
+use areka_emo_compose::BindSet;
 
+use super::test_support::{
+    capture_logs, cell, count, scope, shell_runtime, started, switch, table_of,
+};
 use super::tests::{always_fire, cfg, counting_rng, pattern_of};
 use super::*;
 use crate::resolve::SurfaceTarget;
-use crate::state::{ApplyOutcome, BindApplyOutcome, StageNote};
-
-fn table_of(text: &str) -> AnimationTable {
-    AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(text)))
-}
-
-fn scope() -> ActorKey {
-    ActorKey::from("0")
-}
-
-/// シェルの表が `text` のランタイムと、まだ何も表示していない状態。
-fn shell_runtime(text: &str) -> (LoopRuntime, ScopeStates) {
-    let (rng, _probe) = counting_rng(&[]);
-    (
-        LoopRuntime::new(cfg(table_of(text), rng)),
-        ScopeStates::new(BindSet::default()),
-    )
-}
-
-/// アクターの面の切り替えと同じ順で踏む（出来事の時刻は `at_ms`）。面が変わらなければ `None`。
-fn switch(
-    rt: &mut LoopRuntime,
-    states: &mut ScopeStates,
-    target: SurfaceTarget,
-    at_ms: u64,
-) -> Option<DisplayCommand> {
-    let ApplyOutcome::Changed(cmd) = states.apply(&scope(), target) else {
-        return None;
-    };
-    rt.on_surface_changed(&scope(), Slot::Shell);
-    Some(
-        rt.refresh(&scope(), Slot::Shell, Some(at_ms), states)
-            .unwrap_or(cmd),
-    )
-}
-
-/// 一番上の animation `id` の再生の開始の時刻（再生中でなければ `None`）。
-fn started(rt: &LoopRuntime, slot: Slot, id: u32) -> Option<u64> {
-    rt.playback
-        .get(&(scope(), slot))
-        .and_then(|pb| pb.get(&id))
-        .map(|p| p.started_at_ms)
-}
-
-/// 一番上の animation `id` の欄の絵（載っていなければ `None`）。
-fn cell(states: &ScopeStates, slot: Slot, id: u32) -> Option<u32> {
-    states
-        .current_pattern(&scope(), slot)
-        .get(id)
-        .map(|f| f.surface_id)
-}
-
-fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    capture_lines(LineFormat::LevelTargetFields, f).1
-}
-
-/// `needle` を含む行の数。
-fn count(lines: &[String], needle: &str) -> usize {
-    lines.iter().filter(|l| l.contains(needle)).count()
-}
+use crate::state::{BindApplyOutcome, StageNote};
 
 /// 面 0 の一番上: `runonce`（animation 0＝301 → 100ms で 302 → 100ms で `-1`・全部で 200ms）と
 /// `periodic,1`（animation 1＝401 → 100ms で 402 → 300ms で `-1`・全部で 400ms）。面 1 は何も持たない。

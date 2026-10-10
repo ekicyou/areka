@@ -13,7 +13,8 @@
 //! - `periodic`: 見え始めからの経過を周期で割り（[`lap_of`]・丸めない）、周が進んだ判定で鳴る。
 //!   開始の時刻は最新の周の境目そのもの（判定の時刻ではない・要件 3.1・3.4・3.5・6.1）。
 //! - 隠す・現す（バルーンの窓の閉じ・開き）: 隠れている間は鳴らず、現れた時刻が `periodic` の新しい
-//!   起点になる。`runonce` の印は残る（開き直しでは鳴らない・要件 3.2・5.9）。
+//!   起点になる。`runonce` の印は残る（開き直しでは鳴らない・要件 3.2・5.9）。`talk` の数えは隠すと
+//!   捨て、現すときに渡された数から数え直す。
 //! - `talk`: 数え始めから数値分の文字ごとの区切りを、刻み 1 回分の文字の窓（[`TalkWindow`]）が
 //!   越えた判定で鳴る。開始の時刻は区切りの文字が現れた時刻そのもの（判定の時刻ではない）。
 //!   1 回の窓で区切りを 2 つ以上越えても最新の 1 つだけ（要件 4.1・4.5・4.6）。数えは判定の後に
@@ -37,13 +38,6 @@ pub(crate) struct Armed {
 }
 
 /// スコープの文字の序数の数え。
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "読むのは一番上の面の文字の窓の配線（タスク 4.2）を入れるとき"
-    )
-)]
 pub(crate) struct TalkCursor {
     /// 構えた時点で現れていた文字の序数（ここから 0 と数える）。
     base: u64,
@@ -67,7 +61,7 @@ impl Armed {
     /// 見え始めの時刻で構える（`open` が偽なら隠れた状態で構える）。
     ///
     /// `revealed` は今現れている文字の序数で、`talk` はここから 0 と数える（`None` なら数えを
-    /// 持たない＝表に `talk` が無い面と部品）。
+    /// 持たない＝表に `talk` が無い面・窓が閉じている面・部品）。
     pub(crate) fn arm(at_ms: Option<u64>, open: bool, revealed: Option<u64>) -> Armed {
         Armed {
             visible_since: at_ms.filter(|_| open),
@@ -77,10 +71,11 @@ impl Armed {
         }
     }
 
-    /// 窓が閉じた: 起点を消す（`runonce` の印は残す。`periodic` の周と `talk` の数えは、現すときに
-    /// 置き直す）。
+    /// 窓が閉じた: 起点と `talk` の数えを消す（`runonce` の印は残す。`periodic` の周は現すときに
+    /// 置き直す）。隠れている間は文字を数えないので、数え終えた文字の刈り込みを止めない。
     pub(crate) fn hide(&mut self) {
         self.visible_since = None;
+        self.talk = None;
     }
 
     /// 窓が開いた: 起点を置き直す（`periodic` の周は 0 から・`talk` は `revealed` を 0 と数え直す）。
@@ -154,27 +149,28 @@ impl Armed {
     ///
     /// 数えは単調: 今見えている数が減った刻み（消去で切り詰められた・起点が前へ飛んだ）は進めない。
     /// 数えを持たない状態（部品・表に `talk` が無い面）では何もしない。
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "読むのは一番上の面の文字の窓の配線（タスク 4.2）を入れるとき"
-        )
-    )]
     pub(crate) fn advance_talk(&mut self, now_seen: u64) {
         if let Some(cursor) = &mut self.talk {
             cursor.seen = cursor.seen.max(now_seen);
         }
     }
 
+    /// 消去の知らせの後に呼ぶ: 文字の列が `total` 文字まで切り詰められた（捨てられた序数は次に届く
+    /// 文字に振り直される）。数え済みの序数が `total` を超えていたら、数えた文字の数（数え済み −
+    /// 数え始め）を保ったまま数え済みを `total` に揃える。揃えないと、次に届く文字が「数え済み」に
+    /// 埋もれて区切りを越えても鳴らない。超えていなければ何もしない。
+    pub(crate) fn realign_talk(&mut self, total: u64) {
+        if let Some(cursor) = &mut self.talk {
+            let dropped = cursor.seen.saturating_sub(total);
+            cursor.seen -= dropped;
+            // ponytail: 数え始めの序数が捨てられた数より小さいと 0 で止まり、数えた数が減る（次の区切りが
+            // 遅れる）。数え済みが列を超えるのは刻みの間に構えた直後（数えた数 0）なので、まず届かない。
+            // 届くようなら数え始めを符号つきにする。
+            cursor.base = cursor.base.saturating_sub(dropped);
+        }
+    }
+
     /// 文字の窓を組むための（数え始めの序数, 数え済みの序数）。数えを持たなければ `None`。
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "読むのは一番上の面の文字の窓の配線（タスク 4.2）を入れるとき"
-        )
-    )]
     pub(crate) fn talk_window_bounds(&self) -> Option<(u64, u64)> {
         self.talk.as_ref().map(|cursor| (cursor.base, cursor.seen))
     }

@@ -27,22 +27,29 @@
 //!
 //! bind の書込 API（`apply_bind` 等）は一切呼ばない（read-only 参照のみ・要件 3.3）。
 
-use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use areka_emo_compose::{BindSet, PatternFrame, PatternState};
-use areka_sakura::ActorKey;
+use areka_sakura::{ActorKey, CueCommand, TalkCue};
 
 use crate::actor::SerikoClock;
 use crate::output::DisplayCommand;
 use crate::parts::PartClocks;
 use crate::state::{PatternApplyOutcome, ScopeStates, Slot};
 use crate::table::{AnimationTable, LoopAnimation, LoopFrame, LoopTrigger};
+use crate::talk::{TalkEpoch, TalkFeed};
 use crate::timeline::{
     AlwaysView, FrameStatus, LoopRng, LotteryBoundary, always_at, current_frame_index, frame_at,
     seeded_rng, should_fire,
 };
-use crate::trigger::Armed;
+use crate::trigger::{Armed, TalkWindow};
+
+// 一番上の面の引き金の配線（構える・判定して始める・文字の列と数えの世話）。
+#[path = "looper_trigger.rs"]
+mod top_trigger;
+use top_trigger::{
+    arm_slot, fire_top_triggers, glyph_wall_ms, restart_talk, revealed_at, settle_talk,
+};
 
 /// SERIKO ループ構成（シェル表 1 面＋scope 別バルーン表＋乱数注入シーム）。boot 時に組み立てて
 /// [`LoopRuntime`] へ値渡しする。
@@ -117,6 +124,14 @@ pub(crate) struct LoopRuntime {
     /// 生まれ、面が替わる・表を差し替えると消える。構える条件（一番上に `runonce`・`periodic`・`talk` が
     /// 在る、または表に `talk` が在る）を満たさない面では生まれない（要件 8.1）。
     armed: HashMap<(ActorKey, Slot), Armed>,
+    /// 台本の 0 秒に当たる時計の読みの見積もり（spec: areka-P0-seriko-trigger-intervals 要件 6.4）。
+    /// 表に `talk` が無い間は cue を写さないので空のまま。
+    epoch: TalkEpoch,
+    /// スコープごとの、文字が現れる時刻の列（要件 4.3・4.8）。表に `talk` が無い間は空のまま。
+    feeds: HashMap<ActorKey, TalkFeed>,
+    /// シェルかバルーンのどれかの表に `talk` が在るか（文字の cue を写すかの門・要件 8.1）。表を
+    /// 差し替えるたびに組み直す。
+    has_talk: bool,
 }
 
 /// 固定消費順のための slot ランク（Shell を Balloon より前に置く・D-7）。
@@ -219,39 +234,21 @@ fn top_kinds(table: &AnimationTable, surface_id: u32) -> (bool, bool) {
     (always, trigger)
 }
 
-/// `key` の面の引き金の状態を返す。無ければ `at_ms` を見え始めの時刻として構え（面に入った）、在れば
-/// 窓の開け閉めだけを写す: 閉じたら隠し、開いたら `at_ms` を新しい起点にして現す（`runonce` の印は
-/// 残るので開き直しでは鳴らない・spec: areka-P0-seriko-trigger-intervals 要件 2.1・3.2・5.5）。
-///
-/// 呼ぶのは構える条件（一番上に 3 語が在る、または表に `talk` が在る）を満たす面でだけ（要件 8.1）。
-fn arm_slot<'a>(
-    armed: &'a mut HashMap<(ActorKey, Slot), Armed>,
-    key: &(ActorKey, Slot),
-    surface_id: u32,
-    open: bool,
-    at_ms: u64,
-) -> &'a mut Armed {
-    match armed.entry(key.clone()) {
-        Entry::Occupied(entry) => {
-            let state = entry.into_mut();
-            match (open, state.is_visible()) {
-                (true, false) => state.show(at_ms, None),
-                (false, true) => state.hide(),
-                _ => {}
-            }
-            state
+/// シェルかバルーンのどれかの表に `talk` が在るか（文字の cue を写すかの門）。
+fn any_talk(config: &SerikoLoopConfig) -> bool {
+    config.shell_table.has_talk() || config.balloon_tables.values().any(AnimationTable::has_talk)
+}
+
+/// 再生の終わりの記録。`talk` の再生は文字の到着ごとに起きうるので `debug!`、ほかは `info!`
+/// （文言は同じ・spec: areka-P0-seriko-trigger-intervals 要件 7.3）。
+macro_rules! log_play_end {
+    ($talk:expr, $($arg:tt)+) => {
+        if $talk {
+            tracing::debug!($($arg)+)
+        } else {
+            tracing::info!($($arg)+)
         }
-        Entry::Vacant(entry) => {
-            tracing::debug!(
-                scope = key.0.as_str(),
-                slot = ?key.1,
-                surface_id,
-                at_ms,
-                "seriko: trigger 面に入った（引き金を構えた）"
-            );
-            entry.insert(Armed::arm(Some(at_ms), open, None))
-        }
-    }
+    };
 }
 
 /// 一番上の再生 1 本（`always` 以外）の経過 `elapsed` のコマを欄へ置く。終えていれば（負の番号で
@@ -266,6 +263,7 @@ fn put_top_play(
     elapsed: u64,
 ) {
     let (scope, slot, anim_id) = (&key.0, key.1, anim.id);
+    let is_talk = matches!(anim.trigger, LoopTrigger::Talk { .. });
     match frame_at(&anim.frames, elapsed) {
         // 先頭デッドライン未到達＝ベース露出。再発火時はここで残留コマが即時クリアされる（討議 #2）。
         FrameStatus::Pending => {
@@ -281,7 +279,8 @@ fn put_top_play(
                 if let Some(pb) = playback.get_mut(key) {
                     pb.remove(&anim_id);
                 }
-                tracing::info!(
+                log_play_end!(
+                    is_talk,
                     scope = scope.as_str(),
                     slot = ?slot,
                     animation_id = anim_id,
@@ -311,7 +310,8 @@ fn put_top_play(
             if let Some(pb) = playback.get_mut(key) {
                 pb.remove(&anim_id);
             }
-            tracing::info!(
+            log_play_end!(
+                is_talk,
                 scope = scope.as_str(),
                 slot = ?slot,
                 animation_id = anim_id,
@@ -321,71 +321,10 @@ fn put_top_play(
     }
 }
 
-/// 一番上の 3 語の animation `anims` を番号の昇順に判定し、始まるものを `playback` に入れる（開始の
-/// 時刻は判定が返した時刻＝`runonce` は見え始め・`periodic` は周の境目で、`now_ms` ではない・spec:
-/// areka-P0-seriko-trigger-intervals 要件 2.1・3.1・3.5・6.1）。始まった（animation, 開始の時刻）を返す。
-///
-/// 「再生中か」は刻みの時刻でなく開始の時刻で測る: `playback` に在って、その時刻のコマがまだ終わり
-/// （負の番号で停止・末尾）でないこと（要件 3.3・3.5・5.3）。開始の時刻には終えていて、まだ片付けて
-/// いない再生は、その時刻まで進めて片付けてから（終わりの記録は刻みの進行と同じ 1 件）入れ替える。
-///
-/// 乱数は引かない。始めない経路（隠れている・再生中・境目の前）は記録しない（要件 5.7・7.5）。
-/// 始まった後の進み方は抽選の再生と同じ（`playback` に入るだけ・要件 5.1〜5.3）。
-fn fire_top_triggers<'a>(
-    state: &mut Armed,
-    playback: &mut HashMap<(ActorKey, Slot), SlotPlayback>,
-    pattern: &mut PatternState,
-    warned_negative: &mut HashSet<(ActorKey, Slot, u32)>,
-    key: &(ActorKey, Slot),
-    anims: impl Iterator<Item = &'a LoopAnimation>,
-    now_ms: u64,
-) -> Vec<(&'a LoopAnimation, u64)> {
-    let mut anims: Vec<&LoopAnimation> = anims.collect();
-    anims.sort_by_key(|a| a.id);
-    let mut fired = Vec::new();
-    for anim in anims {
-        // まだ片付けていない前の再生の、時刻 `at` での経過（前の再生が無ければ `None`）。
-        let prev = playback.get(key).and_then(|pb| pb.get(&anim.id)).copied();
-        let since_prev = |at: u64| prev.map(|p| at.saturating_sub(p.started_at_ms));
-        let playing_at = |at| {
-            let status = since_prev(at).map(|elapsed| frame_at(&anim.frames, elapsed));
-            matches!(status, Some(FrameStatus::Pending | FrameStatus::Active(_)))
-        };
-        let Some(started_at_ms) = state.poll(anim, now_ms, playing_at, None) else {
-            continue;
-        };
-        if let Some(elapsed) = since_prev(started_at_ms) {
-            put_top_play(pattern, playback, warned_negative, key, anim, elapsed);
-        }
-        playback
-            .entry(key.clone())
-            .or_default()
-            .insert(anim.id, Playback { started_at_ms });
-        match anim.trigger {
-            LoopTrigger::Runonce => tracing::info!(
-                scope = key.0.as_str(),
-                slot = ?key.1,
-                animation_id = anim.id,
-                started_at_ms,
-                "seriko: trigger runonce を鳴らした（再生開始・先頭コマから・要件 2.1）"
-            ),
-            LoopTrigger::Periodic { .. } => tracing::info!(
-                scope = key.0.as_str(),
-                slot = ?key.1,
-                animation_id = anim.id,
-                started_at_ms,
-                "seriko: trigger periodic を鳴らした（再生開始・先頭コマから・要件 3.1）"
-            ),
-            _ => {}
-        }
-        fired.push((anim, started_at_ms));
-    }
-    fired
-}
-
 impl LoopRuntime {
     /// ループ構成を受けて再生状態ゼロの統括器を構築する（表・rng は注入済み）。
     pub(crate) fn new(config: SerikoLoopConfig) -> Self {
+        let has_talk = any_talk(&config);
         Self {
             config,
             boundary: None,
@@ -395,6 +334,9 @@ impl LoopRuntime {
             parts: PartClocks::default(),
             clock: None,
             armed: HashMap::new(),
+            epoch: TalkEpoch::default(),
+            feeds: HashMap::new(),
+            has_talk,
         }
     }
 
@@ -408,6 +350,49 @@ impl LoopRuntime {
     /// 時刻を使う・design「時計の開始の時刻」）。
     pub(crate) fn event_ms(&self) -> Option<u64> {
         self.clock.as_ref().map(|clock| clock())
+    }
+
+    /// 届いた cue を 1 件、文字の時刻の写しへ渡す（spec: areka-P0-seriko-trigger-intervals 要件 4.3・
+    /// 4.8・4.10・6.4・8.1）。
+    ///
+    /// どの表にも `talk` が無ければ何もしない（真偽 1 つで戻る）。在れば、種類を問わず起点の見積もりを
+    /// 更新し、文字と選択肢の文字をそのスコープの列へ積み、消去はそのスコープ（全消去は全スコープ）の
+    /// 現れなかった文字を捨てる。改行・待ち・`\!` のコマンドは数えない。「今」は時計、無ければ直前の
+    /// 刻みの時刻で、どちらも無ければ写さない（次の cue で起点ができる）。記録は出さない（文字ごとの
+    /// 記録を増やさない・要件 7.3）。
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "呼ぶのは cue の受け口の配線（タスク 6.1）を入れるとき"
+        )
+    )]
+    pub(crate) fn observe_cue(&mut self, cue: &TalkCue) {
+        if !self.has_talk {
+            return;
+        }
+        let Some(now_ms) = self.event_ms().or(self.last_seen) else {
+            return;
+        };
+        self.epoch.observe(cue.at, now_ms);
+        match &cue.command {
+            CueCommand::Text(text) | CueCommand::Choice { text, .. } => self
+                .feeds
+                .entry(cue.actor.clone())
+                .or_default()
+                .push_text(cue.at, cue.duration, text),
+            CueCommand::Clear => {
+                if let Some(feed) = self.feeds.get_mut(&cue.actor) {
+                    restart_talk(feed, &mut self.armed, &cue.actor, cue.at);
+                }
+            }
+            CueCommand::ClearAll => {
+                for (scope, feed) in &mut self.feeds {
+                    restart_talk(feed, &mut self.armed, scope, cue.at);
+                }
+            }
+            _ => {}
+        }
     }
 
     /// 1 tick の統括。発行すべき指令列（通常 0〜2 件）を返す。発行自体は actor が行う（要件 6.3）。
@@ -437,6 +422,11 @@ impl LoopRuntime {
     /// 一番上の再生が無くても通し、`runonce`・`periodic` を乱数なしで判定して、始まるものを判定が返した
     /// 開始の時刻で `playback` に入れる（その後は抽選の再生と同じ進行）。条件を満たさない面には状態が
     /// 生まれない。
+    ///
+    /// `talk`（要件 4）: 表に `talk` が在り窓が開いている面は、刻み 1 回につき文字の窓（前の刻みまでに
+    /// 数えた数・今現れている数・文字が現れた壁時刻の写し）を 1 つ作り、一番上の `talk` を同じ判定に
+    /// 掛ける（開始の時刻は区切りの文字が現れた時刻）。数えを進めて文字の列を刈り込むのは、全部の面が
+    /// 窓を読み終えた刻みの最後（[`settle_talk`]）。
     pub(crate) fn on_tick(&mut self, now_ms: u64, states: &mut ScopeStates) -> Vec<DisplayCommand> {
         // (1) 単調性ガード（防御・実クロックでは非発生）。非単調 tick は状態を変えず無発行。
         if let Some(last) = self.last_seen {
@@ -467,6 +457,8 @@ impl LoopRuntime {
             warned_negative,
             parts,
             armed,
+            epoch,
+            feeds,
             ..
         } = self;
         let SerikoLoopConfig {
@@ -560,10 +552,13 @@ impl LoopRuntime {
             // 部品の経路を通す表か（偽なら部品の行を 1 つも通らない・要件 7.2・7.3）。
             let with_parts = table.has_animated_parts();
             let (has_always, has_trigger) = top_kinds(table, *sid);
+            // 文字を数える面（表に `talk` が在り、窓が開いている）の、今現れている文字の数。
+            let talks = table.has_talk();
+            let now_seen = (talks && *open).then(|| revealed_at(epoch, feeds, scope, now_ms));
             // 引き金の状態は、構える条件（一番上に 3 語が在る、または表に `talk` が在る）を満たす面で
             // だけ持つ。無ければこの刻みの時刻で構え（表の差し替えの後の最初の刻み）、窓の開け閉めを写す。
-            let state = (has_trigger || table.has_talk())
-                .then(|| arm_slot(armed, &key, *sid, *open, now_ms));
+            let state = (has_trigger || talks)
+                .then(|| arm_slot(armed, &key, *sid, *open, now_ms, now_seen));
             // 一番上の再生が無くても、一番上に `always` か 3 語が在るか、見える部品に動くものが在れば通す。
             if !has_playback
                 && !has_always
@@ -587,6 +582,20 @@ impl LoopRuntime {
             // 再発火したアニメは playback を持つのでここで frame_at のみに従い更新される＝残留の即時クリア。
             let mut new_pattern = states.current_pattern(scope, *slot).clone();
 
+            // 文字の窓（面 1 つに刻み 1 回）。一番上に `talk` が無く部品にだけ在る面でも作る。一番上と
+            // 部品が同じ窓を読むので、数えを進めるのは刻みの最後（先に進めると後で読む側が区切りを
+            // 見落とす）。
+            let wall_ms = |glyph| glyph_wall_ms(epoch, feeds.get(scope), glyph, now_ms);
+            let bounds = state.as_ref().and_then(|state| state.talk_window_bounds());
+            let window = bounds
+                .zip(now_seen)
+                .map(|((base, prev_seen), now_seen)| TalkWindow {
+                    base,
+                    prev_seen,
+                    now_seen,
+                    wall_ms: &wall_ms,
+                });
+
             // 一番上の 3 語は抽選を待たずに判定する（一番上に 3 語の在る面でだけ回す）。始まった再生は
             // 下の進行がこの刻みのうちに、開始の時刻からの経過の分だけ進める（要件 6.2）。
             if let Some(state) = state.filter(|_| has_trigger) {
@@ -599,6 +608,7 @@ impl LoopRuntime {
                     &key,
                     anims,
                     now_ms,
+                    window.as_ref(),
                 );
             }
 
@@ -676,6 +686,7 @@ impl LoopRuntime {
             }
 
             // 部品: 一番上の進行を済ませた絵で部品の欄を作り直す（一番上の抽選は全スコープぶん済み）。
+            // 部品の `talk` はこの面の文字の窓 `window` を借りる（渡すのはタスク 5.2）。
             if with_parts {
                 parts.advance(
                     scope,
@@ -698,6 +709,10 @@ impl LoopRuntime {
                 commands.push(cmd);
             }
         }
+
+        // 全部の面が文字の窓を読み終えた: 数えを今現れている数まで進め、数え終えた文字を刈り込む
+        // （表に `talk` が無ければ文字の列は空で、何もしない）。
+        settle_talk(epoch, feeds, armed, now_ms);
 
         commands
     }
@@ -757,6 +772,8 @@ impl LoopRuntime {
             parts,
             last_seen,
             armed,
+            epoch,
+            feeds,
             ..
         } = self;
         let table = match slot {
@@ -793,8 +810,11 @@ impl LoopRuntime {
             // 引き金: 構える条件を満たす面でだけ構え（面に入った）、`runonce` を出来事の時刻で鳴らして
             // 頭のコマをこの評価の絵に載せる（待ちの在る頭は次の刻みが置く）。`periodic` は刻みで鳴らす。
             let (_, has_trigger) = top_kinds(table, sid);
-            if has_trigger || table.has_talk() {
-                let state = arm_slot(armed, &key, sid, open, at);
+            let talks = table.has_talk();
+            if has_trigger || talks {
+                // 文字はこの出来事の時刻までに現れた数の次から数える（`talk` は刻みで鳴らす）。
+                let revealed = (talks && open).then(|| revealed_at(epoch, feeds, scope, at));
+                let state = arm_slot(armed, &key, sid, open, at, revealed);
                 let runonce = table
                     .animations(sid)
                     .iter()
@@ -807,6 +827,7 @@ impl LoopRuntime {
                     &key,
                     runonce,
                     at,
+                    None,
                 );
                 for (anim, started) in fired {
                     if let FrameStatus::Active(i) | FrameStatus::FinishedResidual(i) =
@@ -860,12 +881,18 @@ impl LoopRuntime {
 
     /// 全 scope の `slot` 種の再生状態（一番上の `always` を含む）・引き金の状態・部品の時計・warn! 記録を捨てる
     /// （表の差し替えの共通後段・spec: areka-P0-surface-element-nesting 要件 5.8・
-    /// spec: areka-P0-animated-image-playback 要件 3.6）。
+    /// spec: areka-P0-animated-image-playback 要件 3.6）。「どれかの表に `talk` が在るか」も組み直し、
+    /// 無くなったら文字の時刻の写しを捨てる（spec: areka-P0-seriko-trigger-intervals 要件 8.1）。
     fn forget_slot_kind(&mut self, slot: Slot) {
         self.playback.retain(|(_, s), _| *s != slot);
         self.armed.retain(|(_, s), _| *s != slot);
         self.warned_negative.retain(|(_, s, _)| *s != slot);
         self.parts.clear(slot);
+        self.has_talk = any_talk(&self.config);
+        if !self.has_talk {
+            self.epoch = TalkEpoch::default();
+            self.feeds.clear();
+        }
     }
 }
 
@@ -887,6 +914,12 @@ mod parts_tests;
 #[cfg(test)]
 #[path = "looper_replace_tests.rs"]
 mod replace_tests;
+#[cfg(test)]
+#[path = "looper_talk_tests.rs"]
+mod talk_tests;
+#[cfg(test)]
+#[path = "looper_test_support.rs"]
+mod test_support;
 #[cfg(test)]
 #[path = "looper_tests.rs"]
 pub(crate) mod tests;

@@ -241,6 +241,20 @@ fn armed_closed_stays_silent_until_shown() {
     assert_eq!(armed.poll(&p, 5200, |_| false, None), Some(5200));
 }
 
+/// 隠すと `talk` の数えを捨てる（隠れている間は文字を数えない）。現すときに数を渡されなければ、
+/// 数えを持たないまま。
+#[test]
+fn hide_drops_the_talk_count() {
+    let mut armed = armed_with_text(4);
+    armed.advance_talk(6);
+    assert_eq!(armed.talk_window_bounds(), Some((4, 6)), "前提");
+
+    armed.hide();
+    assert_eq!(armed.talk_window_bounds(), None);
+    armed.show(5000, None);
+    assert_eq!(armed.talk_window_bounds(), None);
+}
+
 // ── talk ─────────────────────────────────────────────────────────────────
 
 /// 3 文字ごとの区切り（3 文字目・6 文字目）で鳴り、開始の時刻は刻みの時刻でなく区切りの文字が
@@ -430,5 +444,43 @@ fn talk_without_a_window_or_while_hidden_stays_silent() {
         part.poll(&t, TICK_MS, |_| false, Some(&crossed)),
         Some(1100),
         "借りた窓で鳴る"
+    );
+}
+
+/// 消去で文字の列が数え済みより短くなったら、数えた文字の数を保ったまま列の総数に揃える。次に届く
+/// 文字（捨てられた序数を使い直す）は、数えた文字の続きとして数えられる。列が数え済み以上なら
+/// 触らない。数え始めは 0 より前へは行かない。
+#[test]
+fn realign_keeps_the_counted_glyphs_and_follows_the_shortened_feed() {
+    let t = talk(1, 3);
+    let mut armed = armed_with_text(10);
+    assert_eq!(talk_tick(&mut armed, &t, 12, false, &every_50ms), None);
+
+    armed.realign_talk(12);
+    assert_eq!(armed.talk_window_bounds(), Some((10, 12)), "超えていない");
+
+    armed.realign_talk(7);
+    assert_eq!(
+        armed.talk_window_bounds(),
+        Some((5, 7)),
+        "数えた 2 文字を保って、列の総数 7 に揃える"
+    );
+    assert_eq!(
+        talk_tick(&mut armed, &t, 8, false, &every_50ms),
+        Some(1350),
+        "次に届いた 1 文字（序数 7）が 3 文字目"
+    );
+
+    let mut early = armed_with_text(1);
+    early.advance_talk(3);
+    early.realign_talk(0);
+    assert_eq!(early.talk_window_bounds(), Some((0, 0)));
+
+    let mut part = armed_at(0);
+    part.realign_talk(0);
+    assert_eq!(
+        part.talk_window_bounds(),
+        None,
+        "数えを持たなければ何もしない"
     );
 }
