@@ -78,7 +78,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.7, 2.8, 2.9, 8.4, 8.6_
 
 - [ ] 4. kanade がアンカーの選択を受けてイベントを送る
-- [ ] 4.1 (P) `OnAnchorSelectEx`／`OnAnchorSelect` の要求を組み立てる
+- [x] 4.1 (P) `OnAnchorSelectEx`／`OnAnchorSelect` の要求を組み立てる
   - `OnAnchorSelectEx`: Reference0＝範囲の文字・Reference1＝ID・Reference2 以降＝引数（記述順・無ければ位置を作らない）。`OnAnchorSelect`: Reference0＝ID。どちらも他のイベントと同じ共通の要求ヘッダ（実行状態の行）を付ける
   - 許可するイベントの表に 2 つを ukadoc の URL のコメント付きで足し、ファイル冒頭の Reference の表に 2 行足す。表の数の檻を 51 → 53 にする
   - テスト: 2 つの要求の Reference の並び・引数なしで位置が無いこと・実行状態の行があること
@@ -189,3 +189,7 @@
 - 3.3（任意の檻・未実施）: 「アンカーが開いている最中に取った空回しの写し（`reinstall`）でも番号の並びが一致する」は、`anchor_open` が `derive(Clone)` で写るので構造で守られているが、檻としては未固定。
 - 3.4: 5 本とも既存のふるまいの固定で最初から緑。噛むことは変異 2 件（`annotate_lines` がアンカーを飛ばす／`Clear` の腕の当たりの行の無効化を `choice_active` で囲う）で確かめた（戻し済み・本番のロジックは無変更）。`choice.rs` の差分は `#[cfg(test)]` の載せる 4 行だけ。
 - 3.4（範囲外・棚卸で扱う）: `cargo clippy -p areka-emo-text --all-targets` は、結合テスト 3 本（`tests/choice_fixture_test.rs`・`emo2_fixture_e2e_test.rs`・`line_pitch_readback_test.rs`）が既定で deny の指摘でコンパイルできない（本 spec の前から・本 spec は触っていない）。1.2 の clippy の申し送りと同じ束。
+- 4.1: 選択肢の組み立て 2 関数の中身を非公開の共通の組み立て（`select_ex_get`／`select_get`・イベント名を引数に取る）へ移し、選択肢とアンカーが同じものを呼ぶ（選択肢の署名とふるまいは無変更）。設計の表に無い追随ファイル 2 本: `events_anchor_tests.rs`（新・テストの置き場）と `events_tests.rs`（全名の檻）。7.1 の照合で数える。
+- 4.1 → 4.2 への申し送り: `on_anchor_select_ex(text, id, references, snapshot)`／`on_anchor_select(id, snapshot)` は `pub` だが `lib.rs` の公開の窓口 `events` には足していない。結合テスト（`tests/`）から使う必要が出たら、そのとき足す。
+- 4.1 → 6.3 への申し送り: `doc/ukadoc-coverage/ledger/shiori.toml` の `OnAnchorSelect`／`OnAnchorSelectEx` は `absent` のままで、note の「許可表に名前が無く、構築関数も無い」はもう事実と合わない（survey は緑のまま）。
+- 4.1（範囲外・棚卸で扱う・1.2 の clippy の束へ追加）: `cargo clippy -p areka-kanade --all-targets` は `actor_raise_reply_tests.rs` の既定で deny の指摘（回らないループ）で lib のテストがコンパイルできない（本 spec の前から）。
