@@ -1,12 +1,12 @@
 # 実機確認の記録（タスク 7・要件 8.5）
 
-**状態: 6 点とも確かめた。残りは 1 つだけ＝Desktop の普通のチャット欄での目視（下の「残り」）**
+**状態: 6 点とも合格（2026-10-11・チャット欄での目視まで済み）**
 
 ## 確かめた物と机
 
 | 項目 | 値 |
 |---|---|
-| 確かめた日 | 2026-10-10（下ごしらえ）・2026-10-11 0:44〜0:49（Desktop を起動し直した後） |
+| 確かめた日 | 2026-10-10（下ごしらえ）・2026-10-11 0:44〜0:49（Desktop を起動し直した後）・2026-10-11 8:13（チャット欄） |
 | 版 | areka 0.0.2・コミット `96f4393`・未コミットの変更 0（zip の `BUILD-INFO.txt`） |
 | zip | `target\package\areka-0.0.2-x64.zip`（SHA256 `b7251e2ee930d06c9bb3906acb56fc19c06be150dc2a8d183434b138ad3f703c`） |
 | 展開した場所 | `C:\home\maz\git\areka\.claude\worktrees\areka-p0-mcp-stdio-bridge-63f45d\target\t7\areka` |
@@ -31,7 +31,7 @@
 
 | 点 | 中身 | 結果 |
 |---|---|---|
-| ⑴ | Desktop に areka のツールが並び、`get_status` など 1 本以上が呼べる | **合格**。11 本が並び、`get_status` は `balloon(0=0/1=0)`、`get_active_ghost_list` は `えも？？` を返した（Code のセッションから。チャット欄の目視は「残り」） |
+| ⑴ | Desktop に areka のツールが並び、`get_status` など 1 本以上が呼べる | **合格**。11 本が並び、`get_status` は `balloon(0=0/1=0)`、`get_active_ghost_list` は `えも？？` を返した（Code のセッションからと、Desktop の普通のチャット欄からの両方で同じ結果） |
 | ⑵ | Desktop が話した版 | **`2025-11-25`**（中継の記録 `answered the first inquiry method="initialize" requested=2025-11-25 answered=2025-11-25`） |
 | ⑶ | areka を止めて呼ぶと理由の読めるエラーが出て、起動し直すと Desktop を起動し直さずに呼べる | **合格**。止めて呼ぶと下の文のエラー。起こし直した後の `get_status` と `get_active_ghost_list` は成功。Desktop の本体は 0:44:36 に起きたものがそのまま |
 | ⑷ | areka を止めたまま Desktop を起動し直すと控えでツールが並び、その後 areka を起動すると呼べる | **合格**。areka が居ない間に `initialize` と `tools/list` へ控えで答え（記録 `areka not found; answered from the cache`）、ツール 11 本が並んだ。areka を起こした後の呼び出しは成功 |
@@ -60,6 +60,8 @@ Server not available: areka-mcp-server not found on 127.0.0.1 ports 9801, 9821, 
 | 0:47:39 | `get_status`・`get_active_ghost_list` | 成功。控えの 2 つが 0:47:39 に書き直された |
 | 0:48:20 | areka を止めてすぐ起こし直した（間に呼び出しなし） | areka は 9802 |
 | 0:48 過ぎ | `get_status` | 成功。中継のプロセスは 0:47:38 に起きたものがそのまま（記録の行は増えていない＝探し直しも失敗も無し） |
+| 8:13:24 | 開発者が Desktop の普通のチャット欄から、areka のツールの一覧・`get_active_ghost_list`・`get_status` を頼んだ | 11 本（`check_script`・`dump_balloon`・`dump_surface`・`get_active_ghost_list`・`get_expression_table`・`get_log`・`get_property`・`get_status`・`raise_event`・`reload`・`sakurascript`）・`えも？？`・`balloon(0=0/1=0)`。チャットの分の中継は 0:44:53 に起きたものがそのまま（7 時間あまり呼び出しなし）で、最初の呼び出しで `connected to areka port=9802` |
+| 8:14:34 | areka を止めた（窓を閉じる合図・自分で終了） | 待ち受けは SSP の 2 つだけに戻った |
 
 ## 実機で分かったこと
 
@@ -76,10 +78,10 @@ Server not available: areka-mcp-server not found on 127.0.0.1 ports 9801, 9821, 
 - 控えは `target\t7\areka\profile\areka\mcp-bridge` に 2 つ出来た（`server-info.json` 625 バイト・`tools.json` 6,780 バイト＝ツール 11 本）。
 - areka は窓を閉じる合図で自分で終わり、9801〜9830 で待ち受けるものは 0 に戻った。
 
-## 残り
+## 後片付け
 
-- Desktop の普通のチャット欄で、areka のツールが並んでいることと 1 本呼べることを開発者の目で見る（上の確かめは Desktop の中の Code のセッションから行った。チャットの分の中継も 0:44:55 に控えで `initialize` と `tools/list` に答えている）。
-- 確かめが済んだら: Desktop の設定から `areka` の項目を外す（`command` がワークツリーの `target` の下を指しているため、ワークツリーを片付けると起動に失敗する）。
+- areka は止めた（エージェントが起こしたものだけ）。SSP と Desktop には触っていない。
+- Desktop の設定の `areka` の項目は開発者が外す（`command` がワークツリーの `target` の下を指しているため、ワークツリーを片付けると起動に失敗する。Desktop が起こした中継 2 つは Desktop を落とすまで動いたままで、その間は展開した場所の `areka-mcp-bridge.exe` を消せない）。
 
 ## 完了のときの申し送り
 
