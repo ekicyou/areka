@@ -10,7 +10,7 @@
   - 完了の姿: 3 つの定数がクレートの外から名前で読め、areka の MCP のクレートの既存のテストが全部緑
   - _Requirements: 2.2, 8.2_
 
-- [ ] 1.2 help の Claude Desktop の節を設定例に書き換える
+- [x] 1.2 help の Claude Desktop の節を設定例に書き換える
   - help を組む関数が、待ち受けている番号に加えて中継の置き場（あれば）を受け取る形にする。呼び手は当面「置き場なし」で呼ぶ
   - 節に、設定ファイルの名前（`claude_desktop_config.json`）・Desktop の設定の画面から開くこと・`mcpServers.areka.command` の設定例・書いた後に Desktop を起動し直すこと・Desktop を先に起動していても前の答えの控えでツールが並ぶことを載せ、「中継は今後の版で用意します」を消す
   - 置き場は JSON の文字列にしてから HTML の `&`・`<`・`>` を置き換えて載せる。置き場が無いときはファイル名だけを載せ、絶対パスに置き換える旨の 1 文を添える
@@ -194,3 +194,7 @@
   - 完了の姿: `verification/signoff.md` に 6 点の結果と、確かめた日・版・机の状態が残っている。完了のときに署名と winget の spec へ「中継の exe が増えた」を申し送る旨も書く
   - _Depends: 6.1, 6.3_
   - _Requirements: 8.5_
+
+## Implementation Notes
+
+- 1.2: help の `command` は渡されたパスを `to_string_lossy` でそのまま載せる。1.3 で渡す `exe_location()` の結果が `\?\` で始まる形にならないことを、受け口のテストか実機で 1 度見る（そのまま設定例に載るため）。

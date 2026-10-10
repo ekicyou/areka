@@ -152,7 +152,7 @@ fn help(port: u16) -> HttpResponse {
     with_body(
         StatusCode::OK,
         "text/html; charset=utf-8",
-        help_html(port).into(),
+        help_html(port, None).into(),
     )
 }
 
