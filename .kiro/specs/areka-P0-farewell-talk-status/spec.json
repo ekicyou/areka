@@ -1,0 +1,22 @@
+{
+  "feature_name": "areka-P0-farewell-talk-status",
+  "created_at": "2026-10-10T01:16:52Z",
+  "updated_at": "2026-10-10T02:30:00Z",
+  "language": "ja",
+  "phase": "tasks-generated",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true
+}
