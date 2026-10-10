@@ -50,7 +50,7 @@
 
 ### Revalidation Triggers
 
-- `areka_mcp::start` の引数が変わる（help へ渡す値を足す）→ `start(&[0], …)` を呼ぶテスト（`server_tests.rs` 4 か所・`testkit.rs` 1 か所）を直す。
+- `areka_mcp::start` の引数が変わる（help へ渡す値を足す）→ `start(&[0], …)` を呼ぶテスト（`server_tests.rs` 5 か所・`testkit.rs` 1 か所）を直す。
 - areka の受け口が JSON の単発応答でなく SSE を返すようになる（ツールが途中で通知や要求を出す）→ 中継は「JSON でない本文」として 4.2 のエラーにする。先にこの設計の送り手を SSE 対応にする。
 - `tools::REPLY_WAIT` より長く待つツールが足される → 中継の `REPLY_WAIT` も見直す（比べるテストが赤になる）。
 - rmcp の版を上げる → 中継のテスト（本物の受け口を相手にしたもの）を全部通す（`tech.md` の rmcp の項に足す）。
@@ -182,7 +182,7 @@ crates/areka-mcp-bridge/
 | `crates/areka-mcp/src/lib.rs` | `pub use handler::SERVER_NAME; pub use dispatch::MCP_PATH; pub use help::BRIDGE_EXE_FILE_NAME;` |
 | `crates/areka-mcp/src/help.rs` | `BRIDGE_EXE_FILE_NAME`（`areka-mcp-bridge.exe`）。`help_html(port, bridge_exe)`。Claude Desktop の節を設定例（`claude_desktop_config.json`・`mcpServers.areka.command`・`env` の有無・Desktop の起動し直し・控えで並ぶこと）に書き換え、「今後の版で用意します」を消す。注釈の「エスケープは要らない」を「パスは JSON と HTML の 2 段で置き換える」に直す |
 | `crates/areka-mcp/src/help_tests.rs` | 「`claude_desktop_config` が無い」の期待を「設定例が JSON として読めて `command` が渡したパスと同じ・`env` の有無の 2 通り・『今後の版』の文が無い」に書き換える |
-| `crates/areka-mcp/src/server_tests.rs`・`testkit.rs` | `start(&[…], …)` の 5 か所に `None` を足す |
+| `crates/areka-mcp/src/server_tests.rs`・`testkit.rs` | `start(&[…], …)` の 6 か所に `None` を足す |
 | `crates/areka/src/main.rs` | `areka_mcp::start(&areka_mcp::read_port_candidates(), mcp_tools, exe_location().map(\|exe\| exe.with_file_name(areka_mcp::BRIDGE_EXE_FILE_NAME)))` の 1 行（`exe_location` は `boot_config.rs` の既存の `pub(crate)`） |
 | `Cargo.lock` | 新しいクレートの行（作り直し） |
 | `THIRD-PARTY-NOTICES.md` | `cargo about generate --workspace` の作り直し（ワークスペースのクレートとして 1 行増える・外部の依存は増えない） |
@@ -217,7 +217,7 @@ crates/areka-mcp-bridge/
 | `crates/areka-mcp/src/server.rs` | `start` の引数 1 つ・`State::new` へ渡す 1 行 | C5 に無し | 無し |
 | `crates/areka-mcp/src/lib.rs` | `pub use` 3 行 | C5 に無し | 無し |
 | `crates/areka-mcp/src/handler.rs` | `SERVER_NAME` の可視性 1 語 | roadmap の「MCP の 3 段目が触らない共有ファイル」（C5 には居ない） | 無し |
-| `crates/areka-mcp/src/server_tests.rs`・`testkit.rs` | `start` の呼び出し 5 か所に `None` | C5 に無し | 無し |
+| `crates/areka-mcp/src/server_tests.rs`・`testkit.rs` | `start` の呼び出し 6 か所に `None` | C5 に無し | 無し |
 | `Cargo.lock`・`THIRD-PARTY-NOTICES.md` | 作り直し | `release-cycle` の版上げ（`v0.0.3`） | roadmap の決まり（本 spec の PR が開いていないときに版上げ） |
 | `dist/README.txt` | 自分の節 3 つと見出しの 1 行 | `baseware-root-list`（自分の行）・`winget-manifest-submission`（約束で触らない） | 節が別 |
 | `.kiro/steering/tech.md` | rmcp の項の追記 | 依存を足す spec は 1 ウェーブに 1 本（本 spec） | 無し |
