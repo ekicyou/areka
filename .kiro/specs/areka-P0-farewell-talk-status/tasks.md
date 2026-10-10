@@ -53,3 +53,7 @@
 - 範囲の外の気付き（完了時の棚卸しの材料）: `crates/areka-kanade/src/schedule/user_break_tests.rs` の `playing_states` の注記「3 つの場面（`fn current_talk_id` が `Some` を返す全て）」は、`current_talk_id` が 5 つの相で番号を返すので元から不正確（本 spec で偽になったものではない）。
 - 範囲の外の気付き（完了時の棚卸しの材料）: `crates/areka/src/emo2_boot/spine_conformance_script.rs` の `expected_statuses` の `OnClose` の行の注記（「終了系列は運行を `Unloading` へ移してから発火する」と行番号での出所）は、本 spec の前から不正確（実際は応答待ちの相へ移り、会話なしの作り方で送る。行番号もずれている）。`OnClose` が行なしという観測そのものは正しい。
 - 適合の一周のテストは `cargo test -p areka --bin areka emo2_boot::spine::conformance_lap_tests::conformance_lap_walks_every_stage_to_its_completion -- --exact`（`crates/areka` はバイナリだけなので `--lib` では絞れない。建った後の実行は数秒）。
+- 完了時の棚卸し: その場で解決 2 件・新しい起票 0 件。
+  - 完了時にその場で解決: `crates/areka-kanade/src/schedule/user_break_tests.rs` の `playing_states` の注記を実際に合わせた（番号が引ける相は 5 つ・並べるのは 3 つ）。
+  - 完了時にその場で解決: `crates/areka/src/emo2_boot/spine_conformance_script.rs` の `expected_statuses` の `OnClose` の行の注記を実際に合わせた（会話なしの作り方で送る・出所は名前で指す）。
+  - 起票しない: `cargo clippy -p areka-kanade --all-targets` の `never_loop`（`actor_raise_reply_tests.rs`）は、既に `areka-P0-clippy-199-lints` の brief と roadmap の行が受け持っている。
