@@ -13,7 +13,7 @@ use crate::ToolOutcome;
 pub(super) const DEFINITION: &str = r##"{
     "name": "check_script",
     "title": "Check SakuraScript Without Playing",
-    "description": "areka's own tool (SSP does not have it). Checks SakuraScript without playing it: the ghost does not speak, move or change. Returns one diagnostic per problem: unknown tags and \\! commands, tags and \\! commands areka accepts but ignores, unreadable arguments, and \\s / \\b IDs missing from the ghost's current shell and balloon. Pass a single tag to check whether areka supports it. Use this before the sakurascript tool.",
+    "description": "areka's own tool (SSP does not have it). Checks SakuraScript without playing it: the ghost does not speak, move or change. Returns one diagnostic per problem: unknown tags and \\! commands, tags and \\! commands areka accepts but ignores, unreadable arguments, unpaired \\_a anchor tags, and \\s / \\b IDs missing from the ghost's current shell and balloon. Pass a single tag to check whether areka supports it. Use this before the sakurascript tool.",
     "inputSchema": {
         "type": "object",
         "properties": {
@@ -63,6 +63,8 @@ pub enum Kind {
     MissingBalloon,
     UnreadableArgument,
     Ignored,
+    /// 開きと閉じの対応の崩れ（今はアンカー `\_a` だけ）。
+    UnpairedTag,
 }
 
 impl Kind {
@@ -75,6 +77,7 @@ impl Kind {
             Kind::MissingBalloon => "missing_balloon",
             Kind::UnreadableArgument => "unreadable_argument",
             Kind::Ignored => "ignored",
+            Kind::UnpairedTag => "unpaired_tag",
         }
     }
 }

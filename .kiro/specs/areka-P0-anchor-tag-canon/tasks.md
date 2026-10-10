@@ -125,7 +125,7 @@
   - _Requirements: 4.11, 4.12_
 
 - [ ] 6. 道具と記録を合わせる
-- [ ] 6.1 (P) `check_script` がアンカーを誤診せず、崩れた形を診断する
+- [x] 6.1 (P) `check_script` がアンカーを誤診せず、崩れた形を診断する
   - 診断の種類に「対応の崩れ」（名前 `unpaired_tag`）を足し、種類と名前の対応の表のテストに足す
   - 診断の本体で対応の判定を 1 回呼び、開きと閉じの位置に、閉じ無し・重なり・迷子の閉じの診断を台本の順のまま出す（文言は設計の ASCII の 3 つ）。`\e` の後ろの開き／閉じには出さない（再生と同じ）
   - 道具の説明の文書の診断の表に 3 行（15〜17 行目）を足す
@@ -208,3 +208,4 @@
 - 5.2: 伝言の振り分けは `choice_drain.rs::forward_all` の 1 分岐だけ。記録の名前は `balloon.rs::selection_events(kind)` の表から引く（選択肢 `choice_selected`／`choice_selection_send_failed`・アンカー `anchor_selected`／`anchor_selection_send_failed`）ので、発行点のソースを `event = "anchor_selected"` で grep しても当たらない（名前は表に 1 か所）。取り出しから kanade へ送れなかったときは、選択肢の `choice_forward_failed` と同じ `warn!` の `anchor_forward_failed`（終了の流れでは kanade の停止が正常なので error にしない）。設計の表に無い追随ファイル: `balloon.rs`・`balloon_pressed.rs`・`shell_box_handler.rs`・`shell_box_handler_tests.rs`。
 - 5.2 → 7.2 への申し送り: 普通のバルーンの「当たり → 発行 → 記録」は頭なしでは踏めない（当たりの行は GPU の提示でしか埋まらない・以前からの制約）。実機では `anchor_selected` の `id`・`label` の欄の値と `anchor_accepted` を見て、範囲の文字と ID が押した所のものであることまで裏取りする。
 - 5.2（既存・棚卸の候補）: 送り口が消えたとき、送り口の `warn!` と呼び手の `error!` が同じ名前で 2 行出る（選択肢で既知の二重発火がアンカーにも写った）。
+- 6.1: 「誰も拾わない命令」の判定は `GenericCommand`／`Move` の腕だけが台帳を引くので、アンカーの台帳への登録は要らなかった。`diagnose` は `\e`・`\-` で打ち切らないが、対応の崩れだけは `pair_anchors` がそこで止まるので後ろに出ない（再生と一致）。道具の説明文（`DEFINITION` の英文の列挙）に「unpaired \_a anchor tags」を足した（レビューを受けて親が 1 句）。文書 `areka-tools.md` は 15〜17 行目のほか、同じ ⑶⑷ の数と例外の文も合わせた。

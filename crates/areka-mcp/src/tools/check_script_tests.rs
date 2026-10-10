@@ -111,6 +111,7 @@ fn kind_names_are_spelled_as_documented() {
         (Kind::MissingBalloon, "missing_balloon"),
         (Kind::UnreadableArgument, "unreadable_argument"),
         (Kind::Ignored, "ignored"),
+        (Kind::UnpairedTag, "unpaired_tag"),
     ];
     for (kind, name) in names {
         assert_eq!(kind.as_str(), name);
