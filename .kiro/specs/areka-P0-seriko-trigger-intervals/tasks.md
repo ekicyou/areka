@@ -2,8 +2,8 @@
 
 > 順番が依存を表す（後のタスクは前のタスクの上に積む）。`(P)` は直前の兄弟と並走できる印。新しいテストは本番ファイルの中でなく同じディレクトリの兄弟ファイルへ置き、本番・テストとも 1 ファイル 1,000 行以下を守る（要件 9.7）。「同じウェーブで触らない約束」のファイル（台本の読み手・台本のコンパイル・運び手の名前の表・合成）には触らない。
 
-- [ ] 1. 読み手: 3 語を数値ごと読む
-- [ ] 1.1 `talk,数値`・`runonce`・`periodic,数値` を語と数値で運ぶ読みを足す
+- [x] 1. 読み手: 3 語を数値ごと読む
+- [x] 1.1 `talk,数値`・`runonce`・`periodic,数値` を語と数値で運ぶ読みを足す
   - interval の型に 3 つの腕を足す（既存の腕と、animation・pattern・element の欄は変えない）
   - 小文字の完全一致だけを 3 語として読み、大文字混じり・`+` 入りは今までどおり元の綴りのまま「その他の語」へ運ぶ
   - `talk`／`periodic` の数値が正の整数として読めないとき（欠落・0・非数値）は、第 2 欄以降を `,` で繋いだ原文を「その他の語」へ運ぶ（読み手は失敗せず、記録も出さない）
@@ -122,3 +122,8 @@
   - 判定の結果（各項目の件数と時刻の差）と起票の一覧が報告に残る
   - _Depends: 7.1_
   - _Requirements: 8.3, 11.2, 11.3, 11.4_
+
+## Implementation Notes
+
+- 1.1: 読み手が `runonce` を `Interval::Runonce` で返すようになったので、seriko の既存の檻 2 本（`table_interval_words_tests.rs` の `other_interval_words_are_not_recorded_and_keep_their_original_vocab`・`table_always_tests.rs` の `combinations_and_other_words_keep_the_debug_arm`）が 2.1 の着地まで赤になる。どちらも語の列に `runonce` を持つ。2.1 で列から外す（設計の Modified Files には `table.rs` の中の檻 1 本しか載っていない）。
+- 1.1: 数値の読みは設計の `fields[2].parse::<u32>()` と同じ答えになる既存の `field_u32` を使った。読み手の中で `periodic,3` を「未認識の語」の検体にしていた檻（`decode_tests_lenient_input_tests.rs`）は `yen-e,3` へ替えた。`decode_tests_animation_tests.rs` の冒頭のコメント「sometimes/periodic 等」は古いまま（未修正・軽微）。

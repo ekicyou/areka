@@ -129,9 +129,24 @@ pub enum Interval {
         /// 頻度パラメータ K。
         k: u32,
     },
-    /// 未認識 interval 語彙の原文忠実転記（sometimes/rarely/periodic/always/runonce 等・
-    /// 要件 8.2）。転記層は語彙を落とさず黙らない＝「完全形保持」が字義どおり成立する。
+    /// `interval,runonce`（第 3 欄以降は読まない・areka-P0-seriko-trigger-intervals 要件 1.3）。
+    Runonce,
+    /// `interval,periodic,秒`（`secs >= 1` を構築時に保証する・同 要件 1.2）。
+    Periodic {
+        /// 周期の秒数（1 以上）。
+        secs: u32,
+    },
+    /// `interval,talk,文字数`（`n >= 1` を構築時に保証する・同 要件 1.1）。
+    Talk {
+        /// 何文字ごとに鳴らすか（1 以上）。
+        n: u32,
+    },
+    /// 未認識 interval 語彙の原文忠実転記（sometimes/rarely/always 等・要件 8.2）。
+    /// 転記層は語彙を落とさず黙らない＝「完全形保持」が字義どおり成立する。
     /// 駆動しない（下流 bind 分類にも静的経路にも該当しない）が値としては保持する。
+    /// `talk`／`periodic` で数値が 1 以上の整数として読めないとき（欠落・0・非数値）は
+    /// 第 2 欄以降を `,` で繋いだ原文（例 `talk,abc`・`periodic`）を運ぶ
+    /// （areka-P0-seriko-trigger-intervals 要件 1.5）。
     Other(Box<str>),
 }
 
