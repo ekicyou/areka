@@ -234,6 +234,8 @@ For tasks that add or change behavior, enforce RED → GREEN with a feature flag
 
 ## Coordination with kiro-watch (only when the coordinator is running)
 
+> **SUSPENDED (developer, 2026-10-10)**: kiro-watch coordination is paused. Skip this whole section — do not look for the coordinator and do not send any `【kiro-watch】` message, even if a session titled kiro-watch exists. To resume, delete this note.
+
 When a session titled **kiro-watch** (not archived) appears in the session list (`mcp__ccd_session_mgmt__list_sessions`), this session takes part in its desk coordination (developer, 2026-10-08). If there is no such session, skip this whole section. Send to its `local_...` id with SendMessage (or `mcp__ccd_session_mgmt__send_message`). Message texts stay in Japanese exactly as below.
 
 - **Join** once at the start of the run (Step 1), before dispatching the first task:
