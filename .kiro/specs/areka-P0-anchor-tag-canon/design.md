@@ -325,7 +325,7 @@ stateDiagram-v2
 | 7.5 | §8 の 1 行 | `COMPAT_ARCHITECTURE.md` | ポインタ | — |
 | 8.1 | 読み取りのテスト | `decode_anchor_tests.rs` | — | — |
 | 8.2 | 素通しの見本の置き換え | 検査 3 本 | — | — |
-| 8.3 | Reference とカスケード | `schedule/anchor_tests.rs` | — | — |
+| 8.3 | Reference とカスケード | `schedule/anchor_tests.rs`（関数を直に呼ぶ）・`schedule/anchor_step_tests.rs`（最上位の `step` から） | — | — |
 | 8.4 | 範囲の当たりと順 | `choice_anchor_tests.rs`・`balloon_pure_core_tests.rs` | — | — |
 | 8.5 | 押下の結論 | `balloon_pure_core_tests.rs`・`shell_box_tests.rs` | — | — |
 | 8.6 | 話している最中・消えた後 | `user_break_tests.rs`／`shell_box_tests.rs`・`actor_clear_atomicity_tests.rs` | — | — |
@@ -601,7 +601,7 @@ pub fn on_anchor_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall;  
 - **範囲**（8.4）: `state_anchor_tests.rs`（開き→追記→閉じで `glyph_range` と `label`・`\n` と `\f` をまたいでも文字だけ継ぐ・`Clear` で消える・下線の装飾番号が範囲の中だけに付く・`quiet` で記録なし）／`choice_anchor_tests.rs`（折り返しをまたぐ 2 行の `LineChoiceSegment`・部分表示の打ち切り・選択肢とアンカーの混在で `derive_hit_rows` の矩形）。
 - **順と結論**（3.5・8.5）: `balloon_pure_core_tests.rs`——重なる矩形で選択肢が勝つ（定義順が逆でも）・`click_selection` が `kind` を写す。`shell_box_tests.rs`——アンカーの `judge_box_click` → `selected_now` → `ConsumedBySelection`。
 - **話している最中・消えた後**（8.6）: `user_break_tests.rs` に「単クリックで選択（アンカー）→ 2 打目は `ConsumedBySelection`」の 1 件（`judge_press` の純粋判定）／`actor_clear_atomicity_tests.rs` にアンカーを含む列が `Clear` で `hit_active=false`・`choice_hit_rows` 空になる 1 件。
-- **kanade**（8.3）: `schedule/anchor_tests.rs`——`plan_anchor`・`on_anchor` の GET（Ref0=text・Ref1=id・Ref2..・空なら位置なし）・204→`OnAnchorSelect`（Ref0=id）・`Value`→`OnAnchorSelect` を送らず `StartTalk`（`talk: Some` なら置き換えで新 talk_id）・`Failed`→204 と同じ・`On` 始まり→`EventId::Choice`・Steady 以外は棄却・`choosing` を立てない・`Failed` が Fault へ倒れない（`mod.rs` の免除）。
+- **kanade**（8.3）: `schedule/anchor_tests.rs`（関数を直に呼ぶ 11 本）と、そこから載せる兄弟 `schedule/anchor_step_tests.rs`（最上位の `step` から通す 8 本・実装 4.3 で分けた）——`plan_anchor`・`on_anchor` の GET（Ref0=text・Ref1=id・Ref2..・空なら位置なし）・204→`OnAnchorSelect`（Ref0=id）・`Value`→`OnAnchorSelect` を送らず `StartTalk`（`talk: Some` なら置き換えで新 talk_id）・`Failed`→204 と同じ・`On` 始まり→`EventId::Choice`・Steady 以外は棄却・`choosing` を立てない・`Failed` が Fault へ倒れない（`mod.rs` の免除）。
 - **道具**（8.7）: `check_script_judge_tests.rs`——4 形で `unknown_tag`／`unknown_command` が 0 件・崩れた 3 形で `unpaired_tag` と文言（表の 15〜17 行目）。
 - **網羅の檻**: dola `sink_test.rs`・ghost `command_kind` の檻に 2 種類、dola の手書きの「10 種」2 檻（`command_tests.rs`・`sheet_test.rs`）を 12 種へ。kanade `events_change_tests.rs` の許可表の数 51 → 53。emo-text `lib.rs` の母数 76。`ukadoc-survey` の整合（`owner_count`・`[briefs].count`・宛先の名前の実在・`briefing.md` の barrier の数・報告 4 本の作り直し）。
 - **実機**（8.8）: `AREKA_NO_ALERT=1`・`RUST_LOG=areka_kanade=info,areka_sakura=warn` で、辞書にアンカーを持つ検体ゴースト（`sample-ghost-kit` の `SAMPLES` から辞書を展開して `\_a[` を含むものを選ぶ。無ければ `target\` の下に `\_a` を使う台詞と `OnAnchorSelectEx` の答えを持つ小さな検体を置く）を起動し、⑴ 押す → 答えの台本に置き換わる、⑵ 話している最中に押しても台詞が続く、を人が見てログで裏取りする。検体はワークツリーの `target\` の下だけ。

@@ -5,7 +5,7 @@
 
 use super::*;
 use crate::msg::{KanadeConfig, MonotonicMs, ShioriCall, ShioriFailure};
-use crate::schedule::log_capture::{assert_logged, capture, logged_once};
+use crate::schedule::log_capture::{capture, logged_once};
 use crate::schedule::{ActiveTalk, Input, step};
 use crate::talk::TalkId;
 use tracing::Level;
@@ -237,7 +237,7 @@ fn failure_and_unexpected_reply_advance_like_no_content_with_a_record() {
             "{event}"
         );
         assert_eq!(state.anchor, Some(final_of("詳細")));
-        assert_logged(&events, level, event);
+        logged_once(&events, level, event);
     }
 }
 
@@ -344,3 +344,7 @@ fn script_reply_through_step_starts_one_talk_without_select() {
     assert!(state.anchor.is_none());
     assert!(matches!(state.phase, Phase::Steady { talk: Some(_) }));
 }
+
+/// 知らせ 1 件と模擬の応答の列を `step` から通し、イベントの列と台詞の起動を数えるテスト。
+#[path = "anchor_step_tests.rs"]
+mod step_tests;

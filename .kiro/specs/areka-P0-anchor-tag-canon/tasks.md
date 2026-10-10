@@ -77,7 +77,7 @@
   - 完了の状態: `cargo test -p areka-emo-text` が緑で、純粋なファイルの一覧の母数が 76
   - _Requirements: 2.1, 2.2, 2.3, 2.7, 2.8, 2.9, 8.4, 8.6_
 
-- [ ] 4. kanade がアンカーの選択を受けてイベントを送る
+- [x] 4. kanade がアンカーの選択を受けてイベントを送る
 - [x] 4.1 (P) `OnAnchorSelectEx`／`OnAnchorSelect` の要求を組み立てる
   - `OnAnchorSelectEx`: Reference0＝範囲の文字・Reference1＝ID・Reference2 以降＝引数（記述順・無ければ位置を作らない）。`OnAnchorSelect`: Reference0＝ID。どちらも他のイベントと同じ共通の要求ヘッダ（実行状態の行）を付ける
   - 許可するイベントの表に 2 つを ukadoc の URL のコメント付きで足し、ファイル冒頭の Reference の表に 2 行足す。表の数の檻を 51 → 53 にする
@@ -96,7 +96,7 @@
   - 完了の状態: `cargo build -p areka-kanade` が警告なしで通り、既存の `cargo test -p areka-kanade` が緑、肥大ファイル 4 本（運行の本体・定常・伝言・アクター）がどれも 1,000 行未満
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.8, 4.9, 4.10, 4.11, 4.12_
 
-- [ ] 4.3 受理とカスケードを純粋な状態機械のテストで固定する
+- [x] 4.3 受理とカスケードを純粋な状態機械のテストで固定する
   - 新しいテストのファイル（最上位の進行の入口から知らせと模擬の応答を入れる・実 SHIORI なし）
   - `On` 始まりでない ID: 最初の一括が `OnAnchorSelectEx` 1 本（Reference の並び・引数なしは位置なし）／204 → `OnAnchorSelect` 1 本（Reference0＝ID）→ 204 で何も起きない／台本 → `OnAnchorSelect` を送らず台詞の起動が 1 回
   - 話している最中に台本が返る → 置き換え（新しいトーク番号）／204 → 再生中の台詞がそのまま
@@ -197,3 +197,7 @@
 - 4.2: 応答の帰属は殻の同期往復で保証される（`actor.rs` の `drive_translating` が 1 つの伝言の処理の中で `step` → 往復 → 応答の再投入を閉じる）。段の記憶 `State.anchor` はその連鎖の間しか `Some` でない。
 - 4.2 → 4.3 への申し送り（残り・すべて最上位の `step` から）: 引数なしで Reference2 以降の位置が無い／最初の応答が 204 の 2 段／話している最中の台本 → 置き換え（新しいトーク番号）と、そのとき選択待ちの帳簿が消えること／204 → 台詞そのまま・帳簿も残る／`On` 始まりで `OnAnchorSelectEx`・`OnAnchorSelect` が出ない／失敗を通したとき `anchor_shiori_failed_as_204` がちょうど 1 件で横断の `shiori_failed` が 0 件・致命へ倒れない（最終段と `On` 始まりでも）／定常以外の棄却／選択待ちの印が立たない／1 回の知らせでイベントの列 1 本・起動高々 1 回。既存の 11 本は `schedule/anchor_tests.rs`（346 行）。`failure_and_unexpected_reply_advance_like_no_content_with_a_record` の記録の表明は「ちょうど 1 件」へ締める。
 - 4.2 → 7.2 への申し送り（既存と同類の窓）: 再生が終わる瞬間にアンカーが押されると、置き換えの後に `unknown_talk_done`（error・状態は維持）が 1 件出うる。マウスや `raise_event` の置き換えと同じ窓で、本 spec が新しく作った種類ではない。
+- 4.3: 最上位の `step` から通す 8 本は兄弟の `schedule/anchor_step_tests.rs` に置いた（`anchor_tests.rs` の末尾から載せる・`change_tests.rs` と同じ形）。設計の表に無い追随ファイル 1 本として 7.1 の照合で数える。噛むことは変異 2 件（`steady::on_reply` の先頭の腕を無効にする／`on_anchor` の Status を選択待ちありに固定）で確かめた（戻し済み・本番のコードは無変更）。
+- 4.3（レビューを受けて親が足した）: 棄却の表に、別れ・切替の台詞がバルーンに出ていて利用者が実際にアンカーを押せる 3 相（`CloseTalkWait`・`ChangeTalkWait`・`ChangeCloseTalkWait`）を足した（計 9 相）。「台詞が出ている相なら受ける」方向へ述語を緩める変更が赤になる。
+- 4.3 → 6.2 への申し送り（互換記録 §2 に 1 行）: 別れ・切替の台詞の中のアンカーは押しても送らない（定常の運行中だけ受理・警告 `anchor_rejected_phase` を残して棄却）。
+- 4.3（任意の檻・未実施）: 「終了や切替の保留中も受理する」を固定するテストは無い（防御を足さないという不在の決めで、分岐が無い）。
