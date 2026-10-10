@@ -164,7 +164,7 @@
   - _Boundary: dist/README.txt_
   - _Requirements: 7.4_
 
-- [ ] 6.2 (P) SSP の中継との差の記録と、steering の追記
+- [x] 6.2 (P) SSP の中継との差の記録と、steering の追記
   - `doc/ssp-mcp/` に、同じ入力に SSP の中継と areka の中継が何を返すかを行ごとに並べた文書を 1 つ足す。要件の実測の表の行を全部含め、違う行には理由を書く（入力の切り方・改行入りの応答・エラーの文の続き・areka でない相手の扱い・控えの置き場・`server/discover` に控えで答える・`AREKA_MCP_PORT=0`・標準入力が閉じた後の 5 秒・居ないときの探索 0.3 秒・要求ごとの確かめの `initialize`・つながっている間の最初の問い合わせの情報）。areka の側の行は 4・5 のテストの結果から書く
   - survey の §6 にこの文書を指す 1 行を足す
   - steering の技術の文書の rmcp の項に、中継も rmcp を使うこと・版を上げるときは中継のテストも通すこと・直接の依存にした 2 つのクレート・開発者の机での登録の手順（`cargo install --path` → `claude mcp add --scope user`）を足す
@@ -254,3 +254,6 @@
 - 5.2: 負荷で偽の赤になりうるのは `a_given_port_is_the_only_one_tried` の後半（偽の受け口が 3 秒黙ると名乗りの続きが付かない）だけ。見切りのテストの下限は、閉じた時刻を流し役のスレッドで取る形に直した（レビューの指摘）。2 つ同時のテストは「時間で重なったこと」を判定していない（この机では重なることをレビューが採取で確認・原子性は `cache_tests.rs` の持ち分）。
 - 6.1: `dist/README.txt` は UTF-8・BOM あり・CRLF。直すときはバイト単位で書き換える（Edit は使わない）。areka には MCP の番号を見せる画面も help の頁を開くメニューも無い（記録に出るだけ）ので、説明書は「9801 を開く → 出なければ 9821 → ポートの節の順」と案内している。「■ 既知の制限」の SSTP の行は、MCP の節と食い違って見えないよう 1 行だけ言い直した（節 3 つと見出し 1 行の外の 5 か所目）。
 - 6.1: 実機確認（7）で見ること＝help と説明書の言い回し（「設定の画面から開けます」「areka のツールが並びます」）が Claude Desktop の実物と合うか。合わなければ help（`help.rs`）と説明書を一緒に直す。候補の外の番号のとき、設定例の `env` で中継へ番号が届くこと。
+- 6.2: 差の記録は `doc/ssp-mcp/bridge-diff-areka.md`（SSP の欄＝要件の実測の表 16 行の写し・areka の欄＝テストの名前・spec のフォルダへのリンクは置かない）。文書の中の「形の違う `params` の `tools/call` は別に起票して直す」は、完了の棚卸で起票したら spec の名前に置き換える。rmcp のクライアントが受け口へ同時に出せる要求は 16 件まで（既定 `max_concurrent_requests`・テストなし）。
+- 6.2: `cargo install` の入れ先は `%CARGO_HOME%\bin`（開発者の机は `CARGO_HOME=c:\rust\cargo`。無ければ `%USERPROFILE%\.cargo\bin`）。設計 D-7・D-17 と `tech.md` を直した。`.kiro/steering/structure.md` に `areka-mcp-bridge` の節はまだ無い（完了時の文書の同期で扱う）。
+- 6.2: Bash の heredoc は `\` を `\` に潰す。`\` を含む置き換えの Python は Write で書いてから実行する。

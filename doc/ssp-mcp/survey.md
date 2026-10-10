@@ -69,6 +69,7 @@ areka へ SSP の MCP サーバを移植する spec 群（`.kiro/steering/roadma
 - **`mcp.exe` の中の文字列**: `POST /api/mcp/v1 HTTP/1.1`・`Host: 127.0.0.1:9801`・`Mcp-Method:`・`Mcp-Name:`・`MCP-Protocol-Version:`・`Server not available`・`No response from server`・`Invalid JSON response from server`・`Unsupported protocol version`・`result.supportedVersions`・`server/discover`＝SSP へは無状態版のヘッダを付けて送り、版の交渉に `server/discover` を使っている様子。
 - **Claude Desktop の JSON 設定は stdio だけ**: Desktop 2.9939.4.0（`C:\Program Files\WindowsApps\Claude_2.9939.4.0_x64__pzs8sxrjxfjjc\app\resources\app.asar`）の検査関数は、`mcpServers` の各項目に `command`（文字列）を必須とし、ほかに `args`・`env`・`extensionId` だけを許す。`url` だけの項目は検査に落ちる。
 - **Claude Desktop のコネクタは 127.0.0.1 へ届かない**: 公式の案内（support.claude.com「Getting started with custom connectors using remote MCP」）は、コネクタの接続が Anthropic のクラウドから行われ、公開インターネットから到達できるサーバが要ると書く。ukadoc の「ブラウザ上で動く AI（claude.ai など）からは 127.0.0.1 に接続できない」と同じ理由。
+- **areka の中継との差（2026-10-10 追記）**: 同じ入力に SSP の中継 `mcp.exe` と areka の中継 `areka-mcp-bridge.exe` が何を返すかは [bridge-diff-areka.md](bridge-diff-areka.md) に行ごとに並べた（2026-10-10 の `mcp.exe` の実測の追補を含む。上の「`no/such` に応答が出なかった」の理由もそこに書いた）。
 
 ## 7. `get_property` の詳しい実測（2026-10-04・SSP 2.9.07・`get_property` spec の要件の段）
 
