@@ -102,7 +102,15 @@
 - 出た文は `target\winget-check\logs\3.4-validate.stdout.txt` に取ってある（UTF-8 として読んだ）。
 - 雛形が持つ欄の変わり方: `InstallationNotes` が 0 → 2（英語と日本語のファイルに 1 つずつ）。ほかの欄の数は、上の一覧のまま。
 
-（PR から写し戻したときの `winget validate` は、タスク 4.2 がここへ書き足す）
+PR から写し戻したとき（タスク 4.2・要件 2.2・2.3）: **成功**。
+
+- 対象: 同じ 4 ファイル。winget-pkgs へ出した PR（https://github.com/microsoft/winget-pkgs/pull/450070）の 4 ファイルの中身で、1 バイトも変えずに置き換えた後の物（置き換えは 17:36:04。見比べの全部は `submission.md` の「写し戻しの見比べ」）。
+- コマンド: `winget validate --manifest dist\winget\0.0.2 --disable-interactivity`（ワークツリーの根で打った。設定は何も変えていない）
+- 時刻: 2026-10-10 17:36:46.910〜17:36:47.777（+09:00）
+- winget が出した文（標準出力の全部。警告の行は 0）: `マニフェストの検証は成功しました。`
+- 終了コード: 0（標準エラーは 0 バイト）
+- 出た文と時刻は `target\winget-check\logs\4.2-validate.stdout.txt`・`4.2-validate.stderr.txt`・`4.2-validate.times.txt` に取ってある（UTF-8 として読んだ）。
+- 雛形が持つ欄の変わり方: 欄の名前・値・数は、どれも変わっていない（上の一覧と、注意書きの `InstallationNotes` 2 のまま）。変わったのは字面だけ＝4 ファイルとも 1 行目に道具の名前の行（`# Created using wingetcreate 1.12.13.0`）が足されて、書式の場所を示す行は 2 行目になった／installer のファイルの `ReleaseDate` がファイルの最後へ動いた／作業の場所のファイルの行末が LF から CRLF になった（コミットに入る中身は LF のまま）。BOM は前も後も無い。
 
 ### ハッシュの突き合わせ（要件 1.5・5.3）
 
@@ -1250,6 +1258,14 @@ winget 自身の記録（`%LOCALAPPDATA%\Packages\Microsoft.DesktopAppInstaller_
 | 機械の側の後片付けの 4 項目を読むスクリプト（読むだけ。`winget list`・`winget settings export` のほかは winget を打たない）・出た文・読んだ PATH の文字列（機械の側・利用者の側・組み直した物）・新しいプロセスでの `areka` の解決・`winget list` 3 回分・`winget settings export` の出力 | `target\winget-check\3.5-final-machine.ps1`・`target\winget-check\logs\3.5-final-machine.txt`・`3.5-final-machine-path.raw.txt`・`3.5-final-user-path.raw.txt`・`3.5-final-fresh-path.txt`・`3.5-final-fresh-shell.*`・`3.5-final-list-*`・`3.5-final-settings-export.*` | 3.5 |
 | winget 自身の記録の写し 6 つ（設定をオンにした回と、その前の断られた回・機械の全員向けに入れた回・外した回と、その前の断られた回・設定を戻した回。パスの頭は置き換えてある）と、設定がオンだった間の winget の全部の回を 1 行ずつにまとめた一覧、`winget error 0x8a150019` の答え | `target\winget-check\logs\3.5-final-winget-diag-settings-enable-refused.txt`・`3.5-final-winget-diag-settings-enable.txt`・`3.5-final-winget-diag-install-machine.txt`・`3.5-final-winget-diag-uninstall-machine-refused.txt`・`3.5-final-winget-diag-uninstall-machine-purge.txt`・`3.5-final-winget-diag-settings-disable.txt`・`3.5-final-winget-diag-window.txt`・`3.5-final-winget-error.*` | 3.5 |
 | winget が機械の全員向けの入れる操作のときに作った空のフォルダ 3 つ（置いたのは winget。`target\` の外。**今も残っている**。中身は 0 件。「後片付けの確かめ」の「機械の側」） | `C:\Program Files\WinGet\`・`C:\Program Files\WinGet\Links\`・`C:\Program Files\WinGet\Packages\` | 3.5 |
+| 提出の道具が出した文（標準出力・標準エラー）と、時刻・終了コード（標準出力の写しは、ログインのときの 1 回限りのコードの行だけ、17:42:54 に進行役の AI がコードを伏せた字に書き替えてある。ほかの行は道具が出したまま。コードはトークンではなく、どこにも残っていない） | `target\winget-check\logs\4.2-submit.stdout.txt`・`4.2-submit.stderr.txt`・`4.2-submit.times.txt` | 4.2（進行役の AI） |
+| PR の本文の写し（確かめ項目に印を付ける前と後・同意の項目に印を付ける前と後）と、同意の文を送った時刻 | `target\winget-check\logs\4.2-pr-body-before.md`・`4.2-pr-body-after.md`・`4.2-pr-body-before-cla.md`・`4.2-pr-body-after-cla.md`・`4.2-cla-comment.time.txt` | 4.2（進行役の AI） |
+| PR から取ってきた 4 ファイル（PR の枝の先頭のコミットの物と同じバイト） | `target\winget-check\pr-450070\` | 4.2 |
+| 置き換える前の雛形 4 ファイルの写し | `target\winget-check\pr-450070\template-before\` | 4.2 |
+| 判定が赤を出せることを見るための、わざと変えた PR のファイルの写し（ハッシュを入れ替えた物・値を 1 つ変えた物） | `target\winget-check\pr-450070\negative-swap\`・`target\winget-check\pr-450070\negative-value\` | 4.2 |
+| 写し戻しの判定のスクリプト（行の集まりの一致・arch ごとの URL とハッシュの組の一致・YAML として解いた見比べ）と、出た文（置き換える前・置き換えた後・赤を出せることを見た 2 回・端末の 1 行での判定） | `target\winget-check\4.2-compare.py`・`target\winget-check\logs\4.2-compare.txt`・`4.2-compare-after-replace.txt`・`4.2-compare-negative-swap.txt`・`4.2-compare-negative-value.txt`・`4.2-judge1-oneliner.txt` | 4.2 |
+| PR を読んだときの出力（PR の値とファイルの一覧・印とコメントと本文）と、Release `v0.0.2` の物の一覧（URL と `digest`） | `target\winget-check\logs\4.2-pr-view.json`・`4.2-pr-files.json`・`4.2-pr-read-2.json`・`4.2-release-assets.json` | 4.2 |
+| 置き換えた後の `git diff -- dist/winget/0.0.2` の全文と、`winget validate` が出した文・時刻・終了コード | `target\winget-check\logs\4.2-git-diff.txt`・`4.2-git-diff.stderr.txt`（0 バイト）・`4.2-validate.stdout.txt`・`4.2-validate.stderr.txt`・`4.2-validate.times.txt` | 4.2 |
 
 - 取ってきた後の `git status --porcelain` は 0 行（`target` の下に限って見ても 0 行）。`git ls-files -- target` も 0 件で、取ってきた物は `git status` に出ない。
 - `git check-ignore -v target/winget-check/release/areka-0.0.2-x64.zip` は `.gitignore:1:target` を返した（追跡の外になる理由がこの 1 行であることの裏付け）。
