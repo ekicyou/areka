@@ -590,7 +590,7 @@ pub fn on_anchor_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall;  
 | 送出の口が無い（`BalloonWiring` 不在等） | no-op | 既存の `error!` と同型 |
 | `check_script` の崩れた形 | 診断 `unpaired_tag` | — |
 
-棄却の経路に沈黙は無い（steering `areka-log-first-no-silent-failure`）。実機の確認は `RUST_LOG=areka_kanade=info,areka_sakura=warn` で `anchor_accepted`・`anchor_unclosed` 等を grep できる。
+棄却の経路に沈黙は無い（steering `areka-log-first-no-silent-failure`）。実機の確認は `RUST_LOG=warn,areka=info,kanade=info,areka_sakura=warn` で `anchor_accepted`・`anchor_unclosed` 等を grep できる。
 
 ## Testing Strategy
 
@@ -604,7 +604,7 @@ pub fn on_anchor_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall;  
 - **kanade**（8.3）: `schedule/anchor_tests.rs`（関数を直に呼ぶ 11 本）と、そこから載せる兄弟 `schedule/anchor_step_tests.rs`（最上位の `step` から通す 8 本・実装 4.3 で分けた）——`plan_anchor`・`on_anchor` の GET（Ref0=text・Ref1=id・Ref2..・空なら位置なし）・204→`OnAnchorSelect`（Ref0=id）・`Value`→`OnAnchorSelect` を送らず `StartTalk`（`talk: Some` なら置き換えで新 talk_id）・`Failed`→204 と同じ・`On` 始まり→`EventId::Choice`・Steady 以外は棄却・`choosing` を立てない・`Failed` が Fault へ倒れない（`mod.rs` の免除）。
 - **道具**（8.7）: `check_script_judge_tests.rs`——4 形で `unknown_tag`／`unknown_command` が 0 件・崩れた 3 形で `unpaired_tag` と文言（表の 15〜17 行目）。
 - **網羅の檻**: dola `sink_test.rs`・ghost `command_kind` の檻に 2 種類、dola の手書きの「10 種」2 檻（`command_tests.rs`・`sheet_test.rs`）を 12 種へ。kanade `events_change_tests.rs` の許可表の数 51 → 53。emo-text `lib.rs` の母数 76。`ukadoc-survey` の整合（`owner_count`・`[briefs].count`・宛先の名前の実在・`briefing.md` の barrier の数・報告 4 本の作り直し）。
-- **実機**（8.8）: `AREKA_NO_ALERT=1`・`RUST_LOG=areka_kanade=info,areka_sakura=warn` で、辞書にアンカーを持つ検体ゴースト（`sample-ghost-kit` の `SAMPLES` から辞書を展開して `\_a[` を含むものを選ぶ。無ければ `target\` の下に `\_a` を使う台詞と `OnAnchorSelectEx` の答えを持つ小さな検体を置く）を起動し、⑴ 押す → 答えの台本に置き換わる、⑵ 話している最中に押しても台詞が続く、を人が見てログで裏取りする。検体はワークツリーの `target\` の下だけ。
+- **実機**（8.8）: `AREKA_NO_ALERT=1`・`RUST_LOG=warn,areka=info,kanade=info,areka_sakura=warn` で、辞書にアンカーを持つ検体ゴースト（`sample-ghost-kit` の `SAMPLES` から辞書を展開して `\_a[` を含むものを選ぶ。無ければ `target\` の下に `\_a` を使う台詞と `OnAnchorSelectEx` の答えを持つ小さな検体を置く）を起動し、⑴ 押す → 答えの台本に置き換わる、⑵ 話している最中に押しても台詞が続く、を人が見てログで裏取りする。検体はワークツリーの `target\` の下だけ。
 
 ## Supporting References
 
