@@ -1,0 +1,26 @@
+{
+  "feature_name": "areka-P0-winget-manifest-submission",
+  "created_at": "2026-10-10T01:00:09Z",
+  "updated_at": "2026-10-10T11:00:22Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-10-10T11:00:22Z"
+    }
+  },
+  "ready_for_implementation": true
+}

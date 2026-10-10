@@ -30,6 +30,7 @@
 //!
 //! wintf には依存しない（headless）。`std::time::Instant` は本クレートに一切現れない。
 
+pub mod anchor_pair;
 pub mod cluster;
 pub mod compile;
 pub mod contract;
@@ -38,6 +39,7 @@ pub mod duration;
 pub mod error;
 pub mod sysvar;
 
+pub use anchor_pair::{AnchorFinding, AnchorIssue, pair_anchors};
 pub use compile::{ChoiceTimeoutDirective, CompiledTalk, compile, parse_choice_timeout};
 pub use drive::spawn_talk;
 pub use error::SakuraError;

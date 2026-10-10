@@ -41,7 +41,7 @@
   - 初回だけ、根の `README.md` の「まだ GitHub Releases での配布はしていない」の行の直し（Release の公開を確かめた後・記録の 1 行と同じ PR）。
   - 初回（`v0.0.2`）の実行と、初回だけの手順。
 - **Out of scope**:
-  - workflow の中身（`release.yml`＝`release-ci-workflow`・`crates-io.yml`＝`crates-io-publish`・`winget.yml`＝`winget-manifest-submission`）。本 spec は workflow のファイルに触らない。
+  - workflow の中身（`release.yml`＝`release-ci-workflow`・`crates-io.yml`＝`crates-io-publish`・`winget.yml`＝`areka-P0-winget-release-automation`）。本 spec は workflow のファイルに触らない。
   - winget のマニフェストの形と初回の手提出（`winget-manifest-submission`）。
   - 配布スクリプトの中身（`release-package-versioned`）と、公開前の確かめのスクリプトの中身（`crates-io-publish`）。
   - 大きい版（0.1.0・1.0.0 など）をいつ上げるかの判断。開発者がその場で指示する。本 spec は指示があればその版にするだけ。
@@ -51,7 +51,7 @@
   - `crates-io.yml` は、同じタグの Release の走りが緑で終わるのを最長 120 分待ってから出す。Rust は最新の安定版を使う（Release の走りと Rust の版が違うので、公開の走りだけが赤なら版の差を先に疑う）。同じ版で何度起動し直してもよく、既に出たクレートは飛ばす（`doc/crates-io-publish.md` 5 節）。
   - Trusted Publishing の設定の値と手順は `doc/crates-io-publish.md` 2 節が正本。本 spec は写さず、そこを指す。
   - `release-ci-workflow` は、初回の実走で初めて動く 6 項目を本 spec へ申し送った（`.kiro/specs/completed/areka-P0-release-ci-workflow/verification/runner-trial.md` の「release-cycle への申し送り」）。本 spec は初回にそれを見守る。完了の条件にはしない。
-  - `winget-manifest-submission` が `winget.yml` を main へ入れた後の回から、見守る相手に winget-pkgs への PR が加わる。手順の形は変わらない。
+  - `areka-P0-winget-release-automation` が `winget.yml` を main へ入れた後の回から、見守る相手に winget-pkgs への PR が加わる。手順の形は変わらない。
   - `roadmap.md` の「完了サマリ」は棚卸（`/kiro-discovery` の再入）と分け合う場所で、本 spec はそこへリリースの 1 行を足すだけ。
 
 ## Requirements

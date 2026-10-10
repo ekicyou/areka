@@ -315,6 +315,7 @@ fn present_actor(
                     .iter()
                     .find(|span| span.ordinal == row.ordinal)
                     .map(|span| ChoiceHitRow {
+                        kind: span.kind,
                         ordinal: row.ordinal,
                         id: span.id.clone(),
                         label: span.label.clone(),

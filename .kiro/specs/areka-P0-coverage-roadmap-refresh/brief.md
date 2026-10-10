@@ -194,3 +194,15 @@ ukadoc 網羅調査の文書（`doc/ukadoc-coverage/roadmap-draft.md`・`briefin
 - **要件定義のモデル**: Fable（誰も仕上げられない行の裁定・議題 2 件＝開発者の判断の分かれ目）。
 - **分割の案**: なし。
 - **見つけた穴・古くなった記述**: 上の 2 つの申し送り（束「既定で着せる吹き出し」の小分類・`briefing-assets.md` の対応表）は今も生きている。`doc/ukadoc-coverage/README.md` は今も、完了済みの `ukadoc-coverage-roadmap` を「統合担当」として申し送り先に書く。台帳に触ると書く未完了の brief は 40 本。
+
+## `areka-P0-anchor-tag-canon` からの申し送り（2026-10-10・完了時の棚卸）
+
+出どころは `completed/areka-P0-anchor-tag-canon/tasks.md` の Implementation Notes（6.3）。`anchor-tag-canon` は自分の持ち物の 4 行（さくらスクリプト 2・SHIORI 2）を実装済みへ移し、数を合わせた。下の 4 件は、節や群の全体の撮り直しになるので触らなかった。
+
+1. **`shiori.toml` の未対応の行の共通の備考**: 台帳 `doc/ukadoc-coverage/ledger/shiori.toml` の未対応のイベントの行は、備考に「ゴーストが `\q` の選択肢 ID にこの名前を書いた場合だけは別」と書く（字面「名前を書いた場合だけは別」で引いて 210 行。言い回しの違う「名前を書いた場合だけは、」が別に 3 行。2026-10-10 の数え。未対応のイベントは 234 件）。`anchor-tag-canon` で、`\_a[On…]` のアンカーからも任意の名前のイベントを送れるようになったので、「だけ」はもう正確でない。文面の正本は `briefing-shiori.md` の群の文面（索引の前置きと各群の備考）。本 spec で、群の文面と台帳の行をまとめて直す（1 行ずつ手で直さない）。
+2. **済んだ裁定の候補**: `roadmap-draft.md` の裁定候補 W-2「`areka-P0-anchor-tag-canon` を繰り上げるか、宛先を 1 件だけ移すか」と、`briefing.md` の改訂候補の表の同じ行（2 行目）は、その spec が完了したので用が済んだ。候補から外すか、済んだと書く。
+3. **裁定ではない読み 2 つ**（2026-10-10 に `anchor-tag-canon` のタスク 6.3 が `roadmap-draft.md` に置いた。本文にも「裁定ではない・次の棚卸で確かめる」と書いてある）:
+   - `anchor-tag-canon` の束を「バルーンのリンク」から「会話」へ替えた（持ち物 4 件が会話 3・リンク 1。文書の決まり「いちばん多くを含む束」に従った）。
+   - 段階 A の表の束「バルーンのリンク」の引受先の案を `areka-P0-anchor-style-canon` にした（束の構成 60 件のうち未対応の 59 件の全数を持つ）。
+   - 本 spec で、2 つとも確かめて、裁定として置くか直す。
+4. **調査の時点の表**: `briefing-shiori.md` の未対応の群の項目の一覧は、`OnAnchorSelect`・`OnAnchorSelectEx` を今も載せている（「`A3`／掛け合い（12）」の行）。`briefing-sakura-script.md` の、brief の主張と台帳の担当を突き合わせた表も、`\_a` の行を調査の時点のまま（台帳の担当が空・主張している brief が `anchor-tag-canon`）載せている。日付つきの写真と明記するか、撮り直すかを、ほかの写真の節と同じ決めで扱う。

@@ -755,6 +755,13 @@ fn on_reply(
     outcome: ShioriOutcome,
     origin: &'static str,
 ) -> (State, Vec<Action>) {
+    // アンカーのイベントの応答は、段の記憶を取り出して先に見る。台本（`None` が返る）だけは
+    // 下の今までの腕へ流す（話していなければ起動・話していれば置き換え）。
+    if let Some(stage) = state.anchor.take()
+        && let Some(actions) = super::anchor::on_anchor_reply(&mut state, stage, &outcome, origin)
+    {
+        return (state, actions);
+    }
     // === choice 先行アーム（C4 規則 3・origin 非依存）===
     // カスケード段の応答は既存の origin 政策 match より**先に**捌く。これを落とすと選択応答が
     // 下の DD-6 防御アーム（`steady_value_during_talk`）で warn 破棄され、選択が沈黙する

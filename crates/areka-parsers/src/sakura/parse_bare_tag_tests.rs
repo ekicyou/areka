@@ -3,15 +3,15 @@
 //! 字句層のトークン列ではなく、利用者から見える結果（`Instruction` 列＝表示本文と
 //! 素通し断片）を固定する。固定するのは次の 3 方向:
 //! - **表示本文**: タグに挟まれた台詞が 1 文字も欠けず 1 文字も増えない（要件 2.1〜2.3・2.5・2.6）。
-//! - **意味を付けない**: 角括弧なし `\_` タグ（切替の別名 `\_+` を除く）は `Instruction::Raw`（タグ全体の文字列）に
-//!   留まり、待ちにも表示にも改行にもならない（要件 3.1〜3.5）。
+//! - **意味を付けない**: 角括弧なし `\_` タグ（切替の別名 `\_+` とアンカーの閉じ `\_a` を除く）は
+//!   `Instruction::Raw`（タグ全体の文字列）に留まり、待ちにも表示にも改行にもならない（要件 3.1〜3.5）。
 //! - **既存規律の不変**: 角括弧付き `\_w`／`\_l` の値正規化と既知 1 文字タグの意味が
 //!   本仕様の前後で同一（要件 4.1・4.6・4.7・5.7）。
 //!
 //! すべて決定論（`#[test]`・時計／GPU／実機に依存しない・要件 5.8）。
 //! 設計の Testing Strategy「通しテスト」P1〜P10 に一対一で対応する。
 
-use super::super::model::{Instruction, NewLineRatio};
+use super::super::model::{Anchor, Instruction, NewLineRatio};
 use super::parse;
 use std::time::Duration;
 
@@ -27,11 +27,12 @@ fn text(s: &str) -> Instruction {
     Instruction::Text(s.to_string())
 }
 
-/// 正典が定める角括弧なし `\_` タグのうち、生の綴りのまま残る 11 綴り（`\` を除く）。
-/// 2 文字形 7 個 ＋ 3 文字形 4 個（要件 1.2・5.1）。
+/// 正典が定める角括弧なし `\_` タグのうち、生の綴りのまま残る 10 綴り（`\` を除く）。
+/// 2 文字形 6 個 ＋ 3 文字形 4 個（要件 1.2・5.1）。
 /// `\_+` は ghost-change-name-resolution で `\![change,ghost,sequential]` の別名になったので外した。
-const CANONICAL_BRACKETLESS_SPELLINGS: [&str; 11] = [
-    "_a", "_q", "_n", "_s", "_V", "_?", "_!", "__c", "__t", "__q", "__v",
+/// `\_a` は anchor-tag-canon で「アンカーの閉じ」になったので外した。
+const CANONICAL_BRACKETLESS_SPELLINGS: [&str; 10] = [
+    "_q", "_n", "_s", "_V", "_?", "_!", "__c", "__t", "__q", "__v",
 ];
 
 // ───────────────────────────────────────────────────────────────────
@@ -48,17 +49,21 @@ fn quick_section_pair_shows_only_the_body() {
     );
 }
 
-/// P2（要件 2.3・5.2・5.5・5.6）: 里々のアンカー形。開始は角括弧付き（不変）、終了は
+/// P2（要件 2.3・5.2・5.5・5.6）: 里々のアンカー形。開始は角括弧付き、終了は
 /// 角括弧なし。表示本文は「アンカー」＋「をクリックする。」で、`a` は漏れず
 /// 「をクリックする。」も飲み込まれない（読み足りない／読みすぎの両方向を塞ぐ対）。
+/// anchor-tag-canon（要件 8.2）で、対は素通しでなく「開き・文字・閉じ・文字」として読まれる。
 #[test]
 fn anchor_pair_shows_only_the_body() {
     assert_eq!(
         parse(r"\_a[Hint]アンカー\_aをクリックする。"),
         vec![
-            raw(r"\_a[Hint]"),
+            Instruction::Anchor(Anchor {
+                id: "Hint".to_string(),
+                references: Vec::new(),
+            }),
             text("アンカー"),
-            raw(r"\_a"),
+            Instruction::AnchorEnd,
             text("をクリックする。"),
         ]
     );
@@ -92,7 +97,7 @@ fn voice_range_pair_shows_only_the_body() {
 // P5〜P7: 意味を付けずに素通しする（要件 3.1〜3.5・5.1）。
 // ───────────────────────────────────────────────────────────────────
 
-/// P5（要件 3.1・3.2・3.3・3.4・5.1）: 生の綴りのまま残る正典 11 タグの各々が単独入力で
+/// P5（要件 3.1・3.2・3.3・3.4・5.1）: 生の綴りのまま残る正典 10 タグの各々が単独入力で
 /// `Raw`（タグ全体の文字列）1 個ちょうどになる。命令列を丸ごと固定するので、
 /// `Wait`／`Cursor`／`NewLine`／`Text` などが 1 個でも増えれば赤になる。
 #[test]
@@ -124,12 +129,12 @@ fn unknown_and_truncated_bracketless_tags_stay_raw() {
 /// P7（要件 3.3）: 角括弧なしタグだけを並べた入力から表示本文は 1 つも生じない。
 #[test]
 fn input_of_bracketless_tags_only_yields_no_text() {
-    let got = parse(r"\_q\_a\__q\__v\_");
+    let got = parse(r"\_q\_s\__q\__v\_");
     assert_eq!(
         got,
         vec![
             raw(r"\_q"),
-            raw(r"\_a"),
+            raw(r"\_s"),
             raw(r"\__q"),
             raw(r"\__v"),
             raw(r"\_"),

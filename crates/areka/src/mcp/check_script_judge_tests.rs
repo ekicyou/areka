@@ -1,5 +1,5 @@
 //! 判断の決定論テスト（要件 3.2〜3.4・3.8・3.10・3.12・3.13）。事実は手書きの表で与え、
-//! 台本は再生と同じ `parse_noted` で読む。種類の表（design.md）の 14 行それぞれに「出る台本」「出ない台本」を置く。
+//! 台本は再生と同じ `parse_noted` で読む。種類の表（`doc/ssp-mcp/areka-tools.md` ⑶）の 17 行それぞれに「出る台本」「出ない台本」を置く。
 
 use std::collections::BTreeMap;
 
@@ -181,6 +181,97 @@ fn row14_unknown_or_missing_font_key() {
     silent(r"\f[color,red]");
     // 値の誤りは受け口が読む引数なので診ない。
     silent(r"\f[bold,abc]");
+}
+
+// ---- アンカー `\_a`（anchor-tag-canon 要件 6.1〜6.3）: 表の 15〜17 行目 ----
+
+/// 種類・位置・綴り・文言の並び（アンカーの診断の見比べ用）。
+fn rows(script: &str) -> Vec<(Kind, usize, usize, String, &'static str)> {
+    check(script)
+        .into_iter()
+        .map(|d| (d.kind, d.start, d.end, d.text, d.message))
+        .collect()
+}
+
+/// 4 つの形（ID だけ・引数つき・`On` 始まり・閉じ）は、知らないタグとも誰も拾わない命令とも言わない。
+#[test]
+fn the_four_anchor_forms_are_not_reported() {
+    silent(r"\_a[Hint]あ\_a\_a[ID,r2,r3]い\_a\_a[OnTest,r0,r1]う\_a");
+}
+
+#[test]
+fn row15_anchor_without_a_close() {
+    fires(r"\_a[x]", Kind::UnpairedTag, MSG_ANCHOR_UNCLOSED);
+    silent(r"\_a[x]あ\_a");
+}
+
+#[test]
+fn row16_anchor_opened_while_another_is_open() {
+    // 診断は新しい開きに付く（直前の開きには付かない）。
+    assert_eq!(
+        rows(r"\_a[x]あ\_a[y]い\_a"),
+        [(
+            Kind::UnpairedTag,
+            7,
+            13,
+            r"\_a[y]".to_string(),
+            MSG_ANCHOR_REOPENED
+        )]
+    );
+    silent(r"\_a[x]あ\_a\_a[y]い\_a");
+}
+
+#[test]
+fn row17_close_without_an_open_anchor() {
+    fires(r"\_a", Kind::UnpairedTag, MSG_ANCHOR_STRAY_CLOSE);
+    silent(r"\_a[x]あ\_a");
+}
+
+/// 重なった開きが閉じられないまま終わると、その開きに 2 件（重なり → 閉じ無し の順）が付く。
+#[test]
+fn reopened_and_never_closed_gives_two_diagnostics_on_the_second_open() {
+    let at = |message| (Kind::UnpairedTag, 7, 13, r"\_a[y]".to_string(), message);
+    assert_eq!(
+        rows(r"\_a[x]あ\_a[y]い"),
+        [at(MSG_ANCHOR_REOPENED), at(MSG_ANCHOR_UNCLOSED)]
+    );
+}
+
+/// アンカーの診断は、他の種類の診断と混ざっても台本の順のまま並ぶ。
+#[test]
+fn anchor_diagnostics_stay_in_script_order() {
+    assert_eq!(
+        rows(r"\_a\x\_a[y]")
+            .iter()
+            .map(|(_, start, _, _, message)| (*start, *message))
+            .collect::<Vec<_>>(),
+        [
+            (0, MSG_ANCHOR_STRAY_CLOSE),
+            (3, MSG_UNKNOWN_TAG),
+            (5, MSG_ANCHOR_UNCLOSED),
+        ]
+    );
+}
+
+/// `\e`・`\-` の後ろの開き／閉じには出さない（再生はそこで読むのをやめる）。手前の開きは閉じ無し。
+#[test]
+fn anchors_after_end_or_quit_are_not_reported() {
+    for stop in [r"\e", r"\-"] {
+        silent(&format!(r"{stop}\_a[x]あ"));
+        silent(&format!(r"{stop}\_a"));
+        silent(&format!(r"{stop}\_a[x]あ\_a[y]い"));
+        assert_eq!(
+            rows(&format!(r"\_a[x]あ{stop}\_a")),
+            [(
+                Kind::UnpairedTag,
+                0,
+                6,
+                r"\_a[x]".to_string(),
+                MSG_ANCHOR_UNCLOSED
+            )],
+            "{stop}"
+        );
+    }
 }
 
 // ---- 位置・スコープ・診ない規則 ----

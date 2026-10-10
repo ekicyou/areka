@@ -1,0 +1,22 @@
+{
+  "feature_name": "areka-P0-anchor-tag-canon",
+  "created_at": "2026-10-10T01:19:01Z",
+  "updated_at": "2026-10-10T11:40:27Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true
+}

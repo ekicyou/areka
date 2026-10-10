@@ -1136,46 +1136,53 @@ absent のまま変わらない。
 """
 
 [entry."ukadoc:list_shiori_event:OnAnchorSelect:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = "A1"
 values = ["掛け合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。バルーンの本文のアンカー（\\_a）の
+うち ID が On で始まらないものが押されたとき、先に送った OnAnchorSelectEx に何も返らなかった（204 の）
+ときだけ、続けて GET で 1 回送る。Ref0＝アンカーの ID。台本が返れば、話している最中でもその台本へ
+置き換える。定常の運行中だけ受理し、起動の途中や、別れ・切替の台詞の間に押されたときは送らない。
+ログ: 押したときは info のログ anchor_selected、受理したときは info のログ anchor_accepted が出て、送出の
+直前に trace のログ shiori_request が 1 行出る。送信に失敗したときは error のログ
+anchor_shiori_failed_as_204 を残して何も返らなかったときと同じに扱い（終了の系列へは倒さない）、
+定常以外で届いたときは warn のログ anchor_rejected_phase を残して送らないので、黙って消えることはない。
+転記元: doc/anchor-compat.md の §1（Reference の割付と順）と §2（正典が黙る分岐の裁定）。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており
+（正典 URL の注記がある）、同じファイルの構築関数 on_anchor_select が組み立てる。送る判断は
+crates/areka-kanade/src/schedule/anchor.rs の on_anchor_reply。
+Reference 割当（正典）: Ref0＝選択されたジャンパの ID。
 無いと失うもの: 台詞の中のリンクを押しても話が続かず、読み手が話を掘り下げる道が閉じる。
 """
 
 [entry."ukadoc:list_shiori_event:OnAnchorSelectEx:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = "A1"
 values = ["掛け合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。バルーンの本文のアンカー（\\_a）の
+うち ID が On で始まらないものが押されたときに、GET で最初に 1 回送る。Ref0＝アンカーの範囲に
+表示された文字・Ref1＝ID・Ref2 以降＝\\_a の 2 番目以降の引数（記述順）。台本が返れば、話している
+最中でもその台本へ置き換え、OnAnchorSelect は送らない。何も返らなかった（204 の）ときだけ
+OnAnchorSelect を続ける。定常の運行中だけ受理し、起動の途中や、別れ・切替の台詞の間に押された
+ときは送らない。ID が On で始まるアンカーでは、これではなく ID と同じ名前のイベントを送る。
+ログ: 押したときは info のログ anchor_selected、受理したときは info のログ anchor_accepted が出て、送出の
+直前に trace のログ shiori_request が 1 行出る。送信に失敗したときは error のログ
+anchor_shiori_failed_as_204 を残して何も返らなかったときと同じに扱い（終了の系列へは倒さない）、
+定常以外で届いたときは warn のログ anchor_rejected_phase を残して送らないので、黙って消えることはない。
+転記元: doc/anchor-compat.md の §1（Reference の割付と順）と §2（正典が黙る分岐の裁定）。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており
+（正典 URL の注記がある）、同じファイルの構築関数 on_anchor_select_ex が組み立てる。送る判断は
+crates/areka-kanade/src/schedule/anchor.rs の on_anchor。
+Reference 割当（正典）: Ref0＝ジャンパのテキスト・Ref1＝ID・Ref2 以降＝拡張情報（\\_a タグ内の
+2 番目以降の引数）。
 無いと失うもの: リンクを押したときに、押した位置や種別まで含めた詳しい形で話を継げなくなる。
 """
 

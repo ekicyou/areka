@@ -207,8 +207,10 @@ fn on_close_notify_is_notify_with_reason_and_derived_status() {
 /// 足した（46→48・いずれも正典固定 ID）。
 /// バルーンの寿命の 3 語（OnBalloonBreak/OnBalloonClose/OnBalloonTimeout）は balloon-lifecycle-events 2.1 で
 /// 同じ前例に倣い足した（48→51・いずれも正典固定 ID・正典に無い `OnBalloonClick` は載せない）。
+/// アンカーの 2 語（OnAnchorSelectEx/OnAnchorSelect）は anchor-tag-canon 4.1 で同じ前例に倣い
+/// 足した（51→53・いずれも正典固定 ID）。
 #[test]
-fn allowed_event_ids_are_exactly_the_fifty_one_and_exclude_ontalk_onhour() {
+fn allowed_event_ids_are_exactly_the_fifty_three_and_exclude_ontalk_onhour() {
     assert_eq!(
         ALLOWED_EVENT_IDS,
         &[
@@ -263,6 +265,8 @@ fn allowed_event_ids_are_exactly_the_fifty_one_and_exclude_ontalk_onhour() {
             "OnBalloonBreak",
             "OnBalloonClose",
             "OnBalloonTimeout",
+            "OnAnchorSelectEx",
+            "OnAnchorSelect",
         ]
     );
     assert!(
@@ -563,6 +567,8 @@ fn every_construction_function_returns_an_allowed_id() {
         on_choice_select_ex("ラベル", "ID", &[], &snap),
         on_choice_select("ID", &snap),
         on_choice_timeout("\\e", &snap),
+        on_anchor_select_ex("文字", "ID", &[], &snap),
+        on_anchor_select("ID", &snap),
     ];
     for call in &calls {
         let id = event_id(call).as_str();

@@ -142,7 +142,7 @@ fn bracket_forms_keep_their_meaning() {
             y: "y".to_string(),
         }]
     );
-    assert_eq!(parse(r"\_a[ID]"), vec![raw(r"\_a[ID]")]);
+    assert_eq!(parse(r"\_s[ID]"), vec![raw(r"\_s[ID]")]);
     assert_eq!(parse(r"\p[1]"), vec![speaker(1)]);
 }
 
