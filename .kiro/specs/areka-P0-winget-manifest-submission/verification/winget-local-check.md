@@ -750,7 +750,164 @@ MCP の口へ送った物と答え（送り方は `tools/call` を 1 本ずつ�
 
 ## 機械の全員向けの実測
 
-（タスク 3.5 で記入）
+結果（要件 4.7）: **機械の全員向け（`--scope machine`）に入れた areka は、普段の権限で起こすと立った。しかし、areka の記憶は書けず、ゴーストを後から入れることもできなかった**。入れ先は `C:\Program Files\WinGet\Packages\Areka.Areka.Portable__DefaultSource`（設計の見込みどおり）で、普段の権限の利用者は、このフォルダの直下に物を作れない。areka は、areka の記憶（`profile\areka\`）と、`.nar` を入れるときの作業フォルダ（`.nar-work\`）を入れ先の直下に作ろうとして、どちらも「アクセスが拒否されました」で失敗した。記憶が書けなかったことは、areka は利用者へ**何も伝えなかった**（起動の記録に残しただけ）。入れられなかったことは、ゴーストの台詞で伝えたが、その台詞は「ファイルが壊れてるのかもね。」で、本当の理由（書けない場所に入っている）は起動の記録にしか出ていない。
+
+時刻はどれも 2026-10-10（+09:00。起動の記録の中の時刻は UTC なので、9 時間足して書いた）。この節の中では、`<入れ先>` は `C:\Program Files\WinGet\Packages\Areka.Areka.Portable__DefaultSource`、`<ワークツリー>` はこのワークツリーの根の絶対パス。
+
+### 1. 誰が何をしたか
+
+| したこと | 誰が | 時刻 |
+|---|---|---|
+| 管理者の端末で、機械の全員向けに入れた | **開発者** | 14:18〜14:19 ごろ |
+| 入れた後の読み（`winget list`・入れ先のフォルダ・PATH の登録 2 つ） | 作業を進めている AI（親のセッション） | 14:19:22 |
+| 普段の権限で `areka` を起こした（有界で 1 回・有界でなく 1 回） | 作業を進めている AI | 14:20:44〜14:23:00 |
+| 2 回目の起動の中で、右クリックメニューの「インストール…」と「終了」を動かした | 作業を進めている AI（開発者に `areka.exe` の画面の操作を許されて行った。実体の場所が変わったので、開発者は許しの画面でもう一度許した） | 14:22:09〜14:22:52 |
+| 残っているファイルの突き合わせ（起動の記録・入れ先の一覧・権限の一覧・タグ `v0.0.2` のソース・配布 zip の中の辞書を読んだ） | この記録を書いた AI | 14:30 より後 |
+
+- この記録を書いた AI は、areka を起こしていないし、winget のコマンドも打っていない。下の値は、残っているファイルを自分で読んで確かめた物。ファイルが残っていない物（開発者の端末に出た winget の文・入れた直後の読み・起こす前の一覧・画面で見た台詞）は、作業を進めている AI から聞いた物として、そう書く。
+- 台本（MCP の `sakurascript`）ではなくメニューで行ったのは、タスク 3.1 と同じ理由（0.0.2 の `sakurascript` は中身の無い仮の受け口。「見つかった件と起票」の 1 行目）。終わらせ方も、台本の `\-` ではなくメニューの「終了」。
+
+### 2. 入れた（開発者・管理者の端末）
+
+- 開発者に示したコマンド（管理者の端末で打つ。示したときは `<ワークツリー>` を絶対パスで書いた）:
+
+  ```powershell
+  winget install --manifest <ワークツリー>\dist\winget\0.0.2 --scope machine
+  ```
+
+- **winget が出した文は取れていない**（開発者の端末に出た。写しは無い）。
+- 入れた後の読み（14:19:22・作業を進めている AI・その回の出力のファイルは無い）: `winget list` に `areka (portable)`・ID `ARP\Machine\X64\Areka.Areka.Portable__DefaultSource`・版 `0.0.2` の行／入れ先は `<入れ先>`／機械の側の PATH の登録は 19 項目（入れる前は 18）で、`<入れ先>` の項目が 1 件／利用者の側の PATH の登録は、入れる前の文字列のまま（タスク 3.4 で戻した 12 項目）。
+- 残っているファイルで確かめられたこと（この記録を書いた AI）:
+  - 14:20:44 に登録から組み直した PATH（`logs\3.5-bounded1-fresh-path.txt`）は **31 項目**。1〜18 番目は、入れる前の機械の側の 18 項目（`logs\2.2-pre-machine-path.txt`）と同じ並び・同じ字面。**19 番目が `<入れ先>`**。20〜31 番目は、利用者の側の 12 項目（`logs\3.4-final-user-path.raw.txt` の変数を開いた形）と同じ。`areka` の字を含む項目は、19 番目の 1 件だけ。＝winget は、機械の側の PATH の登録の末尾へ、入れ先のフォルダを 1 件足した。
+  - 入れ先の一覧（下の 5）で、zip の中の物と winget の控えの 150 ファイルの時刻は 14:19:04〜14:19:10。開発者の「14:18〜14:19 ごろ」と合う。
+- 起こす前の入れ先（作業を進めている AI の読み。**一覧のファイルは残っていない**＝置き場の指定を誤って保存できなかった。残っているのは次の数だけ）: 150 ファイル・16789117 バイト。直下は `balloon\`・`ghost\`・`Areka.Areka.Portable__DefaultSource.db`・`areka.exe`・`BUILD-INFO.txt`・`LICENSE-MIT`・`README.txt`・`shiori-host32-helper.exe`・`THIRD-PARTY-NOTICES.md`。`%LOCALAPPDATA%\VirtualStore\Program Files\WinGet` は無い。
+  - この数は、起動の後の一覧と合う: 起動の後の一覧から、areka が作った `ghost\emo2\ghost\master\profile\` の下を除くと、ちょうど 150 ファイル・16789117 バイトで、直下の 9 つも同じ（下の 5）。
+
+### 3. 1 回目の起動（有界・普段の権限・14:20:44〜14:20:56）
+
+- 起こし方: タスク 2.2 と同じ（登録から組み直した PATH にした新しい `pwsh -NoProfile -NonInteractive` のプロセスの中で、`AREKA_*`・`WINTF_*` を外してから、`areka` の 1 語で起こす）。違いは `AREKA_MCP_PORT=9871` を 1 つ足したことだけ。スクリプトは `target\winget-check\3.5-launch.ps1 -Port 9871 -Tag bounded1`（中で `3.5-inner.ps1` を呼ぶ。名前が `bounded` で始まる回だけ、`AREKA_APP_SMOKE_EXIT_MS=10000` と `AREKA_NO_ALERT=1` を置く）。
+- 置いた環境変数: `AREKA_APP_SMOKE_EXIT_MS=10000`・`AREKA_MCP_PORT=9871`・`AREKA_NO_ALERT=1`・`NO_COLOR=1`・`RUST_LOG=info`。外したのは `AREKA_IMPL_WATCH_HOME` の 1 つ。
+- `Get-Command areka -All` は 1 件で、`<入れ先>\areka.exe`。起きたプロセスの実体も同じ（起こした直後にプロセスから読んだ）。管理者に上げていない。
+- 始めた時刻 14:20:44.981・終わった時刻 14:20:56.592（11.6 秒）・**自分から終わった**・**終了コード 0**（`logs\3.5-bounded1.result.json`）。
+- 起動の記録 `logs\3.5-bounded1.stdout.log` は 123 行（29883 バイト）。標準エラーは 1 行（`[helper] SHIORI 初期化の入口: loadu`）。`ERROR` は **3 行**・`WARN` は 6 行（タスク 2.2 と同じ文の 4 行と、下の `session_mark_…` の 2 行）。タスク 2.2 の起動では `ERROR` は 0 行だった。
+- 要の行（時刻の順）:
+
+  ```text
+  14:20:45.418  INFO areka::boot_config: ベースウェアの根を決めました event="root_resolved" root=C:\Program Files\WinGet\Packages\Areka.Areka.Portable__DefaultSource source=ExeDir
+  14:20:46.276 ERROR areka_sylphya::persist: persist commit failed; existing file intact (temp→rename), reporting Degraded scope=App path=C:\Program Files\WinGet\Packages\Areka.Areka.Portable__DefaultSource\profile\areka\sylphya.toml error=アクセスが拒否されました。 (os error 5)
+  14:20:46.276  WARN areka::boot_resolve: [boot_resolve] 起動中の印を記憶へ書けませんでした（このゴーストが落ちても、次の起動の Ref6/7 にこのゴーストの名前は載りません） event="session_mark_write_degraded" ghost="えも？？" dir=C:\Program Files\WinGet\Packages\Areka.Areka.Portable__DefaultSource\profile\areka
+  14:20:46.431  INFO areka::boot_resolve: [boot_resolve] 最後に使ったものを記憶へ書きました（- は argv なので書いていない） event="last_used_recorded" ghost="emo2" balloon="emo2-kakukaku" shell="master"
+  14:20:46.432 ERROR actor{actor=sylphya}: areka_sylphya::persist: persist commit failed; … scope=App path=…\profile\areka\sylphya.toml error=アクセスが拒否されました。 (os error 5)
+  14:20:46.434  INFO actor{actor=emo-text}: areka::ghost_session: 本物のゴースト窓を開きました（placement シーム・スコープごとにキャラ窓＋バルーン窓） scopes=[0, 1]
+  14:20:56.435  INFO actor{actor=emo-text}: areka::app_exit: [quit_app] 全窓を閉じ、終了を指示した event="app_exit" origin=Smoke closed=4
+  14:20:56.518 ERROR actor{actor=emo-text}: areka_sylphya::persist: persist commit failed; … scope=App path=…\profile\areka\sylphya.toml error=アクセスが拒否されました。 (os error 5)
+  14:20:56.518  WARN actor{actor=emo-text}: areka::boot_resolve: [boot_resolve] 起動中の印を消せませんでした（きれいに終わったのに、次の起動は前回落ちたとして既定のゴーストで Ref6/7 付きになります） event="session_mark_clear_degraded" dir=C:\Program Files\WinGet\Packages\Areka.Areka.Portable__DefaultSource\profile\areka
+  ```
+
+- `本物のゴースト窓を開きました` は **1 件**。`ghost_resolved` は `route=Only dir=<入れ先>\ghost\emo2`・`balloon_resolved` は `route=Companion dir=<入れ先>\balloon\emo2-kakukaku`（タスク 2.2 の初めての起動と同じ決まり方）。起動の挨拶は `OnFirstBoot`。
+- 記憶への書き込みの失敗は 3 回（起こす前に起動中の印を書くとき・最後に使ったゴーストを書くとき・終わるときに印を消すとき）。3 回とも、相手は areka の記憶 `<入れ先>\profile\areka\sylphya.toml`。`session_mark_written`・`session_mark_cleared` の行は 0 件。
+
+### 4. 2 回目の起動（有界でない・普段の権限・`AREKA_NO_ALERT` なし・14:21:45〜14:23:00）
+
+- 起こし方: `3.5-launch.ps1 -Port 9871 -Tag menu1`。1 回目との違いは、`AREKA_APP_SMOKE_EXIT_MS` と `AREKA_NO_ALERT` を**置かない**ことだけ（`AREKA_NO_ALERT` を置くと、0.0.2 はメニューの「インストール…」でファイルを選ぶ画面を出さない）。置いた環境変数は `AREKA_MCP_PORT=9871`・`NO_COLOR=1`・`RUST_LOG=info`。実体は `<入れ先>\areka.exe`。管理者に上げていない。
+- 始めた時刻 14:21:45.692・終わった時刻 14:23:00.863（75.2 秒）・**自分から終わった**（メニューの「終了」）・**終了コード 0**（`logs\3.5-menu1.result.json`）。
+- 起動の記録 `logs\3.5-menu1.stdout.log` は 347 行（84540 バイト）。標準エラーは 1 行（1 回目と同じ）。`ERROR` は **5 行**（記憶への書き込みの失敗 3 行と、入れられなかったことの 2 行）・`WARN` は 5 行（タスク 2.2 と同じ文の 3 行と、`session_mark_…` の 2 行）。
+- 起きたことと、その行:
+
+  | 時刻 | 起きたこと | 起動の記録の行 |
+  |---|---|---|
+  | 14:21:45.764 | 根が決まった | `event="root_resolved" root=<入れ先> source=ExeDir` |
+  | 14:21:45.766〜.783 | ゴーストとバルーンが決まった | `ghost_resolved route=Only dir=<入れ先>\ghost\emo2`・`balloon_resolved route=Memory dir=<入れ先>\balloon\emo2-kakukaku` |
+  | 14:21:46.009〜.010 | 起動中の印が書けなかった | `ERROR … persist commit failed; … scope=App path=<入れ先>\profile\areka\sylphya.toml error=アクセスが拒否されました。 (os error 5)` → `WARN … event="session_mark_write_degraded" ghost="えも？？"` |
+  | 14:21:46.363〜.364 | 最後に使ったゴーストが書けなかった | `INFO … event="last_used_recorded" ghost="emo2" balloon="emo2-kakukaku" shell="master"` → 次の行が `ERROR … persist commit failed; … scope=App …` |
+  | 14:21:46.376 | ゴーストが立った | `本物のゴースト窓を開きました … scopes=[0, 1]`（**1 件**） |
+  | 14:21:47.093 | 起動の挨拶（`OnFirstBoot`）。14:22:04.208 に終わった | `event="boot_talk" talk_id=1`・`source=OnFirstBoot`・`prop_set_cue applied key="areka.boot.count" value="1"`（14:22:04.206） |
+  | 14:22:09.849 | 右クリックメニューが出た | `[menu] shown event="menu_shown" scope=0 items=8` |
+  | 14:22:12.403 | 「インストール…」を選んだ → ファイルを選ぶ画面で `<ワークツリー>\target\winget-check\nar\claudia.nar` を開いた | `[menu] selected event="menu_selected" scope=0 frame=Install id=6` |
+  | 14:22:21.971〜.972 | areka が依頼を受けて、手続きを始めた | `[install] 依頼を受けました event="install_order_queued" origin=Menu count=1` → `[install] 書庫の手続きを始めます event="install_begin" archive=<ワークツリー>\target\winget-check\nar\claudia.nar origin=Menu` |
+  | 14:22:21.982〜.984 | ゴーストへ「入れ始めた」を知らせ、ゴーストが台詞で答えた | `event="steady_talk" talk_id=2 origin="OnInstallBegin"` → `[install] イベントを送りました event="install_event" id="OnInstallBegin" raised=Script` |
+  | 14:22:22.030 | 書庫の中身は受け取れる物と判定した | `[install] 受け取ります event="install_accept" … verdict="accepted" accept=None target_ghost=None` |
+  | 14:22:22.031 | **入れ先の直下に作業フォルダを作れなかった** | `ERROR actor{actor=install}: areka_nar: [areka_nar] refused or failed archive=…\claudia.nar reason=…\claudia.nar: Stage で I/O に失敗: C:\Program Files\WinGet\Packages\Areka.Areka.Portable__DefaultSource\.nar-work\34544-0: アクセスが拒否されました。 (os error 5) committed=0 rolled_back=true work=` |
+  | 14:22:22.032 | **入れられなかった** | `ERROR actor{actor=install}: areka::install::procedure: [install] 書庫を入れられませんでした event="install_failed" archive=…\claudia.nar kind="Io" phase="stage" rolled_back=true word="extraction"` |
+  | 14:22:22.042〜.044 | ゴーストへ「入れられなかった」を知らせ、ゴーストが台詞で答えた（14:22:26.909 に終わった） | `event="steady_talk_replace" talk_id=3 origin="OnInstallFailure"` → `[install] イベントを送りました event="install_event" id="OnInstallFailure" raised=Script` |
+  | 14:22:31.104・14:22:47.114 | 普段のおしゃべりに戻った | `event="steady_talk" talk_id=4 origin="OnSecondChange"`・`talk_id=5 origin="OnSecondChange"` |
+  | 14:22:45.178・14:22:45.421 | MCP の口から 2 つ読んだ（`target\winget-check\3.5-mcp.ps1`） | `get_active_ghost_list` の答えは `えも？？`／`get_log` の答えは areka 自身の記録の 8 件（上の `persist commit failed` 2 件・`session_mark_write_degraded`・`[areka_nar] refused or failed`・`install_failed` を含む。台詞は入っていない）。`logs\3.5-mcp.log` |
+  | 14:22:52.365 | 右クリックメニューの「終了」を選んだ | `[menu] selected event="menu_selected" scope=0 frame=Close id=8` |
+  | 14:22:56.159〜14:23:00.769 | 終わりの挨拶をして、きれいに終わった | `OnClose GET を発行し握手を開始 event="close_handshake_begin" reason="user"` → `event="talk_done_quit" talk_id=6` → `正規 clean shutdown 完了 … event="unload_clean"` → `event="app_exit" origin=KanadeStopped(Quit) closed=4` → `ghost shutdown sequence completed` |
+  | 14:23:00.770 | 起動中の印を消せなかった | `ERROR … persist commit failed; … scope=App …` → `WARN … event="session_mark_clear_degraded"` |
+  | 14:23:00.779 | 最後の行 | `MCP: 待受を閉じた addr=127.0.0.1:9871`（プロセスが消えたのは 0.08 秒後） |
+
+- 画面で見た台詞（作業を進めている AI が 14:22:26 ごろの画面の写しで見た物。**写しのファイルは残っていない**。起動の記録には台詞の本文は出ない）: 「えー、なんでなん！？」（本体の側）と「ファイルが壊れてるのかもね。」（相方の側）。数秒後には普段のおしゃべりに戻っていた。
+- この台詞の出どころ（この記録を書いた AI が、配布 zip `target\winget-check\release\areka-0.0.2-x64.zip` の中の辞書を読んだ。`logs\3.5-zip-grep.txt`）: 同梱のゴースト えも？？ の辞書 `ghost\emo2\ghost\master\dic\install.pasta` には、`OnInstallFailure` の台詞が 3 つ在り、頭の注釈は「`OnInstallFailure`（reference[0] = 失敗理由）は理由を問わず共通トーク」。その 2 つ目（94〜97 行目）が、画面で見た 2 行を含む:
+
+  ```text
+  ＊OnInstallFailure
+  　　　エモ：＠静観　インストールできなかったみたい。
+  　むらさき：＠そんなあ　えー、なんでなん！？
+  　　　エモ：＠通常　ファイルが壊れてるのかもね。
+  ```
+
+  起動の記録でも、`OnInstallFailure` の台詞（`talk_id=3`）の間に、相方の側のバルーン → 本体の側のバルーンの順に文字が出ている（14:22:22.063 `scope=1 trigger="content" visible=true`・14:22:23.863 `scope=0 trigger="content" visible=true`）。この辞書の並び（エモ → むらさき → エモ）と合う。
+- areka がゴーストへ渡した失敗の理由は、正典の語 `extraction` の 1 語だけ（上の `install_failed` の行の `word="extraction"`）。タグ `v0.0.2` の `crates/areka/src/install/judge.rs` の関数 `failure_word` は、書庫が壊れているとき（`CorruptArchive`・`IntegrityMismatch`・`NameUndecodable`）と、ファイルの読み書きに失敗したとき（`NarError::Io`。今回はこちら＝`kind="Io" phase="stage"`）を、同じ `extraction` に写す。＝ゴーストの側からは、「書庫が壊れている」と「入れ先へ書けない」の見分けがつかない。
+- 2 回目の起動は、「前回はきれいに終わらなかった」としては**起きていない**: `event="session_mark_found"`（タグ `v0.0.2` の `crates/areka/src/boot_config.rs` が、残っている印を見つけたときに出す行）は 0 件で、起動の挨拶は普段と同じ `OnFirstBoot`。1 回目の終わりの警告は「次の起動は前回落ちたとして…」と言うが、印は起こす前にも書けていなかった（消す物が無かった）ので、そうはならなかった。
+- 2 回目も起動の挨拶が `OnFirstBoot` だったのは、書けなかったこととは別の話。利用者向けに入れたとき（タスク 2.2 の有界の起動 → タスク 3.1 の 1 回目）も同じ並びだった。初めての起動かどうかは、ゴーストごとの記憶に起動の回数（`areka.boot.count`）が在るかで決まり（タグ `v0.0.2` の `crates/areka-kanade/src/msg.rs` の説明）、有界の起動は、初めての挨拶が終わる前（この回数を書く前）に終わる。
+- タスク 3.1 の 3 回目で見た「最後の行からプロセスが消えるまで約 6 秒」は、今回は出なかった（1 回目は 0.07 秒・2 回目は 0.08 秒）。ただし、今回は `.nar` が入っていない。
+
+### 5. 起動の後の入れ先のフォルダ（一覧 2 つ・14:21:42 と 14:23:20）
+
+一覧は `logs\3.5-installdir-after-bounded1.tsv`（1 回目の後）と `logs\3.5-installdir-after-menu1.tsv`（2 回目の後）。隠しファイルも含む。列は、入れ先から見たパス・大きさ（フォルダは `<dir>`）・時刻。数えたスクリプトは `target\winget-check\3.5-listing-summary.py`、出た文は `logs\3.5-listing-summary.txt`。
+
+| | 1 回目の後 | 2 回目の後 |
+|---|---|---|
+| ファイル | 200・17211723 バイト | 200・17214486 バイト |
+| うち `ghost\emo2\ghost\master\profile\` の下（areka とゴーストが作った物） | 50・422606 バイト | 50・425369 バイト |
+| うち、それ以外（zip の中の物と winget の控え） | 150・16789117 バイト | 150・16789117 バイト |
+| 下の階層のフォルダ | 37（うち 15 が `ghost\emo2\ghost\master\profile\` と、その下） | 37（同じ） |
+| 直下の物 | 9 つ（`balloon\`・`ghost\`・`Areka.Areka.Portable__DefaultSource.db`・`areka.exe`・`BUILD-INFO.txt`・`LICENSE-MIT`・`README.txt`・`shiori-host32-helper.exe`・`THIRD-PARTY-NOTICES.md`） | 同じ 9 つ |
+| 直下の `profile\`（areka の記憶） | **無い**（0 件） | **無い**（0 件） |
+| 直下の `.nar-work\` | **無い**（0 件） | **無い**（0 件） |
+| `ghost\` の直下 | `emo2` の 1 つだけ | `emo2` の 1 つだけ |
+| `balloon\` の直下 | `emo2-kakukaku`・`StayseeBalloon` の 2 つ（同梱の物だけ） | 同じ 2 つ |
+| 名前に `claudia` を含む物 | 0 件 | 0 件 |
+
+- **2 回の起動が入れ先の中に作った物は、`ghost\emo2\ghost\master\profile\` の下の 50 ファイル・15 フォルダだけ**。直下には何も増えていない。zip の中の物と winget の控えの 150 ファイルは、数も大きさの合計も起こす前の読みと同じ。
+- 50 ファイルの内訳: areka がゴーストごとに持つ記憶 `ghost\emo2\ghost\master\profile\areka\sylphya.toml` が 1 つと、ゴースト自身（pasta）の書き残し 49。
+- 1 回目の後と 2 回目の後で、パスの並びは同じ（増えた物・消えた物は 0）。変わったのは 4 ファイル（と、フォルダ 2 つの時刻）で、どれも `ghost\emo2\ghost\master\profile\` の下: `areka\sylphya.toml`（70 → 90 バイト・時刻 14:20:46 → 14:22:04。上の `areka.boot.count` を書いた時刻と合う）・`pasta\logs\pasta.log`（2612 → 5355 バイト）・`pasta\cache\lua\pasta\scene_dic.lua`・`pasta\save\save.json`（大きさは同じで、時刻だけ）。
+- `%LOCALAPPDATA%\VirtualStore\` の下に、同じ並びはできていない。作業を進めている AI の読み（起こす前と、2 回目の後。出力のファイルは無い）では `%LOCALAPPDATA%\VirtualStore\Program Files\WinGet` は無い。この記録を書いた AI も 14:34:39 に読んだ: `%LOCALAPPDATA%\VirtualStore` は在るが、中身は 0 件（`Program Files` も無い。名前に `Areka`・`sylphya`・`nar-work` を含む物も 0 件。`logs\3.5-virtualstore.txt`）。＝Windows は、書けなかった書き込みを別の場所へ逃がしていない。
+
+### 6. 5 項目（設計の段 8 の表・要件 4.7）
+
+| 項目 | 見た物 | 結果 | 根拠の記録 |
+|---|---|---|---|
+| 入れ先のフォルダの場所 | `root_resolved` の行の `root=` | **`C:\Program Files\WinGet\Packages\Areka.Areka.Portable__DefaultSource`**（`source=ExeDir`。2 回とも同じ。設計の見込みどおり、`%ProgramFiles%\WinGet\Packages\` の下） | `logs\3.5-bounded1.stdout.log`・`3.5-menu1.stdout.log` の 2 行目／`logs\3.5-bounded1.result.json`・`3.5-menu1.result.json`（`areka` の 1 語の解決先） |
+| ゴーストが立ったか | `本物のゴースト窓を開きました` の件数 | **立った**（1 回目 1 件・2 回目 1 件。どちらも同梱の えも？？。終了コードはどちらも 0） | 同じ 2 つの起動の記録／`logs\3.5-mcp.log`（`get_active_ghost_list` の答え `えも？？`） |
+| areka の記憶が書けたか | 入れ先の `profile\areka\` の有無・`%LOCALAPPDATA%\VirtualStore\` | **書けなかった**。`<入れ先>\profile\` は、2 回の起動の後も無い。起動の記録に `persist commit failed … scope=App path=<入れ先>\profile\areka\sylphya.toml error=アクセスが拒否されました。 (os error 5)` が 1 回の起動につき 3 行（計 6 行）。`VirtualStore` の下にも無い | 一覧 2 つ（`logs\3.5-installdir-after-*.tsv`・`3.5-listing-summary.txt`）／起動の記録 2 つ／`logs\3.5-virtualstore.txt` |
+| ゴーストを後から入れられたか | 入れ先の `ghost\` の下に検体のフォルダができたか | **入れられなかった**。`ghost\` の下は `emo2` だけで、`claudia` を含む物は 0 件。areka は書庫を受け取れる物と判定した後、入れ先の直下に作業フォルダ `.nar-work\34544-0` を作れずに止めた（`Stage で I/O に失敗: …: アクセスが拒否されました。 (os error 5)`・`install_failed kind="Io" phase="stage" rolled_back=true`）。試したのは `claudia.nar` の 1 回だけ | 2 回目の後の一覧／`logs\3.5-menu1.stdout.log`（上の 4 の表の 14:22:21〜14:22:22 の行） |
+| うまくいかなかったときに areka が利用者へ伝えたこと | ゴーストの台詞・起動の記録の警告とエラーの行 | **入れられなかったこと**: ゴーストの台詞で伝えた（「えー、なんでなん！？」「ファイルが壊れてるのかもね。」）。理由として口にしたのは「ファイルが壊れているのかも」で、本当の理由（入れ先に書けない）は、起動の記録の `ERROR` 2 行にしか出ていない。**記憶が書けなかったこと**: **何も伝えていない**。起動の記録に `ERROR` 3 行と `WARN` 2 行（1 回の起動につき）が残っただけで、このことを伝える台詞もイベントも 0（2 回の起動で出た台詞の出どころは `OnFirstBoot`・`OnInstallBegin`・`OnInstallFailure`・`OnSecondChange`・`OnClose` だけ。知らせの画面を告げる行も 0。2 回目は `AREKA_NO_ALERT` を置いていない） | 画面で見た台詞は、作業を進めている AI の控え（写しのファイルは無い）／辞書は `logs\3.5-zip-grep.txt`／起動の記録 2 つ／`logs\3.5-mcp.log`（`get_log` の答え）。`dump_balloon` は呼んでいない |
+
+- まとめ: 5 項目のうち、見込みどおりだったのは 2（場所・立った）。**うまくいかなかったのは 2（areka の記憶・後から入れる）**。伝え方は、入れる失敗が「理由の違う台詞」・記憶の失敗が「無言」。
+
+### 7. 表の外で分かったこと
+
+- **ゴーストごとの記憶は、この機械では書けた**。`ghost\emo2\ghost\master\profile\` の下に 50 ファイルができ、2 回目の起動はそれを読んでいる（1 回目のバルーンの決まり方は `route=Companion`、2 回目は `route=Memory`＝1 回目が書いた「最後に使ったバルーン」を読んだ）。一方、areka の記憶に書くはずの「最後に使ったゴースト」は読めていない（2 回目の `ghost_resolved` は `route=Only`。利用者向けに入れたときの 2 回目の起動＝タスク 3.1 の 1 回目は `route=Memory` だった）。
+- 書けた理由は、入れ先の権限（`logs\3.5-acl.txt`。作業を進めている AI が 14:23:20 に読んだ 7 か所。取ったコマンドは残っていない）:
+
+  | 場所（入れ先から見て） | 持ち主 | 権限の行 |
+  |---|---|---|
+  | `<入れ先>` そのもの | `BUILTIN\Administrators` | `BUILTIN\Administrators` に全部の権限／`BUILTIN\Users` に**読むことと実行だけ**／`CREATOR OWNER`（下の階層へ引き継ぐ分だけ）。この端末の利用者の行は**無い** |
+  | `ghost\`・`ghost\emo2\`・`ghost\emo2\ghost\master\`・`balloon\` | `BUILTIN\Administrators` | **この端末の利用者に全部の権限**（引き継いだ行）／`BUILTIN\Administrators` に全部の権限。`BUILTIN\Users` の行は無い |
+  | `ghost\emo2\ghost\master\profile\` | この端末の利用者（areka が作った） | 上と同じ 2 つ |
+  | `areka.exe` | `BUILTIN\Administrators` | この端末の利用者に全部の権限／`BUILTIN\Administrators` に全部の権限。`BUILTIN\Users` の行は無い |
+
+  - ＝普段の権限の areka は、入れ先の**直下**には何も作れない（`profile\`・`.nar-work\` が作れなかった理由）。`ghost\`・`balloon\` の中へは書けた。この端末の利用者の行が下の階層にだけ在るのは、入れた開発者のアカウント（管理者に上げたこの端末の利用者）から来ている見込みだが、仕組みは調べていない。
+  - **注意**: これは、入れた管理者と普段の利用者が**同じアカウント**の機械での結果。入れた管理者が別のアカウントの機械では、この行は入れた側のアカウントの物になる見込みで、普段の利用者は `ghost\` の下の記憶も書けないはず。さらに、上の一覧のとおり `areka.exe`・`ghost\`・`balloon\` に `BUILTIN\Users` の行が無いので、別のアカウントの利用者は、読むことも起こすこともできないおそれが在る。どれも**測っていない**（権限の一覧からの読み）。
+- **起動中の印は、書くことも消すこともできなかった**（1 回の起動につき `session_mark_write_degraded` 1 行・`session_mark_clear_degraded` 1 行）。印は「今動いているゴーストの名前」を areka の記憶に書いておき、きれいに終わったときだけ消す物で、次の起動で残っていれば「前回はきれいに終わらなかった」と分かる仕組み（タグ `v0.0.2` の `crates/areka/src/boot_resolve.rs` の説明）。ここから出てくること:
+  - この入れ方では、areka は**前回がきれいに終わらなかったことに気付けない**（落ちても、次の起動は何事も無かったように立つ）。利用者には、この仕組みが働いていないことは伝わらない。
+  - 逆の心配（きれいに終わったのに、次の起動が「前回落ちた」扱いになる）は、今回は**起きなかった**（上の 4。印がそもそも書けていないので、残る物が無い）。終わるときの警告の文は、この場合の実際とは合っていない。
+  - 起動の記録の `INFO … 最後に使ったものを記憶へ書きました event="last_used_recorded"` は、すぐ次の行で areka の記憶への書き込みが失敗しているのに出ている（バルーンとシェルの分はゴーストごとの記憶に書けたが、ゴーストの分は書けていない）。
+- Windows は、書けなかった書き込みを `%LOCALAPPDATA%\VirtualStore\` へ逃がしていない（上の 5）。
+
+（後片付けと設定の戻しは、この後に記入）
 
 ## 後片付けの確かめ
 
@@ -990,6 +1147,12 @@ winget 自身の記録（`%LOCALAPPDATA%\Packages\Microsoft.DesktopAppInstaller_
 | 読んだ winget のソースと文書の写し（v1.29.380 の `PortableInstaller.cpp`・`InstallFlow.cpp`・`AppInstallerStrings.h`・`ManifestLocalization.h`・`doc/Settings.md`） | `target\winget-check\review\3.4\` | 3.4 |
 | winget が入れ直した areka（置いたのは winget。winget の入れ先なので `target\` の外。`--purge` を付けて外した後に残ったのは、入れ直す前から在った areka の記憶の 1 ファイルと空のフォルダ。**このフォルダは、中身の一覧を取ってから 14:17:20 に AI が消した＝今は無い**） | `%LOCALAPPDATA%\Microsoft\WinGet\Packages\Areka.Areka.Portable__DefaultSource\` | 3.4 |
 | 片付けた後の利用者の側を読むスクリプト（入れ先のフォルダと利用者の PATH の登録を読むだけ）・出た文・読んだ利用者の PATH の文字列 | `target\winget-check\3.4-final-user.ps1`・`target\winget-check\logs\3.4-final-user.txt`・`3.4-final-user-path.raw.txt` | 3.4 |
+| 機械の全員向けに入れた areka を普段の権限で起こすスクリプト 2 つ（名前が `bounded` で始まる回だけ有界にする）と、MCP の口へ 1 本送るスクリプト | `target\winget-check\3.5-launch.ps1`・`3.5-inner.ps1`・`3.5-mcp.ps1` | 3.5 |
+| 1 回目（有界）と 2 回目（有界でない・メニューを動かした回）の起動の記録（標準出力・標準エラー）・起こしたプロセスの結果（解決先・時刻・終了コード）・組み直した PATH | `target\winget-check\logs\3.5-bounded1.*`・`3.5-bounded1-fresh-*`・`3.5-menu1.*`・`3.5-menu1-fresh-*` | 3.5 |
+| MCP の口へ送った文と答えの全文（`get_active_ghost_list`・`get_log`） | `target\winget-check\logs\3.5-mcp.log` | 3.5 |
+| 機械の全員向けの入れ先の一覧（1 回目の起動の後・2 回目の起動の後。相対パスと大きさと時刻・隠しファイルも含む）と、入れ先の権限の一覧（7 か所。利用者の名前は「この端末の利用者」に置き換えてある） | `target\winget-check\logs\3.5-installdir-after-bounded1.tsv`・`3.5-installdir-after-menu1.tsv`・`3.5-acl.txt` | 3.5 |
+| 一覧 2 つを数えて見比べるスクリプトと出た文／配布 zip の中の辞書から `OnInstallFailure` の台詞を探すスクリプトと出た文（zip は開いて読むだけで、展開していない）／`%LOCALAPPDATA%\VirtualStore` の読み | `target\winget-check\3.5-listing-summary.py`・`logs\3.5-listing-summary.txt`／`target\winget-check\3.5-zip-grep.py`・`logs\3.5-zip-grep.txt`／`logs\3.5-virtualstore.txt` | 3.5 |
+| winget が機械の全員向けに入れた areka（置いたのは winget で、打ったのは開発者。winget の入れ先なので `target\` の外。2 回の起動が中に作ったのは `ghost\emo2\ghost\master\profile\` の下の 50 ファイルだけ。外すのは、この後の後片付け） | `C:\Program Files\WinGet\Packages\Areka.Areka.Portable__DefaultSource\` | 3.5 |
 
 - 取ってきた後の `git status --porcelain` は 0 行（`target` の下に限って見ても 0 行）。`git ls-files -- target` も 0 件で、取ってきた物は `git status` に出ない。
 - `git check-ignore -v target/winget-check/release/areka-0.0.2-x64.zip` は `.gitignore:1:target` を返した（追跡の外になる理由がこの 1 行であることの裏付け）。
@@ -1016,6 +1179,13 @@ winget 自身の記録（`%LOCALAPPDATA%\Packages\Microsoft.DesktopAppInstaller_
 - `--purge` を付けた外し方は、残りの上へ入れ直した物を外す形でだけ測った（入れ先のフォルダと PATH の項目が残った。理由は「後片付けの確かめ」の「利用者の側」の 7）。何も残っていない機械へ入れた物を `--purge` で外す形では測っていない。
 - **winget で外しただけでは、利用者の PATH に、もう無いフォルダを指す項目が 1 件残る**。開発機では、開発者が手でその項目を消した（「後片付けの確かめ」の「利用者の側」の 8）。areka を winget で外す利用者は、自分で消さない限り、この行き先の無い項目を持ち続ける。見たのは、手元のマニフェストで入れた形で、入れ先のフォルダが前の実測から残っていた回だけ（`--purge` を付けない回と付けた回の 2 回）。何も残っていない機械へ入れて外す形は、別には測っていない（winget のソースの読みでは、その形でも同じく残る見込み。同じ節の 7）。
 - 利用者の側の後片付けの 4 項目のうち、② `areka` の解決と ④ `winget list` の行は、`--purge` で外した直後（14:09）の読みが根拠で、残った 2 つを片付けた後（14:19 より後）には読み直していない。そのときには、次のタスクの機械の全員向けの入れ方が済んでいて、今読むと機械の側の物が当たるため（同じ節の頭の表の下）。
+- 機械の全員向けの実測（タスク 3.5）は、**1 台の機械**での結果で、その機械は、入れた管理者と普段の利用者が**同じアカウント**（開発者が、自分のアカウントを管理者に上げた端末で入れた）。ゴーストごとの記憶（`ghost\` の下）が書けたのは、入れ先の下の階層に、このアカウントへ全部の権限を与える行が在ったため（「機械の全員向けの実測」の 7）。入れた管理者が別のアカウントの機械では、それも書けない見込みで、`areka.exe`・`ghost\`・`balloon\` に `BUILTIN\Users` の行が無いことから、起こすこともできないおそれが在る。別のアカウントでは測っていない。
+- 機械の全員向けに入れたときに winget が出した文は、取れていない（開発者の管理者の端末に出た）。入れた直後の読み（`winget list` の行・PATH の登録の数）も、その回の出力のファイルは無く、作業を進めている AI の読みを聞いて書いた。残っているファイルで確かめられたのは、14:20:44 に登録から組み直した PATH と、入れ先の一覧の時刻まで。
+- 機械の全員向けに入れた後・起こす前の入れ先の中身は、**数でしか分からない**（150 ファイル・16789117 バイトと、直下の 9 つの名前。一覧のファイルは、置き場の指定を誤って保存できなかった）。起動の後の一覧から areka が作った物を除いた数は、この数と合う。
+- 機械の全員向けでの「インストール…」は、**1 回・検体 1 つ（`claudia.nar`）**で試しただけ。バルーンの `.nar` は試していない（同じ作業フォルダ `.nar-work\` を入れ先の直下に作る手続きなので、同じ所で止まる見込み）。ゴーストの切り替えも試していない（ゴーストが同梱の 1 体だけなので、切り替える先が無い）。
+- 機械の全員向けで入れられなかったときのゴーストの台詞は、作業を進めている AI が画面の写しで見た 2 行（「えー、なんでなん！？」「ファイルが壊れてるのかもね。」）で、**写しのファイルは残っていない**。MCP の `dump_balloon` は呼んでいない（`get_log` は呼んだが、返るのは areka 自身の記録で、台詞ではない）。台詞の全文（3 行）は、配布 zip の中の辞書から読んだ物で、画面で 1 行目を見たわけではない。
+- 入れ先の権限の一覧（`logs\3.5-acl.txt`）は 7 か所だけで、取ったコマンドは残っていない。下の階層にだけ「この端末の利用者」の行が在る仕組みは調べていない。
+- 機械の全員向けに入れた形での上げ直しは、測っていない。
 
 ## 見つかった件と起票
 
@@ -1024,5 +1194,8 @@ winget 自身の記録（`%LOCALAPPDATA%\Packages\Microsoft.DesktopAppInstaller_
 | 入れた areka（0.0.2）の MCP の `sakurascript` が、台本を受け取らずに `NG:not implemented yet` と答える。台本で `.nar` を入れる・ゴーストを切り替える・終える、のどれもできず、状態を MCP の口から作れなかった（代わりに、右クリックメニューを AI が画面の操作で動かして作った） | 段 4（タスク 3.1） | `target\winget-check\logs\3.1-mcp.log`（送った文と答え）・上の「上げ直しの実測」の「作る状態」・タグ `v0.0.2` の `crates/areka/src/mcp/sakurascript.rs` | （タスク 3.6 で記入。中身を入れる仕事は、起票済みの `areka-P0-mcp-kanade-tools` の brief に在る） |
 | winget の上げ直しで、利用者の物が消えた。areka は利用者の物（後から入れたゴーストとバルーン・ゴーストの記憶）を、入れ先の `ghost\`・`balloon\` の中に置く。winget は上げ直しのときに、この 2 つのフォルダを中身ごと消してから zip の中身を置き直した（消えた物は 6・208 ファイル。areka の記憶 `profile\` は残った）。その後の起動は、覚えていたゴーストが無いので同梱のゴーストで立った。**外すとき（`--purge` も `--preserve` も付けない `winget uninstall`）も同じ物が消えた**（根は同じ＝利用者の物が、入れ先の `ghost\`・`balloon\` の中に在る）。winget はこの 2 つのフォルダを中身ごと消し、消えた物は同じ 6（利用者の物は 207 ファイル）。残ったのは areka の記憶 `profile\` と空の `.nar-work\` だけで、winget は「ファイルが入れ先に残る」と告げて入れ先のフォルダを残した。そのフォルダを指す利用者の PATH の項目 1 件も残っていた。winget の文は、どちらのときも、利用者の物を消したことを告げない | 段 5（タスク 3.2）・段 6（タスク 3.3） | 上の「上げ直しの実測」の「上げ直し」・`target\winget-check\logs\3.2-diff-after-upgrade.txt`・`3.2-run.stdout.log`／上の「外し方の実測」・`target\winget-check\logs\3.3-diff-after.txt`・`3.3-uninstall.stdout.txt` | （タスク 3.6 で記入。要件 4.6 の起票＝利用者の物が上げ直しと外し方で消えないようにする仕事） |
 | winget で外しても、利用者の機械に後が残る。雛形は `ArchiveBinariesDependOnPath: true` で、入れ先のフォルダを利用者の PATH に 1 件足す。`winget uninstall` は、`--purge` を付けても付けなくても、この PATH の項目を消さなかった（もう無い `areka.exe` の在ったフォルダを指す項目が残る）。入れ先のフォルダも、areka の記憶（`profile\areka\`）が中に在ると残った（`--purge` を付けない回。`--purge` を付けた回も、残りの上へ入れ直した物だったので残った）。winget の文は、PATH の項目が残ることを告げない（フォルダについては、`--purge` を付けない回だけ「ファイルが入れ先に残る」と告げる）。開発機では、フォルダを AI が、PATH の項目を開発者が手で片付けた。これは winget の側の動きだが、areka が利用者の物を入れ先の中に置くことと、雛形が PATH の入れ方を選んだことから出てくる（だから、上の行の「利用者の物が消える」の起票へまとめる手も在る。まとめるか分けるかは、タスク 3.6 で作業を進めている AI が決める） | 段 6（タスク 3.3）・段 7（タスク 3.4） | 上の「後片付けの確かめ」の「利用者の側」の 6（14:09 の 4 項目の読み）・7（winget 自身の記録の行 `Install directory is not empty`・`Unable to remove install directory as there are remaining files in: …` とソースの読み）・8（片付け）／`target\winget-check\logs\3.4-after-purge-*`・`3.4-winget-diag-path-lines.txt`・`3.4-winget-diag-uninstall-purge.txt`・`target\winget-check\review\3.4\PortableInstaller.cpp` | （タスク 3.6 で記入） |
+| 機械の全員向け（`--scope machine`）に入れると、普段の権限の利用者は、areka の記憶を書けず、ゴーストを後から入れられない。areka は、利用者の物（areka の記憶 `profile\areka\`・後から入れるゴーストとバルーン・入れるときの作業フォルダ `.nar-work\`）を `areka.exe` の隣＝入れ先のフォルダに置く。機械の全員向けの入れ先 `C:\Program Files\WinGet\Packages\…` は、普段の権限では直下に何も作れない。1 回の起動につき、areka の記憶への書き込みが 3 回とも「アクセスが拒否されました」で失敗し、メニューの「インストール…」は作業フォルダを作れずに止まった。ゴーストは立つ。**根は上の 2 行目（上げ直しと外し方で利用者の物が消える）と同じ＝利用者の物が入れ先の中に在る**ので、置き場を直す起票へまとめられる | 段 8（タスク 3.5） | 上の「機械の全員向けの実測」の 3〜7・`target\winget-check\logs\3.5-bounded1.stdout.log`・`3.5-menu1.stdout.log`（`persist commit failed … scope=App`・`Stage で I/O に失敗: …\.nar-work\34544-0`）・`3.5-installdir-after-menu1.tsv`・`3.5-acl.txt` | （タスク 3.6 で記入） |
+| areka の記憶が書けないとき、areka は利用者へ何も伝えない。起動の記録に `ERROR`・`WARN` が残るだけで、台詞も知らせも出ず、ゴーストは普段どおりに立って喋る。その裏で、最後に使ったゴーストは覚えられず、起動中の印は書くことも消すこともできない＝前回がきれいに終わらなかったことに気付く仕組みが、黙って働かなくなる（落ちても、次の起動は何事も無かったように立つ）。あわせて、記録の文が実際と合わない所が 2 つ在った: `last_used_recorded` の「記憶へ書きました」は、すぐ次の行で書き込みが失敗しているのに出る／終わるときの警告「次の起動は前回落ちたとして…」は、印がそもそも書けていないこの場合には、そうならない（2 回目の起動に `session_mark_found` は 0 件） | 段 8（タスク 3.5） | 上の「機械の全員向けの実測」の 3・4・6・7・`target\winget-check\logs\3.5-bounded1.stdout.log`・`3.5-menu1.stdout.log`（`session_mark_write_degraded`・`session_mark_clear_degraded`・`last_used_recorded`）・タグ `v0.0.2` の `crates/areka/src/boot_resolve.rs`・`crates/areka/src/boot_config.rs` | （タスク 3.6 で記入） |
+| 入れ先に書けないせいで `.nar` を入れられなかったのに、利用者には「ファイルが壊れてるのかもね。」と伝わる。areka がゴーストへ渡す失敗の理由は正典の語 `extraction` の 1 語だけで、書庫が壊れているときと、入れ先へのファイルの読み書きに失敗したとき（今回＝`kind="Io" phase="stage"`）が同じ語になる。同梱のゴースト（えも？？）の辞書は、理由を見ずに 3 つの台詞から 1 つを選び、その 1 つがこの台詞。本当の理由（アクセスが拒否された場所）は、起動の記録の `ERROR` にしか出ない。利用者は、壊れていない `.nar` を疑うことになる。上の行（置き場）を直せば今回の形では起きなくなるが、ほかの読み書きの失敗でも同じ伝わり方になるので、別の件として書く | 段 8（タスク 3.5） | 上の「機械の全員向けの実測」の 4（`install_failed … word="extraction"` の行と、台詞の出どころ）・`target\winget-check\logs\3.5-menu1.stdout.log`・`3.5-zip-grep.txt`（辞書 `ghost\emo2\ghost\master\dic\install.pasta` の 89〜101 行目）・タグ `v0.0.2` の `crates/areka/src/install/judge.rs`（関数 `failure_word`） | （タスク 3.6 で記入） |
 
 （タスク 3.6 で記入）
