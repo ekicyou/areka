@@ -124,7 +124,7 @@
   - _Depends: 2.2, 3.2, 4.2, 5.1_
   - _Requirements: 4.11, 4.12_
 
-- [ ] 6. 道具と記録を合わせる
+- [x] 6. 道具と記録を合わせる
 - [x] 6.1 (P) `check_script` がアンカーを誤診せず、崩れた形を診断する
   - 診断の種類に「対応の崩れ」（名前 `unpaired_tag`）を足し、種類と名前の対応の表のテストに足す
   - 診断の本体で対応の判定を 1 回呼び、開きと閉じの位置に、閉じ無し・重なり・迷子の閉じの診断を台本の順のまま出す（文言は設計の ASCII の 3 つ）。`\e` の後ろの開き／閉じには出さない（再生と同じ）
@@ -142,7 +142,7 @@
   - _Boundary: doc の互換の記録_
   - _Requirements: 7.1, 7.2, 7.5_
 
-- [ ] 6.3 網羅台帳・宛先の数・報告を合わせる（1 つの段でまとめて）
+- [x] 6.3 網羅台帳・宛先の数・報告を合わせる（1 つの段でまとめて）
   - さくらスクリプトの台帳: 根 2 件（`\_a[ID,r2,r3...]`・`\_a[OnID,r0,r1...]`）を実装済み・持ち主を本 spec に（別名の行 `\_a[ID]` は別名のまま持ち主なし）。`\f[anchor*]` 16 行の持ち主を `areka-P0-anchor-style-canon` へ
   - 資産の台帳: descript の `anchor.*` 43 行の持ち主を `areka-P0-anchor-style-canon` へ。SHIORI の台帳: `OnAnchorSelect`・`OnAnchorSelectEx` を実装済み・持ち主を本 spec に
   - 宛先の下書き: 本 spec の持ち物の数を数え直し（61 → 4）、`areka-P0-anchor-style-canon` の塊（段 A・束「バルーンのリンク」・持ち物 59）を足して brief の数を 1 増やす。概況の文書の SHIORI イベントの柵の数（実装済み 50 → 52・無い 236 → 234）を数え直す
@@ -213,3 +213,6 @@
 - 6.2（開発者への確認・完了の報告で見せる）: ⑴ D-4＝アンカーの左ダブルクリックは 2 回の選択として送る（抑えるかどうか）。⑵ Reference0 の文字は「押す直前までに文字の層へ届いた合図の分」— 合図は文字のかたまりで届くので、まだ 1 字ずつ出ている途中の字も入り、まだ届いていない後ろのかたまりの字は入らない。話している最中の押下の Reference0 を直に固定するテストは無い。
 - 6.2 → `release-cycle` への申し送り: dola の `CueCommand` は `#[non_exhaustive]` でないので、2 種類の追加は、全種類を catch-all なしで並べている外の利用側のビルドを壊す。設計は「API の追加」と書いたが、次の公開の版の上げ方は `release-cycle` の側で決める（0.0.x なので cargo の上ではどの版上げも非互換扱い）。
 - 6.2 → 7.1 への申し送り: `git diff --stat main` は main が先へ進んだ分が混ざる。照合は分岐点との比較（`git diff --stat main...HEAD`）で行う。
+- 6.3: 数え直しはタスクの数とすべて一致（本 spec 61 → 4＝さくらスクリプト 2・SHIORI 2／`areka-P0-anchor-style-canon` 59＝`\f[anchor*]` 16・descript `anchor.*` 43／SHIORI イベントの柵 実装済み 52・無い 234／brief 49）。報告は生成器で作り直した。中身が変わったのは 3 本（`report/assets.md` は持ち主を載せないので差分なし＝7.1 の照合では一覧に出ない）。生成器は LF で書くので、作り直すたびに CRLF へ書き戻す。
+- 6.3（開発者への確認・完了の報告で見せる）: 宛先の下書き `roadmap-draft.md` で、⑴ 本 spec の束を「バルーンのリンク」→「会話」に替えた（持ち物 4 件が会話 3・リンク 1・文書の決まり「いちばん多くを含む束」）、⑵ 段階 A の表の「バルーンのリンク」の引受先の案を `areka-P0-anchor-style-canon` にした（未対応 59 件の全数を持つ・裁定ではなく読み・次の棚卸で確かめる、と本文に明記）。
+- 6.3（範囲外・棚卸で扱う）: ⑴ アンカーの見た目の持ち主を本 spec と書いたままの所 — `crates/areka-emo-text/src/look.rs`（`Note::AnchorColorAsDefault` と `is_unowned` の説明・設計が無改変とした所）・`color.rs` の冒頭・`doc/COMPAT_ARCHITECTURE.md` の `\f[color,default.anchor]` の行の追跡先・`doc/emo2-conformance-scope.md`。⑵ `shiori.toml` の未対応の行の共通の note「`\q` の選択肢 ID にこの名前を書いた場合だけは別」は、`\_a[On…]` からも任意の名前が送れるようになったので「だけ」が不正確（正本は `briefing-shiori.md` の群の文面）。⑶ `roadmap-draft.md`「先頭ウェーブ」冒頭の「84 件／31 件」は 09-13 の写真のままで、実数（60／67）と大きくずれている。W-2「`anchor-tag-canon` を繰り上げるか」の候補も古い。⑷ `\f[anchor*]` 16 行の note の「ログ: 出る（compile の catch-all の debug!）」は本 spec の前から実態と違う（`anchor-style-canon` が書き直す所）。
