@@ -492,6 +492,12 @@ impl AnimationTable {
         self.has_animated_parts || self.has_always || self.has_triggers
     }
 
+    /// `runonce`・`periodic`・`talk` を 1 本でも採ったか（部品の引き金を判定するかの門・一番上でも
+    /// 部品でも・spec: areka-P0-seriko-trigger-intervals 要件 8.1）。
+    pub(crate) fn has_triggers(&self) -> bool {
+        self.has_triggers
+    }
+
     /// `talk` を 1 本でも採ったか（文字の cue を写すかの門・一番上でも部品でも）。
     pub(crate) fn has_talk(&self) -> bool {
         self.has_talk

@@ -749,7 +749,8 @@ impl LoopRuntime {
     /// [`PatternState`] の写しを出来事の時刻 `at_ms`（無ければ直前の刻みの時刻）で作り直す: 一番上の `always` の再生が無ければその時刻で作って欄を置き、部品の欄は
     /// [`PartClocks::refresh`]（見えている `always` の時計を作る・回数つきの見えなくなった時計を捨てる・
     /// 抽選の時計と乱数は触らない）で作り直す。`commit_pattern` が変化を返したらその `Show` を返す。
-    /// 面が無い（`\s[-1]`・`\b[-1]` の後）なら、その面の回数つきの時計を捨てて何も返さない。
+    /// 面が無い（`\s[-1]`・`\b[-1]` の後）なら、その面の回数つきの時計と、部品の 3 語の時計・引き金の
+    /// 状態を捨てて何も返さない（[`PartClocks::drop_hidden`]）。
     /// バルーンの窓が閉じていれば時計を作らない（回数つきは捨てる）。
     /// 出来事の時刻は刻みの単調性の番人（`last_seen`）に入れない。刻みが 1 度も来ておらず `at_ms` も
     /// 無ければ時計を作らない（次の刻みで生まれる）。
@@ -788,7 +789,7 @@ impl LoopRuntime {
             .into_iter()
             .find(|(s, sl, ..)| s == scope && *sl == slot)
         else {
-            parts.drop_finite(scope, slot, table);
+            parts.drop_hidden(scope, slot, table);
             return None;
         };
         let at_ms = at_ms.or(*last_seen);
