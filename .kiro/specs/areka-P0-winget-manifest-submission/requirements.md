@@ -6,7 +6,7 @@
 
 **今の状態**: `v0.0.2` の GitHub Release が 2026-10-06 に公開され、`areka-0.0.2-x64.zip`・`areka-0.0.2-arm64.zip` とそれぞれの `.sha256` が置いてある（マニフェストの `InstallerUrl`・`InstallerSha256` が書ける）。リポジトリにマニフェストは無い（`dist/winget/` は無い）。名乗りは開発者が 2026-10-02 に `Areka.Areka.Portable` と決めた（`Areka.Areka` は後で作るインストーラー版のために空けておく）。入れ物は zip のまま（zip の中のポータブルな exe）・x64 と arm64 を最初から並べる・無料・未署名。areka は利用者のゴーストと記憶を exe の隣に置くので、winget で入れると、それらは winget の入れ先のフォルダの中に住む。外すとき・上げ直すときにそれらが残るかは測っていない。
 
-**何を変えるか**: ① マニフェスト 3 ファイル（version・defaultLocale・installer）の雛形を `dist/winget/` に置く。② 手元で `winget install --manifest` から入れて `areka` の 1 語で起動することを x64 の実機で確かめ、外すとき・上げ直すときに利用者のゴーストと記憶が残るかも測る。③ 開発者が winget-pkgs へ初回の提出（PR）を出し、自動の検査が通るところまで進める。更新の PR を自動で出す workflow（`winget.yml`）と説明書の winget の行は、初回の提出が取り込まれた後に `areka-P0-winget-release-automation` が受け持つ（2026-10-10 に分けた）。
+**何を変えるか**: ① マニフェスト 4 ファイル（version・installer・既定のロケール＝英語・追加のロケール＝日本語）の雛形を `dist/winget/` に置く。② 手元で `winget install --manifest` から入れて `areka` の 1 語で起動することを x64 の実機で確かめ、外すとき・上げ直すときに利用者のゴーストと記憶が残るかも測る。③ 開発者が winget-pkgs へ初回の提出（PR）を出し、自動の検査が通るところまで進める。更新の PR を自動で出す workflow（`winget.yml`）と説明書の winget の行は、初回の提出が取り込まれた後に `areka-P0-winget-release-automation` が受け持つ（2026-10-10 に分けた）。
 
 > 起票: 2026-10-02 `/kiro-discovery`（配布と公開＝winget・crates.io）。2026-10-10 に `areka-P0-winget-release-automation` を切り出した。要件生成: 2026-10-10（main `414d43eb`）。詳細は brief.md。
 
@@ -32,7 +32,7 @@
 
 ## Boundary Context
 
-- **In scope**: ① マニフェストの雛形 3 ファイル（`dist/winget/` の下）／② 手元の `winget install --manifest` で入れて `areka` の 1 語で起動する確かめ（x64 の実機）／③ 外すとき・上げ直すときに利用者のゴーストと記憶が残るかの実測／④ winget-pkgs への初回の提出の手順と、その実行（開発者の手）／⑤ 確かめと提出の記録／⑥ 後ろの spec への申し送り。
+- **In scope**: ① マニフェストの雛形 4 ファイル（`dist/winget/` の下）／② 手元の `winget install --manifest` で入れて `areka` の 1 語で起動する確かめ（x64 の実機）／③ 外すとき・上げ直すときに利用者のゴーストと記憶が残るかの実測／④ winget-pkgs への初回の提出の手順と、その実行（開発者の手）／⑤ 確かめと提出の記録／⑥ 後ろの spec への申し送り。
 - **Out of scope**:
   - `.github/workflows/winget.yml`（更新の PR を自動で出す workflow）・`README.md` と `dist/README.txt` の winget の行と既知の制限の文・`max-versions-to-keep` の数・workflow が使うトークンの登録 → `areka-P0-winget-release-automation`。
   - zip を作ること（完了 `areka-P0-release-package-versioned`）・Release を作ること（完了 `areka-P0-release-ci-workflow`）・リリースの手順（`areka-P0-release-cycle`）・署名（`areka-P0-release-code-signing`）。
@@ -52,9 +52,9 @@
 brief が要件討議へ回した議題は、下の仮置きで要件を書いた（答えで変わる条項を併記）。どれも範囲（何を In とするか）の食い違いではなく、範囲の中の値の決めである。
 
 - **議題 1 `ArchiveBinariesDependOnPath` を付けるか** → **決定（2026-10-10 要件討議）＝付ける**（brief の Desired Outcome の 1 と、steering の `roadmap.md`「配布と公開」のとおり。どちらでも `areka` と打てば起動するが、付けると全員が同じ入り方に揃う）。付けると、winget はリンクを作らず、入れ先のフォルダを利用者の PATH に足す。付けないと、OS の開発者モードがオンの利用者はリンク、オフの利用者は PATH になり、利用者の環境で入り方が分かれる（2026-10-03 実測）。areka はリンクを解けるので、どちらでも起動はする。付ける側の代償は、PATH に areka のフォルダが丸ごと載ること。影響する条項: 要件 1.6・3.3・6.2。
-- **議題 2 Tags の語** → 仮置き＝brief が挙げた **`ukagaka`・`desktop-mascot` の 2 語だけ**。足す語は要件討議で決める。影響する条項: 要件 1.7。
+- **議題 2 Tags の語** → **決定（2026-10-10 要件討議）**＝英語の側は `ukagaka`・`desktop-mascot`・`mascot`・`ghost`・`shiori`・`sakurascript`、日本語の側は `伺か`・`デスクトップマスコット`・`ゴースト`。ほかのアプリの名前（`ssp` など）はタグに使わない。影響する条項: 要件 1.7。
 - **議題 3 提出する版** → **決定（2026-10-10 要件討議）＝`v0.0.2`**（要件 4 の実測の結果に関わらず、この版で出す。下の議題 5）。着手までに次の版が出ていたら、どの版で出すかを着手のときに開発者が決める。影響する条項: 要件 5.3。
-- **議題 4 説明文の言語（既定のロケール）** → **仮置きなし**。brief は「3 ファイル」（＝ロケールは 1 つ）と「ロケールの欄を手で整える」までしか決めていない。マニフェストを作る道具の既定は英語（en-US）。日本語にするか英語にするかで、`winget show` に出る説明の文が変わる。影響する条項: 要件 1.8。
+- **議題 4 説明文の言語（既定のロケール）** → **決定（2026-10-10 要件討議）＝既定を英語（en-US）、追加で日本語（ja-JP）**。winget は利用者の言語に合うほうを出すので、日本語の Windows では日本語、ほかでは英語の説明になる。審査の人は英語で読める。brief の「3 ファイル」は 4 ファイルに改める。影響する条項: 要件 1.3・1.7・1.8・1.10。
 - **議題 5 実測で「利用者のゴーストか記憶が消える」と分かったときに、初回の提出を進めるか** → **決定（2026-10-10 要件討議）＝1 回だけ出して、名乗りを押さえる**。winget-pkgs に名乗りを先に押さえる仕組みは無く、名乗りは 1 版でも取り込まれていることでしか押さえられない。開発者「消えるなら winget は使えない。アプリをインストーラー形式にするとか、ファイル置き場を指定できるようにするとか、整備が必要」「ダメだった場合でも、1 回リリースはしておいて、そのままにしておけば名前は押さえられる」。消える物が在ると分かったときは、① マニフェストに注意書きを付けて `v0.0.2` を出す ② 置き場を直す仕事を別の spec として起票する ③ 置き場が直るまで、説明書に winget の行を載せず、winget-pkgs へ次の版を出さないことを後ろの spec へ申し送る。消える物が 0 なら、注意書きも ③ も要らない。影響する条項: 要件 1.10・4.6・6.2。
 - **議題 6 `areka-P0-release-cycle` の文書にある `winget.yml` の持ち主の名前の直しを、どの spec がするか** → **仮置きなし**（本仕様の要件に入れていない。手順は変わらず、名前が替わるだけ）。
 
@@ -75,14 +75,14 @@ brief が要件討議へ回した議題は、下の仮置きで要件を書い�
 
 1. The マニフェストの雛形 shall 名乗り（`PackageIdentifier`）を `Areka.Areka.Portable` とし、`Areka.Areka` をどの欄にも名乗りとして使わない。
 2. The マニフェストの雛形 shall 表示名を「areka (portable)」、発行者（`Publisher`）を `ekicyou` とし、発行者の素性を示す URL（`PublisherUrl`）とパッケージの URL を持つ。
-3. The マニフェストの雛形 shall version・defaultLocale・installer の 3 ファイルで成り、3 つとも同じ名乗り・同じ版・同じ書式の版（brief の指定は 1.12.0。提出の時点で winget-pkgs が受け付ける版であること）を持つ。
+3. The マニフェストの雛形 shall version・installer・既定のロケール（en-US）・追加のロケール（ja-JP）の 4 ファイルで成り、4 つとも同じ名乗り・同じ版・同じ書式の版（brief の指定は 1.12.0。提出の時点で winget-pkgs が受け付ける版であること）を持つ。
 4. The マニフェストの雛形 shall 入れ物を zip、その中身をポータブルな exe とし、入れる exe を zip の根の `areka.exe` の 1 つ、コマンド名を `areka` とする（`InstallerType: zip`・`NestedInstallerType: portable`・`NestedInstallerFiles` に `areka.exe`・`PortableCommandAlias: areka`）。
 5. The マニフェストの雛形 shall x64 と arm64 の 2 項目を持ち、それぞれの `InstallerUrl` を GitHub Release のその版の `areka-{版}-{arch}.zip` を指す https の URL、`InstallerSha256` を同じ Release の `areka-{版}-{arch}.zip.sha256` に書かれた値と同じにする（大文字と小文字の違いは問わない）。
 6. The マニフェストの雛形 shall `ArchiveBinariesDependOnPath: true` を持つ（議題 1 の決定）。
-7. The マニフェストの雛形 shall ライセンスを MIT とし、短い説明・Release の公開日（`ReleaseDate`）・タグを持ち、タグに `ukagaka` と `desktop-mascot` を含める（議題 2 の仮置き）。
-8. The マニフェストの雛形 shall ロケールのファイルを 1 つだけ持つ（説明文の言語は議題 4 で決める）。
+7. The マニフェストの雛形 shall ライセンスを MIT とし、短い説明・Release の公開日（`ReleaseDate`）・タグを持ち、タグを英語のロケールでは `ukagaka`・`desktop-mascot`・`mascot`・`ghost`・`shiori`・`sakurascript`、日本語のロケールでは `伺か`・`デスクトップマスコット`・`ゴースト` とする（議題 2 の決定）。
+8. The マニフェストの雛形 shall 既定のロケールを英語（en-US）とし、追加のロケールとして日本語（ja-JP）を 1 つ持ち、表示名・短い説明を両方の言語で書く（議題 4 の決定）。
 9. The マニフェストの雛形 shall 署名・インストーラー・スタートメニューのショートカット・ほかのパッケージへの依存を前提にした欄を持たない。
-10. Where 要件 4 の実測で、利用者のゴースト・バルーン・記憶のどれかが消えると分かった, the マニフェストの雛形 shall 入れた直後に利用者へ示される欄に、上げ直しと外すときに何が消えるかと、その前に写しておくことを書く（消える物が 0 のときは書かない）。
+10. Where 要件 4 の実測で、利用者のゴースト・バルーン・記憶のどれかが消えると分かった, the マニフェストの雛形 shall 入れた直後に利用者へ示される欄に、上げ直しと外すときに何が消えるかと、その前に写しておくことを、英語と日本語の両方のロケールに書く（消える物が 0 のときは書かない）。
 
 ### Requirement 2: 雛形の置き場と、リポジトリへの影響の範囲
 
@@ -90,7 +90,7 @@ brief が要件討議へ回した議題は、下の仮置きで要件を書い�
 
 #### Acceptance Criteria
 
-1. The リポジトリ shall マニフェストの雛形 3 ファイルを `dist/winget/` の下に置く（その下の並びは設計で決める）。
+1. The リポジトリ shall マニフェストの雛形 4 ファイルを `dist/winget/` の下に置く（その下の並びは設計で決める）。
 2. When 雛形を置く、または直す, the 開発の手順 shall その雛形に `winget validate` を通し、成功したことを記録に残す。
 3. The リポジトリの雛形 shall winget-pkgs へ提出したマニフェストと同じ内容である（提出の後に自動の検査を受けて直したときは、雛形へ写し戻す）。
 4. The 配布 zip shall `dist/winget/` を足す前と同じ中身の構成である（`dist/winget/**` は zip に入らない）。
@@ -135,7 +135,7 @@ brief が要件討議へ回した議題は、下の仮置きで要件を書い�
 
 1. The 本仕様 shall 初回の提出の手順（開発者のアカウントに winget-pkgs のフォークを用意する・使う道具と入れ方・打つコマンド・トークンをリポジトリにも記録にも書かないこと）を、本仕様のフォルダの中の文書に書く（道具は `komac` か `wingetcreate` のどちらかを設計で選ぶ）。
 2. When 要件 3 が合格し、要件 4 の記録が済む, the 開発者 shall 自分の手で、自分のアカウントの winget-pkgs のフォークから microsoft/winget-pkgs へ、`Areka.Areka.Portable` の 1 つの版だけを含む PR を出す（AI は開発者のトークンを扱わず、提出の操作をしない）。
-3. The 初回の提出 shall 提出する版を着手のときに決めて記録に残し（議題 3 の仮置き＝`v0.0.2`）、その版の公開済みの Release の zip を指す。
+3. The 初回の提出 shall 提出する版を着手のときに決めて記録に残し（議題 3 の決定＝`v0.0.2`）、その版の公開済みの Release の zip を指す。
 4. When PR を出す, the 本仕様 shall PR の URL と、自動の検査の結果（付いた印と、赤のときはその文）を記録に残す（PR の印と文は、AI が GitHub への読むだけの問い合わせで読んでよい。提出の操作とトークンは開発者の手のまま）。
 5. If 自動の検査が赤で、マニフェストの直しで消える, then the 開発者 shall 同じ PR の中で直し、直した内容を雛形へ写し戻して、要件 2.2 をやり直す。
 6. If 自動の検査の赤がマニフェストの直しでは消えない（`areka.exe` がウイルス対策の走査に掛かる・無人のインストールかアンインストールが通らない、など）, then the 本仕様 shall 原因を記録に残して開発者へ報告し、原因を直す仕事を別の spec として `/kiro-discovery` で起票する（本仕様では `crates/**`・`tools/**` を直さない）。
