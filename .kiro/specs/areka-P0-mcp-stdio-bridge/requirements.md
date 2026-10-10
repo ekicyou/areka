@@ -71,14 +71,15 @@
 4. brief の「本体が居なければ Server not available」は、`initialize`・`tools/list`・`ping` には当たらない。SSP の中継はこの 3 つに控えと自前の答えで応える。brief の望む姿（「areka が起動していないとき、理由の分かるエラーが返る」）と brief の範囲（「SSP の `mcp.exe` と同じ入力に同じ出力」）がこの 3 つについて食い違っていたので、裁定 1 で SSP と同じ側に決めた。
 5. brief の「`Mcp-Method`／`Mcp-Name`／`MCP-Protocol-Version` のヘッダを付けて送る」は、`initialize` で始める並びでは起きなかった。
 6. survey §6 の「JSON でない行の直後の `no/such` に応答が出なかった（終了したのか握りつぶしたのかは未確認）」は、JSON でない行と次の要求が 1 つの本文として送られ、1 つのエラーで答えられたため。終了も握りつぶしもしていない。
-7. brief の「中継は MCP の中身を作らず写すだけ」は、裁定 1・2 で 3 か所だけ外れる: 控えを返す・`ping` に自分で答える・相手が areka かを確かめる問い合わせを自分で送る。加えて、`initialize` を使わない版（`2026-07-28`）を通すには、行の中身（`method`・`params.name`・`params._meta` の版）を読んで HTTP の札を 3 つ作る必要がある（ギャップ分析で rmcp 3.5.0 のソースから確認・`research.md` 2.5）。これらを手書きで持つか公式 SDK で組むかは、要件ディスカッションの議題 1 で決める。
+7. brief の「中継は MCP の中身を作らず写すだけ」は、裁定 1・2 で 3 か所だけ外れる: 控えを返す・`ping` に自分で答える・相手が areka かを確かめる問い合わせを自分で送る。加えて、`initialize` を使わない版（`2026-07-28`）を通すには、行の中身（`method`・`params.name`・`params._meta` の版）を読んで HTTP の札を 3 つ作る必要がある（ギャップ分析で rmcp 3.5.0 のソースから確認・`research.md` 2.5）。これらは手書きで持たず、公式 SDK（rmcp）で組む（裁定 3）。
 
 ### 開発者の裁定（2026-10-10）
 
 | # | 問い | 裁定 | 載せた要件 |
 |---|---|---|---|
-| 1 | areka が起動していないとき、`initialize`・`tools/list`・`ping` にどう答えるか | **SSP の中継と同じ。** 中継は、areka から中継した `initialize` と `tools/list` の答えを控えておき、areka が居ないときは控えを `id` だけ差し替えて返す。`ping` は自分で答える。ほかの要求は「areka が居ない」のエラー。控えがまだ無いときの `initialize` はエラー（SSP の実測と同じ）。`server/discover` は SSP と同じく控えず、エラーで答える。**控えの置き場と形は設計で決める**（要件では決めない） | 3.1〜3.11 |
+| 1 | areka が起動していないとき、`initialize`・`tools/list`・`ping` にどう答えるか | **SSP の中継と同じ。** 中継は、areka から中継した `initialize` と `tools/list` の答えを控えておき、areka が居ないときは控えを `id` だけ差し替えて返す。`ping` は自分で答える。ほかの要求は「areka が居ない」のエラー。控えがまだ無いときの `initialize` はエラー（SSP の実測と同じ）。`server/discover` は SSP と同じく控えず、エラーで答える。**控えの置き場と形は設計で決める**（要件では決めない）。※「`id` だけ差し替えて返す」と「`server/discover` は控えない」は、同じ日の裁定 3 で「控えの中身で、どの版の最初の問い合わせにも答える」に改めた | 3.1〜3.11 |
 | 2 | 候補を当たっていて、areka でないもの（SSP など）が応えたらどうするか | **areka の MCP サーバーだと名乗った相手にだけつなぐ。** 違う相手は飛ばし、どの候補も areka でなければ「areka が見つからない」のエラー。`AREKA_MCP_PORT` で番号を指定したときも同じく確かめる。**確かめるのにどの要求を使うかは設計で決める** | 2.2〜2.4・2.11・3.6 |
+| 3 | 行の中身を読んで HTTP の札を作る・控えで答える・名乗りを確かめる中継を、手書きで持つか公式 SDK で組むか | **公式 SDK（rmcp）で組む。** Desktop の側（stdio）も areka の側（HTTP）も rmcp で受ける。`Cargo.lock` に無い外部のクレートは足さない（付属の `reqwest` は使わず、HTTP を送る部分だけ自前で書く＝実測で増える名前 0 個）。これに伴い、中継は「字をそのまま写す」から「意味を変えずに届ける」になり、裁定 1 の「`id` だけ差し替えて返す」「`server/discover` は控えない」は「控えの中身で、どの版の最初の問い合わせにも答える」に改まる。設計の最初に 3 点（自前の HTTP の送り手で rmcp の口を満たせるか・確かめた相手と同じ接続で送れるか・exe の大きさ）を確かめ、崩れたら止めて報告する | 1.1・1.2・1.10・3.1〜3.9・Boundary Context |
 
 ### 要件の段で決めた細部（要件ディスカッションで覆せる）
 
@@ -87,7 +88,7 @@
 | 1 | exe の名前 | **`areka-mcp-bridge.exe`**（Desktop の設定の名前は `areka`） | brief と roadmap が使ってきた名前 | 6.1・7.1 |
 | 2 | ポートを引数でも渡せるか | **渡せない。`AREKA_MCP_PORT` だけ** | Desktop の設定は `env` を書ける。SSP の中継も引数なし。手段が 2 つあると食い違ったときの順を決める必要が出る | 2.8 |
 | 3 | arm64 の zip に入れるか | **入れる**（arm64 の zip には arm64 の中継） | brief の制約「x64＋arm64」 | 7.1 |
-| 4 | 写すだけか、版の札を解釈するか | **行の中身は書き換えない。areka が受ける 5 つの版のどれでも、HTTP で直接つないだときと同じ結果を返す**（`2026-07-28` は、HTTP の札 `MCP-Protocol-Version`・`Mcp-Method`・`Mcp-Name` を行の中身から作らないと areka が 400 で断る＝`research.md` 2.5） | Desktop がどの版で話すかは未確認で、どの版でも使えることが望む姿。Claude Code は既に `initialize` を使わない版でつなぐ | 1.1・1.2・1.10 |
+| 4 | 写すだけか、版の札を解釈するか | **意味を変えずに届ける。Desktop がどの版で話しても、areka へ HTTP で直接つないだときと同じ意味の結果を返す**（裁定 3。版の交渉と HTTP の札は rmcp が持つ。字の並び〔欄の順・空白〕は同じとは限らない） | Desktop がどの版で話すかは未確認で、どの版でも使えることが望む姿。Claude Code は既に `initialize` を使わない版でつなぐ | 1.1・1.2・1.10 |
 | 5 | 入力の切り方 | **1 行 1 要求**（SSP の中継の「波かっこの対応で切る」は写さない） | MCP の stdio は改行区切りで、brief も 1 行 1 要求。JSON でない行が次の要求を巻き込まない | 1.1・1.6 |
 | 6 | 中継が作るエラーの番号と文 | **番号は SSP と同じ `-1`。文は SSP と同じ書き出し（`Server not available`・`No response from server`・`Invalid JSON response from server`）に、理由を英語で続ける** | SSP と同じ文で始めれば SSP の中継に慣れた利用者とエージェントが読める。続きで「理由の分かる」を満たす | 3.6・4.1・4.2 |
 | 7 | `AREKA_MCP_PORT` が `0`・数でない | **`0` は「つなぐ先が無い」として、控えも使わずに各要求へエラー。数でない・範囲外は、標準エラーに 1 件残して既定の 20 候補** | areka 本体の読み方（`0` は待ち受けない・読めない値は既定）と同じ意味にする。待ち受けないと決めた設定で、控えのツールの一覧を並べない | 2.5・2.6 |
@@ -98,7 +99,7 @@
 | 12 | 控えが無いときの `tools/list` | **`initialize` と同じくエラー**（SSP では未実測） | 控えが無いときの `initialize` の実測に揃える | 3.5 |
 | 13 | areka が見つからないエラーの文の続き | **areka でない相手が応えた番号があれば、その番号と相手の名乗りを続きに入れる** | 「areka は起動していないが SSP が 9801 に居る」が Desktop の側で読める | 3.6 |
 | 14 | 届けた要求に応答が無かったとき | **送り直さない** | 台本を流す・イベントを起こす要求が 2 回届くと、ゴーストが同じことを 2 回する | 4.5 |
-| 15 | Desktop が `initialize` を使わない版で話す場合 | **裁定 1 のとおり `server/discover` は控えない。** そのとき「Desktop を先に起動してもツールが並ぶ」は効かないので、実機確認で Desktop の話す版を記録し、効かなければ記録に残す | SSP の実測に従う（裁定 1）。広げるかどうかは実機の結果を見てから | 3.6・8.5 |
+| 15 | Desktop が `initialize` を使わない版で話す場合 | **どの版の最初の問い合わせ（`initialize`・`server/discover`）にも、控えのサーバーの情報で答える**（SSP の中継は `server/discover` にエラーを返す＝差の記録に載せる） | 裁定 3。Desktop の話す版が未実測でも「Desktop を先に起動してもツールが並ぶ」が効く | 3.4・8.5 |
 
 ### 設計へ送る議題（要件では決めない）
 
@@ -107,7 +108,9 @@
 - 候補の並びを areka 本体と共有する手段（共有するか、写して一致を検査するか）。
 - help が中継の置き場を知る手段（help の中で求めるか、areka 本体が自分の場所に使っている決まり〔リンクを辿る〕を通して起動の配線から渡すか＝`research.md` 議題 6）。
 - 待つ時間の値（候補を見切る時間・応答を待つ上限）。
-- HTTP に載せるのに要る札（版・メソッド名・ツール名）の付け方。
+- rmcp での組み方（裁定 3）: 自前の HTTP の送り手で rmcp の口（`StreamableHttpClient`）を満たす形・要求を種類ごとでなく 1 つの口で areka へ渡す形・tokio を中継のどこに置くか・exe の大きさ。
+- rmcp の stdio の輸送が、JSON でない行・オブジェクトでない行をどう扱うか（要件 1.6・1.7 を満たす手段）。
+- rmcp の版を上げるときに中継のテストも通す決まりの置き場（`.kiro/steering/tech.md` の rmcp の項）。
 
 ## Boundary Context
 
@@ -122,7 +125,6 @@
   - areka 本体の MCP の受け口とツール（完了 `mcp-server-core` と各ツールの spec）。本 spec は受け口の振る舞いを変えない。
   - `127.0.0.1` 以外への中継（ほかの機械の areka）・認証・TLS。
   - SSP へつなぐこと（中継のつなぐ先は areka だけ）。
-  - `server/discover` の答えの控え（細部 15）。
   - areka が後から起動したことを Desktop へ知らせること（中継から Desktop へ通知を送らない＝0 件。Desktop の持つツールの一覧は、Desktop が次に `tools/list` を送るまで前のまま）。
   - Claude Desktop の拡張機能（`.mcpb`）の包み。
   - Claude Code・Cursor 向けの案内（今のまま HTTP で直接つなぐ）。
@@ -131,7 +133,7 @@
 - **Adjacent expectations**:
   - 完了 `mcp-server-core` の受け口の約束（上の「areka の受け口の約束」）に頼る。本 spec は help の Claude Desktop の節だけを変え、ほかの節（URL・Claude Code・Cursor・ポートの決まり方・areka 独自のツール）は変えない。
   - 同じウェーブの約束（roadmap のウェーブ C5）で本 spec が触ると届けてあるのは、新しいクレート・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`（作り直し）・`help.rs`・`help_tests.rs`・`tools/package.ps1`・`dist/README.txt`（自分の行）。約束の一覧に無い新しい文書 1 つ（細部 9）と survey §6 の 1 行も触る。**約束は設計の形を縛らない**（開発者の方針 2026-10-05「設計は本質の形で。触らない約束を理由に回避の形へ逃げない」）: 設計が本質の形を選んだ結果、約束の外のファイル（`crates/areka/src/main.rs`・`crates/areka-mcp/src/` の `dispatch.rs`・`server.rs`・`lib.rs`・`port.rs`・`handler.rs` など）に触るなら、設計の文書にそのファイルを挙げ、設計ディスカッションで開発者に諮って、同じファイルを触る並走の spec（`main.rs` は `baseware-root-list`）と調整する。
-  - 外部のクレートは増やさない見込み（brief の目標。JSON の読み書きは `Cargo.lock` に既にある版を使う）。裁定 1・2 を満たすのに MCP の SDK が要ると設計で分かったら、止めて報告する（依存を足すのは開発者の判断）。
+  - 中継は公式 SDK（rmcp・`Cargo.lock` に既にある版）で組み、`Cargo.lock` に無い外部のクレートは足さない（裁定 3。`reqwest` は使わない）。rmcp の機能（クライアント・stdio の輸送）を足すので、`Cargo.lock` と謝辞は作り直す。設計の最初に確かめる 3 点（裁定 3）のどれかが崩れ、外部のクレートを足さないと組めないと分かったら、止めて報告する（依存を足すのは開発者の判断）。
   - 版上げ（`v0.0.3`）は本 spec の PR が開いていないときに行う（roadmap の決まり）。先に版上げが着地したら、取り込んで `Cargo.lock` と謝辞を作り直す。
   - 完了のときに `release-code-signing`（署名する exe の一覧）と `winget-manifest-submission`（入れ子の実行ファイルの一覧）へ、中継が増えたことを申し送る。
 
@@ -143,16 +145,16 @@
 
 #### Acceptance Criteria
 
-1. When 標準入力に JSON のオブジェクト 1 つの行（UTF-8・行末は LF でも CRLF でもよい）が届く, the 中継 shall その中身を書き換えずに、つないだ areka の MCP の受け口（`POST /api/mcp/v1`）へ届け、areka の応答の本文を 1 行（UTF-8・BOM なし・行末は LF 1 つ）で標準出力へ書く。
-2. The 中継 shall 同じ要求を areka へ HTTP で直接送ったときと同じ中身の応答を返す（`initialize`・`tools/list`・`tools/call`・`ping`・areka が返す JSON-RPC のエラー・`isError: true` の結果を含む。`id` は数でも文字列でも要求のまま返る）。
+1. When 標準入力に JSON のオブジェクト 1 つの行（UTF-8・行末は LF でも CRLF でもよい）が届く, the 中継 shall その要求を、意味を変えずに、つないだ areka の MCP の受け口（`POST /api/mcp/v1`）へ届け、areka の応答を、意味を変えずに 1 行（UTF-8・BOM なし・行末は LF 1 つ）で標準出力へ書く。
+2. The 中継 shall 同じ要求を areka へ HTTP で直接送ったときと同じ意味の応答を返す（欄と値が同じ。欄の順と空白は問わない。`initialize`・`tools/list`・`tools/call`・`ping`・areka が返す JSON-RPC のエラー・`isError: true` の結果を含む。`id` は数でも文字列でも要求のまま返る）。
 3. When 届いた行が通知（`id` を持たない要求）で、areka が本文の無い応答で受け取る, the 中継 shall 標準出力へ何も書かない。
-4. When areka の応答の本文が途中に改行を含む JSON である, the 中継 shall 意味を変えずに 1 行にして書く。
+4. The 中継 shall どの応答も 1 行で書く（areka の応答の本文が途中に改行を含んでいても、行を分けない）。
 5. When 標準入力に空の行（空白だけの行を含む）が届く, the 中継 shall areka へ何も送らず、標準出力へ何も書かず、次の行を読む。
 6. If 届いた行が JSON として読めない, then the 中継 shall areka へ送らずに、`id` が `null`・番号 `-32700` の JSON-RPC のエラーを 1 行で返し、次の行を読み続ける（その行が次の行の扱いを変えない）。
 7. If 届いた行が JSON として読めるがオブジェクトでない（配列・数・文字列など）, then the 中継 shall areka へ送らずに、`id` が `null`・番号 `-32600` の JSON-RPC のエラーを 1 行で返し、次の行を読み続ける。
 8. The 中継 shall 行の長さと応答の長さに自分の上限を設けない（areka が受ける大きさの要求と、areka が返す大きさの応答〔画像を含む `dump_surface`・`dump_balloon` の結果〕を欠けずに通す）。
 9. When 標準入力が閉じる, the 中継 shall 扱っている途中の要求の応答を書き終えてから、終了コード 0 で終わる。
-10. The 中継 shall areka が受ける 5 つの版（`initialize` で始める `2025-11-25`・`2025-06-18`・`2025-03-26`・`2024-11-05` と、`server/discover` で始める `2026-07-28`）のどれで話すクライアントにも、areka につながっている間は、HTTP で直接つないだときと同じ結果を返す。
+10. The 中継 shall areka が受ける 5 つの版（`initialize` で始める `2025-11-25`・`2025-06-18`・`2025-03-26`・`2024-11-05` と、`server/discover` で始める `2026-07-28`）のどれで話すクライアントにも、areka につながっている間は、areka へ HTTP で直接つないだときと同じ意味の結果を返す（ツールの一覧・ツールの呼び出しの結果・areka の JSON-RPC のエラー）。
 
 ### Requirement 2: つなぐ先の areka を決める
 
@@ -180,15 +182,15 @@
 
 #### Acceptance Criteria
 
-1. When areka が `initialize` に返した応答（`result` を持つもの）を中継が Desktop へ返す, the 中継 shall その応答を控えに取り、前の `initialize` の控えを置き換える。
-2. When areka が `tools/list` に返した応答（`result` を持つもの）を中継が Desktop へ返す, the 中継 shall その応答を控えに取り、前の `tools/list` の控えを置き換える。
+1. When 中継が areka からサーバーの情報（名乗り・できること・説明の文）を受け取る, the 中継 shall それを控えに取り、前のサーバーの情報の控えを置き換える。
+2. When areka が `tools/list` に返した結果（エラーでないもの）を中継が Desktop へ返す, the 中継 shall その結果を控えに取り、前のツールの一覧の控えを置き換える。
 3. The 中継 shall 控えを、中継が終了して起動し直された後も読める形で持つ（Desktop が次に起動する中継が、前の中継の取った控えで答えられる）。
-4. While areka が見つからず、`initialize` の控えがある, when `initialize` が届く, the 中継 shall 控えの応答を、`id` だけ届いた要求のものに差し替えて 1 行で返す（版などほかの中身は控えのまま）。`tools/list` も、`tools/list` の控えで同じに答える。
-5. If areka が見つからず、届いた `initialize`（または `tools/list`）に当たる控えが無い, then the 中継 shall 3.6 と同じエラーで答える。
-6. If areka が見つからないときに、`initialize`・`tools/list`・`ping` 以外の `id` を持つ要求（`tools/call`・`server/discover`・未知のメソッドを含む）が届く, then the 中継 shall その要求の `id`・番号 `-1`・`Server not available` で始まり areka が見つからない旨が続く英文の `message` を持つ JSON-RPC のエラーを 1 行で返す。areka でない相手が応えた番号があれば、その番号と相手の名乗りを `message` の続きに含める。
+4. While areka が見つからず、サーバーの情報の控えがある, when 最初の問い合わせ（`initialize`、または `initialize` を使わない版の `server/discover`）が届く, the 中継 shall 控えのサーバーの情報（名乗り・できること・説明の文）で答える（版は Desktop と中継の間で決まった版）。`tools/list` には、ツールの一覧の控えで同じに答える。
+5. If areka が見つからず、届いた最初の問い合わせ（または `tools/list`）に当たる控えが無い, then the 中継 shall 3.6 と同じエラーで答える。
+6. If areka が見つからないときに、最初の問い合わせ・`tools/list`・`ping` 以外の `id` を持つ要求（`tools/call`・未知のメソッドを含む）が届く, then the 中継 shall その要求の `id`・番号 `-1`・`Server not available` で始まり areka が見つからない旨が続く英文の `message` を持つ JSON-RPC のエラーを 1 行で返す。areka でない相手が応えた番号があれば、その番号と相手の名乗りを `message` の続きに含める。
 7. While areka が見つからない, when `ping` が届く, the 中継 shall 自分で、その要求の `id` と空の `result`（`{}`）を持つ応答を 1 行で返す。
 8. If areka が見つからないときに通知が届く, then the 中継 shall 標準出力へ何も書かない。
-9. While areka につながっている, the 中継 shall 控えで答えない（`initialize`・`tools/list`・`ping` を含むどの要求も areka へ届け、areka の応答を返す）。areka が居ない間に控えで答えた後で areka が見つかったときも、その後の要求は areka へ届け、3.1・3.2 の決まりで控えを新しい答えに置き換える。
+9. While areka につながっている, the 中継 shall 控えで答えない（最初の問い合わせには areka の今のサーバーの情報で、`tools/list` と `tools/call` には areka の今の答えで応える）。areka が居ない間に控えで答えた後で areka が見つかったときも、その後の要求には areka の今の答えで応え、3.1・3.2 の決まりで控えを新しい中身に置き換える。
 10. If 控えを読めない（壊れている・途中まで）・書けない, then the 中継 shall 標準エラーに理由を残し、読めない控えは無いものとして扱い、要求の中継とエラーの応答を続ける（終了しない）。
 11. While 2 つ以上の中継が同時に動いている, when それぞれが同じ種類の控えを書く, the 中継 shall 控えをどれか 1 つの応答の全体にする（混ざった中身・途中までの中身にしない）。
 
@@ -200,7 +202,7 @@
 
 1. If つないだ areka が、`id` を持つ要求に本文の無い応答を返す、または応答の途中で接続を閉じる, then the 中継 shall その要求の `id`・番号 `-1`・`No response from server` で始まる英文の `message` を持つ JSON-RPC のエラーを 1 行で返す。
 2. If areka の応答の本文が JSON として読めない（HTTP のエラーに付く平文を含む）, then the 中継 shall その要求の `id`・番号 `-1`・`Invalid JSON response from server` で始まる英文の `message` を持つ JSON-RPC のエラーを 1 行で返し、HTTP の状態と本文の頭を標準エラーに残す。
-3. When areka の応答の本文が JSON である, the 中継 shall HTTP の状態（200・400 など）に関わらず、その本文を返す（areka の JSON-RPC のエラーを中継のエラーに作り替えない）。
+3. When areka の応答の本文が JSON である, the 中継 shall HTTP の状態（200・400 など）に関わらず、その中身を返す（areka の JSON-RPC のエラーは、番号・文・付いているデータを同じにして返し、中継のエラーに作り替えない）。
 4. If areka が要求に応えないまま、設計で決めて記録する上限の時間が過ぎる, then the 中継 shall その要求に 4.1 と同じ形のエラーで答え、次の要求を扱える状態に戻る。上限は、areka のツールが答えるまでに掛けうる最も長い時間より長くする。
 5. The 中継 shall areka へ届けた要求を、応答が得られなかったことを理由に送り直さない（同じ要求が areka に 2 回届く回数 0）。
 6. The 中継 shall どのエラーの後も終了せず、次の行を読み続ける。
@@ -250,9 +252,9 @@
 1. The 中継 shall ループバックの偽のサーバー（OS が割り当てる空きポート・固定の番号を束ねるテスト 0 本・ネットへ出ない）を相手に、控えをテストごとの一時の置き場（ワークツリーの `target` の下）に置いて（利用者の本物の控えを読み書きする回数 0・机の本物の 9801〜9830 へ接続するテスト 0 本）、次を決定論テストで固定する:
    - **中継の基本**（要件 1）: 要求と応答の往復（数の `id`・文字列の `id`）・通知で出力なし・改行入りの応答が 1 行になる・空の行・JSON でない行の `-32700` とその次の行が通ること・オブジェクトでない行の `-32600`・大きな応答が欠けないこと・標準入力が閉じて終了コード 0・標準出力に応答の行しか無いこと。
    - **つなぐ先**（要件 2）: areka と名乗る相手へつなぐ・areka と名乗らない相手を飛ばして次の候補の areka へつなぐ（飛ばした相手に Desktop の要求が届いた数 0）・areka と名乗らない相手だけのときのエラーに番号と名乗りが入る・`AREKA_MCP_PORT` の 4 通り（番号・`0`・読めない値・未設定）・指定した番号の相手が areka と名乗らないときのエラー・返事をしない相手の見切り・起動し直した areka へ届くこと・areka が去った番号を areka でないものが取ったときに要求が届かないこと。
-   - **areka が居ないとき**（要件 3）: `initialize` と `tools/list` の応答が控えに取られる・別に起動した中継が控えを `id` だけ差し替えて返す・控えが無いときの `initialize` と `tools/list` のエラー・自前の `ping`・`tools/call` と `server/discover` のエラー・通知で出力なし・areka が見つかった後は areka の応答が返り控えが置き換わる・エラーの応答は控えに取られない・壊れた控えは無いものとして扱われる・控えを書けなくても中継が続く・同時に書いても控えが混ざらない。
+   - **areka が居ないとき**（要件 3）: `initialize` と `tools/list` の応答が控えに取られる・別に起動した中継が控えの中身で答える（`initialize` で始める版と `server/discover` で始める版の両方）・控えが無いときの最初の問い合わせと `tools/list` のエラー・自前の `ping`・`tools/call` のエラー・通知で出力なし・areka が見つかった後は areka の応答が返り控えが置き換わる・エラーの応答は控えに取られない・壊れた控えは無いものとして扱われる・控えを書けなくても中継が続く・同時に書いても控えが混ざらない。
    - **応答がおかしいとき**（要件 4）: 壊れた応答・本文の無い応答・途中で閉じる接続・応答の上限の時間・JSON の本文が HTTP の状態に関わらず返る・送り直しが 0 回・エラーの後も続くこと。
 2. If 中継の候補の並びが areka 本体の待受の候補の並びと食い違う、または中継が areka と見なす名乗りが areka 本体の名乗りと食い違う, then the 全体テスト shall 赤になる。
 3. The areka shall help の決定論テストで、Claude Desktop の節の設定例（中継の絶対パス・JSON として読めること・`env` の有無の 2 通り）と、「今後の版で用意します」の文が無いことを固定する（設定ファイルの名前が載っていないことを確かめていた今の期待は書き換える）。
-4. The 本 spec shall SSP の中継と areka の中継が同じ入力に何を返すかを行ごとに並べた記録を `doc/ssp-mcp/` の下に 1 つ持ち、違う行には違う理由を書く（入力の切り方・改行入りの応答・エラーの文の続き・areka でない相手の扱い・控えの置き場・`AREKA_MCP_PORT` が `0` のときを含む）。
-5. The 本 spec shall 実機で確かめ、結果を `.kiro/specs/areka-P0-mcp-stdio-bridge/verification/signoff.md` に残す: ⑴ 配布スクリプトで作った zip を展開して `areka.exe` を起動し、help の設定例を Claude Desktop の設定に写して Desktop を起動し直すと、Desktop に areka のツールが並び、`get_status` など 1 本以上が呼べる、⑵ そのとき Desktop が話した版を記録する、⑶ areka を止めた状態で Desktop からツールを呼ぶと、理由の読めるエラーが Desktop に出て、areka を起動し直すと Desktop を起動し直さずに呼べる、⑷ areka を止めたまま Desktop を起動し直すと、控えで areka のツールが並び（Desktop が `server/discover` で始める版で話していて並ばなければ、その見え方を記録する＝細部 15）、その後に areka を起動すると Desktop を起動し直さずに呼べる、⑸ SSP が 9801 で待ち受けている机で areka を起動すると、Desktop から呼んだ `get_active_ghost_list` が areka のゴーストを返す（SSP のゴーストを返さない）、⑹ 配布スクリプトの検査（`-Check`）が緑。
+4. The 本 spec shall SSP の中継と areka の中継が同じ入力に何を返すかを行ごとに並べた記録を `doc/ssp-mcp/` の下に 1 つ持ち、違う行には違う理由を書く（入力の切り方・改行入りの応答・エラーの文の続き・areka でない相手の扱い・控えの置き場・`server/discover` に控えで答えること・`AREKA_MCP_PORT` が `0` のときを含む）。比べるのは字の並びではなく意味（欄と値）。
+5. The 本 spec shall 実機で確かめ、結果を `.kiro/specs/areka-P0-mcp-stdio-bridge/verification/signoff.md` に残す: ⑴ 配布スクリプトで作った zip を展開して `areka.exe` を起動し、help の設定例を Claude Desktop の設定に写して Desktop を起動し直すと、Desktop に areka のツールが並び、`get_status` など 1 本以上が呼べる、⑵ そのとき Desktop が話した版を記録する、⑶ areka を止めた状態で Desktop からツールを呼ぶと、理由の読めるエラーが Desktop に出て、areka を起動し直すと Desktop を起動し直さずに呼べる、⑷ areka を止めたまま Desktop を起動し直すと、控えで areka のツールが並び、その後に areka を起動すると Desktop を起動し直さずに呼べる、⑸ SSP が 9801 で待ち受けている机で areka を起動すると、Desktop から呼んだ `get_active_ghost_list` が areka のゴーストを返す（SSP のゴーストを返さない）、⑹ 配布スクリプトの検査（`-Check`）が緑。
