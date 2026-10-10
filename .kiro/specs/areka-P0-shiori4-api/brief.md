@@ -1,0 +1,126 @@
+# Brief: areka-P0-shiori4-api
+
+> 起票: 2026-10-10（`/kiro-discovery`・開発者「SHIORI4（COM の SHIORI）の API 整備の spec はあるか。いまは最低限の決まりだけ作っていて、どこかの段階で着手しないといけない」）。
+> **区分 C・台帳の段は「その他」**（開発者）。**着手は、実装がある程度整備された段階で**。細かい調査と仕様の検討はそのときに行う（開発者「そこで仕様を検討するのがよい」「取り掛かりたいと思ったときに調査すべき」）。この brief は、着手のときの出発点として、いまの実情と開発者の望みを書き留めるもの。
+
+## Problem
+areka の SHIORI の口には、areka 独自の正準形式（呼び名は SHIORI4。COM の `IShiori` の境界を流れるもの）と、従来の SHIORI/3.0 のテキスト（呼び名は SHIORI3）の 2 つがある。設計の方針は「本体と進行役は SHIORI4 だけを話し、SHIORI3 への変換は過去互換のアダプタが受け持つ」だが、いまは最低限の決まりしか作っておらず、実際の経路はこの形になっていない。
+
+- 本番の経路は SHIORI4 を通らない。本体は番号付きの Reference の並びを渡し、32bit ホストの側が SHIORI/3.0 のテキストを組み立てている。
+- SHIORI の側からベースウェアへ問い合わせる口（シンク系インターフェース。プロパティの読み書きなど）は、COM の面には定義があるが、本番ではどこにもつながっていない。
+- SHIORI4 の中身の形式は、紙の上の契約と、実際に流れているものが食い違っている。第三者はどちらで SHIORI を書けばよいかを文書から決められない。
+
+## Current State
+2026-10-10 の調査（main `dbb3c758` の後・コードは読んだだけ）。着手のときに調べ直すこと。
+
+**3 つの層が食い違っている**
+
+| 層 | 決まっていること | 実体 |
+|---|---|---|
+| COM の境界 | `IShioriFactory`・`IShiori`・`IShioriHost` の 3 本。流れる文字列は中身を問わない HSTRING | `crates/shiori-abi/`（実装とテストがある） |
+| 中身の契約（紙） | JSON-RPC 2.0 の封筒・意味名の引数・446 項目のカタログ。版は `contract_version = "0.x"` | `doc/shiori/fragments/`（TOML だけ。読むコードは無い） |
+| 実際に流れているもの | SHIORI/3.0 のテキストを、そのまま HSTRING に入れたもの | `crates/areka-ghost/src/shiori_inproc.rs`・`crates/shiori4-testdll/` |
+
+**経路**
+
+- 本番は `ShioriWiring::Helper` に固定（`crates/areka/src/boot_config.rs`・`ghost_session.rs`・`emo2_boot/mod.rs`）。進行役（kanade）の共通の口 `ShioriBackend`（`crates/areka-kanade/src/shiori/real.rs`）が、イベント名と番号付きの Reference の並びを受け、`crates/shiori-host32-host/src/shiori3.rs` が SHIORI/3.0 のテキストを組み立てて 32bit の helper へ送る。`IShiori` はこの経路に現れない。
+- SHIORI4 と SHIORI3 を変換するアダプタは無い。`crates/shiori-host32-host/src/client.rs` に「`IShiori` への写像点は型で示すだけで実装しない」という注釈があるだけ。
+- `IShiori` を通るのは `ShioriWiring::InProc`（x64 の DLL を同じプロセスに読む経路）だけで、使うのはテスト用の DLL。ゴーストの descript.txt から選ぶ道は無い。
+
+**シンク系インターフェース（SHIORI → ベースウェア）**
+
+- COM の面には `IShioriHost` の 4 つがある: `Raise`（SHIORI からの自発の通知）・`Complete`（遅れて返す応答）・`GetProperty`・`SetProperty`（`crates/shiori-abi/src/interface.rs`）。
+- 実装は 3 つあり、どれも本番に届いていない。
+  - `ShioriHostSink`（`crates/areka/src/shiori_host.rs`）: プロパティは sylphya につながっているが、環境変数で有効にするデモからしか使われない。`Raise` は受けて溜めるだけで、上へ配らない。
+  - `InProcHost`（`crates/areka-ghost/src/shiori_inproc.rs`）: プロパティは孤立した表。`Raise` は警告を出して捨てる。`Complete` は常に断る。
+  - 本番の Helper の経路: 口が無い。
+- `GetProperty` の名前の決まりは「ドット区切りのパス」とだけ書いてある。`Raise` に渡すものが何か（さくらスクリプトか、イベントか）は決まっていない。
+
+**プロパティの入口の現状**（置き場は sylphya の 1 つ。入口は 4 つありうる）
+
+| 入口 | 誰が使えるか | いまの状態 |
+|---|---|---|
+| 台本の指令（`\![get,property,…]` でイベントが返る・`\![set,property,…]`・`%property[…]`） | どの SHIORI でも（台本を返せばよい） | 未実装。`property-query-channels` が持つ（未着手） |
+| シンク系インターフェース（`IShioriHost::GetProperty`／`SetProperty`・その場で値が返る） | 呼び返す口を持つ SHIORI だけ＝x64 の SHIORI4 の DLL | COM の面だけ。本番に届いていない（上の 3 つの実装） |
+| 32bit の DLL からの、台本を通さない読み取り（里々の `get_property` など） | 32bit の SHIORI/3.0 の DLL | 輸送の道が無い。`property-ipc-transport` が持つ（据え置き） |
+| MCP の `get_property` | 外部の道具 | 実装済み（完了 `mcp-get-property`） |
+
+x64 の SHIORI4 の DLL は、いまテスト用の 1 つだけ（emo2 の pasta.dll は 32bit の SHIORI/3.0）。シンク系インターフェースが役に立つのは、x64 の SHIORI4 で書かれた SHIORI が現れてから。
+
+**そのほか、最低限のまま残っているもの**
+
+- 版や能力を確かめ合う口が無い。IID は「開発用・リリースで凍結」と注釈がある。
+- 紙の契約は古いメソッド名（`Request`）のまま。応答の形・共通の欄（`Sender`・`SecurityLevel` など）の置き場・`Notify` の写し方が決まっていない。
+- 第三者向けの仕様書・単独で建てられる見本・検査の道具が無い。`shiori-abi` は `publish = false`。
+- 完了済みの spec（`shiori-com`・`shiori-protocol`・`shiori-reference`・`shiori4-test-ghost`・`host32-shiori-load`）が「下流」「別仕様」「M2 の予約」と書いて送り出した宿題の引受先が、spec として存在しない。
+
+## Desired Outcome
+着手のときに要件として確かめ直す。いまの時点で開発者が望んでいる形は次のとおり。
+
+- **経路が「areka（kanade）→ SHIORI の共通の窓口 → SHIORI3／SHIORI4」になっている**（開発者・2026-10-10）。SHIORI3 への変換の層は今のまま残し、SHIORI4 はその隣に並ぶ。
+- **シンク系インターフェースが本番で使える**（いま特に欲しいもの）。SHIORI の側から、プロパティの読み書きなどをベースウェアへ問い合わせられる。
+- **プロパティへの入口が整理されている**。入口が複数あっても、名前の解決と許可の決まりは 1 か所にある。
+- SHIORI4 の中身の形式が 1 つに決まり、紙の契約と実装が一致している。
+
+## Approach
+**決めていない。着手のときに調べて決める。** いま分かっている分かれ目だけ書き留める。
+
+- **方針 1: SHIORI4 と SHIORI3 は重ねず、並べる**（開発者・2026-10-10「areka(kanade) → shiori 共通窓口 → SHIORI3 / SHIORI4 の方がよいかも」「SHIORI4 → SHIORI3 は理想だが、プロパティシステムの設計的に厳しいかも」）。要件の段で確かめ直してよい。検討した 2 つの形:
+  - **重ねる形**（areka → SHIORI4 → SHIORI3。「SHIORI3 を呼び出す SHIORI4」）: 本体と進行役は SHIORI4 だけを話し、アダプタが SHIORI/3.0 へ変換する。開発者が初めに望んだ形で、2026-06-30 の合意と `doc/COMPAT_ARCHITECTURE.md` §5「areka 本体は常に `IShiori` だけを握る」もこの形。
+  - **並べる形**（SHIORI3 への変換の層は今のまま・SHIORI4 は並走）: 進行役の共通の口は今の `ShioriBackend` のままで、その下に「32bit ホストの経路」と「`IShiori` の経路」が並ぶ。いまのコードはすでにこの形。
+  - 開発者の考え（同日）: プロパティの読み取りは「台本の指令 → イベント」の形で、これを SHIORI4 の層で吸収するには、SHIORI4 の層でも台本を解釈してイベントへ変換することになる。大変なので、重ねずに並べるほうがよいかもしれない。
+  - 並べる形を採る理由は 4 つ。⑴ 台本の指令は「再生がそこへ届いたときに実行し、答えは新しいイベントで返す」もので、SHIORI の層でなく台本を再生する側の仕事。SHIORI4 の SHIORI も台本を返すので、この入口はどちらにも同じに効く＝SHIORI4 の層が吸収する必要が無い。⑵ 32bit の SHIORI/3.0 の DLL は呼び返す口を持たないので、SHIORI4 で包んでもシンク系インターフェースを呼ぶ者がいない。⑶ 重ねると、今いるゴースト（すべて SHIORI/3.0）の要求が、意味名 → 番号の変換を往復してから同じテキストへ戻るだけになる。⑷ ホストは後付けで、進行役はどちらの形式も知らないままにできる。
+  - この方針は 2026-06-30 の合意と `doc/COMPAT_ARCHITECTURE.md` §5 を改める（「唯一の口」は `IShiori` でなく進行役の共通の窓口・`IShiori` は x64 の SHIORI の DLL との口）。文書の書き直しはこの spec で行う。それまで §5 は古い形のまま残る。
+- **分かれ目 2: プロパティへの入口の整理**。入口は上の表の 4 つ。置き場（sylphya）は 1 つなので、整理するのは「名前の解決」と「許可の表」を全部の入口が同じ 1 か所で通ること。許可の表は `property-query-channels` が最初に決めるので、シンク系インターフェースの配線はその後に並べるのが筋。
+- SHIORI4 の中身を何にするか（紙の契約どおり JSON-RPC にするか、別の形にするか）。
+- 32bit の SHIORI/3.0 の DLL に対して、シンク系インターフェースをどう届けるか。従来の DLL には呼び返す口が無いので、プロパティの読み取りは台本を経由する道（`property-query-channels`）と、プロセス間の輸送（`property-ipc-transport`）のどちらか、または両方になる。
+- 共通の窓口 `ShioriBackend` は番号付きの Reference をそのまま渡す形（SHIORI/3.0 の写し）。SHIORI4 の側が意味名や構造のあるデータを要るようになったとき、窓口をどう広げるか（既定の実装を持つメソッドを足す形が、実装 20 か所〔製品 3・テストの偽物 17〕への波及を止める）。
+- `Raise`・遅れて返す応答・版と能力の確認を、この spec に入れるか、後へ回すか。
+- x64 の SHIORI4 の DLL を descript.txt から選べるようにするか（roadmap の予約「pasta の native x64／`IShiori` in-proc」と同じ話）。
+
+規模は 1 spec の上限（20 タスク）を超える見込み。**着手のときに要件の段で切り出す**（先に分けて起票しない）。切り出しの候補は「シンク系インターフェースの本番配線」「SHIORI4 と SHIORI3 の関係の整理」「中身の形式の確定と文書」。
+
+## Scope
+- **In**（着手のときに確かめ直す）:
+  - 共通の窓口（いまの `ShioriBackend`）の下に SHIORI3 と SHIORI4 を並べる形での経路の整理と、文書（`doc/COMPAT_ARCHITECTURE.md` §5）の書き直し。
+  - シンク系インターフェースの本番配線（少なくともプロパティの読み書き）。
+  - SHIORI4 の中身の形式の確定と、紙の契約（`doc/shiori/fragments/_shared.toml` の封筒）との一致。
+  - 古くなった注釈の掃除（`main.rs`・`shiori-abi`・`shiori_inproc.rs` に残る、済んだタスクを指す注釈）。
+- **Out**: 下の「Out of Boundary」。
+
+## Boundary Candidates
+- COM の面（`shiori-abi`: メソッド・IID・HRESULT）。
+- 中身の形式（封筒・要求・応答・エラー）と、その組み立て・読み取り。
+- SHIORI4 ⇄ SHIORI3 のアダプタ（`shiori-host32-host` の x64 の側）。
+- シンク系インターフェースの受け側（プロパティは sylphya・通知は進行役）。
+- 進行役の共通の口 `ShioriBackend` と、その実装 20 か所。
+- 第三者向けの文書と見本。
+
+## Out of Boundary
+- 32bit の helper と IPC の中身（`shiori-host32-helper`・`shiori-host32-ipc`）の作り替え。helper は SHIORI の中身を知らないバイト列の中継のまま。プロパティの輸送のためにタグを足すなら `property-ipc-transport` の仕事。
+- SHIORI/3.0 の要求へヘッダを足す仕事（`script-security-level`・`mcp-shiori-query`）。
+- MAKOTO の DLL（`makoto-dll-host`。同 brief は「x64 の `IShiori` 版は作らない」と明記）。
+- pasta の上流を SHIORI4 に対応させること（別リポジトリ）。
+- `shiori-abi` の crates.io への公開。要るかどうかは、形式が決まってから別に判断する。
+- SSP を動かして挙動を確かめること。
+
+## Upstream / Downstream
+- **Upstream**: 完了 `shiori-com`（COM の面）・`shiori-protocol`／`shiori-protocol-split`（紙の契約）・`shiori4-test-ghost`（テスト用の DLL と InProc の経路）・sylphya（プロパティ）。
+- **Downstream**: x64 の SHIORI4 の DLL を本番で読む仕事（roadmap の予約）・第三者が SHIORI4 で SHIORI を書くこと。
+
+## Existing Spec Touchpoints
+- **Extends**: なし（完了済みの spec の宿題を引き受ける）。
+- **Adjacent**（同じファイルを触る＝同時に走らせない）:
+  - roadmap の直列の列「host32-host」＝ `script-security-level` → `mcp-shiori-query` → `makoto-dll-host` → `makoto-reload-directives` → `property-ipc-transport`。触るのは `crates/shiori-host32-host/src/{shiori3.rs, client.rs}`・`crates/areka-ghost/src/{runtime.rs, shiori_inproc.rs}`・kanade の `shiori/real.rs`。この spec はこの列の後ろに並ぶ。
+  - `property-ipc-transport`（据え置き）: `IShioriHost::GetProperty`／`SetProperty` をプロセス間で運ぶ道。シンク系インターフェースと主題が重なる。着手のときに、どちらが何を持つかを決め直す。
+  - `property-query-channels`: 台本を経由するプロパティの読み取り。
+  - roadmap の予約「pasta の native x64／`IShiori` in-proc（本番に使うときは InProc の SHIORI を外から終わらせる手を決める）」。
+
+## Constraints
+- **優先度**: 区分 C・段「その他」（開発者・2026-10-10）。夢よりは上。急がない。
+- **着手の条件**: 実装がある程度整備されてから。着手のときに、この brief の「Current State」を調べ直す。
+- **1,000 行の上限に近いファイル**（2026-10-10）: `crates/areka-kanade/src/` の `msg.rs` 926・`actor.rs` 900・`schedule/mod.rs` 955・`schedule/steady.rs` 950、`crates/areka/src/main.rs` 950・`emo2_boot/spine.rs` 937、`crates/areka-ghost/src/runtime_tests.rs` 986、`crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` 1135（すでに超えている）。
+- **host-32 は後付け**。進行役（kanade）の変更は、ホストのための特別扱いを足す向きでなく、切り離す向きでだけ行う。
+- **紙の契約の正本は `doc/shiori/fragments/`**。契約を別のファイルへ二重に書かない。
+- **32bit で建つ範囲**は `shiori-host32-*` と `shiori-abi` だけ。
+- 挙動の意味は ukadoc から決める（SSP の実測に頼らない）。
