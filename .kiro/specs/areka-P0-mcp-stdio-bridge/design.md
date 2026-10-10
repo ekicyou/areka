@@ -61,7 +61,7 @@
 ### Existing Architecture Analysis
 
 - areka の受け口（`crates/areka-mcp/src/server.rs` の `start`）は hyper の `http1::Builder` で接続ごとに回し、rmcp の `StreamableHttpService` を無状態（セッション無し・JSON の単発応答）で呼ぶ。hyper の既定でヘッダを読む時間切れが 30 秒あり、**使っていない接続は 30 秒で閉じられる**（hyper 1.11.1 の `Conn` が次の要求の頭を待つときにも時間切れを走らせる）。中継はこれに頼らない作り（要求ごとに接続を開いて閉じる）にする。
-- 候補の並びは `port.rs` の `candidates_from_env_value`（公開）が 1 か所で組む。名乗り `SERVER_NAME`（`handler.rs`）と受け口のパス `MCP_PATH`（`dispatch.rs`）は `pub(crate)` で、本 spec が `pub` にして `lib.rs` から出す。
+- 候補の並びは `port.rs` の `candidates_from_env_value`（公開）が 1 か所で組む。名乗り `SERVER_NAME`（`handler.rs`）は `pub(crate)`、受け口のパス `MCP_PATH`（`dispatch.rs`）は素の `const`（私的）で、本 spec が両方を `pub` にして `lib.rs` から出す。
 - help は `help.rs` の `help_html(port)` が番号だけで組み、呼び手は `dispatch.rs` の `help` の 1 か所。`State`（`dispatch.rs`）は `start` が 1 度だけ組む。中継の置き場を載せるには `State` に 1 欄足し、`start` の引数で受け取る。
 - 起動した exe の本当の場所は `crates/areka/src/boot_config.rs` の `exe_location`（リンクを辿る・プロセスで 1 回）。補助 exe は `default_helper_exe_path` がこれから求める。中継の exe も同じ決まりで求める（`main.rs` の 1 行）。
 - 配布は `tools/package.ps1`（743 行・`SCRIPT_VERSION` 2.0.0）。実行ファイルの許可表・建てる段・静的リンクの検査・zip の中身の判定・組み立ての写し、の 5 か所に中継を足す。
@@ -111,15 +111,15 @@ graph TB
 | D-1 | 全体の作り | 新しいクレート `crates/areka-mcp-bridge/`＝ライブラリ（判断・輸送・探索・控え）＋薄い `main.rs`。本番の依存は上の Allowed Dependencies のとおり | 試しのクレートで同じ構成が建って動いた（`research.md` 11.1〜11.3） |
 | D-2 | Desktop の側の受け方 | rmcp の `Service<RoleServer>` を `Bridge` が直接実装し、`serve_directly_with_ct` で回す。`initialize`・`server/discover`・`ping` も `handle_request` に届く。版の交渉は `Bridge` が行う: 要求の版が `initialize` を持つ 4 版（`2025-11-25`・`2025-06-18`・`2025-03-26`・`2024-11-05`）のどれかならその版、それ以外（`2026-07-28`・未知）は `2025-11-25`（areka の受け口と同じ答え） | `serve_server` は `initialize` の失敗で終わる（`serve_server_with_ct_inner` が `Err` を返す）。`serve_directly` なら失敗した後も次の行を読む（4.6） |
 | D-3 | areka の側のつなぎ方 | rmcp の `serve_client`（既定＝旧式の `initialize` で始める）を `BridgeClient`（`ClientHandler`・名乗りは `areka-mcp-bridge`）で回す。`StreamableHttpClientTransportConfig` は既定（`allow_stateless: true`・同時 16）に URI だけ足す。つながった印は `RunningService<RoleClient, BridgeClient>` 1 本（`Link`）で、`peer_info()` が areka のサーバーの情報（名乗り・できること・説明の文） | 試しで `initialize` → `notifications/initialized` → 以降の要求が同じ transport で通った（11.3） |
-| D-4 | 相手が areka かをどの要求で・いつ確かめるか（2.2・2.3・2.11・4.5） | **接続ごとに、その接続の最初の要求として**旧式の `initialize`（札なし・固定の本文）を送り、`result.serverInfo.name` が `areka_mcp::SERVER_NAME` と同じときだけ、**同じ接続で**本当の要求を送る。送る要求そのものが `initialize`（rmcp の手順の最初）なら、その答えの名乗りで確かめる（2 度送らない）。名乗りが違えば本当の要求は書かずに `NotAreka` で失敗する。接続は要求ごとに開き、`Connection: close` で閉じる（持ち越さない） | 確かめた相手と送る相手が同じ TCP 接続＝必ず同じプロセス。接続を持ち越さないので hyper の 30 秒の閉じ（上）に当たらず、「切れた接続に書いて届いたか分からない」が起きない。areka の `initialize` は無状態で安い。試しの 8 要求の往復が合計 0.44 秒（プロセスの起動込み） |
+| D-4 | 相手が areka かをどの要求で・いつ確かめるか（2.2・2.3・2.11・4.5） | **接続ごとに、その接続の最初の要求として**旧式の `initialize`（札なし・固定の本文）を送り、`result.serverInfo.name` が `areka_mcp::SERVER_NAME` と同じときだけ、**同じ接続で**本当の要求を送る。送る要求そのものが `initialize`（rmcp の手順の最初）なら、その答えの名乗りで確かめる（2 度送らない）。名乗りが違えば本当の要求は書かずに `NotAreka` で失敗する。接続は要求ごとに開き、`Connection: close` で閉じる（持ち越さない） | 確かめた相手と送る相手が同じ TCP 接続＝必ず同じプロセス。接続を持ち越さないので hyper の 30 秒の閉じ（上）に当たらず、「切れた接続に書いて届いたか分からない」が起きない。areka の `initialize` は無状態で安い。試しの 8 要求の往復が合計 0.44 秒（プロセスの起動込み）。**同じ接続で 2 要求が通る根拠**: areka の受け口（`server.rs` の `accept_loop`）は `http1::Builder::new()` を既定のまま使う（keep-alive は既定で有効・`keep_alive(false)` の指定なし）で、`dispatch.rs` の rmcp の設定は `with_json_response(true)`（JSON の単発応答・SSE にしない）。試しは偽の受け口だけだったので、本物の受け口を相手にした `http_tests.rs` の判定（Testing Strategy）で実装の最初に固定する。areka の debug の記録には Desktop の要求ごとに確かめの `initialize` が 1 行増える（差の記録と Monitoring に書く） |
 | D-5 | 候補の探し方と見切り（2.1・2.4・2.9・2.10） | `scan`: 候補の列の全部へ TCP の接続を**並べて**開き（上限 `CONNECT_WAIT`）、開いた接続を**候補の順に** D-4 の確かめにかけ、最初に `areka-mcp-server` と名乗った 1 つで決める。あとの候補の接続は**何も書かずに**閉じる（SSP には `initialize` も届かない）。確かめの応答を待つ上限は `VERIFY_WAIT`。決めた番号は覚え、つながっている間はその番号へ直接つなぐ（先頭から当たり直さない）。覚えた番号への接続が失敗する・名乗りが違う、のどちらかで覚えを捨て、先頭から探し直す | **開発者の机では、誰も居ない `127.0.0.1` の番号への接続が断られるまで約 2 秒かかる**（.NET で 2,035 ms・Rust の std と tokio は 1 秒の上限で 20 回とも時間切れ＝11.4）。順に当たると 20 × 上限になるので、並べて開いて上限で見切る。areka が居ないときの 1 回の探索は約 `CONNECT_WAIT`（0.3 秒）＝SSP の中継の 0.1 秒に近い |
 | D-6 | 届けた要求を送り直すか（4.5）と、接続の失敗の扱い | 送り手の失敗を「**書く前**」（`Connect`・`NotAreka`・`VerifyTimeout`）と「**書いた後**」（`NoResponse`・`NotJson`・`ReplyTimeout`）に分ける。書く前の失敗は要求が誰にも届いていないので、覚えを捨てて探し直し、見つかれば**同じ要求を初めて**送る（送り直しではない）。見つからなければ要件 3 の答え。書いた後の失敗は要件 4 のエラーで答え、送り直さない | 「送り直さない」は「届いたかもしれない要求を 2 回届けない」の意味。書く前の失敗を区別できるのは送り手が自前だから |
-| D-7 | 控えの置き場と形（3.1〜3.3・3.10・3.11） | 置き場は `AREKA_PROFILE_DIR` があればその下、無ければ起動した exe の本当の場所（`current_exe` を `canonicalize` でリンクごと解く）の隣の `profile\areka\mcp-bridge\`。ファイルは 2 つ: `server-info.json`（rmcp の `ServerPeerInfo` をそのまま JSON に）・`tools.json`（rmcp の `ListToolsResult`）。書くときは同じフォルダに `<名前>.<プロセス番号>.tmp` で書いてから `rename` で置き換える。読めない・書けないときは標準エラーに 1 件残して無いものとして続ける | areka 本体の記憶と同じ木（`dist/README.txt` の「記憶の置き場」に 1 行足せる）。`AREKA_PROFILE_DIR` は areka 本体が使っている変数で、テストは環境変数だけで一時の置き場へ向けられる。`rename` は Windows でも既存を置き換えるので、2 つの中継が同時に書いても混ざらない（3.11） |
-| D-8 | 控えに取るもの・返すもの（3.1・3.2・3.4・3.9） | サーバーの情報は `Link` ができるたび（`peer_info()`）に、ツールの一覧は areka が `tools/list` にエラーでない結果を返すたびに置き換える。areka が居ないとき: `initialize` → 控えのサーバーの情報で `InitializeResult`（版は D-2 の交渉）、`server/discover` → 控えで `DiscoverResult`（`supportedVersions` は rmcp の既知の 5 版・`_meta` の `serverInfo` 入り）、`tools/list` → 控えの `ListToolsResult` | 裁定 1・裁定 3・細部 15。`server/discover` にも控えで答える（SSP との差として記録） |
+| D-7 | 控えの置き場と形（3.1〜3.3・3.10・3.11） | 置き場は `AREKA_PROFILE_DIR` があればその下、無ければ中継の exe（`std::env::current_exe()` の親。`canonicalize` は使わず、リンクも辿らない＝areka 本体の `resolve_root_from` の決まり「長いパスの接頭辞と失敗の口を持ち込まない」に合わせる）の隣の `profile\areka\mcp-bridge\`。help が載せる `command` は areka 本体の `exe_location` でリンクを解いた本当の場所なので、中継がリンクごしに起こされる前提は置かない（別の置き場が要るときは `AREKA_PROFILE_DIR`）。ファイルは 2 つ: `server-info.json`（rmcp の `ServerPeerInfo` をそのまま JSON に）・`tools.json`（rmcp の `ListToolsResult`）。書くときは同じフォルダに `<名前>.<プロセス番号>.tmp` で書いてから `rename` で置き換える。読めない・書けないときは標準エラーに 1 件残して無いものとして続ける | areka 本体の記憶と同じ木（`dist/README.txt` の「記憶の置き場」に 1 行足せる）。`AREKA_PROFILE_DIR` は areka 本体が使っている変数で、テストは環境変数だけで一時の置き場へ向けられる。`rename` は Windows でも既存を置き換えるので、2 つの中継が同時に書いても混ざらない（3.11） |
+| D-8 | 控えに取るもの・返すもの（3.1・3.2・3.4・3.9） | サーバーの情報は `Link` ができるたび（`peer_info()`）に、ツールの一覧は areka が `tools/list` にエラーでない結果を返すたびに置き換える。areka が居ないとき: `initialize` → 控えのサーバーの情報で `InitializeResult`（版は D-2 の交渉）、`server/discover` → 控えで `DiscoverResult`（`supportedVersions` は rmcp の既知の 5 版・`_meta` の `serverInfo` 入り）、`tools/list` → 控えの `ListToolsResult` | 裁定 1・裁定 3・細部 15。`server/discover` にも控えで答える（SSP との差として記録）。つながっている間の最初の問い合わせは `Link` を作ったときの `peer_info()` で答える: Desktop が `initialize` を送るのは中継を起こした直後だけなので、areka が別の版で起動し直した後に古い情報で答える場面は実用上起きない（差の記録に一言） |
 | D-9 | 自前の `ping`・エラー・通知（3.6〜3.8・2.6） | areka が居ないとき: `ping` → `{}`、`id` を持つほかの要求 → 番号 `-1`・`Server not available: areka-mcp-server not found on 127.0.0.1 ports <候補>` に、areka でない相手が応えた番号と名乗りを `; port 9801 answered as "ssp-mcp-server"` の形で続ける。通知は何もしない。`AREKA_MCP_PORT=0` は候補が空＝探さず控えも使わず、`id` を持つ全部（`ping` も）に `-1`・`Server not available: AREKA_MCP_PORT=0 (areka does not listen)` | 細部 6・7・13 |
 | D-10 | Desktop からの通知の扱い（1.3・3.8） | つながっているときは `notifications/initialized` 以外を `peer().send_notification` で届ける（areka は 202 で受ける・標準出力には何も書かない）。`notifications/initialized` は rmcp の手順が自分の分を送っているので届けない。居ないときは何もしない | 「意味を変えずに届ける」。areka は無状態なので通知で何も起きないが、届けないと決める理由も無い |
 | D-11 | 待つ時間（2.9・4.4） | `CONNECT_WAIT` 300 ms（並べて開く TCP の上限）・`VERIFY_WAIT` 3 秒（確かめの `initialize` の応答）・`REPLY_WAIT` 30 秒（Desktop の要求の応答・rmcp の `PeerRequestOptions.timeout`）。3 つとも `config.rs` の定数で、テストは `Timeouts` を差し替える。`REPLY_WAIT > areka_mcp::tools::REPLY_WAIT`（10 秒）を常設のテストで判定する | 2.9 の「設計で決めて記録する」。4.4 の「ツールが答えるまでの最も長い時間より長く」 |
-| D-12 | 記録と窓（5.1〜5.3） | `tracing-subscriber` の `fmt` を**標準エラー**へ向けて据える（`RUST_LOG`・既定 `info`）。中継の記録の文は英語（ASCII）。`main.rs` に `#![windows_subsystem = "windows"]`（areka 本体と同じ）で窓を持たない | 標準出力は応答の行だけ（5.1）。Desktop の記録ファイルは文字コードに左右されない |
+| D-12 | 記録と窓（5.1〜5.3） | `tracing-subscriber` の `fmt` を**標準エラー**へ向けて据える（`RUST_LOG`・既定 `info`）。中継の記録の文は英語（ASCII）。共有の関数 `areka_mcp::candidates_from_env_value` が出す 2.5 の `warn!` は日本語のまま通す（Desktop の記録は UTF-8 で読める）。`main.rs` に `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]`（areka 本体の `main.rs` と同じ形・debug では窓あり）で窓を持たない | 標準出力は応答の行だけ（5.1）。Desktop の記録ファイルは文字コードに左右されない |
 | D-13 | 要求を 1 件ずつか並べてか | rmcp の受け手は要求ごとに仕事を起こす（`serve_inner` が `tokio::spawn`）ので並ぶ。中継は要求ごとに接続を持つ（D-4）ので、長いツールの間も `ping` が待たない。応答の行の順は要求の順と同じとは限らない（`id` で対応づける） | 試しで JSON でない行のエラーが、先に届いた要求の応答より先に出た（11.3） |
 | D-14 | help の置き場の渡し方（6.1・6.2） | **本質の形**: `crates/areka/src/main.rs` が `exe_location()` から `areka_mcp::BRIDGE_EXE_FILE_NAME` の隣のパスを求め、`areka_mcp::start(candidates, registry, bridge_exe: Option<PathBuf>)` へ渡す。`State` が持ち、`help_html(port, bridge_exe)` が JSON の文字列（`serde_json::to_string`）にしてから HTML の `&`・`<`・`>` を置き換えて載せる。`None`（場所が取れない）のときはファイル名だけを載せ、「areka.exe と同じフォルダの」と書く | 補助 exe（`default_helper_exe_path`）と同じ決まりを通る＝リンクごしに起こした areka でも本当の隣になる。`start` の引数が増えるので、約束の外のファイルに触る（下の表で諮る） |
 | D-15 | `env` の有無（6.3・6.4） | `areka_mcp::candidates_from_env_value(None)` に実番号が入っていれば `env` を載せない。入っていなければ `"env": {"AREKA_MCP_PORT": "<番号>"}` を載せる | 既定の 20 個の判定を 1 か所から取る |
@@ -379,7 +379,7 @@ flowchart TD
 
 **Responsibilities & Constraints**
 - 候補の列は `areka_mcp::candidates_from_env_value(std::env::var(PORT_ENV).ok().as_deref())` で組む（空＝`0`＝Disabled）。読めない値の `warn!` は同じ関数が出す。
-- 控えの置き場は `AREKA_PROFILE_DIR` → `<exe の本当の場所の親>\profile\areka\mcp-bridge\`。exe の場所は `std::env::current_exe()` を `std::fs::canonicalize` で解いたもの（取れなければ `None`＝控えなしで動く・標準エラーに 1 件）。
+- 控えの置き場は `AREKA_PROFILE_DIR` → `<中継の exe の親>\profile\areka\mcp-bridge\`。exe の場所は `std::env::current_exe()` そのもの（`canonicalize` は使わない・リンクは辿らない＝D-7。取れなければ `None`＝控えなしで動く・標準エラーに 1 件）。
 - 3 つの時間は定数で持ち、テストは `Timeouts` を差し替える。
 
 ##### Service Interface
@@ -410,7 +410,7 @@ impl Config {
 | Requirements | 1.1, 1.4〜1.9, 5.1 |
 
 **Responsibilities & Constraints**
-- `receive`: `read_until(b'\n')`（上限なし）。末尾の `\r` と前後の空白を落とす。空なら次へ。`serde_json::from_slice::<ClientJsonRpcMessage>` で読み、`Syntax`／`Eof` なら `-32700`・`id` なし、`Data`（配列・数・文字列・欄の形違い）なら `-32600` を**自分で標準出力へ 1 行書いて**次へ（rmcp の `AsyncRwTransport` は `Syntax` を黙って捨てるので使わない）。EOF で `None`。
+- `receive`: `read_until(b'\n')`（上限なし）。末尾の `\r` と前後の空白を落とし、先頭の UTF-8 の BOM（最初の行に付くことがある）も落とす（rmcp の stdio の輸送と同じ）。空なら次へ。`serde_json::from_slice::<ClientJsonRpcMessage>` で読み、`Syntax`／`Eof` なら `-32700`・`id` なし、`Data`（配列・数・文字列・欄の形違い）なら `-32600` を**自分で標準出力へ 1 行書いて**次へ（rmcp の `AsyncRwTransport` は `Syntax` を黙って捨てるので使わない）。EOF で `None`。
 - `send`: `serde_json::to_vec`（改行を含まない）＋`\n`。書き手は `Arc<Mutex<W>>`（rmcp は `send` の未来を同時に走らせる）。
 - `R: AsyncRead + Unpin + Send`・`W: AsyncWrite + Unpin + Send + 'static` の総称（テストは `tokio::io::duplex` を差す）。
 
@@ -520,8 +520,8 @@ impl Cache {
 | Requirements | 1.2, 1.3, 1.10, 2.2, 2.6, 2.10, 3.4〜3.9, 4.3〜4.6 |
 
 **Responsibilities & Constraints**
-- 状態: `Disabled`（候補が空）／`link: Option<(Link, u16)>`（`tokio::sync::Mutex` で守る・`None` が「居ない」）。
-- `handle_request` の順: ⑴ Disabled なら `-1`（`ping` も）。⑵ `ensure_link`: `link` があればそれ、無ければ `scan` → `Found` なら `Link` を持ち、`peer_info()` を控えに書く。⑶ `Link` がある: `initialize`／`server/discover` は `peer_info()` から組む（D-2・D-8）、それ以外は `send_request_with_option(req, timeout = reply)`。結果が `ListToolsResult` なら控えに書く。失敗が `McpError` ならそのまま `Err`。`TransportSend` の中身が「書く前」なら `link` を捨てて ⑵ からもう 1 度（1 回だけ）。「書いた後」・`Timeout`・そのほかは要件 4 のエラー。⑷ `Link` が無い（`NotFound`）: 居ないときの表のとおり（控え・`ping`・`-1` に `others` を続ける）。
+- 状態: `Disabled`（候補が空）／`link: Option<Arc<Linked>>`（`Linked { link: Link, port: u16 }`・`tokio::sync::Mutex` で守る・`None` が「居ない」）。要求は `Arc` を写して使うので、欄を空にしても `Link` は使っている要求が全部終わるまで落ちない（rmcp の `RunningService` は落ちると `DropGuard` が働き手を取り消し、途中の要求が全部失敗する。並ぶ要求〔D-13〕の途中で別の要求が欄を空にしても、長い要求の応答は返る）。
+- `handle_request` の順: ⑴ Disabled なら `-1`（`ping` も）。⑵ `ensure_link`: `link` があればそれ、無ければ `scan` → `Found` なら `Arc<Linked>` を欄に置き、`peer_info()` を控えに書く。⑶ `Link` がある: `initialize`／`server/discover` は `peer_info()` から組む（D-2・D-8）、それ以外は `send_request_with_option(req, timeout = reply)`。結果が `ListToolsResult` なら控えに書く。失敗が `McpError` ならそのまま `Err`。`TransportSend` の中身が「書く前」なら、欄が自分の使った `Arc` と同じもの（`Arc::ptr_eq`）のときだけ欄を空にして ⑵ からもう 1 度（1 回だけ）。別の要求が先に欄を入れ替えていれば、欄を空にせず、その新しい `Link` で同じ要求を 1 回だけ送る（2 つの要求が同時に失敗を見ても `Link` は 1 度しか作り直されない）。「書いた後」・`Timeout`・そのほかは要件 4 のエラー。⑷ `Link` が無い（`NotFound`）: 居ないときの表のとおり（控え・`ping`・`-1` に `others` を続ける）。
 - `handle_notification`: `Link` があり `initialized` でなければ `send_notification`（失敗は標準エラーだけ）。無ければ何もしない。
 - `get_info`: `ServerConfig::new(ServerCapabilities::builder().enable_tools().build())` に名乗り `areka-mcp-bridge`（rmcp の `serve_directly` が `configure_direct_peer` に使うだけで、Desktop へは出ない）。
 - 版の交渉（D-2）は `initialize` の答えを組むときに `requested_protocol_version` を見て決める。`DiscoverResult` の `supportedVersions` は `ProtocolVersion::KNOWN_VERSIONS`。
@@ -529,7 +529,8 @@ impl Cache {
 ##### Service Interface
 ```rust
 #[derive(Clone)]
-pub struct Bridge { /* config: Arc<Config>, cache: Arc<Cache>, link: Arc<Mutex<Option<(Link, u16)>>> */ }
+pub struct Linked { pub link: Link, pub port: u16 }
+pub struct Bridge { /* config: Arc<Config>, cache: Arc<Cache>, link: Arc<Mutex<Option<Arc<Linked>>>> */ }
 impl Bridge { pub fn new(config: Config) -> Bridge; }
 impl rmcp::Service<RoleServer> for Bridge {
     async fn handle_request(&self, request: ClientRequest, context: RequestContext<RoleServer>) -> Result<ServerResult, ErrorData>;
@@ -589,7 +590,7 @@ pub fn invalid_json_response(status: u16, head: &str) -> ErrorData;            /
 | `<置き場>\server-info.json` | rmcp の `ServerPeerInfo` を `serde_json` で（`protocolVersion`・`capabilities`・`serverInfo`・`instructions`・`_meta`） | `Link` ができるたび（3.1） | areka が居ないときの最初の問い合わせ（3.4） |
 | `<置き場>\tools.json` | rmcp の `ListToolsResult` を `serde_json` で（`tools` と、あれば `nextCursor`・`_meta`） | areka が `tools/list` にエラーでない結果を返すたび（3.2） | areka が居ないときの `tools/list`（3.4） |
 
-- 置き場: `AREKA_PROFILE_DIR` → `<それ>\mcp-bridge\`、無ければ `<exe の本当の場所の親>\profile\areka\mcp-bridge\`。
+- 置き場: `AREKA_PROFILE_DIR` → `<それ>\mcp-bridge\`、無ければ `<中継の exe の親>\profile\areka\mcp-bridge\`（areka 本体の `default_app_profile_dir` と同じ決まり。`current_exe` のまま・リンクは辿らない＝D-7）。
 - 形は rmcp の型そのものなので、rmcp の版上げで読めなくなった控えは 3.10 の経路（捨てて作り直す）。鍵や版の欄は持たない。
 - SSP の控え（`data\profile\mcp_initialize.dat`・`mcp_tools.dat`）とは置き場も形も別で、互いに触らない（8.1 の「利用者の本物の控えを読み書きする回数 0」は SSP の分も含む）。
 
@@ -619,6 +620,7 @@ pub fn invalid_json_response(status: u16, head: &str) -> ErrorData;            /
 
 - 記録は全部標準エラー（Desktop の `mcp-server-areka.log` に残る）。起動時に `info` で候補の列・控えの置き場・3 つの時間を 1 行ずつ出す。つないだ先の番号・飛ばした候補と理由・控えで答えたこと・エラーの中身を出す（5.2）。
 - `RUST_LOG` で絞れる（既定 `info`）。
+- areka 側の記録: Desktop の要求 1 件ごとに、areka の debug の記録（`dispatch::handle` の「要求に応えた」）に確かめの `initialize` が 1 行増える（D-4）。差の記録（8.4）にも書く。
 
 ## Testing Strategy
 
@@ -626,12 +628,12 @@ pub fn invalid_json_response(status: u16, head: &str) -> ErrorData;            /
 
 ### Unit Tests（部品）
 
-- `stdio_tests.rs`（1.4〜1.7・1.9・5.1）: `tokio::io::duplex` で、数と文字列の `id` の往復・改行入りの応答が 1 行・空の行・JSON でない行の `-32700` とその次の行が通ること・配列／数／文字列の `-32600`・EOF で `None`・大きな行（数 MiB）が欠けない。
-- `http_tests.rs`（2.3・2.9・2.11・4.1〜4.3・4.5）: 偽の受け口で、名乗りが違うと本当の本文が届かない（受け口が受けた要求の数 1＝確かめだけ）・名乗りが合えば同じ接続で 2 要求・返事をしない相手の `VerifyTimeout`・空の本文の `NoResponse`・平文の `NotJson`・状態 400 でも JSON なら中身・chunked の応答・`written()` の真偽。
+- `stdio_tests.rs`（1.4〜1.7・1.9・5.1）: `tokio::io::duplex` で、数と文字列の `id` の往復・改行入りの応答が 1 行・空の行・JSON でない行の `-32700` とその次の行が通ること・配列／数／文字列の `-32600`・EOF で `None`・大きな行（数 MiB）が欠けない・先頭に BOM の付いた最初の行が通る。
+- `http_tests.rs`（2.3・2.9・2.11・4.1〜4.3・4.5）: 偽の受け口で、名乗りが違うと本当の本文が届かない（受け口が受けた要求の数 1＝確かめだけ）・名乗りが合えば同じ接続で 2 要求・返事をしない相手の `VerifyTimeout`・空の本文の `NoResponse`・平文の `NotJson`・状態 400 でも JSON なら中身・chunked の応答・`written()` の真偽。**本物の受け口**（`areka_mcp::start(&[0], …)`）でも「同じ接続で確かめの `initialize` と本当の要求の 2 つが通り、`Connection: close` の後に受け口が閉じる」を判定する（D-4 の根拠を固定する・実装の最初のタスク）。
 - `scan_tests.rs`（2.1・2.2・2.4）: `[SSP 名乗り, areka 名乗り]` で 2 つ目に決まり、1 つ目に本当の要求が届いた数 0・`[areka, areka]` で 1 つ目に決まり 2 つ目には 1 バイトも届かない（接続だけ）・誰も居ない列（束ねずに閉じた番号）で `NotFound` と `others`・返事をしない相手を見切って次へ。
 - `cache_tests.rs`（3.3・3.10・3.11）: 書いて読む・壊れた中身は `None`・書けない置き場（ファイルを置き場にする）で続く・2 つのスレッドが同時に書いても読める JSON のどちらか 1 つ。
 - `config_tests.rs`（2.1・2.4〜2.6・D-7）: `Config::from_values` で `AREKA_MCP_PORT` の 4 通り（番号・`0`・読めない値・未設定）が候補の列に写ること（未設定と読めない値は `areka_mcp::candidates_from_env_value(None)` と同じ 20 個＝机へはつながない純粋な判定）・置き場の 3 通り・`REPLY_WAIT > areka_mcp::tools::REPLY_WAIT`（4.4 の見張り）。
-- `service_tests.rs`（3.x・4.x・2.10・2.11）: 偽の受け口と `run` を `duplex` で回し、居ないときの表の全部（控えあり／なし × 要求の種類・`initialize` で始める版と `server/discover` で始める版）・エラーの応答は控えに取られない・areka が見つかった後は控えが置き換わる・受け口を止めて同じ番号に別の名乗りを立てると要求が届かず探し直す・別の番号で起動し直した受け口へ届く・`AREKA_MCP_PORT=0` の全部エラー・エラーの後も次の行が通る。
+- `service_tests.rs`（3.x・4.x・2.10・2.11）: 偽の受け口と `run` を `duplex` で回し、居ないときの表の全部（控えあり／なし × 要求の種類・`initialize` で始める版と `server/discover` で始める版）・エラーの応答は控えに取られない・areka が見つかった後は控えが置き換わる・受け口を止めて同じ番号に別の名乗りを立てると要求が届かず探し直す・別の番号で起動し直した受け口へ届く・`AREKA_MCP_PORT=0` の全部エラー・エラーの後も次の行が通る・**長い要求の途中で別の要求が書く前の失敗を見ても、長い要求の応答が返る**（`Arc<Linked>` が落ちない）・2 つの要求が同時に書く前の失敗を見ても偽の受け口が受けた `initialize`（`Link` の作り直し）が 1 回。
 - `help_tests.rs`（6.x・8.3）: 上の help の項。
 
 ### Integration Tests（通し）
