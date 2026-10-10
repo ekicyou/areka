@@ -163,7 +163,7 @@ crates/areka-mcp-bridge/
 │   └── errors.rs              # 中継が作る JSON-RPC のエラー（番号 -1 の 3 つの書き出し・-32700・-32600）を作る関数だけ
 └── tests/
     ├── real_receiver_test.rs  # areka_mcp::start(&[0], …) の本物の受け口を相手に、直接つないだ答えと中継ごしの答えを 5 版で比べる（1.10・8.2）
-    ├── exe_test.rs            # CARGO_BIN_EXE_areka-mcp-bridge を起こす: 終了コード 0・標準出力に応答の行だけ・AREKA_MCP_PORT の 4 通り（番号は空きポート）
+    ├── exe_test.rs            # CARGO_BIN_EXE_areka-mcp-bridge を起こす: 終了コード 0・標準出力に応答の行だけ・AREKA_MCP_PORT は番号（偽の受け口の空きポート）と 0 の 2 通りだけ（未設定と読めない値は机の本物の番号へつなぐので exe ごしには回さない）・2 つ同時・読まれない標準出力の 6 秒の見切り
     └── common/
         └── fake_server.rs     # ループバックの偽の受け口（port 0・方法ごとの台本: 名乗り・壊れた本文・空の本文・途中で閉じる・返事をしない・202）
 ```
