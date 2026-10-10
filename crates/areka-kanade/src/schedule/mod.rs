@@ -627,14 +627,14 @@ fn on_execution_state(mut state: State, update: ExecutionStateUpdate) -> (State,
 
 /// 相が再生中のトークを運ぶか（DD-IT-3・スナップショットの talk 軸）。
 ///
-/// アクティブな talk を運ぶ相＝`Steady{Some}` と（挨拶追跡中の）`BootVersion{Some}`（DD-IT-12）。
+/// 再生中＝`current_talk_id` が再生中のトークの番号を引ける相（相の表はそこの 1 つだけ）。普段の会話
+/// （`Steady{Some}`）・起動の挨拶（`BootVersion{Some}`・DD-IT-12）と、お別れの台詞の 3 つの場面＝終了の挨拶
+/// （`CloseTalkWait`）・切り替えの送り出しの台詞（`ChangeTalkWait`）・切り替えの別れの台詞
+/// （`ChangeCloseTalkWait`）が当たる。利用者の中断で止められる場面と `talking` の場面はこれで一致する。
 /// 選択待ちと写しの 3 状態は `Phase` の外にあるため、スナップショットは [`State::snapshot`]／
 /// [`State::snapshot_without_talk`] が組み立てる。
 pub(crate) fn talk_active_of(phase: &Phase) -> bool {
-    matches!(
-        phase,
-        Phase::Steady { talk: Some(_) } | Phase::BootVersion { talk: Some(_) }
-    )
+    current_talk_id(phase).is_some()
 }
 
 /// フェーズの静的ラベル（ログ観測用）。`Phase` は Debug を持たないため、可観測性ログ

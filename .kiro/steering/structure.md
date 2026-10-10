@@ -15,7 +15,7 @@ updated_at: 2026-10-08
 **Location**: `/`  
 **Purpose**: Cargoワークスペース設定、横断ドキュメント、開発ルール  
 **Example**: `Cargo.toml`, `README.md`, `doc/`, `.kiro/steering/`
-**その他の最上位**: `tools/`＝開発用スクリプト（`test-all.ps1`＝フルテスト・完了ゲートの正本〔`tech.md` の Testing〕／`package.ps1`＝配布物の zip（名前に版が入る）と SHA256 を x64 と arm64 で組んで中身を判定し、`-Check` で展開して起動を確かめる／`crates-io.ps1`＝crates.io への公開前の確認〔引数なし＝ネットを使わず包むだけ・全体テストの段・`-Verify`＝組み立てまで・`-Pending`＝まだ出ていないクレート〕／`utf8-child.ps1`＝子のプロセスの出力を端末を通さず UTF-8 で読む関数 `Invoke-Utf8Child`（`.` で読み込む・単独では何もしない）／`encoding-check.ps1`＝道具と workflow の文字コードの判定〔較正→本文の判定→932 の子の判定・全体テストの段 `encoding check`〕／`load-flake.ps1`＝CPU に負荷をかけて areka のテストを回し、回ごとの赤を記録する道具（`tech.md` の Testing「許す赤」の物差し）／`perf/`＝性能改善ループ）・`.github/`＝GitHub Actions の定義（`workflows/release.yml`＝タグ `v*` で動くリリース。zip と SHA256 を作って GitHub Release を公開する／`workflows/crates-io.yml`＝`wintf`・`dola` を crates.io へ出す公開の段。タグ `v*` の push で起き、release の成功を待って出す＋やり直しの `workflow_dispatch`・手順書は `doc/crates-io-publish.md`）・`vendors/`＝検体 `.nar`（`sample_ghost/`）と調査資料のサブモジュール（`pasta/`）・`assets/`＝UI 資産・`docs/`＝単発の技術メモ・`dist/`＝配布物へそのまま入れる文書（第三者向け `README.txt`）
+**その他の最上位**: `tools/`＝開発用スクリプト（`test-all.ps1`＝フルテスト・完了ゲートの正本〔`tech.md` の Testing〕／`package.ps1`＝配布物の zip（名前に版が入る）と SHA256 を x64 と arm64 で組んで中身を判定し、`-Check` で展開して起動を確かめる／`crates-io.ps1`＝crates.io への公開前の確認〔引数なし＝ネットを使わず包むだけ・全体テストの段・`-Verify`＝組み立てまで・`-Pending`＝まだ出ていないクレート〕／`utf8-child.ps1`＝子のプロセスの出力を端末を通さず UTF-8 で読む関数 `Invoke-Utf8Child`（`.` で読み込む・単独では何もしない）／`encoding-check.ps1`＝道具と workflow の文字コードの判定〔較正→本文の判定→932 の子の判定・全体テストの段 `encoding check`〕／`load-flake.ps1`＝CPU に負荷をかけて areka のテストを回し、回ごとの赤を記録する道具（`tech.md` の Testing「許す赤」の物差し）／`perf/`＝性能改善ループ）・`.github/`＝GitHub Actions の定義（`workflows/release.yml`＝タグ `v*` で動くリリース。zip と SHA256 を作って GitHub Release を公開する／`workflows/crates-io.yml`＝`wintf`・`dola` を crates.io へ出す公開の段。タグ `v*` の push で起き、release の成功を待って出す＋やり直しの `workflow_dispatch`・手順書は `doc/crates-io-publish.md`）・`vendors/`＝検体 `.nar`（`sample_ghost/`）と調査資料のサブモジュール（`pasta/`）・`assets/`＝UI 資産・`docs/`＝単発の技術メモ・`dist/`＝配布物へそのまま入れる文書（第三者向け `README.txt`）と、`winget/`＝winget へ提出するマニフェストの雛形（初回に出した版の写し・配布 zip には入らない）
 
 ### Library Crate
 **Location**: `/crates/wintf/`  
@@ -412,6 +412,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Purpose**: ukadoc（SSP 公式仕様書）の項目について「正典の写し（カタログ）」と「areka の判定（台帳）」を建て、その整合を常時走るテスト（`tests/consistency.rs`）で守る**調査道具**（`areka-P0-ukadoc-survey-toolkit`）。**areka の実行時コードからは 1 行も参照されない leaf**・`publish = false`。
 **Pattern**: 純粋層（文字列と値だけ）と入出力層（`io`・判断を持たない）の 2 層。入口は実行ファイル（`cli`）と常時テストの 2 つで、判定の実体は純粋層に 1 つ。互換機能を着地させた spec は、同じ PR で `doc/ukadoc-coverage/ledger/*.toml` の該当項目の判定も更新している（実例: PR#159・PR#162）。
 **Dependencies**: `toml`（読み取りのみ・書き出しは自前 `tomlout.rs`）・`thiserror`・`serde_json`
+**SSP の BTS の要望**: SSP の課題管理（BTS・https://bts.shillest.net/ ）の要望を調べるときは `.kiro/specs/completed/areka-P0-ssp-bts-salvage/bts-ledger.md` を読む（1 回きりの調査の台帳・いつどこまで見たかは台帳の先頭）。
 
 ### Vendored: pasta DSL Engine
 **Location**: `/vendors/pasta/`（git サブモジュール）  

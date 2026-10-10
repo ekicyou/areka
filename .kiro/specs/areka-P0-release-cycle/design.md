@@ -22,7 +22,7 @@
 - `.kiro/steering/workflow.md`・`.claude/skills/kiro-complete/SKILL.md`・`.claude/skills/kiro-impl/SKILL.md` など、ほかの spec と分け合う決まりの文書の変更（0 件。要件 1.8）。
 - 差分の範囲を判定する専用のスクリプト（作らない。下の「設計で決めたこと」8）。
 - 赤の原因の修正（別の spec として起票するだけ）。
-- winget の見守りの細部（`winget-manifest-submission` が `winget.yml` を main へ入れた回から、見守る相手が 1 つ増えるだけ）。
+- winget の見守りの細部（`areka-P0-winget-release-automation` が `winget.yml` を main へ入れた回から、見守る相手が 1 つ増えるだけ）。
 
 ## Boundary Commitments
 
