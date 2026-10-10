@@ -91,7 +91,7 @@
   - 完了の姿: 上のテストが緑。本当の本文を書いた接続は、同じ接続で areka の名乗りを読んだ接続だけ
   - _Requirements: 2.3, 2.9, 2.11, 4.1, 4.2, 4.5, 8.1_
 
-- [ ] 4. 探索と判断
+- [x] 4. 探索と判断
 - [x] 4.1 候補から areka を 1 つ選んで rmcp のクライアントを立てる
   - 候補の全部へ TCP の接続を並べて開き（上限 300 ms）、開いた接続を候補の順に確かめにかけ、最初に areka と名乗った 1 つで決める。あとの候補の接続は 1 バイトも書かずに閉じる
   - areka でない名乗りが応えた番号と名乗りを候補の順に集め、番号ごとの理由（名乗り・返事なし）を標準エラーに残す
@@ -132,7 +132,7 @@
   - 完了の姿: 上のテストが緑
   - _Requirements: 2.10, 2.11, 4.6, 8.1_
 
-- [ ] 4.6 実行ファイルの入口
+- [x] 4.6 実行ファイルの入口
   - 記録を標準エラーへ据える（`RUST_LOG`・既定 `info`）。起動時に候補の列・控えの置き場・3 つの時間を 1 行ずつ出す。記録の文は英語
   - 引数を読まない。リリースのビルドでは窓を持たない。tokio は 1 本のスレッドで中継の中だけで回す
   - 標準入力が閉じたら、途中の応答を rmcp の上限（5 秒）まで書いてから終了コード 0
@@ -244,3 +244,7 @@
 - 4.5: `scan::connect_one` は本番の呼び手が無い（使うのは `scan_tests.rs` の `connect_one_runs_the_same_steps_on_one_port` だけ）。最終の検証で口・テスト・設計の scan の署名行ごと消す。
 - 4.5: 全体テストの負荷で赤になりうるテスト（偽の赤の向きだけ）: `service_retry_tests.rs` の `a_slow_request_survives_another_request_forgetting_the_link`（遅い応答 2 秒より先に `ping` の探し直しが終わる前提・赤なら遅れを延ばす）・`a_request_reaches_areka_restarted_on_another_port_exactly_once`（止めた番号を押さえ直すまでの短い窓）・`two_requests_failing_before_writing_at_once_link_again_only_once`。
 - 4.5: 4.6 への申し送り＝捨てた `Link` が落ちるとき rmcp が `info` で `task cancelled` を 1 行出す。覚えた番号が黙る相手に替わると、その要求は確かめの 3 秒を待ってから探し直す。
+- 4.6: 記録の既定の絞りは `info,rmcp=error`（`RUST_LOG` が無い・読めないときだけ。rmcp の `info` は相手の情報の全部と通知の本文、`warn` はエラーの応答ごとの中身を出すため）。設計 D-12 を直した。最初の問い合わせに答えたとき `[bridge] answered the first inquiry method=… requested=… answered=…` を `info` で出す（実機確認 ⑵ の「Desktop が話した版」はこの行で見る）。
+- 4.6: 相手が標準入力だけ閉じて標準出力を読まないと `LineTransport::close` が戻らず終わらない（実測 20 秒超）ので、`main` が標準入力の終わりを見て 6 秒（`EXIT_WAIT`）で見切り、`Runtime::shutdown_background` で終了コード 0。設計の Error Strategy に追記した。この見切りの自動テストは無い → 5.2 で 1 本足す（`AREKA_MCP_PORT=0` で `ping` を約 3 万行流し、標準出力を読まずに閉じて、終了コード 0・標準エラーに `quitting`・20 秒の上限に掛からない、を見る。約 6 秒）。5.2 では `AREKA_MCP_PORT=0` のとき標準エラーに `response error` が無いことも見る（`rmcp=error` の側の固定）。
+- 4.6: 既知の限界＝壊れた行（行の形のエラー）の書きが詰まっているときは、輸送が次の行を読まないので標準入力の終わりを見られず、6 秒の見切りが効かない（Desktop は壊れた行を送らない・直すなら `stdio.rs`）。6.2 の差の記録に「読まれない標準出力は 6 秒で見切る」を載せる。
+- 4.6: Git Bash の `sed -i` は何も置き換えなくても CRLF を LF に書き直す。ソースには使わない（Edit か、`newline=''` で開く Python）。

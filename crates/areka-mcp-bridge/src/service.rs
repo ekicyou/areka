@@ -119,7 +119,7 @@ impl Bridge {
             return self.forward(linked, request, meta).await;
         }
         let info = linked.link.peer_info();
-        let from_info = |info| first_answer(info, &request);
+        let from_info = |info| first_answer(info, &request, &meta);
         let Some(answer) = info.as_deref().and_then(from_info) else {
             warn!(
                 port = linked.port,
@@ -127,10 +127,6 @@ impl Bridge {
             );
             return Err(errors::no_response("areka gave no server info"));
         };
-        debug!(
-            port = linked.port,
-            "[bridge] answered the first inquiry from the server info of areka"
-        );
         Ok(answer)
     }
 
@@ -147,7 +143,7 @@ impl Bridge {
             ClientRequest::PingRequest(_) => return Ok(ServerResult::empty(())),
             ClientRequest::InitializeRequest(_) | ClientRequest::DiscoverRequest(_) => {
                 let info = self.cache.load_server_info();
-                info.and_then(|info| first_answer(&info, request))
+                info.and_then(|info| first_answer(&info, request, meta))
             }
             ClientRequest::ListToolsRequest(_) => {
                 let tools = self.cache.load_tools();
@@ -348,19 +344,35 @@ fn classify(port: u16, error: &ServiceError) -> Failure {
 
 /// 最初の問い合わせ（`initialize`・`server/discover`）の答えを、areka のサーバーの情報から組む。
 /// つながっているときは areka の今の情報から、居ないときは控えの情報から、同じに組む（設計 D-8）。
-/// 名乗りの無い情報・最初の問い合わせでない要求からは組まない。
-fn first_answer(info: &ServerPeerInfo, request: &ClientRequest) -> Option<ServerResult> {
+/// 名乗りの無い情報・最初の問い合わせでない要求からは組まない。組んだら、相手が話した版
+/// （`initialize` は要求の版、`server/discover` は `_meta` の版）と返した版を 1 行残す。
+fn first_answer(
+    info: &ServerPeerInfo,
+    request: &ClientRequest,
+    meta: &RequestMetaObject,
+) -> Option<ServerResult> {
     let mut config =
         ServerConfig::new(info.capabilities.clone()).with_server_info(info.server_info.clone()?);
     config.instructions = info.instructions.clone();
     config.meta = info.meta.clone();
+    let method = request.method();
     match request {
-        ClientRequest::InitializeRequest(request) => Some(ServerResult::InitializeResult(
-            config.with_protocol_version(negotiated(request.params.protocol_version.clone())),
-        )),
-        ClientRequest::DiscoverRequest(_) => Some(ServerResult::DiscoverResult(
-            DiscoverResult::from_server_info(ProtocolVersion::KNOWN_VERSIONS.to_vec(), config),
-        )),
+        ClientRequest::InitializeRequest(request) => {
+            let requested = &request.params.protocol_version;
+            let answered = negotiated(requested.clone());
+            info!(method, %requested, %answered, "[bridge] answered the first inquiry");
+            Some(ServerResult::InitializeResult(
+                config.with_protocol_version(answered),
+            ))
+        }
+        ClientRequest::DiscoverRequest(_) => {
+            let requested = meta.protocol_version();
+            let requested = requested.map(|v| v.to_string()).unwrap_or_default();
+            info!(method, %requested, "[bridge] answered the first inquiry");
+            Some(ServerResult::DiscoverResult(
+                DiscoverResult::from_server_info(ProtocolVersion::KNOWN_VERSIONS.to_vec(), config),
+            ))
+        }
         _ => None,
     }
 }

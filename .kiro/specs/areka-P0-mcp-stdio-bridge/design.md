@@ -119,7 +119,7 @@ graph TB
 | D-9 | 自前の `ping`・エラー・通知（3.6〜3.8・2.6） | areka が居ないとき: `ping` → `{}`、`id` を持つほかの要求 → 番号 `-1`・`Server not available: areka-mcp-server not found on 127.0.0.1 ports <候補>` に、areka でない相手が応えた番号と名乗りを `; port 9801 answered as "ssp-mcp-server"` の形で続ける。通知は何もしない。`AREKA_MCP_PORT=0` は候補が空＝探さず控えも使わず、`id` を持つ全部（`ping` も）に `-1`・`Server not available: AREKA_MCP_PORT=0 (areka does not listen)` | 細部 6・7・13 |
 | D-10 | Desktop からの通知の扱い（1.3・3.8） | つながっているときは `notifications/initialized` と `notifications/cancelled` 以外を `peer().send_notification` で届ける（areka は 202 で受ける・標準出力には何も書かない）。`notifications/initialized` は rmcp の手順が自分の分を送っているので届けない。**`notifications/cancelled` も届けない**（実装で確かめた＝タスク 4.2）: 通知の `requestId` は Desktop が振った番号で、areka が見たのは中継のクライアント（`Link`）が振り直した番号なので、areka では何も指さない（areka の受け口は無状態で、通知は 202 で受けて捨てる＝直接送っても何も起きない）。型のまま `Link` へ渡すと、rmcp のクライアントがその番号を自分の番号として読み、同じ番号で待っている別の要求を取り消しで終わらせる。取り消された Desktop の要求の応答の行は rmcp の受け手（`serve_inner`）が出さない。中継は areka の応答を上限まで待って捨て、areka の仕事は止めない。居ないときは何もしない（通知のために探索しない） | 「意味を変えずに届ける」。areka は無状態なので通知で何も起きない。取り消しだけは、届けると意味が変わる（番号が別物）ので届けない |
 | D-11 | 待つ時間（2.9・4.4） | `CONNECT_WAIT` 300 ms（並べて開く TCP の上限）・`VERIFY_WAIT` 3 秒（確かめの `initialize` の応答）・`REPLY_WAIT` 30 秒（Desktop の要求の応答・rmcp の `PeerRequestOptions.timeout`）。3 つとも `config.rs` の定数で、テストは `Timeouts` を差し替える。`REPLY_WAIT > areka_mcp::tools::REPLY_WAIT`（10 秒）を常設のテストで判定する | 2.9 の「設計で決めて記録する」。4.4 の「ツールが答えるまでの最も長い時間より長く」 |
-| D-12 | 記録と窓（5.1〜5.3） | `tracing-subscriber` の `fmt` を**標準エラー**へ向けて据える（`RUST_LOG`・既定 `info`）。中継の記録の文は英語（ASCII）。共有の関数 `areka_mcp::candidates_from_env_value` が出す 2.5 の `warn!` は日本語のまま通す（Desktop の記録は UTF-8 で読める）。`main.rs` に `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]`（areka 本体の `main.rs` と同じ形・debug では窓あり）で窓を持たない | 標準出力は応答の行だけ（5.1）。Desktop の記録ファイルは文字コードに左右されない |
+| D-12 | 記録と窓（5.1〜5.3） | `tracing-subscriber` の `fmt` を**標準エラー**へ向けて据える（`RUST_LOG`。無い・読めないときの既定は `info,rmcp=error`＝中継自身の記録は `info`、rmcp 自身の記録は `error` だけ。rmcp の `info` は相手の情報の全部と通知の本文を、`warn` はエラーの応答ごとの中身を出すため＝実装で確かめた・タスク 4.6。`RUST_LOG=info` と書けば rmcp の行も出る。既定で見えない rmcp の `warn` は、5 秒を越えた応答を捨てたことと `x-mcp-header` のツール外しの 2 つ）。色は付けない。中継の記録の文は英語（ASCII）。共有の関数 `areka_mcp::candidates_from_env_value` が出す 2.5 の `warn!` は日本語のまま通す（Desktop の記録は UTF-8 で読める）。`main.rs` に `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]`（areka 本体の `main.rs` と同じ形・debug では窓あり）で窓を持たない | 標準出力は応答の行だけ（5.1）。Desktop の記録ファイルは文字コードに左右されない |
 | D-13 | 要求を 1 件ずつか並べてか | rmcp の受け手は要求ごとに仕事を起こす（`serve_inner` が `tokio::spawn`）ので並ぶ。中継は要求ごとに接続を持つ（D-4）ので、長いツールの間も `ping` が待たない。応答の行の順は要求の順と同じとは限らない（`id` で対応づける）。例外が 1 つ: `Link` の版と違う版を `_meta` に持つ最初の要求は、rmcp のクライアントがほかの POST の無いときに 1 つだけで送り（`is_ordering_barrier`）、その 1 件が終わるまでほかの要求は待つ。`2026-07-28` の Desktop では `Link` を作った直後の 1 件だけ（ふつうは `tools/list`）。その後 `Link` の版はその版に替わったままで、`_meta` に版の無い要求もその版の札で届く。1 つの中継は 1 つの Desktop としか話さず、Desktop は話し方を途中で替えないので、これで足りる。`_meta` の `progressToken` は rmcp のクライアントが自分の番号で上書きする（areka は途中経過を出さないので差は出ない） | 試しで JSON でない行のエラーが、先に届いた要求の応答より先に出た（11.3） |
 | D-14 | help の置き場の渡し方（6.1・6.2） | **本質の形**: `crates/areka/src/main.rs` が `exe_location()` から `areka_mcp::BRIDGE_EXE_FILE_NAME` の隣のパスを求め、`areka_mcp::start(candidates, registry, bridge_exe: Option<PathBuf>)` へ渡す。`State` が持ち、`help_html(port, bridge_exe)` が JSON の文字列（`serde_json::to_string`）にしてから HTML の `&`・`<`・`>` を置き換えて載せる。`None`（場所が取れない）のときはファイル名だけを載せ、「areka.exe と同じフォルダの」と書く | 補助 exe（`default_helper_exe_path`）と同じ決まりを通る＝リンクごしに起こした areka でも本当の隣になる。`start` の引数が増えるので、約束の外のファイルに触る（下の表で諮る） |
 | D-15 | `env` の有無（6.3・6.4） | `areka_mcp::candidates_from_env_value(None)` に実番号が入っていれば `env` を載せない。入っていなければ `"env": {"AREKA_MCP_PORT": "<番号>"}` を載せる | 既定の 20 個の判定を 1 か所から取る |
@@ -146,7 +146,7 @@ graph TB
 crates/areka-mcp-bridge/
 ├── Cargo.toml                 # bin + lib・publish = false # 理由・依存は Allowed Dependencies のとおり
 ├── src/
-│   ├── main.rs                # 記録を標準エラーへ据える → Config::from_env → tokio current_thread → run → 終了コード 0（窓なし）
+│   ├── main.rs                # 記録を標準エラーへ据える → Config::from_env → tokio current_thread → run → 終了コード 0（窓なし）。標準入力の終わりを自分で見て、読まれない標準出力は 6 秒で見切る
 │   ├── lib.rs                 # モジュールの一覧と run(config, stdin, stdout)（テストが呼ぶ入口）
 │   ├── config.rs              # Config（候補の列・控えの置き場・Timeouts）と from_env（AREKA_MCP_PORT・AREKA_PROFILE_DIR・exe の場所と隣の areka.exe の有無・LOCALAPPDATA）・3 つの定数
 │   ├── config_tests.rs
@@ -616,6 +616,7 @@ pub fn invalid_json_response(status: u16, head: &str) -> ErrorData;            /
 | areka の JSON-RPC のエラー | Bridge（McpError） | そのまま（番号・文・`data`） | `debug` |
 | 控えを読めない・書けない | Cache | 無いものとして続ける | `warn` 理由 |
 | 標準入力が閉じた | LineTransport → rmcp | 書きかけの応答を 5 秒まで掃き出して終了コード 0 | `info` |
+| 標準入力が閉じた後、相手が標準出力を読まない | main | 標準入力が閉じてから 6 秒（`EXIT_WAIT`）で見切り、詰まった書きを捨てて終了コード 0 | `warn` 1 件 |
 
 - どのエラーでも中継は終了しない（4.6）。終了するのは標準入力が閉じたときだけ（1.9）。
 - 応答の上限を越えると、rmcp のクライアントが areka へ `notifications/cancelled`（rmcp のクライアントが自分で振った番号つき）を 1 件送る（実装で確かめた＝タスク 4.4）。areka は 202 で受けて捨てる。Desktop の取り消しを届けない決めごと（D-10）とは別で、番号は areka が見た番号なので意味は変わらない。中継のエラーの行はこの送信が終わってから出る（areka が居なければ接続の上限 300 ms、黙る相手なら確かめの 3 秒まで）。
@@ -624,8 +625,9 @@ pub fn invalid_json_response(status: u16, head: &str) -> ErrorData;            /
 
 ### Monitoring
 
+- 相手が標準入力だけ閉じて標準出力を読まないと、詰まった書きが書き手の鍵を持ったままになり、rmcp の 5 秒の後の `LineTransport::close` が戻らない（実測で 20 秒たっても終わらない＝タスク 4.6）。`main` は標準入力の終わり（読めたのが 0 バイト・読みの失敗）を自分で見て、そこから `EXIT_WAIT`（6 秒＝rmcp の 5 秒＋1 秒）で `run` を待つのをやめ、tokio を待たずに畳んで（`Runtime::shutdown_background`）終了コード 0 で終わる。読んでいる相手でも、閉じてから 6 秒を越えて書き続ける分は切れる（要件 1.9 の内）。既知の限界: 壊れた行（行の形のエラー）の書きが詰まっているときは、輸送が次の行を読まないので標準入力の終わりを見られず、この見切りは効かない（Desktop は壊れた行を送らない）。
 - 記録は全部標準エラー（Desktop の `mcp-server-areka.log` に残る）。起動時に `info` で候補の列・控えの置き場・3 つの時間を 1 行ずつ出す。つないだ先の番号・飛ばした候補と理由・控えで答えたこと・エラーの中身を出す（5.2）。
-- `RUST_LOG` で絞れる（既定 `info`）。
+- `RUST_LOG` で絞れる（既定 `info,rmcp=error`＝D-12）。最初の問い合わせに答えたとき、方法・Desktop が求めた版・答えた版を中継の `info` で 1 行出す（実機確認で Desktop が話した版を見る）。
 - areka 側の記録: Desktop の要求 1 件ごとに、areka の debug の記録（`dispatch::handle` の「要求に応えた」）に確かめの `initialize` が 1 行増える（D-4）。差の記録（8.4）にも書く。
 
 ## Testing Strategy
