@@ -34,6 +34,12 @@ fn port_value_maps_to_candidates_in_four_ways() {
         defaults,
         "読めない値は既定の 20 個"
     );
+    // UTF-8 でない値は、`from_env` が読めない字を U+FFFD に替えて渡す。数字に挟まっていても読めない値。
+    assert_eq!(
+        candidates_of(Some("90\u{FFFD}00")),
+        defaults,
+        "U+FFFD の入った値は既定の 20 個"
+    );
 }
 
 fn cache_dir_of(

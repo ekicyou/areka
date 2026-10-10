@@ -53,7 +53,7 @@ impl<R, W> LineTransport<R, W> {
     async fn settle_reply(&mut self) {
         if let Some(task) = &mut self.replying {
             if let Err(error) = task.await {
-                tracing::error!(%error, "the task writing a line-shape error did not finish");
+                tracing::error!(%error, "[bridge] the task writing a line-shape error did not finish");
             }
             self.replying = None;
         }
@@ -85,7 +85,7 @@ where
                 Ok(0) if self.line.is_empty() => return None,
                 Ok(_) => {}
                 Err(error) => {
-                    tracing::error!(%error, "failed to read a line from stdin");
+                    tracing::error!(%error, "[bridge] failed to read a line from stdin");
                     return None;
                 }
             }
@@ -100,18 +100,18 @@ where
             };
             let reply = match error.classify() {
                 Category::Syntax | Category::Eof => {
-                    tracing::debug!(%error, "a line is not JSON; answering -32700");
+                    tracing::debug!(%error, "[bridge] a line is not JSON; answering -32700");
                     errors::parse_error()
                 }
                 Category::Data | Category::Io => {
-                    tracing::debug!(%error, "a line is not a JSON-RPC message; answering -32600");
+                    tracing::debug!(%error, "[bridge] a line is not a JSON-RPC message; answering -32600");
                     errors::invalid_request()
                 }
             };
             let writer = self.writer.clone();
             self.replying = Some(tokio::spawn(async move {
                 if let Err(error) = write_line(&writer, reply.to_string().into_bytes()).await {
-                    tracing::warn!(%error, "failed to write a line-shape error to stdout");
+                    tracing::warn!(%error, "[bridge] failed to write a line-shape error to stdout");
                 }
             }));
         }

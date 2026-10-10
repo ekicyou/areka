@@ -336,11 +336,11 @@ fn port_0_answers_every_request_with_the_error_and_ignores_a_valid_cache() {
     );
 }
 
-/// 要件 2.4: 番号を指定すると、候補はその番号だけ。areka ならつなぎ、areka でない相手なら、ほかで
-/// areka が待ち受けていても「居ない」エラー（文に載る候補はその 1 つ）で、要求はその相手へ届けない。
+/// 要件 2.4: 番号を指定すると、候補はその番号だけ。areka ならつなぎ、areka でない相手なら「居ない」
+/// エラー（文に載る候補はその 1 つ）で、要求はその相手へ届けない。
+/// 要件 2.3・5.2: 飛ばした番号と名乗り、控えで答えたことが標準エラーに残る。
 #[test]
 fn a_given_port_is_the_only_one_tried() {
-    let elsewhere = FakeServer::start(Script::areka());
     let areka = FakeServer::start(Script::areka());
     let profile = TempPath::under_target("bridge-exe");
     let input = [initialize(1), request(2, "ping", Value::Null)];
@@ -357,16 +357,17 @@ fn a_given_port_is_the_only_one_tried() {
     assert_eq!(areka.requests_of("ping").len(), 1);
     record(stderr, &format!("ports=[{}]", areka.port()));
 
-    // areka でない相手の番号を指定する。
+    // areka でない相手の番号を指定する。最初の問い合わせには、上の回が書いた控えで答える。
     let other = FakeServer::start(Script::named("ssp-mcp-server"));
     let port = other.port();
+    let input = [call(1), initialize(2)];
 
-    let done = run_bridge(port, profile.path(), &call(1));
+    let done = run_bridge(port, profile.path(), &input.concat());
 
     let Finished { stdout, stderr, .. } = &done;
     assert_eq!(done.code, Some(0), "stdout: {stdout}\nstderr: {stderr}");
     let answers = answer_lines(&done);
-    assert_eq!(answers.len(), 1, "stdout: {stdout}\nstderr: {stderr}");
+    assert_eq!(answers.len(), 2, "stdout: {stdout}\nstderr: {stderr}");
     let error = &answer_to(&answers, 1)["error"];
     assert_eq!(error["code"], -1, "stdout: {stdout}");
     assert_eq!(
@@ -377,8 +378,16 @@ fn a_given_port_is_the_only_one_tried() {
         "stderr: {stderr}"
     );
     assert_eq!(other.requests_of("tools/call").len(), 0);
-    // ほかの番号の areka には、2 回とも 1 本もつなぎに行っていない。
-    assert_eq!(elsewhere.connections(), []);
+    let cached = answer_to(&answers, 2);
+    assert_eq!(cached["result"]["serverInfo"]["name"], SERVER_NAME);
+    // 飛ばした候補は、番号と名乗りを残す。控えで答えたことは、その方法を残す。
+    let skipped = record(stderr, "skipped a candidate: it answered as another server");
+    assert!(
+        skipped.contains(&format!("port={port}")) && skipped.contains("\"ssp-mcp-server\""),
+        "{skipped}"
+    );
+    let cached = record(stderr, "[bridge] areka not found; answered from the cache");
+    assert!(cached.contains("method=\"initialize\""), "{cached}");
 }
 
 /// 要件 5.4・3.11: 同じ受け口と同じ控えの置き場に exe を 2 つ同時に起こしても、それぞれの標準出力は

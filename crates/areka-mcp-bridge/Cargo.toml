@@ -16,8 +16,12 @@ path = "src/main.rs"
 # 依存は設計の Allowed Dependencies のとおり。どれも Cargo.lock に既にある版で、
 # 新しい外部のクレートは 0 個（要件 7.5）。根の [workspace.dependencies] は変えない。
 [dependencies]
-# 候補の並び・名乗り・受け口のパス・中継の exe の名前・ツールの上限の時間を同じ定数で読む
-# （要件 8.2）。受け口の実行時の部品（start など）は本番では呼ばない。
+# 候補の並び（PORT_ENV・candidates_from_env_value）・名乗り（SERVER_NAME）・受け口のパス（MCP_PATH）を
+# 受け口と同じ定義から読む（要件 8.2）。ツールの上限の時間（tools::REPLY_WAIT）はテストが比べるだけ。
+# 中継の exe の名前（BRIDGE_EXE_FILE_NAME）は中継からは読まない: 綴りは areka-mcp の
+# tests/shared_consts_test.rs が固定し、建った exe がその名前で在ることは配布スクリプト
+# （tools/package.ps1）の写しと zip の中身の検査が見る。
+# 受け口の実行時の部品（start など）は本番では呼ばない。
 areka-mcp = { path = "../areka-mcp" }
 # MCP の公式 SDK。版は areka-mcp と同じ = で固定し、上げるときは中継のテストも全部通す。
 # 既定機能（macros・base64）は切る。transport-io は使わない（標準入出力の輸送は自前）。

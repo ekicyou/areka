@@ -57,8 +57,12 @@ impl Config {
         let areka_beside = exe
             .as_deref()
             .is_some_and(|exe| exe.with_file_name(AREKA_EXE_FILE_NAME).is_file());
+        // UTF-8 でない値を「未設定」に丸めない: 読めない字を U+FFFD に替えた文は数として読めないので、
+        // 共有の関数が `warn!` を 1 件残して既定の 20 個にする（要件 2.5）。
+        let port_value =
+            std::env::var_os(areka_mcp::PORT_ENV).map(|v| v.to_string_lossy().into_owned());
         let config = Config::from_values(
-            std::env::var(areka_mcp::PORT_ENV).ok().as_deref(),
+            port_value.as_deref(),
             std::env::var_os(PROFILE_DIR_ENV).map(PathBuf::from),
             exe,
             areka_beside,

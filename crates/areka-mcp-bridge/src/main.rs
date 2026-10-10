@@ -67,9 +67,9 @@ fn main() -> io::Result<()> {
     } else {
         info!(ports = ?config.candidates, "[bridge] candidates on 127.0.0.1");
     }
-    match &config.cache_dir {
-        Some(dir) => info!(dir = %dir.display(), "[bridge] cache dir"),
-        None => info!("[bridge] no cache dir"),
+    // 置き場が無いときの 1 件は `Config::from_env` の `warn!` が出している。
+    if let Some(dir) = &config.cache_dir {
+        info!(dir = %dir.display(), "[bridge] cache dir");
     }
     let waits = &config.timeouts;
     info!(connect = ?waits.connect, verify = ?waits.verify, reply = ?waits.reply, "[bridge] timeouts");
