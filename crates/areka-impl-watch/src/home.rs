@@ -22,14 +22,21 @@ pub fn env_value() -> Option<OsString> {
 
 /// 置き場所を決め、フォルダが無ければ作る（途中のフォルダも）。
 ///
-/// 無い・空は何も作らずに `HomeUnset`、作れなければ `HomeNotCreatable`。作るのはフォルダだけ。
+/// 順は「空か → 絶対パスか → 作る」。無い・空は `HomeUnset`、絶対パスでなければ
+/// `HomeNotAbsolute`（どちらも何も作らない）、作れなければ `HomeNotCreatable`。作るのはフォルダだけ。
 /// 空の値を通すと `create_dir_all("")` が成功し、置き場所がカレントに化けるので先に断る。
 /// ASCII の空白だけの値も空に数える（フォルダの名前にならない。「設定してください」の文で返す）。
+/// 絶対パスでない値（`foo`・`\foo`・`C:foo`・Git Bash の `/c/…`）は、呼んだときのカレントや
+/// 今のドライブの根を基準にフォルダができ、セッションごとに別々の置き場所になるので断る。
 pub fn resolve(value: Option<OsString>) -> Result<Home, WatchError> {
     let dir = value
         .filter(|value| !value.as_encoded_bytes().iter().all(u8::is_ascii_whitespace))
         .map(PathBuf::from)
         .ok_or(WatchError::HomeUnset)?;
+    if !dir.is_absolute() {
+        let dir = dir.to_string_lossy().into_owned();
+        return Err(WatchError::HomeNotAbsolute { dir });
+    }
     std::fs::create_dir_all(&dir).map_err(|err| WatchError::home_not_creatable(&dir, &err))?;
     Ok(Home { dir })
 }

@@ -16,6 +16,11 @@ pub enum WatchError {
         "AREKA_IMPL_WATCH_HOME is not set or empty. Set it to a folder (for example %USERPROFILE%\\.areka-impl-watch) and copy areka-impl-watch.exe there. See doc/impl-watch.md"
     )]
     HomeUnset,
+    /// `dir` は環境変数の値そのまま。ASCII の外の字は出すときに `\u{...}` へ逃がす。
+    #[error(
+        "AREKA_IMPL_WATCH_HOME must be an absolute path such as C:\\Users\\me\\.areka-impl-watch, but it is '{}'. See doc/impl-watch.md", escape_path(.dir)
+    )]
+    HomeNotAbsolute { dir: String },
     /// `dir` は置き場所の道筋。ASCII の外の字は出すときに `\u{...}` へ逃がす。
     #[error("AREKA_IMPL_WATCH_HOME cannot be created: {}: {kind} (os error {code})", escape_path(.dir))]
     HomeNotCreatable {

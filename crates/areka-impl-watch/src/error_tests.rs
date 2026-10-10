@@ -28,6 +28,9 @@ fn samples() -> Vec<WatchError> {
         },
         WatchError::io("write state.json", &os),
         WatchError::from(json),
+        WatchError::HomeNotAbsolute {
+            dir: "..\\置き場".to_string(),
+        },
     ]
 }
 
@@ -42,6 +45,7 @@ fn variant_index(err: &WatchError) -> usize {
         WatchError::AlreadyRunning { .. } => 5,
         WatchError::Io { .. } => 6,
         WatchError::Json(_) => 7,
+        WatchError::HomeNotAbsolute { .. } => 8,
     }
 }
 
@@ -51,7 +55,7 @@ fn every_message_is_one_ascii_line() {
     let covered: Vec<usize> = samples.iter().map(variant_index).collect();
     assert_eq!(
         covered,
-        (0..8).collect::<Vec<_>>(),
+        (0..9).collect::<Vec<_>>(),
         "見本が全部の種類を踏む"
     );
     for err in &samples {
@@ -80,6 +84,11 @@ fn messages_spell_the_design_text() {
     assert_eq!(
         texts[6],
         "io write state.json: PermissionDenied (os error 0)"
+    );
+    // 環境変数の値は、ASCII の外の字を逃がして映す。
+    assert_eq!(
+        texts[8],
+        "AREKA_IMPL_WATCH_HOME must be an absolute path such as C:\\Users\\me\\.areka-impl-watch, but it is '..\\\\u{7f6e}\\u{304d}\\u{5834}'. See doc/impl-watch.md"
     );
 }
 

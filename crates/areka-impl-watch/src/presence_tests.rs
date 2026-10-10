@@ -4,6 +4,7 @@
 //! 同じプロセスでも 2 つ目のハンドルは取れない）。時計には依らない: 試しの間の待ちは
 //! [`hold_retrying`] へ渡す関数で差し替える。
 
+use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use temp_path_kit::TempPath;
@@ -95,6 +96,65 @@ fn hold_gets_the_lock_when_it_is_released_between_tries() {
 
     assert!(held.is_some(), "解かれた後の試しで取れる");
     assert_eq!(pauses, 2, "取れたらそれ以上試さない");
+    assert!(LockFilePresence::new(&home).is_present("a", WaitKind::Watch));
+}
+
+/// 進行中の探りの形: 作らずに開いて、共有のロックを取ったままのハンドル。
+fn probe_in_progress(path: &Path) -> File {
+    let file = File::open(path).expect("開ける");
+    file.try_lock_shared().expect("共有のロックが取れる");
+    file
+}
+
+#[test]
+fn two_probes_at_the_same_time_both_answer_absent() {
+    let root = TempPath::under_target("impl-watch-presence");
+    let home = home_in(&root);
+    let path = home.alive_path("a", WaitKind::Watch);
+    // 握られていないロックファイル（落ちた見張りが残したもの）。
+    drop(hold(&path).expect("握れる").expect("誰も握っていない"));
+    let other = probe_in_progress(&path);
+
+    // 先の探りがロックを取っている最中でも、後の探りは「居る」と見誤らない。
+    assert!(!LockFilePresence::new(&home).is_present("a", WaitKind::Watch));
+
+    drop(other);
+}
+
+#[test]
+fn a_held_file_is_present_for_probes_at_the_same_time() {
+    let root = TempPath::under_target("impl-watch-presence");
+    let home = home_in(&root);
+    let path = home.alive_path("a", WaitKind::Watch);
+    let _held = hold(&path).expect("握れる").expect("誰も握っていない");
+
+    // 握られているファイルには、探りの共有のロックも掛からない。
+    let other = File::open(&path).expect("開ける");
+    assert!(other.try_lock_shared().is_err(), "排他で握れていない");
+    assert!(LockFilePresence::new(&home).is_present("a", WaitKind::Watch));
+}
+
+#[test]
+fn hold_started_during_a_probe_gets_the_lock_once_the_probe_is_over() {
+    let root = TempPath::under_target("impl-watch-presence");
+    let home = home_in(&root);
+    let path = home.alive_path("a", WaitKind::Watch);
+    drop(hold(&path).expect("握れる").expect("誰も握っていない"));
+    let mut probing = Some(probe_in_progress(&path));
+
+    let mut pauses = 0;
+    let held = hold_retrying(&path, || {
+        pauses += 1;
+        if let Some(probe) = probing.take_if(|_| pauses == 2) {
+            // 閉じるだけでも解けるが、解ける時機を OS 任せにしない。
+            probe.unlock().expect("解ける");
+        }
+    })
+    .expect("失敗ではない");
+
+    // 探りの共有のロックが在る間（1・2 回目）は握れず、解けた後の試しで握れる。
+    assert!(held.is_some(), "解かれた後の試しで取れる");
+    assert_eq!(pauses, 2, "探りの間は握れない・取れたらそれ以上試さない");
     assert!(LockFilePresence::new(&home).is_present("a", WaitKind::Watch));
 }
 

@@ -2,6 +2,7 @@
 //!
 //! 印は `alive/<id>.<kind>.lock` の排他ロックそのもの。ロックはプロセスが死ねば OS が解くので、
 //! プロセス番号は判定に使わない（番号の使い回しに左右されない。要件 7.4）。
+//! 握るのは排他、探るのは共有のロックの試し（探り同士は互いを妨げない）。
 //!
 //! 不変:
 //! - ロックファイルは消さない（Windows では握られているファイルの消去と作り直しが衝突する）。
@@ -18,7 +19,7 @@ use crate::home::Home;
 use crate::plan::Presence;
 use crate::state::WaitKind;
 
-/// 握りを試す回数。探りが一瞬ロックを取るので、同時に始まった握りの 1 回目は外れることがある。
+/// 握りを試す回数。探りが一瞬（共有の）ロックを取るので、同時に始まった握りの 1 回目は外れることがある。
 const HOLD_TRIES: u32 = 5;
 /// 試しの間の待ち。
 const HOLD_PAUSE: Duration = Duration::from_millis(20);
@@ -67,8 +68,7 @@ fn hold_retrying(path: &Path, mut pause: impl FnMut()) -> io::Result<Option<Held
 
 /// ロックファイルを探って「居る」かを答える、生死の口の本物の実装。
 pub struct LockFilePresence {
-    // 設計の欄は `alive_dir` だが、`<id>.<kind>.lock` の綴りを `Home::alive_path` の 1 か所に
-    // 保つため、置き場所ごと持つ。
+    // `<id>.<kind>.lock` の綴りを `Home::alive_path` の 1 か所に保つため、置き場所ごと持つ。
     home: Home,
 }
 
@@ -83,7 +83,9 @@ impl LockFilePresence {
 }
 
 impl Presence for LockFilePresence {
-    /// 作らずに開き、無ければ「居ない」。ロックが取れたら直ちに解いて「居ない」、取れなければ「居る」。
+    /// 作らずに開き、無ければ「居ない」。共有のロックが取れたら直ちに解いて「居ない」、
+    /// 取れなければ（排他で握られている）「居る」。共有で探るのは、同時に走った 2 つの探りが
+    /// 互いのロックを見て「居る」と見誤らないため。
     ///
     /// 「無い」でも「握られている」でもない失敗（アクセス拒否など）は「居る」に倒す。
     /// 「居ない」に倒すと生きている参加者が回収されて机を失い（要件 7.2）、「居る」に倒した
@@ -94,7 +96,7 @@ impl Presence for LockFilePresence {
             Err(err) if err.kind() == io::ErrorKind::NotFound => return false,
             Err(err) => return unsure(id, kind, &err),
         };
-        match file.try_lock() {
+        match file.try_lock_shared() {
             Ok(()) => {
                 let _ = file.unlock();
                 false

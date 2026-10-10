@@ -193,7 +193,7 @@
   - 済んだ姿: 止まっている参加者の申し込みで状態が変わらず `Resumed` が出ない／`unstop` の後に出し直された参加者の再開の待ちが `stop requested again by …` の 0 で終わり、待ちの記録が消える／見張りの抹消で印が付くのは「見張り・実際に消した・作業中」のときだけ、を決定論テストが判定する（各分岐は変異で赤を確かめる）
   - _Requirements: 4.1, 5.9, 5.10, 5.12, 5.16, 7.7_
 
-- [ ] 7.2 口を裁定に合わせる
+- [x] 7.2 口を裁定に合わせる
   - 置き場所の値が絶対パスでなければ断る（空の検査の後・フォルダを作る前。ASCII の 2 行以内・何も読み書きせず 1）。失敗の型を 1 つ足す
   - 居る印の探りを共有のロックの試しに替える（握るのは排他のまま）
   - 読み物（`status.md`）が書けない失敗は `warn!` を 1 行出して、コマンドの結果と終了コードを変えない（状態を変える 1 回・全部消す・状態の確認の 3 つとも）。状態ファイルの書きの失敗はこれまでどおり失敗
@@ -329,3 +329,6 @@
 - 裁定の反映で文書係が選んだ所: 裁定 4 にはまだマイクロ秒の窓が残る（抹消の書きが済んでから居る印を解くまでの間の他人の探り。読んで導いたもの・design の弱点に記載）／裁定 5 の判定は `Path::is_absolute`（UNC は通る・`C:foo` は断る）／裁定 7 の `status` は要約と `status:` の行を今と同じに出す（知らせはログの `warn!` だけ）／裁定 9 で寄せるのは `--id` だけ・寄せる前の exe が書いた大文字入りの識別は `clear` でやり直す／要件 10.2 の例外は読み物だけ（待ちの周期の一回りと抹消の失敗の `warn!` は design の「失敗にしないもの」に書いた）。
 - 7.1: 裁定 1・3・4 をコードへ入れた。`Command::LoadTest` は `join` と待ち行列への追加だけ（`why` の `load-request` は消えた。上の 2.3 の注記の `load-request` は読み替える）。再開の待ちの条件は `wait::judge` の `WaitSpec::Resume` の `match participant.status` 1 か所（`resume_is_over` は消した。上の 4.1 の注記は読み替える）: 止まった＝待つ／作業中＝`resumed`／停止要請中＝`stop requested again by <by>`（`<by>` は見張りの枝と共有する `asked_by`・無い／空は `?`）。見張りの抹消で印が付くのは「種類が見張り・実際に消した・参加者が作業中」のときだけ（新しい出来事は無い）。`--help` の `stopped`／`resume` は `0=resumed, or stop requested again`。
 - 7.1 → 7.3: 古くなったコメントの掃除に (a) `cli::waiting` の doc の「もう終わっていれば（…）」に出し直しを足す (b) `wait.rs` の `WaitEnd::Done` と `run` の doc の「番が来た・停止要請が出た・再開した」 (c) `--help` 末尾の `exit codes: 0 done: …` に出し直しを挙げるか決める、を含める。任意: cli テスト 1 本（見張りの無い走っている持ち主＋並んでいる c＋作業中の a が `stopped --wait` → 同じ呼び出しの回収と番の決め直しで `stop requested again by c`）。
+- 7.2: 裁定 5・6・7・9 をコードへ入れた。`home::resolve` は「空 → `Path::is_absolute` → `create_dir_all`」（断るときは何も作らない・`WatchError::HomeNotAbsolute { dir }`・UNC と `\?\` 形は通る）。探り（`is_present`）だけ `try_lock_shared`・握りは排他のまま。`store::write_status` は失敗を返さず `warn!`（`[store] status.md not written; the result stands`）を 1 行出す（`with_state`・`clear`・`summary` の 3 か所とも結果を変えない。状態ファイルの書きの失敗は失敗のまま）。`cli::parse` は形の検査の後に `--id` だけ `to_ascii_lowercase`。`--help` の終了コード 1 の行は `AREKA_IMPL_WATCH_HOME unset, not absolute or not creatable, …`。
+- 7.2 → 7.3（必須・これが入るまで 7.2 の済んだ姿の「ログに warn 相当が残る」は未了）: 実機テストで、置き場所の `status.md` をフォルダにして塞ぎ、① 状態を変える 1 回（例 `merge`）が 0・結果の行は標準出力・標準エラーは空・`state.json` に変化が入る ② `status` が 0 で要約と `status:` の行 ③ `clear` が 0 で `cleared; backup:` の行、のそれぞれで `impl-watch.log` に `WARN` の水準の `[store] status.md not written` で始まる行が増え、`[store] state change failed`／`clear failed`／`read failed` の `ERROR` の行は増えない、を判定する（文は前方一致で見る）。
+- 7.2 → 7.3（任意）: `--help` の終了コード 1 の行に檻が無い（元へ戻す変異が緑）→ 手順書と `--help` を見比べ直すときに 1 行の判定を足す。`--help` に「`--id` は小文字に寄る」の 1 句を足すか決める。`home_tests.rs` の「設計の綴り」のテストは、判定が番人の値と字面の値を別扱いする後退のときだけ `C:\` 直下に空フォルダを作りうる（番人 2 本が先に赤で止めるので現実味は薄い。0 にするなら字面の輪から `\<名前>` と `/c/<名前>` を外す）。`status_tests.rs` の見本は大文字のまま（`status.rs` は寄せないので挙動は同じ）。

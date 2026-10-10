@@ -362,18 +362,11 @@ fn a_failed_replace_is_retried_five_times_and_then_removes_the_temp_file() {
     fs::write(&kept, "kept").expect("置ける");
     let (store, pauses) = store_noting_pauses(&root);
 
-    let got = store.with_state(watch("a"));
+    // 読み物が書けないことは失敗にしない（変化は状態ファイルに入っている）。
+    let got = store.with_state(watch("a")).expect("変えられる");
 
-    assert!(
-        matches!(
-            got,
-            Err(WatchError::Io {
-                op: "write status.md",
-                ..
-            })
-        ),
-        "{got:?}"
-    );
+    assert_eq!(got, Verdict::Applied);
+    assert_eq!(participants(&home), ["a"]);
     // 5 回試し、間に 20 ms を 4 回挟む。
     assert_eq!(*pauses.borrow(), [Duration::from_millis(20); 4]);
     assert_eq!(

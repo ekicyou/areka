@@ -7,12 +7,14 @@
 //! （本番の表を書き換えると、このファイルのテストが赤になる）。
 
 use std::ffi::OsString;
+#[cfg(windows)]
+use std::path::Component;
 use std::path::PathBuf;
 
 use temp_path_kit::TempPath;
 
 use super::test_support::{args, entries, run_captured};
-use super::{COMMANDS, Command, Invocation, Opt, Outcome, exit_code, parse, usage};
+use super::{COMMANDS, Command, Invocation, Opt, Outcome, exit_code, parse, subject, usage};
 use crate::error::WatchError;
 use crate::plan;
 
@@ -339,6 +341,91 @@ fn name_and_purpose_take_any_text() {
     );
 }
 
+// ---- 識別の小文字への寄せ ----
+
+/// 読んだコマンドが名指す識別。
+fn id_of(command: &Command) -> Option<&str> {
+    match command {
+        Command::Watch { id, .. } | Command::Resume { id } => Some(id),
+        Command::Change(change) => subject(change),
+        Command::Help | Command::Status | Command::Clear => None,
+    }
+}
+
+#[test]
+fn the_id_is_folded_to_ascii_lower_case_in_every_command_that_takes_it() {
+    let mut taking = 0;
+    for (name, required, optional, _) in DESIGN {
+        if !required.contains(&Id) && !optional.contains(&Id) {
+            continue;
+        }
+        taking += 1;
+        let mut opts = required.to_vec();
+        if !opts.contains(&Id) {
+            opts.push(Id);
+        }
+        let mut words = line(name, &opts);
+        let at = words.iter().position(|word| word == "--id");
+        words[at.expect("--id が在る") + 1] = s("AbC-P0.x_Z9");
+
+        let got = parse(&words).unwrap_or_else(|err| panic!("{words:?}: {}", err.0));
+
+        assert_eq!(id_of(&got.command), Some("abc-p0.x_z9"), "{words:?}");
+    }
+    assert_eq!(taking, 11, "識別を取るコマンドの数");
+}
+
+#[test]
+fn only_the_id_is_folded_and_the_other_values_stay_as_typed() {
+    let merge = [
+        "merge", "--id", "AbC", "--repo", "Areka", "--spec", "Spec-X", "--name", "NaMe",
+    ];
+    assert_eq!(
+        parse(&args(&merge)).expect("通る").command,
+        Command::Change(plan::Command::Merge {
+            id: s("abc"),
+            name: Some(s("NaMe")),
+            repo: s("Areka"),
+            spec: s("Spec-X"),
+            bug: false,
+        })
+    );
+    let loadtest = [
+        "loadtest",
+        "--id",
+        "A",
+        "--repo",
+        "Areka",
+        "--purpose",
+        "PurPose",
+    ];
+    assert_eq!(
+        parse(&args(&loadtest)).expect("通る").command,
+        Command::Change(plan::Command::LoadTest {
+            id: s("a"),
+            name: None,
+            repo: s("Areka"),
+            purpose: s("PurPose"),
+        })
+    );
+    let merged = ["merged", "--id", "A", "--pr", "281", "--sha", "AbCdEf0"];
+    assert_eq!(
+        parse(&args(&merged)).expect("通る").command,
+        Command::Change(plan::Command::Merged {
+            id: s("a"),
+            pr: s("281"),
+            sha: s("AbCdEf0"),
+        })
+    );
+    // 名指しの取り消しも、小文字の識別を指す。
+    assert_eq!(
+        parse(&args(&["unstop", "--id", "A"]))
+            .expect("通る")
+            .command,
+        Command::Change(plan::Command::Unstop { id: Some(s("a")) })
+    );
+}
+
 // ---- 使い方の誤り ----
 
 #[test]
@@ -503,6 +590,57 @@ fn a_home_that_cannot_be_created_fails_in_at_most_two_ascii_lines_and_creates_no
     assert!((1..=2).contains(&err.lines().count()), "{err:?}");
     assert_eq!(std::fs::read(&file).expect("読める"), b"keep");
     assert_eq!(entries(root.path()), vec![file]);
+}
+
+/// 絶対パスでない値（相対の形）は、何も作らずに 1。使い方の誤りはそれより先で、`--help` は
+/// 置き場所を決めない。値は、断られなければ一時フォルダの中に落ちるもの（判定が壊れていても
+/// `target\` の外には何も作られない）。ほかの形は `home_tests.rs` が確かめる。
+#[cfg(windows)]
+#[test]
+fn a_home_that_is_not_absolute_fails_in_at_most_two_ascii_lines_and_creates_nothing() {
+    let root = TempPath::under_target("impl-watch-cli");
+    // 道筋には ASCII の外の字も入れる。
+    let dir = root.child("置き場");
+    let cwd = std::env::current_dir().expect("カレントが分かる");
+    // カレントから見た相対の道筋（`..\..\target\…`）。
+    let shared = cwd.components().zip(dir.components());
+    let shared = shared.take_while(|(here, there)| here == there).count();
+    let up = cwd.components().skip(shared).map(|_| Component::ParentDir);
+    let home: PathBuf = up.chain(dir.components().skip(shared)).collect();
+    assert!(!home.is_absolute(), "前提: {home:?}");
+    // 較正: 断られなければ、この値のフォルダは一時フォルダの中にできる。
+    assert_eq!(std::path::absolute(&home).expect("綴れる"), dir);
+    let home = home.into_os_string();
+
+    for words in [args(&["status"]), line("watch", &[Id, Repo])] {
+        let (result, out, err) = run_captured(&words, Some(home.clone()));
+        assert!(
+            matches!(result, Err(WatchError::HomeNotAbsolute { .. })),
+            "{words:?}: {result:?}"
+        );
+        assert_eq!(exit_code(&result), 1);
+        assert_eq!(out, "");
+        assert!(err.is_ascii(), "ASCII の外の字: {err:?}");
+        assert!(
+            err.starts_with("AREKA_IMPL_WATCH_HOME must be an absolute path"),
+            "{err:?}"
+        );
+        assert!(err.ends_with('\n'), "{err:?}");
+        assert!((1..=2).contains(&err.lines().count()), "{err:?}");
+    }
+
+    let (result, _, err) = run_captured(&args(&["leave"]), Some(home.clone()));
+    assert!(matches!(result, Ok(Outcome::Usage)), "{result:?}");
+    assert!(!err.contains("AREKA_IMPL_WATCH_HOME"), "{err:?}");
+    let (result, out, err) = run_captured(&args(&["--help"]), Some(home));
+    assert!(matches!(result, Ok(Outcome::Done)), "{result:?}");
+    assert_eq!((out, err), (format!("{}\n", usage()), String::new()));
+
+    assert_eq!(
+        entries(root.path()),
+        Vec::<PathBuf>::new(),
+        "断った値のフォルダを作った"
+    );
 }
 
 #[test]

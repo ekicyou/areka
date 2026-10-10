@@ -131,6 +131,26 @@ fn the_merge_position_counts_in_serving_order_bugs_first() {
     assert_eq!(merge(&home, "b"), done("queued merge repo=areka pos=2"));
 }
 
+#[test]
+fn ids_that_differ_only_in_case_are_the_same_participant() {
+    let root = TempPath::under_target("impl-watch-cli");
+    let home = home_in(&root);
+
+    assert_eq!(
+        merge(&home, "A"),
+        done("granted merge repo=areka; last: none")
+    );
+    // 記録に入るのは小文字の形。
+    let state = read_state(&home);
+    let ids: Vec<&String> = state.participants.keys().collect();
+    assert_eq!(ids, ["a"]);
+    let holder = state.merge["areka"].holder.as_ref();
+    assert_eq!(holder.map(|holder| holder.id.as_str()), Some("a"));
+
+    // 小文字で呼んでも同じ参加者（机の持ち主）。
+    assert_eq!(merged(&home, "a"), done("merged repo=areka"));
+}
+
 // ---- 負荷テストの机・停止要請 ----
 
 #[test]
@@ -353,6 +373,39 @@ fn clear_without_a_state_file_says_there_is_no_backup() {
     assert_eq!(call(&home, &["clear"]), done("cleared; backup: none"));
 
     assert!(read_state(&home).participants.is_empty());
+}
+
+// ---- 書けなかった読み物 ----
+
+/// 読み物（`status.md`）が書けなくても、コマンドの結果と終了コードは変わらない。
+#[test]
+fn a_reading_matter_that_cannot_be_written_changes_neither_the_result_nor_the_exit_code() {
+    let root = TempPath::under_target("impl-watch-cli");
+    let home = home_in(&root);
+    merge(&home, "a");
+    let (_, summary, _) = call(&home, &["status"]);
+    assert!(summary.contains("\nstatus: "), "{summary:?}");
+    let reading = fs::read(home.join("status.md")).expect("読み物が在る");
+    // 一時ファイルの名前（プロセス番号入り）をフォルダで塞ぐ: 読み物だけが書けなくなる。
+    let temp = format!("status.md.{}.tmp", std::process::id());
+    fs::create_dir(home.join(temp)).expect("作れる");
+
+    // 状態の確認: 要約と読み物の道筋を、書けたときと同じに出す。
+    assert_eq!(call(&home, &["status"]), (0, summary, String::new()));
+    // 状態を変える 1 回: 結果の文と 0（変化は状態ファイルに入っている）。
+    assert_eq!(call(&home, &["leave", "--id", "a"]), done("left"));
+    assert!(read_state(&home).participants.is_empty());
+    // 全部消す: 退避の道筋と 0。
+    let (code, out, err) = call(&home, &["clear"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out:?}");
+    assert!(
+        out.starts_with("cleared; backup: ") && out.contains("state.json.cleared-"),
+        "{out:?}"
+    );
+    assert_eq!(read_state(&home).recent.len(), 1);
+
+    // 較正: 読み物は、どの呼び出しでも書けていない（塞ぐ前のまま）。
+    assert_eq!(fs::read(home.join("status.md")).expect("読める"), reading);
 }
 
 // ---- 出せなかった結果 ----

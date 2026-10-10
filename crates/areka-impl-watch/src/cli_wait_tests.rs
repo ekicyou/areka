@@ -179,6 +179,23 @@ fn a_second_merge_wait_for_the_same_id_is_1_and_changes_nothing() {
     assert_eq!(state_bytes(&home), before);
 }
 
+#[test]
+fn the_presence_sign_of_an_upper_case_id_is_the_lower_case_lock_file() {
+    let root = TempPath::under_target("impl-watch-cli-wait");
+    let home = home_in(&root);
+
+    // 机が空いているので直ちに番を受けて終わる。居る印のファイルは残る。
+    let merge = ["merge", "--id", "A", "--repo", "areka", "--spec", "x"];
+    let granted = done("granted merge repo=areka; last: none");
+    assert_eq!(waiting(&home, &merge), granted);
+    assert_eq!(names(&home.join("alive")), ["a.merge.lock"]);
+
+    // 小文字の識別の見張りが走っている間、大文字で呼んだ見張りは同じ待ちとして断られる。
+    let _first = hold_sign(&home, "a", WaitKind::Watch);
+    let watch = ["watch", "--id", "A", "--repo", "areka"];
+    assert_eq!(call(&home, &watch), already_running("watch"));
+}
+
 // ---- 見張り ----
 
 #[test]

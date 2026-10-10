@@ -196,20 +196,15 @@ fn when_only_the_reading_matter_cannot_be_written_the_events_still_reach_the_log
     let (store, noted) = store_noting_events(&root);
     store.with_state(tick).expect("変えられる");
     noted.borrow_mut().clear();
+    let reading = fs::read(home.status_path()).expect("読める");
     block_status_writes(&home);
 
-    let got = store.with_state(merge("a"));
+    // 読み物が書けないことは失敗にしない: 判断の返した値がそのまま返る。
+    let returned = store.with_state(merge("a")).expect("変えられる");
 
-    assert!(
-        matches!(
-            got,
-            Err(WatchError::Io {
-                op: "write status.md",
-                ..
-            })
-        ),
-        "{got:?}"
-    );
+    assert_eq!(returned.len(), 3, "判断が返した列（前提）");
+    // 較正: 読み物は本当に書けていない（塞ぐ前のまま）。
+    assert_eq!(fs::read(home.status_path()).expect("読める"), reading);
     // 状態ファイルはもう置き換わっている（変化は起きた）。
     assert_eq!(participants(&home), ["a"]);
     let holder = read_state(&home).merge["areka"].holder.clone();
@@ -229,6 +224,7 @@ fn when_only_the_reading_matter_cannot_be_written_the_events_still_reach_the_log
             Event::MergeGranted { repo, id },
         ]
     );
+    assert_eq!(*noted.borrow(), returned);
 }
 
 #[test]
@@ -338,6 +334,38 @@ fn read_only_fails_on_an_unknown_version_and_leaves_the_file() {
     );
     assert_eq!(fs::read_to_string(home.state_path()).expect("読める"), text);
     assert_eq!(names(&home.dir), ["state.json"]);
+}
+
+// ───────── 状態の確認 ─────────
+
+#[test]
+fn summary_returns_the_terminal_summary_even_when_the_reading_matter_cannot_be_written() {
+    let root = TempPath::under_target("impl-watch-store");
+    let home = home_in(&root);
+    let store = store_in(&root);
+    assert_eq!(store.summary().expect("読める"), None, "状態ファイルが無い");
+    store.with_state(watch("a")).expect("変えられる");
+    fs::remove_file(home.status_path()).expect("消せる");
+
+    let summary = store
+        .summary()
+        .expect("読める")
+        .expect("状態ファイルが在る");
+
+    assert!(summary.contains("a areka working\n"), "{summary}");
+    assert!(
+        home.status_path().is_file(),
+        "書けるときは読み物を置き換える"
+    );
+
+    fs::remove_file(home.status_path()).expect("消せる");
+    block_status_writes(&home);
+
+    let got = store.summary().expect("読み物が書けなくても、要約は返る");
+
+    assert_eq!(got, Some(summary));
+    // 較正: 読み物は本当に書けていない。
+    assert!(!home.status_path().exists());
 }
 
 // ───────── 全部消す ─────────
@@ -459,6 +487,28 @@ fn clear_runs_inside_the_exclusion() {
     drop(held);
     store.clear().expect("放された後は消せる");
     assert_eq!(participants(&home), [""; 0]);
+}
+
+#[test]
+fn when_only_the_reading_matter_cannot_be_written_clear_still_returns_the_backup() {
+    let root = TempPath::under_target("impl-watch-store");
+    let home = home_in(&root);
+    let (store, noted) = store_noting_events(&root);
+    store.with_state(watch("a")).expect("変えられる");
+    noted.borrow_mut().clear();
+    let reading = fs::read(home.status_path()).expect("読める");
+    block_status_writes(&home);
+
+    let backup = store
+        .clear()
+        .expect("読み物が書けなくても、消した答えは返る");
+
+    let expected = home.dir.join(CLEARED_AT_T0);
+    assert_eq!(backup.as_deref(), Some(expected.as_path()));
+    assert_eq!(read_state(&home), State::cleared(T0, &expected));
+    assert_eq!(*noted.borrow(), [cleared_event(Some(&expected))]);
+    // 較正: 読み物は本当に書けていない（塞ぐ前のまま）。
+    assert_eq!(fs::read(home.status_path()).expect("読める"), reading);
 }
 
 #[test]

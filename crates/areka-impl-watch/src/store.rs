@@ -12,6 +12,7 @@
 //! - ログ: 置き場所の下の `impl-watch.log` へ追記する。状態の変化は出来事 1 件ずつログの口へ
 //!   渡し（本物は 1 行ずつ書く）、失敗は各入口の出口で `error!` を 1 行出してから返す。
 //!   渡すのは、状態ファイルの置き換え（か退避）が済んだ変化だけ。読み物を書くのはその後。
+//!   読み物が書けないことは失敗にせず、`warn!` を 1 行残して結果を変えない。
 //!
 //! 時計・生死・試しの間の待ち・ログの口は欄に持ち、テストは差し替える。
 
@@ -114,7 +115,8 @@ impl Store {
     /// `f` へ渡すのは、読んだ状態・いまの時刻・生死の口。`f` の返す 2 つ目の値がそのまま返る。
     /// 状態ファイルを置き換えた時点で、判断の返した出来事を 1 件ずつログの口へ渡す（状態
     /// ファイルが書けなかった変化は起きていないので渡さない）。読み物を書くのはその後で、
-    /// 読み物が書けなくても、起きた変化はログに残る。どの失敗もログに残してから返す。
+    /// 読み物が書けなくても失敗にしない（`warn!` を 1 行残して `f` の値を返す）。ほかの失敗は
+    /// ログに残してから返す。
     pub fn with_state<T>(
         &self,
         f: impl FnOnce(&mut State, u64, &dyn Presence) -> (Applied, T),
@@ -149,7 +151,7 @@ impl Store {
         let created = rebuilt.iter().filter(|_| !set_aside);
         created.chain(&applied.events).for_each(&self.log);
         if write {
-            self.write_status(&state, now)?;
+            self.write_status(&state, now);
         }
         Ok(out)
     }
@@ -166,19 +168,19 @@ impl Store {
 
     /// 状態の確認。排他を取らずに読み（[`Store::read_only`]）、読み物を置き換え、端末向けの
     /// 要約（ASCII）を返す。状態ファイルには触らない。状態ファイルが無ければ `None`（読み物も
-    /// 書かない）。
+    /// 書かない）。読み物が書けなくても要約は返す。
     pub fn summary(&self) -> Result<Option<String>, WatchError> {
         let Some(state) = self.read_only()? else {
             return Ok(None);
         };
-        self.write_status(&state, (self.clock)())
-            .inspect_err(|err| tracing::error!(error = %err, "[store] status.md not written"))?;
+        self.write_status(&state, (self.clock)());
         let summary = status::render_terminal(&state, self.presence.as_ref());
         Ok(Some(summary))
     }
 
     /// 全部消す。排他の中で今の状態ファイルを `state.json.cleared-<UTC>` へ退避し、「消した記録」
     /// だけの空の状態を書く。退避先を返す（状態ファイルが無ければ `None`。空の状態は書く）。
+    /// 読み物が書けなくても失敗にしない。
     pub fn clear(&self) -> Result<Option<PathBuf>, WatchError> {
         self.wipe()
             .inspect_err(|err| tracing::error!(error = %err, "[store] clear failed"))
@@ -195,7 +197,7 @@ impl Store {
         let recorded = backup.as_deref().unwrap_or(Path::new(NO_BACKUP));
         let state = State::cleared(now, recorded);
         self.write_state(&state)?;
-        self.write_status(&state, now)?;
+        self.write_status(&state, now);
         Ok(backup)
     }
 
@@ -294,10 +296,14 @@ impl Store {
         self.replace(&self.home.state_path(), &json, "write state.json")
     }
 
-    /// 読み物を置き換える。
-    fn write_status(&self, state: &State, now: u64) -> Result<(), WatchError> {
+    /// 読み物を置き換える。書けなくても失敗にしない: ログに 1 行残すだけで、呼び手の結果は
+    /// 変わらない（正本は状態ファイルで、読み物は次の変化か状態の確認で書き直される）。
+    fn write_status(&self, state: &State, now: u64) {
         let text = status::render_markdown(state, self.presence.as_ref(), now);
-        self.replace(&self.home.status_path(), text.as_bytes(), "write status.md")
+        if let Err(err) = self.replace(&self.home.status_path(), text.as_bytes(), "write status.md")
+        {
+            tracing::warn!(error = %err, "[store] status.md not written; the result stands");
+        }
     }
 
     /// 置き換え書き。一時ファイル `<名前>.<プロセス番号>.tmp` に全部書いて確定してから、

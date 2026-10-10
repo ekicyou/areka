@@ -81,7 +81,7 @@ const OPTIONS: [Opt; 9] = [
 /// 値の形。
 #[derive(Clone, Copy)]
 enum Shape {
-    /// 識別・リポジトリ・spec。ロックファイルの名前と端末の文にそのまま載る。
+    /// 識別・リポジトリ・spec。ロックファイルの名前と端末の文に載る（識別は小文字に寄せた形で）。
     Token,
     /// 名前・内容。`--` で始まらなければ何でもよい（端末へは出さない）。
     Text,
@@ -424,7 +424,7 @@ fn specs() -> impl Iterator<Item = &'static Spec> {
 const FOOT: &str = "
 exit codes:
   0  done: granted, stop requested, resumed, or the state was changed
-  1  failure: AREKA_IMPL_WATCH_HOME unset or not creatable, state file, lock, io, same wait already running
+  1  failure: AREKA_IMPL_WATCH_HOME unset, not absolute or not creatable, state file, lock, io, same wait already running
   2  usage error: nothing is read or written
   3  not applied: the request or the record is gone, or the condition did not hold
 
@@ -497,6 +497,12 @@ pub(crate) fn parse(args: &[String]) -> Result<Invocation, UsageError> {
         if !shape.accepts(&value) {
             return Err(refuse(format!("{flag} must be {}", shape.rule())));
         }
+        // 識別だけは小文字に寄せる（寄せるのはここ 1 か所。大小文字を区別しないファイル
+        // システムで、`A` と `a` が別の参加者のまま同じ居る印を取り合わないように）。
+        let value = match opt {
+            Opt::Id => value.to_ascii_lowercase(),
+            _ => value,
+        };
         found.0.push((opt, value));
     }
     if let Some(missing) = spec.required.iter().find(|opt| !found.has(**opt)) {
