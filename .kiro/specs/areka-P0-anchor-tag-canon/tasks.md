@@ -152,7 +152,7 @@
   - _Requirements: 7.3, 7.4_
 
 - [ ] 7. 全体の確かめ
-- [ ] 7.1 決定論テストと約束の照合
+- [x] 7.1 決定論テストと約束の照合
   - 触った crate（`areka-parsers`・`dola`・`areka-sakura`・`areka-ghost`・`areka-emo-text`・`areka-kanade`・`areka-mcp`・`areka`・`ukadoc-survey`）の `cargo test`・`cargo clippy`・`cargo fmt --check` を通し、最後に全体テストを 1 回だけ回す
   - 触ったファイルがどれも 1,000 行未満。ウェーブの約束で触らないファイル（`emo2_boot` の全部・`menu/`・seriko・`shell/` の読み手）と、設計が無改変とした所（装飾の `look.rs`・時間切れの抑止の観測・選択肢の柵と帳簿）に差分が無い
   - 完了の状態: 上のコマンドがすべて緑で、`git diff --stat main` が設計の「File Structure Plan」の一覧（作り直した報告を含む）に、各タスクが名指しした追随ファイル（1.2 のゴーストの結合テストの檻・4.2 の状態の組み立てと檻・3.4 と 5.1 が足す既存のテストのファイル）を加えたものと一致する
@@ -216,3 +216,5 @@
 - 6.3: 数え直しはタスクの数とすべて一致（本 spec 61 → 4＝さくらスクリプト 2・SHIORI 2／`areka-P0-anchor-style-canon` 59＝`\f[anchor*]` 16・descript `anchor.*` 43／SHIORI イベントの柵 実装済み 52・無い 234／brief 49）。報告は生成器で作り直した。中身が変わったのは 3 本（`report/assets.md` は持ち主を載せないので差分なし＝7.1 の照合では一覧に出ない）。生成器は LF で書くので、作り直すたびに CRLF へ書き戻す。
 - 6.3（開発者への確認・完了の報告で見せる）: 宛先の下書き `roadmap-draft.md` で、⑴ 本 spec の束を「バルーンのリンク」→「会話」に替えた（持ち物 4 件が会話 3・リンク 1・文書の決まり「いちばん多くを含む束」）、⑵ 段階 A の表の「バルーンのリンク」の引受先の案を `areka-P0-anchor-style-canon` にした（未対応 59 件の全数を持つ・裁定ではなく読み・次の棚卸で確かめる、と本文に明記）。
 - 6.3（範囲外・棚卸で扱う）: ⑴ アンカーの見た目の持ち主を本 spec と書いたままの所 — `crates/areka-emo-text/src/look.rs`（`Note::AnchorColorAsDefault` と `is_unowned` の説明・設計が無改変とした所）・`color.rs` の冒頭・`doc/COMPAT_ARCHITECTURE.md` の `\f[color,default.anchor]` の行の追跡先・`doc/emo2-conformance-scope.md`。⑵ `shiori.toml` の未対応の行の共通の note「`\q` の選択肢 ID にこの名前を書いた場合だけは別」は、`\_a[On…]` からも任意の名前が送れるようになったので「だけ」が不正確（正本は `briefing-shiori.md` の群の文面）。⑶ `roadmap-draft.md`「先頭ウェーブ」冒頭の「84 件／31 件」は 09-13 の写真のままで、実数（60／67）と大きくずれている。W-2「`anchor-tag-canon` を繰り上げるか」の候補も古い。⑷ `\f[anchor*]` 16 行の note の「ログ: 出る（compile の catch-all の debug!）」は本 spec の前から実態と違う（`anchor-style-canon` が書き直す所）。
+- 7.1（結果・2026-10-10・コミット `75e27ceb`・開始時の未コミット 0 件）: `tools/test-all.ps1` は全段緑（i686 の成果物 40 秒・`fmt --check`・x64 のワークスペース全テスト 258 秒・i686 のテスト 42 秒・crates.io 公開前の確認・文字コードの判定）。`git diff --name-only main...HEAD`（分岐点 `414d43eb` との比較・90 本）は、設計の「File Structure Plan」の一覧に、各タスクが名指しした追随ファイルと本書に記録した追随ファイルを加えたものと一致（`report/assets.md` は中身が変わらず一覧に出ない）。触らない約束の所（`emo2_boot/`・`menu/`・seriko・`shell/` の読み手）と、設計が無改変とした所（`look.rs`・時間切れの抑止の観測）に差分 0。触った `.rs` はどれも 1,000 行未満（最大 `schedule/mod.rs` 969）。clippy は本 spec が足した行への指摘 0 件（全体 358 件は以前から・リポジトリの道具に clippy の段は無い）。
+- 7.1: この段は差分を持たない確かめなので、タスクごとの独立レビューは置かず、独立の確かめは最後の `/kiro-validate-impl` に任せた。
