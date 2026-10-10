@@ -79,7 +79,7 @@
 //! # 公開面（re-export）
 //!
 //! 本クレートの最終的な公開面は以下に限定される（これ以外の公開面を持たない・Req 7.1）。各シンボルは
-//! 後続タスクで実装され次第、本モジュールから re-export される。
+//! 本モジュールから re-export している。
 //!
 //! - 純粋層 [`spawn`]: `spawn_actor`・`run_inbox`・`ActorHandle`・`ActorError`・
 //!   `install_thread_start_hook`・`ThreadStartHook`・`ThreadStartHookAlreadyInstalled`

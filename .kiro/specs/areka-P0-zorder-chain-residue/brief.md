@@ -109,3 +109,14 @@ zsp は「所有の鎖」でスコープ窓の重なりを構造保証して着�
 ### 棚卸㉒の裁定（2026-10-05）
 
 - A-2（`emo2_boot/spine.rs` の締切の待ち）は `ghost-session-test-load-flake` へ移した。10-05 に `spine` の 3 本が `run_bounded` の 10 秒の締切で赤になり、直す部品が同じ `spine.rs` のため。本 spec は A-1 と B 群だけ＝S〜M。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**: A-2 の spine の族は `ghost-session-test-load-flake`（✅ 10-10・PR#278）が引き取って直した。待ちの部品は `crates/areka/src/emo2_boot/spine_wait.rs` へ出て「進みの目印を見て打ち切る」形になり（`spine.rs` は 1,000 → 937 行）、負荷の下で許す赤の決まりが `.kiro/steering/tech.md` の「テストの待ちと、負荷の下で許す赤」に入った。
+- **A 群で本 spec に残るもの**: 2 つだけ＝A-1（実際の窓の重なり順の 2 本・`crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs`）と、A-2 のうち vblank の期限の 1 本（`crates/wintf/src/runtime/tick_bridge.rs`）。どちらも `#[ignore]` と環境変数で明示して走らせる形に隔離済みで、ふだんの全体テストには入らない。残る仕事は「測り方の問題か欠陥か」の決着だけ。
+- **10-05 の後に main で赤が出たか**: C4 の 16 本の完了の記録を引いた限り、重なり順・vblank・B 群の檻のテストが赤を出した記録は 0（`ghost-session-test-load-flake` の負荷の再現の記録にも出ていない）。発動の条件は満たされていない＝先回りしない（roadmap「生きている決まり」5）。
+- **場所の動き**: `zorder_pair_maintain.rs`・`zorder_pair_maintain_always_on_top_tests.rs`・`tick_bridge.rs`・`crates/areka/src/placement/zorder_group_branch_coverage_tests.rs`・`crates/wintf/src/ecs/window/zorder_chain_tests.rs`・`crates/wintf/src/ecs/world/tick_gate_tests.rs`・`crates/areka/src/tick_gate_config_producers_tests.rs` を `f26aa1c1` の後に触ったコミットは 0。`wintf-tooltip`（✅ 10-08）は wintf に新しいファイルを足したが、これらには触れていない（同 spec の設計に「名簿の検査は行頭が `//` の行しか読み飛ばさない」とあり、B-3 と同じ檻の弱い所がもう 1 つ記録された）。
+- **触るファイル**: 前回の一覧から A-2 の spine の分（`emo2_boot/spine.rs` と `spine_*_tests.rs`）を除く。**規模**: S〜M のまま。**分割の案**: 決着だけの A 群の残りと、檻を直す B 群に分けられるが、据え置きのあいだは分けない。
+- **先に要るもの**: なし。**ファイルの重なり**: 保留の `tick-gate-adoption`（`tick_bridge.rs`・`tick_gate_tests.rs`）・`zorder-property`（B-4 の `doc/COMPAT_ARCHITECTURE.md` の行）。
+- **優先度の区分**: D（据え置き）。**要件定義のモデル**: Opus。
+- **見つけた穴・古くなった記述**: 冒頭の 09-20 の節の「A-2 の spine の族だけが生きている」「`SPIN_WAIT = 30 秒`（`spine.rs`）」は古い（定数と待ちの部品は `spine_wait.rs` へ移り、族は直った）。roadmap の台帳の行の「A-2 は 10-05 に移した」は合っている。

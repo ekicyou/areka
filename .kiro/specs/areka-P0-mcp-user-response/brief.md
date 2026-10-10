@@ -83,3 +83,23 @@
   - 入力欄（`\![open,inputbox]`）と単押しのクリック（`OnMouseClick`）を本 spec の前に別 spec で作るか、本 spec の範囲を「選択肢・ダブルクリック・なでる（移動）・ドラッグ」に絞るか。
   - 履歴を UI 側で積むか（kanade に触らない）、kanade が SHIORI へ送った出来事で積むか。
 - 見つけた穴: 入力欄と単押しのクリックの持ち主が無い（上記）。開発者の決まり「実機で未対応のためにうまくいかない件は範囲外でもすべて起票」に当たる＝`/kiro-discovery` で起票の候補。すぐ直せる軽微な修正: この brief の末尾の前に道具の残りかす `</content>`・`</invoke>` の 2 行が紛れている（消してよい）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - 独自のツールの登録口が `mcp-author-tools` で入った。足し方は `doc/ssp-mcp/areka-tools.md` の「⑹ あとからツールを 1 本足す手順」の表が正本。help の頁は登録の表を読んで組むので `help.rs` には触らない。
+  - `choice-script-prefix` で、ID が `script:` で始まる選択肢は SHIORI へ行かず、後ろの台本が新しいトークとして再生されるようになった。「エージェントが出した選択肢の答えでゴーストを煩わせない」形が正典の作法で既にある＝起票時の議題「エージェント由来の選択の見分け方」の第一候補になる（応答の履歴へ積む所は UI 側の `crates/areka/src/input_events/choice_drain.rs`）。
+  - `balloon-lifecycle-events` で、バルーンを押して止めた・閉じた・時間切れの 3 つが出来事として取れるようになった（`crates/areka/src/emo2_boot/talk_lifecycle.rs` ほか）。応答の履歴に入れるかは要件で決める。
+  - 入力欄（`\![open,inputbox]`・`OnUserInput`）と単押しのクリック（`OnMouseClick`）は今も areka に無く、網羅台帳の持ち主も空のまま。持ち主の spec はまだ起票されていない。
+- 触るファイル:
+  - 新規: `crates/areka-mcp/src/tools/<ツール>.rs`・`crates/areka/src/mcp/<ツール>.rs`・応答の履歴のファイル（`crates/areka/src/` の下・手本は `log_history.rs`）と各兄弟テスト
+  - 追記（手順の表のとおり）: `crates/areka-mcp/src/tools/mod.rs`・`crates/areka-mcp/src/handler.rs`・`tools/tools_own_tests.rs`・`tools/tools_own_socket_tests.rs`・`crates/areka/src/mcp/mod.rs`・`doc/ssp-mcp/areka-tools.md`
+  - 履歴へ積む 1 行ずつ: `crates/areka/src/input_events/{choice_drain,mod,drag}.rs`（バルーンの 3 つも入れるなら `emo2_boot/talk_lifecycle.rs`）
+  - kanade には触らない見込み（履歴は UI 側で積む）。
+- 規模: M〜L（12〜18 タスク）のまま。入力欄と単押しのクリックは含めない前提。
+- 先に要るもの: `mcp-kanade-tools`（`sakurascript` が実際に再生されないと、選択肢を出して答えを受ける流れを確かめられない）。
+  - 同じウェーブに置けない相手: `mcp-shiori-query`（手順の表の 5 ファイルと文書）・`mcp-strict-errors`（`handler.rs`・`areka-tools.md`）・`anchor-tag-canon`（`choice_drain.rs`・`input_events/mod.rs`）・`talk-fast-forward`・`extra-character-windows`（`input_events/` の同じファイルを挙げている）。
+- 優先度の区分: A（開発者の依頼「エージェント目線でこんなツールがあったらいいな、という MCP ツールを提案してほしい」に応えた案を、開発者が spec の一覧に残した）。
+- 要件定義のモデル: Fable（選択肢の答えを誰が先に受け取るかの分かれ目・待つ指定と 10 秒の上限の中の順序）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: 本文 Current State の「`mcp::later` はある（まだ使う側は無い）」は古い（`dump_surface`・`dump_balloon` が使う）。roadmap の台帳の本 spec の行の「kanade の列」は古い（UI 側で積めば列の外）。入力欄と単押しのクリックの起票が棚卸㉒から残ったまま（`/kiro-discovery` の候補）。棚卸㉒の節が書いた道具の残りかすの 2 行は、もう消えている。

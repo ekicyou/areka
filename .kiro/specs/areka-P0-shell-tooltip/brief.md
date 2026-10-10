@@ -63,3 +63,23 @@
 
 - シェルの element の列（`shell/{model,decode}.rs`）とプロパティの動く値の列に掛かる見込み。着手の前に照合する。
 - 段: その他（バルーンのリンクとは別の窓・急ぐ理由が無い）。規模の見込み M（8〜12）。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: 先に要った `wintf-tooltip`（10-08）が着地した。口は `crates/wintf/src/ecs/tooltip/` の `register`・`update`・`unregister`・`supply_text`・`dismiss` と、窓に付ける知らせ `OnTooltip`。範囲は「窓の全体」か矩形だけ。areka の側でこの口を使うコードはまだ 0（最初の使い手は本 spec か `balloon-link-hover`）。tooltipブレスは今も記録なしに吸収される（読み手の塊の振り分けが知らない見出しを捨てる）。
+- 触るファイル: `crates/areka-parsers/src/shell/` の新しい転記のファイル（`boxes.rs`・`undrawn.rs` と同じ型）と `shell/mod.rs` の数行・キャラクター窓の配線（`crates/areka/src/input_events/` の隣）・SHIORI のリソースを尋ねる道 `crates/areka-kanade/src/schedule/resources.rs`・文字の表を運ぶなら `crates/areka-emo-present/src/shell_target.rs`・台帳 `assets.toml`・`shiori.toml` の行。
+- 規模: 8〜12 タスク（プロパティを外した場合）。プロパティの SET・GET まで持つと 13〜16。
+- 先に要るもの: 働きの上では、プロパティの部分だけ `currentghost-property-tree`（未完了）。ファイルの上では `balloon-link-hover`（同じ wintf の口・`resources.rs`）と同時に走らせない。`collisionex-regions` が先なら、形の当たり判定にも出せる。
+- 優先度の区分: A（開発者 10-05 の決めごと「キャラクター窓のツールチップも起票する」）。段は開発者が「その他」と決めているので急がない。
+- 要件定義のモデル: Opus。
+- 分割の案: 無し。プロパティの 5 行は下のとおり持ち主を 1 つにする。
+- 見つけた穴・古くなった記述:
+  - 台帳 `property.toml` の `currentghost.seriko.tooltip.*` の 5 行は、持ち主が `currentghost-property-tree` になっている（状態は「語の表だけ」）＝本 spec の In と二重。推しは「本 spec が文字の表（スコープ × 当たり判定名）と差し替えの口を作り、プロパティとして見せるのは `currentghost-property-tree`」。
+  - Constraints の「シェルの element の列に掛かる見込み」は、2 つ目の転記にすれば掛からない（`shell/{model,decode}.rs` に触らない）。
+  - 優先の順は正典が「シェル側設定がある場合はそちらが優先される」と書く＝tooltipブレスが SHIORI の `tooltip` より先。プロパティで差し替えた文字との順だけが議題に残る。
+
+## 2026-10-10 棚卸㉓の申し送り
+
+- **実機の確かめに 1 項目足す: 主画面より上に置いた画面でツールチップを出す**。完了 `wintf-tooltip` は、ツールチップの位置を OS へ渡すときに 2 つの座標を 16 ビットずつに詰める（`crates/wintf/src/ecs/tooltip/os.rs` の `make_lparam`・負の座標は 2 の補数のまま）。OS が符号付きで読むかは実機でしか決まらない。同 spec の `tasks.md` の Implementation Notes は、3.1 で「負の座標の画面で出す確かめを入れる」と書き、6.1 で「y が負の画面が無いので負の y の詰め方は未確認」と残した。
+- areka からこの口を最初に使う spec（本 spec か `balloon-link-hover`）の実機の確かめで、主画面の上に画面を置き、そこでツールチップの位置が合うかを見る。ずれたら wintf の側の不具合として起票する（本 spec の中では直さない）。

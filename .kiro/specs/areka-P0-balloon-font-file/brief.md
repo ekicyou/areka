@@ -116,3 +116,19 @@
 - 議題（答えで作業が変わるものだけ）: ㉑の 2 件のまま。加えて ⑶ 探し場所を `build_actor_render` の引数で渡すか、`ResolvedBalloonText` に載せるか（後者なら `actor_present.rs` に触れず、`budoux-reveal-reflow` と重なるファイルが 1 つ減る）。
 - 見つけた穴: なし。軽微: ㉑の触るファイルにある「箱の `font.name` に `box_font_dirs` を渡す所」は実在しない（上記）。
 - 並走の判定（厳しめ）: `balloon-lifecycle-events` とは重なり 0＝**並べられる**。`budoux-reveal-reflow` とは `actor_present.rs`（引数で渡す設計のとき）と `lib.rs`（両方が新しいファイルを足すとき）が重なる＝既定では**並べない**（本 spec が `actor_present.rs` を触らず、新しいファイルを足すのが片方だけなら 0 にできる）。`balloon-canon-residue` とは `frame/attach.rs`・`frame/switch.rs`、`anchor-tag-canon` とは `actor.rs`・`viewbox_draw_render.rs`、`text-typesetting` とは `draw.rs`・`draw_metrics.rs`・`viewbox_draw_render.rs`・`actor.rs` が重なる＝並べない。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**:
+  - `budoux-reveal-reflow` が `crates/areka-emo-text/src/` の `actor.rs`（647 行）・`actor_attach.rs`・`actor_box.rs`・`actor_present.rs`・`lib.rs`（純粋な一覧は 73 本）を書き換えた。本 spec が使う所は変わっていない: 箱の探し場所の欄と入れ口と読み口、フォント集を作る 3 か所、書式を作る 3 か所、`.ttf` などを読み飛ばす所（`draw_catalog.rs`）。箱の探し場所の読み口の呼び手は今も 0。
+  - `ghost-standard-balloon` で、普通のバルーンは「ゴーストの descript の指定 → 同梱の最初の 1 つ」で決まるようになった（`crates/areka/src/boot_resolve.rs`）。文字の層へ渡す場所（`crates/areka/src/emo2_boot/frame/attach.rs` と `frame/switch.rs` の、フォルダの名前を渡す呼び出しの隣）は変わっていない。
+  - `self-alpha-declaration` が `crates/areka/src/emo2_boot/assets.rs` を少し書き換えた（透過の宣言の受け渡し）。本 spec の読む所とは別。
+- **触るファイル**: 棚卸㉒の一覧のまま。今の行数は `draw.rs` 761・`draw_catalog.rs` 208・`draw_metrics.rs` 413・`viewbox_draw_render.rs` 571・`actor.rs` 647。検査のファイルを足す＝emo-text の `lib.rs` の一覧の席を使う。
+- **規模**: M（8〜11 タスク）。
+- **先に要るもの**: 働きの依存は無い。触るファイルが重なる相手＝`anchor-tag-canon`（`actor.rs`・`viewbox_draw_render.rs`）・`choice-marker-styling`（`viewbox_draw_render.rs`）・`balloon-canon-residue`・`shell-companion-balloon`（`frame/switch.rs`）・`text-typesetting`。
+- **優先度の区分**: A（開発者の 10-01 の指示「シェル内にバルーン領域を持つゴーストを設計したい」。参考のゴーストは同梱フォントの縦書きが前提で、探す順も開発者が決めた）。
+- **要件定義のモデル**: Opus（正典の文言ははっきりしていて、分かれ目は作りの話だけ）。
+- **分割の案**: 切らない。
+- **見つけた穴・古くなった記述**:
+  - 穴は無い。棚卸㉒の「`budoux-reveal-reflow` と重なる」は相手が着地して消えた。
+  - `anchor-tag-canon` とは同じウェーブに置けない。リンクの列は 4 本続くので、列の決まり（重ならない席があれば前へ）に従うなら、`anchor-tag-canon` の前のウェーブに出すか、リンクの 4 本の後かを優先度で決める。前に出す場合の相手は `reflow-scroll-path-test`・`emo2-real-run-wrap-timeout`・可視性の側だけで直す `choice-balloon-timeout-stuck`（重なり 0）。

@@ -156,3 +156,26 @@
 - 議題（答えで作業が変わるものだけ）: ㉑の 3 件のまま（dola の種類／既定の見た目／話している最中のクリック）。
 - 見つけた穴: なし。軽微: ㉑の節と「棚卸㉑で切った後の範囲」の節にある「`judge_box_click` の結論・2 値」の書き方を上のとおり読み替える。
 - 並走の判定（厳しめ）: `budoux-reveal-reflow`（`state.rs`・`actor_present.rs`）・`balloon-font-file`（`actor.rs`・`viewbox_draw_render.rs`）・`balloon-lifecycle-events`（kanade の `events.rs`・`schedule/mod.rs`・`lib.rs`）・`talk-fast-forward`・`balloon-markers`・`text-typesetting` とは重なる＝並べない。`balloon-canon-residue` とは、dola に種類を足さなければ 0（足すと `areka-seriko/src/actor.rs` で重なる）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**:
+  - 先に済ませる 2 本（`budoux-reveal-reflow`・`open-external-tags`）と `mcp-author-tools` が着地した。働きの前提はすべて満たす＝今すぐ着手できる。
+  - 台本の読み手 `crates/areka-parsers/src/sakura/decode.rs`（477 行）は、どの腕も命令と一緒に「読めなかった印」を返す形になった。`\_a` は今も素通しの腕で「知らないタグ」の印が付く。
+  - 台本を再生せずに確かめる道具 `check_script`（`crates/areka/src/mcp/check_script_judge.rs`）ができた。`\_a` を `\j` と同じ汎用の運び方にすると、受け取り手の一覧 `crates/areka/src/emo2_boot/consumer_ledger.rs`（943 行・今 23 組）に 1 組足さない限り「誰も拾わない命令」と診断される。専用の命令にすればこの一覧には触れない。
+  - 文字の層は台本の全文を先に受け取って空回しする（`crates/areka-emo-text/src/lookahead.rs`）。空回しも本番と同じ `state.rs` の合図の適用を通るので、範囲の記録は選択肢の腕と同じく「空回しでは記録を出さない」決まりに合わせる。全文と届いた字の突き合わせは字と装飾だけを比べるので、範囲を状態に足しても崩れない。
+  - `input_events/` は棚卸㉒から 1 行も変わっていない。kanade は `schedule/mod.rs` 955 行・`steady.rs` 950 行・`msg.rs` 926 行・`actor.rs` 900 行・`events.rs` 793 行になった。
+- **触るファイル**（棚卸㉒の一覧に足す分）:
+  - `crates/areka-parsers/src/sakura/mod.rs`（公開の 1 行）と、`\_a` を素通しと固定している検査 3 本（`parse_bare_tag_tests.rs`・`parse_word_boundary_tests.rs`・`parse_noted_tests.rs` の「知らないタグ」の見本）。
+  - `crates/areka-kanade/src/actor.rs`（900 行。届いた知らせを入力へ写す 1 行と、送ってよいイベントかの判定）。
+  - `crates/areka/src/input_events/balloon_exit.rs`（窓から出たときにホバーを消す所。今は「選択肢が出ているか」だけを見る）。
+  - 運び方しだいで `consumer_ledger.rs` と `doc/ssp-mcp/areka-tools.md` の「今 23 組」の行。
+  - emo-text に新しいファイル（範囲の持ち方と検査）を足す＝`lib.rs` の一覧の席を使う。
+- **規模**: M（13〜16 タスク）。20 を超えない。
+- **先に要るもの**: 働きの依存は無い。触るファイルが重なる相手＝`choice-ranges-one-function`・`balloon-font-file`・`choice-marker-styling`・`talk-fast-forward`・`balloon-markers`・`text-typesetting`・`seriko-trigger-intervals`（台本の読み手と `compile.rs`）・`mcp-kanade-tools`・`farewell-talk-status`（kanade の `schedule/mod.rs`）。
+- **優先度の区分**: C（ukadoc の `\_a` と `OnAnchorSelect(Ex)` の拾い残し。起票は 08-27 の装飾 3 分割）。ただし開発者が頼んだリンクの 3 本（`range-choice-tag`・`link-context-copy`・`balloon-link-hover`）と `anchor-style-canon` の計 4 本がこれを待つ。
+- **要件定義のモデル**: Fable（読み手から kanade まで 5 つのエンジンをまたぐ・開発者に聞く分かれ目が 3 つ・話している最中のクリックは ukadoc の記述が薄い）。
+- **分割の案**: 切らない（装飾は `anchor-style-canon` へ切り出し済み）。
+- **見つけた穴・古くなった記述**:
+  - 同じウェーブに置けるか: `choice-ranges-one-function`＝置けない（`choice.rs`・`actor_present.rs`・`actor.rs`。前が望ましい）。`balloon-text-area-collapse`＝`actor_present.rs` で止める設計なら置けない。`choice-balloon-timeout-stuck`＝可視性の判断の側だけで直すなら置ける。`reflow-scroll-path-test`＝既存の検査ファイルに足すだけなら置ける。
+  - 議題 1（dola に専用の種類を足すか）に、上の「受け取り手の一覧」の話が加わった。網羅台帳で本 spec の持ち物になっている装飾の行（`assets.toml` 43 行・`sakura-script.toml` 16 行）は `anchor-style-canon` へ付け替える。`shiori.toml` の `OnAnchorSelect(Ex)` は持ち主が空。

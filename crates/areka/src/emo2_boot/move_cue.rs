@@ -1,9 +1,9 @@
 //! `\![move]`（キャラクタ移動）の**完全語彙型**と**純粋解釈**（design.md「MoveCueSink＋純粋
 //! 解釈＋UI 適用」・R5.2/R5.4）。
 //!
-//! 本ファイルは task 7.1 の範囲＝**純粋な型＋`parse_move_directive` のみ**。UI 末端結線
-//! （`MoveCueSink`／`BaseposResolver`／`CanonDefaultBasepos`／`apply_move_directive`）は
-//! 後続タスク（7.2〜7.4・9.1）が同ファイルへ additive に足す（scope 境界）。
+//! 本ファイルは純粋な型と `parse_move_directive`、UI 末端の結線
+//! （`MoveCueSink`／`BaseposResolver`／`CanonDefaultBasepos`／`apply_move_directive`）を
+//! 持つ。
 //!
 //! # 正典 positional 形（ukadoc `\![move]`）
 //!

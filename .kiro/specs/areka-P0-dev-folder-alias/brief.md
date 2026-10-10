@@ -84,3 +84,17 @@
 
 - 鍵（名前）は今のフォルダ名と同じ扱いにする。新しい見分けの鍵は作らない。
 - 段: その他。規模の見込み M（8〜12）。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: 前提の `baseware-root-list` は未着手のまま＝本 spec は待ち。10-05 の後に変わった点は 2 つ。
+  - シェルの列挙に、メニューに出さないシェルも数える `list_all_shells` が在る（`crates/areka-ghost/src/catalog.rs`。中身は `scan_shells` の 1 か所）＝シェルのエイリアスはこの 1 か所に足せば両方に効く。
+  - 名前でフォルダを引く呼び手に `\![open,explorer,…]`（`crates/areka/src/readme/opener.rs` の `named_folder`）が増えた。エイリアスの先のフォルダを開く動きになる（書き込みではないので断らない）。
+- 触るファイル: `baseware-root-list` が作る「フォルダ名 → 場所」の関数（`catalog.rs`）・`crates/areka/src/boot_config.rs`（環境変数）・`install/`・`update/desk.rs`（書き込みを断る分岐）・`menu/shell_frame.rs`・`crates/areka-sylphya/src/persist/`・`dist/README.txt`。正確な一覧は `baseware-root-list` の着地の後に引き直す。
+- 規模: 8〜12 タスク。
+- 先に要るもの: `baseware-root-list`（働きの依存）。
+- 優先度の区分: A（開発者「特定のディレクトリを、特定 ID のゴースト・シェル・バルーンとしてエイリアス出来たら便利」）。
+- 要件定義のモデル: Opus（決めごとは起票のときに済んでいる。残る議題は、更新を断ったときに送るイベントを ukadoc から選ぶ 1 件）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: なし。

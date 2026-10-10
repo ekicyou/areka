@@ -78,3 +78,19 @@
 - **画像の element と動く絵の子は同じ 1 行で数えている**: 原寸を `match element.kind` で決め（`ElementKind::Film` は子の原寸、ほかは束縛した絵の原寸）、その後の `max_x`・`max_y` を更新する 1 行で数える。画像の element の X,Y（`element.transform.offset()`）を外形に足す直しは、その 1 行に入れれば子にも効く。命令の側では動く絵の子も X,Y を足して置いている（`push_static_element_ops` の `ElementKind::Film` の腕が `push_film_op` に X,Y を渡す）ので、食い違いは画像の element と同じ形で子にもある。
 - **着せ替えの pattern0 の取り方の既存の食い違いは直していない**: 外形（`flatten_extent`）は「index が最小」の pattern を取り、命令（`plan.rs` の `flatten_surface`）と見える部品（`NestTable` の 1 行 `SurfaceParts` の `bind_targets`）は「index が 0」の pattern を取る。
 - 手書きの `always` の外形は全部の pattern の和集合にした（開発者 2026-10-05・理由: 自動で作る子と手書きは同じに振る舞う／ずっと見える絵が外形で切れてはいけない）。ほかのアニメーション（`random` ほか）のコマは今までどおり数えていない。はみ出す絵の一般の決まりは本 spec の裁定のまま。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: 先に要った `element-base-method`（10-05）と `animated-image-playback`（10-07）がどちらも着地し、待つものが無くなった。外形の計算は `crates/areka-emo-compose/src/plan_extent.rs`（`plan.rs` の子）に在り、動く絵の子と `always` の全部の pattern を数える（上の申し送りは今の main と一致）。画像の element定義の X,Y を足さない食い違いは今もそのまま。
+- 触るファイル: `crates/areka-emo-compose/src/plan_extent.rs`（外形を数える 1 行）と兄弟のテスト `plan_extent_tests.rs`・`plan_nesting_extent_tests.rs`・`plan_extent_film_tests.rs`、期待値が動くなら `golden_tests_frame_extent_tests.rs`。案 B（切って記録）なら記録を出す場所と `log_firing_tests.rs`。`doc/COMPAT_ARCHITECTURE.md` §8。`plan.rs` は触らない見込み。
+- 規模: 3〜6 タスクのまま。切らない。
+- 先に要るもの: 無し（今すぐ着手できる）。同じ `plan_extent.rs` を触る見込みの `animated-image-import`・`element-clipping-option` とは同時に走らせない。`seriko-trigger-intervals` は `always` を含む組み合わせを持つ間だけ重なる（同 brief の分割の案を採れば重ならない）。`collisionex-regions`・`placement-measure-bake-once`・`present-emit-tail-latency` とは重なり 0。
+- 優先度の区分: B（バグ＝描くと決めた絵が記録なしに切られる）。
+- 要件定義のモデル: Fable（正典が外形を定めていない・案 A か案 B かは開発者の裁定）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述:
+  - 着せ替えの最初の pattern の取り方が、外形（番号が最小のもの）と命令（番号が 0 のもの）で違う件は同じ関数の中なので、本 spec で一緒に揃えるのが安い（議題に足す）。
+  - `crates/areka-emo-compose/src/log_firing_tests.rs` の `pattern0_less_bind_skip_fires_debug_and_no_warn_error` の説明に、移す前の `plan.rs` の行番号（`:529`）が残っている。
+  - Current State・Scope の「`plan.rs` の `flatten_extent`」は `plan_extent.rs` と読む。
+  - 外形が変わると採寸の結果も変わる。`placement-measure-bake-once` より先に着地させると、あちらの「採寸の結果が同じ」の固定が書きやすい。

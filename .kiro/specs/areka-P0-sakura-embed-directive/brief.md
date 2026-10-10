@@ -72,3 +72,18 @@
 - 触るファイル: `crates/areka-sakura/src/{compile.rs, drive.rs}`・`crates/dola/src/cue/`・`crates/areka-kanade/src/{msg.rs, actor.rs}`・`schedule/`＋新規ファイル・`doc/ukadoc-coverage/ledger/sakura-script.toml`（`\![embed,…]` の 1 行）・`doc/COMPAT_ARCHITECTURE.md` §8。
 - 議題（答えで作業が変わるものだけ）: 前回の 1 つ（待ちの間の中断・置き換え）のまま。
 - 見つけた穴: 網羅台帳の `\![embed,…]` の行の持ち主が今も `property-query-channels`（実害なし・すぐ直せる）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**:
+  - `property-query-channels` は未着手のまま＝着手できない（その前に `mcp-kanade-tools`・`script-security-level`・`property-name-case-fold`）。
+  - **`budoux-reveal-reflow`（✅ 10-06）で、合図の受け手は登録の時に「これから届く合図の全部」を 1 度だけ先に受け取るようになった**（dola の `CueSink::preview`＝`crates/dola/src/cue/{runtime,sink,schedule}.rs`）。文字の層はこの全文で文節の折り返しを決め、「出した字の行は動かさない」を約束している。`\![embed]` は再生の途中で台本を差し込むので、先に渡した全文が途中で変わる＝差し込みの後の全文の渡し直しと、既に出した行を動かさないことの両立が、設計の要に加わる。
+  - `mcp-author-tools`（✅ 10-08）の `check_script` は、今 `\![embed,…]` を「誰も拾わない指令」と答える（事実どおり）。本 spec が着地するとき、受け取り手の表（`crates/areka/src/emo2_boot/consumer_ledger.rs`・今 23 組）に `embed` の行を足し、一致のテスト `consumer_ledger_agreement_tests.rs` の見本と `doc/ssp-mcp/areka-tools.md` の組の数を直す（触るファイルに無かった）。
+  - `choice-script-prefix`（✅ 10-07）が、返事の台本を新しいトークとして走らせる口を kanade に足した（`crates/areka-kanade/src/schedule/steady_choice_script.rs`）。`\![embed]` は途中への差し込みで別物だが、台本を受けて走らせる所の手本になる。
+  - 行数: kanade の `schedule/steady.rs` **950**・`schedule/mod.rs` **955**・`msg.rs` **926**・`actor.rs` **900**（本文 Constraints の 929・937 は古い）。`crates/areka-sakura/src/compile.rs` 411・`drive.rs` 565。
+- **触るファイル**: `crates/areka-sakura/src/{compile.rs, drive.rs}`・`crates/dola/src/cue/{runtime.rs, schedule.rs, sink.rs}`（407・341・87）・`crates/areka-kanade/src/{msg.rs, actor.rs}`・`schedule/` の新しいファイル（`steady.rs`・`mod.rs` へは呼び出しの数行）・全文の先渡しを受ける側（`crates/areka-emo-text/src/{sink.rs, actor.rs}`・`crates/areka/src/emo2_boot/talk_clock.rs` の見込み）・`crates/areka/src/emo2_boot/consumer_ledger.rs`（**943**）と `consumer_ledger_agreement_tests.rs`・`doc/ssp-mcp/areka-tools.md`・台帳 `sakura-script.toml` の 1 行・`doc/COMPAT_ARCHITECTURE.md` §8。
+- **規模**: M（12〜16。全文の渡し直しと受け取り手の表の分で 10〜14 から上げた）。**分割の案**: なし（一度切り出した spec）。
+- **先に要るもの**: `property-query-channels`（働き）。
+- **ファイルの重なり**: 台本のコンパイルの列（`anchor-tag-canon`・`range-choice-tag`・`talk-fast-forward`・`sakura-time-directives`）・kanade の進行の列の全員・文字とバルーンの列（emo-text に触れる場合）・`emo2_boot` の結線の列（`consumer_ledger.rs`＝`mcp-reload`・`property-query-channels`）。
+- **優先度の区分**: C（ukadoc の `\![embed]` の拾い残し）。**要件定義のモデル**: Fable（再生の途中の往復・時刻の付け直し・中断）。
+- **見つけた穴・古くなった記述**: 網羅台帳 `sakura-script.toml` の `\![embed,…]` の行の持ち主は今も `property-query-channels` のまま（この棚卸では台帳を直していない。本 spec が着地のときに、数の欄と一緒に直す）。

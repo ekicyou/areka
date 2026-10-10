@@ -120,3 +120,25 @@
 - 共有しうる相手: `ghost-standard-balloon`（前提・直列）・`balloon-canon-residue`（`frame/switch.rs`）・`network-update-canon-order`（`ghost_switch.rs`・`ghost_session.rs`・`shell_balloon_switch.rs`）・`mcp-reload`（`ghost_session.rs`）・`coverage-roadmap-refresh`（台帳）。
 - 議題（答えで作業が変わるものだけ）: brief の 4 つのまま。
 - 見つけた穴: なし。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: 待っていた `ghost-standard-balloon` が着地した（10-07）。先に要る spec はもう無い。
+  - 起動と切替のバルーンを決める鎖は「記憶 → ゴーストの descript の 2 つの鍵 → 同梱の最初の 1 個 → 唯一 → 既定 → 無作為」になった（`crates/areka/src/boot_resolve.rs` の `resolve_balloon`。決まり方の印 `BalloonRoute` に `Descript` が増えた）。本 spec は、この鎖に「シェルに紐づくバルーン」の段を 1 つ足す形になる。
+  - バルーンの一覧は、フォルダ名だけの列から、フォルダ名と descript の `name` の組（`areka_ghost::catalog::BalloonEntry`）の列に変わった。
+  - ゴーストの側の読み手は `crates/areka-ghost/src/catalog.rs` の `companion_balloon`（`install.txt` の無印 → `balloon0` の 2 つの鍵だけを見る）。シェルの側は同じ形の読み手を隣に置けば済む。
+  - 起動でもゴーストの切替でも、バルーンは `crates/areka/src/boot_config.rs` の `resolve_balloon_for_ghost` の 1 か所で解く。起動のシェルを決める `decide_boot_shell` はゴーストのフォルダだけから決まる読み取りなので、この関数の中から呼べば「シェルを先に決める」が成り立つ＝`ghost_session.rs` と `emo2_boot/ghost_switch.rs`（902 行）には触らずに済む見込み（設計で確かめる）。
+  - `emo2_boot/frame/switch.rs`（635 行）・`shell_balloon_switch.rs`（442）・`switch_assets.rs`（253）に 10-05 の後で入った変更は 0。切替の進行中の印は今も 1 つだけ。
+- 触るファイル: `crates/areka-ghost/src/catalog.rs`（414）と兄弟のテスト・`crates/areka/src/boot_resolve.rs`（609）・`boot_config.rs`（503）と兄弟のテスト・`emo2_boot/frame/switch.rs`・`emo2_boot/shell_balloon_switch.rs`・（一度に替えるなら）`emo2_boot/switch_assets.rs`・`doc/COMPAT_ARCHITECTURE.md` §8・台帳 `assets.toml`。
+- 規模: 10〜14 タスク（議題 4 で「一度に替える」なら 12〜16）。
+- 先に要るもの: 働きの上では無し。ファイルの重なりは次のとおり。
+  - 重なる: `ghost-inner-balloon`・`baseware-root-list`（`catalog.rs`・`boot_resolve.rs`・`boot_config.rs`＝この 3 本は直列）・`balloon-font-file`（`frame/switch.rs`）・`mcp-reload`（`shell_balloon_switch.rs`）。
+  - 約束つきで 0: `balloon-canon-residue`（向こうが `frame/switch.rs` に触らない）・`network-update-canon-order`（向こうが `shell_balloon_switch.rs`・`ghost_switch.rs` に触らない）。
+  - 0: `emily-ghost-verification`。
+- 優先度の区分: C（ukadoc「同時インストール」の拾い残し。出どころは開発者の「複数 spec への分解で対応して欲しい」なので、それを依頼と数えるなら A）。
+- 要件定義のモデル: Fable（ukadoc が書いていない 4 つの決めを開発者に聞く）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述:
+  - 棚卸㉑・㉒の触るファイルの `ghost_session.rs`・`ghost_switch.rs` は、上のとおり外せる見込み。
+  - `resolve_balloon` は、決めた場所を「根＋フォルダ名」から組み直していて、一覧の項目が持つ場所を使っていない（バルーンの置き場が増える後続の spec が直す所）。

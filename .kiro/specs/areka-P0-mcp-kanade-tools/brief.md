@@ -117,3 +117,27 @@ MCP でいちばん使われるのは「台本を流して見る」（`sakurascr
 - 前の spec `areka-P0-mcp-dump-images` の要件 7.7 ⑵（`sakurascript` で表情を変えた後に `dump_surface` で撮ると、変わった姿が原寸で返る）は、`sakurascript` が無かったため、開発者の了承のうえキャラクターのダブルクリックで表情を変える代わりの手順で確かめた。
 - 本 spec の実機確認で、`sakurascript` で表情を変えてから `dump_surface` を 1 回呼び、変わった姿が返ることを本来の手順で撮り直し、本 spec の `verification/signoff.md` に残す。
 - 出どころ: `areka-P0-mcp-dump-images-residue` の要件（Boundary Context の Out of scope・件 6）。棚卸㉒の C4 の約束で、`mcp-dump-images-residue` は項目 1〜5 だけを持つ。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - `get_status` は `mcp-get-status` で着地した。問い合わせの知らせ（`KanadeMsg::StatusQuery`）に答える関数は kanade の殻 `crates/areka-kanade/src/actor.rs` の中にあり、棚卸㉒が見込んだ新しいファイル `actor_status.rs` は作られていない。
+  - `choice-script-prefix` が「台本 1 つを新しいトークとして始める」関数 `start_talk` を `crates/areka-kanade/src/schedule/steady_choice_script.rs` に作った（使えるのは `schedule` の中だけ。同 spec の設計書は「`sakurascript` はこの関数を呼べる・置き場を移してもよい」と書く）。番号の採番と枠の差し替えは使い回せる。再生中の置き換えのときの選択肢の帳簿の掃除は呼び手の仕事。
+  - `balloon-lifecycle-events` が許可の表（`schedule/events.rs` の `ALLOWED_EVENT_IDS`）を 48 語から 51 語にし、時間切れの知らせ専用の入口（`KanadeMsg::BalloonTimeout`）を足した。`raise_event` で `OnBalloonTimeout` などを頼まれたら、渡された Reference をそのまま送る（kanade は補わない）でよいかを要件で確かめる。
+  - 許可の表との照合は `schedule/events.rs` ではなく、`schedule/change.rs` の `on_raise_event` と、殻（`actor.rs`）の返事を決める所の 2 か所にある。イベント名の型（`msg.rs` の `EventId`）は固定の綴りと選択肢用の 2 種だけで、任意の名前を運ぶ形が無い。
+  - `mcp-ghost-name-match` で宛先の型 `ActiveGhost` に本体側の名前の欄が増えた（テストで字面で組むときは欄を 1 つ足す）。今も `NG:not implemented yet` を返すのは `sakurascript`・`raise_event`・`reload` の 3 本。
+- 触るファイル:
+  - `crates/areka/src/mcp/{sakurascript,raise_event}.rs` と各 `_tests.rs`
+  - kanade: `msg.rs`（926 行）・`actor.rs`（900 行・振り分けの行だけ）・`lib.rs`・`schedule/mod.rs`（955 行・入力の種類と振り分け）・`schedule/change.rs`（`on_raise_event`）・`schedule/events.rs`（任意の名前で要求を組む形）・`schedule/steady_choice_script.rs`（`start_talk` を使える範囲か置き場）
+  - 新規: 殻の側の処理（例 `actor_external.rs`）・台本つきの結果の型のファイル・`schedule/` の子（外からの台本の受け付け）と各兄弟テスト・SSP との差の一覧（`doc/ssp-mcp/` の下）
+  - 翻訳に通すなら `schedule/translate.rs`・`translate.rs`・`doc/COMPAT_ARCHITECTURE.md` §8
+  - 触らない: kanade の `src/change.rs`・`schedule/boot.rs`（`mcp-reload` と並べるための約束）・`schedule/steady.rs`（950 行）・`crates/areka/src/mcp/mod.rs`・`resolve.rs`・`crates/areka-mcp/**`・`main.rs`
+- 規模: M〜L（12〜16 タスク）。`msg.rs` を分ける 1 タスクの分だけ棚卸㉒（11〜15）より増えた。
+- 先に要るもの: 働きの前提はすべて着地済み＝今すぐ始められる。
+  - 同じファイルを触るので同じウェーブに置けない相手: `farewell-talk-status`（`schedule/mod.rs`）・`script-security-level`（`msg.rs`・`actor.rs`・`schedule/mod.rs`・`schedule/change.rs`・`steady_choice_script.rs`）・`mcp-shiori-query`（`msg.rs`・`actor.rs`）・`anchor-tag-canon`（`msg.rs`・`lib.rs`・`schedule/mod.rs`・`schedule/events.rs`）・`sakura-time-critical`・`property-query-channels`。
+  - 重なり 0: `mcp-reload`（上の約束を守れば）・`mcp-stdio-bridge`・`dump-balloon-debug-timeout`。
+  - 本 spec を待つ未完了の spec は 5 本（`mcp-strict-errors`・`mcp-user-response`・`script-impact-tiers`・`mcp-shiori-query`・`property-query-channels`）。
+- 優先度の区分: A（開発者の指示「ssp mcp tool の完全移植のための spec 群を立ち上げて」）。
+- 要件定義のモデル: Fable（再生中・選択肢の最中・切替の最中に届いたときの扱いを SSP に合わせて決める・翻訳に通すかの分かれ目・返事を待つ間の順序）。
+- 分割の案: なし（一度切り出した spec）。上限の近いファイルの分け方だけ決めておく: `msg.rs` は本 spec が最初のタスクで分ける（ファイルの中のテストの塊 約 415 行を兄弟のテストファイルへ出すと本体は約 510 行）。`schedule/mod.rs` は本 spec の後で約 975〜980 行になる見込みで、次に足す spec が分けることになる＝後ろに 5 本以上並ぶ本 spec が先に分けておくのが安い。
+- 見つけた穴・古くなった記述: 棚卸㉒の節の `actor_status.rs` は実在しない。同じ節が許可の表の迂回の置き場を `schedule/events.rs` と書いたのは不正確（照合は `schedule/change.rs` と `actor.rs`）。roadmap の「3 段目の spec が触るファイル」の表の本 spec の行に `get_status.rs` が残っている。

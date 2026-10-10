@@ -117,3 +117,19 @@
 - 触るファイル: `crates/areka-sylphya/src/{actor.rs, mirror.rs, vocab/dotted.rs, vocab/mod.rs}`・`crates/areka-ghost/src/{sylphya_wiring.rs, runtime.rs}`・`crates/areka/src/emo2_boot/{mod.rs, ghost_switch.rs, shell_balloon_switch.rs, frame/switch.rs}`＋新規（例 `crates/areka/src/property/`）・`doc/ukadoc-coverage/ledger/property.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
 - 議題（答えで作業が変わるものだけ）: 動く値を「変わるたびに出す」か「読む時に問い合わせる」か（前回どおり・後続 3 本の形が決まる）。
 - 見つけた穴: なし。並走の照合: `property-name-case-fold`（`key.rs`・`reader.rs`・`actor.rs` の分類）とは `actor.rs` を分け合う見込み＝同時に走らせない。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**:
+  - **働きの上では先頭に立った**。読む道は `mcp-get-property`（✅ 10-04）で足り、未完了の spec への働きの依存は無い（`property-query-channels` は待たない）。待つのはファイルの重なりだけ＝⑴ `property-name-case-fold`（同じ sylphya の `actor.rs`・列の先頭）⑵ `emo2_boot` の結線の列（下の「先に要るもの」）。
+  - sylphya は C4 で変更 0。出す口は今も `publish_static`・`publish_shiori`・`persist_put` の 3 つで、動く値の口は無く、運行の値の届け先も未登録のまま（`actor.rs` 754・`mirror.rs` 248・`vocab/dotted.rs` 407・`vocab/mod.rs` 96）。
+  - `emo2_boot` は C4 の 4 本が触った: `mod.rs` 883 → **912**・`ghost_switch.rs` 891 → **902**（どちらも上限の近く＝値を集める所は新しいファイルに置き、ここへは呼び出しの数行だけ）。`shell_balloon_switch.rs` 442・`frame/switch.rs` 635 は同じ。
+  - `ghost-standard-balloon`（✅ 10-07）で、起動と切替のバルーンは「ゴーストの descript の指定 → 同梱の最初の 1 個」で決まるようになった（`crates/areka/src/boot_resolve.rs` の `resolve_balloon`）。19 項目の値の源（今のバルーンの定義）はゴーストの切替でも替わりうる＝出し直しの点に入れる。
+  - `mcp-get-status`（✅ 10-06）が kanade へ状態を聞く `KanadeMsg::StatusQuery`（返事が後から来る形）を足した。「読む時に問い合わせる」口を選ぶなら、SHIORI の呼び出しの最中の読み取りで待ち合いにならないかを先に確かめる（口の形を決める材料）。
+- **触るファイル**: `crates/areka-sylphya/src/{actor.rs, mirror.rs, vocab/dotted.rs, vocab/mod.rs}`・`crates/areka-ghost/src/{sylphya_wiring.rs, runtime.rs}`（415・788）・`crates/areka/src/emo2_boot/{mod.rs, ghost_switch.rs, shell_balloon_switch.rs, frame/switch.rs}`＋新規（例 `crates/areka/src/property/`）・台帳 `property.toml`（本 spec が持ち主の 64 行のうち `currentghost.balloon` の 23 行）・`doc/COMPAT_ARCHITECTURE.md` §8。口を「読む時に問い合わせる」にすると sylphya の `reader.rs`・`key.rs` にも触れうる。
+- **規模**: M（13〜16）のまま。**分割の案**: なし（一度切り出した spec）。
+- **先に要るもの**: 働きは無し。ファイルで `property-name-case-fold`（先に着地させる）。`emo2_boot` の結線の列では `balloon-font-file`・`balloon-canon-residue`・`shell-companion-balloon`・`mcp-reload`・`extra-character-windows` の後ろ（`mod.rs`・`ghost_switch.rs`・`shell_balloon_switch.rs`・`frame/switch.rs` を分け合う）。`placement-measure-bake-once`（`emo2_boot/mod.rs` を触る案のとき）・`property-query-channels`（`mod.rs`・`areka-ghost/src/runtime.rs`）とも同時に走らせない。
+- **本 spec を待つ spec**: `currentghost-property-others`・`system-property-values`・`property-catalog-lists`・`zorder-property`（4 本とも動く値の口を使う）。
+- **優先度の区分**: C（ukadoc の `currentghost.*` の拾い残し・完了 `balloon-vertical-canon` が先送りした `.vertical` の受け皿・台帳の段は「その他」）。
+- **要件定義のモデル**: Fable（動く値の口の形で後ろの 4 本の形が決まる・スレッドをまたぐ）。
+- **見つけた穴・古くなった記述**: 棚卸㉒の「待つのは `balloon-font-file`〔C4〕ほか」は古い（`balloon-font-file` は C5 へ回った）。roadmap の台帳の行の「前提」の欄（`property-query-channels`（読む道）か `mcp-get-property`）は満たされた＝今の前提は `property-name-case-fold`。本文の行番号つきの位置（`emo2_boot/mod.rs:430-465` など）はどれも古い（受け口の並びは今 `emo2_boot/mod.rs` の `GhostBootOptions` を組む所）。

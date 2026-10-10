@@ -101,3 +101,23 @@
   - 共有しうる相手（増えた分）: `placement-measure-bake-once` の案 A（`placement/mod.rs`・`measure.rs`・`emo2_boot/mod.rs`）・`char-position-save-on-exit`（`placement/persist.rs`）。
 - 議題（答えで作業が変わるものだけ）: 起票時の 3 つのまま。
 - 見つけた穴: 触るファイルの一覧に `emo2_boot/switch_assets.rs` が無かった（上）。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - `char-position-save-on-exit` が着地した（10-08）。位置の記憶は「並べ終えた時点で、記憶に無い窓の位置を書く」形になった（`crates/areka/src/placement/persist.rs`・642 行）。書く関数はスコープの番号を引数に取るので、3 人目以降もそのまま載る見込み。
+  - 窓の数を 0・1 に固定する `derive_scopes`（`crates/areka/src/emo2_boot/mod.rs`）と呼び手 2 か所（起動・`emo2_boot/switch_assets.rs`）、2 人までを前提にした検査 2 か所（`input_events/mod.rs` の `char_scope`・`menu/captions.rs`）は起票のまま。
+  - 3 人いる検体が手に入った: `vendors/sample_ghost/emily4.nar`（`char2.name,Emilio`・`char2.seriko.defaultsurface,200`。CC BY-NC 4.0 なので配布物には入れない）。検体の登記は `emily-ghost-verification` が行う＝議題 2 はそちらの着地で解ける。
+- 触るファイル: `crates/areka/src/emo2_boot/{mod.rs, switch_assets.rs, assets.rs, frame/attach.rs}` と兄弟・`input_events/mod.rs`（571）・`menu/captions.rs`（302）・`placement/{mod,config,source,measure,spawn,persist}.rs`・台帳 `shiori.toml`・`dist/README.txt` の「3 人目からの窓は出ません」の行。
+- 規模: 14〜20 タスク（変わらず）。
+- 先に要るもの: 働きの上では無し（検体は `emily-ghost-verification` の登記の後だと楽）。ファイルの重なりは次のとおり。
+  - `balloon-canon-residue`（`frame/attach.rs`・`placement/config.rs`）・`balloon-font-file`（`frame/attach.rs`）。
+  - `mcp-reload`（`emo2_boot/mod.rs`）・`placement-measure-bake-once`（`emo2_boot/mod.rs`・`placement/{mod,measure}.rs`）・`dpi-realign-remembered-chain`（`placement/`・着手の前に照合）。
+  - `popup-menu-residue`（`menu/captions.rs`）・`shell-companion-balloon`（`switch_assets.rs`・向こうが「一度に替える」を選んだ場合だけ）。
+- 優先度の区分: C（ukadoc の `\p[2]` 以降の拾い残し。えみりは 3 人なので、`emily-ghost-verification` の結果しだいで開発者の依頼の続きになりうる）。
+- 要件定義のモデル: Fable（窓の数の導き方を、起動・配置・入力・メニューの 4 か所で揃える）。
+- 分割の案: なし（20 を超えそうなら、起票のとおりメニューの n≧2 を `popup-menu-residue` へ戻す）。
+- 見つけた穴・古くなった記述:
+  - 触るファイルの一覧に `emo2_boot/assets.rs` が無かった。最初に出す面の番号を「スコープ 0 なら 0・それ以外は 10」の決め打ちで決めている所で、descript の `char*.seriko.defaultsurface`（`sakura.`・`kero.` も）はどこも読んでいない。同じ 10 の決め打ちは `placement/measure.rs` にも在る。
+  - `emo2_boot/mod.rs` は 912 行・`placement/mod.rs` は 902 行＝足す分は兄弟ファイルへ出す。

@@ -10,8 +10,7 @@
 //! → `assets`（parsers/atlas/compose/seriko/emo-present）→ `frame`（bevy_ecs World・emo-present/emo-text 駆動）
 //! → `ghost_session.rs`／`main.rs`（全結線）。左のモジュールは右を import しない。
 //!
-//! 本ファイル群は Foundation タスク（tasks.md task 1）の骨格であり、各サブモジュールの
-//! 機能実装は後続タスク（2〜6）が担う。
+//! 各サブモジュールが機能の実装を持つ。
 
 pub mod adapter;
 pub mod assets;

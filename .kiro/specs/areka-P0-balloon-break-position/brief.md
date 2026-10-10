@@ -55,3 +55,23 @@
   3. 待機（`\w` など）の途中で止めたとき、位置はその待機タグの前か後か。
 - 規模の見込み: M〜L（12〜18 タスク）。`TalkDone` の 60 か所は、欄を `Option` にして既定値の組み立てを足すなどで機械的な手直しを減らせるかを設計で詰める。
 - 1 ファイル 1,000 行未満・決定論のテスト必達・時刻ではなく位置なので丸めの問題は無い。
+
+
+---
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - `balloon-lifecycle-events`（10-08 着地）: `OnBalloonBreak` は Reference 3 個で送られ、Reference2 は空（`crates/areka-kanade/src/schedule/events.rs` の `on_balloon_break`・注記に本 spec の名）。送るかどうかの判断と「止めたトークの台本の控え」は新しい `schedule/balloon_events.rs` が持つ。網羅台帳 `shiori.toml` の `OnBalloonBreak` は `degraded`・持ち主は `balloon-lifecycle-events`＝本 spec が `implemented` に直す。
+  - **位置の源は `mcp-author-tools`（10-08 着地）が作った**: 台本を読む入口 `areka_parsers::sakura::parse_noted`（`crates/areka-parsers/src/sakura/parse.rs`）が、命令ごとに台本の中のバイト範囲（`Read` の `span`）を返す。Current State の「`lex` が捨てている」は古い。残るのは運ぶ道だけ。
+  - 運び方の見立て: 台本のコンパイル（`crates/areka-sakura/src/compile.rs`）が「合図の時刻 → 台本の位置」の表を作り、再生（`drive.rs`）が止めた時刻でその表を引けば、dola の合図の型に欄を足さずに済む（合図を組む多数の箇所に触れない）。
+  - Constraints の未知 2（どの台本の中の位置か）は実物で答えが出ている: 環境変数の置き換えと `OnTranslate` は再生へ渡す前に済む（`crates/areka-ghost/src/translate_wiring.rs`）。再生が読む台本と、kanade が Reference0 に入れる控えは同じ文字列＝位置はその文字列の中で数える。
+  - 完了の知らせ `TalkDone` を組んでいる所は 28 ファイル・62 か所（kanade 20・sakura 3・ghost 2・talk 2・areka 1 ファイル）。
+- 触るファイル: `crates/areka-sakura/src/{compile.rs, drive.rs}`・`crates/areka-talk/src/lib.rs`・kanade の `schedule/{events.rs, balloon_events.rs}`・`TalkDone` を組む 28 ファイル（欄を足すなら）・台帳 `shiori.toml` の 1 行・`doc/COMPAT_ARCHITECTURE.md` §8。台本を読む段（`sakura/lexer.rs`・`decode.rs`）と emo-text には触らない。
+- 規模: 9〜13 タスク（brief の 12〜18 から、位置の源の分が減った）。
+- 分割の案: 切らない。
+- 先に要るもの: 満たした（`balloon-lifecycle-events`）。ファイルの重なり: `compile.rs`・`drive.rs` は台本のコンパイルの列（`anchor-tag-canon`・`range-choice-tag`・`talk-fast-forward`・`sakura-time-directives`・`seriko-trigger-intervals`）、kanade の `events.rs` と `TalkDone` を組む検査のファイルは kanade の進行の列のほぼ全部と当たる。
+- 優先度の区分: C（正典の Reference の持ち越し。起票は開発者の裁定「中断位置は今は作らない。起票を行え」）。
+- 要件定義のモデル: Fable（数え方の単位・待機の途中で止めたときの位置＝正典のあいまいさが残る）。
+- 議題: Constraints の未知 1・3 と、`TalkDone` の 62 か所の手直しの減らし方。未知 2 は上のとおり。
+- 見つけた穴・古くなった記述: Current State の「27 ファイル・60 か所」「`lex` が捨てている」。Adjacent の `open-external-tags` は着地済み。

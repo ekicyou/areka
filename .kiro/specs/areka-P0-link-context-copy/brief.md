@@ -74,3 +74,25 @@
 - 文字とバルーンの列（`input_events/` のバルーンと箱）。
 - `crates/areka/src/readme/destination.rs` の `link_destinations` に付けた `#[cfg_attr(not(test), allow(dead_code))]` は、本 spec が本番の呼び手になったら外す（`open-external-tags` の完了時の申し送り・2026-10-06）。
 - 段: 優先（バルーン関係）。規模の見込み S〜M（6〜10）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**:
+  - `open-external-tags` が着地した。行き先を取り出す関数 `link_destinations` は `crates/areka/src/readme/destination.rs` にあり、本番の呼び手はまだ無い（「テストだけが呼ぶ」印つき）。
+  - `choice-script-prefix` が着地した。`script:` の後ろを取り出す関数 `script_body` は kanade の中だけに公開されている（`crates/areka-kanade/src/schedule/choice.rs`。綴りはここ 1 か所と決めてある）。
+  - `input_events/` は棚卸㉒から変わっていない。Current State は今も全部当たる（バルーンと箱の押下は左だけ・メニューは `crates/areka/src/menu/win32.rs` の `show`・クリップボードのコードは 0 件）。右の押下は受け口まで届いていて、左でないので捨てているだけ。
+- **触るファイル**:
+  - `crates/areka/src/input_events/{balloon_pressed.rs, shell_box_handler.rs}`（右の押下）。
+  - `crates/areka/src/readme/destination.rs`（印を外す。2 段目の頭の文字の判定を置くならここ）。
+  - `crates/areka/src/menu/win32.rs` か `menu/` の新しいファイル、コピーする文字列の決め方とクリップボードの新しいファイル。
+  - `crates/areka-kanade/src/{schedule/choice.rs, lib.rs}`（`script_body` を外から使えるようにするなら）。
+  - `doc/COMPAT_ARCHITECTURE.md` §8（areka 独自の拡張の登記）。
+  - emo-text には触らない見込み（当たりの行は ID・表示の文字・引数をもう持っている）＝emo-text にファイルを足さない。
+- **規模**: S〜M（7〜10 タスク）。
+- **先に要るもの**: `anchor-tag-canon` → `range-choice-tag`（3 種を 1 本で扱うという開発者の決め）。
+- **優先度の区分**: A（開発者の 10-05 の問い「リンクを右クリックしたら URL をコピペできるか」）。
+- **要件定義のモデル**: Opus（分かれ目は起票のときに開発者が決めた）。
+- **分割の案**: 切らない。
+- **見つけた穴・古くなった記述**:
+  - `script:` の綴りを UI の側でもう一度書くと「1 か所」の約束が崩れる。kanade の関数を公開して使うなら kanade の `lib.rs` に触る＝kanade の列の先頭（`mcp-kanade-tools`）と照合する。
+  - `popup-menu-residue`・`extra-character-windows` と `menu/` が重なる＝同じウェーブに置かない。

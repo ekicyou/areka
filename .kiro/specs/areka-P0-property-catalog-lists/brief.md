@@ -118,3 +118,17 @@ SSP プロパティ木の過半は `currentghost` の外にある——`system.*
 - 触るファイル: `crates/areka-sylphya/src/{actor.rs, vocab/dotted.rs, key.rs}`・`crates/areka-ghost/src/{catalog.rs（読むだけ）, sylphya_wiring.rs}`・`crates/areka/src/emo2_boot/mod.rs`（883）・`doc/ukadoc-coverage/ledger/property.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
 - 議題（答えで作業が変わるものだけ）: なし（動く値の出し方は `currentghost-property-tree` が決める）。
 - 見つけた穴: なし。並走の照合: `property-name-case-fold` が括弧の中の名前（`ghostlist(名前)`）を畳む範囲を決めると、本 spec の名前での引き当てに効く＝向こうが先なら、その裁定に従う。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**:
+  - 順は前回のまま（`currentghost-property-tree` の後）。sylphya は C4 で変更 0。
+  - 一覧の源 `crates/areka-ghost/src/catalog.rs` は `ghost-standard-balloon`（✅ 10-07）で 377 → 414 行になった（ゴーストの descript のバルーンの指定を読む `standard_balloon_keys` が増えた）。`list_ghosts`・`list_shells`・`list_all_shells`・`list_balloons` は同じ名前・同じ形で在る。
+  - **源の側に未完了の spec ができた**: `baseware-root-list`（10-05 起票・その他）は、ゴーストとバルーンを複数の根から数える形に変え、「その列挙が `ghostlist`・`balloonlist` の源になる」と書く。どちらが先でも作れる。後から着地する側が合わせる。
+  - 名前で選ぶ形（`ghostlist(名前)`）の英字の大小は `property-name-case-fold` が決める。手本は `mcp-ghost-name-match`（✅ 10-06）の「半角の英字の大小だけ同じとみなす」。`ghostlist(0)` を番号と読むか名前と読むか（SSP は名前と読む＝`doc/ssp-mcp/survey.md` 7.3 節の 5）は本 spec の議題として残る。
+- **触るファイル**: 前回のまま＝`crates/areka-sylphya/src/{actor.rs, vocab/dotted.rs, key.rs}`（754・407・411）・`crates/areka-ghost/src/{catalog.rs（読むだけ）, sylphya_wiring.rs}`・`crates/areka/src/emo2_boot/mod.rs`（**912**）・台帳 `property.toml`（本 spec が持ち主の 120 行のうち `system.*` の 25 行を除く 95 行）・`doc/COMPAT_ARCHITECTURE.md` §8。一覧はゴーストの切替とインストールの後に変わる＝出し直しの点（`crates/areka/src/emo2_boot/ghost_switch.rs` **902**・`crates/areka/src/install/`）にも呼び出しの数行が要る見込み（前回の一覧に無い・口が「読む時に問い合わせる」形なら要らない）。
+- **規模**: M（10〜14）のまま。**分割の案**: なし（一度切り出した spec）。
+- **先に要るもの**: `currentghost-property-tree`（その前に `property-name-case-fold`）。
+- **ファイルの重なり**: `currentghost-property-others`・`system-property-values`・`zorder-property`（`dotted.rs`・`actor.rs`・`emo2_boot/mod.rs`）・`property-name-case-fold`（`actor.rs`・`key.rs`）・`emo2_boot` の結線の列の全員・`baseware-root-list`（向こうが `catalog.rs` を書き換える）。
+- **優先度の区分**: C（ukadoc の一覧のプロパティの拾い残し）。**要件定義のモデル**: Opus。
+- **見つけた穴・古くなった記述**: 上の「出し直しの点」と `baseware-root-list` との順。ほかは無し。

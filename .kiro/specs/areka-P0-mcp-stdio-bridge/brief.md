@@ -117,3 +117,26 @@
   - `tools/package.ps1`・`dist/README.txt`
 - 議題（答えで作業が変わるものだけ）: 棚卸㉑のまま（areka の見つけ方・定数の共有・help の絶対パス・exe の名前／引数／arm64／`PortableCommandAlias`）。
 - 見つけた穴: 棚卸㉑の触るファイルに `THIRD-PARTY-NOTICES.md` が無かった。ワークスペースのクレートは版つきで謝辞の一覧に載るので、新しいクレートを足すと 1 行増える（作り直しで足りる・手で書かない）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - 初回リリース `v0.0.2` が着地した（根の `Cargo.toml` の版は `0.0.2`）。棚卸㉒の縛り 1（版上げと同時に走らせない）は解けた。次の版上げ（`v0.0.3`）は開発者のひと言で始まる。本 spec が開いている間に始まったら、先に着地した方を取り込んで `Cargo.lock` と謝辞を作り直す。
+  - help の頁 `crates/areka-mcp/src/help.rs` は `mcp-author-tools` が触って 64 行から 80 行になった（末尾に「areka 独自のツール」の節）。Claude Desktop の節は今も「中継は今後の版で用意します」の 1 文。help を組む関数 `help_html(port)` の呼び手は `dispatch.rs` の 1 か所のまま。
+  - 配布の道具 `tools/package.ps1` は `tools-utf8-child-output` で 726 行から 743 行になった。同梱で変える 4 か所（入れてよい実行ファイルの一覧・本体を建てる段・CPU 種別を確かめる表・zip の中身を検査する表）の形は同じ。
+  - `crates/areka/src/main.rs` は 950 行。待受の候補（`crates/areka-mcp/src/port.rs` の 9801 → 9821 と隣 9 つずつ）とサーバーの名乗り（`areka-mcp-server`）は変わっていない。
+- 触るファイル:
+  - 新規 `crates/areka-mcp-bridge/**`（名前は要件で決める・`Cargo.toml` に `publish = false # 理由`）。根の `Cargo.toml` は 0 行（`members` は `crates/*`）
+  - `Cargo.lock`（パッケージの行 1 つ）・`THIRD-PARTY-NOTICES.md`（作り直し）
+  - `crates/areka-mcp/src/help.rs`・`help_tests.rs`
+  - `tools/package.ps1`・`dist/README.txt`（本体のクレジットの見出しと、Desktop の設定の節）
+  - help に中継の絶対パスを載せるために起動の引数を広げるなら `crates/areka-mcp/src/{dispatch,server,lib}.rs`・`crates/areka/src/main.rs` も。help の中で「areka.exe の隣」と求める形なら、この 4 ファイルに触らずに済む（設計で選ぶ）。
+- 規模: S〜M（8〜12 タスク）のまま。
+- 先に要るもの: 働きの前提はすべて着地済み＝今すぐ始められる。残る縛りは席だけ。
+  - 依存を足す spec は 1 ウェーブに 1 本（新しいクレートを足す `makoto-dll-host`・版上げと同じウェーブに置かない）。
+  - `tools/package.ps1`・`dist/README.txt` を挙げている spec（`winget-manifest-submission`・`release-code-signing`・`dev-helper-x64-clobber`・`perf-tools-console-encoding`・`install-live-target-hazards`）と同じ行を触らないかを照合する。
+  - MCP と kanade の spec（`mcp-kanade-tools`・`script-security-level`・`mcp-shiori-query`・`mcp-user-response`・`mcp-reload`・`farewell-talk-status`・`dump-balloon-debug-timeout`）とは重なり 0（独自のツールを足す spec は `help.rs` に触らない）。
+- 優先度の区分: A（開発者「SSP と同じ対応を行うには中継 exe を作らないとダメ。どうせ作りたくなるので spec を置いてロードマップに置く」）。
+- 要件定義のモデル: Opus（議題は短い二択が中心。重いのは「SSP が 9801 を持っているとき SSP につながる」穴の扱い 1 つ）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: 本文の「既定 9821」は古いまま（冒頭の 10-03 の注記と棚卸㉑の節が正しい）。棚卸㉒の行数（`help.rs` 64・`package.ps1` 726・`main.rs` 953）は古い。`help.rs` の説明の注釈「設定例は後続 `mcp-stdio-bridge` が足す」は本 spec が消す。

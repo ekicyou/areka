@@ -95,3 +95,22 @@
   - `crates/areka-parsers/src/balloon/{model.rs, parse.rs}`・`doc/COMPAT_ARCHITECTURE.md` §8
 - 議題: 棚卸㉑のまま（強調の帯を本文の高さに合わせるか行送り全体に合わせるか）。
 - 見つけた穴: なし。
+
+
+---
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - `budoux-reveal-reflow`（10-06 着地）が文字の層に「先読み」を足した（`crates/areka-emo-text/src/lookahead.rs`）。台本の全文を先に求め、届いた内容がその先頭と一致するときだけ全文で配置する。新しい項目（ルビつきの親文字）を `state.rs` の `TextItem` に足すと、先読みも同じ項目を扱う: 空回しは同じ `apply_cue` を通るので内容は自動で入るが、「その区間に何かを足した合図か」の見分け（`lookahead.rs` の中の合図の種類の並び）と、「届いた内容が全文の先頭と一致するか」の比べにルビを入れる。入れ忘れると、黙って修正前の動き（届いた字だけで区切る）へ落ちる。
+  - 全文が先に分かるので、「親文字の単位の中で折り返さない」は全文で先に決められる（`text-typesetting` が 1 字ずつの折り返しでも全文を使う形に広げていれば、それに乗る）。
+  - `mcp-author-tools`（10-08 着地）で、台本の検査が `\!` の受け取り手の表に無い名前を「知らない命令」と答える。`\![text,ruby,…]` は表（`crates/areka/src/emo2_boot/consumer_ledger.rs`・943 行）に 1 行と、一致の検査（`consumer_ledger_agreement_tests.rs`）に見本が要る（`text-typesetting` が `text` の行を先に作っていれば、選び分けの語を 1 つ足すだけ）。
+  - 配置・計測・描画・読み手の側（`layout_styled.rs` の `line_pitch_of`・`draw_metrics.rs`・`choice.rs`・`viewbox_*.rs`・`crates/areka-parsers/src/balloon/`）は C4 で無変更。`state.rs`・`actor.rs` には先読みの欄と「空回し」の印が足されただけで、`TextItem`・`TextLayerConfig`・`ResolvedBalloonText` の位置は棚卸㉒のまま当たる。
+- 触るファイル: 棚卸㉒の一覧に、emo-text の `lookahead.rs` と受け取り手の表の 2 本を足す。ルビの配置は新しいファイル＝**emo-text にファイルを足す**（`lib.rs` の席を使う。純粋の数は今 73）。
+- 規模: 13〜17 タスク（棚卸㉒は 12〜16。先読みの扱いで 1 増えた）。
+- 分割の案: 切らない。
+- 先に要るもの: `text-typesetting`（禁則の単位・全文の使い分け）＝未着手。列の順は `balloon-markers` の後。
+- 優先度の区分: A（roadmap「シェル内バルーン」節の開発者の確定 7「ルビ」）。
+- 要件定義のモデル: Fable（選択肢の強調の帯は開発者に決めてもらう分かれ目・行送りの持ち主が替わる・先読みとの噛み合わせ）。
+- 議題: 棚卸㉑のまま（強調の帯を本文の高さに合わせるか行送り全体に合わせるか）。
+- 見つけた穴・古くなった記述: なし。

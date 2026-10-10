@@ -86,3 +86,12 @@
 - 崩れた前提／古くなった位置: 無し。画面更新の相の並びは C3 で末尾に 1 つ増えただけ（`shell-balloon-frame-align` が提示の後に「見えているバルーンの組」を kanade へ届ける相を足した・`emo2_boot/frame.rs` の `emo2_frame_system`）。拡大率の相（dpi）と窓の書き込みの順は変わっていない。`placement/follow/` は C3 で古い注記と `#[allow]` を消しただけ（振る舞い不変）。
 - 触るファイル（着手するなら）: `crates/areka/src/emo2_boot/frame/dpi.rs`・`emo2_boot/frame.rs`（相の順）・`crates/areka-emo-present/src/presenter/refresh.rs`・決定論の檻（`placement/transition_*_tests.rs`）。
 - 議題・穴: なし。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**: 無し（据え置きのまま・開発者の許容は変わらない）。`crates/areka/src/emo2_boot/frame/dpi.rs`（`run_dpi_phase`・508）・`crates/areka-emo-present/src/presenter/refresh.rs`（`refresh_scale`）・`crates/areka/src/placement/transition_judge_verdict.rs`（871）・`transition_judge.rs`（**996**）を `f26aa1c1` の後に触ったコミットは 0。画面更新の相を並べる `emo2_boot/frame.rs`（568）は、`char-position-save-on-exit` がテストの宣言を 18 行足しただけで、拡大率の相と窓の書き込みの順は変わっていない。
+- **隣の動き**: バグの `dpi-realign-remembered-chain`（10-05 起票・未着手）が同じ拡大率の相（`frame/dpi.rs` の詰め直しの武装）を触る見込み＝本 spec を起こすなら、その後に測り直す。
+- **触るファイル**: 前回のまま（着手するなら `emo2_boot/frame/dpi.rs`・`emo2_boot/frame.rs`・`presenter/refresh.rs`・決定論の檻 `placement/transition_*_tests.rs`。`transition_judge_tests.rs` 1,039・`transition_judge_verdict_tests.rs` 1,037 は行数の番人の例外で、足すなら新しいファイル）。
+- **規模**: S〜M のまま（最初の 1 タスクは測り直し・跳ねが無ければ取り下げ）。**分割の案**: なし。**先に要るもの**: なし。
+- **優先度の区分**: D（据え置き＝開発者が「拡大率の切替は頻繁に起こらないため許容」）。**要件定義のモデル**: 着手するなら Fable（相の順＝時機の話）。
+- **見つけた穴・古くなった記述**: 無し。本文の Approach・Scope に残る「判定器を直す」は取り下げ済みのまま（読み飛ばす）。

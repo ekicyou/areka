@@ -119,3 +119,25 @@
 - 議題（答えで作業が変わるものだけ）: ㉑の 2 件のまま。⑶ 印を文字の面の中で描くか emo-present で重ねるか（`talk-fast-forward` が先に決めていればそれに従う）。
 - 見つけた穴: なし。軽微: ㉑の「`judge_box_click` に足す」の書き方と Constraints の古い行数（上記）。
 - 並走の判定（厳しめ）: `budoux-reveal-reflow`（`actor_present.rs`・`state.rs`）・`balloon-font-file`（`actor.rs`・`actor_box.rs`・`viewbox_draw_render.rs`）・`anchor-tag-canon`・`talk-fast-forward`・`text-typesetting`・`balloon-canon-residue`（emo-present の `balloon.rs`）とは重なる＝並べない。`balloon-lifecycle-events` とは重なり 0。
+
+
+---
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - バルーンの読み手（`crates/areka-parsers/src/balloon/`）・スクロールの計画（emo-text の `viewbox.rs`・`viewbox_diff.rs`）・描画（`viewbox_draw_render.rs`）・入力（`crates/areka/src/input_events/`）は C4 で 1 行も動いていない。emo-present の `balloon.rs` は `self-alpha-declaration` が透過の宣言の所だけを触り、系列の表 `SeriesFamily` は本体の系列だけのまま。棚卸㉒の位置はそのまま当たる。
+  - `budoux-reveal-reflow`（10-06 着地）で `actor_present.rs` の「区切り → 配置」が `arrange_lines` へ切り出された。手動で戻した位置は、その後ろの「見える範囲」（`layout.rs` の `LayoutEngine::visible_window`）に足す形で、先読みには触れない。
+  - `mcp-dump-images-residue`（10-06 着地）で emo-text の `surface.rs` が 995 行になった。印を文字の面の中で描く案でも `surface.rs` には足さない（新しいファイルへ）。
+  - `mcp-author-tools`（10-08 着地）で、台本の検査が `\!` の受け取り手の表に無い名前を「知らない命令」と答える。`\![set,balloonnum,…]` は表（`crates/areka/src/emo2_boot/consumer_ledger.rs`・943 行）に 1 行と、一致の検査（`consumer_ledger_agreement_tests.rs`）に見本が要る。
+  - `balloon-lifecycle-events`（10-08 着地）で、バルーンの時間切れはトークの終わりから数える（`emo2_boot/balloon_visibility*.rs`）。読み返すために手動で戻している最中に時間切れで隠れてよいかが新しい論点。
+- 触るファイル: 棚卸㉒の一覧に、受け取り手の表の 2 本を足す（時間切れを止めるなら `emo2_boot/balloon_visibility*.rs` も）。印の配置と読み手のキーは新しいファイル＝**emo-text にファイルを足す**（`lib.rs` の席を使う）。
+- 規模: 18〜22 タスク（棚卸㉒は 16〜20）。
+- 分割の案: 20 をまたぐ。要件の段で超えたら、棚卸㉑の境界で次の 2 本に切る（一度も切り出していない spec）。
+  - 前半 `balloon-markers`（矢印と手動スクロール・装飾の系列の土台・11〜13）: `balloon/{model,parse,validation_tests}.rs` と読み手の新しいファイル・emo-present の `balloon.rs`・emo-text の `layout.rs`・`viewbox.rs`・`viewbox_diff.rs`・`viewbox_draw_render.rs`・`actor.rs`・`actor_present.rs`・`actor_box.rs`・新しい印の配置・`lib.rs`・`input_events/{balloon,balloon_pressed,shell_box,shell_box_handler,user_break}.rs` とホイールの受け口。
+  - 後半（仮の名前 `balloon-status-markers`・通信中の印・数字・SSTP の印・7〜9）: 読み手の同じファイル・emo-text の `state.rs` と印の配置のファイル・`emo2_boot/update_cue.rs`・受け取り手の表の 2 本・台帳。`balloon-scroll-fade` は前半だけを待てばよい。
+- 先に要るもの: 働きの前提は満たした（`shell-balloon`）。列の順は `talk-fast-forward` の後（`shell_box.rs`・`user_break.rs`・emo-present の `balloon.rs` が重なる）。
+- 優先度の区分: A（開発者指示「未実装だった項目も、実装が必要な spec として今回の最終作成 spec に含めて」）。
+- 要件定義のモデル: Fable（箱の印の画像の引き先・手動で戻している最中の扱い・縦書きの矢印＝開発者に決めてもらう分かれ目が多い）。
+- 議題: 棚卸㉒の 3 件のまま。⑷（新）手動で戻している最中の時間切れを止めるか。
+- 見つけた穴・古くなった記述: コードの穴は無い。Constraints の行数（`viewbox.rs` 871・`layout.rs` 977）は今 460・502。

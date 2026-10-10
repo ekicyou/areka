@@ -133,3 +133,61 @@
 - **抽選の対象から外す場所は 2 つ**: `LoopRuntime::on_tick` の抽選の輪（`LoopTrigger::Always` を乱数の前で飛ばす）と、`parts.rs` の `gate`（`Gate::Always` を返す）。
 - **`bind+always` を入れるとき**: `is_always_interval`（経過 0 を描くか・外形に数えるか・表に採るか）と「着せ替えの種類か」（`plan.rs` の `is_bind_interval`・`plan_extent.rs` の `flatten_extent`・`SurfaceParts` の `bind_ids`・`parts.rs` の `gate`・`looper.rs` の `on_tick` の抽選の着せ替えの番人と進行の着せ替えの判定）の両方に載せ、着せ替えが無効の間は経過 0 の絵も描かない形にする。今の `LoopTrigger::Always` は着せ替えの印を持たない。
 - **バルーンの面**: 部品の経路はバルーンの面でも回る（時計の鍵の `Slot::Balloon`）。窓の知らせ `StageNote::Balloon { scope, open, face, generation }`（`crates/areka-seriko/src/state.rs`）を `SerikoSink::send_stage` が `SerikoMsg::Stage` で運び、`ScopeStates::note_stage` が覚える。窓が閉じている間は時計を作らない。送るのは `crates/areka/src/emo2_boot/frame/status_report.rs` の `report_stages`。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: `animated-image-playback`（10-07）が着地し、待つものが無くなった。`always` の単独は動き、組み合わせは今も記録だけ。seriko は `table.rs` 779 行・`actor.rs` 766 行・`state.rs` 728 行・`looper.rs` 682 行・`parts.rs` 625 行・`timeline.rs` 564 行。文字の cue は今も seriko に届いて読み飛ばされ、`\e` は cue を出さず、`\i` は捨てられる（本文どおり）。`mcp-author-tools`（10-08）が台本の読み手の各腕に印を返させ、運び手の名前の表（23 行）と `check_script` の表を揃えるテストを足した。
+- 触るファイル（3 つの塊）:
+  - ⑴ 口パクの側: `crates/areka-parsers/src/shell/{model.rs, decode.rs}`（`Interval` に数値）・`crates/areka-seriko/src/{table,looper,parts,actor,timeline,state}.rs` と兄弟のテスト・台帳 `assets.toml`。
+  - ⑵ 台本から呼ぶ側: `crates/areka-parsers/src/sakura/decode.rs`（`\i` の腕）・`crates/areka-sakura/src/compile.rs`（`\e` で知らせを出す）・運び手の名前の表 `crates/areka/src/emo2_boot/consumer_ledger.rs`（943 行＝上限の近く）・`animation*.name` を読むための `shell/{model,decode}.rs`・seriko の `table.rs`・`actor.rs`・`looper.rs`・台帳 `sakura-script.toml`。
+  - ⑶ `always` を含む組み合わせ: emo-compose の `nesting.rs`・`plan.rs`・`plan_always.rs`・`plan_extent.rs` と seriko の `parts.rs`・`looper.rs`。
+- 規模: 22〜27 タスク（16〜20 から上振れ）。増えたのは、引き受けた `always` の組み合わせ（合成まで及ぶ）・`\i[名前]` のための `animation*.name` の読み（今は読み手が捨てる。型 `Animation` の直書きは約 20 ファイル）・運び手の名前の表への登録。上限を超える。
+- 先に要るもの: 働きの上では無し（組み合わせだけは着地済みの繰り返しの仕組みの上に載る）。
+- 優先度の区分: A（開発者 10-05「口パクの `talk` が動かない」→ 優先度を高へ）。
+- 要件定義のモデル: Fable（文字の数え方・`\_q` と早送り・文字と口を同じフレームで動かす＝時刻の判断）。
+- 分割の案（初めての分割・3 本）:
+  - `seriko-trigger-intervals`（名前を残す・12〜15）＝`talk`・`runonce`・`periodic`。触るのは ⑴ だけで、台本のコンパイルの列にも合成にも触らない＝`anchor-tag-canon`・`extent-element-offset`・`placement-measure-bake-once`・`present-emit-tail-latency` と同じウェーブに置ける。口パクはこれで動く。
+  - `seriko-script-triggers`（新・8〜10）＝`yen-e`・`never` と `\i[ID]`・`animation*.name`。触るのは ⑵。台本のコンパイルの列（`anchor-tag-canon` の後）。1 本目の後。
+  - `seriko-interval-combinations`（新・4〜6）＝`bind+always` ほか `+` の組み合わせ。触るのは ⑶。`extent-element-offset`・`animated-image-import` と直列。1 本目の後。
+- 見つけた穴・古くなった記述:
+  - Constraints の「`actor.rs` 645 行」は今 766 行。
+  - `never` は `\i` が無い間は「自動では動かない」だけ＝1 本目では働きが増えない（2 本目で初めて働く）。
+  - `seriko-rebuild-hidden-lottery` の「見えていない部品も 1 回目は評価する」は、`runonce`・`periodic` を足すと「見えていない部品で再生が始まる」に化ける。1 本目の設計で部品の門を確かめる。
+  - 口パクの検体は同梱に無い（作る）。
+
+
+## 2026-10-10 棚卸㉓の分割
+
+- **分けた理由**: 上の再測定で 22〜27 タスクになり、上限の 20 を超えた（この spec の初めての分割）。3 本に分け、この spec は口パクを動かす 1 本目として名前を残す。
+- **残す範囲（In）**: interval の `talk,数値`（口パク）・`runonce`・`periodic,数値`。
+  - 読み手が `talk,数値`・`periodic,数値` の数値を落とさずに運ぶ（interval の型 `Interval`＝`crates/areka-parsers/src/shell/model.rs`、綴りを型へ写す `normalize_interval`＝同じフォルダの `decode.rs`。今は語だけを `Interval::Other` に写し、数値は捨てている）。
+  - seriko の表が 3 つの引き金を採る（表を組む `AnimationTable::from_world_and_films` と引き金の型 `LoopTrigger`＝`crates/areka-seriko/src/table.rs`）。
+  - 文字の到着は、seriko に既に届いている文字の cue から数える（cue の受け口＝`crates/areka-seriko/src/actor.rs` の `handle_message` が、今は「担当外」として読み飛ばしている）。`runonce` は面が切り替わった瞬間（`state.rs`）、`periodic` は刻み（`looper.rs` の `on_tick`）で起こす。子の面や pattern定義の先でも動かすなら、部品の門と進め方（`parts.rs` の `gate`・`advance`）にも足す。
+  - 決定論のテスト（偽の時計と偽の文字の到着）・網羅台帳の 3 行・口パクの検体（同梱に無いので新しく作る）での実機の確かめ。
+- **出した範囲（Out・どの spec へ）**:
+  - `yen-e`・`never`・台本のタグ `\i[ID番号]`・`animation*.name` の読み → `areka-P0-seriko-script-triggers`（新しく起票）。
+  - `bind+always` ほか、`always` を含む `+` の組み合わせ → `areka-P0-seriko-interval-combinations`（新しく起票）。上の「`animated-image-playback` からの申し送り」の「引き受けるもの」と「`bind+always` を入れるとき」は、そちらが引き継ぐ（申し送りの本文はこの brief に残し、そちらから指す）。
+  - `talk`・`runonce`・`periodic` を含む `+` の組み合わせ（`bind+runonce` など）も、この spec では今までどおり元の綴りを添えた記録だけにする。読むかどうかは `seriko-interval-combinations` の議題。
+  - `\i[ID,wait]`・`start` などの、アニメーションから別のアニメーションを呼ぶメソッド・`\![anim,…]` 系のタグは、今までどおり別途。
+- **順番**: この spec が先。後の 2 本はどちらもこの spec の着地の後（seriko の `table.rs`・`looper.rs`・`parts.rs` を分け合うため）。後の 2 本どうしも seriko の同じファイルを触るので直列。
+- **残した側の規模**: 12〜15 タスク。
+- **残した側が触るファイル**:
+  - `crates/areka-parsers/src/shell/{model.rs, decode.rs}` と兄弟のテスト
+  - `crates/areka-seriko/src/{table,looper,parts,actor,timeline,state}.rs` と兄弟のテスト（足すものは新しい兄弟ファイルへ。今は `table.rs` 779 行・`actor.rs` 766 行・`state.rs` 728 行・`looper.rs` 682 行・`parts.rs` 625 行・`timeline.rs` 564 行）
+  - `doc/ukadoc-coverage/ledger/assets.toml` の `talk,数値`・`runonce`・`periodic,数値` の 3 行
+  - 口パクの検体（新規。置き場は設計で決める）
+- **同じウェーブで触らない約束**（破るなら止めて報告）:
+  - 台本の読み手 `crates/areka-parsers/src/sakura/` と、台本のコンパイル `crates/areka-sakura/src/compile.rs` に触らない。
+  - 運び手の名前の表 `crates/areka/src/emo2_boot/consumer_ledger.rs` に触らない。
+  - 合成 `crates/areka-emo-compose/` に触らない。合成のテストの直書きを直す必要が出たら、止めて報告する。外形のファイル `plan_extent*.rs` には決して触らない。
+  - 読み手では型 `Interval` に腕を足すだけにし、型 `Animation`・`Pattern`・`Element` の欄は変えない（直書きしているファイルが多く、変えると約束の外へ広がる）。
+- **約束が成り立つ根拠**（今の木で確かめた）:
+  - 合成は、着せ替えの種類でない animation の今のコマを、interval の語を見ずに重ねる（`crates/areka-emo-compose/src/plan.rs` の `flatten_surface` の「現在コマの id を合流」の段。着せ替えの種類だけを有効かどうかで絞る）。seriko が欄へコマを載せれば、合成を変えずに描かれる。
+  - 合成が interval を見る場所は「着せ替えの種類か」（`plan.rs` の `is_bind_interval`）と「`always` の単独か」（`nesting.rs` の `is_always_interval`）の 2 関数だけで、どちらも新しい腕を足しても答えが変わらない。
+  - 外形は今の `random` と同じで、コマの絵を数えない（広げるなら `extent-element-offset` の側の話で、この spec は変えない）。
+- **同じウェーブに置けない相手**（読み手の `shell/{model,decode}.rs` を分け合う）: `draw-methods-canon`・`collisionex-regions`・`element-clipping-option`・`animated-image-import`。seriko の `table.rs`・`parts.rs` は `animated-image-import` とも重なる。
+- **この分割で変わった議題**: 起票時の議題 1（文字の数え方・`\_q`・早送り）と、棚卸㉒の議題 2 の推し（seriko が文字の cue から自分で数える）は残る。議題 3（`\i[ID,wait]` を別途にする）と議題 4（`yen-e`・`never`＋`\i` を切り離すか）は、この分割で答えが出たので外す。
+- **設計で確かめること**: `seriko-rebuild-hidden-lottery`（見えていない部品の抽選）が、この spec から関わるようになる。部品を組み直す `rebuild`（`crates/areka-seriko/src/parts.rs`）は、見えていない部品も 1 回目は評価する。今は抽選の乱数が回るだけで表示には出ないが、部品の門に `runonce`・`periodic` を足すと「見えていない部品で再生が始まる」に化ける。部品の門を足すときに、見える部品だけが引き金を受ける形にするか、同 spec を先に済ませるかを設計で決める。
+- **この spec では働きが増えない語**: `never` は自動では動かない語で、今も動かないので見た目は正典どおり。呼び出す `\i` が入る `seriko-script-triggers` で初めて働く。
+- **台帳の担当の付け替え（この brief では台帳に触っていない）**: `always` の行（`ukadoc:descript_shell_surfaces:always:1`）は担当がこの spec になっていて、その理由は組み合わせである。組み合わせを `seriko-interval-combinations` へ出したので、担当の欄はそちらへ付け替える。

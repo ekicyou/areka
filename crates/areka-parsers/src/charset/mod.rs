@@ -1,6 +1,6 @@
 //! charset — バイト列の文字コード検出・全体デコード。
 //!
-//! 公開面集約のスケルトン。後続タスクで以下を順次埋める:
+//! 公開面の集約。中身は次のとおり:
 //! - `model`   : 既定エンコード指定型 `DefaultEncoding`（契約の片側・本 spec 所有）
 //! - `prescan` : 内部・冒頭 ASCII プリスキャンで charset 名を抽出（D1/D2）
 //! - `decode`  : 内部・prescan 結果＋encoding_rs で全体デコード（公開 facade `decode`）

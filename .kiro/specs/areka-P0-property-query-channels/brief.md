@@ -155,3 +155,18 @@ sink 新設（get/set）＋ kanade への「参照付きイベント発生」型
 - `SenderType`（と `SecurityLevel`）を SHIORI へ運ぶ仕組みは `script-security-level`（優先）が持つ。本 spec は出どころに `property` を 1 つ足して使うだけにし、host32-host の列（`shiori3.rs`・`client.rs`）から外れる。網羅台帳 `shiori.toml` の `SenderType` の行の持ち主は `script-security-level` が要件の段で登記する。
 - 許可の表の迂回は `mcp-kanade-tools` が作り、本 spec はそれを使う（kanade の列で `mcp-kanade-tools` を前へ出した）。
 - `property-name-case-fold` を本 spec より先に着地させる（書く道を開く前に `classify_set` の大小の迂回をふさぐ）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**:
+  - 先に要る 2 本はどちらも未着手のまま。許可の表に無い名前のイベントを送る口（`mcp-kanade-tools`）＝`crates/areka/src/mcp/raise_event.rs` は今も「not implemented yet」を返すだけで、`crates/areka-kanade/src/msg.rs` の `EventId` は `Static`・`Choice` の 2 つのまま。SHIORI へ追加のヘッダを運ぶ道（`script-security-level`）＝`crates/shiori-host32-host/src/shiori3.rs` の要求の組み立ては今も `SenderType` を送らない。
+  - `mcp-author-tools`（✅ 10-08）で、台本を再生せずに確かめる `check_script` が入った。「誰も拾わない `\!`」は受け取り手の表（`crates/areka/src/emo2_boot/consumer_ledger.rs` の `ConsumerLedger::canonical`・今 23 組）で決まり、表と受け口が合っていることをテスト `consumer_ledger_agreement_tests.rs` が固定している（行を足して見本を足し忘れると赤）。本 spec が `get,property`・`set,property` を表へ足すとき、このテストの見本と `doc/ssp-mcp/areka-tools.md` の「今 23 組」を一緒に直す。今は `check_script` が `\![get,property,…]` を「知らない指令」と答える（事実どおり）。
+  - `budoux-reveal-reflow`（✅ 10-06）で、合図の受け手は登録の時に台本の残りの全部を 1 度だけ先に受け取るようになった（dola の `CueSink::preview`）。`%property[…]` の値を表示の時に差し替えると、先に渡した全文と食い違う＝値は台本を組む時点で決める形にする（要件に書く）。
+  - 許可の表 `ALLOWED_EVENT_IDS` は 51 語（`balloon-lifecycle-events` が 3 つ足した）。`%property[` はまだ字句にならない（`crates/areka-parsers/src/sakura/lexer.rs` の `scan_sysvar` が英数字と `_` で止まる）。`PropSetCueSink`・`GhostRuntime::sylphya_reader()` は変わらない。
+- **触るファイル**: `crates/areka-kanade/src/msg.rs`（**926**）・`actor.rs`（**900**）・`schedule/{events.rs, change.rs, translate.rs}`（793・425・251。`steady.rs` **950**・`mod.rs` **955** へは足さず新しいファイル）・`crates/areka-parsers/src/sakura/lexer.rs`（426）・`crates/areka-sakura/src/sysvar.rs`（220）・`crates/areka-ghost/src/{prop_sink.rs, runtime.rs}`（546・788）＋新しい get の受け口・`crates/areka/src/emo2_boot/consumer_ledger.rs`（**943**＝中に持つテストを先に外へ出さないと 1,000 を超える）・`consumer_ledger_agreement_tests.rs`・`emo2_boot/mod.rs`（**912**・受け口の並び）・`doc/ssp-mcp/areka-tools.md`・台帳 `sakura-script.toml` の 3 行・`doc/COMPAT_ARCHITECTURE.md` §8。
+- **規模**: M（11〜14）のまま。**分割の案**: なし（一度切り出した spec）。
+- **先に要るもの**: `mcp-kanade-tools`・`script-security-level`・`property-name-case-fold`（3 本とも未着手）。kanade の進行の列では `sakura-time-critical` の後ろ。
+- **ファイルの重なり**: kanade の進行の列の全員（`mcp-kanade-tools`・`mcp-reload`・`script-security-level`・`mcp-strict-errors`・`sakura-time-critical`・`mcp-shiori-query`）・台本のコンパイルの列（`lexer.rs`＝`anchor-tag-canon` ほか）・`emo2_boot` の結線の列（`mod.rs`・`consumer_ledger.rs`＝`mcp-reload`・`currentghost-property-tree` ほか）。
+- **下流が 1 本増えた**: `shiori4-api`（10-10 起票）は「プロパティへの入口の許可の表は本 spec が最初に決める」と書き、本 spec の後ろに並ぶ。
+- **優先度の区分**: C（ukadoc の照会の道の拾い残し・台帳の段は「その他」）。**要件定義のモデル**: Fable（イベントの往復の時機・6 つのクレートをまたぐ）。
+- **見つけた穴・古くなった記述**: 網羅台帳の持ち主のずれ 3 行は今もそのまま（この棚卸では台帳を直していない）＝`shiori.toml` の `property.get:1`・`property.set:1` は `property-ipc-transport` へ、`sakura-script.toml` の `\![embed,…]` の行は `sakura-embed-directive` へ。本 spec が自分の行を直すときに、数の欄と一緒に動かす。本文 Current State は古いまま（着手の前に書き直す・棚卸⑳の注記どおり）。

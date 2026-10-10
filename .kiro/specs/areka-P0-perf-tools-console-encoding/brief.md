@@ -58,3 +58,15 @@
 - 端末の文字コードを書き替えない（開発者の方針・`tech.md`）。
 - `tools/perf/` の外の道具の外から見える形（`package.ps1 -Check` ほか）を変えない。
 - 一時ファイルはワークツリーの `target\` の下だけ。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**: C4 で `tools/perf/` に入った変更は `check-quiet.ps1` の守り 1 か所だけ（`ghost-session-test-load-flake`）。子の中で端末の文字コードを書き替える所（`tools/perf/perf-loop.common.ps1` の、.ps1 を子の pwsh で回す関数）は残っている。呼び出しは今も 7 か所（`perf-loop.measure.ps1` 5・`perf-loop.ps1` 2）。`tools/encoding-check.ps1` は今も `tools/perf/` を対象から外す。C4 で増えた道具 `tools/load-flake.ps1` は `tools/` の直下で、検査の内。
+- **触るファイル**: `tools/perf/perf-loop.common.ps1`（684 行）・`perf-loop.measure.ps1`（993 行）・`perf-loop.ps1`（683 行）・`tools/perf/README.md`。端末へ出す文を直す案ならほかの 4 本（`check-quiet.ps1`・`invoke-cpu-sample.ps1`・`invoke-followup-checks.ps1`・`invoke-perf-run.ps1`）も。検査の対象に入れるなら `tools/encoding-check.ps1` と steering `tech.md` の 1 行。
+- **規模**: S（5〜8）。端末へ出す文を全部 ASCII にする案（候補 3）なら M（10〜14）。
+- **仕事の芯は測定ではない**。確かめは、道具の自己較正（`perf-loop.ps1 selftest`・約 1 分）と試験用の空回し（`-DryRun`）、それにコードページ 932 にした自分だけの端末の子（`encoding-check.ps1` と同じ手）で足りる。実機を何分も回す計測は要らない＝重い回 0。
+- **先に要るもの**: なし。ファイルの重なり: `tools/perf/` を使う計測の spec（`present-emit-tail-latency`・保留の `tick-gate-adoption`）とは同じウェーブに置かない（道具が途中で変わると前後の数が比べられない）。それ以外とは重なり 0。
+- **優先度の区分**: C（方針に合わせる直し・困るのは性能改善ループを回す開発者だけ）。
+- **要件定義のモデル**: Opus。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: なし（brief の数と場所は今も合う）。`perf-loop.measure.ps1` は 993 行＝行を足す直しなら先に分ける（1,000 行の番人が見るのは `crates/` だけだが、同じ目安で）。

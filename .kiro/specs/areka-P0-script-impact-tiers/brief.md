@@ -123,3 +123,31 @@ MCP のエージェントは `sakurascript` と `raise_event` で、正典のタ
 - 触るファイル（並走の照合用・見込み）: 新規の段の表（コード 1 か所＋`doc/` の表）・表とコードの一致を判定する検査（新規）・`consumer_ledger.rs`（引く口）・扱いの実行（記録・同意の窓）の新規ファイル。kanade は触らない見込み（出どころは `script-security-level` が運ぶ）。
 - 議題（答えで作業が変わるものだけ）: 中・高の扱い（起票時のまま）。同意の窓を作るか（作るならメッセージボックスを避ける裁定との兼ね合い）。
 - 見つけた穴: なし。すぐ直せる軽微な修正: この brief の末尾の前に道具の残りかす `</content>`・`</invoke>` の 2 行が紛れている（消してよい）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - `open-external-tags` が着地し、外のものを開く道はすべて 1 つの入口（`crates/areka/src/readme/opener.rs` の `submit`）を通り、開くたびに記録が出る。同 spec の設計書は「同意の窓は `submit` へ差し込む」と申し送っている。高の段のうち `\j[URL]`・`\![open,file/browser/explorer/editor/mailer]` は実物ができた。
+  - `mcp-author-tools` の `check_script` は影響の段を返さない（同 spec の要件の暫定の裁定「`script-impact-tiers` が着地するときに同 spec が足す」）＝本 spec の範囲に「`check_script` の答えに段を足す」が入る。
+  - `\!` の対応表 `crates/areka/src/emo2_boot/consumer_ledger.rs` は 859 行から 943 行になった（上限の近く）。段の表は新しいファイルに置く前提のまま。
+  - `choice-script-prefix` で、`script:` の選択肢の台本は元のトークと同じ扱いで再生される（同 spec の要件 4）。段の扱いも元のトークの出どころで決まる。
+- 触るファイル:
+  - 新規: 段の表（コード 1 か所＋`doc/` の表）・表とコードの一致を判定する検査・扱いの実行（記録・決まれば同意の窓）
+  - `crates/areka/src/readme/opener.rs`（差し込み口）・`emo2_boot/consumer_ledger.rs`（段を引く口。行を足すなら先にファイルの中のテストの塊を兄弟へ出す）
+  - `crates/areka/src/mcp/{check_script,check_script_judge}.rs` と各 `_tests.rs`・答えの形が変わるなら `crates/areka-mcp/src/tools/check_script.rs`・`doc/ssp-mcp/areka-tools.md`
+  - kanade は触らない見込み（出どころは `script-security-level` が運ぶ）。
+- 規模: M（10〜14 タスク）。同意の窓を入れるなら 16〜20。`check_script` へ段を足す分は 1〜2 タスクで、幅の中に収まる。
+- 先に要るもの: `script-security-level`（出どころ）・`mcp-kanade-tools`（MCP の台本が実際に再生される）。
+  - 同じウェーブに置けない相手: `mcp-reload`・`makoto-reload-directives`（`consumer_ledger.rs`）・`mcp-strict-errors`（`check_script_judge.rs`・`areka-tools.md`）・`mcp-user-response`・`mcp-shiori-query`（`areka-tools.md`）・`link-context-copy`・`balloon-link-hover`・`popup-menu-residue`（開く処理のファイルを挙げている）。
+- 優先度の区分: A（開発者が段の分け方そのものを示した: 「ベースウェアの外に環境影響を与えるものには特に留意が必要」「ゴースト切り替えも『低』です」）。
+- 要件定義のモデル: Fable（中・高の扱いと同意の窓は開発者の判断・メッセージボックスを避ける裁定との兼ね合い）。
+- 分割の案: 同意の窓を入れると決まったときだけ「段の表と判定と記録」→「同意の窓」に切る（棚卸㉒のまま）。
+- 見つけた穴・古くなった記述: 10-05 の節の例の名前 `open_external(kind, target, origin)` は実物と違う（実物は `opener.rs` の `submit` で、出どころの引数はまだ無い）。棚卸㉒の `consumer_ledger.rs` 859 行は古い。棚卸㉒の節が書いた道具の残りかすの 2 行は、もう消えている。
+
+## 2026-10-10 棚卸㉓の申し送り
+
+- **議題に足す: SHIORI の台本が、areka の内部の運び名を直に書ける**。完了 `mcp-author-tools` が見つけ、「塞ぐかどうかは別に決める」と残した件（同 spec の `research.md` の 13 節「設計の範囲の外で気づいたこと」）。持ち主がいないので、本 spec の議題に入れる。
+  - `\![areka.prop.set,鍵,値]` と書くと、名前がそのまま運ばれて、プロパティの書き込みの受け口 `PropSetCueSink`（`crates/areka-ghost/src/prop_sink.rs`）が拾う。受け付ける鍵は数える鍵 2 つ（起動の回数 `areka.boot.count`・消滅の回数 `areka.vanish.count`）だけで、位置の鍵と知らない鍵は警告して捨てる＝今できるのは、この 2 つの数を書き換えることまで。
+  - `\![\f,…]` と書くと、`\f` を運ぶ名前（`crates/areka-sakura/src/contract.rs` の `FONT_TAG_CARRIER`）と同じ綴りなので、文字の層が拾う。できるのは `\f[…]` と同じことだけ。
+  - どちらも `\!` の対応表（`ConsumerLedger::canonical`）に行があるので、`check_script` は「拾う者がいる」と答える。
+  - 決めること: 内部の名前の `\!` を台本を読む段で落とすか、段の表で「台本からは書けない」と扱うか、今のまま残すか。外から来た台本（MCP）にも同じ道が開いている点を、段の決め方と合わせて見る。

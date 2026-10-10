@@ -124,3 +124,23 @@ x64 の SHIORI4 の DLL は、いまテスト用の 1 つだけ（emo2 の pasta
 - **紙の契約の正本は `doc/shiori/fragments/`**。契約を別のファイルへ二重に書かない。
 - **32bit で建つ範囲**は `shiori-host32-*` と `shiori-abi` だけ。
 - 挙動の意味は ukadoc から決める（SSP の実測に頼らない）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: 起票（10-10・main `dbb3c758` の後）から main はほとんど動いていない。確かめ直した所: 呼び出しの口 `ShioriBackend` の実装は 20 か所（製品 3・テストの偽物 17）。行数（kanade の `msg.rs` 926・`actor.rs` 900・`schedule/mod.rs` 955・`schedule/steady.rs` 950、`crates/areka/src/main.rs` 950）は brief のとおり。
+- 触るファイル: 着手のときに決める（brief の「Boundary Candidates」と「Adjacent」のまま）。見込みは、host32-host の列のファイル（`crates/shiori-host32-host/src/{shiori3,client}.rs`・`crates/areka-ghost/src/{runtime,shiori_inproc}.rs`・kanade の `shiori/real.rs`）・`crates/shiori-abi/`・`crates/areka/src/shiori_host.rs`・`doc/COMPAT_ARCHITECTURE.md` §5・`doc/shiori/fragments/`。
+- 規模: L を超える（20 タスクを超える見込み）。
+- 先に要るもの:
+  - host32-host の列の前の 4 本（`script-security-level` → `mcp-shiori-query` → `makoto-dll-host` → `makoto-reload-directives`）。SHIORI への要求に追加のヘッダを添える入れ物と、共通の窓口の広げ方がそこで決まる。
+  - `property-query-channels`（プロパティの名前の解決と許可の表を最初に決める）。
+  - `property-ipc-transport`（据え置き）とは、着手のときに持ち分を決め直す。
+  - 開発者の条件「実装がある程度整備されてから」に当たるのは、上の 2 つが着地した後。
+- 優先度の区分: C。出どころは開発者の問い（「SHIORI4 の API 整備の spec はあるか」）なので、決まりを字面どおりに当てれば A になる。ただし開発者が同じ日に「区分 C・段はその他・急がない」と自分で決めている（brief の冒頭と Constraints）＝C のまま。
+- 要件定義のモデル: Fable（複数のエンジンと文書を貫く作り・重ねるか並べるかなど開発者の判断が続く）。
+- 分割の案: 今は出さない。brief のとおり、着手のときに要件の段で「シンク系インターフェースの本番配線」「SHIORI4 と SHIORI3 の関係の整理」「中身の形式の確定と文書」から切り出す。
+- 見つけた穴・古くなった記述: なし。brief が挙げる上限の近く・上限超えのテストファイル（`crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` 1135 行・`crates/areka-ghost/src/runtime_tests.rs` 986 行）は今も同じ。
+
+## 2026-10-10 棚卸㉓の申し送り
+
+- **議題の候補: `load` へ渡すフォルダのパスの形**。今は `…\ghost/master` の形（区切りが混ざり、末尾に区切りが無い）で渡している。出どころは、ゴーストの根に `ghost/master` をつなぐ所（`crates/areka-parsers/src/package/resolve_shell.rs` の定数 `GHOST_MASTER`）で、同じプロセスの道（`crates/areka-ghost/src/shiori_inproc.rs`）も補助プログラムの道（`crates/shiori-host32-helper/src/shiori_proxy.rs` の `init_bytes`）も整えずに渡す。正典は形を決めていない。実害は観測されていない。
+- API を整えるときに「区切りを `\` に揃えるか・末尾に区切りを付けるか」を 1 回で決める。変えると SHIORI へ渡すバイト列がすべてのゴーストで変わるので、開発者の判断。`emily-ghost-verification` にも同じ事実を申し送った。

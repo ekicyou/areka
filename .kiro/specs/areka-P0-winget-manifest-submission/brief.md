@@ -114,3 +114,55 @@
   - ほかに `dist/README.txt` の別の節を触る見込みの brief は `animated-image-playback`・`extra-character-windows`・`property-name-case-fold`・`self-alpha-declaration`・`update-check-options`。
 - 議題（答えで作業が変わるものだけ）: 棚卸㉑の 3 つのまま（`ArchiveBinariesDependOnPath` を付けるか・上げ直しで記憶が残るか・`max-versions-to-keep` と Tags）。加えて、`winget.yml` を同じ PR に入れるか、初回の提出の取り込みの後の PR に分けるか（上の順の制約）。
 - 見つけた穴: 上の順の制約が brief に書かれていない（Desired 4 は `winget.yml` を同じ spec の中で足す前提）。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: **待っていた前提が満たされた。** `v0.0.2` が 2026-10-06 に公開された（https://github.com/ekicyou/areka/releases/tag/v0.0.2 ）。
+  - 置いてある物は `areka-0.0.2-x64.zip`・`areka-0.0.2-arm64.zip` と、それぞれの `.sha256` の 4 つ＝マニフェストの `InstallerUrl`・`InstallerSha256` が書ける。
+  - `README.md` の「## 入手と起動」は、もう「GitHub Releases から配布物の zip を入手して展開する」に直っている（本 spec は winget の 1 行を足すだけ）。
+  - `dist/README.txt` の「■ 入手のしかた」は zip の 1 行のまま・「■ 既知の制限」の先頭は「署名がありません」のまま。
+  - `.github/workflows/` は `release.yml`・`crates-io.yml` の 2 本。`release.yml` は今も、タグ `v*` の push と手での起動の両方で動く。`dist/winget/` はまだ無い。
+  - `release-cycle` の手順は、タグのコミットに `winget.yml` が在るときだけ winget-pkgs への PR を見守る作りになっている＝`winget.yml` が後から入っても、手順を直さずに済む。
+- 触るファイル: `dist/winget/**`（新規）・`.github/workflows/winget.yml`（新規）・`dist/README.txt`（「入手のしかた」に 1 行・「既知の制限」に 2 行）・`README.md`（1 行）。`crates/`・`tools/` には触らない＝ほかのどの spec ともソースの重なり 0。
+- 規模: 7〜10 タスク（分けるなら 5〜7 と 3〜4）。
+- 先に要るもの: なし（今すぐ着手できる）。開発者の手が要るもの＝自分のアカウントの winget-pkgs のフォーク・初回の提出（`komac` か `wingetcreate`）・`winget.yml` が使うトークンの登録。
+- 優先度の区分: A（開発者「winget 対応インストーラーを作成したい」）。
+- 要件定義のモデル: Opus。
+- 分割の案: **2 本に分けるのを推す**（規模のためではなく、人の承認待ち約 2 日を 1 本の PR の中に抱えないため）。
+  - 前の 1 本（この spec のまま）: マニフェストの雛形 `dist/winget/**`・手元の `--manifest` での確かめ（上げ直しで利用者のゴーストが残るかも測る）・初回の手提出。「PR を出して自動の検査が通った」で完了する。説明書には触らない。
+  - 後の 1 本（新しく起票・例 `winget-release-automation`・3〜4 タスク）: `.github/workflows/winget.yml`・`dist/README.txt` と `README.md` の winget の行。**初回の提出が winget-pkgs に取り込まれてから**着手する（取り込みの前に `winget install` の行を説明書に載せない。取り込みの前にタグを打っても `winget.yml` が赤にならない）。
+- 見つけた穴・古くなった記述:
+  - 本文「Current State」の「GitHub Releases も無い」と、棚卸㉒の「`README.md` の最初の箇条は今も『まだ配布していない』」は古い。
+  - 分けない場合は、本 spec の PR が main に入ってから取り込みまでの間、`release-cycle` を回せない。
+
+
+## 2026-10-10 棚卸㉓の分割
+
+- **分けた理由**: 規模（7〜10 タスク）のためではない。winget-pkgs への初回の提出は、人の承認を約 2 日待つ。その待ちを 1 本の PR の中に抱えないために 2 本に分ける。あわせて、`winget.yml` が取り込みの前に main に入ると、その間 `release-cycle` を回せなくなる（同 spec は、タグのコミットに `winget.yml` が在れば winget-pkgs への PR を見守り、そこが赤なら直す spec を起票する決まり）ので、`winget.yml` を後ろの 1 本へ出す。
+- **残す範囲（In）**:
+  - マニフェストの雛形 `dist/winget/**`（新規・3 ファイル。本文の Desired Outcome の 1）。
+  - 手元の `winget install --manifest` での確かめ（同 2）。**上げ直し（`winget upgrade`）で利用者のゴースト・記憶が残るかも、ここで測る**（棚卸㉑の議題 2 の ⒜ を採った形）。
+  - 初回の手提出（同 3）。
+  - **完了の線**: winget-pkgs への PR を出し、その自動の検査が緑になった所まで。取り込み（人の承認）は待たない。
+- **出した範囲（Out・どの spec へ）**: → `areka-P0-winget-release-automation`（新しく起票）
+  - `.github/workflows/winget.yml`（本文の Desired Outcome の 4）。
+  - `README.md` と `dist/README.txt` の winget の行（同 5。「入手のしかた」の 1 行と「既知の制限」の 2 行）。取り込みの前に `winget install` の行を説明書に載せないため。
+  - `max-versions-to-keep` の数（議題の一部）と、トークン（PAT）の登録も、そちらへ移る。
+- **順番**: この spec → winget-pkgs が初回の提出を取り込む（人の承認・実例で約 2 日）→ `winget-release-automation`。`release-cycle` は、この並びのどこでも回せる（`winget.yml` が main に無い間は winget を見守らない）。
+- **残した側の規模**: 5〜7 タスク。
+- **残した側が触るファイル**:
+  - `dist/winget/**`（新規）
+  - この spec のフォルダの中の確かめの記録
+  - リポジトリの外（開発者の手が要るもの）: 開発者のアカウントの winget-pkgs のフォーク・初回の提出（`komac` か `wingetcreate`）。
+- **同じウェーブで触らない約束**（破るなら止めて報告）:
+  - `README.md` に触らない。`dist/README.txt` に触らない。`.github/workflows/` に触らない。
+  - `crates/`・`tools/` に触らない（本文の Constraints のとおり）。
+  - 本文の Constraints の「触るのは `dist/winget/**`・`.github/workflows/winget.yml`・`dist/README.txt`・`README.md`」は、この分割で「`dist/winget/**` だけ」に読み替える。
+  - ほかのどの spec ともファイルの重なりは 0。
+- **議題**（この分割の後に残るもの）:
+  1. `ArchiveBinariesDependOnPath` を付けるか（棚卸㉑の議題 1 のまま）。
+  2. Tags の語。
+  3. 提出する版。winget-pkgs は 1 つの PR に 1 つの版。今 Release が在るのは `v0.0.2` だけだが、着手までに次の版が出ていたら、どの版で初回を出すかを着手のときに決める。
+- **後ろの spec への申し送り**: 上げ直しの実測の結果（利用者のゴーストと記憶が残ったか・同梱のゴーストが上書きされたか）を、この spec の完了のときに `winget-release-automation` の brief へ書き足す（説明書の「既知の制限」の文の材料になる）。消えると分かったら、説明書に書くのは後ろの spec、置き場を変える仕事は別の spec として起票する。
+- **書き換えが要る相手（この brief では触っていない）**: `release-cycle` の要件・設計は、`winget.yml` の持ち主を `winget-manifest-submission` と書いている。持ち主の名前が `winget-release-automation` に替わるだけで、手順（タグのコミットにファイルが在るかで見る）は変わらない。

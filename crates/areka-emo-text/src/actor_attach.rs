@@ -1,5 +1,5 @@
 //! actor の子: 登録と再追従（装着先の解決・大きさの再追従・粗いバルーン定義の警告）。
-//! 足す予定の spec: shell-balloon（登録の口）・balloon-font-file。
+//! 足す予定の spec: balloon-font-file。
 
 use areka_emo_present::TextSlotView;
 use areka_parsers::balloon::BalloonModel;

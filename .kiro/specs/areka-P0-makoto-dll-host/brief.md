@@ -155,3 +155,20 @@ x64 in-proc（COM `IShiori`）の MAKOTO 版は作らない（そのような DL
 - 触るファイル: `crates/areka-parsers/src/package/{model,resolve}.rs`・新規 `crates/shiori-host32-host/src/makoto.rs`・`crates/shiori-host32-host/src/lib.rs`・新規 `crates/shiori-host32-makoto-testdll/`・`crates/areka-ghost/src/runtime.rs`＋新規 `crates/areka-ghost/src/makoto_wiring.rs`・`crates/areka/src/boot_config.rs`・`Cargo.toml`（members）・`Cargo.lock`・`doc/COMPAT_ARCHITECTURE.md` §5／§8・`doc/ukadoc-coverage/ledger/assets.toml`。
 - 議題（答えで作業が変わるものだけ）: なし。
 - 見つけた穴: なし。並走の照合: `runtime.rs` を触る spec（`property-query-channels`・`mcp-*` で実行系に口を足すもの）と同時に走らせない。新しいクレートで `Cargo.lock` が動く＝「依存を足す spec は 1 ウェーブに 1 本」の席を使う。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: C4 の 16 本は本 spec の触るファイルを変えていない。差し込む口（`crates/areka-kanade/src/translate.rs` の `MakotoChain`）と本番の結線（`crates/areka-ghost/src/runtime.rs` の、翻訳の継ぎ目を組む所の `makoto` の 1 行）は棚卸㉒のまま。`runtime.rs` 788 行・`crates/areka-parsers/src/package/resolve.rs` 866 行・`model.rs` 457 行・`crates/shiori-host32-host/src/charset.rs` 286 行も同じ。中身の前提（`translate-pipeline`・`charset-canon`・`shiori-loadu`）は着地済み。
+- 触るファイル: 棚卸㉒の一覧のまま。直す所が 2 つある。
+  - 根の `Cargo.toml` は触らない（`members` は `crates/*` なので新しいクレートは自動で入る）。
+  - 全体テストの道具 `tools/test-all.ps1` の「i686 の成果物を建てる」段に、新しい偽の DLL を足す（一覧に無かった）。
+- 規模: L（15〜18 タスク）のまま。
+- 先に要るもの: 働きの前提なし。席の縛りだけがある。
+  - 新しいクレートで `Cargo.lock` が動く（`mcp-stdio-bridge`・版上げと同じウェーブに置かない）。
+  - `runtime.rs`（`mcp-reload` が `\![reload,shiori]` を含めるとき・`property-query-channels`・`currentghost-property-tree`）。
+  - `tools/test-all.ps1`（`dev-helper-x64-clobber`・`areka-test-threads-av`・`test-wait-marker-gaps` などが挙げている）。
+  - `script-security-level`・`mcp-shiori-query` とは、`shiori3.rs`・`client.rs` に触れないので重ならない見込み（`crates/shiori-host32-host/src/lib.rs` の公開の行だけ照合する）。
+- 優先度の区分: C（ukadoc のトランスレータの拾い残し・台帳の段は「その他」・MAKOTO を同梱する今どきのゴーストは少ない）。
+- 要件定義のモデル: Fable（MAKOTO/2.0 の一次資料が ukadoc に無く原典から決める・別プロセスとの受け渡し）。
+- 分割の案: なし（一度切り出した spec）。
+- 見つけた穴・古くなった記述: 上の 2 点。roadmap の台帳の本 spec の行の前提の欄「`property-query-channels`（host32-host の列）」は古い（同 spec は棚卸㉒で列から外れた）。網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml` の `\![load/unload/reload,makoto]` の 3 行の持ち主が本 spec のまま（`makoto-reload-directives` が着地するときに直す約束）。

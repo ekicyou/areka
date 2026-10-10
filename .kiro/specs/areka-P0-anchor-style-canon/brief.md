@@ -89,3 +89,22 @@
   - `crates/areka-parsers/src/balloon/{model.rs, parse.rs, parse_tests.rs}`・`doc/ukadoc-coverage/ledger/{sakura-script,assets}.toml`・`doc/COMPAT_ARCHITECTURE.md` §8
 - 議題: 起票時のまま 2 件（`anchormethod` の D2D での再現の範囲＝`choice-marker-styling` と同じ答え／訪問済みをいつまで覚えるか）。
 - 見つけた穴: なし。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**:
+  - `anchor-tag-canon`（働き）は未着手のまま＝本 spec はまだ着手できない。
+  - C4 で `crates/areka-emo-text/src/look.rs` は 802 行（`mcp-author-tools` が、効かなかった `\f` の理由の分類を足した）、`state_decoration.rs` は 635 行（`budoux-reveal-reflow`）になった。起票のときの位置は全部当たる（所有外のキーの判定 `is_unowned`・`Note::AnchorColorAsDefault`・`unowned_vocab`・`reset_decoration`・`apply_font_ranges`・`render_styled`）。
+  - 台本を再生せずに確かめる道具 `check_script`（`crates/areka/src/mcp/check_script_judge.rs` の `judge_font`）は、`\f[anchor*]` を今「効かない」と診断する。判定は `look.rs` の結果をそのまま使うので、本 spec が効くようにすれば診断は自動で消える。
+- **触るファイル**: 棚卸㉒の一覧のまま。行数の注意:
+  - `crates/areka-parsers/src/balloon/parse_tests.rs` は 922 行＝読み取りの検査は新しいファイルへ。`balloon/model.rs` は 774 行。
+  - `look.rs` は 802 行＝3 状態の解決は新しいファイルへ置く＝emo-text の `lib.rs` の一覧の席を使う。
+- **規模**: M（10〜13 タスク）。下の穴（descript の形・色・描き方の行）を入れると 12〜16。
+- **先に要るもの**: `anchor-tag-canon`（必須）。同じファイルを触る `text-align-shadow-canon` の後。
+- **優先度の区分**: C（ukadoc の `\f[anchor*]` と descript の `anchor.*` の拾い残し）。
+- **要件定義のモデル**: Fable（`anchormethod` を Direct2D でどこまで再現するか・訪問済みをいつまで覚えるか＝開発者に聞く分かれ目と、ukadoc の記述が薄い所）。
+- **分割の案**: 切らない（切り出したばかり）。
+- **見つけた穴・古くなった記述**:
+  - 網羅台帳の持ち主が切り出しの前のまま: `assets.toml` の `anchor.*` 43 行と `sakura-script.toml` の `\f[anchor*]` 16 行の持ち主が `anchor-tag-canon` で、本 spec の持ち物は 0 行。付け替える。
+  - Scope は descript を `anchor(.notselect|.visited).font.*` 族としか書いていないが、網羅台帳の 43 行には 3 状態ぶんの `anchor.style`・`anchor.brush.color.*`・`anchor.pen.color.*`・`anchor.blendmethod` も入っている（バルーン定義の読み手はどれも読まない）。`\f[anchorstyle,default]` などの戻り先なので範囲に入れる。影の行は `text-align-shadow-canon` と分け方を決める。
+  - roadmap の列の「`choice-marker-styling` ∥ 隣に `anchor-style-canon`」は並走の意味ではない。2 本は `look.rs`・`state_decoration.rs`・`viewbox_draw_render.rs`・`viewbox_draw_decoration.rs` が重なる＝続けて走らせる（同じウェーブには置けない）。

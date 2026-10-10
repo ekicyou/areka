@@ -66,3 +66,13 @@ Win32 の採り口を 1 か所に集め（偽の値を差せる継ぎ目つき�
 - 触るファイル: 新規の Win32 の採り口（例 `crates/areka/src/property/system_env.rs`）・`crates/wintf/src/ecs/window/monitor.rs`（読むだけ）・`crates/areka-sylphya/src/{vocab/dotted.rs, key.rs}`・`crates/areka-ghost/src/sylphya_wiring.rs`・`crates/areka/src/emo2_boot/mod.rs`・`doc/ukadoc-coverage/ledger/property.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
 - 議題（答えで作業が変わるものだけ）: 前回の 1 つ（毎回問い合わせるか間隔を置くか・動く値の口の形しだい）。
 - 見つけた穴: なし。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**: `currentghost-property-tree`（動く値の口）は未着手のまま＝着手できない。C4 は値の源に触れていない＝モニタの値 `crates/wintf/src/ecs/window/monitor.rs` は `f26aa1c1` からの変更 0（`wintf-tooltip` は wintf の別の所）・sylphya も変更 0（`BackingLayer::SystemEnv` は縮退のまま）。網羅台帳 `property.toml` の `system.*` は 25 行で、持ち主は今も `property-catalog-lists`（着地のときに本 spec へ直す）。
+- **触るファイル**: 前回のまま＝新規の Win32 の採り口（例 `crates/areka/src/property/system_env.rs`）・`monitor.rs`（読むだけ）・`crates/areka-sylphya/src/{vocab/dotted.rs, key.rs}`（407・411）・`crates/areka-ghost/src/sylphya_wiring.rs`（415）・`crates/areka/src/emo2_boot/mod.rs`（**912**＝足すのは呼び出しの数行）・台帳 `property.toml`（25 行）・`doc/COMPAT_ARCHITECTURE.md` §8。**足す 1 本**: 根の `Cargo.toml`（下の穴）。
+- **規模**: M〜L（14〜18）のまま。**分割の案**: なし（一度切り出した spec）。
+- **先に要るもの**: `currentghost-property-tree`（その前に `property-name-case-fold`）。
+- **ファイルの重なり**: `currentghost-property-others`・`property-catalog-lists`・`zorder-property`（`dotted.rs`・`emo2_boot/mod.rs`）・`property-name-case-fold`・`property-catalog-lists`（`key.rs`）・`emo2_boot` の結線の列の全員（`mod.rs`）。根の `Cargo.toml` に触るなら、版上げ（`release-cycle`）や依存を足す spec（`mcp-stdio-bridge`・`makoto-dll-host`）と同じウェーブに置けない。
+- **優先度の区分**: C（ukadoc の `system.*` の拾い残し）。**要件定義のモデル**: Opus（議題は「毎回問い合わせるか間隔を置くか」の 1 つで、口の形は前の spec が決める）。
+- **見つけた穴・古くなった記述**: 電源・ディスク・テーマの値を採るには、Windows の機能（電源＝`Win32_System_Power`・ディスクの空き＝`Win32_Storage_FileSystem`・テーマの設定＝`Win32_System_Registry` の見込み）が要るが、根の `Cargo.toml` の `windows` の機能の一覧に今は無い（在るのは `Win32_System_SystemInformation`・`Win32_System_Performance` など）。触るファイルの一覧に根の `Cargo.toml` が無かった。機能を足すだけなら `Cargo.lock` は変わらない見込みだが、設計の段で確かめる。

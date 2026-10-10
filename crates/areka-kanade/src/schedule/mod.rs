@@ -11,7 +11,7 @@
 //! [`TalkEndReason::Quit`] の場合／[`Input::ForceQuit`]／[`Input::ShioriDown`]／[`Input::ShioriReply`] の
 //! 失敗）と、Unload 完了・防御アーム（未知 talk_id・Idle 以外の Boot・応答待ちでない
 //! ShioriReply）を実装する。フェーズ固有の遷移は [`boot`]／[`steady`]／[`close`] の
-//! 各サブモジュールへ委譲する（後続タスク 2.3／2.4／2.5 が本体を実装する）。
+//! 各サブモジュールへ委譲する。
 //!
 //! # ログ規律（steering: areka-log-first-no-silent-failure）
 //! すべての失敗・防御アームは `tracing::error!`／`tracing::warn!` を発行する。沈黙の
@@ -587,7 +587,7 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
             }
         },
 
-        // Tick・CloseRequest はフェーズ固有遷移（後続タスクが本体を実装）。
+        // Tick・CloseRequest はフェーズ固有遷移（本体は各サブモジュール）。
         Input::Tick { now } => dispatch_phase(state, Input::Tick { now }, config),
         Input::CloseRequest { reason } => {
             dispatch_phase(state, Input::CloseRequest { reason }, config)
@@ -854,7 +854,7 @@ fn unloading_reply(mut state: State, outcome: ShioriOutcome) -> (State, Vec<Acti
     (state, vec![Action::StopSelf])
 }
 
-/// フェーズ固有遷移への委譲（boot／steady／close・後続タスクが本体を実装）。
+/// フェーズ固有遷移への委譲（boot／steady／close）。
 fn dispatch_phase(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     match state.phase {
         Phase::Idle

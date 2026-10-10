@@ -165,3 +165,25 @@
 - 議題（答えで作業が変わるものだけ）: 面の偶奇の自動切替の規則（キャラのどちら側に出たかで偶奇を選ぶ・`\b[数字]` で明示されたときの優先）だけ。
 - 見つけた穴: なし。軽微: 上記の Scope の古い書き方（着手のときに読み替える）。
 - 並走の判定（厳しめ）: `balloon-lifecycle-events`・`budoux-reveal-reflow`・`text-typesetting` とは重なり 0＝**並べられる**。`anchor-tag-canon` とは、向こうが dola に種類を足さなければ 0（足すと `areka-seriko/src/actor.rs`）。`balloon-font-file`（`frame/attach.rs`・`frame/switch.rs`）・`balloon-markers`（emo-present の `balloon.rs` の系列の表）・`talk-fast-forward`（同じ表の `clickwait` の行）・`shell-companion-balloon`（`frame/switch.rs`）とは重なる＝並べない。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - ファイルを分け合っていた `self-alpha-declaration` が着地し（10-06）、`crates/areka-emo-present/src/balloon.rs` は空いた（701 行。透過の宣言を読む `load_balloon_use_self_alpha` が足された。系列の表 `SeriesFamily` と面の解決 `resolve_balloon_faces` は変わらず）。
+  - `balloon-lifecycle-events` が着地した（10-08）＝項目 7・8・10 は済み（本文に追記済み）。残りは項目 2・3・5・6 のまま。
+  - バルーンの面の番号の `0` の直書きは今も 1 か所＝`crates/areka/src/emo2_boot/frame/attach.rs` の装着（`PresentCommand::ShowSurface` の `surface_id: 0`）。バルーンを切り替えた後の出し直しも同じ装着を通る。
+  - 項目 4 が `mcp-reload` へ移ったので、切替の側に足すものが無くなった＝`emo2_boot/frame/switch.rs` と `shell_balloon_switch.rs` には触らずに済む見込み（設計で約束にする）。
+  - `crates/areka-seriko/src/actor.rs` は `animated-image-playback` で 766 行になった。`\b[数字]` の腕（`CueCommand::BalloonSurface`）は変わらず。`crates/areka/src/placement/config.rs`（706）・`resolver.rs`（491）の左右の判定も変わらず。
+- 触るファイル: emo-present の `balloon.rs`・`emo2_boot/frame/attach.rs`（455）・`placement/{config,resolver}.rs`・seriko の `actor.rs`・`balloon.defaultsurface` を読む所（要件で確定）・多面の検体（新規）・台帳 `assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
+- 規模: 10〜14 タスク。
+- 先に要るもの: 働きの上では無し。ファイルの重なりは次のとおり。
+  - 重なる: `balloon-font-file`（`frame/attach.rs`）・`extra-character-windows`（`frame/attach.rs`・`placement/config.rs`）・`balloon-markers`・`talk-fast-forward`（emo-present の `balloon.rs` の系列の表）・`seriko-trigger-intervals`（seriko の `actor.rs`）。
+  - 0: `shell-companion-balloon`（上の約束つき）・`network-update-canon-order`・`baseware-root-list`・`emily-ghost-verification`。
+- 優先度の区分: C（ukadoc の拾い残し。残りの項目にバグは 0 件）。
+- 要件定義のモデル: Opus（議題は面の偶数・奇数の自動切替の規則 1 つ）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述:
+  - 本文の Scope・Desired Outcome は古いまま（棚卸㉒の注記どおり、項目 2・3・5・6 と読み替える）。
+  - 棚卸㉑・㉒の触るファイルの `frame/switch.rs`・`shell_balloon_switch.rs` は外せる。
+  - roadmap の台帳の行の規模「12〜16」と前提「`shell-balloon`」は古い（棚卸㉒で 10〜14・前提は完了済み）。

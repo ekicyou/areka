@@ -98,3 +98,23 @@
   - `crates/areka-parsers/src/balloon/{model.rs, parse.rs}`・`doc/COMPAT_ARCHITECTURE.md` §8
 - 議題: 箱の当たりの矩形と「見えている字の数」に、薄れている途中の字を入れるか（棚卸㉑の議題を、数の 2 か所まで広げた）。
 - 見つけた穴: なし。
+
+
+---
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - `budoux-reveal-reflow`（10-06 着地）で `actor_present.rs` の「見える数 → 区切り → 配置」が `arrange_lines` へ切り出された。見える数は今も届いた内容の現れる時刻から出す（`state.rs` の `visible`）＝透明度の純関数が読む時刻の列は変わらない。全文で配置するときも、行に入るのは見えている字だけ。
+  - 「見えている字の数」を読む所は棚卸㉒の 2 か所（`actor_box.rs` の `refresh_shown_boxes`・`balloon_shown_glyphs`）のまま。`balloon-lifecycle-events`（10-08 着地）で、バルーンの時間切れは「トークの終わりの時刻」から数える形になった（`crates/areka/src/emo2_boot/talk_lifecycle.rs`・`balloon_visibility_wait.rs`）。最後の字が薄れ切るのはその最大 150ms 後＝数え始めはずらさない、で足りる見込み（要件で一言決める）。
+  - `mcp-dump-images-residue`（10-06 着地）で、MCP の `dump_balloon` は文字の面を待たずに読み戻す＝薄れている途中の絵がそのまま写る（それで正しい）。emo-text の `surface.rs` は 995 行＝足さない。
+  - `mcp-author-tools`（10-08 着地）で、台本の検査が `\!` の受け取り手の表に無い名前を「知らない命令」と答える。`\![text,reveal,…]` は表（`crates/areka/src/emo2_boot/consumer_ledger.rs`・943 行）に 1 行と、一致の検査（`consumer_ledger_agreement_tests.rs`）に見本が要る。
+  - 早送り（`talk-fast-forward`）と `\_q`（`sakura-time-directives`）は今も未着手＝口だけ用意する形は変わらない。
+- 触るファイル: 棚卸㉒の一覧に、受け取り手の表の 2 本を足す。透明度の仕組みは新しいファイル＝**emo-text にファイルを足す**（`lib.rs` の席を使う）。
+- 規模: 10〜13 タスク（棚卸㉒は 9〜12）。
+- 分割の案: 切らない。
+- 先に要るもの: 働きの前提は無い。列の順は `text-ruby` の後・`balloon-scroll-fade` の前。
+- 優先度の区分: A（開発者指示「フェードインしながら文字を表示するモードが欲しい」）。
+- 要件定義のモデル: Fable（時間で動く描き直しを文字の層に初めて作る・「見えている」の数え方を 3 か所で揃える分かれ目）。
+- 議題: 棚卸㉒のまま（箱の当たりの矩形と「見えている字の数」に、薄れている途中の字を入れるか）。
+- 見つけた穴・古くなった記述: なし（`actor_present.rs` の冒頭の「足す予定の spec」に本 spec の名があり、当たっている）。

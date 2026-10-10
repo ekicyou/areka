@@ -106,3 +106,25 @@
 - 議題（答えで作業が変わるものだけ）: ⑳の 2 件のまま。⑶（新）禁則の追い出しと「出した字の行を動かさない」約束のどちらを優先するか（`budoux-reveal-reflow` の設計の後に）。
 - 見つけた穴: なし。
 - 並走の判定（厳しめ）: `budoux-reveal-reflow`（`segment.rs`・`state.rs`・順序の依存）・`balloon-font-file`（`draw.rs`・`draw_metrics.rs`・`viewbox_draw_render.rs`・`actor.rs`）・`anchor-tag-canon`・`talk-fast-forward`（`state.rs`・`balloon/{model,parse}.rs`）・`balloon-markers`（`layout.rs`・`state.rs`・`balloon/{model,parse}.rs`）とは重なる＝並べない。`balloon-lifecycle-events`・`balloon-canon-residue` とは重なり 0。
+
+
+---
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - `budoux-reveal-reflow`（10-06 着地）が文字の層に「先読み」を足した。再生の前に台本の合図を全部受け取り、場所ごと・区間ごとの全文を先に求め、文節の折り返しはその全文で区切る（新しい `crates/areka-emo-text/src/lookahead.rs` の `TalkLookahead`・`actor_present.rs` の `arrange_lines`）。配置の関数（`layout*.rs`）の判定は変わっていない。
+  - 棚卸㉒の議題 ⑶（禁則の追い出しと「出した字の行を動かさない」のどちらを優先するか）は形が変わった。全文が先に分かるので、禁則も全文で決めれば出した字は動かない。向こうの設計も「見える数より後ろの字を読む判定（禁則など）は全文を当てにしてよい」と書いている。
+  - **残る穴は 2 つ**: ⑴ 1 字ずつの折り返し（`budoux_newline` なし）は今も届いた字だけで配置し、全文を使わない（`arrange_lines` の 1 字ずつの腕）。禁則は次の字を見て前の字を追い出すので、この方式でも全文を使うように広げないと、出した字が動く。⑵ 全文が無い・食い違ったときの落とし先（届いた字だけで配置）での禁則の振る舞い。
+  - `mcp-author-tools`（10-08 着地）で、台本の検査（MCP の `check_script`）が `\!` の受け取り手の表（`crates/areka/src/emo2_boot/consumer_ledger.rs`）に無い名前を「知らない命令」と答えるようになった。`\![text,combine-upright,…]` は表に 1 行と、表と受け口の一致の検査（`consumer_ledger_agreement_tests.rs`）に見本 1 つが要る。
+- 触るファイル: 棚卸㉒の一覧に、emo-text の `lookahead.rs`・`actor_present.rs`（全文の使い分け）と `crates/areka/src/emo2_boot/{consumer_ledger.rs, consumer_ledger_agreement_tests.rs}` を足す。禁則の表は新しいファイル＝**emo-text にファイルを足す**（`lib.rs` の一覧の席を使う。純粋の数は今 73）。
+- 上限に近いファイル: `consumer_ledger.rs` は 943 行（うち約 500 行がファイルの中のテスト）。行を足す前にテストを兄弟のファイルへ出す。
+- 規模: 17〜22 タスク（棚卸㉒は 14〜18。全文の使い分けの拡張・落とし先の決め・受け取り手の表で 2〜4 増えた）。
+- 分割の案: 20 を超える見込みが強い。一度も切り出していない spec なので、要件の段で次の 2 本に切る。
+  - 前半 `text-typesetting`（禁則・ぶら下げ・縦書きの字形の観測点・9〜11）: emo-text の `layout_scan_glyph.rs`・`layout_scan.rs`・`layout.rs`・`wrap.rs`・`segment.rs`・`region.rs`・`lookahead.rs`・`actor_present.rs`・`actor.rs`・新しい禁則の表・`lib.rs`、`crates/areka-parsers/src/balloon/{model,parse}.rs`。
+  - 後半（仮の名前 `text-combine-upright`・縦中横と字の向き・9〜12）: emo-text の `state.rs`・`lookahead.rs`・`layout_scan_glyph.rs`・`writing.rs`・`draw.rs`・`draw_line_store.rs`・`draw_metrics.rs`・`viewbox_draw_render.rs`・`lib.rs`、`balloon/{model,parse}.rs`、受け取り手の表の 2 本。
+- 先に要るもの: 働きの前提は満たした（`budoux-reveal-reflow` が着地）。列の順は `anchor-tag-canon` → リンクの 3 本 → `balloon-font-file` の後のまま（`state.rs`・`actor.rs`・`actor_present.rs`・`viewbox_draw_render.rs`・`lib.rs` が重なる）。
+- 優先度の区分: A（roadmap「シェル内バルーン」節が、開発者の 2026-10-01 の指示を出どころに挙げている）。
+- 要件定義のモデル: Fable（areka 独自の組版・先読みとの噛み合わせ・開発者に決めてもらう分かれ目が 3 つ）。
+- 議題: 棚卸⑳の 2 件（禁則の表を手で書くか・縦中横を自前で描く方式）はそのまま。⑶ は上の「残る穴」の 2 点に置き換える。
+- 見つけた穴・古くなった記述: コードの穴は無い。棚卸㉒の「純粋の数は 71」は今 73。「`actor_present.rs` も触る見込み」は確定（`arrange_lines`）。
