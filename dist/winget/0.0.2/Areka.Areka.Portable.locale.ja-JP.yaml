@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.locale.1.12.0.schema.json
+
+PackageIdentifier: Areka.Areka.Portable
+PackageVersion: 0.0.2
+PackageLocale: ja-JP
+PackageName: areka (portable)
+ShortDescription: 伺か互換のデスクトップマスコット・ベースウェア（α 版）。zip をそのまま置くポータブル版です。
+Tags:
+- 伺か
+- デスクトップマスコット
+- ゴースト
+ManifestType: locale
+ManifestVersion: 1.12.0

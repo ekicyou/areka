@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+
+PackageIdentifier: Areka.Areka.Portable
+PackageVersion: 0.0.2
+PackageLocale: en-US
+Publisher: ekicyou
+PublisherUrl: https://github.com/ekicyou
+PublisherSupportUrl: https://github.com/ekicyou/areka/issues
+PackageName: areka (portable)
+PackageUrl: https://github.com/ekicyou/areka
+License: MIT
+LicenseUrl: https://github.com/ekicyou/areka/blob/v0.0.2/LICENSE-MIT
+ShortDescription: An ukagaka-compatible desktop mascot baseware for Windows (alpha). Portable edition distributed as a zip.
+Tags:
+- ukagaka
+- desktop-mascot
+- mascot
+- ghost
+- shiori
+- sakurascript
+ReleaseNotesUrl: https://github.com/ekicyou/areka/releases/tag/v0.0.2
+ManifestType: defaultLocale
+ManifestVersion: 1.12.0
