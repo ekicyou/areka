@@ -28,6 +28,7 @@
   - Microsoft Learn の提出の説明（https://learn.microsoft.com/en-us/windows/package-manager/package/repository ）: 提出の前に `winget validate` を通す。置き場の並びは `manifests/<発行者の頭文字の小文字>/<発行者>/<アプリ>/<版>/` で、名乗りと版がこの並びと一致していなければならない。1 つの PR に入れられるのは 1 つのパッケージの 1 つの版だけ。`InstallerUrl` は https で、発行者の配布元から直接取れること。PR を出すと自動の検査（マニフェストの検査・URL の検査・ウイルス対策の走査・無人でのインストールとアンインストール）が走り、進み具合は PR のラベルで示される。検査を通り終えて承認待ちになった印は `Azure-Pipeline-Passed`、取り込まれる印は `Validation-Completed`。直しを求める印 `Needs-Author-Feedback` が付いたまま 10 日応えないと、PR は自動で閉じられる。自動の検査の後に人（モデレーター）の審査が在る。
   - Microsoft Learn の `winget uninstall` の説明（https://learn.microsoft.com/en-us/windows/package-manager/winget/uninstall ）: ポータブルな物には `--purge`（入れ先のフォルダの中をすべて消す）と `--preserve`（パッケージが作った物をすべて残す）が在る。どちらも付けないときに、winget が置いていないファイル（利用者のゴースト・記憶）がどうなるかは、この頁に書かれていない＝要件 4 で測る。
 - brief の「portable の上げ直しは古い版を外してから新しい版を入れる」は、外の文書でも実機でも確かめていない（要件 4 で測る）。
+- winget のソースの読み（2026-10-10 のギャップ分析・開発機と同じ版 v1.29.380・`research.md` の 3.1。**実機ではまだ測っていない**）: winget は zip の最上位の項目だけを覚え、覚えたフォルダは、上げ直しでも `--purge` を付けない外し方でも中身ごと消す。areka の zip の最上位のフォルダは `ghost` と `balloon` なので、利用者が後から入れたゴースト・バルーンと、ゴーストとシェルの記憶は消える見込み。残る見込みなのは最上位の `profile\areka\`（areka の記憶）だけ。brief の「アンインストールで消えるのは winget が置いたファイルだけ（利用者のゴーストは残る）」は、この読みと合わない。何を消すかは「いま入っている版が覚えた項目」で決まるので、ある版を winget で入れた人の最初の上げ直しは、後の版の zip をどう直しても変えられない見込み。正本は要件 4 の実測とする。
 
 ## Boundary Context
 
@@ -76,7 +77,7 @@ brief が要件討議へ回した議題は、下の仮置きで要件を書い�
 2. The マニフェストの雛形 shall 表示名を「areka (portable)」、発行者（`Publisher`）を `ekicyou` とし、発行者の素性を示す URL（`PublisherUrl`）とパッケージの URL を持つ。
 3. The マニフェストの雛形 shall version・defaultLocale・installer の 3 ファイルで成り、3 つとも同じ名乗り・同じ版・同じ書式の版（brief の指定は 1.12.0。提出の時点で winget-pkgs が受け付ける版であること）を持つ。
 4. The マニフェストの雛形 shall 入れ物を zip、その中身をポータブルな exe とし、入れる exe を zip の根の `areka.exe` の 1 つ、コマンド名を `areka` とする（`InstallerType: zip`・`NestedInstallerType: portable`・`NestedInstallerFiles` に `areka.exe`・`PortableCommandAlias: areka`）。
-5. The マニフェストの雛形 shall x64 と arm64 の 2 項目を持ち、それぞれの `InstallerUrl` を GitHub Release のその版の `areka-{版}-{arch}.zip` を指す https の URL、`InstallerSha256` を同じ Release の `areka-{版}-{arch}.zip.sha256` に書かれた値と同じにする。
+5. The マニフェストの雛形 shall x64 と arm64 の 2 項目を持ち、それぞれの `InstallerUrl` を GitHub Release のその版の `areka-{版}-{arch}.zip` を指す https の URL、`InstallerSha256` を同じ Release の `areka-{版}-{arch}.zip.sha256` に書かれた値と同じにする（大文字と小文字の違いは問わない）。
 6. The マニフェストの雛形 shall `ArchiveBinariesDependOnPath: true` を持つ（議題 1 の仮置き）。
 7. The マニフェストの雛形 shall ライセンスを MIT とし、短い説明・Release の公開日（`ReleaseDate`）・タグを持ち、タグに `ukagaka` と `desktop-mascot` を含める（議題 2 の仮置き）。
 8. The マニフェストの雛形 shall ロケールのファイルを 1 つだけ持つ（説明文の言語は議題 4 で決める）。
@@ -118,11 +119,11 @@ brief が要件討議へ回した議題は、下の仮置きで要件を書い�
 
 #### Acceptance Criteria
 
-1. When 要件 3 の起動の確かめが合格する, the 開発者 shall 入れた areka に、利用者が後から入れたゴースト 1 体・areka の記憶・ゴーストの記憶（同梱のゴーストの記憶を含む）が入れ先のフォルダの中に在る状態を作り、在ることを記録に残す。
-2. When その状態から、より新しい版を名乗る確かめ専用のマニフェストで `winget upgrade` を行う, the 実測 shall 次の 5 つを項目ごとに記録に残す: 利用者が後から入れたゴーストが残ったか／areka の記憶が残ったか／ゴーストの記憶が残ったか／同梱のファイルが新しい版の中身に置き換わったか／上げ直しの後に `areka` で起動して、上げ直しの前に使っていたゴーストで立ったか。
-3. When その状態から、`--purge` も `--preserve` も付けない `winget uninstall` を行う, the 実測 shall 利用者が後から入れたゴースト・areka の記憶・ゴーストの記憶のそれぞれが残ったかと、winget が出した文を記録に残す。
+1. When 要件 3 の起動の確かめが合格する, the 開発者 shall 入れた areka に、利用者が後から入れたゴースト 1 体・利用者が後から入れたバルーン 1 つ・areka の記憶・ゴーストの記憶とシェルの記憶（同梱のゴーストの分を含む）が入れ先のフォルダの中に在る状態を作り、在ることを記録に残す。
+2. When その状態から、より新しい版を名乗る確かめ専用のマニフェストで `winget upgrade` を行う, the 実測 shall 次の 6 つを項目ごとに記録に残す: 利用者が後から入れたゴーストが残ったか／利用者が後から入れたバルーンが残ったか／areka の記憶が残ったか／ゴーストの記憶とシェルの記憶が残ったか／同梱のファイルが新しい版の中身に置き換わったか／上げ直しの後に `areka` で起動して、上げ直しの前に使っていたゴーストで立ったか。
+3. When その状態から、`--purge` も `--preserve` も付けない `winget uninstall` を行う, the 実測 shall 利用者が後から入れたゴースト・利用者が後から入れたバルーン・areka の記憶・ゴーストの記憶とシェルの記憶のそれぞれが残ったかと、入れ先のフォルダが残ったかと、winget が出した文を記録に残す。
 4. The 実測の記録 shall 各項目を「残った」「消えた」「置き換わった」のどれかで明示し、消えた物が無いときも「消えた物は 0」と書く。
-5. The 実測の記録 shall この結果が手元のマニフェストで入れた形（入れ先のフォルダの名前と `winget list` の ID が winget-pkgs から入れた形と違う）でのものであることを、既知の制限として述べる。
+5. The 実測の記録 shall この結果が手元のマニフェストで入れた形（入れ先のフォルダの名前と `winget list` の ID が winget-pkgs から入れた形と違う）でのものであることを、既知の制限として述べる。あわせて、winget の設定のうち「外すときにポータブルな物の入れ先を丸ごと消す」（`--purge` を既定にする設定）が既定のまま（オフ）で測ったことを書く。
 6. If 利用者のゴーストか記憶のどれかが消えると分かる, then the 本仕様 shall 置き場を変える仕事を別の spec として `/kiro-discovery` で起票し、結果を開発者へ報告したうえで、初回の提出は止めずに進める（議題 5 の仮置き。本仕様では置き場を変えない）。
 
 ### Requirement 5: winget-pkgs への初回の提出
@@ -134,7 +135,7 @@ brief が要件討議へ回した議題は、下の仮置きで要件を書い�
 1. The 本仕様 shall 初回の提出の手順（開発者のアカウントに winget-pkgs のフォークを用意する・使う道具と入れ方・打つコマンド・トークンをリポジトリにも記録にも書かないこと）を、本仕様のフォルダの中の文書に書く（道具は `komac` か `wingetcreate` のどちらかを設計で選ぶ）。
 2. When 要件 3 が合格し、要件 4 の記録が済む, the 開発者 shall 自分の手で、自分のアカウントの winget-pkgs のフォークから microsoft/winget-pkgs へ、`Areka.Areka.Portable` の 1 つの版だけを含む PR を出す（AI は開発者のトークンを扱わず、提出の操作をしない）。
 3. The 初回の提出 shall 提出する版を着手のときに決めて記録に残し（議題 3 の仮置き＝`v0.0.2`）、その版の公開済みの Release の zip を指す。
-4. When PR を出す, the 開発者 shall PR の URL と、自動の検査の結果（付いた印と、赤のときはその文）を記録に残す。
+4. When PR を出す, the 本仕様 shall PR の URL と、自動の検査の結果（付いた印と、赤のときはその文）を記録に残す（PR の印と文は、AI が GitHub への読むだけの問い合わせで読んでよい。提出の操作とトークンは開発者の手のまま）。
 5. If 自動の検査が赤で、マニフェストの直しで消える, then the 開発者 shall 同じ PR の中で直し、直した内容を雛形へ写し戻して、要件 2.2 をやり直す。
 6. If 自動の検査の赤がマニフェストの直しでは消えない（`areka.exe` がウイルス対策の走査に掛かる・無人のインストールかアンインストールが通らない、など）, then the 本仕様 shall 原因を記録に残して開発者へ報告し、原因を直す仕事を別の spec として `/kiro-discovery` で起票する（本仕様では `crates/**`・`tools/**` を直さない）。
 7. The 本仕様 shall 「PR の自動の検査が通り、人の承認待ちになった」ことを完了の線とし、winget-pkgs への取り込みを待たない。自動の検査が通るまでは完了としない。
