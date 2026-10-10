@@ -268,6 +268,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "areka-mcp-bridge"
+version = "0.0.2"
+dependencies = [
+ "areka-mcp",
+ "futures",
+ "http",
+ "httparse",
+ "rmcp",
+ "serde_json",
+ "sse-stream",
+ "temp-path-kit",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "areka-nar"
 version = "0.0.2"
 dependencies = [

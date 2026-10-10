@@ -2,7 +2,7 @@
 
 > 部品・ファイル・型の名前は `design.md` が正本。ここは「何ができあがるか」を書く。テストは本番ファイルの兄弟ファイルに置き、一時の置き場はワークツリーの `target` の下だけ。机の本物の 9801〜9830 へつなぐテスト・開発者の SSP とその控えに触るテストは 0 本。`Cargo.lock` に無い外部のクレートは足さない（足さないと組めないと分かったら止めて報告）。
 
-- [ ] 1. areka 本体の側: 中継と共有する値を出し、help に Desktop の設定例を載せる
+- [x] 1. areka 本体の側: 中継と共有する値を出し、help に Desktop の設定例を載せる
 - [x] 1.1 中継と共有する定数を areka の MCP のクレートから外へ出す
   - 名乗り（`areka-mcp-server`）と受け口のパス（`/api/mcp/v1`）を、綴りを変えずにクレートの外から読めるようにする
   - 中継の exe のファイル名（`areka-mcp-bridge.exe`）の定数を足し、同じく外へ出す
@@ -28,7 +28,7 @@
   - _Requirements: 6.1_
 
 - [ ] 2. 中継のクレートの土台
-- [ ] 2.1 中継のクレートを足して建つ状態にする
+- [x] 2.1 中継のクレートを足して建つ状態にする
   - ワークスペースに新しいクレート（実行ファイル＋ライブラリ）を足す。crates.io へ出さない印と理由の行を付ける
   - 依存は設計の Allowed Dependencies のとおり（rmcp は既定機能を切って 3 つの機能だけ・tokio は中継に要る機能だけ・あとは `Cargo.lock` に既にある版）。`Cargo.lock` を作り直す
   - 設計の File Structure の全モジュールの空のファイルと兄弟テストの宣言、テスト用の依存（`target` の下の一時フォルダの道具・tokio のテスト用の機能。どれも `Cargo.lock` に既にある）を先に置く。3 以降のタスクはモジュールの一覧・`Cargo.toml`・`Cargo.lock` に触らない
@@ -200,3 +200,7 @@
 - 1.2: help の `command` は渡されたパスを `to_string_lossy` でそのまま載せる。1.3 で渡す `exe_location()` の結果が `\\?\` で始まる形にならないことを、受け口のテストか実機で 1 度見る（そのまま設定例に載るため）。
 - 1.3: `exe_location`（`boot_config.rs`）はリンクの先が `\?\` のとき起動した exe のパスへ戻すので、help の `command` に `\?\` が載るのは areka 自体を `\?\C:\…` の綴りで起こしたときだけ（補助 exe・記憶の置き場と同じ綴り＝D-14 のとおり・手当てなし）。実機確認（7）で help の `command` の綴りを一緒に見る。
 - 1.3: この木は CRLF。`cargo fmt --all` が書き直したファイルは LF になるので、整形をかけたら行末を見直す（`git ls-files --eol`）。
+- 2.1: 新しい外部のクレート 0 個の記録＝`Cargo.lock` の名前 273 → 274（増えたのは `areka-mcp-bridge` だけ）・`cargo tree`（全ターゲット）の名前 120 個のうち前の `Cargo.lock` に無いのも自身だけ・`Cargo.lock` の差は新しい塊 18 行。cargo は `Cargo.lock` を LF で書き直すので、動かしたら CRLF へ戻す。
+- 2.1: `tokio-util` は直接の依存にしない。`serve_directly`（3 引数）か `serve_directly_with_ct(.., Default::default())` で `CancellationToken` の名前を書かずに呼べる。待つ口は `RunningService::waiting()`。
+- 2.1: `serde` は直接の依存に無い。控えは呼び手で `serde_json::to_vec`／`from_slice` を rmcp の型に直に使う（総称の補助関数は書かない）。本番の `tokio::select!` は rmcp が `macros` を有効にしているので建つが、`futures` か `timeout` で書くほうが設計の機能の並びに素直。
+- 2.1: 偽の受け口は `lib.rs`（`cfg(test)`）と `tests/exe_test.rs` の両方から `#[path]` で読む。中の項目は `pub`、中継の項目を `crate::` で引かない（根が違う）。`real_receiver_test.rs` に要るなら 5.1 が自分のファイルに 1 行足す。`errors` のテストは 2.2 が `errors_tests.rs` と `errors.rs` 末尾の宣言を足す。
