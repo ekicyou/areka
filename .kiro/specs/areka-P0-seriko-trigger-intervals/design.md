@@ -166,6 +166,7 @@ crates/areka-seriko/src/
 ├── looper_talk_tests.rs             # 新規（実装で追加）: 一番上の talk を偽の刻み・偽の文字の到着で固定（要件 9.4）
 ├── looper_test_support.rs           # 新規（実装で追加）: 上の 2 本が共有する足場
 ├── parts.rs                         # 変更: Gate::Trigger・2 段の rebuild・部品の Armed・見えなくなった時計を捨てる
+├── parts_trigger.rs                 # 新規（実装で追加）: parts の子 part_trigger＝部品 1 つの 3 語を構えて判定する
 ├── parts_trigger_tests.rs           # 新規: 見える部品で始まる・見えない部品で始まらない・後から見えたときの起点（要件 9.5）
 ├── actor.rs                         # 変更: Cue の腕の先頭で loop_runtime.observe_cue(&cue) を 1 回呼ぶ
 ├── actor_talk_tests.rs              # 新規: 偽の文字の到着（Text/Choice/Clear）からの口パク・スコープ別・非表示（要件 9.4・9.6）
@@ -185,7 +186,7 @@ doc/ukadoc-coverage/
 - `crates/areka-parsers/src/shell/decode.rs` — `normalize_interval` に `"runonce"`・`"talk"`・`"periodic"` の腕。数値は `fields[2]` を `u32` として読み、1 以上なら型へ、欠落・0・非数値なら `Other(fields[1..].join(","))`。失敗しない・記録を出さない層のまま。
 - `crates/areka-seriko/src/table.rs` — `LoopTrigger::{Runonce, Periodic{period_ms: NonZeroU64}, Talk{every: NonZeroU32}}`。`from_world_and_films` の `match` に 3 腕（採録の `debug!`・要件 7.1）、`Other` の腕で先頭の語が `talk`／`periodic` なら `warn!`（要件 1.5・7.2）。`AnimationTable` に `has_triggers`（印）・`has_talk()`・`is_continuous()` の拡張。既存の檻 `only_random_and_bindrandom_are_recorded_others_debug_logged` の `Other("runonce")` を非駆動の語（`yen-e`）へ替える。
 - `crates/areka-seriko/src/looper.rs` — `LoopRuntime` に `armed: HashMap<(ActorKey, Slot), Armed>`・`epoch: TalkEpoch`・`feeds: HashMap<ActorKey, TalkFeed>`・`has_talk: bool`。`observe_cue`（新規・`actor.rs` から）。`on_surface_changed` で `armed` を捨てる。`refresh`／`on_tick` で構える・判定する。(3) の門に `top_has_trigger`。`talk` の再生の終わり・停止の記録を `debug!` に下げる（他は不変）。`forget_slot_kind` で `armed` と `has_talk` を更新。
-- `crates/areka-seriko/src/parts.rs` — `Gate::Trigger`、入れ物に `BTreeMap<PartKey, Armed>`、`rebuild` の 2 段目（`arm` 閉包）、`advance`／`refresh` に文字の窓の引数、`drop_unseen_finite` を「回数つきの `always`＋3 語」へ広げる（`is_transient`）、`clear`／窓の閉じで `Armed` を捨てる／隠す。
+- `crates/areka-seriko/src/parts.rs` — `Gate::Trigger`、入れ物に `BTreeMap<PartKey, Armed>`、`rebuild` の 2 段目（`step(Phase, ..)` の閉包）、`advance` に文字の窓の引数（`refresh` は不変）、`drop_unseen_finite` を「回数つきの `always`＋3 語」へ広げる（`drop_unseen_transient`）、`clear`／窓の閉じ／面なしで `Armed` を捨てる／隠す（`drop_hidden` を新設）。実装で兄弟の本番ファイル `parts_trigger.rs` を足した。
 - `crates/areka-seriko/src/actor.rs` — `SerikoMsg::Cue(cue)` を取り出した直後（`cue_target_of` の `match` の前）に `loop_runtime.observe_cue(&cue)` を 1 回。他は不変（`Text` などの `debug!` の腕はそのまま）。
 - `crates/areka-seriko/src/lib.rs` — `mod trigger; mod talk;`。
 - `doc/ukadoc-coverage/ledger/assets.toml` — 要件 10 のとおり。
@@ -260,16 +261,16 @@ flowchart TD
     Visible --> Eval[未評価の部品を評価 1 段目: 抽選と always は今まで どおり, 3 語は時計を読むだけ]
     Eval --> More{見える部品が増えた}
     More -- yes --> Visible
-    More -- no --> Prune[見えない部品のコマを外す]
+    More -- no --> Arm[2 段目 表に 3 語が在るときだけ: まだ判定していない見える部品の 3 語を poll, 始まれば Playing を作りコマを書く]
+    Arm --> Started{再生が始まった}
+    Started -- yes --> Visible
+    Started -- no --> Prune[見えない部品のコマを外す]
     Prune --> Films[動く絵の子を評価]
-    Films --> Arm[2 段目: 見える部品の 3 語を poll, 始まれば Playing を作りコマを書く]
-    Arm --> Changed{コマが増えた}
-    Changed -- yes --> Visible
-    Changed -- no --> Drop[見えない部品の 3 語の時計と Armed を捨てる]
+    Films --> Drop[見えない部品の 3 語の時計と Armed を捨てる]
 ```
 
-- 2 段目で始まった再生のコマが新しい子を見せると 1 段目へ戻り、その子も同じ刻みで評価する（1 刻み遅らせない）。評価済みの集合と `Armed` の印は増えるだけなので止まる。2 段目は同じ刻みのうちに同じ animation を 2 度 `poll` しない（評価済みの集合で止める）。`runonce` は印・`periodic` は `last_lap` で 2 度目も同じ答えだが、`talk` は開始の時刻にもう終えている animation（待ち 0 のコマ 1 枚だけなど）だと 2 度目も「鳴る」と答えるため。
-- 1 段目で評価したが最終的に見えなかった部品は、`Armed` を持たず `poll` も受けないので、再生が始まらない（要件 5.6）。見えていた部品が見えなくなったら時計と `Armed` を捨て、次に見えた刻みで `since = その刻み` の新しい `Armed` を構える（要件 5.9）。
+- 2 段目で始まった再生のコマが新しい子を見せると 1 段目へ戻り、その子も同じ刻みで評価する（1 刻み遅らせない）。1 段目の評価済みの集合と、2 段目の判定済みの集合（`judged`）は増えるだけなので止まる。2 段目は同じ刻みのうちに同じ部品を 2 度判定しない（`judged`）。見えない部品のコマ外しと動く絵の子の評価は外側の輪の後（輪の中で外すと、2 段目のコマで再び見えた部品のコマを失う。3 語の無い表では今までと同じ順）。`runonce` は印・`periodic` は `last_lap` で 2 度目も同じ答えだが、`talk` は開始の時刻にもう終えている animation（待ち 0 のコマ 1 枚だけなど）だと 2 度目も「鳴る」と答えるため。
+- 1 段目で評価したが最終的に見えなかった部品は、`Armed` を持たず `poll` も受けないので、再生が始まらない（要件 5.6）。見えていた部品が見えなくなったら時計と `Armed` を捨て、次に見えた刻みで `since = その刻み` の新しい `Armed` を構える（要件 5.9）。外側の面が替わっても見え続けた部品は構え直さない（`runonce` は鳴り直さず `periodic` は元の起点で続く＝部品の「面に切り替わった瞬間」は見えるようになった瞬間だけ・areka の裁量）。部品の `talk` は slot の窓をそのまま借りるので、部品が見えた刻みの窓に区切りが入っていればその刻みで鳴る（開始の時刻 t_k は部品の起点より前になりうる・1 刻み未満）。
 
 ## Requirements Traceability
 
@@ -638,25 +639,33 @@ enum Gate {
 }
 
 impl PartClocks {
-    pub(crate) fn advance(&mut self, .., talk: Option<&TalkWindow<'_>>, ..);  // 既存の引数に窓を足す
-    pub(crate) fn refresh(&mut self, ..);                                      // 署名は不変
+    pub(crate) fn advance(&mut self, .., open: bool, talk: Option<&TalkWindow<'_>>, rng, pattern);  // 既存の引数に窓を足す
+    pub(crate) fn refresh(&mut self, ..);                                      // 署名は不変（窓なし・`runonce` だけ）
+    pub(crate) fn drop_finite(&mut self, ..);   // 窓の新しい出番: 3 語の時計を捨て、引き金の状態は隠す
+    pub(crate) fn drop_hidden(&mut self, ..);   // 面が無い（`\s[-1]`・`\b[-1]`）: 3 語の時計も引き金の状態も捨てる
 }
 
-/// `rebuild` は 2 段: `evaluate`（1 段目・既存）と `arm`（2 段目・見える部品の引き金）。
-fn rebuild(.., evaluate: impl FnMut(PartKey, &mut PatternState), arm: impl FnMut(u32, &mut PatternState) -> bool);
+/// `rebuild` は 2 段を閉包 1 本で回す: `Phase::Evaluate`（1 段目・既存）と `Phase::Trigger`（2 段目・見える部品の引き金）。
+/// 閉包の戻り値は「再生が始まった」（`Trigger` のときだけ意味を持つ）。
+enum Phase { Evaluate, Trigger }
+fn rebuild(.., step: impl FnMut(Phase, PartKey, &mut PatternState) -> bool);
+
+// parts_trigger.rs（子モジュール part_trigger）: 部品 1 つの 3 語を構えて判定する。
+fn fire_part_triggers<'a>(clocks, armed, order, anims: &'a [LoopAnimation], scope, slot, part: PartKey, at_ms: u64,
+    open: bool, was_playing: &[(ClockKey, u64)], talk: Option<&TalkWindow<'_>>, runonce_only: bool) -> Vec<&'a LoopAnimation>;
 ```
 
-- 1 段目 `evaluate` の `Gate::Trigger`: 抽選の塊（`crossed && open && !playing && should_fire`）を通らず、`look` の結果だけを書く（`Playing`→コマ・`Finished`→`Residual`・`Stopped`→時計を消す＝今の抽選の anim と同じ後半）。
-- 2 段目 `arm(part)`: その部品の animation の列に `Runonce`／`Periodic`／`Talk` が 1 本も無ければ何もしない（`false`・`armed` を作らない）。在れば、入れ物の `armed[PartKey::Surface(part)]` が無ければ `Armed::arm(Some(now_ms), open, None)` で構える（`debug!`）。在れば `open` を同期。その部品の 3 語の anim を番号の昇順に `poll(anim, now, playing_at, talk)`（`playing_at(t)`＝`Playing` が在り、その時刻の `look` がまだ終えていない） し、`Some(at)` なら `clocks.insert(key, Playing { started_at_ms: at })`・`look` でコマを書く・記録（`runonce`／`periodic` は `info!`・`talk` は `debug!`）。コマを 1 つでも書いたら `true`。
-- `rebuild` の外側の輪: 1 段目の輪 → 見えない部品のコマを外す → 動く絵の子 → `table.has_triggers()` が真のときだけ `visible` の各部品に `arm`（偽なら 2 段目を呼ばず輪は 1 回で終わる＝今の形） → `true` が 1 つでもあれば 1 段目の輪へ戻る（`visible_parts` を引き直し、新しく見えた部品だけ `evaluate`）→ 無ければ終わり。
+- 1 段目 `evaluate` の `Gate::Trigger`: 抽選の塊（`crossed && open && !playing && should_fire`）を通らず、在る時計を進めるだけ（`Playing`→コマ・`Finished`→`Residual`・`Stopped`→時計を消す＝今の抽選の anim と同じ後半。この後半は文言そのままで関数 `progress` に切り出し、1 段目と 2 段目の両方が通る）。進める前に、再生中だった時計の（鍵, 開始の時刻）を `was_playing` に控える。`talk` の末尾残留・停止の記録は `progress` の中で `debug!` に下げる（文言は同じ・要件 7.3。水準の切り替えは `looper.rs` と共有のマクロ `log_play_end!`）。
+- 2 段目 `arm(part)`: その部品の animation の列に `Runonce`／`Periodic`／`Talk` が 1 本も無ければ何もしない（`false`・`armed` を作らない）。在れば、入れ物の `armed[PartKey::Surface(part)]` が無ければ `Armed::arm(Some(now_ms), open, None)` で構える（`debug!`）。在れば `open` を同期。その部品の 3 語の anim を番号の昇順に `poll(anim, now, playing_at, talk)`（`playing_at(t)`＝この評価の 1 段目が進める前に再生中だった時計（`was_playing`）が在り、その時刻の `look` がまだ終えていない。部品は 1 段目が先に進行するので、遅れた刻みでは境目に再生中だった時計がもう片付いているため）し、`Some(at)` なら `clocks.insert(key, Playing { started_at_ms: at })`・`progress` で今までの経過分のコマを書く（コマがまだ無ければ＝頭の待ちの前なら、1 段目が書いた前のコマを外す `unwrite`）・記録（`runonce`／`periodic` は `info!`・`talk` は `debug!`・部品の欄つき）。再生が 1 本でも始まったら `true`。
+- `rebuild` の外側の輪: 1 段目の輪 → `table.has_triggers()` が真のときだけ、`visible` のうちまだ判定していない部品に 2 段目（偽なら 2 段目を呼ばず輪は 1 回で終わる＝今の形） → 再生が 1 本でも始まれば 1 段目の輪へ戻る（`visible_parts` を引き直し、新しく見えた部品だけ評価）→ 無ければ輪を抜け、見えない部品のコマを外す（`retain_cells`）→ 動く絵の子。
 - `refresh`（切り替え直後・出来事の時刻）: 2 段目は `create_at`（開いていれば `at_ms`）で構え、`Runonce` だけが鳴る（`periodic` は周 0・`talk` は窓なし）。
-- 捨てる: `drop_unseen_finite` を `drop_unseen_transient` に広げ、見えない部品の「回数つきの `always`」と「3 語」の時計を捨て、見えない部品の `armed` も捨てる（要件 5.6・5.9）。`drop_finite_if_closed`（窓が閉じた）は 3 語の時計を捨て、`armed` は `hide`（`runonce` の印は残す）。`clear(slot)` は `armed` も捨てる。`drop_finite`（面が隠れた・`\s[-1]`）は 3 語の時計と `armed` を捨てる。
+- 捨てる: `drop_unseen_finite` を `drop_unseen_transient` に広げ、見えない部品の「回数つきの `always`」と「3 語」の時計を捨て、見えない部品の `armed` も捨てる（要件 5.6・5.9）。`close`（窓が閉じた）は 3 語の時計を捨て、`armed` は `hide`（`runonce` の印は残す。一番上は閉じても再生中のものは最後まで進むので、ここは揃っていない＝閉じている間は絵が出ない）。`clear(slot)` は `armed` も捨てる。`drop_finite`（窓の新しい出番・`actor.rs` の `on_stage` から）は `close` と同じ（隠すだけ＝開き直しで `runonce` は鳴らない・要件 5.5）。面が無い（`\s[-1]`・`\b[-1]`＝`LoopRuntime::refresh` の面なしの枝）は新しい `drop_hidden` で 3 語の時計と `armed` を捨てる（戻ると `runonce` がもう 1 回・要件 2.6）。走っている 3 語の時計を捨てたときは `debug!`「seriko: part 引き金の時計を捨てた」を時計 1 本につき 1 回（回数つきの `always` と同じ扱い）。
 - 乱数（要件 8.2）: 1 段目は今の順・今の条件のまま（3 語の anim は `should_fire` を呼ばない）。2 段目は乱数を読まない。
 
 **Implementation Notes**
-- Integration: `parts.rs` は 625 行。足すのは `Gate::Trigger` の腕・`arm` の閉包・外側の輪・`armed` の入れ物・捨てる判定で 110 行ほど。
+- Integration: 実装では `parts.rs` が 893 行になり、部品 1 つの 3 語を構えて判定する `fire_part_triggers` を兄弟の本番ファイル `parts_trigger.rs`（`parts` の子モジュール `part_trigger`・127 行）へ出した（新しい記録の target は `areka_seriko::parts::part_trigger`。既存の記録の target は不変）。入れ物は `Container { clocks, armed: BTreeMap<PartKey, Armed> }`。`table.rs` に読み口 `has_triggers()`。
 - Validation: `parts_trigger_tests.rs`＝⑴ 外側の面に置かれた見える部品の `runonce` が切り替えの刻みに 1 回 ⑵ 着せ替えの辺の先（`binds` に無い）の部品は 1 段目で評価されても `armed` を持たず再生が始まらない ⑶ 外側のコマの変化で後から見えた部品は見えた刻みが起点（`periodic` の周 0） ⑷ 見えなくなったら時計と `armed` が消え、再び見えたら頭から ⑸ 部品の `talk` が slot の窓で鳴る ⑹ 2 段目のコマで見えた子の部品が同じ刻みで評価される ⑺ 乱数の消費回数が 3 語の有無で変わらない（`RngProbe`）。
-- Risks: 2 段目で始まったコマが見せる子が、さらに 3 語を持つ場合は、戻った 1 段目では読むだけで、次の外側の輪の 2 段目で構える（同じ刻み）。輪は `evaluated`・`armed` が増えるだけなので止まる。
+- Risks: 2 段目で始まったコマが見せる子が、さらに 3 語を持つ場合は、戻った 1 段目では読むだけで、次の外側の輪の 2 段目で構える（同じ刻み）。輪は `evaluated`・`judged` が増えるだけなので止まる。
 
 ### cue の受け口（`areka-seriko/src/actor.rs`）
 

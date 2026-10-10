@@ -240,7 +240,7 @@ fn any_talk(config: &SerikoLoopConfig) -> bool {
 }
 
 /// 再生の終わりの記録。`talk` の再生は文字の到着ごとに起きうるので `debug!`、ほかは `info!`
-/// （文言は同じ・spec: areka-P0-seriko-trigger-intervals 要件 7.3）。
+/// （文言は同じ・spec: areka-P0-seriko-trigger-intervals 要件 7.3）。部品の進行も同じ決まりで使う。
 macro_rules! log_play_end {
     ($talk:expr, $($arg:tt)+) => {
         if $talk {
@@ -250,6 +250,7 @@ macro_rules! log_play_end {
         }
     };
 }
+pub(crate) use log_play_end;
 
 /// 一番上の再生 1 本（`always` 以外）の経過 `elapsed` のコマを欄へ置く。終えていれば（負の番号で
 /// 止まった・末尾に着いた）再生を捨てて終わりを記録する。刻みの進行と、引き金が終えた再生を
@@ -686,7 +687,7 @@ impl LoopRuntime {
             }
 
             // 部品: 一番上の進行を済ませた絵で部品の欄を作り直す（一番上の抽選は全スコープぶん済み）。
-            // 部品の `talk` はこの面の文字の窓 `window` を借りる（渡すのはタスク 5.2）。
+            // 部品の `talk` はこの面の文字の窓 `window` を借りる（部品は文字の数えを持たない）。
             if with_parts {
                 parts.advance(
                     scope,
@@ -697,6 +698,7 @@ impl LoopRuntime {
                     now_ms,
                     crossed,
                     *open,
+                    window.as_ref(),
                     rng,
                     &mut new_pattern,
                 );

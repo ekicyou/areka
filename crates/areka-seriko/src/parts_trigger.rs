@@ -13,7 +13,7 @@ use areka_sakura::ActorKey;
 use super::{ClockKey, Label, Look, PartAnim, is_trigger, look, sort_by_id};
 use crate::state::Slot;
 use crate::table::{LoopAnimation, LoopTrigger};
-use crate::trigger::Armed;
+use crate::trigger::{Armed, TalkWindow};
 
 /// 2 段目（見えると決まった部品 1 つ）: `runonce`・`periodic`・`talk` を持つ部品なら引き金の状態を
 /// 持たせ（無ければ `at_ms` を見え始めの時刻として構える・在れば窓の開け閉めを写す）、3 語の
@@ -27,9 +27,15 @@ use crate::trigger::Armed;
 /// 末尾）でなければ再生中。1 段目がこの刻みで片付けた再生も、境目の時刻に再生中だったならその周を
 /// 飛ばし、境目の時刻に終えていたなら鳴らす（長さが周期ちょうどの animation も毎周鳴る）。
 ///
+/// `talk` はこの面の文字の窓（一番上の配線が刻み 1 回につき 1 つ作る）。部品は文字の数えを持たず、
+/// 窓をそのまま判定に渡す＝面の数えを借りる: 後から見えた部品も数え直さず、見えなかった間に越えた
+/// 区切りは窓に入らないので後から鳴らない。開始の時刻は区切りの文字が現れた時刻（要件 4.1・4.5・
+/// 5.6）。窓が無い面（表に `talk` が無い・窓が閉じている）と出来事の直後の評価では `talk` は鳴らない。
+/// 数えを進めるのは窓の持ち主（刻みの最後）で、ここでは進めない。
+///
 /// `runonce_only` は出来事の直後の評価（`periodic`・`talk` は刻みが鳴らす）。乱数は引かない。始めない
-/// 経路（隠れている・再生中・境目の前）は記録しない（要件 5.7・7.5）。部品は文字の数えを持たず、
-/// `talk` は面の文字の窓を借りる（渡すのはタスク 5.2。窓が無い間は鳴らない）。
+/// 経路（隠れている・再生中・境目の前）は記録しない（要件 5.7・7.5）。`talk` の開始は文字の到着ごとに
+/// 起きうるので `debug!` に留める（要件 7.3）。
 #[allow(clippy::too_many_arguments)]
 pub(super) fn fire_part_triggers<'a>(
     clocks: &mut BTreeMap<ClockKey, PartAnim>,
@@ -42,6 +48,7 @@ pub(super) fn fire_part_triggers<'a>(
     at_ms: u64,
     open: bool,
     was_playing: &[(ClockKey, u64)],
+    talk: Option<&TalkWindow<'_>>,
     runonce_only: bool,
 ) -> Vec<&'a LoopAnimation> {
     let mut started = Vec::new();
@@ -83,7 +90,7 @@ pub(super) fn fire_part_triggers<'a>(
         let playing_at = |at| {
             before.is_some() && matches!(look(anim, before, at), Look::Nothing | Look::Frame(_))
         };
-        let Some(started_at_ms) = state.poll(anim, at_ms, playing_at, None) else {
+        let Some(started_at_ms) = state.poll(anim, at_ms, playing_at, talk) else {
             continue;
         };
         clocks.insert(key, PartAnim::Playing { started_at_ms });

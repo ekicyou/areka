@@ -23,14 +23,15 @@
 //! 鳴った再生のコマが別の部品を見せたら 1 段目へ戻り、同じ刻みのうちに子のコマまで出す。見えなく
 //! なった部品の 3 語の時計と引き金の状態は捨てる（再び見えた刻みが新しい起点で、途中のコマから
 //! 始まらない）。窓が閉じたら 3 語の時計を捨てて引き金の状態を隠す。表に 3 語が無ければ 2 段目は
-//! 呼ばず、引き金の状態は生まれない。
+//! 呼ばず、引き金の状態は生まれない。部品は文字の数えを持たない: `talk` は、刻みが渡す面の文字の窓を
+//! 一番上と同じ判定に掛けて鳴る（要件 4.1。後から見えた部品も数え直さない）。
 //!
-//! 抽選の時計を動かすのは刻みの [`PartClocks::advance`] だけ。面の切り替え・着せ替えの変化の直後は
-//! [`PartClocks::refresh`] が抽選せずに今のコマを求める（要件 5.6）。`refresh` が書き換えるのは
-//! `always` の時計（出来事の時刻で生まれる・回数つきの見えなくなったものを捨てる）と、3 語の時計
-//! （見えた部品の `runonce` が出来事の時刻で始まる・見えなくなった部品のものを捨てる）だけ。時計は
-//! [`PartClocks::clear`]（その面の種類の表の差し替え）で捨てる（要件 5.8）。抽選の発火・停止・末尾での
-//! 保持の記録は `advance` だけが出す。`always` の時計の誕生と破棄は、生まれた・捨てたところで出す。
+//! 抽選の時計を動かすのは刻み（[`PartClocks::advance`]・以下 `advance`）だけ。面の切り替え・
+//! 着せ替えの変化の直後は [`PartClocks::refresh`] が抽選せずに今のコマを求める（要件 5.6）。`refresh` が
+//! 書き換えるのは `always` の時計（出来事の時刻で生まれる・回数つきの見えなくなったものを捨てる）と、
+//! 3 語の時計（見えた部品の `runonce` が出来事の時刻で始まる・見えなくなった部品のものを捨てる）だけ。
+//! 時計は [`PartClocks::clear`]（その面の種類の表の差し替え）で捨てる（要件 5.8）。抽選の発火・停止・
+//! 末尾での保持の記録は `advance` だけが出す。`always` の時計の誕生と破棄は、生まれた・捨てたところで出す。
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::num::{NonZeroU32, NonZeroU64};
@@ -38,13 +39,13 @@ use std::num::{NonZeroU32, NonZeroU64};
 use areka_emo_compose::{BindSet, Cell, FilmId, PartKey, PatternFrame, PatternState};
 use areka_sakura::ActorKey;
 
-use crate::looper::pattern_frame;
+use crate::looper::{log_play_end, pattern_frame};
 use crate::state::Slot;
 use crate::table::{AnimationTable, LoopAnimation, LoopTrigger};
 use crate::timeline::{
     AlwaysView, FrameStatus, LoopRng, always_at, current_frame_index, frame_at, should_fire,
 };
-use crate::trigger::Armed;
+use crate::trigger::{Armed, TalkWindow};
 
 // 部品の引き金の配線（2 段目: 構える・判定して時計を作る）。
 #[path = "parts_trigger.rs"]
@@ -438,6 +439,9 @@ fn progress(
 ) -> bool {
     let key = (part, anim.id);
     let label = Label(part);
+    // `talk` の再生は文字の到着ごとに起きうるので、終わりの記録は `debug!`（ほかは `info!`・文言は
+    // 同じ・spec: areka-P0-seriko-trigger-intervals 要件 7.3）。
+    let is_talk = matches!(anim.trigger, LoopTrigger::Talk { .. });
     // 進行: 開始からの経過で今のコマを決める（見えなかった間も進んでいた扱い・要件 5.7）。
     match look(anim, clocks.get(&key).copied(), now_ms) {
         Look::Nothing => false,
@@ -447,7 +451,8 @@ fn progress(
         }
         Look::Finished(i) => {
             clocks.insert(key, PartAnim::Residual { frame_index: i });
-            tracing::info!(
+            log_play_end!(
+                is_talk,
                 scope = scope.as_str(),
                 part = %label,
                 animation_id = anim.id,
@@ -468,7 +473,8 @@ fn progress(
                 );
             }
             clocks.remove(&key);
-            tracing::info!(
+            log_play_end!(
+                is_talk,
                 scope = scope.as_str(),
                 part = %label,
                 animation_id = anim.id,
@@ -499,6 +505,12 @@ impl PartClocks {
     /// `pattern` の部品の欄を今の絵の分で作り直す。`open` が偽（バルーンの窓が閉じている）なら
     /// 時計を作らず（抽選もしない）、回数つきの時計を全部捨てる＝今ある終わりなしの時計だけが進む
     /// （spec: areka-P0-animated-image-playback 要件 6.1）。
+    ///
+    /// `talk` はこの面の文字の窓（一番上の配線が刻み 1 回につき 1 つ作る。表に `talk` が無い面・
+    /// 窓が閉じている面では `None`）。見えると決まった部品の `talk` は、この窓を一番上と同じ判定に
+    /// 掛けて鳴る＝部品は文字の数えを持たず、面の数えを借りる（後から見えた部品も数え直さない・
+    /// 見えなかった間に越えた区切りは後から鳴らない・spec: areka-P0-seriko-trigger-intervals
+    /// 要件 4.1・5.4・5.6）。数えを進めるのは呼び手（全部の面が窓を読み終えた刻みの最後）。
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn advance(
         &mut self,
@@ -510,6 +522,7 @@ impl PartClocks {
         now_ms: u64,
         crossed: bool,
         open: bool,
+        talk: Option<&TalkWindow<'_>>,
         rng: &mut LoopRng,
         pattern: &mut PatternState,
     ) {
@@ -551,6 +564,7 @@ impl PartClocks {
                     now_ms,
                     open,
                     &was_playing,
+                    talk,
                     false,
                 );
                 for anim in &started {
@@ -705,8 +719,9 @@ impl PartClocks {
                 let Some(at) = at_ms else {
                     return false;
                 };
-                // 出来事の直後に鳴るのは `runonce` だけ。鳴るのは構えた評価か、閉じた窓で構えて最初に
-                // 開いた評価なので、前の再生は無い（閉じている間の 3 語の時計は捨ててある）。
+                // 出来事の直後に鳴るのは `runonce` だけ（文字の窓は渡さない）。鳴るのは構えた評価か、
+                // 閉じた窓で構えて最初に開いた評価なので、前の再生は無い（閉じている間の 3 語の時計は
+                // 捨ててある）。
                 let started = fire_part_triggers(
                     clocks,
                     armed,
@@ -718,6 +733,7 @@ impl PartClocks {
                     at,
                     open,
                     &[],
+                    None,
                     true,
                 );
                 for anim in &started {
