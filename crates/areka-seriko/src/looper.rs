@@ -361,13 +361,6 @@ impl LoopRuntime {
     /// 現れなかった文字を捨てる。改行・待ち・`\!` のコマンドは数えない。「今」は時計、無ければ直前の
     /// 刻みの時刻で、どちらも無ければ写さない（次の cue で起点ができる）。記録は出さない（文字ごとの
     /// 記録を増やさない・要件 7.3）。
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "呼ぶのは cue の受け口の配線（タスク 6.1）を入れるとき"
-        )
-    )]
     pub(crate) fn observe_cue(&mut self, cue: &TalkCue) {
         if !self.has_talk {
             return;

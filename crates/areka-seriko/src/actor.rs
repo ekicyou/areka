@@ -460,6 +460,10 @@ fn handle_message<O: SurfaceOutput>(
         SerikoMsg::Cue(cue) => cue,
     };
 
+    // 文字の時刻の写しへ、種類で振り分ける前に 1 回だけ渡す（文字でない cue も起点の見積もりを動かす。
+    // 表に `talk` が無ければ真偽 1 つで戻る・spec: areka-P0-seriko-trigger-intervals 要件 4.10・6.4・8.1）。
+    loop_runtime.observe_cue(&cue);
+
     // 分類（DD1/D4/6.2）: Shell 系のみ本アクターが action する。broadcast（D4）で seriko は
     // 全 cue を受け取るため、担当外（非 Shell）・純粋 Wait の受信は「異常」でなく「正常な担当外
     // 受信」——action を無視しつつ duration を honor（seriko は自前 reveal/timeline を持たず
@@ -761,6 +765,9 @@ mod replace_tests;
 #[cfg(test)]
 #[path = "actor_stage_tests.rs"]
 mod stage_tests;
+#[cfg(test)]
+#[path = "actor_talk_tests.rs"]
+mod talk_tests;
 #[cfg(test)]
 #[path = "actor_test_support.rs"]
 mod test_support;

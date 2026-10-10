@@ -81,8 +81,8 @@
   - _Depends: 4.2_
   - _Requirements: 4.1, 5.4, 5.6, 9.5_
 
-- [ ] 6. 統合: 台詞の再生から届く cue を口パクへ繋ぐ
-- [ ] 6.1 seriko の受け口で、届いた cue を文字の写しへ 1 か所で渡す
+- [x] 6. 統合: 台詞の再生から届く cue を口パクへ繋ぐ
+- [x] 6.1 seriko の受け口で、届いた cue を文字の写しへ 1 か所で渡す
   - cue を取り出した直後に、種類を問わず 1 回だけ文字の写しの口へ渡す（今の面の切り替えなどの扱いと記録はそのまま）
   - 「今」は seriko の時計から読む（新しい時計も新しい知らせの口も作らない）
   - 兄弟のテスト（本物のアクター＋偽の時計＋偽の文字の到着）で、文字の到着で口のコマが出ること・`\0` の文字で `\1` の口が動かないこと・非表示のスコープで動かないこと・選択肢の文字が数えられること・改行／待ち／`\!` が数えられないこと・`\s[-1]` から戻ると `runonce` が鳴ることが緑になる。注入した時刻は観測の後に進める
@@ -166,3 +166,5 @@
 - 5.2: 9.1 の「書き替えなし」の例外がもう 1 つ — `PartClocks::advance` に窓の引数を足したので、既存の檻 4 ファイル 8 か所（`parts_tests.rs` 5・`parts_always_tests.rs` 1・`parts_film_tests.rs` 1・`looper_always_tests.rs` 1）に `None,` を 1 行ずつ足した（期待値・入力は不変）。5.1 の `parts_tests.rs` の補助 8 本の `pub(super)` 化、4.1-fix の `trigger_tests.rs` の `poll` の引数の機械的な差し替えも同じ類。
 - 5.2 → 9.2: 記録の検索語「talk を鳴らした」は部品の文言「part trigger talk を鳴らした」にも当たる。`talk` の「part 停止」「part 末尾残留」は `debug!` なので、実機は `areka_seriko` を `debug` で開ける。
 - 5.2: 部品が見えた刻みの窓に区切りが入っていると、その刻みで鳴る（開始の時刻 t_k は部品の起点より前になりうる・1 刻み未満。`runonce`／`periodic` は起点より前に始まらないので、ここだけ非対称・設計に 1 文足した・この場面を固定する檻は無い）。行数 — `parts.rs` 893・`parts_trigger.rs` 127・`looper.rs` 931・`looper_talk_tests.rs` 893・`parts_trigger_tests.rs` 852。
+- 6.1: `actor.rs` の `handle_message` が cue を取り出した直後（種類の `match` の前）に `loop_runtime.observe_cue(&cue)` を 1 回。本番の配送は端から端まで繋がっている（`areka-sakura` の `drive.rs` が全 sink を選別なしで登録・`emo2_boot/mod.rs` は素の `SerikoSink` を入れている・時計は `spawn_seriko_clocked(.., Some(tick_count_ms))` で常に在る＝`emo2_boot` の変更は不要）。seriko に本 spec の `expect(dead_code)` は残っていない。行数 — `actor.rs` 773・`looper.rs` 924・`actor_talk_tests.rs` 353。
+- 6.1: 「非表示・`talk` の無い表で状態が増えない」の欄の水準の固定は `looper_talk_tests.rs`（`hidden_scope_keeps_no_state_and_counts_from_its_return`・`cues_change_nothing_when_the_table_has_no_talk`）に在り、アクターの檻は指令と記録の件数で見る。`cargo test -p areka --lib emo2_boot` は 6.1 では回していない（9.1 で確かめる）。
