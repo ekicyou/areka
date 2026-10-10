@@ -396,7 +396,7 @@ pub struct AnchorFinding { pub index: usize, pub issue: AnchorIssue }
 pub fn pair_anchors<'a>(instructions: impl IntoIterator<Item = &'a Instruction>) -> Vec<AnchorFinding>;
 ```
 
-- 事後条件: 出力は `index` 昇順。同じ位置に 2 件は付かない。失敗経路なし。
+- 事後条件: 出力は `index` 昇順（同じ位置の中は台本の出来事の順）。同じ位置に同じ種類は重ならない。同じ位置に 2 件付くのは 1 つの場合だけ — 重なりの開きが閉じられないまま終わる（`\_a[x]あ\_a[y]い`）とき、その開きの位置に `Reopened`・`Unclosed` の順で 2 件（必ず列の末尾・`Unclosed` は高々 1 件）。要件 1.8 と 1.9 がそれぞれ警告 1 件を求めるため（実装 2.1 で判明・当初の「同じ位置に 2 件は付かない」を改めた）。位置で引く側（compile・`check_script_judge`）は当該位置の全件を見る。失敗経路なし。
 - compile は結果を位置で引き（`Reopened` の位置で `AnchorEnd` を先に発行・`StrayClose` の位置は発行しない・`Unclosed` は走査の終わりに `AnchorEnd` を発行）、各 1 件を `warn!` する。`check_script_judge` は同じ結果を `reads[index].span` に付けて診断にする。
 
 #### compile の腕
