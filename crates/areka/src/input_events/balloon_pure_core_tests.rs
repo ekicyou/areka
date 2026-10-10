@@ -11,6 +11,7 @@ use super::*;
 // -------------------------------------------------------------------------
 
 use areka_emo_text::actor::HitRectPx;
+use areka_emo_text::state::SpanKind;
 
 /// 内側包含（R1.1）: 矩形の内部点はその行 index を返す。
 #[test]
@@ -166,6 +167,7 @@ fn rows_lifted_by_real_k() -> Vec<ChoiceHitRow> {
                 },
             };
             ChoiceHitRow {
+                kind: SpanKind::Choice,
                 ordinal,
                 id: format!("q{ordinal}"),
                 label: format!("label{ordinal}"),
@@ -362,6 +364,7 @@ fn row_with_refs(
     references: Vec<String>,
 ) -> ChoiceHitRow {
     ChoiceHitRow {
+        kind: SpanKind::Choice,
         ordinal,
         id: format!("q{ordinal}"),
         label: format!("label{ordinal}"),

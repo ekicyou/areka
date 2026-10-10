@@ -1,7 +1,7 @@
 use super::*;
 use crate::layout::{FixedMetrics, LineRect, PositionedGlyph, PositionedLine};
 use crate::look::StyleId;
-use crate::state::ChoiceSpan;
+use crate::state::{ChoiceSpan, SpanKind};
 
 /// 行内軸位置 `positions` の各グリフ（送り幅 `adv`）を持つ横書き行を作る
 /// （行矩形は本注釈で未使用ゆえ最小値を入れる）。
@@ -29,6 +29,7 @@ fn line(positions: &[(f32, f32)]) -> PositionedLine {
 /// glyph_range だけを指定した ChoiceSpan（id/label/references は注釈非関与ゆえ最小値）。
 fn span(ordinal: usize, range: core::ops::Range<usize>) -> ChoiceSpan {
     ChoiceSpan {
+        kind: SpanKind::Choice,
         ordinal,
         id: String::new(),
         label: String::new(),

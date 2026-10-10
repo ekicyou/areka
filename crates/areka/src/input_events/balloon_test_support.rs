@@ -10,7 +10,7 @@ use areka_emo_compose::{BindSet, EmoWorld};
 use areka_emo_present::{EmoPresenter, PresentCommand};
 use areka_emo_text::actor::HitRectPx;
 use areka_emo_text::actor::TextLayerRuntime;
-use areka_emo_text::state::TextLayerConfig;
+use areka_emo_text::state::{SpanKind, TextLayerConfig};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver};
 use bevy_ecs::hierarchy::ChildOf;
@@ -30,6 +30,7 @@ use crate::placement::spawn::BalloonWindowMarker;
 /// rect 以外のフィールドは 3.1 の判定に無関係——不透明転写の placeholder。
 pub(crate) fn row(ordinal: usize, left: f32, top: f32, right: f32, bottom: f32) -> ChoiceHitRow {
     ChoiceHitRow {
+        kind: SpanKind::Choice,
         ordinal,
         id: format!("q{ordinal}"),
         label: format!("label{ordinal}"),

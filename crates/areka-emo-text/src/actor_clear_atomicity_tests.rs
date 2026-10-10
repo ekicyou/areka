@@ -7,7 +7,8 @@ use super::test_support::{
     choice_cue, com_world, cue, geo_model, opaque_count, spawn_reserved_slot,
 };
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
-use crate::state::TextLayerConfig;
+use crate::place::PlaceKey;
+use crate::state::{ChoiceSpan, SpanKind, TextLayerConfig};
 
 // ══ task 8.3: Clear/ClearAll の原子的無効化（hover リセット＋ヒット行スナップショット無効化・R5.1/5.2/5.4） ══
 
@@ -393,4 +394,43 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
             "集合2: 新選択肢行 {i} バンドにインクがある（描画==ヒット・7.3/7.4）"
         );
     }
+}
+
+// ══ 当たりの行は範囲の種類を持つ ══
+
+/// 当たりの行は、元の範囲の種類（選択肢／アンカー）をそのまま写して持つ。
+#[test]
+fn hit_rows_carry_the_kind_of_their_span() {
+    let (mut world, window, slot) = com_world();
+    let actor = ActorKey::from("0");
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    // 「あい」をアンカーの範囲（通し番号 0）にし、続けて選択肢（通し番号 1）を置く。
+    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("あい".into())));
+    rt.state.push_span_for_test(
+        &PlaceKey::balloon(&actor),
+        ChoiceSpan {
+            kind: SpanKind::Anchor,
+            ordinal: 0,
+            id: "x".into(),
+            label: "あい".into(),
+            references: vec![],
+            glyph_range: 0..2,
+        },
+    );
+    rt.apply_cue(&choice_cue("0", 0.2, "OnYes", "はい", &[]));
+    let image = (120u32, 60u32);
+    rt.register_actor(
+        actor.clone(),
+        TextSlotBinding::new(slot, window, 1.0, image, image),
+        ResolvedBalloonText::resolve(&geo_model(), image),
+    );
+
+    present_frame(&mut rt, &mut world, 10.0).expect("提示");
+    let mut kinds: Vec<(usize, SpanKind)> = rt
+        .choice_hit_rows(&actor)
+        .iter()
+        .map(|r| (r.ordinal, r.kind))
+        .collect();
+    kinds.sort_by_key(|(ordinal, _)| *ordinal);
+    assert_eq!(kinds, vec![(0, SpanKind::Anchor), (1, SpanKind::Choice)]);
 }

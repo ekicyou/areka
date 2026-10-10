@@ -28,7 +28,7 @@ use crate::lookahead::{TalkLookahead, advance_state};
 use crate::place::PlaceKey;
 use crate::region::{ScaleContract, TextRegion};
 use crate::sink::{EmoTextSink, TextMsg, handle_text_msg_with};
-use crate::state::{SurfaceKeyOutcome, TextLayerConfig, TextLayerState};
+use crate::state::{SpanKind, SurfaceKeyOutcome, TextLayerConfig, TextLayerState};
 use crate::surface::TextSurface;
 use crate::viewbox_draw::{DrawStats, ViewboxExecutor};
 use crate::wrap::WrapMode;
@@ -162,13 +162,15 @@ pub use crate::choice::HitRectPx;
 /// （task 8.2）が担い、本 task（8.1）では per-actor スナップショットは空のまま。
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChoiceHitRow {
+    /// 元の範囲の種類（選択肢／アンカー・[`crate::state::ChoiceSpan::kind`] の写し）。
+    pub kind: SpanKind,
     /// スパンの配送順序数（[`crate::state::ChoiceSpan::ordinal`]・hover 注入／選択解決の主キー）。
     pub ordinal: usize,
-    /// `\q` ID（不透明転写）。
+    /// ID（`\q`／`\_a` の ID・不透明転写）。
     pub id: String,
     /// 表示文字列（不透明転写）。
     pub label: String,
-    /// `\q` 第 3 引数以降（参照列・不透明転写）。
+    /// 付随する引数（`\q` は第 3 引数以降・`\_a` は第 2 引数以降・不透明転写）。
     pub references: Vec<String>,
     /// ヒット矩形（バルーン窓物理 px・スクロール committed 反映済み・[`HitRectPx`]）。
     pub rect: HitRectPx,
@@ -469,11 +471,23 @@ impl TextLayerRuntime {
 
     /// 「選択肢表示中」照会（R1.3・照会のみ＝バリア解決はしない）。
     ///
-    /// **表示層自身**の選択肢スパン集合（[`ActorTextState::choices`](crate::state::ActorTextState::choices)）が
-    /// 非空であることを表す（DD-6——供給側 `CuePlayerState::WaitingForChoice` バリアの真実源とは別）。
+    /// **表示層自身**の範囲の記録（[`ActorTextState::choices`](crate::state::ActorTextState::choices)）に
+    /// 種類が選択肢のものがあることを表す（DD-6——供給側 `CuePlayerState::WaitingForChoice` バリアの真実源とは別）。
     /// スコープの**どの場所か**（普通のバルーン・箱）に選択肢があれば真（要件 8.4——時間切れの
-    /// 待ちを止める条件と kanade の選択待ちの単位がスコープだから）。未知 actor・スパン空は `false`。
+    /// 待ちを止める条件と kanade の選択待ちの単位がスコープだから）。アンカーの範囲は数えない
+    /// （アンカーはバルーンの時間切れを遅らせない）。未知 actor・選択肢なしは `false`。
     pub fn choice_active(&self, actor: &ActorKey) -> bool {
+        self.state.places().any(|(key, s)| {
+            key.actor == *actor && s.choices().iter().any(|span| span.kind == SpanKind::Choice)
+        })
+    }
+
+    /// 「押せる範囲があるか」の照会（選択肢かアンカー・種類を問わない）。
+    ///
+    /// スコープの**どの場所か**（普通のバルーン・箱）に範囲の記録があれば真。ホバーと押下の
+    /// 前段が見る。バルーンの時間切れの待ちを止める条件には使わない（それは
+    /// [`choice_active`](Self::choice_active)）。未知 actor・範囲なしは `false`。
+    pub fn hit_active(&self, actor: &ActorKey) -> bool {
         self.state
             .places()
             .any(|(key, s)| key.actor == *actor && !s.choices().is_empty())

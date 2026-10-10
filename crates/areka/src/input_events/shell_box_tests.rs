@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 
 use areka_emo_compose::{BoxName, EmoWorld, fold_boxes};
 use areka_emo_text::actor::{ChoiceHitRow, HitRectPx, ShownBox};
+use areka_emo_text::state::SpanKind;
 use areka_parsers::shell::{parse, parse_boxes};
 use wintf::ecs::pointer::DoubleClick;
 
@@ -70,6 +71,7 @@ fn shown() -> Vec<ShownBox> {
 
 fn row(ordinal: usize, left: f32, top: f32, right: f32, bottom: f32) -> ChoiceHitRow {
     ChoiceHitRow {
+        kind: SpanKind::Choice,
         ordinal,
         id: format!("q{ordinal}"),
         label: format!("label{ordinal}"),

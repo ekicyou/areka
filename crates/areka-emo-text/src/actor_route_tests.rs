@@ -12,7 +12,7 @@ use areka_sakura::contract::{ActorKey, CueCommand};
 use super::test_support::{choice_cue, cue};
 use super::{SurfaceKeyResolver, TextLayerRuntime};
 use crate::place::{PlaceKey, TextPlace};
-use crate::state::{SurfaceKeyOutcome, TextItem, TextLayerConfig};
+use crate::state::{ChoiceSpan, SpanKind, SurfaceKeyOutcome, TextItem, TextLayerConfig};
 
 /// サーフェス 0 は箱 a・b（先頭は a）、1 は箱 b だけ、2 は箱なし（表に載らない）。
 const SHELL: &str = "\
@@ -188,6 +188,39 @@ fn choice_active_sees_every_place_of_the_scope() {
 
     rt.apply_cue(&cue("0", 0.0, CueCommand::Clear));
     assert!(!rt.choice_active(&actor), "\\c で箱を消すと偽");
+}
+
+/// アンカーの範囲だけがあるスコープは、「選択肢があるか」は偽のまま（バルーンの時間切れを
+/// 止めるのは選択肢だけ）、「押せる範囲があるか」は真。範囲が箱の場所にあっても同じ。
+/// 選択肢が加わると両方が真になる。
+#[test]
+fn anchor_only_scope_is_hit_active_but_not_choice_active() {
+    let mut rt = runtime_with_boxes();
+    let actor = ActorKey::from("0");
+    assert!(!rt.hit_active(&actor), "範囲が無ければ偽");
+
+    let box_a = PlaceKey {
+        actor: actor.clone(),
+        place: boxed("a"),
+    };
+    rt.state.push_span_for_test(
+        &box_a,
+        ChoiceSpan {
+            kind: SpanKind::Anchor,
+            ordinal: 0,
+            id: "x".into(),
+            label: "あ".into(),
+            references: vec![],
+            glyph_range: 0..1,
+        },
+    );
+    assert!(!rt.choice_active(&actor), "アンカーは選択肢に数えない");
+    assert!(rt.hit_active(&actor), "アンカーも押せる範囲");
+    assert!(!rt.hit_active(&ActorKey::from("1")), "別のスコープは偽");
+
+    rt.apply_cue(&choice_cue("0", 0.0, "ID", "はい", &[]));
+    assert!(rt.choice_active(&actor), "選択肢が加われば真");
+    assert!(rt.hit_active(&actor));
 }
 
 /// `\c` が強調の記録を消すのは今の行き先の場所だけ（普通のバルーンの強調は残る）。

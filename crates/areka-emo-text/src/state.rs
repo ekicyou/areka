@@ -327,25 +327,37 @@ impl RevealSchedule {
     }
 }
 
-/// 選択肢スパン（`ActorTextState` の一部・state.rs 所有・design.md「StateIncrement」正本）。
+/// 押せる範囲の種類（[`ChoiceSpan::kind`]）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpanKind {
+    /// 選択肢（`\q`）。
+    Choice,
+    /// アンカー（`\_a`）。
+    Anchor,
+}
+
+/// 押せる範囲の記録——選択肢とアンカーの共通の範囲（`ActorTextState` の一部・state.rs 所有）。
+/// 型の名前は選択肢だけだった頃のまま。
 ///
 /// `Choice` cue 消費時に、追記したグリフ範囲＋不透明転写した `\q` 属性を 1 スパンとして記録する
 /// （R1.1/R1.2）。`ordinal` は配送順序数（hover／照会の主キー）で `choices.len()` を焼き込む。
 /// `glyph_range` は items のグリフ序数空間（`Glyph` のみを数える序数・改行／カーソル等の非グリフ
 /// アイテムを含めない・`visible_glyphs`／reveal と同一序数空間）で、空 `text` は空範囲（`start..start`）。
 ///
-/// 不変条件（design.md「Data Models §不変条件」1）: `glyph_range` は items のグリフ序数空間で
-/// **互いに素**かつ**追記順に単調**（各 Choice cue は自身が追記したグリフのみを範囲化するため
-/// 構造的に成立）。
+/// 不変条件: `ordinal` は列の添字に等しく追記順に単調。**同じ種類の**範囲の `glyph_range` は
+/// 互いに素（各 Choice cue は自身が追記したグリフのみを範囲化するため構造的に成立）。
+/// アンカーの範囲は選択肢の範囲を包んでよい。
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChoiceSpan {
-    /// 配送順序数（hover／照会の主キー・記録時の `choices.len()`）。
+    /// 範囲の種類（選択肢／アンカー）。
+    pub kind: SpanKind,
+    /// 配送順序数（hover／照会の主キー・記録時の `choices.len()`・選択肢とアンカーで共通の通し番号）。
     pub ordinal: usize,
-    /// `\q` ID（不透明転写）。
+    /// ID（`\q`／`\_a` の ID・不透明転写）。
     pub id: String,
-    /// 表示文字列（不透明転写・`text` の複製）。
+    /// 表示文字列（不透明転写・選択肢は `text` の複製・アンカーは範囲の文字）。
     pub label: String,
-    /// `\q` 第 3 引数以降（参照列・不透明転写）。
+    /// 付随する引数（`\q` は第 3 引数以降・`\_a` は第 2 引数以降・不透明転写）。
     pub references: Vec<String>,
     /// グリフ序数範囲（items のグリフ序数空間・空 `text` は空範囲）。
     pub glyph_range: core::ops::Range<usize>,
@@ -542,6 +554,7 @@ impl TextLayerState {
                 }
                 let ordinal = state.choices.len();
                 state.choices.push(ChoiceSpan {
+                    kind: SpanKind::Choice,
                     ordinal,
                     id: id.clone(),
                     label: text.clone(),
