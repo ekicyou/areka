@@ -141,3 +141,11 @@ MCP でいちばん使われるのは「台本を流して見る」（`sakurascr
 - 要件定義のモデル: Fable（再生中・選択肢の最中・切替の最中に届いたときの扱いを SSP に合わせて決める・翻訳に通すかの分かれ目・返事を待つ間の順序）。
 - 分割の案: なし（一度切り出した spec）。上限の近いファイルの分け方だけ決めておく: `msg.rs` は本 spec が最初のタスクで分ける（ファイルの中のテストの塊 約 415 行を兄弟のテストファイルへ出すと本体は約 510 行）。`schedule/mod.rs` は本 spec の後で約 975〜980 行になる見込みで、次に足す spec が分けることになる＝後ろに 5 本以上並ぶ本 spec が先に分けておくのが安い。
 - 見つけた穴・古くなった記述: 棚卸㉒の節の `actor_status.rs` は実在しない。同じ節が許可の表の迂回の置き場を `schedule/events.rs` と書いたのは不正確（照合は `schedule/change.rs` と `actor.rs`）。roadmap の「3 段目の spec が触るファイル」の表の本 spec の行に `get_status.rs` が残っている。
+
+## 2026-10-10 `areka-P0-seriko-trigger-intervals` の完了時の申し送り
+
+出どころは `completed/areka-P0-seriko-trigger-intervals/tasks.md` の Implementation Notes（9.2 の「手順の読み替え」と ①）。
+
+- **実機で確かめた（2026-10-10）**: areka の MCP の `sakurascript` は `NG:not implemented yet` を返す。`seriko-trigger-intervals` の実機の確かめは、設計の手順「MCP の `sakurascript` で台本を送る」を使えず、emo2 の写しの `boot.lua` の `OnBoot`／`OnFirstBoot` が生の台本 1 本を返す形に読み替えて流した（`animated-image-playback` の前例と同じ）。この形では、走行 1 回につき台本は 1 本だけで、途中で送り足せない。面の切り替えの時刻は台本の `\_w[ms]` で決めることになる。
+- **本 spec が着地したら戻せる所**: `seriko-trigger-intervals` の検体の README（`crates/areka-seriko/tests/fixtures/trigger-intervals/README.md` の「実機の確かめ」の 3）と、同 spec の設計書の「実機の確かめ」の 4 は、`sakurascript` で送る本来の手順へ戻せる。本 spec の実機の確認で `sakurascript` が通ったら、README のその 1 文を直す。
+- **本 spec を待っている確かめが増えた**: `seriko-trigger-intervals` が実機で踏めなかった場面のうち、「台詞の中断と新しい台詞」は、走行の途中で 2 本目の台本を送れれば踏める（今は決定論のテストだけが固定している）。

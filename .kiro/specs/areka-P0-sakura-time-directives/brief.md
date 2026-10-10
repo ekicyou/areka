@@ -114,3 +114,12 @@ compile の汎用キャリアアームへ allowlist 判定を追加（純関数�
 - 優先度の区分: C（ukadoc の先送りの追跡）。
 - 要件定義のモデル: Opus（コンパイルの中で閉じる・`\_q` の議題は解けた）。
 - 見つけた穴・古くなった記述: 網羅台帳で本 spec が持ち主の 10 行のうち 6 行（同期の `\![move]`・`\![set,alpha]`・`\![set,scaling]` の 2 行・`\![sound,wait]`・`\![wait,syncobject]`）は、棚卸㉑で範囲から外したのに持ち主が本 spec のまま＝着手のときに付け替える。冒頭の「着手ゲート: M1 外」「allowlist 8 コマンド族」は今の範囲（3 語）と合わない。
+
+## 2026-10-10 `areka-P0-seriko-trigger-intervals` の完了時の申し送り
+
+出どころは `completed/areka-P0-seriko-trigger-intervals/tasks.md` の Implementation Notes（9.2 の ③・検証の ⑷⑸）と同 spec の設計書（Revalidation Triggers）。
+
+- **実機で見たこと（2026-10-10）**: 台本の `\_q…\_q` は効かない。挟んだ字も 1 字 50 ms のまま現れた。上の「棚卸㉓の再測定」に書いてあるとおりの今の姿（読み手に腕が無く素通し）で、新しい事実は無い。
+- **口パクが、文字の現れる時刻の式を写して持つようになった**: `seriko-trigger-intervals` で、seriko は interval `talk,数値` のために「i 文字目が現れる時刻」を自分でも計算する（`crates/areka-seriko/src/talk.rs` の `TalkFeed`・`TalkEpoch`）。式は文字の層と同じで、入力は cue の時刻・再生時間・文字数だけ。**共有ではなく写し**で、文字の層の式を変えても赤になるテストは無い。
+- **本 spec がすること**: 上の節は「倍率や瞬間表示を焼き込んだ再生時間が cue に入るので、文字の層に手は要らない」と書く。seriko の写しも同じ cue の再生時間から計算するので、**cue の再生時間を変えるだけなら `talk.rs` にも手は要らない見込み**。要るのは確かめ: `\_q` で再生時間 0 の字がまとめて届くと、1 回の刻みで区切りを 2 つ以上越える。この場面は判定の純粋な関数のテストだけが固定していて、配線を通したテストも実機の確かめも無い（`\_q` が未対応で踏めなかった）。本 spec の実機の確かめに「`talk,数値` の面で `\_q` を流し、口が最新の区切りで 1 回だけ動く」を 1 項目足す（検体は `crates/areka-seriko/tests/fixtures/trigger-intervals/` を使い回せる）。
+- 文字が現れる時刻の式そのもの・起点の取り方に触ることになったら、`talk.rs` の写しも同じに変える。写しの見張りは新しい spec `seriko-talk-clock-fidelity` が持つ。

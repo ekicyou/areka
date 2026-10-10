@@ -206,3 +206,16 @@ ukadoc 網羅調査の文書（`doc/ukadoc-coverage/roadmap-draft.md`・`briefin
    - 段階 A の表の束「バルーンのリンク」の引受先の案を `areka-P0-anchor-style-canon` にした（束の構成 60 件のうち未対応の 59 件の全数を持つ）。
    - 本 spec で、2 つとも確かめて、裁定として置くか直す。
 4. **調査の時点の表**: `briefing-shiori.md` の未対応の群の項目の一覧は、`OnAnchorSelect`・`OnAnchorSelectEx` を今も載せている（「`A3`／掛け合い（12）」の行）。`briefing-sakura-script.md` の、brief の主張と台帳の担当を突き合わせた表も、`\_a` の行を調査の時点のまま（台帳の担当が空・主張している brief が `anchor-tag-canon`）載せている。日付つきの写真と明記するか、撮り直すかを、ほかの写真の節と同じ決めで扱う。
+
+## `areka-P0-seriko-trigger-intervals` からの申し送り（2026-10-10・完了時の棚卸）
+
+出どころは `completed/areka-P0-seriko-trigger-intervals/tasks.md` の Implementation Notes（8・検証の項）。`seriko-trigger-intervals` は自分の持ち物の 3 行（`runonce:1`・`periodic_2c_6570_5024:1`・`talk_2c_6570_5024:1`）を実装済みへ移し、`always:1` の持ち主を `seriko-interval-combinations` へ付け替えて、数を合わせた。下の 4 件は、道具と文書の決まりの側の話なので触らなかった。
+
+1. **報告の道具が行末を LF で書き出す**: `cargo run -p ukadoc-survey -- report` と `-- report-summary` は、`doc/ukadoc-coverage/report/*.md` の 5 本を LF で書き出す。作業ツリーは CRLF なので、作り直すたびに手で CRLF へ戻すことになる（戻さないと、5 本の全行が差分に出る）。台帳の行を動かす spec は必ず報告を作り直すので、毎回同じ手間が掛かる。道具の側で、今あるファイルの行末に合わせて書くようにする。
+2. **台帳の項目を `implemented` へ移すときに見張りが求めるものが、どこにもまとめて書かれていない**: 見張り（`cargo test -p ukadoc-survey`）は、台帳の行と `roadmap-draft.md` のほかに、⑴ 項目ごとの正典の URL のコメント（ソースに `// ukadoc: <URL>` を 1 行）⑵ `briefing.md` の `[[barrier]]` の数 ⑶ 報告の作り直し、を求める。`seriko-trigger-intervals` の設計は `assets.toml` と `roadmap-draft.md` しか挙げておらず、実装の 1 回目は範囲の外として止まった（要件「見張りを緑に保つ」の内側として境界を広げて通した）。`doc/ukadoc-coverage/README.md` に「項目の状態を動かすときに触る所」の一覧を置く。
+3. **手書きの数が、2 つの枝で同じ誤った値になり、git が黙って通した**: 2026-10-10 に `anchor-tag-canon` と `seriko-trigger-intervals` がそれぞれ `roadmap-draft.md` の `[[spec]]` の行を 1 行足し、どちらも行数を「49 行」と書いた。枝を合わせたとき、数の文は衝突せず、実数は 50 だった（合わせた後に数え直して「50 行」の文を足してある。前の段落の「49 行」は、その時点の記述として残っている）。行数・束を持つ行の数・`[briefs].count` は検査が `[[spec]]` の塊から導けるので、手で書く数を減らすか、検査が数えて比べる形にする。
+4. **触っていない古い記述**（どれも検査の外にある）:
+   - `briefing-assets.md` の「表に添える 4 つの注記」の ⑵ の「駆動する 2 語の一方であるこの綴り」（同じ節の ⑴ は 8 語と書き直してある）。同じ節の ⑶⑷ に残る行番号つきの参照（`method.rs:130` など）。
+   - `roadmap-draft.md` の `[[spec]]` の `areka-P0-seriko-trigger-intervals` の行の `wave = "C5 の候補"`（正本のロードマップでは C5 の ② で、2026-10-10 に着地した）。
+   - 束「サーフェスアニメーション」の、段階の表の「依存する既存 spec」の欄に `areka-P0-shell-implicit-surface`（2 件）が載っていない。
+   - 台帳 `assets.toml` の `endtalk`・`starttalk`・`never`・`yen-e` の 4 行（持ち主は空）と `animation*.interval,インターバル` の行の備考が、動く間隔の語を「2 語だけ」「4 つ」と書いたまま（今は 8 語。詳しくは `seriko-interval-combinations` の brief の同じ日の申し送り）。

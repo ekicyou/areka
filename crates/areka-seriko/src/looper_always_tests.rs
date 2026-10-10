@@ -277,6 +277,7 @@ fn table_replacement_drops_clocks_of_that_face_kind_only() {
         0,
         false,
         true,
+        None,
         &mut rng,
         &mut PatternState::default(),
     );

@@ -91,6 +91,7 @@ fn tick_at(
         now_ms,
         true,
         true,
+        None,
         rng,
         &mut p,
     );
