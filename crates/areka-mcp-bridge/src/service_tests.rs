@@ -74,14 +74,14 @@ impl Desk {
         Cache::new(Some(self.root.child(CACHE_DIR)))
     }
 
-    async fn send(&mut self, message: Value) {
+    pub(super) async fn send(&mut self, message: Value) {
         let line = format!("{message}\n");
         let written = self.stdin.write_all(line.as_bytes()).await;
         written.expect("標準入力へ書ける");
     }
 
     /// 標準出力の次の 1 行。
-    async fn next(&mut self) -> Value {
+    pub(super) async fn next(&mut self) -> Value {
         let mut line = String::new();
         let read = tokio::time::timeout(WAIT, self.stdout.read_line(&mut line)).await;
         read.expect("期限内に 1 行出る").expect("1 行読める");
@@ -109,7 +109,7 @@ impl Desk {
     }
 }
 
-fn request(id: Value, method: &str, params: Value) -> Value {
+pub(super) fn request(id: Value, method: &str, params: Value) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params})
 }
 
@@ -143,7 +143,7 @@ fn discovered(version: &str) -> Value {
 }
 
 /// `2026-07-28` で話す Desktop が要求ごとに `params` へ載せる `_meta`。
-fn stateless_meta() -> Value {
+pub(super) fn stateless_meta() -> Value {
     json!({
         "io.modelcontextprotocol/protocolVersion": "2026-07-28",
         "io.modelcontextprotocol/clientCapabilities": {},
@@ -157,7 +157,7 @@ pub(super) fn tools() -> Value {
 }
 
 /// この方法の要求が `count` 件届くまで待って、届いた全部を返す（応答の行が出ない通知を、眠らずに待つ）。
-async fn arrived(fake: &FakeServer, method: &str, count: usize) -> Vec<Received> {
+pub(super) async fn arrived(fake: &FakeServer, method: &str, count: usize) -> Vec<Received> {
     let of = |r: &&Received| r.method == method;
     fake.wait(|log| log.requests.iter().filter(of).count() >= count)
         .await;
@@ -409,7 +409,7 @@ fn nobody() -> (TcpSocket, u16) {
 }
 
 /// 中継が自分で作る「居ない」エラーの行（番号 `-1`・`Server not available` で始まる文）。
-fn unavailable(id: Value, reason: &str) -> Value {
+pub(super) fn unavailable(id: Value, reason: &str) -> Value {
     let message = format!("Server not available: {reason}");
     json!({"jsonrpc": "2.0", "id": id, "error": {"code": -1, "message": message}})
 }

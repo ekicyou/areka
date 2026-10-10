@@ -58,7 +58,7 @@ enum Failure {
     /// 書く前: 本当の本文を 1 バイトも書いていない（要求は誰にも届いていない）。中身は理由。
     BeforeWrite(String),
     /// 書いた後・応答の上限・読み分けられない失敗: 届いたかもしれないので送り直さない。
-    /// 中身は Desktop へ返すエラー。
+    /// areka が返した JSON-RPC のエラーもここ。中身は Desktop へ返すエラー。
     AfterWrite(ErrorData),
 }
 
@@ -165,19 +165,50 @@ impl Bridge {
         Err(errors::server_not_available(&reason))
     }
 
-    /// 要求を areka へ届け、応答の上限つきで待って、結果をそのまま返す。要求の `_meta` は rmcp が
-    /// 外して渡してくるので、付け直して届ける（`2026-07-28` で話す Desktop の要求は、rmcp の
-    /// クライアントがその版の札を付けて、areka にもその版の要求として届く＝要件 1.10）。
-    /// `tools/list` のエラーでない結果は、返す前に控えに書く（要件 3.2）。
-    /// 届いたかもしれない要求は、どの失敗の後も送り直さない（要件 4.5）。
+    /// 要求を areka へ届けて、結果をそのまま返す。届いたかもしれない要求は、どの失敗の後も送り直さない
+    /// （要件 4.5）。書く前の失敗（覚えた番号に接続できない・名乗りが違う）は、要求が誰にも届いて
+    /// いないので、探し直して、見つかれば同じ要求（`_meta` も同じ）を初めて 1 回だけ送る（要件 2.10・
+    /// 2.11・設計 D-6）。見つからなければ、居ないときの答え。
     async fn forward(
         &self,
         linked: &Arc<Linked>,
         request: ClientRequest,
         meta: RequestMetaObject,
     ) -> Result<ServerResult, ErrorData> {
-        let options = PeerRequestOptions::with_timeout(self.config.timeouts.reply).with_meta(meta);
-        let answer = match linked.link.send_request_with_option(request, options).await {
+        match self.deliver(linked, &request, &meta).await {
+            Ok(result) => return Ok(result),
+            Err(Failure::AfterWrite(answer)) => return Err(answer),
+            Err(Failure::BeforeWrite(_)) => {}
+        }
+        // 別の要求が先に探し直していれば、その新しいつなぎ先が返る（探索は走らない）。
+        let found = match self.ensure_link().await {
+            Ok(found) => found,
+            Err(others) => return self.absent(&request, &meta, &others),
+        };
+        match self.deliver(&found, &request, &meta).await {
+            Ok(result) => Ok(result),
+            Err(Failure::AfterWrite(answer)) => Err(answer),
+            // 見つけた先にも届かなかった。もう探さず、居ないときの答え（次の要求が探す）。
+            Err(Failure::BeforeWrite(_)) => self.absent(&request, &meta, &[]),
+        }
+    }
+
+    /// 要求をこのつなぎ先へ 1 回送り、応答の上限つきで待つ。要求の `_meta` は rmcp が外して渡して
+    /// くるので、付け直して届ける（`2026-07-28` で話す Desktop の要求は、rmcp のクライアントがその版の
+    /// 札を付けて、areka にもその版の要求として届く＝要件 1.10）。`tools/list` のエラーでない結果は、
+    /// 返す前に控えに書く（要件 3.2）。書く前の失敗は、覚えを捨ててから返す。
+    async fn deliver(
+        &self,
+        linked: &Arc<Linked>,
+        request: &ClientRequest,
+        meta: &RequestMetaObject,
+    ) -> Result<ServerResult, Failure> {
+        let wait = self.config.timeouts.reply;
+        let options = PeerRequestOptions::with_timeout(wait).with_meta(meta.clone());
+        let sending = linked
+            .link
+            .send_request_with_option(request.clone(), options);
+        let answer = match sending.await {
             Ok(sent) => sent.await_response().await,
             Err(error) => Err(error),
         };
@@ -195,22 +226,24 @@ impl Bridge {
                     code = error.code.0,
                     "[bridge] areka answered with an error"
                 );
-                Err(error)
+                Err(Failure::AfterWrite(error))
             }
-            Err(error) => match classify(linked.port, &error) {
-                // 要求は誰にも届いていない。覚えた番号に areka が居ないので「居ない」エラーで答える。
-                Failure::BeforeWrite(reason) => {
-                    warn!(port = linked.port, %reason, "[bridge] the request did not reach areka");
-                    Err(errors::server_not_available(&reason))
-                }
-                Failure::AfterWrite(answer) => {
-                    // 働き手が終わったつなぎ先は二度と届けられない。次の要求が探し直す（要件 4.6）。
-                    if matches!(error, ServiceError::TransportClosed) {
+            Err(error) => {
+                let failure = classify(linked.port, &error);
+                match &failure {
+                    // 理由（接続の失敗は OS の文）は記録だけに残し、Desktop への答えには載せない。
+                    Failure::BeforeWrite(reason) => {
+                        info!(port = linked.port, %reason, "[bridge] the request did not reach areka");
                         self.forget(linked).await;
                     }
-                    Err(answer)
+                    // 働き手が終わったつなぎ先は二度と届けられない。次の要求が探し直す（要件 4.6）。
+                    Failure::AfterWrite(_) if matches!(error, ServiceError::TransportClosed) => {
+                        self.forget(linked).await;
+                    }
+                    Failure::AfterWrite(_) => {}
                 }
-            },
+                Err(failure)
+            }
         }
     }
 
@@ -399,3 +432,7 @@ mod tests;
 #[cfg(test)]
 #[path = "service_failure_tests.rs"]
 mod failure_tests;
+
+#[cfg(test)]
+#[path = "service_retry_tests.rs"]
+mod retry_tests;

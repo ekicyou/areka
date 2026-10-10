@@ -125,7 +125,7 @@
   - 完了の姿: 上のテストが緑
   - _Requirements: 4.1, 4.2, 4.4, 4.5, 4.6, 8.1_
 
-- [ ] 4.5 届ける前の失敗の扱い: 探し直して 1 回だけ送る
+- [x] 4.5 届ける前の失敗の扱い: 探し直して 1 回だけ送る
   - 「書く前」の失敗（覚えた番号に接続できない・名乗りが違う）は、覚えを捨てて探し直し、見つかれば同じ要求を初めて 1 回だけ送る。見つからなければ居ないときの答え
   - 覚えを捨てるのは、自分が使ったつなぎ先が今も覚えのままのときだけ。別の要求が先に入れ替えていれば、新しいつなぎ先で 1 回だけ送る。使っている途中の要求があるつなぎ先は、その要求が終わるまで落とさない
   - テスト: 受け口を止めて別の番号で起こし直すと届く・受け口を止めて同じ番号に別の名乗りを立てると要求が届かず探し直す・長い要求の途中で別の要求が書く前の失敗を見ても長い要求の応答が返る・2 つの要求が同時に書く前の失敗を見てもつなぎ直しが 1 回
@@ -240,3 +240,7 @@
 - 4.4: 4.5 への申し送り＝書く前の枝は仮（`Server not available: <HttpError の文>`・`warn`・覚えは捨てない・テストなし）。4.5 はこの枝だけを差し替え、記録は設計どおり `info`。`HttpError::Connect` の文は OS の文（日本語の机では非 ASCII）なので Desktop への答えには載せず記録だけにする。
 - 4.4: 応答の上限を越えると rmcp のクライアントが areka へ自分の番号の `notifications/cancelled` を 1 件送る（設計の Error Strategy に追記）。`id` 付きの要求に areka が 202 を返すと上限まで待って `timed out` になる（テストなし）。この 2 点と「areka の debug の記録に確かめの `initialize` と通知の行が増える」は 6.2 の差の記録に載せる。
 - 4.4: `service_failure_tests.rs` の `a_request_not_answered_within_the_bound_gets_the_timeout_error_once` は応答の上限 300 ms で最後の `ping` も通すので、全体テストの負荷で赤が出たら上限を 1 秒へ延ばす。要件 4.2 の「標準エラーに残す」（`warn!` の `status`・`head`）を判定するテストは無いので、5.2 で壊れた応答の 1 行を exe の標準エラーに見る。テストの道具の共有は `use super::tests::{…}`＋`pub(super)`（areka-seriko・areka-kanade に前例）。
+- 4.5: 送り直す道は 1 本だけ（`forward` が `deliver` を高々 2 回・2 回目へ進むのは 1 回目が `Failure::BeforeWrite` のときだけ）。探し直して見つけた先でも書く前の失敗になったら、そのつなぎ先も捨てて「居ない」答え（名乗りの続きなし）で終わる（設計 D-6 に追記・6.2 の差の記録に 1 行）。書く前の失敗の理由（OS の文）は `info` の記録だけで、Desktop への答えには載らない。
+- 4.5: `scan::connect_one` は本番の呼び手が無い（使うのは `scan_tests.rs` の `connect_one_runs_the_same_steps_on_one_port` だけ）。最終の検証で口・テスト・設計の scan の署名行ごと消す。
+- 4.5: 全体テストの負荷で赤になりうるテスト（偽の赤の向きだけ）: `service_retry_tests.rs` の `a_slow_request_survives_another_request_forgetting_the_link`（遅い応答 2 秒より先に `ping` の探し直しが終わる前提・赤なら遅れを延ばす）・`a_request_reaches_areka_restarted_on_another_port_exactly_once`（止めた番号を押さえ直すまでの短い窓）・`two_requests_failing_before_writing_at_once_link_again_only_once`。
+- 4.5: 4.6 への申し送り＝捨てた `Link` が落ちるとき rmcp が `info` で `task cancelled` を 1 行出す。覚えた番号が黙る相手に替わると、その要求は確かめの 3 秒を待ってから探し直す。
