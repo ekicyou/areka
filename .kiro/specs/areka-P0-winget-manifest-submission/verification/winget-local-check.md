@@ -333,7 +333,9 @@ areka (portable) ARP\User\X64\Areka.Areka.Portable__DefaultSource 0.0.2
 
 ### 作る状態（タスク 3.1・要件 4.1）
 
-結果: **まだ作れていない**（2026-10-10 の 1 回目）。入れた areka（0.0.2）の MCP の `sakurascript` は、台本を受け取らずに `NG:not implemented yet` と答える。台本では、入れることも・切り替えることも・終えることもできなかった。設計の段 4 の決まりどおり、開発者に右クリックメニューでの同じ操作を頼む（頼む操作はこの節の終わり）。状態の写しは**まだ取っていない**。時刻はどれも 2026-10-10（+09:00）。
+結果: **作れた**（2026-10-10・3 回目の起動で）。作り方は設計の見込みと違う。入れた areka（0.0.2）の MCP の `sakurascript` は、台本を受け取らずに `NG:not implemented yet` と答えるので、台本では入れることも・切り替えることも・終えることもできなかった（1 回目）。設計の段 4 の決まりどおり右クリックメニューでの同じ操作に切り替え、3 回目に、検体のゴースト 1 体とバルーン 1 つを入れ、クローディアへ切り替え、「終了」で終えた。シェルの記憶だけは 0.0.2 では作れず、**測れなかった**（理由は下の「作った物の一覧」）。入れ先の写しは `target\winget-check\state-snapshot\` に取った。**この後、上げ直しの実測（タスク 3.2）まで areka を起動しない。** 時刻はどれも 2026-10-10（+09:00）。
+
+右クリックメニューを操作したのは開発者の手ではなく AI（この作業を進めているセッション）。開発者が 13:21 ごろに `areka.exe` の画面の操作を AI に許し、AI が画面の操作でメニューを開いて選んだ（操作した側の控え。起動の記録には、メニューが選ばれた行は出るが、誰の手かは出ない）。開発者の手は要らなかった。
 
 #### 1 回目: MCP の口から台本を送った（13:12〜13:15）
 
@@ -386,20 +388,69 @@ MCP の口へ送った物と答え（送り方は `tools/call` を 1 本ずつ�
 | シェルの記憶（クローディア） | `ghost\claudia\shell\<シェル>\profile\areka\` | 無い（ゴーストがまだ無い） |
 
 - ファイルの数は 201（起こす前と同じ）・合計 17214191 バイト。起こす前（`3.1-installdir-before-launch.txt`・201 ファイル・17211954 バイト）と比べて、大きさが変わったのは 2 ファイルだけ（`ghost\emo2\ghost\master\profile\areka\sylphya.toml` が 70 → 90 バイト・`ghost\emo2\ghost\master\profile\pasta\logs\pasta.log` が 2788 → 5005 バイト）。増えたファイル・消えたファイルは 0。
-- えも？？ のシェルの記憶は、2 回の起動（タスク 2.2 と今回）ではできていない。右クリックメニューで状態を作った後にもう一度見て、無ければ、作る操作（キャラクターを動かす・シェルを切り替える）を足す。
+- この時点では、状態は 1 つも作れていない（下の 2 回目・3 回目へ続く）。
 
-#### 開発者に頼む操作（右クリックメニュー）
+#### 2 回目: 右クリックメニューの「インストール…」が、ファイルを選ぶ画面を出さなかった（13:19〜13:22）
 
-AI が `target\winget-check\3.1-launch.ps1 -Port 9871 -Tag run2` で areka を起こした後（起動の記録を `3.1-run2.stdout.log` に取るため）、キャラクターを右クリックして、次の順に行う。
+- 起こし方は 1 回目と同じ（`3.1-launch.ps1 -Port 9871 -Tag run2`。`AREKA_NO_ALERT=1` を置いたまま）。始めた時刻 13:19:08.106。今のゴーストは えも？？（`ghost_resolved` は `route=Memory dir=…\ghost\emo2`）・`本物のゴースト窓を開きました` は 1 件。MCP の口へは何も送っていない。
+- 13:22:09.133 に右クリックメニューの「インストール…」が選ばれた（`[menu] selected event="menu_selected" scope=0 frame=Install id=6`）。直後の行は `WARN … [install] 告知が抑止されているので、ファイルを選ぶ画面を出さずに取り消しと同じに扱います event="install_pick_suppressed"`。ファイルを選ぶ画面は出ず、何も入らなかった。
+- これは不具合ではない。`AREKA_NO_ALERT` は、自動のテストが画面の前で止まらないように、知らせの画面を抑える環境変数（タグ `v0.0.2` の `crates/areka/src/alert.rs` の説明）で、ファイルを選ぶ画面も同じ扱いにし、抑えたことを記録に残す作りになっている。利用者の普段の起動では置かれない。確かめの側が、起こし方からこの変数を外せば済む（3 回目）。
+- 13:22:48.691 に「終了」が選ばれ（`frame=Close id=8`）、`ghost shutdown sequence completed` → `session_mark_cleared`（13:22:51.176）。終わった時刻 13:22:51.399（223.3 秒）・自分から終わった・**終了コード 0**。
+- 起動の記録 `3.1-run2.stdout.log` は 578 行（144450 バイト）。`ERROR` は 0 行・`WARN` は 4 行（タスク 2.2 と同じ文の 3 行と、上の `install_pick_suppressed` の 1 行）。`last_ghost_not_found` は 0 件。
 
-1. 「インストール…」→ `<ワークツリー>\target\winget-check\nar\claudia.nar` を選ぶ
-2. 「インストール…」→ `<ワークツリー>\target\winget-check\nar\emo2-kakukaku-wplimit.nar` を選ぶ
-3. 「ゴースト」→ クローディア を選ぶ
-4. （切り替わった後のクローディアを右クリックして）「終了」
+#### 3 回目: 右クリックメニューで状態を作った（13:23〜13:26）
 
-その後に AI が、入れ先の一覧・段 4 の表の有無・写し（`state-snapshot`）を取り、この節へ書き足す。
+起こし方: 1 回目との違いは、`AREKA_NO_ALERT` を**置かない**ことだけ（`target\winget-check\3.1-launch-alert.ps1 -Port 9871 -Tag run3`。中で呼ぶ `3.1-inner-alert.ps1` は、`3.1-inner.ps1` から `$env:AREKA_NO_ALERT = '1'` の 1 行を除いただけの物）。置いた環境変数は `AREKA_MCP_PORT=9871`・`RUST_LOG=info`・`NO_COLOR=1`。外したのは `AREKA_IMPL_WATCH_HOME` の 1 つ。`areka` の 1 語で起こし、実体は入れ先のフォルダの `areka.exe`。MCP の口へは何も送っていない（起動の記録に MCP の受け答えの行は 0 行）。
 
-（タスク 3.1 の続き＝右クリックメニューで作った状態の一覧と写しを記入。タスク 3.2 で 6 項目の結果を記入）
+始めた時刻 13:23:26.253。`root_resolved` の `root=` は入れ先のフォルダ・`ghost_resolved` は `route=Memory dir=…\ghost\emo2`・`balloon_resolved` は `route=Memory dir=…\balloon\emo2-kakukaku`・1 件目の `本物のゴースト窓を開きました … scopes=[0, 1]` は 13:23:27.603。
+
+行った操作と、済んだことを確かめた行（起動の記録 `target\winget-check\logs\3.1-run3.stdout.log`。`<入れ先>` は入れ先のフォルダ）:
+
+| 時刻 | 操作（右クリックメニュー） | 済んだことを確かめた行 |
+|---|---|---|
+| 13:23:48 | 「インストール…」（`menu_selected … frame=Install id=6`）→ ファイルを選ぶ画面で `<ワークツリー>\target\winget-check\nar\claudia.nar` を開く | 13:24:04.929 `[install] 依頼を受けました event="install_order_queued" origin=Menu count=1` → `install_begin archive=…\nar\claudia.nar origin=Menu` → `install_accept … verdict="accepted"` → 13:24:05.274 `[install] 入れました event="install_done" … kind=Ghost places=[<入れ先>\ghost\claudia, <入れ先>\balloon\claudia, <入れ先>\balloon\claudia_vertical]` → `last_installed_recorded folder=claudia` → `install_event id="OnInstallComplete" raised=Script` |
+| 13:24:28 | 「インストール…」（`frame=Install id=9`）→ `<ワークツリー>\target\winget-check\nar\emo2-kakukaku-wplimit.nar` を開く | 13:24:40.483 `install_order_queued origin=Menu count=1` → 13:24:40.545 `install_done … kind=Balloon places=[<入れ先>\balloon\emo2-kakukaku-wplimit]` → `last_installed_balloon_recorded folder=emo2-kakukaku-wplimit` → `[install] 今のゴーストの「最後に使ったバルーン」を入れたバルーンへ書き換えました event="install_balloon_remembered" folder=emo2-kakukaku-wplimit` → `install_event id="OnInstallComplete" raised=Script` |
+| 13:25:03 | 「ゴースト」→「悪役令嬢クローディア」（`frame=Ghost id=1`） | `切替の要求を kanade へ送った event="ghost_switch_requested" from=Some("えも？？") to=悪役令嬢クローディア … origin="manual"` → 13:25:08.510 `change_accepted` → 13:25:11.491 `switch_drop_recorded last_ghost="emo2" mark="悪役令嬢クローディア"` → 13:25:12.156 `ghost_switch_booted ghost=Some("claudia") attempt=Target` → 13:25:12.337 2 件目の `本物のゴースト窓を開きました` → 13:25:12.899 `last_used_recorded ghost="claudia" balloon="StayseeBalloon" shell="master"` → 13:25:12.904 `ghost_switch_done ghost=Some("claudia")` |
+| 13:26:22 | クローディアのキャラクターを左へドラッグ（シェルの記憶を作ろうとして足した操作） | `[DragStartEvent] … x=2530 y=1286` → 13:26:22.814 `[DragEndEvent] … x=2447 y=1286 cancelled=false` → `char DragEnd 保存 scope=0 char_x=2131 char_y=704 saved_x=2131 saved_y=704`（位置はクローディアのゴーストの記憶の `[window.0]` に書かれた。シェルの記憶はできなかった） |
+| 13:26:47 | 「終了」（`frame=Close id=12`） | `OnClose GET を発行し握手を開始 event="close_handshake_begin" reason="user"` → 13:26:52.922 `app_exit origin=KanadeStopped(Quit) closed=4` → 13:26:53.086 `ghost shutdown sequence completed` → 13:26:53.112 `きれいに終わったので起動中の印を消しました event="session_mark_cleared"` |
+
+- 画面で読んだ台詞（操作した側の控え。起動の記録には台詞の本文は出ない）: クローディアを入れた後に えも？？ が「来たで！ うちらの出番、減らへんやろな‥‥？」「新しいお友達だね。」／切り替えの後にクローディアの挨拶／ドラッグの後に「ふん、この場所がよろしいの？ まあ、眺めは悪くありませんわ。」。
+- **きれいに終えたときの今のゴーストはクローディア**。終わった後の areka の記憶 `profile\areka\sylphya.toml` は `[last]` の `ghost = "claudia"`・`running = ""`（起動中の印は空）。
+- 終わった時刻 13:26:59.258（213.0 秒）・**自分から終わった**・**終了コード 0**（`3.1-run3.result.json`）。起動の記録の最後の行は 13:26:53.138 の `MCP: 待受を閉じた` で、プロセスが消えたのはその 6.1 秒後（1 回目は 0.07 秒後・2 回目は 0.2 秒後）。この間の記録は無く、理由は調べていない。終了コードは 0 で、起動中の印も消えている。
+- 起動の記録は 595 行（145355 バイト）。`ERROR` は 0 行・`last_ghost_not_found` は 0 件・`WARN` は 9 行（タスク 2.2 と同じ文の 3 行と、切り替えた直後の `balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 …`・`… surface_id=3 …` が 3 行ずつ）。標準エラーは 2 行（`[helper] SHIORI 初期化の入口: loadu` が、えも？？ とクローディアの分）。
+- 切り替えた先のクローディアは、自分の `.nar` が連れてきたバルーン（`claudia`）でなく `StayseeBalloon` で立った（上の `last_used_recorded` の行。クローディアのゴーストの記憶にも `balloon = "StayseeBalloon"` と書かれた）。これは 0.0.2 の動き。タグ `v0.0.2` より後のコミット `8599cd91`（完了 `areka-P0-ghost-standard-balloon`＝バルーンをゴーストの descript の指定と同梱の最初の 1 個で決める）がこの枝には入っている。上げ直し・外し方の実測が見るのはフォルダの有無なので、結果には響かない。
+
+#### 作った物の一覧（3 回目の後・写しを取る前）
+
+一覧は `target\winget-check\logs\3.1-installdir-run3-after-end.txt`（相対パスと大きさ・隠しファイルも含む・スクリプトは `3.1-list.ps1`）。取ったとき、入れ先のフォルダから動いている `areka.exe`・`shiori-host32-helper.exe` は 0・9871 の待ち受けは 0。
+
+| 物（設計の段 4 の表） | 置き場（入れ先のフォルダから見て） | 有無 |
+|---|---|---|
+| 後から入れたゴースト | `ghost\claudia\` | **在る**（69 ファイル・4456155 バイト。うち 1 つはゴーストの記憶） |
+| 後から入れたバルーン | `balloon\emo2-kakukaku-wplimit\` | **在る**（20 ファイル・31898 バイト） |
+| クローディアと一緒に入ったバルーン 2 つ | `balloon\claudia\`・`balloon\claudia_vertical\` | **在る**（37 ファイル・83386 バイト）・**在る**（31 ファイル・54749 バイト） |
+| areka の記憶 | `profile\areka\` | **在る**（1 ファイル `sylphya.toml`・58 バイト。`[last]` の `ghost = "claudia"`・`running = ""`） |
+| ゴーストの記憶（えも？？） | `ghost\emo2\ghost\master\profile\areka\` | **在る**（1 ファイル `sylphya.toml`・98 バイト。`[boot]` の `count`・`[last]` の `balloon = "emo2-kakukaku-wplimit"`・`shell = "master"`） |
+| ゴーストの記憶（クローディア） | `ghost\claudia\ghost\master\profile\areka\` | **在る**（1 ファイル `sylphya.toml`・124 バイト。`[boot]` の `count`・`[last]` の `balloon = "StayseeBalloon"`・`shell = "master"`・`[window.0]` の `x = "2131"`・`y = "704"`） |
+| シェルの記憶（えも？？） | `ghost\emo2\shell\master\profile\areka\` | 無い＝**測れなかった** |
+| シェルの記憶（クローディア） | `ghost\claudia\shell\master\profile\areka\` | 無い＝**測れなかった** |
+
+- **シェルの記憶が測れなかった理由**: 0.0.2 には、シェルの記憶へ書く操作が 1 つも無い。タグ `v0.0.2` のソース（テストを除く）で記憶へ書く口 `persist_put` を呼んでいる所は 8 か所（`crates/areka/src/boot_resolve.rs` の 4 か所・`emo2_boot/ghost_switch.rs`・`install/desk.rs`・`placement/persist.rs`・`crates/areka-ghost/src/prop_sink.rs`）で、書き先はどれも areka の記憶（`PersistScope::App`）かゴーストの記憶（`PersistScope::Ghost`）。シェルの記憶（`PersistScope::Shell`）は、起動のときに読む所だけに出てくる。`crates/areka-sylphya/src/persist/mod.rs` の説明も「本番の鍵はすべてゴーストの記憶に載る」と書いている。設計が足す操作に挙げた「キャラクターを動かす」は 3 回目で行い、位置はゴーストの記憶（`[window.0]`）に書かれた。「シェルを切り替える」も、書く口は上の 8 か所のどれかなので、書き先は areka の記憶かゴーストの記憶になる（今のシェルの名前は、ゴーストの記憶の `[last]` の `shell` に書かれている）。だから、この種類は作らずに「測れなかった」とする（ファイルを手で置くことはしていない）。
+- シェルのフォルダそのもの（`ghost\emo2\shell\master\`・`ghost\claudia\shell\master\`）は `ghost\` の下に在る。上げ直しと外し方で `ghost\` に起きることは、そのままシェルのフォルダにも起きるので、後の実測ではこの 2 つのフォルダの有無を見る。
+- えも？？ のゴーストのフォルダ `ghost\emo2\ghost\master\profile\` には、areka の記憶のほかに、ゴースト自身（pasta）が作った物が 49 ファイル在る（`pasta\save\`・`pasta\logs\`・`pasta\cache\`・`pasta\pasta_scripts\`。合わせて 50 ファイル・431218 バイト）。
+- 入れ先の直下に、空のフォルダ `.nar-work\` ができている（0 ファイル）。`.nar` を入れるときの作業用フォルダで、説明書（`README.txt`）に載っている物。
+- 入れ先のファイルの数は **358**・合計 **21846581 バイト**・下の階層のフォルダは 58。起こす前（201 ファイル）から増えたのは 157 ファイル（`ghost\claudia\` 69・`balloon\claudia\` 37・`balloon\claudia_vertical\` 31・`balloon\emo2-kakukaku-wplimit\` 20）で、消えたファイルは 0。直下の内わけ: `balloon\` 138 ファイル・`ghost\` 212 ファイル・`profile\` 1 ファイル・直下のファイル 7 つ（うち 1 つは winget の控え `Areka.Areka.Portable__DefaultSource.db`＝隠しファイル）。
+- 状態は右クリックメニューで作ったので、台本（MCP）の入口は通っていない（「既知の制限」に書いた）。
+
+#### 写し
+
+- 置き場: `target\winget-check\state-snapshot\`（取る前は無かった）。取った時刻 13:29:53〜13:29:54。
+- コマンド: `robocopy <入れ先> target\winget-check\state-snapshot /E /COPY:DAT /DCOPY:DAT /R:1 /W:1`。終了コード 1（すべて写した、の意味。8 未満は成功）。robocopy の数えは フォルダ 59（根を含む）・ファイル 358・失敗 0・飛ばした物 0（`target\winget-check\logs\3.1-snapshot-robocopy.log`）。
+- 見比べ: 写しの一覧（`3.1-installdir-snapshot.txt`）は **358 ファイル・21846581 バイト**で、入れ先の一覧と 1 行も違わない（一覧のファイルの SHA256 が同じ `21CCE03A…0EDD5A05`）。写した後に取り直した入れ先の一覧（`3.1-installdir-run3-before-snapshot-check.txt`）も同じ。358 ファイルすべてで、入れ先と写しの SHA256 が同じ（違い 0）。下の階層のフォルダは 58 と 58。空の `.nar-work\` も写しに在る。winget の控えは、写しでも隠しファイルのまま。
+- 抜き出して書く 3 つ: `areka.exe` は `CC800980…659D237A`・`profile\areka\sylphya.toml` は `3E16E14A…325EDDF6`・`ghost\claudia\ghost\master\profile\areka\sylphya.toml` は `80ED6700…ADE49528`（どれも入れ先と写しで同じ）。
+- 写しを取った後、入れ先のフォルダから動いているプロセスは 0・9871 の待ち受けは 0。**上げ直しの実測（タスク 3.2）まで、areka を起動しない。**
+
+（タスク 3.2 で 6 項目の結果を記入）
 
 ## 外し方の実測
 
@@ -435,6 +486,10 @@ AI が `target\winget-check\3.1-launch.ps1 -Port 9871 -Tag run2` で areka を�
 | 1 回目の起動の記録（標準出力・標準エラー）・起こしたプロセスの結果（解決先・時刻・終了コード）・組み直した PATH | `target\winget-check\logs\3.1-run1.stdout.log`・`3.1-run1.stderr.log`・`3.1-run1.result.json`・`3.1-run1-fresh-path.txt`・`3.1-run1-fresh-shell.*` | 3.1 |
 | MCP の口へ送った文と答えの全文・`tools/list` の答え | `target\winget-check\logs\3.1-mcp.log`・`3.1-tools-list.json` | 3.1 |
 | 入れ先のフォルダの一覧（起こす前・閉じる要求の直前・終わった後。相対パスと大きさ・隠しファイルも含む） | `target\winget-check\logs\3.1-installdir-before-launch.txt`・`3.1-installdir-run1-before-close.txt`・`3.1-installdir-run1-after-end.txt` | 3.1 |
+| `AREKA_NO_ALERT` を置かずに起こすスクリプト 2 つ（3 回目に使った） | `target\winget-check\3.1-launch-alert.ps1`・`3.1-inner-alert.ps1` | 3.1 |
+| 2 回目・3 回目の起動の記録（標準出力・標準エラー）・起こしたプロセスの結果・組み直した PATH | `target\winget-check\logs\3.1-run2.*`・`3.1-run2-fresh-*`・`3.1-run3.*`・`3.1-run3-fresh-*` | 3.1 |
+| 状態を作った後の入れ先のフォルダの一覧（写しの前・写しの後）と、写しの一覧 | `target\winget-check\logs\3.1-installdir-run3-after-end.txt`・`3.1-installdir-run3-before-snapshot-check.txt`・`3.1-installdir-snapshot.txt` | 3.1 |
+| 状態の写し（入れ先のフォルダの丸ごと。358 ファイル・21846581 バイト・隠しファイルと空のフォルダも含む）と、写したときの robocopy の記録 | `target\winget-check\state-snapshot\`・`target\winget-check\logs\3.1-snapshot-robocopy.log` | 3.1 |
 
 - 取ってきた後の `git status --porcelain` は 0 行（`target` の下に限って見ても 0 行）。`git ls-files -- target` も 0 件で、取ってきた物は `git status` に出ない。
 - `git check-ignore -v target/winget-check/release/areka-0.0.2-x64.zip` は `.gitignore:1:target` を返した（追跡の外になる理由がこの 1 行であることの裏付け）。
@@ -444,13 +499,16 @@ AI が `target\winget-check\3.1-launch.ps1 -Port 9871 -Tag run2` で areka を�
 ## 既知の制限
 
 - arm64 の項目は実機で入れていない。arm64 について確かめたのは、`winget validate` の成功（上の「雛形の検査」の「`winget validate`」）と、`InstallerSha256` が Release の `.sha256` に書かれた値と一致すること（同じく「ハッシュの突き合わせ」）まで（要件 3.7）。
+- 実測の元になる状態（タスク 3.1）は、右クリックメニューで作った。メニューを操作したのは、開発者から `areka.exe` の画面の操作を許された AI。だから、メニューの入口「インストール…」「ゴースト」「終了」は**通っている**。通っていないのは台本（MCP の `sakurascript`）の入口のほうで、これは設計の見込み（状態は MCP の台本で作り、メニューの入口は通らない）と**逆**になった。理由は、入れた 0.0.2 の `sakurascript` が中身の無い仮の受け口で、台本を受け取らないため（「見つかった件と起票」の 1 行目）。入れる手続きと切り替えの手続きそのものは、どちらの入口でも同じ物。
+- 状態を作った起動（3 回目）は、`AREKA_NO_ALERT` を置いていない（置くと、0.0.2 はメニューの「インストール…」でファイルを選ぶ画面を出さない）。利用者の普段の起動と同じ側の条件。
+- シェルの記憶（`ghost\<ゴースト>\shell\<シェル>\profile\areka\`）は、0.0.2 では作る操作が無く、作れなかった。上げ直しと外し方の実測では、この種類を「測れなかった」と書く（理由は「上げ直しの実測」の「作った物の一覧」）。シェルのフォルダそのものは `ghost\` の下に在るので、フォルダの有無は見られる。
 
-（タスク 3.1・3.3・3.4 で記入）
+（タスク 3.3・3.4 で記入）
 
 ## 見つかった件と起票
 
 | 起きたこと | どの段か | 根拠の記録の場所 | 起票した spec |
 |---|---|---|---|
-| 入れた areka（0.0.2）の MCP の `sakurascript` が、台本を受け取らずに `NG:not implemented yet` と答える。台本で `.nar` を入れる・ゴーストを切り替える・終える、のどれもできず、状態を MCP の口から作れなかった（右クリックメニューでの操作を開発者に頼む） | 段 4（タスク 3.1） | `target\winget-check\logs\3.1-mcp.log`（送った文と答え）・上の「上げ直しの実測」の「作る状態」・タグ `v0.0.2` の `crates/areka/src/mcp/sakurascript.rs` | （タスク 3.6 で記入。中身を入れる仕事は、起票済みの `areka-P0-mcp-kanade-tools` の brief に在る） |
+| 入れた areka（0.0.2）の MCP の `sakurascript` が、台本を受け取らずに `NG:not implemented yet` と答える。台本で `.nar` を入れる・ゴーストを切り替える・終える、のどれもできず、状態を MCP の口から作れなかった（代わりに、右クリックメニューを AI が画面の操作で動かして作った） | 段 4（タスク 3.1） | `target\winget-check\logs\3.1-mcp.log`（送った文と答え）・上の「上げ直しの実測」の「作る状態」・タグ `v0.0.2` の `crates/areka/src/mcp/sakurascript.rs` | （タスク 3.6 で記入。中身を入れる仕事は、起票済みの `areka-P0-mcp-kanade-tools` の brief に在る） |
 
 （タスク 3.6 で記入）
