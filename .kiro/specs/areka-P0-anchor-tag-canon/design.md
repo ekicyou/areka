@@ -177,6 +177,7 @@ doc/
 | `crates/dola/src/cue/command.rs` | `CueCommand::AnchorBegin{id, references}`・`CueCommand::AnchorEnd`（`references` は `Choice` と同じ `serde(default, skip_serializing_if)`） |
 | `crates/dola/src/cue/sink.rs` | `cue_target_of` の腕 2 つ → `Some(CueTarget::Balloon)` |
 | `crates/dola/tests/cue/sink_test.rs` | 網羅の檻 `cue_target_of_classifies_every_variant` に 2 種類 |
+| `crates/dola/src/cue/command_tests.rs`・`crates/dola/tests/cue/sheet_test.rs` | 手書きの「全 variant」の列（`cue_command_ten_variants`・「presentation コマンドは 10 種」）を 12 種へ揃える（赤にはならないが主張が嘘になる） |
 | `crates/areka-ghost/src/sink.rs` | `command_kind` の腕 2 つ（`"AnchorBegin"`／`"AnchorEnd"`）とその檻 |
 | `crates/areka-emo-text/src/state.rs` | `ChoiceSpan.kind: SpanKind`・`pub enum SpanKind{Choice, Anchor}`・`ActorTextState.anchor_open: Option<usize>`・`apply_cue` の腕 2 つ（`state_anchor.rs` へ委譲）・`Text`／`Choice` の腕で追記の直後に `extend_open_anchor`・`#[path = "state_anchor.rs"] mod anchor;` |
 | `crates/areka-emo-text/src/state_decoration.rs` | `push_current_style` が開いているアンカーの間は `underline = true` の写しを `intern`（3 行） |
@@ -185,7 +186,7 @@ doc/
 | `crates/areka-emo-text/src/lib.rs` | `PURE_SOURCES` に 3 ファイル・母数 73 → 76 |
 | `crates/areka/src/input_events/balloon.rs` | `ChoiceSelection.kind: SpanKind`・`hit_choice_row` を種類の 2 段走査（選択肢を後ろから → 当たらなければアンカーを後ろから）・`click_selection` が `kind` を写す |
 | `crates/areka/src/input_events/balloon_pressed.rs`・`balloon_moved.rs`・`balloon_exit.rs` | `rt.choice_active(&actor)` → `rt.hit_active(&actor)`（各 1 行）。押下の `selected_now` は種類を問わず真 |
-| `crates/areka/src/input_events/shell_box_handler.rs` | `read_point` の `active` を `hit_active` に（1 行）。`send_selection` の記録に `kind` |
+| `crates/areka/src/input_events/shell_box_handler.rs` | `read_point` の `active` と、**窓の離脱の道**（`hover_action` に `rt.choice_active(&actor)` を渡している箇所）の 2 か所を `hit_active` に（各 1 行。離脱で箱のアンカーの強調を戻す＝要件 3.2／3.7）。`send_selection` の記録に `kind` |
 | `crates/areka/src/input_events/shell_box.rs` | 無改変（`judge_box_click`／`judge_box_press` はそのまま）。`BoxPressVerdict::ConsumedBySelection` の doc を「選択肢・アンカーのどちらでも」に |
 | `crates/areka/src/input_events/choice_drain.rs` | `forward_all` が `kind` で `KanadeMsg::Choice`／`KanadeMsg::Anchor` に振り分ける（`to_anchor_input` を足す） |
 | `crates/areka/src/input_events/balloon_pure_core_tests.rs`・`shell_box_tests.rs`・`balloon_test_support.rs`・`balloon_wiring_tests.rs` | `kind` の欄の追随と、3.5 の順・箱の結論のアンカー版 |
@@ -195,6 +196,7 @@ doc/
 | `crates/areka-kanade/src/schedule/mod.rs` | `Input::Anchor(AnchorInput)`・`State.anchor: Option<AnchorStage>`・`Input::Anchor` の腕（Steady だけ・それ以外は `warn!` で棄却）・横断の `Failed`→Fault の免除条件に `state.anchor.is_some()`・`mod anchor;` |
 | `crates/areka-kanade/src/schedule/steady.rs` | `on_reply` の先頭に段の記憶の腕（`anchor::on_anchor_reply` へ委譲・`Value` は既存の腕へ流す）。5〜6 行 |
 | `crates/areka-kanade/src/schedule/events.rs` | `ALLOWED_EVENT_IDS` に `OnAnchorSelectEx`・`OnAnchorSelect`／`on_anchor_select_ex`・`on_anchor_select`（`on_choice_select_ex`／`on_choice_select` と同じ形）。ファイル冒頭の表に 2 行 |
+| `crates/areka-kanade/src/schedule/events_change_tests.rs` | 許可表の数の檻（`ALLOWED_EVENT_IDS.len()` の 51）を 53 へ |
 | `crates/areka/src/mcp/check_script_judge.rs` | `pair_anchors` を 1 回呼び、`Anchor`／`AnchorEnd` の腕で当該位置の見つかりを `Kind::UnpairedTag` で出す。文言の定数 3 つ |
 | `crates/areka/src/mcp/check_script_judge_tests.rs` | 4 形で `unknown_tag`／`unknown_command` が出ないこと・崩れた 3 形の行（表の 15〜17 行目） |
 | `crates/areka-mcp/src/tools/check_script.rs` | `Kind::UnpairedTag` → `"unpaired_tag"` |
@@ -204,6 +206,8 @@ doc/
 | `doc/ukadoc-coverage/ledger/assets.toml` | descript `anchor.*` 43 行の `owner` を `areka-P0-anchor-style-canon` へ |
 | `doc/ukadoc-coverage/ledger/shiori.toml` | `OnAnchorSelect`・`OnAnchorSelectEx` を `implemented`・`owner = "areka-P0-anchor-tag-canon"` |
 | `doc/ukadoc-coverage/roadmap-draft.md` | `[[spec]] areka-P0-anchor-tag-canon` の `owner_count` を数え直し（61 → 4）・`[[spec]] areka-P0-anchor-style-canon`（`stage = "A"`・`bundle = "バルーンのリンク"`・`owner_count = 59`）を足し `[briefs].count` を 1 増やす（`ukadoc-survey` の整合の檻 a・b・c・f が見る） |
+| `doc/ukadoc-coverage/briefing.md` | `[[barrier]] page = "list_shiori_event"` の `implemented`（50 → 52）と `absent`（236 → 234）を数え直す（`briefing_arms.rs::distribution_findings` が見る） |
+| `doc/ukadoc-coverage/report/{sakura-script,shiori,assets}.md`・`report/summary.md` | **手で直さず**作り直す: `cargo run -p ukadoc-survey -- report` と `report-summary`（`DomainReportStale`・`summary_findings` の全文一致が見る。先例は `choice-script-prefix` のタスク）。台帳・`briefing.md`・`roadmap-draft.md`・報告の作り直しは **1 タスク**にまとめる |
 | `doc/COMPAT_ARCHITECTURE.md` | §8 に 1 行（詳細は `doc/anchor-compat.md` へのポインタ） |
 
 ### C5 の約束との照合
@@ -436,7 +440,7 @@ pub struct ChoiceSpan {
 }
 ```
 
-- 不変（維持）: `ordinal` は追記順に単調・`glyph_range` は互いに素・空回しの写しでは記録を出さない。
+- 不変: `ordinal` は追記順に単調・**同じ種類の**範囲の `glyph_range` は互いに素（アンカーは選択肢を包んでよい・Data Models の不変条件を参照）・空回しの写しでは記録を出さない。
 - 型名は `ChoiceSpan` のまま（名前替えの波及を避ける。doc に「選択肢とアンカーの共通の範囲」と記す）。
 
 #### `state_anchor.rs`（新・`ActorTextState` の impl）
@@ -554,6 +558,7 @@ pub fn on_anchor_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall;  
 - `check_script_judge::diagnose` は `pair_anchors(reads.iter().map(|r| &r.instruction))` を 1 回計算し、`Instruction::Anchor`／`AnchorEnd` の腕で当該 `index` の見つかりを `Kind::UnpairedTag` で出す（診断は台本の順のまま）。
 - 文言（ASCII）: `MSG_ANCHOR_UNCLOSED = "the anchor is not closed; playback extends it to the end of the script"`／`MSG_ANCHOR_REOPENED = "a new anchor opens before the previous one closes; playback closes the previous one here"`／`MSG_ANCHOR_STRAY_CLOSE = "no anchor is open; playback ignores this close"`。
 - `areka-mcp` の `Kind::UnpairedTag` → `"unpaired_tag"`。`areka-tools.md` ⑶ の表に 15〜17 行目として足す。
+- `diagnose` は `\e`・`\-` で打ち切らないが、`pair_anchors` は `End`／`Quit` で止まる。`\e` の後ろの `\_a` は再生でも読まれないので「本番と同じ内容」のまま＝`\e` の後ろの開き／閉じには診断を出さない（意図した差ではなく一致）。
 
 ## Data Models
 
@@ -566,7 +571,7 @@ pub fn on_anchor_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall;  
 
 ### 不変条件
 
-- 同じ場所（普通のバルーン／箱）の列の中で `ordinal` は添字に等しく単調。`glyph_range` は互いに素。
+- 同じ場所（普通のバルーン／箱）の列の中で `ordinal` は添字に等しく単調。**同じ種類の**範囲の `glyph_range` は互いに素。アンカーの範囲は選択肢の範囲を包んでよい（`\_a[x]…\q[題,ID]…\_a`＝要件 1.7「開きから閉じまでに表示される文字の並び」の読みどおり。Reference0 には選択肢の文字も含まれる。押下は選択肢が勝つ＝3.5）。`state.rs` の `ChoiceSpan` の doc「互いに素かつ追記順に単調」はこの文言に改め、`choice_anchor_tests.rs` の混在の檻もこの文言で固定する。
 - 開いているアンカーは高々 1 つ（`anchor_open`）。compile が重なりを補っているので文字の層では到達しない（防御で閉じる）。
 - `choice_active` ⇒ 列に `kind == Choice` がある。`hit_active` ⇒ 列が非空。
 
@@ -595,7 +600,7 @@ pub fn on_anchor_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall;  
 - **話している最中・消えた後**（8.6）: `user_break_tests.rs` に「単クリックで選択（アンカー）→ 2 打目は `ConsumedBySelection`」の 1 件（`judge_press` の純粋判定）／`actor_clear_atomicity_tests.rs` にアンカーを含む列が `Clear` で `hit_active=false`・`choice_hit_rows` 空になる 1 件。
 - **kanade**（8.3）: `schedule/anchor_tests.rs`——`plan_anchor`・`on_anchor` の GET（Ref0=text・Ref1=id・Ref2..・空なら位置なし）・204→`OnAnchorSelect`（Ref0=id）・`Value`→`OnAnchorSelect` を送らず `StartTalk`（`talk: Some` なら置き換えで新 talk_id）・`Failed`→204 と同じ・`On` 始まり→`EventId::Choice`・Steady 以外は棄却・`choosing` を立てない・`Failed` が Fault へ倒れない（`mod.rs` の免除）。
 - **道具**（8.7）: `check_script_judge_tests.rs`——4 形で `unknown_tag`／`unknown_command` が 0 件・崩れた 3 形で `unpaired_tag` と文言（表の 15〜17 行目）。
-- **網羅の檻**: dola `sink_test.rs`・ghost `command_kind` の檻に 2 種類。emo-text `lib.rs` の母数 76。`ukadoc-survey` の整合（`owner_count`・`[briefs].count`・宛先の名前の実在）。
+- **網羅の檻**: dola `sink_test.rs`・ghost `command_kind` の檻に 2 種類、dola の手書きの「10 種」2 檻（`command_tests.rs`・`sheet_test.rs`）を 12 種へ。kanade `events_change_tests.rs` の許可表の数 51 → 53。emo-text `lib.rs` の母数 76。`ukadoc-survey` の整合（`owner_count`・`[briefs].count`・宛先の名前の実在・`briefing.md` の barrier の数・報告 4 本の作り直し）。
 - **実機**（8.8）: `AREKA_NO_ALERT=1`・`RUST_LOG=areka_kanade=info,areka_sakura=warn` で、辞書にアンカーを持つ検体ゴースト（`sample-ghost-kit` の `SAMPLES` から辞書を展開して `\_a[` を含むものを選ぶ。無ければ `target\` の下に `\_a` を使う台詞と `OnAnchorSelectEx` の答えを持つ小さな検体を置く）を起動し、⑴ 押す → 答えの台本に置き換わる、⑵ 話している最中に押しても台詞が続く、を人が見てログで裏取りする。検体はワークツリーの `target\` の下だけ。
 
 ## Supporting References
