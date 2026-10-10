@@ -47,7 +47,8 @@ fn playing(phase: Phase) -> State {
     }
 }
 
-/// 「再生中のトークが在る」3 つの場面（`fn current_talk_id` が `Some` を返す全て）。
+/// 「再生中のトークが在る」場面のうち 3 つ（普段の会話・起動の挨拶・終了の挨拶。`fn current_talk_id` は
+/// 切り替えのお別れの 2 つの相でも番号を返すが、そこでの中断は切り替えの中止という別の結論なので並べない）。
 ///
 /// 場面で結論を変えない（要件 2.5）ことを確かめるため、判断分岐 ⑴ のテストはこの 3 つを一律に踏む。
 fn playing_states(talk_id: TalkId) -> Vec<(&'static str, State)> {
