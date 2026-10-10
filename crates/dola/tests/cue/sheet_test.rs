@@ -540,7 +540,7 @@ fn to_talk_schedule_carries_finite_duration_untransformed() {
     }
 }
 
-/// R1.1/R1.2: 搬送体の duration は**コマンド種別を問わない一律フィールド**。全 12 variant が
+/// R1.1/R1.2: 搬送体の duration は**コマンド種別を問わない一律フィールド**。全 13 variant が
 /// 瞬時（明示的 0）・時間占有の双方を canonical 変換で運べる（旧 command.rs 檻の移設）。
 #[test]
 fn to_talk_schedule_duration_uniform_across_every_command_variant() {
@@ -571,8 +571,12 @@ fn to_talk_schedule_duration_uniform_across_every_command_variant() {
             references: vec![],
         },
         CueCommand::AnchorEnd,
+        CueCommand::Cursor {
+            x: "5em".into(),
+            y: "2lh".into(),
+        },
     ];
-    assert_eq!(commands.len(), 12, "presentation コマンドは 12 種");
+    assert_eq!(commands.len(), 13, "presentation コマンドは 13 種");
 
     for command in commands {
         for duration in [0.0_f64, 1.25] {

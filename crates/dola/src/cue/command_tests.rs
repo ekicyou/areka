@@ -35,7 +35,7 @@ fn routing_command_three_variants() {
 }
 
 #[test]
-fn cue_command_twelve_variants() {
+fn cue_command_thirteen_variants() {
     let cmds = vec![
         CueCommand::Text("hello".into()),
         CueCommand::Clear,
@@ -61,8 +61,12 @@ fn cue_command_twelve_variants() {
             references: vec![],
         },
         CueCommand::AnchorEnd,
+        CueCommand::Cursor {
+            x: "5em".into(),
+            y: "2lh".into(),
+        },
     ];
-    assert_eq!(cmds.len(), 12);
+    assert_eq!(cmds.len(), 13);
 
     // Clone + Debug + PartialEq
     for cmd in &cmds {
