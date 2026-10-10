@@ -8,7 +8,7 @@
 //!
 //! ## 本クレートが持つ正本（canonical source）
 //!
-//! - **運行表の正本**: 運行状態機械（`schedule/`・後続タスクで実装）が ukadoc
+//! - **運行表の正本**: 運行状態機械（`schedule/`）が ukadoc
 //!   Reference 表に基づく遷移判断を一手に担う。mock fixture・状態機械の期待列・
 //!   ハーネスの assert はすべてこの正本から導出される。
 //! - **talk 契約**: talk 起動契約型（[`TalkId`] / [`StartTalk`] / [`TalkDone`] /

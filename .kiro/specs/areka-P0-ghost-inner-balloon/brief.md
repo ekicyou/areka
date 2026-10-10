@@ -87,3 +87,25 @@
 - 利用者が選んだもの（記憶・引数）を作者の指定で上書きしない。
 - 決定論のテスト網羅は必達。ログの無い失敗の経路を作らない。検体と一時フォルダはワークツリーの `target\` の下だけ。
 - 段は**優先**（バルーン関係）・並びは `shell-companion-balloon` の後（棚卸で決める）・規模 M〜L（12〜18 タスク・議題 2 と 3 の答えで動く）・Fable 推奨。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: 待っていた `ghost-standard-balloon` が着地した（10-07）。起票のときの「決め」はそのまま実装された。
+  - descript の `balloon`（`name` → フォルダ名の順に突き合わせ）と `default.balloon.path`（フォルダ名 1 段だけ。区切りや `..` を含む値は当たらないとして記録）が鎖の段になった。「ゴーストの中の `balloon/` は読まない」は `crates/areka/src/boot_config.rs` の `resolve_balloon_for_ghost` の説明と `doc/COMPAT_ARCHITECTURE.md` §8 に書いてある。
+  - 一覧の項目 `BalloonEntry` は場所と素性（フォルダ名・`name`）を持つ。ただし鎖（`crates/areka/src/boot_resolve.rs` の `resolve_balloon`）は、決めた場所を「根＋フォルダ名」から組み直している＝置き場を 2 つにするなら、項目の場所をそのまま使う形へ直す。
+  - **未確認だった点が分かった**: 書庫の中の `balloon/` は、`install.txt` が同梱の取り出し元（`balloon.source.directory`）として名指ししなければ、ゴーストのフォルダの中へそのまま入る（`crates/areka-nar/src/plan.rs` は名指しされたフォルダだけを本体から除く）＝議題 3 は「そのまま入れるだけ」で足りる見込み。
+  - 一覧を引く呼び手が 1 つ増えた: `\![open,explorer,…]` の名前引き（`crates/areka/src/readme/opener.rs` の `named_folder`）。
+- 触るファイル: `crates/areka-ghost/src/catalog.rs`（414）・`crates/areka/src/boot_resolve.rs`（609）・`boot_config.rs`（503）・`emo2_boot/shell_balloon_resolve.rs`（217）・`menu/balloon_frame.rs`・`update/desk.rs`（`updateother` のバルーンの引き方）・`install/procedure.rs`（入れた後の一覧）・`readme/opener.rs`・（記憶の形を変えるなら）`crates/areka-sylphya/src/persist/`・（書庫に鍵を足すなら）`crates/areka-nar/src/{manifest,plan}.rs`・`doc/COMPAT_ARCHITECTURE.md` §8・`dist/README.txt`。
+- 規模: 12〜18 タスク（議題 2 と 3 の答えで動く。3 が「そのまま入れる」なら下の方）。
+- 先に要るもの: 働きの上では無し（`shell-companion-balloon` を待つ理由は、同じファイルを触ることだけ。議題 6 は後から着地する側が答える）。ファイルの重なりは次のとおり。
+  - `shell-companion-balloon`・`baseware-root-list`（`catalog.rs`・`boot_resolve.rs`・`boot_config.rs`＝この 3 本は直列）。
+  - `baseware-root-list`（さらに `shell_balloon_resolve.rs`・`menu/balloon_frame.rs`・`update/desk.rs`・`install/procedure.rs`・`readme/opener.rs`）。
+  - `network-update-canon-order`・`update-check-options`（`update/desk.rs`）。
+  - `emily-ghost-verification`（`areka-nar` の `plan.rs`・書庫に鍵を足す場合だけ）。
+- 優先度の区分: A（開発者「shell フォルダがあるんだから balloon フォルダがあっても良い」「別 spec に」）。
+- 要件定義のモデル: Fable（ukadoc に無い独自の拡張・議題 6 つ）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述:
+  - 本文「Current State」の「`resolve_balloon` は、フォルダ名の一覧と突き合わせる」は古い（今は `BalloonEntry` の列）。
+  - `baseware-root-list` も「項目がどの置き場のものか」を持たせる。先に着地する方が素性に置き場の欄を作り、後の方は種類を足すだけにする（2 本で別々の形を作らない）。

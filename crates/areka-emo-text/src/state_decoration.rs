@@ -25,7 +25,7 @@
 //! 「戻す操作」の実体は 1 か所（[`ActorTextState::reset_look`]）で、`\f[default]` と
 //! 台本の先頭はそこを通る（要件 10.3）。後続仕様のクリック待ち（`\x`）も同じ実体を
 //! 通す前提で口を開けてあるが、`\x` の実装は本仕様の射程外で**本番の呼び出し元はまだ
-//! 無い**（引受先＝`areka-P0-balloon-lifecycle-events`）。
+//! 無い**（引受先＝`areka-P0-talk-fast-forward`）。
 //! 外から呼ぶ入口は [`TextLayerState::reset_decoration`] 1 本で、スコープ指定と
 //! 全スコープ（要件 10.5）の両方を受ける。`\f[disable]` は戻し先の層が違うだけの
 //! 同じ一括の戻しである（[`ActorTextState::reset_look_disabled`] の裁定）。
@@ -586,7 +586,7 @@ impl TextLayerState {
     /// （`ClearAll`→[`ActorTextState::reset_for_new_talk`]）は同じ実体
     /// （[`ActorTextState::reset_look`]）を通り、別々の戻し方を持たない。後続仕様の
     /// クリック待ち（`\x`）もここを通す前提だが、**本番の呼び出し元はまだ無い**
-    /// （引受先＝`areka-P0-balloon-lifecycle-events`）。
+    /// （引受先＝`areka-P0-talk-fast-forward`）。
     /// 既に表示済みの文字の見た目は変わらない（要件 10.7）。
     pub fn reset_decoration(&mut self, scope: Option<&ActorKey>) {
         match scope {

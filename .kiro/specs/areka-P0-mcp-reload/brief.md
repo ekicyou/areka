@@ -103,3 +103,32 @@ AI エージェントは辞書やシェルを書き換えたら、ゴースト�
   - `doc/ukadoc-coverage/ledger/sakura-script.toml` の `\![reload,…]` の行
 - 議題（答えで作業が変わるものだけ）: 前回の 2 つ（`\![reload,shiori]` を含めるか・知らせなしの起動を kanade に足すか）。加えて、降ろす側を `msg.rs` に触らずに済ませるか（済めば MCP の kanade の 2 本と並べられる）。
 - 見つけた穴: なし。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - `\!` の受け取り手の台帳 `crates/areka/src/emo2_boot/consumer_ledger.rs` は 859 行から 943 行になった（`open-external-tags`・`mcp-author-tools`・`balloon-lifecycle-events` が足した）。うち約 510 行はファイルの中のテストの塊＝行を足す前に兄弟のテストファイルへ出す（1 タスク）。
+  - `mcp-author-tools` の `check_script` は同じ台帳を引いて「誰も拾わない `\!`」を答える。`reload` の行を足すと `check_script` の答えも変わる。台帳の行と各受け口の選別が合っていることを固定するテスト `consumer_ledger_agreement_tests.rs` にも行を足す。
+  - `ghost-standard-balloon` がバルーンの決め方を「ゴーストの descript の指定 → 記憶 → 同梱」の順にした（`emo2_boot/ghost_switch.rs` は 902 行）。`\![reload,balloon]` は今のバルーンのフォルダを読み直すだけで選び直しはしない、でよいかを要件で確かめる。
+  - 降ろす側は kanade に足すものが無いと分かった: 切替の依頼の「イベントを送らない」指定（`ChangeRequest` の `raise_event` が偽）で、`OnGhostChanging` も `OnClose` も送らずに降ろす道が既にある（kanade の `schedule/change.rs` の切替を始める関数）。棚卸㉒の議題「降ろす側を `msg.rs` に触らずに済ませるか」の答えは「済む」。kanade で要るのは、起動の由来（`src/change.rs` の `BootOrigin`・今も 4 種）に「知らせを送らない」1 種と、`schedule/boot.rs` でそれを受ける所だけ。
+  - `emo2_boot/mod.rs` は 883 行から 912 行になった。
+- 触るファイル:
+  - `crates/areka/src/mcp/reload.rs`・`reload_tests.rs`
+  - 新規 `crates/areka/src/emo2_boot/reload_cue.rs`＋兄弟テスト（同じゴースト・同じシェル・同じバルーンへ載せ替える入口もここか、その子に置く）
+  - `emo2_boot/consumer_ledger.rs`（943）・`consumer_ledger_agreement_tests.rs`・`emo2_boot/mod.rs`（912）・`emo2_boot/ghost_switch.rs`（902）・`emo2_boot/shell_balloon_switch.rs`（442）
+  - kanade の `src/change.rs`（175）・`schedule/boot.rs`（345）
+  - `\![reload,shiori]` を含めるなら `crates/areka-ghost/src/runtime.rs`（788）
+  - 台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml` の `\![reload,…]` の行・`doc/ssp-mcp/areka-tools.md` の受け取り手の数の 1 行
+- 規模: L（17〜22 タスク）。`\![reload,shiori]` を除くと 14〜17、含めると 17〜22。
+- 先に要るもの: 働きの前提は着地済み。
+  - 同じウェーブに置けない相手: `script-security-level`（`schedule/boot.rs`）・`makoto-reload-directives`・`script-impact-tiers`・`mcp-strict-errors`（`consumer_ledger.rs`）・`shell-companion-balloon`・`balloon-canon-residue`（切替のファイルを挙げている）・`makoto-dll-host`（`runtime.rs`＝`\![reload,shiori]` を含めるときだけ）。
+  - `mcp-kanade-tools` とは、向こうが kanade の `src/change.rs`・`schedule/boot.rs` に触らなければ重なり 0。`mcp-strict-errors` より先に着地させる（案内文の「not implemented yet」の 1 文を消す順）。
+- 優先度の区分: A（開発者の指示「ssp mcp tool の完全移植のための spec 群を立ち上げて」）。
+- 要件定義のモデル: Fable（SHIORI だけの載せ替えと descript の読み直しの意味を ukadoc から決める・切替の最中に届いたときの順序）。
+- 分割の案: 今は切らない（20 をはっきり超えてはいない）。要件の段で数えて 20 を超えたら、前から決めてあるとおり `\![reload,shiori]`（実行系の SHIORI だけを載せ替える・`runtime.rs`）だけを別の spec へ出す。それ以上は削らない。
+- 見つけた穴・古くなった記述: 棚卸㉒の行数（859・883・891）は古い。`doc/ssp-mcp/areka-tools.md` の手書きの「今 23 組」は受け取り手を足すたびに古くなる（数を書かずコードを指す形に直す候補）。
+
+## 2026-10-10 棚卸㉓の申し送り
+
+- **`consumer_ledger.rs` に触るついでの片付け 1 件**（完了 `mcp-author-tools` の `research.md` の 13 節が残したもの）。`\!` の対応表 `ConsumerLedger::canonical`（`crates/areka/src/emo2_boot/consumer_ledger.rs`）の `bind` の行は、名前を文字列 `"bind"` で直に書いている。拾う側の seriko（`crates/areka-seriko/src/actor.rs`）も自分の中で `"bind"` と直に比べていて、2 つを結ぶ共通の定数が無い。ほかの内部の名前（`FONT_TAG_CARRIER`・`PROP_SET_CUE_NAME`・`JUMP_TAG_CARRIER`）は定数を分け合っている。
+- 不具合ではない（今は 2 つの綴りが合っている）。本 spec で対応表に `reload` の行を足すときに、seriko に名前の定数を 1 つ置いて表から引く形へ直す（1 タスクの中で済む大きさ）。seriko のファイルに触りたくないウェーブなら、やらずに次に対応表へ触る spec へ送ってよい。

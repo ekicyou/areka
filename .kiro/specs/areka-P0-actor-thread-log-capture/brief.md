@@ -62,3 +62,15 @@
 - 1 ファイル 1,000 行の番人を守る。
 - テストの実行ファイルの全スレッドで `tracing::enabled!` を真にする形（全体の設定）は取らない。
 - 規模の見立て: S（3〜6）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**: 起票（10-10）から main は動いていない。`spawn_actor`（`crates/areka-actor/src/spawn.rs`・360 行）を呼ぶ本番のファイルは 11 本（`areka` の `install/worker.rs`・`update/worker.rs`、kanade の `actor.rs`・`shiori/real.rs`、`areka-ghost` の `dispatcher.rs`・`relay.rs`・`ticker.rs`、`areka-sakura` の `drive.rs`、`areka-seriko` の `actor.rs`、`areka-sylphya` の `actor.rs`、`areka-mcp` の `server.rs`）。走り始めのフックを入れるのは今も `crates/areka/src/thread_roles.rs` の 1 か所だけ。
+- **触るファイル**: `crates/areka-actor/src/spawn.rs` と兄弟のテスト（今ある `spawn_hook_tests.rs` 60 行か、新しい 1 本）・口が要れば `crates/log-capture-kit/src/capture.rs`（107 行）・対照として `crates/areka/src/install/desk_overwrite_tests.rs`（686 行）の手がかりを集める関数。
+- **規模**: S（4〜6）。
+- **先に要るもの**: なし。ファイルの重なり: `desk_overwrite_tests.rs` は `install-live-target-hazards` が挙げる。`areka-actor` を触ると書く未完了の brief はほかに無い。
+- **測定の仕事ではない**（重い回 0。静かな机の全体テスト 1 回で確かめる）。
+- **優先度の区分**: C（テストの道具の改善・本番の記録は変えない）。
+- **要件定義のモデル**: Fable（スレッドをまたぐ受け手の引き継ぎ・窓が閉じた後に子が出す記録の扱い＝並行）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 背景のスレッドは `spawn_actor` だけで起きていない。素のスレッドで起こす所が本番に 7 か所ある（`crates/areka/src/install/desk.rs`・`install/fetch_url.rs`・`emo2_boot/switch_assets.rs`・`mcp/dump_surface.rs`・`readme/opener.rs`・`shiori_host.rs`、kanade の `shiori/probe.rs`）。`spawn_actor` だけを直しても、これらの記録はテストの捕捉に入らない＝範囲に入れるか（同じ引き継ぎを通す小さな共通の起こし方を作るか）を要件で決める。

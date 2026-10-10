@@ -100,3 +100,23 @@
   - `doc/ukadoc-coverage/ledger/{sakura-script,shiori}.toml`（`_5ct:1` と `Status` の `timecritical`）
 - 議題（答えで作業が変わるものだけ）: 止める「マウス系など」の範囲（前回どおり。ドラッグの 2 語は同じ道なので既定で入る）。
 - 見つけた穴: なし。並走の照合: kanade の列の `balloon-lifecycle-events` と同時に走らせない。台本のコンパイルの列（`compile.rs`）には触れない。
+
+
+---
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - **確かめた**: `\t` は `crates/areka-parsers/src/sakura/decode.rs` の `decode_bare` に腕を足し、汎用の `\!` の運び手へ写せば、`crates/areka-sakura/src/compile.rs` に触らずに合図まで届く（裸の `\+` の腕と、`open-external-tags` が足した `\j` の運搬名＝`sakura/model.rs` の定数が先例）。`mcp-author-tools`（10-08 着地）の後は腕ごとに印を返す形で、腕が印を積まなければ台本の検査は `\t` を「知らないタグ」と答えなくなる（`\t` を見本に使う検査は今は無い）。
+  - **新しく要るもの**: 台本の検査は `\!` の受け取り手の表に無い名前を「知らない命令」と答える。運搬名を表（`crates/areka/src/emo2_boot/consumer_ledger.rs`）に 1 行足し、表と受け口の一致の検査（`consumer_ledger_agreement_tests.rs`＝今は 9 つの受け口を並べる）に新しい受け口と見本を足す。
+  - kanade の行数（`balloon-lifecycle-events`・`choice-script-prefix` の後）: `schedule/steady.rs` 950・`schedule/mod.rs` 955・`msg.rs` 926・`actor.rs` 900。抑えの判定は新しいファイル（例 `schedule/time_critical.rs`）に置き、`mod.rs` の振り分けの `Input::Mouse` の腕から呼ぶ＝`mod.rs` に足すのは宣言・呼び出し・`snapshot_with_choice`・記録の名前で 10 行ほど（1,000 に届かない）。`steady.rs`・`msg.rs`・`actor.rs` には触らない（旗の更新は既にある `KanadeMsg::ExecutionState` に乗り、型は `status.rs`）。`steady.rs` の `on_mouse` の `SEAM(Req7.3)`（パッシブモードの抑え）は残っている。
+  - `mcp-get-status`（10-06 着地）: MCP の `get_status` は kanade の状態から旗を導くので、`timecritical` は自動で出るようになる。`doc/ssp-mcp/get-status-diff-areka.md` の「出さない旗」の行から `timecritical` を外す。
+  - 区間の終わり（中断・選択の確定）を読む入口は、`balloon-lifecycle-events` の後は kanade の `schedule/balloon_events.rs`・`user_break.rs` に集まっている。
+- 触るファイル: `sakura/{decode.rs, model.rs, mod.rs}`・kanade の `status.rs`・`status_derive_tests.rs`・`schedule/mod.rs` と新規 `schedule/time_critical.rs`・新規 `crates/areka/src/emo2_boot/time_critical_cue.rs`・`emo2_boot/{consumer_ledger.rs（943 行）, consumer_ledger_agreement_tests.rs, mod.rs（912 行）}`・台帳 `sakura-script.toml`・`shiori.toml`・`doc/ssp-mcp/get-status-diff-areka.md`。emo-text には触らない。
+- 規模: 8〜11 タスク（棚卸㉒は 7〜10。受け取り手の表と一致の検査で 1 増えた）。
+- 分割の案: 切らない。`consumer_ledger.rs` は行を足す前に、ファイルの中のテスト（約 500 行）を兄弟のファイルへ出す。
+- 先に要るもの: 働きの前提は満たした。ファイルの重なり: `decode.rs`（台本のコンパイルの列の全部）・`schedule/mod.rs`（`mcp-kanade-tools`・`farewell-talk-status`・`mcp-reload` ほか）・`consumer_ledger.rs` と `emo2_boot/mod.rs`（`mcp-reload` ほか）。
+- 優先度の区分: A（出どころは開発者の実機での指摘「メニューを出した後に後続のトークが止まってないときがある」。brief 自身は段を「その他」と書いている）。
+- 要件定義のモデル: Fable（止める「マウス系など」の範囲＝正典のあいまいさ）。
+- 議題: 止める「マウス系など」の範囲（棚卸㉒のまま）。
+- 見つけた穴・古くなった記述: コードの穴は無い。`compile.rs` に触れなくても `decode.rs` は台本のコンパイルの列の持ち物＝列から外れるわけではない。棚卸㉒の行数（`steady.rs` 947 ほか）は上の数に読み替える。

@@ -1,6 +1,6 @@
 //! shell — surfaces.txt パーサ。
 //!
-//! 公開面集約のスケルトン。後続タスクで以下を順次追加する:
+//! 公開面の集約。中身は次のとおり:
 //! - `model`  : 下流共有 I/O 契約型（Shell ルート＋各型＋opaque NewType）
 //! - `lexer`  : 構文層（ブロック/行/ドットキー/CSV/`[id,...]` 配列のトークン化）
 //! - `decode` : 意味層（animationN 集約・append 範囲展開・alias 写像・subset 値正規化）

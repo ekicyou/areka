@@ -125,8 +125,8 @@ pub enum PatternApplyOutcome {
 /// 着せ替え集合 `dynamic_binds` を併せて保持する（要件 3.1・予約シームの消費）。`static_binds`
 /// は [`ScopeStates::new`] で設定し、シェルの差し替え（[`ScopeStates::rebase_shell`]）でだけ替わる。
 /// 動的 bind 未適用の scope に対する **既定（初期値）集合**として機能する（Show 発行の bind 供給源は [`ScopeStates::current_binds`]
-/// が `dynamic_binds` 優先・不在時 `static_binds` フォールバックで決める）。本ユニットは動的 bind の
-/// 変更 API（`apply_bind`）を持たず、`dynamic_binds` は空のまま起動する（後続タスクが書き込む）。
+/// が `dynamic_binds` 優先・不在時 `static_binds` フォールバックで決める）。動的 bind は
+/// `apply_bind` が書き込み、`dynamic_binds` は空のまま起動する。
 pub struct ScopeStates {
     /// 話者スコープごとの現 surface 状態（`ActorKey` は `Ord` 非対応ゆえ HashMap・design）。
     scopes: HashMap<ActorKey, ScopeState>,
@@ -144,7 +144,7 @@ pub struct ScopeStates {
     /// per-scope の動的着せ替え集合（要件 3.1）。エントリを持つ scope はその集合を、持たない
     /// scope は `static_binds`（既定・初期値）を Show の bind 供給源とする（[`current_binds`]）。
     ///
-    /// 本ユニットでは常に空のまま（書き込む `apply_bind` は後続タスク）。空である限り
+    /// 起動時は空（書き込むのは `apply_bind`）。空である限り
     /// [`current_binds`] は全 scope で `static_binds` を返し、Show 発行は従来と byte 同値
     /// （要件 3.8 非退行）。[`current_binds`]: ScopeStates::current_binds
     dynamic_binds: HashMap<ActorKey, BindSet>,

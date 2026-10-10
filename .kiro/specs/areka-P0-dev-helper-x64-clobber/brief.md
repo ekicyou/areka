@@ -44,3 +44,18 @@
 ## Constraints
 - shiori-host32 は後付け・kanade の改変は疎結合化の方向でのみ（host32 のための特別扱いは最後の手段）。
 - 規模の見立て: S（3〜6）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**: フルテストの速度調整（PR#258）は、helper の約 42 秒の檻を i686 の段だけで走らせる形にした（`crates/shiori-host32-helper/src/main.rs` の檻の `cfg`）。上書きそのものは直っていない＝全体テストの x64 の段は今も `cargo test --workspace`（`tools/test-all.ps1`）で、helper の実行ファイルを x64 で作る。ただしこの変更で、x64 の段が helper を作る理由はほぼ無くなった（残る単体テストは i686 の段と同じもの）＝案 ⑴ が「x64 の段から helper を外す」の 1 行で取れる見込みになった。外すと `target\debug\` に helper が無くなるので、案 ⑵（i686 版を隣へ置く）と組にする。
+- **触るファイル**: 案 ⑴⑵ なら `tools/test-all.ps1`（70 行）だけ。案 ⑶（向きを確かめて記録を出す）なら、helper を起こす所 `crates/shiori-host32-host/src/process_host.rs`（632 行）か、helper の置き場を決める関数 `crates/areka/src/boot_config.rs`（503 行）と兄弟のテスト。新しいファイルは無い見込み。
+- **規模**: S（3〜5）。
+- **先に要るもの**: なし。ファイルの重なり: `boot_config.rs` は `shell-companion-balloon`・`ghost-inner-balloon`・`baseware-root-list`・`makoto-dll-host`・`shiori4-api` の brief が挙げる＝案 ⑶ の記録は `process_host.rs` の側に置けば重なりが `makoto-dll-host` だけになる。`tools/test-all.ps1` は `clippy-199-lints`（clippy の段を足すと決めたとき）と同じファイル。
+- **測定の仕事ではない**。確かめはビルドと、手で 1 回起こすことだけ（重い回 0）。
+- **優先度の区分**: C（開発の手順の罠・製品は壊れない）。
+- **要件定義のモデル**: Opus。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**:
+  - brief の「helper を起こす所（`areka-kanade` の host-32 の起動）」は場所が違う。置き場を決めるのは `areka` の `boot_config.rs`、起こすのは `shiori-host32-host` の `process_host.rs`。
+  - 煙テスト（`crates/areka/tests/smoke_boot_loop_exit.rs` の、i686 の成果物を揃える関数）は、全体テストの x64 の段の中で i686 版を `areka.exe` の隣へ写す。だから「全体テストの後は x64 版」になる道筋は自明でない（写した版の更新時刻が古く、次の x64 のビルドが作り直す、という読みは確かめていない）。最初のタスクで、どの操作の後に x64 版へ戻るかをビルドだけで確かめる。
+  - 本番の `areka` には、helper の場所を外から指す口が無い（テストの側だけ `HOST32_HELPER_EXE` を読む）。

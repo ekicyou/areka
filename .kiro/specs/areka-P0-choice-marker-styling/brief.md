@@ -100,3 +100,20 @@
 - 並走の見立て: `budoux-reveal-reflow`（`actor_present.rs`・`state.rs`・`segment.rs`）とはファイルが重ならない。`balloon-font-file`（`viewbox_draw_render.rs`・`look.rs`）・`anchor-tag-canon`（`choice.rs`・`viewbox_draw_render.rs`）とは重なる。列の順（`text-align-shadow-canon` の後）は同じファイルを触るからで機能の依存ではないので、列を飛ばして前へ出すなら相手は `budoux-reveal-reflow` だけ。
 - 議題: `SetROP2` の描画方法（`cursormethod`・descript の `cursor.blendmethod` の縮退と合わせて）を D2D でどこまで再現するか。`anchor-style-canon` と同じ答えにする。
 - 見つけた穴: なし。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**:
+  - C4 で `crates/areka-emo-text/src/` の `choice.rs`（744 行）・`viewbox_draw_render.rs`（571 行）・`viewbox_draw_decoration.rs`（314 行）は変わらず、`look.rs` は 802 行、`state_decoration.rs` は 635 行になった。位置は全部当たる（下線系を塗りへ縮める警告は `choice.rs` の `ResolvedChoiceStyle::resolve`）。
+  - 台本の読み手は `\f` を引数のまま運ぶ＝`decode.rs` には触らない。台本を確かめる道具 `check_script` は `\f[cursor*]` を今「効かない」と診断するが、`look.rs` の結果を使うので本 spec の着地で自動で消える。
+  - 列を飛ばして並べる相手だった `budoux-reveal-reflow` は着地した。
+- **触るファイル**: 棚卸㉒の一覧に、縮退の検査 `choice_style_resolve_tests.rs`（218 行）を足す。`choice_tests.rs` は 966 行＝足さない。下の穴を範囲に入れるなら `crates/areka-parsers/src/balloon/{model.rs, parse.rs}` と読み取りの検査、網羅台帳 `assets.toml` も。新しい検査ファイルを足すなら `lib.rs`。
+- **規模**: 今の Scope のままなら S（5〜8）。下の穴（descript の非選択の層）を入れると M（9〜12 タスク）。
+- **先に要るもの**: 働きの依存は無い。
+- **優先度の区分**: C（ukadoc の `\f[cursor*]` の拾い残し）。
+- **要件定義のモデル**: Opus（分かれ目は `cursormethod` の再現の範囲の 1 つ。`anchor-style-canon` より先に着地するなら、その答えを本 spec で開発者に聞く）。
+- **分割の案**: 切らない（穴を入れても 20 に届かない）。
+- **見つけた穴・古くなった記述**:
+  - **descript の非選択の層が無い**。網羅台帳 `assets.toml` は本 spec に 29 行を割り当てていて、うち影を除く `cursor.notselect.*` 10 行・`cursor.style`・`cursor.pen.color.*`・`cursor.blendmethod` が Scope に書かれていない。バルーン定義の読み手（`crates/areka-parsers/src/balloon/`）は `cursor.notselect` を 1 つも読まない。`\f[cursornotselect*,default]` の戻り先が無いので、要件で範囲に入れるかを決める。影の 8 行（`cursor.font.shadow*`・`cursor.notselect.font.shadow*`）は `text-align-shadow-canon` の持ち物に見える。
+  - 重なる相手: `anchor-tag-canon`・`choice-ranges-one-function`（`choice.rs`）・`balloon-font-file`（`viewbox_draw_render.rs`）・`anchor-style-canon`・`text-align-shadow-canon`。roadmap の「列から外して並べられる相手は `budoux-reveal-reflow` だけ」は相手が着地したので、今は「文字とバルーンの列の先頭とは並べられない」と読む。
+  - `choice.rs` の 2 つの警告の文面に古い段の名前「M1 未対応」が残っている（本 spec が縮退ごと外す）。

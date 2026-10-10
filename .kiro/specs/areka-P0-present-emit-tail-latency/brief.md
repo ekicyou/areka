@@ -45,3 +45,15 @@
 - 1 フレーム遅らせる解は取らない。状態の持ち方を変えて解く。
 - 計測は `tools/perf/` の A/B 交互の手順で前後を比べる（機械の負荷で桁が動くので、単発の数字で判定しない）。
 - 規模の見立て: S〜M（5〜10）。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: 起票（10-07）から `crates/areka-emo-present/src/presenter/show.rs`・`timing.rs` は変更 0。段は今も 4 つ（照会・合成・当たりのマスク・表示の記録）で、Current State は今の main と一致。
+- 触るファイル: `crates/areka-emo-present/src/presenter/{show.rs, timing.rs}` と兄弟のテスト `timing_tests.rs`・`presenter_perf_log_tests.rs`（883 行）。perf の行に段が増えるので、`tools/perf/` の読み手が段の名前を見ていればそこも。原因しだいで、その呼び出し元。
+- 規模: 5〜10 タスクのまま。**計測が約半分**（3〜4＝段を足す・計時のテスト・perf の行の読み手・前後の測り比べと記録）。直しは 2〜6 で、計測の後でないと決まらない。
+- 先に要るもの: 無し（今すぐ着手できる）。`extent-element-offset`・`collisionex-regions`・`seriko-trigger-intervals`・`animated-image-import`・`placement-measure-bake-once` とは重なり 0。`mcp-strict-errors`（`show.rs`）・`balloon-element-order`（`presenter/`）とは同時に走らせない。
+- 優先度の区分: B（バグ＝絵が止まって見える）。
+- 要件定義のモデル: Opus（まず測る仕事。原因がロックやスレッドの待ちと分かったら、設計は Fable）。
+- 分割の案: 無し。計測の結果、直しが emo-present の外で大きいと分かったら、計測と記録で閉じて直しを別に起票する。
+- 見つけた穴・古くなった記述: 本文は測っていない区間の中身を「`info!` の 1 行・窓寸の照合・`frame_of(world)`・`take_delta`」と書くが、実際にはその前に、窓の中身へ絵を渡す処理が全部入っている＝初回の表示の部品の生成・`set_display`・`set_layout`・当たりのマスクの受け渡し・`set_visible`・遷移の記録の 2 行（どれも `show.rs` の「当たりのマスク」の印の後）。wintf の World への書き込みが主な候補なので、段は「絵を渡す塊」と「記録の塊」に分けて足す。

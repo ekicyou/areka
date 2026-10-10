@@ -1,5 +1,5 @@
 //! balloon_visibility の子: 見える・隠すの判断（`decide` と、ライフサイクル信号・利用者の中断・内容の増減の判定）。
-//! 足す予定の spec: balloon-lifecycle-events・shell-balloon。
+//! 足す予定の spec: なし。
 
 use super::wait::decide_timeout;
 use super::{

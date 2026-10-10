@@ -108,3 +108,25 @@
 - **確かめること（要件の段）**: winget の portable で更新したとき、exe の隣のフォルダが入れ替わるか。入れ替わるなら、exe の隣に入れたゴーストを守る手（先頭の根を exe の外に置く案内など）を要件に足す。
 - App の記憶の `PersistKey` は 1 つの値を持つ鍵の族で、並びを持つ鍵は無い。入れ物の形（鍵の族を足すか・TOML の表の形）と、areka が動いている間に利用者が `sylphya.toml` を手で書き換えたときの扱いは設計で決める。
 - 段: その他。規模の見込み M〜L（14〜18）。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - `ghost-standard-balloon` が着地した（10-07）。バルーンの鎖の一覧は `BalloonEntry` の列になった（本文に 10-07 の注記あり）。鎖（`crates/areka/src/boot_resolve.rs` の `resolve_ghost`・`resolve_balloon`）は、決めた場所を「根＋フォルダ名」から組み直す＝根を並びにするなら、一覧の項目が持つ場所を使う形へ直す。
+  - 根を引く呼び手が 1 つ増えた: `\![open,explorer,種類,名前]` の名前引き（`crates/areka/src/readme/opener.rs` の `named_folder`・`open-external-tags`）。
+  - `v0.0.2` が公開された＝本文「確かめること」の winget の上げ直しは、`winget-manifest-submission` の議題（上げ直しで利用者のゴーストが残るか）と同じ実測で答えが出る。
+- 触るファイル（今の呼び手を数え直した）: `crates/areka-ghost/src/catalog.rs`（414）・`crates/areka/src/boot_config.rs`（503）・`boot_resolve.rs`（609）・`main.rs`（**950 行**）・`alert.rs`・`emo2_boot/ghost_switch.rs`（**902 行**）・`emo2_boot/{shell_balloon_resolve,shell_balloon_switch}.rs`・`menu/{ghost_frame,balloon_frame}.rs` とメニューの 2 項目（新しいファイル）・`install/{desk,procedure,overwrite}.rs`・`update/desk.rs`・`readme/opener.rs`・`crates/areka-sylphya/src/persist/`・`dist/README.txt`・`doc/COMPAT_ARCHITECTURE.md`。
+- 規模: 16〜20 タスク（起票の 14〜18 から上げた。呼び手の付け替えが 12 ファイルに及び、上限の近くの 2 本は足す分を兄弟ファイルへ出す）。
+- 先に要るもの: 働きの上では無し。ファイルの重なりは次のとおり。
+  - `shell-companion-balloon`・`ghost-inner-balloon`（`catalog.rs`・`boot_resolve.rs`・`boot_config.rs`＝この 3 本は直列）。
+  - `network-update-canon-order`・`update-check-options`（`update/desk.rs`）・`install-live-target-hazards`（`install/`・向こうが扱いを実装する場合）。
+  - `mcp-reload`（`ghost_switch.rs`・`shell_balloon_switch.rs`）・`popup-menu-residue`（`menu/`・着手の前に照合）。
+  - 0: `balloon-canon-residue`・`emily-ghost-verification`。
+- 優先度の区分: A（開発者「ゴーストフォルダの複数管理の仕組みが欲しい」）。
+- 要件定義のモデル: Fable（記憶の入れ物の形・インストール先・起動と切替とメニューにまたがる）。
+- 分割の案: 今は切らない。要件で 20 を超えたら、「メニューの 2 項目・フォルダ選択・App の記憶への保存」を後の 1 本に出し、前の 1 本は環境変数 `AREKA_ROOT` の並びだけで動く形にする。
+- 見つけた穴・古くなった記述:
+  - 本文の呼び手の一覧に `readme/opener.rs` が無い。
+  - フォルダ選択は、今のファイル選択（`install/pick.rs` の `GetOpenFileNameW`）とは別の API（`IFileOpenDialog`）になる。Windows の機能 `Win32_UI_Shell`・`Win32_System_Com` は根の `Cargo.toml` で有効＝`Cargo.toml` に触らずに済む見込み。
+  - `ghost-inner-balloon` も「項目がどの置き場のものか」を持たせる。先に着地する方が素性に置き場の欄を作る。

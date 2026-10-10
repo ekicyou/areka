@@ -45,3 +45,23 @@
 ## Constraints
 - ログ無しの失敗にしない（error! か warn! を 1 回は出す）。
 - 規模の見立て: S（4〜7）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**:
+  - `mcp-dump-images-residue` が供給面のファイル `crates/areka-emo-text/src/surface.rs` に読み戻しを足し、995 行になった（上限は 1,000）。ここへ 6 行以上足すなら、先に中の検査を兄弟のファイルへ出す＝`lib.rs` の一覧に触る。
+  - 不具合はそのまま残っている。面の大きさは `crates/areka-emo-text/src/actor_present.rs` の `present_actor` の「初めての装着」の枝で領域から計算し、0 でもそのまま装着を呼ぶ。失敗すると装着済みにならないので、次のフレームでまた同じ枝に入る。
+- **触るファイル**:
+  - 止める場所の候補は、本 brief の 3 つに加えて **`actor_present.rs`**（装着の枝の手前で 0 寸を見分けるのが一番素直）。
+  - `crates/areka-emo-text/src/region.rs`（486 行・潰れたときの警告）・`surface.rs`（995 行）・`crates/areka/src/emo2_boot/frame/scale_text.rs`（326 行・失敗の記録と次のフレームの再試行）。
+  - 検査は既存のファイル（`actor_tests.rs` 178 行など）に足せば新しいファイルは要らない。`actor_region_warn_tests.rs` は 894 行で足しにくい。
+- **規模**: S（4〜6 タスク）。
+- **先に要るもの**: 無い。
+- **優先度の区分**: B（バグ。記録が毎フレーム出続けて、ほかの記録が読めなくなる）。
+- **要件定義のモデル**: Opus。
+- **分割の案**: 切らない。
+- **見つけた穴・古くなった記述**:
+  - Boundary Candidates に `actor_present.rs` が無い（装着を呼ぶのはここ）。
+  - `anchor-tag-canon`・`choice-ranges-one-function` と `actor_present.rs` が重なる＝そこで止める設計なら同じウェーブに置けない（前か後）。`surface.rs` の側で止めるなら検査の切り出しで `lib.rs` に触る＝新しいファイルを足す spec と同じウェーブに置けない。
+  - 重なりを 0 にできるのは、領域を登録する所（`actor_attach.rs`・`actor_box.rs`）か `scale_text.rs` で止める形だけ＝設計で選ぶ。`balloon-canon-residue` も `scale_text.rs` に触る。
+  - シェルの中のバルーン（箱）も同じ枝を通るので、同じ直しが箱にも効くことを検査に入れる。

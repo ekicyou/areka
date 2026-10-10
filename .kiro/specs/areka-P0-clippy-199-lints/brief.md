@@ -99,3 +99,25 @@ lint ごとに clippy の提案どおりの機械的な直しを当てる（`col
 - 実装中（2026-10-06）に `cargo clippy --all-targets -- -D warnings` で、上の列挙の外の赤を 2 件見た: `areka-seriko` の `actor.rs` の `large_enum_variant` と `looper.rs` の `collapsible_if`（どちらも本 spec の前から）。
 - 列挙済みの赤も 10-06 時点で残っている: `areka-emo-compose` のテスト 5 か所の `chunks_exact`（`blit_transparent_alpha_tests.rs`・`golden_tests_surface1000_bind_tests.rs`・`golden_tests_test_support.rs`・`composer_tests.rs` ×2）と `dola` の 21 件。
 - 本 spec は `areka-seriko` の `table.rs`・`looper.rs`・`parts.rs`・`timeline.rs`・`state.rs`・`actor.rs` を触ったので、着手のときに行の位置を引き直す。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+`cargo clippy` は走らせていない（共通の決まり）。brief の列挙と、完了した spec の記録からの数え直し。
+
+- **前提の変化（分かっている指摘の場所）**:
+  - 段 1: `dola` 23 か所（上の列挙の足し算。10-06 の実測は 21）・`shiori-abi` 1・`shiori-host32-host/tests/` 6。C4 でこれらのファイルに入った変更は 0（`dola` は `cue/sink.rs` とテストだけ）。
+  - 段 2: `areka-emo-compose` 6（テストの 5 か所は 10-06 に残っている。`plan.rs` は C4 で動いた）・`areka-seriko` 2（列挙の外・上の申し送り）・`areka-emo-text` のテスト 4 ファイル（列挙の外・下の穴）・`areka-kanade` 3・`areka` 約 19。
+  - 足すと約 60 か所・8 クレート。**実数はその 2〜3 倍の見込み**: 完了 `mcp-dump-images-residue` の記録（10-06）は、`areka` と `areka-emo-text` の 2 クレートだけ（テスト込み・依存を除く）で 127 件、完了 `open-external-tags` の記録は `areka` だけで約 73 件と書く。brief の「`areka` 約 19」は古い。
+- **触るファイル**: 8 クレート（`dola`・`shiori-abi`・`shiori-host32-host`・`areka-emo-compose`・`areka-seriko`・`areka-emo-text`・`areka-kanade`・`areka`）。場所は最初のタスクで測り直す。
+- **規模**: M（12〜16）へ上げる（測り直し 1・クレートごとに 1〜2・`areka` は 4〜5・最後の確かめ 1）。20 は超えない見込み。
+- **段 1 のうち、ほかの未完了 spec が触らないもの**: `dola` の `validate/`・`runtime/`・`compile/`（ほかの spec が触るのは `cue/` だけ）と `shiori-host32-host/tests/` の 2 本。`shiori-abi` は 10-10 起票の `shiori4-api`（古い注釈の掃除で `shiori-abi` に触る）と重なりうる＝段 1 から外すか、行で照合する。`test-roots-under-target` が OS の一時フォルダを直に引く所まで直すなら `lifecycle_cyclic_e2e.rs` が重なる。
+- **段 2 はどのクレートも列の spec と重なる**: compose＝`extent-element-offset` ほかシェルの element の列・seriko＝`seriko-trigger-intervals`・emo-text のテスト＝文字とバルーンの列・kanade＝`mcp-kanade-tools`・`areka`＝多数。
+- **測定の仕事ではない**（clippy はビルドだけ・1 回 数分。全体テストは最後に 1 回）。
+- **先に要るもの**: なし。
+- **優先度の区分**: C（バグでない持ち越し・振る舞いは変えない）。
+- **要件定義のモデル**: Opus。
+- **分割の案**: 測り直して 20 を超えたときだけ、段 1（`dola`・`shiori-host32-host/tests/`・`shiori-abi`＝いつでも取れる）と段 2（残りの 5 クレート＝列が空いた席）の 2 本に切る。超えなければ 1 本のまま。
+- **見つけた穴・古くなった記述**:
+  - roadmap の「`wintf-tooltip` の持ち越し」が「申し送った」と書く 5 件は、この brief に節が無かった: `cargo clippy --workspace --all-targets` が止める水準の指摘 5 件で止まる（`crates/areka-emo-text/tests/` の `line_pitch_readback_test.rs`・`choice_fixture_test.rs`・`emo2_fixture_e2e_test.rs`・`decoration_readback_test.rs` と、kanade の `actor_raise_reply_tests.rs`。`absurd_extreme_comparisons` など）。
+  - roadmap の「段 1（`dola`・`shiori-abi`・`shiori-host32-host/tests/`）は空き席でも取れる」は、`shiori-abi` が上のとおり条件つきになった。
+  - 完了 `mcp-ghost-name-match` の記録に、`crates/areka/src/mcp/mcp_tests.rs` の `ok().expect()` 4 か所（10-03 から在る）。

@@ -85,3 +85,18 @@
   - `doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8
 - 議題（答えで作業が変わるものだけ）: 起票時の 3 つのまま。
 - すぐ直せる軽微な修正: この brief の「要件の段で決める議題」の直後に、起票のときの書き損じの 2 行（`</content>`・`</invoke>`）が紛れ込んでいる。消すだけ。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: `element-base-method`（10-05）で読み手が `base` の行も値にし、描けない行の転記 `crates/areka-parsers/src/shell/undrawn.rs` が入った。`animated-image-playback`（10-07）で、動く絵は束縛の直後に `crates/areka-emo-compose/src/film.rs` の `decompose` が子へ分解する。動く絵として扱うかの分かれ目は 2 段になった＝焼く入口 `bake_with_limits`（全コマを読む）と `decompose`（子を作る）。Problem の「再生の側が着地すると動いてしまう」は、今の main で実際に起きる。`self-alpha-declaration` は鍵に触れなかった。
+- 触るファイル: `crates/areka-parsers/src/shell/{model.rs, decode.rs}`・`crates/areka-emo-atlas/src/{manifest.rs, lib.rs}`（鍵を広げるなら `table.rs`）と `emo2_golden.rs`・`crates/areka-emo-compose/src/{fold,normalized,atlas_bind,film,plan,plan_extent}.rs`（描く側で切るなら `blit.rs`、当たり判定の大きさを変えるなら `hit.rs`）・台帳 `assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
+- 規模: 11〜15 タスク（10〜14 から 1 上げ＝分解の段が増えた）。切らない。
+- 先に要るもの: 働きの上では無し。ファイルの重なり＝`extent-element-offset`（`plan_extent.rs`・あちらの裁定の上に載る）・`animated-image-import`（読み手・`manifest.rs`・`plan.rs`・`film.rs`）・`collisionex-regions`・`seriko-trigger-intervals`（読み手）・`draw-methods-canon`（読み手・`fold.rs`・`plan.rs`・`blit.rs`）。列の順は今のまま（`extent-element-offset`・`animated-image-import` の後）。
+- 優先度の区分: C（正典の拾い残し）。
+- 要件定義のモデル: Fable（正典が黙っている 3 つの議題・鍵の形はアトラスと合成にまたがる）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述:
+  - 棚卸㉒の節の「書き損じの 2 行」は棚卸㉒の即時修正で消えた（もう無い）。
+  - 棚卸㉒の節の「外形の計算 `flatten_extent`（`plan.rs`）」は `plan_extent.rs` と読む。
+  - 同じ画像を「切り抜きあり」と「なし」で使うと、片方は動き片方は止まる。動く絵の子の番号は画像 1 つにつき 1 つなので、鍵を分ける形が要る（議題 2 に足す・`animated-image-import` の「別の鍵」と同じ形の問題）。

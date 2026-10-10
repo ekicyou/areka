@@ -59,3 +59,24 @@
 - 文字とバルーンの列と台本のコンパイルの列（`anchor-tag-canon` の次）。
 - 画像の選択肢は `\_b[…,inline]` の対応の状況に依る（要件の段で確かめる）。
 - 段: 優先（バルーン関係）。規模の見込み M（10〜14）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**:
+  - `choice-script-prefix` が着地した。`script:` の選択肢は kanade の `crates/areka-kanade/src/schedule/steady_choice_script.rs` が新しいトークとして走らせ、`script:` の綴りは `schedule/choice.rs` の `script_body` の 1 か所にある。選ばれた ID だけを見て動くので、`\__q` の ID もそのまま通る見込み。
+  - `anchor-tag-canon` は未着手。台本の読み手（`crates/areka-parsers/src/sakura/decode.rs`）は、どの腕も「読めなかった印」を一緒に返す形になった。`\__q` は今も素通しで、検査 `parse_bare_tag_tests.rs` が素通しを固定している。
+  - 選択肢の範囲は、今も「字の通し番号の範囲」で持っている（`crates/areka-emo-text/src/state.rs` の `ChoiceSpan`）。行ごとの割り当て（`choice.rs` の `annotate_lines`）もあるので、開きと閉じの 2 つの合図で範囲を作る形にすれば使い回せる見込み。
+- **触るファイル**:
+  - `crates/areka-parsers/src/sakura/{decode.rs, model.rs, mod.rs}` と検査 `parse_bare_tag_tests.rs`。
+  - `crates/areka-sakura/src/compile.rs`（選択待ちの区切りを出す条件が、今は `\q` の合図だけを数える）・`drive.rs`（選択肢の ID の一覧）。
+  - `crates/areka-emo-text/src/{state.rs, choice.rs, actor_present.rs, actor.rs}` と新しい検査ファイル＝`lib.rs` の一覧の席を使う。
+  - `crates/areka/src/input_events/{balloon.rs, shell_box.rs, shell_box_handler.rs}`（`anchor-tag-canon` の当たりをそのまま使えれば減る）。
+  - 網羅台帳 `sakura-script.toml` の `\__q` の行（持ち主が空のまま）・`doc/COMPAT_ARCHITECTURE.md` §8。kanade は触らない見込み。
+- **規模**: M（10〜14 タスク）。
+- **先に要るもの**: `anchor-tag-canon`（範囲の当たり）。`choice-script-prefix` は着地済み。同じ列の `link-context-copy`・`balloon-link-hover` はこの後。
+- **優先度の区分**: A（開発者の 10-05 の問い「リンクをクリックしたらファイルを開けるか」から起票し、開発者が別の spec にすると決めた）。
+- **要件定義のモデル**: Fable（ukadoc の記述が薄い所＝自動改行・閉じ忘れ・範囲の途中の `\q` や `\_a`、読み手から入力まで複数のエンジン）。
+- **分割の案**: 切らない。
+- **見つけた穴・古くなった記述**:
+  - 画像の選択肢に要る `\_b[…,inline]`（バルーンへの画像の貼り付け）は areka に無く、網羅台帳の持ち主も空、roadmap にも載っていない。本 brief の例 1（バナーを押すとサイトが開く）は本 spec だけでは動かない＝Out に書き、`\_b` を別に起票する。
+  - `seriko-trigger-intervals`・`talk-fast-forward`（台本の読み手と `compile.rs`）とは同じウェーブに置けない。

@@ -96,3 +96,21 @@ compile の汎用キャリアアームへ allowlist 判定を追加（純関数�
 ---
 
 > **📌 2026-10-05 相互登記（`areka-P0-balloon-lifecycle-events` の要件の討議）**——**`\![set,balloontimeout,時間]` は本 spec の担当から外し、`balloon-lifecycle-events` が丸ごと持つ**（開発者裁定「並走の spec が触らないなら本 spec が担当すべき」）。正典は「時間切れはスクリプトの表示が終わってからカウント」「そのスクリプト中のみ有効」で、タグは汎用の `\!` の運び手で表示が終わる時刻までに必ず表示の側へ届くため、コンパイルの側の先読みは要らない（`choicetimeout` とは違い、区切りの値へ焼き込む必要が無い）。本 spec に残るのは A 群（`\![quicksection,…]`・`\![set,balloonwait,…]`）と `\_q`（議題）。網羅台帳の `balloontimeout` の行の持ち主は `balloon-lifecycle-events` が直す。
+
+
+---
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - `\![set,balloontimeout]` は `balloon-lifecycle-events`（10-08）が持って着地した（台帳の行は `implemented`）。本 spec に残るのは `\![quicksection,…]`・`\![set,balloonwait,…]`・`\_q` の 3 語。
+  - **`\_q` を待たせていた理由は無かった**: 棚卸㉑・㉒の「`\_q` は字句で正しく切れない・直しは `anchor-tag-canon` の後」は誤り。字句の直しは完了 `sakura-bare-tag-lexer`（PR#134）で済んでいて、`\_q` は裸の `_q` として切れる（`crates/areka-parsers/src/sakura/lexer_bare_tag_tests.rs` が固定）。今は `decode.rs` の `decode_bare` に腕が無く、素通しになるだけ＝腕を 1 本足せば読める（裸の `\+` を `\![change,ghost,random]` へ写す腕が先例）。議題「`\_q` を入れるか」は「入れる」で閉じてよい。
+  - `mcp-author-tools`（10-08 着地）: `decode.rs` は腕ごとに印を返す形になり、`crates/areka-sakura/src/compile.rs`（411 行）は `parse_choice_timeout` を公開しただけ。台本の検査（MCP の `check_script`）は `\!` の受け取り手の表に無い名前を「知らない命令」と答える＝`quicksection` と `set` の `balloonwait` を表（`crates/areka/src/emo2_boot/consumer_ledger.rs`・943 行・担当は台本の組み立て）に足し、一致の検査（`consumer_ledger_agreement_tests.rs`）に見本を足す。値の読み取りを `parse_choice_timeout` と同じ形の公開の関数にすれば、検査が使い回せる。
+  - `budoux-reveal-reflow`（10-06 着地）: 文字の層へ先渡しされる合図は再生時間つき＝倍率や瞬間表示を焼き込んだ値がそのまま入る（文字の層に手は要らない）。
+- 触るファイル: `crates/areka-sakura/src/{compile.rs, duration.rs, lib.rs}` と兄弟のテスト・`crates/areka-parsers/src/sakura/{decode.rs, model.rs}`（`\_q`）・受け取り手の表の 2 本・（検査に値の誤りを答えさせるなら）`crates/areka/src/mcp/check_script_judge.rs`・台帳 `sakura-script.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。emo-text には触らない。
+- 規模: 8〜12 タスク（棚卸㉒は 10〜14。`balloontimeout` が抜け、表と検査が増えた）。
+- 分割の案: 切らない。
+- 先に要るもの: 働きの前提は無い。ファイルの順は台本のコンパイルの列（`anchor-tag-canon` → `range-choice-tag` → `talk-fast-forward` の後）。早送りとの決め（早送り中の倍率・`\_q` の中の早送り）は後から着地する側が検査で固定する。
+- 優先度の区分: C（ukadoc の先送りの追跡）。
+- 要件定義のモデル: Opus（コンパイルの中で閉じる・`\_q` の議題は解けた）。
+- 見つけた穴・古くなった記述: 網羅台帳で本 spec が持ち主の 10 行のうち 6 行（同期の `\![move]`・`\![set,alpha]`・`\![set,scaling]` の 2 行・`\![sound,wait]`・`\![wait,syncobject]`）は、棚卸㉑で範囲から外したのに持ち主が本 spec のまま＝着手のときに付け替える。冒頭の「着手ゲート: M1 外」「allowlist 8 コマンド族」は今の範囲（3 語）と合わない。

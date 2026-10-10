@@ -88,3 +88,12 @@
 - 触るファイル: 1 段目＝`doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/ledger/shiori.toml`（2 行）。輸送を作るなら前回の一覧どおり（`shiori-host32-ipc`・`shiori-host32-host`・`shiori-host32-helper`・`shiori-abi`・`crates/areka/src/shiori_host.rs`・`crates/areka-ghost/src/shiori_inproc.rs`）。
 - 議題（答えで作業が変わるものだけ）: なし。
 - 見つけた穴: なし（台帳の持ち主のずれは前回の記録どおり）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**: 無し（据え置きのまま）。通信の札（`crates/shiori-host32-ipc/src/lib.rs` の 5 つ）と `crates/shiori-abi/src/interface.rs` の `GetProperty`／`SetProperty` は `f26aa1c1` からの変更 0。`crates/areka/src/main.rs` は 950 行。10-10 起票の `shiori4-api` が、32bit の DLL からの台本を通さない読み取りを「本 spec の持ち物（据え置き）」と名指しし、host32-host の列で本 spec の後ろに並ぶと書いた＝1 段目の裁定の文書は、向こうの「プロパティへの入口の整理」の材料にもなる。
+- **触るファイル**: 1 段目（調べて裁定・文書だけ）＝`doc/COMPAT_ARCHITECTURE.md` §8・台帳 `shiori.toml` の 2 行。輸送を作るなら前回の一覧どおり。
+- **規模**: 1 段目 XS〜S（2〜4）／輸送を作るなら M（10〜14）。**分割の案**: なし。
+- **先に要るもの**: なし。1 段目はどの spec とも重ならない。
+- **優先度の区分**: D（据え置き）。**要件定義のモデル**: 着手するなら Fable（正典に無い道の読みと 2 案の裁定）。
+- **見つけた穴・古くなった記述**: 網羅台帳 `shiori.toml` の `property.get:1`・`property.set:1` の持ち主は今も `property-query-channels` のまま（この棚卸では台帳を直していない）。本 spec の 1 段目か、先にその行を触る spec が、数の欄と一緒に本 spec へ直す。

@@ -86,3 +86,15 @@ dlp が建てた自走ループ（perf-loop）を**測定側 3 是正を先に�
 - 崩れた前提／古くなった位置: 基準の数（08-23）はさらに古い。C3 で毎フレームか常時の処理に関わる変更が入った: `surface-element-nesting` の部品ごとの時計（`crates/areka-seriko/src/looper.rs` ほか）・`animated-image-decode` のコマの表・`shell-balloon-frame-align` の画面更新の末尾の相（見えているバルーンの組を毎フレーム作る）・`mcp-log-history` の info 以上の出来事を常に残す層（`RUST_LOG` と独立）。`drag-cancel-borrow-miss` は `wintf/src/ecs/world/mod.rs` の 1 行（ドラッグの累積器の据え付け）を変えただけで門には触れていない。
 - 触るファイル（着手するなら）: `crates/wintf/src/ecs/world/{tick_gate.rs, mod.rs}`・`crates/areka/src/tick_gate_config.rs`・`crates/areka/src/main.rs`・`tools/perf/`。
 - 議題・穴: なし（保留の解除は開発者の判断）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**: 保留のまま。門は今も既定で切（`crates/wintf/src/ecs/world/mod.rs` の `tick_gate_enabled: false`）。C4 で `tick_gate.rs`・`crates/areka/src/tick_gate_config.rs` に入った変更は 0、`tools/perf/` は `check-quiet.ps1` の守り 1 か所だけ。基準の数（08-23）はさらに古くなった＝C4 で毎フレームか実時間に関わる変更が入った（`animated-image-playback` の動く絵の時計と `always`・`wintf-tooltip` のマウスの止まりの検出・`balloon-lifecycle-events` のバルーンの時間切れ）。動く絵が出ている間は門が省ける回が減る見込みなので、測るときの検体も決め直す。
+- **触るファイル**（着手するなら）: 棚卸㉒のまま。`crates/wintf/src/ecs/world/mod.rs` は `wintf-tooltip` の後 944 行、`crates/areka/src/main.rs` は 950 行＝どちらも上限の近く。
+- **規模**: M〜L のまま。
+- **仕事の芯は測定**（静かな机・実機）。開発者方針「長い試行はしない」「高負荷のテストを何度も回さない」と本文の「夜間・25 分・3 回以上」の衝突は解けていない＝着手の前に短い A/B の測り方を組む順は変わらない。
+- **先に要るもの**: 開発者による保留の解除。同じ `tools/perf/` を使う `present-emit-tail-latency`・`perf-tools-console-encoding` と並べない。
+- **優先度の区分**: D（保留）。
+- **要件定義のモデル**: Fable（測り方の設計と時刻の扱い）。
+- **分割の案**: 本文どおり「測る側の直し」と「門の既定を入れる側」の 2 つ。今は切らない。
+- **見つけた穴・古くなった記述**: なし。

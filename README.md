@@ -104,7 +104,7 @@ pwsh -NoProfile -File tools/package.ps1 -Check     # 組んだ zip を展開し�
 | ⑤ seriko | SERIKO のアニメーション | `areka-seriko` |
 | ⑥ emo | 画像の合成と表示・文字とバルーンの描画 | `areka-emo-*` |
 
-その下に共通の土台として、Windows の UI フレームワーク **`wintf`**（ECS（bevy_ecs）＋ WUC ＋ Direct2D ＋ DirectWrite・縦書き対応）と、時刻つきの台本を再生する **`dola`** があります。アプリ本体は `areka`（bin）で、`.nar` のインストールは `areka-nar`、ネットワーク更新は `areka-update`、MCP サーバ（`127.0.0.1`。SSP と同じツール 10 本のうち 6 本が動き、`get_status`・`sakurascript`・`raise_event`・`reload` はこれから）は `areka-mcp` が受け持ちます。
+その下に共通の土台として、Windows の UI フレームワーク **`wintf`**（ECS（bevy_ecs）＋ WUC ＋ Direct2D ＋ DirectWrite・縦書き対応）と、時刻つきの台本を再生する **`dola`** があります。アプリ本体は `areka`（bin）で、`.nar` のインストールは `areka-nar`、ネットワーク更新は `areka-update`、MCP サーバ（`127.0.0.1`。SSP と同じツール 10 本のうち 7 本が動き、`sakurascript`・`raise_event`・`reload` はこれから。台本を再生せずに確かめる areka 独自のツール `check_script` もある）は `areka-mcp` が受け持ちます。
 
 詳しくは次を参照してください。
 

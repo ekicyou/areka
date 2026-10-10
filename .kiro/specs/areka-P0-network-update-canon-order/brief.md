@@ -117,3 +117,24 @@
 - 共有しうる相手: `update-check-options`（同じ `update/`・`update_cue.rs`＝本 spec の後に直列）・`shell-companion-balloon`（`shell_balloon_switch.rs`・`ghost_switch.rs`・`ghost_session.rs`）・`mcp-reload`（`ghost_session.rs`）・`coverage-roadmap-refresh`（台帳の `shiori.toml`）。
 - 議題（答えで作業が変わるものだけ）: 前回までのまま（対象ごとの読み直しの単位・自動更新〔差 5〕を本 spec で持つか）。
 - 見つけた穴: なし。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: 前提はすべて完了のまま＝今すぐ着手できる。10-05 の後に触るファイルへ入った変更は、テスト 2 本の待ち方（`crates/areka/src/update/desk_reload_tests.rs`・`worker_path_tests.rs`＝`ghost-session-test-load-flake`）だけ。
+  - 「前の台詞の終わりを待つ口」`KanadeMsg::AwaitTalkGap` は今も使える（`crates/areka-kanade/src/schedule/talk_gap.rs` は 2 行だけ変わった。結果の `MarkedEnd::NoTalk`・`Replaced` もそのまま）＝kanade に触らない見込みは変わらない。
+  - `crates/areka/src/emo2_boot/ghost_switch.rs` は `ghost-standard-balloon` で 902 行になった。更新の窓口を呼ぶ 3 か所（切替の終わりの `on_switch_end` が 2 つ・定常の到達の `on_steady` が 1 つ）はここに在る。
+  - エンジン（`crates/areka-update/src/lib.rs`）は今も、MD5 が合わなければその場で失敗する（取り直さない）。
+- 触るファイル:
+  - 必ず: `crates/areka/src/update/{procedure.rs 383, worker.rs 263, desk.rs 703, mod.rs, refs.rs}` と兄弟のテスト・`crates/areka-update/src/{lib.rs 393, error.rs}`・`doc/COMPAT_ARCHITECTURE.md` §8・台帳 `shiori.toml` の備考。
+  - 対象ごとに読み直す場合だけ: `emo2_boot/ghost_switch.rs`・`emo2_boot/shell_balloon_switch.rs`。
+  - 外せる見込み: `emo2_boot/update_cue.rs`（台本の受け口。順の組み替えでは変えるものが無い）・`ghost_session.rs`（更新の窓口の登記の 1 行だけ）。
+- 規模: 10〜14 タスク。
+- 先に要るもの: 働きの上では無し（今すぐ着手できる）。ファイルの重なりは次のとおり。
+  - 重なる: `update-check-options`（後ろに直列）・`baseware-root-list`・`ghost-inner-balloon`（`update/desk.rs`）。
+  - 対象ごとに読み直す場合だけ重なる: `shell-companion-balloon`・`mcp-reload`（`ghost_switch.rs`・`shell_balloon_switch.rs`）。
+  - 0: `balloon-canon-residue`・`emily-ghost-verification`。
+- 優先度の区分: C（ukadoc の発生順序の拾い残し。出どころの開発者の指示は「α 後の対応とし、申し送りのみ」）。
+- 要件定義のモデル: Fable（台詞の終わりを待つ・読み直しをまたぐ順＝時間と並行の話）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: 棚卸㉑・㉒の触るファイルの `update_cue.rs`・`ghost_session.rs` は、上のとおり外せる見込み。

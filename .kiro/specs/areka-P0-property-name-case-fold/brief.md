@@ -71,3 +71,15 @@ SSP はプロパティの名前の英字の大小を区別しない（`BASEWARE.
 - 触るファイル: `crates/areka-sylphya/src/{key.rs, reader.rs, actor.rs}`（名前を正準の鍵にする所・`classify_set`）と兄弟のテスト・`crates/areka-sylphya/src/persist/`（保存の読み戻し・畳むなら）・`crates/areka/src/mcp/get_property_tests.rs`（大文字の名前を 1 つ足すなら）・`doc/COMPAT_ARCHITECTURE.md` §8。
 - 議題（答えで作業が変わるものだけ）: 畳む範囲（括弧の中の名前・自由な名前・保存された名前を含めるか）。前回どおり要件の段で決める。
 - 見つけた穴: なし（上の候補は本 spec の範囲で塞ぐ）。並走の照合: プロパティの動く値の列（`currentghost-property-tree` ほか・`actor.rs` を分け合う）と同時に走らせない。kanade・host32・`emo2_boot` には触れない＝それらの列の spec とは並べられる。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**: 前提は無いまま＝今すぐ着手できる。C4 の 16 本は `crates/areka-sylphya/src/` に 1 行も触れていない（`f26aa1c1` からの変更 0）。穴（書き込みの仕分け `classify_set` が大小まで一致で比べ、`CURRENTGHOST.NAME` が「書けない名前」をすり抜けて保存へ落ちる）は今もそのまま。台本から書く道はまだ無い（`property-query-channels` が未着手）ので、利用者に見える害は出ていない。
+- **兄弟の決まりが先に着地した**: `mcp-ghost-name-match`（✅ 10-06）は MCP の宛先の名前を「前後の空白を除く＋半角の英字の大小だけ同じとみなす」で比べる（`crates/areka/src/mcp/resolve.rs` の `resolve`）。本 spec のプロパティの名前は「半角の英字の大小だけ畳む・前後の空白は削らない」が素直（空白を削らないことは `crates/areka/src/mcp/get_property_tests.rs` が固定している・SSP も削らない）。空白の扱いが 2 つの決まりで違うことを要件に 1 行で書く。括弧の中の名前（`ghostlist(名前)`）も畳むなら、宛先の名前と同じ「半角の英字だけ」に揃える。
+- **触るファイル**: `crates/areka-sylphya/src/key.rs`（411・点付きの名前の解釈 `parse_dotted` と 1 区切りの解釈。`index(…)` の見分けも完全一致）・`actor.rs`（754・`classify_set`・正準語彙の判定・自由な名前を保存へ回す腕）・`reader.rs`（584・解釈の側で畳めば変更 0 の見込み）・`persist/{mod.rs, format.rs}`（403・533・保存済みの名前の読み戻しを畳むなら）と兄弟のテスト（`actor_tests.rs`・`ledger_key_determinism_tests.rs`・`persist/persist_tests.rs` 786・新しいテスト）・`crates/areka/src/mcp/get_property_tests.rs`（大文字の名前を 1 つ足すなら）・`doc/ssp-mcp/survey.md` 7.3 節・`doc/COMPAT_ARCHITECTURE.md` §8。`mirror.rs`・`vocab/dotted.rs`・`areka-ghost`・kanade・`emo2_boot` には触れない。1,000 行に近いファイルは無い。
+- **規模**: S〜M（5〜9）のまま。**分割の案**: なし。
+- **先に要るもの**: なし。**本 spec を待つ未完了の spec は 7 本**＝直に 2 本（`currentghost-property-tree`＝同じ `actor.rs` を分け合う／`property-query-channels`＝書く道を開く前に穴をふさぐ、という棚卸㉒の裁定。ファイルは重ならない）と、その先の 5 本（`currentghost-property-others`・`system-property-values`・`property-catalog-lists`・`zorder-property`・`sakura-embed-directive`）。据え置きの `property-ipc-transport` は待たない。
+- **ファイルの重なり**: `currentghost-property-tree`（`actor.rs`）・`property-catalog-lists`（`actor.rs`・`key.rs`）・`system-property-values`（`key.rs`）・`zorder-property`（`actor.rs`）。どれも本 spec の後ろに並ぶ同じ列の仲間で、ほかの列（kanade・台本・`emo2_boot`・配置・MCP）の spec とは 0＝どのウェーブにも単独で入れられる。
+- **優先度の区分**: C（SSP に合わせる持ち越し・ukadoc は黙っている）。出どころは `mcp-get-property` の議題 1 で開発者が「起票して残す」と決めたことなので、A と読む余地もある。潜在の穴を 1 つ含むが、今は害が出ない。
+- **要件定義のモデル**: Opus で足りる（畳む範囲の分かれ目は `mcp-ghost-name-match` の決まりが手本になる）。
+- **見つけた穴・古くなった記述**: `doc/ssp-mcp/survey.md` 7.3 節の 6（「areka の宛先の解決は名前を完全一致で比べ、空文字を省略と同じに扱う」）は `mcp-ghost-name-match` の着地で偽になった（7.4 節には 10-06 の追記があるが 7.3 節には無い）。roadmap の列「プロパティの動く値」の重なる場所に `reader.rs`・`persist/` が載っていない。本文 Constraints の列挙にも `key.rs`・`reader.rs` が無い。

@@ -95,3 +95,13 @@ ukadoc プロパティ **`currentghost.seriko.zorder`**（SSP 2.8.78・[SET有�
 - 触るファイル: `crates/areka/src/placement/{zorder_group_ledger.rs, zorder_property_deferral_tests.rs}` と兄弟のテスト・`crates/areka-sylphya/src/{actor.rs, vocab/dotted.rs}`・届け先を UI へつなぐ所（`crates/areka-ghost/src/sylphya_wiring.rs`・`crates/areka/src/emo2_boot/mod.rs` の見込み）・`doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/ledger/property.toml`（1 行）。
 - 議題（答えで作業が変わるものだけ）: 前回の 3 つのまま（全部置き換える口・空文字で descript の基本の組も消すか・`RuntimeCommandSink` の届け先の登録をどの spec が作るか）。
 - 見つけた穴: `property-name-case-fold` の調べで、SET の仕分け `classify_set` は `SET_EFFECTIVE` と大小まで一致する名前だけを運行の値に回す。本 spec が `seriko.zorder` を `SET_EFFECTIVE` に載せた後も、`CURRENTGHOST.SERIKO.ZORDER` は自由な名前として保存へ落ちる（向こうが着地すれば解ける）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**: 無し。`crates/areka/src/placement/zorder_group_ledger.rs`（633）と先送りの見張りのテスト `placement/zorder_property_deferral_tests.rs`（611）は `f26aa1c1` からの変更 0。台帳の公開の操作は今も `parse_zorder_tokens`・`try_add_tag_group`・`set_descript_base`・`reset_to_descript`・`groups`・`version` だけで、文字列へ戻す関数と「全部置き換える」口は無いまま。sylphya も変更 0（運行の値の届け先は未登録のまま）。`mcp-author-tools`（✅ 10-08）が仕上げた受け取り手の表（`crates/areka/src/emo2_boot/consumer_ledger.rs`）の `set,zorder`・`reset,zorder` の行は、タグの入口の話で本 spec は変えない。
+- **触るファイル**: 前回のまま＝`crates/areka/src/placement/{zorder_group_ledger.rs, zorder_property_deferral_tests.rs}` と兄弟のテスト・`crates/areka-sylphya/src/{actor.rs, vocab/dotted.rs}`（754・407）・届け先を UI へつなぐ所（`crates/areka-ghost/src/sylphya_wiring.rs`・`crates/areka/src/emo2_boot/mod.rs` **912** の見込み）・`doc/COMPAT_ARCHITECTURE.md` §8・台帳 `property.toml`（1 行）。
+- **規模**: S（5〜8）・書き込みの届け先を本 spec が作るなら S〜M（8〜11）のまま。**分割の案**: なし。
+- **先に要るもの**: `currentghost-property-tree`（動く値の口）・その前に `property-name-case-fold`（大文字で書いた `CURRENTGHOST.SERIKO.ZORDER` が保存へ落ちる穴をふさぐ）。書く側は `property-query-channels`（読む側だけなら待たない）。
+- **ファイルの重なり**: `currentghost-property-tree`・`property-catalog-lists`（`actor.rs`・`dotted.rs`）・`currentghost-property-others`・`system-property-values`（`dotted.rs`・`emo2_boot/mod.rs`）・`property-name-case-fold`（`actor.rs`）。配置の `dpi-realign-remembered-chain` とは `placement/` の別のファイルで重ならない。`extra-character-windows` は本 spec を下流に挙げる（3 人目以降の窓を重なり順の対象に含める）＝後から着地する側が合わせる。
+- **優先度の区分**: C（完了 `scope-zorder-pinning` が先送りした正典 `currentghost.seriko.zorder` の受け皿）。**要件定義のモデル**: Opus。
+- **見つけた穴・古くなった記述**: 無し。議題は前回の 3 つのまま（全部置き換える口・空の文字列で descript の基本の組も消すか・運行の値の届け先をどの spec が登録するか）。

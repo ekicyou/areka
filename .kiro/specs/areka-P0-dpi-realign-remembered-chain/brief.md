@@ -57,3 +57,19 @@
 
 - 段は**バグ**（`char-position-save-on-exit` の着地で、直っていた動きが 2 回目の起動から後退する）。着手は `char-position-save-on-exit` の着地の後。
 - 1 フレーム遅らせて解く形は取らない。DPI 追従は基本設計。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**:
+  - **前提の `char-position-save-on-exit` が着地した（✅ 10-08・PR#264）＝後退はもう main に出ている**。起動の最後に並べ終えた時点で、記憶に位置が無いキャラクター窓の位置を書く（`crates/areka/src/placement/persist.rs` の `persist_unremembered_char_positions`・呼び手は `crates/areka/src/emo2_boot/frame/drain_resnap.rs` の起動の並べ直しの 1 か所）。位置を書く時機は「ドラッグの確定」と「並べ終えた時点」の 2 つで、終了の時には書かない（spec の名前と中身が違う）。
+  - **「覚えている」の今の意味**: 窓の一式 `GhostWindows` の既定の位置が無い（`default_char_pos` が `None`）スコープ＝記憶から戻したスコープ（`crates/areka/src/placement/spawn.rs`）。記憶が空の初回の起動は全員に既定の位置があるので詰め直される。2 回目の起動からは全員 `None` で、詰め直しの判定 `finalize_chain`（`placement/chain_finalize.rs`＝既定の x が今の x と同じスコープだけ動かす）が全員を外す。
+  - Current State の記述はどれも main と合う（`placement/chain_realign.rs` 245 行。拡大率の相で武装する所は `emo2_boot/frame/dpi.rs`、解く所は `frame/drain_resnap.rs` の `realign_chain_once`）。
+- **触るファイル**: `crates/areka/src/placement/chain_realign.rs`（245）・`chain_finalize.rs`（320・判定を分けるなら）・`spawn.rs`（775・「隣り合っていた」を覚える欄を足すなら）・`persist.rs`（642・詰め直した位置を書くなら）・`crates/areka/src/emo2_boot/frame/{dpi.rs, drain_resnap.rs}`（508・533）・`emo2_boot/frame.rs`（568・新しいテストの宣言）・兄弟のテスト（`emo2_boot/frame_chain_realign_tests.rs` 593・`frame_chain_realign_arm_tests.rs` 347・`placement/chain_finalize_tests.rs` 505・`placement/persist_restore_tests.rs` **939**・土台 `emo2_boot/frame_test_support.rs` **902**＝足すなら新しいファイルへ）・`doc/COMPAT_ARCHITECTURE.md` §8。**触らずに済ませる**: `placement/follow/window_move.rs`（1,221・行数の番人の例外）・`placement/transition_judge.rs`（**996**）とそのテスト 2 本（1,039・1,037・例外）＝新しい書き込みの経路を足さず、今ある「詰め直し」の経路を使えば拡大率の切替の判定器に触れない。
+- **規模**: S〜M（6〜9。roadmap の S〔4〜8〕から少し上げた＝下の穴を範囲に入れる分）。**分割の案**: なし。
+- **先に要るもの**: なし（前提は着地済み）＝今すぐ着手できる。
+- **ファイルの重なり**: 着手の候補（バグ・優先の段）とは 0。`placement/` を触る未完了は `extra-character-windows`（`spawn.rs`・`persist.rs`・その他の段・本 spec の下流）・`clippy-199-lints` の 2 段目（`spawn.rs`・`persist.rs` の注記）・`placement-measure-bake-once`（`mod.rs`・`measure.rs`＝別のファイル）・`zorder-property`（`zorder_group_ledger.rs`＝別）・`balloon-canon-residue`（`config.rs`・`resolver.rs`＝別）・据え置きの `dpi-transition-two-tick-bounce`（`frame/dpi.rs`）。`emo2_boot` の結線の列のファイル（`mod.rs`・`ghost_switch.rs`・`frame/{attach,switch,wiring}.rs`）には触れない。
+- **優先度の区分**: B（バグ＝直っていた動きの後退・開発者が「受け入れず、別の spec として起票」と裁定）。
+- **要件定義のモデル**: Fable（決め方の分かれ目が 2 案・拡大率への追従は基本設計・位置の記憶の決まり 3 つと突き合わせる）。
+- **見つけた穴・古くなった記述**:
+  - **同じ隙間は、起動と起動のあいだに拡大率が変わったときにも出る見込み**（コードの読みだけ・実機では未確認）。覚えている位置は「下端の中央の x」を物理ピクセルで保存し（`placement/persist.rs` の `char_pos_to_origin_x`）、起動の最後の並べ直しも覚えているスコープを外すので、拡大率を変えてから起動すると幅だけが変わって隙間が開く。Scope の Out「起動の最後の並べ直し」と当たる＝要件で範囲に入れるかを決める。絵の幅が違うシェルへ切り替えた後の起動も同じ形になりうる（確かめていない）。
+  - `placement/chain_realign.rs` の冒頭の説明「誰も触っていないスコープは対象に残る」は、2 回目の起動からは成り立たない＝本 spec が判定と一緒に書き直す。

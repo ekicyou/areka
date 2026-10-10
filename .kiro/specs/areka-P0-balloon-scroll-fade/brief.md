@@ -91,3 +91,20 @@
   - `crates/areka-parsers/src/balloon/{model.rs, parse.rs}`・`doc/COMPAT_ARCHITECTURE.md` §8
 - 議題: 棚卸㉑のまま（箱の当たりに薄れていく行を入れるか・`text-reveal-fade` と同じ答え）。
 - 見つけた穴: なし。
+
+
+---
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - 見える範囲・押し出しの計画・描画（`crates/areka-emo-text/src/layout.rs` の `LayoutEngine::visible_window`・`viewbox.rs`・`viewbox_diff.rs`・`viewbox_draw_render.rs`）は C4 で判定が変わっていない（`layout.rs` は説明の書き直しだけ）。`actor_present.rs` は `budoux-reveal-reflow`（10-06 着地）で「区切り → 配置」が `arrange_lines` へ切り出されたが、押し出しを見つける所（配置の後ろ）は同じ。
+  - 追い風: 文節の折り返しでは、出した字の行の割り当てが途中で変わらなくなった＝「押し出された行」が後から別の行になることが無く、薄れる層の対象が落ち着いた。
+- 触るファイル: 棚卸㉒のまま。透明度の仕組みのファイルは `text-reveal-fade` が作る。本 spec は検査の兄弟のファイルを足す見込み＝**emo-text にファイルを足す**（`lib.rs` の席を使う）。
+- 規模: 6〜9 タスクのまま。
+- 分割の案: 切らない。
+- 先に要るもの: `balloon-markers`（手動スクロール。向こうを 2 本に切るなら前半だけ）と `text-reveal-fade`（透明度の仕組み）＝どちらも未着手。
+- 優先度の区分: A（roadmap「シェル内バルーン」節・開発者「正典にはない項目ですし、独立 spec かも」）。
+- 要件定義のモデル: Opus（仕組みは `text-reveal-fade` に乗る・議題は向こうと同じ答えにする）。
+- 議題: 棚卸㉑のまま。
+- 見つけた穴・古くなった記述: なし。

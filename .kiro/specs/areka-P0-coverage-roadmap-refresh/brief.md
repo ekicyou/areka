@@ -179,3 +179,18 @@ ukadoc 網羅調査の文書（`doc/ukadoc-coverage/roadmap-draft.md`・`briefin
 
 - `doc/ukadoc-coverage/briefing-assets.md` の「SERIKO/MAYUNA 世代別対応表」は「手で書いていない」「貼ったものと作り直したものが 1 バイトも違わない」と書くが、常設の検査の外にあり、`element-base-method`（2026-10-05）の時点から台帳 `ledger/assets.toml` と食い違ったまま。`animated-image-playback` が `always` を縮退へ移した分も載っていない。
 - 本 spec で、写しを撮り直すか、日付付きの写真と明記するか、検査に入れるかを決める。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **数え直し**（main `ee3af616`・10-05 → 今）: 持ち主が完了済みなのに `[[owner_completed]]` に居ない＝20 本・136 行 → **24 本・150 行**（C4 で `open-external-tags` 6・`balloon-lifecycle-events` 4・`self-alpha-declaration` 2・`ghost-standard-balloon` 2・`choice-script-prefix` 1 が増えた）／ `[[owner_completed]]` 14 のまま ／ `roadmap-draft.md` の `[[spec]]` は 42 行のうち 24 → **48 行のうち 29** が完了済み ／ 一度も起票されなかった仕様名を引く項目 **107** のまま（`assets.toml` 78＋27・`shiori.toml` 2）／ 持ち主が空 1,229 → **1,217**（`assets.toml` 359・`sakura-script.toml` 241・`shiori.toml` 617）／ 旧い波の番号を含む行 70 → **69** ／ 持ち主が完了済みで状態が `vocabulary-only` 9・`degraded` 11 → **15** ／ `completed/` の `areka-P0-*` は 150。
+- **前提の変化**: C4 で台帳を触ったのは 7 本（`element-base-method`・`open-external-tags`・`self-alpha-declaration`・`ghost-standard-balloon`・`choice-script-prefix`・`animated-image-playback`・`balloon-lifecycle-events`）。7 本とも、台帳の行のほかに手書きの数の文書（`briefing.md` か `briefing-*.md`）と `roadmap-draft.md` を書き換えた。`crates/ukadoc-survey/` に入った変更は 0。
+- **触るファイル**: 棚卸㉒のまま（`doc/ukadoc-coverage/{briefing.md, briefing-*.md, roadmap-draft.md, README.md}`・`ledger/{assets,shiori,sakura-script}.toml`・`report/*.md`〔作り直し〕・`crates/ukadoc-survey/tests/consistency/{spec_checks.rs, documents.rs, documents_non_vacuity.rs}`・`.kiro/specs/areka-P0-emo-text-canon-residue/`）。同じフォルダの `linkage_checks.rs` は 944 行・`checks.rs` は 893 行＝判定を足す先にしない。
+- **規模**: M（14〜18）のまま。切らない（10-02 に 2 本を 1 本へまとめた spec）。
+- **「台帳の行を直す spec と同じウェーブに置かない」は要るか**: 台帳の行だけなら、行の重なりで照合する形に狭められる（本 spec が直すのは、持ち主が完了済みの 150 行と、起票されなかった名前を引く 107 項目。生きている spec が持ち主の行〔`property-catalog-lists` 120・`currentghost-property-tree` 64・`anchor-tag-canon` 61・`choice-marker-styling` 39・`balloon-canon-residue` 22 ほか計 14 本〕とは別の行）。**狭められないのは手書きの数の文書**: 行の状態か持ち主を変える spec は、必ず `briefing.md`・`briefing-*.md`・`roadmap-draft.md` の同じ数の行を書き換える（C4 の 7 本とも）。この 3 つは許す重なりに入っていない。だから決まりは「行の状態・持ち主を変える spec と同じウェーブに置かない（備考だけ直す spec は可）」までしか緩められない。本 spec が着地して数が道具の出力になれば、以後は行の重なりだけで足りる。
+- **取り合いそうな行**: `assets.toml` の `areka-P0-seriko-runtime` を引く 78 項目は、シェルの element の列（`seriko-trigger-intervals`・`draw-methods-canon`・`animated-image-import` ほか）が状態を変える行と重なりうる。`descript_install` の同梱の行は `shell-companion-balloon`、`popupmenu` の 4 行は `popup-menu-residue`。要件の段で直す行の一覧を先に出して照合する。
+- **測定の仕事ではない**（重い回 0）。
+- **先に要るもの**: なし。
+- **優先度の区分**: C（ukadoc の網羅台帳の番・製品は壊れない。spec が 1 本完了するたびに悪くなる）。
+- **要件定義のモデル**: Fable（誰も仕上げられない行の裁定・議題 2 件＝開発者の判断の分かれ目）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 上の 2 つの申し送り（束「既定で着せる吹き出し」の小分類・`briefing-assets.md` の対応表）は今も生きている。`doc/ukadoc-coverage/README.md` は今も、完了済みの `ukadoc-coverage-roadmap` を「統合担当」として申し送り先に書く。台帳に触ると書く未完了の brief は 40 本。

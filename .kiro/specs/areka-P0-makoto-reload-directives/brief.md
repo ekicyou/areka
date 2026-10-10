@@ -69,3 +69,18 @@
 - 触るファイル: `crates/areka/src/emo2_boot/{consumer_ledger.rs, mod.rs, shell_balloon_switch.rs}`＋新規の受け口・`crates/areka/src/update/procedure.rs`・`crates/areka/src/mcp/reload.rs`・`crates/areka-ghost/src/makoto_wiring.rs`（`makoto-dll-host` が作る）・`doc/ukadoc-coverage/ledger/sakura-script.toml`（3 行）。
 - 議題（答えで作業が変わるものだけ）: なし。
 - 見つけた穴: なし。並走の照合: `emo2_boot` の結線の列（`balloon-font-file`・`shell-companion-balloon` など `shell_balloon_switch.rs`・`frame/switch.rs` を触るもの）と同時に走らせない。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - 前提の `makoto-dll-host` はまだ＝着手できない。`mcp-reload` もまだ（`crates/areka/src/mcp/reload.rs` は 16 行のダミーのまま）。
+  - `\!` の受け取り手の台帳 `crates/areka/src/emo2_boot/consumer_ledger.rs` は 859 行から 943 行に、`emo2_boot/mod.rs` は 883 行から 912 行になった。台帳へ 3 行足す前に、ファイルの中のテストの塊（約 510 行）が兄弟のテストファイルへ出ている必要がある（先に触る `mcp-reload` が出す見込み）。
+  - `mcp-author-tools` の `check_script` は同じ台帳を引く。3 行を足すと `\![load,makoto]` などが「誰も拾わない」から外れる。台帳と各受け口の選別の一致を固定するテスト `consumer_ledger_agreement_tests.rs` にも行を足す。
+  - `emo2_boot/shell_balloon_switch.rs`（442 行）・`crates/areka/src/update/procedure.rs`（383 行）は変わっていない。
+- 触るファイル: 棚卸㉒の一覧に `crates/areka/src/emo2_boot/consumer_ledger_agreement_tests.rs` を足す。
+- 規模: M（7〜10 タスク）のまま。
+- 先に要るもの: `makoto-dll-host`。`mcp-reload` は前でも後でもよい（後着がつなぐ）が、同じファイル（`consumer_ledger.rs`・`emo2_boot/mod.rs`・`shell_balloon_switch.rs`・`mcp/reload.rs`）を触るので同じウェーブには置かない。
+- 優先度の区分: C（`makoto-dll-host` からの切り出し・開発者の指示は分け方だけ）。
+- 要件定義のモデル: Opus。
+- 分割の案: なし（一度切り出した spec）。
+- 見つけた穴・古くなった記述: 棚卸㉒の行数（859・883）は古い。

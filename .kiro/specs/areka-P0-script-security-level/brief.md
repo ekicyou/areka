@@ -103,3 +103,25 @@ areka はこの「出どころ」を運ばない。そのため、ゴースト�
 
 - `SenderType`・`SecurityLevel` を SHIORI へ運ぶ仕組みの持ち主は本 spec（`property-query-channels` から寄せた）。網羅台帳 `shiori.toml` の `ukadoc:spec_shiori3:SenderType…` の行（持ち主が空）を要件の段で登記する。
 - SHIORI への要求に追加のヘッダを運ぶ道は、本 spec・`property-query-channels`・`mcp-shiori-query` の 3 本が要る。入れ物は先に着手した 1 本が作り、`ShioriBackend` の引数を変えずに既定の実装を持つ新しいメソッドを足す形を推す（実装 19 か所への波及を止める）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - SHIORI への要求と応答の道（`crates/shiori-host32-host/src/{shiori3,client}.rs`・`crates/areka-ghost/src/shiori_inproc.rs`・kanade の `shiori/real.rs`・`crates/areka-talk/src/lib.rs`）は棚卸㉒から 1 行も変わっていない。`SecurityLevel: local` は今も `shiori3.rs` の要求を組む関数が直に書く。呼び出しの口 `ShioriBackend` の実装は 20 か所（製品 3・テストの偽物 17）。
+  - kanade の SHIORI の呼び出しの型（`msg.rs` の `ShioriCall`）を名指しで組む・分解する所は、製品だけで約 50 か所ある（`schedule/events.rs` 23・`schedule/resources.rs` 9 ほか）＝型に欄を足すと広く波及する。欄でなく別の入れ物で添える形を設計で選ぶ。
+  - トークを始める所が 1 つ増えた: `choice-script-prefix` の `crates/areka-kanade/src/schedule/steady_choice_script.rs`。同 spec の設計書は「出どころの欄が足されたら、`script:` の台本を始める関数（`begin`）が元のトークの値を新しいトークへ写す 1 か所を足す」と申し送っている。kanade の中でトークの開始（`StartTalk`）を組む所は `schedule/` の `boot.rs` 2・`change.rs` 2・`close.rs` 2・`steady.rs` 4・`steady_choice_script.rs` 1 の 11 か所。再生中のトークの型（`ActiveTalk`）は `schedule/mod.rs`（955 行）にある。
+  - 今の areka に「外から来た台本」を作る入口は無い（MCP は SSP と同じく `local`・SSTP の受信は無い）。今すぐ効くのは、SHIORI の応答の `SecurityLevel: external` と、SHIORI へ渡す `SenderType` の 2 つ。`mcp-author-tools` の `check_script` に「出どころしだいで実行されないタグ」を診断として出すかは要件の議題。
+- 触るファイル:
+  - `crates/shiori-host32-host/src/{shiori3,client}.rs`（要求の型を字面で組むテスト `shiori3_charset_tests.rs`・`crates/areka-kanade/tests/kanade/translate_test.rs` も）・`crates/areka-ghost/src/shiori_inproc.rs`
+  - kanade: `msg.rs`（926 行）・`shiori/real.rs`・`actor.rs`（900 行）・`schedule/mod.rs`（955 行）・`schedule/{steady,boot,change,close,translate,steady_choice_script,events}.rs`
+  - `crates/areka-talk/src/lib.rs`・それを読む `crates/areka-sakura/src/drive.rs`・`crates/areka-ghost/src/dispatcher.rs`・`crates/areka/src/emo2_boot/user_break_cue.rs`
+  - 新規: 出どころの型と、出どころから `SecurityLevel`・`SenderType` を導く関数・止めるタグの表と、表と実装の一致を判定する検査
+  - 台帳 `doc/ukadoc-coverage/ledger/shiori.toml` の `SecurityLevel`・`SenderType`・`SecurityOrigin` の行（持ち主は今も空）・`doc/COMPAT_ARCHITECTURE.md` §8
+- 規模: L（16〜22 タスク）。見立ての内訳は、SHIORI へのヘッダと応答の読み取りが 8〜10、台本への出どころの印・タグの制約・`OnTranslate` が 9〜12。
+- 先に要るもの: 働きの前提なし＝今すぐ始められる。
+  - 同じウェーブに置けない相手: `mcp-kanade-tools`（`msg.rs`・`actor.rs`・`schedule/mod.rs`・`schedule/change.rs`・`steady_choice_script.rs`）・`farewell-talk-status`（`schedule/mod.rs`）・`mcp-shiori-query`（`shiori3.rs`・`client.rs`・`shiori_inproc.rs`・`msg.rs`・`shiori/real.rs`）・`mcp-reload`（`schedule/boot.rs`）・`anchor-tag-canon`（`msg.rs`・`schedule/mod.rs`）・`sakura-time-critical`（`user_break_cue.rs`）・`talk-fast-forward`（`drive.rs`）。重なり 0: `mcp-stdio-bridge`・`dump-balloon-debug-timeout`。
+  - 本 spec を待つ未完了の spec は、働きで 3 本（`script-impact-tiers`・`property-query-channels`・`sakura-embed-directive`）と、入れ物を分け合う `mcp-shiori-query`。
+- 優先度の区分: A（開発者「セキュリティレベルで実行できるさくらスクリプトに制約が出る。areka に実装されていないと思う。ukadoc で調べてみては」）。
+- 要件定義のモデル: Fable（MCP の出どころの値・`SenderType` の語の当てはめ・止めるタグの全件を ukadoc から決める・複数のエンジンを貫く運搬）。
+- 分割の案: 今は切らない（20 をはっきり超えてはいない）。要件の段で数えて 20 を超えたら、棚卸㉒のとおり ⒜ SHIORI へのヘッダと応答の読み取り（追加のヘッダの入れ物を含む＝`mcp-shiori-query`・`property-query-channels` が待つのはこちら）→ ⒝ 台本への出どころの印とタグの制約、の順に切る。`mcp-kanade-tools` が先に `msg.rs` を分けていなければ、本 spec が最初のタスクで分ける。
+- 見つけた穴・古くなった記述: 棚卸㉒の「実装 19 か所」は 20 か所。構築点の内訳（`boot.rs` 3・`talk.rs` 1）は `boot.rs` 2・`steady_choice_script.rs` 1 に変わった（`talk.rs` のものはテスト）。棚卸㉒の節が書いた道具の残りかすの 2 行は、もう消えている。

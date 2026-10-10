@@ -92,3 +92,15 @@ surfaces.txt の `point.basepos.x/y` 宣言が parse で転記され、move 解�
   - `doc/COMPAT_ARCHITECTURE.md` §8・`doc/ukadoc-coverage/ledger/assets.toml` の `point.basepos.x`・`.y` の 2 行
 - 議題（答えで作業が変わるものだけ）: 棚卸㉑のまま（2 つ目の転記にするか・推しは前者）。
 - 見つけた穴: 無し。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: 無し。据え置きのまま（`point.basepos` を宣言するシェルが要るまで始めない）。`basepos` を読む所は今も `crates/areka/src/emo2_boot/move_cue.rs` とそのテストだけで、parsers・emo-compose・emo-present に 0 件。`BaseposResolver` の形（面の番号を受け取らない）も棚卸㉒のまま。
+- 触るファイル: 棚卸㉒のまま（parsers の新しい転記のファイルと `shell/mod.rs` の 1 行・`move_cue.rs`・面ごとの表を運ぶなら emo-present の `shell_target.rs`・台帳 `assets.toml` の 2 行・`doc/COMPAT_ARCHITECTURE.md` §8）。
+- 規模: 5〜8 タスク。切らない。
+- 先に要るもの: 着手の条件（宣言する実シェルの適合が要ること）は未。
+- 優先度の区分: D（据え置き）。
+- 要件定義のモデル: Opus。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述: 無し。

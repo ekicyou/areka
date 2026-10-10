@@ -13,9 +13,9 @@
 //! 2 つ目の時機は、完了 spec `areka-P0-position-persist` の要件 1.9（ドラッグの確定でだけ
 //! 書く）を `areka-P0-char-position-save-on-exit` で改めたもの。一度もドラッグしていない
 //! キャラが起動のたびに並べ直されないようにするため（記録は `doc/COMPAT_ARCHITECTURE.md` 8 章）。
-//! task 1.1（Foundation）で用意するのは決定論的な変換のみ——寛容 parse（[`parse_px`]）
-//! と保存 entries 構築（[`char_pos_entries`]／[`balloon_offset_entries`]）。復元 merge・
-//! 再射影・`PersistWiring` は後続タスクで本モジュールへ追加する。
+//! 決定論的な変換——寛容 parse（[`parse_px`]）と保存 entries 構築
+//! （[`char_pos_entries`]／[`balloon_offset_entries`]）——のほか、復元 merge・
+//! 再射影・`PersistWiring` も本モジュールにある。
 //!
 //! バルーン相対オフセットの基準変換（アンカー辺基準）は 2026-07-31 の実機裁定で撤去した
 //! ——保存基準はランタイム（[`super::follow::BalloonFollow`]`.offset`）と同じ **char 窓左上**

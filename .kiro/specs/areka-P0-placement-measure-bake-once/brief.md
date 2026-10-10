@@ -77,3 +77,18 @@
   - 共有しうる相手: 案 A は `extra-character-windows`（`placement/mod.rs`・`measure.rs`・`emo2_boot/mod.rs`）と `balloon-font-file`（`assets.rs`）。案 B は `self-alpha-declaration`・`surfaces-basepos`（`shell_target.rs`）。
 - 議題（答えで作業が変わるものだけ）: 1（案 A か案 B か）だけが残る。2 は上のとおり答えが出た。
 - すぐ直せる軽微な修正: この brief の「要件の段で決める議題」の直後に、起票のときの書き損じの 2 行（`</content>`・`</invoke>`）が紛れ込んでいる。消すだけ。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: `animated-image-playback`（10-07）が着地し、採寸の 1 回目も束縛の直後に動く絵を子へ分解するようになった（読んで捨てる仕事が増えた）。起動で 2 行ずつ出る警告の種類も増えた＝`element-base-method` の「描けない描画メソッドの行」・`self-alpha-declaration` の「descript.txt が読めない」「添えてあった `.pna` の数」と透過の扱いの知らせ。`self-alpha-declaration` は採寸と資産組み立ての両方に透過の宣言を渡す引数を足した（`placement/measure.rs`・`emo2_boot/assets.rs`・`balloon.rs` の `build_balloon_target_from_faces`）。採寸と資産組み立てが別々に焼く形は変わっていない。
+- 触るファイル: 案 A＝`crates/areka/src/placement/{mod.rs, measure.rs}`・`crates/areka/src/ghost_session.rs`・`crates/areka/src/emo2_boot/{mod.rs, assets.rs}` と兄弟のテスト。案 B＝`placement/measure.rs`・`crates/areka-emo-present/src/shell_target.rs`・必要なら `balloon.rs`。
+- 規模: 案 A なら 10〜14、案 B なら 5〜8 タスクのまま。切らない。
+- 先に要るもの: 無し（今すぐ着手できる）。`extent-element-offset`・`collisionex-regions`・`seriko-trigger-intervals`・`animated-image-import`・`present-emit-tail-latency` とは重なり 0。列の外では、案 A が `emo2_boot` の結線の列（`mcp-reload`・`balloon-font-file`・`extra-character-windows`）と、案 B が `balloon-canon-residue`（`balloon.rs`）と重なる。`extent-element-offset` が先だと「採寸の結果が同じ」の固定が書きやすい。
+- 優先度の区分: C（性能の持ち越し・同梱の検体では踏まない）。
+- 要件定義のモデル: Opus。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述:
+  - roadmap の台帳の行の「`animated-image-playback` の前が望ましい」は過ぎた。
+  - 棚卸㉒の節の「書き損じの 2 行」は棚卸㉒の即時修正で消えた（もう無い）。
+  - 案 A が足す先の `placement/mod.rs`（902 行）・`emo2_boot/mod.rs`（912 行）・`ghost_session.rs`（873 行）は上限の近く。足す分は新しいファイルへ出す。

@@ -72,3 +72,15 @@
 - GPU のテストは実の GPU のまま（WARP などへ替えない）。sleep を足す・締切を延ばすだけ・1 フレーム遅らせる形では直さない。
 - 1 ファイル 1,000 行の番人を守る（`spine_wait.rs` に足すなら行数を先に測る）。
 - 規模の見立て: S〜M（6〜10）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**: 起票（10-10・着地の直前の枝）の数は main でも同じ。目印の無い `spin_wait_until` の直接の呼び出しは 15 か所（spine の族 9・`session_end_deadline_tests.rs` 4・`mcp/dump_surface.rs` 1・`ghost_session_restart_tests.rs` 1）。`areka` の中の `join_bounded` の写しは 3 つ（`emo2_boot/spine_wait.rs`・`install/desk_pick_tests.rs`・`install/fetch_url_tests.rs`）。GPU の装置の許可の待ち（`spine_wait.rs` の `GpuSlots::take`）は今も上限なし。崩れた前提は無い。
+- **触るファイル**（どれも `crates/areka/src/` の下・テストと足場だけ）: `emo2_boot/spine_wait.rs`（462 行）・`spine_wait_tests.rs`・`ghost_switch_test_support.rs`（672）・`spine_conformance_support.rs`（773）・`spine_conformance_support_tests.rs`（**959 行＝上限の近く**。目印つきへ移すと増えるので先に分ける）・`spine_boot_smoke_tests.rs`・`spine_close_wiring_tests.rs`・`spine_hold_tests.rs`・`spine_seriko_loop_tests.rs`・`shell_balloon_switch_session_abort_tests.rs`（536）・足場の目印を変えるなら `shell_balloon_switch_session_lap_tests.rs`（791）・`session_end_deadline_tests.rs`（523）・`ghost_session_restart_tests.rs`・`mcp/dump_surface.rs`（テストの部分だけ）・`install/desk_pick_tests.rs`・`install/fetch_url_tests.rs`。ほかに `crates/areka-nar/src/install_commit_tests.rs`（802）。`emo2_boot/spine_conformance_lap_tests.rs` は 911 行。
+- **規模**: M（8〜11）。待ちの種類 5 つ＋負荷の記録。切らない。
+- **仕事の芯は書き換え**で、測定は確かめのためだけ。項目 2・3・5 は負荷なしで直せる（打ち切りの文言は時計を注入した檻で見る。静かな机の全体は 1 回 約 70 秒）。重い回は 2 度だけにする: 途中は赤が出たテストの名前で絞って回し（`tools/load-flake.ps1 -Filter`・1 回 数分）、全体の負荷つき 5 回（約 50 分）は最後に 1 度。回す前に所要時間を伝える。
+- **先に要るもの**: 働きの依存は済み（`ghost-session-test-load-flake`）。`areka-test-threads-av` の後に置く（同じテストの実行ファイル・足場のファイルが重なる・あちらの落ちが負荷の回を無効にする）。ほかのファイルの重なり: `install-live-target-hazards`（`session_end_deadline_tests.rs`・`areka-nar` の `install.rs` の近く）・`mcp/dump_surface.rs` を触る MCP の spec・`test-roots-under-target`（呼び出しを 1 つずつ書き換える案のときだけ `install/fetch_url_tests.rs` ほか）。
+- **優先度の区分**: B（バグ＝テストの穴。負荷の下で、許さないと決めた赤が出うる）。
+- **要件定義のモデル**: Fable（待ちと並行・項目 2 に開発者の裁定の分かれ目がある）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 同じ名前の `join_bounded` が、別の実行ファイルのテストにもある（`crates/areka-ghost/tests/ghost/` の 3 本〔接続の失敗・helper の生死・切断〕と `crates/areka-kanade/tests/kanade/common/` の 2 本）。待ちの部品は `areka` の実行ファイルの中にしか無いので、これらは steering `tech.md` の線の外に居る＝範囲に入れるかを要件で決める。`GpuPermit` の説明は「許可を 2 つ取るテストは 1 本だけ」と書く＝上限を付けるとき、その 1 本が待ち合いで打ち切られる形も檻に入れる。

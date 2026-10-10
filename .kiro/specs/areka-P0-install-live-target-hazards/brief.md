@@ -118,3 +118,23 @@
   - 長く掴まれた宛先では、名前替え 1 つにつき約 2 秒待ってから失敗する。上書きの展開（`install/overwrite.rs` の `run_between`）は UI スレッドの上で同期に走るので、UI がその間（約 2 秒 × 拒まれた名前替えの数）塞がる。配置 1 つでも 3 つ続けば約 6 秒で、「応答なし」の 5 秒を越えうる。
   - 背景のスレッドの展開（`install/worker.rs`）では、終了の後始末の待ちの上限 `EXIT_WAIT_LIMIT`（3 秒・完了 `ghost-install` 要件 8.1〜8.3）を、名前替えが 2 つ拒まれ続けると越えうる。⑵ の「終了と展開の重なり」を測るときは、この待ちも数に入れる。
   - 「どちらの `rename` で止まるか」の問いは、試し直しの後も同じ形で残る（止まり方が「すぐ失敗」から「約 2 秒後に失敗」に変わっただけ）。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - 上の 10-10 の申し送りのとおり、`crates/areka-nar/src/install.rs` の確定の名前替えは `rename_patiently` を通る（アクセス拒否と共有違反のときだけ、50 ms 刻みで約 2 秒まで試し直す）。
+  - `balloon-font-file` は未着手で、文字とバルーンの列のリンクの 3 本の後ろに居る。フォントファイルを掴み続ける道（DirectWrite のフォントセット）は今も本番に無い。
+  - `wintf-tooltip` が標準のツールチップの窓を足した（`crates/wintf/src/ecs/tooltip/os.rs`）。OS の窓クラスの窓なので Windows の終了の知らせの受け手にはならない見込みだが、⑵ の「窓が 0 枚の区間」を測るときに、この窓が残っているかも一緒に見る。
+  - 触るファイル（`crates/areka/src/install/{judge,procedure,overwrite,desk}.rs`・`session_end.rs`・`app_exit.rs`）に 10-05 の後で入った変更は、`session_end.rs` の説明の数行と、兄弟のテスト `install/desk_overwrite_tests.rs` の待ち方だけ。
+- 測る分はどれだけか: 全体 8〜14 タスクのうち、**測るだけで 5〜6**。扱いの実装は測った後に決まり、3〜8。
+  - ⑴ 表示中のシェル・使用中のバルーンへ上書きして、誰が掴むか・どの名前替えで止まるか・UI が何秒塞がるかを記録する。
+  - ⑵ 窓 0 枚の区間を決定論のテストで固定し、終了の待ちの上限 3 秒（`crates/areka/src/exit_wait.rs` の `EXIT_WAIT_LIMIT`）と、名前替えの試し直しの合計を突き合わせる。
+- 受け取った上限の話: 試し直しは名前替え 1 つにつき約 2 秒。上書きの展開は UI スレッドで同期に走る（`install/overwrite.rs` の `run_between`）ので、長く掴まれた宛先では UI が数秒塞がる（配置の数しだいで 5 秒を超えうる）。直すなら「確定 1 回あたりの合計の待ち」に上限を付ける形になり、`crates/areka-nar/src/install.rs` に触る＝本文の「`areka-nar` には触らない」約束を見直す議題になる。
+- 触るファイル: 棚卸㉒のまま。上限を直すなら `crates/areka-nar/src/install.rs`（573）と `install_commit_tests.rs`（802）が加わる。
+- 規模: 8〜14 タスク。
+- 先に要るもの: 働きの上では無し。**⑴ を `balloon-font-file` の後まで待たない案を推す**（待つと数ウェーブ先になる。本 spec が残す実機の手順を、`balloon-font-file` が自分の着地のときに回し直せば足りる）。ファイルの重なりは、`emily-ghost-verification`（`install/judge.rs`）・`baseware-root-list`（`install/{desk,procedure,overwrite}.rs`）・`ghost-inner-balloon`（`areka-nar`・上限を直す場合）。`dist/README.txt` は「既知の制限」の別の行。
+- 優先度の区分: C（α の完成判定からの持ち越し・まず測る）。「フォルダが消える」「UI が 5 秒を超えて塞がる」のどちらかを実測で確かめたら B。
+- 要件定義のモデル: Fable（終了と展開の重なり・待ちの上限＝時間と並行の話）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: roadmap の台帳の行の「⑴ は `balloon-font-file` の後に測る」は、上の案を採るなら直す。

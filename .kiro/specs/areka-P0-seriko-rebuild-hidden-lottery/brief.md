@@ -40,3 +40,15 @@
 
 ## Constraints
 - 規模の見立て: XS〜S（記録だけ〜4〜6）。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: 起票（10-07）から `crates/areka-seriko/src/parts.rs` は変更 0。Current State は今の main と一致（`rebuild` の 1 回目が見える部品を求めては評価し、終わってから見えない部品のコマを外す）。
+- 触るファイル: `crates/areka-seriko/src/parts.rs`（`rebuild`）と兄弟のテスト。案 ⑴ でも、見える部品を求める `visible_parts`（`crates/areka-emo-compose/src/nesting.rs`）は呼ぶだけで変えない見込み。
+- 規模: 記録だけで閉じるなら 1〜2、直すなら 4〜6 タスク。切らない。
+- 先に要るもの: 働きの上では無し。`seriko-trigger-intervals` と `parts.rs`・`looper.rs` を分け合うので、その後。
+- 優先度の区分: C（見た目の誤りが確認されていない持ち越し）。
+- 要件定義のモデル: Opus。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述: `seriko-trigger-intervals` が `runonce`・`periodic`・`talk` を部品にも足すと、この性質は「乱数の並びが変わるだけ」でなく「見えていない部品で再生が始まる」に変わりうる。あちらの設計で部品の門を見るときに一緒に決めてしまえば、本 spec は記録だけで閉じられる。

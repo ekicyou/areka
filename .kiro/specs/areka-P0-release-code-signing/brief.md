@@ -94,3 +94,16 @@
 - 触るファイル（並走の照合用）: 棚卸㉑のまま＝`.github/workflows/release.yml`・`tools/package.ps1`・`doc/SIGNING.md`（新規）・`README.md`・`dist/README.txt`（「■ 既知の制限」の「署名がありません」の行）。
 - 議題（答えで作業が変わるものだけ）: ⑴⑵ は棚卸㉑のまま。加えて ⑶ `pasta.dll` を含め「zip の中の未署名の物」を説明書にどう書くか（Smart App Control が DLL も止めるかを要件の段で確かめてから）。
 - 見つけた穴: なし（`pasta.dll` は議題 ⑶。確かめる前なので穴とは書かない）。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: リリースの実績が 1 回になった（`v0.0.2`・10-06）。SignPath Foundation の条件「リリース済み・活発」にはまだ足りない＝据え置きのまま。
+  - `.github/workflows/release.yml` と `tools/package.ps1` は、`tools-utf8-child-output` で子の出力の読み方が変わった。段「zip を作る」が `tools/package.ps1 -Arch all` を 1 回呼ぶ作りはそのまま（組み立てと詰める段の間に手を入れる口は今も無い）。
+- 触るファイル: 棚卸㉒のまま（`.github/workflows/release.yml`・`tools/package.ps1`・`doc/SIGNING.md`〔新規〕・`README.md`・`dist/README.txt` の「署名がありません」の行）。
+- 規模: 6〜9 タスク。
+- 先に要るもの: 数回のリリースの実績と、開発者の「申請する」のひと言。
+- 優先度の区分: D（据え置き・任意）。
+- 要件定義のモデル: Opus。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: なし。

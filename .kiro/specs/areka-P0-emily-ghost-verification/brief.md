@@ -60,3 +60,34 @@ SSP に同梱されている既定ゴースト「Emily/Phase4.5」（えみり�
 - 32bit の SHIORI なので、debug 版の `areka.exe` の隣に i686 の helper が要る。
 - 検体のライセンスは CC BY-NC 4.0＝**areka の配布物へ同梱しない**（`tools/package.ps1` は emo2 だけを入れるので今は触らない）。
 - 「何とか動く」までに見つかる不具合の数が読めない。規模の見立ては要件の段で測り直す（上限は 1 spec 20 タスク・見込みは M）。直す数が膨らむなら、一覧を作って起票へ回す線を要件の段で引く。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: 起票（10-08）の後に着地したのは `balloon-lifecycle-events`・`wintf-tooltip`・`ghost-session-test-load-flake`。本文の指し先はすべて実物と合っている。
+  - 検体は未登記のまま。`crates/areka-nar/src/plan.rs` の `companion_placement` が、取り出し元の無い同梱でインストール全体を断る。検体数の直書きの 7 は `crates/sample-ghost-kit/src/lib_tests.rs` に 2 か所。
+  - 32bit の YAYA の道は、検体 `claudia` で実機まで通っている（`ghost-standard-balloon` の実機の記録）＝えみりの次の壁にはならない見込み。全体テストの後は debug の helper が x64 版に替わる罠がある（`dev-helper-x64-clobber`）。
+- 検証そのものが触るファイル:
+  - インストールの扱い（案 (a) の場合）: `crates/areka-nar/src/plan.rs`（307）と新しい兄弟のテスト（`plan_tests.rs` は **919 行**なので足さない）・要れば `crates/areka/src/install/judge.rs`。案 (b) なら 0。
+  - 登記: `crates/sample-ghost-kit/src/{lib.rs, lib_tests.rs}`・`vendors/sample_ghost/README.md`。
+  - 記録: この spec のフォルダの中の検証の記録（文書だけ）。
+  - 直しがどのファイルに入るかは、起こしてみるまで分からない。
+- 規模: 8〜12 タスク（下の線を引いた場合）。
+- 先に要るもの: なし（今すぐ着手できる）。ファイルの重なりは、`install-live-target-hazards`（`install/judge.rs`）・`ghost-inner-balloon`（`areka-nar` の `plan.rs`・向こうが書庫に鍵を足す場合）。`shell-companion-balloon`・`balloon-canon-residue`・`network-update-canon-order`・`baseware-root-list` とは 0。
+- 優先度の区分: A（開発者「えみりゴーストがうまく動かないらしい」「何とか動くところまでは持っていきたい」）。
+- 要件定義のモデル: Fable（インストールの断りの裁定・どこまでをこの spec で直すかの線）。
+- 分割の案（ほかの列を止めないための線）: この spec は「起こして、確かめて、一覧にして、起票する」まで。この spec の中で直すのは次の 2 つだけにする。
+  - ⑴ 自分の持ち場（インストールの計画・検体の登記）の直し。
+  - ⑵ 1 タスクで済み、同じウェーブのほかの spec が触らないファイルだけで閉じる直し（上限 4 件）。
+  - それ以外は、えみりの記録を根拠に 1 件ずつ起票する（区分は A を引き継ぐ）。「何とか動く」の最後の確かめは、起票した直しが着地した後に、この spec が残す実機の手順をもう一度回して行う。
+- 見つけた穴・古くなった記述:
+  - 登記の行に同梱バルーン `emily4` を書くと、検体のパスの綴りの番人（`crates/log-capture-kit/tests/sample_path_guard_test.rs`）の見張る語に `emily4` が加わる。`crates/areka/src/mcp/` のテスト 13 本が `C:\ssp\ghost\emily4` を書いている（今の綴りは当たらない見込み。登記のときに番人を回して確かめる）。
+  - 最初に出す面の番号は 0 と 10 の決め打ちで（`crates/areka/src/emo2_boot/assets.rs`）、descript の `*.seriko.defaultsurface` はどこも読んでいない。えみりの表情の出だしが違って見えたら、ここが原因の候補。
+  - roadmap の台帳の行の「`install-live-target-hazards` と同時に走らせない」は、重なるファイルが `install/judge.rs` の 1 本だけ＝どちらかが触らない約束をすれば並べられる。
+
+## 2026-10-10 棚卸㉓の申し送り
+
+- **YAYA が起きないときに疑う所の候補: SHIORI の `load` へ渡すフォルダのパスの形**。areka が渡すパスは `…\ghost/master` の形（区切りが混ざり、末尾に区切りが無い）。出どころは、ゴーストの根に `ghost/master` をつなぐ所（`crates/areka-parsers/src/package/resolve_shell.rs` の定数 `GHOST_MASTER`）。同じプロセスで読む道（`crates/areka-ghost/src/shiori_inproc.rs`）も、32 ビットの補助プログラムの道（`crates/shiori-host32-helper/src/shiori_proxy.rs` の `init_bytes`）も、形を整えずにそのまま渡す。正典はパスの形を決めていない。
+- 検体 `claudia`（32 ビットの YAYA）はこの形で動いているので、最初に疑う所ではない。辞書やファイルが見つからない形で止まったら候補に入れる。
+- 直すと SHIORI へ渡すバイト列がすべてのゴーストで変わる＝この spec の中の小さな直しとしては扱わず、開発者に聞く（`shiori4-api` の議題の候補にも同じ事実を書いた）。
+- 上の再測定の「descript の `*.seriko.defaultsurface` はどこも読んでいない」を引き直した。製品コードでこの綴りが出るのは、プロパティの名前の表（`crates/areka-sylphya/src/vocab/dotted.rs` の `SET_EFFECTIVE`）だけで、descript から最初の面を読む所は 0。

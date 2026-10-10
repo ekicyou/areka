@@ -99,3 +99,17 @@
 - 共有しうる相手: `network-update-canon-order`（直列）・上の kanade の列の spec（`events.rs`）・「■ 既知の制限」を触る配布の列（`winget-manifest-submission`・`release-code-signing`・`install-live-target-hazards`）・`coverage-roadmap-refresh`（台帳）。
 - 議題（答えで作業が変わるものだけ）: 起票のまま 3 つ。
 - 見つけた穴: なし。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: 前提の `network-update-canon-order` は未着手のまま＝本 spec は待ち。
+  - 起票の指し先はすべてそのまま（`crates/areka/src/emo2_boot/update_cue.rs` の `UPDATE_OPTIONS` と `--option=`・kanade の `schedule/resources.rs` の「`other_homeurl_override` は載せない」・`dist/README.txt` の「■ 既知の制限」の 2 行）。
+  - kanade の `crates/areka-kanade/src/schedule/events.rs` は `balloon-lifecycle-events` で 793 行になった（バルーンの 3 イベントの行が足された）。「`OnUpdateCheck*` 4 語は載せない」の注記はそのまま。本 spec が足すのは表の別の行。
+- 触るファイル: 棚卸㉒のまま＝`crates/areka/src/emo2_boot/update_cue.rs`（217）・`crates/areka/src/update/{mod,procedure,desk}.rs`・`crates/areka-update/src/`・kanade の `schedule/{events,resources}.rs`・台帳 `{sakura-script,shiori}.toml`・`dist/README.txt`。
+- 規模: 10〜14 タスク。
+- 先に要るもの: `network-update-canon-order`（同じ手続きの順を組み替える＝働きの依存）。ファイルの重なりは、`mcp-kanade-tools`（kanade の許可の表 `schedule/events.rs`・着手の前に照合）・`baseware-root-list`・`ghost-inner-balloon`（`update/desk.rs`）。
+- 優先度の区分: C（ukadoc の拾い残し・説明書の既知の制限の 2 行）。
+- 要件定義のモデル: Fable（ukadoc の「更新オプション指定」の節を原文で確かめてから、応える・応えないを決める）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: なし。

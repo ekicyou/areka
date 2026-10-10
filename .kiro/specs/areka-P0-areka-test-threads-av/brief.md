@@ -70,3 +70,16 @@
   - 4.9 の 5 回目（65.9 秒）
 - 落ちる頃に走っていたのは、名前の順で `frame::visibility_integration_tests`（各スレッドで `CoInitializeEx(MULTITHREADED)` を呼び、`GraphicsCore::new` から MTA の Compositor を作る）の先頭の十数本。上の「`--test-threads=4` でだけ再現」の前提は崩れた＝既定のスレッドの数でも、負荷でスレッドの重なりが増えると起きる。
 - 記録の置き場: `.kiro/specs/completed/areka-P0-ghost-session-test-load-flake/load-repro.md` の 4.7〜4.9（`target\load-flake\after-20261009-*\round-N.log`）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**: `ghost-session-test-load-flake`（10-10 着地）で、GPU の装置を作る足場は作る直前に「GPU の装置の許可」（`crates/areka/src/emo2_boot/spine_wait.rs` の `GpuPermit`・同時に 4 つまで）を取る形になった。取る所は 6 ファイル（`emo2_boot/spine.rs`・`frame_visibility_integration_tests.rs`・`frame_attach_tests.rs`・`film_playback_e2e_tests.rs`・`mcp/dump_surface_gpu_test_support.rs`・`shell_balloon_switch_session_lap_tests.rs`）。上の申し送りの 3 度の落ちは、この許可が入った後の記録＝同時に 4 つまでに絞っても起きる。起票のときの条件「スレッド 4 本」と数が同じなので、許可を 1 つにした対照が安い手がかりになる。
+- GPU・COM を使うテストは C4 でさらに増えた（`emo2_boot/film_playback_e2e_tests.rs`＝`animated-image-playback`・`frame_balloon_timeout_notice_e2e_tests.rs`＝`balloon-lifecycle-events`）。10-05 の一覧に無かった `emo2_boot/frame_shell_box_integration_tests.rs`（`shell-balloon`）も同じ足場を使う。`areka` の実行ファイルのテストは 2,897 本。テスト同士を順番に並べる錠（`Mutex<()>`）は今も 0。待ちの部品が打ち切りの文言を出すようになったので、3 度とも「止まってから」でなく「いきなり」落ちたと記録から読める。
+- **触るファイル**（原因しだい）: 上の 6 ファイル・`emo2_boot/assets_tests.rs`（979 行＝上限の近く）・`assets_shell_tests.rs`・`spine_wait.rs`（462 行）。落ちたスレッドの名前を残す仕掛けを足すなら、テストだけの新しい小さなファイル 1 本（`crates/areka/src/main.rs` は 950 行なので足さない）。本番の欠陥なら `crates/wintf/src/ecs/graphics/`。
+- **規模**: S〜M（5〜9）。切らない。
+- **仕事の芯は再現と測定**＝静かな机が要り、ほかの spec と並べない。重い回を減らす段取り: ① 先に「落ちた瞬間のスレッドの名前（＝テストの名前）と呼び出しの積み上げを 1 行残す仕掛け」をテストの実行ファイルへ入れる（二分探索の何十回を、1 回の再現に置き換える）。② 再現は `emo2_boot::frame` の族に絞って回す（3 度とも、始まりから 19〜94 秒・この族の頃に落ちた。絞れば 1 回は数分以内の見込み）。③ 全体を負荷つきで回すのは最後の確かめの 1 度だけ（5 回で約 50 分・回す前に所要時間を伝える）。静かな机の全体は 1 回 約 70 秒。
+- **先に要るもの**: なし。`test-wait-marker-gaps` とは同じテストの実行ファイル（`--bin areka`）を回し、足場のファイル（`spine_wait.rs`・`emo2_boot/ghost_switch_test_support.rs`・`ghost_session_restart_tests.rs`・`shell_balloon_switch_session_lap_tests.rs`）も重なるので、同じウェーブに置かない。**こちらを先に**（負荷の下の 5 回に 1 回がプロセスごと落ちて、あちらの確かめの回を無効にする。こちらの直しが許可の数を変えるなら、あちらの「許可の待ちの上限」はその後に決める）。`test-roots-under-target` とも同じウェーブに置かない（一時フォルダの置き場が動くと比べる基準が変わる）。
+- **優先度の区分**: B（バグ。テストのプロセスが落ちる・本番のメモリの壊れの疑いが消えていない）。
+- **要件定義のモデル**: Fable（スレッドの競り合い・原因しだいで直し方が分かれる）。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 本文の「`--test-threads=4` で二分探索」は、既定のスレッドの数でも落ちると分かった今は遠回り（上の ①②）。足場の説明（`emo2_boot/spine.rs`・`frame_attach_tests.rs`・`frame_visibility_integration_tests.rs`）に「WARP 可」とあるが、steering `tech.md` は GPU のテストを実の GPU で行うと決めた（注記の直し候補）。

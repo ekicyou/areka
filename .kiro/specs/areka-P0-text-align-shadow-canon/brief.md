@@ -107,3 +107,22 @@
 - 並走の見立て: ②影だけなら `budoux-reveal-reflow`（`actor_present.rs`・`state.rs`・`segment.rs`）とはファイルが重ならない。ただし `balloon-font-file`（`viewbox_draw_render.rs` の `ensure_format`・`look.rs`）と `anchor-tag-canon`（`viewbox_draw_render.rs` の既定の見た目）とは重なる＝C4 の席では並べられない。
 - 議題: SC8（縦書きでのインデントの軸）の裁定（①の要件で・棚卸㉑のまま）。
 - 見つけた穴: なし。
+
+
+---
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化:
+  - **寄せと 1 字ずつの表示**: 中央寄せ・右寄せは、行の幅が決まらないと置き場所が決まらない。1 字ずつ出している途中は行の幅が伸びていくので、届いた字だけで寄せると、出した字が同じ行の中で横へ動く。`budoux-reveal-reflow`（10-06 着地）が止めたのは行の割り当ての動きで、行の中の位置ではない。台本の全文は先に分かるようになった（`crates/areka-emo-text/src/lookahead.rs`）が、配置は見える数で走査を止め（`layout_scan_glyph.rs` の先頭）、1 字ずつの折り返しでは全文を使わない。①寄せの要件で「寄せは区間の全文の行幅で決める」かを決める（`text-typesetting` が全文の使い分けを広げた後なら、それに乗る）。
+  - `mcp-author-tools`（10-08 着地）: 台本の検査が `look.rs` の `apply_font_tag` の結果で「受け取るだけのキー」を答える（`crates/areka/src/mcp/check_script_judge.rs`）。寄せ・影に持ち主が付くと答えが変わる＝`check_script_judge_tests.rs` の「効かない `\f`」の見本 `\f[align,center]` を替え、`look_font_tag_tests.rs` の所有外の 4 つの見本も直す。
+  - 台本を読む段（`crates/areka-parsers/src/sakura/decode.rs` の `"f"` の腕）は引数を写すだけで、印を返す形になっても同じ＝寄せ・影のために読む段へ手を入れる必要は無い（注記の「残る 31 形」の数を直すだけ）。
+  - 棚卸㉒の位置はすべて当たる（`layout_scan.rs` の `cursor_move` と `finish_line`・`layout.rs` の `visible_window`・`draw.rs` の寄せの直書きと `TEXT_DRAW_OPTIONS`・`look.rs` の `UNOWNED_KEYS` の 4 つ・`canvas.rs` の `RESERVED_EFFECT_SHADOW`・`balloon_overrides.rs` の `overrides`）。`look.rs` は 802 行。
+- 触るファイル: 棚卸㉒の一覧に、`crates/areka/src/mcp/check_script_judge_tests.rs` と（寄せを全文で決めるなら）emo-text の `lookahead.rs`・`actor_present.rs` を足す。網羅台帳で本 spec が持ち主の行は `sakura-script.toml` 5・`assets.toml` 4。検査の兄弟のファイルを足す＝**emo-text にファイルを足す**（`lib.rs` の席を使う）。
+- 規模: 18〜22 タスク（棚卸㉒は 17〜21）。
+- 分割の案: 今は切らない（`text-decoration-canon` から一度切り出した spec＝上限を少しまたぐ理由では削らない）。要件ではっきり 20 を超えたら、棚卸㉑の境界（②影 6〜8 → ①寄せ 11〜14）で切る。
+- 先に要るもの: 働きの前提は満たした。`text-typesetting`（全文の使い分け）の後だと ①寄せが楽。列の順は `balloon-scroll-fade` の後。
+- 優先度の区分: C（ukadoc の `\f[align]` ほか 5 項目の拾い残し・棚卸⑬で切り出し）。
+- 要件定義のモデル: Fable（SC8 の裁定・寄せと 1 字ずつの表示の噛み合わせ）。
+- 議題: SC8（縦書きでのインデントの軸）。⑵（新）寄せを区間の全文の行幅で決めるか。
+- 見つけた穴・古くなった記述: コードの穴は無い。Constraints の編集集合にある `decode.rs` は実質は注記だけ。

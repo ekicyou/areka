@@ -1,5 +1,5 @@
 //! balloon_visibility の子: 待ち時間の設定（既定値と環境変数での短縮）と、会話の後の時間切れの判定。
-//! 足す予定の spec: balloon-lifecycle-events。
+//! 足す予定の spec: なし。
 
 use std::sync::OnceLock;
 

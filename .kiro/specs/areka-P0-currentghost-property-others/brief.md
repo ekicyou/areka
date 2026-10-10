@@ -70,3 +70,17 @@
 - 触るファイル: `crates/areka-sylphya/src/vocab/dotted.rs`・`crates/areka-ghost/src/{sylphya_wiring.rs, catalog.rs（読むだけ）}`・`crates/areka/src/emo2_boot/{mod.rs, ghost_switch.rs, shell_balloon_switch.rs}`・`currentghost-property-tree` が作る値を集める所・`crates/areka/src/mcp/get_property_tests.rs`（`currentghost.name` の期待）・`doc/ukadoc-coverage/ledger/property.toml`。
 - 議題（答えで作業が変わるものだけ）: `currentghost.status` の写し方（前回どおり）。
 - 見つけた穴: 上の `get_property_tests.rs` の期待（着地のときに直す・今は直さない）。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**:
+  - `currentghost-property-tree`（動く値の口）は未着手のまま＝着手できない。sylphya は C4 で変更 0。
+  - **`currentghost.status` の読み口ができた**: `mcp-get-status`（✅ 10-06）が kanade へ状態を聞く `KanadeMsg::StatusQuery` を足し、`crates/areka/src/mcp/get_status.rs` が `ExecutionStatus::render` の値を返している。議題「kanade から UI の側へどう写すか」は、この問い合わせを使うか、変わるたびに写すかの二択に縮んだ（返事が後から来る形なので、読む時にその場で待つ使い方は口の形しだい）。`farewell-talk-status`（バグ・未着手）が同じ値を直す＝そちらが先なら直った値がそのまま出る。
+  - **値の源が無い項目が 10 行ある**: `currentghost.seriko.tooltip.*`（5 行）は surfaces.txt の tooltip ブレス、`currentghost.seriko.cursor.*`（5 行）は cursor ブレスが源だが、どちらも読み手がまだ無い（`crates/areka-parsers/src/shell/` に該当 0。tooltip ブレスは `shell-tooltip`〔その他・未着手〕が読む）。本 spec では値なしのまま登記し、読み手ができた時に出す、と要件で書き分ける。
+  - `crates/areka-ghost/src/catalog.rs` は `ghost-standard-balloon` で 414 行になった（`list_shells`・`list_all_shells` は同じ名前で在る）。
+- **触るファイル**: 前回のまま＝`crates/areka-sylphya/src/vocab/dotted.rs`（407）・`crates/areka-ghost/src/{sylphya_wiring.rs, catalog.rs（読むだけ）}`・`crates/areka/src/emo2_boot/{mod.rs, ghost_switch.rs, shell_balloon_switch.rs}`（**912**・**902**・442＝足すのは呼び出しの数行）・`currentghost-property-tree` が作る値を集める所・`crates/areka/src/mcp/get_property_tests.rs`（`currentghost.name` が値なしになる期待を値へ書き換える）・台帳 `property.toml`（`currentghost-property-tree` が持ち主の 64 行のうち `balloon` 以外の 41 行を本 spec へ直す）・`doc/COMPAT_ARCHITECTURE.md` §8。
+- **規模**: M（12〜16。源の無い 10 行を登記だけにするので 14〜18 から少し下げた）。**分割の案**: なし（一度切り出した spec）。
+- **先に要るもの**: `currentghost-property-tree`（その前に `property-name-case-fold`）。
+- **ファイルの重なり**: `system-property-values`・`property-catalog-lists`・`zorder-property`（`dotted.rs`・`emo2_boot/mod.rs`）と、`emo2_boot` の結線の列の全員。`system-property-values` とは働きの依存が無く、ファイルを分け合うだけ。
+- **優先度の区分**: C（ukadoc の `currentghost.*` の拾い残し）。**要件定義のモデル**: Opus（口の形と scope の数え方は前の spec が決める）。
+- **見つけた穴・古くなった記述**: 上の「値の源が無い 10 行」。`get_property_tests.rs` の `currentghost.name` の期待は今もそのまま（着地のときに直す・今は直さない）。

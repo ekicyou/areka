@@ -54,3 +54,20 @@
 ## Constraints
 
 - 規模は S 見込み（数タスク）。`crates/areka-emo-text/src/lib.rs` の純粋な一覧・1 ファイル 1,000 行の番人を守る。ビルドとテストは `-j 2`。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**: 起票（10-06）の後、関係のファイルは変わっていない。`crates/areka-emo-text/src/actor_present.rs` の `present_actor` の並び（`annotate_lines` → `line_bands` → 強調の描画 → 描き替えがあったときだけ `derive_hit_rows`）も、検査 8 が同じ 3 つを呼び直している所（`actor_lookahead_shapes_tests.rs`）もそのまま。
+- **触るファイル**:
+  - `crates/areka-emo-text/src/choice.rs`（744 行）か `actor_present.rs`（410 行）のどちらかにまとめた関数を置く。
+  - `crates/areka-emo-text/src/actor.rs`（検査用の読み口）・`actor_lookahead_shapes_tests.rs`（421 行）。
+  - 新しいファイルは足さない＝`lib.rs` に触らない。
+- **規模**: S（3〜4 タスク）。
+- **先に要るもの**: 無い（`budoux-reveal-reflow` は着地済み）。
+- **優先度の区分**: C（バグではない。検査が本番の並びを見張れない穴＝`budoux-reveal-reflow` の持ち越し）。
+- **要件定義のモデル**: Opus。
+- **分割の案**: 切らない。
+- **見つけた穴・古くなった記述**:
+  - `anchor-tag-canon`・`range-choice-tag`・`choice-marker-styling` と `choice.rs`・`actor_present.rs`・`actor.rs` が重なる＝同じウェーブに置けない。
+  - **`anchor-tag-canon` の前に置くのが素直**（後にすると、アンカーの範囲を足した後の並びをもう一度まとめ直す）。前に置く席が無ければ、`anchor-tag-canon` の最初のタスクに入れる手もある（合わせて 16〜20 タスク）。
+  - `reflow-scroll-path-test` とは、あちらが `actor_lookahead_tests.rs` に足す形なら重ならない。`balloon-text-area-collapse` とは、あちらが `actor_present.rs` で止める設計なら重なる。

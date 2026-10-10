@@ -100,3 +100,17 @@ SERIKO の pattern定義の描画メソッド `import`（`animation*.pattern*,im
   - **冒頭の待ち**: `import` の pattern のウエイトは、子の時計とは別に pattern の側で持つ。
   - **繰り返し回数を使わない**（正典）: 子の定義は回数を持つ（`FilmSheet::laps` → `LoopTrigger::Always` の `laps`）。`import` が指す子は回数なし（`laps: None`）で回す必要がある。
   - **同じ画像を element定義と `import` の両方で使うとき**: 子の鍵は画像 1 つにつき 1 つ（`FilmId`＝親の絵の番号・`animated-image-playback` の要件 3.4 のため）なので、時計も欄も 1 つになり、2 つは同じコマで揃ってしまう。`import` は始まりも回数も違うので、`import` の子は別の鍵（例: `PartKey::Film` に「どの pattern が取り込んだか」を足す）にする。鍵を広げるのは `import` の側の仕事である。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: `animated-image-playback`（10-07）が着地し、待つものが無くなった。上の「繰り返しと分解の仕組みの形」は今の main と一致（`FilmSheet`・`PartKey::Film`・`LoopFrame` の `picture`・`Cell::Picture`）。`import` の行は今も読み手でファイル名が 0 に化け、記録が出ない。合成の語の表（`crates/areka-emo-compose/src/method.rs`）は `import` を知らず、未知の語として警告する。
+- 触るファイル: `crates/areka-parsers/src/shell/{model.rs, decode.rs}`（pattern がファイル名を運ぶ）・`crates/areka-emo-atlas/src/manifest.rs`（焼く一覧）・`crates/areka-emo-compose/src/{plan,plan_extent,nesting,pattern,film,method}.rs`・`crates/areka-seriko/src/{table.rs, parts.rs}`（コマの指す先・`import` の子の別の鍵・冒頭の待ち）・台帳 `assets.toml` の 1 行・`doc/COMPAT_ARCHITECTURE.md` §8。型 `Pattern` の直書きは約 20 ファイル。
+- 規模: 10〜14 タスク（6〜9 から上振れ＝seriko の表と時計の鍵・外形まで及ぶと分かった）。切らない。
+- 先に要るもの: 働きの上では無し。ファイルの重なり＝`seriko-trigger-intervals`（読み手の 2 ファイル・seriko の `table.rs`・`parts.rs`）・`collisionex-regions`（読み手の 2 ファイル）・`extent-element-offset`（`plan_extent.rs`）・`element-clipping-option`・`draw-methods-canon`（読み手・`plan.rs`・`method.rs`）。`placement-measure-bake-once`・`present-emit-tail-latency` とは重なり 0。
+- 優先度の区分: A（「動く画像」は開発者の依頼 10-01 で、`import` は開発者が確定した範囲の中）。
+- 要件定義のモデル: Fable（正典の読みと、読み手・焼く一覧・合成・seriko にまたがる形の選び方）。
+- 分割の案: 無し（一度切り出した spec）。
+- 見つけた穴・古くなった記述:
+  - 「Out of Boundary: seriko の表と時計」は申し送りと食い違う。`import` のコマの指す先と別の鍵は seriko の `table.rs`・`parts.rs` に要る。
+  - Constraints の触るファイルに `nesting.rs`・`pattern.rs`・`film.rs`・`plan_extent.rs`・seriko が無い。「想定 6〜9」は上の規模で読み替える。

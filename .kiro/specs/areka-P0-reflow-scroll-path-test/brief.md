@@ -50,3 +50,19 @@
 ## Constraints
 
 - 規模は S 見込み（2〜3 タスク）。決まった字幅・GPU なし。ビルドとテストは `-j 2`。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**: 起票（10-06）の後、関係のファイルは変わっていない。検査の支え（`Rig`・`Talk`・`reveal_violations`・`budoux_model`）は `crates/areka-emo-text/src/actor_lookahead_tests.rs`（630 行）にあり、あふれの窓は `LayoutEngine::visible_window`、行の列は検査用の読み口 `arrange_for_test`（`actor.rs`）で取れる。
+- **触るファイル**:
+  - `crates/areka-emo-text/src/actor_lookahead_tests.rs` に足すだけなら、この 1 ファイル（100〜150 行足しても上限の内）。
+  - 新しい兄弟のファイルにすると、`actor.rs`（検査のモジュールの宣言）と `lib.rs`（一覧）にも触る。
+- **規模**: S（2〜3 タスク）。
+- **先に要るもの**: 無い。
+- **優先度の区分**: C（バグではない。検査の網羅の穴＝`budoux-reveal-reflow` の持ち越し）。
+- **要件定義のモデル**: Opus。
+- **分割の案**: 切らない。
+- **見つけた穴・古くなった記述**:
+  - 既存の `actor_lookahead_tests.rs` に足す形に決めれば、`anchor-tag-canon` とも `choice-ranges-one-function`（`actor_lookahead_shapes_tests.rs` を触る）とも重なり 0＝同じウェーブに置ける。新しいファイルにする形だと `anchor-tag-canon` と `actor.rs`・`lib.rs` が重なる。
+  - Approach の「1,000 行を超えるなら兄弟のファイルへ」は当たらない見込み。
+  - 変異（全文の枝を外す）で赤を確かめた後は必ず戻し、戻したファイルの時刻を更新してから緑を確かめる。

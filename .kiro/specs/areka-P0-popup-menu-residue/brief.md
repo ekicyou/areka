@@ -122,3 +122,21 @@
 - 共有しうる相手: `menu/` を触る未完了 spec は 0。`areka-kanade/src/actor.rs` は `property-query-channels` が触る。`emo2_boot/spine.rs` はコメント 1 か所なので、近くを触る spec と並べても行の重なりは起きにくい。
 - 議題（答えで作業が変わるものだけ）: なし。
 - 見つけた穴: なし。
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- **前提の変化**: 項目 10（World を借りたままの `ShellExecuteW`）は `open-external-tags`（10-06）で済んだ＝開く処理は `crates/areka/src/readme/opener.rs` の専用のスレッドへ移った。項目 2 も済み（説明書が無ければ OS を呼ばずに warn で止まる。`crates/areka/src/readme_tests.rs` に檻がある）。残りは 3〜9 の 7 件:
+  - 4: `crates/areka/src/menu/trigger.rs` の、メニューを出せなかったときの記録「`[menu] TrackPopupMenuEx failed`」と、それを逐語で見る `menu/trigger_show_tests.rs` の 2 か所。
+  - 5: `crates/areka/src/emo2_boot/readme_cue.rs` の「`ReadmeCueSink:`」で始まる 3 行（`open-external-tags` が文を書き換えたが、接頭辞の形は同じ）。
+  - 6: `crates/areka-kanade/src/actor.rs` の SHIORI の往復の失敗の 3 か所（「——終了系列（Fault）へ」）。
+  - 7: `crates/areka/src/emo2_boot/spine.rs` の 2 つの注記（「現在は 4 本」「4-sink 構成」）。本番は今も 11 本（`emo2_boot/mod.rs` の `sinks: vec![…]`）。
+  - 3・8: テストの穴 2 件（台本の文字列から開く処理までの端から端・scope 1 の終了の指示の端から端）。部品ごとのテストは `open-external-tags` で厚くなった。
+  - 9: `crates/areka/src/menu/captions.rs` の、照会しないメニューの語彙 4 件。台帳の持ち主の付け替えは `coverage-roadmap-refresh`。
+- **触るファイル**: `crates/areka/src/menu/{trigger.rs（573 行）, win32.rs, captions.rs, trigger_show_tests.rs}`・`emo2_boot/readme_cue.rs`・`emo2_boot/spine.rs`（937 行・注記だけ）・`crates/areka-kanade/src/actor.rs`（**900 行＝上限の近く**。文言だけなので増えない）・接頭辞を揃えるなら `actor_resources.rs`・新しいテスト 1〜2 本。`readme.rs` は項目 2・10 が済んだので触らない見込み。
+- **規模**: S（4〜6）。
+- **先に要るもの**: なし。ファイルの重なり: kanade の `actor.rs`（`mcp-kanade-tools` ほか kanade の進行の列）・`menu/captions.rs`（`extra-character-windows`）・`emo2_boot/spine.rs`（`areka-test-threads-av`・`test-wait-marker-gaps` が同じファイルの足場に触りうる）。
+- **測定の仕事ではない**（重い回 0）。
+- **優先度の区分**: C（バグでない持ち越し・記録の文言とテストの穴）。
+- **要件定義のモデル**: Opus。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: 冒頭の「本仕様に残るのは 3〜10 の 8 件」は 7 件になった。項目 7 の注記 2 か所は、spec を待たずに直せる（即時の直し候補）。

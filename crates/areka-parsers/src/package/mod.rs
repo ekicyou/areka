@@ -8,7 +8,7 @@
 //! （`pub fn parse(&str) -> Vec<Model>`・`Result` 無しの寛容パース）を
 //! 誤読しないよう、ここに固定する。
 //!
-//! 公開面集約のスケルトン。後続タスクで以下を順次埋める:
+//! 公開面の集約。中身は次のとおり:
 //! - `model`   : マウントモデル・失敗型の正本（`MountModel` / 付随値型 / `MountError`）
 //! - `resolve` : ツリー解決 + `std::fs` 存在確認 + descript 読込合成 + 既定
 //!   フォールバック（公開 facade `pub fn resolve`）

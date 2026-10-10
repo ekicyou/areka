@@ -92,3 +92,16 @@
   - 裁定によっては `crates/wintf/src/ecs/layout/hit_test/mod.rs` か `crates/wintf/src/ecs/graphics/systems/visual_sync.rs`
 - 議題（答えで作業が変わるものだけ）: 棚卸㉑の 2 つのまま（分けるか描き込むか／wintf の兄弟の重なり順をどちらへ揃えるか）。1 で分ける案を採ると `dump_surface` の重ね直しも範囲に入る。
 - 見つけた穴: 無し。
+
+
+## 2026-10-10 棚卸㉓の再測定（main `ee3af616`・C4 の着地の後）
+
+- 前提の変化: 待っていた `animated-image-playback`（10-07）が着地した。箱を挿す位置 `box_child_index`（`crates/areka-emo-text/src/actor_box.rs`）・挿す口 `attach_window_child` と当たりの `set_hit_cells`（`surface_window_child.rs`）・警告の出どころ `place`（`crates/areka-emo-compose/src/boxes.rs`）・最後に表示した 1 枚を読む口 `last_shown`（`crates/areka-emo-present/src/presenter/snapshot.rs`）は今もある。`wintf-tooltip`（10-08）は wintf に新しいモジュールを足しただけで、兄弟の重なり順には触れていない。
+- 新しく効いてくること: 動く絵は合成の回数を約 13 倍にする。合成を上下に分ける案は 1 回の適用で 2 枚を作り直すので、性能の確かめが重くなる（`present-emit-tail-latency` の尾と同じ場所）。
+- 触るファイル: 棚卸㉒のまま（emo-present の `mount.rs`・`presenter.rs`・`cache.rs`・`presenter/snapshot.rs`、emo-compose の `plan.rs`・`boxes.rs`、emo-text の `actor_box.rs`・`surface_window_child.rs`、`crates/areka/src/mcp/dump_surface.rs`、裁定しだいで wintf の当たり判定か描画の順）。
+- 規模: 10〜14 タスクのまま。切らない。
+- 先に要るもの: 働きの上では無し。シェルの element の列（`plan.rs`）と文字とバルーンの列（`actor_box.rs`）の両方の席が空いたとき。`present-emit-tail-latency` の後が望ましい（`presenter/` を分け合う・性能の物差しが先に要る）。
+- 優先度の区分: A（「シェル内バルーン」は開発者の依頼 10-01・その追跡）。
+- 要件定義のモデル: Fable（合成・表示・文字・wintf にまたがる／兄弟の重なり順の裁定）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述: 無し。
