@@ -233,3 +233,17 @@
   - ⑴ 下線は無人の撮影（`out-auto\menu.png`・1〜3 行目）で確認。マウスを乗せたときの強調は、記録（info）にも画像にも残らないので、開発者の目視（「多分大丈夫」）が根拠。
   - 最下行のリンク（`OnAnchorLong`「長い」・`OnAnchorChoice`「比べる」）は下線が無くても押せた（複数回）。起動直後の台詞のアンカーの字の大きさと色は、撮影ではほかの字と同じだった（装着前の見た目の件は出なかった）。
   - この走行で踏んでいないもの: バルーンが時間切れで消えた後の押下（台詞が置き換わり続けて時間切れが来なかった）・アンカーの左ダブルクリック（D-4）。どちらも檻または互換記録の記述が根拠のまま。
+
+### 完了時の棚卸（2026-10-10・`/kiro-complete` 冒頭ステップ）
+
+- main の取り込み: 完了の手続きの最初に `origin/main`（`a1942d0c`・4 本先）を取り込んだ（衝突なし）。取り込み後、ワークスペースのビルドは警告 0、`ukadoc-survey` と `areka-kanade`（main の 5 本が増えて単体 589 本）は緑、`cargo metadata --locked` は 0。
+- **その場で解決: 3 件**
+  1. アンカーの見た目の持ち主の書き残しを `areka-P0-anchor-style-canon` へ改めた（`crates/areka-emo-text/src/color.rs` の冒頭・`look.rs` の説明 2 か所・`doc/COMPAT_ARCHITECTURE.md` の `\f[color,default.anchor]` の行の追跡先・`doc/emo2-conformance-scope.md`。コメントと文書だけ）。
+  2. dola の手書きの「全種類」の檻 2 本と `CueCommand` の説明に `Cursor` を足し、実数の 13 に揃えた（以前から 1 つずれていた・本番のコードは無変更）。
+  3. 互換記録の「確認待ち」の印を外した（D-2・D-3・D-4・D-8 は 2026-10-10 に開発者へ見せ、変更の指示なしで実装完了の承認を受けた）。
+- **起票: 新しい spec 1 本＋既存の brief への追記 4 件**（`/kiro-discovery`）
+  - 新: `areka-P0-underline-bottom-row-clip`（バグ・文字の領域の下端に来た行の下線が出ない）。
+  - 追記: `areka-P0-anchor-style-canon`（装着前の見た目・下線の解決の差し替え点・`\f[anchor*]` の note）／`areka-P0-coverage-roadmap-refresh`（`shiori.toml` の共通の note・古い裁定候補・2 つの読み・調査時点の表）／`areka-P0-release-cycle`（dola の `CueCommand` の 2 種類と `#[non_exhaustive]` でないこと）／`areka-P0-range-choice-tag`（選択の送り口が消えたときの二重の記録を、ついでに直す候補として）。
+- 起票済みと確かめて、起票しなかったもの: clippy の既存の赤（`areka-P0-clippy-199-lints`）／areka の MCP の `raise_event`・`sakurascript` 未実装（`areka-P0-mcp-kanade-tools`）。
+- 起票しないと決めたもの: 任意の檻 2 本（開いている最中の空回しの取り直し・保留中の受理）は分岐を持たない配線なので足さない。バルーンが時間切れで隠れた後の押下は、箱は `shown_boxes` に無い箱を当たりに使わず、普通のバルーンは窓が隠れるので届かない（種類を問わない既存の仕組み）。pasta の `REG.OnSecondChange` を `boot.lua` から黙らせられない件は areka の未対応ではなく、検体作りの知見として 7.2 の記録に残す。
+- 調停役 kiro-watch: 運用の一時停止中のため省略。
