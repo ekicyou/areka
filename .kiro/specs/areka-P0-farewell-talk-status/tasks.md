@@ -3,7 +3,7 @@
 > テストの名前（T1〜T4）・設計の決定（D1〜D5）・触るファイルは `design.md` の「Testing Strategy」「設計の決定」「File Structure Plan」にある。
 
 - [ ] 1. お別れの台詞の再生中の `talking` を固定するテストを先に書く
-- [ ] 1.1 (P) 段のテストで、判定の全場面・お別れの 3 つの場面の通し・握手の要求を固定する
+- [x] 1.1 (P) 段のテストで、判定の全場面・お別れの 3 つの場面の通し・握手の要求を固定する
   - 運行の相のすべての種類（トークの有無で分かれる相は両方＝17 通り）について、「再生中か」の期待を手書きの表（ワイルドカード無しの分岐）で持ち、判定・再生中のトークの番号が引けるか・実行の状態の素の 3 つがその表と一致することを見る
   - お別れの 3 つの場面（終了の要求→`OnClose` に台詞／切り替えの要求→`OnGhostChanging` に台詞／切り替えの要求→応答なし→`OnClose` に台詞）を、旗・通信中・バルーンがすべて立った写しで実際の入力から流し、応答待ちの間は `talking` 無し、翻訳の依頼の `Status` と再生中の `Status` は `talking,nouserbreak,online,balloon(…)`、旗を下ろす知らせの後は `nouserbreak` 無し、`choosing` は無し、再生の開始の一括に SHIORI への要求が 0、を見る
   - 終わり方 4 通り（最後まで・`\-` に達した・利用者の中断・上限超過）の後は `talking`・`nouserbreak` が無いこと、切り替えの場面の利用者の中断の後に送られる `OnBalloonBreak` の `Status` にも `talking` が無いことを見る
@@ -44,3 +44,8 @@
   - 完了の姿: 一覧に `farewell-talk-status` という語と「`talking` が出ない」という説明が残っていない（リポジトリの `.kiro/` の外を検索して 0 件）
   - _Boundary: 文書（SSP との差の一覧だけ。コードの注記は 2.1 の持ち物）_
   - _Requirements: 4.7_
+
+## Implementation Notes
+
+- `cargo clippy -p areka-kanade --all-targets` は、本 spec が触らない `crates/areka-kanade/src/actor_raise_reply_tests.rs` の `clippy::never_loop`（既定で deny・最後に触ったのは PR#226）で失敗する。全体テストの道具も CI も clippy を回していない。本 spec では「触ったファイルへの clippy の指摘が 0 件」で判定する（2.1 の完了の姿の clippy も同じ読み）。範囲の外なので直さない。完了時の棚卸しで起票する。
+- 段のテストの補助 `phases()` は 17 通り（相の 15 種類＋トークの有無）。先頭 6 つの並びは既存のテストが添字で使うので動かさない。相を足したら `plays_a_talk`（コンパイルが止まる）だけでなく `phases()` と件数の期待も直す。
