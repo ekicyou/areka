@@ -155,7 +155,7 @@
   - _Requirements: 9.2, 12.1_
 
 - [ ] 6. 確かめと添え物
-- [ ] 6.1 本物の実行ファイルで通す実機テストを作る（明示したときだけ走る）
+- [x] 6.1 本物の実行ファイルで通す実機テストを作る（明示したときだけ走る）
   - 本物の実行ファイルを子プロセスで立て、置き場所を `target\` の下の一時フォルダへ向ける。`#[ignore]` にし、理由の文に実行コマンドを書く
   - 通す流れ: 見張りを立ててマージの待ちが番で終わる／「済んだ」で見張りが 3 で終わる／負荷テストの待ち → 別の参加者の見張りが 0 で終わる → 「止まった」と再開の待ち → 「済んだ」で再開／見張りを止めると次の呼び出しが回収する／`clear` で待ちが 3 で終わる／別のプロセスが状態ファイルを開いたままでも置き換え書きが通る／一時の置き場所の下のログに出来事の行と失敗の行（例: 版の合わない状態ファイルを置いて呼ぶ）が残る
   - 立てた子プロセスは、自分が立てたものだけをテストの終わりに必ず止める
@@ -274,3 +274,8 @@
 - 5.4: 構造テストは `main_layering_tests.rs`（手書きの走査・コメントは捨てる・兄弟のテストファイルは対象外）。(1) `plan.rs` の本文が `std::fs`／`std::time`／`std::process`／`std::{`／`std::*` と、1 語の `tracing`／`SystemTime`／`Instant`／`File` を綴らない（設計の 4 つより広い。**`plan.rs` で `std` をまとめ書き `use std::{…}` すると赤になる → 1 行に 1 つで書く**）。(2) `cli.rs`・`status.rs`・`wait.rs`・`error.rs` の文字列・文字リテラルが ASCII だけ（`wait.rs`・`error.rs` は設計が名指さない追加）。走査の限界: `"\u{3042}"` のように逃がして書いた字と `use std as s;` の別名は見えない（端末へ出た文そのものは `cli_test_support.rs` の `call` が毎回 `is_ascii` を見る）。design.md の `main_layering_tests.rs` の行へ追い書きが要る（裁定待ち 2 と一緒に）。
 - 5.4: 5.3 の申し送りの手当て 3 点を入れた。(a) 本物の口の `sleep` は `#[cfg(test)] panic!("a test reached the real 1-second sleep")`／`#[cfg(not(test))] std::thread::sleep(POLL)`（前例: `crates/areka/src/readme/opener.rs`）。待ちの条件が壊れる後退は、常時テストが待ち続けずに 1〜2 秒で赤になる。本物の 1 秒の眠りは常時テストでは走らないので、**6.1 の実機テストが唯一の檻**。(b) `cli_wait_tests.rs` の `call_until_first_sleep`（`catch_unwind` で最初の眠りまで走らせて状態を見る型）と 2 本（`stopped --wait` は「止まった」を記録してから待つ・`resume` は待つだけ）。(c) 本物の口の `pid()` の檻。
 - 5.4（任意の残り）: `store.rs`・`home.rs`・`presence.rs` の失敗の文も標準エラーへ出るので ASCII の走査へ足せる（今は緑のはず）。`plan.rs spells ["std::{"]` の赤の文に「std からは 1 行に 1 つ」の訳を添える。
+- 6.1: 実機テストは `crates/areka-impl-watch/tests/real.rs`（`#![cfg(windows)]`・10 本とも `#[ignore]`）。全体は `cargo test -p areka-impl-watch --test real -- --ignored --nocapture`（約 30 秒。ほぼ全部が 30 回目の周期の一回りを待つ 1 本）、短い形は `… --skip a_waiter_reclaims`（約 6 秒）。子プロセスは必ず `Desk::command` が置き場所を `target\test-roots\…` へ向けて立て、`Running` の `Drop` が自分の子だけを止める。走り続ける書き手の副産物（ログの行・`status.md`・一時ファイル）を見る前は `Desk::settle()`（`state.lock` を作らずに一瞬だけ取る）で 1 回の変更が終わり切るのを待つ（これが無いと、書きが 30 ms 遅いだけで赤になった）。待ちの締切は自前の 15 秒（`spine_wait` は `areka` の bin の非公開モジュールで、この葉クレートからは使えない。明示専用のテストとして受け入れ）。
+- 6.1（実測）: (a) ふつうの読み手（消しを他へ許して開く）が `state.json` を開いたままでも置き換えは通る。(b) **消しを他へ許さない読み手**が開いたままだと、状態を変えるコマンドと `clear` は 20 ms × 5 回の後に 1（`io write state.json: PermissionDenied (os error 5)`・元は無傷・一時ファイルなし・失敗の行 1 本）。設計どおりの今の振る舞いとして固定した。(c) 置き換えと重なった `fs::read` は約 1 万回読んで失敗も書きかけも 0（`read_only` の試し直しは要らない）。(d) 版の合わないファイルを置くと、走っていた見張りも次の読み直しで 1 で終わる。
+- 6.1 → 6.2: 手順書に「`state.json` を消しの共有なしで開き続けるアプリが居る間、状態を変えるコマンドは `io write state.json: PermissionDenied` で 1。閉じて呼び直す（待ち・見張りは読むだけなので続く）」。裁定待ち 7（`status.md`）と同じ場所の話として開発者へ 1 行。
+- 6.1（任意の残り）: `Desk::settle` の `try_lock().ok()` は「握られている」以外の OS の失敗も同じ赤に畳む（`Err(TryLockError::Error(e))` をその場で `panic!` にすると切り分けが速い）。
+- 運用の教訓: 変異の戻しに `git checkout` を使わない（`core.autocrlf=true` で CRLF に化ける）。控えを `target\` に取り、素のコピーで戻して sha256 を比べる。
