@@ -16,6 +16,8 @@
 - `OnAnchorSelectEx`: 「`\_a`ジャンパがクリックされた瞬間に発生。このイベントにSHIORIが何も返さなかった場合にのみ、続けてOnAnchorSelectが発生する。」Reference0＝ジャンパのテキスト・Reference1＝ID・Reference*＝拡張情報（`\_a` タグ内の 2 番目以降の引数）。
 - `OnAnchorSelect`: 「`\_a`ジャンパがクリックされた瞬間に発生。」Reference0＝選択されたジャンパの ID。
 - descript `anchor.style`（選択中アンカーの形状）の既定値は `underline`。
+- 読みの注記: さくらスクリプトの項 `\_a[ID,r2,r3...]` は「OnAnchorSelectExに続けてOnAnchorSelectも発生する」と、常に続くように読める書き方だが、イベントの項 `OnAnchorSelectEx` は「何も返さなかった場合にのみ」と限定する。areka はイベントの項に従う（選択肢の `OnChoiceSelectEx`→`OnChoiceSelect` と同じ形・Requirement 4.2／4.3）。
+- ukadoc の `\_a` には `\q` の `script:` のような ID の綴りに意味を持たせる形は無い。areka は ID をそのまま送り、綴りに特別な意味を持たせない（Requirement 4.1）。
 
 ## Boundary Context
 
@@ -51,7 +53,7 @@
 8. If アンカーの開きがあるのに同じ台本の中に閉じが無い, then the areka shall 範囲を台本の表示の終わりまでとし、警告として 1 件記録する。
 9. If アンカーが開いている間に新たな開きがある, then the areka shall 直前のアンカーをそこで閉じて新たなアンカーを始め、警告として 1 件記録する。
 10. If 開いていないのに閉じの `\_a` がある, then the areka shall 閉じを無視して表示を続け、警告として 1 件記録する。
-11. If `\_a[]` のように ID が空である, then the areka shall ID を空の文字列として扱い、アンカーとしては成立させる（押せば ID が空のまま送る）。
+11. If `\_a[]` のように ID が空である, then the areka shall ID を空の文字列として扱い、アンカーとしては成立させる（押せば ID が空のまま送る）。警告や「読めなかった印」は付けない（正典は ID の形を限っていない）。
 
 ### Requirement 2: アンカーの範囲と寿命
 
@@ -65,7 +67,7 @@
 4. While ゴーストがまだ話している（台詞の表示が終わっていない）, the areka shall 既に表示されたアンカーを押せる状態に保つ。
 5. The areka shall アンカーに選択肢の時間切れを適用せず、アンカーがあることを理由に答えを待つ柵を作らない。
 6. The areka shall アンカーがあることを理由にバルーンの自動の閉じ（バルーンの時間切れ）を遅らせない（選択肢が出ている間は閉じを止める今の規則を、アンカーには広げない）。
-7. When バルーンが消える（次の台詞に置き換わる・バルーンの時間切れ・台詞の中断・台詞の終わり）, the areka shall そのバルーンのアンカーを全て消し、以後そこを押しても何も送らない。
+7. When バルーンの本文が消える（次の台詞に置き換わる・`\c` で本文が消される・バルーンの時間切れ・台詞の中断）, the areka shall そのバルーンのアンカーを全て消し、以後そこを押しても何も送らない。台詞の終わり（`\e`）だけではバルーンは消えないので、アンカーはバルーンが閉じるまで押せる（Requirement 2.1）。
 8. When 1 つの台詞に複数のアンカーがある, the areka shall それぞれを別の範囲として保ち、押した範囲のアンカーだけを送る。
 9. The areka shall 普通のバルーンとシェルの中のバルーンの箱の両方で、同じ規則でアンカーの範囲を保つ。
 10. The areka shall 台本の全文を先に受け取って下見する処理（表示の前の空回し）で、アンカーの範囲の記録や警告を本番と二重に出さない。
@@ -91,7 +93,7 @@
 
 #### Acceptance Criteria
 
-1. When ID が `On` で始まらないアンカーが選択された, the areka shall まず `OnAnchorSelectEx` を送り、Reference0 にアンカーの範囲に表示された文字、Reference1 に ID、Reference2 以降に 2 番目以降の引数を記述順に載せる。
+1. When ID が `On` で始まらないアンカーが選択された, the areka shall まず `OnAnchorSelectEx` を送り、Reference0 にアンカーの範囲に表示された文字、Reference1 に ID、Reference2 以降に 2 番目以降の引数を記述順に載せる。ID の綴りに特別な意味を持たせない（選択肢の `script:` の約束は適用しない）。
 2. If `OnAnchorSelectEx` にゴーストが何も返さなかった（204）, then the areka shall 続けて `OnAnchorSelect` を送り、Reference0 に ID を載せる。
 3. If `OnAnchorSelectEx` にゴーストが台本を返した, then the areka shall `OnAnchorSelect` を送らない。
 4. When ID が `On` で始まるアンカーが選択された, the areka shall ID と同じ名前のイベントを送り、ID に続く引数を Reference0 以降に記述順で載せ、表示された文字と ID を Reference に含めず、`OnAnchorSelectEx`／`OnAnchorSelect` を送らない。
@@ -133,8 +135,8 @@
 #### Acceptance Criteria
 
 1. The areka 互換記録 shall `OnAnchorSelectEx`／`OnAnchorSelect`／`On` 始まりの直接送出の Reference の割付と順序を、ukadoc の該当記述と対応付けて記録する。
-2. The areka 互換記録 shall 正典が黙っている分岐について areka が採った決めを、正典に根拠がある決めと見分けられる形で記録する。対象は少なくとも次を含む — 話している最中のアンカーのクリックの扱い（Requirement 3.4）・閉じの無い開き／開きの重なり／開き無しの閉じの扱い（Requirement 1.8〜1.10）・ID が空のときの扱い（Requirement 1.11）・選択肢とアンカーが重なったときの判定の順（Requirement 3.5）・マウスが乗っていないときの既定の見た目を descript `anchor.style` の既定値から借りたこと（Requirement 5.1）。
-3. When 本 spec が着地する, the areka 網羅台帳 shall `\_a[ID,r2,r3...]`・`\_a[OnID,r0,r1...]`（根 2 件と別名 `\_a[ID]`）と `OnAnchorSelect`・`OnAnchorSelectEx` の行を「ある」に改め、持ち主を本 spec にする。
+2. The areka 互換記録 shall 正典が黙っている分岐について areka が採った決めを、正典に根拠がある決めと見分けられる形で記録する。対象は少なくとも次を含む — 話している最中のアンカーのクリックの扱い（Requirement 3.4）・閉じの無い開き／開きの重なり／開き無しの閉じの扱い（Requirement 1.8〜1.10）・ID が空のときの扱い（Requirement 1.11）・ID の綴りに意味を持たせないこと（Requirement 4.1）・`OnAnchorSelect` を 204 のときだけ続ける読み（Introduction の読みの注記）・選択肢とアンカーが重なったときの判定の順（Requirement 3.5）・マウスが乗っていないときの既定の見た目を descript `anchor.style` の既定値から借りたこと（Requirement 5.1）。
+3. When 本 spec が着地する, the areka 網羅台帳 shall `\_a[ID,r2,r3...]`・`\_a[OnID,r0,r1...]`（根 2 件）と `OnAnchorSelect`・`OnAnchorSelectEx` の行を「ある」（台帳の語彙では `implemented`）に改め、持ち主を本 spec にする。別名の行 `\_a[ID]` は台帳の慣例どおり `alias` のまま持ち主を持たない。
 4. When 本 spec が着地する, the areka 網羅台帳 shall 本 spec の持ち物として残っているアンカーの見た目の行（`\f[anchor*]` 16 項目・`\f[anchor.font.color]`・descript の `anchor.*` 族）の持ち主を `areka-P0-anchor-style-canon` に付け替える。
 5. The areka 互換記録 shall 設計の正本（`COMPAT_ARCHITECTURE.md` §8 の横断表）に本 spec の行を 1 行足し、詳細は互換記録へのポインタで引く。
 
