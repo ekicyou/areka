@@ -170,6 +170,16 @@ pub enum Event {
         kind: WaitKind,
         why: &'static str,
     },
+    /// 状態ファイルを空から作り直した。作るのは口の層で、判断は出さない。`backup` は読めなかった
+    /// ファイルの退避先（ファイルが無かったので新しく作ったときは `None`）。
+    Recovered {
+        backup: Option<String>,
+    },
+    /// 全部消した（`clear`）。作るのは口の層で、判断は出さない。`backup` は消す前のファイルの
+    /// 退避先（状態ファイルが無かったときは `None`）。
+    Cleared {
+        backup: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

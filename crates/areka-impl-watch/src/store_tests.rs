@@ -2,93 +2,27 @@
 //!
 //! 時計と、試しの間の待ちは [`Store`] の欄へ直に差し込む（眠らずに、頼まれた待ちを数える）。
 //! 生死は偽の口で答える。本物の眠りを使うのは、スレッドを競わせる 1 本だけ。
+//! ログの口・読むだけの口・全部消す、のテストは `store_ports_tests.rs` に在る（組み立ての手は
+//! どちらも `store_test_support.rs` のものを使う）。
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::fs::{self, File};
-use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Barrier, mpsc};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use temp_path_kit::TempPath;
 
+use super::test_support::{
+    BROKEN_AT_T0, Everyone, Nobody, T0, block_state_writes, home_in, names, participants,
+    read_state, store_in, store_noting_pauses, tick, watch,
+};
 use super::{Store, open};
 use crate::error::WatchError;
 use crate::home::Home;
-use crate::plan::{Applied, Command, Presence, Verdict, apply};
+use crate::plan::{Applied, Command, Verdict, apply};
 use crate::presence::hold;
 use crate::state::{Recent, RecentKind, State, WaitKind};
-
-/// テストの「いま」（UNIX 秒）。UTC では 2026-10-03T04:00:00Z。
-const T0: u64 = 1_791_000_000;
-
-/// [`T0`] に壊れた状態ファイルを退避したときの名前。
-const BROKEN_AT_T0: &str = "state.json.broken-20261003T040000Z";
-
-/// 誰のどの待ちも「居る」と答える偽の生死（参加者が回収で消えない）。
-struct Everyone;
-
-impl Presence for Everyone {
-    fn is_present(&self, _id: &str, _kind: WaitKind) -> bool {
-        true
-    }
-}
-
-/// 誰も「居ない」と答える偽の生死（見張りの無い「作業中」の参加者が回収される）。
-struct Nobody;
-
-impl Presence for Nobody {
-    fn is_present(&self, _id: &str, _kind: WaitKind) -> bool {
-        false
-    }
-}
-
-fn home_in(root: &TempPath) -> Home {
-    Home {
-        dir: root.path().to_path_buf(),
-    }
-}
-
-/// 時計が [`T0`] で止まり、全員が「居る」、待ちは眠らない口。
-fn store_in(root: &TempPath) -> Store {
-    Store {
-        home: home_in(root),
-        clock: Box::new(|| T0),
-        presence: Box::new(Everyone),
-        pause: Box::new(|_| {}),
-    }
-}
-
-/// 頼まれた待ちを眠らずに書き留める口と、その書き留め。
-fn store_noting_pauses(root: &TempPath) -> (Store, Rc<RefCell<Vec<Duration>>>) {
-    let pauses = Rc::new(RefCell::new(Vec::new()));
-    let noted = Rc::clone(&pauses);
-    let store = Store {
-        pause: Box::new(move |pause| noted.borrow_mut().push(pause)),
-        ..store_in(root)
-    };
-    (store, pauses)
-}
-
-/// 見張りの開始（＝参加）を本物の判断に通す。当てはまったかを返す。
-fn watch(id: &str) -> impl FnOnce(&mut State, u64, &dyn Presence) -> (Applied, Verdict) + '_ {
-    move |state, now, alive| {
-        let command = Command::Watch {
-            id: id.to_owned(),
-            name: None,
-            repo: "areka".to_owned(),
-            pid: 1234,
-        };
-        let applied = apply(state, &command, Some(id), now, alive);
-        let verdict = applied.verdict;
-        (applied, verdict)
-    }
-}
-
-/// 周期の一回り（回収する相手が居なければ何も変えない）を本物の判断に通す。
-fn tick(state: &mut State, now: u64, alive: &dyn Presence) -> (Applied, ()) {
-    (apply(state, &Command::Tick, None, now, alive), ())
-}
 
 /// 「何も変えなかった」という判断の答え。
 fn unchanged() -> Applied {
@@ -97,31 +31,6 @@ fn unchanged() -> Applied {
         verdict: Verdict::Applied,
         events: Vec::new(),
     }
-}
-
-/// フォルダの直下に在るものの名前（並べ替え済み）。
-fn names(dir: &Path) -> Vec<String> {
-    let mut found: Vec<String> = fs::read_dir(dir)
-        .expect("フォルダを読める")
-        .map(|entry| {
-            entry
-                .expect("項目を読める")
-                .file_name()
-                .to_string_lossy()
-                .into_owned()
-        })
-        .collect();
-    found.sort();
-    found
-}
-
-fn read_state(home: &Home) -> State {
-    let bytes = fs::read(home.state_path()).expect("状態ファイルが在る");
-    serde_json::from_slice(&bytes).expect("状態ファイルが状態として読める")
-}
-
-fn participants(home: &Home) -> Vec<String> {
-    read_state(home).participants.into_keys().collect()
 }
 
 /// 「作り直した」の記録（時刻は [`T0`]）。
@@ -425,11 +334,7 @@ fn a_failed_write_of_the_state_leaves_the_original_files_as_they_were() {
     store.with_state(watch("a")).expect("変えられる");
     let state_before = fs::read(home.state_path()).expect("読める");
     let status_before = fs::read(home.status_path()).expect("読める");
-    // 一時ファイルの名前（プロセス番号入り）をフォルダで塞ぐ: 一時ファイルが作れない。
-    let temp = home
-        .dir
-        .join(format!("state.json.{}.tmp", std::process::id()));
-    fs::create_dir(&temp).expect("作れる");
+    block_state_writes(&home);
 
     let got = store.with_state(watch("b"));
 
@@ -547,6 +452,7 @@ fn concurrent_changes_from_several_threads_are_all_kept() {
                     clock: Box::new(|| T0),
                     presence: Box::new(Everyone),
                     pause: Box::new(std::thread::sleep),
+                    log: Box::new(|_| {}),
                 };
                 start.wait();
                 store.with_state(watch(id)).expect("変えられる");
@@ -591,7 +497,7 @@ fn open_wires_the_real_clock_and_the_lock_file_presence() {
     let _held = hold(&home.alive_path("a", WaitKind::Watch))
         .expect("握れる")
         .expect("誰も握っていない");
-    let store = open(home_in(&root)).expect("開ける");
+    let store = open(home_in(&root), "test").expect("開ける");
 
     let before = unix_now();
     let (now, a, b) = store
@@ -609,4 +515,46 @@ fn open_wires_the_real_clock_and_the_lock_file_presence() {
     );
     assert!(a, "握られている印は居る");
     assert!(!b, "印の無い識別は居ない");
+}
+
+#[test]
+fn open_can_be_called_again_in_the_same_process_and_each_home_gets_a_log_file() {
+    // ログの受け手が据わるのはプロセスで 1 度だけ。2 度目からの `open` も落ちずに使える。
+    let roots = [
+        TempPath::under_target("impl-watch-store"),
+        TempPath::under_target("impl-watch-store"),
+    ];
+    for root in &roots {
+        let home = home_in(root);
+        let store = open(home_in(root), "test").expect("開ける");
+        assert_eq!(names(&home.dir), ["impl-watch.log"], "開くだけならログだけ");
+
+        store.with_state(watch("a")).expect("変えられる");
+
+        assert_eq!(participants(&home), ["a"]);
+        assert_eq!(
+            names(&home.dir),
+            ["impl-watch.log", "state.json", "state.lock", "status.md"]
+        );
+    }
+}
+
+#[test]
+fn open_fails_when_the_log_file_cannot_be_opened() {
+    let root = TempPath::under_target("impl-watch-store");
+    let home = home_in(&root);
+    fs::create_dir(home.log_path()).expect("作れる");
+
+    let got = open(home_in(&root), "test").map(|_| ());
+
+    assert!(
+        matches!(
+            got,
+            Err(WatchError::Io {
+                op: "open impl-watch.log",
+                ..
+            })
+        ),
+        "{got:?}"
+    );
 }
