@@ -453,7 +453,7 @@ stateDiagram-v2
 
 **責任と制約**
 - 引数の表 1 本（`COMMANDS: [Spec; 14]` と、その外の `--help` の行 `HELP`）から解釈する。行が持つのは、名前・要る引数・任意の引数・`--wait` を取るか・使い方に出す 1 行・読んだ引数から `Command` を組む関数。`--help` の本文も同じ表から組む。手書きの分岐を別に持たない。
-- `--help` の本文（`usage`）の並びは「使い方の 1 行 → コマンドごとに 2 行（名前と引数・その行の 1 行）→ 引数の形 → 末尾」。表から組まないのは末尾の定数（`FOOT`）だけで、次の 6 行を持つ。`stopped` と `resume` の行は、0 を `0=resumed, or stop requested again` と書く。
+- `--help` の本文（`usage`）の並びは「使い方の 1 行 → コマンドごとに 2 行（名前と引数・その行の 1 行）→ 引数の形 → 末尾」。表から組まないのは末尾の定数（`FOOT`）だけで、見出し `exit codes:` の 1 行と次の 6 行を持つ。`stopped` と `resume` の行は、0 を `0=resumed, or stop requested again` と書く。
   - `0  done: granted, stop requested (or requested again), resumed, or the state was changed`
   - `1  failure: AREKA_IMPL_WATCH_HOME unset, not absolute or not creatable, state file, lock, io, same wait already running`
   - `2  usage error: nothing is read or written`
