@@ -188,6 +188,12 @@
 10. **PR の印を誰が読むか**: 開発者が写すか、AI が `gh` の読むだけの問い合わせで読むか（提出の操作とトークンは開発者の手のまま）。
 11. **`areka-P0-release-cycle` の文書の持ち主の名前の直し**（議題 6）。`winget-manifest-submission` の名前が出る行は、同 spec の `requirements.md` に 4 行・`design.md` に 1 行・`brief.md` に 7 行。うち `winget.yml` の持ち主として読み替えが要る行は、直す spec が数え直す。
 
+### 要件討議での仕分け（2026-10-10）
+
+- **設計で決める**（`/kiro-spec-design`）: 3 書式の版／5 道具と作り方／6 `dist/winget/` の下の並び／7 上げ直しの実測の組み方／8 要件に名前の無い欄。あわせて「7. 設計へ持ち越す調べもの」の 9 件。
+- **要件へ反映済み**: 10 PR の印を誰が読むか（要件 5.4＝AI が読むだけの問い合わせで読んでよい）。3.1 の読みから、要件 4 の測る項目に利用者のバルーンとシェルの記憶を足し、winget の設定が既定のままで測ったことを記録に書く、とした。
+- **開発者と決める**（要件討議）: 1 初回の提出をどうするか／2 `ArchiveBinariesDependOnPath`／4 説明文の言語（タグの語と合わせて）／9 `--scope machine`／11 `areka-P0-release-cycle` の文書の名前の直し。
+
 ## 9. 出典
 
 - リポジトリ: `tools/package.ps1`（`Test-ZipContent` の許可表・段「assemble」の写し）・`crates/areka/src/boot_config.rs`（`follow_exe_links`・`exe_location`・`resolve_boot_from` の `root_resolved`）・`crates/areka/src/ghost_session.rs`・`crates/areka/src/boot_resolve.rs`（`last_ghost_not_found`）・`dist/README.txt`（「■ 記憶の置き場」）・`.kiro/steering/structure.md`（「その他の最上位」）・`.kiro/specs/completed/areka-P0-release-package-versioned/verification/winget-local-check.md`・同 `design.md` の「Out of Boundary」・`.kiro/specs/areka-P0-winget-release-automation/brief.md`。
