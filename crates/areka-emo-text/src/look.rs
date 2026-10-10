@@ -376,7 +376,7 @@ pub enum Note {
     /// `\f[color,default.anchor]`／`default.anchornotselect`／`default.anchorvisited`——
     /// アンカーの色定義がまだ無いので **`default` と同じ色**を適用した（要件 8.8・
     /// design §A 項目 11）。呼び手は `warn!` を 1 台詞に 1 度残す。消費者（本物のアンカー色）は
-    /// `areka-P0-anchor-tag-canon` がこの腕を差し替えて足す。
+    /// `areka-P0-anchor-style-canon` がこの腕を差し替えて足す。
     AnchorColorAsDefault,
     /// 本仕様が意味を与えないキー——見た目を変えない（要件 2.5）。値を捨てずに保つのと
     /// `debug!` の記録は呼び手の担当。
@@ -512,7 +512,7 @@ const UNOWNED_KEYS: [&str; 4] = ["align", "valign", "shadowcolor", "shadowstyle"
 /// 所有外のキーか（要件 2.5 の列挙——寄せ 2・影 2・`cursor*` 10・`anchor*` 17）。
 ///
 /// 所有仕様は `areka-P0-text-align-shadow-canon`（寄せ・影）・
-/// `areka-P0-choice-marker-styling`（`cursor*`）・`areka-P0-anchor-tag-canon`
+/// `areka-P0-choice-marker-styling`（`cursor*`）・`areka-P0-anchor-style-canon`
 /// （`anchor*`・`anchor.font.color` を含む）。
 fn is_unowned(key: &str) -> bool {
     UNOWNED_KEYS.contains(&key) || key.starts_with("cursor") || key.starts_with("anchor")
