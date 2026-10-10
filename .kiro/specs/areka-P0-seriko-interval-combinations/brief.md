@@ -93,3 +93,16 @@
   1. `always` を含まない組み合わせ（`bind+runonce`・`bind+talk,数値`・`bind+periodic,数値` など）を、この spec で読むか。`+` を分ける場所は 1 つなので同じ仕組みで読める見込みだが、語ごとに「着せ替えが無効の間はどうするか」を決める必要がある。
   2. 数値つきの語を含む組み合わせの綴り（数値をどの位置に書くか。`bind+random,4` は今の読み手が読める唯一の形）。正典は黙っている。
   3. 3 語以上の組み合わせと、意味が食い違う組み合わせ（例: `always+never`）をどこまで読み、読まないものをどの水準で記録するか。
+
+## 2026-10-10 `areka-P0-seriko-trigger-intervals` の完了時の申し送り
+
+出どころは `completed/areka-P0-seriko-trigger-intervals/tasks.md` の Implementation Notes（2.1・5.1・8・9.1）。前提の `seriko-trigger-intervals` は 2026-10-10 に着地した。
+
+- **台帳の行 `always:1` の持ち主は本 spec になった**（`doc/ukadoc-coverage/ledger/assets.toml` の `ukadoc:descript_shell_surfaces:always:1`。`owner` の欄は 2026-10-10 に付け替え済み・状態は縮退のまま）。ただし、その行の備考の 3 段落目の末尾「組み合わせは areka-P0-seriko-trigger-intervals が引き受ける（担当欄）。」は付け替えの前のまま残っている（`seriko-trigger-intervals` は備考を変えないと要件で決めていたので触っていない）。この行に手を入れるときに直す。
+- **seriko の形が変わった**（上の「棚卸㉓の測定」の「触るファイル」を読み替える）:
+  - 引き金の型 `LoopTrigger`（`table.rs`）に `Runonce`・`Periodic`・`Talk` の 3 腕が増えた（全部で 6 腕）。読み手の型 `Interval`（`crates/areka-parsers/src/shell/model.rs`）にも同じ 3 腕が増え、`normalize_interval` が名前として認める語は 6 つ（`bind`・`random`・`bind+random`・`runonce`・`periodic`・`talk`）。
+  - `parts.rs` の `rebuild` は 2 段になった（1 段目＝今までの評価、2 段目＝見えると決まった部品だけが 3 語の判定を受ける）。部品の門 `gate` に `Gate::Trigger` が増えた。
+  - 兄弟の本番ファイルが 4 つ増えた: `trigger.rs`（判定）・`talk.rs`（文字の時刻の写し）・`looper_trigger.rs`（一番上の配線）・`parts_trigger.rs`（部品の配線）。
+  - 行数の余裕が少ない: `looper.rs` 924 行・`table.rs` 900 行・`parts.rs` 893 行。組み合わせの腕を足すなら、先に置き場を決める（1 ファイル 1,000 行以下）。
+- **`+` の組み合わせは 3 語についても採っていない**。`bind+runonce`・`bind+talk,数値`・`bind+periodic,数値` などは、今も「それ以外の語」として元の綴りのまま持ち上がり、`debug!`（「未駆動 interval 語彙ゆえ非採録」）だけ残して動かない。上の議題 1 はそのまま生きている。採るなら、着せ替えが無効になったときの 3 語の時計と引き金の状態の捨て方も決めることになる（捨て方の今の決まりと食い違いは `seriko-trigger-teardown-gaps` の brief）。
+- **触っていない台帳の行の古い決まり文句**: `endtalk`・`starttalk`・`never`・`yen-e` の 4 行の備考は、今も「`normalize_interval` が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけ」「実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけ」と書く（4 行とも持ち主の欄は空）。`animation*.interval,インターバル` の行（持ち主は完了 `areka-P0-shell-parse`）の備考「実際に再生を駆動するのは `random`・`bind+random` と…`sometimes`・`rarely` の 4 つである。2026-10-06 からは単独の `always` も」にも、3 語が載っていない。`random,数値` の行には、この型の文は無い（Implementation Notes の 8 の列挙は `random,数値` を挙げるが、2026-10-10 に引いて確かめた）。今は認める語が 6 つ、動く語が 8 つ（`random`・`bind+random`・`sometimes`・`rarely`・`always`・`runonce`・`periodic`・`talk`）。これらの行に手を入れる spec（`never`・`yen-e` は `seriko-script-triggers`）が、触るときに直す。本 spec が `always:1` の備考を書き直すときも、同じ型の文が無いか見る。
