@@ -5,10 +5,11 @@
 
 use std::sync::Arc;
 
+use areka_mcp::SERVER_NAME;
 use rmcp::model::{
-    ClientCapabilities, ClientConfig, ClientNotification, ClientRequest, DiscoverResult, ErrorData,
-    GetExtensions, Implementation, ProtocolVersion, RequestMetaObject, ServerCapabilities,
-    ServerConfig, ServerPeerInfo, ServerResult,
+    CacheScope, ClientCapabilities, ClientConfig, ClientNotification, ClientRequest,
+    DiscoverResult, ErrorData, GetExtensions, Implementation, ListToolsResult, ProtocolVersion,
+    RequestMetaObject, ResultType, ServerCapabilities, ServerConfig, ServerPeerInfo, ServerResult,
 };
 use rmcp::service::{
     NotificationContext, PeerRequestOptions, QuitReason, RequestContext, serve_directly,
@@ -23,6 +24,11 @@ use crate::config::Config;
 use crate::errors;
 use crate::scan::{Link, Scan, scan};
 use crate::stdio::LineTransport;
+
+/// `AREKA_MCP_PORT=0`（待ち受けない設定）のときのエラーの理由（設計 D-9）。
+const DISABLED: &str = "AREKA_MCP_PORT=0 (areka does not listen)";
+/// 「居ない」エラーの文に載せる、areka でない相手の名乗りの長さの上限（字の数）。
+const PEER_NAME_MAX: usize = 64;
 
 /// areka の側へ立てる rmcp のクライアントの持ち主（設計 D-3）。名乗りは `areka-mcp-bridge` と
 /// 中継の版。areka から届く要求・通知には rmcp の既定で応える（areka は送ってこない）。
@@ -100,7 +106,8 @@ impl Bridge {
             return self.forward(linked, request, meta).await;
         }
         let info = linked.link.peer_info();
-        let Some(config) = info.as_deref().and_then(server_config) else {
+        let from_info = |info| first_answer(info, &request);
+        let Some(answer) = info.as_deref().and_then(from_info) else {
             warn!(
                 port = linked.port,
                 "[bridge] the link holds no server info of areka"
@@ -111,15 +118,38 @@ impl Bridge {
             port = linked.port,
             "[bridge] answered the first inquiry from the server info of areka"
         );
-        Ok(match request {
-            ClientRequest::InitializeRequest(request) => ServerResult::InitializeResult(
-                config.with_protocol_version(negotiated(request.params.protocol_version)),
-            ),
-            _ => ServerResult::DiscoverResult(DiscoverResult::from_server_info(
-                ProtocolVersion::KNOWN_VERSIONS.to_vec(),
-                config,
-            )),
-        })
+        Ok(answer)
+    }
+
+    /// areka が居ないときの答え（設計「areka が居ないときの答え」の表）。最初の問い合わせと
+    /// `tools/list` は、当たる控えがあれば控えで答える（要件 3.4）。`ping` は自分で空の結果
+    /// （要件 3.7）。ほかの要求と、当たる控えが無い問い合わせには「居ない」エラー（要件 3.5・3.6）。
+    fn absent(
+        &self,
+        request: &ClientRequest,
+        meta: &RequestMetaObject,
+        others: &[(u16, String)],
+    ) -> Result<ServerResult, ErrorData> {
+        let cached = match request {
+            ClientRequest::PingRequest(_) => return Ok(ServerResult::empty(())),
+            ClientRequest::InitializeRequest(_) | ClientRequest::DiscoverRequest(_) => {
+                let info = self.cache.load_server_info();
+                info.and_then(|info| first_answer(&info, request))
+            }
+            ClientRequest::ListToolsRequest(_) => {
+                let tools = self.cache.load_tools();
+                tools.map(|tools| ServerResult::ListToolsResult(in_dialect_of(tools, meta)))
+            }
+            _ => None,
+        };
+        let method = request.method();
+        if let Some(answer) = cached {
+            info!(method, "[bridge] areka not found; answered from the cache");
+            return Ok(answer);
+        }
+        let reason = not_found(&self.config.candidates, others);
+        info!(method, "[bridge] {reason}; answered with an error");
+        Err(errors::server_not_available(&reason))
     }
 
     /// 要求を areka へ届け、応答の上限つきで待って、結果をそのまま返す。要求の `_meta` は rmcp が
@@ -167,12 +197,16 @@ impl Service<RoleServer> for Bridge {
         request: ClientRequest,
         context: RequestContext<RoleServer>,
     ) -> Result<ServerResult, ErrorData> {
-        // ⑵ つなぐ先を決める（無ければ探す）。
+        // ⑴ 待ち受けない設定（候補が空）: 探さず、控えも使わず、`ping` にもエラー（要件 2.6）。
+        if self.config.candidates.is_empty() {
+            return Err(errors::server_not_available(DISABLED));
+        }
+        // ⑵ つなぐ先を決める（無ければ探す。居ないと答えた後も、要求のたびに探す＝要件 3.9）。
         match self.ensure_link().await {
             // ⑶ つながっている。
             Ok(linked) => self.answer(&linked, request, context.meta).await,
             // ⑷ 居ない。
-            Err(_others) => Err(errors::server_not_available("areka-mcp-server not found")),
+            Err(others) => self.absent(&request, &context.meta, &others),
         }
     }
 
@@ -214,13 +248,59 @@ impl Service<RoleServer> for Bridge {
     }
 }
 
-/// areka のサーバーの情報から、最初の問い合わせの答えの元を組む。名乗りの無い情報からは組まない。
-fn server_config(info: &ServerPeerInfo) -> Option<ServerConfig> {
+/// 最初の問い合わせ（`initialize`・`server/discover`）の答えを、areka のサーバーの情報から組む。
+/// つながっているときは areka の今の情報から、居ないときは控えの情報から、同じに組む（設計 D-8）。
+/// 名乗りの無い情報・最初の問い合わせでない要求からは組まない。
+fn first_answer(info: &ServerPeerInfo, request: &ClientRequest) -> Option<ServerResult> {
     let mut config =
         ServerConfig::new(info.capabilities.clone()).with_server_info(info.server_info.clone()?);
     config.instructions = info.instructions.clone();
     config.meta = info.meta.clone();
-    Some(config)
+    match request {
+        ClientRequest::InitializeRequest(request) => Some(ServerResult::InitializeResult(
+            config.with_protocol_version(negotiated(request.params.protocol_version.clone())),
+        )),
+        ClientRequest::DiscoverRequest(_) => Some(ServerResult::DiscoverResult(
+            DiscoverResult::from_server_info(ProtocolVersion::KNOWN_VERSIONS.to_vec(), config),
+        )),
+        _ => None,
+    }
+}
+
+/// 控えの一覧を、要求の話し方に合わせる。控えは最後に書いたときの話し方の形のまま（`2026-07-28` なら
+/// `resultType`・`ttlMs`・`cacheScope` 付き、旧式なら無し）なので、areka の受け口が版ごとに返す形に
+/// 揃える: `2026-07-28` 以降の要求（`_meta` に版がある）には 3 欄を付け（無いとクライアントが拒む）、
+/// 旧式の要求からは外す。`ttlMs` は 0 なので、クライアントは次も聞き直す（areka が見つかれば今の一覧に
+/// 替わる）。
+fn in_dialect_of(mut tools: ListToolsResult, meta: &RequestMetaObject) -> ListToolsResult {
+    let version = meta.protocol_version();
+    let stateless = version.is_some_and(|v| v >= ProtocolVersion::V_2026_07_28);
+    tools.result_type = stateless.then_some(ResultType::COMPLETE);
+    tools.ttl_ms = stateless.then_some(0);
+    tools.cache_scope = stateless.then_some(CacheScope::Private);
+    tools
+}
+
+/// 「居ない」エラーの理由の文（設計 D-9）: 候補の番号を候補の順に並べ、areka でない名乗りが応えた番号と
+/// 名乗りを続ける（要件 3.6）。
+fn not_found(candidates: &[u16], others: &[(u16, String)]) -> String {
+    let ports: Vec<String> = candidates.iter().map(u16::to_string).collect();
+    let mut reason = format!(
+        "{SERVER_NAME} not found on 127.0.0.1 ports {}",
+        ports.join(", ")
+    );
+    for (port, name) in others {
+        // 名乗りは相手が書いた字。長い文・行の分かれた文を Desktop と記録へ流し込ませない。
+        let plain = |c: char| if c.is_control() { '?' } else { c };
+        let shown: String = name.chars().take(PEER_NAME_MAX).map(plain).collect();
+        let cut = if name.chars().nth(PEER_NAME_MAX).is_some() {
+            "..."
+        } else {
+            ""
+        };
+        reason.push_str(&format!("; port {port} answered as \"{shown}{cut}\""));
+    }
+    reason
 }
 
 /// `initialize` に返す版（設計 D-2・areka の受け口と同じ決まり）: 要求の版が `initialize` を持つ

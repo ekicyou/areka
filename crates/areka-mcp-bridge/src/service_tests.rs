@@ -12,6 +12,7 @@ use rmcp::service::QuitReason;
 use serde_json::{Value, json};
 use temp_path_kit::TempPath;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, DuplexStream};
+use tokio::net::TcpSocket;
 use tokio::task::JoinHandle;
 
 use super::run;
@@ -37,7 +38,12 @@ impl Desk {
     /// この候補の列で中継を回す。確かめの上限は長く取る（負荷の下で偽の受け口の答えが遅れても
     /// areka を飛ばさない）。
     fn start(candidates: Vec<u16>) -> Desk {
-        let root = TempPath::under_target("bridge-service");
+        Desk::start_at(TempPath::under_target("bridge-service"), candidates)
+    }
+
+    /// 控えの置き場の根を受け取って回す（[`Desk::close`] が返した根を渡すと、起動し直した中継に
+    /// なる＝前の中継が残した控えを読む）。
+    fn start_at(root: TempPath, candidates: Vec<u16>) -> Desk {
         let timeouts = Timeouts {
             verify: WAIT,
             ..Timeouts::default()
@@ -79,8 +85,8 @@ impl Desk {
     }
 
     /// 標準入力を閉じる。中継は入力の終わりで終わり、標準出力に読んでいない行は残っていない
-    /// （出るのは応答の行だけ＝通知には何も出ない）。
-    async fn close(mut self) {
+    /// （出るのは応答の行だけ＝通知には何も出ない）。控えの置き場の根を返す。
+    async fn close(mut self) -> TempPath {
         drop(self.stdin);
         let quit = tokio::time::timeout(WAIT, self.run).await;
         let quit = quit.expect("期限内に終わる").expect("入口が panic しない");
@@ -89,6 +95,7 @@ impl Desk {
         let read = self.stdout.read_to_string(&mut rest).await;
         read.expect("標準出力を終わりまで読める");
         assert_eq!(rest, "", "読んでいない行が残っている");
+        self.root
     }
 }
 
@@ -110,6 +117,27 @@ fn initialize_params(version: &str) -> Value {
         "protocolVersion": version,
         "capabilities": {},
         "clientInfo": {"name": "desktop", "version": "1"},
+    })
+}
+
+/// サーバーの情報（`serverInfo` の版がこれ・説明の文なし）から組んだ `server/discover` の答え。
+fn discovered(version: &str) -> Value {
+    json!({
+        "resultType": "complete",
+        "supportedVersions": ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25", "2026-07-28"],
+        "capabilities": {"tools": {}},
+        "ttlMs": 0,
+        "cacheScope": "private",
+        "_meta": {"io.modelcontextprotocol/serverInfo": {"name": SERVER_NAME, "version": version}},
+    })
+}
+
+/// `2026-07-28` で話す Desktop が要求ごとに `params` へ載せる `_meta`。
+fn stateless_meta() -> Value {
+    json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientInfo": {"name": "desktop", "version": "1"},
     })
 }
 
@@ -183,15 +211,7 @@ async fn first_inquiries_are_answered_from_the_info_areka_gave() {
     }
 
     let reply = desk.ask(json!(5), "server/discover", json!({})).await;
-    let expected = json!({
-        "resultType": "complete",
-        "supportedVersions": ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25", "2026-07-28"],
-        "capabilities": {"tools": {}},
-        "ttlMs": 0,
-        "cacheScope": "private",
-        "_meta": {"io.modelcontextprotocol/serverInfo": {"name": SERVER_NAME, "version": "0.0.0"}},
-    });
-    assert_eq!(reply, result(json!(5), expected));
+    assert_eq!(reply, result(json!(5), discovered("0.0.0")));
 
     desk.close().await;
     // areka に届いた `initialize` は、中継の確かめと rmcp の手順のものだけ。
@@ -350,11 +370,7 @@ async fn request_meta_reaches_areka_so_a_stateless_request_stays_stateless() {
     let fake = FakeServer::start(Script::areka().on("tools/list", Reply::Result(tools())));
     let mut desk = Desk::start(vec![fake.port()]);
 
-    let meta = json!({
-        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-        "io.modelcontextprotocol/clientCapabilities": {},
-        "io.modelcontextprotocol/clientInfo": {"name": "desktop", "version": "1"},
-    });
+    let meta = stateless_meta();
     let listed = desk
         .ask(json!(1), "tools/list", json!({"_meta": meta}))
         .await;
@@ -369,4 +385,287 @@ async fn request_meta_reaches_areka_so_a_stateless_request_stays_stateless() {
     for (key, value) in meta.as_object().expect("オブジェクト") {
         assert_eq!(&sent_meta[key], value, "{sent:?}");
     }
+}
+
+// ---- areka が居ないとき・待ち受けない設定のとき（要件 2.6・3.4〜3.9） ----
+
+/// 誰も居ない番号: 束ねたまま待ち受けないソケット（落とすまで、並んで走るテストに取られない）。
+fn nobody() -> (TcpSocket, u16) {
+    let socket = TcpSocket::new_v4().expect("ソケットを作れる");
+    let any_port = "127.0.0.1:0".parse().expect("アドレスとして読める");
+    socket.bind(any_port).expect("空きポートを束ねられる");
+    let port = socket.local_addr().expect("番号が分かる").port();
+    (socket, port)
+}
+
+/// 中継が自分で作る「居ない」エラーの行（番号 `-1`・`Server not available` で始まる文）。
+fn unavailable(id: Value, reason: &str) -> Value {
+    let message = format!("Server not available: {reason}");
+    json!({"jsonrpc": "2.0", "id": id, "error": {"code": -1, "message": message}})
+}
+
+/// 前に動いた中継が残したサーバーの情報の控え（偽の受け口の今の答えとは、版も説明の文も違う）。
+fn cached_info() -> Value {
+    json!({
+        "protocolVersion": "2025-11-25",
+        "capabilities": {"tools": {}},
+        "serverInfo": {"name": SERVER_NAME, "version": "1.2.3"},
+        "instructions": "cached words",
+    })
+}
+
+/// 控えを直に置く（前に動いた中継が areka の答えを書いたのと同じ口で）。
+fn seed(cache: &Cache, info: Option<Value>, tools: Option<Value>) {
+    if let Some(info) = info {
+        cache.save_server_info(&serde_json::from_value(info).expect("サーバーの情報の形"));
+    }
+    if let Some(tools) = tools {
+        cache.save_tools(&serde_json::from_value(tools).expect("一覧の形"));
+    }
+}
+
+/// `2026-07-28` の要求の `params`。
+fn stateless() -> Value {
+    json!({"_meta": stateless_meta()})
+}
+
+/// 控えの一覧で `2026-07-28` の要求に答える形: areka の受け口がその版で付けるのと同じ 3 欄を補う
+/// （`ttlMs` が 0 なので、クライアントは次も聞き直す）。
+fn stateless_tools_from_the_cache() -> Value {
+    let mut listed = tools();
+    listed["resultType"] = json!("complete");
+    listed["ttlMs"] = json!(0);
+    listed["cacheScope"] = json!("private");
+    listed
+}
+
+/// 4 種類の要求（`initialize`・`server/discover`・`tools/list`・`tools/call`）を送り、それぞれが結果で
+/// 答えられたかを返す。結果でない答えは、この理由の「居ない」エラーであること。
+async fn answered(desk: &mut Desk, reason: &str) -> [bool; 4] {
+    let asks = [
+        ("initialize", initialize_params("2025-11-25")),
+        ("server/discover", stateless()),
+        ("tools/list", json!({})),
+        ("tools/call", json!({"name": "get_status"})),
+    ];
+    let mut got = [false; 4];
+    for (slot, (method, params)) in got.iter_mut().zip(asks) {
+        let reply = desk.ask(json!(method), method, params).await;
+        *slot = reply.get("result").is_some();
+        if !*slot {
+            assert_eq!(reply, unavailable(json!(method), reason), "{method}");
+        }
+    }
+    got
+}
+
+/// areka が居ない（候補に居るのは別の名乗りの相手だけ）ときの、控えがある場合の答え（設計「areka が
+/// 居ないときの答え」の表・要件 3.4・3.6〜3.8）。最初の問い合わせと `tools/list` は控えで、`ping` は
+/// 自分で答え、ほかはエラー。一覧の形は、控えを書いたときの話し方でなく、要求の話し方に合わせる。
+#[tokio::test]
+async fn without_areka_the_cache_answers_the_first_inquiries_and_the_tool_list() {
+    let ssp = FakeServer::start(Script::named("ssp-mcp-server"));
+    let mut desk = Desk::start(vec![ssp.port()]);
+    // 控えの一覧は、`2026-07-28` の話し方で書かれた形（areka が付けた 3 欄入り）。
+    let mut written = tools();
+    written["resultType"] = json!("complete");
+    written["ttlMs"] = json!(60_000);
+    written["cacheScope"] = json!("public");
+    seed(&desk.cache(), Some(cached_info()), Some(written));
+
+    for (asked, answered) in [("2025-06-18", "2025-06-18"), ("2026-07-28", "2025-11-25")] {
+        let reply = desk
+            .ask(json!(asked), "initialize", initialize_params(asked))
+            .await;
+        let mut expected = cached_info();
+        expected["protocolVersion"] = json!(answered);
+        assert_eq!(reply, result(json!(asked), expected));
+    }
+    let reply = desk.ask(json!(1), "server/discover", stateless()).await;
+    let mut expected = discovered("1.2.3");
+    expected["instructions"] = json!("cached words");
+    assert_eq!(reply, result(json!(1), expected));
+
+    // 旧式の話し方の要求には 3 欄を付けない。`2026-07-28` の要求には、控えの値でなく決まった 3 欄。
+    let reply = desk.ask(json!(2), "tools/list", json!({})).await;
+    assert_eq!(reply, result(json!(2), tools()));
+    let reply = desk.ask(json!(3), "tools/list", stateless()).await;
+    assert_eq!(reply, result(json!(3), stateless_tools_from_the_cache()));
+
+    let pong = desk.ask(json!("p"), "ping", json!({})).await;
+    assert_eq!(pong, result(json!("p"), json!({})));
+    let port = ssp.port();
+    let reason = format!(
+        "{SERVER_NAME} not found on 127.0.0.1 ports {port}; port {port} answered as \"ssp-mcp-server\""
+    );
+    let call = json!({"name": "get_status"});
+    let reply = desk.ask(json!(4), "tools/call", call).await;
+    assert_eq!(reply, unavailable(json!(4), &reason));
+    let reply = desk.ask(json!("u"), "x/unknown", json!({})).await;
+    assert_eq!(reply, unavailable(json!("u"), &reason));
+    // 通知には何も出さない（探しもしない）。エラーの後も、次の行に答える。
+    desk.send(notification("notifications/x-note", json!({})))
+        .await;
+    let pong = desk.ask(json!(5), "ping", json!({})).await;
+    assert_eq!(pong, result(json!(5), json!({})));
+
+    desk.close().await;
+    // 別の名乗りの相手に届いたのは、`id` を持つ要求 9 つのための確かめだけ（通知の分は無い）。
+    let sent = ssp.requests();
+    assert_eq!(sent.len(), 9, "{sent:?}");
+    let checks = |r: &Received| {
+        r.method == "initialize" && r.body["params"]["clientInfo"]["name"] != "desktop"
+    };
+    assert!(sent.iter().all(checks), "{sent:?}");
+}
+
+/// 当たる控えが無い問い合わせにはエラー（要件 3.5）。控えは種類ごとに見る: サーバーの情報だけ・一覧だけが
+/// あるときは、ある側だけ控えで答える。`ping` は控えが無くても自分で答える（要件 3.7）。
+#[tokio::test]
+async fn without_areka_an_inquiry_with_no_cache_of_its_kind_gets_the_error() {
+    let other = FakeServer::start(Script::named("other"));
+    let port = other.port();
+    let mut desk = Desk::start(vec![port]);
+    let reason = format!(
+        "{SERVER_NAME} not found on 127.0.0.1 ports {port}; port {port} answered as \"other\""
+    );
+
+    assert_eq!(answered(&mut desk, &reason).await, [false; 4]);
+    let pong = desk.ask(json!(0), "ping", json!({})).await;
+    assert_eq!(pong, result(json!(0), json!({})));
+
+    seed(&desk.cache(), Some(cached_info()), None);
+    let got = answered(&mut desk, &reason).await;
+    assert_eq!(got, [true, true, false, false], "サーバーの情報だけ");
+
+    let info_file = desk.root.child(CACHE_DIR).join("server-info.json");
+    std::fs::remove_file(info_file).expect("サーバーの情報の控えを消せる");
+    seed(&desk.cache(), None, Some(tools()));
+    let got = answered(&mut desk, &reason).await;
+    assert_eq!(got, [false, false, true, false], "一覧だけ");
+
+    desk.close().await;
+}
+
+/// 「居ない」エラーの文（設計 D-9）: 候補の番号を候補の順に並べ、areka でない名乗りが応えた番号と名乗りを
+/// 続ける（要件 3.6）。誰も応えなければ続きは無い。名乗りは相手が書いた字なので、64 字で切って `...` を
+/// 付け、制御文字を `?` に替える（長い文・行の分かれた文を Desktop と記録に流し込ませない）。
+#[tokio::test]
+async fn the_not_found_error_names_the_candidates_and_who_answered_instead() {
+    let (_held, closed) = nobody();
+    let mut desk = Desk::start(vec![closed]);
+    let reply = desk.ask(json!(1), "tools/call", json!({})).await;
+    let reason = format!("{SERVER_NAME} not found on 127.0.0.1 ports {closed}");
+    assert_eq!(reply, unavailable(json!(1), &reason));
+    desk.close().await;
+
+    let ssp = FakeServer::start(Script::named("ssp-mcp-server"));
+    let rude = FakeServer::start(Script::named(&format!("a\nb\t{}", "x".repeat(100))));
+    let (first, last) = (ssp.port(), rude.port());
+    let mut desk = Desk::start(vec![first, closed, last]);
+    let reply = desk.ask(json!(2), "tools/call", json!({})).await;
+    let reason = format!(
+        "{SERVER_NAME} not found on 127.0.0.1 ports {first}, {closed}, {last}; \
+         port {first} answered as \"ssp-mcp-server\"; port {last} answered as \"a?b?{}...\"",
+        "x".repeat(60)
+    );
+    assert_eq!(reply, unavailable(json!(2), &reason));
+    desk.close().await;
+}
+
+/// `AREKA_MCP_PORT=0`（候補が空）: 探さず、置き場に控えがあっても使わず、`id` を持つ全部（`ping` も）に
+/// 「待ち受けない設定」のエラー（要件 2.6）。通知には何も出さず、エラーの後も次の行に答える（要件 4.6）。
+#[tokio::test]
+async fn port_zero_answers_every_request_with_the_disabled_error() {
+    let mut desk = Desk::start(Vec::new());
+    seed(&desk.cache(), Some(cached_info()), Some(tools()));
+
+    let asks = [
+        ("ping", json!({})),
+        ("initialize", initialize_params("2025-11-25")),
+        ("server/discover", stateless()),
+        ("tools/list", json!({})),
+        ("tools/call", json!({"name": "get_status"})),
+    ];
+    for (method, params) in asks {
+        desk.send(notification("notifications/x-note", json!({})))
+            .await;
+        let reply = desk.ask(json!(method), method, params).await;
+        let reason = "AREKA_MCP_PORT=0 (areka does not listen)";
+        assert_eq!(reply, unavailable(json!(method), reason), "{method}");
+    }
+    desk.close().await;
+}
+
+/// 控えは中継を起動し直しても残る（要件 3.3）: 前の中継が areka から受け取った答えで、後から起こした
+/// 中継が、`initialize` で始める Desktop にも `server/discover` で始める Desktop にも答える（要件 3.4）。
+#[tokio::test]
+async fn a_bridge_started_later_answers_from_the_cache_an_earlier_one_left() {
+    let fake = FakeServer::start(Script::areka().on("tools/list", Reply::Result(tools())));
+    let mut first = Desk::start(vec![fake.port()]);
+    first.ask(json!(1), "tools/list", json!({})).await;
+    let root = first.close().await;
+    // areka が去り、同じ番号に居るのは別の名乗りの相手。
+    fake.rescript(Script::named("ssp-mcp-server"));
+
+    let mut legacy = Desk::start_at(root, vec![fake.port()]);
+    let reply = legacy
+        .ask(json!(1), "initialize", initialize_params("2025-06-18"))
+        .await;
+    let expected = json!({
+        "protocolVersion": "2025-06-18",
+        "capabilities": {"tools": {}},
+        "serverInfo": {"name": SERVER_NAME, "version": "0.0.0"},
+    });
+    assert_eq!(reply, result(json!(1), expected));
+    let reply = legacy.ask(json!(2), "tools/list", json!({})).await;
+    assert_eq!(reply, result(json!(2), tools()));
+    let root = legacy.close().await;
+
+    let mut modern = Desk::start_at(root, vec![fake.port()]);
+    let reply = modern.ask(json!(1), "server/discover", stateless()).await;
+    assert_eq!(reply, result(json!(1), discovered("0.0.0")));
+    // 旧式の話し方で書かれた控えの一覧に、`2026-07-28` の 3 欄を補う。
+    let reply = modern.ask(json!(2), "tools/list", stateless()).await;
+    assert_eq!(reply, result(json!(2), stateless_tools_from_the_cache()));
+    modern.close().await;
+
+    // areka に届いた一覧の要求は最初の中継の 1 つだけで、立てたつなぎ先も 1 つ。
+    let listed = fake.requests_of("tools/list");
+    assert_eq!(listed.len(), 1, "{:?}", fake.requests());
+    assert_eq!(handshakes(&fake), 1, "{:?}", fake.requests());
+}
+
+/// 居ないと答えた後で areka が見つかれば、以降は areka の今の答えで応え、控えが新しい中身に置き換わる
+/// （要件 3.9・3.1・3.2）。
+#[tokio::test]
+async fn once_areka_is_found_its_answers_replace_the_cache() {
+    let fake = FakeServer::start(Script::named("ssp-mcp-server"));
+    let mut desk = Desk::start(vec![fake.port()]);
+    let old = json!({"tools": []});
+    seed(&desk.cache(), Some(cached_info()), Some(old.clone()));
+    let reply = desk.ask(json!(1), "tools/list", json!({})).await;
+    assert_eq!(reply, result(json!(1), old));
+
+    // 同じ番号に areka が現れる（サーバーの情報もツールの一覧も、控えとは違う）。
+    fake.rescript(Script::areka().on("tools/list", Reply::Result(tools())));
+    let reply = desk.ask(json!(2), "tools/list", json!({})).await;
+    assert_eq!(reply, result(json!(2), tools()));
+    let reply = desk
+        .ask(json!(3), "initialize", initialize_params("2025-11-25"))
+        .await;
+    let expected = json!({
+        "protocolVersion": "2025-11-25",
+        "capabilities": {"tools": {}},
+        "serverInfo": {"name": SERVER_NAME, "version": "0.0.0"},
+    });
+    assert_eq!(reply, result(json!(3), expected.clone()));
+
+    let cache = desk.cache();
+    let info = cache.load_server_info().expect("サーバーの情報の控え");
+    assert_eq!(serde_json::to_value(info).expect("JSON"), expected);
+    let listed = cache.load_tools().expect("一覧の控え");
+    assert_eq!(serde_json::to_value(listed).expect("JSON"), tools());
+    desk.close().await;
+    assert_eq!(handshakes(&fake), 1, "{:?}", fake.requests());
 }

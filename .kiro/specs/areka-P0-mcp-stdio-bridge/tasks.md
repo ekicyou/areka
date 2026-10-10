@@ -111,7 +111,7 @@
   - _Depends: 3.1, 3.2, 3.4_
   - _Requirements: 1.2, 1.3, 1.10, 2.2, 3.1, 3.2, 3.9, 4.3, 8.1_
 
-- [ ] 4.3 areka が居ないとき・待ち受けない設定のときの答え
+- [x] 4.3 areka が居ないとき・待ち受けない設定のときの答え
   - 居ないとき: 最初の問い合わせ（`initialize`・`server/discover`）と `tools/list` は控えがあれば控えで答え、無ければエラー。`ping` は自分で空の結果。ほかの `id` 付きは番号 `-1`・`Server not available` で始まり、候補の番号と、areka でない相手が応えた番号と名乗りが続く文。通知は何もしない
   - `AREKA_MCP_PORT=0`: 探さず控えも使わず、`id` を持つ全部（`ping` も）に「待ち受けない設定」の文のエラー
   - 居ないと答えた後に areka が見つかれば、以降は areka の今の答えで応え、控えが新しい中身に置き換わる
@@ -232,3 +232,7 @@
 - 4.2: 4.3 への申し送り＝`tools.json` の形は最後に書いた話し方で変わる（2026 は `ttlMs`・`cacheScope`・`resultType` 付き・旧式は無し）。居ないときに `2026-07-28` の要求（`context.meta` の版）へ控えで答えるなら、この 3 欄を補う（無いと Claude Code が拒む＝areka の `tools_list_stateless_has_cache_hints` の注釈）。`ensure_link` の `Err` は `others`。仮の枝は 2 つ: 居ないとき（4.3）・`McpError` 以外の失敗（4.4／4.5）。
 - 4.2: 4.6 への申し送り＝入口は `areka_mcp_bridge::service::run`（`lib.rs` の再輸出は無い）。rmcp 自身が `info` で通知の本文（`received notification`）、`warn` でエラーの応答の中身（`response error`）を出すので、既定の絞りを決めるときに頭に置く。
 - 4.2: `service_tests.rs` の道具は `Desk::start(候補の列)`・`send`・`next`・`ask`・`close`・`cache()`・`arrived`・`handshakes`。短い応答の上限を差すには `Desk::start` に時間を渡す口を足す。D-13 のテストは遅い応答 2 秒に頼るので、全体テストの負荷で赤が出たら遅れを延ばす。5.1 は `server/discover` を `2026-07-28` だけで比べる。
+- 4.3: 居ないときの文は `Server not available: areka-mcp-server not found on 127.0.0.1 ports <候補を ", " でつないだ列>` に、`others` の順で `; port N answered as "名乗り"` を続ける（名乗りは 64 字で切って `...`・制御文字は `?`）。`AREKA_MCP_PORT=0` は `Server not available: AREKA_MCP_PORT=0 (areka does not listen)`。
+- 4.3: 控えの `tools/list` は要求の話し方に揃えて返す（`_meta` の版が `2026-07-28` 以上なら `resultType: "complete"`・`ttlMs: 0`・`cacheScope: "private"` を付け、旧式には 3 欄を外す）。居ないときの `ping` は話し方に関わらず `{}`（要件 3.7。つながっているときの `2026-07-28` の `ping` は areka の `-32601`）。居ない間は `id` を持つ要求ごとに探索が 1 回走り、同時の要求の探索は直列（1 回約 0.3 秒）。この 4 点は 6.2 の差の記録に載せる。
+- 4.3: `scan.rs` の `info!(port, %name, …)` は生の名乗りを出す（改行入りの名乗りで標準エラーの記録の行が割れうる・標準出力には触れない）。最終の検証で扱う（`{name:?}` に替えるのが最短）。
+- 4.3: `service_tests.rs` は 671 行。4.4・4.5 で 900 行を越えそうなら、`structure.md` の決まりどおりテーマ単位の兄弟ファイルに分け、共有の道具（`Desk`・`request`・`seed`・`nobody` など）を寄せる（`service.rs` の末尾の宣言を足すのは可・`lib.rs` と `Cargo.toml` は触らない）。`Desk` にはまだ時間を渡す口が無い。
