@@ -3,7 +3,7 @@
 - 日付: 2026-10-10
 - 機械: 開発機（Windows 11 Pro 10.0.26300.9550・26H2・x64）・winget v1.29.380
 - コミット: `f305cee6`（着手のときの枝の先頭。枝は `claude/areka-p0-winget-manifest-1c4fd7`）
-- 判定: **入れて起動する確かめは合格**（6 項目とも合格・タスク 2.2・2026-10-10 13:01〜13:03。下の「入れて起動する」）。上げ直しの実測（タスク 3.2）と外し方の実測（タスク 3.3）は測れて、**どちらも消えた物は 6**（後から入れたゴースト 1・後から入れたバルーン 3・ゴーストの記憶 2。areka の記憶は残った）。消えた物が在るので、雛形の 2 つのロケールへ注意書きを足し、`winget validate` を通して入れ直した（タスク 3.4・14:06〜14:07。インストールの最後に、日本語の注意書きが出た）。**利用者の側の後片付けは済んだ（4 項目とも 0）**。ただし winget だけでは 0 にならなかった: `--purge` を付けて外した後も、4 項目のうち 2 つ（入れ先のフォルダと、利用者の PATH の項目 1 件）が残り、フォルダは中身の一覧を取ってから AI が消し（14:17:20）、PATH の項目は開発者が手で消した（14:18 ごろ。利用者の PATH は、入れる前の文字列と 1 字も違わない形に戻った）（下の「後片付けの確かめ」）。機械の全員向けの実測は進めている途中（タスク 3.5）。設定を戻すこと・提出は、まだ済んでいない（それぞれの節に、そのタスクが書く）
+- 判定: **入れて起動する確かめは合格**（6 項目とも合格・タスク 2.2・2026-10-10 13:01〜13:03。下の「入れて起動する」）。上げ直しの実測（タスク 3.2）と外し方の実測（タスク 3.3）は測れて、**どちらも消えた物は 6**（後から入れたゴースト 1・後から入れたバルーン 3・ゴーストの記憶 2。areka の記憶は残った）。消えた物が在るので、雛形の 2 つのロケールへ注意書きを足し、`winget validate` を通して入れ直した（タスク 3.4・14:06〜14:07。インストールの最後に、日本語の注意書きが出た）。**利用者の側の後片付けは済んだ（4 項目とも 0）**。ただし winget だけでは 0 にならなかった: `--purge` を付けて外した後も、4 項目のうち 2 つ（入れ先のフォルダと、利用者の PATH の項目 1 件）が残り、フォルダは中身の一覧を取ってから AI が消し（14:17:20）、PATH の項目は開発者が手で消した（14:18 ごろ。利用者の PATH は、入れる前の文字列と 1 字も違わない形に戻った）（下の「後片付けの確かめ」）。機械の全員向けの実測も測れた（タスク 3.5・14:18〜14:23）: ゴーストは立ったが、areka の記憶は書けず、ゴーストを後から入れることもできなかった（下の「機械の全員向けの実測」）。**機械の側の後片付けも済んだ（4 項目とも 0）**。こちらも winget だけでは 0 にならなかった: 開発者が管理者の端末で `--purge` を付けて外すと（14:41:08）、入れ先のフォルダは消えたが、機械の PATH の項目 1 件が残り、開発者が手で消した（機械の PATH は、入れる前の文字列と 1 字も違わない形に戻った）。**設定 `LocalManifestFiles` は、開発者が 14:43:20 に元の `false` へ戻した**（下の「変えた設定」）。まだ済んでいないのは、見つかった件の起票（タスク 3.6）と提出（タスク 4.2・4.3）
 - 提出する版: `0.0.2`（Release `v0.0.2`。決め方は「雛形の検査」の「ハッシュの突き合わせ」の 1）
 
 ## 変えた設定
@@ -12,7 +12,7 @@
 
 | 設定 | 変える前の値 | 変える前の値を読んだ時刻 | オンを確かめた時刻 | 戻した時刻 | 戻した後の値 |
 |---|---|---|---|---|---|
-| winget の `LocalManifestFiles`（管理者の端末で `winget settings --enable LocalManifestFiles`） | `false` | 11:44:01 | 12:57:16 に `true` を確認 | （この後に記入） | （この後に記入） |
+| winget の `LocalManifestFiles`（管理者の端末で `winget settings --enable LocalManifestFiles`） | `false` | 11:44:01 | 12:57:16 に `true` を確認 | **14:43:20**（開発者が管理者の端末で `winget settings --disable LocalManifestFiles`。時刻は winget 自身の記録から。AI が `false` を読んだのは 14:43:46 と 14:49:44） | **`false`**（変える前と同じ） |
 
 - 変える前の値の読み方: `winget settings export`（読むだけ）が返す JSON の `adminSettings.LocalManifestFiles`。同じ JSON の管理者向けの設定は 6 つで、6 つとも `false` だった（`BypassCertificatePinningForMicrosoftStore`・`ConfigurationProcessorPath`・`InstallerHashOverride`・`LocalArchiveMalwareScanOverride`・`LocalManifestFiles`・`ProxyCommandLineOptions`）。
 - 開発者に打ってもらうコマンド（管理者の端末）: `winget settings --enable LocalManifestFiles`
@@ -21,8 +21,11 @@
 - **変えた設定はこの 1 つだけ**。同じ回の読みで、管理者向けの設定 6 つのうち `true` は `LocalManifestFiles` の 1 つだけで、残りの 5 つは変える前と同じ `false`。下の「読んで記録するだけの設定」も同じ時刻に読み直して、変える前と同じだった（開発者モードは値 `0`＝オフ・利用者の設定ファイルは無いまま＝フォルダ 4 つ・ファイル 0 件）。
 - 組織の決まり（グループ ポリシー）で winget の設定が固定されていないことも読んだ（11:45:25）。`HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppInstaller` と `HKCU:\SOFTWARE\Policies\Microsoft\Windows\AppInstaller` はどちらもキーが無い。
 - 利用者の PATH のこと（上の表には入れない。確かめのために決めて変えた設定ではなく、winget が入れるときに足した物の後片付け）: 利用者の PATH の登録（`HKCU:\Environment` の `Path`）は、winget の入れる操作が入れ先のフォルダの項目を 1 件足し（13:01）、winget の外す操作では消えなかったので、開発者が手でその 1 件を消した（14:18 ごろ）。消した後の文字列は、入れる前に取っておいた文字列と 1 字も違わない（12 項目・524 字。作業を進めている AI が 14:19:22 に、この記録を書いた AI が 14:22:20 に読んだ。下の「後片付けの確かめ」の「利用者の側」の 8）。AI は PATH を変えていない。
-
-（戻した時刻と戻した後の値は、タスク 3.5 で記入）
+- 設定を戻したこと（タスク 3.5）: 開発者に打ってもらったコマンド（管理者の端末）は `winget settings --disable LocalManifestFiles`。戻したのは開発者。**開発者の端末に出た文は取れていない**。代わりに、winget 自身の記録（`%LOCALAPPDATA%\Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState\DiagOutputDir\` の、その回のファイル。写しは `target\winget-check\logs\3.5-final-winget-diag-settings-disable.txt`）を読んだ: このコマンドが 14:43:20.772 に始まり、14:43:20.805 に `Leaf command succeeded: root:settings` で終わっている（管理者に上げたプロセス＝記録の `Level[1]`）。
+- 戻した後の確かめ（AI が読んだ・`winget settings export` の `adminSettings.LocalManifestFiles`）: 作業を進めている AI（親のセッション）の読みでは、14:41:46 はまだ `true`・14:43:46 に `false`（その回の出力のファイルは無い）。この節を書いた AI が 14:49:44 に読み直して **`false`**（終了コード 0・標準エラー 0 バイト）。同じ回の読みで、管理者向けの設定は 6 つとも `false`＝変える前（11:44:01）と同じ。出た文は `target\winget-check\logs\3.5-final-settings-export.stdout.txt` と `3.5-final-machine.txt`。
+- **設定がオンだった時間は 12:56:29〜14:43:20（約 1 時間 47 分）**。始まりも終わりも winget 自身の記録の時刻（オンにした回の写しは `logs\3.5-final-winget-diag-settings-enable.txt`。その 19 秒前の 12:56:10 に同じコマンドが 1 度、管理者の端末でなかったために断られている＝`0x8a150019`。`winget error 0x8a150019` が返す名前は `APPINSTALLER_CLI_ERROR_COMMAND_REQUIRES_ADMIN`）。この間に、手元のマニフェストから入れた・上げた操作（`--manifest` を付けた `winget install`・`winget upgrade`）は 4 回で、どれも本仕様の雛形か確かめ専用のマニフェスト（13:01:26・14:07:35 の `dist\winget\0.0.2`／13:42:18 の `target\winget-check\upgrade-0.0.2.1`／14:18:56 の `dist\winget\0.0.2` に `--scope machine`）。ほかのマニフェストを入れた回は 0（winget 自身の記録を、この間の全部＝56 回分数えた。`logs\3.5-final-winget-diag-window.txt`）。
+- 機械の PATH のこと（上の表には入れない。利用者の PATH と同じく、決めて変えた設定ではなく、winget が入れるときに足した物の後片付け）: 機械の PATH の登録（`HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment` の `Path`）は、winget の機械の全員向けの入れる操作が入れ先のフォルダの項目を 1 件足し（14:19:10。18 項目 → 19 項目）、`--purge` を付けた外す操作（14:41:08）では消えなかったので、**開発者が手で**その 1 件を消した（14:43:46 より後・14:46:58 より前。管理者の端末で）。消した後の文字列は、どの入れる操作よりも前に取っておいた文字列（`logs\2.2-pre-machine-path.txt`）と 1 字も違わない（18 項目・646 字・値の種類 `ExpandString`。作業を進めている AI が 14:46:58 に、この節を書いた AI が 14:49:29 に、大文字と小文字を区別して比べた。下の「後片付けの確かめ」の「機械の側」）。AI は PATH を変えていない。
+- **確かめのために決めて変えた winget と OS の設定は `LocalManifestFiles` の 1 つだけで、元の値 `false` に戻っている**。下の「読んで記録するだけの設定」も 14:49:44 に読み直して、変える前と同じだった（開発者モードは値 `0`＝オフ・利用者の設定ファイルは無いまま＝フォルダ 4 つ・ファイル 0 件・控えも無い・組織の決まりのキーは `HKLM`・`HKCU` とも無い・winget は v1.29.380）。利用者の PATH と機械の PATH は、どちらも入れる前の文字列と同じ。
 
 ### 読んで記録するだけの設定（変えない・要件 4.5）
 
@@ -907,7 +910,67 @@ MCP の口へ送った物と答え（送り方は `tools/call` を 1 本ずつ�
   - 起動の記録の `INFO … 最後に使ったものを記憶へ書きました event="last_used_recorded"` は、すぐ次の行で areka の記憶への書き込みが失敗しているのに出ている（バルーンとシェルの分はゴーストごとの記憶に書けたが、ゴーストの分は書けていない）。
 - Windows は、書けなかった書き込みを `%LOCALAPPDATA%\VirtualStore\` へ逃がしていない（上の 5）。
 
-（後片付けと設定の戻しは、この後に記入）
+### 8. 外して、設定を戻した（開発者・管理者の端末・14:40〜14:47。要件 4.8・3.4）
+
+この 8 は、上の 1〜7 とは別の AI が書いた（「この節を書いた AI」。areka を起こしていないし、入れる・上げ直す・外す・設定を変える winget のコマンドも打っていない。打ったのは読むだけの `winget list`・`winget settings export`・`winget error`）。**開発者の管理者の端末に出た文は、1 つも取れていない。** 下に書くのは、作業を進めている AI（親のセッション）の読み（聞いた物。その回の出力のファイルは無い）と、winget 自身の記録（この節を書いた AI が読んだ）と、この節を書いた AI が 14:49 に機械を読み直した値。
+
+作業を進めている AI が、開発者へ 1 度に示したコマンド（管理者の端末で打つ。AI は、機械の全員向けの物を外さない・PATH を変えない・winget の設定を変えない）:
+
+```powershell
+# 1. 外す（後片付けなので --purge を付ける）
+winget uninstall --id "ARP\Machine\X64\Areka.Areka.Portable__DefaultSource" --exact --purge
+# 2. 入れ先のフォルダが残っていたときの備え
+Remove-Item -LiteralPath "C:\Program Files\WinGet\Packages\Areka.Areka.Portable__DefaultSource" -Recurse -Force -ErrorAction SilentlyContinue
+# 3. 機械の PATH から、入れ先のフォルダの項目（と、空の項目）だけを除いて書き戻す
+$k='HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment'; $o=(Get-Item $k).GetValue('Path','','DoNotExpandEnvironmentNames'); $n=(($o -split ';') | Where-Object { $_ -and $_ -notlike '*\WinGet\Packages\Areka.Areka.Portable__DefaultSource' }) -join ';'; Set-ItemProperty $k -Name Path -Value $n -Type ExpandString
+# 4. 設定を戻す
+winget settings --disable LocalManifestFiles
+```
+
+どれを打ったか:
+
+| コマンド | 打ったか | いつ | 何で分かるか |
+|---|---|---|---|
+| 1（`--purge` を付けて外す） | **打った**（開発者） | 14:41:07.483〜14:41:08.643 | winget 自身の記録（下） |
+| 2（フォルダの備え） | **打っていない**（要らなかった。1 でフォルダが消えた） | - | 作業を進めている AI から聞いた。winget 自身の記録の `Purged install location directory` の行と、14:41:29 の読み（フォルダは無い）とは合う |
+| 3（機械の PATH の項目を消す） | **打った**（開発者） | 効いたのは 14:43:46 より後・14:46:58 より前 | 前後の読み（14:43:46 は 19 項目・14:46:58 は 18 項目）。このコマンドの記録はどこにも残らない（それより前にも打っていたかどうかは、分からない） |
+| 4（設定を戻す） | **打った**（開発者） | 14:43:20.772〜14:43:20.805 | winget 自身の記録（上の「変えた設定」） |
+
+- 効いた順は 1 → 4 → 3。3 は、作業を進めている AI とのやり取りをもう 1 往復してから効いた（示し方が短すぎて、開発者から「どのフォルダか」「PATH の行は何をするのか」と聞き返された。下の「既知の制限」）。
+
+winget 自身の記録から読めたこと（`%LOCALAPPDATA%\Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState\DiagOutputDir\` の、その回のファイル。写しは `target\winget-check\logs\3.5-final-winget-diag-*.txt`。パスの頭は置き換えてある）:
+
+- **入れた回**（上の 2 の補い。`3.5-final-winget-diag-install-machine.txt`）: `install --manifest <ワークツリー>\dist\winget\0.0.2 --scope machine` が 14:18:56.553 に始まり、14:19:10.530 に `Leaf command succeeded: root:install` で終わった（管理者に上げたプロセス＝`Level[1]`）。14:19:10.265 に `Created target install directory: <入れ先>`（＝winget が自分で作ったフォルダ）、14:19:10.426 に `Appending portable target directory to PATH registry: <入れ先>`。
+- **外した回の 1 度目**（`3.5-final-winget-diag-uninstall-machine-refused.txt`）: 同じ `uninstall … --exact --purge` が 14:40:58.947 に始まり、相手を 1 つ見つけた直後の 14:41:00.086 に `Terminating context: 0x8a150019` で止まった。管理者に上げていないプロセス（`Level[0]`）で、`0x8a150019` は「管理者の権限が要る」（`winget error 0x8a150019` の答えは `APPINSTALLER_CLI_ERROR_COMMAND_REQUIRES_ADMIN`）。何も消していない（消したことを告げる行は 0）。
+- **外した回の 2 度目**（`3.5-final-winget-diag-uninstall-machine-purge.txt`）: 7 秒後の 14:41:07.485 に、管理者に上げたプロセス（`Level[1]`）で同じコマンドが始まり、14:41:08.643 に `Leaf command succeeded: root:uninstall` で終わった。要の行（記録の中の並びのまま。行の頭の日付は省き、入れ先のパスは `<入れ先>` に置き換え、続く 4 行を 1 行にまとめた所が 1 つ在る）:
+
+  ```text
+  14:41:08.399 <I> [CLI ] Found one app. App id: ARP\Machine\X64\Areka.Areka.Portable__DefaultSource App name: areka (portable)
+  14:41:08.560 <I> [CLI ] Deleting portable exe at: <入れ先>\areka.exe
+  14:41:08.566 <I> [CLI ] Removing directory at <入れ先>\balloon
+  14:41:08.578 <I> [CLI ] Deleting portable exe at: <入れ先>\BUILD-INFO.txt
+  14:41:08.583 <I> [CLI ] Removing directory at <入れ先>\ghost
+  14:41:08.609〜.625  （LICENSE-MIT・README.txt・shiori-host32-helper.exe・THIRD-PARTY-NOTICES.md を 1 つずつ）
+  14:41:08.631 <I> [CORE] Install directory is not empty: <入れ先>
+  14:41:08.636 <I> [CLI ] Portable index deleted: <入れ先>\areka.areka.portable__defaultsource.db
+  14:41:08.636 <I> [CLI ] Purged install location directory. Deleted 1 files or directories
+  14:41:08.638 <I> [CLI ] PortableARPEntry deleted.
+  ```
+
+  - `Install directory is not empty` の行が、機械の PATH の項目を消さなかった所（利用者の側と同じ行。理由は下の「後片付けの確かめ」の「利用者の側」の 7＝winget は、PATH の項目を消そうとする時点で入れ先が空でないと何もしない。この時点では winget 自身の控えがまだ在る）。
+  - `Purged install location directory` の行が、入れ先のフォルダを丸ごと消した所。利用者の側（タスク 3.4）では出なかった行で、違いは、今回は winget が自分で作ったフォルダだったこと（入れた回の `Created target install directory`）。areka が中に作った `ghost\emo2\ghost\master\profile\` の下の 50 ファイルは、`ghost` のフォルダごと消えた。
+
+作業を進めている AI の読み（聞いた物。時刻の順）:
+
+| 時刻 | 読んだ値 |
+|---|---|
+| 14:30:25（外す前） | `LocalManifestFiles` は `true`／`<入れ先>` は在る／機械の PATH は 19 項目で、areka の項目が 1 件 |
+| 14:41:29・14:41:46（開発者が外した後） | `<入れ先>` は**無い**・`C:\Program Files\WinGet\Packages\` の下で名前が `Areka` で始まる物は 0 件・`winget list --name areka` は 0 行／機械の PATH は **19 項目のまま**で、areka の項目が 1 件残っている／`LocalManifestFiles` はまだ `true` |
+| 14:43:46 | `LocalManifestFiles` は **`false`**（管理者向けの設定は 6 つとも `false`）／機械の PATH はまだ 19 項目・716 字・areka の項目 1 件で、入れる前の文字列と同じでない／利用者の PATH は 12 項目で、入れる前の文字列と同じ／登録から組み直した PATH の上に `areka.exe` は無い（同じ見方で `winget.exe` は 1 件）／`winget list --name areka` は 0 行で終了コード -1978335212（同じ形の `--name PowerShell` は終了コード 0）／`Links\` に `areka` で始まる物は無い／areka のプロセスは無い |
+| 14:46:58（開発者が 3 を打った後） | 機械の PATH は **18 項目・646 字・areka の項目 0 件**・値の種類 `ExpandString`・入れる前に取っておいた文字列（`logs\2.2-pre-machine-path.txt`）と、大文字と小文字を区別して**同じ**／`LocalManifestFiles` は `false`／`<入れ先>` は無い |
+
+- ＝**`--purge` を付けた外す操作は、入れ先のフォルダは消したが、機械の PATH の項目は残した**（利用者の側と同じ動き）。項目は、開発者が手で消すまで残っていた。
+- 機械の側の 4 項目の今の値と、この節を書いた AI の読み直し（14:49）は、下の「後片付けの確かめ」の「機械の側」。
 
 ## 後片付けの確かめ
 
@@ -1087,9 +1150,40 @@ winget 自身の記録（`%LOCALAPPDATA%\Packages\Microsoft.DesktopAppInstaller_
 
 ＝利用者の側の後片付けの 4 項目は、すべて 0。利用者の PATH は、winget で入れる前と 1 字も違わない。
 
-### 機械の側
+### 機械の側（タスク 3.5・要件 4.8・3.6）
 
-（タスク 3.5 で記入）
+結果: **機械の側の後片付けの 4 項目は、すべて 0**（この節を書いた AI が 14:49:28〜14:49:45 に読んだ。読むだけ）。ただし、利用者の側と同じく、**winget の外す操作だけでは 0 にならなかった**: 開発者が管理者の端末で `--purge` を付けて外した後（14:41:08）、① 入れ先のフォルダ・② `areka` の解決・④ `winget list` の行は 0 になったが、**③ 機械の PATH の項目 1 件は残っていた**。残った 1 件は、開発者が手で消した（14:43:46 より後・14:46:58 より前）。経緯は上の「機械の全員向けの実測」の 8。時刻はどれも 2026-10-10（+09:00）。`<入れ先>` は `C:\Program Files\WinGet\Packages\Areka.Areka.Portable__DefaultSource`。
+
+4 項目の今の値（どの読みで 0 と言うか・誰が 0 にしたか）:
+
+| 項目 | 結果 | いつ・どう読んだか | 見方が当たりを出せること | 0 にしたのは誰か |
+|---|---|---|---|---|
+| ① 入れ先のフォルダ | **0**（`<入れ先>` は無い。`C:\Program Files\WinGet\Packages\` の下は 0 件で、名前が `Areka` で始まる物も 0 件。`C:\Program Files\WinGet\Links\` の下で `areka` で始まる物も 0 件） | 14:49:28 に `Test-Path` と一覧（隠しファイルも含む）で読んだ | 同じ `Test-Path` は、親の `C:\Program Files\WinGet` と `C:\Program Files` に `True` を返した。同じ形の名前の絞り込み（`Win*`）は `C:\Program Files` の下で 10 件を返した | winget の外す操作（開発者が管理者の端末で `--purge` を付けて打った。winget 自身の記録に `Purged install location directory` の行） |
+| ② 新しい端末での `areka` の解決 | **0**（`Get-Command areka -All` は 0 件・`where.exe areka` は終了コード 1 で標準出力 0 字。`shiori-host32-helper` も 0 件） | 14:49:33 に、登録（機械の側;利用者の側）から PATH を組み直した 30 項目（機械の側 18＋利用者の側 12。`areka` の字を含む項目は 0 件）にした新しい `pwsh -NoProfile -NonInteractive` のプロセスで読んだ。解決を見ただけで、`areka` という名前の物は何も起こしていない | 同じプロセスの中で `Get-Command winget -All` は 1 件・`pwsh` は 2 件・`where.exe winget` は終了コード 0 で 1 行。組み直した PATH のうち、フォルダとして在る 29 か所の中に、名前が `areka.` で始まるファイルは 0 件・`winget.` で始まるファイルは 1 件 | winget の外す操作（`areka.exe` が消えた） |
+| ③ 機械の PATH に足された項目 | **0**（`HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment` の `Path` は **18 項目・646 字**・値の種類 `ExpandString`・末尾の `;` は 0。`<入れ先>` と同じ項目は 0 件・`WinGet\Packages\Areka` を含む項目も 0 件・`areka` の字を含む項目も 0 件。どの入れる操作よりも前に取っておいた文字列 `logs\2.2-pre-machine-path.txt`（18 項目・646 字）と、大文字と小文字を区別して比べて**同じ**） | 14:49:29 に、環境変数を開かない形で読んだ | 同じ数え方を、機械の全員向けに入れてあった間に組み直した PATH（`logs\3.5-bounded1-fresh-path.txt`・31 項目）に当てると、`<入れ先>` と同じ項目が 1 件。今の文字列の末尾の 1 字を変えた物は、取っておいた文字列と同じでない、と出る（＝1 字の違いも見分ける） | winget の外す操作では**消えなかった**。**開発者が手で**消した（14:43:46 より後・14:46:58 より前・管理者の端末で。上の「機械の全員向けの実測」の 8 のコマンド 3。AI は PATH を変えていない） |
+| ④ `winget list` の areka の行 | **0**（`winget list --name areka --disable-interactivity` でも `winget list --id Areka --disable-interactivity` でも 0 行。どちらも終了コード -1978335212＝`0x8A150014`（見つからなかったときの値）・標準エラー 0 バイト） | 14:49:35〜14:49:40（`--accept-*` は付けていない。問いは出なかった） | 同じ形の `winget list --name PowerShell --disable-interactivity` は 2 行を返し、終了コード 0 | winget の外す操作（winget 自身の記録に `PortableARPEntry deleted.` の行） |
+
+- 読んだスクリプトは `target\winget-check\3.5-final-machine.ps1`、出た文は `logs\3.5-final-machine.txt`（読んだ PATH の文字列は `logs\3.5-final-machine-path.raw.txt`・`3.5-final-user-path.raw.txt`・`3.5-final-fresh-path.txt`、`winget list` の文は `logs\3.5-final-list-*.stdout.txt`）。打った端末は管理者の権限ではない（管理者の役割を持つかを読んで `False`）。
+- 0 になるまでの経緯（起きた順）: 14:41:08 の外す操作の直後は **① ② ④ が 0・③ は 0 でない**（機械の PATH は 19 項目のままで、もう無い `<入れ先>` を指す項目が 1 件。作業を進めている AI の 14:41:46 と 14:43:46 の読み）。③ が 0 になったのは、開発者が手で消した後（作業を進めている AI の 14:46:58 の読みと、この節を書いた AI の 14:49:29 の読み）。
+- あわせて読んだこと（14:49:28〜14:49:45）:
+  - アンインストールの登録（`HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`・その `WOW6432Node` の側・`HKCU` の側）で、名前に `Areka` を含むキーは 0（それぞれ 148・311・8 のキーの中で）。
+  - 名前が `areka`・`shiori-host32-helper` のプロセスは 0（同じ見方で `pwsh` は 1 つ以上）。
+  - `%LOCALAPPDATA%\VirtualStore` は在るが、中身は 0 件のまま。
+  - 利用者の側も変わっていない: 利用者向けの入れ先 `%LOCALAPPDATA%\Microsoft\WinGet\Packages\Areka.Areka.Portable__DefaultSource` は無い（同じ `Packages\` の 2 件の中に `Areka` で始まる物は 0 件・`Links\` に `areka` で始まる物は 0 件）。利用者の PATH は 12 項目・524 字で、入れる前の文字列と同じ。
+  - 利用者の側の後片付けで「14:19 より後には読み直していない」と書いた ② と ④（上の「利用者の側」の表）も、機械の全員向けの物が無くなった今の読みでは 0（上の表の ② と ④ は、機械の側と利用者の側を合わせた PATH と、`winget list` の全部を見ている）。
+- **4 項目の外に残った物（事実として書く。消していない）**: winget が機械の全員向けの入れる操作のときに作ったフォルダ `C:\Program Files\WinGet\` と、その下の `Links\`・`Packages\`。3 つとも**空のまま残っている**（14:49:28 に、隠しファイルも含めて下の階層まで読んだ: フォルダ 2 つ・ファイル 0 件）。
+
+  | 残っているフォルダ | 作られた時刻 | 最後に書かれた時刻 | 中身 |
+  |---|---|---|---|
+  | `C:\Program Files\WinGet\` | 14:18:56 | 14:19:09 | 下の 2 つのフォルダだけ |
+  | `C:\Program Files\WinGet\Links\` | 14:18:56 | 14:18:56 | 空 |
+  | `C:\Program Files\WinGet\Packages\` | 14:19:09 | 14:41:08 | 空 |
+
+  - 作られた時刻は、機械の全員向けに入れた回（14:18:56〜14:19:10）の中。設定を変える前（11:44〜11:45）の読みでも、`%ProgramFiles%\WinGet\Packages\` は「フォルダ自体がまだ無い」だった（上の「変える前の機械の状態」）。＝この 3 つは、今回の入れる操作が作った物。`Packages\` の最後に書かれた時刻は、外した回の終わり（14:41:08）と合う。
+  - winget の `--purge` は、パッケージの入れ先（`…\Packages\Areka.Areka.Portable__DefaultSource`）までを消し、その親のフォルダは消さない。PATH にも、`winget list` にも、`areka` の解決にも関わらない空のフォルダで、消すには管理者の権限が要る。作業を進めている AI が開発者へ伝えたのは `Packages\` が空で残っていることで、開発者はそのままにした（親の `WinGet\` と隣の `Links\` も今回できた物であることは、この節を書いた AI が 14:49 に作られた時刻を読んで分かった）。AI は `C:\Program Files\WinGet\` に触っていない。
+- 機械の全員向けでは、**何も残っていない所へ入れて `--purge` で外す形**になった（利用者の側では測れなかった形。上の「利用者の側」の 7 の「測っていないこと」）。その形で見えたのは、ソースの読みの見込みどおり「フォルダは消える・PATH の項目は残る」。ただし、これは機械の全員向け（管理者の端末）での 1 回で、利用者向けの入れ方で同じ形を測ったのではない。
+
+＝機械の側の後片付けの 4 項目は、すべて 0。機械の PATH は、winget で入れる前と 1 字も違わない。
 
 ## 置き場（要件 3.5）
 
@@ -1152,7 +1246,10 @@ winget 自身の記録（`%LOCALAPPDATA%\Packages\Microsoft.DesktopAppInstaller_
 | MCP の口へ送った文と答えの全文（`get_active_ghost_list`・`get_log`） | `target\winget-check\logs\3.5-mcp.log` | 3.5 |
 | 機械の全員向けの入れ先の一覧（1 回目の起動の後・2 回目の起動の後。相対パスと大きさと時刻・隠しファイルも含む）と、入れ先の権限の一覧（7 か所。利用者の名前は「この端末の利用者」に置き換えてある） | `target\winget-check\logs\3.5-installdir-after-bounded1.tsv`・`3.5-installdir-after-menu1.tsv`・`3.5-acl.txt` | 3.5 |
 | 一覧 2 つを数えて見比べるスクリプトと出た文／配布 zip の中の辞書から `OnInstallFailure` の台詞を探すスクリプトと出た文（zip は開いて読むだけで、展開していない）／`%LOCALAPPDATA%\VirtualStore` の読み | `target\winget-check\3.5-listing-summary.py`・`logs\3.5-listing-summary.txt`／`target\winget-check\3.5-zip-grep.py`・`logs\3.5-zip-grep.txt`／`logs\3.5-virtualstore.txt` | 3.5 |
-| winget が機械の全員向けに入れた areka（置いたのは winget で、打ったのは開発者。winget の入れ先なので `target\` の外。2 回の起動が中に作ったのは `ghost\emo2\ghost\master\profile\` の下の 50 ファイルだけ。外すのは、この後の後片付け） | `C:\Program Files\WinGet\Packages\Areka.Areka.Portable__DefaultSource\` | 3.5 |
+| winget が機械の全員向けに入れた areka（置いたのは winget で、打ったのは開発者。winget の入れ先なので `target\` の外。2 回の起動が中に作ったのは `ghost\emo2\ghost\master\profile\` の下の 50 ファイルだけ。**開発者が 14:41:08 に、管理者の端末で `--purge` を付けて外した＝今は無い**） | `C:\Program Files\WinGet\Packages\Areka.Areka.Portable__DefaultSource\` | 3.5 |
+| 機械の側の後片付けの 4 項目を読むスクリプト（読むだけ。`winget list`・`winget settings export` のほかは winget を打たない）・出た文・読んだ PATH の文字列（機械の側・利用者の側・組み直した物）・新しいプロセスでの `areka` の解決・`winget list` 3 回分・`winget settings export` の出力 | `target\winget-check\3.5-final-machine.ps1`・`target\winget-check\logs\3.5-final-machine.txt`・`3.5-final-machine-path.raw.txt`・`3.5-final-user-path.raw.txt`・`3.5-final-fresh-path.txt`・`3.5-final-fresh-shell.*`・`3.5-final-list-*`・`3.5-final-settings-export.*` | 3.5 |
+| winget 自身の記録の写し 6 つ（設定をオンにした回と、その前の断られた回・機械の全員向けに入れた回・外した回と、その前の断られた回・設定を戻した回。パスの頭は置き換えてある）と、設定がオンだった間の winget の全部の回を 1 行ずつにまとめた一覧、`winget error 0x8a150019` の答え | `target\winget-check\logs\3.5-final-winget-diag-settings-enable-refused.txt`・`3.5-final-winget-diag-settings-enable.txt`・`3.5-final-winget-diag-install-machine.txt`・`3.5-final-winget-diag-uninstall-machine-refused.txt`・`3.5-final-winget-diag-uninstall-machine-purge.txt`・`3.5-final-winget-diag-settings-disable.txt`・`3.5-final-winget-diag-window.txt`・`3.5-final-winget-error.*` | 3.5 |
+| winget が機械の全員向けの入れる操作のときに作った空のフォルダ 3 つ（置いたのは winget。`target\` の外。**今も残っている**。中身は 0 件。「後片付けの確かめ」の「機械の側」） | `C:\Program Files\WinGet\`・`C:\Program Files\WinGet\Links\`・`C:\Program Files\WinGet\Packages\` | 3.5 |
 
 - 取ってきた後の `git status --porcelain` は 0 行（`target` の下に限って見ても 0 行）。`git ls-files -- target` も 0 件で、取ってきた物は `git status` に出ない。
 - `git check-ignore -v target/winget-check/release/areka-0.0.2-x64.zip` は `.gitignore:1:target` を返した（追跡の外になる理由がこの 1 行であることの裏付け）。
@@ -1180,12 +1277,17 @@ winget 自身の記録（`%LOCALAPPDATA%\Packages\Microsoft.DesktopAppInstaller_
 - **winget で外しただけでは、利用者の PATH に、もう無いフォルダを指す項目が 1 件残る**。開発機では、開発者が手でその項目を消した（「後片付けの確かめ」の「利用者の側」の 8）。areka を winget で外す利用者は、自分で消さない限り、この行き先の無い項目を持ち続ける。見たのは、手元のマニフェストで入れた形で、入れ先のフォルダが前の実測から残っていた回だけ（`--purge` を付けない回と付けた回の 2 回）。何も残っていない機械へ入れて外す形は、別には測っていない（winget のソースの読みでは、その形でも同じく残る見込み。同じ節の 7）。
 - 利用者の側の後片付けの 4 項目のうち、② `areka` の解決と ④ `winget list` の行は、`--purge` で外した直後（14:09）の読みが根拠で、残った 2 つを片付けた後（14:19 より後）には読み直していない。そのときには、次のタスクの機械の全員向けの入れ方が済んでいて、今読むと機械の側の物が当たるため（同じ節の頭の表の下）。
 - 機械の全員向けの実測（タスク 3.5）は、**1 台の機械**での結果で、その機械は、入れた管理者と普段の利用者が**同じアカウント**（開発者が、自分のアカウントを管理者に上げた端末で入れた）。ゴーストごとの記憶（`ghost\` の下）が書けたのは、入れ先の下の階層に、このアカウントへ全部の権限を与える行が在ったため（「機械の全員向けの実測」の 7）。入れた管理者が別のアカウントの機械では、それも書けない見込みで、`areka.exe`・`ghost\`・`balloon\` に `BUILTIN\Users` の行が無いことから、起こすこともできないおそれが在る。別のアカウントでは測っていない。
-- 機械の全員向けに入れたときに winget が出した文は、取れていない（開発者の管理者の端末に出た）。入れた直後の読み（`winget list` の行・PATH の登録の数）も、その回の出力のファイルは無く、作業を進めている AI の読みを聞いて書いた。残っているファイルで確かめられたのは、14:20:44 に登録から組み直した PATH と、入れ先の一覧の時刻まで。
+- 機械の全員向けに入れたときに winget が出した文は、取れていない（開発者の管理者の端末に出た）。入れた直後の読み（`winget list` の行・PATH の登録の数）も、その回の出力のファイルは無く、作業を進めている AI の読みを聞いて書いた。残っているファイルで確かめられたのは、14:20:44 に登録から組み直した PATH と、入れ先の一覧の時刻まで。（後片付けのときに、winget 自身の記録で、入れた回の始まりと終わりの時刻・入れ先のフォルダを作った行・PATH へ足した行も読んだ。「機械の全員向けの実測」の 8）
 - 機械の全員向けに入れた後・起こす前の入れ先の中身は、**数でしか分からない**（150 ファイル・16789117 バイトと、直下の 9 つの名前。一覧のファイルは、置き場の指定を誤って保存できなかった）。起動の後の一覧から areka が作った物を除いた数は、この数と合う。
 - 機械の全員向けでの「インストール…」は、**1 回・検体 1 つ（`claudia.nar`）**で試しただけ。バルーンの `.nar` は試していない（同じ作業フォルダ `.nar-work\` を入れ先の直下に作る手続きなので、同じ所で止まる見込み）。ゴーストの切り替えも試していない（ゴーストが同梱の 1 体だけなので、切り替える先が無い）。
 - 機械の全員向けで入れられなかったときのゴーストの台詞は、作業を進めている AI が画面の写しで見た 2 行（「えー、なんでなん！？」「ファイルが壊れてるのかもね。」）で、**写しのファイルは残っていない**。MCP の `dump_balloon` は呼んでいない（`get_log` は呼んだが、返るのは areka 自身の記録で、台詞ではない）。台詞の全文（3 行）は、配布 zip の中の辞書から読んだ物で、画面で 1 行目を見たわけではない。
 - 入れ先の権限の一覧（`logs\3.5-acl.txt`）は 7 か所だけで、取ったコマンドは残っていない。下の階層にだけ「この端末の利用者」の行が在る仕組みは調べていない。
 - 機械の全員向けに入れた形での上げ直しは、測っていない。
+- 機械の全員向けを外した回と、設定を戻した回に、**開発者の管理者の端末に出た文は取れていない**。分かっているのは、winget 自身の記録に残った行（始まりと終わりの時刻・打った字面・何を消したか）と、前後に AI が機械を読んだ値まで。機械の PATH を直した 1 行（PowerShell）は、winget を通らないので記録がどこにも無く、効いた時刻は前後の読みの間（14:43:46〜14:46:58）としか言えない。
+- 機械の側の後片付けの 4 項目のうち、外した直後から片付くまでの途中の値（14:41:29・14:41:46・14:43:46・14:46:58）は、作業を進めている AI の読みを聞いて書いた（その回の出力のファイルは無い）。この節を書いた AI が自分で読んだのは、片付いた後の 14:49 の 1 回。
+- ② `areka` の解決は、これまでと同じく、**登録から組み直した PATH**で見た（新しく開く端末が受け取るはずの PATH）。開いたままのアプリが持っている古い PATH は読んでいない。PATH の登録を手で直した 1 行は、レジストリの値を書き替えるだけなので、サインインし直すまでは、もう無いフォルダを指す項目を持ったままのアプリが在るかもしれない（測っていない。在っても、その先に `areka.exe` は無いので解決はしない）。利用者の PATH を手で直したとき（タスク 3.4）も同じ。
+- **開発者に頼んだ回数は、設計の見込み（提出を含めて 4 回＝提出の前までは 3 回）より多かった**。提出の前までで 4 回: ① 設定をオンにする ②′ 利用者の PATH の項目を消す（タスク 3.4。winget が消さなかったため）② 機械の全員向けに入れる ③ 機械の全員向けを外す・機械の PATH の項目を消す・設定を戻す。③ は 1 度で済まず、やり取りが 3 往復になった（作業を進めている AI の示し方が短すぎた: 開発者から「どのフォルダか」と聞かれ、次に PATH の 1 行の説明を求められ、その後に PATH の 1 行をもう 1 度打ってもらった）。winget 自身の記録では、オンにする回と外す回のそれぞれで、管理者の端末でなかったために断られた 1 度目が在る（どちらも、すぐ後に管理者の端末で通っている）。
+- **`C:\Program Files\WinGet\` と、その下の空のフォルダ `Links\`・`Packages\` が、開発機に残っている**（機械の全員向けの入れる操作が作った物。`--purge` を付けて外しても消えない。後片付けの 4 項目の外。「後片付けの確かめ」の「機械の側」）。消すには管理者の権限が要り、開発者はそのままにした。
 
 ## 見つかった件と起票
 
@@ -1193,7 +1295,7 @@ winget 自身の記録（`%LOCALAPPDATA%\Packages\Microsoft.DesktopAppInstaller_
 |---|---|---|---|
 | 入れた areka（0.0.2）の MCP の `sakurascript` が、台本を受け取らずに `NG:not implemented yet` と答える。台本で `.nar` を入れる・ゴーストを切り替える・終える、のどれもできず、状態を MCP の口から作れなかった（代わりに、右クリックメニューを AI が画面の操作で動かして作った） | 段 4（タスク 3.1） | `target\winget-check\logs\3.1-mcp.log`（送った文と答え）・上の「上げ直しの実測」の「作る状態」・タグ `v0.0.2` の `crates/areka/src/mcp/sakurascript.rs` | （タスク 3.6 で記入。中身を入れる仕事は、起票済みの `areka-P0-mcp-kanade-tools` の brief に在る） |
 | winget の上げ直しで、利用者の物が消えた。areka は利用者の物（後から入れたゴーストとバルーン・ゴーストの記憶）を、入れ先の `ghost\`・`balloon\` の中に置く。winget は上げ直しのときに、この 2 つのフォルダを中身ごと消してから zip の中身を置き直した（消えた物は 6・208 ファイル。areka の記憶 `profile\` は残った）。その後の起動は、覚えていたゴーストが無いので同梱のゴーストで立った。**外すとき（`--purge` も `--preserve` も付けない `winget uninstall`）も同じ物が消えた**（根は同じ＝利用者の物が、入れ先の `ghost\`・`balloon\` の中に在る）。winget はこの 2 つのフォルダを中身ごと消し、消えた物は同じ 6（利用者の物は 207 ファイル）。残ったのは areka の記憶 `profile\` と空の `.nar-work\` だけで、winget は「ファイルが入れ先に残る」と告げて入れ先のフォルダを残した。そのフォルダを指す利用者の PATH の項目 1 件も残っていた。winget の文は、どちらのときも、利用者の物を消したことを告げない | 段 5（タスク 3.2）・段 6（タスク 3.3） | 上の「上げ直しの実測」の「上げ直し」・`target\winget-check\logs\3.2-diff-after-upgrade.txt`・`3.2-run.stdout.log`／上の「外し方の実測」・`target\winget-check\logs\3.3-diff-after.txt`・`3.3-uninstall.stdout.txt` | （タスク 3.6 で記入。要件 4.6 の起票＝利用者の物が上げ直しと外し方で消えないようにする仕事） |
-| winget で外しても、利用者の機械に後が残る。雛形は `ArchiveBinariesDependOnPath: true` で、入れ先のフォルダを利用者の PATH に 1 件足す。`winget uninstall` は、`--purge` を付けても付けなくても、この PATH の項目を消さなかった（もう無い `areka.exe` の在ったフォルダを指す項目が残る）。入れ先のフォルダも、areka の記憶（`profile\areka\`）が中に在ると残った（`--purge` を付けない回。`--purge` を付けた回も、残りの上へ入れ直した物だったので残った）。winget の文は、PATH の項目が残ることを告げない（フォルダについては、`--purge` を付けない回だけ「ファイルが入れ先に残る」と告げる）。開発機では、フォルダを AI が、PATH の項目を開発者が手で片付けた。これは winget の側の動きだが、areka が利用者の物を入れ先の中に置くことと、雛形が PATH の入れ方を選んだことから出てくる（だから、上の行の「利用者の物が消える」の起票へまとめる手も在る。まとめるか分けるかは、タスク 3.6 で作業を進めている AI が決める） | 段 6（タスク 3.3）・段 7（タスク 3.4） | 上の「後片付けの確かめ」の「利用者の側」の 6（14:09 の 4 項目の読み）・7（winget 自身の記録の行 `Install directory is not empty`・`Unable to remove install directory as there are remaining files in: …` とソースの読み）・8（片付け）／`target\winget-check\logs\3.4-after-purge-*`・`3.4-winget-diag-path-lines.txt`・`3.4-winget-diag-uninstall-purge.txt`・`target\winget-check\review\3.4\PortableInstaller.cpp` | （タスク 3.6 で記入） |
+| winget で外しても、利用者の機械に後が残る。雛形は `ArchiveBinariesDependOnPath: true` で、入れ先のフォルダを利用者の PATH に 1 件足す。`winget uninstall` は、`--purge` を付けても付けなくても、この PATH の項目を消さなかった（もう無い `areka.exe` の在ったフォルダを指す項目が残る）。入れ先のフォルダも、areka の記憶（`profile\areka\`）が中に在ると残った（`--purge` を付けない回。`--purge` を付けた回も、残りの上へ入れ直した物だったので残った）。winget の文は、PATH の項目が残ることを告げない（フォルダについては、`--purge` を付けない回だけ「ファイルが入れ先に残る」と告げる）。開発機では、フォルダを AI が、PATH の項目を開発者が手で片付けた。**機械の全員向け（`--scope machine`）でも同じことが起きた**（タスク 3.5）: 開発者が管理者の端末で `--purge` を付けて外すと、入れ先のフォルダは消えたが、機械の PATH の項目 1 件は残り（winget 自身の記録に、同じ `Install directory is not empty` の行）、開発者が手で消した。これは winget の側の動きだが、areka が利用者の物を入れ先の中に置くことと、雛形が PATH の入れ方を選んだことから出てくる（だから、上の行の「利用者の物が消える」の起票へまとめる手も在る。まとめるか分けるかは、タスク 3.6 で作業を進めている AI が決める） | 段 6（タスク 3.3）・段 7（タスク 3.4）・段 8（タスク 3.5） | 上の「後片付けの確かめ」の「利用者の側」の 6（14:09 の 4 項目の読み）・7（winget 自身の記録の行 `Install directory is not empty`・`Unable to remove install directory as there are remaining files in: …` とソースの読み）・8（片付け）／`target\winget-check\logs\3.4-after-purge-*`・`3.4-winget-diag-path-lines.txt`・`3.4-winget-diag-uninstall-purge.txt`・`target\winget-check\review\3.4\PortableInstaller.cpp`／機械の側は、上の「機械の全員向けの実測」の 8・「後片付けの確かめ」の「機械の側」・`target\winget-check\logs\3.5-final-winget-diag-uninstall-machine-purge.txt`・`3.5-final-machine.txt` | （タスク 3.6 で記入） |
 | 機械の全員向け（`--scope machine`）に入れると、普段の権限の利用者は、areka の記憶を書けず、ゴーストを後から入れられない。areka は、利用者の物（areka の記憶 `profile\areka\`・後から入れるゴーストとバルーン・入れるときの作業フォルダ `.nar-work\`）を `areka.exe` の隣＝入れ先のフォルダに置く。機械の全員向けの入れ先 `C:\Program Files\WinGet\Packages\…` は、普段の権限では直下に何も作れない。1 回の起動につき、areka の記憶への書き込みが 3 回とも「アクセスが拒否されました」で失敗し、メニューの「インストール…」は作業フォルダを作れずに止まった。ゴーストは立つ。**根は上の 2 行目（上げ直しと外し方で利用者の物が消える）と同じ＝利用者の物が入れ先の中に在る**ので、置き場を直す起票へまとめられる | 段 8（タスク 3.5） | 上の「機械の全員向けの実測」の 3〜7・`target\winget-check\logs\3.5-bounded1.stdout.log`・`3.5-menu1.stdout.log`（`persist commit failed … scope=App`・`Stage で I/O に失敗: …\.nar-work\34544-0`）・`3.5-installdir-after-menu1.tsv`・`3.5-acl.txt` | （タスク 3.6 で記入） |
 | areka の記憶が書けないとき、areka は利用者へ何も伝えない。起動の記録に `ERROR`・`WARN` が残るだけで、台詞も知らせも出ず、ゴーストは普段どおりに立って喋る。その裏で、最後に使ったゴーストは覚えられず、起動中の印は書くことも消すこともできない＝前回がきれいに終わらなかったことに気付く仕組みが、黙って働かなくなる（落ちても、次の起動は何事も無かったように立つ）。あわせて、記録の文が実際と合わない所が 2 つ在った: `last_used_recorded` の「記憶へ書きました」は、すぐ次の行で書き込みが失敗しているのに出る／終わるときの警告「次の起動は前回落ちたとして…」は、印がそもそも書けていないこの場合には、そうならない（2 回目の起動に `session_mark_found` は 0 件） | 段 8（タスク 3.5） | 上の「機械の全員向けの実測」の 3・4・6・7・`target\winget-check\logs\3.5-bounded1.stdout.log`・`3.5-menu1.stdout.log`（`session_mark_write_degraded`・`session_mark_clear_degraded`・`last_used_recorded`）・タグ `v0.0.2` の `crates/areka/src/boot_resolve.rs`・`crates/areka/src/boot_config.rs` | （タスク 3.6 で記入） |
 | 入れ先に書けないせいで `.nar` を入れられなかったのに、利用者には「ファイルが壊れてるのかもね。」と伝わる。areka がゴーストへ渡す失敗の理由は正典の語 `extraction` の 1 語だけで、書庫が壊れているときと、入れ先へのファイルの読み書きに失敗したとき（今回＝`kind="Io" phase="stage"`）が同じ語になる。同梱のゴースト（えも？？）の辞書は、理由を見ずに 3 つの台詞から 1 つを選び、その 1 つがこの台詞。本当の理由（アクセスが拒否された場所）は、起動の記録の `ERROR` にしか出ない。利用者は、壊れていない `.nar` を疑うことになる。上の行（置き場）を直せば今回の形では起きなくなるが、ほかの読み書きの失敗でも同じ伝わり方になるので、別の件として書く | 段 8（タスク 3.5） | 上の「機械の全員向けの実測」の 4（`install_failed … word="extraction"` の行と、台詞の出どころ）・`target\winget-check\logs\3.5-menu1.stdout.log`・`3.5-zip-grep.txt`（辞書 `ghost\emo2\ghost\master\dic\install.pasta` の 89〜101 行目）・タグ `v0.0.2` の `crates/areka/src/install/judge.rs`（関数 `failure_word`） | （タスク 3.6 で記入） |
