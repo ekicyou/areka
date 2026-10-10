@@ -112,7 +112,7 @@
 
 #### Acceptance Criteria
 
-1. While アンカーの範囲の文字が表示されていてマウスが乗っていない, the areka shall その文字に下線を引く（ukadoc の descript `anchor.style` の既定値 `underline` に合わせる）。
+1. While アンカーの範囲の文字が表示されていてマウスが乗っていない, the areka shall その文字に下線を引く（ukadoc の descript `anchor.style` の既定値 `underline` に合わせる）。（要件討議 議題 1・2026-10-10 開発者確認: 下線はバルーンの中で初めての常に見える目印になることを了解の上で採用）
 2. While マウスがアンカーの範囲に乗っている, the areka shall 選択肢の行にマウスが乗ったときと同じ強調の見た目にする（Requirement 3.1）。
 3. The areka shall 下線を、既に着地している文字の区間への下線の描画と同じ位置の規則で引く（縦書きの位置の決め直しは `anchor-style-canon` の範囲）。
 4. The areka shall 作者が `\f[anchor*]`・`\f[anchor.font.color]`・descript の `anchor.*` 族で見た目を指定しても、本 spec の範囲では既定の見た目を変えず、指定を今までどおり受け取って保持する。
