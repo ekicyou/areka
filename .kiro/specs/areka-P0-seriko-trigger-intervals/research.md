@@ -162,7 +162,7 @@
 2. T2 を採る場合、新しいトークで `epoch` が前へ飛ぶ場面（`TalkClock` の単調 max と同じ）と、`\x` の後の cue の `at` が実時刻より小さい場面での挙動（emo-text と同じ式なら同じにずれる）。
 3. `apply` の `Changed` が「未知のスコープへの最初の `Show`」でも立つこと（起動直後の `\s[0]`）を `runonce` の最初の表示に使える前提の確認（`state_surface_tests.rs` に既存の檻が在るか）。
 4. バルーンの面の `periodic`／`talk` で、窓が閉じている間（`open=false`）をどう扱うか（`always` は「時計を作らない・回数つきは捨てる」）。要件 3.2・4.9 の「非表示」に窓の閉じを含めるかは正典が沈黙＝裁量として台帳の note に書く候補。
-5. `Choice{text}` を数えない（要件 4.10）ことが、選択肢だけの台詞で口が動かない見た目になる点の実機確認（SSP の挙動は測らない方針なので、ukadoc の文言「バルーン内にテキストが表示されていく時」の読みで決める）。
+5. ~~`Choice{text}` を数えない~~ → **要件討議で解決（2026-10-10・自明な修正）**: emo-text は `Choice` の `text` を Text cue と同じ追記＋同じリビール時刻式で現れさせる（`crates/areka-emo-text/src/state.rs` の `Choice` の腕）ので、正典の「バルーン内にテキストが表示されていく時」に当たる。要件 4.10 を「選択肢の文字は数える」に改めた。seriko の読む腕は `Text` と `Choice{text}` の 2 つ（`duration` はどちらも配送の値）。
 6. 口パクの検体の置き場: `crates/areka-emo-compose/tests/fixtures/`（前例と同じ・compose の下だが compose のソースには触れない）か、seriko の下に新しく切るか。E2E は `crates/areka/src/emo2_boot/` の兄弟（前例 `film_playback_e2e_tests.rs`）。
 
 ## 6. 設計判断の議題（要件討議へ）
@@ -176,4 +176,6 @@
 7. **`talk` の文字の列の持ち方**: 塊（cue）単位（開始・間隔・数・継ぎ目は `max(prev_end, chunk_start)`）で持ち、数え終えた塊を捨てる。1 文字 1 要素は持たない。面の切り替えで列も数も捨てる（要件 4.4）。隠れている間は塊を受け取らない（要件 4.9）。
 8. **一番上の `talk` と部品の `talk` の数え**: 文字の数はスコープごとに 1 つ（要件 4.3）で、一番上と部品は同じ数を見る。部品が後から見えた場合、区切りの数え直しは「部品が見え始めた時点の数から」にするか、スコープの数をそのまま使うか（要件 5.9 の「見え始めた瞬間を起点」の `talk` への当てはめ）。
 9. **台帳の `sometimes`／`rarely` の note の古くなる 1 文**（「`runonce`・`periodic,数値` などは非駆動」）: 本 spec で直すか（要件 10.1 は 3 行だけを挙げる）。
-10. **検体の置き場と形**: `animated-playback` と同じ `crates/areka-emo-compose/tests/fixtures/<名>/`（シェルだけで足りるか・バルーンの面の `talk` も検体に置くか）。E2E の相手は `film_playback_e2e_tests.rs` の型（本物の読み手＋本物の seriko＋偽の時計）。
+10. **検体の置き場と形**: `animated-playback` と同じ `crates/areka-emo-compose/tests/fixtures/<名>/`（シェルだけで足りるか・バルーンの面の `talk` も検体に置くか）。E2E の相手は `film_playback_e2e_tests.rs` の型（本物の読み手＋本物の seriko＋偽の時計）。**制約（要件討議で追記）**: brief の「同じウェーブで触らない約束」は `crates/areka-emo-compose/` に触らないと言っているので、検体を compose の下に置くなら「新しいフォルダを足すだけ（compose のソース・既存のテストは触らない）」に限るか、seriko の下（例 `crates/areka-seriko/tests/fixtures/`）か `crates/areka/` の E2E の兄弟に置く。設計で決め、約束の外へ出るなら止めて報告する。
+11. **seriko の時計の種類（要件討議で追記）**: 本番の seriko の時計は `GetTickCount64`（`crates/areka/src/emo2_boot/mod.rs` の `tick_count_ms`・刻みと共有）で、台本の時計 `TalkClock` は QPC。議題 1 で T2 を採る場合、seriko の時計を QPC 由来の ms に揃えれば（結線の 1 行・`emo2_boot/mod.rs`）文字の層と同じ時計の種類になり、残る差は配送の経路だけになる。`emo2_boot/mod.rs` は brief の「触るファイル」の列に無い（C5 の他の spec とも重ならない）ので、採るなら設計で明記して報告する。刻みの 16 ms の粗さは変わらない。
+12. **`runonce` の最初の表示（研究項目 3・要件討議で追記）**: `apply` の `Changed` が未知のスコープへの最初の `Show` でも立つことを、設計で `state_surface_tests.rs` の既存の檻から確かめる（無ければ本 spec の檻に 1 本足す）。
