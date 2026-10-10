@@ -140,6 +140,7 @@
 
 ### 4. winget-pkgs への PR と、書いた時点の状態
 
+- （この項目の最新の状態は、いちばん下の太字で始まる行＝「人の承認待ちになった時刻」の行に在る）
 - PR: https://github.com/microsoft/winget-pkgs/pull/450070 （題は `New package: Areka.Areka.Portable version 0.0.2`）。できたのは 2026-10-10 17:31:15（+09:00）、出し手は `ekicyou`。変わったファイルは `manifests/a/Areka/Areka/Portable/0.0.2/` の下の 4 つだけ（提出の記録「提出した版と日時」「PR の URL」）。
 - **この節を書いた時点の状態**（2026-10-10 17:53:13〜17:53:15 +09:00 に、`gh pr view 450070 --repo microsoft/winget-pkgs` と、出来事の一覧 `gh api repos/microsoft/winget-pkgs/issues/450070/events` で読んだ。読むだけ）: 開いている（下書きではない・取り込まれていない）。付いている印は `New-Package` の 1 つだけ。**`Validation-Completed` はまだ付いていない＝自動の検査の途中**。検査は、`01. Pull Request Validation` から `07. Installers Scan` までの 7 つと `license/cla` が成功、`08. Installation Validation` が進行中、`09. Installer Metadata Validation` と `10. Validation Completed` は順番待ち。人のレビューは 0 件。
 - 印の出来事は 3 つだけ: `Needs-CLA` が付いた（17:31:44）→ `New-Package` が付いた（17:34:01）→ `Needs-CLA` が外れた（17:35:21）。`Needs-Author-Feedback` と失敗の印は、1 度も付いていない。
