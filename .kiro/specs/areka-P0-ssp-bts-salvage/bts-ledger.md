@@ -19,12 +19,12 @@
 | 項目 | 件数 |
 |---|---|
 | 深刻度「要望」から行にした件数 | 187 |
-| それ以外の深刻度から行にした件数 | 54 |
-| 読んだが外した件数 | 11 |
+| それ以外の深刻度から行にした件数 | 47 |
+| 読んだが外した件数 | 18 |
 | 対象に入らなかった件数（頁を開いていない） | 556 |
 | 合計（一覧の総数） | 808 |
 
-- 読んだが外した番号: 0000068、0000081、0000082、0000109、0000150、0000279、0000374、0000409、0000430、0000441、0000471
+- 読んだが外した番号: 0000068、0000081、0000082、0000109、0000150、0000279、0000374、0000409、0000430、0000441、0000471、0000583、0000601、0000609、0000724、0000745、0000773、0000804
 
 ## 読み方
 
@@ -178,15 +178,15 @@ areka との関係は、ukadoc の網羅の台帳（`doc/ukadoc-coverage/`）・
 
 | 主題 | ひと言の定義 | 行の数 |
 |---|---|---|
-| さくらスクリプトと文字の現れ方 | さくらスクリプトのタグと、文字・音の出し方 | 17 |
-| バルーン | バルーンの見た目・位置・入力ボックス | 16 |
-| シェルとサーフェス | シェルの描き方・サーフェスとアニメーションの定義 | 13 |
+| さくらスクリプトと文字の現れ方 | さくらスクリプトのタグと、文字・音の出し方 | 16 |
+| バルーン | バルーンの見た目・位置・入力ボックス | 15 |
+| シェルとサーフェス | シェルの描き方・サーフェスとアニメーションの定義 | 12 |
 | SHIORI イベント・リソース・プロパティシステム | ベースウェアが SHIORI へ知らせるイベントと、SHIORI から引ける情報 | 15 |
-| 窓と配置 | キャラクターの窓の位置・重なり順・ディスプレイ | 14 |
-| メニュー・設定・操作 | 右クリックメニュー・設定画面・エクスプローラ・ログなど利用者が触る画面 | 33 |
+| 窓と配置 | キャラクターの窓の位置・重なり順・ディスプレイ | 12 |
+| メニュー・設定・操作 | 右クリックメニュー・設定画面・エクスプローラ・ログなど利用者が触る画面 | 32 |
 | インストール・配布・削除 | nar の作り方と入れ方・アンインストール | 21 |
 | ネットワーク更新 | ゴースト・シェル・バルーン・本体の更新の仕組み | 21 |
-| 外との連携 | SSTP・FMO・プラグイン・メール・音声・Web からの呼び出し | 26 |
+| 外との連携 | SSTP・FMO・プラグイン・メール・音声・Web からの呼び出し | 25 |
 | 開発者向けの機能 | 開発用パレット・サーフェスの書き出し・テストの機能 | 20 |
 | 起動・終了・ゴーストの切り替え | 起動の引数・終了の待ち・初回起動 | 4 |
 | その他 | 翻訳・配布元・文字コードなど、上のどれにも入らないもの | 21 |
@@ -210,11 +210,10 @@ areka との関係は、ukadoc の網羅の台帳（`doc/ukadoc-coverage/`）・
 | BTS 0000389 | Make it possible for disable text option to affect only color | 要望 | 仕様どおり | 要望 | 実装済み | `ledger/sakura-script.toml` の `\f[color,色指定]`（`implemented`・`areka-P0-text-decoration-canon`。色指定の `disable` を受ける） | `\f[disable]` は太字や縁取りまで既定に戻してしまうので、色だけを「無効」の色に替える書き方がほしいという要望。作者は、`\f[color,色指定]` に `disable` を書く形が既に在ると案内して閉じた。 |
 | BTS 0000419 | Give \![open,readme] an optional argument to specify what readme to open | 要望 | 実装済み（2.5.76） | 要望 | 未着手 | `ledger/sakura-script.toml` の `\![open,readme]`（`implemented`・`areka-P0-popup-menu-minimal`）は引数なしの形だけ。種類と名前の引数付きは、同 spec の要件が「語彙だけ持ち、何もしない」と置いている | プラグインのメニューから自分の readme を開き直せるよう、`\![open,readme]` に開く相手（種類と名前）を引数で指定できるようにしてほしいという要望。SSP は 2.5.76 で入れた。 |
 | BTS 0000501 | Add time option to \![set,alpha] tag | 要望 | 実装済み（2.7.32） | 要望 | 未着手 | `ledger/sakura-script.toml` の `\![set,alpha,数値,オプション]`（`absent`・持ち主の `areka-P0-sakura-time-directives` は brief で範囲から外している）。roadmap の覚え書きに登記あり（時間の指令の C・D 群） | 透明度を少しずつ変えるタグを何十も並べずに済むよう、`\![set,alpha,数値,オプション]` に変化にかける時間を指定できるようにしてほしいという要望。SSP は 2.7.32 で入れた。 |
-| BTS 0000580 | More ghost-friendly url handling | 要望 | 実装済み（2.6） | — | — | — | （未読） |
-| BTS 0000611 | \q[]に\u[]とかを挟むと\q側の]が認識されないのって仕様ですか？ | マイナー | 仕様どおり | — | — | — | （未読） |
-| BTS 0000692 | Add tag \![open,dressupexplorer] | 要望 | 実装済み（2.7） | — | — | — | （未読） |
-| BTS 0000740 | Extra "wait" parameter for \![set,alpha] and \![set,scaling] tags | 要望 | 実装済み（2.7） | — | — | — | （未読） |
-| BTS 0000745 | \![open,dialog,open]などのダイアログ系を実行後に大きな負荷が発生する | メジャー | 仕様どおり | — | — | — | （未読） |
+| BTS 0000580 | More ghost-friendly url handling | 要望 | 実装済み（2.6.35） | 要望 | 未着手 | `ledger/shiori.toml` の `OnURLQuery`（`absent`・持ち主なし）。続きの扱いを頼む `\![execute,install,url,URL,(feed\|nar\|homeurlのいずれか)]` は `areka-P0-network-update` が作った | URL を投げ込まれたときの `OnURLQuery` で、本体がその URL をどう扱えるかを知らせ、選んだ扱いを台本から続けられるタグもほしいという要望。SSP は 2.6.35 で Reference とタグを足した。 |
+| BTS 0000611 | \q[]に\u[]とかを挟むと\q側の]が認識されないのって仕様ですか？ | マイナー | 仕様どおり | 質問 | 実装済み | 完了した `areka-P0-sakura-parse` の要件「Requirement 13: さくらスクリプト構文の一般パースとエスケープ処理」が、角括弧の中の `\]` を閉じ括弧でなく文字として読むと決めている | 選択肢のタグの角括弧の中に別のタグの角括弧を挟むと閉じ括弧を取り違えるのは仕様かという質問。作者は括弧の入れ子を数えない作りだと答え、ukadoc のエスケープの書き方で避けられると案内して閉じた。 |
+| BTS 0000692 | Add tag \![open,dressupexplorer] | 要望 | 実装済み（2.7） | 要望 | 未着手 | `ledger/sakura-script.toml` の `\![open,dressupexplorer]`（`absent`・持ち主なし）。着せ替えメニューは roadmap の「生きている決まり」6 が予約のままと決めている | 着せ替えを自作のメニューでなく着せ替えエクスプローラの表示で選ばせたいので、その窓を台本から開けるタグがほしいという要望。SSP は 2.7（試作版の RC3）で `\![open,dressupexplorer]` を足した。 |
+| BTS 0000740 | Extra "wait" parameter for \![set,alpha] and \![set,scaling] tags | 要望 | 実装済み（2.7.52） | 要望 | 未着手 | `ledger/sakura-script.toml` の `\![set,alpha,数値,オプション]`・`\![set,scaling,横倍率,縦倍率,オプション]`（どちらも `absent`・持ち主の `areka-P0-sakura-time-directives` は brief で範囲から外している）。roadmap の覚え書きに登記あり（時間の指令の C・D 群） | 透明度や倍率を時間をかけて変えるタグで、変わり終えるまで後ろのタグや台詞を待たせる指定がほしいという要望（待ちのタグを並べる形は利用者の早送りでずれる）。SSP は 2.7.52 で `--wait` を足した。 |
 
 ### バルーン
 
@@ -235,7 +234,6 @@ areka との関係は、ukadoc の網羅の台帳（`doc/ukadoc-coverage/`）・
 | BTS 0000402 | Allow the developer to specify what balloon to use for input boxes | 要望 | 実装済み（2.6.23） | 要望 | 未着手 | `ledger/sakura-script.toml` の `\![open,inputbox,ID,表示時間,テキスト,オプション,...]`（`absent`）。入力ボックスを受け持つ `areka-P0-inputbox-user-input` は、brief でバルーンの側の入力ボックスの見た目の指定を範囲から外している | 入力ボックスを開くタグのオプションで、使う入力ボックスの画像を番号で選べるようにし、画像ごとの設定ファイルも持てるようにしてほしいという要望。SSP は 2.6.23 で入れた。 |
 | BTS 0000446 | Add option to adjust the speed of the balloon's online marker animation | 要望 | 実装済み（2.5.77） | 要望 | brief あり | `ledger/assets.toml` の `onlinemarker.interval,待機時間`（`absent`・持ち主は `areka-P0-balloon-canon-residue`）。通信中の印は進行中の `areka-P0-balloon-markers` の brief が引き取っている | オンラインマーカーの動く絵のこま送りの間隔を、バルーンの descript で決められるようにしてほしいという要望。SSP は 2.5.77 で `onlinemarker.interval,待機時間` を足した。 |
 | BTS 0000567 | "Sticky" balloon tags | 要望 | 実装済み（2.6） | 要望 | 未着手 | `ledger/sakura-script.toml` の `\b[ID番号]`（`implemented`・`areka-P0-kero-balloon`）。無い番号のときの代わりを指すオプションはカタログに項目なし | `\b[ID番号]` で指した番号のバルーンが無いとき、既定の小さいバルーンでなく、台本で決めた別の番号へ落ちるようにしてほしいという要望。SSP は `\b[ID番号]` に代わりの番号を並べるオプションを足した。 |
-| BTS 0000804 | バルーンのsstpmessage.ybの挙動について | マイナー | 実装済み（2.8） | — | — | — | （未読） |
 
 ### シェルとサーフェス
 
@@ -248,12 +246,11 @@ areka との関係は、ukadoc の網羅の台帳（`doc/ukadoc-coverage/`）・
 | BTS 0000183 | allow shells to draw windows with it's own DLL | 要望 | 却下 | 要望 | 未着手 | カタログに項目なし | ゴーストが SHIORI の DLL を持つのと同じように、シェルが自前の DLL で窓を描けるようにしてほしいという要望。SSP は作りの上で難しいとして却下した（BTS 0000020 と同じ話として結ばれている）。 |
 | BTS 0000301 | Allow balloon and shell to have custom dlls to draw the interface | 要望 | 未対応 | 要望 | 未着手 | カタログに項目なし | Live2D や 3D のモデルを使えるよう、本体の描画を差し替えられる部品にして、シェルやバルーンが自前の DLL で描けるようにしてほしいという要望（BTS 0000183 の続き）。SSP は未対応のまま（作者の返事は無い）。 |
 | BTS 0000372 | Allow surfaces to have non-numerical names | 要望 | 実装済み（2.8.24） | 要望 | 未着手 | `ledger/assets.toml` の `name,定義名`（`absent`・持ち主なし） | サーフェスを数字でなく名前で定義できるようにし、番号の範囲を割り振る手間を無くしたいという要望。SSP は互換の問題を避けて、2.8.24 でサーフェスの定義に `name,定義名` を足す形で入れた。 |
-| BTS 0000601 | kero.seriko.defaultsurfaceがOnWindowStateRestore を用意していない場合に機能していない。 | 些細 | 仕様どおり | — | — | — | （未読） |
-| BTS 0000630 | シェルの拡大縮小アルゴリズムについて | 要望 | 未対応 | — | — | — | （未読） |
-| BTS 0000762 | Prevent looping of non-repeating .GIF surfaces | 微調整 | 実装済み（2.7） | — | — | — | （未読） |
-| BTS 0000785 | Optional name attribute for animations | 要望 | 実装済み（2.8） | — | — | — | （未読） |
-| BTS 0000792 | SSP組み込みクロスフェード機能を強制OFFにするdescript.txt設定がほしい | 要望 | 実装済み（2.8） | — | — | — | （未読） |
-| BTS 0000795 | How to get surface width before the surface is displayed | 要望 | 実装済み（2.8） | — | — | — | （未読） |
+| BTS 0000630 | シェルの拡大縮小アルゴリズムについて | 要望 | 未対応 | 要望 | 未着手 | `ledger/sakura-script.toml` の `\![set,scaling,倍率]`（`absent`・持ち主の `areka-P0-sakura-time-directives` は brief で範囲から外している）。画面の拡大率に合わせた拡大は完了した `areka-P0-emo-dpi-scaling` が作ったが、拡大の補い方を選ぶ設定は無い | 高解像度の画面で拡大するとシェルの絵が目に見えて粗くなるので、拡大縮小に超解像のような質の高い方式を選べるようにしてほしいという要望。作者はできそうになってきたので様子を見ていると答え、未対応のまま。 |
+| BTS 0000762 | Prevent looping of non-repeating .GIF surfaces | 微調整 | 実装済み（2.7.93） | 要望 | 方針とぶつかる | 完了した `areka-P0-animated-image-decode` の要件の「開発者の裁定: 動く GIF には対応しない（2026-10-04・要件討議 議題 1）」が、動く GIF を動かさず 1 枚だけ読むと決めている。APNG と WebP では、ファイルの繰り返し回数を守る（完了した `areka-P0-animated-image-playback` の要件「Requirement 2: 繰り返し回数と待ち時間」） | サーフェスに使った動く GIF が、ファイルに決めた回数で止まらずに繰り返し続けるので、止まるようにしてほしいという報告。SSP は 2.7.93 で直した。 |
+| BTS 0000785 | Optional name attribute for animations | 要望 | 実装済み（2.8.24） | 要望 | 未着手 | `ledger/assets.toml` の `animation*.name,定義名`（`absent`・持ち主なし） | 腕や表情の差し替えに使うアニメーションを見分けやすいよう、アニメーションに名前を付けてサーフェステストなどの一覧に出せるようにしてほしいという要望。SSP は 2.8.24 で `animation*.name,定義名` を足した。 |
+| BTS 0000792 | SSP組み込みクロスフェード機能を強制OFFにするdescript.txt設定がほしい | 要望 | 実装済み（2.8.43） | 要望 | 対象外 | areka はサーフェスの切り替えにクロスフェードの効果を持たないので、止める設定は意味を持たない（`ledger/assets.toml` の `seriko.force_disable_crossfade,値` は `absent`・持ち主なしで、備考が「止める対象が無い」と書いている） | 切り替えのアニメーションを全部自前で作るゴーストのために、本体が組み込みで行うサーフェスの切り替えのクロスフェードを descript から止められる設定を作るという、作者自身の提案。SSP は 2.8.43 で入れた。 |
+| BTS 0000795 | How to get surface width before the surface is displayed | 要望 | 実装済み（2.8.57） | 要望 | brief あり | `ledger/property.toml` の `currentghost.scope(ID).surface(ID).rect`（`vocabulary-only`）・`areka-P0-currentghost-property-tree`（頁の提案と同じ綴り。SSP が足した名前は頁に書かれていない） | キャラクターを画面からはみ出さない位置へ出したいので、サーフェスを実際に切り替えて見せる前に、その絵の大きさをプロパティシステムで引けるようにしてほしいという要望。SSP は 2.8.57 で入れた。 |
 
 ### SHIORI イベント・リソース・プロパティシステム
 
@@ -269,11 +266,11 @@ areka との関係は、ukadoc の網羅の台帳（`doc/ukadoc-coverage/`）・
 | BTS 0000492 | Add option to set cursor for entire ghost with property system | 要望 | 実装済み（2.6.11） | 要望 | 未着手 | `ledger/property.toml` の `currentghost.mousecursor`（`vocabulary-only`。値の保持と GET は進行中の `areka-P0-currentghost-property-others` の brief が受け持つ）。カーソルを実際に差し替える `ledger/assets.toml` の `cursor,ファイル名 / mousecursor,ファイル名` は `absent`・持ち主なし | 利用者が入り切りできる自作のマウスカーソルをバルーンの上にも効かせられるよう、ゴースト全体のカーソルをプロパティで替えたいという要望。SSP は 2.6.11 で `currentghost.mousecursor` を足した。 |
 | BTS 0000540 | OnDisplayChange parameter has error | マイナー | 却下 | 挙動の説明 | 未着手 | `ledger/shiori.toml` の `OnDisplayChange`（`absent`・持ち主なし）。areka は画面の拡大率に追従する作り（完了した `areka-P0-emo-dpi-scaling`）だが、このイベントで送る寸法は決めていない | `OnDisplayChange` の画面の寸法が OS の設定と合わないのは、SSP が画面の拡大率に対応しておらず、OS が拡大率で割った寸法を返すためだと作者が説明した（直せないとして閉じた）。 |
 | BTS 0000551 | Notification of whether the current network will be charged in network information notification event | 要望 | 実装済み（2.6.15） | 要望 | 未着手 | `ledger/shiori.toml` の `OnNetworkStatusChange`（`absent`・持ち主なし）。更新の確かめの結果を知らせる `OnUpdateCheckResult` などは `areka-P0-update-check-options` が受け持つ | 通信量を食う処理をゴーストが控えられるよう、今の回線が従量課金かどうかをネットワークの状態のイベントで知らせ、更新の確かめでは取得する大きさも知らせてほしいという要望。SSP は 2.6.15 で入れた。 |
-| BTS 0000584 | RecycleBin related update | 要望 | 実装済み（2.6） | — | — | — | （未読） |
-| BTS 0000593 | OnNetworkStatusChangeに置いて有線ＬＡＮ接続なのにReference2が「other」となる。 | 要望 | 実装済み（2.6） | — | — | — | （未読） |
-| BTS 0000616 | ゴーストやプラグインにおけるOnOtherGhostTalkイベントでNoContentなイベントも補足できるようにしてほしい | 要望 | 未対応 | — | — | — | （未読） |
-| BTS 0000728 | OnUserInput occurs when inputbox times out | マイナー | 仕様どおり | — | — | — | （未読） |
-| BTS 0000791 | プロパティシステムでバルーンの現在位置座標を取得したい | 要望 | 実装済み（2.8） | — | — | — | （未読） |
+| BTS 0000584 | RecycleBin related update | 要望 | 実装済み（2.6.35） | 要望 | 未着手 | `ledger/shiori.toml` の `OnRecycleBinEmpty`・`OnRecycleBinEmptyFromOther`（どちらも `absent`・持ち主なし） | `OnRecycleBinEmpty` で、ごみ箱を空にできたかどうかと、自分のタグで空にしたのかを見分けたいという要望。SSP は 2.6.35 で成否の Reference と `OnRecycleBinEmptyFromOther` を足した。 |
+| BTS 0000593 | OnNetworkStatusChangeに置いて有線ＬＡＮ接続なのにReference2が「other」となる。 | 要望 | 実装済み（2.6.47） | 要望 | 未着手 | `ledger/shiori.toml` の `OnNetworkStatusChange`（`absent`・持ち主なし） | `OnNetworkStatusChange` が、有線 LAN でつないでいるのに接続の種類を「その他」と知らせるので直してほしいという報告。SSP は 2.6.47 で直した。 |
+| BTS 0000616 | ゴーストやプラグインにおけるOnOtherGhostTalkイベントでNoContentなイベントも補足できるようにしてほしい | 要望 | 未対応 | 要望 | 未着手 | `ledger/shiori.toml` の `OnOtherGhostTalk`（`absent`・持ち主なし）。前提になる多重ゴーストとプラグインは roadmap の予約に登記あり | ほかのゴーストのバルーンが閉じた時などをプラグインで拾えるよう、台本が返らなかったイベントも `OnOtherGhostTalk` で知らせる手段がほしいという要望。SSP は未対応のまま（作者の返事は無い）。 |
+| BTS 0000728 | OnUserInput occurs when inputbox times out | マイナー | 仕様どおり | 質問 | brief あり | `ledger/shiori.toml` の `OnUserInputCancel`・`OnUserInput`（どちらも `absent`・持ち主なし）。進行中の `areka-P0-inputbox-user-input` の brief が、時間切れの 2 段（`OnUserInputCancel` に返事が無ければ `OnUserInput`）を受け持つ | 入力ボックスの時間切れで `OnUserInputCancel` に返事が無いと `OnUserInput` も届くのは、ukadoc と SSP のどちらが正しいのかという質問。作者は古い仕様との互換のための動きだと答え、ukadoc に書き足した。 |
+| BTS 0000791 | プロパティシステムでバルーンの現在位置座標を取得したい | 要望 | 実装済み（2.8.39） | 要望 | brief あり | `ledger/property.toml` の `currentghost.balloon.scope(ID).x`・`currentghost.balloon.scope(ID).y`・`currentghost.balloon.scope(ID).rect`（どれも `vocabulary-only`）・`areka-P0-currentghost-property-tree` | バルーンの今の位置も、キャラクターの位置と同じようにプロパティシステムで引きたいという要望。SSP は 2.8.39 で `currentghost.balloon.scope(ID).x` などを足した。 |
 
 ### 窓と配置
 
@@ -283,16 +280,14 @@ areka との関係は、ukadoc の網羅の台帳（`doc/ukadoc-coverage/`）・
 | BTS 0000162 | デスクトップ解像度変更時の挙動 | 表示 | 実装済み（2.7） | 要望 | 未着手 | 起動のときに保存した位置が画面の外なら画面の中へ出す形は `areka-P0-position-persist` が作った。動いている間に解像度が変わったときの位置の扱いは決めていない | 画面の解像度を下げてから元に戻すと、キャラクターの位置が元に戻らないという報告。作者は画面の外へ出て操作できなくなるのを避ける仕様だと答えたが、後に手を入れたとして 2.7 で閉じた（解決状況の欄は差し戻しのまま）。 |
 | BTS 0000355 | Allow user to specify the distance at which ghosts should 'stick' to the taskbar/screen edge | 要望 | 実装済み（2.8.55） | 要望 | 未着手 | カタログに項目なし。ドラッグの最中に画面の端へ吸い付かせる決まりは、areka の資料に見つからない | キャラクターを動かすとき画面の端やタスクバーへ吸い付く距離を設定で決められ、0 にすれば吸い付きを止められるようにしてほしいという要望。SSP は 2.8.55 で入れた。 |
 | BTS 0000463 | バルーンをシェルより前面に表示する設定がほしい。（2.5.34での仕様変更による） | 要望 | 却下 | 要望 | 未着手 | 相方のバルーンを本体のキャラクターより手前に置く並びは、台本と設定から `areka-P0-scope-zorder-pinning` で固定できる。喋っている側のバルーンを自動で手前へ出す設定はカタログに項目なし | 相方のバルーンが本体のキャラクターの下に隠れて読めないので、喋っているバルーンを他より手前へ出すか、バルーンを常にシェルより手前に置く設定がほしいという要望。作者は OS の窓の仕組みの上で無理だとして断った。 |
-| BTS 0000598 | New z-order options | 要望 | 未対応 | — | — | — | （未読） |
-| BTS 0000609 | 他ウィンドウが全て最小化されていると、SSPが最小化される場合がある。 | マイナー | 却下 | — | — | — | （未読） |
-| BTS 0000626 | 全ての仮想デスクトップに表示される | マイナー | 却下 | — | — | — | （未読） |
-| BTS 0000653 | タブレットPCで縦長表示にして画面外判定になったあと元の横長表示に戻しても画面外判定が消えない | 要望 | 実装済み（2.7） | — | — | — | （未読） |
-| BTS 0000677 | ゴーストの立ち位置をデスクトップの相対位置に対応してほしい | 要望 | 実装済み（2.7） | — | — | — | （未読） |
-| BTS 0000723 | DisplayPort接続時に画面の電源を切るとゴーストの位置が動かされる | 要望 | 実装済み（2.7） | — | — | — | （未読） |
-| BTS 0000724 | 以前のsspと \![move]における移動距離が大きく異なっている問題。 | メジャー | 仕様どおり | — | — | — | （未読） |
-| BTS 0000730 | さくらスクリプトの\![set,zorder,ID,ID～]の効果のバルーン適用要望 | 要望 | 実装済み（2.7） | — | — | — | （未読） |
-| BTS 0000733 | Sakurascript tag to reset balloon position (like \![execute,resetwindowpos]) | 要望 | 実装済み（2.7） | — | — | — | （未読） |
-| BTS 0000776 | 起動時にゴーストを最背面で起動する。 | 要望 | 未対応 | — | — | — | （未読） |
+| BTS 0000598 | New z-order options | 要望 | 未対応 | 要望 | 未着手 | 全員の順を並べて固定する `seriko.zorder,スコープID,スコープID,...` と `\![set,zorder,スコープID,スコープID,...]` は `areka-P0-scope-zorder-pinning` が作った。1 体だけを最前・最背に留める指定はカタログに項目なし | キャラクターの多いゴーストで全員の順を並べずに済むよう、1 体だけを常に最前か最背に置く重なり順の指定がほしいという要望。SSP は未対応のまま（作者の返事は無い）。 |
+| BTS 0000626 | 全ての仮想デスクトップに表示される | マイナー | 却下 | 挙動の説明 | 未着手 | カタログに項目なし（仮想デスクトップごとに出すかどうかの設定）。`ledger/shiori.toml` の `OnVirtualDesktopChanged` は `absent`・持ち主なし | キャラクターの窓をタスクバーに出さない設定にすると、設定に関わらず全部の仮想デスクトップに出るのは OS の制限で直せないと作者が説明した。SSP は 2.6.59 で設定画面の表示を改めた。 |
+| BTS 0000653 | タブレットPCで縦長表示にして画面外判定になったあと元の横長表示に戻しても画面外判定が消えない | 要望 | 実装済み（2.7.30） | 要望 | 未着手 | `ledger/shiori.toml` の `OnOffscreen`（`absent`・持ち主なし） | タブレット PC で画面が縦向きになって画面の外に居ると判定された後、横向きに戻って元の位置に見えていても判定が消えないので、戻ったら消してほしいという要望。SSP は 2.7.30 で直した。 |
+| BTS 0000677 | ゴーストの立ち位置をデスクトップの相対位置に対応してほしい | 要望 | 実装済み（2.7） | 要望 | 未着手 | 位置は仮想デスクトップの上の座標で保存する（完了した `areka-P0-position-persist` の要件「Requirement 1: 窓位置の保存と復元」）。画面の広さに対する割合で持つ形は無く、動いている間に解像度が変わったときの位置の扱いも決めていない | 解像度の違う PC の間で設定を共有したり、ノート PC を開け閉めしたりすると立ち位置がずれるので、位置を画面に対する割合で持ち、解像度が変わったらその割合で戻してほしいという要望。SSP は 2.7（試作版の pre7）で入れた。 |
+| BTS 0000723 | DisplayPort接続時に画面の電源を切るとゴーストの位置が動かされる | 要望 | 実装済み（2.7.21） | 要望 | 未着手 | モニタの構成が変わっても保存済みの位置は書き換えない（完了した `areka-P0-position-persist` の要件「Requirement 5: 保存位置の画面内縮退（モニタ構成変化への追従）」）。動いている間に画面が減って戻ったときの位置の扱いは決めていない | DisplayPort でつないだ画面の電源を切るたびにゴーストの位置が動かされ、戻すのが手間だという報告。SSP は 2.7.21 で、画面の外に出た窓を自動で画面の中へ動かす働きを切れる設定を足した。 |
+| BTS 0000730 | さくらスクリプトの\![set,zorder,ID,ID～]の効果のバルーン適用要望 | 要望 | 実装済み（2.7.34） | 要望 | 実装済み | `ledger/sakura-script.toml` の `\![set,zorder,スコープID,スコープID,...]`（`implemented`・`areka-P0-scope-zorder-pinning`）。同 spec の要件「Requirement 1: 数値モードによるスコープ窓の前後関係の確定」がバルーンをキャラクターの直上に保ったままスコープ単位で並べると決め、「Requirement 2: バルーン込み明示モードとスコープ内隣接の調停」が 1 枚ずつ並べる書き方も受ける | `\![set,zorder,スコープID,スコープID,...]` で相方を手前にしても本体側のバルーンが相方より手前に残るので、バルーンも含めて並べ替えたいという要望。SSP は 2.7.34 で、バルーンと立ち絵を 1 枚ずつ並べる書き方を足した。 |
+| BTS 0000733 | Sakurascript tag to reset balloon position (like \![execute,resetwindowpos]) | 要望 | 実装済み（2.7.41） | 要望 | 未着手 | `ledger/sakura-script.toml` の `\![execute,resetballoonpos]`（`absent`・持ち主なし）。`\![execute,resetwindowpos]` も `absent`・持ち主なし | メニューの「バルーンの位置を戻す」と同じことを、`\![execute,resetwindowpos]` のように台本から行えるタグがほしいという要望。SSP は 2.7.41 で入れた。 |
+| BTS 0000776 | 起動時にゴーストを最背面で起動する。 | 要望 | 未対応 | 要望 | 未着手 | カタログに項目なし（起動のときの重なり順を選ぶ設定）。設定画面は roadmap の予約に登記あり | OS の起動と一緒に立ち上げたゴーストが他の窓の邪魔をするので、起動のときにゴーストを最背面で出すオプションがほしいという要望。作者は、起動の直後に一度手前へ出さないと重なり順の制御が不安定になるとして悩んでおり、未対応のまま。 |
 
 ### メニュー・設定・操作
 
@@ -319,18 +314,17 @@ areka との関係は、ukadoc の網羅の台帳（`doc/ukadoc-coverage/`）・
 | BTS 0000533 | Widen TimeMachine window | 些細 | 実装済み（2.6.14） | 要望 | 対象外 | SSP 固有の画面（時刻を仮に変える開発用の窓）の見た目の話 | 時刻を仮に変える窓の欄が狭く、選んだ時刻の文字が切れて読み違えるので、窓と欄を広げてほしいという要望。SSP は 2.6.14 で直した。 |
 | BTS 0000537 | There is no argument for opening the speech tab of the SSP preferences | マイナー | 実装済み（2.6.15） | 要望 | 未着手 | `ledger/sakura-script.toml` の `\![open,configurationdialog,ダイアログID]`（`absent`・持ち主なし）。設定画面は roadmap の予約に登記あり | `\![open,configurationdialog,ダイアログID]` に、設定画面の音声の頁を開く ID が無いので足してほしいという要望。SSP は入れ忘れだったとして 2.6.15 で足した。 |
 | BTS 0000561 | About the trayballoon timeout | マイナー | 実装済み（2.6.19） | 挙動の説明 | 未着手 | `ledger/shiori.toml` の `OnTrayBalloonTimeout`（`absent`・持ち主なし）。トレイアイコンは roadmap の予約に登記あり | タスクトレイの知らせが消える前に時間切れの台詞が始まるのは、OS が時間切れを窓の消えるより早く知らせてくるためだと作者が説明した。SSP は 2.6.19 で話し始めを 1 秒遅らせて和らげた。 |
-| BTS 0000603 | Change SSP's ordering to word-by-word alphabetization | 微調整 | 実装済み（2.6） | — | — | — | （未読） |
-| BTS 0000670 | Add confirmation dialog to "delete" option in Ghost Explorer | 要望 | 却下 | — | — | — | （未読） |
-| BTS 0000671 | kero.popupmenu.typeを0に指定した際に着せ替えを\1側に変更する手段が欲しい。 | 要望 | 実装済み（2.7） | — | — | — | （未読） |
-| BTS 0000678 | \0\s[-1]となっている状態で、sspのショートカット機能が機能しない問題。 | 要望 | 実装済み（2.7） | — | — | — | （未読） |
-| BTS 0000685 | 右ダブルクリックで強制表示されるオーナードローメニューの制御 | 要望 | 実装済み（2.7） | — | — | — | （未読） |
-| BTS 0000709 | ゴーストが自由にいじれるスケジュール領域 | 要望 | 実装済み（2.7） | — | — | — | （未読） |
-| BTS 0000748 | 着せ替えエクスプローラの並び順を変更したい | 要望 | 実装済み（2.7） | — | — | — | （未読） |
-| BTS 0000768 | Separate the toggle for turning off menu thumbnails | 要望 | 実装済み（2.8） | — | — | — | （未読） |
-| BTS 0000773 | マルチディスプレイ環境での本体設定 | 微調整 | 実装済み（2.8） | — | — | — | （未読） |
-| BTS 0000793 | バックログの非表示対象を追加して欲しい | 要望 | 実装済み（2.8） | — | — | — | （未読） |
-| BTS 0000794 | How to handle cipher fonts in the backlog display | 要望 | 実装済み（2.8） | — | — | — | （未読） |
-| BTS 0000803 | スクリプトログの挙動について | 要望 | 実装済み（2.8） | — | — | — | （未読） |
+| BTS 0000603 | Change SSP's ordering to word-by-word alphabetization | 微調整 | 実装済み（2.6.49） | 要望 | 未着手 | 右クリックメニューの「ゴースト」枠は目録の並びのまま列挙する（完了した `areka-P0-ghost-shell-balloon-switch` の要件「Requirement 1: 切替要求の入口は 1 本で、台本とメニューが同じ経路を通る」）。名前の順の比べ方は決めていない。`\![open,ghostexplorer]` は `absent`・持ち主なし | ゴーストやバルーンの一覧とゴーストエクスプローラの名前順が空白を無視した比べ方なので、英語の名前で探しやすいよう単語ごとの比べ方に変えてほしいという要望。SSP は 2.6.49 で入れた。 |
+| BTS 0000670 | Add confirmation dialog to "delete" option in Ghost Explorer | 要望 | 却下 | 要望 | 未着手 | `ledger/sakura-script.toml` の `\![open,ghostexplorer]`（`absent`・持ち主なし）。利用者がゴーストを消す口は areka にまだ無い（消滅は roadmap の予約に登記あり） | ゴーストエクスプローラの「削除」を押し間違えたので、消す前に確かめの窓を出してほしいという要望。作者は、ごみ箱へ移すだけで OS のエクスプローラと同じ動きであり、その確かめは OS の仕組みの上で強いられないとして断った。 |
+| BTS 0000671 | kero.popupmenu.typeを0に指定した際に着せ替えを\1側に変更する手段が欲しい。 | 要望 | 実装済み（2.7.28） | 要望 | 未着手 | `ledger/shiori.toml` の `kero.popupmenu.applybindtoself`（`vocabulary-only`・持ち主なし＝語彙のみ。SSP がこれで応えたかは頁に書かれていない）。着せ替えメニューは roadmap の「生きている決まり」6 が予約のままと決めている | `kero.popupmenu.type` を 0 にして相方側でも本体側と同じメニューを出すとき、その着せ替えで選ぶパーツを相方側のものに替えられるオプションがほしいという要望。SSP は 2.7.28 で入れた。 |
+| BTS 0000678 | \0\s[-1]となっている状態で、sspのショートカット機能が機能しない問題。 | 要望 | 実装済み（2.7） | 要望 | 未着手 | カタログに項目なし（本体のキーボードのショートカット）。キー入力を SHIORI へ知らせる `ledger/shiori.toml` の `OnKeyPress` も `absent`・持ち主なし | 本体側のキャラクターを消して相方や 3 人目以降だけを出しているときにも、Ctrl+W などの本体のショートカットキーが効くようにしてほしいという要望。SSP は 2.7（試作版の pre7）で入れた。 |
+| BTS 0000685 | 右ダブルクリックで強制表示されるオーナードローメニューの制御 | 要望 | 実装済み（2.7.09） | 要望 | 未着手 | 右ボタンの単押しに返事があったらメニューを出さないかどうかは、進行中の `areka-P0-mouse-click-wheel-events` の brief が要件で決める分かれ目に挙げている。右ダブルクリックのときの扱いは brief に無い | 右ダブルクリックは、`OnMouseDoubleClick` に台本を返してもメニューが出てしまうので、右クリックと同じように止められるようにしてほしいという要望。SSP は 2.7.09 で入れた。 |
+| BTS 0000709 | ゴーストが自由にいじれるスケジュール領域 | 要望 | 実装済み（2.7） | 要望 | 未着手 | `ledger/shiori.toml` の `OnScheduleRead`・`ledger/sakura-script.toml` の `\![open,calendar]`（どちらも `absent`・持ち主なし）。ゴーストから予定を書き込むタグはカタログに項目なし | ゴーストが自由に読み書きできる予定の保存先を本体に持たせ、台本から予定を登録するタグと、ある日の予定をゴーストへ渡す口を作りたいという提案。SSP は 2.7 で入れた（何を足したかは頁に書かれていない）。 |
+| BTS 0000748 | 着せ替えエクスプローラの並び順を変更したい | 要望 | 実装済み（2.7.66） | 要望 | 未着手 | `ledger/sakura-script.toml` の `\![open,dressupexplorer]`・`ledger/assets.toml` の `sakura.menuitem*,ID`（どちらも `absent`・持ち主なし）。着せ替えメニューは roadmap の「生きている決まり」6 が予約のままと決めている | 着せ替えエクスプローラに並ぶカテゴリとパーツの順を、`sakura.menuitem*,ID` のように作者が決められるようにしてほしいという要望。SSP は 2.7.66 で、`sakura.menuitem*,ID` を定義した順に連動させた。 |
+| BTS 0000768 | Separate the toggle for turning off menu thumbnails | 要望 | 実装済み（2.8.01） | 要望 | 未着手 | カタログに項目なし（メニューとゴーストエクスプローラの縮小画像の出し分け）。`\![open,ghostexplorer]` は `absent`・持ち主なしで、設定画面は roadmap の予約に登記あり | 縮小画像を出さない設定を、右クリックメニュー用とゴーストエクスプローラ用の 2 つに分けてほしいという要望。SSP は 2.8.01 で、設定のチェックを 3 段にして「メニューにだけ出す」を選べるようにした。 |
+| BTS 0000793 | バックログの非表示対象を追加して欲しい | 要望 | 実装済み（2.8.53） | 要望 | 対象外 | SSP 固有の画面（バックログ）に何を出すかの話。areka はこの画面を持たず、台本の記録は MCP の `get_log`（`areka-P0-mcp-log-history`）で引く（開く `\![open,backlogviewer]` は `ledger/sakura-script.toml` で `absent`・持ち主なし） | バックログで、`\q[タイトル,ID]` の選択肢の文字は出ないのに `\__q[ID,...]` で挟んだ選択肢の文字は出るので、こちらも出さないようにしてほしいという要望。SSP は 2.8.53 で入れた。 |
+| BTS 0000794 | How to handle cipher fonts in the backlog display | 要望 | 実装済み（2.8.53） | 要望 | 対象外 | SSP 固有の画面（バックログ）に何を出すかの話。areka はこの画面も読み上げも持たない（案内された `\__v[オプション]` は `ledger/sakura-script.toml` で `absent`・持ち主なし） | 記号のフォントで読めなくしてある台詞が、バックログでは普通の文字で読めてしまうので、何とかしてほしいという要望。作者は `\__v[オプション]` で伏せられると案内し、2.8.53 で記号のフォントの文字を自動で伏せるようにした。 |
+| BTS 0000803 | スクリプトログの挙動について | 要望 | 実装済み（2.8.84） | 要望 | 対象外 | SSP 固有の画面（スクリプトログ）の表示の動きの話。areka はこの画面を持たず、台本の記録は MCP の `get_log`（`areka-P0-mcp-log-history`）で引く | 開発者向けのスクリプトログで、カーソルを乗せるたびに文面のポップアップが画面いっぱいに出て消えにくく、窓もちらつくので、出し方を改めてほしいという要望。SSP は 2.8.84 でポップアップをやめた。 |
 
 ### インストール・配布・削除
 
@@ -353,10 +347,10 @@ areka との関係は、ukadoc の網羅の台帳（`doc/ukadoc-coverage/`）・
 | BTS 0000457 | New sakura script to open the uninstall confirmation dialog | 要望 | 実装済み（2.5.82） | 要望 | 未着手 | `ledger/sakura-script.toml` の `\![vanishbymyself]`（`absent`・持ち主なし）。消滅は roadmap の予約に登記あり（「生きている決まり」6 が、要望が出たら切ると決めている） | アンインストールの確かめの窓を台本から開けるタグがほしいという要望（`OnGhostTermsDecline` に返事が無いときの既定の動きにする案も添えられた）。SSP は 2.5.82 で入れた。 |
 | BTS 0000546 | New command line parameters for installing nar | 要望 | 実装済み（2.6.15） | 要望 | 未着手 | 起動の引数から nar を入れる口はカタログに項目なし。入れた後の切替は、roadmap の「生きている決まり」7 が「areka は主導しない」と決めていて、引数で頼まれた切替がこれに当たるかは決めきれなかった | 外のプログラムから nar を入れるとき、終わったら入れたゴーストやシェルへ自動で切り替える起動の引数がほしいという要望。SSP は 2.6.15 で入れた。引数で頼まれた切替が areka の決まりに触れるかは決めきれなかった。 |
 | BTS 0000557 | some final minor tweaks needed for ghost installer | 微調整 | 実装済み（2.6.17） | 要望 | 対象外 | SSP の翻訳パックの話 | 翻訳パックの後にゴーストを続けて入れると、利用条件の窓が入れたばかりの言語にならず日本語で出るので、直してほしいという要望。SSP は 2.6.17 で直した。 |
-| BTS 0000570 | Allow a ghost to install multiple balloons | 要望 | 実装済み（2.6） | — | — | — | （未読） |
-| BTS 0000581 | バルーンのフォルダ名を変更してほしい | 要望 | 実装済み（版は不明） | — | — | — | （未読） |
-| BTS 0000582 | Whitelist mode for delete.txt | 要望 | 未対応 | — | — | — | （未読） |
-| BTS 0000798 | アーカイブビューワの動作 | 要望 | 実装済み（2.8） | — | — | — | （未読） |
+| BTS 0000570 | Allow a ghost to install multiple balloons | 要望 | 実装済み（2.6.46） | 要望 | 実装済み | `ledger/assets.toml` の `*.directory,ディレクトリ名`（`implemented`・`areka-P0-nar-install`）。番号付きのバルーンを順に探す読みは完了した `areka-P0-install-companion-reading` が決めた | 1 つのゴーストに複数のバルーンを同梱して、一度にインストールできるようにしてほしいという要望。SSP は 2.6.46 で、`install.txt` に番号付きの `*.directory,ディレクトリ名` を書ける形を入れた。 |
+| BTS 0000581 | バルーンのフォルダ名を変更してほしい | 要望 | 実装済み（版は不明） | 要望 | 対象外 | 個別の配布物（整備班が配るバルーン）の `install.txt` の話で、ベースウェアの機能ではない | 整備班が配るバルーンの新版が旧版と同じフォルダ名で上書きになるので、`install.txt` のフォルダ名を替えてほしいという要望。配布物の側が直された（バルーンの v2.04）。 |
+| BTS 0000582 | Whitelist mode for delete.txt | 要望 | 未対応 | 要望 | 未着手 | カタログに項目なし。`delete.txt` に書かれたファイルを消す側は `areka-P0-update-engine` が作った | `delete.txt` が版を重ねるたびに膨らむので、残すものの一覧と更新ファイルに載るもの以外を更新の後に消す、逆向きの指定の形がほしいという要望。SSP は未対応のまま（作者の返事は無い）。 |
+| BTS 0000798 | アーカイブビューワの動作 | 要望 | 実装済み（2.8.60） | 要望 | 対象外 | デスクトップマスコットの枠の外（汎用の書庫のビューア）。完了した `areka-P0-file-drop` の要件が「汎用の書庫の解凍機・ビューアとしての働き」を恒久に範囲外と置いている。`ledger/sakura-script.toml` の `\![open,archiveviewer,(ファイル名)]` は `absent`・持ち主なし | アーカイブビューアで書庫の中の画像をダブルクリックすると、壁紙の変更やファイルの投げ込みのイベントが呼ばれてゴーストの側の処理が動くので、内蔵のビューアで開く動きにしてほしいという要望。SSP は 2.8.60 で入れた。 |
 
 ### ネットワーク更新
 
@@ -382,7 +376,7 @@ areka との関係は、ukadoc の網羅の台帳（`doc/ukadoc-coverage/`）・
 | BTS 0000458 | 実際の更新日時がわからなくなった | 要望 | 実装済み（2.5.83） | 要望 | 未着手 | `ledger/property.toml` の `update_time`（`vocabulary-only`・`areka-P0-property-catalog-lists`）。日時を見せる `\![open,ghostexplorer]` は `absent`・持ち主なし。更新が無かった回に日時を動かすかどうかは、資料から決めきれなかった | 更新を確かめただけで更新が無かったゴーストまで、ゴーストエクスプローラの更新日時が今日になるので、実際に更新できた日時に戻してほしいという要望。SSP は 2.5.83 で直した。areka が日時をいつ動かすかは決めきれなかった。 |
 | BTS 0000513 | add a file verification to the ssp update process | メジャー | 実装済み（2.6.12） | 要望 | 未着手 | `ledger/sakura-script.toml` の `\![update,platform]`（`absent`・持ち主なし）。roadmap の予約に登記あり（本体の更新） | 本体の更新の後に実行ファイルが壊れて起動できなくなる利用者がいるので、更新の手順にファイルの検証を足してほしいという要望。SSP は 2.6.12 で、展開の前に書庫が壊れていないかを確かめるようにした。 |
 | BTS 0000515 | New extension to update function | 要望 | 実装済み（2.6.23） | 要望 | 未着手 | カタログに項目なし（SSP が何で応えたかは頁に書かれていない）。更新を始めるタグと更新のイベントは `areka-P0-network-update` が作った | 決めた nar を落として入れるなど、ゴーストが更新の手順を自分で組めるよう、本体の更新を止められるタグがほしいという要望。SSP は 2.6.23 で入れた。 |
-| BTS 0000683 | バルーン指定recommended.balloon.forceupdateによるネットワーク更新時の強制バルーン更新機能の提案 | マイナー | 実装済み（2.7） | — | — | — | （未読） |
+| BTS 0000683 | バルーン指定recommended.balloon.forceupdateによるネットワーク更新時の強制バルーン更新機能の提案 | マイナー | 実装済み（2.7） | 要望 | 未着手 | `ledger/assets.toml` の `recommended.balloon,バルーン名`（`absent`・持ち主なし）。roadmap の覚え書きに登記あり（`recommended.balloon`／`recommended.balloon.path`）。一緒に更新させる鍵はカタログに項目なし | ゴーストのネットワーク更新のとき、descript の `recommended.balloon,バルーン名` で指したバルーンも必ず一緒に更新させる鍵を足してほしいという提案。SSP は 2.7（試作版の RC4）で入れた。 |
 
 ### 外との連携
 
@@ -409,11 +403,10 @@ areka との関係は、ukadoc の網羅の台帳（`doc/ukadoc-coverage/`）・
 | BTS 0000453 | Let FMO modulestate reflect shiori's Critical errors | 要望 | 実装済み（2.5.79） | 要望 | 未着手 | roadmap の予約に登記あり（FMO・DirectSSTP） | SHIORI が致命的な誤りで止まっているとき、FMO の SHIORI の状態にもそれが表れるようにしてほしいという要望（BTS 0000450 の続き）。SSP は 2.5.79 で入れた。 |
 | BTS 0000512 | FMO shiori status update when unloaded | 些細 | 実装済み（2.6.10） | 要望 | 未着手 | roadmap の予約に登記あり（FMO・DirectSSTP） | SHIORI を降ろした後も FMO の SHIORI の状態が変わらず、外の道具が表示を切り替えられないので、降ろしたことが FMO に表れるようにしてほしいという要望。SSP は 2.6.10 で直した。 |
 | BTS 0000516 | Gamepad peripheral support | 要望 | 実装済み（2.7.54） | 要望 | 未着手 | `ledger/shiori.toml` の `OnGamepadButtonDown`・`OnGamepadAxisMove` ほか（どれも `absent`・持ち主なし） | ゲームパッドでゴーストと触れ合えるようにしてほしいという要望。SSP は 2.7.54 で、XInput の機器に限って入れた。 |
-| BTS 0000583 | socket sstp don't work | マイナー | 仕様どおり | — | — | — | （未読） |
-| BTS 0000604 | sstp over http: origin key in shiori/3.0 | 要望 | 実装済み（2.6） | — | — | — | （未読） |
-| BTS 0000618 | sstp expansion | 要望 | 未対応 | — | — | — | （未読） |
-| BTS 0000652 | 実験的機能のValueNotifyで\![raise]系や\![notify]系が動作しない | 要望 | 実装済み（2.6） | — | — | — | （未読） |
-| BTS 0000708 | SBV2と直接連携 | 要望 | 実装済み（2.7） | — | — | — | （未読） |
+| BTS 0000604 | sstp over http: origin key in shiori/3.0 | 要望 | 実装済み（2.6.59） | 要望 | 未着手 | SSTP の受信は roadmap の覚え書きに登記あり。出どころを SHIORI へ運ぶヘッダは進行中の `areka-P0-script-security-level` が受け持つ（`ledger/shiori.toml` の `SecurityOrigin [SSP拡張]` は `absent`・持ち主なしで、送るかどうかは同 spec の brief が要件の段で決めると置いている） | HTTP 越しの SSTP で届いた要求がどこの頁から来たのかを、ゴーストが SHIORI の要求で見分けられる手がかりがほしいという要望。SSP は 2.6.59 で入れた（何を足したかは頁に書かれていない）。 |
+| BTS 0000618 | sstp expansion | 要望 | 未対応 | 要望 | 未着手 | SSTP の受信は roadmap の覚え書きに登記あり。動いているゴーストの一覧は MCP の `get_active_ghost_list`（`areka-P0-mcp-tool-entrances`）で引けるが、入っているものの一覧を返す口は無い | Web の頁から SSTP で、本体の版・入っているゴーストやシェルの一覧・更新の確かめ・ゴーストの起動を扱えるようにしてほしいという要望。作者は版と一覧は今ある命令で引けると案内し、起動は安全の検討が要るとして未対応のまま。 |
+| BTS 0000652 | 実験的機能のValueNotifyで\![raise]系や\![notify]系が動作しない | 要望 | 実装済み（2.6.82） | 要望 | 未着手 | `ledger/shiori.toml` の `ValueNotify [SSP拡張 2.5.35]`（`absent`・持ち主なし）。`ledger/sakura-script.toml` の `\![raise,イベント名,r0,r1,r2...]`・`\![notify,イベント名,r0,r1,r2...]` も `absent`・持ち主なし | `ValueNotify [SSP拡張 2.5.35]` でイベントを起こすタグと知らせるタグが動かないので直し、ファイルを開くタグなども通してほしいという要望。SSP は 2.6.82 で直し、利用者の操作が要るタグは避けたいと答えた。 |
+| BTS 0000708 | SBV2と直接連携 | 要望 | 実装済み（2.7.13） | 要望 | 未着手 | カタログに項目なし | 音声合成のモデルを作る人がすぐ試せるよう、台詞の読み上げを Style-Bert-VITS2 と直につなげたいという提案。SSP は 2.7.13 で入れた。 |
 
 ### 開発者向けの機能
 
@@ -434,11 +427,11 @@ areka との関係は、ukadoc の網羅の台帳（`doc/ukadoc-coverage/`）・
 | BTS 0000479 | Sometimes the surface dumper outputs a surface with empty space on the bottom | マイナー | 仕様どおり | 挙動の説明 | 方針とぶつかる | 完了した `areka-P0-mcp-dump-images` の要件「Requirement 5: 画像の形」が、MCP の `dump_surface` の画像の幅と高さを読み戻した絵に一致させ、余白を足さないと決めている | サーフェスの書き出しで絵の下に余白が付くのは、全部のサーフェスのうち最も大きい寸法に揃えて出す作りだからだと作者が説明した。 |
 | BTS 0000480 | Suggestions for surface dumper | 要望 | 実装済み（2.6.00） | 要望 | 未着手 | `ledger/sakura-script.toml` の `\![execute,dumpsurface,ディレクトリ,スコープID,サーフェスリスト,prefix,イベントID,ゼロ位置切り出し]`（`absent`・持ち主なし）。今の見た目を 1 枚返す口は MCP の `dump_surface`（`areka-P0-mcp-dump-images`）が在る | サーフェスの書き出しに、ファイル名の頭の指定・書き出し先の記憶・今のサーフェスの書き出し・終わりを知らせるイベントを足してほしいという要望。SSP は 2.6.00 で入れ、1 枚のときに番号を省く案だけは採らなかった。 |
 | BTS 0000520 | dumpsurface for shells that are not in loading | 要望 | 実装済み（2.7.74） | 要望 | 未着手 | `ledger/sakura-script.toml` の `\![execute,dumpsurface,ディレクトリ,スコープID,サーフェスリスト,prefix,イベントID,ゼロ位置切り出し]`（`absent`・持ち主なし）。切り替えていないシェルの絵を出す口はカタログに項目なし | まだ切り替えていないシェルの見本を出せるよう、読み込んでいないシェルのサーフェスも書き出せるようにしてほしいという要望。SSP は 2.7.74 で入れた。 |
-| BTS 0000613 | Refreshing the AI graph | 要望 | 実装済み（2.6） | — | — | — | （未読） |
-| BTS 0000659 | Reload AI graph with sakurascript | 要望 | 実装済み（2.6） | — | — | — | （未読） |
-| BTS 0000686 | developer_options.txt - exclude all shells but master shell | 要望 | 実装済み（2.7） | — | — | — | （未読） |
-| BTS 0000752 | "Open target directory" button in surface dumper | 要望 | 実装済み（2.7） | — | — | — | （未読） |
-| BTS 0000759 | 現在時刻の仮想的変更で秒を指定したい | 要望 | 実装済み（2.7） | — | — | — | （未読） |
+| BTS 0000613 | Refreshing the AI graph | 要望 | 実装済み（2.6.52） | 要望 | 対象外 | SSP 固有の画面（AI グラフ）の操作の話。areka はこの画面を持たない（開く `\![open,aigraph]` は `ledger/sakura-script.toml` で `absent`・持ち主なし） | 開発の途中でトークの数を確かめるのに AI グラフを閉じて開き直すのが手間なので、SHIORI の再読み込みに合わせるか更新のボタンで描き直せるようにしてほしいという要望。SSP は 2.6.52 で、F5 キーで描き直せるようにした。 |
+| BTS 0000659 | Reload AI graph with sakurascript | 要望 | 実装済み（2.6.89） | 要望 | 未着手 | `ledger/sakura-script.toml` の `\![reload,aigraph]`・`\![open,aigraph]`（どちらも `absent`・持ち主なし）。グラフの値を尋ねる SHIORI リソース `getaistate` は `vocabulary-only`・持ち主なし（語彙のみ） | AI グラフに出す中身をゴーストの側で切り替えて何頁分も見せたいので、開いたままのグラフを台本から描き直せるタグがほしいという要望。SSP は 2.6.89 で `\![reload,aigraph]` を足した。 |
+| BTS 0000686 | developer_options.txt - exclude all shells but master shell | 要望 | 実装済み（2.7） | 要望 | 未着手 | roadmap の予約に登記あり（`\![execute,createnar]`／`createupdatedata`。`developer_options.txt` もここ） | 配布物から master 以外のシェルをまとめて外せるよう、`developer_options.txt` に打ち消しの指定を書きたいという要望（BTS 0000242 の続き）。SSP は 2.7（試作版の RC2）で、`.narignore` などの新しいファイルを足した。 |
+| BTS 0000752 | "Open target directory" button in surface dumper | 要望 | 実装済み（2.7.76） | 要望 | 対象外 | SSP 固有の画面（開発用パレットのサーフェスの書き出し）のボタンの話。areka はこの画面を持たず、絵は MCP の `dump_surface`（`areka-P0-mcp-dump-images`）が直に返すので、書き出し先のフォルダを開く場面が無い | サーフェスの書き出しの画面に、書き出し先のフォルダをすぐ開けるボタンを足してほしいという要望。SSP は 2.7.76 で入れた。 |
+| BTS 0000759 | 現在時刻の仮想的変更で秒を指定したい | 要望 | 実装済み（2.7.92） | 要望 | 対象外 | SSP 固有の画面（時刻を仮に変える開発用の窓）の入力欄の話。areka はこの画面を持たない | 時報を確かめるのに 1 分待たずに済むよう、開発用パレットの時刻を仮に変える窓で秒まで指定できるようにしてほしいという要望。SSP は 2.7.92 で入れた。 |
 
 ### 起動・終了・ゴーストの切り替え
 
@@ -446,8 +439,8 @@ areka との関係は、ukadoc の網羅の台帳（`doc/ukadoc-coverage/`）・
 |---|---|---|---|---|---|---|---|
 | BTS 0000194 | let /? or --help as an acceptable command line parameter for SSP | 要望 | 実装済み（2.5.11） | 要望 | 未着手 | カタログに項目なし。起動の引数でゴーストのフォルダを指す形は `areka-P0-baseware-root-layout` が作ったが、引数の一覧を見せる口は無い | 起動の引数にどんなものがあるかを、`/?` や `--help` を付けて起動すれば見られるようにしてほしいという要望。SSP は 2.5.11 で入れた。 |
 | BTS 0000228 | Show warning when SSP is running in temporary directory | マイナー | 実装済み（2.5.15） | 要望 | 未着手 | カタログに項目なし | 書庫の中から直に起動されて一時フォルダで動いているときは、ゴーストの記憶が消える恐れを利用者へ警告してほしいという要望。SSP は 2.5.15 で入れた。 |
-| BTS 0000588 | ゴースト終了時、execute,http-コマンドの完了を待機させたい | 要望 | 仕様どおり | — | — | — | （未読） |
-| BTS 0000619 | Save information about firstboot soon after firstboot occurs, to avoid data loss | メジャー | 実装済み（2.6） | — | — | — | （未読） |
+| BTS 0000588 | ゴースト終了時、execute,http-コマンドの完了を待機させたい | 要望 | 仕様どおり | 要望 | 未着手 | `ledger/sakura-script.toml` の `\![execute,http-get,URL,オプション,オプション,オプション...]`（`absent`・持ち主なし）。案内された `\![embed,イベント名,r0,r1,r2...]` は進行中の `areka-P0-sakura-embed-directive` が受け持つ | 終了のイベントで HTTP のタグを呼ぶと応答を待たずに終わるので、応答を見せるまで待たせたいという要望。作者は、非同期の指定が無ければ応答まで待つと答え、`\![embed,イベント名,r0,r1,r2...]` と組む形を案内して閉じた。 |
+| BTS 0000619 | Save information about firstboot soon after firstboot occurs, to avoid data loss | メジャー | 実装済み（2.6.53） | 要望 | 実装済み | 完了した `areka-P0-position-persist` の要件「Requirement 3: 初回起動と通常起動の区別（OnFirstBoot ゲート）」が、初回の挨拶のトークを再生し切った時点で起動の記録を書くと決めている（ゴーストを降ろす時まで待たない） | 初回起動が済んだ記録をゴーストを降ろす時にしか保存しないので、途中で落ちると次も `OnFirstBoot` が届いて記憶が初期化される、早めに保存してほしいという要望。SSP は 2.6.53 で入れた。 |
 
 ### その他
 
@@ -473,7 +466,7 @@ areka との関係は、ukadoc の網羅の台帳（`doc/ukadoc-coverage/`）・
 | BTS 0000293 | Auto update of language packages when the dll version in use is less than the ssp ver | 要望 | 実装済み（2.5.49） | 要望 | 対象外 | SSP の翻訳パックの話 | 使っている翻訳パックが本体より古いときは自動で見つけて更新し、手で更新しなくて済むようにしてほしいという要望。SSP は 2.5.49 で、版の比較ではなく日ごとの更新の確認として入れた。 |
 | BTS 0000544 | Some minor adjustments required | マイナー | 実装済み（2.6.15） | 要望 | 対象外 | areka は既定のゴーストを同梱していて、ゴーストが 1 体も無いときの案内の窓を持たない（roadmap の「生きている決まり」7）ので、意味を持たない | ゴーストが 1 体も無くて案内の窓が出ている間も、起動の引数から始めた nar のインストールを受け付けて、普通の起動へ進んでほしいという要望。SSP は 2.6.15 で入れた。 |
 | BTS 0000553 | New option to automatically switch languages after installing a language pack | 要望 | 実装済み（2.6.16） | 要望 | 対象外 | SSP の翻訳パックの話 | 翻訳パックを入れても画面の言語が日本語のままで利用者が戸惑うので、入れた後に自動でその言語へ切り替えてほしいという要望。SSP は 2.6.16 で入れた（解決状況の欄は不明のまま）。 |
-| BTS 0000620 | New image for fixing pages in dark mode | 些細 | 実装済み（版は不明） | — | — | — | （未読） |
+| BTS 0000620 | New image for fixing pages in dark mode | 些細 | 実装済み（版は不明） | 要望 | 対象外 | SSP の配布サイトの話 | ブラウザが頁を暗い色に変えると公式サイトの画像の見え方が崩れるので、差し替え用の画像を使ってほしいという申し出。作者が受け取って閉じた。 |
 
 ### SHIORI・ゴースト個別
 
