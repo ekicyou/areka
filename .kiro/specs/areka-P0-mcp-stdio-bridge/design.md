@@ -489,11 +489,10 @@ pub enum Scan {
 }
 pub type Link = RunningService<RoleClient, BridgeClient>;
 pub async fn scan(candidates: &[u16], timeouts: &Timeouts) -> Scan;
-pub async fn connect_one(port: u16, timeouts: &Timeouts) -> Result<Link, HttpError>;  // 覚えた番号へ
 ```
 - Preconditions: `candidates` は空でない（空は `Bridge` が Disabled として先に処理）。
 - Postconditions: `Found` のとき、`port` より前の候補のどれにも本当の要求は届いていない。`port` より後の候補には接続を開いただけで 1 バイトも書いていない。
-- `connect_one` は `scan(&[port], …)` と同じ手順を 1 つに対して行う。`Link` は `serve_client(BridgeClient, StreamableHttpClientTransport::with_client(OwnHttp{port, timeouts}, config))`。`serve_client` の失敗（`ClientInitializeError`）は `HttpError` に戻せるものは戻し、それ以外は `NoResponse` と同じ扱い（標準エラーに中身）。
+- `Link` は `serve_client(BridgeClient, StreamableHttpClientTransport::with_client(OwnHttp{port, timeouts}, config))`。確かめを通った番号で `serve_client` が失敗したら（`ClientInitializeError`）、中身を標準エラーに残して `NotFound` を返す（次の要求がもう 1 度探す）。覚えた番号だけへつなぎ直す口は持たない（書く前の失敗の後は、覚えを捨てて `scan` で探し直す＝D-6）。
 
 #### Cache
 

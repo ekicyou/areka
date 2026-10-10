@@ -10,11 +10,9 @@ use std::time::Duration;
 
 use areka_mcp::{MCP_PATH, SERVER_NAME};
 use futures::future::join_all;
-use rmcp::service::{ClientInitializeError, RoleClient, RunningService, serve_client};
+use rmcp::service::{RoleClient, RunningService, serve_client};
 use rmcp::transport::StreamableHttpClientTransport;
-use rmcp::transport::streamable_http_client::{
-    StreamableHttpClientTransportConfig, StreamableHttpError,
-};
+use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 use tokio::net::TcpStream;
 use tracing::{debug, info, warn};
 
@@ -48,24 +46,9 @@ pub async fn scan(candidates: &[u16], timeouts: &Timeouts) -> Scan {
         return Scan::NotFound { others };
     };
     match stand(port, timeouts).await {
-        Ok(link) => Scan::Found { link, port },
-        Err(error) => {
-            warn!(port, %error, "[bridge] areka answered the identity check, but the client could not start");
-            Scan::NotFound { others }
-        }
+        Some(link) => Scan::Found { link, port },
+        None => Scan::NotFound { others },
     }
-}
-
-/// 覚えた番号 1 つへつなぎ直す。探索と同じ手順（接続 → 確かめ → rmcp のクライアント）。
-pub async fn connect_one(port: u16, timeouts: &Timeouts) -> Result<Link, HttpError> {
-    let stream = open(port, timeouts.connect)
-        .await
-        .map_err(HttpError::Connect)?;
-    let name = verify(stream, port, timeouts).await?;
-    if name != SERVER_NAME {
-        return Err(HttpError::NotAreka { port, name });
-    }
-    stand(port, timeouts).await
 }
 
 /// areka と名乗った最初の候補の番号。飛ばした候補は、理由を標準エラーに残す（誰かが応えた番号は
@@ -91,7 +74,12 @@ async fn pick(
         match verify(stream, port, timeouts).await {
             Ok(name) if name == SERVER_NAME => return Some(port),
             Ok(name) if !name.is_empty() => {
-                info!(port, %name, "[bridge] skipped a candidate: it answered as another server");
+                // 名乗りは相手の書いた字。制御文字が記録の行を割らない形で出す。
+                info!(
+                    port,
+                    ?name,
+                    "[bridge] skipped a candidate: it answered as another server"
+                );
                 others.push((port, name));
             }
             Ok(_) | Err(HttpError::NotAreka { .. }) => {
@@ -117,8 +105,8 @@ async fn open(port: u16, wait: Duration) -> io::Result<TcpStream> {
 
 /// 番号に rmcp のクライアントを立てる（旧式の `initialize` → `notifications/initialized`）。
 /// 手順の `initialize` も送り手を通るので、ここでも名乗りが確かめられる（設計 D-4）。
-/// 失敗は、送り手の失敗に戻せるものは戻し、戻せないものは中身を標準エラーに残して `NoResponse`。
-async fn stand(port: u16, timeouts: &Timeouts) -> Result<Link, HttpError> {
+/// 失敗は、中身を標準エラーに残して `None`。
+async fn stand(port: u16, timeouts: &Timeouts) -> Option<Link> {
     let http = OwnHttp {
         port,
         timeouts: timeouts.clone(),
@@ -127,19 +115,18 @@ async fn stand(port: u16, timeouts: &Timeouts) -> Result<Link, HttpError> {
     let uri = format!("http://127.0.0.1:{port}{MCP_PATH}");
     let config = StreamableHttpClientTransportConfig::with_uri(uri);
     let transport = StreamableHttpClientTransport::with_client(http, config);
-    let error = match serve_client(BridgeClient, transport).await {
-        Ok(link) => return Ok(link),
-        Err(error) => error,
-    };
-    let text = error.to_string();
-    if let ClientInitializeError::TransportError { error, .. } = error
-        && let Ok(sent) = error.error.downcast::<StreamableHttpError<HttpError>>()
-        && let StreamableHttpError::Client(error) = *sent
-    {
-        return Err(error);
+    match serve_client(BridgeClient, transport).await {
+        Ok(link) => Some(link),
+        Err(error) => {
+            // 失敗の中身には相手の書いた字が入りうるので、制御文字が記録の行を割らない形で出す。
+            warn!(
+                port,
+                ?error,
+                "[bridge] areka answered the identity check, but the client could not start"
+            );
+            None
+        }
     }
-    warn!(port, error = %text, "[bridge] the handshake with areka failed");
-    Err(HttpError::NoResponse)
 }
 
 #[cfg(test)]

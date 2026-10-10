@@ -259,3 +259,5 @@
 - 6.2: Bash の heredoc は `\` を `\` に潰す。`\` を含む置き換えの Python は Write で書いてから実行する。
 - 6.3: 配布スクリプト（版 2.1.0）は中継を x64・arm64 とも zip の最上位に入れる。この机には arm64 のターゲットと VS の ARM64 の部品が有るので `-Arch all` で両方の中身の判定まで通した（arm64 の機械での起動は未確認＝`release.yml` はタグの push か手動の実行でしか走らないので、次のリリースか手動の走りの結果で確かめる）。赤 2 回の出力は `verification/package-red-runs.md`。中継の exe は静的リンク・取り込みは OS の DLL だけ・Subsystem は GUI（窓なし）・x64 で約 3.25 MB。
 - 6.3: 完了のときの申し送り＝署名と winget の spec へ「zip の実行ファイルが 4 本になった（`areka-mcp-bridge.exe` が増えた）」。`deny.toml` の `BSD-2-Clause` の `license-not-encountered` の警告は前から在る（本 spec の差ではない）。
+- 6.4: 最終の掃除を済ませた＝`scan::connect_one` とそのテスト・設計の署名行を消し（4.1・4.5 の申し送り）、`stand` は `Option<Link>` を返す形に縮めた（握手の失敗を `HttpError` に戻す枝は読み手が居なくなった）。`scan.rs` の名乗りの記録は `?name`、握手の失敗は `?error`（行が割れない形・4.3 の申し送り。まれに長い 1 行になる）。
+- 6.4: 謝辞の差は 2 行だけ（`MIT License (263 crate)` と `- areka-mcp-bridge 0.0.2`・外部のクレートは増えていない）。`cargo about` は行末を混ぜて書くので、作り直したら全行 CRLF に戻す。受け口の名乗りだけを替えると `real_receiver_test.rs` の 5 本が最初の行で赤になることを確かめた（`verification/name-mismatch-red.md`）。

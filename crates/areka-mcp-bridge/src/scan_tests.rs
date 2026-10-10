@@ -9,10 +9,9 @@ use areka_mcp::{SERVER_NAME, ToolRegistry};
 use serde_json::{Value, json};
 use tokio::net::TcpSocket;
 
-use super::{Link, Scan, connect_one, scan, stand};
+use super::{Link, Scan, scan};
 use crate::config::Timeouts;
-use crate::fake_server::{Conn, FakeServer, Reply, Script};
-use crate::http::HttpError;
+use crate::fake_server::{Conn, FakeServer, Received, Reply, Script};
 
 const SSP: &str = "ssp-mcp-server";
 
@@ -45,17 +44,6 @@ fn not_found(scan: Scan) -> Vec<(u16, String)> {
         Scan::NotFound { others } => others,
         Scan::Found { port, .. } => panic!("{port} に決まった"),
     }
-}
-
-fn failure(result: Result<Link, HttpError>) -> HttpError {
-    match result {
-        Err(error) => error,
-        Ok(_) => panic!("つながった"),
-    }
-}
-
-fn is_not_areka(error: &HttpError, port: u16, name: &str) -> bool {
-    matches!(error, HttpError::NotAreka { port: p, name: n } if *p == port && n == name)
 }
 
 /// つながった印が持つ、相手のサーバーの情報（JSON の形）。
@@ -243,46 +231,20 @@ async fn connections_to_all_candidates_are_opened_side_by_side() {
     assert!(elapsed < connect * 6, "{elapsed:?}");
 }
 
-/// 覚えた番号 1 つへつなぎ直す口は、探索と同じ手順（接続 → 確かめ → rmcp のクライアント）。
-/// 名乗りが違う相手には確かめの 1 つしか届かず、失敗は番号と名乗りを持つ。
+/// 確かめを通った番号で rmcp のクライアントを立てる手順が失敗したら（確かめの後で相手が替わった・
+/// 居なくなったときの道）、探索は「見つからない」で返る。
 #[tokio::test]
-async fn connect_one_runs_the_same_steps_on_one_port() {
-    let areka = FakeServer::start(Script::areka());
-    let link = connect_one(areka.port(), &patient()).await;
-    assert_linked_to_areka(&link.unwrap_or_else(|error| panic!("つながらない: {error:?}")));
-
-    let ssp = FakeServer::start(Script::named(SSP));
-    let error = failure(connect_one(ssp.port(), &patient()).await);
-    assert!(is_not_areka(&error, ssp.port(), SSP), "{error:?}");
-    only_the_check_arrived(&ssp).await;
-
-    let (_socket, closed) = nobody();
-    let error = failure(connect_one(closed, &patient()).await);
-    assert!(matches!(error, HttpError::Connect(_)), "{error:?}");
-}
-
-/// rmcp のクライアントを立てる手順の失敗（確かめの後で相手が替わった・居なくなったときの道）は、
-/// 送り手の失敗に戻せるものは戻し、戻せないものは `NoResponse`。探索は「見つからない」で返る。
-#[tokio::test]
-async fn a_failed_handshake_comes_back_as_the_senders_failure() {
-    let ssp = FakeServer::start(Script::named(SSP));
-    let error = failure(stand(ssp.port(), &patient()).await);
-    assert!(is_not_areka(&error, ssp.port(), SSP), "{error:?}");
-
-    let (_socket, closed) = nobody();
-    let error = failure(stand(closed, &patient()).await);
-    assert!(matches!(error, HttpError::Connect(_)), "{error:?}");
-
+async fn a_failed_handshake_after_the_check_is_not_found() {
     // 名乗りは areka だが、`initialize` の結果の形になっていない答え: 確かめは通り、rmcp の手順が
-    // 失敗する（送り手の失敗ではない）。
+    // 失敗する。
     let odd_result = json!({"serverInfo": {"name": SERVER_NAME}});
     let odd = FakeServer::start(Script::areka().on("initialize", Reply::Result(odd_result)));
-    let error = failure(stand(odd.port(), &patient()).await);
-    assert!(matches!(error, HttpError::NoResponse), "{error:?}");
-    let error = failure(connect_one(odd.port(), &patient()).await);
-    assert!(matches!(error, HttpError::NoResponse), "{error:?}");
     let others = not_found(scan(&[odd.port()], &patient()).await);
     assert_eq!(others, []);
+
+    // 確かめで飛ばしたのではなく、rmcp の手順の `initialize` まで進んでいる。
+    let handshake = |r: &Received| r.method == "initialize" && r.body["id"] != "identity-check";
+    odd.wait(|log| log.requests.iter().any(handshake)).await;
 }
 
 /// 本物の受け口（`areka_mcp::start` を空きポートに起こす）を探索が見つけ、立てた rmcp の
