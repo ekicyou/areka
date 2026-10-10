@@ -212,3 +212,78 @@
 4. **`script:` 始まりの ID**（研究 3）は要件 4.1 で「綴りに意味を持たせない」に決めた＝`plan_cascade` を共用するなら `Script` の腕に落ちないよう、アンカー用の計画は `Named`／`Canonical` の 2 値だけにする。
 5. **in-flight 中の 2 回目の押下**（研究 2）: 設計の既定は選択肢と同じ「棄却して warn（`choice_rejected_busy` に倣う）」。待たせる案は要件 4.11（高々 1 回）と相性が悪い。
 6. **文書のずれ**（研究 8・`areka-tools.md` の「23 組」と `consumer_ledger.rs` の「24 行」）: 本 spec の範囲外。②-A を採るなら触らないので `/kiro-discovery` へ回す。
+
+## 9. 設計で決めたこと（2026-10-10・`kiro-spec-design`）
+
+> 発見の型: **拡張（light discovery）**。外部の技術調査は不要（新しい依存なし）。§2 の読みを現在のワークツリーで確かめ直し、設計を左右する事実を 3 つ足した（下の「確かめた事実」）。参照した規則: `kiro-spec-design` の `design-principles`／`design-discovery-light`／`design-synthesis`／`design-review-gate`。設計の芯は「最も短く正しい形」（既存の選択肢の道に種類を 1 つ足す・新しい層を作らない）。
+
+### 確かめた事実（設計を左右したもの）
+
+- **kanade の SHIORI 往復は同期**（`actor.rs` の `execute_batch` が `round_trip_request` の結果を `last_reply` として直ちに `Input::ShioriReply` で再投入する）。GET の送出から応答までの間にほかの `KanadeMsg` は読まれない → 研究 2（in-flight 中の 2 回目の押下）は構造上到達しない。アンカーの段の記憶は 1 回の `step` の連鎖の中だけで生きる。
+- **普通のバルーンの中断は左ダブルクリックだけ**（`user_break.rs` の `judge_press`）。単クリックで `selected_now=true` を渡せば 2 打目が `ConsumedBySelection` になる＝選択肢と同じ仕組みで要件 3.3／3.4 が満たせる。
+- **空回しの前方一致は `items`・`glyph_styles`・`styles` だけを比べる**（`lookahead.rs` の `begins_with`）。下線を装飾番号に焼いても空回しと本番は同じ合図を同じ順で適用するので一致が崩れない。
+- `ChoiceSpan`／`ChoiceHitRow`／`ChoiceSelection` を構造体リテラルで組む箇所は 7／9／10（主にテスト）＝欄を 1 つ足す追随は小さい。
+- `ukadoc-survey` の整合の檻（`tests/consistency/spec_checks.rs`）は `[[spec]].owner_count`＝台帳 4 本の数え直し（腕 c）・台帳の宛先の名前が `[[spec]]` か `[[owner_completed]]` に在ること（腕 f）・`[briefs].count`＝`[[spec]]` の行数（腕 a）を見る → 見た目の行の持ち主を `anchor-style-canon` へ付け替えるには `roadmap-draft.md` に同 spec の `[[spec]]` を足し、`count` と `owner_count` を数え直す必要がある。
+
+### Decision: dola の合図の形（議題 1）→ ②-A 専用の種類 2 つ
+
+- **候補**: ②-A `CueCommand::AnchorBegin{id, references}`／`AnchorEnd`・②-B `Choice` への相乗り・②-C 汎用キャリア。
+- **選択**: ②-A。
+- **理由**: ②-C は `\_a[]`（要件 1.11・空 ID の開き）と閉じ `\_a` がどちらも空の引数列になり区別できず、印を足すと正準形から外れる。さらに `consumer_ledger.rs` に行が要り C5 の約束に触れる。②-B は形が合わない（§4.2）。②-A は `has_choice`・`pending_choices`・`choice_active` に条件を足さずに要件 2.5／2.6 を満たす。
+- **代償**: 網羅の match 4 か所＋檻 2 本の追随。`dola` の次の公開は API の追加（minor）→ `release-cycle` へ申し送り（研究 9 の答え＝記録する）。
+
+### Decision: 範囲の持ち方（議題 2）→ ③-i 1 つの列に種類を乗せる
+
+- **選択**: `ChoiceSpan` に `kind: SpanKind{Choice, Anchor}` を足す。`ordinal` は共通の通し番号（列の添字）。型名は変えない。
+- **理由**: 純粋層（`annotate_lines`／`derive_hit_rows`／`decorate_canvas`）とホバー／当たり／箱の結線が `ordinal` と `glyph_range` しか読まないので無改変で両方に効く。後の 3 spec（`range-choice-tag`・`link-context-copy`・`balloon-link-hover`）は同じ列と `kind` に乗れる。
+- **代償**: `choice_active` を `kind == Choice` に絞り、押せる範囲の有無は新しい `hit_active` で見る（述語が 2 つになる）。入力側 4 か所の 1 行ずつの置き換え。
+
+### Decision: 既定の下線（議題 3）→ ⑤-a 装飾番号に焼く
+
+- **選択**: アンカーが開いている間、`push_current_style` が `current` の写しに `underline = true` を立てて `intern` する。`current` は変えない。
+- **理由**: 描画は無改変（`apply_font_ranges` の `SetUnderline`）、縦書きの位置も既存どおり、空回しと本番で番号が一致。3 行で済む。
+- **裁定（互換記録へ）**: 範囲の中の `\f[underline,false]` よりアンカーの下線が勝つ。`\f[default]`／`\f[disable]` の戻しの対象にしない（`current` に混ぜないため自然にそうなる）。
+- **後の差し替え点**: `anchor-style-canon` はこの 3 行を `anchor.style` の解決へ置き換える。ホバー側の見た目は `decorate_canvas` の塗り（描画時）なので、非ホバー＝装飾番号・ホバー＝描画時の 2 層に分かれる。
+
+### Decision: 崩れた形の判定の置き場（議題 4）→ ④-b 共有の純粋関数＋`check_script` の新しい種類
+
+- **選択**: `areka_sakura::anchor_pair::pair_anchors(命令の列) -> Vec<AnchorFinding{index, issue}>`。compile と `check_script_judge` が同じ結果を読む。`check_script` の種類は新しい `unpaired_tag`（文言 3 つ）。
+- **理由**: 読み手は転記層のまま（memory `areka-parser-transcribes-tree-downstream`）。判定が 1 か所なので「本番と同じ内容の警告」（要件 6.3）が構造で成立する。既存の種類は内容が違う（`unreadable_argument`＝引数の話・`ignored`＝効かない話）。
+- **代償**: `areka-mcp/src/tools/check_script.rs`（種類 1 つ）と `doc/ssp-mcp/areka-tools.md`（表 3 行）に触る（C5 の一覧に名前は無いが禁止もされておらず、同じウェーブの ⑦ は `help.rs` だけを触る）。
+
+### Decision: `On` 始まりの受理（議題 7）→ `EventId::Choice` と `on_choice_named` をそのまま使う
+
+- **理由**: 受理規則（`starts_with("On")`）も Reference（Ref0..＝引数）も選択肢と同一。新しい variant は `actor.rs` の `allowed` 判定と `origin` の分岐を増やすだけ。
+- **代償**: `actor.rs` の `origin` の固定ラベル `"OnChoiceEvent"` がアンカー由来の任意名にも付く（記録だけの違い。応答の経路は `State.anchor` の段の記憶で決まる）。variant の doc を「作者が ID に書いた任意名（選択肢・アンカー）」へ 1 行改める。
+
+### Decision: kanade の受理の形
+
+- **選択**: `State.anchor: Option<AnchorStage{SelectEx{id} | Final}>`。帳簿（候補・期限・talk_id）は持たない。`on_reply` の先頭で `take` し、`Value` は既存の腕へ流す（`talk: None` なら起動・`talk: Some` なら `value_replaces_active_talk(origin)` で置き換え＝要件 4.8 が自動）。`NoContent`／`Failed`／想定外だけをアンカーの腕で捌く。横断の `Failed`→Fault の免除条件に `state.anchor.is_some()` を足す（要件 4.10）。
+- **置き場**: 型 `AnchorInput` は新しい `anchor_input.rs`、段と手続きは新しい `schedule/anchor.rs`。肥大ファイル（`mod.rs` 955・`steady.rs` 950・`msg.rs` 926・`actor.rs` 900）には腕・欄・写しの各 1〜数行だけ。
+- **到達しない分岐**: 往復が同期なので「段の進行中の 2 回目」は無い＝棄却の腕を作らない（研究 2 の答え）。
+
+### Decision: Reference0 の文字（§8-2）
+
+- 開きから閉じまでに items へ追記された書記素クラスタをそのまま連ねる。改行・装飾の印は含めない。1 字ずつ出ている途中でも、合図を適用した時点の範囲全体（表示待ちを含む）。正典「ジャンパとなったテキスト」をそのまま読む。provenance=`areka_discretion`（境界の細部）。
+
+### Decision: 互換記録の置き場（研究 7）→ 新しい `doc/anchor-compat.md`
+
+- `choice-cascade-compat.md` は「正典引用は同 spec の research §5 から転記・新たな引用を創作しない」と宣言している。アンカーの引用（本 spec の `requirements.md` 冒頭）を混ぜると宣言が崩れる。provenance 3 値の型だけを写す。
+
+### Decision: 実機の検体（要件 8.8）
+
+- `sample-ghost-kit` の `SAMPLES` から辞書に `\_a[` を含むゴーストを選ぶ（展開して grep）。無ければ `target\` の下に `\_a` の台詞と `OnAnchorSelectEx` の答えを持つ小さな検体を置く。MCP の `raise_event`／`sakurascript` は `mcp-kanade-tools`（未着手）なので使えない。
+
+### 一般化・採用／自作・単純化（design-synthesis）
+
+- **一般化**: 「押せる範囲」を `kind` 付きの 1 つの列にしたことで、`range-choice-tag` は `kind` を 1 つ足すだけで乗れる見込み（本 spec は 2 値のままにする）。
+- **採用／自作**: 新しいライブラリは無い。既存の純粋層・結線・kanade の組み立てを再利用。
+- **単純化**: 研究 §4.6 の「新しい channel」案・「`EventId::Anchor`」案・「`AnchorInput` の照合の鍵」案・「busy の棄却」案はいずれも落とした。`Instruction` の `On` 始まりの区別も読み手に置かない。
+
+### リスクと手当て
+
+- kanade の肥大ファイルが 1,000 行に近づく（`mod.rs` は +12 行程度で 967）→ 腕だけにし本体は `schedule/anchor.rs` へ。超えそうなら `Input::Anchor` の腕の本体も `anchor.rs` へ移す。
+- `ChoiceSpan`／`ChoiceHitRow`／`ChoiceSelection` の欄の追加でテストの構造体リテラルが壊れる（計 26 か所）→ 機械的に `kind: SpanKind::Choice` を足す。
+- `roadmap-draft.md` の `[[spec]]` の追加は `ukadoc-survey` の檻（a・b・c・f）に全部かかる → 台帳と同じタスクで数え直す（`anchor-tag-canon`＝4・`anchor-style-canon`＝59・`count`＝＋1）。
+- `dola` の公開 API の追加 → `release-cycle` へ申し送り（本 spec では版を動かさない）。
+- 実機の検体に `\_a` を使うゴーストが無い可能性 → 上の「実機の検体」の代替。
