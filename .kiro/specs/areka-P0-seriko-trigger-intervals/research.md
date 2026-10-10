@@ -179,3 +179,45 @@
 10. **検体の置き場と形**: `animated-playback` と同じ `crates/areka-emo-compose/tests/fixtures/<名>/`（シェルだけで足りるか・バルーンの面の `talk` も検体に置くか）。E2E の相手は `film_playback_e2e_tests.rs` の型（本物の読み手＋本物の seriko＋偽の時計）。**制約（要件討議で追記）**: brief の「同じウェーブで触らない約束」は `crates/areka-emo-compose/` に触らないと言っているので、検体を compose の下に置くなら「新しいフォルダを足すだけ（compose のソース・既存のテストは触らない）」に限るか、seriko の下（例 `crates/areka-seriko/tests/fixtures/`）か `crates/areka/` の E2E の兄弟に置く。設計で決め、約束の外へ出るなら止めて報告する。
 11. **seriko の時計の種類（要件討議で追記）**: 本番の seriko の時計は `GetTickCount64`（`crates/areka/src/emo2_boot/mod.rs` の `tick_count_ms`・刻みと共有）で、台本の時計 `TalkClock` は QPC。議題 1 で T2 を採る場合、seriko の時計を QPC 由来の ms に揃えれば（結線の 1 行・`emo2_boot/mod.rs`）文字の層と同じ時計の種類になり、残る差は配送の経路だけになる。`emo2_boot/mod.rs` は brief の「触るファイル」の列に無い（C5 の他の spec とも重ならない）ので、採るなら設計で明記して報告する。刻みの 16 ms の粗さは変わらない。
 12. **`runonce` の最初の表示（研究項目 3・要件討議で追記）**: `apply` の `Changed` が未知のスコープへの最初の `Show` でも立つことを、設計で `state_surface_tests.rs` の既存の檻から確かめる（無ければ本 spec の檻に 1 本足す）。
+
+## 7. 設計の段（2026-10-10・`kiro-spec-design`）
+
+### 7.1 参照した指針と範囲
+
+- 読んだもの: `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`（拡張＝軽い発見）・`design-synthesis.md`・`design-review-gate.md`、steering の `product.md`・`tech.md`・`structure.md`（兄弟ファイル・1,000 行・`sample-ghost-kit`・`log-capture-kit`）・`logging.md`（水準の表）、設計の雛形。外部の調査（WebSearch）は不要（新しい依存なし・正典は brief の ukadoc の逐語引用で足りる）。
+- 実物で確かめた主張（file:line は 2026-10-10 のワークツリー）: `normalize_interval`（`decode.rs` 396〜409・数値を捨てる）・`Interval`（`model.rs` 117〜136・`#[non_exhaustive]`）・`LoopTrigger`／`from_world_and_films`／`is_continuous`（`table.rs` 54〜73・143〜371・390〜392）・`on_tick`／`refresh`／`on_surface_changed`（`looper.rs` 248〜531・565〜628・537〜542）・`gate`／`rebuild`／`drop_unseen_finite`／`is_finite`（`parts.rs` 129〜136・264〜317・220〜233・139〜144）・`apply`（`state.rs` 208〜245）・`stage_slots`（684〜702）・`handle_message` の `Some(other)` 腕（`actor.rs` 471〜480）・`cue_target_of`（`dola/src/cue/sink.rs` 65〜87）・`RevealSchedule::extend_chunk`（`emo-text/src/state.rs` 318〜328）・`TalkClock::observe_cue`／`talk_time`（`emo2_boot/talk_clock.rs` 41〜60・63〜75）・`ClockedTextSink::emit` が全部の cue で観測（同 110〜115）・`cluster_count`（`areka-sakura/src/cluster.rs` 23）・`lap_of`（`timeline.rs` 121〜123）・seriko の時計の結線（`emo2_boot/mod.rs` 575〜577・`tick_count_ms` 777）・台帳の 3 行と `always`（`assets.toml` 6048〜・7360〜・7525〜・7800〜）・spec 表（`roadmap-draft.md` 775〜780・`[briefs].count = 48`・`seriko-interval-combinations` の行は無い）・見張りの腕 a〜f（`ukadoc-survey/tests/consistency/spec_checks.rs` 1〜16）・既存の檻 `show_same_surface_twice_second_is_unchanged`（`state_surface_tests.rs` 88〜106・1 回目が `Changed`）・emo2 の口の面 `1200`〜`1211`（`vendors/sample_ghost/emo2.nar` の `shell/master/surfaces.txt`）。
+
+### 7.2 統合（synthesis）の結果
+
+- **一般化**: `runonce`・`periodic`・`talk` は「見え始めの時刻を起点に、いつ始めるかを決める」1 つの問題の 3 つの形。起点（面に入った／部品が見えた／窓が開いた）と判定（1 回・周・文字の序数）を `Armed`／`poll` の 1 つの型に畳み、一番上と部品で同じ関数を呼ぶ（要件 5.4 を構造で満たす）。再生は既存の `playback`／`PartAnim::Playing` に乗せ、何も足さない。
+- **作る／借りる**: 文字の時刻の式は文字の層（`RevealSchedule`・`TalkClock`）のものをそのまま写す（自前の式を作らない・裁定 T2）。書記素は `areka_sakura::cluster`。周の割り算は `timeline::lap_of`。外部クレートは足さない。
+- **簡素化**: 面に入った時刻を `state.rs` に置かない（`on_surface_changed` が `Armed` を捨てることで足りる）・`refresh` の署名に理由を足さない・`timeline.rs` に新しい関数を足さない・文字の列を塊で圧縮しない（文字の層と同じ形の方が檻で突き合わせやすい）・検体に画像を足さない（emo2 の既存の絵を番号で指す）・E2E に合成と GPU を使わない。
+
+### 7.3 設計で確定した判断（議題 3〜12）
+
+| 議題 | 決めたこと | 理由 |
+| --- | --- | --- |
+| 3 `runonce` の口 | `on_surface_changed` が `Armed` を捨て、`refresh`／`on_tick` が「面が在るのに `Armed` が無い」slot を構える | 新しい口も理由の引数も要らない。着せ替え・窓の知らせの `refresh` は `Armed` が在るので鳴らない |
+| 4 部品の門 | P1（2 段の `rebuild`）＋P3（見えなくなった 3 語の時計と `Armed` を捨てる） | 1 段目の順と乱数は不変（要件 8.2）。2 段目で載ったコマが見せる子は同じ刻みで評価（1 刻み遅らせない） |
+| 5 無効な数値 | N2 `Other("talk,abc")` | 綴りが残る（要件 1.5）・読み手は記録を出さない層のまま |
+| 6 周の数え | anim ごとの `last_lap`・再生中の周も記す | 飛ばした周を後から鳴らさない（要件 3.3） |
+| 7 文字の列 | 1 文字 1 要素（台本の秒 `f64`）＋刈り込み | 文字の層と同じ形・O(まだ数えていない文字) |
+| 8 部品の `talk` | slot の窓を借りる | 要件 5.9 が挙げるのは `runonce`・`periodic` だけ |
+| 9 `sometimes`／`rarely` の note | 直す | 要件 10.1 に明記済み |
+| 10 検体 | `crates/areka-seriko/tests/fixtures/trigger-intervals/`・emo2 の絵を番号で指す・E2E は seriko の中 | compose の下に置かない（約束）・画像を足さない |
+| 11 時計の種類 | 変えない（`GetTickCount64` のまま） | 残る差は分解能 10〜16 ms で刻み 16 ms の中。実機で 1 刻みを超えるずれが見えたら起票 |
+| 12 最初の表示 | 既存の檻で固定済み | `state_surface_tests.rs` の `show_same_surface_twice_second_is_unchanged` |
+
+### 7.4 設計で見つけたこと（要件には無い制約）
+
+- **台帳の見張りが `roadmap-draft.md` を要求する**: `always` の担当を `areka-P0-seriko-interval-combinations` へ付け替える（要件 10.3）には、同 spec の `[[spec]]` 行が spec 表に無いので腕 f が赤になる。行を足し（`owner_count = 1`）、本 spec の `owner_count` を 1→3、`[briefs].count` を 48→49 にする。brief の「触るファイル」の列には無いが、約束（コードの範囲）の外ではない。
+- **`talk` の再生の終わり・停止の記録**: 既存の進行相は `FinishedResidual`／`Stopped` を `info!` で出す。口のコマは `-1` で終わるので、文字ごとに `info!` が出て要件 7.3 に反する。`anim.trigger` が `Talk` のときだけ `debug!` に下げる（文言は同じ）。
+- **`Clear` と序数**: 文字の層は `Clear` で schedule を初期化し未リビールの文字を捨てるが、seriko の写しは序数の数えを捨てない（要件 4.3）。`\c` の直後に口が最大 1 区切り分だけ余分に動きうる。正典が沈黙する細部＝台帳の note。
+- **窓の開き直しと `runonce`**: 要件 5.5 は閉じた窓を 3.2・4.9 の非表示にだけ含めるので、`Armed::hide`／`show` は `runonce` の印を残す（開き直しでは鳴らさない）。台帳の note。
+- **表の差し替えの後**: `forget_slot_kind` が `Armed` を捨て、次の刻みが刻みの時刻で構え直す（`runonce` が鳴る・`periodic` の起点はその刻み）。切り替えの出来事の時刻は差し替えの経路には届かないので、ここだけ刻みの時刻。
+
+### 7.5 リスク（設計の時点）
+
+- 文字と口のずれは檻で固定できない（時計の種類・配送の経路）→ 実機の確かめで `talk の区切りで再生開始` の `started_at_ms` と文字の層の `Text cue 適用` を突き合わせる（design「実機の確かめ」手順 5）。
+- `LoopTrigger` の腕で seriko の網羅 `match` が赤になる → コンパイルで見つかる。同じウェーブに seriko を触る spec は居ない。
+- `Other` に `,` 入りの値 → 読む側は逐語一致（`sometimes`／`rarely`・`always`）なので影響なし。
