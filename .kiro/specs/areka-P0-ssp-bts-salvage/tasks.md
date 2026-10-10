@@ -173,3 +173,12 @@ BTS へ取りに行った回数は、一覧まわり 8・課題の頁 237・レ�
 - 10 は通る（steering の案内の 2 つの確かめ・申し送りは 5 項目に増えた）。
 
 台帳のタスクトレイの行（BTS 0000331・0000390・0000407・0000416・0000418・0000561）は、関係を「未着手」のままにしてある。台帳は、先頭に書いた main のコミットの時点で照らした 1 回きりの記録であり、起票はその後の出来事だからである。
+
+### 完了時の棚卸（2026-10-10・`/kiro-complete` の冒頭）
+
+その場で解決 0 件・起票 0 件。
+
+- 「範囲の外で見つけたこと」の、網羅の台帳の古い持ち主 6 つは、どれも引き取る側に既に書いてあった。`currentghost.seriko.tooltip.*`・`currentghost.mousecursor*`・`currentghost.scope(ID).*` は `areka-P0-currentghost-property-others` の brief（着地のときに持ち主を直す）、`system.cursor.pos` は `areka-P0-system-property-values` の brief（同じ）、`animation*.name` は `areka-P0-seriko-script-triggers` の brief（担当なしだった 4 行を引き取る）、`arrow.filename`・`onlinemarker.*`・`sstpmarker.*` は `areka-P0-balloon-markers` の brief（`balloon-canon-residue` の項目 1 を引き取り、網羅の台帳を更新する）、`\![embed,…]` は roadmap の「直接修正候補」の「直さずに各 spec へ渡したもの」。網羅の台帳の持ち主は、各 spec の要件の段で動かす決まり（棚卸㉓）なので、ここでは直さない。
+- 設計の「Open Questions / Risks（段 1 で確かめること）」は、タスク 1 で確かめ終えた（一覧の取り方・拒まれたときの扱い）。
+- 台帳の末尾の「起票の候補」は成果物なので起票しない（申し送り 2）。最後の検証の後に開発者が頼んだ起票 5 本は、申し送り 5 のとおり済んでいる。
+- main `226109e8`（`farewell-talk-status` の完了）を取り込んだ。ぶつかったのは `roadmap.md` の spec 台帳の数の 3 行だけで、main の側（95 本）に起票 5 本を足した 100 本で解いた。
