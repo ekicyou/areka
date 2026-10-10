@@ -483,7 +483,7 @@ pub(crate) struct TalkWindow<'a> {
 impl Armed {
     /// 見え始めの時刻で構える（`open` が偽なら起点は `None`）。
     pub(crate) fn arm(at_ms: Option<u64>, open: bool, revealed: Option<u64>) -> Armed;
-    /// 窓が閉じた: 起点を消す（`runonce` の印は残す・`periodic` の周と `talk` の数えを捨てる）。
+    /// 窓が閉じた: 起点を消す（`runonce` の印は残す・`talk` の数えを捨てる。`periodic` の周は `show` で 0 に戻す）。
     pub(crate) fn hide(&mut self);
     /// 窓が開いた: 起点を置き直す（`periodic` の周は 0 から・`talk` は `revealed` を 0 と数え直す）。
     pub(crate) fn show(&mut self, at_ms: u64, revealed: Option<u64>);
@@ -539,7 +539,7 @@ impl Armed {
 ##### Service Interface
 
 ```rust
-/// 台本の秒と seriko の ms の起点の見積もり（`TalkClock` と同じ単調 max・プロセスに 1 つ）。
+/// 台本の秒と seriko の ms の起点の見積もり（`TalkClock` と同じ単調 max・`LoopRuntime` に 1 つ）。
 pub(crate) struct TalkEpoch { epoch_ms: Option<f64> }
 impl TalkEpoch {
     /// 届いた cue ごと（種類を問わない）: `epoch_ms = max(epoch_ms, now_ms − at × 1000)`。
@@ -563,6 +563,9 @@ impl TalkFeed {
     /// `Text`／`Choice{text}` 1 件: `count = cluster_count(text)`・`interval = duration / count`・
     /// `r_i = max(last + interval, at)`（`last` が無ければ `at`）を `count` 個追記する。`count == 0` は何もしない。
     pub(crate) fn push_chunk(&mut self, at_s: f64, duration_s: f64, count: usize);
+    /// `Text`／`Choice{text}` の文字列を受ける口（実装で追加）: `push_chunk(.., cluster_count(text))`。
+    /// 書記素クラスタで数える決まりをこのファイルに置く。`observe_cue` はこちらを呼ぶ。
+    pub(crate) fn push_text(&mut self, at_s: f64, duration_s: f64, text: &str);
     /// `Clear`／`ClearAll`（台本の秒 `at_s`）: その時刻までに現れていない文字（`r_i > at_s`）を `times` の
     /// 末尾から捨て、`last` を `None` に戻す（文字の層の `clear_content` の写し＝現れなかった文字で口は動かない）。
     pub(crate) fn restart_chain(&mut self, at_s: f64);
@@ -763,6 +766,19 @@ fn fire_part_triggers<'a>(clocks, armed, order, anims: &'a [LoopAnimation], scop
 - `doc/ukadoc-coverage/roadmap-draft.md`: 上の File Structure Plan のとおり（見張りの腕 a・c・f）。
 - 実装で分かった見張りの要求（2026-10-10・タスク 8。上の「腕 a・c・f」だけでは足りなかった）: ⑴ `implemented` の項目は `crates/` の下のソースに正典 URL のコメント（`// ukadoc: <URL>`）が要る＝`crates/areka-seriko/src/table.rs` の `from_world_and_films` の 3 語の腕の上に 3 行（`sometimes`／`rarely` と同じ置き方）⑵ `doc/ukadoc-coverage/briefing.md` の `[[barrier]] descript_shell_surfaces` の数（`implemented` 7→10・`vocabulary_only` 53→50）⑶ 報告の作り直し（`cargo run -p ukadoc-survey -- report` と `-- report-summary`＝`report/assets.md`・`report/summary.md`。道具は LF で書き出すので CRLF へ戻す）。見張りは見ないが偽になる散文も最小で直した: `roadmap-draft.md` の段階 A の表・「サーフェスアニメーション」の節・日付つきの段落、`briefing-assets.md` の 3 行と内訳と注記 ⑴（駆動する間隔の語は 8 語）、`sometimes`／`rarely` の note の「名前として認める語」の数（3→6）。
 - `always:1` の note の末尾の 1 文「組み合わせは areka-P0-seriko-trigger-intervals が引き受ける（担当欄）」は、担当の付け替えで実態と合わなくなったが、要件 10.3 が note を変えないと決めているので触っていない（完了の棚卸で `areka-P0-seriko-interval-combinations` へ申し送る）。
+
+## 実装との対応（2026-10-10・完了前の検証で拾った差）
+
+上の各節の文と実装で、名前や置き場が違うところの読み替え。振る舞いの違いではない。
+
+- `top_has_always`／`top_has_trigger`（Modified Files・Requirements Traceability・一番上の配線）は、実装では `top_kinds(table, sid) -> (always, trigger)` の 1 本（1 回の走査で両方を返す）。表の読み口は `has_triggers()`・`has_talk()`。
+- 流れ図と Traceability の `push_chunk` は `push_text`（中で `push_chunk`）。図は受け口が起点と文字の列を直に呼ぶ形だが、実装は `LoopRuntime::observe_cue` を経る。
+- 一番上の配線 ⑵ の「`feeds[scope]` と `epoch.talk_time(now)` が在れば窓を作る」は、実装では「その slot の表に `talk` が在り窓が開いていて、数えが在れば窓を作る」（文字の列がまだ無いスコープは現れた文字 0 として数え、鳴らない）。
+- 一番上の配線の `refresh` の「面が無いなら今までどおり」は、実装では部品の 3 語の時計と引き金の状態も捨てる（`drop_hidden`・部品の節に書いたとおり）。`runonce` の開始の記録の文言は「seriko: trigger runonce を鳴らした（再生開始・先頭コマから・要件 2.1）」。
+- `talk` の檻の置き場は `looper_talk_tests.rs`（一番上と、`LoopRuntime` を通る部品）。「`talk` の無い表では文字の列が空のまま」は `looper_talk_tests.rs` の `cues_change_nothing_when_the_table_has_no_talk` が固定する（受け口の檻からは非公開の欄が見えない）。検体の E2E の主な表明は同期の受け口＋手で進める時計で、別スレッドのアクターは 1 本。
+- 部品の「走っている 3 語の時計を捨てたとき」の `debug!` は、末尾のコマを保っている（`Residual`）時計を捨てたときも出る。
+- `TalkWindow` の欄は `pub(crate)`（`looper.rs` が組むため）。`Armed::arm` の `at_ms` は `Option<u64>` の署名のままだが、呼び手は常に `Some` を渡す（時刻が分からない `refresh` では構えない）。
+- 実機の手順 5 の検索語「`talk の区切りで再生開始`」は初版の案で、実装の文言は「trigger talk を鳴らした」「part trigger talk を鳴らした」。
 
 ## Open Questions / Risks
 
