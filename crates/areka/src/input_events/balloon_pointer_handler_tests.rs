@@ -802,3 +802,65 @@ fn pressed_left_double_click_reaches_the_user_break_entry() {
         "バルーンが出ていないので、どちらの線へも送らない（要件 1.9）"
     );
 }
+
+// -------------------------------------------------------------------------
+// アンカーだけのバルーン（areka-P0-anchor-tag-canon・要件 3.1〜3.3）
+//
+// 選択肢が 1 つも無くても、アンカーの範囲があれば移動と押下は「押せる範囲がある」として扱う。
+// headless では当たりの行が空なので、見分けは「範囲がある」側の腕に入ったかで付ける
+// （移動＝強調を外す注入・押下＝棄却の理由が `no_hit`）。
+// -------------------------------------------------------------------------
+
+/// アンカーだけの runtime を載せた World（`BalloonWiring` の前回の強調は `last`）。
+fn anchor_only_world(last: Option<usize>) -> (World, Entity, Receiver<ChoiceSelection>) {
+    let mut world = World::new();
+    let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+    let runtime = super::test_support::runtime_with_active_anchor("0");
+    let actor = ActorKey::from("0");
+    assert!(
+        !runtime.borrow().choice_active(&actor) && runtime.borrow().hit_active(&actor),
+        "前提: 選択肢は無く、押せる範囲（アンカー）だけがある"
+    );
+    world.insert_non_send(headless_emo2_wiring(runtime));
+    let (mut bw, rx) = wiring_with_inbox();
+    bw.set_hover(0, last);
+    world.insert_non_send(bw);
+    (world, e, rx)
+}
+
+/// 強調していたアンカーから外れる移動は、強調を外す注入をする（要件 3.2）。
+#[test]
+fn moved_off_an_anchor_injects_the_highlight_off() {
+    let (mut world, e, _rx) = anchor_only_world(Some(0));
+    let logs = capture_logs(|| {
+        on_balloon_pointer_moved(&mut world, e, e, &bubble_move(10, 20));
+    });
+    assert_eq!(
+        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
+        None
+    );
+    assert!(
+        logs.iter().any(|l| l.contains("choice_hover_inject")),
+        "アンカーだけでも強調の注入の腕に入る: {logs:?}"
+    );
+}
+
+/// アンカーだけのバルーンの押下は「範囲はあるが当たらなかった」と判定される（要件 3.3・3.6）。
+#[test]
+fn pressed_on_anchor_only_balloon_is_judged_against_the_ranges() {
+    let (mut world, e, rx) = anchor_only_world(None);
+    let logs = capture_logs(|| {
+        assert!(!on_balloon_pointer_pressed(
+            &mut world,
+            e,
+            e,
+            &bubble_left_press(10, 20)
+        ));
+    });
+    assert!(rx.try_recv().is_err(), "当たっていないので送らない");
+    assert!(
+        logs.iter()
+            .any(|l| l.contains("choice_click_rejected") && l.contains("no_hit")),
+        "棄却の理由は no_hit（inactive ではない）: {logs:?}"
+    );
+}

@@ -42,9 +42,9 @@ use crate::placement::spawn::CharWindowMarker;
 pub(super) struct BoxPoint {
     /// 座標の下の、文字の出ている箱（手前の 1 つ・無ければ箱の外）。
     pub(super) hit: Option<ShownBox>,
-    /// 当たった箱の選択肢の当たり行（シェルの窓の物理 px）。
+    /// 当たった箱の当たり行（選択肢とアンカー・シェルの窓の物理 px）。
     pub(super) rows: Vec<ChoiceHitRow>,
-    /// スコープに選択肢が出ているか（`choice_active`）。
+    /// スコープに押せる範囲（選択肢かアンカー）が出ているか（`hit_active`）。
     pub(super) active: bool,
 }
 
@@ -86,7 +86,7 @@ fn read_point(
     Some(BoxPoint {
         hit,
         rows,
-        active: rt.choice_active(&actor),
+        active: rt.hit_active(&actor),
     })
 }
 
@@ -339,7 +339,8 @@ pub(crate) fn clear_box_hover_on_leave(world: &mut World) {
     for (scope, name, last) in entries {
         if let Some(runtime) = &runtime {
             let actor = ActorKey::from(scope.to_string());
-            match runtime.try_borrow().map(|rt| rt.choice_active(&actor)) {
+            // 押せる範囲（選択肢かアンカー）があるか——箱のアンカーの強調もここで外す。
+            match runtime.try_borrow().map(|rt| rt.hit_active(&actor)) {
                 Ok(active) => apply_highlight(
                     world,
                     runtime,

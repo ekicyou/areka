@@ -266,6 +266,7 @@ fn click_on_row_returns_same_payload_as_balloon() {
     assert_eq!(
         got,
         Some(ChoiceSelection {
+            kind: SpanKind::Choice,
             id: "q2".into(),
             label: "label2".into(),
             scope: 1,
@@ -307,6 +308,83 @@ fn click_without_row_box_or_choices_is_none() {
         None,
         "行が無い"
     );
+}
+
+// ---------------------------------------------------------------------------
+// 箱のアンカー（areka-P0-anchor-tag-canon 要件 3.1・3.3〜3.5・3.7）
+// ---------------------------------------------------------------------------
+
+fn anchor_row(ordinal: usize, left: f32, top: f32, right: f32, bottom: f32) -> ChoiceHitRow {
+    ChoiceHitRow {
+        kind: SpanKind::Anchor,
+        ..row(ordinal, left, top, right, bottom)
+    }
+}
+
+/// 箱のアンカーの上の左押下はアンカーの知らせになり、その押下は「選択で使った」になる——
+/// 単押しでも、話している最中でも、シェルの操作にも中断にもならない。続く 2 打目も同じ。
+#[test]
+fn click_on_anchor_in_box_is_consumed_by_selection() {
+    let boxes = shown();
+    let rows = [anchor_row(0, 0.0, 0.0, 40.0, 10.0)];
+    let hit = box_under_point(&boxes, 5.0, 5.0);
+    let got = judge_box_click(hit, true, &rows, 5.0, 5.0, 1);
+    assert_eq!(
+        got.as_ref().map(|s| (s.kind, s.id.as_str())),
+        Some((SpanKind::Anchor, "q0"))
+    );
+    let selected_now = got.is_some();
+    for talking in [false, true] {
+        assert_eq!(
+            judge_box_press(DoubleClick::None, selected_now, false, talking, false),
+            BoxPressVerdict::ConsumedBySelection
+        );
+        // 2 打目: アンカーの上のまま（範囲が残っている）でも、範囲の外（台詞が替わった）でも。
+        for second_on_anchor in [true, false] {
+            assert_eq!(
+                judge_box_press(
+                    DoubleClick::Left,
+                    second_on_anchor,
+                    selected_now,
+                    talking,
+                    false
+                ),
+                BoxPressVerdict::ConsumedBySelection
+            );
+        }
+    }
+}
+
+/// 箱の中でも、アンカーの上の移動は強調の対象になり、選択肢と重なる所は選択肢が先。
+/// 押下の知らせも同じ順で決まる。
+#[test]
+fn anchor_in_box_is_hovered_and_choice_comes_first() {
+    let boxes = shown();
+    let rows = [
+        row(0, 0.0, 0.0, 40.0, 10.0),
+        anchor_row(1, 0.0, 0.0, 40.0, 20.0),
+    ];
+    let hit = box_under_point(&boxes, 5.0, 15.0);
+    assert_eq!(
+        judge_box_move(hit, &rows, 5.0, 15.0),
+        BoxMove::OverChoice {
+            name: name("a"),
+            ordinal: 1
+        },
+        "アンカーだけの所"
+    );
+    assert_eq!(
+        judge_box_move(hit, &rows, 5.0, 5.0),
+        BoxMove::OverChoice {
+            name: name("a"),
+            ordinal: 0
+        },
+        "重なる所は選択肢"
+    );
+    let kind = |y: f32| judge_box_click(hit, true, &rows, 5.0, y, 0).map(|s| s.kind);
+    assert_eq!(kind(15.0), Some(SpanKind::Anchor));
+    assert_eq!(kind(5.0), Some(SpanKind::Choice));
+    assert_eq!(kind(30.0), None, "範囲の外は今までどおり");
 }
 
 // ---------------------------------------------------------------------------

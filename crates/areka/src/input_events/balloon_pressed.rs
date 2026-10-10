@@ -1,5 +1,5 @@
-//! balloon の子: クリック（`on_balloon_pointer_pressed`・選択肢の確定の発行と、末尾で利用者の中断へ渡す）。
-//! 足す予定の spec: talk-fast-forward・anchor-tag-canon・balloon-markers（矢印のクリック）。
+//! balloon の子: クリック（`on_balloon_pointer_pressed`・選択肢とアンカーの確定の発行と、末尾で利用者の中断へ渡す）。
+//! 足す予定の spec: talk-fast-forward・balloon-markers（矢印のクリック）。
 
 use std::rc::Rc;
 
@@ -29,7 +29,8 @@ use super::{BalloonWiring, click_selection};
 ///    **正常縮退**＝`debug!(event = "choice_pressed_no_emo2")`＋no-op（donor presenter=None 同型・R4.1）。
 /// 2. `BalloonWiring` 存在確認（共有借用即解放）。不在は結線漏れ＝**構成異常**
 ///    `error!(event = "balloon_wiring_missing")`＋no-op。
-/// 3. runtime `try_borrow`（不変）でスナップショット——`choice_active`＋**現行** `choice_hit_rows` を純関数
+/// 3. runtime `try_borrow`（不変）でスナップショット——`hit_active`（押せる範囲＝選択肢かアンカーが
+///    あるか）＋**現行** `choice_hit_rows` を純関数
 ///    [`click_selection`]（task 3.3）へ渡し `Option<ChoiceSelection>` を得る（現行 rows のみ読むことで
 ///    stale 棄却が成立・R2.5/3.2）。`try_borrow` 失敗は構成異常
 ///    `error!(event = "balloon_runtime_borrow_failed")`＋no-op。
@@ -115,7 +116,8 @@ pub(crate) fn on_balloon_pointer_pressed(
     // error!＋no-op（panic しない・log-first）。
     let (active, selection) = match runtime.try_borrow() {
         Ok(rt) => {
-            let active = rt.choice_active(&actor);
+            // 押せる範囲（選択肢かアンカー）があるか。アンカーだけのバルーンでも押下を範囲と照合する。
+            let active = rt.hit_active(&actor);
             let rows = rt.choice_hit_rows(&actor);
             let selection = click_selection(active, rows, x, y, scope);
             (active, selection)
@@ -181,6 +183,7 @@ pub(crate) fn on_balloon_pointer_pressed(
     };
 
     // (5) 利用者の中断（areka-P0-balloon-break）。選択を確定した押下とその続きは中断にしない。
+    // 当たった範囲がアンカーでも `selected_now` は真（種類を問わず「選択で使った」押下）。
     let accepted = super::user_break::on_left_press(world, scope, state.double_click, selected_now);
     selected_now || accepted
 }

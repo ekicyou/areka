@@ -141,6 +141,7 @@ pub(crate) fn register_choice_drain(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use areka_emo_text::state::SpanKind;
     use log_capture_kit::{LineFormat, capture_lines};
     use std::sync::mpsc::{self, TryRecvError};
 
@@ -189,6 +190,7 @@ mod tests {
     /// トリム／正規化／空要素除去が入れば必ず落ちる fixture にする。
     fn dirty_selection() -> ChoiceSelection {
         ChoiceSelection {
+            kind: SpanKind::Choice,
             id: "  Onおしゃべり頻度メニュー  ".to_string(),
             label: " \\q[もどる,back] ＞＞ ".to_string(),
             scope: 1,
@@ -286,6 +288,7 @@ mod tests {
     fn to_choice_input_maps_scope_usize_to_u32() {
         for scope in [0usize, 1, 3] {
             let sel = ChoiceSelection {
+                kind: SpanKind::Choice,
                 id: "q0".to_string(),
                 label: "はい".to_string(),
                 scope,
@@ -303,6 +306,7 @@ mod tests {
     #[test]
     fn to_choice_input_keeps_empty_reference_list_empty() {
         let sel = ChoiceSelection {
+            kind: SpanKind::Choice,
             id: "q1".to_string(),
             label: "いいえ".to_string(),
             scope: 0,
@@ -330,6 +334,7 @@ mod tests {
         for id in arrivals {
             sel_tx
                 .send(ChoiceSelection {
+                    kind: SpanKind::Choice,
                     id: id.to_string(),
                     label: format!("ラベル:{id}"),
                     scope: 0,
@@ -383,6 +388,7 @@ mod tests {
         for id in ["a", "b", "c"] {
             sel_tx
                 .send(ChoiceSelection {
+                    kind: SpanKind::Choice,
                     id: id.to_string(),
                     label: id.to_string(),
                     scope: 1,

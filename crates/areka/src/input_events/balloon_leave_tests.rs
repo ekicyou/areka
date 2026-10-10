@@ -71,6 +71,32 @@ fn leave_balloon_owned_clears_hover_via_inject_none() {
     );
 }
 
+/// アンカーだけのバルーンでも、窓の外へ出たら強調を外す注入をする（areka-P0-anchor-tag-canon
+/// 要件 3.2）。選択肢が無いので、選択肢の有無で見ていれば注入の腕に入らない。
+#[test]
+fn leave_anchor_only_balloon_clears_hover_via_inject_none() {
+    let mut world = World::new();
+    spawn_balloon_leave_child(&mut world, 0);
+    let runtime = super::test_support::runtime_with_active_anchor("0");
+    assert!(
+        !runtime.borrow().choice_active(&ActorKey::from("0")),
+        "前提: 選択肢は無い"
+    );
+    world.insert_non_send(headless_emo2_wiring(runtime));
+    insert_wiring_with_hover(&mut world, 0, Some(0));
+
+    let logs = capture_logs(|| clear_balloon_hover_on_leave(&mut world));
+
+    assert_eq!(
+        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
+        None
+    );
+    assert!(
+        logs.iter().any(|l| l.contains("choice_hover_inject")),
+        "アンカーの強調も注入で外す: {logs:?}"
+    );
+}
+
 /// バルーン所有 leave・非表示（ResetOwnState アーム・R3.4）: choice 非表示・前回注入 Some(3) →
 /// 自前状態のみ None 整合し、**inject はしない**（上流原子性が正本＝choice_hover_inject を出さない）。
 #[test]

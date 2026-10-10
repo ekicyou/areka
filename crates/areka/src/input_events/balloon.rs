@@ -27,6 +27,7 @@ use std::rc::Rc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 use areka_emo_text::actor::ChoiceHitRow;
+use areka_emo_text::state::SpanKind;
 #[cfg(test)]
 use areka_sakura::ActorKey;
 use bevy_ecs::entity::Entity;
@@ -63,6 +64,10 @@ pub(crate) use pressed::on_balloon_pointer_pressed;
 /// 範囲・カスケードは kanade 側）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ChoiceSelection {
+    /// 当たった範囲の種類（選択肢かアンカー・当たりの行から写す）。型の名前は選択肢だけだった
+    /// 頃のままで、アンカーの知らせも同じ形で運ぶ（その場合 `id`・`label`・`references` は
+    /// `\_a` の ID・範囲の文字・2 番目以降の引数）。
+    pub kind: SpanKind,
     /// `\q` ID（選択解決の主キー・不透明転写）。
     pub id: String,
     /// 表示ラベル（不透明転写）。
@@ -209,10 +214,14 @@ pub(crate) struct ChoiceSelectionInbox(pub(crate) Receiver<ChoiceSelection>);
 /// 明文で禁じる）。不変条件は下段の in-source 檻（k=2.0 で持ち上げた行矩形×無変換点＝ヒット／
 /// 同点を ÷k すると外れる・R3.7）が固定する。
 ///
-/// 判定対象は上流が供給する選択肢行ジオメトリ（`rows`）のみ。選択肢以外のバルーン内リンク
-/// （`\_a` 等）は `rows` に含まれず本関数の対象外（R5.2）。
+/// 判定対象は上流が供給する当たりの行（`rows`）のみ。行は選択肢（`\q`）とアンカー（`\_a`）が
+/// 通し番号の順に混ざった列で、種類は各行の `kind` が持つ。
 ///
-/// 重なり時は**逆順走査の最初の一致＝スライス最終一致**の index を返す（`choice_hit_rows` は
+/// 判定は種類の 2 段（areka-P0-anchor-tag-canon 要件 3.5）: まず選択肢の行だけを見て、どれにも
+/// 当たらなかったときにアンカーの行を見る。選択肢とアンカーが重なる所は、台本での定義の順に
+/// 関わらず選択肢になる。
+///
+/// 同じ種類の中の重なりは**逆順走査の最初の一致＝スライス最終一致**の index を返す（`choice_hit_rows` は
 /// ordinal 昇順×行昇順ゆえ「後定義が手前」＝画家のアルゴリズムと整合・DD-CI-5）。病的重なり入力
 /// でも決定的に高々 1 つの index を返す（R1.1／1.5）。非ヒットは `None`（R2.3）。空 `rows` も `None`。
 ///
@@ -227,14 +236,18 @@ pub(crate) fn hit_choice_row(rows: &[ChoiceHitRow], x: f32, y: f32) -> Option<us
     // 半開区間 [left, right) × [top, bottom)：left/top は包含・right/bottom は非包含。
     // 座標は無変換で比較する——行矩形が to_window_physical で既に実適用 k ×済みの窓物理 px ゆえ
     // 点と同一空間で一致する（k=1.0 だからではない）。ここへ ÷k を足すと二重縮約（R5.6/5.7・R6.4）。
-    rows.iter()
-        .enumerate()
-        .rev()
-        .find(|(_, row)| {
-            let r = &row.rect;
-            x >= r.left && x < r.right && y >= r.top && y < r.bottom
-        })
-        .map(|(i, _)| i)
+    let last_hit_of = |kind: SpanKind| {
+        rows.iter()
+            .enumerate()
+            .rev()
+            .find(|(_, row)| {
+                let r = &row.rect;
+                row.kind == kind && x >= r.left && x < r.right && y >= r.top && y < r.bottom
+            })
+            .map(|(i, _)| i)
+    };
+    // 選択肢が先。どの選択肢にも当たらなかったときだけアンカーを見る。
+    last_hit_of(SpanKind::Choice).or_else(|| last_hit_of(SpanKind::Anchor))
 }
 
 /// hover 遷移の決定（純関数・R1.2/1.3/1.4/3.4）。
@@ -273,7 +286,7 @@ pub(crate) enum HoverAction {
 }
 
 pub(crate) fn hover_action(
-    active: bool,
+    active: bool, // 押せる範囲（選択肢かアンカー）があるか（`TextLayerRuntime::hit_active`）
     hit_ordinal: Option<usize>, // hit_choice_row の結果を ordinal へ展開した値
     last_injected: Option<usize>, // BalloonWiring.hover[scope]
 ) -> HoverAction {
@@ -298,6 +311,10 @@ pub(crate) fn hover_action(
 /// 副作用なしの決定的関数。World・runtime 借用・GPU・send・logging 一切不要——入力→
 /// `Option<ChoiceSelection>` のみ。発行シンクへの送出・一度きり制御・ログは呼び手
 /// （配線層 task 4.2）の領分。
+///
+/// `active` は「押せる範囲（選択肢かアンカー）があるか」（`TextLayerRuntime::hit_active`）。当たった
+/// 行がアンカーなら、種類がアンカーの知らせを返す（[`hit_choice_row`] の順で選択肢が先）。以下の
+/// 「choice」「非表示」は、アンカーだけが出ているときも同じに読む。
 ///
 /// - `active == false`（choice 非表示）→ `None`（hit 判定より前に短絡・R3.1）。
 ///   choice 消滅時の stale／原子性ガード＝非表示中はたとえ矩形内座標でも発行しない。
@@ -329,8 +346,9 @@ pub(crate) fn click_selection(
     // 読むことで自然に成立する（キャッシュ行は参照しない・R2.5/3.2）。
     let i = hit_choice_row(rows, x, y)?;
     let hit = &rows[i];
-    // 現行ヒット行から不透明転写（id/label/references は clone・scope は arg・ordinal 非含有）。
+    // 現行ヒット行から不透明転写（kind は写し・id/label/references は clone・scope は arg・ordinal 非含有）。
     Some(ChoiceSelection {
+        kind: hit.kind,
         id: hit.id.clone(),
         label: hit.label.clone(),
         scope,

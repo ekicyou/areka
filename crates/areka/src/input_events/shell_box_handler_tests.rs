@@ -17,7 +17,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 
 use areka_emo_compose::{BoxName, EmoWorld, fold_boxes};
 use areka_emo_text::actor::{HitRectPx, ShownBox, TextLayerRuntime};
-use areka_emo_text::state::TextLayerConfig;
+use areka_emo_text::state::{SpanKind, TextLayerConfig};
 use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind};
 use areka_parsers::shell::{parse, parse_boxes};
 use bevy_ecs::hierarchy::ChildOf;
@@ -30,7 +30,9 @@ use super::*;
 use crate::emo2_boot::hit_region::HitRegion;
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use crate::emo2_boot::user_break_cue::NoUserBreakSignal;
-use crate::input_events::balloon::test_support::{headless_emo2_wiring, row};
+use crate::input_events::balloon::test_support::{
+    anchor_cues, anchor_row, headless_emo2_wiring, row,
+};
 use crate::input_events::balloon::{ChoiceSelectionInbox, click_selection, wire_balloon_choice};
 use crate::input_events::shell_box::ShellBoxHover;
 use crate::input_events::user_break::{UserBreakWiring, drain_no_user_break_signals};
@@ -428,6 +430,84 @@ fn leaving_the_shell_window_clears_hover_and_highlight() {
             },
             duration: 0.0,
         });
+    let win = f
+        .world
+        .spawn((CharWindowMarker { scope: 0 }, Window::default()))
+        .id();
+    f.world.spawn((PointerLeave, ChildOf(win)));
+
+    let ((), events) = capture_logs(|| clear_box_hover_on_leave(&mut f.world));
+    assert_eq!(f.hover(), (None, None));
+    assert_eq!(hover_injections(&events), 1, "強調を外す: {events:?}");
+}
+
+// ---------------------------------------------------------------- アンカー（areka-P0-anchor-tag-canon）
+
+/// 箱 a の行を、選択肢でなくアンカーの範囲にした写し。
+fn anchor_on_a() -> BoxPoint {
+    BoxPoint {
+        rows: vec![anchor_row(0, 10.0, 10.0, 90.0, 20.0)],
+        ..on_a(true)
+    }
+}
+
+/// 文字の層にアンカーの範囲だけを載せる（選択肢は無い）。
+fn with_anchor_only(f: Fixture) -> Fixture {
+    for cue in anchor_cues("0") {
+        f.runtime.borrow_mut().apply_cue(&cue);
+    }
+    let actor = areka_sakura::contract::ActorKey::from("0");
+    assert!(
+        !f.runtime.borrow().choice_active(&actor),
+        "前提: 選択肢は無い"
+    );
+    f
+}
+
+/// 話している最中の箱のアンカーの単押しは、アンカーの知らせが 1 件届き、シェルへも中断へも
+/// 届かない。続く 2 打目（左ダブルクリック・範囲の外）も中断にしない（要件 3.3・3.4・3.7）。
+#[test]
+fn box_anchor_click_while_talking_selects_without_breaking() {
+    let mut f = Fixture::new().talking();
+    assert!(f.pressed(ROW, DoubleClick::None, anchor_on_a()), "処理した");
+    let got = f.selections();
+    assert_eq!(got.len(), 1, "知らせは 1 件: {got:?}");
+    assert_eq!(got[0].kind, SpanKind::Anchor);
+    assert!(f.pressed(BODY, DoubleClick::Left, anchor_on_a()));
+    assert!(f.selections().is_empty(), "範囲の外の 2 打目は知らせない");
+    assert!(f.shell().is_empty(), "シェルへは 0 件");
+    assert!(f.break_rx.try_iter().next().is_none(), "中断もしない");
+    assert!(f.lifecycle_rx.try_iter().next().is_none(), "隠しもしない");
+}
+
+/// 右ボタンの押下は、箱のアンカーの上でも選択にしない（要件 3.8）。
+#[test]
+fn right_press_on_box_anchor_is_not_a_selection() {
+    let mut f = Fixture::new();
+    let state = PointerState {
+        left_down: false,
+        right_down: true,
+        ..pointer(ROW, DoubleClick::None)
+    };
+    assert!(!press_with_point(&mut f.world, 0, &state, anchor_on_a()));
+    assert!(f.selections().is_empty());
+}
+
+/// 座標の写しの「押せる範囲があるか」は、アンカーだけでも真（要件 3.7）。
+#[test]
+fn read_point_is_active_with_only_an_anchor() {
+    let f = with_anchor_only(Fixture::new());
+    let point = read_point(&f.runtime, 0, 5.0, 5.0).expect("借りられる");
+    assert!(point.active);
+}
+
+/// シェルの窓から出ると、箱のアンカーの強調も外す（要件 3.2・3.7）。
+#[test]
+fn leaving_the_shell_window_clears_an_anchor_highlight() {
+    let mut f = Fixture::new();
+    assert!(f.moved(ROW, anchor_on_a()), "アンカーの上の移動は強調する");
+    assert_eq!(f.hover(), (Some(name("a")), Some(0)));
+    let mut f = with_anchor_only(f.with_emo2());
     let win = f
         .world
         .spawn((CharWindowMarker { scope: 0 }, Window::default()))
