@@ -2,9 +2,10 @@
 //! 手順のテスト。
 //!
 //! 本物の口（状態ファイル・ロックファイル・本物の時計・1 秒の眠り）を、ワークツリーの `target\`
-//! の下の一時の置き場所に向けて通す。どのテストも、あらかじめ条件が満ちた状態に対して呼ぶので
-//! 直ちに終わる（眠りに入らない）。待ってからほかの呼び出しで終わる長い流れは、本物の実行
-//! ファイルの実機テストが通す。
+//! の下の一時の置き場所に向けて通す。ほとんどのテストは、あらかじめ条件が満ちた状態に対して
+//! 呼ぶので直ちに終わる（眠りに入らない）。待ちに入った時点の状態を見るテストは、最初の眠りまで
+//! 走らせて止める（[`call_until_first_sleep`]。本物の口の眠りは、テストの組み立てでは眠らずに
+//! panic する）。待ってからほかの呼び出しで終わる長い流れは、本物の実行ファイルの実機テストが通す。
 //!
 //! コマンドの列だけでは作れない状態（すでに停止要請中・止まった参加者）は状態ファイルを直に
 //! 置く。2 つ以上の識別を使うテストは、呼ぶ前にほかの識別の見張りの居る印を握る。
@@ -18,7 +19,7 @@ use super::test_support::{
     call, done, hold_sign, hold_watches, home_in, names, put_state, read_state, state_bytes,
 };
 use crate::error::escape_path;
-use crate::state::{ParticipantStatus, WaitKind};
+use crate::state::{ParticipantStatus, WaitKind, WaitRecord};
 
 const MERGE_A: [&str; 7] = ["merge", "--id", "a", "--repo", "areka", "--spec", "x"];
 const LOAD_A: [&str; 7] = [
@@ -39,6 +40,25 @@ const C_QUEUED: &str =
 /// `--wait` を付けた呼び出し。
 fn waiting(home: &Path, words: &[&str]) -> (u8, String, String) {
     call(home, &[words, &["--wait"]].concat())
+}
+
+/// 待ちに入る呼び出しを、最初の眠りまで走らせて止める。待ちは握った居る印を解いて止まり、
+/// 置いた待ちの記録は（抹消まで進まないので）状態ファイルに残る。
+fn call_until_first_sleep(home: &Path, words: &[&str]) {
+    let stopped_by =
+        std::panic::catch_unwind(|| call(home, words)).expect_err("眠りに入らずに終わった");
+    // ほかの panic（`call` の中の判定など）を、眠りと取り違えない。
+    assert_eq!(
+        stopped_by.downcast_ref::<&str>(),
+        Some(&"a test reached the real 1-second sleep")
+    );
+}
+
+/// 待ちの記録（識別, 種類）。
+fn waits(home: &Path) -> Vec<(String, WaitKind)> {
+    let state = read_state(home);
+    let key = |wait: &WaitRecord| (wait.id.clone(), wait.kind);
+    state.waits.iter().map(key).collect()
 }
 
 /// 消えた: 終了コード 3・標準出力は空・標準エラーにその 1 行。
@@ -193,10 +213,9 @@ fn watch_for_a_stop_requested_participant_ends_at_once_with_who_and_where_to_rea
     let status = |id: &str| state.participants[id].status;
     assert_eq!(status("a"), ParticipantStatus::StopRequested);
     assert_eq!(status("c"), ParticipantStatus::Working);
-    assert!(
-        state.participants["a"].watch.is_some(),
-        "見張りの開始が通る"
-    );
+    // 見張りの開始が通り、このプロセスの番号が載る。
+    let watch = state.participants["a"].watch.as_ref();
+    assert_eq!(watch.expect("見張りが載る").pid, std::process::id());
     assert_eq!(state.waits, []);
     assert!(home.join("status.md").is_file());
     // 居る印も握ったままにしない: 立て直しても 1 にならない。
@@ -281,4 +300,40 @@ fn stopped_wait_for_an_unknown_id_is_3() {
     assert_eq!(waiting(&home, &["stopped", "--id", "a"]), gone("removed"));
 
     assert!(read_state(&home).participants.is_empty());
+}
+
+// ---- 待ちに入った時点の状態（最初の眠りで止める） ----
+
+#[test]
+fn stopped_wait_records_stopped_before_it_starts_to_wait() {
+    let root = TempPath::under_target("impl-watch-cli-wait");
+    let home = home_in(&root);
+    put_not_working(&home, "stop-requested", C_QUEUED);
+    let _held = hold_watches(&home, &["c"]);
+
+    call_until_first_sleep(&home, &["stopped", "--id", "a", "--wait"]);
+
+    // 「止まった」が先に記録され（全員が止まったので、同じ呼び出しで c に番が来る）、それから
+    // 再開を待っている。
+    let state = read_state(&home);
+    assert_eq!(state.participants["a"].status, ParticipantStatus::Stopped);
+    assert_eq!(state.load.holder.expect("持ち主が居る").id, "c");
+    assert_eq!(waits(&home), [("a".to_owned(), WaitKind::Resume)]);
+}
+
+#[test]
+fn resume_only_waits_and_does_not_record_stopped() {
+    let root = TempPath::under_target("impl-watch-cli-wait");
+    let home = home_in(&root);
+    put_not_working(&home, "stop-requested", C_QUEUED);
+    let _held = hold_watches(&home, &["c"]);
+
+    call_until_first_sleep(&home, &["resume", "--id", "a"]);
+
+    // 待つだけ: 停止要請中のままで、c の番も来ない（「止まった」を記録するのは `stopped`）。
+    let state = read_state(&home);
+    let status = state.participants["a"].status;
+    assert_eq!(status, ParticipantStatus::StopRequested);
+    assert_eq!(state.load.holder, None);
+    assert_eq!(waits(&home), [("a".to_owned(), WaitKind::Resume)]);
 }

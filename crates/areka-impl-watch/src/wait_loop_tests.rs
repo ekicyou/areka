@@ -693,3 +693,10 @@ fn the_loop_writes_nothing_to_the_terminal() {
         assert!(!source.contains(word), "wait.rs writes with {word}");
     }
 }
+
+/// 本物の口の読み直しの間隔は 1 秒（番の到来に気付く遅れの上限。本物の眠りそのものは、テストの
+/// 組み立てでは眠らずに panic する）。
+#[test]
+fn the_real_port_polls_every_second() {
+    assert_eq!(super::POLL, Duration::from_secs(1));
+}

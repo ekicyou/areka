@@ -28,3 +28,7 @@ fn main() -> ExitCode {
         .collect();
     ExitCode::from(cli::exit_code(&cli::run(&args, home::env_value())))
 }
+
+#[cfg(test)]
+#[path = "main_layering_tests.rs"]
+mod layering_tests;
