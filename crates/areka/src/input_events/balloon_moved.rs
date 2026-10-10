@@ -1,5 +1,5 @@
-//! balloon の子: ホバーの追従（`on_balloon_pointer_moved`・選択肢の行のハイライトとバルーン滞在の記録）。
-//! 足す予定の spec: anchor-tag-canon（アンカーのホバー）。
+//! balloon の子: ホバーの追従（`on_balloon_pointer_moved`・選択肢の行とアンカーの範囲のハイライトとバルーン滞在の記録）。
+//! 足す予定の spec: なし。
 
 use std::rc::Rc;
 
@@ -38,7 +38,7 @@ use super::{BalloonWiring, HoverAction, hit_choice_row, hover_action};
 ///    `BalloonWiring` 不在は結線漏れ＝**構成異常** `error!(event = "balloon_wiring_missing")`＋no-op
 ///    （配線存在檻が開発時に検出）。滞在の記録は選択肢の有無・行ヒットの有無に依存しない独立の軸
 ///    （areka-P0-balloon-visibility 5.2）。
-/// 3. runtime `try_borrow`（不変）でスナップショット（`choice_active`＋現行 `choice_hit_rows` を純関数
+/// 3. runtime `try_borrow`（不変）でスナップショット（`hit_active`＋現行 `choice_hit_rows` を純関数
 ///    評価・move はここで完結）。`try_borrow` 失敗は構成異常 `error!(event = "balloon_runtime_borrow_failed")`。
 /// 4. 借用解放後に runtime `try_borrow_mut` で `inject_choice_hover`（`Inject` アームのみ）。
 /// 5. `BalloonWiring` 可変借用で自前 `hover` 更新。
@@ -115,7 +115,8 @@ pub(crate) fn on_balloon_pointer_moved(
     // try_borrow 失敗（理論上不到達の構成異常）は error!＋no-op（panic しない・log-first）。
     let action = match runtime.try_borrow() {
         Ok(rt) => {
-            let active = rt.choice_active(&actor);
+            // 押せる範囲（選択肢かアンカー）があるか。アンカーの行も同じ通し番号で強調する。
+            let active = rt.hit_active(&actor);
             let rows = rt.choice_hit_rows(&actor);
             let hit_ordinal = hit_choice_row(rows, x, y).map(|i| rows[i].ordinal);
             hover_action(active, hit_ordinal, last_injected)

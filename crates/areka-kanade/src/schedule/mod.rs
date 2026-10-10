@@ -25,6 +25,8 @@ use crate::msg::{
 use crate::status::{ExecutionSnapshot, ExecutionStateUpdate, ExternalStates};
 use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
+/// アンカーの選択の受理と 2 段の送出（帳簿なし・段の記憶だけ）。
+pub(crate) mod anchor;
 /// バルーンの 3 つのイベントを送るかどうかの判断と、その控え（トークの控え・中断の控え）。
 pub(crate) mod balloon_events;
 pub(crate) mod boot;
@@ -85,6 +87,8 @@ pub(crate) enum Input {
     /// [`steady::on_choice`]（C4 規則 1／2）が持つ。Steady のみ委譲し、他フェーズは状態を
     /// 変えず warn 記録の上で棄却する。
     Choice(ChoiceInput),
+    /// アンカーの選択（UI 配線層 → kanade）。受理の規則と段の記憶は [`anchor::on_anchor`] が持つ。
+    Anchor(crate::anchor_input::AnchorInput),
     /// 選択待ち成立の通知（talk → dispatcher → kanade）。additive 増分（Req 4.4）。
     ///
     /// `display_end` は dispatcher が `base_now` で単調 ms へ換算済み（DD-9・時間基準を新設しない）。
@@ -239,6 +243,8 @@ pub(crate) struct State {
     /// （カスケード Value・タイムアウト Value）、消去点は現 talk の `TalkDone` 到達と
     /// 次の slot 差替（マウス由来の置換を含む）である。
     pub choice_prev_talk: Option<TalkId>,
+    /// アンカーのイベントの応答待ちの段（送る直前に置き、応答で必ず取り出す・[`anchor`]）。
+    pub anchor: Option<anchor::AnchorStage>,
     /// 利用者の中断の控え（止めた相手と scope。完了通知を待っている間だけ `Some`）。
     pub user_break_talk: Option<balloon_events::BreakNote>,
     /// 最後に再生を始めたトークの控え（3 つのバルーンのイベントの Reference0 の源）。
@@ -272,6 +278,7 @@ impl State {
             pending_close: None,
             choice: None,
             choice_prev_talk: None,
+            anchor: None,
             user_break_talk: None,
             shown: None,
             change: None,
@@ -551,6 +558,9 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
             }
         },
 
+        // Anchor: 受理の規則（定常だけ・それ以外は警告で棄却）ごと anchor::on_anchor へ渡す。
+        Input::Anchor(a) => anchor::on_anchor(state, a),
+
         // UserBreak: 場面で振り分けず、受理の規則ごと user_break::on_user_break へ渡す。
         Input::UserBreak { scope } => user_break::on_user_break(state, scope),
 
@@ -617,14 +627,14 @@ fn on_execution_state(mut state: State, update: ExecutionStateUpdate) -> (State,
 
 /// 相が再生中のトークを運ぶか（DD-IT-3・スナップショットの talk 軸）。
 ///
-/// アクティブな talk を運ぶ相＝`Steady{Some}` と（挨拶追跡中の）`BootVersion{Some}`（DD-IT-12）。
+/// 再生中＝`current_talk_id` が再生中のトークの番号を引ける相（相の表はそこの 1 つだけ）。普段の会話
+/// （`Steady{Some}`）・起動の挨拶（`BootVersion{Some}`・DD-IT-12）と、お別れの台詞の 3 つの場面＝終了の挨拶
+/// （`CloseTalkWait`）・切り替えの送り出しの台詞（`ChangeTalkWait`）・切り替えの別れの台詞
+/// （`ChangeCloseTalkWait`）が当たる。利用者の中断で止められる場面と `talking` の場面はこれで一致する。
 /// 選択待ちと写しの 3 状態は `Phase` の外にあるため、スナップショットは [`State::snapshot`]／
 /// [`State::snapshot_without_talk`] が組み立てる。
 pub(crate) fn talk_active_of(phase: &Phase) -> bool {
-    matches!(
-        phase,
-        Phase::Steady { talk: Some(_) } | Phase::BootVersion { talk: Some(_) }
-    )
+    current_talk_id(phase).is_some()
 }
 
 /// フェーズの静的ラベル（ログ観測用）。`Phase` は Debug を持たないため、可観測性ログ
@@ -812,11 +822,15 @@ fn on_shiori_reply(
     // 条件を `Steady` かつ in-flight（`Cascading|TimeoutInFlight`）に限るのが要点である: 選択待ち
     // （`Waiting`）中に届く Failed は pump／マウス由来であり、免除すると SHIORI 失敗時の終了規律
     // （Req6.1）が非 choice 経路まで緩む。非 choice 経路は無改変で従来どおり Unloading{Fault} へ倒れる。
+    //
+    // アンカーのイベントの応答待ち（段の記憶がある間）も同じ免除に入れる。失敗は steady の先頭の
+    // 腕（`anchor::on_anchor_reply`）が `anchor_shiori_failed_as_204` を残して 204 と同じに扱う。
     if matches!(state.phase, Phase::Steady { .. })
-        && state
-            .choice
-            .as_ref()
-            .is_some_and(|ledger| choice_in_flight(&ledger.phase))
+        && (state.anchor.is_some()
+            || state
+                .choice
+                .as_ref()
+                .is_some_and(|ledger| choice_in_flight(&ledger.phase)))
     {
         return steady::step(state, Input::ShioriReply { outcome, origin }, config);
     }

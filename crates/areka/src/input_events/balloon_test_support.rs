@@ -10,7 +10,7 @@ use areka_emo_compose::{BindSet, EmoWorld};
 use areka_emo_present::{EmoPresenter, PresentCommand};
 use areka_emo_text::actor::HitRectPx;
 use areka_emo_text::actor::TextLayerRuntime;
-use areka_emo_text::state::TextLayerConfig;
+use areka_emo_text::state::{SpanKind, TextLayerConfig};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver};
 use bevy_ecs::hierarchy::ChildOf;
@@ -30,6 +30,7 @@ use crate::placement::spawn::BalloonWindowMarker;
 /// rect 以外のフィールドは 3.1 の判定に無関係——不透明転写の placeholder。
 pub(crate) fn row(ordinal: usize, left: f32, top: f32, right: f32, bottom: f32) -> ChoiceHitRow {
     ChoiceHitRow {
+        kind: SpanKind::Choice,
         ordinal,
         id: format!("q{ordinal}"),
         label: format!("label{ordinal}"),
@@ -40,6 +41,20 @@ pub(crate) fn row(ordinal: usize, left: f32, top: f32, right: f32, bottom: f32) 
             right,
             bottom,
         },
+    }
+}
+
+/// アンカーの範囲の当たり行（[`row`] と種類だけが違う）。
+pub(crate) fn anchor_row(
+    ordinal: usize,
+    left: f32,
+    top: f32,
+    right: f32,
+    bottom: f32,
+) -> ChoiceHitRow {
+    ChoiceHitRow {
+        kind: SpanKind::Anchor,
+        ..row(ordinal, left, top, right, bottom)
     }
 }
 
@@ -117,6 +132,36 @@ pub(super) fn runtime_with_active_choice(actor: &str) -> Rc<RefCell<TextLayerRun
         },
         duration: 0.0,
     });
+    rt
+}
+
+/// アンカーの範囲 1 つ（`\_a[x]あい\_a`）を作る合図の列。
+pub(crate) fn anchor_cues(actor: &str) -> [TalkCue; 3] {
+    [
+        CueCommand::AnchorBegin {
+            id: "x".into(),
+            references: Vec::new(),
+        },
+        CueCommand::Text("あい".into()),
+        CueCommand::AnchorEnd,
+    ]
+    .map(|command| TalkCue {
+        at: 0.0,
+        actor: ActorKey::from(actor),
+        command,
+        duration: 0.0,
+    })
+}
+
+/// アンカーの範囲だけを載せた実 runtime（選択肢は無い＝`choice_active` は偽・`hit_active` は真）。
+/// 当たりの行は [`runtime_with_active_choice`] と同じく空のまま。
+pub(super) fn runtime_with_active_anchor(actor: &str) -> Rc<RefCell<TextLayerRuntime>> {
+    let rt = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
+    for cue in anchor_cues(actor) {
+        rt.borrow_mut().apply_cue(&cue);
+    }
     rt
 }
 

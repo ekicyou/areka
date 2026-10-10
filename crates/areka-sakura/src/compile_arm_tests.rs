@@ -130,9 +130,15 @@ fn newline_and_clear_map_to_commands() {
 /// （`compile.rs` の `Instruction::Font` の腕が `Custom("\\f")` の cue を生成する）。除外集合が
 /// Raw-only であるという本檻の主張は変わらない——卒業が 1 つ増えても除外集合は縮む側にしか
 /// 動かないからである。
+///
+/// **2026-10-10 追記**——`areka-P0-anchor-tag-canon` で `Instruction::Anchor`／`AnchorEnd` も
+/// 専用の腕へ卒業した（それまでは catch-all に落ちて捨てられていた）。開きは下の (2) の一覧に
+/// 足してある。閉じは単独だと「開いていないのに閉じ」で合図を出さないが、これは catch-all では
+/// なく専用の腕の決め（警告付き）で、対になった閉じは合図を出す——細目は
+/// `compile_anchor_tests.rs` が担う。除外集合が Raw-only であるという主張は変わらない。
 #[test]
 fn catch_all_ignored_set_is_raw_only() {
-    use areka_parsers::sakura::{Choice, MoveArgs};
+    use areka_parsers::sakura::{Anchor, Choice, MoveArgs};
 
     // (1) Raw は除外集合ゆえ 0 cue。中途に Raw を挟んでも内容は後続 Text のみ（ClearAll 前置）。
     let compiled = compile(&[
@@ -158,7 +164,12 @@ fn catch_all_ignored_set_is_raw_only() {
     // (2) 卒業した 5 語彙は除外集合の外＝各々 cue を生成する（sheet 非空）。ここでこれらが
     //     「無視される」と主張することは 4.1/4.2 と矛盾するため、本檻は生成側のみを固定する
     //     （R8.3 対置換）。詳細写像は個別 behavioral 檻（`*_maps_to_*` 等）が担う。
-    let graduated: [Instruction; 5] = [
+    //     下の配列の 6 個目（アンカーの開き）は 2026-10-10 の卒業（doc の追記）。
+    let graduated: [Instruction; 6] = [
+        Instruction::Anchor(Anchor {
+            id: "x".into(),
+            references: vec![],
+        }),
         Instruction::Choice(Choice {
             disp: "はい".into(),
             target: "OnYes".into(),

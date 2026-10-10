@@ -7,16 +7,24 @@
 //! # 採録規則（要件 8.1/8.2）
 //!
 //! `Interval::Random{k}`／`BindRandom{k}` と、`always` の単独（[`is_always_interval`]・小文字の完全一致）を
-//! 採録する（[`LoopTrigger`] 3 種・spec: areka-P0-animated-image-playback 要件 4.1・4.8・4.9）。加えて
+//! 採録する（[`LoopTrigger`] の前 3 種・spec: areka-P0-animated-image-playback 要件 4.1・4.8・4.9）。加えて
 //! `Interval::Other(語彙)` のうち **`sometimes`・`rarely` の 2 語は採録する**: `sometimes` は
 //! `random,2`・`rarely` は `random,4` と同じ引き金へ読み替え、以降の手順（`k == 0` の検査・コマの
 //! 整列・空の検査）へそのまま流す（小文字の完全一致・spec: areka-P0-shell-implicit-surface
 //! 要件 11.1/11.2）。読み替えたときは元の語（`vocab`）と読み替え先の `k` を `debug!` に残す
 //! （要件 11.7）。`Interval::Bind`（静的着せ替え）・**それ以外の** `Other` の語彙・`#[non_exhaustive]`
 //! の将来 variant は**採録せず `debug!` で記録**する。非採録の `Other` は**元語彙文字列込み**で記録
-//! するため、「`runonce` と書いたのに動かない」が診断可能になる（討議 #1 裁定・要件 11.4）。
-//! 口パク（`interval,talk`）・`\i[N]`・動的 bind・talk cue は構造的に `Random`/`BindRandom` の
-//! interval アニメではないため、この採録フィルタが自然に除外する（要件 8.3）。
+//! するため、「`yen-e` と書いたのに動かない」が診断可能になる（討議 #1 裁定・要件 11.4）。
+//! `\i[N]`・動的 bind・talk cue は構造的に interval アニメではないため、この採録フィルタが自然に
+//! 除外する（要件 8.3）。
+//!
+//! # `runonce`・`periodic,数値`・`talk,数値`（spec: areka-P0-seriko-trigger-intervals 要件 1.5・7.1・7.2・7.4）
+//!
+//! 読み手が型へ写した 3 語（`Interval::Runonce`／`Periodic{secs}`／`Talk{n}`）は [`LoopTrigger`] の
+//! 後ろ 3 種として採り、採ったときに面の番号・animation の番号・語・数値を `debug!` に 1 回残す。
+//! 読み手が数値を読めなかった `talk`／`periodic`（`Other` の先頭の語がその 2 語）は採らず、元の綴りを
+//! 添えた `warn!` を 1 回残す。コマ列が空なら下の縮退ガードの `warn!`。`+` の組み合わせ
+//! （`bind+runonce` など）と大文字混じりは「それ以外の `Other`」のまま `debug!` だけ。
 //!
 //! # 縮退ガード（要件 8.3・構築時 1 回・log-first）
 //!
@@ -48,9 +56,11 @@ use areka_emo_compose::{
     ComposeMethod, EmoWorld, FilmId, FilmSheet, FilmSkip, NestTable, PartKey, is_always_interval,
 };
 
-/// 駆動トリガ（採録は 3 種のみ・要件 8.1）。
+/// 駆動トリガ（採録はこの 6 種のみ・要件 8.1）。
 ///
 /// `k` は 1/N 抽選の頻度パラメータ（`k == 0` は構築時ガードで弾かれるため、採録済み値は常に `k >= 1`）。
+/// 後ろの 3 つ（`runonce`・`periodic,数値`・`talk,数値`）は抽選しない（乱数を引かない・spec:
+/// areka-P0-seriko-trigger-intervals）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoopTrigger {
     /// `interval,random,K`（要件 5.2）。
@@ -69,6 +79,18 @@ pub enum LoopTrigger {
         period_ms: NonZeroU64,
         /// 合計の回数（`None` は終わりなし。手書きは常に `None`）。
         laps: Option<NonZeroU32>,
+    },
+    /// `interval,runonce`: 面に切り替わった瞬間に 1 回。
+    Runonce,
+    /// `interval,periodic,秒`: 面に切り替わった時刻を起点に `period_ms` ごと。
+    Periodic {
+        /// 周期（秒 × 1000・丸めなし。採録済みは `>= 1000`）。
+        period_ms: NonZeroU64,
+    },
+    /// `interval,talk,文字数`: `every` 文字が現れるごと。
+    Talk {
+        /// 区切りの文字数（採録済みは `>= 1`）。
+        every: NonZeroU32,
     },
 }
 
@@ -118,6 +140,21 @@ pub struct AnimationTable {
     has_animated_parts: bool,
     /// `always` を 1 本以上採ったか（手書き・子のどちらでも）。
     has_always: bool,
+    /// `runonce`・`periodic`・`talk` を 1 本以上採ったか（一番上でも部品でも）。
+    has_triggers: bool,
+    /// `talk` を 1 本以上採ったか。
+    has_talk: bool,
+}
+
+/// `talk`／`periodic` の数値が正の整数として読めなかった animation を採らない記録（表を組むときに
+/// 1 回・`vocab` は元の綴り・spec: areka-P0-seriko-trigger-intervals 要件 1.5・7.2）。
+fn warn_invalid_number(surface_id: u32, animation_id: u32, vocab: &str) {
+    tracing::warn!(
+        surface_id,
+        animation_id,
+        vocab,
+        "seriko table: talk/periodic の数値が無効ゆえ非採録（要件 1.5・7.2）"
+    );
 }
 
 impl AnimationTable {
@@ -165,6 +202,27 @@ impl AnimationTable {
                     areka_parsers::shell::Interval::BindRandom { k } => {
                         Some(LoopTrigger::BindRandom { k: *k })
                     }
+                    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#runonce:1
+                    areka_parsers::shell::Interval::Runonce => Some(LoopTrigger::Runonce),
+                    // 読み手は 1 以上だけを型へ写すが、型は 0 を持てるので 0 は無効の数値として扱う。
+                    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#periodic_2c_6570_5024:1
+                    areka_parsers::shell::Interval::Periodic { secs } => {
+                        match NonZeroU64::new(u64::from(*secs) * 1000) {
+                            Some(period_ms) => Some(LoopTrigger::Periodic { period_ms }),
+                            None => {
+                                warn_invalid_number(surface_id, anim.id, "periodic,0");
+                                continue;
+                            }
+                        }
+                    }
+                    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#talk_2c_6570_5024:1
+                    areka_parsers::shell::Interval::Talk { n } => match NonZeroU32::new(*n) {
+                        Some(every) => Some(LoopTrigger::Talk { every }),
+                        None => {
+                            warn_invalid_number(surface_id, anim.id, "talk,0");
+                            continue;
+                        }
+                    },
                     areka_parsers::shell::Interval::Bind => {
                         tracing::debug!(
                             surface_id,
@@ -176,8 +234,10 @@ impl AnimationTable {
                     areka_parsers::shell::Interval::Other(vocab) => {
                         // `sometimes`／`rarely` は `random,2`／`random,4` と同じ引き金へ読み替えて
                         // 採録する（小文字の完全一致・spec: areka-P0-shell-implicit-surface
-                        // 要件 11.1/11.2）。他の語は今までどおり元語彙込みで記録して非採録＝
-                        // 「runonce と書いたのに動かない」の診断は残る語について生きる（要件 11.4）。
+                        // 要件 11.1/11.2）。先頭の語が `talk`／`periodic` のもの（読み手が数値を
+                        // 読めなかった綴り）は `warn!` で非採録（spec: areka-P0-seriko-trigger-intervals
+                        // 要件 1.5・7.2）。他の語は今までどおり元語彙込みで記録して非採録＝
+                        // 「yen-e と書いたのに動かない」の診断は残る語について生きる（要件 11.4）。
                         let rewritten = match &**vocab {
                             // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#sometimes:1
                             "sometimes" => Some(2),
@@ -195,6 +255,14 @@ impl AnimationTable {
                                     "seriko table: 間隔の語を random,K と同じ引き金へ読み替えて採録（要件 11.1/11.2）"
                                 );
                                 Some(LoopTrigger::Random { k })
+                            }
+                            None if matches!(
+                                vocab.split(',').next(),
+                                Some("talk" | "periodic")
+                            ) =>
+                            {
+                                warn_invalid_number(surface_id, anim.id, vocab);
+                                continue;
                             }
                             None => {
                                 tracing::debug!(
@@ -278,6 +346,28 @@ impl AnimationTable {
                     }
                 };
 
+                // 3 語を採ったことを語と数値つきで 1 回残す（数値は書かれたまま・`runonce` は数値なし・
+                // spec: areka-P0-seriko-trigger-intervals 要件 7.1）。
+                let adopted: Option<(&str, Option<u64>)> = match trigger {
+                    LoopTrigger::Runonce => Some(("runonce", None)),
+                    LoopTrigger::Periodic { period_ms } => {
+                        Some(("periodic", Some(period_ms.get() / 1000)))
+                    }
+                    LoopTrigger::Talk { every } => Some(("talk", Some(u64::from(every.get())))),
+                    LoopTrigger::Random { .. }
+                    | LoopTrigger::BindRandom { .. }
+                    | LoopTrigger::Always { .. } => None,
+                };
+                if let Some((vocab, value)) = adopted {
+                    tracing::debug!(
+                        surface_id,
+                        animation_id = anim.id,
+                        vocab,
+                        value,
+                        "seriko table: 引き金の語を採録（要件 7.1）"
+                    );
+                }
+
                 table.entry(surface_id).or_default().push(LoopAnimation {
                     id: anim.id,
                     trigger,
@@ -360,6 +450,17 @@ impl AnimationTable {
                 .values()
                 .flatten()
                 .any(|a| matches!(a.trigger, LoopTrigger::Always { .. }));
+        let has_talk = table
+            .values()
+            .flatten()
+            .any(|a| matches!(a.trigger, LoopTrigger::Talk { .. }));
+        let has_triggers = has_talk
+            || table.values().flatten().any(|a| {
+                matches!(
+                    a.trigger,
+                    LoopTrigger::Runonce | LoopTrigger::Periodic { .. }
+                )
+            });
 
         AnimationTable {
             animations: table,
@@ -367,6 +468,8 @@ impl AnimationTable {
             nest,
             has_animated_parts,
             has_always,
+            has_triggers,
+            has_talk,
         }
     }
 
@@ -385,10 +488,22 @@ impl AnimationTable {
         }
     }
 
-    /// 繰り返しの経路を通す表か: 動く部品が在る、または `always` を 1 本以上採った（偽の表では
-    /// 足した経路を通らない・spec: areka-P0-animated-image-playback 要件 7.1・7.2）。
+    /// 繰り返しの経路を通す表か: 動く部品が在る・`always` を 1 本以上採った・`runonce`／`periodic`／
+    /// `talk` を 1 本以上採った、のどれか（偽の表では足した経路を通らない・spec:
+    /// areka-P0-animated-image-playback 要件 7.1・7.2・spec: areka-P0-seriko-trigger-intervals 要件 8.1）。
     pub fn is_continuous(&self) -> bool {
-        self.has_animated_parts || self.has_always
+        self.has_animated_parts || self.has_always || self.has_triggers
+    }
+
+    /// `runonce`・`periodic`・`talk` を 1 本でも採ったか（部品の引き金を判定するかの門・一番上でも
+    /// 部品でも・spec: areka-P0-seriko-trigger-intervals 要件 8.1）。
+    pub(crate) fn has_triggers(&self) -> bool {
+        self.has_triggers
+    }
+
+    /// `talk` を 1 本でも採ったか（文字の cue を写すかの門・一番上でも部品でも）。
+    pub(crate) fn has_talk(&self) -> bool {
+        self.has_talk
     }
 
     /// 作者のサーフェスの採録済みアニメを 1 本も持たない（表が空）か（動く絵の子の行は数えない）。
@@ -423,6 +538,10 @@ mod always_tests;
 #[cfg(test)]
 #[path = "table_film_tests.rs"]
 mod film_tests;
+
+#[cfg(test)]
+#[path = "table_trigger_tests.rs"]
+mod trigger_tests;
 
 #[cfg(test)]
 mod tests {
@@ -498,7 +617,7 @@ mod tests {
 
     /// (1) kero(`interval,random,4`)＋sakura(`interval,bind+random,4`)＋非駆動(Bind/Other) を含む
     /// 世界から、採録されるのは Random/BindRandom の 2 アニメのみ。Bind と**読み替えの対象でない**
-    /// `Other` は非採録かつ `debug!` で記録され、`Other` は元語彙 `runonce` を含む（要件 8.1/8.2・
+    /// `Other` は非採録かつ `debug!` で記録され、`Other` は元語彙 `yen-e` を含む（要件 8.1/8.2・
     /// 討議 #1）。読み替えの対象 2 語（`sometimes`・`rarely`）は採録側であり、別の檻
     /// `table_interval_words_tests.rs` が留める（要件 11.1/11.2/11.4）。
     #[test]
@@ -529,14 +648,14 @@ mod tests {
                 ],
             )],
         );
-        // 非駆動: surface30 に Bind（静的着せ替え）と Other("runonce")（読み替えの対象でない語彙）。
+        // 非駆動: surface30 に Bind（静的着せ替え）と Other("yen-e")（読み替えの対象でない語彙）。
         let non_driven = surface_with(
             30,
             vec![
                 anim(1, Interval::Bind, vec![pat(0, "overlay", 1100, 0, 0, 0)]),
                 anim(
                     2,
-                    Interval::Other("runonce".into()),
+                    Interval::Other("yen-e".into()),
                     vec![pat(0, "overlay", 1200, 0, 0, 0)],
                 ),
             ],
@@ -593,7 +712,7 @@ mod tests {
         // 全体で採録アニメは 2 本のみ（kero+sakura）。
         assert!(!table.is_empty());
 
-        // debug! ログ: Bind と Other が非採録として記録され、Other は元語彙 runonce を含む。
+        // debug! ログ: Bind と Other が非採録として記録され、Other は元語彙 yen-e を含む。
         assert!(
             logs.contains("level=DEBUG"),
             "非採録は debug! で記録: {logs}"
@@ -603,11 +722,11 @@ mod tests {
             "Bind の非採録が debug! 記録される: {logs}"
         );
         assert!(
-            logs.contains("runonce"),
-            "Other の元語彙 runonce が debug! に記録される（討議 #1）: {logs}"
+            logs.contains("yen-e"),
+            "Other の元語彙 yen-e が debug! に記録される（討議 #1）: {logs}"
         );
         assert!(
-            logs.contains("vocab=\"runonce\""),
+            logs.contains("vocab=\"yen-e\""),
             "元語彙は discriminating field vocab として載る: {logs}"
         );
     }
@@ -763,6 +882,8 @@ mod tests {
                     let total: u64 = anim.frames.iter().map(|f| u64::from(f.wait_ms)).sum();
                     assert_eq!(period_ms.get(), total, "周期は待ちの合計");
                 }
+                // この検体は 3 語を書いていない（型が 0 を持てないので確かめる値も無い）。
+                LoopTrigger::Runonce | LoopTrigger::Periodic { .. } | LoopTrigger::Talk { .. } => {}
             }
         }
     }

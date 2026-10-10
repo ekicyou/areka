@@ -15,7 +15,7 @@ updated_at: 2026-10-08
 **Location**: `/`  
 **Purpose**: Cargoワークスペース設定、横断ドキュメント、開発ルール  
 **Example**: `Cargo.toml`, `README.md`, `doc/`, `.kiro/steering/`
-**その他の最上位**: `tools/`＝開発用スクリプト（`test-all.ps1`＝フルテスト・完了ゲートの正本〔`tech.md` の Testing〕／`package.ps1`＝配布物の zip（名前に版が入る）と SHA256 を x64 と arm64 で組んで中身を判定し、`-Check` で展開して起動を確かめる／`crates-io.ps1`＝crates.io への公開前の確認〔引数なし＝ネットを使わず包むだけ・全体テストの段・`-Verify`＝組み立てまで・`-Pending`＝まだ出ていないクレート〕／`utf8-child.ps1`＝子のプロセスの出力を端末を通さず UTF-8 で読む関数 `Invoke-Utf8Child`（`.` で読み込む・単独では何もしない）／`encoding-check.ps1`＝道具と workflow の文字コードの判定〔較正→本文の判定→932 の子の判定・全体テストの段 `encoding check`〕／`load-flake.ps1`＝CPU に負荷をかけて areka のテストを回し、回ごとの赤を記録する道具（`tech.md` の Testing「許す赤」の物差し）／`perf/`＝性能改善ループ）・`.github/`＝GitHub Actions の定義（`workflows/release.yml`＝タグ `v*` で動くリリース。zip と SHA256 を作って GitHub Release を公開する／`workflows/crates-io.yml`＝`wintf`・`dola` を crates.io へ出す公開の段。タグ `v*` の push で起き、release の成功を待って出す＋やり直しの `workflow_dispatch`・手順書は `doc/crates-io-publish.md`）・`vendors/`＝検体 `.nar`（`sample_ghost/`）と調査資料のサブモジュール（`pasta/`）・`assets/`＝UI 資産・`docs/`＝単発の技術メモ・`dist/`＝配布物へそのまま入れる文書（第三者向け `README.txt`）
+**その他の最上位**: `tools/`＝開発用スクリプト（`test-all.ps1`＝フルテスト・完了ゲートの正本〔`tech.md` の Testing〕／`package.ps1`＝配布物の zip（名前に版が入る）と SHA256 を x64 と arm64 で組んで中身を判定し、`-Check` で展開して起動を確かめる／`crates-io.ps1`＝crates.io への公開前の確認〔引数なし＝ネットを使わず包むだけ・全体テストの段・`-Verify`＝組み立てまで・`-Pending`＝まだ出ていないクレート〕／`utf8-child.ps1`＝子のプロセスの出力を端末を通さず UTF-8 で読む関数 `Invoke-Utf8Child`（`.` で読み込む・単独では何もしない）／`encoding-check.ps1`＝道具と workflow の文字コードの判定〔較正→本文の判定→932 の子の判定・全体テストの段 `encoding check`〕／`load-flake.ps1`＝CPU に負荷をかけて areka のテストを回し、回ごとの赤を記録する道具（`tech.md` の Testing「許す赤」の物差し）／`perf/`＝性能改善ループ）・`.github/`＝GitHub Actions の定義（`workflows/release.yml`＝タグ `v*` で動くリリース。zip と SHA256 を作って GitHub Release を公開する／`workflows/crates-io.yml`＝`wintf`・`dola` を crates.io へ出す公開の段。タグ `v*` の push で起き、release の成功を待って出す＋やり直しの `workflow_dispatch`・手順書は `doc/crates-io-publish.md`）・`vendors/`＝検体 `.nar`（`sample_ghost/`）と調査資料のサブモジュール（`pasta/`）・`assets/`＝UI 資産・`docs/`＝単発の技術メモ・`dist/`＝配布物へそのまま入れる文書（第三者向け `README.txt`）と、`winget/`＝winget へ提出するマニフェストの雛形（初回に出した版の写し・配布 zip には入らない）
 
 ### Library Crate
 **Location**: `/crates/wintf/`  
@@ -315,7 +315,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 - **`areka-ghost`（⓪・結線層）**: descript.txt 起点のマウント解決（`areka_parsers::package::resolve`）を入力に、shiori 通信層（host-32 経由）・kanade・sakura・ticker を起動順に結線し、終了時は逆順で統括する最上位 owner。
 - **`areka-kanade`（③・conductor）**: **運行表（scheduling state machine）の正本**。ghost の boot/steady/close 各フェーズの運行判断。純粋状態機械＋アクターシェル＋メッセージ境界差し替えの三層構造。**sylphya へ依存しない**（`ResourceSink` クロージャで疎結合）。UI（右クリックメニュー）からの複数件の SHIORI リソース照会（`KanadeMsg::ResourceQuery`）は**運行状態機械を経ずにアクターの殻で答える**（`actor_resources.rs`）——会話できる状態（`Phase::Steady`）のときだけ往復し、起動・終了系列の固定の呼出順へ割り込まない。送出の許可表は 1 か所のまま。
 - **`areka-sakura`（④・さくらスクリプト再生）**: SHIORI が返す Value を時間軸上で再生する **per-talk transient** エンジン＝`areka_parsers::sakura::parse` の `Instruction` 列から dola `CueSheet` へのコンパイラ。再生制御そのもの（状態機械・horizon・broadcast）は **dola `cue` が唯一のエンジン**（dola 節参照）。
-- **`areka-seriko`（⑤・SERIKO アニメ）**: サーフェス解決・状態・発行・構築・アクターを責務別モジュールへ分割。部品（element定義の子・pattern定義の先）の時計は `parts.rs` の `PartClocks`（スコープ × 部品の番号 × animation の番号・一番上の切り替えでは捨てない）で、コマは `PatternState` の部品の欄で運ぶ。公開 API は crate root の `pub use` re-export に集約（唯一の公開面）。
+- **`areka-seriko`（⑤・SERIKO アニメ）**: サーフェス解決・状態・発行・構築・アクターを責務別モジュールへ分割。部品（element定義の子・pattern定義の先）の時計は `parts.rs` の `PartClocks`（スコープ × 部品の番号 × animation の番号・一番上の切り替えでは捨てない）で、コマは `PatternState` の部品の欄で運ぶ。interval の 3 語（`talk,数値`・`runonce`・`periodic,数値`）は抽選せず、「始めるか・何時に始まったことにするか」だけを `trigger.rs` の `Armed`（純関数と小さな状態）が決める（一番上の配線は `looper_trigger.rs`・部品は `parts_trigger.rs`。「再生中か」は開始の時刻で測る）。文字が現れる時刻は、文字の層と同じ式の写しを `talk.rs` に持つ（文字の層の式を変えたら写しも変える）。依存の向きは `table.rs` → `timeline.rs`／`trigger.rs`／`talk.rs` → `looper.rs`／`parts.rs` → `actor.rs`（2026-10-10・`areka-P0-seriko-trigger-intervals`）。公開 API は crate root の `pub use` re-export に集約（唯一の公開面）。
 - **`areka-talk`（talk 契約 leaf）**: talk 授受契約の**物理正本**（`TalkId`／`StartTalk`／`TalkDone`／`TalkEndReason`／`TalkCommand`／`ChoiceWaiting`）。kanade（③）⇄ sakura（④）間契約の唯一の物理定義。**依存ゼロ（std のみ）**・エンジン知識を持ち込まない。
 
 ### emo Render Engine Crates（⑥・三段直列＋テキスト層）
@@ -412,6 +412,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Purpose**: ukadoc（SSP 公式仕様書）の項目について「正典の写し（カタログ）」と「areka の判定（台帳）」を建て、その整合を常時走るテスト（`tests/consistency.rs`）で守る**調査道具**（`areka-P0-ukadoc-survey-toolkit`）。**areka の実行時コードからは 1 行も参照されない leaf**・`publish = false`。
 **Pattern**: 純粋層（文字列と値だけ）と入出力層（`io`・判断を持たない）の 2 層。入口は実行ファイル（`cli`）と常時テストの 2 つで、判定の実体は純粋層に 1 つ。互換機能を着地させた spec は、同じ PR で `doc/ukadoc-coverage/ledger/*.toml` の該当項目の判定も更新している（実例: PR#159・PR#162）。
 **Dependencies**: `toml`（読み取りのみ・書き出しは自前 `tomlout.rs`）・`thiserror`・`serde_json`
+**SSP の BTS の要望**: SSP の課題管理（BTS・https://bts.shillest.net/ ）の要望を調べるときは `.kiro/specs/completed/areka-P0-ssp-bts-salvage/bts-ledger.md` を読む（1 回きりの調査の台帳・いつどこまで見たかは台帳の先頭）。
 
 ### Vendored: pasta DSL Engine
 **Location**: `/vendors/pasta/`（git サブモジュール）  

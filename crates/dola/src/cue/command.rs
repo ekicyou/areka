@@ -59,7 +59,7 @@ pub enum CueTarget {
     /// Emote, EntityRef, BalloonSurface を主に消費する。
     /// 注: 名前は「シェル」だが分類上バルーン面切替もここへ経路付けられる（名前負債）。
     Shell,
-    /// バルーン（テキスト表示）— Text, Clear, Choice, WaitForChoice を主に消費
+    /// バルーン（テキスト表示）— Text, Clear, Choice, AnchorBegin, AnchorEnd, WaitForChoice を主に消費
     Balloon,
     /// 窓/placement 系（窓移動等）— `\!` 汎用キャリアのうち、消費側が名前で自己選別して
     /// ここへ割り当てるコマンド名（M1: `"move"`）を消費する演者スロット。
@@ -121,7 +121,7 @@ pub enum RoutingCommand {
 // 演出コマンド
 // ============================================================================
 
-/// 演出コマンド（10 バリアント、データ系のみ）。
+/// 演出コマンド（13 バリアント、データ系のみ）。
 ///
 /// バリアは `BarrierKind` として、ルーティングは `RoutingCommand` として、
 /// それぞれ `Entry` レベルで分離済み。
@@ -192,6 +192,21 @@ pub enum CueCommand {
     /// 上流は残存スコープを列挙できないため、"全消し"を表現者が自らの全スコープを
     /// 消す自己完結コマンドとして表現する。テキスト表現者（バルーン）が消費する。
     ClearAll,
+    /// アンカーの開き（さくらスクリプト `\_a[ID,...]` の不透明転写）。
+    ///
+    /// ここから [`CueCommand::AnchorEnd`] までに流れる文字が、押せる範囲になる。`id` は
+    /// 第 1 引数（空でもよい）、`references` は第 2 引数以降を**記述順のまま**運ぶ（空の
+    /// トークンも潰さない・ID の解釈はしない）。直列化の規約は `Choice` と同じで、`references`
+    /// が空ならキーを出さず、キーの無い資産は空の列として読める。テキスト表現者（バルーン）が
+    /// 消費する。
+    AnchorBegin {
+        id: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        references: Vec<String>,
+    },
+    /// アンカーの閉じ（角括弧の無い `\_a`）。中身を持たない。テキスト表現者（バルーン）が
+    /// 消費する。
+    AnchorEnd,
 }
 
 impl CueCommand {
