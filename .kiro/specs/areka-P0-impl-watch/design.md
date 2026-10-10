@@ -91,7 +91,7 @@ graph TB
 | 層 | 選択 | 役目 | 備考 |
 |---|---|---|---|
 | 実行ファイル | Rust 2024・`crates/areka-impl-watch`（bin）・`publish = false # 開発の道具（areka の外へ出さない）` | 全部 | `[package]` の中ほどに置く |
-| 引数の解釈 | 自前（`ukadoc-survey` と同じ表 1 本） | コマンド 13 個＋`--help` | 外部ライブラリは入れない |
+| 引数の解釈 | 自前（`ukadoc-survey` と同じ表 1 本） | コマンド 14 個＋`--help` | 外部ライブラリは入れない |
 | 状態の形 | `serde`（派生）＋`serde_json` 1 | `state.json` の読み書き | どちらも `Cargo.lock` に在る |
 | 排他 | `std::fs::File::lock`／`try_lock`／`unlock`（Rust 1.89 で安定・道具は 1.99） | `state.lock`（状態の短い排他）と `alive/*.lock`（居る印） | Windows では `LockFileEx` |
 | 生死の確認 | ロックファイルの `try_lock`（標準ライブラリだけ） | 見張りが居るか | `windows` クレートは使わない |
@@ -381,7 +381,7 @@ stateDiagram-v2
 | 要件 | 6.5, 9.2, 9.5, 9.6, 13.2, 13.3, 14.4 |
 
 **責任と制約**
-- 引数の表 1 本（`COMMANDS: [Spec; 13]`＝名前・要る引数・任意の引数・`--wait` を取るか）から解釈する。手書きの分岐を別に持たない。
+- 引数の表 1 本（`COMMANDS: [Spec; 14]`＝名前・要る引数・任意の引数・`--wait` を取るか）から解釈する。手書きの分岐を別に持たない。
 - 端末へ出す文はこのファイルの定数と、`status.rs` の ASCII の要約だけ。識別・リポジトリ・spec・PR・sha・UTC 以外の値を文に混ぜない。置き場所の道筋（`status: …`・`details: …`・`backup: …`・失敗の文）だけは例外で、ASCII の外の字を `\u{XXXX}` に逃がして出す（`escape_path`・9.3）。
 - 失敗の本文は標準エラーへ。標準出力には結果だけ。
 
@@ -599,7 +599,7 @@ pub enum WatchError {
     #[error("state.lock is busy for 10 s; another areka-impl-watch may be stuck")] LockBusy,
     #[error("state file version mismatch: file has {found}, this exe knows {known}. Do not mix old and new exes; see doc/impl-watch.md")] VersionMismatch { found: u64, known: u32 },
     #[error("state file is broken; see impl-watch.log")] Broken,          // status で読むだけのとき
-    #[error("a {kind} wait for {id} is already running")] AlreadyRunning { id: String, kind: WaitKind },
+    #[error("a {kind} wait for {id} is already running")] AlreadyRunning { id: String, kind: &'static str },   // 種類は ASCII の名前（error は state を読まない）
     #[error("io {op}: {kind} (os error {code})")] Io { op: &'static str, kind: String, code: i32 },
     #[error("json: {0}")] Json(String),
 }
