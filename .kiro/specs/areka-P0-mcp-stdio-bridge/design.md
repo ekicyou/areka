@@ -472,7 +472,7 @@ impl StreamableHttpClient for OwnHttp {
 /// scan が使う素の確かめ（Link を作る前）。接続を開いて initialize を送り、名乗りを返す。
 pub async fn verify(stream: TcpStream, port: u16, timeouts: &Timeouts) -> Result<String, HttpError>;
 ```
-- Invariants: 本当の本文を書いた接続は、同じ接続で `areka-mcp-server` の名乗りを読んだ接続だけ。
+- Invariants: Desktop から届いた要求・通知の本文を書いた接続は、同じ接続で `areka-mcp-server` の名乗りを読んだ接続だけ。例外は rmcp の手順の `initialize`（`Link` を作るときに rmcp が自分で送るもので、Desktop の中身を持たない）で、これは確かめを兼ねるので名乗りを読む前に書き、名乗りが違えば `NotAreka`（書く前の扱い）にする（D-4）。この例外が成り立つのは、`Bridge` が Desktop の `initialize` を areka へ送らない（D-8）からで、`Bridge` は Desktop の `initialize` を `Link` へ流してはならない。
 
 #### scan
 

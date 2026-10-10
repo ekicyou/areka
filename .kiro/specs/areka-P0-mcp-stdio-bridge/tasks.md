@@ -74,7 +74,7 @@
   - _Depends: 2.1_
   - _Requirements: 3.3, 3.10, 3.11, 8.1_
 
-- [ ] 3.3 (P) 自前の HTTP の送り手の芯: 接続ごとに確かめてから同じ接続で送る
+- [x] 3.3 (P) 自前の HTTP の送り手の芯: 接続ごとに確かめてから同じ接続で送る
   - **最初に**、本物の受け口（areka の MCP のクレートを空きポートに起こす）を相手に「1 本の接続で確かめの `initialize` と本当の要求の 2 つが通り、`Connection: close` の後に受け口が閉じる」を判定するテストを書いて通す（設計 D-4 の根拠の固定）。崩れたら別々の接続に分けずに止めて報告する
   - `127.0.0.1` のその番号へ接続し、送る本文が `initialize` でなければ固定の旧式の `initialize` を先に送って名乗りを読む。名乗りが areka のものと同じときだけ、同じ接続で本当の本文を送る。送る本文そのものが `initialize` ならその答えの名乗りで確かめる（2 度送らない）
   - 応答の頭を解き、`Content-Length`・chunked・閉じるまで、の 3 通りで本文を欠けずに読む（大きさの上限なし）。HTTP の状態は見ずに本文を読む。202 は「受け取った」
@@ -215,3 +215,7 @@
 - 3.1: `close` は書き手の鍵を待つ。相手が標準入力だけ閉じて標準出力を読まないと rmcp の 5 秒の後も `close` が戻らないので、4.6 の入口で終了の作法を決めるときに頭に置く。
 - 3.2: 控えの書きは全部同期の `std::fs`（`.await` なし）。一時の名前は `<名前>.<pid>.tmp` なので、同じプロセスの中で 2 つが同時に書くと混ざりうる。`main`（4.6）は `current_thread` のまま、`service_tests.rs`（4.x）は `multi_thread` で書かない・`spawn_blocking` から控えを書かない。
 - 3.2: 控えが無い（初回）は記録なしで `None`、読めない・書けないときだけ `warn!`。この `warn!` を判定するテストは無い（設計が `log-capture-kit` を使わないと決めている）。5.2 の「記録は標準エラーに出る」で、壊れた控えを置いて起こした exe の標準エラーに理由が出ることを 1 つ見る。
+- 3.3: D-4 の根拠（本物の受け口が 1 本の接続で 2 要求に答え、`Connection: close` の後に閉じる）は `http_tests.rs` の `real_receiver_answers_two_requests_on_one_connection_then_closes` で固定した（初回から緑）。
+- 3.3: `verify` の約束＝読めた名乗りは areka でもそうでなくても `Ok(name)`（`SERVER_NAME` との比較は呼び手）・名乗りを読めない相手（HTTP でない・JSON でない・途中で切れた・202／SSE）は `Err(NotAreka{name: ""})`・黙る相手は `Err(VerifyTimeout)`。読めなかった理由は送り手の `debug!` にしか出ないので、番号ごとの理由の `info`（要件 2.3）は 4.1 が残す。名乗りが空の相手を `others` と D-9 の文にどう出すかは 4.1／4.3 で決める。
+- 3.3: rmcp の失敗から送り手の失敗へ戻す道は 2 つとも通る（レビューの試しで確認）: 要求の失敗は `ServiceError::TransportSend` の `error` を、`serve_client` の失敗は `ClientInitializeError::TransportError { error }` の `error` を `downcast_ref::<StreamableHttpError<HttpError>>()` → `Client(e)`。この机では止めた受け口への接続は断りでなく `Connect(TimedOut)`（上限 300 ms）。rmcp が要求を時間切れで取り消すと送り手の未来が落ちて接続も閉じる。
+- 3.3: rmcp の型は `params` の無い `tools/list` を `"params": {}` 付きで書き出す（意味は同じ・5.1 の比較と 6.2 の差の記録で頭に置く）。本文そのものが `initialize` のときの往復も上限 `verify` で見切る。204 は「受け取った」にしない（設計は 202 だけ）。
