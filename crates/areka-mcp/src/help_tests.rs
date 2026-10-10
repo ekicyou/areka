@@ -109,7 +109,8 @@ fn desktop_example_source(html: &str) -> &str {
 }
 
 /// 設定例を、ブラウザが表示する文字（HTML の置き換えを戻したもの）にして JSON として読む。
-fn desktop_example(html: &str) -> Value {
+/// 受け口ごしの help のテスト（`server_gate_help_tests.rs`）も使う。
+pub(crate) fn desktop_example(html: &str) -> Value {
     let shown = desktop_example_source(html)
         .replace("&lt;", "<")
         .replace("&gt;", ">")

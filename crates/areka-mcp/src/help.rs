@@ -121,4 +121,4 @@ pub fn help_html(port: u16, bridge_exe: Option<&Path>) -> String {
 
 #[cfg(test)]
 #[path = "help_tests.rs"]
-mod help_tests;
+pub(crate) mod help_tests;

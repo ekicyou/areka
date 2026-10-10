@@ -5,6 +5,7 @@
 //! rmcp の `with_max_request_body_bytes` の両方へ渡す（設計 B-7）。
 
 use std::convert::Infallible;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use http_body_util::combinators::BoxBody;
@@ -37,6 +38,8 @@ type HttpResponse = Response<BoxBody<Bytes, Infallible>>;
 pub(crate) struct State {
     /// help に載せる実番号。
     pub port: u16,
+    /// help の Claude Desktop の設定例に載せる中継の置き場（None＝場所が取れなかった）。
+    pub bridge_exe: Option<PathBuf>,
     /// 複製して `Service::call` で呼ぶ（`poll_ready` は常に Ready）。
     pub mcp: StreamableHttpService<ArekaHandler, NeverSessionManager>,
 }
@@ -46,7 +49,12 @@ impl State {
     /// `NeverSessionManager`）・JSON の単発応答・本文の上限・取り消しの合図。
     /// `allowed_hosts` は既定（`localhost`・`127.0.0.1`・`::1`）のまま、`allowed_origins` は
     /// 空のまま（`Origin` の検査は手前の `gate` が持つ＝設計 B-1）。
-    pub(crate) fn new(port: u16, handler: ArekaHandler, token: CancellationToken) -> Self {
+    pub(crate) fn new(
+        port: u16,
+        bridge_exe: Option<PathBuf>,
+        handler: ArekaHandler,
+        token: CancellationToken,
+    ) -> Self {
         let config = StreamableHttpServerConfig::default()
             .with_legacy_session_mode(false)
             .with_json_response(true)
@@ -57,7 +65,11 @@ impl State {
             Arc::new(NeverSessionManager::default()),
             config,
         );
-        Self { port, mcp }
+        Self {
+            port,
+            bridge_exe,
+            mcp,
+        }
     }
 }
 
@@ -89,7 +101,7 @@ pub(crate) async fn handle(
         }
         Ok(()) => match (req.method(), path.as_str()) {
             (_, MCP_PATH) => forward(&state, req).await,
-            (&Method::GET, HELP_PATH) => (help(state.port), None),
+            (&Method::GET, HELP_PATH) => (help(&state), None),
             (_, HELP_PATH) => {
                 let mut response = plain(StatusCode::METHOD_NOT_ALLOWED);
                 response
@@ -148,11 +160,11 @@ fn peek(body: &[u8]) -> (String, String) {
 }
 
 /// 登録案内（200・`text/html; charset=utf-8`）。
-fn help(port: u16) -> HttpResponse {
+fn help(state: &State) -> HttpResponse {
     with_body(
         StatusCode::OK,
         "text/html; charset=utf-8",
-        help_html(port, None).into(),
+        help_html(state.port, state.bridge_exe.as_deref()).into(),
     )
 }
 

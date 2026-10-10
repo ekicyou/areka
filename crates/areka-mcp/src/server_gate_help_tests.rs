@@ -98,6 +98,23 @@ fn help_is_200_html_with_actual_port() {
     }
 }
 
+/// (spec: areka-P0-mcp-stdio-bridge 要件 6.1) 中継の置き場を渡して起こした受け口の help は、
+/// Claude Desktop の設定例の `command` にそのパスを載せる（`start` → `State` → help の受け渡し）。
+#[test]
+fn help_carries_the_bridge_path_given_to_start() {
+    let bridge = std::path::Path::new(r"C:\Program Files\areka\areka-mcp-bridge.exe");
+    let server = crate::start(&[0], ToolRegistry::default(), Some(bridge.to_path_buf()));
+    let addr = server.local_addr().expect("空きポートで待ち受けている");
+    let response = request(addr, "GET", HELP, &[], b"");
+    assert_eq!(response.status, 200, "{response:?}");
+    let body = String::from_utf8(response.body).expect("本文が UTF-8");
+    assert_eq!(
+        crate::help::help_tests::desktop_example(&body)["mcpServers"]["areka"]["command"],
+        json!(bridge),
+        "{body}"
+    );
+}
+
 /// (要件 6.4) 受け口と help 以外のパスは 404。
 #[test]
 fn unknown_path_is_404() {

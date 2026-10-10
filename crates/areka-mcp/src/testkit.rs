@@ -47,7 +47,7 @@ impl Response {
 
 /// 空きポート（候補 `&[0]`）でサーバを起こし、取っ手と実番号つきの番地を返す。
 pub(crate) fn serve(registry: ToolRegistry) -> (McpServer, SocketAddr) {
-    let server = start(&[0], registry);
+    let server = start(&[0], registry, None);
     let addr = server.local_addr().expect("空きポートで待ち受けている");
     (server, addr)
 }

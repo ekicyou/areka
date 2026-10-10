@@ -180,8 +180,14 @@ fn main() -> Result<()> {
     // 待受の失敗は `error!` に残すだけで終了コードには響かない（`start` は `Result` を返さない）。
     // SSP と同じ 10 本＋独自のツールの登録表と受け口（受け口は `register_systems` の後で World へ置く・
     // mcp-tool-entrances・mcp-author-tools）。
+    // 3 つ目は help の Claude Desktop の設定例に載せる中継の置き場＝起動した exe の本当の場所の隣
+    // （補助 exe と同じ決まり。場所が取れなければ「なし」・areka-P0-mcp-stdio-bridge 設計判断 D-14）。
     let (mcp_tools, mcp_inbox) = areka_mcp::tools::all_entrances(areka_mcp::tools::REPLY_WAIT);
-    let _mcp = areka_mcp::start(&areka_mcp::read_port_candidates(), mcp_tools);
+    let _mcp = areka_mcp::start(
+        &areka_mcp::read_port_candidates(),
+        mcp_tools,
+        boot_config::exe_location().map(|exe| exe.with_file_name(areka_mcp::BRIDGE_EXE_FILE_NAME)),
+    );
 
     // 実行ファイル隣接の 32bit SHIORI helper パスを一度だけ解決する（起動の文脈と起動入力の作り口が
     // 持ち、実 sink 結線経路と `LogSink` フォールバック boot 経路の双方が使う・DD-7）。
