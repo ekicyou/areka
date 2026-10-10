@@ -124,7 +124,7 @@ graph TB
 | D-14 | help の置き場の渡し方（6.1・6.2） | **本質の形**: `crates/areka/src/main.rs` が `exe_location()` から `areka_mcp::BRIDGE_EXE_FILE_NAME` の隣のパスを求め、`areka_mcp::start(candidates, registry, bridge_exe: Option<PathBuf>)` へ渡す。`State` が持ち、`help_html(port, bridge_exe)` が JSON の文字列（`serde_json::to_string`）にしてから HTML の `&`・`<`・`>` を置き換えて載せる。`None`（場所が取れない）のときはファイル名だけを載せ、「areka.exe と同じフォルダの」と書く | 補助 exe（`default_helper_exe_path`）と同じ決まりを通る＝リンクごしに起こした areka でも本当の隣になる。`start` の引数が増えるので、約束の外のファイルに触る（下の表で諮る） |
 | D-15 | `env` の有無（6.3・6.4） | `areka_mcp::candidates_from_env_value(None)` に実番号が入っていれば `env` を載せない。入っていなければ `"env": {"AREKA_MCP_PORT": "<番号>"}` を載せる | 既定の 20 個の判定を 1 か所から取る |
 | D-17 | 開発者の机での使い方（Claude Code から・公開はしない） | クレートは crates.io に**出さない**（`publish = false # 配布の中継 exe・開発者は cargo install --path で入れる`）。開発者はどのワークツリーからでも `cargo install --path crates/areka-mcp-bridge` で `%USERPROFILE%\.cargo\bin\areka-mcp-bridge.exe` に入れ、`claude mcp add --scope user areka <そのパス>` で 1 度登録すれば、全ワークツリーで動いている areka に中継がつなぐ（SSP を飛ばす）。`areka-mcp` への path の依存はそのままで通る（`cargo install --path` は path 依存を解く）。手順は `tech.md` の rmcp の項に 1 行 | 開発者の裁定（議題 3・2026-10-10）: 公開は開発の都合ではなく、要るのは「パスの固定」だけ。公開するなら定数だけの小さな公開クレートを切り出す形（イ）と決めてあるが、本 spec では行わない |
-| D-16 | SSE・`x-mcp-header` | 送り手は JSON 専用。`text/event-stream` の応答は 4.2 のエラー（`Invalid JSON response from server: content-type text/event-stream`）。`Mcp-Name`・`Mcp-Param-*` の札は rmcp のクライアントの `build_request_headers` が作る | areka のツールは今 SSE を返さない（0 件）。札は rmcp が持つので「後の spec への縛り ⑵」は消える。⑴（SSE）は残る |
+| D-16 | SSE・`x-mcp-header` | 送り手は JSON 専用。`text/event-stream` の応答は 4.2 のエラー（`Invalid JSON response from server: HTTP <状態> content-type text/event-stream`＝`NotJson` の `head` に `content-type text/event-stream` を入れる。SSE の本文は終わらないことがあるので読まずに頭だけで決める）。`Mcp-Name`・`Mcp-Param-*` の札は rmcp のクライアントの `build_request_headers` が作る | areka のツールは今 SSE を返さない（0 件）。札は rmcp が持つので「後の spec への縛り ⑵」は消える。⑴（SSE）は残る |
 
 ### Technology Stack
 
@@ -403,7 +403,7 @@ impl Config {
     pub fn from_parts(candidates: Vec<u16>, cache_dir: Option<PathBuf>, timeouts: Timeouts) -> Config;        // 部品のテスト用
 }
 ```
-- Postconditions: `candidates` は `areka_mcp::candidates_from_env_value(port_value)` の結果そのもの（並びの共有＝8.2 の前半）。`cache_dir` は `profile_dir` があればその下の `mcp-bridge`、無ければ `areka_beside` のときだけ `exe` の親の `profile\areka\mcp-bridge`、それも違えば `local_app_data` の下の `areka\mcp-bridge`、どれも無ければ `None`（D-7 の 3 段）。
+- Postconditions: `candidates` は `areka_mcp::candidates_from_env_value(port_value)` の結果そのもの（並びの共有＝8.2 の前半）。`cache_dir` は `profile_dir` があればその下の `mcp-bridge`、無ければ `areka_beside` のときだけ `exe` の親の `profile\areka\mcp-bridge`、それも違えば `local_app_data` の下の `areka\mcp-bridge`（`local_app_data` が絶対パスのときだけ。空・相対の値は取れない扱い＝起こされた場所の下へ黙って書かない）、どれも無ければ `None`（D-7 の 3 段）。
 
 #### LineTransport
 
@@ -413,7 +413,7 @@ impl Config {
 | Requirements | 1.1, 1.4〜1.9, 5.1 |
 
 **Responsibilities & Constraints**
-- `receive`: `read_until(b'\n')`（上限なし）。末尾の `\r` と前後の空白を落とし、先頭の UTF-8 の BOM（最初の行に付くことがある）も落とす（rmcp の stdio の輸送と同じ）。空なら次へ。`serde_json::from_slice::<ClientJsonRpcMessage>` で読み、`Syntax`／`Eof` なら `-32700`・`id` なし、`Data`（配列・数・文字列・欄の形違い）なら `-32600` を**自分で標準出力へ 1 行書いて**次へ（rmcp の `AsyncRwTransport` は `Syntax` を黙って捨てるので使わない）。EOF で `None`。
+- `receive`: `read_until(b'\n')`（上限なし）。末尾の `\r` と前後の空白を落とし、先頭の UTF-8 の BOM（最初の行に付くことがある）も落とす（rmcp の stdio の輸送と同じ）。空なら次へ。`serde_json::from_slice::<ClientJsonRpcMessage>` で読み、`Syntax`／`Eof` なら `-32700`・`id` は `null`、`Data`（配列・数・文字列・欄の形違い）なら `-32600` を**自分で標準出力へ 1 行書いて**次へ（rmcp の `AsyncRwTransport` は `Syntax` を黙って捨てるので使わない）。EOF で `None`。
 - `send`: `serde_json::to_vec`（改行を含まない）＋`\n`。書き手は `Arc<Mutex<W>>`（rmcp は `send` の未来を同時に走らせる）。
 - `R: AsyncRead + Unpin + Send`・`W: AsyncWrite + Unpin + Send + 'static` の総称（テストは `tokio::io::duplex` を差す）。
 
@@ -547,8 +547,8 @@ pub async fn run<R, W>(config: Config, stdin: R, stdout: W) -> QuitReason;  // s
 #### errors
 
 ```rust
-pub fn parse_error() -> ServerJsonRpcMessage;                                  // -32700・id なし
-pub fn invalid_request() -> ServerJsonRpcMessage;                              // -32600・id なし
+pub fn parse_error() -> serde_json::Value;                                     // -32700・`"id": null`（rmcp の型は `id` の欄を省くことしかできないので、行そのものを組む＝要件 1.6）
+pub fn invalid_request() -> serde_json::Value;                                 // -32600・`"id": null`（同上＝要件 1.7）
 pub fn server_not_available(reason: &str) -> ErrorData;                        // -1・"Server not available: <reason>"
 pub fn no_response(reason: &str) -> ErrorData;                                 // -1・"No response from server: <reason>"
 pub fn invalid_json_response(status: u16, head: &str) -> ErrorData;            // -1・"Invalid JSON response from server: HTTP <status> <head>"
@@ -603,8 +603,8 @@ pub fn invalid_json_response(status: u16, head: &str) -> ErrorData;            /
 
 | 起きること | 誰が | 答え | 記録（標準エラー） |
 |---|---|---|---|
-| JSON でない行 | LineTransport | `-32700`・`id` なし・次の行へ | `debug` |
-| オブジェクトでない行・欄の形違い | LineTransport | `-32600`・`id` なし | `debug` |
+| JSON でない行 | LineTransport | `-32700`・`id` は `null`・次の行へ | `debug` |
+| オブジェクトでない行・欄の形違い | LineTransport | `-32600`・`id` は `null` | `debug` |
 | 候補に areka が居ない | Bridge（NotFound） | 控え／`ping`／`-1` Server not available（番号と名乗り付き） | `info` 番号ごとの理由（飛ばした候補・名乗り・返事なし） |
 | `AREKA_MCP_PORT=0` | Bridge（Disabled） | `-1` Server not available（0 の文） | 起動時に `info` 1 件 |
 | 覚えた番号に接続できない・名乗りが違う（書く前） | OwnHttp → Bridge | 覚えを捨てて探し直し、見つかれば同じ要求を 1 回だけ | `info` |

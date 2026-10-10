@@ -35,7 +35,7 @@
   - 完了の姿: 空の入口で x64 のビルドが通り、依存の木に出るクレートの名前が作り直す前の `Cargo.lock` に全部ある（新しい外部のクレート 0 個を名前の比較で確かめて記録する）。出す印の検査が緑
   - _Requirements: 7.5_
 
-- [ ] 2.2 設定（候補の列・控えの置き場・待つ時間）と、中継が作るエラーを組む
+- [x] 2.2 設定（候補の列・控えの置き場・待つ時間）と、中継が作るエラーを組む
   - 候補の列は areka 本体と同じ関数で組む（未設定＝20 個・番号＝その 1 つ・`0`＝空・読めない値＝標準エラーに 1 件残して 20 個）
   - 控えの置き場は 3 段（`AREKA_PROFILE_DIR` → 隣に `areka.exe` が居れば exe の隣の `profile\areka\mcp-bridge` → `%LOCALAPPDATA%\areka\mcp-bridge` → なし）。環境を読む口は 1 つで、判断は値だけを受け取る純粋な関数にする
   - 待つ時間 3 つ（接続 300 ms・確かめ 3 秒・応答 30 秒）を定数で持ち、テストから差し替えられる形にする
@@ -56,7 +56,7 @@
 - [ ] 3. 輸送と控え（部品）
 - [ ] 3.1 (P) 標準入出力の輸送（1 行 1 要求）
   - 1 行を読んで要求にする。行末の CR・前後の空白・最初の行の BOM を落とし、空の行は飛ばす。行の長さに上限を設けない
-  - JSON として読めない行には `-32700`、読めるがオブジェクトでない・欄の形が違う行には `-32600`（どちらも `id` なし）を自分で 1 行書いて、次の行を読む
+  - JSON として読めない行には `-32700`、読めるがオブジェクトでない・欄の形が違う行には `-32600`（どちらも `id` は `null`）を自分で 1 行書いて、次の行を読む
   - 応答は改行を含まない 1 行＋LF で書く。同時の書き込みが 1 行の途中で混ざらないようにする。入力の終わりで輸送が終わる
   - テスト（メモリ上の管で）: 数と文字列の `id` の往復・改行入りの応答が 1 行・空の行・JSON でない行のエラーとその次の行が通ること・配列／数／文字列のエラー・入力の終わり・数 MiB の行が欠けない・BOM の付いた最初の行
   - 完了の姿: 上のテストが緑
@@ -204,3 +204,6 @@
 - 2.1: `tokio-util` は直接の依存にしない。`serve_directly`（3 引数）か `serve_directly_with_ct(.., Default::default())` で `CancellationToken` の名前を書かずに呼べる。待つ口は `RunningService::waiting()`。
 - 2.1: `serde` は直接の依存に無い。控えは呼び手で `serde_json::to_vec`／`from_slice` を rmcp の型に直に使う（総称の補助関数は書かない）。本番の `tokio::select!` は rmcp が `macros` を有効にしているので建つが、`futures` か `timeout` で書くほうが設計の機能の並びに素直。
 - 2.1: 偽の受け口は `lib.rs`（`cfg(test)`）と `tests/exe_test.rs` の両方から `#[path]` で読む。中の項目は `pub`、中継の項目を `crate::` で引かない（根が違う）。`real_receiver_test.rs` に要るなら 5.1 が自分のファイルに 1 行足す。`errors` のテストは 2.2 が `errors_tests.rs` と `errors.rs` 末尾の宣言を足す。
+- 2.2: 行の形のエラー（`-32700`・`-32600`）は要件 1.6・1.7 のとおり `"id": null`。rmcp 3.5.0 の `JsonRpcError` は `id` の欄を省くことしかできないので、`errors::parse_error`／`invalid_request` は `serde_json::Value` を返し、輸送（3.1）が `serde_json::to_vec`＋`\n` で自分で書く（設計の署名を要件に合わせて直した）。文は JSON-RPC 2.0 の綴り `Parse error`・`Invalid Request`。
+- 2.2: `LOCALAPPDATA` は絶対パスのときだけ使う（空・相対は「取れない」＝起こされた場所の下へ黙って書かない）。`AREKA_PROFILE_DIR` の空は areka 本体と同じく「設定あり」。
+- 2.2: SSE の応答の文は `Invalid JSON response from server: HTTP <状態> content-type text/event-stream`（3.4 は `NotJson.head` に `content-type text/event-stream` を入れ、本文は読まない。D-16 を直した）。ほかの `head` は本文の頭 256 バイトを `from_utf8_lossy` でそのまま（絞らない）。D-9 の候補と名乗りの整形は 4.3 の仕事。
