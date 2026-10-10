@@ -33,6 +33,15 @@ mod resolve;
 mod state;
 mod table;
 mod timeline;
+// 引き金の判定（spec: areka-P0-seriko-trigger-intervals）。使うのは一番上と部品の配線。
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "呼ぶのは一番上の面の配線（タスク 4.1）を入れるとき"
+    )
+)]
+mod trigger;
 
 // 検体を窓口から取得しプロセス寿命で保持する共有の受け口（spec: areka-P0-nar-install 要件 1.6）。
 #[cfg(test)]

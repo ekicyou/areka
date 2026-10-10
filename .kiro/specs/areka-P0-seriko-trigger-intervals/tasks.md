@@ -22,7 +22,7 @@
   - _Requirements: 1.5, 1.6, 7.1, 7.2, 7.4, 8.1, 9.7_
 
 - [ ] 3. 引き金の判定と文字の写し（純粋な芯）
-- [ ] 3.1 「見え始めの時刻」を起点にした `runonce`・`periodic` の判定を作る
+- [x] 3.1 「見え始めの時刻」を起点にした `runonce`・`periodic` の判定を作る
   - 引き金の状態（見え始めの時刻・`runonce` の 1 回だけの印・`periodic` の周の数え）と、「今この刻みで始めるか・開始の時刻はいつか」を返す純関数を、seriko の新しい兄弟モジュールとして置く（公開面は変えない）
   - `runonce`: 構えた刻みに 1 回だけ鳴り、開始の時刻は見え始めの時刻。印が付いた後は鳴らない
   - `periodic`: 見え始めの瞬間には鳴らず、数値秒ごとの周の境目で鳴る。開始の時刻は最新の周の境目そのもの。再生中の周は飛ばして数えだけ進める。1 回の刻みで 2 周以上またいでも 1 回だけ
@@ -131,3 +131,6 @@
 - 2.1: 途中の状態 — `parts.rs` の `gate` は 3 語を一時的に `Gate::Off` へ落としている（5.1 で `Gate::Trigger` へ）。`looper.rs` の抽選の `match` は 3 語を乱数の前で `continue`。`table.rs` の `has_talk()` は `#[cfg_attr(not(test), expect(dead_code, …))]` 付き（4.x で `looper.rs` が読み始めたら外す。外し忘れは「満たされない expect」の警告で出る）。3 語を持つ部品は既に `has_animated_parts` を真にする。
 - 2.1: `parts_always_tests.rs` の `always_beside_random_does_not_change_the_draws` は「`always` の無い側」に `runonce` を使ったまま緑。5.1 で部品の `runonce` が鳴るようになったとき、乱数 2 回のままかを確かめる（赤なら語を `yen-e` へ）。
 - 2.1: `table.rs` は 898 行（残り約 100 行）。採録の `debug!` の `value` は `periodic` が秒・`talk` が文字数・`runonce` は欄なし。
+- 3.1: `trigger.rs` の `arm(at_ms, open, _revealed)`・`show(at_ms, _revealed)`・`poll(.., _talk)` は設計の署名どおりで、文字まわりの引数は 3.2 が使い始める（3.1 の檻は書き替え不要）。`TalkWindow` の `#[expect(dead_code)]` は 3.2 で外す。`lib.rs` の `mod trigger;` の `#[cfg_attr(not(test), expect(dead_code, …))]` はモジュール全体に掛かるので、配線が済んだ時点（4.1〜5.x）で必ず外し、使われない項目が残っていないことを確かめる。
+- 3.1: 設計の `hide` の doc（「`periodic` の周を捨てる」）と不変条件（「`show` で `last_lap` だけ空になる」）が食い違う。実装は不変条件の側（`poll` から見える差は無い）。設計の 1 文は文書だけの直し。
+- 3.1: 閉じた窓で構えた面（`arm(open=false)`）の `runonce` は、最初に開いた時刻で 1 回鳴る（まだ鳴らしていないため）。開き直しでは鳴らない。台帳の note（タスク 8）に 1 文足す候補。再生中の `runonce` は印を付けない（設計の事後条件どおり・一番上では到達しない防御）。
