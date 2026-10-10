@@ -182,7 +182,7 @@
 
 ## 6. 設計への申し送り（研究項目）
 
-1. **遅れた選択の照合の鍵（要件 4.12）**: UI 側は `Clear`／`ClearAll` で snapshot を消すので「消えた後に発行」は起きないが、発行から kanade の処理までの間に台詞が置き換わる窓は残る。選択肢は `ledger.talk_id` で照合する。アンカーには帳簿が無く、しかも `TalkDone` の後もバルーンが出ている間は押せる（Steady{talk: None} でも有効）。候補: ⒜ `balloon_events::ShownTalk.talk_id`（最後に再生を始めたトーク）と、文字の層が cue から知れる何か（`TalkCue` は talk_id を運ばない→ 空回しの `ClearCounts` の番号など）を突き合わせる／⒝ UI 側（drain）で「発行時の世代」を付け、同一フレームの drain で古ければ捨てる（kanade に届かない）／⒞ kanade では照合せず、`steady_talk_replace` の規律に任せる（要件 4.12 を UI 側の棄却で読む）。設計で 1 つに決める。
+1. **遅れた選択の照合の鍵（要件 4.12）**: UI 側は `Clear`／`ClearAll` で snapshot を消すので「消えた後に発行」は起きないが、発行から kanade の処理までの間に台詞が置き換わる窓は残る。選択肢は `ledger.talk_id` で照合する。アンカーには帳簿が無く、しかも `TalkDone` の後もバルーンが出ている間は押せる（Steady{talk: None} でも有効）。候補: ⒜ `balloon_events::ShownTalk.talk_id`（最後に再生を始めたトーク）と、文字の層が cue から知れる何か（`TalkCue` は talk_id を運ばない→ 空回しの `ClearCounts` の番号など）を突き合わせる／⒝ UI 側（drain）で「発行時の世代」を付け、同一フレームの drain で古ければ捨てる（kanade に届かない）／⒞ kanade では照合せず、`steady_talk_replace` の規律に任せる（要件 4.12 を UI 側の棄却で読む）。設計で 1 つに決める。 **→ 2026-10-10 要件討議 議題 3 の裁定: ⒞ に相当。照合の鍵は作らず、要件 4.12 は「kanade 側で改めて照合しない」に書き換えた。§1・§2.6・§3・§5 の「4.12 の鍵」への言及は解消済みと読む。**
 2. **in-flight 中の 2 回目の押下（要件 4.11）**: 選択肢は `choice_rejected_busy`。アンカーは「棄却」か「待たせる」か。ukadoc は沈黙（互換記録の対象候補）。
 3. **`script:` 始まりの ID**: ukadoc の `\_a` には無い形。`plan_cascade` を共用すれば `Script` に落ちる。逐語で `OnAnchorSelectEx` に流す（Canonical 扱い）か、選択肢と同じく台本として走らせるか。
 4. **`\_a[]` の印**（要件 1.11）: `ArgumentDefaulted` を付けると `check_script` が `unreadable_argument` を出す。付けないなら何も出ない。
