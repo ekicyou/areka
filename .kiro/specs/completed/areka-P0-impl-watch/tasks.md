@@ -348,3 +348,4 @@
   - 起票 2: `areka-P0-impl-watch-residue`（クレートの拾い残し: 壊れた状態ファイルの訳がログに残らない・時計の 2 系統・番の来る順の鍵の 2 か所・`none` と `stopped:` の重複・殺された前の待ちの記録・裁定 4 の残りの窓・要件 10.2 の字・実機テストだけが檻のもの・テストの穴）。
   - 起票しなかったもの: `spec.json` の phase（完了の手順が直す）。上の 7.4 の残りの一覧のうち、`status_tests.rs` の見本の識別は起票 2 のテストの穴に含めた。
   - main の取り込み: `origin/main` の `be1a09fd` までを 2 回に分けて取り込んだ（衝突なし・`cargo metadata --locked` は 0）。
+- 完了時の全体テスト（2026-10-10・`tools/test-all.ps1 -Format -License`・検査したコミット `09f696c0`）: 10 段のうち 9 段が緑。`x64 workspace tests` の段は `wintf` の実窓のテスト 1 本（`a_fix_whose_insert_position_is_always_on_top_keeps_the_balloon_out_of_the_band` の対照の判定）だけが赤。このブランチは `crates/wintf` を触っていない。開発者の指示（「後 1 回だけテストを行い、状況に変化が無ければ申し送りを持って緑とせよ」）で `cargo test -p wintf --lib` を 1 回だけ回し直し（コミット `06d3cacb`）、同じ 1 本だけが赤（1138 本は緑）＝変化なし。申し送りは `areka-P0-zorder-chain-residue` の brief の「2026-10-10 `impl-watch` の完了時の全体テストからの申し送り」。これをもって緑として扱い、マージへ進んだ。
