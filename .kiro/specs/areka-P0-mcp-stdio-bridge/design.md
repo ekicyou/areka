@@ -205,7 +205,9 @@ crates/areka-mcp-bridge/
 
 ### 他の spec と重なりうるファイル（設計ディスカッションで諮る）
 
-本質の形（D-14）を選んだ結果、同じウェーブの約束（roadmap C5 ⑦「`crates/areka/src/main.rs`・`crates/areka-mcp/src/{dispatch,server,lib}.rs` に触らない」）の外のファイルに触る。開発者の方針（2026-10-05「設計は本質の形で」）に従い、ここに挙げて諮る。
+本質の形（D-14）を選んだ結果、同じウェーブの約束（roadmap C5 ⑦「`crates/areka/src/main.rs`・`crates/areka-mcp/src/{dispatch,server,lib}.rs` に触らない」）の外のファイルに触る。開発者の方針（2026-10-05「設計は本質の形で」）に従い、ここに挙げて諮った。
+
+**開発者の裁定（2026-10-10・設計ディスカッション議題 1）: 本質の形（ア）で進める。** 下の表のファイルに触ってよい。`main.rs` を同じウェーブで触りうる `baseware-root-list` は「新しいファイルへ足す」約束なので、競合しても `areka_mcp::start` の 1 行に限られる（完了のときの取り込みで手で合わせる）。
 
 | ファイル | 本 spec が触る行 | 同じファイルを触りうる spec | 重なりの見立て |
 |---|---|---|---|
@@ -219,7 +221,7 @@ crates/areka-mcp-bridge/
 | `dist/README.txt` | 自分の節 3 つと見出しの 1 行 | `baseware-root-list`（自分の行）・`winget-manifest-submission`（約束で触らない） | 節が別 |
 | `.kiro/steering/tech.md` | rmcp の項の追記 | 依存を足す spec は 1 ウェーブに 1 本（本 spec） | 無し |
 
-**約束を守る代案**（開発者が本質の形を取らないと決めた場合）: `help.rs` の中で `std::env::current_exe()` の親フォルダに `BRIDGE_EXE_FILE_NAME` を結合する。`main.rs`・`dispatch.rs`・`server.rs` は 0 行。欠点はリンクごしに起こした areka で help に載るパスが本当の隣にならないこと（`research.md` 議題 6 のア）。`lib.rs`・`handler.rs` の `pub` 化は代案でも要る（定数の共有＝8.2）。
+**退けた代案（記録のみ・採らない）**: `help.rs` の中で `std::env::current_exe()` の親フォルダに `BRIDGE_EXE_FILE_NAME` を結合する。`main.rs`・`dispatch.rs`・`server.rs` は 0 行。欠点はリンクごしに起こした areka で help に載るパスが本当の隣にならないこと（`research.md` 議題 6 のア）。`lib.rs`・`handler.rs` の `pub` 化は代案でも要る（定数の共有＝8.2）。
 
 ## System Flows
 
