@@ -168,6 +168,14 @@ pub(super) fn run(state: &mut State, cmd: &Command, caller: Option<&str>, now: u
     apply(state, cmd, caller, now, &FakePresence::all_present())
 }
 
+/// 見張りの記録が置かれた（置き換えを含む）出来事。
+pub(super) fn watch_registered(id: &str) -> Event {
+    Event::WaitRegistered {
+        id: id.to_owned(),
+        kind: WaitKind::Watch,
+    }
+}
+
 pub(super) fn applied(changed: bool, events: Vec<Event>) -> Applied {
     Applied {
         changed,

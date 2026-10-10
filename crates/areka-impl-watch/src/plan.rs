@@ -13,8 +13,11 @@
 
 use crate::state::{
     LastMerge, LoadHolder, LoadRequest, MergeHolder, MergeRequest, Participant, ParticipantStatus,
-    State, StopReason, WaitKind, WaitRecord, WatchInfo,
+    Recent, RecentKind, State, StopReason, WaitKind, WaitRecord, WatchInfo,
 };
+
+/// 回収の訳。出来事の `why` と「最近の出来事」の `detail` に同じ綴りで載せる。
+const WATCH_ABSENT: &str = "watch absent";
 
 /// 生死の口: その識別の、その種類の待ち（見張りを含む）のプロセスがいま居るか。
 /// 実装は口の層が持ち、ここは尋ねるだけ。
@@ -71,6 +74,13 @@ pub enum Command {
     Cancel { id: String },
     /// 離脱: 申し込み・机・待ちの記録を外し、参加者の記録を消す。
     Leave { id: String },
+    /// 走っている待ち（マージ・負荷テスト・再開）の記録の登録。同じ識別・同じ種類の記録は
+    /// 置き換え、種類が違えば並べる。見張りの記録は [`Command::Watch`] が置く。
+    RegisterWait { record: WaitRecord },
+    /// 待ち・見張りの記録の抹消（正常に終わる待ちが自分で呼ぶ）。記録が無ければ何も変えない。
+    UnregisterWait { id: String, kind: WaitKind },
+    /// 周期の一回り: 回収と番の決め直しだけを行う。
+    Tick,
 }
 
 /// コマンドが当てはまったか。
@@ -144,6 +154,22 @@ pub enum Event {
     Unstopped {
         id: String,
     },
+    /// 回収された（机・待ち行列・待ちの記録・参加者の記録が消えた）。`why` は訳の ASCII の文。
+    Reclaimed {
+        id: String,
+        why: &'static str,
+    },
+    /// 待ち・見張りの記録が置かれた（置き換えを含む）。
+    WaitRegistered {
+        id: String,
+        kind: WaitKind,
+    },
+    /// 待ち・見張りの記録が消えた。`why` は `ended`（自分で抹消した）か `absent`（殺されていた）。
+    WaitRemoved {
+        id: String,
+        kind: WaitKind,
+        why: &'static str,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -154,16 +180,18 @@ pub struct Applied {
     pub events: Vec<Event>,
 }
 
-/// 判断の入口。`caller` は呼んだ識別、`alive` は生死の口で、どちらも回収が使う。
+/// 判断の入口。毎回「回収 → コマンドの処理 → 番の決め直し」の順に行う。`caller` は呼んだ識別
+/// （開発者の手の呼び出しは `None`）、`alive` は生死の口で、どちらも回収が使う。
 pub fn apply(
     state: &mut State,
     cmd: &Command,
-    _caller: Option<&str>,
+    caller: Option<&str>,
     now: u64,
-    _alive: &dyn Presence,
+    alive: &dyn Presence,
 ) -> Applied {
     let before = state.clone();
     let mut events = Vec::new();
+    reclaim(state, caller, now, alive, &mut events);
     let verdict = match cmd {
         Command::Watch {
             id,
@@ -179,16 +207,14 @@ pub fn apply(
                 since: now,
             });
             participant.awaiting_watch_since = None;
-            put_wait(
-                state,
-                WaitRecord {
-                    id: id.clone(),
-                    kind: WaitKind::Watch,
-                    repo: Some(repo.clone()),
-                    pid: *pid,
-                    since: now,
-                },
-            );
+            let record = WaitRecord {
+                id: id.clone(),
+                kind: WaitKind::Watch,
+                repo: Some(repo.clone()),
+                pid: *pid,
+                since: now,
+            };
+            put_wait(state, record, &mut events);
             Verdict::Applied
         }
         Command::Merge {
@@ -344,6 +370,23 @@ pub fn apply(
             depart(state, id, "leave", &mut events);
             Verdict::Applied
         }
+        Command::RegisterWait { record } => {
+            put_wait(state, record.clone(), &mut events);
+            Verdict::Applied
+        }
+        Command::UnregisterWait { id, kind } => {
+            if drop_where(&mut state.waits, |wait| {
+                wait.id == *id && wait.kind == *kind
+            }) {
+                events.push(Event::WaitRemoved {
+                    id: id.clone(),
+                    kind: *kind,
+                    why: "ended",
+                });
+            }
+            Verdict::Applied
+        }
+        Command::Tick => Verdict::Applied,
     };
     replan(state, now, &mut events);
     Applied {
@@ -351,6 +394,62 @@ pub fn apply(
         verdict,
         events,
     }
+}
+
+/// 回収: 見張りの居ない「作業中」の参加者を、机・待ち行列・待ちの記録ごと外して記録を消し、
+/// 「最近の出来事」に残す。続けて、プロセスの居ない（殺された）待ちの記録を消す。
+///
+/// コマンドの処理より先に行うので、同じ呼び出しで登録する待ちの記録は、ここでは消えない。
+fn reclaim(
+    state: &mut State,
+    caller: Option<&str>,
+    now: u64,
+    alive: &dyn Presence,
+    events: &mut Vec<Event>,
+) {
+    let mut gone = Vec::new();
+    for (id, participant) in &mut state.participants {
+        // 「停止要請中」「止まった」は、見張りが終わっているのが正常なので回収しない。
+        if participant.status != ParticipantStatus::Working {
+            continue;
+        }
+        let present = alive.is_present(id, WaitKind::Watch);
+        if participant.awaiting_watch_since.is_some() {
+            // 再開してから見張りを立て直すまでは回収しない。見張りが居ると分かったら印だけ消す。
+            if present {
+                participant.awaiting_watch_since = None;
+            }
+        } else if !present && caller != Some(id.as_str()) {
+            // 呼んだ識別は同じ呼び出しでは回収しない。
+            gone.push(id.clone());
+        }
+    }
+    for id in gone {
+        erase(state, &id);
+        state.push_recent(Recent {
+            at: now,
+            kind: RecentKind::Reclaimed,
+            id: Some(id.clone()),
+            detail: WATCH_ABSENT.to_owned(),
+        });
+        events.push(Event::Reclaimed {
+            id,
+            why: WATCH_ABSENT,
+        });
+    }
+    // 殺された待ち・見張りの記録: その識別の、その種類のプロセスが居ないもの（呼んだ識別のものも
+    // 同じ。走っている待ちは自分のロックを握っているので「居る」と答えが返る）。
+    state.waits.retain(|wait| {
+        let present = alive.is_present(&wait.id, wait.kind);
+        if !present {
+            events.push(Event::WaitRemoved {
+                id: wait.id.clone(),
+                kind: wait.kind,
+                why: "absent",
+            });
+        }
+        present
+    });
 }
 
 /// 番を決め直す（元のスクリプトの `Invoke-Plan` の写し）: 停止要請の発行 → 負荷テストの番 →
@@ -458,18 +557,23 @@ fn plan_load(state: &mut State, now: u64, events: &mut Vec<Event>) -> bool {
     true
 }
 
-/// 参加を終える: 申し込み・机・待ちの記録を外し、参加者の記録を消す。何か消えたら出来事を 1 件。
-/// 待ちの記録が消えることが、その識別の見張りと待ちが「記録が消えた」で終わる根拠。
+/// 参加を終える: [`erase`] で消し、何か消えたら出来事を 1 件。
 fn depart(state: &mut State, id: &str, why: &'static str, events: &mut Vec<Event>) {
-    let mut gone = remove_from(state, id);
-    gone |= drop_where(&mut state.waits, |wait| wait.id == id);
-    gone |= state.participants.remove(id).is_some();
-    if gone {
+    if erase(state, id) {
         events.push(Event::Left {
             id: id.to_owned(),
             why,
         });
     }
+}
+
+/// その識別の申し込み・机・待ちの記録を外し、参加者の記録を消す。何か消えたら真。
+/// 待ちの記録が消えることが、その識別の見張りと待ちが「記録が消えた」で終わる根拠。
+fn erase(state: &mut State, id: &str) -> bool {
+    let mut gone = remove_from(state, id);
+    gone |= drop_where(&mut state.waits, |wait| wait.id == id);
+    gone |= state.participants.remove(id).is_some();
+    gone
 }
 
 /// 参加: 無ければ「作業中」で登録し、あれば名前（渡されたときだけ）とリポジトリを更新する。
@@ -522,10 +626,19 @@ fn resume(participant: &mut Participant, why: &'static str, now: u64, events: &m
     }
 }
 
-/// 待ちの記録を置く。同じ識別・同じ種類の記録が在れば、その場で置き換える。
-fn put_wait(state: &mut State, record: WaitRecord) {
+/// 待ちの記録を置く。同じ識別・同じ種類の記録が在れば、その場で置き換える（種類が違えば並べる）。
+/// 置いて状態が変わったら出来事を 1 件（同じ記録の置き直しは何も変えない）。
+fn put_wait(state: &mut State, record: WaitRecord, events: &mut Vec<Event>) {
     let same = |wait: &&mut WaitRecord| wait.id == record.id && wait.kind == record.kind;
-    match state.waits.iter_mut().find(same) {
+    let slot = state.waits.iter_mut().find(same);
+    if slot.as_deref() == Some(&record) {
+        return;
+    }
+    events.push(Event::WaitRegistered {
+        id: record.id.clone(),
+        kind: record.kind,
+    });
+    match slot {
         Some(wait) => *wait = record,
         None => state.waits.push(record),
     }
@@ -565,3 +678,7 @@ mod desk_tests;
 #[cfg(test)]
 #[path = "plan_stop_tests.rs"]
 mod stop_tests;
+
+#[cfg(test)]
+#[path = "plan_reclaim_tests.rs"]
+mod reclaim_tests;

@@ -8,7 +8,7 @@
 use super::test_support::{
     PID, PURPOSE, REPO, T0, applied, ask_to_stop, assert_not_applied, hold_load, hold_merge,
     hold_running_load, load_done, load_test, queue_load, queue_merge, run, state_with, stop_for,
-    stopped, wait_record,
+    stopped, wait_record, watch_registered,
 };
 use super::{Command, Event};
 use crate::state::{
@@ -162,10 +162,7 @@ fn watch_start_registers_a_working_participant_with_its_watch_record() {
         since: T0,
     });
     assert_eq!(state, expected);
-    assert_eq!(
-        got,
-        applied(true, vec![Event::Joined { id: "A".to_owned() }])
-    );
+    assert_eq!(got, applied(true, vec![joined("A"), watch_registered("A")]));
 }
 
 #[test]
@@ -207,8 +204,8 @@ fn watch_start_twice_keeps_one_record_and_updates_name_and_repo() {
             since: T0 + 10,
         }]
     );
-    // 2 度目は参加ではないので、参加の出来事は出ない。
-    assert_eq!(got, applied(true, vec![]));
+    // 2 度目は参加ではないので、参加の出来事は出ない。見張りの記録の置き換えだけが出る。
+    assert_eq!(got, applied(true, vec![watch_registered("A")]));
 }
 
 #[test]
@@ -273,7 +270,11 @@ fn watch_start_keeps_the_status_and_clears_the_awaiting_mark() {
             ..wait_record("A", WaitKind::Watch)
         };
         assert_eq!(state, expected, "{status:?}");
-        assert_eq!(got, applied(true, vec![]), "{status:?}");
+        assert_eq!(
+            got,
+            applied(true, vec![watch_registered("A")]),
+            "{status:?}"
+        );
     }
 }
 

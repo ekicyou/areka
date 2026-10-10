@@ -3,7 +3,7 @@
 use super::test_support::{
     PID, PURPOSE, REPO, T0, applied, ask_to_stop, assert_not_applied, hold_load, hold_merge,
     hold_running_load, load_done, load_test, queue_load, queue_merge, run, state_with, stop_for,
-    stopped,
+    stopped, watch_registered,
 };
 use super::{Command, Event};
 use crate::state::{LoadDesk, LoadHolder, Participant, ParticipantStatus, State};
@@ -238,6 +238,7 @@ fn a_participant_who_joins_while_a_load_test_is_wanted_or_held_is_asked_to_stop(
 
         let events = vec![
             Event::Joined { id: "D".to_owned() },
+            watch_registered("D"),
             stop_requested("D", "C"),
         ];
         assert_eq!(got, applied(true, events), "{label}");
@@ -433,10 +434,8 @@ fn while_the_running_mark_is_on_nobody_is_asked_to_stop_and_no_merge_grant_comes
         pid: PID,
     };
     let got = run(&mut state, &watch, Some("D"), T0 + 7);
-    assert_eq!(
-        got,
-        applied(true, vec![Event::Joined { id: "D".to_owned() }])
-    );
+    let events = vec![Event::Joined { id: "D".to_owned() }, watch_registered("D")];
+    assert_eq!(got, applied(true, events));
     for id in ["A", "B", "C"] {
         assert_eq!(seen(&state, id), (Working, T0, None, None), "{id}");
     }
