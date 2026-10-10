@@ -173,7 +173,7 @@
   - _Depends: 5.1, 5.2_
   - _Requirements: 8.4_
 
-- [ ] 6.3 配布スクリプトに中継を足す
+- [x] 6.3 配布スクリプトに中継を足す
   - 実行ファイルの許可表・建てる段・静的リンクの検査・zip の中身の判定（必須の項目・最上位の許可表・CPU 種別と取り込みの検査）・組み立ての写し、の 5 か所に中継を足す。注釈の数を直し、スクリプトの版を上げる
   - スクリプトは始めと終わりで作業ツリーの状態が同じことを見て、説明書も zip に写すので、説明書（6.1）の後に行い、スクリプトの実行中はほかのタスクと並べない
   - 赤の確かめ（2 回・出力を記録して戻す）: 組み立ての写しの行を一時的に外して実行すると中身の判定が赤・写す元を一時的に 32 ビットの補助 exe に替えて実行すると CPU 種別の判定が赤
@@ -257,3 +257,5 @@
 - 6.2: 差の記録は `doc/ssp-mcp/bridge-diff-areka.md`（SSP の欄＝要件の実測の表 16 行の写し・areka の欄＝テストの名前・spec のフォルダへのリンクは置かない）。文書の中の「形の違う `params` の `tools/call` は別に起票して直す」は、完了の棚卸で起票したら spec の名前に置き換える。rmcp のクライアントが受け口へ同時に出せる要求は 16 件まで（既定 `max_concurrent_requests`・テストなし）。
 - 6.2: `cargo install` の入れ先は `%CARGO_HOME%\bin`（開発者の机は `CARGO_HOME=c:\rust\cargo`。無ければ `%USERPROFILE%\.cargo\bin`）。設計 D-7・D-17 と `tech.md` を直した。`.kiro/steering/structure.md` に `areka-mcp-bridge` の節はまだ無い（完了時の文書の同期で扱う）。
 - 6.2: Bash の heredoc は `\` を `\` に潰す。`\` を含む置き換えの Python は Write で書いてから実行する。
+- 6.3: 配布スクリプト（版 2.1.0）は中継を x64・arm64 とも zip の最上位に入れる。この机には arm64 のターゲットと VS の ARM64 の部品が有るので `-Arch all` で両方の中身の判定まで通した（arm64 の機械での起動は未確認＝`release.yml` はタグの push か手動の実行でしか走らないので、次のリリースか手動の走りの結果で確かめる）。赤 2 回の出力は `verification/package-red-runs.md`。中継の exe は静的リンク・取り込みは OS の DLL だけ・Subsystem は GUI（窓なし）・x64 で約 3.25 MB。
+- 6.3: 完了のときの申し送り＝署名と winget の spec へ「zip の実行ファイルが 4 本になった（`areka-mcp-bridge.exe` が増えた）」。`deny.toml` の `BSD-2-Clause` の `license-not-encountered` の警告は前から在る（本 spec の差ではない）。
