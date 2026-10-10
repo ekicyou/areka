@@ -3,13 +3,6 @@
 //! 置き場所は環境変数の値だけで決まり、既定の場所へは倒れない（要件 1.1）。決めるのは値を
 //! 引数で受ける [`resolve`] で、環境を読むのは [`env_value`] の 1 行だけ。
 
-// 使い手（presence・store・cli）が載るまで、本番のビルドではここが未使用になる。
-// 「満たされない expect」の警告が出たら外す。
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "使い手のモジュールは後のタスクで載る")
-)]
-
 use std::ffi::OsString;
 use std::path::PathBuf;
 
@@ -65,12 +58,7 @@ impl Home {
 
     /// 居る印のロックファイル `alive/<id>.<kind>.lock`。`<kind>` は状態ファイルと同じ綴り。
     pub fn alive_path(&self, id: &str, kind: WaitKind) -> PathBuf {
-        let kind = match kind {
-            WaitKind::Watch => "watch",
-            WaitKind::Merge => "merge",
-            WaitKind::Load => "load",
-            WaitKind::Resume => "resume",
-        };
+        let kind = kind.as_str();
         self.alive_dir().join(format!("{id}.{kind}.lock"))
     }
 }

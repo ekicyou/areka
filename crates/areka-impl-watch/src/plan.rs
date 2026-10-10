@@ -4,13 +4,6 @@
 //! いつ呼んでも同じ結果になる。状態が変わるたびに出来事（[`Event`]）を 1 件ずつ返し、ログへ
 //! 書くのは呼び手の仕事。
 
-// 使い手（store・wait・cli）が載るまで、本番のビルドではここが未使用になる。
-// 全部が使われるとこの行が「満たされない expect」の警告になるので、そのとき外す。
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "使い手のモジュールは後のタスクで載る")
-)]
-
 use crate::state::{
     LastMerge, LoadHolder, LoadRequest, MergeHolder, MergeRequest, Participant, ParticipantStatus,
     Recent, RecentKind, State, StopReason, WaitKind, WaitRecord, WatchInfo,

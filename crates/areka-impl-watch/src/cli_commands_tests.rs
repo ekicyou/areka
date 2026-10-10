@@ -9,38 +9,19 @@
 
 use std::fs;
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use temp_path_kit::TempPath;
 
-use super::test_support::{args, entries, run_captured};
+use super::test_support::{
+    args, call, done, hold_watches, home_in, names, put_state, read_state, state_bytes,
+};
 use super::{exit_code, run_with};
 use crate::error::{WatchError, escape_path};
-use crate::home::Home;
-use crate::presence::{Held, hold};
-use crate::state::{RecentKind, State, WaitKind};
+use crate::state::RecentKind;
 
 const NAME: &str = "見張り役";
 const PURPOSE: &str = "負荷の計測";
-
-/// 一時の置き場所。道筋に ASCII の外の字が入る。
-fn home_in(root: &TempPath) -> PathBuf {
-    root.child("置き場")
-}
-
-/// 走らせて、終了コード・標準出力・標準エラーを返す。端末へ出る文は ASCII だけ。
-fn call(home: &Path, words: &[&str]) -> (u8, String, String) {
-    let (result, out, err) = run_captured(&args(words), Some(home.into()));
-    assert!(
-        out.is_ascii(),
-        "{words:?}: 標準出力に ASCII の外の字: {out:?}"
-    );
-    assert!(
-        err.is_ascii(),
-        "{words:?}: 標準エラーに ASCII の外の字: {err:?}"
-    );
-    (exit_code(&result), out, err)
-}
 
 fn merge(home: &Path, id: &str) -> (u8, String, String) {
     let words = [
@@ -70,53 +51,9 @@ fn merged(home: &Path, id: &str) -> (u8, String, String) {
     )
 }
 
-/// できた: 終了コード 0・標準出力にその 1 行・標準エラーは空。
-fn done(line: &str) -> (u8, String, String) {
-    (0, format!("{line}\n"), String::new())
-}
-
 /// 当てはまらなかった: 終了コード 3・標準出力は空・標準エラーにその 1 行。
 fn not_applied(why: &str) -> (u8, String, String) {
     (3, String::new(), format!("not applied: {why}\n"))
-}
-
-/// その識別たちの居る印（見張りのロックファイル）を握る。返した値を持っている間だけ「居る」。
-fn hold_watches(home: &Path, ids: &[&str]) -> Vec<Held> {
-    let home = Home {
-        dir: home.to_path_buf(),
-    };
-    ids.iter()
-        .map(|id| {
-            hold(&home.alive_path(id, WaitKind::Watch))
-                .expect("ロックファイルを開ける")
-                .expect("まだ誰も握っていない")
-        })
-        .collect()
-}
-
-/// 置き場所の直下に在るものの名前（並べ替え済み）。
-fn names(home: &Path) -> Vec<String> {
-    let name = |path: PathBuf| {
-        path.file_name()
-            .expect("名前が在る")
-            .to_string_lossy()
-            .into_owned()
-    };
-    entries(home).into_iter().map(name).collect()
-}
-
-fn state_bytes(home: &Path) -> Vec<u8> {
-    fs::read(home.join("state.json")).expect("状態ファイルが在る")
-}
-
-fn read_state(home: &Path) -> State {
-    serde_json::from_slice(&state_bytes(home)).expect("状態ファイルが状態として読める")
-}
-
-/// 状態ファイルを直に置く（コマンドの列では作れない状態・壊れたファイル）。
-fn put_state(home: &Path, text: &str) {
-    fs::create_dir_all(home).expect("置き場所を作れる");
-    fs::write(home.join("state.json"), text).expect("書ける");
 }
 
 // ---- マージの机 ----

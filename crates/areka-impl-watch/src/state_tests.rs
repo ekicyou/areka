@@ -72,6 +72,8 @@ fn enums_are_spelled_in_lowercase_kebab() {
     ];
     for (value, text) in waits {
         assert_eq!(spelled(json!(value)), text);
+        // ASCII の名前（居る印のファイル名・失敗の文）は、状態ファイルの綴りと同じ。
+        assert_eq!(value.as_str(), text);
     }
     let recents = [
         (RecentKind::Reclaimed, "reclaimed"),

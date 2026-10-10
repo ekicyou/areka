@@ -11,13 +11,6 @@
 //! 例外は記録の種類（[`WaitRecord::kind`]・[`Recent::kind`]）で、欠けたときに入れる中立の値が
 //! 無いので、欠けていれば形の合わないファイルとして読まない。
 
-// 使い手（plan・store・status・wait）が載るまで、本番のビルドではここが未使用になる。
-// 全部が使われるとこの行が「満たされない expect」の警告になるので、そのとき外す。
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "使い手のモジュールは後のタスクで載る")
-)]
-
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -196,6 +189,18 @@ pub enum WaitKind {
     Merge,
     Load,
     Resume,
+}
+
+impl WaitKind {
+    /// ASCII の名前。状態ファイルの綴りと同じで、居る印のファイル名と失敗の文に使う。
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            WaitKind::Watch => "watch",
+            WaitKind::Merge => "merge",
+            WaitKind::Load => "load",
+            WaitKind::Resume => "resume",
+        }
+    }
 }
 
 /// 最近の出来事（回収・状態ファイルの復旧・`clear`）。

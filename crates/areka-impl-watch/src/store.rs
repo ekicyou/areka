@@ -15,13 +15,6 @@
 //!
 //! 時計・生死・試しの間の待ち・ログの口は欄に持ち、テストは差し替える。
 
-// 使い手（wait・cli）が載るまで、本番のビルドではここが未使用になる。
-// 「満たされない expect」の警告が出たら外す。
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "使い手のモジュールは後のタスクで載る")
-)]
-
 use std::fs::{self, File, TryLockError};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -98,7 +91,8 @@ fn write_line(command: &'static str, event: &Event) {
     }
 }
 
-fn unix_now() -> u64 {
+/// 本物の時計（UNIX 秒）。
+pub(crate) fn unix_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |since| since.as_secs())

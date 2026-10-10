@@ -8,8 +8,9 @@
 //! 使い方の誤りと `--help` は置き場所を決める前に終わるので、何も読み書きしない。
 //! 直ちに終わるコマンドの手順は 3 つ: 状態を変える 1 回（[`change`]）・状態の確認
 //! （[`status`]）・全部消す（[`clear`]）。どれも「口を開く → 1 回 → 出力 → 終了コード」。
+//! 待つコマンド（見張り・`--wait`・再開の待ち）の手順は [`waiting`] の 1 つ。
 //!
-//! 標準出力には結果だけ、断りと失敗は標準エラーへ出す。このファイルの文字列リテラルは全部
+//! 標準出力には結果（終了コード 0 の文）だけ、断り・「消えた」・失敗は標準エラーへ出す。このファイルの文字列リテラルは全部
 //! ASCII で、端末へ出す文に載せるのは識別・リポジトリ・spec・PR・sha・時刻と数だけ（名前と
 //! 内容は載せない）。打たれた引数と置き場所の道筋を文に映すときは ASCII の外の字を逃がす
 //! （[`escape_path`]）。
@@ -21,7 +22,8 @@ use std::sync::LazyLock;
 use crate::error::{WatchError, escape_path};
 use crate::home::{self, Home};
 use crate::plan::{self, Event, Verdict};
-use crate::state::State;
+use crate::presence::hold;
+use crate::state::{State, WaitKind};
 use crate::status;
 use crate::store;
 use crate::wait::{self, WaitEnd, WaitSpec};
@@ -545,18 +547,106 @@ fn dispatch(
             return Ok(Outcome::Usage);
         }
     };
-    if invocation.command == Command::Help {
-        say(out, "stdout", usage())?;
-        return Ok(Outcome::Done);
-    }
-    let home = home::resolve(home_value)?;
     let name = invocation.name;
+    // 置き場所を決めるのは `--help` 以外の枝だけ（呼ばれるのはどれか 1 つ）。
+    let home = || home::resolve(home_value);
     match invocation.command {
-        Command::Status => status(home, name, out),
-        Command::Clear => clear(home, name, out),
-        Command::Change(command) if !invocation.wait => change(home, name, &command, out, err),
-        // 待つコマンド（見張り・`--wait`・再開の待ち）。
-        _ => not_wired_yet(name, err),
+        Command::Help => say(out, "stdout", usage()).map(|()| Outcome::Done),
+        Command::Status => status(home()?, name, out),
+        Command::Clear => clear(home()?, name, out),
+        Command::Watch {
+            id,
+            repo,
+            name: shown,
+        } => {
+            let spec = WaitSpec::Watch {
+                id,
+                repo,
+                name: shown,
+            };
+            waiting(home()?, name, &spec, None, out, err)
+        }
+        Command::Resume { id } => waiting(home()?, name, &WaitSpec::Resume { id }, None, out, err),
+        Command::Change(command) => match wait_after(&command).filter(|_| invocation.wait) {
+            Some(spec) => waiting(home()?, name, &spec, Some(&command), out, err),
+            None => change(home()?, name, &command, out, err),
+        },
+    }
+}
+
+/// `--wait` を付けたときに、そのコマンドの後に続ける待ち（`--wait` を取らないコマンドには無い）。
+fn wait_after(command: &plan::Command) -> Option<WaitSpec> {
+    use plan::Command as C;
+    match command {
+        C::Merge { id, repo, .. } => {
+            let (id, repo) = (id.clone(), repo.clone());
+            Some(WaitSpec::Merge { id, repo })
+        }
+        C::LoadTest { id, .. } => Some(WaitSpec::Load { id: id.clone() }),
+        // 「止まった」を記録してから、再開を待つ。
+        C::Stopped { id } => Some(WaitSpec::Resume { id: id.clone() }),
+        _ => None,
+    }
+}
+
+/// 待つコマンド: 居る印を握る → 申し込み（`request`）→ 待ちのループ → 終わりの文 → 終了コード。
+///
+/// 居る印を握るのがいちばん先。同じ識別・同じ種類の待ちがすでに走っていれば、申し込みも
+/// せず（状態を何も変えず）に失敗で返る。`request` は `--wait` の前半（申し込み・「止まった」の
+/// 記録）で、当てはまらなくても断らずに待ちへ進む（始め直した待ちは元の申し込みを引き継ぎ、
+/// 停止要請中でない `stopped --wait` は再開の待ちだけになる）。その時点でもう終わっていれば
+/// （番が来ている・作業中に戻っている・記録が無い）、待ちの記録を置かずに直ちに終わる。
+/// `request` の無い見張りと `resume` は、登録（見張りは参加を兼ねる）からループに任せる。
+///
+/// 待っている間は何も出さない。出すのは終わりの文だけ: 番・停止要請・再開は標準出力で 0、
+/// 「消えた」は標準エラーへ `gone: <訳>` で 3。見張りの終わりには、停止要請の理由（内容は
+/// 日本語になりうる）を読める読み物の道筋を 2 行目に添える。
+fn waiting(
+    home: Home,
+    name: &'static str,
+    spec: &WaitSpec,
+    request: Option<&plan::Command>,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<Outcome, WatchError> {
+    let (id, kind) = (spec.id(), spec.kind());
+    let sign = home.alive_path(id, kind);
+    let reading = home.status_path();
+    let store = store::open(home, name)?;
+    let held = match hold(&sign) {
+        Ok(Some(held)) => Ok(held),
+        Ok(None) => Err(WatchError::AlreadyRunning {
+            id: id.to_owned(),
+            kind: kind.as_str(),
+        }),
+        Err(failure) => Err(WatchError::io("hold the presence mark", &failure)),
+    }
+    .inspect_err(|failure| tracing::error!(error = %failure, "[cli] presence mark not held"))?;
+    let early = match request {
+        Some(command) => store.with_state(|state, now, alive| {
+            let applied = plan::apply(state, command, Some(id), now, alive);
+            let end = wait::judge(spec, Some(state));
+            (applied, end)
+        })?,
+        None => None,
+    };
+    let end = match early {
+        Some(end) => end,
+        None => wait::run(spec, &store, held)?,
+    };
+    match end {
+        WaitEnd::Done(mut line) => {
+            if kind == WaitKind::Watch {
+                line += "\ndetails: ";
+                line += &escape_path(&reading.to_string_lossy());
+            }
+            say(out, "stdout", &line)?;
+            Ok(Outcome::Done)
+        }
+        WaitEnd::Gone(why) => {
+            say(err, "stderr", &format!("gone: {why}"))?;
+            Ok(Outcome::NotApplied)
+        }
     }
 }
 
@@ -700,14 +790,6 @@ fn clear(home: Home, name: &'static str, out: &mut dyn Write) -> Result<Outcome,
     Ok(Outcome::Done)
 }
 
-/// 待つコマンドの手順がつながるまでの仮の枝（タスク 5.3 が置き換える）。状態ファイルもログも
-/// 開かず（申し込みもせず）、成功を装わない。
-fn not_wired_yet(name: &'static str, err: &mut dyn Write) -> Result<Outcome, WatchError> {
-    let line = format!("{name}: accepted, but this command is not wired yet; nothing was done");
-    say(err, "stderr", &line)?;
-    Ok(Outcome::Usage)
-}
-
 /// 1 行を書き出す。書けなかったことも黙って捨てない: 失敗にして、ログにも残す（ログの受け手が
 /// 据わる前の、使い方の誤りと `--help` では、残す先がまだ無い）。
 fn say(to: &mut dyn Write, op: &'static str, line: &str) -> Result<(), WatchError> {
@@ -729,3 +811,7 @@ mod tests;
 #[cfg(test)]
 #[path = "cli_commands_tests.rs"]
 mod commands_tests;
+
+#[cfg(test)]
+#[path = "cli_wait_tests.rs"]
+mod wait_tests;

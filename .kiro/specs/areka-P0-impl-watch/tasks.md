@@ -138,7 +138,7 @@
   - _Depends: 3.5_
   - _Requirements: 3.10, 4.9, 4.11, 5.7, 7.6, 9.2, 9.3, 9.4, 10.2, 13.3, 14.4_
 
-- [ ] 5.3 待つコマンドをつなぐ
+- [x] 5.3 待つコマンドをつなぐ
   - `watch`・`merge --wait`・`loadtest --wait`・`stopped --wait`・`resume` を、「居る印を握る → 待ちのループ → 終わりの 1 行と終了コード」でつなぐ。待ちの口の本物（本物の時計・1 秒の眠り）をここで組む
   - 同じ識別・同じ種類の待ちがすでに走っていれば 1。「消えた」は 3、番・停止要請・再開は 0
   - `merge --wait`／`loadtest --wait` は申し込みを先に行い、すでに番が来ていれば直ちに終わる。`stopped --wait` は「止まった」を記録してから再開を待つ（すでに作業中なら直ちに 0）
@@ -265,3 +265,9 @@
 - 5.2 → 5.3: 待つ 5 形（`watch`・`merge --wait`・`loadtest --wait`・`stopped --wait`・`resume`）だけが仮の枝 `not_wired_yet` に残っている。5.3 がつないで仮の枝とテスト `a_waiting_command_is_refused_until_its_procedure_is_wired` を消す。
 - 5.2 → 6.2: 手順書に「落ちたセッションは `cancel` でなく `leave` で外す」と書く（`cancel --id X` は X をその呼び出しでは回収せず、負荷テストが待たれていれば X を「停止要請中」にする。以後 X は自動では回収されず、`leave --id X` まで候補の番が来ない。読んで導いた結論・実走なし）。`status` はロック無しで `status.md` を置き換えるので、同時の変更の読み物を古い内容で上書きしうる（次の変更か `status` で直る）。
 - 5.2（任意の残り）: 1 つの識別が 2 つの机を持ったままの `merged`（2 行出力）を踏むテストが無い。`stopped:` の列の式の一本化（4.1 の残り）は持ち越し。
+- 5.3: 待つ 5 形は `cli::waiting` の 1 本の手順: **居る印を握る → 申し込み → 待ち**（握れなければ申し込みも回収も通らずに `AlreadyRunning` で 1・状態ファイルは変わらない）。申し込みの時点でもう終わっていれば待ちの記録を置かずに直ちに終わる。`gone: <訳>` は標準エラーで 3（標準出力に文が出るのは 0 のときだけ）。見張りが 0 で終わるときは必ず 2 行目に `details: <home>\status.md`（`already stopped; …` のときも）。`stopped --wait` は、停止要請中 →「止まった」を記録して待つ／すでに作業中 → 0 `resumed`／記録が無い → 3 `gone: removed`。本物の口は `impl WaitPort for Store`（`wait.rs`・`POLL = 1 s`）。`WaitKind::as_str()` が ASCII 名の 1 か所（`alive_path` と `AlreadyRunning { kind }` が使う）。モジュール先頭の `expect(dead_code)` は全部外れた。design.md への追い書きが要る（裁定待ち 2 と一緒に。流れ図の `gone merged` は実際には `gone: removed`）。
+- 5.3: 開発者の機械にはユーザー環境変数 `AREKA_IMPL_WATCH_HOME=C:\home\maz\store\.areka-impl-watch`（空）がすでに在る。exe を子プロセスに立てるテスト・手走り・スキルの試し（6.1・6.3）は、必ず置き場所を `target\` の下の Windows 形の絶対パスで上書きする（上書きしないと本物の置き場所へ書く）。
+- 5.3 → 5.4（確かめの手当て・レビューが確かめ済みの勧め）: (a) **壊れたときに赤でなく待ち続ける常時テストが在る**（変異「`--wait` の印を見ない」で 7 本が終わらない。`tools/test-all.ps1` に時間制限は無い）。`wait.rs` の `impl WaitPort for Store` の `sleep` を `#[cfg(test)] panic!(…)`／`#[cfg(not(test))] std::thread::sleep(POLL)` にすると同じ変異が 0.6 秒で赤になり、今の 218 本は緑のまま（`POLL == 1 秒` を判定するテスト 1 本で未使用の警告を埋める）。(b) その上で、`catch_unwind` で最初の眠りまで走らせて状態ファイルを読むテスト 2 本で、生き残りの変異 2 本（`stopped --wait` が「止まった」を記録しない・`resume` が先に「止まった」を記録する）を閉じる。(c) `watch_for_a_stop_requested_…` に `watch.pid == std::process::id()` の 1 行（本物の口の `pid()` の檻）。
+- 5.3 → 6.1: 握った印を待ちの間じゅう持ち続けること（待っている間の 2 つ目の `watch`／`merge --wait`／`resume` が 1）を必ず判定する。「停止要請中の参加者の `resume` は状態を変えない」の流れを足す。置き換えと重なった一時の読みの失敗への試し直しは足していない（実測する）。
+- 5.3 → 6.2: 手順書に「3 の文（`gone: …`／`not applied: …`）は標準エラーに出る」。
+- 5.3（任意の残り）: 殺された前の待ちの記録が、始め直した待ちの「直ちの終わり」の後も残る（印を握っている間は「居る」と見えるため。次の状態を変える呼び出しの回収で消える。実害は `status` の `waits` の 1 件）。直すなら `waiting` の申し込みの閉包の中で、終わりが出たとき同じ排他のまま `UnregisterWait` を通す（8 行ほど）。

@@ -639,28 +639,3 @@ fn outcomes_map_to_the_four_exit_codes() {
     assert_eq!(exit_code(&Ok(Outcome::Usage)), 2);
     assert_eq!(exit_code(&Ok(Outcome::NotApplied)), 3);
 }
-
-// ---- まだつながっていない待つコマンド ----
-
-#[test]
-fn a_waiting_command_is_refused_until_its_procedure_is_wired() {
-    let root = TempPath::under_target("impl-watch-cli");
-    let home = root.child("home");
-    for words in [
-        line("watch", &[Id, Repo]),
-        line("merge", &[Id, Repo, Spec, Wait]),
-        line("loadtest", &[Id, Repo, Purpose, Wait]),
-        line("stopped", &[Id, Wait]),
-        line("resume", &[Id]),
-    ] {
-        let (result, out, err) = run_captured(&words, Some(home.clone().into_os_string()));
-        // 成功を装わない。
-        assert_ne!(exit_code(&result), 0, "{words:?}: {result:?}");
-        assert_eq!(out, "", "{words:?}");
-        assert!(err.is_ascii(), "{err:?}");
-        assert_eq!(err.matches('\n').count(), 1, "{err:?}");
-        assert!(err.contains(&words[0]), "{err:?}");
-        // 置き場所のフォルダは作るが、状態ファイルもログも作らない（申し込みもしない）。
-        assert_eq!(entries(&home), Vec::<PathBuf>::new(), "{words:?}");
-    }
-}

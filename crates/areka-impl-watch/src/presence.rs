@@ -9,13 +9,6 @@
 //! - 探り（[`LockFilePresence`]）はファイルもフォルダも作らない（`status` が読むだけで済む）。
 //!   `alive/` を作るのは [`hold`] だけ。
 
-// 使い手（store・wait・cli）が載るまで、本番のビルドではここが未使用になる。
-// 「満たされない expect」の警告が出たら外す。
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "使い手のモジュールは後のタスクで載る")
-)]
-
 use std::fs::{File, TryLockError};
 use std::io;
 use std::path::Path;

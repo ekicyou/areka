@@ -7,13 +7,6 @@
 //! 層の一番下に在り、同じクレートの他のモジュールを読み込まない（待ちの種類も ASCII の
 //! 名前で受ける）。
 
-// 使い手（home・store・wait・cli）が載るまで、本番のビルドではここが未使用になる。
-// 全部が使われるとこの行が「満たされない expect」の警告になるので、そのとき外す。
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "使い手のモジュールは後のタスクで載る")
-)]
-
 use std::io;
 use std::path::Path;
 

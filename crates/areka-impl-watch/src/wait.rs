@@ -8,21 +8,17 @@
 //! （[`WaitPort`]）に頼む。時間の上限は無く、待っている間は端末へ何も出さない（終わり方を
 //! 返すだけで、出すのは呼び手）。
 
-// 使い手（待ちのループ・cli）が載るまで、本番のビルドではここが未使用になる。
-// 「満たされない expect」の警告が出たら外す。
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the users of this module arrive in later tasks")
-)]
-
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use crate::error::{WatchError, escape_path};
-use crate::plan::{Applied, Command};
+use crate::plan::{self, Applied, Command};
 use crate::presence::Held;
 use crate::state::{ParticipantStatus, State, WaitKind, WaitRecord};
 use crate::status::last_merge;
+use crate::store::{self, Store};
 
+/// 読み直しの間隔（本物の眠り）。
+const POLL: Duration = Duration::from_secs(1);
 /// 変わっていなくても中身を読む間隔（眠りの回数）。更新時刻と大きさに映らなかった変化を拾う。
 const FULL_READ_EVERY: u64 = 10;
 /// 周期の一回りの間隔（眠りの回数）。
@@ -53,7 +49,8 @@ pub enum WaitSpec {
 }
 
 impl WaitSpec {
-    fn id(&self) -> &str {
+    /// 待っている識別。
+    pub fn id(&self) -> &str {
         match self {
             WaitSpec::Watch { id, .. }
             | WaitSpec::Merge { id, .. }
@@ -186,6 +183,41 @@ pub trait WaitPort {
     fn change(&self, cmd: &Command, caller: &str) -> Result<Applied, WatchError>;
     /// 読み直しの間の眠り（本物は 1 秒）。
     fn sleep(&self);
+}
+
+/// 本物の口: 状態ファイルの口の上に、本物の時計・このプロセスの番号・1 秒の眠りを載せる。
+impl WaitPort for Store {
+    fn now(&self) -> u64 {
+        store::unix_now()
+    }
+
+    fn pid(&self) -> u32 {
+        std::process::id()
+    }
+
+    fn fingerprint(&self) -> Result<Option<(SystemTime, u64)>, WatchError> {
+        // 口の同じ名前の関数（`io::Result` を返し、ログを出さない）。失敗はここでログに残す。
+        Store::fingerprint(self).map_err(|err| {
+            let failure = WatchError::io("stat state.json", &err);
+            tracing::error!(error = %failure, "[wait] state file not checked");
+            failure
+        })
+    }
+
+    fn read(&self) -> Result<Option<State>, WatchError> {
+        self.read_only()
+    }
+
+    fn change(&self, cmd: &Command, caller: &str) -> Result<Applied, WatchError> {
+        self.with_state(|state, now, alive| {
+            let applied = plan::apply(state, cmd, Some(caller), now, alive);
+            (applied.clone(), applied)
+        })
+    }
+
+    fn sleep(&self) {
+        std::thread::sleep(POLL);
+    }
 }
 
 /// 待つ。番が来た・停止要請が出た・再開した・消えた、のどれかで終わる。時間の上限は無い。
