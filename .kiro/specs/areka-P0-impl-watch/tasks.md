@@ -154,7 +154,7 @@
   - 済んだ姿: 中核にファイル読みを 1 行足す、または入口の文に日本語を 1 字足すと、このテストが赤になる（足して確かめ、戻す）
   - _Requirements: 9.2, 12.1_
 
-- [ ] 6. 確かめと添え物
+- [x] 6. 確かめと添え物
 - [x] 6.1 本物の実行ファイルで通す実機テストを作る（明示したときだけ走る）
   - 本物の実行ファイルを子プロセスで立て、置き場所を `target\` の下の一時フォルダへ向ける。`#[ignore]` にし、理由の文に実行コマンドを書く
   - 通す流れ: 見張りを立ててマージの待ちが番で終わる／「済んだ」で見張りが 3 で終わる／負荷テストの待ち → 別の参加者の見張りが 0 で終わる → 「止まった」と再開の待ち → 「済んだ」で再開／見張りを止めると次の呼び出しが回収する／`clear` で待ちが 3 で終わる／別のプロセスが状態ファイルを開いたままでも置き換え書きが通る／一時の置き場所の下のログに出来事の行と失敗の行（例: 版の合わない状態ファイルを置いて呼ぶ）が残る
@@ -177,7 +177,7 @@
   - _Depends: 5.2_
   - _Requirements: 14.5, 14.6_
 
-- [ ] 6.4 全体の確かめ
+- [x] 6.4 全体の確かめ
   - `cargo test --workspace`（または全体テストの道具）で新しいクレートの常時テストが拾われ、実機テストは拾われないことを確かめる
   - `Cargo.lock` の差分が新しいクレートの 1 塊だけ、根の `Cargo.toml`・`tools/test-all.ps1`・`tools/package.ps1`・`kiro-watch` のスキルとスクリプトに差分が無いことを `git diff --stat` で確かめる
   - どのファイルも 1,000 行以下、テストは兄弟ファイルに在ることを確かめる
@@ -286,3 +286,5 @@
 - 6.3: スキルは `.claude/skills/kiro-watch-clear/SKILL.md`（`allowed-tools: Bash, Read`・`disable-model-invocation` 無し）。Bash の呼び出しは 1 回（環境変数が空 → `stop: no-home`／exe が無い → `stop: no-exe`／それ以外は `clear && status; echo "exit=$?"`）。`clear` が 0 以外なら `status` は呼ばず、標準エラーの文を添えて報告する。確認の問い合わせは無い（`/kiro-watch-clear` と打つことが確認）。
 - 6.3（裁定が入ったら見直す所）: 裁定待ち 7 → スキルの「`cleared; backup:` の行が無い失敗では、消えたかどうかを不明と伝える」の小節（今は `status.md` の書きの失敗で `clear` が 1 でも、状態ファイルはすでに空に置き換わっている）。裁定待ち 5 → Rules の「exe は絶対パスでない値を断らない」の 1 文（手順書 2 節と一緒に）。
 - 6.3（任意の残り・境界の外）: `CLAUDE.md` のスキル一覧と手順書 6 節「全部消す」に `/kiro-watch-clear` の 1 行（どちらも要件ではない。完了時の文書の同期で入れるか決める）。スキルの報告の節に「0 以外はすべて失敗として同じ扱い」の 1 句。
+- 6.4: 全体テスト `pwsh -NoProfile -File tools/test-all.ps1` を 1 回だけ回した（コミット `90f6ae90`・未コミットの変更 0 件で開始・7 段すべて緑・約 16 分・記録は `target\impl-watch-6.4-test-all.log`）。新しいクレートの常時テスト 226 本は拾われ、実機テスト 10 本は `ignored` のまま。`Cargo.lock` の差分は新しいクレートの 1 塊だけ、根の `Cargo.toml`・`tools/test-all.ps1`・`tools/package.ps1`・`kiro-watch` のスキルとスクリプトに差分なし、最大のファイルは `tests/real.rs` の 903 行、本番ファイルに `#[test]` は 0 件。その後の差分は `tasks.md` だけ（コードは同じ）。
+- 6.4（設計の見込みとの差・追い書きの材料）: 設計の File Structure Plan に無い兄弟テストファイルが 7 本在る（`cli_commands_tests.rs`・`cli_wait_tests.rs`・`cli_test_support.rs`・`store_ports_tests.rs`・`store_test_support.rs`・`wait_loop_tests.rs`・`wait_test_support.rs`＝どれも 1,000 行の決まりのための分割）。`plan.rs` は 687 行（見込みは 400 行前後）。
