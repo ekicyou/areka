@@ -196,23 +196,40 @@ fn choice_active_sees_every_place_of_the_scope() {
 #[test]
 fn anchor_only_scope_is_hit_active_but_not_choice_active() {
     let mut rt = runtime_with_boxes();
+    rt.set_surface_resolver(fake_resolver());
     let actor = ActorKey::from("0");
     assert!(!rt.hit_active(&actor), "範囲が無ければ偽");
 
+    // サーフェス 0 の行き先は箱 a。`\_a[x]あ\_a` の合図で、箱の場所にアンカーの範囲が出来る。
+    rt.apply_cue(&emote("0", "0"));
+    rt.apply_cue(&cue(
+        "0",
+        0.0,
+        CueCommand::AnchorBegin {
+            id: "x".into(),
+            references: vec![],
+        },
+    ));
+    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into())));
+    rt.apply_cue(&cue("0", 0.0, CueCommand::AnchorEnd));
     let box_a = PlaceKey {
         actor: actor.clone(),
         place: boxed("a"),
     };
-    rt.state.push_span_for_test(
-        &box_a,
-        ChoiceSpan {
+    assert_eq!(
+        rt.state()
+            .place_state(&box_a)
+            .map(|s| s.choices().to_vec())
+            .unwrap_or_default(),
+        vec![ChoiceSpan {
             kind: SpanKind::Anchor,
             ordinal: 0,
             id: "x".into(),
             label: "あ".into(),
             references: vec![],
             glyph_range: 0..1,
-        },
+        }],
+        "前提: 範囲は箱の場所にある"
     );
     assert!(!rt.choice_active(&actor), "アンカーは選択肢に数えない");
     assert!(rt.hit_active(&actor), "アンカーも押せる範囲");

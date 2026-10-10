@@ -452,11 +452,10 @@ pub struct ChoiceSpan {
 
 ```rust
 impl ActorTextState {
-    /// AnchorBegin: 開いていれば直前をここで閉じ（debug!・compile が警告済み）、
-    /// kind=Anchor・glyph_range=now..now・label="" の span を push し anchor_open=Some(ordinal)。
-    pub(super) fn anchor_begin(&mut self, actor: &ActorKey, id: &str, references: &[String], quiet: bool);
-    /// AnchorEnd: anchor_open を外す。開いていなければ debug!（迷子の閉じ・compile が警告済み）。
-    pub(super) fn anchor_end(&mut self, actor: &ActorKey, quiet: bool);
+    /// AnchorBegin: kind=Anchor・glyph_range=now..now・label="" の span を push し anchor_open=Some(ordinal)。
+    pub(super) fn anchor_begin(&mut self, id: &str, references: &[String]);
+    /// AnchorEnd: anchor_open を外す（記録と「開いていたか」の判定は集約の側・下の項）。
+    pub(super) fn anchor_end(&mut self);
     /// Text／Choice の追記の直後に呼ぶ: 開いていれば end += n・label に clusters を継ぐ。
     pub(super) fn extend_open_anchor(&mut self, clusters: &[&str]);
     /// 開いているか（push_current_style が下線を焼く判定に使う）。
@@ -467,6 +466,8 @@ impl ActorTextState {
 - `Clear`／`ClearAll` は既存の初期化で `choices` と一緒に `anchor_open` も `None` にする。
 - `apply_cue` の `Text`・`Choice` の腕は items を extend した直後に `extend_open_anchor` を呼ぶ（2 か所）。
 - 空回し（`quiet`）では記録を出さない（既存の選択肢の腕と同じ）。
+- **開いた場所と閉じの届く場所のずれ**（実装 2.2 のレビューで判明・3.2 で補った）: compile は開きも閉じも「その時点のスコープ」宛てに出すが、文字の層の状態は場所（`PlaceKey`＝スコープ＋行き先）ごとなので、開いたままスコープや行き先が替わる台本（`\_a[x]あ\1い\_a\0う`）では閉じが別の場所へ届く。集約（`TextLayerState`）の側で吸収する — `open_anchor(dest, id, references)` は先に全部の場所の印を外してから宛先の場所で `anchor_begin` を呼び、`close_anchor(actor)` は宛先に関わらず全部の場所の印を外す（compile が「開いているアンカーは台本全体で高々 1 つ」を保証している）。伸長は場所ごとなので、別の場所へ追記された文字は範囲に入らない（上の例は、スコープ 0 に範囲 1 件・文字「あ」・閉じ済み、スコープ 1 は範囲なし）。開いたまま寄り道して戻ると範囲は続く（`\_a[x]あ\1い\0う\_a` → 「あう」）。
+- 上の帰結として、記録（`debug!`）と `quiet` の判定は集約の側で持ち、`ActorTextState::anchor_begin(id, references)`／`anchor_end()` は記録を出さない。`Clear`／`ClearAll` の初期化は `state_decoration.rs::clear_content` にある（`choices.clear()` の隣で `anchor_open = None`）。
 
 #### 既定の下線（`state_decoration.rs::push_current_style`）
 

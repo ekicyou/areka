@@ -7,8 +7,7 @@ use super::test_support::{
     choice_cue, com_world, cue, geo_model, opaque_count, spawn_reserved_slot,
 };
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
-use crate::place::PlaceKey;
-use crate::state::{ChoiceSpan, SpanKind, TextLayerConfig};
+use crate::state::{SpanKind, TextLayerConfig};
 
 // ══ task 8.3: Clear/ClearAll の原子的無効化（hover リセット＋ヒット行スナップショット無効化・R5.1/5.2/5.4） ══
 
@@ -405,18 +404,16 @@ fn hit_rows_carry_the_kind_of_their_span() {
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     // 「あい」をアンカーの範囲（通し番号 0）にし、続けて選択肢（通し番号 1）を置く。
-    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("あい".into())));
-    rt.state.push_span_for_test(
-        &PlaceKey::balloon(&actor),
-        ChoiceSpan {
-            kind: SpanKind::Anchor,
-            ordinal: 0,
+    rt.apply_cue(&cue(
+        "0",
+        0.0,
+        CueCommand::AnchorBegin {
             id: "x".into(),
-            label: "あい".into(),
             references: vec![],
-            glyph_range: 0..2,
         },
-    );
+    ));
+    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("あい".into())));
+    rt.apply_cue(&cue("0", 0.0, CueCommand::AnchorEnd));
     rt.apply_cue(&choice_cue("0", 0.2, "OnYes", "はい", &[]));
     let image = (120u32, 60u32);
     rt.register_actor(

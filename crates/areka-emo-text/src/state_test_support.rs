@@ -40,14 +40,6 @@ pub(super) fn items_of<'a>(state: &'a TextLayerState, actor: &str) -> &'a [TextI
         .items()
 }
 
-impl TextLayerState {
-    /// 範囲の記録を 1 件、合図を通さずにその場所へ置く（テスト専用）。
-    /// 合図からはまだ作れない種類の範囲（アンカー）を持つ状態を組むための口。
-    pub(crate) fn push_span_for_test(&mut self, place: &PlaceKey, span: ChoiceSpan) {
-        self.place_entry(place).choices.push(span);
-    }
-}
-
 // ══ typewriter リビール進行（注入時刻駆動・R3／R7 系） ══
 //
 // reveal ペースは配送 duration 由来（`interval = duration / N`）。FP 誤差を排するため、

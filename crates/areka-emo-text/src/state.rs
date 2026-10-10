@@ -25,6 +25,9 @@
 //!   `choices` へ記録する（R1.1/R1.2）。空 `text` は `warn!`（actor 付き）＋空範囲スパン記録・
 //!   グリフ追記なし（R1.5 縮退）。`choices` は items と同一ライフサイクル（`Clear`/`ClearAll`
 //!   で同時初期化・R5.1/R5.3/R9.5）。
+//! - `AnchorBegin`／`AnchorEnd`（`\_a`）も本層で実消費する: 開きから閉じまでに開いた場所へ
+//!   追記された文字を、選択肢と同じ列 `choices` の 1 件（種類＝アンカー）として記録する。
+//!   開き・伸長・閉じの中身は子の `anchor`（`state_anchor.rs`）が持つ。
 //! - `Cursor`（`\_l` の不透明転写）も本層で実消費する: `parse_cursor_coord` で各軸を
 //!   `CursorCoord` 語彙へ忠実転写し、`TextItem::CursorMove` を items へ追記する（改行マーカーと
 //!   同格の非グリフアイテム＝reveal 対象外・グリフ／リビール状態は不変・R2.1）。
@@ -363,15 +366,19 @@ pub struct ChoiceSpan {
     pub glyph_range: core::ops::Range<usize>,
 }
 
-/// actor 1 人分の表示テキスト状態（追記順の正本＋リビール時刻列＋選択肢スパン）。
+/// actor 1 人分の表示テキスト状態（追記順の正本＋リビール時刻列＋押せる範囲の列）。
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ActorTextState {
     /// 追記順の正本（グリフ／改行マーカー／カーソル指定）。
     items: Vec<TextItem>,
     /// per-glyph リビール時刻列。
     reveal: RevealSchedule,
-    /// 選択肢スパン（items と同一ライフサイクル＝`Clear`/`ClearAll` で同時初期化・R5.1/R5.3）。
+    /// 押せる範囲の列——選択肢とアンカーが同じ列に並ぶ（items と同一ライフサイクル＝
+    /// `Clear`/`ClearAll` で同時初期化・R5.1/R5.3）。欄の名前は選択肢だけだった頃のまま。
     choices: Vec<ChoiceSpan>,
+    /// 開いているアンカーの範囲（`choices` の添字）。開いていなければ `None`。
+    /// `choices` と一緒に消える（操作は [`anchor`]）。
+    anchor_open: Option<usize>,
     /// グリフ序数と同じ序数空間の装飾番号列（操作は [`decoration`]・R3.3）。
     glyph_styles: Vec<StyleId>,
     /// 装飾の表（番号 → 既定と異なる見た目・内容と同じライフサイクル）。
@@ -391,7 +398,7 @@ impl ActorTextState {
         &self.reveal
     }
 
-    /// 選択肢スパン列（配送順・R1.2／R1.3 照会の源）。
+    /// 押せる範囲の列（選択肢とアンカー・配送順・R1.2／R1.3 照会の源）。
     pub fn choices(&self) -> &[ChoiceSpan] {
         &self.choices
     }
@@ -419,14 +426,15 @@ pub struct TextLayerState {
     /// 「空回し」の印（既定は偽）。立てる口は [`TextLayerState::rehearsal_copy`] だけで、
     /// 本番の状態では決して立たない。立っている間は状態の層の warn 4 か所を出さない
     /// （本番の適用が同じ warn を出すので、空回しが出すと 2 回になる・要件 2.8）。
+    /// アンカーの開き・閉じの記録だけは `debug!` も出さない（`state_anchor.rs`）。
     rehearsal: bool,
 }
 
 impl TextLayerState {
     /// 印を立てた写しを返す（空回し専用）。印の立った状態は warn を出さない。
     ///
-    /// 止めるのは warn だけで、`debug!` と warn 済みの記録の集合の更新は本番と同じ
-    /// （集合は写しの中だけで進み、本番の集合には触れない）。
+    /// 止めるのは warn（とアンカーの開き・閉じの `debug!`）だけで、ほかの `debug!` と
+    /// warn 済みの記録の集合の更新は本番と同じ（集合は写しの中だけで進み、本番の集合には触れない）。
     pub(crate) fn rehearsal_copy(&self) -> TextLayerState {
         TextLayerState {
             rehearsal: true,
@@ -474,6 +482,8 @@ impl TextLayerState {
                 state
                     .items
                     .extend(glyph_units.iter().map(|c| TextItem::glyph(c)));
+                // 開いているアンカーの範囲があれば、追記した文字まで伸ばす。
+                state.extend_open_anchor(&glyph_units);
                 state.reveal.extend_chunk(glyph_count, cue.at, interval);
                 // 追記した文字にいま効いている見た目の番号を与える（R3.2/R3.3）。
                 state.push_current_style(&cue.actor, glyph_count, quiet);
@@ -548,6 +558,8 @@ impl TextLayerState {
                     state
                         .items
                         .extend(glyph_units.iter().map(|c| TextItem::glyph(c)));
+                    // アンカーが選択肢を包んでいれば、選択肢の文字もアンカーの範囲に入る。
+                    state.extend_open_anchor(&glyph_units);
                     state.reveal.extend_chunk(glyph_count, cue.at, interval);
                     // 選択肢の文字にもそのときの装飾状態を与える（R3.5）。
                     state.push_current_style(&cue.actor, glyph_count, quiet);
@@ -592,10 +604,10 @@ impl TextLayerState {
                 self.route_select(&cue.actor, key);
             }
             // アンカーの開き・閉じ（`\_a`）は文字の層の担当（cue_target_of が Balloon に分類）。
-            // 範囲の記録を持つまでは状態を変えず、あいだの文字は普通の文字として流れる。
-            CueCommand::AnchorBegin { .. } | CueCommand::AnchorEnd => {
-                tracing::debug!(actor = %cue.actor, command = ?cue.command, "アンカーの開き／閉じの cue（範囲の記録なし・状態は変えない）");
-            }
+            // 開きは今の行き先の場所に範囲を開き、閉じは宛先に関わらず開いている範囲を閉じる
+            // （範囲の記録と、あいだの文字で伸ばす所は [`anchor`]）。
+            CueCommand::AnchorBegin { id, references } => self.open_anchor(&dest, id, references),
+            CueCommand::AnchorEnd => self.close_anchor(&cue.actor),
             // 文字状態機械が消費しない command（cue_target_of が Shell/None に分類）は本状態機械の
             // 対象外——演者側 relevance の責務。防御的に無視する（catch-all を置かず、dola の
             // variant 追加時にコンパイラが再検討を強制する）。整数の `BalloonSurface` は表示系
@@ -661,6 +673,9 @@ mod decoration;
 #[path = "state_route.rs"]
 mod route;
 
+#[path = "state_anchor.rs"]
+mod anchor;
+
 #[cfg(test)]
 #[path = "state_test_support.rs"]
 mod test_support;
@@ -692,3 +707,7 @@ mod route_tests;
 #[cfg(test)]
 #[path = "state_place_tests.rs"]
 mod place_tests;
+
+#[cfg(test)]
+#[path = "state_anchor_tests.rs"]
+mod anchor_tests;
