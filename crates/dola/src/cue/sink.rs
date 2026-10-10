@@ -44,7 +44,8 @@ pub trait CueSink {
 /// ゲートをこの分類に一致させる（中央 router に依存しない・演者側 relevance）。
 ///
 /// - `Emote` / `EntityRef` / `BalloonSurface` → [`CueTarget::Shell`]、
-/// - `Text` / `NewLine` / `Clear` / `ClearAll` / `Choice` / `Cursor` → [`CueTarget::Balloon`]、
+/// - `Text` / `NewLine` / `Clear` / `ClearAll` / `Choice` / `Cursor` / `AnchorBegin` /
+///   `AnchorEnd` → [`CueTarget::Balloon`]、
 /// - `Custom`（`\!` 汎用コマンドキャリア）は**型レベルでは** `None`。ただしこれは
 ///   「誰も action しない」ではなく、**消費者の名前自己選別**への委譲を意味する（R8.7）——
 ///   dola はコマンド名の語彙を一切持たず、実際の担当消費者は結線層（areka）の各消費者が
@@ -75,6 +76,9 @@ pub fn cue_target_of(command: &CueCommand) -> Option<CueTarget> {
         CueCommand::Choice { .. } => Some(CueTarget::Balloon),
         // カーソル位置指定（`\_l`）はバルーン系表現者（emo-text）が消費する。
         CueCommand::Cursor { .. } => Some(CueTarget::Balloon),
+        // アンカーの開き・閉じ（`\_a`）は文字の層（emo-text）が範囲として消費する。
+        CueCommand::AnchorBegin { .. } => Some(CueTarget::Balloon),
+        CueCommand::AnchorEnd => Some(CueTarget::Balloon),
         // Custom（`\!` 汎用キャリア）の型レベル分類は None＝担当未定。ただし
         // 「誰も action しない」ではなく、消費側が名前で自己選別する（dola は
         // コマンド名の語彙を持たない・R8.7）。

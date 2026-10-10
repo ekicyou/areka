@@ -215,6 +215,18 @@ fn cue_target_of_classifies_every_variant() {
         }),
         Some(CueTarget::Balloon)
     );
+    // アンカーの開き・閉じ（`\_a`）は文字の層（emo-text）が範囲として消費する。
+    assert_eq!(
+        cue_target_of(&CueCommand::AnchorBegin {
+            id: "OnJump".into(),
+            references: vec!["r0".into()],
+        }),
+        Some(CueTarget::Balloon)
+    );
+    assert_eq!(
+        cue_target_of(&CueCommand::AnchorEnd),
+        Some(CueTarget::Balloon)
+    );
 
     // 分類不能（Custom）— どの演者も action しない。
     assert_eq!(

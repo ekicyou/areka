@@ -578,6 +578,11 @@ impl TextLayerState {
             CueCommand::BalloonSurface { key } if key.parse::<i64>().is_err() => {
                 self.route_select(&cue.actor, key);
             }
+            // アンカーの開き・閉じ（`\_a`）は文字の層の担当（cue_target_of が Balloon に分類）。
+            // 範囲の記録を持つまでは状態を変えず、あいだの文字は普通の文字として流れる。
+            CueCommand::AnchorBegin { .. } | CueCommand::AnchorEnd => {
+                tracing::debug!(actor = %cue.actor, command = ?cue.command, "アンカーの開き／閉じの cue（範囲の記録なし・状態は変えない）");
+            }
             // 文字状態機械が消費しない command（cue_target_of が Shell/None に分類）は本状態機械の
             // 対象外——演者側 relevance の責務。防御的に無視する（catch-all を置かず、dola の
             // variant 追加時にコンパイラが再検討を強制する）。整数の `BalloonSurface` は表示系

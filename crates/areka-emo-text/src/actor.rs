@@ -360,6 +360,8 @@ impl TextLayerRuntime {
             | CueCommand::NewLine { .. }
             | CueCommand::Cursor { .. }
             | CueCommand::BalloonSurface { .. }
+            | CueCommand::AnchorBegin { .. }
+            | CueCommand::AnchorEnd
             | CueCommand::Wait => {}
         }
         advance_state(&mut self.state, self.surface_resolver.as_deref(), cue);

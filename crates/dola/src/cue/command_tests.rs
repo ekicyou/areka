@@ -35,7 +35,7 @@ fn routing_command_three_variants() {
 }
 
 #[test]
-fn cue_command_ten_variants() {
+fn cue_command_twelve_variants() {
     let cmds = vec![
         CueCommand::Text("hello".into()),
         CueCommand::Clear,
@@ -56,8 +56,13 @@ fn cue_command_ten_variants() {
         CueCommand::BalloonSurface { key: "2".into() },
         CueCommand::Wait,
         CueCommand::ClearAll,
+        CueCommand::AnchorBegin {
+            id: "OnJump".into(),
+            references: vec![],
+        },
+        CueCommand::AnchorEnd,
     ];
-    assert_eq!(cmds.len(), 10);
+    assert_eq!(cmds.len(), 12);
 
     // Clone + Debug + PartialEq
     for cmd in &cmds {
@@ -370,6 +375,62 @@ fn choice_references_additive_wire_form() {
     );
 }
 
+/// アンカーの開き・閉じ（`\_a`）の合図のワイヤ形（additive・選択肢の合図と同じ規約）。
+///
+/// - (a) 引数の列が空の開きは `references` キーを出さない（`skip_serializing_if = "Vec::is_empty"`）。
+/// - (b) 引数の列がある開きは `references` キー付きで往復する（記述順のまま・空のトークンも保つ）。
+/// - (c) `references` を持たない JSON は `default` で空の列として読める。
+/// - (d) 閉じは中身なし（unit variant）＝裸の文字列 `"AnchorEnd"`。
+/// - (e) ID が空の開き（`\_a[]`）も欠落させずに往復する。
+#[test]
+fn anchor_cue_wire_form() {
+    // (a) 引数なしはキーが現れない。
+    let empty = CueCommand::AnchorBegin {
+        id: "OnJump".into(),
+        references: vec![],
+    };
+    assert_eq!(
+        serde_json::to_string(&empty).unwrap(),
+        r#"{"AnchorBegin":{"id":"OnJump"}}"#,
+        "引数の列が空の開きは references キーを出さない"
+    );
+
+    // (b) 引数ありはキー付きで往復し、記述順と空のトークンを保つ。
+    let with_refs = CueCommand::AnchorBegin {
+        id: "jump".into(),
+        references: vec!["r2".into(), "".into(), "r4".into()],
+    };
+    let json = serde_json::to_string(&with_refs).unwrap();
+    assert_eq!(
+        json,
+        r#"{"AnchorBegin":{"id":"jump","references":["r2","","r4"]}}"#
+    );
+    let parsed: CueCommand = serde_json::from_str(&json).unwrap();
+    assert_eq!(parsed, with_refs);
+
+    // (c) references の無い JSON は空の列として読める。
+    let parsed: CueCommand = serde_json::from_str(r#"{"AnchorBegin":{"id":"OnJump"}}"#).unwrap();
+    assert_eq!(parsed, empty);
+
+    // (d) 閉じは裸の文字列。
+    assert_eq!(
+        serde_json::to_string(&CueCommand::AnchorEnd).unwrap(),
+        r#""AnchorEnd""#
+    );
+    let parsed: CueCommand = serde_json::from_str(r#""AnchorEnd""#).unwrap();
+    assert_eq!(parsed, CueCommand::AnchorEnd);
+
+    // (e) ID が空の開きも往復する。
+    let blank = CueCommand::AnchorBegin {
+        id: "".into(),
+        references: vec![],
+    };
+    let json = serde_json::to_string(&blank).unwrap();
+    assert_eq!(json, r#"{"AnchorBegin":{"id":""}}"#);
+    let parsed: CueCommand = serde_json::from_str(&json).unwrap();
+    assert_eq!(parsed, blank);
+}
+
 #[test]
 fn actor_key_hash_eq() {
     use std::collections::HashSet;
@@ -593,6 +654,12 @@ fn duration_is_uniform_envelope_field_across_all_payloads() {
         CueCommand::BalloonSurface { key: "2".into() }.into(),
         CueCommand::Wait.into(),
         CueCommand::ClearAll.into(),
+        CueCommand::AnchorBegin {
+            id: "OnJump".into(),
+            references: vec![],
+        }
+        .into(),
+        CueCommand::AnchorEnd.into(),
         // duration 非該当ペイロード（Barrier / Routing）も envelope としては
         // 一律にフィールドを持つ（値は 0・静的 duration タイムラインの外）。
         BarrierKind::Timeout { duration: 5.0 }.into(),

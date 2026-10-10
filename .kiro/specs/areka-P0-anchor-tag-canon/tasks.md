@@ -2,7 +2,7 @@
 
 > 並べ方: 依存の向き（読み手 → 合図 → compile → 文字の層 → kanade → 入力）の順。列挙型に種類を足す段は、下流の網羅の match に「ビルドを通すための腕」だけを同じ段で置き、中身は後ろの段で入れる（どの段の終わりでもワークスペース全体がビルドできる）。ファイル名・型名・関数名は `design.md` の「File Structure Plan」と「Components and Interfaces」が正本。
 
-- [ ] 1. 読み手と合図の語彙を足す
+- [x] 1. 読み手と合図の語彙を足す
 - [x] 1.1 (P) `\_a` の 4 つの形を読み手の命令にする
   - 角括弧付きの `\_a[…]` を「アンカーの開き」（第 1 引数＝ID・第 2 引数以降＝引数の列・記述順のまま・空のトークンも潰さない）、角括弧の無い `\_a` を「アンカーの閉じ」として読む。どの形にも「知らないタグ」「読めなかった引数」の印を付けない。`\_a[]` は ID が空の開き（印なし）
   - `On` 始まりかどうかは読み手で区別しない。腕の定義行に ukadoc の URL のコメントを置く（網羅台帳の実装済みの根拠・根 2 件 `\_a[ID,r2,r3...]` と `\_a[OnID,r0,r1...]`）
@@ -13,7 +13,7 @@
   - _Boundary: areka-parsers の読み手_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.11, 6.1, 6.2, 8.1, 8.2_
 
-- [ ] 1.2 (P) dola の合図に「アンカーの開き」「アンカーの閉じ」を足し、網羅の match を追随させる
+- [x] 1.2 (P) dola の合図に「アンカーの開き」「アンカーの閉じ」を足し、網羅の match を追随させる
   - 開きは ID と引数の列を持つ（引数が空なら直列化で省く・選択肢の合図と同じ規約）。閉じは中身なし。どちらも宛先はバルーン
   - 網羅の match の追随: dola の宛先の分類・ゴーストの合図の名前付け（`"AnchorBegin"`／`"AnchorEnd"`）・文字の層の「状態へ渡すだけ」の列。文字の層の状態の側は、この段では何もしない腕を置く（中身は 3.2）
   - 檻の追随: 宛先の分類が全種類を覆う檻とゴーストの名前付けの檻に 2 種類を足し、手書きで「10 種」と数えている檻 2 本を 12 種へ揃える。ゴーストの結合テストで合図の全種類を catch-all なしで並べている檻（`spine_e2e_test_broadcast_relevance_partition.rs` の `every_cue_command`・設計の表に無い追随ファイル）にも 2 種類を足す
@@ -170,3 +170,6 @@
 - 1.1: ukadoc の URL のコメントは列挙型の側でなく `decode.rs` の `decode_tag` の腕 `"_a"` に置いた（既存の慣例・`ukadoc-survey` が拾う形）。
 - 1.1 → 6.3 への申し送り: `decode.rs` の `\f` の腕のコメント「アンカー 16 … areka-P0-anchor-tag-canon が後から与える」は、6.3 で持ち主を `areka-P0-anchor-style-canon` へ付け替えるときに 1 行直す。
 - 1.1 → 2.2 への申し送り: `areka-sakura` の檻 `catch_all_ignored_set_is_raw_only` は、2.2 で compile に腕が入るまで `Anchor`／`AnchorEnd` も catch-all に落ちる（緑のまま）。2.2 で説明を合わせる。
+- 1.2（範囲外・棚卸で扱う）: dola の手書きの数の檻 2 本（`cue_command_twelve_variants`・`sheet_test.rs` の「presentation コマンドは 12 種」）と `CueCommand` の doc「12 バリアント」は `Cursor` を数えておらず、実数は 13（本 spec の前から同じ 1 つ分のずれ・10 対 11）。本 spec はタスクの字面どおり +2 だけした。
+- 1.2（範囲外・棚卸で扱う）: `cargo clippy … -- -D warnings` は本 spec の前から赤（dola の `compile/resolve.rs`・`runtime/*`・`validate/*`、areka-kanade の `shiori/real.rs`、areka-ghost の `sink.rs` の既存テスト 1 件）。リポジトリの道具（`tools/test-all.ps1`・CI）に clippy の段は無い。以降の段と 7.1 の clippy は「本 spec が触った行に指摘が無いこと」で判定する。
+- 1.2 → 3.2 への申し送り: `areka-emo-text` の `state.rs::apply_cue` に `AnchorBegin`／`AnchorEnd` の何もしない腕（`debug!` 1 行）を置いてある。中身は 3.2 で入れる。
