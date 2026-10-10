@@ -200,3 +200,199 @@
 - GitHub（`gh`・読むだけ）: `ekicyou/areka` の Release `v0.0.2`／`microsoft/winget-pkgs` の `manifests/a/`・`doc/manifest/schema/`・直近の PR 2 件のファイル／`microsoft/winget-cli`・`microsoft/winget-create`・`russellbanks/Komac` の最新の Release。
 - winget-cli のソース（タグ `v1.29.380`）: `src/AppInstallerCLICore/Workflows/PortableFlow.cpp`（`GetPortableProductCode`・展開したフォルダを 1 段だけ回す所・`VerifyExpectedState` の後の `--force` の分かれ・`Purge` の決め）／`src/AppInstallerCLICore/PortableInstaller.cpp`（`VerifyPortableFile`・`InstallFile`・`RemoveFile`・`ApplyDesiredState`・`RemoveInstallDirectory`）／`src/AppInstallerCommonCore/Manifest/ManifestCommon.cpp`（`DoesInstallerTypeIgnoreScopeFromManifest`）。
 - 外の文書: https://github.com/microsoft/winget-pkgs/blob/master/doc/manifest/schema/1.12.0/installer.md ・ https://github.com/microsoft/winget-pkgs/blob/master/doc/Authoring.md ・ https://github.com/microsoft/winget-create/blob/main/doc/submit.md ・ https://github.com/russellbanks/Komac/blob/main/README.md
+
+---
+
+# 設計フェーズの調べと決定（2026-10-10）
+
+- 作成: 2026-10-10（ブランチ `claude/areka-p0-winget-manifest-1c4fd7`・コミット `97d2161e` の上）
+- 対象: 上の「要件討議での仕分け」が設計へ回した 5 点と、「7. 設計へ持ち越す調べもの」の 9 件。
+- 進め方: winget-pkgs・winget-cli・winget-create・Komac の文書とソースを `gh` の読むだけの問い合わせで読み、Microsoft Learn の 2 頁を取ってきて読み、開発機の `winget` の説明（`--help`）を読んだ。`winget install`・`winget settings` は実行していない。ファイルは取ってきていない（Release の値は GitHub が示す情報だけを読んだ）。
+- 上のギャップ分析は「YAML 3 ファイル」と書いているが、要件討議で日本語のロケールを足して 4 ファイルになった（要件 1.3）。上の文は当時のまま残す。
+
+## まとめ
+
+- **Feature**: `areka-P0-winget-manifest-submission`
+- **Discovery Scope**: Extension（軽い調べ。今ある型＝完了 `areka-P0-release-package-versioned` の手元の確かめを伸ばす仕事で、調べの中心は外の決まりの引き直し）
+- **Key Findings**:
+  - winget-pkgs が今勧める書式は 1.12 のまま（PR のひな形の確かめ項目）。1.28.0 は文書に在るが、増えた欄は DSC 向けだけ。
+  - `wingetcreate submit` も `komac submit` も、手元のマニフェストのフォルダを受ける。どちらも読み直して書き出すので、出た物は手元のファイルと字面が変わりうる＝提出の後に、PR の中身を雛形へ写し戻して見比べる段が要る。
+  - 自動の検査は、今は GitHub の上で 10 段の検査として走る。通ると `Validation-Completed` が付き、その後に人が見る。実際の承認待ちの PR には `Azure-Pipeline-Passed`・`Validation-Completed`・`New-Package` が並んで付いている。初めての人には別の仕組みが `Needs-CLA` を付ける。
+  - `winget upgrade` に `--manifest` が在る（開発機の v1.29.380 の説明と、ソースの分かれ）。上げ直しの実測は、版の欄だけ上げた確かめ専用のマニフェストで組める。
+  - 注意書きに使える欄は `InstallationNotes`（既定のロケールと追加のロケールの両方に在り、インストールの終わりに出る）。
+
+## 調べの記録
+
+### 書式の版（持ち越し 1）
+
+- **きっかけ**: winget-pkgs の文書に 1.28.0 が増えていた。要件 1.3 は「提出の時点で受け付ける版」。
+- **読んだ物**: winget-pkgs の `.github/PULL_REQUEST_TEMPLATE.md`・`doc/manifest/README.md`・`doc/Authoring.md`・`doc/FirstContribution.md`・`doc/manifest/schema/1.12.0/installer.md` と `1.28.0/installer.md`（欄の一覧を機械で見比べた）。
+- **分かったこと**:
+  - PR のひな形の確かめ項目は「Manifest conforms to the 1.12 schema」。
+  - `doc/manifest/README.md`: 「置き場は、新しい書式の受け付けを、対応した端末が行き渡るまで遅らせることが多い。PR のひな形に書いてある版を使ってほしい」。
+  - `doc/Authoring.md` の参照先も 1.12.0。
+  - 1.28.0 の installer の説明で増えた欄は `DesiredStateConfiguration`・`PowerShell`・`ModuleName`・`RepositoryUrl`・`Resources` など DSC 向けの物だけ。
+  - `doc/FirstContribution.md`: 全ファイルの 1 行目に書式の場所を示す行（`# yaml-language-server: $schema=...`）を付ける・1 つのファイルにまとめた形（singleton）は不可・マニフェスト以外のファイルを同じ PR に入れない。
+- **設計への効き方**: 1.12.0 で書く。提出の直前に、ひな形の行がまだ 1.12 かを読んで確かめる。
+
+### 提出の道具（持ち越し 2）
+
+- **きっかけ**: 要件 5.1 は `komac` か `wingetcreate` のどちらかを設計で選ぶ。ギャップ分析は「`wingetcreate submit` がフォルダを受けるか」「`komac` に手元のマニフェストを出す口が在るか」を未知としていた。
+- **読んだ物**: winget-create の `doc/submit.md`・`doc/token.md`・`README.md`・`src/WingetCreateCLI/Commands/SubmitCommand.cs`・`src/WingetCreateCLI/Commands/BaseCommand.cs`・`src/WingetCreateCore/Common/GitHub.cs`／Komac の `README.md`・`src/commands/submit.rs`／両方の最新の Release。
+- **分かったこと**:
+  - `wingetcreate submit <フォルダ>`: `SubmitCommand` の定義は、渡された物がフォルダなら、中のファイルを全部読んでマニフェストの組（version・installer・既定のロケール・追加のロケール）に直し、検査してから出す。＝4 ファイルのフォルダを受ける。フォルダに YAML 以外が在ると読み損ねる作りなので、雛形のフォルダには YAML だけを置く。
+  - フォーク: `SubmitPRAsync` の定義は、開発者のアカウントにフォークが無ければ作り、古ければ追い付かせてから、フォークの新しい枝へ書いて PR を出す（`BaseCommand` の `SubmitPRToFork` の既定は真）。PR の本文は winget-pkgs のひな形がそのまま入る（確かめ項目の印は付いていない）。題は `--prtitle` で渡せる。
+  - トークン: `--token` を付けなければ、ブラウザでの GitHub へのログインになる。`doc/token.md` は「`--token` は記録に残りうる。手元ではログインの流れを勧める」と書く。覚えたログインは `wingetcreate token --clear` で消せる。トークンを使うなら classic の `public_repo`（細かい権限のトークンは不可）。
+  - 出る物: 道具がマニフェストを読み直して書き出す。冒頭に道具の名前の行と書式の場所の行が付く。
+  - `komac submit <フォルダ>`: ソースに在る（`--dry-run` も在る）。説明書の命令の一覧には載っていない。classic の `public_repo` のトークンを覚えさせる必要が在る。こちらも読み直して書き出す。
+  - 最新の版: `wingetcreate` v1.12.13.0（2026-07-23）・`komac` v2.16.0（2026-03-29）。
+- **設計への効き方**: `wingetcreate submit` を選ぶ。提出の後に写し戻しの段を置く。
+
+### 初回の提出者の手続き（持ち越し 3）
+
+- **読んだ物**: winget-pkgs の `.github/PULL_REQUEST_TEMPLATE.md`・`doc/FirstContribution.md`・`doc/Validation.md`、winget-create の `README.md`。
+- **分かったこと**:
+  - 同意（CLA）は、検査とは別の仕組みが見る。済んでいないと `Needs-CLA` が付き、取り込めない。同意は PR の案内に従って 1 回行えば、Microsoft のどのリポジトリにも効く。
+  - PR の本文の確かめ項目: 同意／同じ変更の PR がほかに開いていない／1 つのマニフェストだけ／`winget validate --manifest` を通した／`winget install --manifest` で確かめた／1.12 の書式。
+  - PR の題の形: 「New package: Publisher.Name version X.Y.Z」。
+  - ふつうの提出に、先に Issue を立てる必要は無い。
+- **設計への効き方**: 手順書に、同意と確かめ項目に印を付ける段を入れる。本仕様の流れ（検査 → 手元で入れる → 提出）は確かめ項目をすべて満たす。
+
+### 自動の検査と印（持ち越し 4）
+
+- **読んだ物**: winget-pkgs の `doc/Validation.md`・Microsoft Learn の提出の説明（頁の更新は 2026-07-14）・winget-pkgs で開いている「New package」の PR 8 件の印（`gh search prs`）。
+- **分かったこと**:
+  - 検査は GitHub の上の 10 段（PR の形／マニフェスト／URL／URL の配布元／決まりの文／一覧との整合／インストーラーの走査／インストールの確かめ／インストーラーの情報／まとめ）。前の段が赤だと後の段は飛ばされることが在る。やり直しは、モデレーターが PR に `@wingetbot run` と書いて起こす。
+  - 通ると `Validation-Completed` が付き、その後にモデレーターが見て、承認すると `Moderator-Approved` が付いて自動で取り込まれる。
+  - 開いている PR の実際の印: 承認待ちの物は `Azure-Pipeline-Passed`・`Validation-Completed`・`New-Package` の 3 つ。同意がまだの物はそれに `Needs-CLA` が付いている。＝`Validation-Completed` が付いていても、取り込まれてはいない。
+  - Microsoft Learn の頁は `Azure-Pipeline-Passed` を「検査を通り、承認待ち」、`Validation-Completed` を「取り込まれる印」と書く。要件の事実の節はこの頁を写している。実際の並びとは少し違うが、要件 5.7 の完了の線は「自動の検査が通り、人の承認待ちになった」という中身で書かれているので、食い違いにはならない。
+  - 失敗の印と意味は `doc/Validation.md` の各段と Learn の表に在る（設計の「赤の仕分け」の表に写した）。`Needs-Author-Feedback` は 10 日応えないと PR が閉じられる（Learn）。
+  - インストールの確かめは、管理者でない利用者として、無人で入れ、入れた後に実行ファイルを見つけ、Defender で走査する。
+- **設計への効き方**: 完了の判定を「`Validation-Completed` が付き、`Needs-CLA`・`Needs-Author-Feedback`・失敗の印が 0」とする。
+
+### `winget upgrade --manifest`（持ち越し 5）
+
+- **読んだ物**: 開発機の `winget upgrade --help`（v1.29.380）・Microsoft Learn の `winget upgrade` の説明（頁の更新は 2026-07-21）・winget-cli のタグ `v1.29.380` の `src/AppInstallerCLICore/Commands/UpgradeCommand.cpp`。
+- **分かったこと**:
+  - `-m,--manifest` が在る。Learn は「手元の YAML から上げ直しを行う」と書く。
+  - ソースでは、`--manifest` が在るときの分かれは、マニフェストを読む → 入っている物の中からそのマニフェストに当たる物を探す → 1 つに決まることを確かめる → 入っている版より新しいことを確かめる → 入れる、の順。
+  - 入っている物を見つけられるかは、手元のマニフェストで入れた物の覚えられ方に依るので、実機でしか確かめられない。
+  - `--uninstall-previous` と `--purge` は `upgrade` にも在る（実測では付けない。既定の動きを測る）。
+- **設計への効き方**: 上げ直しは `winget upgrade --manifest`。見つけられなければ、同じフォルダで `winget install --manifest` を打つ代わりの手を認め、どちらを使ったかを記録する（要件 4.2 の「上げ直し」と数える。どちらも、ギャップ分析の 3.1 の 3 で読んだ同じ処理を通る）。
+
+### 入れ先と、外すときの設定（持ち越し 6・7 の前提）
+
+- **読んだ物**: winget-cli のタグ `v1.29.380` の `doc/Settings.md`・開発機の `winget uninstall --help`。
+- **分かったこと**:
+  - 利用者ごとの入れ先の既定は `%LOCALAPPDATA%/Microsoft/WinGet/Packages/`（`portablePackageUserRoot`）、機械の全員向けの既定は `%PROGRAMFILES%/WinGet/Packages/`（`portablePackageMachineRoot`）。
+  - 「外すときにポータブルな物の入れ先を丸ごと消す」は、利用者の設定の `uninstallBehavior.purgePortablePackage`（既定は偽）。
+  - `winget uninstall` にも `-m,--manifest` が在る（手元のマニフェストで入れた物を外す、もう 1 つの口）。
+- **設計への効き方**: 段 8 の入れ先の見込みと、要件 4.5 の「設定が既定のまま」の読み方が決まる。3.1 の見込みの確かめ（持ち越し 6）は、設計の段 5・段 6 の表がそのまま受ける。
+
+### 注意書きの欄
+
+- **読んだ物**: winget-pkgs の `doc/manifest/schema/1.12.0/defaultLocale.md`・`locale.md`、winget-cli の `src/AppInstallerCLICore/Workflows/InstallFlow.cpp`。
+- **分かったこと**: `InstallationNotes` は「インストールが終わったときに利用者へ示す文」で、既定のロケールにも追加のロケールにも書ける。ソースでは `DisplayInstallationNotes` が、選ばれたロケールの文を出す。`Moniker` は既定のロケールだけの欄で、追加のロケールには無い。短い説明は 3〜256 字。タグは 16 個まで。
+- **設計への効き方**: 要件 1.10 の「入れた直後に利用者へ示される欄」を `InstallationNotes` とする。
+
+### 既定のロケール（持ち越し 8）と、名乗りと発行者（持ち越し 9）
+
+- **読んだ物**: winget-pkgs の `doc/Authoring.md`・`doc/FirstContribution.md`・`doc/Policies.md`・`doc/manifest/schema/1.12.0/version.md`。
+- **分かったこと**: 既定のロケールを en-US にせよという決まりは、どれにも無い。名乗りは「ふつう `Publisher.Package`。区切りを足してよい」で、発行者の欄と名乗りの頭が同じであることを求める文は無い。検査の「URL の配布元」は、`InstallerUrl` が発行者の正式な配布元から来ていることを見る（`PackageUrl` を書き、そこから辿れると確かめやすい、と在る）。
+- **設計への効き方**: 既定は英語のまま（要件討議の決定）。`PackageUrl` をリポジトリにし、`InstallerUrl` が同じリポジトリの Release を指す形にする。人に問われたときの答えの文を手順書に用意する。
+
+### 実在するマニフェストの形と、Release の値
+
+- **読んだ物**: winget-pkgs の `manifests/r/rhysd/actionlint/1.7.9/` の 3 ファイル（zip＋portable・x86 と x64 と arm64・道具が出した物）／`gh api` での `ekicyou/areka` の Release `v0.0.2` とタグ `v0.0.2` の `LICENSE-MIT`／winget-pkgs の `manifests/a/Areka`・`ekicyou/winget-pkgs`・`Areka.Areka` を含む PR。
+- **分かったこと**:
+  - 道具が出す形: 1 行目が道具の名前、2 行目が書式の場所の行。installer は `InstallerType: zip`・`NestedInstallerType: portable`・`NestedInstallerFiles`・`ReleaseDate`・`Installers`（CPU の種類ごとに URL とハッシュ。ハッシュは大文字）の順。既定のロケールは `Publisher`・`PublisherUrl`・`PublisherSupportUrl`・`PackageName`・`PackageUrl`・`License`・`LicenseUrl`・`ShortDescription`・`Tags`・`ReleaseNotesUrl` を持つ。
+  - Release `v0.0.2`: 公開 `2026-10-06T12:49:21Z`・下書きでも先行版でもない。GitHub が示す値は x64 `66d3a9a0…6a751c9c`・arm64 `77c5356a…9fdd79fb`（上の 2.2 と同じ）。タグ `v0.0.2` の根に `LICENSE-MIT` が在る。
+  - `manifests/a/Areka` は無い。`ekicyou/winget-pkgs` は無い。`Areka.Areka` を含む PR は 0 件。
+- **設計への効き方**: 雛形の欄の並びを道具が出す形に寄せておく（写し戻しの差を小さくする）。
+
+## 持ち越した 9 件の答え
+
+| 件 | 答え |
+|---|---|
+| 1 書式の版 | 1.12.0（PR のひな形が勧める版） |
+| 2 道具 | `wingetcreate submit`。フォルダを受ける・フォークを自分で作る・ブラウザでのログインで済む。`komac submit` も在るが採らない |
+| 3 初回の提出者の手続き | 同意（CLA）は PR の案内に従って 1 回。PR の本文の確かめ項目 6 つに印を付ける（当てはまるときだけの「Issue への結び付け」は数えない） |
+| 4 自動の検査の印 | 10 段。通ると `Validation-Completed`（`Azure-Pipeline-Passed` も付く）。失敗の印は設計の「赤の仕分け」の表 |
+| 5 `winget upgrade --manifest` | 命令は在る。入っている物を見つけるかは実機で分かる。見つけないときの代わりの手を設計で決めた |
+| 6 3.1 の見込みの確かめ | 設計の段 5・段 6 の表で測る（この調べでは測っていない） |
+| 7 `--scope machine` | 入れ先の既定は `%PROGRAMFILES%/WinGet/Packages/`。段 8 で 1 回測る（要件討議の決定） |
+| 8 既定のロケール | en-US を求める決まりは無い。要件討議の決定（既定は英語・追加で日本語）のまま |
+| 9 名乗りと発行者の食い違い | 決まりには掛からない。問われたときの答えの文を手順書に用意する |
+
+## 設計の決定
+
+### 決定: 書式の版は 1.12.0
+
+- **選ばなかった案**: 1.28.0（文書に在る最新）。
+- **理由**: 置き場が勧めているのは PR のひな形に書いた版で、それが 1.12。1.28.0 で増えた欄は areka に要らない。開発機の winget v1.29.380 はどちらも読めるが、新しい書式は古い winget の利用者に届かない。
+- **残す確かめ**: 提出の直前に、ひな形の行を読み直す。
+
+### 決定: 雛形は手で書き、`wingetcreate submit` で出す
+
+- **選ばなかった案**: ① 道具に作らせてそのまま出す（`wingetcreate new`・`komac new`）＝出す前に手元で確かめる順と合わず、`ArchiveBinariesDependOnPath` と日本語のロケールは結局手で足す。② 道具に作らせてファイルへ出し、手で整える＝値がすべて分かっている 4 ファイルに、道具の問いに答える手間を足すだけ。③ `komac submit`＝説明書の一覧に無い口で、classic のトークンを作って覚えさせる手間が要る。④ `git` と `gh` だけで出す＝字面がそのまま出る利点は在るが、要件 5.1 が道具を 2 つのどちらかと決めている。
+- **理由**: 確かめた 4 ファイルをそのまま道具に渡せる。Microsoft の文書が勧める道具で、手元のフォルダを出す口が文書に在る。トークンを作る場面が無い。
+- **代償**: 道具が読み直して書き出すので、出た物の字面が変わりうる。提出の後に PR の中身を雛形へ写し戻し、欄と値が変わっていないことを確かめる段を置いた。
+
+### 決定: 置き場は `dist/winget/0.0.2/`
+
+- **選ばなかった案**: 平ら（`dist/winget/*.yaml`）＝版が見えず、後の版が出た後に「今の版」と読み違える。winget-pkgs と同じ 5 段＝4 ファイルには深すぎる。
+- **理由**: 雛形は初回に出した版の写しのまま止まる。版のフォルダなら、そのまま `winget validate` と `wingetcreate submit` に渡せる。
+- **決まり**: このフォルダには YAML だけを置く（説明書きのファイルを足さない。道具がフォルダの中のファイルを全部マニフェストとして読むため）。説明は steering の `structure.md` に書く。
+
+### 決定: 上げ直しの実測の組み方
+
+- **より新しい版**: 版の欄だけ `0.0.2.1` に上げ、同じ zip と同じハッシュを指す。`0.0.3` にしないのは、実在しうる次の版と取り違えないため。zip を手元で詰め直して配る案は採らない（手元の配り方と別の zip が要り、測りたいこと＝winget が何を消すか＝は同じ zip でも変わらない）。
+- **「置き換わった」の見分け**: 同梱の `ghost\emo2\readme.txt` に 1 行足し、隣に目印のファイルを置く。最上位の 6 ファイルには触らない（winget がハッシュを見ていて、合わないと上げ直しが止まる＝上の 3.1 の 5）。
+- **状態の作り方**: 開発者が右クリックメニューから作る（本物の経路）。フォルダを手で写して作る案は、前に使っていたゴーストの覚えと記憶を別に作る必要が在るので採らない。ただし、作った状態の写しを取っておき、外し方の実測の前には写しから戻す（メニューの操作を 2 度しない）。
+- **使う検体**: ゴーストは `vendors/sample_ghost/claudia.nar`（同梱のバルーンを 2 つ持つ）、バルーンは `vendors/sample_ghost/emo2-kakukaku-wplimit.nar`（`install.txt` の `type,balloon`）。
+- **一覧を取る時機**: 上げ直しの直後、areka を起動する前（起動すると areka が記憶を作り直すので、消えた物が在ったように見えなくなる）。
+
+### 決定: 要件に名前の無い欄
+
+- **入れる**: `LicenseUrl`・`ReleaseNotesUrl`・`PublisherSupportUrl`（道具が GitHub のパッケージで自動で埋める欄。実在のマニフェストにも在る）。
+- **入れない**: `Moniker`（`areka` の 1 語はインストーラー版 `Areka.Areka` のために空ける）／`MinimumOSVersion`（測った値が無い）／`UpgradeBehavior`（既定のまま。`uninstallPrevious` にしても消える物は同じ見込みで、`deny` は上げ直しを止めるだけで外すときの消え方は変わらない。消えると分かったときの手当ては、要件討議で「注意書き・起票・次の版を出さない」と決まっている）／`Description`・`Author`・`Copyright`。
+
+### 決定: 完了の線の判定
+
+- **判定**: PR に `Validation-Completed` が付き、`Needs-CLA`・`Needs-Author-Feedback`・失敗の印がどれも付いていない。
+- **理由**: 実際の承認待ちの PR の印の並びと、winget-pkgs の `doc/Validation.md` の書き方に合わせた。`Needs-CLA` が付いたままでは人の承認へ進めないので、完了に数えない。
+
+### 決定: 誰の手で行うか
+
+- **決まり**: 機械の状態を変える操作（winget の設定・出し入れ・入れ先のフォルダへの書き込み・提出）は開発者の手、読むだけの操作と文書は AI。
+- **理由**: 要件 3.1・3.4・3.6・4.7・4.8・5.2 が開発者の手と書いている。線を 1 本にしておくと、段ごとに迷わない。
+
+## 統合の見直し
+
+- **まとめられる物**: 段 3・段 5・段 8 の「起動して判定する」は、同じ有界の起動と同じ記録の行で判定する。後片付けの確かめ（要件 3.6 と 4.8）は、同じ 4 項目の表を使い回す。
+- **作らずに借りる物**: 検査は `winget validate`、提出は `wingetcreate`、PR の読み取りは `gh`、起動の判定は areka が今出している記録の行。新しいスクリプトは 0 本。手元の確かめの手順と記録の形は、完了 `areka-P0-release-package-versioned` の `verification/winget-local-check.md` を伸ばす。
+- **削った物**: `dist/winget/` の中の説明書きのファイル（`structure.md` の 1 か所で足りる）／確かめを自動で回すスクリプト（開発者の手の操作が挟まるので、文書に書いたコマンドで足りる）／zip を作り直して中身が変わらないことを確かめる走行（`tools/**` の変更が 0 なので、写す経路の読みで足りる）／PR を常に見張る仕組み（区切りごとに読みに行けば足りる）／Windows サンドボックスでの確かめ。
+
+## 危うさと手当て
+
+- **未署名の exe が走査に掛かる**（外の仕組み）— 設計の「赤の仕分け」で「雛形の直しでは消えない」に仕分け、要件 5.6 のとおり記録・報告・起票する。完了としない。
+- **`wingetcreate submit` が欄か値を変えて出す** — 写し戻しの見比べで見つけ、止めて報告する。
+- **`winget upgrade --manifest` が入っている物を見つけない** — 代わりの手を決めてあり、使ったコマンドを記録する。
+- **自然な操作ではシェルの記憶ができない** — 作る操作を足す。それでもできなければ「測れなかった」と理由を書いて報告する。
+- **設定がオンのまま作業が切れる** — 「変えた設定」の表に戻した時刻が無いことで分かる。再開のときに、後片付けと設定の戻しを先に済ませる。
+- **PR に直しを求める印が付いたまま 10 日過ぎる** — 手順書に期限を書き、後ろの spec への申し送りにも書く。
+
+## 参照したスキルと指針
+
+- `kiro-spec-design` の決まり（`design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）。この仕事に当たる分野別のスキル（画面の設計・アクセシビリティなど）は無い。
+- 設計の見直し（review gate）: 要件の番号 46 個がすべて設計の対応表に在ることを機械で確かめた（欠け 0・余り 0）。直しは 1 回（頼る物の印を平易な語に直す・Microsoft Learn との書き方の違いの述べ方・一覧を取る時機・状態を作ってから上げ直しまで起動しない決まり・「有界」の言い換え・ショートカットの欄が書式に無いことの明記）。要件の食い違いは見つからなかった。
+
+## 設計フェーズの出典
+
+- winget-pkgs（`gh`・読むだけ・2026-10-10）: `.github/PULL_REQUEST_TEMPLATE.md`／`doc/manifest/README.md`／`doc/FirstContribution.md`／`doc/Authoring.md`／`doc/Policies.md`／`doc/Validation.md`／`doc/manifest/schema/1.12.0/` の `version.md`・`installer.md`・`defaultLocale.md`・`locale.md`／`doc/manifest/schema/1.28.0/installer.md`／`manifests/r/rhysd/actionlint/1.7.9/`／開いている「New package」の PR の印。
+- winget-create（`gh`・読むだけ）: `doc/submit.md`・`doc/token.md`・`README.md`・`src/WingetCreateCLI/Commands/SubmitCommand.cs`・`src/WingetCreateCLI/Commands/BaseCommand.cs`・`src/WingetCreateCore/Common/GitHub.cs`。
+- Komac（`gh`・読むだけ）: `README.md`・`src/commands/submit.rs`。
+- winget-cli（タグ `v1.29.380`）: `doc/Settings.md`・`src/AppInstallerCLICore/Commands/UpgradeCommand.cpp`・`src/AppInstallerCLICore/Workflows/InstallFlow.cpp`。
+- 開発機の winget v1.29.380: `winget upgrade --help`・`winget uninstall --help`・`winget validate --help`。
+- Microsoft Learn: https://learn.microsoft.com/en-us/windows/package-manager/package/repository ・ https://learn.microsoft.com/en-us/windows/package-manager/winget/upgrade
+- リポジトリ: `tools/package.ps1`（段「assemble」の写し・起動の確かめの環境変数と目印の行）・`vendors/sample_ghost/README.md` と検体の `install.txt`・`.kiro/steering/structure.md`（「その他の最上位」の行）・`.kiro/specs/areka-P0-release-cycle/requirements.md` と `design.md`（本仕様の名前が出る行）。
