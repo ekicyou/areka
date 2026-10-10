@@ -4,6 +4,8 @@
 
 改め: 2026-10-10（実装の後）。実装が設計から意図して違えた点（どれもレビューで受け入れ済み）を実物のとおりに書き直し、開発者の裁定 9 件を書き入れた。裁定の一覧は末尾の「実装の後の裁定（2026-10-10）」。
 
+改め: 2026-10-10（裁定をコードへ入れた後）。できあがった実物と違っていた所を直した（実機テストは 11 本で支えを `tests/real/mod.rs` に分けた・`--help` の末尾・読み物が書けないときの警告の行の綴り・ファイルの大きさ・スキルの報告の分け方）。
+
 ## Overview
 
 **目的**: 同じマシンで並んで走る実装セッションに、「マージの机」（リポジトリごとに 1 つ）と「負荷テストの机」（マシンに 1 つ）を 1 度に 1 人へ貸し出すコンソールアプリ `areka-impl-watch` を作る。各セッションは Bash から実行ファイルを直接呼ぶ。待ちは「番が来るまで終わらないコマンド」、止まる合図は「停止要請が出たら終わる見張りのコマンド」で表し、LLM のメッセージは 1 通も使わない。
@@ -150,14 +152,14 @@ graph TB
 | `tick` | なし | 回収と再計画だけ（`clear` の退避を手で戻した後など） | 0 | `tick` |
 | `status` | なし | 状態を変えずに読み（ロック無し・回収もしない）、`status.md` を書き、ASCII の要約を出す。見張りの無い参加者に `absent` の印。状態ファイルが無ければ、何も作らず `status.md` も書かない | 0／1＝状態ファイルが壊れている・版が合わない | 下の「状態の確認」。状態ファイルが無ければ `no state file` |
 | `clear` | なし | 状態ファイルを `state.json.cleared-<UTC>` へ退避し、版と「消した記録」だけの空の状態を書く。今のファイルは読まない（壊れていても、版が合わなくても通る）。問い合わせはしない | 0 | `cleared; backup: <path>`（退避するものが無ければ `cleared; backup: none`） |
-| `--help` | なし | コマンド・引数・終了コードの対応を ASCII で出す（置き場所を解決しないので、環境変数が無くても出る） | 0 | 使い方 |
+| `--help` | なし | コマンド・引数・終了コードの対応を ASCII で出す（置き場所を解決しないので、環境変数が無くても出る） | 0 | 使い方（末尾に、終了コードの 4 行と、識別が小文字に寄ることの 1 行。綴りは `cli.rs` の節） |
 
 共通:
 - 使い方の誤り（引数が足りない・知らないコマンド・形に合わない値・同じ引数を 2 度・そのコマンドが受けない引数）→ 何も変えず（置き場所も解決しない）、ASCII の 1 行 `usage error: <何が違うか>; see areka-impl-watch --help` を標準エラーへ出して 2。`-h` と引数なしの呼び出しも使い方の誤りである（使い方を出すのは `--help` だけ）。
 - 環境変数が無い・空（ASCII の空白だけも含む）・絶対パスでない・フォルダを作れない → ASCII の 2 行以内（「`AREKA_IMPL_WATCH_HOME` を設定してください」「絶対パスにしてください」の趣旨・手順書の場所。実物はどれも 1 行）を標準エラーへ出して 1（何も読み書きしない）。
 - 標準出力には結果（終了コード 0 の文）だけ。断り（`not applied: <訳>`）・「消えた」（`gone: <訳>`）・失敗（`WatchError` の文）は標準エラー（`ukadoc-survey` と同じ）。
 - 順は「引数を読む → `--help` ならここで終わる → 置き場所の解決 → コマンドの手順」。
-- 待つコマンド（`watch`・`merge --wait`・`loadtest --wait`・`stopped --wait`・`resume`）の手順は「**居る印を握る → 申し込み（または「止まった」の記録）→ 待ち**」。同じ識別・同じ種類の待ちがすでに走っていて印を握れなければ、申し込みも回収も通らずに `a <種類> wait for <id> is already running` で 1（状態ファイルは変わらない。種類は `watch`・`merge`・`load`・`resume` で、`stopped --wait` と `resume` は同じ種類）。申し込みの時点でもう条件が満ちていれば（番が来ている・作業中に戻っている・記録が無い）、待ちの記録を置かずに直ちに終わる。待っている間は何も出さない。
+- 待つコマンド（`watch`・`merge --wait`・`loadtest --wait`・`stopped --wait`・`resume`）の手順は「**居る印を握る → 申し込み（または「止まった」の記録）→ 待ち**」。同じ識別・同じ種類の待ちがすでに走っていて印を握れなければ、申し込みも回収も通らずに `a <種類> wait for <id> is already running` で 1（状態ファイルは変わらない。種類は `watch`・`merge`・`load`・`resume` で、`stopped --wait` と `resume` は同じ種類）。申し込みの時点でもう条件が満ちていれば（番が来ている・作業中に戻っている・停止要請が出し直されている・記録が無い）、待ちの記録を置かずに直ちに終わる。待っている間は何も出さない。
 
 **呼び方の約束**（手順書に書く・続きの spec がスキルへ写す）:
 - セッションは最初に `watch` をバックグラウンドで走らせ、その後に `merge`／`loadtest`／`loadrunning` を呼ぶ。見張りの無い「作業中」の参加者は次の呼び出しで回収されるため、順を逆にすると申し込みが消えることがある（消えたら待ちが 3 で終わるので、`watch` を立ててから申し込み直す）。再開した後も、次の `merge`／`loadtest` の前に `watch` を立て直す。
@@ -230,12 +232,14 @@ crates/areka-impl-watch/
     ├── wait_loop_tests.rs      # ループ（run）: 偽の口で、直ちに終わる・番が来て終わる・消えて 3・周期の一回りが呼ばれる・変わっていなければ読まない・失敗の扱い
     └── wait_test_support.rs    # wait のテストの支え（時刻の起点・待つものの組み立て）
 crates/areka-impl-watch/tests/
-└── real.rs                     # #![cfg(windows)]・10 本とも #[ignore]: 本物の実行ファイル（CARGO_BIN_EXE_areka-impl-watch＝統合テストだけに渡る）を子プロセスで立てて 取得待ち・返却・見張りの起床・回収・clear・同時の変更・開いたままの置き換え・ログの行 を通す（cargo test -p areka-impl-watch --test real -- --ignored --nocapture＝約 30 秒。短い形は末尾に --skip a_waiter_reclaims＝約 6 秒）
+├── real.rs                     # #![cfg(windows)]・11 本とも #[ignore]: 本物の実行ファイル（CARGO_BIN_EXE_areka-impl-watch＝統合テストだけに渡る）を子プロセスで立てて 取得待ち・返却・見張りの起床・回収・clear・同時の変更・開いたままの置き換え・ログの行・読み物が書けないとき・置き場所の無い呼び出し を通す（cargo test -p areka-impl-watch --test real -- --ignored --nocapture＝11 本で約 30 秒。短い形は末尾に --skip a_waiter_reclaims＝10 本で約 7 秒）
+└── real/
+    └── mod.rs                  # 実機テストの支え（一時の置き場所 Desk・立てた子プロセス Running・終わった子の姿 Done・状態ファイルの読み取り）。real.rs が #[path = "real/mod.rs"] mod support; でつなぐ。フォルダの下に置くので別のテストの入口にならない（テストの入口は real の 1 つのまま・実行コマンドも同じ）
 doc/impl-watch.md               # 入れ方・更新・呼び方の約束・コマンドと終了コードの表
 .claude/skills/kiro-watch-clear/SKILL.md   # clear を呼んで status を呼び、日本語で短く報告する
 ```
 
-接続は `structure.md` の形（本番ファイルの末尾に `#[cfg(test)] #[path = "<stem>_<module>.rs"] mod <module>;`。`main.rs` の兄弟は `main_<module>.rs`）。実機テストは `CARGO_BIN_EXE_<name>` が統合テストにしか渡らないので `tests/real.rs` に置く。どのファイルも 1,000 行以下（本番ファイルでは `cli.rs` が約 820 行・`plan.rs` が約 690 行で最も大きい。テストは 1,000 行の決まりのために `cli_*`・`store_*`・`wait_*` を分けてある。最大は `tests/real.rs` の約 900 行）。`plan.rs` で `std` から読み込むときは 1 行に 1 つで書く（`use std::{…}` のまとめ書きは構造テストが赤にする）。
+接続は `structure.md` の形（本番ファイルの末尾に `#[cfg(test)] #[path = "<stem>_<module>.rs"] mod <module>;`。`main.rs` の兄弟は `main_<module>.rs`）。実機テストは `CARGO_BIN_EXE_<name>` が統合テストにしか渡らないので `tests/real.rs` に置き、その支えは `tests/real/mod.rs` に置いて `#[path = "real/mod.rs"] mod support;` でつなぐ（`tests/` の直下に置くと、それだけで別のテストの入口になるため）。どのファイルも 1,000 行以下（最も大きいのは本番の `cli.rs` の約 830 行で、次がテストの `cli_tests.rs` の約 810 行。本番ファイルで `cli.rs` に続くのは `plan.rs` の約 700 行。テストは 1,000 行の決まりのために `cli_*`・`store_*`・`wait_*` を分けてあり、実機テストも同じ訳で、本体の `tests/real.rs`＝約 690 行と支えの `tests/real/mod.rs`＝約 320 行に分けてある）。`plan.rs` で `std` から読み込むときは 1 行に 1 つで書く（`use std::{…}` のまとめ書きは構造テストが赤にする）。
 
 ### Modified Files
 - `Cargo.lock` — 新しいクレートの 1 塊が増えるだけ（依存は全部既に在る）。
@@ -392,7 +396,7 @@ stateDiagram-v2
 | 9.1 | 状態の確認の中身 | `status.rs` | `status.md` |
 | 9.2, 9.3 | 端末は ASCII・日本語は別に | `status.rs`・`cli.rs`・`wait.rs`・`error.rs`・`main_layering_tests.rs` | 名前・内容は `status.md` だけ・端末へ出す行は ASCII の外を `\u{XXXX}` に逃がす（`error::escape_path`） |
 | 9.4 | 読むだけ・`absent`・無い/壊れたはその旨だけ | `cli.rs`（`status`）・`store.rs`（`read_only`・`summary`） | ロック無し・退避も作成もしない・無ければ `no state file` |
-| 9.5 | `--help` | `cli.rs`（`usage`） | ASCII の表（コマンドの表から組む） |
+| 9.5 | `--help` | `cli.rs`（`usage`） | ASCII の表（コマンドの表から組み、末尾に終了コードの 4 行を足す） |
 | 9.6 | 引数の誤り | `cli.rs`（`parse`） | 2。`--` で始まる値・同じ引数を 2 度・受けない引数・`-h`・引数なしも |
 | 10.1 | 状態の変化をログへ | `plan.rs`（`Event`）・`store.rs` | 1 出来事 1 行（`command=`・`event=`） |
 | 10.2 | 失敗はログへ＋非 0 | `store.rs`・`cli.rs`・`wait.rs` | `error!` → `Err` → 1。読み物 `status.md` の書きの失敗だけは `warn!` を残して結果を変えない（Error Handling の「失敗にしないもの」） |
@@ -403,8 +407,8 @@ stateDiagram-v2
 | 12.1 | 規則 1〜7 を決定論テストで | `plan_*_tests.rs`・`wait_tests.rs`・`wait_loop_tests.rs` | 時刻・生死は引数・眠りは偽の口 |
 | 12.2 | 無い・壊れた・版違い | `store_tests.rs`・`store_ports_tests.rs` | 一時フォルダの本物のファイル |
 | 12.3 | 環境変数の無い警告終了 | `home_tests.rs`・`cli_tests.rs` | 値を引数で渡す |
-| 12.4 | 置き場所は `target\` の下 | 全テスト | `TempPath::under_target("impl-watch")` |
-| 12.5 | 実機テストは `#[ignore]` | `tests/real.rs` | 理由に実行コマンド |
+| 12.4 | 置き場所は `target\` の下 | 全テスト | `TempPath::under_target`（札は `impl-watch-cli`・`impl-watch-store`・`impl-watch-real-merge` のように、どれも `impl-watch-` で始まる） |
+| 12.5 | 実機テストは `#[ignore]` | `tests/real.rs`（支えは `tests/real/mod.rs`） | 理由に実行コマンド |
 | 12.6 | 全体テストが自動で拾う | ワークスペースの `crates/*` | `tools/test-all.ps1` は触らない |
 | 13.1 | 待ちの間はセッションを起こさない | `wait.rs` | 終わるまで何も出さない |
 | 13.2, 13.3 | 端末出力は ASCII の数行 | `cli.rs` | 各コマンドの出力は表のとおり |
@@ -449,6 +453,13 @@ stateDiagram-v2
 
 **責任と制約**
 - 引数の表 1 本（`COMMANDS: [Spec; 14]` と、その外の `--help` の行 `HELP`）から解釈する。行が持つのは、名前・要る引数・任意の引数・`--wait` を取るか・使い方に出す 1 行・読んだ引数から `Command` を組む関数。`--help` の本文も同じ表から組む。手書きの分岐を別に持たない。
+- `--help` の本文（`usage`）の並びは「使い方の 1 行 → コマンドごとに 2 行（名前と引数・その行の 1 行）→ 引数の形 → 末尾」。表から組まないのは末尾の定数（`FOOT`）だけで、次の 6 行を持つ。`stopped` と `resume` の行は、0 を `0=resumed, or stop requested again` と書く。
+  - `0  done: granted, stop requested (or requested again), resumed, or the state was changed`
+  - `1  failure: AREKA_IMPL_WATCH_HOME unset, not absolute or not creatable, state file, lock, io, same wait already running`
+  - `2  usage error: nothing is read or written`
+  - `3  not applied: the request or the record is gone, or the condition did not hold`
+  - `--id is folded to lower case: A and a are the same participant.`
+  - `The state lives in the folder AREKA_IMPL_WATCH_HOME points to. See doc/impl-watch.md`
 - 引数を読むときの決まり: 知らない引数・そのコマンドが受けない引数・同じ引数の重ね書き・足りない引数・形に合わない値は使い方の誤り。値を取る引数は `--` で始まる語を値に取らない（`<引数> needs a value (a value cannot start with --)` の趣旨の誤り）。`--id` の値は形の検査の後に ASCII の小文字へ寄せ、`Command` へは小文字の形だけを入れる（寄せるのはここ 1 か所）。`-h` と引数なしは使い方の誤り。
 - 順は「引数を読む → `--help` ならここで終わる → 置き場所の解決 → コマンドの手順」。使い方の誤りと `--help` は置き場所を決める前に終わるので、何も読み書きしない。
 - 端末へ出す文は、このファイルの定数・`wait::judge` の終わりの 1 行・`status.rs` の ASCII の要約だけ。識別・リポジトリ・spec・PR・sha・UTC と数以外の値を文に混ぜない。打たれた引数（誤りの文に映すとき）と置き場所の道筋（`status: …`・`details: …`・`backup: …`）は、ASCII の外の字を `\u{XXXX}` に逃がして出す（`error::escape_path`・9.3）。
@@ -474,7 +485,7 @@ pub(crate) enum Command { Help, Status, Clear, Watch { id, repo, name: Option<St
   - `--wait` 無しの `merge`／`loadtest`: 直ちに番を受けていれば `wait::judge` の `granted …` の行、並んだだけなら `queued … pos=<n>`（1 始まり。`status::merge_order`／`load_order` の並びで数える）。
   - `merged`: 出来事 `Merged` 1 件（空けた机 1 つ）につき `merged repo=<r>` を 1 行。`unstop`: 出来事 `Unstopped` の数で `unstopped n=<n>`。`stopped`・`tick`: 表の名前がそのまま結果の文。
 - `waiting`（待つ 5 形: `watch`・`merge --wait`・`loadtest --wait`・`stopped --wait`・`resume`）: `home::resolve` → `store::open` → **居る印を握る**（`presence::hold(home.alive_path(id, kind))`。握れなければ `AlreadyRunning{id, kind}` で 1。申し込みも回収も通っていないので状態ファイルは変わらない）→ **申し込み**（`--wait` の前半＝`Merge`／`LoadTest`／`Stopped` を `with_state` で 1 回。当てはまらなくても断らずに進む＝始め直した待ちは元の申し込みを引き継ぎ、停止要請中でない `stopped --wait` は再開の待ちだけになる）→ 同じ排他の中で `wait::judge`。もう終わっていれば待ちの記録を置かずに直ちに終わる → 終わっていなければ **待ち**（`wait::run`。見張りと `resume` は申し込みが無いので、登録からループに任せる）→ 終わりの文。
-  - 番・停止要請・再開（`WaitEnd::Done`）は標準出力へ出して 0。見張りのときは必ず 2 行目に `details: <home>\status.md` を添える（`already stopped; …` のときも。停止要請の内容は日本語になりうるので、読める読み物の道筋を渡す）。
+  - 番・停止要請・再開・停止要請の出し直し（`WaitEnd::Done`）は標準出力へ出して 0。見張りのときは必ず 2 行目に `details: <home>\status.md` を添える（`already stopped; …` のときも。停止要請の内容は日本語になりうるので、読める読み物の道筋を渡す）。
   - 「消えた」（`WaitEnd::Gone`）は標準エラーへ `gone: <訳>` を出して 3。
   - `stopped --wait` の振る舞い: 停止要請中 →「止まった」を記録して待つ／すでに止まっている → 記録は変えずに待つ／すでに作業中 → 直ちに 0 `resumed`／記録が無い → 3 `gone: removed`。
 - `status`: `store::open` → `Store::summary()` → 要約の後ろに `status: <status.md の道筋>` を足して出す。状態ファイルが無ければ `no state file`（どちらも 0）。`status.md` が書けなかったときも要約と `status:` の行は同じに出す（書けなかったことはログの `warn!` に残る）。
@@ -549,7 +560,7 @@ impl Store {
 - `with_state` の順: `state.lock` の排他 → 読む → （退避したなら、その出来事をここでログの口へ。改名はもう起きている）→ `f`（判断）→ 書くなら状態ファイルの置き換え → 出来事をログの口へ（「無かったので作った」→ 判断の返した出来事の順）→ 書いたなら `status.md`。
   - **書く条件は `applied.changed || 作り直した`**。`verdict` は見ない（当てはまらなかった呼び出しでも、先頭の回収の分は変わっている）。作り直した状態は、判断が何も変えなくても 1 度だけ書く（書かなければ次の呼び出しがまた「無かった」と記録する）。変わっていなければ `state.json` も `status.md` も書かない（`Tick` で変化が無いときに、待っている者の数だけ書き直さないため）。
   - 状態ファイルが書けなかった変化は起きていないので、出来事をログの口へ渡さない（退避の出来事だけは先に渡っている）。ログの口へ渡すのを `status.md` より先にするのは、読み物が書けなくても起きた変化の記録を残すため。
-  - **`status.md` の書きの失敗は失敗にしない**（2026-10-10 の裁定）: `warn!` を 1 行（ASCII・`[store] status.md not written`）出し、`with_state`・`clear`・`summary` の返す値は状態の変化（`summary` は要約）のままにする。正本は状態ファイル 1 つ（8.8）で、`status.md` は次の変化か `status` で書き直される。失敗にすると、`status.md` を排他で開き続けるアプリが 1 つ居るだけで、状態ファイルはもう置き換わっているのに全部のコマンドが 1 を返し、判断の返した値（番が来たか等）が捨てられる。
+  - **`status.md` の書きの失敗は失敗にしない**（2026-10-10 の裁定）: `warn!` を 1 行（ASCII・`[store] status.md not written; the result stands`。出すのは読み物を書く 1 関数 `write_status` で、この関数は失敗を返さない）出し、`with_state`・`clear`・`summary` の返す値は状態の変化（`summary` は要約）のままにする。正本は状態ファイル 1 つ（8.8）で、`status.md` は次の変化か `status` で書き直される。失敗にすると、`status.md` を排他で開き続けるアプリが 1 つ居るだけで、状態ファイルはもう置き換わっているのに全部のコマンドが 1 を返し、判断の返した値（番が来たか等）が捨てられる。
 - 書き: `state.json.<pid>.tmp` に全部 → `sync_all` → `rename`（`FsPersistIo::commit` の形。前例は単一プロセス前提で固定の `.tmp` だが、ここは複数プロセスが書くのでプロセス番号を入れる）。`rename` は 20 ms × 5 回まで試し、通らなければ一時ファイルを消して `Err(Io)`（元のファイルは無傷）。`status.md` も同じ形（`status.md.<pid>.tmp`）で書く。
   - ふつうの読み手（消しを他へ許して開く）が `state.json` を開いたままでも置き換えは通る。**消しを他へ許さない形で開き続ける読み手**が居る間は、状態を変えるコマンドと `clear` が 5 回の試しの後に 1（`io write state.json: PermissionDenied (os error 5)`）で終わる。走っている待ち・見張りは読むだけなので続く。
   - 置き換えと重なった `read_only` の読みに試し直しは無い（実測で、失敗も書きかけも見えなかった）。
@@ -669,7 +680,7 @@ pub fn run(spec: &WaitSpec, port: &dyn WaitPort, held: Held) -> Result<WaitEnd, 
   - `Watch`: 参加者が無い → `Gone("removed")`。`Working` → まだ待つ。`StopRequested` → `Done("stop requested by <by>")`（理由が無い・`by` が空の手で直した状態は `stop requested by ?`）。`Stopped` → `Done("already stopped; run stopped --wait or resume")`。
   - `Merge`: 参加者が無い、または待ち行列にも持ち主にも居ない → `Gone("request gone")`。持ち主 → `Done("granted merge repo=<r>; last: …")`。
   - `Load`: 同様。持ち主 → `Done("granted load; stopped: <ids or none>")`。
-  - `Resume`: 参加者が無い → `Gone("removed")`。**「止まった」でなくなったら終わる**（2026-10-10 の裁定。元の設計は「`Working` に戻ったら」）: `Working` → `Done("resumed")`、`StopRequested` → `Done("stop requested again by <by>")`（`<by>` は記録された停止要請の理由の `by`。無い・空なら `?`）。`Stopped` → まだ待つ。
+  - `Resume`: 参加者が無い → `Gone("removed")`。**「止まった」でなくなったら終わる**（2026-10-10 の裁定。元の設計は「`Working` に戻ったら」）: `Working` → `Done("resumed")`、`StopRequested` → `Done("stop requested again by <by>")`（`<by>` は記録された停止要請の理由の `by`。無い・空なら `?`。`<by>` を取り出すのは、見張りの枝と共有する 1 関数 `asked_by`）。`Stopped` → まだ待つ。条件は `judge` の中の、参加者の状態による 1 つの `match` に在る。
   - `Done` の 1 行は、最後に `error::escape_path` を通す（識別・リポジトリ・spec は引数の形の決まりで ASCII だが、手で直した状態ファイルからは何でも来うる）。
 - 途中で殺されたときの記録は `reclaim` が拾う（6.7）。`Ctrl+C` の捕まえは行わない。殺された前の待ちの記録が、始め直した待ちの「直ちの終わり」の後も残ることがある（始め直した待ちが印を握っている間は「居る」と見えるため。次の状態を変える呼び出しの回収で消える。害は `status` の `waits` の 1 件）。
 - 定数: `POLL = 1 s`・`FULL_READ_EVERY = 10`・`TICK_EVERY = 30`（`TICK_EVERY` は `FULL_READ_EVERY` の倍数）。テストは `WaitPort` の偽物で `sleep` を数えるだけにし、実時間を使わない（12.1）。
@@ -749,8 +760,8 @@ status: C:\Users\me\.areka-impl-watch\status.md
 #[derive(thiserror::Error, Debug)]
 pub enum WatchError {
     #[error("AREKA_IMPL_WATCH_HOME is not set or empty. Set it to a folder (for example %USERPROFILE%\\.areka-impl-watch) and copy areka-impl-watch.exe there. See doc/impl-watch.md")] HomeUnset,
-    #[error("AREKA_IMPL_WATCH_HOME must be an absolute path such as C:\\Users\\me\\.areka-impl-watch, but it is '{dir}'. See doc/impl-watch.md")] HomeNotAbsolute { dir: String },
-    #[error("AREKA_IMPL_WATCH_HOME cannot be created: {dir}: {kind} (os error {code})")] HomeNotCreatable { dir: String, kind: String, code: i32 },
+    #[error("AREKA_IMPL_WATCH_HOME must be an absolute path such as C:\\Users\\me\\.areka-impl-watch, but it is '{}'. See doc/impl-watch.md", escape_path(.dir))] HomeNotAbsolute { dir: String },
+    #[error("AREKA_IMPL_WATCH_HOME cannot be created: {}: {kind} (os error {code})", escape_path(.dir))] HomeNotCreatable { dir: String, kind: String, code: i32 },
     #[error("state.lock is busy for 10 s; another areka-impl-watch may be stuck")] LockBusy,
     #[error("state file version mismatch: file has {found}, this exe knows {known}. Do not mix old and new exes; see doc/impl-watch.md")] VersionMismatch { found: u64, known: u32 },
     #[error("state file is broken; see impl-watch.log")] Broken,          // 読むだけ（status・待ちの読み直し）のとき
@@ -808,14 +819,14 @@ pub(crate) fn escape_path(text: &str) -> String;                          // 印
 - **決定論（規則 1〜7・`plan_*_tests.rs`）**: 分岐ごとに 1 本。例: 負荷テストが待たれている間はどのリポジトリでもマージの番が出ない（3.5）／バグ優先・同じなら時刻順（3.4）／マージの二重の判定はリポジトリごと（3.2・3.7）／候補・マージの持ち主・マージ待ちは停止要請の対象外（4.4・5.14）／全員が止まるまで番が来ない・止まったら同じ呼び出しで番が来る（4.5・7.5）／走っている印なら停止要請を出さない（4.12）／持ち主が居るときの `loadrunning` は参加もさせない（4.11）／**止まっている・停止要請中の参加者の `loadtest` は状態を変えず、番を受けたときに「作業中」へ戻る**（5.9）／`unstop` の後に申し込みが残れば出し直す（5.13）／負荷テストが無くなったら全員 `Working`、在る間は `Stopped` のまま（5.8・5.9）／**「作業中」へ戻す全部の箇所で見張り待ちの印が付く・印つきで見張りの無い負荷テストの持ち主は回収されない・印つきで見張りが居れば印だけ消える**（7.7）／**見張りの記録の抹消が実際に記録を消し、参加者が「作業中」なら印が付く。「停止要請中」なら付かない**（7.7）／`merged` で参加者が消え `waits` も消える（3.8）／持ち主でない `merged`・停止要請中でない `stopped` は `NotApplied`（3.10・5.7）で、先頭の回収の分だけが変わる／回収は `Working` だけ・`caller` は回収しない・回収で空いた机に次の番が出る（7.2・7.5・7.7）／2 つのリポジトリは同時に持てる（3.7）。時刻と生死は引数（`plan_test_support.rs` の偽 `Presence`）。「固定した」と書く前に、その分岐を元へ戻す変異を当てて赤を見る。
 - **状態ファイル（`store_tests.rs`・`store_ports_tests.rs`・支えは `store_test_support.rs`・`TempPath::under_target`）**: 無い → 作って 1 度だけ記録／壊れた・形が合わない → `broken-` へ退避して記録／同じ秒の 2 度目の退避が前を上書きしない／版違い → 読まず書かず `Err`／開けない → 退避せず `Err`／置き換え書きの後に `tmp` が残らない／書くかどうかは `changed` で決まり `verdict` では決まらない／`state.lock` を別スレッドで握ったまま `with_state` が上限で `LockBusy`（試しの間の待ちを差し替え、頼まれた待ちの合計で数える。実時間では待たない）／ログの口へ渡る出来事の列と順（退避 → 状態ファイル → 出来事 → 読み物）／状態ファイルが書けなければ出来事は渡らない／**`status.md` が書けなくても `with_state`・`clear`・`summary` は結果を返し、出来事はログの口へ渡る**／`read_only` は作らず退避せず／`clear` は古いファイルを読まない・排他の中で走る。時計・試しの間の待ち・ログの口は `Store` の欄へ直に差し込む。
 - **環境変数（`home_tests.rs`・`cli_tests.rs`）**: `None`・空・ASCII の空白だけ → `HomeUnset`／**絶対パスでない値（相対・ドライブの無い `\foo`・`/c/…` の形）→ `HomeNotAbsolute`**。どれも終了コード 1、標準エラーの文が ASCII 2 行以内、置き場所もカレントの下も何も作られない。
-- **引数（`cli_tests.rs`）**: 本番の表が設計の「コマンドの表」（テストの中の写し）と同じ／全コマンドがそろった形で読める／誤りごとの文と終了コード 2／**値を取る引数は `--` で始まる値を断る（`--name`・`--purpose` も）**／**`--id` は小文字に寄って `Command` に入る（`--repo`・`--spec` は寄らない）**／`-h` と引数なしは 2／使い方の本文が ASCII で終了コードの 4 行を持つ。
+- **引数（`cli_tests.rs`）**: 本番の表が設計の「コマンドの表」（テストの中の写し）と同じ／全コマンドがそろった形で読める／誤りごとの文と終了コード 2／**値を取る引数は `--` で始まる値を断る（`--name`・`--purpose` も）**／**`--id` は小文字に寄って `Command` に入る（`--repo`・`--spec` は寄らない）**／`-h` と引数なしは 2／使い方の本文が ASCII で終了コードの 4 行を持つ／`stopped` と `resume` の行が 0 を「再開した・停止要請が出し直された」の 2 通りで書く／使い方の末尾が、0 の行に停止要請の出し直しを、1 の行に置き場所の失敗 3 つ（無い・絶対パスでない・作れない）を挙げ、識別が小文字に寄ることを言う。
 - **コマンドの手順（`cli_commands_tests.rs`・`cli_wait_tests.rs`・支えは `cli_test_support.rs`）**: 本物の口を `target\` の下の一時の置き場所に向けて通す。置き場所の道筋に ASCII の外の字を入れ、名前と内容に日本語を渡しても、端末へ出る文が ASCII だけ（支えの `call` が毎回確かめる）／0 の文は標準出力・3 の文は標準エラー／居る印を握れなければ 1 で状態ファイルが変わらない／申し込みの時点で条件が満ちていれば待ちの記録を置かずに終わる／待ちに入った時点の状態は、最初の眠りまで走らせて見る（本物の口の眠りはテストの組み立てでは `panic!` するので、それを捕まえる）。2 つ以上の識別を使うテストは、呼ぶ前に全員の居る印をテストのプロセス内で握る（握らないと、呼んだ識別以外は回収される）。
 - **待ち（`wait_tests.rs`＝判定・`wait_loop_tests.rs`＝ループ・支えは `wait_test_support.rs`）**: 判定は状態を組み立てて渡すだけ: 直ちに終わる（5.4・5.11・6.2）／番が来て終わる／記録が消えて `Gone`／状態ファイルが無いも `Gone`／**再開の待ちは `Working` で `resumed`、`StopRequested` で `stop requested again by <id>`、`Stopped` ではまだ待つ**／終わりの 1 行が ASCII の 1 行。ループは偽の `WaitPort` で: `fingerprint` が同じなら `read` を呼ばない・10 回目は呼ぶ／30 回目に `Tick` が届く／登録・読み・`fingerprint` の失敗は待ちの失敗／周期の一回りの失敗は待ちを終えない／最後の抹消の失敗は答えを変えない／居る印は最後の変更が済むまで握っている／`sleep` の回数で経過を数え実時間を使わない。
 - **ロックファイル（`presence_tests.rs`）**: 握っている間 `is_present` が真、落とすと偽、`hold` の二重が `None`、`hold` が `alive/` を作る、探りは何も作らない、**握られていないファイルを 2 つの探りが同時に探っても両方「居ない」**、**探りの共有ロックが掛かっている間に始めた `hold` は、試し直しの間に解ければ握れる**、探りの思わぬ失敗は「居る」。同じプロセス内の別々の `File` で確かめる（Windows の `LockFileEx` はハンドル単位）。試しの間の待ちは `hold_retrying` へ渡す関数で差し替える。
 - **表示（`status_tests.rs`）**: 上の「状態の確認」の見本がそのまま出る／日本語の名前・内容を入れても `render_terminal` が ASCII だけ／`absent` と `awaiting-watch` の印（生死の口と「作業中」かどうかで決まる）／1 行目の数／待ち行列が番の来る順に並ぶ／`utc` の境界（0・うるう年・2038 超え）。
 - **失敗の型（`error_tests.rs`）**: 文が ASCII の 1 行／OS と JSON の失敗の写しに元の文が混ざらない。
 - **構造（`main_layering_tests.rs`）**: `plan.rs` の本文（コメントとリテラルを除く）に `std::fs`・`std::time`・`std::process`・`std::{`・`std::*` と、1 語の `tracing`・`SystemTime`・`Instant`・`File` が無い（`use std::{…}` のまとめ書きも赤になるので、`plan.rs` では 1 行に 1 つで書く）／`cli.rs`・`status.rs`・`wait.rs`・`error.rs` の文字列・文字のリテラルが ASCII だけ（どれも、リテラルがそのまま端末へ出るファイル）。走査は手書きで、`"\u{3042}"` のように逃がして書いた字と `use std as s;` の別名は見えない（端末へ出た文そのものは `cli_test_support.rs` の `call` が毎回確かめる）。
-- **実機（`tests/real.rs`・`#![cfg(windows)]`・10 本とも `#[ignore]`）**: 本物の実行ファイル（`env!("CARGO_BIN_EXE_areka-impl-watch")`・統合テストだけに渡る）を子プロセスで立てる。どの子プロセスにも `AREKA_IMPL_WATCH_HOME` を `TempPath::under_target` の下の絶対パスで明示して渡す（開発者の機械には本物のユーザー環境変数が在る）。通すのは、①`watch` を立て `merge --wait` が番で終わり、`merged` で `watch` が 3 で終わる ②`loadtest --wait` → `watch` が 0 で終わる → `stopped --wait` → `loaddone` で再開（止まっている間の `unstop` による出し直しで再開の待ちが `stop requested again by <id>` で終わる流れを含む）③`watch` を kill して次の呼び出しが回収する ④記録されたプロセス番号が別の生きているプロセスのものでも「居る」と見なさない（7.4）⑤`clear` で待ち・見張りが全部 3 で終わる ⑥同時の変更がどれも失われない ⑦別プロセスが `state.json` を開いたままでも置き換え書きが通る（消しを許さない読み手のときは 1 で元が無傷）⑧ログのファイルに出来事の行（`command=`・`event=`）と失敗の行が残る ⑨環境変数が無い・空・絶対パスでないとき、使い方の誤りのときに何も作られない ⑩待っている者しか居ないとき、30 秒ごとの周期の一回りが落ちた持ち主を回収する。握った居る印を待ちの間じゅう持ち続けること（待っている間の 2 つ目の同じ種類の待ちが 1）もここで判定する。**本物の 1 秒の眠りと、ログの実ファイルの行の檻はここだけ**。理由の文に実行コマンド（`cargo test -p areka-impl-watch --test real -- --ignored --nocapture`＝約 30 秒。ほぼ全部が⑩。短い形は末尾に `--skip a_waiter_reclaims`＝約 6 秒）。
+- **実機（`tests/real.rs`・支えは `tests/real/mod.rs`・`#![cfg(windows)]`・11 本とも `#[ignore]`）**: 本物の実行ファイル（`env!("CARGO_BIN_EXE_areka-impl-watch")`・統合テストだけに渡る）を子プロセスで立てる。子プロセスを組むのは支えの `Desk::command` の 1 か所で、どの子プロセスにも `AREKA_IMPL_WATCH_HOME` を `TempPath::under_target` の下の絶対パスで明示して渡す（開発者の機械には本物のユーザー環境変数が在る。⑨ だけは、その上からわざと変数を外す・空にする・相対の値にする。子のカレントは一時フォルダの中に置く）。識別は小文字で書く。通すのは、①`watch` を立て `merge --wait` が番で終わり、`merged` で `watch` が 3 で終わる（大文字で渡した識別が、記録・居る印のファイル名・出力のどこでも小文字の同じ参加者になることを含む）②`loadtest --wait` → `watch` が 0 で終わる → `stopped --wait` → `loaddone` で再開（停止要請中の `resume` が状態を変えずに直ちに `stop requested again by <id>` で終わる・止まっている間の `unstop` による出し直しで再開の待ちが `stop requested again by <id>` で終わり、もう一度 `stopped --wait` を呼ぶ・止まったままの `loadtest` が申し込んだ者の状態も候補の番も変えない、の流れを含む）③`watch` を kill して次の呼び出しが回収する ④記録されたプロセス番号が別の生きているプロセスのものでも「居る」と見なさない（7.4）⑤`clear` で待ち・見張りが全部 3 で終わる ⑥同時の変更がどれも失われない ⑦別プロセスが `state.json` を開いたままでも置き換え書きが通る（消しを許さない読み手のときは 1 で元が無傷）⑧ログのファイルに出来事の行（`command=`・`event=`）と失敗の行が残る ⑨環境変数が無い・空・絶対パスでないとき、使い方の誤りのときに何も作られない ⑩待っている者しか居ないとき、30 秒ごとの周期の一回りが落ちた持ち主を回収する ⑪読み物 `status.md` が書けないとき（名前をフォルダで塞ぐ）でも、状態を変える 1 回（`merge`）・`status`・`clear` がどれも 0 でふだんの行を出し、ログに `WARN` の水準の `[store] status.md not written…` の行が 1 回につき 1 行ずつ増え、`ERROR` の行は 1 本も出ない（10.2 の例外）。握った居る印を待ちの間じゅう持ち続けること（待っている間の 2 つ目の同じ種類の待ちが 1）もここで判定する。**本物の 1 秒の眠りと、ログの実ファイルの行の檻はここだけ**。理由の文に実行コマンド（`cargo test -p areka-impl-watch --test real -- --ignored --nocapture`＝11 本で約 30 秒。ほぼ全部が⑩。短い形は末尾に `--skip a_waiter_reclaims`＝10 本で約 7 秒）。
 - 全体テスト（`tools/test-all.ps1`）は `cargo test --workspace` で常時テストだけを拾う。実機テストは拾わない。
 
 ## Performance & Scalability
@@ -827,7 +838,7 @@ pub(crate) fn escape_path(text: &str) -> String;                          // 印
 1. 何をするものか（机 2 種・規則 7 つ・調停役との違い）。
 2. 入れ方: Rust 1.89 以上（`File::try_lock`。道具の版はファイルで固定していない）で `cargo build --release -p areka-impl-watch` → `target\release\areka-impl-watch.exe` を `%AREKA_IMPL_WATCH_HOME%` へコピー。環境変数はユーザー環境変数に 1 度だけ（例 `%USERPROFILE%\.areka-impl-watch`）。**値は絶対パス**（絶対パスでない値は断られて 1。Git Bash の中で `/c/…` の形に上書きして呼ばない）。`cargo run` は開発中の試しだけ（待っている間 `target\` の exe が開かれたままになる・cargo の起動が計測を乱す・掃除で消える）。
 3. 更新: (a) `status` で `waits=0`（または `no state file`）を確かめて置き換える (b) 誰かが走らせている間は `areka-impl-watch.exe` を `areka-impl-watch.old.exe` に改名してから新しいものを置き、古い待ちが終わってから `.old.exe` を消す。版が上がった exe は古い状態ファイルを読まない（`version mismatch`）→ `clear` でやり直す。
-4. 呼び方の約束（「コマンドの表」の下の約束と同じ）: `watch` を先に（バックグラウンド）→ `merge`／`loadtest`／`loadrunning`。待ちは `--wait` でバックグラウンド。停止要請で `watch` が終わったら、今のタスクのコミットの切れ目で `stopped --wait`（次にしたいことが負荷テストの申し込みでも、「止まった」は報告する）。`resumed` で終わったら `watch` を立て直す。`stop requested again by <id>` で終わったら、もう一度 `stopped --wait`。止まっている間に負荷テストの番を受けたら、負荷テストの前に `watch` を立て直す。`watch` が 1 で終わったら直ちに立て直す。終わるときは `leave`（`merged` は離脱を兼ねる）。
+4. 呼び方の約束（「コマンドの表」の下の約束と同じ）: `watch` を先に（バックグラウンド）→ `merge`／`loadtest`／`loadrunning`。待ちは `--wait` でバックグラウンド。停止要請で `watch` が終わったら、今のタスクのコミットの切れ目で `stopped --wait`（次にしたいことが負荷テストの申し込みでも、「止まった」は報告する）。`resumed` で終わったら `watch` を立て直す。`stop requested again by <id>` で終わったら、もう一度 `stopped --wait`。止まっている間に負荷テストの番を受けたら、負荷テストの前に `watch` を立て直す（立て直しは 1 回でよい。このとき `stopped --wait` も `resumed` で終わるが、2 度目の `watch` は `a watch wait for <id> is already running` の 1 で終わるだけ）。`watch` が 1 で終わったら直ちに立て直す。終わるときは `leave`（`merged` は離脱を兼ねる）。
 5. コマンドと引数と終了コードの表（この文書の表と同じ・`--help` と行が一致）。引数の形（識別は小文字に寄る・値は `--` で始められない）。出力の行き先（0 は標準出力・3 の文は標準エラー）。終了コードごとにセッションが取る行動（`stopped`・`resume`・`stopped --wait` が 3＝参加者の記録が無い → `watch` を立て直して続ける。`merge --wait`／`loadtest --wait` が 3 → `status` で消えた理由を見て、要るなら `watch` を立ててから申し込み直す）。終了コード 1 の文ごとにすること。
 6. 困ったとき: `status` の読み方（1 行目の数・`absent`／`awaiting-watch` の印。停止要請中・止まったの `absent` は正常）・落ちたセッションを手で外す（`leave --id`。`cancel` は参加者の記録を残すので、落ちたセッションには使わない）・全部消す（`clear`・退避ファイルから戻すには `state.json` へコピーして `tick`）・Claude のアプリを閉じたときに見張りが残ることがある（`status.md` の待ちと見張りの一覧で見分ける）・同じ識別の `watch` が残っていると新しい `watch` が 1 で止まる（一覧のプロセス番号で見分けて止めるか、`leave`）・`loadrunning` はすでに出た停止要請を取り消さない・`unstop` の後は `status` を見る（出し直しは `unstopped n=` に載らない）・`state.json` を開いたままのアプリが居ると状態を変えるコマンドが 1（`status.md` のほうは失敗にならず、ログに残るだけ）・状態ファイルが壊れた／無くなったとき・印つきの負荷テストの持ち主が見張りを立て直す前に落ちたら `leave` で外す。
 7. 置き場所の下のファイル一覧。
@@ -835,7 +846,7 @@ pub(crate) fn escape_path(text: &str) -> String;                          // 印
 ## スキル `kiro-watch-clear` の中身
 - `allowed-tools: Bash, Read`。`disable-model-invocation` は付けない（開発者が `/kiro-watch-clear` で呼ぶ）。確認の問い合わせはしない（`/kiro-watch-clear` と打つことが確認）。
 - 手順は 1 回の Bash の呼び出しにまとめる: ① `$AREKA_IMPL_WATCH_HOME` が空なら `stop: no-home` を出して何も呼ばない ② `"$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe"` が無ければ `stop: no-exe` を出して何も呼ばない ③ `clear` を呼ぶ ④ `clear` が 0 のときだけ `status` を呼ぶ ⑤ 最後に走ったコマンドの終了コードを `exit=<n>` で出す。環境変数は受け継いだものをそのまま使い、スキルの中で設定・書き替え・`/c/…` の形への変換をしない（絶対パスでない値は exe が断って 1 になる）。
-- 報告（日本語で 2〜3 行）: ①② のときは、どちらだったか・何も消していないこと・手順書（`doc/impl-watch.md` の「入れ方」）を案内して止まる。0 のときは、退避ファイルの道筋（`backup: none` なら退避するものが無かった旨）と `status` の要約（参加者 0 など）。失敗（終了コード 1・2）は標準エラーの文を添えて報告し、やり直しも手直しもしない。`cleared; backup:` の行が無い失敗では、消えたかどうかを決め付けず、不明と伝える（今のファイルを退避した後に、空の状態の書きで失敗することがある。`status.md` の書きの失敗は `clear` の失敗にならないので、ここには来ない）。行が在れば `clear` は済んでいて、失敗したのは `status`。
+- 報告（日本語で 2〜3 行）: ①② のときは、どちらだったか・何も消していないこと・手順書（`doc/impl-watch.md` の「入れ方」）を案内して止まる。0 のときは、退避ファイルの道筋（`backup: none` なら退避するものが無かった旨）と `status` の要約（参加者 0 など）。失敗（0 以外の終了コード。ふつうは 1・2）は標準エラーの文を添えて報告し、やり直しも手直しもしない。`cleared; backup:` の行が無い失敗のうち、標準エラーの行が `AREKA_IMPL_WATCH_HOME must be an absolute path`（または `AREKA_IMPL_WATCH_HOME cannot be created`）で始まるものは、exe が状態を開く前に止まっているので、「何も消していない・環境変数の値を直す（手順書の「入れ方」）」と伝える。それ以外の、`cleared; backup:` の行が無い失敗では、消えたかどうかを決め付けず、不明と伝える（今のファイルを退避した後に、空の状態の書きで失敗することがある。`status.md` の書きの失敗は `clear` の失敗にならないので、ここには来ない）。行が在れば `clear` は済んでいて、失敗したのは `status`。
 
 ## 実装の後の裁定（2026-10-10）
 実装とレビューで見つかった設計の穴に対して、開発者が決めたこと。本文の該当の節には「2026-10-10 の裁定」と書いてある。
