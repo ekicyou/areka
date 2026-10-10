@@ -86,7 +86,8 @@ impl TextLayerState {
 
     /// `AnchorEnd` の適用: 合図の宛先に関わらず、開いている範囲を持つ場所を閉じる。
     ///
-    /// どの場所にも開いている範囲が無ければ何もしない（迷子の閉じ・到達しない防御）。
+    /// どの場所にも開いている範囲が無ければ何もしない（迷子の閉じ）。compile が迷子の閉じを
+    /// 落とすのでふつうは届かないが、開いている間に `\c` で本文が消えた後の閉じはここへ届く。
     pub(super) fn close_anchor(&mut self, actor: &ActorKey) {
         let closed = self.close_open_anchors();
         if self.rehearsal {

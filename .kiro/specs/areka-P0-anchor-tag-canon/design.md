@@ -59,7 +59,7 @@
 ### Revalidation Triggers
 
 - `ChoiceSpan`／`ChoiceHitRow`／`ChoiceSelection` に `kind` が乗る → `range-choice-tag`・`link-context-copy`・`balloon-link-hover` はこの欄を前提にしてよい（本 spec の後に設計する 3 本の前提）。
-- `CueCommand` の種類が 2 つ増える → dola の次の版は公開 API の追加（`release-cycle` の記録へ）。
+- `CueCommand` の種類が 2 つ増える → dola の次の版は公開 API の追加（`release-cycle` の記録へ。`CueCommand` は `#[non_exhaustive]` でないので、全種類を catch-all なしで並べる外の利用側のビルドは壊れる。版の上げ方は `release-cycle` が決める）。
 - `choice_active` の意味が「選択肢の範囲があるか」に固定され、新しい `hit_active` が「押せる範囲があるか」になる → 入力側でどちらを見るかを変える spec は本書の表で確かめる。
 - `check_script` の診断の種類に `unpaired_tag` が増える → `doc/ssp-mcp/areka-tools.md` ⑶ の表に行が増える。
 
@@ -120,7 +120,7 @@ graph TB
 - **読み手の命令の形**（research §4.1）: ①-a 専用 variant。`Instruction::Anchor(Anchor{id, references})`（開き・`\_a[ID]`／`\_a[ID,r2,…]`／`\_a[OnID,r0,…]` は全部これ）と `Instruction::AnchorEnd`（閉じ）。`On` 始まりかどうかは読み手で区別しない（意味付けは kanade の `plan_anchor`）。
 - **`\_a[]`**（要件 1.11）: `id = ""`・印なし。`ArgumentDefaulted` を付けない。
 - **Reference0 の文字**（research §8-2）: 開きから閉じまでに items へ追記された書記素クラスタをそのまま連ねた文字列（改行・装飾の印は含めない）。1 字ずつ出ている途中でも、合図を適用した時点の範囲全体の文字（表示待ちを含む）を載せる。
-- **kanade の在庫の記憶**: `State.anchor: Option<AnchorStage>`（`SelectEx{id}`＝`OnAnchorSelectEx` の応答待ち・`Final`＝最終段の応答待ち）。往復が同期なので 1 回の `step` の連鎖の中だけで生きる。
+- **kanade の在庫の記憶**: `State.anchor: Option<AnchorStage>`（`SelectEx{id}`＝`OnAnchorSelectEx` の応答待ち・`Final{id}`＝最終段の応答待ち）。往復が同期なので 1 回の `step` の連鎖の中だけで生きる。
 - **research §8-5（in-flight 中の 2 回目）**: 上の同期の事実により到達しない。棄却の腕は作らず、設計の注記と互換記録に残す。
 - **互換記録の置き場**（research §7-7）: 新しい `doc/anchor-compat.md`（`choice-cascade-compat.md` と同じ provenance 3 値）。既存の選択肢の台帳は「正典引用はその spec の research から転記」と宣言しているので混ぜない。
 - **文書のずれ**（research §8-6・`areka-tools.md` の「23 組」）: 本 spec は `consumer_ledger.rs` に触らないので直さない（`/kiro-discovery` へ）。
@@ -156,7 +156,9 @@ crates/areka-kanade/src/
 ├── anchor_input.rs             # AnchorInput（UI → kanade の知らせの型）
 └── schedule/anchor.rs          # AnchorStage・plan_anchor・on_anchor・on_anchor_reply（choice.rs に倣う）
 crates/areka-kanade/src/schedule/
-└── anchor_tests.rs             # 4.1〜4.6・4.9〜4.11・Steady 以外の棄却・Reference の割付（模擬 SHIORI 不要の純粋状態機械）
+├── anchor_tests.rs             # 4.1〜4.6・4.8〜4.11・Steady 以外の棄却・Reference の割付（関数を直に呼ぶ・模擬 SHIORI 不要の純粋状態機械）
+├── anchor_step_tests.rs        # 同じ要件を最上位の step から通す（実装 4.3 で分けた・anchor_tests.rs から載せる）
+└── events_anchor_tests.rs      # 2 つの要求の Reference の並び・引数なしの位置・実行状態の行（実装 4.1 で分けた）
 doc/
 └── anchor-compat.md            # 互換記録（provenance 3 値・要件 7.1／7.2）
 ```
@@ -186,7 +188,7 @@ doc/
 | `crates/areka-emo-text/src/lib.rs` | `PURE_SOURCES` に 3 ファイル・母数 73 → 76 |
 | `crates/areka/src/input_events/balloon.rs` | `ChoiceSelection.kind: SpanKind`・`hit_choice_row` を種類の 2 段走査（選択肢を後ろから → 当たらなければアンカーを後ろから）・`click_selection` が `kind` を写す |
 | `crates/areka/src/input_events/balloon_pressed.rs`・`balloon_moved.rs`・`balloon_exit.rs` | `rt.choice_active(&actor)` → `rt.hit_active(&actor)`（各 1 行）。押下の `selected_now` は種類を問わず真 |
-| `crates/areka/src/input_events/shell_box_handler.rs` | `read_point` の `active` と、**窓の離脱の道**（`hover_action` に `rt.choice_active(&actor)` を渡している箇所）の 2 か所を `hit_active` に（各 1 行。離脱で箱のアンカーの強調を戻す＝要件 3.2／3.7）。`send_selection` の記録に `kind` |
+| `crates/areka/src/input_events/shell_box_handler.rs` | `read_point` の `active` と、**窓の離脱の道**（`hover_action` に `rt.choice_active(&actor)` を渡している箇所）の 2 か所を `hit_active` に（各 1 行。離脱で箱のアンカーの強調を戻す＝要件 3.2／3.7）。`send_selection` の記録は種類ごとの名前で出す（`balloon.rs::selection_events` の表・`choice_selected`／`anchor_selected`） |
 | `crates/areka/src/input_events/shell_box.rs` | 無改変（`judge_box_click`／`judge_box_press` はそのまま）。`BoxPressVerdict::ConsumedBySelection` の doc を「選択肢・アンカーのどちらでも」に |
 | `crates/areka/src/input_events/choice_drain.rs` | `forward_all` が `kind` で `KanadeMsg::Choice`／`KanadeMsg::Anchor` に振り分ける（`to_anchor_input` を足す） |
 | `crates/areka/src/input_events/balloon_pure_core_tests.rs`・`shell_box_tests.rs`・`balloon_test_support.rs`・`balloon_wiring_tests.rs` | `kind` の欄の追随と、3.5 の順・箱の結論のアンカー版 |
@@ -421,7 +423,7 @@ AnchorEnd,
 
 - `cue_target_of` → `Some(CueTarget::Balloon)`（文字の層が消費）。
 - 網羅の match の追随: `dola/src/cue/sink.rs`・`areka-ghost/src/sink.rs::command_kind`・`areka-emo-text/src/actor.rs`（状態へ渡すだけの列）・`areka-emo-text/src/state.rs`（実消費）。`matches!`／`if let` の所（dola `lookahead.rs`・seriko `actor.rs`・`runtime.rs` の `pending_choices`）は触らない。`emo2_boot/*_cue.rs` は `Custom` だけを見るので触らない。
-- `dola` は crates.io 公開＝次の版は API の追加（minor）。`release-cycle` の記録へ申し送り（research §9）。
+- `dola` は crates.io 公開＝次の版は API の追加（種類 2 つ）。`CueCommand` は `#[non_exhaustive]` でないので、全種類を catch-all なしで並べる外の利用側のビルドは壊れる。版の上げ方は `release-cycle` が決める。`release-cycle` の記録へ申し送り（research §9）。
 
 ### 文字の層（`areka-emo-text`）
 
@@ -575,7 +577,7 @@ pub fn on_anchor_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall;  
 ### 不変条件
 
 - 同じ場所（普通のバルーン／箱）の列の中で `ordinal` は添字に等しく単調。**同じ種類の**範囲の `glyph_range` は互いに素。アンカーの範囲は選択肢の範囲を包んでよい（`\_a[x]…\q[題,ID]…\_a`＝要件 1.7「開きから閉じまでに表示される文字の並び」の読みどおり。Reference0 には選択肢の文字も含まれる。押下は選択肢が勝つ＝3.5）。`state.rs` の `ChoiceSpan` の doc「互いに素かつ追記順に単調」はこの文言に改め、`choice_anchor_tests.rs` の混在の檻もこの文言で固定する。
-- 開いているアンカーは高々 1 つ（`anchor_open`）。compile が重なりを補っているので文字の層では到達しない（防御で閉じる）。
+- 開いているアンカーは高々 1 つ（`anchor_open`）。compile が重なりを補っているので、重なりは文字の層へ届かない（防御で閉じる）。迷子の閉じは届く — アンカーが開いている間の `\c`（`\_a[x]あ\cい\_a`）は本文の消去で印ごと消えるので、後から届く閉じは無視の腕に落ち、後ろの「い」は範囲の外になる（互換記録 D-8）。
 - `choice_active` ⇒ 列に `kind == Choice` がある。`hit_active` ⇒ 列が非空。
 
 ## Error Handling
@@ -583,7 +585,7 @@ pub fn on_anchor_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall;  
 | 場面 | 扱い | 記録 |
 |---|---|---|
 | 閉じ無し・重なり・迷子の閉じ | compile が補う／無視する | `warn!` `anchor_unclosed`／`anchor_reopened`／`anchor_stray_close`（各 1 件・`index`。`id` は開きにだけ付く） |
-| 文字の層での重なり・迷子（到達しない防御） | 閉じる／無視 | `debug!`（空回しは出さない） |
+| 文字の層での重なり（到達しない防御）・迷子の閉じ（開いている間の `\c` をまたぐと届く） | 閉じる／無視 | `debug!`（空回しは出さない） |
 | Steady 以外でのアンカーの知らせ | 棄却 | `warn!` `anchor_rejected_phase`（`id`・`scope`・phase） |
 | SHIORI の失敗（送れない・内部の誤り） | 204 と同じ扱いで続行 | `error!` `anchor_shiori_failed_as_204`（`id`・`stage`＝`select_ex`／`final`・`origin`・`error`） |
 | 想定外の応答（`Notified` 等） | 204 と同じ | `warn!` `anchor_unexpected_reply`（`id`・`stage`） |
@@ -604,7 +606,7 @@ pub fn on_anchor_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall;  
 - **kanade**（8.3）: `schedule/anchor_tests.rs`（関数を直に呼ぶ 11 本）と、そこから載せる兄弟 `schedule/anchor_step_tests.rs`（最上位の `step` から通す 8 本・実装 4.3 で分けた）——`plan_anchor`・`on_anchor` の GET（Ref0=text・Ref1=id・Ref2..・空なら位置なし）・204→`OnAnchorSelect`（Ref0=id）・`Value`→`OnAnchorSelect` を送らず `StartTalk`（`talk: Some` なら置き換えで新 talk_id）・`Failed`→204 と同じ・`On` 始まり→`EventId::Choice`・Steady 以外は棄却・`choosing` を立てない・`Failed` が Fault へ倒れない（`mod.rs` の免除）。
 - **道具**（8.7）: `check_script_judge_tests.rs`——4 形で `unknown_tag`／`unknown_command` が 0 件・崩れた 3 形で `unpaired_tag` と文言（表の 15〜17 行目）。
 - **網羅の檻**: dola `sink_test.rs`・ghost `command_kind` の檻に 2 種類、dola の手書きの「10 種」2 檻（`command_tests.rs`・`sheet_test.rs`）を 12 種へ。kanade `events_change_tests.rs` の許可表の数 51 → 53。emo-text `lib.rs` の母数 76。`ukadoc-survey` の整合（`owner_count`・`[briefs].count`・宛先の名前の実在・`briefing.md` の barrier の数・報告 4 本の作り直し）。
-- **実機**（8.8）: `AREKA_NO_ALERT=1`・`RUST_LOG=warn,areka=info,kanade=info,areka_sakura=warn` で、辞書にアンカーを持つ検体ゴースト（`sample-ghost-kit` の `SAMPLES` から辞書を展開して `\_a[` を含むものを選ぶ。無ければ `target\` の下に `\_a` を使う台詞と `OnAnchorSelectEx` の答えを持つ小さな検体を置く）を起動し、⑴ 押す → 答えの台本に置き換わる、⑵ 話している最中に押しても台詞が続く、を人が見てログで裏取りする。検体はワークツリーの `target\` の下だけ。
+- **実機**（8.8）: `AREKA_NO_ALERT=1`・`RUST_LOG=warn,areka=info,kanade=info,areka_sakura=warn` で、辞書にアンカーを持つ検体ゴースト（`sample-ghost-kit` の `SAMPLES` から辞書を展開して `\_a[` を含むものを選ぶ。無ければ `target\` の下に `\_a` を使う台詞と `OnAnchorSelectEx` の答えを持つ小さな検体を置く）を起動し、⑴ アンカーに下線が出てマウスを乗せると強調される、⑵ 押す → 答えの台本に置き換わる、⑶ 話している最中に押しても台詞が中断されない、を人が見てログで裏取りする（`tasks.md` 7.2 と同じ 3 点）。検体はワークツリーの `target\` の下だけ。
 
 ## Supporting References
 
@@ -616,4 +618,4 @@ pub fn on_anchor_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall;  
 
 ### `release-cycle` への申し送り
 
-- `dola` の `CueCommand` に `AnchorBegin`／`AnchorEnd` を足した＝次の公開は API の追加（minor）。
+- `dola` の `CueCommand` に `AnchorBegin`／`AnchorEnd` を足した＝次の公開は API の追加（種類 2 つ）。`CueCommand` は `#[non_exhaustive]` でないので、全種類を catch-all なしで並べる外の利用側のビルドは壊れる。版の上げ方は `release-cycle` が決める。
