@@ -588,7 +588,154 @@ MCP の口へ送った物と答え（送り方は `tools/call` を 1 本ずつ�
 
 ## 外し方の実測
 
-（タスク 3.3 で記入）
+（タスク 3.3・要件 4.3・4.4・4.5）
+
+結果: **測れた。消えた物は 6**（後から入れたゴースト 1・後から入れたバルーン 3・ゴーストの記憶 2）。areka の記憶は残った。**入れ先のフォルダは残った**（中に残ったのは areka の記憶の 1 ファイルと、空のフォルダ `.nar-work\` だけ）。打ったのは `--purge` も `--preserve` も付けない `winget uninstall` で、止まらず・何も聞かれず・終了コード 0 で終わった。時刻はどれも 2026-10-10（+09:00）。`<入れ先>` は `%LOCALAPPDATA%\Microsoft\WinGet\Packages\Areka.Areka.Portable__DefaultSource`。
+
+入れ先のフォルダと、利用者の PATH に足された項目は、外した後の状態のまま**置いてある**（消していない・入れ直していない）。後片付け（タスク 3.4）がここから続ける。この実測の間、areka は 1 回も起こしていない。
+
+### 1. 写しから戻した（13:54:38〜13:54:44）
+
+上げ直し（タスク 3.2）で消えた物と、その後の起動が書き替えた物を、写し `target\winget-check\state-snapshot\` から入れ先へ戻して、タスク 3.1 の状態にそろえた。入れ先の中で手を入れたのは、これだけ。スクリプトは `target\winget-check\3.3-restore.ps1`（先に、何をするかだけを出させて読み（`logs\3.3-restore-plan.log`）、範囲の外の違いが 0 であることを見てから行った。行った記録は `logs\3.3-restore-apply.log`）。
+
+| 戻した物（入れ先のフォルダから見て） | 行ったこと |
+|---|---|
+| `ghost\claudia\` | フォルダごと置いた（69 ファイル） |
+| `balloon\claudia\` | フォルダごと置いた（37 ファイル） |
+| `balloon\claudia_vertical\` | フォルダごと置いた（31 ファイル） |
+| `balloon\emo2-kakukaku-wplimit\` | フォルダごと置いた（20 ファイル） |
+| えも？？ のゴーストの記憶 `ghost\emo2\ghost\master\profile\`（50 ファイル） | 写しと中身の違う 3 ファイルを上書きした: `areka\sylphya.toml`（70 → 98 バイト）・`pasta\cache\lua\pasta\scene_dic.lua`（586 → 586 バイト・中身が違う）・`pasta\logs\pasta.log`（2788 → 11196 バイト）。残りの 47 ファイルは、起動が作り直した物が写しと同じ中身だったので触っていない。足したファイル・除いたファイルは 0 |
+| areka の記憶 `profile\areka\sylphya.toml` | 上書きした（55 → 58 バイト。「前に使っていたゴースト」が `emo2` から、写しの `claudia` へ戻った） |
+
+- 合わせて、置いたファイルは 157・上書きしたファイルは 4・除いたファイルは 0・作ったフォルダは 18。上書きする前の 4 ファイルは `target\winget-check\3.3-set-aside\overwritten\` に取ってある。
+- **戻していない物**: winget の控え `Areka.Areka.Portable__DefaultSource.db`（写しの物は 0.0.2 のときの控え。入れ先に在る 0.0.2.1 の控えをそのままにした。戻す前と後で SHA256 は同じ `61748269…EA24CA67`）と、zip が置いたファイル（写しと同じ中身なので、触る必要が無い）。
+- 戻す直前（13:54:44）に、`<入れ先>` から動いている `areka.exe`・`shiori-host32-helper.exe` は 0（この名前のプロセス自体が 0）。
+- 戻した後の確かめ（13:54:44）: 写しの 358 ファイルのうち winget の控えを除く **357 ファイルすべてが、入れ先に同じ SHA256 で在る**（無い物 0・中身の違う物 0）。**入れ先にだけ在る余分なファイルは 0**。入れ先は 358 ファイル・21846581 バイト・下の階層のフォルダ 58（写しも 58。無いフォルダ 0・余分なフォルダ 0）。違うのは winget の控えのハッシュだけ。
+- 外す前の一覧（相対パス・大きさ・SHA256・書いた時刻・作った時刻。隠しファイルも含む）: `target\winget-check\logs\3.3-before.tsv`（13:54:47・**358 ファイル・21846581 バイト**・隠しファイル 1）。フォルダの一覧は `3.3-before.dirs.tsv`。スクリプトは `target\winget-check\3.3-list.ps1`（タスク 3.2 の物と同じ作り）。
+
+設計の段 4 の表の物が、すべて在ることを確かめた（上の一覧で数えた）:
+
+| 物（設計の段 4 の表） | 置き場（入れ先のフォルダから見て） | 外す前の有無 |
+|---|---|---|
+| 後から入れたゴースト | `ghost\claudia\` | **在る**（69 ファイル） |
+| 後から入れたバルーン | `balloon\emo2-kakukaku-wplimit\` | **在る**（20 ファイル） |
+| クローディアと一緒に入ったバルーン 2 つ | `balloon\claudia\`・`balloon\claudia_vertical\` | **在る**（37 ファイル）・**在る**（31 ファイル） |
+| areka の記憶 | `profile\areka\` | **在る**（1 ファイル・58 バイト・`3E16E14A…325EDDF6`＝写しと同じ） |
+| ゴーストの記憶（えも？？） | `ghost\emo2\ghost\master\profile\areka\` | **在る**（1 ファイル・98 バイト） |
+| ゴーストの記憶（クローディア） | `ghost\claudia\ghost\master\profile\areka\` | **在る**（1 ファイル・124 バイト・`80ED6700…ADE49528`＝写しと同じ） |
+| シェルの記憶（2 体分） | `ghost\emo2\shell\master\profile\areka\`・`ghost\claudia\shell\master\profile\areka\` | 無い＝**測れなかった**（タスク 3.1 のときと同じ。0.0.2 にはシェルの記憶へ書く操作が無い）。シェルのフォルダ `ghost\emo2\shell\master\`（65 ファイル）・`ghost\claudia\shell\master\`（16 ファイル）は在る |
+
+### 2. 外す前に読んだこと（読むだけ・13:55:07〜13:55:09）
+
+- 利用者の設定の「外すときに入れ先を丸ごと消す」（`uninstallBehavior.purgePortablePackage`）: **欄なし＝既定（オフ）のまま**（要件 4.5）。`winget settings export`（終了コード 0）が `userSettingsFile` として示す `%LOCALAPPDATA%\Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState\settings.json` は、**ファイル自体が無い**（控えの `settings.json.backup` も無い。同じフォルダはフォルダ 4 つ・ファイル 0 件で、「変えた設定」の節で読んだときと同じ）。組織の決まりのキー（`HKLM`・`HKCU` の `SOFTWARE\Policies\Microsoft\Windows\AppInstaller`）も、どちらも無い。管理者向けの設定は `LocalManifestFiles` だけが `true`。
+- `winget list --name areka --disable-interactivity`（終了コード 0・標準エラー 0 バイト）: 1 行だけで、名前 `areka (portable)`・**ID `ARP\User\X64\Areka.Areka.Portable__DefaultSource`**・版 `0.0.2.1`。
+- 利用者の側の PATH の登録: 13 項目・入れ先のフォルダは 1 件（13 番目）・値の種類は `ExpandString`。
+- `<入れ先>` から動いている `areka.exe`・`shiori-host32-helper.exe` は 0（13:55:09）。
+
+### 3. 外した（要件 4.3）
+
+- 打つスクリプト（`target\winget-check\3.3-fire.ps1`）は、打つ直前にもう一度 `winget list --name areka --disable-interactivity` を読み（13:55:29・終了コード 0）、areka の行が 1 行だけで、その行から引いた ID が `ARP\User\X64\Areka.Areka.Portable__DefaultSource`・版が `0.0.2.1` であることを確かめてから、その ID を渡した。
+- `<入れ先>` から動いている `areka.exe`・`shiori-host32-helper.exe` は、13:55:30.045 と 13:55:34.061 の 2 回（4 秒あけて）とも 0（この名前のプロセス自体が 0）。
+- コマンド（ワークツリーの根で・普段の権限で＝管理者の役割を持つかを読んで `False`。**`--purge` も `--preserve` も付けていない**。`--force`・`--accept-*` も付けていない）:
+
+  ```powershell
+  winget uninstall --id "ARP\User\X64\Areka.Areka.Portable__DefaultSource" --exact --disable-interactivity
+  ```
+
+- 始めた時刻 13:55:34.072・終わった時刻 13:55:35.754（1.7 秒）・**終了コード 0**・標準エラーは 0 バイト。問い（同意・確かめ・管理者への切り替え）は 1 つも出なかった。打ったのはこの 1 回だけ。
+- winget が出した文（標準出力の全部＝5 行・466 バイト。省いた行・まとめた行は無い。進み具合の描き直しの行は、ファイルへ向けた出力には 1 行も出なかった。UTF-8 として読んだ。4 行目のパスは、実際の文ではアカウントの名前を含む絶対パスで、ここでは頭を `%LOCALAPPDATA%` に置き換えてある。置き換えていない文は `target\winget-check\logs\3.3-uninstall.stdout.txt`）:
+
+  ```text
+  ソースの検索中にエラーが発生しました;結果は含まれません: msstore
+  見つかりました areka (portable) [ARP\User\X64\Areka.Areka.Portable__DefaultSource]
+  パッケージのアンインストールを開始しています...
+  ファイルはインストール ディレクトリに残ります: %LOCALAPPDATA%\Microsoft\WinGet\Packages\Areka.Areka.Portable__DefaultSource
+  正常にアンインストールされました
+  ```
+
+- 1 行目は、winget が物を探すときに Microsoft Store の側（`msstore`）へ問い合わせられなかった、という知らせ。外す相手は機械に入っている物なので、そのまま進んだ（止まっていない・聞かれていない）。
+- 4 行目が、入れ先のフォルダにファイルが残ることを告げている。**利用者の物（後から入れたゴーストとバルーン・ゴーストの記憶）を消したことを告げる行は 1 行も無い。**
+- 出力の取り方は、入れたとき・上げ直したときと同じ（PowerShell のパイプを通さず、`Start-Process -NoNewWindow -PassThru -RedirectStandardOutput … -RedirectStandardError …` でファイルへ向け、UTF-8 として読んだ。スクリプトは `target\winget-check\3.3-wg.ps1`。時刻と終了コードは `logs\3.3-uninstall.result.json`）。
+
+### 4. 外した後の一覧（13:55:35）と見比べ
+
+一覧は `target\winget-check\logs\3.3-after.tsv` と `3.3-after.dirs.tsv`（**1 ファイル・58 バイト**・下の階層のフォルダ 3・隠しファイル 0）。見比べの全部は `3.3-diff-after.txt`（スクリプトは `3.3-diff.ps1`）。
+
+| 見比べ（358 ファイルの 1 つずつ） | 数 |
+|---|---|
+| 消えた | **357** |
+| 増えた | 0 |
+| ハッシュが同じ | 1（`profile\areka\sylphya.toml`。書いた時刻も作った時刻も前と同じ） |
+| ハッシュが変わった | 0 |
+
+直下の名前ごと（前 → 後）:
+
+| 直下の名前 | 前 | 後 | 消えた |
+|---|---|---|---|
+| 直下のファイル 7 つ（zip の最上位の 6 つと、winget の控え） | 7 | 0 | 7 |
+| `balloon\` | 138 | 0（フォルダごと無い） | 138（`claudia\` 37・`claudia_vertical\` 31・`emo2-kakukaku-wplimit\` 20・同梱の `emo2-kakukaku\` 21・同梱の `StayseeBalloon\` 29） |
+| `ghost\` | 212 | 0（フォルダごと無い） | 212（`claudia\` 69・`emo2\` 143＝うち `ghost\master\profile\` が 50） |
+| `profile\` | 1 | 1 | 0 |
+
+- フォルダ（下の階層）: 58 → 3。消えたフォルダは 55（`ghost\` と `balloon\` と、その下のすべて）。残った 3 つ（`.nar-work\`・`profile\`・`profile\areka\`）は、NTFS がフォルダに振る番号も前と同じ＝触られていない。
+- 見えた形は上げ直しのときと同じ: zip の中に在る直下の物（`ghost\`・`balloon\`・最上位の 6 ファイル）は、フォルダなら中に後から置かれた物ごと丸ごと消された。zip の中に無い直下の物（`profile\`・`.nar-work\`）は触られなかった。
+
+### 5. 項目ごとの結果（設計の段 6・要件 4.3・4.4）
+
+判定は、上の一覧の見比べで決めた。
+
+| 項目 | 見た物（入れ先のフォルダから見て） | 前 → 後 | 結果 |
+|---|---|---|---|
+| 後から入れたゴースト | `ghost\claudia\` | 69 ファイル → フォルダごと無い | **消えた** |
+| 後から入れたバルーン | `balloon\emo2-kakukaku-wplimit\` | 20 ファイル → フォルダごと無い | **消えた** |
+| 〃（クローディアと一緒に入った物） | `balloon\claudia\` | 37 ファイル → フォルダごと無い | **消えた** |
+| 〃（同じ） | `balloon\claudia_vertical\` | 31 ファイル → フォルダごと無い | **消えた** |
+| areka の記憶 | `profile\areka\` | 1 ファイル → 1 ファイル。`sylphya.toml` はハッシュも書いた時刻も前と同じ（`3E16E14A…325EDDF6`・58 バイト） | **残った** |
+| ゴーストの記憶（えも？？） | `ghost\emo2\ghost\master\profile\areka\` | 1 ファイル → フォルダごと無い（上の `ghost\emo2\ghost\master\profile\` の 50 ファイルが丸ごと。ゴースト自身（pasta）の書き残し 49 ファイルも一緒） | **消えた** |
+| ゴーストの記憶（クローディア） | `ghost\claudia\ghost\master\profile\areka\` | 1 ファイル → 無い（ゴーストのフォルダごと） | **消えた** |
+| シェルの記憶（えも？？） | `ghost\emo2\shell\master\profile\areka\` | 前も後も無い | **測れなかった**（0.0.2 にはシェルの記憶へ書く操作が無く、作れなかった）。シェルのフォルダ `ghost\emo2\shell\master\` は**消えた**（65 ファイル → 無い） |
+| シェルの記憶（クローディア） | `ghost\claudia\shell\master\profile\areka\` | 前も後も無い | **測れなかった**（同じ理由）。シェルのフォルダ `ghost\claudia\shell\master\` は**消えた**（16 ファイル → 無い） |
+| 入れ先のフォルダ | `<入れ先>` | 在る → 在る（名前も、NTFS の番号も、作った時刻 13:01:48 も前と同じ＝同じフォルダ） | **残った** |
+
+数に入れない物（外したのだから無くなって当たり前の物と、winget 自身の物）に起きたこと:
+
+- zip の最上位の 6 ファイル（`areka.exe`・`shiori-host32-helper.exe`・`README.txt`・`BUILD-INFO.txt`・`LICENSE-MIT`・`THIRD-PARTY-NOTICES.md`）: 6 つとも無くなった。
+- 同梱のゴースト `ghost\emo2\`（記憶を除いて 93 ファイル）と、同梱のバルーン `balloon\emo2-kakukaku\`（21 ファイル）・`balloon\StayseeBalloon\`（29 ファイル）: フォルダごと無くなった。
+- winget の控え `Areka.Areka.Portable__DefaultSource.db`: 無くなった。
+- `.nar-work\`: **残った**（空のまま）。
+
+**まとめ: 消えた物は 6**（後から入れたゴースト 1＝`ghost\claudia\`／後から入れたバルーン 3＝`balloon\emo2-kakukaku-wplimit\`・`balloon\claudia\`・`balloon\claudia_vertical\`／ゴーストの記憶 2＝えも？？ の分とクローディアの分）。残った物は 1（areka の記憶）。測れなかった物は 2（シェルの記憶 2 か所）。入れ先のフォルダは残った。ファイルの数では **357 ファイルが消えた**（利用者の物 207＝後から入れた 4 つのフォルダ 157 と、えも？？ の `ghost\master\profile\` 50／同梱の物 149＝zip の中身の全部／winget の控え 1）。
+
+- 消えた物は、上げ直しのとき（タスク 3.2）と同じ 6 つ。＝利用者の物のうち、`--purge` を付けない外し方で残るのは areka の記憶だけ。
+- 消えた物が在るので、設計の段 6 の 4（消えた物が 0 のときだけ、ここで後片付けを確かめる）は通らない。後片付けは、段 7 の入れ直しと `--purge` の後（タスク 3.4）に確かめる。
+
+### 6. 残った入れ先のフォルダの中身（消すのはタスク 3.4）
+
+入れ先のフォルダ `<入れ先>` は**残った**。中身は次の 4 つで全部（隠しファイルも含めて見た。**1 ファイル・58 バイト**・下の階層のフォルダ 3）。`Packages\` の下で名前が `Areka` で始まる物は、このフォルダの 1 つだけ。
+
+| 残った物（入れ先のフォルダから見て） | 種類 | 大きさ |
+|---|---|---|
+| `.nar-work\` | フォルダ（空） | - |
+| `profile\` | フォルダ | - |
+| `profile\areka\` | フォルダ | - |
+| `profile\areka\sylphya.toml` | ファイル（areka の記憶。`[last]` の `ghost = "claudia"`・`running = ""`） | 58 バイト |
+
+- 残った areka の記憶は、「前に使っていたゴースト」として、もう無い `claudia` を指している。
+- このフォルダは消していない（タスク 3.4 が、入れ直して `--purge` で外した後に確かめる）。
+
+### 7. 外した後に読んだこと（読むだけ・13:56:13〜13:56:22。後片付けの 4 項目の正式な確かめはタスク 3.4）
+
+| 見た物 | 見方 | 結果 |
+|---|---|---|
+| `winget list` の areka の行 | `winget list --name areka --disable-interactivity` と `winget list --id Areka --disable-interactivity` | **0 行**。どちらも `入力条件に一致するインストール済みのパッケージが見つかりませんでした。` と出て、終了コードは -1978335212（`0x8A150014`。見つからなかったときの値）・標準エラー 0 バイト |
+| 利用者の PATH に足された項目 | レジストリ `HKCU:\Environment` の `Path` を、環境変数を開かない形で読んだ | **残っている**。13 項目のままで、入れ先のフォルダの項目は 1 件（13 番目）。文字列は、外す前とまったく同じ（値の種類も `ExpandString` のまま）。機械の側の PATH は 18 項目で、上げ直しの前と同じ文字列（`areka` の字を含む項目は 0） |
+| 新しい端末での `areka` の解決 | 登録（機械の側;利用者の側）から PATH を組み直した 31 項目にした新しい `pwsh -NoProfile -NonInteractive` のプロセスで `Get-Command areka -All` と `where.exe areka` | **解決しない**（`Get-Command` は 0 件。`where.exe` は終了コード 1）。PATH の項目は残っているが、その先の `areka.exe` がもう無い |
+| 入れ先のフォルダ | `Test-Path` | **在る**（上の 6） |
+| `%LOCALAPPDATA%\Microsoft\WinGet\Links\` の `areka` で始まる物 | 一覧 | 0 件 |
+
+- 見方が当たりを出せること: 同じ形の `winget list --name PowerShell --disable-interactivity` は 2 行を返し、終了コード 0 だった。新しいプロセスの中で `Get-Command winget -All` は 1 件・`Get-Command pwsh -All` は 2 件を返した（組み直した PATH は効いている）。
+- ＝`--purge` を付けない外し方の後、利用者の機械には、入れ先のフォルダ（areka の記憶 1 ファイルと空のフォルダ）と、そのフォルダを指す PATH の項目 1 件が残る。winget の一覧からは消える。
+- 読んだ後も、`<入れ先>` から動いているプロセスは 0（13:56:22）。
 
 ## 機械の全員向けの実測
 
@@ -633,6 +780,14 @@ MCP の口へ送った物と答え（送り方は `tools/call` を 1 本ずつ�
 | 上げ直しの後に有界で起こすスクリプト 2 つと、MCP の口へ 1 本送るスクリプト | `target\winget-check\3.2-run.ps1`・`3.2-inner.ps1`・`3.2-mcp.ps1` | 3.2 |
 | 上げ直しの後の起動の記録（標準出力・標準エラー）・起こしたプロセスの結果・組み直した PATH・MCP の口へ送った文と答え | `target\winget-check\logs\3.2-run.stdout.log`・`3.2-run.stderr.log`・`3.2-run.result.json`・`3.2-run-fresh-*`・`3.2-mcp.log` | 3.2 |
 | 起動の後の入れ先の一覧と、上げ直しの直後との見比べ（判定には使わない） | `target\winget-check\logs\3.2-after-run.tsv`・`3.2-after-run.dirs.tsv`・`3.2-diff-after-run.txt` | 3.2 |
+| 写しから入れ先へ戻した物（置いた 157 ファイル・上書きした 4 ファイル・作ったフォルダ 18。winget の入れ先の中なので `target\` の外。外したときに、areka の記憶の 1 ファイルを除いて消えた） | `%LOCALAPPDATA%\Microsoft\WinGet\Packages\Areka.Areka.Portable__DefaultSource\` の `ghost\claudia\`・`balloon\claudia\`・`balloon\claudia_vertical\`・`balloon\emo2-kakukaku-wplimit\`・`ghost\emo2\ghost\master\profile\`・`profile\areka\sylphya.toml` | 3.3 |
+| 戻すときに上書きした 4 ファイルの、上書きする前の中身 | `target\winget-check\3.3-set-aside\overwritten\` | 3.3 |
+| 写しから戻す・一覧を取る・一覧を見比べる・winget を 1 回打って文を取る・外す・外した後を読む、のスクリプト 6 つ | `target\winget-check\3.3-restore.ps1`・`3.3-list.ps1`・`3.3-diff.ps1`・`3.3-wg.ps1`・`3.3-fire.ps1`・`3.3-facts.ps1` | 3.3 |
+| 戻す前に出させた手はずと、戻した記録（確かめの結果を含む） | `target\winget-check\logs\3.3-restore-plan.log`・`3.3-restore-apply.log` | 3.3 |
+| 外す前の読み（入れ先の一覧・フォルダの一覧・`winget settings export`・`winget list` 2 回分・利用者の PATH の登録） | `target\winget-check\logs\3.3-before.tsv`・`3.3-before.dirs.tsv`・`3.3-pre-settings-export.*`・`3.3-pre-list-name.*`・`3.3-fire-list-name.*`・`3.3-before-user-path.raw.txt` | 3.3 |
+| `winget uninstall` が出した文（標準出力・標準エラー）と、時刻・終了コード | `target\winget-check\logs\3.3-uninstall.stdout.txt`・`3.3-uninstall.stderr.txt`・`3.3-uninstall.result.json` | 3.3 |
+| 外した後の読み（入れ先の一覧・フォルダの一覧・前との見比べ・`winget list` 3 回分・PATH の登録 2 つ・組み直した PATH・新しいプロセスでの `areka` の解決） | `target\winget-check\logs\3.3-after.tsv`・`3.3-after.dirs.tsv`・`3.3-diff-after.txt`・`3.3-after-list-*`・`3.3-after-user-path.raw.txt`・`3.3-after-machine-path.raw.txt`・`3.3-after-fresh-path.txt`・`3.3-after-fresh-shell.*` | 3.3 |
+| 外した後に残った入れ先のフォルダ（areka の記憶の 1 ファイルと空の `.nar-work\`。winget の入れ先なので `target\` の外。後片付けのタスク 3.4 まで置いておく） | `%LOCALAPPDATA%\Microsoft\WinGet\Packages\Areka.Areka.Portable__DefaultSource\` | 3.3 |
 
 - 取ってきた後の `git status --porcelain` は 0 行（`target` の下に限って見ても 0 行）。`git ls-files -- target` も 0 件で、取ってきた物は `git status` に出ない。
 - `git check-ignore -v target/winget-check/release/areka-0.0.2-x64.zip` は `.gitignore:1:target` を返した（追跡の外になる理由がこの 1 行であることの裏付け）。
@@ -649,13 +804,18 @@ MCP の口へ送った物と答え（送り方は `tools/call` を 1 本ずつ�
 - 上げ直しの確かめ専用のマニフェストは、版の欄だけを `0.0.2.1` にした物で、取り寄せる zip は 0.0.2 と同じ。「置き換わった」は、目印を付けた同梱のファイルが zip の中の元の値に戻ったことで見ている（中身の違う新しい版へ替わるところは見ていない）。
 - 上げ直しの後の起動は、タスク 2.2 の起こし方に `AREKA_MCP_PORT` を 1 つ足している（今のゴーストの名前を MCP の口から聞くため）。0.0.2 の `get_status` は名前を返さないので、名前は `get_active_ghost_list` で読んだ。
 
-（タスク 3.3・3.4 で記入）
+- 上げ直しと外し方の実測の結果は、**手元のマニフェストで入れた形**でのもの（要件 4.5）。入れ先のフォルダの名前（`Areka.Areka.Portable__DefaultSource`）と、`winget list` の ID（`ARP\User\X64\Areka.Areka.Portable__DefaultSource`）は、winget-pkgs から入れた形（`Areka.Areka.Portable_Microsoft.Winget.Source_8wekyb3d8bbwe`）と違う。winget-pkgs から入れた形では測っていない。
+- 上げ直しと外し方の実測は、winget の利用者の設定「外すときに入れ先を丸ごと消す」（`uninstallBehavior.purgePortablePackage`）が**既定のまま（オフ）**で測った（要件 4.5）。利用者の設定ファイル自体が無いことを、設定を変える前（「変えた設定」の節）と、外す直前（「外し方の実測」の 2）に読んでいる。この設定をオンにした機械では、`--purge` を付けなくても入れ先が丸ごと消える見込みだが、測っていない。
+- 外し方の実測は、確かめ専用の版 `0.0.2.1` へ上げ直した後の物を外している（提出する版 0.0.2 を入れたままの物を外したのではない）。上げ直しで消えた物と、その後の起動が書き替えた物は、外す前に写しから入れ先へ戻した。戻した物は、winget から見ると、上げ直しの後に利用者が置いた物と同じ（winget の控えに載っていないファイル）。winget の控えは 0.0.2.1 の物のままにした。
+- 外した後の「利用者の PATH の項目が残っている」「`areka` が解決しない」は、読んだだけの事実で、後片付けの正式な確かめではない（「後片付けの確かめ」の節に、タスク 3.4 が書く）。
+
+（タスク 3.4 で記入）
 
 ## 見つかった件と起票
 
 | 起きたこと | どの段か | 根拠の記録の場所 | 起票した spec |
 |---|---|---|---|
 | 入れた areka（0.0.2）の MCP の `sakurascript` が、台本を受け取らずに `NG:not implemented yet` と答える。台本で `.nar` を入れる・ゴーストを切り替える・終える、のどれもできず、状態を MCP の口から作れなかった（代わりに、右クリックメニューを AI が画面の操作で動かして作った） | 段 4（タスク 3.1） | `target\winget-check\logs\3.1-mcp.log`（送った文と答え）・上の「上げ直しの実測」の「作る状態」・タグ `v0.0.2` の `crates/areka/src/mcp/sakurascript.rs` | （タスク 3.6 で記入。中身を入れる仕事は、起票済みの `areka-P0-mcp-kanade-tools` の brief に在る） |
-| winget の上げ直しで、利用者の物が消えた。areka は利用者の物（後から入れたゴーストとバルーン・ゴーストの記憶）を、入れ先の `ghost\`・`balloon\` の中に置く。winget は上げ直しのときに、この 2 つのフォルダを中身ごと消してから zip の中身を置き直した（消えた物は 6・208 ファイル。areka の記憶 `profile\` は残った）。その後の起動は、覚えていたゴーストが無いので同梱のゴーストで立った | 段 5（タスク 3.2） | 上の「上げ直しの実測」の「上げ直し」・`target\winget-check\logs\3.2-diff-after-upgrade.txt`・`3.2-run.stdout.log` | （タスク 3.6 で記入。要件 4.6 の起票＝利用者の物が上げ直しと外し方で消えないようにする仕事） |
+| winget の上げ直しで、利用者の物が消えた。areka は利用者の物（後から入れたゴーストとバルーン・ゴーストの記憶）を、入れ先の `ghost\`・`balloon\` の中に置く。winget は上げ直しのときに、この 2 つのフォルダを中身ごと消してから zip の中身を置き直した（消えた物は 6・208 ファイル。areka の記憶 `profile\` は残った）。その後の起動は、覚えていたゴーストが無いので同梱のゴーストで立った。**外すとき（`--purge` も `--preserve` も付けない `winget uninstall`）も同じ物が消えた**（根は同じ＝利用者の物が、入れ先の `ghost\`・`balloon\` の中に在る）。winget はこの 2 つのフォルダを中身ごと消し、消えた物は同じ 6（利用者の物は 207 ファイル）。残ったのは areka の記憶 `profile\` と空の `.nar-work\` だけで、winget は「ファイルが入れ先に残る」と告げて入れ先のフォルダを残した。そのフォルダを指す利用者の PATH の項目 1 件も残っていた。winget の文は、どちらのときも、利用者の物を消したことを告げない | 段 5（タスク 3.2）・段 6（タスク 3.3） | 上の「上げ直しの実測」の「上げ直し」・`target\winget-check\logs\3.2-diff-after-upgrade.txt`・`3.2-run.stdout.log`／上の「外し方の実測」・`target\winget-check\logs\3.3-diff-after.txt`・`3.3-uninstall.stdout.txt` | （タスク 3.6 で記入。要件 4.6 の起票＝利用者の物が上げ直しと外し方で消えないようにする仕事） |
 
 （タスク 3.6 で記入）
