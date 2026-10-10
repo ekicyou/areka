@@ -42,7 +42,7 @@ pub enum Command {
     /// マージが済んだ: 持っている机を空け、直前のマージを記録し、参加を終える。
     Merged { id: String, pr: String, sha: String },
     /// 負荷テストの机の申し込み。参加を兼ねる。すでに待っている・持っているなら二重に並べず、
-    /// 元の申し込みのままにする。申し込んだ者は「作業中」へ戻る。
+    /// 元の申し込みのままにする。申し込んだ者の状態（作業中・停止要請中・止まった）は変えない。
     LoadTest {
         id: String,
         name: Option<String>,
@@ -71,6 +71,7 @@ pub enum Command {
     /// 置き換え、種類が違えば並べる。見張りの記録は [`Command::Watch`] が置く。
     RegisterWait { record: WaitRecord },
     /// 待ち・見張りの記録の抹消（正常に終わる待ちが自分で呼ぶ）。記録が無ければ何も変えない。
+    /// 見張りの記録を実際に消し、その参加者が「作業中」なら、見張りを立て直すまでの印を付ける。
     UnregisterWait { id: String, kind: WaitKind },
     /// 周期の一回り: 回収と番の決め直しだけを行う。
     Tick,
@@ -280,10 +281,10 @@ pub fn apply(
             repo,
             purpose,
         } => {
-            // 自分の負荷テストのために自分は止まらない（元のスクリプトと同じ）。候補でなければ、
-            // この後の番の決め直しが、候補の負荷テストのための停止要請を出し直す。
-            let participant = join(state, id, name.as_deref(), repo, now, &mut events);
-            resume(participant, "load-request", now, &mut events);
+            // 申し込んだ者の状態は変えない。「停止要請中」「止まった」のまま並び、番を受けたときに
+            // 「作業中」へ戻る（ここで戻すと、見張りの終わっている参加者が誰にも知らされずに
+            // 「停止要請中」へ落ち、候補の番を止め続ける）。
+            join(state, id, name.as_deref(), repo, now, &mut events);
             let desk = &mut state.load;
             let holds = desk.holder.as_ref().is_some_and(|holder| holder.id == *id);
             if !holds && !desk.queue.iter().any(|request| request.id == *id) {
@@ -386,6 +387,15 @@ pub fn apply(
                     kind: *kind,
                     why: "ended",
                 });
+                // 終わりかけの見張りが抹消を呼ぶ直前に再開が入ると、この呼び出しの回収の段が
+                // 「見張りが居る」と見て印を消している。見張りはここで終わるので、立て直すまで
+                // 回収されないように付け直す（出来事は足さない）。
+                if *kind == WaitKind::Watch
+                    && let Some(participant) = state.participants.get_mut(id)
+                    && participant.status == ParticipantStatus::Working
+                {
+                    participant.awaiting_watch_since = Some(now);
+                }
             }
             Verdict::Applied
         }

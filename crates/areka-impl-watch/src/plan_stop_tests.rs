@@ -337,24 +337,58 @@ fn the_grant_comes_when_the_last_participant_who_has_not_stopped_leaves() {
 }
 
 #[test]
-fn asking_for_a_load_test_while_stopped_puts_the_requester_back_to_work_first() {
-    let mut state = c_holds_with_a_stopped(&["A", "C"]);
+fn asking_for_a_load_test_while_stopped_or_stop_requested_leaves_the_requester_as_it_was() {
+    // C が机を持ち、A は止まっていて、B は後から参加してまだ止まっていない。
+    let mut before = c_holds_with_a_stopped(&["A", "B", "C"]);
+    ask_to_stop(&mut before, "B", "C");
 
-    let got = run(&mut state, &load_test("A"), Some("A"), T0 + 9);
+    for id in ["A", "B"] {
+        let mut state = before.clone();
 
-    // 申し込んだ者は「作業中」へ戻る。候補は机を持っている C のままなので、同じ呼び出しの
-    // 番の決め直しが、C の負荷テストのための停止要請を A へ出し直す。
+        let got = run(&mut state, &load_test(id), Some(id), T0 + 9);
+
+        // 並ぶだけ: 申し込んだ者の状態・その時刻・理由・印はそのままで、「作業中」へ戻った
+        // 出来事も、出し直しの停止要請も無い。
+        let mut expected = before.clone();
+        queue_load(&mut expected, id, T0 + 9);
+        assert_eq!(state, expected, "{id}");
+        assert_eq!(got, applied(true, vec![load_requested(id)]), "{id}");
+    }
+}
+
+/// 止まっている参加者の申し込みが、候補の番を止めない（申し込んだ者を「作業中」へ戻すと、
+/// 見張りの終わっている参加者が誰にも知らされずに「停止要請中」へ落ち、番が来なくなる）。
+#[test]
+fn a_load_request_from_a_stopped_participant_does_not_hold_back_the_candidate() {
+    let mut state = state_with(&["A", "B", "C", "X"]);
+    run(&mut state, &load_test("C"), Some("C"), T0 + 1);
+    run(&mut state, &stopped("A"), Some("A"), T0 + 2);
+    run(&mut state, &stopped("B"), Some("B"), T0 + 3);
+
+    // 止まっている B が、自分の負荷テストを申し込む。
+    let got = run(&mut state, &load_test("B"), Some("B"), T0 + 4);
+    assert_eq!(got, applied(true, vec![load_requested("B")]));
+    assert_eq!(seen(&state, "B"), (Stopped, T0 + 3, Some("C"), None));
+
+    // 最後の X が止まった呼び出しで、C に番が来る。B は止まったまま並んでいる。
+    let got = run(&mut state, &stopped("X"), Some("X"), T0 + 5);
+    let events = vec![stop_reported("X"), load_granted("C", &["A", "B", "X"])];
+    assert_eq!(got, applied(true, events));
+    assert_eq!(seen(&state, "B"), (Stopped, T0 + 3, Some("C"), None));
+    assert_eq!(state.load.queue[0].id, "B");
+
+    // C が済んだら次の候補は B。C が止まった呼び出しで、止まっていた B が番を受けて戻る。
+    let got = run(&mut state, &load_done("C"), Some("C"), T0 + 6);
+    let events = vec![load_finished("C"), stop_requested("C", "B")];
+    assert_eq!(got, applied(true, events));
+    let got = run(&mut state, &stopped("C"), Some("C"), T0 + 7);
     let events = vec![
-        resumed("A", "load-request"),
-        load_requested("A"),
-        stop_requested("A", "C"),
+        stop_reported("C"),
+        load_granted("B", &["A", "C", "X"]),
+        resumed("B", "load-granted"),
     ];
     assert_eq!(got, applied(true, events));
-    assert_eq!(
-        seen(&state, "A"),
-        (StopRequested, T0 + 9, Some("C"), Some(T0 + 9))
-    );
-    assert_eq!(state.load.queue[0].id, "A");
+    assert_eq!(seen(&state, "B"), (Working, T0 + 7, None, Some(T0 + 7)));
 }
 
 #[test]

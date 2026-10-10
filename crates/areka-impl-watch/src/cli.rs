@@ -326,7 +326,7 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         required: &[Opt::Id],
         optional: &[],
         wait: true,
-        note: "report stopped. 0=recorded 3=no stop request; with --wait 0=resumed 3=record gone",
+        note: "report stopped. 0=recorded 3=no stop request; with --wait 0=resumed, or stop requested again 3=record gone",
         build: |f| {
             Command::Change(plan::Command::Stopped {
                 id: f.need(Opt::Id),
@@ -338,7 +338,7 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         required: &[Opt::Id],
         optional: &[],
         wait: false,
-        note: "wait for the resume only. 0=resumed 3=record gone",
+        note: "wait for the resume only. 0=resumed, or stop requested again 3=record gone",
         build: |f| Command::Resume {
             id: f.need(Opt::Id),
         },

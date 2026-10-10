@@ -13,7 +13,7 @@ use std::time::{Duration, SystemTime};
 use crate::error::{WatchError, escape_path};
 use crate::plan::{self, Applied, Command};
 use crate::presence::Held;
-use crate::state::{ParticipantStatus, State, WaitKind, WaitRecord};
+use crate::state::{Participant, ParticipantStatus, State, WaitKind, WaitRecord};
 use crate::status::last_merge;
 use crate::store::{self, Store};
 
@@ -44,7 +44,7 @@ pub enum WaitSpec {
     Merge { id: String, repo: String },
     /// 負荷テストの番。
     Load { id: String },
-    /// 再開（「作業中」へ戻る）。
+    /// 再開（「止まった」でなくなる: 「作業中」へ戻る・停止要請が出し直される）。
     Resume { id: String },
 }
 
@@ -113,10 +113,11 @@ pub enum WaitEnd {
     Gone(&'static str),
 }
 
-/// 再開の待ちが終わる状態。設計の条件は「作業中」だけ（「停止要請中」へ出し直されたときの
-/// 扱いを変えるなら、ここ 1 か所）。
-fn resume_is_over(status: ParticipantStatus) -> bool {
-    status == ParticipantStatus::Working
+/// 記録された停止要請の主。理由の無い・誰のものかが空の停止要請（手で直した状態ファイル）は、
+/// 識別に使えない字 `?` で示す。
+fn asked_by(participant: &Participant) -> &str {
+    let by = participant.stop_reason.as_ref().map(|r| r.by.as_str());
+    by.filter(|by| !by.is_empty()).unwrap_or("?")
 }
 
 /// 状態を見て、待ちが終わるか（`Some`）・まだ待つか（`None`）を決める。
@@ -133,11 +134,7 @@ pub fn judge(spec: &WaitSpec, state: Option<&State>) -> Option<WaitEnd> {
             ParticipantStatus::Working => return None,
             ParticipantStatus::Stopped => "already stopped; run stopped --wait or resume".into(),
             ParticipantStatus::StopRequested => {
-                // 理由の無い・誰のものかが空の停止要請（手で直した状態ファイル）は、識別に
-                // 使えない字 `?` で示す。
-                let by = participant.stop_reason.as_ref().map(|r| r.by.as_str());
-                let by = by.filter(|by| !by.is_empty()).unwrap_or("?");
-                format!("stop requested by {by}")
+                format!("stop requested by {}", asked_by(participant))
             }
         },
         WaitSpec::Merge { id, repo } => match state.merge.get(repo) {
@@ -160,8 +157,16 @@ pub fn judge(spec: &WaitSpec, state: Option<&State>) -> Option<WaitEnd> {
             _ if state.load.queue.iter().any(|request| request.id == *id) => return None,
             _ => return Some(WaitEnd::Gone(REQUEST_GONE)),
         },
-        WaitSpec::Resume { .. } if resume_is_over(participant.status) => "resumed".to_owned(),
-        WaitSpec::Resume { .. } => return None,
+        // 再開の待ちは「止まった」でなくなったら終わる（条件はこの 1 か所）。止まっている間に
+        // 停止要請が取り消されて出し直されると「作業中」を 1 度も見ないので、出し直しも終わりにして
+        // 知らせる（見張りはもう終わっていて、知らせられるのはこの待ちだけ）。
+        WaitSpec::Resume { .. } => match participant.status {
+            ParticipantStatus::Stopped => return None,
+            ParticipantStatus::Working => "resumed".to_owned(),
+            ParticipantStatus::StopRequested => {
+                format!("stop requested again by {}", asked_by(participant))
+            }
+        },
     };
     // 識別・リポジトリ・spec は引数の形の決まりで ASCII だが、手で直した状態ファイルからは
     // 何でも来うる。ASCII の外の字（改行も）を逃がして、行が ASCII の 1 行であることを値に頼らない。

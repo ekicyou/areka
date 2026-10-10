@@ -22,7 +22,7 @@ use super::{WaitEnd, WaitPort, WaitSpec, run};
 use crate::error::WatchError;
 use crate::plan::{Applied, Command, Presence, apply};
 use crate::presence::hold;
-use crate::state::{State, WaitKind, WaitRecord};
+use crate::state::{ParticipantStatus, State, WaitKind, WaitRecord};
 
 /// 待ちのプロセスの番号（偽の口が答える）。
 const OWN_PID: u32 = 4321;
@@ -668,6 +668,38 @@ fn a_resume_wait_registers_a_wait_record_and_ends_when_back_to_work() {
             unregister("A", WaitKind::Resume)
         ]
     );
+}
+
+/// 止まっている間に停止要請が取り消され、同じ呼び出しで出し直されたら（負荷テストがまだ
+/// 待たれている）、再開の待ちは「作業中」を 1 度も見ない。出し直しを知らせて終わり、自分の
+/// 記録を消す（知らせなければ、見張りの終わっている A の 2 度目の「止まった」を誰も促さない）。
+#[test]
+fn a_resume_wait_ends_when_the_stop_request_is_issued_again_after_an_unstop() {
+    let port = c_asked_for_a_load_test();
+    // D がまだ止まっていないので、C は待ち行列に並んだまま（走っている印も無い）。
+    port.does("D", watching("D"));
+    port.does("A", Command::Stopped { id: "A".to_owned() });
+    let unstop = Command::Unstop {
+        id: Some("A".to_owned()),
+    };
+    port.at(2, Step::Call("A", unstop));
+
+    let end = port.run(&resume("A")).expect("終わる");
+
+    assert_eq!(end, done("stop requested again by C"));
+    assert_eq!(port.trace(), format!("Rfr{}sfrU", idle(1)));
+    assert_eq!(
+        *port.changes.borrow(),
+        [
+            register("A", WaitKind::Resume, None),
+            unregister("A", WaitKind::Resume)
+        ]
+    );
+    // 再開の待ちの記録は消え、A は「停止要請中」（もう一度「止まった」を報告する番）。
+    assert_eq!(port.waits_of("A"), [WaitKind::Watch]);
+    let state = port.state.borrow();
+    let a = &state.as_ref().expect("状態が在る").participants["A"];
+    assert_eq!(a.status, ParticipantStatus::StopRequested);
 }
 
 // ---- 居る印・出力 ----

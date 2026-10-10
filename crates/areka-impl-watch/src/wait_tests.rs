@@ -359,13 +359,36 @@ fn load_is_gone_when_the_participant_record_is_missing() {
 // ---- 再開の待ち ----
 
 #[test]
-fn resume_keeps_waiting_while_stopped_or_stop_requested() {
-    let mut state = state_with(&[("A", STOPPED), ("B", STOP_REQUESTED)]);
+fn resume_keeps_waiting_while_stopped() {
+    let mut state = state_with(&[("A", STOPPED), ("C", WORKING)]);
     stop_reason(&mut state, "A", "C");
-    stop_reason(&mut state, "B", "C");
 
     assert_eq!(judged(&resume("A"), &state), None);
-    assert_eq!(judged(&resume("B"), &state), None);
+}
+
+/// 止まっている間に停止要請が取り消されて出し直された・「止まった」をまだ報告していない。
+#[test]
+fn resume_ends_with_who_asked_when_the_stop_is_requested_again() {
+    let mut state = state_with(&[("B", STOP_REQUESTED), ("C", WORKING), ("D", WORKING)]);
+    // 誰のものかは、記録された停止要請の理由から取る（いまの候補が D に替わっていても C のまま）。
+    stop_reason(&mut state, "B", "C");
+    state.load.queue.push(load_request("D"));
+
+    assert_eq!(
+        judged(&resume("B"), &state),
+        done("stop requested again by C")
+    );
+}
+
+/// 見張りと同じく、理由が無い・誰のものかが空の停止要請（手で直した状態ファイル）は `?` で示す。
+#[test]
+fn resume_ends_with_a_question_mark_when_the_stop_reason_is_not_recorded() {
+    let mut state = state_with(&[("B", STOP_REQUESTED)]);
+    let asked_again = || done("stop requested again by ?");
+    assert_eq!(judged(&resume("B"), &state), asked_again());
+
+    stop_reason(&mut state, "B", "");
+    assert_eq!(judged(&resume("B"), &state), asked_again());
 }
 
 #[test]
@@ -401,6 +424,10 @@ fn lines_stay_ascii_when_hand_edited_values_are_not_ascii() {
     assert_eq!(
         judged(&watch("B"), &state),
         done("stop requested by \\u{4fc2}")
+    );
+    assert_eq!(
+        judged(&resume("B"), &state),
+        done("stop requested again by \\u{4fc2}")
     );
 
     let mut last = last_merge();

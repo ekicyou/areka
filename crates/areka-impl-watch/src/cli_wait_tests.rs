@@ -322,18 +322,24 @@ fn stopped_wait_records_stopped_before_it_starts_to_wait() {
 }
 
 #[test]
-fn resume_only_waits_and_does_not_record_stopped() {
+fn resume_for_a_stop_requested_participant_ends_at_once_saying_who_asked_and_records_nothing() {
     let root = TempPath::under_target("impl-watch-cli-wait");
     let home = home_in(&root);
     put_not_working(&home, "stop-requested", C_QUEUED);
     let _held = hold_watches(&home, &["c"]);
+    let resume = ["resume", "--id", "a"];
+    let asked_again = done("stop requested again by c");
 
-    call_until_first_sleep(&home, &["resume", "--id", "a"]);
+    // 「止まった」をまだ報告していない: 待たずに、誰の負荷テストかを添えて 0 で終わる。
+    assert_eq!(call(&home, &resume), asked_again);
 
-    // 待つだけ: 停止要請中のままで、c の番も来ない（「止まった」を記録するのは `stopped`）。
+    // 状態は変えない: 停止要請中のままで、c の番も来ない（「止まった」を記録するのは `stopped`）。
+    // 待ちの記録も残らない。
     let state = read_state(&home);
     let status = state.participants["a"].status;
     assert_eq!(status, ParticipantStatus::StopRequested);
     assert_eq!(state.load.holder, None);
-    assert_eq!(waits(&home), [("a".to_owned(), WaitKind::Resume)]);
+    assert_eq!(state.waits, []);
+    // 居る印も握ったままにしない: 呼び直しても 1 にならない。
+    assert_eq!(call(&home, &resume), asked_again);
 }

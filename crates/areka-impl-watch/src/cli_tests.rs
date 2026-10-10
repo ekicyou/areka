@@ -630,6 +630,26 @@ fn usage_notes_say_what_3_means_for_exactly_the_commands_that_can_end_with_3() {
     }
 }
 
+/// 再開の待ちの 0 は 2 通り（再開した・停止要請が出し直された）。
+#[test]
+fn usage_notes_of_the_resume_waits_say_that_0_is_resumed_or_a_stop_requested_again() {
+    let lines: Vec<&str> = usage().lines().collect();
+    for (command, note) in [
+        (
+            "  stopped --id <id> [--wait]",
+            "report stopped. 0=recorded 3=no stop request; with --wait 0=resumed, or stop requested again 3=record gone",
+        ),
+        (
+            "  resume --id <id>",
+            "wait for the resume only. 0=resumed, or stop requested again 3=record gone",
+        ),
+    ] {
+        let at = lines.iter().position(|l| *l == command);
+        let at = at.unwrap_or_else(|| panic!("{command} の行が無い"));
+        assert_eq!(lines[at + 1].trim_start(), note);
+    }
+}
+
 // ---- 終了コード ----
 
 #[test]

@@ -483,3 +483,106 @@ fn a_tick_with_nothing_to_do_changes_nothing() {
         assert_eq!(got, applied(false, vec![]), "{caller:?}");
     }
 }
+
+// ---- 見張りの抹消と、見張りを立て直すまでの印 ----
+
+#[test]
+fn a_watch_that_removes_its_own_record_marks_its_working_participant_as_awaiting() {
+    let mut state = state_with(&["A", "B"]);
+    let mut expected = state.clone();
+    let cmd = unregister("A", WaitKind::Watch);
+
+    let got = run(&mut state, &cmd, Some("A"), T0 + 10);
+
+    expected.waits.retain(|wait| wait.id != "A");
+    expected
+        .participants
+        .get_mut("A")
+        .expect("A が居る")
+        .awaiting_watch_since = Some(T0 + 10);
+    assert_eq!(state, expected);
+    // 印が付いたことの出来事は無い（記録の抹消の 1 件だけ）。
+    let removed = wait_removed("A", WaitKind::Watch, "ended");
+    assert_eq!(got, applied(true, vec![removed]));
+}
+
+#[test]
+fn a_wait_of_another_kind_that_removes_its_record_marks_nobody() {
+    for kind in [WaitKind::Merge, WaitKind::Load, WaitKind::Resume] {
+        let mut state = state_with(&["A", "B"]);
+        state.waits.push(wait_record("A", kind));
+
+        let got = run(&mut state, &unregister("A", kind), Some("A"), T0 + 10);
+
+        assert_eq!(state, state_with(&["A", "B"]), "{kind:?}");
+        let removed = wait_removed("A", kind, "ended");
+        assert_eq!(got, applied(true, vec![removed]), "{kind:?}");
+    }
+}
+
+#[test]
+fn unregistering_a_watch_that_has_no_record_marks_nobody() {
+    // A は「作業中」だが、見張りの記録はもう無い。
+    let mut state = state_with(&["A", "B"]);
+    state.waits.retain(|wait| wait.id != "A");
+    let before = state.clone();
+    let cmd = unregister("A", WaitKind::Watch);
+
+    let got = run(&mut state, &cmd, Some("A"), T0 + 10);
+
+    assert_eq!(state, before);
+    assert_eq!(got, applied(false, vec![]));
+}
+
+#[test]
+fn a_watch_that_removes_its_record_marks_nobody_unless_the_participant_is_working() {
+    // C の負荷テストが走っている（走っている印つき＝この呼び出しで誰も戻らず、停止要請も出ない）。
+    // A は停止要請中、B は止まった。Z は参加者の記録が無く、見張りの記録だけが残っている。
+    let mut state = state_with(&["A", "B", "C"]);
+    hold_running_load(&mut state, "C");
+    ask_to_stop(&mut state, "A", "C");
+    stop_for(&mut state, "B", "C");
+    state.waits.push(wait_record("Z", WaitKind::Watch));
+
+    for id in ["A", "B", "Z"] {
+        let mut expected = state.clone();
+        let cmd = unregister(id, WaitKind::Watch);
+
+        let got = run(&mut state, &cmd, Some(id), T0 + 10);
+
+        // 消えるのは見張りの記録だけ（参加者の記録は作られも変わりもしない）。
+        expected.waits.retain(|wait| wait.id != id);
+        assert_eq!(state, expected, "{id}");
+        let removed = wait_removed(id, WaitKind::Watch, "ended");
+        assert_eq!(got, applied(true, vec![removed]), "{id}");
+    }
+}
+
+/// 停止要請を読んで終わりかけの見張りが抹消を呼ぶ直前に、再開が入った場合。
+#[test]
+fn a_watch_ending_right_after_its_participant_resumed_does_not_get_the_participant_reclaimed() {
+    // A は再開した直後（「作業中」・印つき）で、終わりかけの見張りの記録がまだ在る。
+    let mut state = state_with(&["A", "B"]);
+    state
+        .participants
+        .get_mut("A")
+        .expect("A が居る")
+        .awaiting_watch_since = Some(T0 + 1);
+    let cmd = unregister("A", WaitKind::Watch);
+
+    // 見張りは自分のロックを握っているので、回収の段は「居る」と見て印を消す。続く抹消が、
+    // 同じ呼び出しの中で印を付け直す。
+    let got = run(&mut state, &cmd, Some("A"), T0 + 10);
+
+    let removed = wait_removed("A", WaitKind::Watch, "ended");
+    assert_eq!(got, applied(true, vec![removed]));
+    assert_eq!(state.participants["A"].awaiting_watch_since, Some(T0 + 10));
+    assert_eq!(state.waits, vec![wait_record("B", WaitKind::Watch)]);
+    let before = state.clone();
+
+    // 見張りが終わった後、立て直す前のほかの参加者の呼び出しは、A を回収しない。
+    let got = tick(&mut state, Some("B"), T0 + 11, &no_watch(&["A"]));
+
+    assert_eq!(state, before);
+    assert_eq!(got, applied(false, vec![]));
+}
