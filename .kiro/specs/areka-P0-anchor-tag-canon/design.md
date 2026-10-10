@@ -404,7 +404,7 @@ pub fn pair_anchors<'a>(instructions: impl IntoIterator<Item = &'a Instruction>)
 - `Instruction::Anchor(a)` → `emit(scope, offset, 0.0, CueCommand::AnchorBegin{id, references})`（0 秒・`Choice`／`Cursor` と同じ）。直前が `Reopened` なら先に `AnchorEnd` を発行。
 - `Instruction::AnchorEnd` → `emit(…, CueCommand::AnchorEnd)`。`StrayClose` なら発行しない。
 - 走査が `End`／`Quit`／末尾で終わった時点で `Unclosed` があれば `AnchorEnd` を発行（「表示の終わりまで」）。
-- 記録: `warn!(target: "sakura", event = "anchor_unclosed" | "anchor_reopened" | "anchor_stray_close", index, id?)` を各 1 件。compile は 1 台本 1 回なので空回しと二重にならない（2.10）。
+- 記録: `warn!(event = "anchor_unclosed" | "anchor_reopened" | "anchor_stray_close", index, id?)` を各 1 件（宛先は付けない＝既定の `areka_sakura::compile`。同じ関数の既存の警告と同じで、`RUST_LOG=areka_sakura=warn` で拾える。`id` は開きにだけある＝`anchor_stray_close` は `index` だけ）。compile は 1 台本 1 回なので空回しと二重にならない（2.10）。
 - `has_choice`（柵）は `Choice` だけを数える＝アンカーだけの台本は柵を出さない（2.5）。
 
 ### 合図（`dola`）
@@ -579,7 +579,7 @@ pub fn on_anchor_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall;  
 
 | 場面 | 扱い | 記録 |
 |---|---|---|
-| 閉じ無し・重なり・迷子の閉じ | compile が補う／無視する | `warn!` `anchor_unclosed`／`anchor_reopened`／`anchor_stray_close`（各 1 件・`index`・`id`） |
+| 閉じ無し・重なり・迷子の閉じ | compile が補う／無視する | `warn!` `anchor_unclosed`／`anchor_reopened`／`anchor_stray_close`（各 1 件・`index`。`id` は開きにだけ付く） |
 | 文字の層での重なり・迷子（到達しない防御） | 閉じる／無視 | `debug!`（空回しは出さない） |
 | Steady 以外でのアンカーの知らせ | 棄却 | `warn!` `anchor_rejected_phase`（`id`・`scope`・phase） |
 | SHIORI の失敗（送れない・内部の誤り） | 204 と同じ扱いで続行 | `error!` `anchor_shiori_failed_as_204`（`id`・`origin`・`error`） |
