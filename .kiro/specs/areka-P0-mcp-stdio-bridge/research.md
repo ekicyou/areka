@@ -1,7 +1,7 @@
 # ギャップ分析: areka-P0-mcp-stdio-bridge
 
 > 2026-10-10・本ブランチ（main `414d43eb` の上・コミット `5b8a709b`）で、確定済みの `requirements.md` と今のコードを突き合わせた記録。
-> やったのはファイルを読むことだけ（ビルド・テスト・SSP の中継や偽のサーバーの実行は 0 回）。SSP の中継の振る舞いは `requirements.md` の実測の表と、`target\mcp-stdio-bridge-req\` に残っている入力と出力の記録を読んだ。
+> 1〜10 章（ギャップ分析と要件ディスカッション）でやったのはファイルを読むことだけ（ビルド・テスト・SSP の中継や偽のサーバーの実行は 0 回）。SSP の中継の振る舞いは `requirements.md` の実測の表と、`target\mcp-stdio-bridge-req\` に残っている入力と出力の記録を読んだ。11 章以降（設計の段）は試しのクレートを git の外に建てて動かした（SSP の中継と机の 9801〜9830 には触れていない）。
 > コードは「何の定義か」（関数名・定数名＋ファイル）で指す。rmcp と hyper の振る舞いは、`Cargo.lock` が固定している版（rmcp 3.5.0・hyper 1.11.1）のソースを読んで確かめた。
 > この文書は選択肢と根拠を並べるもので、決定ではない。「見立て」と書いた所も、要件ディスカッションと設計で覆せる。
 
@@ -321,3 +321,80 @@ rmcp の `transport-io`（stdio の側）と `transport-streamable-http-client`�
   - 新しい議題: rmcp の stdio の輸送が JSON でない行・オブジェクトでない行をどう扱うか（要件 1.6・1.7）。
 - **9 章の「後の spec への縛り」のうち消える見込みのもの**: ⑴ 応答が SSE になる場合（rmcp のクライアントが読む）・⑵ `x-mcp-header` の印（rmcp が札を作る）。設計で確かめてから消す。⑶ 待つ上限・⑷ rmcp の版上げのときに中継のテストも通す、は残る。
 - 自明な修正で要件へ入れたもの: 「つなぐ先を決めた後は先頭から当たり直さない」（3 章の議題 3 の「同じ順に反するか」の答え）・「同じウェーブの約束は設計の形を縛らない」（議題 5 のウ・議題 6 のイを選ぶなら設計で挙げて諮る）・「机の本物の 9801〜9830 へ接続するテスト 0 本」。
+
+## 11. 設計の段の確かめ（2026-10-10・裁定 3 の 3 点＋調べ残し 1）
+
+> やり方: rmcp 3.5.0・hyper 1.11.1・sse-stream 0.2.6 のソース（cargo の登録簿 `C:\rust\cargo\registry\src\…`）を読み、試しのクレート `target\mcp-stdio-bridge-design\probe\`（git の外・ワークスペースの `Cargo.lock` を写して建てた）で、自前の送り手・rmcp の `Service<RoleServer>` の直接の実装・自前の stdio の輸送を書いて、偽の受け口（名乗り `areka-mcp-server`・`target\mcp-stdio-bridge-design\fake-areka.ps1`・番号 47123）を相手に 10 行を流した。開発者の SSP・`C:\wintools\ssp\data\profile\*`・机の 9801〜9830 には触れていない（接続の計測は束ねてすぐ放した空きポートと 47123・9・1）。
+
+### 11.1 ⒜ 自前の HTTP の送り手で rmcp の口 `StreamableHttpClient` を満たせるか → **満たせる（建って動いた）**
+
+- `StreamableHttpClient`（`src/transport/streamable_http_client.rs`）は `Clone + Send + 'static` の trait で、**実装が要るのは 3 つ**: `post_message`・`delete_session`・`get_stream`。`post_message_with_max_sse_event_size`・`get_stream_with_max_sse_event_size` は既定の実装（前者へ委ねる）を持つ。要件の「4 つ」は 1 つ多い。
+- 署名（`impl Future … + Send + '_` の形）:
+  - `post_message(&self, uri: Arc<str>, message: ClientJsonRpcMessage, session_id: Option<Arc<str>>, auth_header: Option<String>, custom_headers: HashMap<HeaderName, HeaderValue>) -> Result<StreamableHttpPostResponse, StreamableHttpError<Self::Error>>`。`StreamableHttpPostResponse` は `Accepted`（202）・`Json(ServerJsonRpcMessage, Option<String>)`・`Sse(BoxStream, Option<String>)`。
+  - `delete_session(&self, uri, session_id: Arc<str>, auth_header, custom_headers) -> Result<(), …>`。
+  - `get_stream(&self, uri, session_id: Option<Arc<str>>, last_event_id: Option<String>, auth_header, custom_headers) -> Result<BoxStream<'static, Result<sse_stream::Sse, SseError>>, …>`。戻り値の型 `Sse` は rmcp が外へ出していない（`SseError` だけ出している）ので、`sse-stream` 0.2.6（`Cargo.lock` に在る）を直接の依存にして型の名前を書く。
+- **areka（無状態・JSON の単発）相手に実際に呼ばれるのは `post_message` だけ**: rmcp のクライアントの働き手（`StreamableHttpClientWorker::run`）は、`initialize` の応答に `Mcp-Session-Id` が無く `allow_stateless`（既定 `true`）なら `session_id = None` にし、`get_stream`（共通の SSE）は `session_id` が在るときだけ起こし、`delete_session` は片付けの情報が在るとき（＝セッション在り）だけ呼ぶ。試しでは `delete_session` を `Ok(())`、`get_stream` を `Err(ServerDoesNotSupportSse)` にして一度も呼ばれなかった。
+- 送り手の中身は tokio の `TcpStream`＋`httparse`（1.10.1・`Cargo.lock` に在る）で、`Content-Length`・chunked・閉じるまで、の 3 通りの読み取り。**hyper の `client` 機能は使えない**: hyper 1.11.1 の `Cargo.toml` で `client = ["dep:want", "dep:pin-project-lite", "dep:smallvec"]` と `want`（と `try-lock`）を要し、`want` は `Cargo.lock` に無い（名前の数 0 を破る）。
+- **`Cargo.lock` に無い名前の数**: 試しの `cargo tree -e normal --target x86_64-pc-windows-msvc` の名前（71 個）を `Cargo.lock` の名前と比べて **0 個**。`areka-mcp` を path の依存に足した形（101 個）でも **0 個**。
+- 試しで動いたこと（10 行の入力・標準出力 9 行・終了コード 0・合計 0.44 秒）: `initialize`（areka の名乗り・できること・版を返す）・`notifications/initialized`（出力なし）・`ping`・文字列の `id` の `tools/list`・`tools/call`（本文の `\r\n` と日本語がそのまま 1 行）・JSON でない行 → `-32700`・`[1,2]` → `-32600`・未知のメソッド `x/pretty` が `CustomRequest` として素通り（改行入りの応答が 1 行に）・平文の 415 → `-1`・空の本文 → `-1`。偽の受け口が受けた方法の並びも記録した（`initialize`・`notifications/initialized`・`ping`・`tools/list`・`tools/call`・`x/pretty`・`x/415`・（作り直しの）`initialize`・`notifications/initialized`・`x/empty`）。
+
+### 11.2 ⒝ 確かめた相手と同じ接続で送れるか・手作りの名乗りの確かめと rmcp の手順の関係 → **送れる（接続は送り手の持ち物）**
+
+- rmcp のクライアントの輸送はセッションの番号（`Mcp-Session-Id`）を持ち回るだけで、**TCP の接続は `StreamableHttpClient` の実装が全部決める**（rmcp は `post_message` を要求・通知ごとに 1 回呼ぶ。接続の使い回しも切断の検知も rmcp には無い）。areka はセッションを返さないので `session_id` は常に `None`。
+- したがって「確かめた相手と同じ接続で送る」は送り手の中で閉じる: 接続を開く → 固定の旧式の `initialize` を送って `result.serverInfo.name` を見る → 同じ接続で本当の要求を送る（`Connection: close`）。rmcp の手順の最初の `initialize` も `post_message` を通るので、その答えの名乗りで同じ確かめができる（2 度送らない）。
+- rmcp の手順（`serve_client` の既定 `ClientLifecycleMode::Initialize`）: `initialize` → `notifications/initialized` を送ってから `RunningService` を返し、`peer_info()` に `ServerPeerInfo`（版・できること・`server_info`・`instructions`・`_meta`）が入る。`server/discover` から始める手順（`Auto`／`Discover`）も在るが、areka は旧式の `initialize` を受けるので既定でよい。
+- 働き手の `post_message` の失敗はその要求の `responder` へ返るだけで働き手は死なない（`Event::PostResult` の処理）。`Peer::send_request` には `ServiceError::TransportSend(DynamicTransportError)` として届き、`DynamicTransportError.error`（`Box<dyn Error + Send + Sync>`）を `StreamableHttpError<自前の型>` へ `downcast_ref` できる＝「書く前／後」の読み分けができる。
+- hyper 1.11.1 の受け口（areka）は、使っていない接続も `header_read_timeout`（既定 30 秒・`http1::Builder::new` の初期値・`Conn::poll_read_head` が次の要求の頭を待つときに時計を走らせる）で閉じる。接続を持ち越す形だと 30 秒後の最初の要求が「届いたか分からない」になるので、要求ごとに接続する形を選んだ（design D-4）。
+
+### 11.3 ⒞ exe の大きさ → **2,469,888 バイト（約 2.36 MiB）・`areka-mcp` を依存に足すと 2,504,704 バイト（＋34,816）**
+
+- 試しのクレート（rmcp `server`＋`client`＋`transport-io`＋`transport-streamable-http-client`・tokio・自前の送り手・`Service` の直接の実装・自前の stdio の輸送・`tracing-subscriber`）を、ワークスペースと同じ `[profile.release]`（`opt-level = 'z'`・`lto = true`・`codegen-units = 1`・`panic = 'unwind'`・`strip = false`）で `--target x86_64-pc-windows-msvc` に建てた。`+crt-static` は付けていない（配布の建て方では少し増える）。
+- 本物の中継は控え・探索・記録の分が足されるので、見立ては 2.6〜3 MiB。配布の zip に入れて困る大きさではない（`areka.exe` と同じ木に入る）。
+
+### 11.4 調べ残し 1: 誰も居ない番号への接続が断られるまでの時間 → **開発者の机では約 2 秒（即座に断られない）**
+
+- 束ねてすぐ放した空きポート・47123・9・1 の 4 つへ、tokio の `TcpStream::connect` と std の `TcpStream::connect_timeout` で各 20 回（上限 1 秒）: **80 回とも時間切れ・断られた回数 0**。.NET の `TcpClient.Connect` では **2,035 ms 後に ConnectionRefused**。この机では、閉じた `127.0.0.1` の番号への SYN がすぐには RST で返らず、再送の後に断られる（Windows Defender の壁の 3 つの構成は有効）。
+- SSP の中継が「居ないとき約 0.1 秒」で答えた（要件の実測）のは、1 つの番号を短い上限で見切っているため（断られるのを待っていない）。
+- 含意: 20 候補を順に当たると「上限 × 20」になる。設計は全候補への接続を並べて開き、短い上限（`CONNECT_WAIT` 300 ms）で見切り、開いた接続を候補の順に確かめる形（design D-5）。areka が居ないときの 1 回の探索は約 0.3 秒。
+
+### 11.5 ほかに rmcp 3.5.0 のソースで確かめたこと
+
+- **stdio の輸送（`transport/async_rw.rs` の `AsyncRwTransport::receive`）は、JSON として読めない行（`Syntax`／`Eof`）を黙って捨てる**（`debug!` だけ・issue #938 の判断）。形が違う JSON（`Data`）には `-32600`・`id` なしを返す。要件 1.6（`-32700` を返す）を満たすには輸送を自前で持つ（60 行ほど・試しで動いた）。書き手（`JsonRpcMessageCodec::encode`）は `serde_json::to_writer`＋`\n`（改行を含まない 1 行＝要件 1.4）。
+- **`serve_server`（`serve_server_with_ct_inner`）は、最初の問い合わせが失敗すると `Err` を返してループに入らない**（`report_initialize_failure`）。`initialize` の前の `ping` には自分で `{}` を返す。要件 4.6 と「控えが無いときの `initialize` はエラー」（裁定 1）を両立させるには `serve_directly_with_ct`（手順を飛ばして最初から `serve_inner`）を使い、`initialize`・`server/discover`・`ping` も `handle_request` で扱う。試しで `serve_directly` に `Service<RoleServer>` を直接実装した型を渡して動いた（`ServerHandler` の包括実装とは重ならない）。版の交渉（`negotiate_protocol_version`）は `serve_server` の中の関数で外から呼べないので、中継が同じ答え（要求の版が `initialize` を持つ 4 版ならその版・それ以外は `2025-11-25`）を自分で組む。
+- **`Service<RoleServer>`** の 3 つ: `handle_request(&self, ClientRequest, RequestContext) -> Result<ServerResult, ErrorData>`・`handle_notification`・`get_info() -> ServerConfig`（＝`InitializeResult` の別名）。`supported_protocol_versions()` は既定で `ProtocolVersion::KNOWN_VERSIONS`（5 版）。`ClientRequest` は既知の 18 種＋`CustomRequest { method, params, extensions }`、`ServerResult` も `CustomResult(Value)` を持つ＝未知のメソッドが素通りする（試しの `x/pretty`）。
+- **rmcp の受け手は要求ごとに仕事を起こす**（`serve_inner` の `tokio::spawn`）: 応答の行の順は要求の順と同じとは限らない（試しで `-32700` の行が先の要求の応答より先に出た）。標準入力が閉じると `QuitReason::Closed` で、書きかけの応答を **5 秒**まで掃き出してから終わる（`drain_timeout`）。
+- **`Peer::send_request_with_option(request, PeerRequestOptions)`** の `timeout` で応答の上限を付けられる（`ServiceError::Timeout`）。`PeerRequestOptions` は `non_exhaustive` なので `no_options()` から欄を書く。
+- **札**: クライアントの働き手の `build_request_headers`／`request_version_headers` が `MCP-Protocol-Version`・`Mcp-Method`・`Mcp-Name`・`Mcp-Param-*`（`tools/list` の答えから `x-mcp-header` の印を覚える `cache_tools_from_response`）を組んで `custom_headers` に入れて渡す。自前の送り手はそれを写すだけ。
+- **`DiscoverResult::from_server_info(supported_versions, ServerConfig)`** で控えのサーバーの情報から `server/discover` の答えを組める（`_meta` の `io.modelcontextprotocol/serverInfo` 入り・`ttlMs: 0`・`cacheScope: private`）。`ServerPeerInfo` は `serde` で読み書きできる（控えの形にそのまま使える）。
+
+## 12. 設計の決定（`design.md` の D-1〜D-16 の根拠の要約）
+
+| 決定 | 選んだ形 | 退けた形と理由 |
+|---|---|---|
+| 全体の作り（議題 2） | 新しいクレート・rmcp 両側・HTTP の送り手だけ自前（裁定 3） | 案 A・案 B・`reqwest`（34 個増える）・hyper の `client` 機能（`want` が増える） |
+| Desktop の側の受け方 | `serve_directly_with_ct`＋`Service<RoleServer>` の直接の実装 | `serve_server`＋`ServerHandler`: 最初の問い合わせの失敗で終わる（4.6 に反する）・`initialize` の答えを `get_info` の同期の関数で返す形になり、areka へ問いに行けない |
+| 名乗りの確かめ（議題 3） | 接続ごとに、その接続の最初の要求で確かめてから同じ接続で送る（ア） | イ（つなぎっぱなし）: hyper の 30 秒の閉じで「届いたか分からない」が出る・ウ（別の接続）: 入れ替わりの隙・エ（最初だけ）: 2.11 に反する |
+| 探し方（議題 7） | 並べて開き・順に確かめ・短い上限で見切る | 順に当たる: 居ないときに上限 × 20（机では断られるまで 2 秒） |
+| 控え（議題 4） | exe の隣（`profile\areka\mcp-bridge\`）・`AREKA_PROFILE_DIR` で変えられる・種類ごとに 1 ファイル・一時の名前から `rename` | `%LOCALAPPDATA%`（areka に無い決まり・パッケージ版の振り替えが未確認）・`%TEMP%`（消される・見張りが赤） |
+| 定数の共有（議題 5） | `areka-mcp` を本番の依存に（受け口の部品は呼ばない・exe は +34,816 バイト） | 写して検査（判断の関数を 2 か所に持つ）・定数だけのクレート（クレートが 2 つ・`handler.rs`／`port.rs` の移動） |
+| help の置き場（議題 6） | `main.rs` から `exe_location` で求めて `start` の引数で渡す（イ＝本質の形） | ア（`help.rs` の中で `current_exe`）: リンクごしで本当の隣にならない。代案として design に残す |
+| 入力の切り方・1 行にする（議題 9） | 自前の輸送が 1 行 1 要求で読み、rmcp の型を `serde_json` で 1 行に書く | rmcp の stdio の輸送: JSON でない行を黙って捨てる |
+| 1 件ずつか並べてか（議題 8） | rmcp の受け手が並べる・接続は要求ごと | 1 件ずつに戻す: rmcp の受け手の形に逆らう・長いツールの間 `ping` が待つ |
+| 通知 | つながっていれば `initialized` 以外を届ける・居なければ何もしない | 全部捨てる: 「意味を変えずに届ける」に反する理由が無い |
+| 時間 | `CONNECT_WAIT` 300 ms・`VERIFY_WAIT` 3 秒・`REPLY_WAIT` 30 秒（`tools::REPLY_WAIT` 10 秒より長い・比べるテスト） | — |
+| 窓 | `#![windows_subsystem = "windows"]`（areka 本体と同じ） | 端末のアプリ: Desktop の起こし方によっては窓が出る |
+
+## 13. 9 章の「後の spec への縛り」の整理
+
+- ⑴ SSE の応答: **残る**（自前の送り手は JSON 専用・SSE は 4.2 のエラー）。10 章の「消える見込み」は外れた。
+- ⑵ `x-mcp-header` の札: **消える**（rmcp のクライアントが作る）。
+- ⑶ `REPLY_WAIT` より長いツール: 残る（比べるテストで赤）。
+- ⑷ rmcp の版上げで中継のテストも通す: 残る（`tech.md` に書く）。
+- 新しく足す: 標準入力が閉じた後の掃き出しは rmcp の 5 秒（`REPLY_WAIT` より短い）。areka が居ないときの探索は Desktop の要求ごとに約 0.3 秒（覚えは持たない）。`dist/README.txt` の既知の制限「SSTP はありません」は MCP の節と並ぶが、要件の外なので触らない（気付いた点）。
+
+## 14. 調べ残し（実装・実機確認で埋める）
+
+1. Claude Desktop が話す版・同時に要求を送るか・1 要求を待つ上限（要件 8.5 ⑵）。
+2. パッケージ版の Desktop から起こされた中継が exe の隣へ書けるか（8.5 ⑷ で分かる・書けなければ 3.10 の経路で控えなしになる）。
+3. SSP の中継の未実測 3 点（返事をしない相手をどれだけ待つか・`2026-07-28` での送り方・控えが無いときの `tools/list`）は差の記録に「未実測」と書く（SSP の中継を動かすのは開発者の了承の下で）。
+4. 配布の建て方（`+crt-static`）での exe の大きさ（11.3 は付けずに測った）。
