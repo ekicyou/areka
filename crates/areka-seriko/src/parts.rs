@@ -132,6 +132,10 @@ fn gate(anim: &LoopAnimation, binds: &BindSet) -> Gate {
         LoopTrigger::BindRandom { k } if binds.contains(anim.id) => Gate::Lottery(k),
         LoopTrigger::BindRandom { .. } => Gate::Off,
         LoopTrigger::Always { period_ms, laps } => Gate::Always { period_ms, laps },
+        // `runonce`・`periodic`・`talk` は抽選しない・乱数を引かない。部品での再生はまだ入れて
+        // いないので対象外（時計が生まれないので `Off` の腕は何もしない・spec:
+        // areka-P0-seriko-trigger-intervals 要件 5.7）。
+        LoopTrigger::Runonce | LoopTrigger::Periodic { .. } | LoopTrigger::Talk { .. } => Gate::Off,
     }
 }
 

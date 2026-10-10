@@ -10,8 +10,8 @@
   - 兄弟のテストで 3 語の読み（数値あり・数値なし・0・非数値・大文字混じり・`+` 入り・`runonce`）が緑になり、既存の語（`bind`・`random,数値`・`bind+random,数値`・`always`・`sometimes`・`rarely`）の読みのテストが緑のまま
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 9.1, 9.7_
 
-- [ ] 2. seriko の表: 3 語を採る
-- [ ] 2.1 3 語を引き金として表に採り、採った・採れなかったを記録する
+- [x] 2. seriko の表: 3 語を採る
+- [x] 2.1 3 語を引き金として表に採り、採った・採れなかったを記録する
   - 表の引き金の型に 3 つの腕を足す（`periodic` は周期の ms・`talk` は区切りの文字数。どちらも 0 を持てない型）
   - 採ったとき、面の番号・アニメーションの番号・語・数値を添えた `debug!` を表を組むときに 1 回残す
   - 「その他の語」の先頭の語が `talk`／`periodic` のとき（数値が無効）は、面の番号・アニメーションの番号・元の綴りを添えた `warn!` を 1 回残して採らない。コマ列が空の 3 語は既存の `warn!` で採らない。`+` の組み合わせと範囲外の語は今までどおり `debug!` だけ
@@ -127,3 +127,7 @@
 
 - 1.1: 読み手が `runonce` を `Interval::Runonce` で返すようになったので、seriko の既存の檻 2 本（`table_interval_words_tests.rs` の `other_interval_words_are_not_recorded_and_keep_their_original_vocab`・`table_always_tests.rs` の `combinations_and_other_words_keep_the_debug_arm`）が 2.1 の着地まで赤になる。どちらも語の列に `runonce` を持つ。2.1 で列から外す（設計の Modified Files には `table.rs` の中の檻 1 本しか載っていない）。
 - 1.1: 数値の読みは設計の `fields[2].parse::<u32>()` と同じ答えになる既存の `field_u32` を使った。読み手の中で `periodic,3` を「未認識の語」の検体にしていた檻（`decode_tests_lenient_input_tests.rs`）は `yen-e,3` へ替えた。`decode_tests_animation_tests.rs` の冒頭のコメント「sometimes/periodic 等」は古いまま（未修正・軽微）。
+- 2.1: `runonce` を「採らない語」の例にしていた檻の差し替えは 4 ファイル（`table.rs` の中の 1 本・`table_interval_words_tests.rs`・`table_always_tests.rs`・`table_parts_tests.rs` の 2 件）。9.1 の「語の差し替え 1 か所を除く」はこの 4 ファイルと読む。
+- 2.1: 途中の状態 — `parts.rs` の `gate` は 3 語を一時的に `Gate::Off` へ落としている（5.1 で `Gate::Trigger` へ）。`looper.rs` の抽選の `match` は 3 語を乱数の前で `continue`。`table.rs` の `has_talk()` は `#[cfg_attr(not(test), expect(dead_code, …))]` 付き（4.x で `looper.rs` が読み始めたら外す。外し忘れは「満たされない expect」の警告で出る）。3 語を持つ部品は既に `has_animated_parts` を真にする。
+- 2.1: `parts_always_tests.rs` の `always_beside_random_does_not_change_the_draws` は「`always` の無い側」に `runonce` を使ったまま緑。5.1 で部品の `runonce` が鳴るようになったとき、乱数 2 回のままかを確かめる（赤なら語を `yen-e` へ）。
+- 2.1: `table.rs` は 898 行（残り約 100 行）。採録の `debug!` の `value` は `periodic` が秒・`talk` が文字数・`runonce` は欄なし。

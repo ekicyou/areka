@@ -325,6 +325,11 @@ impl LoopRuntime {
                         }
                         // `always` は抽選しない（乱数を引く前に飛ばす。再生は進行の側・task 3.4）。
                         LoopTrigger::Always { .. } => continue,
+                        // `runonce`・`periodic`・`talk` も抽選しない（乱数を引く前に飛ばす・spec:
+                        // areka-P0-seriko-trigger-intervals 要件 5.7）。
+                        LoopTrigger::Runonce
+                        | LoopTrigger::Periodic { .. }
+                        | LoopTrigger::Talk { .. } => continue,
                     };
                     // (c) 1/N 抽選（ここで初めて乱数を消費）。
                     if should_fire(k, rng) {
