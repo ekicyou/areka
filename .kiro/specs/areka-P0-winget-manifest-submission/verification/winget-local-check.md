@@ -331,7 +331,75 @@ areka (portable) ARP\User\X64\Areka.Areka.Portable__DefaultSource 0.0.2
 
 ## 上げ直しの実測
 
-（タスク 3.1 で作った状態の一覧を、タスク 3.2 で 6 項目の結果を記入）
+### 作る状態（タスク 3.1・要件 4.1）
+
+結果: **まだ作れていない**（2026-10-10 の 1 回目）。入れた areka（0.0.2）の MCP の `sakurascript` は、台本を受け取らずに `NG:not implemented yet` と答える。台本では、入れることも・切り替えることも・終えることもできなかった。設計の段 4 の決まりどおり、開発者に右クリックメニューでの同じ操作を頼む（頼む操作はこの節の終わり）。状態の写しは**まだ取っていない**。時刻はどれも 2026-10-10（+09:00）。
+
+#### 1 回目: MCP の口から台本を送った（13:12〜13:15）
+
+起こし方（タスク 2.2 と同じ。違いは、決めた時間で終わる指定を外したことと、MCP の口の番号を決めたこと）:
+
+- PATH を登録（機械の側;利用者の側）から組み直した新しい `pwsh -NoProfile -NonInteractive` のプロセスの中で、`AREKA_*`・`WINTF_*` を外し（外れたのは `AREKA_IMPL_WATCH_HOME` の 1 つ）、`AREKA_NO_ALERT=1`・`RUST_LOG=info`・`NO_COLOR=1`・`AREKA_MCP_PORT=9871` を置いた。`AREKA_APP_SMOKE_EXIT_MS` は置いていない。
+- 番号 9871 は、起こす直前に `Get-NetTCPConnection -State Listen` で待ち受けが 0 件であることを見て決めた（9800〜9899 の待ち受けも 0 件）。
+- `areka` の 1 語を渡した（`Get-Command areka -All` は 1 件）。起きたプロセスの実体は `%LOCALAPPDATA%\Microsoft\WinGet\Packages\Areka.Areka.Portable__DefaultSource\areka.exe`。作業フォルダは `target\winget-check\run\`。スクリプトは `target\winget-check\3.1-launch.ps1` と `3.1-inner.ps1`。
+- 始めた時刻 13:12:09.202。起動の記録（`target\winget-check\logs\3.1-run1.stdout.log`）から: `root_resolved` の `root=` は入れ先のフォルダ（`source=ExeDir`）／`ghost_resolved` は `route=Memory dir=…\ghost\emo2`／`balloon_resolved` は `route=Memory dir=…\balloon\emo2-kakukaku`／`MCP: 待受を始めた url=http://127.0.0.1:9871/api/mcp/v1`／`本物のゴースト窓を開きました … scopes=[0, 1]` は 1 件／`last_ghost_not_found` は 0 件。
+
+MCP の口へ送った物と答え（送り方は `tools/call` を 1 本ずつの HTTP。送った文と答えの全文は `target\winget-check\logs\3.1-mcp.log`。スクリプトは `target\winget-check\3.1-mcp.ps1`）:
+
+| 時刻 | 送った物 | 答え | 確かめたこと |
+|---|---|---|---|
+| 13:12:14 | `get_status` | `talking,balloon(0=0)` | 起動の台詞を話している |
+| 13:12:14 | `get_active_ghost_list` | `えも？？` | 今のゴーストは同梱の えも？？ |
+| 13:12:29 | `get_status` | `balloon(0=0/1=0)` | 話し終わった（`talking` が無い） |
+| 13:12:29 | `check_script`（下と同じ台本） | JSON-RPC のエラー `-32602`・`tool not found` | 0.0.2 にはこのツールが無い（0.0.2 より後に足された物。不具合ではない） |
+| 13:12:29 | `sakurascript`（下の台本） | **`NG:not implemented yet`**（`isError: true`） | 台本は受け取られなかった |
+| 13:13:13 | `get_status`・`get_active_ghost_list` | `balloon(0=0/1=0)`・`えも？？` | 何も変わっていない |
+
+送った台本（そのまま。`<ワークツリー>` はこのワークツリーの根の絶対パス。検体は `vendors\sample_ghost\claudia.nar` の写しで、SHA256 は元と同じ `93A34C50…D23A790A`）:
+
+```text
+\![execute,install,path,<ワークツリー>\target\winget-check\nar\claudia.nar]\e
+```
+
+- 送ってから 40 秒待っても、入れ先に `ghost\claudia\` はできなかった。起動の記録にも、インストールの行は 1 行も無い。
+- 理由: 0.0.2 の MCP の `sakurascript` は、中身がまだ無い仮の受け口（タグ `v0.0.2` の `crates/areka/src/mcp/sakurascript.rs` の `handle` が、何もせず `NG:not implemented yet` を返す 1 文。この枝の同じファイルも同じ）。同じ口の `tools/list` は 10 本を返すが（答えの全文は `target\winget-check\logs\3.1-tools-list.json`）、`raise_event` と `reload` も同じ仮の受け口（こちらはタグ `v0.0.2` のソースの読みで、実機では呼んでいない）。中身を入れる仕事は、起票済みでまだ着手していない spec `areka-P0-mcp-kanade-tools` の brief に書かれている。
+- だから 2 本目の台本（`emo2-kakukaku-wplimit.nar` を入れる）・切り替えの台本（`\![change,ghost,…]`）・終える台本（`\-`）は**送っていない**（同じ答えになるだけなので）。
+
+終え方（台本の `\-` が使えないので、OS の閉じる要求で終えた）:
+
+- 自分が起こしたプロセス（プロセスの番号・実体のパス・始めた時刻が、起こしたときの控えと合うことを確かめた 1 つ）のキャラクター窓 1 枚へ、OS の閉じる要求（`WM_CLOSE`＝Alt＋F4 と同じ物）を 1 回送った（13:15:04.677）。プロセスを止める操作はしていない。
+- areka はこれを、右クリックメニューの「終了」と同じ終わり方として扱った。起動の記録の行: `[os_close] OS の閉鎖要求をメニューの「終了」と同じ終了要求として kanade へ送る event="os_close_request" scope=0 kind="ghost"` → `OnClose GET を発行し握手を開始` → 終わりの台詞 → `ghost shutdown sequence completed` → `きれいに終わったので起動中の印を消しました event="session_mark_cleared"`。
+- 終わった時刻 13:15:14.219（起こしてから 185.0 秒）・**自分から終わった**・**終了コード 0**。終わった後、入れ先のフォルダから動いているプロセスは 0・9871 の待ち受けは 0。
+- 起動の記録は 645 行（160426 バイト）。`ERROR` は 0 行・`WARN` は 5 行（タスク 2.2 と同じ 2 つの文が 3 行＝絵の `null.png` が 2 行と折り返しの基準が 1 行。残り 2 行は、MCP へ無いツール `check_script` を聞いた答えと、試しに引数なしで聞いた `get_property` の答え＝どちらも聞き方の側の物）。標準エラーは 1 行（`[helper] SHIORI 初期化の入口: loadu`）。
+
+1 回目の後の入れ先（隠しファイルも数えた。一覧は `target\winget-check\logs\3.1-installdir-run1-after-end.txt`・相対パスと大きさ）:
+
+| 物（設計の段 4 の表） | 置き場（入れ先のフォルダから見て） | 有無 |
+|---|---|---|
+| 後から入れたゴースト | `ghost\claudia\` | 無い |
+| 後から入れたバルーン | `balloon\emo2-kakukaku-wplimit\` | 無い |
+| クローディアと一緒に入るバルーン 2 つ | `balloon\claudia\`・`balloon\claudia_vertical\` | 無い・無い |
+| areka の記憶 | `profile\areka\` | 在る（1 ファイル・55 バイト。中の `[last]` は `ghost = "emo2"`・`running = ""`） |
+| ゴーストの記憶（えも？？） | `ghost\emo2\ghost\master\profile\areka\` | 在る（1 ファイル・90 バイト） |
+| ゴーストの記憶（クローディア） | `ghost\claudia\ghost\master\profile\areka\` | 無い（ゴーストがまだ無い） |
+| シェルの記憶（えも？？） | `ghost\emo2\shell\master\profile\areka\` | 無い |
+| シェルの記憶（クローディア） | `ghost\claudia\shell\<シェル>\profile\areka\` | 無い（ゴーストがまだ無い） |
+
+- ファイルの数は 201（起こす前と同じ）・合計 17214191 バイト。起こす前（`3.1-installdir-before-launch.txt`・201 ファイル・17211954 バイト）と比べて、大きさが変わったのは 2 ファイルだけ（`ghost\emo2\ghost\master\profile\areka\sylphya.toml` が 70 → 90 バイト・`ghost\emo2\ghost\master\profile\pasta\logs\pasta.log` が 2788 → 5005 バイト）。増えたファイル・消えたファイルは 0。
+- えも？？ のシェルの記憶は、2 回の起動（タスク 2.2 と今回）ではできていない。右クリックメニューで状態を作った後にもう一度見て、無ければ、作る操作（キャラクターを動かす・シェルを切り替える）を足す。
+
+#### 開発者に頼む操作（右クリックメニュー）
+
+AI が `target\winget-check\3.1-launch.ps1 -Port 9871 -Tag run2` で areka を起こした後（起動の記録を `3.1-run2.stdout.log` に取るため）、キャラクターを右クリックして、次の順に行う。
+
+1. 「インストール…」→ `<ワークツリー>\target\winget-check\nar\claudia.nar` を選ぶ
+2. 「インストール…」→ `<ワークツリー>\target\winget-check\nar\emo2-kakukaku-wplimit.nar` を選ぶ
+3. 「ゴースト」→ クローディア を選ぶ
+4. （切り替わった後のクローディアを右クリックして）「終了」
+
+その後に AI が、入れ先の一覧・段 4 の表の有無・写し（`state-snapshot`）を取り、この節へ書き足す。
+
+（タスク 3.1 の続き＝右クリックメニューで作った状態の一覧と写しを記入。タスク 3.2 で 6 項目の結果を記入）
 
 ## 外し方の実測
 
@@ -362,6 +430,11 @@ areka (portable) ARP\User\X64\Areka.Areka.Portable__DefaultSource 0.0.2
 | 新しいプロセスで `areka` を起こすスクリプト 2 つ | `target\winget-check\2.2-launch.ps1`・`target\winget-check\2.2-inner.ps1` | 2.2 |
 | 起動のときの作業フォルダ（中は空） | `target\winget-check\run\` | 2.2 |
 | winget が入れた areka（置いたのは winget。winget 自身の入れ先なので `target\` の外。この後のタスクが続けて使い、後片付けで外す） | `%LOCALAPPDATA%\Microsoft\WinGet\Packages\Areka.Areka.Portable__DefaultSource\` | 2.2 |
+| 検体の `.nar` の写し 2 つ（`claudia.nar`・`emo2-kakukaku-wplimit.nar`。元は `vendors\sample_ghost\` で、元には触っていない） | `target\winget-check\nar\` | 3.1 |
+| areka を有界でなく起こすスクリプト 2 つ・MCP の口へ 1 本送るスクリプト・入れ先の一覧を取るスクリプト | `target\winget-check\3.1-launch.ps1`・`3.1-inner.ps1`・`3.1-mcp.ps1`・`3.1-list.ps1` | 3.1 |
+| 1 回目の起動の記録（標準出力・標準エラー）・起こしたプロセスの結果（解決先・時刻・終了コード）・組み直した PATH | `target\winget-check\logs\3.1-run1.stdout.log`・`3.1-run1.stderr.log`・`3.1-run1.result.json`・`3.1-run1-fresh-path.txt`・`3.1-run1-fresh-shell.*` | 3.1 |
+| MCP の口へ送った文と答えの全文・`tools/list` の答え | `target\winget-check\logs\3.1-mcp.log`・`3.1-tools-list.json` | 3.1 |
+| 入れ先のフォルダの一覧（起こす前・閉じる要求の直前・終わった後。相対パスと大きさ・隠しファイルも含む） | `target\winget-check\logs\3.1-installdir-before-launch.txt`・`3.1-installdir-run1-before-close.txt`・`3.1-installdir-run1-after-end.txt` | 3.1 |
 
 - 取ってきた後の `git status --porcelain` は 0 行（`target` の下に限って見ても 0 行）。`git ls-files -- target` も 0 件で、取ってきた物は `git status` に出ない。
 - `git check-ignore -v target/winget-check/release/areka-0.0.2-x64.zip` は `.gitignore:1:target` を返した（追跡の外になる理由がこの 1 行であることの裏付け）。
@@ -375,5 +448,9 @@ areka (portable) ARP\User\X64\Areka.Areka.Portable__DefaultSource 0.0.2
 （タスク 3.1・3.3・3.4 で記入）
 
 ## 見つかった件と起票
+
+| 起きたこと | どの段か | 根拠の記録の場所 | 起票した spec |
+|---|---|---|---|
+| 入れた areka（0.0.2）の MCP の `sakurascript` が、台本を受け取らずに `NG:not implemented yet` と答える。台本で `.nar` を入れる・ゴーストを切り替える・終える、のどれもできず、状態を MCP の口から作れなかった（右クリックメニューでの操作を開発者に頼む） | 段 4（タスク 3.1） | `target\winget-check\logs\3.1-mcp.log`（送った文と答え）・上の「上げ直しの実測」の「作る状態」・タグ `v0.0.2` の `crates/areka/src/mcp/sakurascript.rs` | （タスク 3.6 で記入。中身を入れる仕事は、起票済みの `areka-P0-mcp-kanade-tools` の brief に在る） |
 
 （タスク 3.6 で記入）
