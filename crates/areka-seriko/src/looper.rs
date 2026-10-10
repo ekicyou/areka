@@ -254,15 +254,88 @@ fn arm_slot<'a>(
     }
 }
 
+/// 一番上の再生 1 本（`always` 以外）の経過 `elapsed` のコマを欄へ置く。終えていれば（負の番号で
+/// 止まった・末尾に着いた）再生を捨てて終わりを記録する。刻みの進行と、引き金が終えた再生を
+/// 入れ替えるとき（[`fire_top_triggers`]）の両方がここを通る。
+fn put_top_play(
+    new_pattern: &mut PatternState,
+    playback: &mut HashMap<(ActorKey, Slot), SlotPlayback>,
+    warned_negative: &mut HashSet<(ActorKey, Slot, u32)>,
+    key: &(ActorKey, Slot),
+    anim: &LoopAnimation,
+    elapsed: u64,
+) {
+    let (scope, slot, anim_id) = (&key.0, key.1, anim.id);
+    match frame_at(&anim.frames, elapsed) {
+        // 先頭デッドライン未到達＝ベース露出。再発火時はここで残留コマが即時クリアされる（討議 #2）。
+        FrameStatus::Pending => {
+            new_pattern.remove(anim_id);
+        }
+        // 現在コマ 1 枚を搬送（4.2）。Active は再生継続、FinishedResidual は残留のうえ playback 除去。
+        FrameStatus::Active(i) | FrameStatus::FinishedResidual(i) => {
+            new_pattern.set(anim_id, pattern_frame(&anim.frames[i]));
+            // 末尾非負到達（FinishedResidual）＝もう「再生中」ではない → playback のみ除去
+            // （コマは残す・IdleResidual へ・4.4/9.4）。Active は再生継続でここは通らない。
+            let is_last = i == anim.frames.len() - 1;
+            if is_last {
+                if let Some(pb) = playback.get_mut(key) {
+                    pb.remove(&anim_id);
+                }
+                tracing::info!(
+                    scope = scope.as_str(),
+                    slot = ?slot,
+                    animation_id = anim_id,
+                    "seriko: loop 末尾残留（最終コマ保持・再抽選対象へ・要件 4.4/9.4）"
+                );
+            }
+        }
+        // 負 surface（`-1` 等）→ コマ除去＋playback 除去でベース復帰（4.3）。
+        FrameStatus::Stopped => {
+            // `-1` は正典駆動、それ以外の負値は初回のみ warn!（自アニメ停止扱い・他アニメ停止は非駆動・8.2）。
+            if let Some(i) = current_frame_index(&anim.frames, elapsed) {
+                let sid_val = anim.frames[i].surface_id;
+                if sid_val != -1 {
+                    let wkey = (scope.clone(), slot, anim_id);
+                    if warned_negative.insert(wkey) {
+                        tracing::warn!(
+                            scope = scope.as_str(),
+                            slot = ?slot,
+                            animation_id = anim_id,
+                            surface_id = sid_val,
+                            "seriko: loop `-1` 以外の負 surface（自アニメ停止扱い・他アニメ停止 `-2` は非駆動・要件 8.2）"
+                        );
+                    }
+                }
+            }
+            new_pattern.remove(anim_id);
+            if let Some(pb) = playback.get_mut(key) {
+                pb.remove(&anim_id);
+            }
+            tracing::info!(
+                scope = scope.as_str(),
+                slot = ?slot,
+                animation_id = anim_id,
+                "seriko: loop 停止（負 surface でベース復帰・要件 4.3）"
+            );
+        }
+    }
+}
+
 /// 一番上の 3 語の animation `anims` を番号の昇順に判定し、始まるものを `playback` に入れる（開始の
 /// 時刻は判定が返した時刻＝`runonce` は見え始め・`periodic` は周の境目で、`now_ms` ではない・spec:
 /// areka-P0-seriko-trigger-intervals 要件 2.1・3.1・3.5・6.1）。始まった（animation, 開始の時刻）を返す。
+///
+/// 「再生中か」は刻みの時刻でなく開始の時刻で測る: `playback` に在って、その時刻のコマがまだ終わり
+/// （負の番号で停止・末尾）でないこと（要件 3.3・3.5・5.3）。開始の時刻には終えていて、まだ片付けて
+/// いない再生は、その時刻まで進めて片付けてから（終わりの記録は刻みの進行と同じ 1 件）入れ替える。
 ///
 /// 乱数は引かない。始めない経路（隠れている・再生中・境目の前）は記録しない（要件 5.7・7.5）。
 /// 始まった後の進み方は抽選の再生と同じ（`playback` に入るだけ・要件 5.1〜5.3）。
 fn fire_top_triggers<'a>(
     state: &mut Armed,
     playback: &mut HashMap<(ActorKey, Slot), SlotPlayback>,
+    pattern: &mut PatternState,
+    warned_negative: &mut HashSet<(ActorKey, Slot, u32)>,
     key: &(ActorKey, Slot),
     anims: impl Iterator<Item = &'a LoopAnimation>,
     now_ms: u64,
@@ -271,12 +344,19 @@ fn fire_top_triggers<'a>(
     anims.sort_by_key(|a| a.id);
     let mut fired = Vec::new();
     for anim in anims {
-        let playing = playback
-            .get(key)
-            .is_some_and(|pb| pb.contains_key(&anim.id));
-        let Some(started_at_ms) = state.poll(anim, now_ms, playing, None) else {
+        // まだ片付けていない前の再生の、時刻 `at` での経過（前の再生が無ければ `None`）。
+        let prev = playback.get(key).and_then(|pb| pb.get(&anim.id)).copied();
+        let since_prev = |at: u64| prev.map(|p| at.saturating_sub(p.started_at_ms));
+        let playing_at = |at| {
+            let status = since_prev(at).map(|elapsed| frame_at(&anim.frames, elapsed));
+            matches!(status, Some(FrameStatus::Pending | FrameStatus::Active(_)))
+        };
+        let Some(started_at_ms) = state.poll(anim, now_ms, playing_at, None) else {
             continue;
         };
+        if let Some(elapsed) = since_prev(started_at_ms) {
+            put_top_play(pattern, playback, warned_negative, key, anim, elapsed);
+        }
         playback
             .entry(key.clone())
             .or_default()
@@ -503,16 +583,24 @@ impl LoopRuntime {
             if has_always && *open {
                 start_top_always(playback, table, scope, *slot, *sid, now_ms);
             }
+            // 残留（非再生アニメのコマ）を保つため現 PatternState から開始し、再生中アニメのみを更新する。
+            // 再発火したアニメは playback を持つのでここで frame_at のみに従い更新される＝残留の即時クリア。
+            let mut new_pattern = states.current_pattern(scope, *slot).clone();
+
             // 一番上の 3 語は抽選を待たずに判定する（一番上に 3 語の在る面でだけ回す）。始まった再生は
             // 下の進行がこの刻みのうちに、開始の時刻からの経過の分だけ進める（要件 6.2）。
             if let Some(state) = state.filter(|_| has_trigger) {
                 let anims = table.animations(*sid).iter().filter(is_trigger_word);
-                fire_top_triggers(state, playback, &key, anims, now_ms);
+                fire_top_triggers(
+                    state,
+                    playback,
+                    &mut new_pattern,
+                    warned_negative,
+                    &key,
+                    anims,
+                    now_ms,
+                );
             }
-
-            // 残留（非再生アニメのコマ）を保つため現 PatternState から開始し、再生中アニメのみを更新する。
-            // 再発火したアニメは playback を持つのでここで frame_at のみに従い更新される＝残留の即時クリア。
-            let mut new_pattern = states.current_pattern(scope, *slot).clone();
 
             // 再生中 animation id を昇順で処理（決定論の warn! 順・D-7 と同一方針）。
             let mut playing_ids: Vec<u32> = playback
@@ -572,59 +660,14 @@ impl LoopRuntime {
                     continue;
                 }
 
-                match frame_at(&anim.frames, elapsed) {
-                    // 先頭デッドライン未到達＝ベース露出。再発火時はここで残留コマが即時クリアされる（討議 #2）。
-                    FrameStatus::Pending => {
-                        new_pattern.remove(anim_id);
-                    }
-                    // 現在コマ 1 枚を搬送（4.2）。Active は再生継続、FinishedResidual は残留のうえ playback 除去。
-                    FrameStatus::Active(i) | FrameStatus::FinishedResidual(i) => {
-                        new_pattern.set(anim_id, pattern_frame(&anim.frames[i]));
-                        // 末尾非負到達（FinishedResidual）＝もう「再生中」ではない → playback のみ除去
-                        // （コマは残す・IdleResidual へ・4.4/9.4）。Active は再生継続でここは通らない。
-                        let is_last = i == anim.frames.len() - 1;
-                        if is_last {
-                            if let Some(pb) = playback.get_mut(&key) {
-                                pb.remove(&anim_id);
-                            }
-                            tracing::info!(
-                                scope = scope.as_str(),
-                                slot = ?slot,
-                                animation_id = anim_id,
-                                "seriko: loop 末尾残留（最終コマ保持・再抽選対象へ・要件 4.4/9.4）"
-                            );
-                        }
-                    }
-                    // 負 surface（`-1` 等）→ コマ除去＋playback 除去でベース復帰（4.3）。
-                    FrameStatus::Stopped => {
-                        // `-1` は正典駆動、それ以外の負値は初回のみ warn!（自アニメ停止扱い・他アニメ停止は非駆動・8.2）。
-                        if let Some(i) = current_frame_index(&anim.frames, elapsed) {
-                            let sid_val = anim.frames[i].surface_id;
-                            if sid_val != -1 {
-                                let wkey = (scope.clone(), *slot, anim_id);
-                                if warned_negative.insert(wkey) {
-                                    tracing::warn!(
-                                        scope = scope.as_str(),
-                                        slot = ?slot,
-                                        animation_id = anim_id,
-                                        surface_id = sid_val,
-                                        "seriko: loop `-1` 以外の負 surface（自アニメ停止扱い・他アニメ停止 `-2` は非駆動・要件 8.2）"
-                                    );
-                                }
-                            }
-                        }
-                        new_pattern.remove(anim_id);
-                        if let Some(pb) = playback.get_mut(&key) {
-                            pb.remove(&anim_id);
-                        }
-                        tracing::info!(
-                            scope = scope.as_str(),
-                            slot = ?slot,
-                            animation_id = anim_id,
-                            "seriko: loop 停止（負 surface でベース復帰・要件 4.3）"
-                        );
-                    }
-                }
+                put_top_play(
+                    &mut new_pattern,
+                    playback,
+                    warned_negative,
+                    &key,
+                    anim,
+                    elapsed,
+                );
             }
 
             // 空になった SlotPlayback は除去（Idle へ戻す・空 map を残さない）。
@@ -710,6 +753,7 @@ impl LoopRuntime {
         let LoopRuntime {
             config,
             playback,
+            warned_negative,
             parts,
             last_seen,
             armed,
@@ -755,7 +799,16 @@ impl LoopRuntime {
                     .animations(sid)
                     .iter()
                     .filter(|a| a.trigger == LoopTrigger::Runonce);
-                for (anim, started) in fire_top_triggers(state, playback, &key, runonce, at) {
+                let fired = fire_top_triggers(
+                    state,
+                    playback,
+                    &mut pattern,
+                    warned_negative,
+                    &key,
+                    runonce,
+                    at,
+                );
+                for (anim, started) in fired {
                     if let FrameStatus::Active(i) | FrameStatus::FinishedResidual(i) =
                         frame_at(&anim.frames, at.saturating_sub(started))
                     {

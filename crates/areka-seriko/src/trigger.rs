@@ -100,21 +100,26 @@ impl Armed {
 
     /// 今の判定で `anim` を始めるなら、開始の時刻を返す。
     ///
-    /// 隠れている間・`playing`（同じ animation が再生中）の間は始めない。`periodic` は再生中に来た周も
-    /// 数えだけ進めるので、飛ばした周が後から鳴ることは無い（要件 3.3）。`talk` は `talk`（文字の窓）が
-    /// 無ければ始めず、数えはここでは進めない（窓 1 つを一番上と部品の何本もの animation が読むので、
-    /// 進めるのは全部の判定の後の [`Armed::advance_talk`]）。抽選の引き金と `always` はここへ来ない
-    /// 前提で、来ても何も返さない。
+    /// 隠れている間と、同じ animation が再生中の間は始めない。「再生中か」は判定の時刻 `now_ms` でなく、
+    /// 返すことになる開始の時刻で `playing_at` に尋ねる（`runonce` は見え始め・`periodic` は周の境目・
+    /// `talk` は区切りの文字が現れた時刻）。その時刻ちょうどに終わった再生は再生中でないので、長さが
+    /// 周期ちょうどの animation も毎周鳴り、遅れた刻みが見た境目も、その時刻に再生中だったなら飛ばす
+    /// （要件 3.1・3.3・3.5・4.7）。`periodic` は再生中に来た周も数えだけ進めるので、飛ばした周が後から
+    /// 鳴ることは無い。`talk` は `talk`（文字の窓）が無ければ始めず、数えはここでは進めない（窓 1 つを
+    /// 一番上と部品の何本もの animation が読むので、進めるのは全部の判定の後の
+    /// [`Armed::advance_talk`]）。抽選の引き金と `always` はここへ来ない前提で、来ても何も返さない。
     pub(crate) fn poll(
         &mut self,
         anim: &LoopAnimation,
         now_ms: u64,
-        playing: bool,
+        playing_at: impl Fn(u64) -> bool,
         talk: Option<&TalkWindow<'_>>,
     ) -> Option<u64> {
         let since = self.visible_since?;
         match anim.trigger {
-            LoopTrigger::Runonce => (!playing && self.fired.insert(anim.id)).then_some(since),
+            LoopTrigger::Runonce => {
+                (!playing_at(since) && self.fired.insert(anim.id)).then_some(since)
+            }
             LoopTrigger::Periodic { period_ms } => {
                 let (lap, _) = lap_of(now_ms.saturating_sub(since), period_ms);
                 if lap <= self.last_lap.get(&anim.id).copied().unwrap_or(0) {
@@ -122,7 +127,7 @@ impl Armed {
                 }
                 self.last_lap.insert(anim.id, lap);
                 // 周の数は経過を周期で割った商なので、掛け戻しは今の時刻を超えない。
-                (!playing).then(|| since + lap * period_ms.get())
+                Some(since + lap * period_ms.get()).filter(|&at| !playing_at(at))
             }
             LoopTrigger::Talk { every } => {
                 let window = talk?;
@@ -135,7 +140,9 @@ impl Armed {
                 // 越えた区切りのうち最新の文字の序数（今見えている数を超えない）。前の判定までに
                 // 数え済みなら鳴らし済みか見送り済み。今見えている数が減った刻みも、ここで外れる。
                 let glyph = window.base + crossed * every - 1;
-                (glyph >= window.prev_seen && !playing).then(|| (window.wall_ms)(glyph))
+                (glyph >= window.prev_seen)
+                    .then(|| (window.wall_ms)(glyph))
+                    .filter(|&at| !playing_at(at))
             }
             LoopTrigger::Random { .. }
             | LoopTrigger::BindRandom { .. }

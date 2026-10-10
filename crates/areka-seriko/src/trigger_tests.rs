@@ -70,7 +70,7 @@ fn talk_tick(
         now_seen,
         wall_ms,
     };
-    let started = armed.poll(anim, TICK_MS, playing, Some(&window));
+    let started = armed.poll(anim, TICK_MS, |_| playing, Some(&window));
     armed.advance_talk(now_seen);
     started
 }
@@ -84,12 +84,16 @@ fn runonce_fires_once_and_starts_at_visible_since() {
     let mut armed = armed_at(1234);
     let (a, b) = (runonce(1), runonce(2));
 
-    assert_eq!(armed.poll(&a, 1250, false, None), Some(1234));
-    assert_eq!(armed.poll(&a, 1266, true, None), None, "再生中");
-    assert_eq!(armed.poll(&a, 9000, false, None), None, "再生が終わった後");
+    assert_eq!(armed.poll(&a, 1250, |_| false, None), Some(1234));
+    assert_eq!(armed.poll(&a, 1266, |_| true, None), None, "再生中");
+    assert_eq!(
+        armed.poll(&a, 9000, |_| false, None),
+        None,
+        "再生が終わった後"
+    );
 
-    assert_eq!(armed.poll(&b, 9000, false, None), Some(1234));
-    assert_eq!(armed.poll(&b, 9016, false, None), None);
+    assert_eq!(armed.poll(&b, 9000, |_| false, None), Some(1234));
+    assert_eq!(armed.poll(&b, 9016, |_| false, None), None);
 }
 
 /// 再生中の判定は印を付けない（鳴らしていないものを鳴らしたことにしない）。
@@ -98,8 +102,8 @@ fn runonce_polled_while_playing_keeps_its_one_shot() {
     let mut armed = armed_at(100);
     let a = runonce(1);
 
-    assert_eq!(armed.poll(&a, 100, true, None), None);
-    assert_eq!(armed.poll(&a, 116, false, None), Some(100));
+    assert_eq!(armed.poll(&a, 100, |_| true, None), None);
+    assert_eq!(armed.poll(&a, 116, |_| false, None), Some(100));
 }
 
 // ── periodic ─────────────────────────────────────────────────────────────
@@ -111,16 +115,20 @@ fn periodic_fires_at_each_lap_boundary_counted_from_visible_since() {
     let mut armed = armed_at(500);
     let p = periodic(3, 2000);
 
-    assert_eq!(armed.poll(&p, 500, false, None), None, "見え始めの瞬間");
-    assert_eq!(armed.poll(&p, 2499, false, None), None, "境目の 1 ms 前");
+    assert_eq!(armed.poll(&p, 500, |_| false, None), None, "見え始めの瞬間");
     assert_eq!(
-        armed.poll(&p, 2500, false, None),
+        armed.poll(&p, 2499, |_| false, None),
+        None,
+        "境目の 1 ms 前"
+    );
+    assert_eq!(
+        armed.poll(&p, 2500, |_| false, None),
         Some(2500),
         "境目ちょうど"
     );
-    assert_eq!(armed.poll(&p, 2516, false, None), None, "同じ周");
+    assert_eq!(armed.poll(&p, 2516, |_| false, None), None, "同じ周");
     assert_eq!(
-        armed.poll(&p, 4510, false, None),
+        armed.poll(&p, 4510, |_| false, None),
         Some(4500),
         "境目を 10 ms 過ぎた刻み"
     );
@@ -132,10 +140,10 @@ fn periodic_laps_are_counted_per_animation() {
     let mut armed = armed_at(0);
     let (fast, slow) = (periodic(1, 1000), periodic(2, 3000));
 
-    assert_eq!(armed.poll(&fast, 2000, false, None), Some(2000));
-    assert_eq!(armed.poll(&slow, 2000, false, None), None);
-    assert_eq!(armed.poll(&fast, 3000, false, None), Some(3000));
-    assert_eq!(armed.poll(&slow, 3000, false, None), Some(3000));
+    assert_eq!(armed.poll(&fast, 2000, |_| false, None), Some(2000));
+    assert_eq!(armed.poll(&slow, 2000, |_| false, None), None);
+    assert_eq!(armed.poll(&fast, 3000, |_| false, None), Some(3000));
+    assert_eq!(armed.poll(&slow, 3000, |_| false, None), Some(3000));
 }
 
 /// 再生中に来た周は飛ばす。飛ばした周は、再生が終わっても後から鳴らない。
@@ -144,9 +152,9 @@ fn periodic_lap_reached_while_playing_is_skipped_for_good() {
     let mut armed = armed_at(0);
     let p = periodic(3, 1000);
 
-    assert_eq!(armed.poll(&p, 1000, true, None), None, "再生中の周");
-    assert_eq!(armed.poll(&p, 1016, false, None), None, "飛ばした周");
-    assert_eq!(armed.poll(&p, 2000, false, None), Some(2000), "次の周");
+    assert_eq!(armed.poll(&p, 1000, |_| true, None), None, "再生中の周");
+    assert_eq!(armed.poll(&p, 1016, |_| false, None), None, "飛ばした周");
+    assert_eq!(armed.poll(&p, 2000, |_| false, None), Some(2000), "次の周");
 }
 
 /// 1 回の刻みで 2 周以上またいでも 1 回だけ鳴り、開始の時刻は最新の境目。
@@ -155,13 +163,39 @@ fn periodic_tick_spanning_laps_fires_once_at_the_latest_boundary() {
     let mut armed = armed_at(100);
     let p = periodic(3, 1000);
 
-    assert_eq!(armed.poll(&p, 3350, false, None), Some(3100));
+    assert_eq!(armed.poll(&p, 3350, |_| false, None), Some(3100));
     assert_eq!(
-        armed.poll(&p, 3350, false, None),
+        armed.poll(&p, 3350, |_| false, None),
         None,
         "またいだ分を積まない"
     );
-    assert_eq!(armed.poll(&p, 4100, false, None), Some(4100));
+    assert_eq!(armed.poll(&p, 4100, |_| false, None), Some(4100));
+}
+
+/// 「再生中か」は判定の時刻でなく周の境目の時刻で尋ねる: 境目ちょうどで終わっていた再生は遅れた
+/// 刻みでも鳴らし、境目ではまだ再生中だった周は、刻みの時刻に終わっていても飛ばす。
+#[test]
+fn periodic_asks_whether_it_is_playing_at_the_lap_boundary() {
+    let p = periodic(3, 1000);
+
+    let mut ended_at_boundary = armed_at(100);
+    assert_eq!(
+        ended_at_boundary.poll(&p, 1350, |at| at < 1100, None),
+        Some(1100),
+        "境目 1100 で終わっている"
+    );
+
+    let mut ended_after_boundary = armed_at(100);
+    assert_eq!(
+        ended_after_boundary.poll(&p, 1350, |at| at < 1200, None),
+        None,
+        "境目 1100 では再生中"
+    );
+    assert_eq!(
+        ended_after_boundary.poll(&p, 1360, |_| false, None),
+        None,
+        "飛ばした周"
+    );
 }
 
 // ── 隠す・現す ───────────────────────────────────────────────────────────
@@ -172,19 +206,23 @@ fn periodic_tick_spanning_laps_fires_once_at_the_latest_boundary() {
 fn hide_silences_and_show_rebases_periodic_but_keeps_the_runonce_mark() {
     let mut armed = armed_at(0);
     let (r, p) = (runonce(1), periodic(3, 1000));
-    assert_eq!(armed.poll(&r, 0, false, None), Some(0));
-    assert_eq!(armed.poll(&p, 1000, false, None), Some(1000));
+    assert_eq!(armed.poll(&r, 0, |_| false, None), Some(0));
+    assert_eq!(armed.poll(&p, 1000, |_| false, None), Some(1000));
 
     armed.hide();
-    assert_eq!(armed.poll(&p, 5000, false, None), None, "隠れている間");
-    assert_eq!(armed.poll(&r, 5000, false, None), None);
+    assert_eq!(armed.poll(&p, 5000, |_| false, None), None, "隠れている間");
+    assert_eq!(armed.poll(&r, 5000, |_| false, None), None);
 
     armed.show(5300, None);
-    assert_eq!(armed.poll(&r, 5300, false, None), None, "印は残る");
-    assert_eq!(armed.poll(&p, 5300, false, None), None, "現れた瞬間");
-    assert_eq!(armed.poll(&p, 6299, false, None), None, "古い起点の境目");
+    assert_eq!(armed.poll(&r, 5300, |_| false, None), None, "印は残る");
+    assert_eq!(armed.poll(&p, 5300, |_| false, None), None, "現れた瞬間");
     assert_eq!(
-        armed.poll(&p, 6300, false, None),
+        armed.poll(&p, 6299, |_| false, None),
+        None,
+        "古い起点の境目"
+    );
+    assert_eq!(
+        armed.poll(&p, 6300, |_| false, None),
         Some(6300),
         "新しい起点の 1 周目"
     );
@@ -195,12 +233,12 @@ fn hide_silences_and_show_rebases_periodic_but_keeps_the_runonce_mark() {
 fn armed_closed_stays_silent_until_shown() {
     let mut armed = Armed::arm(Some(100), false, None);
     let (r, p) = (runonce(1), periodic(3, 1000));
-    assert_eq!(armed.poll(&r, 100, false, None), None);
-    assert_eq!(armed.poll(&p, 4000, false, None), None);
+    assert_eq!(armed.poll(&r, 100, |_| false, None), None);
+    assert_eq!(armed.poll(&p, 4000, |_| false, None), None);
 
     armed.show(4200, None);
-    assert_eq!(armed.poll(&r, 4216, false, None), Some(4200));
-    assert_eq!(armed.poll(&p, 5200, false, None), Some(5200));
+    assert_eq!(armed.poll(&r, 4216, |_| false, None), Some(4200));
+    assert_eq!(armed.poll(&p, 5200, |_| false, None), Some(5200));
 }
 
 // ── talk ─────────────────────────────────────────────────────────────────
@@ -306,6 +344,31 @@ fn talk_boundary_reached_while_playing_is_skipped_for_good() {
     );
 }
 
+/// 「再生中か」は刻みの時刻でなく区切りの文字が現れた時刻で尋ねる。
+#[test]
+fn talk_asks_whether_it_is_playing_at_the_glyph_reveal_time() {
+    let mut armed = armed_with_text(0);
+    let t = talk(1, 3);
+    // 区切りの文字（序数 2）が現れるのは 1100。
+    let window = TalkWindow {
+        base: 0,
+        prev_seen: 0,
+        now_seen: 3,
+        wall_ms: &every_50ms,
+    };
+
+    assert_eq!(
+        armed.poll(&t, TICK_MS, |at| at <= 1100, Some(&window)),
+        None,
+        "1100 ではまだ再生中"
+    );
+    assert_eq!(
+        armed.poll(&t, TICK_MS, |at| at < 1100, Some(&window)),
+        Some(1100),
+        "1100 ちょうどで終わっている"
+    );
+}
+
 /// 数えは単調。今見えている数が減った刻み（数え始めより手前まで減った刻みも）は数えを進めず、
 /// 鳴らさない。数え済みの区切りは、数が戻っても鳴り直さない。
 #[test]
@@ -351,11 +414,11 @@ fn talk_without_a_window_or_while_hidden_stays_silent() {
     };
 
     let mut open = armed_with_text(0);
-    assert_eq!(open.poll(&t, TICK_MS, false, None), None, "窓が無い");
+    assert_eq!(open.poll(&t, TICK_MS, |_| false, None), None, "窓が無い");
 
     let mut closed = Armed::arm(Some(0), false, Some(0));
     assert_eq!(
-        closed.poll(&t, TICK_MS, false, Some(&crossed)),
+        closed.poll(&t, TICK_MS, |_| false, Some(&crossed)),
         None,
         "隠れている"
     );
@@ -364,7 +427,7 @@ fn talk_without_a_window_or_while_hidden_stays_silent() {
     part.advance_talk(3);
     assert_eq!(part.talk_window_bounds(), None);
     assert_eq!(
-        part.poll(&t, TICK_MS, false, Some(&crossed)),
+        part.poll(&t, TICK_MS, |_| false, Some(&crossed)),
         Some(1100),
         "借りた窓で鳴る"
     );

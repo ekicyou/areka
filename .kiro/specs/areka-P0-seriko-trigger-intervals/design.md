@@ -210,7 +210,7 @@ sequenceDiagram
     Note over L: playback と armed を捨てる
     A->>L: refresh(scope, slot, event_ms)
     L->>T: arm(visible_since = event_ms)
-    L->>T: poll(runonce, playing=false)
+    L->>T: poll(runonce, playing_at)
     T-->>L: Some(event_ms)
     Note over L: playback に started_at = event_ms を入れ info!
     A->>L: on_tick(now)
@@ -220,7 +220,7 @@ sequenceDiagram
 ```
 
 - 同じ番号の再指定は `apply` が `Unchanged` を返すので `on_surface_changed` も `refresh` も呼ばれない＝鳴らない（要件 2.3）。着せ替えの `refresh` は `armed` が在るので構え直さない＝鳴らない（要件 2.4）。`\s[-1]` の後の `Show` は `Changed`＝鳴る（要件 2.6）。
-- `periodic` は構えた時点の周が 0 なので切り替わった瞬間には鳴らず（要件 3.1）、`lap` が進んだ刻みで最新の境目の時刻を開始にする（要件 3.4・3.5）。再生中に周が進んだときは `last_lap` だけ進めて鳴らさない（要件 3.3）。
+- `periodic` は構えた時点の周が 0 なので切り替わった瞬間には鳴らず（要件 3.1）、`lap` が進んだ刻みで最新の境目の時刻を開始にする（要件 3.4・3.5）。境目の時刻にまだ再生中なら `last_lap` だけ進めて鳴らさない（要件 3.3・「再生中か」は刻みの時刻でなく境目の時刻で測る）。
 
 ### 文字が届いてから `talk` が鳴るまで
 
@@ -247,7 +247,7 @@ sequenceDiagram
 ```
 
 - 文字の層と同じ式なので、`\x` の後の cue（`at` が実時刻より小さい）や新しいトークで起点が前へ飛ぶ場面も文字の層と同じにずれる（研究項目 2）。
-- 区切りが同じ時刻に 2 つ以上来ても、刻みが越えた区切りのうち最新の 1 つだけを開始にする（要件 4.6）。再生中なら区切りを見送り、`seen` は進めるので後から鳴り直さない（要件 4.7）。
+- 区切りが同じ時刻に 2 つ以上来ても、刻みが越えた区切りのうち最新の 1 つだけを開始にする（要件 4.6）。区切りの文字が現れた時刻 t_k にまだ再生中なら区切りを見送り、`seen` は進めるので後から鳴り直さない（要件 4.7）。
 
 ### 部品の 2 段の評価（刻み 1 回・`advance`）
 
@@ -265,7 +265,7 @@ flowchart TD
     Changed -- no --> Drop[見えない部品の 3 語の時計と Armed を捨てる]
 ```
 
-- 2 段目で始まった再生のコマが新しい子を見せると 1 段目へ戻り、その子も同じ刻みで評価する（1 刻み遅らせない）。評価済みの集合と `Armed` の印は増えるだけなので止まる。2 段目の `poll` は同じ刻みで 2 度呼ばれても同じ答え（`runonce` は印・`periodic` は `last_lap`・`talk` は再生中の判定）。
+- 2 段目で始まった再生のコマが新しい子を見せると 1 段目へ戻り、その子も同じ刻みで評価する（1 刻み遅らせない）。評価済みの集合と `Armed` の印は増えるだけなので止まる。2 段目は同じ刻みのうちに同じ animation を 2 度 `poll` しない（評価済みの集合で止める）。`runonce` は印・`periodic` は `last_lap` で 2 度目も同じ答えだが、`talk` は開始の時刻にもう終えている animation（待ち 0 のコマ 1 枚だけなど）だと 2 度目も「鳴る」と答えるため。
 - 1 段目で評価したが最終的に見えなかった部品は、`Armed` を持たず `poll` も受けないので、再生が始まらない（要件 5.6）。見えていた部品が見えなくなったら時計と `Armed` を捨て、次に見えた刻みで `since = その刻み` の新しい `Armed` を構える（要件 5.9）。
 
 ## Requirements Traceability
@@ -286,7 +286,7 @@ flowchart TD
 | 2.6 | 非表示から表示へ戻ったら鳴らす | state（既存）・looper | `Hidden`→`Show` は `Changed` | 同上 |
 | 3.1 | 起点から数値秒ごと・瞬間には鳴らさない | 引き金 | `poll(Periodic)`: `lap_of(now − since, period)` の `lap ≥ 1` | 面に入ってから |
 | 3.2 | 離れたら止め・戻ったら新しい起点 | looper・引き金 | `Armed` を捨てる／`hide`→`show(at)` で `since` を置き直す | 同上 |
-| 3.3 | 再生中の回は飛ばす | 引き金 | `playing` なら `last_lap` だけ進める | 同上 |
+| 3.3 | 再生中の回は飛ばす | 引き金 | 境目の時刻に再生中なら `last_lap` だけ進める | 同上 |
 | 3.4 | 2 周以上またいでも 1 回 | 引き金 | 最新の周の境目 `since + lap × period` だけ | 同上 |
 | 3.5 | 数値秒ちょうど・起点をずらさない | 引き金・timeline | `lap_of`（割り算・丸めない）・`since` は出来事の時刻 | 同上 |
 | 4.1 | 数値分の文字が現れるごとに 1 回 | 文字の写し・引き金 | `TalkFeed::revealed_until`・`poll(Talk)` | 文字が届いてから |
@@ -295,13 +295,13 @@ flowchart TD
 | 4.4 | 面の切り替えで 0 から | looper | `on_surface_changed` が `Armed`（`TalkCursor` 込み）を捨て、構え直しで `base = revealed_until(at)` | 同上 |
 | 4.5 | t_k を越えた最初の刻みで `started_at = t_k` | 引き金・looper | `poll(Talk)` が返す `wall_ms(g)` を `Playback.started_at_ms` に入れ、同じ刻みの (3) が `frame_at(now − t_k)` | 同上 |
 | 4.6 | 同じ時刻の区切りは 1 回 | 引き金 | 越えた区切りのうち最新の 1 つ | 同上 |
-| 4.7 | 再生中の区切りは始め直さない | 引き金 | `playing` なら `None`・`seen` は進む | 同上 |
+| 4.7 | 再生中の区切りは始め直さない | 引き金 | t_k に再生中なら `None`・`seen` は進む | 同上 |
 | 4.8 | 他のスコープは動かさない | 文字の写し | `TalkFeed` の鍵は `ActorKey`・窓は (scope, slot) ごと | 同上 |
 | 4.9 | 非表示・`talk` 無しは何もしない・記録も増やさない | looper | `stage_slots` に無い slot は評価しない・`visible_since = None` なら `poll` は `None`・`talk` 無しの面は窓を作らない | 同上 |
 | 4.10 | 文字でない知らせは数えない・選択肢は数える | 文字の写し | `observe_cue` が読むのは `Text`・`Choice{text}`（追記）と `Clear`／`ClearAll`（継ぎ目の初期化）だけ | 同上 |
 | 5.1 | コマを番号順に 1 回流し繰り返さない | looper・parts（既存） | `frame_at`・`FinishedResidual`→playback 除去 | — |
 | 5.2 | `-1` で消して終える | looper・parts（既存） | `FrameStatus::Stopped` | — |
-| 5.3 | 再生中は頭からやり直さない | 引き金 | `poll(.., playing)` は `playing` で `None` | — |
+| 5.3 | 再生中は頭からやり直さない | 引き金 | `poll(.., playing_at)` は開始の時刻に再生中なら `None` | — |
 | 5.4 | 一番上でも部品でも同じ決まり | 引き金 | `Armed`・`poll` を `looper.rs` と `parts.rs` の両方が呼ぶ | 部品の 2 段 |
 | 5.5 | シェルでもバルーンでも同じ・閉じた窓は非表示 | looper | `stage_slots` の `open` → `Armed::hide`／`show`（`runonce` の印は残す） | — |
 | 5.6 | 見えない部品で始めない | parts | 2 段目は最終的に見える部品だけ | 部品の 2 段 |
@@ -483,12 +483,13 @@ impl Armed {
     pub(crate) fn hide(&mut self);
     /// 窓が開いた: 起点を置き直す（`periodic` の周は 0 から・`talk` は `revealed` を 0 と数え直す）。
     pub(crate) fn show(&mut self, at_ms: u64, revealed: Option<u64>);
-    /// 今の判定で `anim` を始めるなら開始の時刻を返す（`playing` が真なら始めない）。
+    /// 今の判定で `anim` を始めるなら開始の時刻を返す。`playing_at(t)` は「壁時刻 `t` にこの animation が
+    /// まだ再生中か」で、判定が返すことになる開始の時刻で尋ねる（その時刻に再生中なら始めない）。
     pub(crate) fn poll(
         &mut self,
         anim: &LoopAnimation,
         now_ms: u64,
-        playing: bool,
+        playing_at: impl Fn(u64) -> bool,
         talk: Option<&TalkWindow<'_>>,
     ) -> Option<u64>;
     /// `poll(Talk)` の後に数えた序数を進める（slot の窓 1 つにつき刻み 1 回）。`seen = max(seen, now_seen)`
@@ -500,15 +501,16 @@ impl Armed {
 
 - Preconditions: `anim.trigger` が `Random`／`BindRandom`／`Always` のとき `poll` は常に `None`（呼ばれない前提だが防御・記録なし）。
 - Postconditions（`poll` の決まり）:
-  - `Runonce`: `visible_since` が `Some(since)` で `fired` に無ければ `fired` に入れて `Some(since)`。`playing` なら入れずに `None`（構えた直後は再生中でありえない）。それ以外は `None`（要件 2.1・2.2・2.5）。
-  - `Periodic{period_ms}`: `visible_since` が `None` なら `None`。`(lap, _) = lap_of(now_ms − since, period_ms)`。`lap > last_lap[id]` なら `last_lap[id] = lap` と置き、`lap >= 1` かつ `!playing` なら `Some(since + lap × period_ms)`、`playing` なら `None`（その周は飛ばす・要件 3.1・3.3・3.4・3.5）。
-  - `Talk{every}`: `visible_since` が `None` または窓が無ければ `None`。`m = (now_seen − base) / every`・区切りの序数 `g = base + m × every − 1`。`m >= 1` かつ `g >= prev_seen` かつ `!playing` なら `Some(wall_ms(g))`（越えた区切りのうち最新の 1 つ・要件 4.1・4.5・4.6・4.7）。
+  - `Runonce`: `visible_since` が `Some(since)` で `fired` に無ければ `fired` に入れて `Some(since)`。`playing_at(since)` が真なら入れずに `None`（構えた直後は再生中でありえない）。それ以外は `None`（要件 2.1・2.2・2.5）。
+  - `Periodic{period_ms}`: `visible_since` が `None` なら `None`。`(lap, _) = lap_of(now_ms − since, period_ms)`。`lap > last_lap[id]` なら `last_lap[id] = lap` と置き、`lap >= 1` かつ境目の時刻 `at = since + lap × period_ms` で `!playing_at(at)` なら `Some(at)`、`playing_at(at)` なら `None`（その周は飛ばす・要件 3.1・3.3・3.4・3.5）。1 回の刻みで 2 周以上またいだときは、実際に在る再生だけで測る（飛ばした境目で仮に始まったはずの再生は数えない）。
+  - `Talk{every}`: `visible_since` が `None` または窓が無ければ `None`。`m = (now_seen − base) / every`・区切りの序数 `g = base + m × every − 1`。`m >= 1` かつ `g >= prev_seen` かつ `!playing_at(wall_ms(g))` なら `Some(wall_ms(g))`（越えた区切りのうち最新の 1 つ・要件 4.1・4.5・4.6・4.7）。
   - `arm`／`show` は `talk = Some(TalkCursor { base: revealed, seen: revealed })`（`revealed` が `None`＝その slot の表に `talk` が無ければ `None`）。
+- 「再生中か」の測り方（2026-10-10・実装中の改訂）: `playing_at` は刻みの時刻でなく、判定が返すことになる開始の時刻（`runonce`＝見え始め・`periodic`＝周の境目・`talk`＝`wall_ms(g)`）で尋ねる。呼び手は「再生の項目が在り、その時刻のコマがまだ終わりでない（`frame_at` が `Pending`／`Active`）」と答える。終えたのに刻みがまだ片付けていない再生を「再生中」に数えない（長さが周期ちょうどの animation も毎周鳴る・要件 3.1・3.3・4.7・5.3 の「その時刻に再生中か」の字面どおり）。
 - Invariants: `seen` は単調非減少・`fired` と `last_lap` は `hide` では残り `show` で `last_lap` だけ空になる・`talk` の `base` は `show` ごとに置き直す。
 
 **Implementation Notes**
 - Integration: 一番上は `LoopRuntime.armed: HashMap<(ActorKey, Slot), Armed>`、部品は `PartClocks` の入れ物ごとの `BTreeMap<PartKey, Armed>`（部品の `talk` は `None`・窓は slot から借りる）。
-- Validation: `trigger_tests.rs`＝`runonce`（1 回だけ・`playing` の防御・`hide`→`show` で鳴らない）・`periodic`（周 0・1・2 周またぎ・再生中の飛ばし・`show` で周が戻る）・`talk`（区切りの序数・同時 2 区切り・再生中の見送り・`base` の数え直し・窓無し）。
+- Validation: `trigger_tests.rs`＝`runonce`（1 回だけ・`playing` の防御・`hide`→`show` で鳴らない）・`periodic`（周 0・1・2 周またぎ・再生中の飛ばし・`show` で周が戻る・境目の時刻で `playing_at` を尋ねる）・`talk`（区切りの序数・同時 2 区切り・再生中の見送り・`base` の数え直し・窓無し・文字が現れた時刻で `playing_at` を尋ねる）。
 - Risks: 「`runonce` は窓が開き直しても鳴らさない」は正典が沈黙する areka の裁量（要件 5.5 は閉じた窓を 3.2・4.9 の非表示にだけ含める）。台帳の note に書く。
 
 ### 文字の写し（`areka-seriko/src/talk.rs`・新規）
@@ -596,15 +598,15 @@ impl LoopRuntime {
 
 - 「今」＝`event_ms()`、時計が無ければ `last_seen`、どちらも無ければ写さない（刻みが 1 度も来ていない起動直後の cue は起点を作らない＝次の cue で作る。文字の層も epoch 未確立の間は何も見せない）。`observe_cue` は記録を出さない（文字ごとの記録を増やさない・要件 4.9・7.3。担当外の読み飛ばしの `debug!` は既存の腕がこれまでどおり 1 件出すだけ）。
 - `on_surface_changed(scope, slot)`: `playback` と `warned_negative` に加えて `armed.remove(key)`（要件 2.5・3.2・4.4）。
-- `refresh(scope, slot, at_ms, states)`: 面が在り、かつ**構える条件**＝「一番上に 3 語が在る（`top_has_trigger(table, sid)`）**または** その slot の表に `talk` が在る（`table.has_talk()`）」を満たす slot でだけ構える（満たさない slot は `armed` を作らず記録も出さない）。後ろの条件は、一番上に 3 語が無く部品にだけ `talk` が在る面（検体 9101＋9102）で slot の文字の数えを持つため（部品は slot の窓を借りる・要件 5.4）。`talk` を 1 本も書かない表（同梱の検体 4 本）では今までどおり何も生まれない。`armed` に無ければ `Armed::arm(at_ms, open, revealed)` を入れて `debug!(scope, slot, surface_id, at_ms, "seriko: trigger 面に入った（引き金を構えた）")`。在れば `open` と `visible_since` の食い違いを `hide`／`show(at)` で直す（窓の知らせ）。次に、`at_ms` が在れば一番上の `Runonce` を `poll`（`playing = playback に在る`）し、`Some(at)` なら `playback` に入れて `info!(scope, slot, animation_id, "seriko: trigger runonce を鳴らした（再生開始・要件 2.1）")`、`frame_at(frames, 0)` が `Active`／`FinishedResidual` ならそのコマを `pattern` に置く（`Pending` なら次の刻みが置く）。`periodic`・`talk` は `refresh` では鳴らさない（周 0・窓なし）。面が無い（`\s[-1]` の後）なら今までどおり。
-- `on_tick` の (3): 門に `top_has_trigger(table, sid)`（`Runonce`／`Periodic`／`Talk` が 1 本でも在る）を足す。`top_has_always` と `top_has_trigger` は `animations(sid)` の 1 回の走査で両方の真偽を返す（刻みごとに 2 度走査しない）。**構える条件（`top_has_trigger(table, sid) || table.has_talk()`）が偽の slot は ⑴〜⑶・⑹ を飛ばし `armed` を作らない**（`random` が再生中でも・動く部品が見えていても）。`top_has_trigger` が偽で `has_talk` だけが真の slot は ⑴・⑵ と部品への窓の受け渡しだけを行い、一番上の `poll` は回さない。slot ごとに ⑴ `armed` が無ければ `now_ms` で構える（表の差し替えの後の最初の刻み）、`open` を同期 ⑵ その slot の表に `talk` が在り `feeds[scope]` と `epoch.talk_time(now)` が在れば `TalkWindow { base, prev_seen: seen, now_seen: revealed_until(t), wall_ms }` を作る（`armed.talk` が `None` のまま＝構えた時点で起点が未確立だったときは、ここで `TalkCursor { base: now_seen, seen: now_seen }` を遅延生成する）⑶ 一番上の 3 語の anim を番号の昇順に `poll`（`playing = playback に在る`）し、`Some(at)` なら `playback` に `Playback { started_at_ms: at }` を入れて記録（`runonce`／`periodic` は `info!`・`talk` は `debug!`・要件 7.3）⑷ 既存の進行（`frame_at(now − started)`）がそのまま続く ⑸ 部品へ `parts.advance(.., talk_window.as_ref(), ..)` ⑹ `armed.advance_talk(now_seen)`。刻みの最後に各スコープの `feeds` を刈り込む。
+- `refresh(scope, slot, at_ms, states)`: 面が在り、かつ**構える条件**＝「一番上に 3 語が在る（`top_has_trigger(table, sid)`）**または** その slot の表に `talk` が在る（`table.has_talk()`）」を満たす slot でだけ構える（満たさない slot は `armed` を作らず記録も出さない）。後ろの条件は、一番上に 3 語が無く部品にだけ `talk` が在る面（検体 9101＋9102）で slot の文字の数えを持つため（部品は slot の窓を借りる・要件 5.4）。`talk` を 1 本も書かない表（同梱の検体 4 本）では今までどおり何も生まれない。`armed` に無ければ `Armed::arm(at_ms, open, revealed)` を入れて `debug!(scope, slot, surface_id, at_ms, "seriko: trigger 面に入った（引き金を構えた）")`。在れば `open` と `visible_since` の食い違いを `hide`／`show(at)` で直す（窓の知らせ）。次に、`at_ms` が在れば一番上の `Runonce` を `poll`（`playing_at(t)`＝`playback` に在り、`frame_at(frames, t − started)` が `Pending`／`Active`）し、`Some(at)` なら `playback` に入れて `info!(scope, slot, animation_id, "seriko: trigger runonce を鳴らした（再生開始・要件 2.1）")`、`frame_at(frames, 0)` が `Active`／`FinishedResidual` ならそのコマを `pattern` に置く（`Pending` なら次の刻みが置く）。`periodic`・`talk` は `refresh` では鳴らさない（周 0・窓なし）。面が無い（`\s[-1]` の後）なら今までどおり。
+- `on_tick` の (3): 門に `top_has_trigger(table, sid)`（`Runonce`／`Periodic`／`Talk` が 1 本でも在る）を足す。`top_has_always` と `top_has_trigger` は `animations(sid)` の 1 回の走査で両方の真偽を返す（刻みごとに 2 度走査しない）。**構える条件（`top_has_trigger(table, sid) || table.has_talk()`）が偽の slot は ⑴〜⑶・⑹ を飛ばし `armed` を作らない**（`random` が再生中でも・動く部品が見えていても）。`top_has_trigger` が偽で `has_talk` だけが真の slot は ⑴・⑵ と部品への窓の受け渡しだけを行い、一番上の `poll` は回さない。slot ごとに ⑴ `armed` が無ければ `now_ms` で構える（表の差し替えの後の最初の刻み）、`open` を同期 ⑵ その slot の表に `talk` が在り `feeds[scope]` と `epoch.talk_time(now)` が在れば `TalkWindow { base, prev_seen: seen, now_seen: revealed_until(t), wall_ms }` を作る（`armed.talk` が `None` のまま＝構えた時点で起点が未確立だったときは、ここで `TalkCursor { base: now_seen, seen: now_seen }` を遅延生成する）⑶ 一番上の 3 語の anim を番号の昇順に `poll`（`playing_at(t)`＝`playback` に在り、`frame_at(frames, t − started)` が `Pending`／`Active`）し、`Some(at)` なら（開始の時刻には終えていてまだ片付けていない同じ animation の再生が `playback` に残っていれば、その時刻まで進めて片付けてから＝終わりの記録は進行と同じ 1 件）`playback` に `Playback { started_at_ms: at }` を入れて記録（`runonce`／`periodic` は `info!`・`talk` は `debug!`・要件 7.3）⑷ 既存の進行（`frame_at(now − started)`）がそのまま続く ⑸ 部品へ `parts.advance(.., talk_window.as_ref(), ..)` ⑹ `armed.advance_talk(now_seen)`。刻みの最後に各スコープの `feeds` を刈り込む。
 - 進行相の記録: `FinishedResidual`／`Stopped` の `info!` は、`anim.trigger` が `Talk` のときだけ `debug!`（文言は同じ・要件 7.3）。`runonce`／`periodic` は `random` と同じ `info!`。
 - `forget_slot_kind(slot)`: `armed` のその slot 種を捨てる。`has_talk` は `shell_table.has_talk() || balloon_tables.values().any(has_talk)` で組み直す（`new`・`replace_*` の両方）。
 - 門（要件 8.1）: 3 語の無い表は `has_triggers = false`・`has_talk = false` なので、`observe_cue` は即戻り、`refresh` は `is_continuous()` の偽で即 `None`、(3) は今までどおりの条件で飛ばす。`armed` は作られない。構える 3 か所（`refresh`・(3) ⑴・部品の 2 段目）はいずれも構える条件（一番上は「3 語が在る、または表に `talk` が在る」・部品は「その部品に 3 語が在る」）を先に見るので、動く部品や `random` の再生で門を通る slot（emo2）でも `armed` も「面に入った」の `debug!` も生まれない（設計レビュー Critical Issue 2）。
 
 **Implementation Notes**
 - Integration: `looper.rs` は 682 行。足すのは `observe_cue`・構える／同期する補助・窓を作る補助・(3) の `poll` の輪で 120 行ほど（1,000 行以下）。
-- Validation: `looper_trigger_tests.rs`（`rt.on_tick(now, &mut states)` と `rt.refresh(..)` の直呼び・偽の刻み）＝`runonce` の最初の表示・戻ってきたとき・着せ替えの `refresh` で鳴らない／`periodic` の起点・N 秒ごと・面を離れた停止・再生中の飛ばし・2 周またぎ／`talk` の区切りと `started_at = t_k`・同時 2 区切り・再生中・面の切り替えの数え直し／3 語の無い表で `armed` が空のまま（`random` が再生中でも・動く部品が見えていても）・乱数の消費 0・emo2 の既存の檻の記録の件数が変わらない／`talk` の終わりの記録が `debug!`。
+- Validation: `looper_trigger_tests.rs`（`rt.on_tick(now, &mut states)` と `rt.refresh(..)` の直呼び・偽の刻み）＝`runonce` の最初の表示・戻ってきたとき・着せ替えの `refresh` で鳴らない／`periodic` の起点・N 秒ごと・面を離れた停止・再生中の飛ばし・2 周またぎ・長さが周期ちょうどでも毎周鳴る・境目の時刻に再生中なら遅い刻みでも飛ばす・前の再生の終わりと境目をまたいだ遅い刻みで 1 回／`talk` の区切りと `started_at = t_k`・同時 2 区切り・再生中・面の切り替えの数え直し／3 語の無い表で `armed` が空のまま（`random` が再生中でも・動く部品が見えていても）・乱数の消費 0・emo2 の既存の檻の記録の件数が変わらない／`talk` の終わりの記録が `debug!`。
 - Risks: `refresh` の `at_ms` が `None`（時計も刻みも無い）のときは構えない＝`runonce` は次の刻みで鳴る（本番は時計が常に在る）。
 
 ### 部品の配線（`areka-seriko/src/parts.rs`）
@@ -637,7 +639,7 @@ fn rebuild(.., evaluate: impl FnMut(PartKey, &mut PatternState), arm: impl FnMut
 ```
 
 - 1 段目 `evaluate` の `Gate::Trigger`: 抽選の塊（`crossed && open && !playing && should_fire`）を通らず、`look` の結果だけを書く（`Playing`→コマ・`Finished`→`Residual`・`Stopped`→時計を消す＝今の抽選の anim と同じ後半）。
-- 2 段目 `arm(part)`: その部品の animation の列に `Runonce`／`Periodic`／`Talk` が 1 本も無ければ何もしない（`false`・`armed` を作らない）。在れば、入れ物の `armed[PartKey::Surface(part)]` が無ければ `Armed::arm(Some(now_ms), open, None)` で構える（`debug!`）。在れば `open` を同期。その部品の 3 語の anim を番号の昇順に `poll(anim, now, playing = Playing が在る, talk)` し、`Some(at)` なら `clocks.insert(key, Playing { started_at_ms: at })`・`look` でコマを書く・記録（`runonce`／`periodic` は `info!`・`talk` は `debug!`）。コマを 1 つでも書いたら `true`。
+- 2 段目 `arm(part)`: その部品の animation の列に `Runonce`／`Periodic`／`Talk` が 1 本も無ければ何もしない（`false`・`armed` を作らない）。在れば、入れ物の `armed[PartKey::Surface(part)]` が無ければ `Armed::arm(Some(now_ms), open, None)` で構える（`debug!`）。在れば `open` を同期。その部品の 3 語の anim を番号の昇順に `poll(anim, now, playing_at, talk)`（`playing_at(t)`＝`Playing` が在り、その時刻の `look` がまだ終えていない） し、`Some(at)` なら `clocks.insert(key, Playing { started_at_ms: at })`・`look` でコマを書く・記録（`runonce`／`periodic` は `info!`・`talk` は `debug!`）。コマを 1 つでも書いたら `true`。
 - `rebuild` の外側の輪: 1 段目の輪 → 見えない部品のコマを外す → 動く絵の子 → `table.has_triggers()` が真のときだけ `visible` の各部品に `arm`（偽なら 2 段目を呼ばず輪は 1 回で終わる＝今の形） → `true` が 1 つでもあれば 1 段目の輪へ戻る（`visible_parts` を引き直し、新しく見えた部品だけ `evaluate`）→ 無ければ終わり。
 - `refresh`（切り替え直後・出来事の時刻）: 2 段目は `create_at`（開いていれば `at_ms`）で構え、`Runonce` だけが鳴る（`periodic` は周 0・`talk` は窓なし）。
 - 捨てる: `drop_unseen_finite` を `drop_unseen_transient` に広げ、見えない部品の「回数つきの `always`」と「3 語」の時計を捨て、見えない部品の `armed` も捨てる（要件 5.6・5.9）。`drop_finite_if_closed`（窓が閉じた）は 3 語の時計を捨て、`armed` は `hide`（`runonce` の印は残す）。`clear(slot)` は `armed` も捨てる。`drop_finite`（面が隠れた・`\s[-1]`）は 3 語の時計と `armed` を捨てる。
@@ -746,7 +748,7 @@ fn rebuild(.., evaluate: impl FnMut(PartKey, &mut PatternState), arm: impl FnMut
 - 議題 3（`runonce` の口）: R1 でも R2 でもなく、`on_surface_changed` が `Armed` を捨てることで「面に入った」を表す。`refresh` の署名は不変。
 - 議題 4（部品の門）: P1＋P3。`rebuild` を 2 段にし、見えると確定した部品だけが引き金を受け、見えなくなった部品の 3 語の時計と `Armed` を捨てる。`seriko-rebuild-hidden-lottery` は乱数の並びの話だけ残す。
 - 議題 5（無効な数値）: N2。`Other("talk,abc")` の原文を運び、表で `warn!`。
-- 議題 6（周の数え）: `last_lap` を anim ごとに持ち、再生中の周も `last_lap` に記す（飛ばした周を後から鳴らさない）。
+- 議題 6（周の数え）: `last_lap` を anim ごとに持ち、境目の時刻に再生中だった周も `last_lap` に記す（飛ばした周を後から鳴らさない）。「再生中か」は境目の時刻で測る（2026-10-10・4.1 の査読を受けた実装中の改訂。初版の「`playback` に在る＝まだ片付けていない」は、長さが周期ちょうどの animation を 2 周期に 1 回しか鳴らさず要件 3.1 に反した）。
 - 議題 7（文字の列）: 1 文字 1 要素（台本の秒・`f64`）＋刈り込み。塊単位の圧縮は、文字の層と同じ式を同じ形で持つ方が検証しやすいので採らない。
 - 議題 8（部品の `talk` の数え）: slot の窓を借りる（部品が後から見えても数え直さない。5.9 が挙げるのは `runonce`・`periodic` だけ）。
 - 議題 9（`sometimes`／`rarely` の note）: 直す（要件 10.1 に明記済み）。

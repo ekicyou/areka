@@ -314,6 +314,123 @@ fn periodic_skips_a_lap_while_still_playing() {
     assert_eq!(started(&rt, Slot::Shell, 1), Some(3030), "次の境目で鳴る");
 }
 
+/// 面 0 の一番上: `periodic,1` で、長さが周期ちょうどの再生（401 → 400ms で 402 → 600ms で `-1`・
+/// 全部で 1000ms）。
+const EXACT_PERIODIC_STOP: &str = "surface0\n{\n\
+    animation1.interval,periodic,1\n\
+    animation1.pattern0,overlay,401,0,0,0\n\
+    animation1.pattern1,overlay,402,400,0,0\n\
+    animation1.pattern2,overlay,-1,600,0,0\n}\n\
+    surface401\n{\n}\nsurface402\n{\n}\n";
+
+/// [`EXACT_PERIODIC_STOP`] と同じ長さで、`-1` の代わりに末尾のコマ（403）が残る再生。
+const EXACT_PERIODIC_RESIDUAL: &str = "surface0\n{\n\
+    animation1.interval,periodic,1\n\
+    animation1.pattern0,overlay,401,0,0,0\n\
+    animation1.pattern1,overlay,402,400,0,0\n\
+    animation1.pattern2,overlay,403,600,0,0\n}\n\
+    surface401\n{\n}\nsurface402\n{\n}\nsurface403\n{\n}\n";
+
+/// 長さが周期ちょうどの再生は、終わりと次の境目が同じ時刻になる。境目の時刻にはもう再生中でないので
+/// 毎周鳴る（1 周おきにならない）。終えたのにまだ片付けていなかった前の再生は、終わりの記録を 1 件
+/// 残して入れ替わり、絵は新しい再生の経過のコマになる（要件 3.1・3.3・3.5・6.1・6.2）。
+#[test]
+fn periodic_as_long_as_its_period_fires_at_every_lap() {
+    for (text, end) in [
+        (EXACT_PERIODIC_STOP, "seriko: loop 停止"),
+        (EXACT_PERIODIC_RESIDUAL, "seriko: loop 末尾残留"),
+    ] {
+        let (mut rt, mut states) = shell_runtime(text);
+        let logs = capture_logs(|| {
+            rt.on_tick(0, &mut states);
+            switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30);
+            // （刻みの時刻, 開始の時刻, 欄の絵）: 境目を過ぎた刻み・周の途中の刻み・境目ちょうどの刻み
+            // （3030）・前の再生の終わり＝境目をまたいだ遅い刻み（4500）。
+            for (now, start, shown) in [
+                (1040, 1030, 401),
+                (1500, 1030, 402),
+                (2040, 2030, 401),
+                (2500, 2030, 402),
+                (3030, 3030, 401),
+                (4500, 4030, 402),
+            ] {
+                rt.on_tick(now, &mut states);
+                assert_eq!(started(&rt, Slot::Shell, 1), Some(start), "{now}");
+                assert_eq!(cell(&states, Slot::Shell, 1), Some(shown), "{now}");
+            }
+        });
+        assert_eq!(
+            count(&logs, "seriko: trigger periodic を鳴らした"),
+            4,
+            "{logs:?}"
+        );
+        assert_eq!(
+            count(&logs, end),
+            3,
+            "入れ替わった再生 1 本につき終わりの記録 1 件: {logs:?}"
+        );
+    }
+}
+
+/// 境目の時刻にまだ再生中だった周は、その境目を見る刻みが再生の終わりより後に来ても飛ばす
+/// （「再生中か」は刻みの時刻でなく境目の時刻で測る・要件 3.3・3.5）。
+#[test]
+fn periodic_skips_a_lap_playing_at_the_boundary_even_when_seen_by_a_late_tick() {
+    let (mut rt, mut states) = shell_runtime(LONG_PERIODIC);
+    rt.on_tick(0, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
+    rt.on_tick(1040, &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(1030));
+
+    // 再生は 2530 で終わる。境目 2030 を見る刻みは、その後の 2600。
+    rt.on_tick(2600, &mut states);
+    assert_eq!(
+        started(&rt, Slot::Shell, 1),
+        None,
+        "境目 2030 では再生中だった＝始めない"
+    );
+    assert_eq!(cell(&states, Slot::Shell, 1), Some(402), "末尾のコマが残る");
+    rt.on_tick(2700, &mut states);
+    assert_eq!(
+        started(&rt, Slot::Shell, 1),
+        None,
+        "飛ばした周は後から鳴らない"
+    );
+
+    rt.on_tick(3040, &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(3030), "次の境目で鳴る");
+}
+
+/// 前の再生の終わりと次の境目の両方をまたいだ刻み（終わり < 境目 < 刻み）は、境目で 1 回だけ鳴らす。
+/// 前の再生の終わりの記録は 1 件（要件 3.4・3.5・6.2）。
+#[test]
+fn periodic_fires_at_the_boundary_when_a_late_tick_spans_the_previous_end() {
+    let (mut rt, mut states) = shell_runtime(TRIGGERS);
+    let logs = capture_logs(|| {
+        rt.on_tick(0, &mut states);
+        switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30);
+        rt.on_tick(1040, &mut states);
+        assert_eq!(started(&rt, Slot::Shell, 1), Some(1030));
+
+        // 再生は 1430 で終わり、次の境目は 2030。その間に刻みは来ない。
+        rt.on_tick(2100, &mut states);
+        assert_eq!(started(&rt, Slot::Shell, 1), Some(2030), "境目から");
+        assert_eq!(cell(&states, Slot::Shell, 1), Some(401), "経過 70");
+        rt.on_tick(2140, &mut states);
+        assert_eq!(cell(&states, Slot::Shell, 1), Some(402), "経過 110");
+    });
+    let periodic: Vec<String> = logs
+        .into_iter()
+        .filter(|l| l.contains("animation_id=1"))
+        .collect();
+    assert_eq!(
+        count(&periodic, "seriko: trigger periodic を鳴らした"),
+        2,
+        "{periodic:?}"
+    );
+    assert_eq!(count(&periodic, "seriko: loop 停止"), 1, "{periodic:?}");
+}
+
 /// 1 回の刻みで境目を 2 つまたいでも、始めるのは 1 回だけ（開始は最新の境目）で、またいだ数を
 /// 積み上げない（要件 3.4）。
 #[test]
