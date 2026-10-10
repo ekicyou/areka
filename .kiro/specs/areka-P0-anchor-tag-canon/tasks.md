@@ -151,14 +151,14 @@
   - _Depends: 1.1, 4.1_
   - _Requirements: 7.3, 7.4_
 
-- [ ] 7. 全体の確かめ
+- [x] 7. 全体の確かめ
 - [x] 7.1 決定論テストと約束の照合
   - 触った crate（`areka-parsers`・`dola`・`areka-sakura`・`areka-ghost`・`areka-emo-text`・`areka-kanade`・`areka-mcp`・`areka`・`ukadoc-survey`）の `cargo test`・`cargo clippy`・`cargo fmt --check` を通し、最後に全体テストを 1 回だけ回す
   - 触ったファイルがどれも 1,000 行未満。ウェーブの約束で触らないファイル（`emo2_boot` の全部・`menu/`・seriko・`shell/` の読み手）と、設計が無改変とした所（装飾の `look.rs`・時間切れの抑止の観測・選択肢の柵と帳簿）に差分が無い
   - 完了の状態: 上のコマンドがすべて緑で、`git diff --stat main` が設計の「File Structure Plan」の一覧（作り直した報告を含む）に、各タスクが名指しした追随ファイル（1.2 のゴーストの結合テストの檻・4.2 の状態の組み立てと檻・3.4 と 5.1 が足す既存のテストのファイル）を加えたものと一致する
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7_
 
-- [ ] 7.2 実機で 1 周を確かめる
+- [x] 7.2 実機で 1 周を確かめる
   - 検体: 辞書にアンカーを持つ検体ゴーストを選ぶ。無ければワークツリーの `target\` の下に、`\_a` を使う台詞と `OnAnchorSelectEx` の答えを持つ小さな検体を置く（検体・一時フォルダは `target\` の下だけ）
   - `AREKA_NO_ALERT=1`・`RUST_LOG=warn,areka=info,kanade=info,areka_sakura=warn` で起動し、⑴ アンカーに下線が出てマウスを乗せると強調される、⑵ 押す → ゴーストが答える → 台詞が置き換わる、⑶ 話している最中に押しても台詞が中断されない、を人が見て、ログ（`anchor_selected`・`anchor_accepted`）で裏取りする
   - areka の未対応のためにうまくいかなかった件が出たら、範囲外でも `/kiro-discovery` へ起票する
@@ -227,3 +227,9 @@
 - 検証で直した設計の古い記述: `Final{id}`（「そのほかの決め」）／dola の版（「minor」を外し、`#[non_exhaustive]` でないことと `release-cycle` が決めることを 3 か所に）／`send_selection` の記録は種類ごとの名前／実機は 3 点／新しいファイルの一覧に `anchor_step_tests.rs`・`events_anchor_tests.rs`。
 - 7.2 に足す観点（検証から）: ⑴ バルーンが時間切れで消えた後、リンクのあった所を押しても `anchor_selected` が出ない（押せる範囲を持ったまま時間切れで隠れるのはアンカーが初めて・要件 2.7 のこの道は檻が無い）、⑵ アンカーがあっても時間切れが遅れない（要件 2.6）、⑶ 最下行のリンクは下線が無くても押せる。
 - 7.2（呼び方）: `target\anchor-signoff\` の道具（`run.ps1`・`check-log.ps1`・`auto.ps1`・`mcp.ps1`）は自分の置き場所を基準に動く（`$PSScriptRoot`・`git -C`・`Push-Location`）ので、どのディレクトリからでも絶対パスで呼べる。人へ渡すコマンドは相対パスでなく絶対パスで書く（開発者の指摘・2026-10-10）。
+- 7.2（結果・2026-10-10 20:14〜20:17・開発者が実機で操作）: 開発者の所見は「多分大丈夫」、`check-log.ps1` は `OK`。ログ（`target\anchor-signoff\run-human.log`・追跡外なので要点をここへ写す）: 押下 37 回で `anchor_selected` 37 件・`anchor_accepted` 37 件（id と文字は押した所のもの）・ERROR 0 件・`anchor_` の warn／error 0 件・中断の記録（`user_break`）0 件・`unknown_talk_done` 0 件。WARN は既存の 3 件だけ（`null.png` の全透明 2・折返し基準 1）。
+  - ⑵ 押す → 答える → 置き換わる: `id=detail label=くわしく` → `anchor_accepted plan=Canonical` → `steady_talk talk_id=2 origin="OnAnchorSelectEx"`／`id=item label=品物 references_len=2` → `steady_talk talk_id=4 origin="OnAnchorSelect"`（`OnAnchorSelectEx` が 204 → `OnAnchorSelect`）／`id=OnAnchorDemo label=デモ references_len=1` → `plan=Named` → `origin="OnChoiceEvent"`／`id=nohandler label=答えなし` は受理だけで台詞は始まらない／`id=wrap label=行をまたぐ`（改行は文字に入らない）→ `origin="OnAnchorSelect"`。
+  - ⑶ 話している最中: `talk_id=10`（「長い」・20:14:50）の最中、:52 に `id=nohandler label=答なし` → 置き換えなし・中断なし、:55 に `id=detail label=台本` → `steady_talk_replace talk_id=11 origin="OnAnchorSelectEx"`。別の回は最中の `id=item label=品物` → `steady_talk_replace talk_id=14 origin="OnAnchorSelect"`。
+  - ⑴ 下線は無人の撮影（`out-auto\menu.png`・1〜3 行目）で確認。マウスを乗せたときの強調は、記録（info）にも画像にも残らないので、開発者の目視（「多分大丈夫」）が根拠。
+  - 最下行のリンク（`OnAnchorLong`「長い」・`OnAnchorChoice`「比べる」）は下線が無くても押せた（複数回）。起動直後の台詞のアンカーの字の大きさと色は、撮影ではほかの字と同じだった（装着前の見た目の件は出なかった）。
+  - この走行で踏んでいないもの: バルーンが時間切れで消えた後の押下（台詞が置き換わり続けて時間切れが来なかった）・アンカーの左ダブルクリック（D-4）。どちらも檻または互換記録の記述が根拠のまま。
