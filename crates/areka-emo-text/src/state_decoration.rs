@@ -260,14 +260,21 @@ impl ActorTextState {
     /// `actor` は R6.3 の記録（上下付きが有効なまま文字が追記された）に使う——ここが
     /// 「文字が追記された」ことを知る唯一の地点だからである。`quiet` が真（空回しの写し）なら
     /// その `warn!` を出さない（記録済みの集合は同じく更新する・要件 2.8）。
+    ///
+    /// アンカー（`\_a`）の範囲が開いている間は、いま効いている見た目の**写し**に下線を立てて
+    /// 登録する（アンカーの既定の見た目）。作者の装飾の状態そのものは変えないので、
+    /// `\f[default]`／`\f[disable]` の戻し先にも閉じた後の文字にも残らない。範囲の中で作者が
+    /// 下線を切っても、アンカーの下線が勝つ。
     pub(super) fn push_current_style(&mut self, actor: &ActorKey, glyph_count: usize, quiet: bool) {
         if glyph_count == 0 {
             return;
         }
         self.warn_script_once(actor, quiet);
-        let id = self
-            .styles
-            .intern(&self.decor.current, &self.decor.layers.default);
+        let mut look = std::borrow::Cow::Borrowed(&self.decor.current);
+        if self.anchor_is_open() {
+            look.to_mut().underline = true;
+        }
+        let id = self.styles.intern(&look, &self.decor.layers.default);
         self.glyph_styles
             .extend(std::iter::repeat_n(id, glyph_count));
     }
