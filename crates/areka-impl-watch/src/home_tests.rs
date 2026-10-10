@@ -123,6 +123,8 @@ fn a_rooted_value_without_a_drive_is_refused_before_anything_is_created() {
 /// 設計が名指す綴り（`foo`・`.`・`..\x`・`\foo`・`C:foo`・`/c/x`）。断られなければカレントや
 /// ドライブの根（`target\` の外）にフォルダができる値なので、先に「一時フォルダの中に落ちる値」で
 /// 同じ判定を通し、断ると分かってから渡す（判定が壊れていれば、渡す前に赤で止まる）。
+/// ドライブの根に落ちる綴り（`\foo`・`/c/x`）は、一時フォルダに落ちる形と判定の表だけで確かめ、
+/// 字面のままは渡さない（判定の後退がドライブの根にフォルダを作る道を残さない）。
 #[cfg(windows)]
 #[test]
 fn the_spellings_named_by_the_design_are_refused_and_create_nothing() {
@@ -147,9 +149,7 @@ fn the_spellings_named_by_the_design_are_refused_and_create_nothing() {
         name.clone(),
         ".".to_owned(),
         format!("..\\{name}"),
-        format!("\\{name}"),
         format!("{drive}{name}"),
-        format!("/c/{name}"),
     ] {
         // 断られなければ作られる道筋のうち、いま無いもののいちばん上（`.` には無い）。
         let lands = std::path::absolute(&value).expect("綴れる");
