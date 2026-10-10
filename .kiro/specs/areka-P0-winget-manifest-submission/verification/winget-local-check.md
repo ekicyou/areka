@@ -12,10 +12,13 @@
 
 | 設定 | 変える前の値 | 変える前の値を読んだ時刻 | オンを確かめた時刻 | 戻した時刻 | 戻した後の値 |
 |---|---|---|---|---|---|
-| winget の `LocalManifestFiles`（管理者の端末で `winget settings --enable LocalManifestFiles`） | `false` | 11:44:01 | （この後に記入） | （この後に記入） | （この後に記入） |
+| winget の `LocalManifestFiles`（管理者の端末で `winget settings --enable LocalManifestFiles`） | `false` | 11:44:01 | 12:57:16 に `true` を確認 | （この後に記入） | （この後に記入） |
 
 - 変える前の値の読み方: `winget settings export`（読むだけ）が返す JSON の `adminSettings.LocalManifestFiles`。同じ JSON の管理者向けの設定は 6 つで、6 つとも `false` だった（`BypassCertificatePinningForMicrosoftStore`・`ConfigurationProcessorPath`・`InstallerHashOverride`・`LocalArchiveMalwareScanOverride`・`LocalManifestFiles`・`ProxyCommandLineOptions`）。
 - 開発者に打ってもらうコマンド（管理者の端末）: `winget settings --enable LocalManifestFiles`
+- オンにしたのは開発者（管理者の端末で上のコマンドを打った）。開発者が伝えた winget の答えは 1 行で、`管理者設定 'LocalManifestFiles' を有効にしました。`（この文は AI が自分で見た物ではなく、開発者から聞いた物）。
+- オンの確かめ（AI が読んだ・12:57:16）: `winget settings export` の `adminSettings.LocalManifestFiles` が `true`（終了コード 0・標準エラー 0 バイト）。
+- **変えた設定はこの 1 つだけ**。同じ回の読みで、管理者向けの設定 6 つのうち `true` は `LocalManifestFiles` の 1 つだけで、残りの 5 つは変える前と同じ `false`。下の「読んで記録するだけの設定」も同じ時刻に読み直して、変える前と同じだった（開発者モードは値 `0`＝オフ・利用者の設定ファイルは無いまま＝フォルダ 4 つ・ファイル 0 件）。
 - 組織の決まり（グループ ポリシー）で winget の設定が固定されていないことも読んだ（11:45:25）。`HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppInstaller` と `HKCU:\SOFTWARE\Policies\Microsoft\Windows\AppInstaller` はどちらもキーが無い。
 
 （戻した時刻と戻した後の値は、タスク 3.5 で記入）
@@ -51,6 +54,7 @@
 見方が当たりを出せること（0 と書く前に確かめた）:
 
 - 同じ形の `winget list --name PowerShell` は 2 行を返し、終了コード 0 だった。＝この引き方は、入っている物が在れば行を出す。
+- 打った字面のこと: areka を引いた 2 回の `winget list` には `--accept-source-agreements --disable-interactivity` を、`PowerShell` を引いた 1 回には `--disable-interactivity` を付けていた。`--accept-source-agreements` は要らなかった（付けなかった 3 回目も同じ機械で問いを出さずに通った）ので、この後の winget のコマンドには付けない。
 - 新しいプロセスでの解決は、同じプロセスの中で `Get-Command pwsh -All` が 2 件・`Get-Command winget -All` が 1 件を返した。＝組み直した PATH は効いていて、在るコマンドは見つかる。
 - 出た文は `target\winget-check\logs\pre-2.1-*.txt` に取ってある（winget の文は UTF-8 として読んだ）。
 
@@ -222,6 +226,8 @@ steering の直し（要件 2.7）: `.kiro/steering/structure.md` の「その�
 | Release `v0.0.2` から取ってきた zip 2 つと `.sha256` 2 つ | `target\winget-check\release\` | 1.1 |
 | `winget validate` が出した文（雛形の分と、赤を出せることを見た分） | `target\winget-check\logs\validate-1.2*.txt` | 1.2 |
 | 赤を出せることを見るための、わざと壊した雛形の写し 4 ファイル | `target\winget-check\validate-negative\` | 1.2 |
+| 設定を変える前の機械の状態を読んだときの出力（`winget list` 3 回分・新しいプロセスでの `areka` の解決・`where.exe`） | `target\winget-check\logs\pre-2.1-*.txt` | 2.1 |
+| オンを確かめたときの `winget settings export` の出力 | `target\winget-check\logs\on-2.1-settings-export.*.txt` | 2.1 |
 
 - 取ってきた後の `git status --porcelain` は 0 行（`target` の下に限って見ても 0 行）。`git ls-files -- target` も 0 件で、取ってきた物は `git status` に出ない。
 - `git check-ignore -v target/winget-check/release/areka-0.0.2-x64.zip` は `.gitignore:1:target` を返した（追跡の外になる理由がこの 1 行であることの裏付け）。
