@@ -21,7 +21,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 3.3, 4.2, 4.3_
 
 - [ ] 2. 判定を直し、既存のテストと文書を新しい振る舞いへ合わせる
-- [ ] 2.1 「再生中か」の判定を、再生中のトークの番号が引けるかどうかへ委ねる
+- [x] 2.1 「再生中か」の判定を、再生中のトークの番号が引けるかどうかへ委ねる
   - 判定の本体を設計の決定 D1 のとおりにし（署名は変えない）、判定の注記と、実行の状態の素の「再生中」の欄の注記を、お別れの台詞を含む説明へ改める
   - 再生中のトークの番号を引く関数・会話なしの作り方・各入口の門・相の移り方には触れない
   - 判定を直すと必ず赤になる終了の握手の結合テスト（「別れの台詞の `OnTranslate` は会話なしの状態」という期待）を、再生中の状態の期待と文言へ書き換える
@@ -49,3 +49,5 @@
 
 - `cargo clippy -p areka-kanade --all-targets` は、本 spec が触らない `crates/areka-kanade/src/actor_raise_reply_tests.rs` の `clippy::never_loop`（既定で deny・最後に触ったのは PR#226）で失敗する。全体テストの道具も CI も clippy を回していない。本 spec では「触ったファイルへの clippy の指摘が 0 件」で判定する（2.1 の完了の姿の clippy も同じ読み）。範囲の外なので直さない。完了時の棚卸しで起票する。
 - 段のテストの補助 `phases()` は 17 通り（相の 15 種類＋トークの有無）。先頭 6 つの並びは既存のテストが添字で使うので動かさない。相を足したら `plays_a_talk`（コンパイルが止まる）だけでなく `phases()` と件数の期待も直す。
+- 2.1 で、設計が挙げていなかった既存のテストが 1 本赤になった: `crates/areka-kanade/tests/kanade/external_status_test.rs` の、通信中の旗を落とした後の要求を「どれも `Status` の行なし」と見る表明（区間に終了の挨拶の `OnTranslate` が入る）。「`OnTranslate` だけ `talking`、ほかは行なし」へ書き換え、design.md・research.md の「2 か所」を「3 か所」へ改めた。
+- 範囲の外の気付き（完了時の棚卸しの材料）: `crates/areka-kanade/src/schedule/user_break_tests.rs` の `playing_states` の注記「3 つの場面（`fn current_talk_id` が `Some` を返す全て）」は、`current_talk_id` が 5 つの相で番号を返すので元から不正確（本 spec で偽になったものではない）。

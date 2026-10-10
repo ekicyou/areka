@@ -30,7 +30,7 @@
 
 - kanade の「再生中か」の判定の定義: **再生中のトークの番号が引ける相は、すべて再生中**（`talk_active_of` ≡ `current_talk_id` が番号を返す）。
 - その定義を固定する決定論テスト（相の全種類の表・お別れの 3 つの場面の通し・握手の要求が変わらないこと）。
-- 新しい振る舞いで古くなる既存のテストの期待 2 か所の書き換え。
+- 新しい振る舞いで古くなる既存のテストの期待 3 か所の書き換え。
 - SSP との差の一覧（`doc/ssp-mcp/get-status-diff-areka.md`）のうち、お別れの台詞の行（消す）と「各旗の出る条件」の行（`talking` の説明）。
 
 ### Out of Boundary
@@ -98,7 +98,7 @@ graph LR
 | D2 | 握手の要求と各入口の門は 1 行も変えない | 握手の要求は `State::snapshot_without_talk` を使い、判定を読まない。お別れの間の依頼は門が断る。どちらも本 spec の直しの影響を受けない（要件 3.1・3.3） |
 | D3 | 相の全種類の表のテストは、期待を手書きの `match`（ワイルドカード無し）で持つ | 期待を `talk_active_of` や `current_talk_id` から導くと、テストが自明になる。ワイルドカードを置かないので、相を足すとコンパイルが止まり、判断が求められる |
 | D4 | 段のテストは `schedule/external_state_tests.rs`、殻を通すテストは `tests/kanade/translate_test.rs` に足す。新しいファイルは作らない | 要る道具（満たした写し・最後のリクエストの取り出し・任意の ID に台詞を返す偽の SHIORI・完了を返さない再生側）が両方にそろっている。`schedule/mod.rs` にテストの接続宣言を足さずに済む |
-| D5 | 古い前提の既存のテスト 2 か所は、新しい振る舞い（`talking`）へ書き換える | お別れの台詞の翻訳の `Status` を「会話なし」と固定している所。要件 4.9 |
+| D5 | 古い前提の既存のテスト 3 か所は、新しい振る舞い（`talking`）へ書き換える | お別れの台詞の翻訳の `Status` を「会話なし」または「行なし」と固定している所。3 か所目（通信中の旗のテスト）は実装で `cargo test -p areka-kanade` を全部回して見つけた。要件 4.9 |
 
 ### Technology Stack
 
@@ -119,6 +119,7 @@ graph LR
 - `crates/areka-kanade/src/schedule/external_state_tests.rs` — 節「お別れの台詞の再生中の `talking`」を足す（テスト T1〜T3。402 行 → 600 行前後）。
 - `crates/areka-kanade/tests/kanade/translate_test.rs` — お別れの 3 つの場面を殻ごと通すテスト T4 と、問い合わせを 1 通送って答えを受ける小さな補助を足す（637 行 → 750 行前後）。
 - `crates/areka-kanade/tests/kanade/close_test_handshake_tests.rs` — `OnClose` の後の 1 件目（別れの台詞の `OnTranslate`）の期待を、会話なし（`ExecutionSnapshot::INACTIVE`）から再生中（`talk_active: true`）へ書き換え、文言「終了の相は会話なしの状態」を改める。
+- `crates/areka-kanade/tests/kanade/external_status_test.rs` — 通信中の旗を落とした後の要求を見る最後の表明（「どれも `Status` の行なし」）を、「終了の挨拶の `OnTranslate` だけ `talking`、ほかは行なし」へ書き換える（実装で見つけた 3 か所目）。
 - `crates/areka/src/emo2_boot/spine_conformance_script.rs` — `expected_statuses` の最後の行（終了の挨拶の `OnTranslate`）を `None` から `Some(STATUS_TALKING)` へ書き換え、その上の注記を改める。
 - `doc/ssp-mcp/get-status-diff-areka.md` — 「終了の挨拶・切り替えのお別れの台詞の再生中」の行を消す。「各旗の出る条件」の行の `talking` の説明を「普段の会話・起動の挨拶・終了の挨拶・切り替えのお別れの台詞の再生中は `talking`」へ改める。見出しの日付を作業日に改める。
 
@@ -176,7 +177,7 @@ stateDiagram-v2
 | 4.6 | 判定と番号の引ける相の一致を固定 | テスト | — | T1 |
 | 4.7 | 差の一覧を直す | 文書 | — | `doc/ssp-mcp/get-status-diff-areka.md` |
 | 4.8 | 古い注記を直す | 注記 | — | `schedule/mod.rs`・`status.rs` |
-| 4.9 | 既存のテストを緑に保つ | 既存のテスト 2 か所の書き換え（D5） | — | 検証の手順 |
+| 4.9 | 既存のテストを緑に保つ | 既存のテスト 3 か所の書き換え（D5） | — | 検証の手順 |
 
 ## Components and Interfaces
 
@@ -265,6 +266,7 @@ pub(crate) fn talk_active_of(phase: &Phase) -> bool;
 ### 既存のテストの書き換え（4.9）
 
 - `tests/kanade/close_test_handshake_tests.rs`: 別れの台詞の `OnTranslate` の期待を再生中の状態へ。
+- `tests/kanade/external_status_test.rs`: 通信中の旗を落とした後の要求の表明を「終了の挨拶の `OnTranslate` だけ `talking`、ほかは行なし」へ（実装で見つけた 3 か所目）。
 - `crates/areka/src/emo2_boot/spine_conformance_script.rs`: `expected_statuses` の最後の行を `Some(STATUS_TALKING)` へ。
 
 ### 検証の手順

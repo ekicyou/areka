@@ -7,7 +7,7 @@
 - **Key Findings**:
   - 「再生中か」の判定 `talk_active_of` と、再生中のトークの番号を引く `current_talk_id`（どちらも `crates/areka-kanade/src/schedule/mod.rs`）は、同じ問いに別々の表で答えている。後者は既にお別れの台詞の 3 つの相を知っている。前者を後者へ委ねれば、足すのは 0 行で、2 つの表が食い違う余地が無くなる。
   - お別れの台詞の再生中に `State::snapshot` から作られて実際に外へ出る値は 2 つだけ: 状態の問い合わせの答え（`actor.rs` の `answer_status`）と、お別れの台詞そのものの翻訳（`schedule/translate.rs` の `capture`）の `Status`。brief が挙げた `\![raise,…]` とバルーンのイベントは、定常でなければ送る前に断られるので該当しない。
-  - 新しい振る舞いで赤になる既存のテストは 2 か所（お別れの台詞の翻訳の `Status` を「会話なし」と固定している所）。ほかは期待を `State::snapshot` から導いているので自動で追随する。
+  - 新しい振る舞いで赤になる既存のテストは 3 か所（お別れの台詞の翻訳の `Status` を「会話なし」または「行なし」と固定している所。設計の時点では 2 か所と読み、3 か所目は実装で見つけた）。ほかは期待を `State::snapshot` から導いているので自動で追随する。
 
 ## Research Log
 
@@ -30,10 +30,11 @@
 - **Findings**:
   - 赤になる 1: `crates/areka-kanade/tests/kanade/close_test_handshake_tests.rs` の、`OnClose` の後の 1 件目（別れの台詞の `OnTranslate`）を `ExecutionSnapshot::INACTIVE` で期待している所（文言「終了の相は会話なしの状態」）。
   - 赤になる 2: `crates/areka/src/emo2_boot/spine_conformance_script.rs` の `expected_statuses` の最後の行 `status(TRANSLATE, None)`（注記「終了の挨拶の `OnTranslate` も終了の相の状態＝ヘッダ行なし」）。読むのは `spine_conformance_lap_tests.rs` の一周のテスト。
+  - 赤になる 3（設計の時点の見落とし・実装で `cargo test -p areka-kanade` を全部回して見つけた）: `crates/areka-kanade/tests/kanade/external_status_test.rs` の、通信中の旗を落とした後の要求を「どれも `Status` の行なし」と見る表明。区間に終了の挨拶の `OnTranslate` が入る。
   - 追随する: `schedule/translate_path_tests.rs` の `assert_path`（期待を `d.s.snapshot()` から導く）・`schedule/schedule_tests.rs` の `state_snapshot_preserves_the_talk_axis_of_phase`（期待を `talk_active_of` から導く）。
   - 影響なし: `crates/areka-ghost` の結合テストの記録は `Status` を持たない。`tests/kanade/translate_test.rs` の終了・切り替えの行は `OnClose`／`OnGhostChanging` が 204 の筋書きで、お別れの台詞を再生しない。
   - 握手の要求が会話なしで送られることは `schedule/external_state_tests.rs` が既に固定している（`OnGhostChanging`・その 204 の後の `OnClose`・定常からの `OnClose`・普段の会話の途中の強制終了）。足りないのは「普段の会話の完了を待ってから送る `OnClose`」と「お別れの台詞の途中の強制終了」。
-- **Implications**: 書き換える既存のテストは 2 か所と決まる。握手の固定は 2 場面を足せば要件 4.5 の 4 つがそろう。
+- **Implications**: 書き換える既存のテストは 3 か所（上の 1〜3）。握手の固定は 2 場面を足せば要件 4.5 の 4 つがそろう。
 
 ### テストの置き場
 
