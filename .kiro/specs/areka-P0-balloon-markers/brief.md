@@ -141,3 +141,9 @@
 - 要件定義のモデル: Fable（箱の印の画像の引き先・手動で戻している最中の扱い・縦書きの矢印＝開発者に決めてもらう分かれ目が多い）。
 - 議題: 棚卸㉒の 3 件のまま。⑷（新）手動で戻している最中の時間切れを止めるか。
 - 見つけた穴・古くなった記述: コードの穴は無い。Constraints の行数（`viewbox.rs` 871・`layout.rs` 977）は今 460・502。
+
+## 2026-10-10 `/kiro-discovery`（自前の既定バルーンと検体「どっとさくら」）からの申し送り
+
+- **議題を 1 つ足す＝オンラインの印を 1 枚の動く絵でも持てるようにする**。開発者の指示（2026-10-10「online0.png などのアニメは動画 webp などで実現する」）で、areka 自前の既定バルーン（`areka-P0-default-balloon-selfmade`）はオンラインの印を連番でなく 1 枚の動く WebP で持つ。正典は `onlinemarker.filename` の名前に 0 からの連番を足して読み、`onlinemarker.interval`（既定 500 ミリ秒・50 未満は不可）で切り替える。1 枚の動く絵（動く WebP・APNG）は areka の拡張になるので、決めること: 連番が 1 枚だけでその絵が動く絵のとき、こまの時間は絵の中の時間割りを使うか／`onlinemarker.interval` を書いたときどちらが勝つか／連番と動く絵が混ざったときの扱い。動く絵を読んで時刻どおりに回す仕組みは面の絵で着地済み（完了 `areka-P0-animated-image-playback`）。
+- **名前の探し方は `areka-P0-balloon-webp-names` の 1 か所を通す**。同 spec が「名前から絵のファイルを探す」所をまとめ、`.png` と `.webp` を受ける。印の絵（`arrow*`・`online*`・`sstp`）も同じ所で探せば `.webp` の印を拾える。同じ系列の表（`SeriesFamily`）を触るので、同 spec を先に着地させる。
+- **印の検体が 2 つできる**。連番 16 コマのオンラインの印・矢印・SSTP の印を持つ古い作りの検体＝`dot_sakura` の同梱バルーン `bottle`（`areka-P0-dot-sakura-specimen`）。1 枚の動く絵の印を持つ検体＝新しい既定バルーン（`areka-P0-default-balloon-selfmade`）。Constraints の「印の画像の検体はリポジトリ内に作る」は、この 2 つで足りるかを着手時に見直す。
