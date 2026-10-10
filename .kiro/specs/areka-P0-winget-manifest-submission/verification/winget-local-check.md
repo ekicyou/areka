@@ -450,7 +450,141 @@ MCP の口へ送った物と答え（送り方は `tools/call` を 1 本ずつ�
 - 抜き出して書く 3 つ: `areka.exe` は `CC800980…659D237A`・`profile\areka\sylphya.toml` は `3E16E14A…325EDDF6`・`ghost\claudia\ghost\master\profile\areka\sylphya.toml` は `80ED6700…ADE49528`（どれも入れ先と写しで同じ）。
 - 写しを取った後、入れ先のフォルダから動いているプロセスは 0・9871 の待ち受けは 0。**上げ直しの実測（タスク 3.2）まで、areka を起動しない。**
 
-（タスク 3.2 で 6 項目の結果を記入）
+### 上げ直し（タスク 3.2・要件 4.2・4.4）
+
+結果: **測れた。消えた物は 6**（後から入れたゴースト 1・後から入れたバルーン 3・ゴーストの記憶 2）。areka の記憶は残った。同梱のファイルは置き換わった。上げ直しの後の起動は、前のゴースト（クローディア）ではなく**別のゴースト（えも？？）で立った**。使ったコマンドは `winget upgrade --manifest` で、代わりの手（`winget install --manifest`）は要らなかった。時刻はどれも 2026-10-10（+09:00）。`<入れ先>` は `%LOCALAPPDATA%\Microsoft\WinGet\Packages\Areka.Areka.Portable__DefaultSource`。
+
+入れ先は、起動した後の状態のまま**置いてある**（写しから戻していない・外していない）。外し方の実測（タスク 3.3）がここから続ける。
+
+#### 1. 上げ直しの前に確かめたこと（読むだけ・13:40:32）
+
+- `<入れ先>` から動いている `areka.exe`・`shiori-host32-helper.exe` は 0（この名前のプロセス自体が 0）。
+- `<入れ先>` は 358 ファイル・21846581 バイト・下の階層のフォルダ 58 で、写し `target\winget-check\state-snapshot\` と同じ数。
+- 見比べの元になる値: Release の `areka-0.0.2-x64.zip` の中の `ghost/emo2/readme.txt`（3105 バイト）の SHA256 は `E1B864F9CE41519F1B2DDEF00AD986397BE51D7558A54F7213266B8BC0483B40`（zip を開かずに、中の 1 件をメモリへ読んで計算した）。入れ先の `ghost\emo2\readme.txt` も同じ値だった。zip の中に `winget-check-marker.txt` は無い。zip の最上位のファイルは 6 つ（`areka.exe`・`BUILD-INFO.txt`・`LICENSE-MIT`・`README.txt`・`shiori-host32-helper.exe`・`THIRD-PARTY-NOTICES.md`）。
+
+#### 2. 目印（13:40:48）
+
+入れ先の中で手を入れたのは、この 2 つだけ。zip の最上位の 6 ファイルには触っていない。
+
+| 目印 | 場所（入れ先のフォルダから見て） | 付けた後 |
+|---|---|---|
+| 末尾へ 1 行足した（73 バイト・ASCII の `winget-check marker line (areka-P0-winget-manifest-submission task 3.2)` と改行） | `ghost\emo2\readme.txt` | 3178 バイト・SHA256 `266B860A544CBB0D77B8B9247D28A4BEFC1DE06D26DB472C9555FAD53088907D`（付ける前は 3105 バイト・`E1B864F9…C0483B40`） |
+| 新しく置いたファイル（73 バイト） | `ghost\emo2\winget-check-marker.txt` | SHA256 `61C7E035D2A5DF0B2660D279E5ED97C09E1C8496A34CA9F906873EB03355221A` |
+
+- 付けた後の入れ先は 359 ファイル・21846727 バイト（1 ファイル・146 バイト増えた）。
+
+#### 3. 確かめ専用のマニフェスト
+
+- 置き場: `target\winget-check\upgrade-0.0.2.1\`（4 ファイル。`dist\winget\0.0.2\` の 4 ファイルの写し）。
+- 変えた欄は `PackageVersion` の 1 つだけ（`0.0.2` → `0.0.2.1`。4 ファイルに 1 行ずつで、変わった行は合わせて 4 行）。`InstallerUrl`・`InstallerSha256` と、ほかの欄は 0.0.2 のまま（元との見比べで、違う行はこの 4 行だけ）。
+- `winget validate --manifest target\winget-check\upgrade-0.0.2.1 --disable-interactivity`: 13:41:04・**終了コード 0**・標準エラー 0 バイト。出た文は `マニフェストの検証は成功しました。` の 1 行。
+- `git status --porcelain` は 0 行（`git check-ignore -v` は `.gitignore:1:target` を返した）。リポジトリは追跡していない。
+
+#### 4. 上げ直しの前の一覧と、打つ前の確かめ
+
+- 一覧（相対パス・大きさ・SHA256・書いた時刻・作った時刻。隠しファイルも含む）: `target\winget-check\logs\3.2-before.tsv`（13:41:06・**359 ファイル・21846727 バイト**・隠しファイル 1）。フォルダの一覧（相対パス・NTFS がフォルダに振る番号・作った時刻）: `3.2-before.dirs.tsv`（下の階層のフォルダ 58）。スクリプトは `target\winget-check\3.2-list.ps1`。
+- `<入れ先>` から動いている `areka.exe`・`shiori-host32-helper.exe` は、13:41:04・13:41:13・13:42:14・13:42:18 の 4 回とも 0（最後の 2 回は、打つスクリプトが 4 秒あけて見た分）。
+- 打つ前の `winget list --id Areka --disable-interactivity`: ID は `ARP\User\X64\Areka.Areka.Portable__DefaultSource`・版は `0.0.2`（終了コード 0）。
+- 利用者の側の PATH の登録は 13 項目で、入れ先のフォルダは 1 件。`winget settings export` の `adminSettings.LocalManifestFiles` は `true`。打った端末は管理者の権限ではない（管理者の役割を持つかを読んで `False`）。
+
+#### 5. 上げ直し（要件 4.2）
+
+- コマンド（ワークツリーの根で・普段の権限で。`--accept-*`・`--force`・`--ignore-security-hash`・`--scope`・`--purge` は付けていない。スクリプトは `target\winget-check\3.2-fire.ps1`）:
+
+  ```powershell
+  winget upgrade --manifest target\winget-check\upgrade-0.0.2.1 --disable-interactivity
+  ```
+
+- 始めた時刻 13:42:18.834・終わった時刻 13:42:28.967（10.1 秒）・**終了コード 0**・標準エラーは 0 バイト。問い（同意・管理者への切り替え）は 1 つも出なかった。**止まらなかったので、代わりの手 `winget install --manifest` は打っていない。**
+- winget が出した文（標準出力の全部＝10 行・741 バイト。省いた行・まとめた行は無い。進み具合の描き直しの行は、ファイルへ向けた出力には 1 行も出なかった。UTF-8 として読んだ）:
+
+  ```text
+  見つかりました areka (portable) [Areka.Areka.Portable] バージョン 0.0.2.1
+  このアプリケーションは所有者からライセンス供与されます。
+  Microsoft はサードパーティのパッケージに対して責任を負わず、ライセンスも付与しません。
+  ダウンロード中 https://github.com/ekicyou/areka/releases/download/v0.0.2/areka-0.0.2-x64.zip
+  インストーラーハッシュが正常に検証されました
+  アーカイブを展開しています...
+  アーカイブが正常に展開されました
+  パッケージのインストールを開始しています...
+  コマンド ライン エイリアスが追加されました: "areka"
+  インストールが完了しました
+  ```
+
+- 初めて入れたとき（上の「入れて起動する」の 11 行）との違いは、`パス環境変数が変更されました; …` の行が無いことだけ。古い版を外した・ファイルを消した、と告げる行は 1 行も無い（利用者は、この文からは物が消えたことを知れない）。
+- 出力の取り方は、入れたときと同じ（PowerShell のパイプを通さず、`Start-Process -NoNewWindow -PassThru -RedirectStandardOutput … -RedirectStandardError …` でファイルへ向け、UTF-8 として読んだ）。
+
+#### 6. 上げ直しの後の一覧（起動より先・13:42:30）と見比べ
+
+一覧は `target\winget-check\logs\3.2-after-upgrade.tsv` と `3.2-after-upgrade.dirs.tsv`（**151 ファイル・16789175 バイト**・下の階層のフォルダ 25・隠しファイル 1）。見比べの全部は `3.2-diff-after-upgrade.txt`（スクリプトは `3.2-diff.ps1`）。この時点で areka はまだ起こしていない。
+
+| 見比べ（359 ファイルの 1 つずつ） | 数 |
+|---|---|
+| 消えた | **208** |
+| 増えた | 0 |
+| ハッシュが同じ | 149（うち 148 は書いた時刻が新しい＝winget が zip から置き直した物。時刻も変わらなかったのは `profile\areka\sylphya.toml` の 1 つだけ） |
+| ハッシュが変わった | 2（`ghost\emo2\readme.txt`＝目印の行が消えて元の値へ・`Areka.Areka.Portable__DefaultSource.db`＝winget の控え） |
+
+直下の名前ごと（前 → 後）:
+
+| 直下の名前 | 前 | 後 | 消えた | ハッシュが変わった |
+|---|---|---|---|---|
+| 直下のファイル 7 つ | 7 | 7 | 0 | 1（winget の控え） |
+| `balloon\` | 138 | 50 | 88（`claudia\` 37・`claudia_vertical\` 31・`emo2-kakukaku-wplimit\` 20） | 0 |
+| `ghost\` | 213 | 93 | 120（`claudia\` 69・`emo2\ghost\master\profile\` 50・目印のファイル 1） | 1（`emo2\readme.txt`） |
+| `profile\` | 1 | 1 | 0 | 0 |
+
+- フォルダ（下の階層）: 58 → 25。消えたフォルダは 33（`ghost\claudia\` とその下 14・`balloon\claudia\`・`balloon\claudia_vertical\`・`balloon\emo2-kakukaku-wplimit\`・`ghost\emo2\ghost\master\profile\` とその下 14）。残った 25 のうち 22 は、名前は同じでも NTFS の番号が変わっている＝**消してから作り直された**（`balloon\` と `ghost\` と、その下のすべて）。番号が変わらなかったのは 3 つ（`.nar-work\`・`profile\`・`profile\areka\`）。
+- 見えた形: zip の中に在る直下のフォルダ（`ghost\`・`balloon\`）は、中に後から置かれた物ごと丸ごと消され、zip の中身だけが置き直された。zip の中に無い直下の物（`profile\`・`.nar-work\`）は触られなかった。
+- 入れ先のフォルダ: 名前は同じ `Areka.Areka.Portable__DefaultSource`・**同じフォルダ**（NTFS の番号も作った時刻 13:01:48 も前と同じ。`Packages\` の下で名前に `Areka` を含む物はこの 1 つ）。
+- `winget list`（`--id Areka` と `--name areka` の 2 回。どちらも終了コード 0・標準エラー 0 バイトで同じ 1 行）: 名前 `areka (portable)`・ID `ARP\User\X64\Areka.Areka.Portable__DefaultSource`（前と同じ）・版 **`0.0.2.1`**（前は `0.0.2`）。
+- 利用者の側の PATH の登録: 文字列として前と同じ（13 項目・入れ先のフォルダは **1 件**・値の種類は `ExpandString`）。機械の側も前と同じ。`%LOCALAPPDATA%\Microsoft\WinGet\Links\` に `areka` で始まる物は 0。
+- winget の控え `Areka.Areka.Portable__DefaultSource.db`: 在る・隠しファイルのまま・大きさは同じ 16384 バイト・**中身は変わった**（SHA256 `486FC085…FE16FA4D` → `61748269…EA24CA67`・書いた時刻 13:42:28）。
+- `.nar-work\`: **残った**（空のまま・NTFS の番号も前と同じ）。
+
+#### 7. 6 項目（設計の段 5 の表・要件 4.2・4.4）
+
+判定は、上の一覧の見比べ（起動より先）で決めた。6 つ目だけは起動の記録と MCP の答えで決めた。
+
+| 項目 | 見た物（入れ先のフォルダから見て） | 前 → 後 | 結果 |
+|---|---|---|---|
+| 後から入れたゴースト | `ghost\claudia\` | 69 ファイル → フォルダごと無い | **消えた** |
+| 後から入れたバルーン | `balloon\emo2-kakukaku-wplimit\` | 20 ファイル → フォルダごと無い | **消えた** |
+| 〃（クローディアと一緒に入った物） | `balloon\claudia\` | 37 ファイル → フォルダごと無い | **消えた** |
+| 〃（同じ） | `balloon\claudia_vertical\` | 31 ファイル → フォルダごと無い | **消えた** |
+| areka の記憶 | `profile\areka\` | 1 ファイル → 1 ファイル。`sylphya.toml` はハッシュも書いた時刻も前と同じ（`3E16E14A…325EDDF6`・58 バイト。中の「前に使っていたゴースト」は `claudia` のまま＝もう無いゴーストを指している） | **残った** |
+| ゴーストの記憶（えも？？） | `ghost\emo2\ghost\master\profile\areka\` | 1 ファイル → フォルダごと無い（上の `ghost\emo2\ghost\master\profile\` が丸ごと消えた＝50 ファイル。ゴースト自身（pasta）の書き残し `pasta\save\save.json` ほか 49 ファイルも一緒） | **消えた** |
+| ゴーストの記憶（クローディア） | `ghost\claudia\ghost\master\profile\areka\` | 1 ファイル → 無い（ゴーストのフォルダごと） | **消えた** |
+| シェルの記憶（えも？？） | `ghost\emo2\shell\master\profile\areka\` | 前も後も無い | **測れなかった**（0.0.2 にはシェルの記憶へ書く操作が無く、作れなかった）。シェルのフォルダ `ghost\emo2\shell\master\` は**置き換わった**（65 ファイル → 65 ファイルでハッシュは全部同じだが、フォルダは消してから作り直された。中に後から置いた物が在れば、一緒に消える形） |
+| シェルの記憶（クローディア） | `ghost\claudia\shell\master\profile\areka\` | 前も後も無い | **測れなかった**（同じ理由）。シェルのフォルダ `ghost\claudia\shell\master\` は**消えた**（16 ファイル → 無い） |
+| 同梱のファイル | `ghost\emo2\readme.txt`・`ghost\emo2\winget-check-marker.txt` | `readme.txt` は 3178 バイト `266B860A…` → 3105 バイト `E1B864F9…C0483B40`（zip の中の値に戻った）。目印のファイルは無い | **置き換わった** |
+| 上げ直しの後の起動 | 起動の記録と MCP の答え（下の 8） | `本物のゴースト窓を開きました` 1 件・`last_ghost_not_found` 1 件・クローディアのフォルダを指す行 0 件・`get_active_ghost_list` は `えも？？`・終了コード 0 | **別のゴーストで立った**（前はクローディア・立ったのは えも？？） |
+
+**まとめ: 消えた物は 6**（後から入れたゴースト 1＝`ghost\claudia\`／後から入れたバルーン 3＝`balloon\emo2-kakukaku-wplimit\`・`balloon\claudia\`・`balloon\claudia_vertical\`／ゴーストの記憶 2＝えも？？ の分とクローディアの分）。残った物は 1（areka の記憶）。測れなかった物は 2（シェルの記憶 2 か所）。ファイルの数では **208 ファイルが消えた**（後から入れた 4 つのフォルダ 157＝クローディアのゴーストの記憶 1 を含む・えも？？ の `ghost\master\profile\` 50＝ゴーストの記憶 1 とゴースト自身の書き残し 49・目印のファイル 1）。
+
+- 消えた物が在るので、設計の段 7（注意書きを足して入れ直す・起票）を通る（タスク 3.4）。
+
+#### 8. 上げ直しの後の起動（一覧を取った後・13:43:37）
+
+- 起こし方はタスク 2.2 と同じ（PATH を登録から組み直した 31 項目にした新しい `pwsh -NoProfile -NonInteractive` の中で、`AREKA_*`・`WINTF_*` を外し＝外れたのは `AREKA_IMPL_WATCH_HOME` の 1 つ、`AREKA_APP_SMOKE_EXIT_MS=10000`・`AREKA_NO_ALERT=1`・`RUST_LOG=info`・`NO_COLOR=1` を置き、`areka` の 1 語を渡した）。**足したのは `AREKA_MCP_PORT=9871` の 1 つだけ**（動いている間に、MCP の口から今のゴーストの名前を聞くため。番号は、起こす直前に待ち受けが 0 件であることを見て決めた。9800〜9899 の待ち受けも 0 件）。スクリプトは `target\winget-check\3.2-run.ps1`・`3.2-inner.ps1`・`3.2-mcp.ps1`。
+- `Get-Command areka -All` は 1 件で、`<入れ先>\areka.exe`。起きたプロセスの実体も同じ。
+- 始めた時刻 13:43:37.360・終わった時刻 13:43:47.924（10.6 秒）・**自分から終わった**（止めていない）・**終了コード 0**。起こしたのはこの 1 回だけ。最後の記録の行（13:43:47.871）からプロセスが消えるまでは 0.05 秒。終わった後、`<入れ先>` から動いているプロセスは 0・9871 の待ち受けは 0。
+- 起動の記録 `target\winget-check\logs\3.2-run.stdout.log` は 126 行（29704 バイト）。標準エラーは 1 行（`[helper] SHIORI 初期化の入口: loadu`）。判定に使う行（行の頭の時刻は省き、入れ先のパスは `<入れ先>` に置き換えた。記録の中の並びのまま）:
+
+  ```text
+  INFO areka::boot_config: ベースウェアの根を決めました event="root_resolved" root=<入れ先> source=ExeDir
+  WARN areka::boot_resolve: [boot_resolve] 前回のゴーストが根に見つからないので次の候補へ進みます event="last_ghost_not_found" memory="claudia" ghost_store=<入れ先>\ghost
+  INFO areka::boot_config: 起動するゴーストを決めました event="ghost_resolved" route=Only dir=<入れ先>\ghost\emo2
+  INFO areka::boot_config: バルーンを決めました event="balloon_resolved" route=Companion dir=<入れ先>\balloon\emo2-kakukaku
+  INFO areka::boot_resolve: [boot_resolve] 最後に使ったものを記憶へ書きました（- は argv なので書いていない） event="last_used_recorded" ghost="emo2" balloon="emo2-kakukaku" shell="master"
+  INFO actor{actor=emo-text}: areka::ghost_session: 本物のゴースト窓を開きました（placement シーム・スコープごとにキャラ窓＋バルーン窓） scopes=[0, 1]
+  ```
+
+- 件数: `本物のゴースト窓を開きました` **1 件**・`last_ghost_not_found` **1 件**（覚えていた `claudia` が `ghost\` に無い）・クローディアのフォルダを指す行 **0 件**（`claudia` の字が出るのは、上の `last_ghost_not_found` の 1 行だけ）・`root_resolved` 1 件。
+- MCP の答え（`target\winget-check\logs\3.2-mcp.log`）: `get_active_ghost_list` は 13:43:37.830 と 13:43:42.490 の 2 回とも **`えも？？`**。`get_status` は `talking` と `talking,balloon(0=0/1=0)`。
+- `ERROR` は 0 行・`WARN` は 5 行（上の `last_ghost_not_found` 1 行と、タスク 2.2 と同じ文の 4 行＝絵の `null.png` 2 行・折り返しの基準 1 行・決めた時間で終わるときの `force_quit` 1 行）。終わりの行は `ghost shutdown sequence completed` と `session_mark_cleared`。
+- areka は、前のゴーストが無いことを起動の記録の `WARN` 1 行に残して、同梱の えも？？ で立った。そのときに利用者へ台詞で伝えたかどうかは、読んでいない（この起動は 10 秒で終わる形で、台詞の中身は取っていない）。
+- 起動の後の入れ先（判定には使わない。一覧は `3.2-after-run.tsv`・見比べは `3.2-diff-after-run.txt`）: 201 ファイル・17211954 バイト。起動が作り直した物は 50 ファイル（`ghost\emo2\ghost\master\profile\` の下＝えも？？ のゴーストの記憶 1 とゴースト自身の書き残し 49）。areka の記憶 `profile\areka\sylphya.toml` は書き替わり、「前に使っていたゴースト」が `claudia` から `emo2` になった（58 → 55 バイト）。作り直された えも？？ のゴーストの記憶は、最後に使ったバルーンが `emo2-kakukaku`（上げ直しの前は、後から入れた `emo2-kakukaku-wplimit`）。
 
 ## 外し方の実測
 
@@ -490,6 +624,15 @@ MCP の口へ送った物と答え（送り方は `tools/call` を 1 本ずつ�
 | 2 回目・3 回目の起動の記録（標準出力・標準エラー）・起こしたプロセスの結果・組み直した PATH | `target\winget-check\logs\3.1-run2.*`・`3.1-run2-fresh-*`・`3.1-run3.*`・`3.1-run3-fresh-*` | 3.1 |
 | 状態を作った後の入れ先のフォルダの一覧（写しの前・写しの後）と、写しの一覧 | `target\winget-check\logs\3.1-installdir-run3-after-end.txt`・`3.1-installdir-run3-before-snapshot-check.txt`・`3.1-installdir-snapshot.txt` | 3.1 |
 | 状態の写し（入れ先のフォルダの丸ごと。358 ファイル・21846581 バイト・隠しファイルと空のフォルダも含む）と、写したときの robocopy の記録 | `target\winget-check\state-snapshot\`・`target\winget-check\logs\3.1-snapshot-robocopy.log` | 3.1 |
+| 同梱のファイルへ付けた目印 2 つ（`readme.txt` の末尾の 1 行と、`winget-check-marker.txt`。winget の入れ先の中なので `target\` の外。上げ直しで 2 つとも消えた） | `%LOCALAPPDATA%\Microsoft\WinGet\Packages\Areka.Areka.Portable__DefaultSource\ghost\emo2\` | 3.2 |
+| 版だけを `0.0.2.1` に上げた確かめ専用のマニフェスト 4 ファイルと、`winget validate` が出した文 | `target\winget-check\upgrade-0.0.2.1\`・`target\winget-check\logs\3.2-validate.*.txt` | 3.2 |
+| 一覧を取る・動いているプロセスを読む・winget を 1 回打つ・一覧を見比べる、のスクリプト 4 つ | `target\winget-check\3.2-list.ps1`・`3.2-procs.ps1`・`3.2-fire.ps1`・`3.2-diff.ps1` | 3.2 |
+| 上げ直しの前の読み（入れ先の一覧・フォルダの一覧・PATH の登録 2 つ・`winget list`・`winget settings export`） | `target\winget-check\logs\3.2-before.tsv`・`3.2-before.dirs.tsv`・`3.2-before-*.txt` | 3.2 |
+| `winget upgrade` が出した文（標準出力・標準エラー）と、時刻・終了コード | `target\winget-check\logs\3.2-upgrade.stdout.txt`・`3.2-upgrade.stderr.txt`・`3.2-upgrade.result.json` | 3.2 |
+| 上げ直しの後（起動より先）の読み（入れ先の一覧・フォルダの一覧・前との見比べ・PATH の登録・`winget list` 2 回分） | `target\winget-check\logs\3.2-after-upgrade.tsv`・`3.2-after-upgrade.dirs.tsv`・`3.2-diff-after-upgrade.txt`・`3.2-after-user-path.raw.txt`・`3.2-after-list-*.txt` | 3.2 |
+| 上げ直しの後に有界で起こすスクリプト 2 つと、MCP の口へ 1 本送るスクリプト | `target\winget-check\3.2-run.ps1`・`3.2-inner.ps1`・`3.2-mcp.ps1` | 3.2 |
+| 上げ直しの後の起動の記録（標準出力・標準エラー）・起こしたプロセスの結果・組み直した PATH・MCP の口へ送った文と答え | `target\winget-check\logs\3.2-run.stdout.log`・`3.2-run.stderr.log`・`3.2-run.result.json`・`3.2-run-fresh-*`・`3.2-mcp.log` | 3.2 |
+| 起動の後の入れ先の一覧と、上げ直しの直後との見比べ（判定には使わない） | `target\winget-check\logs\3.2-after-run.tsv`・`3.2-after-run.dirs.tsv`・`3.2-diff-after-run.txt` | 3.2 |
 
 - 取ってきた後の `git status --porcelain` は 0 行（`target` の下に限って見ても 0 行）。`git ls-files -- target` も 0 件で、取ってきた物は `git status` に出ない。
 - `git check-ignore -v target/winget-check/release/areka-0.0.2-x64.zip` は `.gitignore:1:target` を返した（追跡の外になる理由がこの 1 行であることの裏付け）。
@@ -502,6 +645,9 @@ MCP の口へ送った物と答え（送り方は `tools/call` を 1 本ずつ�
 - 実測の元になる状態（タスク 3.1）は、右クリックメニューで作った。メニューを操作したのは、開発者から `areka.exe` の画面の操作を許された AI。だから、メニューの入口「インストール…」「ゴースト」「終了」は**通っている**。通っていないのは台本（MCP の `sakurascript`）の入口のほうで、これは設計の見込み（状態は MCP の台本で作り、メニューの入口は通らない）と**逆**になった。理由は、入れた 0.0.2 の `sakurascript` が中身の無い仮の受け口で、台本を受け取らないため（「見つかった件と起票」の 1 行目）。入れる手続きと切り替えの手続きそのものは、どちらの入口でも同じ物。
 - 状態を作った起動（3 回目）は、`AREKA_NO_ALERT` を置いていない（置くと、0.0.2 はメニューの「インストール…」でファイルを選ぶ画面を出さない）。利用者の普段の起動と同じ側の条件。
 - シェルの記憶（`ghost\<ゴースト>\shell\<シェル>\profile\areka\`）は、0.0.2 では作る操作が無く、作れなかった。上げ直しと外し方の実測では、この種類を「測れなかった」と書く（理由は「上げ直しの実測」の「作った物の一覧」）。シェルのフォルダそのものは `ghost\` の下に在るので、フォルダの有無は見られる。
+- 上げ直しに使ったコマンドは `winget upgrade --manifest`（タスク 3.2）。止まらなかったので、代わりの手（`winget install --manifest`）は使っていない。
+- 上げ直しの確かめ専用のマニフェストは、版の欄だけを `0.0.2.1` にした物で、取り寄せる zip は 0.0.2 と同じ。「置き換わった」は、目印を付けた同梱のファイルが zip の中の元の値に戻ったことで見ている（中身の違う新しい版へ替わるところは見ていない）。
+- 上げ直しの後の起動は、タスク 2.2 の起こし方に `AREKA_MCP_PORT` を 1 つ足している（今のゴーストの名前を MCP の口から聞くため）。0.0.2 の `get_status` は名前を返さないので、名前は `get_active_ghost_list` で読んだ。
 
 （タスク 3.3・3.4 で記入）
 
@@ -510,5 +656,6 @@ MCP の口へ送った物と答え（送り方は `tools/call` を 1 本ずつ�
 | 起きたこと | どの段か | 根拠の記録の場所 | 起票した spec |
 |---|---|---|---|
 | 入れた areka（0.0.2）の MCP の `sakurascript` が、台本を受け取らずに `NG:not implemented yet` と答える。台本で `.nar` を入れる・ゴーストを切り替える・終える、のどれもできず、状態を MCP の口から作れなかった（代わりに、右クリックメニューを AI が画面の操作で動かして作った） | 段 4（タスク 3.1） | `target\winget-check\logs\3.1-mcp.log`（送った文と答え）・上の「上げ直しの実測」の「作る状態」・タグ `v0.0.2` の `crates/areka/src/mcp/sakurascript.rs` | （タスク 3.6 で記入。中身を入れる仕事は、起票済みの `areka-P0-mcp-kanade-tools` の brief に在る） |
+| winget の上げ直しで、利用者の物が消えた。areka は利用者の物（後から入れたゴーストとバルーン・ゴーストの記憶）を、入れ先の `ghost\`・`balloon\` の中に置く。winget は上げ直しのときに、この 2 つのフォルダを中身ごと消してから zip の中身を置き直した（消えた物は 6・208 ファイル。areka の記憶 `profile\` は残った）。その後の起動は、覚えていたゴーストが無いので同梱のゴーストで立った | 段 5（タスク 3.2） | 上の「上げ直しの実測」の「上げ直し」・`target\winget-check\logs\3.2-diff-after-upgrade.txt`・`3.2-run.stdout.log` | （タスク 3.6 で記入。要件 4.6 の起票＝利用者の物が上げ直しと外し方で消えないようにする仕事） |
 
 （タスク 3.6 で記入）
