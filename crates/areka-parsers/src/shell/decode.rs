@@ -294,7 +294,7 @@ fn field_u32(fields: &[String], idx: usize) -> u32 {
 ///   animation は N の**初出順**で保持する（z-order 実順序付けはしない・要件 5.6）。
 /// - **interval 忠実転記**（要件 5.1/5.2/5.3/8.2）: `interval,KIND[,K]` の KIND を
 ///   `bind` → `Bind`、`random` → `Random{k}`、`bind+random` → `BindRandom{k}` に正規化し、
-///   未認識キーワード（`sometimes`/`periodic`/`always` 等・要件 8.2）は原文のまま
+///   未認識キーワード（`sometimes`/`rarely`/`always` 等・要件 8.2）は原文のまま
 ///   `Interval::Other(keyword)` へ転記する（fallback-Bind 撤去・討議 #1 裁定＝語彙を
 ///   落とさない黙らない）。K は field[2] を u32・欠落既定 0。interval 行は当該 ID の
 ///   slot を確定させる（interval のみで pattern が無くとも初出順で animation を積む）。
@@ -389,10 +389,15 @@ fn animation_slot(animations: &mut Vec<Animation>, id: u32) -> &mut Animation {
 /// `animationN.interval,KIND[,K]` 行を `Interval` へ忠実転記する（要件 5.1/5.2/5.3/8.2）。
 ///
 /// KIND（field[1]）が駆動 3 種（bind/random/bind+random）ならその語彙へ、それ以外の
-/// 未認識キーワード（sometimes/rarely/periodic/always/runonce 等）は原文のまま
+/// 未認識キーワード（sometimes/rarely/always 等）は原文のまま
 /// `Interval::Other(keyword)` へ転記する（fallback-Bind 撤去・討議 #1 裁定・要件 8.2）。
 /// 転記層は語彙を落とさず黙らない。KIND 欠落は空文字 `Other("")`（下流吸収・要件 3.3）。
 /// K（field[2]）は u32・欠落既定 0（要件 3.3）。
+///
+/// 引き金の 3 語（areka-P0-seriko-trigger-intervals 要件 1.1〜1.5）は小文字の完全一致だけを
+/// 読む: `runonce` → `Runonce`（第 3 欄以降は読まない）、`talk`／`periodic` は field[2] が
+/// 1 以上の整数なら `Talk{n}`／`Periodic{secs}`、読めないとき（欠落・0・非数値）は第 2 欄以降を
+/// `,` で繋いだ原文を `Other` へ運ぶ（失敗せず記録も出さない・無効の記録は下流の表が出す）。
 fn normalize_interval(fields: &[String]) -> Interval {
     match fields.get(1).map(String::as_str) {
         Some("bind") => Interval::Bind,
@@ -402,6 +407,13 @@ fn normalize_interval(fields: &[String]) -> Interval {
         },
         Some("bind+random") => Interval::BindRandom {
             k: field_u32(fields, 2),
+        },
+        Some("runonce") => Interval::Runonce,
+        // `field_u32` は欠落・非数値を 0 へ倒すので、0 が「正の整数として読めない」の全部。
+        Some(word @ ("talk" | "periodic")) => match (word, field_u32(fields, 2)) {
+            (_, 0) => Interval::Other(fields[1..].join(",").into()),
+            ("talk", n) => Interval::Talk { n },
+            (_, secs) => Interval::Periodic { secs },
         },
         // 未認識キーワード・欠落は原文（欠落は空文字）を `Other` へ忠実転記する（要件 8.2）。
         other => Interval::Other(other.unwrap_or("").into()),
@@ -574,3 +586,9 @@ fn parse_alias_ids(value: &str) -> Vec<u32> {
 #[cfg(test)]
 #[path = "decode_charset_tests.rs"]
 mod charset_tests;
+
+/// 引き金の 3 語（`talk,数値`・`runonce`・`periodic,数値`）の読みを固定する兄弟テスト
+/// （areka-P0-seriko-trigger-intervals 要件 9.1）。
+#[cfg(test)]
+#[path = "decode_interval_trigger_tests.rs"]
+mod interval_trigger_tests;

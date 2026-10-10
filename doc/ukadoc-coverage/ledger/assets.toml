@@ -6048,7 +6048,7 @@ note = """
 [entry."ukadoc:descript_shell_surfaces:always:1"]
 status = "degraded"
 introduced = ""
-owner = "areka-P0-seriko-trigger-intervals"
+owner = "areka-P0-seriko-interval-combinations"
 priority = "A6"
 values = ["気配"]
 links = []
@@ -7358,19 +7358,21 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:periodic_2c_6570_5024:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-seriko-trigger-intervals"
 priority = "A6"
 values = ["気配"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: debug!。areka-parsers の shell::normalize_interval が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけで、それ以外の語は元の綴りのまま持ち上げられ、areka-seriko の table まで届いたところで非駆動として落とされる。
-この語は数値を添える形だが、areka-parsers の shell::normalize_interval が第 2 欄を数値にするのは駆動する 2 語のときだけなので、添えた数値も値にならない。
-実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけである（`bind` は静的な着せ替えゆえ非駆動）。この語を書いてもコマは 1 枚も進まない。
-落とすときに元の綴りを添えた記録が出るが、その段は控えめで、areka の main が既定とする記録の水準では見えない。作者から見ると「書いたのに何も動かないし、何も言われない」という形になる。
-この縮小を引き受ける行が見直し表にある——`wintf-P0-animation-system`（再生をまばたきの 2 語だけにした）。ただし受け取る経路はあっても駆動する経路が無いので、状態は縮退ではなく語彙のみとした。同じページの間隔語 `bind` も同じ理由で語彙のみである（合成のしかたの側にある同じ綴りの項目とは別である）。
+壊れ方: 見た目の差。記録: debug!。areka はこの語を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無い。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、同じページの `random,数値` でも採っている）。ここに出る記録は壊れたときの記録ではなく、採録したことを残す記録である。
+2026-10-10 から駆動する（areka-P0-seriko-trigger-intervals）。areka-parsers の shell::normalize_interval が小文字の完全一致で `periodic` を読み、数値が 1 以上の整数なら値にする。areka-seriko の table::AnimationTable::from_world がそれを引き金 `LoopTrigger::Periodic` として採録して、サーフェスの番号・animation の番号・語・数値を添えた debug! を表を作るときに 1 回残す。スコープがそのサーフェスを表示している間、切り替わった時刻を起点に、数値秒・2×数値秒・3×数値秒…の時刻ごとに最初のコマから 1 回ずつ再生する。別のサーフェスへ切り替わるか非表示になると止まり、戻った時刻が新しい起点になる。乱数は使わない。シェルのサーフェスでもバルーンのサーフェスでも同じである。
+正典が黙っている所は areka の裁量で次のとおりに決めた。切り替わった瞬間には再生しない（起点から数値秒後が最初の 1 回）。数値秒ちょうどで数え、画面の更新が遅れても起点をずらさない。1 回の更新の間に周の時刻を 2 つ以上またいでも、再生は 1 回だけ始める。周の時刻に同じアニメーションの再生がまだ続いていれば、その周は飛ばす（その時刻にまだ続いているかで測るので、長さが周期ちょうどのアニメーションは毎周再生する）。
+バルーンの窓が閉じている間は、そのバルーンのサーフェスを非表示として扱う。窓が閉じると新しい周の再生を始めなくなり、開き直した時刻が新しい起点になる。
+element定義の子のサーフェス・pattern定義の先のサーフェス（部品）に書いた `periodic` は、その部品が見えるようになった瞬間が起点で、見えなくなると止まる。外側のサーフェスが替わっても見え続けた部品は、元の起点のまま続く。
+`+` の組み合わせ（`bind+periodic` など）と `Periodic` のような大文字混じりの綴りは採らず、今までどおり元の綴りを添えた debug! だけを残す。数値が読めない綴り（数値が無い・0・数字でない）も採らず、サーフェスの番号・animation の番号・元の綴りを添えた warn! を表を作るときに 1 回出す。
 束: アニメーションを始める間隔の語・名前を受けて控えめな記録だけ残す（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 24——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、この語が非駆動だった当時の仕分けの綴りをそのまま残している（同じ束の他の間隔語と揃えるため。優先度 A6 は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:point.basepos.x_2c_5ea7_6a19:1"]
@@ -7490,10 +7492,10 @@ values = ["気配"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: debug!。areka はこの語を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無い。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、同じページの `random,数値` でも採っている）。ここに出る記録は壊れたときの記録ではなく、読み替えたことを残す記録である。
-areka-parsers の shell::normalize_interval が名前として認めるのは 3 つの語（`bind`・`random`・`bind+random`）だけなので、この語は元の綴りのまま `Interval::Other` へ忠実に転記される。それを areka-seriko の table::AnimationTable::from_world が `random,4` と同じ引き金（毎秒 4 分の 1 の確率）・同じコマの進め方へ読み替えて採録する。比べ方は小文字の完全一致で、`Rarely` のような大文字混じりの綴りは読み替えない。
+areka-parsers の shell::normalize_interval が名前として認めるのは 6 つの語（`bind`・`random`・`bind+random`・`runonce`・`periodic`・`talk`）だけなので、この語は元の綴りのまま `Interval::Other` へ忠実に転記される。それを areka-seriko の table::AnimationTable::from_world が `random,4` と同じ引き金（毎秒 4 分の 1 の確率）・同じコマの進め方へ読み替えて採録する。比べ方は小文字の完全一致で、`Rarely` のような大文字混じりの綴りは読み替えない。
 読み替えたときに元の綴りを添えた debug! が出る（欄: surface_id・animation_id・vocab・k）ので、どの面のどのアニメーションがどの引き金になったかがログから読める。段は控えめで、areka の main が既定とする記録の水準では見えない。
 実測（2026-09-20）: テンプレートゴースト `konnoyayame` の面 0 のまばたき（`animation0`）が `sometimes` を使っており、実機の走行で `k=2` の抽選が 101 回発火した。`rarely` を使う検体は手元に 0 件だが、読み替えは同じ 1 か所の腕で、`sometimes` と同型に採録される。
-`sometimes`・`rarely` 以外の間隔語（`runonce`・`never`・`endtalk`・`periodic,数値` など）は今までどおり元の綴りを添えた debug! を残して非駆動である（単独の `always` だけは 2026-10-06 から `areka-P0-animated-image-playback` が駆動する）。この 2 語を駆動側へ移したのは `areka-P0-shell-implicit-surface`（要件 11.1・11.2）で、正典 URL はその読み替えの腕（areka-seriko の table::AnimationTable::from_world）に置いた。
+`talk,数値`・`runonce`・`periodic,数値` の 3 語は 2026-10-10 から `areka-P0-seriko-trigger-intervals` が駆動し、単独の `always` は 2026-10-06 から `areka-P0-animated-image-playback` が駆動する。`yen-e`・`never` は今までどおり元の綴りを添えた debug! を残して非駆動である。この 2 語を駆動側へ移したのは `areka-P0-shell-implicit-surface`（要件 11.1・11.2）で、正典 URL はその読み替えの腕（areka-seriko の table::AnimationTable::from_world）に置いた。
 束: アニメーションを始める間隔の語・名前を受けて控えめな記録だけ残す（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 24——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 束の名前と順位は、この語が非駆動だった当時の仕分けの綴りをそのまま残している（同じ束の他の間隔語と揃えるため。優先度 A6 は変えていない）。
 """
@@ -7523,18 +7525,20 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:runonce:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-seriko-trigger-intervals"
 priority = "A6"
 values = ["気配"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: debug!。areka-parsers の shell::normalize_interval が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけで、それ以外の語は元の綴りのまま持ち上げられ、areka-seriko の table まで届いたところで非駆動として落とされる。
-実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけである（`bind` は静的な着せ替えゆえ非駆動）。この語を書いてもコマは 1 枚も進まない。
-落とすときに元の綴りを添えた記録が出るが、その段は控えめで、areka の main が既定とする記録の水準では見えない。作者から見ると「書いたのに何も動かないし、何も言われない」という形になる。
-この縮小を引き受ける行が見直し表にある——`wintf-P0-animation-system`（再生をまばたきの 2 語だけにした）。ただし受け取る経路はあっても駆動する経路が無いので、状態は縮退ではなく語彙のみとした。同じページの間隔語 `bind` も同じ理由で語彙のみである（合成のしかたの側にある同じ綴りの項目とは別である）。
+壊れ方: 見た目の差。記録: debug!。areka はこの語を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無い。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、同じページの `random,数値` でも採っている）。ここに出る記録は壊れたときの記録ではなく、採録したことを残す記録である。
+2026-10-10 から駆動する（areka-P0-seriko-trigger-intervals）。areka-parsers の shell::normalize_interval が小文字の完全一致で `runonce` を読み、areka-seriko の table::AnimationTable::from_world が引き金 `LoopTrigger::Runonce` として採録して、サーフェスの番号・animation の番号・語を添えた debug! を表を作るときに 1 回残す。スコープのサーフェスが別の番号からそのサーフェスに切り替わった瞬間（起動後の最初の表示と、`\\s[-1]` などの非表示からの戻りを含む）に、最初のコマから最後のコマまでを 1 回だけ再生する。同じ番号の指定し直しと、着せ替えだけの切り替えでは再生しない。乱数は使わない。シェルのサーフェスでもバルーンのサーフェスでも同じである。
+正典が黙っている所は areka の裁量で次のとおりに決めた。バルーンの窓が閉じている間は、そのバルーンのサーフェスを非表示として扱う。窓の開き直しは切り替わりとみなさず、`runonce` を再生しない。閉じた窓のまま切り替わったサーフェスの `runonce` だけは、最初に窓が開いた時刻で 1 回再生する。
+element定義の子のサーフェス・pattern定義の先のサーフェス（部品）に書いた `runonce` は、その部品が見えるようになった瞬間を切り替わった瞬間として 1 回再生する。外側のサーフェスが替わっても見え続けた部品は再生し直さない。
+`+` の組み合わせ（`bind+runonce` など）と `RunOnce` のような大文字混じりの綴りは採らず、今までどおり元の綴りを添えた debug! だけを残す。
 束: アニメーションを始める間隔の語・名前を受けて控えめな記録だけ残す（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 24——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、この語が非駆動だった当時の仕分けの綴りをそのまま残している（同じ束の他の間隔語と揃えるため。優先度 A6 は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:sakura.balloon.offsetx_2c_5ea7_6a19:1"]
@@ -7590,10 +7594,10 @@ values = ["気配"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: debug!。areka はこの語を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無い。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、同じページの `random,数値` でも採っている）。ここに出る記録は壊れたときの記録ではなく、読み替えたことを残す記録である。
-areka-parsers の shell::normalize_interval が名前として認めるのは 3 つの語（`bind`・`random`・`bind+random`）だけなので、この語は元の綴りのまま `Interval::Other` へ忠実に転記される。それを areka-seriko の table::AnimationTable::from_world が `random,2` と同じ引き金（毎秒 2 分の 1 の確率）・同じコマの進め方へ読み替えて採録する。比べ方は小文字の完全一致で、`Sometimes` のような大文字混じりの綴りは読み替えない。
+areka-parsers の shell::normalize_interval が名前として認めるのは 6 つの語（`bind`・`random`・`bind+random`・`runonce`・`periodic`・`talk`）だけなので、この語は元の綴りのまま `Interval::Other` へ忠実に転記される。それを areka-seriko の table::AnimationTable::from_world が `random,2` と同じ引き金（毎秒 2 分の 1 の確率）・同じコマの進め方へ読み替えて採録する。比べ方は小文字の完全一致で、`Sometimes` のような大文字混じりの綴りは読み替えない。
 読み替えたときに元の綴りを添えた debug! が出る（欄: surface_id・animation_id・vocab・k）ので、どの面のどのアニメーションがどの引き金になったかがログから読める。段は控えめで、areka の main が既定とする記録の水準では見えない。
 実測（2026-09-20）: テンプレートゴースト `konnoyayame` の面 0 のまばたき（`animation0`）が `sometimes` を使っており、実機の走行で `k=2` の抽選が 101 回発火した。`rarely` を使う検体は手元に 0 件だが、読み替えは同じ 1 か所の腕で、`sometimes` と同型に採録される。
-`sometimes`・`rarely` 以外の間隔語（`runonce`・`never`・`endtalk`・`periodic,数値` など）は今までどおり元の綴りを添えた debug! を残して非駆動である（単独の `always` だけは 2026-10-06 から `areka-P0-animated-image-playback` が駆動する）。この 2 語を駆動側へ移したのは `areka-P0-shell-implicit-surface`（要件 11.1・11.2）で、正典 URL はその読み替えの腕（areka-seriko の table::AnimationTable::from_world）に置いた。
+`talk,数値`・`runonce`・`periodic,数値` の 3 語は 2026-10-10 から `areka-P0-seriko-trigger-intervals` が駆動し、単独の `always` は 2026-10-06 から `areka-P0-animated-image-playback` が駆動する。`yen-e`・`never` は今までどおり元の綴りを添えた debug! を残して非駆動である。この 2 語を駆動側へ移したのは `areka-P0-shell-implicit-surface`（要件 11.1・11.2）で、正典 URL はその読み替えの腕（areka-seriko の table::AnimationTable::from_world）に置いた。
 束: アニメーションを始める間隔の語・名前を受けて控えめな記録だけ残す（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 24——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 束の名前と順位は、この語が非駆動だった当時の仕分けの綴りをそのまま残している（同じ束の他の間隔語と揃えるため。優先度 A6 は変えていない）。
 """
@@ -7798,19 +7802,21 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 """
 
 [entry."ukadoc:descript_shell_surfaces:talk_2c_6570_5024:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-seriko-trigger-intervals"
 priority = "A6"
 values = ["気配"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: debug!。areka-parsers の shell::normalize_interval が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけで、それ以外の語は元の綴りのまま持ち上げられ、areka-seriko の table まで届いたところで非駆動として落とされる。
-この語は数値を添える形だが、areka-parsers の shell::normalize_interval が第 2 欄を数値にするのは駆動する 2 語のときだけなので、添えた数値も値にならない。
-実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけである（`bind` は静的な着せ替えゆえ非駆動）。この語を書いてもコマは 1 枚も進まない。
-落とすときに元の綴りを添えた記録が出るが、その段は控えめで、areka の main が既定とする記録の水準では見えない。作者から見ると「書いたのに何も動かないし、何も言われない」という形になる。
-この縮小を引き受ける行が見直し表にある——`wintf-P0-animation-system`（再生をまばたきの 2 語だけにした）。ただし受け取る経路はあっても駆動する経路が無いので、状態は縮退ではなく語彙のみとした。同じページの間隔語 `bind` も同じ理由で語彙のみである（合成のしかたの側にある同じ綴りの項目とは別である）。
+壊れ方: 見た目の差。記録: debug!。areka はこの語を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無い。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、同じページの `random,数値` でも採っている）。ここに出る記録は壊れたときの記録ではなく、採録したことを残す記録である。
+2026-10-10 から駆動する（areka-P0-seriko-trigger-intervals）。areka-parsers の shell::normalize_interval が小文字の完全一致で `talk` を読み、数値が 1 以上の整数なら値にする。areka-seriko の table::AnimationTable::from_world がそれを引き金 `LoopTrigger::Talk` として採録して、サーフェスの番号・animation の番号・語・数値を添えた debug! を表を作るときに 1 回残す。スコープの台詞の文字がバルーンに現れていく間、数値分の文字が現れるごと（数値が 3 なら 3 文字目・6 文字目・9 文字目…が現れる時刻）に、そのスコープの今のサーフェスのアニメーションを最初のコマから 1 回再生する。動かすのは文字が現れるスコープだけで、乱数は使わない。シェルのサーフェスでもバルーンのサーフェスでも同じである。
+正典が黙っている所は areka の裁量で次のとおりに決めた。数える単位は書記素クラスタで（結合文字や絵文字の列は 1 文字）、選択肢の文字も数え、改行・消去・待ちは数えない。サーフェスが別の番号へ切り替わったときと、バルーンのサーフェスではバルーンの窓が開き直したときに数え直す（その時刻までに現れていた文字は数えず、その後に現れる文字を 1 文字目から数える。シェルのサーフェスの数えはバルーンの窓の開け閉めでは変わらない）。区切りが同じ時刻に 2 つ以上来たとき（文字が一度に現れたとき）と、画面の更新が遅れて 1 回の更新の間に区切りを 2 つ以上越えたときは、再生を最新の区切りの 1 回にまとめる。区切りの時刻に同じアニメーションの再生がまだ続いていれば、その区切りは飛ばす（その時刻にまだ続いているかで測るので、長さが区切りの間隔ちょうどのアニメーションは毎回再生する）。文字が現れる時刻は、バルーンの文字の層と同じ式で数える。
+バルーンの窓が閉じている間は、そのバルーンのサーフェスを非表示として扱い、再生を始めない。
+element定義の子のサーフェス・pattern定義の先のサーフェス（部品）に書いた `talk` は、その部品が見えている間、外側のサーフェスの文字の数えで再生する（部品が後から見えるようになっても数え直さない）。
+`+` の組み合わせ（`bind+talk` など）と `Talk` のような大文字混じりの綴りは採らず、今までどおり元の綴りを添えた debug! だけを残す。数値が読めない綴り（数値が無い・0・数字でない）も採らず、サーフェスの番号・animation の番号・元の綴りを添えた warn! を表を作るときに 1 回出す。
 束: アニメーションを始める間隔の語・名前を受けて控えめな記録だけ残す（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 24——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、この語が非駆動だった当時の仕分けの綴りをそのまま残している（同じ束の他の間隔語と揃えるため。優先度 A6 は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:version_2c_2a:1"]

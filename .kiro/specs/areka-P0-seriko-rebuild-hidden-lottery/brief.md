@@ -52,3 +52,14 @@
 - 要件定義のモデル: Opus。
 - 分割の案: 無し。
 - 見つけた穴・古くなった記述: `seriko-trigger-intervals` が `runonce`・`periodic`・`talk` を部品にも足すと、この性質は「乱数の並びが変わるだけ」でなく「見えていない部品で再生が始まる」に変わりうる。あちらの設計で部品の門を見るときに一緒に決めてしまえば、本 spec は記録だけで閉じられる。
+
+## 2026-10-10 `areka-P0-seriko-trigger-intervals` の完了時の申し送り
+
+出どころは `completed/areka-P0-seriko-trigger-intervals/tasks.md` の Implementation Notes（5.1・5.2）と同 spec の設計書（Revalidation Triggers・部品の節）。前提の `seriko-trigger-intervals` は 2026-10-10 に着地した。
+
+- **上の節の心配（「見えていない部品で再生が始まる」）は起きなかった**。`parts.rs` の `rebuild` は 2 段になった。
+  - 1 段目は今までの評価のまま＝外側の今のコマでは見えない部品にも回り、抽選のくじを引く（**乱数の消費の並びは変えていない**。本 spec の Current State は今も当たっている）。3 語（`runonce`・`periodic`・`talk`）は、1 段目では在る時計を進めるだけで、始めない。
+  - 2 段目は、見えると決まった部品にだけ回り、3 語を始めるかを判定する。1 段目の評価を受けただけで、見えると決まらなかった部品は 2 段目に来ない。
+- **本 spec が `rebuild` の評価の順を変えるときの約束**: 「見えると決まった部品だけが 3 語の引き金を受ける」を保つ（`seriko-trigger-intervals` の設計書の Revalidation Triggers が名指ししている）。固定しているテストは `crates/areka-seriko/src/parts_trigger_tests.rs`。
+- **触るファイルの今**: `parts.rs` は 893 行（1,000 行の上限まで約 100 行）。部品の 3 語の配線は兄弟の `parts_trigger.rs` に出してある。
+- **近い件が 1 本起票された**: `seriko-lottery-ended-play-skip`（終わった再生が片付く前の境界で、抽選のくじを 1 回飛ばす件）。直す向きを選ぶと、本 spec と同じ抽選の決定論のテストの期待値を引き直す＝2 本を続けて取ると引き直しが 1 度で済む。

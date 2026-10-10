@@ -1,0 +1,22 @@
+{
+  "feature_name": "areka-P0-seriko-trigger-intervals",
+  "created_at": "2026-10-10T04:05:21Z",
+  "updated_at": "2026-10-10T12:57:35Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true
+}
