@@ -23,10 +23,6 @@ pub struct Home {
 }
 
 /// 環境変数の今の値。`main` が読んで `cli::run` へ渡す（テストは値を直に渡す）。
-#[cfg_attr(
-    test,
-    expect(dead_code, reason = "テストはプロセスの環境変数を読まない")
-)]
 pub fn env_value() -> Option<OsString> {
     std::env::var_os("AREKA_IMPL_WATCH_HOME")
 }

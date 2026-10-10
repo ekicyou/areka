@@ -120,7 +120,7 @@
   - _Requirements: 6.1, 6.2, 6.6, 6.7, 12.1, 13.1, 13.5, 13.6_
 
 - [ ] 5. 入口でつなぐ（引数からコマンドの手順・出力・終了コードまで）
-- [ ] 5.1 引数の表・使い方・誤りの扱いを作る
+- [x] 5.1 引数の表・使い方・誤りの扱いを作る
   - コマンド 14 個（`watch`・`merge`・`merged`・`loadtest`・`loadrunning`・`loaddone`・`stopped`・`resume`・`unstop`・`cancel`・`leave`・`tick`・`status`・`clear`）と `--help` を 1 本の表から解釈する（設計のコマンドの表の 14 行が正）。要る引数・任意の引数・`--wait` を取るかを表に持つ
   - 形の決まり: 識別・リポジトリ・spec は英数字と `._-` の 1〜100 字、PR は数字、sha は 16 進の 7〜40 字。外れたら使い方の誤り
   - `--help` はコマンド・引数・終了コード（0／1／2／3）の対応を ASCII で出す
@@ -253,3 +253,10 @@
 - 4.2 → 5.3: 本物の口（`Store` の上・本物の時計・1 秒の眠り・`POLL = 1 s`）は 5.3 が作る。`Store::fingerprint` は `io::Result` を返し出口に `error!` が無いので、本物の口が `WatchError::io` に直すときに `error!` を 1 行出す（出さないと「ログ無しの 1」になる）。置き換えと重なった一時の失敗の試し直しを足すなら本物の口の中。呼び手が `hold(home.alive_path(id, spec.kind()))` を行う。`AlreadyRunning { kind }` に要る `WaitKind` の ASCII 名の関数はまだ無い（`state.rs` に 1 つ置き `home.rs` の `alive_path` もそれを使う）。
 - 4.2 → 6.2: 手順書に「`watch` が 1 で終わったら直ちに立て直す（立て直すまでに他人の呼び出しが来ると回収される）」と書く。
 - 4.2（任意の残り）: 登録の直後の最初の `fingerprint` の失敗に檻が無い（`.ok().flatten()` に替える変異が緑。害は次の 1 秒で 1 回多く読むだけ）。`sleeps == 0` で失敗させて跡が `Rf` で終わるテストを 1 本足せば閉じる。
+- 5.1: `cli::parse` は表 1 本（`COMMANDS: [Spec; 14]`＋14 行の外の `static HELP`）だけを引く。`Invocation { name: &'static str, command, wait }`、`cli::Command` は `Help`／`Status`／`Clear`／`Watch { id, repo, name: Option }`／`Resume { id }`／`Change(plan::Command)`。順は「読む → `--help` ならここで終わる → 置き場所の解決 → コマンドの手順」。終了コードの写像は `cli::exit_code` の 1 か所。失敗の本文は `run_with` が標準エラーへ書く（`main` は何も出さない）。`-h` と引数なしは使い方の誤り（2）。`main` は `args_os` を置き換えの字つきで文字列にする。
+- 5.1 → 5.2／5.3: 仮の枝 `not_wired_yet`（置き場所を解決してから ASCII 1 行＋ 2・store は開かない）とそのテスト `a_parsed_command_is_refused_until_its_procedure_is_wired` は、5.2・5.3 が `dispatch` の末尾を `match invocation.command` に替えて消す（5.2 だけ済んだ時点では待つコマンドがまだここへ来る）。`Outcome::NotApplied` の `expect(dead_code)` は 5.2 が作った時点で外す。`store::open` の後で標準出力・標準エラーへ書けない失敗は「ログ無しの 1」になるので `error!` を 1 行足す。`Found::need` は表の `required` と `build` がずれると空文字を渡す（檻は `every_command_parses_in_its_full_form`）。
+- 5.1 → 5.2: `--help` の `--name`／`--purpose` の `any text` を `any text not starting with --` に、誤りの文を `needs a value (a value cannot start with --)` の趣旨に直して、字と振る舞いを合わせる（裁定待ち 8 の今の振る舞いのまま）。任意: 設計の表で 3 を持つ 9 コマンドの `--help` の行に `3=` が在ることを 1 本で判定する（`note` に檻が無い）。
+- 5.1 → 6.2: 手順書に (a) Bash で空の変数を引用符つきで `--name ""` と渡すと名前が空になる (b) 環境変数の失敗の文は 1 行（設計の「共通:」の「2 行」は「2 行以内」へ追い書き）。
+- 5.1【開発者の裁定待ち 8・設計からの狭め】値を取る引数は `--` で始まる値を断る（設計「引数の形」の「`--name`・`--purpose`: 任意の文字列」より狭い。例: `--purpose "--release build x5"` が 2）。外すと `--spec $SPEC --bug`（空の変数）が spec=`--bug` として黙って通り、`--name $NAME --wait` が `--wait` を名前に食って待たずに 0 で返る。推奨: 狭めたままにして design.md の「引数の形」へ追い書き。
+- 5.1【開発者の裁定待ち 9・設計の水準】大小文字だけ違う識別は実害がある: Windows では `alive/A.watch.lock` と `alive/a.watch.lock` が同じファイル（レビューが実測）なのに、状態ファイルの中では `A` と `a` は別の参加者。`A` の見張りが走っていると `a` の `watch` は `AlreadyRunning` で 1、見張りの無い `a` は `A` が生きている限り回収されない。推奨: 識別を ASCII の小文字に寄せてから使う（`cli` の 1 か所）か、手順書に「大小文字だけ違う識別を使わない」。識別に何を渡すか（続きの spec）と一緒に決める。`con`・`nul` などの予約名は古い Windows でデバイスに化けうる（この機械では普通のファイル）。
+- 5.1 → 裁定待ち 5 の実例（優先度を上げる）: Git Bash から `AREKA_IMPL_WATCH_HOME=/c/home/…/x` の形が Windows 形に直らずに exe へ渡ると、`C:\c\home\…` にフォルダの鎖ができる（レビュー中に実際に起き、空なのを確かめて消した）。Windows では `/c/…` は `is_absolute()` が偽なので、推奨の「絶対パスでなければ断る」で防げる。Bash から呼ぶスキル（6.3）に直結する。
