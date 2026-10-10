@@ -86,7 +86,7 @@
   - _Boundary: areka-kanade のイベントの組み立て_
   - _Requirements: 4.1, 4.2, 4.6, 4.7_
 
-- [ ] 4.2 アンカーの知らせの受理と 2 段の送出を作る
+- [x] 4.2 アンカーの知らせの受理と 2 段の送出を作る
   - 知らせの型（ID・範囲の文字・スコープ・引数）を新しいファイルに置き、UI からの伝言と状態機械の入力に種類を 1 つずつ足す（肥大ファイルには 1 行〜数行の腕だけ）
   - 受理と段の記憶を新しいファイルに置く: ID が `On` で始まれば同じ名前のイベント（選択肢の `On` 始まりと同じ組み立てと受理規則・Reference0 以降＝引数）を 1 本、そうでなければ `OnAnchorSelectEx` を 1 本積み、応答待ちの段を覚える。帳簿・期限・照合の鍵は持たない。受理の記録（`anchor_accepted`）を出す
   - 応答: 台本なら段の記憶を捨てて既存の応答の腕へ流す（話していなければ起動・話していれば単一の再生枠の規律で置き換え）。204・送信の失敗（`error!` `anchor_shiori_failed_as_204`）・想定外の応答（`warn!`）は、`OnAnchorSelectEx` の段なら `OnAnchorSelect` を積んで最終段へ、最終段なら何もしない
@@ -193,3 +193,7 @@
 - 4.1 → 4.2 への申し送り: `on_anchor_select_ex(text, id, references, snapshot)`／`on_anchor_select(id, snapshot)` は `pub` だが `lib.rs` の公開の窓口 `events` には足していない。結合テスト（`tests/`）から使う必要が出たら、そのとき足す。
 - 4.1 → 6.3 への申し送り: `doc/ukadoc-coverage/ledger/shiori.toml` の `OnAnchorSelect`／`OnAnchorSelectEx` は `absent` のままで、note の「許可表に名前が無く、構築関数も無い」はもう事実と合わない（survey は緑のまま）。
 - 4.1（範囲外・棚卸で扱う・1.2 の clippy の束へ追加）: `cargo clippy -p areka-kanade --all-targets` は `actor_raise_reply_tests.rs` の既定で deny の指摘（回らないループ）で lib のテストがコンパイルできない（本 spec の前から）。
+- 4.2（設計の直し）: ⑴ 最終段も ID を持つ（`AnchorStage::Final { id }`）— 空の ID は正当な形なので、失敗の記録で空文字を代用できない。記録には `stage`（`select_ex`／`final`）も載る。⑵ Steady の判定と `anchor_rejected_phase` は `anchor::on_anchor` の中（`mod.rs` の腕は 1 行）。⑶ 終了や切替の保留中もアンカーは受理する（選択肢と同じ）。`On` 始まりのアンカーの応答の出所ラベルは `"OnChoiceEvent"` のまま。`design.md` の該当箇所を改めた。
+- 4.2: 応答の帰属は殻の同期往復で保証される（`actor.rs` の `drive_translating` が 1 つの伝言の処理の中で `step` → 往復 → 応答の再投入を閉じる）。段の記憶 `State.anchor` はその連鎖の間しか `Some` でない。
+- 4.2 → 4.3 への申し送り（残り・すべて最上位の `step` から）: 引数なしで Reference2 以降の位置が無い／最初の応答が 204 の 2 段／話している最中の台本 → 置き換え（新しいトーク番号）と、そのとき選択待ちの帳簿が消えること／204 → 台詞そのまま・帳簿も残る／`On` 始まりで `OnAnchorSelectEx`・`OnAnchorSelect` が出ない／失敗を通したとき `anchor_shiori_failed_as_204` がちょうど 1 件で横断の `shiori_failed` が 0 件・致命へ倒れない（最終段と `On` 始まりでも）／定常以外の棄却／選択待ちの印が立たない／1 回の知らせでイベントの列 1 本・起動高々 1 回。既存の 11 本は `schedule/anchor_tests.rs`（346 行）。`failure_and_unexpected_reply_advance_like_no_content_with_a_record` の記録の表明は「ちょうど 1 件」へ締める。
+- 4.2 → 7.2 への申し送り（既存と同類の窓）: 再生が終わる瞬間にアンカーが押されると、置き換えの後に `unknown_talk_done`（error・状態は維持）が 1 件出うる。マウスや `raise_event` の置き換えと同じ窓で、本 spec が新しく作った種類ではない。

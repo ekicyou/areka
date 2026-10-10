@@ -193,7 +193,7 @@ doc/
 | `crates/areka-kanade/src/msg.rs` | `KanadeMsg::Anchor(AnchorInput)`（1 行）・`EventId::Choice` の doc 1 行 |
 | `crates/areka-kanade/src/lib.rs` | `pub mod anchor_input; pub use anchor_input::AnchorInput;` |
 | `crates/areka-kanade/src/actor.rs` | `KanadeMsg::Anchor(a) => Input::Anchor(a)`（1 行） |
-| `crates/areka-kanade/src/schedule/mod.rs` | `Input::Anchor(AnchorInput)`・`State.anchor: Option<AnchorStage>`・`Input::Anchor` の腕（Steady だけ・それ以外は `warn!` で棄却）・横断の `Failed`→Fault の免除条件に `state.anchor.is_some()`・`mod anchor;` |
+| `crates/areka-kanade/src/schedule/mod.rs` | `Input::Anchor(AnchorInput)`・`State.anchor: Option<AnchorStage>`・`Input::Anchor` の腕（`anchor::on_anchor` を呼ぶ 1 行。Steady の判定と棄却の `warn!` は `anchor.rs` の中）・横断の `Failed`→Fault の免除条件に `state.anchor.is_some()`・`mod anchor;` |
 | `crates/areka-kanade/src/schedule/steady.rs` | `on_reply` の先頭に段の記憶の腕（`anchor::on_anchor_reply` へ委譲・`Value` は既存の腕へ流す）。5〜6 行 |
 | `crates/areka-kanade/src/schedule/events.rs` | `ALLOWED_EVENT_IDS` に `OnAnchorSelectEx`・`OnAnchorSelect`／`on_anchor_select_ex`・`on_anchor_select`（`on_choice_select_ex`／`on_choice_select` と同じ形）。ファイル冒頭の表に 2 行 |
 | `crates/areka-kanade/src/schedule/events_change_tests.rs` | 許可表の数の檻（`ALLOWED_EVENT_IDS.len()` の 51）を 53 へ |
@@ -527,8 +527,9 @@ pub(crate) fn plan_anchor(id: &str) -> AnchorPlan;       // starts_with("On") �
 pub(crate) enum AnchorStage {
     /// OnAnchorSelectEx の応答待ち（204 なら OnAnchorSelect へ）。
     SelectEx { id: String },
-    /// 最終段（OnAnchorSelect か On 始まり）の応答待ち。
-    Final,
+    /// 最終段（OnAnchorSelect か On 始まり）の応答待ち。`id` は記録のために持つ
+    /// （空の ID は正当な形なので、空文字で代用しない。On 始まりはイベント名そのもの）。
+    Final { id: String },
 }
 /// Steady で受理: plan → GET を 1 本積み State.anchor に段を置く。info! anchor_accepted。
 pub(super) fn on_anchor(state: State, input: AnchorInput) -> (State, Vec<Action>);
@@ -538,10 +539,11 @@ pub(super) fn on_anchor(state: State, input: AnchorInput) -> (State, Vec<Action>
 pub(super) fn on_anchor_reply(state: &mut State, stage: AnchorStage, outcome: &ShioriOutcome, origin: &'static str) -> Option<Vec<Action>>;
 ```
 
-- `schedule/mod.rs`: `Input::Anchor` は `Phase::Steady` だけ受理（`anchor::on_anchor`）。それ以外は `warn!(event = "anchor_rejected_phase")` で棄却。横断の `Failed`→Fault の免除条件を `choice_in_flight || state.anchor.is_some()` に広げる（4.10）。
+- `schedule/mod.rs` の腕は `Input::Anchor(a) => anchor::on_anchor(state, a)` の 1 行（`user_break::on_user_break` などと同じ形）。`Phase::Steady` だけ受理し、それ以外を `warn!(event = "anchor_rejected_phase")` で棄却する判定は `anchor::on_anchor` の中に置く。横断の `Failed`→Fault の免除条件を `choice_in_flight || state.anchor.is_some()` に広げる（4.10）。
 - `steady::on_reply` の先頭: `if let Some(stage) = state.anchor.take() { if let Some(actions) = anchor::on_anchor_reply(&mut state, stage, &outcome, origin) { return (state, actions); } }`——`Value` はそのまま下の既存の腕へ（`talk: None` なら起動・`talk: Some` なら `value_replaces_active_talk` で置き換え・`clear_choice_ledger` も既存どおり＝4.8）。
 - スナップショットは `state.snapshot()`（選択待ちの有無は帳簿から導く・アンカーは `choosing` を立てない・4.7）。
 - 段の記憶は 1 回の `step` の連鎖の中だけで生きる（往復が同期）。close 系の掃除点に足す項目は無い（`take` で必ず消える）。
+- 終了や切替の保留（`pending_close`／`pending_change`）がある間もアンカーは受理する（選択肢と同じ・マウスのような保留中の防御は足さない）。`On` 始まりのアンカーの応答の出所ラベルは、選択肢の `On` 始まりと同じ `"OnChoiceEvent"` のまま。
 
 #### `events.rs`
 
@@ -567,7 +569,7 @@ pub fn on_anchor_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall;  
 
 - **アンカー（範囲）**: 開きの合図から閉じの合図までに追記された文字の並び。属性＝ID・引数・表示された文字。選択肢と同じ列に `kind` 違いで並ぶ。寿命＝バルーンの本文と同じ（`Clear`／`ClearAll` で消える）。
 - **選択の知らせ**: `ChoiceSelection{kind, id, label, scope, references}` → `AnchorInput{id, text, scope, references}`。
-- **段の記憶**: `AnchorStage`（`SelectEx{id}` → `Final`）。帳簿（候補・期限・talk_id）は持たない。
+- **段の記憶**: `AnchorStage`（`SelectEx{id}` → `Final{id}`）。帳簿（候補・期限・talk_id）は持たない。
 - **対応の見つかり**: `AnchorFinding{index, issue}`。
 
 ### 不変条件
@@ -583,8 +585,8 @@ pub fn on_anchor_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall;  
 | 閉じ無し・重なり・迷子の閉じ | compile が補う／無視する | `warn!` `anchor_unclosed`／`anchor_reopened`／`anchor_stray_close`（各 1 件・`index`。`id` は開きにだけ付く） |
 | 文字の層での重なり・迷子（到達しない防御） | 閉じる／無視 | `debug!`（空回しは出さない） |
 | Steady 以外でのアンカーの知らせ | 棄却 | `warn!` `anchor_rejected_phase`（`id`・`scope`・phase） |
-| SHIORI の失敗（送れない・内部の誤り） | 204 と同じ扱いで続行 | `error!` `anchor_shiori_failed_as_204`（`id`・`origin`・`error`） |
-| 想定外の応答（`Notified` 等） | 204 と同じ | `warn!` `anchor_unexpected_reply` |
+| SHIORI の失敗（送れない・内部の誤り） | 204 と同じ扱いで続行 | `error!` `anchor_shiori_failed_as_204`（`id`・`stage`＝`select_ex`／`final`・`origin`・`error`） |
+| 想定外の応答（`Notified` 等） | 204 と同じ | `warn!` `anchor_unexpected_reply`（`id`・`stage`） |
 | 送出の口が無い（`BalloonWiring` 不在等） | no-op | 既存の `error!` と同型 |
 | `check_script` の崩れた形 | 診断 `unpaired_tag` | — |
 
