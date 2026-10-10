@@ -68,6 +68,7 @@ areka は、AI のアプリからゴーストに話させたり様子を調べ�
 3. ページの「Claude Desktop」の節にある設定例を、Claude Desktop の設定ファイル claude_desktop_config.json に写します。このファイルは Claude Desktop の設定の画面から開けます。
 　・ファイルに mcpServers がすでにあるときは、設定例の "areka" の項目だけをその中へ足します。
 4. Claude Desktop を起動し直します。areka のツールが並びます。
+　・窓を閉じるだけでは Claude Desktop は終了しません。タスクバーの通知領域（時計の近く）にある Claude のアイコンから終了してから、起動し直してください。
 
 ・一度つないだ後は、Claude Desktop を areka より先に起動していても、areka のツールが並びます。中継が控え（前に areka から受け取った答えの写し）を持っていて、areka が見つからない間はそれで答えるためです。
 ・areka が起動していない間にツールを使うと、areka が見つからないという英語のエラーが返ります。areka を起動すれば、Claude Desktop を起動し直さなくても使えるようになります。

@@ -159,8 +159,9 @@ fn desktop_example_has_no_env_on_every_default_candidate() {
     }
 }
 
-/// (要件 6.5) 節に、設定ファイルの名前・Desktop の設定の画面から開くこと・書いた後に起動し直すこと・
-/// 前の答えの控えでツールが並ぶことが載り、「今後の版」の文は無い。置き場を渡したときは置き換えの文も無い。
+/// (要件 6.5) 節に、設定ファイルの名前・Desktop の設定の画面から開くこと・書いた後に起動し直すこと
+/// （窓を閉じるだけでは終了しない旨の断り付き）・前の答えの控えでツールが並ぶことが載り、
+/// 「今後の版」の文は無い。置き場を渡したときは置き換えの文も無い。
 #[test]
 fn desktop_section_tells_where_to_write_and_to_restart() {
     let html = help_html(12345, Some(Path::new(BRIDGE_PATH)));
@@ -172,6 +173,10 @@ fn desktop_section_tells_where_to_write_and_to_restart() {
     );
     assert!(section.contains("設定の画面から開"), "{html}");
     assert!(section.contains("起動し直"), "{html}");
+    assert!(
+        section.contains("窓を閉じるだけでは Claude Desktop は終了しません"),
+        "{html}"
+    );
     assert!(section.contains("控え"), "{html}");
     assert!(!html.contains("今後の版"), "{html}");
     assert!(!section.contains("置き換えてください"), "{html}");

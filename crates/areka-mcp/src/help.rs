@@ -16,7 +16,8 @@ pub const BRIDGE_EXE_FILE_NAME: &str = "areka-mcp-bridge.exe";
 /// `AREKA_MCP_PORT` で 1 つを指定・`0` で待ち受けない）、⑸ Claude Desktop は中継を通す
 /// （`claude_desktop_config.json` の設定例。`command` は中継の置き場 `bridge_exe`・無ければ
 /// ファイル名だけにして絶対パスへの置き換えを頼む。`env` は `port` が既定の候補の外のときだけ
-/// 載せる＝spec: areka-P0-mcp-stdio-bridge）。
+/// 載せる。書いた後の起動し直しには、窓を閉じるだけでは終了しない旨を添える
+/// ＝spec: areka-P0-mcp-stdio-bridge）。
 /// URL とコマンド例の番号は引数から取り、既定の順の説明は [`DEFAULT_PORTS`]・[`FALLBACK_STEPS`]
 /// から組む（数を手で書かない）。
 /// 続けて「areka 独自のツール」の節に [`OWN_TABLE`] の各行を `<code>名前</code> — 1 行` で並べる
@@ -107,6 +108,7 @@ pub fn help_html(port: u16, bridge_exe: Option<&Path>) -> String {
   }}
 }}</code></pre>
 {replace_note}<p>書いた後に Claude Desktop を起動し直すと、areka のツールが並びます。
+窓を閉じるだけでは Claude Desktop は終了しません。タスクバーの通知領域（時計の近く）にある Claude のアイコンから終了してから、起動し直してください。
 一度つないだ後は、Claude Desktop を areka より先に起動していても、中継が持っている前の答えの控えでツールが並びます。</p>
 
 <h2>areka 独自のツール</h2>
