@@ -412,6 +412,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Purpose**: ukadoc（SSP 公式仕様書）の項目について「正典の写し（カタログ）」と「areka の判定（台帳）」を建て、その整合を常時走るテスト（`tests/consistency.rs`）で守る**調査道具**（`areka-P0-ukadoc-survey-toolkit`）。**areka の実行時コードからは 1 行も参照されない leaf**・`publish = false`。
 **Pattern**: 純粋層（文字列と値だけ）と入出力層（`io`・判断を持たない）の 2 層。入口は実行ファイル（`cli`）と常時テストの 2 つで、判定の実体は純粋層に 1 つ。互換機能を着地させた spec は、同じ PR で `doc/ukadoc-coverage/ledger/*.toml` の該当項目の判定も更新している（実例: PR#159・PR#162）。
 **Dependencies**: `toml`（読み取りのみ・書き出しは自前 `tomlout.rs`）・`thiserror`・`serde_json`
+**SSP の BTS の要望**: SSP の課題管理（BTS・https://bts.shillest.net/ ）の要望を調べるときは `.kiro/specs/completed/areka-P0-ssp-bts-salvage/bts-ledger.md` を読む（1 回きりの調査の台帳・いつどこまで見たかは台帳の先頭）。
 
 ### Vendored: pasta DSL Engine
 **Location**: `/vendors/pasta/`（git サブモジュール）  
