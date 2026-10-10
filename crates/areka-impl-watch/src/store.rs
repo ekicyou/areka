@@ -45,8 +45,9 @@ const LOCK_LIMIT: Duration = Duration::from_secs(10);
 const REPLACE_TRIES: u32 = 5;
 /// 置き換えの試しの間の待ち。
 const REPLACE_PAUSE: Duration = Duration::from_millis(20);
-/// 状態ファイルが無いときの `clear` が、「消した記録」の退避先の欄に書く綴り。
-const NO_BACKUP: &str = "none";
+/// 状態ファイルが無いときの `clear` が、「消した記録」の退避先の欄に書く綴り（端末へ出す
+/// `backup: none` も同じ綴り）。
+pub(crate) const NO_BACKUP: &str = "none";
 
 /// 置き場所のファイルへの口。
 pub struct Store {
@@ -167,6 +168,19 @@ impl Store {
             None => Ok(None),
         };
         read().inspect_err(|err| tracing::error!(error = %err, "[store] read failed"))
+    }
+
+    /// 状態の確認。排他を取らずに読み（[`Store::read_only`]）、読み物を置き換え、端末向けの
+    /// 要約（ASCII）を返す。状態ファイルには触らない。状態ファイルが無ければ `None`（読み物も
+    /// 書かない）。
+    pub fn summary(&self) -> Result<Option<String>, WatchError> {
+        let Some(state) = self.read_only()? else {
+            return Ok(None);
+        };
+        self.write_status(&state, (self.clock)())
+            .inspect_err(|err| tracing::error!(error = %err, "[store] status.md not written"))?;
+        let summary = status::render_terminal(&state, self.presence.as_ref());
+        Ok(Some(summary))
     }
 
     /// 全部消す。排他の中で今の状態ファイルを `state.json.cleared-<UTC>` へ退避し、「消した記録」

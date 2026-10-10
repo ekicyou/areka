@@ -128,7 +128,7 @@
   - 済んだ姿: 引数の誤りが 2 で状態ファイルが作られない／環境変数なしが 1 で出力が ASCII 2 行以内・何も作られない／`--help` が 0 で全コマンドと 4 つの終了コードを含む、をテストが判定する
   - _Requirements: 1.3, 6.5, 9.5, 9.6, 12.3_
 
-- [ ] 5.2 直ちに終わるコマンドをつなぐ
+- [x] 5.2 直ちに終わるコマンドをつなぐ
   - `merged`・`loaddone`・`loadrunning`・`stopped`（`--wait` 無し）・`unstop`・`cancel`・`leave`・`tick`・`--wait` 無しの `merge`／`loadtest` を、「置き場所の解決 → 開く → 状態を変える 1 回 → 出力 → 終了コード」の同じ手順でつなぐ
   - `status`: 読むだけの口で読み、読み物を書き、ASCII の要約と読み物の道筋を出す。状態ファイルが無ければその旨だけ、壊れた・版違いは 1
   - `clear`: 問い合わせをせず直ちに行い、退避の道筋を 1 行で出す
@@ -260,3 +260,8 @@
 - 5.1【開発者の裁定待ち 8・設計からの狭め】値を取る引数は `--` で始まる値を断る（設計「引数の形」の「`--name`・`--purpose`: 任意の文字列」より狭い。例: `--purpose "--release build x5"` が 2）。外すと `--spec $SPEC --bug`（空の変数）が spec=`--bug` として黙って通り、`--name $NAME --wait` が `--wait` を名前に食って待たずに 0 で返る。推奨: 狭めたままにして design.md の「引数の形」へ追い書き。
 - 5.1【開発者の裁定待ち 9・設計の水準】大小文字だけ違う識別は実害がある: Windows では `alive/A.watch.lock` と `alive/a.watch.lock` が同じファイル（レビューが実測）なのに、状態ファイルの中では `A` と `a` は別の参加者。`A` の見張りが走っていると `a` の `watch` は `AlreadyRunning` で 1、見張りの無い `a` は `A` が生きている限り回収されない。推奨: 識別を ASCII の小文字に寄せてから使う（`cli` の 1 か所）か、手順書に「大小文字だけ違う識別を使わない」。識別に何を渡すか（続きの spec）と一緒に決める。`con`・`nul` などの予約名は古い Windows でデバイスに化けうる（この機械では普通のファイル）。
 - 5.1 → 裁定待ち 5 の実例（優先度を上げる）: Git Bash から `AREKA_IMPL_WATCH_HOME=/c/home/…/x` の形が Windows 形に直らずに exe へ渡ると、`C:\c\home\…` にフォルダの鎖ができる（レビュー中に実際に起き、空なのを確かめて消した）。Windows では `/c/…` は `is_absolute()` が偽なので、推奨の「絶対パスでなければ断る」で防げる。Bash から呼ぶスキル（6.3）に直結する。
+- 5.2: 直ちに終わるコマンドは `cli::change` の 1 本の手順（置き場所の解決 → `store::open(home, <表の名前>)` → `with_state`＋`plan::apply` → 出力 → 終了コード）。呼んだ識別（`caller`）はコマンドが名指す識別（`unstop --id X` も X・`tick` と全員宛ての `unstop` は `None`）。「当てはまらなかった」は標準エラーに `not applied: <Verdict の文>` で 3。`--wait` 無しの `merge`／`loadtest` が直ちに番を受けたら `wait::judge` の `granted …` の行、並んだだけなら `queued … pos=<n>`（1 始まり・`status::merge_order`／`load_order` で数える）。`merged` は空けた机 1 つにつき 1 行。`unstop` は `unstopped n=<n>` だけ。
+- 5.2: `Store::summary()`（`read_only` → `status.md` の置き換え → `render_terminal` の文。状態ファイルが無ければ `None` で何も書かない・ロックを取らない）を足した。`status` は無ければ `no state file`（0）、`clear` は退避するものが無ければ `cleared; backup: none`。`say` は書けなかったとき `error!` を 1 行出して `Err`。裁定待ち 7 は `status` にも及ぶ（`status.md` が書けないと要約を出さず 1）。
+- 5.2 → 5.3: 待つ 5 形（`watch`・`merge --wait`・`loadtest --wait`・`stopped --wait`・`resume`）だけが仮の枝 `not_wired_yet` に残っている。5.3 がつないで仮の枝とテスト `a_waiting_command_is_refused_until_its_procedure_is_wired` を消す。
+- 5.2 → 6.2: 手順書に「落ちたセッションは `cancel` でなく `leave` で外す」と書く（`cancel --id X` は X をその呼び出しでは回収せず、負荷テストが待たれていれば X を「停止要請中」にする。以後 X は自動では回収されず、`leave --id X` まで候補の番が来ない。読んで導いた結論・実走なし）。`status` はロック無しで `status.md` を置き換えるので、同時の変更の読み物を古い内容で上書きしうる（次の変更か `status` で直る）。
+- 5.2（任意の残り）: 1 つの識別が 2 つの机を持ったままの `merged`（2 行出力）を踏むテストが無い。`stopped:` の列の式の一本化（4.1 の残り）は持ち越し。

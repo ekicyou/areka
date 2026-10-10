@@ -7,11 +7,12 @@
 //! （本番の表を書き換えると、このファイルのテストが赤になる）。
 
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use temp_path_kit::TempPath;
 
-use super::{COMMANDS, Command, Invocation, Opt, Outcome, exit_code, parse, run_with, usage};
+use super::test_support::{args, entries, run_captured};
+use super::{COMMANDS, Command, Invocation, Opt, Outcome, exit_code, parse, usage};
 use crate::error::WatchError;
 use crate::plan;
 
@@ -52,10 +53,6 @@ fn sample(opt: Opt) -> (&'static str, Option<&'static str>) {
     }
 }
 
-fn args(words: &[&str]) -> Vec<String> {
-    words.iter().map(|word| (*word).to_owned()).collect()
-}
-
 /// コマンドの名前の後ろに、引数を形に合う値つきで並べる。
 fn line(name: &str, opts: &[Opt]) -> Vec<String> {
     let mut words = vec![name];
@@ -73,27 +70,6 @@ fn refusal(words: &[String]) -> String {
         Err(err) => err.0,
         Ok(invocation) => panic!("通ってしまった: {words:?} -> {invocation:?}"),
     }
-}
-
-/// 差し替えた書き手で走らせ、結果・標準出力・標準エラーを返す。
-fn run_captured(
-    words: &[String],
-    home: Option<OsString>,
-) -> (Result<Outcome, WatchError>, String, String) {
-    let (mut out, mut err) = (Vec::new(), Vec::new());
-    let result = run_with(words, home, &mut out, &mut err);
-    let text = |bytes: Vec<u8>| String::from_utf8(bytes).expect("UTF-8 で出る");
-    (result, text(out), text(err))
-}
-
-/// フォルダの直下に在るものの一覧（並べ替え済み）。
-fn entries(dir: &Path) -> Vec<PathBuf> {
-    let mut found: Vec<PathBuf> = std::fs::read_dir(dir)
-        .expect("フォルダを読める")
-        .map(|entry| entry.expect("項目を読める").path())
-        .collect();
-    found.sort();
-    found
 }
 
 fn s(text: &str) -> String {
@@ -389,17 +365,33 @@ fn malformed_command_lines_are_usage_errors() {
             args(&["leave", "--id", "a", "b"]),
             "leave: unexpected argument 'b'",
         ),
-        (args(&["leave", "--id"]), "leave: --id needs a value"),
+        (
+            args(&["leave", "--id"]),
+            "leave: --id needs a value (a value cannot start with --)",
+        ),
         // 値の場所に次の引数が来ている（空の変数を引用符なしで渡したときの形）。
         (
             args(&["merge", "--id", "a", "--repo", "r", "--spec", "--bug"]),
-            "merge: --spec needs a value",
+            "merge: --spec needs a value (a value cannot start with --)",
         ),
         (
             args(&[
                 "merge", "--id", "a", "--repo", "r", "--spec", "s", "--name", "--wait",
             ]),
-            "merge: --name needs a value",
+            "merge: --name needs a value (a value cannot start with --)",
+        ),
+        // 名前・内容も `--` で始まる値は取らない（使い方の `any text not starting with --`）。
+        (
+            args(&[
+                "loadtest",
+                "--id",
+                "a",
+                "--repo",
+                "r",
+                "--purpose",
+                "--release x5",
+            ]),
+            "loadtest: --purpose needs a value (a value cannot start with --)",
         ),
         (
             args(&["leave", "--id", "a", "--id", "a"]),
@@ -579,8 +571,8 @@ fn usage_is_ascii_and_shows_every_command_argument_and_exit_code() {
         (Id, "1-100 chars of A-Z a-z 0-9 . _ -"),
         (Repo, "1-100 chars of A-Z a-z 0-9 . _ -"),
         (Spec, "1-100 chars of A-Z a-z 0-9 . _ -"),
-        (Name, "any text"),
-        (Purpose, "any text"),
+        (Name, "any text not starting with --"),
+        (Purpose, "any text not starting with --"),
         (Pr, "digits only"),
         (Sha, "7-40 hex digits"),
         (Bug, "no value"),
@@ -608,6 +600,36 @@ fn usage_is_ascii_and_shows_every_command_argument_and_exit_code() {
     }
 }
 
+#[test]
+fn usage_notes_say_what_3_means_for_exactly_the_commands_that_can_end_with_3() {
+    // 設計のコマンドの表で、終わり方に 3 を持つ 9 個。
+    let with_3 = [
+        "watch",
+        "merge",
+        "merged",
+        "loadtest",
+        "loadrunning",
+        "loaddone",
+        "stopped",
+        "resume",
+        "unstop",
+    ];
+    let lines: Vec<&str> = usage().lines().collect();
+    for (name, ..) in DESIGN {
+        let at = lines
+            .iter()
+            .position(|l| l.strip_prefix("  ").and_then(|l| l.split(' ').next()) == Some(name))
+            .unwrap_or_else(|| panic!("{name} の行が無い"));
+        let note = lines[at + 1];
+        assert!(note.contains("0="), "{name}: {note}");
+        assert_eq!(
+            note.contains("3="),
+            with_3.contains(&name),
+            "{name}: {note}"
+        );
+    }
+}
+
 // ---- 終了コード ----
 
 #[test]
@@ -618,13 +640,19 @@ fn outcomes_map_to_the_four_exit_codes() {
     assert_eq!(exit_code(&Ok(Outcome::NotApplied)), 3);
 }
 
-// ---- つなぐ前の仮の枝 ----
+// ---- まだつながっていない待つコマンド ----
 
 #[test]
-fn a_parsed_command_is_refused_until_its_procedure_is_wired() {
+fn a_waiting_command_is_refused_until_its_procedure_is_wired() {
     let root = TempPath::under_target("impl-watch-cli");
     let home = root.child("home");
-    for words in [args(&["status"]), line("merge", &[Id, Repo, Spec, Wait])] {
+    for words in [
+        line("watch", &[Id, Repo]),
+        line("merge", &[Id, Repo, Spec, Wait]),
+        line("loadtest", &[Id, Repo, Purpose, Wait]),
+        line("stopped", &[Id, Wait]),
+        line("resume", &[Id]),
+    ] {
         let (result, out, err) = run_captured(&words, Some(home.clone().into_os_string()));
         // 成功を装わない。
         assert_ne!(exit_code(&result), 0, "{words:?}: {result:?}");
@@ -632,7 +660,7 @@ fn a_parsed_command_is_refused_until_its_procedure_is_wired() {
         assert!(err.is_ascii(), "{err:?}");
         assert_eq!(err.matches('\n').count(), 1, "{err:?}");
         assert!(err.contains(&words[0]), "{err:?}");
-        // 置き場所のフォルダは作るが、状態ファイルもログも作らない。
+        // 置き場所のフォルダは作るが、状態ファイルもログも作らない（申し込みもしない）。
         assert_eq!(entries(&home), Vec::<PathBuf>::new(), "{words:?}");
     }
 }

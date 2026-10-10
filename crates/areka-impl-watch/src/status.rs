@@ -5,13 +5,6 @@
 //! 要約（[`render_terminal`]）は識別・リポジトリ・spec・PR・sha・時刻と数だけを使う。
 //! このファイルの文字列リテラルは、読み物の見出しも含めて全部 ASCII。
 
-// 使い手（store・cli）が載るまで、本番のビルドではここが未使用になる。
-// 「満たされない expect」の警告が出たら外す。理由の文もこのファイルの文字列リテラルなので ASCII。
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the users of this module arrive in later tasks")
-)]
-
 use serde::Serialize;
 
 use crate::error::escape_path;
@@ -276,14 +269,14 @@ fn mark(id: &str, participant: &Participant, presence: &dyn Presence) -> Option<
 
 /// マージの待ち行列を番の来る順に並べる: バグ優先 → 申し込みの早い順・同点は行列の前
 /// （判断が番を選ぶ鍵と同じ。行列そのものは到着順で持たれている）。
-fn merge_order(queue: &[MergeRequest]) -> Vec<&MergeRequest> {
+pub(crate) fn merge_order(queue: &[MergeRequest]) -> Vec<&MergeRequest> {
     let mut order: Vec<&MergeRequest> = queue.iter().collect();
     order.sort_by_key(|request| (!request.bug, request.requested));
     order
 }
 
 /// 負荷テストの待ち行列を番の来る順に並べる: 申し込みの早い順・同点は行列の前。
-fn load_order(queue: &[LoadRequest]) -> Vec<&LoadRequest> {
+pub(crate) fn load_order(queue: &[LoadRequest]) -> Vec<&LoadRequest> {
     let mut order: Vec<&LoadRequest> = queue.iter().collect();
     order.sort_by_key(|request| request.requested);
     order

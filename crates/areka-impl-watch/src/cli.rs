@@ -1,4 +1,4 @@
-//! 引数の解釈・コマンドの表・`--help`・終了コードへの写像。
+//! 引数の解釈・コマンドの表・`--help`・コマンドの手順・終了コードへの写像。
 //!
 //! 引数は表 1 本（[`COMMANDS`] の 14 行と [`HELP`]）から読む。コマンドごとの手書きの分岐は
 //! 持たない。行が持つのは、名前・要る引数・任意の引数・`--wait` を取るか・使い方に出す 1 行・
@@ -6,17 +6,25 @@
 //!
 //! 順は「引数を読む → `--help` ならここで終わる → 置き場所を決める → コマンドの手順」。
 //! 使い方の誤りと `--help` は置き場所を決める前に終わるので、何も読み書きしない。
+//! 直ちに終わるコマンドの手順は 3 つ: 状態を変える 1 回（[`change`]）・状態の確認
+//! （[`status`]）・全部消す（[`clear`]）。どれも「口を開く → 1 回 → 出力 → 終了コード」。
 //!
 //! 標準出力には結果だけ、断りと失敗は標準エラーへ出す。このファイルの文字列リテラルは全部
-//! ASCII で、打たれた引数を文に映すときは ASCII の外の字を逃がす（[`escape_path`]）。
+//! ASCII で、端末へ出す文に載せるのは識別・リポジトリ・spec・PR・sha・時刻と数だけ（名前と
+//! 内容は載せない）。打たれた引数と置き場所の道筋を文に映すときは ASCII の外の字を逃がす
+//! （[`escape_path`]）。
 
 use std::ffi::OsString;
 use std::io::{self, Write};
 use std::sync::LazyLock;
 
 use crate::error::{WatchError, escape_path};
-use crate::home;
-use crate::plan;
+use crate::home::{self, Home};
+use crate::plan::{self, Event, Verdict};
+use crate::state::State;
+use crate::status;
+use crate::store;
+use crate::wait::{self, WaitEnd, WaitSpec};
 
 const EXE: &str = "areka-impl-watch";
 
@@ -26,11 +34,6 @@ pub enum Outcome {
     /// できた。
     Done,
     /// 当てはまらなかった。
-    // 作るのはコマンドの手順（後のタスク）。「満たされない expect」の警告が出たら外す。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the command procedures arrive in later tasks")
-    )]
     NotApplied,
     /// 使い方の誤り。
     Usage,
@@ -78,7 +81,7 @@ const OPTIONS: [Opt; 9] = [
 enum Shape {
     /// 識別・リポジトリ・spec。ロックファイルの名前と端末の文にそのまま載る。
     Token,
-    /// 名前・内容。何でもよい（端末へは出さない）。
+    /// 名前・内容。`--` で始まらなければ何でもよい（端末へは出さない）。
     Text,
     Digits,
     Hex,
@@ -142,7 +145,7 @@ impl Shape {
     const fn rule(self) -> &'static str {
         match self {
             Shape::Token => "1-100 chars of A-Z a-z 0-9 . _ -",
-            Shape::Text => "any text",
+            Shape::Text => "any text not starting with --",
             Shape::Digits => "digits only",
             Shape::Hex => "7-40 hex digits",
             Shape::Flag => "no value",
@@ -483,7 +486,11 @@ pub(crate) fn parse(args: &[String]) -> Result<Invocation, UsageError> {
                 .next()
                 .filter(|value| !value.starts_with("--"))
                 .cloned()
-                .ok_or_else(|| refuse(format!("{flag} needs a value")))?,
+                .ok_or_else(|| {
+                    refuse(format!(
+                        "{flag} needs a value (a value cannot start with --)"
+                    ))
+                })?,
         };
         if !shape.accepts(&value) {
             return Err(refuse(format!("{flag} must be {}", shape.rule())));
@@ -542,26 +549,183 @@ fn dispatch(
         say(out, "stdout", usage())?;
         return Ok(Outcome::Done);
     }
-    home::resolve(home_value)?;
-    not_wired_yet(&invocation, err)
+    let home = home::resolve(home_value)?;
+    let name = invocation.name;
+    match invocation.command {
+        Command::Status => status(home, name, out),
+        Command::Clear => clear(home, name, out),
+        Command::Change(command) if !invocation.wait => change(home, name, &command, out, err),
+        // 待つコマンド（見張り・`--wait`・再開の待ち）。
+        _ => not_wired_yet(name, err),
+    }
 }
 
-/// コマンドの手順がつながるまでの仮の枝（タスク 5.2・5.3 が `invocation.command` の `match` に
-/// 置き換える）。状態ファイルもログも開かず、成功を装わない。
-fn not_wired_yet(invocation: &Invocation, err: &mut dyn Write) -> Result<Outcome, WatchError> {
-    let line = format!(
-        "{}: accepted, but this command is not wired yet; nothing was done",
-        invocation.name
-    );
+/// 状態を変える 1 回: 口を開く → 排他の中で判断に通す → 結果の文 → 終了コード。
+///
+/// 呼んだ識別は、コマンドが名指す識別（その識別は同じ呼び出しでは回収されない）。
+/// 「当てはまらなかった」は標準エラーへ 1 行出して 3（そのときも、回収の分は書かれている）。
+fn change(
+    home: Home,
+    name: &'static str,
+    command: &plan::Command,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<Outcome, WatchError> {
+    let store = store::open(home, name)?;
+    let (verdict, line) = store.with_state(|state, now, alive| {
+        let applied = plan::apply(state, command, subject(command), now, alive);
+        let line = result_line(name, command, state, &applied.events);
+        let told = (applied.verdict, line);
+        (applied, told)
+    })?;
+    match verdict {
+        Verdict::Applied => {
+            say(out, "stdout", &line)?;
+            Ok(Outcome::Done)
+        }
+        Verdict::NotApplied(why) => {
+            say(err, "stderr", &format!("not applied: {why}"))?;
+            Ok(Outcome::NotApplied)
+        }
+    }
+}
+
+/// コマンドが名指す識別（`tick` と、全員宛ての `unstop` には無い）。
+fn subject(command: &plan::Command) -> Option<&str> {
+    use plan::Command as C;
+    match command {
+        C::Watch { id, .. }
+        | C::Merge { id, .. }
+        | C::Merged { id, .. }
+        | C::LoadTest { id, .. }
+        | C::LoadRunning { id, .. }
+        | C::LoadDone { id }
+        | C::Stopped { id }
+        | C::Cancel { id }
+        | C::Leave { id }
+        | C::UnregisterWait { id, .. } => Some(id),
+        C::RegisterWait { record } => Some(&record.id),
+        C::Unstop { id } => id.as_deref(),
+        C::Tick => None,
+    }
+}
+
+/// 当てはまった呼び出しの結果の文（ASCII・末尾に改行なし）。`state` は変えた後の状態。
+fn result_line(
+    name: &'static str,
+    command: &plan::Command,
+    state: &State,
+    events: &[Event],
+) -> String {
+    use plan::Command as C;
+    match command {
+        C::Merge { id, repo, .. } => {
+            let wait = WaitSpec::Merge {
+                id: id.clone(),
+                repo: repo.clone(),
+            };
+            granted(&wait, state).unwrap_or_else(|| {
+                let queue = state.merge.get(repo).map_or(&[][..], |desk| &desk.queue);
+                let ahead = status::merge_order(queue)
+                    .into_iter()
+                    .take_while(|request| request.id != *id)
+                    .count();
+                format!("queued merge repo={repo} pos={}", ahead + 1)
+            })
+        }
+        C::LoadTest { id, .. } => granted(&WaitSpec::Load { id: id.clone() }, state)
+            .unwrap_or_else(|| {
+                let ahead = status::load_order(&state.load.queue)
+                    .into_iter()
+                    .take_while(|request| request.id != *id)
+                    .count();
+                format!("queued load pos={}", ahead + 1)
+            }),
+        // 空けた机 1 つに 1 行（1 つの識別が 2 つのリポジトリの机を持っていれば 2 行）。
+        C::Merged { .. } => {
+            let lines = events.iter().filter_map(|event| match event {
+                Event::Merged { repo, .. } => Some(format!("merged repo={}", escape_path(repo))),
+                _ => None,
+            });
+            lines.collect::<Vec<_>>().join("\n")
+        }
+        C::LoadRunning { .. } => "recorded running load".to_owned(),
+        C::LoadDone { .. } => "load done".to_owned(),
+        C::Unstop { .. } => {
+            let unstopped = |event: &&Event| matches!(event, Event::Unstopped { .. });
+            format!("unstopped n={}", events.iter().filter(unstopped).count())
+        }
+        C::Cancel { .. } => "cancelled".to_owned(),
+        C::Leave { .. } => "left".to_owned(),
+        // `stopped` と `tick` は、表の名前がそのまま結果の文（見張りの開始と待ちの記録の
+        // 登録・抹消は、この手順へは来ない）。
+        C::Stopped { .. }
+        | C::Tick
+        | C::Watch { .. }
+        | C::RegisterWait { .. }
+        | C::UnregisterWait { .. } => name.to_owned(),
+    }
+}
+
+/// すでに番が来ていれば、待ちの終わりと同じ 1 行（綴りは [`wait::judge`] の 1 か所）。
+fn granted(wait: &WaitSpec, state: &State) -> Option<String> {
+    match wait::judge(wait, Some(state)) {
+        Some(WaitEnd::Done(line)) => Some(line),
+        _ => None,
+    }
+}
+
+/// 状態の確認: 状態を変えずに読み、読み物を書き、ASCII の要約と読み物の道筋を出す。
+/// 状態ファイルが無ければ、その旨だけを出す（状態ファイルも読み物も作らない）。
+fn status(home: Home, name: &'static str, out: &mut dyn Write) -> Result<Outcome, WatchError> {
+    let reading = home.status_path();
+    let text = match store::open(home, name)?.summary()? {
+        Some(summary) => {
+            let reading = escape_path(&reading.to_string_lossy());
+            format!("{summary}status: {reading}")
+        }
+        None => "no state file".to_owned(),
+    };
+    say(out, "stdout", &text)?;
+    Ok(Outcome::Done)
+}
+
+/// 全部消す: 問い合わせをせずに直ちに行い、退避の道筋を 1 行で出す。
+fn clear(home: Home, name: &'static str, out: &mut dyn Write) -> Result<Outcome, WatchError> {
+    let backup = store::open(home, name)?.clear()?;
+    let backup = backup.map_or(store::NO_BACKUP.to_owned(), |path| {
+        escape_path(&path.to_string_lossy())
+    });
+    say(out, "stdout", &format!("cleared; backup: {backup}"))?;
+    Ok(Outcome::Done)
+}
+
+/// 待つコマンドの手順がつながるまでの仮の枝（タスク 5.3 が置き換える）。状態ファイルもログも
+/// 開かず（申し込みもせず）、成功を装わない。
+fn not_wired_yet(name: &'static str, err: &mut dyn Write) -> Result<Outcome, WatchError> {
+    let line = format!("{name}: accepted, but this command is not wired yet; nothing was done");
     say(err, "stderr", &line)?;
     Ok(Outcome::Usage)
 }
 
-/// 1 行を書き出す。書けなかったことも黙って捨てない。
+/// 1 行を書き出す。書けなかったことも黙って捨てない: 失敗にして、ログにも残す（ログの受け手が
+/// 据わる前の、使い方の誤りと `--help` では、残す先がまだ無い）。
 fn say(to: &mut dyn Write, op: &'static str, line: &str) -> Result<(), WatchError> {
-    writeln!(to, "{line}").map_err(|err| WatchError::io(op, &err))
+    writeln!(to, "{line}").map_err(|err| {
+        let failure = WatchError::io(op, &err);
+        tracing::error!(error = %failure, "[cli] output failed");
+        failure
+    })
 }
+
+#[cfg(test)]
+#[path = "cli_test_support.rs"]
+mod test_support;
 
 #[cfg(test)]
 #[path = "cli_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "cli_commands_tests.rs"]
+mod commands_tests;
