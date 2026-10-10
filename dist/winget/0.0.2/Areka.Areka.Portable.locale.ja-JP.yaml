@@ -9,5 +9,6 @@ Tags:
 - 伺か
 - デスクトップマスコット
 - ゴースト
+InstallationNotes: areka は、後から入れたゴースト・バルーンとその記憶を、インストール先のフォルダ（areka.exe と同じ場所）の中に置きます。winget upgrade と winget uninstall は、ghost フォルダと balloon フォルダを、後から入れた物ごと消します。上げ直す前と外す前に、この 2 つのフォルダを別の場所へ写しておいてください。
 ManifestType: locale
 ManifestVersion: 1.12.0
