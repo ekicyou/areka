@@ -25,7 +25,7 @@ use crate::check::check_arguments;
 use crate::registry::{ToolContent, ToolOutcome, ToolRegistry};
 
 /// `serverInfo.name`（版は Cargo の版）。
-pub(crate) const SERVER_NAME: &str = "areka-mcp-server";
+pub const SERVER_NAME: &str = "areka-mcp-server";
 
 /// `initialize` の `instructions`（英文・4 文）。2 文目の後の 1 文が独自のツール `check_script` の案内
 /// （spec: areka-P0-mcp-author-tools）。

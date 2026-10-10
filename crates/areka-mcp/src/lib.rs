@@ -23,6 +23,10 @@ mod testkit;
 pub mod tools;
 
 // 公開面（rmcp・tokio・hyper の型は出さない）。
+// 名乗り・受け口のパス・中継の exe の名前は中継（areka-mcp-bridge）が同じ定数を読む。
+pub use dispatch::MCP_PATH;
+pub use handler::SERVER_NAME;
+pub use help::BRIDGE_EXE_FILE_NAME;
 pub use port::{
     DEFAULT_PORTS, FALLBACK_STEPS, PORT_ENV, candidates_from_env_value, read_port_candidates,
 };

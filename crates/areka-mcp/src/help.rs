@@ -3,6 +3,10 @@
 use crate::port::{DEFAULT_PORTS, FALLBACK_STEPS, PORT_ENV};
 use crate::tools::{OWN_TABLE, spec_from_definition};
 
+/// 中継（Claude Desktop 向けの stdio の橋）の exe のファイル名。areka.exe の隣に置かれる
+/// （spec: areka-P0-mcp-stdio-bridge）。
+pub const BRIDGE_EXE_FILE_NAME: &str = "areka-mcp-bridge.exe";
+
 /// 登録手順の日本語 HTML を実際の番号 `port` で組む（要件 6.1・6.2）。
 ///
 /// 5 項目: ⑴ 待ち受けている URL、⑵ Claude Code の登録コマンド、⑶ Cursor の

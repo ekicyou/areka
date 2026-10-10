@@ -26,7 +26,7 @@ use crate::help::help_html;
 pub(crate) const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
 
 /// MCP の受け口のパス（method を問わず rmcp へ）。
-const MCP_PATH: &str = "/api/mcp/v1";
+pub const MCP_PATH: &str = "/api/mcp/v1";
 /// 登録案内のパス（GET だけ）。
 const HELP_PATH: &str = "/api/mcp/help";
 
