@@ -1,10 +1,12 @@
-//! 引き金の判定（`runonce`・`periodic`）の決定論テスト
-//! （spec: areka-P0-seriko-trigger-intervals 要件 2.1・2.2・3.1〜3.5・5.3・5.9・6.1・9.3）。
+//! 引き金の判定（`runonce`・`periodic`・`talk`）の決定論テスト
+//! （spec: areka-P0-seriko-trigger-intervals 要件 2.1・2.2・3.1〜3.5・4.1・4.5〜4.7・5.3・5.9・6.1・
+//! 9.3・9.4）。
 //!
 //! 時刻は全部ただの数（ms）。判定はコマ列を読まないので、animation のコマ列は空で組む。
+//! 文字が現れる時刻は、序数から壁時刻への偽の写し（閉包）で渡す。
 
 use super::*;
-use std::num::NonZeroU64;
+use std::num::{NonZeroU32, NonZeroU64};
 
 fn runonce(id: u32) -> LoopAnimation {
     LoopAnimation {
@@ -24,9 +26,53 @@ fn periodic(id: u32, period_ms: u64) -> LoopAnimation {
     }
 }
 
+fn talk(id: u32, every: u32) -> LoopAnimation {
+    LoopAnimation {
+        id,
+        trigger: LoopTrigger::Talk {
+            every: NonZeroU32::new(every).expect("正"),
+        },
+        frames: Vec::new(),
+    }
+}
+
 /// 開いた窓で `at_ms` に見え始めた状態。
 fn armed_at(at_ms: u64) -> Armed {
     Armed::arm(Some(at_ms), true, None)
+}
+
+/// 開いた窓で見え始め、その時点で `revealed` 文字が現れていた状態（`talk` の数えを持つ）。
+fn armed_with_text(revealed: u64) -> Armed {
+    Armed::arm(Some(0), true, Some(revealed))
+}
+
+/// `talk` の判定に渡す刻みの時刻。文字が現れる時刻のどれよりも後に置き、開始の時刻が
+/// 刻みの時刻でないことを見分ける。
+const TICK_MS: u64 = 90_000;
+
+/// 序数 `g` の文字が 50 ms おきに現れる偽の写し（0 文字目が 1000 ms）。
+fn every_50ms(g: u64) -> u64 {
+    1000 + g * 50
+}
+
+/// 刻み 1 回分: 数えから文字の窓を組んで判定し、判定の後に数えを進める（一番上の面の配線と同じ順）。
+fn talk_tick(
+    armed: &mut Armed,
+    anim: &LoopAnimation,
+    now_seen: u64,
+    playing: bool,
+    wall_ms: &dyn Fn(u64) -> u64,
+) -> Option<u64> {
+    let (base, prev_seen) = armed.talk_window_bounds().expect("数えを持つ");
+    let window = TalkWindow {
+        base,
+        prev_seen,
+        now_seen,
+        wall_ms,
+    };
+    let started = armed.poll(anim, TICK_MS, playing, Some(&window));
+    armed.advance_talk(now_seen);
+    started
 }
 
 // ── runonce ──────────────────────────────────────────────────────────────
@@ -155,4 +201,171 @@ fn armed_closed_stays_silent_until_shown() {
     armed.show(4200, None);
     assert_eq!(armed.poll(&r, 4216, false, None), Some(4200));
     assert_eq!(armed.poll(&p, 5200, false, None), Some(5200));
+}
+
+// ── talk ─────────────────────────────────────────────────────────────────
+
+/// 3 文字ごとの区切り（3 文字目・6 文字目）で鳴り、開始の時刻は刻みの時刻でなく区切りの文字が
+/// 現れた時刻。区切りの間の文字では鳴らない。
+#[test]
+fn talk_fires_at_every_third_glyph_and_starts_at_its_reveal_time() {
+    let mut armed = armed_with_text(0);
+    let t = talk(1, 3);
+
+    assert_eq!(talk_tick(&mut armed, &t, 0, false, &every_50ms), None);
+    assert_eq!(talk_tick(&mut armed, &t, 2, false, &every_50ms), None);
+    assert_eq!(
+        talk_tick(&mut armed, &t, 3, false, &every_50ms),
+        Some(1100),
+        "3 文字目（序数 2）"
+    );
+    assert_eq!(
+        talk_tick(&mut armed, &t, 3, false, &every_50ms),
+        None,
+        "同じ区切り"
+    );
+    assert_eq!(talk_tick(&mut armed, &t, 5, false, &every_50ms), None);
+    assert_eq!(
+        talk_tick(&mut armed, &t, 6, false, &every_50ms),
+        Some(1250),
+        "6 文字目（序数 5）"
+    );
+}
+
+/// 数え始めは構えた時点で現れていた文字の数（それより前の文字は数えない）。現し直すと、
+/// その時点の数から数え直す。
+#[test]
+fn talk_counts_from_the_glyphs_visible_when_armed_and_recounts_on_show() {
+    let mut armed = armed_with_text(4);
+    let t = talk(1, 3);
+
+    assert_eq!(talk_tick(&mut armed, &t, 6, false, &every_50ms), None);
+    assert_eq!(
+        talk_tick(&mut armed, &t, 7, false, &every_50ms),
+        Some(1300),
+        "構えてから 3 文字目（序数 6）"
+    );
+
+    armed.hide();
+    armed.show(5000, Some(8));
+    assert_eq!(armed.talk_window_bounds(), Some((8, 8)));
+    assert_eq!(
+        talk_tick(&mut armed, &t, 10, false, &every_50ms),
+        None,
+        "古い数え始めなら 9 文字目の区切り"
+    );
+    assert_eq!(
+        talk_tick(&mut armed, &t, 11, false, &every_50ms),
+        Some(1500),
+        "現れてから 3 文字目（序数 10）"
+    );
+}
+
+/// 1 回の刻みで区切りを 2 つ以上越えても 1 回だけ鳴る。開始の時刻は越えた区切りのうち最新のもの。
+/// 文字が一度に現れた（区切りが同じ時刻に重なった）ときも 1 回。
+#[test]
+fn talk_boundaries_crossed_in_one_window_fire_once_at_the_latest() {
+    let t = talk(1, 3);
+
+    let mut late = armed_with_text(0);
+    assert_eq!(
+        talk_tick(&mut late, &t, 7, false, &every_50ms),
+        Some(1250),
+        "序数 2 と 5 を越えた"
+    );
+    assert_eq!(
+        talk_tick(&mut late, &t, 7, false, &every_50ms),
+        None,
+        "越えた分を積まない"
+    );
+    assert_eq!(talk_tick(&mut late, &t, 9, false, &every_50ms), Some(1400));
+
+    let at_once = |_g: u64| 2000;
+    let mut burst = armed_with_text(0);
+    assert_eq!(talk_tick(&mut burst, &t, 9, false, &at_once), Some(2000));
+    assert_eq!(talk_tick(&mut burst, &t, 9, false, &at_once), None);
+}
+
+/// 再生中に越えた区切りでは始め直さない。数えは進むので、再生が終わっても後から鳴らない。
+#[test]
+fn talk_boundary_reached_while_playing_is_skipped_for_good() {
+    let mut armed = armed_with_text(0);
+    let t = talk(1, 3);
+
+    assert_eq!(talk_tick(&mut armed, &t, 3, true, &every_50ms), None);
+    assert_eq!(armed.talk_window_bounds(), Some((0, 3)), "数えは進む");
+    assert_eq!(
+        talk_tick(&mut armed, &t, 4, false, &every_50ms),
+        None,
+        "見送った区切り"
+    );
+    assert_eq!(
+        talk_tick(&mut armed, &t, 6, false, &every_50ms),
+        Some(1250),
+        "次の区切り"
+    );
+}
+
+/// 数えは単調。今見えている数が減った刻み（数え始めより手前まで減った刻みも）は数えを進めず、
+/// 鳴らさない。数え済みの区切りは、数が戻っても鳴り直さない。
+#[test]
+fn talk_count_never_goes_back_when_fewer_glyphs_are_visible() {
+    let mut armed = armed_with_text(1);
+    let t = talk(1, 3);
+    assert_eq!(
+        talk_tick(&mut armed, &t, 6, false, &every_50ms),
+        Some(1150),
+        "序数 3"
+    );
+
+    assert_eq!(talk_tick(&mut armed, &t, 2, false, &every_50ms), None);
+    assert_eq!(
+        talk_tick(&mut armed, &t, 0, false, &every_50ms),
+        None,
+        "数え始めより手前"
+    );
+    assert_eq!(armed.talk_window_bounds(), Some((1, 6)), "進めない");
+
+    assert_eq!(
+        talk_tick(&mut armed, &t, 6, false, &every_50ms),
+        None,
+        "数え済みの区切り"
+    );
+    assert_eq!(
+        talk_tick(&mut armed, &t, 7, false, &every_50ms),
+        Some(1300),
+        "序数 6"
+    );
+}
+
+/// 文字の窓が無い判定と、隠れている間の判定は鳴らない。数えを持たない状態（部品・表に `talk` が
+/// 無い面）は、進めても数えを持たないまま。
+#[test]
+fn talk_without_a_window_or_while_hidden_stays_silent() {
+    let t = talk(1, 3);
+    let crossed = TalkWindow {
+        base: 0,
+        prev_seen: 0,
+        now_seen: 3,
+        wall_ms: &every_50ms,
+    };
+
+    let mut open = armed_with_text(0);
+    assert_eq!(open.poll(&t, TICK_MS, false, None), None, "窓が無い");
+
+    let mut closed = Armed::arm(Some(0), false, Some(0));
+    assert_eq!(
+        closed.poll(&t, TICK_MS, false, Some(&crossed)),
+        None,
+        "隠れている"
+    );
+
+    let mut part = armed_at(0);
+    part.advance_talk(3);
+    assert_eq!(part.talk_window_bounds(), None);
+    assert_eq!(
+        part.poll(&t, TICK_MS, false, Some(&crossed)),
+        Some(1100),
+        "借りた窓で鳴る"
+    );
 }
