@@ -17,6 +17,8 @@
 //!   および正典 bare 形 `\0`/`\h`（本体側=0）・`\1`/`\u`（相方側=1）を写像（ukadoc・R1.5/R4.4）。
 //!   サーフェス `\s[...]` → `Surface`（無加工保持）、
 //!   カーソル `\_l[x,y]` → `Cursor`、制御 `\e`/`\c`/`\-` → `End`/`Clear`/`Quit`（要件 2/6）。
+//! - アンカー: 角括弧付き `\_a[ID,r…]` → `Anchor`（ID と引数の列）、角括弧の無い `\_a` →
+//!   `AnchorEnd`（意味を読まない転記・開きと閉じの対応は消費側）。
 //! - 裸の `\+`／`\_+` → `\![change,ghost,random]`／`\![change,ghost,sequential]` と同じ `GenericCommand`（別名の転記）。
 //! - システム変数 `%keyword` → `SystemVar`（展開なし・要件 8）、テキスト → `Text`（要件 9）。
 //!
@@ -33,7 +35,9 @@
 // 経由で到達されるため、モジュール全体の dead_code 抑止は不要（除去済み）。
 
 use super::lexer::Token;
-use super::model::{Choice, Instruction, MoveArgs, NewLineRatio, Read, ReadNote, SurfaceArg};
+use super::model::{
+    Anchor, Choice, Instruction, MoveArgs, NewLineRatio, Read, ReadNote, SurfaceArg,
+};
 use std::iter::Peekable;
 use std::ops::Range;
 use std::time::Duration;
@@ -247,7 +251,10 @@ fn decode_bare(word: &str, notes: &mut Vec<ReadNote>) -> Instruction {
         "+" => decode_passthrough_bang(["change", "ghost", "random"].map(String::from).into()),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c__2b:1
         "_+" => decode_passthrough_bang(["change", "ghost", "sequential"].map(String::from).into()),
-        // 上記以外の subset 外 bare タグ（`\i` `\j`・`\_a` `\__q` 等）は
+        // アンカーの閉じ（anchor-tag-canon 要件 1.4）: 角括弧の無い `\_a`。開きとの対応
+        // （閉じ無し・重なり・開いていない閉じ）は読まない（判定は消費側）。
+        "_a" => Instruction::AnchorEnd,
+        // 上記以外の subset 外 bare タグ（`\i` `\j`・`\_n` `\__q` 等）は
         // タスク 4.2 のパススルー領分。
         other => decode_passthrough_bare(other, notes),
     }
@@ -319,6 +326,12 @@ fn decode_tag(word: String, args: Vec<String>, notes: &mut Vec<ReadNote>) -> Ins
             name: super::model::JUMP_TAG_CARRIER.to_owned(),
             raw_args: args,
         },
+        // アンカーの開き `\_a[ID,r…]`（anchor-tag-canon 要件 1.1〜1.3・1.11）: 第 1 引数を ID、
+        // 以降を引数の列として記述順のまま転記する。ID が `On` で始まるかどうかは読まない
+        // （どのイベントを送るかは消費側）。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_a_5bID_2cr2_2cr3..._5d:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_a_5bOnID_2cr0_2cr1..._5d:1
+        "_a" => decode_anchor(args),
         // subset 外タグ（`\i` 等）はタスク 4.2 のパススルー領分。
         _ => decode_passthrough_tag(word, args, notes),
     }
@@ -348,6 +361,18 @@ fn decode_choice(args: Vec<String>, notes: &mut Vec<ReadNote>) -> Instruction {
         target,
         references,
     })
+}
+
+/// `\_a[ID,r…]` → アンカーの開き。第 1 引数が ID、以降が引数の列（記述順・空のトークンも
+/// 潰さない・anchor-tag-canon 要件 1.1〜1.3）。
+///
+/// 正典は ID の形を限っていないので、`\_a[]`（ID が空）でも「既定へ落とした」印は付けない
+/// （要件 1.11）。
+fn decode_anchor(args: Vec<String>) -> Instruction {
+    let mut it = args.into_iter();
+    let id = it.next().unwrap_or_default();
+    let references: Vec<String> = it.collect();
+    Instruction::Anchor(Anchor { id, references })
 }
 
 /// `\![...]` の第 1 引数で分岐する。`move` のみ本タスクで `Move` へ decode（要件 7.1）。
@@ -445,7 +470,7 @@ fn decode_passthrough_bang(args: Vec<String>) -> Instruction {
     Instruction::GenericCommand { name, raw_args }
 }
 
-/// 【タスク 4.2】subset 外の bare タグ（`\i` `\j`・`\_a` `\__q` 等・**スコープタグを除く**）
+/// 【タスク 4.2】subset 外の bare タグ（`\i` `\j`・`\_n` `\__q` 等・**スコープタグを除く**）
 /// → 綴りを `\` 付きで復元した `Raw` として保持し、生情報を失わない（要件 11.2）。
 /// 正典スコープ bare 形 `\0`/`\1`/`\h`/`\u` は `decode_bare` で
 /// `SpeakerScope` へ写像されるため、ここへは到達しない（R1.5/R4.4）。
