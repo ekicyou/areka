@@ -278,7 +278,7 @@ EXE="$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe"
 | `AREKA_IMPL_WATCH_HOME cannot be created: …` | 変数の値（絶対パスか・書ける場所か）を直す |
 | `a watch wait for <識別> is already running` | 同じ識別の見張りが残っている。6 節 |
 | `state file version mismatch: …` | 3 節の「版が上がる更新のとき」 |
-| `state file is broken; see impl-watch.log` | `status` が読めなかった。6 節の「状態ファイルが壊れた」 |
+| `state file is broken; see impl-watch.log` | `status`、または走っていた待ち・見張りが、状態ファイルを読めなかった。6 節の「状態ファイルが壊れた」 |
 | `state.lock is busy for 10 s; …` | 少し置いて呼び直す。続くなら、止まったままの `areka-impl-watch.exe` が無いか見る |
 | `io write state.json: PermissionDenied …`・`io write status.md: …` | 6 節の「ファイルを開いたままのアプリが居る」 |
 
@@ -360,7 +360,7 @@ status: C:\Users\me\.areka-impl-watch\status.md
 
 ### 状態ファイルが壊れた・無くなった
 
-- 状態を変えるコマンドが、読めない状態ファイルを見つけると、`state.json.broken-<UTC>` へ退避して空から始める（上書きはしない）。`status.md` の最近の出来事に `recovered`（`backed up: <道筋>`）が載り、ログにも残る。参加者は全員消えているので、走っていた待ち・見張りは終了コード 3 で終わる。各セッションは `watch` を立ててから申し込み直す。
+- 状態を変えるコマンドが、読めない状態ファイルを見つけると、`state.json.broken-<UTC>` へ退避して空から始める（上書きはしない）。`status.md` の最近の出来事に `recovered`（`backed up: <道筋>`）が載り、ログにも残る。参加者は全員消えているので、走っていた待ち・見張りは終わる。終了コードは、退避の後に読み直したものが 3、退避より先に読めないファイルを読んでしまったものが 1（`state file is broken; see impl-watch.log`）。どちらの場合も、各セッションは `watch` を立ててから申し込み直す。
 - 状態ファイルが無いときは、空から作る（最近の出来事に `recovered`・`created`）。
 - `status` は作りも退避もしない。無ければ `no state file`、読めなければ `state file is broken; see impl-watch.log` で終了コード 1。
 
