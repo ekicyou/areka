@@ -148,3 +148,82 @@
 - 原則（要件 13・開発者 2026-10-10）: トークンの負荷が最優先、機械の負荷はその次。論点 3（待ちの方式）・6（終了コード）・7（日本語の読ませ方）は、この順で量る。待ちの出力は終了コード＋ASCII の数行、詳しい内容は読み物へ。申し込みと待ちは 1 コマンドで行える形を既定にする（往復のコマンド数の表は設計で）。
 - 判断の移植は `Invoke-Plan` を 1 対 1 で写し、テストは「規則 1〜7 の分岐ごとに 1 本」を先に赤で書く。既存の挙動のうち要件に無いもの（`note`・開発者への「空になった」）は写さない。
 - 論点 1（セッションを代表するプロセス）は要件の討議で決まった: 見張り `watch` のプロセスが印。`alive.rs` は見張りのプロセスの生死だけを答えればよく、`hold` コマンドは要らない。
+
+## 8. 設計の調査（2026-10-10・設計の生成）
+
+### 要約
+- **Feature**: `areka-P0-impl-watch`
+- **Discovery Scope**: Extension（既存の前例を組み合わせる新しいクレート。外部ライブラリの調査は不要なので light discovery。1 節の調査が済んでいるのでサブエージェントは出さず、流用点だけを本文で確かめ直した）
+- **参照した指針**: `.kiro/steering/product.md`・`tech.md`（crates.io の節・端末は ASCII・`publish` の行）・`structure.md`（兄弟テスト・1,000 行・`main.rs` の兄弟は `main_<module>.rs`・`tests/` の置き方）・`logging.md`（`tracing`・`with_default` 禁止）・`workflow.md`（`Cargo.lock`）・スキル `kiro-spec-design` の `design-principles.md`／`design-discovery-light.md`／`design-synthesis.md`／`design-review-gate.md`。
+- **主な発見**:
+  1. `std::fs::File::lock`／`try_lock`／`unlock` は 1.89 で安定、道具は 1.99 → 排他も生死の確認も標準ライブラリだけで書ける。`windows` クレートも `fs2` も要らない。
+  2. `CARGO_BIN_EXE_<name>` は統合テスト（`tests/`）にしか渡らない → 実機テストは `crates/areka-impl-watch/tests/real.rs` に置く（本番ファイルの兄弟には置けない）。
+  3. `tracing-subscriber` の `fmt::layer` は自前の `datetime` で時刻を付ける（`chrono`・`humantime` は要らない）→ ログの時刻は subscriber 任せ、自前の UTC の文字化は `status.md` と出力だけ。
+  4. `kiro-watch.ps1` の `Invoke-Plan` は 4 段（停止要請 → 負荷の番 → 再開 → マージの番）で、負荷テストが在るときは `return` してマージの段へ来ない。`loadtest` は自分の状態を `working` に戻す。`loadrunning` は待ち行列から外して持ち主にし `running` を付ける。`merged` は参加者を消す。この順と分岐をそのまま `plan.rs` へ写す。
+
+### 調査の記録
+
+#### 複数プロセスの排他と生死の確認（要件 7・8）
+- **きっかけ**: 1.3 節「無いもの」の排他と生死。
+- **確かめたこと**: Rust std の `File::lock` 系（Windows は `LockFileEx`・ファイル全体・強制ロック・プロセスの死で OS が解く）。Rust の `File::open` は `FILE_SHARE_DELETE` を含む共有で開くので、別のプロセスが `state.json` を開いたままでも `rename` の置き換えが通る見込み（実機テスト⑥で通す）。
+- **含み**: 状態ファイルそのものはロックしない（`rename` の相手になるため）。`state.lock`（排他）と `alive/<id>.<kind>.lock`（居る印・待ちの印）を分ける。ロックファイルは消さない（握られているファイルの消去と作り直しが Windows で衝突する）。探りはファイルを作らない。
+
+#### 長い待ちの方式（要件 6・13）
+- **きっかけ**: 論点 3。
+- **確かめたこと**: 名前つきイベント（`CreateEvent`／`WaitForSingleObject`）は `windows` の機能が要る。1 秒ごとの `metadata`（更新時刻と大きさ）は数 µs で、静かな机の計測を乱さない。
+- **含み**: 読み直しの間隔 1 秒・中身は変化のあるときと 10 回に 1 回・30 回に 1 回「周期の一回り」（排他の中で回収と再計画）。「周期の一回り」が無いと、待っている者しか居ないときに落ちた持ち主を誰も回収しない（要件 7 の目的に反する）。
+
+#### Claude Code の Bash のバックグラウンド実行（要件 6.1 の前提）
+- **確かめたこと**: 道具の説明は「ターンをまたいで走り続け、終わると呼んだセッションを起こす」。時間の上限の記述は無い。Claude のアプリを閉じたときに子プロセスが終わるかは**確かめられていない**。
+- **含み**: 終わらない場合は見張りが残って机が塞がる → 手順書に `status` の `absent`／`waits` の見分け方と `leave --id`・`clear` の手を書く。設計はどちらでも成り立つ。
+
+#### 流用点の確かめ直し
+- `crates/ukadoc-survey/src/main.rs`＋`cli/mod.rs`: 表 1 本・結果は標準出力・断りは標準エラー・0/1/2 → 写す（3 を足す）。
+- `crates/areka/src/boot_config.rs` の `resolve_root_from(env, exe)`: 値を引数で受ける → `home::resolve(value)` に写す（exe の隣へ倒れる段は写さない）。
+- `crates/areka-sylphya/src/persist/io.rs` の `FsPersistIo::commit`: 一時ファイル → `sync_all` → `rename` → 写す。
+- `crates/temp-path-kit` の `TempPath::under_target(label)`: テストの置き場所に使う。
+- `crates/areka-update/src/winhttp_real_tests.rs` の `#[ignore = "…コマンド"]`: 理由に実行コマンドを書く形を写す。
+- `crates/areka-update/Cargo.toml`: `publish = false # 理由` の位置と `[dev-dependencies]` の書き方。
+
+### 案の比較
+
+| 案 | 中身 | 長所 | 短所 | 判断 |
+|---|---|---|---|---|
+| 純粋な判断の中核＋薄い口 | `plan::apply(state, cmd, caller, now, alive)` と、ファイル・時計・生死の 3 つの口 | 規則 1〜7 を `sleep` 無しで固定できる・同時書き・故障・死んだ持ち主を偽物で再現 | 口の型が 3 つ要る | **採る** |
+| 待ちの中で判断する | 待ちのプロセスが自分で番を決める | 口が減る | 判断が 2 か所になり、決定論テストの対象が散る | 採らない |
+| 状態の読みも共有ロック | `status`・待ちの読み直しで `lock_shared` | 教科書的 | 置き換え書きで読みは常に一貫するので要らない・ロックの回数が増える | 採らない |
+
+### 設計の決定（論点 1〜14 の答え。理由は `design.md` の表と同じ）
+1. 居る印＝`watch` のプロセス（`hold` 無し）— 要件の討議の裁定。
+2. 生死＝参加者ごとのロックファイル（B-std）— 標準ライブラリだけ・使い回しの備え不要・権限に左右されない。B-win（`OpenProcess`＋作成時刻）は `windows` の機能と使い回しの照合が要るので選ばない。
+3. 待ち＝1 秒の読み直し＋変化の検知＋30 秒ごとの「周期の一回り」— 名前つきイベントは選ばない。
+4. 排他＝別ファイル `state.lock`・`try_lock` を 10 ms × 最長 10 秒・読みはロック無し。
+5. 版＝`"version": 1`・知らない版は読まず上書きせず 1・壊れたら `state.json.broken-<UTC>`。
+6. 終了コード＝0／1／2／3（3＝当てはまらなかった: 番は来なかった・条件に合わず変えなかった）。環境変数の失敗は 1 から分けない。
+7. 日本語＝`status.md`（UTF-8）へ。端末は ASCII。識別・リポジトリ・spec は ASCII に限る。
+8. ログ＝`tracing`＋`fmt::layer` を追記ファイルへ（`logging.md` どおり）。素の追記は選ばない（規約と時刻の付与）。
+9. 時刻＝UNIX 秒＋自前の UTC（`chrono`・`GetLocalTime` は選ばない）。
+10. 手順書＝`doc/impl-watch.md`。更新は「`status` で確かめる」と「動いている exe を改名してから置く」の 2 通り。
+11. 識別＝`[A-Za-z0-9._-]` の 1〜100 字。
+12. コマンド＝13 個＋`--help`（`watch`・`merge`・`merged`・`loadtest`・`loadrunning`・`loaddone`・`stopped`・`resume`・`unstop`・`cancel`・`leave`・`tick`・`status`・`clear`）。`join`（`watch` が兼ねる）・`note`・`next`（`tick` に改名）は置かない。申し込みと待ちは `--wait` で 1 つ、「止まった」と再開の待ちは `stopped --wait` で 1 つ。
+13. 置き換えの確かめ＝`status` の `waits`。exe を書き込みで開く確かめは置かない。
+14. 要件 11.3 の文言＝変えない。
+
+### 設計の合成（synthesis）
+- **一般化**: 3 種の長い待ち（番・停止要請・再開）は「状態を読み直して自分の条件を判定する」の 1 つのループ（`wait::run`＋純粋な `judge`）。`merge --wait`／`loadtest --wait`／`watch`／`stopped --wait`／`resume` は全部この 1 本。
+- **作る／採る**: 排他と生死は std の `File::lock` 系を採る（`fs2`／`fs4`／`windows` は作らない・入れない）。JSON は `serde`＋`serde_json`。ログは `tracing`。引数の解釈は自前（前例どおり）。
+- **削ったもの**: `hold`・`join`・`note`・`next`・開発者への「空になった」・読みの共有ロック・版の移行の仕組み（`clear` でやり直す）・ログの回し・exe を開く確かめ・Windows の API によるプロセスの生死。
+
+### 危うさと手当て
+- Claude のアプリを閉じても見張りが残る可能性 → `status` の `absent`／`waits` と `leave`／`clear` の手を手順書に書く。設計は変えない。
+- 探り（`try_lock` → `unlock`）と `watch` の開始が同時 → `hold` の 5 回の試しで吸収。
+- `watch` より先に `merge` を呼ぶと、その参加者は次の呼び出しで回収され、待ちが 3 で終わる → 「`watch` を先に」を呼び方の約束として手順書と続きの spec へ。自分の呼び出しでは自分を回収しない（`caller`）。
+- 再開の後に `watch` を立て直すまでの間に他の呼び出しが回収することがある → 失うものは無い（止まっていた参加者は机も申し込みも持たない）。`watch` の立て直しで参加し直す。
+- `tracing` の subscriber はプロセスに 1 度 → テストは `Applied.events` を見て、ログファイルの中身に依らない。
+- 実機で通すべきこと（`tests/real.rs`）: 別のプロセスが `state.json` を開いたまま `rename` が通ること・`LockFileEx` がロックファイルにだけ効くこと・kill した見張りの回収。
+
+### 参照
+- `.claude/skills/kiro-watch/kiro-watch.ps1`（`Invoke-Plan`・`switch ($Command)`）— 判断の設計図。
+- Rust std `std::fs::File::lock`／`try_lock`／`lock_shared`／`unlock`（1.89 安定）— 排他と生死。
+- Cargo のリファレンス「Environment variables Cargo sets for crates」— `CARGO_BIN_EXE_<name>` は統合テスト・ベンチにだけ渡る。
+- `crates/ukadoc-survey`・`crates/areka/src/boot_config.rs`・`crates/areka-sylphya/src/persist/io.rs`・`crates/temp-path-kit`・`crates/areka-update` — 流用した前例。
