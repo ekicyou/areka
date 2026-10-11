@@ -114,3 +114,20 @@
 2. **インストールの失敗の理由**: 正典の 6 語に「書けない」に当たる語が無い。正典に無い語を足してよいか（前例: ネットワーク更新では、正典に語の無い輸送の失敗に `dns`・`connect` などを足して `doc/COMPAT_ARCHITECTURE.md` §8 に登記した）、`extraction` のままにして別の道で補うか。
 3. **起動中の印が書けないとき**、落ちたことに気付く仕組みが働いていないことを、どう扱うか（知らせるだけか、別の手で補うか）。
 4. **同梱のゴーストの辞書**が理由を見て台詞を分けるように、辞書の持ち主へ申し送るか。
+
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+- 前提の変化: 無し（10-10 の起票の後、関係のファイルは変わっていない）。
+- 触るファイル（呼び手を数えた）:
+  - `crates/areka/src/boot_resolve.rs`（起動中の印を書く・消す関数と、最後に使ったものの記録）。
+  - その呼び手の `main.rs`（956 行・上限 1,000）と `emo2_boot/ghost_switch.rs`（902 行・切替の途中の印を書く所）。
+  - `install/judge.rs`（失敗理由の語の写し）・要れば `alert.rs` と `crates/areka-sylphya/src/persist/mod.rs`（保存の結果）・`doc/COMPAT_ARCHITECTURE.md` §8。
+  - 印のテスト `main_session_mark_tests.rs` は 938 行＝足さずに兄弟のファイルへ置く。
+- 規模: 6〜10 タスク（伝える道を今在るものから選ぶ場合）。
+- 先に要るもの: 働きの上では無し。ただしカタログの鎖の 4 本と同じ `boot_resolve.rs` を触るので、鎖の席を 1 回使う。
+- カタログの鎖の順の案: `baseware-root-list` → `user-data-root` → `ghost-inner-balloon` → `write-failure-notice` → `shell-companion-balloon`＝この spec は 4 番目（区分 A の 3 本の後・区分 C の前）。
+  - 触る関数は、`ghost-inner-balloon`・`shell-companion-balloon` が直す所（バルーンを決める鎖）とは別。開発者が「同じファイルでも関数が別ならよい」と決めれば、この 2 本のどちらかと並べられる。
+  - `baseware-root-list`・`user-data-root` とは並べない（`main.rs`・`install/`・記憶の置き場が重なる）。
+- ファイルの重なり（鎖のほか）: `emily-ghost-verification`（`install/judge.rs`・向こうが触る場合だけ）・`install-live-target-hazards`（`install/judge.rs`）・`tasktray-icon`（`main.rs`）。
+- 優先度の区分: B。要件定義のモデル: Fable（どちらも起票のまま）。
+- 見つけた穴・古くなった記述: 本文の触る所に、呼び手の `main.rs` と `emo2_boot/ghost_switch.rs` が無い（保存の結果を呼び手へ返すなら、両方に入る）。

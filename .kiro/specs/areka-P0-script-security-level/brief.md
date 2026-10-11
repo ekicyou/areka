@@ -125,3 +125,15 @@ areka はこの「出どころ」を運ばない。そのため、ゴースト�
 - 要件定義のモデル: Fable（MCP の出どころの値・`SenderType` の語の当てはめ・止めるタグの全件を ukadoc から決める・複数のエンジンを貫く運搬）。
 - 分割の案: 今は切らない（20 をはっきり超えてはいない）。要件の段で数えて 20 を超えたら、棚卸㉒のとおり ⒜ SHIORI へのヘッダと応答の読み取り（追加のヘッダの入れ物を含む＝`mcp-shiori-query`・`property-query-channels` が待つのはこちら）→ ⒝ 台本への出どころの印とタグの制約、の順に切る。`mcp-kanade-tools` が先に `msg.rs` を分けていなければ、本 spec が最初のタスクで分ける。
 - 見つけた穴・古くなった記述: 棚卸㉒の「実装 19 か所」は 20 か所。構築点の内訳（`boot.rs` 3・`talk.rs` 1）は `boot.rs` 2・`steady_choice_script.rs` 1 に変わった（`talk.rs` のものはテスト）。棚卸㉒の節が書いた道具の残りかすの 2 行は、もう消えている。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化:
+  - 並べられなかった相手のうち `farewell-talk-status`・`anchor-tag-canon`（どちらも 10-10）が着地した。SHIORI への要求と応答の道（`crates/shiori-host32-host/`・`crates/areka-ghost/src/shiori_inproc.rs`・kanade の `shiori/`・`crates/areka-talk/`）は棚卸㉓から変わっていない。
+  - `anchor-tag-canon` で、バルーンの本文のアンカーを押すと SHIORI へイベントが行くようになった（kanade の `schedule/anchor.rs`・`OnAnchorSelectEx` → `OnAnchorSelect`）。外から来た台本の中のアンカーを押したときのイベントへ出どころをどう写すかを、選択肢と並べて要件で決める。アンカーの応答の台本は今までのトークを始める腕へ流れる（トークの開始を組む所の数は着手時に数え直す）。
+  - kanade の行数: `msg.rs` 930・`actor.rs` 901・`schedule/mod.rs` 969・`schedule/steady.rs` 957・`schedule/events.rs` 845。
+- 触るファイル: 棚卸㉓のとおり（アンカーにも出どころを写すなら kanade の `schedule/anchor.rs` が加わる）。
+- 規模: L（16〜22 タスク）のまま。切り方も棚卸㉓のまま。
+- 先に要るもの: 働きの前提なし。ただし `mcp-kanade-tools` と 5 つのファイルが重なる（`msg.rs`・`actor.rs`・`schedule/mod.rs`・`schedule/change.rs`・`steady_choice_script.rs`）ので同じウェーブに置けない。`schedule/mod.rs` は残り 31 行で、`mcp-kanade-tools` が `msg.rs` と `schedule/mod.rs` を先に分ける段取り＝その後に着手するのが安い。`mcp-reload`（`schedule/boot.rs`）・`sakura-time-critical`（`schedule/mod.rs`・`user_break_cue.rs`）・`mcp-shiori-query`・`mouse-click-wheel-events`・`inputbox-user-input`（`schedule/events.rs`）とも並べられない。重なり 0: `mcp-receiver-bugs`・`mcp-stdio-bridge-residue`。
+- 優先度の区分: A のまま。要件定義のモデル: Fable のまま。
+- 見つけた穴・古くなった記述: 棚卸㉓の節の「同じウェーブに置けない相手」の `farewell-talk-status`・`anchor-tag-canon` と、「重なり 0」の `mcp-stdio-bridge` は着地済み。行数（`msg.rs` 926・`schedule/mod.rs` 955 ほか）は上の数に読み替える。

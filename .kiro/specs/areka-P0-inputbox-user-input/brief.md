@@ -92,3 +92,15 @@
   4. 話の最中に `OnUserInput` の返事が届いたとき、今の話を置き換えるか（マウスの返事と同じ扱いにするか）。
   5. 外から来た台本（MCP の `sakurascript`）が入力欄を開いてよいか。`script-security-level` が着地するまでの扱い。
 - **ukadoc の照合**: ukadoc「さくらスクリプト」の `\![open,inputbox,ID,表示時間,テキスト,オプション,...]`・`\![close,inputbox,ID]`・`\![open,passwordinput,…]`・`\![open,dateinput,…]`・`\![open,timeinput,…]`・`\![open,sliderinput,…]`・`\![open,ipinput,…]`・`\![open,teachbox]`、「SHIORI Event」の `OnUserInput`・`OnUserInputCancel`・`inputbox.autocomplete` を ukadoc MCP で確かめた。`--option=` に書ける語の一覧は確かめていない（例の `noclose` だけ）。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化:
+  - `anchor-tag-canon`（10-10）が着地した。行数: kanade の `schedule/events.rs` 845・`msg.rs` 930・`schedule/mod.rs` 969。`emo2_boot/mod.rs` 911・`consumer_ledger.rs` 943（変わらず）。
+  - 議題 3 の手本が増えた: アンカーは「`On` で始まる ID はその名前のイベントを 1 本だけ・それ以外は 2 段」を、帳簿を持たず段の記憶だけで扱う（kanade の `schedule/anchor.rs`）。`On` で始まる ID を通す決まりは選択肢と同じ関数（`is_allowed_choice_event`）で、イベント名の型の任意の名前の側（`msg.rs` の `EventId`）は「作者が ID に書いた名前」として選択肢とアンカーが共用している＝入力欄の ID も同じ道に乗せられる。
+  - 入力の種類を新しいファイルに置く前例もできた（kanade の `src/anchor_input.rs`）。それでも `msg.rs`（知らせの 1 行と名前）・`schedule/mod.rs`（入力の種類・状態の欄・振り分けの腕）・`lib.rs` には数行ずつ足している。
+- 触るファイル: 棚卸㉓のとおり。kanade は新しいファイルと `schedule/events.rs` のほかに、上の 3 つ（`msg.rs`・`schedule/mod.rs`・`lib.rs`）に数行ずつ。
+- 規模: 棚卸㉓のまま（OS 標準の部品なら 12〜16 タスク）。
+- 先に要るもの: 働きの上では無い。同じウェーブに置けない相手: `mcp-kanade-tools`・`mouse-click-wheel-events`・`script-security-level`（kanade の `schedule/events.rs`・`schedule/mod.rs`・`msg.rs`）・`mcp-reload`・`sakura-time-critical`・`sakura-time-directives`（`consumer_ledger.rs`）。`mcp-kanade-tools` が `msg.rs` と `schedule/mod.rs` を分けた後に着手するのが安い。重なり 0: `mcp-receiver-bugs`・`mcp-stdio-bridge-residue`・`check-script-arg-checks`（`doc/ssp-mcp/areka-tools.md` の受け取り手の数の 1 行を向こうに預ければ）。
+- 優先度の区分: C のまま。要件定義のモデル: Fable のまま。
+- 見つけた穴・古くなった記述: 棚卸㉓の測定は、入力の種類を足すと触ることになる kanade の `msg.rs`・`schedule/mod.rs`・`lib.rs` を挙げていなかった。Adjacent の `anchor-tag-canon` は着地済み。

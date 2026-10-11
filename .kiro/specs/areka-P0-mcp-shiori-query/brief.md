@@ -150,3 +150,13 @@ areka 独自のツール 1 本（仮名 `query_shiori`）。**SSTP NOTIFY と同
 - 要件定義のモデル: Fable（`X-` で始まるヘッダの原文の確認・SSTP NOTIFY が SHIORI へどのメソッドで届くか・各 SHIORI が任意の名前のヘッダを読み書きできるか）。
 - 分割の案: なし。
 - 見つけた穴・古くなった記述: 棚卸㉒の「前提の状態: 待ち（`mcp-author-tools` が未着手）」と「実装 19 か所」は古い。roadmap の依存の行は `mcp-author-tools` だけで、裁定で決めた `mcp-kanade-tools` が書かれていない。棚卸㉒の節が書いた道具の残りかすの 2 行は、もう消えている。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化:
+  - SHIORI への要求と応答の道は棚卸㉓から変わっていない。kanade の行数は `msg.rs` 930・`actor.rs` 901。
+  - `mcp-stdio-bridge`（10-11）が着地した。中継 `areka-mcp-bridge` は、areka が居ないときの一覧をツールの定義の列（`crates/areka-mcp/src/tools/mod.rs` の `all_specs`）から読む＝ツールを 1 本足すと中継の一覧にも自動で載り、中継のファイルには触らない。足す手順の表（`doc/ssp-mcp/areka-tools.md` の ⑹）は変わっていない。
+- 触るファイル・規模（M〜L・12〜16 タスク）: 棚卸㉓のまま。
+- 先に要るもの: `mcp-kanade-tools`（働き）・`script-security-level`（入れ物の順）。同じウェーブに置けない相手に `mcp-receiver-bugs` の件 1（`crates/areka-mcp/src/handler.rs`）が加わった。
+- 優先度の区分: A のまま。要件定義のモデル: Fable のまま。
+- 見つけた穴・古くなった記述: 棚卸㉓の節が「重なり 0」と書いた `mcp-stdio-bridge`・`farewell-talk-status` は着地済み。

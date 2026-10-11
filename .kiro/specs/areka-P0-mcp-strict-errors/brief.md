@@ -129,3 +129,15 @@ AI が書いた台本は、存在しない surface 番号や綴りを誤った�
 - 要件定義のモデル: Fable（上の議題は開発者の判断・SSP の strict の記録との差をどこまで許すか）。
 - 分割の案: なし（20 を超えたときの切り方は棚卸㉑のまま）。
 - 見つけた穴・古くなった記述: 棚卸㉑・㉒の「触るファイル」は ⑵ だけを前提にしている。文面の定数（`check_script_judge.rs` の `MSG_*`）と文書の一致はテストで見ていない（申し送りのとおり・本 spec が検査を足す候補）。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化:
+  - `mcp-stdio-bridge`（10-11）が着地し、案内文（`crates/areka-mcp/src/handler.rs` の `INSTRUCTIONS`）は外から読める定数になった。中継 `areka-mcp-bridge` は areka が居ないときの答えにこの文をそのまま使う＝最後の 1 文を消すと中継の答えも一緒に変わる。中継のテストは定数と比べているので、中継のファイルに直す所は無い。文は 4 文のままで、`NG:not implemented yet` を返すのも 3 本のまま。
+  - `anchor-tag-canon`（10-10）が着地し、診断の種類は 6 つから 7 つになった（`unpaired_tag`＝アンカーの開きと閉じの対応の崩れ・文面 3 つ）。正本 `doc/ssp-mcp/areka-tools.md` の見本の表は 17 行。判定 `crates/areka/src/mcp/check_script_judge.rs` は 218 行で、対応の崩れは再生が使うのと同じ判定（`areka_sakura::pair_anchors`）の答え。再生も同じ所で同じ内容の警告を出している＝strict の記録に `unpaired_tag` を入れるかを、6 類の議題に足す。
+  - `check_script` は `\e`・`\-` の後ろも診るが、`unpaired_tag` だけは後ろに出さない（正本に明記）。入口で `diagnose` に通す案 ⑴ の弱み「`\e` の後ろも診てしまう」は、この種類には当たらない。
+- 触るファイル: 棚卸㉓のとおり。
+- 規模: ⑴ なら S〜M（6〜10 タスク）・⑵ なら M〜L（12〜18 タスク）のまま。
+- 先に要るもの: `mcp-kanade-tools`・`mcp-reload`（案内文の 1 文を消す順）。`check-script-arg-checks` が先に着地すると種類と文面の正本が増える＝後の側が揃える。同じウェーブに置けない相手: `mcp-user-response`・`mcp-shiori-query`・`mcp-receiver-bugs` の件 1（`handler.rs`）・`check-script-arg-checks`・`script-impact-tiers`（`check_script_judge.rs`・`areka-tools.md`）。
+- 優先度の区分: A のまま。要件定義のモデル: Fable のまま。
+- 見つけた穴・古くなった記述: 10-08 の申し送りの「6 類」の表に `unpaired_tag` の行が無い。文面の定数（`check_script_judge.rs` の `MSG_*`・10 個になった）と文書の一致は、今もテストで見ていない。

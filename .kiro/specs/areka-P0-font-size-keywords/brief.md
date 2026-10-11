@@ -70,3 +70,13 @@
 - **網羅台帳の行の扱い**: `\f[height,数値]` の行は持ち主 `areka-P0-text-decoration-canon`・状態 `implemented` のまま変えない（完了した持ち主を書き換えない）。注記の「語彙のみ」の 1 文だけを本 spec が実物に合わせて書き直す。
 - **覚え書きとの違い**: 覚え書きは「`look.rs` だけ」と書くが、印を見ている所が文字の層と `check_script` に 1 か所ずつあり、文書も 2 つ直す。規模は S のまま。
 - **ukadoc の照合**: ukadoc「`\f[height,数値]`」（さくらスクリプトの一覧）を ukadoc MCP で確かめた。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- **前提の変化**: `anchor-tag-canon` が着地した（10-10）。本 spec が触る所は残っている（`look.rs` の `Note::StylesheetKeyword`・`state_decoration.rs` の記録の腕・`check_script_judge.rs` の `judge_font`・検査の 2 か所）。行数は `state_decoration.rs` 643・`check_script_judge.rs` 218（`look.rs` 802 は同じ）。
+- **触るファイル・規模（S・3〜5 タスク）・優先度の区分（C）・要件定義のモデル（Fable）**: 変わらない。新しいファイルは足さない見込み＝emo-text の `lib.rs` の席は使わない。
+- **先に要るもの**: なし＝今すぐ着手できる。
+- **見つけた穴・古くなった記述**:
+  - **`range-choice-tag` と `check_script_judge.rs` が重なる**（あちらは範囲の選択肢の開きと閉じの崩れを、アンカーと同じ形で知らせる見込み）＝同じウェーブに置けない。上の Adjacent に無かった相手。
+  - Adjacent の `balloon-font-file` は `look.rs` に触らない見込み（あちらの棚卸㉒の測定）＝重なり 0 で並べられる。`anchor-tag-canon` は着地したので相手から外れる。
+  - 並べられる相手: `balloon-font-file`・`balloon-text-bugs`・`choice-ranges-one-function`・`real-run-log-noise`（どれとも重なり 0。ただし前の 3 本は互いに重なるので、同じウェーブに入るのはそのうち 1 本）。

@@ -128,3 +128,13 @@
 - 要件定義のモデル: Fable（areka 独自の組版・先読みとの噛み合わせ・開発者に決めてもらう分かれ目が 3 つ）。
 - 議題: 棚卸⑳の 2 件（禁則の表を手で書くか・縦中横を自前で描く方式）はそのまま。⑶ は上の「残る穴」の 2 点に置き換える。
 - 見つけた穴・古くなった記述: コードの穴は無い。棚卸㉒の「純粋の数は 71」は今 73。「`actor_present.rs` も触る見込み」は確定（`arrange_lines`）。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- **前提の変化**: `anchor-tag-canon` が着地した（10-10）。文字の層の `state.rs`（713 行）・`actor.rs`（663 行）・`actor_present.rs`（411 行）が書き換わったが、配置の関数（`layout*.rs`）・先読み（`lookahead.rs` 328 行）・1 字ずつの折り返しの腕（`actor_present.rs` の `arrange_lines`）は同じ＝棚卸㉓の「残る穴 2 つ」はそのまま。
+  - 新しく確かめること（後半＝縦中横の側）: 押せる範囲（選択肢・アンカー）は字の通し番号の範囲で持ち（`state.rs` の `ChoiceSpan`）、当たりの升は字ごとに作る（`choice.rs` の `glyph_cells`）。縦中横で複数の字を 1 升にまとめると、通し番号と升の対応が変わる＝範囲の中に縦中横があるときの当たりと下線を、要件で 1 行決める。禁則（前半）は字の順を変えないので影響しない見込み。
+- **触るファイル**: 棚卸㉓のまま（後半に `choice.rs` が入るかは上の決め次第）。禁則の表は新しいファイル＝emo-text の `lib.rs` の一覧（今 76 本。棚卸㉓の「73」は古い）の席を使う。`crates/areka/src/emo2_boot/consumer_ledger.rs` は 943 行のまま。
+- **規模**: 17〜22 タスクのまま。分割の案（前半 `text-typesetting`・後半 仮の名前 `text-combine-upright`）も同じ。
+- **先に要るもの**: 働きの前提は満たしている。列の順は `range-choice-tag` → `link-context-copy` → `balloon-link-hover` → `balloon-font-file` の後のまま（列の頭だった `anchor-tag-canon` は着地した）。
+- **優先度の区分**: A のまま。**要件定義のモデル**: Fable のまま。
+- **見つけた穴・古くなった記述**: コードの穴は無い。前半は `region.rs` に触るので `real-run-log-noise` と、`actor_present.rs` に触るので `balloon-text-bugs`・`choice-ranges-one-function` と、同じウェーブに置けない。

@@ -91,3 +91,16 @@ SSP に同梱されている既定ゴースト「Emily/Phase4.5」（えみり�
 - 検体 `claudia`（32 ビットの YAYA）はこの形で動いているので、最初に疑う所ではない。辞書やファイルが見つからない形で止まったら候補に入れる。
 - 直すと SHIORI へ渡すバイト列がすべてのゴーストで変わる＝この spec の中の小さな直しとしては扱わず、開発者に聞く（`shiori4-api` の議題の候補にも同じ事実を書いた）。
 - 上の再測定の「descript の `*.seriko.defaultsurface` はどこも読んでいない」を引き直した。製品コードでこの綴りが出るのは、プロパティの名前の表（`crates/areka-sylphya/src/vocab/dotted.rs` の `SET_EFFECTIVE`）だけで、descript から最初の面を読む所は 0。
+
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+- 前提の変化:
+  - 本文が隣に挙げていた `seriko-trigger-intervals` が着地した（10-10）。アニメーションの起動の型 `talk`・`runonce`・`periodic` が動く＝えみりの絵が動かないときの原因の候補から、この 3 つが外れる（えみりがどの型を使うかは実機で見る）。`anchor-tag-canon` も着地した（台本の `\_a` のリンクが働く）。
+  - 検体の登記表を触る spec が 3 本起票された（`dot-sakura-specimen`・`default-balloon-selfmade`・`sample-url-fetch`）。棚卸㉓の「重なり 0」は、登記表については当たらなくなった。
+- 触るファイル: 棚卸㉓のまま（`crates/areka-nar/src/plan.rs` 307 と新しい兄弟のテスト・`crates/sample-ghost-kit/src/{lib.rs,lib_tests.rs}`・`vendors/sample_ghost/README.md`・要れば `install/judge.rs`）。
+- 規模: 8〜12 タスク（変わらず）。
+- 先に要るもの: 働きの上では無し。ファイルの上では、検体の登記表の席を待つ。
+- 席の案（検体の登記表の列）: `dot-sakura-specimen` → `emily-ghost-verification` → `default-balloon-selfmade` → `sample-url-fetch`＝この spec は 2 番目。そのとき検体の数の直しは「7 を 8 に」でなく「8 を 9 に」。
+- ファイルの重なり: 上の 3 本（登記表・数のテスト・README の表）・`write-failure-notice`（`install/judge.rs`・こちらが触る場合だけ）。カタログの鎖とは 0 のまま（`ghost-inner-balloon` が書庫に鍵を足さない限り）。
+- 優先度の区分: A。要件定義のモデル: Fable（どちらも変わらず）。
+- 見つけた穴・古くなった記述: 実機の窓を出す回は、`emo2-real-run-stability`・`dot-sakura-specimen` の実機の回や、負荷の走行と同じ時間に回さない。

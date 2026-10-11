@@ -74,3 +74,16 @@
   3. 記録の上限と水準（読めない行は `warn!`、読まなかったキーは `info!` か `debug!` か。`get_log` で見える水準にする必要がある）。
   4. 設定ファイルを検査する MCP のツールがまだ要るか（本 spec の後で開発者に聞く。本 spec では作らない）。
 - **ukadoc の照合**: 不要（areka の記録の話で、正典の主張を含まない）。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化: Adjacent に挙げた `seriko-trigger-intervals` と `anchor-tag-canon` は着地した。`shell/decode.rs` は 576 → 594 行（interval の語が 3 つ増えた）。`kv/parse.rs`（43）・`shell/parse.rs`（28）・`balloon/parse.rs`（252）は変更 0（`anchor-tag-canon` はバルーンの descript の読み手に触れなかった）。
+- 触るファイル: 棚卸㉓のまま。
+- 規模: 9〜13 タスクのまま。
+- 先に要るもの: なし。同じウェーブに置けない相手（今の一覧）:
+  - `shell/decode.rs`: `collisionex-regions`・`animated-image-import`・`element-clipping-option`・`draw-methods-canon`・`seriko-script-triggers`（`animation*.name` を読む）・`shell-tooltip`・`surfaces-basepos`。`seriko-interval-combinations` は、組み合わせを読み手で型に写す形を選んだときだけ。
+  - `balloon/parse.rs`: `balloon-markers`・`anchor-style-canon`・`emo-text-canon-residue`。`balloon-canon-residue` は今の触るファイルに `balloon/parse.rs` が無い＝重ならない見込み。
+  - 重なり 0: `extent-element-offset`・`seriko-trigger-lottery-gaps`・`seriko-talk-clock-fidelity`・`balloon-webp-names`。
+- 優先度の区分: C のまま。
+- 要件定義のモデル: Opus のまま。
+- 見つけた穴・古くなった記述: 読み手が黙って落とすものが 2 つ増えて見えた。`animation*.name` の行（`seriko-script-triggers` が読むようにする）と、知らない interval の語の後ろの数値（`bind+periodic,5` の `5`）。この spec が先に着地すると前者は「読まなかった行」として記録に出る＝あちらの着地で消えることを、記録の期待に入れておく。

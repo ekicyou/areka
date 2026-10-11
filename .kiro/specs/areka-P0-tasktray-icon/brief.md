@@ -97,3 +97,15 @@ areka は通知領域（タスクトレイ）にアイコンを出さない。�
 - アイコンの大きさは、画面の拡大率に合わせて選ぶ（areka は拡大率に追従する作り）。
 - 実機の確かめは、画面のロックを外した机で行う。Windows 11 は既定でアイコンを「隠れているアイコン」に入れるので、確かめの手順にその開き方を書く。
 - 異常終了のとき、アイコンは OS が片付けるまで残る（OS の仕様）。既知の制限として書く。
+
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+- 前提の変化: 無し（指している場所はどれも実物と合っている）。
+- 触るファイル（測った）: `crates/areka/src/menu/trigger.rs`（573）・`menu/mod.rs`（348）・`main.rs`（956 行・上限 1,000＝足す分は新しい `tray/` へ出す）・新しい `crates/areka/src/tray/`・wintf の新しい部品（`crates/wintf/src/ecs/` の下。ツールチップの前例の隣）。
+- 規模: 10〜14 タスク（roadmap の見立てのまま）。
+- 先に要るもの: `app-icon`。後ろに待つのは 3 本（`tasktray-ghost-icon`・`tasktray-balloon`・`tasktray-minimize`）。
+- ファイルの重なり:
+  - `baseware-root-list`（`main.rs`・`menu/mod.rs`）・`user-data-root`・`write-failure-notice`（`main.rs`）＝この 3 本が実装中の間は並べない。
+  - `popup-menu-residue`（`menu/`）。
+- 優先度の区分: A。要件定義のモデル: Fable を勧める（自前の窓の手続きと World の貸し借りの順・議題 4 つ）。
+- 見つけた穴・古くなった記述: 本文に規模と要件定義のモデルが書かれていない（roadmap の行には規模が在る）。

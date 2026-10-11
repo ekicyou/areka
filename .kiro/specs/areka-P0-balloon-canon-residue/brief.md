@@ -187,3 +187,16 @@
   - 本文の Scope・Desired Outcome は古いまま（棚卸㉒の注記どおり、項目 2・3・5・6 と読み替える）。
   - 棚卸㉑・㉒の触るファイルの `frame/switch.rs`・`shell_balloon_switch.rs` は外せる。
   - roadmap の台帳の行の規模「12〜16」と前提「`shell-balloon`」は古い（棚卸㉒で 10〜14・前提は完了済み）。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化: seriko の `actor.rs` を分け合っていた `seriko-trigger-intervals` が着地した（776 行。`\b[数字]` の腕は変わらず、cue の受け口の頭に「文字の時刻の写し」へ渡す 1 行が入った）。emo-present の `balloon.rs`（701）・`emo2_boot/frame/attach.rs`（455）・`placement/{config,resolver}.rs`（706・491）は変更 0。面の番号の `0` の直書きも装着の 1 か所のまま。
+- 触るファイル: 棚卸㉓のまま。
+- 規模: 10〜14 タスクのまま。
+- 先に要るもの: 働きの上では無し。ファイルの重なりの相手が入れ替わった。
+  - seriko の `actor.rs`: `seriko-trigger-lottery-gaps`（窓の知らせの受け口を触る。件 1 は `\b[番号]` の切り替えで引き金が構え直ることをテストで固定する＝同じ腕の近く）・`seriko-script-triggers`（cue の受け口で名前を開封する所）。棚卸㉓の節の「`seriko-trigger-intervals`」はこの 2 本に読み替える。
+  - emo-present の `balloon.rs` の系列の表: 10-10 に起票された `balloon-webp-names`（面の絵の名前に `.webp` を受け、名前から絵のファイルを探す所を 1 か所にまとめる）。面の解決の土台が変わるので、あちらを先に置くと二度手間が無い。`balloon-markers`・`talk-fast-forward` は棚卸㉓のまま。
+  - 重なり 0: `extent-element-offset`・`collisionex-regions`・`animated-image-import`・`seriko-interval-combinations`・`seriko-talk-clock-fidelity`。
+- 優先度の区分: C のまま。
+- 要件定義のモデル: Opus のまま。
+- 見つけた穴・古くなった記述: `sakura.balloon.defaultsurface` はゴーストの descript の鍵で、今はどこも読んでいない（バルーンの descript の読み手 `crates/areka-parsers/src/balloon/parse.rs` の仕事ではない）。`config-parse-diagnostics` の brief はこの spec を `balloon/parse.rs` の相手に挙げるが、こちらの触るファイルに無い＝重ならない見込み（要件で確かめる）。

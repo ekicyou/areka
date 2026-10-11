@@ -71,3 +71,17 @@
   - `anchor-tag-canon`・`range-choice-tag`・`choice-marker-styling` と `choice.rs`・`actor_present.rs`・`actor.rs` が重なる＝同じウェーブに置けない。
   - **`anchor-tag-canon` の前に置くのが素直**（後にすると、アンカーの範囲を足した後の並びをもう一度まとめ直す）。前に置く席が無ければ、`anchor-tag-canon` の最初のタスクに入れる手もある（合わせて 16〜20 タスク）。
   - `reflow-scroll-path-test` とは、あちらが `actor_lookahead_tests.rs` に足す形なら重ならない。`balloon-text-bugs` の件 2 とは、あちらが `actor_present.rs` で止める設計なら重なる。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- **前提の変化**: `anchor-tag-canon` が着地した（10-10）。上の棚卸㉓の「起票の後、関係のファイルは変わっていない」と「`anchor-tag-canon` の前に置くのが素直」は古い。
+  - `present_actor` の並び（`annotate_lines` → `line_bands` → 強調の描画 → 描き替えがあったときだけ `derive_hit_rows`）は同じ。3 つの関数は、選択肢とアンカーを種類つきの同じ列で扱うようになった。
+  - **同じ 3 つを検査の側で呼び直す所が 2 か所に増えた**: 前からの `actor_lookahead_shapes_tests.rs` に加えて、`anchor-tag-canon` の新しい検査 `choice_anchor_tests.rs` の補助の関数も、同じ順で 3 つを呼んでいる。まとめた関数へ替えるのは 2 か所。
+- **触るファイル**: `crates/areka-emo-text/src/actor_present.rs`（411 行・呼び替えは必ず要る）・`choice.rs`（748 行・まとめた関数をここに置くなら）・`actor.rs`（663 行・検査用の読み口）・`actor_lookahead_shapes_tests.rs`（421 行）・`choice_anchor_tests.rs`（273 行）。新しいファイルは足さない＝`lib.rs` の席は使わない。
+- **規模**: S（3〜5 タスク）。
+- **先に要るもの**: 無い＝今すぐ着手できる。
+- **優先度の区分**: C のまま。**要件定義のモデル**: Opus のまま。
+- **見つけた穴・古くなった記述**:
+  - 同じウェーブに置けない相手: `range-choice-tag`・`balloon-font-file`（`actor.rs`）・`balloon-text-bugs`（`actor_present.rs`）。`choice-marker-styling` とは、まとめた関数を `actor_present.rs` に置けば重ならない（`choice.rs` に置くと重なる）。
+  - 並べられる相手: `font-size-keywords`・`real-run-log-noise`（重なり 0）。
+  - `range-choice-tag` より前に入れると、あちらが範囲の選択肢の検査を書くときに、まとめた関数を最初から呼べる。後になっても直す所は増えない見込み（範囲の選択肢は、種類つきの同じ列に乗るだけ）。

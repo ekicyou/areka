@@ -75,3 +75,13 @@
 - 折返し基準の `WARN` は、持ち主の `emo-text-canon-residue` が取り下げ予定なので、同 spec を片付けるとき（`coverage-roadmap-refresh` と一緒）に「同梱のバルーンが起動のたびに警告を出す」ことが落ちないよう、要件の段で 1 行確かめる（本 spec へ入れるかは、そのとき開発者に聞く）。
 - 規模の見込み: S（3〜5 タスク。`trace!` へ下げるだけなら 2〜3）。
 - 要件定義のモデル: Opus。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- **前提の変化**: 無い。毎フレームの `debug!` 2 種類（`crates/areka-emo-text/src/region.rs`・`actor_attach.rs`）と焼き込みの警告（`crates/areka-emo-atlas/src/lib.rs`）は main に同じ形で在る。行数も同じ（486・251・686）。
+- **触るファイル・規模・優先度の区分・要件定義のモデル**: 変わらない。
+- **見つけた穴・古くなった記述**（ほかの spec との重なりの書き足し）:
+  - Adjacent の「`balloon-text-bugs` の件 2 とは触るファイルも別」は条件つき。あちらは 0 寸を見分ける層の候補に `region.rs` を挙げている＝あちらが `region.rs` で止める設計を選ぶと重なる。
+  - `balloon-font-file` とは `actor_attach.rs` が重なる（あちらは普通のバルーンを登録する所を触る）＝同じウェーブに置けない。`text-typesetting` の前半とは `region.rs` が重なる。
+  - 検査を兄弟の新しいファイルに置くと、emo-text の `lib.rs` の一覧（今 76 本）の席を使う。席を使う spec（`range-choice-tag` など）と並べるなら、今ある検査ファイルへ足す。
+  - 並べられる相手: `range-choice-tag`・`choice-ranges-one-function`・`font-size-keywords`・`choice-marker-styling`（重なり 0）。

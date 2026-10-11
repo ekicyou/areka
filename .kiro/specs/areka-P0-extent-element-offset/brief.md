@@ -94,3 +94,15 @@
   - `crates/areka-emo-compose/src/log_firing_tests.rs` の `pattern0_less_bind_skip_fires_debug_and_no_warn_error` の説明に、移す前の `plan.rs` の行番号（`:529`）が残っている。
   - Current State・Scope の「`plan.rs` の `flatten_extent`」は `plan_extent.rs` と読む。
   - 外形が変わると採寸の結果も変わる。`placement-measure-bake-once` より先に着地させると、あちらの「採寸の結果が同じ」の固定が書きやすい。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化: 合成（`crates/areka-emo-compose`）は棚卸㉓から変更 0。外形を数える `flatten_extent`（`plan_extent.rs`・198 行）も、画像の element定義の X,Y を足さない食い違いも、そのまま。`seriko-trigger-intervals` は 10-10 に着地し、外形のファイルには触れなかった（`always` を含む組み合わせは `seriko-interval-combinations` へ切り出された）。
+- 触るファイル: 棚卸㉓のまま。
+- 規模: 3〜6 タスクのまま。
+- 先に要るもの: 無し（今すぐ着手できる）。同じ `plan_extent.rs` を触るので同時に走らせない相手は `animated-image-import`・`element-clipping-option`・`seriko-interval-combinations`（棚卸㉓の節の「`seriko-trigger-intervals`」はこの名前に読み替える）。`draw-methods-canon` は外形の本体には触らないが、兄弟のテスト `plan_extent_film_tests.rs` の直書きを欄 1 つぶん直すので、同じウェーブに置かない。
+- 重なり 0: `collisionex-regions`・`config-parse-diagnostics`・`seriko-trigger-lottery-gaps`・`seriko-talk-clock-fidelity`・`seriko-script-triggers`・`balloon-canon-residue`・`balloon-webp-names`。
+- 後ろで待つもの: `element-clipping-option`（こちらの裁定の上に載る）と、その後ろの `draw-methods-canon`・`draw-methods-blend`。ファイルの順として `animated-image-import`・`seriko-interval-combinations`。
+- 優先度の区分: B のまま。
+- 要件定義のモデル: Fable のまま。
+- 見つけた穴・古くなった記述: 新しい件は無い。棚卸㉓の 2 件（`log_firing_tests.rs` の説明に残る移す前の行番号・本文の「`plan.rs` の `flatten_extent`」）は今もそのまま。

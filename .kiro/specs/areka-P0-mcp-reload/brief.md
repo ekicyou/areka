@@ -132,3 +132,18 @@ AI エージェントは辞書やシェルを書き換えたら、ゴースト�
 
 - **`consumer_ledger.rs` に触るついでの片付け 1 件**（完了 `mcp-author-tools` の `research.md` の 13 節が残したもの）。`\!` の対応表 `ConsumerLedger::canonical`（`crates/areka/src/emo2_boot/consumer_ledger.rs`）の `bind` の行は、名前を文字列 `"bind"` で直に書いている。拾う側の seriko（`crates/areka-seriko/src/actor.rs`）も自分の中で `"bind"` と直に比べていて、2 つを結ぶ共通の定数が無い。ほかの内部の名前（`FONT_TAG_CARRIER`・`PROP_SET_CUE_NAME`・`JUMP_TAG_CARRIER`）は定数を分け合っている。
 - 不具合ではない（今は 2 つの綴りが合っている）。本 spec で対応表に `reload` の行を足すときに、seriko に名前の定数を 1 つ置いて表から引く形へ直す（1 タスクの中で済む大きさ）。seriko のファイルに触りたくないウェーブなら、やらずに次に対応表へ触る spec へ送ってよい。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化:
+  - 棚卸㉓の後に着地した spec は、本 spec の触るファイルをほとんど変えていない（`consumer_ledger.rs` 943・`ghost_switch.rs` 902・`shell_balloon_switch.rs` 442 は変わらず・`emo2_boot/mod.rs` は 911）。
+  - 起動の由来（kanade の `src/change.rs` の `BootOrigin`）を全部並べて分ける所は `schedule/boot.rs` の 1 か所だけと確かめた＝種類を 1 つ足しても kanade で触るのは `src/change.rs` と `schedule/boot.rs` の 2 つで済み、`mcp-kanade-tools` との「重なり 0」の約束は守れる。
+  - `NG:not implemented yet` を固定しているテストはツールごとの別ファイル（`crates/areka/src/mcp/reload_tests.rs`）＝`mcp-kanade-tools` と同じテストファイルを直すことは無い。
+- 触るファイル・規模（L・17〜22 タスク。`\![reload,shiori]` を除くと 14〜17）: 棚卸㉓のまま。
+- 先に要るもの: 働きの前提なし。
+  - **棚卸㉓の節に抜けていた相手**: `baseware-root-list`（ウェーブ C5 の残り・未着手）が `emo2_boot/ghost_switch.rs` と `shell_balloon_switch.rs` を挙げている＝同じウェーブに置けるのは 2 本のうち 1 本だけ。
+  - ほかに並べられない相手: `consumer_ledger.rs` に行を足す `sakura-time-critical`・`sakura-time-directives`・`inputbox-user-input`、`doc/ssp-mcp/areka-tools.md` を直す `check-script-arg-checks`・`mcp-user-response`・`mcp-shiori-query`、`crates/areka-ghost/src/runtime.rs` を触る spec（`\![reload,shiori]` を含めるときだけ）。
+  - `areka-tools.md` の 1 行（受け取り手の数）を本 spec で直さず、数を書かない形への直しごと `check-script-arg-checks` に預ければ、`check-script-arg-checks` とは重なり 0 にできる。
+  - 重なり 0: `mcp-kanade-tools`（上の約束つき）・`mcp-receiver-bugs`・`mcp-stdio-bridge-residue`。
+- 優先度の区分: A のまま。要件定義のモデル: Fable のまま。
+- 見つけた穴・古くなった記述: `check-script-arg-checks` の brief は「本 spec が `change_cue.rs` を挙げている」と書くが、本 spec の触るファイルに `change_cue.rs` は無い（受け口は新しい `reload_cue.rs`）。`mcp-receiver-bugs` の brief の Adjacent は本 spec を「`handler.rs` を触る spec」に数えているが、本 spec は `handler.rs` を挙げていない。

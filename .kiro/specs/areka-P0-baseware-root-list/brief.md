@@ -130,3 +130,21 @@
   - 本文の呼び手の一覧に `readme/opener.rs` が無い。
   - フォルダ選択は、今のファイル選択（`install/pick.rs` の `GetOpenFileNameW`）とは別の API（`IFileOpenDialog`）になる。Windows の機能 `Win32_UI_Shell`・`Win32_System_Com` は根の `Cargo.toml` で有効＝`Cargo.toml` に触らずに済む見込み。
   - `ghost-inner-balloon` も「項目がどの置き場のものか」を持たせる。先に着地する方が素性に置き場の欄を作る。
+
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+- 前提の変化: 棚卸㉓の後に着地した spec が動かしたのは、触るファイルのうち `crates/areka/src/main.rs` だけ（950 → 956 行・上限 1,000）。カタログの 3 ファイル（`catalog.rs` 414・`boot_resolve.rs` 609・`boot_config.rs` 503）と `install/`・`update/desk.rs`・`menu/` は変わっていない。同じファイルを触る spec が 10-10 に 3 本起票された（`user-data-root`・`write-failure-notice`・`default-balloon-selfmade`）。
+- 触るファイル: 棚卸㉓のまま。メニューの 2 項目は、枠の並び（`Frame::ORDER`）を持つ `menu/mod.rs` にも入る見込み。
+- 規模: 16〜20 タスク（変わらず）。`main.rs`（956）と `emo2_boot/ghost_switch.rs`（902）は、足す分を兄弟のファイルへ出す。
+- 先に要るもの: 無し＝今すぐ着手できる先頭。働きの上で後ろに待つのは `user-data-root`（その先に `winget-release-automation`）・`dev-folder-alias`・`property-catalog-lists`。ファイルの上で待つのは `ghost-inner-balloon`・`shell-companion-balloon`・`write-failure-notice`・`default-balloon-selfmade`。
+- カタログの鎖の順の案: `baseware-root-list` → `user-data-root` → `ghost-inner-balloon` → `write-failure-notice` → `shell-companion-balloon`。
+  - この spec が「根の並び」と、一覧の項目の「どの置き場のものか」の欄を作る。ほかはその上に足す。
+  - `user-data-root` を 2 番目に置くのは、winget の案内と次の版がそれを待つため。
+  - `default-balloon-selfmade` が重なるのは、既定の名前の定数 1 行と、その名前を期待するテスト 4 本だけ（席の案は向こうの brief）。
+- ファイルの重なり（新しく分かった分）:
+  - `user-data-root`（`boot_config.rs`・`catalog.rs`・`boot_resolve.rs`・`main.rs`・`install/desk.rs`）。
+  - `write-failure-notice`（`boot_resolve.rs` の起動中の印と記録の関数・`main.rs`・`emo2_boot/ghost_switch.rs`）。
+  - `tasktray-icon`（`main.rs`・`menu/mod.rs`）。
+  - 0: `app-icon`（向こうが `main.rs` に触らない形のとき）・`dot-sakura-specimen`・`emily-ghost-verification`・`impl-watch-skills`・`impl-watch-residue`・`emo2-real-run-stability`（検査の側だけで直すとき）。
+- 優先度の区分: A。要件定義のモデル: Fable（どちらも変わらず）。
+- 見つけた穴・古くなった記述: 本文「確かめること」（winget の上げ直しで exe の隣が入れ替わるか）は答えが出た（入れ替わる。後から入れた物ごと消える）。守る手は `user-data-root` が持つ案＝この spec の要件には足さない。

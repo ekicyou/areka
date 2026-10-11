@@ -132,3 +132,14 @@
   3. pattern定義の `base` で当たり判定もコマのサーフェスのものへ替えるか（正典はそう書く）。入れるなら当たり判定の経路（`crates/areka-emo-compose/src/hit.rs`）まで及び、+1〜2 タスク。
   4. 描けない語が残るときの警告を、状態が変わったときの 1 回にするか。
 - **見つけた穴**: `asis` の正典は「element定義で合成したサーフェスを、ほかのサーフェスのアニメーションの部品として `asis` で合成したときの表示は未定義」と書く。areka の決めを §8 に記す。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化: 分割の節の「同じウェーブに置けない相手」に挙げた `seriko-trigger-intervals` は着地した。読み手（`shell/model.rs` 295 行・`decode.rs` 594 行・`undrawn.rs` 62 行）は interval の語が増えただけ。合成の 7 か所の門と語の表 `method.rs` は変更 0。`Element` を直書きするファイルは 39 のまま。
+- 触るファイル: 分割の節のまま。seriko の `table.rs` は 900 行になった（pattern定義の `base` を「描けない」と確かめる期待は、このファイルの中に在るテストに残っている）。
+- 規模: 13〜16 タスクのまま。
+- 先に要るもの: 列の順は今のまま（`element-clipping-option` の後。その前に `extent-element-offset`）。
+- 同じウェーブに置けない相手（足す分）: 読み手の `decode.rs` を触る `config-parse-diagnostics`。seriko の `table.rs` を触る `seriko-trigger-lottery-gaps`・`seriko-interval-combinations`・`seriko-script-triggers`・`animated-image-import`（こちらが触るのはテストの期待 1 か所だけ）。
+- 優先度の区分: A のまま。
+- 要件定義のモデル: Fable のまま。
+- 見つけた穴・古くなった記述: 新しい件は無い。

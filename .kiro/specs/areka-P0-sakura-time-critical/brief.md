@@ -120,3 +120,16 @@
 - 要件定義のモデル: Fable（止める「マウス系など」の範囲＝正典のあいまいさ）。
 - 議題: 止める「マウス系など」の範囲（棚卸㉒のまま）。
 - 見つけた穴・古くなった記述: コードの穴は無い。`compile.rs` に触れなくても `decode.rs` は台本のコンパイルの列の持ち物＝列から外れるわけではない。棚卸㉒の行数（`steady.rs` 947 ほか）は上の数に読み替える。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化:
+  - `anchor-tag-canon`（10-10）が着地し、読み手 `crates/areka-parsers/src/sakura/decode.rs` は 400 行から 502 行になった（`decode_bare` に腕を足す形はそのまま使える）。`sakura/model.rs`（172 行）・`sakura/mod.rs` も同 spec が触った後。
+  - 止める相手の候補が増えた: バルーンの本文のアンカーを押した知らせ（kanade の入力の種類「アンカーの選択」・`schedule/anchor.rs`）。議題「止めるマウス系などの範囲」に、アンカーの選択（`OnAnchorSelect` の組）を入れるかを足す。振り分けの腕は `schedule/mod.rs` にあり、抑えの判定を新しいファイルから呼ぶ形は同じ。
+  - `farewell-talk-status`（10-10）で、`talking` の旗はお別れの台詞の間も立つようになった（`schedule/mod.rs` の再生中の判定）。`doc/ssp-mcp/get-status-diff-areka.md` の「出さない旗」の行には今も `timecritical` がある＝本 spec が外す。
+  - kanade の行数: `schedule/mod.rs` 969（足す 10 行ほどで約 980。`mcp-kanade-tools` が先に分ければ余裕が出る）・`schedule/steady.rs` 957・`msg.rs` 930・`actor.rs` 901。`emo2_boot/mod.rs` 911・`consumer_ledger.rs` 943（変わらず）。
+- 触るファイル: 棚卸㉓のとおり（アンカーも止めるときに足すのは `schedule/mod.rs` の腕だけ）。
+- 規模: 8〜11 タスクのまま。切らない。
+- 先に要るもの: 働きの前提なし。同じウェーブに置けない相手: `mcp-kanade-tools`・`script-security-level`（`schedule/mod.rs`）・`mcp-reload`・`inputbox-user-input`（`consumer_ledger.rs`・`emo2_boot/mod.rs`）・`sakura-time-directives`（`decode.rs`・`model.rs`・`consumer_ledger.rs`）・`range-choice-tag`・`talk-fast-forward`（`decode.rs`）。`farewell-talk-status`・`anchor-tag-canon` は着地して外れた。
+- 優先度の区分: A のまま。要件定義のモデル: Fable のまま。
+- 見つけた穴・古くなった記述: 棚卸㉓の節の行数（`schedule/mod.rs` 955・`emo2_boot/mod.rs` 912 ほか）は上の数に読み替える。`mouse-click-wheel-events` が先に着地すると、止める対象にクリック 2 つとホイールが加わる。

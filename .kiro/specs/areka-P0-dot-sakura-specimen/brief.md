@@ -82,3 +82,16 @@ areka の検体は、pasta（`emo2`）・里々（`R_POST_and_KOMAINU`）・YAYA
 - 実機の根・展開先・一時のファイルはワークツリーの `target\` の下だけ。実走は短い絶対パスで起こす。
 - 第三者の絵（シェル）を含むので、スクリーンショットを文書や PR に貼るかどうかは開発者に聞いてからにする。
 - 規模の見立ては S（4〜6 タスク）。
+
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+- 前提の変化: 無し（登記表は 7 行のまま・`vendors/sample_ghost/` に `dot_sakura.nar` はまだ無い）。
+- 触るファイル: 本文のとおり（`vendors/sample_ghost/` の書庫と README・`crates/sample-ghost-kit/src/{lib.rs,lib_tests.rs}`・steering・根の `README.md`）。
+- 規模: 4〜6 タスク（変わらず）。
+- 先に要るもの: 無し＝今すぐ着手できる先頭。後ろに待つのは 2 本（`default-balloon-selfmade`・`sample-url-fetch`）。
+- 席の案（検体の登記表の列）: `dot-sakura-specimen` → `emily-ghost-verification` → `default-balloon-selfmade` → `sample-url-fetch`＝この spec は 1 番目。
+  - 4 本とも同じ登記表・数のテスト・README の表を触るので、1 度に 1 本。
+  - この spec を先にするのは、小さく、後ろの 2 本を解くため。`emily-ghost-verification` は実機の調べが長くなりうるので、登記の席を先に持たせない。
+- ファイルの重なり: 上の 3 本だけ。カタログの鎖・タスクトレイの列・`app-icon`・`impl-watch-skills`・`impl-watch-residue` とは 0。
+- 優先度の区分: A。要件定義のモデル: Opus（決めごとは 10-10 に済み。残る議題 3 つは実測で答えが出る）。
+- 見つけた穴・古くなった記述: 本文に要件定義のモデルが書かれていない。`emily-ghost-verification` の本文も「7 を 8 に」と書いている＝後から着地する方は「8 を 9 に」になる。実機の窓を出す回は、ほかの実機の走行や負荷の走行と同じ時間に回さない。

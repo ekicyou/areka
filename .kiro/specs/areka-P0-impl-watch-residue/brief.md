@@ -75,3 +75,14 @@
 - exe を子プロセスに立てるテスト・手走りは、置き場所をワークツリーの `target\` の下の Windows 形の絶対パスで必ず上書きする（開発者の機械には本物の `AREKA_IMPL_WATCH_HOME` が設定されている）。
 - 変異の戻しに `git checkout` を使わない（控えを `target\` に取り、素のコピーで戻して sha256 を比べる）。
 - 規模の見立て: S〜M（8〜12）。
+
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+- 前提の変化: 無し（`crates/areka-impl-watch` は 10-10 の着地の後、変わっていない。いちばん大きいのは `cli.rs` の 825 行）。
+- 触るファイル: `crates/areka-impl-watch/src/` と `tests/` だけ。
+- 規模: 8〜12 タスク（変わらず）。
+- 先に要るもの: 無し＝今すぐ着手できる。
+- `Cargo.lock` の席: 使わない。ただし (i) で記録の捕捉の道具（`log-capture-kit`）をテスト用の依存に足すと、`crates/areka-impl-watch/Cargo.toml` と `Cargo.lock` が変わる＝その場合だけ席を取る。
+- ファイルの重なり: `impl-watch-skills` とは 0（こちらが `--help` の文と手順書 `doc/impl-watch.md` に触らない限り）。この群のほかの spec とも 0。
+- 優先度の区分: C。要件定義のモデル: Opus（決めてから直す 3 件は小さい）。
+- 見つけた穴・古くなった記述: 本文に区分と要件定義のモデルが書かれていない（roadmap の行には区分が在る）。

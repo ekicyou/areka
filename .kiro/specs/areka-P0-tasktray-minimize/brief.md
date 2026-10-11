@@ -84,3 +84,13 @@ areka にはアイコン化（最小化）が無い。キャラクターを一�
 - アイコン化の間に溜まった時間の扱いは「時刻は正確に扱う」に従う（止めた分を飛ばすのか、過ぎた分だけ進めるのかを要件で決めて書く）。
 - 黙って壊れる経路を残さない。
 - 実機の確かめは、画面のロックを外した机で行う。
+
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+- 前提の変化: 無し。
+- 触るファイル（測った分）: `\!` の受け口を足すと、コマンドの名前と担当の表（`crates/areka/src/emo2_boot/consumer_ledger.rs`・943 行・上限 1,000＝テストは兄弟のファイルへ）に 1 行入る。ほかは kanade の `crates/areka-kanade/src/schedule/events.rs`（845）・`menu/mod.rs`（枠を足す）・配置の層・wintf の窓の表示。
+- 規模: 10〜15 タスク（roadmap の見立てのまま）。
+- 先に要るもの: `tasktray-icon`・`tasktray-ghost-icon`＝タスクトレイの列の最後。
+- ファイルの重なり: `tasktray-ghost-icon`・`tasktray-balloon`（上の表）・`tasktray-balloon` と kanade の列の spec（`schedule/events.rs`）・`baseware-root-list`・`popup-menu-residue`（`menu/`）。
+- 優先度の区分: A。要件定義のモデル: Fable を勧める（アイコン化の間に喋るか・時計を進めるかの議題）。
+- 見つけた穴・古くなった記述: 本文に規模と要件定義のモデルが書かれていない（roadmap の行には規模が在る）。

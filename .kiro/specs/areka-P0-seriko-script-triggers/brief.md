@@ -113,3 +113,20 @@
 - **seriko の形**（上の「棚卸㉓の測定」の「触るファイル」に足す）: 引き金の判定は `trigger.rs` の `Armed`（一番上の面でも部品でも同じ型。開始の時刻は判定の時刻でなく、出来事の時刻を返す）、一番上の配線は `looper_trigger.rs`、部品の配線は `parts_trigger.rs`。始まった再生は抽選の再生と同じ表に入り、同じ進み方をする。`\i[ID]` と `yen-e` の「1 回流す」は、この「始めるなら何時に始まったことにするか」を返す形に乗せられる見込み。`looper.rs` は 924 行・`table.rs` は 900 行＝足すなら兄弟のファイルへ。
 - **検体と実機の手順を使い回せる**: `crates/areka-seriko/tests/fixtures/trigger-intervals/`（`surfaces.txt` と README）。面 9100〜9104 は、emo2 が既定の着せ替えで出す立ち絵と同じ絵を element定義で重ねてあり、emo2 の `surfaces.txt` の末尾へ書き足して使う（番号は当たらない）。README の「実機の確かめ」に、写しの作り方・記録の絞り・判定の検索語が在る。`never`・`yen-e` の面を足すなら、9105 から先の番号で同じ立ち絵を使える。
 - **実機で台本を流す道具がまだ無い**: areka の MCP の `sakurascript` は `NG:not implemented yet` を返す（`mcp-kanade-tools` の持ち物）。`seriko-trigger-intervals` は、写しの `boot.lua` が台本 1 本を返す形で流した（走行 1 回につき台本 1 本・途中で送れない）。`\i[ID]` を台詞の途中で何度も送る確かめは、`mcp-kanade-tools` の後の方が楽。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化: 待っていた 2 本がどちらも着地した（`seriko-trigger-intervals`・`anchor-tag-canon`＝ともに 10-10）。働きの上でもファイルの順でも待つものは無く、今すぐ着手できる。
+  - 台本の読み手 `sakura/decode.rs` は 502 行、コンパイルの `compile.rs` は 481 行になった（`\_a` の腕と、閉じ忘れたリンクを走査の終わりで閉じる処理が入った）。`\i` は今も「subset 外の正準タグ」の腕で素通しの `Raw` になり、`\e` の腕は今も走査を打ち切るだけで cue を出さない。
+  - `anchor-tag-canon` はリンクを専用の cue で運び、運び手の名前の表には何も足さなかった。`consumer_ledger.rs` は 943 行のまま、seriko 宛ての名前は `bind` だけ。＝`\i` と「台本の終わり」の 2 つの名前の登録と一致のテストは、今もこの spec の仕事。
+  - シェルの読み手は interval の語が増えただけで、`animation*.name` は今も運ばない（型 `Animation` の欄は 3 つ）。この型を直書きするファイルは 27 に増えた。
+- 触るファイル: 上の測定と申し送りのまま。seriko は `table.rs`（900）・`actor.rs`（776）・`looper.rs`（924）と、引き金の `trigger.rs`・`looper_trigger.rs`・`parts_trigger.rs`。
+- 規模: 8〜10 タスクのまま。
+- 先に要るもの: 無し。順の目安として、`yen-e`・`never` の引き金の後始末は `seriko-trigger-lottery-gaps` の件 1 が揃える決まりに乗るので、そちらが先だと二度手間が無い。
+- 同時に走らせない相手:
+  - seriko のファイル: `seriko-trigger-lottery-gaps`・`seriko-talk-clock-fidelity`・`seriko-interval-combinations`・`balloon-canon-residue`（`actor.rs`）・`animated-image-import`（`table.rs`）。
+  - シェルの読み手: Adjacent の 4 本と `config-parse-diagnostics`。
+  - 台本の読み手・`compile.rs`・運び手の名前の表: Adjacent の文字と台本の列の spec（表に行を足す `sakura-time-directives`・`text-ruby` なども同じ）。
+- 優先度の区分: A のまま。
+- 要件定義のモデル: Fable のまま。
+- 見つけた穴・古くなった記述: `\e` の知らせを出す位置は、閉じ忘れたリンクを閉じる cue（走査の終わりに足される）との前後を設計で決める。

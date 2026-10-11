@@ -76,3 +76,13 @@
 - 話の最中に届いたイベントの返事の扱いは、今の決まり（roadmap「生きている決まり」）に合わせる。
 - 黙って壊れる経路を残さない（`--text` が無い・断られた・読み捨てたを記録する）。
 - 実機の確かめは、OS の通知の設定を入れた机で行う。手順に設定の見方を書く。
+
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+- 前提の変化: `anchor-tag-canon` が着地した（10-10）。本文が直列の相手に挙げていた 1 本が済み、kanade のイベントの表 `crates/areka-kanade/src/schedule/events.rs` は 845 行になった。
+- 触るファイル（測った分）: `\!` の受け口を足すと、コマンドの名前と担当の表（`crates/areka/src/emo2_boot/consumer_ledger.rs`・943 行・上限 1,000＝テストは兄弟のファイルへ）に 1 行入る。ほかは kanade の `schedule/events.rs`（845）と、`tasktray-icon` が作る wintf の通知領域の部品。
+- 規模: 6〜10 タスク（roadmap の見立てのまま）。
+- 先に要るもの: `tasktray-icon`。
+- ファイルの重なり: `tasktray-ghost-icon`・`tasktray-minimize`（上の表）・`tasktray-minimize` と kanade の列の spec（`mcp-kanade-tools` ほか＝`schedule/events.rs`）。＝`tasktray-icon` の後の 3 本は 1 度に 1 本。
+- 優先度の区分: A。要件定義のモデル: Fable を勧める（知らせの遅れ・時間切れが先に届く順など、時機の議題）。
+- 見つけた穴・古くなった記述: 本文に規模と要件定義のモデルが書かれていない（roadmap の行には規模が在る）。
