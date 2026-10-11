@@ -113,7 +113,7 @@ graph TB
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
 | 道具 | PowerShell 7（`#Requires -Version 7`） | 検査・一覧・本文の組み立て | 既存の `tools/*.ps1` と同じ流儀（`Set-StrictMode -Version 3.0`・`$ErrorActionPreference = 'Stop'`） |
-| 履歴 | `git log --first-parent --format=%s` | 一覧のもと | `Invoke-Utf8Child` で UTF-8 として読む |
+| 履歴 | `git log --first-parent --format=%s` | 一覧のもと | `Invoke-Utf8Child` で UTF-8 として読む。範囲の前に `--end-of-options` を、後ろに `--` を付けて呼ぶ（`-` で始まる値をオプションとして働かせない） |
 | 公開 | `gh release create --notes-file` | 本文と 5 つの添付 | `--generate-notes`・`--notes-start-tag` をやめる |
 | CI | `actions/checkout`（今の固定の版）に `fetch-depth: 0` | 履歴の全部とタグ | 版の固定の値は変えない |
 
@@ -130,6 +130,7 @@ tools/
 └── release-notes-fixture/         # 検査の見本（encoding check は下のフォルダを見ない）
     ├── subjects.txt               # 題名の並び（1 行 1 題名）
     ├── expected-notes.md          # subjects.txt から作られるべき詳しいリリースノート
+    ├── expected-notes-from-start.md # subjects.txt から fix と perf の製品の変更を除き、一つ前のタグを空にしたときの出力
     └── highlights-ok.md           # 形を満たす見どころのファイル
 .kiro/specs/areka-P0-release-notes-highlights/verification/
 ├── release-cycle-sweep.md         # リリースの手順の文書の洗い出し（直した所・直さなかった所と理由）
@@ -377,6 +378,8 @@ v0.0.2 から v0.0.3 までに入ったすべての変更です（37 件）。
   5. 当たらない →「開発の内部の作業など」。載せる文は題名の全体（4.7）。
   6. 載せる文から `areka-P0-` の字の並びをすべて外す（4.4）。
 - 行は `- {載せる文}` に、PR の番号が在れば ` ([#{番号}](https://github.com/{Repository}/pull/{番号}))` を続ける。
+- 載せる文は、Markdown の記号を逃がさずにそのまま載せる（4.10）。
+- PR の番号として扱うのは、行末の ` (#番号)`（空白 1 つ・括弧・`#`・数字）だけである。行末の `(PR#番号)` は PR の番号として扱わず、文のまま載せる。
 - 見出しの中の並びは `git log` の順（新しい順）。0 件の見出しは出さない（4.8。上の見本の空の見出しは、形を見せるための物）。
 - 冒頭は題の行と、範囲の 1 行（4.9）。`PrevTag` が空のときは「最初から v{版} まで」の文を使う。件数は行の数と同じ（4.1）。
 - 題・範囲の文・5 つの見出し・本文の末尾のリンクの文は `tools/release-notes.strings.json` に置く。詳しいリリースノートは普通の文体で書く（口調は本文だけ）。
@@ -395,7 +398,7 @@ v0.0.2 から v0.0.3 までに入ったすべての変更です（37 件）。
 
 | 見るもの | 判定 |
 |---|---|
-| 一覧の整形 | `release-notes-fixture/subjects.txt` を `Format-ReleaseNotes` に入れた結果が、`expected-notes.md` と 1 字違わず同じ（改行を LF にそろえて比べる）。見本は、製品の変更の 4 つの種類・内部の作業・接頭辞の無い題名・接頭辞の外に spec 名を含む題名・PR の番号の無い題名・日本語の題名・0 件の見出しを含む |
+| 一覧の整形 | `release-notes-fixture/subjects.txt` を `Format-ReleaseNotes` に入れた結果が、`expected-notes.md` と 1 字違わず同じ（改行を LF にそろえて比べる）。見本は、製品の変更の 4 つの種類・内部の作業・接頭辞の無い題名・接頭辞の外に spec 名を含む題名・PR の番号の無い題名・日本語の題名を含む。0 件の見出しを出さないことと、一つ前のタグが空のときの範囲の文は、`subjects.txt` から fix と perf の製品の変更を除き、一つ前のタグを空にして入れた結果を `expected-notes-from-start.md` と比べて見る（同じく 1 字違わず同じ） |
 | 検査が通る | `highlights-ok.md` を `Test-Highlights` に入れると、欠けが 0 |
 | 検査が落ちる | `highlights-ok.md` から 1 か所ずつ外した文（見出しを全部消す／見出しの `(#番号)` を消す／`areka-P0-x` を足す／出典のリンクを消す／リンクの前に `Claudia` を足す）と `$null` を入れると、それぞれ決まった `Key` の欠けが出る |
 | 決まりとの一致 | `doc/release-notes/README.md` が、較正値の出典の URL を含む |
