@@ -430,7 +430,7 @@ v0.0.2 から v0.0.3 までに入ったすべての変更です（37 件）。
 |----|------|------------------|------|
 | 取り出し | 直す | — | `with:` に `fetch-depth: 0` を足す（履歴の全部とタグ）。`persist-credentials: false` と版の固定はそのまま |
 | 見どころの検査 | 足す（「版の検査」の直後） | `VERSION` | `pwsh -NoProfile -NonInteractive -File ./tools/release-notes.ps1 -Check -Version $env:VERSION`。子の終了コードをそのまま返す（`$host.SetShouldExit`）。条件を付けない＝タグの走りでも乾いた走りでも回る |
-| リリースノートを作る | 足す（「既存の Release の検査」の直後） | `VERSION`・`PREV_TAG`・`GITHUB_REPOSITORY`・`GITHUB_STEP_SUMMARY` | 先を決める（`git rev-parse -q --verify "refs/tags/v$env:VERSION"` が通ればそのタグ、通らなければ `HEAD`）。`-Notes` で `target/release-notes/release-notes-v{版}.md` を、`-Body` で `target/release-notes/release-body-v{版}.md` を作る。どちらかが失敗したら、その終了コードで止まる。2 つの中身を `GITHUB_STEP_SUMMARY` へ UTF-8 で足す |
+| リリースノートを作る | 足す（「既存の Release の検査」の直後） | `VERSION`・`PREV_TAG`・`GITHUB_REPOSITORY`・`GITHUB_STEP_SUMMARY` | 先を決める（`git rev-parse -q --verify "refs/tags/v$env:VERSION"` が通ればそのタグ、通らなければ `HEAD`）。`-Notes` で `target/release-notes/release-notes-v{版}.md` を、`-Body` で `target/release-notes/release-body-v{版}.md` を作る。どちらかが失敗したら、その終了コードで止まる。2 つの中身を `GITHUB_STEP_SUMMARY` へ UTF-8 で足す。走りの結果の頁では、2 つの中身のそれぞれの前に ASCII の見出しの行を 1 行置く。`-PrevTag` は、`PREV_TAG` が空でないときだけ渡す |
 | 4 つの確かめ → 5 つの確かめ | 直す | `VERSION` | 今の 4 つの判定はそのまま。加えて、`target/release-notes/` の 2 つ（詳しいリリースノート・本文）が在って空でないことを見る。読むだけ |
 | Release を公開 | 直す | `GITHUB_REPOSITORY`・`GH_TOKEN`・`VERSION` | `$files` に詳しいリリースノートを足す（5 つ）。`$opts` から `--generate-notes` と `--notes-start-tag` を外し、`--notes-file {本文}` を足す。`PREV_TAG` はこの段では使わない。下書きで作って載せ終えてから公開する `gh` の動きと、終了コードの返し方はそのまま |
 | 後始末 | 触らない | — | Release を探す行は「既存の Release の検査」と 1 字違わず同じまま |
