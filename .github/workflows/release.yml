@@ -36,6 +36,8 @@ jobs:
       - name: 取り出し
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # 履歴の全部とタグを取る（詳しいリリースノートが、一つ前のタグからの変更を git で読む）
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Rust の固定
@@ -82,6 +84,20 @@ jobs:
             Write-Host "no tag; skipping the comparison (Cargo.toml version '$version')"
           }
           "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: 見どころの検査
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # 入力は環境変数 VERSION だけ。手元でも差し替えて同じ本文を回せる
+          # 条件を付けない。タグの走りでも乾いた走りでも、配布物を組み立てる前のこの場所で回る
+          # 読むだけ。その版の見どころのファイル（doc/release-notes/v{版}.md）の形を見る。欠けの名前（FAIL {Key}）は道具が印字する
+          # 道具は別の PowerShell のプロセスで -File で呼ぶ（端末の文字コードは書き替えない）。この段は子の終了コードをそのまま返すだけ
+          pwsh -NoProfile -NonInteractive -File ./tools/release-notes.ps1 -Check -Version $env:VERSION
+          $code = $LASTEXITCODE
+          # 子の終了コードをそのまま段の終了コードにする（-Command は 0 と 1 以外を 1 に潰すので先にホストへ渡す）
+          $host.SetShouldExit($code)
+          exit $code
 
       - name: 既存の Release の検査
         id: guard
@@ -137,6 +153,44 @@ jobs:
           $prevTag = Get-PrevTag $names $env:VERSION
           Write-Host "previous tag: '$prevTag'"
           "prev_tag=$prevTag" >> $env:GITHUB_OUTPUT
+
+      - name: リリースノートを作る
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PREV_TAG: ${{ steps.guard.outputs.prev_tag }}
+        run: |
+          # 入力は環境変数だけ（VERSION・PREV_TAG・GITHUB_REPOSITORY・GITHUB_STEP_SUMMARY）。手元でも差し替えて同じ本文を回せる
+          # 条件を付けない。タグの走りでも乾いた走りでも、配布物を組み立てる前のこの場所で回る（作れなければ組み立ての前に失敗で終わる）
+          # 書くのは target/release-notes の 2 つ（詳しいリリースノート・Release の本文）と、走りの結果の頁だけ。リポジトリにも Release にも書かない
+          $outDir = Join-Path (Get-Location).Path 'target/release-notes'
+          $notes = Join-Path $outDir "release-notes-v$env:VERSION.md"
+          $body = Join-Path $outDir "release-body-v$env:VERSION.md"
+          # 一覧の先は、その版のタグが在ればタグ、無ければ先頭（乾いた走りではタグがまだ無いことがある）
+          $tagRef = "refs/tags/v$env:VERSION"
+          $null = git rev-parse -q --verify $tagRef
+          $to = if ($LASTEXITCODE) { 'HEAD' } else { $tagRef }
+          Write-Host "release notes end at '$to'"
+          $noteArgs = @('-Notes', '-Version', $env:VERSION, '-Repository', $env:GITHUB_REPOSITORY, '-To', $to, '-Out', $notes)
+          # 一つ前のタグは、在るときだけ渡す（無ければ最初のコミットから）
+          if ($env:PREV_TAG) { $noteArgs += @('-PrevTag', $env:PREV_TAG) }
+          # 道具は別の PowerShell のプロセスで -File で呼ぶ（端末の文字コードは書き替えない）。失敗の文（FAIL ...）は道具が印字する
+          pwsh -NoProfile -NonInteractive -File ./tools/release-notes.ps1 @noteArgs
+          $code = $LASTEXITCODE
+          if (-not $code) {
+            pwsh -NoProfile -NonInteractive -File ./tools/release-notes.ps1 -Body -Version $env:VERSION -Repository $env:GITHUB_REPOSITORY -Out $body
+            $code = $LASTEXITCODE
+          }
+          if ($code) {
+            # どちらかが作れなければ、その場で子の終了コードで終わる（-Command は 0 と 1 以外を 1 に潰すので先にホストへ渡す）
+            $host.SetShouldExit($code)
+            exit $code
+          }
+          # 作った 2 つを走りの結果の頁へ足す。BOM なしの UTF-8 でファイルからファイルへ写す（端末を通さない）
+          $utf8 = [Text.UTF8Encoding]::new($false)
+          $summary = "## release body (release-body-v$env:VERSION.md)`n`n" + [IO.File]::ReadAllText($body, $utf8) +
+            "`n`n## release notes (release-notes-v$env:VERSION.md)`n`n" + [IO.File]::ReadAllText($notes, $utf8) + "`n"
+          [IO.File]::AppendAllText($env:GITHUB_STEP_SUMMARY, $summary, $utf8)
+          exit 0
 
       - name: 道具の用意
         timeout-minutes: 10
@@ -210,12 +264,13 @@ jobs:
           $host.SetShouldExit($code)
           exit $code
 
-      - name: 4 つの確かめ
+      - name: 5 つの確かめ
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          # 入力は環境変数 VERSION だけ。置き場は今いるフォルダ（作業ツリーの根）からの target/package
-          # 読むだけ。4 つのファイルを書き換えない・作り直さない
+          # 入力は環境変数 VERSION だけ。置き場は今いるフォルダ（作業ツリーの根）からの target/package と target/release-notes
+          # 読むだけ。zip と .sha256 の 4 つも、段「リリースノートを作る」が作った 2 つ（詳しいリリースノート・本文）も、書き換えない・作り直さない
+          # 添付になるのは 5 つ（4 つと詳しいリリースノート）。本文は添付でなく Release の本文になる
           $dir = Join-Path (Get-Location).Path 'target/package'
           $zips = @("areka-$env:VERSION-x64.zip", "areka-$env:VERSION-arm64.zip")
           $names = @(foreach ($z in $zips) { $z; "$z.sha256" })
@@ -224,6 +279,21 @@ jobs:
             foreach ($n in $missing) { Write-Host "missing: $n (dir $dir)" }
             exit 1
           }
+          # 詳しいリリースノートと本文が在って、空でないこと
+          $notesDir = Join-Path (Get-Location).Path 'target/release-notes'
+          $notes = @("release-notes-v$env:VERSION.md", "release-body-v$env:VERSION.md")
+          $badNotes = 0
+          foreach ($n in $notes) {
+            $path = Join-Path $notesDir $n
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              Write-Host "missing: $n (dir $notesDir)"
+              $badNotes++
+            } elseif (-not [IO.FileInfo]::new($path).Length) {
+              Write-Host "empty: $n (dir $notesDir)"
+              $badNotes++
+            }
+          }
+          if ($badNotes) { exit 1 }
           # .sha256 は「小文字の 16 進 64 字・空白 2 つ・zip のファイル名・LF」の 1 行（tools/package.ps1 の書き方）。
           # 中身を字のとおり（Ordinal）に丸ごと比べる。-ceq は文化に従い、BOM や幅のない字を無視するので使わない
           # 印字では、空白から ~ までの外の字を \r・\n・\uXXXX の形で見せる（BOM は \uFEFF）
@@ -250,6 +320,7 @@ jobs:
             Write-Host "ok: $z (SHA256 $($hashes[$z]))"
             Write-Host "ok: $z.sha256"
           }
+          foreach ($n in $notes) { Write-Host "ok: $n ($([IO.FileInfo]::new((Join-Path $notesDir $n)).Length) bytes)" }
           $root = if ($env:GITHUB_WORKSPACE) { $env:GITHUB_WORKSPACE } else { (Get-Location).Path }
           try {
             $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($root))
@@ -265,17 +336,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
-          PREV_TAG: ${{ steps.guard.outputs.prev_tag }}
         run: |
-          # 入力は環境変数だけ（GITHUB_REPOSITORY・GH_TOKEN・VERSION・PREV_TAG）
-          # 渡すのは 4 つの確かめが見た同じ置き場の同じ 4 つ。タグは作らない（リモートに無ければ --verify-tag で gh が止まる）
-          # gh は下書きで作り、4 つを載せ終えてから公開し、途中で失敗したら自分の下書きを消す。この段が成功の経路の最後の段
+          # 入力は環境変数だけ（GITHUB_REPOSITORY・GH_TOKEN・VERSION）
+          # 渡すのは 5 つの確かめが見た同じ置き場の同じ物。添付は 5 つ（zip と .sha256 の 4 つ・詳しいリリースノート）。タグは作らない（リモートに無ければ --verify-tag で gh が止まる）
+          # 本文は段「リリースノートを作る」が作ったファイルから読む（見どころと、詳しいリリースノートへのリンクだけ。GitHub に一覧を作らせない）
+          # gh は下書きで作り、5 つを載せ終えてから公開し、途中で失敗したら自分の下書きを消す。この段が成功の経路の最後の段
           $dir = Join-Path (Get-Location).Path 'target/package'
+          $notesDir = Join-Path (Get-Location).Path 'target/release-notes'
           $tag = "v$env:VERSION"
           $files = @(foreach ($z in @("areka-$env:VERSION-x64.zip", "areka-$env:VERSION-arm64.zip")) { Join-Path $dir $z; Join-Path $dir "$z.sha256" })
-          $opts = @('--repo', $env:GITHUB_REPOSITORY, '--verify-tag', '--generate-notes', '--title', $tag)
-          # ノートの始まりのタグは、一つ前のタグが在るときだけ渡す
-          if ($env:PREV_TAG) { $opts += @('--notes-start-tag', $env:PREV_TAG) }
+          $files += Join-Path $notesDir "release-notes-v$env:VERSION.md"
+          $opts = @('--repo', $env:GITHUB_REPOSITORY, '--verify-tag', '--notes-file', (Join-Path $notesDir "release-body-v$env:VERSION.md"), '--title', $tag)
           gh release create $tag @files @opts
           $code = $LASTEXITCODE
           if ($code) { Write-Host "cannot publish the release (gh release create exited with code $code)" }

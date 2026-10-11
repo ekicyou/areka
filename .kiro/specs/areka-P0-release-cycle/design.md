@@ -2,11 +2,11 @@
 
 ## Overview
 
-**Purpose**: 開発者が `/kiro-impl areka-P0-release-cycle` を打ったときだけ、版を 1 つ上げ、タグを 1 つ打ち、GitHub Release と crates.io への公開までを見届ける、繰り返しの手順を決める。
+**Purpose**: 開発者が `/release`（入口のスキル。`/kiro-impl areka-P0-release-cycle` と同じ）を打ったときだけ、版を 1 つ上げ、タグを 1 つ打ち、GitHub Release と crates.io への公開までを見届ける、繰り返しの手順を決める。
 
-**Users**: 開発者（リリースの時期を決め、マージとタグを承認する人）と、手順を回す AI（`/kiro-impl` を受けた主文脈）。
+**Users**: 開発者（リリースの時期を決め、マージとタグを承認する人）と、手順を回す AI（`/release` か `/kiro-impl` を受けた主文脈）。
 
-**Impact**: 製品のコードは 1 行も足さない。本書は「何を、どの順で、どの道具で行い、どこで止まり、何をどこに記録するか」を決める手順の設計である。使う道具はすべて main に在る物（`tools/test-all.ps1`・`tools/package.ps1`・`tools/crates-io.ps1`・`gh`・`git`・`cargo`）で、新しいスクリプトは 0 本。
+**Impact**: 製品のコードは 1 行も足さない。本書は「何を、どの順で、どの道具で行い、どこで止まり、何をどこに記録するか」を決める手順の設計である。使う道具はすべて main に在る物（`tools/test-all.ps1`・`tools/package.ps1`・`tools/crates-io.ps1`・`tools/release-notes.ps1`・`gh`・`git`・`cargo`）で、新しいスクリプトは 0 本。
 
 ### Goals
 
@@ -30,7 +30,8 @@
 
 - 繰り返しの手順（7 つの段・止まる点・判定・やり直しの決まり）と、それを写した `tasks.md`。
 - この spec だけに効く `/kiro-impl` の読み替え（下の「`/kiro-impl` の読み替え」）。
-- 版上げの 1 コミットの中身（根の `Cargo.toml` の 2 行・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`dist/README.txt` の「時点」の行）。
+- 入口のスキル `.claude/skills/release/SKILL.md`（`/release`）。持つのは入口と、外へ出るコマンドの打ち方の決まりだけで、段・コマンド・判定の表は写さない（正本は本書と `tasks.md`）。
+- 版上げの 1 コミットの中身（根の `Cargo.toml` の 2 行・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`dist/README.txt` の「時点」の行・その版の見どころのファイル `doc/release-notes/v{版}.md`）。
 - タグ `v{版}`（打つのはこの手順だけ）。
 - `.kiro/steering/roadmap.md` の「完了サマリ」の下の小見出し「リリース」と、その表の行。
 - 初回だけ: 根の `README.md` の「## 入手と起動」の最初の箇条の 1 行、初回の記録 `verification/first-run.md`。
@@ -38,7 +39,8 @@
 ### Out of Boundary
 
 - `release.yml`・`crates-io.yml`・`winget.yml` の中身と、その赤の原因の修正。
-- `tools/package.ps1`・`tools/crates-io.ps1`・`tools/test-all.ps1` の中身。
+- `tools/package.ps1`・`tools/crates-io.ps1`・`tools/test-all.ps1`・`tools/release-notes.ps1` の中身。
+- 見どころの書き方の決まり（正本は `doc/release-notes/README.md`。本書は写さない）。
 - Trusted Publishing の設定の値と手順（正本は `doc/crates-io-publish.md` 2 節。本書は写さない）。
 - 公開の走りが赤のときの切り分けの中身（正本は同 5 節）。
 - 大きい版をいつ上げるかの判断（開発者がその場で指示する）。
@@ -47,9 +49,9 @@
 ### Allowed Dependencies
 
 - 手元の道具: `git`・`gh`・`cargo`・cargo-edit（`cargo set-version`。開発者の手元に 0.13.13 が在る）・`pwsh`。
-- リポジトリの道具: `tools/test-all.ps1 -License`・`tools/package.ps1 -Check`・`tools/crates-io.ps1 -Verify`／`-Pending`。
+- リポジトリの道具: `tools/test-all.ps1 -License`・`tools/package.ps1 -Check`・`tools/crates-io.ps1 -Verify`／`-Pending`・`tools/release-notes.ps1 -Notes`／`-Check`。
 - 受け手: `.github/workflows/release.yml`・`.github/workflows/crates-io.yml`（タグ `v*` の push で動く）。
-- 手順書: `doc/crates-io-publish.md`（2 節・4 節・5 節・7 節）。
+- 手順書: `doc/crates-io-publish.md`（2 節・4 節・5 節・7 節）・`doc/release-notes/README.md`（見どころの書き方の決まり）。
 - 申し送り: `.kiro/specs/completed/areka-P0-release-ci-workflow/verification/runner-trial.md` の「release-cycle への申し送り」。
 - してはいけない依存: 接続先の URL を印字するコマンド（`git remote -v` など同 7 節の一覧）・`git push --tags`・`git push --follow-tags`・`--force` の付く push・`tools/test-all.ps1 -Format`。
 
@@ -57,11 +59,13 @@
 
 次が変わったら、本書と `tasks.md` を見直す。
 
-- `release.yml`・`crates-io.yml` のきっかけ（タグ `v*` の push）・待ちの上限・Release に添える物の数（今は 4 つ）。
+- `release.yml`・`crates-io.yml` のきっかけ（タグ `v*` の push）・待ちの上限・Release に添える物の数（今は 5 つ）・Release の本文のもと（今はその版の見どころのファイル）。
 - 版の置き場（今は根の `Cargo.toml` の 2 行だけ）。3 行目が増えたら段 2 と段 3 の判定を直す。
-- `tools/test-all.ps1`・`tools/package.ps1`・`tools/crates-io.ps1` の引数の名前や終了コードの意味。
+- `tools/test-all.ps1`・`tools/package.ps1`・`tools/crates-io.ps1`・`tools/release-notes.ps1` の引数の名前や終了コードの意味。
+- 見どころのファイルの置き場所・名前（今は `doc/release-notes/v{版}.md`）。変わったら段 2〜4 と段 6 の判定を直す。
 - `winget.yml` が main に入る（段 6 の見守りの相手が増える）。
 - `/kiro-impl` が `tasks.md` と `design.md` を読む順や、チェックの付け方を変える。
+- 本書の節の名前（「`/kiro-impl` の読み替え」「再開のときの事実の読み方」「止まり方の決まり」）を変える（入口のスキルが名前で指している）。
 - roadmap の「完了サマリ」の構成が変わる（「リリース」の置き場）。
 
 ## Architecture
@@ -99,12 +103,12 @@ flowchart TD
 
 ### `/kiro-impl` の読み替え（この spec だけ）
 
-`/kiro-impl areka-P0-release-cycle`（タスク番号なし）で始める。この spec では、`/kiro-impl` の自走の形を次のとおり読み替える。決まりは本書と `tasks.md` の冒頭に置き、`/kiro-impl` の文書は直さない（要件 1.8 と同じ考え方）。
+`/release`（入口のスキル）で始める。`/kiro-impl areka-P0-release-cycle`（タスク番号なし）と打っても同じである。スキルは `kiro-impl` のスキルを読まず、下の表の読み替えをそのまま実行の形にする。この spec では、`/kiro-impl` の自走の形を次のとおり読み替える。決まりは本書と `tasks.md` の冒頭に置き、`/kiro-impl` の文書は直さない（要件 1.8 と同じ考え方）。
 
 | `/kiro-impl` の段 | この spec での扱い | 理由 |
 |---|---|---|
 | 文脈の読み込み・タスクの承認の確かめ・始めの `git status --porcelain` | そのまま行う。始めの作業木は変更 0 件であること | — |
-| タスクごとの実装役・レビュー役・デバッグ役のサブエージェント | 起こさない（0 回）。主文脈がタスクを上から順に自分で行う | サブエージェントは開発者に聞けない。コードを書かないので、レビューの相手になる差分が版上げの 4 ファイルしか無く、それは開発者が承認 A で見る |
+| タスクごとの実装役・レビュー役・デバッグ役のサブエージェント | 起こさない（0 回）。主文脈がタスクを上から順に自分で行う | サブエージェントは開発者に聞けない。コードを書かないので、レビューの相手になる差分が版上げの 5 ファイルしか無く、それは開発者が承認 A で見る |
 | テストを先に書く流れ・機能の旗 | 当てはめない | 振る舞いを変えるコードが無い |
 | タスクの完了の判定 | 各タスクに書いた「判定」を、その場で取り直した事実（コマンドの出力・終了コード）で確かめてから完了とする | `kiro-verify-completion` の考え方をそのまま使う |
 | `tasks.md` の `[x]` | 作業木に付けるだけで、**コミットしない**（`git add` に `tasks.md` を入れない） | 版上げの PR に `tasks.md` を混ぜない。main の `tasks.md` は常に未完了のまま |
@@ -120,7 +124,7 @@ flowchart TD
 | コミット | 回 | 入れる物 | main への入り方 |
 |---|---|---|---|
 | `spec.json` を実装中の段にする | 初回だけ | `spec.json`（`phase` を `implementation` に・`updated_at`） | 版上げの PR（初回は spec の文書を同じ PR に載せる） |
-| 版上げ | 毎回 | 根の `Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`dist/README.txt` | 版上げの PR |
+| 版上げ | 毎回 | 根の `Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`dist/README.txt`・`doc/release-notes/v{版}.md` | 版上げの PR |
 | 記録 | 毎回 | roadmap の 1 行（初回は下の「段 7」の 4 点） | 次に main へ入る PR に相乗り |
 
 ### Technology Stack
@@ -129,6 +133,7 @@ flowchart TD
 |-------|------------------|-----------------|-------|
 | 版上げ | cargo-edit 0.13.13 の `cargo set-version` | 根の `Cargo.toml` の 2 行と `Cargo.lock` を動かす | 開発者の手元の道具。無い・2 行目が動かないときは手で 2 行を直して `cargo update -w` |
 | 手元の確かめ | `tools/test-all.ps1 -License`・`tools/package.ps1 -Check`・`tools/crates-io.ps1 -Verify -Version {版}` | 全体テスト・起動の確かめ・公開前の確かめ | どれも終了コード 0 が緑 |
+| 見どころ | `tools/release-notes.ps1 -Notes`・`-Check -Version {版}` | 変更の一覧を出す・見どころのファイルの形の検査 | 書き方の決まりは `doc/release-notes/README.md`。`-Check` は読むだけで、終了コード 0 が緑。`-Notes` が書くのは `-Out` の 1 つだけ |
 | GitHub の操作 | `gh`（`pr`・`run`・`release`・`workflow`） | PR・走りの見守り・Release の確かめ | — |
 | 版の管理 | `git`（`--quiet` つきの `fetch`・`push`・`ls-remote`） | 取り込み・タグ | 標準エラーは捨て、成否は終了コードと事実の読み直しで決める |
 
@@ -147,7 +152,7 @@ flowchart TD
     └── first-run.md          # 初回だけ作る。初回だけの確かめの結果（下の「初回の記録の形」）
 ```
 
-新しく作るファイルは `tasks.md`（タスクの段で作る）と `verification/first-run.md`（初回の段 7 で作る）の 2 つ。スクリプトは 0 本。
+この spec のフォルダの中に新しく作るファイルは `tasks.md`（タスクの段で作る）と `verification/first-run.md`（初回の段 7 で作る）の 2 つ。スクリプトは 0 本。
 
 ### Modified Files
 
@@ -157,6 +162,7 @@ flowchart TD
 - `Cargo.lock` — ワークスペースのクレートの `version` の行だけ。
 - `THIRD-PARTY-NOTICES.md` — 全体テストの `-License` が作り直した物。動くのはワークスペースのクレートの版の行だけ。
 - `dist/README.txt` — 冒頭の「この説明書は …… 時点の内容です。」の日付だけ。
+- `doc/release-notes/v{版}.md` — 新しいファイル 1 つ（その版の見どころ）。ほかの版のファイルは触らない。
 
 毎回（記録のコミット）:
 
@@ -178,8 +184,8 @@ flowchart TD
 | 段 | すること | 要件 | 止まる点 | 使う物 |
 |---|---|---|---|---|
 | 1 前提の確かめ | 枝・開いた PR・版・タグの在否 | 1.1, 1.5, 1.7, 2.1, 2.2, 2.3, 3.1, 3.2, 3.6, 3.7, 8.4 | 欠ければ止まる | `git`・`gh` |
-| 2 版を上げる | 2 行と lock と「時点」の行 | 3.1, 3.2, 3.3, 3.4 | — | `cargo set-version` |
-| 3 手元の確かめ | 全体テスト・差分の範囲・起動・公開前 | 1.6, 2.4, 2.5, 2.6, 3.3, 3.4, 3.5, 3.6, 3.8, 3.9, 8.3 | 欠ければ止まる | `tools/` の 3 本 |
+| 2 版を上げる | 2 行と lock と「時点」の行・見どころを書く | 3.1, 3.2, 3.3, 3.4, 3.10 | — | `cargo set-version`・`tools/release-notes.ps1 -Notes` |
+| 3 手元の確かめ | 全体テスト・差分の範囲・起動・公開前・見どころの検査 | 1.6, 2.4, 2.5, 2.6, 3.3, 3.4, 3.5, 3.6, 3.8, 3.9, 3.11, 8.3 | 欠ければ止まる | `tools/` の 4 本 |
 | 4 版上げの PR | コミット・PR・承認 A・squash マージ | 2.7, 4.1, 4.2, 4.3, 4.4 | **承認 A** | `gh pr` |
 | 5 タグ | squash のコミットにタグ・承認 B・push | 5.1, 5.2, 5.3, 5.4, 8.1, 8.2 | **承認 B** | `git tag`・`git push` |
 | 6 見守り | 2 本の走り・Release・crates.io・赤の決まり | 6.1〜6.8, 8.5, 8.6, 8.7 | 赤は開発者の判断 | `gh run`・`gh release` |
@@ -217,7 +223,12 @@ flowchart TD
 - **いつものやり方**: 指示が無い回は `cargo set-version --bump patch --workspace`、指示がある回は `cargo set-version {版} --workspace`。`--locked` は付けない（`Cargo.lock` を書き直すので、付けると失敗する）。
 - **代わりのやり方**（道具が無い・2 行目を動かさなかったとき）: 根の `Cargo.toml` の 2 行を Edit で直し、`cargo update -w` で `Cargo.lock` を揃える（`.kiro/steering/workflow.md` の「`Cargo.lock` の扱い」が認めているやり方）。
 - `dist/README.txt` の冒頭の「この説明書は …… 時点の内容です。」の日付を、その日の日付に Edit で直す（ファイルは BOM 付き・CRLF。行の置き換えだけにして、ほかの行と改行を動かさない）。
-- どちらのやり方でも、正しく上がったかは段 3 の「差分の範囲の判定」が決める。段 2 自身は判定を持たない。
+- **見どころを書く**（3.10）: 版を上げた後、一つ前のタグからの変更の一覧を手元で出し、それを読んで見どころのファイルを書く。
+  - 一覧は `pwsh -NoProfile -File tools/release-notes.ps1 -Notes -Version {版} -Repository ekicyou/areka -PrevTag v{旧版} -Out target/release-notes/release-notes-v{版}.md` で出す。出てくるのは、Release の走りが Release に添える詳しいリリースノートと同じ形の一覧で、先は今の枝の先頭である。置き場は `target/` の下なので、git には入らない。
+  - `v{旧版}` のタグが手元に無いとき（`git rev-parse -q --verify refs/tags/v{旧版}` が 0 でない）は、先に `git fetch --quiet {remote} refs/tags/v{旧版}:refs/tags/v{旧版}` で、その 1 本だけを取る。
+  - 一覧から見どころを選び、`doc/release-notes/README.md` の決まり（形・口調・必ず載せるもの・書かないもの）に従って、`doc/release-notes/v{版}.md` を新しく書く。決まりは同書が正本で、本書には写さない。ほかの版のファイルは触らない。
+  - 書いたら、その場で `pwsh -NoProfile -File tools/release-notes.ps1 -Check -Version {版}` を回し、欠けが出たら直してから段 3 へ進む（段 3 の b の全体テストも、重いテストの後ろの段 `release notes check` で同じファイルの形を見るので、欠けたまま進むと、長い全体テストが終わりの近くで赤になる）。PR を出す前の判定は、段 3 の f が持つ。
+- どちらのやり方でも、正しく上がったかは段 3 の「差分の範囲の判定」が決める。見どころのファイルの形は段 3 の f が決める。段 2 自身は判定を持たない。
 
 ### 段 3: 手元の確かめ
 
@@ -230,17 +241,19 @@ flowchart TD
 | c | 差分の範囲の判定 | 下の表 | 全部が当たる | 3.3, 3.4, 3.5, 3.6, 8.3 |
 | d | 起動の確かめ（x64） | `pwsh -NoProfile -File tools/package.ps1 -Check` | 終了コード 0 | 2.5 |
 | e | 公開前の確かめ | `pwsh -NoProfile -File tools/crates-io.ps1 -Verify -Version {版}` | 終了コード 0 | 3.8, 3.9 |
+| f | 見どころの検査 | `pwsh -NoProfile -File tools/release-notes.ps1 -Check -Version {版}` | 終了コード 0 | 3.11 |
 
 - b に `-Format` は付けない。`-Format` は先に `cargo fmt --all` でソースを書き換えるので、要件 1.6 に反する。付けなくても `cargo fmt --all -- --check` は回る。`-License` は `THIRD-PARTY-NOTICES.md` を作り直す。
 - b と d は時間がかかるので裏で回し、終わりの知らせを待つ。d は窓を出す。
-- a〜e のどれかが欠けたら、版上げの PR を出さずに止まり、どの確かめが欠けたか（e なら赤の理由も）を開発者へ報告する（2.6・3.9）。作業木はそのまま残し、消したり戻したりしない。
+- f は読むだけで、すぐ終わる。同じ検査を Release の走りが組み立ての前に回し、欠けていれば何も公開せずに止まる。タグは打った後に動かせないので、PR を出す前にここで通す。f が見るのは形だけで、口調と、必ず載せるものが載っているかは、承認 A で開発者が読んで確かめる。
+- a〜f のどれかが欠けたら、版上げの PR を出さずに止まり、どの確かめが欠けたか（e なら赤の理由も、f なら道具が印字した欠けの名前も）を開発者へ報告する（2.6・3.9・3.11）。作業木はそのまま残し、消したり戻したりしない。
 
 **差分の範囲の判定（c）** — 主文脈が `git diff` の出力を読んで決める。スクリプトは作らない。変更かどうかは中身の差分（`git diff`）で見て、`git status` の印では見ない（改行だけの違いは `git diff` に出ないので、変更に数えない）。数は決め打ちにせず、`N`＝ワークスペースのクレートの数（a の出力の `packages` の数。今は 30）を使う。
 
 | 見る物 | コマンド | 当たりの条件 |
 |---|---|---|
-| 動いたファイルの集まり | `git diff --numstat HEAD` | `Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md` の 3 つが在り、ほかに在ってよいのは `dist/README.txt` と、この spec の `tasks.md`（作業木だけのチェック）だけ |
-| 新しいファイル | `git status --porcelain` の `??` の行 | 0 行 |
+| 動いたファイルの集まり | `git diff --numstat HEAD` | `Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md` の 3 つが在り、ほかに在ってよいのは `dist/README.txt` と、この spec の `tasks.md`（作業木だけのチェック）だけ。その版の見どころのファイルは、まだ git に入っていない新しいファイルなので、ここには出ず、次の行に出る |
+| 新しいファイル | `git status --porcelain` の `??` の行 | `doc/release-notes/v{版}.md` の 1 行だけ（その版の見どころのファイル。ほかの物は 1 行も無い） |
 | `Cargo.toml` | `git diff -U0 HEAD -- Cargo.toml` | 足した行 2・消した行 2。`[workspace.package]` の `version` の行と `dola` の行で、どちらも `{旧版}` が `{版}` になっただけ（初回は、この「2 行とも動いた」を `first-run.md` に書く＝8.3） |
 | `Cargo.lock` | `git diff -U0 HEAD -- Cargo.lock` | 消した行は全部 `version = "{旧版}"`、足した行は全部 `version = "{版}"` で、どちらも `N` 行。それ以外の行（外部のクレートの行を含む）は 0 行 |
 | `THIRD-PARTY-NOTICES.md` | `git diff -U0 HEAD -- THIRD-PARTY-NOTICES.md` | 消した行は全部「`- {ワークスペースのクレートの名前} {旧版}`」、足した行は全部同じ名前の「`{版}`」で、数が同じ。それ以外の行は 0 行 |
@@ -250,17 +263,20 @@ flowchart TD
 
 ### 段 4: 版上げの PR
 
-1. `git add Cargo.toml Cargo.lock THIRD-PARTY-NOTICES.md dist/README.txt` と、名前を挙げて足す（`git add -A`・`git add .` は使わない。`tasks.md` は足さない）。コミットの題は `chore(release): v{版}`。
+1. `git add Cargo.toml Cargo.lock THIRD-PARTY-NOTICES.md dist/README.txt doc/release-notes/v{版}.md` と、名前を挙げて足す（`git add -A`・`git add .` は使わない。`tasks.md` は足さない）。コミットの題は `chore(release): v{版}`。
 2. 「確かめた main」は、段 1 で取り込んだときの `{remote}/main` の先端のコミット（`git rev-parse {remote}/main`）とする。段 3 はこの main を取り込んだ作業木で回すので、途中で `fetch` が挟まっても、確かめていない main を「確かめた」と取り違えない。
-3. `git push --quiet {remote} HEAD` の後、`gh pr create --base main --title "chore(release): v{版}"`。本文には、版・4 ファイルの `--numstat`・段 3 の a〜e の結果を書く。初回は「spec の文書を同じ PR に載せている」と書く。
-4. PR の中身を読み直す: `gh pr view {番号} --json files`。2 回目以降は上の 4 ファイルだけ（4.2）。初回は 4 ファイルと、この spec のフォルダの下のファイルだけ（4.4）。違えば止まる。
-5. **承認 A**: PR の URL・差分の数・確かめの結果を示し、「squash マージしてよいか」を開発者に聞いて止まる（4.3）。初回は、乾いた走りの結果（緑・省いた）も添える。
+3. `git push --quiet {remote} HEAD` の後、`gh pr create --base main --title "chore(release): v{版}"`。本文には、版・5 ファイル（同じ日に 2 回目の版上げなら、`dist/README.txt` を除く 4 つ）の `--numstat`・段 3 の a〜f の結果・見どころのファイルの所在（`doc/release-notes/v{版}.md`）を書く。初回は「spec の文書を同じ PR に載せている」と書く。
+4. PR の中身を読み直す: `gh pr view {番号} --json files`。2 回目以降は上の 5 ファイルだけ（同じ日に 2 回目の版上げなら、`dist/README.txt` を除く 4 つ）（4.2）。初回は、上のファイルと、この spec のフォルダの下のファイルだけ（4.4）。違えば止まる。
+5. **承認 A**: PR の URL・差分の数・確かめの結果・見どころのファイルの所在を示し、見どころの文章を読んでもらったうえで、「squash マージしてよいか」を開発者に聞いて止まる（4.3）。初回は、乾いた走りの結果（緑・省いた）も添える。
+   - 見どころの口調と、必ず載せるもの（`doc/release-notes/README.md` の「必ず載せるもの」）が載っているかは、機械では見ない。ここで開発者が読んで確かめる。
+   - 文章の直しを求められたら、次の順で戻る: 見どころのファイルを直す → 段 3 の f を回し直す → `git add doc/release-notes/v{版}.md` だけを足したコミットを 1 つ作る（題は `chore(release): v{版} の見どころの直し`。版上げの PR に載り、squash で 1 つのコミットになる）→ `git push --quiet {remote} HEAD` → 承認 A を取り直す。
 6. 承認を得たら、`git fetch --quiet {remote} main` で main を読み直す。先端が「確かめた main」と違えば（2.7）、次を行う。
    - `git merge {remote}/main` で取り込む。衝突したら止まる。
    - 段 3 の a・b を回し直す。b の後、作業木が（この spec の `tasks.md` を除いて）きれいでなければ止まる（回し直した `-License` が `THIRD-PARTY-NOTICES.md` を変えた＝main に依存の変更が入った。コミットせずに開発者へ報告する）。
-   - 段 3 の c を回し直す。版上げはもうコミット済みなので、比べる相手を読み替える: c の表の `git diff … HEAD` を `git diff … {remote}/main HEAD` にする（main の先端と枝の先端の比べ。初回は、この spec のフォルダの下のファイルが在ってよい）。
+   - 段 3 の c を回し直す。版上げはもうコミット済みなので、比べる相手を読み替える: c の表の `git diff … HEAD` を `git diff … {remote}/main HEAD` にする（main の先端と枝の先端の比べ。初回は、この spec のフォルダの下のファイルが在ってよい）。見どころのファイルはコミット済みなので、「動いたファイルの集まり」に足したファイルとして出て、「新しいファイル」の `??` の行は 1 行も無い。
+   - 新しく main に入った変更の題名を `git log --first-parent --format=%s {確かめた main}..{remote}/main` で読む（`{確かめた main}` は、覚えてある「確かめた main」のコミット）。題名が 1 件でも在れば、全部を開発者に示して止まり、見どころに足す物が在るか（`doc/release-notes/README.md` の「必ず載せるもの」）の答えを待つ。0 件なら、止まらずに先へ進む。この止まりは、承認 A で読んでもらった見どころの確かめ直しで、承認 A の取り直しと同じ場で取る。止まる点としては承認 A の続きである（止まる点は増えない）。答えが「足す物は無い」なら、先へ進む（マージの承認を取り直すかは、下の `git diff` の出力で決める）。足すなら、上の 5 の文章の直しと同じ順で直し、承認 A を取り直す。
    - `git push --quiet {remote} HEAD` の後、新しい先端を「確かめた main」として覚え直す。
-   - 承認 A を取り直すかは、取り込みの前と後の `git diff {remote}/main HEAD -- Cargo.toml Cargo.lock THIRD-PARTY-NOTICES.md dist/README.txt` の出力で決める。1 字違わず同じなら取り直さない。違えば取り直す。
+   - 承認 A を取り直すかは、取り込みの前と後の `git diff {remote}/main HEAD -- Cargo.toml Cargo.lock THIRD-PARTY-NOTICES.md dist/README.txt doc/release-notes/v{版}.md` の出力で決める。1 字違わず同じなら取り直さない。違えば取り直す。
    - マージの直前にもう一度 main を読み、また動いていたら、この 6 を繰り返す。
 7. `gh pr merge {番号} --squash`（`--delete-branch` は付けない。枝は段 7 の受け渡しで使う）。`gh pr view {番号} --json state,mergeCommit` で `MERGED` と squash のコミットを読む。main へ直接 push する操作は 0 回（4.1）。
 
@@ -288,7 +304,7 @@ flowchart TD
 | 相手 | やり方 | 緑の条件 | 要件 |
 |---|---|---|---|
 | Release の走り | `gh run view {id} --json conclusion` | `success` | 6.1 |
-| GitHub Release | `gh release view v{版} --json isDraft,assets,url` | `isDraft` が `false`。添わった物がちょうど 4 つ＝`areka-{版}-x64.zip`・`areka-{版}-x64.zip.sha256`・`areka-{版}-arm64.zip`・`areka-{版}-arm64.zip.sha256` | 6.1 |
+| GitHub Release | `gh release view v{版} --json isDraft,assets,url,body` | `isDraft` が `false`。添わった物がちょうど 5 つ＝`areka-{版}-x64.zip`・`areka-{版}-x64.zip.sha256`・`areka-{版}-arm64.zip`・`areka-{版}-arm64.zip.sha256`・`release-notes-v{版}.md`。`body`（本文）が、タグのコミットの見どころのファイル（`git show {sha}:doc/release-notes/v{版}.md`）の中身で始まる（どちらも改行を LF にそろえ、見どころのファイルの末尾の空白と空行を除いて、バイトの並びで比べる。`git show` と `gh` の出力を、端末の文字コードを通して読まない。文字コードが 932 の端末では日本語が壊れ、偽の赤になる） | 6.1 |
 | 公開の走り | `gh run view {id} --json conclusion` | `success` | 6.2 |
 | crates.io | `pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version {版}`（作業木の版が `{版}` のまま回す） | 終了コード 0 で、標準出力が 0 行 | 6.2 |
 | winget | `git cat-file -e {sha}:.github/workflows/winget.yml` が 0 のときだけ、winget-pkgs へのその版の PR を `gh pr list --repo microsoft/winget-pkgs` で探す | PR が在る | 6.3, 8.7 |
@@ -368,7 +384,7 @@ flowchart TD
 
 ### 再開のときの事実の読み方
 
-セッションが切れたら、同じワークツリーで `/kiro-impl areka-P0-release-cycle` を打ち直す。作業木の `tasks.md` の `[x]` が残っていればそこから続ける。残っていないときも、取り返しのつかない操作を二度しないよう、次の事実を先に読む。
+セッションが切れたら、同じワークツリーで `/release` を打ち直す。作業木の `tasks.md` の `[x]` が残っていればそこから続ける。残っていないときも、取り返しのつかない操作を二度しないよう、次の事実を先に読む。
 
 | 事実 | 読み方 | 在るとき |
 |---|---|---|
@@ -408,6 +424,8 @@ flowchart TD
 | 3.7 | タグが既に在れば止まる | 段 1・段 5 の 3 |
 | 3.8 | 公開前の確かめ | 段 3 の e |
 | 3.9 | 公開前の確かめが赤なら止まる | 段 3 |
+| 3.10 | 変更の一覧を出して見どころを書く | 段 2（見どころを書く）・Modified Files |
+| 3.11 | 見どころの検査・赤なら止まる | 段 3 の f |
 | 4.1 | PR と squash マージ・直接 push しない | 段 4 |
 | 4.2 | 2 回目以降は版上げだけ | 段 1（枝に余計な変更が無い）・段 4 の 1 と 4 |
 | 4.3 | マージは開発者の承認の後 | 段 4 の 5（承認 A） |
@@ -416,7 +434,7 @@ flowchart TD
 | 5.2 | タグは開発者の承認の後 | 段 5 の 4（承認 B） |
 | 5.3 | タグの名前は版を写す | 段 5 の 2 |
 | 5.4 | タグを動かさず消さない | 段 5 の 7 |
-| 6.1 | Release の走り・Release・4 ファイル | 段 6 の緑の判定 |
+| 6.1 | Release の走り・Release・5 ファイル・本文 | 段 6 の緑の判定 |
 | 6.2 | 公開の走り・crates.io | 段 6 の緑の判定 |
 | 6.3 | winget（在る回だけ） | 段 6 の緑の判定 |
 | 6.4 | Release の赤で Re-run してよい条件 | 段 6 の赤のときの決まり |
@@ -450,7 +468,7 @@ flowchart TD
 | 5 | roadmap の「リリース」の置き場 | 「完了サマリ」の末尾に小見出しと 5 列の表。行は末尾に足す | 要件 7.2 の 5 つがそのまま列になる |
 | 6 | `/kiro-complete`・`workflow.md` の扱い | 使わない・直さない（要件ディスカッションで決着） | 要件 1.8 |
 | 7 | 全体テストの形 | `-License` だけ | `-Format` はソースを書き換える |
-| 8 | 差分の範囲の判定 | 主文脈が `git diff --numstat` と `-U0` の差分を読む。スクリプトは作らない | 見るのは 4 ファイルで、行の形は 2 種類だけ。置き場の前例が無いスクリプトを足すほどの量でない。承認 A で開発者も同じ差分を見る |
+| 8 | 差分の範囲の判定 | 主文脈が `git diff --numstat` と `-U0` の差分を読む。スクリプトは作らない | 見るのは 5 ファイルで、差分の行の形は 2 種類だけ（新しく足す見どころのファイルは、名前と在ることだけを見て、形は段 3 の f が見る）。置き場の前例が無いスクリプトを足すほどの量でない。承認 A で開発者も同じ差分を見る |
 | 9 | タグの押し方 | `git push --quiet {remote} refs/tags/v{版}` の 1 本だけ | 手元にリモートへ出したくないタグが 2 本在る |
 | 10 | 初回の 6 項目の記録 | `verification/first-run.md`。赤が起きないと見られない項目は「起きなかった」と書く。タグからの乾いた走りは 2 本の走りの後に 1 回 | わざと赤を起こさない。申し送りは完了の条件でない |
 | 11 | 見守りの待ち方 | `gh run watch --exit-status` を裏で回し、切れたら掛け直す | 走りの状態は GitHub に在り、いつでも読み直せる |
@@ -475,10 +493,11 @@ flowchart TD
 
 ### 毎回の確かめ（手順そのものが持つ判定）
 
-- 段 3 の c: 版上げの差分が 4 ファイルの決まった行だけであること（要件 3.3〜3.6）。
+- 段 3 の c: 版上げの差分が 5 ファイル（新しく足す見どころのファイル 1 つを含む）の決まった行だけであること（要件 3.3〜3.6）。
+- 段 3 の f: その版の見どころのファイルが見どころの検査を通ること（3.10・3.11）。
 - 段 4 の 4: PR に載ったファイルの集まりが決まりどおりであること（4.2・4.4）。
 - 段 5 の 2 と 6: タグの名前がそのコミットの版と同じで、リモートのタグが squash のコミットを指すこと（5.1・5.3）。
-- 段 6 の緑の判定: Release が公開の状態で 4 つの物を持ち、`-Pending` の残りが 0 行であること（6.1・6.2）。
+- 段 6 の緑の判定: Release が公開の状態で 5 つの物を持ち、本文がその版の見どころで始まり、`-Pending` の残りが 0 行であること（6.1・6.2）。
 - 段 7 の後: main の `tasks.md` に `[x]` が 0 個であること（1.3）。相乗りが main に入った後、次の回の段 1 が roadmap の行を読んで確かめる。
 
 ### 初回の実走で確かめること
@@ -494,7 +513,8 @@ flowchart TD
 ### 2 回目の実走で確かめること
 
 - `tasks.md` に「（初回だけ）」のタスクが 0 個で、段 1 の「枝に余計な変更が無い」が 0 件になること（1.2・4.2）。
-- 版上げの PR のファイルがちょうど 4 つ（同じ日の 2 回目なら 3 つ）であること。
+- 版上げの PR のファイルがちょうど 5 つ（同じ日に 2 回目の版上げなら 4 つ）であること。
+- Release の走りが、見どころの本文と 5 つの添付で Release を公開すること（この形の公開の段が本番で動くのは、2 回目の `v0.0.3` が初めて。段 6 の緑の判定で見る）。
 
 ## Security Considerations
 

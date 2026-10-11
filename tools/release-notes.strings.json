@@ -1,0 +1,11 @@
+{
+  "notesTitle": "# areka v{version} の詳しいリリースノート",
+  "notesRange": "{prev} から v{version} までに入ったすべての変更です（{count} 件）。",
+  "notesRangeFromStart": "最初から v{version} までに入ったすべての変更です（{count} 件）。",
+  "headFeat": "新しい機能",
+  "headFix": "不具合の修正",
+  "headPerf": "性能の改善",
+  "headOther": "そのほかの変更",
+  "headInternal": "開発の内部の作業など",
+  "bodyLink": "すべての変更は、添付の [{asset}]({url}) にまとめてありますわ。"
+}

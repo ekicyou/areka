@@ -1,0 +1,18 @@
+feat(areka-P0-anchor-tag-canon): さくらスクリプトのアンカー \_a[ID]…\_a を働かせる (#286)
+docs(discovery): areka-P0-impl-watch を起票し、areka-P0-kanade の後ろに置く (#277)
+fix(areka-P0-farewell-talk-status): areka-P0-kanade の終了の台詞の再生中に talking を載せる (#282)
+perf(areka-P0-startup-speed): 起動のときの画像の読み込みを並べて行う (#150)
+feat(areka-P0-old-work): PR を通していない古い変更
+docs(areka-P0-ssp-bts-salvage): 要望を通読して台帳にまとめる (#284)
+refactor(areka-P0-emo)!: 窓の原点を下端中央にそろえる (#120)
+perf(test): 開発用ビルドのデバッグ情報を行番号の表だけにする (#258)
+chore: 版を 0.0.2 に上げる
+feat(kiro-watch): 停止要請を取り消す unstop を足す (#272)
+Merge branch 'main' into work
+初期の骨組みを置く
+areka-P0-kanade: 種類の後ろが括弧でもコロンでもない題名 (#12)
+fix(areka-P0-session-mark-residue): 番号の括弧の形が違う題名 (PR#195)
+Feat(areka-P0-big-type): 種類が大文字で始まる題名 (#301)
+feat(pre-areka-P0-scope): スコープの途中に印が在る題名 (#302)
+docs(areka-P0-tight): 括弧の前に空白の無い題名(#9)
+chore: areka-Pareka-P0-0-nested の印を外した跡に印がまた現れる題名

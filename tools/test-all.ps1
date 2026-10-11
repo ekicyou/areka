@@ -10,7 +10,8 @@
   5. i686 でしか走らないテスト（host-32 系）
   6. crates.io 公開前の確認（tools/crates-io.ps1 の包むだけの形・ネットを使わない）
   7. 道具の文字コードの判定（tools/encoding-check.ps1 を別のプロセスで・ネットを使わない）
-  8. -License のときだけ cargo deny check と cargo about generate（テストと同時に回すと rustc がメモリ不足で落ちるので最後に直列で）
+  8. リリースノートの道具の自分の検査（tools/release-notes.ps1 -SelfTest を別のプロセスで・ネットを使わない）
+  9. -License のときだけ cargo deny check と cargo about generate（テストと同時に回すと rustc がメモリ不足で落ちるので最後に直列で）
   段が赤でも止めずに最後まで回し、段ごとの合否を一覧にして、1 つでも赤なら終了コード 1 で終わる。
   一覧には検査したコミットと、始めた時点の未コミットの変更の件数も出す（「直近の緑」で再実行を省けるかの証拠）。
 
@@ -48,6 +49,7 @@ Step 'x64 workspace tests' { cargo test --workspace --no-fail-fast -j 4 }
 Step 'i686 tests (host-32)' { cargo test -p shiori-host32-helper -p shiori-host32-ipc --target $i686 --no-fail-fast }
 Step 'crates.io pre-publish check (package only)' { pwsh -NoProfile -File tools/crates-io.ps1 }
 Step 'encoding check' { pwsh -NoProfile -File tools/encoding-check.ps1 }
+Step 'release notes check' { pwsh -NoProfile -File tools/release-notes.ps1 -SelfTest }
 if ($License) {
     Step 'cargo deny check' { cargo deny check }
     Step 'cargo about generate' { cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md }

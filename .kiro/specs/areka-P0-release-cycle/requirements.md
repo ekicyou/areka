@@ -5,12 +5,12 @@
 
 ## Introduction
 
-本 spec は、開発者が `/kiro-impl areka-P0-release-cycle` を打ったときだけ 1 回のリリースを行う、**繰り返し spec** である。`completed/` へは移さず、実行のたびに `tasks.md` のチェックを戻して次の回に備える（`.kiro/steering/workflow.md` と `kiro-complete` の「繰り返し仕様の例外」）。
+本 spec は、開発者が `/release`（入口のスキル。`/kiro-impl areka-P0-release-cycle` と打っても同じ）を打ったときだけ 1 回のリリースを行う、**繰り返し spec** である。`completed/` へは移さず、実行のたびに `tasks.md` のチェックを戻して次の回に備える（`.kiro/steering/workflow.md` と `kiro-complete` の「繰り返し仕様の例外」）。
 
 1 回の実行は次の流れになる。
 
 1. 前提を確かめる。
-2. 版を上げる（指示が無ければ +0.0.1）。
+2. 版を上げ（指示が無ければ +0.0.1）、その版の見どころを書く。
 3. 版上げだけの PR を出し、squash マージする（初回だけ、本 spec の文書も同じ PR に載せる）。
 4. その squash のコミットに `v{版}` のタグを打って push する。これが GitHub Actions のきっかけになる。
 5. Release を作る走りと crates.io へ出す走りを見守り、赤なら決まりに従う。
@@ -23,19 +23,22 @@
 - **版**: ワークスペースで 1 つの版。正本は根の `Cargo.toml` の `[workspace.package]` の `version`。根の `[workspace.dependencies]` の `dola` の `version` も同じ値を持つ（`crates-io-publish` の設計で、版上げで動くのはこの 2 行だけにした）。
 - **タグ**: `v` と版を続けた名前（例 `v0.0.2`）。版を写したもので、正本ではない。
 - **版上げの枝・版上げの PR**: 版を上げる変更だけを載せた作業の枝と、それを main へ入れる PR。
-- **Release の走り**: タグの push で動き、組み立て・zip・SHA256 を作って GitHub Release を公開する `release.yml` の走り。
+- **Release の走り**: タグの push で動き、組み立て・zip・SHA256 と、詳しいリリースノート・Release の本文を作って GitHub Release を公開する `release.yml` の走り。
 - **公開の走り**: 同じタグの push を自分で受け、Release の走りの緑を待ってから `wintf`・`dola` を crates.io へ出す `crates-io.yml` の走り。
 - **乾いた走り**: `release.yml` を手で起動し、Release を作らずに組み立てまでを確かめる走り。
 - **全体テスト**: 手元の `tools/test-all.ps1`（整形とライセンスの確かめを含む形。整形は確かめるだけで、ソースを書き換えない）。
 - **起動の確かめ**: 配布スクリプト `tools/package.ps1 -Check`（x64）。窓を出すので GitHub Actions では回せず、手元で回す。
 - **公開前の確かめ**: `tools/crates-io.ps1 -Verify`（何も上げずに、組み立てまで確かめる形）。
+- **見どころのファイル**: その版で特に注目に値する内容を日本語で紹介する Markdown のファイル。版ごとに 1 つ、`doc/release-notes/v{版}.md` に置く。Release の本文のもとになる。
+- **詳しいリリースノート**: 一つ前のタグからその版までに main へ入ったすべての変更を、1 変更 1 行で並べた Markdown のファイル（`release-notes-v{版}.md`）。Release の走りが作って Release に添える。同じ形の一覧を、`tools/release-notes.ps1 -Notes` で手元でも出せる。
+- **見どころの検査**: `tools/release-notes.ps1 -Check`（その版の見どころのファイルが決まりの形を満たすかを見る。読むだけ）。
 
 ## Boundary Context
 
 - **In scope**:
   - 繰り返しの手順そのもの（毎回同じ `tasks.md` の形と、戻し方）。
   - 版の上げ方（使う道具は設計で決める）と、版とタグの決まり。
-  - 版上げで書き換えるファイル: 根の `Cargo.toml` の 2 行・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`（作り直し）・`dist/README.txt` の「時点」の行。
+  - 版上げで書き換えるファイル: 根の `Cargo.toml` の 2 行・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`（作り直し）・`dist/README.txt` の「時点」の行・その版の見どころのファイル（新しく足す 1 つ）。
   - 見守りと、赤のときの決まり。
   - 記録の形（`roadmap.md` の 1 行）。
   - 初回だけ、根の `README.md` の「まだ GitHub Releases での配布はしていない」の行の直し（Release の公開を確かめた後・記録の 1 行と同じ PR）。
@@ -50,6 +53,7 @@
   - `release.yml` は、タグの版と `Cargo.toml` の版を比べ、違えば何も作らずに止まる。Rust の版は `1.99.0` に固定されている。
   - `crates-io.yml` は、同じタグの Release の走りが緑で終わるのを最長 120 分待ってから出す。Rust は最新の安定版を使う（Release の走りと Rust の版が違うので、公開の走りだけが赤なら版の差を先に疑う）。同じ版で何度起動し直してもよく、既に出たクレートは飛ばす（`doc/crates-io-publish.md` 5 節）。
   - Trusted Publishing の設定の値と手順は `doc/crates-io-publish.md` 2 節が正本。本 spec は写さず、そこを指す。
+  - 見どころの書き方の決まり（形・口調・必ず載せるもの）は `doc/release-notes/README.md` が正本。本 spec は写さず、そこを指す。変更の一覧と見どころの検査には `tools/release-notes.ps1` を呼ぶだけで、その中身は書き換えない。`release.yml` は同じ検査を組み立ての前に回し、その版の見どころのファイルが欠けていれば何も公開せずに止まる。
   - `release-ci-workflow` は、初回の実走で初めて動く 6 項目を本 spec へ申し送った（`.kiro/specs/completed/areka-P0-release-ci-workflow/verification/runner-trial.md` の「release-cycle への申し送り」）。本 spec は初回にそれを見守る。完了の条件にはしない。
   - `areka-P0-winget-release-automation` が `winget.yml` を main へ入れた後の回から、見守る相手に winget-pkgs への PR が加わる。手順の形は変わらない。
   - `roadmap.md` の「完了サマリ」は棚卸（`/kiro-discovery` の再入）と分け合う場所で、本 spec はそこへリリースの 1 行を足すだけ。
@@ -62,7 +66,7 @@
 
 #### Acceptance Criteria
 
-1. When 開発者が本 spec の実装（`/kiro-impl areka-P0-release-cycle`）を打つ, the リリースの手順 shall 1 回の実行で 1 回のリリース（版を 1 つ上げ、タグを 1 つ打つ）だけを行う。
+1. When 開発者が本 spec の実装（`/release`、または `/kiro-impl areka-P0-release-cycle`）を打つ, the リリースの手順 shall 1 回の実行で 1 回のリリース（版を 1 つ上げ、タグを 1 つ打つ）だけを行う。
 2. The リリースの手順 shall 2 回目以降、毎回同じタスクの並びで回る（初回だけの手順は要件 8 に分け、2 回目以降のタスクには残さない）。
 3. When 1 回の実行が終わる（要件 7 の記録の 1 行を書き終える）, the リリースの手順 shall main の `tasks.md` をチェックがすべて未完了の状態（次の回にそのまま使える形）に置き、本 spec を `.kiro/specs/` の直下に置いたままにする（`completed/` へ移さない）。
 4. The 本 spec の `spec.json` shall 初回の実行の後も実装中の段のまま置き、完了の段へ進めない。
@@ -93,13 +97,15 @@
 
 1. While 開発者から版の指示が無い, the リリースの手順 shall 版を patch で 1 つ上げる（例 `0.0.1` → `0.0.2`）。
 2. Where 開発者がその回の版を指示した, the リリースの手順 shall 指示された版にする。
-3. The リリースの手順 shall 版上げで次だけを書き換える: 根の `Cargo.toml` の 2 行（`[workspace.package]` の `version`・`[workspace.dependencies]` の `dola` の `version`）、`Cargo.lock` のワークスペースのクレートの版の行、`THIRD-PARTY-NOTICES.md`（全体テストで作り直した物）、`dist/README.txt` の冒頭の「この説明書は …… 時点の内容です。」の日付（その日の日付にする）。初回だけ直す根の `README.md` の 1 行は版上げに含めず、記録の 1 行と同じ PR に載せる（要件 8.8）。
-4. The リリースの手順 shall 各クレートの `Cargo.toml`・外部のクレートの版・`dist/README.txt` の「時点」の行以外の行を書き換えない。
+3. The リリースの手順 shall 版上げで次だけを書き換える: 根の `Cargo.toml` の 2 行（`[workspace.package]` の `version`・`[workspace.dependencies]` の `dola` の `version`）、`Cargo.lock` のワークスペースのクレートの版の行、`THIRD-PARTY-NOTICES.md`（全体テストで作り直した物）、`dist/README.txt` の冒頭の「この説明書は …… 時点の内容です。」の日付（その日の日付にする）、その版の見どころのファイル `doc/release-notes/v{版}.md`（新しいファイル 1 つ。その版の分だけ）。初回だけ直す根の `README.md` の 1 行は版上げに含めず、記録の 1 行と同じ PR に載せる（要件 8.8）。
+4. The リリースの手順 shall 各クレートの `Cargo.toml`・外部のクレートの版・`dist/README.txt` の「時点」の行以外の行を書き換えない。新しく足すファイルは、その版の見どころのファイルの 1 つだけで、ほかの版の見どころのファイルは書き換えない。
 5. If 版上げの差分に要件 3.3 の外の変更（`Cargo.lock` の外部のクレートの行を含む）が現れる, then the リリースの手順 shall その変更を取り込まずに止まり、開発者へ報告する（変更かどうかは中身の差分で判断し、改行の違いだけのものは変更と数えない）。
 6. If 根の `Cargo.toml` の 2 行の版が一致しない, then the リリースの手順 shall 版上げの PR を出さずに止まる。
 7. If 上げた後の版のタグ `v{版}` が既に在る, then the リリースの手順 shall 版上げの PR を出さずに止まり、開発者へ報告する（同じ版で出し直さない）。
 8. When 版を上げ終えた, the リリースの手順 shall 版上げの枝の中身で公開前の確かめを通し、緑を確かめる。
 9. If 公開前の確かめが赤, then the リリースの手順 shall 版上げの PR を出さずに止まり、赤の理由を開発者へ報告する。
+10. When 版を上げ終えた, the リリースの手順 shall 一つ前のタグから版上げの枝の先頭までの変更の一覧を手元で出し（詳しいリリースノートと同じ形）、その中から見どころを選んで、その版の見どころのファイルを `doc/release-notes/README.md` の決まりに従って書く。
+11. When 見どころのファイルを書き終えた, the リリースの手順 shall 版上げの PR を出す前に見どころの検査を回し、赤なら版上げの PR を出さずに止まって、欠けたものを開発者へ報告する。
 
 ### Requirement 4: 版上げの PR とマージ
 
@@ -129,7 +135,7 @@
 
 #### Acceptance Criteria
 
-1. When タグを push した, the リリースの手順 shall Release の走りが緑で終わること、その版の GitHub Release が下書きでない公開の状態で在ること、4 つのファイル（x64 と arm64 の zip とそれぞれの SHA256）が添わっていることを確かめる。
+1. When タグを push した, the リリースの手順 shall Release の走りが緑で終わること、その版の GitHub Release が下書きでない公開の状態で在ること、5 つのファイル（x64 と arm64 の zip・それぞれの SHA256・詳しいリリースノート）が添わっていること、本文がその版の見どころであることを確かめる。
 2. When タグを push した, the リリースの手順 shall 公開の走りが緑で終わること、`wintf`・`dola` がその版で crates.io に在ること（`tools/crates-io.ps1 -Pending` の残りが空）を確かめる。
 3. Where タグのコミットに `winget.yml` が在る, the リリースの手順 shall winget-pkgs へその版の PR が出たことも確かめる。
 4. If Release の走りが赤で、その版の Release が残っておらず、原因がタグを動かさずに済むもの（通信の失敗・時間切れ・取り消し）である, then the リリースの手順 shall 開発者の判断で、同じ走りを「Re-run」でやり直してよい。
@@ -172,3 +178,4 @@
 - **版上げの道具**（brief の議題 3）→ 設計で決める（要件は変わらない）。brief の棚卸㉒の節は、手元の cargo-edit 0.13.13 のソースを読み、`cargo set-version --bump patch --workspace` が `[workspace.dependencies]` の `dola` の行も動かす見込みとした。実物は要件 8.3 で確かめる。
 - **開いている PR の条件**（brief の議題 4）→ 2026-10-05 棚卸㉒の裁定 8 で「`Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md` を触る開いた PR 0 本」に改めた（要件 2.2・2.3）。
 - **`THIRD-PARTY-NOTICES.md` の作り直し**（brief の議題 5）→ 作り直す。`.kiro/steering/workflow.md` の「`Cargo.lock` の扱い」が「lock を揃えたら謝辞も作り直してコミットに含める」と決めており、全体テストの `-License` が作り直す（要件 3.3）。
+- **見どころを書く段**（2026-10-11 に `areka-P0-release-notes-highlights` が足した）→ 版上げの PR に、その版の見どころのファイルを 1 つ足し、PR を出す前に見どころの検査を通す（要件 3.3・3.4・3.10・3.11）。公開の後の確かめは、5 つのファイルと本文に改めた（要件 6.1）。書き方の決まり（`doc/release-notes/README.md`）と道具（`tools/release-notes.ps1`）は同 spec が main に入れた物で、本 spec はそれを使うだけで書き換えない（要件 1.6）。
