@@ -39,7 +39,7 @@
 
 ## Existing Spec Touchpoints
 - **Extends**: なし
-- **Adjacent**: `ghost-session-test-load-flake`・`areka-test-threads-av`（同じテストを並べて回す・同時に走らせると原因の切り分けが濁る）
+- **Adjacent**: `ghost-session-test-load-flake`・`areka-test-binary-stability` の件 1（同じテストを並べて回す・同時に走らせると原因の切り分けが濁る）
 
 ## Constraints
 - 1 ファイル 1,000 行の番人を守る。
@@ -53,7 +53,7 @@
 - **触るファイル**: 入口の中身だけ替える案なら `crates/temp-path-kit/src/lib.rs`（148 行）・`lib_tests.rs`・見張り `crates/log-capture-kit/tests/temp_path_guard_test.rs`（783 行）の 3 本で 240 か所が一度に動く＝ほかの spec の兄弟のテストと 1 行も重ならない。呼び出しを 1 つずつ書き換える案は 80 ファイルに触り、`install/`・`menu/`・`readme/`・`emo2_boot/`・`placement/` の兄弟のテストがほかの spec と重なるので、取るなら crate ごとに段を分ける。
 - **規模**: 入口を替える案で S〜M（5〜8）。書き換える案は M（10〜14）。
 - **仕事の芯は機械的な置き換え**で測定ではない。確かめは静かな机の全体テスト 1 回（約 5 分）を前と後に 1 度ずつ（置き場が動くと所要時間が変わりうるので比べる）。負荷の再現は要らない。
-- **先に要るもの**: なし。入口を替える案なら、ファイルの重なりは 0 でどの席にも入る。ただし `areka-test-threads-av`・`test-wait-marker-gaps` とは同じウェーブに置かない（240 か所の読み書きの場所が変わり、あちらの比べる基準が動く）。
+- **先に要るもの**: なし。入口を替える案なら、ファイルの重なりは 0 でどの席にも入る。ただし `areka-test-binary-stability` の件 1・2 とは同じウェーブに置かない（240 か所の読み書きの場所が変わり、あちらの比べる基準が動く）。
 - **優先度の区分**: C（バグでない持ち越し。根拠は開発の決まり「一時フォルダは `target\` の下だけ」で、開発者がこの spec を名指しで頼んだ記録は無い）。
 - **要件定義のモデル**: Opus。
 - **分割の案**: なし（20 を超えない）。

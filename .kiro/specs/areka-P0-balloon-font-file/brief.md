@@ -131,4 +131,4 @@
 - **分割の案**: 切らない。
 - **見つけた穴・古くなった記述**:
   - 穴は無い。棚卸㉒の「`budoux-reveal-reflow` と重なる」は相手が着地して消えた。
-  - `anchor-tag-canon` とは同じウェーブに置けない。リンクの列は 4 本続くので、列の決まり（重ならない席があれば前へ）に従うなら、`anchor-tag-canon` の前のウェーブに出すか、リンクの 4 本の後かを優先度で決める。前に出す場合の相手は `reflow-scroll-path-test`・`emo2-real-run-wrap-timeout`・可視性の側だけで直す `choice-balloon-timeout-stuck`（重なり 0）。
+  - `anchor-tag-canon` とは同じウェーブに置けない。リンクの列は 4 本続くので、列の決まり（重ならない席があれば前へ）に従うなら、`anchor-tag-canon` の前のウェーブに出すか、リンクの 4 本の後かを優先度で決める。前に出す場合の相手は `reflow-scroll-path-test`・`emo2-real-run-stability` の件 1・可視性の側だけで直す `balloon-text-bugs` の件 1（重なり 0）。

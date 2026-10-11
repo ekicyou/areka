@@ -39,7 +39,7 @@
 
 ## Existing Spec Touchpoints
 - **Extends**: なし
-- **Adjacent**: `dump-balloon-debug-timeout`（実機で 32bit のゴーストを起こす）・`release-code-signing`（配布物の helper）
+- **Adjacent**: `mcp-receiver-bugs` の件 2（実機で 32bit のゴーストを起こす）・`release-code-signing`（配布物の helper）
 
 ## Constraints
 - shiori-host32 は後付け・kanade の改変は疎結合化の方向でのみ（host32 のための特別扱いは最後の手段）。

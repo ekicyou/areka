@@ -135,7 +135,7 @@ MCP でいちばん使われるのは「台本を流して見る」（`sakurascr
 - 規模: M〜L（12〜16 タスク）。`msg.rs` を分ける 1 タスクの分だけ棚卸㉒（11〜15）より増えた。
 - 先に要るもの: 働きの前提はすべて着地済み＝今すぐ始められる。
   - 同じファイルを触るので同じウェーブに置けない相手: `farewell-talk-status`（`schedule/mod.rs`）・`script-security-level`（`msg.rs`・`actor.rs`・`schedule/mod.rs`・`schedule/change.rs`・`steady_choice_script.rs`）・`mcp-shiori-query`（`msg.rs`・`actor.rs`）・`anchor-tag-canon`（`msg.rs`・`lib.rs`・`schedule/mod.rs`・`schedule/events.rs`）・`sakura-time-critical`・`property-query-channels`。
-  - 重なり 0: `mcp-reload`（上の約束を守れば）・`mcp-stdio-bridge`・`dump-balloon-debug-timeout`。
+  - 重なり 0: `mcp-reload`（上の約束を守れば）・`mcp-stdio-bridge`・`mcp-receiver-bugs` の件 2。
   - 本 spec を待つ未完了の spec は 5 本（`mcp-strict-errors`・`mcp-user-response`・`script-impact-tiers`・`mcp-shiori-query`・`property-query-channels`）。
 - 優先度の区分: A（開発者の指示「ssp mcp tool の完全移植のための spec 群を立ち上げて」）。
 - 要件定義のモデル: Fable（再生中・選択肢の最中・切替の最中に届いたときの扱いを SSP に合わせて決める・翻訳に通すかの分かれ目・返事を待つ間の順序）。

@@ -42,7 +42,7 @@
 ## Scope
 
 - **In**: `region.rs` と `actor_attach.rs` の毎フレームの `debug!` 2 種類の出し方。焼き込みの入口の全透明の警告の条件（同梱の emo2 の `null.png` で出る件）。直した後の行数の確かめ。記録の文言を固定しているテストの追随。
-- **Out**: 折返し基準の `WARN`（`emo-text-canon-residue` の項目 14）。文字の描画範囲が潰れたときの記録の洪水（`balloon-text-area-collapse`）。背景のスレッドの記録がテストの捕捉に届かない件（`actor-thread-log-capture`）。seriko の記録（`talk` の開始と終わりは `seriko-trigger-intervals` が `debug!` に留めた）。確かめの道具が終わり際に起こす `WARN`。記録の仕組みそのもの（`LogSink`・MCP の `get_log`）。
+- **Out**: 折返し基準の `WARN`（`emo-text-canon-residue` の項目 14）。文字の描画範囲が潰れたときの記録の洪水（`balloon-text-bugs` の件 2）。背景のスレッドの記録がテストの捕捉に届かない件（`actor-thread-log-capture`）。seriko の記録（`talk` の開始と終わりは `seriko-trigger-intervals` が `debug!` に留めた）。確かめの道具が終わり際に起こす `WARN`。記録の仕組みそのもの（`LogSink`・MCP の `get_log`）。
 
 ## Boundary Candidates
 
@@ -63,7 +63,7 @@
 
 - **Extends**: なし。
 - **Adjacent**（読んで、境界を確かめた）:
-  - `balloon-text-area-collapse`: 文字の描画範囲が 0 以下に潰れたとき、供給面を作る失敗が毎フレーム `WARN` 1 行と `ERROR` 2 行を出し続ける件。あちらは失敗の経路で、直しは「0 寸なら作らない」。こちらは正常の経路の `debug!`。触るファイルも別（あちらは `actor_present.rs`）。
+  - `balloon-text-bugs` の件 2: 文字の描画範囲が 0 以下に潰れたとき、供給面を作る失敗が毎フレーム `WARN` 1 行と `ERROR` 2 行を出し続ける件。あちらは失敗の経路で、直しは「0 寸なら作らない」。こちらは正常の経路の `debug!`。触るファイルも別（あちらは `actor_present.rs`）。
   - `actor-thread-log-capture`: テストの記録の捕捉を子のスレッドへ届ける件（`areka-actor`）。記録の量や水準は変えない。重なり無し。
   - 文字とバルーンの列（`crates/areka-emo-text/src/actor*.rs`）の spec とは、`actor_attach.rs` を分け合う＝同じ時に走らせない。
 

@@ -46,7 +46,7 @@
 ## Scope
 
 - **In**: 文字の時刻の写し（`talk.rs`）と文字の層の式の一致を見張る仕組み。起点の見積もりの差の計測と、差を 1 刻み未満に保つ直し。中断の直後の数え落とし。部品の `talk` と区切りの 2 つ越えの配線の水準のテスト。`realign_talk` の天井。決めを変えたときの `doc/COMPAT_ARCHITECTURE.md` §8 と網羅台帳の備考（`talk_2c_6570_5024:1`）。
-- **Out**: 文字が現れる時刻そのものを変えること（早送りは `talk-fast-forward`・`\_q` と `\![quicksection]` と `\![set,balloonwait]` は `sakura-time-directives`・現れ方の演出は `text-reveal-fade`）。`talk` をいつ鳴らすかの決まり（何文字ごと・再生中は見送る＝`seriko-trigger-intervals` で確定）。引き金の後始末（`seriko-trigger-teardown-gaps`）。cue の届く時刻の揺れそのものを減らすこと（dola と台本の再生機の配送の話＝ここでは揺れても差が出ない形にするだけ）。
+- **Out**: 文字が現れる時刻そのものを変えること（早送りは `talk-fast-forward`・`\_q` と `\![quicksection]` と `\![set,balloonwait]` は `sakura-time-directives`・現れ方の演出は `text-reveal-fade`）。`talk` をいつ鳴らすかの決まり（何文字ごと・再生中は見送る＝`seriko-trigger-intervals` で確定）。引き金の後始末（`seriko-trigger-lottery-gaps` の件 1）。cue の届く時刻の揺れそのものを減らすこと（dola と台本の再生機の配送の話＝ここでは揺れても差が出ない形にするだけ）。
 
 ## Boundary Candidates
 
@@ -67,7 +67,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: 完了 `seriko-trigger-intervals` の設計の「時計（要件 6）」の決め（seriko の時計は `GetTickCount64` のまま）を、実機の数値で見直すことがある。
-- **Adjacent**: seriko の `looper.rs`・`looper_trigger.rs`・`trigger.rs` を触る spec と直列（`seriko-trigger-teardown-gaps`・`seriko-lottery-ended-play-skip`・`seriko-interval-combinations`・`seriko-script-triggers`・`seriko-rebuild-hidden-lottery`）。式を共有の関数へ出す形を選ぶなら、文字とバルーンの列（`crates/areka-emo-text/src/state.rs`）と `emo2_boot` の結線の列（`emo2_boot/mod.rs`・`talk_clock.rs`）にも触る＝その列の spec と同じ時に走らせない。
+- **Adjacent**: seriko の `looper.rs`・`looper_trigger.rs`・`trigger.rs` を触る spec と直列（`seriko-trigger-lottery-gaps` の件 1・2・`seriko-interval-combinations`・`seriko-script-triggers`・`seriko-trigger-lottery-gaps` の件 3）。式を共有の関数へ出す形を選ぶなら、文字とバルーンの列（`crates/areka-emo-text/src/state.rs`）と `emo2_boot` の結線の列（`emo2_boot/mod.rs`・`talk_clock.rs`）にも触る＝その列の spec と同じ時に走らせない。
 
 ## Constraints
 
