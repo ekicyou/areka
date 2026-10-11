@@ -1,6 +1,6 @@
 # 実機確認の記録（タスク 7・要件 8.5）
 
-**状態: 6 点とも合格（2026-10-11・チャット欄での目視まで済み）**
+**状態: ⑴〜⑹ と、後から足した ⑺（areka も控えも無い机）とも合格（2026-10-11）**
 
 ## 確かめた物と机
 
@@ -77,6 +77,35 @@ Server not available: areka-mcp-server not found on 127.0.0.1 ports 9801, 9821, 
 - 展開した zip の中継を手で起こし（`AREKA_MCP_PORT=9801`・`AREKA_PROFILE_DIR` は展開した場所の `profile\areka`）、`initialize`（`2025-06-18`）・`notifications/initialized`・`tools/list`・`tools/call`（`get_status`）の 4 行を渡した。標準出力は 3 行（通知には何も書かない）: 名乗りは `areka-mcp-server` 0.0.2・版は `2025-06-18`、ツールは 11 本、`get_status` は `balloon(0=0/1=0)`。終了コード 0。
 - 控えは `target\t7\areka\profile\areka\mcp-bridge` に 2 つ出来た（`server-info.json` 625 バイト・`tools.json` 6,780 バイト＝ツール 11 本）。
 - areka は窓を閉じる合図で自分で終わり、9801〜9830 で待ち受けるものは 0 に戻った。
+
+## 確かめ ⑺（2026-10-11・areka も控えも無い机・タスク 8.3）
+
+きっかけ: ⑴〜⑹ の後、中継を開発者の cargo の `bin` フォルダ（`c:\rust\cargo\bin`）へ入れて設定を書き換え、areka を起こさずに Desktop を起動し直したところ、控えの置き場が新しく空だったため、中継が最初の問い合わせにエラーで答え、Desktop は areka の項目を始められなかった（`Couldn't start for Cowork and Code sessions`。8:44〜9:24 に 8 回）。開発者の裁定 6 で「areka も控えも無いときは中継が組み込みの答えで答える」に改め（タスク 8.1・8.2）、直した中継で確かめ直した。
+
+| 項目 | 値 |
+|---|---|
+| 版 | areka 0.0.2・コミット `1f99909`・未コミットの変更 0 |
+| 配布スクリプトの検査 | `tools/package.ps1 -Check` が全段 OK・記録の判定 7 行とも PASS・終了コード 0（出力は `target\t8\package-check.txt`。zip の SHA256 は `f51117f5470b64fb439db95e06e980025b3d4a41242a50fb350fd7d3650e3d67`） |
+| 中継 | `cargo install --path …\crates\areka-mcp-bridge --locked` で `c:\rust\cargo\bin\areka-mcp-bridge.exe` を置き換えた（9:35・3,182,080 バイト。動いている中継が 0 だったのでそのまま置き換わった） |
+| Desktop の設定 | `areka` の `command` は `areka-mcp-bridge.exe`（PATH から。開発者の手） |
+| 起動し直す前の机 | areka は動いていない・9801〜9830 で待ち受けるもの 0・SSP も動いていない・中継のプロセス 0・控えの置き場は無い |
+| Desktop | Store 版 `Claude_2.31226.1.0_x64`。開発者が本体ごと落として起動し直した（9:36:02） |
+
+| 時刻 | したこと | 見えたこと |
+|---|---|---|
+| 9:36:07・9:36:08 | （Desktop が自分で）中継を 2 つ起こし、`initialize`・`tools/list` | 記録に `areka not found; answered from the built-in definitions method="initialize"` と `method="tools/list"`（中継 2 つとも）。`requested=2025-11-25`。この回に `Couldn't start` の行は 0。ツール 11 本が並んだ |
+| 9:36:50 | `get_status`（areka は居ない） | エラー `Server not available: areka-mcp-server not found on 127.0.0.1 ports 9801, 9821, …, 9830`（SSP が居ないので名乗りの続きは無い） |
+| 9:36:59 | areka を起こした（新しい zip を `target\t8\areka` へ展開したもの・コミット `1f99909`） | areka は 9801 で待ち受け |
+| 9:37:10 | `get_status`・`get_active_ghost_list` | `talking,balloon(0=0/1=0)`・`えも？？`。記録に `connected to areka port=9801`。Desktop の本体は 9:36:02 に起きたものがそのまま。控えの 2 つが 9:37:10 に出来た |
+| 9:37:54 | areka を止めた（窓を閉じる合図・自分で終了） | 待ち受けるもの 0 に戻った |
+
+**結果: 合格**（areka も控えも無いのに Desktop が areka の項目を始めてツールが並び、areka を起こすと Desktop を起動し直さずに呼べた）。
+
+この回で分かったこと:
+
+- **Store 版の Desktop が起こした中継の控えは、Desktop のパッケージのフォルダへ回される**。中継の記録は置き場を `C:\Users\<利用者>\AppData\Local\areka\mcp-bridge` と書くが、ファイルの実物は `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local\areka\mcp-bridge` に出来た（Store 版のアプリは、子プロセスが `%LOCALAPPDATA%` へ書いたものを自分のパッケージのフォルダへ回す）。中継の読み書きは同じ所へ回るので動きは変わらないが、手で控えを消したい人は探す場所が違う。zip の形（中継の隣に `areka.exe`）の控えは zip のフォルダの中なので、この話は当たらない。
+- Desktop は、項目を始められなかった後も時々やり直していた（8:44〜9:24 に 8 回）。
+- エラーで答えた後、Desktop の Code の側は次の呼び出しの前に中継を閉じて起こし直した（⑶ のときと同じ・結果は変わらない）。
 
 ## 後片付け
 

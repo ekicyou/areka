@@ -195,7 +195,7 @@
   - _Depends: 6.1, 6.3_
   - _Requirements: 8.5_
 
-- [ ] 8. areka も控えも無いときの組み込みの答え（2026-10-11 の裁定 6）
+- [x] 8. areka も控えも無いときの組み込みの答え（2026-10-11 の裁定 6）
 - [x] 8.1 中継が自分で持っている答えで、最初の問い合わせと `tools/list` に答える
   - テストを先に書いて赤を見てから実装する。形は設計 D-18 と「D-18 の補足」が正本
   - areka の MCP のクレートの公開面に 3 つ足す（足すだけ・受け口の答えは 1 字も変えない）: 説明の文の定数を外から読めるようにする・サーバーの版の定数を足す・本番の登録と同じ行と順でツールの定義の列を返す関数を足す（読めない行は登録と同じく記録 1 件で飛ばす）。受け口の最初の答えは、足した 2 つの定数を読む形に直す（同じ値を 2 か所に書かない）
@@ -222,7 +222,7 @@
   - _Depends: 8.1_
   - _Requirements: 3.5, 7.4, 8.4_
 
-- [ ] 8.3 実機確認（開発者の立ち会い・Claude Desktop・areka も控えも無い机）
+- [x] 8.3 実機確認（開発者の立ち会い・Claude Desktop・areka も控えも無い机）
   - Claude Desktop を終了する・起動し直すのは開発者に頼む（エージェントは落とさない・起こさない）。頼む回数（見込み 1 回）を先に伝える。Desktop の設定ファイルの書き換えも開発者の手で
   - 下ごしらえ: 新しいコミットで配布スクリプトの検査（`-Check`）が緑。中継を開発者の cargo の `bin` フォルダへ入れ直す（`cargo install --path crates/areka-mcp-bridge --locked`。`--path` はワークツリーの絶対パスで渡す）。Desktop は中継を起こしたまま持ち続けるので、動いている exe は置き換えられない: 開発者に Desktop を終了してもらってから入れるか、動いている exe の名前を先に変えてから入れる
   - 机の状態: areka が 1 つも動いていない（動いていたら開発者に終了を頼む。プロセスを決めつけで止めない）。控えの置き場（`%LOCALAPPDATA%\areka\mcp-bridge`）が空（中のファイルは消さずに `target` の下へ移して退ける）
@@ -312,3 +312,5 @@
 - 8.1: ひっくり返したテスト＝`service_tests.rs` の `without_areka_an_inquiry_with_no_cache_of_its_kind_gets_the_error` → `…_gets_the_built_in_answer`（実装の前は `[Error, Error, Error, Error]` で赤）と、`exe_test.rs` の `a_broken_cache_and_a_broken_answer_leave_their_reason_on_stderr` の前半（名前はそのまま・実装の前は名乗りが `Null` で赤）。差の記録（`bridge-diff-areka.md`）が前の名前を 4 か所で引いているので 8.2 で直す。`exe_test.rs` の頭の注釈の `AREKA_MCP_PORT` の説明に「束ねたまま待ち受けない番号」を足すのも 8.2 で。
 - 8.1: exe の大きさ（x64・`cargo build --release -p areka-mcp-bridge`）は 3,155,456 → 3,182,080 バイト（約 26 KB の増え・依存は足していない）。配布スクリプトの建てでの値は 8.3 で取り直す。`service_tests.rs` は 869 行になった（次に足すなら分ける）。
 - 8.2: help の Claude Desktop の節の最後の文を設計の文に替えた（`help_tests.rs` の `desktop_section_tells_where_to_write_and_to_restart` が固定）。説明書は 2 行だけ（控えの行・`0` の行。BOM と行末はそのまま）。差の記録は areka の欄 3 行の書き換えと 4 節の 1 行（判定の数 21 → 22）・古いテスト名 4 か所の付け替え・頭の日付の 1 文・言葉の表の 1 行。SSP の欄は変えていない。`exe_test.rs` の頭の注釈に「束ねたまま待ち受けない番号」を足した（注釈だけ）。
+- 8.3: 確かめ ⑺ は合格（2026-10-11 9:36〜・`verification/signoff.md`）。areka も控えも無い机で Desktop を起動し直すと、中継が組み込みの答えで `initialize` と `tools/list` に答えて areka の項目が始まり（`Couldn't start` は 0 行）、areka を起こすと Desktop を落とさずに呼べた。配布スクリプトの検査はコミット `1f99909` で緑。配布の建ての中継の exe は 3,278,336 バイト（前 3,252,224 から約 26 KB の増え）。
+- 8.3: 実機で分かったこと＝Store 版の Desktop が起こした中継の控えは、Desktop のパッケージのフォルダ（`%LOCALAPPDATA%\Packages\Claude_…\LocalCache\Local\areka\mcp-bridge`）へ回される（中継の記録が書く置き場と実物の場所が違う・動きは同じ）。説明書に書くかは完了のときに決める。開発者の机の Desktop の設定は `areka-mcp-bridge.exe`（cargo の `bin`）を指す本番の形になったので、7 の後片付けの「設定から外す」は要らなくなった（`target\t7`・`target\t8` の展開した木は消してよい）。中継を入れ直すときは Desktop が exe をつかんでいる（落とすか、動いている exe の名前を変えてから入れる）。
