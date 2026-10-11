@@ -109,7 +109,7 @@ areka は、前回使ったゴーストなどを次の 3 か所に覚えます�
 
 たとえば えも？？ のゴーストの記憶は ghost\emo2\ghost\master\profile\areka\ にあります。
 これらのフォルダを消すと、areka が覚えていたことは初めての起動と同じ状態に戻ります。
-このほかに、中継の控え（上の「■ Claude Desktop からつなぐ」を参照）が areka.exe の隣の profile\areka\mcp-bridge\ にあります（中継を areka.exe と別の場所に置いたときは %LOCALAPPDATA%\areka\mcp-bridge\）。消しても、次に Claude Desktop を起動し直して areka へつないだときに作り直します。
+このほかに、中継の控え（上の「■ Claude Desktop からつなぐ」を参照）が areka.exe の隣の profile\areka\mcp-bridge\ にあります（中継を areka.exe と別の場所に置いたときは %LOCALAPPDATA%\areka\mcp-bridge\。Microsoft Store 版の Claude Desktop が起動した中継では、%LOCALAPPDATA%\Packages\ の中の Claude_ で始まるフォルダの LocalCache\Local\areka\mcp-bridge\）。消しても、次に Claude Desktop を起動し直して areka へつないだときに作り直します。
 
 
 ■ 入手のしかた
