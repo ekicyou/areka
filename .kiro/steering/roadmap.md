@@ -104,11 +104,19 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 |---|---|---|---|---|
 | v0.0.2 | 2026-10-06 | https://github.com/ekicyou/areka/releases/tag/v0.0.2 | https://github.com/microsoft/winget-pkgs/pull/450070 （初回の手提出・2026-10-10・自動の検査は通過・人の承認待ち＝まだ取り込まれていない） | — |
 
+`v0.0.3` からは、この表に行を足さない（2026-10-11 開発者の決定・リリースの記録は GitHub の Release の頁）。上の行は歴史として残す。
+
+### 次のリリースへの申し送り
+
+スキル `/release` が段 1 で読む（`.claude/skills/release/procedure.md` の 1.4）。「次の版上げのときに」と申し送る事は、ここへ 1 項目で足す。項目の頭に、書いたときの最新の版を「`v{その版}` の後」の形で書く（その版より後のリリースが済んだら、済んだ物として読み飛ばされる。消すのは、次に roadmap を触る PR）。版上げの 5 つのファイル（根の `Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`dist/README.txt`・その版の見どころ）の外を触る仕事は、ここへ書かずに、リリースの前に別の PR で片づける（残っていると `/release` は段 1 で止まる）。
+
+- **`v0.0.2` の後**・`anchor-tag-canon`（2026-10-10）: crates.io に出している `dola` の合図の語彙 `CueCommand`（`crates/dola/src/cue/command.rs`）に 2 種類（`AnchorBegin`・`AnchorEnd`）が増えた。`CueCommand` は `#[non_exhaustive]` でないので、全種類を catch-all なしで並べている外の利用側は、次の版でビルドが通らなくなる。材料: 版の決め方（0.0.x の間は、cargo の上ではどの版上げも非互換の扱い）と、見どころ（載せるかは `doc/release-notes/README.md` の「必ず載せるもの」で決める）。詳細は `doc/anchor-compat.md` の 3.2。
+
 ## ウェーブ編成（着手順の正本・2026-10-11 棚卸㉔）
 
 > 各ウェーブは**フルライフサイクル**（要件 → 設計 → タスク → 実装 → `/kiro-complete`＝PR の squash マージ）を完走してから次へ。1 spec ＝ 1 worktree ＝ 1 PR。**同じウェーブに入れるのは、棚卸㉔までの実測で触るソースファイルの重なりが 0 の組だけ**。許す重なりは 5 つだけ＝表の末尾への追記（`doc/COMPAT_ARCHITECTURE.md` §8）・生成物（`THIRD-PARTY-NOTICES.md`・`doc/ukadoc-coverage/report/`＝手で直さず作り直す）・steering・網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の**別々の行**・説明書 `dist/README.txt` の**別々の行**。文書だけの段は置かない。
 > **並び順の決まり（2026-10-07 開発者・10-05 の 3 段を改めた）**: 依存の木（働きの依存＋同じソースファイルを触る spec＋直列の列の順）の**先頭**だけを候補にし、**① ぶら下がる未完了の spec が多い ② 区分が高い（A ＞ B ＞ C ＞ D）③ 起票が古い**の順に並べ、上から互いに触るファイルが重ならないものを**最大 8 本**取る。据え置き・保留・取り下げ予定は木に入れない。**測ることが本体の spec はウェーブに並べない**（ほかの仕事を汚し、汚される）。区分 A でぶら下がる数が同じものは、開発者が「高」「早めに」と言ったものを先にした（棚卸㉓の読み＝違えば直す）。
-> **1 ウェーブに 1 本だけの席**: ⑴ 依存を足す spec と版上げ（`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md`）＝C6 は空き（`app-icon` がビルドの依存を足す形を選んだときだけ使う。`release-cycle` の `v0.0.3` は `user-data-root` の着地の後） ⑵ emo-text に新しいソースファイルを足す spec（`lib.rs` の純粋な一覧の数の行＝今 76）＝C6 は `range-choice-tag`。
+> **1 ウェーブに 1 本だけの席**: ⑴ 依存を足す spec と版上げ（`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md`）＝C6 は空き（`app-icon` がビルドの依存を足す形を選んだときだけ使う。`/release` の `v0.0.3` は `user-data-root` の着地の後） ⑵ emo-text に新しいソースファイルを足す spec（`lib.rs` の純粋な一覧の数の行＝今 76）＝C6 は `range-choice-tag`。
 > C5（8 本）は 5 本が着地した（`anchor-tag-canon`・`seriko-trigger-intervals`・`ssp-bts-salvage`・`winget-manifest-submission`＝10-10、`mcp-stdio-bridge`＝10-11）。着手していなかった 3 本（`property-name-case-fold`・`extent-element-offset`・`baseware-root-list`）は C6 へ持ち越した。ウェーブの外で `farewell-talk-status`・`impl-watch`（10-10）も着地した。C5 の行の全文（編成根拠と約束つき）・棚卸㉓の裁定は history「2026-10-11 棚卸㉔退避」。
 
 | Wave | ユニット（並べた順） | 開始コマンド | 編成根拠（触るファイルと、同じウェーブの間の約束） |
@@ -120,7 +128,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 
 ### 版上げと winget の決まり（棚卸㉒の「初回リリースの段取り」のうち今も効くもの）
 
-- **版上げの PR を出すとき、`Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md` を触る開いた PR は 0 本**。ほかの PR が開いていても、タグは版上げの squash コミットに打つので Release の中身は決まる。字の上で衝突しないまま `Cargo.lock` が古くなる（`--locked` の組み立てが落ちる）のを防ぐため、依存を足す spec とは同じ時に走らせない。C5 の席は `mcp-stdio-bridge` が使い、10-11 の着地で空いた。`release-cycle` の `v0.0.3` を止めているのは下の winget の順の決まり（`user-data-root` の着地）だけ。
+- **版上げの PR を出すとき、`Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md` を触る開いた PR は 0 本**。ほかの PR が開いていても、タグは版上げの squash コミットに打つので Release の中身は決まる。字の上で衝突しないまま `Cargo.lock` が古くなる（`--locked` の組み立てが落ちる）のを防ぐため、依存を足す spec とは同じ時に走らせない。C5 の席は `mcp-stdio-bridge` が使い、10-11 の着地で空いた。`/release` の `v0.0.3` を止めているのは下の winget の順の決まり（`user-data-root` の着地）だけ。
 - **winget の順の決まり**: winget-releaser は既に winget-pkgs に在るパッケージしか更新できない。初回の手提出（人の承認・実例で約 2 日）が取り込まれるまで `winget.yml` を main へ入れない（入れた後にタグを打つと `winget.yml` が赤になる）。棚卸㉓で、手提出まで（`winget-manifest-submission`）と、取り込まれた後の自動化（`winget-release-automation`）に分けた。✅ `winget-manifest-submission` は 2026-10-10 に着地した（手提出の PR＝https://github.com/microsoft/winget-pkgs/pull/450070 ・自動の検査は通過・人の承認待ち＝まだ取り込まれていない）。`winget-release-automation` を始めるのは、**この PR が winget-pkgs に取り込まれ、かつ `user-data-root` が着地してから**（それまで、説明書に winget の行を載せず、winget-pkgs へ次の版を出さない＝「winget-manifest-submission の手元の確かめで見つかった件」の「順の決まり」）。
 
 ### 直列の列（同じ列の spec は同時に走らせない・列が違えば並べられる）
@@ -156,7 +164,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
   - **kanade の上限**: `mcp-kanade-tools`（C6-②）が最初に `msg.rs` のテストを出し `schedule/mod.rs` を割る。その後ろの `script-security-level`・`sakura-time-critical`・`mouse-click-wheel-events`・`inputbox-user-input`・`balloon-link-hover`・`talk-fast-forward` は、割った後の形に足す。✅ `farewell-talk-status` の申し送り（「再生中か」の判定を相の側へ移す）も `mcp-kanade-tools` が引き取る。
   - **`main.rs`（956 行）を触る spec は互いに直列**: `baseware-root-list`・`user-data-root`・`write-failure-notice`・`tasktray-icon`（と、アプリの側で直す形を選んだときの `emo2-real-run-stability`）。
   - **emo-present の `balloon.rs`**: `balloon-webp-names`（名前から絵を引く所をそろえる）→ `balloon-canon-residue`。
-- **依存を足す spec と版上げは 1 ウェーブに 1 本**（`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md` が重なる）: C5 は `mcp-stdio-bridge`（新しいクレート・10-11 に着地済み）が席を使った。`impl-watch`（新しいクレート・10-10 に着地済み）・`makoto-dll-host`（新しいクレート）・`system-property-values`（`windows` の機能を足す）・`release-cycle` の版上げも同じ席を使う。
+- **依存を足す spec と版上げは 1 ウェーブに 1 本**（`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md` が重なる）: C5 は `mcp-stdio-bridge`（新しいクレート・10-11 に着地済み）が席を使った。`impl-watch`（新しいクレート・10-10 に着地済み）・`makoto-dll-host`（新しいクレート）・`system-property-values`（`windows` の機能を足す）・`/release` の版上げも同じ席を使う。
 - **網羅台帳をまとめて書き換える `coverage-roadmap-refresh` は、台帳の行を直す spec と同じウェーブに置かない**（台帳に触ると書く未完了の brief が 40 本を超えたので、行の重なりで照合する形を同 spec の議題にした）。
 - **列に属さず、いつでも単独で取れる**: `coverage-roadmap-refresh`・`popup-menu-residue`・`clippy-199-lints`（段 1＝`dola` の `validate/`・`runtime/`・`compile/` と `shiori-host32-host/tests/` は空き席でも取れる。`shiori-abi` は `shiori4-api` と分け合う）・`property-name-case-fold`（sylphya だけ）。
 - **MCP の 3 段目の約束**: SSP と同じ 10 本の中身を作る spec は、今までどおりツールのファイル（`crates/areka/src/mcp/<ツール>.rs`）と自分のエンジンの側だけを触る（`mcp/mod.rs`・`handler.rs` は触らない）。areka 独自のツールを足す spec（`mcp-user-response`・`mcp-shiori-query`）は `doc/ssp-mcp/areka-tools.md` の「⑹ あとからツールを 1 本足す手順」の表のファイル（`crates/areka-mcp/src/tools/mod.rs`・`handler.rs`・`tools_own_tests.rs`・`tools_own_socket_tests.rs`・`crates/areka/src/mcp/mod.rs` と、その文書）を触るので、互いに、また MCP の共有ファイルを触る他の spec と同じウェーブに置かない。`handler.rs` の `INSTRUCTIONS` に残る「not implemented yet」の 1 文は、今までどおり最後に着地する `mcp-strict-errors` が消す（`mcp-author-tools` が足した独自のツールの 1 文は残す）＝`mcp-reload` は `mcp-strict-errors` より先に着地させる。今も `NG:not implemented yet` を返すのは 10 本のうち 3 本（`sakurascript`・`raise_event`＝`mcp-kanade-tools`・`reload`＝`mcp-reload`）。
@@ -312,7 +320,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 >
 > **2026-10-10 棚卸㉓で直したもの・渡したもの**の全文は history「2026-10-11 棚卸㉔退避」の旧「直接修正候補」節。それより前は、そこから辿る「2026-10-10 棚卸㉓退避」。
 
-残っている候補: 1 件——`deny.toml` と `about.toml` が許すライセンスの一覧に `BSD-2-Clause` が残るが、今の依存にこのライセンスのものは無い（`mcp-stdio-bridge` の完了時の全体テストで「出会わなかったライセンス」の警告として記録された・`deny.toml` の「依存グラフに実在し」のコメントはこの 1 行について誤り）。外すには `cargo deny check licenses` を回して確かめる必要があるので、次の版上げ（`release-cycle`＝同じ `Cargo.lock`・`THIRD-PARTY-NOTICES.md` の席）のときに一緒に行う。
+残っている候補: 0 件。2026-10-11 に片づけた 1 件——`deny.toml` と `about.toml` が許すライセンスの一覧から、今の依存に無い `BSD-2-Clause` を外した（`cargo deny check licenses` は「出会わなかったライセンス」の警告なしで通り、作り直した謝辞は 1 字も変わらない。`release-cycle` の手順をスキル `/release` へ移す PR に同乗。版上げの PR には版上げ以外を混ぜないので、リリースの前に片づけた）。
 
 取り下げた 1 件を再登記しないこと——判定器（`crates/areka/src/placement/transition_judge_verdict.rs`）の窓ごとの書込上限が見送り窓を除いていないのは**意図どおり**（`completed/areka-P0-dpi-transition-atomicity/mechanism-ledger.md` §13.1・2026-09-24 に開発者が再確認）。
 
@@ -548,7 +556,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
   1. **入れ物は zip のまま**（winget の `zip`＋`portable`）。アイコンが欲しくなったら後からインストーラーを別 spec で足す。
   2. **名乗りは zip 版＝`Areka.Areka.Portable`（「areka ポータブル」）・インストーラー版＝`Areka.Areka`（空けておく）**。入れ物の種類ごとに別の名乗り（portable で入れた人の環境へ次の版でインストーラーを被せる乗り換えを winget は綺麗に扱えない）。発行者は areka プロジェクト自身（`ekicyou.areka` は却下）。
   3. **x64 と arm64 を最初から並べる**（arm64 はこのプロジェクトの動機）。補助 exe は i686 のまま。
-  4. **きっかけはタグ**。普通の PR では何も起きない。繰り返し spec `release-cycle` を開発者が打ったときだけ、版を +0.0.1 → PR → squash マージ → `v{版}` のタグ → GitHub Actions がビルド・zip・SHA256・Release → crates.io → winget へ PR。版の正本は `Cargo.toml`、タグはそれを写す。
+  4. **きっかけはタグ**。普通の PR では何も起きない。スキル `/release` を開発者が打ったときだけ、版を +0.0.1 → PR → squash マージ → `v{版}` のタグ → GitHub Actions がビルド・zip・SHA256・Release → crates.io → winget へ PR。版の正本は `Cargo.toml`、タグはそれを写す。
   5. **無料で**: 未署名で出す（規約上の障害は無い）。CI ができたら SignPath Foundation に申請する（任意）。有料の証明書は開発者がその場で決める。
   6. **「外部 CI は持たない」はテストの門の話**＝ビルドと配布だけを Actions に乗せる。zip の起動確認（`-Check`）は窓を出すので手元に残す。
   7. **crates.io は部品と本体の公開・名前の確保のため** ⇒ **10-03 `crates-io-publish` の要件討議で改め**: 版を出し続けるのは汎用のライブラリ `wintf`・`dola` だけ。`areka` は 0.0.1 の名前の確保のまま・本体と部品は出さない。`cargo install areka` では 32bit の補助 exe が付かないので、利用者向けの入れ方は winget か zip。
@@ -805,7 +813,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 
 - [ ] areka-P0-anchor-style-canon -- 見た目の装着より先に届いたアンカーの字が装着前の見た目のまま残りうる件（実機では出ていない）・下線を焼いている 1 か所（`state_decoration.rs` の `push_current_style`）が `anchor.style` の解決で置き換える所であること・`\f[anchor*]` 16 行の台帳の備考の書き直し・`underline-bottom-row-clip` と同じ所を触ること・互換の記録 `doc/anchor-compat.md` を申し送った。Dependencies: areka-P0-anchor-tag-canon
 - [ ] areka-P0-coverage-roadmap-refresh -- `shiori.toml` の未対応の行の共通の備考（`\q` の選択肢 ID に書いた場合「だけ」）がアンカーの `\_a[On…]` で正確でなくなった件・済んだ裁定の候補 W-2・裁定ではない読み 2 つ（束の付け替えと引受先の案）・調査の時点の表を申し送った。Dependencies: none
-- [ ] areka-P0-release-cycle -- `dola` の `CueCommand` に 2 種類（`AnchorBegin`・`AnchorEnd`）が増え、`#[non_exhaustive]` でないので外の利用側のビルドを壊しうる件を、次の版を決めるときの材料として申し送った。Dependencies: none
+- [x] areka-P0-release-cycle -- （2026-10-11 に「次のリリースへの申し送り」の節へ移した）`dola` の `CueCommand` に 2 種類（`AnchorBegin`・`AnchorEnd`）が増え、`#[non_exhaustive]` でないので外の利用側のビルドを壊しうる件を、次の版を決めるときの材料として申し送った。Dependencies: none
 - [ ] areka-P0-range-choice-tag -- 選択の送り先が消えたとき、送り口の `warn!` と呼び手の `error!` が同じ名前で 2 行出る件（完了 `choice-interact` からある軽い件・アンカーにも写った）を、同じ送り口を触るときのついでの直しとして申し送った。Dependencies: areka-P0-anchor-tag-canon
 
 #### Specs (dependency order)
@@ -930,6 +938,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 - **pasta と違う所**: 一覧のもと（areka は GitHub に作らせている）・添付の数（4 → 5）・再実行の形（areka は頭からやり直す）・乾いた走り（areka だけ）・公開済みの版（pasta は書き直さない仮定・areka は `v0.0.2` を直す＝2026-10-11 開発者「公開済みの項は『直す』で」）。
 - **2026-10-11 に着地した**（ウェーブには組まず単独）。`release-cycle` の次の回（`v0.0.3`・`user-data-root` の着地待ち）より前に入った。
 - **着地の後の決定（2026-10-11 開発者）**: 「外から見た動きは pasta と同じく承認なしでノンストップ。`areka-P0-release-cycle` を完了にして、`/release` を正にするのが目的」。新しい spec は立てず、`release-cycle` の最後の仕事として新しいワークツリーで行う（手順をスキルへ写す・承認の 2 点を外す・同 spec を `completed/` へ移す・`workflow.md` と `kiro-complete` の「繰り返し仕様の例外」と、この roadmap の `release-cycle` の行・ほかの spec の brief の参照を合わせる）。答え待ちの 5 点と許可ルールの前提は、`release-cycle` の brief の「ほかの spec からの申し送り」に在る。
+- **移した結果（2026-10-11）**: 手順の正本は `.claude/skills/release/procedure.md`。開発者の答え 5 点＝⑴ 見どころは手順の最後の報告に全文を載せ、開発者はそこで読む（直しは公開の後に頼む）⑵ PR を出した後に main が動いても止まらず、手順を回す側が見どころへ足す ⑶ 上の「リリース」の表への記録はやめる ⑷ 走りが赤のときは今までどおり止まって聞く ⑸ 次の版への申し送りは「次のリリースへの申し送り」の節に置く。**`v0.0.3` の実走で初めて確かめる事**: 承認なしの `gh pr merge` とタグの push が自動モードの許可の判定を通るか（足すルールの文面は `procedure.md` の「開発者の設定」）・見どころを書く段・見どころの本文と 5 つの添付で公開する段。スキルは開発者が打ったときだけ動くので、試し打ちはしていない。
 
 #### Existing Spec Updates
 

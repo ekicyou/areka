@@ -47,7 +47,7 @@ Kiro-style Spec-Driven Development on an agentic SDLC
   - `--review off` skips task-local review; use it intentionally and keep `/kiro-validate-impl {feature}` as the final quality gate
   - `/kiro-validate-impl {feature}` (standalone re-validation)
 - Completion (explicit approval required): `/kiro-complete {feature}` — static DoD gate → archive to `completed/` → one full test run after the archive (docs updated in parallel while it runs) → final commit → **PR create + squash merge** (the only path into `main`). Use only when the developer explicitly approves.
-- Release (recurring, only when the developer types it): `/release [X.Y.Z]` — runs the recurring spec `areka-P0-release-cycle` once (version bump PR → squash merge → tag → watch → record). Not `/kiro-complete`.
+- Release (only when the developer types it): `/release [X.Y.Z]` — runs one release from the skill's own procedure without approval stops (version bump PR → squash merge → tag → watch → final report with the highlights). Not `/kiro-complete`.
 - Progress check: `/kiro-spec-status {feature}` (use anytime)
 
 ## Skills Structure
@@ -62,7 +62,7 @@ Skills are located in `.claude/skills/kiro-*/SKILL.md`
 - `kiro-review` — task-local adversarial review protocol used by reviewer subagents
 - `kiro-debug` — root-cause-first debug protocol used by debugger subagents
 - `kiro-verify-completion` — fresh-evidence gate before success or completion claims
-- `release` — entry of one release (`/release [X.Y.Z]`); holds no steps, executes `.kiro/specs/areka-P0-release-cycle/tasks.md` and `design.md` in the main context, stops at approval A (merge) and approval B (tag push)
+- `release` — one release (`/release [X.Y.Z]`); the procedure lives in the skill (`SKILL.md` + `procedure.md`) and runs in the main context without approval stops; it stops only on a failed check, a red run, a state the procedure does not cover, or a refused command
 - `kiro-watch-clear` — clears every record of the impl-watch desks (`areka-impl-watch.exe clear`, then `status`); run only when the developer asks for a full clear (runbook: `doc/impl-watch.md`)
 - Use skills explicitly requested by the user and skills relevant to the task's domain, including design, accessibility, and UX.
 - Select skills from their descriptions or metadata first, then read only the selected skills and the references needed for the task.

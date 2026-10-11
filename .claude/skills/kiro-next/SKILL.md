@@ -88,7 +88,7 @@ Last line: "briefs written: N/N".
 
 ## Step 6 — Dependency tree and the next wave
 **Edges** (strict): functional dependencies + any shared source file (other unfinished specs and in-flight specs) + the roadmap's serial-lane order. Allowed overlaps that do NOT create edges: appending to `doc/COMPAT_ARCHITECTURE.md` §8; generated files (`THIRD-PARTY-NOTICES.md`, `doc/ukadoc-coverage/report/`); steering; different rows of `doc/ukadoc-coverage/ledger/*.toml`; different rows of `dist/README.txt`. A conditional overlap ("only if …") counts as an edge unless the wave row states a promise that removes it.
-**Single-seat resources** (one spec per wave): `Cargo.lock` / `THIRD-PARTY-NOTICES.md` / `tech.md` dependency additions (a pending recurring `release-cycle` bump holds this seat); the emo-text `lib.rs` pure-file list (only one spec may add an emo-text source file per wave).
+**Single-seat resources** (one spec per wave): `Cargo.lock` / `THIRD-PARTY-NOTICES.md` / `tech.md` dependency additions (a pending `/release` version bump holds this seat); the emo-text `lib.rs` pure-file list (only one spec may add an emo-text source file per wave).
 **Excluded from the tree**: 据え置き, 保留, 取り下げ予定 specs (neither candidates nor counted as descendants). **Not parallelised**: specs whose core work is measurement (latency/perf/load) — they pollute and are polluted by other work.
 **Procedure**:
 1. Heads = specs with no unfinished predecessor (in-flight specs count as unfinished predecessors).

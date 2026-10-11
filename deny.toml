@@ -30,7 +30,6 @@ allow = [
     "Unlicense",
     "Zlib",
     "0BSD",
-    "BSD-2-Clause",
     "BSD-3-Clause",   # encoding_rs の AND 側で必須
     "Unicode-3.0",    # unicode-ident の AND 側で必須
 ]

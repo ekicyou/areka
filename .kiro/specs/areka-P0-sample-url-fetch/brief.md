@@ -86,7 +86,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: 完了 `areka-P0-nar-install`（登記表と窓口を作り、「検体は配布形のまま保管する」と決めた）の決めごとを改める。
-- **Adjacent**: `areka-P0-default-balloon-selfmade`（既定バルーンは製品の資産＝この spec の対象にしない。同 spec が既定を差し替えた後は、配布の道が検体の取り寄せに触れない形にできる）。`areka-P0-test-roots-under-target`（検体・一時のフォルダの置き場の決まり＝議題 4）。配布と公開の列（`tools/package.ps1`・`release.yml`）。`areka-P0-release-cycle`（リリースの手順が検体の取り寄せで変わらないこと）。
+- **Adjacent**: `areka-P0-default-balloon-selfmade`（既定バルーンは製品の資産＝この spec の対象にしない。同 spec が既定を差し替えた後は、配布の道が検体の取り寄せに触れない形にできる）。`areka-P0-test-roots-under-target`（検体・一時のフォルダの置き場の決まり＝議題 4）。配布と公開の列（`tools/package.ps1`・`release.yml`）。スキル `/release`（リリースの手順が検体の取り寄せで変わらないこと）。
 
 ## Constraints
 

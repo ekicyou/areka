@@ -54,7 +54,7 @@ argument-hint: <feature-name>
 
 ## 例外: 繰り返し仕様
 
-リリース手順やレビュー・ループのような繰り返し実行型仕様は `completed/` に**移動しない**。
+レビュー・ループのような繰り返し実行型仕様は `completed/` に**移動しない**。
 
 判定基準:
 - spec.json や requirements.md に「繰り返し」「repeatable」「定期実行」「ループ」等の記述がある

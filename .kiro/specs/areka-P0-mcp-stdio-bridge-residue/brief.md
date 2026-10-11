@@ -58,7 +58,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: なし（完了した `mcp-stdio-bridge` の拾い残し）。
-- **Adjacent**: `tools/package.ps1` を触る spec（`release-code-signing`・`install-live-target-hazards`・`winget-release-automation`）。`release-cycle`（9 の走りはここで起きる）。`mcp-receiver-bugs` の件 1（`real_receiver_test.rs` が重なる）。
+- **Adjacent**: `tools/package.ps1` を触る spec（`release-code-signing`・`install-live-target-hazards`・`winget-release-automation`）。スキル `/release`（9 の走りはここで起きる）。`mcp-receiver-bugs` の件 1（`real_receiver_test.rs` が重なる）。
 
 ## Constraints
 

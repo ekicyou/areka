@@ -14,7 +14,7 @@
 - `.github/workflows/` は `release.yml`・`crates-io.yml` の 2 本。`winget.yml` は無い。`release.yml` は、タグ `v*` の push と、手での起動（main での乾いた走り）の両方で動く。
 - `README.md` の「## 入手と起動」の最初の箇条は「GitHub Releases から配布物の zip を入手して展開する」。winget の行は無い。
 - `dist/README.txt` の「■ 入手のしかた」は箇条 1 つ（配布の zip）。「■ 既知の制限」の先頭は「areka.exe には署名がありません」。どちらにも winget の行は無い。
-- `release-cycle` の決まり（`.kiro/specs/areka-P0-release-cycle/requirements.md` の「見守り」の受け入れ基準と、`design.md` の「緑の判定」の表）: **タグのコミットに `winget.yml` が在るときだけ**、winget-pkgs へその版の PR が出たことを確かめる。`winget.yml` が main に無い間は、winget を見守りの相手に入れない。Release の公開より後の段（winget など）が赤なら、同じ版で出し直さずに、原因を直す spec を起票する。＝`winget.yml` が main に入った次の回から、手順を直さずに見守りの相手が 1 つ増える。
+- スキル `/release` の決まり（`.claude/skills/release/procedure.md` の段 6 の「緑を判定する」の表。もとは `areka-P0-release-cycle` の要件と設計）: **タグのコミットに `winget.yml` が在るときだけ**、winget-pkgs へその版の PR が出たことを確かめる。`winget.yml` が main に無い間は、winget を見守りの相手に入れない。Release の公開より後の段（winget など）が赤なら、同じ版で出し直さずに、原因を直す spec を起票する。＝`winget.yml` が main に入った次の回から、手順を直さずに見守りの相手が 1 つ増える。
 - 更新の PR を出す道具（`winget-releaser`＝GitHub Action）は、winget-pkgs に**既に在る**名乗りの更新しかできない。前提は「既に 1 版が在ること」「開発者のアカウントに winget-pkgs のフォークが在ること」（切り出し元の brief の Current State。出典は roadmap「配布と公開」の節）。
 - `GITHUB_TOKEN` が作った Release では `release: published` が飛ばないので、`winget.yml` は `workflow_run` で `release.yml` の終わりを受ける（2026-10-03 `release-ci-workflow` の裁定）。
 
@@ -27,7 +27,7 @@
   - スタートメニューにアイコンは出ない（コマンド名 `areka` か、インストール先のフォルダから起動する）。
   - Smart App Control を有効にしている環境では、未署名の exe が止まる。
   - 上げ直しのときの利用者のゴーストと記憶の扱い（`winget-manifest-submission` の実測の結果を受けて書く）。
-- 次の `release-cycle` の回で、winget-pkgs への PR が見守りの相手に入り、緑になる。
+- 次の `/release` の回で、winget-pkgs への PR が見守りの相手に入り、緑になる。
 
 ## Approach
 
@@ -38,7 +38,7 @@
 ## Scope
 
 - **In**: `.github/workflows/winget.yml`・`README.md` の「## 入手と起動」の箇条・`dist/README.txt` の「■ 入手のしかた」の 1 行と「■ 既知の制限」の行・次のリリースの回で PR が出たことの確かめ。
-- **Out**: マニフェストの形・手元の `--manifest` での確かめ・初回の手提出（`winget-manifest-submission`）。Release を作る側（`release.yml`）。リリースの手順（`release-cycle`。この spec は手順の文書に触らない）。署名（`release-code-signing`）。インストーラー版（名乗り `Areka.Areka`）。
+- **Out**: マニフェストの形・手元の `--manifest` での確かめ・初回の手提出（`winget-manifest-submission`）。Release を作る側（`release.yml`）。リリースの手順（スキル `/release`。この spec は手順の文書に触らない）。署名（`release-code-signing`）。インストーラー版（名乗り `Areka.Areka`）。
 
 ## Boundary Candidates
 
@@ -53,7 +53,7 @@
 ## Upstream / Downstream
 
 - **Upstream**: `winget-manifest-submission`（完了していること）と、**winget-pkgs が初回の提出を取り込んでいること**（`winget search Areka.Areka.Portable` で引けること）。`release-ci-workflow`・`release-package-versioned`（完了）。
-- **Downstream**: `release-cycle` の次の回（見守りの相手が増える）。`release-code-signing`（「既知の制限」の同じ節）。
+- **Downstream**: `/release` の次の回（見守りの相手が増える）。`release-code-signing`（「既知の制限」の同じ節）。
 
 ## Existing Spec Touchpoints
 
@@ -64,7 +64,7 @@
 
 - 触るのは `.github/workflows/winget.yml`（新規）・`README.md`・`dist/README.txt` だけ。`crates/`・`tools/`・`dist/winget/**` には触らない。
 - 秘密をリポジトリに置かない。
-- **取り込みの前に着手しない**。取り込みの前に `winget.yml` が main に入ると、その間に打ったタグで `winget.yml` が赤になり、`release-cycle` が直す spec を起票することになる。取り込みの前に `winget install` の行を説明書に載せると、利用者が試して失敗する。
+- **取り込みの前に着手しない**。取り込みの前に `winget.yml` が main に入ると、その間に打ったタグで `winget.yml` が赤になり、`/release` の見守りが直す spec を起票することになる。取り込みの前に `winget install` の行を説明書に載せると、利用者が試して失敗する。
 - 一度出した名乗り `Areka.Areka.Portable` は変えない。
 - 道具が端末へ出す文は ASCII だけにする（workflow の段の中で文字コードを書き替えない）。
 

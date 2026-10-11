@@ -124,6 +124,6 @@
 
 ### 3.2 申し送り
 
-- **`dola` の公開（`areka-P0-release-cycle` の記録へ）**: 合図の語彙 `CueCommand`（`crates/dola/src/cue/command.rs`）に 2 種類——`AnchorBegin { id, references }` と `AnchorEnd`——を足した。`dola` は crates.io に公開しているので、次の公開は公開 API の追加になる。`CueCommand` は `#[non_exhaustive]` ではないので、全種類を catch-all なしで並べている利用側は、分岐を 2 つ足す必要がある。`references` が空なら直列化でキーを出さない（`Choice` と同じ規約）。
+- **`dola` の公開（roadmap の「次のリリースへの申し送り」へ）**: 合図の語彙 `CueCommand`（`crates/dola/src/cue/command.rs`）に 2 種類——`AnchorBegin { id, references }` と `AnchorEnd`——を足した。`dola` は crates.io に公開しているので、次の公開は公開 API の追加になる。`CueCommand` は `#[non_exhaustive]` ではないので、全種類を catch-all なしで並べている利用側は、分岐を 2 つ足す必要がある。`references` が空なら直列化でキーを出さない（`Choice` と同じ規約）。
 - **`check_script` の診断の種類**: `unpaired_tag` が 1 つ増えた（D-7）。診断の表（`doc/ssp-mcp/areka-tools.md`）には 3 行（閉じ無し・重なり・開いていない閉じ）が載っている。
 - **生成正本**: `doc/shiori/fragments/` 配下は生成物であり手編集しない。正典側の記述が更新されたときは生成元を更新し、本表の `provenance` と反証の欄を見直す（`COMPAT_ARCHITECTURE.md` §2「ukadoc 更新時は正典に従い是正」）。

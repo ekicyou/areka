@@ -52,7 +52,7 @@
 
 ## Existing Spec Touchpoints
 - **Extends**: なし（新しい境界。`tools-utf8-child-output` は完了済み）。
-- **Adjacent**: `release-cycle`（`tools/package.ps1`・`tools/crates-io.ps1` を使う・`tools/perf/` には触れない）・`test-all` の段 `encoding check`（対象を広げるなら判定が変わる）。
+- **Adjacent**: スキル `/release`（`tools/package.ps1`・`tools/crates-io.ps1` を使う・`tools/perf/` には触れない）・`test-all` の段 `encoding check`（対象を広げるなら判定が変わる）。
 
 ## Constraints
 - 端末の文字コードを書き替えない（開発者の方針・`tech.md`）。

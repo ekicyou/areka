@@ -64,7 +64,7 @@ areka には自分のアイコンが無い。`areka.exe` はエクスプロー�
 
 - wintf。アイコンを読む・出すコードは足さない（読むのは `areka-P0-tasktray-icon`）。
 - 今のマニフェストの埋め込み。動きを変えない（版 6 の標準の部品の申告を壊さない）。
-- リリースの段取り（`release-cycle`）。exe の中身が増えるだけで、手順は変えない。
+- リリースの段取り（スキル `/release`）。exe の中身が増えるだけで、手順は変えない。
 
 ## Upstream / Downstream
 
@@ -74,7 +74,7 @@ areka には自分のアイコンが無い。`areka.exe` はエクスプロー�
 ## Existing Spec Touchpoints
 
 - **Extends**: なし。
-- **Adjacent**: `crates/areka/build.rs` を作った `wintf-tooltip`（完了）。exe に署名する `release-code-signing`（埋め込みの後に署名する順になるだけで、重ならない見込み）。`winget-manifest-submission`・`winget-release-automation`（マニフェストのアイコンの欄は範囲の外）。`release-cycle`（次の版の配布物から絵が入る）。
+- **Adjacent**: `crates/areka/build.rs` を作った `wintf-tooltip`（完了）。exe に署名する `release-code-signing`（埋め込みの後に署名する順になるだけで、重ならない見込み）。`winget-manifest-submission`・`winget-release-automation`（マニフェストのアイコンの欄は範囲の外）。スキル `/release`（次の版の配布物から絵が入る）。
 
 ## Constraints
 
