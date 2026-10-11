@@ -147,3 +147,67 @@
 - **2026-10-10 `areka-P0-anchor-tag-canon`（完了時の棚卸）**: crates.io に出している `dola` の合図の語彙 `CueCommand`（`crates/dola/src/cue/command.rs`）に 2 種類（`AnchorBegin`・`AnchorEnd`）が増えた。`CueCommand` は `#[non_exhaustive]` でないので、全種類を catch-all なしで並べている外の利用側は、次の版でビルドが通らなくなる。次に公開する版の上げ方は、これを踏まえて本 spec の側で決める（0.0.x の間は、cargo の上ではどの版上げも非互換の扱い）。詳細は `doc/anchor-compat.md` の 3.2。
 - **2026-10-11 `areka-P0-release-notes-highlights`（`/kiro-discovery` の起票）**: リリースの本文を、自動の PR の題名の一覧から、注目に値する数件の日本語の紹介に替える spec を起票した。同 spec が、本 spec の要件・設計・タスクに「紹介文を下書きして版上げの PR に載せる段」を足し、公開の後の確かめを 4 つのファイルから 5 つ（詳細なリリースノートのファイルが増える）に直す。**次の回（`v0.0.3`）は、同 spec が着地してから打つ**（着地の前に打つと、本文は今までどおり自動の一覧になる）。
 - **2026-10-11 `areka-P0-release-notes-highlights`（完了時の棚卸・開発者の決定）**: 開発者が「外から見た動きは pasta と同じく承認なしでノンストップ。`areka-P0-release-cycle` を完了にして、`/release` を正にするのが目的」と決めた。同 spec が入れた `/release` は入口だけで、手順の正本はまだ本 spec の `tasks.md` と `design.md` に在る。移行は新しい spec を立てず、本 spec の最後の仕事として、新しいワークツリーで行う: 要件のマージの承認とタグの承認を外す → 手順（段・コマンド・判定の表・再開の読み方）をスキルの中へ写す → 本 spec を普通の完了の手順で `completed/` へ移す → `workflow.md` と `kiro-complete` の「繰り返し仕様の例外」・roadmap・ほかの spec の brief の参照を合わせる。**開発者の答え待ちが 5 点**（かっこの中は推す答え）: ⑴ 見どころを人が読む場（全文を示して止まらずに進む）⑵ 承認の後に main が動いたときの「足す物は在るか」の止まり（無くす）⑶ roadmap の「リリース」の表への記録と次の PR への相乗り（やめる・GitHub の Release の頁を記録とする）⑷ 走りが赤のとき（今までどおり止まって聞く）⑸ 上の `dola` の件と、`deny.toml`・`about.toml` の `BSD-2-Clause` の掃除（スキルの手順の「版上げのときに一緒に見る事」へ移す）。**前提が 1 つ**: 自動モードの見張りが承認なしの `gh pr merge` とタグの push を止める見込みなので、`/release` 用の許可ルールを開発者の設定に足してもらう（文面は移行のときに示す）。pasta の形は ekicyou/pasta の PR#105（`.claude/skills/release/` の `SKILL.md`・`procedure.md`・`scripts/`）。
+
+## 2026-10-11 `/release` へ移す仕事の作業計画（`/kiro-discovery`・main `d0c697d6`）
+
+上の最後の申し送りを書いたセッション「areka release notes」と直接やり取りして引き継いだ。新しい spec は立てない（本 spec の最後の仕事）。作業の枝は `claude/areka-release-notes-plan-6885b1`（この計画のコミットと同じ枝・PR は 1 本）。
+
+### 目的と、終わったときの形
+
+- 開発者が `/release` を打つと、順調なら承認で止まらずに最後まで進む（pasta と同じ外から見た動き）。
+- 手順の正本は `.claude/skills/release/` の中（`SKILL.md` と `procedure.md`）。本 spec は `completed/` の記録になり、実行には使わない。
+- 止まるのは、判定が赤のとき・走りが赤のとき・手順に無い状態・許可の判定に断られたときだけ。
+
+### 引き継ぎで分かった事（文書に無かった物）
+
+- **pasta との違いは残る**: areka のリリース CI はテストを回さない。手元の確かめ（`tools/test-all.ps1 -License` 約 19 分・`tools/package.ps1 -Check`＝窓が出る・`tools/crates-io.ps1 -Verify`・`tools/release-notes.ps1 -Check`）は手順に残す。止まらなくても 1 回 30 分ほど掛かる。
+- **スキルの中にスクリプトは置かない**。道具は今の `tools/*.ps1` のまま（本 spec の設計の「新しいスクリプトは 0 本」を保つ。`.claude/skills/` の下の ps1 は文字コードの検査の外になる）。
+- **完了の関門**: `kiro-complete` は `tasks.md` の全項目の完了を求める。今の `tasks.md` は未完了 30・完了 0（リリース 1 回分の手順）なので、移行の仕事の一覧に置き換えてから完了にする。
+- **試し打ちはできない**: スキルは開発者が打ったときだけ動く設定で、動かせば本物のリリースになる。実走は `v0.0.3`（`user-data-root` の着地待ち）が初めてで、見どころを書く段と公開の段もそこで初めて本番で動く。
+- **この計画で確かめた事**: ほかに繰り返し spec は無い（`.kiro/specs/` の直下で「繰り返し」を名乗るのは本 spec だけ）。`crates/`・`tools/`・`.github/`・`dist/` に `release-cycle` の語は 0 件（移動で壊れる実ファイル読みは無い）。
+
+### スキルへ写す物・落とす物
+
+- **写す**（`procedure.md`・300〜350 行の見込み）: 設計の「Components and Interfaces」の前置き（置き換える語 `{版}`・`{旧版}`・`{remote}`・`{枝}`・`{sha}`、`git` の出力の決まり）、段 1〜6、段 3 の「差分の範囲の判定」の表、段 6 の「緑の判定」と「赤のときの決まり」の表、「再開のときの事実の読み方」、「止まり方の決まり」、「してはいけない依存」（`git remote -v`・`--tags`・`--follow-tags`・`--force`・`test-all.ps1 -Format`）。`tasks.md` の 1.1〜6.3 の箇条と各「判定」。
+- **落とす**: `/kiro-impl` の読み替えの表、「1 回の実行で作るコミット」の表、承認 A・B の文、マージの前の文章の直しの戻り道、`tasks.md` のチェックを戻す話、記録の形（Data Models）、Requirements Traceability、Testing Strategy、Boundary の各節、「設計で決めたこと」、初回（`v0.0.2`）だけの分。
+- **答えしだい**: 段 7（記録と受け渡し）は下の ⑶、段 4 の「新しく入った題名を示して止まる」は下の ⑵。
+
+### 仕事の一覧（この順）
+
+1. **本 spec の文書を「記録」に直す**。要件・設計の先頭に「完了した記録・実行には使わない・正本は `.claude/skills/release/`」と書き、移行の節を 1 つ足して、覆る行を名指しする: 要件 4.3（マージの承認）・5.2（タグの承認）・1.3・1.4・1.8（タスクを未完了に保つ・実装中のまま置く・`/kiro-complete` を使わない）、⑶ の答えしだいで 7.1〜7.4。完了済みの `release-notes-highlights` の要件 6.4・6.7・6.9 を上書きすることも 1 行書く（完了した spec の文書は書き換えない）。要件・設計の全文の書き直しはしない。
+2. **`tasks.md` をこの一覧に置き換える**（もとの手順は `procedure.md` と git の履歴に残る）。
+3. **`procedure.md` を新しく書き、`SKILL.md` を書き直す**。コマンドはもとの設計・タスクから一字も変えずに写す（承認で止まる文だけを外す）。`SKILL.md` は約束と段の要約で、「段を始める前に `procedure.md` のその段を読み直す・記憶でコマンドを書かない・外へ出るコマンドは単独の 1 行」を残す。
+4. **参照を合わせる**（語は `release-cycle`。`completed/`・`roadmap-history.md`・本 spec のフォルダは除く）:
+   - `CLAUDE.md` 2 行・`product.md` 1・`tech.md` 1・`focus.md` 1・`kiro-next` の SKILL 1・`doc/anchor-compat.md` 1。
+   - ほかの spec の brief 12 本（`winget-release-automation` 8 か所は手順の中身を指すので、指す先をスキルへ書き直す。ほかの 11 本は 1〜3 か所ずつ）。
+   - `roadmap.md` 約 20 か所。「席」と「版上げと winget の順」の文は主語を `/release` に言い替える。`Dependencies: areka-P0-release-cycle` は歴史の名前なので置き換えない。台帳の行を外して数を直すのは完了の手順の中で数え直す。
+   - `workflow.md` と `kiro-complete` の「繰り返し仕様の例外」は、仕組みは残して、例に挙げた「リリース手順」の語だけを外す（共通の文書は例外の spec のために直さない、という 10-05 の決まりに沿う最小の直し）。
+5. **確かめる**（テストは回さない・文書だけの変更）:
+   - もとの設計・タスクのコマンドの行と `procedure.md` のコマンドの行を機械で突き合わせ、増えた行 0・減った行は「落とす」に挙げた物だけ。
+   - `SKILL.md` が名前で指す節が `procedure.md` に全部在る。
+   - 文字コードの検査（`tools/encoding-check.ps1`）が終了 0。
+   - `release-cycle` の語の残りを一覧にして、残す理由（歴史の名前）を 1 行ずつ付ける。
+   - レビュー役のサブエージェントを 1 回（もとの文書と `procedure.md` を渡し、「落ちた手順・足された手順は在るか」だけを見させる）。実走で試せないので、ここは省かない。
+6. **開発者の「実装完了を承認」の後に `/kiro-complete areka-P0-release-cycle`**（`completed/` への移動・全体テスト 1 回・PR・squash マージ）。
+7. **`v0.0.3` の初めての実走で見る事**を、スキルの外に残す（roadmap の 1 行）: 承認なしのマージとタグの push が許可の判定を通るか・見どころの段・公開の段。
+
+### 開発者の答え待ち 5 点（引き継ぎで推す答えが 2 つ変わった）
+
+1. **見どころを人が読む場**: 全文を示して、止まらずに進む。弱みは、口調と「必ず載せるもの」を機械で見ていない点。公開の後に Release の頁の本文は直せるが、タグのコミットの中のファイルは直せない。
+2. **PR を出した後に main が動いたとき**（推す答えを変えた）: ただ止まりを無くすのではなく、main を取り込んだら変更の一覧を出し直し、AI が「必ず載せるもの」に当たる変更を見どころへ足して検査を回し直す（止まらない）。10-11 に「止まる」を残した理由（後から入った変更は見どころを書いたときに見ていない・タグは動かせない）を保てる。
+3. **roadmap の「リリース」の表への記録**: やめて、GitHub の Release の頁を記録とする（pasta も記録のコミットを作らない）。今ある行は歴史として残す。弱みは、winget-pkgs の PR の URL と「赤で起票した spec」の列の置き場が無くなる点。渋るなら代わりは「版上げの PR の中で行を書く（Release の URL は版から決まる・winget の列は空）」。
+4. **走りが赤のとき**: 今までどおり止まって聞く（やり直しも開発者の判断）。pasta は一部の赤だけ 3 回まで自動でやり直すが、areka は写さない。
+5. **次の版への申し送りの置き場**（推す答えを変えた）: 本 spec の brief が記録になると、ほかの spec が「次の版上げのときに」と書き残す先が無くなる。roadmap に「次のリリースへの申し送り」の節を 1 つ置き、`procedure.md` の最初の段でそこを読む。今ある 2 件（`dola` の `CueCommand` の追加・`deny.toml` と `about.toml` の `BSD-2-Clause`）はそこへ移し、`v0.0.3` で片づけたら消す。スキルの中には置かない（スキルの書き換えは見張りに止められることがある）。
+
+### 前提（開発者の設定・`v0.0.3` を打つ前までに）
+
+自動モードの見張りは、承認なしの `gh pr merge` とタグの push を止める見込み。今の文のルールは「実装完了を承認」の発言に結び付いている。同じ型で `/release` 用を 1 つ足してもらう。文面の案:
+
+> Release: when the user's message is the `/release` command (optionally with a version), the agent may push its harness worktree branch, create the version-bump PR with `gh pr create --base main`, squash-merge that PR with `gh pr merge --squash`, create the tag `v{version}` on that squash commit and push only that tag (`git push <remote> refs/tags/v{version}`). This does not cover `--admin`, bypassing required checks, merging any other PR, pushing directly to main, `--force`, `--tags`, moving or deleting a pushed tag, or `gh release delete`.
+
+タグの push がこの形で通るかは、まだ誰も試していない。移行の仕事そのもの（6 の完了の手順）は今のルールで通る。
+
+### 触らない物
+
+- `tools/`・`.github/workflows/`・クレート・`doc/release-notes/README.md`（見どころの決まりは pasta とそろえてある。変えないので pasta への知らせは要らない）。
+- 完了済みの spec の文書（`release-notes-highlights` を含む）と `roadmap-history.md`。
