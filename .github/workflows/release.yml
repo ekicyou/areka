@@ -36,6 +36,8 @@ jobs:
       - name: 取り出し
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # 履歴の全部とタグを取る（詳しいリリースノートが、一つ前のタグからの変更を git で読む）
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Rust の固定
@@ -82,6 +84,20 @@ jobs:
             Write-Host "no tag; skipping the comparison (Cargo.toml version '$version')"
           }
           "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: 見どころの検査
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # 入力は環境変数 VERSION だけ。手元でも差し替えて同じ本文を回せる
+          # 条件を付けない。タグの走りでも乾いた走りでも、配布物を組み立てる前のこの場所で回る
+          # 読むだけ。その版の見どころのファイル（doc/release-notes/v{版}.md）の形を見る。欠けの名前（FAIL {Key}）は道具が印字する
+          # 道具は別の PowerShell のプロセスで -File で呼ぶ（端末の文字コードは書き替えない）。この段は子の終了コードをそのまま返すだけ
+          pwsh -NoProfile -NonInteractive -File ./tools/release-notes.ps1 -Check -Version $env:VERSION
+          $code = $LASTEXITCODE
+          # 子の終了コードをそのまま段の終了コードにする（-Command は 0 と 1 以外を 1 に潰すので先にホストへ渡す）
+          $host.SetShouldExit($code)
+          exit $code
 
       - name: 既存の Release の検査
         id: guard
