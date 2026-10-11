@@ -2,7 +2,7 @@
 
 ## 走らせ方（この spec だけ）
 
-- `/kiro-impl areka-P0-release-cycle`（タスク番号なし）で始める。1 回の実行で、リリースを 1 回だけ行う。
+- `/release` で始める（入口のスキル `.claude/skills/release/SKILL.md`。`/release 0.0.3` のように版を指示してもよい）。`/kiro-impl areka-P0-release-cycle`（タスク番号なし）と打っても同じ手順を回す。1 回の実行で、リリースを 1 回だけ行う。
 - `/kiro-impl` の自走の形は、`design.md` の「`/kiro-impl` の読み替え」の表のとおりに読み替える。
   - サブエージェントは起こさない（0 回）。主文脈がタスクを上から順に自分で行う。
   - `[x]` は作業木に付けるだけで、コミットしない（`git add` に `tasks.md` を入れない）。

@@ -5,7 +5,7 @@
 
 ## Introduction
 
-本 spec は、開発者が `/kiro-impl areka-P0-release-cycle` を打ったときだけ 1 回のリリースを行う、**繰り返し spec** である。`completed/` へは移さず、実行のたびに `tasks.md` のチェックを戻して次の回に備える（`.kiro/steering/workflow.md` と `kiro-complete` の「繰り返し仕様の例外」）。
+本 spec は、開発者が `/release`（入口のスキル。`/kiro-impl areka-P0-release-cycle` と打っても同じ）を打ったときだけ 1 回のリリースを行う、**繰り返し spec** である。`completed/` へは移さず、実行のたびに `tasks.md` のチェックを戻して次の回に備える（`.kiro/steering/workflow.md` と `kiro-complete` の「繰り返し仕様の例外」）。
 
 1 回の実行は次の流れになる。
 
@@ -66,7 +66,7 @@
 
 #### Acceptance Criteria
 
-1. When 開発者が本 spec の実装（`/kiro-impl areka-P0-release-cycle`）を打つ, the リリースの手順 shall 1 回の実行で 1 回のリリース（版を 1 つ上げ、タグを 1 つ打つ）だけを行う。
+1. When 開発者が本 spec の実装（`/release`、または `/kiro-impl areka-P0-release-cycle`）を打つ, the リリースの手順 shall 1 回の実行で 1 回のリリース（版を 1 つ上げ、タグを 1 つ打つ）だけを行う。
 2. The リリースの手順 shall 2 回目以降、毎回同じタスクの並びで回る（初回だけの手順は要件 8 に分け、2 回目以降のタスクには残さない）。
 3. When 1 回の実行が終わる（要件 7 の記録の 1 行を書き終える）, the リリースの手順 shall main の `tasks.md` をチェックがすべて未完了の状態（次の回にそのまま使える形）に置き、本 spec を `.kiro/specs/` の直下に置いたままにする（`completed/` へ移さない）。
 4. The 本 spec の `spec.json` shall 初回の実行の後も実装中の段のまま置き、完了の段へ進めない。

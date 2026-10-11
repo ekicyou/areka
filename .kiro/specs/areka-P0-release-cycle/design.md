@@ -2,9 +2,9 @@
 
 ## Overview
 
-**Purpose**: 開発者が `/kiro-impl areka-P0-release-cycle` を打ったときだけ、版を 1 つ上げ、タグを 1 つ打ち、GitHub Release と crates.io への公開までを見届ける、繰り返しの手順を決める。
+**Purpose**: 開発者が `/release`（入口のスキル。`/kiro-impl areka-P0-release-cycle` と同じ）を打ったときだけ、版を 1 つ上げ、タグを 1 つ打ち、GitHub Release と crates.io への公開までを見届ける、繰り返しの手順を決める。
 
-**Users**: 開発者（リリースの時期を決め、マージとタグを承認する人）と、手順を回す AI（`/kiro-impl` を受けた主文脈）。
+**Users**: 開発者（リリースの時期を決め、マージとタグを承認する人）と、手順を回す AI（`/release` か `/kiro-impl` を受けた主文脈）。
 
 **Impact**: 製品のコードは 1 行も足さない。本書は「何を、どの順で、どの道具で行い、どこで止まり、何をどこに記録するか」を決める手順の設計である。使う道具はすべて main に在る物（`tools/test-all.ps1`・`tools/package.ps1`・`tools/crates-io.ps1`・`tools/release-notes.ps1`・`gh`・`git`・`cargo`）で、新しいスクリプトは 0 本。
 
@@ -30,6 +30,7 @@
 
 - 繰り返しの手順（7 つの段・止まる点・判定・やり直しの決まり）と、それを写した `tasks.md`。
 - この spec だけに効く `/kiro-impl` の読み替え（下の「`/kiro-impl` の読み替え」）。
+- 入口のスキル `.claude/skills/release/SKILL.md`（`/release`）。持つのは入口と、外へ出るコマンドの打ち方の決まりだけで、段・コマンド・判定の表は写さない（正本は本書と `tasks.md`）。
 - 版上げの 1 コミットの中身（根の `Cargo.toml` の 2 行・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`dist/README.txt` の「時点」の行・その版の見どころのファイル `doc/release-notes/v{版}.md`）。
 - タグ `v{版}`（打つのはこの手順だけ）。
 - `.kiro/steering/roadmap.md` の「完了サマリ」の下の小見出し「リリース」と、その表の行。
@@ -64,6 +65,7 @@
 - 見どころのファイルの置き場所・名前（今は `doc/release-notes/v{版}.md`）。変わったら段 2〜4 と段 6 の判定を直す。
 - `winget.yml` が main に入る（段 6 の見守りの相手が増える）。
 - `/kiro-impl` が `tasks.md` と `design.md` を読む順や、チェックの付け方を変える。
+- 本書の節の名前（「`/kiro-impl` の読み替え」「再開のときの事実の読み方」「止まり方の決まり」）を変える（入口のスキルが名前で指している）。
 - roadmap の「完了サマリ」の構成が変わる（「リリース」の置き場）。
 
 ## Architecture
@@ -101,7 +103,7 @@ flowchart TD
 
 ### `/kiro-impl` の読み替え（この spec だけ）
 
-`/kiro-impl areka-P0-release-cycle`（タスク番号なし）で始める。この spec では、`/kiro-impl` の自走の形を次のとおり読み替える。決まりは本書と `tasks.md` の冒頭に置き、`/kiro-impl` の文書は直さない（要件 1.8 と同じ考え方）。
+`/release`（入口のスキル）で始める。`/kiro-impl areka-P0-release-cycle`（タスク番号なし）と打っても同じである。スキルは `kiro-impl` のスキルを読まず、下の表の読み替えをそのまま実行の形にする。この spec では、`/kiro-impl` の自走の形を次のとおり読み替える。決まりは本書と `tasks.md` の冒頭に置き、`/kiro-impl` の文書は直さない（要件 1.8 と同じ考え方）。
 
 | `/kiro-impl` の段 | この spec での扱い | 理由 |
 |---|---|---|
@@ -382,7 +384,7 @@ flowchart TD
 
 ### 再開のときの事実の読み方
 
-セッションが切れたら、同じワークツリーで `/kiro-impl areka-P0-release-cycle` を打ち直す。作業木の `tasks.md` の `[x]` が残っていればそこから続ける。残っていないときも、取り返しのつかない操作を二度しないよう、次の事実を先に読む。
+セッションが切れたら、同じワークツリーで `/release` を打ち直す。作業木の `tasks.md` の `[x]` が残っていればそこから続ける。残っていないときも、取り返しのつかない操作を二度しないよう、次の事実を先に読む。
 
 | 事実 | 読み方 | 在るとき |
 |---|---|---|

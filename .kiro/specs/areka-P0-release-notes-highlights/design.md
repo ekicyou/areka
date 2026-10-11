@@ -133,6 +133,8 @@ tools/
     ├── expected-notes-from-start.md # subjects.txt から fix と perf の製品の変更を除き、一つ前のタグを空にしたときの出力
     ├── highlights-ok.md           # 形を満たす見どころのファイル
     └── expected-body.md           # highlights-ok.md から作られるべき本文
+.claude/skills/release/
+└── SKILL.md                       # リリースの入口（`/release`）。手順は写さず、リリースの手順の文書を読んで回す
 .kiro/specs/areka-P0-release-notes-highlights/verification/
 ├── release-cycle-sweep.md         # リリースの手順の文書の洗い出し（直した所・直さなかった所と理由）
 ├── docs-sweep.md                  # 生きている文書の洗い出し
@@ -149,6 +151,8 @@ tools/
 - `.kiro/steering/structure.md` — `tools/` の行に `release-notes.ps1` を、`.github/` の `release.yml` の説明に本文と添付を足す。`doc/release-notes/` を 1 行で書く。
 - `.claude/skills/kiro-complete/SKILL.md` — 全体テストの段の一覧の写しに 1 行足す（段の名前の追随だけ。手順は変えない）。
 - `.kiro/steering/workflow.md` — Test Gate のかっこの中の段の並びに 1 語足す（段の名前の追随だけ。手順は変えない）。
+- `CLAUDE.md` — 手順の一覧とスキルの一覧に `/release` を 1 行ずつ足す。
+- `.kiro/specs/areka-P0-release-cycle/requirements.md`・`design.md`・`tasks.md`（入口の分） — 始め方の文を `/release` に改め（`/kiro-impl areka-P0-release-cycle` も同じ手順を回すと書く）、設計の「This Spec Owns」に入口のスキルを、「Revalidation Triggers」にスキルが名前で指す節の名前を足す。段・判定・タスクの並びは変えない。
 
 ## System Flows
 
@@ -204,6 +208,7 @@ graph TB
 | 6.1, 6.2, 6.3, 6.4, 6.5 | 手順の段・数え上げ・検査・PR の説明・5 つ | リリースの手順の文書の直し | 直しの表 | — |
 | 6.6 | 洗い出しの記録 | 証跡 | `verification/release-cycle-sweep.md` | — |
 | 6.7, 6.8 | 繰り返しの形・workflow と `tools/` を書き換えない | リリースの手順の文書の直し | 直しの表の「保つ物」 | — |
+| 6.9 | 入口のスキル `/release` | リリースの手順の文書の直し | `.claude/skills/release/SKILL.md`（手順は写さない） | — |
 | 7.1 | `v0.0.2` の見どころ | `v0.0.2` の頁の直し | `doc/release-notes/v0.0.2.md` | — |
 | 7.2〜7.7 | 証跡・承認・同じ作り方・確かめ・書き換えない・一致 | `v0.0.2` の頁の直し | 直しの手順 | — |
 | 8.1, 8.2 | 生きている文書の追随・完了した spec は触らない | 文書の追随 | `verification/docs-sweep.md` | — |
