@@ -24,12 +24,16 @@ use tracing::debug;
 use crate::check::check_arguments;
 use crate::registry::{ToolContent, ToolOutcome, ToolRegistry};
 
-/// `serverInfo.name`（版は Cargo の版）。
+/// `serverInfo.name`（版は [`SERVER_VERSION`]）。
 pub const SERVER_NAME: &str = "areka-mcp-server";
 
+/// `serverInfo.version`（このクレートの Cargo の版）。中継（areka-mcp-bridge）も、areka が居ないときの
+/// 組み込みの答えにこの値を読む。
+pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// `initialize` の `instructions`（英文・4 文）。2 文目の後の 1 文が独自のツール `check_script` の案内
-/// （spec: areka-P0-mcp-author-tools）。
-pub(crate) const INSTRUCTIONS: &str = "This server controls areka, a desktop mascot (Ukagaka-compatible baseware) running on this machine. It exposes the same tools as the MCP server of SSP; call get_active_ghost_list first to get the ghost name for the ghost_name parameter. check_script is an areka-only tool that SSP does not have: it checks SakuraScript without playing it (the ghost does nothing), so use it before sakurascript. A tool that is not implemented yet returns a result starting with \"NG:not implemented yet\".";
+/// （spec: areka-P0-mcp-author-tools）。中継（areka-mcp-bridge）も組み込みの答えにこの文を読む。
+pub const INSTRUCTIONS: &str = "This server controls areka, a desktop mascot (Ukagaka-compatible baseware) running on this machine. It exposes the same tools as the MCP server of SSP; call get_active_ghost_list first to get the ghost name for the ghost_name parameter. check_script is an areka-only tool that SSP does not have: it checks SakuraScript without playing it (the ghost does nothing), so use it before sakurascript. A tool that is not implemented yet returns a result starting with \"NG:not implemented yet\".";
 
 /// rmcp へ渡す受け手。中身は登録表を写した `ToolRouter` と登録順の定義の列（複製は `Arc` の複製）。
 #[derive(Clone)]
@@ -100,7 +104,7 @@ impl ServerHandler for ArekaHandler {
     /// tools の能力だけ（resources・prompts なし）。版の交渉は rmcp の既定に任せる（設計 B-11）。
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::new(SERVER_NAME, env!("CARGO_PKG_VERSION")))
+            .with_server_info(Implementation::new(SERVER_NAME, SERVER_VERSION))
             .with_instructions(INSTRUCTIONS)
     }
 

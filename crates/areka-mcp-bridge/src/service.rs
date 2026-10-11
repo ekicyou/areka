@@ -3,13 +3,16 @@
 //! Desktop の側は rmcp のサービスを直接実装し、最初の問い合わせを飛ばして回す（設計 D-2）。
 //! `initialize`・`server/discover`・`ping` もここへ届き、どの要求が失敗しても次の行を読み続ける。
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
-use areka_mcp::SERVER_NAME;
+use areka_mcp::tools::all_specs;
+use areka_mcp::{INSTRUCTIONS, SERVER_NAME, SERVER_VERSION, ToolSpec};
 use rmcp::model::{
     CacheScope, ClientCapabilities, ClientConfig, ClientNotification, ClientRequest,
     DiscoverResult, ErrorData, GetExtensions, Implementation, ListToolsResult, ProtocolVersion,
     RequestMetaObject, ResultType, ServerCapabilities, ServerConfig, ServerPeerInfo, ServerResult,
+    Tool,
 };
 use rmcp::service::{
     NotificationContext, PeerRequestOptions, QuitReason, RequestContext, serve_directly,
@@ -131,8 +134,9 @@ impl Bridge {
     }
 
     /// areka が居ないときの答え（設計「areka が居ないときの答え」の表）。最初の問い合わせと
-    /// `tools/list` は、当たる控えがあれば控えで答える（要件 3.4）。`ping` は自分で空の結果
-    /// （要件 3.7）。ほかの要求と、当たる控えが無い問い合わせには「居ない」エラー（要件 3.5・3.6）。
+    /// `tools/list` は、当たる控えがあれば控えで（要件 3.4）、無ければ（読めない控え・名乗りの無い
+    /// 控えを含む）中継が自分で持っている組み込みの答えで答える（要件 3.5・設計 D-18）。`ping` は
+    /// 自分で空の結果（要件 3.7）。ほかの要求には「居ない」エラー（要件 3.6）。
     fn absent(
         &self,
         request: &ClientRequest,
@@ -154,6 +158,23 @@ impl Bridge {
         let method = request.method();
         if let Some(answer) = cached {
             info!(method, "[bridge] areka not found; answered from the cache");
+            return Ok(answer);
+        }
+        // 当たる控えが無い。組み込みの答えは、控えの答えと同じ整えを通す。控えには書かない。
+        let built_in = match request {
+            ClientRequest::InitializeRequest(_) | ClientRequest::DiscoverRequest(_) => {
+                first_answer(&builtin_info(), request, meta)
+            }
+            ClientRequest::ListToolsRequest(_) => Some(ServerResult::ListToolsResult(
+                in_dialect_of(builtin_tools(), meta),
+            )),
+            _ => None,
+        };
+        if let Some(answer) = built_in {
+            info!(
+                method,
+                "[bridge] areka not found; answered from the built-in definitions"
+            );
             return Ok(answer);
         }
         let reason = not_found(&self.config.candidates, others);
@@ -377,7 +398,29 @@ fn first_answer(
     }
 }
 
-/// 控えの一覧を、要求の話し方に合わせる。控えは最後に書いたときの話し方の形のまま（`2026-07-28` なら
+/// 組み込みのサーバーの情報（控えの `server-info.json` と同じ型・設計 D-18）: 名乗り・版・説明の文は
+/// `areka_mcp` の値で、できることは受け口と同じ「ツールだけ」。版の欄は読まれない（答えの版は
+/// [`first_answer`] が要求から決める）。
+fn builtin_info() -> ServerPeerInfo {
+    let tools_only = ServerCapabilities::builder().enable_tools().build();
+    ServerPeerInfo::new(ProtocolVersion::LATEST_WITH_INITIALIZE, tools_only)
+        .with_server_info(Implementation::new(SERVER_NAME, SERVER_VERSION))
+        .with_instructions(INSTRUCTIONS)
+}
+
+/// 組み込みのツールの一覧（控えの `tools.json` と同じ型・設計 D-18）: `areka_mcp` のツールの定義の列を、
+/// 受け口が登録表から組むのと同じ形で rmcp の型に写す。呼ばれるたびに組む（覚えない）。
+fn builtin_tools() -> ListToolsResult {
+    let tool = |spec: ToolSpec| {
+        let description = spec.description.map(Cow::Owned);
+        let mut tool = Tool::new_with_raw(spec.name, description, spec.input_schema);
+        tool.title = spec.title;
+        tool
+    };
+    ListToolsResult::with_all_items(all_specs().into_iter().map(tool).collect())
+}
+
+/// 控えか組み込みの一覧を、要求の話し方に合わせる。控えは最後に書いたときの話し方の形のまま（`2026-07-28` なら
 /// `resultType`・`ttlMs`・`cacheScope` 付き、旧式なら無し）なので、areka の受け口が版ごとに返す形に
 /// 揃える: `2026-07-28` 以降の要求（`_meta` に版がある）には 3 欄を付け（無いとクライアントが拒む）、
 /// 旧式の要求からは外す。`ttlMs` は 0 なので、クライアントは次も聞き直す（areka が見つかれば今の一覧に

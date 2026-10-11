@@ -6,7 +6,10 @@
 //!
 //! 受け口のパスと名乗りは `areka_mcp` の定数を読む。受け口が名乗る値と中継が見なす値が食い違えば、
 //! 中継が受け口を飛ばして「居ない」エラーを返すので、どの比較も赤になる（要件 8.2）。
-//! 机の 9801〜9830 へはつながない（候補は起こした受け口の番号だけ）。
+//!
+//! 最後の 1 本は、組み込みの答えの見張り（要件 8.6）: 本番のツールを全部登録した受け口が直接返す答えと、
+//! areka も控えも無い中継が自分で持っている答えを、同じ 5 つの版で比べる。
+//! 机の 9801〜9830 へはつながない（候補は、起こした受け口の番号か、誰も待ち受けていない番号だけ）。
 
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -20,6 +23,7 @@ use areka_mcp_bridge::service::run;
 use serde_json::{Value, json};
 use temp_path_kit::TempPath;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream};
+use tokio::net::TcpSocket;
 
 /// `initialize` を持たない版（`server/discover` で始め、要求ごとに `_meta` と札を付ける）。
 const STATELESS: &str = "2026-07-28";
@@ -256,4 +260,61 @@ async fn v2025_03_26_bridged_answers_equal_direct_answers() {
 #[tokio::test]
 async fn v2024_11_05_bridged_answers_equal_direct_answers() {
     compare("2024-11-05").await;
+}
+
+/// 組み込みの答えの見張り（要件 8.6・設計 D-18）: 本番のツールを全部登録した受け口が、最初の問い合わせと
+/// `tools/list` に直接返す答えと、areka も控えも無い中継の答え（中継が自分で持っている答え）が、5 つの
+/// 版のどれでも応答の全体で等しい。受け口の最初の答えか一覧と、中継の組み込みの答えの、片方だけが
+/// 変われば赤になる。ツールの本数は数で固定しない。
+#[tokio::test]
+async fn built_in_answers_equal_the_answers_of_the_real_receiver_in_all_five_versions() {
+    // 本番の登録（ツールは呼ばない。受け口へ届く要求の受信端は持ったままにする）。
+    let (registry, _requests) = areka_mcp::tools::all_entrances(areka_mcp::tools::REPLY_WAIT);
+    let server = areka_mcp::start(&[0], registry, None);
+    let receiver = server.local_addr().expect("空きポートで待ち受けている");
+    let receiver = receiver.port();
+    // 中継の候補は、束ねたまま待ち受けないソケットの番号（誰も応えない）だけ。
+    let held = TcpSocket::new_v4().expect("ソケットを作れる");
+    let any_port = "127.0.0.1:0".parse().expect("アドレスとして読める");
+    held.bind(any_port).expect("空きポートを束ねられる");
+    let nobody = held.local_addr().expect("番号が分かる").port();
+    let name = areka_mcp::SERVER_NAME;
+
+    for version in [
+        "2026-07-28",
+        "2025-11-25",
+        "2025-06-18",
+        "2025-03-26",
+        "2024-11-05",
+    ] {
+        // 中継は版ごとに新しく起こす（控えの置き場は空）。
+        let mut desk = Desk::start(nobody);
+        let first = if version == STATELESS {
+            let at = "/result/_meta/io.modelcontextprotocol~1serverInfo/name";
+            json!({"id": 1, "method": "server/discover", "at": at, "is": name})
+        } else {
+            let client = json!({"name": "desktop", "version": "1"});
+            let params =
+                json!({"protocolVersion": version, "capabilities": {}, "clientInfo": client});
+            json!({"id": 1, "method": "initialize", "params": params,
+                "at": "/result/serverInfo/name", "is": name})
+        };
+        // 「どちらも同じ的外れの答え」で通らないよう、直接の答えの 1 か所も見る。
+        let listed = json!({"id": 2, "method": "tools/list",
+            "at": "/result/tools/0/name", "is": "get_active_ghost_list"});
+        for case in [first, listed] {
+            let message = request(version, &case);
+            let direct = direct(receiver, version, &message);
+            let built_in = desk.ask(&message).await;
+            assert_eq!(
+                built_in, direct,
+                "{version} {case}: 組み込みの答え（左）が受け口の直接の答え（右）と違う"
+            );
+            let at = case["at"].as_str().expect("ポインタ");
+            assert_eq!(direct.pointer(at), Some(&case["is"]), "{version}: {direct}");
+        }
+        // 中継は受け口と話していない（控えは空のまま＝答えは自分で持っているもの）。
+        let cache = Cache::new(Some(desk.cache_dir.path().to_owned()));
+        assert!(cache.load_server_info().is_none() && cache.load_tools().is_none());
+    }
 }

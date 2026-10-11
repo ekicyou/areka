@@ -196,7 +196,7 @@
   - _Requirements: 8.5_
 
 - [ ] 8. areka も控えも無いときの組み込みの答え（2026-10-11 の裁定 6）
-- [ ] 8.1 中継が自分で持っている答えで、最初の問い合わせと `tools/list` に答える
+- [x] 8.1 中継が自分で持っている答えで、最初の問い合わせと `tools/list` に答える
   - テストを先に書いて赤を見てから実装する。形は設計 D-18 と「D-18 の補足」が正本
   - areka の MCP のクレートの公開面に 3 つ足す（足すだけ・受け口の答えは 1 字も変えない）: 説明の文の定数を外から読めるようにする・サーバーの版の定数を足す・本番の登録と同じ行と順でツールの定義の列を返す関数を足す（読めない行は登録と同じく記録 1 件で飛ばす）。受け口の最初の答えは、足した 2 つの定数を読む形に直す（同じ値を 2 か所に書かない）
   - areka の MCP のクレートのテスト: 定義の列が、本番の登録表から取り出した列と等しい（同じ名前・同じ順・同じ中身）の 1 本。外から読める名前の固定に 3 つ足す。受け口の既存のテストは変えずに緑のまま
@@ -308,3 +308,6 @@
 - 7: 実機で分かったこと＝⑴ Desktop は窓を閉じただけでは設定を読み直さない（本体がタスクバーに残る。本体ごと落として初めて中継が起きる）。説明書と help の「起動し直す」にその旨を足すかは完了のときに決める。⑵ Desktop は同じ設定の項目から中継を 2 つ起こす（チャットの分と Code の分と見られる・控えは同じ置き場を使い、壊れなかった）。⑶ エラーで答えた後、Desktop の Code の側は次の呼び出しの前に中継を閉じて起こし直した（結果は変わらない）。同じ中継のまま新しい areka へ届くことは、エラーを挟まない起こし直しで別に見た。⑷ この机の Desktop の記録の置き場は `%LOCALAPPDATA%\Claude\Logs`。
 - 7: 後片付けの申し送り＝Desktop の設定の `areka` の項目は開発者が外す（`command` がワークツリーの `target\t7\areka` を指す）。Desktop が起こした中継は Desktop を落とすまで動いたままで、その間は展開した場所の exe を消せない（完了でワークツリーを片付ける前に外して Desktop を起動し直す）。
 - 裁定（2026-10-11・5 点とも推しのとおり）を当てた: ⑴ help と説明書の「起動し直す」に「窓を閉じるだけでは Claude Desktop は終了しない・通知領域のアイコンから終了してから起動し直す」を足した（`help_tests.rs` の判定 1 つ）。⑵〜⑷ 要件 4.2・4.3・3.6・3.9 の文を実装の形に言い直した（コードは同じ）。⑸ 旧式の `server/discover` は要件 1.2 に例外の句を足した。要件に「開発者の裁定（2026-10-11）」の表が在る。確かめは `areka-mcp` のテスト・clippy・整形だけ（全体テストは完了のとき）。help の文が変わったので、配布 zip の `areka.exe` は実機確認のとき（コミット `96f4393`）と 1 文ぶん違う。
+- 8.1: areka も控えも無いときの最初の問い合わせと `tools/list` は、中継が組み込みの答えで答える（`service.rs` の `Bridge::absent` の順＝`ping` → 控え → 組み込み → エラー。`builtin_info`・`builtin_tools` が `areka-mcp` の公開の値 `SERVER_NAME`・`SERVER_VERSION`・`INSTRUCTIONS`・`tools::all_specs` から組む）。受け口の答えは 1 字も変わっていない。食い違いの見張りは `real_receiver_test.rs` の `built_in_answers_equal_the_answers_of_the_real_receiver_in_all_five_versions`（応答の全体・5 つの版・本数は数で固定しない）。
+- 8.1: ひっくり返したテスト＝`service_tests.rs` の `without_areka_an_inquiry_with_no_cache_of_its_kind_gets_the_error` → `…_gets_the_built_in_answer`（実装の前は `[Error, Error, Error, Error]` で赤）と、`exe_test.rs` の `a_broken_cache_and_a_broken_answer_leave_their_reason_on_stderr` の前半（名前はそのまま・実装の前は名乗りが `Null` で赤）。差の記録（`bridge-diff-areka.md`）が前の名前を 4 か所で引いているので 8.2 で直す。`exe_test.rs` の頭の注釈の `AREKA_MCP_PORT` の説明に「束ねたまま待ち受けない番号」を足すのも 8.2 で。
+- 8.1: exe の大きさ（x64・`cargo build --release -p areka-mcp-bridge`）は 3,155,456 → 3,182,080 バイト（約 26 KB の増え・依存は足していない）。配布スクリプトの建てでの値は 8.3 で取り直す。`service_tests.rs` は 869 行になった（次に足すなら分ける）。

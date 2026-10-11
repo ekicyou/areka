@@ -20,4 +20,9 @@ fn bridge_shared_names_are_readable_from_outside_the_crate() {
     );
     let _: fn(Option<&str>) -> Vec<u16> = areka_mcp::candidates_from_env_value;
     let _: Duration = areka_mcp::tools::REPLY_WAIT;
+
+    // 中継の組み込みの答えの元（説明の文・サーバーの版・ツールの定義の列）。説明の文の綴りは
+    // 固定しない（書き換える spec が別に居る）。
+    let _: (&str, &str) = (areka_mcp::INSTRUCTIONS, areka_mcp::SERVER_VERSION);
+    let _: fn() -> Vec<areka_mcp::ToolSpec> = areka_mcp::tools::all_specs;
 }

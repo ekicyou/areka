@@ -463,8 +463,57 @@ fn stdin_closed_while_stdout_is_never_read_exits_with_code_0_by_the_bound() {
     );
 }
 
-/// 要件 5.2・3.10・4.2: 失敗の理由は標準エラーに残る。読めない控えは無いものとして扱い、その
-/// ファイルと理由を残す。areka の JSON でない応答は、状態と本文の頭を残す（要求は送り直さない）。
+/// 要件 3.5・3.12・設計 D-18: areka も控えも無い（誰も待ち受けていない番号・空の控えの置き場）とき、
+/// `initialize` と `tools/list` に、中継が自分で持っている答えで答え、方法ごとに記録を残す。
+/// 組み込みの答えは控えに書かない（置き場にファイルができない）。終了コード 0。
+#[test]
+fn without_areka_or_a_cache_the_built_in_definitions_answer_and_leave_a_record() {
+    // 束ねたまま待ち受けないソケットの番号（落とすまで、並んで走るテストに取られない）。
+    let held = tokio::net::TcpSocket::new_v4().expect("make a socket");
+    let any_port = "127.0.0.1:0".parse().expect("an address");
+    held.bind(any_port).expect("bind a free port");
+    let port = held.local_addr().expect("the bound port").port();
+    let profile = TempPath::under_target("bridge-exe");
+    let input = [initialize(1), request(2, "tools/list", Value::Null)];
+
+    let done = run_bridge(port, profile.path(), &input.concat());
+
+    let Finished { stdout, stderr, .. } = &done;
+    assert_eq!(done.code, Some(0), "stdout: {stdout}\nstderr: {stderr}");
+    let answers = answer_lines(&done);
+    assert_eq!(answers.len(), 2, "stdout: {stdout}\nstderr: {stderr}");
+    let first = answer_to(&answers, 1);
+    assert_eq!(
+        first["result"]["serverInfo"]["name"], SERVER_NAME,
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
+    let tools = answer_to(&answers, 2)["result"]["tools"].as_array();
+    assert!(
+        tools.is_some_and(|tools| !tools.is_empty()),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
+    for method in ["initialize", "tools/list"] {
+        built_in_record(stderr, method);
+    }
+    let cache_dir = profile.child("mcp-bridge");
+    let left = std::fs::read_dir(&cache_dir).map_or(0, Iterator::count);
+    assert_eq!(left, 0, "files are left in {cache_dir:?}");
+}
+
+/// 標準エラーに、組み込みの答えで答えた記録の行が、この方法で在ること。
+fn built_in_record(stderr: &str, method: &str) {
+    let words = "[bridge] areka not found; answered from the built-in definitions";
+    let method = format!("method=\"{method}\"");
+    let found = |line: &str| line.contains(words) && line.contains(&method);
+    assert!(
+        stderr.lines().any(found),
+        "stderr lacks {words:?} with {method}: {stderr}"
+    );
+}
+
+/// 要件 5.2・3.10・4.2: 失敗の理由は標準エラーに残る。読めない控えは無いものとして扱い（最初の
+/// 問い合わせには組み込みの答えで答える＝要件 3.5）、そのファイルと理由を残す。areka の JSON でない
+/// 応答は、状態と本文の頭を残す（要求は送り直さない）。
 #[test]
 fn a_broken_cache_and_a_broken_answer_leave_their_reason_on_stderr() {
     let profile = TempPath::under_target("bridge-exe");
@@ -479,17 +528,20 @@ fn a_broken_cache_and_a_broken_answer_leave_their_reason_on_stderr() {
     let Finished { stdout, stderr, .. } = &done;
     assert_eq!(done.code, Some(0), "stdout: {stdout}\nstderr: {stderr}");
     let answers = answer_lines(&done);
-    let message = answer_to(&answers, 1)["error"]["message"].as_str();
-    let not_found = format!("Server not available: {SERVER_NAME} not found on 127.0.0.1 ports");
-    assert!(
-        message.is_some_and(|message| message.starts_with(&not_found)),
+    // 壊れた控えは使わず、組み込みの答えで答える。壊れた控えの警告は残り、ファイルは書き直さない。
+    let first = answer_to(&answers, 1);
+    assert_eq!(
+        first["result"]["serverInfo"]["name"], SERVER_NAME,
         "stdout: {stdout}\nstderr: {stderr}"
     );
+    built_in_record(stderr, "initialize");
     let warned = record(stderr, "[bridge] the cache is not readable JSON");
     assert!(
         warned.contains("WARN") && warned.contains(&broken.display().to_string()),
         "{warned}"
     );
+    let kept = std::fs::read(&broken).expect("read the broken cache");
+    assert_eq!(kept, b"\xff\xfe not json", "the broken cache was rewritten");
 
     // areka が `tools/call` に 500 の平文で答える。
     let areka = FakeServer::start(Script::areka().on("tools/call", Reply::Text(500, "boom")));

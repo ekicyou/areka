@@ -7,7 +7,8 @@
 
 use std::time::Duration;
 
-use areka_mcp::SERVER_NAME;
+use areka_mcp::tools::all_specs;
+use areka_mcp::{INSTRUCTIONS, SERVER_NAME, SERVER_VERSION, ToolSpec};
 use rmcp::service::QuitReason;
 use serde_json::{Value, json};
 use temp_path_kit::TempPath;
@@ -439,30 +440,94 @@ fn stateless() -> Value {
     json!({"_meta": stateless_meta()})
 }
 
-/// 控えの一覧で `2026-07-28` の要求に答える形: areka の受け口がその版で付けるのと同じ 3 欄を補う
-/// （`ttlMs` が 0 なので、クライアントは次も聞き直す）。
-fn stateless_tools_from_the_cache() -> Value {
-    let mut listed = tools();
+/// 控えか組み込みの一覧で `2026-07-28` の要求に答える形: areka の受け口がその版で付けるのと同じ 3 欄を
+/// 補う（`ttlMs` が 0 なので、クライアントは次も聞き直す）。
+fn in_stateless_form(mut listed: Value) -> Value {
     listed["resultType"] = json!("complete");
     listed["ttlMs"] = json!(0);
     listed["cacheScope"] = json!("private");
     listed
 }
 
-/// 4 種類の要求（`initialize`・`server/discover`・`tools/list`・`tools/call`）を送り、それぞれが結果で
-/// 答えられたかを返す。結果でない答えは、この理由の「居ない」エラーであること。
-async fn answered(desk: &mut Desk, reason: &str) -> [bool; 4] {
+/// 組み込みの答えの `initialize` の結果（返す版がこれ）。名乗り・版・説明の文は `areka_mcp` の値。
+fn built_in_info(version: &str) -> Value {
+    json!({
+        "protocolVersion": version,
+        "capabilities": {"tools": {}},
+        "serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION},
+        "instructions": INSTRUCTIONS,
+    })
+}
+
+/// 組み込みの答えの `server/discover` の結果。
+fn built_in_discovered() -> Value {
+    let mut expected = discovered(SERVER_VERSION);
+    expected["instructions"] = json!(INSTRUCTIONS);
+    expected
+}
+
+/// 組み込みの答えの `tools/list` の結果（旧式の話し方の形）: `areka_mcp` のツールの定義の列を、同じ順で
+/// （本数は数で固定しない）。
+fn built_in_tools() -> Value {
+    let tool = |spec: ToolSpec| {
+        let mut tool = json!({"name": spec.name, "inputSchema": spec.input_schema});
+        if let Some(title) = spec.title {
+            tool["title"] = json!(title);
+        }
+        if let Some(description) = spec.description {
+            tool["description"] = json!(description);
+        }
+        tool
+    };
+    let tools: Vec<Value> = all_specs().into_iter().map(tool).collect();
+    assert!(!tools.is_empty(), "areka_mcp のツールの定義の列が空");
+    json!({"tools": tools})
+}
+
+/// 答えの元。
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum By {
+    /// 控え（[`cached_info`]・[`tools`]）。
+    Cache,
+    /// 中継が自分で持っている答え（`areka_mcp` の値）。
+    BuiltIn,
+    /// 「居ない」エラー。
+    Error,
+}
+
+/// 4 種類の要求（`initialize`・`server/discover`・`tools/list`・`tools/call`）を送り、それぞれが何で
+/// 答えられたかを返す。結果は、控えの答えの全体か組み込みの答えの全体のどちらかと同じであること。
+/// 結果でない答えは、この理由の「居ない」エラーであること。
+async fn answered(desk: &mut Desk, reason: &str) -> [By; 4] {
+    let mut cached_discovered = discovered("1.2.3");
+    cached_discovered["instructions"] = json!("cached words");
+    let initialize = initialize_params("2025-11-25");
+    let call = json!({"name": "get_status"});
+    // （方法, 送る中身, 控えの答え, 組み込みの答え）。
     let asks = [
-        ("initialize", initialize_params("2025-11-25")),
-        ("server/discover", stateless()),
-        ("tools/list", json!({})),
-        ("tools/call", json!({"name": "get_status"})),
+        (
+            "initialize",
+            initialize,
+            cached_info(),
+            built_in_info("2025-11-25"),
+        ),
+        (
+            "server/discover",
+            stateless(),
+            cached_discovered,
+            built_in_discovered(),
+        ),
+        ("tools/list", json!({}), tools(), built_in_tools()),
+        ("tools/call", call, Value::Null, Value::Null),
     ];
-    let mut got = [false; 4];
-    for (slot, (method, params)) in got.iter_mut().zip(asks) {
+    let mut got = [By::Error; 4];
+    for (slot, (method, params, cached, built_in)) in got.iter_mut().zip(asks) {
         let reply = desk.ask(json!(method), method, params).await;
-        *slot = reply.get("result").is_some();
-        if !*slot {
+        if reply == result(json!(method), cached) {
+            *slot = By::Cache;
+        } else if reply == result(json!(method), built_in) {
+            *slot = By::BuiltIn;
+        } else {
             assert_eq!(reply, unavailable(json!(method), reason), "{method}");
         }
     }
@@ -500,7 +565,7 @@ async fn without_areka_the_cache_answers_the_first_inquiries_and_the_tool_list()
     let reply = desk.ask(json!(2), "tools/list", json!({})).await;
     assert_eq!(reply, result(json!(2), tools()));
     let reply = desk.ask(json!(3), "tools/list", stateless()).await;
-    assert_eq!(reply, result(json!(3), stateless_tools_from_the_cache()));
+    assert_eq!(reply, result(json!(3), in_stateless_form(tools())));
 
     let pong = desk.ask(json!("p"), "ping", json!({})).await;
     assert_eq!(pong, result(json!("p"), json!({})));
@@ -529,10 +594,12 @@ async fn without_areka_the_cache_answers_the_first_inquiries_and_the_tool_list()
     assert!(sent.iter().all(checks), "{sent:?}");
 }
 
-/// 当たる控えが無い問い合わせにはエラー（要件 3.5）。控えは種類ごとに見る: サーバーの情報だけ・一覧だけが
-/// あるときは、ある側だけ控えで答える。`ping` は控えが無くても自分で答える（要件 3.7）。
+/// 当たる控えが無い問い合わせには、エラーでなく組み込みの答え（要件 3.5・設計 D-18）。控えは種類ごとに
+/// 見る（要件 3.4）: サーバーの情報だけ・一覧だけがあるときは、ある側は控えで、無い側は組み込みの答えで
+/// 答える。`tools/call` はどの場合も「居ない」エラー。`ping` は控えが無くても自分で答える（要件 3.7）。
 #[tokio::test]
-async fn without_areka_an_inquiry_with_no_cache_of_its_kind_gets_the_error() {
+async fn without_areka_an_inquiry_with_no_cache_of_its_kind_gets_the_built_in_answer() {
+    use By::{BuiltIn, Cache, Error};
     let other = FakeServer::start(Script::named("other"));
     let port = other.port();
     let mut desk = Desk::start(vec![port]);
@@ -540,21 +607,133 @@ async fn without_areka_an_inquiry_with_no_cache_of_its_kind_gets_the_error() {
         "{SERVER_NAME} not found on 127.0.0.1 ports {port}; port {port} answered as \"other\""
     );
 
-    assert_eq!(answered(&mut desk, &reason).await, [false; 4]);
+    let got = answered(&mut desk, &reason).await;
+    assert_eq!(got, [BuiltIn, BuiltIn, BuiltIn, Error], "控えなし");
     let pong = desk.ask(json!(0), "ping", json!({})).await;
     assert_eq!(pong, result(json!(0), json!({})));
 
     seed(&desk.cache(), Some(cached_info()), None);
     let got = answered(&mut desk, &reason).await;
-    assert_eq!(got, [true, true, false, false], "サーバーの情報だけ");
+    assert_eq!(got, [Cache, Cache, BuiltIn, Error], "サーバーの情報だけ");
 
     let info_file = desk.root.child(CACHE_DIR).join("server-info.json");
     std::fs::remove_file(info_file).expect("サーバーの情報の控えを消せる");
     seed(&desk.cache(), None, Some(tools()));
     let got = answered(&mut desk, &reason).await;
-    assert_eq!(got, [false, false, true, false], "一覧だけ");
+    assert_eq!(got, [BuiltIn, BuiltIn, Cache, Error], "一覧だけ");
 
     desk.close().await;
+}
+
+/// areka も控えも無いときの組み込みの答えの形（設計 D-18）: 控えの答えと同じ整えを通る。`initialize` の
+/// 版は要求から決まり、`2026-07-28` の `tools/list` には 3 欄が付き、旧式には付かない。そのときも
+/// `ping` は空の結果、ほかの要求は「居ない」エラーのまま（要件 3.6・3.7）。組み込みの答えは控えに
+/// 書かない（答えた後も、置き場にファイルが無い）。
+#[tokio::test]
+async fn without_areka_or_a_cache_the_built_in_answers_take_the_dialect_of_the_request() {
+    let other = FakeServer::start(Script::named("other"));
+    let port = other.port();
+    let mut desk = Desk::start(vec![port]);
+
+    for (asked, answered) in [("2025-06-18", "2025-06-18"), ("2026-07-28", "2025-11-25")] {
+        let reply = desk
+            .ask(json!(asked), "initialize", initialize_params(asked))
+            .await;
+        assert_eq!(reply, result(json!(asked), built_in_info(answered)));
+    }
+    let reply = desk.ask(json!(1), "server/discover", stateless()).await;
+    assert_eq!(reply, result(json!(1), built_in_discovered()));
+    let reply = desk.ask(json!(2), "tools/list", json!({})).await;
+    assert_eq!(reply, result(json!(2), built_in_tools()));
+    let reply = desk.ask(json!(3), "tools/list", stateless()).await;
+    let expected = in_stateless_form(built_in_tools());
+    assert_eq!(reply, result(json!(3), expected));
+
+    let pong = desk.ask(json!("p"), "ping", json!({})).await;
+    assert_eq!(pong, result(json!("p"), json!({})));
+    let reason = format!(
+        "{SERVER_NAME} not found on 127.0.0.1 ports {port}; port {port} answered as \"other\""
+    );
+    let call = json!({"name": "get_status"});
+    let reply = desk.ask(json!(4), "tools/call", call).await;
+    assert_eq!(reply, unavailable(json!(4), &reason));
+    let reply = desk.ask(json!("u"), "x/unknown", json!({})).await;
+    assert_eq!(reply, unavailable(json!("u"), &reason));
+
+    let root = desk.close().await;
+    let dir = root.child(CACHE_DIR);
+    let left = std::fs::read_dir(&dir).map_or(0, Iterator::count);
+    assert_eq!(left, 0, "控えの置き場 {dir:?} にファイルができている");
+}
+
+/// 読めない控え・名乗りの無いサーバーの情報の控えは、無いものとして組み込みの答えへ進む（要件 3.10・
+/// 3.5）。組み込みの答えで控えを書き直さない（置き場のファイルは置いたときのまま）。
+#[tokio::test]
+async fn an_unreadable_or_nameless_cache_falls_through_to_the_built_in_answer() {
+    use By::{BuiltIn, Error};
+    let other = FakeServer::start(Script::named("other"));
+    let port = other.port();
+    let mut desk = Desk::start(vec![port]);
+    let reason = format!(
+        "{SERVER_NAME} not found on 127.0.0.1 ports {port}; port {port} answered as \"other\""
+    );
+    let dir = desk.root.child(CACHE_DIR);
+    let files = ["server-info.json", "tools.json"].map(|name| dir.join(name));
+    let broken = b"\xff\xfe not json";
+    std::fs::create_dir_all(&dir).expect("控えの置き場を作れる");
+    for file in &files {
+        std::fs::write(file, broken).expect("壊れた控えを置ける");
+    }
+
+    let got = answered(&mut desk, &reason).await;
+    assert_eq!(got, [BuiltIn, BuiltIn, BuiltIn, Error], "読めない控え");
+    for file in &files {
+        let kept = std::fs::read(file).expect("置いた控えが残っている");
+        assert_eq!(kept, broken, "{file:?}");
+    }
+
+    // 読めるが、名乗り（`serverInfo`）の無いサーバーの情報。
+    let nameless = json!({
+        "protocolVersion": "2025-11-25",
+        "capabilities": {"tools": {}},
+        "instructions": "cached words",
+    });
+    seed(&desk.cache(), Some(nameless), None);
+    let got = answered(&mut desk, &reason).await;
+    assert_eq!(got, [BuiltIn, BuiltIn, BuiltIn, Error], "名乗りの無い控え");
+
+    desk.close().await;
+}
+
+/// 組み込みの答えで `initialize` と `tools/list` に答えた後で areka が現れると、次の `tools/call` は
+/// areka へ届いて結果が返り、以降は areka の今の答えで応える（要件 3.12・3.9: 居ないと答えた後も、
+/// 要求のたびに探す）。
+#[tokio::test]
+async fn after_built_in_answers_the_next_tool_call_reaches_areka_once_it_appears() {
+    let fake = FakeServer::start(Script::named("ssp-mcp-server"));
+    let mut desk = Desk::start(vec![fake.port()]);
+    let reply = desk
+        .ask(json!(1), "initialize", initialize_params("2025-11-25"))
+        .await;
+    assert_eq!(reply, result(json!(1), built_in_info("2025-11-25")));
+    let reply = desk.ask(json!(2), "tools/list", json!({})).await;
+    assert_eq!(reply, result(json!(2), built_in_tools()));
+
+    let done = json!({"content": [{"type": "text", "text": "done"}]});
+    let script = Script::areka()
+        .on("tools/list", Reply::Result(tools()))
+        .on("tools/call", Reply::Result(done.clone()));
+    fake.rescript(script);
+    let call = json!({"name": "get_status", "arguments": {}});
+    let reply = desk.ask(json!(3), "tools/call", call).await;
+    assert_eq!(reply, result(json!(3), done));
+    let reply = desk.ask(json!(4), "tools/list", json!({})).await;
+    assert_eq!(reply, result(json!(4), tools()));
+
+    desk.close().await;
+    let sent = fake.requests();
+    assert_eq!(fake.requests_of("tools/call").len(), 1, "{sent:?}");
+    assert_eq!(handshakes(&fake), 1, "{sent:?}");
 }
 
 /// 「居ない」エラーの文（設計 D-9）: 候補の番号を候補の順に並べ、areka でない名乗りが応えた番号と名乗りを
@@ -583,26 +762,35 @@ async fn the_not_found_error_names_the_candidates_and_who_answered_instead() {
     desk.close().await;
 }
 
-/// `AREKA_MCP_PORT=0`（候補が空）: 探さず、置き場に控えがあっても使わず、`id` を持つ全部（`ping` も）に
-/// 「待ち受けない設定」のエラー（要件 2.6）。通知には何も出さず、エラーの後も次の行に答える（要件 4.6）。
+/// `AREKA_MCP_PORT=0`（候補が空）: 探さず、控えが無くても組み込みの答えを使わず、置き場に控えがあっても
+/// 使わず、`id` を持つ全部（`ping` も）に「待ち受けない設定」のエラー（要件 2.6）。通知には何も出さず、
+/// エラーの後も次の行に答える（要件 4.6）。
 #[tokio::test]
 async fn port_zero_answers_every_request_with_the_disabled_error() {
     let mut desk = Desk::start(Vec::new());
-    seed(&desk.cache(), Some(cached_info()), Some(tools()));
 
-    let asks = [
-        ("ping", json!({})),
-        ("initialize", initialize_params("2025-11-25")),
-        ("server/discover", stateless()),
-        ("tools/list", json!({})),
-        ("tools/call", json!({"name": "get_status"})),
-    ];
-    for (method, params) in asks {
-        desk.send(notification("notifications/x-note", json!({})))
-            .await;
-        let reply = desk.ask(json!(method), method, params).await;
-        let reason = "AREKA_MCP_PORT=0 (areka does not listen)";
-        assert_eq!(reply, unavailable(json!(method), reason), "{method}");
+    for seeded in [false, true] {
+        if seeded {
+            seed(&desk.cache(), Some(cached_info()), Some(tools()));
+        }
+        let asks = [
+            ("ping", json!({})),
+            ("initialize", initialize_params("2025-11-25")),
+            ("server/discover", stateless()),
+            ("tools/list", json!({})),
+            ("tools/call", json!({"name": "get_status"})),
+        ];
+        for (method, params) in asks {
+            desk.send(notification("notifications/x-note", json!({})))
+                .await;
+            let reply = desk.ask(json!(method), method, params).await;
+            let reason = "AREKA_MCP_PORT=0 (areka does not listen)";
+            assert_eq!(
+                reply,
+                unavailable(json!(method), reason),
+                "{method}（控え: {seeded}）"
+            );
+        }
     }
     desk.close().await;
 }
@@ -637,7 +825,7 @@ async fn a_bridge_started_later_answers_from_the_cache_an_earlier_one_left() {
     assert_eq!(reply, result(json!(1), discovered("0.0.0")));
     // 旧式の話し方で書かれた控えの一覧に、`2026-07-28` の 3 欄を補う。
     let reply = modern.ask(json!(2), "tools/list", stateless()).await;
-    assert_eq!(reply, result(json!(2), stateless_tools_from_the_cache()));
+    assert_eq!(reply, result(json!(2), in_stateless_form(tools())));
     modern.close().await;
 
     // areka に届いた一覧の要求は最初の中継の 1 つだけで、立てたつなぎ先も 1 つ。
