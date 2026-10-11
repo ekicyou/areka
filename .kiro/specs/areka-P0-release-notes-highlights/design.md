@@ -287,10 +287,12 @@ param(
     [Parameter(ParameterSetName = 'Body', Mandatory)][switch]$Body,
     [Parameter(ParameterSetName = 'SelfTest', Mandatory)][switch]$SelfTest,
 
-    # v を付けない版（例 0.0.3）。-SelfTest の外では必須
+    # v を付けない版（例 0.0.3）。-SelfTest の外では必須。
+    # ファイルの名前と印字に使うので、版に現れる ASCII の字だけを通す
     [Parameter(ParameterSetName = 'Check', Mandatory)]
     [Parameter(ParameterSetName = 'Notes', Mandatory)]
-    [Parameter(ParameterSetName = 'Body', Mandatory)][string]$Version,
+    [Parameter(ParameterSetName = 'Body', Mandatory)]
+    [ValidatePattern('^[0-9A-Za-z.+-]+$')][string]$Version,
 
     # owner/name（例 ekicyou/areka）。リンクの URL を作る
     [Parameter(ParameterSetName = 'Notes', Mandatory)]
@@ -314,15 +316,16 @@ param(
 | `-SelfTest` | 下の「自分の検査」を回す | 0 全部通った／1 |
 
 - 知らない引数は断る（`[CmdletBinding()]`）。引数の組み合わせの誤りは PowerShell の引数の誤りとして落ちる。
-- Preconditions: 作業フォルダはどこでもよい（道具がリポジトリの根へ移る）。`-Notes` は、`PrevTag` と `To` が作業木の `git` から見えること。
+- Preconditions: 作業フォルダはどこでもよい。道具は今のフォルダを変えない。リポジトリの根は自分の置き場所（`$PSScriptRoot`）から決め、`git` は `-C {根}` を付けて呼ぶ。`-Out` の相対パスは、呼んだ側の今のフォルダから数える。`-Notes` は、`PrevTag` と `To` が作業木の `git` から見えること。
 - Postconditions: 終了コード 0 のとき、`-Out` のファイルは在って空でない。
 - Invariants: 同じ入力（題名の並び・版・`PrevTag`・`Repository`・定型文）から、1 バイトも違わない出力になる（日付や時刻を書かない）。
 
 **中の関数（`-SelfTest` が直接呼ぶ。入出力は文字列だけで、ファイルにも `git` にも触らない）**
 
 ```powershell
-# 欠けの名前の並びを返す（空なら通った）。$Text が $null ならファイルが無い扱い
-function Test-Highlights([AllowNull()][string]$Text) # -> [pscustomobject[]] @{ Key; Line; Detail }
+# 欠けの名前の並びを返す（空なら通った）。$Text が $null ならファイルが無い扱い。
+# 引数に型を付けない: [string] を付けると PowerShell が $null を空の文字列に変え、無いファイルと空のファイルを分けられない
+function Test-Highlights([AllowNull()]$Text) # -> [pscustomobject[]] @{ Key; Line; Detail }
 # 題名の並びから詳しいリリースノートの全文を返す
 function Format-ReleaseNotes([string[]]$Subjects, [string]$Version, [string]$PrevTag, [string]$Repository, [pscustomobject]$Strings) # -> [string]
 # 見どころの文とリンクの文から本文を返す
@@ -335,12 +338,13 @@ function Format-Body([string]$Highlights, [string]$Version, [string]$Repository,
 |---|---|---|
 | `missing-file` | `doc/release-notes/v{版}.md` が無い（この名前のファイルだけを見る・2.6） | 1.1, 2.1 |
 | `no-highlight` | `### ` で始まる行が 0 | 1.2, 2.1 |
-| `heading-no-pr` | `### ` の行のうち、行末が `\(#\d+(, #\d+)*\)` でないもの（行の番号を付ける） | 1.3, 1.4, 2.1 |
+| `heading-no-pr` | `### ` の行のうち、行末が `\(#[0-9]+(, #[0-9]+)*\)` でないもの（行の番号を付ける） | 1.3, 1.4, 2.1 |
 | `spec-name` | `areka-P0-` が現れる（行の番号を付ける・大文字と小文字を区別する） | 1.5, 2.1 |
 | `no-source-link` | 出典のリンクの字の並びが無い | 1.7, 2.1 |
-| `first-name-not-linked` | 最初に現れる `Claudia` が、出典のリンクの中の物でない | 1.7 |
+| `first-name-not-linked` | 出典のリンクが在り、それより前に `Claudia` が現れる（リンクが 1 つも無いときは、`no-source-link` だけを出す） | 1.7 |
 
 - 欠けは 1 つ目で止めず、全部を集めて `FAIL {Key} line {行}: {ASCII の説明}` の形で印字する（2.2）。行の中身は印字しない（日本語を画面へ出さない）。
+- ファイルの全体の欠け（`missing-file`・`no-highlight`・`no-source-link`）は、行を 0 で印字する。
 - 通ったときは `OK highlights v{版} ({見どころの数} item(s))` を印字する。
 
 **詳しいリリースノートの形（要件 4）**
@@ -400,7 +404,7 @@ v0.0.2 から v0.0.3 までに入ったすべての変更です（37 件）。
 - 落ちた項目は `FAIL selftest {名前}` を全部印字し、最後に 1 回で終了コードを決める。
 
 **Implementation Notes**
-- Integration: リポジトリの根へ移る・`utf8-child.ps1` を読み込む・冒頭のコメントのヘルプは、`tools/crates-io.ps1` の流儀に合わせる。
+- Integration: 今のフォルダを変えない（リポジトリの根は自分の置き場所 `$PSScriptRoot` から決め、`git` は `-C {根}` を付けて呼び、`-Out` の相対パスは呼んだ側の今のフォルダから数える）・`utf8-child.ps1` を読み込む・冒頭のコメントのヘルプは、`tools/crates-io.ps1` の流儀に合わせる。
 - Validation: 段 `encoding check` が、このスクリプトを自動で対象にする（コメントの外は ASCII だけ）。
 - Risks: 定型文の JSON が壊れると `-Notes` と `-Body` が落ちる。`-SelfTest` が全体テストで先に落ちる。
 
