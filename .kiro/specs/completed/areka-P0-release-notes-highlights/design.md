@@ -135,7 +135,7 @@ tools/
     └── expected-body.md           # highlights-ok.md から作られるべき本文
 .claude/skills/release/
 └── SKILL.md                       # リリースの入口（`/release`）。手順は写さず、リリースの手順の文書を読んで回す
-.kiro/specs/areka-P0-release-notes-highlights/verification/
+.kiro/specs/completed/areka-P0-release-notes-highlights/verification/
 ├── release-cycle-sweep.md         # リリースの手順の文書の洗い出し（直した所・直さなかった所と理由）
 ├── docs-sweep.md                  # 生きている文書の洗い出し
 ├── workflow-check.md              # workflow の静的な確かめ・段の本文の手元の走り・乾いた走りの結果
