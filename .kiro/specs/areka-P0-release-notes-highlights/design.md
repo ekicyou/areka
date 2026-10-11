@@ -148,6 +148,7 @@ tools/
 - `.kiro/steering/tech.md` — 全体テストの段の説明に `release notes check` を足す。リリース CI の説明（zip と SHA256 を作って公開する）に、本文と詳しいリリースノートを足す。
 - `.kiro/steering/structure.md` — `tools/` の行に `release-notes.ps1` を、`.github/` の `release.yml` の説明に本文と添付を足す。`doc/release-notes/` を 1 行で書く。
 - `.claude/skills/kiro-complete/SKILL.md` — 全体テストの段の一覧の写しに 1 行足す（段の名前の追随だけ。手順は変えない）。
+- `.kiro/steering/workflow.md` — Test Gate のかっこの中の段の並びに 1 語足す（段の名前の追随だけ。手順は変えない）。
 
 ## System Flows
 
@@ -507,7 +508,7 @@ v0.0.2 から v0.0.3 までに入ったすべての変更です（37 件）。
 
 ### 文書の追随と全体テストの段
 
-- `tools/test-all.ps1`: `Step 'release notes check' { pwsh -NoProfile -File tools/release-notes.ps1 -SelfTest }` を `encoding check` の後ろに足す（8.5）。段の一覧の写し（冒頭のコメント・`tech.md`・`structure.md`・`kiro-complete` の段の一覧）に同じ名前を足す。
+- `tools/test-all.ps1`: `Step 'release notes check' { pwsh -NoProfile -File tools/release-notes.ps1 -SelfTest }` を `encoding check` の後ろに足す（8.5）。段の一覧の写し（冒頭のコメント・`tech.md`・`structure.md`・`kiro-complete` の段の一覧・`workflow.md` の Test Gate のかっこ）に同じ名前を足す。
 - 生きている文書の洗い出し（8.1）は、実装でやり直して `verification/docs-sweep.md` に記録する。設計の時点で直すと決めた所は Modified Files の `tech.md`・`structure.md` である。`README.md`・`dist/README.txt`・`doc/crates-io-publish.md` は、zip の入手と Release の公開の事実だけを書いていて、本文の作り方にも添付の数にも触れていないので、直さない。
 - 完了した spec の文書（`.kiro/specs/completed/`）は書き換えない（8.2）。公開の段の新しい形の正本は本書である。
 
