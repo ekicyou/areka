@@ -6,5 +6,6 @@
   "headFix": "不具合の修正",
   "headPerf": "性能の改善",
   "headOther": "そのほかの変更",
-  "headInternal": "開発の内部の作業など"
+  "headInternal": "開発の内部の作業など",
+  "bodyLink": "すべての変更は、添付の [{asset}]({url}) にまとめてありますわ。"
 }

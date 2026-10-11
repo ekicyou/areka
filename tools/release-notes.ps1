@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-  リリースの見どころのファイル（doc/release-notes/v{版}.md）の形を検査し、詳しいリリースノートを作る。
+  リリースの見どころのファイル（doc/release-notes/v{版}.md）の形を検査し、詳しいリリースノートと Release の本文を作る。
 
 .DESCRIPTION
-  -Check と -SelfTest は読むだけで、何も書かない。-Notes が書くのは -Out のファイル 1 つだけ。
+  -Check と -SelfTest は読むだけで、何も書かない。-Notes と -Body が書くのは -Out のファイル 1 つだけ。
   画面へ出す文は ASCII だけで、見どころの行の中身も題名も印字しない。
   端末の文字コードは読みも書きもしない。今のフォルダを変えない。呼ばれた場所によらず、このスクリプトの在るリポジトリを見る。
   見どころの書き方の決まりは doc/release-notes/README.md に在る。
@@ -27,11 +27,19 @@
           形が合わない＝内部の作業。載せるのは題名の全体
           載せる文から spec 名の印をすべて外す（外した跡にまた現れたら、無くなるまで外す）
         見出しの中は git log の順（新しい順）。0 件の見出しは出さない。
+    -Body -Version {版} -Repository {owner/name} -Out {ファイル}
+        先に -Check と同じ検査を回す。欠けが在れば同じ FAIL の行を印字し、何も書かずに終わる。
+        通れば Release の本文を -Out に書く（LF・BOM なしの UTF-8。-Out の相対パスの数え方は -Notes と同じ）:
+          見どころのファイルの中身（末尾の空行を除く）／空行／---／空行／詳しいリリースノートの添付へのリンクの文
+        リンクの先は https://github.com/{owner/name}/releases/download/v{版}/{添付の名前}。
+          OK release body v{版}
+          FAIL strings: ...                        定型文が読めない
     -SelfTest
         自分の検査。判定を 1 つずつ「ok selftest {名前}」か「FAIL selftest {名前}」で印字する。
           定型文のファイルが読めて、鍵がそろっている
           見本の題名（tools/release-notes-fixture/subjects.txt）から作った文が expected-notes.md と 1 字違わず同じ
           見本から fix と perf の製品の変更を除き、一つ前のタグを空にして作った文が expected-notes-from-start.md と同じ
+          見本の見どころ（highlights-ok.md）から作った本文が expected-body.md と 1 字違わず同じ（末尾に空行を足しても同じ）
           見本（tools/release-notes-fixture/highlights-ok.md）が通る
           見本から 1 か所ずつ外した文が、それぞれ決まった欠けの名前だけで落ちる
           見出しの番号の後ろに字を続けた文が落ちる／大文字と小文字の違う spec 名の印は通る／欠けを重ねた文が全部を返す
@@ -46,21 +54,23 @@
     no-source-link         出典のリンクが無い
     first-name-not-linked  出典のリンクより前に「Claudia」が在る
 
-  終了コード: 0 通った／1 欠けが在る（-Notes は git の失敗か定型文が読めない・-SelfTest は落ちた判定が在る）
+  終了コード: 0 通った／1 欠けが在る（-Notes は git の失敗か定型文が読めない・-Body は欠けか定型文が読めない・-SelfTest は落ちた判定が在る）
 
   較正値（変更はスクリプト冒頭の「較正値」の 1 か所だけ）:
     HIGHLIGHTS_DIR  見どころのフォルダ
     SOURCE_URL      出典の URL（doc/release-notes/README.md と同じ値）
     SOURCE_LINK     出典のリンク（最初の「Claudia」の書き方）
     SPEC_MARK       spec 名の印
+    ASSET_NAME      詳しいリリースノートの添付の名前の形（{version}＝版）
     STRINGS_FILE    日本語の定型文のファイル（このスクリプトと同じフォルダ）
-    NOTES_KEYS      定型文の鍵。{version}＝版・{prev}＝一つ前のタグ・{count}＝件数 に置き換わるのは題と範囲の文だけ
+    NOTES_KEYS      定型文の鍵。{version}＝版・{prev}＝一つ前のタグ・{count}＝件数 に置き換わるのは題と範囲の文だけ。
+                    本文の末尾のリンクの文（bodyLink）は {asset}＝添付の名前・{url}＝添付の URL に置き換わる
 
 .PARAMETER Version
   v を付けない版（例 0.0.3）。
 
 .PARAMETER Repository
-  owner/name（例 ekicyou/areka）。PR へのリンクの URL を作る。
+  owner/name（例 ekicyou/areka）。PR へのリンクと、添付へのリンクの URL を作る。
 
 .PARAMETER PrevTag
   一つ前のタグ（例 v0.0.2）。空なら最初のコミットから。
@@ -74,6 +84,7 @@
 .EXAMPLE
   pwsh -NoProfile -File tools/release-notes.ps1 -Check -Version 0.0.3
   pwsh -NoProfile -File tools/release-notes.ps1 -Notes -Version 0.0.3 -Repository ekicyou/areka -PrevTag v0.0.2 -Out target/release-notes/release-notes-v0.0.3.md
+  pwsh -NoProfile -File tools/release-notes.ps1 -Body -Version 0.0.3 -Repository ekicyou/areka -Out target/release-notes/release-body-v0.0.3.md
   pwsh -NoProfile -File tools/release-notes.ps1 -SelfTest
 #>
 #Requires -Version 7
@@ -82,17 +93,21 @@
 param(
     [Parameter(ParameterSetName = 'Check', Mandatory)][switch]$Check,
     [Parameter(ParameterSetName = 'Notes', Mandatory)][switch]$Notes,
+    [Parameter(ParameterSetName = 'Body', Mandatory)][switch]$Body,
     [Parameter(ParameterSetName = 'SelfTest', Mandatory)][switch]$SelfTest,
 
     # ファイルの名前と印字に使うので、版に現れる ASCII の字だけを通す
     [Parameter(ParameterSetName = 'Check', Mandatory)]
     [Parameter(ParameterSetName = 'Notes', Mandatory)]
+    [Parameter(ParameterSetName = 'Body', Mandatory)]
     [ValidatePattern('^[0-9A-Za-z.+-]+$')][string]$Version,
 
-    [Parameter(ParameterSetName = 'Notes', Mandatory)][string]$Repository,
+    [Parameter(ParameterSetName = 'Notes', Mandatory)]
+    [Parameter(ParameterSetName = 'Body', Mandatory)][string]$Repository,
     [Parameter(ParameterSetName = 'Notes')][string]$PrevTag = '',
     [Parameter(ParameterSetName = 'Notes')][string]$To = 'HEAD',
-    [Parameter(ParameterSetName = 'Notes', Mandatory)][string]$Out
+    [Parameter(ParameterSetName = 'Notes', Mandatory)]
+    [Parameter(ParameterSetName = 'Body', Mandatory)][string]$Out
 )
 
 Set-StrictMode -Version 3.0
@@ -105,8 +120,9 @@ $HIGHLIGHTS_DIR = 'doc/release-notes'
 $SOURCE_URL     = 'https://github.com/ponapalt/claudia'
 $SOURCE_LINK    = "[Claudia]($SOURCE_URL)"
 $SPEC_MARK      = 'areka-P0-'
+$ASSET_NAME     = 'release-notes-v{version}.md'
 $STRINGS_FILE   = 'release-notes.strings.json'
-$NOTES_KEYS     = 'notesTitle', 'notesRange', 'notesRangeFromStart', 'headFeat', 'headFix', 'headPerf', 'headOther', 'headInternal'
+$NOTES_KEYS     = 'notesTitle', 'notesRange', 'notesRangeFromStart', 'headFeat', 'headFix', 'headPerf', 'headOther', 'headInternal', 'bodyLink'
 
 $root = Split-Path $PSScriptRoot -Parent
 
@@ -186,6 +202,20 @@ function Format-ReleaseNotes([string[]]$Subjects, [string]$Version, [string]$Pre
     ($blocks -join "`n`n") + "`n"
 }
 
+# 見どころの文とリンクの文から Release の本文の全文（改行は LF）を返す。ファイルにも git にも触らない
+function Format-Body([string]$Highlights, [string]$Version, [string]$Repository, [pscustomobject]$Strings) {
+    $asset = $ASSET_NAME.Replace('{version}', $Version)
+    $url = "https://github.com/$Repository/releases/download/v$Version/$asset"
+    $Highlights.TrimEnd() + "`n`n---`n`n" + $Strings.bodyLink.Replace('{asset}', $asset).Replace('{url}', $url) + "`n"
+}
+
+# -Out のファイルに BOM なしの UTF-8 で書く（親のフォルダが無ければ作る）。相対パスは呼んだ側の今のフォルダから数える
+function Write-Out([string]$Text) {
+    $path = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Out)
+    [void][System.IO.Directory]::CreateDirectory((Split-Path $path -Parent))
+    [System.IO.File]::WriteAllText($path, $Text, [System.Text.UTF8Encoding]::new($false))
+}
+
 if ($SelfTest) {
     $script:selfFails = 0
     function Judge([string]$Name, [bool]$Ok) {
@@ -240,6 +270,13 @@ if ($SelfTest) {
         Judge 'notes from the start without fix and perf equal the expected notes' (
             ($noFixPerf.Count -lt $subjects.Count) -and
             ((Format-ReleaseNotes $noFixPerf '1.2.3' '' 'owner/name' $strings) -ceq (& $fx 'expected-notes-from-start.md')))
+
+        # ---- 本文の組み立て ----
+        Judge 'body of the fixture highlights equals the expected body' (
+            (Format-Body $ok '1.2.3' 'owner/name' $strings) -ceq (& $fx 'expected-body.md'))
+        # 見どころの末尾の空行は、いくつ在っても本文に持ち込まない
+        Judge 'body drops the trailing blank lines of the highlights' (
+            (Format-Body ($ok + "`n`n") '1.2.3' 'owner/name' $strings) -ceq (& $fx 'expected-body.md'))
     }
 
     if ($script:selfFails) { "selftest: $($script:selfFails) failure(s)"; exit 1 }
@@ -259,17 +296,22 @@ if ($Notes) {
     # 1 行 1 題名。最後の改行だけを外す（空の題名の行を落とさない）
     $log = $r.Out.Replace("`r`n", "`n") -replace '\n\z', ''
     $subjects = $log -ne '' ? @($log -split "`n") : @()
-    $path = $PSCmdlet.GetUnresolvedProviderPathFromPSPath($Out)
-    [void][System.IO.Directory]::CreateDirectory((Split-Path $path -Parent))
-    [System.IO.File]::WriteAllText($path, (Format-ReleaseNotes $subjects $Version $PrevTag $Repository $strings), [System.Text.UTF8Encoding]::new($false))
+    Write-Out (Format-ReleaseNotes $subjects $Version $PrevTag $Repository $strings)
     "OK release notes v$Version ($($subjects.Count) change(s))"
     exit 0
 }
 
-# ---- -Check ----
+# ---- -Check と -Body（どちらも先に見どころの検査を回す） ----
 $text = Read-Lf (Join-Path $root "$HIGHLIGHTS_DIR/v$Version.md")
 $found = @(Test-Highlights $text)
 foreach ($f in $found) { "FAIL $($f.Key) line $($f.Line): $($f.Detail)" }
 if ($found.Count) { exit 1 }
+if ($Body) {
+    try { $strings = Read-Strings }
+    catch { "FAIL strings: cannot read tools/$STRINGS_FILE, or a key is missing or empty"; exit 1 }
+    Write-Out (Format-Body $text $Version $Repository $strings)
+    "OK release body v$Version"
+    exit 0
+}
 "OK highlights v$Version ($(@($text -split "`n" -cmatch '^### ').Count) item(s))"
 exit 0

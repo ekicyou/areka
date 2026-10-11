@@ -131,7 +131,8 @@ tools/
     ├── subjects.txt               # 題名の並び（1 行 1 題名）
     ├── expected-notes.md          # subjects.txt から作られるべき詳しいリリースノート
     ├── expected-notes-from-start.md # subjects.txt から fix と perf の製品の変更を除き、一つ前のタグを空にしたときの出力
-    └── highlights-ok.md           # 形を満たす見どころのファイル
+    ├── highlights-ok.md           # 形を満たす見どころのファイル
+    └── expected-body.md           # highlights-ok.md から作られるべき本文
 .kiro/specs/areka-P0-release-notes-highlights/verification/
 ├── release-cycle-sweep.md         # リリースの手順の文書の洗い出し（直した所・直さなかった所と理由）
 ├── docs-sweep.md                  # 生きている文書の洗い出し
@@ -313,7 +314,7 @@ param(
 |----|----------|-----------|
 | `-Check -Version` | その版の見どころのファイルを検査し、欠けをすべて印字する | 0 通った／1 欠けが在る |
 | `-Notes -Version -Repository [-PrevTag] [-To] -Out` | `{PrevTag}..{To}`（`PrevTag` が空なら `{To}` まで全部）の本線の題名から、詳しいリリースノートを `-Out` に書く | 0／1（`git` が失敗・定型文が読めない） |
-| `-Body -Version -Repository -Out` | 先に `-Check` と同じ検査を回し、通れば「見どころのファイルの中身＋空行＋リンクの文」を `-Out` に書く | 0／1（検査の欠け・書けない） |
+| `-Body -Version -Repository -Out` | 先に `-Check` と同じ検査を回し、通れば「見どころのファイルの中身＋空行＋区切りの線（`---`）＋空行＋リンクの文」を `-Out` に書く | 0／1（検査の欠け・書けない） |
 | `-SelfTest` | 下の「自分の検査」を回す | 0 全部通った／1 |
 
 - 知らない引数は断る（`[CmdletBinding()]`）。引数の組み合わせの誤りは PowerShell の引数の誤りとして落ちる。
@@ -399,6 +400,7 @@ v0.0.2 から v0.0.3 までに入ったすべての変更です（37 件）。
 | 見るもの | 判定 |
 |---|---|
 | 一覧の整形 | `release-notes-fixture/subjects.txt` を `Format-ReleaseNotes` に入れた結果が、`expected-notes.md` と 1 字違わず同じ（改行を LF にそろえて比べる）。見本は、製品の変更の 4 つの種類・内部の作業・接頭辞の無い題名・接頭辞の外に spec 名を含む題名・PR の番号の無い題名・日本語の題名を含む。0 件の見出しを出さないことと、一つ前のタグが空のときの範囲の文は、`subjects.txt` から fix と perf の製品の変更を除き、一つ前のタグを空にして入れた結果を `expected-notes-from-start.md` と比べて見る（同じく 1 字違わず同じ） |
+| 本文の組み立て | `release-notes-fixture/highlights-ok.md` を `Format-Body` に入れた結果が、`expected-body.md` と 1 字違わず同じ。見どころの末尾に空行を足して入れても、同じ結果になる |
 | 検査が通る | `highlights-ok.md` を `Test-Highlights` に入れると、欠けが 0 |
 | 検査が落ちる | `highlights-ok.md` から 1 か所ずつ外した文（見出しを全部消す／見出しの `(#番号)` を消す／`areka-P0-x` を足す／出典のリンクを消す／リンクの前に `Claudia` を足す）と `$null` を入れると、それぞれ決まった `Key` の欠けが出る |
 | 決まりとの一致 | `doc/release-notes/README.md` が、較正値の出典の URL を含む |
