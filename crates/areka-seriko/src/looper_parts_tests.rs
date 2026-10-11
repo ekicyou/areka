@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use areka_emo_compose::{BindSet, EmoWorld, PatternState};
 
+use super::test_support::{shell_runtime, switch};
 use super::tests::{always_fire, cfg, counting_rng};
 use super::*;
 use crate::resolve::SurfaceTarget;
@@ -231,4 +232,83 @@ fn part_draws_follow_all_top_draws_in_fixed_order() {
         assert_eq!(part_frames(pattern, 100), vec![(1, 50), (2, 201)]);
         assert_eq!(part_frames(pattern, 50), vec![(0, 202)]);
     }
+}
+
+fn playing(at: u64) -> Option<crate::parts::PartAnim> {
+    Some(crate::parts::PartAnim::Playing { started_at_ms: at })
+}
+
+/// 面が隠れた（`\s[-1]`）ら、部品の 3 語の時計も引き金の状態も捨てる。面が戻ると、見えた部品の
+/// `runonce` はその時刻でもう 1 回鳴る（spec: areka-P0-seriko-trigger-intervals 要件 2.6・5.4・5.9）。
+/// 面の切り替えと同じ順（状態の更新 → 再生の破棄 → `refresh`）で踏む。
+#[test]
+fn hidden_surface_lets_the_part_runonce_fire_again_on_return() {
+    // 一番上 0 が子 100 を置く。100 の `runonce` は 101 → 300ms で `-1`。
+    let (mut rt, mut states) = shell_runtime(
+        "surface0\n{\nelement0,overlay,100,0,0\n}\n\
+         surface100\n{\nanimation0.interval,runonce\n\
+         animation0.pattern0,overlay,101,0,0,0\n\
+         animation0.pattern1,overlay,-1,300,0,0\n}\n",
+    );
+    let scope = ActorKey::from("0");
+
+    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0), 1000).expect("Show");
+    assert_eq!(rt.parts.clock(&scope, 100, 0), playing(1000));
+    assert_eq!(part_frames(show_of(&cmd).1, 100), vec![(0, 101)]);
+
+    switch(&mut rt, &mut states, SurfaceTarget::Hide, 1100).expect("Hide");
+    assert_eq!(rt.parts.clock(&scope, 100, 0), None, "時計を捨てる");
+    assert!(
+        rt.parts.armed_parts(&scope, Slot::Shell).is_empty(),
+        "引き金の状態も捨てる"
+    );
+
+    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0), 1200).expect("Show");
+    assert_eq!(
+        rt.parts.clock(&scope, 100, 0),
+        playing(1200),
+        "戻った時刻でもう 1 回"
+    );
+    assert_eq!(part_frames(show_of(&cmd).1, 100), vec![(0, 101)]);
+}
+
+/// 面の切り替えをまたいで見え続けた部品は引き金の状態を保ち、`runonce` を鳴らし直さない。見えなく
+/// なった部品は時計も引き金の状態も捨てる（部品は「見えたら生まれ、見えなくなったら消える」・
+/// spec: areka-P0-seriko-trigger-intervals 要件 5.9）。
+#[test]
+fn part_visible_across_a_surface_switch_keeps_its_runonce_used() {
+    // 子 100 は一番上 0 と 1 の両方、子 101 は 0 だけが置く。どちらの `runonce` も 300ms で `-1`。
+    let (mut rt, mut states) = shell_runtime(
+        "surface0\n{\nelement0,overlay,100,0,0\nelement1,overlay,101,0,0\n}\n\
+         surface1\n{\nelement0,overlay,100,0,0\n}\n\
+         surface100\n{\nanimation0.interval,runonce\n\
+         animation0.pattern0,overlay,110,0,0,0\n\
+         animation0.pattern1,overlay,-1,300,0,0\n}\n\
+         surface101\n{\nanimation0.interval,runonce\n\
+         animation0.pattern0,overlay,111,0,0,0\n\
+         animation0.pattern1,overlay,-1,300,0,0\n}\n",
+    );
+    let scope = ActorKey::from("0");
+
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 1000).expect("Show");
+    assert_eq!(rt.parts.clock(&scope, 100, 0), playing(1000));
+    assert_eq!(rt.parts.clock(&scope, 101, 0), playing(1000));
+
+    let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(1), 1100).expect("1 へ");
+    assert_eq!(
+        rt.parts.clock(&scope, 100, 0),
+        playing(1000),
+        "見え続けた部品は鳴らし直さない"
+    );
+    assert_eq!(part_frames(show_of(&cmd).1, 100), vec![(0, 110)]);
+    assert_eq!(rt.parts.clock(&scope, 101, 0), None, "見えなくなった部品");
+    assert_eq!(
+        rt.parts.armed_parts(&scope, Slot::Shell),
+        vec![areka_emo_compose::PartKey::Surface(100)]
+    );
+
+    // 再生を終えた後も、構え直していないのでもう鳴らない。
+    rt.on_tick(1400, &mut states);
+    rt.on_tick(1500, &mut states);
+    assert_eq!(rt.parts.clock(&scope, 100, 0), None);
 }

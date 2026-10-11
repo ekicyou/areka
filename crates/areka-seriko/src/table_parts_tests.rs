@@ -75,12 +75,12 @@ animation1.interval,always
         (
             "element定義の子が動かない（採らない語）",
             child,
-            "runonce",
+            "yen-e",
             false,
         ),
         ("着せ替えの pattern0 の先が動く", bind, "random,2", true),
         ("採った animation のコマの先が動く", frame, "random,2", true),
-        ("コマの先の animation が採らない語", frame, "runonce", false),
+        ("コマの先の animation が採らない語", frame, "yen-e", false),
         (
             "採らない always の経過 0 の先が動く",
             always_rest,

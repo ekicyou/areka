@@ -104,3 +104,12 @@
   1. `\i` が指せるアニメーション。`never` だけか、interval が何であっても 1 回流すか。再生の途中でもう一度呼ばれたら頭からやり直すか。正典は「表示する」とだけ書く。
   2. `\e` を書かずに終わった台本と、途中で中断された台本で、`yen-e` を起こすか。正典は「`\e` が来た時」とだけ書く。
   3. `animation*.name` の名前が 2 つのアニメーションで重なったとき・数字だけの名前（番号と見分けが付かない）のとき、どちらを採るか。正典は黙っている。
+
+## 2026-10-10 `areka-P0-seriko-trigger-intervals` の完了時の申し送り
+
+出どころは `completed/areka-P0-seriko-trigger-intervals/tasks.md` の Implementation Notes（7.1・8・9.1・9.2）。前提の `seriko-trigger-intervals` は 2026-10-10 に着地した（「引き金が来たら 1 回流す」の形ができた）。
+
+- **台帳の `yen-e`・`never` の行は触っていない**（`doc/ukadoc-coverage/ledger/assets.toml`）。2 行の備考は今も「`normalize_interval` が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけ」「実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけ」と書く。今は、名前として認める語が 6 つ（`bind`・`random`・`bind+random`・`runonce`・`periodic`・`talk`）、動く語が 8 つ（`random`・`bind+random`・`sometimes`・`rarely`・`always`・`runonce`・`periodic`・`talk`）。本 spec がこの 2 行を実装済みへ移すときに、備考ごと書き直す。
+- **seriko の形**（上の「棚卸㉓の測定」の「触るファイル」に足す）: 引き金の判定は `trigger.rs` の `Armed`（一番上の面でも部品でも同じ型。開始の時刻は判定の時刻でなく、出来事の時刻を返す）、一番上の配線は `looper_trigger.rs`、部品の配線は `parts_trigger.rs`。始まった再生は抽選の再生と同じ表に入り、同じ進み方をする。`\i[ID]` と `yen-e` の「1 回流す」は、この「始めるなら何時に始まったことにするか」を返す形に乗せられる見込み。`looper.rs` は 924 行・`table.rs` は 900 行＝足すなら兄弟のファイルへ。
+- **検体と実機の手順を使い回せる**: `crates/areka-seriko/tests/fixtures/trigger-intervals/`（`surfaces.txt` と README）。面 9100〜9104 は、emo2 が既定の着せ替えで出す立ち絵と同じ絵を element定義で重ねてあり、emo2 の `surfaces.txt` の末尾へ書き足して使う（番号は当たらない）。README の「実機の確かめ」に、写しの作り方・記録の絞り・判定の検索語が在る。`never`・`yen-e` の面を足すなら、9105 から先の番号で同じ立ち絵を使える。
+- **実機で台本を流す道具がまだ無い**: areka の MCP の `sakurascript` は `NG:not implemented yet` を返す（`mcp-kanade-tools` の持ち物）。`seriko-trigger-intervals` は、写しの `boot.lua` が台本 1 本を返す形で流した（走行 1 回につき台本 1 本・途中で送れない）。`\i[ID]` を台詞の途中で何度も送る確かめは、`mcp-kanade-tools` の後の方が楽。

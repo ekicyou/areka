@@ -15,7 +15,7 @@ use super::{
 };
 use crate::draw::DEFAULT_BALLOON_BACKGROUND;
 use crate::place::{PlaceKey, TextPlace};
-use crate::state::TextLayerConfig;
+use crate::state::{SpanKind, TextLayerConfig};
 
 /// 全部の文字が見えている時刻。
 const LATE: f64 = 10.0;
@@ -215,6 +215,7 @@ fn place_addressed_hit_rows_hover_and_origin() {
     let box_a = f.key(0, "a");
     let balloon = PlaceKey::balloon(&a);
     let row = ChoiceHitRow {
+        kind: SpanKind::Choice,
         ordinal: 0,
         id: "OnA".into(),
         label: "A".into(),

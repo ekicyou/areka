@@ -80,3 +80,7 @@
 - **見つけた穴・古くなった記述**:
   - 画像の選択肢に要る `\_b[…,inline]`（バルーンへの画像の貼り付け）は areka に無く、網羅台帳の持ち主も空、roadmap にも載っていない。本 brief の例 1（バナーを押すとサイトが開く）は本 spec だけでは動かない＝Out に書き、`\_b` を別に起票する。
   - `seriko-trigger-intervals`・`talk-fast-forward`（台本の読み手と `compile.rs`）とは同じウェーブに置けない。
+
+## 2026-10-10 `areka-P0-anchor-tag-canon` の完了時の申し送り
+
+- **ついでに直す 1 件（選択の送り口の記録が 2 行出る）**: 選択の送り先が消えているとき、送り口の `warn!`（`crates/areka/src/input_events/balloon.rs` の `BalloonWiring::send_selection`）と、呼び手の `error!`（普通のバルーンは `balloon_pressed.rs` の `on_balloon_pointer_pressed`、箱は `shell_box_handler.rs` の `send_selection`）が、同じ名前で 1 行ずつ出る（選択肢は `choice_selection_send_failed`、アンカーは `anchor_selection_send_failed`。名前の表は `balloon.rs` の `selection_events`）。完了 `areka-P0-choice-interact` からある軽い件で、`anchor-tag-canon` でアンカーにも写った。本 spec は `\__q` の範囲の当たりで同じ送り口と `balloon.rs`・`shell_box_handler.rs` を触るので、そのときに 1 回の失敗につき 1 行へ揃える（どちらを残すかは設計で決める）。動きは変えない。

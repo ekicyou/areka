@@ -144,7 +144,7 @@ areka 独自のツール 1 本（仮名 `query_shiori`）。**SSTP NOTIFY と同
 - 規模: M〜L（12〜16 タスク）のまま。要求に添える追加のヘッダの入れ物を `script-security-level` が先に作っていれば 10〜14。
 - 先に要るもの: `mcp-kanade-tools`（上記）。入れ物の順は `script-security-level` → 本 spec（host32-host の列）。
   - 同じウェーブに置けない相手: `mcp-kanade-tools`（`msg.rs`・`actor.rs`）・`script-security-level`（`shiori3.rs`・`client.rs`・`shiori_inproc.rs`・`msg.rs`・`shiori/real.rs`）・`mcp-user-response`（手順の表の 5 ファイルと文書）・`mcp-strict-errors`（`handler.rs`・`areka-tools.md`）。
-  - 重なり 0: `mcp-stdio-bridge`・`farewell-talk-status`・`mcp-reload`・`dump-balloon-debug-timeout`。
+  - 重なり 0: `mcp-stdio-bridge`・`farewell-talk-status`・`mcp-reload`・`mcp-receiver-bugs` の件 2。
   - 本 spec を待つ未完了の spec は 0 本（将来の SSTP の受信だけ）。
 - 優先度の区分: A（開発者「今の MCP ツールって、SHIORI への情報要求が無いですよね」・ヘッダの名前も開発者の裁定）。
 - 要件定義のモデル: Fable（`X-` で始まるヘッダの原文の確認・SSTP NOTIFY が SHIORI へどのメソッドで届くか・各 SHIORI が任意の名前のヘッダを読み書きできるか）。

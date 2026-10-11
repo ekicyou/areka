@@ -1,20 +1,30 @@
 //! 登録案内の HTML（日本語・5 項目）。
 
-use crate::port::{DEFAULT_PORTS, FALLBACK_STEPS, PORT_ENV};
+use std::path::Path;
+
+use crate::port::{DEFAULT_PORTS, FALLBACK_STEPS, PORT_ENV, candidates_from_env_value};
 use crate::tools::{OWN_TABLE, spec_from_definition};
+
+/// 中継（Claude Desktop 向けの stdio の橋）の exe のファイル名。areka.exe の隣に置かれる
+/// （spec: areka-P0-mcp-stdio-bridge）。
+pub const BRIDGE_EXE_FILE_NAME: &str = "areka-mcp-bridge.exe";
 
 /// 登録手順の日本語 HTML を実際の番号 `port` で組む（要件 6.1・6.2）。
 ///
 /// 5 項目: ⑴ 待ち受けている URL、⑵ Claude Code の登録コマンド、⑶ Cursor の
 /// `mcpServers` の断片、⑷ ポートの決まり方と変え方（既定の順・早い者勝ち・隣への退避・
-/// `AREKA_MCP_PORT` で 1 つを指定・`0` で待ち受けない）、⑸ Claude Desktop は中継が要る
-/// （設定例は後続 `mcp-stdio-bridge` が足す）。
+/// `AREKA_MCP_PORT` で 1 つを指定・`0` で待ち受けない）、⑸ Claude Desktop は中継を通す
+/// （`claude_desktop_config.json` の設定例。`command` は中継の置き場 `bridge_exe`・無ければ
+/// ファイル名だけにして絶対パスへの置き換えを頼む。`env` は `port` が既定の候補の外のときだけ
+/// 載せる。書いた後の起動し直しには、窓を閉じるだけでは終了しない旨を添える
+/// ＝spec: areka-P0-mcp-stdio-bridge）。
 /// URL とコマンド例の番号は引数から取り、既定の順の説明は [`DEFAULT_PORTS`]・[`FALLBACK_STEPS`]
 /// から組む（数を手で書かない）。
 /// 続けて「areka 独自のツール」の節に [`OWN_TABLE`] の各行を `<code>名前</code> — 1 行` で並べる
 /// （名前は登録と同じ定義から読む・spec: areka-P0-mcp-author-tools）。
-/// 埋め込む値は数と定数（名前と 1 行は `<`・`>`・`&` を含まない）なので HTML のエスケープは要らない。
-pub fn help_html(port: u16) -> String {
+/// 埋め込む値のうち数と定数（名前と 1 行は `<`・`>`・`&` を含まない）は HTML のエスケープが要らない。
+/// 中継のパスだけは JSON と HTML の 2 段で置き換える（貼れば正しい JSON になる）。
+pub fn help_html(port: u16, bridge_exe: Option<&Path>) -> String {
     // 読めない定義は登録の側（`register_row`）が `error!` で記録して登録しないので、ここでも載せない。
     let own_tools: String = OWN_TABLE
         .iter()
@@ -27,6 +37,31 @@ pub fn help_html(port: u16) -> String {
     let [first, second] = DEFAULT_PORTS;
     let (first_next, second_next) = (first + 1, second + 1);
     let (first_last, second_last) = (first + FALLBACK_STEPS, second + FALLBACK_STEPS);
+    // Claude Desktop の設定例。置き場は JSON の文字列にしてから（`\` が重なる）HTML の 3 字を置き換える。
+    let command = serde_json::Value::from(bridge_exe.map_or_else(
+        || BRIDGE_EXE_FILE_NAME.to_owned(),
+        |path| path.to_string_lossy().into_owned(),
+    ))
+    .to_string()
+    .replace('&', "&amp;")
+    .replace('<', "&lt;")
+    .replace('>', "&gt;");
+    let replace_note = if bridge_exe.is_some() {
+        ""
+    } else {
+        "<p><code>command</code> の値は、areka.exe と同じフォルダにある中継の絶対パスに置き換えてください。</p>\n"
+    };
+    // 既定の候補のどれかなら中継が自分で見つけるので `env` は要らない。外の番号だけ載せる。
+    let env = if candidates_from_env_value(None).contains(&port) {
+        String::new()
+    } else {
+        format!(
+            r#",
+      "env": {{
+        "{PORT_ENV}": "{port}"
+      }}"#
+        )
+    };
     format!(
         r#"<!DOCTYPE html>
 <html lang="ja">
@@ -63,7 +98,18 @@ pub fn help_html(port: u16) -> String {
 <code>{PORT_ENV}=0</code> で待ち受けない設定になります。</p>
 
 <h2>Claude Desktop</h2>
-<p>Claude Desktop は HTTP の MCP サーバを設定に直接書けないため、stdio との中継が要ります。中継は今後の版で用意します。</p>
+<p>Claude Desktop は HTTP の MCP サーバを設定に直接書けないため、stdio との中継（<code>{BRIDGE_EXE_FILE_NAME}</code>）を通してつなぎます。
+設定ファイル <code>claude_desktop_config.json</code>（Claude Desktop の設定の画面から開けます）の <code>mcpServers</code> に次を加えます。</p>
+<pre><code>{{
+  "mcpServers": {{
+    "areka": {{
+      "command": {command}{env}
+    }}
+  }}
+}}</code></pre>
+{replace_note}<p>書いた後に Claude Desktop を起動し直すと、areka のツールが並びます。
+窓を閉じるだけでは Claude Desktop は終了しません。タスクバーの通知領域（時計の近く）にある Claude のアイコンから終了してから、起動し直してください。
+Claude Desktop を areka より先に起動していても、areka のツールが並びます（中継が、前に areka から受け取った答えの控えか、控えがまだ無ければ自分で持っている一覧で答えます）。ツールを使うには areka を起動してください。起動すれば、Claude Desktop を起動し直さなくても使えます。</p>
 
 <h2>areka 独自のツール</h2>
 <p>SSP と同じツールに加えて、SSP に無い次のツールを出しています。</p>
@@ -77,4 +123,4 @@ pub fn help_html(port: u16) -> String {
 
 #[cfg(test)]
 #[path = "help_tests.rs"]
-mod help_tests;
+pub(crate) mod help_tests;

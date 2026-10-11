@@ -137,6 +137,22 @@ pub fn all_entrances(reply_wait: Duration) -> (ToolRegistry, Receiver<ToolReques
     (registry, rx)
 }
 
+/// 本番の登録（[`all_entrances`]）と同じ行・同じ順の、ツールの定義の列（SSP と同じ 10 本、続けて独自の
+/// ツール）。中継（areka-mcp-bridge）が、areka が居ないときの組み込みの一覧をここから組む。
+/// 定義が読めない行は、登録と同じく `error!` 1 件で飛ばす（本番の表では起きない）。
+pub fn all_specs() -> Vec<ToolSpec> {
+    let own = OWN_TABLE.iter().map(|&(definition, _, _)| definition);
+    let rows = TABLE.iter().map(|&(definition, _)| definition).chain(own);
+    let read = |definition| match spec_from_definition(definition) {
+        Ok(spec) => Some(spec),
+        Err(reason) => {
+            error!(%reason, "MCP: ツールの定義が読めない。この行は列に入れない");
+            None
+        }
+    };
+    rows.filter_map(read).collect()
+}
+
 /// 表の行を順に登録する。定義が読めない行は `error!` 1 件で登録しない（本番の表では起きない）。
 pub(crate) fn register_rows(
     rows: &[(&str, Parse)],

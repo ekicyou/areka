@@ -70,4 +70,4 @@
 - **見つけた穴・古くなった記述**:
   - `anchor-tag-canon`・`range-choice-tag`・`choice-marker-styling` と `choice.rs`・`actor_present.rs`・`actor.rs` が重なる＝同じウェーブに置けない。
   - **`anchor-tag-canon` の前に置くのが素直**（後にすると、アンカーの範囲を足した後の並びをもう一度まとめ直す）。前に置く席が無ければ、`anchor-tag-canon` の最初のタスクに入れる手もある（合わせて 16〜20 タスク）。
-  - `reflow-scroll-path-test` とは、あちらが `actor_lookahead_tests.rs` に足す形なら重ならない。`balloon-text-area-collapse` とは、あちらが `actor_present.rs` で止める設計なら重なる。
+  - `reflow-scroll-path-test` とは、あちらが `actor_lookahead_tests.rs` に足す形なら重ならない。`balloon-text-bugs` の件 2 とは、あちらが `actor_present.rs` で止める設計なら重なる。

@@ -70,7 +70,7 @@ fn exact_always_is_adopted_with_period_and_no_laps() {
 /// 組み合わせ・大文字・ほかの語は今までどおり採らず、元の綴りつきの `debug!` を残す（要件 4.8・4.9）。
 #[test]
 fn combinations_and_other_words_keep_the_debug_arm() {
-    for word in ["bind+always", "always+bind", "Always", "runonce", "never"] {
+    for word in ["bind+always", "always+bind", "Always", "yen-e", "never"] {
         let (table, logs) = table_and_logs(&surface0_with(word));
         assert!(table.animations(0).is_empty(), "{word}: {logs:?}");
         assert!(!table.is_continuous(), "{word}");

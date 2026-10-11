@@ -115,6 +115,8 @@ fn input_variants_are_existing_eight_plus_choice_two() {
             Input::TranslateDone(_) => "TranslateDone",
             // balloon-lifecycle-events で時間切れの知らせ（`BalloonTimeout`）の腕を足した。
             Input::BalloonTimeout { .. } => "BalloonTimeout",
+            // anchor-tag-canon でアンカーの選択（`Anchor`）の腕を足した。
+            Input::Anchor(_) => "Anchor",
         }
     }
     assert_eq!(tag(&Input::Boot), "Boot");

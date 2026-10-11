@@ -7,7 +7,7 @@ use super::test_support::{
     choice_cue, com_world, cue, geo_model, opaque_count, spawn_reserved_slot,
 };
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
-use crate::state::TextLayerConfig;
+use crate::state::{SpanKind, TextLayerConfig};
 
 // ══ task 8.3: Clear/ClearAll の原子的無効化（hover リセット＋ヒット行スナップショット無効化・R5.1/5.2/5.4） ══
 
@@ -393,4 +393,86 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
             "集合2: 新選択肢行 {i} バンドにインクがある（描画==ヒット・7.3/7.4）"
         );
     }
+}
+
+// ══ 当たりの行は範囲の種類を持つ ══
+
+/// 当たりの行は、元の範囲の種類（選択肢／アンカー）をそのまま写して持つ。
+#[test]
+fn hit_rows_carry_the_kind_of_their_span() {
+    let (mut world, window, slot) = com_world();
+    let actor = ActorKey::from("0");
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    // 「あい」をアンカーの範囲（通し番号 0）にし、続けて選択肢（通し番号 1）を置く。
+    rt.apply_cue(&cue(
+        "0",
+        0.0,
+        CueCommand::AnchorBegin {
+            id: "x".into(),
+            references: vec![],
+        },
+    ));
+    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("あい".into())));
+    rt.apply_cue(&cue("0", 0.0, CueCommand::AnchorEnd));
+    rt.apply_cue(&choice_cue("0", 0.2, "OnYes", "はい", &[]));
+    let image = (120u32, 60u32);
+    rt.register_actor(
+        actor.clone(),
+        TextSlotBinding::new(slot, window, 1.0, image, image),
+        ResolvedBalloonText::resolve(&geo_model(), image),
+    );
+
+    present_frame(&mut rt, &mut world, 10.0).expect("提示");
+    let mut kinds: Vec<(usize, SpanKind)> = rt
+        .choice_hit_rows(&actor)
+        .iter()
+        .map(|r| (r.ordinal, r.kind))
+        .collect();
+    kinds.sort_by_key(|(ordinal, _)| *ordinal);
+    assert_eq!(kinds, vec![(0, SpanKind::Anchor), (1, SpanKind::Choice)]);
+}
+
+// ══ アンカーの範囲の消去 ══
+
+/// アンカーだけの列も、本文の消去（`Clear`）と同時に押せなくなる: 提示を待たずに当たりの行が
+/// 空になり、「押せる範囲があるか」が偽になる。選択肢が 1 つも無い列なので、消去の無効化が
+/// 選択肢の有無に寄りかかっていれば古い当たりの行が残る。
+#[test]
+fn clear_drops_anchor_hit_rows_and_hit_active_atomically() {
+    let (mut world, window, slot) = com_world();
+    let actor = ActorKey::from("0");
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    rt.apply_cue(&cue(
+        "0",
+        0.0,
+        CueCommand::AnchorBegin {
+            id: "x".into(),
+            references: vec![],
+        },
+    ));
+    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("あい".into())));
+    rt.apply_cue(&cue("0", 0.0, CueCommand::AnchorEnd));
+    let image = (120u32, 60u32);
+    rt.register_actor(
+        actor.clone(),
+        TextSlotBinding::new(slot, window, 1.0, image, image),
+        ResolvedBalloonText::resolve(&geo_model(), image),
+    );
+
+    present_frame(&mut rt, &mut world, 10.0).expect("提示");
+    let kinds: Vec<SpanKind> = rt.choice_hit_rows(&actor).iter().map(|r| r.kind).collect();
+    assert_eq!(kinds, vec![SpanKind::Anchor], "消去の前は当たりの行 1");
+    assert!(rt.hit_active(&actor), "消去の前は押せる範囲がある");
+
+    rt.apply_cue(&cue("0", 11.0, CueCommand::Clear));
+    assert!(
+        rt.choice_hit_rows(&actor).is_empty(),
+        "消去は提示を待たずに当たりの行を空にする"
+    );
+    assert!(!rt.hit_active(&actor), "消去で押せる範囲が無くなる");
+
+    // 消去の後の提示でも戻らない。
+    present_frame(&mut rt, &mut world, 12.0).expect("消去の後の提示");
+    assert!(rt.choice_hit_rows(&actor).is_empty());
+    assert!(!rt.hit_active(&actor));
 }

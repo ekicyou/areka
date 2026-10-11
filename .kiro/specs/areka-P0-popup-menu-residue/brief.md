@@ -134,7 +134,7 @@
   - 9: `crates/areka/src/menu/captions.rs` の、照会しないメニューの語彙 4 件。台帳の持ち主の付け替えは `coverage-roadmap-refresh`。
 - **触るファイル**: `crates/areka/src/menu/{trigger.rs（573 行）, win32.rs, captions.rs, trigger_show_tests.rs}`・`emo2_boot/readme_cue.rs`・`emo2_boot/spine.rs`（937 行・注記だけ）・`crates/areka-kanade/src/actor.rs`（**900 行＝上限の近く**。文言だけなので増えない）・接頭辞を揃えるなら `actor_resources.rs`・新しいテスト 1〜2 本。`readme.rs` は項目 2・10 が済んだので触らない見込み。
 - **規模**: S（4〜6）。
-- **先に要るもの**: なし。ファイルの重なり: kanade の `actor.rs`（`mcp-kanade-tools` ほか kanade の進行の列）・`menu/captions.rs`（`extra-character-windows`）・`emo2_boot/spine.rs`（`areka-test-threads-av`・`test-wait-marker-gaps` が同じファイルの足場に触りうる）。
+- **先に要るもの**: なし。ファイルの重なり: kanade の `actor.rs`（`mcp-kanade-tools` ほか kanade の進行の列）・`menu/captions.rs`（`extra-character-windows`）・`emo2_boot/spine.rs`（`areka-test-binary-stability` の件 1・2 が同じファイルの足場に触りうる）。
 - **測定の仕事ではない**（重い回 0）。
 - **優先度の区分**: C（バグでない持ち越し・記録の文言とテストの穴）。
 - **要件定義のモデル**: Opus。

@@ -238,6 +238,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "areka-impl-watch"
+version = "0.0.2"
+dependencies = [
+ "serde",
+ "serde_json",
+ "temp-path-kit",
+ "thiserror",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "areka-kanade"
 version = "0.0.2"
 dependencies = [
@@ -265,6 +277,24 @@ dependencies = [
  "tokio-util",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "areka-mcp-bridge"
+version = "0.0.2"
+dependencies = [
+ "areka-mcp",
+ "futures",
+ "http",
+ "httparse",
+ "rmcp",
+ "serde_json",
+ "sse-stream",
+ "temp-path-kit",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

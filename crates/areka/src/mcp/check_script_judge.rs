@@ -2,14 +2,14 @@
 //!
 //! 窓も World も要らない純粋な関数だけを置く。判定は自分で持たず、再生が実際に使う関数
 //! （`parse_noted` の印・`ConsumerLedger::consumer_of`・`parse_choice_timeout`・`apply_font_tag`・
-//! `SurfaceResolver::resolve`・`resolve_balloon_key`）の答えを診断の種類へ写すだけにする。
+//! `SurfaceResolver::resolve`・`resolve_balloon_key`・`pair_anchors`）の答えを診断の種類へ写すだけにする。
 
 use std::ops::Range;
 
 use areka_emo_text::look::{FontTagFailure, LookLayers, Note, apply_font_tag};
 use areka_mcp::tools::check_script::{Diagnostic, Kind};
 use areka_parsers::sakura::{Instruction, Read, ReadNote};
-use areka_sakura::{ChoiceTimeoutDirective, parse_choice_timeout};
+use areka_sakura::{AnchorIssue, ChoiceTimeoutDirective, pair_anchors, parse_choice_timeout};
 use areka_seriko::{BalloonResolve, SurfaceTarget, resolve_balloon_key};
 
 use crate::emo2_boot::consumer_ledger::ConsumerLedger;
@@ -27,6 +27,12 @@ pub(in crate::mcp) const MSG_UNCLOSED: &str =
 pub(in crate::mcp) const MSG_DEFAULTED: &str =
     "the argument is missing or unreadable; playback uses the default value";
 pub(in crate::mcp) const MSG_IGNORED: &str = "areka accepts this but it has no effect yet";
+pub(in crate::mcp) const MSG_ANCHOR_UNCLOSED: &str =
+    "the anchor is not closed; playback extends it to the end of the script";
+pub(in crate::mcp) const MSG_ANCHOR_REOPENED: &str =
+    "a new anchor opens before the previous one closes; playback closes the previous one here";
+pub(in crate::mcp) const MSG_ANCHOR_STRAY_CLOSE: &str =
+    "no anchor is open; playback ignores this close";
 
 /// 判断に要る事実。本番は UI スレッドで写し取った値が答え、テストは手書きの表で答える。
 pub(in crate::mcp) trait ScriptFacts {
@@ -39,7 +45,8 @@ pub(in crate::mcp) trait ScriptFacts {
 }
 
 /// 命令を台本の順に 1 つずつ見て診断の列を作る。`facts` が None＝窓の無いゴースト（surface とバルーンを診ない）。
-/// `\e`・`\-` で打ち切らない（再生はされないが、書いてある誤りは知らせる）。
+/// `\e`・`\-` で打ち切らない（再生はされないが、書いてある誤りは知らせる）。アンカーの対応の崩れだけは、
+/// 再生と同じ判定（`pair_anchors`）がそこで数えるのをやめるので、後ろの開き／閉じには出ない。
 pub(in crate::mcp) fn diagnose(
     script: &str,
     reads: &[Read],
@@ -57,8 +64,12 @@ pub(in crate::mcp) fn diagnose(
     // 切替の `\!` を見た後は、どの絵・バルーンになるか字面で決まらないので診ない（要件 3.8）。
     let mut shell_switched = false;
     let mut balloon_switched = false;
+    // アンカーの対応の崩れ。命令の添字の昇順で来るので、前から順に取り出す。
+    let mut anchor_findings = pair_anchors(reads.iter().map(|r| &r.instruction))
+        .into_iter()
+        .peekable();
 
-    for read in reads {
+    for (index, read) in reads.iter().enumerate() {
         let span = read.span.clone();
         for note in &read.notes {
             let (kind, message) = match note {
@@ -120,6 +131,17 @@ pub(in crate::mcp) fn diagnose(
                     && balloon_missing(facts, scope, arg.as_str())
                 {
                     out.push(Kind::MissingBalloon, &span, MSG_MISSING_BALLOON);
+                }
+            }
+            // 同じ開きに 2 件（重なり → 閉じ無し）付くことがあるので、その位置の分を全部出す。
+            Instruction::Anchor(_) | Instruction::AnchorEnd => {
+                while let Some(finding) = anchor_findings.next_if(|f| f.index == index) {
+                    let message = match finding.issue {
+                        AnchorIssue::Unclosed => MSG_ANCHOR_UNCLOSED,
+                        AnchorIssue::Reopened => MSG_ANCHOR_REOPENED,
+                        AnchorIssue::StrayClose => MSG_ANCHOR_STRAY_CLOSE,
+                    };
+                    out.push(Kind::UnpairedTag, &span, message);
                 }
             }
             _ => {}

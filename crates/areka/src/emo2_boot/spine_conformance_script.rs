@@ -882,10 +882,12 @@ pub(super) fn expected_statuses() -> Vec<RecordedStatus> {
         status(TRANSLATE, Some(STATUS_TALKING)),
         status(CHOICE_MOVE_APPLY, Some(STATUS_TALKING_CHOOSING)),
         status(TRANSLATE, Some(STATUS_TALKING)),
-        // ── 終了: 終了系列は運行を `Unloading` へ移してから発火する＝全状態が非アクティブ。
-        //    出所: `crates/areka-kanade/src/schedule/mod.rs:484-492`。
+        // ── 終了: 終了の握手の `OnClose` は会話なしの作り方（`State::snapshot_without_talk`）で送る。
+        //    写しに通信中もバルーンも載っていないこの一周では、ヘッダ行なし。
+        //    出所: `crates/areka-kanade/src/schedule/steady.rs` の `begin_close`。
         status("OnClose", None),
-        //    終了の挨拶の `OnTranslate` も終了の相の状態＝ヘッダ行なし。
-        status(TRANSLATE, None),
+        //    終了の挨拶の `OnTranslate` は、挨拶を再生する相へ移った後（再生を始める時点）の状態を
+        //    運ぶ。終了の挨拶の再生中も会話中に数えるので、普段の台詞の `OnTranslate` と同じ会話中。
+        status(TRANSLATE, Some(STATUS_TALKING)),
     ]
 }

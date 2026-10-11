@@ -143,3 +143,12 @@
 - 要件定義のモデル: Fable（時刻の付け替え・スレッドをまたぐ届け方・ダブルクリックとの順）。
 - 議題: 棚卸㉑・㉒の 4 件のまま（1 は上の材料つき）。
 - 見つけた穴・古くなった記述: コードの穴は無い。棚卸㉒の行数（`msg.rs` 909 ほか）は上の数に読み替える。
+
+## 2026-10-10 `areka-P0-seriko-trigger-intervals` の完了時の申し送り
+
+出どころは `completed/areka-P0-seriko-trigger-intervals/tasks.md` の Implementation Notes（9.2 の ②・検証の ⑷）と同 spec の設計書（Revalidation Triggers）。
+
+- **実機で見たこと（2026-10-10）**: 台本の `\x` は、待ちもせず消しもしない（`まつ。\xあと。` は、間を置かずに続けて出た）。上の Problem・Current State に書いてあるとおりの今の姿で、新しい事実は無い。同 spec の Implementation Notes はこの件の引受先を `balloon-canon-residue` と書いたが、`\x`／`\x[noclear]` は本 spec が引き取っている（上の Existing Spec Touchpoints）。
+- **口パクが、文字の現れる時刻の式を写して持つようになった**: `seriko-trigger-intervals` で、seriko は interval `talk,数値` のために「i 文字目が現れる時刻」を自分でも計算する（`crates/areka-seriko/src/talk.rs` の `TalkFeed`＝文字の層の `RevealSchedule::extend_chunk` と同じ式・`TalkEpoch`＝`TalkClock::observe_cue` と同じ式）。**共有ではなく写し**で、文字の層の式を変えても赤になるテストは無い。
+- **本 spec がすること**: 早送り（残りの字を一気に出す）や `\x`（時計を止めて、クリックで再開する）で、文字が現れる時刻・起点・cue の届き方を変えるなら、`talk.rs` の写しも同じに変える。変えないと、口だけが元の時刻で動く（早送りで字が全部出た後に、口が遅れて動き続ける形になりうる）。要件の段で、早送りの間の口の動かし方（区切りを 1 回の刻みで何個も越えたときは、最新の 1 つだけ鳴る決まりが今ある）を 1 行確かめる。
+- **見張りの持ち主**: 写しと文字の層の式の一致を見張る仕組みは、新しい spec `seriko-talk-clock-fidelity` が持つ。そちらが先に着地していれば、本 spec の変更で見張りが赤になる。本 spec が先なら、`talk.rs` を手で合わせ、同 spec の brief に合わせた所を 1 行残す。

@@ -28,7 +28,7 @@ use bevy_ecs::world::World;
 use wintf::ecs::pointer::{PointerLeave, PointerState, dispatch_pointer_events};
 use wintf::ecs::{Input, find_owner_window};
 
-use super::balloon::{BalloonWiring, ChoiceSelection, HoverAction, hover_action};
+use super::balloon::{BalloonWiring, ChoiceSelection, HoverAction, hover_action, selection_events};
 use super::shell_box::{
     BoxMove, BoxPressVerdict, ShellBoxHover, box_under_point, judge_box_click, judge_box_move,
     next_box_hover,
@@ -42,9 +42,9 @@ use crate::placement::spawn::CharWindowMarker;
 pub(super) struct BoxPoint {
     /// 座標の下の、文字の出ている箱（手前の 1 つ・無ければ箱の外）。
     pub(super) hit: Option<ShownBox>,
-    /// 当たった箱の選択肢の当たり行（シェルの窓の物理 px）。
+    /// 当たった箱の当たり行（選択肢とアンカー・シェルの窓の物理 px）。
     pub(super) rows: Vec<ChoiceHitRow>,
-    /// スコープに選択肢が出ているか（`choice_active`）。
+    /// スコープに押せる範囲（選択肢かアンカー）が出ているか（`hit_active`）。
     pub(super) active: bool,
 }
 
@@ -86,7 +86,7 @@ fn read_point(
     Some(BoxPoint {
         hit,
         rows,
-        active: rt.choice_active(&actor),
+        active: rt.hit_active(&actor),
     })
 }
 
@@ -265,8 +265,10 @@ pub(super) fn press_with_point(
     verdict != BoxPressVerdict::ShellOp
 }
 
-/// 選択の確定を既存の送り口で送る（`balloon_pressed.rs` と同じ記録）。送れたら `true`。
+/// 選択の確定を既存の送り口で送る（`balloon_pressed.rs` と同じ記録・箱の印つき）。送れたら `true`。
+/// 記録の名前は種類で決まる（選択肢は `choice_selected`・アンカーは `anchor_selected`）。
 fn send_selection(world: &World, hit: &ShownBox, sel: ChoiceSelection) -> bool {
+    let (selected, send_failed) = selection_events(sel.kind);
     let (scope, id, label, references_len) = (
         sel.scope,
         sel.id.clone(),
@@ -283,7 +285,7 @@ fn send_selection(world: &World, hit: &ShownBox, sel: ChoiceSelection) -> bool {
     };
     if wiring.send_selection(sel) {
         tracing::info!(
-            event = "choice_selected",
+            event = selected,
             scope,
             id = %id,
             label = %label,
@@ -294,7 +296,7 @@ fn send_selection(world: &World, hit: &ShownBox, sel: ChoiceSelection) -> bool {
         true
     } else {
         tracing::error!(
-            event = "choice_selection_send_failed",
+            event = send_failed,
             scope,
             id = %id,
             "ChoiceSelection 発行シンク送出失敗（受け口消滅後）: no-op 縮退"
@@ -339,7 +341,8 @@ pub(crate) fn clear_box_hover_on_leave(world: &mut World) {
     for (scope, name, last) in entries {
         if let Some(runtime) = &runtime {
             let actor = ActorKey::from(scope.to_string());
-            match runtime.try_borrow().map(|rt| rt.choice_active(&actor)) {
+            // 押せる範囲（選択肢かアンカー）があるか——箱のアンカーの強調もここで外す。
+            match runtime.try_borrow().map(|rt| rt.hit_active(&actor)) {
                 Ok(active) => apply_highlight(
                     world,
                     runtime,

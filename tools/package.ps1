@@ -14,7 +14,7 @@
     （.zip.tmp・.zip.sha256.tmp）で作り、最後の段「完成」で改名する。
 
   段は名前つきで直列に回す:
-    前提の確認 → ターゲット導入 → ビルド（i686 の補助 exe・CPU 種別ごとの本体）→ 静的リンクの確認
+    前提の確認 → ターゲット導入 → ビルド（i686 の補助 exe・CPU 種別ごとの本体と中継）→ 静的リンクの確認
     → ライセンス検査 → 謝辞の生成 → 検体の展開
     → CPU 種別ごとに「組み立て → 圧縮 → 中身の判定 → SHA256」
     → （-Check のとき）短いパスへ展開 → 起動 → 番犬 → 記録の判定 → 後片付け
@@ -119,7 +119,7 @@ $ProgressPreference = 'SilentlyContinue'
 # =============================================================================
 # 較正値（説明の一覧と対応。変更はここだけ）
 # =============================================================================
-$SCRIPT_VERSION       = '2.0.0'
+$SCRIPT_VERSION       = '2.1.0'
 $OUT_DIR              = 'target/package'
 # CPU 種別ごとの値の唯一の出どころ（ビルドのターゲット・zip の名前の {arch}・機械種別の検査）。順序つき
 $ARCHS = [ordered]@{
@@ -140,7 +140,7 @@ $EXPAND_DIR_MAX_CHARS = 160
 $ARM64_VS_COMPONENT   = 'Microsoft.VisualStudio.Component.VC.Tools.ARM64'
 $VSWHERE_PATH         = "$([Environment]::GetFolderPath('ProgramFilesX86'))\Microsoft Visual Studio\Installer\vswhere.exe"
 $DLL_DENY_PREFIXES    = @('vcruntime', 'msvcp', 'msvcr', 'api-ms-win-crt-', 'ucrtbase', 'concrt')
-$ALLOWED_EXECUTABLES  = @('areka.exe', 'shiori-host32-helper.exe', 'ghost/emo2/ghost/master/pasta.dll')
+$ALLOWED_EXECUTABLES  = @('areka.exe', 'areka-mcp-bridge.exe', 'shiori-host32-helper.exe', 'ghost/emo2/ghost/master/pasta.dll')
 $LOG_MARKER_SMOKE_GATE     = 'smoke 自動 close ゲート有効'          # crates/areka/src/main.rs の SMOKE_EXIT_ENV の info!
 $LOG_MARKER_WINDOWS        = '本物のゴースト窓を開きました'          # crates/areka/src/ghost_session.rs
 $LOG_MARKER_FAULTS         = @('SHIORI が動かなくなりました', 'event="connect_failed"', 'event="helper_exited"')
@@ -398,14 +398,16 @@ Set-EnvTemp 'CARGO_BUILD_RUSTFLAGS' $null
 Step 'build i686 helper' { cargo build --locked --release -p shiori-host32-helper --target $I686 --target-dir $OUT_DIR }
 foreach ($a in $script:BuildArchs) {
     $t = $ARCHS[$a].Target
-    Step "build $a areka" { cargo build --locked --release -p areka --target $t --target-dir $OUT_DIR }
+    Step "build $a areka" { cargo build --locked --release -p areka -p areka-mcp-bridge --target $t --target-dir $OUT_DIR }
 }
 Restore-Env
 
 Step 'check static linking' {
-    # 作った exe 全部（helper＋作る CPU 種別の本体）と、期待する機械種別
+    # 作った exe 全部（helper＋作る CPU 種別の本体と中継）と、期待する機械種別
     $exes = [ordered]@{ $script:HelperExe = $HELPER_MACHINE }
-    foreach ($a in $script:BuildArchs) { $exes["$OUT_DIR/$($ARCHS[$a].Target)/release/areka.exe"] = $ARCHS[$a].Machine }
+    foreach ($a in $script:BuildArchs) {
+        foreach ($n in @('areka.exe', 'areka-mcp-bridge.exe')) { $exes["$OUT_DIR/$($ARCHS[$a].Target)/release/$n"] = $ARCHS[$a].Machine }
+    }
     $bad = $false
     foreach ($exe in $exes.Keys) {
         if (-not (Test-Path -LiteralPath $exe)) { throw "build output missing: $exe" }
@@ -489,14 +491,14 @@ function Test-ZipContent([string]$ZipPath, [string]$Arch) {
         $names = @($map.Keys | Sort-Object)
 
         # 1. 必須の項目
-        foreach ($r in @('areka.exe', 'shiori-host32-helper.exe', 'ghost/emo2/ghost/master/descript.txt', 'ghost/emo2/install.txt',
+        foreach ($r in @('areka.exe', 'areka-mcp-bridge.exe', 'shiori-host32-helper.exe', 'ghost/emo2/ghost/master/descript.txt', 'ghost/emo2/install.txt',
                 'balloon/emo2-kakukaku/descript.txt', 'balloon/StayseeBalloon/descript.txt',
                 'README.txt', 'LICENSE-MIT', 'THIRD-PARTY-NOTICES.md', 'BUILD-INFO.txt')) {
             if (-not $map.ContainsKey($r)) { $bad.Add("1 required entry missing: $r") }
         }
         # 2. 最上位・ghost/ 直下・balloon/ 直下の許可表
         $allowed = @{
-            ''         = @('areka.exe', 'shiori-host32-helper.exe', 'ghost', 'balloon', 'README.txt', 'LICENSE-MIT', 'THIRD-PARTY-NOTICES.md', 'BUILD-INFO.txt')
+            ''         = @('areka.exe', 'areka-mcp-bridge.exe', 'shiori-host32-helper.exe', 'ghost', 'balloon', 'README.txt', 'LICENSE-MIT', 'THIRD-PARTY-NOTICES.md', 'BUILD-INFO.txt')
             'ghost/'   = @('emo2')
             'balloon/' = @('emo2-kakukaku', 'StayseeBalloon')
         }
@@ -508,12 +510,12 @@ function Test-ZipContent([string]$ZipPath, [string]$Arch) {
         # 3. 起動記録
         $prof = @($names | Where-Object { $_ -match '(^|/)profile/' })
         if ($prof.Count) { $bad.Add("3 $($prof.Count) entries contain profile/ (first: $($prof[0]))") }
-        # 4. 実行ファイルと DLL は許可表の 3 本だけ
+        # 4. 実行ファイルと DLL は許可表の 4 本だけ
         $execs = @($names | Where-Object { $_ -match '\.(exe|dll)$' })
         $execs | Where-Object { $ALLOWED_EXECUTABLES -cnotcontains $_ } | ForEach-Object { $bad.Add("4 executable not in the allow list: $_") }
         $ALLOWED_EXECUTABLES | Where-Object { $execs -cnotcontains $_ } | ForEach-Object { $bad.Add("4 executable missing: $_") }
-        # 5. PE の機種・6. 依存 DLL（本体と helper だけ）
-        $machines = [ordered]@{ 'areka.exe' = $ARCHS[$Arch].Machine; 'shiori-host32-helper.exe' = $HELPER_MACHINE; 'ghost/emo2/ghost/master/pasta.dll' = $HELPER_MACHINE }
+        # 5. PE の機種・6. 依存 DLL（本体・中継・helper だけ）
+        $machines = [ordered]@{ 'areka.exe' = $ARCHS[$Arch].Machine; 'areka-mcp-bridge.exe' = $ARCHS[$Arch].Machine; 'shiori-host32-helper.exe' = $HELPER_MACHINE; 'ghost/emo2/ghost/master/pasta.dll' = $HELPER_MACHINE }
         foreach ($n in $machines.Keys) {
             if (-not $map.ContainsKey($n)) { continue }   # 無いことは 1／4 が言う
             try { $info = Read-PeInfo (Read-ZipEntry $map[$n]) } catch { $bad.Add("5 cannot read as PE: $n ($_)"); continue }
@@ -553,8 +555,9 @@ foreach ($a in $script:BuildArchs) {
     Step "$a assemble" {
         if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
         $null = New-Item -ItemType Directory -Path "$stage/ghost", "$stage/balloon"
-        # 設計の「zip の中身」の 9 行だけ（写す元が無ければ Copy-Item が throw）。areka.exe だけ CPU 種別ごと
+        # 設計の「zip の中身」の 10 行だけ（写す元が無ければ Copy-Item が throw）。areka.exe と areka-mcp-bridge.exe だけ CPU 種別ごと
         Copy-Item -LiteralPath "$OUT_DIR/$($ARCHS[$a].Target)/release/areka.exe" -Destination $stage
+        Copy-Item -LiteralPath "$OUT_DIR/$($ARCHS[$a].Target)/release/areka-mcp-bridge.exe" -Destination $stage
         Copy-Item -LiteralPath $script:HelperExe -Destination $stage
         Copy-Item -LiteralPath $script:GhostDir -Destination "$stage/ghost/emo2" -Recurse
         Copy-Item -LiteralPath $script:KakukakuDir -Destination "$stage/balloon/emo2-kakukaku" -Recurse

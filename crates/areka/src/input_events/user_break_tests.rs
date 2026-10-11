@@ -406,6 +406,41 @@ fn previous_press_memory_is_read_then_overwritten() {
     assert_eq!(lines.kanade().len(), 1);
 }
 
+/// 話している最中の単クリックでアンカーを選ぶと、続く 2 打目（左ダブルクリック）は中断に
+/// ならない（areka-P0-anchor-tag-canon 要件 3.4）。1 打目の「選択で使った」は、当たった範囲が
+/// アンカーでも選択の知らせが作られることから来る。2 打目はアンカーの上のまま（範囲が残って
+/// いる）でも、範囲の外（答えの台詞に替わった）でも同じ。
+#[test]
+fn second_click_after_selecting_an_anchor_is_not_a_break() {
+    use crate::input_events::balloon::{click_selection, test_support::anchor_row};
+    let rows = [anchor_row(0, 0.0, 0.0, 40.0, 10.0)];
+    let on_anchor = |x: f32| {
+        click_selection(true, &rows, x, 5.0, 0)
+            .is_some_and(|s| s.kind == areka_emo_text::state::SpanKind::Anchor)
+    };
+    assert!(on_anchor(5.0) && !on_anchor(50.0), "前提: 範囲の上と外");
+
+    for second_x in [5.0, 50.0] {
+        assert_eq!(
+            judge_press(
+                DoubleClick::Left,
+                on_anchor(second_x),
+                on_anchor(5.0),
+                Some(true),
+                false
+            ),
+            PressVerdict::ConsumedBySelection
+        );
+        let mut lines = Lines::wired();
+        assert!(!lines.press(0, DoubleClick::None, on_anchor(5.0)));
+        assert!(!lines.press(0, DoubleClick::Left, on_anchor(second_x)));
+        assert!(
+            lines.lifecycle().is_empty() && lines.kanade().is_empty(),
+            "隠さず、止めない"
+        );
+    }
+}
+
 /// 外側の入口は表示層へ照会した結果で判定する: 表示層に相手が居なければ、結線済みでも
 /// どちらの線へも送らない（要件 1.9）。
 #[test]

@@ -162,6 +162,7 @@ pub fn spawn_kanade_translating(
                 // 選択系 2 入力（additive・Req 4.4）。境界型をそのまま状態機械の入力へ写す
                 // （シェルは判断しない——受領検証・帳簿確立は schedule 層の責務）。
                 KanadeMsg::Choice(c) => Input::Choice(c),
+                KanadeMsg::Anchor(a) => Input::Anchor(a),
                 KanadeMsg::ChoiceWaiting {
                     talk_id,
                     choice_ids,

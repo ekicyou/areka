@@ -9,7 +9,7 @@ use super::*;
 use crate::bind::BindOptionDecls;
 use crate::looper::tests::{always_fire, cfg};
 use crate::output::{DisplayCommand, MockSurfaceOutput};
-use areka_emo_compose::{BindSet, EmoWorld, PatternState};
+use areka_emo_compose::{BindSet, EmoWorld};
 use areka_sakura::{ActorKey, CueCommand, TalkCue};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -114,33 +114,6 @@ impl Rig {
             duration: 0.0,
         }))
     }
-}
-
-/// ただ 1 件の `Show` の (面, 着せ替え, コマの状態)。
-fn single_show(mut cmds: Vec<DisplayCommand>) -> (u32, BindSet, PatternState) {
-    assert_eq!(cmds.len(), 1, "発行は 1 件だけ: {cmds:?}");
-    match cmds.remove(0) {
-        DisplayCommand::Show {
-            surface_id,
-            binds,
-            pattern,
-            ..
-        } => (surface_id, binds, pattern),
-        other => panic!("Show を期待: {other:?}"),
-    }
-}
-
-/// 部品 `part` の欄を (animation の番号, コマの番号) の列で読む。
-fn part_frames(pattern: &PatternState, part: u32) -> Vec<(u32, u32)> {
-    pattern
-        .part(part)
-        .map(|(id, f)| (id, f.surface_id))
-        .collect()
-}
-
-/// 一番上の欄を (animation の番号, コマの番号) の列で読む。
-fn top_frames(pattern: &PatternState) -> Vec<(u32, u32)> {
-    pattern.iter().map(|(id, f)| (id, f.surface_id)).collect()
 }
 
 /// 子が閉じ目のコマの途中で `\s` を、同じ子を置く面へ切り替える: `Show` は 1 件だけで閉じ目を

@@ -21,12 +21,13 @@ use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 
+use areka_actor::reply_channel;
 use areka_kanade::{
     ChangeHandoff, ChangeOrigin, ChangeRequest, ChangeTarget, CloseReason, ExecutionSnapshot,
-    KanadeConfig, KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped, MonotonicMs,
-    MouseButton, MouseEventKind, MouseInput, ShioriCall, ShioriFailure, ShioriFault, ShioriMethod,
-    ShioriMsg, ShioriOutcome, TalkCommand, TalkDone, TalkEndReason, TalkId, TranslateSeams, events,
-    spawn_kanade_translating,
+    ExecutionStatus, KanadeConfig, KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped,
+    MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriCall, ShioriFailure, ShioriFault,
+    ShioriMethod, ShioriMsg, ShioriOutcome, TalkCommand, TalkDone, TalkEndReason, TalkId,
+    TranslateSeams, events, spawn_kanade_translating,
 };
 use shiori_host32_host::{Charset, Method, ShioriRequest, build_request};
 
@@ -37,6 +38,9 @@ use super::common::{
 
 /// ダブルクリックが返す台詞。
 const MOUSE_SCRIPT: &str = r"\0\s[0]なでなで\e";
+
+/// お別れの台詞（終了の挨拶・切り替えの送り出しの台詞・切り替えの別れの台詞として返す）。
+const FAREWELL_SCRIPT: &str = r"\0\s[0]またね\e";
 
 /// 偽物が記録する 1 件（SHIORI の要求か、再生側への指示か）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -213,6 +217,17 @@ impl Rig {
 
     fn release(&self) {
         self.release.send(()).expect("偽物は握ったまま待っている");
+    }
+
+    /// 状態の問い合わせを 1 通送り、答え（線に載せる形）を上限つきで受ける。問い合わせは他の入力と
+    /// 同じ受信箱に並ぶので、先に送った入力の処理が済んだ後の状態が返る。
+    fn status(&self) -> Option<String> {
+        let (reply, receiver) = reply_channel::<ExecutionStatus>();
+        self.send(KanadeMsg::StatusQuery { reply });
+        receiver
+            .recv_timeout(DEFAULT_TIMEOUT)
+            .expect("問い合わせは期限内に答えられる（再生の終わりを待たない）")
+            .render()
     }
 
     /// kanade を止めて（まだ動いていれば `Close`）、記録と停止通知を返す。
@@ -633,4 +648,118 @@ fn change_handoff_carries_translated_script_or_none_on_transport_failure() {
     );
     assert_eq!(stopped, today, "原因と中身は OnGhostChanging の故障と同じ");
     assert_eq!(after_translate[1..], [Seen::Call(expected_unload())]);
+}
+
+/// お別れの台詞の 1 場面を殻ごと通す（areka-P0-farewell-talk-status 要件 2.1〜2.3・3.3・4.2・4.3）。
+/// `script_id` の GET だけが台詞を返す。`trigger` がきっかけの入力、`handshakes` がそれで送られる
+/// 握手の要求の列（最後の 1 件が台詞を返す）。
+///
+/// 「起動 → 問い合わせ → きっかけの入力 → 問い合わせ → 台詞の完了」を同じ受信箱へ順に送る。kanade は
+/// 入力 1 つの処理（握手の往復・翻訳の往復・再生の開始）を済ませてから次を受けるので、2 回目の
+/// 問い合わせは必ず再生の開始の後に処理される。再生側は完了を返さないので、その時点は再生中。
+fn assert_farewell_scene(
+    name: &str,
+    script_id: &'static str,
+    trigger: KanadeMsg,
+    handshakes: Vec<ShioriCall>,
+) {
+    let rig = spawn_rig(WireSpec::new(&[(script_id, FAREWELL_SCRIPT)]));
+    rig.send(KanadeMsg::Boot);
+    let before = rig.status();
+    rig.send(trigger);
+    let during = rig.status();
+    rig.send(talk_done(1));
+    let (log, _) = rig.finish();
+
+    assert_eq!(
+        before, None,
+        "{name}: 起動の後、何も再生していない間の答えは値なし"
+    );
+    assert_eq!(
+        during.as_deref(),
+        Some("talking"),
+        "{name}: お別れの台詞の再生中の 2 回目の答えに talking が無い"
+    );
+
+    let translates = calls_of(&log.seen, "OnTranslate");
+    assert_eq!(
+        translates.len(),
+        1,
+        "{name}: OnTranslate は 1 件: {:#?}",
+        log.seen
+    );
+    assert_eq!(
+        translates[0].status, during,
+        "{name}: OnTranslate の Status は同じ時点の問い合わせの答えと同じ値"
+    );
+
+    let handshake_statuses: Vec<Option<String>> = log
+        .seen
+        .iter()
+        .filter_map(|s| match s {
+            Seen::Call(c) if c.id == "OnClose" || c.id == "OnGhostChanging" => {
+                Some(c.status.clone())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        handshake_statuses,
+        vec![None; handshakes.len()],
+        "{name}: 握手の要求（OnClose・OnGhostChanging）に Status の行は無い"
+    );
+
+    let first_id = record(&handshakes[0]).id;
+    let source = handshakes.last().expect("握手の要求は 1 件以上");
+    let translate = expected_translate(FAREWELL_SCRIPT, source, &talking());
+    let mut expected: Vec<Seen> = handshakes.into_iter().map(call).collect();
+    expected.extend([
+        Seen::Call(translate),
+        start(1, FAREWELL_SCRIPT),
+        Seen::Call(expected_unload()),
+    ]);
+    assert_eq!(
+        from_first(&log.seen, &first_id),
+        expected.as_slice(),
+        "{name}: きっかけの入力から後は握手の要求・OnTranslate・再生の開始・降ろす往復だけ"
+    );
+}
+
+/// 終了の挨拶: 終了の要求で送った `OnClose` が台詞を返す。
+#[test]
+fn farewell_close_talk_is_talking_in_status_answer_and_on_translate() {
+    let reason = CloseReason::User { scope: 0 };
+    assert_farewell_scene(
+        "終了の挨拶",
+        "OnClose",
+        KanadeMsg::CloseRequest { reason },
+        vec![events::on_close(reason, &ExecutionSnapshot::INACTIVE)],
+    );
+}
+
+/// 切り替えの送り出しの台詞: 切り替えの要求で送った `OnGhostChanging` が台詞を返す。
+#[test]
+fn farewell_change_talk_is_talking_in_status_answer_and_on_translate() {
+    let idle = ExecutionSnapshot::INACTIVE;
+    assert_farewell_scene(
+        "切り替えの送り出しの台詞",
+        "OnGhostChanging",
+        KanadeMsg::ChangeGhost(change_request()),
+        vec![events::on_ghost_changing(&change_request(), &idle)],
+    );
+}
+
+/// 切り替えの別れの台詞: `OnGhostChanging` は 204 で、続けて送った `OnClose` が台詞を返す。
+#[test]
+fn farewell_change_close_talk_is_talking_in_status_answer_and_on_translate() {
+    let idle = ExecutionSnapshot::INACTIVE;
+    assert_farewell_scene(
+        "切り替えの別れの台詞",
+        "OnClose",
+        KanadeMsg::ChangeGhost(change_request()),
+        vec![
+            events::on_ghost_changing(&change_request(), &idle),
+            events::on_close(CloseReason::System, &idle),
+        ],
+    );
 }

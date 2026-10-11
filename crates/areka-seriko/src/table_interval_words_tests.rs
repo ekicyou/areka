@@ -69,7 +69,7 @@ fn rarely_records_the_same_entry_as_random_4() {
 /// 比べ方は小文字の完全一致なので、大文字は読み替えの対象にならない。
 #[test]
 fn other_interval_words_are_not_recorded_and_keep_their_original_vocab() {
-    for word in ["bind+always", "runonce", "Sometimes", "Rarely"] {
+    for word in ["bind+always", "yen-e", "Sometimes", "Rarely"] {
         let (table, logs) = table_and_logs(&surfaces_txt_with(word));
         assert!(
             table.animations(0).is_empty(),

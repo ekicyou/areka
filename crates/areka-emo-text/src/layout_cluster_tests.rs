@@ -19,7 +19,7 @@ use super::{FixedMetrics, GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::choice::{annotate_lines, derive_hit_rows, line_bands};
 use crate::region::TextRegion;
 use crate::segment::{Segment, SegmentPlan};
-use crate::state::{ChoiceSpan, CursorCoord, CursorUnit, TextItem};
+use crate::state::{ChoiceSpan, CursorCoord, CursorUnit, SpanKind, TextItem};
 use crate::writing::WritingMode;
 
 /// 共通前提の文字高さ。
@@ -297,6 +297,7 @@ fn choice_over_one_emoji_is_one_advance_wide() {
             let items = glyph_items(&["あ", form, "い"]);
             let lines = lay(&items, mode, None, WrapPlan::CharByChar);
             let spans = [ChoiceSpan {
+                kind: SpanKind::Choice,
                 ordinal: 0,
                 id: String::new(),
                 label: String::new(),
