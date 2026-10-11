@@ -267,12 +267,12 @@ flowchart TD
 4. PR の中身を読み直す: `gh pr view {番号} --json files`。2 回目以降は上の 5 ファイルだけ（同じ日に 2 回目の版上げなら、`dist/README.txt` を除く 4 つ）（4.2）。初回は、上のファイルと、この spec のフォルダの下のファイルだけ（4.4）。違えば止まる。
 5. **承認 A**: PR の URL・差分の数・確かめの結果・見どころのファイルの所在を示し、見どころの文章を読んでもらったうえで、「squash マージしてよいか」を開発者に聞いて止まる（4.3）。初回は、乾いた走りの結果（緑・省いた）も添える。
    - 見どころの口調と、必ず載せるもの（`doc/release-notes/README.md` の「必ず載せるもの」）が載っているかは、機械では見ない。ここで開発者が読んで確かめる。
-   - 文章の直しを求められたら、次の順で戻る: 見どころのファイルを直す → 段 3 の f を回し直す → `git add doc/release-notes/v{版}.md` だけを足したコミットを 1 つ作る（版上げの PR に載り、squash で 1 つのコミットになる）→ `git push --quiet {remote} HEAD` → 承認 A を取り直す。
+   - 文章の直しを求められたら、次の順で戻る: 見どころのファイルを直す → 段 3 の f を回し直す → `git add doc/release-notes/v{版}.md` だけを足したコミットを 1 つ作る（題は `chore(release): v{版} の見どころの直し`。版上げの PR に載り、squash で 1 つのコミットになる）→ `git push --quiet {remote} HEAD` → 承認 A を取り直す。
 6. 承認を得たら、`git fetch --quiet {remote} main` で main を読み直す。先端が「確かめた main」と違えば（2.7）、次を行う。
    - `git merge {remote}/main` で取り込む。衝突したら止まる。
    - 段 3 の a・b を回し直す。b の後、作業木が（この spec の `tasks.md` を除いて）きれいでなければ止まる（回し直した `-License` が `THIRD-PARTY-NOTICES.md` を変えた＝main に依存の変更が入った。コミットせずに開発者へ報告する）。
    - 段 3 の c を回し直す。版上げはもうコミット済みなので、比べる相手を読み替える: c の表の `git diff … HEAD` を `git diff … {remote}/main HEAD` にする（main の先端と枝の先端の比べ。初回は、この spec のフォルダの下のファイルが在ってよい）。見どころのファイルはコミット済みなので、「動いたファイルの集まり」に足したファイルとして出て、「新しいファイル」の `??` の行は 1 行も無い。
-   - 新しく main に入った変更の題名を `git log --first-parent --format=%s {確かめた main}..{remote}/main` で読み、開発者に示す（`{確かめた main}` は、覚えてある「確かめた main」のコミット）。見どころに足す物が在るか（`doc/release-notes/README.md` の「必ず載せるもの」）は、開発者が決める。足すなら、上の 5 の文章の直しと同じ順で直し、承認 A を取り直す。
+   - 新しく main に入った変更の題名を `git log --first-parent --format=%s {確かめた main}..{remote}/main` で読む（`{確かめた main}` は、覚えてある「確かめた main」のコミット）。題名が 1 件でも在れば、全部を開発者に示して止まり、見どころに足す物が在るか（`doc/release-notes/README.md` の「必ず載せるもの」）の答えを待つ。0 件なら、止まらずに先へ進む。この止まりは、承認 A で読んでもらった見どころの確かめ直しで、承認 A の取り直しと同じ場で取る。止まる点としては承認 A の続きである（止まる点は増えない）。答えが「足す物は無い」なら、先へ進む（マージの承認を取り直すかは、下の `git diff` の出力で決める）。足すなら、上の 5 の文章の直しと同じ順で直し、承認 A を取り直す。
    - `git push --quiet {remote} HEAD` の後、新しい先端を「確かめた main」として覚え直す。
    - 承認 A を取り直すかは、取り込みの前と後の `git diff {remote}/main HEAD -- Cargo.toml Cargo.lock THIRD-PARTY-NOTICES.md dist/README.txt doc/release-notes/v{版}.md` の出力で決める。1 字違わず同じなら取り直さない。違えば取り直す。
    - マージの直前にもう一度 main を読み、また動いていたら、この 6 を繰り返す。
