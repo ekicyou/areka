@@ -107,3 +107,8 @@
 - 要件定義のモデル: Opus。
 - 分割の案: なし。
 - 見つけた穴・古くなった記述: なし。
+
+## 2026-10-11 `mcp-stdio-bridge` の完了からの申し送り
+
+- zip に入る実行ファイルが 1 つ増えた。`tools/package.ps1` の `$ALLOWED_EXECUTABLES` は 4 つ＝`areka.exe`・`areka-mcp-bridge.exe`（Claude Desktop 用の中継・x64 と arm64 で別の物）・`shiori-host32-helper.exe`・`ghost/emo2/ghost/master/pasta.dll`。自分で組む物は 5 つ（x64 の本体と中継・arm64 の本体と中継・helper）。上の「署名の相手を数え直した」の 3 つ・3 つは、この行で読み替える。
+- 中継は Claude Desktop が子プロセスとして起こす（利用者がダブルクリックする物ではない）。未署名の中継が Smart App Control などで止まると、Desktop の側では「areka の項目を始められなかった」としか見えない。署名の相手に必ず入れる。

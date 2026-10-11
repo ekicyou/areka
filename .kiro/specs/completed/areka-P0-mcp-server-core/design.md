@@ -171,7 +171,7 @@ crates/areka-mcp/
 - `Cargo.lock`・`THIRD-PARTY-NOTICES.md` — `cargo` と `tools/test-all.ps1 -License` が作り直す（手の差分 0 行）。
 - `doc/ssp-mcp/transport-diff-areka.md` — 新規（要件 5）。
 - `.kiro/steering/roadmap.md` — 本 spec の行の既定ポートの記述（B-13 の裁定に合わせる）と、起票時の記録への裁定の 1 文。
-- `.kiro/specs/areka-P0-mcp-stdio-bridge/brief.md` — 冒頭に B-13 の裁定の日付つき注記 1 段（本文の決めごとは変えない・Revalidation Trigger の追随）。
+- `.kiro/specs/completed/areka-P0-mcp-stdio-bridge/brief.md` — 冒頭に B-13 の裁定の日付つき注記 1 段（本文の決めごとは変えない・Revalidation Trigger の追随）。
 - `.kiro/steering/tech.md` — Key Libraries に rmcp・tokio（＋tokio-util）・hyper（＋hyper-util・http-body-util・tower-service）の登記（用途・版・「tokio は MCP のスレッドに閉じる」）。
 - `.kiro/steering/structure.md` — 「MCP Server Crate（areka-mcp）」の節（Location・Purpose・Modules・Dependencies・規律）。
 - `.kiro/specs/areka-P0-mcp-server-core/verification/signoff.md` — 実機確認の記録（要件 9.5・9.6）。

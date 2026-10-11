@@ -39,6 +39,14 @@ fn own_rows_are_registered_without_duplicate_names() {
     }
 }
 
+/// (spec: areka-P0-mcp-stdio-bridge・要件 8.6) `all_specs` の列は、本番の登録表（`all_entrances`）の
+/// 定義の列と同じ名前・同じ順・同じ中身（中継の組み込みの一覧はこの列から組む）。
+#[test]
+fn all_specs_equals_the_specs_of_the_production_registry() {
+    let (all, _rx) = all_entrances(REPLY_WAIT);
+    assert_eq!(all_specs(), specs(&all));
+}
+
 /// (要件 1.4) `entrances` は 10 本のまま。
 #[test]
 fn entrances_stays_ten() {

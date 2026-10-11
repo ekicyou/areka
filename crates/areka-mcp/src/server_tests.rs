@@ -28,7 +28,7 @@ fn assert_ping(addr: std::net::SocketAddr) {
 /// 先頭の候補で束ねたので移った旨（`skipped`）は無く、debug も 0 件。
 #[test]
 fn listen_logs_info_with_url() {
-    let (server, events) = capture(|| start(&[0], ToolRegistry::default()));
+    let (server, events) = capture(|| start(&[0], ToolRegistry::default(), None));
     let addr = server.local_addr().expect("空きポートで待ち受けている");
     assert!(addr.ip().is_loopback() && addr.is_ipv4(), "{addr}");
     let infos = of_level(&events, Level::INFO);
@@ -52,7 +52,7 @@ fn bind_failure_logs_error_and_returns_off() {
     let occupied = TcpListener::bind("127.0.0.1:0").expect("空きポートを占める");
     let port = occupied.local_addr().unwrap().port();
 
-    let (server, events) = capture(|| start(&[port], ToolRegistry::default()));
+    let (server, events) = capture(|| start(&[port], ToolRegistry::default(), None));
     let errors = of_level(&events, Level::ERROR);
     assert_eq!(errors.len(), 1, "{events:?}");
     assert_eq!(
@@ -84,7 +84,7 @@ fn default_candidates_skip_taken_port() {
     let occupied = TcpListener::bind("127.0.0.1:0").expect("空きポートを占める");
     let taken = occupied.local_addr().unwrap().port();
 
-    let (server, events) = capture(|| start(&[taken, 0], ToolRegistry::default()));
+    let (server, events) = capture(|| start(&[taken, 0], ToolRegistry::default(), None));
     let addr = server.local_addr().expect("次の候補で待ち受けている");
     assert_ne!(addr.port(), taken, "占めた番号で待ち受けている");
 
@@ -127,7 +127,7 @@ fn all_candidates_taken_logs_one_error() {
         second.local_addr().unwrap().port(),
     ];
 
-    let (server, events) = capture(|| start(&taken, ToolRegistry::default()));
+    let (server, events) = capture(|| start(&taken, ToolRegistry::default(), None));
     assert!(server.local_addr().is_none());
 
     let debugs = of_level(&events, Level::DEBUG);
@@ -156,7 +156,7 @@ fn all_candidates_taken_logs_one_error() {
 /// (要件 2.4) 候補が空（`AREKA_MCP_PORT` が `0`）では info 1 件・待ち受けない（落としても閉じる記録は出ない）。
 #[test]
 fn disabled_port_logs_info_and_no_thread() {
-    let (server, events) = capture(|| start(&[], ToolRegistry::default()));
+    let (server, events) = capture(|| start(&[], ToolRegistry::default(), None));
     assert_eq!(of_level(&events, Level::INFO).len(), 1, "{events:?}");
     assert_eq!(events.len(), 1, "{events:?}");
     // 理由（環境変数の名前）も載せる（要件 2.4）。

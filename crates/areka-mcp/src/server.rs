@@ -5,6 +5,7 @@
 //! 取っ手 [`McpServer`] の `Drop` で取り消して畳む（設計 B-3）。
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::time::Duration;
@@ -29,7 +30,9 @@ pub(crate) const ACCEPT_RETRY_WAIT: Duration = Duration::from_millis(100);
 ///
 /// `candidates`: 試す番号の列（先頭から順・最初に束ねた 1 つで待ち受ける＝設計判断 B-13）。
 /// 空＝待ち受けない（`AREKA_MCP_PORT=0`）。要素の `0`＝OS に空きポートを割り当てさせる（テスト用）。
-pub fn start(candidates: &[u16], registry: ToolRegistry) -> McpServer {
+/// `bridge_exe`: help の Claude Desktop の設定例に載せる中継の置き場（None＝場所が取れなかった・
+/// spec: areka-P0-mcp-stdio-bridge）。
+pub fn start(candidates: &[u16], registry: ToolRegistry, bridge_exe: Option<PathBuf>) -> McpServer {
     if candidates.is_empty() {
         info!("MCP: 待ち受けない（AREKA_MCP_PORT が 0）");
         return McpServer { listening: None };
@@ -60,6 +63,7 @@ pub fn start(candidates: &[u16], registry: ToolRegistry) -> McpServer {
     let token = CancellationToken::new();
     let state = Arc::new(State::new(
         addr.port(),
+        bridge_exe,
         ArekaHandler::new(registry),
         token.clone(),
     ));

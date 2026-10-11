@@ -1,0 +1,55 @@
+[package]
+name = "areka-mcp-bridge"
+workspace = "../.."
+description = "Claude Desktop 向けの中継（spec: areka-P0-mcp-stdio-bridge）: 標準入出力の 1 行 1 要求を、127.0.0.1 で待ち受ける areka の MCP の受け口（Streamable HTTP）へ届ける"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false # 配布の中継 exe・開発者は cargo install --path で入れる
+repository.workspace = true
+
+[[bin]]
+name = "areka-mcp-bridge"
+path = "src/main.rs"
+
+# 依存は設計の Allowed Dependencies のとおり。どれも Cargo.lock に既にある版で、
+# 新しい外部のクレートは 0 個（要件 7.5）。根の [workspace.dependencies] は変えない。
+[dependencies]
+# 候補の並び（PORT_ENV・candidates_from_env_value）・名乗り（SERVER_NAME）・受け口のパス（MCP_PATH）を
+# 受け口と同じ定義から読む（要件 8.2）。ツールの上限の時間（tools::REPLY_WAIT）はテストが比べるだけ。
+# areka も控えも無いときの組み込みの答えの元（SERVER_VERSION・INSTRUCTIONS・tools::all_specs）も
+# 同じ定義から読む（要件 3.5・8.6）。
+# 中継の exe の名前（BRIDGE_EXE_FILE_NAME）は中継からは読まない: 綴りは areka-mcp の
+# tests/shared_consts_test.rs が固定し、建った exe がその名前で在ることは配布スクリプト
+# （tools/package.ps1）の写しと zip の中身の検査が見る。
+# 受け口の実行時の部品（start など）は本番では呼ばない。
+areka-mcp = { path = "../areka-mcp" }
+# MCP の公式 SDK。版は areka-mcp と同じ = で固定し、上げるときは中継のテストも全部通す。
+# 既定機能（macros・base64）は切る。transport-io は使わない（標準入出力の輸送は自前）。
+# reqwest・hyper の client 機能は Cargo.lock に無いクレートを引くので使わない（HTTP の送り手は自前）。
+rmcp = { version = "=3.5.0", default-features = false, features = [
+    "server",
+    "client",
+    "transport-streamable-http-client",
+] }
+# 非同期ランタイムは main が回す current_thread 1 本だけ（中継は別のプロセスなので main が持ってよい）。
+tokio = { version = "1", features = ["rt", "net", "time", "io-std", "io-util", "sync"] }
+# rmcp の HTTP の口（StreamableHttpClient）の署名に出る型: BoxStream・HeaderName／HeaderValue・Sse。
+futures = "0.3"
+http = "1"
+sse-stream = "0.2"
+# 自前の HTTP/1.1 の送り手が応答の頭を解く。
+httparse = "1"
+serde_json = "1"
+thiserror = { workspace = true }
+tracing = { workspace = true }
+# 記録を標準エラーへ据える（RUST_LOG）。
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+# 控えの置き場などの一時フォルダ（target の下）。
+temp-path-kit = { path = "../temp-path-kit" }
+# #[tokio::test] と、偽の受け口を回しながら子プロセス（建てた exe）を待つテストのための機能。
+# 本番の exe は current_thread のまま（上の [dependencies] の機能だけで建つ）。
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
