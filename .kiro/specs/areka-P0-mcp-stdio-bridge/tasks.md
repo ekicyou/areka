@@ -212,7 +212,7 @@
   - _Depends: 5.1, 5.2_
   - _Requirements: 2.6, 3.4, 3.5, 3.9, 3.10, 3.12, 8.1, 8.6_
 
-- [ ] 8.2 help・説明書・差の記録を、組み込みの答えに合わせる
+- [x] 8.2 help・説明書・差の記録を、組み込みの答えに合わせる
   - help の Claude Desktop の節: 「一度つないだ後は、Claude Desktop を areka より先に起動していても、中継が持っている前の答えの控えでツールが並びます。」の文を、設計の help の項の新しい文に替える（一度もつないでいなくても並ぶ・ツールを使うには areka の起動が要る・起動すれば Desktop を起動し直さなくても使える）。help のほかの文と節は 1 字も変えない。help のテストの判定を新しい文に合わせる（「一度つないだ後は」が無い・areka の起動が要る旨がある）
   - 説明書（`dist/README.txt`・BOM 付き・CRLF・バイト単位で書き換える）: 「■ Claude Desktop からつなぐ」の控えの行を「一度もつないでいなくても並ぶ（控えが無ければ、中継が自分で持っている一覧で答える）」に言い直し、「■ MCP のポート」の `0` の行に「自分で持っている一覧も使わない」を足す。ほかの行は触らない
   - 差の記録（`doc/ssp-mcp/bridge-diff-areka.md`）: areka の欄を書き換える行が 3 つ（2 節の「`initialize`（控えが無い）」・2 節の「ほか」・3 節の「控えが無いときの `tools/list`」）と、4 節に足す行が 1 つ（組み込みの答えの中身・答えの元の順・既知の上限・`AREKA_MCP_PORT=0` では使わない）。SSP の欄は実測の写しのまま変えない（測っていない振る舞いを書き足さない）。`tools/call` と未知のメソッドのエラーの文の説明は「ほか」の行へ移す。8.1 で名前を替えたテストを引いている行を直し、頭の「判定の数」を数え直して合わせる
@@ -311,3 +311,4 @@
 - 8.1: areka も控えも無いときの最初の問い合わせと `tools/list` は、中継が組み込みの答えで答える（`service.rs` の `Bridge::absent` の順＝`ping` → 控え → 組み込み → エラー。`builtin_info`・`builtin_tools` が `areka-mcp` の公開の値 `SERVER_NAME`・`SERVER_VERSION`・`INSTRUCTIONS`・`tools::all_specs` から組む）。受け口の答えは 1 字も変わっていない。食い違いの見張りは `real_receiver_test.rs` の `built_in_answers_equal_the_answers_of_the_real_receiver_in_all_five_versions`（応答の全体・5 つの版・本数は数で固定しない）。
 - 8.1: ひっくり返したテスト＝`service_tests.rs` の `without_areka_an_inquiry_with_no_cache_of_its_kind_gets_the_error` → `…_gets_the_built_in_answer`（実装の前は `[Error, Error, Error, Error]` で赤）と、`exe_test.rs` の `a_broken_cache_and_a_broken_answer_leave_their_reason_on_stderr` の前半（名前はそのまま・実装の前は名乗りが `Null` で赤）。差の記録（`bridge-diff-areka.md`）が前の名前を 4 か所で引いているので 8.2 で直す。`exe_test.rs` の頭の注釈の `AREKA_MCP_PORT` の説明に「束ねたまま待ち受けない番号」を足すのも 8.2 で。
 - 8.1: exe の大きさ（x64・`cargo build --release -p areka-mcp-bridge`）は 3,155,456 → 3,182,080 バイト（約 26 KB の増え・依存は足していない）。配布スクリプトの建てでの値は 8.3 で取り直す。`service_tests.rs` は 869 行になった（次に足すなら分ける）。
+- 8.2: help の Claude Desktop の節の最後の文を設計の文に替えた（`help_tests.rs` の `desktop_section_tells_where_to_write_and_to_restart` が固定）。説明書は 2 行だけ（控えの行・`0` の行。BOM と行末はそのまま）。差の記録は areka の欄 3 行の書き換えと 4 節の 1 行（判定の数 21 → 22）・古いテスト名 4 か所の付け替え・頭の日付の 1 文・言葉の表の 1 行。SSP の欄は変えていない。`exe_test.rs` の頭の注釈に「束ねたまま待ち受けない番号」を足した（注釈だけ）。

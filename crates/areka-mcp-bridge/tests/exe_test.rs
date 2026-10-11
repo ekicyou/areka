@@ -1,9 +1,9 @@
 //! 建てた exe（`CARGO_BIN_EXE_areka-mcp-bridge`）を起こす通しのテスト。
 //!
-//! 起こす exe には必ず `AREKA_MCP_PORT`（偽の受け口の番号か `0`）と `AREKA_PROFILE_DIR`（`target` の
-//! 下の一時フォルダ）の両方を渡す（机の本物の番号と本物の控えの置き場へ落ちない）。読めない値と
-//! 未設定は既定の 20 個（机の本物の番号）へつなぎに行くので、exe ごしには回さない
-//! （`config_tests.rs` の値だけの判定が持つ）。
+//! 起こす exe には必ず `AREKA_MCP_PORT`（偽の受け口の番号か、テストが束ねたまま待ち受けない番号か、
+//! `0`）と `AREKA_PROFILE_DIR`（`target` の下の一時フォルダ）の両方を渡す（机の本物の番号と本物の
+//! 控えの置き場へ落ちない）。読めない値と未設定は既定の 20 個（机の本物の番号）へつなぎに行くので、
+//! exe ごしには回さない（`config_tests.rs` の値だけの判定が持つ）。
 
 use std::io::{Read, Write};
 use std::path::Path;

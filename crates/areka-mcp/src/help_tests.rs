@@ -160,7 +160,9 @@ fn desktop_example_has_no_env_on_every_default_candidate() {
 }
 
 /// (要件 6.5) 節に、設定ファイルの名前・Desktop の設定の画面から開くこと・書いた後に起動し直すこと
-/// （窓を閉じるだけでは終了しない旨の断り付き）・前の答えの控えでツールが並ぶことが載り、
+/// （窓を閉じるだけでは終了しない旨の断り付き）・Desktop を areka より先に起動していてもツールが並ぶこと
+/// （控えか、控えが無ければ中継が自分で持っている一覧で。「一度つないだ後は」の条件は付かない）・
+/// ツールを使うには areka の起動が要り、起動すれば Desktop を起動し直さなくてよいことが載り、
 /// 「今後の版」の文は無い。置き場を渡したときは置き換えの文も無い。
 #[test]
 fn desktop_section_tells_where_to_write_and_to_restart() {
@@ -178,6 +180,20 @@ fn desktop_section_tells_where_to_write_and_to_restart() {
         "{html}"
     );
     assert!(section.contains("控え"), "{html}");
+    assert!(!html.contains("一度つないだ後は"), "{html}");
+    assert!(
+        section.contains("areka より先に起動していても、areka のツールが並びます"),
+        "{html}"
+    );
+    assert!(section.contains("自分で持っている一覧"), "{html}");
+    assert!(
+        section.contains("ツールを使うには areka を起動してください"),
+        "{html}"
+    );
+    assert!(
+        section.contains("Claude Desktop を起動し直さなくても使えます"),
+        "{html}"
+    );
     assert!(!html.contains("今後の版"), "{html}");
     assert!(!section.contains("置き換えてください"), "{html}");
 }

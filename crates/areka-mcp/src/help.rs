@@ -109,7 +109,7 @@ pub fn help_html(port: u16, bridge_exe: Option<&Path>) -> String {
 }}</code></pre>
 {replace_note}<p>書いた後に Claude Desktop を起動し直すと、areka のツールが並びます。
 窓を閉じるだけでは Claude Desktop は終了しません。タスクバーの通知領域（時計の近く）にある Claude のアイコンから終了してから、起動し直してください。
-一度つないだ後は、Claude Desktop を areka より先に起動していても、中継が持っている前の答えの控えでツールが並びます。</p>
+Claude Desktop を areka より先に起動していても、areka のツールが並びます（中継が、前に areka から受け取った答えの控えか、控えがまだ無ければ自分で持っている一覧で答えます）。ツールを使うには areka を起動してください。起動すれば、Claude Desktop を起動し直さなくても使えます。</p>
 
 <h2>areka 独自のツール</h2>
 <p>SSP と同じツールに加えて、SSP に無い次のツールを出しています。</p>
