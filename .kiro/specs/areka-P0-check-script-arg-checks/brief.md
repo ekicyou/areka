@@ -88,3 +88,17 @@ MCP のツール `check_script` は、台本を再生せずに「areka で効く
   2. 受け口の記録を同じに保つ方法。推しは「取り出した関数が理由を値で返し、受け口は今の文のまま記録する」。記録の文を固定するテストが無い受け口（`change_cue`・`switch_cue`・`readme_cue`）は、取り出す前に今の記録を固定するテストを足すかどうか。
   3. 縮退して受けるもの（`\![move]` の時間つき・`install` の読まない後ろの引数・更新の読み飛ばした指定）を `unreadable_argument` と `ignored` のどちらで返すか、文面を足すか。足すと `mcp-strict-errors` が揃える正本（`areka-tools.md` の ⑶）が変わる。
 - **覚え書きとの違い**: 覚え書きは「判定を純粋な関数へ取り出せば足せる」と書くが、10 のうち 7 つは既に純粋な関数になっている。ukadoc の照合は不要（areka の道具の話で、正典の主張を含まない）。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化:
+  - `anchor-tag-canon`（10-10）が着地した＝`check_script_judge.rs` を先に触る相手が 1 つ減り、今すぐ始められる先頭になった。
+  - 同 spec が判定に足したもの: 診断の種類は 6 つから 7 つ（`crates/areka-mcp/src/tools/check_script.rs` の `Kind` に `unpaired_tag`）・文面の定数 3 つ・アンカーの開きと閉じの対応を再生と同じ関数（`areka_sakura::pair_anchors`）で診る段。「再生と同じ関数の答えを種類へ写す」本 spec の手本がもう 1 つ増えた。
+  - 正本 `doc/ssp-mcp/areka-tools.md` は 167 行（種類は 7 つ・見本の表は 17 行・固定するテストは `row01`〜`row17`）。本 spec が見本の行を足すなら 18 行目から。
+  - 取り出しの 3 つの受け口（`change_cue.rs` 119・`switch_cue.rs` 123・`readme_cue.rs` 140）と、既に関数がある 7 つは変わっていない。
+- 触るファイル: 棚卸㉓のとおり。行数: `check_script_judge.rs` 218・`check_script_judge_tests.rs` 404・`check_script_tests.rs` 281・`areka-tools.md` 167。
+- 規模: M（8〜12 タスク）のまま。
+- 先に要るもの: なし。同じウェーブに置けない相手: `mcp-strict-errors`・`script-impact-tiers`・`anchor-style-canon`・`text-align-shadow-canon`・`font-size-keywords`・`sakura-time-directives`・`talk-fast-forward`（`check_script_judge.rs`）・`popup-menu-residue`（`readme_cue.rs`）・`doc/ssp-mcp/areka-tools.md` を直す `mcp-user-response`・`mcp-shiori-query`・`mcp-reload`（向こうは受け取り手の数の 1 行だけ＝その 1 行を本 spec が預かれば重なり 0）。
+  - 重なり 0: `mcp-kanade-tools`・`mcp-receiver-bugs`・`mcp-stdio-bridge-residue`。
+- 優先度の区分: C のまま。要件定義のモデル: Opus のまま。
+- 見つけた穴・古くなった記述: 本文 Current State の「診断の種類は 6 つ」「`check_script_judge.rs`・196 行」は古い。Adjacent と棚卸㉓の節の「`mcp-reload`（`change_cue.rs`）」は当たらない（向こうの触るファイルに無い）。同じ節の `anchor-tag-canon` は着地済み。

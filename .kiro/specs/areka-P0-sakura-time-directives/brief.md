@@ -123,3 +123,15 @@ compile の汎用キャリアアームへ allowlist 判定を追加（純関数�
 - **口パクが、文字の現れる時刻の式を写して持つようになった**: `seriko-trigger-intervals` で、seriko は interval `talk,数値` のために「i 文字目が現れる時刻」を自分でも計算する（`crates/areka-seriko/src/talk.rs` の `TalkFeed`・`TalkEpoch`）。式は文字の層と同じで、入力は cue の時刻・再生時間・文字数だけ。**共有ではなく写し**で、文字の層の式を変えても赤になるテストは無い。
 - **本 spec がすること**: 上の節は「倍率や瞬間表示を焼き込んだ再生時間が cue に入るので、文字の層に手は要らない」と書く。seriko の写しも同じ cue の再生時間から計算するので、**cue の再生時間を変えるだけなら `talk.rs` にも手は要らない見込み**。要るのは確かめ: `\_q` で再生時間 0 の字がまとめて届くと、1 回の刻みで区切りを 2 つ以上越える。この場面は判定の純粋な関数のテストだけが固定していて、配線を通したテストも実機の確かめも無い（`\_q` が未対応で踏めなかった）。本 spec の実機の確かめに「`talk,数値` の面で `\_q` を流し、口が最新の区切りで 1 回だけ動く」を 1 項目足す（検体は `crates/areka-seriko/tests/fixtures/trigger-intervals/` を使い回せる）。
 - 文字が現れる時刻の式そのもの・起点の取り方に触ることになったら、`talk.rs` の写しも同じに変える。写しの見張りは新しい spec `seriko-talk-clock-fidelity` が持つ。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化:
+  - 台本のコンパイルの列の先頭だった `anchor-tag-canon`（10-10）が着地した。行数: `crates/areka-sakura/src/compile.rs` 481（411 から）・`crates/areka-parsers/src/sakura/decode.rs` 502（400 から）・`sakura/model.rs` 172。新しいファイル `crates/areka-sakura/src/anchor_pair.rs`（アンカーの開きと閉じの対応）ができた。
+  - `decode_bare` に `\_q` の腕を足す形と、値の読み取りを `parse_choice_timeout` と同じ形の公開の関数にする案は、そのまま使える（どちらの関数も今もある）。
+  - `consumer_ledger.rs`（943）は変わっていない。台本の検査（`crates/areka/src/mcp/check_script_judge.rs`・218 行）は診断の種類が 7 つになった。
+- 触るファイル: 棚卸㉓のとおり。
+- 規模: 8〜12 タスクのまま。切らない。
+- 先に要るもの: 働きの前提は無い。ファイルの順は、列の残り `range-choice-tag` → `talk-fast-forward` の後（どちらも未着手）。列の外では `sakura-time-critical`（`decode.rs`・`model.rs`・`consumer_ledger.rs`）・`mcp-reload`・`inputbox-user-input`（`consumer_ledger.rs`）・`check-script-arg-checks`（検査に値の誤りを答えさせるときだけ `check_script_judge.rs`）と並べられない。kanade と `crates/areka-mcp/` には触らないので、`mcp-kanade-tools`・`mcp-receiver-bugs`・`mcp-stdio-bridge-residue` とは重なり 0。
+- 優先度の区分: C のまま。要件定義のモデル: Opus のまま。
+- 見つけた穴・古くなった記述: 棚卸㉓の節の「`compile.rs`（411 行）」は 481 行。同じ節が書いた台帳の持ち主の付け替えと冒頭の古い記述は、手つかずで残っている。

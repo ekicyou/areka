@@ -97,3 +97,15 @@
 - リリースの配布物を組む道を、通信の失敗で止めない（製品の資産はリポジトリが持つ）。
 - 道具が端末へ出す文は ASCII だけ。
 - 規模の見立ては M（8〜12 タスク）。
+
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+- 前提の変化: 無し。`vendors/sample_ghost/` の書庫は 8 本のまま。`tools/package.ps1` に `mcp-stdio-bridge` の変更が入ったが、既定バルーンを検体の窓口から引く所は変わっていない。
+- 触るファイル・規模: 本文のとおり（8〜12 タスク）。
+- 先に要るもの: `dot-sakura-specimen`。
+- 席の案（検体の登記表の列）: `dot-sakura-specimen` → `emily-ghost-verification` → `default-balloon-selfmade` → `sample-url-fetch`＝この spec は最後。
+  - 登記表の全部の行に URL とハッシュの欄を足すので、行を足す 3 本が済んでからにする。開発者も「将来的には」と言っている。
+  - `default-balloon-selfmade` が先に着地すれば、配布の道具は検体の取り寄せに触れずに済む。
+- ファイルの重なり: 上の 3 本（登記表・数のテスト・README）・`default-balloon-selfmade`（`tools/package.ps1`）。`tools/test-all.ps1` を触る `dev-helper-x64-clobber` は、着手の前に照らす。
+- 優先度の区分: A。要件定義のモデル: Fable を勧める（取り寄せ先・置き場の決まりの例外・置く権利は開発者の決めごと）。
+- 見つけた穴・古くなった記述: 本文に要件定義のモデルが書かれていない。

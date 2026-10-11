@@ -152,3 +152,16 @@
 - **口パクが、文字の現れる時刻の式を写して持つようになった**: `seriko-trigger-intervals` で、seriko は interval `talk,数値` のために「i 文字目が現れる時刻」を自分でも計算する（`crates/areka-seriko/src/talk.rs` の `TalkFeed`＝文字の層の `RevealSchedule::extend_chunk` と同じ式・`TalkEpoch`＝`TalkClock::observe_cue` と同じ式）。**共有ではなく写し**で、文字の層の式を変えても赤になるテストは無い。
 - **本 spec がすること**: 早送り（残りの字を一気に出す）や `\x`（時計を止めて、クリックで再開する）で、文字が現れる時刻・起点・cue の届き方を変えるなら、`talk.rs` の写しも同じに変える。変えないと、口だけが元の時刻で動く（早送りで字が全部出た後に、口が遅れて動き続ける形になりうる）。要件の段で、早送りの間の口の動かし方（区切りを 1 回の刻みで何個も越えたときは、最新の 1 つだけ鳴る決まりが今ある）を 1 行確かめる。
 - **見張りの持ち主**: 写しと文字の層の式の一致を見張る仕組みは、新しい spec `seriko-talk-clock-fidelity` が持つ。そちらが先に着地していれば、本 spec の変更で見張りが赤になる。本 spec が先なら、`talk.rs` を手で合わせ、同 spec の brief に合わせた所を 1 行残す。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- **前提の変化**: `anchor-tag-canon` が着地した（10-10）。列の順は、台本の読み手の列でも文字とバルーンの列でも `range-choice-tag` の後になった。
+  - 押下の判定にアンカーが入った: 押せる範囲（選択肢・アンカー）の上の押下は「選択の確定」で、中断にしない（箱は `crates/areka/src/input_events/shell_box.rs` の `judge_box_press`。4 値のまま）。早送りの押下も、この判定の後ろに置く。
+  - 台本の変換（`crates/areka-sakura/src/compile.rs`）は、閉じ忘れたアンカーを台本の終わりで閉じる合図を足すようになった。`\x` で止まっている間もアンカーは開いたままで押せる＝区切りの前後でアンカーをどう扱うかを、後半（`\x`）の要件で 1 行決める。dola の中で時刻を付け替える案なら、変換の側は変わらない。
+  - `\x` を「知らないタグ」の見本に使う検査は、今も 3 本とも在る。
+- **上限に近いファイル**（kanade・上限 1,000 行）: `schedule/mod.rs` 969・`schedule/steady.rs` 957・`msg.rs` 930・`actor.rs` 901＝棚卸㉓の数は古い。`msg.rs` に知らせを 1 種類足すと、`actor.rs`・`schedule/mod.rs` にも配線の行が要る（`anchor-tag-canon` がそうだった）＝`schedule/mod.rs` の余りは 31 行。中身は新しいファイルへ置く。
+- **触るファイル**: 棚卸㉓のまま。emo-text にファイルを足す（`lib.rs` の一覧は今 76 本）。
+- **規模**: 18〜23 タスクのまま。分割の案（前半 `talk-fast-forward`・後半 仮の名前 `click-wait-tag`）も同じ。
+- **先に要るもの**: 働きの前提は満たしている。列の順で `range-choice-tag`（`decode.rs`・`compile.rs`・dola の `cue/runtime.rs`）の後。
+- **優先度の区分**: A のまま。**要件定義のモデル**: Fable のまま。
+- **見つけた穴・古くなった記述**: コードの穴は無い。kanade に触るので `balloon-link-hover`・`mcp-kanade-tools`・`mcp-shiori-query` と同じウェーブに置けない。

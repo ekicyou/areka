@@ -84,3 +84,22 @@
 ## 2026-10-10 `areka-P0-anchor-tag-canon` の完了時の申し送り
 
 - **ついでに直す 1 件（選択の送り口の記録が 2 行出る）**: 選択の送り先が消えているとき、送り口の `warn!`（`crates/areka/src/input_events/balloon.rs` の `BalloonWiring::send_selection`）と、呼び手の `error!`（普通のバルーンは `balloon_pressed.rs` の `on_balloon_pointer_pressed`、箱は `shell_box_handler.rs` の `send_selection`）が、同じ名前で 1 行ずつ出る（選択肢は `choice_selection_send_failed`、アンカーは `anchor_selection_send_failed`。名前の表は `balloon.rs` の `selection_events`）。完了 `areka-P0-choice-interact` からある軽い件で、`anchor-tag-canon` でアンカーにも写った。本 spec は `\__q` の範囲の当たりで同じ送り口と `balloon.rs`・`shell_box_handler.rs` を触るので、そのときに 1 回の失敗につき 1 行へ揃える（どちらを残すかは設計で決める）。動きは変えない。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- **前提の変化**: `anchor-tag-canon` が着地した（10-10）＝先に要るものは無くなり、今すぐ着手できる。上の棚卸㉓の「未着手」は古い。そのまま使えるもの:
+  - 開きから閉じまでの字を 1 つの範囲にする記録（`crates/areka-emo-text/src/state_anchor.rs`）と、選択肢とアンカーが種類つきで並ぶ範囲の列（`state.rs` の `ChoiceSpan` の `kind`）。行ごとの割り当て・当たりの行・ホバー・押下・選択の送り口（`crates/areka/src/input_events/balloon.rs` の `ChoiceSelection`）は、もう種類を見て動く＝種類が選択肢の範囲を作れば、押下から `OnChoiceSelect` までは今の道を通る見込み。
+  - 開きと閉じの対応の判定（`crates/areka-sakura/src/anchor_pair.rs` の `pair_anchors`。台本の変換と `check_script` が共有）。閉じ忘れ・重なり・迷子の閉じの扱いをアンカーと揃えるかは本 spec で決める（`doc/anchor-compat.md` の 3.1）。
+- **触るファイル**（棚卸㉓の一覧を引き直した）:
+  - `crates/areka-parsers/src/sakura/{decode.rs, model.rs, mod.rs}`・検査 `parse_bare_tag_tests.rs` と新しい検査ファイル。
+  - `crates/areka-sakura/src/{compile.rs, anchor_pair.rs か隣の新しいファイル, lib.rs}`。`drive.rs` は触らない見込み（選択肢の ID の一覧は dola の再生機から読むだけ）。
+  - **dola（棚卸㉓の一覧に無かった）**: `crates/dola/src/cue/{command.rs, sink.rs, runtime.rs}`。選択待ちの照合の一覧（`runtime.rs` の `pending_choices`）は今 `Choice` の合図だけを積むので、範囲の選択肢の ID も積まないと選んでも解けない。合図の種類を足すなら、全種類を並べている所（`crates/areka-ghost/src/sink.rs` の名前の表・emo-text の `actor.rs`）にも腕が要る。
+  - `crates/areka-emo-text/src/{state.rs, state_anchor.rs, actor.rs, lookahead.rs}` と新しい検査ファイル＝**emo-text にファイルを足す**（`lib.rs` の純粋な一覧は今 76 本・ウェーブに 1 席）。`choice.rs`・`actor_present.rs` は種類つきになったので触らずに済む見込み。
+  - `crates/areka/src/mcp/check_script_judge.rs`（開きと閉じの崩れの知らせ。アンカーと同じ形にするなら。**棚卸㉓の一覧に無かった**）と診断の表 `doc/ssp-mcp/areka-tools.md`。
+  - `crates/areka/src/input_events/{balloon.rs, balloon_pressed.rs, shell_box_handler.rs}` は、上の申し送りの「記録が 2 行出る」直しだけ。kanade と `crates/areka/src/emo2_boot/` は触らない見込み。
+- **規模**: M（10〜14 タスク）のまま（当たりと押下の分が減り、dola と `check_script` の分が増えた）。**優先度の区分**: A のまま。**要件定義のモデル**: Fable のまま。
+- **先に要るもの**: 無い＝文字とバルーンの列と、台本の読み手の列の両方の先頭。働きで後ろに待つのは `link-context-copy`・`balloon-link-hover` の 2 本、列の順で待つのは約 13 本。
+- **見つけた穴・古くなった記述**:
+  - dola は crates.io に公開している。合図の語彙を足すと公開 API の追加になる＝`release-cycle` へ 1 行申し送る（`anchor-tag-canon` と同じ扱い）。
+  - 「選択肢の範囲があるか」の観測（`actor.rs` の `TextLayerRuntime::choice_active`）は、バルーンの時間切れを止める判定が読む。範囲の選択肢でも立つようにする。`balloon-text-bugs` の件 1 が同じ観測のまわりを直すので、同じウェーブに置かない。
+  - 同じウェーブに置けない相手: `font-size-keywords`（`check_script_judge.rs`）・`choice-ranges-one-function`・`balloon-font-file`（`actor.rs`）・`talk-fast-forward`（`decode.rs`・`compile.rs`・dola の `runtime.rs`）。`choice-marker-styling` とは、あちらが新しいファイルを足さず、こちらが `choice.rs` に触らなければ重ならない。

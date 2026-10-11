@@ -84,3 +84,14 @@ ukadoc の `collisionex` の書式（`descript_shell_surfaces`）を引き直し
   - ukadoc の `collisionex` の形は 4 つでなく 5 つ。5 つ目は `region`（画像ファイルの指定した色の領域を当たり判定にする・SSP 2.5.19 から・書式は「ファイル名,R,G,B,領域反転」）。本文も台帳の行も 4 つしか書いていない。`region` は画像を読む仕組みが要るので、本 spec では読めた行を記録して使わず、別に起票するのが筋（議題に足す）。
   - 書式は `collisionex*,ID,タイプ,座標…` で、名前が 2 番目に来る（`collision*` は最後）。読み手で取り違えない。
   - 読み手を `shell/boxes.rs` と同じ「2 つ目の転記」にすれば `shell/{model,decode}.rs` に触れずに済むが、`collision` と書いた順を合わせるために行の順番を運ぶ必要がある（議題 1 の第 3 の案）。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化: 読み手の 2 ファイルを分け合っていた `seriko-trigger-intervals` が 10-10 に着地した。型のファイル `shell/model.rs` は 295 行（interval の型に腕が 3 つ増えた）、値にする `shell/decode.rs` は 594 行。当たり判定を値にする `decode_collisions` と、合成の `hit.rs`（756 行）・`hit_import.rs` は変更 0。
+- 触るファイル: 棚卸㉓のまま。型 `Collision` を直書きするテストは 12 ファイルのまま（parsers 7・emo-compose 3・emo-present 2）。
+- 規模: 8〜11 タスクのまま。
+- 先に要るもの: 働きの上では無し（今すぐ着手できる）。読み手の 2 ファイルを分け合うので同時に走らせない相手は、`animated-image-import`・`element-clipping-option`・`draw-methods-canon`・`seriko-script-triggers`（`animation*.name` を読む）・`config-parse-diagnostics`（`decode.rs`）。`seriko-interval-combinations` は、組み合わせを読み手で型に写す形を選んだときだけ重なる。列の外では `shell-tooltip`・`surfaces-basepos`。
+- 重なり 0: `extent-element-offset`・`seriko-trigger-lottery-gaps`・`seriko-talk-clock-fidelity`・`balloon-canon-residue`・`balloon-webp-names`。
+- 優先度の区分: A のまま（個別に見れば C、も棚卸㉓のまま）。
+- 要件定義のモデル: Opus のまま。
+- 見つけた穴・古くなった記述: 新しい件は無い。棚卸㉓の節の「`seriko-trigger-intervals`」は着地済みと読む。

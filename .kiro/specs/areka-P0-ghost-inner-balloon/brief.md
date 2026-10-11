@@ -109,3 +109,19 @@
 - 見つけた穴・古くなった記述:
   - 本文「Current State」の「`resolve_balloon` は、フォルダ名の一覧と突き合わせる」は古い（今は `BalloonEntry` の列）。
   - `baseware-root-list` も「項目がどの置き場のものか」を持たせる。先に着地する方が素性に置き場の欄を作り、後の方は種類を足すだけにする（2 本で別々の形を作らない）。
+
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+- 前提の変化: 触るファイルは棚卸㉓から変わっていない（`catalog.rs` 414・`boot_resolve.rs` 609・`boot_config.rs` 503・`update/desk.rs` 703・`readme/opener.rs` 401）。同じ鎖に 3 本が加わった（`user-data-root`・`write-failure-notice`・`default-balloon-selfmade`＝10-10 起票）。
+- 触るファイル・規模: 棚卸㉓のまま（12〜18 タスク）。
+- 先に要るもの: 働きの上では無し。ファイルの上では、カタログの鎖の席を待つ。
+- カタログの鎖の順の案: `baseware-root-list` → `user-data-root` → `ghost-inner-balloon` → `write-failure-notice` → `shell-companion-balloon`＝この spec は 3 番目。
+  - 一覧の項目の「どの置き場のものか」の欄は `baseware-root-list` が作り、この spec は種類を 1 つ足すだけになる。
+  - `user-data-root` を先にするのは、winget の案内と次の版がそれを待つため。
+- ファイルの重なり（足す分）:
+  - `user-data-root`（`catalog.rs`・`boot_resolve.rs`・`boot_config.rs`）。
+  - `write-failure-notice`（`boot_resolve.rs`。向こうが触るのは起動中の印と記録の関数だけで、バルーンを決める鎖には触らない）。
+  - `default-balloon-selfmade`（`boot_resolve.rs` の既定の名前の定数と、そのテスト）。
+  - `emily-ghost-verification` とは、書庫に鍵を足さない限り 0（棚卸㉓のまま）。
+- 優先度の区分: A。要件定義のモデル: Fable（どちらも変わらず）。
+- 見つけた穴・古くなった記述: 本文「Constraints」の「並びは `shell-companion-balloon` の後」は古い（待つ理由はファイルだけと棚卸㉓で分かった。区分 A のこちらが先）。

@@ -149,3 +149,20 @@ MCP でいちばん使われるのは「台本を流して見る」（`sakurascr
 - **実機で確かめた（2026-10-10）**: areka の MCP の `sakurascript` は `NG:not implemented yet` を返す。`seriko-trigger-intervals` の実機の確かめは、設計の手順「MCP の `sakurascript` で台本を送る」を使えず、emo2 の写しの `boot.lua` の `OnBoot`／`OnFirstBoot` が生の台本 1 本を返す形に読み替えて流した（`animated-image-playback` の前例と同じ）。この形では、走行 1 回につき台本は 1 本だけで、途中で送り足せない。面の切り替えの時刻は台本の `\_w[ms]` で決めることになる。
 - **本 spec が着地したら戻せる所**: `seriko-trigger-intervals` の検体の README（`crates/areka-seriko/tests/fixtures/trigger-intervals/README.md` の「実機の確かめ」の 3）と、同 spec の設計書の「実機の確かめ」の 4 は、`sakurascript` で送る本来の手順へ戻せる。本 spec の実機の確認で `sakurascript` が通ったら、README のその 1 文を直す。
 - **本 spec を待っている確かめが増えた**: `seriko-trigger-intervals` が実機で踏めなかった場面のうち、「台詞の中断と新しい台詞」は、走行の途中で 2 本目の台本を送れれば踏める（今は決定論のテストだけが固定している）。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化:
+  - 同じファイルを触るので並べられなかった `farewell-talk-status`（10-10）と `anchor-tag-canon`（10-10）が着地した。本 spec の前に終わっていないものは無い。
+  - `anchor-tag-canon` が kanade に足したのは、入力の種類 1 つ（アンカーの選択）と新しいファイル 2 つ（`src/anchor_input.rs`・`schedule/anchor.rs`）だけ。`msg.rs` のテストの塊も `schedule/mod.rs` の中身も動かしていない＝上限の近いファイルを分ける仕事は丸ごと残っている。
+  - 許可の表（`schedule/events.rs` の `ALLOWED_EVENT_IDS`）は 51 語から 53 語になった（`OnAnchorSelectEx`・`OnAnchorSelect`）。`raise_event` でこの 2 語を頼まれたときも、渡された Reference をそのまま送るでよいかを要件で確かめる。イベント名の型（`msg.rs` の `EventId`）は今も 2 種。
+  - `farewell-talk-status` の設計書が、「再生中」の判定を相のメソッドへ移す整理を「`schedule/mod.rs` を割る予定の本 spec に任せる」と申し送っている。
+  - `mcp-stdio-bridge`（10-11）は `crates/areka-mcp/` の案内文とツールの定義の列を外から読める形にしただけで、`crates/areka/src/mcp/{sakurascript,raise_event}.rs` には触れていない。
+- 触るファイル: 棚卸㉓のとおり。行数だけ変わった: `msg.rs` 930・`actor.rs` 901・`schedule/mod.rs` 969・`schedule/events.rs` 845・`schedule/change.rs` 425・`schedule/steady.rs` 957（触らない）。
+- 規模: M〜L（13〜17 タスク）。`schedule/mod.rs` を分ける 1 タスクの分だけ増えた。
+- 分け方（最初の 2 タスク）: ⑴ `msg.rs` はファイルの中のテストの塊（約 418 行）を兄弟のテストファイルへ出す（本体は約 510 行）。⑵ `schedule/mod.rs` は残り 31 行で、本 spec が足すと 990 行前後になる＝「次に足す spec が分ける」でなく本 spec が先に分ける。候補は、型の定義の塊（入力・相・状態・行動の約 400 行）を兄弟のファイルへ出して `mod.rs` から同じ名前で見せる形（呼ぶ側の書き方は変わらない）。
+- 先に要るもの: なし＝今すぐ始められる先頭。本 spec を待つ未完了の spec は 5 本のまま。
+  - 同じウェーブに置けない相手: `script-security-level`・`mcp-shiori-query`（`msg.rs`・`actor.rs` ほか）・`sakura-time-critical`（`schedule/mod.rs`）・`mouse-click-wheel-events`（`msg.rs`・`schedule/events.rs`）・`inputbox-user-input`（`schedule/events.rs`）・`property-query-channels`。
+  - 重なり 0: `mcp-reload`（本 spec が kanade の `src/change.rs`・`schedule/boot.rs` に触らず、向こうが `msg.rs`・`actor.rs`・`schedule/mod.rs`・`schedule/change.rs` に触らない約束。起動の由来を全部並べて分ける所は `schedule/boot.rs` の 1 か所だけなので守れる）・`mcp-receiver-bugs`（2 件とも。本 spec が `crates/areka-mcp/**`・`crates/areka/src/mcp/mod.rs`・`dump_balloon.rs` に触らない約束）・`mcp-stdio-bridge-residue`・`check-script-arg-checks`・`sakura-time-directives`。
+- 優先度の区分: A のまま。要件定義のモデル: Fable のまま。
+- 見つけた穴・古くなった記述: 棚卸㉓の節の「同じウェーブに置けない相手」の `farewell-talk-status`・`anchor-tag-canon` と、「重なり 0」の `mcp-stdio-bridge` は着地済み。`mcp-receiver-bugs` の brief の Adjacent は本 spec と `mcp-reload` を「`handler.rs` を触る spec」に数えているが、どちらの brief も `handler.rs` を挙げていない（案内文の最後の 1 文を消すのは `mcp-strict-errors`）。

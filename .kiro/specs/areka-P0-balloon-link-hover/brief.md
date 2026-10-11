@@ -96,3 +96,18 @@
 
 - **実機の確かめに 1 項目足す: 主画面より上に置いた画面でツールチップを出す**。完了 `wintf-tooltip` は、ツールチップの位置を OS へ渡すときに 2 つの座標を 16 ビットずつに詰める（`crates/wintf/src/ecs/tooltip/os.rs` の `make_lparam`・負の座標は 2 の補数のまま）。OS が符号付きで読むかは実機でしか決まらない。同 spec の `tasks.md` の Implementation Notes は、3.1 で「負の座標の画面で出す確かめを入れる」と書き、6.1 で「y が負の画面が無いので負の y の詰め方は未確認」と残した。
 - areka からこの口を最初に使う spec（本 spec か `shell-tooltip`）の実機の確かめで、主画面の上に画面を置き、そこでバルーンのツールチップの位置が合うかを見る。ずれたら wintf の側の不具合として起票する（本 spec の中では直さない）。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- **前提の変化**: `anchor-tag-canon` が着地した（10-10）。
+  - 当たりの行（`crates/areka-emo-text/src/actor.rs` の `ChoiceHitRow`）が種類・ID・範囲の文字・引数を持つ＝「マウスがどの範囲の上にあるか」と、イベントに載せる材料は、そこから読める。ホバーの判定の順と Reference0 の文字の決めは `doc/anchor-compat.md`（2.1 の 7 と 10）を共有する。
+  - UI から kanade へ知らせを 1 種類足す道の手本ができた: 知らせの型（`crates/areka-kanade/src/anchor_input.rs`）・状態機械（`schedule/anchor.rs`）・イベントの組み立て（`schedule/events.rs` の `on_anchor_select`）。ホバーの 2 つのイベントも同じ形で足せる。
+  - 「押せる範囲があるか（種類を問わない）」の観測（`actor.rs` の `TextLayerRuntime::hit_active`）ができた。ホバーの前段はこれを読む。
+- **触るファイル**: 棚卸㉓の一覧に次を足す。
+  - kanade の `schedule/steady.rs`・`schedule/close.rs`（知らせを 1 種類足すと、返事の受け取りと終了のときの初期化に 1〜2 行ずつ要る。`anchor-tag-canon` がそうだった）。
+  - `crates/areka/src/input_events/{balloon.rs, balloon_moved.rs, balloon_exit.rs, shell_box_handler.rs}`（ホバーの出入りを見ている所）。
+- **上限に近いファイル**（上限 1,000 行）: kanade の `schedule/mod.rs` 969・`schedule/steady.rs` 957・`msg.rs` 930・`actor.rs` 901。`schedule/events.rs` は 845。棚卸㉓の数は古い。足すのは配線の数行だけにし、中身は新しいファイルへ置く。`schedule/mod.rs` は余りが 31 行＝先に中身を外へ出すタスクを 1 つ見込む。
+- **規模**: M（11〜14 タスク。ファイル出しで 1 増）。
+- **先に要るもの**: `link-context-copy`（その前に `range-choice-tag`）。まだ列の先頭ではない。
+- **優先度の区分**: A のまま。**要件定義のモデル**: Fable のまま。
+- **見つけた穴・古くなった記述**: 穴は無い。kanade の同じファイルを触る `mcp-kanade-tools`・`mcp-shiori-query`・`talk-fast-forward` とは同じウェーブに置けない（`farewell-talk-status` は着地した）。

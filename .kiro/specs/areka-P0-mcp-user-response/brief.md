@@ -103,3 +103,16 @@
 - 要件定義のモデル: Fable（選択肢の答えを誰が先に受け取るかの分かれ目・待つ指定と 10 秒の上限の中の順序）。
 - 分割の案: なし。
 - 見つけた穴・古くなった記述: 本文 Current State の「`mcp::later` はある（まだ使う側は無い）」は古い（`dump_surface`・`dump_balloon` が使う）。roadmap の台帳の本 spec の行の「kanade の列」は古い（UI 側で積めば列の外）。入力欄と単押しのクリックの起票が棚卸㉒から残ったまま（`/kiro-discovery` の候補）。棚卸㉒の節が書いた道具の残りかすの 2 行は、もう消えている。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化:
+  - `anchor-tag-canon`（10-10）が着地した。選択の知らせを kanade へ送る所 `crates/areka/src/input_events/choice_drain.rs`（540 行）は、アンカーを押した知らせも同じ所で送るようになった＝履歴へ積む 1 行の置き場は今もここで、選択肢とアンカーの両方を 1 か所で拾える。
+  - 利用者のしたことに「アンカーを押した」が加わった。履歴に入れるかを要件で決める。アンカーには選択肢の `script:` の約束が無い（押すと必ず SHIORI へイベントが行く）＝エージェントが出したアンカーの答えでゴーストを煩わせない道は今は無い。
+  - `mcp-stdio-bridge`（10-11）が着地した。中継 `areka-mcp-bridge` は、areka が居ないときの一覧と案内文を `crates/areka-mcp/` の定数とツールの定義の列（`tools/mod.rs` の `all_specs`）から読む＝ツールを 1 本足すと中継の一覧にも自動で載り、中継のファイルには触らない。足す手順の表（`doc/ssp-mcp/areka-tools.md` の ⑹）は変わっていない。
+  - 入力欄と単押しのクリックの持ち主は起票済み（`inputbox-user-input`・`mouse-click-wheel-events`）。どちらも本 spec の働きの前提ではない（先に着地していれば、履歴に積む出来事が増える）。
+- 触るファイル: 棚卸㉓のとおり。
+- 規模: M〜L（12〜18 タスク）のまま。
+- 先に要るもの: `mcp-kanade-tools`。同じウェーブに置けない相手: `mcp-shiori-query`（手順の表の 5 ファイルと文書）・`mcp-strict-errors`・`mcp-receiver-bugs` の件 1（`crates/areka-mcp/src/handler.rs`）・`check-script-arg-checks`・`mcp-reload`（`doc/ssp-mcp/areka-tools.md`）・`mouse-click-wheel-events`・`range-choice-tag`・`talk-fast-forward`・`extra-character-windows`（`input_events/mod.rs`）。`anchor-tag-canon` は着地して外れた。
+- 優先度の区分: A のまま。要件定義のモデル: Fable のまま。
+- 見つけた穴・古くなった記述: 棚卸㉓の節の「持ち主の spec はまだ起票されていない」「起票が残ったまま」は古い（上の 2 本が起票済み）。

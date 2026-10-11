@@ -1,5 +1,5 @@
 //! actor の子: 1 コマの描画の流れ（未解決の見送り・初回の装着・配置→装飾→描画→提示）。
-//! 足す予定の spec: text-reveal-fade（`present_actor`）・balloon-markers・anchor-tag-canon。
+//! 足す予定の spec: text-reveal-fade（`present_actor`）・balloon-markers。
 
 use bevy_ecs::hierarchy::Children;
 use bevy_ecs::prelude::World;

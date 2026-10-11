@@ -132,3 +132,15 @@
 - **見つけた穴・古くなった記述**:
   - 穴は無い。棚卸㉒の「`budoux-reveal-reflow` と重なる」は相手が着地して消えた。
   - `anchor-tag-canon` とは同じウェーブに置けない。リンクの列は 4 本続くので、列の決まり（重ならない席があれば前へ）に従うなら、`anchor-tag-canon` の前のウェーブに出すか、リンクの 4 本の後かを優先度で決める。前に出す場合の相手は `reflow-scroll-path-test`・`emo2-real-run-stability` の件 1・可視性の側だけで直す `balloon-text-bugs` の件 1（重なり 0）。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- **前提の変化**: `anchor-tag-canon` が着地した（10-10）。同 spec は `crates/areka-emo-text/src/` の `actor.rs`（663 行）・`actor_attach.rs`・`actor_present.rs`（411 行）を書き換えたが、本 spec が使う所は変わっていない: 箱の探し場所の欄と入れ口と読み口（読み口の本番の呼び手は今も 0）・`.ttf` などを読み飛ばす所（`draw_catalog.rs`）・描画の組み立て（`actor_decoration.rs` の `build_actor_render`）。`viewbox_draw_render.rs` には `anchor-tag-canon` は触らなかった。`crates/areka/src/emo2_boot/frame/` も変わっていない。
+- **触るファイル**: 棚卸㉒の一覧のまま。検査のファイルを足す＝emo-text の `lib.rs` の一覧（今 76 本）の席を使う。
+- **規模**: M（8〜11 タスク）のまま。
+- **先に要るもの**: 働きの依存は無い＝今すぐ着手できる。`anchor-tag-canon` との重なりは消えた。
+- **優先度の区分**: A のまま。**要件定義のモデル**: Opus のまま。
+- **見つけた穴・古くなった記述**:
+  - 今ぶつかる相手（同じウェーブに置けない）: `range-choice-tag`（`actor.rs` と `lib.rs` の席）・`choice-ranges-one-function`（`actor.rs`）・`balloon-text-bugs`（`lib.rs` の席。件 1 を文字の層で直すなら `actor.rs` も）・`choice-marker-styling`（`viewbox_draw_render.rs`）・`real-run-log-noise`（`actor_attach.rs`）・`text-typesetting`・`balloon-canon-residue`・`shell-companion-balloon`（`emo2_boot/frame/switch.rs`）。
+  - 並べられる相手: `font-size-keywords`（重なり 0。あちらは `look.rs`・`state_decoration.rs`・`check_script_judge.rs`。あちらの brief は本 spec を「`look.rs` に触る」と書くが、本 spec は `look.rs` に触らない見込み）。
+  - roadmap の列の説明「`actor.rs`・`viewbox_draw_render.rs` が `anchor-tag-canon` と重なる」は、相手が着地して用済み。

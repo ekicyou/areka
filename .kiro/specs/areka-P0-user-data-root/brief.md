@@ -148,3 +148,21 @@
 8. **説明書**の「■ 記憶の置き場」をどう書き直すか（シェルの記憶の行は、0.0.2 では書く操作が無い）。
 9. **雛形の注意書きを外す時機と持ち主**（この spec の着地の後。`dist/winget/**` はこの spec の範囲外）。
 10. **次の版を、自分たち以外が winget-pkgs へ出しうること**（2026-10-10 `winget-manifest-submission` の最後の検証で出た一般論・確かめていない）: 初回の `0.0.2` が取り込まれた後は、第三者や自動の道具が、次の版の PR を winget-pkgs へ出すことがありうる。「置き場が直るまで次の版を出さない」は、自分たちの側の決めでしかない。そうなったときに、`0.0.2` を入れた人の上げ直しで物が消えるのを、どこまで受け入れ、どう知らせるか（雛形の注意書き・Release の説明）。
+
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+- 前提の変化: 無し（10-10 の起票の後、関係のファイルは変わっていない）。winget-pkgs への初回の提出は、リポジトリの記録の上では人の承認待ちのまま。
+- 触るファイル（呼び手を数えた）:
+  - 根の決め方と areka の記憶の置き場: `crates/areka/src/boot_config.rs`（`resolve_root_from`・`default_app_profile_dir`）。後者の呼び手は `main.rs`（956 行・上限 1,000）・`ghost_session.rs`（873）・`shiori_host.rs`。
+  - ゴーストとシェルの記憶の置き場を動かす場合（議題 7）: `crates/areka-ghost/src/{sylphya_wiring,runtime}.rs`・`crates/areka/src/boot_resolve.rs`（ゴーストの記憶の根を組む所）・`placement/persist.rs`。
+  - 作業フォルダ: `crates/areka/src/install/desk.rs`（展開器へ根を渡す所）・要れば `crates/areka-nar/src/install.rs`（定数 `WORK`）。
+  - 既定の並び: `crates/areka-ghost/src/catalog.rs`（`baseware-root-list` が作る並びの型）。説明書 `dist/README.txt`「■ 記憶の置き場」。
+- 規模: 12〜18 タスク（議題 7 で同梱のゴーストの記憶を動かすなら上の方。winget で入れた形の実測 3 種を含む）。切る案は無し。
+- 先に要るもの: `baseware-root-list`（根の並び・「新しく入れる物は先頭の根へ」）。
+- カタログの鎖の順の案: `baseware-root-list` → `user-data-root` → `ghost-inner-balloon` → `write-failure-notice` → `shell-companion-balloon`＝この spec は 2 番目。理由は、`winget-release-automation` と説明書の winget の行がこの spec を待つこと。
+- ファイルの重なり:
+  - カタログの鎖のほかの 4 本（`boot_resolve.rs`・`boot_config.rs`・`catalog.rs`）。`write-failure-notice` とは `main.rs` も。
+  - `tasktray-icon`（`main.rs`）・`install-live-target-hazards`（`install/`）。
+  - `placement/persist.rs`・`ghost_session.rs` を触るほかの列の spec は、着手の前に照らす。
+- 優先度の区分: A。要件定義のモデル: Fable（どちらも起票のまま）。
+- 見つけた穴・古くなった記述: 本文の触る所に `main.rs`・`ghost_session.rs`・`shiori_host.rs`・`placement/persist.rs` が無い。`baseware-root-list` の「確かめること」（exe の隣が入れ替わるときに守る手）は、この spec が持つ案。

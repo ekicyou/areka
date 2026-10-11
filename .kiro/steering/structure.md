@@ -395,7 +395,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Modules**: `probe.rs`（常駐の仕掛けの確立）／`capture.rs`（捕捉窓。窓の内側で対照イベントを発行し、その捕捉を要求して落ちる＝**不在主張が捕捉 0 件のまま静かに緑にならない**）／`event.rs`（正準イベント型と既存の文字列形の再現）／`filter.rs`（`env-filter` feature・濾過指示つき捕捉。有効にしてよいのは `wintf` のみ）／`global.rs`（全スレッド横断の一回限り捕捉。既定 API と混同させないため別窓口とし、両立条件を明記）
 **Tests（`tests/`）**: **ワークスペース全体の見張りの置き場である**（設計判断・ログ捕捉に限らない）。共有機構の迂回検知（`with_default_guard_test.rs`）・**1 ファイル 1,000 行の番人**（`file_length_guard_test.rs`。目安の正本は本文書 Test Naming Conventions の「1 ファイル 1,000 行以下の目安」の項）・**テスト用一時パスの窓口の迂回検知**（`temp_path_guard_test.rs`）・**検体ゴースト／バルーンの窓口の迂回検知**（`sample_path_guard_test.rs`。旧置き場・展開形の検体フォルダ・展開先の名前空間・同梱バルーンのパス組みの 4 形を、走査語を `sample-ghost-kit` の登記表 `SAMPLES` から組み立てて見張る。`sample-ghost-kit` が本番依存に現れないことも同じ見張りが判定する）の 4 本が、走査部品 `workspace_scan/mod.rs`（ファイル列挙・コメント除去・語の走査）を共有する。**見張りを別 crate へ分けると走査器が複製される**ため、crate 名がログ捕捉だけを名乗る点との食い違いを承知でこの配置を採っている。較正 `capture_calibration_test.rs` は**わざと硬化なしの直接呼出を使う**ので迂回検知の例外表に載る（外すと較正が空振りする）。各見張りは例外表の件数を別の定数に逐語で持ち、**項目の追加は複数箇所の明示的な編集としてのみ許す**（暗黙に増えない）。
 **Dependencies**: `tracing`（必須）＋ `tracing-subscriber`（`env-filter` feature 時のみの任意依存・既定 off）。**ワークスペース内 crate への依存は 0**（leaf・依存方向の規律＝`wintf` から引いても上位 crate を持ち込まない）・`publish = false`
-**Consumers**: テスト専用（`[dev-dependencies]` のパス依存 1 行）で 14 crate（`areka`・`wintf`・`areka-ghost`・`areka-kanade`・`areka-seriko`・`areka-sylphya`・`areka-emo-atlas`・`areka-emo-compose`・`areka-emo-present`・`areka-emo-text`・`areka-nar`・`areka-update`・`areka-mcp`・`shiori-host32-host`）。**`[dependencies]` へは決して置かない**（製品側依存に現れたら `with_default_guard_test.rs` が赤にする）
+**Consumers**: テスト専用（`[dev-dependencies]` のパス依存 1 行）で 15 crate（`areka`・`wintf`・`areka-ghost`・`areka-kanade`・`areka-sakura`・`areka-seriko`・`areka-sylphya`・`areka-emo-atlas`・`areka-emo-compose`・`areka-emo-present`・`areka-emo-text`・`areka-nar`・`areka-update`・`areka-mcp`・`shiori-host32-host`）。**`[dependencies]` へは決して置かない**（製品側依存に現れたら `with_default_guard_test.rs` が赤にする）
 
 ### Temp Path Kit Crate（temp-path-kit）
 **Location**: `/crates/temp-path-kit/`
@@ -403,7 +403,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Pattern**: 名前は `areka-{札}-{プロセス識別子}-{連番}` を組む内部関数 1 つで作り、実際に作る入口がその関数を通る。**一意性と後始末は別の性質**で、識別子があっても破棄が無ければ `%TEMP%` に積み上がる（実例あり）ので、破棄は型が持つ。宛先の種類は増やさず、単一ファイルはディレクトリの下に取る。置き場は 2 つ＝`TempPath::new`（OS の一時フォルダ）と `TempPath::under_target`（ワークスペースの `target\test-roots\`・実機の根・検体・一時フォルダをワークツリーの `target\` の下だけに作ると決めたテストが使う・2026-10-07 `areka-P0-ghost-standard-balloon`）。名前・一意性・破棄はどちらも同じ内部関数を通る。
 **Modules**: `lib.rs`（入口・名前組立・破棄）＋ `lib_tests.rs`（自己テスト）
 **Dependencies**: **依存 0**（`[dependencies]` 節そのものが無く std のみ）・`publish = false`
-**Consumers**: テスト専用（`[dev-dependencies]`）で `areka`・`areka-emo-present`・`areka-ghost`・`areka-parsers`・`areka-sylphya`・`areka-impl-watch`。**迂回の検知は本 crate ではなく `log-capture-kit/tests/temp_path_guard_test.rs` にある**（走査部品を複製しないため。**窓口と見張りが別 crate に分かれるのは意図的な設計**）
+**Consumers**: テスト専用（`[dev-dependencies]`）で `areka`・`areka-emo-present`・`areka-ghost`・`areka-parsers`・`areka-sylphya`・`areka-impl-watch`・`areka-mcp-bridge`。**迂回の検知は本 crate ではなく `log-capture-kit/tests/temp_path_guard_test.rs` にある**（走査部品を複製しないため。**窓口と見張りが別 crate に分かれるのは意図的な設計**）
 
 ### Sample Ghost Kit Crate（sample-ghost-kit）
 **Location**: `/crates/sample-ghost-kit/`

@@ -106,3 +106,16 @@
   - 行数の余裕が少ない: `looper.rs` 924 行・`table.rs` 900 行・`parts.rs` 893 行。組み合わせの腕を足すなら、先に置き場を決める（1 ファイル 1,000 行以下）。
 - **`+` の組み合わせは 3 語についても採っていない**。`bind+runonce`・`bind+talk,数値`・`bind+periodic,数値` などは、今も「それ以外の語」として元の綴りのまま持ち上がり、`debug!`（「未駆動 interval 語彙ゆえ非採録」）だけ残して動かない。上の議題 1 はそのまま生きている。採るなら、着せ替えが無効になったときの 3 語の時計と引き金の状態の捨て方も決めることになる（捨て方の今の決まりと食い違いは `seriko-trigger-lottery-gaps` の件 1 の brief）。
 - **触っていない台帳の行の古い決まり文句**: `endtalk`・`starttalk`・`never`・`yen-e` の 4 行の備考は、今も「`normalize_interval` が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけ」「実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけ」と書く（4 行とも持ち主の欄は空）。`animation*.interval,インターバル` の行（持ち主は完了 `areka-P0-shell-parse`）の備考「実際に再生を駆動するのは `random`・`bind+random` と…`sometimes`・`rarely` の 4 つである。2026-10-06 からは単独の `always` も」にも、3 語が載っていない。`random,数値` の行には、この型の文は無い（Implementation Notes の 8 の列挙は `random,数値` を挙げるが、2026-10-10 に引いて確かめた）。今は認める語が 6 つ、動く語が 8 つ（`random`・`bind+random`・`sometimes`・`rarely`・`always`・`runonce`・`periodic`・`talk`）。これらの行に手を入れる spec（`never`・`yen-e` は `seriko-script-triggers`）が、触るときに直す。本 spec が `always:1` の備考を書き直すときも、同じ型の文が無いか見る。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化: 前提の `seriko-trigger-intervals` は着地済みで、働きの上で待つものは無い（上の申し送りのとおり）。10-11 に小さいバグの起票がまとめられ、引き金の後始末と抽選の食い違いは `seriko-trigger-lottery-gaps` の 1 本になった。合成の 4 ファイルと、2 つの関数（`is_always_interval`・`is_bind_interval`）を引く場所は棚卸㉓から変更 0。
+- 触るファイル: 上の測定と申し送りのまま。今の行数は、合成の `plan.rs` 703・`nesting.rs` 418・`plan_extent.rs` 198・`plan_always.rs` 95、seriko の `looper.rs` 924・`table.rs` 900・`parts.rs` 893。
+- 規模: 4〜6 タスク（議題 1 を入れるなら +1〜2）のまま。
+- 先に要るもの: 働きの上では無し。ただし議題 1 で `always` を含まない組み合わせ（`bind+runonce` など）を採るなら、着せ替えが無効になったときの捨て方は `seriko-trigger-lottery-gaps` の件 1 が揃える決まりに乗る＝そちらを先にする。
+- 同時に走らせない相手: Adjacent の 4 本（`extent-element-offset`・`animated-image-import`・`draw-methods-canon`・`seriko-script-triggers`）に加えて、`seriko-trigger-lottery-gaps`（seriko の `table.rs`・`parts.rs`・`looper.rs`）・`seriko-talk-clock-fidelity`（`looper.rs`）・`element-clipping-option`（`plan.rs`・`plan_extent.rs`）。読み手で型に写す形を採るなら `collisionex-regions`・`config-parse-diagnostics` も。重なり 0 は `balloon-canon-residue`・`balloon-webp-names`。
+- 優先度の区分: A のまま。
+- 要件定義のモデル: Fable のまま。
+- 見つけた穴・古くなった記述:
+  - 読み手の `normalize_interval` は、知らない語のときは語だけを運び、後ろの数値を落とす（`bind+periodic,5` は `bind+periodic` として持ち上がる。読み手のテスト `decode_interval_trigger_tests.rs` がこの形を固定している）。議題 1・2 で数値つきの組み合わせを採るなら「読み手に触らない形」は取れず、`shell/decode.rs` とそのテストの直しが要る。`bind+always` は数値が無いので今のままで足りる。
+  - seriko の `table.rs` は 900 行のうち後ろの約 350 行がファイルの中のテスト。兄弟のファイルへ出せば、腕を足す余裕ができる。

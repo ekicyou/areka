@@ -121,3 +121,16 @@
 3. **台帳の備考の書き直し**: `doc/ukadoc-coverage/ledger/sakura-script.toml` の `\f[anchor*]` 16 行の備考は「ログ: 出る（compile の catch-all の debug! 記録）」と書くが、実態と合わない（`anchor-tag-canon` より前から。16 行とも）。本 spec が行の状態を変えるときに書き直す。
 4. **隣の spec と同じ所を触る**: `areka-P0-balloon-text-bugs` の件 3（2026-10-10 起票・バグ）＝文字の領域の下端に来た行の下線が出ない件。下線の位置を DirectWrite に任せている所（`viewbox_draw_decoration.rs` の `apply_font_ranges`）と文字の面の大きさを触るので、本 spec の「縦書きの下線の位置の決め直し」と重なる。同時に走らせない。先に着地した方の決めに、後の方が合わせる。
 5. **互換の記録**: アンカーの裁定の正本は `doc/anchor-compat.md`。本 spec が差し替える行は 2.1 の 8・9、本 spec へ波及する事柄は §3（3.1 の表の 1 行目と「4 本が前提にしてよいもの」）。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- **前提の変化**: 上の申し送りのとおり `anchor-tag-canon` は着地した（10-10）＝働きの前提は満たした。列の順で `text-align-shadow-canon`・`choice-marker-styling` の後に置いているのは、同じファイルを触るからで、働きの依存ではない。
+  - 差し替える所は実物で確かめた: アンカーが開いている間の下線の焼き込み（`crates/areka-emo-text/src/state_decoration.rs` の `push_current_style`）・アンカーの範囲の記録（`state_anchor.rs`）・所有外の判定（`look.rs` の `is_unowned`）・`Note::AnchorColorAsDefault`。
+  - ホバーの強調（`choice.rs` の `decorate_canvas`）は種類を見ず、選択肢と同じ見た目でアンカーも塗る。3 つの状態（通常・ホバー・訪問済み）の見た目を分けるなら、ここへ種類を通す＝`choice.rs`・`actor_present.rs` も触るファイルに入る。
+- **触るファイル**: 棚卸㉒の一覧に `crates/areka-emo-text/src/{state_anchor.rs, choice.rs, actor_present.rs}` を足す。行数: `state_decoration.rs` 643・`look.rs` 802・`choice.rs` 748・`crates/areka-parsers/src/balloon/parse_tests.rs` 922（読み取りの検査は新しいファイルへ）。新しいファイルを足す＝emo-text の `lib.rs` の一覧（今 76 本）の席を使う。
+- **規模**: M（10〜13）／棚卸㉓の穴を入れると 12〜16 のまま。
+- **先に要るもの**: 働きの依存は無い。
+- **優先度の区分**: C のまま。**要件定義のモデル**: Fable のまま。
+- **見つけた穴・古くなった記述**:
+  - 網羅台帳の持ち主は付け替え済みを確かめた（`assets.toml` 43 行・`sakura-script.toml` 16 行）。
+  - 同じウェーブに置けない相手: `choice-marker-styling`・`font-size-keywords`・`text-align-shadow-canon`（`look.rs`・`state_decoration.rs`）・`balloon-text-bugs` の件 3（`viewbox_draw_decoration.rs`）・`balloon-font-file`（`viewbox_draw_render.rs`）・`range-choice-tag`（`state_anchor.rs` と `lib.rs` の席）・`choice-ranges-one-function`（`choice.rs`・`actor_present.rs`）。文字の層のほぼ全部の spec と重なる＝列の後ろのままが素直。

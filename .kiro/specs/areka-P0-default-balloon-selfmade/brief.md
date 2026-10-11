@@ -144,3 +144,19 @@ communicatebox.x,8     communicatebox.y,21  communicatebox.width,385  communicat
 - 印の絵が今は出ないことを、説明書に嘘なく書く（出るようになるのは `balloon-markers` の後）。
 - 一時のファイル（案の絵・途中の絵）はワークツリーの `target\` の下。リポジトリに入れるのは、選んだ絵と道具だけ。
 - 規模の見立ては M（8〜12 タスク）。
+
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+- 前提の変化: `tools/package.ps1` に `mcp-stdio-bridge` の変更が入った（中継の exe を配布物に足した）。既定バルーンを引く 4 か所はそのまま在る。既定の名前の定数（`crates/areka/src/boot_resolve.rs` の `DEFAULT_BALLOON_FOLDER`）と検体の登記表（7 行）は変わっていない。
+- 触るファイル（測った）:
+  - カタログの鎖と重なるのは、既定の名前の定数 1 行と、その名前を既定として期待するテスト 4 本（本文のとおり）だけ。
+  - `StayseeBalloon` を綴るテストはほかに 10 本ほど在るが、検体の名前として使っているだけ＝検体を残すなら直さなくてよい見込み（着手時に 1 本ずつ見る）。
+  - ほかは `tools/package.ps1`・`crates/sample-ghost-kit/src/{lib.rs,lib_tests.rs}`・`vendors/sample_ghost/`・文書・絵を描く道具と中身を固定するテスト（新しいファイル）。
+- 規模: 8〜12 タスク（変わらず）。
+- 先に要るもの: `dot-sakura-specimen`。絵を `.webp` で持つなら `balloon-webp-names` も。
+- 席の案:
+  - 検体の登記表の列: `dot-sakura-specimen` → `emily-ghost-verification` → `default-balloon-selfmade` → `sample-url-fetch`（1 度に 1 本）。この spec の番では、登記の数は 9 を 10 に直す見込み。
+  - カタログの鎖: 鎖の席は使わない。実装の最後に「既定の差し替え」のタスクを置き、その直前に main を取り込む。そのとき鎖の spec が実装中なら、相手が既定の名前の定数とそのテスト 4 本に触らないことを照らす。
+  - `tools/package.ps1`: `sample-url-fetch` と同時に走らせない。
+- 優先度の区分: A。要件定義のモデル: Fable を勧める（名前・絵柄・形式・権利など 9 つの議題を開発者に聞く。絵の案は主のセッションが出す）。
+- 見つけた穴・古くなった記述: 本文に要件定義のモデルが書かれていない。

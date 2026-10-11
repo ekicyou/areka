@@ -96,3 +96,15 @@
 - **見つけた穴・古くなった記述**:
   - `script:` の綴りを UI の側でもう一度書くと「1 か所」の約束が崩れる。kanade の関数を公開して使うなら kanade の `lib.rs` に触る＝kanade の列の先頭（`mcp-kanade-tools`）と照合する。
   - `popup-menu-residue`・`extra-character-windows` と `menu/` が重なる＝同じウェーブに置かない。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- **前提の変化**: `anchor-tag-canon` が着地した（10-10）。先に要るものは `range-choice-tag` だけになった。
+  - 当たりの行（`crates/areka-emo-text/src/actor.rs` の `ChoiceHitRow`）は、種類（選択肢／アンカー）・ID・範囲の文字・引数を持つ＝右クリックの入口は同じ行を読めばよい（`doc/anchor-compat.md` の 3.1）。emo-text に触らない見込みは確かになった。
+  - 右と中の押下をアンカーの選択にしないことが、検査で固定された（箱は `crates/areka/src/input_events/shell_box_handler_tests.rs` の `right_press_on_box_anchor_is_not_a_selection`）。右の押下の入口を足しても、選択は送らない（この検査は緑のまま）。
+  - 行き先を取り出す関数 `link_destinations`（`crates/areka/src/readme/destination.rs`）は今も「テストだけが呼ぶ」印つき。`script_body` も kanade の中だけの公開のまま。クリップボードのコードは今も 0 件。
+- **触るファイル**: 棚卸㉓の一覧のまま。`balloon_pressed.rs`・`shell_box_handler.rs` は `anchor-tag-canon` が書き換えたが、左だけを受ける所の形は同じ。
+- **規模**: S〜M（7〜10 タスク）のまま。
+- **先に要るもの**: `range-choice-tag`（3 種を 1 本で扱う決め）。まだ列の先頭ではない。後ろに `balloon-link-hover` が待つ。
+- **優先度の区分**: A のまま。**要件定義のモデル**: Opus のまま。
+- **見つけた穴・古くなった記述**: 穴は無い。`range-choice-tag` とは `balloon_pressed.rs`・`shell_box_handler.rs` も重なる（あちらは選択の送り口の記録の直し）＝働きの順と同じく、続けて走らせる。

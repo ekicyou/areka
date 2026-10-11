@@ -100,3 +100,14 @@
   - 棚卸㉒の節の「書き損じの 2 行」は棚卸㉒の即時修正で消えた（もう無い）。
   - 棚卸㉒の節の「外形の計算 `flatten_extent`（`plan.rs`）」は `plan_extent.rs` と読む。
   - 同じ画像を「切り抜きあり」と「なし」で使うと、片方は動き片方は止まる。動く絵の子の番号は画像 1 つにつき 1 つなので、鍵を分ける形が要る（議題 2 に足す・`animated-image-import` の「別の鍵」と同じ形の問題）。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化: 読み手の 2 ファイルを分け合っていた `seriko-trigger-intervals` が着地した（`shell/model.rs` 295 行・`decode.rs` 594 行。interval の語が増えただけ）。合成（`crates/areka-emo-compose`）と焼く側（`crates/areka-emo-atlas`）は変更 0＝棚卸㉓の節は今の main と一致。
+- 触るファイル: 棚卸㉓のまま。
+- 規模: 11〜15 タスクのまま。
+- 先に要るもの: `extent-element-offset`（まだ着手されていない。あちらの裁定の上に載る）。列の順は今のまま（`extent-element-offset`・`animated-image-import` の後）。
+- ファイルの重なり（棚卸㉓の節の「`seriko-trigger-intervals`」を読み替える）: 読み手は `collisionex-regions`・`animated-image-import`・`draw-methods-canon`・`seriko-script-triggers`・`config-parse-diagnostics`。合成の `plan.rs`・`plan_extent.rs` は `seriko-interval-combinations` とも重なる。10-10 に起票された `balloon-webp-names` は焼く側の絵の読み手のフォルダ（`decode/`）だけを触る見込みで、こちらの `manifest.rs`・`lib.rs` とは重ならない。
+- 優先度の区分: C のまま。
+- 要件定義のモデル: Fable のまま。
+- 見つけた穴・古くなった記述: 新しい件は無い。

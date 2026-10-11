@@ -114,3 +114,17 @@ SERIKO の pattern定義の描画メソッド `import`（`animation*.pattern*,im
 - 見つけた穴・古くなった記述:
   - 「Out of Boundary: seriko の表と時計」は申し送りと食い違う。`import` のコマの指す先と別の鍵は seriko の `table.rs`・`parts.rs` に要る。
   - Constraints の触るファイルに `nesting.rs`・`pattern.rs`・`film.rs`・`plan_extent.rs`・seriko が無い。「想定 6〜9」は上の規模で読み替える。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化: `seriko-trigger-intervals`（10-10）で seriko の形が変わった。繰り返しの表 `table.rs` は 779 → 900 行、部品の `parts.rs` は 625 → 893 行。引き金の型 `LoopTrigger` は 6 腕になり、部品の組み直し `rebuild` は 2 段になった（1 段目＝今までの評価、2 段目＝見えると決まった部品だけが `runonce`・`periodic`・`talk` の判定を受ける）。読み手（`shell/model.rs` 295 行・`decode.rs` 594 行）は interval の語が増えただけで、pattern がファイル名を運ばないのは同じ。合成（`crates/areka-emo-compose`）と焼く側（`crates/areka-emo-atlas`）は変更 0。
+- 触るファイル: 棚卸㉓のまま。ただし seriko の `table.rs`・`parts.rs` には足す余裕がほぼ無い（上限 1,000 行）。`import` の子の鍵とコマの指す先は兄弟のファイルへ置くか、先に `table.rs` の中に在るテスト（ファイルの後ろの約 350 行）を兄弟のファイルへ出す。型 `Pattern` を直書きするファイルは 22。
+- 規模: 10〜14 タスクのまま（置き場を作る分も幅の中）。
+- 先に要るもの: 働きの上では無し。ファイルの重なり（棚卸㉓の節の「`seriko-trigger-intervals`」を読み替える）:
+  - 読み手の 2 ファイル: `collisionex-regions`・`element-clipping-option`・`draw-methods-canon`・`seriko-script-triggers`・`config-parse-diagnostics`。
+  - `plan_extent.rs`: `extent-element-offset`・`element-clipping-option`・`seriko-interval-combinations`。`plan.rs`・`nesting.rs`: `draw-methods-canon`・`seriko-interval-combinations`・`element-clipping-option`。
+  - seriko の `table.rs`・`parts.rs`: `seriko-trigger-lottery-gaps`・`seriko-interval-combinations`・`seriko-script-triggers`（`table.rs`）。
+  - 重なり 0: `seriko-talk-clock-fidelity`・`balloon-canon-residue`・`balloon-webp-names`（あちらが触るのは絵の読み手のフォルダ `decode/` だけ）。
+- 優先度の区分: A のまま。
+- 要件定義のモデル: Fable のまま。
+- 見つけた穴・古くなった記述: `rebuild` が 2 段になったので、`import` の子の時計をどちらの段で作るかを設計で確かめる（「見えると決まった部品だけが 3 語の引き金を受ける」の約束は `parts_trigger_tests.rs` が固定している）。

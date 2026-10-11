@@ -117,3 +117,15 @@
   - **descript の非選択の層が無い**。網羅台帳 `assets.toml` は本 spec に 29 行を割り当てていて、うち影を除く `cursor.notselect.*` 10 行・`cursor.style`・`cursor.pen.color.*`・`cursor.blendmethod` が Scope に書かれていない。バルーン定義の読み手（`crates/areka-parsers/src/balloon/`）は `cursor.notselect` を 1 つも読まない。`\f[cursornotselect*,default]` の戻り先が無いので、要件で範囲に入れるかを決める。影の 8 行（`cursor.font.shadow*`・`cursor.notselect.font.shadow*`）は `text-align-shadow-canon` の持ち物に見える。
   - 重なる相手: `anchor-tag-canon`・`choice-ranges-one-function`（`choice.rs`）・`balloon-font-file`（`viewbox_draw_render.rs`）・`anchor-style-canon`・`text-align-shadow-canon`。roadmap の「列から外して並べられる相手は `budoux-reveal-reflow` だけ」は相手が着地したので、今は「文字とバルーンの列の先頭とは並べられない」と読む。
   - `choice.rs` の 2 つの警告の文面に古い段の名前「M1 未対応」が残っている（本 spec が縮退ごと外す）。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- **前提の変化**: `anchor-tag-canon` が着地した（10-10）。`crates/areka-emo-text/src/choice.rs` は 748 行・`state_decoration.rs` は 643 行になった（`look.rs` 802・`viewbox_draw_render.rs` 571・`viewbox_draw_decoration.rs` 314 は同じ）。本 spec が触る所（`choice.rs` の `ResolvedChoiceStyle::resolve` の 2 つの縮退・`look.rs` の所有外の判定）は変わっていない。
+  - 押せる範囲は、選択肢とアンカーが種類つきの同じ列に並ぶようになった。ホバーの強調の描き方（`choice.rs` の `decorate_canvas`）は種類を見ず、どちらも同じ見た目で塗る＝本 spec で `cursor.style` の下線や枠を足すと、アンカーのホバーの見た目も一緒に変わる。アンカーの側の作者指定は `anchor-style-canon` の持ち物なので、アンカーをどう見せるか（今のまま／選択肢と同じ）を要件に 1 行置く。
+- **触るファイル**: 棚卸㉓のまま。
+- **規模**: S（5〜8）／棚卸㉓の穴を入れると M（9〜12）のまま。
+- **先に要るもの**: 働きの依存は無い＝今すぐ着手できる。
+- **列の外へ出せるか（roadmap が「次の棚卸で測る」とした件）**: 列の頭だった `anchor-tag-canon` との重なり（`choice.rs`）は消えた。今の列の頭 `range-choice-tag` とは、決まって重なるファイルが無い（あちらは `state.rs`・`state_anchor.rs`・`actor.rs`・`lookahead.rs`。`choice.rs` は触らない見込み）。**本 spec が emo-text に新しいファイルを足さなければ（検査は今ある `choice_style_resolve_tests.rs` 218 行へ）、`range-choice-tag` と同じウェーブに置ける**。
+- **同じウェーブに置けない相手**: `font-size-keywords`（`look.rs`・`state_decoration.rs`）・`balloon-font-file`（`viewbox_draw_render.rs`）・`balloon-text-bugs` の件 3（`viewbox_draw_decoration.rs`）・`anchor-style-canon`・`text-align-shadow-canon`。`choice-ranges-one-function` とは、あちらがまとめた関数を `choice.rs` に置くと重なる。
+- **優先度の区分**: C のまま。**要件定義のモデル**: Opus のまま。
+- **見つけた穴・古くなった記述**: 棚卸㉓の穴（descript の非選択の層が無い）はそのまま。`choice.rs` の 2 つの警告の文面の「M1 未対応」も残っている。

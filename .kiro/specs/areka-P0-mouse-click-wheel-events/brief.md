@@ -82,3 +82,15 @@ kanade のマウスの出来事に「クリック」と「ホイール」を足�
   4. **ホイールの送る頻度**。1 フレーム分を足し合わせて 1 回にするか、移動と同じ間引きの時間を置くか。足し合わせた量をそのまま Reference2 に入れてよいか。
 - **ukadoc の照合**: ukadoc「SHIORI Event」の一覧の `OnMouseClick`・`OnMouseClickEx`・`OnMouseWheel`・`OnMouseUp`・`OnMouseDoubleClick`・`OnMouseMultipleClick` を ukadoc MCP で確かめた。
 - **覚え書きとの違い**: 覚え書きは 3 つのイベントだけを挙げるが、正典の `OnMouseClick` は `OnMouseUp` の後に続くイベントで、その `OnMouseUp` も台帳で持ち主が無い。右ボタンの解放は既にメニューが使っている。
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+
+- 前提の変化:
+  - `anchor-tag-canon`（10-10）が着地し、kanade の同じファイルを触る相手が 1 つ減った。行数: `schedule/events.rs` 845・`msg.rs` 930・`schedule/steady.rs` 957（残り 43 行）・`schedule/mod.rs` 969。送ってよいイベントの表は 53 語。
+  - 「返事が無ければ次のイベントを送る」の前例が 3 つになった: アンカーの `OnAnchorSelectEx` → `OnAnchorSelect`（kanade の `schedule/anchor.rs`）。選択肢と違い帳簿も期限も持たず、「どの段の応答を待っているか」だけを覚える軽い形。議題 1 の案 A（`OnMouseUp` → `OnMouseClick`）はこの形に倣える＝判断は新しいファイルに置き、`schedule/steady.rs` に足すのは応答の腕の入口の数行で済む見込み。
+  - `crates/areka/src/input_events/mod.rs`（571）・`throttle.rs`（276）・`crates/areka/src/menu/trigger.rs`（573）は変わっていない。`anchor-tag-canon` が触った入力のファイル（`input_events/balloon*.rs`・`choice_drain.rs`・`shell_box*.rs`）は本 spec の範囲の外。
+- 触るファイル: 棚卸㉓のとおり（案 A なら kanade に新しいファイルと、`schedule/mod.rs` の状態の欄 1 つ）。
+- 規模: S〜M（6〜10 タスク）・案 A なら M（10〜13）のまま。
+- 先に要るもの: なし。同じウェーブに置けない相手: `mcp-kanade-tools`（`msg.rs`・`schedule/events.rs`。案 A なら `schedule/mod.rs` も）・`inputbox-user-input`・`script-security-level`・`sakura-time-critical` ほか kanade の `schedule/events.rs` に触る spec、`input_events/mod.rs` に触る spec（Adjacent のとおり）。`mcp-kanade-tools` が `msg.rs` と `schedule/mod.rs` を分けた後に着手するのが安い。重なり 0: `mcp-reload`・`mcp-receiver-bugs`・`mcp-stdio-bridge-residue`・`check-script-arg-checks`。
+- 優先度の区分: C のまま。要件定義のモデル: Fable のまま。
+- 見つけた穴・古くなった記述: Adjacent の `anchor-tag-canon` は着地済み。本文 Current State の「前例は 2 つ」は 3 つ。Constraints の行数（`msg.rs` 926・`schedule/steady.rs` 950）は上の数に読み替える。

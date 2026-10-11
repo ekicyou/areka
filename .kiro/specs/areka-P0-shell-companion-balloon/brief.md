@@ -142,3 +142,15 @@
 - 見つけた穴・古くなった記述:
   - 棚卸㉑・㉒の触るファイルの `ghost_session.rs`・`ghost_switch.rs` は、上のとおり外せる見込み。
   - `resolve_balloon` は、決めた場所を「根＋フォルダ名」から組み直していて、一覧の項目が持つ場所を使っていない（バルーンの置き場が増える後続の spec が直す所）。
+
+
+## 2026-10-11 棚卸㉔の再測定（main `7c5469f3`）
+- 前提の変化: 触るファイルは棚卸㉓から変わっていない（`catalog.rs` 414・`boot_resolve.rs` 609・`boot_config.rs` 503・`emo2_boot/frame/switch.rs` 635・`shell_balloon_switch.rs` 442・`switch_assets.rs` 253）。同じ鎖に 3 本が加わった（`user-data-root`・`write-failure-notice`・`default-balloon-selfmade`＝10-10 起票）。
+- 触るファイル・規模: 棚卸㉓のまま（10〜14 タスク）。
+- 先に要るもの: 働きの上では無し。ファイルの上では、カタログの鎖の席を待つ。
+- カタログの鎖の順の案: `baseware-root-list` → `user-data-root` → `ghost-inner-balloon` → `write-failure-notice` → `shell-companion-balloon`＝この spec は最後。
+  - 理由: 鎖の 5 本のうち区分 C はこの 1 本だけで、後ろに待つ spec も無い。
+  - `ghost-inner-balloon` の議題 6（シェルに紐づくバルーンが、ゴーストの中のバルーンを指せるか）は、後から着地するこの spec が答える。
+- ファイルの重なり（足す分）: `user-data-root`（`catalog.rs`・`boot_resolve.rs`・`boot_config.rs`）・`write-failure-notice`（`boot_resolve.rs`。触る関数は別＝起動中の印と記録）・`default-balloon-selfmade`（`boot_resolve.rs` の既定の名前の定数と、そのテスト）。
+- 優先度の区分: C。要件定義のモデル: Fable（どちらも変わらず）。
+- 見つけた穴・古くなった記述: なし。
