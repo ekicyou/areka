@@ -166,7 +166,7 @@ x64 in-proc（COM `IShiori`）の MAKOTO 版は作らない（そのような DL
 - 先に要るもの: 働きの前提なし。席の縛りだけがある。
   - 新しいクレートで `Cargo.lock` が動く（`mcp-stdio-bridge`・版上げと同じウェーブに置かない）。
   - `runtime.rs`（`mcp-reload` が `\![reload,shiori]` を含めるとき・`property-query-channels`・`currentghost-property-tree`）。
-  - `tools/test-all.ps1`（`dev-helper-x64-clobber`・`areka-test-threads-av`・`test-wait-marker-gaps` などが挙げている）。
+  - `tools/test-all.ps1`（`dev-helper-x64-clobber`・`areka-test-binary-stability` の件 1・2 などが挙げている）。
   - `script-security-level`・`mcp-shiori-query` とは、`shiori3.rs`・`client.rs` に触れないので重ならない見込み（`crates/shiori-host32-host/src/lib.rs` の公開の行だけ照合する）。
 - 優先度の区分: C（ukadoc のトランスレータの拾い残し・台帳の段は「その他」・MAKOTO を同梱する今どきのゴーストは少ない）。
 - 要件定義のモデル: Fable（MAKOTO/2.0 の一次資料が ukadoc に無く原典から決める・別プロセスとの受け渡し）。

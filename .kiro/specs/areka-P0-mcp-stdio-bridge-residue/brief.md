@@ -39,7 +39,7 @@
 ## Scope
 
 - **In**: `crates/areka-mcp-bridge/**`・`tools/package.ps1` の中身の判定 1 つ・`crates/areka-mcp/src/port.rs` の記録の 1 行（6 を共有の側で直すとき）・`doc/ssp-mcp/bridge-diff-areka.md` と `dist/README.txt` の該当の行。
-- **Out**: 中継の答えの形（要件 1〜4 の約束は変えない）・組み込みの答え（設計 D-18）・areka の受け口の答え（`mcp-malformed-call-code`）・SSE や取り消しへの対応（`completed/areka-P0-mcp-stdio-bridge/design.md`「残る縛り」）。
+- **Out**: 中継の答えの形（要件 1〜4 の約束は変えない）・組み込みの答え（設計 D-18）・areka の受け口の答え（`mcp-receiver-bugs` の件 1）・SSE や取り消しへの対応（`completed/areka-P0-mcp-stdio-bridge/design.md`「残る縛り」）。
 
 ## Boundary Candidates
 
@@ -58,7 +58,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: なし（完了した `mcp-stdio-bridge` の拾い残し）。
-- **Adjacent**: `tools/package.ps1` を触る spec（`release-code-signing`・`install-live-target-hazards`・`winget-release-automation`）。`release-cycle`（9 の走りはここで起きる）。`mcp-malformed-call-code`（`real_receiver_test.rs` が重なる）。
+- **Adjacent**: `tools/package.ps1` を触る spec（`release-code-signing`・`install-live-target-hazards`・`winget-release-automation`）。`release-cycle`（9 の走りはここで起きる）。`mcp-receiver-bugs` の件 1（`real_receiver_test.rs` が重なる）。
 
 ## Constraints
 

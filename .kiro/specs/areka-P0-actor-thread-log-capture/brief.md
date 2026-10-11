@@ -49,12 +49,12 @@
 ## Upstream / Downstream
 
 - **Upstream**: なし（`areka-actor`・`log-capture-kit` は在る）。
-- **Downstream**: 背景のスレッドの記録を見たいテストすべて（install・update・kanade・SHIORI の結線のテスト）。`test-wait-marker-gaps` の赤の読み分けも楽になる。
+- **Downstream**: 背景のスレッドの記録を見たいテストすべて（install・update・kanade・SHIORI の結線のテスト）。`areka-test-binary-stability` の件 2 の赤の読み分けも楽になる。
 
 ## Existing Spec Touchpoints
 
 - **Extends**: 完了 `areka-P0-test-cage-determinism`（log-capture-kit）・完了 `areka-P0-draw-load-parity`（走り始めのフック）。
-- **Adjacent**: `areka-actor` に触る spec とは同時に走らせない（2026-10-10 の時点で、brief に `areka-actor` を挙げる起票済みの spec は無い）。`test-wait-marker-gaps`（同じテストを読む）。
+- **Adjacent**: `areka-actor` に触る spec とは同時に走らせない（2026-10-10 の時点で、brief に `areka-actor` を挙げる起票済みの spec は無い）。`areka-test-binary-stability` の件 2（同じテストを読む）。
 
 ## Constraints
 

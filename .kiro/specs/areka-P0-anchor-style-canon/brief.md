@@ -119,5 +119,5 @@
    - 下線を丸ごとの写しでなく「既定との差分」として持てば、この窓は消える。3 状態の見た目の解決を作るときに一緒に決める。
 2. **差し替える 1 か所**: `anchor-tag-canon` は、アンカーが開いている間「見た目の写しに下線を立てたもの」を `state_decoration.rs` の `push_current_style` で焼いている。本 spec の `anchor.style` の解決は、ここを置き換える。作者が範囲の中で下線を切ってもアンカーの下線が勝つ決め（`doc/anchor-compat.md` の 2.1 の 9）も、ここで見直す。
 3. **台帳の備考の書き直し**: `doc/ukadoc-coverage/ledger/sakura-script.toml` の `\f[anchor*]` 16 行の備考は「ログ: 出る（compile の catch-all の debug! 記録）」と書くが、実態と合わない（`anchor-tag-canon` より前から。16 行とも）。本 spec が行の状態を変えるときに書き直す。
-4. **隣の spec と同じ所を触る**: `areka-P0-underline-bottom-row-clip`（2026-10-10 起票・バグ）＝文字の領域の下端に来た行の下線が出ない件。下線の位置を DirectWrite に任せている所（`viewbox_draw_decoration.rs` の `apply_font_ranges`）と文字の面の大きさを触るので、本 spec の「縦書きの下線の位置の決め直し」と重なる。同時に走らせない。先に着地した方の決めに、後の方が合わせる。
+4. **隣の spec と同じ所を触る**: `areka-P0-balloon-text-bugs` の件 3（2026-10-10 起票・バグ）＝文字の領域の下端に来た行の下線が出ない件。下線の位置を DirectWrite に任せている所（`viewbox_draw_decoration.rs` の `apply_font_ranges`）と文字の面の大きさを触るので、本 spec の「縦書きの下線の位置の決め直し」と重なる。同時に走らせない。先に着地した方の決めに、後の方が合わせる。
 5. **互換の記録**: アンカーの裁定の正本は `doc/anchor-compat.md`。本 spec が差し替える行は 2.1 の 8・9、本 spec へ波及する事柄は §3（3.1 の表の 1 行目と「4 本が前提にしてよいもの」）。

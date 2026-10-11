@@ -119,7 +119,7 @@ areka はこの「出どころ」を運ばない。そのため、ゴースト�
   - 台帳 `doc/ukadoc-coverage/ledger/shiori.toml` の `SecurityLevel`・`SenderType`・`SecurityOrigin` の行（持ち主は今も空）・`doc/COMPAT_ARCHITECTURE.md` §8
 - 規模: L（16〜22 タスク）。見立ての内訳は、SHIORI へのヘッダと応答の読み取りが 8〜10、台本への出どころの印・タグの制約・`OnTranslate` が 9〜12。
 - 先に要るもの: 働きの前提なし＝今すぐ始められる。
-  - 同じウェーブに置けない相手: `mcp-kanade-tools`（`msg.rs`・`actor.rs`・`schedule/mod.rs`・`schedule/change.rs`・`steady_choice_script.rs`）・`farewell-talk-status`（`schedule/mod.rs`）・`mcp-shiori-query`（`shiori3.rs`・`client.rs`・`shiori_inproc.rs`・`msg.rs`・`shiori/real.rs`）・`mcp-reload`（`schedule/boot.rs`）・`anchor-tag-canon`（`msg.rs`・`schedule/mod.rs`）・`sakura-time-critical`（`user_break_cue.rs`）・`talk-fast-forward`（`drive.rs`）。重なり 0: `mcp-stdio-bridge`・`dump-balloon-debug-timeout`。
+  - 同じウェーブに置けない相手: `mcp-kanade-tools`（`msg.rs`・`actor.rs`・`schedule/mod.rs`・`schedule/change.rs`・`steady_choice_script.rs`）・`farewell-talk-status`（`schedule/mod.rs`）・`mcp-shiori-query`（`shiori3.rs`・`client.rs`・`shiori_inproc.rs`・`msg.rs`・`shiori/real.rs`）・`mcp-reload`（`schedule/boot.rs`）・`anchor-tag-canon`（`msg.rs`・`schedule/mod.rs`）・`sakura-time-critical`（`user_break_cue.rs`）・`talk-fast-forward`（`drive.rs`）。重なり 0: `mcp-stdio-bridge`・`mcp-receiver-bugs` の件 2。
   - 本 spec を待つ未完了の spec は、働きで 3 本（`script-impact-tiers`・`property-query-channels`・`sakura-embed-directive`）と、入れ物を分け合う `mcp-shiori-query`。
 - 優先度の区分: A（開発者「セキュリティレベルで実行できるさくらスクリプトに制約が出る。areka に実装されていないと思う。ukadoc で調べてみては」）。
 - 要件定義のモデル: Fable（MCP の出どころの値・`SenderType` の語の当てはめ・止めるタグの全件を ukadoc から決める・複数のエンジンを貫く運搬）。
