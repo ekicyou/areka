@@ -8,7 +8,7 @@
 use super::*;
 use crate::layout::{FixedMetrics, LayoutEngine, LineRect, PositionedGlyph, WrapPlan};
 use crate::look::StyleId;
-use crate::state::{ChoiceSpan, TextItem};
+use crate::state::{ChoiceSpan, SpanKind, TextItem};
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
@@ -253,6 +253,7 @@ fn every_choice_hit_row_lies_inside_the_glyph_cells() {
         TextItem::glyph("え"),
     ];
     let span = |ordinal, glyph_range| ChoiceSpan {
+        kind: SpanKind::Choice,
         ordinal,
         id: String::new(),
         label: String::new(),

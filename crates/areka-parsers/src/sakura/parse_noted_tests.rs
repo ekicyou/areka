@@ -150,7 +150,7 @@ fn unknown_tag_is_noted_on_spellings_without_an_arm() {
     for (s, spelling) in [
         // 素通しの素の綴り（角括弧なし）。
         (r"前\x後", r"\x"),
-        (r"\_a本文", r"\_a"),
+        (r"\_n本文", r"\_n"),
         (r"末尾の\", r"\"),
         // 素通しのタグ（角括弧つき）。
         (r"\i[5]", r"\i[5]"),
@@ -260,7 +260,7 @@ fn marker_ignored_is_not_noted_without_the_marker() {
 #[test]
 fn raw_iff_unknown_tag_or_unclosed() {
     let extra: &[&str] = &[
-        r"\x\_a\__q\i[5]\&[amp]\w[2]\q*[ID]",
+        r"\x\_n\__q\i[5]\&[amp]\w[2]\q*[ID]",
         r"\q[ID][題]\e\q*[ID][題]\q[題]",
         r"\_w[abc]\n[abc]\p[x]\![*]\![*]\q[題,ID]",
         r#"\![raise,"a"#,

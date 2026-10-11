@@ -106,9 +106,12 @@ fn farewell_talk_without_quit_tag_still_terminates() {
         expected_translate(
             FIXED_FAREWELL_SCRIPT,
             &onclose,
-            &ExecutionSnapshot::INACTIVE
+            &ExecutionSnapshot {
+                talk_active: true,
+                ..ExecutionSnapshot::INACTIVE
+            }
         ),
-        "OnClose の後の 1 件目は別れの台詞の OnTranslate（終了の相は会話なしの状態）"
+        "OnClose の後の 1 件目は別れの台詞の OnTranslate（別れの台詞は再生中の状態＝`talking`）"
     );
     assert_eq!(
         *after_close[1],

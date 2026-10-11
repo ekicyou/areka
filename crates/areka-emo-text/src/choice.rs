@@ -742,3 +742,7 @@ mod decorate_tests;
 #[cfg(test)]
 #[path = "choice_glyph_cells_tests.rs"]
 mod glyph_cells_tests;
+
+#[cfg(test)]
+#[path = "choice_anchor_tests.rs"]
+mod anchor_tests;

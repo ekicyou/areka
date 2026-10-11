@@ -58,7 +58,7 @@
   - `\![move,dx,dy,...,base,base]`（キャラ位置移動・位置調整の中核）
   - `%username`（SSP システム変数展開）
 - **`\!` コマンドは `move` だけ本実装、他はスタブで可**（set/get property・choicetimeout・reload は辞書発火なし）。
-- **M1 不要**（emo2 未使用）: raise/open/exec/anchor/timerraise/bind 等 `\!` 系、`\b \_b \i \j \& \f[] \_a \_q \_n \x`。なお `\f[]` の語彙は 2026-08-27 に**文字装飾系 3 spec**（`areka-P0-text-decoration-canon`〔核 17 項目＋基盤〕／`areka-P0-anchor-tag-canon`〔アンカー系 16 項目〕／`areka-P0-choice-marker-styling`〔`cursor*` 10 項目〕・いずれも M2 ゲート）が全 43 項目を分担所有することが確定した。ここでの「M1 不要」は emo2 適合に要らないという意味であり、語彙が未所有という意味ではない。
+- **M1 不要**（emo2 未使用）: raise/open/exec/anchor/timerraise/bind 等 `\!` 系、`\b \_b \i \j \& \f[] \_a \_q \_n \x`。なお `\f[]` の語彙は 2026-08-27 に**文字装飾系 3 spec**（`areka-P0-text-decoration-canon`〔核 17 項目＋基盤〕／`areka-P0-anchor-style-canon`〔アンカー系 16 項目〕／`areka-P0-choice-marker-styling`〔`cursor*` 10 項目〕・いずれも M2 ゲート）が全 43 項目を分担所有することが確定した。ここでの「M1 不要」は emo2 適合に要らないという意味であり、語彙が未所有という意味ではない。
 - 独自論点: `\n[percent]` の割合解釈・`\s[]` 不透明扱い・`%username` 展開は要実装。budoux/縦書きは**痕跡なし・M1 不要**。
 
 ## 4. バルーン（balloon-loader の M1 実需）

@@ -41,7 +41,7 @@ use super::{BalloonWiring, HoverAction, hover_action};
 /// - `Emo2Wiring` 不在（boot 前／失敗）は**正常縮退**＝`debug!(event = "choice_leave_no_emo2")`＋no-op
 ///   （donor presenter=None 同型・R4.1）。runtime `Rc` は 1 度 clone し全 scope で共有する（同一資源）。
 /// - `BalloonWiring` 不在は結線漏れ＝**構成異常** `error!(event = "balloon_wiring_missing")`＋skip。
-/// - runtime `try_borrow`（不変）で `choice_active` を控え、借用解放後に `try_borrow_mut` で
+/// - runtime `try_borrow`（不変）で `hit_active` を控え、借用解放後に `try_borrow_mut` で
 ///   `inject_choice_hover`（`Inject` アームのみ・値は必ず `None`）。`RefCell` 借用失敗は
 ///   `error!(event = "balloon_runtime_borrow_failed")`＋skip（panic しない・log-first）。
 /// - `Inject(None)`（表示中・注入済→解除）: `inject_choice_hover(actor, None)`＋自前状態 `None`＋
@@ -133,10 +133,11 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
             continue;
         };
 
-        // ── 借用規律 ③ runtime 不変借用で choice_active スナップショット（hit は None＝窓外離脱・R1.3）──
+        // ── 借用規律 ③ runtime 不変借用で hit_active スナップショット（hit は None＝窓外離脱・R1.3）──
+        // 押せる範囲（選択肢かアンカー）があるかを見る——アンカーの強調もここで外す。
         // try_borrow 失敗（理論上不到達の構成異常）は error!＋skip（panic しない・log-first）。
         let action = match runtime.try_borrow() {
-            Ok(rt) => hover_action(rt.choice_active(&actor), None, last_injected),
+            Ok(rt) => hover_action(rt.hit_active(&actor), None, last_injected),
             Err(_) => {
                 tracing::error!(
                     event = "balloon_runtime_borrow_failed",

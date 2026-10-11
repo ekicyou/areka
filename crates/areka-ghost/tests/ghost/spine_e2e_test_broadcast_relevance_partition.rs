@@ -7,7 +7,7 @@
 // broadcast（D4）では全 cue が登録された全 sink（seriko/emo-text）へ配られる。どの action を
 // 演じるかは演者側 relevance（`cue_target_of` が単一権威）が決めるため、**変異 variant ごとに
 // action する演者は高々一つ**でなければならない（二重 action / 暗黙ドロップの発散を型で塞ぐ）。
-// 本モジュールは `CueCommand` の全 10 variant について、`cue_target_of` の分類が
+// 本モジュールは `CueCommand` の全 variant について、`cue_target_of` の分類が
 // 「Shell→seriko だけが action／Balloon→emo-text だけが action／None→誰も action しない」の
 // partition になっていることを純関数として固定する（GPU 不要・決定論）。
 //
@@ -61,7 +61,9 @@ fn every_cue_command() -> Vec<CueCommand> {
         | CueCommand::BalloonSurface { .. }
         | CueCommand::Cursor { .. }
         | CueCommand::Wait
-        | CueCommand::ClearAll => {}
+        | CueCommand::ClearAll
+        | CueCommand::AnchorBegin { .. }
+        | CueCommand::AnchorEnd => {}
     }
     vec![
         CueCommand::Text("hi".into()),
@@ -85,6 +87,11 @@ fn every_cue_command() -> Vec<CueCommand> {
         },
         CueCommand::Wait,
         CueCommand::ClearAll,
+        CueCommand::AnchorBegin {
+            id: "OnJump".into(),
+            references: vec![],
+        },
+        CueCommand::AnchorEnd,
     ]
 }
 
@@ -125,6 +132,15 @@ fn every_variant_has_at_most_one_acting_performer_consistent_with_cue_target_of(
             },
             Some(Performer::EmoText),
         ),
+        // アンカーの開き・閉じ（`\_a`）は文字の層（emo-text＝Balloon）が action する。
+        (
+            CueCommand::AnchorBegin {
+                id: "OnJump".into(),
+                references: vec![],
+            },
+            Some(Performer::EmoText),
+        ),
+        (CueCommand::AnchorEnd, Some(Performer::EmoText)),
         (
             CueCommand::Custom {
                 command: "fade".into(),

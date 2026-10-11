@@ -36,8 +36,9 @@ fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
     // シェル・バルーン切替の 3 語を足して 45 語（areka-P0-shell-balloon-switch 要件 8.2）、
     // 翻訳の `OnTranslate` を足して 46 語（areka-P0-translate-pipeline 要件 3.4）、
     // ドラッグの 2 語を足して 48 語（areka-P0-mouse-drag-events 要件 7.1）、
-    // バルーンの寿命の 3 語を足して 51 語（areka-P0-balloon-lifecycle-events 要件 3.5・6.4）。
-    assert_eq!(ALLOWED_EVENT_IDS.len(), 51);
+    // バルーンの寿命の 3 語を足して 51 語（areka-P0-balloon-lifecycle-events 要件 3.5・6.4）、
+    // アンカーの 2 語を足して 53 語（areka-P0-anchor-tag-canon 要件 4.1・4.2）。
+    assert_eq!(ALLOWED_EVENT_IDS.len(), 53);
     for id in [
         "OnGhostChanging",
         "OnGhostChanged",

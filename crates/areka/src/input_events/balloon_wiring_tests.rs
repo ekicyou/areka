@@ -8,6 +8,7 @@ use std::sync::mpsc;
 
 fn sample() -> ChoiceSelection {
     ChoiceSelection {
+        kind: SpanKind::Choice,
         id: "q0".to_string(),
         label: "はい".to_string(),
         scope: 0,
@@ -39,6 +40,10 @@ fn differing_field_contents_compare_unequal() {
         base, different_refs,
         "references が異なれば非等価であるべき"
     );
+
+    let mut different_kind = sample();
+    different_kind.kind = SpanKind::Anchor;
+    assert_ne!(base, different_kind, "種類が異なれば非等価であるべき");
 }
 
 #[test]

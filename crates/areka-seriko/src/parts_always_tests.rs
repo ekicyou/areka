@@ -41,6 +41,7 @@ fn tick(
         now_ms,
         crossed,
         true,
+        None,
         rng,
         &mut p,
     );

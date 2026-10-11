@@ -66,6 +66,8 @@
 //! | `OnBalloonBreak` | GET | Ref0=止めたトークの台本・Ref1=スコープ番号・Ref2=空（中断位置は作らない） |
 //! | `OnBalloonClose` | GET | Ref0=閉じたバルーンに出ていた台本 |
 //! | `OnBalloonTimeout` | GET | Ref0=時間切れで隠れたバルーンに出ていた台本・Ref1=`0` |
+//! | `OnAnchorSelectEx` | GET | Ref0=アンカーの範囲の文字・Ref1=ID・Ref2 以降=引数（記述順・無ければ位置なし） |
+//! | `OnAnchorSelect` | GET | Ref0=ID |
 
 use crate::change::{BootOrigin, ChangeRequest, ChangedFrom, ShioriMethod};
 use crate::msg::{CloseReason, EventId, KanadeConfig, MonotonicMs, MouseButton, ShioriCall};
@@ -225,6 +227,13 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnBalloonClose",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonTimeout:1
     "OnBalloonTimeout",
+    // アンカーの 2 語（areka-P0-anchor-tag-canon 要件 4.1・4.2・51→53 語）。バルーンの本文の
+    // アンカー（`\_a`）が押されたときに送る。`On` で始まる ID の直接の送出は選択肢の任意名と
+    // 同じ道（[`is_allowed_choice_event`]）を通るので、表には載らない。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnAnchorSelectEx:1
+    "OnAnchorSelectEx",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnAnchorSelect:1
+    "OnAnchorSelect",
 ];
 
 /// `id` が送出許可集合（[`ALLOWED_EVENT_IDS`]）に属するかを判定する（Req3.1）。
@@ -647,16 +656,7 @@ pub fn on_choice_select_ex(
     references: &[String],
     snapshot: &ExecutionSnapshot,
 ) -> ShioriCall {
-    let mut refs = Vec::with_capacity(2 + references.len());
-    refs.push(label.to_string());
-    refs.push(id.to_string());
-    // 空参照列なら extend は 1 要素も足さない＝Ref2 以降の位置が生えない（Req3.5）。
-    refs.extend(references.iter().cloned());
-    ShioriCall::Get {
-        id: EventId::Static("OnChoiceSelectEx"),
-        references: refs,
-        status: ExecutionStatus::derive(snapshot),
-    }
+    select_ex_get("OnChoiceSelectEx", label, id, references, snapshot)
 }
 
 /// `OnChoiceSelect`（GET・Ref0=選択肢 ID のみ）。
@@ -664,8 +664,56 @@ pub fn on_choice_select_ex(
 /// 正典形カスケードの**後続段**（先行 `OnChoiceSelectEx` が 204 のときのみ発行・裁定 2）。
 /// Reference は常に 1 個で、付随参照列・表示ラベルは載せない（Req3.2）。
 pub fn on_choice_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
+    select_get("OnChoiceSelect", id, snapshot)
+}
+
+/// `OnAnchorSelectEx`（GET・Ref0=範囲の文字／Ref1=ID／Ref2 以降＝引数）。
+///
+/// `On` で始まらない ID のアンカーが押されたときに最初に送る（areka-P0-anchor-tag-canon 要件 4.1）。
+/// 並びは [`on_choice_select_ex`] と同じで、Ref0 が選択肢のラベルの代わりにアンカーの範囲に
+/// 表示された文字になる。引数（`\_a[ID,r2,r3...]` の 2 番目以降）は記述順のまま逐語で載せ、
+/// 無ければ Ref2 以降の位置を作らない（要件 4.6。上記「空参照列の規約」を参照）。
+pub fn on_anchor_select_ex(
+    text: &str,
+    id: &str,
+    references: &[String],
+    snapshot: &ExecutionSnapshot,
+) -> ShioriCall {
+    select_ex_get("OnAnchorSelectEx", text, id, references, snapshot)
+}
+
+/// `OnAnchorSelect`（GET・Ref0=ID のみ）。
+///
+/// 先に送った `OnAnchorSelectEx` が 204 のときだけ続けて送る（areka-P0-anchor-tag-canon 要件 4.2）。
+/// Reference は常に 1 個で、範囲の文字・引数は載せない。
+pub fn on_anchor_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
+    select_get("OnAnchorSelect", id, snapshot)
+}
+
+/// 選択肢とアンカーの「Ex」の共通の組み立て（Ref0=表示された文字・Ref1=ID・Ref2 以降＝引数）。
+fn select_ex_get(
+    event: &'static str,
+    text: &str,
+    id: &str,
+    references: &[String],
+    snapshot: &ExecutionSnapshot,
+) -> ShioriCall {
+    let mut refs = Vec::with_capacity(2 + references.len());
+    refs.push(text.to_string());
+    refs.push(id.to_string());
+    // 空参照列なら extend は 1 要素も足さない＝Ref2 以降の位置が生えない（Req3.5）。
+    refs.extend(references.iter().cloned());
     ShioriCall::Get {
-        id: EventId::Static("OnChoiceSelect"),
+        id: EventId::Static(event),
+        references: refs,
+        status: ExecutionStatus::derive(snapshot),
+    }
+}
+
+/// 選択肢とアンカーの無印の共通の組み立て（Ref0=ID の 1 個だけ）。
+fn select_get(event: &'static str, id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
+    ShioriCall::Get {
+        id: EventId::Static(event),
         references: vec![id.to_string()],
         status: ExecutionStatus::derive(snapshot),
     }
@@ -791,3 +839,7 @@ mod change_tests;
 #[cfg(test)]
 #[path = "events_balloon_tests.rs"]
 mod balloon_tests;
+
+#[cfg(test)]
+#[path = "events_anchor_tests.rs"]
+mod anchor_tests;

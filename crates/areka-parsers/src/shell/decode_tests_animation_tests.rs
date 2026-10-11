@@ -13,8 +13,9 @@ use super::{Animation, DrawMethod, Interval, Pattern, decode, lex};
 // - pattern index を明示保持し（連番前提なし・疎許容・要件 5.4）、負の surface 参照 ID を
 //   センチネルとして失わず i64 保持する（要件 5.5・意味付けは下流）。
 // - animation は id の初出順で保持する（z-order 実順序付けはしない・要件 5.6）。
-// interval 3 種以外（sometimes/periodic 等・要件 5.7）と非 overlay pattern は
+// interval 3 種以外（sometimes/always 等・要件 5.7）と非 overlay pattern は
 // タスク 4.6 の寛容吸収シームゆえここでは検証しない。
+// runonce / periodic,数値 / talk,数値 の読みは兄弟の decode_interval_trigger_tests.rs。
 
 /// `animationN.interval,bind` ＋ 単一 pattern → interval Bind・pattern 正規化（要件 5.1/5.4）。
 #[test]

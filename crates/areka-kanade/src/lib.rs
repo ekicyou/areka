@@ -22,6 +22,7 @@
 //! 一切依存しない（DD-1）。
 
 pub mod actor;
+pub mod anchor_input;
 pub mod change;
 // 殻で答える複数件のリソース照会（`KanadeMsg::ResourceQuery`）。`actor.rs` を薄く保つための分室。
 mod actor_resources;
@@ -40,6 +41,7 @@ pub mod talk;
 pub mod translate;
 
 pub use actor::{spawn_kanade, spawn_kanade_translating, spawn_kanade_with_stop_sink};
+pub use anchor_input::AnchorInput;
 pub use change::{
     BootOrigin, CancelReason, ChangeHandoff, ChangeOrigin, ChangeRequest, ChangeTarget,
     ChangedFrom, GapLeft, GapRaise, KanadeNotice, MarkedEnd, RaiseOutcome, ShioriMethod, TalkGap,

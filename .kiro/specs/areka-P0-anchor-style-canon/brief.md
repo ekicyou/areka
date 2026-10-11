@@ -108,3 +108,16 @@
   - 網羅台帳の持ち主が切り出しの前のまま: `assets.toml` の `anchor.*` 43 行と `sakura-script.toml` の `\f[anchor*]` 16 行の持ち主が `anchor-tag-canon` で、本 spec の持ち物は 0 行。付け替える。
   - Scope は descript を `anchor(.notselect|.visited).font.*` 族としか書いていないが、網羅台帳の 43 行には 3 状態ぶんの `anchor.style`・`anchor.brush.color.*`・`anchor.pen.color.*`・`anchor.blendmethod` も入っている（バルーン定義の読み手はどれも読まない）。`\f[anchorstyle,default]` などの戻り先なので範囲に入れる。影の行は `text-align-shadow-canon` と分け方を決める。
   - roadmap の列の「`choice-marker-styling` ∥ 隣に `anchor-style-canon`」は並走の意味ではない。2 本は `look.rs`・`state_decoration.rs`・`viewbox_draw_render.rs`・`viewbox_draw_decoration.rs` が重なる＝続けて走らせる（同じウェーブには置けない）。
+
+## 2026-10-10 `areka-P0-anchor-tag-canon` の完了時の申し送り
+
+出どころは `completed/areka-P0-anchor-tag-canon/tasks.md` の Implementation Notes（3.3・6.2・6.3・7.2）。前提の `anchor-tag-canon`（働き）は実装と実機の確かめを終えた。上の「2026-10-10 棚卸㉓の再測定」の「未着手のまま」と、台帳の持ち主の付け替えの行は古くなった（`\f[anchor*]` 16 行と descript の `anchor.*` 43 行の持ち主は、`anchor-tag-canon` のタスク 6.3 が本 spec へ付け替えた＝本 spec の持ち物は 59 行）。
+
+1. **見た目の装着より先に届いたアンカーの字**（実機では出ていない・潜んでいる性質）: 見た目の装着（`crates/areka-emo-text/src/state_decoration.rs` の `set_look_layers`）より先にアンカーの中の文字が届くと、その字は「装着前の既定＋下線」の丸ごとの写しとして装飾の表に載る（`look.rs` の `StyleTable::intern`）。`set_look_layers` はその字を載せ直さないので、装着の後もその字だけ装着前の既定の大きさ・色・フォントで描かれうる。
+   - 作者が `\f` で飾った字には前からある性質（テスト `attaching_after_an_explicit_look_still_lands_the_balloon_defaults` が再現する窓）。`anchor-tag-canon` の下線で、`\f` を 1 つも書かない台本でも起こりうるようになった。
+   - 2026-10-10 の実機では、起動直後の台詞のアンカーの字の大きさと色はほかの字と同じだった（崩れは 0 件）。
+   - 下線を丸ごとの写しでなく「既定との差分」として持てば、この窓は消える。3 状態の見た目の解決を作るときに一緒に決める。
+2. **差し替える 1 か所**: `anchor-tag-canon` は、アンカーが開いている間「見た目の写しに下線を立てたもの」を `state_decoration.rs` の `push_current_style` で焼いている。本 spec の `anchor.style` の解決は、ここを置き換える。作者が範囲の中で下線を切ってもアンカーの下線が勝つ決め（`doc/anchor-compat.md` の 2.1 の 9）も、ここで見直す。
+3. **台帳の備考の書き直し**: `doc/ukadoc-coverage/ledger/sakura-script.toml` の `\f[anchor*]` 16 行の備考は「ログ: 出る（compile の catch-all の debug! 記録）」と書くが、実態と合わない（`anchor-tag-canon` より前から。16 行とも）。本 spec が行の状態を変えるときに書き直す。
+4. **隣の spec と同じ所を触る**: `areka-P0-underline-bottom-row-clip`（2026-10-10 起票・バグ）＝文字の領域の下端に来た行の下線が出ない件。下線の位置を DirectWrite に任せている所（`viewbox_draw_decoration.rs` の `apply_font_ranges`）と文字の面の大きさを触るので、本 spec の「縦書きの下線の位置の決め直し」と重なる。同時に走らせない。先に着地した方の決めに、後の方が合わせる。
+5. **互換の記録**: アンカーの裁定の正本は `doc/anchor-compat.md`。本 spec が差し替える行は 2.1 の 8・9、本 spec へ波及する事柄は §3（3.1 の表の 1 行目と「4 本が前提にしてよいもの」）。

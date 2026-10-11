@@ -1,0 +1,59 @@
+# Implementation Plan
+
+> テストの名前（T1〜T4）・設計の決定（D1〜D5）・触るファイルは `design.md` の「Testing Strategy」「設計の決定」「File Structure Plan」にある。
+
+- [x] 1. お別れの台詞の再生中の `talking` を固定するテストを先に書く
+- [x] 1.1 (P) 段のテストで、判定の全場面・お別れの 3 つの場面の通し・握手の要求を固定する
+  - 運行の相のすべての種類（トークの有無で分かれる相は両方＝17 通り）について、「再生中か」の期待を手書きの表（ワイルドカード無しの分岐）で持ち、判定・再生中のトークの番号が引けるか・実行の状態の素の 3 つがその表と一致することを見る
+  - お別れの 3 つの場面（終了の要求→`OnClose` に台詞／切り替えの要求→`OnGhostChanging` に台詞／切り替えの要求→応答なし→`OnClose` に台詞）を、旗・通信中・バルーンがすべて立った写しで実際の入力から流し、応答待ちの間は `talking` 無し、翻訳の依頼の `Status` と再生中の `Status` は `talking,nouserbreak,online,balloon(…)`、旗を下ろす知らせの後は `nouserbreak` 無し、`choosing` は無し、再生の開始の一括に SHIORI への要求が 0、を見る
+  - 終わり方 4 通り（最後まで・`\-` に達した・利用者の中断・上限超過）の後は `talking`・`nouserbreak` が無いこと、切り替えの場面の利用者の中断の後に送られる `OnBalloonBreak` の `Status` にも `talking` が無いことを見る
+  - 握手の要求: 普段の会話の完了を待ってから送る `OnClose` と、お別れの 3 つの場面の再生中に届いた強制終了の `OnClose` の通知が、会話なしの値（`online,balloon(…)`）のままであることを見る（`OnGhostChanging` とその応答なしの後の `OnClose` は既存のテストを数える）
+  - 完了の姿: 判定を直す前の状態で `cargo test -p areka-kanade --lib external_state` を回すと、お別れの 3 つの相の行と 3 つの場面の通しが赤、握手の要求のテストと既存のテストは緑
+  - _Boundary: 段のテスト_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.2, 3.1, 3.2, 3.3, 3.4, 4.1, 4.3, 4.4, 4.5, 4.6_
+
+- [x] 1.2 (P) 殻を通すテストで、問い合わせの答えと翻訳の `Status` を固定する
+  - 本物の殻に、任意の GET に台詞を返せて再生の完了を返さない偽物をつなぎ、お別れの 3 つの場面それぞれで「起動→問い合わせ→きっかけの入力→問い合わせ→台詞の完了」を同じ受信箱へ順に送る
+  - 1 回目の答えは値なし、2 回目の答えは `talking`、記録の `OnTranslate` は 1 件で `Status` が 2 回目の答えと同じ値、握手の要求（`OnClose`・`OnGhostChanging`）は `Status` の行なし、きっかけの入力から後の記録は握手の要求・`OnTranslate`・再生の開始・降ろす往復だけ、を見る
+  - 問い合わせを 1 通送って答えを上限つきで受ける小さな補助を同じファイルに足す
+  - 完了の姿: 判定を直す前の状態で `cargo test -p areka-kanade --test kanade translate_test` を回すと、新しいテストだけが「2 回目の答えに `talking` が無い」で赤、既存のテストは緑
+  - _Boundary: 殻を通すテスト_
+  - _Requirements: 2.1, 2.2, 2.3, 3.3, 4.2, 4.3_
+
+- [x] 2. 判定を直し、既存のテストと文書を新しい振る舞いへ合わせる
+- [x] 2.1 「再生中か」の判定を、再生中のトークの番号が引けるかどうかへ委ねる
+  - 判定の本体を設計の決定 D1 のとおりにし（署名は変えない）、判定の注記と、実行の状態の素の「再生中」の欄の注記を、お別れの台詞を含む説明へ改める
+  - 再生中のトークの番号を引く関数・会話なしの作り方・各入口の門・相の移り方には触れない
+  - 判定を直すと必ず赤になる終了の握手の結合テスト（「別れの台詞の `OnTranslate` は会話なしの状態」という期待）を、再生中の状態の期待と文言へ書き換える
+  - `cargo test -p areka-kanade` を全部回し、ほかに赤が出たら「お別れの間に `talking` が無い」前提のテストかを見分けて書き換える（前提が違う赤は直さずに報告する）
+  - `crates/areka` のテストは 2.2 の持ち物で、ここでは回さない（2.2 が終わるまで適合の一周は赤になる）
+  - 完了の姿: `cargo test -p areka-kanade` が緑（1.1 と 1.2 のテストを含む）。判定を持つファイルの行数が今（955 行）より増えていない。`cargo fmt --all --check` と `cargo clippy -p areka-kanade --all-targets` が通る
+  - _Boundary: 判定 `talk_active_of` と注記・終了の握手の結合テストの期待_
+  - _Depends: 1.1, 1.2_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 3.5, 3.6, 4.8, 4.9_
+
+- [x] 2.2 適合の一周の期待列を新しい振る舞いへ合わせる
+  - `crates/areka` の適合の一周の進行状態の期待列の最後の行（終了の挨拶の `OnTranslate`）を、行なしから `talking` へ書き換え、その上の注記を改める
+  - 進行状態の記録を読む一周のテストだけを名前で絞って 1 回回す（GPU の足場を使う重いテストなので繰り返さない。`crates/areka` の全体は完了時の全体テストに任せる）
+  - 完了の姿: 絞った一周のテストが緑。`cargo fmt --all --check` が通る
+  - _Boundary: 適合の一周の期待列（`crates/areka` のその 1 ファイルだけ）_
+  - _Requirements: 2.2, 4.9_
+
+- [x] 2.3 (P) SSP との差の一覧を直す
+  - 「終了の挨拶・切り替えのお別れの台詞の再生中」の行を消し、「各旗の出る条件」の行の `talking` の説明を「普段の会話・起動の挨拶・終了の挨拶・切り替えのお別れの台詞の再生中」へ改め、見出しの日付を作業日に改める
+  - 完了の姿: 一覧に `farewell-talk-status` という語と「`talking` が出ない」という説明が残っていない。リポジトリの `.kiro/` の外を検索して当たるのは、1.1・1.2 が足したテストの出どころを示す注記（spec の名前）だけで、「`talking` が出ない」という説明は 0 件
+  - _Boundary: 文書（SSP との差の一覧だけ。コードの注記は 2.1 の持ち物）_
+  - _Requirements: 4.7_
+
+## Implementation Notes
+
+- `cargo clippy -p areka-kanade --all-targets` は、本 spec が触らない `crates/areka-kanade/src/actor_raise_reply_tests.rs` の `clippy::never_loop`（既定で deny・最後に触ったのは PR#226）で失敗する。全体テストの道具も CI も clippy を回していない。本 spec では「触ったファイルへの clippy の指摘が 0 件」で判定する（2.1 の完了の姿の clippy も同じ読み）。範囲の外なので直さない。完了時の棚卸しで起票する。
+- 段のテストの補助 `phases()` は 17 通り（相の 15 種類＋トークの有無）。先頭 6 つの並びは既存のテストが添字で使うので動かさない。相を足したら `plays_a_talk`（コンパイルが止まる）だけでなく `phases()` と件数の期待も直す。
+- 2.1 で、設計が挙げていなかった既存のテストが 1 本赤になった: `crates/areka-kanade/tests/kanade/external_status_test.rs` の、通信中の旗を落とした後の要求を「どれも `Status` の行なし」と見る表明（区間に終了の挨拶の `OnTranslate` が入る）。「`OnTranslate` だけ `talking`、ほかは行なし」へ書き換え、design.md・research.md の「2 か所」を「3 か所」へ改めた。
+- 範囲の外の気付き（完了時の棚卸しの材料）: `crates/areka-kanade/src/schedule/user_break_tests.rs` の `playing_states` の注記「3 つの場面（`fn current_talk_id` が `Some` を返す全て）」は、`current_talk_id` が 5 つの相で番号を返すので元から不正確（本 spec で偽になったものではない）。
+- 範囲の外の気付き（完了時の棚卸しの材料）: `crates/areka/src/emo2_boot/spine_conformance_script.rs` の `expected_statuses` の `OnClose` の行の注記（「終了系列は運行を `Unloading` へ移してから発火する」と行番号での出所）は、本 spec の前から不正確（実際は応答待ちの相へ移り、会話なしの作り方で送る。行番号もずれている）。`OnClose` が行なしという観測そのものは正しい。
+- 適合の一周のテストは `cargo test -p areka --bin areka emo2_boot::spine::conformance_lap_tests::conformance_lap_walks_every_stage_to_its_completion -- --exact`（`crates/areka` はバイナリだけなので `--lib` では絞れない。建った後の実行は数秒）。
+- 完了時の棚卸し: その場で解決 2 件・新しい起票 0 件。
+  - 完了時にその場で解決: `crates/areka-kanade/src/schedule/user_break_tests.rs` の `playing_states` の注記を実際に合わせた（番号が引ける相は 5 つ・並べるのは 3 つ）。
+  - 完了時にその場で解決: `crates/areka/src/emo2_boot/spine_conformance_script.rs` の `expected_statuses` の `OnClose` の行の注記を実際に合わせた（会話なしの作り方で送る・出所は名前で指す）。
+  - 起票しない: `cargo clippy -p areka-kanade --all-targets` の `never_loop`（`actor_raise_reply_tests.rs`）は、既に `areka-P0-clippy-199-lints` の brief と roadmap の行が受け持っている。

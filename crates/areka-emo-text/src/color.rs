@@ -4,7 +4,7 @@
 //! 選択肢マーカーの色・アンカーの色はいずれも「指定方法については※下記参照」と同じ注を指す。
 //! したがって書式の解析も 1 か所であるべきで（要件 8.10）、本モジュールがその唯一の解析点である。
 //! 後続仕様（`areka-P0-text-align-shadow-canon`／`areka-P0-choice-marker-styling`／
-//! `areka-P0-anchor-tag-canon`）は [`parse_color`] をそのまま呼ぶ。
+//! `areka-P0-anchor-style-canon`）は [`parse_color`] をそのまま呼ぶ。
 //!
 //! ## 正典（2026-09-11 取得・requirements.md 付録 A「色指定（※）」）
 //!

@@ -272,6 +272,7 @@ fn choice_cue_appends_glyphs_and_records_nonempty_span() {
     assert_eq!(
         choices_of(&state, "0"),
         &[ChoiceSpan {
+            kind: SpanKind::Choice,
             ordinal: 0,
             id: "OnYes".into(),
             label: "はい".into(),
@@ -372,6 +373,7 @@ fn empty_choice_text_warns_and_records_empty_range_no_glyphs() {
     assert_eq!(
         choices_of(&state, "0"),
         &[ChoiceSpan {
+            kind: SpanKind::Choice,
             ordinal: 0,
             id: "empty".into(),
             label: "".into(),

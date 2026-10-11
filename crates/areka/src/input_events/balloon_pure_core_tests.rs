@@ -11,6 +11,7 @@ use super::*;
 // -------------------------------------------------------------------------
 
 use areka_emo_text::actor::HitRectPx;
+use areka_emo_text::state::SpanKind;
 
 /// 内側包含（R1.1）: 矩形の内部点はその行 index を返す。
 #[test]
@@ -166,6 +167,7 @@ fn rows_lifted_by_real_k() -> Vec<ChoiceHitRow> {
                 },
             };
             ChoiceHitRow {
+                kind: SpanKind::Choice,
                 ordinal,
                 id: format!("q{ordinal}"),
                 label: format!("label{ordinal}"),
@@ -362,6 +364,7 @@ fn row_with_refs(
     references: Vec<String>,
 ) -> ChoiceHitRow {
     ChoiceHitRow {
+        kind: SpanKind::Choice,
         ordinal,
         id: format!("q{ordinal}"),
         label: format!("label{ordinal}"),
@@ -478,5 +481,95 @@ fn click_empty_references_transcribed_as_empty() {
     assert!(
         sel.references.is_empty(),
         "空 references は空 Vec として転写"
+    );
+}
+
+// -------------------------------------------------------------------------
+// 選択肢とアンカーが混ざった当たりの行（areka-P0-anchor-tag-canon・要件 3.5・3.6）
+//
+// 行の列は通し番号の昇順で、選択肢とアンカーが台本の順に混ざる。判定は種類の 2 段——選択肢を
+// 後ろから見て、当たらなければアンカーを後ろから見る。
+// -------------------------------------------------------------------------
+
+use super::test_support::anchor_row;
+
+/// 重なる矩形では選択肢が勝つ。台本での定義の順がどちらでも同じ（要件 3.5）。
+#[test]
+fn overlapping_choice_wins_over_anchor_in_either_order() {
+    // どちらの並びでも (50, 30) を選択肢とアンカーの両方が含む。
+    let choice_first = [
+        row(0, 0.0, 0.0, 100.0, 100.0),
+        anchor_row(1, 40.0, 20.0, 60.0, 40.0),
+    ];
+    assert_eq!(
+        hit_choice_row(&choice_first, 50.0, 30.0),
+        Some(0),
+        "アンカーが後ろ（手前）にあっても選択肢"
+    );
+    let anchor_first = [
+        anchor_row(0, 0.0, 0.0, 100.0, 100.0),
+        row(1, 40.0, 20.0, 60.0, 40.0),
+    ];
+    assert_eq!(
+        hit_choice_row(&anchor_first, 50.0, 30.0),
+        Some(1),
+        "選択肢が後ろにあれば、もちろん選択肢"
+    );
+    // 選択肢が 2 つ重なる所にアンカーが挟まっても、後ろの選択肢（今までどおり）。
+    let sandwiched = [
+        row(0, 0.0, 0.0, 100.0, 100.0),
+        anchor_row(1, 0.0, 0.0, 100.0, 100.0),
+        row(2, 40.0, 20.0, 60.0, 40.0),
+        anchor_row(3, 0.0, 0.0, 100.0, 100.0),
+    ];
+    assert_eq!(hit_choice_row(&sandwiched, 50.0, 30.0), Some(2));
+    assert_eq!(
+        hit_choice_row(&sandwiched, 10.0, 10.0),
+        Some(0),
+        "後ろの選択肢の外では、手前のアンカーより奥の選択肢"
+    );
+}
+
+/// 選択肢に当たらずアンカーに当たればアンカー。アンカー同士が重なれば後ろの行。
+/// どの範囲の外でもなければ今までどおり無し（要件 3.5・3.6）。
+#[test]
+fn anchor_is_hit_only_where_no_choice_covers_the_point() {
+    let rows = [
+        row(0, 0.0, 0.0, 100.0, 20.0),
+        anchor_row(1, 0.0, 20.0, 100.0, 40.0),
+        anchor_row(2, 50.0, 20.0, 100.0, 40.0),
+    ];
+    assert_eq!(hit_choice_row(&rows, 10.0, 30.0), Some(1), "アンカーだけ");
+    assert_eq!(
+        hit_choice_row(&rows, 60.0, 30.0),
+        Some(2),
+        "アンカー同士は後ろの行"
+    );
+    assert_eq!(hit_choice_row(&rows, 10.0, 10.0), Some(0), "選択肢だけ");
+    assert_eq!(hit_choice_row(&rows, 10.0, 50.0), None, "範囲の外");
+}
+
+/// 選択の知らせは当たった行の種類を写す。重なりでは選択肢の知らせになり、範囲の外では
+/// 今までどおり作らない（要件 3.3・3.5・3.6）。
+#[test]
+fn click_selection_copies_the_kind_of_the_hit_row() {
+    let rows = [
+        row(0, 0.0, 0.0, 100.0, 20.0),
+        anchor_row(1, 0.0, 20.0, 100.0, 40.0),
+        row(2, 0.0, 30.0, 100.0, 40.0),
+    ];
+    let kind_and_id = |y: f32| click_selection(true, &rows, 50.0, y, 0).map(|s| (s.kind, s.id));
+    assert_eq!(kind_and_id(10.0), Some((SpanKind::Choice, "q0".into())));
+    assert_eq!(kind_and_id(25.0), Some((SpanKind::Anchor, "q1".into())));
+    assert_eq!(
+        kind_and_id(35.0),
+        Some((SpanKind::Choice, "q2".into())),
+        "アンカーと選択肢が重なる所は選択肢の知らせ"
+    );
+    assert_eq!(kind_and_id(50.0), None, "範囲の外");
+    assert_eq!(
+        click_selection(false, &rows, 50.0, 25.0, 0),
+        None,
+        "押せる範囲が無い（消えた後）ならアンカーの上でも作らない"
     );
 }

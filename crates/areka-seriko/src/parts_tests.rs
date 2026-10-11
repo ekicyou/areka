@@ -18,24 +18,24 @@ use crate::state::Slot;
 use crate::table::AnimationTable;
 use crate::timeline::LoopRng;
 
-fn table_of(text: &str) -> AnimationTable {
+pub(super) fn table_of(text: &str) -> AnimationTable {
     AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(text)))
 }
 
-fn scope() -> ActorKey {
+pub(super) fn scope() -> ActorKey {
     ActorKey::from("0")
 }
 
-fn no_binds() -> BindSet {
+pub(super) fn no_binds() -> BindSet {
     BindSet::from_ids([])
 }
 
-fn calls(probe: &Arc<Mutex<RngProbe>>) -> usize {
+pub(super) fn calls(probe: &Arc<Mutex<RngProbe>>) -> usize {
     probe.lock().unwrap().calls
 }
 
 /// overlay・位置 0,0 のコマ（一番上の欄に手で置く用）。
-fn overlay(surface_id: u32) -> PatternFrame {
+pub(super) fn overlay(surface_id: u32) -> PatternFrame {
     PatternFrame {
         surface_id,
         method: ComposeMethod::Overlay,
@@ -45,7 +45,7 @@ fn overlay(surface_id: u32) -> PatternFrame {
 }
 
 /// 部品 `part` の欄を (animation の番号, コマの番号) の列で読む。
-fn part_frames(pattern: &PatternState, part: u32) -> Vec<(u32, u32)> {
+pub(super) fn part_frames(pattern: &PatternState, part: u32) -> Vec<(u32, u32)> {
     pattern
         .part(part)
         .map(|(id, f)| (id, f.surface_id))
@@ -81,6 +81,7 @@ fn tick(
         now_ms,
         crossed,
         true,
+        None,
         rng,
         &mut pattern,
     );
@@ -624,6 +625,7 @@ fn clear_drops_clocks_of_every_scope() {
         1000,
         true,
         true,
+        None,
         &mut rng,
         &mut p,
     );
@@ -637,6 +639,7 @@ fn clear_drops_clocks_of_every_scope() {
         1000,
         true,
         true,
+        None,
         &mut rng,
         &mut p,
     );
@@ -649,11 +652,11 @@ fn clear_drops_clocks_of_every_scope() {
     assert!(peek_at(&mut clocks, &table, 0, &b, 1060, &PatternState::default()).is_empty());
 }
 
-fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
+pub(super) fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
     capture_lines(LineFormat::LevelTargetFields, f).1
 }
 
-fn count(lines: &[String], needles: &[&str]) -> usize {
+pub(super) fn count(lines: &[String], needles: &[&str]) -> usize {
     lines
         .iter()
         .filter(|l| needles.iter().all(|n| l.contains(n)))
@@ -698,6 +701,7 @@ fn negative_id_other_than_minus_one_warns_once_per_scope_part_animation() {
                 base,
                 true,
                 true,
+                None,
                 &mut rng,
                 &mut p,
             );
@@ -711,6 +715,7 @@ fn negative_id_other_than_minus_one_warns_once_per_scope_part_animation() {
                 base + 50,
                 false,
                 true,
+                None,
                 &mut rng,
                 &mut p,
             );

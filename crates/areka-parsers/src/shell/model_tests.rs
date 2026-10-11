@@ -63,11 +63,16 @@ fn interval_variants_construct_and_match() {
         Interval::Bind,
         Interval::Random { k: 5 },
         Interval::BindRandom { k: 3 },
+        Interval::Runonce,
+        Interval::Periodic { secs: 7 },
+        Interval::Talk { n: 2 },
     ] {
         match iv {
-            Interval::Bind => {}
+            Interval::Bind | Interval::Runonce => {}
             Interval::Random { k } => assert_eq!(k, 5),
             Interval::BindRandom { k } => assert_eq!(k, 3),
+            Interval::Periodic { secs } => assert_eq!(secs, 7),
+            Interval::Talk { n } => assert_eq!(n, 2),
             Interval::Other(_) => {}
         }
     }

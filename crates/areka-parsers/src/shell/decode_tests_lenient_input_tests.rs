@@ -127,20 +127,22 @@ animation1.pattern0,overlay,20,0,0,0
 }
 
 /// pattern を伴わない未知 interval のみの行も忠実転記される（fallback-Bind 撤去後は
-/// interval 行が当該 ID の slot を確定させる・要件 8.2）。`interval,periodic` は
-/// `Interval::Other("periodic")` の animation を初出順で 1 個積む（pattern は空）。
+/// interval 行が当該 ID の slot を確定させる・要件 8.2）。`interval,yen-e` は
+/// `Interval::Other("yen-e")` の animation を初出順で 1 個積む（pattern は空）。
 /// 認識可能 interval 単独行が既に slot を作る挙動と対称（語彙を落とさない黙らない）。
+/// （検体の語は元 `periodic`。areka-P0-seriko-trigger-intervals で `periodic,数値` が
+/// 読める語になったので、未認識のままの語へ替えた。）
 #[test]
 fn unknown_interval_only_line_is_transcribed_as_other() {
-    let input = "surface0\n{\nanimation0.interval,periodic,3\n}\n";
+    let input = "surface0\n{\nanimation0.interval,yen-e,3\n}\n";
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces.len(), 1);
-    // periodic は Interval::Other へ転記され、pattern を持たない animation slot が立つ。
+    // yen-e は Interval::Other へ転記され、pattern を持たない animation slot が立つ。
     assert_eq!(shell.surfaces[0].animations.len(), 1);
     assert_eq!(shell.surfaces[0].animations[0].id, 0);
     assert_eq!(
         shell.surfaces[0].animations[0].interval,
-        Interval::Other("periodic".into())
+        Interval::Other("yen-e".into())
     );
     assert!(shell.surfaces[0].animations[0].patterns.is_empty());
 }

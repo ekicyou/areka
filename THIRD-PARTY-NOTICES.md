@@ -2957,6 +2957,7 @@ SOFTWARE.
 - areka-emo-present 0.0.2
 - areka-emo-text 0.0.2
 - areka-ghost 0.0.2
+- areka-impl-watch 0.0.2
 - areka-kanade 0.0.2
 - areka-mcp 0.0.2
 - areka-mcp-bridge 0.0.2

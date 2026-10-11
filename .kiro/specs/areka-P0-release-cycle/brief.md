@@ -141,3 +141,7 @@
 
 - 版上げの PR を出すとき、`Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md` を触る開いた PR は 0 本（C4 のほかの 12 本はどれも触らない約束）。版上げの全体テストの後に main が動いたら、取り込んで全体テストを回し直してからタグを打つ（Release の段はテストを回さない）。
 - `dist/README.txt` は「時点」の行だけ（`self-alpha-declaration` が既知の制限の行を直す＝別の行）。
+
+## ほかの spec からの申し送り（次の版を決めるときに読む）
+
+- **2026-10-10 `areka-P0-anchor-tag-canon`（完了時の棚卸）**: crates.io に出している `dola` の合図の語彙 `CueCommand`（`crates/dola/src/cue/command.rs`）に 2 種類（`AnchorBegin`・`AnchorEnd`）が増えた。`CueCommand` は `#[non_exhaustive]` でないので、全種類を catch-all なしで並べている外の利用側は、次の版でビルドが通らなくなる。次に公開する版の上げ方は、これを踏まえて本 spec の側で決める（0.0.x の間は、cargo の上ではどの版上げも非互換の扱い）。詳細は `doc/anchor-compat.md` の 3.2。
