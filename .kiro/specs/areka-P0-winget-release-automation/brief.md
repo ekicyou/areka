@@ -182,7 +182,7 @@ PR に直しを求める印 `Needs-Author-Feedback` が付いたら、**10 日�
 - zip の最上位に実行ファイルが 1 つ増えた（`areka-mcp-bridge.exe`＝Claude Desktop 用の中継）。マニフェストの `NestedInstallerFiles` は `areka.exe` だけのままでよい（中継は利用者が名前で起こす物ではない）。winget は入れ先のフォルダを丸ごと PATH に載せるので、中継も名前で呼べる形になる。
 - areka の help の頁（`/api/mcp/help`）が出す Claude Desktop の設定例は、動いている `areka.exe` の隣の中継の絶対パスを載せる。winget で入れた版を上げ直すと入れ先のフォルダの名前が変わるなら、利用者の Desktop の設定のパスが古くなる。次の版の提出の確かめで、上げ直しの後も設定例のパスが同じかを 1 度見る（変わるなら説明書に 1 行）。
 
-## 2026-10-11 `release-notes` の起票からの申し送り
+## 2026-10-11 `release-notes-highlights` の起票からの申し送り
 
-- `areka-P0-release-notes` が着地すると、リリースに添えるファイルが 4 つから 5 つになる（詳細なリリースノートのファイルが増える・名前の案は `areka-{版}-release-notes.md`）。zip を拾う絞り込み `installers-regex: '\.zip$'` にこのファイルは当たらない見込みだが、この spec の確かめの中で 1 度見る。
+- `areka-P0-release-notes-highlights` が着地すると、リリースに添えるファイルが 4 つから 5 つになる（詳細なリリースノートのファイルが増える・名前の案は `release-notes-v{版}.md`）。zip を拾う絞り込み `installers-regex: '\.zip$'` にこのファイルは当たらない見込みだが、この spec の確かめの中で 1 度見る。
 - リリースの本文は、注目に値する数件の日本語の紹介になる（版ごとのファイルがリポジトリに在る）。winget のマニフェストの変更点の欄に何を入れるかを決めるときの材料にできる。
