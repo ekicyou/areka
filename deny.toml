@@ -38,6 +38,13 @@ allow = [
 # RustSec 脆弱性 DB のチェックはゲートに含める（yanked/脆弱性は警告→将来 deny 可）
 version = 2
 yanked = "warn"
+# 見逃す勧告は 1 件ずつ理由と持ち主の spec を書く（2026-10-15 開発者の判断）
+ignore = [
+    # unsafe-libyaml は保守されていない（直した版は出ない）。引くのは dola の任意の機能 yaml（serde_yaml）だけで、
+    # 既定では無効・ワークスペースで有効にするクレートは 0 本＝areka の配布物には入らない。
+    # serde_yaml を替えるか機能ごと外すかは areka-P0-dola-yaml-backend が決める。片づいたらこの行を消す。
+    { id = "RUSTSEC-2024-0449", reason = "dola の任意の機能 yaml だけが引く・配布物に入らない・持ち主は areka-P0-dola-yaml-backend" },
+]
 
 [bans]
 # 重複バージョンやワイルドカードは今は警告に留める（ライセンスゲートが主目的）
