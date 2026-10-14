@@ -44,7 +44,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: `areka-P0-release-ci-workflow`（CI のビルドが前提）・`areka-P0-release-cycle` の数回の実行（「リリース済み・活発」の実績）。
+- **Upstream**: `areka-P0-release-ci-workflow`（CI のビルドが前提）・スキル `/release` の数回の実行（「リリース済み・活発」の実績）。
 - **Downstream**: なし。
 
 ## Existing Spec Touchpoints
@@ -67,7 +67,7 @@
 ## 2026-10-04 棚卸㉑の再測定（main `634032f6`・C2 の着地の後）
 
 - 規模: S（6〜9 タスク）。切る: なし。段は据え置き（任意）のまま。
-- 前提の状態: CI のビルド（`release-ci-workflow`）は着地した。「リリース済み・活発」の実績（`release-cycle` の数回の実行）はまだ 0 回＝SignPath Foundation への申請の条件が満たせない。着手は早くても `release-cycle` の数回の後。
+- 前提の状態: CI のビルド（`release-ci-workflow`）は着地した。「リリース済み・活発」の実績（`/release` の数回の実行）はまだ 0 回＝SignPath Foundation への申請の条件が満たせない。着手は早くても `/release` の数回の後。
 - 崩れた前提／古くなった位置:
   - **「ビルドと zip の間に段を挟む」は `release.yml` だけでは書けない**。`release.yml` の段「zip を作る」は `tools/package.ps1 -Arch all` を 1 回呼び、その中で組み立て・同梱物の配置・zip・SHA256 までを一続きに行う。exe に署名してから zip を作るには、`tools/package.ps1` に「組み立てた後・zip の前」に外から手を入れられる口（組み立てと詰める段を分ける、または署名の段を呼ぶ口）が要る＝brief の Out of Boundary「配布スクリプトの中身」に触る。設計の段で境界を改める。
   - 署名する exe は `areka.exe`・`shiori-host32-helper.exe` の 2 本（`tools/package.ps1` の zip の中身の一覧）。C4 の候補 `mcp-stdio-bridge` が Desktop 用の中継 exe を zip に足すと 3 本になる。
@@ -85,7 +85,7 @@
 ## 2026-10-05 棚卸㉒の再測定（main `f26aa1c1`・C3 の着地の後）
 
 - 規模: S（6〜9 タスク）。切る: なし。段は据え置き（任意）のまま。
-- 前提の状態: **待ち**。リリースの実績はまだ 0 回（タグは `v0.0.1` だけ・`release.yml` は main で本番の走りをしていない）。SignPath Foundation の条件「リリース済み・活発」は、`release-cycle` を何回か回した後に満たし始める。
+- 前提の状態: **待ち**。リリースの実績はまだ 0 回（タグは `v0.0.1` だけ・`release.yml` は main で本番の走りをしていない）。SignPath Foundation の条件「リリース済み・活発」は、`/release` を何回か打った後に満たし始める。
 - 崩れた前提／古くなった位置:
   - C3 で `.github/workflows/release.yml` と `tools/package.ps1` は 1 行も変わっていない。棚卸㉑の指摘（段「zip を作る」は `tools/package.ps1 -Arch all` を 1 回呼ぶだけで、組み立てと詰める段の間に外から手を入れる口が無い）はそのまま。
   - 署名の相手を数え直した: zip に入る実行ファイルは `tools/package.ps1` の `$ALLOWED_EXECUTABLES` の 3 つ＝`areka.exe`（x64 と arm64 で別の物）・`shiori-host32-helper.exe`（i686 の 1 つを両方の zip に入れる）・`ghost/emo2/ghost/master/pasta.dll`（i686）。自分で組む物は 3 つ（x64 の本体・arm64 の本体・helper）。

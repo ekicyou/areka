@@ -100,6 +100,6 @@
 - **規模**: M（10〜14 タスク）のまま（当たりと押下の分が減り、dola と `check_script` の分が増えた）。**優先度の区分**: A のまま。**要件定義のモデル**: Fable のまま。
 - **先に要るもの**: 無い＝文字とバルーンの列と、台本の読み手の列の両方の先頭。働きで後ろに待つのは `link-context-copy`・`balloon-link-hover` の 2 本、列の順で待つのは約 13 本。
 - **見つけた穴・古くなった記述**:
-  - dola は crates.io に公開している。合図の語彙を足すと公開 API の追加になる＝`release-cycle` へ 1 行申し送る（`anchor-tag-canon` と同じ扱い）。
+  - dola は crates.io に公開している。合図の語彙を足すと公開 API の追加になる＝roadmap の「次のリリースへの申し送り」へ 1 項目足す（`anchor-tag-canon` と同じ扱い）。
   - 「選択肢の範囲があるか」の観測（`actor.rs` の `TextLayerRuntime::choice_active`）は、バルーンの時間切れを止める判定が読む。範囲の選択肢でも立つようにする。`balloon-text-bugs` の件 1 が同じ観測のまわりを直すので、同じウェーブに置かない。
   - 同じウェーブに置けない相手: `font-size-keywords`（`check_script_judge.rs`）・`choice-ranges-one-function`・`balloon-font-file`（`actor.rs`）・`talk-fast-forward`（`decode.rs`・`compile.rs`・dola の `runtime.rs`）。`choice-marker-styling` とは、あちらが新しいファイルを足さず、こちらが `choice.rs` に触らなければ重ならない。

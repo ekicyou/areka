@@ -60,7 +60,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: なし（スキルの文書の書き替え）。
-- **Adjacent**: `areka-P0-impl-watch-residue`（アプリの拾い残し。`--help` や出力の文が変わると、スキルの読み方も合わせる）。`areka-P0-release-cycle`（繰り返しの spec。`kiro-complete` を使わないので机の段は別に要るかを要件で見る）。
+- **Adjacent**: `areka-P0-impl-watch-residue`（アプリの拾い残し。`--help` や出力の文が変わると、スキルの読み方も合わせる）。スキル `/release`（`kiro-complete` を使わずに版上げの PR を自分でマージするので、机の段が別に要るかを要件で見る）。
 
 ## Constraints
 

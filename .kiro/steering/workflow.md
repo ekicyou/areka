@@ -70,7 +70,7 @@ Spec: <spec-name>"
 mv .kiro/specs/<spec-name> .kiro/specs/completed/
 ```
 
-> **繰り返し仕様の例外**: リリース手順・レビューループ等の繰り返し実行型仕様は `completed/` に**移動しない**（`.kiro/specs/` 直下に留め、tasks.md のチェックボックスをリセット）。
+> **繰り返し仕様の例外**: レビューループ等の繰り返し実行型仕様は `completed/` に**移動しない**（`.kiro/specs/` 直下に留め、tasks.md のチェックボックスをリセット）。
 
 ### Step 4. `spec.json` の `phase` を更新
 

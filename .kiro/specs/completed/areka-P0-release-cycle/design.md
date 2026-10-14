@@ -1,5 +1,7 @@
 # Design Document: areka-P0-release-cycle
 
+> **この文書は完了した spec の記録で、実行には使わない**（2026-10-11）。リリースの手順の正本は `.claude/skills/release/`（`SKILL.md` と `procedure.md`）で、開発者が `/release` を打って回す。本書は `v0.0.2` を出した繰り返し spec の時点の文で、`requirements.md` の末尾の「手順をスキル `/release` へ移した」の節が、今の形と食い違う行を名指しする。
+
 ## Overview
 
 **Purpose**: 開発者が `/release`（入口のスキル。`/kiro-impl areka-P0-release-cycle` と同じ）を打ったときだけ、版を 1 つ上げ、タグを 1 つ打ち、GitHub Release と crates.io への公開までを見届ける、繰り返しの手順を決める。

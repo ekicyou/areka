@@ -128,7 +128,7 @@ communicatebox.x,8     communicatebox.y,21  communicatebox.width,385  communicat
 ## Upstream / Downstream
 
 - **Upstream**: `areka-P0-dot-sakura-specimen`（手本を検体として引ける・登記表と数のテストを続けて触る）。`areka-P0-balloon-webp-names`（議題 3 で `.webp` を選ぶとき）。要件の段に、開発者と絵柄を選ぶ往復が入る。
-- **Downstream**: `areka-P0-balloon-markers`（このバルーンの矢印・オンライン・SSTP の印が、同 spec が求める「リポジトリ内の印の検体」になる）。`areka-P0-release-cycle`（次の版の配布物から既定が替わる）。
+- **Downstream**: `areka-P0-balloon-markers`（このバルーンの矢印・オンライン・SSTP の印が、同 spec が求める「リポジトリ内の印の検体」になる）。スキル `/release`（次の版の配布物から既定が替わる）。
 
 ## Existing Spec Touchpoints
 
