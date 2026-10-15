@@ -11,7 +11,7 @@
 ### Goals
 
 - roadmap.md の 5 か所（版の段の表・spec 台帳の表・テーマ別の決めごと・ウェーブ編成の表・完了サマリの表）を、今の書き方のまま読み、版の段ごとの帯とカードの 1 枚の自己完結の HTML を作る（要件 1〜4）。
-- 同じ roadmap.md と同じコミットからは同じバイトを作る。全体テストで道具の働きを見本だけで確かめる（要件 5.4・6.5・6.6）。
+- 同じ roadmap.md（同じ中身）からは、いつ・どの枝で作っても同じバイトを作る。全体テストで道具の働きを見本だけで確かめる（要件 5.4・6.5・6.6）。
 - `doc/` の整理で、コードとテストが読むファイルには触らず、動かしたファイルへの参照を同じ変更で直す（要件 8）。
 
 ### Non-Goals
@@ -44,7 +44,7 @@
 ### Allowed Dependencies
 
 - PowerShell 7（`#Requires -Version 7`・手元は 7.6.7）と .NET の標準（`System.IO.File`・`System.Text.UTF8Encoding`・`ConvertTo-Json -EscapeHandling EscapeHtml`）。
-- `git`（既に使っている。コミットと未コミットの変更を読むだけ）を `tools/utf8-child.ps1` の `Invoke-Utf8Child` 経由で呼ぶ。
+- `git`（既に使っている。roadmap.md の中身の印を `hash-object` で求めるだけ）を `tools/utf8-child.ps1` の `Invoke-Utf8Child` 経由で呼ぶ。
 - ブラウザの標準（HTML・CSS・素の JavaScript）。外の CDN・フォント・画像・ライブラリは使わない。
 - 依存の向き: 文言のファイル・ひな形（データ）→ 読み手（純粋な関数）→ HTML の組み立て（純粋な関数）→ 入出力（本体・`-SelfTest`）。ひな形の JS は埋め込まれたデータの形だけに依る。逆向きは作らない。
 
@@ -94,7 +94,7 @@ graph LR
 | CLI | PowerShell 7（`pwsh`）| 読み手・データの組み立て・HTML の書き出し・`-SelfTest`・`-Open` | 既存の道具と同じ。新しいモジュールは無い |
 | データ | JSON（`ConvertTo-Json -Depth 10 -Compress -EscapeHandling EscapeHtml`）| HTML に埋める中身 | `<`・`>`・`&`・`'`・`"` を `\u003c` などに逃がす＝台帳の文の中の `</script>` で壊れない（手元の 7.6.7 で確かめた）|
 | 表示 | HTML5・CSS・素の JavaScript（ES2017 程度）| 帯・カード・凡例・絞り込み | 外の物を読まない。`<details>` で開く |
-| 外の道具 | git（既存）| HEAD のコミット・roadmap.md の未コミットの変更 | `Invoke-Utf8Child` で読む |
+| 外の道具 | git（既存）| roadmap.md の中身の印（`git hash-object`）| `Invoke-Utf8Child` で読む |
 
 ## File Structure Plan
 
@@ -165,7 +165,7 @@ flowchart TD
 | 1.5 | 名前の順・`→` の依存 | Reader・Renderer | `Card.chained` | — |
 | 1.6 | カードの欄・一言の出どころ | Reader・Renderer | `Card.oneLiner`・`tier`・`cls`・`size`・`prereqs`・`Get-OneLiner` | — |
 | 1.7 | 開くと台帳の全文と注 | Reader・Renderer | `Card.ledger`・`Card.note`・`<details>` | — |
-| 1.8 | どの roadmap から | Cli・Renderer | `Source`（`updatedAt`・`commit`・`dirty`）| — |
+| 1.8 | どの roadmap から | Cli・Renderer | `Source`（`updatedAt`・`blob`）| — |
 | 2.1 | 着手中の印 | Reader・Renderer | `Card.wave` | — |
 | 2.2 | 完了の印・帯から外さない | Reader・Renderer | `Card.done` | — |
 | 2.3 | 完了の場所（完了サマリの順）| Reader・Renderer | `completed.rows` | — |
@@ -292,7 +292,7 @@ function Read-Roadmap([string]$Text, [pscustomobject]$Markers, [pscustomobject]$
 | `not-in-band` | 台帳の spec がどの帯にも無い | `WARN not-in-band {名前}` | 末尾の帯「帯に無い」にカードを置く |
 | `duplicate` | 同じ名前が 2 つ以上の帯に出る | `WARN duplicate {名前}: bands {i},{j}` | 先の帯に置き、カードに「ほかの帯」 |
 | `table-columns` | 表の行の欄の数が見出し行と違う | `WARN table-columns {表の鍵} line {行}: {k} cell(s), expected {w}` | 足りない欄は空として読む |
-| `git` | git が使えない・HEAD が読めない | `WARN git: commit unknown` | コミットを「不明」と出す |
+| `git` | git が使えない・中身の印を求められない | `WARN git: blob unknown` | 中身の印を「不明」と出す |
 
 帯の番号は表の行の順の 1 から。名前は spec 名（ASCII）なので、そのまま印字する（念のため ASCII の外の字は `?` に替える）。
 
@@ -364,7 +364,7 @@ function Format-Html([string]$Template, [pscustomobject]$Data, [pscustomobject]$
 - **呼び方**: `pwsh -NoProfile -File {根}\tools\roadmap-overview.ps1 [-Open]`／`... -SelfTest`。知らない引数は断る（`[CmdletBinding()]`・パラメーターセット `Build`（既定）と `SelfTest`）。
 - **入力**: `$root = Split-Path $PSScriptRoot -Parent` の `.kiro/steering/roadmap.md` だけ（要件 4.1・6.4）。今のフォルダを変えない。
 - **読み方**: 道具が読むファイル（roadmap.md・文言のファイル・ひな形、`-SelfTest` では見本と期待の値も）は、すべて `Read-Lf`（UTF-8 で読み CRLF を LF に）を通す。`.gitattributes` が無く `core.autocrlf=true` の写しでは、入れたファイルが作業の木で CRLF になるため（前例の release-notes の見本も同じ形で緑）。
-- **Source（要件 1.8）**: `updatedAt`＝前置きの `updated_at`。`commit`＝`git -C $root rev-parse HEAD` の先頭 12 字（長さは道具が決める＝リポジトリが育っても同じコミットなら同じ字）。`dirty`＝`git -C $root status --porcelain -- .kiro/steering/roadmap.md` の出力が空でない。git が使えなければ `commit = null`・`dirty = false` とし、`git` の警告を出す。
+- **Source（要件 1.8）**: `updatedAt`＝前置きの `updated_at`。`blob`＝`git -C $root hash-object -- .kiro/steering/roadmap.md` の先頭 12 字（中身の印。中身だけで決まり、HEAD や未コミットかによらない。長さは道具が決める・`--short` は使わない）。HEAD は使わない（作業の枝で作った 1 枚は squash マージの後に main から辿れず、roadmap.md と無関係なコミットでもバイトが変わるため・設計討議 議題 1）。辿り方は `git log --find-object={blob}`、手元の roadmap.md と同じ中身かは `git hash-object` 1 回で分かる（`doc/README.md` に書く）。git が使えなければ `blob = null` とし、`git` の警告を出す。
 - **出力**: `$root/doc/roadmap-overview-{updatedAt}.html` を BOM なしの UTF-8・LF で書く（同じ名前が在れば書き替える・ほかの日付のファイルには触らない・要件 5.3）。
 - **端末（ASCII だけ・要件 4.6・6.3）**: `FAIL strings: ...`／`FAIL template: ...`／`FAIL missing {鍵}`（欠けごとに 1 行）／`WARN ...`（警告ごとに 1 行）／`FAIL write {path}: {理由}`／`OK wrote doc/roadmap-overview-{日付}.html ({帯} band(s), {spec} spec(s), {警告} warning(s))`。帯の数は表の行の数、spec の数は帯に置いたカードの数（「帯に無い」の帯を含む）。
 - **終了コード**: 0＝書けた（警告が在っても 0）／1＝文言かひな形が読めない・欠けが在る・書けない。
@@ -381,7 +381,7 @@ function Format-Html([string]$Template, [pscustomobject]$Data, [pscustomobject]$
 
 1. 文言のファイルが読めて、`markers` と `labels` の鍵がそろっている。
 2. ひな形: 差し込み口がちょうど 1 つ・`<meta charset="utf-8">` を持つ・外の物を読む書き方（`<script ... src`・`<link`・`@import`・`url(`・`http://`・`https://`）が無い・ASCII だけ（日本語を文言のファイルの 1 か所に保つ）。
-3. 見本（`roadmap-overview-fixture/roadmap.md`）から作ったデータの JSON（`ConvertTo-Json -Depth 10` の字下げつき・LF）が `expected-data.json` と 1 字違わず同じ。`Source` は固定の値（`updatedAt` は見本の前置き・`commit = '0123456789ab'`・`dirty = $false`）。
+3. 見本（`roadmap-overview-fixture/roadmap.md`）から作ったデータの JSON（`ConvertTo-Json -Depth 10` の字下げつき・LF）が `expected-data.json` と 1 字違わず同じ。`Source` は固定の値（`updatedAt` は見本の前置き・`blob = '0123456789ab'`）。
 4. 見本は欠け 0・警告 0。
 5. 見本を 1 か所ずつ壊した文が、決まった警告の鍵だけを出す: 帯の「＝**N 本**」の N を変える → `band-count`／帯に台帳に無い名前を足す → `not-in-ledger`／台帳に帯に無い行を足す → `not-in-band`／帯の名前を別の帯にも書く → `duplicate`／台帳の行の欄を 1 つ増やす → `table-columns`。壊した文が見本と同じなら判定は空振りなので落とす。
 6. 見本から 1 か所ずつ外した文が、決まった欠けの鍵だけを出し、`Data` が無い: 前置きの `updated_at`・5 つの節の見出し（`themes` 以外は「節は在るが表が無い」形も 1 つ）。
@@ -394,7 +394,7 @@ function Format-Html([string]$Template, [pscustomobject]$Data, [pscustomobject]$
 #### StringsFile
 
 - `markers`（読み取りの目印・日本語を含む）: `secVersions`（`版の段`）・`secLedger`（`spec 台帳`）・`secThemes`（`テーマ別の決めごと`）・`secWaves`（`ウェーブ編成`）・`secSummary`（`完了サマリ`）・`groupSep`（`／`）・`headSep`（`＝`）・`chainSep`（`→`）・`listSep`（`・`）・`brackets`（`["（）","〔〕","「」"]`）・`countRegex`（`＝\*\*(\d+) 本\*\*`）・`classRegex`（`区分 ?([A-Z])`）・`themeCut`（`（`）・`sentenceEnd`（`。`）・`ellipsis`（`…`）。ASCII の目印（`## `・`#### Specs (dependency order)`・`Dependencies:`・`areka-P0-`・`updated_at`）は本体の較正値に置く。
-- `labels`（HTML の決まった文言・要件 6.7）: 題・作った元の行（更新日・コミット・未コミットの注・コミット不明）・帯の数の書き方・数の違いの書き方・着手中・完了・台帳に無い・帯に無い（帯の名前を兼ねる）・ほかの帯・前提・roadmap に無い・段・区分・規模・並び・テーマ・テーマなし・絞り込みを解く・完了の場所の見出し・完了サマリの列の名前・完了サマリに無い完了・開いたときの欄の名前（何をするか・並び・前提・版の段の注）・警告の件数。
+- `labels`（HTML の決まった文言・要件 6.7）: 題・作った元の行（更新日・中身の印・印が不明）・帯の数の書き方・数の違いの書き方・着手中・完了・台帳に無い・帯に無い（帯の名前を兼ねる）・ほかの帯・前提・roadmap に無い・段・区分・規模・並び・テーマ・テーマなし・絞り込みを解く・完了の場所の見出し・完了サマリの列の名前・完了サマリに無い完了・開いたときの欄の名前（何をするか・並び・前提・版の段の注）・警告の件数。
 - 読むときに鍵の欠けか空を `FAIL strings` にする（release-notes と同じ）。
 
 **データの形（Reader の出力・ひな形の JS が読む契約）**
@@ -403,7 +403,7 @@ HTML に埋めるのは `{ labels: Record<string, string>; data: OverviewData }`
 
 ```typescript
 type OverviewData = {
-  source: { updatedAt: string; commit: string | null; dirty: boolean };
+  source: { updatedAt: string; blob: string | null };   // blob＝roadmap.md の git hash-object の先頭 12 字
   themes: string[];                    // 凡例の順。添字 themes.length が「テーマなし」
   bands: Band[];                       // 表の行の順。在れば末尾に notInBand の帯
   completed: { rows: SummaryRow[]; extra: DoneItem[] };
@@ -441,7 +441,7 @@ type DoneItem = { name: string; oneLiner: string; theme: number };
 | Requirements | 1.1〜1.8・2.1〜2.5・3.2〜3.5・4.3〜4.5・6.2・6.3 |
 
 - **骨組み**: `<!doctype html>`・`<html lang="ja">`・`<meta charset="utf-8">`・`<meta name="viewport">`・`<style>`（中に書く）・`<script id="roadmap-data" type="application/json">@@ROADMAP_DATA@@</script>`・`<script>`（中に書く）。題（`<title>`）は JS が `labels` から付ける。ひな形は ASCII だけ（矢印などの記号は JS や CSS の逃がし `\u2192`・`\2192` で書く）。
-- **頭**: 題・作った元（更新日・コミット・未コミットの注）・警告の件数（0 なら出さない）を、開いてすぐ見える所に出す（要件 1.8）。
+- **頭**: 題・作った元（更新日・roadmap.md の中身の印）・警告の件数（0 なら出さない）を、開いてすぐ見える所に出す（要件 1.8）。
 - **帯（要件 1.1〜1.5）**: 帯を左から右へ並べた横の列（1 帯＝幅を決めた 1 列・はみ出す分は横に送る）。帯の頭に版の名前・目標・数（`declared` と `read` が違えば両方を `labels` の書き方で）。小見出しの組は帯の中で小見出しを付けて順に。`chained` のカードの前に `→` を置き、直前のカードを待つと分かるようにする。
 - **カード（要件 1.6・1.7・2.1・2.2・2.5・3.5・4.4・4.5）**: `<details>`。閉じた面（`<summary>`）に名前・テーマの札（色と文字）・一言・段・区分・規模・印（着手中＋ウェーブ名・完了・台帳に無い・ほかの帯）・前提の名前と居場所（帯の名前／完了／roadmap に無い）。開いた面に台帳の何をするか・並び・前提の全文と版の段の注。
 - **色（要件 3.2）**: テーマの添字 i の色相＝`(i × 137.508) mod 360`（黄金角で隣り合うテーマの色を離す）・彩度と明度は固定。テーマなしは灰色。色はカードの左の帯と凡例の札に使い、文字の色は地の色と組で読める濃さに保つ。
@@ -456,9 +456,9 @@ type DoneItem = { name: string; oneLiner: string; theme: number };
 - **0 件の確かめ（要件 8.4）**: `git grep -n -e 'doc/ROADMAP.md' -e 'doc/discussion-260702-' -- . ':!.kiro/specs/completed' ':!.kiro/steering/roadmap-history.md' ':!doc/archive' ':!.kiro/specs/areka-P0-roadmap-overview-html'` が 0 件であることを、コマンドと結果を `doc-inventory.md` に記録する。除くのは、要件 8.3 の 2 つ（完了した spec の文書・`roadmap-history.md`）と、要件 7 の表で歴史として残すと確定した `doc/archive/`、それに本仕様の文書（移動の記録そのもので、完了のときに `completed/` へ移る）。除いた所に残る名指しの件数も同じ所に書く。
 - **全体テスト（要件 8.5）**: 整理と道具を入れ終えた後に `tools/test-all.ps1` を 1 回回す（コードとテストが読む `doc/` のファイルには触らないので、壊れる所は無い見込みを確かめる）。重いので、整理のたびに回さない。
 - **SteeringEdits（要件 5.5・8.7）**: `focus.md` 63 行を `📍 doc/README.md … doc/ の案内（俯瞰の HTML の作り方と開き方・今も効く文書と歴史の書き分け）` の形に差し替える。roadmap.md と brief.md の誤った記載は「`doc/` のうちコードとテストが読むのは `doc/ukadoc-coverage/`・`doc/ssp-mcp/` の 2 ファイル・`doc/release-notes/`・`doc/impl-watch.md`。`doc/shiori/` を読むコードとテストは無い（`resolve.rs:41` は doc コメントで名指すだけ・網羅台帳の名指しは自由文の注。`shiori4-api` の brief が `doc/shiori/fragments/` を紙の契約の正本と呼ぶ）」の趣旨に直す。roadmap.md のほかの行は触らない。
-- **DocGuide（要件 5.5・9.1〜9.3）**: `doc/README.md` に、(1) 決まり＝歴史として置くものは `doc/archive/` の下だけ・外に残るものは今も効く・日付つきの俯瞰のスナップショットは例外としてファイル名の日付で「その日の姿」と分かる・`doc/` に足すときはこの案内に 1 行足す（機械の検査は無い）、(2) 残った直下の各ファイルと各フォルダの役目を 1 行ずつ（今も効く／歴史）、(3) 俯瞰の HTML の作り方と開き方＝`pwsh -NoProfile -File C:\home\maz\git\areka\tools\roadmap-overview.ps1 -Open`（どのフォルダから打っても動く。ほかの写しでは根の部分をその写しの場所に替える。作ったファイルは継続して直さない・コミットするかは任意）を書く。
+- **DocGuide（要件 5.5・9.1〜9.3）**: `doc/README.md` に、(1) 決まり＝歴史として置くものは `doc/archive/` の下だけ・外に残るものは今も効く・日付つきの俯瞰のスナップショットは例外としてファイル名の日付で「その日の姿」と分かる・`doc/` に足すときはこの案内に 1 行足す（機械の検査は無い）、(2) 残った直下の各ファイルと各フォルダの役目を 1 行ずつ（今も効く／歴史）、(3) 俯瞰の HTML の作り方と開き方＝`pwsh -NoProfile -File C:\home\maz\git\areka\tools\roadmap-overview.ps1 -Open`（どのフォルダから打っても動く。ほかの写しでは根の部分をその写しの場所に替える。作ったファイルは継続して直さない・コミットするかは任意）と、頭の中身の印の使い方（`git log --oneline --find-object={印}` で辿る・`git hash-object .kiro/steering/roadmap.md` で手元と同じ中身か確かめる）を書く。
 - **DocInventory（要件 7.1〜7.4・8.4）**: `doc-inventory.md` に要件 7 の表を実装の時点の数えで書く。行＝`doc/` の直下の各ファイルと各フォルダ。フォルダの中にコードかテストが読むファイルが在れば、そのファイルを別の行に分ける（`doc/ssp-mcp/` はフォルダの行と 2 ファイルの行。`doc/ukadoc-coverage/`・`doc/release-notes/` は全体が読まれるのでフォルダの 1 行）。列＝ファイルの数・最後に変わった日（`git log -1 --format=%cs -- {場所}`）・参照（コードとテスト／steering／スキル／まだ完了していない spec の文書／ほかの `doc/` のファイル／根の文書）・歴史の記録からの参照（`.kiro/specs/completed/` と `roadmap-history.md` の件数）・中身の見立て・扱い。扱いは requirements.md の表の確定と同じにする。末尾に 0 件の確かめのコマンドと結果を置く。
-- **Snapshot（要件 5.3）**: 上の roadmap.md の直し（要件 8.7）をコミットした後に道具を回し、できた `doc/roadmap-overview-{updated_at}.html` を手で直さずにコミットする（コミットの後に作るので、頭のコミットと未コミットの注が「その日の姿」を正しく指す）。
+- **Snapshot（要件 5.3）**: 上の roadmap.md の直し（要件 8.7）をコミットした後に道具を回し、できた `doc/roadmap-overview-{updated_at}.html` を手で直さずにコミットする（直しの後に作るので、頭の中身の印が「その日の姿」を正しく指す。完了の手続きで roadmap.md がもう一度直されると、この印の中身は main の歴史には残らないが、日付と印は正しいまま＝設計討議 議題 1 で了承）。
 
 ## Error Handling
 

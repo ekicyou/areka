@@ -90,7 +90,7 @@ brief が要件の段へ回した議題 3 つは、下の仮置きで要件を�
 5. The 俯瞰の HTML shall 帯の中（小見出しの組の中）のカードを、表の spec の列に名前が出る順に並べ、`→` で結ばれた spec どうしは前から後ろへの依存の順と分かる形で見せる。
 6. The カード shall spec の名前・一言・段（優先／その他／バグ／据え置き／保留）・区分（A〜D）・規模・前提を出す。一言は「テーマ別の決めごと」の各節の `#### Specs (dependency order)` の行の説明から取り、どの節にも載らない spec は「spec 台帳」の「何をするか」の書き出しを短く切って使う。
 7. When 開発者がカードを開く操作をする, the 俯瞰の HTML shall その spec の「spec 台帳」の行の全文（何をするか・並び・前提）と、表の spec の列で名前に付いた括弧書きの注を見せる。
-8. The 俯瞰の HTML shall どの roadmap.md から作ったかを、roadmap.md の更新日（先頭の `updated_at`）と、作ったときのコミット（roadmap.md に未コミットの変更が在ればその旨）として、開いてすぐ見える所に出す。
+8. The 俯瞰の HTML shall どの roadmap.md から作ったかを、roadmap.md の更新日（先頭の `updated_at`）と、roadmap.md の中身の印（`git hash-object` の先頭 12 字。中身だけで決まり、squash マージの後も同じ中身なら同じ印＝設計討議 議題 1）として、開いてすぐ見える所に出す。
 
 ### Requirement 2: 着手中・完了・依存の見分け
 
@@ -139,7 +139,7 @@ brief が要件の段へ回した議題 3 つは、下の仮置きで要件を�
 1. The 道具 shall 1 つのコマンドで、今のリポジトリの roadmap.md から HTML を作る。
 2. Where 開発者が開く指定を付ける, the 道具 shall 作った HTML を OS の既定のブラウザで開く。
 3. The 道具 shall 作った HTML を、roadmap.md の更新日（先頭の `updated_at`）をファイル名に入れた `doc/roadmap-overview-{YYYY-MM-DD}.html` に書く（同じ更新日のファイルが在れば書き替える・ほかの日付のファイルには触らない）。本仕様は、実装の時点の roadmap.md から作った 1 枚をリポジトリに入れる（議題 1）。
-4. The 道具 shall 同じ roadmap.md と同じコミットからは、1 バイトも違わない HTML を作る（作った時刻のような、入力によらない値を HTML に入れない）。
+4. The 道具 shall 同じ roadmap.md（同じ中身）からは、どのコミット・どの枝で作っても 1 バイトも違わない HTML を作る（作った時刻のような、入力によらない値を HTML に入れない）。
 5. The 作り直しの手順 shall `doc/` の案内（要件 9）に、どのディレクトリから打っても動く絶対パスのコマンドとして書かれ、`focus.md` の参照先の一覧の 1 行（消す `doc/ROADMAP.md` の行と差し替える）から辿れる。
 6. The 入れた HTML shall 作った日の姿のスナップショットとし、roadmap.md が動いても直さない。本仕様は、棚卸と `/kiro-discovery` の手順に「roadmap を直したら HTML を作り直す」段を足さず、入れた HTML と今の roadmap.md の食い違いを全体テストで検査しない（いつの姿かはファイル名の日付と要件 1.8 で見える＝議題 1・2）。
 
