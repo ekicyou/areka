@@ -95,3 +95,9 @@ ukadoc の `collisionex` の書式（`descript_shell_surfaces`）を引き直し
 - 優先度の区分: A のまま（個別に見れば C、も棚卸㉓のまま）。
 - 要件定義のモデル: Opus のまま。
 - 見つけた穴・古くなった記述: 新しい件は無い。棚卸㉓の節の「`seriko-trigger-intervals`」は着地済みと読む。
+
+## 2026-10-15 `/kiro-discovery` の申し送り（`region` の持ち主）
+
+- 上の棚卸㉓の節が「別に起票するのが筋」と書いた `collisionex` の `region`（画像の指定色の領域）は、`areka-P0-hit-id-pass` が引き取った（開発者 2026-10-15「シェル仕様で、Headなどのリージョン範囲を、画像で取り込む仕様があるはずです。これに対応するためにもヒットテストIDが欲しい」）。
+- **この spec に頼むこと**: 読み手は `region` の行も落とさずに型へ運ぶ（ファイル名・R・G・B・領域反転）。働き（画像を読んで当たり判定にする）は `hit-id-pass` が持つので、この spec では読めた `region` の行を使わずに記録だけを残す。こうしておけば `hit-id-pass` は読み手の `shell/{model,decode}.rs` に触れずに済む（`draw-methods-canon` と `draw-methods-blend` の分け方と同じ）。
+- この spec の 4 つの図形の CPU の判定は今の計画のまま。図形も ID の描き先へ寄せるかは `hit-id-pass` の議題 2。
