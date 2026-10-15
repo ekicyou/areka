@@ -8,7 +8,7 @@
 
 **何を変えるか**: ① roadmap.md から、版の段ごとに spec を並べた 1 枚の自己完結の HTML を作り直す道具を作る（手書きの HTML は置かない）。② `doc/` の古い記載を棚卸し、開発者が選んだものを消す・`doc/archive/` へ寄せる。消した・寄せたファイルを参照していた所は同じ変更で直す。
 
-> 起票: 2026-10-15 `/kiro-discovery`（「版の段」の続き・開発者「html でロードマップを俯瞰できる資料を作ってもらえないか？ doc フォルダの整理もかねて」「俯瞰図 spec を最初に実施する」）。要件生成: 2026-10-15（main `c670b612`）。詳細は brief.md。
+> 起票: 2026-10-15 `/kiro-discovery`（「版の段」の続き・開発者「html でロードマップを俯瞰できる資料を作ってもらえないか？ doc フォルダの整理もかねて」「俯瞰図 spec を最初に実施する」）。要件生成: 2026-10-15（main `c670b612`）。要件討議で main `ce08088c`（Fable の列の付け直し）を取り込み、下の事実が変わらないことを確かめた。詳細は brief.md。
 
 ## Introduction
 
@@ -18,7 +18,7 @@
 
 - roadmap.md（main `c670b612`・`updated_at: 2026-10-15`）の「版の段」の表は 8 行（v0.0.3・v0.1.0・v0.2.0・v0.3.0・v0.4.0・いつか・windows-reactor 待ち・版に縛らない）。spec の列は `／` で組に分かれ、組には「動く＝」「配れる＝」「後続: シェル内バルーン＝」のような小見出しが付くものがある。`→` が依存の順、`・` が並び、名前の後ろの括弧書き（中に `〔〕` が入れ子になる）が注、行の末尾の「＝**N 本**」が手書きの数（今は 5＋40＋11＋5＋1＋28＋4＋20 ＝ 114）。
 - 「spec 台帳」の表の列は「spec・段・何をするか・規模・並び・前提・Fable」の 7 つで、114 行。段の列は「優先・区分 A」のように段と区分を 1 つのセルに持つ（今の実数え＝優先 A 33・優先 C 10・その他 A 11・その他 C 37・バグ B 10・据え置き D 12・保留 D 1）。
-- 「テーマ別の決めごと」の各 `###` 節の `#### Specs (dependency order)` には `- [ ] areka-P0-{名前} -- {一言}。Dependencies: {前提}` の形の行が並ぶ（チェック済み `- [x]` は 39 行）。台帳の 114 本のうち 25 本は、どの節にも載らない（`balloon-canon-residue`・`shiori4-api`・`tick-gate-adoption`・`property-name-case-fold` など）。節に載るが台帳に無い未完了の spec は 0 本。
+- 「テーマ別の決めごと」の各 `###` 節の `#### Specs (dependency order)` には `- [ ] areka-P0-{名前} -- {一言}。Dependencies: {前提}` の形の行が並ぶ（チェック済み `- [x]` は 39 行）。同じ節の `#### Existing Spec Updates` にも `- [ ]`・`- [x]`・`- [→]` の行（29 行）が在るが、これはほかの spec への申し送りで、その節に属する印ではない。台帳の 114 本のうち 30 本は、どの節の `#### Specs (dependency order)` にも載らない（`balloon-canon-residue`・`shiori4-api`・`tick-gate-adoption`・`property-name-case-fold` など。ギャップ分析の数え直し）。節に載るが台帳に無い未完了の spec は 0 本。
 - 「ウェーブ編成」の表の最初の行が、いま走っているウェーブ C6（8 本）。2 行目以降は「次のウェーブの候補」「ウェーブの外」「保留」で、着手中ではない。
 - `tools/release-notes.ps1` が、Markdown から文書を作る PowerShell の道具の前例（文言を `release-notes.strings.json` に外出し・端末へは ASCII だけ・`-SelfTest` を `tools/test-all.ps1` の 1 段として回す・同じ入力からは同じバイト）。リポジトリに入れた生成物を、作り直した物と突き合わせるテストの前例は `doc/ukadoc-coverage/report/`（`crates/ukadoc-survey/tests/consistency/` が古さを赤にする）。
 - `doc/` は 119 ファイル（直下 12 ファイルと 6 フォルダ）。コードかテストがファイルとして読む・テストが場所の名前を突き合わせるのは、`doc/ukadoc-coverage/` の全体（`crates/ukadoc-survey/src/io/paths.rs` ほか）・`doc/ssp-mcp/tools-list-ssp-2.9.05.json` と `doc/ssp-mcp/log-convention.md`（areka-mcp と areka のテスト）・`doc/release-notes/`（`tools/release-notes.ps1` と `.github/workflows/release.yml`）・`doc/impl-watch.md`（areka-impl-watch のエラー文とそのテストが場所の名前を持つ）の 4 か所。根の `README.md` が `doc/images/emo2-boot.png` を表示する。
@@ -67,7 +67,7 @@ brief が要件の段へ回した議題 3 つは、下の仮置きで要件を�
 - 完了した spec の文書と `roadmap-history.md` は書き換えない（roadmap.md が「history が全文正本・非改変」と定める）。brief の Desired Outcome の 3 の「steering は 1 つも壊れない」は、`roadmap-history.md` を除く steering と読む。
 - 歴史として置くものは `doc/archive/` の下だけに置き、`doc/archive/` の外に残るものは今も効くものとする。どちらかは `doc/` の直下の 1 枚の案内（新しく作る）で書き分ける。
 - HTML の表示は、版の段の帯を左から右へ並べる（brief の推す形）。完了した spec は帯に入らないので、帯とは別の「完了」の場所にテーマごとにまとめる。
-- テーマは「テーマ別の決めごと」の `###` 見出しとし、どの節にも載らない 25 本は「テーマなし」にまとめる（roadmap.md を書き足さない）。
+- テーマは「テーマ別の決めごと」の `###` 見出しとし、どの節の `#### Specs (dependency order)` にも載らない 30 本は「テーマなし」にまとめる（roadmap.md を書き足さない）。
 
 
 ## Requirements
@@ -94,8 +94,8 @@ brief が要件の段へ回した議題 3 つは、下の仮置きで要件を�
 #### Acceptance Criteria
 
 1. The 俯瞰の HTML shall 「ウェーブ編成」の表の、いま走っているウェーブの行（表の最初の行）に名前が出る spec のカードに、着手中の印とウェーブの名前（今は C6）を付ける。
-2. Where 帯の中の spec が「テーマ別の決めごと」の節でチェック済み（`- [x]`）になっている, the 俯瞰の HTML shall そのカードに完了の印を付け、帯からは外さない。
-3. The 俯瞰の HTML shall どの帯にも載らないチェック済み（`- [x]`）の spec を、完了の印を付けたカードとして、帯とは別の「完了」の場所にテーマごとにまとめて見せる。
+2. Where 帯の中の spec が「テーマ別の決めごと」の節の `#### Specs (dependency order)` の下でチェック済み（`- [x]`）になっている（`#### Existing Spec Updates` の下の印は申し送りの印なので数えない）, the 俯瞰の HTML shall そのカードに完了の印を付け、帯からは外さない。
+3. The 俯瞰の HTML shall どの帯にも載らないチェック済み（`#### Specs (dependency order)` の下の `- [x]`）の spec を、完了の印を付けたカードとして、帯とは別の「完了」の場所にテーマごとにまとめて見せる。
 4. The カード shall 前提（「spec 台帳」の「前提」の列と、テーマの節の `Dependencies:`）に挙がった spec の名前を出し、その spec がどの帯に居るか（または完了か）を名前の横に出す。
 
 ### Requirement 3: テーマの色分けと絞り込み
