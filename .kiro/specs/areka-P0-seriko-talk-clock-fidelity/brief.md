@@ -78,3 +78,9 @@
 - 実機の確かめは、`seriko-trigger-intervals` の検体（`crates/areka-seriko/tests/fixtures/trigger-intervals/`・面 9100〜9104）と README の手順を使い回せる。
 - 規模の見込み: M（8〜12 タスク。見張りのテストと数え落としとテストの追加だけなら 5〜7、起点を 1 か所にするなら上の側＝要件で測る）。
 - 要件定義のモデル: Fable（時計と起点の持ち主の判断・スレッドをまたぐ時刻の扱い）。
+
+## ほかの spec からの申し送り
+
+- **2026-10-15 `/kiro-discovery`（時刻の土台）**: 開発者が「関連する時刻情報は、すべて `QueryUnbiasedInterruptTimePrecise`（100ns の `u64`）から取る」行き先を決め、`dola-interrupt-ticks`・`talk-anchor-interrupt-ticks`・`instant-to-interrupt-ticks` の 3 本（どれも据え置き・区分 D）を起票した。`talk-anchor-interrupt-ticks` は、台本の起点を配る時に本物の絶対時刻で押し、文字の層と seriko が起点を見積もらずに読む形へ替える＝この spec の「起点」（1・2）の根を後から取り除く。この spec は区分 B で先に着地する見込みなので、次のとおりにする。
+  - 起点の直し方で「seriko の時計を文字の層と同じ時計に揃える」を選ぶなら、揃える先は QPC でなく割り込み時刻（`QueryUnbiasedInterruptTimePrecise`）にする（後で 2 度替えないため）。ただし `dola-interrupt-ticks` の型はまだ無いので、型の新設はこの spec でしない。
+  - 「起点を 1 か所で見積もって両方へ配る」を選ぶなら、その 1 か所は `talk-anchor-interrupt-ticks` で「押された起点を読む」に置き換わる前提で、置き場を選ぶ。
