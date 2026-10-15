@@ -58,6 +58,18 @@ Resolve these values once, in order. Each has a single deterministic outcome; if
 
    Record `{default-branch}` as a single concrete name before proceeding. Do not re-evaluate it later.
 
+### Step 0.5: Bring in the remote default branch (prevents stale-base accidents)
+Run this before the precondition gate: the discovery `brief.md` may exist only on the remote default branch (discovery lands through a PR), and the spec must start from the latest base.
+1. If `{remote}` is none → warn once and skip this step.
+2. If the current branch (`git branch --show-current`) equals `{default-branch}` → skip this step (Step 2 STOPs anyway).
+3. Otherwise run:
+   ```powershell
+   git fetch {remote} {default-branch}
+   git merge --no-edit {remote}/{default-branch}
+   ```
+4. If the fetch fails, the merge refuses (uncommitted changes), or the merge conflicts: run `git merge --abort` when a merge is in progress, then STOP and report the error. Do not resolve conflicts, stash, or reset on the developer's behalf.
+5. Report the result in one line (`Already up to date` or the merged range).
+
 ### Step 1: Verify post-discovery precondition (hard gate)
 This skill is deterministic about its precondition: the spec folder created by `/kiro-discovery` MUST already exist.
 1. Treat `$ARGUMENTS` as the confirmed feature name. Verify the spec folder and discovery brief exist:
@@ -80,7 +92,7 @@ This skill never creates branches or worktrees — the feature branch is supplie
    - Do NOT create a branch, do NOT run any phase, do NOT commit, do NOT push.
    - Report that `/kiro-start` does not run on the default branch (`{default-branch}`): spec work must happen on a non-default working branch. Ask the developer to re-run `/kiro-start {feature-name}` inside the Claude Code harness worktree (a non-default working branch). The discovery artifacts (`brief.md`) remain intact for the re-run.
 3. **If `$branch` does NOT equal `{default-branch}`:**
-   - Proceed directly to the spec initialization phase (Step 3) on the current branch. Do not create or switch branches, do not pull, do not push.
+   - Proceed directly to the spec initialization phase (Step 3) on the current branch. Do not create or switch branches, do not push (the remote default branch was already merged in Step 0.5).
 
 ### Step 3: Delegate spec init + requirements to a subagent (orchestration)
 Dispatch **one** subagent via the Agent tool to perform the init → requirements phase so the controller context stays lightweight. Pass the resolved values from Step 0 (`{specs-root}`, `{skill-base}`, `{feature-name}` = `$ARGUMENTS`) into the prompt. If a prior round returned open questions (Step 4), append the user's answers verbatim under an `## Answered Clarifications` heading in the prompt.
@@ -203,7 +215,7 @@ This phase is **NOT delegated**: it requires turn-by-turn developer dialogue, an
 3. Never push. Remote sync is the responsibility of `kiro-complete` (PR-based), not `kiro-start`.
 
 ## Important Constraints
-- **Lightweight orchestration with one interactive exception**: The controller (main context) runs Step 0 (resolution), Step 1 (precondition gate), Step 2 (default-branch guard), Step 4 (clarification + verification), Step 5/6/8 (commits + gap-doc resolution), and Step 7 (the interactive requirements discussion). Init + requirements (Step 3) and gap analysis (Step 6) are delegated to subagents. The requirements discussion (Step 7) is intentionally NOT delegated because it needs chat-window developer dialogue a subagent cannot perform. Do NOT run kiro-spec-init, kiro-spec-requirements, or kiro-validate-gap inline in the controller.
+- **Lightweight orchestration with one interactive exception**: The controller (main context) runs Step 0 (resolution), Step 0.5 (merging the remote default branch), Step 1 (precondition gate), Step 2 (default-branch guard), Step 4 (clarification + verification), Step 5/6/8 (commits + gap-doc resolution), and Step 7 (the interactive requirements discussion). Init + requirements (Step 3) and gap analysis (Step 6) are delegated to subagents. The requirements discussion (Step 7) is intentionally NOT delegated because it needs chat-window developer dialogue a subagent cannot perform. Do NOT run kiro-spec-init, kiro-spec-requirements, or kiro-validate-gap inline in the controller.
 - **Discussion Q&A in the chat window**: All developer-facing topics in Step 7 are presented at once as ordinary chat messages, each with a recommendation; bulk approval settles them all, otherwise only the topics the developer names are discussed one by one. Do NOT use `AskUserQuestion` for the discussion. (`AskUserQuestion` is reserved for the Step 4 requirements clarifications.)
 - **No branch/worktree creation, ever**: This skill does not create, switch, delete, reset, or force-update branches, and does not create worktrees. Feature branches are supplied by the Claude Code (harness) worktree feature.
 - **Subagents never interact with the user**: The Step 3 and Step 6 subagents must not ask questions. Genuine clarifications are returned to the controller, which asks the user. Keep Step 4 clarification rounds bounded (max 2).
@@ -252,5 +264,6 @@ Provide output in the language specified in `spec.json` with the following struc
 - **Discussion: Developer Unresponsive / Open Topics**: If the developer stops responding or defers Category C topics, summarize the remaining open topics and stop without guessing. Already-resolved topics and their commits remain on the branch.
 - **On Default Branch (STOP)**: If the current branch equals `{default-branch}`, STOP in Step 2 before any phase/commit/push. Report that spec work does not run on the default branch and ask the developer to re-run `/kiro-start {feature-name}` inside the Claude Code harness worktree (a non-default working branch). Do not create a branch or modify any files; `brief.md` is preserved for the re-run.
 - **Non-Default Branch (normal path)**: Proceed through all four phases on the current branch and commit each (no push). Remote sync is deferred to `kiro-complete`.
-- **No Remote**: If `{remote}` is none, warn once; all phases and the local commits still proceed (kiro-start never pushes or performs remote operations).
+- **Remote Merge Failure (Step 0.5)**: If fetching or merging `{remote}/{default-branch}` fails or conflicts, abort any in-progress merge, STOP, and report. Nothing else has run; re-run `/kiro-start {feature-name}` after the developer resolves it.
+- **No Remote**: If `{remote}` is none, warn once and skip Step 0.5; all phases and the local commits still proceed (kiro-start never pushes; its only remote operation is the Step 0.5 fetch).
 - **Commit Failure**: Report the error with the current branch name; the generated files remain staged/present on the current branch.
