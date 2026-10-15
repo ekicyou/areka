@@ -143,3 +143,11 @@
 - 優先度の区分: A のまま。
 - 要件定義のモデル: Fable のまま。
 - 見つけた穴・古くなった記述: 新しい件は無い。
+
+## 2026-10-15 `/kiro-discovery` の決め（D2D の道）
+
+- **議題 1 は Direct2D の道に決まった**（開発者 2026-10-15「D2D合成アルゴリズムの改善も入れる予定なのです。wintfではコマンドリストの合成ルールが現在固定ですが、これをD2D合成ルールを個別に指定できるようにして、高度な合成を実現したい」）。上の分割の節の予告どおり、wintf だけの spec `areka-P0-wintf-d2d-composite-rules` を起票した。**この spec はその後に着手する**（前提に足す）。「同じウェーブで触らない約束」の「wintf に触らない」はそのまま効く（wintf の分は向こうが持つ）。
+- **この spec が持つもの（D2D の道のとき）**: 読み手が描画メソッドを運ぶこと（分割の節のまま）／ukadoc の語 → wintf の合成の規則の対応（起票時の見立て: `overlay`＝`SOURCE_OVER`・`overlay-fast`＝`SOURCE_ATOP`・`interpolate`＝`DESTINATION_OVER`・`replace`＝`BOUNDED_SOURCE_COPY`・`reduce`＝`DESTINATION_IN`・`base`＝土台を消して描く・`asis`＝α を無視して描く。表の全体は `wintf-d2d-composite-rules` の brief）／emo の合成の段を、CPU の整数の転写から「element ごとに規則つきで描く D2D の命令の列」へ移すこと。
+- **決定論のテスト**: 合成の答え（画素）のテストは D2D を CPU の描き手（WARP）で動かして固定する（開発者 2026-10-15「画像合成に関するテストは、CPUに切り替えるべき」）。今の CPU の整数の合成の檻（`golden_tests_*.rs`）の扱い（見本として残すか、WARP の見本へ移すか）は要件で決める。
+- **CPU の画素に頼っている読み手の出どころが変わる**: 当たり判定の α マスク（`presenter/budget.rs`・`cache.rs`）・MCP の `dump_surface`（`presenter/read.rs`）・バルーンの背景色（`emo2_boot/balloon_background.rs`）。α は `wintf-d2d-composite-rules` の 1 ピクセルの読み戻し（開発者 2026-10-15「座標さえわかれば、１ピクセルだけGPUから書き戻すようなことはできないか？」）、`dump_surface` と背景色は全体の読み戻しへ替える見込み。どちらが受け持つかは両 spec の要件で決める。
+- **規模**: D2D の道で測り直す（着手のとき）。wintf の分は外へ出したので、分割の節の「30 を超える」より小さくなる見込み。一度切り出した spec なので、上限 20 を少しまたぐ程度ではさらに削らない。
