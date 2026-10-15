@@ -24,6 +24,8 @@
     SECTION_PREFIX 節の見出しの頭（「## 」）
     TABLE_RULE    表の区切り行（|---）に当てる正規表現
     ONE_LINER_MAX カードの一言の上限の字数（越えれば切って「…」を足す）
+    SPEC_PREFIX   spec 名の頭（外してから SPEC_NAME に当てる）
+    SPEC_NAME     spec 名に見える語に当てる正規表現（当たらないバッククォートの語はファイル名などとして読み飛ばす）
 
 .PARAMETER Open
   書けたときだけ、作った HTML を OS の既定のアプリ（ブラウザ）で開く。
@@ -59,6 +61,8 @@ $LABEL_KEYS   = 'title', 'sourceUpdated', 'sourceBlob', 'sourceBlobUnknown', 'ba
 $SECTION_PREFIX = '## '
 $TABLE_RULE     = '^\|\s*:?-'
 $ONE_LINER_MAX  = 60
+$SPEC_PREFIX    = 'areka-P0-'
+$SPEC_NAME      = '^[a-z0-9]+(-[a-z0-9]+)+$'
 
 $root = Split-Path $PSScriptRoot -Parent
 
@@ -193,6 +197,80 @@ function Get-OneLiner([string]$Text, [pscustomobject]$Markers) {
     $info.SubstringByTextElements(0, $ONE_LINER_MAX) + $Markers.ellipsis
 }
 
+# バッククォートの語が spec 名に見えれば、頭の SPEC_PREFIX を外した名前を返す。見えなければ $null
+function Get-SpecName([string]$Word) {
+    $w = $Word.StartsWith($SPEC_PREFIX) ? $Word.Substring($SPEC_PREFIX.Length) : $Word
+    $w -cmatch $SPEC_NAME ? $w : $null
+}
+
+# 版の段の表を帯の並びに読む。節か表が無ければ $null（欠け version-table は呼ぶ側が出す）。
+# 返り値 @{ Bands = 帯（表の行の順）; Warnings = band-count の警告 }。カードは名前・連鎖・注だけを持つ
+# （ほかの欄は台帳とテーマを読んだ後の組み立てで足す）
+function Get-Bands([string[]]$Lines, [pscustomobject]$Markers) {
+    $table = Get-Table $Lines $Markers.secVersions
+    if ($null -eq $table) { return $null }
+    $opens = @($Markers.brackets | ForEach-Object { [string]$_[0] })
+    $closes = @($Markers.brackets | ForEach-Object { [string]$_[1] })
+    $bands = [System.Collections.Generic.List[object]]::new()
+    $warnings = [System.Collections.Generic.List[object]]::new()
+    foreach ($row in $table.Rows) {
+        $cell = { param($k) $k -lt $row.Cells.Count ? $row.Cells[$k] : '' }
+        $spec = & $cell 2
+        # 深さ 0 の字の印（括弧の組とバッククォートの中は深さ 0 にしない）
+        $top = [bool[]]::new($spec.Length)
+        $depth = 0; $inCode = $false
+        for ($i = 0; $i -lt $spec.Length; $i++) {
+            $chr = [string]$spec[$i]
+            if ($chr -eq '`') { $inCode = -not $inCode; continue }
+            if ($inCode) { continue }
+            if ($opens -ccontains $chr) { $depth++; continue }
+            if ($closes -ccontains $chr) { if ($depth -gt 0) { $depth-- }; continue }
+            $top[$i] = $depth -eq 0
+        }
+        # 深さ 0 の最後の「＝**N 本**」が書かれた数。その前だけが並びの文
+        $declared = $null
+        $list = $spec
+        $hit = @([regex]::Matches($spec, $Markers.countRegex) | Where-Object { $top[$_.Index] }) | Select-Object -Last 1
+        if ($hit) { $declared = [int]$hit.Groups[1].Value; $list = $spec.Substring(0, $hit.Index) }
+
+        $groups = [System.Collections.Generic.List[object]]::new()
+        $read = 0
+        foreach ($grp in Split-Top $list @($Markers.groupSep) $Markers) {
+            $parts = @(Split-Top $grp.Text @($Markers.headSep) $Markers)
+            $heading = $null
+            $body = $grp.Text
+            if ($parts.Count -gt 1) {
+                $heading = ConvertTo-Plain $parts[0].Text
+                $body = ($parts[1..($parts.Count - 1)] | ForEach-Object { $_.Sep + $_.Text }) -join ''
+                $body = $body.Substring($Markers.headSep.Length)
+            }
+            $cards = [System.Collections.Generic.List[object]]::new()
+            foreach ($el in Split-Top $body @($Markers.chainSep, $Markers.listSep) $Markers) {
+                $t = $el.Text.TrimStart()
+                if (-not $t.StartsWith('`')) { continue }
+                $end = $t.IndexOf('`', 1)
+                if ($end -lt 0) { continue }
+                $name = Get-SpecName $t.Substring(1, $end - 1)
+                if ($null -eq $name) { continue }
+                $note = ConvertTo-Plain $t.Substring($end + 1)
+                $cards.Add([pscustomobject][ordered]@{
+                    name = $name; chained = $el.Sep -ceq $Markers.chainSep; note = $note -eq '' ? $null : $note
+                })
+            }
+            $read += $cards.Count
+            $groups.Add([pscustomobject][ordered]@{ heading = $heading; cards = [object[]]$cards })
+        }
+        $bands.Add([pscustomobject][ordered]@{
+            name = ConvertTo-Plain (& $cell 0); goal = ConvertTo-Plain (& $cell 1)
+            declared = $declared; read = $read; notInBand = $false; groups = [object[]]$groups
+        })
+        if ($declared -ne $read) {
+            $warnings.Add([pscustomobject]@{ Key = 'band-count'; Detail = "band $($bands.Count): declared $($declared ?? '?'), read $read" })
+        }
+    }
+    [pscustomobject]@{ Bands = [object[]]$bands; Warnings = [object[]]$warnings }
+}
+
 if ($SelfTest) {
     $script:selfFails = 0
     function Judge([string]$Name, [bool]$Ok) {
@@ -255,6 +333,52 @@ if ($SelfTest) {
         (Get-OneLiner "p$q q$e r$q2 s$e t" $m) -ceq "p$q q$e r$q2 s" -and
         (Get-OneLiner ('x' * 61) $m) -ceq (('x' * 60) + $dots) -and
         (Get-OneLiner ('x' * 60) $m) -ceq ('x' * 60)
+    }
+
+    # ---- 版の段の読み方（仮の判定。2.5 で見本の判定に置き替えて外す） ----
+    # 版の段だけを持つ小さな断片。帯 1: 括弧の中の・＝→名前・ファイル名・地の文・最後の深さ 0 の数・数の後ろの名前と括弧の中の数
+    # 帯 2: 小見出し（中に名前）・〔〕の入れ子・／の組・数が無い。帯 3: 数と読んだ数が違う
+    $script:bandFrag = $null
+    if ($null -ne $m) { try {
+        $o, $c = $m.brackets[0][0], $m.brackets[0][1]
+        $o2, $c2 = $m.brackets[1][0], $m.brackets[1][1]
+        $l, $ch, $eq, $g = $m.listSep, $m.chainSep, $m.headSep, $m.groupSep
+        $hon = [string][char]0x672C
+        $script:bandFrag = Get-Bands @(
+            '# t', "$SECTION_PREFIX$($m.secVersions)", 'text', '| v | g | s |', '|---|---|---|',
+            "| **v1** | ``g`` one | ``a-one`` $ch ``areka-P0-b-two``${o}n$l m$eq``z-z``${ch}w$c$l ``c.rs``$l plain$l ``d-four``$eq**3 $hon**. tail ``e-five``$o$eq**7 $hon**$c |",
+            "| v2 | g2 | h``q-q``$o``r-r``$c$eq``f-six``$ch``g-seven``$o$o2 note$c2$c$g ``h-eight`` |",
+            "| v3 | g3 | ``i-nine``$eq**2 $hon** |",
+            '', '## Next') $m
+    } catch { } }
+    function Show-Card($Card) { "$($Card.name)|$($Card.chained)|$($Card.note)" }
+    Try-Judge 'bands-groups' {
+        $b = $script:bandFrag.Bands
+        $b.Count -eq 3 -and (Same ($b | ForEach-Object { "$($_.name)|$($_.goal)|$($_.notInBand)|$(@($_.groups).Count)" }) 'v1|g one|False|1', 'v2|g2|False|2', 'v3|g3|False|1') -and
+        (Same ($b[1].groups[1].cards | ForEach-Object { $_.name }) 'h-eight') -and $null -eq $b[1].groups[1].heading
+    }
+    Try-Judge 'bands-heading' {
+        $b = $script:bandFrag.Bands
+        $null -eq $b[0].groups[0].heading -and $b[1].groups[0].heading -ceq "hq-q$($m.brackets[0][0])r-r$($m.brackets[0][1])" -and
+        (Same ($b[1].groups[0].cards | ForEach-Object { $_.name }) 'f-six', 'g-seven')
+    }
+    Try-Judge 'bands-chain' {
+        $b = $script:bandFrag.Bands
+        (Same ($b[0].groups[0].cards | ForEach-Object { "$($_.name)|$($_.chained)" }) 'a-one|False', 'b-two|True', 'd-four|False') -and
+        (Same ($b[1].groups[0].cards | ForEach-Object { "$($_.name)|$($_.chained)" }) 'f-six|False', 'g-seven|True')
+    }
+    Try-Judge 'bands-note' {
+        $b = $script:bandFrag.Bands
+        $o, $c = $m.brackets[0][0], $m.brackets[0][1]
+        $o2, $c2 = $m.brackets[1][0], $m.brackets[1][1]
+        (Same ($b[0].groups[0].cards | ForEach-Object { Show-Card $_ }) 'a-one|False|', "b-two|True|${o}n$($m.listSep) m$($m.headSep)z-z$($m.chainSep)w$c", 'd-four|False|') -and
+        $null -eq $b[0].groups[0].cards[0].note -and (Show-Card $b[1].groups[0].cards[1]) -ceq "g-seven|True|$o${o2} note$c2$c"
+    }
+    Try-Judge 'bands-count' {
+        $f = $script:bandFrag
+        (Same ($f.Bands | ForEach-Object { "$($_.declared)|$($_.read)" }) '3|3', '|3', '2|1') -and $null -eq $f.Bands[1].declared -and
+        (Same ($f.Warnings | ForEach-Object { "$($_.Key) $($_.Detail)" }) 'band-count band 2: declared ?, read 3', 'band-count band 3: declared 2, read 1') -and
+        $null -eq (Get-Bands @('## Other', '| a |') $m)
     }
 
     if ($script:selfFails) { "selftest: $($script:selfFails) failure(s)"; exit 1 }
