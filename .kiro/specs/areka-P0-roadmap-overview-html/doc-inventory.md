@@ -105,3 +105,56 @@ D images
 ```
 
 根の `docs/` の行は `git ls-files docs | wc -l` と `git log -1 --format=%cs -- docs`、`doc/` の合計は `git ls-files doc | wc -l` で数えた。
+
+## 元の場所の名前が残っていないことの確かめ（要件 8.4）
+
+2026-10-16、コミット `5f85863b` の上（作業ツリーに変更なし）で、Git Bash から `git grep`（git 2.55.0）で探した。`--untracked` で追跡していないファイルも含めた。動かした 4 ファイルは、消した `doc/ROADMAP.md` と、`doc/archive/` へ寄せた `doc/discussion-260702-m1-roadmap.md`・`doc/discussion-260702-concurrency-model.svg`・`doc/discussion-260702-roadmap-tree.svg`。3 つの discussion は名前の頭がそろうので `discussion-260702-` の 1 つの型でまとめて探した。
+
+探した型は 5 つ。`doc/` を付けた完全な名前に加え、`doc/` の中から相対のリンクで書ける名前だけの形（`](ROADMAP.md)` など）も拾うため、名前だけの型も探した。
+
+| 型 | 拾うもの |
+|---|---|
+| `doc/ROADMAP\.md` | 完全な名前 |
+| `(?<![\w/.-])ROADMAP\.md` | 前にパスの付かない名前だけ（相対のリンク） |
+| `ROADMAP\.md` | 前に何が付いても（ほかのフォルダの同名も含む・最も広い） |
+| `doc/discussion-260702-` | 3 つの完全な名前 |
+| `discussion-260702-` | 3 つの名前だけ（相対のリンク・最も広い） |
+
+大文字と小文字は区別した（`.kiro/steering/roadmap.md` は別のファイル）。念のため `doc/roadmap\.md` を `-i` で探した結果も 0 件。
+
+### 除く所を外して探したコマンドと結果
+
+```sh
+EX=(':!.kiro/specs/completed/' ':!.kiro/steering/roadmap-history.md' ':!doc/archive/' ':!.kiro/specs/areka-P0-roadmap-overview-html/')
+for p in 'doc/ROADMAP\.md' '(?<![\w/.-])ROADMAP\.md' 'ROADMAP\.md' 'doc/discussion-260702-' 'discussion-260702-'; do
+  git grep -P -n --untracked "$p" -- . "${EX[@]}"; echo "rc=$?"
+done
+git grep -n -i --untracked 'doc/roadmap\.md' -- . "${EX[@]}"; echo "rc=$?"
+```
+
+結果: 6 つとも出力なし・`rc=1`（一致なし）。**除く所の外に残った参照は 0 件。**
+
+### 較正（除く所を外さずに同じ型で探す）
+
+```sh
+git grep -P -c --untracked "$p" -- . | awk -F: '{s+=$2; n++} END{print n" files / "s" lines"}'
+for d in .kiro/specs/completed/ .kiro/steering/roadmap-history.md doc/archive/ .kiro/specs/areka-P0-roadmap-overview-html/; do
+  git grep -P -c --untracked "$p" -- "$d" | awk -F: -v d="$d" '{s+=$2; n++} END{printf "%s: %d files / %d lines\n", d, n, s}'
+done
+```
+
+除く所の 4 つはどれも在る（追跡しているファイルの数: `.kiro/specs/completed/` 2052・`roadmap-history.md` 1・`doc/archive/` 39・本仕様のフォルダ 8）。除く所を外さないと同じ型で一致が出て、その数は除く所ごとの数の和にちょうど等しい。だから除く指定は効いていて、上の 0 件は「型が何にも当たらない」のではなく「除く所の外に無い」ことを示す。
+
+### 除いた所に残る件数（ファイル数 / 行数）
+
+| 型 | 外さずに全体 | `.kiro/specs/completed/` | `roadmap-history.md` | `doc/archive/` | 本仕様のフォルダ |
+|---|---|---|---|---|---|
+| `doc/ROADMAP\.md` | 12 / 35 | 4 / 9 | 0 / 0 | 1 / 1 | 7 / 25 |
+| `(?<![\w/.-])ROADMAP\.md` | 12 / 76 | 9 / 72 | 0 / 0 | 0 / 0 | 3 / 4 |
+| `ROADMAP\.md` | 18 / 124 | 10 / 94 | 0 / 0 | 1 / 1 | 7 / 29 |
+| `doc/discussion-260702-` | 6 / 13 | 1 / 1 | 0 / 0 | 0 / 0 | 5 / 12 |
+| `discussion-260702-` | 9 / 27 | 2 / 2 | 0 / 0 | 1 / 3 | 6 / 22 |
+
+- `doc/archive/` の `ROADMAP.md` の 1 行は `doc/archive/ARCHITECTURE.md` の名指しで、棚卸の表の決めどおり歴史として残す。`discussion-260702-` の 3 行は寄せた `discussion-260702-m1-roadmap.md` が 2 つの svg を載せる相対のリンクで、一緒に動かしたので効いたまま。
+- 本仕様のフォルダの数は、この節を足す前に数えた。この節そのものが型の文字を含むので、足した後は増える。
+- `.kiro/specs/completed/` の `ROADMAP.md` の行には、ほかの場所の同じ名前を指すものも含む（広い型なので）。どちらも当時の記録で書き換えない（要件 8.3）。
