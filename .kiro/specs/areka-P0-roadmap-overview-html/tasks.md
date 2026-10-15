@@ -122,7 +122,7 @@
   - _Requirements: 8.4_
 
 - [ ] 7. 実物での確かめと仕上げ
-- [ ] 7.1 今の roadmap.md から 1 枚を作り、ブラウザで確かめてコミットする
+- [x] 7.1 今の roadmap.md から 1 枚を作り、ブラウザで確かめてコミットする
   - roadmap.md の直し（6.3）をコミットした後に道具を回し、`OK` の行が 8 帯・114 本・警告 0 であること、着手中が C6 の 8 本・完了サマリに無い完了が `package-check-temp-cleanup`・roadmap に無い前提が `status-execution-states` であることを見る（requirements の事実の値。main の取り込みで roadmap.md が動いていれば引き直した値と突き合わせ、差を記録に書く）
   - ネットを使わずに開き、帯の並び・カードの開閉・凡例で 1 つと 2 つのテーマを選んだときの数・解いたときの元の数・完了の場所を見る
   - 作った `doc/roadmap-overview-{updated_at}.html` を手で直さずにコミットする（作り直しの段や食い違いの検査は足さない）
@@ -141,3 +141,4 @@
 - 1.1: `labels` の鍵の名前は実装係が決めた（design は散文で列挙）。ひな形の JS は `tools/roadmap-overview.strings.json` の `labels` の鍵名と `$LABEL_KEYS` に合わせる。較正値の ASCII の目印（`## `・`#### Specs (dependency order)`・`Dependencies:`・`areka-P0-`・`updated_at`・ONE_LINER_MAX=60）と `utf8-child.ps1` の読み込みは、最初に使うタスクで足す。作る呼び方は 4.1 まで `FAIL build: ...` で 1 を返す。
 - 2.3: 台帳の 1 欄目に spec の名前らしい語が無い行は警告なしで飛ばす（design に鍵が無い）。帯に在れば `not-in-ledger` で見える。帯にも無いと黙って消える残りの危うさは、要るなら design に鍵を足す話（完了の棚卸で判断）。
 - 2.4: 前提の居場所の `band` は、帯に無い帯（name が空）に居れば `""`、roadmap に無ければ `null`。ひな形（3.1）は `""` を `labels.notInBand` で見せ、`null` だけを「roadmap に無い」とする。同じ帯の中で名前が重なっても `duplicate`（`bands 1,1`）を出す（design の「2 つ以上の帯」より厳しいが、カードは増えない）。
+- 7.1（2026-10-16・roadmap.md の中身の印 `e8392795e218`・main の取り込みで roadmap.md は動いていない）: `C:\` から引数なしで回して `OK wrote doc/roadmap-overview-2026-10-15.html (8 band(s), 114 spec(s), 0 warning(s))`・終了コード 0・BOM と CR なし。着手中は C6 の 8 本（baseware-root-list・app-icon・dot-sakura-specimen・mcp-kanade-tools・extent-element-offset・range-choice-tag・collisionex-regions・property-name-case-fold）、完了サマリに無い完了は `package-check-temp-cleanup`、roadmap に無い前提は `status-execution-states` で、requirements の事実の値と一致。ブラウザ（127.0.0.1 の配信・外の物の読み込み 0 件）で、帯 8 本が左から 5/40/11/5/1/28/4/20 本、カードの開閉（開くと台帳の全文）、テーマ 1 つ（タスクトレイ）で 1/0/0/0/0/0/4/0、2 つ（＋シェル内バルーン）で 1/6/0/1/0/0/4/0、解くと元の数、完了の場所は絞り込みの間も 32 行のまま、を確かめた。
