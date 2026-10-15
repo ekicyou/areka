@@ -1,7 +1,7 @@
 ---
 name: kiro-discovery
 description: Entry point for new work. Determines the best action path or work decomposition (update existing spec, create new spec, mixed decomposition, or no spec needed) and refines ideas through structured dialogue.
-allowed-tools: Read, Write, Glob, Grep, Agent, WebSearch, WebFetch, AskUserQuestion
+allowed-tools: Read, Write, Glob, Grep, Bash, Agent, WebSearch, WebFetch, AskUserQuestion
 argument-hint: <idea-or-request>
 ---
 
@@ -14,6 +14,19 @@ argument-hint: <idea-or-request>
   - Output is an actionable next step (not just a description)
 
 ## Execution Steps
+
+### Step 0: Bring in the remote default branch (prevents stale-base accidents)
+
+Before scanning, merge the latest remote default branch so discovery reads the current specs and roadmap.
+- **Remote**: `origin` if present; else the only remote; else none → warn once and skip this step.
+- **Default branch**: `git symbolic-ref --quiet --short refs/remotes/{remote}/HEAD` with the `{remote}/` prefix stripped; if empty, `main`.
+- Run (on any branch, including the default branch):
+  ```powershell
+  git fetch {remote} {default-branch}
+  git merge --no-edit {remote}/{default-branch}
+  ```
+- If the fetch fails, the merge refuses (uncommitted changes), or the merge conflicts: run `git merge --abort` when a merge is in progress, then STOP and report. Do not resolve conflicts, stash, or reset on the developer's behalf.
+- Report the result in one line (`Already up to date` or the merged range).
 
 ### Step 1: Lightweight Scan
 
