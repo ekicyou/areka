@@ -30,6 +30,8 @@
     THEME_ROW_SEP テーマの行の名前の並びと残りの区切り
     THEME_NAME_SEP テーマの行の名前の並びの区切り
     THEME_DEPS    テーマの行の残りの、一言の元と前提の文の区切り（最後のもの）
+    FRONT_MATTER  先頭の前置きの区切りの行
+    UPDATED_AT    前置きの更新日の鍵（値は YYYY-MM-DD。無ければ欠け updated-at）
 
 .PARAMETER Open
   書けたときだけ、作った HTML を OS の既定のアプリ（ブラウザ）で開く。
@@ -71,6 +73,8 @@ $THEME_SPECS    = '#### Specs (dependency order)'
 $THEME_ROW_SEP  = ' -- '
 $THEME_NAME_SEP = ', '
 $THEME_DEPS     = 'Dependencies:'
+$FRONT_MATTER   = '---'
+$UPDATED_AT     = 'updated_at'
 
 $root = Split-Path $PSScriptRoot -Parent
 
@@ -420,6 +424,146 @@ function Get-Summary([string[]]$Lines, [pscustomobject]$Markers) {
     [pscustomobject]@{ Rows = [object[]]$rows; Warnings = [object[]]$warnings }
 }
 
+# roadmap.md の全文（LF）から、HTML に埋めるデータ・警告・欠けを作る。ファイルにも git にも触らず、時刻・乱数・環境を読まない。
+# 更新日は前置きの UPDATED_AT から読み、$Source からは blob（中身の印・無ければ $null）だけを使う。
+# 返り値 @{ Missing = 欠けの鍵（在れば Data は $null）; Warnings = @{ Key; Detail }; Data = データの形（design）}。
+# 並びはすべて roadmap.md に出る順で、1 要素でも配列として持つ
+function Read-Roadmap([string]$Text, [pscustomobject]$Markers, [pscustomobject]$Source) {
+    $lines = [string[]]$Text.Split("`n")
+    $missing = [System.Collections.Generic.List[string]]::new()
+    $updatedAt = $null
+    if ($lines.Count -and $lines[0] -ceq $FRONT_MATTER) {
+        for ($i = 1; $i -lt $lines.Count -and $lines[$i] -cne $FRONT_MATTER; $i++) {
+            if ($lines[$i] -cmatch "^$UPDATED_AT\s*:\s*(\d{4}-\d{2}-\d{2})\s*$") { $updatedAt = $Matches[1]; break }
+        }
+    }
+    if ($null -eq $updatedAt) { $missing.Add('updated-at') }
+    $bands = Get-Bands $lines $Markers;    if ($null -eq $bands) { $missing.Add('version-table') }
+    $ledger = Get-Ledger $lines $Markers;  if ($null -eq $ledger) { $missing.Add('ledger-table') }
+    $themes = Get-Themes $lines $Markers;  if ($null -eq $themes) { $missing.Add('themes') }
+    $wave = Get-Wave $lines $Markers;      if ($null -eq $wave) { $missing.Add('wave-table') }
+    $summary = Get-Summary $lines $Markers; if ($null -eq $summary) { $missing.Add('summary-table') }
+    $warnings = [System.Collections.Generic.List[object]]::new()
+    foreach ($r in @($bands, $ledger, $wave, $summary) | Where-Object { $_ }) { foreach ($w in $r.Warnings) { $warnings.Add($w) } }
+    if ($missing.Count) { return [pscustomobject]@{ Missing = [string[]]$missing; Warnings = [object[]]$warnings; Data = $null } }
+
+    # 引き当て（並びは作らない）。台帳とテーマは最初に出た行を使う
+    $ledgerBy = @{}
+    foreach ($r in $ledger.Rows) { if (-not $ledgerBy.ContainsKey($r.name)) { $ledgerBy[$r.name] = $r } }
+    $themeBy = @{}
+    $done = [System.Collections.Generic.HashSet[string]]::new()
+    foreach ($r in $themes.Rows) {
+        foreach ($n in $r.names) { if (-not $themeBy.ContainsKey($n)) { $themeBy[$n] = $r }; if ($r.done) { [void]$done.Add($n) } }
+    }
+    $inSummary = [System.Collections.Generic.HashSet[string]]::new()
+    foreach ($r in $summary.Rows) { foreach ($n in $r.names) { [void]$inSummary.Add($n); [void]$done.Add($n) } }
+    $waveNames = [System.Collections.Generic.HashSet[string]]::new([string[]]$wave.Names)
+    $noTheme = @($themes.Themes).Count
+
+    function New-Card([string]$Name, [bool]$Chained, $Note) {
+        $lr = $ledgerBy[$Name]; $tr = $themeBy[$Name]
+        [pscustomobject][ordered]@{
+            name = $Name
+            oneLiner = $null -ne $tr ? (Get-OneLiner $tr.source $Markers) : ($null -ne $lr ? (Get-OneLiner $lr.what $Markers) : '')
+            theme = $null -ne $tr ? $tr.theme : $noTheme
+            tier = $null -ne $lr ? $lr.tier : $null; cls = $null -ne $lr ? $lr.cls : $null; size = $null -ne $lr ? $lr.size : $null
+            chained = $Chained; note = $Note
+            wave = $waveNames.Contains($Name) ? $wave.Name : $null
+            done = $done.Contains($Name); notInLedger = $null -eq $lr
+            otherBands = [System.Collections.Generic.List[string]]::new()
+            prereqs = [object[]]@()
+            ledger = $null -ne $lr ? [pscustomobject][ordered]@{ what = $lr.what; order = $lr.order; prereq = $lr.prereq } : $null
+        }
+    }
+
+    # 帯に置く。2 つ目以降に出た名前はカードにせず、先のカードの otherBands に帯の名前を足す
+    $placed = [ordered]@{}   # 名前 -> @{ Band = 置いた帯の名前; Card }
+    $seen = [ordered]@{}     # 名前 -> 出た帯の番号（1 から）
+    $notInLedger = [System.Collections.Generic.List[string]]::new()
+    $outBands = [System.Collections.Generic.List[object]]::new()
+    for ($bi = 0; $bi -lt $bands.Bands.Count; $bi++) {
+        $b = $bands.Bands[$bi]
+        $groups = foreach ($g in $b.groups) {
+            $cards = foreach ($k in $g.cards) {
+                if (-not $seen.Contains($k.name)) { $seen[$k.name] = [System.Collections.Generic.List[int]]::new() }
+                $seen[$k.name].Add($bi + 1)
+                if ($placed.Contains($k.name)) {
+                    $p = $placed[$k.name]
+                    if ($p.Band -cne $b.name -and -not $p.Card.otherBands.Contains($b.name)) { $p.Card.otherBands.Add($b.name) }
+                    continue
+                }
+                $card = New-Card $k.name $k.chained $k.note
+                $placed[$k.name] = @{ Band = $b.name; Card = $card }
+                if ($card.notInLedger) { $notInLedger.Add($k.name) }
+                $card
+            }
+            [pscustomobject][ordered]@{ heading = $g.heading; cards = [object[]]@($cards) }
+        }
+        $outBands.Add([pscustomobject][ordered]@{
+            name = $b.name; goal = $b.goal; declared = $b.declared; read = $b.read; notInBand = $false; groups = [object[]]@($groups)
+        })
+    }
+    foreach ($n in $seen.Keys) {
+        if ($seen[$n].Count -gt 1) { $warnings.Add([pscustomobject]@{ Key = 'duplicate'; Detail = "${n}: bands $($seen[$n] -join ',')" }) }
+    }
+    foreach ($n in $notInLedger) { $warnings.Add([pscustomobject]@{ Key = 'not-in-ledger'; Detail = $n }) }
+
+    # 台帳に在ってどの帯にも無い spec は、末尾の帯（名前と目標は空・小見出し無しの組 1 つ・台帳の順）へ
+    $rest = foreach ($r in $ledger.Rows) {
+        if ($placed.Contains($r.name)) { continue }
+        $card = New-Card $r.name $false $null
+        $placed[$r.name] = @{ Band = ''; Card = $card }
+        $warnings.Add([pscustomobject]@{ Key = 'not-in-band'; Detail = $r.name })
+        $card
+    }
+    $rest = [object[]]@($rest)
+    if ($rest.Count) {
+        $outBands.Add([pscustomobject][ordered]@{
+            name = ''; goal = ''; declared = $null; read = $rest.Count; notInBand = $true
+            groups = [object[]]@([pscustomobject][ordered]@{ heading = $null; cards = $rest })
+        })
+    }
+
+    # 前提＝台帳の前提 → Specs の前提の順に重なりを外す。居場所は置いた帯の名前と完了か（どちらも無い＝roadmap に無い）
+    foreach ($p in $placed.Values) {
+        $card = $p.Card
+        $names = [System.Collections.Generic.List[string]]::new()
+        $lr = $ledgerBy[$card.name]; $tr = $themeBy[$card.name]
+        foreach ($n in @(@(if ($null -ne $lr) { $lr.prereqs }) + @(if ($null -ne $tr) { $tr.prereqs }))) {
+            if ($n -and -not $names.Contains($n)) { $names.Add($n) }
+        }
+        $card.prereqs = [object[]]@(foreach ($n in $names) {
+            [pscustomobject][ordered]@{ name = $n; band = $placed.Contains($n) ? $placed[$n].Band : $null; done = $done.Contains($n) }
+        })
+        $card.otherBands = [string[]]@($card.otherBands)
+    }
+
+    $extra = [System.Collections.Generic.List[object]]::new()
+    $extraNames = [System.Collections.Generic.HashSet[string]]::new()
+    foreach ($r in $themes.Rows) {
+        if (-not $r.done) { continue }
+        foreach ($n in $r.names) {
+            if ($placed.Contains($n) -or $inSummary.Contains($n) -or -not $extraNames.Add($n)) { continue }
+            $tr = $themeBy[$n]
+            $extra.Add([pscustomobject][ordered]@{ name = $n; oneLiner = Get-OneLiner $tr.source $Markers; theme = $tr.theme })
+        }
+    }
+    $rows = foreach ($r in $summary.Rows) {
+        [pscustomobject][ordered]@{
+            wave = $r.wave; date = $r.date; units = $r.units; summary = $r.summary; oneLiner = Get-OneLiner $r.summary $Markers
+        }
+    }
+
+    $data = [pscustomobject][ordered]@{
+        source = [pscustomobject][ordered]@{ updatedAt = $updatedAt; blob = $Source.blob }
+        themes = [string[]]@($themes.Themes)
+        bands = [object[]]$outBands
+        completed = [pscustomobject][ordered]@{ rows = [object[]]@($rows); extra = [object[]]$extra }
+        warningCount = $warnings.Count
+    }
+    [pscustomobject]@{ Missing = [string[]]@(); Warnings = [object[]]$warnings; Data = $data }
+}
+
 if ($SelfTest) {
     $script:selfFails = 0
     function Judge([string]$Name, [bool]$Ok) {
@@ -605,6 +749,109 @@ if ($SelfTest) {
             'table-columns summary-table line 4: 2 cell(s), expected 4') -and
         (Same ($f.Rows | ForEach-Object { "$($_.name)|$($_.tier)|$($_.what)|$($_.prereq)" }) 'a-one|t|w|p', 'b-two|t||', 'c-three|t|w|p') -and
         $s.Rows[0].units -ceq '' -and $s.Rows[0].summary -ceq ''
+    }
+
+    # ---- 組み立て（仮の判定。2.5 で見本の判定に置き替えて外す） ----
+    # 5 か所と前置きを持つ小さな断片。a-one と b-two は帯 1（→ で連鎖）、c-three は帯 2。
+    # b-two は Specs の行が無い（テーマなし・台帳の文から一言・着手中）。c-three と done-y は - [x]（done-y は帯にも完了サマリにも無い）。
+    # 前提: b-two は帯の a-one と roadmap に無い gone-x、c-three は完了の done-y と帯の b-two
+    $script:readBase = $null
+    if ($null -ne $m) { try {
+        $o, $c = $m.brackets[0][0], $m.brackets[0][1]
+        $l, $ch, $eq, $e = $m.listSep, $m.chainSep, $m.headSep, $m.sentenceEnd
+        $hon = [string][char]0x672C
+        $kubun = [string][char]0x533A + [char]0x5206
+        $script:readBase = @(
+            '---', 'inclusion: manual', 'updated_at: 2026-01-02', '---', '# t',
+            "$SECTION_PREFIX$($m.secVersions)", '| v | g | s |', '|---|---|---|',
+            "| v1 | g1 | ``a-one`` $ch ``b-two``$eq**2 $hon** |",
+            "| v2 | g2 | ``c-three``$eq**1 $hon** |", '',
+            "$SECTION_PREFIX$($m.secLedger)", '| s | t | w | z | o | p | f |', '|---|---|---|---|---|---|---|',
+            "| ``a-one`` | bug$l $kubun B | what a | S | ord | - | - |",
+            "| ``b-two`` | t2 | what b$e more | M | o2 | ``a-one``$l ``gone-x`` | - |",
+            "| ``c-three`` | t3 | what c | L | o3 | ``done-y`` | - |", '',
+            "$SECTION_PREFIX$($m.secThemes)", "### Alpha$o x$c", '#### Specs (dependency order)',
+            "- [ ] areka-P0-a-one -- alpha one$e Dependencies: none",
+            "- [x] areka-P0-done-y, areka-P0-c-three -- fin$e Dependencies: areka-P0-b-two", '',
+            "$SECTION_PREFIX$($m.secWaves)", '| W | U | C | Y |', '|---|---|---|---|', '| **C1** | `b-two` | x | y |', '',
+            "$SECTION_PREFIX$($m.secSummary)", '| W | D | U | S |', '|---|---|---|---|', "| W1 | 01-01 | ``old-z`` | sum one$e more |"
+        ) -join "`n"
+    } catch { } }
+    $script:readSrc = [pscustomobject]@{ blob = '0123456789ab' }
+    function Read-Frag([string]$Text) { Read-Roadmap $Text $m $script:readSrc }
+    function Show-Full($k) {
+        "$($k.name)|$($k.oneLiner)|$($k.theme)|$($k.tier)|$($k.cls)|$($k.size)|$($k.chained)|$($k.note)|$($k.wave)|$($k.done)|$($k.notInLedger)|" +
+        "$(@($k.otherBands) -join ',')|$((@($k.prereqs) | ForEach-Object { "$($_.name)@$($_.band)@$($_.done)" }) -join ',')"
+    }
+    Try-Judge 'read-assemble' {
+        $r = Read-Frag $script:readBase
+        $d = $r.Data
+        $cards = @($d.bands | ForEach-Object { $_.groups } | ForEach-Object { $_.cards })
+        @($r.Missing).Count -eq 0 -and @($r.Warnings).Count -eq 0 -and $d.warningCount -eq 0 -and
+        "$($d.source.updatedAt)|$($d.source.blob)" -ceq '2026-01-02|0123456789ab' -and (Same $d.themes 'Alpha') -and
+        (Same ($d.bands | ForEach-Object { "$($_.name)|$($_.goal)|$($_.declared)|$($_.read)|$($_.notInBand)" }) 'v1|g1|2|2|False', 'v2|g2|1|1|False') -and
+        (Same ($cards | ForEach-Object { Show-Full $_ }) 'a-one|alpha one|0|bug|B|S|False|||False|False||',
+            'b-two|what b|1|t2||M|True||C1|False|False||a-one@v1@False,gone-x@@False',
+            'c-three|fin|0|t3||L|False|||True|False||done-y@@True,b-two@v1@False') -and
+        "$($cards[0].ledger.what)|$($cards[0].ledger.order)|$($cards[0].ledger.prereq)" -ceq 'what a|ord|-' -and
+        (Same ($d.completed.rows | ForEach-Object { "$($_.wave)|$($_.date)|$($_.units)|$($_.oneLiner)" }) 'W1|01-01|old-z|sum one') -and
+        (Same ($d.completed.extra | ForEach-Object { "$($_.name)|$($_.oneLiner)|$($_.theme)" }) 'done-y|fin|0')
+    }
+    Try-Judge 'read-deterministic' {
+        $a = (Read-Frag $script:readBase).Data | ConvertTo-Json -Depth 10 -Compress
+        $b = (Read-Frag $script:readBase).Data | ConvertTo-Json -Depth 10 -Compress
+        # 1 要素の並びも配列のまま（themes・帯 2 の組とカード・otherBands の空）
+        $a -ceq $b -and $a.Contains('"themes":["Alpha"]') -and $a.Contains('"otherBands":[]') -and
+        $a.Contains('"groups":[{"heading":null,"cards":[{"name":"c-three"')
+    }
+    # 1 か所ずつ壊した文が決まった警告の鍵（と Detail）だけを出す。壊した文が元と同じなら落とす
+    function Test-Warn([string]$From, [string]$To, [string]$Want) {
+        $t = $script:readBase.Replace($From, $To)
+        $r = Read-Frag $t
+        $t -cne $script:readBase -and @($r.Missing).Count -eq 0 -and $r.Data.warningCount -eq @($r.Warnings).Count -and
+        (Same ($r.Warnings | ForEach-Object { "$($_.Key) $($_.Detail)" }) $Want)
+    }
+    Try-Judge 'read-warn-band-count' {
+        Test-Warn "$($m.headSep)**2 $([char]0x672C)**" "$($m.headSep)**3 $([char]0x672C)**" 'band-count band 1: declared 3, read 2'
+    }
+    Try-Judge 'read-warn-not-in-ledger' {
+        $hon = [string][char]0x672C
+        (Test-Warn "``c-three``$($m.headSep)**1 $hon**" "``c-three``$($m.listSep) ``q-new``$($m.headSep)**2 $hon**" 'not-in-ledger q-new') -and
+        (Show-Full (Read-Frag $script:readBase.Replace("``c-three``$($m.headSep)**1 $hon**", "``c-three``$($m.listSep) ``q-new``$($m.headSep)**2 $hon**")).Data.bands[1].groups[0].cards[1]) -ceq
+            'q-new||1||||False|||False|True||'
+    }
+    Try-Judge 'read-warn-not-in-band' {
+        $from, $to = '| `c-three` | t3 |', "| ``r-led`` | t | w | z | o | ``c-three`` | - |`n| ``c-three`` | t3 |"
+        $b = (Read-Frag $script:readBase.Replace($from, $to)).Data.bands
+        (Test-Warn $from $to 'not-in-band r-led') -and @($b).Count -eq 3 -and
+        "$($b[2].name)|$($b[2].goal)|$($b[2].declared)|$($b[2].read)|$($b[2].notInBand)|$($b[2].groups[0].heading)" -ceq '|||1|True|' -and
+        (Show-Full $b[2].groups[0].cards[0]) -ceq 'r-led|w|1|t||z|False|||False|False||c-three@v2@True'
+    }
+    Try-Judge 'read-warn-duplicate' {
+        $hon = [string][char]0x672C
+        $from, $to = "``c-three``$($m.headSep)**1 $hon**", "``c-three``$($m.listSep) ``a-one``$($m.headSep)**2 $hon**"
+        $b = (Read-Frag $script:readBase.Replace($from, $to)).Data.bands
+        (Test-Warn $from $to 'duplicate a-one: bands 1,2') -and (Same $b[0].groups[0].cards[0].otherBands 'v2') -and
+        @($b[1].groups[0].cards).Count -eq 1 -and $b[1].read -eq 2
+    }
+    Try-Judge 'read-warn-table-columns' { Test-Warn '| ord | - | - |' '| ord | - | - | x |' 'table-columns ledger-table line 15: 8 cell(s), expected 7' }
+    # 1 か所ずつ外した文が決まった欠けの鍵だけを出し、Data が無い
+    Try-Judge 'read-missing' {
+        $cases = [ordered]@{
+            'updated-at' = @("updated_at: 2026-01-02`n", '')
+            'version-table' = @("$SECTION_PREFIX$($m.secVersions)", "${SECTION_PREFIX}Gone")
+            'ledger-table' = @("$SECTION_PREFIX$($m.secLedger)", "${SECTION_PREFIX}Gone")
+            'themes' = @("$SECTION_PREFIX$($m.secThemes)", "${SECTION_PREFIX}Gone")
+            'wave-table' = @("$SECTION_PREFIX$($m.secWaves)", "${SECTION_PREFIX}Gone")
+            'summary-table' = @("$SECTION_PREFIX$($m.secSummary)", "${SECTION_PREFIX}Gone")
+        }
+        $ok = $true
+        foreach ($k in $cases.Keys) {
+            $t = $script:readBase.Replace($cases[$k][0], $cases[$k][1])
+            $r = Read-Frag $t
+            $ok = $ok -and $t -cne $script:readBase -and (Same $r.Missing $k) -and $null -eq $r.Data
+        }
+        $ok
     }
 
     if ($script:selfFails) { "selftest: $($script:selfFails) failure(s)"; exit 1 }
