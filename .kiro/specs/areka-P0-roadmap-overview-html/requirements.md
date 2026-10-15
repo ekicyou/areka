@@ -20,6 +20,7 @@
 - 「spec 台帳」の表の列は「spec・段・何をするか・規模・並び・前提・Fable」の 7 つで、114 行。段の列は「優先・区分 A」のように段と区分を 1 つのセルに持つ（今の実数え＝優先 A 33・優先 C 10・その他 A 11・その他 C 37・バグ B 10・据え置き D 12・保留 D 1）。
 - 「テーマ別の決めごと」の各 `###` 節の `#### Specs (dependency order)` には `- [ ] areka-P0-{名前} -- {一言}。Dependencies: {前提}` の形の行が並ぶ（チェック済み `- [x]` は 39 行）。同じ節の `#### Existing Spec Updates` にも `- [ ]`・`- [x]`・`- [→]` の行（29 行）が在るが、これはほかの spec への申し送りで、その節に属する印ではない。台帳の 114 本のうち 30 本は、どの節の `#### Specs (dependency order)` にも載らない（`balloon-canon-residue`・`shiori4-api`・`tick-gate-adoption`・`property-name-case-fold` など。ギャップ分析の数え直し）。節に載るが台帳に無い未完了の spec は 0 本。
 - 「ウェーブ編成」の表の最初の行が、いま走っているウェーブ C6（8 本）。2 行目以降は「次のウェーブの候補」「ウェーブの外」「保留」で、着手中ではない。
+- 「完了サマリ」の表（列「Wave・完了日・ユニット（PR）・一行要約」）が、最初の耐力壁から C6 の前までの完了をウェーブの順に持つ（＝完了済みのロードマップ）。台帳の前提に出る spec 名のうち `.kiro/specs/completed/` にしか無い 8 本は、7 本がこの表に載り、載らないのは `status-execution-states` の 1 本（W1〜W4 などの行が「…他」と縮めてある）。`#### Specs (dependency order)` の下の `- [x]` の spec も、この表に載らないのは `package-check-temp-cleanup` の 1 本だけ。`roadmap-history.md` は旧 roadmap の凍結の写しと退避の節の地の文で、名前が出ても完了とは限らないので、道具の入力にしない。
 - `tools/release-notes.ps1` が、Markdown から文書を作る PowerShell の道具の前例（文言を `release-notes.strings.json` に外出し・端末へは ASCII だけ・`-SelfTest` を `tools/test-all.ps1` の 1 段として回す・同じ入力からは同じバイト）。リポジトリに入れた生成物を、作り直した物と突き合わせるテストの前例は `doc/ukadoc-coverage/report/`（`crates/ukadoc-survey/tests/consistency/` が古さを赤にする）。
 - `doc/` は 119 ファイル（直下 12 ファイルと 6 フォルダ）。コードかテストがファイルとして読む・テストが場所の名前を突き合わせるのは、`doc/ukadoc-coverage/` の全体（`crates/ukadoc-survey/src/io/paths.rs` ほか）・`doc/ssp-mcp/tools-list-ssp-2.9.05.json` と `doc/ssp-mcp/log-convention.md`（areka-mcp と areka のテスト）・`doc/release-notes/`（`tools/release-notes.ps1` と `.github/workflows/release.yml`）・`doc/impl-watch.md`（areka-impl-watch のエラー文とそのテストが場所の名前を持つ）の 4 か所。根の `README.md` が `doc/images/emo2-boot.png` を表示する。
 - **brief と roadmap.md の「ロードマップの俯瞰図と doc の整理」節の誤り**: 「`doc/shiori/equivalence_evidence.toml` は `crates/ukadoc-survey/src/evidence/resolve.rs` と網羅台帳 `doc/ukadoc-coverage/ledger/shiori.toml` が読む」は事実でない。`git grep equivalence_evidence` のヒットは `doc/shiori/README.md`・そのファイル自身・この 2 か所の記載・完了した spec の文書だけ。`resolve.rs:41` は `doc/shiori/fragments/` を doc コメントで名指すだけで、`ledger/shiori.toml` の 4 か所も自由文の注。`doc/shiori/` を読むコードとテストは 0 件。ただし、まだ完了していない `shiori4-api` の brief が `doc/shiori/fragments/` を「紙の契約の正本」と呼ぶ。
@@ -36,7 +37,7 @@
   - 完了した spec の文書（`.kiro/specs/completed/`）と `roadmap-history.md` の書き換え（当時の記録で、中の古い場所の名前はそのまま残す）。
   - 根の `docs/`（議題 3 で確定＝触らない）。
 - **Adjacent expectations**:
-  - 上流: roadmap.md の「版の段」節（2026-10-15）が俯瞰の背骨。4 か所の書き方は、棚卸と `/kiro-discovery` が書くままを道具の側で吸収する。読めない形に変わったら、道具は黙らずに知らせる（要件 4）。
+  - 上流: roadmap.md の「版の段」節（2026-10-15）が俯瞰の背骨。読む 5 か所（要件 4.1）の書き方は、棚卸と `/kiro-discovery` が書くままを道具の側で吸収する。読めない形に変わったら、道具は黙らずに知らせる（要件 4）。
   - 下流: 以後の棚卸と `/kiro-discovery`。入れる HTML は日付つきの「その日の姿」で、継続して直さない（議題 1 で確定）ので、両者の手順に作り直しの段は足さない。
   - `shiori4-api`: brief が `doc/shiori/` を指す。`doc/shiori/` を動かすなら、その brief の場所の名前を同じ変更で直す（要件 8.1）。
   - スキル `kiro-complete`: `doc/ROADMAP.md` を書いてよいファイルとして名指す。消すなら同じ変更で直す（要件 8.1）。
@@ -68,7 +69,9 @@ brief が要件の段へ回した議題 3 つは、下の仮置きで要件を�
 - コードかテストがファイルとして読む・場所の名前を突き合わせる `doc/` のファイルは、消さず動かさない（動かすとコードを直すことになり、doc の整理の範囲を越える）。
 - 完了した spec の文書と `roadmap-history.md` は書き換えない（roadmap.md が「history が全文正本・非改変」と定める）。brief の Desired Outcome の 3 の「steering は 1 つも壊れない」は、`roadmap-history.md` を除く steering と読む。
 - 歴史として置くものは `doc/archive/` の下だけに置き、`doc/archive/` の外に残るものは今も効くものとする。どちらかは `doc/` の直下の 1 枚の案内（新しく作る）で書き分ける。
-- HTML の表示は、版の段の帯を左から右へ並べる（brief の推す形）。完了した spec は帯に入らないので、帯とは別の「完了」の場所にテーマごとにまとめる。
+- HTML の表示は、版の段の帯を左から右へ並べる（brief の推す形）。完了した spec は帯に入らないので、帯とは別の「完了」の場所に、roadmap.md の「完了サマリ」の表のウェーブの順で並べる（議題 4 で確定）。
+
+議題 4（要件討議で追加・2026-10-15 確定）: **完了の判定の出どころ** → 開発者「議題4は改めた推奨案で確定。roadmap.md だけを読み、完了サマリで判定、完了の場所はウェーブ順」。道具は roadmap.md だけを読み（`.kiro/specs/completed/` も `roadmap-history.md` も読まない）、spec が完了かを「完了サマリ」の表と `#### Specs (dependency order)` の下の `- [x]` で決める。どこにも見つからない前提の名前には「roadmap に無い」の印を付ける（今は `status-execution-states` の 1 本＝完了サマリの行を縮めたときに名前が落ちたことも見える）。討議の初めの推奨案（`completed/` のフォルダ名で判定・完了の場所は `- [x]` の 39 本をテーマごと）は、開発者の指摘で roadmap.md の中に完了サマリの表が在ると分かって改めた。
 - テーマは「テーマ別の決めごと」の `###` 見出しとし、どの節の `#### Specs (dependency order)` にも載らない 30 本は「テーマなし」にまとめる（roadmap.md を書き足さない）。
 
 
@@ -97,8 +100,9 @@ brief が要件の段へ回した議題 3 つは、下の仮置きで要件を�
 
 1. The 俯瞰の HTML shall 「ウェーブ編成」の表の、いま走っているウェーブの行（表の最初の行）に名前が出る spec のカードに、着手中の印とウェーブの名前（今は C6）を付ける。
 2. Where 帯の中の spec が「テーマ別の決めごと」の節の `#### Specs (dependency order)` の下でチェック済み（`- [x]`）になっている（`#### Existing Spec Updates` の下の印は申し送りの印なので数えない）, the 俯瞰の HTML shall そのカードに完了の印を付け、帯からは外さない。
-3. The 俯瞰の HTML shall どの帯にも載らないチェック済み（`#### Specs (dependency order)` の下の `- [x]`）の spec を、完了の印を付けたカードとして、帯とは別の「完了」の場所にテーマごとにまとめて見せる。
-4. The カード shall 前提（「spec 台帳」の「前提」の列と、テーマの節の `Dependencies:`）に挙がった spec の名前を出し、その spec がどの帯に居るか（または完了か）を名前の横に出す。
+3. The 俯瞰の HTML shall 帯とは別の「完了」の場所に、roadmap.md の「完了サマリ」の表の行を表の順（ウェーブの順）に並べ、各行のウェーブ・完了日・spec の名前・一行要約を見せる。
+4. If どの帯にも載らないチェック済み（`#### Specs (dependency order)` の下の `- [x]`）の spec が「完了サマリ」の表にも無い, then the 俯瞰の HTML shall その spec を「完了」の場所の末尾の「完了サマリに無い完了」の組に、完了の印を付けて見せる（黙って落とさない）。
+5. The カード shall 前提（「spec 台帳」の「前提」の列と、テーマの節の `Dependencies:`）に挙がった spec の名前を出し、その spec がどの帯に居るか、または完了か（「完了サマリ」の表か `- [x]` に在る）を名前の横に出す。どれにも見つからない名前には「roadmap に無い」の印を付ける。
 
 ### Requirement 3: テーマの色分けと絞り込み
 
@@ -118,8 +122,8 @@ brief が要件の段へ回した議題 3 つは、下の仮置きで要件を�
 
 #### Acceptance Criteria
 
-1. The 道具 shall roadmap.md を読むだけで書き換えず、HTML のために roadmap.md の書き方を変えることを求めない（「版の段」の表・「spec 台帳」の表・「テーマ別の決めごと」の節・「ウェーブ編成」の表の今の書き方を、そのまま読む）。
-2. If roadmap.md が読めない、または 4 か所（「版の段」の表・「spec 台帳」の表・「テーマ別の決めごと」・「ウェーブ編成」の表）のどれかが見つからない, then the 道具 shall HTML を書かず（前に書いた HTML も消さず）、見つからない場所の名前を端末へ出して 0 でない終了コードで終わる。
+1. The 道具 shall roadmap.md を読むだけで書き換えず、HTML のために roadmap.md の書き方を変えることを求めない（「版の段」の表・「spec 台帳」の表・「テーマ別の決めごと」の節・「ウェーブ編成」の表・「完了サマリ」の表の今の書き方を、そのまま読む）。道具が読むファイルは roadmap.md だけとする（`.kiro/specs/completed/` と `roadmap-history.md` は読まない）。
+2. If roadmap.md が読めない、または 5 か所（「版の段」の表・「spec 台帳」の表・「テーマ別の決めごと」・「ウェーブ編成」の表・「完了サマリ」の表）のどれかが見つからない, then the 道具 shall HTML を書かず（前に書いた HTML も消さず）、見つからない場所の名前を端末へ出して 0 でない終了コードで終わる。
 3. If 「版の段」の表の行に書かれた spec の数（「＝**N 本**」）と、その行から読んだ spec の名前の数が違う, then the 道具 shall 端末へ警告を出し、HTML のその帯に両方の数を出したうえで、HTML は書き終える。
 4. If 「版の段」の表に名前が出る spec が「spec 台帳」に無い、または「spec 台帳」の spec がどの帯にも載らない, then the 道具 shall 端末へ警告を出し、HTML でその spec に「台帳に無い」または「帯に無い」の印を付けて見せる（黙って落とさない）。
 5. If 同じ spec の名前が 2 つ以上の帯に出る, then the 道具 shall 端末へ警告を出し、HTML では表で先に出る帯に置いて、もう一方の帯の名前をカードに出す。
