@@ -336,7 +336,7 @@ pwsh -NoProfile -File tools/test-all.ps1 -Format -License   # Bash／PowerShell 
 
 #### 並行レーンの規則（必須）
 
-- **触ってよいもの（書き込み可）**: `.kiro/steering/*.md`（roadmap・focus・workflow など）・`doc/ROADMAP.md`・`.claude/skills/**`・完了 spec の文書（`.kiro/specs/completed/{feature-name}/` の中の既存ファイル）・スクラッチパッド（PR 文面の下書き）。
+- **触ってよいもの（書き込み可）**: `.kiro/steering/*.md`（roadmap・focus・workflow など）・`.claude/skills/**`・完了 spec の文書（`.kiro/specs/completed/{feature-name}/` の中の既存ファイル）・スクラッチパッド（PR 文面の下書き）。
 - **触ってはいけないもの**:
   - ソース・テスト・ビルド設定（`crates/**`・`tools/**`・`Cargo.toml`・`Cargo.lock`・`deny.toml`・`about.toml`）——テストの検査対象そのもの。
   - `THIRD-PARTY-NOTICES.md`——スクリプトが最後に書く。
@@ -347,7 +347,7 @@ pwsh -NoProfile -File tools/test-all.ps1 -Format -License   # Bash／PowerShell 
 
 #### 6-1. ROADMAP更新
 
-ロードマップの正本を確認し、完了したSpecが記載されているか判定する（参照タイミングは `.kiro/steering/focus.md`）。`.kiro/steering/workflow.md` がロードマップの正本（areka では `.kiro/steering/roadmap.md`・`doc/ROADMAP.md` はポインタ stub）を定めていればそれに従う。定めが無ければ `doc/ROADMAP.md` を見る。
+ロードマップの正本を確認し、完了したSpecが記載されているか判定する（参照タイミングは `.kiro/steering/focus.md`）。`.kiro/steering/workflow.md` がロードマップの正本（areka では `.kiro/steering/roadmap.md`）を定めていればそれに従う。定めが無ければ `.kiro/steering/roadmap.md` を見る。
 
 **スコープ判定（優先順位）**:
 1. `requirements.md` に明示的なROADMAP項目との紐付け記述がある場合
@@ -409,7 +409,7 @@ git commit -m "chore({feature-name}): 完了の文書更新（ROADMAP・steering
 git diff --name-only <5-1 で控えたコミット> HEAD
 ```
 
-- 許される変更: 並行レーンで触ってよいもの（`.kiro/steering/**`・`doc/ROADMAP.md`・`.claude/skills/**`・`.kiro/specs/completed/{feature-name}/**`）・`THIRD-PARTY-NOTICES.md`・`-Format` の整形による `*.rs` の変更（整形はテストの前の段で行われ、その後のテストが整形後のコードを検査している）。
+- 許される変更: 並行レーンで触ってよいもの（`.kiro/steering/**`・`.claude/skills/**`・`.kiro/specs/completed/{feature-name}/**`）・`THIRD-PARTY-NOTICES.md`・`-Format` の整形による `*.rs` の変更（整形はテストの前の段で行われ、その後のテストが整形後のコードを検査している）。
 - **それ以外が 1 つでもあれば** 7-4 へ（全体テストの回し直し）。
 
 #### 7-4. 回し直し（必要なときだけ）

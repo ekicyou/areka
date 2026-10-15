@@ -95,7 +95,7 @@
   - 完了の姿: 本仕様のフォルダに棚卸の表があり、各行の扱いが requirements.md の確定の表と一致する
   - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-- [ ] 6.2 古い doc を消し・寄せ、参照を直す
+- [x] 6.2 古い doc を消し・寄せ、参照を直す
   - `doc/ROADMAP.md` を消し、M1 期の議論の 3 ファイルを一緒に `doc/archive/` へ移す（中身は変えない）
   - `workflow.md` の stub の文と、スキル `kiro-complete` の触ってよいものの 2 か所と stub の文を直す。`structure.md` の道具の一覧に新しい道具を 1 項足す
   - コードとテストが読む doc・完了した spec の文書・`roadmap-history.md`・`doc/archive/` の中の名指し・正本の文書の中身には触らない

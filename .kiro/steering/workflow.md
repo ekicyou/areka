@@ -86,7 +86,7 @@ mv .kiro/specs/<spec-name> .kiro/specs/completed/
 
 ### Step 6. ROADMAP更新（該当する場合）
 
-仕様が `.kiro/steering/roadmap.md`（ロードマップ正本）に記載されている場合、以下を更新する（参照タイミングは `.kiro/steering/focus.md`）。`doc/ROADMAP.md` はポインタ stub のため更新対象ではない。
+仕様が `.kiro/steering/roadmap.md`（ロードマップ正本）に記載されている場合、以下を更新する（参照タイミングは `.kiro/steering/focus.md`）。
 
 #### 6-1. 仕様テーブルの状態列を更新
 
