@@ -166,3 +166,16 @@ MCP でいちばん使われるのは「台本を流して見る」（`sakurascr
   - 重なり 0: `mcp-reload`（本 spec が kanade の `src/change.rs`・`schedule/boot.rs` に触らず、向こうが `msg.rs`・`actor.rs`・`schedule/mod.rs`・`schedule/change.rs` に触らない約束。起動の由来を全部並べて分ける所は `schedule/boot.rs` の 1 か所だけなので守れる）・`mcp-receiver-bugs`（2 件とも。本 spec が `crates/areka-mcp/**`・`crates/areka/src/mcp/mod.rs`・`dump_balloon.rs` に触らない約束）・`mcp-stdio-bridge-residue`・`check-script-arg-checks`・`sakura-time-directives`。
 - 優先度の区分: A のまま。要件定義のモデル: Fable のまま。
 - 見つけた穴・古くなった記述: 棚卸㉓の節の「同じウェーブに置けない相手」の `farewell-talk-status`・`anchor-tag-canon` と、「重なり 0」の `mcp-stdio-bridge` は着地済み。`mcp-receiver-bugs` の brief の Adjacent は本 spec と `mcp-reload` を「`handler.rs` を触る spec」に数えているが、どちらの brief も `handler.rs` を挙げていない（案内文の最後の 1 文を消すのは `mcp-strict-errors`）。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+
+- 前提の変化: 版の段で **v0.1.0**（MCP の 10 本をそろえる列の先頭＝本 spec → `mcp-reload` → `mcp-strict-errors`・`mcp-receiver-bugs`）。10-11 に組んだウェーブ C6 の ② のままだが、C6 は始まっていない。10-11 からソースは説明 2 行しか変わっておらず、本 spec の触るファイルは 1 行も動いていない＝棚卸㉔の測りがそのまま効く。
+- 触るファイル: 棚卸㉓・㉔のとおり。行数も同じ（`msg.rs` 930・`actor.rs` 901・`schedule/mod.rs` 969・`schedule/events.rs` 845・`schedule/change.rs` 425・`schedule/steady.rs` 957〔触らない〕）。今も `NG:not implemented yet` を返すのは `crates/areka/src/mcp/` の `sakurascript.rs`・`raise_event.rs`・`reload.rs` の 3 本。
+- 規模: M〜L（13〜17）のまま。最初の 2 タスクで、`msg.rs` の中のテスト（約 418 行）を兄弟のファイルへ出し、`schedule/mod.rs` の型の塊を兄弟のファイルへ出して同じ名前で見せる。kanade の列の後ろ（`script-security-level` ほか）は割った後の形に足す。
+- 先に要るもの: なし＝今すぐ始められる。
+- 同じウェーブに置けない相手（v0.0.3・v0.1.0 の 24 本の中）: `script-security-level`（`msg.rs`・`actor.rs`・`schedule/{mod,change,steady_choice_script}.rs`）・`multi-ghost-runtime`（`msg.rs`＝止まった知らせにゴーストの区別を足す）・`mcp-strict-errors`（`crates/areka/src/mcp/{sakurascript,raise_event}.rs`・働きの上でも後）。列の外では `mcp-shiori-query`・`sakura-time-critical`・`mouse-click-wheel-events`・`inputbox-user-input`・`property-query-channels`。
+- 重なり 0: `mcp-reload`（約束つき・確かめ直した＝起動の由来 `BootOrigin` を全部並べて分ける所は kanade の `schedule/boot.rs` の 1 か所だけで、ほかは組み立てか `if let`。`schedule/mod.rs` を割るときに型を同じ名前で見せれば `schedule/boot.rs` は変わらない＝これを割り方の条件にする）・`mcp-receiver-bugs`・`baseware-root-list`・`property-name-case-fold`・`emo2-real-run-stability`・`dpi-realign-remembered-chain`。
+- 優先度の区分: A のまま。
+- 要件定義のモデル: **Opus**（2026-10-15 の厳しい基準で付け直した＝C6 の表も Opus）。再生中・選択肢の最中の扱いは SSP に合わせて決める問いで、返事を待つ形は `mcp-get-status` の先例（`mcp::later`）がある＝新しい並行の設計にも新しい境界にも当たらない。
+- 分割の案: なし（一度切り出した spec）。
+- 見つけた穴・古くなった記述: 棚卸㉓・㉔の節の「要件定義のモデル: Fable」は 10-15 の付け直しで Opus になった。roadmap の「3 段目の spec が触るファイル」の表の本 spec の行に、着地済みの `get_status.rs` が残っている。

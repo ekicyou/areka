@@ -186,3 +186,16 @@ PR に直しを求める印 `Needs-Author-Feedback` が付いたら、**10 日�
 
 - `areka-P0-release-notes-highlights` が着地すると、リリースに添えるファイルが 4 つから 5 つになる（詳細なリリースノートのファイルが増える・名前の案は `release-notes-v{版}.md`）。zip を拾う絞り込み `installers-regex: '\.zip$'` にこのファイルは当たらない見込みだが、この spec の確かめの中で 1 度見る。
 - リリースの本文は、注目に値する数件の日本語の紹介になる（版ごとのファイルがリポジトリに在る）。winget のマニフェストの変更点の欄に何を入れるかを決めるときの材料にできる。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+- 前提の変化: 版の段で **v0.1.0**（配れる）。2026-10-16 に `gh pr view 450070 --repo microsoft/winget-pkgs` で読んだ: 開いたまま・取り込まれていない（取り込みの日時は空）。`user-data-root` も未着手。＝着手の条件の 2 つとも満ちていない（確かめた）。
+- 触るファイル: `.github/workflows/winget.yml`（新規。今の `.github/workflows/` は `release.yml`・`crates-io.yml` の 2 本）・`README.md` の「## 入手と起動」の箇条・`dist/README.txt` の「■ 入手のしかた」と「■ 既知の制限」。
+- 規模: 3〜5 タスク（下の注意書きを外す仕事を持つなら 1 増える）。
+- 先に要るもの: winget-pkgs の PR 450070 の取り込み・`user-data-root` の着地・開発者の PAT の登録。
+- 同じウェーブに置けない相手: 無し（24 本と重なり 0。`dist/README.txt` は `baseware-root-list`・`user-data-root` と別の節）。
+- 優先度の区分: A（開発者「winget 対応インストーラーを作成したい」）。
+- 要件定義のモデル: Opus。
+- 分割の案: 切らない。
+- 見つけた穴・古くなった記述:
+  - 雛形の注意書き `InstallationNotes`（上げ直しで消えるという知らせ）を、`user-data-root` の着地の後に外す持ち主がいない（`user-data-root` は「雛形の持ち主の仕事」と書き、この spec は `dist/winget/**` を範囲外にし、`winget-manifest-submission` は完了）。更新の PR は winget-pkgs の今のマニフェストを元に作られる見込みなので、外さなければ次の版へ引き継がれる＝この spec の要件で持つのが自然。
+  - v0.0.3 は `/release` で出ても、この spec の着地までは winget-pkgs へ出さない（議題 2「その間の版を手で出すか、次の版まで待つか」はこの spec で決める）。

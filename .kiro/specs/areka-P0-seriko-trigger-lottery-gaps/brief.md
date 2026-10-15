@@ -287,3 +287,14 @@ SERIKO の引き金と抽選に、決まりの食い違いが 3 件残ってい�
 - **本 spec が `rebuild` の評価の順を変えるときの約束**: 「見えると決まった部品だけが 3 語の引き金を受ける」を保つ（`seriko-trigger-intervals` の設計書の Revalidation Triggers が名指ししている）。固定しているテストは `crates/areka-seriko/src/parts_trigger_tests.rs`。
 - **触るファイルの今**: `parts.rs` は 893 行（1,000 行の上限まで約 100 行）。部品の 3 語の配線は兄弟の `parts_trigger.rs` に出してある。
 - **近い件が 1 本起票された**: `seriko-lottery-ended-play-skip`（終わった再生が片付く前の境界で、抽選のくじを 1 回飛ばす件）。直す向きを選ぶと、本 spec と同じ抽選の決定論のテストの期待値を引き直す＝2 本を続けて取ると引き直しが 1 度で済む。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+- 前提の変化: 版の段で v0.1.0（バグ）。棚卸㉔ではこの spec の節を書いていない（上限で外れた）。seriko は 10-10 から変更 0（`looper.rs` 924・`parts.rs` 893・`table.rs` 900・`actor.rs` 776・`trigger.rs` 192・`looper_trigger.rs` 227・`parts_trigger.rs` 127 行）。3 件の指し先（3 語の述語の写し＝`looper.rs` の `is_trigger_word`・`parts.rs` の `is_trigger`・`table.rs` の `has_triggers`、`parts.rs` の `rebuild`・`drop_hidden`、`actor.rs` の `on_stage`、`looper.rs` の `on_surface_changed`）は今も在る。
+- 触るファイル: 上の 7 本と兄弟のテスト・`doc/COMPAT_ARCHITECTURE.md` §8・台帳の備考。
+- 規模: 8〜21 タスク（件 2・件 3 を両方「直す」にすると 20 を少し越えうる。両方「記録して閉じる」なら 8〜12）。
+- 先に要るもの: 無し。後ろに `seriko-talk-clock-fidelity`（v0.2.0）。
+- 同じウェーブに置けない相手: `animated-image-import`（`table.rs`・`parts.rs`）。`mcp-reload`（ついでの片付けで seriko の `actor.rs` の `"bind"` に触る場合）・`mcp-strict-errors`（案 ⑵ で `actor.rs`・`resolve.rs` に触る場合）。版に縛らない列の `seriko-interval-combinations`・`seriko-script-triggers` とも直列（変わらず）。
+- 優先度の区分: B（件 3 だけ元は C）。
+- 要件定義のモデル: **Opus に改める**（本文は Fable）。正典の黙る所を 5 つ以上選ぶのは「議題が多い」で、10-15 の基準では Fable にならない。件 2 の「境界の時刻で測る」は、着地済み `seriko-trigger-intervals` の時計の決まりの上での直しで、時刻の順の新しい設計ではない。
+- 分割の案: 無し（10-11 にわざと 1 本にまとめた＝20 を少し越えるだけなら割らない。引き直すテストの本数を要件の段で先に数える）。
+- 見つけた穴・古くなった記述: 件 1 の節の Adjacent に、今はこの spec に入った旧名 `seriko-rebuild-hidden-lottery`・`seriko-lottery-ended-play-skip` が並んでいる（同じ spec の中の話と読む）。

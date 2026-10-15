@@ -73,3 +73,17 @@
 - **見つけた穴・古くなった記述**:
   - **同じ隙間は、起動と起動のあいだに拡大率が変わったときにも出る見込み**（コードの読みだけ・実機では未確認）。覚えている位置は「下端の中央の x」を物理ピクセルで保存し（`placement/persist.rs` の `char_pos_to_origin_x`）、起動の最後の並べ直しも覚えているスコープを外すので、拡大率を変えてから起動すると幅だけが変わって隙間が開く。Scope の Out「起動の最後の並べ直し」と当たる＝要件で範囲に入れるかを決める。絵の幅が違うシェルへ切り替えた後の起動も同じ形になりうる（確かめていない）。
   - `placement/chain_realign.rs` の冒頭の説明「誰も触っていないスコープは対象に残る」は、2 回目の起動からは成り立たない＝本 spec が判定と一緒に書き直す。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+
+- 前提の変化: 版の段で **v0.1.0** のバグ。10-11 から触るファイルは変わっていない（`placement/chain_realign.rs` 245・`chain_finalize.rs` 320・`spawn.rs` 775・`persist.rs` 642・`emo2_boot/frame/dpi.rs` 508・`frame/drain_resnap.rs` 533・`emo2_boot/frame.rs` 568）。10-15 に起票された `multi-ghost-runtime` が `placement/` の同じファイルを触る。
+- 触るファイル: 棚卸㉓のとおり。
+- 規模: S〜M（6〜9）のまま。
+- 先に要るもの: なし。
+- `multi-ghost-runtime` との重なり（その brief を読んだ）: 向こうは窓の一式 `GhostWindows`（`placement/spawn.rs`）と窓の印にゴーストの区別を持たせ、記憶の結線（`placement/persist.rs`）・止まる流れ（`emo2_boot/frame.rs`）・重なりの順の鎖をゴーストごとにする（向こうの議題 4）。本 spec の詰め直し（`chain_realign.rs` が `GhostWindows` を 1 本の鎖として読む・197 行目）はその上で動く＝`spawn.rs`・`persist.rs`・`emo2_boot/frame.rs` が重なり、働きでも「鎖がゴーストごと」に変わる。**同じウェーブに置けない**。順は本 spec（小さいバグ）を先に着地させ、`multi-ghost-runtime` が鎖をゴーストごとへ移すときに詰め直しの判定も一緒に運ぶのが安い（逆だと本 spec が複数ゴーストの形で書き直しになる）。
+- `placement-measure-bake-once` との重なり: 0（向こうは案 A＝`placement/{mod,measure}.rs`・`ghost_session.rs`・`emo2_boot/{mod,assets}.rs`、案 B＝`measure.rs`・emo-present の `shell_target.rs`）＝並べられる。
+- ほかの 24 本: `user-data-root` が記憶の置き場を動かす案（向こうの議題 7）を選ぶと `placement/persist.rs` が重なる。それ以外は 0（`emo2_boot` の結線の列のファイルには触らない）。
+- 優先度の区分: B のまま。
+- 要件定義のモデル: **Opus**（10-15 の付け直し。2 案の分かれ目は、DPI 追従の基本設計と位置の記憶の 3 つの決まりで決まる＝先例で決まらない骨格には当たらない）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: 棚卸㉓の節の「要件定義のモデル: Fable」は古い。`placement/chain_realign.rs` 30 行目の説明「誰も触っていないスコープは対象に残る」は 2 回目の起動から成り立たない（棚卸㉓のまま・本 spec が判定と一緒に書き直す）。

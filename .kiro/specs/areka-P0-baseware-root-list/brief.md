@@ -148,3 +148,18 @@
   - 0: `app-icon`（向こうが `main.rs` に触らない形のとき）・`dot-sakura-specimen`・`emily-ghost-verification`・`impl-watch-skills`・`impl-watch-residue`・`emo2-real-run-stability`（検査の側だけで直すとき）。
 - 優先度の区分: A。要件定義のモデル: Fable（どちらも変わらず）。
 - 見つけた穴・古くなった記述: 本文「確かめること」（winget の上げ直しで exe の隣が入れ替わるか）は答えが出た（入れ替わる。後から入れた物ごと消える）。守る手は `user-data-root` が持つ案＝この spec の要件には足さない。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+- 前提の変化: 版の段で **v0.0.3**（カタログの鎖の 1 本目）。10-11 の後、触るファイルは 1 行も変わっていない（`catalog.rs` 414・`boot_resolve.rs` 609・`boot_config.rs` 503・`main.rs` 956・`emo2_boot/ghost_switch.rs` 902）。組んだウェーブ C6 は始まっていない。
+- 触るファイル: 棚卸㉔のまま。足す分: 起動中の印に書く名前を引く関数（`crates/areka/src/boot_resolve.rs` の `running_name`）は根を 1 つ受けて目録を引く＝根の並びを受ける形に変わる。その呼び手は `main.rs` の最初のゴーストを起こす所（印を書く呼び出しと同じ数行）と、`emo2_boot/ghost_switch.rs` の定常に入ったときの印の投函。
+- 規模: 16〜20 タスク（変わらず）。
+- 先に要るもの: 無し（今すぐ着手できる・v0.0.3 の先頭）。
+- 同じウェーブに置けない相手（版の段の 24 本の中）:
+  - `user-data-root`・`write-failure-notice`（`main.rs`・`boot_resolve.rs`。`write-failure-notice` とは上の `running_name` の呼び手の数行と `ghost_switch.rs` も）。
+  - `multi-ghost-runtime`（`main.rs`・`boot_resolve.rs`・`boot_config.rs`・`ghost_switch.rs`・`shell_balloon_switch.rs`・`menu/`・`install/desk.rs`・`update/desk.rs`・`readme/opener.rs`）・`ghost-call`（`menu/ghost_frame.rs`・`menu/mod.rs`）・`mcp-reload`（`ghost_switch.rs`・`shell_balloon_switch.rs`）・`default-balloon-selfmade`（`boot_resolve.rs` の既定の名前の定数 1 行）。
+  - 重なり 0: `app-icon`・`balloon-text-bugs`・`dot-sakura-specimen`・`emily-ghost-verification`・`winget-release-automation`（`dist/README.txt` は別の節）。
+- 列の外の相手: `ghost-inner-balloon`・`shell-companion-balloon`（版に縛らない・鎖の後ろ）・`tasktray-icon`（windows-reactor 待ち）。`property-name-case-fold` とは「`persist/` を書き替えない」約束のまま。
+- 優先度の区分: A（開発者「ゴーストフォルダの複数管理の仕組みが欲しい」）。
+- 要件定義のモデル: Opus（2026-10-15 の厳しい基準で付け直したまま。記憶の入れ物の形は今ある鍵の族の延長で、新しい境界・並行の保証・先例の無い骨格の分かれ目のどれにも当たらない）。
+- 分割の案: 切らない（20 を超えたら棚卸㉓の案＝メニューの 2 項目・フォルダ選択・記憶への保存を後ろの 1 本へ）。
+- 見つけた穴・古くなった記述: 棚卸㉔の節の「要件定義のモデル: Fable」は古い（上のとおり Opus）。本文の呼び手の一覧に `running_name` とその 2 つの呼び手が無い。

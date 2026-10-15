@@ -166,3 +166,19 @@
   - `placement/persist.rs`・`ghost_session.rs` を触るほかの列の spec は、着手の前に照らす。
 - 優先度の区分: A。要件定義のモデル: Fable（どちらも起票のまま）。
 - 見つけた穴・古くなった記述: 本文の触る所に `main.rs`・`ghost_session.rs`・`shiori_host.rs`・`placement/persist.rs` が無い。`baseware-root-list` の「確かめること」（exe の隣が入れ替わるときに守る手）は、この spec が持つ案。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+- 前提の変化: 版の段で **v0.0.3** の 2 本目（カタログの鎖）。触るファイルは変わっていない。winget-pkgs への初回の提出（PR 450070）は 10-16 に読んでも開いたまま（取り込まれていない）。
+- 触るファイル: 棚卸㉔のまま。足す分: ネットワーク更新の作業フォルダ（`crates/areka-update/src/paths.rs` の `WORK_DIR`＝`<対象のゴースト>\.update-work\`・`work.rs`）は、ゴーストのフォルダそのものの中に作られ、更新もその場で書く。＝同梱のゴースト（exe の隣）の更新は、機械の全員向けでは書けず、利用者向けでは次の上げ直しで更新の中身ごと消える。範囲に入れるかを議題 7（同梱のゴーストの記憶）と一緒に決める。
+- 規模: 12〜18 タスク（上の件を入れるなら上の方）。
+- 先に要るもの: `baseware-root-list`（根の並び・「新しく入れる物は先頭の根へ」）。
+- 同じウェーブに置けない相手（24 本の中）:
+  - `baseware-root-list`・`write-failure-notice`（`main.rs`・`boot_resolve.rs`）・`default-balloon-selfmade`（`boot_resolve.rs` の定数 1 行）。
+  - `multi-ghost-runtime`（`main.rs`・`boot_config.rs`・`boot_resolve.rs`・`ghost_session.rs`・`placement/persist.rs`）・`dpi-realign-remembered-chain`（`placement/persist.rs`）・`placement-measure-bake-once`（案 A を選ぶと `ghost_session.rs`）。
+  - 重なり 0: `app-icon`・`balloon-text-bugs`・`winget-release-automation`（`dist/README.txt` は別の節）。
+- 優先度の区分: A（開発者「消えるなら winget は使えない」）。
+- 要件定義のモデル: Opus に改める。置き場の向きは開発者の裁定（議題 1〜3）で決まり、先例（完了 `baseware-root-layout` の裁定・`AREKA_PROFILE_DIR` の上書き）の延長。新しい境界・並行の保証・先例の無い骨格の分かれ目のどれにも当たらない。
+- 分割の案: 切らない。
+- 見つけた穴・古くなった記述:
+  - 本文の触る所に `areka-update` の作業フォルダが無い（上）。
+  - 雛形の注意書き（`dist/winget/**` の `InstallationNotes`＝上げ直しで消えるという知らせ）を外す持ち主がいない。この spec は「雛形の持ち主の仕事」と書き、`winget-manifest-submission` は完了し、`winget-release-automation` は `dist/winget/**` を範囲外にしている＝要件の段で持ち主を決める（`winget-release-automation` が持つのが自然）。

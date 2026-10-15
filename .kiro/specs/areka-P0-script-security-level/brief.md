@@ -137,3 +137,16 @@ areka はこの「出どころ」を運ばない。そのため、ゴースト�
 - 先に要るもの: 働きの前提なし。ただし `mcp-kanade-tools` と 5 つのファイルが重なる（`msg.rs`・`actor.rs`・`schedule/mod.rs`・`schedule/change.rs`・`steady_choice_script.rs`）ので同じウェーブに置けない。`schedule/mod.rs` は残り 31 行で、`mcp-kanade-tools` が `msg.rs` と `schedule/mod.rs` を先に分ける段取り＝その後に着手するのが安い。`mcp-reload`（`schedule/boot.rs`）・`sakura-time-critical`（`schedule/mod.rs`・`user_break_cue.rs`）・`mcp-shiori-query`・`mouse-click-wheel-events`・`inputbox-user-input`（`schedule/events.rs`）とも並べられない。重なり 0: `mcp-receiver-bugs`・`mcp-stdio-bridge-residue`。
 - 優先度の区分: A のまま。要件定義のモデル: Fable のまま。
 - 見つけた穴・古くなった記述: 棚卸㉓の節の「同じウェーブに置けない相手」の `farewell-talk-status`・`anchor-tag-canon` と、「重なり 0」の `mcp-stdio-bridge` は着地済み。行数（`msg.rs` 926・`schedule/mod.rs` 955 ほか）は上の数に読み替える。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+
+- 前提の変化: 版の段で **v0.1.0** の「止めると困る後続」（MCP で外から流せる台本に、ukadoc が「外部からは不可」と書いたタグを止める守りが無い）。10-11 から触るファイルは動いていない。`SecurityLevel: local` は今も `crates/shiori-host32-host/src/shiori3.rs` の要求を組む所（137 行目）が直に書く。SHIORI の呼び出しの口 `ShioriBackend`（`crates/areka-kanade/src/shiori/real.rs` 62 行目）の実装は 20 か所のまま。
+- 触るファイル: 棚卸㉓のとおり（アンカーへ出どころを写すなら kanade の `schedule/anchor.rs` も）。
+- 規模: L（16〜22）。20 を超えたら ⒜ SHIORI へのヘッダと応答の読み取り（追加のヘッダの入れ物を含む）→ ⒝ 台本の印とタグの止め、の順に切る（棚卸㉓のまま）。
+- 先に要るもの: 働きの前提なし。ファイルの上で `mcp-kanade-tools` の後（`msg.rs` と `schedule/mod.rs` を割った形に足す）。
+- 同じウェーブに置けない相手（24 本の中）: `mcp-kanade-tools`（kanade の 5 ファイル）・`mcp-reload`（`schedule/boot.rs`）・`multi-ghost-runtime`（`msg.rs`）・`mcp-strict-errors` の案 ⑵（`areka-talk`・`areka-sakura/src/drive.rs`・`schedule/translate.rs`）。列の外: `mcp-shiori-query`・`sakura-time-critical`・`talk-fast-forward`・`mouse-click-wheel-events`・`inputbox-user-input`。
+- 重なり 0: `mcp-receiver-bugs`・`property-name-case-fold`・`baseware-root-list`・`dpi-realign-remembered-chain`・`emo2-real-run-stability`（件 2 で仲介を直すときも `shiori-host32-helper` の側で、本 spec の `shiori-host32-host` とは別のクレート）。`emily-ghost-verification` は YAYA の `load` のパスの形を直すことになったら `crates/areka-ghost/src/shiori_inproc.rs` を照合する。
+- 優先度の区分: A のまま。
+- 要件定義のモデル: **Fable**（roadmap の表も ○）。当たる基準＝**先例の無い公開の契約を新しく引く**: ⑴ 出どころの型を kanade → `areka-talk` → `areka-sakura` → `emo2_boot` の受け取り手まで運ぶ（今ある `ChangeOrigin`・`BootOrigin` は kanade の中の切替と起動の理由だけで、台本の出どころの先例にならない）。⑵ SHIORI へ追加のヘッダを運ぶ入れ物を、公開の `ShioriBackend`（実装 20 か所）に足す形を決める＝後の `property-query-channels`・`mcp-shiori-query` が同じ入れ物を使う。roadmap の推し（引数を変えず、既定の実装を持つメソッドを足す）は候補で、決まった先例ではない。32bit の仲介との間は `shiori3.rs` が要求の文を組む所に行を足すだけ＝そこは新しい境界ではない。
+- 分割の案: 上の条件つきの 1 つだけ。
+- 見つけた穴・古くなった記述: 新しいものは無い（`check_script` に出どころの診断を出すかは議題のまま）。

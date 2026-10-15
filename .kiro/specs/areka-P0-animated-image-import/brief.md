@@ -128,3 +128,15 @@ SERIKO の pattern定義の描画メソッド `import`（`animation*.pattern*,im
 - 優先度の区分: A のまま。
 - 要件定義のモデル: Fable のまま。
 - 見つけた穴・古くなった記述: `rebuild` が 2 段になったので、`import` の子の時計をどちらの段で作るかを設計で確かめる（「見えると決まった部品だけが 3 語の引き金を受ける」の約束は `parts_trigger_tests.rs` が固定している）。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+- 前提の変化: 版の段で v0.1.0（「黙って壊れる」＝止めると困る後続）。読み手・焼く一覧・合成・seriko は棚卸㉔から変更 0。pattern の番号の欄 `surface_id` は今も整数（`crates/areka-parsers/src/shell/model.rs` 162 行目）で、合成の語の表 `method.rs` は `import` を知らない。
+- `collisionex-regions` が v0.2.0 へ移ったので、読み手 `shell/{model,decode}.rs` の鎖でこの spec の前に居る未完了はもう無い。v0.1.0 の中で待つのは `extent-element-offset`（`plan_extent.rs`）だけ＝確かめた。roadmap の「直列の列」のシェルの element の列と読み手の鎖は「`collisionex-regions` → `animated-image-import`」の順のまま＝ファイルの順として入れ替える（`animated-image-import` → `collisionex-regions`）。
+- 触るファイル: 棚卸㉓のまま（`shell/model.rs` 295・`decode.rs` 594・`crates/areka-emo-atlas/src/manifest.rs` 352・合成の `plan.rs` 703・`plan_extent.rs` 198・`nesting.rs` 418・`pattern.rs` 324・`film.rs` 177・`method.rs` 415・seriko の `table.rs` **900**・`parts.rs` **893**・台帳 `assets.toml` の 1 行・COMPAT §8）。型 `Pattern` を直書きするファイルは 22。`table.rs` は 547 行目からの中のテスト（約 354 行）を先に兄弟のファイルへ出す。
+- 規模: 10〜14 タスク（変わらず）。
+- 先に要るもの: `extent-element-offset`（ファイルの順）。働きの上では無し。
+- 同じウェーブに置けない相手: `extent-element-offset`（`plan_extent.rs`）・`seriko-trigger-lottery-gaps`（seriko の `table.rs`・`parts.rs`）。ほかの v0.0.3・v0.1.0 とは 0（`balloon-webp-names` は絵の読み手の `decode` だけ、`placement-measure-bake-once` は `crates/areka` の採寸と起動）。
+- 優先度の区分: A（「動く画像」は開発者の依頼・`import` はその範囲）。
+- 要件定義のモデル: **Opus に改める**（棚卸㉔は Fable）。読み手・焼く一覧・合成・seriko にまたがるが、形は `animated-image-playback` の子の仕組み（`FilmSheet`・`PartKey::Film`・`Cell::Picture`）が前例で、足す 3 か所まで本文の「仕組みの形」に書いてある。
+- 分割の案: 無し（一度切り出した spec）。
+- 見つけた穴・古くなった記述: 上の roadmap の列の順。本文の Out of Boundary「seriko の表と時計」と Constraints の触るファイルの欠けは棚卸㉓の指摘のまま。

@@ -179,3 +179,16 @@ AI のクライアントが、形の違う `params` の `tools/call`（`name` �
 - 要件定義のモデル: Opus。
 - 分割の案: なし。単独の席を取らない手もある: 次に実機で MCP を使う spec（`mcp-kanade-tools` は実機で `dump_surface` を呼ぶ申し送りを持つ）の実機確認に「debug 版で `dump_balloon` を 5 回」を相乗りさせ、返れば本 spec を閉じる。
 - 見つけた穴・古くなった記述: なし（brief は 10-07 のまま正しい）。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+
+- 前提の変化: 版の段で **v0.1.0**（MCP の列・`mcp-strict-errors` と並ぶ後ろ）。起票（10-11）から触るファイルは動いていない。件 1 の原因どおり `crates/areka-mcp/src/handler.rs`（144 行）に `on_custom_request` はまだ無い。今の答えを固定している 2 か所も在る（`crates/areka-mcp-bridge/tests/real_receiver_test.rs` の 208 行目＝`"params": {"name": 7}` の行と 196 行目の説明・`doc/ssp-mcp/bridge-diff-areka.md` の 93 行目）。件 2 の `crates/areka/src/mcp/dump_balloon.rs`（163 行）も変わらない。
+- 触るファイル: 件 1＝`handler.rs`・受け口の決定論テスト（`crates/areka-mcp/src/server_protocol_tests.rs` か新しい兄弟）・上の 2 か所。件 2＝再現しなければ 0、すれば `dump_balloon.rs` か `crates/areka/src/mcp/mod.rs` の `later`。
+- 規模: 4〜12（件 1＝3〜5・件 2＝確かめだけ 1〜2／再現すれば 4〜7）。
+- 先に要るもの: なし（働きの前提は全部着地済み）。
+- 同じウェーブに置けない相手（24 本の中）: `mcp-strict-errors`（`handler.rs`）だけ。列の外: `mcp-stdio-bridge-residue`（`real_receiver_test.rs`）・`mcp-user-response`・`mcp-shiori-query`（`handler.rs`・件 2 で `mcp/mod.rs` を触るときも）。
+- 重なり 0: `mcp-kanade-tools`・`mcp-reload`（どちらも `crates/areka-mcp/**`・`dump_balloon.rs`・`mcp/mod.rs` に触らない約束）と、ほかの 24 本すべて。
+- 優先度の区分: B（件 1＝答えの番号が事実と違う・件 2＝実機で 1 度返らなかった）。
+- 要件定義のモデル: Opus（原因の分かった小さい直しと確かめ）。
+- 分割の案: なし。件 2 は、`mcp-kanade-tools` の実機確認（debug 版で `dump_surface` を呼ぶ申し送り）に「`dump_balloon` を 5 回」を相乗りさせ、返れば記録して閉じる手もある（棚卸㉓のまま）。
+- 見つけた穴・古くなった記述: 本 brief の Adjacent と件 1 の節は `mcp-kanade-tools`・`mcp-reload` を `handler.rs` を触る spec に数えているが、どちらも触らない（触るのは `mcp-strict-errors`・`mcp-user-response`・`mcp-shiori-query`）。

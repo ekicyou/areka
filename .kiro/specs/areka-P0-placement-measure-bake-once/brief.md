@@ -92,3 +92,14 @@
   - roadmap の台帳の行の「`animated-image-playback` の前が望ましい」は過ぎた。
   - 棚卸㉒の節の「書き損じの 2 行」は棚卸㉒の即時修正で消えた（もう無い）。
   - 案 A が足す先の `placement/mod.rs`（902 行）・`emo2_boot/mod.rs`（912 行）・`ghost_session.rs`（873 行）は上限の近く。足す分は新しいファイルへ出す。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+- 前提の変化: 版の段で v0.1.0（「手前が持ち込んだ重さ」）。棚卸㉓から触る所の変更は 0。採寸 `crates/areka/src/placement/measure.rs`（450 行）の `measure_native_scope_sizes` と、起動の資産組み立て `crates/areka/src/emo2_boot/assets.rs`（547 行）の `build_boot_assets` が別々に焼く形はそのまま。
+- 触るファイル: 案 A＝`placement/mod.rs`（902）・`placement/measure.rs`・`crates/areka/src/ghost_session.rs`（873）・`emo2_boot/mod.rs`（911）・`emo2_boot/assets.rs` と兄弟のテスト（上限の近い 3 本には足さず新しいファイルへ）。案 B＝`placement/measure.rs`・`crates/areka-emo-present/src/shell_target.rs`（757）・要れば `crates/areka-emo-present/src/balloon.rs`（701）・試験の支え `crates/areka/src/mcp/dump_surface_gpu_test_support.rs`。
+- 規模: 案 A なら 10〜14、案 B なら 5〜8 タスク（変わらず）。
+- 先に要るもの: 無し。`extent-element-offset` が先だと「採寸の結果が同じ」の固定が書きやすい（ファイルの重なりは 0）。
+- 同じウェーブに置けない相手: 案 A＝`multi-ghost-runtime`（`placement/mod.rs`・`ghost_session.rs`・`emo2_boot/mod.rs`）・`user-data-root`（`ghost_session.rs` の記憶の置き場の呼び手を直す場合）。案 B＝`balloon-webp-names`（`balloon.rs`）。`extent-element-offset`・`animated-image-import`（合成と読み手）とは 0。`dpi-realign-remembered-chain` とも 0（あちらは `placement/` の `chain_realign.rs`・`chain_finalize.rs`・`spawn.rs`・`persist.rs` と `emo2_boot/frame/`＝`mod.rs`・`measure.rs` に触らない）。
+- 優先度の区分: C（性能の持ち越し・同梱の検体では踏まない）。
+- 要件定義のモデル: Opus（変わらず）。案 A は起動の段取りの順に触れるが、1 本の道の中の順で、並行の新しい設計ではない。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述: 案 A は `multi-ghost-runtime` がゴーストごとに分け直す起動の道と同じ場所を作り直す＝v0.1.0 の中では `multi-ghost-runtime` の後に置くか、当たりの小さい案 B を選ぶ。棚卸㉓の節の `emo2_boot/mod.rs`「912 行」は今 911 行（差し支え無し）。

@@ -241,7 +241,7 @@ fn extent_cycle_warn_fires_with_surface_id() {
 /// アニメの静的不活性（実機第2欠陥の是正・task 11.2）。
 ///
 /// bind id=1400 は pattern0 を持たず index=1 のみ（surface 1412＝閉じ目相当）。build_plan（→derive_ops
-/// →flatten_surface）は index==0 不在ゆえ命令を積まず DEBUG を出す。extent 経路（flatten_extent・:529）は
+/// →flatten_surface）は index==0 不在ゆえ命令を積まず DEBUG を出す。extent 経路（`plan_extent.rs` の flatten_extent）は
 /// サイズ不変契約のため全 bind pattern（min_by_key）を辿るが DEBUG は出さない＝DEBUG は 1 本だけ。
 #[test]
 fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {

@@ -83,3 +83,16 @@ SSP はプロパティの名前の英字の大小を区別しない（`BASEWARE.
 - **優先度の区分**: C（SSP に合わせる持ち越し・ukadoc は黙っている）。出どころは `mcp-get-property` の議題 1 で開発者が「起票して残す」と決めたことなので、A と読む余地もある。潜在の穴を 1 つ含むが、今は害が出ない。
 - **要件定義のモデル**: Opus で足りる（畳む範囲の分かれ目は `mcp-ghost-name-match` の決まりが手本になる）。
 - **見つけた穴・古くなった記述**: `doc/ssp-mcp/survey.md` 7.3 節の 6（「areka の宛先の解決は名前を完全一致で比べ、空文字を省略と同じに扱う」）は `mcp-ghost-name-match` の着地で偽になった（7.4 節には 10-06 の追記があるが 7.3 節には無い）。roadmap の列「プロパティの動く値」の重なる場所に `reader.rs`・`persist/` が載っていない。本文 Constraints の列挙にも `key.rs`・`reader.rs` が無い。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+
+- 前提の変化: 版の段で **v0.1.0** の「止めると困る後続」（書き込みの検査を英字の大小で迂回できる）。C6 の ④ のまま。sylphya は 10-11 から 1 行も変わっていない（`key.rs` 411・`actor.rs` 754〔書き込みの仕分け `classify_set` は 136 行目〕・`reader.rs` 584・`persist/mod.rs` 403・`persist/format.rs` 533）。
+- 触るファイル: 棚卸㉓のとおり。1,000 行に近いファイルは無い。
+- 規模: S〜M（5〜9）のまま。
+- 先に要るもの: なし。
+- 「sylphya だけで重なり 0」を確かめた: 畳む所を名前の解釈と書き込みの仕分け（`key.rs`・`actor.rs`・`reader.rs`）に留めるなら、24 本のどれとも 0。**保存された名前の読み戻しまで畳む（`persist/{mod,format}.rs` を触る）と 0 でなくなる**＝`baseware-root-list`（`persist/` に根の並びの鍵を足す）・`multi-ghost-runtime`（`persist/mod.rs` の `LastGhost`・`LastRunning` を並びにする）・`write-failure-notice`（要れば `persist/mod.rs` の保存の結果）。`crates/areka/src/mcp/get_property_tests.rs`（大文字の名前を 1 つ足すなら）は誰とも重ならない。
+- 推し: 保存の読み戻しは畳まない（書くときは正準の綴り・読む側の解釈で畳む）形を要件で先に選べば、どのウェーブにも単独で入れられる。
+- 優先度の区分: C（SSP に合わせる持ち越し・ukadoc は黙っている）のまま。v0.1.0 では守りの穴として扱う。
+- 要件定義のモデル: Opus のまま（畳む範囲は `mcp-ghost-name-match` の決まりが手本）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: `doc/ssp-mcp/survey.md` の 121 行目（7.3 節の 6「名前を完全一致で比べ、空文字を省略と同じに扱う」）は `mcp-ghost-name-match` の着地で偽のまま＝すぐ直せる。roadmap の列「プロパティの動く値」に `reader.rs`・`persist/` が無い（棚卸㉓のまま）。

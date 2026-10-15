@@ -1,6 +1,6 @@
 //! 先進坑: wintf-winmsg-executor
 //!
-//! 対応本坑 spec: `.kiro/specs/wintf-winmsg-executor/brief.md`
+//! 対応本坑 spec: `.kiro/specs/completed/wintf-winmsg-executor/brief.md`
 //! 一次記録（動機・概要・検証結果）は隣の README.md（3 幕）を正本とする。
 //!
 //! 実行法: `cargo run -p pilot --example wintf-winmsg-executor`

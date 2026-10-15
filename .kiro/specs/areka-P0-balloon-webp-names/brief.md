@@ -68,3 +68,14 @@
 - `.png` の名前だけのバルーン（今の検体の全部）の見え方を 1 画素も変えない。
 - 動く GIF に対応しない裁定（2026-10-04）と、α 付きの絵を正しく使う原則・`.pna` を使わない決まりを動かさない。
 - 規模の見立ては S（4〜7 タスク）。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+- 前提の変化: 版の段で v0.1.0（見た目＝`default-balloon-selfmade` の前）。起票（10-10）から触る所の変更は 0。本文の指し先は今も合う（拡張子の定数・面の番号を取る関数・系列の表は `crates/areka-emo-present/src/balloon.rs`、動く絵の見分けは `crates/areka-emo-atlas/src/decode/sniff.rs`）。
+- 触るファイル: `crates/areka-emo-present/src/balloon.rs`（701 行）・静止画を WIC へ、動く絵を `image` へ回す振り分け `crates/areka-emo-atlas/src/decode.rs`（380 行）と `decode/image_arm.rs`（151 行）・兄弟のテスト・`.webp` の名前の検体（新しいファイル）・`dist/README.txt` と `doc/COMPAT_ARCHITECTURE.md` §8 の 1 行ずつ・台帳の備考。
+- 規模: 4〜7 タスク（変わらず）。
+- 先に要るもの: 無し。後ろで `default-balloon-selfmade`（絵を `.webp` で持つ場合）・`balloon-markers`（版に縛らない列）・`balloon-canon-residue`（いつか）が待つ。
+- 同じウェーブに置けない相手: `placement-measure-bake-once`（案 B を選ぶと `balloon.rs` の `build_balloon_target_from_faces` に上限を渡す口を足す）。ほかの v0.0.3・v0.1.0 とは 0（`animated-image-import` は絵の読み手の `decode` に触らない）。
+- 優先度の区分: A（開発者「画像ファイルなどは現代的なフォーマットにする」）。
+- 要件定義のモデル: Opus（10-15 の基準に当たる所が無い）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述: 本文に要件定義のモデルが書かれていない。議題 3（読み手を替えるとシェルの絵にも効く）は `decode.rs` の振り分けの 1 か所で決まる。
