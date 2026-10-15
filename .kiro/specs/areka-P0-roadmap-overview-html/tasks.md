@@ -121,7 +121,7 @@
   - 完了の姿: 探したコマンドと 0 件の結果、除いた所に残る件数が棚卸の表の末尾に記録されている
   - _Requirements: 8.4_
 
-- [ ] 7. 実物での確かめと仕上げ
+- [x] 7. 実物での確かめと仕上げ
 - [x] 7.1 今の roadmap.md から 1 枚を作り、ブラウザで確かめてコミットする
   - roadmap.md の直し（6.3）をコミットした後に道具を回し、`OK` の行が 8 帯・114 本・警告 0 であること、着手中が C6 の 8 本・完了サマリに無い完了が `package-check-temp-cleanup`・roadmap に無い前提が `status-execution-states` であることを見る（requirements の事実の値。main の取り込みで roadmap.md が動いていれば引き直した値と突き合わせ、差を記録に書く）
   - ネットを使わずに開き、帯の並び・カードの開閉・凡例で 1 つと 2 つのテーマを選んだときの数・解いたときの元の数・完了の場所を見る
@@ -130,7 +130,7 @@
   - _Depends: 4.1, 6.3_
   - _Requirements: 1.1, 2.1, 2.4, 2.5, 3.3, 3.4, 5.3, 5.6, 6.2_
 
-- [ ] 7.2 全体テストを 1 回回す
+- [x] 7.2 全体テストを 1 回回す
   - 整理と道具をすべて入れた後に `tools/test-all.ps1` を 1 回回す（重いので整理のたびには回さない）
   - 完了の姿: 全体テストが `roadmap overview check` を含めて緑で終わり、doc を読むコードとテストが壊れていない
   - _Depends: 5.1, 6.5_
@@ -142,3 +142,4 @@
 - 2.3: 台帳の 1 欄目に spec の名前らしい語が無い行は警告なしで飛ばす（design に鍵が無い）。帯に在れば `not-in-ledger` で見える。帯にも無いと黙って消える残りの危うさは、要るなら design に鍵を足す話（完了の棚卸で判断）。
 - 2.4: 前提の居場所の `band` は、帯に無い帯（name が空）に居れば `""`、roadmap に無ければ `null`。ひな形（3.1）は `""` を `labels.notInBand` で見せ、`null` だけを「roadmap に無い」とする。同じ帯の中で名前が重なっても `duplicate`（`bands 1,1`）を出す（design の「2 つ以上の帯」より厳しいが、カードは増えない）。
 - 7.1（2026-10-16・roadmap.md の中身の印 `e8392795e218`・main の取り込みで roadmap.md は動いていない）: `C:\` から引数なしで回して `OK wrote doc/roadmap-overview-2026-10-15.html (8 band(s), 114 spec(s), 0 warning(s))`・終了コード 0・BOM と CR なし。着手中は C6 の 8 本（baseware-root-list・app-icon・dot-sakura-specimen・mcp-kanade-tools・extent-element-offset・range-choice-tag・collisionex-regions・property-name-case-fold）、完了サマリに無い完了は `package-check-temp-cleanup`、roadmap に無い前提は `status-execution-states` で、requirements の事実の値と一致。ブラウザ（127.0.0.1 の配信・外の物の読み込み 0 件）で、帯 8 本が左から 5/40/11/5/1/28/4/20 本、カードの開閉（開くと台帳の全文）、テーマ 1 つ（タスクトレイ）で 1/0/0/0/0/0/4/0、2 つ（＋シェル内バルーン）で 1/6/0/1/0/0/4/0、解くと元の数、完了の場所は絞り込みの間も 32 行のまま、を確かめた。
+- 7.2（2026-10-16・コミット `f1c9ec26`・始めの未コミットの変更 0）: `tools/test-all.ps1` を 1 回回し、`roadmap overview check` を含む 9 段すべて OK・`all steps green`・終了コード 0（x64 の全体テスト 608 秒）。
