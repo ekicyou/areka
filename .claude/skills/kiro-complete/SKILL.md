@@ -321,7 +321,7 @@ pwsh -NoProfile -File tools/test-all.ps1 -Format -License   # Bash／PowerShell 
 ```
 
 - **必ず `run_in_background` で起動し、完了通知を待つ**（約 19 分・2026-09-24 実測で x64 全テストだけ 838 秒）。前面で回すとツールの時間切れで途中の結果しか残らないうえ、待ち時間に何もできない。起動したらすぐステップ6 へ進む。
-- **段**（末尾の一覧に出る名前は英語）: `add i686 target`（i686 ターゲット導入）→ `build i686 artifacts`（helper・偽 DLL 2 つ）→ `cargo fmt (format)`（`cargo fmt --all`・`-Format`）→ `fmt --check` → `x64 workspace tests`（`--no-fail-fast -j 4`）→ `i686 tests (host-32)` → `crates.io pre-publish check (package only)`（`wintf`・`dola` の公開前の確認）→ `encoding check`（道具の文字コードの判定・`tools/encoding-check.ps1`・約 40 秒）→ `release notes check`（リリースノートの道具の自分の検査・`tools/release-notes.ps1 -SelfTest`）→ `cargo deny check` → `cargo about generate`（この 2 段は `-License`）。
+- **段**（末尾の一覧に出る名前は英語）: `add i686 target`（i686 ターゲット導入）→ `build i686 artifacts`（helper・偽 DLL 2 つ）→ `cargo fmt (format)`（`cargo fmt --all`・`-Format`）→ `fmt --check` → `x64 workspace tests`（`--no-fail-fast -j 4`）→ `i686 tests (host-32)` → `crates.io pre-publish check (package only)`（`wintf`・`dola` の公開前の確認）→ `encoding check`（道具の文字コードの判定・`tools/encoding-check.ps1`・約 40 秒）→ `release notes check`（リリースノートの道具の自分の検査・`tools/release-notes.ps1 -SelfTest`）→ `roadmap overview check`（俯瞰の HTML の道具の自分の検査・`tools/roadmap-overview.ps1 -SelfTest`）→ `cargo deny check` → `cargo about generate`（この 2 段は `-License`）。
 - **Format Gate**: `-Format` が「`cargo fmt --all` で整形 → `--check` で確認」をテストの前の段で行う。整形差分はステップ7 のコミットに取り込む。`cargo fmt` が構文エラーで失敗したら中断して報告する（コンパイルできないコードが残っている）。Rust ワークスペースでないリポジトリはチェックリストに「(整形対象不在により省略)」と注記する。
 - **License Gate**: MIT 配布を守るライセンス健全性ゲート。`-License` がテストの後に直列で回す（テストと同時に回すと rustc がメモリ不足で落ちる）。
   - (a) 汚染ゲート `cargo deny check`: 強コピーレフト（GPL/LGPL/AGPL/MPL 等）や許可外ライセンスの混入を検出する（`deny.toml` があるときだけ意味を持つ）。
@@ -336,7 +336,7 @@ pwsh -NoProfile -File tools/test-all.ps1 -Format -License   # Bash／PowerShell 
 
 #### 並行レーンの規則（必須）
 
-- **触ってよいもの（書き込み可）**: `.kiro/steering/*.md`（roadmap・focus・workflow など）・`doc/ROADMAP.md`・`.claude/skills/**`・完了 spec の文書（`.kiro/specs/completed/{feature-name}/` の中の既存ファイル）・スクラッチパッド（PR 文面の下書き）。
+- **触ってよいもの（書き込み可）**: `.kiro/steering/*.md`（roadmap・focus・workflow など）・`.claude/skills/**`・完了 spec の文書（`.kiro/specs/completed/{feature-name}/` の中の既存ファイル）・スクラッチパッド（PR 文面の下書き）。
 - **触ってはいけないもの**:
   - ソース・テスト・ビルド設定（`crates/**`・`tools/**`・`Cargo.toml`・`Cargo.lock`・`deny.toml`・`about.toml`）——テストの検査対象そのもの。
   - `THIRD-PARTY-NOTICES.md`——スクリプトが最後に書く。
@@ -347,7 +347,7 @@ pwsh -NoProfile -File tools/test-all.ps1 -Format -License   # Bash／PowerShell 
 
 #### 6-1. ROADMAP更新
 
-ロードマップの正本を確認し、完了したSpecが記載されているか判定する（参照タイミングは `.kiro/steering/focus.md`）。`.kiro/steering/workflow.md` がロードマップの正本（areka では `.kiro/steering/roadmap.md`・`doc/ROADMAP.md` はポインタ stub）を定めていればそれに従う。定めが無ければ `doc/ROADMAP.md` を見る。
+ロードマップの正本を確認し、完了したSpecが記載されているか判定する（参照タイミングは `.kiro/steering/focus.md`）。`.kiro/steering/workflow.md` がロードマップの正本（areka では `.kiro/steering/roadmap.md`）を定めていればそれに従う。定めが無ければ `.kiro/steering/roadmap.md` を見る。
 
 **スコープ判定（優先順位）**:
 1. `requirements.md` に明示的なROADMAP項目との紐付け記述がある場合
@@ -409,7 +409,7 @@ git commit -m "chore({feature-name}): 完了の文書更新（ROADMAP・steering
 git diff --name-only <5-1 で控えたコミット> HEAD
 ```
 
-- 許される変更: 並行レーンで触ってよいもの（`.kiro/steering/**`・`doc/ROADMAP.md`・`.claude/skills/**`・`.kiro/specs/completed/{feature-name}/**`）・`THIRD-PARTY-NOTICES.md`・`-Format` の整形による `*.rs` の変更（整形はテストの前の段で行われ、その後のテストが整形後のコードを検査している）。
+- 許される変更: 並行レーンで触ってよいもの（`.kiro/steering/**`・`.claude/skills/**`・`.kiro/specs/completed/{feature-name}/**`）・`THIRD-PARTY-NOTICES.md`・`-Format` の整形による `*.rs` の変更（整形はテストの前の段で行われ、その後のテストが整形後のコードを検査している）。
 - **それ以外が 1 つでもあれば** 7-4 へ（全体テストの回し直し）。
 
 #### 7-4. 回し直し（必要なときだけ）
