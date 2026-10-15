@@ -363,6 +363,7 @@ function Format-Html([string]$Template, [pscustomobject]$Data, [pscustomobject]$
 
 - **呼び方**: `pwsh -NoProfile -File {根}\tools\roadmap-overview.ps1 [-Open]`／`... -SelfTest`。知らない引数は断る（`[CmdletBinding()]`・パラメーターセット `Build`（既定）と `SelfTest`）。
 - **入力**: `$root = Split-Path $PSScriptRoot -Parent` の `.kiro/steering/roadmap.md` だけ（要件 4.1・6.4）。今のフォルダを変えない。
+- **読み方**: 道具が読むファイル（roadmap.md・文言のファイル・ひな形、`-SelfTest` では見本と期待の値も）は、すべて `Read-Lf`（UTF-8 で読み CRLF を LF に）を通す。`.gitattributes` が無く `core.autocrlf=true` の写しでは、入れたファイルが作業の木で CRLF になるため（前例の release-notes の見本も同じ形で緑）。
 - **Source（要件 1.8）**: `updatedAt`＝前置きの `updated_at`。`commit`＝`git -C $root rev-parse HEAD` の先頭 12 字（長さは道具が決める＝リポジトリが育っても同じコミットなら同じ字）。`dirty`＝`git -C $root status --porcelain -- .kiro/steering/roadmap.md` の出力が空でない。git が使えなければ `commit = null`・`dirty = false` とし、`git` の警告を出す。
 - **出力**: `$root/doc/roadmap-overview-{updatedAt}.html` を BOM なしの UTF-8・LF で書く（同じ名前が在れば書き替える・ほかの日付のファイルには触らない・要件 5.3）。
 - **端末（ASCII だけ・要件 4.6・6.3）**: `FAIL strings: ...`／`FAIL template: ...`／`FAIL missing {鍵}`（欠けごとに 1 行）／`WARN ...`（警告ごとに 1 行）／`FAIL write {path}: {理由}`／`OK wrote doc/roadmap-overview-{日付}.html ({帯} band(s), {spec} spec(s), {警告} warning(s))`。帯の数は表の行の数、spec の数は帯に置いたカードの数（「帯に無い」の帯を含む）。
@@ -439,7 +440,7 @@ type DoneItem = { name: string; oneLiner: string; theme: number };
 | Intent | 埋め込まれたデータから、帯・カード・凡例・絞り込み・完了の場所を描く |
 | Requirements | 1.1〜1.8・2.1〜2.5・3.2〜3.5・4.3〜4.5・6.2・6.3 |
 
-- **骨組み**: `<!doctype html>`・`<html lang="ja">`・`<meta charset="utf-8">`・`<meta name="viewport">`・`<style>`（中に書く）・`<script id="roadmap-data" type="application/json">@@ROADMAP_DATA@@</script>`・`<script>`（中に書く）。題（`<title>`）は JS が `labels` から付ける。ひな形は ASCII だけ（矢印などの記号は JS や CSS の逃がし `→`・`\2192` で書く）。
+- **骨組み**: `<!doctype html>`・`<html lang="ja">`・`<meta charset="utf-8">`・`<meta name="viewport">`・`<style>`（中に書く）・`<script id="roadmap-data" type="application/json">@@ROADMAP_DATA@@</script>`・`<script>`（中に書く）。題（`<title>`）は JS が `labels` から付ける。ひな形は ASCII だけ（矢印などの記号は JS や CSS の逃がし `\u2192`・`\2192` で書く）。
 - **頭**: 題・作った元（更新日・コミット・未コミットの注）・警告の件数（0 なら出さない）を、開いてすぐ見える所に出す（要件 1.8）。
 - **帯（要件 1.1〜1.5）**: 帯を左から右へ並べた横の列（1 帯＝幅を決めた 1 列・はみ出す分は横に送る）。帯の頭に版の名前・目標・数（`declared` と `read` が違えば両方を `labels` の書き方で）。小見出しの組は帯の中で小見出しを付けて順に。`chained` のカードの前に `→` を置き、直前のカードを待つと分かるようにする。
 - **カード（要件 1.6・1.7・2.1・2.2・2.5・3.5・4.4・4.5）**: `<details>`。閉じた面（`<summary>`）に名前・テーマの札（色と文字）・一言・段・区分・規模・印（着手中＋ウェーブ名・完了・台帳に無い・ほかの帯）・前提の名前と居場所（帯の名前／完了／roadmap に無い）。開いた面に台帳の何をするか・並び・前提の全文と版の段の注。

@@ -18,7 +18,7 @@
 
 - roadmap.md（main `c670b612`・`updated_at: 2026-10-15`）の「版の段」の表は 8 行（v0.0.3・v0.1.0・v0.2.0・v0.3.0・v0.4.0・いつか・windows-reactor 待ち・版に縛らない）。spec の列は `／` で組に分かれ、組には「動く＝」「配れる＝」「後続: シェル内バルーン＝」のような小見出しが付くものがある。`→` が依存の順、`・` が並び、名前の後ろの括弧書き（中に `〔〕` が入れ子になる）が注、行の末尾の「＝**N 本**」が手書きの数（今は 5＋40＋11＋5＋1＋28＋4＋20 ＝ 114）。
 - 「spec 台帳」の表の列は「spec・段・何をするか・規模・並び・前提・Fable」の 7 つで、114 行。段の列は「優先・区分 A」のように段と区分を 1 つのセルに持つ（今の実数え＝優先 A 33・優先 C 10・その他 A 11・その他 C 37・バグ B 10・据え置き D 12・保留 D 1）。
-- 「テーマ別の決めごと」の各 `###` 節の `#### Specs (dependency order)` には `- [ ] areka-P0-{名前} -- {一言}。Dependencies: {前提}` の形の行が並ぶ（チェック済み `- [x]` は 39 行）。同じ節の `#### Existing Spec Updates` にも `- [ ]`・`- [x]`・`- [→]` の行（29 行）が在るが、これはほかの spec への申し送りで、その節に属する印ではない。台帳の 114 本のうち 30 本は、どの節の `#### Specs (dependency order)` にも載らない（`balloon-canon-residue`・`shiori4-api`・`tick-gate-adoption`・`property-name-case-fold` など。ギャップ分析の数え直し）。節に載るが台帳に無い未完了の spec は 0 本。
+- 「テーマ別の決めごと」の各 `###` 節の `#### Specs (dependency order)` には `- [ ] areka-P0-{名前} -- {一言}。Dependencies: {前提}` の形の行が並ぶ（チェック済み `- [x]` は 34 行。下の `#### Existing Spec Updates` の 5 行は含めない＝設計の段の数え直し）。同じ節の `#### Existing Spec Updates` にも `- [ ]`・`- [x]`・`- [→]` の行（29 行）が在るが、これはほかの spec への申し送りで、その節に属する印ではない。台帳の 114 本のうち 30 本は、どの節の `#### Specs (dependency order)` にも載らない（`balloon-canon-residue`・`shiori4-api`・`tick-gate-adoption`・`property-name-case-fold` など。ギャップ分析の数え直し）。節に載るが台帳に無い未完了の spec は 0 本。
 - 「ウェーブ編成」の表の最初の行が、いま走っているウェーブ C6（8 本）。2 行目以降は「次のウェーブの候補」「ウェーブの外」「保留」で、着手中ではない。
 - 「完了サマリ」の表（列「Wave・完了日・ユニット（PR）・一行要約」）が、最初の耐力壁から C6 の前までの完了をウェーブの順に持つ（＝完了済みのロードマップ）。台帳の前提に出る spec 名のうち `.kiro/specs/completed/` にしか無い 8 本は、7 本がこの表に載り、載らないのは `status-execution-states` の 1 本（W1〜W4 などの行が「…他」と縮めてある）。`#### Specs (dependency order)` の下の `- [x]` の spec も、この表に載らないのは `package-check-temp-cleanup` の 1 本だけ。`roadmap-history.md` は旧 roadmap の凍結の写しと退避の節の地の文で、名前が出ても完了とは限らないので、道具の入力にしない。
 - `tools/release-notes.ps1` が、Markdown から文書を作る PowerShell の道具の前例（文言を `release-notes.strings.json` に外出し・端末へは ASCII だけ・`-SelfTest` を `tools/test-all.ps1` の 1 段として回す・同じ入力からは同じバイト）。リポジトリに入れた生成物を、作り直した物と突き合わせるテストの前例は `doc/ukadoc-coverage/report/`（`crates/ukadoc-survey/tests/consistency/` が古さを赤にする）。
@@ -177,7 +177,7 @@ brief が要件の段へ回した議題 3 つは、下の仮置きで要件を�
 1. When 棚卸の表で「消す」または「`doc/archive/` へ寄せる」と選ばれたファイルを動かす, the 本仕様 shall そのファイルを参照しているコード・テスト・steering（`roadmap-history.md` を除く）・スキル・まだ完了していない spec の文書・残る `doc/` のファイル・リポジトリの根の文書を、同じ変更の中で新しい場所を指すか参照を外す形に直す。
 2. The 本仕様 shall コードかテストがファイルとして読む、または場所の名前を突き合わせる `doc/` のファイル（`doc/ukadoc-coverage/` の全体・`doc/ssp-mcp/tools-list-ssp-2.9.05.json`・`doc/ssp-mcp/log-convention.md`・`doc/release-notes/`・`doc/impl-watch.md`）を消さず、場所も変えない。
 3. The 本仕様 shall 完了した spec の文書（`.kiro/specs/completed/`）と `roadmap-history.md` を書き換えない（どちらも当時の記録で、中の古い場所の名前はそのまま残す）。
-4. When 整理を終える, the 本仕様 shall 動かした各ファイルの元の場所の名前でリポジトリ全体（完了した spec の文書と `roadmap-history.md` を除く）を探し、残った参照が 0 件であることを記録に残す。
+4. When 整理を終える, the 本仕様 shall 動かした各ファイルの元の場所の名前でリポジトリ全体（完了した spec の文書・`roadmap-history.md`・中の名指しを歴史として残すと棚卸の表で決めた `doc/archive/`・移動の記録そのものである本仕様の文書を除く。除いた所に残る件数も記録する）を探し、残った参照が 0 件であることを記録に残す。
 5. When 整理を終える, the 本仕様 shall 全体テストを回し、コードとテストが `doc/` を読む所が壊れていないことを確かめる。
 6. The 本仕様 shall `doc/` の正本の文書（`COMPAT_ARCHITECTURE.md` など、棚卸の表で「残す」とした今の正本）の中身を書き直さない（参照の場所の直しだけは要件 8.1 に従って行う）。
 7. The 本仕様 shall 本仕様の brief と roadmap.md の「ロードマップの俯瞰図と doc の整理」節にある「`doc/shiori/equivalence_evidence.toml` をコードと網羅台帳が読む」という誤った記載を、引き直した事実に合わせて直す。
