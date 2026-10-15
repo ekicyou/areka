@@ -103,7 +103,7 @@
   - 完了の姿: 消した・移したファイルの元の場所を名指す行が、`focus.md` を除く steering・スキル・まだ完了していない spec の文書から無くなる
   - _Requirements: 8.1, 8.2, 8.3, 8.6_
 
-- [ ] 6.3 brief と roadmap.md の誤った記載を直す
+- [x] 6.3 brief と roadmap.md の誤った記載を直す
   - 本仕様の brief と roadmap.md の「ロードマップの俯瞰図と doc の整理」節の「消すと壊れる参照」の項を、引き直した事実（コードとテストが読むのは 4 か所・`doc/shiori/` を読むコードとテストは無い）に直し、roadmap.md のほかの行は触らない（`updated_at` も変えない＝7.1 のファイル名の日付はこの値のまま）
   - 完了の姿: 2 つの文書から `equivalence_evidence.toml` をコードが読むという記載が消え、直しが単独のコミットになっている
   - _Requirements: 8.7_

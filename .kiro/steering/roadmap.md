@@ -1079,7 +1079,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 > 出どころは開発者（2026-10-15）「ちょっとロードマップを視覚的に見たいが、html でロードマップを俯瞰できる資料を作ってもらえないか？ doc フォルダの整理もかねて。これは今作ってくれてもよいし、制作・整理（古い記載の doc を消す）spec を作ってもよい」→ 推し（spec 1 本）を採った「全て推奨で」「俯瞰図 spec を最初に実施する」。
 
 - **分け方**: 作り直せる道具（roadmap.md → 自己完結の HTML）と、`doc/` の古い記載の棚卸・削除を 1 本にした（どちらも「今の姿だけを見せる」ための手入れで、触るのは `tools/`・`doc/`・参照している側だけ）。手書きの HTML を 1 枚置く形は、roadmap が動くたびに古くなるので採らなかった。
-- **消すと壊れる参照**: `doc/shiori/equivalence_evidence.toml` は `crates/ukadoc-survey/src/evidence/resolve.rs` と網羅台帳 `doc/ukadoc-coverage/ledger/shiori.toml` が読む。ほかの参照の一覧は brief の Current State。
+- **消すと壊れる参照**: `doc/` のうちコードとテストが読む（ファイルとして読む・場所の名前を突き合わせる）のは 4 か所＝`doc/ukadoc-coverage/` の全体（`crates/ukadoc-survey/src/io/paths.rs` ほか）・`doc/ssp-mcp/tools-list-ssp-2.9.05.json` と `doc/ssp-mcp/log-convention.md`（areka-mcp と areka のテスト）・`doc/release-notes/`（`tools/release-notes.ps1` と `.github/workflows/release.yml`）・`doc/impl-watch.md`（areka-impl-watch のエラー文とそのテスト）。`doc/shiori/` を読むコードとテストは無い（`crates/ukadoc-survey/src/evidence/resolve.rs:41` は `doc/shiori/fragments/` を doc コメントで名指すだけ・網羅台帳 `doc/ukadoc-coverage/ledger/shiori.toml` の名指しは自由文の注。ただし `areka-P0-shiori4-api` の brief が `doc/shiori/fragments/` を紙の契約の正本と呼ぶ）。ほかの参照の一覧は brief の Current State。
 - **置き場**: 版に縛らない（道具と手入れ）。開発者が最初に着手する。
 
 #### Specs (dependency order)
