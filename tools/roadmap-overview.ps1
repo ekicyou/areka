@@ -12,8 +12,19 @@
           FAIL strings: {理由}                   文言のファイルが読めない・鍵が欠けるか空
     -SelfTest
         自分の検査。判定を 1 つずつ「ok selftest {名前}」か「FAIL selftest {名前}」で印字する。
-          strings  文言のファイルが読めて、markers と labels の鍵がそろい、どれも空でない
-                   （鍵を 1 つ外した写しと、1 つを空にした写しが落ちることも確かめる）
+        判定の番号は design の SelfTest の番号（2 と 7 はひな形と組み立ての判定で、後のタスクで入る）。
+        見本は tools/roadmap-overview-fixture/（roadmap.md＝見本の断片・expected-data.json＝期待の値）。
+          1 strings  文言のファイルが読めて、markers と labels の鍵がそろい、どれも空でない
+                     （鍵を 1 つ外した写しと、1 つを空にした写しが落ちることも確かめる）
+          3 fixture data equals the expected data
+                     見本から作ったデータの JSON（字下げつき・LF・中身の印は 0123456789ab）が期待の値と 1 字違わず同じ
+          4 fixture has no missing and no warning
+          5 fixture broken for {鍵} warns with {鍵} only
+                     見本を 1 か所ずつ壊した文（band-count・not-in-ledger・not-in-band・duplicate・table-columns）が
+                     その警告の鍵だけを出す。壊した文が見本と同じなら落とす
+          6 fixture without {所} of {鍵} is missing {鍵} only
+                     前置きの updated_at と 5 つの節（themes 以外は「節は在るが表が無い」形も）を 1 つずつ外した文が
+                     その欠けの鍵だけを出し、データを作らない（外し方が 10 でなければ「fixture removals cover every missing key」が落ちる）
 
   終了コード: 0 通った／1 文言のファイルが読めない・落ちた判定が在る
 
@@ -585,273 +596,74 @@ if ($SelfTest) {
     }
     Judge 'strings' $caught
 
-    # ---- 共通の割り方（仮の判定。2.5 で見本の判定に置き替えて外す） ----
-    # 日本語の字は文言の目印から組み立てる（このファイルを ASCII に保つ）
-    function Same($Got, [string[]]$Want) { $g = @($Got); $g.Count -eq $Want.Count -and ($g -join "`n") -ceq ($Want -join "`n") }
+    # ---- 3〜6. 見本の読み取り（見本は tools/roadmap-overview-fixture/。中身の印は固定の値） ----
     function Try-Judge([string]$Name, [scriptblock]$Body) { $ok = $false; try { $ok = [bool](& $Body) } catch { }; Judge $Name $ok }
+    $fxDir = Join-Path $PSScriptRoot 'roadmap-overview-fixture'
+    $fixture = Read-Lf (Join-Path $fxDir 'roadmap.md')
+    $expected = Read-Lf (Join-Path $fxDir 'expected-data.json')
     $m = ${strings}?.markers
+    $src = [pscustomobject]@{ blob = '0123456789ab' }
+    function Read-Fixture([string]$Text) { Read-Roadmap $Text $m $src }
+    $base = $null
+    if ($null -ne $m -and $null -ne $fixture) { try { $base = Read-Fixture $fixture } catch { } }
 
-    Try-Judge 'split-row' {
-        (Same (Split-Row '| a | `x|y` | b\|c |') 'a', '`x|y`', 'b|c') -and
-        (Same (Split-Row 'a | b') 'a', 'b') -and
-        (Same (Split-Row '| a | b') 'a', 'b') -and
-        (Same (Split-Row '| a |  |') 'a', '') -and
-        (Same (Split-Row '| a | b\|') 'a', 'b|')
+    # 3. 見本から作ったデータの JSON（字下げつき・LF）が期待の値と 1 字違わず同じ
+    Try-Judge 'fixture data equals the expected data' {
+        $null -ne $expected -and (($base.Data | ConvertTo-Json -Depth 10).Replace("`r`n", "`n") + "`n") -ceq $expected
     }
-    Try-Judge 'split-top' {
-        $o, $c = $m.brackets[0][0], $m.brackets[0][1]
-        $o2, $c2 = $m.brackets[1][0], $m.brackets[1][1]
-        $q, $q2 = $m.brackets[2][0], $m.brackets[2][1]
-        $l, $ch = $m.listSep, $m.chainSep
-        $text = "a$l b$o c$l d$o2$q e$ch f$q2$c2$c$ch ``g$l h$o``$l i"
-        $got = Split-Top $text @($l, $ch) $m | ForEach-Object { "$($_.Sep)|$($_.Text)" }
-        Same $got "|a", "$l| b$o c$l d$o2$q e$ch f$q2$c2$c", "$ch| ``g$l h$o``", "$l| i"
-    }
-    Try-Judge 'get-table' {
-        $lines = '# t', '## Other', '| A | B | C |', '|---|---|---|', '| no | no | no |', '## Sec', 'text',
-                 '| A | B | C |', '|---|---|---|', '| 1 | 2 | 3 |', '| 4 | 5', 'after', '| z | z | z |',
-                 '### sub', '## Empty', 'nothing', '## Next'
-        $t = Get-Table $lines 'Sec'
-        $t.Width -eq 3 -and $t.Rows.Count -eq 2 -and $t.Rows[0].Line -eq 10 -and $t.Rows[1].Line -eq 11 -and
-        (Same $t.Rows[0].Cells '1', '2', '3') -and (Same $t.Rows[1].Cells '4', '5') -and
-        $null -eq (Get-Table $lines 'Empty') -and $null -eq (Get-Table $lines 'Gone') -and
-        (Get-Table $lines 'Other').Rows[0].Cells[0] -ceq 'no'
-    }
-    Try-Judge 'convert-plain' { (ConvertTo-Plain ' **a** `b` c ') -ceq 'a b c' }
-    Try-Judge 'one-liner' {
-        $o, $c = $m.brackets[0][0], $m.brackets[0][1]
-        $q, $q2 = $m.brackets[2][0], $m.brackets[2][1]
-        $e, $dots = $m.sentenceEnd, $m.ellipsis
-        (Get-OneLiner " ab$o x$o y$c z$c **c** ``d``$e tail" $m) -ceq 'ab c d' -and
-        (Get-OneLiner "p$q q$e r$q2 s$e t" $m) -ceq "p$q q$e r$q2 s" -and
-        (Get-OneLiner ('x' * 61) $m) -ceq (('x' * 60) + $dots) -and
-        (Get-OneLiner ('x' * 60) $m) -ceq ('x' * 60)
+    # 4. 見本は欠け 0・警告 0
+    Try-Judge 'fixture has no missing and no warning' {
+        $null -ne $base.Data -and @($base.Missing).Count -eq 0 -and @($base.Warnings).Count -eq 0 -and $base.Data.warningCount -eq 0
     }
 
-    # ---- 版の段の読み方（仮の判定。2.5 で見本の判定に置き替えて外す） ----
-    # 版の段だけを持つ小さな断片。帯 1: 括弧の中の・＝→名前・ファイル名・地の文・最後の深さ 0 の数・数の後ろの名前と括弧の中の数
-    # 帯 2: 小見出し（中に名前）・〔〕の入れ子・／の組・数が無い。帯 3: 数と読んだ数が違う
-    $script:bandFrag = $null
-    if ($null -ne $m) { try {
-        $o, $c = $m.brackets[0][0], $m.brackets[0][1]
-        $o2, $c2 = $m.brackets[1][0], $m.brackets[1][1]
-        $l, $ch, $eq, $g = $m.listSep, $m.chainSep, $m.headSep, $m.groupSep
-        $hon = [string][char]0x672C
-        $script:bandFrag = Get-Bands @(
-            '# t', "$SECTION_PREFIX$($m.secVersions)", 'text', '| v | g | s |', '|---|---|---|',
-            "| **v1** | ``g`` one | ``a-one`` $ch ``areka-P0-b-two``${o}n$l m$eq``z-z``${ch}w$c$l ``c.rs``$l plain$l ``d-four``$eq**3 $hon**. tail ``e-five``$o$eq**7 $hon**$c |",
-            "| v2 | g2 | h``q-q``$o``r-r``$c$eq``f-six``$ch``g-seven``$o$o2 note$c2$c$g ``h-eight`` |",
-            "| v3 | g3 | ``i-nine``$eq**2 $hon** |",
-            '', '## Next') $m
-    } catch { } }
-    function Show-Card($Card) { "$($Card.name)|$($Card.chained)|$($Card.note)" }
-    Try-Judge 'bands-groups' {
-        $b = $script:bandFrag.Bands
-        $b.Count -eq 3 -and (Same ($b | ForEach-Object { "$($_.name)|$($_.goal)|$($_.notInBand)|$(@($_.groups).Count)" }) 'v1|g one|False|1', 'v2|g2|False|2', 'v3|g3|False|1') -and
-        (Same ($b[1].groups[1].cards | ForEach-Object { $_.name }) 'h-eight') -and $null -eq $b[1].groups[1].heading
+    # 5. 見本を 1 か所ずつ壊した文が、決まった警告の鍵だけを出す（壊した文が見本と同じなら空振りなので落とす）。
+    # 壊す所は「いつか」の帯の「`omega-last`＝**1 本**」と、台帳の omega-last の行（行の頭で当てる＝ウェーブの表の名前に当てない）
+    $broken = [ordered]@{}
+    if ($null -ne $m -and $null -ne $fixture) {
+        $l, $eq = $m.listSep, $m.headSep
+        $last = "``omega-last``$eq**1 "
+        $row = "`n| ``omega-last`` |"
+        $broken['band-count']    = $fixture.Replace($last, "``omega-last``$eq**2 ")
+        $broken['not-in-ledger'] = $fixture.Replace($last, "``omega-last``$l ``zz-new``$eq**2 ")
+        $broken['not-in-band']   = $fixture.Replace($row, "`n| ``zz-led`` | t | w | z | o | - | - |$row")
+        $broken['duplicate']     = $fixture.Replace($last, "``omega-last``$l ``alpha-base``$eq**2 ")
+        $broken['table-columns'] = $fixture.Replace($row, "$row x |")
     }
-    Try-Judge 'bands-heading' {
-        $b = $script:bandFrag.Bands
-        $null -eq $b[0].groups[0].heading -and $b[1].groups[0].heading -ceq "hq-q$($m.brackets[0][0])r-r$($m.brackets[0][1])" -and
-        (Same ($b[1].groups[0].cards | ForEach-Object { $_.name }) 'f-six', 'g-seven')
-    }
-    Try-Judge 'bands-chain' {
-        $b = $script:bandFrag.Bands
-        (Same ($b[0].groups[0].cards | ForEach-Object { "$($_.name)|$($_.chained)" }) 'a-one|False', 'b-two|True', 'd-four|False') -and
-        (Same ($b[1].groups[0].cards | ForEach-Object { "$($_.name)|$($_.chained)" }) 'f-six|False', 'g-seven|True')
-    }
-    Try-Judge 'bands-note' {
-        $b = $script:bandFrag.Bands
-        $o, $c = $m.brackets[0][0], $m.brackets[0][1]
-        $o2, $c2 = $m.brackets[1][0], $m.brackets[1][1]
-        (Same ($b[0].groups[0].cards | ForEach-Object { Show-Card $_ }) 'a-one|False|', "b-two|True|${o}n$($m.listSep) m$($m.headSep)z-z$($m.chainSep)w$c", 'd-four|False|') -and
-        $null -eq $b[0].groups[0].cards[0].note -and (Show-Card $b[1].groups[0].cards[1]) -ceq "g-seven|True|$o${o2} note$c2$c"
-    }
-    Try-Judge 'bands-count' {
-        $f = $script:bandFrag
-        (Same ($f.Bands | ForEach-Object { "$($_.declared)|$($_.read)" }) '3|3', '|3', '2|1') -and $null -eq $f.Bands[1].declared -and
-        (Same ($f.Warnings | ForEach-Object { "$($_.Key) $($_.Detail)" }) 'band-count band 2: declared ?, read 3', 'band-count band 3: declared 2, read 1') -and
-        $null -eq (Get-Bands @('## Other', '| a |') $m)
-    }
-
-    # ---- 台帳・テーマ・ウェーブ・完了サマリの読み方（仮の判定。2.5 で見本の判定に置き替えて外す） ----
-    function Show-Names($Names) { @($Names) -join ',' }
-    Try-Judge 'ledger' {
-        $o, $c = $m.brackets[0][0], $m.brackets[0][1]
-        $l = $m.listSep
-        $kubun = [string][char]0x533A + [char]0x5206
-        $f = Get-Ledger @(
-            '# t', "$SECTION_PREFIX$($m.secLedger)$o n$c", '> text', '| s | t | w | z | o | p | f |', '|---|---|---|---|---|---|---|',
-            "| ``a-one``$o``x-x``$c | bug$l $kubun B | what **bold**$o y$c | 5 | ord | ``b-two``$l ``c.rs``$l ``areka-P0-c-three``$o``d-four``$c | - |",
-            "| ``areka-P0-e-five`` | t2 | w2 |",
-            '| plain | x | x | x | x | x | x |',
-            '', '## Next') $m
-        $r = $f.Rows
-        $r.Count -eq 2 -and
-        (Same ($r | ForEach-Object { "$($_.name)|$($_.tier)|$($_.cls)|$($_.size)|$($_.what)|$($_.order)" }) "a-one|bug|B|5|what bold$o y$c|ord", 'e-five|t2|||w2|') -and
-        $r[0].prereq -ceq "b-two$l c.rs$l areka-P0-c-three${o}d-four$c" -and (Show-Names $r[0].prereqs) -ceq 'b-two,c-three' -and
-        $null -eq $r[1].cls -and @($r[1].prereqs).Count -eq 0 -and
-        $null -eq (Get-Ledger @('## Other', '| a |') $m) -and $null -eq (Get-Ledger @("$SECTION_PREFIX$($m.secLedger)", 'no table') $m)
-    }
-    Try-Judge 'themes' {
-        $o, $c = $m.brackets[0][0], $m.brackets[0][1]
-        $e, $ch = $m.sentenceEnd, $m.chainSep
-        $f = Get-Themes @(
-            '# t', "$SECTION_PREFIX$($m.secThemes)", 'text', "### Alpha$o x$c", 'note',
-            '#### Existing Spec Updates', '- [ ] areka-P0-skip-me -- no. Dependencies: none',
-            '#### Specs (dependency order)', '',
-            "- [x] areka-P0-a-one, areka-P0-b-two -- first$e Dependencies: areka-P0-c-three$o areka-P0-z-z$c, areka-P0-d-four",
-            "- [$ch] areka-P0-e-five -- moved Dependencies: none",
-            "### **Beta** two$o y$c", '#### Specs (dependency order)',
-            '- [ ] areka-P0-f-six -- say Dependencies: x then Dependencies: areka-P0-a-one',
-            '### Empty', '#### Existing Spec Updates', '- [x] areka-P0-g-seven -- x',
-            '## Next', '#### Specs (dependency order)', '- [x] areka-P0-h-eight -- out') $m
-        (Same $f.Themes 'Alpha', 'Beta two') -and
-        (Same ($f.Rows | ForEach-Object { "$(Show-Names $_.names)|$($_.done)|$($_.theme)|$($_.source)|$(Show-Names $_.prereqs)" }) `
-            'a-one,b-two|True|0|first|c-three,d-four', 'e-five|False|0|moved|', 'f-six|False|1|say Dependencies: x then|a-one') -and
-        $null -eq (Get-Themes @('## Other', '### x') $m)
-    }
-    Try-Judge 'wave' {
-        $o, $c = $m.brackets[0][0], $m.brackets[0][1]
-        $f = Get-Wave @(
-            "$SECTION_PREFIX$($m.secWaves)", '> x', '| Wave | Units | Cmd | Why |', '|---|---|---|---|',
-            "| **C9**$o 3$c | ``a-one``$o``b-two``$c ``c.rs`` ``areka-P0-c-three`` | x | y |",
-            '| **Next** | `z-z` | x | y |') $m
-        $g = Get-Wave @("$SECTION_PREFIX$($m.secWaves)", '| W | U | C | Y |', '|---|---|---|---|', '| plain `w` | `q-q` | x | y |') $m
-        $f.Name -ceq 'C9' -and (Show-Names $f.Names) -ceq 'a-one,b-two,c-three' -and
-        $g.Name -ceq 'plain w' -and (Show-Names $g.Names) -ceq 'q-q' -and
-        $null -eq (Get-Wave @('## Other', '| a |') $m)
-    }
-    $script:summaryFrag = $null
-    if ($null -ne $m) { try {
-        $o, $c = $m.brackets[0][0], $m.brackets[0][1]
-        $script:summaryFrag = Get-Summary @(
-            "$SECTION_PREFIX$($m.secSummary)$o x$c", '| Wave | D | U | S |', '|---|---|---|---|',
-            '| W1 | 07-01 | `a-one` 23/23 | sum **b** |',
-            "| W2 | 08-01 | ``b-two``$o``x``$c$($m.listSep) ``c-three``${o}PR#1$c | s2",
-            "| W3 | 09-01 | idle$($m.listSep) plain | s3 |",
-            '', '### rel', '| v | d |', '|---|---|', '| `z-z` | x |') $m
-    } catch { } }
-    Try-Judge 'summary' {
-        $r = $script:summaryFrag.Rows
-        (Same ($r | ForEach-Object { "$($_.wave)|$($_.date)|$($_.units)|$($_.summary)|$(Show-Names $_.names)" }) `
-            'W1|07-01|a-one 23/23|sum b|a-one', "W2|08-01|b-two$($m.brackets[0][0])x$($m.brackets[0][1])$($m.listSep) c-three$($m.brackets[0][0])PR#1$($m.brackets[0][1])|s2|b-two,c-three",
-            "W3|09-01|idle$($m.listSep) plain|s3|") -and
-        @($script:summaryFrag.Warnings).Count -eq 0 -and
-        $null -eq (Get-Summary @('## Other', '| a |') $m)
-    }
-    Try-Judge 'table-columns' {
-        $f = Get-Ledger @("$SECTION_PREFIX$($m.secLedger)", '| s | t | w | z | o | p | f |', '|---|---|---|---|---|---|---|',
-                          '| `a-one` | t | w | z | o | p | f |', '| `b-two` | t |', '| `c-three` | t | w | z | o | p | f | extra |') $m
-        $s = Get-Summary @("$SECTION_PREFIX$($m.secSummary)", '| W | D | U | S |', '|---|---|---|---|', '| W1 | 07-01 |') $m
-        (Same ($f.Warnings + $s.Warnings | ForEach-Object { "$($_.Key) $($_.Detail)" }) `
-            'table-columns ledger-table line 5: 2 cell(s), expected 7', 'table-columns ledger-table line 6: 8 cell(s), expected 7',
-            'table-columns summary-table line 4: 2 cell(s), expected 4') -and
-        (Same ($f.Rows | ForEach-Object { "$($_.name)|$($_.tier)|$($_.what)|$($_.prereq)" }) 'a-one|t|w|p', 'b-two|t||', 'c-three|t|w|p') -and
-        $s.Rows[0].units -ceq '' -and $s.Rows[0].summary -ceq ''
-    }
-
-    # ---- 組み立て（仮の判定。2.5 で見本の判定に置き替えて外す） ----
-    # 5 か所と前置きを持つ小さな断片。a-one と b-two は帯 1（→ で連鎖）、c-three は帯 2。
-    # b-two は Specs の行が無い（テーマなし・台帳の文から一言・着手中）。c-three と done-y は - [x]（done-y は帯にも完了サマリにも無い）。
-    # 前提: b-two は帯の a-one と roadmap に無い gone-x、c-three は完了の done-y と帯の b-two
-    $script:readBase = $null
-    if ($null -ne $m) { try {
-        $o, $c = $m.brackets[0][0], $m.brackets[0][1]
-        $l, $ch, $eq, $e = $m.listSep, $m.chainSep, $m.headSep, $m.sentenceEnd
-        $hon = [string][char]0x672C
-        $kubun = [string][char]0x533A + [char]0x5206
-        $script:readBase = @(
-            '---', 'inclusion: manual', 'updated_at: 2026-01-02', '---', '# t',
-            "$SECTION_PREFIX$($m.secVersions)", '| v | g | s |', '|---|---|---|',
-            "| v1 | g1 | ``a-one`` $ch ``b-two``$eq**2 $hon** |",
-            "| v2 | g2 | ``c-three``$eq**1 $hon** |", '',
-            "$SECTION_PREFIX$($m.secLedger)", '| s | t | w | z | o | p | f |', '|---|---|---|---|---|---|---|',
-            "| ``a-one`` | bug$l $kubun B | what a | S | ord | - | - |",
-            "| ``b-two`` | t2 | what b$e more | M | o2 | ``a-one``$l ``gone-x`` | - |",
-            "| ``c-three`` | t3 | what c | L | o3 | ``done-y`` | - |", '',
-            "$SECTION_PREFIX$($m.secThemes)", "### Alpha$o x$c", '#### Specs (dependency order)',
-            "- [ ] areka-P0-a-one -- alpha one$e Dependencies: none",
-            "- [x] areka-P0-done-y, areka-P0-c-three -- fin$e Dependencies: areka-P0-b-two", '',
-            "$SECTION_PREFIX$($m.secWaves)", '| W | U | C | Y |', '|---|---|---|---|', '| **C1** | `b-two` | x | y |', '',
-            "$SECTION_PREFIX$($m.secSummary)", '| W | D | U | S |', '|---|---|---|---|', "| W1 | 01-01 | ``old-z`` | sum one$e more |"
-        ) -join "`n"
-    } catch { } }
-    $script:readSrc = [pscustomobject]@{ blob = '0123456789ab' }
-    function Read-Frag([string]$Text) { Read-Roadmap $Text $m $script:readSrc }
-    function Show-Full($k) {
-        "$($k.name)|$($k.oneLiner)|$($k.theme)|$($k.tier)|$($k.cls)|$($k.size)|$($k.chained)|$($k.note)|$($k.wave)|$($k.done)|$($k.notInLedger)|" +
-        "$(@($k.otherBands) -join ',')|$((@($k.prereqs) | ForEach-Object { "$($_.name)@$($_.band)@$($_.done)" }) -join ',')"
-    }
-    Try-Judge 'read-assemble' {
-        $r = Read-Frag $script:readBase
-        $d = $r.Data
-        $cards = @($d.bands | ForEach-Object { $_.groups } | ForEach-Object { $_.cards })
-        @($r.Missing).Count -eq 0 -and @($r.Warnings).Count -eq 0 -and $d.warningCount -eq 0 -and
-        "$($d.source.updatedAt)|$($d.source.blob)" -ceq '2026-01-02|0123456789ab' -and (Same $d.themes 'Alpha') -and
-        (Same ($d.bands | ForEach-Object { "$($_.name)|$($_.goal)|$($_.declared)|$($_.read)|$($_.notInBand)" }) 'v1|g1|2|2|False', 'v2|g2|1|1|False') -and
-        (Same ($cards | ForEach-Object { Show-Full $_ }) 'a-one|alpha one|0|bug|B|S|False|||False|False||',
-            'b-two|what b|1|t2||M|True||C1|False|False||a-one@v1@False,gone-x@@False',
-            'c-three|fin|0|t3||L|False|||True|False||done-y@@True,b-two@v1@False') -and
-        "$($cards[0].ledger.what)|$($cards[0].ledger.order)|$($cards[0].ledger.prereq)" -ceq 'what a|ord|-' -and
-        (Same ($d.completed.rows | ForEach-Object { "$($_.wave)|$($_.date)|$($_.units)|$($_.oneLiner)" }) 'W1|01-01|old-z|sum one') -and
-        (Same ($d.completed.extra | ForEach-Object { "$($_.name)|$($_.oneLiner)|$($_.theme)" }) 'done-y|fin|0')
-    }
-    Try-Judge 'read-deterministic' {
-        $a = (Read-Frag $script:readBase).Data | ConvertTo-Json -Depth 10 -Compress
-        $b = (Read-Frag $script:readBase).Data | ConvertTo-Json -Depth 10 -Compress
-        # 1 要素の並びも配列のまま（themes・帯 2 の組とカード・otherBands の空）
-        $a -ceq $b -and $a.Contains('"themes":["Alpha"]') -and $a.Contains('"otherBands":[]') -and
-        $a.Contains('"groups":[{"heading":null,"cards":[{"name":"c-three"')
-    }
-    # 1 か所ずつ壊した文が決まった警告の鍵（と Detail）だけを出す。壊した文が元と同じなら落とす
-    function Test-Warn([string]$From, [string]$To, [string]$Want) {
-        $t = $script:readBase.Replace($From, $To)
-        $r = Read-Frag $t
-        $t -cne $script:readBase -and @($r.Missing).Count -eq 0 -and $r.Data.warningCount -eq @($r.Warnings).Count -and
-        (Same ($r.Warnings | ForEach-Object { "$($_.Key) $($_.Detail)" }) $Want)
-    }
-    Try-Judge 'read-warn-band-count' {
-        Test-Warn "$($m.headSep)**2 $([char]0x672C)**" "$($m.headSep)**3 $([char]0x672C)**" 'band-count band 1: declared 3, read 2'
-    }
-    Try-Judge 'read-warn-not-in-ledger' {
-        $hon = [string][char]0x672C
-        (Test-Warn "``c-three``$($m.headSep)**1 $hon**" "``c-three``$($m.listSep) ``q-new``$($m.headSep)**2 $hon**" 'not-in-ledger q-new') -and
-        (Show-Full (Read-Frag $script:readBase.Replace("``c-three``$($m.headSep)**1 $hon**", "``c-three``$($m.listSep) ``q-new``$($m.headSep)**2 $hon**")).Data.bands[1].groups[0].cards[1]) -ceq
-            'q-new||1||||False|||False|True||'
-    }
-    Try-Judge 'read-warn-not-in-band' {
-        $from, $to = '| `c-three` | t3 |', "| ``r-led`` | t | w | z | o | ``c-three`` | - |`n| ``c-three`` | t3 |"
-        $b = (Read-Frag $script:readBase.Replace($from, $to)).Data.bands
-        (Test-Warn $from $to 'not-in-band r-led') -and @($b).Count -eq 3 -and
-        "$($b[2].name)|$($b[2].goal)|$($b[2].declared)|$($b[2].read)|$($b[2].notInBand)|$($b[2].groups[0].heading)" -ceq '|||1|True|' -and
-        (Show-Full $b[2].groups[0].cards[0]) -ceq 'r-led|w|1|t||z|False|||False|False||c-three@v2@True'
-    }
-    Try-Judge 'read-warn-duplicate' {
-        $hon = [string][char]0x672C
-        $from, $to = "``c-three``$($m.headSep)**1 $hon**", "``c-three``$($m.listSep) ``a-one``$($m.headSep)**2 $hon**"
-        $b = (Read-Frag $script:readBase.Replace($from, $to)).Data.bands
-        (Test-Warn $from $to 'duplicate a-one: bands 1,2') -and (Same $b[0].groups[0].cards[0].otherBands 'v2') -and
-        @($b[1].groups[0].cards).Count -eq 1 -and $b[1].read -eq 2
-    }
-    Try-Judge 'read-warn-table-columns' { Test-Warn '| ord | - | - |' '| ord | - | - | x |' 'table-columns ledger-table line 15: 8 cell(s), expected 7' }
-    # 1 か所ずつ外した文が決まった欠けの鍵だけを出し、Data が無い
-    Try-Judge 'read-missing' {
-        $cases = [ordered]@{
-            'updated-at' = @("updated_at: 2026-01-02`n", '')
-            'version-table' = @("$SECTION_PREFIX$($m.secVersions)", "${SECTION_PREFIX}Gone")
-            'ledger-table' = @("$SECTION_PREFIX$($m.secLedger)", "${SECTION_PREFIX}Gone")
-            'themes' = @("$SECTION_PREFIX$($m.secThemes)", "${SECTION_PREFIX}Gone")
-            'wave-table' = @("$SECTION_PREFIX$($m.secWaves)", "${SECTION_PREFIX}Gone")
-            'summary-table' = @("$SECTION_PREFIX$($m.secSummary)", "${SECTION_PREFIX}Gone")
+    foreach ($k in 'band-count', 'not-in-ledger', 'not-in-band', 'duplicate', 'table-columns') {
+        Try-Judge "fixture broken for $k warns with $k only" {
+            $t = $broken[$k]
+            $r = Read-Fixture $t
+            $t -cne $fixture -and @($r.Missing).Count -eq 0 -and $r.Data.warningCount -eq @($r.Warnings).Count -and
+            (@($r.Warnings | ForEach-Object Key) -join ',') -ceq $k
         }
-        $ok = $true
-        foreach ($k in $cases.Keys) {
-            $t = $script:readBase.Replace($cases[$k][0], $cases[$k][1])
-            $r = Read-Frag $t
-            $ok = $ok -and $t -cne $script:readBase -and (Same $r.Missing $k) -and $null -eq $r.Data
+    }
+
+    # 6. 見本から 1 か所ずつ外した文が、決まった欠けの鍵だけを出し、Data が無い。
+    # 節の見出しの行を別の名前に替える（節が無い）か、見出しの直後に別の節を挟む（節は在るが表が無い）。
+    # themes は表を持たない節なので「節が無い」形だけ。外し方は合わせて 10（数が違えば判定は空振りなので落とす）
+    function Edit-Heading([string]$Marker, [scriptblock]$To) {
+        $lines = $fixture.Split("`n")
+        for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i].StartsWith($SECTION_PREFIX + $Marker)) { $lines[$i] = & $To $lines[$i]; break }
         }
-        $ok
+        $lines -join "`n"
+    }
+    $cut = [System.Collections.Generic.List[object]]::new()
+    if ($null -ne $m -and $null -ne $fixture) {
+        $cut.Add(@('updated-at', 'the updated_at line', ([regex]"(?m)^$UPDATED_AT\s*:.*\n").Replace($fixture, '', 1)))
+        $places = [ordered]@{ 'version-table' = $m.secVersions; 'ledger-table' = $m.secLedger; 'themes' = $m.secThemes
+                              'wave-table' = $m.secWaves; 'summary-table' = $m.secSummary }
+        foreach ($k in $places.Keys) {
+            $cut.Add(@($k, 'the section', (Edit-Heading $places[$k] { "${SECTION_PREFIX}gone" })))
+            if ($k -cne 'themes') { $cut.Add(@($k, 'the table', (Edit-Heading $places[$k] { param($h) "$h`n`n${SECTION_PREFIX}gone" }))) }
+        }
+    }
+    Judge 'fixture removals cover every missing key' ($cut.Count -eq 10)
+    foreach ($c in $cut) {
+        Try-Judge "fixture without $($c[1]) of $($c[0]) is missing $($c[0]) only" {
+            $r = Read-Fixture $c[2]
+            $c[2] -cne $fixture -and (@($r.Missing) -join ',') -ceq $c[0] -and $null -eq $r.Data
+        }
     }
 
     if ($script:selfFails) { "selftest: $($script:selfFails) failure(s)"; exit 1 }

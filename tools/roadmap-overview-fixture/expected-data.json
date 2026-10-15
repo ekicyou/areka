@@ -1,0 +1,304 @@
+{
+  "source": {
+    "updatedAt": "2026-01-02",
+    "blob": "0123456789ab"
+  },
+  "themes": [
+    "土台の鎖",
+    "動くゴースト",
+    "いつかの夢"
+  ],
+  "bands": [
+    {
+      "name": "v0.0.3",
+      "goal": "利用者の物が消えない・致命的なバグ",
+      "declared": 3,
+      "read": 3,
+      "notInBand": false,
+      "groups": [
+        {
+          "heading": null,
+          "cards": [
+            {
+              "name": "alpha-base",
+              "oneLiner": "土台の鎖を張る",
+              "theme": 0,
+              "tier": "バグ",
+              "cls": "B",
+              "size": "S（3〜4）",
+              "chained": false,
+              "note": null,
+              "wave": null,
+              "done": false,
+              "notInLedger": false,
+              "otherBands": [],
+              "prereqs": [],
+              "ledger": {
+                "what": "表の欄に a|b と | を書いても割れない。後ろの文",
+                "order": "鎖の 1 本目",
+                "prereq": "なし（eta-old は 07-01 着地）"
+              }
+            },
+            {
+              "name": "beta-next",
+              "oneLiner": "土台の鎖を張る",
+              "theme": 0,
+              "tier": "優先",
+              "cls": "A",
+              "size": "M",
+              "chained": true,
+              "note": "（alpha-base の後・鎖＝1 本目→2 本目）",
+              "wave": "C9",
+              "done": false,
+              "notInLedger": false,
+              "otherBands": [],
+              "prereqs": [
+                {
+                  "name": "alpha-base",
+                  "band": "v0.0.3",
+                  "done": false
+                }
+              ],
+              "ledger": {
+                "what": "鎖の 2 本目を張る",
+                "order": "alpha-base の後",
+                "prereq": "alpha-base・foo.rs"
+              }
+            },
+            {
+              "name": "gamma-fix",
+              "oneLiner": "後続を拾う",
+              "theme": 1,
+              "tier": "優先",
+              "cls": "A",
+              "size": "S",
+              "chained": false,
+              "note": "（〔入れ子・注〕の中＝外）",
+              "wave": null,
+              "done": false,
+              "notInLedger": false,
+              "otherBands": [],
+              "prereqs": [
+                {
+                  "name": "eta-old",
+                  "band": null,
+                  "done": true
+                },
+                {
+                  "name": "ghost-of-past",
+                  "band": null,
+                  "done": false
+                }
+              ],
+              "ledger": {
+                "what": "台帳の文に </script> が在っても HTML が壊れない",
+                "order": "単独",
+                "prereq": "✅ eta-old・ghost-of-past（どこにも無い）"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "v0.1.0",
+      "goal": "よく使われるゴーストが「SSP と同じ」に動く（括弧書き・zeta-check は読まない）",
+      "declared": 4,
+      "read": 4,
+      "notInBand": false,
+      "groups": [
+        {
+          "heading": "動く",
+          "cards": [
+            {
+              "name": "epsilon-run",
+              "oneLiner": "ゴーストを動かす",
+              "theme": 1,
+              "tier": "その他",
+              "cls": "C",
+              "size": "L",
+              "chained": false,
+              "note": null,
+              "wave": null,
+              "done": false,
+              "notInLedger": false,
+              "otherBands": [],
+              "prereqs": [
+                {
+                  "name": "theta-follow",
+                  "band": "v0.1.0",
+                  "done": false
+                },
+                {
+                  "name": "gamma-fix",
+                  "band": "v0.0.3",
+                  "done": false
+                }
+              ],
+              "ledger": {
+                "what": "ゴーストを動かす（台帳の文）",
+                "order": "動くの先頭",
+                "prereq": "−"
+              }
+            },
+            {
+              "name": "zeta-check",
+              "oneLiner": "動きを確かめる",
+              "theme": 1,
+              "tier": "その他",
+              "cls": "C",
+              "size": "S",
+              "chained": true,
+              "note": null,
+              "wave": null,
+              "done": true,
+              "notInLedger": false,
+              "otherBands": [],
+              "prereqs": [
+                {
+                  "name": "epsilon-run",
+                  "band": "v0.1.0",
+                  "done": false
+                },
+                {
+                  "name": "omicron-done",
+                  "band": null,
+                  "done": true
+                }
+              ],
+              "ledger": {
+                "what": "動きを確かめる",
+                "order": "epsilon-run の後",
+                "prereq": "epsilon-run・omicron-done"
+              }
+            }
+          ]
+        },
+        {
+          "heading": "eta-old の後続",
+          "cards": [
+            {
+              "name": "theta-follow",
+              "oneLiner": "後続を拾う",
+              "theme": 1,
+              "tier": "その他",
+              "cls": "C",
+              "size": "M",
+              "chained": false,
+              "note": null,
+              "wave": "C9",
+              "done": false,
+              "notInLedger": false,
+              "otherBands": [],
+              "prereqs": [
+                {
+                  "name": "iota-solo",
+                  "band": "v0.1.0",
+                  "done": false
+                }
+              ],
+              "ledger": {
+                "what": "後続を拾う",
+                "order": "eta-old の後続",
+                "prereq": "areka-P0-iota-solo〔zeta-check は注〕"
+              }
+            },
+            {
+              "name": "iota-solo",
+              "oneLiner": "テーマの行が無い spec の一言は台帳の何をするかから取り、六十字を越える長い文は六十字で切って末尾に省略の印を足して…",
+              "theme": 3,
+              "tier": "据え置き",
+              "cls": null,
+              "size": "M",
+              "chained": false,
+              "note": null,
+              "wave": null,
+              "done": false,
+              "notInLedger": false,
+              "otherBands": [],
+              "prereqs": [],
+              "ledger": {
+                "what": "テーマの行が無い spec の一言は台帳の何をするかから取り、六十字を越える長い文は六十字で切って末尾に省略の印を足して見せる",
+                "order": "単独",
+                "prereq": "−"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "いつか",
+      "goal": "夢",
+      "declared": 1,
+      "read": 1,
+      "notInBand": false,
+      "groups": [
+        {
+          "heading": null,
+          "cards": [
+            {
+              "name": "omega-last",
+              "oneLiner": "やることが無くなってから",
+              "theme": 2,
+              "tier": "保留",
+              "cls": "D",
+              "size": "?",
+              "chained": false,
+              "note": null,
+              "wave": null,
+              "done": false,
+              "notInLedger": false,
+              "otherBands": [],
+              "prereqs": [
+                {
+                  "name": "ghost-of-past",
+                  "band": null,
+                  "done": false
+                }
+              ],
+              "ledger": {
+                "what": "いつかやる",
+                "order": "単独",
+                "prereq": "−"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "completed": {
+    "rows": [
+      {
+        "wave": "耐力壁",
+        "date": "07-01",
+        "units": "eta-old",
+        "summary": "x64→32bit 駆動 GO",
+        "oneLiner": "x64→32bit 駆動 GO"
+      },
+      {
+        "wave": "W1〜W4",
+        "date": "〜07-29",
+        "units": "idle-talk／sylphya 他",
+        "summary": "増分ウェーブ全完走（括弧の中。は切らない）。後ろの文は一言に入らない",
+        "oneLiner": "増分ウェーブ全完走"
+      },
+      {
+        "wave": "W5",
+        "date": "08-01",
+        "units": "mu-done（PR#97）・nu-done（omicron-done の前・PR#98）",
+        "summary": "M-dialogue 完走",
+        "oneLiner": "M-dialogue 完走"
+      }
+    ],
+    "extra": [
+      {
+        "name": "kappa-gone",
+        "oneLiner": "着地済みで完了サマリに無い",
+        "theme": 0
+      }
+    ]
+  },
+  "warningCount": 0
+}
