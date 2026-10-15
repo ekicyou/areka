@@ -26,6 +26,10 @@
     ONE_LINER_MAX カードの一言の上限の字数（越えれば切って「…」を足す）
     SPEC_PREFIX   spec 名の頭（外してから SPEC_NAME に当てる）
     SPEC_NAME     spec 名に見える語に当てる正規表現（当たらないバッククォートの語はファイル名などとして読み飛ばす）
+    THEME_SPECS   テーマの節で読む #### 見出し（ほかの #### の下、Existing Spec Updates などは読まない）
+    THEME_ROW_SEP テーマの行の名前の並びと残りの区切り
+    THEME_NAME_SEP テーマの行の名前の並びの区切り
+    THEME_DEPS    テーマの行の残りの、一言の元と前提の文の区切り（最後のもの）
 
 .PARAMETER Open
   書けたときだけ、作った HTML を OS の既定のアプリ（ブラウザ）で開く。
@@ -63,6 +67,10 @@ $TABLE_RULE     = '^\|\s*:?-'
 $ONE_LINER_MAX  = 60
 $SPEC_PREFIX    = 'areka-P0-'
 $SPEC_NAME      = '^[a-z0-9]+(-[a-z0-9]+)+$'
+$THEME_SPECS    = '#### Specs (dependency order)'
+$THEME_ROW_SEP  = ' -- '
+$THEME_NAME_SEP = ', '
+$THEME_DEPS     = 'Dependencies:'
 
 $root = Split-Path $PSScriptRoot -Parent
 
@@ -203,6 +211,42 @@ function Get-SpecName([string]$Word) {
     $w -cmatch $SPEC_NAME ? $w : $null
 }
 
+# 文の中のバッククォートの語のうち spec 名に見えるものを、出る順に返す（頭の SPEC_PREFIX は外す）
+function Get-CodeNames([string]$Text) {
+    @([regex]::Matches($Text, '`([^`]*)`') | ForEach-Object { Get-SpecName $_.Groups[1].Value } | Where-Object { $_ })
+}
+
+# 括弧の組（markers.brackets）の中を入れ子ごと外した、深さ 0 の文。
+# バッククォートの中は塊として残し、中の括弧は数えない
+function Get-TopText([string]$Text, [pscustomobject]$Markers) {
+    $opens = @($Markers.brackets | ForEach-Object { [string]$_[0] })
+    $closes = @($Markers.brackets | ForEach-Object { [string]$_[1] })
+    $sb = [System.Text.StringBuilder]::new()
+    $depth = 0
+    $inCode = $false
+    foreach ($c in $Text.ToCharArray()) {
+        $ch = [string]$c
+        if ($ch -eq '`') { $inCode = -not $inCode }
+        elseif (-not $inCode) {
+            if ($opens -ccontains $ch) { $depth++; continue }
+            if ($closes -ccontains $ch) { if ($depth -gt 0) { $depth-- }; continue }
+        }
+        if ($depth -eq 0) { [void]$sb.Append($ch) }
+    }
+    $sb.ToString()
+}
+
+# 表の行の欄を、見出し行の欄の数（$Width）の長さ以上にそろえて返す。数が違えば table-columns の警告を
+# $Warnings へ足す（足りない欄は空として読む・余りの欄は残す）。$Key は表の鍵（version-table など）
+function Get-Cells($Row, [int]$Width, [string]$Key, $Warnings) {
+    $cells = [string[]]$Row.Cells
+    if ($cells.Count -ne $Width) {
+        $Warnings.Add([pscustomobject]@{ Key = 'table-columns'; Detail = "$Key line $($Row.Line): $($cells.Count) cell(s), expected $Width" })
+    }
+    if ($cells.Count -lt $Width) { $cells = [string[]](@($cells) + @('') * ($Width - $cells.Count)) }
+    $cells
+}
+
 # 版の段の表を帯の並びに読む。節か表が無ければ $null（欠け version-table は呼ぶ側が出す）。
 # 返り値 @{ Bands = 帯（表の行の順）; Warnings = band-count の警告 }。カードは名前・連鎖・注だけを持つ
 # （ほかの欄は台帳とテーマを読んだ後の組み立てで足す）
@@ -214,8 +258,8 @@ function Get-Bands([string[]]$Lines, [pscustomobject]$Markers) {
     $bands = [System.Collections.Generic.List[object]]::new()
     $warnings = [System.Collections.Generic.List[object]]::new()
     foreach ($row in $table.Rows) {
-        $cell = { param($k) $k -lt $row.Cells.Count ? $row.Cells[$k] : '' }
-        $spec = & $cell 2
+        $cells = Get-Cells $row $table.Width 'version-table' $warnings
+        $spec = $cells[2]
         # 深さ 0 の字の印（括弧の組とバッククォートの中は深さ 0 にしない）
         $top = [bool[]]::new($spec.Length)
         $depth = 0; $inCode = $false
@@ -261,7 +305,7 @@ function Get-Bands([string[]]$Lines, [pscustomobject]$Markers) {
             $groups.Add([pscustomobject][ordered]@{ heading = $heading; cards = [object[]]$cards })
         }
         $bands.Add([pscustomobject][ordered]@{
-            name = ConvertTo-Plain (& $cell 0); goal = ConvertTo-Plain (& $cell 1)
+            name = ConvertTo-Plain $cells[0]; goal = ConvertTo-Plain $cells[1]
             declared = $declared; read = $read; notInBand = $false; groups = [object[]]$groups
         })
         if ($declared -ne $read) {
@@ -269,6 +313,111 @@ function Get-Bands([string[]]$Lines, [pscustomobject]$Markers) {
         }
     }
     [pscustomobject]@{ Bands = [object[]]$bands; Warnings = [object[]]$warnings }
+}
+
+# spec 台帳の表を行の並びに読む。節か表が無ければ $null（欠け ledger-table は呼ぶ側が出す）。
+# 7 欄＝spec・段・何をするか・規模・並び・前提・Fable。1 欄目に spec 名に見えるバッククォートの語が無い行は読まない。
+# 返り値 @{ Rows = @{ name; tier; cls; size; what; order; prereq（前提の全文の地の文）; prereqs（深さ 0 の名前） }; Warnings }
+function Get-Ledger([string[]]$Lines, [pscustomobject]$Markers) {
+    $table = Get-Table $Lines $Markers.secLedger
+    if ($null -eq $table) { return $null }
+    $rows = [System.Collections.Generic.List[object]]::new()
+    $warnings = [System.Collections.Generic.List[object]]::new()
+    foreach ($row in $table.Rows) {
+        $c = Get-Cells $row $table.Width 'ledger-table' $warnings
+        # 1 欄目の最初のバッククォートの語だけを名前と見る（2 つ目以降の語は注）
+        $first = [regex]::Match($c[0], '`([^`]*)`')
+        $name = $first.Success ? (Get-SpecName $first.Groups[1].Value) : $null
+        if ($null -eq $name) { continue }
+        $cls = [regex]::Match($c[1], $Markers.classRegex)
+        $rows.Add([pscustomobject][ordered]@{
+            name = $name
+            tier = ConvertTo-Plain (Split-Top $c[1] @($Markers.listSep) $Markers)[0].Text
+            cls = $cls.Success ? $cls.Groups[1].Value : $null
+            size = ConvertTo-Plain $c[3]; what = ConvertTo-Plain $c[2]; order = ConvertTo-Plain $c[4]
+            prereq = ConvertTo-Plain $c[5]; prereqs = [string[]]@(Get-CodeNames (Get-TopText $c[5] $Markers))
+        })
+    }
+    [pscustomobject]@{ Rows = [object[]]$rows; Warnings = [object[]]$warnings }
+}
+
+# テーマ別の決めごとの節を読む。節が無ければ $null（欠け themes は呼ぶ側が出す）。
+# ### 見出しごとに、THEME_SPECS の #### の下の「- [{印}] {名前の並び} -- {残り}」の行だけを読む。
+# 返り値 @{ Themes = Specs の行を 1 つ以上持つ見出しの名前（出る順）; Rows = @{ names; done; theme（Themes の添字）;
+#   source（一言の元）; prereqs（前提の文の深さ 0 の SPEC_PREFIX 付きの名前） } }
+function Get-Themes([string[]]$Lines, [pscustomobject]$Markers) {
+    $start = -1
+    for ($i = 0; $i -lt $Lines.Count; $i++) {
+        if ($Lines[$i].StartsWith($SECTION_PREFIX + $Markers.secThemes)) { $start = $i; break }
+    }
+    if ($start -lt 0) { return $null }
+    $themes = [System.Collections.Generic.List[string]]::new()
+    $rows = [System.Collections.Generic.List[object]]::new()
+    $heading = ''
+    $theme = -1
+    $inSpecs = $false
+    $prefixed = [regex]::Escape($SPEC_PREFIX) + '([a-z0-9]+(?:-[a-z0-9]+)*)'
+    for ($i = $start + 1; $i -lt $Lines.Count -and -not $Lines[$i].StartsWith($SECTION_PREFIX); $i++) {
+        $line = $Lines[$i]
+        if ($line.StartsWith('### ')) {
+            $h = $line.Substring(4)
+            $cut = $h.IndexOf($Markers.themeCut)
+            $heading = ConvertTo-Plain ($cut -ge 0 ? $h.Substring(0, $cut) : $h)
+            $theme = -1; $inSpecs = $false; continue
+        }
+        if ($line.StartsWith('#### ')) { $inSpecs = $line.TrimEnd() -ceq $THEME_SPECS; continue }
+        if (-not $inSpecs -or $line -notmatch '^- \[(.)\]\s*(.*)$') { continue }
+        $mark, $body = $Matches[1], $Matches[2]
+        $sep = $body.IndexOf($THEME_ROW_SEP)
+        $list, $rest = $sep -ge 0 ? @($body.Substring(0, $sep), $body.Substring($sep + $THEME_ROW_SEP.Length)) : @($body, '')
+        $d = $rest.LastIndexOf($THEME_DEPS)
+        $source, $deps = $d -ge 0 ? @($rest.Substring(0, $d), $rest.Substring($d + $THEME_DEPS.Length)) : @($rest, '')
+        $source = $source.Trim()
+        if ($source.EndsWith($Markers.sentenceEnd)) { $source = $source.Substring(0, $source.Length - $Markers.sentenceEnd.Length).TrimEnd() }
+        if ($theme -lt 0) { $themes.Add($heading); $theme = $themes.Count - 1 }
+        $rows.Add([pscustomobject][ordered]@{
+            names = [string[]]@($list -split [regex]::Escape($THEME_NAME_SEP) | ForEach-Object { Get-SpecName $_.Trim() } | Where-Object { $_ })
+            done = $mark -ceq 'x'; theme = $theme; source = $source
+            prereqs = [string[]]@([regex]::Matches((Get-TopText $deps $Markers), $prefixed) |
+                ForEach-Object { Get-SpecName $_.Value } | Where-Object { $_ })
+        })
+    }
+    [pscustomobject]@{ Themes = [string[]]$themes; Rows = [object[]]$rows }
+}
+
+# ウェーブ編成の表の最初の行（いま走っているウェーブ）を読む。節か表が無ければ $null（欠け wave-table は呼ぶ側が出す）。
+# 返り値 @{ Name = 1 欄目の最初の **…** の中（無ければ欄の地の文・行が無ければ $null）; Names = 2 欄目の spec 名; Warnings }
+function Get-Wave([string[]]$Lines, [pscustomobject]$Markers) {
+    $table = Get-Table $Lines $Markers.secWaves
+    if ($null -eq $table) { return $null }
+    $warnings = [System.Collections.Generic.List[object]]::new()
+    $name = $null
+    $names = [string[]]@()
+    if ($table.Rows.Count) {
+        $c = Get-Cells $table.Rows[0] $table.Width 'wave-table' $warnings
+        $bold = [regex]::Match($c[0], '\*\*(.+?)\*\*')
+        $name = ConvertTo-Plain ($bold.Success ? $bold.Groups[1].Value : $c[0])
+        $names = [string[]]@(Get-CodeNames $c[1])
+    }
+    [pscustomobject]@{ Name = $name; Names = $names; Warnings = [object[]]$warnings }
+}
+
+# 完了サマリの節の最初の表を読む（節の後の別の表は読まない）。節か表が無ければ $null（欠け summary-table は呼ぶ側が出す）。
+# 4 欄＝Wave・完了日・ユニット（PR）・一行要約。返り値 @{ Rows = @{ wave; date; units; summary（地の文）;
+#   names（ユニットの欄の、深さを問わないバッククォートの spec 名＝完了） }; Warnings }
+function Get-Summary([string[]]$Lines, [pscustomobject]$Markers) {
+    $table = Get-Table $Lines $Markers.secSummary
+    if ($null -eq $table) { return $null }
+    $rows = [System.Collections.Generic.List[object]]::new()
+    $warnings = [System.Collections.Generic.List[object]]::new()
+    foreach ($row in $table.Rows) {
+        $c = Get-Cells $row $table.Width 'summary-table' $warnings
+        $rows.Add([pscustomobject][ordered]@{
+            wave = ConvertTo-Plain $c[0]; date = ConvertTo-Plain $c[1]; units = ConvertTo-Plain $c[2]
+            summary = ConvertTo-Plain $c[3]; names = [string[]]@(Get-CodeNames $c[2])
+        })
+    }
+    [pscustomobject]@{ Rows = [object[]]$rows; Warnings = [object[]]$warnings }
 }
 
 if ($SelfTest) {
@@ -379,6 +528,83 @@ if ($SelfTest) {
         (Same ($f.Bands | ForEach-Object { "$($_.declared)|$($_.read)" }) '3|3', '|3', '2|1') -and $null -eq $f.Bands[1].declared -and
         (Same ($f.Warnings | ForEach-Object { "$($_.Key) $($_.Detail)" }) 'band-count band 2: declared ?, read 3', 'band-count band 3: declared 2, read 1') -and
         $null -eq (Get-Bands @('## Other', '| a |') $m)
+    }
+
+    # ---- 台帳・テーマ・ウェーブ・完了サマリの読み方（仮の判定。2.5 で見本の判定に置き替えて外す） ----
+    function Show-Names($Names) { @($Names) -join ',' }
+    Try-Judge 'ledger' {
+        $o, $c = $m.brackets[0][0], $m.brackets[0][1]
+        $l = $m.listSep
+        $kubun = [string][char]0x533A + [char]0x5206
+        $f = Get-Ledger @(
+            '# t', "$SECTION_PREFIX$($m.secLedger)$o n$c", '> text', '| s | t | w | z | o | p | f |', '|---|---|---|---|---|---|---|',
+            "| ``a-one``$o``x-x``$c | bug$l $kubun B | what **bold**$o y$c | 5 | ord | ``b-two``$l ``c.rs``$l ``areka-P0-c-three``$o``d-four``$c | - |",
+            "| ``areka-P0-e-five`` | t2 | w2 |",
+            '| plain | x | x | x | x | x | x |',
+            '', '## Next') $m
+        $r = $f.Rows
+        $r.Count -eq 2 -and
+        (Same ($r | ForEach-Object { "$($_.name)|$($_.tier)|$($_.cls)|$($_.size)|$($_.what)|$($_.order)" }) "a-one|bug|B|5|what bold$o y$c|ord", 'e-five|t2|||w2|') -and
+        $r[0].prereq -ceq "b-two$l c.rs$l areka-P0-c-three${o}d-four$c" -and (Show-Names $r[0].prereqs) -ceq 'b-two,c-three' -and
+        $null -eq $r[1].cls -and @($r[1].prereqs).Count -eq 0 -and
+        $null -eq (Get-Ledger @('## Other', '| a |') $m) -and $null -eq (Get-Ledger @("$SECTION_PREFIX$($m.secLedger)", 'no table') $m)
+    }
+    Try-Judge 'themes' {
+        $o, $c = $m.brackets[0][0], $m.brackets[0][1]
+        $e, $ch = $m.sentenceEnd, $m.chainSep
+        $f = Get-Themes @(
+            '# t', "$SECTION_PREFIX$($m.secThemes)", 'text', "### Alpha$o x$c", 'note',
+            '#### Existing Spec Updates', '- [ ] areka-P0-skip-me -- no. Dependencies: none',
+            '#### Specs (dependency order)', '',
+            "- [x] areka-P0-a-one, areka-P0-b-two -- first$e Dependencies: areka-P0-c-three$o areka-P0-z-z$c, areka-P0-d-four",
+            "- [$ch] areka-P0-e-five -- moved Dependencies: none",
+            "### **Beta** two$o y$c", '#### Specs (dependency order)',
+            '- [ ] areka-P0-f-six -- say Dependencies: x then Dependencies: areka-P0-a-one',
+            '### Empty', '#### Existing Spec Updates', '- [x] areka-P0-g-seven -- x',
+            '## Next', '#### Specs (dependency order)', '- [x] areka-P0-h-eight -- out') $m
+        (Same $f.Themes 'Alpha', 'Beta two') -and
+        (Same ($f.Rows | ForEach-Object { "$(Show-Names $_.names)|$($_.done)|$($_.theme)|$($_.source)|$(Show-Names $_.prereqs)" }) `
+            'a-one,b-two|True|0|first|c-three,d-four', 'e-five|False|0|moved|', 'f-six|False|1|say Dependencies: x then|a-one') -and
+        $null -eq (Get-Themes @('## Other', '### x') $m)
+    }
+    Try-Judge 'wave' {
+        $o, $c = $m.brackets[0][0], $m.brackets[0][1]
+        $f = Get-Wave @(
+            "$SECTION_PREFIX$($m.secWaves)", '> x', '| Wave | Units | Cmd | Why |', '|---|---|---|---|',
+            "| **C9**$o 3$c | ``a-one``$o``b-two``$c ``c.rs`` ``areka-P0-c-three`` | x | y |",
+            '| **Next** | `z-z` | x | y |') $m
+        $g = Get-Wave @("$SECTION_PREFIX$($m.secWaves)", '| W | U | C | Y |', '|---|---|---|---|', '| plain `w` | `q-q` | x | y |') $m
+        $f.Name -ceq 'C9' -and (Show-Names $f.Names) -ceq 'a-one,b-two,c-three' -and
+        $g.Name -ceq 'plain w' -and (Show-Names $g.Names) -ceq 'q-q' -and
+        $null -eq (Get-Wave @('## Other', '| a |') $m)
+    }
+    $script:summaryFrag = $null
+    if ($null -ne $m) { try {
+        $o, $c = $m.brackets[0][0], $m.brackets[0][1]
+        $script:summaryFrag = Get-Summary @(
+            "$SECTION_PREFIX$($m.secSummary)$o x$c", '| Wave | D | U | S |', '|---|---|---|---|',
+            '| W1 | 07-01 | `a-one` 23/23 | sum **b** |',
+            "| W2 | 08-01 | ``b-two``$o``x``$c$($m.listSep) ``c-three``${o}PR#1$c | s2",
+            "| W3 | 09-01 | idle$($m.listSep) plain | s3 |",
+            '', '### rel', '| v | d |', '|---|---|', '| `z-z` | x |') $m
+    } catch { } }
+    Try-Judge 'summary' {
+        $r = $script:summaryFrag.Rows
+        (Same ($r | ForEach-Object { "$($_.wave)|$($_.date)|$($_.units)|$($_.summary)|$(Show-Names $_.names)" }) `
+            'W1|07-01|a-one 23/23|sum b|a-one', "W2|08-01|b-two$($m.brackets[0][0])x$($m.brackets[0][1])$($m.listSep) c-three$($m.brackets[0][0])PR#1$($m.brackets[0][1])|s2|b-two,c-three",
+            "W3|09-01|idle$($m.listSep) plain|s3|") -and
+        @($script:summaryFrag.Warnings).Count -eq 0 -and
+        $null -eq (Get-Summary @('## Other', '| a |') $m)
+    }
+    Try-Judge 'table-columns' {
+        $f = Get-Ledger @("$SECTION_PREFIX$($m.secLedger)", '| s | t | w | z | o | p | f |', '|---|---|---|---|---|---|---|',
+                          '| `a-one` | t | w | z | o | p | f |', '| `b-two` | t |', '| `c-three` | t | w | z | o | p | f | extra |') $m
+        $s = Get-Summary @("$SECTION_PREFIX$($m.secSummary)", '| W | D | U | S |', '|---|---|---|---|', '| W1 | 07-01 |') $m
+        (Same ($f.Warnings + $s.Warnings | ForEach-Object { "$($_.Key) $($_.Detail)" }) `
+            'table-columns ledger-table line 5: 2 cell(s), expected 7', 'table-columns ledger-table line 6: 8 cell(s), expected 7',
+            'table-columns summary-table line 4: 2 cell(s), expected 4') -and
+        (Same ($f.Rows | ForEach-Object { "$($_.name)|$($_.tier)|$($_.what)|$($_.prereq)" }) 'a-one|t|w|p', 'b-two|t||', 'c-three|t|w|p') -and
+        $s.Rows[0].units -ceq '' -and $s.Rows[0].summary -ceq ''
     }
 
     if ($script:selfFails) { "selftest: $($script:selfFails) failure(s)"; exit 1 }
