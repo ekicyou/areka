@@ -96,7 +96,7 @@ Last line: "briefs written: N/N".
 3. Sort heads by descendant count desc → class A > B > C > D → older filing date (higher in the roadmap).
 4. Greedily take heads from the top whose touched files do not overlap any already-taken head; stop at 8.
 5. For every chosen spec write its touched files and the **same-wave promises** (files it must not touch). List the heads not chosen with one-line reasons, and outline the following wave's candidates.
-6. Model per chosen spec from the re-measurement (Opus by default; Fable only with the criterion named per Step 3 (6) — re-check old ○ marks against it, they predate 2026-10-15).
+6. Model per chosen spec from the re-measurement (Opus by default; Fable only with the criterion named per Step 3 (6)).
 
 ## Step 7 — Write the roadmap (one script)
 Do all roadmap edits in one Python script in the scratch directory (read with `newline=''`, split on `\r\n`, assert every anchor/replace target exists):
