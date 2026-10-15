@@ -60,6 +60,6 @@ arekaアルファリリースロードマップと`.kiro/specs/`配下の仕様�
 📍 `.kiro/steering/roadmap.md` … **ロードマップ正本**（kiro 標準テンプレート・`inclusion: manual` で非常駐。`/kiro-discovery` 再入・`/kiro-spec-batch` が標準パスで参照）
 📍 `.kiro/specs/*/spec.json` … 各仕様の phase/approvals（件数は配置フォルダ基準で数える）
 📍 `doc/COMPAT_ARCHITECTURE.md` … 設計判断の正本
-📍 `doc/ROADMAP.md` … 旧パスのポインタ stub（正本は steering/roadmap.md）
+📍 `doc/README.md` … `doc/` の案内（俯瞰の HTML の作り方と開き方・今も効く文書と歴史の書き分け）
 📍 `.kiro/steering/two-tunnel.md` … 二坑モデル規律の正本（`inclusion: manual` で非常駐）
 📍 roadmap.md「エンジン固有名」節 … 7エンジン⓪〜⑥の固有名正本（**ghost / shiori / parsers / kanade / sakura / seriko / emo**・2026-07-02 確定）
