@@ -12,10 +12,12 @@
           FAIL strings: {理由}                   文言のファイルが読めない・鍵が欠けるか空
     -SelfTest
         自分の検査。判定を 1 つずつ「ok selftest {名前}」か「FAIL selftest {名前}」で印字する。
-        判定の番号は design の SelfTest の番号（2 と 7 はひな形と組み立ての判定で、後のタスクで入る）。
+        判定の番号は design の SelfTest の番号。
         見本は tools/roadmap-overview-fixture/（roadmap.md＝見本の断片・expected-data.json＝期待の値）。
           1 strings  文言のファイルが読めて、markers と labels の鍵がそろい、どれも空でない
                      （鍵を 1 つ外した写しと、1 つを空にした写しが落ちることも確かめる）
+          2 template ひな形（TEMPLATE_FILE）が約束を守る: 差し込み口がちょうど 1 つ・CHARSET を持つ・
+                     EXTERNAL に当たる書き方が無い・ASCII だけ（1 か所ずつ崩した写しがその約束だけで落ちることも確かめる）
           3 fixture data equals the expected data
                      見本から作ったデータの JSON（字下げつき・LF・中身の印は 0123456789ab）が期待の値と 1 字違わず同じ
           4 fixture has no missing and no warning
@@ -25,6 +27,8 @@
           6 fixture without {所} of {鍵} is missing {鍵} only
                      前置きの updated_at と 5 つの節（themes 以外は「節は在るが表が無い」形も）を 1 つずつ外した文が
                      その欠けの鍵だけを出し、データを作らない（外し方が 10 でなければ「fixture removals cover every missing key」が落ちる）
+          7 fixture html is the same twice and escapes the script end tag
+                     見本から 2 回作った HTML が 1 字違わず同じで、台帳の文の </script> が JSON の逃がしになっている
 
   終了コード: 0 通った／1 文言のファイルが読めない・落ちた判定が在る
 
@@ -43,6 +47,10 @@
     THEME_DEPS    テーマの行の残りの、一言の元と前提の文の区切り（最後のもの）
     FRONT_MATTER  先頭の前置きの区切りの行
     UPDATED_AT    前置きの更新日の鍵（値は YYYY-MM-DD。無ければ欠け updated-at）
+    TEMPLATE_FILE HTML・CSS・JS のひな形（このスクリプトと同じフォルダ）
+    PLACEHOLDER   ひな形のデータの差し込み口
+    CHARSET       ひな形が持つ文字コードの宣言
+    EXTERNAL      ひな形に在ってはならない、外の物を読む書き方に当てる正規表現
 
 .PARAMETER Open
   書けたときだけ、作った HTML を OS の既定のアプリ（ブラウザ）で開く。
@@ -86,6 +94,10 @@ $THEME_NAME_SEP = ', '
 $THEME_DEPS     = 'Dependencies:'
 $FRONT_MATTER   = '---'
 $UPDATED_AT     = 'updated_at'
+$TEMPLATE_FILE  = 'roadmap-overview.template.html'
+$PLACEHOLDER    = '@@ROADMAP_DATA@@'
+$CHARSET        = '<meta charset="utf-8">'
+$EXTERNAL       = '(?i)<script\b[^>]*\ssrc\s*=|<link\b|@import|url\(|https?://'
 
 $root = Split-Path $PSScriptRoot -Parent
 
@@ -125,6 +137,23 @@ function Read-Strings {
     $bad = @(Test-Strings $s)
     if ($bad.Count) { throw "missing or empty key(s) in tools/${STRINGS_FILE}: $($bad -join ', ')" }
     $s
+}
+
+# ひな形の約束の破れを鍵（placeholder・charset・external・ascii）で全部返す（空なら通った）。
+# 差し込み口がちょうど 1 つ・文字コードの宣言が在る・外の物を読む書き方が無い・ASCII だけ
+function Test-Template([string]$Template) {
+    if (([regex]::Matches($Template, [regex]::Escape($PLACEHOLDER))).Count -ne 1) { 'placeholder' }
+    if (-not $Template.Contains($CHARSET)) { 'charset' }
+    if ($Template -match $EXTERNAL) { 'external' }
+    if ($Template -match '[^\x00-\x7F]') { 'ascii' }
+}
+
+# 文言とデータを HTML の字を逃がす JSON にし、ひな形のただ 1 つの差し込み口を文字列の置き換え（正規表現でない）で替える。
+# 改行は LF。時刻・乱数・環境の値は入れない
+function Format-Html([string]$Template, [pscustomobject]$Data, [pscustomobject]$Labels) {
+    if (([regex]::Matches($Template, [regex]::Escape($PLACEHOLDER))).Count -ne 1) { throw 'template must have exactly one placeholder' }
+    $json = [ordered]@{ labels = $Labels; data = $Data } | ConvertTo-Json -Depth 10 -Compress -EscapeHandling EscapeHtml
+    $Template.Replace("`r`n", "`n").Replace($PLACEHOLDER, $json)
 }
 
 # 表の 1 行を欄に割る。先頭と末尾の | は在っても無くてもよい。バッククォートの中の | と \| は区切りにしない
@@ -580,6 +609,7 @@ if ($SelfTest) {
     function Judge([string]$Name, [bool]$Ok) {
         if ($Ok) { "ok selftest $Name" } else { $script:selfFails++; "FAIL selftest $Name" }
     }
+    function Try-Judge([string]$Name, [scriptblock]$Body) { $ok = $false; try { $ok = [bool](& $Body) } catch { }; Judge $Name $ok }
 
     # ---- 文言の鍵がそろう ----
     $strings = $null
@@ -596,8 +626,20 @@ if ($SelfTest) {
     }
     Judge 'strings' $caught
 
+    # ---- 2. ひな形の約束（差し込み口が 1 つ・文字コードの宣言・外の物を読む書き方が無い・ASCII だけ） ----
+    # 1 か所ずつ崩した写しが、その約束の鍵だけで落ちることも確かめる（判定の空振りを防ぐ）
+    $template = Read-Lf (Join-Path $PSScriptRoot $TEMPLATE_FILE)
+    Try-Judge 'template' {
+        $null -ne $template -and @(Test-Template $template).Count -eq 0 -and
+        (@(Test-Template ($template + $PLACEHOLDER)) -join ',') -ceq 'placeholder' -and
+        (@(Test-Template $template.Replace($PLACEHOLDER, '')) -join ',') -ceq 'placeholder' -and
+        (@(Test-Template $template.Replace($CHARSET, '')) -join ',') -ceq 'charset' -and
+        (@(Test-Template ($template + '<link rel="x">')) -join ',') -ceq 'external' -and
+        (@(Test-Template ($template + '<script src="x.js"></script>')) -join ',') -ceq 'external' -and
+        (@(Test-Template ($template + "/* $([char]0x3042) */")) -join ',') -ceq 'ascii'
+    }
+
     # ---- 3〜6. 見本の読み取り（見本は tools/roadmap-overview-fixture/。中身の印は固定の値） ----
-    function Try-Judge([string]$Name, [scriptblock]$Body) { $ok = $false; try { $ok = [bool](& $Body) } catch { }; Judge $Name $ok }
     $fxDir = Join-Path $PSScriptRoot 'roadmap-overview-fixture'
     $fixture = Read-Lf (Join-Path $fxDir 'roadmap.md')
     $expected = Read-Lf (Join-Path $fxDir 'expected-data.json')
@@ -664,6 +706,17 @@ if ($SelfTest) {
             $r = Read-Fixture $c[2]
             $c[2] -cne $fixture -and (@($r.Missing) -join ',') -ceq $c[0] -and $null -eq $r.Data
         }
+    }
+
+    # 7. 見本から 2 回作った HTML（labels は文言のファイルのもの）が 1 字違わず同じで、
+    # 台帳の文の </script> が \u003c/script\u003e に逃がされている（HTML の </script> の数はひな形と同じ）
+    Try-Judge 'fixture html is the same twice and escapes the script end tag' {
+        $h1 = Format-Html $template (Read-Fixture $fixture).Data $strings.labels
+        $h2 = Format-Html $template (Read-Fixture $fixture).Data $strings.labels
+        $escEnd = '\' + 'u003c/script' + '\' + 'u003e'
+        $ends = { param($t) ([regex]::Matches($t, '</script>')).Count }
+        $h1 -ceq $h2 -and $h1.Contains($escEnd) -and -not $h1.Contains($PLACEHOLDER) -and
+        (& $ends $h1) -eq (& $ends $template) -and -not $h1.Contains("`r")
     }
 
     if ($script:selfFails) { "selftest: $($script:selfFails) failure(s)"; exit 1 }
