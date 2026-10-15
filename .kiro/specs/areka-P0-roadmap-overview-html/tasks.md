@@ -1,7 +1,7 @@
 # Implementation Plan
 
-- [ ] 1. 道具の土台
-- [ ] 1.1 文言のファイルと道具の骨組みを作る
+- [x] 1. 道具の土台
+- [x] 1.1 文言のファイルと道具の骨組みを作る
   - 読み取りの目印（日本語の区切り・括弧の組・数と区分の正規表現・節の目印）と HTML の決まった文言を、design の鍵の一覧どおりに文言のファイルへ置く
   - 道具の本体を release-notes の型（版の指定・StrictMode・較正値・根の求め方・LF にそろえて読む・BOM なしで書く）でなぞり、作る呼び方と自分の検査の呼び方の 2 つの引数の組を持たせ、知らない引数を断る
   - 文言のファイルが読めない・鍵が欠けるか空なら `FAIL strings: ...` の 1 行と終了コード 1。端末へ出す文は ASCII だけ
@@ -135,3 +135,7 @@
   - 完了の姿: 全体テストが `roadmap overview check` を含めて緑で終わり、doc を読むコードとテストが壊れていない
   - _Depends: 5.1, 6.5_
   - _Requirements: 6.6, 8.5_
+
+## Implementation Notes
+
+- 1.1: `labels` の鍵の名前は実装係が決めた（design は散文で列挙）。ひな形の JS は `tools/roadmap-overview.strings.json` の `labels` の鍵名と `$LABEL_KEYS` に合わせる。較正値の ASCII の目印（`## `・`#### Specs (dependency order)`・`Dependencies:`・`areka-P0-`・`updated_at`・ONE_LINER_MAX=60）と `utf8-child.ps1` の読み込みは、最初に使うタスクで足す。作る呼び方は 4.1 まで `FAIL build: ...` で 1 を返す。
