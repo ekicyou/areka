@@ -71,8 +71,8 @@
   - _Depends: 2.5, 3.1_
   - _Requirements: 5.4, 6.2, 6.3, 6.5_
 
-- [ ] 4. 作る呼び方の入出力
-- [ ] 4.1 roadmap.md を読み、中身の印を求め、HTML を書いて報告する
+- [x] 4. 作る呼び方の入出力
+- [x] 4.1 roadmap.md を読み、中身の印を求め、HTML を書いて報告する
   - 根の roadmap.md だけを LF にそろえて読み、読めなければ `FAIL missing roadmap`。欠けは鍵ごとに `FAIL missing {鍵}` を出して何も書かない
   - 中身の印を git の hash-object の先頭 12 字で求め（UTF-8 の子の呼び出し経由・今のフォルダを変えない）、求められなければ印を無しにして `WARN git: blob unknown`
   - 警告ごとに ASCII の `WARN` の行、`doc/roadmap-overview-{updated_at}.html` を BOM なし UTF-8・LF で書き（ほかの日付のファイルに触らない）、書けなければ `FAIL write {path}: {理由}` と 1

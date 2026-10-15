@@ -10,6 +10,14 @@
     （引数なし） [-Open]
         roadmap.md から HTML を作る。-Open を付けると、書けたときだけ OS の既定のアプリで開く。
           FAIL strings: {理由}                   文言のファイルが読めない・鍵が欠けるか空
+          FAIL template: {理由}                  ひな形が読めない・約束を破る
+          FAIL missing roadmap                   .kiro/steering/roadmap.md が読めない
+          FAIL missing {鍵}                      読めない所（欠けごとに 1 行・何も書かない）
+          WARN {鍵} ...                          読めたが食い違う所（警告ごとに 1 行・書く）
+          WARN git: blob unknown                 中身の印（git hash-object の先頭 12 字）を求められない
+          FAIL write {path}: {理由}              HTML を書けない
+          OK wrote {path} ({帯} band(s), {spec} spec(s), {警告} warning(s))
+        終了コード: 0 書けた（警告が在っても 0）／1 FAIL の行を出した
     -SelfTest
         自分の検査。判定を 1 つずつ「ok selftest {名前}」か「FAIL selftest {名前}」で印字する。
         判定の番号は design の SelfTest の番号。
@@ -100,6 +108,9 @@ $CHARSET        = '<meta charset="utf-8">'
 $EXTERNAL       = '(?i)<script\b[^>]*\ssrc\s*=|<link\b|@import|url\(|https?://'
 
 $root = Split-Path $PSScriptRoot -Parent
+
+# 子の出力を端末の文字コードに依らず UTF-8 で読む関数 Invoke-Utf8Child
+. (Join-Path $PSScriptRoot 'utf8-child.ps1')
 
 # ファイルを UTF-8 で読み、改行を LF にそろえて返す。無ければ $null
 function Read-Lf([string]$Path) {
@@ -727,6 +738,41 @@ if ($SelfTest) {
 # ---- 作る呼び方 ----
 try { $strings = Read-Strings }
 catch { "FAIL strings: $($_.Exception.Message -replace '[^\x20-\x7E]', '?')"; exit 1 }
-# 読み手と HTML の組み立ては後のタスクで入る。それまでは黙って通さず落ちる
-'FAIL build: the reader and the html assembler are not implemented yet'
-exit 1
+function ConvertTo-Ascii([string]$Text) { $Text -replace '[^\x20-\x7E]', '?' }
+
+$template = Read-Lf (Join-Path $PSScriptRoot $TEMPLATE_FILE)
+if ($null -eq $template) { "FAIL template: cannot read tools/$TEMPLATE_FILE"; exit 1 }
+$bad = @(Test-Template $template)
+if ($bad.Count) { "FAIL template: tools/$TEMPLATE_FILE breaks: $($bad -join ', ')"; exit 1 }
+
+# 読むのは根の roadmap.md だけ（今のフォルダによらない）
+$roadmapRel = '.kiro/steering/roadmap.md'
+$text = Read-Lf (Join-Path $root $roadmapRel)
+if ($null -eq $text) { 'FAIL missing roadmap'; exit 1 }
+
+# 中身の印＝git hash-object の先頭 12 字（ファイルの中身だけで決まる。git log --find-object で辿れる）
+$blob = $null
+try {
+    $g = Invoke-Utf8Child git @('-C', $root, 'hash-object', '--', $roadmapRel)
+    if ($g.Code -eq 0 -and $g.Out.Trim() -cmatch '^[0-9a-f]{40,64}$') { $blob = $g.Out.Trim().Substring(0, 12) }
+} catch { }
+
+$r = Read-Roadmap $text $strings.markers ([pscustomobject]@{ blob = $blob })
+if (@($r.Missing).Count) { foreach ($k in $r.Missing) { "FAIL missing $k" }; exit 1 }
+
+$warnLines = @(foreach ($w in $r.Warnings) { ConvertTo-Ascii "WARN $($w.Key) $($w.Detail)" })
+if ($null -eq $blob) { $warnLines += 'WARN git: blob unknown'; $r.Data.warningCount++ }
+$warnLines
+
+$outRel = "doc/roadmap-overview-$($r.Data.source.updatedAt).html"
+$outPath = Join-Path $root $outRel
+try { Write-Utf8 $outPath (Format-Html $template $r.Data $strings.labels) }
+catch { "FAIL write ${outRel}: $(ConvertTo-Ascii $_.Exception.GetBaseException().Message)"; exit 1 }
+
+# 帯の数は版の段の表の行の数、spec の数は置いたカードの数（「帯に無い」の帯を含む）
+$bandN = @($r.Data.bands | Where-Object { -not $_.notInBand }).Count
+$specN = 0
+foreach ($b in $r.Data.bands) { foreach ($gr in $b.groups) { $specN += @($gr.cards).Count } }
+"OK wrote $outRel ($bandN band(s), $specN spec(s), $($r.Data.warningCount) warning(s))"
+if ($Open) { Invoke-Item -LiteralPath $outPath }
+exit 0
