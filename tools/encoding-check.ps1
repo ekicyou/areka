@@ -40,6 +40,12 @@
        production   Invoke-Utf8Child must read the sample exactly
        real         Invoke-Utf8Child cargo metadata must give exactly one areka package with a
                     version, printed as version=<v>
+     then, in its own scope (perf-loop.common.ps1 sets StrictMode 3.0), with the real
+     Invoke-PwshChild of tools/perf and the sample <U+7248><U+2460><U+1F600> printed by this script
+     run with -PerfSampleChild (out1= Write-Output, out2= Write-Host, err1= stderr):
+       perf calibration  Invoke-Child with a plain -File (no prefix) must break the sample
+       perf real         Invoke-PwshChild must deliver the 3 lines exactly
+       perf console      the child's console must still be 932 / 932 (read from the OS)
      The parent copies the child's lines, fails on a non-zero exit, reads the version itself and
      fails unless the child's version=<v> line is the same, and fails if its own two console code
      pages (read from the OS, not the .NET cache) changed. The parent never sets its own console.
@@ -47,12 +53,14 @@
   Writes nothing, creates no temporary files, prints ASCII only, never prints the environment.
 
   Run: pwsh -NoProfile -File tools/encoding-check.ps1
-  (-Cp932Child is internal; run by hand from a terminal it changes nothing and exits with 1.)
+  (-Cp932Child and -PerfSampleChild are internal; run by hand from a terminal they change nothing,
+  print one ASCII line and exit with 1.)
 #>
 using namespace System.Management.Automation.Language
 #Requires -Version 7
 param(
-    [switch]$Cp932Child   # internal: only the windowless child started by this script uses it
+    [switch]$Cp932Child,      # internal: only the windowless child started by this script uses it
+    [switch]$PerfSampleChild  # internal: the sample writer started by that child
 )
 
 Set-StrictMode -Version 3.0
@@ -325,6 +333,19 @@ function Read-ArekaVersion {
     $v
 }
 
+if ($PerfSampleChild) {
+    # Run by hand from a terminal: print no sample.
+    if (-not ([Console]::IsOutputRedirected -and [Console]::IsErrorRedirected)) {
+        '-PerfSampleChild is internal; run tools/encoding-check.ps1 without it'
+        exit 1
+    }
+    $s = "`u{7248}`u{2460}`u{1F600}"
+    Write-Output "out1=$s"
+    Write-Host "out2=$s"
+    [Console]::Error.WriteLine("err1=$s")
+    exit 0
+}
+
 if ($Cp932Child) {
     # Run by hand from a terminal: do not touch the developer's console.
     if (-not ([Console]::IsOutputRedirected -and [Console]::IsErrorRedirected)) {
@@ -373,6 +394,34 @@ if ($Cp932Child) {
     # real: the version of the current workspace
     try { "version=$(Read-ArekaVersion)" }
     catch { $bad.Add("FAIL cp932 child: real: $(Show-Ascii $_.Exception.Message)") }
+
+    # perf: the real Invoke-PwshChild of tools/perf on this 932 console. The grandchild is this
+    # script with -PerfSampleChild. perf-loop.common.ps1 sets StrictMode 3.0, so it is loaded only
+    # inside this scope, after the 3 checks above.
+    & {
+        . (Join-Path $root 'tools/perf/perf-loop.common.ps1')
+        $s = "`u{7248}`u{2460}`u{1F600}"
+        $want = @("out1=$s", "out2=$s", "err1=$s") -join "`n"
+
+        # perf calibration: the plain -File call (no prefix) must break the sample
+        $r = Invoke-Child -Exe $pwsh -Arguments @('-NoProfile', '-NonInteractive', '-File', $PSCommandPath, '-PerfSampleChild') -Quiet
+        $got = (@($r.Out) + @($r.Err)) -join "`n"
+        if ($r.Code) { $bad.Add("FAIL cp932 child: perf calibration: sample writer exited with code $($r.Code)") }
+        elseif (& $same $got $want) { $bad.Add('FAIL cp932 child: perf calibration: the plain call read the sample intact; cannot detect a regression on this console') }
+        else { "PASS cp932 child: perf calibration (the plain call breaks the sample: $(Show-Ascii $got 0))" }
+
+        # perf real: Invoke-PwshChild must deliver the 3 lines exactly
+        $r = Invoke-PwshChild -ScriptPath $PSCommandPath -Arguments @('-PerfSampleChild') -Quiet
+        $got = (@($r.Out) + @($r.Err)) -join "`n"
+        $exact = $r.Code -eq 0 -and @($r.Out).Count -eq 2 -and @($r.Err).Count -eq 1 -and (& $same $got $want)
+        if ($exact) { 'PASS cp932 child: perf real (Invoke-PwshChild delivers the 3 sample lines exactly)' }
+        else { $bad.Add("FAIL cp932 child: perf real: code $($r.Code), Invoke-PwshChild read $(Show-Ascii $got 0)") }
+
+        # perf console: the child must leave this console at 932 (a rewrite prefix would change it)
+        $cps = Get-ConsoleCodePages
+        if ($cps[0] -eq 932 -and $cps[1] -eq 932) { 'PASS cp932 child: perf console still 932 after Invoke-PwshChild' }
+        else { $bad.Add("FAIL cp932 child: perf console changed by Invoke-PwshChild: output $($cps[0]), input $($cps[1])") }
+    }
 
     $bad
     if ($bad.Count) { exit 1 }
