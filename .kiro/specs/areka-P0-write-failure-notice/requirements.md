@@ -144,7 +144,7 @@
 1. The areka shall 「記憶へ書きました」の意味の記録（`last_used_recorded`・`last_shell_recorded`・`last_balloon_recorded`・`install_balloon_remembered`）を、書き込みが成り立ったときだけ出す。書けなかったときに「書きました」の記録は 0 件。（結果を見てから出す形か、投函の時点の文を「書くように頼みました」に改めて結果を別の行で出す形かは設計で決める。どちらでも、書けなかったときは失敗の記録が出る。）
 2. The areka shall 印を消せなかったときの記録（`session_mark_clear_degraded`）の文を、要件 3.2・3.3 の区別に合わせる（残る印が在るときだけ「次の起動は前回落ちたとして既定のゴーストで起きる」と書く）。
 3. The areka shall 印を残すときの記録（`session_mark_kept`）の文を、印がその回に書けていたときだけ「次の起動は既定のゴーストで Ref6/7 付き」と書き、書けていなかったときはそう予告しない。
-4. When 記録の語彙（`event=` の名前・欄）を変える, the areka shall それを読むテストと文書（2026-10-16 の時点で読み手はテストだけ＝`crates/areka/src/boot_resolve_tests.rs`・`roots/edit_tests.rs`・`install/procedure_branch_tests.rs`・`install/desk_overwrite_tests.rs`・印のテスト群・`doc/ukadoc-coverage/ledger/shiori.toml`。`tools/` の下に読み手は 0）を同じ変更で直す（読み手が古い名前を探して空振りする所を 0 にする）。
+4. When 記録の語彙（`event=` の名前・欄）を変える, the areka shall それを読むテストと文書を同じ変更で直す（読み手が古い名前を探して空振りする所を 0 にする）。読み手は設計の段で grep で数え直す。2026-10-16 の時点で、要件 4.1〜4.3 の 6 つの名前を読むのは、本体 3（`boot_resolve.rs`・`main.rs`・`install/desk.rs`）・テスト 10（`boot_resolve_tests.rs`・`main_session_mark_tests.rs`・`main_session_mark_fallback_tests.rs`・`install/desk_record_tests.rs`・`emo2_boot/frame/switch_finish_tests.rs`・`shell_balloon_switch_session_{lap,balloon,abort}_tests.rs`・`session_end_tests.rs`・`session_end_deadline_tests.rs`）・生成物の文書 1（`doc/roadmap-overview-2026-10-16.html`）。`tools/` の下に読み手は 0。このうちテストの幾つかは「書きました」の行を「投函が起きた印」として数えているので、文や出す時点を変えるときは、その判定の意味も置き換える。
 5. The areka shall 今日の記録の行のうち、事実と合っている物（`session_mark_write_degraded`・`switch_drop_record_degraded`・`session_mark_steady`・`roots_memory_write_failed`・`persist commit failed`）の名前を変えない（文に要件 1.4 の欄を足すのは可）。
 
 ### Requirement 5: 書けないせいのインストールの失敗を、書庫の破損と見分けて伝える
@@ -196,7 +196,7 @@
 
 1. The areka shall emo2 の辞書を、この spec の中で書き換えない（辞書の元はリポジトリの外。リポジトリには配布形の `vendors/sample_ghost/emo2.nar` だけが在り、`dic/install.pasta` の `OnInstallFailure` は「理由を問わず共通トーク」の 3 場面）。
 2. When 要件 5 の新しい語と、要件 2 の知らせの形が決まる, the areka shall emo2 の辞書の持ち主へ、届くようになった語と知らせの形と、理由ごとに台詞を分けてほしいことを申し送る（議題 4。申し送りの置き場は議題 4 の答えに従う）。
-3. The areka shall 申し送りが届くまでの間も、要件 5 の語は送る（辞書が知らない語は辞書の既定の台詞へ落ちるだけで、今日より悪くならないことを要件 9 の議題 2 で確かめる）。
+3. The areka shall 申し送りが届くまでの間も、要件 5 の語は送る（辞書が知らない語は辞書の既定の台詞へ落ちるだけで、今日より悪くならない。ギャップ分析 `research.md` §5.3 で検体の 5 体〔emo2・claudia・konnoyayame・emily4・R_POST_and_KOMAINU〕を読み、知らない語で台詞が出なくなる辞書は 0 と確かめた）。
 
 ### Requirement 9: 裁定（暫定・要件ディスカッションで確定）
 
@@ -217,7 +217,7 @@
    - 候補 (b) **`readonly`**（同じ一覧の「読み取り専用フラグによる更新対象への書き込み失敗。」）。権限の拒否・空き不足には字面が合わない。
    - 候補 (c) **areka の新しい語**（ネットワーク更新で `dns`・`connect` を足した前例の形）。
    - 候補 (d) **`extraction` のまま**、別の道（議題 1 の知らせ）で補う。
-   - **推奨: (a) `fileio`**。理由: 正典の語の中で「書けない」を言う語で、areka の中でネットワーク更新と同じ失敗に同じ語を使える。インストールの一覧の外の語なので、辞書が知らなければ既定の台詞へ落ちる（今日の「壊れてるかも」より悪くならない）ことを、`OnInstallFailure` の Reference0 を比べる辞書の書き方（3 系統の検体の辞書）で確かめて設計へ渡す。登記は §8 の行で「インストールの一覧に語が無いので、同じページのネットワーク失敗理由の `fileio` を借りる」と書く。
+   - **推奨: (a) `fileio`**。理由: 正典の語の中で「書けない」を言う語で、areka の中でネットワーク更新と同じ失敗に同じ語を使える。インストールの一覧の外の語なので、辞書が知らなければ既定の台詞へ落ちる（今日の「壊れてるかも」より悪くならない）。検体の 5 体の辞書で確かめ済み（`research.md` §5.3: emo2 は今日と同じ・emily4 は誤った「壊れていると思うから取り直して」が消える・YAYA と里々の 3 体は語をそのまま見せる）。登記は §8 の行で「インストールの一覧に語が無いので、同じページのネットワーク失敗理由の `fileio` を借りる」と書く。
 3. **議題 3（印が書けないときの扱い）**: The areka shall 要件 3.5 を次のどちらかで満たす。
    - 候補 (a) **知らせるだけ**（要件 3.1〜3.4）。補いの仕組みは作らない。
    - 候補 (b) 印の代わりの置き場（一時フォルダなど）へ書いて補う。
