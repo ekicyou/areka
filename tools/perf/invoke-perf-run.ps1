@@ -147,6 +147,9 @@ Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 # 外部コマンド（git）の標準エラー出力で例外を投げさせない。終了コードは自前で見る。
 $PSNativeCommandUseErrorActionPreference = $false
+# 子の出力を端末の文字コードに依らず UTF-8 で読む（Invoke-Utf8Child）・子の pwsh の引数を UTF-8 の書き手の前置き付きで組む（Get-PwshChildArguments）
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'utf8-child.ps1')
+. (Join-Path $PSScriptRoot 'perf-pwsh-child.ps1')
 
 # =============================================================================
 # 較正値・調整値（上部の一覧と対応。変更はここだけ）
@@ -312,13 +315,46 @@ function Get-MachineFacts {
     } catch {
         $facts['cpu_model']         = "(取得できませんでした: $($_.Exception.Message))"
     }
-    try {
-        $power = & powercfg /getactivescheme 2>&1
-        $facts['power_scheme']      = ($power | Out-String).Trim()
-    } catch {
-        $facts['power_scheme']      = "(取得できませんでした)"
-    }
+    $facts['power_scheme']          = Get-ActivePowerScheme
     return $facts
+}
+
+# 今の電源設定を powrprof の API から '<GUID> (<名前>)' の形で取る。名前は UTF-16 で来るので
+# 端末の文字コードに依らない（powercfg は端末の文字コードで書き、437 の端末では日本語の名前が ? に落ちる）。
+# 取れないときは '(unavailable: <理由>)' を返す（走行は止めない）。
+function Get-ActivePowerScheme {
+    try {
+        if (-not ('ArekaPerfRun.PowerScheme' -as [type])) {
+            Add-Type -Namespace ArekaPerfRun -Name PowerScheme -MemberDefinition @'
+[DllImport("powrprof.dll")]
+public static extern uint PowerGetActiveScheme(IntPtr userRootPowerKey, out IntPtr activePolicyGuid);
+[DllImport("powrprof.dll")]
+public static extern uint PowerReadFriendlyName(IntPtr rootPowerKey, ref Guid schemeGuid, IntPtr subGroupGuid, IntPtr settingGuid, byte[] buffer, ref uint bufferSize);
+[DllImport("kernel32.dll")]
+public static extern IntPtr LocalFree(IntPtr mem);
+'@
+        }
+        $api = [ArekaPerfRun.PowerScheme]
+        $guidPtr = [IntPtr]::Zero
+        $rc = $api::PowerGetActiveScheme([IntPtr]::Zero, [ref]$guidPtr)
+        if ($rc -ne 0) { return "(unavailable: PowerGetActiveScheme returned $rc)" }
+        try {
+            $guid = [System.Runtime.InteropServices.Marshal]::PtrToStructure($guidPtr, [type][guid])
+        } finally {
+            [void]$api::LocalFree($guidPtr)
+        }
+        # 1 回目で大きさを聞き、2 回目で名前（UTF-16・終端の NUL 付き）を読む
+        $size = [uint32]0
+        $rc = $api::PowerReadFriendlyName([IntPtr]::Zero, [ref]$guid, [IntPtr]::Zero, [IntPtr]::Zero, $null, [ref]$size)
+        if ($rc -ne 0 -or $size -eq 0) { return "$guid (unavailable: PowerReadFriendlyName returned $rc)" }
+        $buffer = [byte[]]::new($size)
+        $rc = $api::PowerReadFriendlyName([IntPtr]::Zero, [ref]$guid, [IntPtr]::Zero, [IntPtr]::Zero, $buffer, [ref]$size)
+        if ($rc -ne 0) { return "$guid (unavailable: PowerReadFriendlyName returned $rc)" }
+        $name = [System.Text.Encoding]::Unicode.GetString($buffer, 0, [int]$size).TrimEnd([char]0)
+        return "$guid ($name)"
+    } catch {
+        return "(unavailable: $($_.Exception.Message))"
+    }
 }
 
 # ソース識別（同一手順の再測が同一コードに対して行われたかを後から突き合わせるため）
@@ -326,14 +362,15 @@ function Get-SourceFacts {
     param([string]$RepoRoot)
     $facts = [ordered]@{}
     try {
-        $head = & git -C $RepoRoot rev-parse HEAD 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            $facts['git_head'] = ($head | Out-String).Trim()
-            $branch = & git -C $RepoRoot rev-parse --abbrev-ref HEAD 2>&1
-            if ($LASTEXITCODE -eq 0) { $facts['git_branch'] = ($branch | Out-String).Trim() }
-            $status = & git -C $RepoRoot status --porcelain 2>&1
-            if ($LASTEXITCODE -eq 0) {
-                $dirty = @($status | Where-Object { $_ -and $_.ToString().Trim().Length -gt 0 }).Count
+        # git は UTF-8 で書くので、端末の文字コードに依らず UTF-8 で読む（Invoke-Utf8Child）
+        $head = Invoke-Utf8Child git @('-C', $RepoRoot, 'rev-parse', 'HEAD')
+        if ($head.Code -eq 0) {
+            $facts['git_head'] = $head.Out.Trim()
+            $branch = Invoke-Utf8Child git @('-C', $RepoRoot, 'rev-parse', '--abbrev-ref', 'HEAD')
+            if ($branch.Code -eq 0) { $facts['git_branch'] = $branch.Out.Trim() }
+            $status = Invoke-Utf8Child git @('-C', $RepoRoot, 'status', '--porcelain')
+            if ($status.Code -eq 0) {
+                $dirty = @($status.Out -split '\r?\n' | Where-Object { $_.Trim().Length -gt 0 }).Count
                 $facts['git_dirty_files'] = $dirty
             }
         } else {
@@ -402,12 +439,14 @@ function Get-PwshPath {
 function Invoke-CheckQuietOnce {
     param([string]$ScriptPath, [string]$TargetOutDir, [string]$Stage, [string]$GoalFilePath)
 
-    $quietArgs = @('-NoProfile', '-File', $ScriptPath, '-Stage', $Stage, '-OutDir', $TargetOutDir)
+    $quietArgs = @('-Stage', $Stage, '-OutDir', $TargetOutDir)
     if ($GoalFilePath) { $quietArgs += @('-GoalFile', $GoalFilePath) }
-    $captured = & (Get-PwshPath) @quietArgs 2>&1
-    $code     = $LASTEXITCODE
-    foreach ($line in @($captured)) { Write-Info ([string]$line) }
-    return $code
+    # 子の pwsh は前置きで標準出力・標準エラーを UTF-8 で書くので、UTF-8 で読む。
+    # 写す順は標準出力の行、続いて標準エラーの行（交互の順は保たない）。
+    $result = Invoke-Utf8Child (Get-PwshPath) (Get-PwshChildArguments -ScriptPath $ScriptPath -Arguments $quietArgs)
+    foreach ($line in @($result.Out -split '\r?\n' | Where-Object { $_ -ne '' })) { Write-Info $line }
+    foreach ($line in $result.ErrLines) { Write-Info $line }
+    return $result.Code
 }
 
 function Format-Section {
@@ -861,7 +900,7 @@ if (-not (Test-Path -LiteralPath $runLogPath -PathType Leaf) -or (Get-Item -Lite
 }
 $logText = Get-Content -LiteralPath $runLogPath -Raw -Encoding utf8
 if ($logText -notmatch [regex]::Escape($LOG_MARKER_SMOKE_GATE)) {
-    Stop-Run $EXIT_RUN_FAILED "実行ログに有界自動終了の証跡『$LOG_MARKER_SMOKE_GATE』がありません。$SMOKE_EXIT_ENV_NAME が効いていない走行は同一手順の再測になりません。"
+    Stop-Run $EXIT_RUN_FAILED "実行ログに有界自動終了の証跡（LOG_MARKER_SMOKE_GATE）がありません。$SMOKE_EXIT_ENV_NAME が効いていない走行は同一手順の再測になりません。"
 }
 if ($sampleCount -lt 1) {
     Stop-Run $EXIT_COUNTER_FAILED "CPU 時系列が 1 点も採れていません。"
