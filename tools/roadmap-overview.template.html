@@ -60,6 +60,13 @@ section.completed h2 { font-size: 16px; }
 .head-row { display: grid; grid-template-columns: 8em 7em minmax(0, 1fr) minmax(0, 2fr); gap: 8px;
   padding: 0 9px; color: var(--muted); font-size: 12px; }
 .extra { margin-top: 12px; }
+.wave-cmds { padding: 12px 16px 0; }
+.wave-cmds .bar { display: flex; align-items: center; gap: 8px; }
+.wave-cmds h2 { margin: 0; font-size: 16px; }
+.wave-cmds button { font: inherit; padding: 3px 12px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel); color: var(--fg); cursor: pointer; }
+.wave-cmds pre { margin: 6px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel); overflow-x: auto; font: 13px/1.5 ui-monospace, Consolas, monospace; }
 @media (max-width: 640px) {
   .row > summary, .head-row { grid-template-columns: 1fr; gap: 0; }
   .head-row { display: none; }
@@ -112,6 +119,40 @@ section.completed h2 { font-size: 16px; }
   header.appendChild(src);
   if (D.warningCount > 0) header.appendChild(el("div", "warnings", fmt(L.warningCount, { count: D.warningCount })));
   document.body.appendChild(header);
+
+  // Next wave's start commands (the code block /kiro-next writes under the wave table) with a copy button
+  if (D.waveCommands !== null) {
+    var wc = el("section", "wave-cmds");
+    var bar = el("div", "bar");
+    bar.appendChild(el("h2", null, L.waveCommands));
+    var copyBtn = el("button", null, L.copy);
+    copyBtn.type = "button";
+    bar.appendChild(copyBtn);
+    wc.appendChild(bar);
+    var pre = el("pre", null, D.waveCommands);
+    wc.appendChild(pre);
+    var copied = function () {
+      copyBtn.textContent = L.copied;
+      setTimeout(function () { copyBtn.textContent = L.copy; }, 1500);
+    };
+    // Clipboard API first; inside a sandboxed frame it may be refused, so fall back to selecting the text
+    var fallback = function () {
+      var range = document.createRange();
+      range.selectNodeContents(pre);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      try { if (document.execCommand("copy")) copied(); } catch (e) { }
+    };
+    copyBtn.addEventListener("click", function () {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(D.waveCommands).then(copied, fallback);
+      } else {
+        fallback();
+      }
+    });
+    document.body.appendChild(wc);
+  }
 
   // Legend
   var legend = el("div", "legend");

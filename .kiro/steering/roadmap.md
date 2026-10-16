@@ -160,6 +160,24 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | **ウェーブの外（測ることが本体・静かな机で 1 本ずつ）** | `areka-test-binary-stability`（2026-10-11 に `areka-test-threads-av` と `test-wait-marker-gaps` をまとめた＝同じテストの実行ファイル `--bin areka` を回す・中の順は落ちる件 → 待ちの件）・`present-emit-tail-latency`（半分が計測）・`install-live-target-hazards`（測ってから扱いを決める）・`real-run-input-guard-observations`（2026-10-16 `balloon-text-bugs` の完了の棚卸で起票・再現が本体）（`dump-balloon-debug-timeout` は 2026-10-11 に `mcp-receiver-bugs` の件 2 へまとめた＝次のウェーブの候補） | — | 机の空きを開発者が決めたときに 1 本ずつ挟む。重い走行は赤が出たテストに絞り、全体の負荷の走行は最後の 1 回だけ（1 回 約 50 分） |
 | **保留** | `tick-gate-adoption` | — | 「長い試行はしない」と両立する短い A/B の測り方を先に組む。計測を汚すので他と並べない |
 
+**C8 の開始コマンド**（`/kiro-next` の報告と同じ形・俯瞰の HTML がこの塊をコピーのボタンつきで出す）:
+
+```
+Wave C8 7本（v0.0.3 2本＋割り込み 5本）
+【本来の次の版 v0.0.3】
+Opus
+/kiro-start areka-P0-user-data-root
+/kiro-start areka-P0-write-failure-notice
+
+【割り込み（版に縛らない・v0.0.3 の着地を遅らせない）】
+Opus
+/kiro-start areka-P0-choice-ranges-one-function
+/kiro-start areka-P0-test-roots-under-target
+/kiro-start areka-P0-real-run-log-noise
+/kiro-start areka-P0-actor-thread-log-capture
+/kiro-start areka-P0-mcp-stdio-bridge-residue
+```
+
 ### 版上げと winget の決まり（棚卸㉒の「初回リリースの段取り」のうち今も効くもの）
 
 - **版上げの PR を出すとき、`Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md` を触る開いた PR は 0 本**。ほかの PR が開いていても、タグは版上げの squash コミットに打つので Release の中身は決まる。字の上で衝突しないまま `Cargo.lock` が古くなる（`--locked` の組み立てが落ちる）のを防ぐため、依存を足す spec とは同じ時に走らせない。C5 の席は `mcp-stdio-bridge` が使い、10-11 の着地で空いた。`/release` の `v0.0.3` を打つのは、「版の段」の v0.0.3 の 5 本（`baseware-root-list`・`user-data-root`・`write-failure-notice`・`balloon-text-bugs`・`app-icon`）が着地してから（2026-10-15 開発者）。

@@ -45,6 +45,9 @@
     "colSummary": "一行要約",
     "completedExtra": "完了サマリに無い完了",
     "what": "何をするか",
-    "note": "版の段の注"
+    "note": "版の段の注",
+    "waveCommands": "次のウェーブの開始コマンド",
+    "copy": "コピー",
+    "copied": "コピーしました"
   }
 }

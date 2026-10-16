@@ -54,6 +54,12 @@ updated_at: 2026-01-02
 | **C9**（2 本並走・**Opus** 2） | ① `beta-next`（A・`c.rs` を触る） ∥ ② `areka-P0-theta-follow` | `/kiro-start` | 重なり 0 |
 | **次のウェーブの候補** | `omega-last` | — | 2 行目は着手中にしない |
 
+```
+Wave C9 2本
+Opus
+/kiro-start areka-P0-beta-next
+```
+
 ## spec 台帳（brief を持つ 8 本・見本）
 
 > 前置きの文。

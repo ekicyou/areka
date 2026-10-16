@@ -10,6 +10,7 @@
     （引数なし） [-Open] [-OutFile <path>]
         roadmap.md から HTML を作る。-Open を付けると、書けたときだけ OS の既定のアプリで開く。
         -OutFile を付けると doc/ の日付つきの名前でなく、その場所へ書く（相対なら今のフォルダから）。
+        ウェーブ編成の節の最初の ``` の塊（次のウェーブの開始コマンド）は、頁の上にコピーのボタンつきで出す（無ければ出さない）。
           FAIL strings: {理由}                   文言のファイルが読めない・鍵が欠けるか空
           FAIL template: {理由}                  ひな形が読めない・約束を破る
           FAIL missing roadmap                   .kiro/steering/roadmap.md が読めない
@@ -97,7 +98,8 @@ $MARKER_KEYS  = 'secVersions', 'secLedger', 'secThemes', 'secWaves', 'secSummary
 $LABEL_KEYS   = 'title', 'sourceUpdated', 'sourceBlob', 'sourceBlobUnknown', 'bandCount', 'bandCountMismatch',
                 'warningCount', 'wave', 'done', 'notInLedger', 'notInBand', 'otherBands', 'prereqs', 'notInRoadmap',
                 'tier', 'cls', 'size', 'order', 'theme', 'noTheme', 'clearFilter', 'completedHeading',
-                'colWave', 'colDate', 'colUnits', 'colSummary', 'completedExtra', 'what', 'note'
+                'colWave', 'colDate', 'colUnits', 'colSummary', 'completedExtra', 'what', 'note',
+                'waveCommands', 'copy', 'copied'
 $SECTION_PREFIX = '## '
 $TABLE_RULE     = '^\|\s*:?-'
 $ONE_LINER_MAX  = 60
@@ -464,6 +466,20 @@ function Get-Wave([string[]]$Lines, [pscustomobject]$Markers) {
     [pscustomobject]@{ Name = $name; Names = $names; Warnings = [object[]]$warnings }
 }
 
+# ウェーブ編成の節の最初のコードの塊（``` で囲んだ行・/kiro-next が書く開始コマンドの一覧）を、囲みを外して返す。
+# 節か塊が無ければ $null（任意の欄＝欠けにも警告にもしない）
+function Get-WaveCommands([string[]]$Lines, [pscustomobject]$Markers) {
+    $i = 0
+    while ($i -lt $Lines.Count -and -not $Lines[$i].StartsWith($SECTION_PREFIX + $Markers.secWaves)) { $i++ }
+    for ($i++; $i -lt $Lines.Count -and -not $Lines[$i].StartsWith($SECTION_PREFIX); $i++) {
+        if (-not $Lines[$i].StartsWith('```')) { continue }
+        $body = [System.Collections.Generic.List[string]]::new()
+        for ($i++; $i -lt $Lines.Count -and -not $Lines[$i].StartsWith('```'); $i++) { $body.Add($Lines[$i]) }
+        return ($body -join "`n")
+    }
+    $null
+}
+
 # 完了サマリの節の最初の表を読む（節の後の別の表は読まない）。節か表が無ければ $null（欠け summary-table は呼ぶ側が出す）。
 # 4 欄＝Wave・完了日・ユニット（PR）・一行要約。返り値 @{ Rows = @{ wave; date; units; summary（地の文）;
 #   names（ユニットの欄の、深さを問わないバッククォートの spec 名＝完了） }; Warnings }
@@ -616,6 +632,7 @@ function Read-Roadmap([string]$Text, [pscustomobject]$Markers, [pscustomobject]$
         source = [pscustomobject][ordered]@{ updatedAt = $updatedAt; blob = $Source.blob }
         themes = [string[]]@($themes.Themes)
         bands = [object[]]$outBands
+        waveCommands = Get-WaveCommands $lines $Markers
         completed = [pscustomobject][ordered]@{ rows = [object[]]@($rows); extra = [object[]]$extra }
         warningCount = $warnings.Count
     }
