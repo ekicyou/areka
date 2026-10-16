@@ -67,6 +67,8 @@ mod decoration;
 mod plan;
 #[path = "viewbox_draw_render.rs"]
 mod render;
+#[path = "viewbox_draw_underline.rs"]
+mod underline;
 
 use decoration::BrushCache;
 // 兄弟檻（`viewbox_draw_frame_render_tests.rs`）が `super::plan_inconsistency` で私有項目へ届くための

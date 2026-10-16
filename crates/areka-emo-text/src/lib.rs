@@ -452,6 +452,8 @@ mod tests {
         "viewbox_draw_render.rs",
         "viewbox_draw_scroll_retain_tests.rs",
         "viewbox_draw_test_support.rs",
+        "viewbox_draw_underline.rs",
+        "viewbox_draw_underline_tests.rs",
         "underline_tests.rs",
     ];
 
