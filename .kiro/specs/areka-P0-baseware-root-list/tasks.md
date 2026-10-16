@@ -227,3 +227,4 @@
 - 7.3（要件 12.10）: 止めたのは自分が起こしたと PID と実行ファイルのパス（`targetrinreka.exe`）で確かめた areka（13744・12476・20424・25136）だけで、どれも `CloseMainWindow` で正常に終えた（強制終了 0）。別のワークツリーの areka には触れていない。
 - 最終検証で受け入れた部分（コードは変えない）: 「置き場を外す ▸」の ▸ は OS のサブメニューの矢印で、項目名の文字ではない（要件 7.1・10.2）。記憶の書き込みでゴーストが動いているときの失敗は sylphya の `save_scope` の error で残り、`roots_memory_write_failed` は動いていないときの経路だけ（要件 8.5）。`pin_to_current` の呼び出しの配線は 12.8 によりテストしない。根が見つからないときの終了コード 1 は今の経路のまま（要件 9.4）。`area_for` の `expect` は `place` が根ごとに掘る不変条件で、同じ crate の既存の書き方に合わせた。
 - 最終検証の直し（1 回目）: 置き場を外した後に別の置き場の同じフォルダ名が見えていても、今のゴーストへのインストール（上書き・シェル・サプリメント）は今のゴーストの根へ入れる（`CatalogDestinations` の `running_root`・info `install_running_ghost_root_kept`・要件 8.7 と 5.3 のくい違いを 8.7 側にそろえた）。`menu/roots_frame.rs` は起動の文脈が無いとき warn `menu_roots_frame_no_context`。
+- 完了時の棚卸（2026-10-16）: その場で解決 0 件・起票 1 件（7.3 の「メニューを開いている間に kero のバルーンが黒い四角」を `popup-menu-residue` の件 11 へまとめた）。検証の FYI の「根の綴りの同一視は実体を見ない（junction・subst・UNC）」は `ponytail:` の天井として受け入れ済み。
