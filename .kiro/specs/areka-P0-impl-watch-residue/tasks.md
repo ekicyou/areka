@@ -128,7 +128,7 @@
   - 負荷テストの机の持ち主（見張りなし）・待ち行列の見張りの居る者・作業中の者の状態で、作業中の者の `stopped --wait` が `stop requested again by <識別>` で 0 になることを判定し、再開の待ちの判定の停止要請の枝を壊す変異で赤・戻して緑を確かめる
   - 完了の状態: 入口のテストが緑で、変異の記録が 2 件書かれている
   - _Requirements: 9.1, 9.2, 9.4, 9.5_
-- [ ] 6.4 (h6) と (h7): 構造テストの ASCII の走査を広げ、赤の文に訳を添える
+- [x] 6.4 (h6) と (h7): 構造テストの ASCII の走査を広げ、赤の文に訳を添える
   - ASCII の走査の対象を、リテラルの無い入口の起動ファイルを除く本番ファイル 9 本に広げ、広げた各ファイルへ ASCII の外の字の文を置く変異で赤・戻して緑を確かめる
   - 判断の核の構造テストの赤の文に「`std` からは 1 行に 1 つずつ読み込む」の訳を添える
   - 完了の状態: 構造テストが緑で、変異の記録が書かれている
@@ -163,6 +163,7 @@
 - 6.2: `wait::run` の登録の直後の `port.fingerprint()?` を `port.fingerprint().unwrap_or(None)`（失敗を「無い」に畳む）にした → `wait::loop_tests::a_failed_fingerprint_right_after_registration_ends_the_wait_with_the_error` が赤（`Ok(Done("granted merge repo=areka; last: none"))`＝失敗で終わらず、読んで番が来たと答えた）。控え `target\mutation-backup\6.2-wait.rs` から素のコピーで戻し、sha256 一致（`be93604b6571ffd76e82c673709b9420ba31b44d193c3e3f520308a67cb99318`）を確かめて緑。
 - 6.3 (h3): `cli.rs` の `C::Merged` の行の組み立てに `.take(1)` を足して最初の 1 行だけを出した → `cli::commands_tests::merged_by_a_holder_of_two_desks_prints_one_line_per_desk_in_repo_order` が赤（`left: (0, "merged repo=areka\n", "")`・`right: (0, "merged repo=areka\nmerged repo=zeta\n", "")`）。控え `target\mutation-backup\6.3-cli.rs` から素のコピーで戻し、sha256 一致（`18e776f53a1abb2ccd6e8f062cefc7e63f59e2199ca00cbaae2a55568d0472bb`）を確かめて緑。
 - 6.3 (h4): `wait::judge` の再開の待ちの `StopRequested` の枝を `"resumed"` にした → `cli::wait_tests::stopped_wait_ends_with_stop_requested_again_when_the_same_call_hands_the_load_desk_on` が赤（`left: (0, "resumed\n", "")`・`right: (0, "stop requested again by c\n", "")`）。控え `target\mutation-backup\6.3-wait.rs` から素のコピーで戻し、sha256 一致（`be93604b6571ffd76e82c673709b9420ba31b44d193c3e3f520308a67cb99318`）を確かめて緑。
+- 6.4 (h6): 広げた 5 本（`store.rs`・`home.rs`・`presence.rs`・`plan.rs`・`state.rs`）へ 1 本ずつ、末尾に `const MUTATION_6_4: &str = "変異";` を足した → どれも `layering_tests::files_that_write_to_the_terminal_have_ascii_only_literals` が赤（`store.rs: non-ASCII literals [(425, "変異")]`・`home.rs: … [(78, "変異")]`・`presence.rs: … [(121, "変異")]`・`plan.rs: … [(753, "変異")]`・`state.rs: … [(253, "変異")]`）。それぞれ控え `target\mutation-backup\6.4-<名前>.rs` から素のコピーで戻し、sha256 一致（`store.rs` `7e09a07f88ea0427a8dba031b8e48fb54b11f739233b88fbbf546965400db528`・`home.rs` `3503efc704c946862a9a6685535a2cc17cbb5dcb3dc30c24c044cb10e1472bfb`・`presence.rs` `75153ab8240b6b138ea2533055732bb9ca63d78bcdb19ec80438133cad3e5011`・`plan.rs` `fc9399bd7448a636e87b64bc47f7ef844e4dd57b5ed00a73e7b43c868f6d9aa0`・`state.rs` `c30929a0efd9d3b62d041bdfa6fcd325aa8552e13bfe0a5c3649c9f0f5c1726f`）を確かめて緑。(h7) の赤の文の訳は変異を求めない（要件 9.3）。
 
 ## Implementation Notes
 
