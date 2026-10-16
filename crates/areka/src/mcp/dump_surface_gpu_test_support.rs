@@ -101,6 +101,7 @@ impl GpuRig {
         // 送り手は捨てる（要求は直接 `handle` へ渡す）。置き場は後から答える組を毎フレーム覗かせる。
         let (_, inbox) = mpsc::channel();
         crate::mcp::install(&mut rig.world, inbox);
+        rig.wire_app_memory();
         rig.boot("A");
         Self {
             rig,

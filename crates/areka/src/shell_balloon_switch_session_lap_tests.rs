@@ -130,6 +130,7 @@ pub(super) fn lap_rig_of(ghosts: Vec<(&str, FakeShiori)>, shells: &[&str]) -> La
     let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
     rig.world.insert_resource(core);
     rig.world.insert_resource(wuc);
+    rig.wire_app_memory();
     rig.boot("A");
     LapRig {
         rig,

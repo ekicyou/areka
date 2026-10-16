@@ -57,6 +57,8 @@ use crate::{ConfigInputs, default_app_profile_dir, ghost_boot_options, is_benign
 pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<KanadeNotice>) {
     emo2_boot::register_emo2_frame_system(world);
     emo2_boot::wire_kanade_stop(world, kanade_stop_rx);
+    // 記憶を書けない失敗の受け口と汲み出し（プロセスに 1 回・areka-P0-write-failure-notice）。
+    crate::write_failure::install(world);
 
     readme::register_readme_drain(world);
     emo2_boot::ghost_switch::register_change_drain(world);
@@ -679,7 +681,7 @@ pub(crate) fn boot_ghost(
         Some(kanade_stop),
         BootOrigin::Plain,
         shell.as_deref(),
-        None,
+        crate::write_failure::sender(world),
     ) {
         Ok(runtime) => {
             tracing::info!("LogSink フォールバックで起動しました（emo2-boot wire 不成立）");

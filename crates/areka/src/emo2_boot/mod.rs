@@ -678,7 +678,7 @@ pub fn wire_emo2_boot(
         Some(kanade_stop),
         boot_origin,
         shell,
-        None,
+        crate::write_failure::sender(world),
     ) {
         Ok(runtime) => runtime,
         Err(err) => {
