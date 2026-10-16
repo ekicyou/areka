@@ -7,8 +7,9 @@
   端末の文字コードは読みも書きもしない。今のフォルダを変えない。呼ばれた場所によらず、このスクリプトの在るリポジトリを見る。
   日本語の読み取りの目印と HTML の決まった文言は、文言のファイル（STRINGS_FILE）の 1 か所だけに置く。
 
-    （引数なし） [-Open]
+    （引数なし） [-Open] [-OutFile <path>]
         roadmap.md から HTML を作る。-Open を付けると、書けたときだけ OS の既定のアプリで開く。
+        -OutFile を付けると doc/ の日付つきの名前でなく、その場所へ書く（相対なら今のフォルダから）。
           FAIL strings: {理由}                   文言のファイルが読めない・鍵が欠けるか空
           FAIL template: {理由}                  ひな形が読めない・約束を破る
           FAIL missing roadmap                   .kiro/steering/roadmap.md が読めない
@@ -63,11 +64,16 @@
 .PARAMETER Open
   書けたときだけ、作った HTML を OS の既定のアプリ（ブラウザ）で開く。
 
+.PARAMETER OutFile
+  書く先のファイル。省くと doc/roadmap-overview-{updated_at}.html。/kiro-next は棚卸の最後に
+  scratch の roadmap-overview-latest.html へ書いて、セッションで公開する。
+
 .PARAMETER SelfTest
   自分の検査だけを回す。何も書かない。
 
 .EXAMPLE
   pwsh -NoProfile -File tools/roadmap-overview.ps1 -Open
+  pwsh -NoProfile -File tools/roadmap-overview.ps1 -OutFile C:\some\folder\roadmap-overview-latest.html
   pwsh -NoProfile -File tools/roadmap-overview.ps1 -SelfTest
 #>
 #Requires -Version 7
@@ -75,6 +81,7 @@
 [CmdletBinding(DefaultParameterSetName = 'Build')]
 param(
     [Parameter(ParameterSetName = 'Build')][switch]$Open,
+    [Parameter(ParameterSetName = 'Build')][string]$OutFile,
     [Parameter(ParameterSetName = 'SelfTest', Mandatory)][switch]$SelfTest
 )
 
@@ -764,8 +771,13 @@ $warnLines = @(foreach ($w in $r.Warnings) { ConvertTo-Ascii "WARN $($w.Key) $($
 if ($null -eq $blob) { $warnLines += 'WARN git: blob unknown'; $r.Data.warningCount++ }
 $warnLines
 
-$outRel = "doc/roadmap-overview-$($r.Data.source.updatedAt).html"
-$outPath = Join-Path $root $outRel
+if ($OutFile) {
+    $outPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutFile)
+    $outRel = ConvertTo-Ascii $outPath
+} else {
+    $outRel = "doc/roadmap-overview-$($r.Data.source.updatedAt).html"
+    $outPath = Join-Path $root $outRel
+}
 try { Write-Utf8 $outPath (Format-Html $template $r.Data $strings.labels) }
 catch { "FAIL write ${outRel}: $(ConvertTo-Ascii $_.Exception.GetBaseException().Message)"; exit 1 }
 
