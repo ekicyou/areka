@@ -191,7 +191,7 @@ crates/
 
 ### セッション間の打ち合わせの時点（タスクに入れる）
 
-1. **設計の確定の直後（済み・2026-10-16）**: 上の `apply` の形・確かめの部品の持ち主・着地の順を、`user-data-root` のセッションへ送った。
+1. **設計の確定の直後（済み・2026-10-16）**: 上の `apply` の形・確かめの部品の持ち主・着地の順を、`user-data-root` のセッションへ送った。向こうは異論なく合わせた（向こうのコミット `a7f2f344`）。確かめの口の名前と形は `areka_user_data::open_dir_for_add(dir: &Path) -> std::io::Result<()>`。向こうの「置き場を先頭へ ▸」は `apply` の外（`decide_front`・`move_to_front`）だけを足し、こちらは `apply` の中身を変える。同じ `roots/edit.rs` に後で着地する側が main を取り込んで合わせる。
 2. **「起動の前の確かめ」のタスクの初め**: main を取り込み、`areka-user-data` の確かめの口が在るかを見る。在れば使う。無ければ、`user-data-root` のセッションへ着地の見込みを尋ね、そのタスクだけ止めて待つ（自前の確かめを作って先へ進めない）。
 3. **完了の前（`/kiro-complete` の前）**: `apply` が `write_failure::fatal` へ渡す形で着地することを、`user-data-root` のセッションへ知らせる（向こうの要件 3.9 の確かめのため）。
 ## System Flows
