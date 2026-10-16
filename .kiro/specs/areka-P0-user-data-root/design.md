@@ -52,6 +52,7 @@
 - 新しいクレート `crates/areka-user-data` は `std` と `tracing`（ワークスペースの版）だけに依存する。`areka`・`areka-ghost`・`areka-mcp` には依存しない。
 - `areka` → `areka-user-data`（path 依存）。`areka-mcp-bridge` → `areka-user-data`（path 依存）。外部（crates.io）の依存は増えない（要件 7.6）。
 - `areka` の側の写す判断は `areka_ghost::{BasewareRoots, StoreKind, same_root}` を使う。
+- 「書ける根だ」の印 `RootMark` は `areka-ghost`（`catalog.rs` の `BasewareRoot`）に置く。`areka-ghost` は `areka-user-data` に依存しない（印は `from_env: bool` だけを持つ）。
 - テストは `temp-path-kit`（ワークスペースの `target\` の下の一時フォルダ）を使う。
 - 依存の向き: `areka-user-data`（型・判断・手続き） → `areka::roots::user_root`（プロセスに 1 つの形と写す判断） → 呼び手（`boot_config`・`roots`・`menu`・`install`・`update`・`emo2_boot`）。逆向きの import は誤り。
 
@@ -60,6 +61,7 @@
 - `areka-user-data` の公開の型（`Layout`・`Reason`・`UserRoot`）や `app_profile_dir` の規則が変わる → 中継（`areka-mcp-bridge`）と areka の両方のテストを通し直す。
 - `write-failure-notice` が `roots/edit.rs` の `apply` の形を変える → 「置き場を先頭へ ▸」のタスク（最後）を新しい形に合わせる。
 - `resolve_roots_from` の引数が変わる → `dev-folder-alias`（同じ `roots/{mod,resolve}.rs`）が照らし直す。
+- `BasewareRoot` に印 `RootMark` が足される → `BasewareRoot` を等しさで比べるテストと、並びを組み直す呼び手（今の項目を複写せず `BasewareRoot::new` で作り直すと印が消える）を照らし直す。
 - 書ける根の中のフォルダの並び（`ghost\`・`balloon\`・`.nar-work\`・`.copy-work\`・`profile\`・`mcp-bridge\`）が変わる → 説明書と `winget-release-automation` の申し送りを直す。
 - winget の控えのファイルの名前の規則（`<名乗り>_<出どころ>.db`）が変わる → winget の入れ先の見分けを照らし直す。
 
@@ -150,24 +152,30 @@ crates/areka/src/roots/
 ├── user_root.rs                     # 新: プロセスに 1 つの形（OnceLock）・並びに入れる書ける根・写す判断 plan_copy（純粋）と writable_copy
 └── user_root_tests.rs               # 新: plan_copy の分岐・AREKA_ROOT のときの扱いの決定論テスト
 
+crates/areka/src/emo2_boot/
+├── switch_copy.rs                   # 新: 切替の写しを背景のスレッドで走らせ、写し終わりを UI スレッドへ知らせる（段「写し待ち」）
+└── switch_copy_tests.rs             # 新: 写す要の有無・写し終わりの前後で前のゴーストが止まったときの決定論テスト
+
 .kiro/specs/areka-P0-user-data-root/verification/
 └── winget-user-data-check.md        # 新: winget で入れた形と zip の形の実測の記録（要件 9.1・10.8〜10.10）
 ```
 
 ### Modified Files
 
+- `crates/areka-ghost/src/catalog.rs` — `BasewareRoot` に印 `mark: RootMark`（`Plain`／`UserRoot { from_env: bool }`）と口 `BasewareRoot::user_root(dir, from_env)`・`mark()` を足す。`new(dir)` は `Plain`（今の呼び手は変わらない）。
 - `crates/areka/Cargo.toml` — `areka-user-data = { path = "../areka-user-data" }` を足す。
-- `crates/areka/src/roots/mod.rs` — `pub(crate) mod user_root;` を宣言し、`resolve_roots` が `user_root::listed_user_root()` を `resolve_roots_from` へ渡す。
-- `crates/areka/src/roots/resolve.rs` — `resolve_roots_from` に第 4 引数 `user_root: Option<&UserRoot>` を足し、既定の腕と記憶の腕で先頭へ差し込む（要件 3.1・3.2・3.4）。
-- `crates/areka/src/roots/resolve_tests.rs` — 既存の呼び出しへ `None` を足し、差し込みの分岐のテストを足す。
-- `crates/areka/src/roots/report.rs` — `log_roots` が書ける根の行に `user_root` 欄（`default`／`env_var`）を足す。判断は `log_roots_with(resolved, occasion, user_root)` に置き、`log_roots` は今の形の口のまま `listed_user_root()` を渡す（`edit.rs` の呼び出しを変えないため）。
+- `crates/areka/src/roots/mod.rs` — `pub(crate) mod user_root;` を宣言し、`resolve_roots` が `user_root::listed_user_root()` を `resolve_roots_from` へ渡す（プロセスの形を読むのはここと `default_app_profile_dir` だけ）。
+- `crates/areka/src/roots/resolve.rs` — `resolve_roots_from` に第 4 引数 `user_root: Option<&UserRoot>` を足し、既定の腕と記憶の腕で先頭へ差し込み、その項目に印を付ける（要件 3.1・3.2・3.4）。
+- `crates/areka/src/roots/resolve_tests.rs` — 既存の呼び出しへ `None` を足し、差し込みと印の分岐のテストを足す。
+- `crates/areka/src/roots/report.rs` — `log_roots` の口は今のまま。`root_listed` の行に、項目の印から `user_root` 欄（`default`／`env_var`）を足す（`edit.rs` の呼び出しを変えずに印が付く）。
 - `crates/areka/src/roots/report_tests.rs` — 印の付く行・付かない行のテスト。
 - `crates/areka/src/boot_config.rs` — `default_app_profile_dir` の中身を共有の `app_profile_dir` に替える。`resolve_boot_from` に写しの口 `prepare_ghost: fn(&BasewareRoots, &Path) -> PathBuf` を足し、argv でない経路のゴーストを写しへ替える。`resolve_boot` は `user_root::writable_ghost` を渡す。
 - `crates/areka/src/boot_config_roots_tests.rs` — `resolve_boot_from` の呼び出しへ写しの口（素通し）を足し、「argv では写しの口を呼ばない」「argv でなければ写した先のフォルダでバルーンと構成入力を決める」のテストを足す。
-- `crates/areka/src/emo2_boot/ghost_switch.rs` — `boot_into` の先頭（文脈の確かめの後）でゴーストのフォルダを `writable_copy` へ通す（3〜5 行）。
-- `crates/areka/src/install/destination.rs` — `CatalogDestinations::answer` が、見えている物が実行ファイルの隣の根に在るとき `writable_copy` を通してから根を答える。
-- `crates/areka/src/update/desk.rs` — `resolve` のバルーンの腕（今のバルーン・`updateother` のバルーン）でフォルダを `writable_copy` へ通す。
-- `crates/areka/src/menu/roots_frame.rs` — 「置き場を外す ▸」の子のうち書ける根を選べない形にする（要件 3.3）。「置き場を先頭へ ▸」の供給関数 `front_item` を足す（要件 3.7・3.8・最後のタスク）。
+- `crates/areka/src/emo2_boot/ghost_switch.rs` — 受理の直後に `switch_copy::start` を呼んで予約に持たせ、`switch_to` の先頭で写し待ちなら段を「写し待ち」にして戻る（数行・本体は `switch_copy.rs`）。`switch_to_default`（既定への戻し・非常口）は `boot_into` の前に同期の `writable_copy` を通す。
+- `crates/areka/src/emo2_boot/mod.rs` — `switch_copy` の宣言だけ。写し終わりは、今の取り出しの系 `drain_change_requests` の先頭で `switch_copy::poll(world)` を呼んで受け取る（系は増やさない＝「入力の段の系はちょうど 1 つ」のテストを保つ）。
+- `crates/areka/src/install/destination.rs` — `CatalogDestinations::answer` が、見えている物が実行ファイルの隣の根に在るとき `writable_copy` を通してから根を答える（インストールは背景のスレッド）。
+- `crates/areka/src/update/desk.rs`・`update/worker.rs` — `resolve` は値の関数のまま。バルーンの対象の写しは更新の作業スレッドで、取り込みの前に `writable_copy` を通す。
+- `crates/areka/src/menu/roots_frame.rs` — 「置き場を外す ▸」の子のうち書ける根（印の付いた項目）を選べない形にする（要件 3.3）。「置き場を先頭へ ▸」の供給関数 `front_item` を足す（要件 3.7・3.8・最後のタスク）。
 - `crates/areka/src/menu/mod.rs`・`menu/captions.rs`・`menu/plan.rs` — 枠 `Frame::RootFront`（「置き場を追加…」と「置き場を外す」の間）・既定名「置き場を先頭へ」・区切りの群 1（最後のタスク）。並び順を固定しているテスト（`menu/mod_registry_tests.rs`・`menu/plan_tests.rs`・`menu/roots_frame_tests.rs`）を 10 枠に直す。
 - `crates/areka/src/roots/edit.rs`・`roots/edit_tests.rs` — **約束の外（下の節）**。`decide_front`（純粋）と UI スレッドの入口 `move_to_front` を足し、今の `apply` を呼ぶ（最後のタスク）。
 - `crates/areka-mcp-bridge/Cargo.toml`・`src/config.rs`・`src/config_tests.rs` — `from_env` が隣に `areka.exe` が在るとき `areka_user_data::establish` と `app_profile_dir` で置き場を決め、`from_values` は `exe`・`areka_beside` の代わりに決まった記憶の置き場 `beside_profile: Option<PathBuf>` を受ける。
@@ -255,7 +263,8 @@ flowchart TD
     Copy -- failed --> AsIs
 ```
 
-- 「書ける根が実行ファイルの隣の根より上に在る」を条件にするのは、写しが上の根として下の同梱の物を隠す（`catalog_roots` の隠れの規則）ときだけ写しが一覧・切替・更新と食い違わないため。利用者が「置き場を先頭へ ▸」で実行ファイルの隣の根を書ける根より上へ動かしたときは、実行ファイルの隣の物はその場で使い・書く（要件 3.7 の「以後、新しく入れる物はその置き場へ入る」と同じ扱い）。
+- 「書ける根が実行ファイルの隣の根より上に在る」を条件にするのは、写しが上の根として下の同梱の物を隠す（`catalog_roots` の隠れの規則）ときだけ写しが一覧・切替・更新と食い違わないため。メニューでは実行ファイルの隣が書ける根より上に来る道は無い（足すのは末尾・書ける根は外せない・「置き場を先頭へ ▸」で実行ファイルの隣を選べない＝要件 3.8）。この条件は、記憶を手で書き替えた場合の守りとして残す。
+- 「書ける根」は並びの項目の印（`RootMark::UserRoot`）で見分ける。印の無い並び（テスト・`AREKA_ROOT`・今の形）では、どのフックも写さない。
 
 ## Requirements Traceability
 
@@ -277,7 +286,7 @@ flowchart TD
 | 3.3 | 「置き場を外す ▸」で書ける根を選べない | RootsMenu | `remove_item` | — |
 | 3.4 | `AREKA_ROOT` では足さず写さない | UserRootContext・RootsResolveExt | `listed_user_root()`・環境変数の腕 | 写す判断 |
 | 3.5 | 既定の並びを記憶に書かない | RootsResolveExt | 書く口を足さない（今のまま） | — |
-| 3.6 | 並びの記録に書ける根の出どころ | RootsReportExt | `log_roots_with` の `user_root` 欄 | — |
+| 3.6 | 並びの記録に書ける根の出どころ | RootsReportExt | `log_roots` の `user_root` 欄（項目の印から） | — |
 | 3.7 | 「置き場を先頭へ ▸」で先頭へ動かし記憶に書き info | RootsFront・RootsMenu | `decide_front`・`move_to_front`・`apply` | — |
 | 3.8 | 子は全部・今の先頭は選べない・env と 1 つは項目ごと選べない・両方の形で出す | RootsMenu | `front_item` | — |
 | 3.9 | 書けなかった結果を受け口へそのまま | RootsFront | 着地の後の `apply` の戻り値をそのまま返す | — |
@@ -299,7 +308,7 @@ flowchart TD
 | 6.1 | 中継は areka と同じ規則で `mcp-bridge\` | BridgeConfig | `establish`・`app_profile_dir` | — |
 | 6.2 | 隣に `areka.exe` が無ければ今どおり | BridgeConfig | `from_values` の第 3 段（`%LOCALAPPDATA%\areka`） | — |
 | 6.3 | 決められなければ控えなしで warn | BridgeConfig | 今の `from_env` の warn | — |
-| 7.1 | 使わない形は今と同じ | 全体 | `listed_user_root() == None` で全フックが素通し | — |
+| 7.1 | 使わない形は今と同じ | 全体 | `listed_user_root() == None`＝並びに印の付いた項目が無く、全フックが素通し | — |
 | 7.2 | 実行ファイルの隣の根を残し、物を移さない | RootsResolveExt | 並びに残す・写しは書く前だけ | — |
 | 7.3 | ゴースト・シェルの記憶の場所の規則を変えない | — | `profile_areka_root` を変えない | — |
 | 7.4 | argv の起動は写さない | BootHook | `route == GhostRoute::Argv` で写しの口を呼ばない | — |
@@ -318,7 +327,7 @@ flowchart TD
 | 10.3 | 並びのテスト | RootsResolveExt・RootsMenu・RootsFront・UserRootContext | `resolve_tests.rs`・`roots_frame_tests.rs`・`edit_tests.rs`・`user_root_tests.rs` | — |
 | 10.4 | 写す判断のテスト | UserRootContext・CopyTree | `user_root_tests.rs`・`copy_tests.rs` | — |
 | 10.5 | 記憶の置き場と引き継ぎ・中継のテスト | UserDataCore・BridgeConfig | `lib_tests.rs`・`config_tests.rs` | — |
-| 10.6 | 値の注入・環境変数を書き換えない・`target\` の下 | 全テスト | `Signals`・`CopyContext`・`temp-path-kit` | — |
+| 10.6 | 値の注入・環境変数を書き換えない・`target\` の下 | 全テスト | `Signals`・並びの項目の印（`RootMark`）・`temp-path-kit` | — |
 | 10.7 | 判断の分岐に限る | 全テスト | 下の Testing Strategy | — |
 | 10.8 | winget で入れた形の実測 | Verification | 実測の記録 | — |
 | 10.9 | zip の形の実測 | Verification | 同上 | — |
@@ -340,7 +349,7 @@ flowchart TD
 | 書けるかの確かめ | `exe_dir_writability` | 何も作らない（ハンドルを開いて閉じるだけ） |
 | 写しの作業 | `copy_tree_atomic` | `<書ける根>\.copy-work\` |
 
-例外（数に入れない・要件の字面どおり）: `AREKA_ROOT` の並び（要件 3.4・4.1）、argv の起動（要件 7.4）、写しに失敗したときの元の場所（要件 4.7）、利用者が「置き場を先頭へ ▸」で実行ファイルの隣の根を書ける根より上へ動かした後（要件 3.7）。
+例外（数に入れない・要件の字面どおり）: `AREKA_ROOT` の並び（要件 3.4・4.1）、argv の起動（要件 7.4）、写しに失敗したときの元の場所（要件 4.7）。「置き場を先頭へ ▸」で実行ファイルの隣を書ける根より上へ動かすことはできない（要件 3.8）ので、例外に入らない。
 
 ## Components and Interfaces
 
@@ -554,42 +563,52 @@ pub fn copy_tree_atomic(
 | Requirements | 1.4, 3.4, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 7.1, 7.4 |
 
 **Responsibilities & Constraints**
-- `layout()` は `OnceLock` で 1 回だけ `areka_user_data::establish(exe_dir, AREKA_PROFILE_DIR)` を呼んで覚える（`exe_location` と同じ型）。
+- `layout()` は `OnceLock` で 1 回だけ `areka_user_data::establish(exe_dir, AREKA_PROFILE_DIR)` を呼んで覚える（`exe_location` と同じ型）。読み手は `resolve_roots`（`listed_user_root()` 経由）と `default_app_profile_dir` の 2 つだけ（どちらも本番の薄い口・2026-10-16 設計の討議 議題 3）。
 - `listed_user_root()` は、`AREKA_ROOT` が在るとき `None`（要件 3.4: 並びに足さない・写さない）、ほかは `layout().user_root`。`AREKA_ROOT` を見るのはここで、`ROOTS_ENV` の定数を使う。記憶の置き場は `layout()` から決める（`AREKA_ROOT` に関わらず要件 5 のとおり）。
-- 写す判断 `plan_copy` は純粋。写すのは `writable_copy` だけ。
+- 「どれが書ける根か」は並びの項目の印（`RootMark::UserRoot`）で見る。写す判断・記録・メニュー・インストールの宛先・更新の対象は、どれも並びの値だけを読み、プロセスの形を読まない。
+- 写す判断 `plan_copy` は純粋。写すのは `copy_for_write` だけ。
 
 **Contracts**: Service [x] / State [x]
 
 ##### Service Interface
 
 ```rust
+// crates/areka-ghost/src/catalog.rs（足す）
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum RootMark {
+    #[default]
+    Plain,
+    /// 書ける根（`from_env`＝`AREKA_USER_ROOT` で決まった）。付けるのは `resolve_roots_from` だけ。
+    UserRoot { from_env: bool },
+}
+impl BasewareRoot {
+    pub fn new(dir: PathBuf) -> Self;                         // 今のまま・Plain
+    pub fn user_root(dir: PathBuf, from_env: bool) -> Self;   // 足す
+    pub fn mark(&self) -> RootMark;                           // 足す
+}
+impl BasewareRoots {
+    /// 印の付いた項目（無ければ None）。
+    pub fn user_root(&self) -> Option<&BasewareRoot>;        // 足す
+}
+
+// crates/areka/src/roots/user_root.rs
 pub(crate) fn layout() -> &'static areka_user_data::Layout;
-/// 並びに入れる書ける根（`AREKA_ROOT` が在るとき・今の形のときは None）。
+/// 並びに入れる書ける根（`AREKA_ROOT` が在るとき・今の形のときは None）。読み手は resolve_roots だけ。
 pub(crate) fn listed_user_root() -> Option<&'static areka_user_data::UserRoot>;
 
-/// 写す判断の文脈（値・テストは直接組む）。
-pub(crate) struct CopyContext {
-    pub user_root: Option<std::path::PathBuf>,
-    pub exe_dir: Option<std::path::PathBuf>,
-}
-impl CopyContext {
-    /// 本物（`listed_user_root()` と `exe_location()` の親）。
-    pub(crate) fn current() -> CopyContext;
-}
-
 pub(crate) enum CopyPlan {
-    /// 写さない（形が今のまま・実行ファイルの隣の根の直下の物でない・書ける根が並びで下）。
+    /// 写さない（印の付いた項目が無い・実行ファイルの隣の根の直下の物でない・書ける根が並びで下）。
     AsIs,
-    /// 写す（`to` は `<書ける根>\<ghost|balloon>\<フォルダ名>`）。
+    /// 写す（`to` は `<書ける根>\<ghost|balloon>\<フォルダ名>`・書ける根の綴りは並びの `dir()` のまま）。
     Copy { from: std::path::PathBuf, to: std::path::PathBuf },
 }
 
 /// 純粋な判断（要件 4.3・4.4・3.4・7.1）。`Copy` になるのは次のすべてのとき:
-/// 文脈の書ける根が在る／`dir` の親が `<exe_dir>\<kind の置き場>`（`same_root`）／
+/// 並びに印の付いた項目が在る／`dir` の親が `<exe_dir>\<kind の置き場>`（`same_root`）／
 /// 並びで書ける根が実行ファイルの隣の根より上に在る（実行ファイルの隣の根が並びに無ければ AsIs）。
 pub(crate) fn plan_copy(
-    ctx: &CopyContext,
     roots: &areka_ghost::BasewareRoots,
+    exe_dir: Option<&std::path::Path>,
     kind: areka_ghost::StoreKind,
     dir: &std::path::Path,
 ) -> CopyPlan;
@@ -599,13 +618,14 @@ pub(crate) fn plan_copy(
 /// `kind`・`from`・`to`・`files`・`bytes`・`ms`）。`Raced` なら `to`（info `user_data_copy_raced`）。
 /// 失敗なら `dir` のまま（error `user_data_copy_failed`・要件 4.7）。
 pub(crate) fn copy_for_write(
-    ctx: &CopyContext,
     roots: &areka_ghost::BasewareRoots,
+    exe_dir: Option<&std::path::Path>,
     kind: areka_ghost::StoreKind,
     dir: &std::path::Path,
 ) -> std::path::PathBuf;
 
-/// 本番の口: `copy_for_write(&CopyContext::current(), …)`。
+/// 本番の口: `copy_for_write(roots, exe_location の親, …)`（`exe_location` は環境変数を読まず物も作らない
+/// `OnceLock`・`roots/edit.rs` の `exe_dir` と同じ読み方）。
 pub(crate) fn writable_copy(
     roots: &areka_ghost::BasewareRoots,
     kind: areka_ghost::StoreKind,
@@ -619,15 +639,15 @@ pub(crate) fn writable_ghost(
 ) -> std::path::PathBuf;
 ```
 
-- 写しの作業の棚は `<書ける根>\.copy-work\`（`copy_tree_atomic` の `work_root` に書ける根を渡す）。`.nar-work` は使い回さない（`areka-nar` の棚の片付けが他の走行の作業フォルダを消すため）。
+- 写しの作業の棚は `<書ける根>\.copy-work\`（`copy_tree_atomic` の `work_root` に並びの書ける根の `dir()` を渡す）。`.nar-work` は使い回さない（`areka-nar` の棚の片付けが他の走行の作業フォルダを消すため）。
+- 印は並びと一緒に `BootContext.roots` に入る。`decide_add`／`decide_remove`／`decide_front` はどれも今の項目を複写する（`to_vec`）ので印は消えない。記憶から読み直すときは `resolve_roots_from` が付け直す（記憶の綴り `[baseware] roots` は変えない）。
 
 ##### State Management
-- 形は `OnceLock`。テストは `CopyContext` と `plan_copy`／`copy_for_write` を直接使い、プロセスの形（`layout()`）に頼らない。テストのプロセスでは実行ファイルのフォルダ（`target\…\deps`）に書け、控えのファイルも無いので、`layout()` は今の形になる（テストが `%LOCALAPPDATA%` に物を作らない）。
+- 形は `OnceLock`。テストは印の付いた並びを自分で組んで `plan_copy`／`copy_for_write` を直接使い、プロセスの形（`layout()`）に頼らない。印の無い並びで組んだテスト（今の全テスト）は、どのフックを通っても写さず記録の欄も空＝`AREKA_USER_ROOT` を開けた端末で回しても結果は変わらない（要件 10.6）。
 
 **Implementation Notes**
-- Integration: フックの 4 か所はどれも「使うフォルダを `writable_copy` の答えに替える」1〜数行。
+- Integration: フックの 4 か所はどれも「使うフォルダを写しの口の答えに替える」1〜数行。切替は予約の時点で背景のスレッド（`switch_copy`）、バルーンの更新は作業スレッド、インストールは背景のスレッド、最初の起動は窓の前（2026-10-16 設計の討議 議題 2）。
 - Validation: `user_root_tests.rs` で `plan_copy` の各分岐（下の Testing Strategy）と、`copy_for_write` の「在れば写さない」「失敗で元を返し半端を残さない」。
-- Risks: 切替の写しは UI スレッドの上で同期に走る（Open Questions 1）。所要は `user_data_copied` の `ms` で実測する。
 
 #### RootsResolveExt（`roots/resolve.rs`・`roots/mod.rs`）
 
@@ -648,8 +668,8 @@ pub(crate) fn resolve_roots_from(
 ```
 
 - 環境変数の腕: `user_root` を見ない（要件 3.4）。
-- 記憶の腕（読める項目が 1 つ以上）: 項目に `user_root.dir` と同じ根（`same_root`）が在れば記憶の順のまま、無ければ先頭に足す（要件 3.2）。
-- 既定の腕（記憶が無い・読める項目が 0）: `[user_root.dir, exe_dir]`（要件 3.1）。`exe_dir` が取れないときは `[user_root.dir]` で続け、`RootError::ExeLocationUnavailable` にしない（書ける根だけでも新しく入れる物は使える）。
+- 記憶の腕（読める項目が 1 つ以上）: 項目に `user_root.dir` と同じ根（`same_root`）が在れば記憶の順のまま、無ければ先頭に足す（要件 3.2）。どちらでも、その項目を `BasewareRoot::user_root(dir, from_env)` にする（印を付ける）。
+- 既定の腕（記憶が無い・読める項目が 0）: `[user_root.dir（印付き）, exe_dir]`（要件 3.1）。`exe_dir` が取れないときは `[user_root.dir]` で続け、`RootError::ExeLocationUnavailable` にしない（書ける根だけでも新しく入れる物は使える）。
 - 出どころ（`RootsOrigin`）は今のまま（既定の腕は `Default`、記憶の腕は `Memory`）。既定の並びを記憶に書く口は足さない（要件 3.5）。
 - 重複の除去・`status`・`NoneFound` は今の処理をそのまま通る（2 回並べない）。
 - `ResolvedRoots` の欄は増やさない（`roots/edit.rs` の `apply` が組み立てるため・約束の外を増やさない）。
@@ -663,14 +683,9 @@ pub(crate) fn resolve_roots_from(
 
 ```rust
 pub(crate) fn log_roots(resolved: &ResolvedRoots, occasion: ReportOccasion); // 今の口のまま
-pub(crate) fn log_roots_with(
-    resolved: &ResolvedRoots,
-    occasion: ReportOccasion,
-    user_root: Option<&areka_user_data::UserRoot>,
-);
 ```
 
-- `root_listed` の行に欄 `user_root`（その根が書ける根なら `default`／`env_var`、ほかは空の文字列）を足す。`log_roots` は `listed_user_root()` を渡すだけ（`edit.rs` の `apply` からの呼び出しも変えずに印が付く）。
+- `root_listed` の行に欄 `user_root`（項目の印が `UserRoot { from_env: false }` なら `default`、`true` なら `env_var`、`Plain` は空の文字列）を足す。値は並びの項目だけから読む（プロセスの形を読まない）ので、`edit.rs` の `apply` からの呼び出しも変えずに印が付き、テストは並びを組むだけで確かめられる。
 
 #### ProfileDirHook と BootHook（`boot_config.rs`）
 
@@ -702,11 +717,34 @@ pub(crate) fn resolve_boot_from(
 
 | フック | 場所 | 変えること | 要件 |
 |---|---|---|---|
-| SwitchHook | `emo2_boot/ghost_switch.rs` の `boot_into` | 文脈の確かめ（`roots` を取った）の直後に `ghost.dir = writable_copy(&roots, StoreKind::Ghost, &ghost.dir)`。`switch_to`（メニュー・`\![change,ghost,…]`・更新の後の読み直し）と `switch_to_default`（既定への戻し）の両方が通る | 4.3 |
+| SwitchHook | `emo2_boot/ghost_switch.rs`・`emo2_boot/switch_copy.rs` | 下の「切替の写し」。`switch_to`（メニュー・`\![change,ghost,…]`・更新の後の読み直し）は背景で写し、`switch_to_default`（既定への戻し・非常口）は `boot_into` の前に同期の `writable_copy` | 4.3 |
 | InstallHook | `install/destination.rs` の `CatalogDestinations::answer` | `install_root` の答えが「見えている物」のとき（`find_ghost`／`find_balloon` の項目）、その項目のフォルダを `writable_copy` に通し、答えが変われば写しの根を答える。答える綴りは並びの中の書ける根の `dir()` そのまま（`areka-nar` は作業フォルダを根の綴りの完全一致でまとめるため・`destination.rs` の冒頭の注記）。`running_root` の腕は変えない（起動中のゴーストはすでに写し）。`areka-nar` は配置ごとに 1 回だけ尋ねる（`InstallRoots` の約束）ので、写すのも 1 配置 1 回。インストールは背景のスレッドで走る | 4.4 |
-| UpdateHook | `update/desk.rs` の `resolve` | `TargetKind::Balloon` の 2 つの腕（`here.balloon_dir`・`list_balloons` から引いた `dir`）で `writable_copy(&here.roots, StoreKind::Balloon, &dir)` を通してから `target` へ渡す。ゴースト・シェルは起こしたフォルダ（写し）なので通さない | 4.4 |
+| UpdateHook | `update/desk.rs`・`update/worker.rs` | `resolve` は値の関数のまま（写さない）。更新の仕事 `UpdateJob` に並び（`here.roots`）を持たせ、作業スレッドが `TargetKind::Balloon` の対象を取り込みの前に `writable_copy(&roots, StoreKind::Balloon, &dir)` へ通し、答えのフォルダを更新する。ゴースト・シェルは起こしたフォルダ（写し）なので通さない | 4.4 |
 
 - 表示だけのバルーン（`resolve_balloon_for_ghost`・バルーンの切替）にはフックを置かない（要件 4.5）。
+
+**切替の写し（`emo2_boot/switch_copy.rs`・2026-10-16 設計の討議 議題 2）**
+
+```rust
+/// 写しの見込み（予約 `SwitchInFlight` に持たせる）。
+pub(crate) enum SwitchCopy {
+    /// 写す要が無い（plan_copy が AsIs・写しが在る）。
+    None,
+    /// 背景のスレッドで写している（答えのフォルダが届く受信端）。
+    Running(std::sync::mpsc::Receiver<std::path::PathBuf>),
+    /// 写し終えた（写しのフォルダ・失敗なら元のフォルダ）。
+    Done(std::path::PathBuf),
+}
+/// 受理の直後に呼ぶ。plan_copy が Copy なら std::thread で copy_for_write を走らせる。
+pub(crate) fn start(roots: &BasewareRoots, exe_dir: Option<&Path>, dir: &Path) -> SwitchCopy;
+/// drain_change_requests の先頭で毎回呼ぶ。Running が届けば Done にし、段が「写し待ち」なら switch_to の続きを呼ぶ。
+pub(crate) fn poll(world: &mut World);
+```
+
+- 写しは前のゴーストの別れの台詞（`OnGhostChanging` 等）と並んで走る。前のゴーストが止まった時点（`switch_to`）で `Done` なら、そのフォルダから起こす。`Running` なら段を「写し待ち」にして戻り（前のゴーストの窓はそのまま・UI スレッドは止まらない）、`poll` が受け取った時点で続きを走らせる。
+- 写しの失敗は `copy_for_write` が元のフォルダを返すので、続きは元から起こす（要件 4.7）。
+- 「写し待ち」の間に届いた切替の要求は、今の予約の規則どおり `ghost_switch_busy` で退ける。
+- `ghost_switch.rs` の変更は、受理の直後の `start` 1 行・`SwitchInFlight` の欄 1 つ・`switch_to` の先頭の分岐数行（余裕 83 行の内）。
 - バルーンの更新で写した後は、更新の後の読み直し（同じゴーストへの切替）でバルーンが並びから引き直され、上の根の写しが使われる。
 
 #### RootsMenu（`menu/roots_frame.rs`・`menu/mod.rs`・`menu/captions.rs`・`menu/plan.rs`）
@@ -716,8 +754,8 @@ pub(crate) fn resolve_boot_from(
 | Intent | 「置き場を外す ▸」で書ける根を選べなくし、「置き場を先頭へ ▸」を出す |
 | Requirements | 3.3, 3.8 |
 
-- `remove_item`: 子のうち `listed_user_root()` と同じ根（`same_root`）の子は `enabled: false`（ほかの子は今どおり「根が 2 つ以上」で選べる）。`roots/edit.rs` の `remove_root` は変えない（要件 3.3）。
-- `front_item`（最後のタスク）: 見出し「置き場を先頭へ」・子は並びの全部の根（並びの順・絶対パス）・先頭の子は `enabled: false`・見出しは `roots_origin != EnvVar && roots.len() > 1` のときだけ選べる。子の動作は `roots::move_to_front(world, dir)`。書ける根を使う形でも使わない形でも出す。
+- `remove_item`: 子のうち印の付いた項目（`RootMark::UserRoot`）の子は `enabled: false`（ほかの子は今どおり「根が 2 つ以上」で選べる）。`roots/edit.rs` の `remove_root` は変えない（要件 3.3）。
+- `front_item`（最後のタスク）: 見出し「置き場を先頭へ」・子は並びの全部の根（並びの順・絶対パス）・先頭の子は `enabled: false`・並びに印の付いた項目が在るときは実行ファイルの隣の根（`exe_location` の親と `same_root`）の子も `enabled: false`（要件 3.8・2026-10-16 設計の討議 議題 1）・見出しは `roots_origin != EnvVar && roots.len() > 1` のときだけ選べる。子の動作は `roots::move_to_front(world, dir)`。書ける根を使う形でも使わない形でも出す。
 - `Frame::RootFront` は `RootAdd` と `RootRemove` の間（`ORDER` は 10 枠）。区切りの群は 1（`Update`〜`RootRemove` と同じ）。SHIORI のリソース名は無い（`caption_resource: None`）。
 
 #### RootsFront（`roots/edit.rs`・約束の外・最後のタスク）
@@ -842,11 +880,14 @@ impl Config {
 
 ### 単体（areka）
 
-- `roots/user_root_tests.rs`（10.3・10.4）: `plan_copy` の分岐＝書ける根なし → `AsIs`／実行ファイルの隣の根の直下のゴースト・バルーン → `Copy`／実行ファイルの隣でない根の物・シェルのフォルダ → `AsIs`／書ける根が並びで下（先頭へ動かした後）→ `AsIs`。`copy_for_write`＝書ける根に同じフォルダ名が在れば写さずそれを返す（同梱が新しくなっていても・写しが更新されていても上書きしない）／写せなければ元を返す。`listed_user_root` の `AREKA_ROOT` の扱いは値の関数に分けて確かめる。
+- `roots/user_root_tests.rs`（10.3・10.4）: `plan_copy` の分岐＝印の付いた項目なし → `AsIs`／実行ファイルの隣の根の直下のゴースト・バルーン → `Copy`／実行ファイルの隣でない根の物・シェルのフォルダ → `AsIs`／書ける根が並びで下（記憶を手で書き替えた場合）→ `AsIs`。`copy_for_write`＝書ける根に同じフォルダ名が在れば写さずそれを返す（同梱が新しくなっていても・写しが更新されていても上書きしない）／写せなければ元を返す。`listed_user_root` の `AREKA_ROOT` の扱いは値の関数に分けて確かめる。
 - `roots/resolve_tests.rs`（10.3）: 既定の 2 つ（書ける根 → 実行ファイルの隣）／記憶の並びに無ければ先頭へ・在れば記憶の順（先頭へ動かした順を次の起動でも守る）・重ねない／`AREKA_ROOT` では足さない／書ける根なしは今と同じ。
-- `roots/report_tests.rs`（3.6）: 書ける根の行にだけ `user_root` 欄が付く。
+- `roots/report_tests.rs`（3.6）: 印の付いた項目の行にだけ `user_root` 欄（`default`／`env_var`）が付く。
+- `roots/edit_tests.rs` の既存の足す・外す（10.3）: 印の付いた項目が並びの複写で残る（足した後・外した後も `RootMark::UserRoot`）。
+- `emo2_boot/switch_copy_tests.rs`（10.4）: 写す要が無ければ `None`／前のゴーストが止まる前に写し終えた → そのまま写しから起こす／止まった後に写し終えた → 段「写し待ち」を経て写しから起こす／写しの失敗 → 元から起こす／「写し待ち」の間の切替の要求は `ghost_switch_busy`。
+- `update` の作業スレッド（10.4）: バルーンの対象は取り込みの前に写しへ替わる・印の無い並びでは写さない。
 - `boot_config_roots_tests.rs`（10.3・7.4）: argv の起動では写しの口が呼ばれない／argv でなければ写した先でバルーンと構成入力が決まる。
-- `menu/roots_frame_tests.rs`（10.3）: 「置き場を外す ▸」の書ける根の子は選べない／「置き場を先頭へ ▸」の今の先頭の子は選べない・置き場が 1 つと `AREKA_ROOT` で見出しが選べない・書ける根を使わない形でも出る。
+- `menu/roots_frame_tests.rs`（10.3）: 「置き場を外す ▸」の書ける根の子は選べない／「置き場を先頭へ ▸」の今の先頭の子は選べない・印の付いた項目が在るとき実行ファイルの隣の子は選べない（無いときは選べる）・置き場が 1 つと `AREKA_ROOT` で見出しが選べない・書ける根を使わない形でも出る。
 - `roots/edit_tests.rs`（10.3・最後のタスク）: `decide_front` が先頭へ動かしてほかの順を保つ／すでに先頭・`EnvLocked`・`Stale`。`move_to_front` が今のゴーストを替えない（`BootContext.current` が変わらない）。
 - `areka-mcp-bridge/src/config_tests.rs`（10.5）: `from_values` の段の順（`profile_dir` → `beside_profile` → `LOCALAPPDATA` → なし）。共有の関数の入力の組は `areka-user-data` のテストが持つ。
 
@@ -861,15 +902,21 @@ impl Config {
 
 ## Performance & Scalability
 
-- 写しは同梱のゴースト・バルーン 1 つにつき一生に 1 回（以後は写しが在るので写さない）。最初の起動の写しは窓を開く前。切替の写しは UI スレッドの上だが、切替そのもの（降ろす・窓を閉じる・ゴーストを読む）がすでに同期の手続きで、写しは同じ大きさの読みを 1 回足すだけ。所要は `user_data_copied` の `ms` で実測する。
+- 写しは同梱のゴースト・バルーン 1 つにつき一生に 1 回（以後は写しが在るので写さない）。最初の起動の写しは窓を開く前（同期）。切替の写しは予約の時点から背景のスレッドで走り、前のゴーストの別れの台詞と重なる。バルーンの更新の写しは更新の作業スレッド、インストールの写しはインストールの背景のスレッド。UI スレッドの上で同期に写すのは、既定ゴーストへの戻し（非常口・emo2 は大きさが分かり、ほとんど初回に写し済み）だけ。所要は `user_data_copied` の `ms` で実測する。
 - 判断の確かめは起動に 1 回（フォルダの一覧 1 回・ハンドル 1 回）。
 
 ## Open Questions / Risks
 
-設計の討議へ持ち込む（どれも要件の字面で決まり、ここでは推しの形で書いた）:
+2026-10-16 設計の討議で決着（3 件とも推奨案で承認）:
 
-1. **切替の写しを UI スレッドで同期に行う**。代わりの案は「背景で写し、済んでから起こす」（切替の段が 1 つ増える・`ghost_switch.rs` は 917 行）。推しは同期（理由は Performance の節）。実測で長ければ背景へ出す。
-2. **利用者が実行ファイルの隣の根を「置き場を先頭へ ▸」で書ける根より上へ動かした後**は、写しをやめ、実行ファイルの隣でその場で使い・書く（要件 3.7 の「新しく入れる物はその置き場へ」と同じ向き）。代わりの案は「書ける根を使う形では、実行ファイルの隣の根を先頭へ選べなくする」（要件 3.8 の「今の先頭だけ選べない」と食い違うので要件の改めが要る）。
+- 議題 1: 書ける根を使う形では「置き場を先頭へ ▸」の実行ファイルの隣の子を選べない（要件 3.8 に 1 文を足した）。要件 4.1 の「0」は例外なし。
+- 議題 2: 切替の写しは予約の時点から背景のスレッド（`switch_copy.rs`・段「写し待ち」）、バルーンの更新の写しは作業スレッド。最初の起動と既定への戻しは同期。
+- 議題 3: 「書ける根だ」の印を並びの項目に持たせ（`RootMark`）、プロセスの形を読むのは `resolve_roots` と `default_app_profile_dir` だけ。
+
+設計で決めた（議題にしない）:
+
+1. （欠番・議題 2 で決着）
+2. （欠番・議題 1 で決着）
 3. **書けるかが分からない（`Unknown`）とき**は今の形（書ける扱い）にする。代わりの案は書ける根を使う形にする。
 4. **写しの作業フォルダの残骸**: 写す途中でプロセスが落ちると `<書ける根>\.copy-work\` に残る（実行ファイルの隣ではない・次の写しの邪魔はしない）。自動の片付けは足さない（ponytail: 片付けが要るなら `establish` で古い項目を消す）。
 5. **winget の控えのファイルの見分け**は winget の作り（`PortableInstaller` の `<製品コード>.db`）に頼る。winget が規則を変えたら外れる（機械の全員向けは「書けない」で拾える）。レジストリの入れ先の記録（ARP の `InstallLocation`）は `windows` の機能の追加と 3 つの鍵の見方が要るので採らなかった。
