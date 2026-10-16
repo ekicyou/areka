@@ -76,14 +76,14 @@ pub fn survey(roots: &BasewareRoots) -> Survey {
     let ghosts = union(
         roots,
         StoreKind::Ghost,
-        catalog::list_ghosts,
+        catalog::scan_ghosts,
         |e: &GhostEntry| (&e.identity.folder, &e.dir),
         &mut hidden,
     );
     let balloons = union(
         roots,
         StoreKind::Balloon,
-        catalog::list_balloons,
+        catalog::scan_balloons,
         |e: &BalloonEntry| (&e.identity.folder, &e.dir),
         &mut hidden,
     );
@@ -99,7 +99,7 @@ pub fn list_ghosts(roots: &BasewareRoots) -> Vec<GhostEntry> {
     union(
         roots,
         StoreKind::Ghost,
-        catalog::list_ghosts,
+        catalog::scan_ghosts,
         |e: &GhostEntry| (&e.identity.folder, &e.dir),
         &mut Vec::new(),
     )
@@ -110,7 +110,7 @@ pub fn list_balloons(roots: &BasewareRoots) -> Vec<BalloonEntry> {
     union(
         roots,
         StoreKind::Balloon,
-        catalog::list_balloons,
+        catalog::scan_balloons,
         |e: &BalloonEntry| (&e.identity.folder, &e.dir),
         &mut Vec::new(),
     )

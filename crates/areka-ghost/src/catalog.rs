@@ -12,6 +12,8 @@
 //! - 記憶・解決順・既定の定数は知らない（`areka-sylphya`・`areka-nar` に依存しない）。
 //! - 失敗は縮退（`warn!`＋除外）で、列挙は `Result` を返さない。格納フォルダが無いのは 0 件。
 //! - 並びはフォルダ名のバイト順（`String::cmp`）。`recommended.*` は使わない（要件 2.5）。
+//! - 1 根の走査（`scan_ghosts`・`scan_balloons`）は crate の中だけ。外から一覧と引き当てを得る口は
+//!   和の部品（`catalog_roots`）だけ（areka-P0-baseware-root-list 要件 2.6）。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -116,7 +118,7 @@ pub struct BalloonEntry {
 /// `<根>/ghost/` の直下で `ghost/master/descript.txt` を持つフォルダ。素性は
 /// `ghost/master/descript.txt` から、readme と thumbnail.png はゴーストのフォルダ最上位で見る。
 /// フォルダ名の昇順。
-pub fn list_ghosts(root: &BasewareRoot) -> Vec<GhostEntry> {
+pub(crate) fn scan_ghosts(root: &BasewareRoot) -> Vec<GhostEntry> {
     subdirs(&root.ghost_store())
         .into_iter()
         .filter_map(|(folder, dir)| {
@@ -161,7 +163,7 @@ fn scan_shells(ghost_dir: &Path, include_hidden: bool) -> Vec<ShellEntry> {
 
 /// `<根>/balloon/` の直下で descript.txt を持ち、`type` が無いか `balloon` のフォルダ。
 /// `type` が他の値なら `warn!`＋除外（要件 2.3）。
-pub fn list_balloons(root: &BasewareRoot) -> Vec<BalloonEntry> {
+pub(crate) fn scan_balloons(root: &BasewareRoot) -> Vec<BalloonEntry> {
     subdirs(&root.balloon_store())
         .into_iter()
         .filter_map(|(folder, dir)| {

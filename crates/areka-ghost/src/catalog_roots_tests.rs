@@ -11,9 +11,7 @@ use super::{
     BasewareRoots, Hidden, InstallRoot, StoreKind, find_balloon, find_ghost, fold_key,
     install_root, list_balloons, list_ghosts, same_folder_name, same_root, survey,
 };
-use crate::catalog::{
-    BasewareRoot, GhostEntry, list_balloons as scan_balloons, list_ghosts as scan_ghosts,
-};
+use crate::catalog::{BasewareRoot, GhostEntry, scan_balloons, scan_ghosts};
 
 /// ASCII・全角英字・ギリシアは大文字小文字を区別しない（要件 2.8）。
 #[test]
