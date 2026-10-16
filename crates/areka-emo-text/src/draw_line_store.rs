@@ -10,6 +10,9 @@
 //! - 生成の工程に **`decorate`**（生成時 1 度だけのフォント系範囲指定）が挟まり、順序は
 //!   「生成 → `decorate` → はみ出し実測」になる。装飾はインクの張り出しを変えるので、
 //!   はみ出しは焼いた後の行から測る。
+//! - 下線は行に焼かず areka が塗る（areka-P0-balloon-text-bugs 件 3）。下線のある行は
+//!   [`line_layout_with_strokes`](LineLayoutStore::line_layout_with_strokes) の `decorate` が
+//!   線の行の箱からのはみ出しを返し、実測のはみ出しと欄ごとの大きい方で合わせて持つ。
 //! - 行送り軸の箱寸は呼び手が渡す `block_extent`。**既定だけの行は従来どおり `font_height`**
 //!   （`ViewboxExecutor::line_layout_for` が [`line_layout`](LineLayoutStore::line_layout) へ
 //!   落とす）で、装飾のある行だけが行内最大 em（`viewbox_draw_decoration::block_extent`）に
@@ -125,6 +128,28 @@ impl LineLayoutStore {
         style_ids: &[StyleId],
         decorate: impl FnOnce(&IDWriteTextLayout) -> Result<(), TextLayerError>,
     ) -> Result<IDWriteTextLayout, TextLayerError> {
+        self.line_layout_with_strokes(index, text, format, block_extent, mode, style_ids, |l| {
+            decorate(l).map(|()| LineOverhang::default())
+        })
+    }
+
+    /// 行 TextLayout の取得（装飾込み・`decorate` が線のはみ出しも返す形・areka-P0-balloon-text-bugs 件 3）。
+    ///
+    /// [`line_layout_decorated`](Self::line_layout_decorated) と同じ生成・再利用の規則で、
+    /// `decorate` は焼いた後に areka が塗る線（下線）の行の箱からのはみ出しを返す。下線は
+    /// 行の TextLayout に焼かないので `GetOverhangMetrics` の実測に入らない——その分を
+    /// 実測のはみ出しと**欄ごとの大きい方**で合わせて持つ（描き替えの範囲が線を取りこぼさない）。
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn line_layout_with_strokes(
+        &mut self,
+        index: usize,
+        text: &str,
+        format: &IDWriteTextFormat,
+        block_extent: f32,
+        mode: WritingMode,
+        style_ids: &[StyleId],
+        decorate: impl FnOnce(&IDWriteTextLayout) -> Result<LineOverhang, TextLayerError>,
+    ) -> Result<IDWriteTextLayout, TextLayerError> {
         if let Some(cached) = self.cache.get(&index)
             && cached.text == text
             && cached.styles == style_ids
@@ -140,12 +165,18 @@ impl LineLayoutStore {
             .create_text_layout(&HSTRING::from(text), format, max_width, max_height)
             .map_err(device_err("CreateTextLayout(line)"))?;
         self.creations += 1;
-        decorate(&layout)?;
+        let strokes = decorate(&layout)?;
         // 実測インクはみ出し（生成時 1 回・確定行は再計測しない）。行ボックスのブロック軸寸は
         // block_extent（横＝max_height／縦＝max_width）ゆえ、その軸の overhang が em ボックスからの
         // はみ出しを直接与える。行内軸は巨大 PROBE_MAX_EXTENT 箱ゆえ overhang は巨大負値＝`max(0.0)`
         // で 0 に丸まる（resident_rect はブロック軸の overhang のみ使う）。
-        let overhang = measure_line_overhang(&layout)?;
+        let measured = measure_line_overhang(&layout)?;
+        let overhang = LineOverhang {
+            top: measured.top.max(strokes.top),
+            bottom: measured.bottom.max(strokes.bottom),
+            left: measured.left.max(strokes.left),
+            right: measured.right.max(strokes.right),
+        };
         self.cache.insert(
             index,
             CachedLineLayout {

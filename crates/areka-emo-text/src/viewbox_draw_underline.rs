@@ -5,8 +5,9 @@
 //! [`crate::underline`] が担い、本モジュールは値を写すだけ（太さ・幅・縦書きの位置・色は
 //! DirectWrite と D2D の決め方のまま＝要件 3.2）。
 //!
-//! - 受け手は `#[implement(IDWriteTextRenderer)]`。`DrawUnderline` だけを記録し、字・打ち消し線・
-//!   埋め込み物は何もしない。画素への寄せの問いには D2D の描画と同じ条件（拡大率 k の変換・
+//! - 受け手は `#[implement(IDWriteTextRenderer1)]`（縦書きの行は `IDWriteTextRenderer1` を持たない
+//!   受け手を `DWRITE_E_TEXTRENDERERINCOMPATIBLE` で断るため）。`DrawUnderline` だけを記録し、
+//!   字・打ち消し線・埋め込み物は何もしない。画素への寄せの問いには D2D の描画と同じ条件（拡大率 k の変換・
 //!   1 DIP＝1 画像画素・寄せは有効＝描画は `D2D1_DRAW_TEXT_OPTIONS_NO_SNAP` を使わない）を答える。
 //! - [`collect_underlines`] は区間に下線を立てて `IDWriteTextLayout::Draw` で集め、集めるのが
 //!   失敗しても区間の下線を立てる前の状態へ必ず戻す。失敗は `error!`＋`Err`（当該フレームを見送る）。
@@ -18,11 +19,13 @@ use std::rc::Rc;
 use windows::Win32::Foundation::E_INVALIDARG;
 use windows::Win32::Graphics::Direct2D::ID2D1Brush;
 use windows::Win32::Graphics::DirectWrite::{
-    DWRITE_GLYPH_RUN, DWRITE_GLYPH_RUN_DESCRIPTION, DWRITE_MATRIX, DWRITE_MEASURING_MODE,
-    DWRITE_READING_DIRECTION_LEFT_TO_RIGHT, DWRITE_READING_DIRECTION_RIGHT_TO_LEFT,
-    DWRITE_READING_DIRECTION_TOP_TO_BOTTOM, DWRITE_STRIKETHROUGH, DWRITE_TEXT_RANGE,
-    DWRITE_UNDERLINE, IDWriteInlineObject, IDWritePixelSnapping_Impl, IDWriteTextLayout,
-    IDWriteTextRenderer, IDWriteTextRenderer_Impl,
+    DWRITE_GLYPH_ORIENTATION_ANGLE, DWRITE_GLYPH_ORIENTATION_ANGLE_0_DEGREES,
+    DWRITE_GLYPH_ORIENTATION_ANGLE_90_DEGREES, DWRITE_GLYPH_RUN, DWRITE_GLYPH_RUN_DESCRIPTION,
+    DWRITE_MATRIX, DWRITE_MEASURING_MODE, DWRITE_READING_DIRECTION_LEFT_TO_RIGHT,
+    DWRITE_READING_DIRECTION_RIGHT_TO_LEFT, DWRITE_READING_DIRECTION_TOP_TO_BOTTOM,
+    DWRITE_STRIKETHROUGH, DWRITE_TEXT_RANGE, DWRITE_UNDERLINE, IDWriteInlineObject,
+    IDWritePixelSnapping_Impl, IDWriteTextLayout, IDWriteTextRenderer_Impl, IDWriteTextRenderer1,
+    IDWriteTextRenderer1_Impl,
 };
 use windows_core::{BOOL, HRESULT, IUnknown, Interface, Ref, implement};
 
@@ -105,7 +108,7 @@ fn set_and_draw(
     }
     let recorded = Rc::new(RefCell::new(Vec::new()));
     let failure = Rc::new(Cell::new(None));
-    let renderer: IDWriteTextRenderer = UnderlineRecorder {
+    let renderer: IDWriteTextRenderer1 = UnderlineRecorder {
         scale,
         recorded: Rc::clone(&recorded),
         failure: Rc::clone(&failure),
@@ -139,7 +142,7 @@ fn restore(
 }
 
 /// 下線だけを記録する受け手（`IDWriteTextLayout::Draw` の 1 回の間だけ生きる）。
-#[implement(IDWriteTextRenderer)]
+#[implement(IDWriteTextRenderer1)]
 struct UnderlineRecorder {
     /// 描画の拡大率 k（画素への寄せの問いの答え）。
     scale: f32,
@@ -155,6 +158,7 @@ impl UnderlineRecorder {
         &self,
         x: f32,
         y: f32,
+        angle: DWRITE_GLYPH_ORIENTATION_ANGLE,
         underline: *const DWRITE_UNDERLINE,
         effect: Ref<IUnknown>,
     ) -> Result<RecordedUnderline, HRESULT> {
@@ -179,6 +183,22 @@ impl UnderlineRecorder {
                 return Err(E_INVALIDARG);
             }
         };
+        // `stroke_rect` の写し方は、横書きは回さず・縦書きは時計回りに 90 度回す前提
+        // （D2D の既定の描き方と同じ）。DirectWrite の向きの角度がその前提と違えば記録しない。
+        let expected = match reading {
+            ReadingAxis::TopToBottom => DWRITE_GLYPH_ORIENTATION_ANGLE_90_DEGREES,
+            ReadingAxis::LeftToRight | ReadingAxis::RightToLeft => {
+                DWRITE_GLYPH_ORIENTATION_ANGLE_0_DEGREES
+            }
+        };
+        if angle != expected {
+            tracing::error!(
+                orientation_angle = angle.0,
+                ?reading,
+                "下線の向きの角度が写し方の前提と違う"
+            );
+            return Err(E_INVALIDARG);
+        }
         let brush = effect.as_ref().and_then(|e| match e.cast::<ID2D1Brush>() {
             Ok(brush) => Some(brush),
             Err(_) => {
@@ -252,22 +272,22 @@ impl IDWriteTextRenderer_Impl for UnderlineRecorder_Impl {
 
     fn DrawUnderline(
         &self,
-        _context: *const core::ffi::c_void,
+        context: *const core::ffi::c_void,
         x: f32,
         y: f32,
         underline: *const DWRITE_UNDERLINE,
         effect: Ref<IUnknown>,
     ) -> windows_core::Result<()> {
-        match self.record(x, y, underline, effect) {
-            Ok(line) => {
-                self.recorded.borrow_mut().push(line);
-                Ok(())
-            }
-            Err(hresult) => {
-                self.failure.set(Some(hresult));
-                Err(hresult.into())
-            }
-        }
+        // `IDWriteTextRenderer1` を持つ受け手には DirectWrite は角度つきの口を呼ぶ。
+        IDWriteTextRenderer1_Impl::DrawUnderline(
+            self,
+            context,
+            x,
+            y,
+            DWRITE_GLYPH_ORIENTATION_ANGLE_0_DEGREES,
+            underline,
+            effect,
+        )
     }
 
     fn DrawStrikethrough(
@@ -286,6 +306,69 @@ impl IDWriteTextRenderer_Impl for UnderlineRecorder_Impl {
         _context: *const core::ffi::c_void,
         _x: f32,
         _y: f32,
+        _object: Ref<IDWriteInlineObject>,
+        _sideways: BOOL,
+        _right_to_left: BOOL,
+        _effect: Ref<IUnknown>,
+    ) -> windows_core::Result<()> {
+        Ok(())
+    }
+}
+
+impl IDWriteTextRenderer1_Impl for UnderlineRecorder_Impl {
+    fn DrawGlyphRun(
+        &self,
+        _context: *const core::ffi::c_void,
+        _x: f32,
+        _y: f32,
+        _angle: DWRITE_GLYPH_ORIENTATION_ANGLE,
+        _mode: DWRITE_MEASURING_MODE,
+        _run: *const DWRITE_GLYPH_RUN,
+        _description: *const DWRITE_GLYPH_RUN_DESCRIPTION,
+        _effect: Ref<IUnknown>,
+    ) -> windows_core::Result<()> {
+        Ok(())
+    }
+
+    fn DrawUnderline(
+        &self,
+        _context: *const core::ffi::c_void,
+        x: f32,
+        y: f32,
+        angle: DWRITE_GLYPH_ORIENTATION_ANGLE,
+        underline: *const DWRITE_UNDERLINE,
+        effect: Ref<IUnknown>,
+    ) -> windows_core::Result<()> {
+        match self.record(x, y, angle, underline, effect) {
+            Ok(line) => {
+                self.recorded.borrow_mut().push(line);
+                Ok(())
+            }
+            Err(hresult) => {
+                self.failure.set(Some(hresult));
+                Err(hresult.into())
+            }
+        }
+    }
+
+    fn DrawStrikethrough(
+        &self,
+        _context: *const core::ffi::c_void,
+        _x: f32,
+        _y: f32,
+        _angle: DWRITE_GLYPH_ORIENTATION_ANGLE,
+        _strikethrough: *const DWRITE_STRIKETHROUGH,
+        _effect: Ref<IUnknown>,
+    ) -> windows_core::Result<()> {
+        Ok(())
+    }
+
+    fn DrawInlineObject(
+        &self,
+        _context: *const core::ffi::c_void,
+        _x: f32,
+        _y: f32,
+        _angle: DWRITE_GLYPH_ORIENTATION_ANGLE,
         _object: Ref<IDWriteInlineObject>,
         _sideways: BOOL,
         _right_to_left: BOOL,

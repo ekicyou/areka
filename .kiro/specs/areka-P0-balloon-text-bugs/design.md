@@ -46,7 +46,7 @@
 
 - `crates/areka`（`emo2_boot`・`input_events`）→ `areka-emo-text` の公開の口（`TextLayerRuntime`・`TextMsg`・`EmoTextSink`）。逆向きは無い。
 - `areka-sakura` の再生（`drive.rs`）→ `dola` の `CuePlayer::announce_choice_wait`（新）→ 登録された受け口の `CueSink::choice_wait_began`（新・何もしない既定つき）。先渡しの `preview` と同じ向きと形（設計の討議 議題 1）。
-- `areka-emo-text` → `wintf`（`VisualGraphics`・`Arrangement` の部品）・`windows`（DirectWrite の `IDWriteTextRenderer`・`IDWriteTextLayout`）・**`windows-core`（`#[implement]` のため・ワークスペースの依存・新しい外部のクレートは 0）**。`areka-emo-text` は `areka-ghost` に依らないまま。
+- `areka-emo-text` → `wintf`（`VisualGraphics`・`Arrangement` の部品）・`windows`（DirectWrite の `IDWriteTextRenderer1`・`IDWriteTextLayout`）・**`windows-core`（`#[implement]` のため・ワークスペースの依存・新しい外部のクレートは 0）**。`areka-emo-text` は `areka-ghost` に依らないまま。
 - 可視性の判断は時計・GPU・World に触れない純関数のまま（`decide`）。
 - 新しい公開型は作らない。下線の受け手と幾何は `areka-emo-text` の中だけ（`pub(crate)`）。
 
@@ -110,7 +110,7 @@ graph TB
 
 | 層 | 選んだもの・版 | この spec での役目 | 注 |
 |---|---|---|---|
-| 文字の描画 | DirectWrite（`windows` 0.62）`IDWriteTextLayout::Draw`・`IDWriteTextRenderer` | 下線の幾何（`DWRITE_UNDERLINE`）と区間の描画効果を集める | 既に使う機能の別の口。新しい依存なし |
+| 文字の描画 | DirectWrite（`windows` 0.62）`IDWriteTextLayout::Draw`・`IDWriteTextRenderer1` | 下線の幾何（`DWRITE_UNDERLINE`）と区間の描画効果を集める | 既に使う機能の別の口。新しい依存なし |
 | COM の実装 | `windows-core` 0.62 の `#[implement]` | 下線を集める受け手を作る | ワークスペースの依存（`crates/areka`・`wintf` が使用）を emo-text の直接の依存へ足す。`Cargo.lock` の emo-text の列に 1 行。**版は `windows` と同じ 0.62 の系列（ワークスペースのピン `0.62.2`）**。emo-text の `Cargo.toml` には版を書かず `{ workspace = true }` だけにする。出ている `0.100.0` は 0.62 と互換が無いので取らない（`windows` と別々に上げない） |
 | 合成 | wintf の `VisualGraphics`（`on_remove`）・`visual_sync` | 潰れたときに差し込み口から文字の絵を外す | 既存の部品の取り外しだけ |
 | 合図の線 | `std::sync::mpsc`（可視性）・`UiSender<TextMsg>`（文字） | 選択肢を出した・トークが終わった | 既存の線に 1 種類ずつ足す |
@@ -123,7 +123,7 @@ graph TB
 crates/areka-emo-text/src/
 ├── underline.rs                       # 純粋層: 下線の矩形（横書きはベースライン直下・縦書きは DirectWrite のまま）と面の内側への寄せ・はみ出しの足し分
 ├── underline_tests.rs                 # 上の決定論の檻（GPU なし）
-├── viewbox_draw_underline.rs          # 描画実行部の子: DirectWrite に下線の幾何と描画効果を聞く受け手（#[implement(IDWriteTextRenderer)]）と、区間の下線を立てて集めて戻す手順
+├── viewbox_draw_underline.rs          # 描画実行部の子: DirectWrite に下線の幾何と描画効果を聞く受け手（#[implement(IDWriteTextRenderer1)]）と、区間の下線を立てて集めて戻す手順
 ├── viewbox_draw_underline_tests.rs    # 実 DirectWrite の幾何の檻・実 GPU の読み戻しの檻（最下行・拡大率・縦書き・打ち消し線・字の画素）
 ├── actor_choice_settle_tests.rs       # 済みの境目・押下とトークの終わり・写しと強調の原子性・箱（GPU なしと実 GPU）
 ├── actor_region_collapse_tests.rs     # 潰れた範囲の記録の回数・描かないこと・片付け・戻り・箱（実 GPU を含む）
@@ -563,7 +563,7 @@ pub(crate) fn collect_underlines(
     scale: f32,
 ) -> Result<Vec<RecordedUnderline>, TextLayerError>;
 ```
-- 受け手は `#[implement(IDWriteTextRenderer)]`。`DrawUnderline` だけを記録し、`DrawGlyphRun`・`DrawStrikethrough`・`DrawInlineObject` は何もしない。画素への寄せの問い（`IsPixelSnappingDisabled`・`GetCurrentTransform`・`GetPixelsPerDip`）は D2D の描画と同じ条件（拡大率 k の変換・1 DIP＝1 画像画素）を答える。
+- 受け手は `#[implement(IDWriteTextRenderer1)]`（実装で改めた: 縦書きの行の Draw は `IDWriteTextRenderer1` を持たない受け手を `DWRITE_E_TEXTRENDERERINCOMPATIBLE` で断る。角度つきの `DrawUnderline` で向きの角度が `stroke_rect` の前提（横書き 0°・縦書き 90°）と違えば `error!` を残して Err）。`DrawUnderline` だけを記録し、`DrawGlyphRun`・`DrawStrikethrough`・`DrawInlineObject` は何もしない。画素への寄せの問い（`IsPixelSnappingDisabled`・`GetCurrentTransform`・`GetPixelsPerDip`）は D2D の描画と同じ条件（拡大率 k の変換・1 DIP＝1 画像画素）を答える。
 - 描画効果は `ID2D1Brush` へ写して持つ（D2D の既定の描き方と同じ。写せない効果は既定の文字色）。
 
 #### 下線の塗り（`render_styled`・`line_styles`・行の保持庫）

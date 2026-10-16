@@ -717,3 +717,91 @@ fn the_cursor_preview_of_a_pending_newline_uses_the_closing_lines_pitch() {
         r"`\_l` の実効位置の先読みは閉じる行の丈から行送りを引く"
     );
 }
+
+// ── 要件 3.7／3.9（areka-P0-balloon-text-bugs 件 3）: 下線は配置に効かない ──
+
+/// 下線の有無で、行の位置・文字の位置・入る行の数（見える窓）・当たり行が変わらない。
+///
+/// 下線は描く段で areka が塗るもので、配置は下線を読まない。下線つきの見た目と、下線だけを
+/// 外した同じ見た目（大きさ・太さ・斜体は同じ）で同じ台詞を組み、面からあふれる行数にして
+/// 見える窓まで突き合わせる。
+#[test]
+fn underline_changes_neither_line_positions_nor_fitting_lines_nor_hit_rows() {
+    use super::test_support::model_rect;
+    use crate::choice::{LineBand, LineChoiceSegment, derive_hit_rows};
+
+    // 幅 30（全角 3 文字）× 高さ 40（行送り 12 で 3 行）の範囲に 6 行を流す。
+    let region = TextRegion::resolve(
+        &model_rect((Some(0), Some(0)), (Some(0), Some(40), Some(0), Some(30))),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    let items = glyph_items("あいうえおかきくけこさしすせそたちつ");
+    let default = look_with_height(10.0);
+    let lay = |underline: bool| {
+        let mut table = StyleTable::default();
+        let id = table.intern(
+            &TextLook {
+                underline,
+                bold: true,
+                ..default.clone()
+            },
+            &default,
+        );
+        let ids: Vec<StyleId> = (0..items.len())
+            .map(|i| if i % 2 == 0 { id } else { StyleId::DEFAULT })
+            .collect();
+        let lines = layout_styled_h(
+            &items,
+            &region,
+            styles(&table, &ids, &default),
+            WrapPlan::CharByChar,
+        );
+        let window = LayoutEngine::visible_window(&lines, &region, WritingMode::HorizontalTb);
+        let segments: Vec<LineChoiceSegment> = lines
+            .iter()
+            .enumerate()
+            .map(|(i, l)| LineChoiceSegment {
+                line_index: i,
+                ordinal: i,
+                inline_range: (l.rect.left, l.rect.right),
+            })
+            .collect();
+        let bands = vec![
+            LineBand {
+                extent: 10.0,
+                offset: 0.0,
+            };
+            lines.len()
+        ];
+        let hits = derive_hit_rows(
+            &lines,
+            &segments,
+            WritingMode::HorizontalTb,
+            &region,
+            &bands,
+        );
+        let positions: Vec<Vec<(f32, f32)>> = lines
+            .iter()
+            .map(|l| l.glyphs.iter().map(|g| (g.inline_pos, g.advance)).collect())
+            .collect();
+        (rects(&lines), positions, window, hits)
+    };
+
+    let with = lay(true);
+    let without = lay(false);
+    assert!(
+        with.2.first_visible_line > 0,
+        "前提: 行が範囲からあふれて見える窓が送られている（入る行の数が効く形）"
+    );
+    assert_eq!(with.0, without.0, "行の矩形が下線の有無で変わらない");
+    assert_eq!(
+        with.1, without.1,
+        "文字の位置と送り幅が下線の有無で変わらない"
+    );
+    assert_eq!(
+        with.2, without.2,
+        "見える窓（入る行の数）が下線の有無で変わらない"
+    );
+    assert_eq!(with.3, without.3, "当たり行が下線の有無で変わらない");
+}

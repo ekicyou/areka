@@ -136,7 +136,13 @@ fn default_only_line_keeps_font_height_and_empty_style_ids() {
         size: (20.0, 37.5), // 行箱の高さを font_height と別値にする（丸め非依存の証拠）。
     };
 
-    let line = line_styles(&run, 12.0, WritingMode::HorizontalTb);
+    let line = line_styles(
+        &run,
+        12.0,
+        WritingMode::HorizontalTb,
+        &StyleTable::default(),
+        &TextLook::ukadoc_default(),
+    );
 
     assert!(
         line.default_only,
@@ -156,7 +162,13 @@ fn default_only_line_keeps_font_height_and_empty_style_ids() {
         glyphs: vec![glyph("あ", StyleId(1)), glyph("い", StyleId::DEFAULT)],
         size: (20.0, 37.5),
     };
-    let line = line_styles(&decorated, 12.0, WritingMode::HorizontalTb);
+    let line = line_styles(
+        &decorated,
+        12.0,
+        WritingMode::HorizontalTb,
+        &StyleTable::default(),
+        &TextLook::ukadoc_default(),
+    );
     assert!(!line.default_only, "番号の付いた行は既定だけの行ではない");
     assert_eq!(
         line.ids,
@@ -555,5 +567,292 @@ fn color_reset_is_issued_once_and_not_duplicated_on_choice_lines() {
         RESET_CALLS.with(|c| c.get()),
         0,
         "選択肢の行は既に解除済み——解除を二重に発行しない"
+    );
+}
+
+// ────────────────────────── 件 3（areka-P0-balloon-text-bugs 2.4）: 下線を焼かず区間とはみ出しを用意する
+
+/// 区間を `(startPosition, length)` の組へ落とす（比較用）。
+fn spans(ranges: &[windows::Win32::Graphics::DirectWrite::DWRITE_TEXT_RANGE]) -> Vec<(u32, u32)> {
+    ranges.iter().map(|r| (r.startPosition, r.length)).collect()
+}
+
+/// 下線の区間の選びは、今まで `SetUnderline(true)` を焼いていた区間と同じ
+/// （既定と違う装飾の区間で、見た目の下線が真で、既定の下線と違うもの）。作者の下線
+/// （`\f[underline,1]`）とアンカーの既定の下線（色つき＋下線）はどちらも入り、太字だけの区間・
+/// 番号 0 の区間は入らない。UTF-16 で 2 単位の文字（`𠮷`）は 2 と数える。
+#[test]
+fn underline_ranges_pick_the_runs_that_turned_underline_on() {
+    let default = TextLook::ukadoc_default();
+    assert!(!default.underline, "前提: 既定の見た目は下線なし");
+    let mut table = StyleTable::default();
+    let author = table.intern(
+        &TextLook {
+            underline: true,
+            ..default.clone()
+        },
+        &default,
+    );
+    let anchor = table.intern(
+        &TextLook {
+            underline: true,
+            color: (0, 0, 255),
+            ..default.clone()
+        },
+        &default,
+    );
+    let bold = table.intern(
+        &TextLook {
+            bold: true,
+            ..default.clone()
+        },
+        &default,
+    );
+    let run = GlyphRunContent {
+        glyphs: vec![
+            glyph("あ", author),
+            glyph("い", author),
+            glyph("う", bold),
+            glyph("え", StyleId::DEFAULT),
+            glyph("𠮷", anchor),
+        ],
+        size: (50.0, 12.0),
+    };
+
+    let line = line_styles(&run, 12.0, WritingMode::HorizontalTb, &table, &default);
+    assert_eq!(
+        spans(&line.underlines),
+        vec![(0, 2), (4, 2)],
+        "作者の下線の区間とアンカーの下線の区間だけが選ばれる"
+    );
+
+    // 既定だけの行は区間を持たない。
+    let plain = GlyphRunContent {
+        glyphs: vec![glyph("あ", StyleId::DEFAULT)],
+        size: (10.0, 12.0),
+    };
+    assert!(
+        line_styles(&plain, 12.0, WritingMode::HorizontalTb, &table, &default)
+            .underlines
+            .is_empty(),
+        "既定だけの行は下線の区間を持たない"
+    );
+
+    // 既定が下線つきなら、下線つきの装飾は既定と同じ下線＝今も焼いていなかった区間（選ばない）。
+    let underlined_default = TextLook {
+        underline: true,
+        ..default.clone()
+    };
+    let mut table2 = StyleTable::default();
+    let bold_underlined = table2.intern(
+        &TextLook {
+            bold: true,
+            ..underlined_default.clone()
+        },
+        &underlined_default,
+    );
+    let run2 = GlyphRunContent {
+        glyphs: vec![glyph("あ", bold_underlined)],
+        size: (10.0, 12.0),
+    };
+    assert!(
+        line_styles(
+            &run2,
+            12.0,
+            WritingMode::HorizontalTb,
+            &table2,
+            &underlined_default
+        )
+        .underlines
+        .is_empty(),
+        "既定と同じ下線の区間は選ばない（今の選び方と同じ）"
+    );
+}
+
+/// 保持庫にある行の TextLayout を、再利用で引き直す（焼く処理が呼ばれたら作り直し＝誤り）。
+fn cached_line_layout(
+    exec: &mut ViewboxExecutor,
+    run: &GlyphRunContent,
+    font: &ResolvedFont,
+    mode: WritingMode,
+    styles: &StyleTable,
+) -> windows::Win32::Graphics::DirectWrite::IDWriteTextLayout {
+    let format = exec
+        .format
+        .as_ref()
+        .expect("描いた後は書式がある")
+        .1
+        .clone();
+    let text: String = run.glyphs.iter().map(|g| &*g.text).collect();
+    let line = line_styles(run, font.height, mode, styles, &font.looks.default);
+    let before = exec.line_store.creations();
+    let layout = exec
+        .line_store
+        .line_layout_decorated(0, &text, &format, line.extent, mode, &line.ids, |_| {
+            panic!("保持庫の行を引き直すはず（作り直しは鍵の食い違い）")
+        })
+        .expect("保持庫の行が引ける");
+    assert_eq!(exec.line_store.creations(), before, "再利用で引けている");
+    layout
+}
+
+/// 最初の GlyphRun 住人の run。
+fn first_run(canvas: &ContentCanvas) -> GlyphRunContent {
+    match &canvas.residents[0].content {
+        ResidentContent::GlyphRun(run) => run.clone(),
+        other => panic!("最初の住人は GlyphRun のはず: {other:?}"),
+    }
+}
+
+/// 要件 3.6／3.8: 行の TextLayout に下線は焼かない（D2D の `DrawTextLayout` は下線を描かない）。
+/// 打ち消し線は今のまま焼く。
+#[test]
+fn underline_is_not_baked_into_the_line_layout_but_strikethrough_still_is() {
+    let mut rig = Rig::new();
+    let image = (60u32, 20u32);
+    let mut surface = rig.attach(image, 1.0);
+    let mode = WritingMode::HorizontalTb;
+    let font = ResolvedFont::resolve(&geo_model(Some(10)));
+    let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let default = &font.looks.default;
+
+    let mut styles = StyleTable::default();
+    let under = styles.intern(
+        &TextLook {
+            underline: true,
+            ..default.clone()
+        },
+        default,
+    );
+    let strike = styles.intern(
+        &TextLook {
+            strike: true,
+            ..default.clone()
+        },
+        default,
+    );
+    let (plain, window) = build(&glyph_items("あい"), &region, mode, 10.0);
+    let mut canvas = decorate_first_glyph(&plain, under);
+    if let ResidentContent::GlyphRun(run) = &mut canvas.residents[0].content {
+        run.glyphs[1].style = strike;
+    }
+
+    let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+    exec.render_styled(
+        &canvas,
+        &window,
+        &font,
+        mode,
+        &contract,
+        &mut surface,
+        &styles,
+    )
+    .expect("render_styled 失敗");
+
+    let run = first_run(&canvas);
+    let layout = cached_line_layout(&mut exec, &run, &font, mode, &styles);
+    let mut underline = windows::core::BOOL(1);
+    let mut strikethrough = windows::core::BOOL(0);
+    unsafe {
+        layout
+            .GetUnderline(0, &mut underline, None)
+            .expect("GetUnderline");
+        layout
+            .GetStrikethrough(1, &mut strikethrough, None)
+            .expect("GetStrikethrough");
+    }
+    assert!(
+        !underline.as_bool(),
+        "下線の区間でも行の TextLayout に下線を焼かない（areka が塗る）"
+    );
+    assert!(
+        strikethrough.as_bool(),
+        "打ち消し線は今のまま行の TextLayout に焼く（要件 3.8）"
+    );
+}
+
+/// 下線のある行のはみ出しは線を含む: 行の生成のときに集めた線の、行の箱からのはみ出しと
+/// 実測のはみ出しの欄ごとの大きい方になる（描き替えの範囲が線を取りこぼさない）。
+///
+/// 行の箱を 7 画素に縮め、インクが箱に収まる字（`ー`）を選んで、線（ベースラインの直下）だけが
+/// 箱の下へ出る形にする。比べる相手は同じ形で色だけを変えた行（装飾のある行・下線なし）。
+#[test]
+fn an_underlined_line_overhang_covers_its_stroke() {
+    let mut rig = Rig::new();
+    let image = (60u32, 20u32);
+    let mode = WritingMode::HorizontalTb;
+    let font = ResolvedFont::resolve(&geo_model(Some(10)));
+    let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let default = &font.looks.default;
+    const EXTENT: f32 = 7.0;
+
+    let (plain, window) = build(&glyph_items("ーー"), &region, mode, 10.0);
+    let render = |rig: &mut Rig, look: TextLook| {
+        let (styles, id) = table_with(&look, default);
+        let mut canvas = decorate_first_glyph(&plain, id);
+        if let ResidentContent::GlyphRun(run) = &mut canvas.residents[0].content {
+            run.size.1 = EXTENT;
+        }
+        let mut surface = rig.attach(image, 1.0);
+        let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+        exec.render_styled(
+            &canvas,
+            &window,
+            &font,
+            mode,
+            &contract,
+            &mut surface,
+            &styles,
+        )
+        .expect("render_styled 失敗");
+        let overhang = exec.line_store.overhang(0).expect("行が生成されている");
+        (exec, canvas, styles, overhang)
+    };
+
+    let (_, _, _, without) = render(
+        &mut rig,
+        TextLook {
+            color: (255, 0, 0),
+            ..default.clone()
+        },
+    );
+    let (mut exec, canvas, styles, with) = render(
+        &mut rig,
+        TextLook {
+            underline: true,
+            color: (255, 0, 0),
+            ..default.clone()
+        },
+    );
+
+    // 期待値: 同じ行の線を集めて、行の原点 (0,0) で矩形にし、箱からのはみ出しを測る。
+    let run = first_run(&canvas);
+    let line = line_styles(&run, font.height, mode, &styles, default);
+    assert_eq!(line.extent, EXTENT, "前提: 行の箱は縮めた丈");
+    let layout = cached_line_layout(&mut exec, &run, &font, mode, &styles);
+    let strokes: Vec<_> = super::underline::collect_underlines(&layout, &line.underlines, 1.0)
+        .expect("集められる")
+        .iter()
+        .map(|r| crate::underline::stroke_rect(&r.raw, (0.0, 0.0)))
+        .collect();
+    assert!(!strokes.is_empty(), "前提: 線が 1 本以上ある");
+    let stroke_below = strokes.iter().map(|s| s.bottom).fold(f32::MIN, f32::max) - EXTENT;
+    assert!(
+        stroke_below > without.bottom,
+        "前提: 線は字のインクより下へ出る（線 {stroke_below} ≤ インク {}）——非退化",
+        without.bottom
+    );
+
+    assert_eq!(
+        with.bottom, stroke_below,
+        "下線のある行の下のはみ出しは線の下端まで（実測 {} のままは取りこぼし）",
+        without.bottom
+    );
+    assert_eq!(
+        (with.top, with.left, with.right),
+        (without.top, without.left, without.right),
+        "線の出ない欄は実測のはみ出しのまま"
     );
 }
