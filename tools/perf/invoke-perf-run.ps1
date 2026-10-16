@@ -221,15 +221,15 @@ function Get-UtcStamp {
 function Stop-Run {
     param([int]$Code, [string]$Message)
 
-    Write-Problem "[invoke-perf-run] 失敗: $Message"
+    Write-Problem "[invoke-perf-run] failed: $Message"
 
     if ($script:OutDirCreated -and $script:OutDirPath -and (Test-Path -LiteralPath $script:OutDirPath)) {
         try {
             $errText = @(
-                "この採取は失敗しました。測定結果として使ってはいけません。",
-                "時刻: $(Get-UtcStamp)",
-                "終了コード: $Code",
-                "理由: $Message"
+                "This run failed. Do not use it as a measurement result.",
+                "time: $(Get-UtcStamp)",
+                "exit code: $Code",
+                "reason: $Message"
             ) -join [Environment]::NewLine
             Set-Content -LiteralPath (Join-Path $script:OutDirPath 'FAILED.txt') -Value $errText -Encoding utf8
 
@@ -239,9 +239,9 @@ function Stop-Run {
                 $leaf = $leaf + '-' + [DateTime]::UtcNow.ToString('HHmmssfff')
             }
             Rename-Item -LiteralPath $script:OutDirPath -NewName $leaf
-            Write-Problem "[invoke-perf-run] 作りかけの出力は $(Join-Path $parent $leaf) へ退避しました（判定には使えません）。"
+            Write-Problem "[invoke-perf-run] moved the partial output to $(Join-Path $parent $leaf) (not usable for judging)."
         } catch {
-            Write-Problem "[invoke-perf-run] 作りかけの出力の退避に失敗しました: $($_.Exception.Message)"
+            Write-Problem "[invoke-perf-run] could not move the partial output: $($_.Exception.Message)"
         }
     }
     exit $Code
@@ -304,7 +304,7 @@ function Get-MachineFacts {
         $facts['os_build']          = $os.BuildNumber
         $facts['total_memory_mb']   = [math]::Round($os.TotalVisibleMemorySize / 1024)
     } catch {
-        $facts['os_caption']        = "(取得できませんでした: $($_.Exception.Message))"
+        $facts['os_caption']        = "(unavailable: $($_.Exception.Message))"
     }
     try {
         $cpu = @(Get-CimInstance -ClassName Win32_Processor -ErrorAction Stop)
@@ -313,7 +313,7 @@ function Get-MachineFacts {
         $facts['cpu_cores_physical']= ($cpu | Measure-Object -Property NumberOfCores -Sum).Sum
         $facts['cpu_max_clock_mhz'] = ($cpu | Measure-Object -Property MaxClockSpeed -Maximum).Maximum
     } catch {
-        $facts['cpu_model']         = "(取得できませんでした: $($_.Exception.Message))"
+        $facts['cpu_model']         = "(unavailable: $($_.Exception.Message))"
     }
     $facts['power_scheme']          = Get-ActivePowerScheme
     return $facts
@@ -374,10 +374,10 @@ function Get-SourceFacts {
                 $facts['git_dirty_files'] = $dirty
             }
         } else {
-            $facts['git_head'] = '(git から取得できませんでした)'
+            $facts['git_head'] = '(unavailable: git rev-parse HEAD failed)'
         }
     } catch {
-        $facts['git_head'] = "(git を実行できませんでした: $($_.Exception.Message))"
+        $facts['git_head'] = "(unavailable: cannot run git: $($_.Exception.Message))"
     }
     return $facts
 }
@@ -466,23 +466,23 @@ function Format-Section {
 #    どちらの経路を通ったかは run-meta.txt の quiet_mode に残る。
 # =============================================================================
 if ($ConfirmQuiet -and $AutoQuiet) {
-    Stop-Run $EXIT_BAD_ARGS "-ConfirmQuiet と -AutoQuiet は同時に指定できません。人が確認したのなら -ConfirmQuiet、機械に確認させるのなら -AutoQuiet のどちらか一方だけを指定してください。"
+    Stop-Run $EXIT_BAD_ARGS "-ConfirmQuiet and -AutoQuiet cannot be used together. Use only one: -ConfirmQuiet if a person checked, -AutoQuiet to let the machine check."
 }
 if (-not $ConfirmQuiet -and -not $AutoQuiet -and -not $DryRun) {
     Write-Problem @"
-[invoke-perf-run] 実走を開始しませんでした。
+[invoke-perf-run] run not started.
 
-この計測は「測定マシンに他の負荷がないこと（静寂状態）」を前提にしています。
-並行して開発セッション・ビルド・テスト・他のアプリが動いていると、採取した CPU 時系列は
-areka の性能ではなくマシンの混み具合を測ったものになり、判定が丸ごと誤りになります。
+This measurement assumes the machine has no other load (quiet state).
+If dev sessions, builds, tests or other apps run at the same time, the CPU series
+measures how busy the machine is, not areka, and the verdict is wrong as a whole.
 
-開発者ご本人が次を確認してください:
-  ・他の開発セッション（並行するビルドやテスト）が動いていないこと
-  ・重いアプリケーション（ブラウザの大量タブ・動画・仮想マシン等）を閉じたこと
-  ・ウイルス対策ソフトの全体スキャンなど、定期処理が走っていないこと
+Please check yourself that:
+  - no other dev session (parallel build or test) is running
+  - heavy apps (many browser tabs, video, virtual machines, etc.) are closed
+  - no scheduled job such as a full antivirus scan is running
 
-確認できたら -ConfirmQuiet を付けて再実行してください。
-起動せずに前提だけを確かめたい場合は -DryRun を付けてください（測定にはなりません）。
+When confirmed, run again with -ConfirmQuiet.
+To check only the preconditions without starting areka, use -DryRun (not a measurement).
 "@
     exit $EXIT_QUIET_UNCONFIRMED
 }
@@ -499,7 +499,7 @@ $smokeExitMs = switch ($runProfile) {
     default { -1 }
 }
 if ($smokeExitMs -lt 0) {
-    Stop-Run $EXIT_BAD_ARGS "水準の指定 -Profile が不正です（受け取った値: '$Profile'）。short（7 分）か long（20 分超）のどちらかを指定してください。"
+    Stop-Run $EXIT_BAD_ARGS "invalid -Profile (got: '$Profile'). Use short (7 min) or long (over 20 min)."
 }
 
 $buildDirName = switch ($runBuild) {
@@ -508,7 +508,7 @@ $buildDirName = switch ($runBuild) {
     default   { '' }
 }
 if (-not $buildDirName) {
-    Stop-Run $EXIT_BAD_ARGS "ビルド種別の指定 -Build が不正です（受け取った値: '$Build'）。dev か release のどちらかを指定してください。"
+    Stop-Run $EXIT_BAD_ARGS "invalid -Build (got: '$Build'). Use dev or release."
 }
 
 # 実行体の位置は tools/perf/ からリポジトリルートを 2 階層上へたどって決める。
@@ -516,26 +516,26 @@ if (-not $buildDirName) {
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 if ($BinDir) {
     if (-not (Test-Path -LiteralPath $BinDir -PathType Container)) {
-        Stop-Run $EXIT_BAD_ARGS "-BinDir のフォルダが存在しません: $BinDir"
+        Stop-Run $EXIT_BAD_ARGS "-BinDir folder does not exist: $BinDir"
     }
     $binDirFull = (Resolve-Path -LiteralPath $BinDir).Path.TrimEnd('\')
     $exePath    = Join-Path $binDirFull 'areka.exe'
     if (-not (Test-Path -LiteralPath $exePath -PathType Leaf)) {
-        Stop-Run $EXIT_BAD_ARGS "areka の実行体が -BinDir にありません: $exePath — A/B 比較では実行体一式（areka.exe と 32bit SHIORI ヘルパ）を先にこのフォルダへ複製してください。"
+        Stop-Run $EXIT_BAD_ARGS "areka executable not found in -BinDir: $exePath - for A/B compare, first copy the executable set (areka.exe and the 32bit SHIORI helper) into this folder."
     }
 } else {
     $binDirFull = ''
     $exePath    = Join-Path $repoRoot (Join-Path 'target' (Join-Path $buildDirName 'areka.exe'))
     if (-not (Test-Path -LiteralPath $exePath -PathType Leaf)) {
         $buildHint = 'cargo build -p areka' + $(if ($runBuild -eq 'release') { ' --release' } else { '' })
-        Stop-Run $EXIT_BAD_ARGS "areka の実行体が見つかりません: $exePath — 先に「$buildHint」を実行してください。"
+        Stop-Run $EXIT_BAD_ARGS "areka executable not found: $exePath - run '$buildHint' first."
     }
 }
 
 # 目標定義ファイル（-AutoQuiet の閾値と確かめ直しの回数の出どころ）。
 # check-quiet.ps1 と同じ決まりで解決し、無ければここで止める（黙って既定値へ落とさない）。
 if ($Goal -and $GoalFile) {
-    Stop-Run $EXIT_BAD_ARGS "-Goal と -GoalFile は同時に指定できません。"
+    Stop-Run $EXIT_BAD_ARGS "-Goal and -GoalFile cannot be used together."
 }
 $goalFileFull    = ''
 $quietRetryMax   = $QUIET_RETRY_MAX_DEFAULT
@@ -543,33 +543,33 @@ $quietRetryWait  = $QUIET_RETRY_WAIT_SEC_DEFAULT
 if ($Goal -or $GoalFile) {
     $goalCandidate = if ($GoalFile) { $GoalFile } else { Join-Path $PSScriptRoot (Join-Path 'goals' "$Goal.toml") }
     if (-not (Test-Path -LiteralPath $goalCandidate -PathType Leaf)) {
-        Stop-Run $EXIT_BAD_ARGS "目標定義ファイルが見つかりません: $goalCandidate"
+        Stop-Run $EXIT_BAD_ARGS "goal file not found: $goalCandidate"
     }
     $goalFileFull = (Resolve-Path -LiteralPath $goalCandidate).Path
     $retrySettings = Read-QuietRetrySettingsFromToml ([IO.File]::ReadAllText($goalFileFull))
     if ($retrySettings.ContainsKey('retry_max'))      { $quietRetryMax  = [int]$retrySettings['retry_max'] }
     if ($retrySettings.ContainsKey('retry_wait_sec')) { $quietRetryWait = [int]$retrySettings['retry_wait_sec'] }
     if (-not $AutoQuiet) {
-        Write-Info "[invoke-perf-run] 注意: 目標定義ファイル $goalFileFull は -AutoQuiet のときだけ使います（今回は使いません）。"
+        Write-Info "[invoke-perf-run] note: goal file $goalFileFull is used only with -AutoQuiet (not used this time)."
     }
 }
-if ($quietRetryMax -lt 0)  { Stop-Run $EXIT_BAD_ARGS "確かめ直しの回数が不正です（0 以上が必要）: $quietRetryMax（目標定義ファイル $goalFileFull の [quiet] retry_max）" }
-if ($quietRetryWait -lt 0) { Stop-Run $EXIT_BAD_ARGS "確かめ直しの待ち秒数が不正です（0 以上が必要）: $quietRetryWait（目標定義ファイル $goalFileFull の [quiet] retry_wait_sec）" }
+if ($quietRetryMax -lt 0)  { Stop-Run $EXIT_BAD_ARGS "invalid retry count (must be 0 or more): $quietRetryMax ([quiet] retry_max in goal file $goalFileFull)" }
+if ($quietRetryWait -lt 0) { Stop-Run $EXIT_BAD_ARGS "invalid retry wait seconds (must be 0 or more): $quietRetryWait ([quiet] retry_wait_sec in goal file $goalFileFull)" }
 
 # ゴーストのルート: 絶対パス必須（相対パスでは pasta.dll の読み込みに失敗する既知の要件）
 if (-not $GhostRoot) {
-    Stop-Run $EXIT_BAD_ARGS "-GhostRoot が指定されていません。ゴースト一式のルートを絶対パスで指定してください。"
+    Stop-Run $EXIT_BAD_ARGS "-GhostRoot is not given. Pass the root of the ghost set as an absolute path."
 }
 if (-not [System.IO.Path]::IsPathFullyQualified($GhostRoot)) {
-    Stop-Run $EXIT_BAD_ARGS "-GhostRoot は絶対パスで指定してください（受け取った値: '$GhostRoot'）。相対パスで起動すると SHIORI の読み込みに失敗します。"
+    Stop-Run $EXIT_BAD_ARGS "-GhostRoot must be an absolute path (got: '$GhostRoot'). With a relative path, loading SHIORI fails."
 }
 if (-not (Test-Path -LiteralPath $GhostRoot -PathType Container)) {
-    Stop-Run $EXIT_BAD_ARGS "-GhostRoot のフォルダが存在しません: $GhostRoot"
+    Stop-Run $EXIT_BAD_ARGS "-GhostRoot folder does not exist: $GhostRoot"
 }
 $ghostRootFull = [System.IO.Path]::GetFullPath($GhostRoot).TrimEnd('\')
 $descriptPath  = Join-Path $ghostRootFull (Join-Path 'ghost' (Join-Path 'master' 'descript.txt'))
 if (-not (Test-Path -LiteralPath $descriptPath -PathType Leaf)) {
-    Stop-Run $EXIT_BAD_ARGS "ゴーストの起動起点 $descriptPath が見つかりません。-GhostRoot にはゴースト一式のルート（直下に ghost\master\descript.txt があるフォルダ）を指定してください。"
+    Stop-Run $EXIT_BAD_ARGS "ghost boot file $descriptPath not found. -GhostRoot must be the root of the ghost set (the folder with ghost\master\descript.txt under it)."
 }
 
 # バルーンのルート: 絶対パス必須。既定は置かない——バルーンはゴーストのルートの下に無く
@@ -577,13 +577,13 @@ if (-not (Test-Path -LiteralPath $descriptPath -PathType Leaf)) {
 # 「ゴーストのルートに名前を継ぎ足す」既定は必ず存在しない場所を指すためである。
 if (-not $BalloonRoot) {
     # 逐語で出す文なので単引用符で書く（二重引用符だとバッククォートが逃がし記号として食われる）
-    Stop-Run $EXIT_BAD_ARGS '-BalloonRoot が指定されていません。バルーンのルートを絶対パスで指定してください（cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2 の balloon.emo2-kakukaku= の行の値を渡してください）。'
+    Stop-Run $EXIT_BAD_ARGS '-BalloonRoot is not given. Pass the balloon root as an absolute path (use the value of the balloon.emo2-kakukaku= line from cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2).'
 }
 if (-not [System.IO.Path]::IsPathFullyQualified($BalloonRoot)) {
-    Stop-Run $EXIT_BAD_ARGS "-BalloonRoot は絶対パスで指定してください（受け取った値: '$BalloonRoot'）。"
+    Stop-Run $EXIT_BAD_ARGS "-BalloonRoot must be an absolute path (got: '$BalloonRoot')."
 }
 if (-not (Test-Path -LiteralPath $BalloonRoot -PathType Container)) {
-    Stop-Run $EXIT_BAD_ARGS "-BalloonRoot のフォルダが存在しません: $BalloonRoot"
+    Stop-Run $EXIT_BAD_ARGS "-BalloonRoot folder does not exist: $BalloonRoot"
 }
 $balloonRootFull = [System.IO.Path]::GetFullPath($BalloonRoot).TrimEnd('\')
 
@@ -593,7 +593,7 @@ $balloonRootFull = [System.IO.Path]::GetFullPath($BalloonRoot).TrimEnd('\')
 if (-not $OutDir) {
     $localAppData = [Environment]::GetFolderPath('LocalApplicationData')
     if (-not $localAppData) {
-        Stop-Run $EXIT_BAD_ARGS "出力先の既定位置（LOCALAPPDATA）を解決できませんでした。-OutDir で明示してください。"
+        Stop-Run $EXIT_BAD_ARGS "cannot resolve the default out dir (LOCALAPPDATA). Pass -OutDir."
     }
     $stamp  = [DateTime]::Now.ToString('yyyyMMdd-HHmmss', [Globalization.CultureInfo]::InvariantCulture)
     $leaf   = "perf-$stamp" + $(if ($DryRun) { '-dryrun' } else { '' })
@@ -603,12 +603,12 @@ if (-not [System.IO.Path]::IsPathFullyQualified($OutDir)) {
     $OutDir = [System.IO.Path]::GetFullPath((Join-Path (Get-Location).Path $OutDir))
 }
 if (Test-Path -LiteralPath $OutDir) {
-    Stop-Run $EXIT_BAD_ARGS "出力先 $OutDir は既に存在します。採取のたびに新しいフォルダを作る決まりです（過去の採取を上書きしません）。別の -OutDir を指定してください。"
+    Stop-Run $EXIT_BAD_ARGS "out dir $OutDir already exists. Each run makes a new folder (past runs are never overwritten). Pass another -OutDir."
 }
 try {
     New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 } catch {
-    Stop-Run $EXIT_BAD_ARGS "出力先 $OutDir を作成できませんでした: $($_.Exception.Message)"
+    Stop-Run $EXIT_BAD_ARGS "cannot create out dir ${OutDir}: $($_.Exception.Message)"
 }
 $script:OutDirPath    = [System.IO.Path]::GetFullPath($OutDir)
 $script:OutDirCreated = $true
@@ -630,32 +630,32 @@ $quietAttempts = 0
 if ($AutoQuiet) {
     $checkQuietPath = Join-Path $PSScriptRoot $CHECK_QUIET_SCRIPT
     if (-not (Test-Path -LiteralPath $checkQuietPath -PathType Leaf)) {
-        Stop-Run $EXIT_BAD_ARGS "自動静寂確認のスクリプトが見つかりません: $checkQuietPath — -AutoQuiet はこのスクリプトを必要とします（人が確認して進めるなら -ConfirmQuiet を使ってください）。"
+        Stop-Run $EXIT_BAD_ARGS "quiet-check script not found: $checkQuietPath - -AutoQuiet needs it (use -ConfirmQuiet if a person checked instead)."
     }
     $maxQuietAttempts = $quietRetryMax + 1
     while ($true) {
         $quietAttempts++
-        Write-Info "[invoke-perf-run] 静寂状態の自動確認 $quietAttempts/$maxQuietAttempts 回目（$CHECK_QUIET_SCRIPT）…"
+        Write-Info "[invoke-perf-run] quiet check $quietAttempts/$maxQuietAttempts ($CHECK_QUIET_SCRIPT)..."
         try {
             $quietCode = Invoke-CheckQuietOnce -ScriptPath $checkQuietPath -TargetOutDir $script:OutDirPath `
                 -Stage $QUIET_STAGE_BEFORE -GoalFilePath $goalFileFull
         } catch {
-            Stop-Run $EXIT_BAD_ARGS "自動静寂確認のスクリプトを起動できませんでした（$checkQuietPath）: $($_.Exception.Message)"
+            Stop-Run $EXIT_BAD_ARGS "cannot start the quiet-check script ($checkQuietPath): $($_.Exception.Message)"
         }
         if ($quietCode -eq 0) { break }
         if ($quietCode -eq 4) {
-            Stop-Run $EXIT_COUNTER_FAILED "静寂状態の自動確認で性能カウンタを読めませんでした（$CHECK_QUIET_SCRIPT が 4 で終了）。判断の根拠は quiet-$QUIET_STAGE_BEFORE.txt に残しています。"
+            Stop-Run $EXIT_COUNTER_FAILED "quiet check could not read the performance counters ($CHECK_QUIET_SCRIPT exited with 4). The evidence is in quiet-$QUIET_STAGE_BEFORE.txt."
         }
         if ($quietCode -ne 2) {
-            Stop-Run $EXIT_BAD_ARGS "静寂状態の自動確認を実行できませんでした（$CHECK_QUIET_SCRIPT が $quietCode で終了）。引数か前提が不正です。"
+            Stop-Run $EXIT_BAD_ARGS "quiet check could not run ($CHECK_QUIET_SCRIPT exited with $quietCode). Bad arguments or preconditions."
         }
         if ($quietAttempts -ge $maxQuietAttempts) {
-            Stop-Run $EXIT_QUIET_UNCONFIRMED "静寂状態の自動確認に失敗しました（$maxQuietAttempts 回確かめて、いずれも「静かでない」でした）。他の負荷が動いているマシンで採った CPU 時系列は areka の性能ではなくマシンの混み具合を測ったものになるため、起動しません。判断の根拠は quiet-$QUIET_STAGE_BEFORE.txt に残しています（下記の退避先を見てください）。"
+            Stop-Run $EXIT_QUIET_UNCONFIRMED "quiet check failed (checked $maxQuietAttempts times, never quiet). A CPU series taken while other load runs measures the machine, not areka, so areka is not started. The evidence is in quiet-$QUIET_STAGE_BEFORE.txt (see the moved folder below)."
         }
-        Write-Info "[invoke-perf-run] まだ静かではありません。$quietRetryWait 秒待って確かめ直します（残り $($maxQuietAttempts - $quietAttempts) 回）。"
+        Write-Info "[invoke-perf-run] not quiet yet. Waiting $quietRetryWait s and checking again ($($maxQuietAttempts - $quietAttempts) left)."
         Start-Sleep -Seconds $quietRetryWait
     }
-    Write-Info "[invoke-perf-run] 静寂状態を確認しました（$quietAttempts 回目・根拠は $quietPath）。"
+    Write-Info "[invoke-perf-run] machine is quiet (attempt $quietAttempts, evidence in $quietPath)."
 }
 
 # =============================================================================
@@ -679,7 +679,7 @@ $rustLogValue = if ($RustLogExtra) { "$RUST_LOG_VALUE,$RustLogExtra" } else { $R
 $runSection = [ordered]@{
     'script'                 = 'tools/perf/invoke-perf-run.ps1'
     'script_version'         = $SCRIPT_VERSION
-    'spec'                   = 'areka-P0-recompose-budget（要件 2.1 / 2.3 / 2.6 / 2.7 / 4.5）'
+    'spec'                   = 'areka-P0-recompose-budget (requirements 2.1 / 2.3 / 2.6 / 2.7 / 4.5)'
     'dry_run'                = [bool]$DryRun
     'quiet_confirmed'        = [bool]$ConfirmQuiet
     'profile'                = $runProfile
@@ -719,34 +719,34 @@ $calibrationSection = [ordered]@{
     'EXIT_WATCHDOG_MARGIN_SEC'       = $EXIT_WATCHDOG_MARGIN_SEC
     'EARLY_EXIT_TOLERANCE_SEC'       = $EARLY_EXIT_TOLERANCE_SEC
     'LOG_MARKER_SMOKE_GATE'          = $LOG_MARKER_SMOKE_GATE
-    'cpu_unit'                       = 'cpu_percent_1core = 1 コアを 100% とする換算値（複数コア使用時は 100 超もあり得る）。1 行は約 1 秒幅の瞬時値で、15 秒の平均ではない'
+    'cpu_unit'                       = 'cpu_percent_1core = percent of one core (can exceed 100 when several cores are used). Each row is an instant value over about 1 s, not a 15 s average'
 }
 
 $metaHead = @(
-    '# areka 性能計測 実行条件（invoke-perf-run.ps1 が生成）',
-    '# 判定スクリプト（judge-perf.py）はこの内容を測定マシンの条件として併記する（要件 4.5）。',
+    '# areka perf run conditions (written by invoke-perf-run.ps1)',
+    '# judge-perf.py shows this content as the conditions of the measuring machine (requirement 4.5).',
     ''
 ) -join [Environment]::NewLine
-$metaHead += Format-Section '実行' $runSection
-$metaHead += Format-Section '対象' $targetSection
-$metaHead += Format-Section '較正値' $calibrationSection
-$metaHead += Format-Section 'マシン' (Get-MachineFacts)
-$metaHead += Format-Section 'ソース' (Get-SourceFacts -RepoRoot $repoRoot)
+$metaHead += Format-Section "`u{5B9F}`u{884C}" $runSection
+$metaHead += Format-Section "`u{5BFE}`u{8C61}" $targetSection
+$metaHead += Format-Section "`u{8F03}`u{6B63}`u{5024}" $calibrationSection
+$metaHead += Format-Section "`u{30DE}`u{30B7}`u{30F3}" (Get-MachineFacts)
+$metaHead += Format-Section "`u{30BD}`u{30FC}`u{30B9}" (Get-SourceFacts -RepoRoot $repoRoot)
 Set-Content -LiteralPath $metaPath -Value $metaHead -Encoding utf8
 
-Write-Info "[invoke-perf-run] 水準=$runProfile ビルド=$runBuild 有界終了=${smokeExitMs}ms"
-Write-Info "[invoke-perf-run] 実行体   : $exePath"
-Write-Info "[invoke-perf-run] ゴースト : $ghostRootFull"
-Write-Info "[invoke-perf-run] バルーン : $balloonRootFull"
-Write-Info "[invoke-perf-run] 出力先   : $($script:OutDirPath)"
+Write-Info "[invoke-perf-run] profile=$runProfile build=$runBuild smoke_exit=${smokeExitMs}ms"
+Write-Info "[invoke-perf-run] exe      : $exePath"
+Write-Info "[invoke-perf-run] ghost    : $ghostRootFull"
+Write-Info "[invoke-perf-run] balloon  : $balloonRootFull"
+Write-Info "[invoke-perf-run] out dir  : $($script:OutDirPath)"
 if ($BinDir) {
-    Write-Info "[invoke-perf-run] 実行体の所在は -BinDir で上書きしています（SHA-256 $exeSha256）。"
+    Write-Info "[invoke-perf-run] exe location overridden by -BinDir (SHA-256 $exeSha256)."
 }
 if ($RustLogExtra) {
-    Write-Info "[invoke-perf-run] RUST_LOG : $rustLogValue（-RustLogExtra を連結した値）"
+    Write-Info "[invoke-perf-run] RUST_LOG : $rustLogValue (with -RustLogExtra appended)"
 }
 if (-not $helperExists) {
-    Write-Info "[invoke-perf-run] 注意: 32bit SHIORI ヘルパ $helperPath がありません。実 SHIORI なしの走行になり、発話のない別条件の計測になります（run-meta.txt に記録済み）。"
+    Write-Info "[invoke-perf-run] note: 32bit SHIORI helper $helperPath not found. The run has no real SHIORI and no talk, so it measures a different condition (recorded in run-meta.txt)."
 }
 
 # =============================================================================
@@ -754,12 +754,12 @@ if (-not $helperExists) {
 # =============================================================================
 if ($DryRun) {
     $dryText = @(
-        'これは -DryRun（起動しない前提確認）の出力です。',
-        '実走していないため run.log も cpu.csv もありません。測定結果として扱ってはいけません。',
-        "時刻: $(Get-UtcStamp)"
+        'This is the output of -DryRun (checks preconditions without starting areka).',
+        'Nothing was run, so there is no run.log and no cpu.csv. Do not treat this as a measurement result.',
+        "time: $(Get-UtcStamp)"
     ) -join [Environment]::NewLine
     Set-Content -LiteralPath (Join-Path $script:OutDirPath 'DRY-RUN.txt') -Value $dryText -Encoding utf8
-    Write-Info "[invoke-perf-run] -DryRun のため起動しませんでした。前提の検証と実行条件の記録のみ完了しました（測定ではありません）。"
+    Write-Info "[invoke-perf-run] -DryRun: areka not started. Only checked preconditions and recorded run conditions (not a measurement)."
     exit $EXIT_OK
 }
 
@@ -788,12 +788,12 @@ try {
             -RedirectStandardError $errLogPath `
             -NoNewWindow -PassThru
     } catch {
-        Stop-Run $EXIT_RUN_FAILED "areka を起動できませんでした（$exePath）: $($_.Exception.Message)"
+        Stop-Run $EXIT_RUN_FAILED "cannot start areka ($exePath): $($_.Exception.Message)"
     }
     if ($null -eq $proc) {
-        Stop-Run $EXIT_RUN_FAILED "areka を起動できませんでした（$exePath）: プロセスを取得できませんでした。"
+        Stop-Run $EXIT_RUN_FAILED "cannot start areka ($exePath): no process object returned."
     }
-    Write-Info "[invoke-perf-run] 起動しました（プロセス ID $($proc.Id)）。有界自動終了まで約 $([math]::Round($smokeExitMs / 60000.0, 1)) 分です。"
+    Write-Info "[invoke-perf-run] started (process ID $($proc.Id)). About $([math]::Round($smokeExitMs / 60000.0, 1)) min until the smoke auto-exit."
 
     # --- 最初の 1 点を採る。ここで採れないならカウンタ名・権限の問題ゆえ即エラー終了 ---
     $sampleCount = 0
@@ -802,19 +802,19 @@ try {
     $lastError   = ''
     while ($true) {
         if ($proc.HasExited) {
-            Stop-Run $EXIT_RUN_FAILED "areka が CPU の初回採取より前に終了しました（終了コード $($proc.ExitCode)）。実行ログ $runLogPath と $errLogPath を確認してください。"
+            Stop-Run $EXIT_RUN_FAILED "areka exited before the first CPU sample (exit code $($proc.ExitCode)). Check the run logs $runLogPath and $errLogPath."
         }
         try {
             $firstValue = Get-ProcessCpuPercent1Core -TargetProcessId $proc.Id -InstanceFilter "$instanceName*" `
                 -IdCounterTemplate $COUNTER_PATH_PROC_ID -CpuCounterTemplate $COUNTER_PATH_PROC_CPU
             if ($null -ne $firstValue) { break }
-            $lastError = "対象プロセス（ID $($proc.Id)）の性能カウンタのインスタンスが見つかりません。"
+            $lastError = "performance counter instance for the target process (ID $($proc.Id)) not found."
         } catch {
             $lastError = $_.Exception.Message
         }
         if ([DateTime]::UtcNow -ge $graceUntil) {
             if ($proc -and -not $proc.HasExited) { try { $proc.Kill() } catch { } }
-            Stop-Run $EXIT_COUNTER_FAILED "CPU の性能カウンタを取得できませんでした（$COUNTER_FIRST_SAMPLE_GRACE_SEC 秒待機）: $lastError — カウンタ名 '$($COUNTER_PATH_PROC_CPU -f $instanceName)' はこのマシンで有効ですか（日本語版などカウンタ名が翻訳されている環境では冒頭の較正値を書き換えてください）。"
+            Stop-Run $EXIT_COUNTER_FAILED "cannot read the CPU performance counter (waited $COUNTER_FIRST_SAMPLE_GRACE_SEC s): $lastError - is the counter name '$($COUNTER_PATH_PROC_CPU -f $instanceName)' valid on this machine? (where counter names are localized, edit the calibration values at the top)"
         }
         Start-Sleep -Seconds $COUNTER_RETRY_WAIT_SEC
     }
@@ -829,7 +829,7 @@ try {
         $now = [DateTime]::UtcNow
         if ($now -ge $deadline) {
             try { $proc.Kill() } catch { }
-            Stop-Run $EXIT_RUN_FAILED "areka が予定時刻（有界自動終了 ${smokeExitMs}ms ＋ 猶予 ${EXIT_WATCHDOG_MARGIN_SEC}秒）を過ぎても終了しませんでした。停止させました。実行ログ $runLogPath を確認してください。"
+            Stop-Run $EXIT_RUN_FAILED "areka did not exit by the planned time (smoke auto-exit ${smokeExitMs}ms + margin ${EXIT_WATCHDOG_MARGIN_SEC}s). Killed it. Check the run log $runLogPath."
         }
         if ($now -ge $nextSampleAt) {
             $value    = $null
@@ -840,7 +840,7 @@ try {
                     $value = Get-ProcessCpuPercent1Core -TargetProcessId $proc.Id -InstanceFilter "$instanceName*" `
                         -IdCounterTemplate $COUNTER_PATH_PROC_ID -CpuCounterTemplate $COUNTER_PATH_PROC_CPU
                     if ($null -ne $value) { break }
-                    $sampleErr = "対象プロセス（ID $($proc.Id)）の性能カウンタのインスタンスが見つかりません。"
+                    $sampleErr = "performance counter instance for the target process (ID $($proc.Id)) not found."
                 } catch {
                     $sampleErr = $_.Exception.Message
                 }
@@ -848,7 +848,7 @@ try {
                 $attempt++
                 if ($attempt -gt $COUNTER_RETRY_MAX) {
                     try { $proc.Kill() } catch { }
-                    Stop-Run $EXIT_COUNTER_FAILED "CPU の採取に $COUNTER_RETRY_MAX 回連続で失敗しました: $sampleErr — 時系列が歯抜けのまま判定に回さないため、この採取を失敗として終了します。"
+                    Stop-Run $EXIT_COUNTER_FAILED "CPU sampling failed $COUNTER_RETRY_MAX times in a row: $sampleErr - a series with gaps must not be judged, so this run ends as failed."
                 }
                 Start-Sleep -Seconds $COUNTER_RETRY_WAIT_SEC
             }
@@ -889,21 +889,21 @@ try {
 # 7. 採取結果の健全性確認（黙って壊れた成果を残さない）
 # =============================================================================
 if ($exitCode -ne 0) {
-    Stop-Run $EXIT_RUN_FAILED "areka が異常終了しました（終了コード $exitCode）。実行ログ $runLogPath と $errLogPath を確認してください。"
+    Stop-Run $EXIT_RUN_FAILED "areka exited abnormally (exit code $exitCode). Check the run logs $runLogPath and $errLogPath."
 }
 $plannedSec = $smokeExitMs / 1000.0
 if ($elapsedSec -lt ($plannedSec - $EARLY_EXIT_TOLERANCE_SEC)) {
-    Stop-Run $EXIT_RUN_FAILED "areka が予定より早く終了しました（予定 $([math]::Round($plannedSec))秒 に対し実際 $([math]::Round($elapsedSec))秒）。有界自動終了ではない経路で終わっており、計測として成立しません。"
+    Stop-Run $EXIT_RUN_FAILED "areka exited earlier than planned (planned $([math]::Round($plannedSec)) s, actual $([math]::Round($elapsedSec)) s). It did not end by the smoke auto-exit, so this is not a valid measurement."
 }
 if (-not (Test-Path -LiteralPath $runLogPath -PathType Leaf) -or (Get-Item -LiteralPath $runLogPath).Length -eq 0) {
-    Stop-Run $EXIT_RUN_FAILED "実行ログ $runLogPath が空です。ログが取れていない走行は判定に使えません。"
+    Stop-Run $EXIT_RUN_FAILED "run log $runLogPath is empty. A run without a log cannot be judged."
 }
 $logText = Get-Content -LiteralPath $runLogPath -Raw -Encoding utf8
 if ($logText -notmatch [regex]::Escape($LOG_MARKER_SMOKE_GATE)) {
-    Stop-Run $EXIT_RUN_FAILED "実行ログに有界自動終了の証跡（LOG_MARKER_SMOKE_GATE）がありません。$SMOKE_EXIT_ENV_NAME が効いていない走行は同一手順の再測になりません。"
+    Stop-Run $EXIT_RUN_FAILED "run log has no smoke auto-exit marker (LOG_MARKER_SMOKE_GATE). A run where $SMOKE_EXIT_ENV_NAME did not take effect is not a repeat of the same procedure."
 }
 if ($sampleCount -lt 1) {
-    Stop-Run $EXIT_COUNTER_FAILED "CPU 時系列が 1 点も採れていません。"
+    Stop-Run $EXIT_COUNTER_FAILED "no CPU sample was taken."
 }
 
 # =============================================================================
@@ -918,9 +918,9 @@ $resultSection = [ordered]@{
     'run_stderr_log'       = $errLogPath
     'cpu_csv'              = $cpuCsvPath
 }
-Add-Content -LiteralPath $metaPath -Value (Format-Section '結果' $resultSection) -Encoding utf8
+Add-Content -LiteralPath $metaPath -Value (Format-Section "`u{7D50}`u{679C}" $resultSection) -Encoding utf8
 
-Write-Info "[invoke-perf-run] 完了しました（$([math]::Round($elapsedSec))秒・CPU 採取 $sampleCount 点）。"
-Write-Info "[invoke-perf-run] 出力: $($script:OutDirPath)"
+Write-Info "[invoke-perf-run] done ($([math]::Round($elapsedSec)) s, $sampleCount CPU samples)."
+Write-Info "[invoke-perf-run] output: $($script:OutDirPath)"
 Write-Info "[invoke-perf-run]   $FILE_RUN_LOG / $FILE_CPU_CSV / $FILE_RUN_META"
 exit $EXIT_OK

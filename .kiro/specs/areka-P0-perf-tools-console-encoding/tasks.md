@@ -86,7 +86,7 @@
   - _Boundary: PerfLoop_
   - _Requirements: 4.7, 10.1, 10.2_
 
-- [ ] 5. 道具が端末へ出す文を ASCII にする（ファイルごと）
+- [x] 5. 道具が端末へ出す文を ASCII にする（ファイルごと）
 - [x] 5.1 (P) 共通の部品の表示・例外・子を起こせないときの文を ASCII の英文にする
   - 意味（どの段の・何が・どの値で・次に何を）と終了コードを落とさず、埋め込む値は書き替えない（R1）。機械が読む行は変えない（R0）
   - 完了の状態: `perf-loop.common.ps1` に規則 A が当たらず、機械が読む行が 1.1 の一覧と同じ字面
@@ -121,7 +121,7 @@
   - _Boundary: InvokeFollowupChecks_
   - _Depends: 4.2_
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
-- [ ] 5.7 (P) 計測の 1 走行の道具の文面と `run-meta.txt`・`DRY-RUN.txt`・`FAILED.txt` の文を整える
+- [x] 5.7 (P) 計測の 1 走行の道具の文面と `run-meta.txt`・`DRY-RUN.txt`・`FAILED.txt` の文を整える
   - 端末と `FAILED.txt` の両方へ出す文は R1、`DRY-RUN.txt` の本文と `run-meta.txt` の値の失敗の札は R3
   - `run-meta.txt` の節の見出し 6 つは字を変えず `` `u{…} `` で書く（R2）。鍵と行の並びは変えない
   - 完了の状態: `invoke-perf-run.ps1` に規則 A・B が当たらず、`run-meta.txt` の見出しと鍵が直す前と同じ字
@@ -158,3 +158,4 @@
 ## Implementation Notes
 
 - 5.x で端末へ出す文を英文にしたら、`tools/perf/README.md` が引いている同じ文（例: 553 行の「走行する実行体: … sha256=…」→ `executable to run: …`）もタスク 6 で合わせる。
+- 5.7 の後、README の run-meta.txt の見本の値（失敗の札・`spec`・`cpu_unit`）が古い日本語のままなら、タスク 6 で合わせる。
