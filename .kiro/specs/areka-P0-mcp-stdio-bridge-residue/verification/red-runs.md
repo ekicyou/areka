@@ -83,3 +83,33 @@ cargo test -p areka-mcp-bridge --test exe_test after_stdin_closed
 ### 最後の確かめ
 
 2 つとも戻した後に `cargo test -p areka-mcp-bridge` を 1 回回して緑（部品 87・`main.rs` 0・`exe_test` 10・`real_receiver_test` 6・文書 0、失敗 0）。`git status` で `http.rs`・`main.rs` に差分は無い。
+
+## 確かめ A（要件 1.2・1.4・1.7・8.3・8.4・タスク 5.2）: コンソールの作りの中継を入れた zip で配布の検査が赤になる
+
+当てた変異（`crates\areka-mcp-bridge\src\main.rs` の 1 行目だけ）: 窓を出さない宣言 `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]` を消した。これで release の中継はコンソールの作り（Subsystem 3）になる。
+
+当てる前に元のファイルをワークツリーの `target\mutation-backup\main.rs` へ写した（5.1 の控えを上書き）。写す前の作業ファイルの `git hash-object` は `git rev-parse HEAD:crates/areka-mcp-bridge/src/main.rs` と同じ `22dce89bd8da74650a5065e8e08ebaef168cbb15`、控えと作業ファイルの sha256 は同じ `c7adc674fd171405261cf5dfc9dcb91bec39255a7fac0885361514ed396920bd`。
+
+ワークツリーの根から 1 回だけ走らせた。
+
+```
+pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\kiro-start-areka-p0-dev-cad680\tools\package.ps1 -Arch x64
+```
+
+出力の全部はワークツリーの `target\residue-5.2\package-x64.log`。組み立て一式は通り（i686 の helper 67 秒・x64 の本体と中継 476 秒・静的リンクの検査・ライセンスの検査・謝辞・検体の展開・x64 の組み上げと圧縮まで全部 OK）、段「x64 content check」で止まった。その段の出力（取り込みの DLL の並びは略した）:
+
+```
+==> x64 content check
+areka.exe: machine 0x8664, imports ...
+areka.exe: subsystem 2
+areka-mcp-bridge.exe: machine 0x8664, imports ...
+areka-mcp-bridge.exe: subsystem 3
+shiori-host32-helper.exe: machine 0x014c, imports ...
+ghost/emo2/ghost/master/pasta.dll: machine 0x014c, imports ...
+FAIL 5 wrong subsystem: areka-mcp-bridge.exe is 3 (expected 2 = windows gui)
+FAIL x64 content check (1 s, content check: 1 failure(s))
+```
+
+- 終了コード: 1（スクリプトはこの段で止まり、後ろの段は走っていない）。
+- 否は 1 件だけで、中継の窓の作りの 1 件。`areka.exe` は `subsystem 2` で否が無い。helper と `pasta.dll` には窓の作りの行が出ていない（判定にかけていない）。
+- 戻した後: 控えを素のコピーで上書きし（`git checkout` は使っていない）、控えと作業ファイルの sha256 が同じ（`c7adc674…396920bd`）、`git hash-object` も `git rev-parse HEAD:crates/areka-mcp-bridge/src/main.rs` と同じ（`22dce89b…`）。`git status` で `main.rs` に差分は無い。
