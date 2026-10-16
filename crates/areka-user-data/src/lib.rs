@@ -5,6 +5,10 @@
 //! （`probe`）とプロセスのはじめに 1 回だけ走る準備（`establish`）、フォルダの木を半端なく
 //! 写す手続き（`copy` モジュール）は、この判断の上に載る。
 
+mod copy;
+
+pub use copy::{CopyDone, CopyError, CopyStats, copy_tree_atomic};
+
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
