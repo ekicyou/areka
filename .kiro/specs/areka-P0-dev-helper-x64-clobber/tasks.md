@@ -48,7 +48,7 @@
   - _Depends: 1_
   - _Requirements: 1.6_
 
-- [ ] 5. 実機と最後の全体テストで確かめる（順番を守る）
+- [x] 5. 実機と最後の全体テストで確かめる（順番を守る）
 - [x] 5.1 隣を x64 版にして claudia を起こし、知らせの 1 行を確かめる
   - 根は先例（完了 spec `ghost-standard-balloon` の 6.2）と同じ形で作る: `target\` の下の短い絶対パスに根を作り、`vendors/sample_ghost/` の `claudia.nar` から `ghost\claudia` と `balloon\claudia` を展開して並べ、`AREKA_ROOT` にその根、`AREKA_PROFILE_DIR` に同じ `target\` の下の空のフォルダを渡す。使った絶対パスを記録に書く
   - `cargo build -p areka` の後に `cargo build -p shiori-host32-helper`（x64）で隣を x64 版にし、その根で claudia を有界の自動終了（`AREKA_APP_SMOKE_EXIT_MS`）つきで起こす
@@ -63,7 +63,7 @@
   - _Depends: 3.2, 4, 5.1_
   - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 2.4_
 
-- [ ] 5.3 写す手間なしで claudia を起こす
+- [x] 5.3 写す手間なしで claudia を起こす
   - 5.2 の直後に、何も写さず `target\debug\areka.exe` で、5.1 と同じ根・同じ環境変数（記憶のフォルダは空に戻す）で claudia を有界の自動終了つきで起こす
   - 完了の状態: `0x800700C1` が出ず、`connect_failed` と `helper_not_i686` がどちらも 0 件で、claudia が起きている
   - _Depends: 5.2_
@@ -74,3 +74,4 @@
 - タスク 3.1: 置き先を塞いだときの HResult は `Move-Item -Force` の都合で 0x800700B7 になる（設計の 0x80070020 は書式の例）。自己検査は値に依らない。
 - 5.1: 実機（2026-10-16・debug）根 `<worktree>	arget\hxoot`・記憶 `target\hx\profile`・`RUST_LOG=info`。隣が x64（8664）で `helper_not_i686`（path・machine=0x8664・直し方）が 37 行目、`connect_failed` が 55 行目で 1 件ずつ、その後は今までどおり `shiori_failed`→`alert`。完了時の棚卸へ: 失敗の道の `alert` の `MessageBoxW` がメインスレッドを止め、`AREKA_APP_SMOKE_EXIT_MS` が発火しても閉じない（自分で起こした pid を強制終了した・本 spec の範囲外）。
 - 5.2: 全体テスト（commit 31a47af5）は新しい 2 段を含め `x64 workspace tests` 以外が OK・終わった後の隣は 014C。赤は `temp_path_guard_test` の 3 本で、2.2 のテストが `std::env::temp_dir()` を直に呼んでいたため。`CARGO_MANIFEST_DIR` に替えて直し、回し直しは赤のテストだけ（16 passed）。
+- 5.3: 5.2 の直後に何も写さず `target\debugreka.exe`・根は 5.1 と同じ・記憶は空の `target\hx\profile53`。`boot_talk`・`boot_complete` の後に自動終了で終了コード 0。`helper_not_i686`・`connect_failed`・`0x800700C1`・`helper_image_unverified` はすべて 0 件。
