@@ -76,6 +76,15 @@ pub enum Command {
     UnregisterWait { id: String, kind: WaitKind },
     /// 周期の一回り: 回収と番の決め直しだけを行う。
     Tick,
+    /// そのリポジトリの記録を消す（`clear --repo`）: そのリポジトリの参加者を昇順に 1 人ずつ
+    /// [`Command::Leave`] と同じに外し、そのリポジトリのマージの机に残る持ち主と待ち行列を外す
+    /// （直前のマージの記録は残す）。
+    // 入口の `clear --repo` の形は 5.2 で足す（足したらこの expect が満たされずに警告になり、外す合図になる）。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the clear --repo form is added in task 5.2")
+    )]
+    ClearRepo { repo: String },
 }
 
 /// コマンドが当てはまったか。
@@ -403,6 +412,33 @@ pub fn apply(
             Verdict::Applied
         }
         Command::Tick => Verdict::Applied,
+        Command::ClearRepo { repo } => {
+            // 規則は足さない: 外し方は `leave` のまま、空いた机の番と再開は続く番の決め直しが行う。
+            let ids: Vec<String> = state
+                .participants
+                .iter()
+                .filter(|(_, participant)| participant.repo == *repo)
+                .map(|(id, _)| id.clone())
+                .collect();
+            for id in ids {
+                depart(state, &id, "leave", &mut events);
+                state.push_recent(Recent {
+                    at: now,
+                    kind: RecentKind::Cleared,
+                    id: Some(id),
+                    detail: format!("repo={repo}"),
+                });
+            }
+            // 残るのは参加者の記録の無い者・ほかのリポジトリの参加者の申し込み。机が無ければ作らない。
+            if let Some(desk) = state.merge.get_mut(repo) {
+                let holder = desk.holder.take().map(|holder| holder.id);
+                let queued = desk.queue.drain(..).map(|request| request.id);
+                for id in holder.into_iter().chain(queued) {
+                    events.push(Event::Cancelled { id });
+                }
+            }
+            Verdict::Applied
+        }
     };
     replan(state, now, &mut events);
     Applied {
@@ -713,3 +749,7 @@ mod stop_tests;
 #[cfg(test)]
 #[path = "plan_reclaim_tests.rs"]
 mod reclaim_tests;
+
+#[cfg(test)]
+#[path = "plan_clear_tests.rs"]
+mod clear_tests;

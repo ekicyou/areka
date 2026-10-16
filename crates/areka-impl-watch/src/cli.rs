@@ -715,7 +715,7 @@ fn subject(command: &plan::Command) -> Option<&str> {
         | C::UnregisterWait { id, .. } => Some(id),
         C::RegisterWait { record } => Some(&record.id),
         C::Unstop { id } => id.as_deref(),
-        C::Tick => None,
+        C::Tick | C::ClearRepo { .. } => None,
     }
 }
 
@@ -766,6 +766,20 @@ fn result_line(
         }
         C::Cancel { .. } => "cancelled".to_owned(),
         C::Leave { .. } => "left".to_owned(),
+        // 外した者の出来事から組む（入口の形と `--help` の 1 行は 5.2）。
+        C::ClearRepo { repo } => {
+            let left: Vec<String> = events
+                .iter()
+                .filter_map(|event| match event {
+                    Event::Left { id, .. } => Some(id.clone()),
+                    _ => None,
+                })
+                .collect();
+            escape_path(&format!(
+                "cleared repo={repo}; left: {}",
+                status::id_list(&left)
+            ))
+        }
         // `stopped` と `tick` は、表の名前がそのまま結果の文（見張りの開始と待ちの記録の
         // 登録・抹消は、この手順へは来ない）。
         C::Stopped { .. }
