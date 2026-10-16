@@ -28,7 +28,7 @@
 - 偽の受け口の自己確認をどの束で走らせるか（`src/lib.rs` の宣言・`tests/common/fake_server.rs` の末尾・`tests/common/fake_server_tests.rs` の頭）。
 - `127.0.0.1` の番号へ上限つきで接続を開く関数 `http::connect`（1 か所）と、その 2 つの使い手（`scan.rs` の探索・`http.rs` の `OwnHttp::post`）。
 - 件 4 のテスト 1 本（`src/service_failure_tests.rs`）と、件 5 のテスト 2 本（`tests/exe_test.rs`）。
-- `crates/areka-mcp/src/port.rs` の `warn!` の文 2 行と、その文を確かめる `crates/areka-mcp/src/port_tests.rs` の期待 3 か所（とその説明のコメント 1 行）。
+- `crates/areka-mcp/src/port.rs` の `warn!` の文 2 行と、その文を確かめる `crates/areka-mcp/src/port_tests.rs` の期待 2 か所（97・113 行目。それぞれ判定を 2 つに分ける）とその説明のコメント 1 行（82 行目）。
 - `doc/ssp-mcp/bridge-diff-areka.md` の頭の判定の数・1 節「終わり」・4 節「応答の上限を越えたときに受け口へ届くもの」「標準エラーの記録」「読まれない標準出力の見切りが効かない場合」・4 節の新しい行（件 8）・「残る縛り」の rmcp の行。
 - 確かめの記録 `.kiro/specs/areka-P0-mcp-stdio-bridge-residue/verification/red-runs.md`（要件 1.7・8.2〜8.4）。
 
@@ -47,7 +47,7 @@
 - 依存の向き: `scan.rs` → `http.rs`（今と同じ向き。探索は既に `http::verify` と `OwnHttp` を使う）。`http.rs` は `scan.rs` を使わない。
 
 ### Revalidation Triggers
-- rmcp の版を上げるとき: 件 4 のテスト（202 で待ちが残る）と件 5 のテスト（閉じた後の 5 秒）が rmcp の決まりを固定している。赤になったら差の記録の 1 節「終わり」と 4 節の行を測り直す。
+- rmcp の版を上げるとき: 件 4 のテスト（202 で待ちが残る）と件 5 のテスト（閉じた後の 5 秒・時間の幅と、中継の 6 秒の見切りの枝を通らなかったこと）が rmcp の決まりを固定している（5 秒が短くなっても長くなっても赤）。赤になったら差の記録の 1 節「終わり」と 4 節の行を測り直す。
 - `tools/package.ps1` の `Test-ZipContent` の項目 5 を触る spec（`areka-P0-release-code-signing`・`areka-P0-install-live-target-hazards`・`areka-P0-winget-release-automation`）: 項目 5 の繰り返しの中に窓の作りの判定が入る。項目 5 の形を変えるときはこの判定を残す。
 - `areka.exe` か中継の入口から `windows_subsystem` の行を動かすとき: 配布の検査が赤になる（意図どおり）。
 - `port.rs` の記録の文を読む道具（記録の grep など）を足すとき: 文は「既定の候補を使う」になっている。
@@ -93,7 +93,7 @@ graph TB
 - `crates/areka-mcp-bridge/tests/common/fake_server.rs` — 末尾の `#[cfg(test)] #[path = "fake_server_tests.rs"] mod tests;` を消す。頭の説明に「自己確認は部品のテストの束でだけ走る」を足す。
 - `crates/areka-mcp-bridge/tests/common/fake_server_tests.rs` — 頭の `use super::*;` を `use crate::fake_server::*;` と `use areka_mcp::{MCP_PATH, SERVER_NAME};` に替える。頭の説明（「それぞれの置き方で 1 回ずつ走る」）を「部品のテストの束（`src/lib.rs`）でだけ走る」に直す。テストの中身は変えない。
 - `crates/areka-mcp-bridge/src/http.rs` — `pub(crate) async fn connect(port: u16, wait: Duration) -> io::Result<TcpStream>` を足し、`OwnHttp::post` の頭の接続をそれに替える（外れは `map_err(HttpError::Connect)`）。
-- `crates/areka-mcp-bridge/src/scan.rs` — `open` を消し、`pick` が `http::connect` を使う。使わなくなった `use`（`io`・`Ipv4Addr`・`TcpStream` のうち残らないもの）を外す。
+- `crates/areka-mcp-bridge/src/scan.rs` — `open` を消し、`pick` が `http::connect` を使う。使わなくなった `use`（`io`・`Ipv4Addr`・`TcpStream`・`std::time::Duration` のうち残らないもの）を外す。
 - `crates/areka-mcp-bridge/src/service_failure_tests.rs` — 件 4 のテスト 1 本（約 30 行・229 行 → 約 260 行）。
 - `crates/areka-mcp-bridge/tests/exe_test.rs` — 件 5 のテスト 2 本（約 70 行・568 行 → 約 640 行）。
 - `crates/areka-mcp/src/port.rs` — 46 行目と 67 行目の `warn!` の文。
@@ -227,11 +227,12 @@ graph TB
 - 置き場は `tests/exe_test.rs`（終了コードと、待たずに終わること〔`shutdown_background`〕は建てた exe でしか見られない。今の終わり方のテストもここ＝要件 8.5）。
 - 起こし方: 今の `run_bridge(fake.port(), profile.path(), input)`（番号は偽の受け口の番号・置き場は `TempPath::under_target("bridge-exe")`＝要件 8.1）。入力は `call(1)` の 1 行だけ（`initialize` は送らない。標準出力に出る行を件の応答だけにする）。
 - **5.1** `a_reply_coming_more_than_5s_after_stdin_closed_is_dropped_and_the_exit_code_is_0`:
-  - 台本: `tools/call` に `Reply::Delayed(12 秒, called())`（閉じてから 5 秒を越え、30 秒の上限より前に返る）。
-  - 判定: 終了コード 0・標準出力が空（応答を書かない）・偽の受け口に `tools/call` が 1 回届いている（届けた要求だった）・閉じてから終わるまで（`Finished::waited`）が 5 秒以上 12 秒未満（rmcp の 5 秒は待ち、応答も 30 秒の上限も待たない）。
+  - 台本: `tools/call` に `Reply::Delayed(Duration::from_secs(12), Box::new(called()))`（閉じてから 5 秒を越え、30 秒の上限より前に返る）。
+  - 判定: 終了コード 0・標準出力が空（応答を書かない）・偽の受け口に `tools/call` が 1 回届いている（届けた要求だった）・閉じてから終わるまで（`Finished::waited`）が 5 秒以上 12 秒未満（rmcp の 5 秒は待ち、応答も 30 秒の上限も待たない）・標準エラーに `[bridge] finished` の行があり（`record`）、`[bridge] stdout is still not read` の行が無い（rmcp が自分で戻った＝中継の 6 秒の見切りの枝ではない）。
 - **5.2** `a_reply_coming_within_5s_after_stdin_closed_is_written_before_exit_code_0`:
-  - 台本: `tools/call` に `Reply::Delayed(1 秒, called())`。
-  - 判定: 終了コード 0・応答の行がちょうど 1 行で `id` 1 の結果（`content[0].text` が `done`）・偽の受け口に `tools/call` が 1 回。
+  - 台本: `tools/call` に `Reply::Delayed(Duration::from_secs(1), Box::new(called()))`。
+  - 判定: 終了コード 0・応答の行がちょうど 1 行で `id` 1 の結果（`content[0].text` が `done`）・偽の受け口に `tools/call` が 1 回・標準エラーに `[bridge] finished` の行があり、`[bridge] stdout is still not read` の行が無い。
+- 標準エラーの 2 つの判定を入れる理由: 中継には別に「閉じてから 6 秒で見切る」枝（`main.rs` の `select` の右）がある。時間と出力だけを見ると、rmcp が 5 秒より長く待つようになっても 6 秒の見切りで同じ結果になり緑のまま残る。どちらの枝で終わったかを判定に入れると、rmcp の 5 秒が短くなる向きにも長くなる向きにも赤になる。
 - 今のテストで 5.2 が判定されていない理由（要件 5.3）: `one_initialize_line_then_eof_gives_one_answer_line_and_exit_code_0` の `initialize` は受け口へ届けない。`several_lines_...` と `two_bridges_...` の `tools/call` は、閉じた時点で途中かどうかが決まっていない（遅れが 0〜30 ms）。
 - 所要: 5.1 は約 5 秒、5.2 は約 1 秒（rmcp の決まりの 5 秒を実時間で待つ）。幅は今の `stdin_closed_while_stdout_is_never_read_exits_with_code_0_by_the_bound` と同じ考えで広めに取る。
 - 根拠: rmcp 3.5.0 の `service.rs` 1762〜1803 行目。`QuitReason::Closed` のとき、途中の応答を `Duration::from_secs(5)` まで待って書く（外から変えられない）。
@@ -303,7 +304,7 @@ pub(crate) async fn connect(port: u16, wait: Duration) -> io::Result<TcpStream>;
 
 - **確かめ A（要件 1.7）**: `crates/areka-mcp-bridge/src/main.rs` の 1 行目（`windows_subsystem` の行）を消した実物で、`pwsh -NoProfile -File <ワークツリー>\tools\package.ps1 -Arch x64`（`-Check` なし）を 1 回走らせる。期待: 段「x64 content check」が `FAIL 5 wrong subsystem: areka-mcp-bridge.exe is 3 (expected 2 = windows gui)` を出して終了コード 1。同じ出力に `areka.exe: subsystem 2` があり、`areka.exe` の否が無いこと（合格の道筋も同じ走りで見える＝もう 1 回の緑の走りは回さない）。注意: release の組み立て一式（i686 の helper・x64 の本体と中継）・ライセンスの検査・謝辞・検体の展開まで走り、時間が掛かる（走らせる前に開発者へ所要の見込みを伝える）。検体の展開はこのワークツリーの `target/nar-samples/manual/` を作り直すので、このワークツリーで実機を回している間は走らせない。
 - **確かめ B（要件 8.2）**:
-  - 件 4: `http.rs` の `classify` の 202 の枝を `Err(HttpError::NoResponse)` に替えると、件 4 のテストが赤（答えの文が `No response from server: empty body or connection closed` になる）。戻して緑。
+  - 件 4: `http.rs` の `OwnHttp::post_message` で、送ったのが要求（`ClientJsonRpcMessage::Request`）で `post` の答えが `Accepted` なら `Err(HttpError::NoResponse)` を返すように替えると、件 4 のテストが赤（上限まで待たずにすぐエラーで答える）。戻して緑。`classify` の 202 の枝そのものは替えない（要求と通知を区別しないので、握手の `notifications/initialized` への 202 まで壊れ、探索が「見つからない」になって狙いの枝を示せない）。
   - 件 5: `main.rs` の `EXIT_WAIT` を `Duration::ZERO` に替えると、5.1（閉じてから 5 秒より前に終わる）と 5.2（1 秒後の応答を書く前に終わる）の両方が赤。戻して緑。5.1 のうち「30 秒の上限や応答を待たない」の側は rmcp 3.5.0 の決まった 5 秒が持ち、中継の側に当てられる変異が無い（`select` を外す・`shutdown_background` を替えても rmcp は 5 秒で戻る）。その旨と理由を記録する。
 - **確かめ C（要件 2.3）**: `cargo test -p areka-mcp-bridge -- --list` を直しの前と後で取り、テストの関数の名前の集まりが同じ（自己確認の 2 本は前は 2 つの束に 1 回ずつ・後は部品の束に 1 回）であることを記録する。
 
@@ -320,8 +321,8 @@ pub(crate) async fn connect(port: u16, wait: Duration) -> io::Result<TcpStream>;
 - `scan_tests.rs`・`http_tests.rs` の今のテスト（開かない番号の見切り・並べて開く・接続の失敗）: `connect` へ付け替えた後も、判定を変えずに通る（要件 3.3）。
 
 ### 通しのテスト（中継・`tests/exe_test.rs`）
-- 件 5.1: 閉じてから 12 秒後に返る要求は書かれず、5〜12 秒で終了コード 0。
-- 件 5.2: 閉じてから 1 秒後に返る要求は書かれてから終了コード 0。
+- 件 5.1: 閉じてから 12 秒後に返る要求は書かれず、5〜12 秒で終了コード 0・中継が自分で終わった記録（6 秒の見切りの記録は無い）。
+- 件 5.2: 閉じてから 1 秒後に返る要求は書かれてから終了コード 0・同じく中継が自分で終わった記録。
 - 今の `stdin_closed_while_stdout_is_never_read_exits_with_code_0_by_the_bound` などは変えずに通る。
 
 ### 共有の番号の読み（`cargo test -p areka-mcp port_tests`）
