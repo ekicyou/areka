@@ -386,3 +386,38 @@ fn resume_for_a_stop_requested_participant_ends_at_once_saying_who_asked_and_rec
     // 居る印も握ったままにしない: 呼び直しても 1 にならない。
     assert_eq!(call(&home, &resume), asked_again);
 }
+
+#[test]
+fn stopped_wait_ends_with_stop_requested_again_when_the_same_call_hands_the_load_desk_on() {
+    let root = TempPath::under_target("impl-watch-cli-wait");
+    let home = home_in(&root);
+    // 負荷テストの机の持ち主 h（作業中・見張りなし）・待ち行列の c（見張りの印を握る）・作業中の a。
+    put_state(
+        &home,
+        r#"{
+          "version": 1,
+          "participants": {
+            "a": { "id": "a", "repo": "areka" },
+            "c": { "id": "c", "repo": "areka" },
+            "h": { "id": "h", "repo": "areka" }
+          },
+          "load": {
+            "holder": { "id": "h", "purpose": "負荷の計測" },
+            "queue": [ { "id": "c", "purpose": "負荷の計測", "requested": 10 } ]
+          }
+        }"#,
+    );
+    let _held = hold_watches(&home, &["c"]);
+
+    // 同じ呼び出しの回収で h が外れ、番の決め直しで c が a を止める。眠らずに 0 で終わる。
+    let asked_again = done("stop requested again by c");
+    assert_eq!(waiting(&home, &["stopped", "--id", "a"]), asked_again);
+
+    let state = read_state(&home);
+    assert!(!state.participants.contains_key("h"), "{state:?}");
+    assert_eq!(
+        state.participants["a"].status,
+        ParticipantStatus::StopRequested
+    );
+    assert_eq!(state.waits, []);
+}

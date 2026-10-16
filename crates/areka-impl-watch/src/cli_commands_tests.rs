@@ -151,6 +151,32 @@ fn ids_that_differ_only_in_case_are_the_same_participant() {
     assert_eq!(merged(&home, "a"), done("merged repo=areka"));
 }
 
+#[test]
+fn merged_by_a_holder_of_two_desks_prints_one_line_per_desk_in_repo_order() {
+    let root = TempPath::under_target("impl-watch-cli");
+    let home = home_in(&root);
+    // a が 2 つのリポジトリの机を持ったまま（コマンドの列では作れないので直に置く）。
+    put_state(
+        &home,
+        r#"{
+          "version": 1,
+          "participants": { "a": { "id": "a", "repo": "areka" } },
+          "merge": {
+            "zeta": { "holder": { "id": "a", "spec": "s" } },
+            "areka": { "holder": { "id": "a", "spec": "s" } }
+          }
+        }"#,
+    );
+
+    // 空けた机 1 つに 1 行。リポジトリの昇順。
+    let lines = "merged repo=areka\nmerged repo=zeta";
+    assert_eq!(merged(&home, "a"), done(lines));
+
+    let state = read_state(&home);
+    let holders = state.merge.values().filter(|desk| desk.holder.is_some());
+    assert_eq!(holders.count(), 0);
+}
+
 // ---- 負荷テストの机・停止要請 ----
 
 #[test]

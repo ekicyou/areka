@@ -123,7 +123,7 @@
   - 眠り 0 回での更新時刻の取得の失敗で、待ちがその失敗で終わり、跡が読みの失敗で止まることを判定するテストを足し、最初の取得を「無い」に畳む変異で赤・戻して緑を確かめる
   - 完了の状態: 待ちのテストが緑で、変異の記録が 1 件書かれている
   - _Requirements: 9.1, 9.2, 9.4, 9.5_
-- [ ] 6.3 (h3) と (h4): 2 つの机を持つ者の `merged` と、同じ呼び出しの中で再び止められる再開の待ち
+- [x] 6.3 (h3) と (h4): 2 つの机を持つ者の `merged` と、同じ呼び出しの中で再び止められる再開の待ち
   - 1 つの識別が 2 つのリポジトリの机を持ったままの `merged` が 2 行（リポジトリの昇順）を出すことを判定し、最初の 1 行だけを出す変異で赤・戻して緑を確かめる
   - 負荷テストの机の持ち主（見張りなし）・待ち行列の見張りの居る者・作業中の者の状態で、作業中の者の `stopped --wait` が `stop requested again by <識別>` で 0 になることを判定し、再開の待ちの判定の停止要請の枝を壊す変異で赤・戻して緑を確かめる
   - 完了の状態: 入口のテストが緑で、変異の記録が 2 件書かれている
@@ -161,6 +161,8 @@
 - 4.2: 直す前の実物（`cli::waiting` の早い終わりが待ちの記録を消さない）に新しいテストを先に当てた → `cli::wait_tests::a_restarted_merge_wait_that_ends_at_once_removes_the_record_of_the_killed_wait` が赤（`left: [("a", Merge)]`・`right: []`＝殺された前の `(a, merge)` の記録が残る）。早い終わりで同じ排他の中に `UnregisterWait` を通して緑。
 - 6.1: `status::render_terminal` の `merging` の数え方に `.take(1)` を足して先頭の机だけを数えた → `status::tests::first_line_counts_every_merge_desk_with_a_holder_across_repos` が赤（`left: … merging=1 …`・`right: … merging=2 …`）。ほかの表示のテストは緑のまま。控え `target\mutation-backup\6.1-status.rs` から素のコピーで戻し、sha256 一致（`f7c8916cf35f500b6ba712e9021b414bef6e2109a77d602e408b8e76d2386d77`）を確かめて緑。(h8) の見本の識別の小文字化は変異を求めない（要件 9.3）。
 - 6.2: `wait::run` の登録の直後の `port.fingerprint()?` を `port.fingerprint().unwrap_or(None)`（失敗を「無い」に畳む）にした → `wait::loop_tests::a_failed_fingerprint_right_after_registration_ends_the_wait_with_the_error` が赤（`Ok(Done("granted merge repo=areka; last: none"))`＝失敗で終わらず、読んで番が来たと答えた）。控え `target\mutation-backup\6.2-wait.rs` から素のコピーで戻し、sha256 一致（`be93604b6571ffd76e82c673709b9420ba31b44d193c3e3f520308a67cb99318`）を確かめて緑。
+- 6.3 (h3): `cli.rs` の `C::Merged` の行の組み立てに `.take(1)` を足して最初の 1 行だけを出した → `cli::commands_tests::merged_by_a_holder_of_two_desks_prints_one_line_per_desk_in_repo_order` が赤（`left: (0, "merged repo=areka\n", "")`・`right: (0, "merged repo=areka\nmerged repo=zeta\n", "")`）。控え `target\mutation-backup\6.3-cli.rs` から素のコピーで戻し、sha256 一致（`18e776f53a1abb2ccd6e8f062cefc7e63f59e2199ca00cbaae2a55568d0472bb`）を確かめて緑。
+- 6.3 (h4): `wait::judge` の再開の待ちの `StopRequested` の枝を `"resumed"` にした → `cli::wait_tests::stopped_wait_ends_with_stop_requested_again_when_the_same_call_hands_the_load_desk_on` が赤（`left: (0, "resumed\n", "")`・`right: (0, "stop requested again by c\n", "")`）。控え `target\mutation-backup\6.3-wait.rs` から素のコピーで戻し、sha256 一致（`be93604b6571ffd76e82c673709b9420ba31b44d193c3e3f520308a67cb99318`）を確かめて緑。
 
 ## Implementation Notes
 
