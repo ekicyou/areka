@@ -265,7 +265,7 @@ fn after_scroll_violations(stages: &[Stage], windows: &[crate::layout::VisibleWi
 1. `git diff --stat -- crates/areka-emo-text/src/lookahead.rs` が空であることを確かめる（戻すときに他の変更を消さないため）。
 2. 変異を入れる: `TalkLookahead::basis` の本体の 1 行目に `if true { return Basis::Arrived; }` を入れる（先渡しの有無にかかわらず「届いた字で区切る」を返す。`if true` で包むので、続く行が「届かないコード」の警告にならない。設計の段で警告 0 件を確かめた）。
 3. `cargo test -p areka-emo-text --lib full_text_path_keeps_glyph_rows_through_overflow_scroll -j 2` が失敗し、失敗の文の「あふれの後の段階の違反」に 1 件以上あることを確かめる（設計の段の実測では `(a) t=1.300→1.450` の 1 件。要件 4.1・4.4）。
-4. 戻す: `git checkout -- crates/areka-emo-text/src/lookahead.rs`、続けて `touch crates/areka-emo-text/src/lookahead.rs`（時刻を新しくしてビルドに古い結果を使わせない・要件 4.2）。git の stash は他のセッションと共有なので使わない。
+4. 戻す: `git checkout -- crates/areka-emo-text/src/lookahead.rs`、続けて `touch crates/areka-emo-text/src/lookahead.rs`（Git Bash の場合。PowerShell なら `(Get-Item crates/areka-emo-text/src/lookahead.rs).LastWriteTime = Get-Date`。時刻を新しくしてビルドに古い結果を使わせない・要件 4.2）。git の stash は他のセッションと共有なので使わない。
 5. 同じ検査が成功し、`git status --short` に本番のファイルが出ないこと（`git diff --stat -- crates/areka-emo-text/src/lookahead.rs` が空）を確かめる（要件 4.2・4.3）。
 6. 記録: 3 の失敗の文の要点（あふれの後の段階の違反の行）、5 の成功、差分が空であることを、tasks.md のそのタスクの記録に書く。出力を保存するなら、ワークツリーの `target\` の下だけに置く。
 
