@@ -441,3 +441,147 @@ fn a_result_that_cannot_be_printed_is_a_failure_not_a_silent_success() {
         "io stdout: BrokenPipe (os error 0)\n"
     );
 }
+
+// ---- 番の順・`pos=`・読み物の並びの一致 ----
+
+/// 誰のどの待ちも「居る」と答える生死（回収で誰も消えない）。
+struct AllPresent;
+
+impl crate::plan::Presence for AllPresent {
+    fn is_present(&self, _: &str, _: crate::state::WaitKind) -> bool {
+        true
+    }
+}
+
+/// 待ち行列の識別すべてを参加者にする（`pos=` の判定は参加者の記録を引く）。
+fn join_all(state: &mut crate::state::State, ids: &[&str]) {
+    for id in ids {
+        let participant = crate::state::Participant {
+            id: (*id).to_owned(),
+            ..Default::default()
+        };
+        state.participants.insert((*id).to_owned(), participant);
+    }
+}
+
+/// 読み物の待ち行列（`  1. <id> (...`）の識別を上から順に。
+fn reading_queue(state: &crate::state::State) -> Vec<String> {
+    let reading = crate::status::render_markdown(state, &AllPresent, 0);
+    let ids = reading.lines().filter_map(|line| {
+        let (nth, rest) = line.strip_prefix("  ")?.split_once(". ")?;
+        nth.parse::<usize>().ok()?;
+        Some(rest.split_once(" (")?.0.to_owned())
+    });
+    ids.collect()
+}
+
+#[test]
+fn the_serving_order_the_position_and_the_reading_agree_with_ties_and_bugs_mixed() {
+    use crate::plan::{Command, apply};
+    use crate::state::{LoadHolder, LoadRequest, MergeDesk, MergeHolder, MergeRequest, State};
+
+    // マージ: バグと通常が混ざり、時刻の同点が両方の区分に在る。行列の並びは番の順と食い違う。
+    let request = |id: &str, bug, requested| MergeRequest {
+        id: id.to_owned(),
+        spec: "s".to_owned(),
+        bug,
+        requested,
+    };
+    let mut merge = State::empty();
+    merge.merge.insert(
+        "areka".to_owned(),
+        MergeDesk {
+            queue: vec![
+                request("n1", false, 10),
+                request("b1", true, 20),
+                request("n2", false, 10),
+                request("b2", true, 20),
+                request("n3", false, 5),
+                request("b3", true, 30),
+            ],
+            ..MergeDesk::default()
+        },
+    );
+    let expected = ["b1", "b2", "b3", "n3", "n1", "n2"];
+
+    // (1) 持ち主を空けて周期の一回りを繰り返したときの番の順。
+    let mut served = merge.clone();
+    let mut granted = Vec::new();
+    while let Some(holder) = {
+        apply(&mut served, &Command::Tick, None, 0, &AllPresent);
+        served
+            .merge
+            .get_mut("areka")
+            .and_then(|desk| desk.holder.take())
+    } {
+        granted.push(holder.id);
+    }
+    assert_eq!(granted, expected);
+
+    // (2) 別の持ち主が居る間の `pos=`、(3) 読み物の待ち行列。
+    let mut held = merge;
+    join_all(&mut held, &expected);
+    held.merge.get_mut("areka").expect("机が在る").holder = Some(MergeHolder {
+        id: "m".to_owned(),
+        ..MergeHolder::default()
+    });
+    for (nth, id) in expected.iter().enumerate() {
+        let command = Command::Merge {
+            id: (*id).to_owned(),
+            name: None,
+            repo: "areka".to_owned(),
+            spec: "s".to_owned(),
+            bug: false,
+        };
+        assert_eq!(
+            super::result_line("merge", &command, &held, &[]),
+            format!("queued merge repo=areka pos={}", nth + 1)
+        );
+    }
+    assert_eq!(reading_queue(&held), expected);
+
+    // 負荷テスト: 同点入り（負荷テストの待ちが在るとマージの番が出ないので別の状態）。
+    let request = |id: &str, requested| LoadRequest {
+        id: id.to_owned(),
+        purpose: PURPOSE.to_owned(),
+        requested,
+    };
+    let mut load = State::empty();
+    load.load.queue = vec![
+        request("l1", 10),
+        request("l2", 5),
+        request("l3", 10),
+        request("l4", 5),
+    ];
+    let expected = ["l2", "l4", "l1", "l3"];
+
+    let mut served = load.clone();
+    let mut granted = Vec::new();
+    while let Some(holder) = {
+        apply(&mut served, &Command::Tick, None, 0, &AllPresent);
+        served.load.holder.take()
+    } {
+        granted.push(holder.id);
+    }
+    assert_eq!(granted, expected);
+
+    let mut held = load;
+    join_all(&mut held, &expected);
+    held.load.holder = Some(LoadHolder {
+        id: "h".to_owned(),
+        ..LoadHolder::default()
+    });
+    for (nth, id) in expected.iter().enumerate() {
+        let command = Command::LoadTest {
+            id: (*id).to_owned(),
+            name: None,
+            repo: "areka".to_owned(),
+            purpose: PURPOSE.to_owned(),
+        };
+        assert_eq!(
+            super::result_line("loadtest", &command, &held, &[]),
+            format!("queued load pos={}", nth + 1)
+        );
+    }
+    assert_eq!(reading_queue(&held), expected);
+}
