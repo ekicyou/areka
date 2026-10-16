@@ -159,3 +159,7 @@ pub(crate) fn tell_at_close(
 #[cfg(test)]
 #[path = "write_failure_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "write_failure_sites_tests.rs"]
+mod sites_tests;

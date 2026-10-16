@@ -378,7 +378,7 @@ fn record_installed(world: &mut World, record: InstalledRecord) {
 }
 
 /// 今のゴーストの「最後に使ったバルーン」の記憶を書き換える（次に起こしたときから使われる＝要件 6.6）。
-fn remember_balloon(world: &World, folder: String) {
+pub(crate) fn remember_balloon(world: &World, folder: String) {
     let Some(runtime) = names::current_runtime(world) else {
         tracing::warn!(
             event = "install_balloon_not_remembered",
