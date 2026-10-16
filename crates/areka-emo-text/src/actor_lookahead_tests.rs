@@ -628,3 +628,134 @@ fn char_by_char_wrap_is_stable_and_never_consults_the_lookahead() {
         );
     }
 }
+
+/// 検査 8 の台本: 1 行目を改行で区切り、2 行目と 3 行目の境（＝あふれが始まる所）に検査 1 と同じ仕掛けを置く。
+const SCROLL_TALK: &str = "\\1こんにちは。\\nイイジャン！\\_w[450]‥\\_w[150]‥\\_w[150]ええと、";
+/// 検査 8 の台本の出終わったときの区切り（前提）。
+const SCROLL_TALK_FINAL: [&str; 3] = ["こんにちは。", "イイジャン！", "‥‥ええと、"];
+/// 検査 8 の欄: 幅は [`NINE_WIDE`] と同じ全角 9 字。高さ 53 は、字の丈 20・行送り 22 で
+/// 2 行目の下端 42 は入り（42 <= 53）、3 行目の下端 64 は入らない（64 > 53）値。
+const TWO_ROWS: (u32, u32) = (NINE_WIDE.0, 53);
+
+/// 役者 1・[`budoux_model`]・[`TWO_ROWS`] で台本を本番の経路で流し、判定の時刻ごとに
+/// 行の割り当て（送る前の行の番号のまま）と見える行の範囲を返す。2 本の列は同じ長さで、
+/// 添字が同じ段階を指す。見える行の範囲は、本番の提示と同じく `arrange_lines` の行の列を
+/// `layout_input` の描画範囲・書字方向とともに `LayoutEngine::visible_window` へ渡して得る。
+fn walk_with_windows(
+    script: &str,
+    delivery: Delivery,
+) -> (Vec<Stage>, Vec<crate::layout::VisibleWindow>) {
+    let mut rig = Rig::new();
+    rig.attach("1", &budoux_model(), TWO_ROWS);
+    let mut talk = rig.play(script, ANCHOR, delivery);
+    let place = PlaceKey::balloon(&ActorKey::from("1"));
+    let mut stages = Vec::new();
+    let mut windows = Vec::new();
+    for t in talk.times.clone() {
+        talk.tick(t);
+        let lines = rig.lines(&place, t);
+        let window = {
+            let runtime = rig.runtime.borrow();
+            let resolved = runtime.layout_input.get(&place).expect("装着済みの場所");
+            crate::layout::LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode)
+        };
+        stages.push(Stage {
+            time: t,
+            rows: lines
+                .iter()
+                .map(|line| line.glyphs.iter().map(|g| g.text.to_string()).collect())
+                .collect(),
+        });
+        windows.push(window);
+    }
+    (stages, windows)
+}
+
+/// 違反のうち、あふれのスクロールが起きている段階（見える最初の行が 2 行目以降）で見つかった
+/// (a) だけを返す（隣り合う 2 段階ずつ [`reveal_violations`] に渡す）。
+fn after_scroll_violations(
+    stages: &[Stage],
+    windows: &[crate::layout::VisibleWindow],
+) -> Vec<String> {
+    (1..stages.len())
+        .filter(|&j| windows[j].first_visible_line > 0)
+        .flat_map(|j| reveal_violations(&stages[j - 1..=j]))
+        .filter(|v| v.starts_with("(a)"))
+        .collect()
+}
+
+/// 検査 8: 先渡しありの台本が 2 行だけ入る欄からあふれても、表示済みの字の行の割り当てが
+/// 変わらず、出終わったときの見える行の範囲と行の割り当てが先渡しなしと同じ。先渡しなしの対照では
+/// あふれの後の段階で字が動く（台本の形の確かめ・要件 1.1〜1.7・2.1〜2.4・3.1・3.2）。
+#[test]
+fn full_text_path_keeps_glyph_rows_through_overflow_scroll() {
+    let (stages, windows) = walk_with_windows(SCROLL_TALK, Delivery::Staged);
+    let (old, old_windows) = walk_with_windows(SCROLL_TALK, Delivery::WithoutPreview);
+    let trace = |stages: &[Stage], windows: &[crate::layout::VisibleWindow]| {
+        stages
+            .iter()
+            .zip(windows)
+            .map(|(s, w)| {
+                format!(
+                    "t={:.3} first_visible_line={} {:?}",
+                    s.time,
+                    w.first_visible_line,
+                    show(&s.rows)
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+
+    // 前提（先渡しあり）。
+    let last = stages.last().expect("段階がある");
+    let last_window = windows.last().expect("見える行の範囲がある");
+    assert_eq!(
+        show(&last.rows),
+        SCROLL_TALK_FINAL,
+        "前提: 出終わったときの区切り:\n{:#?}",
+        trace(&stages, &windows)
+    );
+    assert_eq!(
+        last_window.first_visible_line,
+        1,
+        "前提: 出終わったときに 3 行のうち 2 行だけが見える（欄の高さ）:\n{:#?}",
+        trace(&stages, &windows)
+    );
+    assert!(
+        windows.iter().any(|w| w.first_visible_line == 0)
+            && windows.iter().any(|w| w.first_visible_line > 0),
+        "前提: あふれの前の段階と後の段階が両方ある:\n{:#?}",
+        trace(&stages, &windows)
+    );
+
+    // 対照（先渡しなし）: 台本が「届いた字だけで区切ると、あふれの後の段階で字が動く」形を保っている。
+    assert!(
+        !reveal_violations(&old).is_empty()
+            && !after_scroll_violations(&old, &old_windows).is_empty(),
+        "対照: 先渡しなしであふれの後の段階の違反が無い（台本が前提の形を失った）:\n{:#?}",
+        trace(&old, &old_windows)
+    );
+
+    // 要件 2: 先渡しありの全段階で表示済みの字が動かない。
+    let violations = reveal_violations(&stages);
+    assert!(
+        violations.is_empty(),
+        "表示済みの字が動いた:\n{}\nあふれの後の段階の違反:\n{}\n段階:\n{:#?}",
+        violations.join("\n"),
+        after_scroll_violations(&stages, &windows).join("\n"),
+        trace(&stages, &windows)
+    );
+
+    // 要件 3: 出終わったときの見える行の範囲と行の割り当てが先渡しなしと同じ。
+    let old_last = old.last().expect("段階がある");
+    assert_eq!(
+        Some(last_window),
+        old_windows.last(),
+        "出終わったときの見える行の範囲が先渡しなしと違う"
+    );
+    assert_eq!(
+        show(&last.rows),
+        show(&old_last.rows),
+        "出終わったときの行の割り当てが先渡しなしと違う"
+    );
+}

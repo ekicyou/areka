@@ -87,6 +87,17 @@ pub enum ParticipantStatus {
     Stopped,
 }
 
+impl ParticipantStatus {
+    /// ASCII の名前。状態ファイルの綴りと同じで、`status` の表示に使う。
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            ParticipantStatus::Working => "working",
+            ParticipantStatus::StopRequested => "stop-requested",
+            ParticipantStatus::Stopped => "stopped",
+        }
+    }
+}
+
 /// 停止要請の理由: 誰の負荷テストか・その内容。
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -221,6 +232,17 @@ pub enum RecentKind {
     Reclaimed,
     Recovered,
     Cleared,
+}
+
+impl RecentKind {
+    /// ASCII の名前。状態ファイルの綴りと同じで、`status` の表示に使う。
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            RecentKind::Reclaimed => "reclaimed",
+            RecentKind::Recovered => "recovered",
+            RecentKind::Cleared => "cleared",
+        }
+    }
 }
 
 #[cfg(test)]

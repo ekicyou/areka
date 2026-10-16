@@ -246,7 +246,9 @@ fn each_option_is_accepted_only_by_the_commands_that_list_it() {
             let mut opts = required.to_vec();
             opts.push(opt);
             let words = line(name, &opts);
-            let listed = optional.contains(&opt) || (opt == Wait && wait);
+            // `clear` は名前の行に出さない別の形 `--repo` を受ける（要件 11.4）。
+            let variant = name == "clear" && opt == Repo;
+            let listed = optional.contains(&opt) || (opt == Wait && wait) || variant;
             match parse(&words) {
                 Ok(invocation) => {
                     assert!(listed, "表に無い引数が通った: {words:?}");
@@ -799,6 +801,84 @@ fn usage_foot_names_the_reissued_stop_request_the_home_failures_and_the_id_foldi
         "--id is folded to lower case: A and a are the same participant.",
     ] {
         assert!(lines.contains(&line), "{line}:\n{}", usage());
+    }
+}
+
+// ---- clear --repo ----
+
+/// `--help` に足すのは `clear` の説明の行の直後の 1 行だけ。名前の行は `  clear` のまま。
+#[test]
+fn usage_adds_exactly_one_clear_repo_line_after_the_clear_note() {
+    const ADDED: &str = "      clear --repo <repo>: leave everyone of the repo and empty its merge desk (the last merge stays). prints \"cleared repo=<repo>; left: <ids or none>\". 0=done";
+    let lines: Vec<&str> = usage().lines().collect();
+    let at = lines
+        .iter()
+        .position(|l| *l == "  clear")
+        .expect("clear の行");
+    assert_eq!(
+        lines[at..at + 4],
+        [
+            "  clear",
+            "      set the state file aside and start empty, without asking. 0=done",
+            ADDED,
+            "  --help",
+        ]
+    );
+    // 別の形の行はこの 1 行だけ（説明の行の字下げ 6 つの後にコマンドの名前が来るのはここだけ）。
+    let variants = lines
+        .iter()
+        .filter(|l| {
+            l.strip_prefix("      ")
+                .and_then(|l| l.split(' ').next())
+                .is_some_and(|word| COMMANDS.iter().any(|spec| spec.name == word))
+        })
+        .count();
+    assert_eq!(variants, 1, "{}", usage());
+}
+
+#[test]
+fn clear_takes_repo_as_its_other_form_and_stays_plain_without_it() {
+    assert_eq!(
+        parse(&args(&["clear", "--repo", "areka"])).expect("通る"),
+        Invocation {
+            name: "clear",
+            command: Command::Change(plan::Command::ClearRepo { repo: s("areka") }),
+            wait: false,
+        }
+    );
+    assert_eq!(
+        parse(&args(&["clear"])).expect("通る").command,
+        Command::Clear
+    );
+    let rule = "1-100 chars of A-Z a-z 0-9 . _ -";
+    for (words, why) in [
+        (
+            &["clear", "--repo"][..],
+            s("--repo needs a value (a value cannot start with --)"),
+        ),
+        (
+            &["clear", "--repo", "a/b"],
+            format!("--repo must be {rule}"),
+        ),
+        (
+            &["clear", "--repo", r"C:\x"],
+            format!("--repo must be {rule}"),
+        ),
+        (
+            &["clear", "--repo", "a", "--repo", "a"],
+            s("--repo given twice"),
+        ),
+        (
+            &["clear", "--repo", "a", "--id", "a"],
+            s("--id is not accepted"),
+        ),
+        (&["clear", "--repo", "a", "x"], s("unexpected argument 'x'")),
+        (
+            &["clear", "--repo", "a", "--wait"],
+            s("--wait is not accepted"),
+        ),
+    ] {
+        assert_eq!(refusal(&args(words)), format!("clear: {why}"), "{words:?}");
     }
 }
 
