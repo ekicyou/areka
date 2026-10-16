@@ -135,6 +135,9 @@ mod update;
 /// 終了の後始末が、背景で書いている仕事の終わりを上限つきで待つ口（areka-P0-ghost-install 要件 8）。
 mod exit_wait;
 
+/// ベースウェアの根の並びの決め方（areka-P0-baseware-root-list）。
+mod roots;
+
 // ---------------------------------------------------------------------------
 // Entry Point
 // ---------------------------------------------------------------------------
@@ -165,7 +168,8 @@ fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     // 4 つ目は起動中の印の値＝前回きれいに終わらなかったゴーストの名前（読むだけで消さない）。
     // 初回の起動の由来になる（要件 12.4）。
-    let (cfg, ghost_decision, balloon_decision, halted, root) = match resolve_boot(&args) {
+    let (cfg, ghost_decision, balloon_decision, halted, resolved_roots) = match resolve_boot(&args)
+    {
         Ok(resolved) => resolved,
         Err(scene) => {
             alert::raise(&scene, alert::suppressed());
@@ -205,12 +209,14 @@ fn main() -> Result<()> {
     let (kanade_stop_tx, kanade_stop_rx) = std::sync::mpsc::channel();
     ghost_session::register_systems(app.world().borrow_mut().world_mut(), kanade_stop_rx);
     mcp::install(app.world().borrow_mut().world_mut(), mcp_inbox);
+    roots::install(app.world().borrow_mut().world_mut());
 
     // 起動の文脈と起動入力の作り口（本番版）を据える（切替と右クリックメニューの「ゴースト」枠が読む）。
     install_boot_context(
         app.world().borrow_mut().world_mut(),
         boot_config::BootContext {
-            root,
+            roots: resolved_roots.roots,
+            roots_origin: resolved_roots.origin,
             app_profile_dir: default_app_profile_dir(),
             helper_exe,
             // argv で始まったプロセスか（ここで 1 度だけ決め、以後変えない・要件 12.5）。
@@ -468,7 +474,7 @@ fn boot_first_ghost(
     match world.get_resource::<boot_config::BootContext>() {
         Some(ctx) if !ctx.argv_session => boot_resolve::write_session_mark(
             &ctx.app_profile_dir,
-            &boot_resolve::running_name(&ctx.root, ghost),
+            &boot_resolve::running_name(ghost),
         ),
         Some(_) => tracing::debug!(
             event = "session_mark_untouched_argv",
@@ -580,7 +586,16 @@ fn after_run(world: &mut World) -> AfterRun {
     let (ghost_name, ghost_root) = match first {
         Some(app_exit::ExitOrigin::GhostFallbackFailed(_)) => (
             Some(boot_resolve::DEFAULT_GHOST_FOLDER.to_owned()),
-            ctx.root.ghost_dir(boot_resolve::DEFAULT_GHOST_FOLDER),
+            // 既定ゴーストの場所は和から引く（どの根にも無ければ並びの先頭の根の下）。
+            areka_ghost::catalog_roots::find_ghost(&ctx.roots, boot_resolve::DEFAULT_GHOST_FOLDER)
+                .map(|e| e.dir)
+                .unwrap_or_else(|| {
+                    ctx.roots
+                        .roots()
+                        .first()
+                        .map(|r| r.ghost_dir(boot_resolve::DEFAULT_GHOST_FOLDER))
+                        .unwrap_or_default()
+                }),
         ),
         _ => (
             session

@@ -153,10 +153,12 @@ $EXIT_MEASURE_FAILED = 4
 $EXIT_UNAVAILABLE    = 5
 
 $SCRIPT_DIR = Split-Path -Parent $PSCommandPath
+# 一時ファイルと作業用のフォルダはワークツリーの target\perf-loop-tmp\ の下だけに置く（OS の一時フォルダは使わない）。
+$PERF_TMP_DIR = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'target\perf-loop-tmp'
 
 # --------------------------------------------------------------- 補助関数 ----
 function Write-Info    { param([string]$Message) Write-Host $Message }
-function Write-Problem { param([string]$Message) Write-Host "エラー: $Message" }
+function Write-Problem { param([string]$Message) Write-Host "error: $Message" }
 
 # 標準出力の末尾に置く終端行。走行固有のトークンを添えて、背景終了でも読み取れるようにする。
 function Write-ResultLine {
@@ -197,17 +199,22 @@ function Test-Elevated {
 }
 
 # 外部コマンドを走らせ、終了コードと標準出力・標準エラーを揃えて返す。
+# 受け皿の 2 つのファイルは端末の出力の文字コード（[Console]::OutputEncoding）で読む。
+# xperf と wpaexporter は渡された出力先へ端末の出力の文字コードで書くため。今の xperf は
+# ASCII だけを書くので結果に差は出ないが、地域語の文が来たときに化けないようにしておく。
 function Invoke-NativeCommand {
     param([string]$FilePath, [string[]]$ArgumentList)
-    $outFile = [System.IO.Path]::GetTempFileName()
-    $errFile = [System.IO.Path]::GetTempFileName()
+    $null = New-Item -ItemType Directory -Path $PERF_TMP_DIR -Force
+    $id = [guid]::NewGuid().ToString('N')
+    $outFile = Join-Path $PERF_TMP_DIR "cpu-sample-$id.out"
+    $errFile = Join-Path $PERF_TMP_DIR "cpu-sample-$id.err"
     try {
         $p = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -NoNewWindow -Wait -PassThru `
             -RedirectStandardOutput $outFile -RedirectStandardError $errFile
         return [pscustomobject]@{
             ExitCode = $p.ExitCode
-            StdOut   = (Get-Content -LiteralPath $outFile -Raw -ErrorAction SilentlyContinue)
-            StdErr   = (Get-Content -LiteralPath $errFile -Raw -ErrorAction SilentlyContinue)
+            StdOut   = (Get-Content -LiteralPath $outFile -Raw -Encoding ([Console]::OutputEncoding) -ErrorAction SilentlyContinue)
+            StdErr   = (Get-Content -LiteralPath $errFile -Raw -Encoding ([Console]::OutputEncoding) -ErrorAction SilentlyContinue)
         }
     } finally {
         Remove-Item -LiteralPath $outFile, $errFile -Force -ErrorAction SilentlyContinue
@@ -252,7 +259,7 @@ function Measure-ArekaFrames {
         Problem          = ''
     }
     if ([string]::IsNullOrWhiteSpace($Text)) {
-        $result.Problem = 'dump が空です'
+        $result.Problem = 'dump is empty'
         return $result
     }
 
@@ -318,7 +325,7 @@ function Measure-ArekaFrames {
         if (-not $headers.ContainsKey($known)) { $missingHeaders += $known }
     }
     if ($missingHeaders.Count -gt 0) {
-        $result.Problem = "既知の列名行が dump に在りません: $($missingHeaders -join '／')"
+        $result.Problem = "known header rows missing from dump: $($missingHeaders -join '/')"
     }
     $result.ThreadIds = @($result.ThreadIds | Sort-Object)
     return $result
@@ -339,7 +346,7 @@ function Get-ProbeResult {
         return [pscustomobject]@{ Available = $true; Reason = 'ok' }
     }
 
-    $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ('areka-cpu-probe-' + [guid]::NewGuid().ToString('N'))
+    $tempDir = Join-Path $PERF_TMP_DIR ('areka-cpu-probe-' + [guid]::NewGuid().ToString('N'))
     $null = New-Item -ItemType Directory -Path $tempDir -Force
     $probeEtl  = Join-Path $tempDir 'probe.etl'
     $mergedEtl = Join-Path $tempDir 'probe-merged.etl'
@@ -368,7 +375,7 @@ function Get-BackendFromGoalFile {
     param([string]$Path)
     if (-not $Path) { return $null }
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        Stop-Run -Mode 'stop' -Code $EXIT_BAD_ARGS -Message "-GoalFile が見つかりません: $Path"
+        Stop-Run -Mode 'stop' -Code $EXIT_BAD_ARGS -Message "-GoalFile not found: $Path"
     }
     $inSampling = $false
     foreach ($raw in (Get-Content -LiteralPath $Path)) {
@@ -394,22 +401,22 @@ function Invoke-StartMode {
     if (-not $probe.Available) {
         Write-Info "available=false reason=$($probe.Reason)"
         Stop-Run -Mode 'start' -Code $EXIT_UNAVAILABLE `
-            -Message "CPU サンプリングを始められません（reason=$($probe.Reason)）。段③（関数別の帰属）は昇格した PowerShell が要ります。これは計測の失敗ではなく能力の不足です。" `
+            -Message "cannot start CPU sampling (reason=$($probe.Reason)). Stage 3 (per-function attribution) needs an elevated PowerShell. This is a missing capability, not a measurement failure." `
             -Extra "available=false reason=$($probe.Reason)"
     }
     $etlFull = [System.IO.Path]::GetFullPath($Etl)
     $parent = Split-Path -Parent $etlFull
     if ($parent -and -not (Test-Path -LiteralPath $parent -PathType Container)) {
         try { $null = New-Item -ItemType Directory -Path $parent -Force }
-        catch { Stop-Run -Mode 'start' -Code $EXIT_BAD_ARGS -Message "-Etl の出力先 $parent を作成できませんでした: $($_.Exception.Message)" }
+        catch { Stop-Run -Mode 'start' -Code $EXIT_BAD_ARGS -Message "could not create the -Etl output folder ${parent}: $($_.Exception.Message)" }
     }
     $xperf = Get-XperfPath
     $r = Invoke-NativeCommand -FilePath $xperf -ArgumentList (Get-StartArguments -EtlPath $etlFull)
     if ($r.ExitCode -ne 0) {
         Stop-Run -Mode 'start' -Code $EXIT_RUN_FAILED `
-            -Message "xperf の採取開始が失敗しました（終了コード $($r.ExitCode)）: $($r.StdErr)$($r.StdOut)"
+            -Message "xperf failed to start capture (exit code $($r.ExitCode)): $($r.StdErr)$($r.StdOut)"
     }
-    Write-Info "採取を開始しました: $etlFull"
+    Write-Info "capture started: $etlFull"
     Write-ResultLine -Mode 'start' -Code $EXIT_OK -Extra "etl=$etlFull"
     exit $EXIT_OK
 }
@@ -419,15 +426,15 @@ function Invoke-StopMode {
     $outFull = [System.IO.Path]::GetFullPath($Out)
     $pdbFull = [System.IO.Path]::GetFullPath($PdbDir)
     if (-not (Test-Path -LiteralPath $pdbFull -PathType Container)) {
-        Stop-Run -Mode 'stop' -Code $EXIT_BAD_ARGS -Message "-PdbDir のフォルダが在りません: $pdbFull（release ビルドは環境変数 CARGO_PROFILE_RELEASE_DEBUG=line-tables-only で行ってください）"
+        Stop-Run -Mode 'stop' -Code $EXIT_BAD_ARGS -Message "-PdbDir folder not found: $pdbFull (build release with the environment variable CARGO_PROFILE_RELEASE_DEBUG=line-tables-only)"
     }
     $xperf = Get-XperfPath
     if (-not $xperf) {
-        Stop-Run -Mode 'stop' -Code $EXIT_UNAVAILABLE -Message 'xperf.exe が見つかりません。' -Extra 'available=false reason=no_xperf'
+        Stop-Run -Mode 'stop' -Code $EXIT_UNAVAILABLE -Message 'xperf.exe not found.' -Extra 'available=false reason=no_xperf'
     }
     if (-not $SymCache) {
         $localApp = [Environment]::GetFolderPath('LocalApplicationData')
-        if (-not $localApp) { Stop-Run -Mode 'stop' -Code $EXIT_BAD_ARGS -Message '記号キャッシュの既定位置（LOCALAPPDATA）を解決できませんでした。-SymCache で明示してください。' }
+        if (-not $localApp) { Stop-Run -Mode 'stop' -Code $EXIT_BAD_ARGS -Message 'could not resolve the default symbol cache location (LOCALAPPDATA). Pass -SymCache explicitly.' }
         $SymCache = Join-Path $localApp $DEFAULT_SYMCACHE_SUBDIR
     }
     $null = New-Item -ItemType Directory -Path $SymCache -Force -ErrorAction SilentlyContinue
@@ -439,7 +446,7 @@ function Invoke-StopMode {
     $wpaProfile = Join-Path $SCRIPT_DIR $WPA_PROFILE_RELPATH
     if ($backendName -eq 'wpaexporter' -and -not (Test-Path -LiteralPath $wpaProfile -PathType Leaf)) {
         Stop-Run -Mode 'stop' -Code $EXIT_BAD_ARGS `
-            -Message "profile file missing: $wpaProfile — 代替 backend（wpaexporter）は版管理された .wpaProfile が要ります。既定の backend（xperf-dumper）を使うか、.wpaProfile を追加してください。"
+            -Message "profile file missing: $wpaProfile - the alternative backend (wpaexporter) needs the version-controlled .wpaProfile. Use the default backend (xperf-dumper) or add the .wpaProfile."
     }
 
     # ⒜ 採取を止めてトレースをまとめる（マージ済みの ETL を作る）
@@ -448,9 +455,9 @@ function Invoke-StopMode {
     if ($d.ExitCode -ne 0) {
         if (-not (Test-Path -LiteralPath $etlFull -PathType Leaf)) {
             Stop-Run -Mode 'stop' -Code $EXIT_RUN_FAILED `
-                -Message "xperf の採取停止が失敗し、$etlFull も在りません（終了コード $($d.ExitCode)）: $($d.StdErr)$($d.StdOut)"
+                -Message "xperf failed to stop capture and $etlFull does not exist (exit code $($d.ExitCode)): $($d.StdErr)$($d.StdOut)"
         }
-        Write-Info "採取の停止（-d）が非ゼロを返しました。既に在る $etlFull をそのまま読みます。"
+        Write-Info "stopping capture (-d) returned non-zero. Reading the existing $etlFull as is."
         $merged = $etlFull
     }
 
@@ -461,18 +468,18 @@ function Invoke-StopMode {
         if ($backendName -eq 'wpaexporter') {
             $wpa = Get-WpaExporterPath
             if (-not $wpa) {
-                Stop-Run -Mode 'stop' -Code $EXIT_UNAVAILABLE -Message 'wpaexporter.exe が見つかりません。' -Extra 'available=false reason=no_xperf'
+                Stop-Run -Mode 'stop' -Code $EXIT_UNAVAILABLE -Message 'wpaexporter.exe not found.' -Extra 'available=false reason=no_xperf'
             }
             $outDir = Split-Path -Parent $outFull
             $w = Invoke-NativeCommand -FilePath $wpa -ArgumentList @('-i', $merged, '-profile', $wpaProfile, '-outputfolder', $outDir)
             if ($w.ExitCode -ne 0) {
-                Stop-Run -Mode 'stop' -Code $EXIT_RUN_FAILED -Message "wpaexporter が失敗しました（終了コード $($w.ExitCode)）: $($w.StdErr)$($w.StdOut)"
+                Stop-Run -Mode 'stop' -Code $EXIT_RUN_FAILED -Message "wpaexporter failed (exit code $($w.ExitCode)): $($w.StdErr)$($w.StdOut)"
             }
         } else {
             $s = Invoke-NativeCommand -FilePath $xperf `
                 -ArgumentList @('-i', $merged, '-symbols', '-a', 'dumper', '-o', $outFull)
             if ($s.ExitCode -ne 0) {
-                Stop-Run -Mode 'stop' -Code $EXIT_RUN_FAILED -Message "xperf の記号解決（-a dumper）が失敗しました（終了コード $($s.ExitCode)）: $($s.StdErr)$($s.StdOut)"
+                Stop-Run -Mode 'stop' -Code $EXIT_RUN_FAILED -Message "xperf symbol resolution (-a dumper) failed (exit code $($s.ExitCode)): $($s.StdErr)$($s.StdOut)"
             }
         }
     } finally {
@@ -481,18 +488,18 @@ function Invoke-StopMode {
 
     # ⒞ 関門: 書き出した dump を数え直す（要件 2.11 ＝ 黙って続けない）
     if (-not (Test-Path -LiteralPath $outFull -PathType Leaf)) {
-        Stop-Run -Mode 'stop' -Code $EXIT_MEASURE_FAILED -Message "dump が書き出されていません: $outFull"
+        Stop-Run -Mode 'stop' -Code $EXIT_MEASURE_FAILED -Message "dump was not written: $outFull"
     }
     $stats = Measure-ArekaFrames -Text (Get-Content -LiteralPath $outFull -Raw)
     if ($stats.Problem) {
         Stop-Run -Mode 'stop' -Code $EXIT_MEASURE_FAILED `
-            -Message "dump を読めません（$($stats.Problem)）— dump=$outFull。xperf の版で列の並びが変わった可能性があります。" `
+            -Message "cannot read dump ($($stats.Problem)) - dump=$outFull. The xperf version may have changed the column order." `
             -Extra "dump=$outFull sample_count=$($stats.SampleCount) stack_rows=$($stats.StackCount)"
     }
     if ($stats.ArekaFrames -lt 1) {
-        $why = if ($stats.Problem) { "（$($stats.Problem)）" } else { '' }
+        $why = if ($stats.Problem) { " ($($stats.Problem))" } else { '' }
         Stop-Run -Mode 'stop' -Code $EXIT_MEASURE_FAILED `
-            -Message "記号解決ゼロ（areka.exe! フレーム 0）$why — dump=$outFull sample_count=$($stats.SampleCount)。release を環境変数 CARGO_PROFILE_RELEASE_DEBUG=line-tables-only でビルドし、-PdbDir に PDB が在ることを確かめてください。" `
+            -Message "no symbols resolved (0 areka.exe! frames)$why - dump=$outFull sample_count=$($stats.SampleCount). Build release with the environment variable CARGO_PROFILE_RELEASE_DEBUG=line-tables-only and check that -PdbDir has the PDB." `
             -Extra "dump=$outFull sample_count=$($stats.SampleCount) areka_frames=0"
     }
     $summary = "sample_count=$($stats.SampleCount) areka_frames=$($stats.ArekaFrames) dump=$outFull"
@@ -509,7 +516,7 @@ function Invoke-SelfTestMode {
     function Test-Expected {
         param([string]$Side, [string]$Label, $Expected, $Actual)
         if ($Expected -eq $Actual) { return $null }
-        return "${Side}: $Label が期待値と違います（期待 $Expected ／ 実際 $Actual）"
+        return "${Side}: $Label differs from the expected value (expected $Expected / actual $Actual)"
     }
 
     # ⒜-1 合格側: 同梱の dump 断片の内訳が、README に公表した既知の値と厳密に一致する。
@@ -520,22 +527,22 @@ function Invoke-SelfTestMode {
     $okFrames = 0
     $okSamples = 0
     if (-not (Test-Path -LiteralPath $fixture -PathType Leaf)) {
-        $failures += "同梱の dump 断片が在りません: $fixture"
+        $failures += "bundled dump fixture not found: $fixture"
     } else {
         $okStats = Measure-ArekaFrames -Text (Get-Content -LiteralPath $fixture -Raw)
         $okFrames = $okStats.ArekaFrames
         $okSamples = $okStats.SampleCount
-        if ($okStats.Problem) { $failures += "合格側: $($okStats.Problem)（$fixture）" }
+        if ($okStats.Problem) { $failures += "pass side: $($okStats.Problem) ($fixture)" }
         $failures += @(
-            (Test-Expected '合格側' 'SampledProfile 行の数'   $FIXTURE_EXPECT_SAMPLE_COUNT      $okStats.SampleCount),
-            (Test-Expected '合格側' 'Stack 行の数'            $FIXTURE_EXPECT_STACK_COUNT       $okStats.StackCount),
-            (Test-Expected '合格側' 'areka.exe のフレーム数'  $FIXTURE_EXPECT_AREKA_FRAMES      $okStats.ArekaFrames),
-            (Test-Expected '合格側' '記号解決済みフレーム数'  $FIXTURE_EXPECT_RESOLVED_FRAMES   $okStats.ResolvedFrames),
-            (Test-Expected '合格側' '記号未解決フレーム数'    $FIXTURE_EXPECT_UNRESOLVED_FRAMES $okStats.UnresolvedFrames),
-            (Test-Expected '合格側' 'ThreadID の一覧'         ($FIXTURE_EXPECT_TIDS -join ',')  ($okStats.ThreadIds -join ','))
+            (Test-Expected 'pass side' 'SampledProfile row count' $FIXTURE_EXPECT_SAMPLE_COUNT     $okStats.SampleCount),
+            (Test-Expected 'pass side' 'Stack row count'         $FIXTURE_EXPECT_STACK_COUNT       $okStats.StackCount),
+            (Test-Expected 'pass side' 'areka.exe frame count'  $FIXTURE_EXPECT_AREKA_FRAMES      $okStats.ArekaFrames),
+            (Test-Expected 'pass side' 'resolved frame count'   $FIXTURE_EXPECT_RESOLVED_FRAMES   $okStats.ResolvedFrames),
+            (Test-Expected 'pass side' 'unresolved frame count' $FIXTURE_EXPECT_UNRESOLVED_FRAMES $okStats.UnresolvedFrames),
+            (Test-Expected 'pass side' 'ThreadID list'          ($FIXTURE_EXPECT_TIDS -join ',')  ($okStats.ThreadIds -join ','))
         ) | Where-Object { $_ }
-        Write-Info "selftest 合格側: sample_count=$($okStats.SampleCount) stack_rows=$($okStats.StackCount) areka_frames=$($okStats.ArekaFrames) resolved=$($okStats.ResolvedFrames) unresolved=$($okStats.UnresolvedFrames) tids=$($okStats.ThreadIds -join ',')"
-        Write-Info "selftest 合格側の期待値: sample_count=$FIXTURE_EXPECT_SAMPLE_COUNT stack_rows=$FIXTURE_EXPECT_STACK_COUNT areka_frames=$FIXTURE_EXPECT_AREKA_FRAMES resolved=$FIXTURE_EXPECT_RESOLVED_FRAMES unresolved=$FIXTURE_EXPECT_UNRESOLVED_FRAMES tids=$($FIXTURE_EXPECT_TIDS -join ',')"
+        Write-Info "selftest pass side: sample_count=$($okStats.SampleCount) stack_rows=$($okStats.StackCount) areka_frames=$($okStats.ArekaFrames) resolved=$($okStats.ResolvedFrames) unresolved=$($okStats.UnresolvedFrames) tids=$($okStats.ThreadIds -join ',')"
+        Write-Info "selftest pass side expected: sample_count=$FIXTURE_EXPECT_SAMPLE_COUNT stack_rows=$FIXTURE_EXPECT_STACK_COUNT areka_frames=$FIXTURE_EXPECT_AREKA_FRAMES resolved=$FIXTURE_EXPECT_RESOLVED_FRAMES unresolved=$FIXTURE_EXPECT_UNRESOLVED_FRAMES tids=$($FIXTURE_EXPECT_TIDS -join ',')"
     }
 
     # ⒜-2 不合格側: areka.exe を含まない dump では必ず 0 と数える（毎回赤も作る）
@@ -550,17 +557,17 @@ function Invoke-SelfTestMode {
     ) -join "`n"
     $redStats = Measure-ArekaFrames -Text $redText
     $failures += @(
-        (Test-Expected '不合格側' 'areka.exe のフレーム数'  0 $redStats.ArekaFrames),
-        (Test-Expected '不合格側' 'SampledProfile 行の数'   2 $redStats.SampleCount),
-        (Test-Expected '不合格側' 'Stack 行の数'            1 $redStats.StackCount),
-        (Test-Expected '不合格側' '記号未解決フレーム数'    1 $redStats.UnresolvedFrames)
+        (Test-Expected 'fail side' 'areka.exe frame count'  0 $redStats.ArekaFrames),
+        (Test-Expected 'fail side' 'SampledProfile row count' 2 $redStats.SampleCount),
+        (Test-Expected 'fail side' 'Stack row count'         1 $redStats.StackCount),
+        (Test-Expected 'fail side' 'unresolved frame count' 1 $redStats.UnresolvedFrames)
     ) | Where-Object { $_ }
-    if ($redStats.Problem) { $failures += "不合格側: 両方の列名行が在るのに読めないと言いました（$($redStats.Problem)）" }
-    Write-Info "selftest 不合格側: sample_count=$($redStats.SampleCount) stack_rows=$($redStats.StackCount) areka_frames=$($redStats.ArekaFrames)（areka_frames=0 が期待値）"
+    if ($redStats.Problem) { $failures += "fail side: both header rows exist but it reported the dump unreadable ($($redStats.Problem))" }
+    Write-Info "selftest fail side: sample_count=$($redStats.SampleCount) stack_rows=$($redStats.StackCount) areka_frames=$($redStats.ArekaFrames) (expected areka_frames=0)"
 
     # ⒜-3 空の入力は「dump が空」と言い、黙って 0 を返さない
     $emptyStats = Measure-ArekaFrames -Text ''
-    if (-not $emptyStats.Problem) { $failures += '空入力に対して理由を返しませんでした' }
+    if (-not $emptyStats.Problem) { $failures += 'empty input returned no reason' }
 
     # ⒜-4 列名行が欠けた入力は、どのイベントの分が無いのかまで言う（-Stop はこれで exit 4）
     $noStackText = @(
@@ -569,9 +576,9 @@ function Invoke-SelfTestMode {
     ) -join "`n"
     $noStackStats = Measure-ArekaFrames -Text $noStackText
     if ($noStackStats.Problem -notmatch 'Stack') {
-        $failures += "列名行の欠落: Stack の列名行が無い入力を通してしまいました（Problem='$($noStackStats.Problem)'）"
+        $failures += "missing header row: input without the Stack header row was accepted (Problem='$($noStackStats.Problem)')"
     }
-    Write-Info "selftest 列名行の欠落: problem=$($noStackStats.Problem)"
+    Write-Info "selftest missing header row: problem=$($noStackStats.Problem)"
 
     # ⒝ -Probe（採れないことは赤ではなく UNAVAILABLE の報告）
     $probe = Get-ProbeResult
@@ -580,10 +587,10 @@ function Invoke-SelfTestMode {
 
     if ($failures.Count -gt 0) {
         foreach ($f in $failures) { Write-Problem $f }
-        Stop-Run -Mode 'selftest' -Code $EXIT_RUN_FAILED -Message '自己較正が赤です（道具そのものが壊れています）。' `
+        Stop-Run -Mode 'selftest' -Code $EXIT_RUN_FAILED -Message 'self-test is red (the tool itself is broken).' `
             -Extra "failures=$($failures.Count) available=$available reason=$($probe.Reason)"
     }
-    Write-Info '自己較正: 合格（合格側は既知の内訳と厳密一致／不合格側 0 フレーム／空入力と列名行欠落に理由あり）'
+    Write-Info 'self-test: pass (pass side matches the known counts exactly / fail side 0 frames / empty input and missing header row give a reason)'
     Write-ResultLine -Mode 'selftest' -Code $EXIT_OK `
         -Extra "fixture_areka_frames=$okFrames fixture_sample_count=$okSamples red_areka_frames=$($redStats.ArekaFrames) available=$available reason=$($probe.Reason)"
     exit $EXIT_OK
@@ -595,5 +602,5 @@ switch ($PSCmdlet.ParameterSetName) {
     'Start'    { Invoke-StartMode }
     'Stop'     { Invoke-StopMode }
     'SelfTest' { Invoke-SelfTestMode }
-    default    { Stop-Run -Mode 'none' -Code $EXIT_BAD_ARGS -Message '-Probe / -Start / -Stop / -SelfTest のどれか 1 つを指定してください。' }
+    default    { Stop-Run -Mode 'none' -Code $EXIT_BAD_ARGS -Message 'specify exactly one of -Probe / -Start / -Stop / -SelfTest.' }
 }

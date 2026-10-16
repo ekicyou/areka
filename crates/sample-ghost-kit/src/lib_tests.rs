@@ -424,7 +424,7 @@ fn every_sample_nar_installs_exactly_the_elements_its_registry_row_declares() {
             .unwrap_or_else(|err| panic!("検体 {} の .nar は受理されるはず: {err}", sample.name));
         let outcome = archive
             .install(&areka_nar::InstallRequest {
-                root: root.path(),
+                roots: &areka_nar::SingleRoot(root.path()),
                 target_ghost: None,
             })
             .unwrap_or_else(|err| panic!("検体 {} は空の根へ展開できるはず: {err}", sample.name));

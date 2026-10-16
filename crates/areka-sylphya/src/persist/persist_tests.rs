@@ -27,6 +27,7 @@ fn all_families() -> Vec<PersistKey> {
         PersistKey::LastBalloon,
         PersistKey::LastShell,
         PersistKey::LastRunning,
+        PersistKey::BasewareRoots,
     ]
 }
 
@@ -782,5 +783,98 @@ fn last_running_hand_written_empty_is_absent() {
     };
     io.commit(&path, "format-version = 1\n[last]\nrunning = \"\"\n")
         .unwrap();
+    assert!(load_scope(PersistScope::App, &roots, &io).is_empty());
+}
+
+// === 根の並び（areka-P0-baseware-root-list 要件 1.4・1.11〜1.13・8.1）===
+
+#[test]
+fn baseware_roots_canonical_key_exact_string() {
+    assert_eq!(
+        PersistKey::BasewareRoots.to_canonical_key(),
+        "areka.baseware.roots"
+    );
+}
+
+// --- 書く → 読む（表 [baseware] の roots）→ 空文字は空文字のまま（「無し」に潰さない）---
+#[test]
+fn baseware_roots_round_trip_and_empty_string_stays_empty() {
+    let io = FakePersistIo::new();
+    let path = PathBuf::from("/app/sylphya.toml");
+    let roots = ScopeRoots {
+        app: Some(PathBuf::from("/app")),
+        ..ScopeRoots::default()
+    };
+    save_scope(
+        PersistScope::App,
+        &roots,
+        &io,
+        vec![(PersistKey::BasewareRoots, r"<exe>|D:\ssp".into())],
+    );
+    let serialized = io.read(&path).unwrap().unwrap();
+    assert!(
+        serialized.contains("[baseware]"),
+        "serialized=
+{serialized}"
+    );
+    assert_eq!(
+        load_scope(PersistScope::App, &roots, &io),
+        vec![(PersistKey::BasewareRoots, r"<exe>|D:\ssp".to_string())]
+    );
+
+    // 短い並びで丸ごと置き換わる（前の項目が残らない）。
+    save_scope(
+        PersistScope::App,
+        &roots,
+        &io,
+        vec![(PersistKey::BasewareRoots, "<exe>".into())],
+    );
+    assert_eq!(
+        load_scope(PersistScope::App, &roots, &io),
+        vec![(PersistKey::BasewareRoots, "<exe>".to_string())]
+    );
+
+    // 空文字を書く＝0 項目。読み戻しても空文字のまま。
+    save_scope(
+        PersistScope::App,
+        &roots,
+        &io,
+        vec![(PersistKey::BasewareRoots, String::new())],
+    );
+    assert_eq!(
+        load_scope(PersistScope::App, &roots, &io),
+        vec![(PersistKey::BasewareRoots, String::new())]
+    );
+}
+
+// --- 表が無い・型外れは「無し」---
+#[test]
+fn baseware_roots_absent_or_type_mismatch_is_none() {
+    let io = FakePersistIo::new();
+    let path = PathBuf::from("/app/sylphya.toml");
+    let roots = ScopeRoots {
+        app: Some(PathBuf::from("/app")),
+        ..ScopeRoots::default()
+    };
+    io.commit(
+        &path,
+        "format-version = 1
+[last]
+ghost = \"emo2\"
+",
+    )
+    .unwrap();
+    assert_eq!(
+        load_scope(PersistScope::App, &roots, &io),
+        vec![(PersistKey::LastGhost, "emo2".to_string())]
+    );
+    io.commit(
+        &path,
+        "format-version = 1
+[baseware]
+roots = 3
+",
+    )
+    .unwrap();
     assert!(load_scope(PersistScope::App, &roots, &io).is_empty());
 }

@@ -177,11 +177,13 @@ fn last_balloon(rig: &SwitchRig) -> Option<String> {
 
 /// 根の `balloon/<folder>` の `descript.txt` の `name`。
 fn balloon_name(rig: &SwitchRig, folder: &str) -> String {
-    areka_ghost::catalog::list_balloons(&rig.root)
-        .into_iter()
-        .find(|e| e.identity.folder == folder)
-        .and_then(|e| e.identity.name)
-        .unwrap_or_else(|| panic!("バルーン {folder} に name が在る"))
+    areka_ghost::catalog_roots::list_balloons(&areka_ghost::catalog_roots::BasewareRoots::single(
+        rig.root.dir().to_path_buf(),
+    ))
+    .into_iter()
+    .find(|e| e.identity.folder == folder)
+    .and_then(|e| e.identity.name)
+    .unwrap_or_else(|| panic!("バルーン {folder} に name が在る"))
 }
 
 /// scope 0 の文字の層に今載っている文字（グリフだけを連ねる）。

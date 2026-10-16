@@ -768,3 +768,35 @@ fn load_done_by_a_non_holder_changes_nothing() {
         assert_not_applied(&got, id);
     }
 }
+
+#[test]
+fn merge_order_puts_bugs_first_then_earliest_and_keeps_ties_in_queue_order() {
+    let request = |id: &str, bug: bool, requested: u64| MergeRequest {
+        id: id.to_owned(),
+        spec: format!("spec-{id}"),
+        bug,
+        requested,
+    };
+    let queue = [
+        request("A", false, T0 + 1),
+        request("B", true, T0 + 3),
+        request("C", false, T0),
+        request("D", true, T0 + 3),
+        request("E", false, T0 + 1),
+    ];
+
+    assert_eq!(super::merge_order(&queue), vec![1, 3, 2, 0, 4]);
+    assert!(super::merge_order(&[]).is_empty());
+}
+
+#[test]
+fn load_order_puts_earliest_first_and_keeps_ties_in_queue_order() {
+    let mut state = State::default();
+    queue_load(&mut state, "A", T0 + 2);
+    queue_load(&mut state, "B", T0);
+    queue_load(&mut state, "C", T0 + 2);
+    queue_load(&mut state, "D", T0);
+
+    assert_eq!(super::load_order(&state.load.queue), vec![1, 3, 0, 2]);
+    assert!(super::load_order(&[]).is_empty());
+}

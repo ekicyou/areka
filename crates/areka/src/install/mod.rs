@@ -17,12 +17,13 @@ use wintf::ecs::pointer::dispatch_pointer_events;
 use crate::exit_wait::{self, WorkGate};
 
 pub(crate) mod desk;
+mod destination;
 pub(crate) mod fetch_url;
 #[cfg(test)]
 pub(crate) mod fetch_url_test_support;
 pub(crate) mod judge;
 pub(crate) mod names;
-mod pick;
+pub(crate) mod pick;
 mod procedure;
 mod terms;
 mod worker;

@@ -13,101 +13,6 @@ fn config_inputs_holds_resolved_roots() {
 }
 
 // ---------------------------------------------------------------------------
-// 根の決め方（task 2.3・要件 1.2〜1.4・8.2）
-// ---------------------------------------------------------------------------
-// `resolve_root_from` へ env の値と実行ファイルの場所を注入して踏む。プロセスの env は
-// 書かない（要件 8.2）。一時フォルダは共通窓口 `temp-path-kit` から受け取る。
-
-mod root {
-    use crate::boot_config::{RootError, RootSource, resolve_root_from};
-    use std::path::PathBuf;
-    use temp_path_kit::TempPath;
-
-    /// `AREKA_ROOT` が実在のフォルダを指すとき、その値を根とし exe は見ない（要件 1.3）。
-    #[test]
-    fn env_present_existing_dir_is_root_and_exe_is_ignored() {
-        let root = TempPath::new("root-env-exists");
-        // exe は実在しない場所を指す。env があれば見ないので結果に現れない。
-        let exe = PathBuf::from(r"C:\areka-no-such-dir\areka.exe");
-        let got = resolve_root_from(Some(root.path().to_path_buf()), Some(exe));
-        assert_eq!(got, Ok((root.path().to_path_buf(), RootSource::EnvVar)));
-    }
-
-    /// `AREKA_ROOT` が実在しない場所を指すとき、exe の隣へ倒さず失敗する（要件 1.3・1.4）。
-    #[test]
-    fn env_present_missing_dir_fails_without_falling_back_to_exe() {
-        let exe_dir = TempPath::new("root-env-missing-exe");
-        let missing = exe_dir.child("no-such-root");
-        let got = resolve_root_from(Some(missing.clone()), Some(exe_dir.child("areka.exe")));
-        assert_eq!(
-            got,
-            Err(RootError::NotADirectory {
-                dir: missing,
-                source: RootSource::EnvVar,
-            })
-        );
-    }
-
-    /// `AREKA_ROOT` が無いとき、実行ファイルのあるフォルダを根とする（要件 1.2・9.1）。
-    #[test]
-    fn env_absent_exe_dir_exists_is_root() {
-        let exe_dir = TempPath::new("root-exe-exists");
-        let got = resolve_root_from(None, Some(exe_dir.child("areka.exe")));
-        assert_eq!(got, Ok((exe_dir.path().to_path_buf(), RootSource::ExeDir)));
-    }
-
-    /// `AREKA_ROOT` が無く、exe の隣が実在しないとき失敗する（要件 1.4）。
-    #[test]
-    fn env_absent_exe_dir_missing_fails() {
-        let base = TempPath::new("root-exe-missing");
-        let missing = base.child("gone");
-        let got = resolve_root_from(None, Some(missing.join("areka.exe")));
-        assert_eq!(
-            got,
-            Err(RootError::NotADirectory {
-                dir: missing,
-                source: RootSource::ExeDir,
-            })
-        );
-    }
-
-    /// `AREKA_ROOT` も exe の場所も無いとき、`"."` へ倒さず失敗する（要件 1.4）。
-    #[test]
-    fn env_absent_exe_unavailable_fails_without_dot_fallback() {
-        assert_eq!(
-            resolve_root_from(None, None),
-            Err(RootError::ExeLocationUnavailable)
-        );
-    }
-
-    /// 空の `AREKA_ROOT` は「設定あり」: exe の隣へもカレントへも倒さず失敗する。
-    #[test]
-    fn empty_env_fails_without_fallback() {
-        assert_eq!(
-            resolve_root_from(
-                Some(PathBuf::new()),
-                Some(PathBuf::from("C:\\x\\areka.exe"))
-            ),
-            Err(RootError::NotADirectory {
-                dir: PathBuf::new(),
-                source: RootSource::EnvVar
-            })
-        );
-    }
-
-    /// 相対の `AREKA_ROOT` はカレント基準で絶対化してから検査し、絶対パスで返る
-    /// （`canonicalize` ではなく `std::path::absolute`）。
-    #[test]
-    fn relative_env_is_returned_absolute() {
-        // `cargo test` のカレントはパッケージの根で、`src` は必ず実在する。
-        let got = resolve_root_from(Some(PathBuf::from("src")), None);
-        let expected = std::env::current_dir().expect("カレント取得").join("src");
-        assert_eq!(got, Ok((expected.clone(), RootSource::EnvVar)));
-        assert!(expected.is_absolute());
-    }
-}
-
-// ---------------------------------------------------------------------------
 // 起動前の解決の判断（task 5.1・要件 4.1・4.7・4.8・5.1）
 // ---------------------------------------------------------------------------
 // `resolve_boot_from` へ根と argv を注入して、argv の有無で分かれる判断だけを踏む
@@ -115,7 +20,6 @@ mod root {
 
 mod boot {
     use crate::alert::AlertScene;
-    use crate::boot_config::RootSource;
     use crate::boot_config::resolve_boot_from;
     use crate::boot_resolve::{BalloonRoute, GhostRoute};
     use log_capture_kit::capture;
@@ -140,7 +44,7 @@ mod boot {
         let given = root.child("not-a-ghost");
         std::fs::create_dir_all(&given).expect("フォルダを組む");
         let got = resolve_boot_from(
-            Ok((root.path().to_path_buf(), RootSource::EnvVar)),
+            crate::roots::single_env(root.path().to_path_buf()),
             &args(&[&given]),
             root.path(),
             no_pick,
@@ -148,7 +52,7 @@ mod boot {
         assert_eq!(
             got.map(|_| ()),
             Err(AlertScene::GhostMissing {
-                ghost_store: root.path().join("ghost"),
+                ghost_stores: vec![root.path().join("ghost")],
                 argv: Some(given),
             })
         );
@@ -175,7 +79,7 @@ mod boot {
         .expect("記憶");
         let (got, events) = capture(|| {
             resolve_boot_from(
-                Ok((root.path().to_path_buf(), RootSource::EnvVar)),
+                crate::roots::single_env(root.path().to_path_buf()),
                 &args(&[&ghost, &balloon]),
                 root.path(),
                 no_pick,
@@ -196,7 +100,7 @@ mod boot {
     fn no_argv_and_empty_root_is_ghost_missing_without_argv() {
         let root = TempPath::new("boot-empty-root");
         let got = resolve_boot_from(
-            Ok((root.path().to_path_buf(), RootSource::EnvVar)),
+            crate::roots::single_env(root.path().to_path_buf()),
             &args(&[]),
             root.path(),
             no_pick,
@@ -204,10 +108,43 @@ mod boot {
         assert_eq!(
             got.map(|_| ()),
             Err(AlertScene::GhostMissing {
-                ghost_store: root.path().join("ghost"),
+                ghost_stores: vec![root.path().join("ghost")],
                 argv: None,
             })
         );
+    }
+
+    /// 起動の記録: 並びの 1 根ごとの `root_listed` は argv の有無によらず残し、隠れの件数
+    /// （目録を読む）は argv でゴーストを渡した起動では残さない（要件 1.15・2.5・11.2）。
+    #[test]
+    fn boot_lists_roots_and_counts_hidden_only_without_argv() {
+        let has = |events: &[log_capture_kit::CapturedEvent], name: &str| {
+            events.iter().any(|e| e.field_str("event") == Some(name))
+        };
+        let root = TempPath::under_target("boot-records");
+        let (_, events) = capture(|| {
+            resolve_boot_from(
+                crate::roots::single_env(root.path().to_path_buf()),
+                &args(&[]),
+                root.path(),
+                no_pick,
+            )
+        });
+        assert!(has(&events, "root_listed"), "{events:?}");
+        assert!(has(&events, "roots_hidden_count"), "{events:?}");
+
+        let given = root.child("not-a-ghost");
+        std::fs::create_dir_all(&given).expect("フォルダを組む");
+        let (_, events) = capture(|| {
+            resolve_boot_from(
+                crate::roots::single_env(root.path().to_path_buf()),
+                &args(&[&given]),
+                root.path(),
+                no_pick,
+            )
+        });
+        assert!(has(&events, "root_listed"), "{events:?}");
+        assert!(!has(&events, "roots_hidden_count"), "{events:?}");
     }
 }
 
@@ -218,11 +155,10 @@ mod boot {
 // それを呼び、戻りの 4 つ目に「起動中の印の値（前回落ちたゴーストの名前・読むだけで消さない）」を載せる。
 
 mod switch_balloon {
-    use crate::boot_config::{RootSource, resolve_balloon_for_ghost, resolve_boot_from};
+    use crate::boot_config::{resolve_balloon_for_ghost, resolve_boot_from};
     use crate::boot_resolve::{
         BalloonRoute, DEFAULT_GHOST_FOLDER, GhostRoute, read_session_mark, write_session_mark,
     };
-    use areka_ghost::BasewareRoot;
     use log_capture_kit::capture;
     use std::path::{Path, PathBuf};
     use temp_path_kit::TempPath;
@@ -270,7 +206,7 @@ mod switch_balloon {
     }
 
     fn resolve(tmp: &TempPath, ghost: &Path) -> (BalloonRoute, Option<String>) {
-        let root = BasewareRoot::new(tmp.path().to_path_buf());
+        let root = areka_ghost::BasewareRoots::single(tmp.path().to_path_buf());
         let got = resolve_balloon_for_ghost(&root, ghost, no_pick).expect("決まる");
         assert_eq!(
             got.dir,
@@ -328,7 +264,7 @@ mod switch_balloon {
             argv_balloon.display().to_string(),
         ];
         let (_, _, b, _, _) = resolve_boot_from(
-            Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
+            crate::roots::single_env(tmp.path().to_path_buf()),
             &args,
             tmp.path(),
             no_pick,
@@ -349,7 +285,7 @@ mod switch_balloon {
         put_companion(&ghost, "b1");
         let args = vec!["areka.exe".to_owned()];
         let (cfg, g, b, mark, _) = resolve_boot_from(
-            Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
+            crate::roots::single_env(tmp.path().to_path_buf()),
             &args,
             tmp.path(),
             no_pick,
@@ -398,7 +334,7 @@ mod switch_balloon {
         let args = vec!["areka.exe".to_owned()];
         let boot = || {
             let (_, g, _, mark, _) = resolve_boot_from(
-                Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
+                crate::roots::single_env(tmp.path().to_path_buf()),
                 &args,
                 &app_dir,
                 no_pick,
@@ -451,7 +387,7 @@ mod switch_balloon {
         let args = vec!["areka.exe".to_owned(), ghost.display().to_string()];
         let (got, events) = capture(|| {
             resolve_boot_from(
-                Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
+                crate::roots::single_env(tmp.path().to_path_buf()),
                 &args,
                 &app_dir,
                 no_pick,
@@ -477,7 +413,7 @@ mod switch_balloon {
         let tmp = TempPath::new("switch-balloon-context");
         let ghost = fixture(&tmp);
         let (cfg, g, b, _, _) = resolve_boot_from(
-            Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
+            crate::roots::single_env(tmp.path().to_path_buf()),
             &["areka.exe".to_owned()],
             tmp.path(),
             no_pick,
@@ -485,7 +421,8 @@ mod switch_balloon {
         .expect("決まる");
         let mut world = bevy_ecs::world::World::new();
         world.insert_resource(BootContext {
-            root: BasewareRoot::new(tmp.path().to_path_buf()),
+            roots: areka_ghost::BasewareRoots::single(tmp.path().to_path_buf()),
+            roots_origin: crate::roots::RootsOrigin::EnvVar,
             app_profile_dir: tmp.path().to_path_buf(),
             helper_exe: tmp.child("shiori-host32-helper.exe"),
             argv_session: false,
@@ -502,7 +439,10 @@ mod switch_balloon {
             ctx.current.balloon.folder.as_deref(),
             Some("StayseeBalloon")
         );
-        assert_eq!(ctx.root.balloon_dir("b1"), tmp.child("balloon").join("b1"));
+        assert_eq!(
+            ctx.roots.roots()[0].balloon_dir("b1"),
+            tmp.child("balloon").join("b1")
+        );
         assert_eq!(ctx.app_profile_dir, tmp.path());
         assert_eq!(ctx.helper_exe, tmp.child("shiori-host32-helper.exe"));
     }

@@ -30,7 +30,8 @@ fn dest(url: &str) -> Destination {
 
 fn boot_context(root: &BasewareRoot) -> BootContext {
     BootContext {
-        root: root.clone(),
+        roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
+        roots_origin: crate::roots::RootsOrigin::EnvVar,
         app_profile_dir: root.dir().join("profile"),
         helper_exe: root.dir().join("helper.exe"),
         argv_session: false,
@@ -113,7 +114,10 @@ fn submit_copies_the_context_and_sends_one_job() {
     assert_eq!(job.context.ghost_dir, ghost_dir);
     // 実行系の無い置き場は descript の名を持たないので、フォルダの絶対パスが名になる。
     assert_eq!(job.context.ghost, listed_name(None, &ghost_dir));
-    assert_eq!(job.context.baseware, Some(root));
+    assert_eq!(
+        job.context.baseware,
+        Some(areka_ghost::BasewareRoots::single(root.dir().to_path_buf()))
+    );
 }
 
 #[test]

@@ -9,7 +9,8 @@
 
   1. Calibration: every rule is run on built-in samples that must pass and samples that must fail.
      Samples are plain strings (single quotes or concatenation), so they are never code here.
-  2. Static rules over tools/*.ps1 (not tools/perf/) and the run: bodies of .github/workflows/*.yml
+  2. Static rules over tools/*.ps1 and tools/perf/*.ps1 (direct children of each folder only; rules
+     A-D, the same for both) and the run: bodies of .github/workflows/*.yml
      (a step's `run: |` block or one-line scalar; a mapping-valued run: such as defaults.run is
      not a body). Each body is parsed as pwsh; a parse error is a failure.
        A  a non-comment token whose source text has a char outside tab, CR, LF, 0x20-0x7E
@@ -18,8 +19,15 @@
        C  an assignment to [Console]::OutputEncoding / InputEncoding ([System.Console] too) or
           $OutputEncoding, or a chcp / chcp.com command (only exception: inside the function
           Set-OwnConsoleCp932 in tools/encoding-check.ps1); the string after -Command / -c of a
-          child pwsh / powershell is parsed and checked the same way
-       D  a cargo / cargo.exe command (bare or with &) with the element metadata or nar-sample-path
+          child pwsh / powershell is parsed and checked the same way, and so is every string that
+          mentions Encoding or chcp (only exceptions, in tools/encoding-check.ps1: the strings of
+          $calib and $chcpWords in Get-ConsoleRewrites); [Console]::SetOut / SetError are
+          not rewrites
+       D  a cargo / cargo.exe command (bare or with &) with the element metadata or nar-sample-path,
+          also through a variable argument ($x, @x): the right-hand sides of = / += to that name
+          (case-insensitive, any scope) are followed through string constants, arrays, +,
+          parentheses and other variables (each once); pipelines, command results, members and
+          method values are not followed
        E  tools/package.ps1 (metadata and nar-sample-path), tools/crates-io.ps1 (metadata) and the
           run bodies of .github/workflows/release.yml (metadata) each have an Invoke-Utf8Child
           call with that element
@@ -32,19 +40,27 @@
        production   Invoke-Utf8Child must read the sample exactly
        real         Invoke-Utf8Child cargo metadata must give exactly one areka package with a
                     version, printed as version=<v>
+     then, in its own scope (perf-loop.common.ps1 sets StrictMode 3.0), with the real
+     Invoke-PwshChild of tools/perf and the sample <U+7248><U+2460><U+1F600> printed by this script
+     run with -PerfSampleChild (out1= Write-Output, out2= Write-Host, err1= stderr):
+       perf calibration  Invoke-Child with a plain -File (no prefix) must break the sample
+       perf real         Invoke-PwshChild must deliver the 3 lines exactly
+       perf console      the child's console must still be 932 / 932 (read from the OS)
      The parent copies the child's lines, fails on a non-zero exit, reads the version itself and
      fails unless the child's version=<v> line is the same, and fails if its own two console code
-     pages changed. The parent never sets its own console.
+     pages (read from the OS, not the .NET cache) changed. The parent never sets its own console.
   All failures are collected and printed, then the exit code is decided once.
   Writes nothing, creates no temporary files, prints ASCII only, never prints the environment.
 
   Run: pwsh -NoProfile -File tools/encoding-check.ps1
-  (-Cp932Child is internal; run by hand from a terminal it changes nothing and exits with 1.)
+  (-Cp932Child and -PerfSampleChild are internal; run by hand from a terminal they change nothing,
+  print one ASCII line and exit with 1.)
 #>
 using namespace System.Management.Automation.Language
 #Requires -Version 7
 param(
-    [switch]$Cp932Child   # internal: only the windowless child started by this script uses it
+    [switch]$Cp932Child,      # internal: only the windowless child started by this script uses it
+    [switch]$PerfSampleChild  # internal: the sample writer started by that child
 )
 
 Set-StrictMode -Version 3.0
@@ -86,6 +102,32 @@ function Get-ArgWords([CommandAst]$Cmd) {
     }
 }
 
+# Rule D's value tracing: the string constants an expression is built from. Follows string
+# constants, arrays (@(...) and , lists), +, parentheses and variables (through $Assigned: lower-case
+# name -> right-hand sides of = and +=, each name once via $Seen). Pipelines, command results,
+# members and method values are not followed.
+function Get-TracedWords([Ast]$Node, [hashtable]$Assigned, [System.Collections.Generic.HashSet[string]]$Seen) {
+    if ($Node -is [PipelineAst]) {
+        $el = $Node.PipelineElements
+        if ($el.Count -eq 1 -and $el[0] -is [CommandExpressionAst]) { Get-TracedWords $el[0].Expression $Assigned $Seen }
+    }
+    elseif ($Node -is [CommandExpressionAst]) { Get-TracedWords $Node.Expression $Assigned $Seen }
+    elseif ($Node -is [StringConstantExpressionAst]) { $Node.Value }
+    elseif ($Node -is [ArrayLiteralAst]) { foreach ($e in $Node.Elements) { Get-TracedWords $e $Assigned $Seen } }
+    elseif ($Node -is [ArrayExpressionAst]) { foreach ($s in $Node.SubExpression.Statements) { Get-TracedWords $s $Assigned $Seen } }
+    elseif ($Node -is [ParenExpressionAst]) { Get-TracedWords $Node.Pipeline $Assigned $Seen }
+    elseif ($Node -is [BinaryExpressionAst] -and $Node.Operator -eq [TokenKind]::Plus) {
+        Get-TracedWords $Node.Left $Assigned $Seen
+        Get-TracedWords $Node.Right $Assigned $Seen
+    }
+    elseif ($Node -is [VariableExpressionAst]) {
+        $name = $Node.VariablePath.UserPath.Split(':')[-1].ToLowerInvariant()
+        if ($Assigned.ContainsKey($name) -and $Seen.Add($name)) {
+            foreach ($r in $Assigned[$name]) { Get-TracedWords $r $Assigned $Seen }
+        }
+    }
+}
+
 function Test-InFunction([Ast]$Node, [string]$Name) {
     for ($p = $Node.Parent; $null -ne $p; $p = $p.Parent) {
         if ($p -is [FunctionDefinitionAst] -and $p.Name -eq $Name) { return $true }
@@ -97,6 +139,7 @@ function Test-InFunction([Ast]$Node, [string]$Name) {
 # the string a child PowerShell gets after -Command / -c (parsed, not searched as text; reported at
 # the line of the child's command). Returns objects with Line and Text.
 function Get-ConsoleRewrites([Ast]$Ast, [string]$Where) {
+    $chcpWords = @('chcp', 'chcp.com')
     foreach ($n in $Ast.FindAll({ param($n) $n -is [AssignmentStatementAst] }, $true)) {
         $l = $n.Left
         if ($l -is [ConvertExpressionAst]) { $l = $l.Child }   # [Text.Encoding]$OutputEncoding = ...
@@ -110,7 +153,7 @@ function Get-ConsoleRewrites([Ast]$Ast, [string]$Where) {
     }
     foreach ($c in $Ast.FindAll({ param($n) $n -is [CommandAst] }, $true)) {
         $leaf = Get-CommandLeaf $c
-        if ($leaf -in @('chcp', 'chcp.com') -and -not ($Where -eq $SelfWhere -and (Test-InFunction $c 'Set-OwnConsoleCp932'))) {
+        if ($leaf -in $chcpWords -and -not ($Where -eq $SelfWhere -and (Test-InFunction $c 'Set-OwnConsoleCp932'))) {
             [pscustomobject]@{ Line = $c.Extent.StartLineNumber; Text = $c.Extent.Text }
         }
         if ($leaf -notin @('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe')) { continue }
@@ -126,6 +169,31 @@ function Get-ConsoleRewrites([Ast]$Ast, [string]$Where) {
             }
         }
     }
+    # Every string (not a bare word) that mentions Encoding or chcp is parsed and checked the same
+    # way (a prefix built in a variable and passed to a child). Only exceptions, in this file: the
+    # strings of the calibration samples ($calib = ...) and $chcpWords above.
+    foreach ($s in $Ast.FindAll({ param($n)
+                ($n -is [StringConstantExpressionAst] -and $n.StringConstantType -ne [StringConstantType]::BareWord) -or
+                $n -is [ExpandableStringExpressionAst] }, $true)) {
+        if ($s.Value -notmatch 'Encoding' -and $s.Value -notmatch $chcpWords[0]) { continue }
+        if ($Where -eq $SelfWhere -and (Test-SelfExemptString $s)) { continue }
+        $tk = $null; $er = $null
+        $inner = [Parser]::ParseInput($s.Value, [ref]$tk, [ref]$er)
+        if (@(Get-ConsoleRewrites $inner '').Count) {
+            [pscustomobject]@{ Line = $s.Extent.StartLineNumber; Text = $s.Extent.Text }
+        }
+    }
+}
+
+# Rule C's own exceptions in tools/encoding-check.ps1, by name: a string inside the right-hand side
+# of $calib = ..., or of $chcpWords = ... inside the function Get-ConsoleRewrites.
+function Test-SelfExemptString([Ast]$Str) {
+    for ($p = $Str.Parent; $null -ne $p; $p = $p.Parent) {
+        if (-not ($p -is [AssignmentStatementAst] -and $p.Left -is [VariableExpressionAst])) { continue }
+        $name = $p.Left.VariablePath.UserPath
+        return ($name -eq 'calib' -or ($name -eq 'chcpWords' -and (Test-InFunction $p 'Get-ConsoleRewrites')))
+    }
+    $false
 }
 
 # Rules A-D (and parse errors) on one pwsh text. Returns the findings and the elements of
@@ -157,14 +225,30 @@ function Get-Findings {
     }
 
     # C
-    foreach ($h in Get-ConsoleRewrites $ast $Where) { & $add 'C' $h.Line $h.Text }
+    foreach ($h in @(Get-ConsoleRewrites $ast $Where) | Sort-Object Line -Unique) { & $add 'C' $h.Line $h.Text }
 
     # D, and the Invoke-Utf8Child elements for E
     $callWords = [System.Collections.Generic.List[string]]::new()
+    $assigned = @{}   # rule D: lower-case variable name -> right-hand sides of = and +=
+    foreach ($n in $ast.FindAll({ param($n) $n -is [AssignmentStatementAst] -and
+                    $n.Operator -in @([TokenKind]::Equals, [TokenKind]::PlusEquals) }, $true)) {
+        $l = $n.Left
+        if ($l -is [ConvertExpressionAst]) { $l = $l.Child }
+        if ($l -isnot [VariableExpressionAst]) { continue }
+        $name = $l.VariablePath.UserPath.Split(':')[-1].ToLowerInvariant()
+        if (-not $assigned.ContainsKey($name)) { $assigned[$name] = [System.Collections.Generic.List[Ast]]::new() }
+        $assigned[$name].Add($n.Right)
+    }
     foreach ($c in $ast.FindAll({ param($n) $n -is [CommandAst] }, $true)) {
         $leaf = Get-CommandLeaf $c
         if ($null -eq $leaf) { continue }
         $words = @(Get-ArgWords $c | Where-Object { $_ -in $CallWordSet })
+        if ($leaf -in @('cargo', 'cargo.exe') -and -not $words.Count) {
+            $seen = [System.Collections.Generic.HashSet[string]]::new()
+            $words = @(foreach ($e in @($c.CommandElements | Select-Object -Skip 1)) {
+                    Get-TracedWords $e $assigned $seen | Where-Object { $_ -in $CallWordSet }
+                })
+        }
         if ($leaf -in @('cargo', 'cargo.exe') -and $words.Count) { & $add 'D' $c.Extent.StartLineNumber $c.Extent.Text }
         if ($leaf -eq 'Invoke-Utf8Child') { foreach ($w in $words) { $callWords.Add($w) } }
     }
@@ -216,6 +300,18 @@ $root = Split-Path -Parent $PSScriptRoot
 $pwsh = [Environment]::ProcessPath
 $VersionPattern = '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$'
 
+# The console code pages read from the OS now: @(<output>, <input>). [Console]::OutputEncoding
+# is cached by .NET and misses a rewrite by a child. The type is built in memory, once.
+function Get-ConsoleCodePages {
+    if (-not ('ArekaEncodingCheck.ConsoleCp' -as [type])) {
+        Add-Type -Namespace ArekaEncodingCheck -Name ConsoleCp -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("kernel32.dll")] public static extern uint GetConsoleOutputCP();
+[System.Runtime.InteropServices.DllImport("kernel32.dll")] public static extern uint GetConsoleCP();
+'@
+    }
+    @([ArekaEncodingCheck.ConsoleCp]::GetConsoleOutputCP(), [ArekaEncodingCheck.ConsoleCp]::GetConsoleCP())
+}
+
 # The only console rewrite rule C allows: called only in the windowless child (-Cp932Child), on
 # the console that child owns alone.
 function Set-OwnConsoleCp932 {
@@ -235,6 +331,19 @@ function Read-ArekaVersion {
     $v = [string]$pkgs[0].version
     if ($v -cnotmatch $VersionPattern) { throw "areka version is not a version: $(Show-Ascii $v)" }
     $v
+}
+
+if ($PerfSampleChild) {
+    # Run by hand from a terminal: print no sample.
+    if (-not ([Console]::IsOutputRedirected -and [Console]::IsErrorRedirected)) {
+        '-PerfSampleChild is internal; run tools/encoding-check.ps1 without it'
+        exit 1
+    }
+    $s = "`u{7248}`u{2460}`u{1F600}"
+    Write-Output "out1=$s"
+    Write-Host "out2=$s"
+    [Console]::Error.WriteLine("err1=$s")
+    exit 0
 }
 
 if ($Cp932Child) {
@@ -286,13 +395,41 @@ if ($Cp932Child) {
     try { "version=$(Read-ArekaVersion)" }
     catch { $bad.Add("FAIL cp932 child: real: $(Show-Ascii $_.Exception.Message)") }
 
+    # perf: the real Invoke-PwshChild of tools/perf on this 932 console. The grandchild is this
+    # script with -PerfSampleChild. perf-loop.common.ps1 sets StrictMode 3.0, so it is loaded only
+    # inside this scope, after the 3 checks above.
+    & {
+        . (Join-Path $root 'tools/perf/perf-loop.common.ps1')
+        $s = "`u{7248}`u{2460}`u{1F600}"
+        $want = @("out1=$s", "out2=$s", "err1=$s") -join "`n"
+
+        # perf calibration: the plain -File call (no prefix) must break the sample
+        $r = Invoke-Child -Exe $pwsh -Arguments @('-NoProfile', '-NonInteractive', '-File', $PSCommandPath, '-PerfSampleChild') -Quiet
+        $got = (@($r.Out) + @($r.Err)) -join "`n"
+        if ($r.Code) { $bad.Add("FAIL cp932 child: perf calibration: sample writer exited with code $($r.Code)") }
+        elseif (& $same $got $want) { $bad.Add('FAIL cp932 child: perf calibration: the plain call read the sample intact; cannot detect a regression on this console') }
+        else { "PASS cp932 child: perf calibration (the plain call breaks the sample: $(Show-Ascii $got 0))" }
+
+        # perf real: Invoke-PwshChild must deliver the 3 lines exactly
+        $r = Invoke-PwshChild -ScriptPath $PSCommandPath -Arguments @('-PerfSampleChild') -Quiet
+        $got = (@($r.Out) + @($r.Err)) -join "`n"
+        $exact = $r.Code -eq 0 -and @($r.Out).Count -eq 2 -and @($r.Err).Count -eq 1 -and (& $same $got $want)
+        if ($exact) { 'PASS cp932 child: perf real (Invoke-PwshChild delivers the 3 sample lines exactly)' }
+        else { $bad.Add("FAIL cp932 child: perf real: code $($r.Code), Invoke-PwshChild read $(Show-Ascii $got 0)") }
+
+        # perf console: the child must leave this console at 932 (a rewrite prefix would change it)
+        $cps = Get-ConsoleCodePages
+        if ($cps[0] -eq 932 -and $cps[1] -eq 932) { 'PASS cp932 child: perf console still 932 after Invoke-PwshChild' }
+        else { $bad.Add("FAIL cp932 child: perf console changed by Invoke-PwshChild: output $($cps[0]), input $($cps[1])") }
+    }
+
     $bad
     if ($bad.Count) { exit 1 }
     exit 0
 }
 
 $fails = [System.Collections.Generic.List[string]]::new()
-$cpBefore = @([Console]::OutputEncoding.CodePage, [Console]::InputEncoding.CodePage)
+$cpBefore = Get-ConsoleCodePages
 
 # ---- 1. calibration ----
 $jp = "`u{65E5}`u{672C}"
@@ -310,6 +447,10 @@ $calib = @(
     @{ Name = 'rewrite inside child pwsh -Command'; Text = 'pwsh -NoProfile -Command ''[Console]::OutputEncoding = [Text.Encoding]::UTF8; & ./tools/package.ps1'''; Expect = 'C' }
     @{ Name = 'chcp inside child pwsh -c'; Text = 'pwsh -c "chcp 65001"'; Expect = 'C' }
     @{ Name = 'Set-OwnConsoleCp932 outside encoding-check'; Where = 'tools/package.ps1'; Text = 'function Set-OwnConsoleCp932 { chcp 932 }'; Expect = 'C' }
+    @{ Name = 'rewrite prefix built in a variable and passed'; Text = '$inner = ''[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); '' + $x; $psi.ArgumentList.Add($inner)'; Expect = 'C' }
+    @{ Name = 'chcp inside an argument array'; Text = '$a = @(''-Command'', ''chcp 65001'')'; Expect = 'C' }
+    @{ Name = 'bare cargo with metadata passed as an array variable'; Text = '$a = @(''metadata'', ''--no-deps''); cargo @a'; Expect = 'D' }
+    @{ Name = 'bare cargo with nar-sample-path through two variables'; Text = '$NAR_ARGS = @(''run'', ''--bin'', ''nar-sample-path''); $cargoArgs = @($nar_args) + @(''--'', ''x''); & cargo @cargoArgs'; Expect = 'D' }
     @{ Name = 'marker inside expandable string'; Text = '"$LOG_MARKER_A ' + $jp + '"'; Expect = 'B' }
     @{ Name = 'parse error'; Text = 'if ('; Expect = 'parse' }
     @{ Name = 'missing Invoke-Utf8Child call'; Text = 'cargo metadata'; Need = @('metadata'); Expect = 'E' }
@@ -324,6 +465,9 @@ $calib = @(
     @{ Name = 'child pwsh -File'; Text = 'pwsh -NoProfile -NonInteractive -File ./tools/package.ps1 -Arch all'; Expect = $null }
     @{ Name = 'Invoke-Utf8Child metadata'; Text = "Invoke-Utf8Child cargo @('metadata')"; Need = @('metadata'); Expect = $null }
     @{ Name = 'Set-OwnConsoleCp932 in encoding-check'; Where = $SelfWhere; Text = 'function Set-OwnConsoleCp932 { [Console]::OutputEncoding = [Text.Encoding]::GetEncoding(932); chcp 932 }'; Expect = $null }
+    @{ Name = 'UTF-8 writer prefix for a child'; Text = '$pre = ''$u = [System.Text.UTF8Encoding]::new($false); $w = [System.IO.StreamWriter]::new([Console]::OpenStandardOutput(), $u); $w.AutoFlush = $true; [Console]::SetOut($w); $e = [System.IO.StreamWriter]::new([Console]::OpenStandardError(), $u); $e.AutoFlush = $true; [Console]::SetError($e); '''; Expect = $null }
+    @{ Name = 'bare cargo with a pipeline value'; Text = '$PUBLISH = @(''metadata''); $pArgs = $PUBLISH | ForEach-Object { ''-p'', $_ }; cargo publish @pArgs'; Expect = $null }
+    @{ Name = 'bare cargo with only other words in variables'; Text = '$x = @(''build'', ''--locked''); $x += $x; cargo @x $y'; Expect = $null }
     @{ Name = 'yaml name and comment only'; Yaml = $true; Text = "# " + $jp + "${nl}steps:${nl}  - name: " + $jp + "${nl}"; Expect = $null }
     @{ Name = 'yaml block ends at the next key'; Yaml = $true; Text = "steps:${nl}  - run: |${nl}      Write-Host 'ok'${nl}    name: " + $jp + "${nl}  - name: " + $jp + "${nl}"; Expect = $null }
     @{ Name = 'yaml defaults run mapping'; Yaml = $true; Text = "defaults:${nl}  run:${nl}    shell: pwsh${nl}    working-directory: " + $jp + "${nl}"; Expect = $null }
@@ -343,6 +487,7 @@ if ($fails.Count -eq 0) { "PASS calibration ($($calib.Count) samples)" }
 
 # ---- 2. static rules over the real files ----
 $targets = @(Get-ChildItem -LiteralPath (Join-Path $root 'tools') -Filter '*.ps1' -File) +
+@(Get-ChildItem -LiteralPath (Join-Path $root 'tools/perf') -Filter '*.ps1' -File) +
 @(Get-ChildItem -LiteralPath (Join-Path $root '.github/workflows') -Filter '*.yml' -File)
 $callWordsOf = @{}
 foreach ($file in $targets) {
@@ -382,7 +527,7 @@ if ($null -ne $child) {
     }
     elseif ($childFails.Count -eq 0) { $fails.Add("FAIL cp932 child: expected one version= line, got $($childVersion.Count)") }
 }
-$cpAfter = @([Console]::OutputEncoding.CodePage, [Console]::InputEncoding.CodePage)
+$cpAfter = Get-ConsoleCodePages
 if (($cpBefore -join ',') -ceq ($cpAfter -join ',')) { "PASS own console code pages unchanged (output $($cpAfter[0]), input $($cpAfter[1]))" }
 else { $fails.Add("FAIL own console code pages changed: output $($cpBefore[0]) -> $($cpAfter[0]), input $($cpBefore[1]) -> $($cpAfter[1])") }
 

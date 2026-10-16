@@ -29,6 +29,9 @@
 //! balloon = "StayseeBalloon"
 //! shell = "master"
 //! running = "broken"   # 起動中の印（空文字は「無し」と読む）
+//!
+//! [baseware]           # areka.baseware.roots（並び全体を 1 本の文字列・空文字は空文字のまま）
+//! roots = "<exe>|D:\\ssp"
 //! ```
 //!
 //! - `format-version` は最上位の **整数 key**（本バージョン = [`FORMAT_VERSION`] = 1）。
@@ -88,6 +91,9 @@ pub struct FormatDoc {
     /// 起動中の印（動いているゴーストの名前）。正準 key `areka.last.running`・表 `[last]` running。
     /// 空文字は「無し」と読む（[`read_toml_str`] が `None` にする＝空文字を書けば消える）。
     pub last_running: Option<String>,
+    /// 根の並び（1 本の文字列・意味は呼び手が持つ）。正準 key `areka.baseware.roots`・表
+    /// `[baseware]` roots。空文字は空文字のまま（`last_running` と違い「無し」に潰さない）。
+    pub baseware_roots: Option<String>,
 }
 
 impl FormatDoc {
@@ -103,6 +109,7 @@ impl FormatDoc {
             && self.last_balloon.is_none()
             && self.last_shell.is_none()
             && self.last_running.is_none()
+            && self.baseware_roots.is_none()
     }
 }
 
@@ -158,6 +165,11 @@ pub fn to_toml_string(doc: &FormatDoc) -> String {
     }
     if !last.is_empty() {
         root.insert("last".into(), toml::Value::Table(last));
+    }
+    if let Some(v) = &doc.baseware_roots {
+        let mut t = toml::Table::new();
+        t.insert("roots".into(), toml::Value::String(v.clone()));
+        root.insert("baseware".into(), toml::Value::Table(t));
     }
 
     // toml の直列化は本 Table 構造では失敗しない（全値が String/Integer/Table）。万一の
@@ -243,6 +255,10 @@ pub fn read_toml_str(content: &str) -> FormatDoc {
         last_balloon: read_last("balloon"),
         last_shell: read_last("shell"),
         last_running: read_last("running").filter(|v| !v.is_empty()),
+        baseware_roots: table
+            .get("baseware")
+            .and_then(toml::Value::as_table)
+            .and_then(|t| read_str(t, "roots")),
         window: read_axis_map(&table, "window"),
         balloon_offset: read_axis_map(&table, "balloon-offset"),
         boot_count: read_count(&table, "boot"),
@@ -317,6 +333,7 @@ mod tests {
             last_balloon: Some("StayseeBalloon".into()),
             last_shell: Some("master".into()),
             last_running: Some("broken".into()),
+            baseware_roots: Some(r"<exe>|D:\ssp".into()),
         };
 
         let toml = to_toml_string(&doc);
@@ -351,6 +368,22 @@ mod tests {
 
         let back = read_toml_str(&to_toml_string(&doc));
         assert_eq!(doc, back);
+    }
+
+    #[test]
+    fn baseware_roots_empty_string_round_trips_as_empty_string() {
+        // [baseware] roots = "" は 0 項目の並び——「無し」に潰さず空文字のまま往復する。
+        let doc = FormatDoc {
+            baseware_roots: Some(String::new()),
+            ..FormatDoc::default()
+        };
+        let toml = to_toml_string(&doc);
+        assert!(
+            toml.contains("[baseware]"),
+            "output=
+{toml}"
+        );
+        assert_eq!(read_toml_str(&toml), doc);
     }
 
     #[test]

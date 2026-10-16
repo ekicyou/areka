@@ -225,7 +225,7 @@ fn balloon_archive(extra: &[&str]) -> NarBuilder {
 fn stages_the_archive_tree_verbatim_when_the_destination_is_absent() {
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
     let prepared = prepare(ghost_archive(&[]), &request);
@@ -280,7 +280,7 @@ fn takes_in_the_whole_existing_tree_and_overwrites_only_same_named_files_when_re
         ],
     );
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
     let prepared = prepare(balloon_archive(&["refresh,0"]), &request);
@@ -326,7 +326,7 @@ fn refresh_one_keeps_only_the_undelete_mask_names_at_every_level() {
     );
     let extra = ["refresh,1", "refreshundeletemask,state.dat:keepme.TXT"];
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
     let prepared = prepare(balloon_archive(&extra), &request);
@@ -366,7 +366,7 @@ fn a_companion_balloon_follows_its_own_prefixed_refresh_keys() {
         &[("keep.dat", b"kept"), ("gone.dat", b"gone")],
     );
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
     let prepared = prepare(
@@ -433,7 +433,7 @@ fn a_supplement_overlays_even_when_it_declares_refresh_one() {
         .file("ghost/master/dic.txt", b"dic")
         .done();
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: Some("test-ghost"),
     };
     let prepared = prepare(archive, &request);
@@ -475,7 +475,7 @@ fn the_work_folder_is_created_even_for_a_placement_with_nothing_to_place() {
         )
         .done();
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: Some("test-ghost"),
     };
     let prepared = prepare(archive, &request);
@@ -514,7 +514,7 @@ fn written_content_stays_byte_identical_without_any_conversion() {
         .deflate()
         .done();
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
     let prepared = prepare(archive, &request);
@@ -548,7 +548,7 @@ fn a_read_only_existing_file_does_not_block_the_archive_from_replacing_it() {
     set_read_only(&protected, true);
 
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
     let prepared = prepare(balloon_archive(&[]), &request);

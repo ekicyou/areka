@@ -90,11 +90,11 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **スレッドを多く作る足場は絞ったまま使う**: プールを汲み出さない足場は `WintfTaskPool::with_threads(1)`、GPU の装置を作る足場は `GraphicsCore::new()` の直前で `GpuPermit::take()`（同時に 4 つ）を取り、足場の最後の欄として持つ。GPU のテストは実のハードウェア GPU で行う（WARP などへ替えない）
 - **許す赤（申し開き）**: CPU を論理 CPU の 2 倍の空回しで埋めた負荷の再現（`tools/load-flake.ps1 -Burners 44`・22 論理 CPU の机）の下に限り、ゴーストの足場（`SwitchRig` とその仲間）と GPU の足場を使うテストが、5 回に十数件ほど `［止まった］`（多くは「進み 0 回・待ち始めから 30.0 秒」）で赤になることがある。これは既知の残りとして許す。理由: 最初の GPU のテストが装置を作った後、Intel のドライバの DLL（`igd10umt64xe`・`igc64` など）と D3D の検証層がプロセスに残り、GPU を使わないテストも含めて、すべてのスレッドの生まれと消えのたびに OS のローダーの錠の中で初期化を受ける。CPU を 2 倍に埋めると錠を持つスレッドが待たされ、スレッドの始まりと終わりが 30 秒を越えて列を作る。テストの側での絞り（プールのスレッド・GPU の装置の数・足場の同時の数）は試し尽くしており、残りは負荷の条件そのものから来る。本番の順序の取り違えではない（同 spec の `load-repro.md` の 4.2〜4.4）
 - **許さない赤**: 静かな机と `tools/test-all.ps1` の赤は、上の形でも許さない（ふだんは緑）。負荷の下でも、待ちの文言の無い赤・`［進みは不明］`・`［進んではいた］`、それに `［止まった］` で相手の処理に取り違えがある赤は許さない。待ちを足すか、取り違えを直す
-- **段 `encoding check`**（`tools/encoding-check.ps1`・crates.io の公開前の確認の後、`-License` の段の前）: リリースの道具（`tools/*.ps1`・`tools/perf/` を除く）と `.github/workflows/*.yml` の `run:` の本文を構文解析して、端末へ出す文の ASCII の外の字・端末の文字コードの書き替え・`cargo metadata`／`nar-sample-path` の素の呼び出しを赤にし、端末を 932 にした自分だけの子で `Invoke-Utf8Child`（`tools/utf8-child.ps1`）が UTF-8 を字のとおりに読むことを確かめる（2026-10-06 `areka-P0-tools-utf8-child-output`）
+- **段 `encoding check`**（`tools/encoding-check.ps1`・crates.io の公開前の確認の後、`-License` の段の前）: 道具（`tools/*.ps1` と `tools/perf/*.ps1`・どちらもフォルダの直下だけ・同じ規則）と `.github/workflows/*.yml` の `run:` の本文を構文解析して、端末へ出す文の ASCII の外の字・端末の文字コードの書き替え・`cargo metadata`／`nar-sample-path` の素の呼び出しを赤にする。書き替えは子の pwsh の `-Command`／`-c` に渡す文字列の中と、`Encoding`／`chcp` を含む文字列の中まで同じに見る（`[Console]::SetOut`／`SetError` は書き替えに数えない）。素の呼び出しは引数の変数を代入の右辺までたどって見る。端末を 932 にした自分だけの子で、`Invoke-Utf8Child`（`tools/utf8-child.ps1`）が UTF-8 を字のとおりに読むこと、`tools/perf/` の `Invoke-PwshChild` が子の 3 行（`Write-Output`・`Write-Host`・標準エラー）を字のとおりに届けること（前置きの無い素の `-File` では崩れることを較正として先に確かめる）、子の端末が 932 のままであることを確かめる（2026-10-06 `areka-P0-tools-utf8-child-output`・2026-10-16 `areka-P0-perf-tools-console-encoding`）
 - **段 `release notes check`**（`tools/release-notes.ps1 -SelfTest`・段 `encoding check` の後、`-License` の段の前・ネットを使わない）: リリースノートの道具の自分の検査。見本の題名と見本の見どころ（`tools/release-notes-fixture/`）から作った詳しいリリースノートと Release の本文が期待の文と 1 字違わず同じこと、見本から 1 か所ずつ外した見どころが決まった欠けの名前で落ちること、`doc/release-notes/v*.md` の実物が全部通ることを確かめる（2026-10-11 `areka-P0-release-notes-highlights`）
 - **段 `roadmap overview check`**（`tools/roadmap-overview.ps1 -SelfTest`・段 `release notes check` の後、`-License` の段の前・ネットを使わない）: 俯瞰の HTML の道具の自分の検査。文言のファイル（`tools/roadmap-overview.strings.json`）とひな形（`tools/roadmap-overview.template.html`）の形、見本の roadmap（`tools/roadmap-overview-fixture/`）から読んだデータと組み立てた HTML が期待のとおりなこと、見本から 1 か所ずつ崩した入力が決まった名前で落ちることを確かめる。実物の `roadmap.md` は通さない（書き方が変わるたびに赤にしないため・2026-10-16 `areka-P0-roadmap-overview-html`）
 
-**道具が端末へ出す文は ASCII だけ・端末の文字コードを書き替えない**（`tools/` のスクリプトと workflow の `run:` の本文）: 進みの表示・失敗の文・判定の結果の行・投げる例外の文は英語（ASCII）で書く。`[Console]::OutputEncoding` などの代入や `chcp` で端末を書き替えて逃げない。子のプロセスの出力を値として読む所（JSON・パス・版）は `tools/utf8-child.ps1` の `Invoke-Utf8Child` で UTF-8 のバイトとして読む。子の出力をそのまま写すだけの所は中身を書き替えない。写す所でも、子の出力を `2>&1 |` などパイプで受けて写すと端末の文字コードで解かれて化ける（932 の端末で `cargo deny` の罫線が `笏娯楳` のように崩れた）ので、`Invoke-Utf8Child` で読んでから行として写すか、パイプに通さず端末へ直接書かせる。注記・段の名前（workflow）・手順書の地の文は日本語のままでよい
+**道具が端末へ出す文は ASCII だけ・端末の文字コードを書き替えない**（`tools/` と `tools/perf/` のスクリプトと workflow の `run:` の本文・子の中でも書き替えない）: 進みの表示・失敗の文・判定の結果の行・投げる例外の文は英語（ASCII）で書く。`[Console]::OutputEncoding` などの代入や `chcp` で端末を書き替えて逃げない。子のプロセスの出力を値として読む所（JSON・パス・版）は `tools/utf8-child.ps1` の `Invoke-Utf8Child` で UTF-8 のバイトとして読む。子の出力をそのまま写すだけの所は中身を書き替えない。写す所でも、子の出力を `2>&1 |` などパイプで受けて写すと端末の文字コードで解かれて化ける（932 の端末で `cargo deny` の罫線が `笏娯楳` のように崩れた）ので、`Invoke-Utf8Child` で読んでから行として写すか、パイプに通さず端末へ直接書かせる。注記・段の名前（workflow）・手順書の地の文は日本語のままでよい
 
 **テストの門は手元のフルテスト（`tools/test-all.ps1`）のまま。ビルドと配布だけを GitHub Actions に乗せる**（タグ `v*` の push のときだけ・`.github/workflows/release.yml`。x64 と arm64 の zip と SHA256、それに詳しいリリースノート（一つ前のタグからの本線の変更の一覧・`tools/release-notes.ps1`）を作って GitHub Release を公開する。Release の本文は、その版の見どころ（`doc/release-notes/v{版}.md`・版上げの PR で書く）と詳しいリリースノートへのリンクで、GitHub に一覧を作らせない。添付は zip 2 つ・`.sha256` 2 つ・`release-notes-v{版}.md` の 5 つ。見どころのファイルが無いか形が欠けていれば、組み立ての前に止まる。手で始めて公開しない試しの走りもある）。zip の起動確認（配布スクリプトの `-Check`）は窓を出すので CI では回さず、手元で通す（スキル `/release` の手順）。テストを GitHub Actions へ移すことは 2026-09-24 に検討して見送った。テストの主役は実窓・WUC・GPU 描画の GUI 層で、ホスト型の実行環境で同じ水準を確かめられる見込みが薄いため（デバッグビルドの `GraphicsCore::new()` は D3D11 デバッグ層を必ず要求する等）。
 
@@ -115,8 +115,8 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 ### Common Commands
 ```bash
 # Dev (サンプル実行): cargo run -p wintf --example taffy_flex_demo
-# Build: cargo build
-# Build (Release最適化): cargo build --release
+# Build: cargo build -p areka
+# Build (Release最適化): cargo build -p areka --release
 # Test: cargo test
 # Full test (DoD gate・i686 の準備込み・PowerShell): pwsh -NoProfile -File tools/test-all.ps1 [-Format] [-License]
 ```

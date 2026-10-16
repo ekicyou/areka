@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
-use areka_ghost::catalog::{BasewareRoot, list_balloons};
+use areka_ghost::catalog_roots::find_balloon;
 use areka_nar::{
     ElementKind, InstallKind, InstallOutcome, IoPhase, NarArchive, NarError, SurvivingTree,
 };
@@ -405,18 +405,8 @@ fn fail(
 }
 
 /// 入れた物（識別子・名前・場所）。同梱バルーン（先頭より後のバルーン）の名前は、入れた後の
-/// 目録の `name`（設計で決めたこと 14）。目録に無い・名前が無ければ `areka-nar` の名前（フォルダ名）。
+/// 和の目録の `name`（設計で決めたこと 14）。目録に無い・名前が無ければ `areka-nar` の名前（フォルダ名）。
 fn installed_items(outcome: &InstallOutcome, facts: &GhostFacts) -> Vec<InstalledItem> {
-    let has_companion = outcome
-        .installed
-        .iter()
-        .skip(1)
-        .any(|element| element.kind == ElementKind::Balloon);
-    let balloons = if has_companion {
-        list_balloons(&BasewareRoot::new(facts.root.clone()))
-    } else {
-        Vec::new()
-    };
     outcome
         .installed
         .iter()
@@ -424,15 +414,10 @@ fn installed_items(outcome: &InstallOutcome, facts: &GhostFacts) -> Vec<Installe
         .map(|(index, element)| {
             let folder = element.path.file_name().map(|name| name.to_string_lossy());
             let catalog_name = (index > 0 && element.kind == ElementKind::Balloon)
-                .then(|| {
-                    balloons.iter().find(|entry| {
-                        folder.as_deref().is_some_and(|folder| {
-                            entry.identity.folder.eq_ignore_ascii_case(folder)
-                        })
-                    })
-                })
+                .then_some(folder)
                 .flatten()
-                .and_then(|entry| entry.identity.name.clone());
+                .and_then(|folder| find_balloon(&facts.roots, &folder))
+                .and_then(|entry| entry.identity.name);
             InstalledItem {
                 kind: kind_word(&element.kind),
                 name: catalog_name.unwrap_or_else(|| element.name.clone()),

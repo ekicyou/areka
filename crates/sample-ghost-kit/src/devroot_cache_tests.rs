@@ -569,7 +569,7 @@ fn the_multiprocess_child_acquires_the_master_copy() {
         NarArchive::open(&nar).unwrap_or_else(|err| panic!("子 {index} の .nar の読み取り: {err}"));
     archive
         .install(&InstallRequest {
-            root: reference.path(),
+            roots: &SingleRoot(reference.path()),
             target_ghost: None,
         })
         .unwrap_or_else(|err| panic!("子 {index} の突き合わせ用の展開: {err}"));

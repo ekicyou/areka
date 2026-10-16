@@ -1,6 +1,6 @@
 //! 右クリックメニュー（areka-P0-popup-menu-minimal）。
 //!
-//! このファイルは登記の口を持つ: 枠 7 種とその並び（[`Frame::ORDER`]）、登記の単位
+//! このファイルは登記の口を持つ: 枠 9 種とその並び（[`Frame::ORDER`]）、登記の単位
 //! （[`MenuItem`]）、枠ごとに 1 つだけ持つ供給関数（[`Supplier`]）、登記・取り消し・写しの
 //! 取得（[`MenuRegistry`]）。列挙・切替・インストール・更新の各 spec はメニュー本体を
 //! 触らず、自分の枠へ供給関数を登記して項目を足している（要件 6.1・登記者は `*_frame.rs`）。
@@ -12,13 +12,15 @@
 //! [`ghost_frame`]（「ゴースト」枠の供給関数・areka-P0-ghost-shell-balloon-switch）・
 //! [`shell_frame`]・[`balloon_frame`]（「シェル」「バルーン」枠の供給関数・areka-P0-shell-balloon-switch）・
 //! [`install_frame`]（「インストール」枠の供給関数・areka-P0-ghost-install）・
-//! [`update_frame`]（「ネットワーク更新」枠の供給関数・areka-P0-network-update）。
+//! [`update_frame`]（「ネットワーク更新」枠の供給関数・areka-P0-network-update）・
+//! [`roots_frame`]（「置き場を追加…」「置き場を外す」枠の供給関数・areka-P0-baseware-root-list）。
 
 pub(crate) mod balloon_frame;
 pub(crate) mod captions;
 pub(crate) mod ghost_frame;
 pub(crate) mod install_frame;
 pub(crate) mod plan;
+pub(crate) mod roots_frame;
 pub(crate) mod shell_frame;
 pub(crate) mod trigger;
 pub(crate) mod update_frame;
@@ -40,7 +42,7 @@ use crate::placement::spawn::CharWindowMarker;
 use crate::readme;
 use trigger::PendingQuery;
 
-/// メニューの枠。宣言順がそのまま並び順（①〜⑦・要件 2.1）で、判別値を登記の添字に使う。
+/// メニューの枠。宣言順がそのまま並び順（①〜⑨・要件 2.1）で、判別値を登記の添字に使う。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum Frame {
     /// ① ゴースト
@@ -53,20 +55,26 @@ pub(crate) enum Frame {
     Update,
     /// ⑤ インストール
     Install,
-    /// ⑥ 説明書
+    /// ⑥ 置き場を追加（areka-P0-baseware-root-list 要件 6.1）
+    RootAdd,
+    /// ⑦ 置き場を外す（areka-P0-baseware-root-list 要件 7.1）
+    RootRemove,
+    /// ⑧ 説明書
     Readme,
-    /// ⑦ 終了
+    /// ⑨ 終了
     Close,
 }
 
 impl Frame {
     /// 枠の並び順。並びを決める場所はここだけで、写しも計画もこの順に従う。
-    pub(crate) const ORDER: [Frame; 7] = [
+    pub(crate) const ORDER: [Frame; 9] = [
         Frame::Ghost,
         Frame::Shell,
         Frame::Balloon,
         Frame::Update,
         Frame::Install,
+        Frame::RootAdd,
+        Frame::RootRemove,
         Frame::Readme,
         Frame::Close,
     ];
@@ -111,7 +119,7 @@ pub(crate) enum ItemBody {
 /// ゴーストを起こすたびに `MenuWiring` は新品になるので、登記は起こすたびにやり直す（`ghost-shell-balloon-switch` の契約）。
 #[derive(Default)]
 pub(crate) struct MenuRegistry {
-    slots: [Option<Supplier>; 7],
+    slots: [Option<Supplier>; 9],
 }
 
 impl MenuRegistry {
@@ -282,8 +290,8 @@ pub(crate) fn attach_release_handlers(world: &mut World) {
 /// 枠へ供給関数を登記する（World 越しの入口）。結線の前に呼ばれたら `warn!` で記録して
 /// 何もしない。呼び手は「ゴースト」枠の [`ghost_frame::register`]・「シェル」枠の
 /// [`shell_frame::register`]・「バルーン」枠の [`balloon_frame::register`]・「インストール」枠の
-/// [`install_frame::register`]・「ネットワーク更新」枠の [`update_frame::register`]（どれもゴーストを
-/// 起こすたび）。
+/// [`install_frame::register`]・「ネットワーク更新」枠の [`update_frame::register`]・置き場の 2 枠の
+/// [`roots_frame::register`]（どれもゴーストを起こすたび）。
 pub(crate) fn register(world: &mut World, frame: Frame, supplier: Supplier) {
     let Some(mut wiring) = world.get_non_send_mut::<MenuWiring>() else {
         tracing::warn!(
@@ -296,12 +304,12 @@ pub(crate) fn register(world: &mut World, frame: Frame, supplier: Supplier) {
     wiring.registry.register(frame, supplier);
 }
 
-/// ⑥「説明書」の供給関数。有効／無効は写しを取るたびにファイルの在否で決まる
+/// ⑧「説明書」の供給関数。有効／無効は写しを取るたびにファイルの在否で決まる
 /// （要件 4.3・6.2・11.4）。項目名とリソース名は [`captions::FRAME_CAPTIONS`] から引く。
 fn readme_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
         label: captions::default_label(Frame::Readme).to_string(),
-        caption_resource: Some(captions::resource_for(Frame::Readme)),
+        caption_resource: captions::resource_for(Frame::Readme),
         enabled: readme::is_available(world),
         checked: None,
         body: ItemBody::Action(Rc::new(open_readme)),
@@ -313,11 +321,11 @@ fn open_readme(world: &mut World, _ctx: &MenuContext) {
     readme::open_from_world(world, readme::MENU_TAG);
 }
 
-/// ⑦「終了」の供給関数。常に選べる（要件 2.2）。
+/// ⑨「終了」の供給関数。常に選べる（要件 2.2）。
 fn close_item(_world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
         label: captions::default_label(Frame::Close).to_string(),
-        caption_resource: Some(captions::resource_for(Frame::Close)),
+        caption_resource: captions::resource_for(Frame::Close),
         enabled: true,
         checked: None,
         body: ItemBody::Action(Rc::new(request_close)),

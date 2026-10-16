@@ -28,7 +28,7 @@ impl Fixture {
         let ctx = OpenContext {
             ghost: "G".to_owned(),
             ghost_dir: root.ghost_dir("g"),
-            baseware: Some(root),
+            baseware: Some(areka_ghost::BasewareRoots::single(root.dir().to_path_buf())),
         };
         Fixture { _tmp: tmp, ctx }
     }
@@ -263,7 +263,7 @@ fn named_fixture() -> (TempPath, OpenContext) {
     let ctx = OpenContext {
         ghost: "G".to_owned(),
         ghost_dir: root.ghost_dir("g"),
-        baseware: Some(root),
+        baseware: Some(areka_ghost::BasewareRoots::single(root.dir().to_path_buf())),
     };
     (tmp, ctx)
 }
@@ -311,7 +311,7 @@ fn named_shell_by_name_then_folder() {
 fn named_balloon_by_name_then_folder() {
     let (_tmp, ctx) = named_fixture();
     let os = FakeOs::default();
-    let root = ctx.baseware.clone().unwrap();
+    let root = ctx.baseware.clone().unwrap().roots()[0].clone();
     assert_eq!(
         resolve(&named("balloon", "bb"), &ctx, &os),
         Ok(want(Verb::Open, root.balloon_dir("ba"), None, None))
@@ -330,7 +330,7 @@ fn named_balloon_by_name_then_folder() {
 fn named_miss_case_and_special_names_are_no_match() {
     let (_tmp, ctx) = named_fixture();
     let os = FakeOs::default();
-    // 大文字小文字を区別する・特別な名前は解かない。
+    // name は大文字小文字を区別する・特別な名前は解かない。
     for (kind, name) in [
         ("ghost", "nope"),
         ("ghost", "random"),
@@ -366,4 +366,25 @@ fn named_without_baseware_root_fails() {
             "{kind}"
         );
     }
+}
+
+/// 並びの 2 つ目の根のゴースト・バルーンも和で引け、フォルダ名は 1 つの規則（大文字小文字を
+/// 区別しない）で比べる（areka-P0-baseware-root-list 要件 2.6・2.8・3.5）。
+#[test]
+fn named_ghost_and_balloon_from_second_root_match_folder_ignoring_case() {
+    let (_tmp, mut ctx) = named_fixture();
+    let tmp2 = TempPath::under_target("open-ext-named-2");
+    let second = build_ghost_root(&tmp2, ("h", "H"), &[], &[("Zz", "ZName")]);
+    let mut roots = ctx.baseware.clone().unwrap().roots().to_vec();
+    roots.push(second.clone());
+    ctx.baseware = Some(areka_ghost::BasewareRoots::new(roots));
+    let os = FakeOs::default();
+    assert_eq!(
+        resolve(&named("ghost", "H"), &ctx, &os),
+        Ok(want(Verb::Open, second.ghost_dir("h"), None, None))
+    );
+    assert_eq!(
+        resolve(&named("balloon", "zZ"), &ctx, &os),
+        Ok(want(Verb::Open, second.balloon_dir("Zz"), None, None))
+    );
 }

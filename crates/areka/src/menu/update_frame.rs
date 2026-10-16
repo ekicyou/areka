@@ -22,7 +22,7 @@ pub(crate) fn register(world: &mut World) {
 fn update_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
         label: captions::default_label(Frame::Update).to_string(),
-        caption_resource: Some(captions::resource_for(Frame::Update)),
+        caption_resource: captions::resource_for(Frame::Update),
         enabled: desk::can_update(world),
         checked: None,
         body: ItemBody::Action(Rc::new(|world: &mut World, _: &MenuContext| {

@@ -795,6 +795,8 @@ fn boot_wired(
         menu::balloon_frame::register(world);
         // 「インストール」枠の登記（ghost-install 要件 1.8）: 同じ理由で起こすたびにやり直す。
         menu::install_frame::register(world);
+        // 「置き場を追加…」「置き場を外す」枠の登記（baseware-root-list 要件 6.1・7.1）: 同じ理由で起こすたびにやり直す。
+        menu::roots_frame::register(world);
         // 「ネットワーク更新」枠の登記（network-update 要件 1.2）: 同じ理由で起こすたびにやり直す。
         menu::update_frame::register(world);
         // 置換語 %lastghostname・%lastobjectname の載せ直し（記憶の置き場は起こすたびに新しくなる）。

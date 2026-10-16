@@ -1,0 +1,26 @@
+{
+  "feature_name": "areka-P0-perf-tools-console-encoding",
+  "created_at": "2026-10-16T01:51:56Z",
+  "updated_at": "2026-10-16T08:58:15Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-10-16T08:58:15Z"
+    }
+  },
+  "ready_for_implementation": true
+}

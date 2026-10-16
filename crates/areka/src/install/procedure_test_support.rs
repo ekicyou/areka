@@ -7,7 +7,9 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use areka_nar::{InstallOutcome, InstallRequest, IoPhase, NarArchive, NarError, SurvivingTree};
+use areka_nar::{
+    InstallOutcome, InstallRequest, IoPhase, NarArchive, NarError, SingleRoot, SurvivingTree,
+};
 use sample_ghost_kit::{NarBuilder, install_txt};
 use temp_path_kit::TempPath;
 
@@ -76,8 +78,9 @@ impl FakePorts {
         )
         .expect("起動中のゴーストの descript.txt を置ける");
         let facts = GhostFacts {
-            root: root.path().to_path_buf(),
+            roots: areka_ghost::BasewareRoots::single(root.path().to_path_buf()),
             folder: Some(RUNNING.to_owned()),
+            running_dir: None,
             name: "Running".to_owned(),
             sakura_name: Some(RUNNING_SAKURA.to_owned()),
             install_accept: vec!["x".to_owned(), RUNNING_ALIAS.to_owned()],
@@ -123,7 +126,7 @@ impl FakePorts {
         target_ghost: Option<&str>,
     ) -> Result<InstallOutcome, NarError> {
         archive.install(&InstallRequest {
-            root: self.root.path(),
+            roots: &SingleRoot(self.root.path()),
             target_ghost,
         })
     }

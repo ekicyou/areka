@@ -9,7 +9,7 @@
 //! # 2 段で使う
 //!
 //! ```rust,no_run
-//! use areka_nar::{InstallKind, InstallOutcome, InstallRequest, NarArchive, NarError};
+//! use areka_nar::{InstallKind, InstallOutcome, InstallRequest, NarArchive, NarError, SingleRoot};
 //! use std::path::Path;
 //!
 //! fn install(nar: &Path, root: &Path) -> Result<InstallOutcome, NarError> {
@@ -19,7 +19,7 @@
 //!         println!("{} を入れます", archive.manifest().name);
 //!     }
 //!     // ⑵ 入れる。失敗したら宛先は呼ぶ前のまま（巻き戻せなかったぶんは理由に載る）。
-//!     match archive.install(&InstallRequest { root, target_ghost: None }) {
+//!     match archive.install(&InstallRequest { roots: &SingleRoot(root), target_ghost: None }) {
 //!         Err(NarError::Refused { reason, .. }) => {
 //!             // 短い語をそのまま `OnInstallFailure` の理由に写せる。
 //!             println!("拒否: {}", reason.kind());
@@ -39,7 +39,7 @@
 //! （要件 9.1）。
 
 use crate::container::{inflate_entry, read_central_directory};
-use crate::install::{WorkArea, commit_all, stage_placement};
+use crate::install::{WorkArea, area_for, commit_all, stage_placement};
 use crate::names::{EntryName, validate_entry_names};
 use crate::plan::build_plan;
 use std::path::{Path, PathBuf};
@@ -57,7 +57,7 @@ pub use error::{
     ElementKind, ExistingState, InstalledElement, Integrity, IoPhase, ManifestWarning, NarError,
     RefuseReason, SurvivingTree, UnsafeWhy, Unsupported,
 };
-pub use install::{InstallOutcome, InstallRequest};
+pub use install::{InstallOutcome, InstallRequest, InstallRoots, SingleRoot};
 pub use manifest::{Companion, ExistingPolicy, InstallKind, InstallManifest};
 
 /// 検証を終えた `.nar` 1 本。
@@ -83,7 +83,7 @@ impl NarArchive {
     /// 読み取りに失敗したとき [`NarError::Io`]（`phase: Read`）。構造・整合性・名前・
     /// マニフェストのいずれかが通らなかったとき [`NarError::Refused`]。
     pub fn open(path: &Path) -> Result<NarArchive, NarError> {
-        Self::read(path).map_err(|failure| log_failure(failure, None))
+        Self::read(path).map_err(|failure| log_failure(failure, &[]))
     }
 
     /// `install.txt` の解釈の結果。呼び出し側が `accept` の照合や宛先の選択に使う。
@@ -114,7 +114,7 @@ impl NarArchive {
     /// （宛先には触れていない）。組み上げ・確定・巻き戻しの I/O が失敗したとき
     /// [`NarError::Io`]（どこまで確定したかと巻き戻せたかを持つ＝要件 6.4）。
     pub fn install(&self, request: &InstallRequest<'_>) -> Result<InstallOutcome, NarError> {
-        let mut work = None;
+        let mut work = Vec::new();
         match self.place(request, &mut work) {
             Ok(outcome) => {
                 // 拒否ではないが黙って通さないもの（要件 3.9）。1 件ずつ出す。
@@ -140,7 +140,7 @@ impl NarArchive {
                 );
                 Ok(outcome)
             }
-            Err(failure) => Err(log_failure(failure, work)),
+            Err(failure) => Err(log_failure(failure, &work)),
         }
     }
 
@@ -176,13 +176,14 @@ impl NarArchive {
 
     /// 計画 → 組み上げ → 確定。記録は出さない（出口は [`NarArchive::install`] 1 つ）。
     ///
-    /// 作業フォルダを掘ったら、その場所を `work` へ置く（呼び手が記録の欄として出す）。
+    /// 作業フォルダは配置の根ごとに 1 つ掘り（綴りが同じ根は 1 つ）、掘った順に `work` へ
+    /// 積む（呼び手が記録の欄として出す。途中で失敗しても掘った分は載る）。
     /// `rolled_back` が偽のとき、利用者の元の木が残っている場所は失敗の値の
-    /// `survivors` が持ち、いずれも `work` の配下に在る。
+    /// `survivors` が持ち、いずれも `work` のどれかの作業フォルダの配下に在る。
     fn place(
         &self,
         request: &InstallRequest<'_>,
-        work: &mut Option<PathBuf>,
+        work: &mut Vec<PathBuf>,
     ) -> Result<InstallOutcome, NarError> {
         let refused = |reason| NarError::Refused {
             archive: self.archive.clone(),
@@ -190,18 +191,29 @@ impl NarArchive {
         };
         let plan = build_plan(&self.manifest, &self.names, request).map_err(refused)?;
 
-        let area = WorkArea::create(request.root)
-            .map_err(|failure| self.io(IoPhase::Stage, failure.path, failure.source))?;
-        *work = Some(area.path().to_path_buf());
+        // 棚の掃除は掘るときに行うので、触るのはこの `.nar` の根の棚だけ。同じ根に 2 度
+        // 掘ると 2 度目の掃除が 1 度目の作業フォルダを消すので、綴りが同じ根は 1 つにする。
+        let mut areas: Vec<WorkArea> = Vec::new();
+        for placement in &plan {
+            if areas.iter().any(|area| area.root() == placement.root) {
+                continue;
+            }
+            let area = WorkArea::create(&placement.root)
+                .map_err(|failure| self.io(IoPhase::Stage, failure.path, failure.source))?;
+            work.push(area.path().to_path_buf());
+            areas.push(area);
+        }
 
+        // 全部を組み終えてから確定へ進む（どの根にもまだ 1 バイトも書いていない）。
         let mut states = Vec::with_capacity(plan.len());
         for (k, placement) in plan.iter().enumerate() {
+            let area = area_for(&areas, &placement.root);
             let state = stage_placement(&area.stage(k), placement, &self.contents)
                 .map_err(|failure| self.io(IoPhase::Stage, failure.path, failure.source))?;
             states.push(state);
         }
 
-        commit_all(&area, &self.manifest, &plan, &states).map_err(|failure| NarError::Io {
+        commit_all(&areas, &self.manifest, &plan, &states).map_err(|failure| NarError::Io {
             archive: self.archive.clone(),
             phase: failure.phase,
             path: failure.path,
@@ -273,9 +285,10 @@ fn read_archive_bytes(path: &Path) -> Result<Vec<u8>, NarError> {
 /// 失敗の記録を 1 回だけ出し、受け取った失敗をそのまま返す（要件 9.1・6.4）。
 ///
 /// `NarError` の表示は確定済みの件数も巻き戻せたかも持たない（設計の逐語）ので、
-/// 要件 6.4 が見えることを求めている 2 つは欄として足す。`work` はこの走行が作業
-/// フォルダを掘ったなら、巻き戻せたかに関わらずその場所（掘る前の失敗と拒否では空）。
-fn log_failure(failure: NarError, work: Option<PathBuf>) -> NarError {
+/// 要件 6.4 が見えることを求めている 2 つは欄として足す。`work` はこの走行が掘った
+/// 作業フォルダの列で、巻き戻せたかに関わらず掘った順に `; ` でつなぐ（根 1 つなら
+/// その場所 1 つ・掘る前の失敗と拒否では空）。
+fn log_failure(failure: NarError, work: &[PathBuf]) -> NarError {
     let (archive, committed, rolled_back) = match &failure {
         // 拒否は書く前に止まっているので、確定は 0 件・宛先は呼ぶ前のまま。
         NarError::Refused { archive, .. } => (archive.clone(), 0, true),
@@ -291,7 +304,11 @@ fn log_failure(failure: NarError, work: Option<PathBuf>) -> NarError {
         reason = %failure,
         committed,
         rolled_back,
-        work = %work.unwrap_or_default().display(),
+        work = %work
+            .iter()
+            .map(|dir| dir.display().to_string())
+            .collect::<Vec<_>>()
+            .join("; "),
         "[areka_nar] refused or failed"
     );
     failure

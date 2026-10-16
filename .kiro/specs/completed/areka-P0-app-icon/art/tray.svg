@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1024" height="1024" viewBox="0 0 512 512">
+<defs><filter id="ua" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/></filter>
+<filter id="ga" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -0.3 -0.59 -0.11 0 1"/><feComponentTransfer><feFuncA type="linear" slope="20" intercept="-15.5"/></feComponentTransfer><feComposite in2="SourceAlpha" operator="in"/></filter>
+<filter id="s" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+<feGaussianBlur in="SourceAlpha" stdDeviation="3" result="b"/>
+<feComponentTransfer in="b" result="m"><feFuncA type="linear" slope="14" intercept="-6.5"/></feComponentTransfer>
+<feGaussianBlur in="m" stdDeviation="12" result="mb2"/><feComponentTransfer in="mb2" result="d2"><feFuncA type="linear" slope="20" intercept="-1"/></feComponentTransfer><feFlood flood-color="#7A7A7A"/><feComposite in2="d2" operator="in" result="og"/><feGaussianBlur in="m" stdDeviation="9" result="mb"/>
+<feComponentTransfer in="mb" result="d"><feFuncA type="linear" slope="20" intercept="-1"/></feComponentTransfer>
+<feFlood flood-color="#FFFFFF"/><feComposite in2="d" operator="in" result="ow"/>
+<feFlood flood-color="#7C80E0"/><feComposite in2="m" operator="in" result="fl"/>
+<feMerge><feMergeNode in="og"/><feMergeNode in="ow"/><feMergeNode in="fl"/></feMerge></filter></defs>
+<g filter="url(#s)"><path d="M66,24.5 C62.75,19.75 61.333,18.333 57,16.5 C52.667,14.667 46.833,16.333 40,13.5 C33.167,10.667 16,-0.5 16,-0.5 C16,-0.5 17.5,22 17.5,22 C17.5,22 0.5,22 0.5,22 C0.5,22 9.5,31 9.5,31 C9.5,31 0.5,32 0.5,32 C0.5,32 8.5,40 8.5,40 C8.5,40 4.833,47.5 3.5,55 C2.167,62.5 0.5,85 0.5,85 C0.5,85 83,85.5 83,85.5 C83,85.5 79.333,55.167 76.5,45 C73.667,34.833 69.25,29.25 66,24.5 Z" transform="translate(18,40) scale(5.6667,5.6628)"/></g>
+</svg>

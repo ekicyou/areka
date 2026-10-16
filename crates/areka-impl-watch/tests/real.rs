@@ -518,7 +518,7 @@ fn the_log_keeps_event_lines_and_failure_lines_across_processes() {
     assert_eq!(desk.call("tick"), ok("tick\n"));
     let first = desk.log();
     assert_eq!(first.lines().count(), 1, "{first}");
-    desk.assert_logged("tick", "Recovered { backup: None }");
+    desk.assert_logged("tick", "Recovered { backup: None, damage: None }");
     let mut watch_a = desk.watch("a");
     desk.assert_logged("watch", "Joined { id: \"a\" }");
     desk.assert_logged("watch", "WaitRegistered { id: \"a\", kind: Watch }");
@@ -570,9 +570,20 @@ fn the_log_keeps_event_lines_and_failure_lines_across_processes() {
     let set_aside =
         "[store] state file was broken; set aside command=\"tick\" event=Recovered { backup: Some(";
     assert_eq!(desk.log_lines("WARN", set_aside), 1, "{}", desk.log());
+    // 退避の行には壊れた訳（JSON として読めない位置）が載る（要件 1.6）。
+    let damage = "damage: Some(NotJson { line: 1, column: ";
+    assert_eq!(desk.log_lines("WARN", damage), 1, "{}", desk.log());
     let reading = read(&desk.file("status.md"));
     let row = "| recovered | - | backed up: ";
     assert!(reading.contains(row), "{reading}");
+
+    // 壊れたファイルを `status` が読むと 1 で終わり、失敗の行に訳が載る（退避はしない）。
+    desk.put_state("not json");
+    let broken_text = "state file is broken; see impl-watch.log\n";
+    assert_eq!(desk.call("status"), done(1, "", broken_text));
+    assert_eq!(read(&state_json), "not json");
+    let read_damage = "[store] read failed error=state file is broken; see impl-watch.log damage=NotJson { line: 1, column: ";
+    assert_eq!(desk.log_lines("ERROR", read_damage), 1, "{}", desk.log());
 
     // 追記（最初の行が頭に残っている）・色の制御文字なし・どの行も時刻で始まり出どころを持つ。
     let log = desk.log();

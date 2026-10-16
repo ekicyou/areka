@@ -101,3 +101,31 @@ fn without_boot_context_only_a_disabled_balloon_frame_is_shown() {
         ))
     );
 }
+
+/// 2 つの根の和: 両方の根のバルーンが隠れを除いてフォルダ名のバイト順に並び、今のバルーン
+/// （後ろの根の `StayseeBalloon`）と同じフォルダ名として先の根の `stayseeballoon` に印が付く
+/// （areka-P0-baseware-root-list 4.3・要件 2.8・3.5）。
+#[test]
+fn union_of_two_roots_marks_same_folder_name_balloon() {
+    let first = TempPath::under_target("balloon-frame-union-first");
+    let second = TempPath::under_target("balloon-frame-union-second");
+    let first_root = BasewareRoot::new(first.path().to_path_buf());
+    let second_root = BasewareRoot::new(second.path().to_path_buf());
+    put_balloon(&first_root, "stayseeballoon", "");
+    put_balloon(&second_root, "StayseeBalloon", "");
+    put_balloon(&second_root, "Alpha", "");
+    let mut ctx = boot_context(&second_root, "A");
+    ctx.roots = areka_ghost::BasewareRoots::new(vec![first_root, second_root]);
+    let mut world = World::new();
+    world.insert_resource(ctx);
+    wire_menu(&mut world, std::sync::mpsc::channel().0);
+    register(&mut world);
+
+    assert_eq!(
+        balloon_shape(&world).map(|s| s.3),
+        Some(vec![
+            ("Alpha".to_owned(), true, Some(false)),
+            ("stayseeballoon".to_owned(), true, Some(true)),
+        ])
+    );
+}

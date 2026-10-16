@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
-use areka_ghost::GhostEntry;
+use areka_ghost::{GhostEntry, same_folder_name};
 use areka_kanade::{
     BootOrigin, ChangeHandoff, ChangeOrigin, ChangeRequest, ChangeTarget, ChangedFrom, CloseReason,
     KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFault, ShioriFaultKind,
@@ -165,13 +165,18 @@ pub(crate) struct SwitchInFlight {
 /// 純粋: 目録の項目と指し方から切替先を決める（要件 1.5・1.8・11.8）。
 ///
 /// 名前は `descript.txt` の `name` と先に突き合わせ、一致が無ければフォルダ名と突き合わせる。
-/// フォルダ名の指し方はフォルダ名とだけ突き合わせる。比較は大文字小文字を区別し、今のゴーストも
-/// 除外しない。`sakura_name` は fs を読むので入口が埋める（ここでは `None`）。
+/// フォルダ名の指し方はフォルダ名とだけ突き合わせる。`name` は大文字小文字を区別し、フォルダ名は
+/// 1 つの規則（`same_folder_name`）で比べる。今のゴーストも除外しない。`sakura_name` は fs を
+/// 読むので入口が埋める（ここでは `None`）。
 pub(crate) fn resolve_switch_target(
     entries: &[GhostEntry],
     spec: &GhostSpec,
 ) -> Option<SwitchTarget> {
-    let by_folder = |want: &str| entries.iter().find(|e| e.identity.folder == want);
+    let by_folder = |want: &str| {
+        entries
+            .iter()
+            .find(|e| same_folder_name(&e.identity.folder, want))
+    };
     let hit = match spec {
         GhostSpec::Name(want) => entries
             .iter()
@@ -245,7 +250,7 @@ impl UnresolvedReason {
 /// 特別な名前は `random`・`sequential`・`lastinstalled` の完全一致だけ（大文字小文字を区別）で、
 /// 目録に同じ名前のゴーストがいても特別な名前として解く。`entries` は `list_ghosts` の並び
 /// （フォルダ名の昇順）のまま渡す。`current`＝今のゴーストのフォルダ名（`None` は目録に無い扱い）、
-/// `last_installed`＝最後に入れたゴーストのフォルダ名の記録。
+/// `last_installed`＝最後に入れたゴーストのフォルダ名の記録（どちらも `same_folder_name` で比べる）。
 /// - `random`: 今のゴーストを除いた候補から `pick(候補数)` で 1 体。候補が 0 体なら今のゴースト
 ///   自身（目録に残っているのはそれだけ）。`pick` を呼ぶのは候補が 1 体以上のときだけ。
 /// - `sequential`: 今の位置の次（末尾なら先頭）。今のゴーストが目録に無ければ先頭。
@@ -263,7 +268,8 @@ pub(crate) fn resolve_special_name(
         folder: e.identity.folder.clone(),
         position,
     };
-    let is_current = |e: &&GhostEntry| Some(e.identity.folder.as_str()) == current;
+    let is_current =
+        |e: &&GhostEntry| current.is_some_and(|c| same_folder_name(&e.identity.folder, c));
     match name {
         "random" => {
             let others: Vec<&GhostEntry> = entries.iter().filter(|e| !is_current(e)).collect();
@@ -283,10 +289,13 @@ pub(crate) fn resolve_special_name(
         }
         "lastinstalled" => match last_installed {
             None => NameResolution::Unresolved(UnresolvedReason::LastInstalledNone),
-            Some(want) => entries.iter().find(|e| e.identity.folder == want).map_or(
-                NameResolution::Unresolved(UnresolvedReason::LastInstalledMissing),
-                |e| resolved(e, None),
-            ),
+            Some(want) => entries
+                .iter()
+                .find(|e| same_folder_name(&e.identity.folder, want))
+                .map_or(
+                    NameResolution::Unresolved(UnresolvedReason::LastInstalledMissing),
+                    |e| resolved(e, None),
+                ),
         },
         _ => NameResolution::Plain,
     }
@@ -344,7 +353,7 @@ pub(crate) fn request_ghost_switch_with(
         );
         return SwitchVerdict::NoContext;
     };
-    let entries = areka_ghost::catalog::list_ghosts(&ctx.root);
+    let entries = areka_ghost::catalog_roots::list_ghosts(&ctx.roots);
     let current_folder = ctx.current.ghost.folder.clone();
     // 特別な名前は同名のゴーストより先に解く。メニューのフォルダの名指しは素通し。記録は読むだけ。
     let spec = match &req.ghost {
@@ -378,7 +387,7 @@ pub(crate) fn request_ghost_switch_with(
         }
         GhostSpec::Folder(_) => req.ghost.clone(),
     };
-    let Some(mut target) = resolve_switch_target(&entries, &spec) else {
+    let Some(target) = resolve_switch_target(&entries, &spec) else {
         tracing::warn!(
             event = "ghost_switch_unknown",
             reason = "name",
@@ -387,6 +396,7 @@ pub(crate) fn request_ghost_switch_with(
         );
         return SwitchVerdict::NotFound;
     };
+    let mut target = super::same_folder_pin::pin_to_current(target, &ctx.current.ghost);
 
     let session = world
         .get_non_send::<GhostSlot>()
@@ -461,7 +471,7 @@ pub(crate) fn request_ghost_switch_with(
 pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
     let Some((stage, target_name, target_is_default)) =
         world.get_non_send::<SwitchInFlight>().map(|f| {
-            let is_default = f.target.folder == DEFAULT_GHOST_FOLDER;
+            let is_default = same_folder_name(&f.target.folder, DEFAULT_GHOST_FOLDER);
             (f.stage, f.target.name.clone(), is_default)
         })
     else {
@@ -625,7 +635,7 @@ fn record_steady_memory(world: &World) {
         );
         return;
     }
-    let name = running_name(&ctx.root, &ctx.current.ghost);
+    let name = running_name(&ctx.current.ghost);
     publisher.persist_put(
         PersistScope::App,
         vec![(PersistKey::LastRunning, name.clone())],
@@ -691,7 +701,7 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     };
     if boot_into(world, closed, ghost, origin) {
         set_stage(world, WelcomeAttempt::Target);
-    } else if target.folder == DEFAULT_GHOST_FOLDER {
+    } else if same_folder_name(&target.folder, DEFAULT_GHOST_FOLDER) {
         fatal(
             world,
             format!("切替先の既定ゴースト {} を起こせなかった", target.name),
@@ -707,10 +717,7 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
 /// [`boot_into`]（由来＝前回落ちた・経路＝既定）。成功なら段を「迎え入れ（既定）」に。
 pub(crate) fn switch_to_default(world: &mut World, fallen_name: &str) {
     let default_dir = world.get_resource::<BootContext>().and_then(|ctx| {
-        areka_ghost::catalog::list_ghosts(&ctx.root)
-            .into_iter()
-            .find(|e| e.identity.folder == DEFAULT_GHOST_FOLDER)
-            .map(|e| e.dir)
+        areka_ghost::catalog_roots::find_ghost(&ctx.roots, DEFAULT_GHOST_FOLDER).map(|e| e.dir)
     });
     let Some(dir) = default_dir else {
         fatal(
@@ -790,9 +797,9 @@ fn boot_into(
         false
     };
     // 作り口と文脈は同期の I/O の前に確かめる（無ければ何を解いても起こせない）。
-    let context = world.get_resource::<BootContext>().map(|c| c.root.clone());
+    let context = world.get_resource::<BootContext>().map(|c| c.roots.clone());
     let has_source = world.contains_non_send::<GhostBootInputsSource>();
-    let (Some(root), true) = (context, has_source) else {
+    let (Some(roots), true) = (context, has_source) else {
         let reason = if has_source {
             "boot_context"
         } else {
@@ -805,10 +812,14 @@ fn boot_into(
         );
         return failed("no_context", reason.to_owned());
     };
-    let balloon = match resolve_balloon_for_ghost(&root, &ghost.dir, pick_index) {
+    let balloon = match resolve_balloon_for_ghost(&roots, &ghost.dir, pick_index) {
         Ok(balloon) => balloon,
-        Err(NoBalloon { balloon_store }) => {
-            return failed("balloon", balloon_store.display().to_string());
+        Err(NoBalloon { balloon_stores }) => {
+            let stores: Vec<String> = balloon_stores
+                .iter()
+                .map(|s| s.display().to_string())
+                .collect();
+            return failed("balloon", stores.join("; "));
         }
     };
     tracing::info!(
@@ -900,3 +911,7 @@ mod boot_event_tests;
 #[cfg(test)]
 #[path = "ghost_switch_balloon_tests.rs"]
 mod balloon_tests;
+
+#[cfg(test)]
+#[path = "ghost_switch_roots_tests.rs"]
+mod roots_tests;

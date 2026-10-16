@@ -228,11 +228,13 @@ fn menu_balloon_frame_marks_the_current_balloon_and_selecting_requests_a_switch(
         "charset,UTF-8\r\nname,二つ目\r\n",
     )
     .unwrap();
-    let current_label = areka_ghost::catalog::list_balloons(&rig.root)
-        .into_iter()
-        .find(|e| e.identity.folder == crate::emo2_boot::ghost_switch_test_support::BALLOON)
-        .map(|e| e.identity.name.unwrap_or(e.identity.folder))
-        .expect("検体のバルーンが根に在る");
+    let current_label = areka_ghost::catalog_roots::list_balloons(
+        &areka_ghost::catalog_roots::BasewareRoots::single(rig.root.dir().to_path_buf()),
+    )
+    .into_iter()
+    .find(|e| e.identity.folder == crate::emo2_boot::ghost_switch_test_support::BALLOON)
+    .map(|e| e.identity.name.unwrap_or(e.identity.folder))
+    .expect("検体のバルーンが根に在る");
     rig.boot("A");
     let steady = rig.wait_steady();
 
