@@ -2,6 +2,7 @@
 //!
 //! 部品のテスト（`src/lib.rs` が `cfg(test)` で読む）と通しのテスト（`tests/exe_test.rs`）が
 //! この同じ 1 ファイルを `#[path]` で読む。根が違うので、中継の項目を `crate::` で引かない。
+//! 自己確認（`fake_server_tests.rs`）は部品のテストの束（`src/lib.rs`）でだけ走る。
 //!
 //! 受け口は自分のスレッドと自分の tokio（`current_thread`）で回る。呼び手が同期のテストでも、
 //! `current_thread` の `#[tokio::test]` でも、子プロセス（建てた exe）を待って止まっている間でも
@@ -515,7 +516,3 @@ async fn hold(stream: &mut TcpStream, connection: usize, shared: &Shared) {
         sink.clear();
     }
 }
-
-#[cfg(test)]
-#[path = "fake_server_tests.rs"]
-mod tests;

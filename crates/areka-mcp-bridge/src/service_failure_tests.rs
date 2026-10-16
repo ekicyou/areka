@@ -112,6 +112,34 @@ async fn a_request_not_answered_within_the_bound_gets_the_timeout_error_once() {
     assert_eq!(handshakes(&fake), 1, "{sent:?}");
 }
 
+/// areka が `id` を持つ要求に 202 で応える（要件 4.1〜4.3）: rmcp はその `id` を待ちのまま残すので、
+/// 応答の上限まで待って `timed out after <上限>` で 1 回だけ答え、同じつなぎ先で次の行に答える。
+/// 上限の後に rmcp が送る `notifications/cancelled` は方法の名前が違うので数に入らない。
+#[tokio::test]
+async fn a_request_answered_with_202_waits_for_the_bound_and_gets_the_timeout_error_once() {
+    let reply = Duration::from_millis(300);
+    let fake = FakeServer::start(Script::areka().on("tools/call", Reply::Accepted));
+    let timeouts = Timeouts { reply, ..patient() };
+    let mut desk = Desk::start_with(vec![fake.port()], timeouts);
+    // 先につないでおく（探索の時間を、上限の計りに入れない）。
+    desk.ask(json!(0), "ping", json!({})).await;
+
+    let asked = Instant::now();
+    let call = json!({"name": "get_status"});
+    let answer = desk.ask(json!(1), "tools/call", call).await;
+    let waited = asked.elapsed();
+    let message = "No response from server: timed out after 300ms";
+    assert_eq!(answer, failed(json!(1), message));
+    assert!(reply <= waited && waited < WAIT, "{waited:?}");
+    let pong = desk.ask(json!(2), "ping", json!({})).await;
+    assert_eq!(pong, result(json!(2), json!({})));
+
+    desk.close().await;
+    let sent = fake.requests();
+    assert_eq!(fake.requests_of("tools/call").len(), 1, "{sent:?}");
+    assert_eq!(handshakes(&fake), 1, "{sent:?}");
+}
+
 /// つなぎ先の働き手が終わっていた（rmcp の `TransportClosed`）: 送り直さずエラーで答え、覚えを捨てるので、
 /// 次の要求は探し直して届く（要件 4.6）。捨てるのは、覚えが自分の使ったつなぎ先のままのときだけ。
 #[tokio::test]

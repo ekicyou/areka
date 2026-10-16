@@ -122,12 +122,9 @@ impl OwnHttp {
         headers: &HashMap<HeaderName, HeaderValue>,
     ) -> Result<StreamableHttpPostResponse, HttpError> {
         let port = self.port;
-        let connect = TcpStream::connect((Ipv4Addr::LOCALHOST, port));
-        let mut stream = match tokio::time::timeout(self.timeouts.connect, connect).await {
-            Ok(Ok(stream)) => stream,
-            Ok(Err(error)) => return Err(HttpError::Connect(error)),
-            Err(_) => return Err(HttpError::Connect(io::ErrorKind::TimedOut.into())),
-        };
+        let mut stream = connect(port, self.timeouts.connect)
+            .await
+            .map_err(HttpError::Connect)?;
         let mut buf = Vec::new();
         let real = request(port, body, headers, true);
         let wait = self.timeouts.verify;
@@ -156,6 +153,14 @@ impl OwnHttp {
             "[bridge] got an answer"
         );
         classify(reply)
+    }
+}
+
+/// `127.0.0.1` の番号へ接続を開く。上限 `wait` を過ぎたら `TimedOut`。探索と送り手の両方が使う。
+pub(crate) async fn connect(port: u16, wait: Duration) -> io::Result<TcpStream> {
+    match tokio::time::timeout(wait, TcpStream::connect((Ipv4Addr::LOCALHOST, port))).await {
+        Ok(result) => result,
+        Err(_) => Err(io::ErrorKind::TimedOut.into()),
     }
 }
 

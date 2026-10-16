@@ -16,3 +16,8 @@ pub mod stdio;
 #[allow(dead_code)]
 #[path = "../tests/common/fake_server.rs"]
 pub(crate) mod fake_server;
+
+/// 偽の受け口の自己確認。この部品のテストの束でだけ走る（通しのテストの束では読まない）。
+#[cfg(test)]
+#[path = "../tests/common/fake_server_tests.rs"]
+mod fake_server_tests;
