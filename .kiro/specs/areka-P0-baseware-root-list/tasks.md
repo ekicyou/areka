@@ -191,7 +191,7 @@
   - _Boundary: Docs_
   - _Requirements: 10.4_
 
-- [ ] 7. 仕上げと検証
+- [x] 7. 仕上げと検証
 - [x] 7.1 1 根の走査を crate の外へ出さない形に閉じ、移り途中の形を片付ける
   - 1 根の走査の関数を crate の中だけの名前（`scan_ghosts`・`scan_balloons`）にし、今の目録のテストをそれを呼ぶ形へ直す。crate の外から一覧と引き当てを得る口が和の部品だけになる
   - 3.1 で入れた移り途中の仮の形と根 1 つの欄の残りを片付ける
@@ -205,7 +205,7 @@
   - 完了の姿: 全体テストの末尾の一覧が緑で、上の各点が証跡（コマンドの出力）つきで確かめられている
   - _Requirements: 11.1, 11.4, 11.5, 11.6, 12.7, 12.8_
 
-- [ ] 7.3 実機で 2 つの根を確かめる
+- [x] 7.3 実機で 2 つの根を確かめる
   - ワークツリーの `target\` の下に 2 つの根（片方は SSP と同じ形で、もう一方と同じフォルダ名のゴーストを 1 体含む）を組み、記憶の置き場は `AREKA_PROFILE_DIR` で `target\` の下へ向ける（実行のコマンドは絶対パスで示す）
   - ① `AREKA_ROOT` に `;` 区切りで渡して起動し、メニューに和が出て記録に `root_listed` 2 行と `root_hidden_item` が出る ② 新しいゴーストを入れて先頭の根へ入り `install_placed` がその根を示す ③ `AREKA_ROOT` なしで「置き場を追加…」で足した根のゴーストがメニューに出て、再起動の後も残る（記憶の `[baseware] roots`）・フォルダ選択の画面がゴーストの窓の後ろに出ないか・画面の間もゴーストが止まらないかを見る ④ 「置き場を外す ▸」で外した根のフォルダが残る
   - 止めるのは自分が起こしたと確かめたプロセスだけにする
@@ -222,3 +222,5 @@
 - 3.2: 格納フォルダの列を `; ` でつなぐ処理が `alert.rs::joined`・`boot_resolve.rs::joined`・`ghost_switch.rs::boot_into` の 3 か所にある。3.3 で告知の文面を仕上げるとき 1 つへ寄せてよい。
 - 4.6: `install_placed`・`install_no_root` は desk でなく worker と上書きの両経路が通る `install/destination.rs::install_into` で記録する（同じ 1 回ずつ）。見つかる根が無いときは `NarError::Io{phase: Stage, rolled_back: true}` を作って今の失敗の経路へ倒す（`archive` 欄は空・記録と告知は手続きの側の本当のパスを使う）。`crate::roots::head_root` は使い手が無くなったので削除済み。
 - 7.2: 全体テスト `tools/test-all.ps1` を `2a8420ff` で 1 回・全段緑（x64 552 秒）。`Cargo.toml`／`Cargo.lock` の差分 0・環境変数を書き換えるテスト 0・触ったファイルの最大 990 行・`main.rs` 971 行／`ghost_switch.rs` 917 行。この spec の新しいテスト 6 か所が `TempPath::new`（OS の一時フォルダ）だったので `under_target` へ直し、該当のテストだけ回し直して緑（61 件）。
+- 7.3（実機・2026-10-16・`targetr\` の下・`AREKA_PROFILE_DIR=targetr\profile`・右クリックは自分で起こした areka の窓へ SendInput・メニューとフォルダ選択の画面は画面操作）: ① `AREKA_ROOT=A;B` で `root_listed` 2 行（origin=env_var）・`root_hidden_item`（ghost emo2・B が A に隠れる）・`roots_hidden_count` 1・メニューのゴースト枠に B のクローディアと A のえも？？（印は A）・「置き場を追加…」「置き場を外す」は選べない形。② インストール… で konnoyayame.nar → `install_placed` root=A・`A\ghost\konnoyayame` ができた。③ `AREKA_ROOT` なし（既定＝exe の隣）で「置き場を追加…」→ フォルダ選択の画面（題「置き場にするフォルダを選んでください」・ゴーストの窓の後ろに出ない・画面の間もゴーストは喋り続ける）で C を選ぶ → `root_listed` occasion=change・記憶 `[baseware] roots = "<exe>|…r\C"`・再起動なしでゴースト枠に R ポストと狛犬・再起動後も origin=memory で 2 行。④「置き場を外す ▸」の子が並びの順の絶対パス（bin・C）→ C を外す → 記憶は `"<exe>"`・`C\ghost\R_POST_and_KOMAINU` は残る。
+- 7.3 で見つけた範囲外の件（`/kiro-complete` の棚卸で起票）: 右クリックメニューを開いている間、うにゅう側（kero）のバルーンの窓が黒い四角で塗られて見えることがある（`menu3`・`menu5` の撮影で 2 回）。この spec はバルーンの描画に触れていない。
