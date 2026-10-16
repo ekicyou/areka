@@ -574,9 +574,9 @@ mod last_used {
         let app_dir = tmp.child("app-profile");
         let before = read_session_mark(&app_dir);
 
-        let ((), written) = capture(|| write_session_mark(&app_dir, "動いている子"));
+        let (_, written) = capture(|| write_session_mark(&app_dir, "動いている子"));
         let after_write = read_session_mark(&app_dir);
-        let ((), cleared) = capture(|| clear_session_mark(&app_dir));
+        let (_, cleared) = capture(|| clear_session_mark(&app_dir));
 
         assert_eq!(
             (
@@ -599,10 +599,10 @@ mod last_used {
         let tmp = TempPath::new("boot-resolve-switch-drop");
         let app_dir = tmp.child("app-profile");
         let argv_dir = tmp.child("app-profile-argv");
-        write_session_mark(&argv_dir, "前からの印");
+        let _ = write_session_mark(&argv_dir, "前からの印");
 
-        let ((), events) = capture(|| write_switch_drop(&app_dir, Some("切替先")));
-        write_switch_drop(&argv_dir, None);
+        let (_, events) = capture(|| write_switch_drop(&app_dir, Some("切替先")));
+        let _ = write_switch_drop(&argv_dir, None);
 
         assert_eq!(
             (
@@ -644,23 +644,23 @@ mod last_used {
             (
                 "session_mark_write_degraded",
                 "session_mark_written",
-                Box::new(|| write_session_mark(&app_dir, "動いている子")),
+                Box::new(|| drop(write_session_mark(&app_dir, "動いている子"))),
             ),
             (
                 "switch_drop_record_degraded",
                 "switch_drop_recorded",
-                Box::new(|| write_switch_drop(&app_dir, Some("切替先"))),
+                Box::new(|| drop(write_switch_drop(&app_dir, Some("切替先")))),
             ),
             (
                 // argv で始まったプロセス（印に触れない）でも最後のゴーストが書けなければ警告する。
                 "switch_drop_record_degraded",
                 "switch_drop_recorded",
-                Box::new(|| write_switch_drop(&app_dir, None)),
+                Box::new(|| drop(write_switch_drop(&app_dir, None))),
             ),
             (
                 "session_mark_clear_degraded",
                 "session_mark_cleared",
-                Box::new(|| clear_session_mark(&app_dir)),
+                Box::new(|| drop(clear_session_mark(&app_dir))),
             ),
         ];
         for (warn, info, write) in cases {

@@ -593,7 +593,7 @@ fn settle_session_mark_applies_the_verdict() {
         ),
     ] {
         let app_profile_dir = tmp.child(event);
-        write_session_mark(&app_profile_dir, "A");
+        let _ = write_session_mark(&app_profile_dir, "A");
         let mark = MarkInputs {
             app_profile_dir: app_profile_dir.clone(),
             argv_session,
@@ -801,7 +801,7 @@ fn clean_exit_clears_mark_and_next_boot_follows_memory() {
 fn argv_session_neither_reads_writes_nor_clears_mark() {
     let mut rig = rig_with(FakeShiori::ConnectFail);
     let app = app_dir(&rig);
-    write_session_mark(&app, "前の印");
+    let _ = write_session_mark(&app, "前の印");
     let argv_dir = rig.root.ghost_dir("A");
     let found = resolve_boot_from(
         crate::roots::single_env(rig.root.dir().to_path_buf()),

@@ -672,7 +672,8 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
         Some(ctx) => write_switch_drop(
             &ctx.app_profile_dir,
             (!ctx.argv_session).then_some(target.name.as_str()),
-        ),
+        )
+        .unwrap_or_default(), // 失敗は記録済み・致命へ渡すのは 5.3 で足す
         None => tracing::warn!(
             event = "boot_context_missing",
             "起動の文脈が無いので降ろした直後の記憶を書けない（最後のゴーストと印は前のゴーストのまま）"

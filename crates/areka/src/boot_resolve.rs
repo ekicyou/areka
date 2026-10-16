@@ -15,12 +15,14 @@
 use std::hash::{BuildHasher, RandomState};
 use std::path::{Path, PathBuf};
 
+use crate::app_exit::ExitOrigin;
 use areka_ghost::catalog::{BalloonEntry, GhostEntry};
 use areka_ghost::same_folder_name;
 use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{
-    PersistKey, PersistOutcome, PersistScope, ScopeRoots, SylphyaPublisher, load_scope, save_scope,
+    PersistFailure, PersistKey, PersistOutcome, PersistScope, ScopeRoots, SylphyaPublisher,
+    load_scope, save_scope,
 };
 
 // 判断と記憶の直読みの消費者は起動前の解決（`boot_config::resolve_boot`）。記憶の書き込み
@@ -419,69 +421,124 @@ pub(crate) fn read_session_mark(app_profile_dir: &Path) -> Option<String> {
 }
 
 /// 印を書く（初回の起動の前・呼び手は argv で始まったプロセスでないときだけ呼ぶ）。
-pub(crate) fn write_session_mark(app_profile_dir: &Path, running: &str) {
+/// 書けなければ失敗の中身を返す（呼び手が起動を止める・要件 3.1）。
+pub(crate) fn write_session_mark(
+    app_profile_dir: &Path,
+    running: &str,
+) -> Result<(), PersistFailure> {
     match save_app(
         app_profile_dir,
         vec![(PersistKey::LastRunning, running.to_owned())],
     ) {
-        PersistOutcome::Saved => tracing::info!(
-            event = "session_mark_written",
-            ghost = running,
-            "[boot_resolve] 起動中の印を書きました"
-        ),
-        PersistOutcome::Degraded(_) => tracing::warn!(
-            event = "session_mark_write_degraded",
-            ghost = running,
-            dir = %app_profile_dir.display(),
-            "[boot_resolve] 起動中の印を記憶へ書けませんでした（このゴーストが落ちても、次の起動の Ref6/7 にこのゴーストの名前は載りません）"
-        ),
+        PersistOutcome::Saved => {
+            tracing::info!(
+                event = "session_mark_written",
+                ghost = running,
+                "[boot_resolve] 起動中の印を書きました"
+            );
+            Ok(())
+        }
+        PersistOutcome::Degraded(failure) => {
+            tracing::warn!(
+                event = "session_mark_write_degraded",
+                ghost = running,
+                dir = %app_profile_dir.display(),
+                reason = ?failure.cause,
+                "[boot_resolve] 起動中の印を記憶へ書けませんでした（起動を止めます）"
+            );
+            Err(failure)
+        }
     }
 }
 
 /// 切替で前のゴーストを降ろした直後: 最後に使ったゴースト＝既定と（`mark` が在れば）印＝切替先を
 /// 1 回の書き込みで書く。argv で始まったプロセスは `mark` に `None` を渡す（印に触れない・要件 12.5）。
-/// 呼び手は `ghost_switch::switch_to`。
-pub(crate) fn write_switch_drop(app_profile_dir: &Path, mark: Option<&str>) {
+/// 呼び手は `ghost_switch::switch_to`。書けなければ失敗の中身を返す（呼び手が終える・要件 3.3）。
+pub(crate) fn write_switch_drop(
+    app_profile_dir: &Path,
+    mark: Option<&str>,
+) -> Result<(), PersistFailure> {
     let mut entries = vec![(PersistKey::LastGhost, DEFAULT_GHOST_FOLDER.to_owned())];
     entries.extend(mark.map(|m| (PersistKey::LastRunning, m.to_owned())));
-    match (save_app(app_profile_dir, entries), mark) {
-        (PersistOutcome::Saved, _) => tracing::info!(
-            event = "switch_drop_recorded",
-            last_ghost = DEFAULT_GHOST_FOLDER,
-            mark = mark.unwrap_or("-"),
-            "[boot_resolve] 降ろした直後の記憶を書きました（最後のゴーストは既定・印は切替先・- は argv なので印に触れていない）"
-        ),
-        (PersistOutcome::Degraded(_), Some(mark)) => tracing::warn!(
-            event = "switch_drop_record_degraded",
-            last_ghost = DEFAULT_GHOST_FOLDER,
-            mark,
-            dir = %app_profile_dir.display(),
-            "[boot_resolve] 降ろした直後の記憶を書けませんでした（切替先が落ちても、次の起動の印は前のゴーストの名前のまま・最後のゴーストは前のゴーストのままになります）"
-        ),
-        (PersistOutcome::Degraded(_), None) => tracing::warn!(
-            event = "switch_drop_record_degraded",
-            last_ghost = DEFAULT_GHOST_FOLDER,
-            mark = "-",
-            dir = %app_profile_dir.display(),
-            "[boot_resolve] 降ろした直後の記憶を書けませんでした（最後のゴーストは前のゴーストのままになります・argv で始まったプロセスなので印にはもともと触れません）"
-        ),
+    match save_app(app_profile_dir, entries) {
+        PersistOutcome::Saved => {
+            tracing::info!(
+                event = "switch_drop_recorded",
+                last_ghost = DEFAULT_GHOST_FOLDER,
+                mark = mark.unwrap_or("-"),
+                "[boot_resolve] 降ろした直後の記憶を書きました（最後のゴーストは既定・印は切替先・- は argv なので印に触れていない）"
+            );
+            Ok(())
+        }
+        PersistOutcome::Degraded(failure) => {
+            tracing::warn!(
+                event = "switch_drop_record_degraded",
+                last_ghost = DEFAULT_GHOST_FOLDER,
+                mark = mark.unwrap_or("-"),
+                dir = %app_profile_dir.display(),
+                reason = ?failure.cause,
+                "[boot_resolve] 降ろした直後の記憶を書けませんでした（終了します）"
+            );
+            Err(failure)
+        }
     }
 }
 
 /// きれいな終わり: 印を消す（空文字を書く）。呼び手は後始末で降ろした後。
-pub(crate) fn clear_session_mark(app_profile_dir: &Path) {
+/// 消せなければ記憶の印を読み直し、残る印が在るときだけ次の起動を予告する（要件 4.2）。
+pub(crate) fn clear_session_mark(app_profile_dir: &Path) -> Result<(), PersistFailure> {
     match save_app(
         app_profile_dir,
         vec![(PersistKey::LastRunning, String::new())],
     ) {
-        PersistOutcome::Saved => tracing::info!(
-            event = "session_mark_cleared",
-            "[boot_resolve] きれいに終わったので起動中の印を消しました"
+        PersistOutcome::Saved => {
+            tracing::info!(
+                event = "session_mark_cleared",
+                "[boot_resolve] きれいに終わったので起動中の印を消しました"
+            );
+            Ok(())
+        }
+        PersistOutcome::Degraded(failure) => {
+            match read_session_mark(app_profile_dir) {
+                Some(remaining) => tracing::warn!(
+                    event = "session_mark_clear_degraded",
+                    dir = %app_profile_dir.display(),
+                    remaining = remaining.as_str(),
+                    "[boot_resolve] 起動中の印を消せませんでした（きれいに終わったのに、次の起動は前回落ちたとして既定のゴーストで起き、Ref7 は{remaining}になります）"
+                ),
+                None => tracing::warn!(
+                    event = "session_mark_clear_degraded",
+                    dir = %app_profile_dir.display(),
+                    remaining = "-",
+                    "[boot_resolve] 起動中の印を消せませんでした（記憶に起動中の印は残っていません）"
+                ),
+            }
+            Err(failure)
+        }
+    }
+}
+
+/// きれいに終わらなかったので印を残すときの記録（`session_mark_kept`）。記憶の印を読み直し、
+/// 印が在るときだけ次の起動の Ref6/7 を予告する（要件 4.3）。呼び手は `main::settle_session_mark`。
+pub(crate) fn keep_session_mark(
+    app_profile_dir: &Path,
+    reason: &'static str,
+    first: Option<&ExitOrigin>,
+) {
+    match read_session_mark(app_profile_dir) {
+        Some(remaining) => tracing::info!(
+            event = "session_mark_kept",
+            reason,
+            first = ?first,
+            remaining = remaining.as_str(),
+            "[boot_resolve] きれいに終わらなかったので起動中の印を残します（次の起動は既定のゴーストで Ref6/7 付き（Ref7＝{remaining}））"
         ),
-        PersistOutcome::Degraded(_) => tracing::warn!(
-            event = "session_mark_clear_degraded",
-            dir = %app_profile_dir.display(),
-            "[boot_resolve] 起動中の印を消せませんでした（きれいに終わったのに、次の起動は前回落ちたとして既定のゴーストで Ref6/7 付きになります）"
+        None => tracing::info!(
+            event = "session_mark_kept",
+            reason,
+            first = ?first,
+            remaining = "-",
+            "[boot_resolve] きれいに終わらなかったので起動中の印を残します（記憶に起動中の印が無いので、次の起動は前回落ちたとは扱われません）"
         ),
     }
 }

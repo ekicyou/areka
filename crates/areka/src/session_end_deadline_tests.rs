@@ -104,7 +104,7 @@ fn boot_a(
     let mut rig = SwitchRig::new(vec![("A", FakeShiori::Scripted(Box::new(script)))]);
     rig.plant_boot_record("A");
     rig.boot("A");
-    write_session_mark(&rig.app_dir(), "A");
+    let _ = write_session_mark(&rig.app_dir(), "A");
     let ready = match hold {
         Some(HoldAt::Get(_)) => {
             let handle = rig.handle("A");

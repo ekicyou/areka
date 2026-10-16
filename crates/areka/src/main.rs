@@ -478,7 +478,8 @@ fn boot_first_ghost(
         Some(ctx) if !ctx.argv_session => boot_resolve::write_session_mark(
             &ctx.app_profile_dir,
             &boot_resolve::running_name(ghost),
-        ),
+        )
+        .unwrap_or_default(), // 失敗は記録済み・止める扱いは 5.2 で足す
         Some(_) => tracing::debug!(
             event = "session_mark_untouched_argv",
             "[main] argv で始まったプロセスなので起動中の印を書きません"
@@ -693,7 +694,8 @@ fn session_mark_verdict(
 }
 
 /// 降ろした後の印の始末: 判定して、消すなら消し（`info!(session_mark_cleared)`）、残すなら理由つきの
-/// `info!(session_mark_kept)`、argv なら `debug!` だけ。呼ぶのはゴーストの実行系が 0 の時点だけ。
+/// `info!(session_mark_kept)`（`boot_resolve::keep_session_mark`）、argv なら `debug!` だけ。
+/// 呼ぶのはゴーストの実行系が 0 の時点だけ。
 fn settle_session_mark(mark: &MarkInputs, end: Teardown) -> MarkVerdict {
     let verdict = session_mark_verdict(
         mark.first.as_ref(),
@@ -702,13 +704,13 @@ fn settle_session_mark(mark: &MarkInputs, end: Teardown) -> MarkVerdict {
         end,
     );
     match verdict {
-        MarkVerdict::Clear => boot_resolve::clear_session_mark(&mark.app_profile_dir),
-        MarkVerdict::Keep(reason) => tracing::info!(
-            event = "session_mark_kept",
-            reason,
-            first = ?mark.first,
-            "[main] きれいに終わらなかったので起動中の印を残します（次の起動は既定のゴーストで Ref6/7 付き）"
-        ),
+        MarkVerdict::Clear => {
+            // 失敗は記録済み・告知へ渡すのは 5.2 で足す
+            boot_resolve::clear_session_mark(&mark.app_profile_dir).unwrap_or_default()
+        }
+        MarkVerdict::Keep(reason) => {
+            boot_resolve::keep_session_mark(&mark.app_profile_dir, reason, mark.first.as_ref())
+        }
         MarkVerdict::Untouched => tracing::debug!(
             event = "session_mark_untouched_argv",
             "[main] argv で始まったプロセスなので起動中の印に触れません"
