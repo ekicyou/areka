@@ -49,7 +49,7 @@
   - _Requirements: 1.6_
 
 - [ ] 5. 実機と最後の全体テストで確かめる（順番を守る）
-- [ ] 5.1 隣を x64 版にして claudia を起こし、知らせの 1 行を確かめる
+- [x] 5.1 隣を x64 版にして claudia を起こし、知らせの 1 行を確かめる
   - 根は先例（完了 spec `ghost-standard-balloon` の 6.2）と同じ形で作る: `target\` の下の短い絶対パスに根を作り、`vendors/sample_ghost/` の `claudia.nar` から `ghost\claudia` と `balloon\claudia` を展開して並べ、`AREKA_ROOT` にその根、`AREKA_PROFILE_DIR` に同じ `target\` の下の空のフォルダを渡す。使った絶対パスを記録に書く
   - `cargo build -p areka` の後に `cargo build -p shiori-host32-helper`（x64）で隣を x64 版にし、その根で claudia を有界の自動終了（`AREKA_APP_SMOKE_EXIT_MS`）つきで起こす
   - 後片付けは続く 5.2 の全体テストの揃えの段に任せる（ここで i686 版へ戻さない）
@@ -72,3 +72,4 @@
 ## Implementation Notes
 - タスク 1: 写した i686 版の helper は写し元の古い更新時刻を持つので、素の `cargo build` は helper を作り直して隣を x64 版へ戻す（research.md 10 節）。`cargo build -p areka` は隣を触らない。
 - タスク 3.1: 置き先を塞いだときの HResult は `Move-Item -Force` の都合で 0x800700B7 になる（設計の 0x80070020 は書式の例）。自己検査は値に依らない。
+- 5.1: 実機（2026-10-16・debug）根 `<worktree>	arget\hxoot`・記憶 `target\hx\profile`・`RUST_LOG=info`。隣が x64（8664）で `helper_not_i686`（path・machine=0x8664・直し方）が 37 行目、`connect_failed` が 55 行目で 1 件ずつ、その後は今までどおり `shiori_failed`→`alert`。完了時の棚卸へ: 失敗の道の `alert` の `MessageBoxW` がメインスレッドを止め、`AREKA_APP_SMOKE_EXIT_MS` が発火しても閉じない（自分で起こした pid を強制終了した・本 spec の範囲外）。
