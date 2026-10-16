@@ -64,7 +64,8 @@ pub use asker::{AskerContext, AskerId};
 pub use key::{KeyParseError, PathSeg, PropPath, Selector, parse_dotted};
 pub use mirror::{MirrorImage, SharedMirror};
 pub use persist::{
-    Axis, PersistKey, PersistOutcome, PersistScope, ScopeRoots, load_scope, save_scope,
+    Axis, PersistFailure, PersistFailureCause, PersistKey, PersistOutcome, PersistScope,
+    ScopeRoots, load_scope, save_scope,
 };
 pub use reader::SylphyaReader;
 pub use value::{DottedResolution, FlatResolution};

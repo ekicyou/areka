@@ -183,9 +183,10 @@ fn apply(world: &mut World, roots: BasewareRoots, exe_dir: Option<PathBuf>) {
                 app: Some(app_profile_dir.clone()),
                 ..ScopeRoots::default()
             };
-            if save_scope(PersistScope::App, &scope_roots, &FsPersistIo, entries)
-                == PersistOutcome::Degraded
-            {
+            if matches!(
+                save_scope(PersistScope::App, &scope_roots, &FsPersistIo, entries),
+                PersistOutcome::Degraded(_)
+            ) {
                 tracing::error!(
                     event = "roots_memory_write_failed",
                     dir = %app_profile_dir.display(),

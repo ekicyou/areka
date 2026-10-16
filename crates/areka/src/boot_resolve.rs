@@ -429,7 +429,7 @@ pub(crate) fn write_session_mark(app_profile_dir: &Path, running: &str) {
             ghost = running,
             "[boot_resolve] 起動中の印を書きました"
         ),
-        PersistOutcome::Degraded => tracing::warn!(
+        PersistOutcome::Degraded(_) => tracing::warn!(
             event = "session_mark_write_degraded",
             ghost = running,
             dir = %app_profile_dir.display(),
@@ -451,14 +451,14 @@ pub(crate) fn write_switch_drop(app_profile_dir: &Path, mark: Option<&str>) {
             mark = mark.unwrap_or("-"),
             "[boot_resolve] 降ろした直後の記憶を書きました（最後のゴーストは既定・印は切替先・- は argv なので印に触れていない）"
         ),
-        (PersistOutcome::Degraded, Some(mark)) => tracing::warn!(
+        (PersistOutcome::Degraded(_), Some(mark)) => tracing::warn!(
             event = "switch_drop_record_degraded",
             last_ghost = DEFAULT_GHOST_FOLDER,
             mark,
             dir = %app_profile_dir.display(),
             "[boot_resolve] 降ろした直後の記憶を書けませんでした（切替先が落ちても、次の起動の印は前のゴーストの名前のまま・最後のゴーストは前のゴーストのままになります）"
         ),
-        (PersistOutcome::Degraded, None) => tracing::warn!(
+        (PersistOutcome::Degraded(_), None) => tracing::warn!(
             event = "switch_drop_record_degraded",
             last_ghost = DEFAULT_GHOST_FOLDER,
             mark = "-",
@@ -478,7 +478,7 @@ pub(crate) fn clear_session_mark(app_profile_dir: &Path) {
             event = "session_mark_cleared",
             "[boot_resolve] きれいに終わったので起動中の印を消しました"
         ),
-        PersistOutcome::Degraded => tracing::warn!(
+        PersistOutcome::Degraded(_) => tracing::warn!(
             event = "session_mark_clear_degraded",
             dir = %app_profile_dir.display(),
             "[boot_resolve] 起動中の印を消せませんでした（きれいに終わったのに、次の起動は前回落ちたとして既定のゴーストで Ref6/7 付きになります）"

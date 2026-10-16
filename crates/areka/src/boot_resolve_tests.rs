@@ -636,10 +636,10 @@ mod last_used {
             ..ScopeRoots::default()
         };
         // 前提の確認: この置き場への保存は本当に縮退する。
-        assert_eq!(
+        assert!(matches!(
             save_scope(PersistScope::App, &roots, &FsPersistIo, vec![]),
-            PersistOutcome::Degraded
-        );
+            PersistOutcome::Degraded(_)
+        ));
         let cases: [(&str, &str, Box<dyn Fn()>); 4] = [
             (
                 "session_mark_write_degraded",

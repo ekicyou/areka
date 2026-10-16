@@ -182,13 +182,36 @@ impl PersistKey {
     }
 }
 
+/// 保存できなかった 1 回の中身（spec areka-P0-write-failure-notice 要件 1.4）。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PersistFailure {
+    /// 書けなかったスコープ。
+    pub scope: PersistScope,
+    /// 書けなかった置き場（スコープの root＝`…\profile\areka`）。root が無ければ `None`。
+    pub dir: Option<PathBuf>,
+    /// 覚えられなかった key（投函の entries の key の並び。起動の前の確かめは空）。
+    pub keys: Vec<PersistKey>,
+    /// 書けなかった理由。
+    pub cause: PersistFailureCause,
+}
+
+/// [`PersistFailure`] の理由。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PersistFailureCause {
+    /// スコープの置き場が決まっていない（root 不在）。
+    NoRoot,
+    /// OS の理由（`std::io::Error` の表示。例「アクセスが拒否されました。 (os error 5)」）。
+    Io(String),
+}
+
 /// 永続保存の結果（design「永続層 → Service Interface」）。
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PersistOutcome {
     /// 原子的確定に成功（以後のロードで同値復元・R6.6）。
     Saved,
     /// 保存失敗（root 不在・commit 失敗）→ ログ済み・縮退（鏡像反映はアクターの領分・R6.7）。
-    Degraded,
+    /// 書けなかった 1 回の中身を運ぶ。
+    Degraded(PersistFailure),
 }
 
 /// 当該スコープの永続状態を一括ロードする（起動時・R6.1/R6.3/R6.5）。
@@ -256,13 +279,19 @@ pub fn save_scope(
     io: &dyn PersistIo,
     entries: Vec<(PersistKey, String)>,
 ) -> PersistOutcome {
+    let keys: Vec<PersistKey> = entries.iter().map(|(key, _)| *key).collect();
     let Some(path) = roots.file_of(scope) else {
         tracing::warn!(
             target: LOG_TARGET,
             ?scope,
             "persist scope root absent; save degraded (no destination)"
         );
-        return PersistOutcome::Degraded;
+        return PersistOutcome::Degraded(PersistFailure {
+            scope,
+            dir: None,
+            keys,
+            cause: PersistFailureCause::NoRoot,
+        });
     };
 
     // read-modify-write: 既存 doc を土台にマージ（無関係 key を温存）。
@@ -275,14 +304,21 @@ pub fn save_scope(
     match io.commit(&path, &content) {
         Ok(()) => PersistOutcome::Saved,
         Err(e) => {
+            let key_names: Vec<String> = keys.iter().map(|key| key.to_canonical_key()).collect();
             tracing::error!(
                 target: LOG_TARGET,
                 ?scope,
                 path = %path.display(),
                 error = %e,
+                keys = ?key_names,
                 "persist commit failed; existing file intact (temp→rename), reporting Degraded"
             );
-            PersistOutcome::Degraded
+            PersistOutcome::Degraded(PersistFailure {
+                scope,
+                dir: roots.root_of(scope).cloned(),
+                keys,
+                cause: PersistFailureCause::Io(e.to_string()),
+            })
         }
     }
 }
@@ -409,3 +445,7 @@ fn push_axis_family(
 #[cfg(test)]
 #[path = "persist_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "persist_failure_tests.rs"]
+mod failure_tests;

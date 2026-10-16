@@ -27,7 +27,8 @@ use crate::asker::AskerId;
 use crate::key::parse_dotted;
 use crate::mirror::{MirrorImage, SharedMirror};
 use crate::persist::{
-    PersistIo, PersistKey, PersistOutcome, PersistScope, ScopeRoots, load_scope, save_scope,
+    PersistFailure, PersistFailureCause, PersistIo, PersistKey, PersistOutcome, PersistScope,
+    ScopeRoots, load_scope, save_scope,
 };
 use crate::reader::SylphyaReader;
 use crate::vocab::dotted::{DOTTED_ROOTS, GENERIC_PROP_NAMES, SET_EFFECTIVE};
@@ -681,9 +682,20 @@ fn run_actor(
                 let _ = reply.send(());
             }
             SylphyaMsg::PersistPut {
-                reply: Some(reply), ..
+                scope,
+                entries,
+                reply: Some(reply),
             } => {
-                let outcome = persist_outcome.unwrap_or(PersistOutcome::Degraded);
+                // 仮の中身（PersistPut は必ず PersistSave を出すので起きない）。task 1.2 で
+                // error! を残して返信端を落とす扱いへ替える。
+                let outcome = persist_outcome.unwrap_or_else(|| {
+                    PersistOutcome::Degraded(PersistFailure {
+                        scope,
+                        dir: None,
+                        keys: entries.iter().map(|(key, _)| *key).collect(),
+                        cause: PersistFailureCause::NoRoot,
+                    })
+                });
                 let _ = reply.send(outcome);
             }
             _ => {}
