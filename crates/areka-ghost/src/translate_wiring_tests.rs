@@ -94,7 +94,7 @@ fn poisoned_source_logs_and_yields_empty_snapshot() {
 /// 数える記録）を出さず、翻訳用の `debug!` を出す（要件 2.3・8.4）。
 #[test]
 fn translate_reader_matches_playback_without_its_fixed_log() {
-    let parts = spawn_ghost_sylphya(ScopeRoots::default());
+    let parts = spawn_ghost_sylphya(ScopeRoots::default(), None);
     let asker = AskerId::new("ghost/translate-reader-cage");
     parts.publisher.publish_static(
         asker.clone(),

@@ -879,7 +879,7 @@ fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
     };
 
     // runtime 側 sylphya（実 FsPersistIo・実アクター・本番 boot と同一の spawn 経路）。
-    let parts = crate::sylphya_wiring::spawn_ghost_sylphya(roots.clone());
+    let parts = crate::sylphya_wiring::spawn_ghost_sylphya(roots.clone(), None);
 
     // `PersistWiring` の clone 送信端（UI スレッド常駐端の代役）。PersistWiring は
     // `{ publisher: SylphyaPublisher }` ゆえ、clone した publisher が同一 mpsc 送信端＝同一 FIFO。

@@ -21,7 +21,7 @@ use areka_sakura::contract::SystemVarSnapshot;
 use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{
     AskerContext, AskerId, ScopeRoots, SylphyaInit, SylphyaParts, SylphyaPublisher, SylphyaReader,
-    spawn_sylphya,
+    spawn_sylphya_with_failures,
 };
 
 use crate::runtime::SystemVarSource;
@@ -104,12 +104,20 @@ pub fn ghost_asker_id(shiori_dir: &Path) -> AskerId {
 /// 初期鏡像へ投影する（不在スコープは空扱い・emo2 fixture の read-only でも汚染しない——M1 本番
 /// 経路に永続書込呼出は無い・design Implementation Notes）。返る [`SylphyaParts`] の reader は
 /// 結線直後から無待機で読める。
-pub fn spawn_ghost_sylphya(roots: ScopeRoots) -> SylphyaParts {
-    spawn_sylphya(SylphyaInit {
-        roots,
-        io: Box::new(FsPersistIo),
-        runtime_sink: None,
-    })
+///
+/// `failures` は保存の失敗の受け口（要件 1.3）。`Some` なら保存が失敗するたびに中身を 1 件送る。
+pub fn spawn_ghost_sylphya(
+    roots: ScopeRoots,
+    failures: Option<std::sync::mpsc::Sender<areka_sylphya::PersistFailure>>,
+) -> SylphyaParts {
+    spawn_sylphya_with_failures(
+        SylphyaInit {
+            roots,
+            io: Box::new(FsPersistIo),
+            runtime_sink: None,
+        },
+        failures,
+    )
 }
 
 /// 静的構成層を publish する（フラット＝`derive_flat_statics`・大域点付き＝baseware 2 項・R4.3-4.5/R5.1）。
@@ -370,7 +378,7 @@ mod tests {
 
         // 空 roots（全 None）で sylphya を起動——FsPersistIo だが root 不在で FS を一切触らない
         // （load_scope は root 不在→空縮退・決定論）。selfname を publish して asker 区画へ着地させる。
-        let parts = spawn_ghost_sylphya(ScopeRoots::default());
+        let parts = spawn_ghost_sylphya(ScopeRoots::default(), None);
         let asker = AskerId::new("ghost/provider-log-cage");
         parts.publisher.publish_static(
             asker.clone(),

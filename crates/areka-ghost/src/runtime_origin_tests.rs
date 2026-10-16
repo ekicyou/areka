@@ -110,7 +110,7 @@ fn boot_and_collect(tag: &str, origin: BootOrigin) -> Vec<(String, Vec<String>)>
         ticker: TickerMode::Disabled,
     };
 
-    let runtime = boot_with_origin(options, None, origin, None).expect("boot should succeed");
+    let runtime = boot_with_origin(options, None, origin, None, None).expect("boot should succeed");
 
     let deadline = Instant::now() + Duration::from_secs(10);
     let seen = loop {

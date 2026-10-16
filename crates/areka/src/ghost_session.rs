@@ -679,6 +679,7 @@ pub(crate) fn boot_ghost(
         Some(kanade_stop),
         BootOrigin::Plain,
         shell.as_deref(),
+        None,
     ) {
         Ok(runtime) => {
             tracing::info!("LogSink フォールバックで起動しました（emo2-boot wire 不成立）");
