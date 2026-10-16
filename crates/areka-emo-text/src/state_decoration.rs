@@ -244,6 +244,7 @@ impl ActorTextState {
         self.reveal = super::RevealSchedule::default();
         self.choices.clear();
         self.anchor_open = None;
+        self.settled = 0;
         self.glyph_styles.clear();
         self.styles.clear();
     }

@@ -410,6 +410,7 @@ mod tests {
         "actor_box_sync_tests.rs",
         "actor_box_tests.rs",
         "actor_choice_contract_tests.rs",
+        "actor_choice_settle_tests.rs",
         "actor_clear_atomicity_tests.rs",
         "actor_decoration.rs",
         "actor_decoration_frame_tests.rs",

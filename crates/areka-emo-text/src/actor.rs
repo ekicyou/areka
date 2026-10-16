@@ -621,6 +621,10 @@ mod choice_contract_tests;
 mod clear_atomicity_tests;
 
 #[cfg(test)]
+#[path = "actor_choice_settle_tests.rs"]
+mod choice_settle_tests;
+
+#[cfg(test)]
 #[path = "actor_scale_refresh_tests.rs"]
 mod scale_refresh_tests;
 
