@@ -32,8 +32,8 @@
 - **In scope**:
   - `crates/areka-mcp-bridge/` の中のコードとテスト（ただし `src/config.rs` を除く）の上での件 2〜5 と、件 6 の中継の側。
   - 配布スクリプト `tools/package.ps1` の、zip の中身の判定のうち PE を読む所への窓の作りの判定の追加（件 1）。
-  - 件 6 を共有の側で直すときの、`crates/areka-mcp/src/port.rs` の記録の 2 行。
-  - 差の記録 `doc/ssp-mcp/bridge-diff-areka.md` の、件 4・5・7・8 に当たる行。
+  - 件 6 を共有の側で直すときの、`crates/areka-mcp/src/port.rs` の記録の 2 行と、その文を確かめる兄弟のテスト `crates/areka-mcp/src/port_tests.rs` の期待。
+  - 差の記録 `doc/ssp-mcp/bridge-diff-areka.md` の、件 4・5・6・7・8 に当たる行と、行を足したときの文書の頭の行の数。
 - **Out of scope**:
   - 中継の答えの形（完了した spec の要件 1〜4 の約束）・組み込みの答え（完了した spec の設計 D-18）・受け口の答え（`areka-P0-mcp-receiver-bugs` の件 1）・SSE や取り消しへの対応（完了した spec の設計「残る縛り」）。
   - 件 7・8 の動きを直すこと（この spec では限界として差の記録に書いて閉じる。Requirement 7）。
@@ -69,7 +69,7 @@
 #### Acceptance Criteria
 1. The areka-mcp-bridge shall 偽の受け口の部品のテスト（今の `tests/common/fake_server_tests.rs` の中身）を、全体テストの 1 回の走りの中で 1 回だけ走らせる。
 2. The areka-mcp-bridge shall 偽の受け口を、中継の部品のテストと exe の通しのテストの両方から今のとおり使えるままにする。
-3. The areka-mcp-bridge shall 1 の前後で、今走っているテストの名前がどれも少なくとも 1 回走ることを保つ（減るのは重複の 1 回分だけ）。
+3. The areka-mcp-bridge shall 1 の前後で、今走っているテストの名前（関数の名前。どの束のどの部品の下で走るかの道筋は変わってよい）がどれも少なくとも 1 回走ることを保つ（減るのは重複の 1 回分だけ）。
 4. The areka-mcp-bridge shall 1〜3 で、偽の受け口の振る舞いとテストの判定を変えない。
 
 ### Requirement 3: 上限つきの接続を 1 か所にする
@@ -124,5 +124,5 @@
 2. When Requirement 4 と 5 のテストを足した, the areka-P0-mcp-stdio-bridge-residue spec shall そのテストが守る振る舞いを壊す変異を当てた実物で赤になり、戻した実物で緑になることを確かめる。守る振る舞いが使っている外の部品の決まりで、実物の側に当てられる変異が無いときは、その旨と理由を記録に残す。
 3. When 変異を当てて戻す, the areka-P0-mcp-stdio-bridge-residue spec shall 元のファイルの控えをワークツリーの `target\` の下に取り、素のコピーで戻し、戻した後の中身が控えと同じ（sha256 が一致する）ことを確かめる（`git checkout` で戻さない）。
 4. The areka-P0-mcp-stdio-bridge-residue spec shall Requirement 1 の 7 とこの要件の 2 の結果（当てた変異・赤になった判定やテスト）を、この spec の文書に記録する。
-5. The areka-mcp-bridge shall 新しいテストを、テストする所と同じ場所の兄弟のテストファイルへ置き、どのファイルも 1,000 行を超えない（869 行の `service_tests.rs` へは足さない）。
+5. The areka-mcp-bridge shall 新しいテストを、テストする所と同じ場所の兄弟のテストファイルへ置き（建てた exe を起こす通しのテストは、今の終わり方のテストと同じ `tests/exe_test.rs` へ置く）、どのファイルも 1,000 行を超えない（869 行の `service_tests.rs` へは足さない）。
 6. The areka-mcp-bridge shall この spec の全体で、新しい外部のクレート（開発用を含む）を足さない。
