@@ -9,7 +9,8 @@
 
   1. Calibration: every rule is run on built-in samples that must pass and samples that must fail.
      Samples are plain strings (single quotes or concatenation), so they are never code here.
-  2. Static rules over tools/*.ps1 (not tools/perf/) and the run: bodies of .github/workflows/*.yml
+  2. Static rules over tools/*.ps1 and tools/perf/*.ps1 (direct children of each folder only; rules
+     A-D, the same for both) and the run: bodies of .github/workflows/*.yml
      (a step's `run: |` block or one-line scalar; a mapping-valued run: such as defaults.run is
      not a body). Each body is parsed as pwsh; a parse error is a failure.
        A  a non-comment token whose source text has a char outside tab, CR, LF, 0x20-0x7E
@@ -437,6 +438,7 @@ if ($fails.Count -eq 0) { "PASS calibration ($($calib.Count) samples)" }
 
 # ---- 2. static rules over the real files ----
 $targets = @(Get-ChildItem -LiteralPath (Join-Path $root 'tools') -Filter '*.ps1' -File) +
+@(Get-ChildItem -LiteralPath (Join-Path $root 'tools/perf') -Filter '*.ps1' -File) +
 @(Get-ChildItem -LiteralPath (Join-Path $root '.github/workflows') -Filter '*.yml' -File)
 $callWordsOf = @{}
 foreach ($file in $targets) {
