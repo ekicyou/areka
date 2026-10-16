@@ -625,7 +625,7 @@ fn record_steady_memory(world: &World) {
         );
         return;
     }
-    let name = running_name(&crate::roots::head_root(&ctx.roots), &ctx.current.ghost);
+    let name = running_name(&ctx.current.ghost);
     publisher.persist_put(
         PersistScope::App,
         vec![(PersistKey::LastRunning, name.clone())],
@@ -807,8 +807,12 @@ fn boot_into(
     };
     let balloon = match resolve_balloon_for_ghost(&roots, &ghost.dir, pick_index) {
         Ok(balloon) => balloon,
-        Err(NoBalloon { balloon_store }) => {
-            return failed("balloon", balloon_store.display().to_string());
+        Err(NoBalloon { balloon_stores }) => {
+            let stores: Vec<String> = balloon_stores
+                .iter()
+                .map(|s| s.display().to_string())
+                .collect();
+            return failed("balloon", stores.join("; "));
         }
     };
     tracing::info!(

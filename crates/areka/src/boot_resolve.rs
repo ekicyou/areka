@@ -15,7 +15,8 @@
 use std::hash::{BuildHasher, RandomState};
 use std::path::{Path, PathBuf};
 
-use areka_ghost::BasewareRoot;
+use areka_ghost::catalog::{BalloonEntry, GhostEntry};
+use areka_ghost::same_folder_name;
 use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{
@@ -55,7 +56,7 @@ pub(crate) enum BalloonRoute {
     Random,
 }
 
-/// 決まったゴースト（argv なら渡されたパスそのもの・それ以外は `<根>/ghost/<folder>`）。
+/// 決まったゴースト（argv なら渡されたパスそのもの・それ以外は当たった和の項目の場所）。
 /// argv の経路だけ `folder` が `None`（根の外かもしれないので名前を持たない）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GhostDecision {
@@ -64,7 +65,7 @@ pub(crate) struct GhostDecision {
     pub folder: Option<String>,
 }
 
-/// 決まったバルーン（argv なら渡されたパスそのもの・それ以外は `<根>/balloon/<folder>`）。
+/// 決まったバルーン（argv なら渡されたパスそのもの・それ以外は当たった和の項目の場所）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct BalloonDecision {
     pub route: BalloonRoute,
@@ -72,33 +73,33 @@ pub(crate) struct BalloonDecision {
     pub folder: Option<String>,
 }
 
-/// 0 体（要件 4.7）。告知の文面に置くべき場所を載せるため格納フォルダを持つ。
+/// 0 体（要件 4.7・9.6）。告知の文面に置くべき場所を載せるため各根の格納フォルダ（上から）を持つ。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct NoGhost {
-    pub ghost_store: PathBuf,
+    pub ghost_stores: Vec<PathBuf>,
 }
 
-/// 0（要件 5.8）。告知の文面に置くべき場所を載せるため格納フォルダを持つ。
+/// 0（要件 5.8・9.7）。告知の文面に置くべき場所を載せるため各根の格納フォルダ（上から）を持つ。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct NoBalloon {
-    pub balloon_store: PathBuf,
+    pub balloon_stores: Vec<PathBuf>,
 }
 
 /// ゴーストの判断の入力（要件 4.9「argv・記憶の値・列挙の結果だけ」）。
-/// `argv` があるとき `memory`／`listed` は読まない（空でよい）。
+/// `argv` があるとき `memory`／`listed`／`stores` は読まない（空でよい）。
 pub(crate) struct GhostInputs<'a> {
-    pub root: &'a BasewareRoot,
     /// argv[1]
     pub argv: Option<&'a Path>,
     /// App スコープ `areka.last.ghost`
     pub memory: Option<&'a str>,
-    /// `list_ghosts` の folder（昇順）
-    pub listed: &'a [String],
+    /// 和の `list_ghosts`（フォルダ名の昇順）
+    pub listed: &'a [GhostEntry],
+    /// 見つかる根の `ghost\`（上から・記録と 0 体の失敗に載せる）
+    pub stores: &'a [PathBuf],
 }
 
 /// バルーンの判断の入力。`argv` があるとき他は読まない（空でよい）。
 pub(crate) struct BalloonInputs<'a> {
-    pub root: &'a BasewareRoot,
     /// argv[2]
     pub argv: Option<&'a Path>,
     /// 起動するゴーストの Ghost スコープ `areka.last.balloon`
@@ -109,41 +110,46 @@ pub(crate) struct BalloonInputs<'a> {
     pub balloon_name: Option<&'a str>,
     /// `<ゴースト>/install.txt` の同梱の最初の 1 個（無印 → `balloon0`）の `*.directory`
     pub companion: Option<&'a str>,
-    /// `list_balloons` の戻り（フォルダ名の昇順）
-    pub listed: &'a [areka_ghost::catalog::BalloonEntry],
+    /// 和の `list_balloons`（フォルダ名の昇順）
+    pub listed: &'a [BalloonEntry],
+    /// 見つかる根の `balloon\`（上から・記録と 0 の失敗に載せる）
+    pub stores: &'a [PathBuf],
 }
 
-/// `name` が列挙に在ればその名を返す（在る・無いの判定だけ。並びは見ない）。
-fn find<'a>(listed: &'a [String], name: &str) -> Option<&'a str> {
-    listed.iter().find(|f| *f == name).map(String::as_str)
+/// 格納フォルダの列を記録の値へ（`; ` でつなぐ・根 1 つなら今と同じ綴り）。
+fn joined(stores: &[PathBuf]) -> String {
+    stores
+        .iter()
+        .map(|s| s.display().to_string())
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+/// フォルダ名が `name` と同じ（要件 2.8 の 1 つの規則）和の項目（在る・無いの判定だけ。並びは見ない）。
+fn find<'a>(listed: &'a [GhostEntry], name: &str) -> Option<&'a GhostEntry> {
+    listed
+        .iter()
+        .find(|e| same_folder_name(&e.identity.folder, name))
 }
 
 /// [`find`] のバルーンの一覧版（フォルダ名で突き合わせる）。
-fn find_balloon<'a>(
-    listed: &'a [areka_ghost::catalog::BalloonEntry],
-    name: &str,
-) -> Option<&'a str> {
+fn find_balloon<'a>(listed: &'a [BalloonEntry], name: &str) -> Option<&'a BalloonEntry> {
     listed
         .iter()
-        .map(|e| e.identity.folder.as_str())
-        .find(|f| *f == name)
+        .find(|e| same_folder_name(&e.identity.folder, name))
 }
 
 /// descript の `balloon` の突き合わせ: `name` が一致する最初（列挙の並び＝フォルダ名の昇順）、
 /// 1 つも無いときに限りフォルダ名（実行中の `\![change,balloon,名前]` のふつうの名前と同じ・要件 2.6）。
-fn find_balloon_by_name<'a>(
-    listed: &'a [areka_ghost::catalog::BalloonEntry],
-    name: &str,
-) -> Option<&'a str> {
+fn find_balloon_by_name<'a>(listed: &'a [BalloonEntry], name: &str) -> Option<&'a BalloonEntry> {
     listed
         .iter()
         .find(|e| e.identity.name.as_deref() == Some(name))
-        .map(|e| e.identity.folder.as_str())
         .or_else(|| find_balloon(listed, name))
 }
 
 /// descript の段で鍵ごとに使う突き合わせ（[`find_balloon`] か [`find_balloon_by_name`]）。
-type FindBalloon = for<'l> fn(&'l [areka_ghost::catalog::BalloonEntry], &str) -> Option<&'l str>;
+type FindBalloon = for<'l> fn(&'l [BalloonEntry], &str) -> Option<&'l BalloonEntry>;
 
 /// 段 1〜5＋0 体（要件 4.1〜4.7）。`pick` は「候補数 n（≥ 2）→ 0..n の添字」。純粋。
 pub(crate) fn resolve_ghost(
@@ -159,19 +165,20 @@ pub(crate) fn resolve_ghost(
         });
     }
     let listed = inputs.listed;
-    let at = |route, folder: &str| GhostDecision {
+    // 当たった和の項目の場所とフォルダ名をそのまま使う（根から組み直さない）。
+    let at = |route, entry: &GhostEntry| GhostDecision {
         route,
-        dir: inputs.root.ghost_dir(folder),
-        folder: Some(folder.to_owned()),
+        dir: entry.dir.clone(),
+        folder: Some(entry.identity.folder.clone()),
     };
     // 段 2: 記憶（列挙に在れば）。在らねば黙って読み替えず warn して次へ（要件 4.6）。
     if let Some(memory) = inputs.memory {
         match find(listed, memory) {
-            Some(folder) => return Ok(at(GhostRoute::Memory, folder)),
+            Some(entry) => return Ok(at(GhostRoute::Memory, entry)),
             None => tracing::warn!(
                 event = "last_ghost_not_found",
                 memory,
-                ghost_store = %inputs.root.ghost_store().display(),
+                ghost_store = %joined(inputs.stores),
                 "[boot_resolve] 前回のゴーストが根に見つからないので次の候補へ進みます"
             ),
         }
@@ -179,24 +186,24 @@ pub(crate) fn resolve_ghost(
     match listed {
         // 0 体（要件 4.7）。
         [] => Err(NoGhost {
-            ghost_store: inputs.root.ghost_store(),
+            ghost_stores: inputs.stores.to_vec(),
         }),
         // 段 3: 唯一。
         [only] => Ok(at(GhostRoute::Only, only)),
         _ => {
             // 段 4: 既定（DEFAULT_GHOST_FOLDER を参照するのはこの段だけ）。
-            if let Some(folder) = find(listed, DEFAULT_GHOST_FOLDER) {
-                return Ok(at(GhostRoute::Default, folder));
+            if let Some(entry) = find(listed, DEFAULT_GHOST_FOLDER) {
+                return Ok(at(GhostRoute::Default, entry));
             }
             // 段 5: 無作為。
-            let folder = listed[pick(listed.len())].as_str();
+            let entry = &listed[pick(listed.len())];
             tracing::info!(
                 event = "ghost_picked_randomly",
-                folder,
+                folder = entry.identity.folder.as_str(),
                 candidates = listed.len(),
                 "[boot_resolve] 既定のゴーストが無いので無作為に選びました"
             );
-            Ok(at(GhostRoute::Random, folder))
+            Ok(at(GhostRoute::Random, entry))
         }
     }
 }
@@ -216,19 +223,21 @@ pub(crate) fn resolve_balloon(
         });
     }
     let listed = inputs.listed;
-    let at = |route, folder: &str| BalloonDecision {
+    // 当たった和の項目の場所とフォルダ名をそのまま使う（根から組み直さない）。
+    let at = |route, entry: &BalloonEntry| BalloonDecision {
         route,
-        dir: inputs.root.balloon_dir(folder),
-        folder: Some(folder.to_owned()),
+        dir: entry.dir.clone(),
+        folder: Some(entry.identity.folder.clone()),
     };
+    let store = joined(inputs.stores);
     // 段 2: ゴーストごとの記憶（同梱より先＝裁定 4）。
     if let Some(memory) = inputs.memory {
         match find_balloon(listed, memory) {
-            Some(folder) => return Ok(at(BalloonRoute::Memory, folder)),
+            Some(entry) => return Ok(at(BalloonRoute::Memory, entry)),
             None => tracing::warn!(
                 event = "last_balloon_not_found",
                 memory,
-                balloon_store = %inputs.root.balloon_store().display(),
+                balloon_store = %store,
                 "[boot_resolve] 前回のバルーンが根に見つからないので次の候補へ進みます"
             ),
         }
@@ -247,12 +256,12 @@ pub(crate) fn resolve_balloon(
     for (key, value, find) in descript {
         let Some(value) = value else { continue };
         match find(listed, value) {
-            Some(folder) => return Ok(at(BalloonRoute::Descript, folder)),
+            Some(entry) => return Ok(at(BalloonRoute::Descript, entry)),
             None => tracing::warn!(
                 event = "descript_balloon_not_found",
                 key,
                 value,
-                balloon_store = %inputs.root.balloon_store().display(),
+                balloon_store = %store,
                 "[boot_resolve] ゴーストの descript.txt が指すバルーンが根に見つからないので次の候補へ進みます"
             ),
         }
@@ -260,11 +269,11 @@ pub(crate) fn resolve_balloon(
     // 段 4: ゴーストの同梱（install.txt の同梱の最初の 1 個＝無印 → `balloon0`）。
     if let Some(companion) = inputs.companion {
         match find_balloon(listed, companion) {
-            Some(folder) => return Ok(at(BalloonRoute::Companion, folder)),
+            Some(entry) => return Ok(at(BalloonRoute::Companion, entry)),
             None => tracing::warn!(
                 event = "companion_balloon_not_found",
                 companion,
-                balloon_store = %inputs.root.balloon_store().display(),
+                balloon_store = %store,
                 "[boot_resolve] ゴーストの同梱バルーンが根に見つからないので次の候補へ進みます"
             ),
         }
@@ -272,24 +281,24 @@ pub(crate) fn resolve_balloon(
     match listed {
         // 0（要件 5.8）。
         [] => Err(NoBalloon {
-            balloon_store: inputs.root.balloon_store(),
+            balloon_stores: inputs.stores.to_vec(),
         }),
         // 段 5: 唯一。
-        [only] => Ok(at(BalloonRoute::Only, &only.identity.folder)),
+        [only] => Ok(at(BalloonRoute::Only, only)),
         _ => {
             // 段 6: 既定（DEFAULT_BALLOON_FOLDER を参照するのはこの段だけ）。
-            if let Some(folder) = find_balloon(listed, DEFAULT_BALLOON_FOLDER) {
-                return Ok(at(BalloonRoute::Default, folder));
+            if let Some(entry) = find_balloon(listed, DEFAULT_BALLOON_FOLDER) {
+                return Ok(at(BalloonRoute::Default, entry));
             }
             // 段 7: 無作為。
-            let folder = listed[pick(listed.len())].identity.folder.as_str();
+            let entry = &listed[pick(listed.len())];
             tracing::info!(
                 event = "balloon_picked_randomly",
-                folder,
+                folder = entry.identity.folder.as_str(),
                 candidates = listed.len(),
                 "[boot_resolve] 既定のバルーンが無いので無作為に選びました"
             );
-            Ok(at(BalloonRoute::Random, folder))
+            Ok(at(BalloonRoute::Random, entry))
         }
     }
 }
@@ -477,8 +486,9 @@ pub(crate) fn clear_session_mark(app_profile_dir: &Path) {
     }
 }
 
-/// 印に書く名前: 目録の同じフォルダの descript の `name`、無ければフォルダ名（argv 以外の決定だけが来る）。
-pub(crate) fn running_name(root: &BasewareRoot, ghost: &GhostDecision) -> String {
+/// 印に書く名前: 決まったゴーストの場所の descript の `name`、無ければフォルダ名（argv 以外の決定だけが来る）。
+/// 和は引かない（同じフォルダ名が別の根から見えても、動いているゴーストの名前を書く）。
+pub(crate) fn running_name(ghost: &GhostDecision) -> String {
     let folder = ghost.folder.clone().unwrap_or_else(|| {
         // argv の決定は印を書かない（呼び手が旗で止める）。来たらフォルダの末尾で代える。
         ghost
@@ -487,11 +497,7 @@ pub(crate) fn running_name(root: &BasewareRoot, ghost: &GhostDecision) -> String
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default()
     });
-    areka_ghost::catalog::list_ghosts(root)
-        .into_iter()
-        .find(|e| e.identity.folder == folder)
-        .and_then(|e| e.identity.name)
-        .unwrap_or(folder)
+    areka_ghost::catalog::descript_name(&ghost.dir.join("ghost").join("master")).unwrap_or(folder)
 }
 
 /// 起動成功時に書く内容（要件 3.2〜3.5・裁定 5）。

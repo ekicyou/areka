@@ -473,7 +473,7 @@ fn boot_first_ghost(
     match world.get_resource::<boot_config::BootContext>() {
         Some(ctx) if !ctx.argv_session => boot_resolve::write_session_mark(
             &ctx.app_profile_dir,
-            &boot_resolve::running_name(&roots::head_root(&ctx.roots), ghost),
+            &boot_resolve::running_name(ghost),
         ),
         Some(_) => tracing::debug!(
             event = "session_mark_untouched_argv",
@@ -585,7 +585,16 @@ fn after_run(world: &mut World) -> AfterRun {
     let (ghost_name, ghost_root) = match first {
         Some(app_exit::ExitOrigin::GhostFallbackFailed(_)) => (
             Some(boot_resolve::DEFAULT_GHOST_FOLDER.to_owned()),
-            roots::head_root(&ctx.roots).ghost_dir(boot_resolve::DEFAULT_GHOST_FOLDER),
+            // 既定ゴーストの場所は和から引く（どの根にも無ければ並びの先頭の根の下）。
+            areka_ghost::catalog_roots::find_ghost(&ctx.roots, boot_resolve::DEFAULT_GHOST_FOLDER)
+                .map(|e| e.dir)
+                .unwrap_or_else(|| {
+                    ctx.roots
+                        .roots()
+                        .first()
+                        .map(|r| r.ghost_dir(boot_resolve::DEFAULT_GHOST_FOLDER))
+                        .unwrap_or_default()
+                }),
         ),
         _ => (
             session

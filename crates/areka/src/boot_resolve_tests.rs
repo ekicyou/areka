@@ -8,6 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
+use areka_ghost::BasewareRoot;
 use log_capture_kit::{CapturedEvent, capture};
 
 use super::*;
@@ -58,11 +59,23 @@ fn ghost(
     listed: &[String],
     pick: impl FnOnce(usize) -> usize,
 ) -> (Result<GhostDecision, NoGhost>, Vec<CapturedEvent>) {
+    // フォルダ名の列を根 1 つの和の項目へ直す。
+    let listed: Vec<GhostEntry> = listed
+        .iter()
+        .map(|folder| GhostEntry {
+            dir: root.ghost_dir(folder),
+            root: root.dir().to_path_buf(),
+            identity: areka_ghost::catalog::Identity {
+                folder: folder.clone(),
+                ..Default::default()
+            },
+        })
+        .collect();
     let inputs = GhostInputs {
-        root,
         argv,
         memory,
-        listed,
+        listed: &listed,
+        stores: &[root.ghost_store()],
     };
     capture(|| resolve_ghost(&inputs, pick))
 }
@@ -88,13 +101,13 @@ fn balloon(
         })
         .collect();
     let inputs = BalloonInputs {
-        root,
         argv,
         memory,
         default_balloon_path: None,
         balloon_name: None,
         companion,
         listed: &listed,
+        stores: &[root.balloon_store()],
     };
     capture(|| resolve_balloon(&inputs, pick))
 }
@@ -194,7 +207,7 @@ fn ghost_none_listed_returns_store() {
     assert_eq!(
         got,
         Err(NoGhost {
-            ghost_store: root.ghost_store(),
+            ghost_stores: vec![root.ghost_store()],
         })
     );
 }
@@ -319,7 +332,7 @@ fn balloon_none_listed_returns_store() {
     assert_eq!(
         got,
         Err(NoBalloon {
-            balloon_store: root.balloon_store(),
+            balloon_stores: vec![root.balloon_store()],
         })
     );
 }
@@ -672,9 +685,9 @@ mod last_used {
         }
         assert_eq!(
             [
-                running_name(&root, &ghost_at(&root, GhostRoute::Memory, "named")),
-                running_name(&root, &ghost_at(&root, GhostRoute::Default, "nameless")),
-                running_name(&root, &ghost_at(&root, GhostRoute::Only, "missing")),
+                running_name(&ghost_at(&root, GhostRoute::Memory, "named")),
+                running_name(&ghost_at(&root, GhostRoute::Default, "nameless")),
+                running_name(&ghost_at(&root, GhostRoute::Only, "missing")),
             ],
             [
                 "名のある子".to_owned(),

@@ -33,11 +33,11 @@ pub(crate) enum AlertScene {
     RootMissing(RootError),
     /// ゴーストが無い（要件 4.7）／argv のフォルダがゴーストでない（要件 4.8・argv は Some）。
     GhostMissing {
-        ghost_store: PathBuf,
+        ghost_stores: Vec<PathBuf>,
         argv: Option<PathBuf>,
     },
     /// バルーンが無い（要件 5.8）。
-    BalloonMissing { balloon_store: PathBuf },
+    BalloonMissing { balloon_stores: Vec<PathBuf> },
     /// 起動窓を開けない（要件 6.4）。`reason` は失敗の内容（`PlacementError` の表示）。
     StartupWindow { reason: String },
     /// SHIORI が動かなくなった（起動時か会話中かは載せない）。
@@ -93,14 +93,13 @@ pub(crate) fn alert_text(scene: &AlertScene) -> (String, String) {
                 RootsOrigin::Memory => "アプリの記憶の指すフォルダがありません。",
                 RootsOrigin::Default => "実行ファイルのあるフォルダが見つかりません。",
             };
-            let tried: Vec<String> = tried.iter().map(|d| d.display().to_string()).collect();
             [
                 format!("根が決まりません: {what}"),
-                format!("置く場所: {}", tried.join("; ")),
+                format!("置く場所: {}", joined(tried)),
                 ROOT_SHAPE.to_owned(),
             ]
         }
-        AlertScene::GhostMissing { ghost_store, argv } => [
+        AlertScene::GhostMissing { ghost_stores, argv } => [
             match argv {
                 None => "ゴーストが見つかりません。".to_owned(),
                 Some(given) => format!(
@@ -108,12 +107,12 @@ pub(crate) fn alert_text(scene: &AlertScene) -> (String, String) {
                     given.display()
                 ),
             },
-            format!("置く場所: {}", ghost_store.display()),
+            format!("置く場所: {}", joined(ghost_stores)),
             GHOST_SHAPE.to_owned(),
         ],
-        AlertScene::BalloonMissing { balloon_store } => [
+        AlertScene::BalloonMissing { balloon_stores } => [
             "バルーンが見つかりません。".to_owned(),
-            format!("置く場所: {}", balloon_store.display()),
+            format!("置く場所: {}", joined(balloon_stores)),
             BALLOON_SHAPE.to_owned(),
         ],
         AlertScene::StartupWindow { reason } => [
@@ -142,6 +141,15 @@ pub(crate) fn alert_text(scene: &AlertScene) -> (String, String) {
         | AlertScene::StartupWindow { .. } => TITLE,
     };
     (title.to_owned(), lines.join("\n"))
+}
+
+/// パスの列を 1 行へ（`; ` でつなぐ・仮の最小の文面＝仕上げは 3.3）。
+fn joined(paths: &[PathBuf]) -> String {
+    paths
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 /// 値から抑止を判断する純粋な口（None／""／空白のみ／"0"（trim 後）→ false・それ以外 → true）。

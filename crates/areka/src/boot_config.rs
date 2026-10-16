@@ -229,8 +229,7 @@ pub(crate) fn resolve_boot_from(
         AlertScene::RootMissing(err)
     })?;
     report::log_roots(&resolved, ReportOccasion::Boot);
-    // 移り途中（3.2 で鎖を和の上へ）: 鎖はまだ根 1 つを受けるので、見つかるいちばん上の根で引く。
-    let root = crate::roots::head_root(&resolved.roots);
+    let ghost_stores = resolved.roots.ghost_stores();
     let (argv_ghost, argv_balloon) = (
         args.get(1).map(std::path::Path::new),
         args.get(2).map(std::path::Path::new),
@@ -245,7 +244,7 @@ pub(crate) fn resolve_boot_from(
     }
     if let Some(argv) = argv_ghost.filter(|argv| !catalog::is_ghost_dir(argv)) {
         return Err(AlertScene::GhostMissing {
-            ghost_store: root.ghost_store(),
+            ghost_stores,
             argv: Some(argv.to_path_buf()),
         });
     }
@@ -263,29 +262,26 @@ pub(crate) fn resolve_boot_from(
             "前回はきれいに終わらなかったので、最後のゴーストの記憶を読まずに起動するゴーストを決めます"
         );
     }
-    let (memory, listed): (_, Vec<String>) = match argv_ghost {
+    let (memory, listed) = match argv_ghost {
         Some(_) => (None, Vec::new()),
         None => (
             mark.is_none()
                 .then(|| boot_resolve::read_last_ghost(app_profile_dir))
                 .flatten(),
-            catalog::list_ghosts(&root)
-                .into_iter()
-                .map(|e| e.identity.folder)
-                .collect(),
+            areka_ghost::catalog_roots::list_ghosts(&resolved.roots),
         ),
     };
     let ghost = boot_resolve::resolve_ghost(
         &GhostInputs {
-            root: &root,
             argv: argv_ghost,
             memory: memory.as_deref(),
             listed: &listed,
+            stores: &ghost_stores,
         },
         pick,
     )
-    .map_err(|NoGhost { ghost_store }| AlertScene::GhostMissing {
-        ghost_store,
+    .map_err(|NoGhost { ghost_stores }| AlertScene::GhostMissing {
+        ghost_stores,
         argv: None,
     })?;
     tracing::info!(event = "ghost_resolved", route = ?ghost.route, dir = %ghost.dir.display(), "起動するゴーストを決めました");
@@ -293,19 +289,19 @@ pub(crate) fn resolve_boot_from(
     let balloon = match argv_balloon {
         Some(argv) => boot_resolve::resolve_balloon(
             &BalloonInputs {
-                root: &root,
                 argv: Some(argv),
                 memory: None,
                 default_balloon_path: None,
                 balloon_name: None,
                 companion: None,
                 listed: &[],
+                stores: &[],
             },
             pick,
         ),
         None => resolve_balloon_for_ghost(&resolved.roots, &ghost.dir, pick),
     }
-    .map_err(|NoBalloon { balloon_store }| AlertScene::BalloonMissing { balloon_store })?;
+    .map_err(|NoBalloon { balloon_stores }| AlertScene::BalloonMissing { balloon_stores })?;
     tracing::info!(event = "balloon_resolved", route = ?balloon.route, dir = %balloon.dir.display(), "バルーンを決めました");
 
     let cfg = ConfigInputs {
@@ -320,8 +316,8 @@ pub(crate) fn resolve_boot_from(
 /// 1 ゴースト分のバルーンを解く（起動前の解決の後半・切替先のバルーンの解決＝要件 4.7）。
 /// 初回起動の argv の第 2 引数はここへ届かない。
 ///
-/// 記憶・descript の 2 鍵・同梱・根の一覧は、段が当たるかどうかに関わらず先にまとめて読み、
-/// 判断と「当たらなかった」の記録は鎖（`boot_resolve::resolve_balloon`）に任せる。候補は根の
+/// 記憶・descript の 2 鍵・同梱・並びの和の一覧は、段が当たるかどうかに関わらず先にまとめて読み、
+/// 判断と「当たらなかった」の記録は鎖（`boot_resolve::resolve_balloon`）に任せる。候補は各根の
 /// バルーンの置き場の列挙だけで、ゴーストのフォルダの中の `balloon/` は読まない。
 pub(crate) fn resolve_balloon_for_ghost(
     roots: &areka_ghost::BasewareRoots,
@@ -331,15 +327,13 @@ pub(crate) fn resolve_balloon_for_ghost(
     use crate::boot_resolve::{self, BalloonInputs};
     use areka_ghost::catalog;
 
-    // 移り途中（3.2 で和の上へ）: 鎖はまだ根 1 つを受ける。
-    let root = &crate::roots::head_root(roots);
     let memory = boot_resolve::read_last_balloon(ghost_dir);
     let standard = catalog::standard_balloon_keys(ghost_dir);
     let companion = catalog::companion_balloon(ghost_dir);
-    let listed = catalog::list_balloons(root);
+    let listed = areka_ghost::catalog_roots::list_balloons(roots);
     boot_resolve::resolve_balloon(
         &BalloonInputs {
-            root,
+            stores: &roots.balloon_stores(),
             argv: None,
             memory: memory.as_deref(),
             default_balloon_path: standard.default_balloon_path.as_deref(),
@@ -451,3 +445,7 @@ mod exe_link_tests;
 #[cfg(test)]
 #[path = "boot_config_balloon_tests.rs"]
 mod balloon_tests;
+
+#[cfg(test)]
+#[path = "boot_config_roots_tests.rs"]
+mod roots_tests;

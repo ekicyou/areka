@@ -86,7 +86,7 @@ fn root_missing_logs_one_error_with_absolute_root() {
 fn ghost_missing_logs_one_error_with_absolute_store() {
     let ghost_store = abs("root").join("ghost");
     let scene = AlertScene::GhostMissing {
-        ghost_store: ghost_store.clone(),
+        ghost_stores: vec![ghost_store.clone()],
         argv: None,
     };
     let body = only_alert_body(&raise_suppressed(&scene));
@@ -103,7 +103,7 @@ fn ghost_missing_logs_one_error_with_absolute_store() {
 fn balloon_missing_logs_one_error_with_absolute_store() {
     let balloon_store = abs("root").join("balloon");
     let scene = AlertScene::BalloonMissing {
-        balloon_store: balloon_store.clone(),
+        balloon_stores: vec![balloon_store.clone()],
     };
     let body = only_alert_body(&raise_suppressed(&scene));
     assert!(body.starts_with("バルーンが見つかりません"), "{body}");
@@ -128,11 +128,11 @@ fn startup_window_logs_one_error_with_reason() {
 #[test]
 fn store_scenes_have_three_lines() {
     let ghost = AlertScene::GhostMissing {
-        ghost_store: abs("root").join("ghost"),
+        ghost_stores: vec![abs("root").join("ghost")],
         argv: None,
     };
     let balloon = AlertScene::BalloonMissing {
-        balloon_store: abs("root").join("balloon"),
+        balloon_stores: vec![abs("root").join("balloon")],
     };
     for scene in [ghost, balloon] {
         let (title, body) = alert_text(&scene);
@@ -146,7 +146,7 @@ fn store_scenes_have_three_lines() {
 fn ghost_missing_from_argv_names_the_given_path() {
     let given = abs("not-a-ghost");
     let scene = AlertScene::GhostMissing {
-        ghost_store: abs("root").join("ghost"),
+        ghost_stores: vec![abs("root").join("ghost")],
         argv: Some(given.clone()),
     };
     let (_, body) = alert_text(&scene);
@@ -196,11 +196,11 @@ fn startup_scenes_keep_the_startup_title() {
     let scenes = [
         AlertScene::RootMissing(exe_unavailable()),
         AlertScene::GhostMissing {
-            ghost_store: abs("root").join("ghost"),
+            ghost_stores: vec![abs("root").join("ghost")],
             argv: None,
         },
         AlertScene::BalloonMissing {
-            balloon_store: abs("root").join("balloon"),
+            balloon_stores: vec![abs("root").join("balloon")],
         },
         AlertScene::StartupWindow {
             reason: "x".to_owned(),

@@ -52,7 +52,7 @@ mod boot {
         assert_eq!(
             got.map(|_| ()),
             Err(AlertScene::GhostMissing {
-                ghost_store: root.path().join("ghost"),
+                ghost_stores: vec![root.path().join("ghost")],
                 argv: Some(given),
             })
         );
@@ -108,7 +108,7 @@ mod boot {
         assert_eq!(
             got.map(|_| ()),
             Err(AlertScene::GhostMissing {
-                ghost_store: root.path().join("ghost"),
+                ghost_stores: vec![root.path().join("ghost")],
                 argv: None,
             })
         );

@@ -69,7 +69,7 @@
   - _Depends: 1.2, 2.1, 2.2_
   - _Requirements: 1.3, 1.15, 2.5, 11.1, 11.2, 11.3_
 
-- [ ] 3.2 起動の鎖（ゴーストとバルーンの決め方）を和の項目とフォルダ名の 1 つの規則で引く
+- [x] 3.2 起動の鎖（ゴーストとバルーンの決め方）を和の項目とフォルダ名の 1 つの規則で引く
   - ゴーストとバルーンの決め方の入力から根を外し、和の項目の列と格納フォルダの列を受ける。当たった項目の場所を使い、突き合わせは 1 つの規則で行う。既定ゴースト・既定バルーン・同梱のバルーン・記憶のバルーンの引き当ても和の上で行う
   - 「記憶の指す先が無い」等の warn は event 名と欄名を今のまま、値は格納フォルダの列を `; ` でつないだもの（根 1 つなら今と同じ綴り）。ゴーストが無い・バルーンが無いの失敗は格納フォルダの列を持ち、告知の場面へも列のまま渡す（場面の中身を列にする型の変更はここで行い、文面は 3.3）
   - 起動中の印に書く名前は和を引かず、決まったゴーストの場所の descript を直に読む（無ければフォルダ名）。`main.rs` の後始末の告知の既定ゴーストの場所は和から引く（無ければ先頭の根の下）
@@ -219,3 +219,4 @@
 - 2.1: design の `RootError` は控えを持たなかったが、要件 1.7・1.9・1.12・1.13 の warn を起動が失敗する経路でも残すため、各腕に `skipped`・`memory_fell_back` を持たせた（進行役の判断）。2.2 の記録の部品は失敗の値からも控えと「既定へ倒した」を warn に出すこと。`main.rs` の `mod roots;` の `#[allow(dead_code)]` は 3.1 で外す。
 - 3.1: argv でゴーストを渡す起動では起動時の隠れの記録（`log_hidden`・`survey`）を出さない（要件 11.2「argv の起動は目録の外」と既存テストの「argv の起動は warn を出さない」を優先・`root_listed` は両経路で出す・テスト `boot_lists_roots_and_counts_hidden_only_without_argv` が固定）。要件 2.5 の欠けではない。
 - 3.1: 移り途中の仮の形は `crate::roots::head_root`（見つかる先頭の根・無ければ先頭）1 つに集めた。使う所: `boot_config.rs`（2 か所・3.2）・`ghost_switch.rs` `running_name`（3.2）・`main.rs` `running_name`／後始末の告知（3.2）・`install/desk.rs` `GhostFacts.root`／`install/overwrite.rs`（4.5・4.6）。`install/procedure.rs` の `list_balloons(&BasewareRoot::new(facts.root))` も 4.6。7.1 で `head_root` ごと消す。
+- 3.2: 格納フォルダの列を `; ` でつなぐ処理が `alert.rs::joined`・`boot_resolve.rs::joined`・`ghost_switch.rs::boot_into` の 3 か所にある。3.3 で告知の文面を仕上げるとき 1 つへ寄せてよい。
