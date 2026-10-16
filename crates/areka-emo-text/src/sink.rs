@@ -30,6 +30,10 @@ pub enum TextMsg {
     Upcoming(Vec<TalkCue>),
     /// 終了指示（結線側が talk 経路の畳み込みで送る・`Ok(Break)` 経路）。
     Close,
+    /// トークの終わり（cue を送った複製が落ちるときに 1 回・そのトークの cue の後に届く・件 1）。
+    TalkEnded,
+    /// 再生が選択待ちに入った（[`dola::cue::CueSink::choice_wait_began`] の写し・件 1）。
+    ChoiceWaitBegan,
 }
 
 /// **単一の出力契約** [`dola::cue::CueSink`] の実装——broadcast された全 cue を UI ドレインへ
@@ -44,9 +48,32 @@ pub enum TextMsg {
 /// # Invariants
 ///
 /// `emit`／`close` はいかなる失敗でも panic しない（送信失敗は `tracing::error!` のみ・R1.5）。
-#[derive(Clone)]
 pub struct EmoTextSink {
     tx: UiSender<TextMsg>,
+    /// この複製が cue を 1 つ以上送った（＝落ちるときに [`TextMsg::TalkEnded`] を送る）。
+    started: bool,
+}
+
+/// 複製＝トークの境界: 複製は「cue を送った」の印を偽から始める（`NoUserBreakCueSink` と同じ手口）。
+/// 前のトークの印を持ち越すと、cue を送らずに落ちた複製まで終わりを送ってしまう。
+impl Clone for EmoTextSink {
+    fn clone(&self) -> Self {
+        Self::new(self.tx.clone())
+    }
+}
+
+/// **トークの終わり**——cue を送った複製が落ちるときに [`TextMsg::TalkEnded`] を 1 回送る（件 1）。
+///
+/// 複製はトークの再生が所有し、最後まで・中断・置き換えのどの終わり方でも落ちる。同じ口の FIFO で
+/// そのトークの cue の後に並び、置き換えでは配送が古いトークのスレッドを合流してから新しいトークを
+/// 起こすので、次のトークの合図より前に届く。登録の原本・cue を送らなかった複製は送らない。
+/// 送れないとき（UI ドレイン停止後）は `warn!` 1 行・panic しない。
+impl Drop for EmoTextSink {
+    fn drop(&mut self) {
+        if self.started && self.tx.send(TextMsg::TalkEnded).is_err() {
+            tracing::warn!("EmoTextSink::drop: UI text drain already stopped; talk end dropped");
+        }
+    }
 }
 
 impl EmoTextSink {
@@ -54,7 +81,7 @@ impl EmoTextSink {
     ///
     /// 正規の構築点は結線 API `spawn_emo_text`（actor.rs・drain 起動と対で取得する）。
     pub fn new(tx: UiSender<TextMsg>) -> Self {
-        Self { tx }
+        Self { tx, started: false }
     }
 
     /// 終了指示（`emit` と同じ口・FIFO で cue の後に並ぶ）。
@@ -97,6 +124,7 @@ impl EmoTextSink {
 /// `TextSink` 実装を撤去し `CueSink` 一本へ集約）。
 impl dola::cue::CueSink for EmoTextSink {
     fn emit(&mut self, cue: TalkCue) {
+        self.started = true;
         self.deliver(cue);
     }
 
@@ -107,6 +135,16 @@ impl dola::cue::CueSink for EmoTextSink {
             tracing::error!(
                 cues = upcoming.len(),
                 "EmoTextSink::preview: UI text drain already stopped; upcoming cues dropped"
+            );
+        }
+    }
+
+    /// 選択待ちの始まりを [`TextMsg::ChoiceWaitBegan`] として合図と同じ口へ積む（件 1）。
+    /// 積めなかったとき（UI ドレイン停止後）は `preview` と同じく `error!` 1 行のみ・panic しない。
+    fn choice_wait_began(&mut self) {
+        if self.tx.send(TextMsg::ChoiceWaitBegan).is_err() {
+            tracing::error!(
+                "EmoTextSink::choice_wait_began: UI text drain already stopped; choice wait start dropped"
             );
         }
     }
@@ -125,27 +163,34 @@ impl dola::cue::CueSink for EmoTextSink {
 /// 個別 cue の処理失敗は `Err` として返し、基盤が `error!`＋継続する（R1.5——
 /// **失敗は終了経路ではない**・ループを殺さない）。
 ///
-/// 先渡し（[`TextMsg::Upcoming`]）は読み飛ばす（字は `Cue` で届くので失われない）。
-/// 先渡しを使う取り出しは [`handle_text_msg_with`] を用いる。
+/// 先渡し（[`TextMsg::Upcoming`]）・トークの終わり（[`TextMsg::TalkEnded`]）・選択待ちの始まり
+/// （[`TextMsg::ChoiceWaitBegan`]）は読み飛ばす（字は `Cue` で届くので失われない）。
+/// これらを使う取り出しは [`handle_text_msg_with`] を用いる。
 pub fn handle_text_msg<E>(
     msg: TextMsg,
     on_cue: impl FnOnce(TalkCue) -> Result<(), E>,
 ) -> Result<ControlFlow<()>, E> {
-    handle_text_msg_with(msg, on_cue, |_| Ok(()))
+    handle_text_msg_with(msg, on_cue, |_| Ok(()), |_| Ok(()))
 }
 
-/// [`handle_text_msg`] に先渡しの受け取り `on_upcoming` を差し込める形（終了規律は同じ）。
+/// [`handle_text_msg`] に先渡しの受け取り `on_upcoming` と、トークの印（[`TextMsg::TalkEnded`]・
+/// [`TextMsg::ChoiceWaitBegan`] のどちらかだけが渡る）の受け取り `on_talk_mark` を差し込める形
+/// （終了規律は同じ）。
 ///
-/// 先渡しの受け取りの失敗も `Err` として返し、基盤が `error!`＋継続する。
+/// 先渡し・印の受け取りの失敗も `Err` として返し、基盤が `error!`＋継続する。
 pub fn handle_text_msg_with<E>(
     msg: TextMsg,
     on_cue: impl FnOnce(TalkCue) -> Result<(), E>,
     on_upcoming: impl FnOnce(Vec<TalkCue>) -> Result<(), E>,
+    on_talk_mark: impl FnOnce(TextMsg) -> Result<(), E>,
 ) -> Result<ControlFlow<()>, E> {
     match msg {
         TextMsg::Close => Ok(ControlFlow::Break(())),
         TextMsg::Cue(cue) => on_cue(cue).map(|()| ControlFlow::Continue(())),
         TextMsg::Upcoming(upcoming) => on_upcoming(upcoming).map(|()| ControlFlow::Continue(())),
+        mark @ (TextMsg::TalkEnded | TextMsg::ChoiceWaitBegan) => {
+            on_talk_mark(mark).map(|()| ControlFlow::Continue(()))
+        }
     }
 }
 
@@ -456,6 +501,7 @@ mod tests {
                 *got.borrow_mut() = Some(u);
                 Ok(())
             },
+            |_| panic!("on_talk_mark must not be called for Upcoming"),
         );
         assert_eq!(result, Ok(ControlFlow::Continue(())));
         assert_eq!(got.into_inner(), Some(list.clone()), "先渡しは無変形で渡る");
@@ -464,6 +510,7 @@ mod tests {
             TextMsg::Upcoming(list),
             |_| -> Result<(), String> { panic!("on_cue must not be called") },
             |_| Err("busy".to_string()),
+            |_| panic!("on_talk_mark must not be called"),
         );
         assert_eq!(failed, Err("busy".to_string()));
     }
@@ -489,6 +536,7 @@ mod tests {
                                 .push(TextMsg::Upcoming(u));
                             Ok(())
                         },
+                        |_| Ok(()),
                     )
                 },
             )
@@ -534,3 +582,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "sink_talk_end_tests.rs"]
+mod talk_end_tests;

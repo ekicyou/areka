@@ -507,28 +507,16 @@ impl TextLayerRuntime {
     }
 
     /// 文字の線の `ChoiceWaitBegan`: このトークが選択待ちに入ったと覚える。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "文字の線のドレインへはタスク 4.5 が結ぶ")
-    )]
     fn note_choice_wait_began(&mut self) {
         self.choice_wait_open = true;
     }
 
     /// 選択待ちに入ったかの欄を戻す（`TalkEnded` と次のトークの先渡し）。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "文字の線のドレインへはタスク 4.5 が結ぶ")
-    )]
     fn close_choice_wait(&mut self) {
         self.choice_wait_open = false;
     }
 
     /// 文字の線のトークの終わり: 全部の場所の選択肢を済みにし、押下の口と同じく写しと強調を揃える。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "文字の線のドレインへはタスク 4.5 が結ぶ")
-    )]
     fn settle_all_choices(&mut self) {
         self.state.settle_all_choices();
         let places: Vec<PlaceKey> = self.state.places().map(|(key, _)| key.clone()).collect();
@@ -609,6 +597,8 @@ impl TextLayerRuntime {
 /// handler は `runtime` の `Rc` clone を捕捉し（`!Send` handler・基盤許容）、
 /// [`handle_text_msg_with`]（終了規律の正準写像）へ委譲して cue を純粋状態へ適用する。
 /// 先渡し（`TextMsg::Upcoming`）は実行時の `preview_talk` へ渡し、空回しで区間の全文を求める。
+/// 選択待ちの始まり（`TextMsg::ChoiceWaitBegan`）は押下の口を開き、トークの終わり
+/// （`TextMsg::TalkEnded`）は全部の場所の選択肢を済みにして口を閉じる（先渡しも口を閉じる・件 1）。
 /// 終了経路はちょうど 2 つ——`TextMsg::Close` 受領＝`Ok(Break)`・全 `UiSender`
 /// （＝全 [`EmoTextSink`] クローン）drop＝drain 正常終了（R1.4・error ログなし）。
 /// 個別 cue の適用失敗（runtime 借用競合など）は `Err` 戻し→基盤が `error!`＋継続する
@@ -638,6 +628,8 @@ pub fn spawn_emo_text(
             },
             |upcoming| match runtime.try_borrow_mut() {
                 Ok(mut rt) => {
+                    // 次のトークの先渡し＝前のトークの選択待ちは終わっている（件 1）。
+                    rt.close_choice_wait();
                     rt.preview_talk(&upcoming);
                     Ok(())
                 }
@@ -646,6 +638,23 @@ pub fn spawn_emo_text(
                 Err(_) => Err(format!(
                     "TextLayerRuntime が借用中のため先渡しを受け取れない（cues={}）——そのトークは先渡し無し",
                     upcoming.len()
+                )),
+            },
+            |mark| match runtime.try_borrow_mut() {
+                Ok(mut rt) => {
+                    if mark == TextMsg::ChoiceWaitBegan {
+                        rt.note_choice_wait_began();
+                    } else {
+                        // トークの終わり: 全部の場所の選択肢を済みにし、押下の口を閉じる（件 1）。
+                        rt.settle_all_choices();
+                        rt.close_choice_wait();
+                    }
+                    Ok(())
+                }
+                // 借用競合——cue と同じく Err 戻しで基盤の error!＋継続に乗せる（終わりなら、その
+                // トークの選択肢は次の台詞の頭で消える）。
+                Err(_) => Err(format!(
+                    "TextLayerRuntime が借用中のためトークの印を適用できない（{mark:?}）"
                 )),
             },
         )

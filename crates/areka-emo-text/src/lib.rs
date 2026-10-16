@@ -438,6 +438,7 @@ mod tests {
         "draw_oracle_tests.rs",
         "draw_test_support.rs",
         "sink.rs",
+        "sink_talk_end_tests.rs",
         "surface.rs",
         "surface_hit_cells_tests.rs",
         "surface_window_child.rs",
