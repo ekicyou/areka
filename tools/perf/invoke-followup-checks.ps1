@@ -133,6 +133,12 @@ $judgePath = Join-Path $PSScriptRoot 'judge-followup.py'
 $NAR_SAMPLE_ARGS   = @('run', '-q', '-p', 'sample-ghost-kit', '--bin', 'nar-sample-path', '--manifest-path')
 $script:NarSampleMaps = @{}
 
+#: 表示成立点の実行ログの目印（本番のログの文言と字で突き合わせる）。
+$LOG_MARKER_SHOW_READY = 'apply\(ShowSurface\): 表示・マスクを更新'
+
+# 子の出力を端末の文字コードに依らず UTF-8 で読む（Invoke-Utf8Child）
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'utf8-child.ps1')
+
 # =============================================================================
 # Win32（DPI 対応で読む・列挙・入力注入・窓の移動）
 # =============================================================================
@@ -169,8 +175,8 @@ public class AkFollowupW32 {
     [StructLayout(LayoutKind.Sequential)] public struct MOUSEINPUT {
         public int dx, dy; public uint mouseData, dwFlags, time; public IntPtr dwExtraInfo;
     }
-    // x64 の INPUT は 40 バイト（type 4 + 詰め 4 + MOUSEINPUT 32）。詰め物を自分で足すと
-    // 48 バイトになり SendInput が ERROR_INVALID_PARAMETER(87) を返す。足さないこと。
+    // On x64, INPUT is 40 bytes (type 4 + padding 4 + MOUSEINPUT 32). Adding the padding by hand
+    // makes it 48 bytes and SendInput returns ERROR_INVALID_PARAMETER(87). Do not add it.
     [StructLayout(LayoutKind.Sequential)] public struct INPUT { public uint type; public MOUSEINPUT mi; }
 
     public static int InputSize() { return Marshal.SizeOf(typeof(INPUT)); }
@@ -241,12 +247,16 @@ function Get-NarSampleMap {
     param([Parameter(Mandatory = $true)][string]$Sample)
     if ($script:NarSampleMaps.ContainsKey($Sample)) { return $script:NarSampleMaps[$Sample] }
     $cargoArgs = @($NAR_SAMPLE_ARGS) + @((Join-Path $repoRoot 'Cargo.toml'), '--', $Sample)
-    $lines = @()
-    try { $lines = @(& cargo @cargoArgs) }
+    $result = $null
+    # cargo（と窓口）は UTF-8 で書くので、端末の文字コードに依らず UTF-8 で読む
+    try { $result = Invoke-Utf8Child cargo $cargoArgs }
     catch { Stop-Run $EXIT_FAIL "検体の窓口を呼べません（cargo $($cargoArgs -join ' ')）: $($_.Exception.Message)" }
-    if ($LASTEXITCODE -ne 0) {
-        Stop-Run $EXIT_FAIL "検体の窓口が失敗しました（終了コード $LASTEXITCODE・cargo $($cargoArgs -join ' ')）。理由は上の標準エラーに出ています。"
+    if ($result.Code -ne 0) {
+        # 標準エラーは端末へ直に出なくなったので、止める前に行のまま写す
+        foreach ($errLine in $result.ErrLines) { Write-Info $errLine }
+        Stop-Run $EXIT_FAIL "検体の窓口が失敗しました（終了コード $($result.Code)・cargo $($cargoArgs -join ' ')）。理由は上の標準エラーに出ています。"
     }
+    $lines = @($result.Out -split '\r?\n')
     $map = @{}
     foreach ($line in $lines) {
         $text = "$line".Trim()
@@ -286,9 +296,15 @@ function Invoke-Judge {
     # 判定の本文は必ず標準出力へ出す（会話へ届く形）。関数の戻り値で本文を持ち帰ると
     # 終了コードと混ざるため、終了コードはスクリプト変数へ置く。
     param([pscustomobject]$Python, [string[]]$Arguments)
+    # judge-followup.py は標準出力と標準エラーを UTF-8 に寄せて書くので、UTF-8 で読み、
+    # 標準出力の行・標準エラーの行の順に行のまま写す（末尾の改行 1 つだけを落とす）
     $argv = @($Python.Prefix) + $Arguments
-    & $Python.Exe @argv | ForEach-Object { Write-Host $_ }
-    $script:JudgeExitCode = $LASTEXITCODE
+    $result = Invoke-Utf8Child $Python.Exe $argv
+    if ($result.Out) {
+        foreach ($outLine in (($result.Out -replace '\r?\n\z', '') -split '\r?\n')) { Write-Host $outLine }
+    }
+    foreach ($errLine in $result.ErrLines) { Write-Host $errLine }
+    $script:JudgeExitCode = $result.Code
 }
 
 function Read-RunLogText {
@@ -475,7 +491,7 @@ try {
 
     # --- 表示成立点を待つ（ここから先が観測の前提）------------------------------
     $showReady = Wait-RunLogPattern -Path $runLogPath -Since $launchedAt `
-        -Pattern 'apply\(ShowSurface\): 表示・マスクを更新' -TimeoutMs $SHOW_READY_TIMEOUT_MS
+        -Pattern $LOG_MARKER_SHOW_READY -TimeoutMs $SHOW_READY_TIMEOUT_MS
     if (-not $showReady) {
         Write-Probe -Check 'session' -Step 'show_ready' -Fields @("waited_ms=$SHOW_READY_TIMEOUT_MS", 'result=timeout')
         Stop-Run $EXIT_FAIL "表示成立点（apply(ShowSurface)）が $SHOW_READY_TIMEOUT_MS ms 以内に出ませんでした。$runLogPath を確認してください。"

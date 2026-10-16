@@ -64,7 +64,7 @@
   - _Boundary: InvokePerfRun_
   - _Depends: 3.1_
   - _Requirements: 1.3, 2.2, 3.2_
-- [ ] 4.2 (P) 追いの確かめの道具で、`cargo` と判定器の子を UTF-8 で読む
+- [x] 4.2 (P) 追いの確かめの道具で、`cargo` と判定器の子を UTF-8 で読む
   - `tools/utf8-child.ps1` を読み込む
   - `nar-sample-path` の `cargo` を UTF-8 で読む形に替え、失敗のときは標準エラーの行を写してから止める
   - 判定器の Python を UTF-8 で読む形に替え、標準出力の行・標準エラーの行を行のまま写し、終了コードを今と同じく持ち帰る
