@@ -1,6 +1,6 @@
 //! # actor_underline_present_tests — 下線を描く段で集めて寄せ、字の後に塗る（件 3・実 GPU）
 //!
-//! 出典 spec: `areka-P0-balloon-text-bugs`（要件 **3.1**・**3.2**・**3.3**・**3.5**・**3.6**・
+//! 出典 spec: `areka-P0-balloon-text-bugs`（要件 **3.1**・**3.2**・**3.3**・**3.4**・**3.5**・**3.6**・
 //! **3.8**・**3.11**・**4.3**、design「areka が塗る下線（件 3）」・テストの方針「結合 2・3・5」）。
 //!
 //! 本番の 1 フレームの経路（`present_frame`・実 DirectWrite の行送り・実 GPU）を通して読み戻す。
@@ -14,6 +14,7 @@
 //! | 打ち消し線 | 打ち消し線の画素は下線を足しても変わらない | 3.8 |
 //! | 箱 | 箱の文字の面でも実機の形・収まらない形が同じに成り立つ | 3.5 |
 //! | 部分の描き替え | 最下行を 1 字ずつ出す（毎フレーム部分の描き替え）と、最後の面が 1 フレームで全部描いた面と 1 バイトも違わない（拡大率 1.25・1.5・寄せる形と寄せない形） | 3.1, 3.11, 4.3 |
+//! | 縦書きの端の列 | 縦書き 2 方向（普通のバルーンと箱・拡大率 1.0・1.25・1.5）で、面の端の列を含む全部の列の作者の下線が字の列の左（今の側）に途切れなく見え、面に収まらない右から左の左端の列の線だけが面の左端へ太さを保って寄せられる | 3.4, 3.5 |
 //!
 //! 「違う画素」の述語は、同じ台本を 2 度撮って 1 バイトも違わないこと（較正）を先に確かめる。
 
@@ -74,9 +75,31 @@ surface0
 {
 element1,balloon,real,0,0
 }
+balloon.vrl
+{
+size,118,120
+font.name,Yu Gothic UI
+font.height,28
+writing_mode,vertical_rl
+}
+balloon.vlr
+{
+size,118,120
+font.name,Yu Gothic UI
+font.height,28
+writing_mode,vertical_lr
+}
 surface1
 {
 element1,balloon,short,0,0
+}
+surface2
+{
+element1,balloon,vrl,0,0
+}
+surface3
+{
+element1,balloon,vlr,0,0
 }
 ";
 
@@ -202,19 +225,35 @@ fn timed(script: &[CueCommand]) -> (Vec<TalkCue>, f64) {
 
 /// 普通のバルーン（面＝`image`・拡大率 `k`）へ台本を流して 1 フレーム提示し、面を読み戻す。
 fn shoot_balloon(image: (u32, u32), k: f32, script: &[CueCommand]) -> Shot {
+    shoot_described(BALLOON, image, k, script)
+}
+
+/// 定義 `descript` の普通のバルーンへ台本を流して 1 フレーム提示し、面を読み戻す。
+fn shoot_described(descript: &str, image: (u32, u32), k: f32, script: &[CueCommand]) -> Shot {
     let cues: Vec<TalkCue> = script.iter().map(|c| cue("0", 0.0, c.clone())).collect();
-    shoot_frames(image, k, &cues, &[LATE])
+    shoot_frames_described(descript, image, k, &cues, &[LATE])
 }
 
 /// 普通のバルーンへ cue 列を流し、時刻 `frames` の順にフレームを提示して、最後の面を読み戻す。
 fn shoot_frames(image: (u32, u32), k: f32, cues: &[TalkCue], frames: &[f64]) -> Shot {
+    shoot_frames_described(BALLOON, image, k, cues, frames)
+}
+
+/// [`shoot_frames`] の定義を選べる形。
+fn shoot_frames_described(
+    descript: &str,
+    image: (u32, u32),
+    k: f32,
+    cues: &[TalkCue],
+    frames: &[f64],
+) -> Shot {
     let (mut world, window, slot) = com_world();
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.register_actor_binding(
         actor.clone(),
         TextSlotBinding::new(slot, window, k, physical(image, k), image),
-        &parse_str(BALLOON, None),
+        &parse_str(descript, None),
     );
     for c in cues {
         rt.apply_cue(c);
@@ -550,6 +589,144 @@ fn revealing_the_bottom_row_frame_by_frame_paints_the_same_pixels_as_one_frame()
                     diff_rows(&whole, &progressive)
                 );
             }
+        }
+    }
+}
+
+// ──────────────────────────── 縦書きの端の列（要件 3.4・3.5）
+
+/// 縦書きの文字の面: 列送り 30 の 4 列目の列の箱（幅 28）が面の端にちょうど接する幅（4×30−2）。
+/// 線は字の列の左に出るので、効くのは面の左端の列: 右から左では最後の列（字のインクが面の左端
+/// から始まり、線は面の外へ出る＝寄せが効く）、左から右では最初の列（線は面に収まる＝寄せない）。
+const VERTICAL: (u32, u32) = (118, 120);
+
+/// 縦書きの普通のバルーンの定義（validrect は全域）。
+fn vertical_balloon(mode: &str) -> String {
+    format!("{BALLOON}writing_mode,{mode}\n")
+}
+
+/// 連続した列（x）の集まりごとの両端（両端を含む）。
+fn runs(cols: &[u32]) -> Vec<(u32, u32)> {
+    let mut out: Vec<(u32, u32)> = Vec::new();
+    for &x in cols {
+        match out.last_mut() {
+            Some((_, end)) if *end + 1 == x => *end = x,
+            _ => out.push((x, x)),
+        }
+    }
+    out
+}
+
+/// 縦書きの全部の列に作者の下線を引いた面と下線の無い面を比べ、列ごとに確かめる:
+/// 線（下線の無い面と違う列の帯）が字の列の左の 1/3 にあり（今の側＝D2D の既定の描き方・
+/// `decoration_readback` の縦書きの檻と同じ側）、字の列の上端から下端まで途切れずに見える。
+/// 端の列（面の左端・右端に接する列）を含む全部の列で成り立つ＝線は面の内側にある。
+/// 線の帯（左の列から順）を返す。
+fn assert_vertical_columns(plain: &Shot, styled: &Shot, what: &str) -> Vec<(u32, u32)> {
+    let ink_x: Vec<u32> = (0..plain.w)
+        .filter(|&x| (0..plain.h).any(|y| plain.is_ink(x, y)))
+        .collect();
+    let columns = runs(&ink_x);
+    assert_eq!(
+        columns.len(),
+        LINES.len(),
+        "{what}: 字の列が 4 本（前提）: {columns:?}"
+    );
+    let diff_x: Vec<u32> = (0..plain.w)
+        .filter(|&x| (0..plain.h).any(|y| plain.px(x, y) != styled.px(x, y)))
+        .collect();
+    let bands = runs(&diff_x);
+    assert_eq!(
+        bands.len(),
+        columns.len(),
+        "{what}: 違う列の帯が字の列ごとに 1 本ずつでない: 帯 {bands:?}・列 {columns:?}"
+    );
+    for (&(b0, b1), &(c0, c1)) in bands.iter().zip(&columns) {
+        // 側: 帯の中心が字の列の左の 1/3 より左（字の外を含む・2 倍の目盛りで半画素を避ける）。
+        let offset = i64::from(b0 + b1) - 2 * i64::from(c0);
+        assert!(
+            3 * offset < 2 * i64::from(c1 - c0),
+            "{what}: 線 {b0}..={b1} が字の列 {c0}..={c1} の左の 1/3 に無い（線の側が変わった）"
+        );
+        let ink_y: Vec<u32> = (0..plain.h)
+            .filter(|&y| (c0..=c1).any(|x| plain.is_ink(x, y)))
+            .collect();
+        let (y0, y1) = (ink_y[0], ink_y[ink_y.len() - 1]);
+        assert!(
+            (b0..=b1).any(|x| (y0..=y1).all(|y| styled.is_ink(x, y))),
+            "{what}: 列 {c0}..={c1} の線 {b0}..={b1} が字の上端 {y0} から下端 {y1} まで途切れずに見えない"
+        );
+    }
+    bands
+}
+
+/// 面の左端の列の線の寄せ（要件 3.4「端の列で面に収まらないときだけ面の内側へ寄せる」）:
+/// 右から左は線が面の外へ出るので、面の左端の画素から太さを保って塗る。左から右は収まるので
+/// 寄せない（面の左端から離れている）。
+fn assert_left_edge_pull(mode: &str, bands: &[(u32, u32)], k: f32, what: &str) {
+    let (b0, b1) = bands[0];
+    if mode == "vertical_rl" {
+        assert_eq!(b0, 0, "{what}: 寄せた線は面の左端の画素から塗られる");
+        assert!(
+            b1 + 1 >= (underline_thickness() * k).floor() as u32,
+            "{what}: 寄せた線の太さ（{} 列）が保たれていない",
+            b1 + 1
+        );
+    } else {
+        assert!(
+            b0 > 0,
+            "{what}: 収まる線が面の左端へ寄せられた: {b0}..={b1}"
+        );
+    }
+}
+
+/// 縦書き 2 方向の普通のバルーンで、端の列を含む全部の列の作者の下線が面の内側に、今の側
+/// （字の列の左）に途切れなく見える（要件 3.4）。拡大率 1.0・1.25・1.5。
+#[test]
+fn vertical_edge_column_underlines_are_inside_the_surface_on_todays_side() {
+    for mode in ["vertical_rl", "vertical_lr"] {
+        let descript = vertical_balloon(mode);
+        for k in SCALES {
+            let what = format!("{mode} k={k}");
+            let plain = shoot_described(
+                &descript,
+                VERTICAL,
+                k,
+                &script(&LINES, Mark::Plain, |_| true),
+            );
+            let author = shoot_described(
+                &descript,
+                VERTICAL,
+                k,
+                &script(&LINES, Mark::Author, |_| true),
+            );
+            assert_eq!(
+                (author.w, author.h),
+                physical(VERTICAL, k),
+                "{what}: 面の寸（前提）"
+            );
+            let bands = assert_vertical_columns(&plain, &author, &what);
+            assert_left_edge_pull(mode, &bands, k, &what);
+        }
+    }
+}
+
+/// 箱の文字の面でも同じ（要件 3.5）: 縦書き 2 方向の箱で、端の列を含む全部の列の作者の下線が
+/// 面の内側に、今の側に途切れなく見える。
+#[test]
+fn vertical_box_edge_column_underlines_are_inside_the_surface_on_todays_side() {
+    for (surface, mode) in [(2, "vertical_rl"), (3, "vertical_lr")] {
+        for k in SCALES {
+            let what = format!("箱 {mode} k={k}");
+            let plain = shoot_box(surface, k, &script(&LINES, Mark::Plain, |_| true));
+            let author = shoot_box(surface, k, &script(&LINES, Mark::Author, |_| true));
+            assert_eq!(
+                (author.w, author.h),
+                physical(VERTICAL, k),
+                "{what}: 箱の面の寸（前提）"
+            );
+            let bands = assert_vertical_columns(&plain, &author, &what);
+            assert_left_edge_pull(mode, &bands, k, &what);
         }
     }
 }

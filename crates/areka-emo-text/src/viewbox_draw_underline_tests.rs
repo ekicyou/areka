@@ -8,6 +8,7 @@
 //! | §3 | 集めるのが失敗しても戻し、`error!` を残して `Err` | log-first |
 //! | §4 | 描画効果のブラシを持ち、無い・写せない効果は既定の文字色の印（`None`） | 3.1 |
 //! | §5 | `render_styled` の中で集めるのに失敗したフレームは提示を見送り（面は前のまま）、次のフレームで再試行して塗る。変化の無いフレームは集めない（2.5）。失敗を仕込むのは行の生成のときの集め（可謬・plan より前）で、Phase 1 の `collect_underlines(...)?` は `apply_color_ranges` と同じ BeginDraw 前の `?` の結線を使う（Phase 1 だけの檻は持たない） | 3.1, 4.3 |
+//! | §6 | 縦書き（2 方向・3 書体・拡大率 1.0／1.25／1.5・整数でない原点）の areka の塗り方（集める → `stroke_rect` → 字の後に `FillRectangle`）が、D2D 自身の下線（`SetUnderline` を焼いた `DrawTextLayout`）と、覆う画素の範囲が同じ・各画素の各成分の差 4/255 以下で一致する（2.6） | 3.4, 4.3 |
 
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::Graphics::Direct2D::{D2D1_DEVICE_CONTEXT_OPTIONS_NONE, ID2D1Brush};
@@ -318,4 +319,179 @@ fn a_failed_collection_skips_the_frame_and_the_next_frame_retries() {
         painted,
         "面は変わらない"
     );
+}
+
+// ────────────────────────── §6 縦書きの写し方は D2D 自身の下線と一致する（実 GPU）
+
+/// 合格の幅: 各画素の各成分の差の上限（design 件 3「確かめ」・実装の前に決めた値・広げない）。
+const D2D_MATCH_TOLERANCE: u8 = 4;
+
+/// 1 枚を実 GPU で描いて読み戻す（拡大率 `k` の変換の下・面は `image`×k の物理寸）。
+/// 描き方は `render_styled` と同じ: 透明に消し、k の変換を掛けて描く。
+fn shoot_d2d(
+    rig: &mut Rig,
+    image: (u32, u32),
+    k: f32,
+    draw: impl FnOnce(
+        &windows::Win32::Graphics::Direct2D::ID2D1DeviceContext,
+        &windows::Win32::Graphics::Direct2D::ID2D1SolidColorBrush,
+    ),
+) -> Vec<u8> {
+    use windows::Win32::Graphics::Direct2D::ID2D1Image;
+    use windows_numerics::Matrix3x2;
+
+    let mut surface = rig.attach(image, k);
+    let dc = rig
+        .core
+        .d2d_device()
+        .expect("D2D デバイス")
+        .create_device_context(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)
+        .expect("D2D DC");
+    let target = crate::draw::create_d2d_target_bitmap(&dc, surface.back_tex()).expect("target");
+    let black = D2D1_COLOR_F {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    let brush = dc.create_solid_color_brush(&black, None).expect("ブラシ");
+    unsafe {
+        dc.SetTarget(&target);
+        dc.BeginDraw();
+    }
+    dc.clear(None);
+    dc.set_transform(&Matrix3x2 {
+        M11: k,
+        M12: 0.0,
+        M21: 0.0,
+        M22: k,
+        M31: 0.0,
+        M32: 0.0,
+    });
+    draw(&dc, &brush);
+    unsafe { dc.EndDraw(None, None) }.expect("EndDraw");
+    unsafe { dc.SetTarget(None::<&ID2D1Image>) };
+    surface.flip();
+    surface.read_back().expect("read_back")
+}
+
+/// 縦書きの行の TextLayout（本番の行の保持庫と同じ寸＝行送りの軸は字の大きさ・行内の軸は果てなし）。
+fn vertical_layout(
+    factory: &IDWriteFactory2,
+    name: &str,
+    height: u32,
+    text: &str,
+    mode: WritingMode,
+) -> IDWriteTextLayout {
+    let font = ResolvedFont::resolve(&live_diff_model_font(Some(name), Some(height)));
+    let format = create_text_format(factory, &font, mode).expect("TextFormat が作れる");
+    factory
+        .create_text_layout(
+            &HSTRING::from(text),
+            &format,
+            height as f32,
+            crate::draw::PROBE_MAX_EXTENT,
+        )
+        .expect("行の TextLayout が作れる")
+}
+
+/// 端でない列の縦書きの下線は、areka の塗り方（`collect_underlines` → `stroke_rect` →
+/// 字の後に `FillRectangle`＝`render_styled` と同じ道）と、D2D 自身が描いた下線（区間に
+/// `SetUnderline(true)` を焼いて `DrawTextLayout`）とで、覆う画素の範囲（α が 0 でない画素の
+/// 集まり）が同じで、各画素の各成分の差が [`D2D_MATCH_TOLERANCE`] 以下（要件 3.4・4.3）。
+/// 2 方向・3 書体・拡大率 1.0／1.25／1.5・整数でない原点で確かめる。写し方（時計回りの回し方・
+/// offset の側）を取り違えると線が列の反対側か字の中に出て、覆う範囲が違って赤になる。
+#[test]
+fn vertical_strokes_match_d2d_own_underline_drawing() {
+    use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
+    use windows_numerics::Vector2;
+
+    let factory = factory();
+    let mut rig = Rig::new();
+    let image = (120u32, 260u32);
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        for &(name, height, text) in FONTS {
+            let length = text.encode_utf16().count() as u32;
+            for k in [1.0f32, 1.25, 1.5] {
+                for origin in [(40.0f32, 10.0f32), (40.3, 10.7)] {
+                    let what = format!("{mode:?} {name} {height} k={k} 原点 {origin:?}");
+                    let reference = shoot_d2d(&mut rig, image, k, |dc, brush| {
+                        let layout = vertical_layout(&factory, name, height, text, mode);
+                        unsafe { layout.SetUnderline(true, range(0, length)) }
+                            .expect("SetUnderline");
+                        dc.draw_text_layout(
+                            Vector2 {
+                                X: origin.0,
+                                Y: origin.1,
+                            },
+                            &layout,
+                            brush,
+                            crate::draw::TEXT_DRAW_OPTIONS,
+                        );
+                    });
+                    let painted = shoot_d2d(&mut rig, image, k, |dc, brush| {
+                        let layout = vertical_layout(&factory, name, height, text, mode);
+                        let recorded = collect_underlines(&layout, &[range(0, length)], k, origin)
+                            .expect("集められる");
+                        assert!(!recorded.is_empty(), "{what}: 線が集まる");
+                        dc.draw_text_layout(
+                            Vector2 {
+                                X: origin.0,
+                                Y: origin.1,
+                            },
+                            &layout,
+                            brush,
+                            crate::draw::TEXT_DRAW_OPTIONS,
+                        );
+                        for r in &recorded {
+                            assert_eq!(r.raw.reading, ReadingAxis::TopToBottom, "{what}");
+                            let s = stroke_rect(&r.raw, (0.0, 0.0));
+                            let rect = D2D_RECT_F {
+                                left: s.left,
+                                top: s.top,
+                                right: s.right,
+                                bottom: s.bottom,
+                            };
+                            dc.fill_rectangle(&rect, brush);
+                        }
+                    });
+                    // 較正: D2D の下線は字だけの面にインクを足している（比べる線がある）。
+                    let glyphs_only = shoot_d2d(&mut rig, image, k, |dc, brush| {
+                        let layout = vertical_layout(&factory, name, height, text, mode);
+                        dc.draw_text_layout(
+                            Vector2 {
+                                X: origin.0,
+                                Y: origin.1,
+                            },
+                            &layout,
+                            brush,
+                            crate::draw::TEXT_DRAW_OPTIONS,
+                        );
+                    });
+                    assert_ne!(reference, glyphs_only, "{what}: D2D が下線を描いた（前提）");
+
+                    let covered = |bytes: &[u8]| -> Vec<bool> {
+                        bytes.as_chunks::<4>().0.iter().map(|p| p[3] != 0).collect()
+                    };
+                    let (cov_ref, cov_ours) = (covered(&reference), covered(&painted));
+                    let mismatched = cov_ref
+                        .iter()
+                        .zip(&cov_ours)
+                        .filter(|(a, b)| a != b)
+                        .count();
+                    let worst = reference
+                        .iter()
+                        .zip(&painted)
+                        .map(|(a, b)| a.abs_diff(*b))
+                        .max()
+                        .unwrap_or(0);
+                    assert!(
+                        mismatched == 0 && worst <= D2D_MATCH_TOLERANCE,
+                        "{what}: D2D 自身の下線と一致しない（覆う範囲の食い違い {mismatched} 画素・\
+                         成分の差の最大 {worst}/255・合格は 0 画素かつ {D2D_MATCH_TOLERANCE}/255 以下）"
+                    );
+                }
+            }
+        }
+    }
 }
