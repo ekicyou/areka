@@ -80,6 +80,7 @@ impl FakePorts {
         let facts = GhostFacts {
             roots: areka_ghost::BasewareRoots::single(root.path().to_path_buf()),
             folder: Some(RUNNING.to_owned()),
+            running_dir: None,
             name: "Running".to_owned(),
             sakura_name: Some(RUNNING_SAKURA.to_owned()),
             install_accept: vec!["x".to_owned(), RUNNING_ALIAS.to_owned()],

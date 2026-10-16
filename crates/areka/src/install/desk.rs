@@ -421,6 +421,7 @@ fn ghost_facts(world: &World) -> Option<GhostFacts> {
         .unwrap_or_else(|| dir.display().to_string());
     Some(GhostFacts {
         roots: ctx.roots.clone(),
+        running_dir: folder.as_ref().map(|_| dir.to_path_buf()),
         folder,
         name,
         sakura_name: areka_ghost::catalog::sakura_name(dir),

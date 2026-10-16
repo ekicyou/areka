@@ -405,6 +405,7 @@ fn facts_describe_the_running_ghost() {
         Some(Some(GhostFacts {
             roots: areka_ghost::BasewareRoots::single(tmp.path().to_path_buf()),
             folder: Some("A".to_owned()),
+            running_dir: Some(root.ghost_dir("A")),
             name: "A".to_owned(),
             sakura_name: Some("さくら".to_owned()),
             install_accept: vec!["甲".to_owned(), "乙".to_owned()],

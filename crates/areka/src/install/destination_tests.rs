@@ -97,6 +97,30 @@ fn answers_built_root_when_all_roots_vanish_after_build() {
     assert_eq!(dest.balloon_root("Fresh"), one);
 }
 
+/// 起動中のゴーストの根が並びから外れ、別の根に同じフォルダ名が見えていても、起動中のゴーストの
+/// フォルダ名には起動中のゴーストの根を答える（要件 8.7・5.3）。別のフォルダ名は今の答えのまま。
+#[test]
+fn running_ghost_folder_answers_its_own_root_even_off_the_list() {
+    let tmp = TempPath::under_target("install-destination-running-pin");
+    let (gone, seen) = (tmp.child("a"), tmp.child("b"));
+    put_ghost(&gone, "Emo");
+    put_ghost(&seen, "emo");
+    let dest = CatalogDestinations::new(list(std::slice::from_ref(&seen)))
+        .expect("作れる")
+        .with_running(Some(gone.join("ghost").join("Emo")));
+    let (answers, events) = capture_logs(|| [dest.ghost_root("EMO"), dest.ghost_root("Fresh")]);
+    assert_eq!(
+        answers,
+        [gone, seen],
+        "(起動中→その根・別の名前→並びの答え)"
+    );
+    assert!(
+        events
+            .iter()
+            .any(|e| e.field_str("event") == Some("install_running_ghost_root_kept"))
+    );
+}
+
 // ---- 並びを宛先にして入れる（install_into・tasks.md 4.6・要件 5.1・5.3・5.4・5.5・5.7・5.9・12.4） ----
 
 use std::collections::BTreeMap;
@@ -160,7 +184,7 @@ fn new_ghost_goes_to_head_and_companion_balloon_to_its_own_root() {
     let archive = ghost_nar(&tmp, "fresh", true);
 
     let (result, events) =
-        capture_logs(|| install_into(&list(&[one.clone(), two.clone()]), &archive, None));
+        capture_logs(|| install_into(&list(&[one.clone(), two.clone()]), &archive, None, None));
     result.expect("入る");
     assert!(
         one.join("ghost/fresh/ghost/master/descript.txt").is_file(),
@@ -204,7 +228,7 @@ fn existing_ghost_is_overwritten_in_its_root_and_the_hidden_one_is_untouched() {
     let below = tree(&two);
     let archive = ghost_nar(&tmp, "dup", false);
 
-    install_into(&list(&[one.clone(), two.clone()]), &archive, None).expect("入る");
+    install_into(&list(&[one.clone(), two.clone()]), &archive, None, None).expect("入る");
     assert_eq!(
         std::fs::read(one.join("ghost/Dup/ghost/master/descript.txt")).expect("上書き"),
         b"charset,UTF-8\r\nname,New\r\n"
@@ -228,7 +252,7 @@ fn failure_in_the_second_root_restores_both_roots() {
         .open(two.join("balloon/kaku/descript.txt"))
         .expect("掴める");
 
-    let error = install_into(&list(&[one.clone(), two.clone()]), &archive, None)
+    let error = install_into(&list(&[one.clone(), two.clone()]), &archive, None, None)
         .expect_err("使用中なので確定できない");
     drop(handle);
     assert!(
@@ -265,8 +289,14 @@ fn failure_in_the_second_root_restores_both_roots() {
 fn no_found_root_fails_before_writing_with_an_error() {
     let tmp = TempPath::under_target("install-into-no-root");
     let archive = ghost_nar(&tmp, "fresh", false);
-    let (result, events) =
-        capture_logs(|| install_into(&list(&[tmp.child("a"), tmp.child("b")]), &archive, None));
+    let (result, events) = capture_logs(|| {
+        install_into(
+            &list(&[tmp.child("a"), tmp.child("b")]),
+            &archive,
+            None,
+            None,
+        )
+    });
     assert!(
         matches!(
             result,

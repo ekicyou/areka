@@ -85,6 +85,8 @@ pub(crate) struct DeskPorts {
     gate: Arc<WorkGate>,
     /// ベースウェアの根の並びの写し（素性を最後に尋ねたときの値）。
     roots: Option<BasewareRoots>,
+    /// 起動中のゴーストの場所（素性を最後に尋ねたときの値・要件 8.7）。
+    running: Option<PathBuf>,
     /// 今扱っている書庫のパス（`begin_archive` で覚える）。
     archive: PathBuf,
 }
@@ -95,6 +97,7 @@ impl DeskPorts {
             desk,
             gate,
             roots: None,
+            running: None,
             archive: PathBuf::new(),
         }
     }
@@ -174,6 +177,7 @@ impl InstallPorts for DeskPorts {
     fn ghost_facts(&mut self) -> Option<GhostFacts> {
         let facts = self.ask(|reply| DeskAsk::Facts { reply }).flatten()?;
         self.roots = Some(facts.roots.clone());
+        self.running = facts.running_dir.clone();
         Some(facts)
     }
 
@@ -201,7 +205,7 @@ impl InstallPorts for DeskPorts {
             self.gate.end();
             return None;
         }
-        let result = install_into(&roots, archive, target_ghost);
+        let result = install_into(&roots, archive, target_ghost, self.running.as_deref());
         // 書き終えた直後に手放す（間で終了が始まると「書く前」と記録されるので続けて呼ぶ）。
         self.gate.leave_write();
         self.gate.end();

@@ -92,6 +92,7 @@ fn facts_at(root: &Path) -> GhostFacts {
     GhostFacts {
         roots: areka_ghost::BasewareRoots::single(root.to_path_buf()),
         folder: Some("running".to_owned()),
+        running_dir: None,
         name: "Running".to_owned(),
         sakura_name: None,
         install_accept: Vec::new(),

@@ -146,9 +146,12 @@ pub(super) fn run_between(world: &mut World) {
     let target = world
         .get_non_send::<SwitchInFlight>()
         .map(|f| f.target.folder.clone());
-    let roots = world
-        .get_resource::<BootContext>()
-        .map(|ctx| ctx.roots.clone());
+    // 並びと、起動中のゴーストの場所（根の下のゴーストのときだけ・要件 8.7）。
+    let roots = world.get_resource::<BootContext>().map(|ctx| {
+        let ghost = &ctx.current.ghost;
+        let running = ghost.folder.as_ref().map(|_| ghost.dir.clone());
+        (ctx.roots.clone(), running)
+    });
     let Some(mut desk) = world.get_non_send_mut::<InstallDesk>() else {
         return;
     };
@@ -159,7 +162,7 @@ pub(super) fn run_between(world: &mut World) {
         return;
     };
     let ours = target.is_some_and(|t| same_folder_name(&t, &pending.folder));
-    let (true, Some(roots)) = (ours, roots) else {
+    let (true, Some((roots, running))) = (ours, roots) else {
         tracing::debug!(
             event = "install_overwrite_skipped",
             folder = %pending.folder,
@@ -168,7 +171,12 @@ pub(super) fn run_between(world: &mut World) {
         return;
     };
     let started = Instant::now();
-    let result = install_into(&roots, archive, pending.target_ghost.as_deref());
+    let result = install_into(
+        &roots,
+        archive,
+        pending.target_ghost.as_deref(),
+        running.as_deref(),
+    );
     let ms = started.elapsed().as_millis() as u64;
     tracing::info!(
         event = "install_overwrite_done",

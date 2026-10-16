@@ -19,11 +19,22 @@ pub(crate) fn register(world: &mut World) {
     super::register(world, Frame::RootRemove, Rc::new(remove_item));
 }
 
+/// 起動の文脈。無ければ warn を残す（2 項目とも選べない・子の無い見出しになる）。
+fn context<'w>(world: &'w World, frame: Frame) -> Option<&'w BootContext> {
+    let ctx = world.get_resource::<BootContext>();
+    if ctx.is_none() {
+        tracing::warn!(
+            event = "menu_roots_frame_no_context",
+            frame = ?frame,
+            "[menu] 起動の文脈が無いので、置き場の枠は選べない見出しだけを出す"
+        );
+    }
+    ctx
+}
+
 /// 並びを変えてよいか（起動の文脈が在り、`AREKA_ROOT` で渡していない）。
 fn editable(world: &World) -> bool {
-    world
-        .get_resource::<BootContext>()
-        .is_some_and(|ctx| ctx.roots_origin != RootsOrigin::EnvVar)
+    context(world, Frame::RootAdd).is_some_and(|ctx| ctx.roots_origin != RootsOrigin::EnvVar)
 }
 
 /// 「置き場を追加…」: 葉 1 つ。選ぶとフォルダを選ぶ画面を出す（要件 6.1・6.2）。
@@ -42,8 +53,7 @@ fn add_item(world: &World, _ctx: &MenuContext) -> MenuItem {
 /// 「置き場を外す ▸」: 子は並びの全部の根（見つからない根も）を並びの順に絶対パスで並べる。
 /// 根が 1 つなら子は選べない（要件 7.1・7.3）。
 fn remove_item(world: &World, _ctx: &MenuContext) -> MenuItem {
-    let dirs: Vec<_> = world
-        .get_resource::<BootContext>()
+    let dirs: Vec<_> = context(world, Frame::RootRemove)
         .map(|ctx| {
             ctx.roots
                 .roots()
