@@ -1,7 +1,7 @@
-//! 「置き場を追加…」「置き場を外す ▸」枠の決定論テスト（要件 6.1・7.1・7.3・8.2・8.6・12.5）。
+//! 「置き場を追加…」「置き場を外す ▸」枠の決定論テスト（要件 6.1・7.1・7.3・8.2・8.6・12.5／areka-P0-user-data-root 要件 3.3・10.3）。
 //!
 //! 確かめること: 2 項目が出ること・外すの子が並びの順の絶対パスで見つからない根も含むこと・
-//! 根が 1 つのとき子が選べないこと・`AREKA_ROOT` で渡しているとき両方が選べないこと。
+//! 根が 1 つのとき子が選べないこと・書ける根（印の付いた項目）の子が選べないこと・`AREKA_ROOT` で渡しているとき両方が選べないこと。
 //! 項目の動作は呼ばない（追加は本物の選ぶ画面が出る・外すの判断は `roots/edit_tests.rs` が確かめる）。
 
 use std::path::{Path, PathBuf};
@@ -20,11 +20,19 @@ use crate::roots::RootsOrigin;
 
 /// 並び `dirs`・出どころ `origin` の起動の文脈と置き場の受け口を据え、2 枠を登記した World。
 fn wired_world(dirs: &[PathBuf], origin: RootsOrigin) -> World {
-    let a = dirs[0].clone();
+    wired_world_roots(
+        dirs.iter().cloned().map(BasewareRoot::new).collect(),
+        origin,
+    )
+}
+
+/// 印つきの項目を含む並び `roots` で [`wired_world`] と同じ World を作る。
+fn wired_world_roots(roots: Vec<BasewareRoot>, origin: RootsOrigin) -> World {
+    let a = roots[0].dir().to_path_buf();
     let mut world = World::new();
     world.init_resource::<Schedules>();
     world.insert_resource(BootContext {
-        roots: BasewareRoots::new(dirs.iter().cloned().map(BasewareRoot::new).collect()),
+        roots: BasewareRoots::new(roots),
         roots_origin: origin,
         app_profile_dir: a.join("profile"),
         helper_exe: a.join("helper.exe"),
@@ -148,5 +156,35 @@ fn env_var_disables_both_items() {
             item(&world, Frame::RootRemove).enabled,
         ),
         (false, false)
+    );
+}
+
+/// 書ける根（印の付いた項目）の子は選べず、ほかの子は今どおり選べる
+/// （areka-P0-user-data-root 要件 3.3・10.3）。
+#[test]
+fn user_root_child_is_disabled_others_unchanged() {
+    let tmp = TempPath::under_target("roots_frame_user_root");
+    let user = tmp.path().join("user");
+    let exe = tmp.path().join("exe");
+    let extra = tmp.path().join("extra");
+    let world = wired_world_roots(
+        vec![
+            BasewareRoot::user_root(user.clone(), false),
+            BasewareRoot::new(exe.clone()),
+            BasewareRoot::new(extra.clone()),
+        ],
+        RootsOrigin::Memory,
+    );
+    let remove = item(&world, Frame::RootRemove);
+    assert_eq!(
+        (remove.enabled, children(&remove)),
+        (
+            true,
+            vec![
+                (label(&user), false),
+                (label(&exe), true),
+                (label(&extra), true)
+            ]
+        )
     );
 }

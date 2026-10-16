@@ -7,6 +7,7 @@
 
 use std::rc::Rc;
 
+use areka_ghost::RootMark;
 use bevy_ecs::world::World;
 
 use super::{Frame, ItemBody, MenuContext, MenuItem, captions};
@@ -51,28 +52,26 @@ fn add_item(world: &World, _ctx: &MenuContext) -> MenuItem {
 }
 
 /// 「置き場を外す ▸」: 子は並びの全部の根（見つからない根も）を並びの順に絶対パスで並べる。
-/// 根が 1 つなら子は選べない（要件 7.1・7.3）。
+/// 根が 1 つなら子は選べない（要件 7.1・7.3）。書ける根（印の付いた項目）の子は選べない
+/// （areka-P0-user-data-root 要件 3.3）。
 fn remove_item(world: &World, _ctx: &MenuContext) -> MenuItem {
-    let dirs: Vec<_> = context(world, Frame::RootRemove)
-        .map(|ctx| {
-            ctx.roots
-                .roots()
-                .iter()
-                .map(|r| r.dir().to_path_buf())
-                .collect()
-        })
+    let roots: Vec<_> = context(world, Frame::RootRemove)
+        .map(|ctx| ctx.roots.roots().to_vec())
         .unwrap_or_default();
-    let removable = dirs.len() > 1;
-    let children = dirs
+    let removable = roots.len() > 1;
+    let children = roots
         .into_iter()
-        .map(|dir| MenuItem {
-            label: dir.display().to_string(),
-            caption_resource: None,
-            enabled: removable,
-            checked: None,
-            body: ItemBody::Action(Rc::new(move |world: &mut World, _: &MenuContext| {
-                roots::remove_root(world, dir.clone())
-            })),
+        .map(|root| {
+            let dir = root.dir().to_path_buf();
+            MenuItem {
+                label: dir.display().to_string(),
+                caption_resource: None,
+                enabled: removable && !matches!(root.mark(), RootMark::UserRoot { .. }),
+                checked: None,
+                body: ItemBody::Action(Rc::new(move |world: &mut World, _: &MenuContext| {
+                    roots::remove_root(world, dir.clone())
+                })),
+            }
         })
         .collect();
     MenuItem {
