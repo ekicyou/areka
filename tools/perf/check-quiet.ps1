@@ -140,7 +140,7 @@ function Get-UtcStamp {
 # 失敗して終了する。理由を必ず表示する（黙って失敗しない）。
 function Stop-Bad {
     param([int]$Code, [string]$Message)
-    Write-Problem "[check-quiet] 失敗: $Message"
+    Write-Problem "[check-quiet] failed: $Message"
     exit $Code
 }
 
@@ -316,11 +316,11 @@ function Measure-MachineCpu {
         try {
             $set = Get-Counter -Counter $CounterPath -SampleInterval 1 -MaxSamples ($Seconds + $Warmup) -ErrorAction Stop
             $values = @($set | ForEach-Object { [double]$_.CounterSamples[0].CookedValue })
-            if ($values.Count -le $Warmup) { throw "採取本数が足りません（$($values.Count) 本）" }
+            if ($values.Count -le $Warmup) { throw "not enough samples ($($values.Count))" }
             return @($values[$Warmup..($values.Count - 1)])
         } catch {
             $last = $_
-            Write-Host "[check-quiet] 性能カウンタの採取に失敗しました（$try/3）: $($_.Exception.Message)"
+            Write-Host "[check-quiet] performance counter sampling failed ($try/3): $($_.Exception.Message)"
             if ($try -lt 3) { Start-Sleep -Seconds 3 }
         }
     }
@@ -421,9 +421,9 @@ function Invoke-SelfTest {
     ) -join "`n") + "`n"
     $actual = Format-QuietReport $fixture
     if ($actual -cne $expected) {
-        $ng += "文面が期待と一致しません。`n--- 期待 ---`n$expected--- 実際 ---`n$actual"
+        $ng += "report text does not match the expected text.`n--- expected ---`n$expected--- actual ---`n$actual"
     }
-    if ((Format-QuietReport $fixture) -cne $actual) { $ng += '同じ入力から違う文面が出ました（決定論の破れ）。' }
+    if ((Format-QuietReport $fixture) -cne $actual) { $ng += 'same input gave a different report (not deterministic).' }
 
     # (2) 該当 0 件・PID 未指定・丸めの表記
     $empty = @{
@@ -434,17 +434,17 @@ function Invoke-SelfTest {
         cpu_min_pct = 1.0; presence_names = @('areka'); busy_list = @()
     }
     $emptyText = Format-QuietReport $empty
-    if ($emptyText -notmatch 'heavy_process_list=-\n')     { $ng += '該当 0 件が「-」になりません。' }
-    if ($emptyText -notmatch 'heavy_process_busy=-\n')     { $ng += '働いていたプロセス 0 件が「-」になりません。' }
+    if ($emptyText -notmatch 'heavy_process_list=-\n')     { $ng += 'zero hits is not written as "-".' }
+    if ($emptyText -notmatch 'heavy_process_busy=-\n')     { $ng += 'zero busy processes is not written as "-".' }
     # 在るだけで落とす名前が 0 件のときも「-」（空文字だと「指定なし」と読めない）。
     $noPresence0 = $empty.Clone()
     $noPresence0['presence_names'] = @()
     if ((Format-QuietReport $noPresence0) -notmatch 'heavy_process_presence=-\n') {
-        $ng += '在るだけで落とす名前 0 件が「-」になりません。'
+        $ng += 'zero presence names is not written as "-".'
     }
-    if ($emptyText -notmatch 'target_pid_excluded=-\n')    { $ng += 'PID 未指定が「-」になりません。' }
-    if ($emptyText -notmatch 'machine_cpu_mean_pct=0\.0\n'){ $ng += '小数 1 桁の丸めが期待と違います。' }
-    if ($emptyText -notmatch 'heavy_processes_found=0\n')  { $ng += '該当件数 0 の表記が違います。' }
+    if ($emptyText -notmatch 'target_pid_excluded=-\n')    { $ng += 'no target PID is not written as "-".' }
+    if ($emptyText -notmatch 'machine_cpu_mean_pct=0\.0\n'){ $ng += 'rounding to 1 decimal place differs from the expected value.' }
+    if ($emptyText -notmatch 'heavy_processes_found=0\n')  { $ng += 'hit count 0 is written wrongly.' }
 
     # (3) 判定の全通り（境界＝閾値ちょうどは静か・計測失敗は MEASURE_FAILED）
     $cases = @(
@@ -457,11 +457,11 @@ function Invoke-SelfTest {
     foreach ($c in $cases) {
         $got = Get-QuietVerdict $c.mean $c.th $c.n
         if ($got.verdict -cne $c.v -or $got.reason -cne $c.r -or $got.code -ne $c.c) {
-            $ng += "判定が違います: mean=$($c.mean) th=$($c.th) n=$($c.n) → $($got.verdict)/$($got.reason)/$($got.code)"
+            $ng += "wrong verdict: mean=$($c.mean) th=$($c.th) n=$($c.n) -> $($got.verdict)/$($got.reason)/$($got.code)"
         }
     }
     $failed = Get-QuietVerdict $null 10.0 0
-    if ($failed.verdict -cne $VERDICT_FAILED -or $failed.code -ne $EXIT_MEASURE) { $ng += '計測失敗の判定が違います。' }
+    if ($failed.verdict -cne $VERDICT_FAILED -or $failed.code -ne $EXIT_MEASURE) { $ng += 'wrong verdict for a failed measurement.' }
 
     # (3b) 働いているか遊んでいるかの選り分け（2026-08-23 の是正の核心）。
     #   遊休の rust-analyzer は落とさない／同じ名前でも働いていれば落とす／
@@ -475,17 +475,17 @@ function Invoke-SelfTest {
     )
     $sel = Select-HeavyProcesses $cands @('areka') 1.0
     if ((Format-HeavyList $sel.hits) -cne '7:areka;8:cargo;4100:python') {
-        $ng += "働いているプロセスの選り分けが違います: $(Format-HeavyList $sel.hits)"
+        $ng += "wrong selection of busy processes: $(Format-HeavyList $sel.hits)"
     }
     if ((Format-BusyList $sel.busy) -cne '8:cargo:n/a;4100:python:6.3') {
-        $ng += "働いていたプロセスの記録が違います: $(Format-BusyList $sel.busy)"
+        $ng += "wrong record of busy processes: $(Format-BusyList $sel.busy)"
     }
     # 下限ちょうどは「働いている」（狭義の未満だけが遊休）。
     $edge = Select-HeavyProcesses @([pscustomobject]@{ pid = 1; name = 'python'; pct = 1.0 }) @() 1.0
-    if (@($edge.hits).Count -ne 1) { $ng += '下限ちょうどが「働いている」になりません。' }
+    if (@($edge.hits).Count -ne 1) { $ng += 'a process exactly at the lower limit is not read as busy.' }
     # 在るだけで落とす一覧が空なら、遊休の areka も落とさない（一覧は指定どおりに効く）。
     $noPresence = Select-HeavyProcesses @([pscustomobject]@{ pid = 7; name = 'areka'; pct = 0.0 }) @() 1.0
-    if (@($noPresence.hits).Count -ne 0) { $ng += '在るだけで落とす一覧が空でも落としています。' }
+    if (@($noPresence.hits).Count -ne 0) { $ng += 'a process is rejected although the presence list is empty.' }
 
     # (3c) ％の算出（Δ CPU 時間 ÷（窓の秒数 × 論理 CPU 数））と、窓の途中で現れた分の扱い。
     $startSnap = @{ 10 = [pscustomobject]@{ pid = 10; name = 'python'; cpu_sec = 100.0 } }
@@ -495,48 +495,48 @@ function Invoke-SelfTest {
         12 = [pscustomobject]@{ pid = 12; name = 'cl';     cpu_sec = $null }   # 読めなかった
     }
     $calc = @(Get-HeavyCandidates $startSnap $endSnap 20.0 8 | Sort-Object -Property pid)
-    if ((Format-Pct $calc[0].pct) -cne '2.5') { $ng += "％の算出が違います（4s/20s/8 コア）: $(Format-Pct $calc[0].pct)" }
-    if ((Format-Pct $calc[1].pct) -cne '1.9') { $ng += "途中で現れた分の算出が違います: $(Format-Pct $calc[1].pct)" }
-    if ($null -ne $calc[2].pct)               { $ng += '読めなかった CPU 時間が n/a になりません。' }
+    if ((Format-Pct $calc[0].pct) -cne '2.5') { $ng += "wrong percent (4s/20s/8 cores): $(Format-Pct $calc[0].pct)" }
+    if ((Format-Pct $calc[1].pct) -cne '1.9') { $ng += "wrong percent for a process that appeared mid-window: $(Format-Pct $calc[1].pct)" }
+    if ($null -ne $calc[2].pct)               { $ng += 'unreadable CPU time is not written as n/a.' }
 
     # (4) TOML の [quiet] 節の解釈（他の節の同名キー・注釈行・行内注釈を混ぜる）
-    $toml = @'
+    $toml = @"
 [goal]
 name = "draw-load-parity"
-sample_sec = 999                     # 別の節の同名キーは読まない
+sample_sec = 999                     # `u{5225}`u{306E}`u{7BC0}`u{306E}`u{540C}`u{540D}`u{30AD}`u{30FC}`u{306F}`u{8AAD}`u{307E}`u{306A}`u{3044}
 
-# 注釈行
+# `u{6CE8}`u{91C8}`u{884C}
 [quiet]
-machine_cpu_max_pct = 10.5           # 行内注釈
+machine_cpu_max_pct = 10.5           # `u{884C}`u{5185}`u{6CE8}`u{91C8}
 sample_sec = 7
 heavy_process_names = ["cargo", "rustc", "rust-analyzer"]
-heavy_process_cpu_min_pct = 2.5      # 行内注釈
+heavy_process_cpu_min_pct = 2.5      # `u{884C}`u{5185}`u{6CE8}`u{91C8}
 heavy_process_presence = ["areka", "ssp"]
 retry_max = 3
 
 [followup]
 sample_sec = 111
 heavy_process_cpu_min_pct = 99.0
-'@
+"@
     $parsed = Read-QuietSettingsFromToml $toml
-    if ($parsed['machine_cpu_max_pct'] -ne 10.5) { $ng += "TOML: machine_cpu_max_pct が $($parsed['machine_cpu_max_pct'])" }
-    if ($parsed['sample_sec'] -ne 7)             { $ng += "TOML: sample_sec が $($parsed['sample_sec'])" }
-    if ((@($parsed['heavy_process_names']) -join ',') -cne 'cargo,rustc,rust-analyzer') { $ng += 'TOML: heavy_process_names の解釈が違います。' }
-    if ($parsed['heavy_process_cpu_min_pct'] -ne 2.5) { $ng += "TOML: heavy_process_cpu_min_pct が $($parsed['heavy_process_cpu_min_pct'])" }
-    if ((@($parsed['heavy_process_presence']) -join ',') -cne 'areka,ssp') { $ng += 'TOML: heavy_process_presence の解釈が違います。' }
+    if ($parsed['machine_cpu_max_pct'] -ne 10.5) { $ng += "TOML: machine_cpu_max_pct is $($parsed['machine_cpu_max_pct'])" }
+    if ($parsed['sample_sec'] -ne 7)             { $ng += "TOML: sample_sec is $($parsed['sample_sec'])" }
+    if ((@($parsed['heavy_process_names']) -join ',') -cne 'cargo,rustc,rust-analyzer') { $ng += 'TOML: heavy_process_names is parsed wrongly.' }
+    if ($parsed['heavy_process_cpu_min_pct'] -ne 2.5) { $ng += "TOML: heavy_process_cpu_min_pct is $($parsed['heavy_process_cpu_min_pct'])" }
+    if ((@($parsed['heavy_process_presence']) -join ',') -cne 'areka,ssp') { $ng += 'TOML: heavy_process_presence is parsed wrongly.' }
     # 空の配列は「指定なし」ではなく「1 つも置かない」（既定へ黙って落ちない）。
     $emptyPresence = Read-QuietSettingsFromToml "[quiet]`nheavy_process_presence = []`n"
     if (-not $emptyPresence.ContainsKey('heavy_process_presence') -or @($emptyPresence['heavy_process_presence']).Count -ne 0) {
-        $ng += 'TOML: 空の heavy_process_presence が既定へ落ちています。'
+        $ng += 'TOML: an empty heavy_process_presence falls back to the default.'
     }
 
     if ($ng.Count -gt 0) {
-        Write-Problem "[check-quiet] 自己較正 NG（$($ng.Count) 件）"
+        Write-Problem "[check-quiet] self-test NG ($($ng.Count) problems)"
         foreach ($m in $ng) { Write-Problem "  - $m" }
         Write-Info "CHECK-QUIET RESULT stage=selftest verdict=SELFTEST_NG code=$EXIT_SELFTEST_NG file=-"
         exit $EXIT_SELFTEST_NG
     }
-    Write-Info '[check-quiet] 自己較正 OK（文面の決定論・書式・判定 6 通り・働いているかの選り分け・％の算出・TOML [quiet] 解釈）'
+    Write-Info '[check-quiet] self-test OK (report determinism, format, 6 verdict cases, busy process selection, percent calculation, TOML [quiet] parsing)'
     Write-Info "CHECK-QUIET RESULT stage=selftest verdict=SELFTEST_OK code=$EXIT_QUIET file=-"
     exit $EXIT_QUIET
 }
@@ -547,13 +547,13 @@ if ($SelfTest) { Invoke-SelfTest }
 # 引数・前提の検証
 # =============================================================================
 if ([string]::IsNullOrWhiteSpace($Stage)) {
-    Stop-Bad $EXIT_BAD_ARGS '-Stage が必要です（出力ファイル名 quiet-<Stage>.txt に使います）。'
+    Stop-Bad $EXIT_BAD_ARGS '-Stage is required (used for the output file name quiet-<Stage>.txt).'
 }
 if ($Stage.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) {
-    Stop-Bad $EXIT_BAD_ARGS "-Stage にファイル名として使えない文字が含まれています: $Stage"
+    Stop-Bad $EXIT_BAD_ARGS "-Stage contains characters not allowed in a file name: $Stage"
 }
-if ([string]::IsNullOrWhiteSpace($OutDir)) { Stop-Bad $EXIT_BAD_ARGS '-OutDir が必要です。' }
-if ($Goal -and $GoalFile) { Stop-Bad $EXIT_BAD_ARGS '-Goal と -GoalFile は同時に指定できません。' }
+if ([string]::IsNullOrWhiteSpace($OutDir)) { Stop-Bad $EXIT_BAD_ARGS '-OutDir is required.' }
+if ($Goal -and $GoalFile) { Stop-Bad $EXIT_BAD_ARGS '-Goal and -GoalFile cannot be given together.' }
 
 # 既定値 → 目標定義ファイル → 明示引数、の順に上書きする。
 # 【落とし穴】PowerShell の変数名は大小を区別しない。実効値を入れる変数に $SampleSec と
@@ -569,7 +569,7 @@ $goalPath        = ''
 if ($Goal -or $GoalFile) {
     $goalPath = if ($GoalFile) { $GoalFile } else { Join-Path $PSScriptRoot "goals\$Goal.toml" }
     if (-not (Test-Path -LiteralPath $goalPath -PathType Leaf)) {
-        Stop-Bad $EXIT_BAD_ARGS "目標定義ファイルが見つかりません: $goalPath"
+        Stop-Bad $EXIT_BAD_ARGS "goal definition file not found: $goalPath"
     }
     $goalPath = (Resolve-Path -LiteralPath $goalPath).Path
     $settings = Read-QuietSettingsFromToml ([IO.File]::ReadAllText($goalPath))
@@ -586,22 +586,22 @@ if ($PSBoundParameters.ContainsKey('HeavyProcessNames')) { $effHeavyNames   = @(
 if ($PSBoundParameters.ContainsKey('HeavyProcessCpuMinPct')) { $effCpuMinPct = [double]$HeavyProcessCpuMinPct }
 if ($PSBoundParameters.ContainsKey('HeavyProcessPresence'))  { $effPresence  = @($HeavyProcessPresence) }
 
-if ($effSampleSec -lt 1)      { Stop-Bad $EXIT_BAD_ARGS "採取秒数が不正です（1 以上が必要）: $effSampleSec" }
-if ($effThresholdPct -le 0.0) { Stop-Bad $EXIT_BAD_ARGS "閾値が不正です（0 より大きい値が必要）: $effThresholdPct" }
-if ($effCpuMinPct -lt 0.0)    { Stop-Bad $EXIT_BAD_ARGS "重いプロセスの下限が不正です（0 以上が必要）: $effCpuMinPct" }
+if ($effSampleSec -lt 1)      { Stop-Bad $EXIT_BAD_ARGS "invalid sample seconds (must be 1 or more): $effSampleSec" }
+if ($effThresholdPct -le 0.0) { Stop-Bad $EXIT_BAD_ARGS "invalid threshold (must be greater than 0): $effThresholdPct" }
+if ($effCpuMinPct -lt 0.0)    { Stop-Bad $EXIT_BAD_ARGS "invalid heavy process lower limit (must be 0 or more): $effCpuMinPct" }
 
 try {
     if (-not (Test-Path -LiteralPath $OutDir)) { New-Item -ItemType Directory -Path $OutDir -Force | Out-Null }
 } catch {
-    Stop-Bad $EXIT_BAD_ARGS "出力先を作れません: $OutDir（$($_.Exception.Message)）"
+    Stop-Bad $EXIT_BAD_ARGS "cannot create the output folder: $OutDir ($($_.Exception.Message))"
 }
 $outFile = Join-Path (Resolve-Path -LiteralPath $OutDir).Path "quiet-$Stage.txt"
 
 # =============================================================================
 # 計測 → 判定 → 記録
 # =============================================================================
-$goalShown = if ($goalPath) { $goalPath } else { '(引数/既定)' }
-Write-Info "[check-quiet] stage=$Stage 秒数=$effSampleSec 閾値=$(Format-Pct $effThresholdPct)% 目標定義=$goalShown"
+$goalShown = if ($goalPath) { $goalPath } else { '(arguments/defaults)' }
+Write-Info "[check-quiet] stage=$Stage sample_sec=$effSampleSec threshold=$(Format-Pct $effThresholdPct)% goal=$goalShown"
 
 # 見張る名前＝負荷で見る一覧 ∪ 在るだけで落とす一覧（後者だけに書いた名前も見張る）。
 $watchNames  = @(@($effHeavyNames) + @($effPresence) | Sort-Object -Unique)
@@ -619,7 +619,7 @@ try {
     $maxPct  = [double]$stat.Maximum
 } catch {
     $counterError = $_.Exception.Message
-    Write-Problem "[check-quiet] 性能カウンタ '$COUNTER_PATH_MACHINE_CPU' の取得に失敗しました: $counterError"
+    Write-Problem "[check-quiet] failed to read performance counter '$COUNTER_PATH_MACHINE_CPU': $counterError"
 }
 
 $windowClock.Stop()
