@@ -139,7 +139,7 @@
   - _Requirements: 9.1, 9.3_
 
 - [ ] 7. 仕上げの確かめ
-- [ ] 7.1 実機テストを短い形で 1 回走らせ、`--help` の差を確かめる
+- [x] 7.1 実機テストを短い形で 1 回走らせ、`--help` の差を確かめる
   - 置き場所をワークツリーの `target\` の下の Windows 形の絶対パスで上書きして、実機テストを短い形（`--skip a_waiter_reclaims`）で 1 回走らせ、⑦ と (h5) の直しを含めて緑を確かめる
   - 5.2 で控えた直す前の `--help` と後の実行ファイルの `--help` を並べ、差が `clear --repo` の 1 行の足しだけであることを確かめて記録する（控えは 1.x〜5.1 の後の実物から取るが、それらは `--help` を変えないので直す前と同じ）
   - 完了の状態: 実機テストの緑と `--help` の差がこのファイルの記録にある
@@ -168,3 +168,12 @@
 ## Implementation Notes
 
 - 5.2: 今ある入口のテスト `cli::tests::each_option_is_accepted_only_by_the_commands_that_list_it` に、`clear` の `--repo`（別の形）だけを通す例外を 1 か所足した。テストの中に写した表は名前の行の表で、設計の「別の形」は読みの側だけが `--repo` を受けるため、書き替えなしでは赤になる。完了の状態「書き替えなしで緑」に対する例外はこの 1 件だけで、名前の行の表を照らす判定は書き替えなしで緑。
+
+## 仕上げの確かめの記録
+
+- 7.1 実機テスト（短い形・1 回だけ）: `AREKA_IMPL_WATCH_HOME` を `C:\home\maz\git\areka\.claude\worktrees\areka-p0-watch-residue-a89e79\target\real-home-7-1` に上書きして `cargo test -p areka-impl-watch --test real -- --ignored --skip a_waiter_reclaims` → `10 passed; 0 failed; 0 ignored; 1 filtered out; finished in 8.80s`（全体 約 9.2 秒）。各テストの置き場所はテスト自身が `target\test-roots\` の下に作る。⑦ `the_log_keeps_event_lines_and_failure_lines_across_processes`（2.3）は緑・(h5) の `Desk::settle`（6.5）は `tests\real\mod.rs` の片付けと `tests\real.rs` から通っている。
+- 7.1 `--help` の差: 5.2 の控え `target\help-before.txt`（53 行）と、今の実行ファイルの `--help`（`AREKA_IMPL_WATCH_HOME` は上と同じ・54 行）を `git diff --no-index` で並べた。差は `clear` の項に足した次の 1 行だけ。
+
+  ```
+        clear --repo <repo>: leave everyone of the repo and empty its merge desk (the last merge stays). prints "cleared repo=<repo>; left: <ids or none>". 0=done
+  ```
