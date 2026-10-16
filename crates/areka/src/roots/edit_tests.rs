@@ -1,4 +1,5 @@
-//! 置き場の追加と外すの判断の決定論テスト（要件 1.5・6.4・6.6〜6.8・7.2・7.3・8.6・12.5）。
+//! 置き場の追加・外す・先頭へ動かすの判断の決定論テスト（要件 1.5・6.4・6.6〜6.8・7.2・7.3・8.6・12.5、
+//! areka-P0-user-data-root 要件 3.7・10.3）。
 //!
 //! 実在する根は `TempPath::under_target`（ワークツリーの `target\` の下）に掘る。
 
@@ -154,6 +155,105 @@ fn remove_not_listed_is_stale() {
         decide_remove(&roots_of(&[&a, &b]), RootsOrigin::Memory, &gone),
         RemoveVerdict::Stale
     );
+}
+
+#[test]
+fn front_moves_to_front_keeping_others_order() {
+    let tmp = TempPath::under_target("roots-edit-front-move");
+    let a = root(&tmp, "a", true);
+    let b = root(&tmp, "b", true);
+    let c = root(&tmp, "c", true);
+    let picked = PathBuf::from(c.to_string_lossy().to_uppercase());
+    assert_eq!(
+        decide_front(&roots_of(&[&a, &b, &c]), RootsOrigin::Memory, &picked),
+        FrontVerdict::Moved {
+            roots: roots_of(&[&c, &a, &b])
+        }
+    );
+    // 真ん中の根でもほかの順は保つ。
+    assert_eq!(
+        decide_front(&roots_of(&[&a, &b, &c]), RootsOrigin::Default, &b),
+        FrontVerdict::Moved {
+            roots: roots_of(&[&b, &a, &c])
+        }
+    );
+}
+
+#[test]
+fn front_already_first_is_unchanged() {
+    let tmp = TempPath::under_target("roots-edit-front-first");
+    let a = root(&tmp, "a", true);
+    let b = root(&tmp, "b", true);
+    assert_eq!(
+        decide_front(&roots_of(&[&a, &b]), RootsOrigin::Memory, &a),
+        FrontVerdict::AlreadyFront
+    );
+}
+
+#[test]
+fn front_env_var_is_locked() {
+    let tmp = TempPath::under_target("roots-edit-front-env");
+    let a = root(&tmp, "a", true);
+    let b = root(&tmp, "b", true);
+    assert_eq!(
+        decide_front(&roots_of(&[&a, &b]), RootsOrigin::EnvVar, &b),
+        FrontVerdict::EnvLocked
+    );
+}
+
+#[test]
+fn front_not_listed_is_stale() {
+    let tmp = TempPath::under_target("roots-edit-front-stale");
+    let a = root(&tmp, "a", true);
+    let b = root(&tmp, "b", true);
+    let gone = root(&tmp, "gone", true);
+    assert_eq!(
+        decide_front(&roots_of(&[&a, &b]), RootsOrigin::Memory, &gone),
+        FrontVerdict::Stale
+    );
+}
+
+/// 書ける根の印は足す・外す・先頭へ動かすの並びの複写で残る（areka-P0-user-data-root 10.3）。
+#[test]
+fn user_root_mark_survives_add_remove_front() {
+    use areka_ghost::RootMark;
+    let tmp = TempPath::under_target("roots-edit-mark-survives");
+    let user = root(&tmp, "user", true);
+    let exe = root(&tmp, "exe", true);
+    let extra = root(&tmp, "extra", true);
+    let marked = BasewareRoots::new(vec![
+        BasewareRoot::user_root(user.clone(), false),
+        BasewareRoot::new(exe.clone()),
+    ]);
+    let is_marked = |roots: &BasewareRoots| {
+        roots
+            .roots()
+            .iter()
+            .find(|r| r.dir() == user)
+            .map(|r| r.mark())
+            == Some(RootMark::UserRoot { from_env: false })
+    };
+
+    let AddVerdict::Added { roots: added, .. } = decide_add(&marked, RootsOrigin::Memory, &extra)
+    else {
+        panic!("足せるはず");
+    };
+    assert!(is_marked(&added), "足した後も印が残る");
+
+    let RemoveVerdict::Removed { roots: removed, .. } =
+        decide_remove(&added, RootsOrigin::Memory, &exe)
+    else {
+        panic!("外せるはず");
+    };
+    assert!(is_marked(&removed), "外した後も印が残る");
+
+    let FrontVerdict::Moved { roots: fronted } =
+        decide_front(&removed, RootsOrigin::Memory, &extra)
+    else {
+        panic!("先頭へ動かせるはず");
+    };
+    assert_eq!(fronted.roots()[0].dir(), extra);
+    assert!(is_marked(&fronted), "先頭へ動かした後も印が残る");
 }
 
 // ---------------------------------------------------------------- 適用（実行系が居ない経路・要件 8.1〜8.5）
@@ -317,5 +417,72 @@ mod apply {
             world.resource::<BootContext>().roots,
             roots_of(&[&a, &empty])
         );
+    }
+
+    #[test]
+    fn front_writes_memory_and_takes_effect_without_switching() {
+        let tmp = TempPath::under_target("roots-edit-apply-front");
+        let a = root(&tmp, "a", true);
+        ghost(&a, "ga");
+        let b = root(&tmp, "b", true);
+        let profile = tmp.path().join("profile");
+        let mut world = world(&a, profile.clone());
+        world.resource_mut::<BootContext>().roots = roots_of(&[&a, &b]);
+
+        let ((), events) = capture(|| move_to_front(&mut world, b.clone()));
+
+        let ctx = world.resource::<BootContext>();
+        assert_eq!(ctx.roots, roots_of(&[&b, &a]), "その回に効く（要件 3.7）");
+        assert_eq!(ctx.roots_origin, RootsOrigin::Memory);
+        assert_eq!(
+            ctx.current.ghost.folder.as_deref(),
+            Some("ga"),
+            "切り替えない"
+        );
+        assert_eq!(ctx.current.ghost.dir, a.join(r"ghost\ga"));
+        let value = read_memory(&profile).expect("記憶に並びが書かれる");
+        let (decoded, _) = decode_memory(&value, super::super::exe_dir().as_deref());
+        assert_eq!(decoded, vec![b.clone(), a.clone()]);
+        let moved = named(&events, "roots_moved_to_front");
+        assert_eq!(moved.len(), 1, "{events:?}");
+        assert_eq!(moved[0].level, tracing::Level::INFO);
+        assert_eq!(named(&events, "root_listed").len(), 2);
+    }
+
+    #[test]
+    fn front_refusals_warn_and_never_write_memory() {
+        let tmp = TempPath::under_target("roots-edit-apply-front-refuse");
+        let a = root(&tmp, "a", true);
+        let b = root(&tmp, "b", true);
+        let gone = root(&tmp, "gone", true);
+        let profile = tmp.path().join("profile");
+        let mut world = world(&a, profile.clone());
+        world.resource_mut::<BootContext>().roots = roots_of(&[&a, &b]);
+
+        let ((), events) = capture(|| {
+            move_to_front(&mut world, a.clone());
+            move_to_front(&mut world, gone.clone());
+        });
+        world.resource_mut::<BootContext>().roots_origin = RootsOrigin::EnvVar;
+        let ((), env_events) = capture(|| move_to_front(&mut world, b.clone()));
+
+        let reasons: Vec<_> = named(&events, "roots_front_refused")
+            .iter()
+            .chain(named(&env_events, "roots_front_refused").iter())
+            .map(|e| {
+                assert_eq!(e.level, tracing::Level::WARN);
+                e.field_str("reason").map(str::to_owned)
+            })
+            .collect();
+        assert_eq!(
+            reasons,
+            vec![
+                Some("already_front".to_owned()),
+                Some("stale".to_owned()),
+                Some("env_var".to_owned())
+            ]
+        );
+        assert_eq!(world.resource::<BootContext>().roots, roots_of(&[&a, &b]));
+        assert!(read_memory(&profile).is_none(), "変えないなら書かない");
     }
 }

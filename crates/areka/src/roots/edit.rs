@@ -1,9 +1,10 @@
-//! 置き場の追加と外すの判断（純粋・design.md「RootsEdit」）。
+//! 置き場の追加・外す・先頭へ動かすの判断（純粋・design.md「RootsEdit」、
+//! areka-P0-user-data-root design.md「RootsFront」）。
 //!
 //! 値だけで判断する: 今の並び・出どころ・足すフォルダ（または外す根の絶対パス）。
 //! フォルダそのものは消さない・動かさない（要件 7.2）。触るのは並びの値だけ。
-//! 適用（起動の文脈・記憶・記録）は UI スレッドの入口 [`add_root`]・[`remove_root`]。
-//! 並べ替えの判断は作らない（要件 7.4）。
+//! 適用（起動の文脈・記憶・記録）は UI スレッドの入口 [`add_root`]・[`remove_root`]・[`move_to_front`]。
+//! 並べ替えは「先頭へ動かす」だけ（areka-P0-user-data-root 要件 3.7）。
 
 use std::path::{Path, PathBuf};
 
@@ -39,6 +40,19 @@ pub(crate) enum RemoveVerdict {
     LastOne,
     EnvLocked,
     /// 並びに無い（メニューを出した後に並びが変わった・warn・変えない）。
+    Stale,
+}
+
+/// 先頭へ動かすの判断（areka-P0-user-data-root 要件 3.7）。
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum FrontVerdict {
+    /// 先頭へ動かした（ほかの順は保つ）。
+    Moved { roots: BasewareRoots },
+    /// すでに先頭（変えない・warn）。
+    AlreadyFront,
+    /// `AREKA_ROOT` で渡している（変えない・warn）。
+    EnvLocked,
+    /// 並びに無い（メニューを出した後に並びが変わった・warn）。
     Stale,
 }
 
@@ -84,6 +98,57 @@ pub(crate) fn decide_remove(
         roots: BasewareRoots::new(list),
         removed,
     }
+}
+
+/// 先頭へ動かす: 項目を複写して動かす（書ける根の印は残る）。
+pub(crate) fn decide_front(roots: &BasewareRoots, origin: RootsOrigin, dir: &Path) -> FrontVerdict {
+    if origin == RootsOrigin::EnvVar {
+        return FrontVerdict::EnvLocked;
+    }
+    match roots.roots().iter().position(|r| same_root(r.dir(), dir)) {
+        None => FrontVerdict::Stale,
+        Some(0) => FrontVerdict::AlreadyFront,
+        Some(index) => {
+            let mut list = roots.roots().to_vec();
+            let picked = list.remove(index);
+            list.insert(0, picked);
+            FrontVerdict::Moved {
+                roots: BasewareRoots::new(list),
+            }
+        }
+    }
+}
+
+/// UI スレッドの入口: 置き場を並びの先頭へ動かす（今のゴースト・バルーンは切り替えない）。
+/// 記憶へ書けなかった結果は `apply` の中で扱う（要件 3.9）。
+#[allow(dead_code)] // 7.2（メニューの「置き場を先頭へ ▸」）がつないだら外す
+pub(crate) fn move_to_front(world: &mut World, dir: PathBuf) {
+    let Some(ctx) = world.get_resource::<BootContext>() else {
+        tracing::error!(
+            event = "roots_change_no_context",
+            "[RootsEdit] 起動の文脈が無いので置き場を先頭へ動かせません"
+        );
+        return;
+    };
+    let reason = match decide_front(&ctx.roots, ctx.roots_origin, &dir) {
+        FrontVerdict::Moved { roots } => {
+            tracing::info!(
+                event = "roots_moved_to_front",
+                path = %dir.display(),
+                "[RootsEdit] 置き場を並びの先頭へ動かしました"
+            );
+            return apply(world, roots, exe_dir());
+        }
+        FrontVerdict::AlreadyFront => "already_front",
+        FrontVerdict::EnvLocked => "env_var",
+        FrontVerdict::Stale => "stale",
+    };
+    tracing::warn!(
+        event = "roots_front_refused",
+        path = %dir.display(),
+        reason,
+        "[RootsEdit] 置き場を先頭へ動かせないので変えません"
+    );
 }
 
 /// UI スレッドの入口: 置き場を足す（判断・適用・記録・design「RootsEdit」）。
