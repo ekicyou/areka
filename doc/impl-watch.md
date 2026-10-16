@@ -40,7 +40,7 @@
 
 ### 調停役のセッションとの違い
 
-これまでは、調停役の Claude セッション（スキル `kiro-watch`）がメッセージのやり取りで同じ机を貸し出していた。決まり 7 つはそのまま引き継ぎ、やり方だけを替える。
+これまでは、調停役の Claude セッション（スキル `kiro-watch`）がメッセージのやり取りで同じ机を貸し出していた。決まり 7 つはそのまま引き継ぎ、やり方だけを替えた。下の表は、替えたときの違いの記録である。
 
 | | 調停役のセッション | `areka-impl-watch` |
 |---|---|---|
@@ -52,11 +52,11 @@
 | 送れる数 | 開発者の入力 1 回につき約 10 通で止まる | 上限は無い |
 | 次の「どうぞ」への添え書き | 在る | 無い。伝えたいことは開発者がそのセッションへ直接書く |
 
-実装と完了のスキルがこのアプリを呼ぶ形に書き替わるまでは、完了の手順は今の調停役の机を使う。
+今は、実装・完了・棚卸のスキル（`kiro-impl`・`kiro-complete`・`kiro-next`）がこのアプリを呼ぶ。調停役のセッションはもう使わない。スキルがいつ何を呼ぶかは、4 節の「スキルからの呼び方」にある。
 
 ## 2. 入れ方
 
-要るもの: Rust 1.89 以上（ファイルのロックを標準ライブラリで使うため）。
+要るもの: Rust 1.89 以上（ファイルのロックを標準ライブラリで使うため）と PowerShell 7（置き方の道具を走らせるため）。
 
 1. **ユーザー環境変数 `AREKA_IMPL_WATCH_HOME` を 1 度だけ設定する。** 例は `%USERPROFILE%\.areka-impl-watch`。
 
@@ -66,21 +66,34 @@
 
    設定は、その後に開いた端末とアプリから見える。Claude のアプリも立ち上げ直す。
 
-2. **ビルドして、置き場所へコピーする。**（新しい端末で）
+2. **置き方の道具を走らせる。**（新しい端末で）
 
    ```powershell
-   cargo build --release -p areka-impl-watch
-   New-Item -ItemType Directory -Force $env:AREKA_IMPL_WATCH_HOME | Out-Null
-   Copy-Item target\release\areka-impl-watch.exe $env:AREKA_IMPL_WATCH_HOME
+   pwsh -NoProfile -File <メインの作業コピー>\tools\impl-watch-install.ps1
    ```
 
-3. **確かめる。**
+   `<メインの作業コピー>` は、リポジトリの本体の作業コピー（共通の git フォルダ `.git` の親。`git rev-parse --path-format=absolute --git-common-dir` の親）の `C:\…` の形の絶対パスである。既定の枝の最新を取り込んだ作業コピーで走らせる。どのフォルダから呼んでも同じに動き、今のフォルダを変えない。
 
-   ```powershell
-   & "$env:AREKA_IMPL_WATCH_HOME\areka-impl-watch.exe" status
+   道具は、スクリプトの在る作業コピーのソースから実行ファイルを release でビルドし、置き場所のフォルダが無ければ作って `areka-impl-watch.exe` を置き、置いたものの `--help` を呼んで確かめる。うまくいけば次の行が出て、終了コード 0 で終わる。
+
+   ```
+   OK placed areka-impl-watch.exe
+   OK check: --help exit 0
    ```
 
-   初めてなら `no state file` と出て、終了コードが 0 になる。
+   最後の `OK check: --help exit 0` が確かめである。別に `status` を呼ばなくてよい。
+
+   うまくいかなければ、`FAIL` で始まる行を出して終了コード 1 で終わる。
+
+   | 出る行 | 訳とすること |
+   |---|---|
+   | `FAIL home: AREKA_IMPL_WATCH_HOME is not set` | 環境変数が無い・空。手順 1 をして、新しい端末で走らせ直す |
+   | `FAIL home: AREKA_IMPL_WATCH_HOME is not an absolute path` | 値が `C:\…` の形でない。下の「環境変数について」のとおり直す |
+   | `FAIL build: cargo exit <n>`・`FAIL build: no executable in cargo output` | ビルドに失敗した（cargo のエラーの行がその前に出る）。置き場所には触っていない |
+   | `FAIL place: copy`・`FAIL place: rename` | 置き場所に書けなかった。前の実行ファイルは元のまま残っている |
+   | `FAIL check: --help exit <n>` | 置いたものが動かなかった |
+
+   道具は環境変数の値を画面へ出さず、設定も変更もしない。
 
 環境変数について:
 
@@ -98,21 +111,20 @@
 
 ## 3. 更新
 
-実行ファイルは、誰かが待ち・見張りで走らせている間は上書きできない。手順は 2 通りある。
+2 節の手順 2 と同じコマンドをもう一度走らせる。誰かが待ち・見張りで走らせている間でもよい（Windows は、動いている実行ファイルの上書きはできないが、改名はできる）。手順はいつもこの 1 通りである。
 
-**(a) 誰も走らせていないときに置き換える。**
+道具は、今の `areka-impl-watch.exe` を `areka-impl-watch.old-<UTC>.exe` へ改名してから新しいものを置き、続けて古い実行ファイル（前の形の `areka-impl-watch.old.exe` も）を 1 つずつ消してみる。走っていた待ち・見張りは古いもののまま続き、その後の呼び出しから新しいものが使われる。出る行は次の形である。
 
-1. `status` を呼び、1 行目の `waits=0` を確かめる（`waits` は走っている待ち・見張りの記録の数。`no state file` と出たら、まだ誰も使っていない）。落ちたセッションの記録が残っているだけなら、`tick` を呼んでからもう一度 `status` を見る。
-2. ビルドして、置き場所へ上書きでコピーする（2 節の手順 2 と同じ）。
-
-**(b) 誰かが走らせている間に置き換える。** Windows は、動いている実行ファイルの改名はできる。
-
-```powershell
-Rename-Item "$env:AREKA_IMPL_WATCH_HOME\areka-impl-watch.exe" areka-impl-watch.old.exe
-Copy-Item target\release\areka-impl-watch.exe $env:AREKA_IMPL_WATCH_HOME
+```
+OK renamed previous to areka-impl-watch.old-20261016T020500Z.exe
+OK placed areka-impl-watch.exe
+OK removed areka-impl-watch.old-20261016T020500Z.exe
+OK check: --help exit 0
 ```
 
-古い待ち・見張りが終わってから `areka-impl-watch.old.exe` を消す。消せなければ、まだ古いものが走っている（後でもう一度）。前の `.old.exe` が残っていたら、改名の前に消す。
+誰かが古いものを走らせていると、`OK removed …` の代わりに `KEEP areka-impl-watch.old-<UTC>.exe (in use; run again later)` と出る。そのままでよい。残った古いものは、次に道具を走らせたときに消える。
+
+道具が触るのは、置き場所の `areka-impl-watch.exe`・`areka-impl-watch.new.exe`・`areka-impl-watch.old*.exe` だけである。状態ファイル・ロック・居る印・ログ・`status.md`・退避のファイルには触らず、`clear` も呼ばない。
 
 **状態ファイルの版が上がる更新のとき。** 状態ファイルには版の番号が入っている（今は 1）。知らない版のファイルを見た実行ファイルは、読まず・書き替えずに、標準エラーへ次の形の 1 行を出して終了コード 1 で終わる。
 
@@ -390,8 +402,9 @@ status: C:\Users\me\.areka-impl-watch\status.md
 
 | ファイル | 中身 | 手で消してよいか |
 |---|---|---|
-| `areka-impl-watch.exe` | 実行ファイル | 3 節の手順で置き換える |
-| `areka-impl-watch.old.exe` | 更新のときに改名した古い実行ファイル | 古い待ち・見張りが終わったら消す |
+| `areka-impl-watch.exe` | 実行ファイル | 置き方の道具で置き換える（3 節） |
+| `areka-impl-watch.old-<UTC>.exe`（前の形の `areka-impl-watch.old.exe` も） | 更新のときに改名した古い実行ファイル。走っていて消せなかったものが残る | 置き方の道具が次に消す |
+| `areka-impl-watch.new.exe` | 写したばかりの新しい実行ファイル。置き方の途中で止まったときだけ残る | 置き方の道具が次に上書きして使う |
 | `state.json` | 状態の正本（UTF-8 の JSON・版つき） | 消さない・手で書き替えない。消したいときは `clear` |
 | `state.lock` | 状態を変える間だけ握る排他の印（空） | 消さない |
 | `alive\<識別>.<種類>.lock` | 「居る」印（空）。走っている見張り・待ちが握る。種類は `watch`・`merge`・`load`・`resume`。終わっても残る | 誰も走らせていないとき（`waits=0`）だけ消してよい。走っている間は消さない |
@@ -401,4 +414,4 @@ status: C:\Users\me\.areka-impl-watch\status.md
 | `state.json.cleared-<UTC>` | `clear` の前の状態ファイルの退避 | 戻す必要が無くなったら消してよい |
 | `state.json.<プロセス番号>.tmp`・`status.md.<プロセス番号>.tmp` | 書きかけ。書き終えると置き換えで消える | 残っていたら（書いている途中で止められた）、誰も走らせていないときに消してよい |
 
-`<UTC>` は `20261010T105033Z` の形。同じ秒に 2 度退避したときは、末尾に `-1` のように番号が付く。
+`<UTC>` は `20261010T105033Z` の形。退避のファイルは、同じ秒に 2 度退避したときに、末尾に `-1` のように番号が付く。
