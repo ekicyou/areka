@@ -18,7 +18,8 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 5.1_
   - 記録（10-16）: `TalkLookahead::basis` の本体の 1 行目に `if true { return Basis::Arrived; }` を入れる前、`lookahead.rs` の `git diff --stat` は空だった。入れた後の検査は失敗した（終了コード 101・警告 0 件）。失敗したのは「字が動かないこと」の判定（`actor_lookahead_tests.rs:741`）で、失敗の文の「あふれの後の段階の違反」には次の 1 件があった: `(a) t=1.300→1.450: 見えていた字が動いた ["こんにちは。", "イイジャン！‥‥"] → ["こんにちは。", "イイジャン！", "‥‥え"]`。`git checkout --` で戻して `touch` した後、同じ検査は成功した（1 passed・警告 0 件）。`lookahead.rs` の `git diff --stat` は空で、`git status --short` にも何も出ない。出力は `target\reflow-mutation\red.txt`・`green.txt` に置いた。
 
-- [ ] 3. 文字の層の今ある経路の検査と合わせて回し直し、本番と今ある検査に差分が無いことを確かめる
+- [x] 3. 文字の層の今ある経路の検査と合わせて回し直し、本番と今ある検査に差分が無いことを確かめる
   - 経路の検査のモジュール全体（今ある 7 本と新しい 1 本）を回す。GPU は使わない。
   - 完了の状態: `cargo test -p areka-emo-text --lib actor::lookahead_tests -j 2` が 8 本とも成功し、分かれた時点との比べ `git diff $(git merge-base main HEAD) --numstat -- crates/`（作業中の木と比べる。本線の先頭とは比べない。並走の `balloon-text-bugs` が本線に先に入っても誤って赤にしないため）の行が経路の検査のファイルの 1 行だけで、その消した行の数（2 列目）が 0 である（本番のコードと今ある検査の中身が変わっていない）。
   - _Requirements: 5.1, 5.2_
+  - 記録（10-16）: `cargo test -p areka-emo-text --lib actor::lookahead_tests -j 2` は 8 passed・0 failed・警告 0 件。`git diff $(git merge-base main HEAD) --numstat -- crates/` は `131 0 crates/areka-emo-text/src/actor_lookahead_tests.rs` の 1 行だけ（消した行 0）。`cargo fmt -p areka-emo-text -- --check` も差分なし。
