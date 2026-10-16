@@ -346,7 +346,7 @@ $script:Notices = "$OUT_DIR/THIRD-PARTY-NOTICES.md"
 # 開発者のシェルの値に継ぎ足さない（-C target-cpu=native 等が混ざると開発機でしか動かない exe になる）
 $script:RustFlags = '-C target-feature=+crt-static'
 
-# PE のバイト列から機種と取り込み表の DLL 名を読む（PE32 と PE32+ の両方）。
+# PE のバイト列から機種・窓の作り（subsystem）・取り込み表の DLL 名を読む（PE32 と PE32+ の両方）。
 # 読めない形なら throw。遅延読み込みの表は読まない（拒否表の DLL を遅延で読むことは無い前提）。
 function Read-PeInfo([byte[]]$Bytes) {
     $u16 = { param($o) [BitConverter]::ToUInt16($Bytes, $o) }
@@ -358,6 +358,7 @@ function Read-PeInfo([byte[]]$Bytes) {
     $opt = $pe + 24
     $magic = & $u16 $opt
     $dirs = switch ($magic) { 0x10b { $opt + 96 } 0x20b { $opt + 112 } default { throw ('unknown optional header magic 0x{0:x}' -f $magic) } }
+    $subsystem = & $u16 ($opt + 68)   # PE32 と PE32+ で同じ位置（2 = windows gui・3 = console）
     $importRva = & $u32 ($dirs + 8)   # データディレクトリの 1 番＝import
     $secTable = $opt + (& $u16 ($pe + 20))
     $toOffset = {
@@ -376,7 +377,7 @@ function Read-PeInfo([byte[]]$Bytes) {
             $names.Add([Text.Encoding]::ASCII.GetString($Bytes, $n, $end - $n))
         }
     }
-    [pscustomobject]@{ Machine = $machine; Imports = $names.ToArray() }
+    [pscustomobject]@{ Machine = $machine; Subsystem = $subsystem; Imports = $names.ToArray() }
 }
 
 # 取り込み表の名前のうち拒否表（前方一致・大文字小文字を区別しない）に当たるもの（呼ぶ側は @() で包む）
@@ -516,11 +517,16 @@ function Test-ZipContent([string]$ZipPath, [string]$Arch) {
         $ALLOWED_EXECUTABLES | Where-Object { $execs -cnotcontains $_ } | ForEach-Object { $bad.Add("4 executable missing: $_") }
         # 5. PE の機種・6. 依存 DLL（本体・中継・helper だけ）
         $machines = [ordered]@{ 'areka.exe' = $ARCHS[$Arch].Machine; 'areka-mcp-bridge.exe' = $ARCHS[$Arch].Machine; 'shiori-host32-helper.exe' = $HELPER_MACHINE; 'ghost/emo2/ghost/master/pasta.dll' = $HELPER_MACHINE }
+        $guiExes = @('areka.exe', 'areka-mcp-bridge.exe')   # 窓の作りを判定する exe（helper と pasta.dll は入れない）
         foreach ($n in $machines.Keys) {
             if (-not $map.ContainsKey($n)) { continue }   # 無いことは 1／4 が言う
             try { $info = Read-PeInfo (Read-ZipEntry $map[$n]) } catch { $bad.Add("5 cannot read as PE: $n ($_)"); continue }
             Write-Host ('{0}: machine 0x{1:x4}, imports {2}' -f $n, $info.Machine, ($info.Imports -join ', '))
             if ($info.Machine -ne $machines[$n]) { $bad.Add(('5 wrong machine: {0} is 0x{1:x4} (expected 0x{2:x4})' -f $n, $info.Machine, $machines[$n])) }
+            if ($guiExes -ccontains $n) {
+                Write-Host ('{0}: subsystem {1}' -f $n, $info.Subsystem)
+                if ($info.Subsystem -ne 2) { $bad.Add(('5 wrong subsystem: {0} is {1} (expected 2 = windows gui)' -f $n, $info.Subsystem)) }
+            }
             if ($n -like '*.exe') {
                 $denied = @(Get-DeniedImports $info.Imports)
                 if ($denied.Count) { $bad.Add("6 imports a denied DLL: $n -> $($denied -join ', ')") }

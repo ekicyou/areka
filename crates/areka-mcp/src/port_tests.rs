@@ -79,7 +79,7 @@ fn candidates_from_env_value_blank_and_overflow_fall_back() {
     }
 }
 
-/// (要件 2.5) 読めない値の warn にはその値を載せ、文面は「既定の候補で待ち受ける」。
+/// (要件 2.5) 読めない値の warn にはその値を載せ、文面は「areka の MCP の口の番号に既定の候補を使う」で「待ち受ける」を含まない。
 #[test]
 fn candidates_from_env_value_warn_carries_the_value() {
     let (_, events) = capture(|| candidates_from_env_value(Some("abc")));
@@ -93,10 +93,8 @@ fn candidates_from_env_value_warn_carries_the_value() {
             .any(|(k, v)| k == "value" && v.debug.contains("abc")),
         "{warn:?}"
     );
-    assert!(
-        warn.message().contains("既定の候補で待ち受ける"),
-        "{warn:?}"
-    );
+    assert!(warn.message().contains("既定の候補を使う"), "{warn:?}");
+    assert!(!warn.message().contains("待ち受ける"), "{warn:?}");
 }
 
 /// (要件 2.5) UTF-8 でない値は warn 1 件で既定の候補へ倒す（実際の環境変数は触らず、読み口の判断へ直接渡す）。
@@ -110,9 +108,10 @@ fn read_port_candidates_non_unicode_falls_back_with_warn() {
     assert_eq!(warn_count(&events), 1, "{events:?}");
     assert_eq!(events.len(), 1, "{events:?}");
     assert!(
-        events[0].message().contains("既定の候補で待ち受ける"),
+        events[0].message().contains("既定の候補を使う"),
         "{events:?}"
     );
+    assert!(!events[0].message().contains("待ち受ける"), "{events:?}");
 }
 
 /// (要件 2.2, 2.3) 読み口は未設定と読める値を純粋な判断へそのまま渡す（指定の番号に隣は足さない）。
