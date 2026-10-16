@@ -168,6 +168,7 @@
 ## Implementation Notes
 
 - 5.2: 今ある入口のテスト `cli::tests::each_option_is_accepted_only_by_the_commands_that_list_it` に、`clear` の `--repo`（別の形）だけを通す例外を 1 か所足した。テストの中に写した表は名前の行の表で、設計の「別の形」は読みの側だけが `--repo` を受けるため、書き替えなしでは赤になる。完了の状態「書き替えなしで緑」に対する例外はこの 1 件だけで、名前の行の表を照らす判定は書き替えなしで緑。
+- 完了の手続き（全体テスト）で、2.1 のテスト `read_only_logs_the_damage_of_a_broken_file_in_one_ascii_line` が `tracing::subscriber::with_default` で捕捉先を直に差しており、ワークスペースの見張り `log-capture-kit` の `no_direct_capture_call_lives_outside_the_shared_crate_and_the_allow_table` が赤になった（クレートのテストだけでは捕まらない）。設計の「移さない理由（要件 8.2）」どおり、ログの行は常時テストで捕まえず実機テスト ⑦ に残すため、そのテストと補助の書き口を消した。訳を返す・退避しない・端末の文の判定は別のテストが持ち、読むだけの道の失敗の行の訳は ⑦ が判定する。
 
 ## 仕上げの確かめの記録
 

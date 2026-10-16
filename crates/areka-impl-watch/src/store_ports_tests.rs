@@ -5,9 +5,7 @@
 //! 組み立ての手は `store_test_support.rs` のものを使う。
 
 use std::fs::{self, File};
-use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use temp_path_kit::TempPath;
@@ -380,50 +378,6 @@ fn a_change_sets_each_broken_file_aside_and_its_damage_reaches_the_log_port() {
         if let Damage::WrongShape { line, column } = damage {
             assert!(line >= 1 && column >= 1, "{damage:?}");
         }
-    }
-}
-
-/// 書かれた行をためる書き口（ログの行を確かめる）。
-#[derive(Clone, Default)]
-struct Lines(Arc<Mutex<Vec<u8>>>);
-
-impl Write for Lines {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.0.lock().expect("握れる").extend_from_slice(buf);
-        Ok(buf.len())
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-#[test]
-fn read_only_logs_the_damage_of_a_broken_file_in_one_ascii_line() {
-    for (text, damage) in broken_files() {
-        let root = TempPath::under_target("impl-watch-store");
-        let home = home_in(&root);
-        fs::write(home.state_path(), text).expect("置ける");
-        let lines = Lines::default();
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(Mutex::new(lines.clone()))
-            .with_ansi(false)
-            .finish();
-
-        let got = tracing::subscriber::with_default(subscriber, || store_in(&root).read_only());
-
-        assert!(matches!(got, Err(WatchError::Broken(_))), "{got:?}");
-        let written = String::from_utf8(lines.0.lock().expect("握れる").clone()).expect("UTF-8");
-        let logged: Vec<&str> = written.lines().collect();
-        assert_eq!(logged.len(), 1, "{written}");
-        assert!(logged[0].is_ascii(), "{written}");
-        assert!(logged[0].contains("[store] read failed"), "{written}");
-        assert!(
-            logged[0].contains(&format!("damage={damage:?}")),
-            "{written}"
-        );
-        // 値は写さない（`participants` の中身や `x` の値が出ない）。
-        assert!(!logged[0].contains("participants"), "{written}");
-        assert!(!logged[0].contains("not json"), "{written}");
     }
 }
 
