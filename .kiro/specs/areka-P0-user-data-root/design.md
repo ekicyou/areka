@@ -696,14 +696,14 @@ pub(crate) fn resolve_boot_from(
 - `resolve_ghost` の後、経路が `GhostRoute::Argv` でなければ `ghost.dir = prepare_ghost(&resolved.roots, &ghost.dir)`。その後のバルーンの解決（`resolve_balloon_for_ghost`）と `ConfigInputs.ghost_root` は写しのフォルダで決まる＝`BootContext.current`・`GhostSession::ghost_dir()`・更新の対象・入れ直しの `running_root` がそろって写しになる。
 - 前回きれいに終わらなかったときの既定ゴースト（`resolve_ghost` の既定の段）も同じ経路を通る。
 - `resolve_boot` は `crate::roots::user_root::writable_ghost` を渡す。`main.rs` は `resolve_boot(&args)` を呼ぶだけで変わらない。
-- `ResolvedRoots` を組む `resolve_roots` が `layout()` を呼ぶ前に、`default_app_profile_dir()` が先に `layout()` を呼ぶ（`resolve_boot` の 1 行目）＝書ける根は並びを組む前に作られている。
+- `layout()` は `OnceLock` なので、どの呼び手が先に呼んでも、並びを組む前に書ける根は作られている。
 
 #### SwitchHook・InstallHook・UpdateHook（呼び手の 1〜数行）
 
 | フック | 場所 | 変えること | 要件 |
 |---|---|---|---|
 | SwitchHook | `emo2_boot/ghost_switch.rs` の `boot_into` | 文脈の確かめ（`roots` を取った）の直後に `ghost.dir = writable_copy(&roots, StoreKind::Ghost, &ghost.dir)`。`switch_to`（メニュー・`\![change,ghost,…]`・更新の後の読み直し）と `switch_to_default`（既定への戻し）の両方が通る | 4.3 |
-| InstallHook | `install/destination.rs` の `CatalogDestinations::answer` | `install_root` の答えが「見えている物」のとき（`find_ghost`／`find_balloon` の項目）、その項目のフォルダを `writable_copy` に通し、答えが変われば写しの根（`<書ける根>`）を答える。`running_root` の腕は変えない（起動中のゴーストはすでに写し）。`areka-nar` は配置ごとに 1 回だけ尋ねる（`InstallRoots` の約束）ので、写すのも 1 配置 1 回。インストールは背景のスレッドで走る | 4.4 |
+| InstallHook | `install/destination.rs` の `CatalogDestinations::answer` | `install_root` の答えが「見えている物」のとき（`find_ghost`／`find_balloon` の項目）、その項目のフォルダを `writable_copy` に通し、答えが変われば写しの根を答える。答える綴りは並びの中の書ける根の `dir()` そのまま（`areka-nar` は作業フォルダを根の綴りの完全一致でまとめるため・`destination.rs` の冒頭の注記）。`running_root` の腕は変えない（起動中のゴーストはすでに写し）。`areka-nar` は配置ごとに 1 回だけ尋ねる（`InstallRoots` の約束）ので、写すのも 1 配置 1 回。インストールは背景のスレッドで走る | 4.4 |
 | UpdateHook | `update/desk.rs` の `resolve` | `TargetKind::Balloon` の 2 つの腕（`here.balloon_dir`・`list_balloons` から引いた `dir`）で `writable_copy(&here.roots, StoreKind::Balloon, &dir)` を通してから `target` へ渡す。ゴースト・シェルは起こしたフォルダ（写し）なので通さない | 4.4 |
 
 - 表示だけのバルーン（`resolve_balloon_for_ghost`・バルーンの切替）にはフックを置かない（要件 4.5）。
@@ -786,7 +786,7 @@ impl Config {
   - シェルの記憶の行（要件 8.3）: 実装のタスクで `PersistScope::Shell` へ書く本番の呼び手を確かめる（設計の時点の見立ては「読むだけで書く呼び手は 0」＝`areka-sylphya` の `build_initial_image` が読むだけ）。0 なら「今の版には、シェルの記憶を作る操作はありません」と書く。
 - `doc/COMPAT_ARCHITECTURE.md` §8: 「ベースウェアの格納フォルダ（根）を複数持つ形」の行に、書ける根を使う形の 3 つの場合・既定の並び・写しの規則（書ける根が上に在るときだけ・同じフォルダ名が無いときだけ・上書きしない）・記憶の置き場を足す。
 - `.kiro/specs/areka-P0-winget-release-automation/brief.md`: 節「user-data-root からの申し送り」を足す。注意書き（`InstallationNotes`）を外してよい条件＝この spec の版からの上げ直しで消える物が 0（実測 10.8）。外せない場合＝9.1 で 0.0.2 からの最初の上げ直しで消える物が 1 以上なら、その人たち向けの知らせを残す所（Release の説明・説明書の該当の行）を向こうで決める。
-- `verification/winget-user-data-check.md`: 出どころの spec（`areka-P0-winget-manifest-submission` の `verification/winget-local-check.md`）と同じ手順と物差しで、10.8 の 3 つ（利用者向けの上げ直し・外す・機械の全員向け）と 9.1（0.0.2 からの最初の上げ直し）と 10.9（zip の形）を数える。足す数: `%LOCALAPPDATA%\VirtualStore\` の下に areka の物ができていないこと（32bit の SHIORI の helper が逸らされて書いていないこと）。確かめ専用のマニフェスト・`AREKA_USER_ROOT` で向ける根は `target\` の下。winget と OS の設定を変えるのは開発者の手だけ。止めるのは自分が起こしたと確認できたプロセスだけ（要件 10.10）。
+- `verification/winget-user-data-check.md`: 出どころの spec（`areka-P0-winget-manifest-submission` の `verification/winget-local-check.md`）と同じ手順と物差しで、10.8 の 3 つ（利用者向けの上げ直し・外す・機械の全員向け）と 9.1（0.0.2 からの最初の上げ直し）と 10.9（zip の形）を数える。足す数: `%LOCALAPPDATA%\VirtualStore\` の下に areka の物ができていないこと（32bit の SHIORI の helper が逸らされて書いていないこと）。機械の全員向け（`Program Files`）で、書けるかの確かめが `PermissionDenied`（`reason=unwritable`）になることを `user_data_layout` の行で 1 度確かめる。確かめ専用のマニフェスト・`AREKA_USER_ROOT` で向ける根は `target\` の下。winget と OS の設定を変えるのは開発者の手だけ。止めるのは自分が起こしたと確認できたプロセスだけ（要件 10.10）。
 
 ## Data Models
 
