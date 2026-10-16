@@ -177,7 +177,7 @@
   - 実機の記録で上が確かめられた状態
   - _Requirements: 2.3, 2.4, 2.5, 4.4_
 
-- [ ] 5.5 件 3 を実機で撮り直して残す
+- [x] 5.5 件 3 を実機で撮り直して残す
   - 4 行入る台詞の最下行の作者の下線とアンカーの下線を `dump_balloon` で撮り直して残し、縦書きのバルーンでも 1 枚撮る
   - 同じ撮影で最下行の字の下の部分（`g`・`y`・`ぁ`）が欠けていないかを見て、欠けていれば範囲の外として `/kiro-discovery` で起票する
   - 撮り直した画像が残り、descent の欠けの有無と（あれば）起票先が記録された状態
@@ -194,3 +194,4 @@
 - 4.4: `note_choice_wait_began`・`close_choice_wait`・`settle_all_choices` は `expect(dead_code)` で 4.5 の結線を待つ。4.5 で結んだらこの属性を外す。同じスコープの箱に済んでいない選択肢が残るとき `choice_active` が真のままの組は GPU なしの檻が無い（4.7 の箱の檻で一部覆う）。
 - 4.6: 押下のハンドラから済みまでを通しで動かす檻は 4.7 の実 GPU の範囲。箱の押下の `runtime_of(world)` が None のときは記録なしで抜ける（`locate` が runtime を前提にするので実際には通らない）。
 - 範囲外の観察（5.3 実機・判定には使っていない・完了の棚卸で起票を判断）: ⑴ ポインタの移動と押下を 1 回の SendInput で同時に送ると areka の記録に移動も押下も残らなかった（`targettb-signoffun-Wait-1.log`・先に移動してから押すと通る）。⑵ 操作していない時間に `[visibility-guard]` と `[balloon-limit] Clamp` が 565 行続いた（`run-Timeout-1.log`・直前に `loop ticker catch-up`・窓の 1 枚が -32768 の位置・再走では再現せず）。
+- 範囲外（5.5 実機・完了の棚卸で /kiro-discovery で起票）: 最下行の字の下の部分（`g`・`y`）が文字の面の下端（validrect の下端）で欠ける。面の高さ 122・Yu Gothic UI 28 画素・拡大率 2.0 で最下行の descent が約 6 画素足りない。行の矩形で数えると収まるとされるのでスクロールも起きない（`real-machine-signoff.md` 7.4・`images/underline-bottom-row-zoom4x.png`）。下線の無い字で欠けるかは未確認。

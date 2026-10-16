@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  areka-P0-balloon-text-bugs タスク 5.3（件 1）・5.4（件 2）を実機で確かめる根づくりと、起動・操作・記録。
+  areka-P0-balloon-text-bugs タスク 5.3（件 1）・5.4（件 2）・5.5（件 3）を実機で確かめる根づくりと、起動・操作・記録。
 
 .DESCRIPTION
   -Prepare : areka（debug）と 32bit の補助プロセスを組み、検体 emo2 を nar-sample-path で展開して
@@ -18,6 +18,8 @@
              で測ってから押す。入力デスクトップが Default でないときは操作せず止まる。
              Collapse（タスク 5.4・件 2）: root の同梱バルーンに足した 8×8 の面 balloons20.png で \b[20]→\b[20]→\b[0]→\b[20] の
              4 本を時間切れごとに流す。操作はせず、見えている間に areka の MCP の dump_balloon を dump-<名>.png に撮る。
+             Underline・Vertical（タスク 5.5・件 3）: 最下行（縦書きは最後の列）に作者の下線とアンカーを置いた 4 行の台詞を
+             1 本流し、終わってから dump_balloon で撮る。Vertical は root-tate（基層に vertical,1 と wordwrappoint.y,-56）。
 
 .EXAMPLE
   pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-anchor-tag-canon-da1fe5\.kiro\specs\areka-P0-balloon-text-bugs\real-machine-run.ps1 -Prepare
@@ -25,7 +27,7 @@
 #>
 param(
     [switch]$Prepare,
-    [ValidateSet('Chose', 'Timeout', 'Break', 'Box', 'Wait', 'Collapse')]
+    [ValidateSet('Chose', 'Timeout', 'Break', 'Box', 'Wait', 'Collapse', 'Underline', 'Vertical')]
     [string]$Run,
     [int]$ExitMs = 75000,
     [int]$TimeoutMs = 5000,
@@ -60,9 +62,18 @@ local COLLAPSE = {
     [==[\0\s[0]\b[20]ちいさい面（4）\e]==],
 }
 
+-- 件 3（Underline・Vertical）: 文字の領域に 4 行（縦書きは 4 列）入る台詞。最下行（縦書きは最後の列）に
+-- 作者の下線とアンカーを置き、字の下の部分（g・y・ぁ）を全部の行に入れる。
+local UNDERLINE = [==[\0\s[0]\b[0]一行目 gyぁ\n二行目 gyぁ\n三行目 \f[underline,1]下線gyぁ\f[underline,0]\n]==]
+    .. [==[\f[underline,1]下線gyぁ\f[underline,0] \_a[OnBtbAnchor]アンカgyぁ\_a\e]==]
+local VERTICAL = [==[\0\s[0]\b[0]\f[underline,1]下線ぁ\f[underline,0]\n二列目\n三列目\n]==]
+    .. [==[\f[underline,1]下線ぁ\f[underline,0]\_a[OnBtbAnchor]アンカ\_a\e]==]
+
 local function talk()
     n = n + 1
     if SCEN == "Collapse" then return COLLAPSE[n] end
+    if SCEN == "Underline" then return UNDERLINE end
+    if SCEN == "Vertical" then return VERTICAL end
     local s = [==[\0\s[0]]==]
     if SCEN == "Timeout" then s = s .. [==[\![set,choicetimeout,8000]]==] end
     s = s .. "選んでね（" .. tostring(n) .. "）" .. CHOICES
@@ -80,11 +91,11 @@ REG.OnFirstBoot = REG.OnBoot
 REG.OnGhostChanged = REG.OnBoot
 REG.OnBalloonTimeout = function(act)
     if SCEN == "Collapse" and n < #COLLAPSE then return talk() end
-    if SCEN ~= "Wait" and SCEN ~= "Collapse" and n < 2 then return talk() end
+    if (SCEN == "Chose" or SCEN == "Timeout" or SCEN == "Break" or SCEN == "Box") and n < 2 then return talk() end
     return nil
 end
 
-for _, id in ipairs({ "OnBtbYes", "OnBtbNo", "OnChoiceTimeout", "OnBalloonBreak", "OnBalloonClose",
+for _, id in ipairs({ "OnBtbYes", "OnBtbNo", "OnBtbAnchor", "OnAnchorSelectEx", "OnAnchorSelect", "OnChoiceTimeout", "OnBalloonBreak", "OnBalloonClose",
     "OnMinuteChange", "OnHourTimeSignal", "OnMouseMove", "OnMouseClick", "OnMouseDoubleClick", "OnMouseWheel",
     "OnShellChanging", "OnShellChanged", "OnBalloonChange", "OnGhostChanging", "OnSurfaceChange",
     "OnSurfaceRestore", "OnInstallCompleteAll", "OnUpdateComplete" }) do
@@ -120,7 +131,7 @@ if ($Prepare) {
     $manual = ($printed | Where-Object { $_ -like 'root=*' }) -replace '^root=', ''
     $helper = Join-Path $wt 'target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe'
     if ((Machine $helper) -ne '014C') { throw "helper が 32bit でない: $helper" }
-    foreach ($name in 'root', 'root-box') {
+    foreach ($name in 'root', 'root-box', 'root-tate') {
         $root = Join-Path $base $name
         New-Item -ItemType Directory -Force $root | Out-Null
         Get-ChildItem -Force $root | Remove-Item -Recurse -Force
@@ -136,6 +147,10 @@ if ($Prepare) {
     }
     $surfaces = Join-Path $base 'root-box\ghost\emo2\shell\master\surfaces.txt'
     [IO.File]::AppendAllText($surfaces, (("`r`n" + $boxBraces.Trim() + "`r`n") -replace "(?<!`r)`n", "`r`n"), $utf8)
+    # 件 3 の縦書き: root-tate の同梱バルーンの基層 descript.txt に正典キー vertical,1 を足す（書字方向は起動時に確定）。
+    # emo2-kakukaku は横書き用で wordwrappoint.y,0 を持ち、縦書きでは 1 字ごとに列を折り返す（1 回目の撮影）。
+    # 列を validrect の下端まで使えるよう、wordwrappoint.y を validrect.bottom と同じ -56 に上書きする（後勝ち）。
+    [IO.File]::AppendAllText((Join-Path $base 'root-tate\balloon\emo2-kakukaku\descript.txt'), "`r`nvertical,1`r`nwordwrappoint.y,-56`r`n", $utf8)
     return
 }
 
@@ -190,7 +205,7 @@ public static class BtbInput {
 '@
 
 if (-not $Run) { return }
-$root = Join-Path $base $(if ($Run -eq 'Box') { 'root-box' } else { 'root' })
+$root = Join-Path $base $(switch ($Run) { 'Box' { 'root-box' } 'Vertical' { 'root-tate' } default { 'root' } })
 if (-not (Test-Path (Join-Path $root 'areka.exe'))) { throw "根がない。先に -Prepare" }
 $bootLua = Join-Path $root 'ghost\emo2\ghost\master\scripts\pasta\shiori\event\boot.lua'
 [IO.File]::WriteAllText($bootLua, (($lua -replace '__SCEN__', $Run) -replace "(?<!`r)`n", "`r`n"), $utf8)
@@ -350,6 +365,13 @@ try {
             Start-Sleep -Milliseconds (3 * $TimeoutMs)
             $late = @(Lines | Select-Object -Skip $script:seen | Where-Object { $_ -match 'id=OnBalloonTimeout' })
             Note "OnBalloonTimeout after break: $($late.Count)"
+        }
+        { $_ -in 'Underline', 'Vertical' } {
+            # 件 3: 操作はしない。台詞が出揃うのを待ち（トークの終わり＝steady_talk_done か boot_talk の完了）、
+            # dump_balloon で撮る。撮った後は時間切れに任せる。
+            WaitFor 'visible=true' | Out-Null
+            WaitFor 'event="?(boot_talk_done|steady_talk_done|talk_done)' 30 | Out-Null
+            Start-Sleep -Milliseconds 1000; Dump ($Run.ToLower())
         }
         'Collapse' {
             # 件 2: 操作はしない。面ごとに記録を待ち、見えている間に dump_balloon で今の絵を撮る。
