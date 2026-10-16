@@ -28,12 +28,15 @@
 - **In scope**:
   - 全体テストのスクリプトが終わったときの、`target\debug\` の `areka.exe` の隣の helper の向き（i686 版であること）と、揃えられなかったときの知らせ。
   - areka が隣の helper を起こすときに、その helper が 32bit 版でないと分かる記録を 1 行出すこと。
+  - `README.md` と `.kiro/steering/tech.md` のビルドの手順を `cargo build -p areka` に替えること（罠の入口である素の `cargo build` を手順から外す）。
 - **Out of scope**:
   - 配布物の helper の置き方（`tools/package.ps1`・すでに i686 版）と、arm64 の helper。
   - 32bit の SHIORI の受け口の仕組みそのもの（areka と helper のやりとり・LOAD の手順・失敗の扱い）。
   - helper の置き場の決め方（`areka.exe` の隣）。別の場所を探しに行くこと・外から helper の場所を指す口を足すことはしない（brief の案 ⑶ の「開発時だけの探し方」は取らない。同じウェーブの `baseware-root-list` と重なるため）。
   - `target\release\` の helper（全体テストは debug だけを作る）。
   - 全体テスト以外の操作で開発者が作った x64 版の helper を、自動で置き換えること（記録で知らせるところまで）。
+  - 根の `Cargo.toml` に `default-members` を置いて素の `cargo build` から helper を外すこと（32 クレートを並べ直す保守と、書き忘れたクレートが黙って抜ける危うさのため取らない）。
+  - 全体テストの x64 の段から helper を外すこと（x64 の段はもともと隣の helper を上書きしないので目的に効かない。時間の短縮だけのための変更は混ぜない）。
 - **Adjacent expectations**:
   - 上流: フルテストの速度調整（PR#258・spec なし）。helper の約 42 秒かかるテストを i686 の段だけで走らせる形は保つ。
   - 同じウェーブ C7 の `baseware-root-list`: helper の置き場を決める関数のファイル（`boot_config.rs`）を触る。本仕様はそのファイルの振る舞いを変えない。
@@ -51,9 +54,10 @@
 
 1. When 全体テストのスクリプトが最後の段まで回り終えた, the 全体テストのスクリプト shall `target\debug\` の `areka.exe` の隣に i686（32bit）版の `shiori-host32-helper.exe` が在る状態で終わる。
 2. If 途中のいずれかの段（i686 の成果物のビルドを除く）が赤で終わった, the 全体テストのスクリプト shall 段が赤でも止めずに最後まで回す今の決まりを保ち、1 と同じ状態で終わる。
-3. If i686 版の helper を `areka.exe` の隣へ揃えられなかった（i686 の成果物のビルドが赤・i686 版のファイルが無い など）, the 全体テストのスクリプト shall 段ごとの合否の一覧に、揃えられなかったことの分かる赤の行を出し、終了コード 1 で終わる。
+3. If i686 版の helper を `areka.exe` の隣へ揃えられなかった（i686 版のファイルが無い・置き換えが断られた など）, the 全体テストのスクリプト shall 段ごとの合否の一覧に、揃えられなかったことの分かる赤の行を出し、終了コード 1 で終わる。揃えの段の合否は「終わったときに隣が i686 版か」だけで決める。i686 の成果物のビルドが赤でも、前の i686 版が残っていればそれを隣へ置いて揃えの段は緑とし、ビルドの失敗はビルドの段の赤で知らせる（同じ失敗で二重に赤にしない）。
 4. When 開発者が全体テストのスクリプトの直後に `target\debug\areka.exe` で 32bit の SHIORI のゴースト（例: claudia の `yaya.dll`）を起こした, the areka shall 実行ファイルの形式の違い（`0x800700C1`）で SHIORI の読み込みに失敗せずに、そのゴーストを起こす。
 5. The 全体テストのスクリプト shall 端末へ出す新しい文（一覧の行を含む）を、今の一覧の行と同じく ASCII の文字だけで書く。
+6. The 開発の手順の文書（`README.md` と `.kiro/steering/tech.md` のビルドの手順） shall areka を作る手順を、helper を x64 で作らない `cargo build -p areka` で示す（ワークスペースの根の素の `cargo build` を手順として示さない）。
 
 ### Requirement 2: 全体テストが確かめる範囲を減らさない
 
@@ -76,5 +80,5 @@
 2. The 1 の記録 shall 1 行の中に、helper のパス・その helper が 32bit 版でないので 32bit の SHIORI を読めないこと・直し方（i686 版の helper を `areka.exe` の隣へ置く）を含む。
 3. When 1 の記録を出した, the areka shall そのゴーストを、今の「SHIORI を読めなかった」ときと同じ扱いで続ける（新しい窓・メッセージボックス・別の止め方を足さない）。
 4. While `areka.exe` の隣の helper が 32bit（i686）の実行ファイルである, the areka shall 1 の記録を出さず、ゴーストの起こし方を今と変えない（配布物の helper は常にこの場合）。
-5. If helper の向きを確かめられなかった（helper のファイルは在るが読めない・実行ファイルの形をしていない など）, the areka shall 確かめられなかったことと helper のパスを記録に 1 行残し、その後の起こし方は今と変えない（黙って飛ばさない）。
+5. If helper の向きを確かめられなかった（helper のファイルが無い・在るが読めない・実行ファイルの形をしていない など）, the areka shall 確かめられなかったことと helper のパスを記録に 1 行残し、その後の起こし方は今と変えない（黙って飛ばさない）。
 6. The areka shall helper を探す場所を `areka.exe` の隣から広げず、helper の場所を外から指す口も足さない。
