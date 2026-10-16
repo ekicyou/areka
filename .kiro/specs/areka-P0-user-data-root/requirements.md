@@ -57,7 +57,7 @@ winget で areka を入れた利用者（と、`areka.exe` の在るフォルダ
   - `areka-P0-write-failure-notice`（同じウェーブ）: 書ける根を作れない・写せない・記憶を書けないときの利用者への知らせは向こうの持ち物。同じウェーブの約束で、この spec は `crates/areka/src/main.rs`・`crates/areka/src/boot_resolve.rs`・`crates/areka/src/roots/edit.rs` に触らない（`boot_resolve.rs` に手を入れないと済まないと設計で分かったら、そのタスクを最後に置き、向こうの着地を待って main を取り込んでから直す）。
   - `areka-P0-winget-release-automation`（後続）: この spec の着地で、説明書の winget の行と winget-pkgs への次の版の提出を始められる。雛形の注意書き（`InstallationNotes`）を外すかどうかと、その作業は向こうが持つ（要件 9）。
   - メニューの「置き場を外す ▸」（`crates/areka/src/menu/roots_frame.rs`）: 書ける根を選べない形にするために触る（要件 3.3）。「置き場を先頭へ ▸」も `crates/areka/src/menu/` に足す（要件 3.7・3.8。`write-failure-notice` は `menu/` に触らないと確かめた）。
-  - 並びを変える手続き（`crates/areka/src/roots/edit.rs`）: 「置き場を先頭へ ▸」の判断の関数を足し、今の `apply` を呼ぶ（`apply` の中身は変えない）。このファイルは同じウェーブの約束で触らないものなので、**このタスクを最後に置き、`write-failure-notice` の着地を待って main を取り込んでから直す**。向こうは `apply` の呼び方か戻り値（書けなかった結果を返す形）を変える見込みなので、着地の後の形に合わせ、書けなかった結果を握りつぶさずに渡す（要件 3.9）。
+  - 並びを変える手続き（`crates/areka/src/roots/edit.rs`）: 「置き場を先頭へ ▸」の判断の関数を足し、今の `apply` を呼ぶ（`apply` の中身は変えない）。このファイルは同じウェーブの約束で触らないものなので、**このタスクを最後に置く**。2026-10-16 の `write-failure-notice` の設計の討議（向こうのコミット `0af52066`）で、`apply` の形（引数・戻り値 `()`）は変わらず、書けなかった結果は `apply` の中で向こうの致命の道へ渡ると決まった＝今の `apply` を呼べば要件 3.9 を満たす。着地の順はこちらが先（向こうの「起動の前の確かめ」のタスクが、こちらの書けるかの確かめの部品 `areka_user_data::open_dir_for_add` を待つ片向きの待ち）なので、向こうの着地は待たない（待つと互いに待ち合う）。
   - `areka-P0-dev-folder-alias`・`areka-P0-ghost-inner-balloon`・`areka-P0-shell-companion-balloon`: 同じ `roots/` と `boot_config.rs` の別の関数を触る。この spec は根の並びの値の形を変えない。
 
 ## Requirements

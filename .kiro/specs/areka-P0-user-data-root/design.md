@@ -29,6 +29,7 @@
 
 ### This Spec Owns
 
+- 書けるかの確かめの部品 `areka_user_data::open_dir_for_add`（`write-failure-notice` も自前の確かめを作らずこれを呼ぶ・2026-10-16 打ち合わせ）。
 - 書ける根を使う形かどうかの判断（winget の入れ先・書けない・環境変数 `AREKA_USER_ROOT`・どれでもない）と、その理由の記録。
 - 書ける根の場所の決め方（`AREKA_USER_ROOT` → `%LOCALAPPDATA%\areka\`）と、書ける根のフォルダを作ること。
 - areka の記憶の置き場の既定（`AREKA_PROFILE_DIR` が無いとき）と、実行ファイルの隣の記憶の一度きりの引き継ぎ。
@@ -41,7 +42,7 @@
 ### Out of Boundary
 
 - 根の並びの値の形・上から探す規則・隠れの規則・「置き場を追加…」（完了 `areka-P0-baseware-root-list`）。記憶の綴り `<exe>`・`|` は変えない。
-- 並びを記憶へ書けなかったときの扱いと知らせ（`write-failure-notice`。`roots/edit.rs` の `apply` の戻り値の形も向こうが決める）。
+- 並びを記憶へ書けなかったときの扱いと知らせ（`write-failure-notice`。`roots/edit.rs` の `apply` の形〔`fn apply(world, roots, exe_dir)`・戻り値 `()`〕は変わらず、書けなかった結果は `apply` の中で向こうの致命の道 `write_failure::fatal` へ渡る＝2026-10-16 向こうの設計の討議・コミット `0af52066`）。
 - 記憶を書ける根の `profile\areka\` へ書けないときの起動の止め方（`write-failure-notice` の書けるかの確かめ。こちらの写しの後に走る）。
 - `.update-work`・`.nar-work` の中身と片付け（宛先の根が変わるだけ）。
 - winget が残す PATH の項目・`dist/winget/**`・`InstallationNotes` を外す作業（`winget-release-automation`）。
@@ -59,6 +60,7 @@
 ### Revalidation Triggers
 
 - `areka-user-data` の公開の型（`Layout`・`Reason`・`UserRoot`）や `app_profile_dir` の規則が変わる → 中継（`areka-mcp-bridge`）と areka の両方のテストを通し直す。
+- `open_dir_for_add` の形（引数・`std::io::Result<()>`）が変わる → `write-failure-notice` の `write_failure::probe_dir` が照らし直す（向こうの「起動の前の確かめ」のタスクはこの口が main に在ることを待つ）。
 - `write-failure-notice` が `roots/edit.rs` の `apply` の形を変える → 「置き場を先頭へ ▸」のタスク（最後）を新しい形に合わせる。
 - `resolve_roots_from` の引数が変わる → `dev-folder-alias`（同じ `roots/{mod,resolve}.rs`）が照らし直す。
 - `BasewareRoot` に印 `RootMark` が足される → `BasewareRoot` を等しさで比べるテストと、並びを組み直す呼び手（今の項目を複写せず `BasewareRoot::new` で作り直すと印が消える）を照らし直す。
@@ -187,7 +189,7 @@ crates/areka/src/emo2_boot/
 
 | ファイル | 触る理由 | 置き方 |
 |---|---|---|
-| `crates/areka/src/roots/edit.rs`（と `edit_tests.rs`） | 「置き場を先頭へ ▸」（要件 3.7〜3.9）は並びを変える手続き＝今の `decide_add`／`decide_remove` と同じ所に判断を置き、同じ `apply` で起動の文脈・記憶・記録を書き換えるのが本質の形。メニューの側で並びを組み替えて `apply` を迂回すると、記憶へ書く口と「書けなかった結果」の受け渡し（要件 3.9）が 2 つに割れる | **最後のタスク**。`write-failure-notice` の着地を待ち、main を取り込んでから、着地の後の `apply` の形（書けなかった結果を返す形）に合わせる。「置き場を先頭へ ▸」のメニューの項目（`menu/*`）も同じタスクに入れる（入口が無いまま項目だけ出さない） |
+| `crates/areka/src/roots/edit.rs`（と `edit_tests.rs`） | 「置き場を先頭へ ▸」（要件 3.7〜3.9）は並びを変える手続き＝今の `decide_add`／`decide_remove` と同じ所に判断を置き、同じ `apply` で起動の文脈・記憶・記録を書き換えるのが本質の形。メニューの側で並びを組み替えて `apply` を迂回すると、記憶へ書く口と「書けなかった結果」の受け渡し（要件 3.9）が 2 つに割れる | **最後のタスク**（向こうの着地は待たない）。`apply` の形は変わらない（向こうの設計の討議で確定）ので、今の `apply` を呼ぶだけで要件 3.9 を満たす。着地の順はこちらが先（向こうの「起動の前の確かめ」のタスクがこちらの `open_dir_for_add` を待つ片向きの待ち。こちらが向こうを待つと互いに待ち合う）。触るのは `apply` の外（`decide_front`・`move_to_front` を足すだけ）で、向こうは `apply` の中身を変える＝後に着地する側が main を取り込んで合わせる。「置き場を先頭へ ▸」のメニューの項目（`menu/*`）も同じタスクに入れる（入口が無いまま項目だけ出さない） |
 | `crates/areka/src/main.rs` | 触らない | 記憶の置き場は `default_app_profile_dir` の中身で替わり、書ける根は `OnceLock` の口から読む。新しいモジュールは `roots/` の下に置く |
 | `crates/areka/src/boot_resolve.rs` | 触らない | 写しのフォルダを渡せば `ghost_roots`・`read_last_balloon`・`decide_boot_shell` は今のまま写しを読む |
 
@@ -289,7 +291,7 @@ flowchart TD
 | 3.6 | 並びの記録に書ける根の出どころ | RootsReportExt | `log_roots` の `user_root` 欄（項目の印から） | — |
 | 3.7 | 「置き場を先頭へ ▸」で先頭へ動かし記憶に書き info | RootsFront・RootsMenu | `decide_front`・`move_to_front`・`apply` | — |
 | 3.8 | 子は全部・今の先頭は選べない・env と 1 つは項目ごと選べない・両方の形で出す | RootsMenu | `front_item` | — |
-| 3.9 | 書けなかった結果を受け口へそのまま | RootsFront | 着地の後の `apply` の戻り値をそのまま返す | — |
+| 3.9 | 書けなかった結果を受け口へそのまま | RootsFront | 今の `apply` を呼ぶ（書けなかった結果は `apply` の中で `write_failure::fatal` へ渡る） | — |
 | 4.1 | 実行ファイルの下に作る物 0 | 全フック・BridgeConfig | 下の「書く経路の表」 | 写す判断 |
 | 4.2 | 新しく入れる物と作業フォルダは書ける根へ | RootsResolveExt | `install_root` の「いちばん上」（今のまま） | — |
 | 4.3 | 起こす前に写して写しを起こす | BootHook・SwitchHook・UserRootContext | `writable_ghost`・`writable_copy` | 起動の流れ・写す判断 |
@@ -346,7 +348,7 @@ flowchart TD
 | 起こしたゴーストの記憶・SHIORI の書き残し・シェルの記憶 | 起こしたフォルダ（`writable_ghost`／`boot_into` の `writable_copy`） | 写しの中 |
 | ゴースト・シェルのネットワーク更新（`.update-work` を含む） | 起こしたフォルダ | 写しの中 |
 | バルーンのネットワーク更新（`.update-work` を含む） | `update/desk.rs` の `resolve` → `writable_copy` | `<書ける根>\balloon\` の写し |
-| 書けるかの確かめ | `exe_dir_writability` | 何も作らない（ハンドルを開いて閉じるだけ） |
+| 書けるかの確かめ | `exe_dir_writability`（中は `open_dir_for_add`） | 何も作らない（ハンドルを開いて閉じるだけ） |
 | 写しの作業 | `copy_tree_atomic` | `<書ける根>\.copy-work\` |
 
 例外（数に入れない・要件の字面どおり）: `AREKA_ROOT` の並び（要件 3.4・4.1）、argv の起動（要件 7.4）、写しに失敗したときの元の場所（要件 4.7）。「置き場を先頭へ ▸」で実行ファイルの隣を書ける根より上へ動かすことはできない（要件 3.8）ので、例外に入らない。
@@ -366,7 +368,7 @@ flowchart TD
 | InstallHook | `areka::install::destination` | 入れ直し・シェル・supplement の宛先を写しへ | 4.4 | UserRootContext (P0), areka-nar (P1) | — |
 | UpdateHook | `areka::update::desk::resolve` | バルーンの更新の対象を写しへ | 4.4 | UserRootContext (P0) | — |
 | RootsMenu | `areka::menu::roots_frame` 他 | 書ける根を外せない・「置き場を先頭へ ▸」 | 3.3, 3.8 | UserRootContext (P1), RootsFront (P0) | — |
-| RootsFront | `areka::roots::edit` | 先頭へ動かす判断と適用 | 3.7, 3.9 | `apply`（`write-failure-notice` の着地の後の形） (P0) | Service |
+| RootsFront | `areka::roots::edit` | 先頭へ動かす判断と適用 | 3.7, 3.9 | `apply`（形は今のまま・中で `write_failure::fatal`） (P0) | Service |
 | BridgeConfig | `areka-mcp-bridge::config` | 控えの置き場を areka と同じ関数で | 6.1〜6.3 | UserDataCore (P0) | Service |
 | Docs | `dist/README.txt` 他 | 説明書・互換表・申し送り | 8.1〜8.5, 9.2, 9.3 | — | — |
 | Verification | `verification/winget-user-data-check.md` | 実測の記録 | 9.1, 10.8〜10.10 | 開発者の手 (P0) | — |
@@ -468,6 +470,12 @@ pub fn decide(signals: &Signals) -> Decision;
 /// 本物の入力を読む薄い口（環境変数 2 つ・控えのファイル・書けるかの確かめ）。
 pub fn probe(exe_dir: Option<&std::path::Path>) -> Signals;
 
+/// フォルダに物を足せるかを、何も作らずに OS へ尋ねる（書けるかの確かめの唯一の部品）。
+/// `access_mode(FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY)`＋`custom_flags(FILE_FLAG_BACKUP_SEMANTICS)` で開いてすぐ閉じ、
+/// OS の結果をそのまま返す。呼び手は `exe_dir_writability`（`Writability` へ写すだけ）と
+/// `write-failure-notice` の `write_failure::probe_dir`（在るいちばん深いフォルダを選んで呼ぶ）。
+pub fn open_dir_for_add(dir: &std::path::Path) -> std::io::Result<()>;
+
 /// プロセスのはじめに 1 回: probe → decide → 書ける根を作る → 記憶の引き継ぎ → 記録。
 /// `profile_env` は `AREKA_PROFILE_DIR` の値（在れば引き継がない＝記憶はそちら）。
 pub fn establish(exe_dir: Option<&std::path::Path>, profile_env: Option<&std::ffi::OsStr>) -> Layout;
@@ -487,7 +495,7 @@ pub fn app_profile_dir(
 
 **probe の中身**
 - winget の控え: `read_dir(exe_dir)` の直下のファイルで、名前が `WINGET_MARKER_PREFIX` で始まり `.db` で終わるもの（大小無視）。winget は zip の入れ先へ `<名乗り>_<出どころ>.db`（隠し属性・SQLite）を置く。綴りの頭が名乗りなので、手元のマニフェスト（`__DefaultSource`）・winget-pkgs（`_Microsoft.Winget.Source_8wekyb3d8bbwe`）・入れ先の根の付け替え（`portablePackageUserRoot`／`MachineRoot`）・`--location` のどれでも当たる。読めなければ「無い」として warn。
-- 書けるか: `OpenOptions` に `access_mode(FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY)`（`0x2 | 0x4`）と `custom_flags(FILE_FLAG_BACKUP_SEMANTICS)`（`0x0200_0000`）を付けて実行ファイルのフォルダのハンドルを開き、すぐ閉じる。権限の確かめは開くときに OS が行うので、何も作らない（要件 1.4・4.1）。`PermissionDenied` → `Denied`、ほかの失敗 → `Unknown`。
+- 書けるか: `open_dir_for_add(exe_dir)`＝`OpenOptions` に `access_mode(FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY)`（`0x2 | 0x4`）と `custom_flags(FILE_FLAG_BACKUP_SEMANTICS)`（`0x0200_0000`）を付けてフォルダのハンドルを開き、すぐ閉じる。`exe_dir_writability` はその結果を `Writability` へ写すだけ。権限の確かめは開くときに OS が行うので、何も作らない（要件 1.4・4.1）。`PermissionDenied` → `Denied`、ほかの失敗 → `Unknown`。
 - winget の控えが在れば書けるかは確かめない（理由は先に当たった 1 つを載せる）。
 
 **establish の中身（記録の event）**
@@ -787,7 +795,7 @@ pub(crate) fn move_to_front(world: &mut bevy_ecs::world::World, dir: std::path::
 ```
 
 - 今のゴースト・バルーンには触らない（`apply` の今の約束＝要件 3.7 の「切り替えない」）。
-- 3.9: `write-failure-notice` の着地の後、`apply` が書けなかった結果を返す形になっていれば、`move_to_front` はその結果を変えずに向こうの受け口へ渡す（`add_root`・`remove_root` と同じ扱い）。着地の前の形（`apply` が error を残すだけ）なら、そのまま呼ぶ。
+- 3.9: `apply` の形は変わらない（`fn apply(world, roots, exe_dir)`・戻り値 `()`）。書けなかった結果は `apply` の中で `write-failure-notice` の致命の道（`write_failure::fatal` → 正規の終了 → 告知）へ渡るので、`move_to_front` は戻り値を受けず分岐も書かずに今の `apply` を呼ぶ（`add_root`・`remove_root` と同じ扱い・2026-10-16 向こうの設計の討議・コミット `0af52066`）。
 
 #### BridgeConfig（`areka-mcp-bridge/src/config.rs`）
 
@@ -859,7 +867,7 @@ impl Config {
 | 写せない（読み・書き・リンク） | 元のフォルダを使う | error `user_data_copy_failed`（`kind`・`from`・`to`・`error`） |
 | 写しの作業フォルダを消せない | 続ける | warn `user_data_copy_work_left`（`dir`） |
 | 「置き場を先頭へ」を受け付けない | 変えない | warn `roots_front_refused`（`reason`） |
-| 並びを記憶へ書けない（先頭へ） | `apply` の今の扱い／着地の後は向こうの受け口へ | `apply` が残す（向こうの持ち物） |
+| 並びを記憶へ書けない（先頭へ） | `apply` の中で向こうの致命の道へ（`write_failure::fatal`） | `apply` が残す（向こうの持ち物） |
 
 ### Monitoring
 
