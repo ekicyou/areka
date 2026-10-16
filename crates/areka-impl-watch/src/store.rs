@@ -82,7 +82,13 @@ pub fn open(home: Home, command: &'static str) -> Result<Store, WatchError> {
 /// 本物のログの口: 出来事 1 件を 1 行にする（時刻は受け手が付ける）。識別と変化の中身は
 /// 出来事の綴りに在る。
 fn write_line(command: &'static str, event: &Event) {
-    if matches!(event, Event::Recovered { backup: Some(_) }) {
+    if matches!(
+        event,
+        Event::Recovered {
+            backup: Some(_),
+            ..
+        }
+    ) {
         tracing::warn!(command, event = ?event, "[store] state file was broken; set aside");
     } else {
         tracing::info!(command, event = ?event, "[store] state changed");
@@ -131,7 +137,13 @@ impl Store {
         let (mut state, rebuilt) = self.load(now)?;
         // 退避はもう起きたことなので、この後の書きを待たずにログへ渡す。
         // 「無かったので作った」は、状態ファイルが書けてから渡す。
-        let set_aside = matches!(rebuilt, Some(Event::Recovered { backup: Some(_) }));
+        let set_aside = matches!(
+            rebuilt,
+            Some(Event::Recovered {
+                backup: Some(_),
+                ..
+            })
+        );
         if set_aside {
             rebuilt.iter().for_each(&self.log);
         }
@@ -252,17 +264,18 @@ impl Store {
     /// 「作り直した」の出来事で、ログの口へ渡すのは呼び手。作り直したときは、その訳を
     /// 「最近の出来事」に足す（要件 8.4・8.5）。
     fn load(&self, now: u64) -> Result<(State, Option<Event>), WatchError> {
-        let backup = match self.read()? {
+        let (backup, damage) = match self.read()? {
             Some(bytes) => match parse(&bytes) {
                 Ok(state) => return Ok((state, None)),
-                // 読めない・版が無い・形が合わないファイルは退避する。
-                Err(WatchError::Broken(_)) => self.set_aside("broken", now)?,
+                // 読めない・版が無い・形が合わないファイルは退避し、その訳を出来事に載せる。
+                Err(WatchError::Broken(damage)) => (self.set_aside("broken", now)?, Some(damage)),
                 Err(err) => return Err(err),
             },
-            None => None,
+            None => (None, None),
         };
         let event = Event::Recovered {
             backup: backup.as_deref().map(lossy),
+            damage,
         };
         let mut state = State::empty();
         state.push_recent(Recent {

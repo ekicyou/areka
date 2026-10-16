@@ -41,12 +41,17 @@ fn merge(id: &str) -> impl FnOnce(&mut State, u64, &dyn Presence) -> (Applied, V
     }
 }
 
-/// 「作り直した」の出来事。`backup` は退避先（無かったので作ったときは `None`）。
-fn recovered_event(backup: Option<&Path>) -> Event {
+/// 「作り直した」の出来事。`backup` は退避先、`damage` は退避した訳（無かったので作ったときは
+/// どちらも `None`）。
+fn recovered_event(backup: Option<&Path>, damage: Option<Damage>) -> Event {
     Event::Recovered {
         backup: backup.map(lossy),
+        damage,
     }
 }
+
+/// `"not json"` を退避したときの訳。
+const NOT_JSON: Damage = Damage::NotJson { line: 1, column: 2 };
 
 /// 「全部消した」の出来事。`backup` は退避先（状態ファイルが無かったときは `None`）。
 fn cleared_event(backup: Option<&Path>) -> Event {
@@ -120,7 +125,7 @@ fn a_recovery_reaches_the_log_port_once_and_before_the_events_of_the_judgement()
     let (store, noted) = store_noting_events(&root);
     let returned = store.with_state(merge("a")).expect("変えられる");
     assert_eq!(returned.len(), 3, "判断が返した列（前提）");
-    let mut expected = vec![recovered_event(None)];
+    let mut expected = vec![recovered_event(None, None)];
     expected.extend(returned);
     assert_eq!(*noted.borrow(), expected);
     // 2 度目からは作り直しではない。
@@ -137,7 +142,10 @@ fn a_recovery_reaches_the_log_port_once_and_before_the_events_of_the_judgement()
     store.with_state(tick).expect("変えずに済む");
     assert_eq!(
         *noted.borrow(),
-        [recovered_event(Some(&home.dir.join(BROKEN_AT_T0)))]
+        [recovered_event(
+            Some(&home.dir.join(BROKEN_AT_T0)),
+            Some(NOT_JSON)
+        )]
     );
 }
 
@@ -164,7 +172,10 @@ fn when_the_write_fails_the_events_of_the_judgement_do_not_reach_the_log_port() 
     // 退避はもう起きているので渡る。書けなかった参加・申し込み・番は起きていないので渡らない。
     assert_eq!(
         *noted.borrow(),
-        [recovered_event(Some(&home.dir.join(BROKEN_AT_T0)))]
+        [recovered_event(
+            Some(&home.dir.join(BROKEN_AT_T0)),
+            Some(NOT_JSON)
+        )]
     );
 }
 
@@ -340,6 +351,33 @@ fn read_only_fails_on_a_broken_file_with_its_damage_and_does_not_set_it_aside() 
         );
         assert_eq!(names(&home.dir), ["state.json"], "退避も作成もしない");
         assert_eq!(*noted.borrow(), []);
+    }
+}
+
+#[test]
+fn a_change_sets_each_broken_file_aside_and_its_damage_reaches_the_log_port() {
+    for (text, damage) in broken_files() {
+        let root = TempPath::under_target("impl-watch-store");
+        let home = home_in(&root);
+        fs::write(home.state_path(), text).expect("置ける");
+        let (store, noted) = store_noting_events(&root);
+
+        store.with_state(tick).expect("退避して続けられる");
+
+        let backup = home.dir.join(BROKEN_AT_T0);
+        assert_eq!(
+            fs::read_to_string(&backup).expect("退避ファイルが在る"),
+            text
+        );
+        assert_eq!(
+            *noted.borrow(),
+            [recovered_event(Some(&backup), Some(damage))],
+            "{text}"
+        );
+        // 形が合わないときの位置は、元のバイト列を読み直して得た 1 以上の行と列。
+        if let Damage::WrongShape { line, column } = damage {
+            assert!(line >= 1 && column >= 1, "{damage:?}");
+        }
     }
 }
 

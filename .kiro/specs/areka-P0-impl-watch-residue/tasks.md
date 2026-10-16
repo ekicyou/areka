@@ -42,7 +42,7 @@
   - 3 種の壊れたファイルで読むだけの道が訳を返して退避しないこと、端末の文が今のままであることを常時テストで判定する
   - 完了の状態: 新しいテストと今のテストが緑
   - _Requirements: 1.2, 1.3, 1.4, 1.5_
-- [ ] 2.2 退避の出来事に訳を載せ、ログの口へ渡ることを判定する
+- [x] 2.2 退避の出来事に訳を載せ、ログの口へ渡ることを判定する
   - 退避の出来事に訳の欄を足し（ファイルが無くて作ったときは無し）、状態を変える 1 回の読みが退避するときに訳を入れる。今の型の照合を欄の増えた形に直す
   - 3 種の壊れたファイルを状態を変える 1 回が退避し、ログの口へ渡る出来事が 3 種の訳を持つこと（形が合わないときの位置は行・列とも 1 以上）を常時テストで判定する
   - 読み直しを外す変異を当てて、形が合わないときの位置のテストが赤になることを確かめ、戻して緑を確かめる
@@ -155,3 +155,4 @@
 ## 変異の記録
 
 - 1.4: `plan::merge_order` の鍵に `Reverse(index)` を足して同点の並びを逆にした → `cli::commands_tests::the_serving_order_the_position_and_the_reading_agree_with_ties_and_bugs_mixed` が赤（番の順の判定）。控え `target\mutation-backup\plan.rs.bak` から戻し、sha256 一致を確かめて緑。
+- 2.2: ① `store::parse` の読み直しを外し、`WrongShape` の位置を `from_value` の失敗の位置（0, 0）から取った → `store::ports_tests::a_change_sets_each_broken_file_aside_and_its_damage_reaches_the_log_port`・`store::ports_tests::read_only_fails_on_a_broken_file_with_its_damage_and_does_not_set_it_aside`・`store::ports_tests::read_only_logs_the_damage_of_a_broken_file_in_one_ascii_line` が赤。② `Store::load` で訳を捨てた（`damage: None` 相当）→ `store::ports_tests::a_change_sets_each_broken_file_aside_and_its_damage_reaches_the_log_port`・`store::ports_tests::a_recovery_reaches_the_log_port_once_and_before_the_events_of_the_judgement`・`store::ports_tests::when_the_write_fails_the_events_of_the_judgement_do_not_reach_the_log_port` が赤。どちらも控え `target\mutation-backup\store.rs` から素のコピーで戻し、sha256 一致（`e9f87617157773fc1d3a4e5a291fa85b25a80f59aab2739958bc5d67254c99d0`）を確かめて緑。

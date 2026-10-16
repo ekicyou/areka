@@ -4,6 +4,7 @@
 //! いつ呼んでも同じ結果になる。状態が変わるたびに出来事（[`Event`]）を 1 件ずつ返し、ログへ
 //! 書くのは呼び手の仕事。
 
+use crate::error::Damage;
 use crate::state::{
     LastMerge, LoadHolder, LoadRequest, MergeHolder, MergeRequest, Participant, ParticipantStatus,
     Recent, RecentKind, State, StopReason, WaitKind, WaitRecord, WatchInfo,
@@ -165,9 +166,11 @@ pub enum Event {
         why: &'static str,
     },
     /// 状態ファイルを空から作り直した。作るのは口の層で、判断は出さない。`backup` は読めなかった
-    /// ファイルの退避先（ファイルが無かったので新しく作ったときは `None`）。
+    /// ファイルの退避先（ファイルが無かったので新しく作ったときは `None`）。`damage` は退避した
+    /// 訳（ファイルが無かったので新しく作ったときは `None`）。
     Recovered {
         backup: Option<String>,
+        damage: Option<Damage>,
     },
     /// 全部消した（`clear`）。作るのは口の層で、判断は出さない。`backup` は消す前のファイルの
     /// 退避先（状態ファイルが無かったときは `None`）。
