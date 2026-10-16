@@ -3,7 +3,7 @@
 ## Project Description (Input)
 - **困っている人**: `areka-impl-watch`（並んで走る実装セッションに机を 1 人ずつ貸し出すコンソールアプリ）へ次に手を入れる開発者。
 - **今の状況**: 完了した `areka-P0-impl-watch` の実装とレビューで「知っていて開けてある」と記録した小さな残り（(a)〜(i)）が 1 か所にまとまっていない。特に、状態ファイルが壊れたとき失敗の文は「`impl-watch.log` を見よ」と指すのに、ログに壊れた訳（JSON の行と列）が残らない。ほかに、時計の取り方が 2 系統、番の来る順の鍵が 2 か所、`none` の綴りと `stopped:` の列の式が重複、殺された前の待ちの記録が残る、の直す向きが決まった残りと、決めてから直す 3 件（裁定 4 の残りの窓・要件 10.2 の字と実物のずれ・実機テストだけが判定する振る舞い）と、任意のテストの穴がある。
-- **変えたいこと**: 壊れた状態ファイルの訳がログに 1 行残り、重複がそれぞれ 1 か所になり、殺された前の待ちの記録が残らず、決めてから直す 3 件は直すか記録に留めるかが決まって文書と合い、採ったテストの穴は変異を当てて赤になることを確かめた上で入る。出力の文の形・`--help` の文・判断の核の規則・状態ファイルの版は変えない。
+- **変えたいこと**: 壊れた状態ファイルの訳がログに 1 行残り、重複がそれぞれ 1 か所になり、殺された前の待ちの記録が残らず、決めてから直す 3 件は直すか記録に留めるかが決まって文書と合い、採ったテストの穴は変異を当てて赤になることを確かめた上で入る。出力の文の形・判断の核の規則・状態ファイルの版は変えず、`--help` には `clear --repo` の 1 行を足すだけにする。あわせて、棚卸の始まりに呼ぶ「リポジトリの分だけ記録を消す」形（`clear --repo`）を足す（2026-10-16 開発者の承認）。
 
 ## Introduction
 
@@ -33,13 +33,13 @@
 - **Out of scope**:
   - 判断の核（番の決め方・回収の決まり・停止要請の決まり）の規則の変更。
   - 端末へ出す文の形（`granted …`・`queued … pos=<n>`・`gone: …`・`not applied: …`・`state file is broken; see impl-watch.log` など）と終了コードの変更。
-  - `--help` の文と手順書 `doc/impl-watch.md` の書き替え（どちらも `areka-P0-impl-watch-skills` が読む・直す側）。
+  - `--help` の今ある行と、手順書 `doc/impl-watch.md` の書き替え（どちらも `areka-P0-impl-watch-skills` が読む・直す側）。`--help` に `clear --repo` の 1 行を足すことだけは範囲の内（Requirement 11）。
   - 完了した spec `completed/areka-P0-impl-watch/` の文書への追い書き。
-  - 新しいコマンド・新しい規則・状態ファイルの形式の版を上げる変更（要るなら別に起票する）。
+  - 新しいコマンド（`clear` に `--repo` の形を足す Requirement 11 を除く）・新しい規則・状態ファイルの形式の版を上げる変更（要るなら別に起票する）。
   - スキルの書き替え。
   - 依存の追加（開発用の依存を含む）と、それに伴う `Cargo.toml`・`Cargo.lock` の変更。
 - **Adjacent expectations**:
-  - `areka-P0-impl-watch-skills` は、端末へ出す文と `--help` を読む。この spec はそれらを変えないので、あちらとの触るファイルの重なりは無い。
+  - `areka-P0-impl-watch-skills` は、端末へ出す文と `--help` を読む。この spec は今ある文を変えないので、あちらとの触るファイルの重なりは無い。`clear --repo` は、あちらの Requirement 12（`kiro-next` の始まりに 1 回呼ぶ・終了コード 2 なら飛ばす）と Requirement 9.5（手順書に書く）が呼ぶ側・書く側を受け持ち、この spec はアプリの側だけを受け持つ。着地の順はどちらが先でもよい。
   - `areka-P0-actor-thread-log-capture`（記録の捕捉の道具）は、(i) で使えるかを見るだけで触らない。ワークスペースの「共有の捕捉の仕組みの迂回」の見張りの例外表も増やさない。
   - 手順書 `doc/impl-watch.md` の今の記述のうち、壊れたファイルの退避が「ログにも残る」はこの spec の後も正しいままである。裁定 4 の窓を戻しの理由の 1 つに挙げる一文だけは、Requirement 6 で窓を閉じると古くなる（害は無い）。その削除は `areka-P0-impl-watch-skills` へ申し送る。
 
@@ -152,10 +152,27 @@
 **Objective:** As a このアプリを呼ぶセッションとスキル, I want この spec の後も、端末の文・終了コード・`--help`・状態ファイルが同じである, so that 呼び出し側も手順書も何も変えずに、直った実行ファイルへ入れ替えられる
 
 #### Acceptance Criteria
-1. The areka-impl-watch shall 端末へ出す文の形・終了コードの対応・`--help` の文を変えない。
-2. The areka-impl-watch shall 状態ファイルの形式の版を変えず、新しいコマンドを足さない。
-3. The areka-impl-watch shall 判断の核の規則（番の決め方・回収・停止要請・再開）を変えない（Requirement 5 の後始末と Requirement 6 の窓の閉じ方も、規則を足さずに行う）。
+1. The areka-impl-watch shall 端末へ出す文の形・終了コードの対応・`--help` の今ある行を変えない（Requirement 11 の 1 行を足すことを除く）。
+2. The areka-impl-watch shall 状態ファイルの形式の版を変えず、Requirement 11 の `clear --repo` のほかに新しいコマンドを足さない。
+3. The areka-impl-watch shall 判断の核の規則（番の決め方・回収・停止要請・再開）を変えない（Requirement 5 の後始末・Requirement 6 の窓の閉じ方・Requirement 11 の `clear --repo` も、規則を足さずに今の決まりを使って行う）。
 4. The areka-impl-watch shall 端末へ出す文を ASCII だけにし、判断の核が `std::fs`・時計・`tracing` を綴らないことを、今の構造テストが緑のまま保つ。
 5. The areka-impl-watch shall 本番ファイル・テストファイルのどれも 1,000 行以下に保ち、新しいテストは本番ファイルの中に書かず兄弟のファイルへ置く。
 6. When 実行ファイルを子プロセスに立てるテスト、または手で走らせて確かめる, the areka-impl-watch shall 置き場所（`AREKA_IMPL_WATCH_HOME`）をワークツリーの `target\` の下の Windows 形の絶対パスで必ず上書きし、開発者の機械に設定された本物の置き場所に触れない。
-7. The areka-impl-watch-residue spec shall 手順書 `doc/impl-watch.md`・`--help`・完了した spec の文書を書き替えず、直した振る舞いと決めたことをこの spec の文書に記録する。
+7. The areka-impl-watch-residue spec shall 手順書 `doc/impl-watch.md`・`--help` の今ある行・完了した spec の文書を書き替えず、直した振る舞いと決めたことをこの spec の文書に記録する。
+
+### Requirement 11: リポジトリの分だけ記録を消す（`clear --repo`）
+**Objective:** As a 棚卸（`kiro-next`）を始める開発者, I want そのリポジトリの机の記録（落ちたセッションの残り）だけを 1 回の呼び出しでまとめて消せる, so that 返事をしない残りの参加者が負荷テストの番を塞ぎ続けず、ほかのリポジトリの記録を消さずに済む
+
+2026-10-16 開発者の承認（「watch アプリの修正はこの spec が引き取る・あちらの仕様と歩調を合わせる」）で足した要件。呼ぶ側は `areka-P0-impl-watch-skills` の Requirement 12（`kiro-next` の始まりに 1 回呼ぶ）で、棚卸の時点ではそのリポジトリで誰も作業していないことを前提にする。
+
+#### Acceptance Criteria
+1. When `clear --repo <リポジトリの名前>` が呼ばれた, the areka-impl-watch shall そのリポジトリの参加者の全員を、1 人ずつ `leave` したのと同じ結果にする（申し込み・机・待ちの記録・参加者の記録を外し、外したことで空いた机の番の決め直しと、止められていた者の再開を、今の決まりのまま行う）。
+2. When `clear --repo` が呼ばれた, the areka-impl-watch shall そのリポジトリのマージの机に残る持ち主と待ち行列を、参加者の記録の有無にかかわらず空にし、直前のマージの記録（`last`）は残す。
+3. The areka-impl-watch shall ほかのリポジトリの参加者・マージの机と、ほかのリポジトリの参加者が持つ負荷テストの机の番・待ち行列・待ちの記録を消さない。
+4. The areka-impl-watch shall `--repo` に、ほかのコマンドの `--repo` と同じ形（英数字と `.` `_` `-` だけの 1〜100 字の名前。例 `areka`）を受け、パスを受けない。
+5. When `clear --repo` が済んだ, the areka-impl-watch shall 外した参加者の識別を並べた ASCII の 1 行（外した者が居なければ `none`）を出して、終了コード 0 で終わる（消すものが無いことは失敗でも「当てはまらない」の 3 でもない）。
+6. If `--repo` の値が形に合わない・余計な引数がある, then the areka-impl-watch shall 今の使い方の誤りと同じく終了コード 2 で終わる。正しい呼び方を終了コード 2 で終えることはない（呼ぶ側は 2 を「この形がまだ無い」と読んで飛ばすため）。
+7. The areka-impl-watch shall 外した参加者ごとに、`leave` と同じ出来事をログと読み物の最近の出来事に残す。全部を消す `clear` のような状態ファイルの退避は行わない。
+8. The areka-impl-watch shall 引数の無い `clear`（全部を消す）の振る舞い・出力・終了コードを変えない。
+9. The areka-impl-watch shall 1〜7 を常時テストで判定する（2 つのリポジトリの参加者が混ざり、消すリポジトリの者が負荷テストの机を持ってほかのリポジトリの者を止めている状態を含む）。
+10. The areka-impl-watch-residue spec shall 新しい形の呼び方と結果の 1 行を `--help` に 1 行足し、今ある `--help` の行は 1 字も変えない。手順書への書き込みは `areka-P0-impl-watch-skills` の Requirement 9.5 に任せる。
