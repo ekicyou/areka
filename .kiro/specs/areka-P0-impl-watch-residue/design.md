@@ -63,7 +63,7 @@
 
 ### Existing Architecture Analysis
 
-- 状態を変える呼び出しは全部 `Store::with_state`（`state.lock` の排他の中で 読む → 判断 → 書く → ログの口 → 読み物）を通る。判断（`plan::apply`）を呼ぶのは `with_state` へ渡す閉じた関数の中だけで、生死の確認（回収）は必ず `state.lock` の中で走る。この不変を、裁定 4 の窓を閉じる根拠に使う（要件 6）。
+- 状態を変える呼び出しは全部 `Store::with_state`（`state.lock` の排他の中で 読む → 判断 → 書く → ログの口 → 読み物）を通る。判断（`plan::apply`）を呼ぶのは `with_state` へ渡す閉じた関数の中だけで、状態を変える生死の確認（回収）は必ず `state.lock` の中で走る（読み物の `mark` と端末の要約 `summary` の探りは排他の外で走るが、状態を変えない）。この不変を、裁定 4 の窓を閉じる根拠に使う（要件 6）。
 - 判断の核 `plan.rs` は純粋（ファイル・時計・プロセス・ログを持たない）。出来事（`Event`）を返し、ログへ書くのは口の層。
 - `cli.rs` はコマンドの表 1 本（14 行）と `--help` を同じ表から組む。コマンドごとの手書きの分岐を持たない。
 - 待ちのループ `wait::run` は口（`WaitPort`）越しに時計・読み・状態を変える 1 回・眠りを頼む。本物の口は `Store` の上に在る。
@@ -150,7 +150,7 @@ sequenceDiagram
     O->>O: state.lock を握ってから回収（記録も印も消えた後しか見ない）
 ```
 
-- 生死の確認は `state.lock` の中でしか走らないので、「記録は消えたが印は握られている」状態を他の呼び出しが見ることは無い。
+- 状態を変える生死の確認（回収）は `state.lock` の中でしか走らないので、「記録は消えたが印は握られている」状態を見て状態を変える呼び出しは無い。読み物の `mark` と `summary` の探りは排他の外だが、状態を変えないので窓にならない。
 - 状態ファイルの書きが失敗したときは、印はすでに解けていて記録は残る。次の回収が「居ない」として記録を消す（要件 6.3。今の「残った記録は回収に任せる」と同じ結末）。参加者は再開の後なら見張り待ちの印を持っているので回収されない。
 
 ### `clear --repo` の流れ（要件 11）
@@ -337,7 +337,7 @@ fn parse(bytes: &[u8]) -> Result<State, WatchError>;
 4. `from_value::<State>(value)` で形へ写す（今の読み方。通るファイルは今と同じ）。失敗したときだけ、元のバイト列を `from_slice::<State>` で読み直す。読み直しが通ればその状態を使い、失敗すればその失敗の行と列で `Broken(WrongShape { line, column })`。`Value` から写した失敗は位置が 0 なので、位置は読み直しからしか取れない。読み直しが通る場合も値を作り話で埋めないので、黙った置き換えにならない。
 
 **訳の運び方**
-- `load`: `Err(Broken(damage))` なら退避し、`Event::Recovered { backup, damage: Some(damage) }` を作る（ファイルが無かったときは `damage: None`）。本物のログの口 `write_line` は今どおり `backup: Some(_)` で `warn!`、`event = ?event` の綴りに `damage` が載る（要件 1.1, 1.2）。
+- `load`: `Err(Broken(damage))` なら退避し、`Event::Recovered { backup, damage: Some(damage) }` を作る（ファイルが無かったときは `damage: None`）。本物のログの口 `write_line` は今どおり `backup: Some(_)` で `warn!`、`event = ?event` の綴りに `damage` が載る（要件 1.1, 1.2）。`Recovered { backup: Some(_) }` を照らす今の型の照合は、欄が増えるので `Recovered { backup: Some(_), .. }` に直す。
 - `read_only`: `Broken(damage)` のときだけ `tracing::error!(error = %err, damage = ?damage, "[store] read failed")`、ほかの失敗は今の行のまま。`status` と走っている待ち・見張りの読みは全部ここを通る（要件 1.3）。
 - 端末の文（`state file is broken; see impl-watch.log`）・終了コード・退避の振る舞いは変えない（要件 1.5）。
 
@@ -375,7 +375,7 @@ pub trait WaitPort {
   - `finish` = `self.with_state(|state, now, alive| { let applied = plan::apply(state, cmd, Some(caller), now, alive); drop(held); (applied.clone(), applied) })`。判断が生死を尋ね終えてから印を解き、排他は状態ファイルの書きとログの口と読み物の後に放す（要件 6.1）。`plan.rs` には触らない（要件 6.2）。排他を取れずに閉じた関数が走らなかったときも、`held` は閉じた関数と一緒に落ちて解ける。
   - `sleep` = `self.pause_for(POLL)`。`#[cfg(test)]` の `panic!` は外す（安全網は `refuse_poll` へ移る）。
 - `run`: 登録は `spec.register(port.pid(), port.now()?)`。最後は `port.finish(&unregister, id, held)`、失敗は今の `warn!`（`[wait] wait record not removed; left to be reclaimed`）を残して答えを返す（要件 6.3）。`drop(held)` の行は無くなる。途中の失敗で返るときは、今どおり `held` が落ちて解ける。
-- 不変（モジュールの説明に書く）: `plan::apply` を呼ぶのは `with_state` へ渡す閉じた関数の中だけ（`cli::change`・`cli::waiting`・`wait` の `change` と `finish`）。待ちの居る印は、最後の抹消の `state.lock` の中で解く。
+- 不変（モジュールの説明に書く）: `plan::apply` を呼ぶのは `with_state` へ渡す閉じた関数の中だけ（`cli::change`・`cli::waiting`・`wait` の `change` と `finish`）。待ちの居る印は、最後の抹消の `state.lock` の中で解く。状態を変える生死の確認（回収）は `state.lock` の中でしか走らない（読み物の `mark`・`summary` の探りは排他の外だが状態を変えない）。
 - 偽の口（`wait_loop_tests.rs`）の `now` は `Ok(T0 + 眠った回数)`。`finish`: 跡に `U` を残し、居る印が握られていたかを書き留め、判断に通し、`held` を落とす。失敗の差し込みでも `held` は落ちる。
 
 ### 入口（cli.rs）
@@ -398,7 +398,7 @@ pub(crate) struct Variant {
 }
 ```
 - `clear` の行: `variant: Some(Variant { opt: Opt::Repo, note: "leave everyone of the repo and empty its merge desk (the last merge stays). prints \"cleared repo=<repo>; left: <ids or none>\". 0=done" })`、`build: |f| match f.take(Opt::Repo) { Some(repo) => Command::Change(plan::Command::ClearRepo { repo }), None => Command::Clear }`。ほかの 13 行と `--help` の行は `variant: None`。
-- `parse`: 受ける引数は「要る・任意・`--wait`」に `variant` の引数を足したもの。形の検査・2 度の断り・余計な語の断りは今の道のまま（要件 11.4, 11.6）。
+- `parse`: 受ける引数は「要る・任意・`--wait`」に `variant` の引数を足したもの。今の `Spec::accepted()` は引数の読みと `--help` の名前の行の両方に使われているので、読みの側だけが `variant` の引数を受けるように分ける。形の検査・2 度の断り・余計な語の断りは今の道のまま（要件 11.4, 11.6）。
 - `usage`: 名前の行は今どおり「要る・任意・`--wait`」だけで組む（`  clear` のまま）。`note` の行の次に、`variant` があれば `format!("      {} {}: {}\n", spec.name, variant.opt.shown(), variant.note)` を足す。これが `--help` に足す唯一の行（要件 11.10）。
 - 引数の無い `clear` は今の `Command::Clear` の道のまま（要件 11.8）。
 
@@ -511,7 +511,7 @@ Some(command) => store.with_state(|state, now, alive| {
 
 ## 移さない・直さない理由（要件 6.4, 8.2, 9.1）
 
-- 要件 6.4: 他のプロセスがまさにその瞬間に探る並走そのものは常時テストで作れないので、「印は `state.lock` の中で解かれ、生死の確認は `state.lock` の中でしか走らない」という順の不変を常時テストで判定し、並走の再現はしない。
+- 要件 6.4: 他のプロセスがまさにその瞬間に探る並走そのものは常時テストで作れないので、「印は `state.lock` の中で解かれ、状態を変える生死の確認は `state.lock` の中でしか走らない」という順の不変を常時テストで判定し、並走の再現はしない。
 - 要件 8.2（読み物の警告の行）: `[store] status.md not written; the result stands` の行を常時テストで捕まえる手は、記録の捕捉の道具を開発用の依存に足す（`Cargo.toml`・`Cargo.lock` が変わる）・受け手をスレッドに差す（迂回の見張りの例外表が増える）・本物の受け手を使う（プロセスに 1 つで最初に開いた置き場所へ行き、判定の足場にならない）の 3 つとも塞がっているので、実機テスト ⑪ に残す。
 - 要件 8.2（ログの実ファイルの項目）: `command=`・`event=` の字面を作るのは `tracing-subscriber` で、上と同じ 3 つの塞がりにより常時テストで捕まえられないので、実機テストに残す。
 - 要件 9.1: (h1)〜(h8) は 8 件とも採るので、採らない理由の行は無い。
