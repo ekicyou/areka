@@ -184,8 +184,8 @@ sequenceDiagram
 | 8.1, 8.2, 8.3, 8.4, 8.5, 8.6 | 調停役の退役と呼び名の掃除 | 調停役の退役・kiro-watch-clear・手順書 1 節 | 削除・書き替えの一覧 | — |
 | 9.1, 9.2, 9.3, 9.4, 9.5 | 手順書の追い書き | 手順書 | 4 節の小節・5 節の表・6 節の削除 | — |
 | 10.1, 10.2, 10.3 | トークンの負荷 | 机の呼び方の約束 | 起きる機会・読む行・知らせの 1 行 | — |
-| 12.1, 12.2, 12.3, 12.4, 12.5, 12.6 | 棚卸の始まりのリポジトリの掃除 | kiro-next の掃除の段 | `clear --repo` の 1 行 | — |
 | 11.1, 11.2, 11.3, 11.4 | 確かめ | 確かめの記録 | 一時の置き場所・4 つの場合・コマンドの並び・差分なし | — |
+| 12.1, 12.2, 12.3, 12.4, 12.5, 12.6 | 棚卸の始まりのリポジトリの掃除 | kiro-next の掃除の段 | `clear --repo` の 1 行 | — |
 
 ## Components and Interfaces
 
@@ -250,23 +250,35 @@ else echo "desk: id=$ID repo=$R"; fi
 | 見張り | `exit=0`・`stop requested by <X>` | 停止要請。各スキルの「止まる切れ目」で `stopped --wait` | 3.1, 3.3 |
 | 見張り | `exit=0`・`already stopped; …` | 「止まった」を記録し直さず `resume` をバックグラウンドで | 3.7 |
 | 見張り | `exit=1`・`AREKA_IMPL_WATCH_HOME …` | その回の机の段を止めて 1 行（標準エラーの行をそのまま）・最後の報告にも残す | 6.3 |
-| 見張り | `exit=1`・`a watch wait for <ID> is already running` | 自分の見張りが走っていれば何もしない。覚えが無ければ `leave --id <ID>` → 見張りを立て直す → 1 行で伝える。抜けたので持っていた申し込みがあれば申し込み直す | 2.3, 2.7, 2.8 |
+| 見張り | `exit=1`・`a watch wait for <ID> is already running` | 自分の見張りが走っていれば何もしない。覚えが無ければ、下の「残りの見張りの外し方」の 1 本をバックグラウンドで走らせ、1 行で伝える。抜けたので持っていた申し込みがあれば、その 1 本が終わる前に申し込み直す | 2.3, 2.7, 2.8 |
 | 見張り | `exit=1`・上のほか | 直ちに 1 回だけ立て直す。立て直しも同じ文の 1 なら終了コード 1 の表の行に従い、直らなければその回の机の段を止めて最後の報告に残す | 2.6, 6.4 |
-| 見張り | `exit=3` | `leave`・`merged` の後なら何もしない。それ以外は 1 行伝えて立て直し、持っていた申し込みを申し込み直す（机を持っていたら各スキルの 4.7・5.8） | 2.9, 2.10 |
+| 見張り | `exit=3` | 今の見張り（最後に走らせた見張りの実行）でなければ何もしない。今の見張りで、参加を終えた（実行の終わりの `leave`・`merged`）後なら何もしない。それ以外は 1 行伝えて立て直し、持っていた申し込みを申し込み直す（机を持っていたら各スキルの 4.7・5.8） | 2.9, 2.10 |
 | 再開の待ち（`stopped --wait`・`resume`） | `exit=0`・`resumed` | 見張りを立て直してから、止まった所の次へ | 3.5 |
 | 再開の待ち | `exit=0`・`stop requested again by <X>` | 作業に戻らず、もう一度 `stopped --wait` | 3.6 |
 | 再開の待ち | `exit=3` | 見張りを立て直して続ける | 3.8 |
 | 再開の待ち | `exit=1`・`a resume wait for <ID> is already running` | 前の再開の待ちが走っている。何もしない（6.4 の失敗に数えない） | 3.10 |
 | `merge --wait`・`loadtest --wait` | `exit=1`・`a merge wait …`／`a load wait … is already running` | 自分の待ちが走っていれば何もしない。覚えが無ければ `cancel --id <ID>` → 申し込み直す → 1 行 | 6.4 |
-| どれでも | `exit=1`・`state.lock is busy …` | 少し置いて 1 回だけ呼び直す。続けば 6.4 | 6.4 |
+| `loaddone` | `exit=3`・`not applied: not the load-test holder` | 机はすでに自分のものでない（記録が消えた など）。返し直さず、1 行伝えて続ける | 4.5, 6.4 |
+| `loadrunning` | `exit=3`・`not applied: the load-test desk already has a holder` | 持ち主にならない。1 行伝え、その計測を記録しないまま開発者の指示を待つ | 4.6 |
+| `leave`・`merged`・`loaddone`・`cancel`・`loadrunning` | `exit=1`・下の 2 行のほか | 標準エラーの 1 行をそのまま伝え、手順書 5 節の終了コード 1 の表に従う。直らなければその回の机の段を止めて最後の報告に残す | 6.3, 6.4 |
+| どれでも | `exit=1`・`state.lock is busy …` | 間を置かずに 1 回だけ呼び直す（実行ファイルが自分で 10 秒待ってから断るので、スキルの側で待たない）。続けば 6.4 | 6.4 |
 | どれでも | `exit=2` | 呼び方の誤り。スキルの文の誤りなので、その回の机の段を止めて最後の報告に残す | 6.4 |
 
 - 立て直し・申し込み直しは、同じ出来事で 2 つの待ちが続けて終わっても、それぞれ 1 回だけ行う。2 度目が `already running` で終わっても害の無いものとして扱う（4.4 と同じ扱い）。
 - 終わりの知らせは中身（出力の文）で読む。「自分の見張りか」の覚えに頼るのは `already running` の 2.7 と 2.8 の分かれ目だけ。
-- 前のセッションの残りの見張りは、`leave` の後に記録の消えたことを 1〜2 秒で見つけて終わる。その間に立て直した見張りがまた `already running` で終わったら、1 回だけ立て直す。
+- **残りの見張りの外し方**（2.8）: 前のセッションの残りの見張りは、`leave` の後に記録の消えたことを次の見回り（実行ファイルの見回りは 1 秒ごと・`wait.rs` の `POLL`）で見つけて終わるまで、自分の識別の見張りの錠を持ち続ける。直ちに立て直すと、その錠にぶつかって `already running` になる。そこで、外す・待つ・立て直すを 1 本のバックグラウンドの Bash にまとめ、セッションを起こすのは終わりの 1 回だけにする:
+
+```bash
+"$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" leave --id <ID> 2>&1; sleep 3; "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" watch --id <ID> --repo <R> --name <feature> 2>&1; echo "exit=$?"
+```
+
+  - `sleep 3` は見回りの間隔 1 秒の 3 回分。読むのは最後の `exit=` と見張りの行だけ（`leave` の行は読まない）。この 1 本を「今の見張り」として覚える。
+  - この `leave` は参加を終えたことに数えない（参加を終えるのは実行の終わりの `leave` と `merged` だけ）。
+  - この 1 本がまた `already running` で終わったら、2.8 をもう 1 度は行わず 6.4 に従う。
 
 ##### State Management
-- 会話が覚えるもの: 机の段が `on`（`id`・`repo`）か `off`（訳）／見張りの実行の番号／停止の状態（無し・停止要請を受けた・止まった）／負荷テストの机（無し・待っている・持っている）／マージの机（無し・待っている・持っている・自分で外した）／参加を終えたか（`leave`・`merged` の後）。
+- 会話が覚えるもの: 机の段が `on`（`id`・`repo`）か `off`（訳）／見張りの実行の番号／停止の状態（無し・停止要請を受けた・止まった）／負荷テストの机（無し・待っている・持っている）／マージの机（無し・待っている・持っている・自分で外した）／参加を終えたか（実行の終わりの `leave`・`merged` の後。2.8 の外し方の `leave` は数えない）。
+- 「今の見張り」は最後に走らせた見張り（2.8 の 1 本を含む）の実行の番号。終わった見張りの 3 は、それが今の見張りのときだけ扱う。立て直す前の古い見張りの終わりは読み流す。
 - 正本はアプリの状態である。会話の覚えが消えても、前置きと終わり方の表だけで元へ戻れる（失うのは 2.7／2.8 の見分けだけで、そのときは 2.8 に倒す）。
 
 ### スキルの文（スキルごと）
@@ -369,7 +381,7 @@ else "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" clear --repo "$R" 2>&1; echo 
 | 順 | すること | 出る行 | 終わり |
 |---|---|---|---|
 | 1 | 環境変数を読む。空・空白だけ／絶対パスでない（`[System.IO.Path]::IsPathFullyQualified` が偽。`\foo`・`C:foo`・`/c/…` を含む）なら何もせず終わる。値を設定・変更しない | `FAIL home: AREKA_IMPL_WATCH_HOME is not set` ／ `FAIL home: AREKA_IMPL_WATCH_HOME is not an absolute path` | 1（7.5） |
-| 2 | `cargo build --release -q -p areka-impl-watch --manifest-path <作業木>\Cargo.toml --message-format=json-render-diagnostics`。作った実行ファイルの道筋は cargo の報せの `executable` から取る（`CARGO_TARGET_DIR` に依らない） | 失敗なら `FAIL build: cargo exit <n>`（置き場所に触らない） | 1（7.6） |
+| 2 | `cargo build --release -q -p areka-impl-watch --manifest-path <作業木>\Cargo.toml --message-format=json-render-diagnostics`。作った実行ファイルの道筋は cargo の報せの `executable` から取る（`CARGO_TARGET_DIR` に依らない）。cargo の JSON は `tools/utf8-child.ps1` の `Invoke-Utf8Child` で UTF-8 のバイトとして読む（steering の道具の決まり・`tools/roadmap-overview.ps1` の前例） | 失敗なら `FAIL build: cargo exit <n>`（置き場所に触らない） | 1（7.6） |
 | 3 | 置き場所のフォルダが無ければ作る。新しい実行ファイルを `areka-impl-watch.new.exe` として写す | `FAIL place: copy` | 1（今のものに触っていない） |
 | 4 | 今の `areka-impl-watch.exe` が在れば `areka-impl-watch.old-<UTC>.exe`（`<UTC>` は `20261016T020500Z` の形）へ改名する（走っていても改名はできる）。続けて `.new.exe` を `areka-impl-watch.exe` へ改名する | `OK placed areka-impl-watch.exe`（前のものが在れば `OK renamed previous to areka-impl-watch.old-<UTC>.exe` も） | 改名に失敗したら、改名した古いものを元へ戻し `.new.exe` を消して `FAIL place: rename` で 1（7.3） |
 | 5 | `areka-impl-watch.old*.exe`（前の形の `areka-impl-watch.old.exe` も含む）をそれぞれ消してみる | 消せた `OK removed <名前>`／走っていて消せない `KEEP <名前> (in use; run again later)` | 続ける（7.4） |
@@ -412,7 +424,11 @@ else "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" clear --repo "$R" 2>&1; echo 
 - 今使う文書（`.claude/skills/`・`CLAUDE.md`・`.kiro/steering/` の今の規則・手順書）に調停役のセッションを今使うものとして指す文が残らないことを確かめる。roadmap.md の本 spec の行と履歴の行、完了した spec、`tools/release-notes-fixture/`、`doc/roadmap-overview-*.html` は書き替えない（8.3・8.4）。
 
 #### 確かめの記録（`verification.md`）
-- 一時の置き場所: `<作業木>\target\impl-watch-skills-trial\home`（Windows 形の絶対パス）。試しの端末の中だけ環境変数をこれへ向ける。本物の置き場所へ書かない・本物の置き場所で `clear` しない（11.1）。
+- 一時の置き場所: `<作業木>\target\impl-watch-skills-trial\home`（Windows 形の絶対パス）。本物の置き場所へ書かない・本物の置き場所で `clear` しない（11.1）。
+- Bash・PowerShell のツールは呼ぶ度に新しい端末で、本物の置き場所の値を受け継ぐ。そのため試しのコマンドは 1 本ごとに次を守る:
+  - コマンドの頭で環境変数を一時の置き場所へ向ける（Bash は `export AREKA_IMPL_WATCH_HOME='<作業木>\target\impl-watch-skills-trial\home'`、PowerShell は `$env:AREKA_IMPL_WATCH_HOME = '…'`）。
+  - 同じコマンドの中で、値が `<作業木>\target\` で始まることを確かめ、違えば何もせず止まる。
+  - 試しの前と後に本物の置き場所の中身の一覧を取り、同じであることと、`C:\c\` のフォルダができていないことを記録する。
 - 記録する中身は Testing Strategy の「確かめ」の項目。各項目に、走らせたコマンド・終了コード・出力の行を載せる。
 
 ## Error Handling
@@ -452,6 +468,7 @@ else "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" clear --repo "$R" 2>&1; echo 
 5. 記録が消えたときの立て直し: `leave --id trial-a` で a の見張りと待ちが 3 → 立て直しの `watch` が 0 のまま走る。
 6. `clear --repo`: 実行ファイルが受けるなら 0 と 1 行、受けないなら 2（どちらも記録し、`kiro-next` の読み方と合うこと）。
 7. 前置きの判定: 環境変数が空・実行ファイルの無いフォルダ・形に合わない識別で、前置きの 1 行がそれぞれ `desk: skip no-home`・`no-exe`・`bad-name` になること。
+8. 残りの見張りの外し方: a の見張りを走らせたまま、別の端末から「残りの見張りの外し方」の 1 本を字のまま走らせ、古い見張りが 3 で終わり、新しい見張りが `already running` にならずに走り続けること。
 
 ### 文書の静的な確かめ
 1. 机の前置きの Bash が `kiro-impl` と `kiro-complete` で 1 字違わず同じで、`kiro-next` の `R=` の式とも同じであること（`git grep -F` で行を数える）。
