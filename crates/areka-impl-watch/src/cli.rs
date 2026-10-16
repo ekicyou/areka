@@ -632,8 +632,19 @@ fn waiting(
     .inspect_err(|failure| tracing::error!(error = %failure, "[cli] presence mark not held"))?;
     let early = match request {
         Some(command) => store.with_state(|state, now, alive| {
-            let applied = plan::apply(state, command, Some(id), now, alive);
+            let mut applied = plan::apply(state, command, Some(id), now, alive);
             let end = wait::judge(spec, Some(state));
+            if end.is_some() {
+                // 殺された前の待ち（同じ識別・同じ種類）の記録を、答えを決めたのと同じ排他の中で
+                // 消す。終わりの 1 行は 1 回目の判定のまま。
+                let unregister = plan::Command::UnregisterWait {
+                    id: id.to_owned(),
+                    kind,
+                };
+                let cleanup = plan::apply(state, &unregister, Some(id), now, alive);
+                applied.changed |= cleanup.changed;
+                applied.events.extend(cleanup.events);
+            }
             (applied, end)
         })?,
         None => None,

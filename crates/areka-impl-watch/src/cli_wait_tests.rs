@@ -149,6 +149,32 @@ fn merge_wait_makes_the_request_before_waiting() {
 }
 
 #[test]
+fn a_restarted_merge_wait_that_ends_at_once_removes_the_record_of_the_killed_wait() {
+    let root = TempPath::under_target("impl-watch-cli-wait");
+    let home = home_in(&root);
+    let _held = hold_watches(&home, &["a"]);
+    // a はすでに areka の机の持ち主。前の `merge --wait` は殺され、その記録だけが残っている
+    // （居る印は殺されたときに解けている）。
+    call(&home, &MERGE_A);
+    let mut state = read_state(&home);
+    state.waits.push(WaitRecord {
+        id: "a".to_owned(),
+        kind: WaitKind::Merge,
+        repo: Some("areka".to_owned()),
+        pid: 4242,
+        since: 1,
+    });
+    put_state(&home, &serde_json::to_string(&state).expect("状態を書ける"));
+
+    // 始め直した待ちは直ちに番で終わる（文と終了コードは今のまま）。
+    let granted = done("granted merge repo=areka; last: none");
+    assert_eq!(waiting(&home, &MERGE_A), granted);
+
+    // 殺された前の待ちの記録は、同じ呼び出しで消えている。
+    assert_eq!(waits(&home), []);
+}
+
+#[test]
 fn loadtest_wait_is_granted_at_once_when_nobody_has_to_stop() {
     let root = TempPath::under_target("impl-watch-cli-wait");
     let home = home_in(&root);
