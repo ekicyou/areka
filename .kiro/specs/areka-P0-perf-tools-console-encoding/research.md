@@ -335,3 +335,59 @@ pwsh の版は 7.6.7。
 ## 10. 手元での確かめの記録（要件 7.4・実装の段で書く）
 
 実装の段で、端末の文字コード・回したコマンド・終了コード・前と後の端末の値（OS から読んだ値）を書く。直す前に控えた要件 7.2 の終了コードもここに書く。
+
+### 10.1 確かめの足場（タスク 1.1・2026-10-16）
+
+- 手順書きは `<ワークツリー>\target\perf-loop-check\harness.ps1`（一時ファイル・`tools/` には置かない・コミットしない）。回し方は `pwsh -NoProfile -File <ワークツリー>\target\perf-loop-check\harness.ps1 -Tag before`（直した後は `-Tag after`）。
+- 外側の pwsh は `tools/utf8-child.ps1` の `Invoke-Utf8Child -OwnConsole` で、窓の無い自分だけの端末を持つ子（自分自身を `-Child` で回したもの）を起こす。開発者の端末には触れない。`-Child` を手で端末から回したときは何もせず 1 で終わる。
+- 子は自分の端末だけを 932 にする（`[Console]::OutputEncoding`／`InputEncoding` に 932。判定の `Set-OwnConsoleCp932` と同じ形）。道具を 1 本回すたびに、回す前に 932 に戻す（前の道具の影響を持ち越さないため）。
+- 前と後の端末の値は、子の中で `kernel32` の `GetConsoleOutputCP`／`GetConsoleCP` を `Add-Type`（メモリの中で組む）で呼んで OS から読む。プロセスが覚えた値（`[Console]::OutputEncoding.CodePage`）は使わない。
+- 道具は子と同じ端末を分け合う孫として `& pwsh -NoProfile -File tools\perf\perf-loop.ps1 …` で回す（開発者が 932 の端末から素で回すのと同じ形）。孫の出力は `target\perf-loop-check\<before|after>-<名前>.log` に UTF-8 で写す。
+- 実行体はビルドしない。空の置き物 `target\perf-loop-check\bin\areka.exe` を手順書きが `New-Item -ItemType File -Force` で置き、`-BinDir` で渡す。出力先は `-OutRoot <ワークツリー>\target\perf-loop-check`。
+
+### 10.2 直す前の結果（コミット `9668dfc3`・pwsh 7.6.7）
+
+| 回したコマンド（`-Goal draw-load-parity -OutRoot <wt>\target\perf-loop-check -BinDir <wt>\target\perf-loop-check\bin` を付ける） | 終了コード | 前の端末（出力・入力） | 後の端末（出力・入力） |
+|---|---|---|---|
+| `perf-loop.ps1 preflight` | 0 | 932・932 | **65001**・932 |
+| `perf-loop.ps1 rank-run -Iter 1 -DryRun` | 0 | 932・932 | **65001**・932 |
+
+末尾の `PERF-LOOP RESULT` の行（`<wt>` はワークツリーの絶対パス）:
+
+```
+PERF-LOOP RESULT preflight code=0 dir=<wt>\target\perf-loop-check\draw-load-parity
+PERF-LOOP RESULT rank-run code=0 dir=<wt>\target\perf-loop-check\draw-load-parity\iter-1\rank
+```
+
+- 直す前は、どちらも回し終えた後に端末の出力の文字コードが 932 から 65001 に変わっていた（要件 1.2 の穴がこの足場で再現する）。入力の文字コードは 932 のまま。
+- `preflight` は自己較正 9 本がすべて緑（`SELFTEST RESULT ok=9 ng=0`・`verdict=PREFLIGHT_OK`）。昇格していないので段③は `UNAVAILABLE reason=not_elevated`（止める理由にならず 0）。
+- `rank-run -DryRun` は `[invoke-perf-run]` の行（実行体の SHA-256 は空のファイルの値 `E3B0C442…B855`・32bit SHIORI ヘルパが無い注意の 1 行・`-DryRun のため起動しませんでした`）が出て、子の PowerShell が回ったことを確かめた。
+- 直した後は同じ手順書きを `-Tag after` で回し、終了コードと `PERF-LOOP RESULT` の行が同じで、前と後の端末がどちらも 932・932 であることを見る（要件 7.2）。
+
+### 10.3 機械が読む行の一覧（直す前・直した後の字面の比べの基準・要件 4.4）
+
+`tools/perf/*.ps1` の 7 本が端末（標準出力）へ出す行のうち、ほかの道具・スキル・エージェントが読む行。字面は下の型のまま 1 字も変えない（`<…>` は値）。`selftest … | <説明>` は `|` より前だけが機械の部分。
+
+| 行の型 | 出す所 | 読む所 |
+|---|---|---|
+| `PERF-LOOP RESULT <sub> code=<n> dir=<path>` | `perf-loop.common.ps1` 98 行（`$PERF_LOOP_RESULT_PREFIX`＝55 行） | スキル `perf-loop-iteration`・エージェント `perf-*` |
+| `SELFTEST RESULT ok=<n> ng=<n>` | `perf-loop.ps1` 397 行 | 同上 |
+| `selftest <道具> ok\|NG code=<n> \| <説明>` | `perf-loop.ps1` 365 行（`selftest python NG code=-1 \| …`）・379 行・390 行 | 同上 |
+| `[perf-loop] version=<v>` と `sub=`・`goal=`・`goal_file=`・`time_utc=`・`repo_root=`・`out_root=`・`out_dir=`・`elevated=`・`xperf=`・`xperf_path=`・`pdb=`・`pdb_path=`・`pdb_hint=`・`probe_available=`・`probe_reason=`・`function_stage=<s> reason=<r>`・`judge_script=`・`judge_version_goal=`・`judge_version_script=`・`judge_version_match=`・`python=<v> min=<v> ok=<b>`・`pwsh=<v> min=<n> ok=<b>`・`checkin_minutes=<n> source=<s> recommended=<n> warn_below=<n>`・`checkin_warn=`・`ledger=`・`ledger_exists=`・`goal_check=`・`selftest=<w> ok=<n> ng=<n>`・`sampling_backend=`・`capabilities=<k:v;…>`・`verdict=`・`code=`（ほか `checkin_note=`・`fail_reason=`） | `perf-loop.ps1` 566〜600 行（同じ文面を `preflight.txt` にも書く） | 同上・`preflight.txt` を読む側 |
+| `preflight_file=<path>` | `perf-loop.ps1` 608 行 | 同上 |
+| `[perf-loop] shiori_helper_present=<b> dir=<path>` | `perf-loop.measure.ps1` 381 行 | 同上 |
+| `[perf-loop] baseline build=<b> verdict=<v> dir=<path>` | `perf-loop.measure.ps1` 588 行 | 同上 |
+| `[perf-loop] 走行する実行体: <exe> sha256=<h> git_head=<h> git_dirty=<b>` | `perf-loop.common.ps1` 667 行 | 同上（`sha256=` 以降の `key=value`。前の日本語の地の文は design の規則 R1 で ASCII にする側） |
+| `CHECK-QUIET RESULT stage=<s> verdict=<v> code=<n> file=<path>` | `check-quiet.ps1` 536・540・661 行 | `perf-loop.common.ps1`（`Invoke-CheckQuietOnce`）・`perf-loop.ps1` の自己較正 |
+| `[check-quiet] version=<v>`、続けて `stage=`・`time_utc=`・`sample_sec=`・`machine_cpu_mean_pct=`・`machine_cpu_max_pct=`・`threshold_mean_pct=`・`heavy_process_names=`・`heavy_processes_found=`・`heavy_process_list=`・`target_pid_excluded=`・`verdict=`・`reason=`・`heavy_process_cpu_min_pct=`・`heavy_process_presence=`・`heavy_process_busy=`（静寂の確認の報告・16 行） | `check-quiet.ps1` 222〜239 行（`Format-QuietReport`）で組み、658 行で `quiet-*.txt` に書き、659 行（`[Console]::Out.Write($report)`）で同じ文面を端末にも出す | `perf-loop.common.ps1` 677〜678 行（`quiet-*.txt` の `verdict=`）・人と記録（`Invoke-CheckQuietOnce` が写す）。ソースの注記（218・235〜236 行）は読む側に「perf-ledger.py・judge 系」を挙げている。ただし `tools/perf/*.py` を grep しても、この報告の鍵を読む所は無かった。`perf_ledger_goal.py` 63 行の `machine_cpu_max_pct`・`sample_sec`・`heavy_process_names` は目標定義の TOML の `[quiet]` の鍵の名前で、報告は読まない。それでも注記に従い、読む側があるものとして扱う。**行の並びそのものも機械が読む**ので、並べ替えない。新しい行は末尾にだけ足す（236 行の注記） |
+| `counter_error=<s>` | `check-quiet.ps1` 660 行 | 人と記録 |
+| `INVOKE-CPU-SAMPLE RESULT <mode> code=<n> version=<v> [<key=value …>]` | `invoke-cpu-sample.ps1` 164 行（`Write-ResultLine`）。`<key=value>` は、probe の 387・398 行（`available=`・`reason=`）、start の 413 行（`etl=`）、stop の 426・464 行（`available=false reason=no_xperf`）・490 行（`dump=`・`sample_count=`・`stack_rows=`）・496 行（`dump=`・`sample_count=`・`areka_frames=0`）・500〜501 行（`sample_count=`・`areka_frames=`・`dump=`・`stack_rows=`・`resolved=`・`unresolved=`・`backend=`）、selftest の 584・588 行（`failures=`・`fixture_areka_frames=`・`fixture_sample_count=`・`red_areka_frames=`・`available=`・`reason=`） | `perf-loop.ps1` の自己較正（`LastLine`）・`perf-loop.measure.ps1` 668 行（stop の失敗の文に `$stop.LastLine` を写す） |
+| `sample_count=<n> areka_frames=<n> dump=<path>` | `invoke-cpu-sample.ps1` 498〜499 行（`Write-Info $summary`・単独の行） | 人と記録 |
+| `available=<b> reason=<r>` | `invoke-cpu-sample.ps1` 386・395・579 行 | `perf-loop.ps1` 431 行（`Get-SamplingProbe`）・`perf-loop.measure.ps1` 400〜401 行 |
+| `FOLLOWUP RESULT overall=<v> clickthrough=<v> drag=<v> dpi=<v> balloon_follow=<v> code=<n> dir=<path>` | `invoke-followup-checks.ps1` 233・848 行 | `perf-loop.measure.ps1` 918〜920 行 |
+
+- `invoke-perf-run.ps1` は端末へ機械が読む行を出さない（`[invoke-perf-run]` の行はすべて人が読む行。機械が読むのは `run-meta.txt` などのファイルで、要件 4.5 の側）。
+- ファイルにだけ出る `key=value`（`invoke-followup-checks.ps1` 443〜446 行と 508〜688 行の採取の行・`perf-loop.measure.ps1` 389 行）は端末へ出す文ではないので上の表に入れない（形は要件 4.5 で変えない）。
+- 日本語の地の文の中に `reason=<r>` などが混ざる行（`perf-loop.measure.ps1` 422・635・665 行、`perf-loop.ps1` 612 行、`check-quiet.ps1` 604 行の `[check-quiet] stage=… 秒数=… 閾値=…`）は人が読む行なので表に入れない。design の規則 R1 で行ごと ASCII の英文に書き直してよい。`perf-loop.common.ps1` 667 行を表に入れたのは、`sha256=` から後ろが値の並びとして読まれるため（前の地の文だけを R1 で直す）。
+- ほかの道具の出力をそのまま写す行（`invoke-followup-checks.ps1` 290 行が写す `judge-followup.py` の出力、`perf-loop.common.ps1` 247 行・`perf-loop.measure.ps1` 340 行・`invoke-perf-run.ps1` 409 行が写す子の出力）は、元の道具の行の型が上の表のとおりで、写す側は字を変えない。
+- 直す前の実際の字面は `target\perf-loop-check\before-preflight.log`（47 行）と `before-rank-run-dryrun.log`（18 行）にある。直した後は `after-*.log` の同じ型の行と字で比べる。
