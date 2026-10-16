@@ -93,7 +93,7 @@
   - _Boundary: cli_
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-- [ ] 5. リポジトリの分だけ記録を消す `clear --repo`
+- [x] 5. リポジトリの分だけ記録を消す `clear --repo`
 - [x] 5.1 判断の核にリポジトリの分を消す判断を足す
   - そのリポジトリの参加者を昇順に `leave` と同じ外し方で外し、1 人ごとに最近の出来事へ今ある `cleared` の綴り＋識別＋`repo=<名前>` を足す
   - そのリポジトリのマージの机に残る持ち主と待ち行列を外し、1 件ごとに取り消しの出来事を出し、直前のマージの記録は残す（机が無ければ作らない）。判定は必ず当てはまる
@@ -103,7 +103,7 @@
   - 完了の状態: 新しいテストが緑で、今の判断の核のテストも緑
   - 判断の核に入口の照合の枝だけを添える統合タスク
   - _Requirements: 10.3, 11.1, 11.2, 11.3, 11.7, 11.9_
-- [ ] 5.2 入口に `clear --repo` の形と `--help` の 1 行を足す
+- [x] 5.2 入口に `clear --repo` の形と `--help` の 1 行を足す
   - 手を入れる前に、今の実物を組んで `--help` を `target\` の下へ控える（置き場所は `target\` の下の Windows 形の絶対パスで上書きする。7.1 の比べの「前」になる）
   - 表の行に名前の行に出さない別の形を足し、`clear` の行だけが `--repo` の形を持つ。引数の読みの側だけが別の形の引数を受け、名前の行は今のまま
   - `--help` は `clear` の説明の行の次に設計の約束の 1 行だけを足す
@@ -159,3 +159,7 @@
 - 3.2: 直す前の実物（`WaitPort::now` が `store::unix_now` の本物の時刻）に新しいテストを先に当てた → `store::ports_tests::the_wait_record_takes_its_start_time_from_the_clock_of_the_store` が赤（`left: [Some(1792132289)]`・`right: [Some(1791000000)]`＝置かれた待ちの記録の `since` が止めた時刻 `T0` でなく本物の時刻）。本物の口の `now` を `Store::time` にして緑。
 - 4.1: 本物の口の `WaitPort::finish` で居る印を排他の後で解いた（`drop(held)` を `with_state` の閉じた関数の外・返った後へ移した）→ `store::ports_tests::the_last_unregister_releases_the_presence_mark_inside_the_exclusion` が赤（`left: [(true, true)]`・`right: [(false, true)]`＝ログの口の中で印がまだ「居る」）。控え `target\mutation-backup\4.1-wait.rs` から素のコピーで戻し、sha256 一致（`be93604b6571ffd76e82c673709b9420ba31b44d193c3e3f520308a67cb99318`）を確かめて緑。
 - 4.2: 直す前の実物（`cli::waiting` の早い終わりが待ちの記録を消さない）に新しいテストを先に当てた → `cli::wait_tests::a_restarted_merge_wait_that_ends_at_once_removes_the_record_of_the_killed_wait` が赤（`left: [("a", Merge)]`・`right: []`＝殺された前の `(a, merge)` の記録が残る）。早い終わりで同じ排他の中に `UnregisterWait` を通して緑。
+
+## Implementation Notes
+
+- 5.2: 今ある入口のテスト `cli::tests::each_option_is_accepted_only_by_the_commands_that_list_it` に、`clear` の `--repo`（別の形）だけを通す例外を 1 か所足した。テストの中に写した表は名前の行の表で、設計の「別の形」は読みの側だけが `--repo` を受けるため、書き替えなしでは赤になる。完了の状態「書き替えなしで緑」に対する例外はこの 1 件だけで、名前の行の表を照らす判定は書き替えなしで緑。

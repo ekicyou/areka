@@ -217,14 +217,22 @@ pub(crate) struct Spec {
     pub(crate) optional: &'static [Opt],
     /// `--wait` を取るか。
     pub(crate) wait: bool,
+    /// 名前の行には出さず、`note` の次の 1 行で示す別の形（今は `clear --repo` だけ）。
+    pub(crate) variant: Option<Variant>,
     /// 使い方に出す 1 行: すること と、0・3 の意味（1 と 2 は全コマンドに共通）。
     note: &'static str,
     /// 読んだ引数から [`Command`] を組む。
     build: fn(&mut Found) -> Command,
 }
 
+/// 表の行の別の形: 1 つの引数と、`--help` に足す 1 行の説明。
+pub(crate) struct Variant {
+    pub(crate) opt: Opt,
+    pub(crate) note: &'static str,
+}
+
 impl Spec {
-    /// この行が受ける引数（要る・任意・`--wait`）。
+    /// 名前の行に出す引数（要る・任意・`--wait`）。
     fn accepted(&self) -> impl Iterator<Item = Opt> {
         let wait = self.wait.then_some(Opt::Wait);
         self.required
@@ -232,6 +240,12 @@ impl Spec {
             .chain(self.optional)
             .copied()
             .chain(wait)
+    }
+
+    /// 引数の読みが受ける引数（名前の行の引数と、別の形の引数）。
+    fn parsed(&self) -> impl Iterator<Item = Opt> {
+        self.accepted()
+            .chain(self.variant.as_ref().map(|variant| variant.opt))
     }
 }
 
@@ -242,6 +256,7 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         required: &[Opt::Id, Opt::Repo],
         optional: &[Opt::Name],
         wait: false,
+        variant: None,
         note: "join and stay as the presence mark until a stop request. 0=stop requested (or already stopped) 3=record gone",
         build: |f| Command::Watch {
             id: f.need(Opt::Id),
@@ -254,6 +269,7 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         required: &[Opt::Id, Opt::Repo, Opt::Spec],
         optional: &[Opt::Bug, Opt::Name],
         wait: true,
+        variant: None,
         note: "queue for the merge desk of the repo. 0=queued; with --wait 0=granted 3=request gone",
         build: |f| {
             Command::Change(plan::Command::Merge {
@@ -270,6 +286,7 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         required: &[Opt::Id, Opt::Pr, Opt::Sha],
         optional: &[],
         wait: false,
+        variant: None,
         note: "release the merge desk, record the last merge and leave. 0=done 3=not the holder",
         build: |f| {
             Command::Change(plan::Command::Merged {
@@ -284,6 +301,7 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         required: &[Opt::Id, Opt::Repo, Opt::Purpose],
         optional: &[Opt::Name],
         wait: true,
+        variant: None,
         note: "queue for the load-test desk. 0=queued; with --wait 0=granted 3=request gone",
         build: |f| {
             Command::Change(plan::Command::LoadTest {
@@ -299,6 +317,7 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         required: &[Opt::Id, Opt::Repo, Opt::Purpose],
         optional: &[Opt::Name],
         wait: false,
+        variant: None,
         note: "record an already running load test as the holder. 0=recorded 3=the desk has a holder",
         build: |f| {
             Command::Change(plan::Command::LoadRunning {
@@ -314,6 +333,7 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         required: &[Opt::Id],
         optional: &[],
         wait: false,
+        variant: None,
         note: "release the load-test desk. 0=done 3=not the holder",
         build: |f| {
             Command::Change(plan::Command::LoadDone {
@@ -326,6 +346,7 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         required: &[Opt::Id],
         optional: &[],
         wait: true,
+        variant: None,
         note: "report stopped. 0=recorded 3=no stop request; with --wait 0=resumed, or stop requested again 3=record gone",
         build: |f| {
             Command::Change(plan::Command::Stopped {
@@ -338,6 +359,7 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         required: &[Opt::Id],
         optional: &[],
         wait: false,
+        variant: None,
         note: "wait for the resume only. 0=resumed, or stop requested again 3=record gone",
         build: |f| Command::Resume {
             id: f.need(Opt::Id),
@@ -348,6 +370,7 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         required: &[],
         optional: &[Opt::Id],
         wait: false,
+        variant: None,
         note: "withdraw the stop requests of everyone, or of one id. 0=done 3=nobody to unstop",
         build: |f| {
             Command::Change(plan::Command::Unstop {
@@ -360,6 +383,7 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         required: &[Opt::Id],
         optional: &[],
         wait: false,
+        variant: None,
         note: "drop the requests and desks of the id; the participant stays. 0=done",
         build: |f| {
             Command::Change(plan::Command::Cancel {
@@ -372,6 +396,7 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         required: &[Opt::Id],
         optional: &[],
         wait: false,
+        variant: None,
         note: "drop the requests, desks and the participant record of the id. 0=done",
         build: |f| {
             Command::Change(plan::Command::Leave {
@@ -384,6 +409,7 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         required: &[],
         optional: &[],
         wait: false,
+        variant: None,
         note: "reclaim and replan only. 0=done",
         build: |_| Command::Change(plan::Command::Tick),
     },
@@ -392,6 +418,7 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         required: &[],
         optional: &[],
         wait: false,
+        variant: None,
         note: "read without changing: write status.md and print a summary. 0=done",
         build: |_| Command::Status,
     },
@@ -400,8 +427,15 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         required: &[],
         optional: &[],
         wait: false,
+        variant: Some(Variant {
+            opt: Opt::Repo,
+            note: "leave everyone of the repo and empty its merge desk (the last merge stays). prints \"cleared repo=<repo>; left: <ids or none>\". 0=done",
+        }),
         note: "set the state file aside and start empty, without asking. 0=done",
-        build: |_| Command::Clear,
+        build: |f| match f.take(Opt::Repo) {
+            Some(repo) => Command::Change(plan::Command::ClearRepo { repo }),
+            None => Command::Clear,
+        },
     },
 ];
 
@@ -411,6 +445,7 @@ static HELP: Spec = Spec {
     required: &[],
     optional: &[],
     wait: false,
+    variant: None,
     note: "print this text. 0=done",
     build: |_| Command::Help,
 };
@@ -446,6 +481,14 @@ pub fn usage() -> &'static str {
                 };
             }
             text += &format!("\n      {}\n", spec.note);
+            if let Some(variant) = &spec.variant {
+                text += &format!(
+                    "      {} {}: {}\n",
+                    spec.name,
+                    variant.opt.shown(),
+                    variant.note
+                );
+            }
         }
         text += "\noptions:\n";
         for opt in OPTIONS {
@@ -475,7 +518,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Invocation, UsageError> {
             return Err(refuse(format!("unexpected argument '{arg}'")));
         };
         let (flag, shape) = (opt.flag(), opt.shape());
-        if !spec.accepted().any(|accepted| accepted == opt) {
+        if !spec.parsed().any(|accepted| accepted == opt) {
             return Err(refuse(format!("{flag} is not accepted")));
         }
         if found.has(opt) {
@@ -766,7 +809,7 @@ fn result_line(
         }
         C::Cancel { .. } => "cancelled".to_owned(),
         C::Leave { .. } => "left".to_owned(),
-        // 外した者の出来事から組む（入口の形と `--help` の 1 行は 5.2）。
+        // 外した者の出来事から組む（退避は行わない）。
         C::ClearRepo { repo } => {
             let left: Vec<String> = events
                 .iter()

@@ -375,6 +375,68 @@ fn clear_without_a_state_file_says_there_is_no_backup() {
     assert!(read_state(&home).participants.is_empty());
 }
 
+// ---- リポジトリの分だけ消す ----
+
+#[test]
+fn clear_repo_leaves_everyone_of_the_repo_and_prints_the_ids_without_a_backup() {
+    let root = TempPath::under_target("impl-watch-cli");
+    let home = home_in(&root);
+    let _held = hold_watches(&home, &["a", "b", "c"]);
+    merge(&home, "a");
+    merge(&home, "b");
+    let other = ["merge", "--id", "c", "--repo", "other", "--spec", "s"];
+    call(&home, &other);
+
+    assert_eq!(
+        call(&home, &["clear", "--repo", "areka"]),
+        done("cleared repo=areka; left: a, b")
+    );
+
+    // 退避は作らず、ほかのリポジトリの参加者はそのまま。
+    assert!(
+        !names(&home).iter().any(|name| name.contains("cleared")),
+        "{:?}",
+        names(&home)
+    );
+    let ids: Vec<String> = read_state(&home).participants.into_keys().collect();
+    assert_eq!(ids, ["c"]);
+    // 消すものが無くても 0。
+    assert_eq!(
+        call(&home, &["clear", "--repo", "areka"]),
+        done("cleared repo=areka; left: none")
+    );
+}
+
+#[test]
+fn a_malformed_clear_repo_is_2_and_creates_or_changes_nothing() {
+    let root = TempPath::under_target("impl-watch-cli");
+    let home = home_in(&root);
+    let malformed: [&[&str]; 8] = [
+        &["clear", "--repo"],
+        &["clear", "--repo", "a/b"],
+        &["clear", "--repo", r"C:\x"],
+        &["clear", "--repo", "areka", "--repo", "areka"],
+        &["clear", "--repo", "areka", "--id", "a"],
+        &["clear", "--repo", "areka", "extra"],
+        &["clear", "--repo", "areka", "--wait"],
+        &["clear", "--wait"],
+    ];
+    // 置き場所の無いときは作らない。
+    for words in malformed {
+        let (code, out, _) = call(&home, words);
+        assert_eq!((code, out.as_str()), (2, ""), "{words:?}");
+        assert!(!home.exists(), "{words:?}: 置き場所を作った");
+    }
+    // 状態の在るときは変えず、何も足さない。
+    merge(&home, "a");
+    let (before, listed) = (state_bytes(&home), names(&home));
+    for words in malformed {
+        assert_eq!(call(&home, words).0, 2, "{words:?}");
+        assert_eq!(state_bytes(&home), before, "{words:?}");
+        assert_eq!(names(&home), listed, "{words:?}");
+    }
+}
+
 // ---- 書けなかった読み物 ----
 
 /// 読み物（`status.md`）が書けなくても、コマンドの結果と終了コードは変わらない。

@@ -79,11 +79,6 @@ pub enum Command {
     /// そのリポジトリの記録を消す（`clear --repo`）: そのリポジトリの参加者を昇順に 1 人ずつ
     /// [`Command::Leave`] と同じに外し、そのリポジトリのマージの机に残る持ち主と待ち行列を外す
     /// （直前のマージの記録は残す）。
-    // 入口の `clear --repo` の形は 5.2 で足す（足したらこの expect が満たされずに警告になり、外す合図になる）。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the clear --repo form is added in task 5.2")
-    )]
     ClearRepo { repo: String },
 }
 
