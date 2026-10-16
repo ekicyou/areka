@@ -1,9 +1,9 @@
 {
   "feature_name": "areka-P0-baseware-root-list",
   "created_at": "2026-10-16T01:49:51Z",
-  "updated_at": "2026-10-16T04:21:37Z",
+  "updated_at": "2026-10-16T11:30:00Z",
   "language": "ja",
-  "phase": "tasks-generated",
+  "phase": "completed",
   "approvals": {
     "requirements": {
       "generated": true,
