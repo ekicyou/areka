@@ -323,3 +323,13 @@
 
 - **議題 1（区切りより前の押下）**: 押下で選択肢を済ませるのは、そのトークが選択待ちに入った後だけ。再生（`drive.rs` の `notify_choice_waiting_if_newly_waiting`）が `ChoiceWaiting` を done の口へ送った後に、`dola::cue::CueSink` の新しい既定つきメソッド `choice_wait_began` で文字の線へ `TextMsg::ChoiceWaitBegan` を積む（先渡しの `preview` と同じ型）。それより前の押下は今のまま kanade が捨て（`steady.rs` 245 行の `choice_rejected_no_wait`）、押し直せる。根拠: 押せる時を kanade が受け付ける時と同じ順で決められ、台本の最後の `\w` の待ちも正しく扱える。採らなかった案: 先渡しの `Upcoming` で文字の層だけで見分ける（最後の `\w` を見落とす）・範囲の外として起票（穴が残る）。残る確かめ: `ChoiceWaiting` は dispatcher を経て kanade へ着くので、押下の選択の着く順がそれより後と言えるかを実装の最初のタスクで経路を読んで確かめる。
 - **議題 2（縦書きの下線）**: 縦も横も同じ塗り方の 1 本の道。D2D が描いた縦書きの下線との一致の合格の幅を先に決めた（覆う画素の範囲が同じ・各画素の各成分の差 4/255 以下）。採らなかった案: 縦書きは D2D に描かせ端の列だけ自前で塗る（分かれ道とフレームごとの切り替えが増える）。
+
+### タスク 4.1 の確かめ: 押下の選択と `ChoiceWaiting` が kanade に着く順（2026-10-16・結論は「後と言い切れない」）
+
+kanade の入口は 1 本の mpsc（`crates/areka-ghost/src/runtime.rs:724` の `kanade_tx.clone()` を dispatcher へ、`crates/areka/src/ghost_session.rs:820` の `runtime.kanade().clone()` を選択の取り次ぎへ渡す＝同じ受け口の複製）。2 つの伝言は別々のスレッドからこの口へ送られる。
+
+- 経路 A（選択待ち）: 再生のスレッドが `crates/areka-sakura/src/drive.rs:398` で `ChoiceWaiting` を done の口（dispatcher の inbox）へ送る → **dispatcher のスレッド**が inbox を順に汲み、`crates/areka-ghost/src/dispatcher.rs:130` → `on_choice_waiting`（228 行）→ 261〜270 行で `KanadeMsg::ChoiceWaiting` を kanade へ送る。
+- 経路 B（押下・設計どおりに作った後）: 再生のスレッドが 398 行の後に `announce_choice_wait` → 文字の線へ `ChoiceWaitBegan` → UI が受けて済ませてよい印を立てる → 押下 `crates/areka/src/input_events/balloon_pressed.rs:163`（`send_selection`・`crates/areka/src/input_events/balloon.rs:138`）→ **UI のスレッド**の `drain_choice_selections` が `crates/areka/src/input_events/choice_drain.rs:101` で `KanadeMsg::Choice` を kanade へ直接送る（dispatcher を通らない）。
+- 再生のスレッドで「done の口へ送った」が「文字の線へ積んだ」より先なのは言えるが、それは **dispatcher の inbox に入った**ことまでしか保証しない。dispatcher が kanade へ送り出す（261 行）ことと、UI が kanade へ送る（101 行）ことの間には同期が無い＝happens-before が無い。dispatcher の inbox に先に積まれた伝言（`Tick`・`Done`、`Start`／`Close` なら 379 行の `join` で待つ）を汲み終えるまで、A の送り出しは遅れうる。
+- B が先に着いた時の結果: kanade は帳簿が無いので `crates/areka-kanade/src/schedule/steady.rs:239` の `on_choice` が 248 行の `choice_rejected_no_wait`（WARN）で捨てる。UI 側ではその場所の選択肢は既に済み（押せない）ので、利用者は押し直せず選択が失われ、要件 1.11 の「警告を出さない」にも反する。
+- 実際の窓は「UI の受け取り＋押下の処理」と「dispatcher のスレッドの起き上がり」の競り合いで狭いが、構造では閉じていない。タスク 4.1 の指示どおり、ここで止めて開発者へ報告する（4.2 以降へ進まない）。コードは変えていない。
