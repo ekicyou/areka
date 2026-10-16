@@ -422,7 +422,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **SSP の BTS の要望**: SSP の課題管理（BTS・https://bts.shillest.net/ ）の要望を調べるときは `.kiro/specs/completed/areka-P0-ssp-bts-salvage/bts-ledger.md` を読む（1 回きりの調査の台帳・いつどこまで見たかは台帳の先頭）。
 
 ### Impl Watch Crate（areka-impl-watch）
-**Location**: `/crates/areka-impl-watch/`（手順書は `/doc/impl-watch.md`・スキルは `/.claude/skills/kiro-watch-clear/`）
+**Location**: `/crates/areka-impl-watch/`（手順書は `/doc/impl-watch.md`・呼ぶスキルは `/.claude/skills/kiro-impl/`・`/.claude/skills/kiro-complete/`・`/.claude/skills/kiro-next/`・`/.claude/skills/kiro-watch-clear/`・置き方の道具は `/tools/impl-watch-install.ps1`）
 **Purpose**: 並んで走る実装セッション（Claude のセッション）へ、「マージの机」（リポジトリごとに 1 つ）と「負荷テストの机」（マシンに 1 つ）を 1 度に 1 人へ貸し出す**開発の道具**（`areka-P0-impl-watch` 2026-10-10）。各セッションが Bash から実行ファイルを直に呼び、待ちは「番が来たら終わるコマンド」。**areka の実行時コードからは 1 行も参照されない leaf の bin**・`publish = false`・配布物に入れない。
 **Pattern**: 判断の核と薄い口。`plan::apply(state, cmd, caller, now, alive)`（回収 → コマンド → 番の決め直し）は純粋で、`std::fs`・時計・`tracing` を綴らない（構造テスト `main_layering_tests.rs` が見張る）。口は置き場所（環境変数 `AREKA_IMPL_WATCH_HOME`・絶対パスだけ）・居る印（`alive/<識別>.<種類>.lock` を握りっぱなしにする）・`state.json`（`state.lock` の排他＋一時ファイルからの置き換え書き・版 1）・読み物 `status.md`・`impl-watch.log`。終了コードは 0 済み／1 失敗／2 使い方の誤り／3 当てはまらない・消えた。端末へ出す文は ASCII だけ。
 **Modules**: 層の順に `error` → `state` → `plan` → `home`／`presence`／`status` → `store` → `wait` → `cli` → `main`
