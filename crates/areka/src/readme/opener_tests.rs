@@ -373,7 +373,7 @@ fn named_without_baseware_root_fails() {
 #[test]
 fn named_ghost_and_balloon_from_second_root_match_folder_ignoring_case() {
     let (_tmp, mut ctx) = named_fixture();
-    let tmp2 = TempPath::new("open-ext-named-2");
+    let tmp2 = TempPath::under_target("open-ext-named-2");
     let second = build_ghost_root(&tmp2, ("h", "H"), &[], &[("Zz", "ZName")]);
     let mut roots = ctx.baseware.clone().unwrap().roots().to_vec();
     roots.push(second.clone());

@@ -199,7 +199,7 @@
   - _Depends: 3.2, 4.1, 4.3, 4.4, 4.6_
   - _Requirements: 2.6, 11.1_
 
-- [ ] 7.2 並びが 1 つのときの振る舞いと規律を全体で確かめる
+- [x] 7.2 並びが 1 つのときの振る舞いと規律を全体で確かめる
   - 全体テスト（`tools/test-all.ps1`）を 1 回回し、根 1 つの並びの今のテストが要件 11.1 の許す変化（メニューの 2 項目・告知の文面・記録の行・大文字小文字）だけで緑であることを確かめる
   - 触ったファイルがどれも 1,000 行の目安の内側（番人のテスト `file_length_guard_test.rs` が緑・`main.rs` と `ghost_switch.rs` は置き換えと数行だけ）、`Cargo.toml` と `Cargo.lock` に差分が無い（新しい外部依存 0）、同時に起動するゴーストが 1 体のまま、テストの根が `target\` の下だけ（一時パスの番人が緑）・プロセスの環境変数を書き換えるテストが 0 件であることを確かめる
   - 完了の姿: 全体テストの末尾の一覧が緑で、上の各点が証跡（コマンドの出力）つきで確かめられている
@@ -221,3 +221,4 @@
 - 3.1: 移り途中の仮の形は `crate::roots::head_root`（見つかる先頭の根・無ければ先頭）1 つに集めた。使う所: `boot_config.rs`（2 か所・3.2）・`ghost_switch.rs` `running_name`（3.2）・`main.rs` `running_name`／後始末の告知（3.2）・`install/desk.rs` `GhostFacts.root`／`install/overwrite.rs`（4.5・4.6）。`install/procedure.rs` の `list_balloons(&BasewareRoot::new(facts.root))` も 4.6。7.1 で `head_root` ごと消す。
 - 3.2: 格納フォルダの列を `; ` でつなぐ処理が `alert.rs::joined`・`boot_resolve.rs::joined`・`ghost_switch.rs::boot_into` の 3 か所にある。3.3 で告知の文面を仕上げるとき 1 つへ寄せてよい。
 - 4.6: `install_placed`・`install_no_root` は desk でなく worker と上書きの両経路が通る `install/destination.rs::install_into` で記録する（同じ 1 回ずつ）。見つかる根が無いときは `NarError::Io{phase: Stage, rolled_back: true}` を作って今の失敗の経路へ倒す（`archive` 欄は空・記録と告知は手続きの側の本当のパスを使う）。`crate::roots::head_root` は使い手が無くなったので削除済み。
+- 7.2: 全体テスト `tools/test-all.ps1` を `2a8420ff` で 1 回・全段緑（x64 552 秒）。`Cargo.toml`／`Cargo.lock` の差分 0・環境変数を書き換えるテスト 0・触ったファイルの最大 990 行・`main.rs` 971 行／`ghost_switch.rs` 917 行。この spec の新しいテスト 6 か所が `TempPath::new`（OS の一時フォルダ）だったので `under_target` へ直し、該当のテストだけ回し直して緑（61 件）。

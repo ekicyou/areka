@@ -297,8 +297,8 @@ fn rewiring_gives_a_fresh_registration_with_the_ghost_frame() {
 /// 印が付く（要件 2.8・3.5・8.7）。
 #[test]
 fn union_of_two_roots_lists_both_and_marks_same_folder_name() {
-    let first = TempPath::new("ghost-frame-union-first");
-    let second = TempPath::new("ghost-frame-union-second");
+    let first = TempPath::under_target("ghost-frame-union-first");
+    let second = TempPath::under_target("ghost-frame-union-second");
     put_ghost(&first, "C", "charset,UTF-8\n");
     put_ghost(&first, "A", "charset,UTF-8\n");
     put_ghost(&second, "a", "charset,UTF-8\n");

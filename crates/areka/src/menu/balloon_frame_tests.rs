@@ -107,8 +107,8 @@ fn without_boot_context_only_a_disabled_balloon_frame_is_shown() {
 /// （areka-P0-baseware-root-list 4.3・要件 2.8・3.5）。
 #[test]
 fn union_of_two_roots_marks_same_folder_name_balloon() {
-    let first = TempPath::new("balloon-frame-union-first");
-    let second = TempPath::new("balloon-frame-union-second");
+    let first = TempPath::under_target("balloon-frame-union-first");
+    let second = TempPath::under_target("balloon-frame-union-second");
     let first_root = BasewareRoot::new(first.path().to_path_buf());
     let second_root = BasewareRoot::new(second.path().to_path_buf());
     put_balloon(&first_root, "stayseeballoon", "");

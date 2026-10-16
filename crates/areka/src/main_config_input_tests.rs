@@ -121,7 +121,7 @@ mod boot {
         let has = |events: &[log_capture_kit::CapturedEvent], name: &str| {
             events.iter().any(|e| e.field_str("event") == Some(name))
         };
-        let root = TempPath::new("boot-records");
+        let root = TempPath::under_target("boot-records");
         let (_, events) = capture(|| {
             resolve_boot_from(
                 crate::roots::single_env(root.path().to_path_buf()),
