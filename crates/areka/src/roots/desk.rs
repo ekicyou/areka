@@ -59,7 +59,6 @@ pub(crate) fn drain(world: &mut World) {
 }
 
 /// 「置き場を追加…」を選べるか（受け口が在り・選ぶ画面が出ていない）。
-#[allow(dead_code)] // 使い手はメニューの「置き場を追加…」（tasks.md 5.6）
 pub(crate) fn can_pick(world: &World) -> bool {
     world
         .get_non_send::<RootsDesk>()
@@ -69,7 +68,6 @@ pub(crate) fn can_pick(world: &World) -> bool {
 /// 選ぶ画面のスレッド `roots-pick` を起こす（メニューの動作・テストは抑止と画面の代わりを差し込む）。
 /// 出ている最中なら `debug!` で無視し、抑止のときは出さずに取り消しと同じに扱う。起こしたスレッドの
 /// 取っ手を返す（本番は持たない）。
-#[allow(dead_code)] // 使い手はメニューの「置き場を追加…」（tasks.md 5.6）
 pub(crate) fn start_pick<F>(world: &mut World, suppressed: bool, pick: F) -> Option<JoinHandle<()>>
 where
     F: FnOnce() -> Result<Option<PathBuf>, PickError> + Send + 'static,

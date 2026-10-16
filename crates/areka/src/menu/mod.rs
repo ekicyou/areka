@@ -12,13 +12,15 @@
 //! [`ghost_frame`]（「ゴースト」枠の供給関数・areka-P0-ghost-shell-balloon-switch）・
 //! [`shell_frame`]・[`balloon_frame`]（「シェル」「バルーン」枠の供給関数・areka-P0-shell-balloon-switch）・
 //! [`install_frame`]（「インストール」枠の供給関数・areka-P0-ghost-install）・
-//! [`update_frame`]（「ネットワーク更新」枠の供給関数・areka-P0-network-update）。
+//! [`update_frame`]（「ネットワーク更新」枠の供給関数・areka-P0-network-update）・
+//! [`roots_frame`]（「置き場を追加…」「置き場を外す」枠の供給関数・areka-P0-baseware-root-list）。
 
 pub(crate) mod balloon_frame;
 pub(crate) mod captions;
 pub(crate) mod ghost_frame;
 pub(crate) mod install_frame;
 pub(crate) mod plan;
+pub(crate) mod roots_frame;
 pub(crate) mod shell_frame;
 pub(crate) mod trigger;
 pub(crate) mod update_frame;
@@ -288,8 +290,8 @@ pub(crate) fn attach_release_handlers(world: &mut World) {
 /// 枠へ供給関数を登記する（World 越しの入口）。結線の前に呼ばれたら `warn!` で記録して
 /// 何もしない。呼び手は「ゴースト」枠の [`ghost_frame::register`]・「シェル」枠の
 /// [`shell_frame::register`]・「バルーン」枠の [`balloon_frame::register`]・「インストール」枠の
-/// [`install_frame::register`]・「ネットワーク更新」枠の [`update_frame::register`]（どれもゴーストを
-/// 起こすたび）。
+/// [`install_frame::register`]・「ネットワーク更新」枠の [`update_frame::register`]・置き場の 2 枠の
+/// [`roots_frame::register`]（どれもゴーストを起こすたび）。
 pub(crate) fn register(world: &mut World, frame: Frame, supplier: Supplier) {
     let Some(mut wiring) = world.get_non_send_mut::<MenuWiring>() else {
         tracing::warn!(

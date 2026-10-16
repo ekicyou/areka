@@ -25,7 +25,6 @@ use crate::install::pick::PickError;
 const TITLE: &str = "置き場にするフォルダを選んでください";
 
 /// フォルダを選ぶ画面を出して、選ばれたフォルダを返す（取り消しは None）。呼んだスレッドを塞ぐ。
-#[allow(dead_code)] // 使い手はメニューの「置き場を追加…」（tasks.md 5.6）
 pub(crate) fn pick_folder() -> Result<Option<PathBuf>, PickError> {
     // SAFETY: 引数は None と定数。初期化に成功したときだけ、同じスレッドで対にして解放する。
     let hr = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };

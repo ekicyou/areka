@@ -122,7 +122,6 @@ pub(crate) fn add_root(world: &mut World, picked: PathBuf) {
 }
 
 /// UI スレッドの入口: 置き場を外す（並びの値だけ・フォルダは消さず動かさない・要件 7.2）。
-#[allow(dead_code)] // 呼び手はメニューの置き場の項目（tasks.md 5.6）
 pub(crate) fn remove_root(world: &mut World, dir: PathBuf) {
     let Some(ctx) = world.get_resource::<BootContext>() else {
         tracing::error!(
