@@ -153,6 +153,8 @@ $EXIT_MEASURE_FAILED = 4
 $EXIT_UNAVAILABLE    = 5
 
 $SCRIPT_DIR = Split-Path -Parent $PSCommandPath
+# 一時ファイルと作業用のフォルダはワークツリーの target\perf-loop-tmp\ の下だけに置く（OS の一時フォルダは使わない）。
+$PERF_TMP_DIR = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'target\perf-loop-tmp'
 
 # --------------------------------------------------------------- 補助関数 ----
 function Write-Info    { param([string]$Message) Write-Host $Message }
@@ -197,17 +199,22 @@ function Test-Elevated {
 }
 
 # 外部コマンドを走らせ、終了コードと標準出力・標準エラーを揃えて返す。
+# 受け皿の 2 つのファイルは端末の出力の文字コード（[Console]::OutputEncoding）で読む。
+# xperf と wpaexporter は渡された出力先へ端末の出力の文字コードで書くため。今の xperf は
+# ASCII だけを書くので結果に差は出ないが、地域語の文が来たときに化けないようにしておく。
 function Invoke-NativeCommand {
     param([string]$FilePath, [string[]]$ArgumentList)
-    $outFile = [System.IO.Path]::GetTempFileName()
-    $errFile = [System.IO.Path]::GetTempFileName()
+    $null = New-Item -ItemType Directory -Path $PERF_TMP_DIR -Force
+    $id = [guid]::NewGuid().ToString('N')
+    $outFile = Join-Path $PERF_TMP_DIR "cpu-sample-$id.out"
+    $errFile = Join-Path $PERF_TMP_DIR "cpu-sample-$id.err"
     try {
         $p = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -NoNewWindow -Wait -PassThru `
             -RedirectStandardOutput $outFile -RedirectStandardError $errFile
         return [pscustomobject]@{
             ExitCode = $p.ExitCode
-            StdOut   = (Get-Content -LiteralPath $outFile -Raw -ErrorAction SilentlyContinue)
-            StdErr   = (Get-Content -LiteralPath $errFile -Raw -ErrorAction SilentlyContinue)
+            StdOut   = (Get-Content -LiteralPath $outFile -Raw -Encoding ([Console]::OutputEncoding) -ErrorAction SilentlyContinue)
+            StdErr   = (Get-Content -LiteralPath $errFile -Raw -Encoding ([Console]::OutputEncoding) -ErrorAction SilentlyContinue)
         }
     } finally {
         Remove-Item -LiteralPath $outFile, $errFile -Force -ErrorAction SilentlyContinue
@@ -339,7 +346,7 @@ function Get-ProbeResult {
         return [pscustomobject]@{ Available = $true; Reason = 'ok' }
     }
 
-    $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ('areka-cpu-probe-' + [guid]::NewGuid().ToString('N'))
+    $tempDir = Join-Path $PERF_TMP_DIR ('areka-cpu-probe-' + [guid]::NewGuid().ToString('N'))
     $null = New-Item -ItemType Directory -Path $tempDir -Force
     $probeEtl  = Join-Path $tempDir 'probe.etl'
     $mergedEtl = Join-Path $tempDir 'probe-merged.etl'
