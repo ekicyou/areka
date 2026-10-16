@@ -111,7 +111,7 @@ function Stop-Run {
         [string]$Sub,
         [string]$Dir
     )
-    Write-Problem "[perf-loop] 失敗: $Message"
+    Write-Problem "[perf-loop] FAILED: $Message"
     Exit-WithResult -Code $Code -Sub $Sub -Dir $Dir
 }
 
@@ -127,12 +127,12 @@ function Get-NarSampleMap {
     param([Parameter(Mandatory = $true)][string]$Sample)
     if ($script:NarSampleMaps.ContainsKey($Sample)) { return $script:NarSampleMaps[$Sample] }
     $cargo = Get-Command 'cargo' -ErrorAction SilentlyContinue
-    if (-not $cargo) { Stop-Run -Code $EXIT_MEASURE_FAILED -Message 'cargo が見つかりません（検体の在り処を尋ねられません）' }
+    if (-not $cargo) { Stop-Run -Code $EXIT_MEASURE_FAILED -Message 'cargo not found (cannot ask where the sample is)' }
     $cargoArgs = @('run', '-q', '-p', 'sample-ghost-kit', '--bin', 'nar-sample-path',
                    '--manifest-path', (Join-Path $repoRoot 'Cargo.toml'), '--', $Sample)
     $r = Invoke-Child -Exe $cargo.Source -Arguments $cargoArgs -Quiet
     if ($r.Code -ne 0) {
-        Stop-Run -Code $EXIT_MEASURE_FAILED -Message "検体の窓口が失敗しました（終了コード $($r.Code)・cargo $($cargoArgs -join ' ')）: $($r.LastLine)"
+        Stop-Run -Code $EXIT_MEASURE_FAILED -Message "sample lookup failed (exit code $($r.Code), cargo $($cargoArgs -join ' ')): $($r.LastLine)"
     }
     $map = @{}
     foreach ($line in $r.Out) {
@@ -152,7 +152,7 @@ function Get-NarSamplePath {
     param([Parameter(Mandatory = $true)][string]$Sample, [Parameter(Mandatory = $true)][string]$Key)
     $map = Get-NarSampleMap -Sample $Sample
     if (-not $map.ContainsKey($Key) -or -not $map[$Key]) {
-        Stop-Run -Code $EXIT_MEASURE_FAILED -Message "検体の窓口の出力に '$Key=' の行がありません（検体 '$Sample'・出た鍵: $(($map.Keys | Sort-Object) -join ', ')）"
+        Stop-Run -Code $EXIT_MEASURE_FAILED -Message "sample lookup output has no '$Key=' line (sample '$Sample', keys found: $(($map.Keys | Sort-Object) -join ', '))"
     }
     return $map[$Key]
 }
@@ -200,9 +200,9 @@ function Invoke-Child {
         return [pscustomobject]@{
             Code     = -1
             Out      = @()
-            Err      = @("実行体がありません: $Exe")
-            Lines    = @("実行体がありません: $Exe")
-            LastLine = "実行体がありません: $Exe"
+            Err      = @("executable not found: $Exe")
+            Lines    = @("executable not found: $Exe")
+            LastLine = "executable not found: $Exe"
         }
     }
 
@@ -234,9 +234,9 @@ function Invoke-Child {
         return [pscustomobject]@{
             Code     = -1
             Out      = @()
-            Err      = @("起動できません: $($_.Exception.Message)")
-            Lines    = @("起動できません: $($_.Exception.Message)")
-            LastLine = "起動できません: $($_.Exception.Message)"
+            Err      = @("cannot start: $($_.Exception.Message)")
+            Lines    = @("cannot start: $($_.Exception.Message)")
+            LastLine = "cannot start: $($_.Exception.Message)"
         }
     } finally {
         $process.Dispose()
@@ -296,11 +296,11 @@ function Invoke-PwshChild {
     )
     $pwshPath = Get-PwshPath
     if (-not $pwshPath) {
-        $msg = 'pwsh が見つかりません'
+        $msg = 'pwsh not found'
         return [pscustomobject]@{ Code = -1; Out = @(); Err = @($msg); Lines = @($msg); LastLine = $msg }
     }
     if (-not (Test-Path -LiteralPath $ScriptPath -PathType Leaf)) {
-        $msg = "スクリプトがありません: $ScriptPath"
+        $msg = "script not found: $ScriptPath"
         return [pscustomobject]@{ Code = -1; Out = @(); Err = @($msg); Lines = @($msg); LastLine = $msg }
     }
     $argv = Get-PwshChildArguments -ScriptPath $ScriptPath -Arguments $Arguments
@@ -505,14 +505,14 @@ function Get-LoopDir {
     )
     $root = if ($OutRoot) { $OutRoot } else { $script:OutRootPath }
     $goalName = if ($Goal) { $Goal } else { $script:GoalName }
-    if (-not $root) { throw '出力先の根が決まっていません（Resolve-OutRoot を先に呼ぶこと）。' }
-    if (-not $goalName) { throw '目標の名前が決まっていません。' }
+    if (-not $root) { throw 'output root is not set (call Resolve-OutRoot first).' }
+    if (-not $goalName) { throw 'goal name is not set.' }
 
     $path = Join-Path $root $goalName
     switch ($Kind) {
         'goal' { }
         'iter' {
-            if ($Iter -lt 1) { throw "-Iter は 1 以上が要ります（受け取った値: $Iter）。" }
+            if ($Iter -lt 1) { throw "-Iter must be 1 or more (got: $Iter)." }
             $path = Join-Path $path "iter-$Iter"
         }
         'baseline' {
@@ -526,7 +526,7 @@ function Get-LoopDir {
     }
     if ($Leaf) {
         if ($Kind -eq 'iter' -and $PERF_LOOP_ITER_LEAVES -notcontains $Leaf) {
-            throw "周の小部屋の名前が語彙にありません: '$Leaf'（使えるのは $($PERF_LOOP_ITER_LEAVES -join '・')）"
+            throw "iteration subfolder name is not in the vocabulary: '$Leaf' (allowed: $($PERF_LOOP_ITER_LEAVES -join ', '))"
         }
         $path = Join-Path $path $Leaf
     }
@@ -582,7 +582,7 @@ function Test-ResumeArtifact {
     )
     if (-not $Resume) { return $false }
     if (-not (Test-Path -LiteralPath $Path)) { return $false }
-    Write-Info "[perf-loop] -Resume: 既にある成果物を再利用します: $Path"
+    Write-Info "[perf-loop] -Resume: reusing existing output: $Path"
     return $true
 }
 
@@ -636,11 +636,11 @@ function Sync-MeasureShioriHelper {
     if (Test-Path -LiteralPath $dest -PathType Leaf) { return }
     $src = Join-Path $repoRoot (Join-Path 'target' (Join-Path $MEASURE_HELPER_TARGET (Join-Path 'release' $MEASURE_HELPER_EXE)))
     if (-not (Test-Path -LiteralPath $src -PathType Leaf)) {
-        Write-Problem "[perf-loop] 警告: 32bit SHIORI ヘルパが $dest にも $src にもありません。cargo build --release -p $MEASURE_HELPER_PACKAGE --target $MEASURE_HELPER_TARGET を先に回してください（合否判定の走行は exit 4 で止まります）。"
+        Write-Problem "[perf-loop] WARNING: 32bit SHIORI helper is in neither $dest nor $src. Run cargo build --release -p $MEASURE_HELPER_PACKAGE --target $MEASURE_HELPER_TARGET first (a pass/fail run stops with exit 4)."
         return
     }
     Copy-Item -LiteralPath $src -Destination $dest -Force
-    Write-Info "[perf-loop] 32bit SHIORI ヘルパを実行体の隣へ複製しました: $src -> $dest"
+    Write-Info "[perf-loop] copied 32bit SHIORI helper next to the executable: $src -> $dest"
 }
 
 # 走行前に作業ツリーから実行体を作り直す（-BinDir 無しの走行＝followup／rank-run／measure-baseline／final）。
@@ -654,11 +654,11 @@ function Sync-MeasureWorktreeBuild {
     $manifest = Join-Path $repoRoot 'Cargo.toml'
     $cargoArgs = @('build'); if ($Build -eq 'release') { $cargoArgs += '--release' }
     $cargoArgs += @('-p', $MEASURE_AREKA_PACKAGE, '--manifest-path', $manifest)
-    $r = Invoke-MeasureCargo -Label "走行前に作業ツリーから $Build ビルド" -Arguments $cargoArgs
-    if ($r.Code -ne 0) { Stop-Run -Code $EXIT_MEASURE_FAILED -Message "走行前の $Build ビルドが失敗しました（終了コード $($r.Code)）: $($r.LastLine)" }
+    $r = Invoke-MeasureCargo -Label "pre-run $Build build from the worktree" -Arguments $cargoArgs
+    if ($r.Code -ne 0) { Stop-Run -Code $EXIT_MEASURE_FAILED -Message "pre-run $Build build failed (exit code $($r.Code)): $($r.LastLine)" }
     $exe = Join-Path (Get-MeasureBinDir -BinDir '' -Build $Build) $MEASURE_AREKA_EXE
     $git = Get-MeasureGitFacts
-    Write-Info "[perf-loop] 走行する実行体: $exe sha256=$(Get-MeasureSha256 -Path $exe) git_head=$($git.Head) git_dirty=$($git.Dirty)"
+    Write-Info "[perf-loop] executable to run: $exe sha256=$(Get-MeasureSha256 -Path $exe) git_head=$($git.Head) git_dirty=$($git.Dirty)"
 }
 
 # 走行後の静寂確認（quiet-after.txt）が NOT_QUIET だった走行は -Resume で再利用しない（設計: 静寂の確認は
@@ -673,6 +673,6 @@ function Test-MeasureQuietAfterOk {
     $stamp = (Get-UtcStamp) -replace '[^0-9]', ''
     $aside = "$Dir-NOTQUIET-$stamp"
     Move-Item -LiteralPath $Dir -Destination $aside -Force
-    Write-Problem "[perf-loop] 走行後の静寂確認が $($verdict[0]) だった走行は再利用せず退避しました: $aside（採り直します）"
+    Write-Problem "[perf-loop] post-run quiet check was $($verdict[0]); run not reused, moved aside: $aside (will rerun)"
     return $false
 }
