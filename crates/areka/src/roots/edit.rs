@@ -2,14 +2,20 @@
 //!
 //! 値だけで判断する: 今の並び・出どころ・足すフォルダ（または外す根の絶対パス）。
 //! フォルダそのものは消さない・動かさない（要件 7.2）。触るのは並びの値だけ。
-//! 適用（起動の文脈・記憶・記録）は tasks.md 5.3。並べ替えの判断は作らない（要件 7.4）。
-#![allow(dead_code)] // 使い手は並びの変更の適用（tasks.md 5.3）
+//! 適用（起動の文脈・記憶・記録）は UI スレッドの入口 [`add_root`]・[`remove_root`]。
+//! 並べ替えの判断は作らない（要件 7.4）。
 
 use std::path::{Path, PathBuf};
 
 use areka_ghost::{BasewareRoot, BasewareRoots, same_root};
+use areka_sylphya::persist::FsPersistIo;
+use areka_sylphya::{PersistKey, PersistOutcome, PersistScope, ScopeRoots, save_scope};
+use bevy_ecs::world::World;
 
-use super::RootsOrigin;
+use super::report::{ReportOccasion, log_hidden, log_roots};
+use super::{ResolvedRoots, RootStatus, RootsOrigin, encode_memory};
+use crate::boot_config::BootContext;
+use crate::ghost_session::GhostSlot;
 
 /// 追加の判断。
 #[derive(Debug, PartialEq, Eq)]
@@ -78,6 +84,139 @@ pub(crate) fn decide_remove(
         roots: BasewareRoots::new(list),
         removed,
     }
+}
+
+/// UI スレッドの入口: 置き場を足す（判断・適用・記録・design「RootsEdit」）。
+#[allow(dead_code)] // 呼び手は置き場を選ぶ画面の受け口（tasks.md 5.5）
+pub(crate) fn add_root(world: &mut World, picked: PathBuf) {
+    let Some(ctx) = world.get_resource::<BootContext>() else {
+        tracing::error!(
+            event = "roots_change_no_context",
+            "[RootsEdit] 起動の文脈が無いので置き場を足せません"
+        );
+        return;
+    };
+    match decide_add(&ctx.roots, ctx.roots_origin, &picked) {
+        AddVerdict::Added { roots, empty } => {
+            if empty {
+                tracing::warn!(
+                    event = "roots_add_empty_root",
+                    path = %picked.display(),
+                    "[RootsEdit] 足した置き場の直下に ghost も balloon もありません"
+                );
+            }
+            apply(world, roots, exe_dir());
+        }
+        AddVerdict::AlreadyListed { existing } => tracing::warn!(
+            event = "roots_add_already_listed",
+            path = %picked.display(),
+            existing = %existing.display(),
+            "[RootsEdit] すでに並びにある置き場なので変えません"
+        ),
+        AddVerdict::EnvLocked => tracing::warn!(
+            event = "roots_add_refused",
+            path = %picked.display(),
+            reason = "env_var",
+            "[RootsEdit] AREKA_ROOT で並びを渡しているので変えません"
+        ),
+    }
+}
+
+/// UI スレッドの入口: 置き場を外す（並びの値だけ・フォルダは消さず動かさない・要件 7.2）。
+#[allow(dead_code)] // 呼び手はメニューの置き場の項目（tasks.md 5.6）
+pub(crate) fn remove_root(world: &mut World, dir: PathBuf) {
+    let Some(ctx) = world.get_resource::<BootContext>() else {
+        tracing::error!(
+            event = "roots_change_no_context",
+            "[RootsEdit] 起動の文脈が無いので置き場を外せません"
+        );
+        return;
+    };
+    let reason = match decide_remove(&ctx.roots, ctx.roots_origin, &dir) {
+        RemoveVerdict::Removed { roots, .. } => return apply(world, roots, exe_dir()),
+        RemoveVerdict::LastOne => "last_one",
+        RemoveVerdict::EnvLocked => "env_var",
+        RemoveVerdict::Stale => "stale",
+    };
+    tracing::warn!(
+        event = "roots_remove_refused",
+        path = %dir.display(),
+        reason,
+        "[RootsEdit] 置き場を外せないので変えません"
+    );
+}
+
+/// 実行ファイルのフォルダ（記憶へ `<exe>` で書く相手）。
+fn exe_dir() -> Option<PathBuf> {
+    crate::boot_config::exe_location()
+        .and_then(Path::parent)
+        .map(Path::to_path_buf)
+}
+
+/// 適用: ①起動の文脈の並びと出どころ（記憶）を書き換える（その回に効かせる・要件 8.2・8.5）
+/// ②記憶へ書く（要件 8.1）③変更のときの並びと隠れを記録する（要件 8.3）。
+/// 今のゴースト・バルーン（`BootContext.current`）には触らない（要件 8.4）。
+fn apply(world: &mut World, roots: BasewareRoots, exe_dir: Option<PathBuf>) {
+    let value = encode_memory(&roots, exe_dir.as_deref());
+    let Some(mut ctx) = world.get_resource_mut::<BootContext>() else {
+        tracing::error!(
+            event = "roots_change_no_context",
+            "[RootsEdit] 起動の文脈が無いので置き場の変更を適用できません"
+        );
+        return;
+    };
+    ctx.roots = roots.clone();
+    ctx.roots_origin = RootsOrigin::Memory;
+    let app_profile_dir = ctx.app_profile_dir.clone();
+
+    let entries = vec![(PersistKey::BasewareRoots, value)];
+    let runtime = world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .and_then(|session| session.runtime());
+    match runtime {
+        // 動いているゴーストの記憶の書き手を通す（同じファイルを 2 か所から書かない）。
+        // 書けなければ `save_scope` が error を残す。
+        Some(runtime) => runtime
+            .sylphya_publisher()
+            .persist_put(PersistScope::App, entries),
+        None => {
+            let scope_roots = ScopeRoots {
+                app: Some(app_profile_dir.clone()),
+                ..ScopeRoots::default()
+            };
+            if save_scope(PersistScope::App, &scope_roots, &FsPersistIo, entries)
+                == PersistOutcome::Degraded
+            {
+                tracing::error!(
+                    event = "roots_memory_write_failed",
+                    dir = %app_profile_dir.display(),
+                    "[RootsEdit] 置き場の並びを記憶へ書けません（この回の並びは効いています）"
+                );
+            }
+        }
+    }
+
+    let status = roots
+        .roots()
+        .iter()
+        .map(|r| RootStatus {
+            dir: r.dir().to_path_buf(),
+            found: r.dir().is_dir(),
+        })
+        .collect();
+    let hidden = areka_ghost::catalog_roots::survey(&roots).hidden;
+    log_roots(
+        &ResolvedRoots {
+            roots,
+            origin: RootsOrigin::Memory,
+            status,
+            skipped: Vec::new(),
+            memory_fell_back: false,
+        },
+        ReportOccasion::Change,
+    );
+    log_hidden(&hidden, ReportOccasion::Change);
 }
 
 #[cfg(test)]

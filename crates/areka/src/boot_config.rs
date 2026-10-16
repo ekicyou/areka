@@ -176,8 +176,7 @@ pub(crate) type BootResolved = (
 #[derive(bevy_ecs::prelude::Resource)]
 pub(crate) struct BootContext {
     pub roots: areka_ghost::BasewareRoots,
-    /// 並びの出どころ。読み手はメニューの置き場の項目と並びの変更（tasks.md 5.3・5.6）。
-    #[allow(dead_code)] // 読み手は tasks.md 5.3・5.6 で来る
+    /// 並びの出どころ。読み手はメニューの置き場の項目と並びの変更（`roots::add_root`・`remove_root`）。
     pub roots_origin: crate::roots::RootsOrigin,
     pub app_profile_dir: std::path::PathBuf,
     pub helper_exe: std::path::PathBuf,

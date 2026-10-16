@@ -155,3 +155,167 @@ fn remove_not_listed_is_stale() {
         RemoveVerdict::Stale
     );
 }
+
+// ---------------------------------------------------------------- 適用（実行系が居ない経路・要件 8.1〜8.5）
+
+mod apply {
+    use super::*;
+    use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
+    use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+    use crate::roots::{decode_memory, read_memory};
+    use bevy_ecs::world::World;
+    use log_capture_kit::{CapturedEvent, capture};
+
+    /// 根の下に読めるゴースト 1 体を置く。
+    fn ghost(root: &Path, folder: &str) {
+        let master = root.join("ghost").join(folder).join("ghost").join("master");
+        std::fs::create_dir_all(&master).unwrap();
+        std::fs::write(
+            master.join("descript.txt"),
+            format!("charset,UTF-8\r\nname,{folder}\r\n"),
+        )
+        .unwrap();
+    }
+
+    fn world(root: &Path, app_profile_dir: PathBuf) -> World {
+        let mut world = World::new();
+        world.insert_resource(BootContext {
+            roots: roots_of(&[root]),
+            roots_origin: RootsOrigin::Default,
+            app_profile_dir,
+            helper_exe: root.join("helper.exe"),
+            argv_session: false,
+            current: CurrentGhost {
+                cfg: ConfigInputs {
+                    ghost_root: root.join(r"ghost\ga"),
+                    balloon_root: root.join(r"balloon\B"),
+                },
+                ghost: GhostDecision {
+                    route: GhostRoute::Default,
+                    dir: root.join(r"ghost\ga"),
+                    folder: Some("ga".to_owned()),
+                },
+                balloon: BalloonDecision {
+                    route: BalloonRoute::Default,
+                    dir: root.join(r"balloon\B"),
+                    folder: Some("B".to_owned()),
+                },
+            },
+        });
+        world
+    }
+
+    fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
+        events
+            .iter()
+            .filter(|e| e.field_str("event") == Some(name))
+            .collect()
+    }
+
+    #[test]
+    fn add_writes_memory_and_takes_effect_without_switching() {
+        let tmp = TempPath::under_target("roots-edit-apply-add");
+        let a = root(&tmp, "a", true);
+        ghost(&a, "ga");
+        let b = root(&tmp, "b", true);
+        ghost(&b, "gb");
+        let profile = tmp.path().join("profile");
+        let mut world = world(&a, profile.clone());
+
+        let ((), events) = capture(|| add_root(&mut world, b.clone()));
+
+        let ctx = world.resource::<BootContext>();
+        assert_eq!(ctx.roots, roots_of(&[&a, &b]), "その回に効く（要件 8.2）");
+        assert_eq!(ctx.roots_origin, RootsOrigin::Memory);
+        assert_eq!(
+            ctx.current.ghost.folder.as_deref(),
+            Some("ga"),
+            "切り替えない（要件 8.4）"
+        );
+        // 記憶を直に読む口で読み戻すと同じ並び（要件 8.1）。
+        let value = read_memory(&profile).expect("記憶に並びが書かれる");
+        let (decoded, skipped) = decode_memory(&value, super::super::exe_dir().as_deref());
+        assert_eq!(decoded, vec![a.clone(), b.clone()]);
+        assert!(skipped.is_empty());
+        // 次に引く和に足した根のゴーストが入る。
+        let survey = areka_ghost::catalog_roots::survey(&ctx.roots);
+        assert!(survey.ghosts.iter().any(|g| g.identity.folder == "gb"));
+        // 変更のときの並びと隠れの記録（要件 8.3）。
+        let listed = named(&events, "root_listed");
+        assert_eq!(listed.len(), 2);
+        assert!(
+            listed
+                .iter()
+                .all(|e| e.field_str("occasion") == Some("change"))
+        );
+        assert_eq!(named(&events, "roots_hidden_count").len(), 1);
+        assert!(named(&events, "roots_memory_write_failed").is_empty());
+    }
+
+    #[test]
+    fn add_takes_effect_and_logs_error_when_memory_unwritable() {
+        let tmp = TempPath::under_target("roots-edit-apply-unwritable");
+        let a = root(&tmp, "a", true);
+        let b = root(&tmp, "b", true);
+        // 記憶の置き場がファイル＝書けない。
+        let profile = tmp.path().join("profile-is-a-file");
+        std::fs::write(&profile, "x").unwrap();
+        let mut world = world(&a, profile);
+
+        let ((), events) = capture(|| add_root(&mut world, b.clone()));
+
+        assert_eq!(world.resource::<BootContext>().roots, roots_of(&[&a, &b]));
+        let failed = named(&events, "roots_memory_write_failed");
+        assert_eq!(failed.len(), 1, "{events:?}");
+        assert_eq!(failed[0].level, tracing::Level::ERROR);
+    }
+
+    #[test]
+    fn remove_writes_memory_and_keeps_folder() {
+        let tmp = TempPath::under_target("roots-edit-apply-remove");
+        let a = root(&tmp, "a", true);
+        let b = root(&tmp, "b", true);
+        let profile = tmp.path().join("profile");
+        let mut world = world(&a, profile.clone());
+        world.resource_mut::<BootContext>().roots = roots_of(&[&a, &b]);
+
+        remove_root(&mut world, b.clone());
+
+        assert_eq!(world.resource::<BootContext>().roots, roots_of(&[&a]));
+        let value = read_memory(&profile).expect("記憶に並びが書かれる");
+        let (decoded, _) = decode_memory(&value, super::super::exe_dir().as_deref());
+        assert_eq!(decoded, vec![a.clone()]);
+        assert!(b.is_dir(), "フォルダは消さない（要件 7.2）");
+    }
+
+    #[test]
+    fn refusals_warn_and_never_write_memory() {
+        let tmp = TempPath::under_target("roots-edit-apply-refuse");
+        let a = root(&tmp, "a", true);
+        let empty = root(&tmp, "empty", false);
+        let profile = tmp.path().join("profile");
+        let mut world = world(&a, profile.clone());
+
+        let ((), events) = capture(|| {
+            add_root(&mut world, a.clone());
+            remove_root(&mut world, a.clone());
+        });
+        assert_eq!(named(&events, "roots_add_already_listed").len(), 1);
+        let refused = named(&events, "roots_remove_refused");
+        assert_eq!(refused.len(), 1);
+        assert_eq!(refused[0].field_str("reason"), Some("last_one"));
+        assert!(
+            read_memory(&profile).is_none(),
+            "既定の並びのままなら書かない（要件 1.11）"
+        );
+
+        let ((), events) = capture(|| add_root(&mut world, empty.clone()));
+        let warned = named(&events, "roots_add_empty_root");
+        assert_eq!(warned.len(), 1);
+        assert_eq!(warned[0].level, tracing::Level::WARN);
+        assert_eq!(
+            world.resource::<BootContext>().roots,
+            roots_of(&[&a, &empty])
+        );
+    }
+}

@@ -7,7 +7,7 @@ mod edit;
 pub(crate) mod report;
 mod resolve;
 
-#[allow(unused_imports)] // 使い手は並びの変更の適用（tasks.md 5.3）
+#[allow(unused_imports)] // 使い手はメニューと受け口（tasks.md 5.5・5.6）
 pub(crate) use edit::*;
 pub(crate) use resolve::*;
 
