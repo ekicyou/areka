@@ -18,9 +18,10 @@ perf-loop.common.ps1 — perf-loop.ps1 が dot-source する共通部品
   ⒝ 子プロセスの起動 … Get-PythonCommand / Get-PwshPath / Invoke-Child
                        出力を 1 行ずつ持ち帰り、終了コードを握り潰さない。
                        **子の出力は端末のコードページに依らず必ず UTF-8 として読む**
-                       （python には PYTHONIOENCODING、pwsh には子の中での
-                       [Console]::OutputEncoding 切り替えを渡し、読む側は
-                       ProcessStartInfo の StandardOutputEncoding を UTF-8 に固定する）。
+                       （python には PYTHONIOENCODING、pwsh には perf-pwsh-child.ps1 の
+                       前置き＝子の中で自分の標準出力・標準エラーだけを UTF-8 の書き手に
+                       替える文を渡し、読む側は ProcessStartInfo の StandardOutputEncoding を
+                       UTF-8 に固定する）。端末の文字コードの設定はどこでも書き替えない。
                        素の `& $exe` 捕捉は親の端末のコードページで復号するため、
                        CP932 の端末から回すと日本語が化けて字面の比較が偽の不一致になる
   ⒞ 目標定義の読み   … Read-TomlSections / Get-GoalConfig / Get-JudgeScriptVersion
@@ -46,6 +47,9 @@ perf-loop.common.ps1 — perf-loop.ps1 が dot-source する共通部品
 #>
 
 Set-StrictMode -Version 3.0
+
+# 子の PowerShell の引数を UTF-8 の書き手の前置き付きで組む Get-PwshChildArguments（前置きの唯一の所在）
+. (Join-Path $PSScriptRoot 'perf-pwsh-child.ps1')
 
 # =============================================================================
 # 較正値・調整値（perf-loop.ps1 の一覧と対応。変更はここだけ）
@@ -279,11 +283,11 @@ function Invoke-PythonChild {
 }
 
 # .ps1 を子 pwsh で回す。
-# -File ではなく -Command で呼び、子の中で [Console]::OutputEncoding を UTF-8 へ
-# 切り替えてからスクリプトを起動する。PowerShell は出力先が渡された handle でも
-# [Console]::OutputEncoding（＝その端末のコードページ）で書くため、-File のままだと
-# CP932 の端末から回した子の出力が CP932 で来る。親（Invoke-Child）は UTF-8 で読むので、
-# ここを揃えないと日本語が化ける。端末そのもののコードページは変えない（子の中だけ）。
+# 引数は Get-PwshChildArguments（perf-pwsh-child.ps1）で組む。PowerShell は出力先が渡された
+# handle でも [Console]::OutputEncoding（＝その端末のコードページ）で書くため、素の -File だと
+# CP932 の端末から回した子の出力が CP932 で来る。前置きは子の中でその子の標準出力・標準エラー
+# だけを UTF-8 の書き手に替えるので、親（Invoke-Child）は UTF-8 で読める。端末の文字コードの
+# 設定は子の中でも書き替えない（共有の端末は子が終わっても元のまま）。
 function Invoke-PwshChild {
     param(
         [Parameter(Mandatory = $true)][string]$ScriptPath,
@@ -299,17 +303,7 @@ function Invoke-PwshChild {
         $msg = "スクリプトがありません: $ScriptPath"
         return [pscustomobject]@{ Code = -1; Out = @(); Err = @($msg); Lines = @($msg); LastLine = $msg }
     }
-    $parts = @("& '" + ($ScriptPath -replace "'", "''") + "'")
-    foreach ($argument in $Arguments) {
-        $text = [string]$argument
-        # -SelfTest のような引数名はそのまま（引用すると値として渡ってしまう形もあるため
-        # 引数名の形をしているものだけ素で渡し、それ以外は単引用符で括る）
-        if ($text -match '^-[A-Za-z][A-Za-z0-9]*$') { $parts += $text }
-        else { $parts += ("'" + ($text -replace "'", "''") + "'") }
-    }
-    $inner = "[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new(`$false); " +
-             ($parts -join ' ') + "; exit `$LASTEXITCODE"
-    $argv = @('-NoProfile', '-NonInteractive', '-Command', $inner)
+    $argv = Get-PwshChildArguments -ScriptPath $ScriptPath -Arguments $Arguments
     return Invoke-Child -Exe $pwshPath -Arguments $argv -Quiet:$Quiet
 }
 

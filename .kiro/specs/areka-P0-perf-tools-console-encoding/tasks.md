@@ -38,7 +38,7 @@
   - _Requirements: 5.1, 5.3, 5.4, 5.5, 5.7_
 
 - [ ] 3. 子の PowerShell の起こし方を、端末を書き替えない形に替える
-- [ ] 3.1 子の PowerShell の引数を UTF-8 の書き手の前置き付きで組む部品を作り、`Invoke-PwshChild` を替える
+- [x] 3.1 子の PowerShell の引数を UTF-8 の書き手の前置き付きで組む部品を作り、`Invoke-PwshChild` を替える
   - 新しい読み込み用のファイルに、前置き（そのプロセスの標準出力・標準エラーを BOM の無い UTF-8 の書き手に替える・自分だけの範囲で回す）と引数の引用の規則を置く。前置きの所在はここ 1 か所だけ
   - `Invoke-PwshChild` は新しい部品で組んだ引数で `Invoke-Child` を呼ぶだけにする（子を起こせないときの文はこのタスクでは今の字のまま残し、ASCII への書き直しは 5.1 が持つ）。引数と戻り値・呼ぶ側 7 か所・`Invoke-Child`・`Invoke-PythonChild` は変えない
   - `perf-loop.common.ps1` の頭書と子を起こす所の注記を、実際の動きに合わせて書き直す
