@@ -29,11 +29,13 @@
   - 調停役のスキル `kiro-watch`（`SKILL.md`・`kiro-watch.ps1`・`messages.json`）の退役と、今使う文書に残る呼び名の掃除。
   - 手順書 `doc/impl-watch.md` の 1 節〜4 節の追い書き（スキルから呼ぶ形・置き方の手順を指す形）。
   - 一時の置き場所での確かめ。
+  - スキル `kiro-next` の始まりに、そのリポジトリの机の記録を消す段を 1 つ足すこと（Requirement 12）。
 - **Out of scope**:
   - アプリ `crates/areka-impl-watch` のソースと振る舞い（コマンド・引数・終了コード・出力の文・規則 7 つ）。足りないものが見つかったら `areka-P0-impl-watch-residue` へ申し送るか、`/kiro-discovery` で起票する。
   - 開発者の機械の環境変数の設定・変更（スキルも置き方の手順も読むだけ）。
   - ほかのリポジトリ（pasta など）のスキル。
-  - スキル `kiro-next`: 着手中の spec は今どおり `git worktree list` と枝の差分で見分ける。机の状態（`status`）は読まない（読まなくても棚卸の結果が変わらないため）。
+  - スキル `kiro-next` の Requirement 12 の段のほか: 着手中の spec は今どおり `git worktree list` と枝の差分で見分ける。机の状態（`status`）は読まない（読まなくても棚卸の結果が変わらないため）。参加者にもならない。
+  - リポジトリの分だけ消す形（`clear --repo`）をアプリに足すこと: `areka-P0-impl-watch-residue` が受け持つ（2026-10-16 開発者の承認）。
   - スキル `/release`: マージの机を取らない。版上げの PR は roadmap・台帳の数・生成した報告を書き替えず、マージの直前に既定の枝の動きを読み直して取り込む手順を自分で持つため。
   - `.kiro/steering/workflow.md` への机の段の 1 節: 書かない。机の段の正本はスキルと手順書に置く。
   - 机を使うスキル以外のスキル（`kiro-validate-impl` の単独の実行・`kiro-debug` など）の参加。
@@ -158,6 +160,8 @@
 1. The 手順書 shall 4 節に、机を使うスキルが識別・リポジトリ・名前に何を渡すかと、どのスキルのどの時点で見張り・申し込み・返却・参加の終わりを呼ぶかを書く。
 2. The 手順書 shall 2 節・3 節の手で打つビルドとコピーと入れ替えの手順を、置き方の手順（Requirement 7）を指す形にする。
 3. The 手順書 shall スキルの書き方と食い違う記述（Requirement 2〜6 と異なる見張りの立て方・終了コードごとの扱い）を持たない。
+4. The 手順書 shall `areka-P0-impl-watch-residue` が申し送った、古くなる記述（見張りが停止要請で終わるのと同時に再開が入り、ごくまれに起きる、を戻しの理由に挙げる一文）を、あちらの着地に合わせて消す。
+5. The 手順書 shall `kiro-next` が棚卸の始まりにそのリポジトリの記録を消すこと（Requirement 12）を、4 節の呼び方に書く。
 
 ### Requirement 10: トークンの負荷
 **Objective:** As a 開発者, I want 机の調停が Claude のセッションを余計に起こさず、読む文を最小にすること, so that トークンの負荷が最小に保たれる
@@ -166,6 +170,17 @@
 1. The 机を使うスキル shall セッションが起きる機会を、待つコマンド（見張り・番の待ち・再開の待ち）の終わりだけにし、状態を読みに行く見回り・時間を決めた繰り返し・定期の `status` を行わない。
 2. The 机を使うスキル shall 机のコマンドの結果を、終了コードと出力の ASCII の数行だけで判断し、ふだんの流れでは `status` も `status.md` も読まない（訳を調べるとき・Requirement 5.7 のときだけ読む）。
 3. The 机を使うスキル shall 机について開発者へ伝えることを、1 つの出来事につき 1 行にまとめる。
+
+### Requirement 12: 棚卸の始まりのリポジトリの掃除（kiro-next）
+**Objective:** As a 開発者, I want 棚卸の始まりに、そのリポジトリの机の記録（落ちたセッションの残り）がまとめて消えること, so that 返事をしない残りの参加者が負荷テストの番を塞ぎ続けず、手で `leave` して回らなくて済む
+
+#### Acceptance Criteria
+1. When `kiro-next` が始まった, the kiro-next skill shall 棚卸の段に入る前に、Requirement 1.3 と同じリポジトリの名前を渡してそのリポジトリの記録だけを消すコマンド（`clear --repo <リポジトリの名前>`）を 1 回呼ぶ（棚卸の時点では、そのリポジトリで誰も作業していないため）。
+2. The kiro-next skill shall ほかのリポジトリの参加者と記録を消さず、全部を消す `clear` を呼ばない。
+3. If 環境変数が空・実行ファイルが無い・置き場所の値が断られた, then the kiro-next skill shall Requirement 6.1〜6.3 と同じく、その段を飛ばして 1 行で伝え、棚卸を続ける。
+4. If コマンドが終了コード 2（呼び方の誤り＝リポジトリの分だけ消す形がまだ無い）で終わった, then the kiro-next skill shall その段を飛ばして 1 行で伝え、棚卸を続ける（`areka-P0-impl-watch-residue` との着地の順に縛られないため）。
+5. The kiro-next skill shall 机の参加者にならず（`watch` を立てない）、`status` を読まない。
+6. While 消された記録の持ち主のセッションが実は動いていた, the 机を使うスキル shall Requirement 2.9・5.8 のとおり見張りを立て直して申し込み直す（この段のための別の決まりを足さない）。
 
 ### Requirement 11: 確かめ
 **Objective:** As a 開発者, I want スキルの書き方と置き方の手順が、本物の置き場所を汚さずに確かめられていること, so that 着地の後に机の段が書いたとおりに回ると信じられる
