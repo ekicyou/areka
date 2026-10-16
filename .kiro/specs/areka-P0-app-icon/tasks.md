@@ -66,7 +66,7 @@
   - arm64 の `link.exe` が資源のファイルを受けないときは、そこで止めて報告する（設計の前提が崩れる）
   - 完了の状態: 2 本目のテストが飛ばしの行を出さずに緑
   - _Requirements: 3.6, 6.4_
-- [ ] 6.2 変えてはいけないものが変わっていないことと、静的な見張りを確かめる
+- [x] 6.2 変えてはいけないものが変わっていないことと、静的な見張りを確かめる
   - `Cargo.lock`・各 `Cargo.toml`・`crates/areka/src/`・`areka.manifest`・`tools/package.ps1`・`tools/test-all.ps1`・`.github/workflows/` に差分が無いことを、パスが実在することを確かめてから `git diff` で見る
   - 段 `encoding check` を回し、新しい道具が通ることを見る。中継と 32 ビットの補助の exe のクレートに組み立ての指示が増えていないことを見る
   - `cargo test -p areka` と `tools/app-icon.ps1 -SelfTest` を回す。重い全体テスト（`tools/test-all.ps1`）は回さない（`/kiro-complete` が 1 回回す）
@@ -84,3 +84,4 @@
 - 道具は `[CmdletBinding()]` 付き。打ち間違えた引数は黙って組む処理へ落ちず、エラーになる（2.4）。出力 3 つの置き換えは控えを取ってから行い、途中で失敗したら全部戻す（2.2・2.4）。
 - 5 の README の「置き場」は今の場所と保管後の場所を両方書いている。`/kiro-complete` がパスを `completed/` へ書き換えると同じ文が 2 つ並ぶので、そのとき括弧の中を消して 1 つにまとめる。
 - 6.1（2026-10-16）: arm64 の道具は VS2022 の MSVC 14.44.35207 `Hostx64\arm64\link.exe`。debug で組んだ `target\aarch64-pc-windows-msvc\debug\areka.exe`（機械の種類 0xAA64）を `AREKA_ICON_CHECK_EXE` で検査し、飛ばしの行なしで緑。リンカは `icons.res` をそのまま受けた。
+- 6.2（2026-10-16）: 新しいワークツリーで `cargo test -p areka` を直に回すと、32 ビットの組み立ての出力（`shiori-host32-helper.exe`・`shiori_loadu.dll`）が無いので、実機の 2 本（`mcp_get_log_real_run`・`smoke_boot_loop_exit`）が赤になる。この仕様とは関係なく、`tools/test-all.ps1` は先にそれらを組むので起きない。組んでから回すと緑（単体 2920 通過）。
