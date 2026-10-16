@@ -1,6 +1,6 @@
 ---
 name: kiro-watch-clear
-description: 'Clear the whole desk state of areka-impl-watch (participants, merge desks and queues, load-test desk and queue, stop requests, wait and watch records) in one go, then show the resulting status. Calls `areka-impl-watch.exe clear` and `status` from the folder named by the environment variable AREKA_IMPL_WATCH_HOME; the previous state is kept as a backup file. Use when: /kiro-watch-clear, 机の状況を全部消す, 机を最初からやり直す, impl-watch を clear. DO NOT USE FOR: removing one session (use `areka-impl-watch.exe leave --id <id>`), only looking at the state (use `status`), the coordinator session of the kiro-watch skill (its state lives elsewhere), installing or updating the exe (see doc/impl-watch.md).'
+description: 'Clear the whole desk state of areka-impl-watch (participants, merge desks and queues, load-test desk and queue, stop requests, wait and watch records) in one go, then show the resulting status. Calls `areka-impl-watch.exe clear` and `status` from the folder named by the environment variable AREKA_IMPL_WATCH_HOME; the previous state is kept as a backup file. Use when: /kiro-watch-clear, 机の状況を全部消す, 机を最初からやり直す, impl-watch を clear. DO NOT USE FOR: removing one session (use `areka-impl-watch.exe leave --id <id>`), only looking at the state (use `status`), installing or updating the exe (use tools/impl-watch-install.ps1; doc/impl-watch.md 2-3).'
 allowed-tools: Bash, Read
 argument-hint: ''
 ---
@@ -15,7 +15,7 @@ Empty the desk state of `areka-impl-watch` and tell the developer what happened,
 `clear` asks nothing and acts at once: it moves the current `state.json` to `state.json.cleared-<UTC>` and starts from an empty state. Every running wait and watch then ends with exit code 3. The developer typing `/kiro-watch-clear` is the confirmation; do not ask again, and do not run this skill unless the developer asked for a full clear.
 
 ## Rules
-- Tools: Bash and Read only. Run exactly the one command below, once.
+- Tools: Bash and Read only. Run exactly the one command below, once. The only other command allowed is the `git rev-parse` that fills in the install command (see "How to install"), and only when giving it.
 - Use the inherited `AREKA_IMPL_WATCH_HOME` as it is. Never set, change, rewrite or convert it (no `AREKA_IMPL_WATCH_HOME=...` prefix, no `/c/...` form, no `cd`). The exe refuses a value that is not a `C:\...` absolute path: it ends with exit code 1 and one standard-error line starting with `AREKA_IMPL_WATCH_HOME must be an absolute path`, and reads and writes nothing. Report that line as it is; do not repair the value.
 - Do not build, copy or install the exe from this skill. Do not edit files under the home folder by hand.
 
@@ -50,7 +50,7 @@ The summary line is enough; Read the `status.md` named by `status:` only when th
 
 **Any `exit=<n>` other than 0** (a failure; 1 and 2 are the usual values, and every other non-zero value is treated the same way): report that it failed, which command failed, and attach the standard-error text unchanged. Do not retry and do not try to repair anything.
 - No `cleared; backup:` line in the output → `clear` reported the failure and `status` was not called.
-  - The standard-error line starts with `AREKA_IMPL_WATCH_HOME must be an absolute path` (or `AREKA_IMPL_WATCH_HOME cannot be created`) → the exe stopped before it opened the state. Say that nothing was cleared and that the value of the environment variable has to be fixed (`doc/impl-watch.md` 「2. 入れ方」).
+  - The standard-error line starts with `AREKA_IMPL_WATCH_HOME must be an absolute path` (or `AREKA_IMPL_WATCH_HOME cannot be created`) → the exe stopped before it opened the state. Say that nothing was cleared and that the value of the environment variable has to be fixed, then run the install tool (the command in "How to install" below).
   - Any other line → do not say whether the state was cleared or kept. Most failures happen before the state file is touched (it is kept), but one happens in between: the state file was already moved to `state.json.cleared-<UTC>` and the new empty state could not be written (then there is no `state.json`, and `status` prints `no state file`). Say it is unknown and that `areka-impl-watch.exe status` shows it once the cause is removed. A `status.md` that cannot be written is not such a failure: `clear` still ends with 0 and prints its line.
 - A `cleared; backup:` line is there → the clear succeeded (give the backup path) and `status` failed.
 
@@ -58,8 +58,15 @@ The summary line is enough; Read the `status.md` named by `status:` only when th
 For `stop: no-home` and `stop: no-exe`, tell the developer in Japanese, in 2-3 lines:
 - which of the two it was (環境変数 `AREKA_IMPL_WATCH_HOME` が空／置き場所に `areka-impl-watch.exe` が無い),
 - that nothing was cleared,
-- that the way to install is in `doc/impl-watch.md` 「2. 入れ方」 (set the user environment variable once to a `C:\...` absolute path, build, copy the exe there, restart the Claude app).
+- that the way to install is the install tool (the command in "How to install" below; details in `doc/impl-watch.md` 「2. 入れ方」 and 「3. 更新」).
 
-Then stop. Read that section only if the developer asks for the steps.
+Then stop. Read those sections only if the developer asks for the steps.
+
+## How to install
+Give the developer the install tool of the main working copy (the parent of the common git folder `.git`) as an absolute-path command:
+
+`pwsh -NoProfile -File <parent of git rev-parse --path-format=absolute --git-common-dir, in C:\... form>\tools\impl-watch-install.ps1`
+
+Fill in the absolute path, and add that it is run in a working copy that has taken in the latest of the default branch. Only show the command; do not run it from this skill.
 
 </instructions>
