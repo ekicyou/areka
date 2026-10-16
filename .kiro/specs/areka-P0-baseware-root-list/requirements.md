@@ -17,11 +17,11 @@
   - 根が決まらないときの告知（`crates/areka/src/alert.rs` の `alert_text`）は `AREKA_ROOT` を名指しする。
 - 根の外にあるゴーストは、起動の引数でフォルダを直接渡す以外に使えない。引数で渡したものは「目録の外」の扱いで、メニューにも切替先にも記憶にも載らない。
 - 一覧（`crates/areka-ghost/src/catalog.rs` の `list_ghosts`・`list_balloons`）は 1 つの根だけを見る。並びはフォルダ名のバイト順。シェルの一覧（`list_shells`）はゴーストのフォルダの下を見るので、根に依らない。
-- 根が 1 つと決め打ちしている本番の呼び手は 12 ファイルに及ぶ。
+- 根が 1 つと決め打ちしている本番の呼び手は 13 ファイルに及び、インストールの部品 `areka-nar` も根を 1 つだけ受ける。
   - 起動: `boot_config.rs`、`boot_resolve.rs`（ゴーストとバルーンの決め方・既定ゴースト `emo2`・既定バルーン `StayseeBalloon`・起動中の印に書く名前を引く `running_name`）、`main.rs`。
   - 切替: `emo2_boot/ghost_switch.rs`（`random`・`sequential`・`lastinstalled`・定常に入ったときの起動中の印）・`emo2_boot/shell_balloon_resolve.rs`・`emo2_boot/shell_balloon_switch.rs`。
   - メニュー: `menu/ghost_frame.rs`・`menu/balloon_frame.rs`。
-  - インストール: `install/desk.rs`・`install/overwrite.rs`・`install/procedure.rs`。
+  - インストール: `install/desk.rs`・`install/overwrite.rs`・`install/procedure.rs`・`install/worker.rs`（根を背景のスレッドへ運ぶ）。`areka-nar` は宛先の根を `InstallRequest` で 1 つだけ受ける。
   - ネットワーク更新: `update/desk.rs`（根を引くのは `updateother` の `--balloon=` だけ）。
   - `\![open,explorer,種類,名前]` の名前引き: `readme/opener.rs` の `named_folder`。
 - 記憶の鍵はフォルダ名だけで、どの根かを持たない。前回のゴースト（アプリの記憶）、前回のバルーンと前回のシェル（ゴーストの記憶）、切替の指定、メニューの印がこれに当たる。
@@ -209,7 +209,7 @@
 
 #### Acceptance Criteria
 
-1. While 並びが 1 つの根だけである, the areka shall 起動・切替・メニューの一覧・インストール・ネットワーク更新を今と同じに動かす（変わるのは要件 6・7 のメニューの 2 項目、要件 9.4〜9.6 の告知の文面、要件 1.14・2.5 の記録の行だけ）。
+1. While 並びが 1 つの根だけである, the areka shall 起動・切替・メニューの一覧・インストール・ネットワーク更新を今と同じに動かす（変わるのは要件 6・7 のメニューの 2 項目、要件 9.4〜9.6 の告知の文面、要件 1.14・2.5・5.7 の記録の行だけ）。
 2. The areka shall 起動の引数でフォルダを直接渡す起動（実機サインオフの絶対パス起動）を今どおり「目録の外」として扱い、根の並びによって変えない。
 3. The areka shall アプリの記憶の置き場（`AREKA_PROFILE_DIR`・既定は実行ファイルのフォルダの `profile\areka\`）を変えない。
 4. The areka shall 同時に起動するゴーストを今どおり 1 体とする。
