@@ -674,7 +674,8 @@ fn session_mark_verdict(
         | ExitOrigin::Escape
         | ExitOrigin::Smoke
         | ExitOrigin::OsClose
-        | ExitOrigin::SessionEnd => {}
+        | ExitOrigin::SessionEnd
+        | ExitOrigin::MemoryWriteFailed(_) => {}
     }
     if !end.run_ok {
         return MarkVerdict::Keep("run_failed");

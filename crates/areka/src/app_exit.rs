@@ -10,6 +10,7 @@
 //! 出所 [`ExitOrigin`] は記録の語彙であり、受け手は出所で分岐しない（要件 3.7）。
 
 use areka_kanade::{CloseReason, KanadeStopCause, ShioriFault};
+use areka_sylphya::PersistFailure;
 use bevy_ecs::prelude::*;
 use wintf::AppExit;
 use wintf::ecs::WindowHandle;
@@ -45,6 +46,9 @@ pub(crate) enum ExitOrigin {
     /// OS のセッションの終了（シャットダウン・再起動・ログオフ＝`WM_ENDSESSION` の wParam が真）。
     /// 窓の手続きの中で後始末まで済ませる（`session_end::on_os_session_end`）。失敗の中身は無い。
     SessionEnd,
+    /// 記憶を書けなかった（最初の失敗の中身つき・areka-P0-write-failure-notice 要件 2.2）。
+    /// 降ろす手順は正規の道を通るので、印の判定では「きれいな終わり」の群に入る。
+    MemoryWriteFailed(PersistFailure),
 }
 
 /// 最初に終了を指示した出所（World に 1 つ・書き込みは 1 度）。
@@ -73,6 +77,21 @@ pub(crate) fn fault_of(origin: &ExitOrigin) -> Option<&ShioriFault> {
         | ExitOrigin::Escape
         | ExitOrigin::Smoke
         | ExitOrigin::OsClose
+        | ExitOrigin::SessionEnd
+        | ExitOrigin::MemoryWriteFailed(_) => None,
+    }
+}
+
+/// 出所が記憶の書き込みの失敗なら中身（網羅の match・areka-P0-write-failure-notice 要件 2.2）。
+/// `main` は [`fault_of`] が無くこれが在れば「記憶を書けない」の告知を組み、終了コードを 1 にする。
+pub(crate) fn write_failure_of(origin: &ExitOrigin) -> Option<&PersistFailure> {
+    match origin {
+        ExitOrigin::MemoryWriteFailed(f) => Some(f),
+        ExitOrigin::KanadeStopped(_)
+        | ExitOrigin::Escape
+        | ExitOrigin::Smoke
+        | ExitOrigin::OsClose
+        | ExitOrigin::GhostFallbackFailed(_)
         | ExitOrigin::SessionEnd => None,
     }
 }

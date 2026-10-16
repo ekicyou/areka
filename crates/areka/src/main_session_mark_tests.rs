@@ -406,6 +406,13 @@ fn session_mark_verdict_table() {
         ExitOrigin::Smoke,
         ExitOrigin::OsClose,
         ExitOrigin::SessionEnd,
+        // 記憶を書けなかった終わりも降ろす手順は正規の道を通る＝消す側（write-failure-notice 要件 3.6）。
+        ExitOrigin::MemoryWriteFailed(areka_sylphya::PersistFailure {
+            scope: PersistScope::App,
+            dir: None,
+            keys: vec![PersistKey::LastRunning],
+            cause: areka_sylphya::PersistFailureCause::NoRoot,
+        }),
     ];
     let quit = ExitOrigin::KanadeStopped(Quit);
     let session_end = ExitOrigin::SessionEnd;

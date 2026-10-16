@@ -284,6 +284,41 @@ fn fault_of_returns_the_fault_only_for_fault_origins() {
     }
 }
 
+fn memory_write_failed() -> areka_sylphya::PersistFailure {
+    areka_sylphya::PersistFailure {
+        scope: areka_sylphya::PersistScope::App,
+        dir: None,
+        keys: vec![areka_sylphya::PersistKey::LastRunning],
+        cause: areka_sylphya::PersistFailureCause::NoRoot,
+    }
+}
+
+/// **areka-P0-write-failure-notice 要件 2.2**: 記憶を書けなかった出所は SHIORI の告知を選ばず
+/// （`fault_of` は `None`）、`write_failure_of` だけが中身を返す。他の 10 行は `None`。
+#[test]
+fn write_failure_of_returns_the_failure_only_for_memory_write_failed() {
+    let failure = memory_write_failed();
+    let origin = ExitOrigin::MemoryWriteFailed(failure.clone());
+    assert_eq!(write_failure_of(&origin), Some(&failure));
+    assert_eq!(fault_of(&origin), None);
+    let fault = connect_failed();
+    let others = [
+        ExitOrigin::KanadeStopped(KanadeStopCause::Quit),
+        ExitOrigin::KanadeStopped(KanadeStopCause::Forced),
+        ExitOrigin::KanadeStopped(KanadeStopCause::CloseSilent),
+        ExitOrigin::KanadeStopped(KanadeStopCause::DeadlineExceeded),
+        ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault.clone())),
+        ExitOrigin::Escape,
+        ExitOrigin::Smoke,
+        ExitOrigin::OsClose,
+        ExitOrigin::GhostFallbackFailed(fault),
+        ExitOrigin::SessionEnd,
+    ];
+    for origin in &others {
+        assert_eq!(write_failure_of(origin), None, "出所 {origin:?} の判定");
+    }
+}
+
 /// **要件 1.12・4.5・2.5（最初が勝つ・要件 7.2）**: `quit_app` を 2 度呼んでも `FirstExit` は
 /// 最初の出所のまま。2 度目は debug の `app_exit_again` がちょうど 1 件で、上書きはしない。
 /// 最初の `app_exit` の出所には失敗の種類と理由が載る。
