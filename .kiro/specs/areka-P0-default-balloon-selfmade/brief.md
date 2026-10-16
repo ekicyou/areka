@@ -160,3 +160,15 @@ communicatebox.x,8     communicatebox.y,21  communicatebox.width,385  communicat
   - `tools/package.ps1`: `sample-url-fetch` と同時に走らせない。
 - 優先度の区分: A。要件定義のモデル: Fable を勧める（名前・絵柄・形式・権利など 9 つの議題を開発者に聞く。絵の案は主のセッションが出す）。
 - 見つけた穴・古くなった記述: 本文に要件定義のモデルが書かれていない。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+- 前提の変化: 版の段で v0.1.0（見た目の 2 本目）。ソースの変更は 0。既定の名前の定数は今も `crates/areka/src/boot_resolve.rs` の 31 行目 `DEFAULT_BALLOON_FOLDER`（10 行目の説明も名前を書く）。配布の道具 `tools/package.ps1`（746 行）の 4 か所（466・495・503・564 行）もそのまま。
+- カタログの鎖との当たり（測り直した）: 鎖のファイルで触るのは `boot_resolve.rs`（609 行）の定数 1 行と、既定として期待するテスト 4 本（`boot_resolve_tests.rs`・`boot_resolve_balloon_tests.rs`・`boot_config_balloon_tests.rs`・`main_config_input_tests.rs`）だけ。カタログの本体 `crates/areka-ghost/src/catalog.rs` に名前は無く、触らない（`catalog_tests.rs`・`catalog_test_support.rs` は検体の名前として並び順を見るだけ＝直さない見込み）。
+- 触るファイル: 上の 5 本・`tools/package.ps1`・登記表 `crates/sample-ghost-kit/src/{lib.rs,lib_tests.rs}`・`vendors/sample_ghost/`・`dist/README.txt`・根の `README.md`・steering・絵を描く道具と中身を固定するテスト（新しいファイル）。
+- 規模: 8〜12 タスク（変わらず）。
+- 先に要るもの: `dot-sakura-specimen` → `emily-ghost-verification`（登記表の席・数は 9 を 10 に）。`balloon-webp-names`（絵を `.webp` で持つ場合の働きの依存・ファイルの重なりは 0）。
+- 同じウェーブに置けない相手: `dot-sakura-specimen`・`emily-ghost-verification`（登記表）・`multi-ghost-runtime`（`boot_resolve.rs` を挙げる）・`winget-release-automation`（根の `README.md`）。`boot_resolve.rs` を触る `baseware-root-list`・`user-data-root`・`write-failure-notice` は v0.0.3＝先に着地する見込み。差し替えのタスクの前に main を取り込んで照らす（変わらず）。
+- 優先度の区分: A。
+- 要件定義のモデル: **Opus に改める**（棚卸㉔は Fable を勧めた）。議題 9 つは開発者に聞く選びで、10-15 の基準のどれにも当たらない。絵の案は主のセッションが出す（変わらず）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述: 鎖の当たりに `catalog.rs` を数える読みは当たらない（名前を持つのは `boot_resolve.rs` だけ）。

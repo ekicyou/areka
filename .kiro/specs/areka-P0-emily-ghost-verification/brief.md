@@ -104,3 +104,14 @@ SSP に同梱されている既定ゴースト「Emily/Phase4.5」（えみり�
 - ファイルの重なり: 上の 3 本（登記表・数のテスト・README の表）・`write-failure-notice`（`install/judge.rs`・こちらが触る場合だけ）。カタログの鎖とは 0 のまま（`ghost-inner-balloon` が書庫に鍵を足さない限り）。
 - 優先度の区分: A。要件定義のモデル: Fable（どちらも変わらず）。
 - 見つけた穴・古くなった記述: 実機の窓を出す回は、`emo2-real-run-stability`・`dot-sakura-specimen` の実機の回や、負荷の走行と同じ時間に回さない。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+- 前提の変化: 版の段で v0.1.0（「動く」の 2 本目・見つけた崩れは 1 件ずつ起票してこの版で直す）。ソースの変更は 0。インストールを断る所（`crates/areka-nar/src/plan.rs` の `companion_placement`・307 行）も、検体の README の「未登記」の注記もそのまま。
+- 触るファイル: 棚卸㉔のまま（`plan.rs` と新しい兄弟のテスト〔`plan_tests.rs` は 919 行＝足さない〕・登記表 `crates/sample-ghost-kit/src/{lib.rs,lib_tests.rs}`・`vendors/sample_ghost/README.md`・要れば `crates/areka/src/install/judge.rs` 246 行）。直しがどこへ入るかは起こすまで分からない。
+- 規模: 8〜12 タスク（棚卸㉓の線＝この中で直すのは自分の持ち場と、1 タスクで閉じる直し 4 件まで）。
+- 先に要るもの: `dot-sakura-specimen`（登記表の席・数は 8 を 9 に）。働きの上では無し。
+- 同じウェーブに置けない相手: `dot-sakura-specimen`・`default-balloon-selfmade`（登記表・数のテスト・検体の README）。`write-failure-notice`（v0.0.3・`install/judge.rs`・こちらが触る場合だけ＝先に着地する見込み）。
+- 優先度の区分: A（開発者「何とか動くところまでは持っていきたい」）。
+- 要件定義のモデル: **Opus に改める**（棚卸㉔までは Fable）。インストールの断りの裁定は、着地済み `ghost-standard-balloon` の「解けないバルーンは既定へ落とす」決まりが前例になり、10-15 の基準（前例の無い境界・並行や時刻の新しい設計・前例で決まらない骨格の分かれ目）に当たらない。
+- 分割の案: 無し（棚卸㉓の線のまま）。
+- 見つけた穴・古くなった記述: 新しい件は無い。実機の窓を出す回は `dot-sakura-specimen`・`emo2-real-run-stability` の実機の回や負荷の走行と時間を分ける（変わらず）。

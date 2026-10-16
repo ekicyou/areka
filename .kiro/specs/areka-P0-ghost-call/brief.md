@@ -73,3 +73,19 @@
 1. もう動いているゴーストをメニューでどう見せるか（出さない・選べない・印を付ける）。
 2. 周りへの知らせの順（呼んだ側の `OnGhostCallComplete` と、無関係なゴーストの `OnOtherGhostBooted` は「同じとき」＝どちらを先に送るか）。
 3. 呼んだ履歴のメニュー（`callghosthistorybutton`）を本 spec に入れるか。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+- 前提の変化: 10-15 の起票の後の初めての測定。版の段で **v0.1.0**（`multi-ghost-runtime` の後）。ソースは起票の時から変わっていない。
+- 確かめたこと: `emo2_boot/consumer_ledger.rs`（943 行）に `call`・`ghost` の行は無い。`emo2_boot/change_cue.rs` は 119 行。`OnGhostCalling`・`OnGhostCalled`・`OnGhostCallComplete` は本番のコードに無く、`OnOtherGhostBooted` は `reference_brain.rs`（515 行）の検査の文字列 1 か所だけ。`menu/ghost_frame.rs` 74・`menu/mod.rs` 348。語彙は `crates/areka-sylphya/src/vocab/shiori_resource.rs`（291）に在る。
+- 触るファイル（見込み）:
+  - `consumer_ledger.rs`（先に中のテストを兄弟へ出す）と `consumer_ledger_agreement_tests.rs`・新しい受け取り手（`emo2_boot/` の新しいファイルか `change_cue.rs`）。
+  - `menu/{mod,ghost_frame}.rs` と新しい枠。
+  - kanade の `src/change.rs`（起動の由来＝今 4 種に「呼ばれた」を足す。`OnGhostCalled` が 204 なら `OnBoot` へ続く）と `schedule/boot.rs`（345）。
+  - 周りへ送る所（`multi-ghost-runtime` が作る席の集まり）・台帳 `sakura-script.toml` と SHIORI のイベントの台帳の行・COMPAT §8。
+- 規模: 10〜14 タスク。
+- 先に要るもの: `multi-ghost-runtime`（働き）。
+- 同じウェーブに置けない相手（24 本の中）: `multi-ghost-runtime`・`mcp-reload`（`consumer_ledger.rs`・kanade の `src/change.rs`・`schedule/boot.rs`＝向こうも起動の由来を 1 種足す）・`mcp-strict-errors` と `script-security-level`（`consumer_ledger.rs`）・`baseware-root-list`（`menu/ghost_frame.rs`・`menu/mod.rs`）・`mcp-kanade-tools`（イベントの許可の表 `schedule/events.rs` に足すとき）。
+- 優先度の区分: A（開発者の「複数ゴーストの同時起動」）。
+- 要件定義のモデル: Opus。イベントと Reference の並びは ukadoc が決め、名前の解決は完了 `ghost-change-name-resolution` を使い回す。議題 2（送る順）は ukadoc の「同じとき」の 2 通りの並べ方で、骨格の分かれ目ではない。
+- 分割の案: 切らない。
+- 見つけた穴・古くなった記述: 本文に kanade の `src/change.rs`・`schedule/boot.rs`（`OnGhostCalled` から `OnBoot` への落ち方）が無い＝`mcp-reload` と直列になることが書かれていない。

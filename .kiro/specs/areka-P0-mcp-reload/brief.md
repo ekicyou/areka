@@ -147,3 +147,16 @@ AI エージェントは辞書やシェルを書き換えたら、ゴースト�
   - 重なり 0: `mcp-kanade-tools`（上の約束つき）・`mcp-receiver-bugs`・`mcp-stdio-bridge-residue`。
 - 優先度の区分: A のまま。要件定義のモデル: Fable のまま。
 - 見つけた穴・古くなった記述: `check-script-arg-checks` の brief は「本 spec が `change_cue.rs` を挙げている」と書くが、本 spec の触るファイルに `change_cue.rs` は無い（受け口は新しい `reload_cue.rs`）。`mcp-receiver-bugs` の brief の Adjacent は本 spec を「`handler.rs` を触る spec」に数えているが、本 spec は `handler.rs` を挙げていない。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+
+- 前提の変化: 版の段で **v0.1.0**（MCP の列の 2 本目・`mcp-kanade-tools` の後）。10-11 から触るファイルは動いていない（`emo2_boot/consumer_ledger.rs` 943・`emo2_boot/mod.rs` 911・`emo2_boot/ghost_switch.rs` 902・`emo2_boot/shell_balloon_switch.rs` 442・kanade の `src/change.rs` 175・`schedule/boot.rs` 345）。
+- `baseware-root-list` との重なりを確かめ直した＝**本当に重なる**。向こうは、ゴーストの一覧を根から引く所（`ghost_switch.rs` の `catalog::list_ghosts(&ctx.root)` 2 か所）と、バルーンの候補を根から引く所（`shell_balloon_switch.rs` の `balloon_candidates(&ctx.root)`）を根の並びへ付け替える。本 spec は同じ 2 ファイルの載せ替えの入口を触る＝同じウェーブに置けない。順は `baseware-root-list`（v0.0.3）が先。
+- `mcp-kanade-tools` とは **同じウェーブに置ける**（約束つき）: 起動の由来に種類を足しても、kanade で触るのは `src/change.rs` と `schedule/boot.rs` だけ（全部並べて分ける所は `schedule/boot.rs` の 1 か所・areka 本体の側の 9 か所はどれも組み立て）。本 spec は `msg.rs`・`actor.rs`・`schedule/mod.rs`・`schedule/change.rs` に触らない。案内文の 1 文を最後に `mcp-strict-errors` が消す順は変わらない。
+- 規模: L（17〜22）。`\![reload,shiori]` を除けば 14〜17。20 を超えたら `\![reload,shiori]` を後の 1 本へ（roadmap のとおり）。
+- 先に要るもの: 働きの前提なし。ファイルの上で `baseware-root-list` の着地の後。
+- 同じウェーブに置けない相手（24 本の中）: `baseware-root-list`（`ghost_switch.rs`・`shell_balloon_switch.rs`）・`write-failure-notice`（`ghost_switch.rs`）・`multi-ghost-runtime`（`ghost_switch.rs`・`shell_balloon_switch.rs`・`emo2_boot/mod.rs`・kanade の `src/change.rs`）・`script-security-level`（`schedule/boot.rs`）・`placement-measure-bake-once` の案 A（`emo2_boot/mod.rs`）・`ghost-call`（`consumer_ledger.rs` に行を足す）・`mcp-strict-errors`（`doc/ssp-mcp/areka-tools.md`・案 ⑵ なら `consumer_ledger.rs`）。`\![reload,shiori]` を含めるなら `crates/areka-ghost/src/runtime.rs` を触る `user-data-root`・`multi-ghost-runtime`・`ghost-call` とも。
+- 重なり 0: `mcp-kanade-tools`（上の約束つき）・`mcp-receiver-bugs`・`property-name-case-fold`・`emo2-real-run-stability`・`dpi-realign-remembered-chain`。
+- 優先度の区分: A のまま。要件定義のモデル: **Opus**（10-15 の付け直し。載せ替えは今ある切替の道 `request_ghost_switch` に乗る＝新しい境界ではない）。
+- 分割の案: 上の 1 つだけ（20 を超えたら）。
+- 見つけた穴・古くなった記述: 棚卸㉓・㉔の「Fable のまま」は古い。`mcp-receiver-bugs` の brief の Adjacent は本 spec を `handler.rs` を触る spec に数えている（本 spec は触らない）。

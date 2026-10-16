@@ -141,3 +141,16 @@ AI が書いた台本は、存在しない surface 番号や綴りを誤った�
 - 先に要るもの: `mcp-kanade-tools`・`mcp-reload`（案内文の 1 文を消す順）。`check-script-arg-checks` が先に着地すると種類と文面の正本が増える＝後の側が揃える。同じウェーブに置けない相手: `mcp-user-response`・`mcp-shiori-query`・`mcp-receiver-bugs` の件 1（`handler.rs`）・`check-script-arg-checks`・`script-impact-tiers`（`check_script_judge.rs`・`areka-tools.md`）。
 - 優先度の区分: A のまま。要件定義のモデル: Fable のまま。
 - 見つけた穴・古くなった記述: 10-08 の申し送りの「6 類」の表に `unpaired_tag` の行が無い。文面の定数（`check_script_judge.rs` の `MSG_*`・10 個になった）と文書の一致は、今もテストで見ていない。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+
+- 前提の変化: 版の段で **v0.1.0**（MCP の列の最後）。10-11 から触るファイルは動いていない（案内文は `crates/areka-mcp/src/handler.rs` の 36 行目の 1 定数・最後の 1 文が「not implemented yet」／判定 `crates/areka/src/mcp/check_script_judge.rs` 218 行）。
+- 触るファイル: 棚卸㉓のとおり（案 ⑴＝入口で診る、案 ⑵＝再生まで印を運ぶ、で違う）。
+- 規模: ⑴ なら 6〜10・⑵ なら 12〜18 のまま。
+- 先に要るもの: `mcp-kanade-tools`（strict を受ける口と `raise_event` の返り台本）・`mcp-reload`（案内文の 1 文を消す順）。⑵ で印を出どころと同じ入れ物に載せるなら `script-security-level` も先。
+- 同じウェーブに置けない相手（24 本の中）: `mcp-receiver-bugs`（`handler.rs`＝向こうは `on_custom_request` を足し、こちらは案内文の 1 文。行は違うが許す重なりに入らない）・`mcp-kanade-tools`（`crates/areka/src/mcp/{sakurascript,raise_event}.rs`）・`mcp-reload`（`doc/ssp-mcp/areka-tools.md`）。⑵ のときは `script-security-level`（`crates/areka-talk/src/lib.rs`・kanade の `msg.rs`・`schedule/translate.rs`・`crates/areka-sakura/src/drive.rs`）と、`consumer_ledger.rs` を触る `mcp-reload`・`ghost-call`・`multi-ghost-runtime` も。列の外: `check-script-arg-checks`・`script-impact-tiers`・`mcp-user-response`・`mcp-shiori-query`。
+- 重なり 0: `property-name-case-fold`・`emo2-real-run-stability`・`dpi-realign-remembered-chain`・`baseware-root-list`。
+- 優先度の区分: A のまま。
+- 要件定義のモデル: **Opus**（10-15 の付け直し。⑴ と ⑵ の分かれ目は開発者に問う議題だが、⑴ の形は `check_script` の `diagnose` が先例として決めている＝先例で決まらない骨格の分かれ目には当たらない）。
+- 分割の案: なし。⑵ で 20 を超えたら棚卸㉑の切り方。
+- 見つけた穴・古くなった記述: 棚卸㉓・㉔の「Fable のまま」は古い。10-08 の申し送りの「6 類」の表に `unpaired_tag` の行が無い・文面の定数と文書の一致をテストで見ていない（どちらも㉔のまま）。

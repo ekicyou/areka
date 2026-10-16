@@ -226,3 +226,14 @@ emo2 を新しい写しから起こした実機の走行が、1 回だけ、SHIO
 - 実機の窓が出る検査なので、負荷を掛ける検査と同じ時間には回さない。くり返しの走行は、回す前に所要時間を伝える。
 - 規模の見込み: XS〜S（確かめと記録だけ 1〜3・areka の側の直しが要ると分かれば 4〜7 タスク）。
 - 要件定義のモデル: Opus。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+
+- 前提の変化: 版の段で **v0.1.0** のバグ。10-11 から関係のファイルは変わっていない（`crates/areka/tests/emo2_real_run.rs` 247 行・自動終了 3,000 ミリ秒〔60 行目〕・見張りの締切 120 秒・仲介 `crates/shiori-host32-helper/src/shiori_proxy.rs` 814 行）。
+- 検査の側だけで直せるか: 直せる見込み。今の検査は子の出力を、子が終わった後にまとめて読む（3 秒の自動終了に頼る）。候補＝子の標準出力を走りながら読み、`wrap=BudouxWordWrap` を見てから、自分が起こした子の窓へ閉じる知らせを送る（Alt+F4 と同じ道＝`crates/areka/src/app_exit.rs` の `on_ghost_os_close` → `OnClose` → 終了コード 0）。自動終了は保険として長めに残す。これなら `main.rs` に触らない。アプリの側に「印が出てから閉じる」を作るときだけ `main.rs`（956 行）に触る。
+- 本物の窓を出すか: **出す**。本物の `areka.exe` を emo2 で起こし、本物の GPU と窓・32bit の仲介と pasta.dll を使う。`AREKA_EMO2_REAL_RUN=1` のときだけ走る（ふだんの `cargo test` では素通り）＝負荷の走行（`areka-test-binary-stability` など）と同じ時間に回さない。件 2 のくり返し（数十回）も同じ。回す前に所要時間を伝える。
+- 規模: 4〜13（件 1＝3〜6・件 2＝確かめと記録 1〜3／直すなら 4〜7）。
+- 先に要るもの: なし。
+- 同じウェーブに置けない相手: 検査の側だけなら 24 本のどれとも 0。アプリの側を選んだら `main.rs` を触る `baseware-root-list`・`user-data-root`・`write-failure-notice`・`multi-ghost-runtime` と直列。件 2 で仲介を直すなら `shiori_proxy.rs` を疑い先に挙げる `emily-ghost-verification` と照合。
+- 優先度の区分: B のまま。要件定義のモデル: Opus のまま。分割の案: なし。
+- 見つけた穴・古くなった記述: 件 1 の棚卸㉓の節の「`main.rs` は `mcp-kanade-tools`・`mcp-stdio-bridge` なども触る」は誤り（`mcp-kanade-tools` の brief は `main.rs` に触らないと書く・`mcp-stdio-bridge` は着地済み）。

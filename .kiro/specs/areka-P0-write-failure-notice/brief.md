@@ -131,3 +131,19 @@
 - ファイルの重なり（鎖のほか）: `emily-ghost-verification`（`install/judge.rs`・向こうが触る場合だけ）・`install-live-target-hazards`（`install/judge.rs`）・`tasktray-icon`（`main.rs`）。
 - 優先度の区分: B。要件定義のモデル: Fable（どちらも起票のまま）。
 - 見つけた穴・古くなった記述: 本文の触る所に、呼び手の `main.rs` と `emo2_boot/ghost_switch.rs` が無い（保存の結果を呼び手へ返すなら、両方に入る）。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+- 前提の変化: 版の段で **v0.0.3**。`ghost-inner-balloon` は 2026-10-16 に版に縛らない列へ移った＝鎖の順「`user-data-root` → `ghost-inner-balloon` → この spec」のままだと、v0.0.3 の spec が版に縛らない spec を待つ逆向きになる。触るファイルは変わっていない。
+- 鎖の中の順の答え: **`user-data-root` のすぐ後（3 本目）でよい**。`ghost-inner-balloon` との重なりは `boot_resolve.rs` だけで、触る関数も別（こちらは印と記録の関数、向こうはバルーンを決める鎖）＝この spec を前に出しても困らない。
+- `baseware-root-list` と同時には走らせられない。順を決めるファイル:
+  - `main.rs`: 最初のゴーストを起こす所で、印を書く呼び出しの引数が `running_name(&ctx.root, …)`＝向こうが根の並びに変える数行と同じ所。降ろした後の始末の所（`after_run`）も既定のゴーストの場所を根から組む。
+  - `boot_resolve.rs`: 印に書く名前を引く `running_name` は、印を消す関数のすぐ下で、目録を根から引く。
+  - `emo2_boot/ghost_switch.rs`: 定常に入ったときの印の投函が `running_name(&ctx.root, …)` を呼ぶ。降ろした直後の記録（`write_switch_drop` の呼び出し）もこのファイル。
+- `user-data-root` とも同じウェーブに置けない（`main.rs`・`boot_resolve.rs`）が、触る所は別（向こうは記憶の置き場を決める `boot_config.rs` の `default_app_profile_dir` と、`main.rs` の起動の文脈を組む 1 行）。開発者が「同じファイルでも関数が別ならよい」と決めれば並べられる。働きの上では待たない（ただ、知らせに出す「書けない場所」は `user-data-root` の後の置き場で確かめる方が手戻りが無い）。
+- 触るファイル: 棚卸㉔のまま（`boot_resolve.rs` 609・`main.rs` 956・`ghost_switch.rs` 902・`install/judge.rs` 246・要れば `alert.rs` 241 と `crates/areka-sylphya/src/persist/mod.rs` 403・COMPAT §8）。印のテスト `main_session_mark_tests.rs` は 938 行＝兄弟のファイルへ。
+- 規模: 6〜10 タスク（変わらず）。
+- 同じウェーブに置けない相手（24 本の中）: `baseware-root-list`・`user-data-root`・`multi-ghost-runtime`（`main.rs`・`boot_resolve.rs`・`ghost_switch.rs`）・`default-balloon-selfmade`（`boot_resolve.rs`）・`property-name-case-fold`（保存の結果を返す形で `persist/mod.rs` に触るときだけ）・`emily-ghost-verification`（向こうが `install/judge.rs` に触るときだけ）。重なり 0: `app-icon`・`balloon-text-bugs`・`winget-release-automation`。
+- 優先度の区分: B（バグ。書けないことが利用者に伝わらない）。
+- 要件定義のモデル: Opus に改める。伝える道は「切替の失敗の知らせ」（`OnBoot` の Reference6・7）、失敗の語は「ネットワーク更新の輸送の語の足し方」という先例が決める。新しい境界・並行の保証・骨格の分かれ目に当たらない。
+- 分割の案: 切らない。
+- 見つけた穴・古くなった記述: roadmap の「版をまたぐ依存の確かめ（2026-10-15）」の行と「棚卸㉔で列に足したこと」の鎖の順は、`ghost-inner-balloon` を前に置いたまま（直しは棚卸の報告へ）。本文の触る所に `running_name` の呼び手が無い。

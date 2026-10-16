@@ -107,3 +107,18 @@
 2. 2 体目以降を起こす最小の入口を本 spec に置くか（推しは「前回の並びの復元」と、検査用の入口だけ。利用者向けの「呼ぶ」は `ghost-call`）。
 3. メニューの「終了」と「すべて終了」の出し分け（今のメニューは Win32 標準。1 体のときは「終了」だけで `OnCloseAll` を起こす＝ukadoc どおり）。
 4. 窓の重なりの順を、ゴーストをまたいでどう決めるか（ゴーストごとの鎖を独立に持つ、が推し）。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+- 前提の変化: 10-15 の起票の後の初めての測定。版の段で **v0.1.0**（複数ゴーストの同時起動）。ソースは起票の時から変わっていない。
+- 本文の主張は全部コードに在った。足りない分:
+  - ゴーストの箱 `GhostSlot`（`crates/areka/src/ghost_session.rs`）を読む本番のファイルは 22。本文の挙げた外に `mcp/` の 5 つ（`resolve`・`get_status`・`get_property`・`get_expression_table`・`dump_surface` の支え）・`install/{desk,names}.rs`・`update/{desk,mod}.rs`・`readme/opener.rs`・`input_events/file_drop.rs`・`menu/shell_frame.rs`・`emo2_boot/{balloon_visibility_phase,frame/status_report,frame/switch}.rs`。
+  - 窓の印と `GhostWindows` に触る本番のファイルは 43。`quit_app` の呼び手は 8 ファイル。止める理由 `CloseReason` は kanade の `msg.rs` に在る（`change.rs` ではない）。
+- 上限の近く（触る見込み）: `main.rs` 956・`emo2_boot/consumer_ledger.rs` 943・kanade の `msg.rs` 930 と `schedule/mod.rs` 969・`emo2_boot/mod.rs` 911・`ghost_switch.rs` 902・`placement/mod.rs` 902・`ghost_session.rs` 873。
+- 規模: 24〜30 タスク（割る仕事 3〜4・集まりと識別子 2・窓と重なりの順 4・結線 9 種の配り先 4〜5・知らせの送り主 2・止まり方と `OnCloseAll` 4・席での切替 2・印と記憶の並び 3・2 体目の入口と MCP 2・説明と実機 2）。
+- 分割の案: 一度切り出した spec なので、20 を少し超えるだけなら切らない。要件で 25 を超えたら、前＝「席と区別」（集まり・識別子・窓・結線・知らせ・検査用の 2 体目の入口・`get_active_ghost_list`）、後＝「止まり方と記憶」（1 体の終了・`OnCloseAll`・席での切替・印と記憶の並び）に切る。`ghost-call` は後の方を待つ。
+- 先に要るもの: 働きの上では無し。ファイルの上で次の着地の後: `baseware-root-list`・`user-data-root`・`write-failure-notice`（`main.rs`・`boot_resolve.rs`・`boot_config.rs`・`ghost_switch.rs`）、`mcp-kanade-tools`（kanade の `msg.rs`・`schedule/mod.rs` を先に割る・`emo2_boot/frame/switch.rs`）、`mcp-reload`（kanade の `change.rs`・`emo2_boot/mod.rs`・`ghost_switch.rs`・`shell_balloon_switch.rs`）。
+- 同じウェーブに置けない相手（24 本の中）: 上の 5 本・`script-security-level` と `mcp-strict-errors`（kanade の `msg.rs`）・`ghost-call`・`dpi-realign-remembered-chain`（`placement/spawn.rs`・`persist.rs`）・`placement-measure-bake-once`（案 A なら `ghost_session.rs`・`placement/mod.rs`・`emo2_boot/mod.rs`）・`property-name-case-fold`（App の記憶の書き方を `persist/mod.rs` で変えるとき）。MCP の宛先を引く関数（`mcp/resolve.rs` の `active`）の形を変えると、`mcp-kanade-tools` が作る `sakurascript`・`raise_event` にも波及する。
+  - 重なり 0: `app-icon`・`dot-sakura-specimen`・`balloon-webp-names`・`extent-element-offset`・`seriko-trigger-lottery-gaps`・`mcp-receiver-bugs`。＝v0.1.0 の中では、ほぼ単独で走る後ろの方の席。
+- 優先度の区分: A（開発者「複数ゴーストの同時起動→…まだ出来ていない」）。
+- 要件定義のモデル: **Fable**。当たる基準＝並行と順の保証を新しく設計する。プロセスに 1 本の知らせの受け口を、止まりの相が「届く順」と「ゴーストが 1 体であること」に頼って読んでいる（`emo2_boot/frame.rs` の `KanadeNoticeRx`・`run_ghost_quit_phase`）。App の記憶は「読んで重ねて書く」ので、N 体の書き手が同時に書くと片方が消えうる（`boot_resolve.rs` の印の関数の上の説明）。
+- 見つけた穴・古くなった記述: 本文の `GhostSlot` の読み手の一覧が足りない（上の 22）。「知らせ」の項の `CloseReason` の置き場（`msg.rs`）。

@@ -5,7 +5,7 @@
 
 ## 動機（なぜ掘るか）
 
-- 対応する本坑 spec: `wintf-winmsg-executor`（`.kiro/specs/wintf-winmsg-executor/brief.md`）
+- 対応する本坑 spec: `wintf-winmsg-executor`（`.kiro/specs/completed/wintf-winmsg-executor/brief.md`）
 - 確認したい方向 / 実現可能性 / 手順（＝「怪しい所」だけを掘る）:
   - wintf のメッセージループ・ウィンドウ起動・UI スレッド async を外部クレート
     `wintf-winmsg-executor`（v0.0.3・`winmsg-executor` フォーク）へ置き換え可能か。

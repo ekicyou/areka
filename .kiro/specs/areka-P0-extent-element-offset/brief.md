@@ -106,3 +106,14 @@
 - 優先度の区分: B のまま。
 - 要件定義のモデル: Fable のまま。
 - 見つけた穴・古くなった記述: 新しい件は無い。棚卸㉓の 2 件（`log_firing_tests.rs` の説明に残る移す前の行番号・本文の「`plan.rs` の `flatten_extent`」）は今もそのまま。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+- 前提の変化: 版の段で v0.1.0（バグ）。C6 の 1 本（走らなかった）。合成のクレートは棚卸㉔から変更 0。外形を数える `crates/areka-emo-compose/src/plan_extent.rs`（198 行）の 123〜124 行目は今も「累積の位置＋原寸」で、element定義の X,Y を足さない。
+- 触るファイル: 棚卸㉓のまま（`plan_extent.rs` と兄弟のテスト `plan_extent_tests.rs` 578・`plan_nesting_extent_tests.rs` 186・`plan_extent_film_tests.rs` 228、期待値が動けば `golden_tests_frame_extent_tests.rs` 242、案 B なら `log_firing_tests.rs` 767、`doc/COMPAT_ARCHITECTURE.md` §8）。
+- 規模: 3〜6 タスク（変わらず）。
+- 先に要るもの: 無し。後ろで `animated-image-import`（同じ `plan_extent.rs`）が待つ。
+- 同じウェーブに置けない相手: v0.0.3・v0.1.0 の中では `animated-image-import`（`plan_extent.rs`）だけ。`placement-measure-bake-once` とは 0（あちらは `crates/areka/src/placement/` と起動の資産組み立て）。版に縛らない列の `seriko-interval-combinations`、v0.2.0 の `element-clipping-option`・`draw-methods-canon` とも置けない（変わらず）。
+- 優先度の区分: B（描くと決めた絵が記録なしに切られる）。
+- 要件定義のモデル: Opus（C6 で 10-15 に付け直したとおり。案 A か B かは開発者の裁定で、前例で決まらない骨格の分かれ目ではない）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述: `crates/areka-emo-compose/src/log_firing_tests.rs` 244 行目の説明に「`flatten_extent`・:529」（移す前の `plan.rs` の行番号）が残る（変わらず）。

@@ -95,3 +95,14 @@ areka の検体は、pasta（`emo2`）・里々（`R_POST_and_KOMAINU`）・YAYA
 - ファイルの重なり: 上の 3 本だけ。カタログの鎖・タスクトレイの列・`app-icon`・`impl-watch-skills`・`impl-watch-residue` とは 0。
 - 優先度の区分: A。要件定義のモデル: Opus（決めごとは 10-10 に済み。残る議題 3 つは実測で答えが出る）。
 - 見つけた穴・古くなった記述: 本文に要件定義のモデルが書かれていない。`emily-ghost-verification` の本文も「7 を 8 に」と書いている＝後から着地する方は「8 を 9 に」になる。実機の窓を出す回は、ほかの実機の走行や負荷の走行と同じ時間に回さない。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+- 前提の変化: 版の段で v0.1.0（「動く」の先頭）。組んだまま走らなかったウェーブ C6 の 1 本。棚卸㉔からソースの変更は 0（登記表は 7 行・`dot_sakura.nar` はまだ無い）。
+- 触るファイル: `vendors/sample_ghost/` の書庫（新しいファイル）と `README.md`（146 行）・検体の登記表 `crates/sample-ghost-kit/src/lib.rs`（542 行）と数のテスト `lib_tests.rs`（601 行・数の 7 が 2 か所と説明の 7）・steering・根の `README.md`（検体の表）。
+- 規模: 4〜6 タスク（変わらず）。
+- 先に要るもの: 無し。後ろに `emily-ghost-verification` → `default-balloon-selfmade`（ともに v0.1.0）→ `sample-url-fetch` が登記表の順で待つ。
+- 同じウェーブに置けない相手: `emily-ghost-verification`・`default-balloon-selfmade`（登記表・数のテスト・検体の README）。根の `README.md` は `default-balloon-selfmade`（既定のバルーンの 1 行と検体の表）と `winget-release-automation`（「入手と起動」の箇条）も触る＝節は別でも、根の `README.md` は許す重なりの 5 つに入っていない。
+- 優先度の区分: A（開発者「ゴースト検体に『どっとさくら』を追加」）。
+- 要件定義のモデル: Opus（10-15 の厳しい基準に当たる所が無い。議題 3 つは実測で答えが出る）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述: 議題 1（見張りの語の当たり）を数えた＝今のソース（`crates/`・`tools/` の `.rs`・`.toml`・`.ps1`）に `bottle`・`dot_sakura` の綴りは 0 件。当たらない見込み（登記のときに見張りのテストを回して確かめる）。

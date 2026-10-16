@@ -290,3 +290,18 @@
 - 要件で決める未知: 直し方の 3 案のどれにするか・下線のはみ出しの量を拡大率とフォントごとにどう得るか・縦書きと箱で同じ形が起きるか。
 - 規模の見込み: S（4〜7 タスク。面を広げる案は当たりの矩形と箱の写しまで確かめるので上の側）。
 - 1 ファイル 1,000 行未満・決定論のテスト必達・1 フレーム遅らせる解は取らない・GPU のテストは実 GPU で回す。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`）
+- 前提の変化: 版の段で **v0.0.3**（選択肢のバルーンが消えない）。10-11 の起票の後、触るファイルは変わっていない（`actor_present.rs` 411 は説明の 2 行だけ。`surface.rs` 995・`actor.rs` 663・`state.rs` 713・`region.rs` 486・`layout.rs` 502・`viewbox_diff.rs` 429・`viewbox_draw_decoration.rs` 314・`emo2_boot/balloon_visibility_wait.rs` 289・`emo2_boot/frame/scale_text.rs` 326）。選択肢の問い（`actor.rs` の `choice_active`）は今も「選択肢の行が残っているか」で答える＝件 1 は残っている。
+- **文字とバルーンの列の頭にできる**: 働きの上で待つ相手は無い（上流は全部着地）。前に居た `range-choice-tag` は版に縛らない列へ移った＝この spec を列の頭、`range-choice-tag` をその後にする。
+  - 同じウェーブに並べられる条件: 件 1 を出し入れの側（案 A＝`balloon_visibility_wait.rs`）で直し、かつ emo-text に新しいファイルを足さない（`surface.rs` に 6 行以上足さない）とき。そのとき `range-choice-tag`（`actor.rs`・`state.rs`・`input_events/{balloon,balloon_pressed,shell_box_handler}.rs`・emo-text の席）と重なり 0。
+  - 件 1 を文字の層（案 B）で直すなら `actor.rs`・`state.rs`・`input_events/balloon_pressed.rs`・`shell_box_handler.rs` が重なる＝この spec が先。
+- 触るファイル: 本文の「Current State」のまま。
+- 規模: 11〜20 タスク（変わらず）。
+- 先に要るもの: 無し。
+- 同じウェーブに置けない相手（24 本の中）: 案 A なら無し。`multi-ghost-runtime` は入力とバルーンの結線を触る＝案 B のときだけ照らす。`emo2-real-run-stability` とはファイルは重ならないが、向こうの検査は `actor_present.rs` の「テキスト供給面を予約スロットへ装着した」の記録を証跡に使う＝件 2 で装着の枝を直すとき、この記録の文を残す。
+- 列の外の相手: `choice-ranges-one-function`（`actor_present.rs`・`actor.rs`）・`balloon-canon-residue`（`scale_text.rs`）・`anchor-style-canon`（`viewbox_draw_decoration.rs`）・`clippy-199-lints`（`balloon_visibility_*`）。
+- 優先度の区分: B（バグ 3 件）。
+- 要件定義のモデル: Opus に改める。件 1 は着地済みの `balloon-lifecycle-events` が決めた合図の順の上で数え方を直すだけ、件 3 の 3 案は先例（完了 `text-decoration-canon` の要件 5.7）のどれを改めるかの選び＝新しい並行の保証・骨格の分かれ目に当たらない。
+- 分割の案: 切らない（20 を超えたら件 3 を出す＝起票のまま）。
+- 見つけた穴・古くなった記述: 本文「Constraints」の「要件定義のモデル: Fable」は古い。

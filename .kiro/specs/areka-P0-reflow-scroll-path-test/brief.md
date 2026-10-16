@@ -66,3 +66,10 @@
   - 既存の `actor_lookahead_tests.rs` に足す形に決めれば、`anchor-tag-canon` とも `choice-ranges-one-function`（`actor_lookahead_shapes_tests.rs` を触る）とも重なり 0＝同じウェーブに置ける。新しいファイルにする形だと `anchor-tag-canon` と `actor.rs`・`lib.rs` が重なる。
   - Approach の「1,000 行を超えるなら兄弟のファイルへ」は当たらない見込み。
   - 変異（全文の枝を外す）で赤を確かめた後は必ず戻し、戻したファイルの時刻を更新してから緑を確かめる。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`・ウェーブ C7 の空き席）
+
+前提の変化: 版に縛らない列。今の版 v0.0.3 の 3 本（`baseware-root-list`・`balloon-text-bugs`・`app-icon`）と同じウェーブ C7 の空き席に入れた（v0.0.3 の着地のウェーブ数を増やさない条件＝先頭・3 本と重なり 0・1 本だけの席を取らない・見立ての上限が 16 以下・静かな机が要らない）。
+触るファイル: 今ある `crates/areka-emo-text/src/actor_lookahead_tests.rs` へ検査を足すだけ（新しいファイルを足すと emo-text の `actor.rs`・`lib.rs` の席を取るので足さない）。
+規模: 2〜3 タスク。先に要るもの: なし（列の外で取れる）。
+優先度の区分: C。要件定義のモデル: Opus。分割: なし。
