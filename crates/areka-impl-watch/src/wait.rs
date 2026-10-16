@@ -7,6 +7,14 @@
 //! [`run`] は 4 種の待ちに共通のループで、時計・読み・状態を変える 1 回・眠りを口
 //! （[`WaitPort`]）に頼む。時間の上限は無く、待っている間は端末へ何も出さない（終わり方を
 //! 返すだけで、出すのは呼び手）。
+//!
+//! 不変:
+//! - 判断（`plan::apply`）を呼ぶのは [`Store::with_state`] へ渡す閉じた関数の中だけ
+//!   （`cli::change`・`cli::waiting`・この口の `change` と `finish`）。状態を変える生死の確認
+//!   （回収）は `state.lock` の排他の中でしか走らない（読み物の印と端末の要約の探りは排他の外
+//!   だが、状態を変えない）。
+//! - 待ちの居る印は、最後の抹消（[`WaitPort::finish`]）の `state.lock` の排他の中で、判断の
+//!   後に解く。だから「記録は消えたが印は握られている」状態を見て状態を変える呼び出しは無い。
 
 use std::time::{Duration, SystemTime};
 
@@ -14,8 +22,8 @@ use crate::error::{WatchError, escape_path};
 use crate::plan::{self, Applied, Command};
 use crate::presence::Held;
 use crate::state::{Participant, ParticipantStatus, State, WaitKind, WaitRecord};
-use crate::status::last_merge;
-use crate::store::{self, Store};
+use crate::status::{id_list, last_merge};
+use crate::store::Store;
 
 /// 読み直しの間隔（本物の眠り）。
 const POLL: Duration = Duration::from_secs(1);
@@ -147,14 +155,9 @@ pub fn judge(spec: &WaitSpec, state: Option<&State>) -> Option<WaitEnd> {
             _ => return Some(WaitEnd::Gone(REQUEST_GONE)),
         },
         WaitSpec::Load { id } => match &state.load.holder {
-            Some(holder) if holder.id == *id => format!(
-                "granted load; stopped: {}",
-                if holder.stopped.is_empty() {
-                    "none".to_owned()
-                } else {
-                    holder.stopped.join(", ")
-                }
-            ),
+            Some(holder) if holder.id == *id => {
+                format!("granted load; stopped: {}", id_list(&holder.stopped))
+            }
             _ if state.load.queue.iter().any(|request| request.id == *id) => return None,
             _ => return Some(WaitEnd::Gone(REQUEST_GONE)),
         },
@@ -176,8 +179,8 @@ pub fn judge(spec: &WaitSpec, state: Option<&State>) -> Option<WaitEnd> {
 
 /// 待ちのループが外へ頼むこと（本物は状態ファイルの口と本物の時計・テストは偽物）。
 pub trait WaitPort {
-    /// いまの時刻（UNIX 秒）。待ちの記録の「始めた時刻」に載せる。
-    fn now(&self) -> u64;
+    /// いまの時刻（UNIX 秒）。待ちの記録の「始めた時刻」に載せる。読めなければ待ちの失敗。
+    fn now(&self) -> Result<u64, WatchError>;
     /// 待っているプロセスの番号。見張り・待ちの記録に載せる（人が読むためで、生死の判定には
     /// 使わない）。
     fn pid(&self) -> u32;
@@ -187,14 +190,18 @@ pub trait WaitPort {
     fn read(&self) -> Result<Option<State>, WatchError>;
     /// 状態を変える 1 回（短い排他の中で判断に通す）。`caller` は呼んだ識別。
     fn change(&self, cmd: &Command, caller: &str) -> Result<Applied, WatchError>;
+    /// 最後の抹消。判断に通した後、状態の排他を放す前に `held`（居る印）を解く。失敗しても
+    /// `held` は解ける。
+    fn finish(&self, cmd: &Command, caller: &str, held: Held) -> Result<Applied, WatchError>;
     /// 読み直しの間の眠り（本物は 1 秒）。
     fn sleep(&self);
 }
 
 /// 本物の口: 状態ファイルの口の上に、本物の時計・このプロセスの番号・1 秒の眠りを載せる。
 impl WaitPort for Store {
-    fn now(&self) -> u64 {
-        store::unix_now()
+    fn now(&self) -> Result<u64, WatchError> {
+        // 状態を変える呼び出しと同じ時計。失敗は `time` がログに残す。
+        self.time()
     }
 
     fn pid(&self) -> u32 {
@@ -221,13 +228,19 @@ impl WaitPort for Store {
         })
     }
 
+    fn finish(&self, cmd: &Command, caller: &str, held: Held) -> Result<Applied, WatchError> {
+        // 判断が生死を尋ね終えてから印を解く。排他は状態ファイルの書き・ログの口・読み物の後に
+        // 放す。排他を取れずに閉じた関数が走らなかったときも、`held` は閉じた関数と一緒に落ちる。
+        self.with_state(|state, now, alive| {
+            let applied = plan::apply(state, cmd, Some(caller), now, alive);
+            drop(held);
+            (applied.clone(), applied)
+        })
+    }
+
     fn sleep(&self) {
-        // 常時テストが本物の口に通すのは、直ちに終わる（眠りに入らない）場合だけ。眠りに来たなら
-        // 終わりの条件が壊れているので、終わらないテストにせず、その場で赤にする。
-        #[cfg(test)]
-        panic!("a test reached the real 1-second sleep");
-        #[cfg(not(test))]
-        std::thread::sleep(POLL);
+        // テストのプロセスでは、状態ファイルの口の待ちの安全網が 1 秒の眠りをその場で止める。
+        self.pause_for(POLL);
     }
 }
 
@@ -240,14 +253,15 @@ impl WaitPort for Store {
 /// 2. 読んで判定する。終わらなければ眠り、眠るたびに状態ファイルの更新時刻と大きさを見て、
 ///    変わっていたか [`FULL_READ_EVERY`] 回目なら、また読んで判定する。[`TICK_EVERY`] 回目
 ///    ごとに、その前に周期の一回りを呼ぶ（回数は始めからの眠りの数）。
-/// 3. 終わるときに自分の記録を消す（無ければ何も変わらない）。
+/// 3. 終わるときに自分の記録を消し（無ければ何も変わらない）、同じ排他の中で `held` を解く
+///    （[`WaitPort::finish`]）。
 ///
 /// 失敗の扱い: 登録・読み・更新時刻の取得の失敗は待ちの失敗（記録は消しに行かない。握りが
 /// 解けるので、殺された待ちと同じく次の呼び出しの回収が消す）。周期の一回りの失敗は待ちを
 /// 終えない。答えが出た後の抹消の失敗は、答えを変えない（残った記録は同じく回収が消す）。
 pub fn run(spec: &WaitSpec, port: &dyn WaitPort, held: Held) -> Result<WaitEnd, WatchError> {
     let id = spec.id();
-    port.change(&spec.register(port.pid(), port.now()), id)?;
+    port.change(&spec.register(port.pid(), port.now()?), id)?;
     // 読む前に取る: 取ってから読むまでの間の変化は、次の眠りの後に「変わった」と見える。
     let mut seen = port.fingerprint()?;
     let mut polls = 0_u64;
@@ -272,10 +286,9 @@ pub fn run(spec: &WaitSpec, port: &dyn WaitPort, held: Held) -> Result<WaitEnd, 
         id: id.to_owned(),
         kind: spec.kind(),
     };
-    if let Err(err) = port.change(&unregister, id) {
+    if let Err(err) = port.finish(&unregister, id, held) {
         tracing::warn!(id, error = %err, "[wait] wait record not removed; left to be reclaimed");
     }
-    drop(held);
     Ok(end)
 }
 

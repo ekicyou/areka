@@ -63,6 +63,8 @@ fn enums_are_spelled_in_lowercase_kebab() {
     ];
     for (value, text) in status {
         assert_eq!(spelled(json!(value)), text);
+        // 失敗なしで返す綴りは、状態ファイルの綴りと同じ（表が 2 つに割れたら赤）。
+        assert_eq!(value.as_str(), text);
     }
     let waits = [
         (WaitKind::Watch, "watch"),
@@ -82,6 +84,7 @@ fn enums_are_spelled_in_lowercase_kebab() {
     ];
     for (value, text) in recents {
         assert_eq!(spelled(json!(value)), text);
+        assert_eq!(value.as_str(), text);
     }
 }
 

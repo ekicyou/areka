@@ -1,0 +1,218 @@
+# 実装計画
+
+決まり（全タスク共通）:
+- 各タスクの終わりで `cargo test -p areka-impl-watch` が緑で、クレートが組み上がる。
+- 変異を当てて戻すときは、控えをワークツリーの `target\mutation-backup\` に取り、素のコピーで戻し、sha256 が控えと同じことを確かめる（`git checkout` で戻さない）。当てた変異と赤になったテストは、このファイルの末尾の「変異の記録」に書く。
+- 変異を当てるタスクは本番ファイルを一時的に壊すので、ほかのタスクと並べて走らせない。
+- 1.1 と 1.2 は触るファイルが重ならないが、同じワークツリーで並べるときは片方の書きかけで相手のテストが赤になりうるので、テストは両方の手が止まってから回す。
+- 依存を足さず、`Cargo.toml`・`Cargo.lock`・`doc/impl-watch.md`・`src/main.rs`・`src/home.rs`・`src/presence.rs` に触れない。
+
+- [x] 1. 綴りと番の来る順を 1 か所にする
+- [x] 1.1 (P) 参加者の状態と最近の出来事の種類の綴りを、失敗なしで返せるようにする
+  - 待ちの種類の綴りと同じ作りで、2 つの列挙それぞれが状態ファイルの綴りを返す
+  - 全部の値について、返す綴りが状態ファイルへ書く綴りと同じであることを常時テストで判定する
+  - 完了の状態: 新しいテストが緑で、綴りの表が 2 つに割れたら赤になる
+  - _Boundary: state_
+  - _Requirements: 7.5_
+- [x] 1.2 (P) 番の来る順を判断の核の 1 か所で決める
+  - マージの待ち行列（バグ優先・申し込みの早い順・同点は行列の前）と負荷テストの待ち行列（申し込みの早い順・同点は行列の前）の順を、添字の列として返す 2 つの決まりを判断の核に置く
+  - 番を決める 2 か所が、この決まりの先頭を取るように替える（同点の扱いは今と同じ）
+  - 完了の状態: 今の判断の核のテストが書き替えなしで緑のまま
+  - _Boundary: plan_
+  - _Requirements: 3.1, 3.3_
+- [x] 1.3 「無い」の綴りと止まった者の列を 1 か所にし、読み物の並びを判断の核の順に寄せる
+  - 読み物の層に `none` の綴りと識別の並び（空なら `none`・あれば `", "` でつなぐ）を 1 つずつ置き、状態ファイルの口の退避先の `none`・待ちの判定の `stopped:` の列・読み物の負荷テストの机の行・`clear` の `none` をそれに替える
+  - 読み物と端末の要約の待ち行列の並べ方を 1.2 の決まりへ替え、読み物の層の独自の並べ方と綴りの作り（作れなければ `?`）を外して 1.1 の綴りを使う
+  - 入口の `pos=` を 1.2 の決まりの添字の列で数えるように替える（読み物の層の並べ方を外すと入口が組み上がらなくなるため、同じタスクで替える）
+  - 完了の状態: 端末の文・読み物・`clear` の退避先の記録・`pos=` を見る今のテストが書き替えなしで全部緑
+  - 読み物・状態ファイルの口・待ち・入口の 4 つにまたがる綴りの付け替えの統合タスク
+  - _Depends: 1.1, 1.2_
+  - _Requirements: 3.1, 4.1, 4.2, 4.3, 7.5_
+- [x] 1.4 番の順・`pos=`・読み物の並びの 3 つの一致を判定する
+  - バグと通常が混ざり時刻の同点も入ったマージの待ち行列と、同点入りの負荷テストの待ち行列（別々の状態）で、番を繰り返し決めた順・`pos=` の順・読み物の待ち行列の順の 3 つが、書き下した期待の順と同じであることを常時テストで判定する
+  - 完了の状態: 新しいテストが緑
+  - _Depends: 1.3_
+  - _Requirements: 3.1, 3.2, 3.3_
+
+- [x] 2. 壊れた状態ファイルの訳をログに残す
+- [x] 2.1 壊れた訳の型を作り、状態ファイルの読みが訳を返すようにする
+  - 壊れた訳（JSON として読めない＋行と列／形が合わない＋行と列／版の数字が無い）の型を足し、「壊れている」の失敗に持たせる（端末の文は同じ）
+  - 状態ファイルの読みを「読めない／版が無い／版違い／形が合わない」に分け、形が合わないときだけ元のバイト列を読み直して位置を取る（位置が 0 を入れる道を作らない）
+  - 状態の確認と待ちの読みが通る読むだけの道で、壊れているときのログの行に訳を載せる（値は写さない・ASCII）
+  - 3 種の壊れたファイルで読むだけの道が訳を返して退避しないこと、端末の文が今のままであることを常時テストで判定する
+  - 完了の状態: 新しいテストと今のテストが緑
+  - _Requirements: 1.2, 1.3, 1.4, 1.5_
+- [x] 2.2 退避の出来事に訳を載せ、ログの口へ渡ることを判定する
+  - 退避の出来事に訳の欄を足し（ファイルが無くて作ったときは無し）、状態を変える 1 回の読みが退避するときに訳を入れる。今の型の照合を欄の増えた形に直す
+  - 3 種の壊れたファイルを状態を変える 1 回が退避し、ログの口へ渡る出来事が 3 種の訳を持つこと（形が合わないときの位置は行・列とも 1 以上）を常時テストで判定する
+  - 読み直しを外す変異を当てて、形が合わないときの位置のテストが赤になることを確かめ、戻して緑を確かめる
+  - 完了の状態: 新しいテストが緑で、変異の記録が 1 件書かれている
+  - 判断の核の出来事と状態ファイルの口にまたがる統合タスク
+  - _Depends: 2.1_
+  - _Requirements: 1.1, 1.2, 1.6, 9.4, 9.5_
+- [x] 2.3 実機テストのログの判定を訳つきに直す
+  - 実機テスト ⑦ の退避の出来事の判定を訳の欄つきの形に直し、壊れたファイルの退避の警告の行と、壊れたファイルを `status` が読んだ失敗の行に `NotJson { line: 1, column: ` の訳が載ることを足す
+  - 完了の状態: 実機テストが `#[ignore]` のまま組み上がる（走らせての確かめは 7.1）
+  - _Requirements: 1.6, 8.5_
+
+- [x] 3. 時計と眠りを状態ファイルの口へまとめる
+- [x] 3.1 状態ファイルの口の時計を失敗しうる 1 つの口にする
+  - 時計を失敗しうる形にし、本物の時計の芯は 1970 年より前なら失敗を返す（0 に代えない）
+  - いまの時刻を取る口を 1 つ置き、失敗はそこでログに 1 行残す。状態を変える呼び出し・全部を消す `clear`・端末の要約がそこから時刻を取る
+  - 1970 年より前で失敗・後で秒数を返すこと、時計が失敗する状態ファイルの口で状態を変える呼び出しが失敗して何も書かないことを常時テストで判定する
+  - 完了の状態: 新しいテストが緑
+  - _Requirements: 2.1, 7.5_
+- [x] 3.2 待ちの記録の「始めた時刻」を同じ時計から取る
+  - 待ちの口のいまの時刻を失敗しうる形にし、本物の口は 3.1 の口を使い、待ちの登録はそこから時刻を取る。偽の口も合わせる
+  - 時計を止めた状態ファイルの口を本物の口として待ちに渡し、置かれた待ちの記録の始めた時刻が止めた時刻であることを常時テストで判定する（直す前の実物では赤になることを確かめる）
+  - 完了の状態: 新しいテストが緑
+  - _Depends: 3.1_
+  - _Requirements: 2.1, 2.2, 2.3_
+- [x] 3.3 待ちの 1 秒の眠りを状態ファイルの口へ通し、常時テストで判定する
+  - 状態ファイルの口に試しの間の待ちを頼む口を足し、本物の待ちの眠りはそこを通す。待ちの層のテスト用の強制停止は外す
+  - テストのプロセスでだけ、本物の眠りの前に 1 秒以上を頼まれたら今と同じ字で止める安全網をテストの支えに置き、テストの支えの状態ファイルの口の待ちもそれにする
+  - 待ちの眠りが 1 秒を頼むこと、安全網が 1 秒で止め 20 ms では何もしないことを常時テストで判定する
+  - 完了の状態: 新しいテストと、眠りの字で見分ける今の待ちのテストが緑。依存と見張りの例外表が増えていない
+  - _Depends: 3.2_
+  - _Requirements: 8.1, 8.3, 8.4, 8.5_
+
+- [x] 4. 待ちの後始末を同じ排他の中で行う
+- [x] 4.1 見張りの最後の抹消と居る印の解きを同じ排他の中で行う
+  - 待ちの口に最後の抹消を足し、本物の口は状態の排他の中で判断に通した後に居る印を解き、排他は状態ファイルの書き・ログの口・読み物の後に放す（判断の核には触らない）
+  - 待ちのループの最後をそれに替え、失敗は今の警告を残して答えを変えない。偽の口も合わせる
+  - ログの口の中で、居る印の探りが「居ない」かつ状態の排他が握られていることを書き留め、最後の抹消の後に 1 件だけそうなっていることを常時テストで判定する
+  - 印を排他の後で解く変異を当てて赤、戻して緑を確かめる。抹消の失敗で答えが変わらない今のテストが緑のまま
+  - 不変（判断を呼ぶのは排他の中だけ・印は最後の抹消の排他の中で解く）を待ちの層の説明に書く
+  - 完了の状態: 新しいテストが緑で、変異の記録が 1 件書かれている
+  - _Boundary: wait, store_
+  - _Requirements: 6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 9.4, 9.5_
+- [x] 4.2 始め直した待ちが直ちに終わったとき、前の待ちの記録を同じ排他の中で消す
+  - 先に、殺された前の `(a, merge)` の記録が在る状態で `merge --wait` が直ちに番で終わった後、状態ファイルの待ちの記録にそれが無いことを見る常時テストを書き、直す前の実物で赤になることを確かめて記録する
+  - 入口の待ちの始めで、答えが出て直ちに終わるときに、同じ識別・同じ種類の待ちの記録の抹消を同じ排他の中で判断に通す。終わりの 1 行は 1 回目の判定のまま
+  - 完了の状態: そのテストが緑で、端末の文と終了コードを見る今の待ちのテストが緑のまま。直す前の赤の記録が書かれている
+  - _Boundary: cli_
+  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
+
+- [x] 5. リポジトリの分だけ記録を消す `clear --repo`
+- [x] 5.1 判断の核にリポジトリの分を消す判断を足す
+  - そのリポジトリの参加者を昇順に `leave` と同じ外し方で外し、1 人ごとに最近の出来事へ今ある `cleared` の綴り＋識別＋`repo=<名前>` を足す
+  - そのリポジトリのマージの机に残る持ち主と待ち行列を外し、1 件ごとに取り消しの出来事を出し、直前のマージの記録は残す（机が無ければ作らない）。判定は必ず当てはまる
+  - 入口のコマンドの照合（照らす主・結果の 1 行）に新しい判断の枝を足し、クレートが組み上がるようにする（照らす主は無し・結果の 1 行は 5.2 で仕上げる仮の形でよい）
+  - 新しい兄弟のテストファイルを判断の核の末尾のテストの読み込みの塊につなぐ
+  - 2 つのリポジトリの参加者が混ざり、消すリポジトリの者が負荷テストの机を持ってほかのリポジトリの者を止めている状態で、外れ方・出来事の順・最近の出来事・机・止められていた者の再開・ほかのリポジトリが残ることを、新しい兄弟のテストファイルで常時テストで判定する
+  - 完了の状態: 新しいテストが緑で、今の判断の核のテストも緑
+  - 判断の核に入口の照合の枝だけを添える統合タスク
+  - _Requirements: 10.3, 11.1, 11.2, 11.3, 11.7, 11.9_
+- [x] 5.2 入口に `clear --repo` の形と `--help` の 1 行を足す
+  - 手を入れる前に、今の実物を組んで `--help` を `target\` の下へ控える（置き場所は `target\` の下の Windows 形の絶対パスで上書きする。7.1 の比べの「前」になる）
+  - 表の行に名前の行に出さない別の形を足し、`clear` の行だけが `--repo` の形を持つ。引数の読みの側だけが別の形の引数を受け、名前の行は今のまま
+  - `--help` は `clear` の説明の行の次に設計の約束の 1 行だけを足す
+  - 結果の 1 行 `cleared repo=<名前>; left: <識別>, …`（居なければ `left: none`）を外した者の出来事から組み、終了コード 0。退避は行わない
+  - `--repo` の値なし・パス・2 度・ほかの引数・余計な語・`--wait` が 2 で何も作らないこと、引数無しの `clear` が今の出力のままであること、`--help` の今ある行がそのままで 1 行だけ増えたことを常時テストで判定する
+  - 完了の状態: 新しいテストと今の入口のテストが書き替えなしで緑
+  - _Depends: 5.1_
+  - _Requirements: 10.1, 10.2, 11.4, 11.5, 11.6, 11.8, 11.9, 11.10_
+
+- [x] 6. テストの穴を埋める（変異を当てるので並べない）
+- [x] 6.1 (h1) と (h8): マージの机の持ち主が 2 人以上のときの要約と、見本の識別
+  - 2 つのリポジトリの机に持ち主が居る状態で、端末の要約の 1 行目が `merging=2` であることを判定するテストを足し、先頭の机だけを数える変異で赤・戻して緑を確かめる
+  - 読み物のテストの見本の識別を小文字へ揃える
+  - 完了の状態: 読み物のテストが緑で、変異の記録が 1 件書かれている
+  - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
+- [x] 6.2 (h2): 登録の直後の更新時刻の取得の失敗
+  - 眠り 0 回での更新時刻の取得の失敗で、待ちがその失敗で終わり、跡が読みの失敗で止まることを判定するテストを足し、最初の取得を「無い」に畳む変異で赤・戻して緑を確かめる
+  - 完了の状態: 待ちのテストが緑で、変異の記録が 1 件書かれている
+  - _Requirements: 9.1, 9.2, 9.4, 9.5_
+- [x] 6.3 (h3) と (h4): 2 つの机を持つ者の `merged` と、同じ呼び出しの中で再び止められる再開の待ち
+  - 1 つの識別が 2 つのリポジトリの机を持ったままの `merged` が 2 行（リポジトリの昇順）を出すことを判定し、最初の 1 行だけを出す変異で赤・戻して緑を確かめる
+  - 負荷テストの机の持ち主（見張りなし）・待ち行列の見張りの居る者・作業中の者の状態で、作業中の者の `stopped --wait` が `stop requested again by <識別>` で 0 になることを判定し、再開の待ちの判定の停止要請の枝を壊す変異で赤・戻して緑を確かめる
+  - 完了の状態: 入口のテストが緑で、変異の記録が 2 件書かれている
+  - _Requirements: 9.1, 9.2, 9.4, 9.5_
+- [x] 6.4 (h6) と (h7): 構造テストの ASCII の走査を広げ、赤の文に訳を添える
+  - ASCII の走査の対象を、リテラルの無い入口の起動ファイルを除く本番ファイル 9 本に広げ、広げた各ファイルへ ASCII の外の字の文を置く変異で赤・戻して緑を確かめる
+  - 判断の核の構造テストの赤の文に「`std` からは 1 行に 1 つずつ読み込む」の訳を添える
+  - 完了の状態: 構造テストが緑で、変異の記録が書かれている
+  - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 10.4_
+- [x] 6.5 (h5): 実機テストの支えの机の確かめを「握られている」だけの試し直しにする
+  - 机の確かめが「握られている」だけを試し直し、ほかの失敗は直ちに赤にする
+  - 完了の状態: 実機テストが `#[ignore]` のまま組み上がる（走らせての確かめは 7.1）
+  - _Requirements: 9.1, 9.3_
+
+- [x] 7. 仕上げの確かめ
+- [x] 7.1 実機テストを短い形で 1 回走らせ、`--help` の差を確かめる
+  - 置き場所をワークツリーの `target\` の下の Windows 形の絶対パスで上書きして、実機テストを短い形（`--skip a_waiter_reclaims`）で 1 回走らせ、⑦ と (h5) の直しを含めて緑を確かめる
+  - 5.2 で控えた直す前の `--help` と後の実行ファイルの `--help` を並べ、差が `clear --repo` の 1 行の足しだけであることを確かめて記録する（控えは 1.x〜5.1 の後の実物から取るが、それらは `--help` を変えないので直す前と同じ）
+  - 完了の状態: 実機テストの緑と `--help` の差がこのファイルの記録にある
+  - _Depends: 2.3, 5.2, 6.5_
+  - _Requirements: 1.6, 8.5, 9.3, 10.1, 10.6, 11.10_
+- [x] 7.2 変えないものと置き方の決まりを確かめる
+  - クレートの常時テストが全部緑・本番とテストのファイルが全部 1,000 行以下・新しいテストが兄弟のファイルにあることを確かめる
+  - `Cargo.toml`・`Cargo.lock`・`doc/impl-watch.md`・完了した spec の文書・`--help` の今ある行に差が無いことを、差分の対象が実在することを確かめた上で記録する
+  - 状態ファイルの書き出しの失敗が今どおり失敗であること、失敗にしない例外が設計の 4 つだけであること、設計の末尾の移さない理由（6.4・8.2・9.1）と申し送り（6.5）が実物と合っていることを確かめる
+  - 完了の状態: 確かめの結果がこのファイルの記録にある
+  - _Requirements: 6.5, 7.3, 7.4, 8.2, 8.3, 8.4, 10.2, 10.4, 10.5, 10.7_
+
+## 変異の記録
+
+- 1.4: `plan::merge_order` の鍵に `Reverse(index)` を足して同点の並びを逆にした → `cli::commands_tests::the_serving_order_the_position_and_the_reading_agree_with_ties_and_bugs_mixed` が赤（番の順の判定）。控え `target\mutation-backup\plan.rs.bak` から戻し、sha256 一致を確かめて緑。
+- 2.2: ① `store::parse` の読み直しを外し、`WrongShape` の位置を `from_value` の失敗の位置（0, 0）から取った → `store::ports_tests::a_change_sets_each_broken_file_aside_and_its_damage_reaches_the_log_port`・`store::ports_tests::read_only_fails_on_a_broken_file_with_its_damage_and_does_not_set_it_aside`・`store::ports_tests::read_only_logs_the_damage_of_a_broken_file_in_one_ascii_line` が赤。② `Store::load` で訳を捨てた（`damage: None` 相当）→ `store::ports_tests::a_change_sets_each_broken_file_aside_and_its_damage_reaches_the_log_port`・`store::ports_tests::a_recovery_reaches_the_log_port_once_and_before_the_events_of_the_judgement`・`store::ports_tests::when_the_write_fails_the_events_of_the_judgement_do_not_reach_the_log_port` が赤。どちらも控え `target\mutation-backup\store.rs` から素のコピーで戻し、sha256 一致（`e9f87617157773fc1d3a4e5a291fa85b25a80f59aab2739958bc5d67254c99d0`）を確かめて緑。
+- 3.2: 直す前の実物（`WaitPort::now` が `store::unix_now` の本物の時刻）に新しいテストを先に当てた → `store::ports_tests::the_wait_record_takes_its_start_time_from_the_clock_of_the_store` が赤（`left: [Some(1792132289)]`・`right: [Some(1791000000)]`＝置かれた待ちの記録の `since` が止めた時刻 `T0` でなく本物の時刻）。本物の口の `now` を `Store::time` にして緑。
+- 4.1: 本物の口の `WaitPort::finish` で居る印を排他の後で解いた（`drop(held)` を `with_state` の閉じた関数の外・返った後へ移した）→ `store::ports_tests::the_last_unregister_releases_the_presence_mark_inside_the_exclusion` が赤（`left: [(true, true)]`・`right: [(false, true)]`＝ログの口の中で印がまだ「居る」）。控え `target\mutation-backup\4.1-wait.rs` から素のコピーで戻し、sha256 一致（`be93604b6571ffd76e82c673709b9420ba31b44d193c3e3f520308a67cb99318`）を確かめて緑。
+- 4.2: 直す前の実物（`cli::waiting` の早い終わりが待ちの記録を消さない）に新しいテストを先に当てた → `cli::wait_tests::a_restarted_merge_wait_that_ends_at_once_removes_the_record_of_the_killed_wait` が赤（`left: [("a", Merge)]`・`right: []`＝殺された前の `(a, merge)` の記録が残る）。早い終わりで同じ排他の中に `UnregisterWait` を通して緑。
+- 6.1: `status::render_terminal` の `merging` の数え方に `.take(1)` を足して先頭の机だけを数えた → `status::tests::first_line_counts_every_merge_desk_with_a_holder_across_repos` が赤（`left: … merging=1 …`・`right: … merging=2 …`）。ほかの表示のテストは緑のまま。控え `target\mutation-backup\6.1-status.rs` から素のコピーで戻し、sha256 一致（`f7c8916cf35f500b6ba712e9021b414bef6e2109a77d602e408b8e76d2386d77`）を確かめて緑。(h8) の見本の識別の小文字化は変異を求めない（要件 9.3）。
+- 6.2: `wait::run` の登録の直後の `port.fingerprint()?` を `port.fingerprint().unwrap_or(None)`（失敗を「無い」に畳む）にした → `wait::loop_tests::a_failed_fingerprint_right_after_registration_ends_the_wait_with_the_error` が赤（`Ok(Done("granted merge repo=areka; last: none"))`＝失敗で終わらず、読んで番が来たと答えた）。控え `target\mutation-backup\6.2-wait.rs` から素のコピーで戻し、sha256 一致（`be93604b6571ffd76e82c673709b9420ba31b44d193c3e3f520308a67cb99318`）を確かめて緑。
+- 6.3 (h3): `cli.rs` の `C::Merged` の行の組み立てに `.take(1)` を足して最初の 1 行だけを出した → `cli::commands_tests::merged_by_a_holder_of_two_desks_prints_one_line_per_desk_in_repo_order` が赤（`left: (0, "merged repo=areka\n", "")`・`right: (0, "merged repo=areka\nmerged repo=zeta\n", "")`）。控え `target\mutation-backup\6.3-cli.rs` から素のコピーで戻し、sha256 一致（`18e776f53a1abb2ccd6e8f062cefc7e63f59e2199ca00cbaae2a55568d0472bb`）を確かめて緑。
+- 6.3 (h4): `wait::judge` の再開の待ちの `StopRequested` の枝を `"resumed"` にした → `cli::wait_tests::stopped_wait_ends_with_stop_requested_again_when_the_same_call_hands_the_load_desk_on` が赤（`left: (0, "resumed\n", "")`・`right: (0, "stop requested again by c\n", "")`）。控え `target\mutation-backup\6.3-wait.rs` から素のコピーで戻し、sha256 一致（`be93604b6571ffd76e82c673709b9420ba31b44d193c3e3f520308a67cb99318`）を確かめて緑。
+- 6.4 (h6): 広げた 5 本（`store.rs`・`home.rs`・`presence.rs`・`plan.rs`・`state.rs`）へ 1 本ずつ、末尾に `const MUTATION_6_4: &str = "変異";` を足した → どれも `layering_tests::files_that_write_to_the_terminal_have_ascii_only_literals` が赤（`store.rs: non-ASCII literals [(425, "変異")]`・`home.rs: … [(78, "変異")]`・`presence.rs: … [(121, "変異")]`・`plan.rs: … [(753, "変異")]`・`state.rs: … [(253, "変異")]`）。それぞれ控え `target\mutation-backup\6.4-<名前>.rs` から素のコピーで戻し、sha256 一致（`store.rs` `7e09a07f88ea0427a8dba031b8e48fb54b11f739233b88fbbf546965400db528`・`home.rs` `3503efc704c946862a9a6685535a2cc17cbb5dcb3dc30c24c044cb10e1472bfb`・`presence.rs` `75153ab8240b6b138ea2533055732bb9ca63d78bcdb19ec80438133cad3e5011`・`plan.rs` `fc9399bd7448a636e87b64bc47f7ef844e4dd57b5ed00a73e7b43c868f6d9aa0`・`state.rs` `c30929a0efd9d3b62d041bdfa6fcd325aa8552e13bfe0a5c3649c9f0f5c1726f`）を確かめて緑。(h7) の赤の文の訳は変異を求めない（要件 9.3）。
+
+## Implementation Notes
+
+- 5.2: 今ある入口のテスト `cli::tests::each_option_is_accepted_only_by_the_commands_that_list_it` に、`clear` の `--repo`（別の形）だけを通す例外を 1 か所足した。テストの中に写した表は名前の行の表で、設計の「別の形」は読みの側だけが `--repo` を受けるため、書き替えなしでは赤になる。完了の状態「書き替えなしで緑」に対する例外はこの 1 件だけで、名前の行の表を照らす判定は書き替えなしで緑。
+- 完了の手続き（全体テスト）で、2.1 のテスト `read_only_logs_the_damage_of_a_broken_file_in_one_ascii_line` が `tracing::subscriber::with_default` で捕捉先を直に差しており、ワークスペースの見張り `log-capture-kit` の `no_direct_capture_call_lives_outside_the_shared_crate_and_the_allow_table` が赤になった（クレートのテストだけでは捕まらない）。設計の「移さない理由（要件 8.2）」どおり、ログの行は常時テストで捕まえず実機テスト ⑦ に残すため、そのテストと補助の書き口を消した。訳を返す・退避しない・端末の文の判定は別のテストが持ち、読むだけの道の失敗の行の訳は ⑦ が判定する。
+
+## 仕上げの確かめの記録
+
+- 7.1 実機テスト（短い形・1 回だけ）: `AREKA_IMPL_WATCH_HOME` を `C:\home\maz\git\areka\.claude\worktrees\areka-p0-watch-residue-a89e79\target\real-home-7-1` に上書きして `cargo test -p areka-impl-watch --test real -- --ignored --skip a_waiter_reclaims` → `10 passed; 0 failed; 0 ignored; 1 filtered out; finished in 8.80s`（全体 約 9.2 秒）。各テストの置き場所はテスト自身が `target\test-roots\` の下に作る。⑦ `the_log_keeps_event_lines_and_failure_lines_across_processes`（2.3）は緑・(h5) の `Desk::settle`（6.5）は `tests\real\mod.rs` の片付けと `tests\real.rs` から通っている。
+- 7.1 `--help` の差: 5.2 の控え `target\help-before.txt`（53 行）と、今の実行ファイルの `--help`（`AREKA_IMPL_WATCH_HOME` は上と同じ・54 行）を `git diff --no-index` で並べた。差は `clear` の項に足した次の 1 行だけ。
+
+  ```
+        clear --repo <repo>: leave everyone of the repo and empty its merge desk (the last merge stays). prints "cleared repo=<repo>; left: <ids or none>". 0=done
+  ```
+
+### 7.2
+
+基準は `git merge-base HEAD main` ＝ `1e6590d8`。
+
+- 常時テスト: `cargo test -p areka-impl-watch` → 単体 `279 passed; 0 failed; 0 ignored`、`tests\real.rs` は `0 passed; 0 failed; 11 ignored`（実機テストは明示したときだけ走るまま・要件 8.5）。`cargo fmt --all -- --check` は終了コード 0。`cargo clippy -p areka-impl-watch --all-targets` の警告は 0 件・エラーは 0 件。
+- 行数（要件 10.5）: `src\*.rs`・`tests\*.rs`・`tests\real\*.rs` の 33 本で最大は `cli.rs` と `cli_tests.rs` の 893 行。1,000 行を超えるファイルは 0 本。
+- 兄弟のファイル（要件 10.5）: 本番ファイル 10 本（`cli`・`error`・`home`・`main`・`plan`・`presence`・`state`・`status`・`store`・`wait`）の `#[test]` は各 0 件、差分で足された `#[test]` も 0 件。新しいテストファイルは `plan_clear_tests.rs` の 1 本（`plan.rs` の `#[path = "plan_clear_tests.rs"] mod clear_tests;`）で、ほかの新しいテストは今ある `*_tests.rs` に足した。
+- 差分が 0 のもの（対象の実在は `git ls-files -- <パス>` の件数で先に確かめた・作業ツリーの未コミットの差も 0）:
+
+  | 対象 | `git ls-files` の件数 | `git diff --stat 1e6590d8..HEAD` の行数 |
+  |---|---|---|
+  | `Cargo.toml` | 1 | 0 |
+  | `Cargo.lock` | 1 | 0 |
+  | `crates/areka-impl-watch/Cargo.toml` | 1 | 0 |
+  | `doc/impl-watch.md` | 1 | 0 |
+  | `.kiro/specs/completed`（完了した spec の文書） | 2060 | 0 |
+  | `crates/areka-impl-watch/src/main.rs` | 1 | 0 |
+  | `crates/areka-impl-watch/src/home.rs` | 1 | 0 |
+  | `crates/areka-impl-watch/src/presence.rs` | 1 | 0 |
+
+  差分のあるファイルは `crates/areka-impl-watch/` と `.kiro/specs/areka-P0-impl-watch-residue/` の下だけで、その外は 0 本（ワークスペースの迂回の見張りの例外表も変わっていない・要件 8.4）。
+- `--help` の今ある行（要件 10.1, 10.7）: `AREKA_IMPL_WATCH_HOME` を `C:\home\maz\git\areka\.claude\worktrees\areka-p0-watch-residue-a89e79\target\real-home-7-2` に上書きして `target\debug\areka-impl-watch.exe --help` を `target\help-after-7-2.txt` へ取り（終了コード 0・置き場所のフォルダは作られない）、`git diff --no-index --stat target\help-before.txt target\help-after-7-2.txt` → `1 insertion(+)`・削除 0 行。足されたのは 7.1 の `clear --repo <repo>: …` の 1 行だけ。
+- 状態ファイルの形式の版とコマンド（要件 10.2）: `state.rs` の `pub const VERSION: u32 = 1;` は基準と同じ。`state.rs` の差分は `git diff --numstat` で `+22/-0` で、中身は `ParticipantStatus::as_str` と `RecentKind::as_str` の 2 つの `impl` だけなので、書き出す形は変わらない。`cli.rs` のコマンドの表の `name:` の並び（15 個）は、`git show 1e6590d8:crates/areka-impl-watch/src/cli.rs | grep -o 'name: "[a-z-]*"'` と今のファイルから同じように抜いたものを `diff` で比べて差 0。足したのは今ある `clear` の `--repo` の形の `plan::Command::ClearRepo` だけで、新しいコマンド名は 0 個。
+- ASCII と判断の核の綴り（要件 10.4）: `main_layering_tests.rs` の構造テスト `files_that_write_to_the_terminal_have_ascii_only_literals`（ASCII の走査）と `the_judgement_core_spells_no_file_clock_process_or_log`（判断の核が `std::fs`・時計・`tracing` を綴らない）は、上の `279 passed; 0 failed` の中で緑。
+- 状態ファイルの書き出しの失敗（要件 7.3）: `Store::change` の `self.write_state(&state)?` が失敗を返し、`with_state` が `error!` を残す。`store_tests.rs` の `a_failed_write_of_the_state_leaves_the_original_files_as_they_were` が `Err(Io { op: "write state.json", .. })` と状態ファイル・読み物が元のままを判定して緑。
+- 失敗にしない例外（要件 7.1, 7.2, 7.4）: 本番ファイルで失敗を `warn!` に代えて先へ進む所は次の 4 か所だけで、設計の「失敗にしないもの」の表の 4 行と所も字面も一致。
+  - `store.rs` `write_status` → `[store] status.md not written; the result stands`
+  - `wait.rs` `run` の周期の `Tick` → `[wait] periodic round failed; still waiting`
+  - `wait.rs` `run` の `finish` → `[wait] wait record not removed; left to be reclaimed`
+  - `presence.rs` `unsure` → `[presence] probe failed; treated as present`
+
+  ほかの `warn!` は `store.rs` `write_line` の `[store] state file was broken; set aside`（退避の出来事の記録で、失敗を飲む道ではない）だけ。`let _ =` の 6 か所（ロックの解除 3＝`presence.rs` 2・`store.rs` 1、ログの受け手の 2 度目 1、一時ファイルの消去 1、標準エラーへの書き 1＝`cli.rs`）は、設計の棚卸（要件 7.5）の「失敗で終わる道の中の後始末」に当たる。
+- 設計の末尾と実物の突き合わせ:
+  - 移さない理由 6.4: `store_ports_tests.rs` の `the_last_unregister_releases_the_presence_mark_inside_the_exclusion` が順の不変を判定している（4.1 の変異で赤）。
+  - 移さない理由 8.2: 読み物の警告の行は実機テスト `tests\real.rs` の 605 行目（`WARN` と `: [store] status.md not written`）、`command=`・`event=` の項目は 571 行目で判定している。`Cargo.toml`・`Cargo.lock` の差分は上の表のとおり 0（要件 8.3）。
+  - 移さない理由 9.1: (h1)〜(h8) は 8 件とも採ってあり（6.1〜6.5・変異の記録）、採らない理由の行が無いことと合う。
+  - 申し送り 6.5: `doc/impl-watch.md` の 365 行目に「見張りが停止要請で終わるのと同時に再開が入り…ごくまれに起きる」の一文が書き替えられずに残り（差分 0）、設計の「申し送り」節が `areka-P0-impl-watch-skills` の要件 9.4 への申し送りとして記録している。

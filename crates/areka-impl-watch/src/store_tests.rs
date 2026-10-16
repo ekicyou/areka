@@ -17,7 +17,7 @@ use super::test_support::{
     BROKEN_AT_T0, Everyone, Nobody, T0, block_state_writes, home_in, names, participants,
     read_state, store_in, store_noting_pauses, tick, watch,
 };
-use super::{Store, open};
+use super::{Store, open, unix_seconds};
 use crate::error::WatchError;
 use crate::home::Home;
 use crate::plan::{Applied, Command, Verdict, apply};
@@ -272,7 +272,7 @@ fn nothing_is_written_when_the_judgement_says_unchanged() {
     let now = Rc::new(Cell::new(T0));
     let clock = Rc::clone(&now);
     let store = Store {
-        clock: Box::new(move || clock.get()),
+        clock: Box::new(move || Ok(clock.get())),
         ..store_in(&root)
     };
     store.with_state(watch("a")).expect("変えられる");
@@ -442,7 +442,7 @@ fn concurrent_changes_from_several_threads_are_all_kept() {
                 // 口はスレッドごと（別々のプロセスが別々に開く姿）。ロックの待ちは本物の眠り。
                 let store = Store {
                     home: Home { dir: dir.clone() },
-                    clock: Box::new(|| T0),
+                    clock: Box::new(|| Ok(T0)),
                     presence: Box::new(Everyone),
                     pause: Box::new(std::thread::sleep),
                     log: Box::new(|_| {}),
@@ -550,4 +550,88 @@ fn open_fails_when_the_log_file_cannot_be_opened() {
         ),
         "{got:?}"
     );
+}
+
+// ───────── 時計 ─────────
+
+#[test]
+fn the_real_clock_core_fails_before_1970_and_counts_seconds_after() {
+    let before = unix_seconds(UNIX_EPOCH - Duration::from_secs(1));
+    assert!(
+        matches!(
+            before,
+            Err(WatchError::Io {
+                op: "read the clock",
+                ..
+            })
+        ),
+        "0 に代えずに失敗する: {before:?}"
+    );
+    assert_eq!(
+        unix_seconds(UNIX_EPOCH + Duration::from_secs(5)).expect("1970 年より後"),
+        5
+    );
+}
+
+#[test]
+fn a_change_through_a_failing_clock_fails_and_writes_nothing() {
+    let root = TempPath::under_target("impl-watch-store");
+    let home = home_in(&root);
+    let judged = Cell::new(false);
+    let store = Store {
+        clock: Box::new(|| {
+            Err(WatchError::io(
+                "read the clock",
+                &std::io::Error::other("before 1970"),
+            ))
+        }),
+        ..store_in(&root)
+    };
+
+    let result = store.with_state(|state, now, alive| {
+        judged.set(true);
+        watch("a")(state, now, alive)
+    });
+
+    assert!(
+        matches!(
+            result,
+            Err(WatchError::Io {
+                op: "read the clock",
+                ..
+            })
+        ),
+        "{result:?}"
+    );
+    assert!(!judged.get(), "時刻が無ければ判断へ進まない");
+    assert_eq!(
+        names(&home.dir),
+        ["state.lock"],
+        "状態ファイルも読み物も書かない"
+    );
+}
+
+#[test]
+fn clear_through_a_failing_clock_fails_and_writes_nothing() {
+    let root = TempPath::under_target("impl-watch-store");
+    let home = home_in(&root);
+    store_in(&root).with_state(watch("a")).expect("変えられる");
+    let before = fs::read(home.state_path()).expect("読める");
+    let store = Store {
+        clock: Box::new(|| {
+            Err(WatchError::io(
+                "read the clock",
+                &std::io::Error::other("before 1970"),
+            ))
+        }),
+        ..store_in(&root)
+    };
+
+    assert!(matches!(store.clear(), Err(WatchError::Io { .. })));
+    assert_eq!(
+        fs::read(home.state_path()).expect("読める"),
+        before,
+        "退避も書きもしない"
+    );
+    assert_eq!(names(&home.dir), ["state.json", "state.lock", "status.md"]);
 }

@@ -5,16 +5,21 @@
 //! 要約（[`render_terminal`]）は識別・リポジトリ・spec・PR・sha・時刻と数だけを使う。
 //! このファイルの文字列リテラルは、読み物の見出しも含めて全部 ASCII。
 
-use serde::Serialize;
-
 use crate::error::escape_path;
-use crate::plan::Presence;
-use crate::state::{
-    LastMerge, LoadRequest, MergeRequest, Participant, ParticipantStatus, State, WaitKind,
-};
+use crate::plan::{Presence, load_order, merge_order};
+use crate::state::{LastMerge, Participant, ParticipantStatus, State, WaitKind};
 
-/// 「居ない・無い」の綴り（持ち主なし・待ち行列なし・直前のマージなし・項目なし）。
-const NONE: &str = "none";
+/// 「居ない・無い」の綴り（読み物・端末の文・`clear` の退避先の記録）。
+pub(crate) const NONE: &str = "none";
+
+/// 識別の並び: 空なら `none`、あれば `", "` でつなぐ（負荷テストの机の `stopped:` など）。
+pub(crate) fn id_list(ids: &[String]) -> String {
+    if ids.is_empty() {
+        NONE.to_owned()
+    } else {
+        ids.join(", ")
+    }
+}
 
 /// 状態の確認の読み物（UTF-8・`status.md` の中身）。`now` は書いた時刻。
 pub fn render_markdown(state: &State, presence: &dyn Presence, now: u64) -> String {
@@ -37,7 +42,7 @@ pub fn render_markdown(state: &State, presence: &dyn Presence, now: u64) -> Stri
             id,
             &p.name,
             &p.repo,
-            &spelling(p.status),
+            p.status.as_str(),
             &utc(p.since),
             mark(id, p, presence).unwrap_or("-"),
             reason.as_deref().unwrap_or("-"),
@@ -59,16 +64,13 @@ pub fn render_markdown(state: &State, presence: &dyn Presence, now: u64) -> Stri
             utc(holder.requested),
             utc(holder.granted),
             yes_no(holder.running),
-            if holder.stopped.is_empty() {
-                NONE.to_owned()
-            } else {
-                holder.stopped.join(", ")
-            },
+            id_list(&holder.stopped),
             text(&holder.purpose),
         ),
         None => format!("- holder: {NONE}"),
     });
-    let waiting = load_order(&state.load.queue).into_iter().map(|request| {
+    let waiting = load_order(&state.load.queue).into_iter().map(|nth| {
+        let request = &state.load.queue[nth];
         format!(
             "{} (requested {}): {}",
             request.id,
@@ -98,7 +100,8 @@ pub fn render_markdown(state: &State, presence: &dyn Presence, now: u64) -> Stri
             ),
             None => format!("- holder: {NONE}"),
         });
-        let waiting = merge_order(&desk.queue).into_iter().map(|request| {
+        let waiting = merge_order(&desk.queue).into_iter().map(|nth| {
+            let request = &desk.queue[nth];
             format!(
                 "{} (spec {}, bug: {}, requested {})",
                 request.id,
@@ -113,7 +116,7 @@ pub fn render_markdown(state: &State, presence: &dyn Presence, now: u64) -> Stri
 
     let waits = state.waits.iter().map(|wait| {
         row(&[
-            &spelling(wait.kind),
+            wait.kind.as_str(),
             &wait.id,
             wait.repo.as_deref().unwrap_or("-"),
             &wait.pid.to_string(),
@@ -130,7 +133,7 @@ pub fn render_markdown(state: &State, presence: &dyn Presence, now: u64) -> Stri
     let recent = state.recent.iter().map(|recent| {
         row(&[
             &utc(recent.at),
-            &spelling(recent.kind),
+            recent.kind.as_str(),
             recent.id.as_deref().unwrap_or("-"),
             &recent.detail,
         ])
@@ -184,7 +187,7 @@ pub fn render_terminal(state: &State, presence: &dyn Presence) -> String {
         lines.push(format!(
             "{id} {} {}{mark}",
             participant.repo,
-            spelling(participant.status)
+            participant.status.as_str()
         ));
     }
     for (repo, desk) in &state.merge {
@@ -199,7 +202,7 @@ pub fn render_terminal(state: &State, presence: &dyn Presence) -> String {
     }
     let waiting: Vec<&str> = load_order(&state.load.queue)
         .into_iter()
-        .map(|request| request.id.as_str())
+        .map(|nth| state.load.queue[nth].id.as_str())
         .collect();
     lines.push(format!(
         "load: holder={load_holder} queue={}",
@@ -267,34 +270,11 @@ fn mark(id: &str, participant: &Participant, presence: &dyn Presence) -> Option<
     }
 }
 
-/// マージの待ち行列を番の来る順に並べる: バグ優先 → 申し込みの早い順・同点は行列の前
-/// （判断が番を選ぶ鍵と同じ。行列そのものは到着順で持たれている）。
-pub(crate) fn merge_order(queue: &[MergeRequest]) -> Vec<&MergeRequest> {
-    let mut order: Vec<&MergeRequest> = queue.iter().collect();
-    order.sort_by_key(|request| (!request.bug, request.requested));
-    order
-}
-
-/// 負荷テストの待ち行列を番の来る順に並べる: 申し込みの早い順・同点は行列の前。
-pub(crate) fn load_order(queue: &[LoadRequest]) -> Vec<&LoadRequest> {
-    let mut order: Vec<&LoadRequest> = queue.iter().collect();
-    order.sort_by_key(|request| request.requested);
-    order
-}
-
 /// 直前のマージの 1 行分（`PR#281 414d43eb impl-watch 2026-10-10T01:00:00Z`）。
 pub(crate) fn last_merge(last: Option<&LastMerge>) -> String {
     last.map_or(NONE.to_owned(), |last| {
         format!("PR#{} {} {} {}", last.pr, last.sha, last.spec, utc(last.at))
     })
-}
-
-/// 列挙の ASCII の綴り。状態ファイルと同じ綴り（serde の `kebab-case`）を唯一の表にする。
-fn spelling(value: impl Serialize) -> String {
-    match serde_json::to_value(value) {
-        Ok(serde_json::Value::String(text)) => text,
-        _ => "?".to_owned(),
-    }
 }
 
 fn yes_no(flag: bool) -> &'static str {
