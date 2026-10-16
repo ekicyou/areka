@@ -18,7 +18,10 @@
        C  an assignment to [Console]::OutputEncoding / InputEncoding ([System.Console] too) or
           $OutputEncoding, or a chcp / chcp.com command (only exception: inside the function
           Set-OwnConsoleCp932 in tools/encoding-check.ps1); the string after -Command / -c of a
-          child pwsh / powershell is parsed and checked the same way
+          child pwsh / powershell is parsed and checked the same way, and so is every string that
+          mentions Encoding or chcp (only exceptions, in tools/encoding-check.ps1: the strings of
+          $calib and $chcpWords in Get-ConsoleRewrites); [Console]::SetOut / SetError are
+          not rewrites
        D  a cargo / cargo.exe command (bare or with &) with the element metadata or nar-sample-path
        E  tools/package.ps1 (metadata and nar-sample-path), tools/crates-io.ps1 (metadata) and the
           run bodies of .github/workflows/release.yml (metadata) each have an Invoke-Utf8Child
@@ -97,6 +100,7 @@ function Test-InFunction([Ast]$Node, [string]$Name) {
 # the string a child PowerShell gets after -Command / -c (parsed, not searched as text; reported at
 # the line of the child's command). Returns objects with Line and Text.
 function Get-ConsoleRewrites([Ast]$Ast, [string]$Where) {
+    $chcpWords = @('chcp', 'chcp.com')
     foreach ($n in $Ast.FindAll({ param($n) $n -is [AssignmentStatementAst] }, $true)) {
         $l = $n.Left
         if ($l -is [ConvertExpressionAst]) { $l = $l.Child }   # [Text.Encoding]$OutputEncoding = ...
@@ -110,7 +114,7 @@ function Get-ConsoleRewrites([Ast]$Ast, [string]$Where) {
     }
     foreach ($c in $Ast.FindAll({ param($n) $n -is [CommandAst] }, $true)) {
         $leaf = Get-CommandLeaf $c
-        if ($leaf -in @('chcp', 'chcp.com') -and -not ($Where -eq $SelfWhere -and (Test-InFunction $c 'Set-OwnConsoleCp932'))) {
+        if ($leaf -in $chcpWords -and -not ($Where -eq $SelfWhere -and (Test-InFunction $c 'Set-OwnConsoleCp932'))) {
             [pscustomobject]@{ Line = $c.Extent.StartLineNumber; Text = $c.Extent.Text }
         }
         if ($leaf -notin @('pwsh', 'pwsh.exe', 'powershell', 'powershell.exe')) { continue }
@@ -126,6 +130,31 @@ function Get-ConsoleRewrites([Ast]$Ast, [string]$Where) {
             }
         }
     }
+    # Every string (not a bare word) that mentions Encoding or chcp is parsed and checked the same
+    # way (a prefix built in a variable and passed to a child). Only exceptions, in this file: the
+    # strings of the calibration samples ($calib = ...) and $chcpWords above.
+    foreach ($s in $Ast.FindAll({ param($n)
+                ($n -is [StringConstantExpressionAst] -and $n.StringConstantType -ne [StringConstantType]::BareWord) -or
+                $n -is [ExpandableStringExpressionAst] }, $true)) {
+        if ($s.Value -notmatch 'Encoding' -and $s.Value -notmatch $chcpWords[0]) { continue }
+        if ($Where -eq $SelfWhere -and (Test-SelfExemptString $s)) { continue }
+        $tk = $null; $er = $null
+        $inner = [Parser]::ParseInput($s.Value, [ref]$tk, [ref]$er)
+        if (@(Get-ConsoleRewrites $inner '').Count) {
+            [pscustomobject]@{ Line = $s.Extent.StartLineNumber; Text = $s.Extent.Text }
+        }
+    }
+}
+
+# Rule C's own exceptions in tools/encoding-check.ps1, by name: a string inside the right-hand side
+# of $calib = ..., or of $chcpWords = ... inside the function Get-ConsoleRewrites.
+function Test-SelfExemptString([Ast]$Str) {
+    for ($p = $Str.Parent; $null -ne $p; $p = $p.Parent) {
+        if (-not ($p -is [AssignmentStatementAst] -and $p.Left -is [VariableExpressionAst])) { continue }
+        $name = $p.Left.VariablePath.UserPath
+        return ($name -eq 'calib' -or ($name -eq 'chcpWords' -and (Test-InFunction $p 'Get-ConsoleRewrites')))
+    }
+    $false
 }
 
 # Rules A-D (and parse errors) on one pwsh text. Returns the findings and the elements of
@@ -157,7 +186,7 @@ function Get-Findings {
     }
 
     # C
-    foreach ($h in Get-ConsoleRewrites $ast $Where) { & $add 'C' $h.Line $h.Text }
+    foreach ($h in @(Get-ConsoleRewrites $ast $Where) | Sort-Object Line -Unique) { & $add 'C' $h.Line $h.Text }
 
     # D, and the Invoke-Utf8Child elements for E
     $callWords = [System.Collections.Generic.List[string]]::new()
@@ -322,6 +351,8 @@ $calib = @(
     @{ Name = 'rewrite inside child pwsh -Command'; Text = 'pwsh -NoProfile -Command ''[Console]::OutputEncoding = [Text.Encoding]::UTF8; & ./tools/package.ps1'''; Expect = 'C' }
     @{ Name = 'chcp inside child pwsh -c'; Text = 'pwsh -c "chcp 65001"'; Expect = 'C' }
     @{ Name = 'Set-OwnConsoleCp932 outside encoding-check'; Where = 'tools/package.ps1'; Text = 'function Set-OwnConsoleCp932 { chcp 932 }'; Expect = 'C' }
+    @{ Name = 'rewrite prefix built in a variable and passed'; Text = '$inner = ''[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); '' + $x; $psi.ArgumentList.Add($inner)'; Expect = 'C' }
+    @{ Name = 'chcp inside an argument array'; Text = '$a = @(''-Command'', ''chcp 65001'')'; Expect = 'C' }
     @{ Name = 'marker inside expandable string'; Text = '"$LOG_MARKER_A ' + $jp + '"'; Expect = 'B' }
     @{ Name = 'parse error'; Text = 'if ('; Expect = 'parse' }
     @{ Name = 'missing Invoke-Utf8Child call'; Text = 'cargo metadata'; Need = @('metadata'); Expect = 'E' }
@@ -336,6 +367,7 @@ $calib = @(
     @{ Name = 'child pwsh -File'; Text = 'pwsh -NoProfile -NonInteractive -File ./tools/package.ps1 -Arch all'; Expect = $null }
     @{ Name = 'Invoke-Utf8Child metadata'; Text = "Invoke-Utf8Child cargo @('metadata')"; Need = @('metadata'); Expect = $null }
     @{ Name = 'Set-OwnConsoleCp932 in encoding-check'; Where = $SelfWhere; Text = 'function Set-OwnConsoleCp932 { [Console]::OutputEncoding = [Text.Encoding]::GetEncoding(932); chcp 932 }'; Expect = $null }
+    @{ Name = 'UTF-8 writer prefix for a child'; Text = '$pre = ''$u = [System.Text.UTF8Encoding]::new($false); $w = [System.IO.StreamWriter]::new([Console]::OpenStandardOutput(), $u); $w.AutoFlush = $true; [Console]::SetOut($w); $e = [System.IO.StreamWriter]::new([Console]::OpenStandardError(), $u); $e.AutoFlush = $true; [Console]::SetError($e); '''; Expect = $null }
     @{ Name = 'yaml name and comment only'; Yaml = $true; Text = "# " + $jp + "${nl}steps:${nl}  - name: " + $jp + "${nl}"; Expect = $null }
     @{ Name = 'yaml block ends at the next key'; Yaml = $true; Text = "steps:${nl}  - run: |${nl}      Write-Host 'ok'${nl}    name: " + $jp + "${nl}  - name: " + $jp + "${nl}"; Expect = $null }
     @{ Name = 'yaml defaults run mapping'; Yaml = $true; Text = "defaults:${nl}  run:${nl}    shell: pwsh${nl}    working-directory: " + $jp + "${nl}"; Expect = $null }
