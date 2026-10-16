@@ -205,6 +205,73 @@ EXE="$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe"
 
 停止の往復の ① が `stop requested again by <識別>` で終わったときだけ、① をもう 1 度呼ぶ（コマンドが 1 つ、セッションが起きる回数が 1 回増える）。出し直しを知らせるものがほかに無いので、この 1 回は要る。
 
+### スキルからの呼び方
+
+実装・完了・棚卸のスキル（`kiro-impl`・`kiro-complete`・`kiro-next`）は、上の流れを次の形で呼ぶ。
+
+- **机のコマンドを呼ぶのは主の会話だけ。** 実装係・レビュー係などのサブエージェントは `areka-impl-watch.exe` を呼ばない（1 つのセッションが 1 つの参加者）。
+- **1 つの作業木で机を使うセッションは 1 つ。** 同じ作業木の 2 つのセッションは識別が同じになり、互いの見張りを外し合う。
+- 机は助けである。使えないとき（下の `skip`、環境変数の断り、直らない失敗）は、その回だけ机の段を飛ばして作業を続け、訳を最後の報告に残す。
+- 見回り・時間を決めた繰り返し・定期の `status` はしない。セッションが起きるのは待ちのコマンドが終わったときだけで、机について開発者へ伝えるのは 1 つの出来事につき 1 行である。
+
+**識別・リポジトリ・名前の求め方。** 実行の初めに、次の 1 回の Bash（前景）で求める。
+
+```bash
+ID=$(basename "$(git rev-parse --show-toplevel)"); R=$(basename "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")")
+if [ -z "$AREKA_IMPL_WATCH_HOME" ]; then echo "desk: skip no-home"
+elif [ ! -f "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" ]; then echo "desk: skip no-exe"
+elif ! [[ "$ID" =~ ^[A-Za-z0-9._-]{1,100}$ && "$R" =~ ^[A-Za-z0-9._-]{1,100}$ ]]; then echo "desk: skip bad-name $ID $R"
+else echo "desk: id=$ID repo=$R"; fi
+```
+
+- 識別（`--id`）は作業木の最上位のフォルダの名前。Claude のセッションが替わっても、同じ作業木なら同じ値になる。
+- リポジトリ（`--repo`）は共通の git フォルダ（`.git`）の親の名前で、どの作業木から呼んでも同じ。`origin` の URL は資格情報を含むことがあるので使わない。
+- 名前（`--name`）と `merge` の `--spec` には spec の名前を渡す。
+- `desk: skip …` なら別の値をこしらえず、その回は机のコマンドを 1 つも呼ばない（`no-exe` のときは 2 節の置き方の道具のコマンドを案内する）。
+- `desk: id=… repo=…` の値を覚え、以後のコマンドへ字のまま書く。
+
+**呼ぶ形。** どのコマンドも同じ形で呼び、最後の `exit=<n>` とその前の 1〜2 行だけを読む（`2>&1` で、標準エラーの 1 行も同じ出力に入る）。
+
+```bash
+"$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" <コマンド> <引数> 2>&1; echo "exit=$?"
+```
+
+`watch`・`merge --wait`・`loadtest --wait`・`stopped --wait`・`resume` はバックグラウンドで、`leave`・`merged`・`loaddone`・`cancel`・`loadrunning`・`clear --repo` は前景で呼ぶ。`status` は訳を調べるときだけ前景で呼ぶ。
+
+**いつ何を呼ぶか。**
+
+| スキル | 時点 | 呼ぶもの |
+|---|---|---|
+| `kiro-impl` | 実行の初め（準備の最後） | 上の求め方 → 最初のタスクの前に `watch --id --repo --name`（バックグラウンド） |
+| `kiro-impl` | 機械を独り占めする段（静かな CPU での計測・わざと負荷をかけた再現・時間を測る比べ）を含むタスクの前 | `loadtest --id --repo --purpose --wait`（バックグラウンド）。番が来るまでそのタスクに入らない。ふだんのテストは数えない |
+| `kiro-impl` | 負荷テストの番が来た（`granted load; …`） | 止まっている間に受けたなら `watch` を 1 回立て直す → そのタスク → 済んだら直ちに `loaddone` |
+| `kiro-impl` | 見張りが `stop requested by <識別>` で終わった | 今のタスクをコミットの切れ目まで進め、`stopped --id --wait`（バックグラウンド） |
+| `kiro-impl` | 再開の待ちが `resumed` で終わった | `watch` を立て直して次のタスクへ |
+| `kiro-impl` | 実行の終わり（どの終わり方でも） | `leave`。完了の承認を待つ間は参加者でない |
+| `kiro-impl` | 開発者が「走っている負荷テストを記録せよ」と言ったときだけ | `loadrunning --id --repo --purpose` → 済んだら `loaddone` |
+| `kiro-complete` | 完了の手順の前（前置きステップ） | 上の求め方 → 自分の見張りが走っていなければ `watch` → 停止要請を受けていたら `stopped --wait` → `merge --id --repo --spec [--bug] --wait`（バックグラウンド）。番が来るまで手順に入らない |
+| `kiro-complete` | マージの番が来た（`granted merge …`） | 既定の枝を取り込んでから完了の手順へ |
+| `kiro-complete` | PR の squash マージが成功した後 | `merged --id --pr --sha`（参加の終わりを兼ねる） |
+| `kiro-complete` | 中断条件・開発者の取りやめで手順をやめるとき | `cancel`（参加は続ける） |
+| `kiro-complete` | PR を作れずにマージの無いまま終わるとき | `leave` |
+| `kiro-next` | 棚卸の始め（1 回だけ） | `clear --repo <リポジトリ>`（前景）。そのリポジトリの記録だけを消す。`watch` は立てず、`status` も読まない |
+
+`kiro-next` は求め方のうちリポジトリだけを求め、`clear --repo` が 1 で終わっても 2（`--repo` を受けない古い実行ファイル）で終わっても、1 行伝えて棚卸を続ける。消された記録の持ち主が実は動いていたときは、そのセッションの見張りが終了コード 3 で終わり、下の扱いで立て直す。
+
+**終わったときの扱い**は、5 節の「終了コードごとにセッションがすること」と終了コード 1 の表のとおりである。スキルは次を足す。
+
+- **立て直しと申し込み直しは 1 回まで。** 同じ出来事で 2 つの待ちが続けて終わっても、立て直しと申し込み直しはそれぞれ 1 回だけ行う。2 度目が `already running` で終わっても害は無い。
+- 見張りが終了コード 1（下の 2 つのほか）で終わったら、直ちに 1 回だけ立て直す。立て直しも同じ文の 1 で終わったら終了コード 1 の表に従い、直らなければその回の机の段を止める。
+- `AREKA_IMPL_WATCH_HOME …` の断りで終わったら、その回の机の段を止め、標準エラーの 1 行をそのまま伝える。
+- 見張りが `a watch wait for <識別> is already running` で終わり、自分で立てた見張りの覚えが無ければ、前のセッションの残りの見張りである。外す・待つ・立てるを 1 本にまとめてバックグラウンドで走らせる（残りの見張りは、記録が消えたことを 1 秒ごとの見回りで見つけて終わるまで、同じ識別の錠を持ち続けるため）。持っていた申し込みがあれば、この 1 本が終わる前に申し込み直す。この 1 本がまた `already running` で終わったら繰り返さず、その回の机の段を止める。
+
+  ```bash
+  "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" leave --id <識別> 2>&1; sleep 3; "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" watch --id <識別> --repo <リポジトリ> --name <spec の名前> 2>&1; echo "exit=$?"
+  ```
+
+  この `leave` は参加の終わりに数えない（参加を終えるのは実行の終わりの `leave` と `merged` だけ）。
+- 終了コード 2 は、スキルの文の誤りである。その回の机の段を止める。
+
 ## 5. コマンド・引数・終了コード
 
 `areka-impl-watch.exe --help` が同じ対応を英語で出す（置き場所の環境変数が無くても出る）。
@@ -228,7 +295,7 @@ EXE="$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe"
 | `leave` | `--id` | — | その識別の申し込み・机・参加者の記録を消す | 済んだ | — |
 | `tick` | — | — | 落ちた参加者を外し、番を決め直すだけ | 済んだ | — |
 | `status` | — | — | 状態を変えずに読み、`status.md` を書き、要約を出す | 済んだ | — |
-| `clear` | — | — | 状態ファイルを退避して空から始める。問い合わせはしない | 済んだ | — |
+| `clear` | — | `--repo` | 状態ファイルを退避して空から始める。問い合わせはしない。`--repo` つきは、そのリポジトリの参加者を全員外し、マージの机と待ち行列を空にする（直前のマージは残す。退避はせず、ほかのリポジトリには触らない） | 済んだ（`--repo` つきは外す者が居なくても 0） | — |
 | `--help` | — | — | 使い方を出す | 済んだ | — |
 
 `cancel`・`leave`・`unstop`・`stopped`・`merged`・`loaddone` の `--id` は「誰について」であって、呼ぶ者と違ってよい（開発者が代わりに呼べる）。
@@ -274,7 +341,7 @@ EXE="$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe"
 | `leave` | `left` | — |
 | `tick` | `tick` | — |
 | `status` | 要約（6 節）。状態ファイルが無ければ `no state file` | — |
-| `clear` | `cleared; backup: <退避したファイル>`（退避するものが無ければ `cleared; backup: none`） | — |
+| `clear` | `cleared; backup: <退避したファイル>`（退避するものが無ければ `cleared; backup: none`）。`--repo` つきは `cleared repo=<リポジトリ>; left: <識別>, <識別>`（外した者が居なければ `left: none`。`--repo` を受けない古い実行ファイルは使い方の誤りの 2） | — |
 
 待つコマンド（`watch`・`merge --wait`・`loadtest --wait`・`stopped --wait`・`resume`）は、「居る印を握る → 申し込む（または『止まった』を記録する）→ 待つ」の順に進む。同じ識別・同じ種類の待ちがすでに走っていれば、申し込みもせずに `a <種類> wait for <識別> is already running` で終了コード 1 になる（種類は `watch`・`merge`・`load`・`resume`。`stopped --wait` と `resume` は同じ種類）。呼んだ時点でもう条件が満ちていれば、待たずに直ちに終わる。「停止要請中」の参加者に `resume` を呼んだときも、直ちに `stop requested again by <識別>` で終わる（「止まった」をまだ報告していないので、`stopped --wait` を呼ぶ）。
 
@@ -282,14 +349,14 @@ EXE="$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe"
 
 | コマンド | 0 | 3 |
 |---|---|---|
-| `watch` | 停止要請。今のタスクをコミットの切れ目まで進めて `stopped --wait`。`already stopped; …` のときは、すでに「止まった」を記録済みなので `stopped --wait` か `resume` で再開を待つ | 参加者の記録が消えた。`merged`・`leave` の後なら行動は要らない。覚えが無ければ `status` で見て、続けるなら `watch` を立て直す |
-| `merge --wait`・`loadtest --wait` | 番が来た。作業をして `merged`／`loaddone` | 申し込みが消えた（取り下げ・参加の終わり・落ちたと見なされて外された・`clear`）。`status` と `status.md` の最近の出来事で訳を見て、要るなら **`watch` を立ててから**申し込み直す |
+| `watch` | 停止要請。今のタスクをコミットの切れ目まで進めて `stopped --wait`。`already stopped; …` のときは、すでに「止まった」を記録済みなので、記録し直さずに `resume` で再開を待つ | 参加者の記録が消えた。最後に立てた見張りでなければ（立て直す前の古い見張りの終わり）行動は要らない。参加を終えた（`merged`・`leave`）後なら行動は要らない。それ以外は 1 行伝えて `watch` を立て直し、持っていた申し込みを申し込み直す（机を持っていたなら、番がまた来てから続ける） |
+| `merge --wait`・`loadtest --wait` | 番が来た。作業をして `merged`／`loaddone` | 申し込みが消えた（取り下げ・参加の終わり・落ちたと見なされて外された・`clear`）。自分で `cancel` した後なら行動は要らない。それ以外は 1 行伝えて、**`watch` を立ててから**申し込み直す。訳を調べたいときだけ `status` と `status.md` の最近の出来事を見る |
 | `stopped --wait`・`resume` | `resumed` なら再開した。`watch` を立て直して続ける。`stop requested again by <識別>` なら、停止要請が出し直されている。作業には戻らず、もう一度 `stopped --wait` を呼ぶ | 参加者の記録が無い。`watch` を立て直して続ける |
 | `stopped`（`--wait` 無し） | 記録した。再開は `resume` で待つ | 停止要請中でない（取り消された・すでに「止まった」を記録済み・参加者の記録が無い）。`watch` を立て直す。直ちに `already stopped; …` で終わったら `resume` で再開を待ち、終わらなければそのまま続ける |
 | `merge`・`loadtest`（`--wait` 無し） | `granted …` なら番が来ている。`queued …` なら並んだだけなので、`--wait` つきで呼び直して待つ（二重には並ばない） | — |
 | `merged` | 済んだ | 持ち主でない。`status` の `last=` に自分のマージが載っていれば、すでに記録済み |
 | `loaddone` | 済んだ | 持ち主でない。机はもう空いているか、他の参加者のもの。行動は要らない |
-| `loadrunning` | 記録した | 机に持ち主が居る（自分がすでに持ち主のときの呼び直しも 3）。`status` で持ち主を見る |
+| `loadrunning` | 記録した | 机に持ち主が居る（自分がすでに持ち主のときの呼び直しも 3）。持ち主にならず、その計測は記録されない。1 行伝えて開発者の指示を待つ（持ち主は `status` で見られる） |
 | `unstop` | 取り消した。負荷テストがまだ待たれていれば、同じ呼び出しの中で出し直される。出し直しは `unstopped n=<戻した人数>` に載らないので、続けて `status` を見る（再開の待ちを走らせていない参加者が `stop-requested` と出ていたら、6 節の「止まっている間に停止要請が出し直された」） | 取り消す相手が居ない。行動は要らない |
 
 終了コード 1 のときは、標準エラーの 1 行を読む。
@@ -299,15 +366,17 @@ EXE="$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe"
 | `AREKA_IMPL_WATCH_HOME is not set or empty. …` | 2 節のとおり環境変数を設定する |
 | `AREKA_IMPL_WATCH_HOME must be an absolute path …` | 変数の値を `C:\…` の形の絶対パスに直す（2 節） |
 | `AREKA_IMPL_WATCH_HOME cannot be created: …` | 変数の値（書ける場所か）を直す |
-| `a watch wait for <識別> is already running` | 同じ識別の見張りが残っている。6 節 |
+| `a watch wait for <識別> is already running` | 同じ識別の見張りがまだ走っている。自分で立てた見張りなら行動は要らない。覚えが無ければ前のセッションの残りなので、4 節の「スキルからの呼び方」の外し方の 1 本を走らせる（手で外すときは 6 節） |
+| `a resume wait for <識別> is already running` | 前の再開の待ち（`stopped --wait`・`resume`）がまだ走っている。行動は要らない |
+| `a merge wait for <識別> is already running`・`a load wait for <識別> is already running` | 同じ識別の番の待ちがまだ走っている。自分で走らせた待ちなら行動は要らない。覚えが無ければ `cancel --id <識別>` を呼んでから申し込み直す |
 | `state file version mismatch: …` | 3 節の「版が上がる更新のとき」 |
 | `state file is broken; see impl-watch.log` | `status`、または走っていた待ち・見張りが、状態ファイルを読めなかった。6 節の「状態ファイルが壊れた」 |
-| `state.lock is busy for 10 s; …` | 少し置いて呼び直す。続くなら、止まったままの `areka-impl-watch.exe` が無いか見る |
+| `state.lock is busy for 10 s; …` | 間を置かずに 1 回だけ呼び直す（実行ファイルが 10 秒待ってから断っているので、待ち足さなくてよい）。続くなら、止まったままの `areka-impl-watch.exe` が無いか見る |
 | `io write state.json: PermissionDenied …`・`io set aside state.json: …` | 6 節の「ファイルを開いたままのアプリが居る」 |
 
-**`watch` が終了コード 1 で終わったら、直ちに立て直す。** 立て直すまでの間にほかの参加者の呼び出しが来ると、落ちたものとして外される。ただし、出た文が `a watch wait for <識別> is already running` のときは、前の見張りがまだ走っているので立て直さなくてよい。
+**`watch` が終了コード 1 で終わったら、直ちに 1 回だけ立て直す。** 立て直すまでの間にほかの参加者の呼び出しが来ると、落ちたものとして外される。立て直しも同じ文の 1 で終わったら、上の表に従う。ただし、出た文が `AREKA_IMPL_WATCH_HOME …` の断りのときは立て直さずに変数を直し、`a watch wait for <識別> is already running` のときは上の表の行に従う。
 
-終了コード 2 は呼び方の誤りなので、引数を直して呼び直す。
+終了コード 2 は呼び方の誤りなので、引数を直して呼び直す。スキルから出たときはスキルの文の誤りなので、その回の机の段を止める。
 
 ## 6. 困ったとき
 
@@ -374,7 +443,7 @@ status: C:\Users\me\.areka-impl-watch\status.md
 
 ### 生きているのに外された
 
-待ちが終了コード 3（`gone: …`）で終わり、`status.md` の最近の出来事に、その識別の `reclaimed`（`watch absent`）が載っている。見張りを立てる前に申し込んだ、見張りが終了コード 1 で終わってから立て直すまでに間があった、のどちらかがほとんどである。見張りが停止要請で終わるのと同時に再開が入り、その一瞬に別の呼び出しまで重なったときにも、ごくまれに起きる。どの場合も、`watch` を立ててから申し込み直せば元に戻る。
+待ちが終了コード 3（`gone: …`）で終わり、`status.md` の最近の出来事に、その識別の `reclaimed`（`watch absent`）が載っている。見張りを立てる前に申し込んだ、見張りが終了コード 1 で終わってから立て直すまでに間があった、のどちらかがほとんどである。どの場合も、`watch` を立ててから申し込み直せば元に戻る。
 
 ### ファイルを開いたままのアプリが居る
 
