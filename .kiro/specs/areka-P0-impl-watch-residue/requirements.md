@@ -41,7 +41,7 @@
 - **Adjacent expectations**:
   - `areka-P0-impl-watch-skills` は、端末へ出す文と `--help` を読む。この spec はそれらを変えないので、あちらとの触るファイルの重なりは無い。
   - `areka-P0-actor-thread-log-capture`（記録の捕捉の道具）は、(i) で使えるかを見るだけで触らない。ワークスペースの「共有の捕捉の仕組みの迂回」の見張りの例外表も増やさない。
-  - 手順書 `doc/impl-watch.md` の今の記述（壊れたファイルの退避が「ログにも残る」・裁定 4 の窓の扱い）は、この spec の後も正しいままである。
+  - 手順書 `doc/impl-watch.md` の今の記述のうち、壊れたファイルの退避が「ログにも残る」はこの spec の後も正しいままである。裁定 4 の窓を戻しの理由の 1 つに挙げる一文だけは、Requirement 6 で窓を閉じると古くなる（害は無い）。その削除は `areka-P0-impl-watch-skills` へ申し送る。
 
 ## Requirements
 
@@ -90,13 +90,17 @@
 4. The areka-impl-watch shall 1 と 2 を常時テストで判定する。
 5. The areka-impl-watch-residue spec shall 4 のテストが直す前の実物で赤になることを確かめ、その結果をこの spec の文書に記録する。
 
-### Requirement 6: 裁定 4 の残りの窓の扱い
-**Objective:** As a このクレートへ手を入れる開発者, I want 裁定 4 の残りの窓を閉じない理由と、起きたときの戻し方が 1 か所に書かれている, so that 同じ窓を読んで見つけ直し、調べ直すことが無い
+### Requirement 6: 裁定 4 の残りの窓を閉じる
+**Objective:** As a 見張りを立てて待つ実装セッション, I want 見張りが終わる一瞬に別の呼び出しが重なっても、自分が回収されない, so that 知っていて開けてある窓のために、申し込み直す手間が起きない
+
+裁定 4 の残りの窓: 見張りが自分の待ちの記録を消す書きを済ませてから、居る印を解くまでの間に、他の呼び出しの生死の確認が入ると、見張り待ちの印が消え、後の呼び出しでその参加者が回収されうる（読んで導いたもの・実測なし）。
 
 #### Acceptance Criteria
-1. The areka-impl-watch shall 回収の決まり（見張り待ちの印の付け外しを含む）を変えず、裁定 4 の残りの窓（見張りが自分の待ちの記録を消す書きを済ませてから、居る印を解くまでの間に、他の呼び出しの生死の確認が入ると、見張り待ちの印が消え、後の呼び出しでその参加者が回収されうる）を閉じない。
-2. The areka-impl-watch-residue spec shall 設計書の末尾に、窓の中身・起きたときの結果（参加者が回収され、待ちが「消えた」の終了コードで終わる）・戻し方（`watch` を立てて申し込み直す）・閉じない理由（閉じるには判断の核の回収の決まりを変える必要があり、この spec の範囲の外）・実測が無く読んで導いたものであることを、1 行で残す。
-3. The areka-impl-watch-residue spec shall 手順書 `doc/impl-watch.md` と完了した spec の設計書の今の記述を書き替えない（どちらもすでにこの窓と戻し方を記している）。
+1. The areka-impl-watch shall 見張りが自分の待ちの記録を消してから居る印を解くまでの間を、他の呼び出しの生死の確認から見えないようにする（他の呼び出しが「待ちの記録は消えたのに居る印は握られている」状態を見ることが無い）。
+2. The areka-impl-watch shall 1 を、判断の核の回収の決まり（見張り待ちの印の付け外しを含む）を変えずに行う。
+3. If 見張りの最後の記録の抹消が失敗した, then the areka-impl-watch shall 見張りの答えと終了コードを変えず、残った記録を後の回収に任せる（今の「失敗にしない」例外のまま）。
+4. The areka-impl-watch shall 1 を常時テストで判定する。常時テストで判定できない部分があれば、その理由をこの spec の設計書の末尾に 1 行で残す。
+5. The areka-impl-watch-residue spec shall 手順書 `doc/impl-watch.md` の、この窓を戻しの理由の 1 つに挙げる記述（「見張りが停止要請で終わるのと同時に再開が入り…ごくまれに起きる」）が古くなることを、この spec の文書に記録し、手順書を受け持つ `areka-P0-impl-watch-skills` へ申し送る（この spec では手順書を書き替えない）。
 
 ### Requirement 7: 「失敗にしない」例外を要件の字に合わせる
 **Objective:** As a 要件と実物を突き合わせる開発者, I want 失敗を終了コードに映さない例外が、実物と同じだけ要件に並んでいる, so that 要件の字（例外は読み物だけ）と実物の振る舞いが食い違わない
@@ -110,18 +114,19 @@
 2. The areka-impl-watch shall 1 の 4 つの振る舞いを今のまま保つ（実物を元の要件の字へ寄せない）。
 3. The areka-impl-watch shall 状態ファイルの書き出しの失敗を、これまでどおり失敗（終了コード非 0・元のファイルは無傷）にする。
 4. The areka-impl-watch-residue spec shall この要件をもって、完了した spec の要件 10.2 の字を引き継ぐ（完了した spec の要件の文書は書き替えない）。
+5. The areka-impl-watch shall 1 の 4 つの外に、ログを残さずに値を代えて先へ進む道を持たない（今ある 2 か所＝列挙の綴りが作れないときの `?` と、時計が 1970 年より前のときの 0 を含む）。
 
 ### Requirement 8: 実機テストだけが判定している振る舞いの扱い
 **Objective:** As a このクレートへ手を入れる開発者, I want 実機テストだけが判定している振る舞いを、常時テストで拾えるものは拾い、拾えないものは理由が残っている, so that 全体テストの緑だけで壊れたことに気付けない箇所が、知られないまま残らない
 
 #### Acceptance Criteria
-1. The areka-impl-watch shall 次の 3 つのそれぞれについて、常時テストで判定するか、常時テストで判定できない理由をこの spec の設計書の末尾に 1 行で残すかのどちらかにする:
+1. The areka-impl-watch shall 待ちの読み直しの間の 1 秒の眠りが頼まれることを、常時テストで判定する（眠りに来たら赤にする今の安全網は、テストの側の支えで保つ）。
+2. The areka-impl-watch-residue spec shall 次の 2 つは常時テストへ移さず、移さない理由（ログの行を常時テストで捕まえる手が、依存の追加・迂回の見張りの例外表・プロセスに 1 つの受け手の 3 つとも塞がっていること）をこの spec の設計書の末尾に 1 行ずつ残す:
    - 読み物が書けなかったときのログの警告の行（`[store] status.md not written; the result stands`）。
-   - 待ちの読み直しの間の本物の 1 秒の眠り。
    - ログの実ファイルに載る行の項目（`command=`・`event=`）。
-2. The areka-impl-watch shall 1 のために依存を足さない（開発用の依存を含む・`Cargo.toml` と `Cargo.lock` を変えない）。
-3. The areka-impl-watch shall 1 のために、ワークスペースの「共有の捕捉の仕組みの迂回」の見張りの例外表を増やさない。
-4. The areka-impl-watch shall 今の実機テストを、明示したときだけ走るまま残す。
+3. The areka-impl-watch shall 1 と 2 のために依存を足さない（開発用の依存を含む・`Cargo.toml` と `Cargo.lock` を変えない）。
+4. The areka-impl-watch shall 1 と 2 のために、ワークスペースの「共有の捕捉の仕組みの迂回」の見張りの例外表を増やさない。
+5. The areka-impl-watch shall 今の実機テストを、明示したときだけ走るまま残す。
 
 ### Requirement 9: テストの穴を埋める
 **Objective:** As a このクレートへ手を入れる開発者, I want 今のテストが拾えない変異が分かっている箇所に、赤になることを確かめたテストが入っている, so that その箇所を誤って壊したときに全体テストが赤になる
@@ -139,7 +144,7 @@
 #### Acceptance Criteria
 1. The areka-impl-watch shall (h1)〜(h8) のそれぞれについて、テストを足す（または直す）か、採らない理由をこの spec の設計書の末尾に 1 行で残すかのどちらかにする。
 2. When (h1)〜(h4)・(h6) の穴を埋めるテストを足した, the areka-impl-watch-residue spec shall そのテストが、穴の記述にある変異（記述に変異が無いものは、その流れを壊す変異。(h6) は広げた走査の先へ ASCII の外の字の文を置く変異）を当てた実物で赤になり、戻した実物で緑になることを確かめる。
-3. Where 直すのがテストの支え・赤の文・見本だけである（(h5)・(h7)・(h8)）, the areka-impl-watch-residue spec shall 変異の確かめを求めず、直した後に今のテストが緑のままであることだけを確かめる。
+3. Where 直すのがテストの支え・赤の文・見本だけである（(h5)・(h7)・(h8)）, the areka-impl-watch-residue spec shall 変異の確かめを求めず、直した後に今のテストが緑のままであることだけを確かめる。(h5) は実機テストの支えの直しなので、実機テストを短い形で 1 回走らせて緑を確かめる（組み立てが通るだけでは足りない）。
 4. When 変異を当てて戻す, the areka-impl-watch-residue spec shall 元のファイルの控えをワークツリーの `target\` の下に取り、素のコピーで戻し、戻した後の中身が控えと同じ（sha256 が一致する）ことを確かめる（`git checkout` で戻さない）。
 5. The areka-impl-watch-residue spec shall 変異を当てて確かめた結果（当てた変異・赤になったテスト）を、この spec の文書に記録する。
 
@@ -149,7 +154,7 @@
 #### Acceptance Criteria
 1. The areka-impl-watch shall 端末へ出す文の形・終了コードの対応・`--help` の文を変えない。
 2. The areka-impl-watch shall 状態ファイルの形式の版を変えず、新しいコマンドを足さない。
-3. The areka-impl-watch shall 判断の核の規則（番の決め方・回収・停止要請・再開）を変えない（Requirement 5 の後始末も、規則を足さずに行う）。
+3. The areka-impl-watch shall 判断の核の規則（番の決め方・回収・停止要請・再開）を変えない（Requirement 5 の後始末と Requirement 6 の窓の閉じ方も、規則を足さずに行う）。
 4. The areka-impl-watch shall 端末へ出す文を ASCII だけにし、判断の核が `std::fs`・時計・`tracing` を綴らないことを、今の構造テストが緑のまま保つ。
 5. The areka-impl-watch shall 本番ファイル・テストファイルのどれも 1,000 行以下に保ち、新しいテストは本番ファイルの中に書かず兄弟のファイルへ置く。
 6. When 実行ファイルを子プロセスに立てるテスト、または手で走らせて確かめる, the areka-impl-watch shall 置き場所（`AREKA_IMPL_WATCH_HOME`）をワークツリーの `target\` の下の Windows 形の絶対パスで必ず上書きし、開発者の機械に設定された本物の置き場所に触れない。
