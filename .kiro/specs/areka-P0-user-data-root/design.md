@@ -174,7 +174,7 @@ crates/areka/src/emo2_boot/
 - `crates/areka/src/boot_config.rs` — `default_app_profile_dir` の中身を共有の `app_profile_dir` に替える。`resolve_boot_from` に写しの口 `prepare_ghost: fn(&BasewareRoots, &Path) -> PathBuf` を足し、argv でない経路のゴーストを写しへ替える。`resolve_boot` は `user_root::writable_ghost` を渡す。
 - `crates/areka/src/boot_config_roots_tests.rs` — `resolve_boot_from` の呼び出しへ写しの口（素通し）を足し、「argv では写しの口を呼ばない」「argv でなければ写した先のフォルダでバルーンと構成入力を決める」のテストを足す。
 - `crates/areka/src/emo2_boot/ghost_switch.rs` — 受理の直後に `switch_copy::start` を呼んで予約に持たせ、`switch_to` の先頭で写し待ちなら段を「写し待ち」にして戻る（数行・本体は `switch_copy.rs`）。`switch_to_default`（既定への戻し・非常口）は `boot_into` の前に同期の `writable_copy` を通す。
-- `crates/areka/src/emo2_boot/mod.rs` — `switch_copy` の宣言だけ。写し終わりは、今の取り出しの系 `drain_change_requests` の先頭で `switch_copy::poll(world)` を呼んで受け取る（系は増やさない＝「入力の段の系はちょうど 1 つ」のテストを保つ）。
+- `crates/areka/src/emo2_boot/mod.rs` — `switch_copy` の宣言だけ。写し終わりは、今の取り出しの系 `drain_change_requests`（`ghost_switch.rs` の中）の先頭で `switch_copy::poll(world)` を呼んで受け取る（系は増やさない＝「入力の段の系はちょうど 1 つ」のテストを保つ）。
 - `crates/areka/src/install/destination.rs` — `CatalogDestinations::answer` が、見えている物が実行ファイルの隣の根に在るとき `writable_copy` を通してから根を答える（インストールは背景のスレッド）。
 - `crates/areka/src/update/desk.rs`・`update/worker.rs` — `resolve` は値の関数のまま。バルーンの対象の写しは更新の作業スレッドで、取り込みの前に `writable_copy` を通す。
 - `crates/areka/src/menu/roots_frame.rs` — 「置き場を外す ▸」の子のうち書ける根（印の付いた項目）を選べない形にする（要件 3.3）。「置き場を先頭へ ▸」の供給関数 `front_item` を足す（要件 3.7・3.8・最後のタスク）。
