@@ -9,6 +9,10 @@
 //! 前の押下の口は何もしない・後ならその場所の選択肢の問いが偽でほかの場所は真・全部済みで偽・
 //! アンカーは押せる範囲に残る・強調が外れる・当たり行の写しから選択肢の行がその場で消える。
 //! 提示で写しを作り直すときの外し方は実 GPU の檻（タスク 4.7）が固定する。
+//!
+//! タスク 4.7 の部分は実 GPU で、普通のバルーンと箱の場所の両方について、済んだ行の座標の押下が
+//! 当たらないこと・WARN 0 行・済んだ行の強調が読み戻しに出ないこと・済む前と後で強調なしの読み戻しが
+//! 同じことを固定する（押下のハンドラからの通しは `areka` の `balloon_choice_settle_tests.rs`）。
 
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
@@ -343,4 +347,169 @@ fn closing_the_choice_wait_makes_the_press_a_no_op_again() {
     rt.settle_choices_at(&balloon("0"));
     assert!(rt.choice_active(&ActorKey::from("0")));
     assert_eq!(row_kinds(&rt, "0").len(), 3);
+}
+
+// ══ タスク 4.7: 済んだ行の振る舞い（実 GPU・普通のバルーンと箱） ══
+
+use bevy_ecs::prelude::World;
+use log_capture_kit::capture;
+
+use super::box_sync_tests::{SHELL_IMAGE, emote, layout, name, resolver, select};
+use super::test_support::{choice_cue, com_world};
+use super::{ResolvedBalloonText, TextSlotBinding, present_frame};
+use crate::place::TextPlace;
+
+/// 全部の文字が見えている時刻。
+const LATE: f64 = 10.0;
+
+/// 押下の口が読む値（押せる範囲があるか・当たり行）で、その座標に当たる行があるか。
+/// 入力の層の `click_selection`／`judge_box_click` と同じ判定（押せる範囲が無ければ当たらない・
+/// 矩形は左上を含み右下を含まない）。
+fn press_hits(rt: &TextLayerRuntime, place: &PlaceKey, x: f32, y: f32) -> bool {
+    rt.hit_active(&place.actor)
+        && rt.choice_hit_rows_at(place).iter().any(|row| {
+            let r = row.rect;
+            x >= r.left && x < r.right && y >= r.top && y < r.bottom
+        })
+}
+
+/// 済んだ行の通しの檻（要件 1.10〜1.12）。`place` に選択肢 2 つを載せて装着済みの `rt` を受ける。
+///
+/// 提示→当たり行あり→選択待ちの始まり→強調したまま場所を済み→その座標の押下は当たらない・
+/// 済み・提示で WARN 0 行／済む前と後で強調なしの読み戻しが同じ／済んだ行に強調を入れても強調なしと同じ。
+/// 済む前の強調が読み戻しを変えることを先に確かめ、読み戻しの比べが効くことを担保する。
+fn settled_row_is_unpressable_and_unlit(
+    rt: &mut TextLayerRuntime,
+    world: &mut World,
+    place: &PlaceKey,
+) {
+    let read = |rt: &TextLayerRuntime| {
+        rt.surface_at(place)
+            .expect("供給面")
+            .read_back()
+            .expect("read_back")
+    };
+    present_frame(rt, world, LATE).expect("提示");
+    let rows = rt.choice_hit_rows_at(place).to_vec();
+    let first = rows
+        .iter()
+        .find(|r| r.kind == SpanKind::Choice)
+        .expect("前提: 選択肢の当たり行がある")
+        .clone();
+    let (x, y) = (
+        (first.rect.left + first.rect.right) / 2.0,
+        (first.rect.top + first.rect.bottom) / 2.0,
+    );
+    assert!(
+        press_hits(rt, place, x, y),
+        "前提: 済む前はその座標の押下が当たる"
+    );
+    let plain = read(rt);
+    rt.inject_choice_hover_at(place, Some(first.ordinal));
+    present_frame(rt, world, LATE).expect("強調の提示");
+    assert_ne!(
+        read(rt),
+        plain,
+        "前提: 済む前の強調は読み戻しを変える（比べが効く）"
+    );
+
+    // 押下を送れた後の口（選択待ちの始まりの後・強調したまま）。済みと次の提示の記録を檻に入れる。
+    rt.note_choice_wait_began();
+    let ((), events) = capture(|| {
+        rt.settle_choices_at(place);
+        present_frame(rt, world, LATE).expect("済んだ後の提示");
+        let _ = press_hits(rt, place, x, y);
+        tracing::warn!("対照の警告");
+    });
+    let warns: Vec<_> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .collect();
+    assert_eq!(
+        warns.len(),
+        1,
+        "数えられるのは対照の 1 行だけ（済み・提示・押下の判定で WARN 0 行）: {warns:?}"
+    );
+    assert!(
+        !press_hits(rt, place, x, y),
+        "済んだ行の座標の押下は選択にならない（要件 1.11）"
+    );
+    assert_eq!(
+        read(rt),
+        plain,
+        "済む前と後で強調なしの読み戻しが同じ（強調は済みで外れる・要件 1.10・1.12）"
+    );
+
+    rt.inject_choice_hover_at(place, Some(first.ordinal));
+    present_frame(rt, world, LATE).expect("済んだ行へ強調を入れた提示");
+    assert_eq!(
+        read(rt),
+        plain,
+        "済んだ行に強調を入れても読み戻しは強調なしと同じ（要件 1.10）"
+    );
+}
+
+/// 普通のバルーンの場所（要件 1.10〜1.12）。
+#[test]
+fn settled_balloon_row_is_unpressable_and_unlit_on_the_gpu() {
+    let (mut world, window, slot) = com_world();
+    let actor = ActorKey::from("0");
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &[]));
+    rt.apply_cue(&choice_cue("0", 0.2, "OnNo", "いいえ", &[]));
+    let image = (120u32, 60u32);
+    rt.register_actor(
+        actor.clone(),
+        TextSlotBinding::new(slot, window, 1.0, image, image),
+        ResolvedBalloonText::resolve(&super::test_support::geo_model(), image),
+    );
+
+    settled_row_is_unpressable_and_unlit(&mut rt, &mut world, &balloon("0"));
+    assert!(!rt.choice_active(&actor), "場所の選択肢が全部済んだ");
+}
+
+/// 箱の場所（要件 1.13）。サーフェス 0 の箱 b に選択肢を出す。
+#[test]
+fn settled_box_row_is_unpressable_and_unlit_on_the_gpu() {
+    let (mut world, window, slot) = com_world();
+    let actor = ActorKey::from("0");
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    let layout = layout();
+    rt.set_box_layout(&mut world, layout.clone(), resolver(), vec![]);
+    rt.apply_cue(&emote("0", "0"));
+    rt.apply_cue(&select("0", "b"));
+    rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &[]));
+    rt.apply_cue(&choice_cue("0", 0.2, "OnNo", "いいえ", &[]));
+    let shell = TextSlotBinding::new(slot, window, 1.0, SHELL_IMAGE, SHELL_IMAGE);
+    rt.sync_box_bindings(&mut world, &[(actor.clone(), Some((shell, 0)))]);
+
+    let box_b = PlaceKey {
+        actor: actor.clone(),
+        place: TextPlace::Box(name(&layout, 0, "b")),
+    };
+    settled_row_is_unpressable_and_unlit(&mut rt, &mut world, &box_b);
+    assert!(!rt.choice_active(&actor), "箱の選択肢が全部済んだ");
+}
+
+/// 同じスコープの別の箱に済んでいない選択肢が残るあいだは、選択肢の問いは真のまま
+/// （バルーンの時間切れを止めたまま・要件 1.13・GPU なし）。
+#[test]
+fn a_live_choice_in_another_box_of_the_scope_keeps_choice_active() {
+    let mut f = super::box_sync_tests::fixture();
+    let actor = ActorKey::from("0");
+    f.show("0");
+    f.rt.apply_cue(&select("0", "a"));
+    f.rt.apply_cue(&choice("0", "x"));
+    f.rt.apply_cue(&select("0", "b"));
+    f.rt.apply_cue(&choice("0", "y"));
+    f.rt.note_choice_wait_began();
+    let (box_a, box_b) = (f.key(0, "a"), f.key(0, "b"));
+
+    f.rt.settle_choices_at(&box_b);
+    assert!(
+        f.rt.choice_active(&actor),
+        "箱 a の選択肢は済んでいない＝問いは真のまま"
+    );
+    f.rt.settle_choices_at(&box_a);
+    assert!(!f.rt.choice_active(&actor), "両方の箱が済むと偽");
 }
