@@ -92,7 +92,7 @@
   - 完了の状態: `perf-loop.common.ps1` に規則 A が当たらず、機械が読む行が 1.1 の一覧と同じ字面
   - _Boundary: PerfLoopCommon_
   - _Requirements: 4.1, 4.2, 4.3, 4.4_
-- [ ] 5.2 (P) 入口の道具の文面を ASCII の英文にする
+- [x] 5.2 (P) 入口の道具の文面を ASCII の英文にする
   - R0・R1 のとおり。4.4 の突き合わせの字句は触らない
   - 完了の状態: `perf-loop.ps1` に規則 A が当たらず、機械が読む行が 1.1 の一覧と同じ字面
   - _Boundary: PerfLoop_
