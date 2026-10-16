@@ -1,4 +1,4 @@
-//! balloon の子: クリック（`on_balloon_pointer_pressed`・選択肢とアンカーの確定の発行と、末尾で利用者の中断へ渡す）。
+//! balloon の子: クリック（`on_balloon_pointer_pressed`・選択肢とアンカーの確定の発行・送れた選択肢の場所の選択肢を済みにすることと、末尾で利用者の中断へ渡す）。
 //! 足す予定の spec: talk-fast-forward・balloon-markers（矢印のクリック）。
 
 use std::rc::Rc;

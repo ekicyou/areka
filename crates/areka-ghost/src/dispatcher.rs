@@ -2,7 +2,9 @@
 //!
 //! 再生開始要求を受けて per-talk の再生アクターを起動し、同時に1本だけ再生する
 //! 単一 slot を維持する。完了通知の運行系への中継・stale 通知の棄却・Close funnel・
-//! Tick 中継を担う（design.md「ghost::dispatcher」）。
+//! Tick 中継を担う（design.md「ghost::dispatcher」）。UI の押下の選択（選択肢・アンカー）も
+//! 判断せずに kanade へ取り次ぐ——選択待ちの始まりの知らせと同じ inbox に並べ、押下の選択が
+//! それを追い越さないようにする（areka-P0-balloon-text-bugs 件 1）。
 //!
 //! # self-sender ハンドオフ（design.md 参照）
 //!

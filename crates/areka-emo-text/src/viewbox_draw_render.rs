@@ -1,4 +1,4 @@
-//! viewbox_draw の子: 装飾つきの描画（`render_styled`・行レイアウトと書式の確保・強調の矩形と行の描画の補助）。
+//! viewbox_draw の子: 装飾つきの描画（`render_styled`・行レイアウトと書式の確保・強調の矩形と行の描画の補助・下線を集めて塗る）。
 //! 足す予定の spec: text-typesetting（縦中横の塊）・text-reveal-fade・choice-marker-styling・anchor-style-canon（強調の矩形の見た目）。
 
 use std::rc::Rc;
