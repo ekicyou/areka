@@ -10,6 +10,7 @@
 use std::rc::Rc;
 
 use areka_ghost::Identity;
+use areka_ghost::catalog_roots::same_folder_name;
 use bevy_ecs::world::World;
 
 use super::{Frame, ItemBody, MenuContext, MenuItem, captions};
@@ -48,7 +49,7 @@ fn shell_frame_item(world: &World, _ctx: &MenuContext) -> MenuItem {
 }
 
 /// シェル・バルーンの枠の項目を組む。子のラベルは `name`（無ければフォルダ名）で目録の並びのまま、
-/// `current` のフォルダに印を付ける。子が 0 なら選べない見出し。子を選ぶとフォルダ名で指した
+/// `current` と同じフォルダ名（`same_folder_name`）に印を付ける。子が 0 なら選べない見出し。子を選ぶとフォルダ名で指した
 /// 出どころ＝メニューの要求を入口へ出す。
 pub(super) fn skin_frame(
     frame: Frame,
@@ -64,7 +65,7 @@ pub(super) fn skin_frame(
                 label: identity.name.unwrap_or_else(|| folder.clone()),
                 caption_resource: None,
                 enabled: true,
-                checked: Some(current == Some(folder.as_str())),
+                checked: Some(current.is_some_and(|c| same_folder_name(c, &folder))),
                 body: ItemBody::Action(Rc::new(move |world: &mut World, _: &MenuContext| {
                     let verdict = request_skin_switch(
                         world,

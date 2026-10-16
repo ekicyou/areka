@@ -289,3 +289,34 @@ fn rewiring_gives_a_fresh_registration_with_the_ghost_frame() {
         "{events:?}"
     );
 }
+
+// ---------------------------------------------------------------- 根の和（areka-P0-baseware-root-list 4.3）
+
+/// 2 つの根の和: 両方の根のゴーストが隠れ（先の根と同じフォルダ名の後ろの根の 1 体）を除いて
+/// フォルダ名のバイト順に並び、今のゴースト（後ろの根の `a`）と同じフォルダ名として先の根の `A` に
+/// 印が付く（要件 2.8・3.5・8.7）。
+#[test]
+fn union_of_two_roots_lists_both_and_marks_same_folder_name() {
+    let first = TempPath::new("ghost-frame-union-first");
+    let second = TempPath::new("ghost-frame-union-second");
+    put_ghost(&first, "C", "charset,UTF-8\n");
+    put_ghost(&first, "A", "charset,UTF-8\n");
+    put_ghost(&second, "a", "charset,UTF-8\n");
+    put_ghost(&second, "B", "charset,UTF-8\n");
+    let second_root = BasewareRoot::new(second.path().to_path_buf());
+    let mut ctx = boot_context(&second_root, "a");
+    ctx.roots = areka_ghost::BasewareRoots::new(vec![
+        BasewareRoot::new(first.path().to_path_buf()),
+        second_root,
+    ]);
+    let (world, _rx) = wired_world(Some(ctx));
+
+    assert_eq!(
+        ghost_item(&world).map(|i| shape(&i).3),
+        Some(vec![
+            ("A".to_owned(), true, Some(true)),
+            ("B".to_owned(), true, Some(false)),
+            ("C".to_owned(), true, Some(false)),
+        ])
+    );
+}

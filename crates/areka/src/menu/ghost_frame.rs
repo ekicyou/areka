@@ -1,12 +1,13 @@
 //! 右クリックメニューの「ゴースト」枠（areka-P0-ghost-shell-balloon-switch・design「GhostFrame」）。
 //!
-//! メニューを出すたびに起動の文脈の根で目録を読み、目録の並びのままゴーストを子項目に並べて
-//! 今のゴーストに印を付ける（要件 1.11）。子を選ぶとフォルダ名で指す「手動」の切替要求を
+//! メニューを出すたびに起動の文脈の根の並びの和（隠れを除きフォルダ名のバイト順）を読み、その並びのままゴーストを子項目に並べて
+//! 今のゴーストと同じフォルダ名（`same_folder_name`）に印を付ける（要件 1.11・8.7）。子を選ぶとフォルダ名で指す「手動」の切替要求を
 //! 切替の唯一の入口（[`request_ghost_switch`]）へ出す（要件 1.4）。登記はゴーストを起こすたびに
 //! `ghost_session::boot_wired` が `wire_menu` の直後でやり直す（要件 1.12）。
 
 use std::rc::Rc;
 
+use areka_ghost::catalog_roots::same_folder_name;
 use areka_kanade::ChangeOrigin;
 use bevy_ecs::world::World;
 
@@ -45,7 +46,7 @@ fn ghost_frame_item(world: &World, _ctx: &MenuContext) -> MenuItem {
                 label: entry.identity.name.unwrap_or_else(|| folder.clone()),
                 caption_resource: None,
                 enabled: true,
-                checked: Some(current == Some(folder.as_str())),
+                checked: Some(current.is_some_and(|c| same_folder_name(c, &folder))),
                 body: ItemBody::Action(Rc::new(move |world: &mut World, _: &MenuContext| {
                     let verdict = request_ghost_switch(
                         world,
