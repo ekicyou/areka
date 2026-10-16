@@ -24,15 +24,23 @@
           RT_GROUP_ICON 1（app）・2（tray）（記憶の印 0x1030）。言語 0・4 バイト境まで 0 で詰める。
           RT_MANIFEST は書かない。
 
-  終了コード: 0 3 つとも書けた／1 FAIL の行を出した
+    -Seed（原画を変えたときだけ・組みはしない）
+        原画 app.png・tray.png を同じ決まり（1024x1024・8 ビット RGBA）で検査し、無い <名>-<寸法>.png だけを
+        GDI+ で縮めて書く（32 ビット ARGB の画板・高品質の双三次・縁の折り返し）。在るファイルは上書きしない。
+          OK seeded <file>
+          FAIL input <file>: ...                  原画の欠けや違い。何も書かない
+          FAIL write <file>: <reason>
+
+  終了コード: 0 3 つとも書けた（-Seed は FAIL なし）／1 FAIL の行を出した
 #>
-param()
+param([switch]$Seed)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 # 較正値（資源の番号の表・完了の後は変えない）
 $SIZES = @(16, 20, 24, 32, 40, 48, 64, 256)
+$MASTER_SIZE = 1024
 $GROUPS = @(
     @{ Name = 'app';  GroupId = 1; FirstIconId = 1 },
     @{ Name = 'tray'; GroupId = 2; FirstIconId = 9 }
@@ -51,29 +59,80 @@ function Get-BE32([byte[]]$b, [int]$at) {
     ([uint32]$b[$at] -shl 24) -bor ([uint32]$b[$at + 1] -shl 16) -bor ([uint32]$b[$at + 2] -shl 8) -bor [uint32]$b[$at + 3]
 }
 
+# 1 枚を検査する（在る・PNG の印と IHDR・n x n・8 ビット RGBA）。戻り値: FAIL の行（文字列）か、通ればバイト
+function Test-PngFile([string]$Dir, [string]$File, [int]$N) {
+    $path = Join-Path $Dir $File
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return "FAIL input ${File}: missing" }
+    $b = [System.IO.File]::ReadAllBytes($path)
+    $sig = [byte[]](0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+    $isPng = $b.Length -ge 33 -and
+        [System.Linq.Enumerable]::SequenceEqual([byte[]]$b[0..7], $sig) -and
+        [System.Text.Encoding]::ASCII.GetString($b, 12, 4) -eq 'IHDR'
+    if (-not $isPng) { return "FAIL input ${File}: not a PNG" }
+    $w = Get-BE32 $b 16
+    $h = Get-BE32 $b 20
+    if ($w -ne $N -or $h -ne $N) { return "FAIL input ${File}: size ${w}x${h}, want ${N}x${N}" }
+    if ($b[24] -ne 8 -or $b[25] -ne 6) { return "FAIL input ${File}: not 8-bit RGBA" }
+    , $b
+}
+
 # 16 枚を検査する。戻り値: @{ Fails = 行の配列; Png = @{ '<名>-<寸法>.png' = bytes } }
 function Test-IconInput([string]$Dir) {
     $fails = [System.Collections.Generic.List[string]]::new()
     $png = @{}
-    $sig = [byte[]](0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
     foreach ($g in $GROUPS) {
         foreach ($n in $SIZES) {
             $file = "$($g.Name)-$n.png"
-            $path = Join-Path $Dir $file
-            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { $fails.Add("FAIL input ${file}: missing"); continue }
-            $b = [System.IO.File]::ReadAllBytes($path)
-            $isPng = $b.Length -ge 33 -and
-                [System.Linq.Enumerable]::SequenceEqual([byte[]]$b[0..7], $sig) -and
-                [System.Text.Encoding]::ASCII.GetString($b, 12, 4) -eq 'IHDR'
-            if (-not $isPng) { $fails.Add("FAIL input ${file}: not a PNG"); continue }
-            $w = Get-BE32 $b 16
-            $h = Get-BE32 $b 20
-            if ($w -ne $n -or $h -ne $n) { $fails.Add("FAIL input ${file}: size ${w}x${h}, want ${n}x${n}"); continue }
-            if ($b[24] -ne 8 -or $b[25] -ne 6) { $fails.Add("FAIL input ${file}: not 8-bit RGBA"); continue }
-            $png[$file] = $b
+            $r = Test-PngFile $Dir $file $n
+            if ($r -is [string]) { $fails.Add($r) } else { $png[$file] = $r }
         }
     }
     @{ Fails = $fails; Png = $png }
+}
+
+# 種まき: 原画 2 枚を検査し、無い <名>-<寸法>.png だけを縮めて書く。戻り値: 端末へ出す行
+function Invoke-Seed([string]$Dir) {
+    $masters = @{}
+    $fails = @(foreach ($g in $GROUPS) {
+            $r = Test-PngFile $Dir "$($g.Name).png" $MASTER_SIZE
+            if ($r -is [string]) { $r } else { $masters[$g.Name] = $r }
+        })
+    if ($fails.Count) { return , $fails }
+
+    Add-Type -AssemblyName System.Drawing
+    $lines = [System.Collections.Generic.List[string]]::new()
+    foreach ($g in $GROUPS) {
+        $src = [System.Drawing.Bitmap]::new([System.IO.MemoryStream]::new($masters[$g.Name]))
+        try {
+            foreach ($n in $SIZES) {
+                $file = "$($g.Name)-$n.png"
+                $path = Join-Path $Dir $file
+                if (Test-Path -LiteralPath $path) { continue }
+                $tmp = "$path.tmp"
+                $dst = [System.Drawing.Bitmap]::new($n, $n, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+                $gr = [System.Drawing.Graphics]::FromImage($dst)
+                $attr = [System.Drawing.Imaging.ImageAttributes]::new()
+                try {
+                    $gr.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceCopy
+                    $gr.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                    $gr.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+                    $gr.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+                    $attr.SetWrapMode([System.Drawing.Drawing2D.WrapMode]::TileFlipXY)
+                    $gr.DrawImage($src, [System.Drawing.Rectangle]::new(0, 0, $n, $n), 0, 0, $src.Width, $src.Height, [System.Drawing.GraphicsUnit]::Pixel, $attr)
+                    $dst.Save($tmp, [System.Drawing.Imaging.ImageFormat]::Png)
+                    # 上書きしない Move: 間に誰かが置いたファイルも守る
+                    [System.IO.File]::Move($tmp, $path, $false)
+                    $lines.Add("OK seeded $file")
+                } catch {
+                    Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+                    $lines.Add("FAIL write ${file}: $(ConvertTo-Ascii $_.Exception.GetBaseException().Message)")
+                } finally {
+                    $attr.Dispose(); $gr.Dispose(); $dst.Dispose()
+                }
+            }
+        } finally { $src.Dispose() }
+    }
+    , @($lines)
 }
 
 # 検査を通った 16 枚から 3 つのファイルのバイトを組む。戻り値: 順序つきの @{ ファイル名 = bytes }
@@ -138,25 +197,37 @@ function New-IconOutputs([hashtable]$Png) {
     $out
 }
 
-# 3 つを一時ファイルへ書けてから置き換える。失敗は一時ファイルを消して FAIL の行を返す。
+# 3 つを一時ファイルへ書けてから置き換える。今のファイルは .bak へ退かし、途中で失敗したら
+# 置き換え済みのものを .bak から戻す（3 つとも前のまま）。一時ファイルと .bak は最後に消す。
 function Write-IconOutputs([string]$Dir, $Outputs) {
-    $temps = [ordered]@{}
     $current = $null
+    $swapped = [System.Collections.Generic.List[string]]::new()
+    $leftovers = @($Outputs.Keys | ForEach-Object { $p = Join-Path $Dir $_; "$p.tmp"; "$p.bak" })
     try {
         foreach ($name in $Outputs.Keys) {
             $current = $name
-            $tmp = Join-Path $Dir "$name.tmp"
-            $temps[$name] = $tmp
-            [System.IO.File]::WriteAllBytes($tmp, $Outputs[$name])
+            [System.IO.File]::WriteAllBytes((Join-Path $Dir "$name.tmp"), $Outputs[$name])
         }
-        foreach ($name in $temps.Keys) {
+        foreach ($name in $Outputs.Keys) {
             $current = $name
-            [System.IO.File]::Move($temps[$name], (Join-Path $Dir $name), $true)
+            $dest = Join-Path $Dir $name
+            if (Test-Path -LiteralPath $dest -PathType Leaf) { [System.IO.File]::Replace("$dest.tmp", $dest, "$dest.bak") }
+            else { [System.IO.File]::Move("$dest.tmp", $dest) }
+            $swapped.Add($name)
         }
     } catch {
-        foreach ($t in $temps.Values) { if (Test-Path -LiteralPath $t -PathType Leaf) { Remove-Item -LiteralPath $t -Force -ErrorAction SilentlyContinue } }
-        return , @("FAIL write ${current}: $(ConvertTo-Ascii $_.Exception.GetBaseException().Message)")
+        $msg = ConvertTo-Ascii $_.Exception.GetBaseException().Message
+        foreach ($name in $swapped) {
+            $dest = Join-Path $Dir $name
+            try {
+                if (Test-Path -LiteralPath "$dest.bak" -PathType Leaf) { [System.IO.File]::Move("$dest.bak", $dest, $true) }
+                else { [System.IO.File]::Delete($dest) }
+            } catch { $msg += "; restore $name failed: $(ConvertTo-Ascii $_.Exception.GetBaseException().Message)" }
+        }
+        foreach ($t in $leftovers) { Remove-Item -LiteralPath $t -Force -ErrorAction SilentlyContinue }
+        return , @("FAIL write ${current}: $msg")
     }
+    foreach ($t in $leftovers) { Remove-Item -LiteralPath $t -Force -ErrorAction SilentlyContinue }
     , @($Outputs.Keys | ForEach-Object {
             if ($_ -eq $RES_FILE) { "OK wrote $_ ($($GROUPS.Count) groups, $($GROUPS.Count * $SIZES.Count) images)" }
             else { "OK wrote $_ ($($SIZES.Count) images)" }
@@ -170,7 +241,7 @@ function Invoke-Pack([string]$Dir) {
     Write-IconOutputs $Dir (New-IconOutputs $in.Png)
 }
 
-$lines = Invoke-Pack $IconDir
+$lines = if ($Seed) { Invoke-Seed $IconDir } else { Invoke-Pack $IconDir }
 $lines
 if ($lines -like 'FAIL *') { exit 1 }
 exit 0
