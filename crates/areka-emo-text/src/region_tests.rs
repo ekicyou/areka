@@ -105,10 +105,12 @@ fn missing_validrect_components_fall_back_to_image_edges() {
     assert_eq!(region.bottom(), 224.0);
 }
 
-/// fixture の descript 基層のみ（validrect 全 0）は退化矩形＝warn を記録しつつ返す
-/// （log-first・縮退継続）。2層マージ後のみ非退化になる fixture 実態の再現。
+/// fixture の descript 基層のみ（validrect 全 0）は潰れた矩形として返り、解決は警告を
+/// 1 行も出さない（spec `areka-P0-balloon-text-bugs` 件 2・要件 2.2）。解決は再追従の
+/// 判定キーを得るために毎フレーム呼ばれるため、ここで書くと記録が洪水になる——潰れの
+/// 記録は actor の登録口が状態の変わり目に 1 回だけ書く。
 #[test]
-fn base_layer_only_validrect_is_degenerate_and_warns() {
+fn base_layer_only_validrect_is_collapsed_and_resolve_does_not_warn() {
     // descript.txt 基層実測: origin 0,0・wordwrappoint.x,-34・validrect 全 0。
     let base = model(
         (Some(0), Some(0)),
@@ -120,7 +122,46 @@ fn base_layer_only_validrect_is_degenerate_and_warns() {
     });
     assert_eq!(region.left(), 0.0);
     assert_eq!(region.right(), 0.0);
-    assert!(warns >= 1, "退化矩形は warn を記録する");
+    assert!(region.is_collapsed(), "幅 0・高さ 0 は潰れ");
+    assert_eq!(warns, 0, "解決は潰れた矩形でも警告を書かない");
+}
+
+/// 潰れの判定（要件 2.1）: 幅か高さが正でなければ潰れ。幅 0・高さ 0・負の幅・負の高さ・
+/// 非数を潰れに数え、幅・高さとも正なら潰れでない。どの解決も警告を出さない（要件 2.2）。
+#[test]
+fn is_collapsed_counts_zero_negative_and_nan_extent() {
+    let resolve = |vr: (i32, i32, i32, i32)| {
+        let m = model(
+            (None, None),
+            (None, None),
+            (Some(vr.0), Some(vr.1), Some(vr.2), Some(vr.3)),
+        );
+        TextRegion::resolve(&m, FIXTURE_IMAGE_SIZE, WritingMode::HorizontalTb)
+    };
+    // (top, bottom, left, right) の順（ValidRect::new の引数順）。
+    let cases: [(&str, (i32, i32, i32, i32), bool); 5] = [
+        ("幅 0", (10, 100, 50, 50), true),
+        ("高さ 0", (60, 60, 10, 200), true),
+        ("負の幅", (10, 100, 200, 50), true),
+        ("負の高さ", (100, 10, 10, 200), true),
+        ("幅・高さとも正", (10, 100, 10, 200), false),
+    ];
+    for (label, vr, expected) in cases {
+        let (region, warns) = count_warns(|| resolve(vr));
+        assert_eq!(region.is_collapsed(), expected, "{label}");
+        assert_eq!(warns, 0, "{label}: 解決は警告を書かない");
+    }
+
+    // 非数は解決の入口（i32・u32）からは作れないので、解決済みの値を直に差し替えて問う。
+    let healthy = resolve((10, 100, 10, 200));
+    for (label, region) in [
+        ("left が非数", TextRegion { left: f32::NAN, ..healthy }),
+        ("right が非数", TextRegion { right: f32::NAN, ..healthy }),
+        ("top が非数", TextRegion { top: f32::NAN, ..healthy }),
+        ("bottom が非数", TextRegion { bottom: f32::NAN, ..healthy }),
+    ] {
+        assert!(region.is_collapsed(), "{label} は潰れに数える");
+    }
 }
 
 /// 2層マージ（balloon-parse 実機構）を通した fixture 再現:
