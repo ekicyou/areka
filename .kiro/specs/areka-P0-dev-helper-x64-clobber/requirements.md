@@ -12,7 +12,7 @@
 
 ## Introduction
 
-本仕様は、開発の手順の罠を 2 つの面から塞ぐ。1 つは全体テストのスクリプトの後始末（終わったときに `areka.exe` の隣の helper が i686 版であること）、もう 1 つは areka 自身の知らせ（隣の helper が 32bit 版でないときに、理由の分かる 1 行を残すこと）。前者で全体テストの後の罠を消し、後者で全体テスト以外の操作（開発者が自分でワークスペース全体をビルドしたときなど）で同じ状態になっても、理由がログから 1 行で分かるようにする。配布物は helper が常に i686 版なので、製品の振る舞いは変えない（区分 C＝開発の手順の罠）。
+本仕様は、開発の手順の罠を 2 つの面から塞ぐ。1 つは全体テストのスクリプトの後始末（終わったときに `areka.exe` の隣の helper が i686 版であること）、もう 1 つは areka 自身の知らせ（隣の helper が 32bit 版でないときに、理由の分かる 1 行を残すこと）。前者で全体テストの後の罠を消し、後者で全体テスト以外の操作（開発者がワークスペースの根で素の `cargo build` を打ったときなど）で同じ状態になっても、理由がログから 1 行で分かるようにする。配布物は helper が常に i686 版なので、製品の振る舞いは変えない（区分 C＝開発の手順の罠）。
 
 要件生成時に引き直した事実（設計はこれを再検証する）:
 
@@ -20,7 +20,7 @@
 - helper の置き場は `crates/areka/src/boot_config.rs` の `default_helper_exe_path`（起動した exe の本当の場所の親＋`shiori-host32-helper.exe`）。helper を起こすのは `crates/shiori-host32-host/src/process_host.rs` の `spawn`、つなぐ手順は `crates/areka-ghost/src/shiori_wiring.rs` の `real_connect`（起こす → HELLO を待つ → LOAD の ack が `[1]` か確かめる）。本番の areka には helper の場所を外から指す口が無い（テストの側だけ `HOST32_HELPER_EXE` を読む）。
 - x64 版の helper が 32bit の DLL を読もうとすると、helper の中で LOAD が失敗し（helper の標準エラーへの観測のみ）、areka の側には「SHIORI の LOAD が成功 ack [1] を返さなかった（proxy 未確立）: [0]」の形の文だけが残る。helper の向きが原因だとは書かれない。
 - 煙テスト（`crates/areka/tests/smoke_boot_loop_exit.rs` の `ensure_i686_artifact`）は、x64 の全テストの段の中で、隣の helper が i686 版でなければ `target\i686-pc-windows-msvc\{debug,release}\` から写して置く。i686 かどうかは実行ファイルの見出しの機械の種類で見分ける（`is_i686_pe`）。
-- helper のクレートには結合テストのフォルダが無く、ほかのクレートが helper を依存に持つことも無い。どの操作の後に `target\debug\shiori-host32-helper.exe` が x64 版になるのかは確かめていない（brief の 10-10 の項の申し送り）。下の要件は「どの操作で x64 版になるか」に依らない形で書く。
+- helper のクレートには結合テストのフォルダが無く、ほかのクレートが helper を依存に持つことも無い。ギャップ分析（research.md 3 節）で静的に確かめた結果、全体テストの x64 の段は helper を `target\debug\` へ出さず、x64 版を隣へ置くのはワークスペースの根での素の `cargo build`（`default-members` が無いので全クレートが対象）である。作り直しが要らないときも出力を結び直すので、全体テストの後に一度 `cargo build` を打つと、写した i686 版が x64 版へ戻る（実測は設計の最初のタスクで行う）。下の要件は「どの操作で x64 版になるか」に依らない形で書く。
 - PR#258 で、helper の約 42 秒かかるテスト（応答が返らない SHIORI を待ち切るテスト）は i686 の段だけで走る形になった（`crates/shiori-host32-helper/src/main.rs` のそのテストの `cfg`）。helper の単体テストのうち 32bit の DLL を読むものは x64 では理由付きで飛ばされ、i686 の段でだけ走る。
 
 ## Boundary Context
