@@ -141,12 +141,12 @@ tools/
 - `tools/perf/perf-loop.common.ps1` — `perf-pwsh-child.ps1` を読み込む。`Invoke-PwshChild` は `Invoke-Child -Exe <pwsh> -Arguments (Get-PwshChildArguments ...)` だけになる。`Invoke-Child`・`Invoke-PwshChild`・`Stop-Run`・`Test-ResumeArtifact`・`Get-LoopDir` ほかの文面と投げる例外の文を ASCII に。頭書 ⒝（17〜25 行）と `Invoke-PwshChild` の注記（281〜286 行）を実際の動きに合わせる（8.2）。
 - `tools/perf/perf-loop.ps1` — 文面を ASCII に。`Test-GoalTextMatchesGoalMd` の作業用のフォルダ（272 行）を `target\perf-loop-tmp\` の下へ。313・315 行の正規表現の日本語を `` `u{…} `` で書く（4.7）。
 - `tools/perf/perf-loop.measure.ps1` — 文面を ASCII に（行の中で書き替え、行を足さない。直した後の行数は 993 以下）。
-- `tools/perf/check-quiet.ps1` — 文面を ASCII に（子を起こさない）。
+- `tools/perf/check-quiet.ps1` — 文面を ASCII に（子を起こさない）。自己較正の TOML の見本の日本語の注記を `` `u{…} `` で書く（R4）。
 - `tools/perf/invoke-cpu-sample.ps1` — 文面を ASCII に（`Write-Problem` の前置き `エラー: ` を `error: ` に）。`Invoke-NativeCommand`（202〜203 行）の受け皿と `-Probe` の作業用のフォルダ（342 行）を `target\perf-loop-tmp\` の下へ。受け皿のファイルを端末の出力の文字コードで読む。
-- `tools/perf/invoke-followup-checks.ps1` — `tools/utf8-child.ps1` を読み込む。`Get-NarSampleMap` の `& cargo @cargoArgs`（245 行）と `Invoke-Judge` の `& $Python.Exe @argv | ForEach-Object { Write-Host $_ }`（290 行）を `Invoke-Utf8Child` に替える。478 行の目印を `$LOG_MARKER_SHOW_READY` への代入に移す。`Write-Note`（`followup.txt`）を含む文面を ASCII に。
+- `tools/perf/invoke-followup-checks.ps1` — `tools/utf8-child.ps1` を読み込む。`Get-NarSampleMap` の `& cargo @cargoArgs`（245 行）と `Invoke-Judge` の `& $Python.Exe @argv | ForEach-Object { Write-Host $_ }`（290 行）を `Invoke-Utf8Child` に替える。478 行の目印を `$LOG_MARKER_SHOW_READY` への代入に移す。`Write-Note`（`followup.txt`）を含む文面を ASCII に。`Add-Type` の C# の注記（172〜173 行）を英文に（R4）。
 - `tools/perf/invoke-perf-run.ps1` — `tools/utf8-child.ps1` と `perf-pwsh-child.ps1` を読み込む。`git`（329〜334 行）を `Invoke-Utf8Child` に、`Invoke-CheckQuietOnce`（407 行）を `Invoke-Utf8Child` ＋ `Get-PwshChildArguments` に、`powercfg /getactivescheme`（316 行）を `powrprof` の API に替える。864 行の規則 B の 1 件を直す。`run-meta.txt` の節の見出しを `` `u{…} `` で書く。ほかの文面を ASCII に。
 - `tools/encoding-check.ps1` — 下の「判定」の節のとおり。頭書（2〜42 行）の規則の説明を合わせる。
-- `tools/perf/README.md` — 第 11 節に小節「端末の文字コードと子の出力」を足す（8.1）。
+- `tools/perf/README.md` — 第 11 節に小節「端末の文字コードと子の出力」を足す（8.1）。判定器（`judge-followup.py`）の出力は判定器が終わってからまとめて写ること（今は 1 行ずつ）と、静寂の確認の写しは標準出力の後に標準エラーの順になることも一言書く。
 - `.kiro/steering/tech.md` — 93 行（段 `encoding check` の「`tools/perf/` を除く」を外し、規則 C・D の広がりと perf の 932 の判定を足す）と 97 行（決まりの対象に `tools/perf/` を含めると明記）（8.3）。
 - `.claude/skills/perf-loop-iteration/SKILL.md` — 29 行の注記を「道具が写した子の中身（例: Python の判定器の日本語の報告）は、端末の文字コードと会話へ届ける仕組みの組み合わせで化けることがある」に狭める（8.4）。
 
@@ -331,6 +331,7 @@ function Get-PwshChildArguments {
 - `-Probe` の作業用のフォルダ（342 行）も `target\perf-loop-tmp\areka-cpu-probe-<guid>` へ。
 - ワークツリーの根は `Split-Path -Parent (Split-Path -Parent $PSScriptRoot)`（ほかの子のスクリプトと同じ求め方）。
 - xperf が `-o` で書く dump は xperf が自分でファイルに書く物で、端末を通らない。読み方は変えない。
+- 端末の出力の文字コードで読む理由（xperf が ASCII だけを書く今は結果に差が出ないが、地域語の文が来たときに化けないため）を、`Invoke-NativeCommand` の注記に残す。
 
 **Contracts**: Service [x]
 
@@ -361,9 +362,9 @@ function Get-PwshChildArguments {
 - **きっかけ**: `pwsh -NoProfile -File tools/encoding-check.ps1`（段 `encoding check`・手で回すのも同じ）。終了コード 0＝全部合格・1＝1 つ以上不合格（今のまま）。
 - **対象**（5.1）: `tools/*.ps1`・`tools/perf/*.ps1`（どちらも直下だけ）・`.github/workflows/*.yml` の `run:` の本文。`tools/perf/` の `.ps1` は `tools/*.ps1` と同じ規則 A〜D で調べる。規則 E の対象は今のまま。
 - **規則 C の広がり**（5.3）: 今の検査（代入・`chcp`・子の pwsh の `-Command`／`-c` の次の文字列）に、次を足す。対象の中のすべての文字列（単引用符・二重引用符・ヒア文字列）のうち、字面に `Encoding` か `chcp` を含むもの（大文字小文字を問わない・速さのための前の絞り）を PowerShell として構文解析し、今の規則 C と同じ見方（`[Console]`／`[System.Console]` の `OutputEncoding`・`InputEncoding` への代入・`$OutputEncoding` への代入・`chcp`／`chcp.com` のコマンド）で当たれば、その文字列の行で赤にする。これで「文字列を変数に組み、`ProcessStartInfo.ArgumentList` に渡す」形（今の `perf-loop.common.ps1:310`）を捕まえる。
-  - 自分の例外: `tools/encoding-check.ps1` 自身には、この文字列の中身の検査を当てない（規則の語彙と較正の見本を文字列で持つため。実測で 113 行の `'chcp'` と較正の見本 9 個が当たる）。`tools/encoding-check.ps1` の文字列でない所の検査と、`-Command` の次の文字列の検査は今のまま当てる。
+  - 自分の例外: `tools/encoding-check.ps1` の中で、当たると分かっている文字列だけを外す。外すのは、較正の見本の並び（`$calib` への代入の右辺の中の文字列）と、`Get-ConsoleRewrites` の中の語の一覧（`@('chcp', 'chcp.com')`）の 2 つだけ（実測で 113 行の `'chcp'` と較正の見本 9 個が当たる）。ほかの文字列（子の pwsh へ変数で渡す `$emit` など）は中身を検査する。判定自身に書き替えの文が入ったときも捕まえるため、例外はファイル単位にせず、今の `Set-OwnConsoleCp932` と同じく名前で狭く限る。
   - `[Console]::SetOut`／`SetError` は書き替えではないので当てない（前置きは赤にならない）。
-- **規則 D の広がり**（5.7）: 素の `cargo`／`cargo.exe` の呼び出しの引数に変数（`@x` の展開・`$x`）があれば、同じファイルの中のその変数への代入（`=`・`+=`）の右辺から、文字列の定数を集める。集め方は「文字列の定数・配列（`@(…)`・`,` の並び）・`+`・括弧・ほかの変数（同じ規則で追い、同じ変数は 1 度だけ）」だけを辿り、コマンドの結果・メンバーの参照・メソッドの呼び出しの値は辿らない。集めた字に `metadata` か `nar-sample-path` があれば赤。変数の名前で辿る（範囲は見ない＝広めに当たる側へ寄せる）。今の対象では `tools/crates-io.ps1` の `cargo publish … @pArgs`（`$pArgs = $PUBLISH | ForEach-Object { '-p', $_ }`＝パイプの値なので辿らない）が当たらないこと、`invoke-followup-checks.ps1:245`（`$cargoArgs = @($NAR_SAMPLE_ARGS) + …` → `$NAR_SAMPLE_ARGS` に `nar-sample-path`）が直す前は当たることを確かめる。
+- **規則 D の広がり**（5.7）: 素の `cargo`／`cargo.exe` の呼び出しの引数に変数（`@x` の展開・`$x`）があれば、同じファイルの中のその変数への代入（`=`・`+=`）の右辺から、文字列の定数を集める。集め方は「文字列の定数・配列（`@(…)`・`,` の並び）・`+`・括弧・ほかの変数（同じ規則で追い、同じ変数は 1 度だけ）」だけを辿り、コマンドの結果・メンバーの参照・メソッドの呼び出しの値は辿らない。集めた字に `metadata` か `nar-sample-path` があれば赤。変数の名前で辿る（範囲は見ない＝広めに当たる側へ寄せる）。名前は大文字小文字を区別しない（PowerShell の変数名と同じ。`package.ps1` は `$I686`、`test-all.ps1` は `$i686` と書く）。今の対象では `tools/crates-io.ps1` の `cargo publish … @pArgs`（`$pArgs = $PUBLISH | ForEach-Object { '-p', $_ }`＝パイプの値なので辿らない）が当たらないこと、`invoke-followup-checks.ps1:245`（`$cargoArgs = @($NAR_SAMPLE_ARGS) + …` → `$NAR_SAMPLE_ARGS` に `nar-sample-path`）が直す前は当たることを確かめる。
 - **較正の見本**（5.5）: 今の 27 見本はそのまま。足す見本（文字列は ASCII・日本語は `` `u{…} ``）:
   - 赤（C）: 前置きを変数に組んで `ArgumentList` に渡す形（`$inner = '[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); ' + $x; $psi.ArgumentList.Add($inner)`）
   - 赤（C）: 引数の配列の中の `'chcp 65001'`（`$a = @('-Command', 'chcp 65001')`）
@@ -378,7 +379,7 @@ function Get-PwshChildArguments {
   - 較正の確かめ（6.3）: `Invoke-Child -Exe <pwsh> -Arguments @('-NoProfile', '-NonInteractive', '-File', <自分>, '-PerfSampleChild') -Quiet`（前置きの無い・端末に頼る形）で読んだ行が見本と 1 字違わず一致したら `FAIL … cannot detect a regression`（壊れない条件では戻りを捕まえられない）。
   - 本番の確かめ（6.1・6.2）: `Invoke-PwshChild -ScriptPath <自分> -Arguments @('-PerfSampleChild') -Quiet` の `Code` が 0、`Out` が `out1=<見本>`・`out2=<見本>` の 2 行、`Err` が `err1=<見本>` の 1 行と 1 字違わず一致すれば `PASS`、違えば `FAIL`（`Show-Ascii` で字を `\uXXXX` にして示す）。
   - 端末が変わっていないことの確かめ（1.2）: 本番の確かめの後、子は自分の端末の出力・入力の文字コードを OS から読み（`Get-ConsoleCodePages`）、932・932 のままでなければ `FAIL`（前置きが書き替えの形に戻されたとき、字は届いても端末が 65001 に変わるのでここで捕まる）。
-- **前後の比べ**（1.2・6.4）: 今の「own console code pages unchanged」は .NET が覚えた値（`[Console]::OutputEncoding.CodePage`）で比べていて、子の書き替えに気付けない。`Get-ConsoleCodePages`（`Add-Type -MemberDefinition` で `kernel32.dll` の `GetConsoleOutputCP`・`GetConsoleCP` を呼ぶ・戻りは `@(<出力>, <入力>)`）で、始めと終わりに OS から読んで比べる。行の文面は今のまま。
+- **前後の比べ**（1.2・6.4）: 今の「own console code pages unchanged」は .NET が覚えた値（`[Console]::OutputEncoding.CodePage`）で比べていて、子の書き替えに気付けない。`Get-ConsoleCodePages`（`Add-Type -MemberDefinition` で `kernel32.dll` の `GetConsoleOutputCP`・`GetConsoleCP` を呼ぶ・戻りは `@(<出力>, <入力>)`）で、始めと終わりに OS から読んで比べる。行の文面は今のまま。`Add-Type` は型が既にあれば組み直さない（`-as [type]` で確かめる・同じ名前の型を 2 度組むと失敗する）。
 - **約束**（5.6・6.6）: 何も書き出さない・一時ファイルを作らない（`Add-Type` はメモリの中で組む）・端末へ ASCII だけを出す・判定を回す端末の文字コードを書き替えない（書き替えは窓の無い子の自分だけの端末だけ・`Set-OwnConsoleCp932` のまま）・環境変数を出さない。
 - **出力**: 足した確かめの行は今の形（`PASS cp932 child: …`／`FAIL cp932 child: …`・ASCII）。親は今のとおり子の行を写し、`FAIL` を集める。
 
@@ -422,7 +423,10 @@ function Get-PwshChildArguments {
 - **R1 端末へ出す文**（端末とファイルの両方へ出す文を含む）: 道具が自分で書く文面を ASCII の英文に書き直す。どの段の・何が・どの値で失敗したか・次に何をするかを残す（4.3）。値（パス・子の出力の行・目標の名前・`LastLine`）は書き替えずに埋め込む（4.2）。区切りの `・` は `, ` に、全角の括弧は半角に。終了コードは変えない。
 - **R2 ファイルにだけ出す日本語で、ほかの道具や外の文言と字で突き合わせる物・見出しとして読まれる物**: 字を変えず、字句は ASCII で書く。ログの目印は `$LOG_MARKER_*` への代入（規則 A の例外）に置き、ほかは二重引用符の文字列の中で `` `u{…} `` で書く。該当: `run-meta.txt` の節の見出し 6 つ・`$LOG_MARKER_SMOKE_GATE`（今のまま）・`$LOG_MARKER_SHOW_READY`（移す）・`perf-loop.ps1` の正規表現 2 つ。
 - **R3 ファイルにだけ出す、人が読むだけの文**（`DRY-RUN.txt`・`FAILED.txt` の本文の決まり文句・`followup.txt` の覚え書き・`run-meta.txt` の値の失敗の札）: ASCII の英文に書き直す。これらを中身で読む道具は無く（判定器は `followup-verdict.txt` と `run-meta.txt` の鍵を読む）、ファイルの名前・行の並び・鍵は変えない（4.5）。
-- 書き直しのとき R0〜R2 に当たる字を網に掛けないこと。実装では、直す前に 7 本の機械の行（`RESULT`・`key=value`）を一覧にして、直した後に同じ字面で残っていることを確かめる。
+- **R4 端末にもファイルにも出ない字句**（規則 A は注記の外の字句をすべて見るので、これも赤になる）: 2 か所ある。
+  - `invoke-followup-checks.ps1` の `Add-Type -TypeDefinition` のヒア文字列の中の C# の注記（172〜173 行）は英文に書き直す（中身の意味は変えない）。
+  - `check-quiet.ps1` の自己較正の TOML の見本（503〜520 行・単引用符のヒア文字列）は、展開するヒア文字列（`@"…"@`）に替え、日本語の注記の字を `` `u{…} `` で書く。見本の字は 1 字も変えず、確かめる中身（ASCII の外の字を含む注記行・行内注記を読み飛ばすこと）を保つ。見本に `$` と `` ` `` が無いことを、替える前に確かめる。
+- 書き直しのとき R0〜R2・R4 に当たる字を網に掛けないこと。実装では、直す前に 7 本の機械の行（`RESULT`・`key=value`）を一覧にして、直した後に同じ字面で残っていることを確かめる。
 
 ## Error Handling
 
@@ -448,6 +452,7 @@ function Get-PwshChildArguments {
 - 直す前に同じ条件で 7.2 のコマンドを回し、終了コードを控える（7.2 の「直す前と同じ」の基準）。
 - 7.1: `pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest -Goal <goal>` が 0 で終わり、`SELFTEST RESULT ok=<n> ng=0`、前後の値が 932・932（`invoke-cpu-sample.ps1 -SelfTest`・`check-quiet.ps1 -SelfTest`・`invoke-followup-checks.ps1 -SelfTest`（`Invoke-Judge`）を子の PowerShell で通る）。
 - 7.2: `preflight` と、子の PowerShell を起こす計測のサブコマンド 1 つ以上（例: `rank-run -Iter 1 -DryRun`。実行体が在る状態で回し、`invoke-perf-run.ps1` の行が出たことで子が回ったことを確かめる）を `-OutRoot <ワークツリー>\target\perf-loop-check` で回し、直す前と同じ終了コードと末尾の `PERF-LOOP RESULT` の行、前後の値が同じ。
+- 2 つ目の子の起こし方（`Invoke-CheckQuietOnce`）: `perf-loop` の `-DryRun` は子へ `-AutoQuiet` を渡さないので、上の 2 つはこの道を通らない。本番の計測はすべて `-AutoQuiet` で走るので、`pwsh -NoProfile -File tools/perf/invoke-perf-run.ps1 -Profile short -Build dev -AutoQuiet -Goal draw-load-parity -DryRun`（`-DryRun` でも静寂の確認は本当に回る・頭書 95 行）を同じ 932 の子の中で 1 回回し、`check-quiet.ps1` の `CHECK-QUIET RESULT` の行が写されることと終了コードを控える。静かでなければ 2 で終わるのも正しい結果（所要は 20 秒〜最長 4 分半＝確かめ 4 回×20 秒＋待ち 3 回×60 秒）。
 - 7.4: 端末の値・回したコマンド・終了コード・前後の値を `research.md` の節「手元での確かめの記録」に残す。
 
 ### 静的な確かめ
