@@ -312,3 +312,9 @@
 - [DWRITE_UNDERLINE](https://learn.microsoft.com/windows/win32/api/dwrite/ns-dwrite-dwrite_underline) — 幅・太さ・ずれ・読みの向き・行送りの向き。
 - `crates/areka-sakura/src/compile.rs` 311〜327 行 — 選択待ちの区切りは台本の最後に 1 個。
 - `crates/wintf/src/ecs/graphics/components.rs` 84〜110 行・`crates/wintf/src/ecs/graphics/systems/visual_sync.rs` — `VisualGraphics` を外すと親の Visual から外れる・未同期の子で親の子を並べ直す。
+
+### 設計の討議 議題 3 の決め（2026-10-16）
+
+- 下線の受け手は `#[implement(IDWriteTextRenderer)]` で作り、emo-text に `windows-core = { workspace = true }` を足す（開発者「足すのは良い」）。
+- 版に注意する（開発者「今出てる 0.100.0 は互換性が無い。windows のバージョンと合わせるように」）。ワークスペースのピン `windows-core = "0.62.2"` が `windows = "0.62"`（`Cargo.lock` で `0.62.2`）と揃っているので、emo-text の `Cargo.toml` には版を書かない。`windows-core` だけを上げない。
+- C7 の「依存を足す席」⑴ を本 spec が使うと roadmap に書き戻した。

@@ -109,7 +109,7 @@ graph TB
 | 層 | 選んだもの・版 | この spec での役目 | 注 |
 |---|---|---|---|
 | 文字の描画 | DirectWrite（`windows` 0.62）`IDWriteTextLayout::Draw`・`IDWriteTextRenderer` | 下線の幾何（`DWRITE_UNDERLINE`）と区間の描画効果を集める | 既に使う機能の別の口。新しい依存なし |
-| COM の実装 | `windows-core` 0.62 の `#[implement]` | 下線を集める受け手を作る | ワークスペースの依存（`crates/areka`・`wintf` が使用）を emo-text の直接の依存へ足す。`Cargo.lock` の emo-text の列に 1 行 |
+| COM の実装 | `windows-core` 0.62 の `#[implement]` | 下線を集める受け手を作る | ワークスペースの依存（`crates/areka`・`wintf` が使用）を emo-text の直接の依存へ足す。`Cargo.lock` の emo-text の列に 1 行。**版は `windows` と同じ 0.62 の系列（ワークスペースのピン `0.62.2`）**。emo-text の `Cargo.toml` には版を書かず `{ workspace = true }` だけにする。出ている `0.100.0` は 0.62 と互換が無いので取らない（`windows` と別々に上げない） |
 | 合成 | wintf の `VisualGraphics`（`on_remove`）・`visual_sync` | 潰れたときに差し込み口から文字の絵を外す | 既存の部品の取り外しだけ |
 | 合図の線 | `std::sync::mpsc`（可視性）・`UiSender<TextMsg>`（文字） | 選択肢を出した・トークが終わった | 既存の線に 1 種類ずつ足す |
 
@@ -166,7 +166,7 @@ crates/areka/src/input_events/
 - `crates/areka-emo-text/src/draw_line_store.rs` — 装飾つきの行の生成のとき、下線の分を行のはみ出しへ足す。
 - `crates/areka-emo-text/src/viewbox_draw_render.rs` — Phase 1 で下線を集めて寄せ、Phase 2 で字の後に塗る。
 - `crates/areka-emo-text/src/lib.rs` — `mod underline;` と、新しいファイル 7 本を `PURE_SOURCES`／`SOURCES_OUTSIDE_THE_PURE_SCAN` へ（純粋層の母数の行を直す）。
-- `crates/areka-emo-text/Cargo.toml` — `windows-core = { workspace = true }`。`Cargo.lock` の emo-text の列。
+- `crates/areka-emo-text/Cargo.toml` — `windows-core = { workspace = true }`（版はワークスペースのピン＝`windows` と同じ `0.62.2`。版を直書きしない・`0.100.0` は互換が無いので取らない）。`Cargo.lock` の emo-text の列（`windows-core` の項そのものは変えない）。
 
 **共通**
 - `doc/COMPAT_ARCHITECTURE.md` §8 — 4 行（時間切れの起点・済んだ行・潰れた範囲・横書きの下線）。
@@ -643,4 +643,4 @@ pub(crate) fn collect_underlines(
 
 - データの移し替えは無い。3 件は独立に着地できる（触るファイルの重なりは `actor_present.rs` だけで、別の段）。順の目安は件 2 → 件 3 → 件 1（brief の目安のまま）。
 - 件 1 は `range-choice-tag` より先に着地させる（`actor.rs`・`state.rs`・`input_events` の重なり・開発者の裁定）。
-- `windows-core` の追加で `Cargo.lock` が変わる。ウェーブ C7 の「依存を足す席」を本 spec が使うことを roadmap の約束の欄へ返す。
+- `windows-core` の追加で `Cargo.lock` が変わる（emo-text の列の 1 行だけ）。ウェーブ C7 の「依存を足す席」を本 spec が使うことは roadmap の約束の欄へ返した（設計の討議 議題 3）。確かめ: 着地の前に `Cargo.lock` の `windows` と `windows-core` が同じ `0.62.2` のままで、`windows-core` の項が 2 つに割れていない（`0.100` 系が入っていない）こと。
