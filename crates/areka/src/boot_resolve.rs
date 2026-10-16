@@ -670,3 +670,7 @@ mod boot_resolve_tests;
 #[cfg(test)]
 #[path = "boot_resolve_balloon_tests.rs"]
 mod boot_resolve_balloon_tests;
+
+#[cfg(test)]
+#[path = "boot_resolve_mark_text_tests.rs"]
+mod boot_resolve_mark_text_tests;

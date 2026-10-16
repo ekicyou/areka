@@ -120,7 +120,7 @@
   - _Boundary: main_session_mark_write_tests_
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 7.2, 7.6_
 
-- [ ] 6.3 (P) 記録の文の両面のテスト
+- [x] 6.3 (P) 記録の文の両面のテスト
   - 兄弟の新しいテストで、4 行が書けたときも書けないときも「書きました」を含まず書けないときだけ `memory_write_failed` が出ること、印を消せない文は印が残るときだけ「前回落ちたとして」を含むこと、印を残す文は印が在るときだけ「Ref6/7 付き」を含むことを判定する
   - 文のテストが緑になる
   - _Boundary: boot_resolve_mark_text_tests_
