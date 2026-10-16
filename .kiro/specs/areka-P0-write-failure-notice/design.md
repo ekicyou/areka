@@ -149,7 +149,7 @@ crates/
 - `crates/areka-sylphya/src/lib.rs` — `PersistFailure`・`PersistFailureCause`・`spawn_sylphya_with_failures` を公開の並びへ。
 - `crates/areka-sylphya/src/persist/persist_tests.rs` — `== PersistOutcome::Degraded` の 3 か所を `matches!` へ（型合わせ）。
 - `crates/areka-ghost/src/runtime.rs` — `boot_with_origin` の末尾に `persist_failures: Option<Sender<PersistFailure>>`。`boot`・`boot_with_kanade_stop` は `None`。`spawn_ghost_sylphya` へ渡す。
-- `crates/areka-ghost/src/sylphya_wiring.rs` — `spawn_ghost_sylphya(roots, failures)`（`spawn_sylphya_with_failures` を呼ぶ）。
+- `crates/areka-ghost/src/sylphya_wiring.rs` — `spawn_ghost_sylphya(roots, failures)`（`spawn_sylphya_with_failures` を呼ぶ）。同じファイルの中のテストの呼び出し（`spawn_ghost_sylphya(ScopeRoots::default())`）にも引数 `None` を足す（型合わせ）。
 - `crates/areka-ghost/src/runtime_origin_tests.rs`・`runtime_shell_tests.rs`・`runtime_tests.rs`・`translate_wiring_tests.rs`、`crates/areka/src/install/names_tests.rs` — 引数 `None` を足す（型合わせ）。
 - `crates/areka/src/main.rs` — `mod write_failure;`・起動の前の確かめの呼び出し・`boot_first_ghost` の戻り値・`after_run` の場面と終了コード・`session_mark_verdict` の群に 1 腕・`settle_session_mark` の戻り値・後始末の告知を `tell_at_close` へ（約 +14 行・985 行前後）。
 - `crates/areka/src/alert.rs` — `AlertScene::MemoryWrite`・`WriteMoment`・文面・`remembered_text`。
@@ -431,8 +431,9 @@ fn drain_system(world: &mut World);
 pub(crate) fn probe_dir(dir: &Path) -> std::io::Result<()>;
 
 /// 起動の前の確かめ: アプリの記憶の置き場 → ゴーストの記憶の置き場
-/// （`<ghost_root>\ghost\master\profile\areka`）の順。最初の失敗を返す（keys は空）。
-pub(crate) fn check_boot_dirs(ghost_root: &Path, app_profile_dir: &Path)
+/// （`<cfg.ghost_root>\ghost\master\profile\areka`）の順。最初の失敗を返す（keys は空）。
+/// `ConfigInputs` は `resolve_boot` の結果からしか得られないので、写しの前には呼べない（並びを型で守る）。
+pub(crate) fn check_boot_dirs(cfg: &ConfigInputs, app_profile_dir: &Path)
     -> Result<(), PersistFailure>;
 
 /// 起動を止める: `memory_write_failed` を記録し、`MemoryWrite { moment: Boot }` を告げ、
@@ -456,7 +457,7 @@ pub(crate) fn tell_at_close(
 - 事後条件: `fatal` の後は `FirstExit` が在る（最初の出所が残る）。`stop_boot_with` は抑止でも `Err` を返す（終わることは変えない・要件 2.6）。`tell_at_close` が告げるのは 0 か 1 件。
 - 記録 `memory_write_failed`（`error!`）の欄: `scope`・`what`（`alert::remembered_text`）・`dir`・`reason`・`moment`（`boot`／`running`）。どの致命も 1 件ずつ残す（汲み出した失敗・起動の前・印を消せない・降ろす途中に残っていた失敗）。
 - `probe_dir` の手順: ① `dir` から親へ辿り、在る最初のフォルダ（`dir` 自身を含む）を選ぶ（無ければ `NotFound` の `Err`）。② そこへ名前 `.areka-write-check-<pid>.tmp` を `create_new`＋`custom_flags(FILE_FLAG_DELETE_ON_CLOSE)` で開き、すぐ閉じる（OS が消す）。選んだ所がファイルなら OS の失敗がそのまま返る。
-- 確かめの置き場: `ghost_root` は `resolve_boot` が返した `ConfigInputs.ghost_root`（`user-data-root` の写しの後の、決まったゴーストのフォルダ）。アプリの記憶は `default_app_profile_dir()`（`main` が起動の文脈へ渡すのと同じ値）。シェルの記憶は areka が書かないので確かめない。
+- 確かめの置き場: `resolve_boot` が返した `ConfigInputs` を受け取り、その `ghost_root`（`user-data-root` の写しの後の、決まったゴーストのフォルダ）を見る。`main` の中で `ConfigInputs` は `resolve_boot` の結果からしか作れないので、確かめを写しの前へ動かすことは型の上でできない（要件 7.2 の「写しの後」はこれで守り、並びを照らす檻のテストは足さない）。アプリの記憶は `default_app_profile_dir()`（`main` が起動の文脈へ渡すのと同じ値）。シェルの記憶は areka が書かないので確かめない。
 - argv で始まったプロセスも同じ確かめをする（argv のプロセスもゴーストの記憶と置き場の並びを書く）。
 
 **Implementation Notes**
@@ -605,7 +606,7 @@ pub(crate) fn failure_word(error: &NarError) -> FailureWord {
 
 - `write_failure_tests.rs`:
   - `probe_dir` は在るフォルダでも、在らない下のフォルダ（親を確かめる）でも、前後でフォルダの中身が同じ（ファイル 0・フォルダ 0 が増えない）（要件 2.9）。普通のファイルの下を指すと `Err`。
-  - `check_boot_dirs`: アプリの置き場が書けない → `scope=App`・ゴーストの置き場が書けない → `scope=Ghost`・`dir=<ghost_root>\ghost\master\profile\areka`。元の置き場（写す前）を書けなくし、決まった置き場（写した先）だけ書けるとき `Ok`＝渡された決まった置き場しか見ない（要件 2.1・7.2）。
+  - `check_boot_dirs`: アプリの置き場が書けない → `scope=App`・ゴーストの置き場が書けない → `scope=Ghost`・`dir=<ghost_root>\ghost\master\profile\areka`。元の置き場（写す前）を書けなくし、決まった置き場（写した先）だけ書けるとき `Ok`＝渡された `ConfigInputs` の置き場しか見ない（要件 2.1・7.2。写しの後に走る並びは、`ConfigInputs` を受け取る引数の型が守る）。
   - 汲み出し: 失敗 1 件 → `FirstExit` が `MemoryWriteFailed`・`memory_write_failed` が 1 件／2 件 → `FirstExit` は最初の 1 件のまま（要件 2.5）。
   - `stop_boot_with(failure, true)`: `alert` の記録が 1 件（`suppressed=true`・題名「areka を起動できません」）で、`Err` を返す（要件 2.6）。
   - `tell_at_close`: 出所の場面＋印を消せない＋残りの失敗 → 告げるのは出所の場面 1 件／場面なし＋印を消せない → `Running` の 1 件で `Err`／何も無い → 0 件で `Ok`（要件 6.1・7.5）／抑止でも `Err` は変わらない（要件 2.6）。
@@ -617,7 +618,7 @@ pub(crate) fn failure_word(error: &NarError) -> FailureWord {
 
 ### 実機（要件 7.7）
 
-- `crates/areka/tests/smoke_boot_loop_exit.rs` に ⑤ 書けない方向を足す: `AREKA_ROOT`＝検体の根（`SampleRoot::acquire`）・`AREKA_PROFILE_DIR`＝`TempPath::under_target` の下に作った普通のファイル・`AREKA_NO_ALERT=1`。番犬の締切の内に非 0 で終わり、記録に `memory_write_failed` と題名「areka を起動できません」の `alert`（本文に「記憶を書けないので」）が在り、本物のゴースト窓の印が 0・`session_mark_written` が 0。窓を開く前に止まるので、モニタの有無に依らない。人の手は要らない。この方向は本物の `main` を通るので、確かめが `resolve_boot`（`user-data-root` の写しを含む）の後に走る並びもここで通る（単体の `check_boot_dirs` の判定は「渡された決まった置き場しか見ない」ことを、実機はその並びを受け持つ・要件 7.2）。
+- `crates/areka/tests/smoke_boot_loop_exit.rs` に ⑤ 書けない方向を足す: `AREKA_ROOT`＝検体の根（`SampleRoot::acquire`）・`AREKA_PROFILE_DIR`＝`TempPath::under_target` の下に作った普通のファイル・`AREKA_NO_ALERT=1`。番犬の締切の内に非 0 で終わり、記録に `memory_write_failed` と題名「areka を起動できません」の `alert`（本文に「記憶を書けないので」）が在り、本物のゴースト窓の印が 0・`session_mark_written` が 0。窓を開く前に止まるので、モニタの有無に依らない。人の手は要らない。`AREKA_ROOT` を渡すと `user-data-root` は写さないので、この方向は「写しの後」の並びを受け持たない（並びは `check_boot_dirs` の引数の型が守る）。
 
 ## Security Considerations
 
