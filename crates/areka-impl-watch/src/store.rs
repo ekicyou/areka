@@ -39,9 +39,6 @@ const LOCK_LIMIT: Duration = Duration::from_secs(10);
 const REPLACE_TRIES: u32 = 5;
 /// 置き換えの試しの間の待ち。
 const REPLACE_PAUSE: Duration = Duration::from_millis(20);
-/// 状態ファイルが無いときの `clear` が、「消した記録」の退避先の欄に書く綴り（端末へ出す
-/// `backup: none` も同じ綴り）。
-pub(crate) const NO_BACKUP: &str = "none";
 
 /// 置き場所のファイルへの口。
 pub struct Store {
@@ -194,7 +191,7 @@ impl Store {
         (self.log)(&Event::Cleared {
             backup: backup.as_deref().map(lossy),
         });
-        let recorded = backup.as_deref().unwrap_or(Path::new(NO_BACKUP));
+        let recorded = backup.as_deref().unwrap_or(Path::new(status::NONE));
         let state = State::cleared(now, recorded);
         self.write_state(&state)?;
         self.write_status(&state, now);

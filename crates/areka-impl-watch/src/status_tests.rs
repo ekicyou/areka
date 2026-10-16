@@ -515,3 +515,11 @@ fn markdown_keeps_free_text_inside_its_table_cell() {
     assert_eq!(row.len(), 8, "{row:?}");
     assert_eq!(row[1], r"a\|b  c");
 }
+
+#[test]
+fn id_list_is_none_when_empty_and_comma_space_joined_otherwise() {
+    assert_eq!(super::NONE, "none");
+    assert_eq!(super::id_list(&[]), "none");
+    assert_eq!(super::id_list(&["A".to_owned()]), "A");
+    assert_eq!(super::id_list(&["A".to_owned(), "B".to_owned()]), "A, B");
+}

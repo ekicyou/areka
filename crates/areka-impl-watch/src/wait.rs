@@ -14,7 +14,7 @@ use crate::error::{WatchError, escape_path};
 use crate::plan::{self, Applied, Command};
 use crate::presence::Held;
 use crate::state::{Participant, ParticipantStatus, State, WaitKind, WaitRecord};
-use crate::status::last_merge;
+use crate::status::{id_list, last_merge};
 use crate::store::{self, Store};
 
 /// 読み直しの間隔（本物の眠り）。
@@ -147,14 +147,9 @@ pub fn judge(spec: &WaitSpec, state: Option<&State>) -> Option<WaitEnd> {
             _ => return Some(WaitEnd::Gone(REQUEST_GONE)),
         },
         WaitSpec::Load { id } => match &state.load.holder {
-            Some(holder) if holder.id == *id => format!(
-                "granted load; stopped: {}",
-                if holder.stopped.is_empty() {
-                    "none".to_owned()
-                } else {
-                    holder.stopped.join(", ")
-                }
-            ),
+            Some(holder) if holder.id == *id => {
+                format!("granted load; stopped: {}", id_list(&holder.stopped))
+            }
             _ if state.load.queue.iter().any(|request| request.id == *id) => return None,
             _ => return Some(WaitEnd::Gone(REQUEST_GONE)),
         },

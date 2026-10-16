@@ -724,18 +724,18 @@ fn result_line(
             };
             granted(&wait, state).unwrap_or_else(|| {
                 let queue = state.merge.get(repo).map_or(&[][..], |desk| &desk.queue);
-                let ahead = status::merge_order(queue)
+                let ahead = plan::merge_order(queue)
                     .into_iter()
-                    .take_while(|request| request.id != *id)
+                    .take_while(|&nth| queue[nth].id != *id)
                     .count();
                 format!("queued merge repo={repo} pos={}", ahead + 1)
             })
         }
         C::LoadTest { id, .. } => granted(&WaitSpec::Load { id: id.clone() }, state)
             .unwrap_or_else(|| {
-                let ahead = status::load_order(&state.load.queue)
+                let ahead = plan::load_order(&state.load.queue)
                     .into_iter()
-                    .take_while(|request| request.id != *id)
+                    .take_while(|&nth| state.load.queue[nth].id != *id)
                     .count();
                 format!("queued load pos={}", ahead + 1)
             }),
@@ -791,7 +791,7 @@ fn status(home: Home, name: &'static str, out: &mut dyn Write) -> Result<Outcome
 /// 全部消す: 問い合わせをせずに直ちに行い、退避の道筋を 1 行で出す。
 fn clear(home: Home, name: &'static str, out: &mut dyn Write) -> Result<Outcome, WatchError> {
     let backup = store::open(home, name)?.clear()?;
-    let backup = backup.map_or(store::NO_BACKUP.to_owned(), |path| {
+    let backup = backup.map_or(status::NONE.to_owned(), |path| {
         escape_path(&path.to_string_lossy())
     });
     say(out, "stdout", &format!("cleared; backup: {backup}"))?;
