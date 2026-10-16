@@ -28,7 +28,6 @@ pub(crate) fn seen(visible_glyphs: usize, visible: bool) -> ScopeObservation {
         }),
         visible,
         hover: Some(false),
-        choice_active: Some(false),
         box_showing: false,
     }
 }
@@ -39,7 +38,6 @@ pub(crate) fn unobserved(visible: bool) -> ScopeObservation {
         visible_glyphs: None,
         visible,
         hover: Some(false),
-        choice_active: Some(false),
         box_showing: false,
     }
 }
@@ -52,19 +50,10 @@ pub(crate) fn hovered(observation: ScopeObservation) -> ScopeObservation {
     }
 }
 
-/// 選択肢を表示中の scope にする（Requirement 5.4）。
-pub(crate) fn choosing(observation: ScopeObservation) -> ScopeObservation {
-    ScopeObservation {
-        choice_active: Some(true),
-        ..observation
-    }
-}
-
 /// 抑止条件の観測が 1 つも取れなかった scope にする（Requirement 5.5）。
 pub(crate) fn suppression_unobserved(observation: ScopeObservation) -> ScopeObservation {
     ScopeObservation {
         hover: None,
-        choice_active: None,
         ..observation
     }
 }

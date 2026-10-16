@@ -566,11 +566,12 @@ fn suppression_holds_the_expired_deadline_and_release_restarts_the_measurement()
     assert_eq!(expired.actions, vec![hide_timed_out(&[0])]);
 }
 
-/// ドラッグ中と、装着済み scope での選択肢表示中はいずれも抑止になる（Requirement 5.1 / 5.4）。
-/// 一方、**不可視**の scope へのポインタ滞在は抑止にしない——不可視の間は離脱の通知が届かず、
-/// 滞在の記録が残ったままだと恒久的な抑止に固着するため（Requirement 5.5 の向き）。
+/// ドラッグ中は抑止になる（Requirement 5.1）。一方、**不可視**の scope へのポインタ滞在は抑止に
+/// しない——不可視の間は離脱の通知が届かず、滞在の記録が残ったままだと恒久的な抑止に固着するため
+/// （Requirement 5.5 の向き）。選択肢の表示中は抑止に数えない（areka-P0-balloon-text-bugs 要件 1.5・
+/// 選択を待つ間はトークの終わりが届かないので計測の手前で止まる）。
 #[test]
-fn drag_and_choice_suppress_but_hover_on_an_invisible_scope_does_not() {
+fn drag_suppresses_but_hover_on_an_invisible_scope_does_not() {
     let mut dragged = armed_state();
     let held_by_drag = Frame::new(&[(0, seen(2, true)), (1, seen(0, false))])
         .at(TIMEOUT)
@@ -586,27 +587,6 @@ fn drag_and_choice_suppress_but_hover_on_an_invisible_scope_does_not() {
         vec![VisibilityLogEvent::TimeoutSuppressed {
             kinds: SuppressionKinds {
                 dragging: true,
-                ..SuppressionKinds::default()
-            },
-            deadline: TIMEOUT,
-        }]
-    );
-
-    // 選択肢は装着済みの scope すべてを見る（不可視の scope の選択肢でも抑止する）。
-    let mut choosing_state = armed_state();
-    let held_by_choice = Frame::new(&[(0, seen(2, true)), (1, choosing(seen(0, false)))])
-        .at(TIMEOUT)
-        .timeout(TIMEOUT)
-        .run(&mut choosing_state);
-    assert!(
-        held_by_choice.actions.is_empty(),
-        "選択肢の表示中に非表示が起きた"
-    );
-    assert_eq!(
-        held_by_choice.logs,
-        vec![VisibilityLogEvent::TimeoutSuppressed {
-            kinds: SuppressionKinds {
-                choice: true,
                 ..SuppressionKinds::default()
             },
             deadline: TIMEOUT,

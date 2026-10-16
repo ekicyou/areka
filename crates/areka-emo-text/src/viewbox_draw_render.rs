@@ -1,4 +1,4 @@
-//! viewbox_draw の子: 装飾つきの描画（`render_styled`・行レイアウトと書式の確保・強調の矩形と行の描画の補助）。
+//! viewbox_draw の子: 装飾つきの描画（`render_styled`・行レイアウトと書式の確保・強調の矩形と行の描画の補助・下線を集めて塗る）。
 //! 足す予定の spec: text-typesetting（縦中横の塊）・text-reveal-fade・choice-marker-styling・anchor-style-canon（強調の矩形の見た目）。
 
 use std::rc::Rc;
@@ -6,7 +6,7 @@ use std::rc::Rc;
 use tracing::warn;
 use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
 use windows::Win32::Graphics::Direct2D::{
-    D2D1_ANTIALIAS_MODE_ALIASED, ID2D1Image, ID2D1SolidColorBrush,
+    D2D1_ANTIALIAS_MODE_ALIASED, ID2D1Brush, ID2D1Image, ID2D1SolidColorBrush,
 };
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_TEXT_RANGE, IDWriteTextFormat, IDWriteTextLayout,
@@ -19,6 +19,7 @@ use super::decoration::{LineStyles, apply_color_ranges, apply_font_ranges, line_
 #[cfg(test)]
 use super::none_err;
 use super::plan::degrade_if_needed;
+use super::underline::collect_underlines;
 use super::{FormatKey, ViewboxExecutor, color_f, device_err};
 use crate::TextLayerError;
 use crate::canvas::GlyphRunContent;
@@ -28,6 +29,7 @@ use crate::layout::{PositionedGlyph, VisibleWindow};
 use crate::look::StyleTable;
 use crate::region::ScaleContract;
 use crate::surface::TextSurface;
+use crate::underline::{pull_inside, stroke_overhang, stroke_rect};
 use crate::viewbox::{FramePlan, LineOverhang};
 use crate::writing::WritingMode;
 
@@ -39,6 +41,10 @@ impl ViewboxExecutor {
     /// 行の箱寸も従来どおり `font.height` をそのまま渡す——生成物も呼出列も装飾導入前と同一
     /// （要件 14.2）。装飾のある行だけが `line_layout_decorated`（生成時に 1 度だけフォント系の
     /// 範囲指定）と `apply_color_ranges`（毎フレーム色を焼き直す）を通る。
+    ///
+    /// 下線（areka-P0-balloon-text-bugs 件 3）は行の TextLayout に焼かず、Phase 1 で下線の区間が
+    /// ある行だけ DirectWrite の幾何と効果を集め（字を描く原点で）、矩形を決めて見える窓の行は面の
+    /// 内側へ寄せ、Phase 2 で行の字の後に塗る。
     ///
     /// 範囲指定と描画基盤の呼び出しの失敗は `error!` を残して `Err` を返し、当該フレームを
     /// 見送る（plan 未 commit・front 不変＝次フレーム再試行安全・要件 13.3）。
@@ -67,13 +73,31 @@ impl ViewboxExecutor {
             let overhang = match &resident.content {
                 ResidentContent::GlyphRun(run) if !run.glyphs.is_empty() => {
                     let text: String = run.glyphs.iter().map(|g| &*g.text).collect();
-                    self.line_layout_for(index, &text, run, &format, font, mode, styles)?;
+                    self.line_layout_for(
+                        index,
+                        &text,
+                        run,
+                        &format,
+                        font,
+                        mode,
+                        styles,
+                        contract.scale,
+                    )?;
                     self.line_store.overhang(index).unwrap_or_default()
                 }
                 // Choice 住人は内包 run を GlyphRun と同一経路で計測する（R9.5）。
                 ResidentContent::Choice(choice) if !choice.run.glyphs.is_empty() => {
                     let text: String = choice.run.glyphs.iter().map(|g| &*g.text).collect();
-                    self.line_layout_for(index, &text, &choice.run, &format, font, mode, styles)?;
+                    self.line_layout_for(
+                        index,
+                        &text,
+                        &choice.run,
+                        &format,
+                        font,
+                        mode,
+                        styles,
+                        contract.scale,
+                    )?;
                     let measured = self.line_store.overhang(index).unwrap_or_default();
                     // ハイライト帯（band_offset ＋ band_extent）は em ボックス丈より外側へ出る
                     // （descent 込み＋行ボックス中央への寄せ）。ダーティ矩形が em ボックス＋
@@ -145,6 +169,9 @@ impl ViewboxExecutor {
                 // 範囲へ文字色効果を焼く）は可謬ゆえこの BeginDraw 前区間で `?` 伝播する（失敗フレームは
                 // target 未設定のまま skip＝再試行安全・R4.5/R4.6）。
                 let block_offset = window.block_offset;
+                let k = contract.scale;
+                // 下線を寄せる範囲＝面の物理寸 ÷ k（画像の画素）。
+                let bound = (size.0 as f32 / k, size.1 as f32 / k);
                 let mut draws: Vec<(usize, LineDraw)> = Vec::new();
                 for &index in draw_lines {
                     let resident = &canvas.residents[index];
@@ -169,8 +196,16 @@ impl ViewboxExecutor {
                         continue;
                     }
                     let text: String = run.glyphs.iter().map(|g| &*g.text).collect();
-                    let (layout, line) =
-                        self.line_layout_for(index, &text, run, &format, font, mode, styles)?;
+                    let (layout, line) = self.line_layout_for(
+                        index,
+                        &text,
+                        run,
+                        &format,
+                        font,
+                        mode,
+                        styles,
+                        contract.scale,
+                    )?;
                     let (dx, dy) = resident.transform.offset();
                     let origin = match mode {
                         WritingMode::HorizontalTb => Vector2 {
@@ -185,7 +220,7 @@ impl ViewboxExecutor {
 
                     // ── 色の焼き込み順（毎フレーム・要件 3.5）: 全範囲の解除 → 装飾の色 → 重ね表示の色 ──
                     // 色は `SetDrawingEffect` でキャッシュ層 TextLayout に残るため、フォント系
-                    // 6 項目（生成時 1 度）と違って毎フレーム焼き直す。Choice 行はここで全文字範囲を
+                    // 項目（生成時 1 度）と違って毎フレーム焼き直す。Choice 行はここで全文字範囲を
                     // `None` へリセットする（hover 解除フレームは全範囲 None のみ＝素描画）。
                     if choice.is_some() {
                         let full_len = text.encode_utf16().count() as u32;
@@ -263,12 +298,40 @@ impl ViewboxExecutor {
                         None
                     };
 
+                    // 下線（件 3）: 色と重ね表示の効果を焼いた後に、下線の区間がある行だけ集める
+                    // （効果はブラシとして線の色になる）。原点は字を描く原点と同じ（DirectWrite の
+                    // 画素への寄せが字と同じベースラインを返す）。見える窓の行の線だけを面の
+                    // 物理寸 ÷ k の範囲へ寄せる（送りで面の外へ出た行は今と同じく端で切れる）。
+                    let strokes = if line.underlines.is_empty() {
+                        Vec::new()
+                    } else {
+                        collect_underlines(&layout, &line.underlines, k, (origin.X, origin.Y))?
+                            .into_iter()
+                            .map(|recorded| {
+                                let rect = stroke_rect(&recorded.raw, (0.0, 0.0));
+                                let rect = if index >= window.first_visible_line {
+                                    pull_inside(rect, mode, bound)
+                                } else {
+                                    rect
+                                };
+                                let rect = D2D_RECT_F {
+                                    left: rect.left,
+                                    top: rect.top,
+                                    right: rect.right,
+                                    bottom: rect.bottom,
+                                };
+                                (rect, recorded.brush)
+                            })
+                            .collect()
+                    };
+
                     draws.push((
                         index,
                         LineDraw {
                             origin,
                             layout,
                             choice: choice_draw,
+                            strokes,
                         },
                     ));
                 }
@@ -282,7 +345,6 @@ impl ViewboxExecutor {
 
                 // ── Phase 2（描画・ダーティ矩形限定）: この区間の D2D 呼び出しは不可謬（戻り値
                 // なし）で、失敗は EndDraw に集約される。SetTarget は成否によらず必ず解除する。 ──
-                let k = contract.scale;
                 unsafe { self.dc.SetTarget(&target) };
                 unsafe { self.dc.BeginDraw() };
                 for dirty_rect in dirty {
@@ -343,6 +405,13 @@ impl ViewboxExecutor {
                             self.text_draw_options(),
                         );
                         self.stats.draw_text_layout_calls += 1;
+                        // 下線は字の後に塗る（効果のブラシが無ければ既定の文字色）。
+                        for (rect, stroke) in &d.strokes {
+                            match stroke {
+                                Some(stroke) => self.dc.fill_rectangle(rect, stroke),
+                                None => self.dc.fill_rectangle(rect, &brush),
+                            }
+                        }
                     }
                     // ⑥ 範囲限定を解除。
                     unsafe {
@@ -377,7 +446,10 @@ impl ViewboxExecutor {
     /// 既定だけの行は従来の [`LineLayoutStore::line_layout`] をそのまま通る（空の番号列・
     /// 行の箱寸は `font.height`・焼き処理なし＝装飾導入前と 1 ビットも変わらない・要件 14.2）。
     /// 装飾のある行だけが [`LineLayoutStore::line_layout_decorated`] を通り、生成時に 1 度だけ
-    /// フォント系の範囲指定（[`apply_font_ranges`]）を焼く。
+    /// フォント系の範囲指定（[`apply_font_ranges`]）を焼く。下線の区間がある行は、続けて
+    /// 下線の幾何を 1 回集め（[`collect_underlines`]・拡大率 `scale`）、線の行の箱からのはみ出し
+    /// （[`stroke_overhang`]）を保持庫へ返す——下線は行に焼かないので実測のはみ出しに入らない
+    /// （areka-P0-balloon-text-bugs 件 3）。
     #[allow(clippy::too_many_arguments)]
     fn line_layout_for(
         &mut self,
@@ -388,8 +460,9 @@ impl ViewboxExecutor {
         font: &ResolvedFont,
         mode: WritingMode,
         styles: &StyleTable,
+        scale: f32,
     ) -> Result<(IDWriteTextLayout, LineStyles), TextLayerError> {
-        let line = line_styles(run, font.height, mode);
+        let line = line_styles(run, font.height, mode, styles, &font.looks.default);
         if line.default_only {
             let layout = self
                 .line_store
@@ -399,14 +472,24 @@ impl ViewboxExecutor {
         // 台帳は `&mut self.line_store` と同時に借りられないので Rc を複製して渡す。
         let fonts = Rc::clone(&self.fonts);
         let default = &font.looks.default;
-        let layout = self.line_store.line_layout_decorated(
+        let layout = self.line_store.line_layout_with_strokes(
             index,
             text,
             format,
             line.extent,
             mode,
             &line.ids,
-            |l| apply_font_ranges(l, &line.runs, styles, default, &fonts),
+            |l| {
+                apply_font_ranges(l, &line.runs, styles, default, &fonts)?;
+                if line.underlines.is_empty() {
+                    return Ok(LineOverhang::default());
+                }
+                let strokes: Vec<_> = collect_underlines(l, &line.underlines, scale, (0.0, 0.0))?
+                    .iter()
+                    .map(|r| stroke_rect(&r.raw, (0.0, 0.0)))
+                    .collect();
+                Ok(stroke_overhang(&strokes, mode, line.extent))
+            },
         )?;
         Ok((layout, line))
     }
@@ -453,6 +536,9 @@ struct LineDraw {
     layout: IDWriteTextLayout,
     /// Choice 住人のときのみ Some（GlyphRun は None＝素描画）。
     choice: Option<ChoiceDraw>,
+    /// 塗る下線（画像の画素・寄せ済み）と、その区間の効果のブラシ（`None`＝既定の文字色）。
+    /// 下線の区間の無い行は空。
+    strokes: Vec<(D2D_RECT_F, Option<ID2D1Brush>)>,
 }
 
 /// Choice 行のハイライト描画資源（hover 時のみ塗り資源を持つ・非 hover は全範囲 None リセットのみ）。

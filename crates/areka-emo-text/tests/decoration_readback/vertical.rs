@@ -23,7 +23,10 @@
 //! ## 裁定との照合は述語にしない（要件 12.4）
 //!
 //! 完了仕様 `areka-P0-balloon-vertical-canon` の裁定は「下線は列の右側」だが、本仕様は縦書きの
-//! 線の位置を **DirectWrite の既定に委ねる**（開発者裁定 2026-09-11・areka は線を描き分けない）。
+//! 線の位置を **DirectWrite の既定に委ねる**（開発者裁定 2026-09-11）。下線は spec
+//! `areka-P0-balloon-text-bugs`（件 3）から areka が塗るが、縦書きは DirectWrite が教える位置と
+//! 太さのまま D2D の既定の描き方と同じ向きに回して塗る（D2D 自身の下線との一致は
+//! `src/viewbox_draw_underline_tests.rs` の実 GPU の檻が固定・要件 3.4）ので、側と位置は変わらない。
 //! ゆえにここは「今日の既定はこの側だ」という**実測の固定**に留め、裁定との一致は述語にしない
 //! ——照合結果は `doc/COMPAT_ARCHITECTURE.md` §8 への登記（task 9.1）が書く。
 //!
@@ -102,7 +105,8 @@ fn measure(mode: &str, tokens: &[&str], what: &str) -> ((u32, u32), (u32, u32), 
 // ══ 今日の値（実測で固定する定数） ═════════════════════════════════════════════════════
 //
 // いずれも `Yu Gothic UI`・`font.height,28`・面 320x200・validrect 5 画素内側での実測。
-// 位置も側も DirectWrite の既定に委ねてあり areka 側で描き分けない（要件 5.7／12.2）。
+// 位置も側も DirectWrite の既定に委ねてある（要件 5.7／12.2）。下線は areka が塗るが、D2D の
+// 既定の描き方と同じ写し方なので値は変わらない（spec `areka-P0-balloon-text-bugs` 要件 3.4）。
 // 値が動いたら描画基盤側の変化を疑い、定数を書き換える前に裁定を仰ぐこと。
 
 /// 下線が出る側（2 方向とも同じ・要件 12.2／12.3）——列の**左**（実測では字の列の左端に
@@ -202,8 +206,9 @@ fn underline_lands_on_the_same_side_of_the_column_in_both_vertical_modes() {
     );
     assert_eq!(
         side_rl, UNDERLINE_SIDE,
-        "下線の出る側が今日の DirectWrite の既定から動いた。areka は線を描き分けないので、\
-         定数を書き換える前に描画基盤側の変化を疑い裁定を仰ぐこと（要件 5.7／12.2）"
+        "下線の出る側が今日の DirectWrite の既定から動いた。縦書きの線は D2D の既定の描き方と\
+         同じ写し方で塗るので、定数を書き換える前に写し方か描画基盤側の変化を疑い裁定を仰ぐこと\
+         （要件 5.7／12.2・spec `areka-P0-balloon-text-bugs` 要件 3.4）"
     );
 }
 

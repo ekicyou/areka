@@ -1,8 +1,9 @@
-//! balloon の子: クリック（`on_balloon_pointer_pressed`・選択肢とアンカーの確定の発行と、末尾で利用者の中断へ渡す）。
+//! balloon の子: クリック（`on_balloon_pointer_pressed`・選択肢とアンカーの確定の発行・送れた選択肢の場所の選択肢を済みにすることと、末尾で利用者の中断へ渡す）。
 //! 足す予定の spec: talk-fast-forward・balloon-markers（矢印のクリック）。
 
 use std::rc::Rc;
 
+use areka_emo_text::place::PlaceKey;
 use areka_sakura::ActorKey;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
@@ -11,7 +12,7 @@ use wintf::ecs::pointer::{Phase, PointerState};
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::placement::spawn::BalloonWindowMarker;
 
-use super::{BalloonWiring, click_selection, selection_events};
+use super::{BalloonWiring, click_selection, selection_events, settle_after_selection};
 
 /// バルーン窓のポインタ押下ハンドラ（Bubble のみ処理・確定クリック発行・R2.1/2.3/2.4/2.5/2.6/3.1/3.2/4.2/5.1/8.4）。
 ///
@@ -40,7 +41,8 @@ use super::{BalloonWiring, click_selection, selection_events};
 ///    label, references_len)` を **1 行**発火し `true`（DD-CI-7・R7.2 grep 対象）。送出失敗（受け口消滅）→
 ///    `error!(event = "choice_selection_send_failed", scope, id)`＋`false`。当たった範囲がアンカーなら
 ///    記録の名前だけが替わる（`anchor_selected`／`anchor_selection_send_failed`・欄は同じ・
-///    名前の表は [`selection_events`]）。
+///    名前の表は [`selection_events`]）。送れた選択が選択肢なら、普通のバルーンの選択肢を済みにする
+///    （[`settle_after_selection`]・アンカーは済まない・areka-P0-balloon-text-bugs 件 1）。
 ///
 /// `resolve_choice` は本 crate から呼ばない（発行まで・カスケードは W6・R2.6/5.4）。自前描画なし。
 /// `RefCell` は `try_borrow` のみ（panic しない・log-first）。座標は窓 client 物理 px を**無変換**で
@@ -153,6 +155,7 @@ pub(crate) fn on_balloon_pointer_pressed(
             // info! 用の値を send 前に控える（send_selection が selection の所有権を消費するため）。
             // 記録の名前は種類で決まる（選択肢は今までの名前・アンカーは anchor_ で始まる名前）。
             let (selected, send_failed) = selection_events(sel.kind);
+            let kind = sel.kind;
             let id = sel.id.clone();
             let label = sel.label.clone();
             let references_len = sel.references.len();
@@ -162,6 +165,8 @@ pub(crate) fn on_balloon_pointer_pressed(
                 .expect("BalloonWiring は直上（②）で存在確認済み（donor self-gating 同型）")
                 .send_selection(sel);
             if sent {
+                // 送れた選択が選択肢なら、普通のバルーンの選択肢を済みにする（件 1・アンカーは済まない）。
+                settle_after_selection(&runtime, &PlaceKey::balloon(&actor), kind);
                 // 実機サインオフ導線（DD-CI-7・R7.2 grep 対象）: 発行 1 回につき 1 行。
                 tracing::info!(
                     event = selected,

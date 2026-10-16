@@ -1,6 +1,6 @@
 //! 実機サインオフ用 hover 注入デバッグ導線（design.md「結線層 / HoverInjectConduit」・R8.2/8.4/8.6）。
 //!
-//! 実ポインタに依存せず、env ゲート駆動で「選択肢表示中」actor のハイライトを周期巡回させる有界導線。
+//! 実ポインタに依存せず、env ゲート駆動で済んでいない選択肢を持つ actor のハイライトを周期巡回させる有界導線。
 //! `AREKA_CHOICE_HOVER_INJECT` が **未設定/空/不正なら完全 no-op（本番既定）**。`cycle`＝既定周期
 //! 700ms・`cycle:<ms>`＝指定周期。text phase の frame clock（`TalkClock::talk_time` と同じ時刻源）で
 //! 駆動し、注入時刻の商（time÷period の整数商）で `None→0→1→…→None→…` を巡回する——**実時間 sleep を
@@ -133,7 +133,9 @@ pub fn run_hover_inject_with(
     };
     let period_secs = *period_ms as f64 / 1000.0;
     for (actor, active, hit_rows) in actors {
-        // 「選択肢表示中」でない actor はスキップ（照会のみ・8.4 の実ポインタ非依存）。
+        // 「済んでいない選択肢がある」でない actor はスキップ（照会のみ・8.4 の実ポインタ非依存）。
+        // 選択肢が全部済んだ actor には注入しない。一部の場所だけが済んだときに巡回の番号が済んだ
+        // 選択肢を指しても、提示がその強調を装飾へ渡さない（areka-P0-balloon-text-bugs 件 1）。
         if !active {
             continue;
         }

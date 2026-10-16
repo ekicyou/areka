@@ -374,6 +374,7 @@ impl TextLayerRuntime {
     /// （サーフェス番号, 名前）ごとに 1 度だけ警告する。定義の 2 つの警告（折り返しの基準・無視した
     /// 書き出し位置）は名前の欄を `balloon.*`ブレスの名前にして、箱の名前ごとに 1 度だけ出す
     /// （登録し直しには前の配置の入力が無いので、毎回出さないよう名前で覚える・要件 3.11）。
+    /// 描画範囲の潰れは場所の記憶と突き合わせて状態の変わり目に 1 回だけ記録する（件 2・要件 2.7）。
     fn register_box(&mut self, key: PlaceKey, want: DesiredBox) {
         let Some(def) = self.box_layout.def(&want.site.name) else {
             // `desired_box` が定義の在る名前だけを通すので構造上起こらない。
@@ -394,6 +395,8 @@ impl TextLayerRuntime {
             decoration::warn_ignored_origin(name, &resolved, None);
         }
         let (w, h) = (i64::from(def.size.0), i64::from(def.size.1));
+        // 潰れの記録（件 2）。`def` の借用が切れた後に呼ぶ。
+        self.note_region_collapse(&key, want.site.name.as_str(), &resolved);
         let (sw, sh) = (
             i64::from(want.surface_size.0),
             i64::from(want.surface_size.1),

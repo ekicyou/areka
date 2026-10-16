@@ -103,3 +103,8 @@
   - dola は crates.io に公開している。合図の語彙を足すと公開 API の追加になる＝roadmap の「次のリリースへの申し送り」へ 1 項目足す（`anchor-tag-canon` と同じ扱い）。
   - 「選択肢の範囲があるか」の観測（`actor.rs` の `TextLayerRuntime::choice_active`）は、バルーンの時間切れを止める判定が読む。範囲の選択肢でも立つようにする。`balloon-text-bugs` の件 1 が同じ観測のまわりを直すので、同じウェーブに置かない。
   - 同じウェーブに置けない相手: `font-size-keywords`（`check_script_judge.rs`）・`choice-ranges-one-function`・`balloon-font-file`（`actor.rs`）・`talk-fast-forward`（`decode.rs`・`compile.rs`・dola の `runtime.rs`）。`choice-marker-styling` とは、あちらが新しいファイルを足さず、こちらが `choice.rs` に触らなければ重ならない。
+
+## `balloon-text-bugs` からの申し送り（2026-10-16 着地）
+
+- バルーンの時間切れの判定は、もう `TextLayerRuntime::choice_active` を読まない。選択肢つきのトークは、可視性の線の合図 `ChoiceShown` で覚え、トークの終わりの時刻から測り直す（`crates/areka/src/emo2_boot/balloon_visibility_wait.rs` の `effective_display_end`）。範囲の選択肢でも時間切れを正しく扱うには、`crates/areka/src/emo2_boot/talk_lifecycle.rs` の `BalloonLifecycleSink` が範囲の選択肢の cue でも `ChoiceShown` を 1 回送ればよい。
+- `choice_active` の意味は「済んでいない選択肢があるか」に変わった（押した場所の選択肢は済み・選択肢の時間切れと中断ではトークの終わりに全部済む）。範囲の選択肢も済みの境目（`ActorTextState::settled`）に乗る形で作る。押下の選択は dispatcher の受け口を通って kanade へ届く（`DispatcherMsg::Choice`／`Anchor`）。

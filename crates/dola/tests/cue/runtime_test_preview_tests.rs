@@ -196,3 +196,57 @@ fn default_preview_sink_emits_unchanged() {
     );
     assert_eq!(logged_commands(&plain_log).len(), 5);
 }
+
+/// 選択待ちの始まり（`CueSink::choice_wait_began`）を受けた順を、共有の列へ受け手の番号で残す受け手
+/// （areka-P0-balloon-text-bugs 要件 1.10・1.11）。
+struct ChoiceWaitSink {
+    id: usize,
+    log: Rc<RefCell<Vec<usize>>>,
+}
+
+impl CueSink for ChoiceWaitSink {
+    fn emit(&mut self, _cue: TalkCue) {}
+
+    fn choice_wait_began(&mut self) {
+        self.log.borrow_mut().push(self.id);
+    }
+}
+
+/// `announce_choice_wait` は登録された全部の受け手へ、登録順に 1 回ずつ配る。
+#[test]
+fn announce_choice_wait_reaches_every_sink_once_in_registration_order() {
+    let mut player = CuePlayer::from_sheet(&sheet());
+    let log = Rc::new(RefCell::new(Vec::new()));
+    for id in 0..3 {
+        player.register_sink(Box::new(ChoiceWaitSink {
+            id,
+            log: log.clone(),
+        }));
+    }
+    assert!(log.borrow().is_empty(), "登録や先渡しでは配らない");
+    drive_to_end(&mut player);
+    assert!(log.borrow().is_empty(), "再生の状態の移りの中では配らない");
+
+    player.announce_choice_wait();
+    assert_eq!(*log.borrow(), vec![0, 1, 2], "全部へ登録順に 1 回ずつ");
+}
+
+/// 上書きしない受け手（既定の実装）は選択待ちの始まりで何もしない: 記録は増えず、
+/// 隣の受け手への配りも止めない。
+#[test]
+fn default_choice_wait_began_does_nothing() {
+    let mut player = CuePlayer::from_sheet(&sheet());
+    let (plain_log, plain) = recording_sink();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    player.register_sink(plain);
+    player.register_sink(Box::new(ChoiceWaitSink {
+        id: 7,
+        log: log.clone(),
+    }));
+    player.tick(0.0);
+    let before = plain_log.borrow().clone();
+
+    player.announce_choice_wait();
+    assert_eq!(*plain_log.borrow(), before, "既定の実装は何も残さない");
+    assert_eq!(*log.borrow(), vec![7], "既定の受け手の後ろへも配る");
+}

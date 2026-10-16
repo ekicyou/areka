@@ -106,7 +106,7 @@ impl<T: dola::cue::CueSink + Clone> ClockedTextSink<T> {
 /// 登録先が要求する形・task 7.1）。broadcast 下では担当外 cue（`Emote` 等）も本 sink へ届くが、
 /// `observe_cue` は `cue.at` 一貫で epoch を単調 max 推定するため無害（設計 §Revalidation Triggers）。
 /// 内側 sink（本番は `EmoTextSink`）へ `CueSink::emit` で非改変転送し、先渡し（`preview`）も
-/// 時刻を観測せずに内側へ通す。
+/// 時刻を観測せずに内側へ通す。選択待ちの始まり（`choice_wait_began`）も同じく内側へ通す。
 impl<T: dola::cue::CueSink + Clone> dola::cue::CueSink for ClockedTextSink<T> {
     fn emit(&mut self, cue: TalkCue) {
         // emit ごとに cue.at を観測して epoch を推定し、cue は非改変で内側へ透過転送する。
@@ -118,6 +118,12 @@ impl<T: dola::cue::CueSink + Clone> dola::cue::CueSink for ClockedTextSink<T> {
         // 先渡しは「その時刻に届いた」出来事ではないので時刻は観測しない（トークの頭の時刻の
         // 見積もりに混ぜない）。内側へそのまま通すだけ（通さないと文字の層へ届かない）。
         dola::cue::CueSink::preview(&mut self.inner, upcoming);
+    }
+
+    fn choice_wait_began(&mut self) {
+        // 選択待ちの始まりも時刻を観測せず内側へ通す（通さないと既定の何もしないに落ちて、
+        // 文字の層が押下で選択肢を済ませてよいと知れない）。
+        dola::cue::CueSink::choice_wait_began(&mut self.inner);
     }
 }
 
@@ -149,6 +155,8 @@ mod tests {
         cues: Arc<Mutex<Vec<TalkCue>>>,
         /// 先渡しで受け取った列（呼ばれた回数ぶん積む）。
         previews: Arc<Mutex<Vec<Vec<TalkCue>>>>,
+        /// 選択待ちの始まりを受けた回数。
+        began: Arc<Mutex<usize>>,
     }
 
     impl RecordingTextSink {
@@ -156,7 +164,12 @@ mod tests {
             Self {
                 cues: Arc::new(Mutex::new(Vec::new())),
                 previews: Arc::new(Mutex::new(Vec::new())),
+                began: Arc::new(Mutex::new(0)),
             }
+        }
+
+        fn began_count(&self) -> usize {
+            *self.began.lock().expect("recording sink mutex poisoned")
         }
 
         fn previewed(&self) -> Vec<Vec<TalkCue>> {
@@ -187,6 +200,10 @@ mod tests {
                 .lock()
                 .expect("recording sink mutex poisoned")
                 .push(upcoming.to_vec());
+        }
+
+        fn choice_wait_began(&mut self) {
+            *self.began.lock().expect("recording sink mutex poisoned") += 1;
         }
     }
 
@@ -398,6 +415,27 @@ mod tests {
             "preview must not move the established epoch"
         );
         assert_eq!(inner.previewed().len(), 2);
+    }
+
+    /// `ClockedTextSink::choice_wait_began` は内側へ呼ばれた回数だけ取り次ぎ（取り次がないと既定の
+    /// 何もしないに落ちて押下で済まなくなる・areka-P0-balloon-text-bugs 要件 1.10/1.11）、時刻は観測しない。
+    #[test]
+    fn clocked_sink_forwards_choice_wait_began() {
+        let (_now, clock) = controllable_clock();
+        let tc = TalkClock::new(clock);
+        let inner = RecordingTextSink::new();
+        let mut sink = ClockedTextSink::new(inner.clone(), tc.clone());
+
+        sink.choice_wait_began();
+        assert_eq!(
+            inner.began_count(),
+            1,
+            "inner sink must receive choice_wait_began"
+        );
+        sink.choice_wait_began();
+        assert_eq!(inner.began_count(), 2, "forwarded once per call");
+        assert_eq!(tc.talk_time(300.0), None, "must not observe time");
+        assert!(inner.recorded().is_empty() && inner.previewed().is_empty());
     }
 
     /// `ClockedTextSink<T>` が boot 型境界（`Send + Clone + 'static`）を満たすことをコンパイル時表明。

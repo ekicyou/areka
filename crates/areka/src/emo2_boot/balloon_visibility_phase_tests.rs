@@ -3,7 +3,7 @@
 //
 // 判断そのものの網羅表は親の `balloon_visibility_tests.rs`（判断中核 `decide`）が所有する。
 // ここが押さえるのは**配線**だけである:
-//   ⑴ 観測の収集（可視状態・可視グリフ数・選択肢表示中・ポインタ滞在・ドラッグ中・信号）
+//   ⑴ 観測の収集（可視状態・可視グリフ数・ポインタ滞在・ドラッグ中・信号）
 //   ⑵ 判断が返した行動の発行（表示は専用入口・非表示は既存漏斗）と失敗時の縮退
 //   ⑶ 判断が返した事象のログへの写し（design 決定 D10 の水準・フィールド）
 //   ⑷ 自分が発行していない可視性変化の検出（`trigger=explicit`）と滞在記録の掃除
@@ -402,10 +402,10 @@ fn lifecycle_signals_are_drained_in_full() {
 
 /// 観測が取れない軸は `None` のまま運ぶ（既定値へ潰さない・Requirement 5.5）。
 ///
-/// 文字層ランタイムを外から借りたままにして借用失敗を作り、可視グリフ数と選択肢表示中の双方が
-/// 観測なしになること・記録が 1 回であること・借用が戻れば武装し直すことを見る。
+/// 文字層ランタイムを外から借りたままにして借用失敗を作り、可視グリフ数が観測なしになること・
+/// 記録が 1 回であること・借用が戻れば武装し直すことを見る。
 #[test]
-fn runtime_borrow_failure_yields_no_glyph_and_no_choice_observation() {
+fn runtime_borrow_failure_yields_no_glyph_observation() {
     let harness = Harness::new().with_balloon_scope(0).with_talk_epoch();
     let mut world = world_at(1.0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
@@ -442,7 +442,6 @@ fn runtime_borrow_failure_yields_no_glyph_and_no_choice_observation() {
 
     let observed = observations.0.scopes[&0];
     assert_eq!(observed.visible_glyphs, None, "グリフ数は観測なし");
-    assert_eq!(observed.choice_active, None, "選択肢表示中も観測なし");
     assert_eq!(
         observed.visible, false,
         "可視状態は表示層から引けている（借用失敗と無関係の軸）"
@@ -470,11 +469,6 @@ fn runtime_borrow_failure_yields_no_glyph_and_no_choice_observation() {
         recovered.scopes[&0].visible_glyphs.map(|g| g.count),
         Some(2),
         "注入時刻 1.0 では 2 文字ともリビール済み"
-    );
-    assert_eq!(
-        recovered.scopes[&0].choice_active,
-        Some(false),
-        "選択肢スパンが無いので抑止しない"
     );
     assert!(
         visibility_lines(&events).is_empty(),
@@ -512,11 +506,6 @@ fn glyphs_are_not_observed_without_injected_time() {
     );
 
     assert_eq!(observations.scopes[&0].visible_glyphs, None);
-    assert_eq!(
-        observations.scopes[&0].choice_active,
-        Some(false),
-        "選択肢表示中は時刻に依らず観測できる"
-    );
 }
 
 /// ポインタ配線が world に無ければ滞在は観測なし＝抑止なしへ倒し、記録は 1 回（Requirement 5.5）。
@@ -764,7 +753,6 @@ fn decision_events_are_written_with_the_agreed_level_and_fields() {
             kinds: SuppressionKinds {
                 dragging: false,
                 hover: true,
-                choice: false,
             },
             deadline: 34.0,
         },
@@ -796,7 +784,11 @@ fn decision_events_are_written_with_the_agreed_level_and_fields() {
     assert_eq!(lines[5].level, Level::INFO);
     assert_eq!(lines[5].expect_field("hover"), "true");
     assert_eq!(lines[5].expect_field("dragging"), "false");
-    assert_eq!(lines[5].expect_field("choice"), "false");
+    assert_eq!(
+        lines[5].field("choice"),
+        None,
+        "見送りの記録の欄は dragging と hover の 2 つ（選択肢の表示中は数えない）"
+    );
 
     assert_eq!(
         lines[6].level,

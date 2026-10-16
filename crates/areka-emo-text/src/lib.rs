@@ -59,6 +59,7 @@ pub mod segment;
 pub mod sink;
 pub mod state;
 pub mod surface;
+mod underline;
 pub mod viewbox;
 pub mod viewbox_draw;
 pub mod wrap;
@@ -392,6 +393,8 @@ mod tests {
             "choice_anchor_tests.rs",
             include_str!("choice_anchor_tests.rs"),
         ),
+        // areka-P0-balloon-text-bugs 件 3 の下線の幾何（純粋）。
+        ("underline.rs", include_str!("underline.rs")),
     ];
     /// 純粋層の走査面へ**載せない**ファイルの明示（タスク 9.4）。
     ///
@@ -407,12 +410,15 @@ mod tests {
         "actor_box_sync_tests.rs",
         "actor_box_tests.rs",
         "actor_choice_contract_tests.rs",
+        "actor_choice_settle_tests.rs",
         "actor_clear_atomicity_tests.rs",
         "actor_decoration.rs",
         "actor_decoration_frame_tests.rs",
         "actor_decoration_tests.rs",
         "actor_lookahead_shapes_tests.rs",
         "actor_lookahead_tests.rs",
+        "actor_region_collapse_present_tests.rs",
+        "actor_region_collapse_tests.rs",
         "actor_region_warn_tests.rs",
         "actor_route_tests.rs",
         "actor_runtime_frame_tests.rs",
@@ -420,6 +426,7 @@ mod tests {
         "actor_scroll_retain_tests.rs",
         "actor_test_support.rs",
         "actor_tests.rs",
+        "actor_underline_present_tests.rs",
         "draw.rs",
         "draw_catalog.rs",
         "draw_catalog_tests.rs",
@@ -431,6 +438,7 @@ mod tests {
         "draw_oracle_tests.rs",
         "draw_test_support.rs",
         "sink.rs",
+        "sink_talk_end_tests.rs",
         "surface.rs",
         "surface_hit_cells_tests.rs",
         "surface_window_child.rs",
@@ -447,6 +455,9 @@ mod tests {
         "viewbox_draw_render.rs",
         "viewbox_draw_scroll_retain_tests.rs",
         "viewbox_draw_test_support.rs",
+        "viewbox_draw_underline.rs",
+        "viewbox_draw_underline_tests.rs",
+        "underline_tests.rs",
     ];
 
     /// 層規律の構造檻: 純粋層モジュール（state/writing/region/layout/canvas/look/color）の
@@ -456,7 +467,7 @@ mod tests {
     fn pure_layer_modules_have_no_windows_imports() {
         // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
         // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
-        assert_eq!(PURE_SOURCES.len(), 76, "走査する純粋層モジュールの母数");
+        assert_eq!(PURE_SOURCES.len(), 77, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",

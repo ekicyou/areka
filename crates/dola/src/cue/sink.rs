@@ -35,6 +35,12 @@ pub trait CueSink {
     fn preview(&mut self, upcoming: &[TalkCue]) {
         let _ = upcoming;
     }
+
+    /// 選択待ちの始まり: 再生が選択待ちに入り、その事実を完了の口へ送り終えた後に 1 回だけ
+    /// [`CuePlayer::announce_choice_wait`](super::CuePlayer::announce_choice_wait) から呼ばれる。
+    /// 再生器の状態の移り（`tick`）の中では呼ばれない。既定は何もしない（上書きしない受け手の
+    /// 動きは変わらない）。
+    fn choice_wait_began(&mut self) {}
 }
 
 /// `CueCommand` → 配送先スロットの relevance 分類（**単一権威**・R11.3）。

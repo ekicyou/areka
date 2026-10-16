@@ -379,6 +379,9 @@ pub struct ActorTextState {
     /// 開いているアンカーの範囲（`choices` の添字）。開いていなければ `None`。
     /// `choices` と一緒に消える（操作は [`anchor`]）。
     anchor_open: Option<usize>,
+    /// 済みの境目: この序数より前の選択肢は済み（`0..=choices.len()`・`choices` と同じ寿命で
+    /// 消去のとき 0 に戻る・アンカーは境目より前でも済まない・要件 1.10〜1.13）。
+    settled: usize,
     /// グリフ序数と同じ序数空間の装飾番号列（操作は [`decoration`]・R3.3）。
     glyph_styles: Vec<StyleId>,
     /// 装飾の表（番号 → 既定と異なる見た目・内容と同じライフサイクル）。
@@ -406,6 +409,23 @@ impl ActorTextState {
     /// テキスト状態が初期状態（空）か。
     pub fn is_empty(&self) -> bool {
         self.items.is_empty() && self.reveal.is_empty() && self.choices.is_empty()
+    }
+
+    /// 今ある範囲を全部済みにする（境目を範囲の数へ進める）。済むのは種類が選択肢の範囲だけ。
+    pub(crate) fn settle_choices(&mut self) {
+        self.settled = self.choices.len();
+    }
+
+    /// その範囲が済んだ選択肢か（種類が選択肢で、序数が境目より前）。
+    pub fn is_settled_choice(&self, span: &ChoiceSpan) -> bool {
+        span.kind == SpanKind::Choice && span.ordinal < self.settled
+    }
+
+    /// 済んでいない選択肢が 1 つでもあるか。
+    pub fn has_live_choice(&self) -> bool {
+        self.choices
+            .iter()
+            .any(|span| span.kind == SpanKind::Choice && !self.is_settled_choice(span))
     }
 }
 
@@ -439,6 +459,24 @@ impl TextLayerState {
         TextLayerState {
             rehearsal: true,
             ..self.clone()
+        }
+    }
+
+    /// 場所の選択肢を済みにする。場所の状態が無ければ何もしない（偽を返す・場所も作らない）。
+    pub(crate) fn settle_choices_at(&mut self, place: &PlaceKey) -> bool {
+        match self.actors.get_mut(place) {
+            Some(state) => {
+                state.settle_choices();
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// 全部の場所の選択肢を済みにする。
+    pub(crate) fn settle_all_choices(&mut self) {
+        for state in self.actors.values_mut() {
+            state.settle_choices();
         }
     }
 

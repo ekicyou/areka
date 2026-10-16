@@ -10,8 +10,9 @@
 //!
 //! 1. **表示に効く 7 項目**（`name`・`height`・`color`・`bold`・`italic`・`underline`・
 //!    `strike`）は、有効にした行と素の行で**画素が違う**（要件 5.1）。
-//! 2. **下線と打ち消し線**は、インクの増えた行が連続した 1 本の帯になり、その位置が
-//!    今日の DirectWrite の既定と同じである（要件 5.1・位置は areka で描き分けない）。
+//! 2. **下線と打ち消し線**は、インクの増えた行が連続した 1 本の帯になる（要件 5.1）。
+//!    打ち消し線の位置は今日の DirectWrite の既定と同じ。横書きの下線の位置はベースラインの直下
+//!    （spec `areka-P0-balloon-text-bugs` 要件 3.10——areka が塗る）。
 //! 3. **語彙のみの 3 項目**（`sub`・`sup`・`outline`）は、有効にしても**画素が同じ**
 //!    （要件 5.9／6.1——DirectWrite の範囲指定で表せないので表示は変えない）。
 //!
@@ -54,10 +55,11 @@ use support::{
 /// `\f[underline,1]` でインクが増える行の帯（供給面 local の y・`Yu Gothic UI` の
 /// `font.height,28`・横書き）。
 ///
-/// 位置は DirectWrite の既定に委ねてあり、areka 側で線を描き分けない（要件 5.1・
-/// `doc/COMPAT_ARCHITECTURE.md` §8 の登記対象）。ここは**今日の値**を実測で固定するだけで、
-/// 値が動いたら赤にして裁定を仰ぐ。
-const UNDERLINE_BAND: (u32, u32) = (33, 33);
+/// 横書きの下線は areka が線の上端をベースラインに置いて塗る（spec `areka-P0-balloon-text-bugs`
+/// 要件 3.10・`doc/COMPAT_ARCHITECTURE.md` §8 の登記対象）。この形のベースラインは 30
+/// （字のインクは 29 行まで）で、二値化した線の帯は 30 の 1 行（太さ 1.42）。DirectWrite の既定の
+/// 位置（33・ベースラインから下線の位置の分だけ下）から改めた。値が動いたら赤にして裁定を仰ぐ。
+const UNDERLINE_BAND: (u32, u32) = (30, 30);
 
 /// 同上・`\f[strike,1]`（打ち消し線は字の中ほどを通る）。
 ///
@@ -135,7 +137,7 @@ fn each_visible_key_changes_the_pixels_in_horizontal_tb() {
 
 /// `\f[underline,1]` は字より下に連続した 1 本の帯を足す。
 ///
-/// 位置は DirectWrite の既定（areka は描き分けない）。[`UNDERLINE_BAND`] は今日の実測値で、
+/// 位置はベースラインの直下（要件 3.10）。[`UNDERLINE_BAND`] は今日の実測値で、
 /// 動いたら赤にして裁定を仰ぐ。
 #[test]
 fn underline_adds_one_band_of_ink_below_the_glyphs() {
@@ -146,7 +148,7 @@ fn underline_adds_one_band_of_ink_below_the_glyphs() {
     assert_eq!(
         band, UNDERLINE_BAND,
         "下線のインクの帯が今日の値から動いた（`Yu Gothic UI` font.height={FONT_HEIGHT}・横書き）。\
-         位置は DirectWrite の既定に委ねてあるので、値が動いたら描画基盤側の変化を疑い、\
+         線の上端はベースライン（要件 3.10）なので、値が動いたら塗り方か描画基盤側の変化を疑い、\
          定数を書き換える前に裁定を仰ぐこと"
     );
 }

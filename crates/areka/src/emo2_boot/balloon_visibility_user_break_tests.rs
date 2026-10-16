@@ -222,14 +222,14 @@ fn a_deadline_reached_after_a_user_break_produces_no_action() {
     assert!(expired.logs.is_empty(), "満了の時刻に記録が出た");
 }
 
-/// 抑止（ドラッグ・滞在・選択肢の表示中）は時間切れだけの規則であり、中断は見ない
+/// 抑止（ドラッグ・滞在）は時間切れだけの規則であり、中断は見ない
 /// ——ダブルクリックした利用者は必ずバルーンの上に居る。
 #[test]
 fn suppression_does_not_hold_back_a_user_break() {
     let mut state = BalloonVisibilityState::default();
     step(&mut state, &[(0, seen(3, false))]);
 
-    let mut obs = observations(&[(0, choosing(hovered(seen(3, true))))]);
+    let mut obs = observations(&[(0, hovered(seen(3, true)))]);
     obs.dragging = true;
     obs.lifecycle.push(TalkLifecycleSignal::UserBreak);
     let broken = decide(&mut state, &obs, Some(1.0), TIMEOUT);

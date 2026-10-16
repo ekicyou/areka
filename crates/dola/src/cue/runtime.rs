@@ -169,6 +169,16 @@ impl CuePlayer {
         self.sinks.push(sink);
     }
 
+    /// 登録された全部の受け手へ [`CueSink::choice_wait_began`] を登録順に 1 回ずつ配る。
+    ///
+    /// 呼ぶのは再生の側（選択待ちに入った事実を完了の口へ送った後）で、`tick` の中からは
+    /// 呼ばない（状態の移りの中で配ると、選択待ちの知らせより先に受け手へ着きうる）。
+    pub fn announce_choice_wait(&mut self) {
+        for sink in self.sinks.iter_mut() {
+            sink.choice_wait_began();
+        }
+    }
+
     // ── 2 フェーズ API ──
 
     /// Phase 1: 注入時刻でランタイムを進める。

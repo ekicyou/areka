@@ -231,7 +231,8 @@ impl TextRegion {
     /// （`\_l` の `centerx`／`centery` の基準）。
     ///
     /// - validrect: 負値=反対辺基準で絶対値化。成分 `None` は画像全域の辺へ縮退
-    ///   （`debug!` 記録）。退化矩形（幅/高さ ≤ 0）は `warn!`＋そのまま返す（縮退継続）。
+    ///   （`debug!` 記録）。潰れた矩形（幅/高さ ≤ 0）は記録せずそのまま返す——判定は
+    ///   [`is_collapsed`](Self::is_collapsed)、記録は actor の登録口の担当（下の節）。
     /// - 描画開始点: validrect の範囲内（両端を含む）へ解決された origin 成分は宣言どおり。
     ///   範囲外へ解決された成分と `None` 成分は書字開始角へ縮退する（どちらも `debug!` 記録）。
     ///   無視した宣言の解決値は [`ignored_origin`](Self::ignored_origin) が運ぶ。
@@ -255,8 +256,14 @@ impl TextRegion {
     /// 文言と 4 つの欄（`balloon`・`axis`・`wrap_threshold`・`inline_limit`）は移動の前後で
     /// 1 文字も変えていない。
     ///
-    /// 移したのは**この警告だけ**である——退化した validrect の `warn!` と未指定成分の縮退の
-    /// `debug!` は別の症状の記録であり、そのまま残す（記録の無い縮退経路を作らない）。
+    /// 未指定成分の縮退の `debug!` は別の症状の記録であり、そのまま残す。
+    ///
+    /// ## 潰れた validrect の警告も本関数では書かない（2026-10-16・spec `areka-P0-balloon-text-bugs` 件 2）
+    ///
+    /// 潰れた validrect（幅か高さが 0 以下）の `warn!` も、かつて本関数の中にあった。上と同じ
+    /// 理由で毎フレーム出続けたため外した。判定は [`is_collapsed`](Self::is_collapsed) が持ち、
+    /// 記録は actor の登録口が「潰れた」「戻った」の状態の変わり目に 1 回ずつ書く。記録の無い
+    /// 縮退経路にはならない。
     pub fn resolve(model: &BalloonModel, image_size: (u32, u32), mode: WritingMode) -> TextRegion {
         let (width, height) = (image_size.0 as f32, image_size.1 as f32);
 
@@ -266,15 +273,9 @@ impl TextRegion {
         let top = resolve_or(vr.top(), height, 0.0, "validrect.top");
         let right = resolve_or(vr.right(), width, width, "validrect.right");
         let bottom = resolve_or(vr.bottom(), height, height, "validrect.bottom");
-        if right <= left || bottom <= top {
-            tracing::warn!(
-                left,
-                top,
-                right,
-                bottom,
-                "解決後の validrect が退化している（幅/高さ ≤ 0）——描画は空領域へ縮退する"
-            );
-        }
+        // 潰れた validrect（幅か高さが正でない）でも**ここでは記録しない**——毎フレーム
+        // 呼ばれる本関数が書くと記録が洪水になる。潰れの判定は [`TextRegion::is_collapsed`]、
+        // 記録は actor の登録口が状態の変わり目に 1 回だけ書く（件 2・要件 2.2）。
 
         // ── 描画開始点: 範囲内の宣言は宣言どおり・範囲外と未宣言は書字開始角へ（正準表参照） ──
         let start_corner = match mode {
@@ -324,6 +325,14 @@ impl TextRegion {
             image_size: (width, height),
             ignored_origin: (ignored_x, ignored_y),
         }
+    }
+
+    /// 解決した validrect の幅か高さが正でないか（非数も潰れに数える）。
+    ///
+    /// 潰れた領域は「描くものが無い状態」であり、文字の層はその場所に供給面を作らない
+    /// （件 2・要件 2.1）。`!(x > 0.0)` の形で問うので、非数を含む比較は潰れに倒れる。
+    pub fn is_collapsed(&self) -> bool {
+        !(self.right - self.left > 0.0 && self.bottom - self.top > 0.0)
     }
 
     /// validrect 絶対矩形の左辺（image px）。

@@ -7,20 +7,25 @@
 //!
 //! ## 焼くもの・焼かないもの
 //!
-//! 焼くのはフォント家族名・大きさ・太さ・斜体・下線・打ち消し線の 6 項目だけで、いずれも
+//! 焼くのはフォント家族名・大きさ・太さ・斜体・打ち消し線の 5 項目だけで、いずれも
 //! **既定と値が違うときだけ**発行する（既定と同じ項目への範囲指定は意味が無く COM 呼出が
 //! 増えるだけ——これは節約であって要件 14.2 の担保ではない。「既定だけの行は範囲指定 0 回」を
 //! 実際に担っているのは、呼び手 `line_layout_for` の `line.default_only` 短絡と、下の
 //! `apply_font_ranges` が外側で行う `if run.style == StyleId::DEFAULT { continue; }` の 2 点で、
-//! この 6 項目のガードを全撤去しても crate は緑のまま——実測 2026-09-12）。白抜き（`outline`）と
-//! 上下付き（`script`）は語彙のみで読まない。下線・打ち消し線の**位置**は DirectWrite の
-//! 既定に委ね、areka 側で線を描き分けない（要件 5.7）——だから `SetUnderline`／
-//! `SetStrikethrough` の真偽だけを渡す。太字・斜体に対応する書体が無いときの合成も
-//! DirectWrite に委ねる（要件 5.6・失敗扱いにしない）。
+//! この項目ごとのガードを全撤去しても crate は緑のまま——実測 2026-09-12）。白抜き（`outline`）と
+//! 上下付き（`script`）は語彙のみで読まない。打ち消し線の**位置**は DirectWrite の既定に委ね
+//! （完了 `text-decoration-canon` の要件 5.7）、`SetStrikethrough` の真偽だけを渡す。
+//! 太字・斜体に対応する書体が無いときの合成も DirectWrite に委ねる（要件 5.6・失敗扱いにしない）。
+//!
+//! **下線は焼かない**（areka-P0-balloon-text-bugs 件 3 が要件 5.7 を横書きの下線について改めた）。
+//! 下線を引く区間は [`line_styles`] が [`LineStyles::underlines`] に選び（選び方は焼いていた
+//! ときと同じ）、areka がその区間の DirectWrite の幾何から矩形を決めて字の後に塗る——横書きは
+//! どの行もベースラインの直下、面に収まらなければ面の内側へ寄せる。D2D の `DrawTextLayout` に
+//! 下線を描かせると、最下行の線が面の外に出て欠けるため。
 //!
 //! ## 色は毎フレーム焼き直す
 //!
-//! フォント系 6 項目は行 TextLayout の生成時に 1 度だけ焼く（[`crate::draw::LineLayoutStore`]
+//! フォント系の項目は行 TextLayout の生成時に 1 度だけ焼く（[`crate::draw::LineLayoutStore`]
 //! が装飾番号列込みで再利用を判定する）。一方**色**は `SetDrawingEffect` でブラシを差すので、
 //! 前フレームの重ね表示（hover）の色がキャッシュ層の TextLayout に残り得る。ゆえに色だけは
 //! 毎フレーム「全範囲の解除 → 装飾の色 → 重ね表示の色」の順で焼き直す
@@ -107,17 +112,35 @@ pub(crate) struct LineStyles {
     pub extent: f32,
     /// 既定の見た目しか使っていない行か（真なら範囲指定・色の解除・ブラシ生成のいずれも行わない）。
     pub default_only: bool,
+    /// 下線を引く区間の列（areka が塗る・行の TextLayout には焼かない）。既定だけの行は空。
+    pub underlines: Vec<DWRITE_TEXT_RANGE>,
 }
 
 /// 行の装飾を切り出す（既定だけの行は従来の引数——空の番号列と `font_height`——へ落とす）。
+///
+/// 下線の区間は、既定と違う装飾の区間のうち、見た目の下線が真で既定の下線と違うもの
+/// （下線を行の TextLayout に焼いていたときと同じ選び方）。作者の `[underline,1]` と
+/// アンカーの既定の下線はどちらもここに入る。
 pub(crate) fn line_styles(
     run: &GlyphRunContent,
     font_height: f32,
     mode: WritingMode,
+    styles: &StyleTable,
+    default: &TextLook,
 ) -> LineStyles {
     let runs = style_runs(&run.glyphs);
     let default_only = runs.iter().all(|r| r.style == StyleId::DEFAULT);
+    let underlines = runs
+        .iter()
+        .filter(|r| r.style != StyleId::DEFAULT)
+        .filter(|r| {
+            let look = styles.resolve(r.style, default);
+            look.underline && look.underline != default.underline
+        })
+        .map(|r| r.range)
+        .collect();
     LineStyles {
+        underlines,
         ids: if default_only {
             Vec::new()
         } else {
@@ -134,6 +157,7 @@ pub(crate) fn line_styles(
 }
 
 /// 既定と異なる区間にだけ、既定と異なるフォント系項目を焼く（要件 5.1／5.2／5.6／5.7／5.8／9.8）。
+/// 下線は焼かない（[`LineStyles::underlines`] の区間を areka が塗る・areka-P0-balloon-text-bugs 件 3）。
 ///
 /// 行 TextLayout の**生成時に 1 度だけ**呼ばれる（[`crate::draw::LineLayoutStore::line_layout_decorated`]
 /// の `decorate` 口）。家族名は [`FontCatalog::family_for`] が解決した名前だけを渡す——
@@ -183,11 +207,6 @@ pub(crate) fn apply_font_ranges(
             };
             unsafe { layout.SetFontStyle(style, run.range) }
                 .map_err(device_err("SetFontStyle(装飾の区間)"))?;
-        }
-        if look.underline != default.underline {
-            note_range_call();
-            unsafe { layout.SetUnderline(look.underline, run.range) }
-                .map_err(device_err("SetUnderline(装飾の区間)"))?;
         }
         if look.strike != default.strike {
             note_range_call();

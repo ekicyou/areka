@@ -29,13 +29,29 @@
 //! # 会話終了後のタイムアウト（Requirement 4）
 //!
 //! 計測はトークの終わりの合図（`TalkEnded`）が届いてから始める。満了予定の起点は
-//! **実効の表示終了**＝会話の占有終端（待機を含む台本の終わり）と止まった時刻の早い方で、
-//! 止まった時刻が届かなければ占有終端である。正典のカウント起点「スクリプトの表示が終わって
-//! から」に一致させるため、初期の確立式は
-//! `満了予定 = 実効の表示終了（占有終端と止まった時刻の早い方）＋ このトークの待ち時間（既定は既定時間）`
+//! **実効の表示終了**で、トークの種類で採り方が分かれる。
+//!
+//! | トークの終わり | 選択肢つきでないトーク | 選択肢つきのトーク（`ChoiceShown` が届いた） |
+//! |---|---|---|
+//! | 未着 | 計測しない | 計測しない（選択の待ちの間はここに居る） |
+//! | 止まった時刻あり | 占有終端と止まった時刻の早い方 | 止まった時刻（`origin=choice_wait_ended_at`） |
+//! | 時刻なし | 占有終端（`origin=stop_time_missing`） | 計測が成り立つ最初のフレームの現在時刻（`origin=choice_wait_end_time_missing`） |
+//!
+//! 正典のカウント起点「スクリプトの表示が終わってから」に一致させるため、初期の確立式は
+//! `満了予定 = 実効の表示終了 ＋ このトークの待ち時間（既定は既定時間）`
 //! であって、「計測が成り立った最初のフレームの現在時刻 + 待ち時間」ではない——観測はフレーム
 //! 単位で飛び飛びに入るため、後者では観測の遅れがそのまま満了のずれになる。現在時刻を起点に
-//! 取り直すのは抑止が解けた瞬間だけである（Requirement 5.3）。
+//! 取り直すのは抑止が解けた瞬間と、選択肢つきのトークで止まった時刻が届かなかったとき
+//! （本番では起きない縮退）だけである（Requirement 5.3）。
+//!
+//! 選択肢つきのトークでは占有終端（選択肢を出した所）と比べない。選択の待ちは区切り（台本の
+//! 最後）で解けるまでトークを終わらせないので、待ちの間は計測の手前で止まり、待ちが解けた
+//! 時刻＝止まった時刻から測る（選んだ・選択肢の時間切れ・中断のどれでも同じ合図の形・
+//! areka-P0-balloon-text-bugs 要件 1.1〜1.8）。次の会話の開始で「選択肢つき」の印は戻る。
+//!
+//! 抑止はドラッグ中と可視のバルーンへの滞在の 2 つだけで、抑止が解けたら現在時刻から測り直す。
+//! 選択肢の行が残っていることは抑止に数えない（完了 spec areka-P0-balloon-visibility の要件 5.4
+//! を areka-P0-balloon-text-bugs 要件 1.5 が改めた）。
 //!
 //! 待ち時間はトークごとの指定（`\![set,balloontimeout,時間]`）で差し替わり、「なし」の指定では
 //! そのトークの計測をしない。時間切れで隠したフレームにだけトークの番号の知らせを返す。
@@ -157,23 +173,24 @@ impl VisibilityTrigger {
 
 /// 成立している抑止条件の内訳（Requirement 8.3 のログ用）。
 ///
-/// 抑止 = ドラッグ中 ∨ 可視 scope へのポインタ滞在 ∨ 装着 scope の選択肢表示中
-/// （design「可視性の判断フロー」の抑止の式）。観測が取れなかった条件は成立しない側へ倒す
-/// （Requirement 5.5）。
+/// 抑止 = ドラッグ中 ∨ 可視 scope へのポインタ滞在（design「可視性の判断フロー」の抑止の式）。
+/// 観測が取れなかった条件は成立しない側へ倒す（Requirement 5.5）。
+///
+/// 完了 spec areka-P0-balloon-visibility の要件 5.4 は「選択肢の表示中」も抑止に数えたが、
+/// areka-P0-balloon-text-bugs が外した（要件 1.5）。選択を待つ間はトークの終わりが届かないので
+/// 計測の手前で止まり、待ちが解けた後に残る選択肢の行は時間切れを止める理由にならない。
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct SuppressionKinds {
     /// いずれかのバルーン窓がドラッグ中（Requirement 5.1）。
     pub(crate) dragging: bool,
     /// いずれかの**可視**バルーンの上にポインタが滞在中（Requirement 5.2）。
     pub(crate) hover: bool,
-    /// いずれかの装着 scope で選択肢が表示中（Requirement 5.4・外部所有の照会）。
-    pub(crate) choice: bool,
 }
 
 impl SuppressionKinds {
     /// いずれかの抑止条件が成立しているか。
     fn any(self) -> bool {
-        self.dragging || self.hover || self.choice
+        self.dragging || self.hover
     }
 }
 
@@ -254,6 +271,12 @@ pub(crate) enum MeasurementOrigin {
     DisplayEnd,
     /// 止まった時刻が届かなかった（時刻源が起点を持たない）ので、占有区間の終端を採った。
     StopTimeMissing,
+    /// 選択肢つきのトークで、選択の待ちが解けた＝止まった時刻（talk 相対秒）を採った
+    /// （占有区間の終端とは比べない・areka-P0-balloon-text-bugs 要件 1.2〜1.4・1.8）。
+    ChoiceWaitEndedAt(f64),
+    /// 選択肢つきのトークで止まった時刻が届かなかったので、終わりを畳んだ後で計測が成り立った
+    /// 最初のフレームの現在時刻を採った（表示を保持する側の縮退・本番では起きない）。
+    ChoiceWaitEndTimeMissing,
 }
 
 impl MeasurementOrigin {
@@ -263,6 +286,8 @@ impl MeasurementOrigin {
             MeasurementOrigin::StoppedAt(_) => "stopped_at",
             MeasurementOrigin::DisplayEnd => "display_end",
             MeasurementOrigin::StopTimeMissing => "stop_time_missing",
+            MeasurementOrigin::ChoiceWaitEndedAt(_) => "choice_wait_ended_at",
+            MeasurementOrigin::ChoiceWaitEndTimeMissing => "choice_wait_end_time_missing",
         }
     }
 }
@@ -335,12 +360,6 @@ pub(crate) struct ScopeObservation {
     /// `None` は**観測が取れなかった**ことを表す（本番ではポインタ配線そのものの不在）。
     /// その場合は抑止しない側として扱う（Requirement 5.5——消えないまま固着する側へ倒さない）。
     pub(crate) hover: Option<bool>,
-    /// この scope で選択肢が表示中か（本番では `TextLayerRuntime::choice_active`・
-    /// Requirement 5.4 の外部所有の照会）。
-    ///
-    /// `None` は観測が取れなかったことを表し、`hover` と同じく抑止しない側へ倒す
-    /// （Requirement 5.5）。
-    pub(crate) choice_active: Option<bool>,
     /// この scope の箱（シェル内バルーン）のどれかに文字が出ているか（areka-P0-shell-balloon
     /// 要件 6.10・6.11）。既定は偽で、偽なら判断は箱を足す前と同じになる。
     ///
@@ -366,7 +385,7 @@ pub(crate) struct VisibilityObservations {
     /// いずれかのバルーン窓がドラッグ中か（Requirement 5.1）。
     ///
     /// 本番の観測は world の問い合わせ（ドラッグ標識つきバルーン窓の有無）であり、失敗しうる
-    /// 借用や不在の資源を経由しないため、`hover` / `choice_active` と違って「観測できない」
+    /// 借用や不在の資源を経由しないため、`hover` と違って「観測できない」
     /// 状態を持たない。
     pub(crate) dragging: bool,
 }
@@ -406,7 +425,7 @@ pub(crate) struct ScopeVisibility {
 /// 判断中核 [`decide`] はこの値を読み書きしない（縮退の方向は観測値そのものが表す）。
 #[derive(Debug, Default)]
 struct ObservationFailureLogged {
-    /// 文字層ランタイムの借用に失敗した（グリフ数と選択肢表示中が観測できない）。
+    /// 文字層ランタイムの借用に失敗した（グリフ数が観測できない）。
     runtime: bool,
     /// ポインタ配線（`BalloonWiring`）が world に無い（滞在が観測できない）。
     hover_wiring: bool,
@@ -434,6 +453,9 @@ pub(crate) struct BalloonVisibilityState {
     talk_end: TalkEnd,
     /// このトークの待ち時間（会話開始の信号で `Default` へ戻す・到着順に上書き）。
     talk_timeout: TalkTimeout,
+    /// このトークで選択肢を出した（`ChoiceShown` で立て、会話開始の信号で戻す・
+    /// areka-P0-balloon-text-bugs 要件 1.2〜1.4）。
+    talk_had_choice: bool,
     /// 利用者の中断でバルーンを隠したので、内容の増加では出し直さない
     /// （areka-P0-balloon-break 要件 4.8）。次の会話開始の信号で解く。
     ///
@@ -531,6 +553,10 @@ mod box_tests;
 #[cfg(test)]
 #[path = "balloon_visibility_talk_end_tests.rs"]
 mod talk_end_tests;
+
+#[cfg(test)]
+#[path = "balloon_visibility_choice_wait_tests.rs"]
+mod choice_wait_tests;
 
 // 会話終了観測から判断中核までの端から端（task 6.6）。実台本の再生から、受け口が落ちてトークの
 // 終わりが届き、占有終端（止まった時刻と同じ）が計測起点になるところまでを 1 本で通す。判断中核の私有状態を読むため親の内側に置く。

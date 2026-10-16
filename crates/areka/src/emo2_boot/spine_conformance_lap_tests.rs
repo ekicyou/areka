@@ -249,8 +249,9 @@ impl StageSink for LapSink<'_> {
                     }
                     // 利用者の中断は押下の線から届くもので、本テストは押下を作らない。
                     TalkLifecycleSignal::UserBreak => {}
-                    // 待ち時間の指定と会話の終わりは本テストの観測の対象外。
+                    // 待ち時間の指定・選択肢を出した・会話の終わりは本テストの観測の対象外。
                     TalkLifecycleSignal::BalloonTimeout(_)
+                    | TalkLifecycleSignal::ChoiceShown
                     | TalkLifecycleSignal::TalkEnded { .. } => {}
                 }
             }

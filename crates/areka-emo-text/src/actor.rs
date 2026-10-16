@@ -260,6 +260,11 @@ pub struct TextLayerRuntime {
     /// 定義の 2 つの警告（折り返しの基準・無視した書き出し位置）を出した箱の名前。箱の登録には
     /// 前の配置の入力が毎回無いので、名前ごとに 1 度だけにする。箱の束を差し替えると空に戻す。
     box_definition_warned: BTreeSet<BoxName>,
+    /// いま描画範囲（validrect）が潰れている場所（幅か高さが 0 以下・件 2）。登録口
+    /// （`actor_attach.rs` の `note_region_collapse`）が状態の変わり目に 1 回だけ記録するための
+    /// 記憶で、登録を外しても・箱の束を差し替えても消さない＝隠す・出す・付け直しで記録が
+    /// 増えない（要件 2.3〜2.5・2.7）。
+    collapsed_regions: BTreeSet<PlaceKey>,
     /// スコープ → 最後に提示したフレームで文字が 1 字以上見えていた箱の四角（手前から・
     /// `actor_box.rs` の `shown_boxes`）。提示のたびに作り直し、出なくなった箱（`\c`・台詞の頭・
     /// 箱を隠す印・箱の同期が登録を外した箱）はその場で外す。台本の `\s` の受け取りでは外さない
@@ -268,6 +273,10 @@ pub struct TextLayerRuntime {
     /// 先渡しの空回しで求めた区間の全文の持ち主（[`preview_talk`](Self::preview_talk) が入れ、
     /// 合図の適用が消去と届いた数を数える）。正本ではない（届いた字の正本は `state`）。
     lookahead: TalkLookahead,
+    /// このトークが選択待ちに入ったか（文字の線の `ChoiceWaitBegan` で真・`TalkEnded` と次のトークの
+    /// 先渡しで偽）。真のときだけ押下の口 [`settle_choices_at`](Self::settle_choices_at) が場所を済ませる。
+    /// トークは 1 体のゴーストで同時に 1 本なので、場所ごとでなくランタイムに 1 つ（件 1）。
+    choice_wait_open: bool,
 }
 
 impl TextLayerRuntime {
@@ -295,8 +304,10 @@ impl TextLayerRuntime {
             box_sites: HashMap::new(),
             box_overflow_warned: BTreeSet::new(),
             box_definition_warned: BTreeSet::new(),
+            collapsed_regions: BTreeSet::new(),
             shown_boxes: HashMap::new(),
             lookahead: TalkLookahead::default(),
+            choice_wait_open: false,
         }
     }
 
@@ -469,24 +480,72 @@ impl TextLayerRuntime {
         self.choice_snapshot.get(place).map_or(&[], Vec::as_slice)
     }
 
-    /// 「選択肢表示中」照会（R1.3・照会のみ＝バリア解決はしない）。
+    /// 「済んでいない選択肢があるか」照会（R1.3・照会のみ＝バリア解決はしない・件 1 で意味を改めた）。
     ///
     /// **表示層自身**の範囲の記録（[`ActorTextState::choices`](crate::state::ActorTextState::choices)）に
-    /// 種類が選択肢のものがあることを表す（DD-6——供給側 `CuePlayerState::WaitingForChoice` バリアの真実源とは別）。
-    /// スコープの**どの場所か**（普通のバルーン・箱）に選択肢があれば真（要件 8.4——時間切れの
-    /// 待ちを止める条件と kanade の選択待ちの単位がスコープだから）。アンカーの範囲は数えない
-    /// （アンカーはバルーンの時間切れを遅らせない）。未知 actor・選択肢なしは `false`。
+    /// 種類が選択肢で済みの境目より後のもの（[`ActorTextState::has_live_choice`](crate::state::ActorTextState::has_live_choice)）があることを表す（DD-6——供給側 `CuePlayerState::WaitingForChoice` バリアの真実源とは別）。
+    /// スコープの**どの場所か**（普通のバルーン・箱）に済んでいない選択肢があれば真（kanade の
+    /// 選択待ちの単位がスコープだから）。アンカーの範囲は数えない。バルーンの時間切れの観測は
+    /// これを読まない（選択肢つきのトークはトークの終わりの時刻から測る）。未知 actor・選択肢なしは `false`。
     pub fn choice_active(&self, actor: &ActorKey) -> bool {
-        self.state.places().any(|(key, s)| {
-            key.actor == *actor && s.choices().iter().any(|span| span.kind == SpanKind::Choice)
-        })
+        self.state
+            .places()
+            .any(|(key, s)| key.actor == *actor && s.has_live_choice())
+    }
+
+    /// 押下の口: 選択待ちに入った後なら、場所の選択肢を済みにし、当たり行の写しと強調から
+    /// 済んだ選択肢をその場で外す（提示を待たない・`Clear` と同じ原子性・要件 1.10〜1.13）。
+    /// 選択待ちに入る前は何もしない（kanade が捨てる押下なので、押し直せるまま残す）。
+    pub fn settle_choices_at(&mut self, place: &PlaceKey) {
+        if !self.choice_wait_open {
+            debug!(actor = %place.actor, "選択待ちの前の押下——選択肢を済みにしない（押し直せるまま）");
+            return;
+        }
+        if self.state.settle_choices_at(place) {
+            self.drop_settled_choices(place);
+        }
+    }
+
+    /// 文字の線の `ChoiceWaitBegan`: このトークが選択待ちに入ったと覚える。
+    fn note_choice_wait_began(&mut self) {
+        self.choice_wait_open = true;
+    }
+
+    /// 選択待ちに入ったかの欄を戻す（`TalkEnded` と次のトークの先渡し）。
+    fn close_choice_wait(&mut self) {
+        self.choice_wait_open = false;
+    }
+
+    /// 文字の線のトークの終わり: 全部の場所の選択肢を済みにし、押下の口と同じく写しと強調を揃える。
+    fn settle_all_choices(&mut self) {
+        self.state.settle_all_choices();
+        let places: Vec<PlaceKey> = self.state.places().map(|(key, _)| key.clone()).collect();
+        for place in &places {
+            self.drop_settled_choices(place);
+        }
+    }
+
+    /// 場所の当たり行の写しから済んだ選択肢の行を外し（アンカーの行は残る）、済んだ選択肢を指す
+    /// 強調を `None` にする。
+    fn drop_settled_choices(&mut self, place: &PlaceKey) {
+        let Some(state) = self.state.place_state(place) else {
+            return;
+        };
+        if let Some(rows) = self.choice_snapshot.get_mut(place) {
+            rows.retain(|row| !is_settled_ordinal(state, row.ordinal));
+        }
+        if let Some(hover) = self.choice_hover.get_mut(place)
+            && hover.is_some_and(|ordinal| is_settled_ordinal(state, ordinal))
+        {
+            *hover = None;
+        }
     }
 
     /// 「押せる範囲があるか」の照会（選択肢かアンカー・種類を問わない）。
     ///
     /// スコープの**どの場所か**（普通のバルーン・箱）に範囲の記録があれば真。ホバーと押下の
-    /// 前段が見る。バルーンの時間切れの待ちを止める条件には使わない（それは
-    /// [`choice_active`](Self::choice_active)）。未知 actor・範囲なしは `false`。
+    /// 前段が見る。バルーンの時間切れの待ちを止める条件には使わない（済んでいない選択肢の
+    /// 有無は [`choice_active`](Self::choice_active)）。未知 actor・範囲なしは `false`。
     pub fn hit_active(&self, actor: &ActorKey) -> bool {
         self.state
             .places()
@@ -538,6 +597,8 @@ impl TextLayerRuntime {
 /// handler は `runtime` の `Rc` clone を捕捉し（`!Send` handler・基盤許容）、
 /// [`handle_text_msg_with`]（終了規律の正準写像）へ委譲して cue を純粋状態へ適用する。
 /// 先渡し（`TextMsg::Upcoming`）は実行時の `preview_talk` へ渡し、空回しで区間の全文を求める。
+/// 選択待ちの始まり（`TextMsg::ChoiceWaitBegan`）は押下の口を開き、トークの終わり
+/// （`TextMsg::TalkEnded`）は全部の場所の選択肢を済みにして口を閉じる（先渡しも口を閉じる・件 1）。
 /// 終了経路はちょうど 2 つ——`TextMsg::Close` 受領＝`Ok(Break)`・全 `UiSender`
 /// （＝全 [`EmoTextSink`] クローン）drop＝drain 正常終了（R1.4・error ログなし）。
 /// 個別 cue の適用失敗（runtime 借用競合など）は `Err` 戻し→基盤が `error!`＋継続する
@@ -567,6 +628,8 @@ pub fn spawn_emo_text(
             },
             |upcoming| match runtime.try_borrow_mut() {
                 Ok(mut rt) => {
+                    // 次のトークの先渡し＝前のトークの選択待ちは終わっている（件 1）。
+                    rt.close_choice_wait();
                     rt.preview_talk(&upcoming);
                     Ok(())
                 }
@@ -575,6 +638,23 @@ pub fn spawn_emo_text(
                 Err(_) => Err(format!(
                     "TextLayerRuntime が借用中のため先渡しを受け取れない（cues={}）——そのトークは先渡し無し",
                     upcoming.len()
+                )),
+            },
+            |mark| match runtime.try_borrow_mut() {
+                Ok(mut rt) => {
+                    if mark == TextMsg::ChoiceWaitBegan {
+                        rt.note_choice_wait_began();
+                    } else {
+                        // トークの終わり: 全部の場所の選択肢を済みにし、押下の口を閉じる（件 1）。
+                        rt.settle_all_choices();
+                        rt.close_choice_wait();
+                    }
+                    Ok(())
+                }
+                // 借用競合——cue と同じく Err 戻しで基盤の error!＋継続に乗せる（終わりなら、その
+                // トークの選択肢は次の台詞の頭で消える）。
+                Err(_) => Err(format!(
+                    "TextLayerRuntime が借用中のためトークの印を適用できない（{mark:?}）"
                 )),
             },
         )
@@ -590,6 +670,15 @@ mod boxes;
 
 #[path = "actor_present.rs"]
 mod present;
+
+/// その序数の範囲が済んだ選択肢か（範囲が無い序数は済んでいない扱い）。押下の口・トークの終わりの口と
+/// 提示（`actor_present.rs`）が同じ判定で写しと強調から外す。
+fn is_settled_ordinal(state: &crate::state::ActorTextState, ordinal: usize) -> bool {
+    state
+        .choices()
+        .iter()
+        .any(|span| span.ordinal == ordinal && state.is_settled_choice(span))
+}
 
 pub use boxes::ShownBox;
 pub use present::present_frame;
@@ -615,12 +704,28 @@ mod choice_contract_tests;
 mod clear_atomicity_tests;
 
 #[cfg(test)]
+#[path = "actor_choice_settle_tests.rs"]
+mod choice_settle_tests;
+
+#[cfg(test)]
 #[path = "actor_scale_refresh_tests.rs"]
 mod scale_refresh_tests;
 
 #[cfg(test)]
 #[path = "actor_region_warn_tests.rs"]
 mod region_warn_tests;
+
+#[cfg(test)]
+#[path = "actor_region_collapse_tests.rs"]
+mod region_collapse_tests;
+
+#[cfg(test)]
+#[path = "actor_region_collapse_present_tests.rs"]
+mod region_collapse_present_tests;
+
+#[cfg(test)]
+#[path = "actor_underline_present_tests.rs"]
+mod underline_present_tests;
 
 #[cfg(test)]
 #[path = "actor_scroll_retain_tests.rs"]

@@ -124,6 +124,7 @@ fn apply_lifecycle_signals(
                 state.talk_id = talk_id;
                 state.talk_end = TalkEnd::NotYet;
                 state.talk_timeout = TalkTimeout::Default;
+                state.talk_had_choice = false;
                 // 次の会話が始まった。進行中の計測は破棄する（Requirement 4.5）。
                 if let Some(deadline) = state.deadline.take() {
                     logs.push(VisibilityLogEvent::MeasurementDiscarded {
@@ -175,6 +176,10 @@ fn apply_lifecycle_signals(
                 // 計測を捨てる相手は構造上無い。
                 state.talk_timeout = timeout;
             }
+            TalkLifecycleSignal::ChoiceShown => {
+                // このトークは選択肢つき（areka-P0-balloon-text-bugs 要件 1.2〜1.4）。
+                state.talk_had_choice = true;
+            }
             TalkLifecycleSignal::TalkEnded { at } => {
                 // 止まった時刻を丸めずに記す。時刻が無ければ「時刻なし」（要件 5.2・5.6）。
                 state.talk_end = at.map_or(TalkEnd::TimeUnknown, TalkEnd::At);
@@ -189,7 +194,7 @@ fn apply_lifecycle_signals(
 /// 対象は**現に出ているバルーンすべて**で、中断の合図が起きた scope だけではない。窓が
 /// 見えている scope に加え、箱に文字が出ている scope も載せる（areka-P0-shell-balloon
 /// 要件 6.10）。どちらも出ていない scope は載せない（隠す指示を重ねて出さない）。
-/// 抑止（ドラッグ・ポインタの滞在・選択肢の表示中）は**見ない**——抑止はタイムアウトだけの規則であり、ダブルクリックした利用者は必ず
+/// 抑止（ドラッグ・ポインタの滞在）は**見ない**——抑止はタイムアウトだけの規則であり、ダブルクリックした利用者は必ず
 /// バルーンの上に居るためである。
 fn decide_user_break(
     state: &mut BalloonVisibilityState,
