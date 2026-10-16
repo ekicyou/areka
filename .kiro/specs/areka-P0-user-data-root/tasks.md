@@ -35,7 +35,7 @@
   - _Boundary: areka-ghost catalog_
   - _Requirements: 2.5, 10.3_
 
-- [ ] 2.2 プロセスに 1 つの形と、写す判断を 1 か所に置く
+- [x] 2.2 プロセスに 1 つの形と、写す判断を 1 か所に置く
   - areka が共有の葉のクレートに path 依存し、根のモジュールの下に新しいモジュールを宣言する（`main.rs` は触らない）
   - 形は実行ファイルの場所と同じ「1 回だけ決めて覚える」型で覚える。並びに入れる書ける根は `AREKA_ROOT` が在るとき無しにし、その判断は値の関数に分けて確かめる
   - 写す判断は純粋で、並びの印・実行ファイルのフォルダ・種類（ゴースト／バルーン）・フォルダだけで「そのまま／写す（行き先）」を答える。写す口は 1 つで、在れば写さず行き先を返し、写せたら info、先を越されたら info、失敗なら元を返して error
@@ -151,3 +151,8 @@
   - zip を展開して書ける形で起動し、書ける根を使わない記録と、今の記憶がそのまま効くことを見る
   - 実測の記録のファイルに機械の全員向けと zip の形の結果が在る
   - _Requirements: 1.2, 1.4, 4.1, 7.1, 10.8, 10.9, 10.10_
+
+## Implementation Notes
+- areka には lib のターゲットが無い。クレートのテストは `cargo test -p areka --bin areka <filter>`。全体の `cargo test -p areka` は i686 の `shiori-host32-helper`・`shiori-host32-testdll-loadu` を先に組んでおく（`smoke_boot_loop_exit` 等）
+- ワークスペースの `clippy -D warnings` は HEAD の時点で触っていないクレート（dola・areka-kanade・areka-ghost の runtime.rs/ticker.rs）で赤。全体の検査（`tools/test-all.ps1`）は fmt と test だけ。変えた行だけ clippy を見る
+- 2.2 で後のタスクがつなぐ 5 つの関数に `#[allow(dead_code)]`（つなぐタスクの名前つき）を付けた。つないだタスクで外す

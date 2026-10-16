@@ -115,6 +115,7 @@ dependencies = [
  "areka-seriko",
  "areka-sylphya",
  "areka-update",
+ "areka-user-data",
  "async-io",
  "bevy_ecs",
  "dola",

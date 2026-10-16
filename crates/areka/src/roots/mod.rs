@@ -8,6 +8,7 @@ mod edit;
 pub(crate) mod pick;
 pub(crate) mod report;
 mod resolve;
+pub(crate) mod user_root;
 
 pub(crate) use desk::install;
 pub(crate) use edit::*;

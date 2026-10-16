@@ -34,6 +34,9 @@ areka-update = { path = "../areka-update" }
 # MCP サーバの受け口（areka-P0-mcp-server-core・要件 1.1／8.6）。ワークスペースの中の
 # path 依存で、外部（crates.io）依存の追加ではない（rmcp・tokio・hyper は areka-mcp 側に閉じる）。
 areka-mcp = { path = "../areka-mcp" }
+# 書ける根の形の判断と写す手続き（areka-P0-user-data-root・要件 4.6）。ワークスペースの中の
+# path 依存で、外部（crates.io）依存の追加ではない。
+areka-user-data = { path = "../areka-user-data" }
 windows-core = { workspace = true }
 human-panic = { workspace = true }
 thiserror = { workspace = true }
