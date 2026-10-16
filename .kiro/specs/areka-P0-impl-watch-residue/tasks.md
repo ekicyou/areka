@@ -62,7 +62,7 @@
   - 1970 年より前で失敗・後で秒数を返すこと、時計が失敗する状態ファイルの口で状態を変える呼び出しが失敗して何も書かないことを常時テストで判定する
   - 完了の状態: 新しいテストが緑
   - _Requirements: 2.1, 7.5_
-- [ ] 3.2 待ちの記録の「始めた時刻」を同じ時計から取る
+- [x] 3.2 待ちの記録の「始めた時刻」を同じ時計から取る
   - 待ちの口のいまの時刻を失敗しうる形にし、本物の口は 3.1 の口を使い、待ちの登録はそこから時刻を取る。偽の口も合わせる
   - 時計を止めた状態ファイルの口を本物の口として待ちに渡し、置かれた待ちの記録の始めた時刻が止めた時刻であることを常時テストで判定する（直す前の実物では赤になることを確かめる）
   - 完了の状態: 新しいテストが緑
@@ -156,3 +156,4 @@
 
 - 1.4: `plan::merge_order` の鍵に `Reverse(index)` を足して同点の並びを逆にした → `cli::commands_tests::the_serving_order_the_position_and_the_reading_agree_with_ties_and_bugs_mixed` が赤（番の順の判定）。控え `target\mutation-backup\plan.rs.bak` から戻し、sha256 一致を確かめて緑。
 - 2.2: ① `store::parse` の読み直しを外し、`WrongShape` の位置を `from_value` の失敗の位置（0, 0）から取った → `store::ports_tests::a_change_sets_each_broken_file_aside_and_its_damage_reaches_the_log_port`・`store::ports_tests::read_only_fails_on_a_broken_file_with_its_damage_and_does_not_set_it_aside`・`store::ports_tests::read_only_logs_the_damage_of_a_broken_file_in_one_ascii_line` が赤。② `Store::load` で訳を捨てた（`damage: None` 相当）→ `store::ports_tests::a_change_sets_each_broken_file_aside_and_its_damage_reaches_the_log_port`・`store::ports_tests::a_recovery_reaches_the_log_port_once_and_before_the_events_of_the_judgement`・`store::ports_tests::when_the_write_fails_the_events_of_the_judgement_do_not_reach_the_log_port` が赤。どちらも控え `target\mutation-backup\store.rs` から素のコピーで戻し、sha256 一致（`e9f87617157773fc1d3a4e5a291fa85b25a80f59aab2739958bc5d67254c99d0`）を確かめて緑。
+- 3.2: 直す前の実物（`WaitPort::now` が `store::unix_now` の本物の時刻）に新しいテストを先に当てた → `store::ports_tests::the_wait_record_takes_its_start_time_from_the_clock_of_the_store` が赤（`left: [Some(1792132289)]`・`right: [Some(1791000000)]`＝置かれた待ちの記録の `since` が止めた時刻 `T0` でなく本物の時刻）。本物の口の `now` を `Store::time` にして緑。

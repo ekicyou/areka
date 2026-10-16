@@ -102,7 +102,7 @@ impl FakePort {
         let mut state = self.state.borrow_mut();
         let created = state.is_none();
         let state = state.get_or_insert_with(State::empty);
-        let applied = apply(state, cmd, Some(who), self.now(), self);
+        let applied = apply(state, cmd, Some(who), T0 + self.sleeps.get(), self);
         if stamped && (created || applied.changed) {
             self.stamp.set(self.stamp.get() + 1);
         }
@@ -158,8 +158,8 @@ impl Presence for FakePort {
 
 impl WaitPort for FakePort {
     /// 眠った回数だけが経過（1 回＝1 秒）。
-    fn now(&self) -> u64 {
-        T0 + self.sleeps.get()
+    fn now(&self) -> Result<u64, WatchError> {
+        Ok(T0 + self.sleeps.get())
     }
 
     fn pid(&self) -> u32 {

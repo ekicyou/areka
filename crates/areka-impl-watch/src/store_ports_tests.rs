@@ -643,3 +643,64 @@ fn when_the_empty_state_cannot_be_written_the_backup_of_clear_remains() {
     assert_eq!(fs::read(&backup).expect("退避ファイルが在る"), before);
     assert_eq!(*noted.borrow(), [cleared_event(Some(&backup))]);
 }
+
+// ───────── 待ちの口の時計 ─────────
+
+/// 時計を [`T0`] に止めた口を本物の待ちの口として渡すと、置かれた待ちの記録の始めた時刻は
+/// [`T0`] になる（待ちの記録の時刻も状態ファイルの口と同じ時計から取る）。停止要請中の
+/// 参加者の再開の待ちは最初の判定で終わるので、眠らない。
+#[test]
+fn the_wait_record_takes_its_start_time_from_the_clock_of_the_store() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use crate::presence::hold;
+    use crate::state::{Participant, ParticipantStatus};
+    use crate::wait::{WaitEnd, WaitSpec, run};
+
+    let root = TempPath::under_target("impl-watch-store");
+    let home = home_in(&root);
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let noted = Rc::clone(&seen);
+    let state_path = home.state_path();
+    let store = Store {
+        log: Box::new(move |event| {
+            if let Event::WaitRegistered { id, kind } = event {
+                let bytes = fs::read(&state_path).expect("状態ファイルが在る");
+                let state: State = serde_json::from_slice(&bytes).expect("状態として読める");
+                let record = state.waits.iter().find(|w| w.id == *id && w.kind == *kind);
+                noted.borrow_mut().push(record.map(|w| w.since));
+            }
+        }),
+        ..store_in(&root)
+    };
+    store
+        .with_state(|state, now, _| {
+            let participant = Participant {
+                id: "a".to_owned(),
+                repo: "areka".to_owned(),
+                status: ParticipantStatus::StopRequested,
+                since: now,
+                ..Participant::default()
+            };
+            state.participants.insert("a".to_owned(), participant);
+            let applied = Applied {
+                changed: true,
+                verdict: Verdict::Applied,
+                events: Vec::new(),
+            };
+            (applied, ())
+        })
+        .expect("変えられる");
+    let held = hold(&root.path().join("own.lock"))
+        .expect("握れる")
+        .expect("誰も握っていない");
+
+    let end = run(&WaitSpec::Resume { id: "a".to_owned() }, &store, held).expect("待てる");
+
+    assert!(
+        matches!(end, WaitEnd::Done(_)),
+        "最初の判定で終わる（前提）: {end:?}"
+    );
+    assert_eq!(*seen.borrow(), [Some(T0)], "始めた時刻は止めた時刻");
+}

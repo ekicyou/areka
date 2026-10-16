@@ -15,7 +15,7 @@ use crate::plan::{self, Applied, Command};
 use crate::presence::Held;
 use crate::state::{Participant, ParticipantStatus, State, WaitKind, WaitRecord};
 use crate::status::{id_list, last_merge};
-use crate::store::{self, Store};
+use crate::store::Store;
 
 /// 読み直しの間隔（本物の眠り）。
 const POLL: Duration = Duration::from_secs(1);
@@ -171,8 +171,8 @@ pub fn judge(spec: &WaitSpec, state: Option<&State>) -> Option<WaitEnd> {
 
 /// 待ちのループが外へ頼むこと（本物は状態ファイルの口と本物の時計・テストは偽物）。
 pub trait WaitPort {
-    /// いまの時刻（UNIX 秒）。待ちの記録の「始めた時刻」に載せる。
-    fn now(&self) -> u64;
+    /// いまの時刻（UNIX 秒）。待ちの記録の「始めた時刻」に載せる。読めなければ待ちの失敗。
+    fn now(&self) -> Result<u64, WatchError>;
     /// 待っているプロセスの番号。見張り・待ちの記録に載せる（人が読むためで、生死の判定には
     /// 使わない）。
     fn pid(&self) -> u32;
@@ -188,8 +188,9 @@ pub trait WaitPort {
 
 /// 本物の口: 状態ファイルの口の上に、本物の時計・このプロセスの番号・1 秒の眠りを載せる。
 impl WaitPort for Store {
-    fn now(&self) -> u64 {
-        store::unix_now()
+    fn now(&self) -> Result<u64, WatchError> {
+        // 状態を変える呼び出しと同じ時計。失敗は `time` がログに残す。
+        self.time()
     }
 
     fn pid(&self) -> u32 {
@@ -242,7 +243,7 @@ impl WaitPort for Store {
 /// 終えない。答えが出た後の抹消の失敗は、答えを変えない（残った記録は同じく回収が消す）。
 pub fn run(spec: &WaitSpec, port: &dyn WaitPort, held: Held) -> Result<WaitEnd, WatchError> {
     let id = spec.id();
-    port.change(&spec.register(port.pid(), port.now()), id)?;
+    port.change(&spec.register(port.pid(), port.now()?), id)?;
     // 読む前に取る: 取ってから読むまでの間の変化は、次の眠りの後に「変わった」と見える。
     let mut seen = port.fingerprint()?;
     let mut polls = 0_u64;

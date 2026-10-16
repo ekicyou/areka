@@ -102,13 +102,6 @@ fn unix_seconds(at: SystemTime) -> Result<u64, WatchError> {
         .map_err(|_| WatchError::io("read the clock", &io::Error::other("before 1970")))
 }
 
-/// 本物の時計（UNIX 秒）。待ちの口だけが使う。
-pub(crate) fn unix_now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since| since.as_secs())
-}
-
 /// 握っている `state.lock`。落とすと解ける（ファイルは残る）。
 struct StateLock(File);
 
