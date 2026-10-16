@@ -88,7 +88,7 @@ pub(super) fn skin_frame(
         .collect();
     MenuItem {
         label: captions::default_label(frame).to_string(),
-        caption_resource: Some(captions::resource_for(frame)),
+        caption_resource: captions::resource_for(frame),
         enabled: !children.is_empty(),
         checked: None,
         body: ItemBody::Submenu(children),

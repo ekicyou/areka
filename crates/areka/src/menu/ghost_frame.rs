@@ -25,7 +25,7 @@ pub(crate) fn register(world: &mut World) {
 fn ghost_frame_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     let frame = |enabled, children| MenuItem {
         label: captions::default_label(Frame::Ghost).to_string(),
-        caption_resource: Some(captions::resource_for(Frame::Ghost)),
+        caption_resource: captions::resource_for(Frame::Ghost),
         enabled,
         checked: None,
         body: ItemBody::Submenu(children),

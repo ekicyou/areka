@@ -41,7 +41,7 @@ fn submenu(label: &str, resource: Option<&'static str>, children: Vec<MenuItem>)
     }
 }
 
-/// 第 1 スライスの写し（⑥説明書・⑦終了だけが登記されている）。
+/// 第 1 スライスの写し（⑧説明書・⑨終了だけが登記されている）。
 fn readme_and_close_snapshot() -> Vec<(Frame, MenuItem)> {
     vec![
         (Frame::Readme, leaf("説明書", Some("readmebutton.caption"))),
@@ -78,9 +78,10 @@ fn visibility_of(outcome: ResourceOutcome) -> (Visibility, Vec<String>) {
     (interpreted.visibility, lines)
 }
 
-/// 対応表は枠の数と同じ長さで、[`Frame::ORDER`] の順に要件 3.1 の組を並べる。
+/// 対応表は枠の数と同じ長さで、[`Frame::ORDER`] の順に要件 3.1 の組と、置き場の 2 枠
+/// （SHIORI のリソース名を持たない・areka-P0-baseware-root-list 要件 6.1・7.1）を並べる。
 #[test]
-fn frame_captions_table_is_the_seven_rows_of_requirement_3_1() {
+fn frame_captions_table_is_the_nine_rows() {
     assert_eq!(
         FRAME_CAPTIONS.len(),
         Frame::ORDER.len(),
@@ -89,17 +90,27 @@ fn frame_captions_table_is_the_seven_rows_of_requirement_3_1() {
     assert_eq!(
         FRAME_CAPTIONS,
         [
-            ("ghostrootbutton.caption", Frame::Ghost, "ゴースト"),
-            ("shellrootbutton.caption", Frame::Shell, "シェル"),
-            ("balloonrootbutton.caption", Frame::Balloon, "バルーン"),
-            ("updatebutton.caption", Frame::Update, "ネットワーク更新"),
+            (Some("ghostrootbutton.caption"), Frame::Ghost, "ゴースト"),
+            (Some("shellrootbutton.caption"), Frame::Shell, "シェル"),
             (
-                "ghostinstallbutton.caption",
+                Some("balloonrootbutton.caption"),
+                Frame::Balloon,
+                "バルーン"
+            ),
+            (
+                Some("updatebutton.caption"),
+                Frame::Update,
+                "ネットワーク更新"
+            ),
+            (
+                Some("ghostinstallbutton.caption"),
                 Frame::Install,
                 "インストール…"
             ),
-            ("readmebutton.caption", Frame::Readme, "説明書"),
-            ("closebutton.caption", Frame::Close, "終了"),
+            (None, Frame::RootAdd, "置き場を追加…"),
+            (None, Frame::RootRemove, "置き場を外す"),
+            (Some("readmebutton.caption"), Frame::Readme, "説明書"),
+            (Some("closebutton.caption"), Frame::Close, "終了"),
         ]
         .as_slice()
     );
@@ -108,15 +119,19 @@ fn frame_captions_table_is_the_seven_rows_of_requirement_3_1() {
     }
 }
 
-/// 枠からリソース名と既定名を引く。
+/// 枠からリソース名と既定名を引く。置き場の 2 枠はリソース名を持たない。
 #[test]
 fn resource_for_and_default_label_read_the_table() {
-    assert_eq!(resource_for(Frame::Readme), "readmebutton.caption");
+    assert_eq!(resource_for(Frame::Readme), Some("readmebutton.caption"));
     assert_eq!(default_label(Frame::Readme), "説明書");
-    assert_eq!(resource_for(Frame::Close), "closebutton.caption");
+    assert_eq!(resource_for(Frame::Close), Some("closebutton.caption"));
     assert_eq!(default_label(Frame::Close), "終了");
-    assert_eq!(resource_for(Frame::Ghost), "ghostrootbutton.caption");
+    assert_eq!(resource_for(Frame::Ghost), Some("ghostrootbutton.caption"));
     assert_eq!(default_label(Frame::Update), "ネットワーク更新");
+    assert_eq!(resource_for(Frame::RootAdd), None);
+    assert_eq!(default_label(Frame::RootAdd), "置き場を追加…");
+    assert_eq!(resource_for(Frame::RootRemove), None);
+    assert_eq!(default_label(Frame::RootRemove), "置き場を外す");
 }
 
 /// 表示可否の問い合わせ先はスコープで選ぶ（要件 3.6）。
@@ -147,7 +162,7 @@ fn unqueried_resources_are_absent_from_the_real_allow_table() {
             "{id} は問い合わせない名前なので運行の許可表に入れてはならない"
         );
     }
-    for (id, _, _) in FRAME_CAPTIONS {
+    for id in FRAME_CAPTIONS.iter().filter_map(|row| row.0) {
         assert!(is_allowed_resource_id(id), "{id} を引けない");
     }
     assert!(is_allowed_resource_id(SAKURA_POPUPMENU_VISIBLE));
@@ -284,7 +299,7 @@ fn two_failed_ids_are_reported_in_a_single_warn_line() {
 #[test]
 fn timeout_defaults_every_id_with_one_warn_carrying_the_reason() {
     let (interpreted, lines) = interpret_capturing(Err(QueryFailure::Timeout));
-    for (id, _, _) in FRAME_CAPTIONS {
+    for id in FRAME_CAPTIONS.iter().filter_map(|row| row.0) {
         assert_eq!(interpreted.captions.get(id), None, "{id} も既定名へ落ちる");
     }
     let warns = lines_at(&lines, "WARN");
