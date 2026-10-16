@@ -102,6 +102,7 @@ fn after_run_and_settle(rig: &mut SwitchRig) -> (bool, Option<MarkVerdict>) {
                 shiori_cut: false,
             },
         )
+        .0
     });
     (down_ok, verdict)
 }

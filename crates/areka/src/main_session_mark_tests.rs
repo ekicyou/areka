@@ -182,7 +182,8 @@ fn first_boot(rig: &mut SwitchRig, ghost: GhostDecision, origin: BootOrigin, arg
         },
         &ghost,
         &balloon,
-    );
+    )
+    .expect("印を書ける");
 }
 
 /// 土台の根の `folder` を記憶の経路で決まったゴーストとして初回の起動で起こす。
@@ -203,7 +204,7 @@ fn after_run_and_settle(rig: &mut SwitchRig) -> (bool, Option<MarkVerdict>) {
     let verdict = after
         .mark
         .as_ref()
-        .map(|mark| settle_session_mark(mark, end(true, down_ok, false)));
+        .map(|mark| settle_session_mark(mark, end(true, down_ok, false)).0);
     (down_ok, verdict)
 }
 
@@ -600,7 +601,7 @@ fn settle_session_mark_applies_the_verdict() {
             first,
             logsink_fallback: false,
         };
-        let (verdict, events) = capture(|| settle_session_mark(&mark, end(true, true, false)));
+        let (verdict, events) = capture(|| settle_session_mark(&mark, end(true, true, false)).0);
         let logged = events
             .iter()
             .filter(|e| e.level == level && e.field_str("event") == Some(event))
@@ -653,7 +654,7 @@ fn boot_fault_keeps_mark_and_next_boot_is_default_with_halt() {
     let verdict = after
         .mark
         .as_ref()
-        .map(|mark| settle_session_mark(mark, end(true, down_a, false)));
+        .map(|mark| settle_session_mark(mark, end(true, down_a, false)).0);
     let mark_kept = read_session_mark(&app);
     plant_last_ghost(&app, "A");
     let next = next_boot(&mut rig);

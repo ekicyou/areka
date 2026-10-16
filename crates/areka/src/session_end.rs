@@ -19,6 +19,7 @@ use crate::emo2_boot::frame::run_ghost_quit_phase;
 use crate::emo2_boot::ghost_switch::SwitchInFlight;
 use crate::exit_wait;
 use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::write_failure;
 use crate::{MarkInputs, Teardown, settle_session_mark};
 
 /// OS のセッションの終了を 1 回処理した印（プロセスに高々 1 つ）。`fn main` の後始末はこれを見て
@@ -136,7 +137,7 @@ pub(crate) fn end_session_from(world: &mut World, budget: WaitBudget) {
 
     // 降ろした後（実行系が 0）なので UI スレッドが App スコープへ直接書いてよい。
     let first = world.get_resource::<FirstExit>().map(|f| f.0.clone());
-    match world.get_resource::<BootContext>() {
+    let clear_failed = match world.get_resource::<BootContext>() {
         Some(ctx) => {
             let mark = MarkInputs {
                 app_profile_dir: ctx.app_profile_dir.clone(),
@@ -151,13 +152,19 @@ pub(crate) fn end_session_from(world: &mut World, budget: WaitBudget) {
                     down_ok,
                     shiori_cut,
                 },
-            );
+            )
+            .1
         }
-        None => tracing::warn!(
-            event = "boot_context_missing",
-            "[session_end] 起動の文脈が無いので起動中の印を消せません（次の起動は前回落ちたとして Ref6/7 付きになります）"
-        ),
-    }
+        None => {
+            tracing::warn!(
+                event = "boot_context_missing",
+                "[session_end] 起動の文脈が無いので起動中の印を消せません（次の起動は前回落ちたとして Ref6/7 付きになります）"
+            );
+            None
+        }
+    };
+    // 印を消せなかった失敗と降ろす途中の失敗は記録だけ（告知は OS の終了を塞ぐので出さない・要件 2.3 の例外）。
+    write_failure::log_only(world, clear_failed);
 
     // 書いている最中の背景の仕事を、降ろす待ちと同じ出発点・同じ上限で待つ（足し算にしない・
     // ghost-install 要件 8.2）。印の始末の後なので、待つ間に終わらされても印は済んでいる。

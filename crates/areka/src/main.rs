@@ -313,7 +313,8 @@ fn main() -> Result<()> {
         &descript,
         &ghost_decision,
         &balloon_decision,
-    );
+    )
+    .map_err(write_failure::stop_boot)?;
 
     // main 自身の送出端を落とす（受け口に残る送出端は起動の 2 経路と起動入力の作り口が持つ写しだけ）。
     drop(kanade_stop_tx);
@@ -343,6 +344,8 @@ fn main() -> Result<()> {
         mark,
         fault,
     } = after_run(app.world().borrow_mut().world_mut());
+    // 降ろす途中の書き込みの失敗の受け手（OS のセッションの終了で処理済みなら `None`）。
+    let late = write_failure::take_receiver(app.world().borrow_mut().world_mut());
 
     // 後始末（降ろす → 印の始末 → 告知 → 降ろした結果 → ④）を成否によらず 1 回通し、
     // 終了コードは最後に決める（要件 3.1・3.2）。告知は降ろした後（design「告知の位置」）。① で
@@ -366,7 +369,7 @@ fn main() -> Result<()> {
         // 起動中の印の始末（要件 12.2・12.3）: 降ろして記憶の書き出しが済んだ後に、きれいな終わりなら
         // 消し、そうでなければ理由を残して残す。UI スレッドが App スコープへ直接書くのは実行系が
         // 1 つも動いていない間だけ（ここは降ろした後なので書いてよい）。
-        if let Some(mark) = &mark {
+        let clear_failed = mark.as_ref().and_then(|mark| {
             settle_session_mark(
                 mark,
                 Teardown {
@@ -374,16 +377,15 @@ fn main() -> Result<()> {
                     down_ok: down.is_ok(),
                     shiori_cut: false,
                 },
-            );
-        }
+            )
+            .1
+        });
 
         // 書いている最中の背景の仕事を待つ（印の始末の後＝待つ間に終わらされても印は済んでいる）。
         closing.wait(exit_budget);
 
-        // SHIORI の失敗の告知（1 プロセスに最大 1 回・抑止なら記録だけ・要件 1.1・1.6・1.12）。
-        if let Some(scene) = &scene {
-            alert::raise(scene, alert::suppressed());
-        }
+        // 告知を 1 つだけ選ぶ（出所の場面 → 印を消せない → 降ろす途中の失敗・抑止なら記録だけ）。
+        let told = write_failure::tell_at_close(scene, clear_failed, late, alert::suppressed());
         down?;
 
         // ④ スレッド別 CPU の最後のスナップショット（task 2.4）。終了直前に 1 枚出してから
@@ -393,7 +395,7 @@ fn main() -> Result<()> {
             handle.stop_and_report_final();
         }
 
-        Ok(())
+        told
     })
 }
 
@@ -470,7 +472,7 @@ fn boot_first_ghost(
     descript: &ghost_session::StartupDescriptValues,
     ghost: &boot_resolve::GhostDecision,
     balloon: &boot_resolve::BalloonDecision,
-) {
+) -> std::result::Result<(), areka_sylphya::PersistFailure> {
     let argv_session = world
         .get_resource::<boot_config::BootContext>()
         .is_some_and(|ctx| ctx.argv_session);
@@ -478,8 +480,7 @@ fn boot_first_ghost(
         Some(ctx) if !ctx.argv_session => boot_resolve::write_session_mark(
             &ctx.app_profile_dir,
             &boot_resolve::running_name(ghost),
-        )
-        .unwrap_or_default(), // 失敗は記録済み・止める扱いは 5.2 で足す
+        )?, // 書けなければゴーストを起こさない（`main` が起動を止める・要件 3.1）
         Some(_) => tracing::debug!(
             event = "session_mark_untouched_argv",
             "[main] argv で始まったプロセスなので起動中の印を書きません"
@@ -507,18 +508,19 @@ fn boot_first_ghost(
         }
     }
     world.insert_non_send(ghost_session::GhostSlot(Some(session)));
+    Ok(())
 }
 
 /// `run()` の後に置き場と起動の文脈から組むもの。
 struct AfterRun {
     /// 降ろす単位（置き場が空＝切替の途中の致命か、OS のセッションの終了で降ろし済みなら `None`）。
     session: Option<ghost_session::GhostSession>,
-    /// SHIORI の失敗の告知の場面（最初の出所が Fault で、OS のセッションの終了を処理していないときだけ）。
+    /// 告知の場面（最初の出所が Fault か記憶を書けなかったもので、OS のセッションの終了を処理していないときだけ）。
     scene: Option<alert::AlertScene>,
     /// 起動中の印の判定の材料（起動の文脈が無いか、OS のセッションの終了で済んでいれば `None`＝
     /// 印に触れない）。判定は降ろした後。
     mark: Option<MarkInputs>,
-    /// 終了コードを 1 にするか（最初の出所に失敗の中身がある＝`fault_of`・告知の場面の有無とは独立）。
+    /// 終了コードを 1 にするか（最初の出所に失敗の中身がある＝`fault_of`／`write_failure_of`・告知の場面の有無とは独立）。
     fault: bool,
 }
 
@@ -559,7 +561,8 @@ fn after_run(world: &mut World) -> AfterRun {
         .get_resource::<app_exit::FirstExit>()
         .map(|first| first.0.clone());
     let fault = first.as_ref().and_then(app_exit::fault_of).cloned();
-    let fault_exit = fault.is_some();
+    let write = first.as_ref().and_then(app_exit::write_failure_of).cloned();
+    let fault_exit = fault.is_some() || write.is_some();
     if world.contains_resource::<session_end::SessionEnded>() {
         // OS のセッションの終了の中で降ろして印も始末した（要件 12.11）。告知は OS の終了を塞ぐので出さない。
         tracing::info!(
@@ -617,12 +620,19 @@ fn after_run(world: &mut World) -> AfterRun {
             .as_ref()
             .is_some_and(ghost_session::GhostSession::logsink_fallback),
     };
-    let scene = fault.map(|fault| alert::AlertScene::ShioriFault {
-        ghost_name,
-        // argv で相対パスを渡されても告知には絶対パスを載せる（要件 1.3）。
-        ghost_root: std::path::absolute(&ghost_root).unwrap_or(ghost_root),
-        fault,
-    });
+    let scene = fault
+        .map(|fault| alert::AlertScene::ShioriFault {
+            ghost_name,
+            // argv で相対パスを渡されても告知には絶対パスを載せる（要件 1.3）。
+            ghost_root: std::path::absolute(&ghost_root).unwrap_or(ghost_root),
+            fault,
+        })
+        .or_else(|| {
+            write.map(|failure| alert::AlertScene::MemoryWrite {
+                failure,
+                moment: alert::WriteMoment::Running,
+            })
+        });
     AfterRun {
         session,
         scene,
@@ -695,28 +705,32 @@ fn session_mark_verdict(
 
 /// 降ろした後の印の始末: 判定して、消すなら消し（`info!(session_mark_cleared)`）、残すなら理由つきの
 /// `info!(session_mark_kept)`（`boot_resolve::keep_session_mark`）、argv なら `debug!` だけ。
-/// 呼ぶのはゴーストの実行系が 0 の時点だけ。
-fn settle_session_mark(mark: &MarkInputs, end: Teardown) -> MarkVerdict {
+/// 呼ぶのはゴーストの実行系が 0 の時点だけ。印を消せなかった失敗は組の 2 つ目で返す（記録済み）。
+fn settle_session_mark(
+    mark: &MarkInputs,
+    end: Teardown,
+) -> (MarkVerdict, Option<areka_sylphya::PersistFailure>) {
     let verdict = session_mark_verdict(
         mark.first.as_ref(),
         mark.argv_session,
         mark.logsink_fallback,
         end,
     );
-    match verdict {
-        MarkVerdict::Clear => {
-            // 失敗は記録済み・告知へ渡すのは 5.2 で足す
-            boot_resolve::clear_session_mark(&mark.app_profile_dir).unwrap_or_default()
-        }
+    let failed = match verdict {
+        MarkVerdict::Clear => boot_resolve::clear_session_mark(&mark.app_profile_dir).err(),
         MarkVerdict::Keep(reason) => {
-            boot_resolve::keep_session_mark(&mark.app_profile_dir, reason, mark.first.as_ref())
+            boot_resolve::keep_session_mark(&mark.app_profile_dir, reason, mark.first.as_ref());
+            None
         }
-        MarkVerdict::Untouched => tracing::debug!(
-            event = "session_mark_untouched_argv",
-            "[main] argv で始まったプロセスなので起動中の印に触れません"
-        ),
-    }
-    verdict
+        MarkVerdict::Untouched => {
+            tracing::debug!(
+                event = "session_mark_untouched_argv",
+                "[main] argv で始まったプロセスなので起動中の印に触れません"
+            );
+            None
+        }
+    };
+    (verdict, failed)
 }
 
 // ---------------------------------------------------------------------------
@@ -975,3 +989,6 @@ mod finish_after_run_tests;
 #[cfg(test)]
 #[path = "main_session_mark_tests.rs"]
 mod session_mark_tests;
+#[cfg(test)]
+#[path = "main_session_mark_write_tests.rs"]
+mod session_mark_write_tests;
