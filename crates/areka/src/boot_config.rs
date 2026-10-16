@@ -204,11 +204,16 @@ pub(crate) fn resolve_boot(args: &[String]) -> Result<BootResolved, crate::alert
         args,
         &app_profile_dir,
         crate::boot_resolve::pick_index,
+        crate::roots::user_root::writable_ghost,
     )
 }
 
 /// 根の並び → ゴースト → バルーン → `ConfigInputs`（design「起動解決」）。決まらなければ告知の場面を返す。
 /// 並びは決まっても決まらなくても先に記録を残す（要件 1.15・2.5）。
+///
+/// argv でないゴースト（前回きれいに終わらなかったときの既定も）は `prepare_ghost`（本番は
+/// `user_root::writable_ghost`）の答えのフォルダへ替え、バルーンと `ConfigInputs` もそのフォルダで
+/// 決める（user-data-root 要件 4.3・7.4）。表示するだけのバルーンは写さない（要件 4.5）。
 ///
 /// argv がある側は列挙も記憶も読まない（要件 4.1・5.1）。argv のゴーストは「ゴーストか」の 1 検査
 /// だけ（要件 4.8）。決まるたびに経路と場所を info に残す（要件 4.10・5.11）。
@@ -217,6 +222,7 @@ pub(crate) fn resolve_boot_from(
     args: &[String],
     app_profile_dir: &std::path::Path,
     pick: fn(usize) -> usize,
+    prepare_ghost: fn(&areka_ghost::BasewareRoots, &std::path::Path) -> std::path::PathBuf,
 ) -> Result<BootResolved, crate::alert::AlertScene> {
     use crate::alert::AlertScene;
     use crate::boot_resolve::{self, BalloonInputs, GhostInputs, NoBalloon, NoGhost};
@@ -270,7 +276,7 @@ pub(crate) fn resolve_boot_from(
             areka_ghost::catalog_roots::list_ghosts(&resolved.roots),
         ),
     };
-    let ghost = boot_resolve::resolve_ghost(
+    let mut ghost = boot_resolve::resolve_ghost(
         &GhostInputs {
             argv: argv_ghost,
             memory: memory.as_deref(),
@@ -283,6 +289,10 @@ pub(crate) fn resolve_boot_from(
         ghost_stores,
         argv: None,
     })?;
+    // 書く前に写す（user-data-root 要件 4.3）: argv で渡したフォルダは写さない（要件 10.3）。
+    if ghost.route != boot_resolve::GhostRoute::Argv {
+        ghost.dir = prepare_ghost(&resolved.roots, &ghost.dir);
+    }
     tracing::info!(event = "ghost_resolved", route = ?ghost.route, dir = %ghost.dir.display(), "起動するゴーストを決めました");
 
     let balloon = match argv_balloon {
@@ -451,3 +461,7 @@ mod balloon_tests;
 #[cfg(test)]
 #[path = "boot_config_roots_tests.rs"]
 mod roots_tests;
+
+#[cfg(test)]
+#[path = "boot_config_copy_tests.rs"]
+mod copy_tests;

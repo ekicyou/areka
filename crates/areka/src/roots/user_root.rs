@@ -160,7 +160,6 @@ pub(crate) fn writable_copy(roots: &BasewareRoots, kind: StoreKind, dir: &Path) 
 }
 
 /// `resolve_boot_from` へ渡す口（ゴースト用）。
-#[allow(dead_code)] // 呼び手は resolve_boot（task 4.1）
 pub(crate) fn writable_ghost(roots: &BasewareRoots, dir: &Path) -> PathBuf {
     writable_copy(roots, StoreKind::Ghost, dir)
 }

@@ -109,6 +109,7 @@ fn default_ghost_and_balloon_are_adopted_from_the_lower_root() {
             &["areka.exe".to_owned()],
             &app_dir,
             no_pick,
+            |_, dir| dir.to_path_buf(),
         )
     });
     let (cfg, ghost, balloon, _, _) = got.expect("決まる");
@@ -195,6 +196,7 @@ fn no_ghost_in_any_root_carries_every_ghost_store() {
         &["areka.exe".to_owned()],
         &app_dir,
         no_pick,
+        |_, dir| dir.to_path_buf(),
     );
     assert_eq!(
         got.map(|_| ()),
