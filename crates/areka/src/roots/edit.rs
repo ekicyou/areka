@@ -183,15 +183,17 @@ fn apply(world: &mut World, roots: BasewareRoots, exe_dir: Option<PathBuf>) {
                 app: Some(app_profile_dir.clone()),
                 ..ScopeRoots::default()
             };
-            if matches!(
-                save_scope(PersistScope::App, &scope_roots, &FsPersistIo, entries),
-                PersistOutcome::Degraded(_)
-            ) {
+            // 書けなければ記録を残して致命へ渡す（書き換えた起動の文脈の並びは戻さない・要件 1.5）。
+            if let PersistOutcome::Degraded(failure) =
+                save_scope(PersistScope::App, &scope_roots, &FsPersistIo, entries)
+            {
                 tracing::error!(
                     event = "roots_memory_write_failed",
                     dir = %app_profile_dir.display(),
-                    "[RootsEdit] 置き場の並びを記憶へ書けません（この回の並びは効いています）"
+                    reason = ?failure.cause,
+                    "[RootsEdit] 置き場の並びを記憶へ書けません（終了します）"
                 );
+                crate::write_failure::fatal(world, failure);
             }
         }
     }
@@ -221,3 +223,7 @@ fn apply(world: &mut World, roots: BasewareRoots, exe_dir: Option<PathBuf>) {
 #[cfg(test)]
 #[path = "edit_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "edit_write_failure_tests.rs"]
+mod write_failure_tests;

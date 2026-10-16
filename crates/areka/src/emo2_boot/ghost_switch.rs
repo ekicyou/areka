@@ -668,12 +668,18 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     // 最後のゴースト＝既定・印＝切替先を 1 回で書く（要件 12.6）。UI スレッドが App スコープへ直接
     // 書くのは実行系が 1 つも動いていない間だけ（動いている間はそのゴーストの記憶の書き手を通す）。
     // 既定への戻しと致命はこれに触れない（印は切替先のまま・要件 12.7・12.8）。
+    // 書けなければ切替の予約を下ろして致命へ渡し、切替先を起こさずに戻る（要件 3.3）。
     match world.get_resource::<BootContext>() {
-        Some(ctx) => write_switch_drop(
-            &ctx.app_profile_dir,
-            (!ctx.argv_session).then_some(target.name.as_str()),
-        )
-        .unwrap_or_default(), // 失敗は記録済み・致命へ渡すのは 5.3 で足す
+        Some(ctx) => {
+            if let Err(failure) = write_switch_drop(
+                &ctx.app_profile_dir,
+                (!ctx.argv_session).then_some(target.name.as_str()),
+            ) {
+                world.remove_non_send::<SwitchInFlight>();
+                crate::write_failure::fatal(world, failure);
+                return;
+            }
+        }
         None => tracing::warn!(
             event = "boot_context_missing",
             "起動の文脈が無いので降ろした直後の記憶を書けない（最後のゴーストと印は前のゴーストのまま）"
@@ -916,3 +922,7 @@ mod balloon_tests;
 #[cfg(test)]
 #[path = "ghost_switch_roots_tests.rs"]
 mod roots_tests;
+
+#[cfg(test)]
+#[path = "ghost_switch_drop_write_tests.rs"]
+mod drop_write_tests;
