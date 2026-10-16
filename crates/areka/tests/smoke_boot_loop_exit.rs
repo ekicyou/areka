@@ -85,6 +85,7 @@ fn run_smoke(args: &[&str], envs: &[(&str, &str)]) -> (ExitStatus, String, Strin
         // 開発者のシェルの根・記憶の場所を持ち込まない（方向ごとに envs で与える）。
         .env_remove("AREKA_ROOT")
         .env_remove("AREKA_PROFILE_DIR")
+        .env_remove("AREKA_USER_ROOT")
         .envs(envs.iter().copied())
         // RUST_LOG は明示しない（骨格既定 info でよい）。診断は捕捉出力から得る。
         .stdout(Stdio::piped())

@@ -56,7 +56,7 @@
   - _Requirements: 3.6, 10.3_
 
 - [ ] 3. 記憶の置き場と中継の控え
-- [ ] 3.1 areka の記憶の置き場を共有の規則で決める
+- [x] 3.1 areka の記憶の置き場を共有の規則で決める
   - 今の記憶の置き場の関数の名前と戻りの型のまま、中身を「共有の記憶の置き場の決め方（`AREKA_PROFILE_DIR`・プロセスの形・実行ファイルの場所）」に替え、無いときは今どおりにする（呼び手は変えない）
   - 起動・ゴーストの起動・SHIORI の受け口・並びの読み書きは今の関数だけを通るので、置き場はそろって 1 つになる。新しいテストは足さない（分岐は 1.1 のテストが持つ・要件 10.7）
   - areka の既存のテストが緑
@@ -157,3 +157,4 @@
 - ワークスペースの `clippy -D warnings` は HEAD の時点で触っていないクレート（dola・areka-kanade・areka-ghost の runtime.rs/ticker.rs）で赤。全体の検査（`tools/test-all.ps1`）は fmt と test だけ。変えた行だけ clippy を見る
 - 2.2 で後のタスクがつなぐ 5 つの関数に `#[allow(dead_code)]`（つなぐタスクの名前つき）を付けた。つないだタスクで外す
 - 2.3 から本番の `resolve_roots` が `layout()`（`establish`）を呼ぶ。本物の areka.exe を子として起こす統合テスト 3 本（`smoke_boot_loop_exit.rs`・`emo2_real_run.rs`・`mcp_get_log_real_run.rs`）は開発者の `AREKA_USER_ROOT` を受け継いでしまうので、3.1 で子の起こし方に `.env_remove("AREKA_USER_ROOT")` を足す
+- 3.1 から bin の単体テスト 2 本（`main_ghost_wiring_tests.rs` の `ghost_boot_options`・`ghost_session_strict_tests.rs` の `GhostBootInputs::production`）が本物の環境で `layout()` を 1 回動かす。今の形では何も作らないが、開発者のシェルに `AREKA_USER_ROOT` が在るとそこを作る。完了の点検で扱いを決める

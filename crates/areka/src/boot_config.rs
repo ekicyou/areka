@@ -365,19 +365,22 @@ pub(crate) fn default_helper_exe_path() -> std::path::PathBuf {
 ///
 /// - 環境変数 `AREKA_PROFILE_DIR` が設定されていればそのパスを採用する（本番 env は `AREKA_`
 ///   名前空間・記憶 areka-runtime-env-naming）。
-/// - 未設定なら実行ファイル隣接の `profile/areka/`（起動した exe の本当の場所（`exe_location`）の親ディレクトリ／`current_exe()`
+/// - 未設定でプロセスの形に書ける根が在れば `<書ける根>\profile\areka`（`areka_user_data::app_profile_dir`）。
+/// - 無ければ実行ファイル隣接の `profile/areka/`（起動した exe の本当の場所（`exe_location`）の親ディレクトリ／`current_exe()`
 ///   失敗時は `"."` へ寛容フォールバック——boot 呼び出し自体が非致命ゆえ panic/Err 伝播は不要）。
 ///
 /// App スコープはマウント解決に現れない（ghost/shell スコープは `<shiori.dir>`／`<shell.dir>` から
 /// ghost が導く）ため、bin が本関数で供給して `GhostBootOptions.app_profile_dir` へ渡す。
 pub(crate) fn default_app_profile_dir() -> std::path::PathBuf {
-    if let Some(dir) = std::env::var_os("AREKA_PROFILE_DIR") {
-        return std::path::PathBuf::from(dir);
-    }
-    let base = exe_location()
-        .and_then(std::path::Path::parent)
-        .unwrap_or(std::path::Path::new("."));
-    base.join("profile").join("areka")
+    // 共有の決め方（user-data-root 要件 5.1〜5.3）: env → 書ける根 → 実行ファイルの隣。
+    let exe_dir = exe_location().and_then(std::path::Path::parent);
+    areka_user_data::app_profile_dir(
+        std::env::var_os(areka_user_data::PROFILE_DIR_ENV).as_deref(),
+        crate::roots::user_root::layout(),
+        exe_dir,
+    )
+    // 決まらない（実行ファイルの場所が取れない）ときは今どおり `"."` の下。
+    .unwrap_or_else(|| std::path::Path::new(".").join("profile").join("areka"))
 }
 
 /// `ghost_root`／helper パスから `GhostBootOptions` を組み立てる純粋ヘルパ
