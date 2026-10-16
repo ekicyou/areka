@@ -387,7 +387,7 @@ pub(crate) fn request_ghost_switch_with(
         }
         GhostSpec::Folder(_) => req.ghost.clone(),
     };
-    let Some(mut target) = resolve_switch_target(&entries, &spec) else {
+    let Some(target) = resolve_switch_target(&entries, &spec) else {
         tracing::warn!(
             event = "ghost_switch_unknown",
             reason = "name",
@@ -396,6 +396,7 @@ pub(crate) fn request_ghost_switch_with(
         );
         return SwitchVerdict::NotFound;
     };
+    let mut target = super::same_folder_pin::pin_to_current(target, &ctx.current.ghost);
 
     let session = world
         .get_non_send::<GhostSlot>()
