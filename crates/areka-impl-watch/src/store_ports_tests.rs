@@ -5,7 +5,9 @@
 //! 組み立ての手は `store_test_support.rs` のものを使う。
 
 use std::fs::{self, File};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use temp_path_kit::TempPath;
 
@@ -14,7 +16,7 @@ use super::test_support::{
     BROKEN_AT_T0, Nobody, T0, block_state_writes, home_in, names, participants, read_state,
     store_in, store_noting_events, store_noting_pauses, tick, watch,
 };
-use crate::error::WatchError;
+use crate::error::{Damage, WatchError};
 use crate::home::Home;
 use crate::plan::{Applied, Command, Event, Presence, Verdict, apply};
 use crate::state::State;
@@ -296,11 +298,28 @@ fn read_only_returns_the_state_without_taking_the_lock_or_writing() {
     );
 }
 
+/// 壊れた状態ファイルの 3 種と、読むだけの道が返す訳。
+fn broken_files() -> [(&'static str, Damage); 3] {
+    [
+        // JSON でない文。
+        ("not json", Damage::NotJson { line: 1, column: 2 }),
+        // JSON で版も 1 だが、2 行目の欄の型が違う。位置は元のバイト列を読み直して取る。
+        (
+            "{ \"version\": 1,
+  \"participants\": [] }",
+            Damage::WrongShape {
+                line: 2,
+                column: 18,
+            },
+        ),
+        // 版の数字が無い。
+        (r#"{ "x": 1 }"#, Damage::NoVersion),
+    ]
+}
+
 #[test]
-fn read_only_fails_on_a_broken_file_and_does_not_set_it_aside() {
-    // JSON でない文・JSON だが形が合わない・版の数字が無い。
-    let broken = ["not json", r#"{ "version": 1, "participants": [] }"#, "{}"];
-    for text in broken {
+fn read_only_fails_on_a_broken_file_with_its_damage_and_does_not_set_it_aside() {
+    for (text, damage) in broken_files() {
         let root = TempPath::under_target("impl-watch-store");
         let home = home_in(&root);
         fs::write(home.state_path(), text).expect("置ける");
@@ -308,7 +327,12 @@ fn read_only_fails_on_a_broken_file_and_does_not_set_it_aside() {
 
         let got = store.read_only();
 
-        assert!(matches!(got, Err(WatchError::Broken)), "{text}: {got:?}");
+        match got {
+            Err(WatchError::Broken(found)) => assert_eq!(found, damage, "{text}"),
+            other => panic!("{text}: {other:?}"),
+        }
+        let err = store.read_only().expect_err("2 度目も壊れている");
+        assert_eq!(err.to_string(), "state file is broken; see impl-watch.log");
         assert_eq!(
             fs::read_to_string(home.state_path()).expect("読める"),
             text,
@@ -316,6 +340,50 @@ fn read_only_fails_on_a_broken_file_and_does_not_set_it_aside() {
         );
         assert_eq!(names(&home.dir), ["state.json"], "退避も作成もしない");
         assert_eq!(*noted.borrow(), []);
+    }
+}
+
+/// 書かれた行をためる書き口（ログの行を確かめる）。
+#[derive(Clone, Default)]
+struct Lines(Arc<Mutex<Vec<u8>>>);
+
+impl Write for Lines {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.lock().expect("握れる").extend_from_slice(buf);
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn read_only_logs_the_damage_of_a_broken_file_in_one_ascii_line() {
+    for (text, damage) in broken_files() {
+        let root = TempPath::under_target("impl-watch-store");
+        let home = home_in(&root);
+        fs::write(home.state_path(), text).expect("置ける");
+        let lines = Lines::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(Mutex::new(lines.clone()))
+            .with_ansi(false)
+            .finish();
+
+        let got = tracing::subscriber::with_default(subscriber, || store_in(&root).read_only());
+
+        assert!(matches!(got, Err(WatchError::Broken(_))), "{got:?}");
+        let written = String::from_utf8(lines.0.lock().expect("握れる").clone()).expect("UTF-8");
+        let logged: Vec<&str> = written.lines().collect();
+        assert_eq!(logged.len(), 1, "{written}");
+        assert!(logged[0].is_ascii(), "{written}");
+        assert!(logged[0].contains("[store] read failed"), "{written}");
+        assert!(
+            logged[0].contains(&format!("damage={damage:?}")),
+            "{written}"
+        );
+        // 値は写さない（`participants` の中身や `x` の値が出ない）。
+        assert!(!logged[0].contains("participants"), "{written}");
+        assert!(!logged[0].contains("not json"), "{written}");
     }
 }
 

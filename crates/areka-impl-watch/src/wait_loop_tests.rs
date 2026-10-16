@@ -19,7 +19,7 @@ use temp_path_kit::TempPath;
 
 use super::test_support::{T0, load, merge, resume, watch};
 use super::{WaitEnd, WaitPort, WaitSpec, run};
-use crate::error::WatchError;
+use crate::error::{Damage, WatchError};
 use crate::plan::{Applied, Command, Presence, apply};
 use crate::presence::hold;
 use crate::state::{ParticipantStatus, State, WaitKind, WaitRecord};
@@ -506,13 +506,17 @@ fn a_failed_registration_is_the_error() {
 /// 次の状態を変える呼び出しの回収が消す）。
 #[test]
 fn a_failed_read_ends_the_wait_with_the_error() {
-    let port = b_queued_behind_a()
-        .failing(|call, sleeps| (call == 'r' && sleeps == 2).then_some(WatchError::Broken));
+    let port = b_queued_behind_a().failing(|call, sleeps| {
+        (call == 'r' && sleeps == 2).then_some(WatchError::Broken(Damage::NoVersion))
+    });
     port.at(2, Step::Call("C", watching("C")));
 
     let end = port.run(&merge("B", "areka"));
 
-    assert!(matches!(end, Err(WatchError::Broken)), "{end:?}");
+    assert!(
+        matches!(end, Err(WatchError::Broken(Damage::NoVersion))),
+        "{end:?}"
+    );
     assert_eq!(port.trace(), format!("Rfr{}sfr", idle(1)));
     assert_eq!(port.waits_of("B"), [WaitKind::Watch, WaitKind::Merge]);
     assert!(!port.lock_is_held());

@@ -24,7 +24,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
 
-use crate::error::WatchError;
+use crate::error::{Damage, WatchError};
 use crate::home::Home;
 use crate::plan::{Applied, Event, Presence};
 use crate::presence::LockFilePresence;
@@ -154,13 +154,19 @@ impl Store {
     }
 
     /// 読むだけ。排他を取らず、作らず、退避もせず、読み物も書かない。
-    /// 無ければ `None`、読めない・形が合わなければ `Broken`、知らない版なら `VersionMismatch`。
+    /// 無ければ `None`、読めない・版が無い・形が合わなければ `Broken`（訳つき・訳はログの行にも
+    /// 載る）、知らない版なら `VersionMismatch`。
     pub fn read_only(&self) -> Result<Option<State>, WatchError> {
         let read = || match self.read()? {
-            Some(bytes) => parse(&bytes)?.map(Some).ok_or(WatchError::Broken),
+            Some(bytes) => parse(&bytes).map(Some),
             None => Ok(None),
         };
-        read().inspect_err(|err| tracing::error!(error = %err, "[store] read failed"))
+        read().inspect_err(|err| match err {
+            WatchError::Broken(damage) => {
+                tracing::error!(error = %err, damage = ?damage, "[store] read failed");
+            }
+            _ => tracing::error!(error = %err, "[store] read failed"),
+        })
     }
 
     /// 状態の確認。排他を取らずに読み（[`Store::read_only`]）、読み物を置き換え、端末向けの
@@ -247,10 +253,11 @@ impl Store {
     /// 「最近の出来事」に足す（要件 8.4・8.5）。
     fn load(&self, now: u64) -> Result<(State, Option<Event>), WatchError> {
         let backup = match self.read()? {
-            Some(bytes) => match parse(&bytes)? {
-                Some(state) => return Ok((state, None)),
-                // 読めない・形が合わないファイルは退避する。
-                None => self.set_aside("broken", now)?,
+            Some(bytes) => match parse(&bytes) {
+                Ok(state) => return Ok((state, None)),
+                // 読めない・版が無い・形が合わないファイルは退避する。
+                Err(WatchError::Broken(_)) => self.set_aside("broken", now)?,
+                Err(err) => return Err(err),
             },
             None => None,
         };
@@ -329,25 +336,37 @@ impl Store {
     }
 }
 
-/// 状態ファイルの中身を状態として読む。JSON として読めない・形が合わないなら `None`。
+/// 状態ファイルの中身を状態として読む。読めない・版が無い・形が合わないなら `Broken`（訳つき）。
 ///
-/// 版の数字だけを先に見る。知らない版のファイルは、形を読まずに失敗にする。
-/// 版の数字が無いもの（どの版の実行ファイルも書かない）は、形の合わないファイル。
-fn parse(bytes: &[u8]) -> Result<Option<State>, WatchError> {
-    let value = serde_json::from_slice::<Value>(bytes).ok();
-    let version = value
-        .as_ref()
-        .and_then(|value| value.get("version"))
-        .and_then(Value::as_u64);
-    if let Some(found) = version.filter(|found| *found != u64::from(VERSION)) {
+/// 版の数字だけを先に見る。知らない版のファイルは、形を読まずに `VersionMismatch` にする。
+/// 版の数字が無いもの（どの版の実行ファイルも書かない）は `NoVersion`。
+fn parse(bytes: &[u8]) -> Result<State, WatchError> {
+    let value = serde_json::from_slice::<Value>(bytes).map_err(|err| {
+        WatchError::Broken(Damage::NotJson {
+            line: err.line(),
+            column: err.column(),
+        })
+    })?;
+    let found = value
+        .get("version")
+        .and_then(Value::as_u64)
+        .ok_or(WatchError::Broken(Damage::NoVersion))?;
+    if found != u64::from(VERSION) {
         return Err(WatchError::VersionMismatch {
             found,
             known: VERSION,
         });
     }
-    Ok(version
-        .and(value)
-        .and_then(|value| serde_json::from_value(value).ok()))
+    // 形へ写す道は今のまま。`Value` から写した失敗は位置が 0 なので、失敗したときだけ元の
+    // バイト列を読み直して位置を取る（通ればその状態を使う）。
+    serde_json::from_value(value).or_else(|_| {
+        serde_json::from_slice(bytes).map_err(|err| {
+            WatchError::Broken(Damage::WrongShape {
+                line: err.line(),
+                column: err.column(),
+            })
+        })
+    })
 }
 
 fn lossy(path: &Path) -> String {
