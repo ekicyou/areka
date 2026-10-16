@@ -494,3 +494,52 @@ design の節「子の出力を受け取る所の棚卸」の表の扱いは、�
 | `perf-pwsh-child.ps1`（足した部品） | なし（引数の配列を組むだけで子を起こさない） | 0 件 |
 
 - 素の `& cargo`・`& python`・`& git`・`& pwsh`・`& powercfg` で子の出力を受け取る所は、7 本のどこにも残っていない（注記の中の言及を除く）。
+
+### 10.5 932 の端末のまま道具を軽く回した結果（タスク 7.2・コミット `b1a2a693`・pwsh 7.6.7・2026-10-16）
+
+足場は 10.1 の `harness.ps1`。回す道具を選ぶ引数 `-Only`（既定は `preflight,rank-run-dryrun`）と、`selftest` と `invoke-perf-run.ps1 -AutoQuiet -DryRun` の 2 つを足した（どれもワークツリーの `target\` の下・コミットしない）。足した 2 つも、ほかと同じく窓の無い自分だけの端末を持つ子の中で、回す前にその端末を 932 にしてから孫として回す。前と後の端末の値は子の中で OS の API（`GetConsoleOutputCP`／`GetConsoleCP`）から読んだ。開発者の端末には触れていない。孫の出力は `target\perf-loop-check\7.2-<名前>.log` に UTF-8 で写した。
+
+回し方:
+
+- `pwsh -NoProfile -File <wt>\target\perf-loop-check\harness.ps1 -Tag 7.2 -Only selftest,preflight,rank-run-dryrun`（3 つで約 41 秒）
+- `pwsh -NoProfile -File <wt>\target\perf-loop-check\harness.ps1 -Tag 7.2 -Only autoquiet-dryrun`（1 回だけ・4 分 40 秒）
+
+| 回したコマンド | 終了コード | 前の端末（出力・入力） | 後の端末（出力・入力） |
+|---|---|---|---|
+| `perf-loop.ps1 selftest -Goal draw-load-parity` | 0 | 932・932 | 932・932 |
+| `perf-loop.ps1 preflight`（10.2 と同じ引数） | 0（直す前も 0） | 932・932 | 932・932（直す前は 65001・932） |
+| `perf-loop.ps1 rank-run -Iter 1 -DryRun`（10.2 と同じ引数） | 0（直す前も 0） | 932・932 | 932・932（直す前は 65001・932） |
+| `invoke-perf-run.ps1 -Profile short -Build release -GhostRoot <wt>\target\nar-samples\manual\emo2\ghost\emo2 -BalloonRoot <wt>\target\nar-samples\manual\emo2\balloon\emo2-kakukaku -OutDir <wt>\target\perf-loop-check\autoquiet-7.2-<日時> -AutoQuiet -Goal draw-load-parity -BinDir <wt>\target\perf-loop-check\bin -DryRun` | 2（静かでない） | 932・932 | 932・932 |
+
+#### selftest（要件 7.1）
+
+- 最後の 2 行は `SELFTEST RESULT ok=9 ng=0` と `PERF-LOOP RESULT selftest code=0 dir=-`。9 本の `selftest <道具> ok code=0` がすべて出た。
+- `judge-perf.py` の説明は日本語のまま（Python の道具はこの spec で触らない）で、932 の端末でも字が化けずに写っていた。ほかの 8 行は ASCII だけ。
+
+#### preflight と rank-run -DryRun（要件 7.2・1.2）
+
+- 末尾の `PERF-LOOP RESULT` の行は 10.2 の控えと字で同じ（`<wt>` はワークツリーの絶対パス）。
+
+```
+PERF-LOOP RESULT preflight code=0 dir=<wt>\target\perf-loop-check\draw-load-parity
+PERF-LOOP RESULT rank-run code=0 dir=<wt>\target\perf-loop-check\draw-load-parity\iter-1\rank
+```
+
+- 直す前は回し終えた後に端末の出力の文字コードが 65001 に変わっていたが、直した後はどちらも 932 のまま。
+- 機械が読む行（10.3 の表）を `before-*.log` と `7.2-*.log` で比べた（`time_utc=` の値は除く）。`rank-run` は差分なし。`preflight` の差分は 2 行だけで、どちらも design の規則 R1 のとおり機械の部分の外。
+  - `selftest goal-text-vs-goal-md ok code=0 | …` の `|` より後ろの説明が英文になった（`|` より前は同じ）。
+  - `pdb_hint=` の値（道具が書く説明の文）が英文になった（鍵の名前と行の形は同じ）。
+- 行数は直す前と同じ（`preflight` 47 行・`rank-run` 18 行）。`preflight` は自己較正 9 本がすべて緑（`SELFTEST RESULT ok=9 ng=0`）。
+
+#### 静寂の確認の道（要件 2.1・2.2・7.3）
+
+- `invoke-perf-run.ps1 -AutoQuiet -DryRun` は `check-quiet.ps1` を 4 回（最初の 1 回と確かめ直し 3 回・60 秒おき）呼び、4 回とも `CHECK-QUIET RESULT stage=before verdict=NOT_QUIET code=2 file=<wt>\target\perf-loop-check\autoquiet-7.2-20261016173557\quiet-before.txt` の行を自分の出力へ写した。その前には静寂の確認の報告（`[check-quiet] version=1.0.1` から `heavy_process_busy=` までの 16 行）も写っていた。
+- 静かでなかったのは、ほかのセッションのビルド（`rustc` など）が回っていたため（機械全体の CPU の平均 36.8〜63.4%・閾値 10.0%）。上限まで確かめ直して静かにならなかったので終了コード 2 で終わり、作りかけの出力先は `autoquiet-7.2-20261016173557-FAILED` に退避された。どれも道具の決めたとおりの動き。
+- 写された行と `[invoke-perf-run]` の行はすべて ASCII で、932 の端末で字が化けていない。
+- 静かと判定された後の道（静寂の確認の後に run-meta.txt を書く所）は今回は通っていない。-AutoQuiet の走行の前後の端末の値 932・932 は足場の標準出力に出ただけでファイルには残っていない。
+
+#### run-meta.txt の power_scheme（要件 1.3）
+
+- `rank-run -DryRun` が作った `<wt>\target\perf-loop-check\draw-load-parity\iter-1\rank\run-meta.txt` の 58 行は `power_scheme = d7a728f8-6d8b-4ab7-a3e3-7aaeb0f9871c (Sonos)` で、`<GUID> (<名前>)` の形。`AutoQuiet` の走行は静かでなかったので `run-meta.txt` を書く所まで進まない（静寂の確認は記録より先）。
+
+ビルドと、実機を何分も回す計測はしていない。
