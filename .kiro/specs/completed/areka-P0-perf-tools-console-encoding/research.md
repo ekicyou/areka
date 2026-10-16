@@ -1,0 +1,545 @@
+# ギャップ分析: areka-P0-perf-tools-console-encoding
+
+- 日付: 2026-10-16（main `1e6590d8` の上・ブランチ `claude/areka-p0-perf-console-encoding-50106b`）
+- 入力: `requirements.md`（要件 1〜9）・`brief.md`・steering `tech.md`（93 行・97 行）・`structure.md`
+- 調べ方: `tools/perf/*.ps1` の 7 本・`tools/encoding-check.ps1`・`tools/utf8-child.ps1`・`tools/perf/README.md`・スキル `perf-loop-iteration`・エージェント `perf-*` を読んだ。加えて、判定の規則を `tools/perf/*.ps1` に当てる静的な数えと、**窓の無い自分だけの端末（932）の中だけで閉じる数秒の実測**を数回行った（開発者の端末には触れていない。実測の前後で外側の端末は 932 のまま）。重い計測は回していない。
+
+---
+
+## 1. まとめ
+
+- **子の中の書き替えは、共有の端末を本当に 65001 に変え、子が終わっても残る**（実測で確かめた）。親の .NET は端末の文字コードを一度読むと覚えておくので、同じプロセスの `[Console]::OutputEncoding` を見ても変化に気付けない。要件 1.2・6.4・7 の「前と後で同じ」の確かめ方は、OS に直接尋ねる形か、新しい子で読む形にする必要がある。
+- **書き替えの代わりの有力な形が実測で効いた**: 子の PowerShell の中で `[Console]::SetOut`／`SetError` に UTF-8 の書き手を渡すと（端末には触れない・そのプロセスの中だけ）、`Write-Host`・素の出力・`Write-Output`・`[Console]::Out`・`Write-Error`・`Write-Information` が全部 UTF-8 で来て、932 に無い字（絵文字）まで 1 字違わず親に届いた。端末の文字コードは 932 のまま。
+- **書き替えを消すと、今は偶然うまくいっている所が崩れる**: 子のスクリプトが孫を素の `&` で起こしている所（`invoke-followup-checks.ps1` の python と cargo・`invoke-perf-run.ps1` の pwsh・git・powercfg）は、今は共有の端末が 65001 になっているから化けずに済んでいる。撤去と同時にこれらの読み方を直す必要がある（要件 2.2・3.2）。xperf・powercfg のように端末の文字コードで書く OS の道具は、撤去の後は 932 で書いてくる。
+- **端末へ出す日本語は 7 本で 395 字句（約 390 行）**。大半は端末へ出す文だが、ファイルにだけ書く日本語（`run-meta.txt` の見出し・ログの目印・Python の出力と突き合わせる正規表現）も字句の規則（規則 A）に掛かるので、ASCII の字句で日本語を書き表す方法を設計で選ぶ必要がある。
+- **今の判定の規則 C は、今ある書き替えを見逃す**: `tools/perf/` を対象に入れて規則を当てると、赤は規則 A（395 件）と規則 B（1 件）だけで、`Invoke-PwshChild` の書き替えは 0 件。書き替えの文が「`pwsh -Command '…'` の形」ではなく、変数に組んで `ProcessStartInfo` の引数に渡す形だから。要件 5.3 を満たすには規則 C を広げる必要がある。
+
+---
+
+## 2. 今の姿
+
+### 2.1 子を起こす部品（`tools/perf/perf-loop.common.ps1`）
+
+| 部品 | 行 | 起こし方 | 読み方 | 端末に依るか |
+|---|---|---|---|---|
+| `Invoke-Child` | 188–264 | `ProcessStartInfo`・`UseShellExecute=$false`・`CreateNoWindow` なし（親と端末を分け合う） | `StandardOutputEncoding`／`StandardErrorEncoding` を UTF-8 に固定 | 依らない（正しい形） |
+| `Invoke-PythonChild` | 270–279 | `Invoke-Child` に `PYTHONIOENCODING=utf-8`・`PYTHONUTF8=1` を渡す | 同上 | 依らない |
+| `Invoke-PwshChild` | 287–314 | `pwsh -NoProfile -NonInteractive -Command "[Console]::OutputEncoding=…UTF8…; & '<script>' …; exit $LASTEXITCODE"` | 同上 | **子が共有の端末を書き替えて合わせている**（本 spec の直す所） |
+
+- 失敗のときの持ち帰りの文（`実行体がありません`・`起動できません`・`pwsh が見つかりません`・`スクリプトがありません`）は日本語。要件 4.1 の「子を起こせないときに持ち帰る文」に当たる。
+- 頭書（17–24 行）と `Invoke-PwshChild` の注記（281–286 行）に「子の中での `[Console]::OutputEncoding` 切り替え」「端末そのもののコードページは変えない（子の中だけ）」と書いてある（要件 8.2 で消す記述）。`perf-loop.ps1` の頭書 40–42 行にも「子の道具の出力は必ず UTF-8 として読む」の説明がある（撤去の後も正しいが、書き方の見直し候補）。
+
+### 2.2 `Invoke-PwshChild` の呼び出し 7 か所
+
+| 呼ぶ所 | 子 | 親が子の出力をどう使うか |
+|---|---|---|
+| `perf-loop.measure.ps1:267` | `invoke-perf-run.ps1`（走行・`-DryRun` 可） | 端末へそのまま写す（`-Quiet` なし）・`Code`・`LastLine` を失敗の文に埋める |
+| `perf-loop.measure.ps1:293` | `check-quiet.ps1 -Stage after` | `Code`・`LastLine` |
+| `perf-loop.measure.ps1:638` | `invoke-cpu-sample.ps1 -Start` | 写す・`Code`・`LastLine` |
+| `perf-loop.measure.ps1:659` | `invoke-cpu-sample.ps1 -Stop` | 写す・`Code`・`LastLine` |
+| `perf-loop.measure.ps1:913` | `invoke-followup-checks.ps1` | 写す・`^FOLLOWUP RESULT ` の行を正規表現で拾う（ASCII） |
+| `perf-loop.ps1:375` | 自己較正の 3 本（`-SelfTest`） | `Code`・`LastLine`・赤のときだけ全行を写す |
+| `perf-loop.ps1:427` | `invoke-cpu-sample.ps1 -Probe` | `^available=… reason=…` の行を拾う（ASCII） |
+
+親が字面で読む行はどれも ASCII。日本語が要るのは「写す」と「`LastLine` を文に埋める」所だけ。
+
+### 2.3 子のスクリプトの中で孫を起こす所
+
+| スクリプト:行 | 孫 | 今の読み方 | 撤去の後に起きること |
+|---|---|---|---|
+| `invoke-followup-checks.ps1:245` | `& cargo @cargoArgs`（`nar-sample-path`） | 素の `&`＝端末の文字コードで解く | 出力は ASCII の `key=value`＋パス。パスに日本語が入ると化ける |
+| `invoke-followup-checks.ps1:290` | `& $Python.Exe @argv \| ForEach-Object { Write-Host $_ }`（`judge-followup.py`） | パイプ＝端末の文字コードで解く | `judge-followup.py` は自分で UTF-8 に寄せて書く（894–899 行）→ 932 で解かれて**化ける**（今は共有の端末が 65001 なので化けていない） |
+| `invoke-followup-checks.ps1:464` | `Start-Process areka.exe -RedirectStandardOutput <file>` | ファイルを `-Encoding utf8` で読む | 端末を通らない（変化なし） |
+| `invoke-perf-run.ps1:316` | `& powercfg /getactivescheme 2>&1` | 素の `&` | powercfg は端末の文字コードで書く道具と見られる。撤去の後は 932 で来て 932 で解く＝今と字は同じになる見込み。ただし 437 などの端末では日本語の名前が落ちる（要確認） |
+| `invoke-perf-run.ps1:329–334` | `& git rev-parse`／`status --porcelain` | 素の `&` | HEAD は ASCII。ブランチ名に日本語があると化ける。`status` は行数だけ数える |
+| `invoke-perf-run.ps1:407` | `& (Get-PwshPath) -NoProfile -File check-quiet.ps1 … 2>&1`（`Invoke-CheckQuietOnce`） | 素の `&`＝孫も親も端末の文字コード | 932 では字が合うが、932 に無い字は孫の側で落ちる。要件 2.1・2.2 に合わない |
+| `invoke-perf-run.ps1:745` | `Start-Process areka.exe -RedirectStandardOutput <file>` | ファイルを `-Encoding utf8` で読む（862 行） | 端末を通らない |
+| `invoke-cpu-sample.ps1:205` | `Start-Process xperf … -RedirectStandardOutput <一時ファイル>` | `Get-Content -Raw`（pwsh 7 の既定＝UTF-8） | xperf は端末か ANSI の文字コードで書くと見られる。今は共有の端末が 65001 なので UTF-8 で来ている可能性。撤去の後、xperf の日本語の失敗の文が化けうる（要確認） |
+| `check-quiet.ps1` | 孫なし（`Get-Counter`・`Get-Process` はプロセスの中の API） | — | — |
+
+補足: `invoke-cpu-sample.ps1:202–203` は一時ファイルを OS の一時フォルダ（`GetTempFileName`）に作っている。要件の範囲外の項には載っていない（brief の Constraints は「一時ファイルはワークツリーの `target\` の下だけ」）。
+
+### 2.4 端末へ出す文の量（注記を除く字句で ASCII の外の字を含むもの）
+
+| ファイル | 行数 | 該当の字句 | 主な中身 |
+|---|---|---|---|
+| `check-quiet.ps1` | 662 | 41 | 自己較正の失敗の文（`$ng +=`）・`Write-Host` 1 か所 |
+| `invoke-cpu-sample.ps1` | 599 | 54 | `Write-Problem`（`エラー: …` を前置）・dump の点検の文 |
+| `invoke-followup-checks.ps1` | 849 | 40 | 中止・失敗の文・ログの目印の正規表現 1 か所（478 行 `apply\(ShowSurface\): 表示・マスクを更新`） |
+| `invoke-perf-run.ps1` | 887 | 81 | 進みと失敗の文・`run-meta.txt` の節の見出し（`実行`・`対象`・`較正値`・`マシン`・`ソース`・`結果`）・`FAILED.txt`／`DRY-RUN.txt` の本文・`$LOG_MARKER_SMOKE_GATE` |
+| `perf-loop.common.ps1` | 684 | 23 | `Stop-Run` の `[perf-loop] 失敗:`・子を起こせないときの文・cargo のラベル |
+| `perf-loop.measure.ps1` | **993** | 110 | 進みと失敗の文・ラベル（`'走行'` など）・`DRY-RUN` の本文 |
+| `perf-loop.ps1` | 683 | 46 | 自己較正と preflight の文・**Python の出力と突き合わせる正規表現**（313 行・315 行） |
+| 計 | | **395** | |
+
+ファイルにだけ出す日本語の主な所:
+- `run-meta.txt` の節の見出し: `judge-perf.py` の `read_run_meta`（1164 行）は見出しを読むが、値は鍵の名前で引く（`meta_lookup`）。見出しは報告に出るだけ。要件 4.5（ほかの道具が読むファイルの形を変えない）との兼ね合いで、日本語のまま残すのが安全。
+- `$LOG_MARKER_SMOKE_GATE`（`invoke-perf-run.ps1:174`）と `invoke-followup-checks.ps1:478` の目印は、areka のログの文言との突き合わせ。中身を変えると突き合わせが壊れる。
+- `perf-loop.ps1:313/315` は `perf-ledger.py goal-text` の標準エラーと `goals/*.goal.md` の日本語を正規表現で読む（要件 4.7）。
+
+### 2.5 判定（`tools/encoding-check.ps1`）の今の規則を `tools/perf/*.ps1` に当てた結果
+
+`encoding-check.ps1` の関数をそのまま取り出して `tools/perf/*.ps1` に当てた（静的・ファイルは書いていない）:
+
+| ファイル | 規則 A | 規則 B | 規則 C | 規則 D |
+|---|---|---|---|---|
+| `check-quiet.ps1` | 41 | 0 | 0 | 0 |
+| `invoke-cpu-sample.ps1` | 54 | 0 | 0 | 0 |
+| `invoke-followup-checks.ps1` | 40 | 0 | 0 | 0 |
+| `invoke-perf-run.ps1` | 80 | 1（864 行） | 0 | 0 |
+| `perf-loop.common.ps1` | 23 | 0 | **0** | 0 |
+| `perf-loop.measure.ps1` | 110 | 0 | 0 | 0 |
+| `perf-loop.ps1` | 46 | 0 | 0 | 0 |
+
+- 構文の誤りは 0。
+- **規則 C は `Invoke-PwshChild` の書き替え（310 行）を見逃す**。規則 C が子の PowerShell の文を調べるのは「コマンド名が `pwsh` で、`-Command` の次に文字列の定数が来る形」だけ。perf は文字列を変数 `$inner` に組み、配列に入れて `Invoke-Child` → `ProcessStartInfo.ArgumentList` に渡すので、どの形にも当たらない。
+- 規則 B の 1 件: `invoke-perf-run.ps1:864` が `$LOG_MARKER_SMOKE_GATE` を展開文字列（端末へ出す失敗の文）に埋めている。
+- 規則 D も `invoke-followup-checks.ps1:245` の `& cargo @cargoArgs`（`nar-sample-path` は変数 `$NAR_SAMPLE_ARGS` の中）を見逃す（引数の定数しか見ないため）。要件 5 は規則 D の強化を求めていないが、要件 3 の棚卸で拾う所。
+- 規則 A は `$LOG_MARKER_*` への代入の右辺だけを例外にしている。この例外はログの目印の日本語の置き場として使える（`invoke-followup-checks.ps1:478` の目印も `$LOG_MARKER_*` に移せば規則の内に収まる）。
+- 判定の対象の取り方は `Get-ChildItem tools -Filter *.ps1`（下の階層を見ない・345 行）。`tools/perf/fixtures`・`fixtures-loop`・`goals` に `.ps1` は無い。
+
+### 2.6 文書の古い記述
+
+- `tools/perf/README.md`（1140 行）: 子の出力の受け取り方と端末へ出す文の決まりを書いた所が**無い**。要件 8.1 は「書き直す」でなく「新たに書く」になる。
+- steering `tech.md:93`（段 `encoding check` の「`tools/perf/` を除く」）と `tech.md:97`（決まりの対象が「`tools/` のスクリプト」）。
+- スキル `perf-loop-iteration` の `SKILL.md:29`「説明文の日本語は端末の文字コードで化けることがある」。エージェント `perf-*` の 4 本には文字コードに頼る記述は無い。
+
+### 2.7 小さな実測（窓の無い自分だけの 932 の端末の中だけで閉じた）
+
+外側の pwsh から `Invoke-Utf8Child -OwnConsole` で窓の無い子を起こし、その子が自分の端末だけを 932 にして、そこから孫の pwsh を `ProcessStartInfo`（UTF-8 で読む・端末を分け合う）で起こした。見本は `U+7248`・`U+2460`（932 にある）と `U+1F600`（932 に無い）。
+
+| 試したこと | 結果 |
+|---|---|
+| 孫が何もせずに出す（今の前置きを外しただけの形） | 標準出力も標準エラーも化けた（`�`…）。**判定の「壊れることを先に確かめる」の見本として使える**（要件 6.3） |
+| 孫が今の前置き（`[Console]::OutputEncoding=UTF8`）の後に出す | 字は届く。ただし孫が終わった後、**共有の端末は 65001 のまま**（`GetConsoleOutputCP` と新しい子の読みの両方で 65001）。同じプロセスの `[Console]::OutputEncoding.CodePage` は 932 のまま（.NET が覚えた値） |
+| 孫が `[Console]::SetOut`／`SetError` に UTF-8 の書き手（`OpenStandardOutput`／`OpenStandardError` の上・`AutoFlush`）を渡してから出す | `Write-Host`・素の出力・`Write-Output`・`[Console]::Out.WriteLine`・`[Console]::Error.WriteLine`・`Write-Error`・`Write-Information` の全部が 1 字違わず届いた（932 に無い絵文字も）。端末は 932 のまま |
+| `Write-Error` の色の符号 | 前置きなし・今の前置き・`SetError` のどれでも同じ ANSI の符号（`ESC[31;1m`）が標準エラーに乗る＝撤去で変わらない |
+
+pwsh の版は 7.6.7。
+
+---
+
+## 3. 要件ごとの対応表
+
+| 要件 | 今ある物 | ギャップ |
+|---|---|---|
+| 1.1 書き替えない | `Invoke-Child`・`Invoke-PythonChild` は書き替えない | **Missing**: `Invoke-PwshChild` の前置きの撤去。孫を起こす所に書き替えは無い |
+| 1.2 回し終えた後も同じ | なし | **Constraint**: 同じプロセスの `[Console]::OutputEncoding` では確かめられない（2.7）。OS に尋ねる（`GetConsoleOutputCP`）か新しい子で読む |
+| 1.3 どのコードページでも同じ結果 | 親の読みは UTF-8 固定 | **Unknown**: powercfg・xperf のように端末の文字コードで書く道具の出力（`run-meta.txt` の `power_scheme`・xperf の失敗の文）が端末の文字コードで変わる |
+| 2.1 子の PowerShell の字を 1 字違わず | 親の読みは正しい | **Missing**: 子に UTF-8 で書かせる手（候補: `SetOut`／`SetError` の前置き・実測で効く） |
+| 2.2 孫の字を化けさせない | なし | **Missing**: 2.3 の素の `&`・パイプを置き換える（`invoke-followup-checks.ps1` 2 か所・`invoke-perf-run.ps1` 3 種） |
+| 2.3 Python・cargo・git の読みを後退させない | `Invoke-Child`・`Invoke-PythonChild` | 親の側は変えなくてよい |
+| 2.4 写す所は中身を変えない | `Invoke-Child` の写し | 変えなくてよい |
+| 3.1–3.3 棚卸 | なし | **Missing**: 文書に残す（4 章の下書きが土台） |
+| 4.1–4.3 端末へ出す文は ASCII | なし（`tools/*.ps1` は済み） | **Missing**: 395 字句の書き直し |
+| 4.4 機械が読む行を変えない | `PERF-LOOP RESULT`・`SELFTEST RESULT`・`FOLLOWUP RESULT`・`CHECK-QUIET RESULT`・`selftest … code=`・`available=` などは既に ASCII | **Constraint**: 書き直しの網に掛けない |
+| 4.5 ほかの道具が読むファイルの形 | `run-meta.txt`・`quiet-*.txt`（ASCII の `key=value`） | **Constraint**: `run-meta.txt` の節の見出しの日本語を残すなら、字句を ASCII で書き表す手が要る |
+| 4.6 端末とファイルの両方へ出す文 | `check-quiet.ps1` の報告（ASCII の `key=value`）・`invoke-followup-checks.ps1` の `Write-Note` | `Write-Note` の中身の確認が要る |
+| 4.7 Python の日本語との突き合わせ | `perf-loop.ps1:313/315` の正規表現 | **Constraint**: 突き合わせの字は日本語のまま、字句は ASCII（`` `u{…} `` など） |
+| 5.1 対象に入れる | `encoding-check.ps1:345` | **Missing**: 対象の取り方に `tools/perf/*.ps1` を足す |
+| 5.3 子へ渡す文の中の書き替えを赤 | 規則 C（`pwsh -Command '…'` の形だけ） | **Missing**: 今の perf の形（変数に組んで `ProcessStartInfo` に渡す）を捕まえる規則と較正の見本 |
+| 5.4 端末へ出す日本語を赤 | 規則 A | 足りる（ただしファイルにだけ出す日本語も赤になる＝4.5・4.7 の書き表し方と対） |
+| 5.5・5.6 今の約束と較正を保つ | 較正 27 見本・cp932 child | 規則 C を広げるとき、`encoding-check.ps1` 自身の較正の見本（書き替えを文字列で持つ）を誤って赤にしない工夫が要る |
+| 6.1–6.6 932 の判定 | `encoding-check.ps1` の cp932 child（`Invoke-Utf8Child` の読みを確かめる形） | **Missing**: perf の起こし方での見本の判定・壊れることの先の確かめ。置き場は未定（8 章 決めること 8） |
+| 7.1–7.4 手元の確かめ | `perf-loop.ps1 selftest`（約 1 分）・`-DryRun`・`-OutRoot` | 道具は揃っている。前後の端末の文字コードの読み方だけ 1.2 と同じ注意 |
+| 8.1–8.4 文書 | 2.6 | **Missing**: README に節を足す・注記 2 か所・`tech.md` 2 行・スキル 1 行 |
+| 9.4 1,000 行 | `perf-loop.measure.ps1` が 993 行 | **Constraint**: このファイルには行を足さない（部品は `perf-loop.common.ps1` へ） |
+| 9.5 依存を足さない | — | どの案も標準の .NET と PowerShell だけで済む |
+
+---
+
+## 4. 子の出力を受け取る所の棚卸（下書き・要件 3 の土台）
+
+設計とタスクで確定させる前の下書き。「扱い」は今の姿から見た見込み。
+
+| スクリプト | 受け取る所 | 見込みの扱い |
+|---|---|---|
+| `perf-loop.common.ps1` | `Invoke-Child`（ProcessStartInfo・UTF-8） | もとから端末に依らない |
+| | `Invoke-PythonChild` | もとから端末に依らない |
+| | `Invoke-PwshChild` | **直す**（前置きの差し替え） |
+| | `Get-NarSampleMap`（`Invoke-Child` で cargo） | もとから端末に依らない |
+| `perf-loop.measure.ps1` | `Invoke-PwshChild` 5 か所・`Invoke-PythonChild` 3 か所・`Invoke-Child`（git 2・cargo 1） | 部品の直しで足りる（呼ぶ側は変えない） |
+| `perf-loop.ps1` | `Invoke-PythonChild` 4 か所・`Invoke-Child`（python -c）・`Invoke-PwshChild` 2 か所 | 同上 |
+| `check-quiet.ps1` | 子を起こさない | 0 件（明示する） |
+| `invoke-cpu-sample.ps1` | `Invoke-NativeCommand`（xperf をファイルへ） | 端末を通らない（ファイルを介す）。ただしファイルの中身の文字コードは xperf 次第（要確認） |
+| `invoke-followup-checks.ps1` | `& cargo`（245）・`& python \| Write-Host`（290） | **直す** |
+| | `Start-Process areka.exe`（ファイルへ・UTF-8 で読む） | 端末を通らない |
+| `invoke-perf-run.ps1` | `& pwsh check-quiet.ps1`（407） | **直す** |
+| | `& git`（329–334） | **直す**か「ASCII しか来ない」の見極め（ブランチ名） |
+| | `& powercfg`（316） | 決めること 4 |
+| | `Start-Process areka.exe`（ファイルへ・UTF-8 で読む） | 端末を通らない |
+
+---
+
+## 5. 実装の案
+
+### 案 A: 今の部品を伸ばす（推す形の土台）
+
+1. `Invoke-PwshChild` の前置きを `[Console]::OutputEncoding=…` から「`[Console]::SetOut`／`SetError` に UTF-8 の書き手を渡す」に差し替える（起こす側＝UTF-8 で読む側が、そのプロセスの中だけで UTF-8 を頼む）。呼ぶ側の 7 か所は変えない。
+2. 子のスクリプトの中の素の `&` とパイプ（2.3）を、UTF-8 で読む形に置き換える。`invoke-perf-run.ps1`・`invoke-followup-checks.ps1` は `perf-loop.common.ps1` を読み込まない単独のスクリプトなので、`tools/utf8-child.ps1` の `Invoke-Utf8Child` を読み込んで使う（形は変えない・使うだけ）か、別の手を取る（決めること 3）。pwsh の孫（`check-quiet.ps1`）には 1 と同じ前置きを付ける。
+3. 端末へ出す文を ASCII に書き直す。機械が読む行は網から外す。ファイルにだけ出す日本語は ASCII の字句で書き表す（決めること 5）。
+4. `encoding-check.ps1` の対象に `tools/perf/*.ps1` を足し、規則 C を今の perf の形まで広げ、較正の見本を足す。932 の判定を足す（決めること 6・8）。
+5. 文書（README に節・注記 2 か所・`tech.md` 2 行・スキル 1 行）。
+
+- 良い点: 触るのは 7 本の中身と判定と文書だけ。呼ぶ側の形・出力先の配置・終了コードが変わらない（要件 9.1）。前置きが 1 か所にまとまるので判定で見張りやすい。実測で効くと分かっている。
+- 気になる点: 「プロセスの中の書き手の差し替え」が開発者の方針（端末の文字コードを変えて逃げない）の字面にどう映るか。要件 1.1 が並べる「出力の文字コード・入力の文字コード・コードページ・PowerShell が子へ渡す文字コード」のどれにも当たらないが、確認しておきたい（決めること 1）。
+
+### 案 B: 新しい受け渡しの形を作る
+
+- B-1 ファイル渡し: 子は端末へ ASCII だけを出し、日本語を含む中身（写す行・`LastLine`）は UTF-8 のファイルに書き、親がそれを読んで写す。端末も書き手も触らない。
+  - 良い点: 方針の字面に最も沿う。
+  - 気になる点: 子のスクリプト 4 本と親の写し方に手が入る。ファイルの置き場が要る（既定の出力先は `%LOCALAPPDATA%`。出力先の配置を変えない要件 9.1・一時ファイルは `target\` の下の決まりとぶつかりうる）。自己較正・`-Probe` のように出力先を持たない呼び出しもある。規模が上がる。
+- B-2 端末の今の文字コードで読む: 親が `Invoke-PwshChild` の子の出力だけを、共有の端末の今の出力の文字コード（読むだけ）で解く。
+  - 良い点: 子に何もさせない。
+  - 気になる点: 端末の文字コードに無い字は子の側で `?` に落ちる（437 の端末なら日本語が全部落ちる）。要件 1.3・2.1 に合わない。
+
+### 案 C: 混ぜる
+
+- 子の PowerShell には案 A の前置き、孫の OS の道具（powercfg・xperf）には「端末の今の文字コードで読む」か「その情報をプロセスの中の API（CIM など）で取る」、Python と cargo と git は今の `Invoke-Child` と同じ UTF-8 の読み、という形。読む相手ごとに正しい読み方を選ぶ。
+- 良い点: 相手の書き方に合わせた読み方になる。
+- 気になる点: 読み方の種類が増えるので、棚卸の表（要件 3.3）で所ごとの理由を残す必要がある。
+
+---
+
+## 6. 手間と危うさ
+
+- **手間: M（3〜7 日）** — 子を起こす所の直しは小さい（部品 1 か所＋孫 5 か所ほど）が、端末へ出す文の書き直しが 7 本・395 字句にまたがり、判定の規則 C の拡張と較正、932 の判定の追加が乗る。要件の見立て（10〜14 タスク）と合う。
+- **危うさ: 中** — 主な手（`SetOut`／`SetError`）は実測で効くと分かった。残る不確かさは、(1) 端末の文字コードで書く OS の道具（powercfg・xperf）が撤去の後にどう書くか、(2) 規則 C を広げたときの誤検出（`encoding-check.ps1` 自身の較正の見本）、(3) 395 字句の書き直しで機械が読む行やファイルの中身を誤って変えること（要件 4.4・4.5）。
+
+---
+
+## 7. 設計への申し送り
+
+### 推す方向
+
+案 A を土台に、OS の道具の読み方だけ案 C の考えを足す形。理由: 実測で効く・呼ぶ側を変えない・判定で見張る所が 1 か所にまとまる。
+
+### 決めること（要件の議論・設計で答えが要るもの）
+
+1. **子の PowerShell に UTF-8 で書かせる手**: `SetOut`／`SetError` の前置き（案 A）か、ファイル渡し（案 B-1）か。前置きの形は要件 1.1 の「書き替え」に当たらない、という読みでよいか。
+2. **前置きの置き場**: `Invoke-PwshChild` の 1 か所（起こす側が頼む）か、子のスクリプトの頭（出力が渡された先のときだけ）か。後者は開発者が `pwsh -File <子> | …` と手で回したときの読みを変えてしまう。
+3. **単独のスクリプトの中の孫の起こし方**: `invoke-perf-run.ps1`・`invoke-followup-checks.ps1` で `tools/utf8-child.ps1` の `Invoke-Utf8Child` を読み込むか、`perf-loop.common.ps1` を読み込むか、小さな共通の部品を `tools/perf/` に置くか。`Invoke-Utf8Child` は標準出力を 1 本の文字列で、標準エラーを別に返すので、`2>&1` の並び（標準出力と標準エラーの混ざる順）は保てない。
+4. **端末の文字コードで書く OS の道具の読み方**: `powercfg /getactivescheme`（`run-meta.txt` の `power_scheme`）と xperf の出力（`invoke-cpu-sample.ps1` の失敗の文・dump）。今は共有の端末が 65001 になっているので UTF-8 で来ている可能性があり、撤去で 932 に戻る。端末の今の文字コードで読む・CIM などで取る・ASCII の部分（GUID）だけ使う、のどれにするか。要件 1.3 の「同じ結果」に `power_scheme` の値の字が含まれるか。
+5. **ファイルにだけ出す日本語・ログの目印・突き合わせの字の書き表し方**: `` `u{…} ``（`encoding-check.ps1` の前例）・隣の `*.strings.json`（`release-notes.ps1`・`roadmap-overview.ps1` の前例）・`$LOG_MARKER_*` への代入（規則 A の例外・ログの目印向き）・英語に替えてよい所（人だけが読む `FAILED.txt`・`DRY-RUN.txt` など）の使い分け。`run-meta.txt` の節の見出しを日本語のまま残すか。
+6. **規則 C の穴の塞ぎ方**: 文字列の定数を全部 PowerShell として構文解析して書き替えを探す／`-Command` の次の要素になる文字列だけを見る／文字列の中の字面を正規表現で見る、のどれか。`encoding-check.ps1` 自身の較正の見本（書き替えを文字列で持つ）の扱い（例外の所を名前で限る、など）。`SetOut`／`SetError` は規則 C の対象にしない（書き替えではない）と書き分けるか。
+7. **規則 B の 1 件の直し方**: `invoke-perf-run.ps1:864` の失敗の文から目印の中身を外し、名前（`LOG_MARKER_SMOKE_GATE`）で言うなど。
+8. **932 の判定（要件 6）の置き場**: `encoding-check.ps1` の cp932 child に足す（全体テストのたびに回る）／`perf-loop.ps1 selftest` に足す（性能改善ループを回すときだけ）／両方。「道具と同じ起こし方」を、本物の `Invoke-PwshChild`（`perf-loop.common.ps1` を読み込む）で確かめるか、同じ前置きの定数を分け合う形にするか。
+9. **前後の端末の文字コードの確かめ方**: .NET は端末の文字コードを覚えるので、同じプロセスの `[Console]::OutputEncoding` では子の書き替えに気付けない（実測）。`GetConsoleOutputCP` を呼ぶ（`Add-Type` の P/Invoke・依存は増えない）か、新しい子の pwsh で読むか。`encoding-check.ps1` の今の「own console code pages unchanged」も同じ弱さを持つ（子が書き替えない今は実害なし）。要件 5.6 の範囲で直すか、そのままにするか。
+10. **スキル `perf-loop-iteration` の注記の書き方**: 撤去の後、道具が自分で出す文は ASCII になるが、写す子の中身（`judge-perf.py` の日本語の報告）は、端末の文字コードと読む側（会話へ届ける仕組み）の組み合わせで今後も化けうる。注記を消すか、「写した子の中身は化けることがある」と狭めるか。
+11. **範囲の外に残る物の書き残し**: `invoke-cpu-sample.ps1` の一時ファイルが OS の一時フォルダにある件、規則 D が `& cargo @cargoArgs` を見逃す件を、この spec で直すか、記すだけにするか。
+12. **`perf-loop.measure.ps1`（993 行）**: 書き直しで行を増やさない書き方（長い英文を 1 行に収める・部品は `perf-loop.common.ps1` へ）を約束として置くか。
+
+### 調べること（設計の段で）
+
+- powercfg と xperf が、出力を渡された先（パイプ・ファイル）へ書くときに使う文字コード（端末の出力の文字コード・OEM・ANSI のどれか）。窓の無い自分だけの端末で数秒で確かめられる。
+- `SetOut`／`SetError` の前置きが、`-Command` の中で `& '<script>'` を回して `exit $LASTEXITCODE` する今の形でも、終了コードと出力の順を保つこと（`AutoFlush` と、例外で止まったときの書き残し）。
+- 規則 C を広げたときの、`tools/*.ps1` と workflow の `run:` の本文への誤検出が 0 であること（要件 5.5）。
+
+## 8. 要件の議論で決めたこと（2026-10-16・全議題を推奨案で確定）
+
+- 決めること 1 → 子の PowerShell には `[Console]::SetOut`／`SetError` に UTF-8 の書き手を渡す形（案 A）を採る。これは端末の書き替えに当たらない（要件 1.1 に明記）。ファイル渡し（案 B-1）は採らない。
+- 決めること 4 → `run-meta.txt` の `power_scheme` のようにファイルに値として残る物は、端末に依らず字まで同じにする（手段は設計）。xperf の失敗の文のように写すだけの物は、読む側で化けさせなければ足りる（要件 1.3）。
+- 決めること 10 → スキルの注記は消さずに、写した子の中身だけに狭めて書き直す（要件 8.4）。
+- 決めること 11 → OS の一時フォルダの 3 か所（`perf-loop.ps1:272`・`invoke-cpu-sample.ps1:202-203`・`:342`）と規則 D の穴は、この spec で直す（要件 10・要件 5.7）。
+- 残りの 2・3・5・6・7・8・9（確かめ方）・12 は設計の段で決める。
+
+---
+
+## 9. 設計の段の調べと決めたこと（2026-10-16・`/kiro-spec-design`）
+
+### 9.1 まとめ
+
+- **調べの種類**: 既存の道具の拡張（軽い調べ）。新しい依存は無い。使った手順: スキル `kiro-spec-design` の規則（`design-principles`・`design-discovery-light`・`design-synthesis`・`design-review-gate`）。簡素さの指針（ponytail）に沿い、既にある部品（`Invoke-Child`・`Invoke-Utf8Child`・判定の構文解析の手）を使い回した。
+- **主な分かったこと**:
+  - `powercfg` は渡された出力先へ**端末の出力の文字コード**で書く（932 で 932 のバイト・65001 で UTF-8・437 で `?????`）。`run-meta.txt` の `power_scheme` を端末に依らず字まで同じにするには `powercfg` をやめ、Unicode の API で取るしかない。
+  - CIM の `root\cimv2\power` の `Win32_PowerPlan` はこの机で失敗した（名前空間のエラー）。`powrprof.dll` の `PowerGetActiveScheme`＋`PowerReadFriendlyName` は `Add-Type` で呼べて、GUID と名前（`Sonos`）が取れた。
+  - xperf は端末の文字コードが 932・65001・437 のどれでも同じ ASCII のバイトを書き、パスの中の日本語の字は自分で落とす（道具の性質）。wpaexporter は今回の呼び方では日本語を出さず、書き方は決めきれなかった（.NET の画面の道具は既定で端末の出力の文字コードで書く）。
+  - 判定の規則 C を「すべての文字列を構文解析する」形に広げると、`tools/*.ps1`・`tools/perf/*.ps1` の 8,297 個の文字列のうち当たるのは `perf-loop.common.ps1:310`（直す所）と `tools/encoding-check.ps1` の 10 か所（規則の語彙と較正の見本）だけ。ただし全部を解析すると 15 秒かかる。
+  - 規則 D を「ファイルの中に `metadata` の字があれば」の粗い形にすると、`tools/crates-io.ps1` の `cargo publish … @pArgs` が誤って赤になる（同じファイルに `Invoke-Utf8Child cargo @('metadata', …)` がある）。値の流れを辿る形にする必要がある。
+
+### 9.2 調べの記録
+
+#### 9.2.1 OS の道具が渡された出力先へ書く文字コード
+
+- **きっかけ**: 決めること 4・設計の段の「調べること」1 つ目。
+- **やり方**: 窓の無い自分だけの端末（`Invoke-Utf8Child -OwnConsole`）を持つ子の中だけで、その端末を 932 → 65001 → 437 に切り替え、`Start-Process -RedirectStandardOutput` でファイルに受けたバイトを見た（開発者の端末には触れていない。見本のファイルは会話の作業場の一時フォルダ）。
+- **分かったこと**:
+  - `powercfg /getactivescheme`: 932 で `\x93d\x8C\xB9…`（932 の「電源設定の」）、65001 で `\xE9\x9B\xBB…`（UTF-8）、437 で `?????`。端末の出力の文字コードで書く。
+  - `xperf -i "<日本語の字を含むパス>"`: 3 つの文字コードで同じバイト（`xperf: error: …\x` で日本語の字の所から落ちる）。
+  - `wpaexporter`: 使い方の英文だけが出て、日本語の字の書き方は確かめられなかった。
+- **設計への影響**: `power_scheme` は `powrprof` の API で取る。xperf・wpaexporter の受け皿のファイルは端末の出力の文字コードで読む（書き替えを消すと端末は 932 のままなので、今の UTF-8 の読みでは食い違う）。
+
+#### 9.2.2 電源設定を Unicode で取る手
+
+- **試したこと**: `Get-CimInstance -Namespace root\cimv2\power -ClassName Win32_PowerPlan -Filter 'IsActive=True'` → この机で失敗。`Add-Type -MemberDefinition` で `powrprof.dll` の `PowerGetActiveScheme`（GUID・`LocalFree` で返す）と `PowerReadFriendlyName`（大きさを先に尋ねてから UTF-16 で受ける）→ `rc=0`・`d7a728f8-6d8b-4ab7-a3e3-7aaeb0f9871c`・`Sonos`。
+- **設計への影響**: 値の形は `<GUID> (<名前>)`。`powercfg` の地域語の行（`電源設定の GUID: … (Sonos)`）からは変わるが、`judge-perf.py` は `run-meta.txt` を見出しと鍵で読み、`power_scheme` を引かない（`read_run_meta`・`meta_lookup`）。鍵と節は変えない（要件 4.5）。
+
+#### 9.2.3 規則 C の文字列の中身の検査の当たり方と速さ
+
+- **やり方**: `tools/*.ps1`・`tools/perf/*.ps1` の全部の文字列（単引用符・二重引用符・ヒア文字列）を PowerShell として構文解析し、今の規則 C と同じ見方で当てた（読むだけ）。
+- **分かったこと**: 当たりは `perf-loop.common.ps1:310`（`[Console]::OutputEncoding=…` の展開文字列・`$false` は字のまま残るので代入として解ける）と、`tools/encoding-check.ps1` の 113 行（`'chcp'`・`'chcp.com'`）・306〜312 行・326 行（較正の見本。見本の名前の `'chcp inside child pwsh -c'` まで `chcp` のコマンドとして解ける）。8,297 個で 15 秒。
+- **設計への影響**: 字面に `Encoding` か `chcp` を含む文字列だけを先に絞ってから解析する。`tools/encoding-check.ps1` 自身にはこの文字列の中身の検査を当てない（文字列でない所と `-Command` の次の文字列の検査は今のまま当てる）。
+
+#### 9.2.4 規則 D の値の追跡
+
+- **分かったこと**: 素の `cargo` を変数で呼ぶ所は、今の対象では `tools/crates-io.ps1:308・311`（`@pArgs`）と workflow `crates-io.yml:160`（`@pArgs`）、perf では `invoke-followup-checks.ps1:245`（`@cargoArgs`）。`$pArgs = $PUBLISH | ForEach-Object { '-p', $_ }` はパイプの値。`$cargoArgs = @($NAR_SAMPLE_ARGS) + @(…)`・`$NAR_SAMPLE_ARGS = @('run', '-q', …, 'nar-sample-path', '--manifest-path')`。
+- **設計への影響**: 文字列の定数・配列・`+`・括弧・ほかの変数だけを辿り、コマンドの結果・メンバーの参照・メソッドの呼び出しは辿らない。これで `crates-io` は緑のまま（要件 5.5）、perf の 245 行は直す前は赤（要件 5.7）。
+
+#### 9.2.5 子のスクリプトの作り（前置きの置き場の決め手）
+
+- 子のスクリプト 4 本は単独で、`perf-loop.common.ps1` を読み込まない。`invoke-perf-run.ps1` は自前の `Write-Info`・`Stop-Run`（引数の形が違う）・`Get-PwshPath`（見つからなければ `'pwsh'` を返す）・`Get-UtcStamp`（末尾に `Z`）を持つので、`perf-loop.common.ps1` を読み込むと名前がぶつかり、`Invoke-PwshChild` が `invoke-perf-run.ps1` の `Get-PwshPath` を呼んで壊れる。
+- 子の PowerShell を起こす所は `Invoke-PwshChild` と `invoke-perf-run.ps1:407`（`check-quiet.ps1`）の 2 つ。
+
+### 9.3 形の比べ
+
+| 案 | 中身 | 良い点 | 気になる点 | 採否 |
+|---|---|---|---|---|
+| 前置きを `perf-loop.common.ps1` に置き、`invoke-perf-run.ps1` に写しを置く | 2 か所に同じ文 | ファイルが増えない | 片方だけ直されてずれる | 採らない |
+| `invoke-perf-run.ps1` が `perf-loop.common.ps1` を読み込む | 部品を共有 | 写しが無い | 名前がぶつかり壊れる（9.2.5） | 採らない |
+| `tools/utf8-child.ps1` に前置きを足す | 読み手と書き手の頼みを 1 か所に | 置き場として自然 | 範囲の外のファイル（要件の境界）を触る | 採らない |
+| **`tools/perf/perf-pwsh-child.ps1` に引数を組む部品を 1 つ置く** | `Get-PwshChildArguments` | 前置きと引用の規則の唯一の所在・名前がぶつからない | ファイルが 1 つ増える | **採る** |
+| `check-quiet.ps1` が自分の頭で書き手を替える | 子の側で頼む | 呼ぶ側を触らない | 手で `pwsh -File check-quiet.ps1` の出力を受けたときの読みが変わる（決めること 2） | 採らない |
+
+### 9.4 決めたこと（残りの決めること）
+
+- **決めること 2（前置きの置き場）**: 起こす側（`Get-PwshChildArguments`）だけ。子のスクリプトの頭には置かない。理由: 子を手で回したときの動きを変えない・前置きが 1 か所にまとまり判定で見張りやすい。
+- **決めること 3（単独のスクリプトの中の孫）**: `tools/utf8-child.ps1` の `Invoke-Utf8Child` を読み込んで使う（形は変えない）。標準出力と標準エラーの交互の順は保たない（人が読む写しだけで、機械が読む行は標準出力の 1 行）。
+- **決めること 4（OS の道具）**: `power_scheme` は `powrprof` の API（9.2.2）。xperf・wpaexporter は受け皿のファイルを端末の出力の文字コードで読む（9.2.1）。xperf の dump（`-o` で xperf が自分で書くファイル）は端末を通らないので変えない。
+- **決めること 5（ファイルにだけ出す日本語）**: 字で突き合わせる物・見出しとして読まれる物（`run-meta.txt` の見出し 6 つ・ログの目印 2 つ・`perf-loop.ps1` の正規表現 2 つ）は字を変えず、目印は `$LOG_MARKER_*` への代入、ほかは `` `u{…} `` で書く。人が読むだけの文（`DRY-RUN.txt`・`FAILED.txt`・`followup.txt` の覚え書き・`run-meta.txt` の値の失敗の札）は英文にする。これらを中身で読む道具は無い（判定器は `followup-verdict.txt` と `run-meta.txt` の鍵を読む。スキルの「`followup.txt` の総合」は判定器の報告と `FOLLOWUP RESULT` の行に当たり、覚え書きの文ではない）。英文にする理由: `` `u{…} `` で数十行の地の文を書くと、字句が読めなくなる。
+- **決めること 6（規則 C の穴）**: 全部の文字列を、字面の前の絞りの後に構文解析する（9.2.3）。正規表現で字面を探す形は採らない（今の判定の「字面で探さず構文で見る」の考えに合わせる）。`SetOut`／`SetError` は当てない。自分の例外は `tools/encoding-check.ps1` の文字列の中身の検査だけ。
+- **決めること 7（規則 B の 1 件）**: 失敗の文は目印を名前（`LOG_MARKER_SMOKE_GATE`）で言う。中身は `run-meta.txt` の `[較正値]` に残る。
+- **決めること 8（932 の判定の置き場）**: `tools/encoding-check.ps1` の窓の無い子の中だけ（全体テストのたびに回る）。本物の `Invoke-PwshChild` を `perf-loop.common.ps1` の読み込みで使う。見本を出す孫は `tools/encoding-check.ps1` 自身（内部の引数 `-PerfSampleChild`）。一時のスクリプトを書かないので「何も書き出さない」約束を保つ（要件 5.6・6.6）。`perf-loop.ps1 selftest` には足さない（性能改善ループを回すときしか回らない）。
+- **決めること 9（前後の端末の値の確かめ方）**: 判定の中は `GetConsoleOutputCP`／`GetConsoleCP`（`Add-Type`）で OS から読む。今の「own console code pages unchanged」もこの読み方に替える（.NET が覚えた値では子の書き替えに気付けない）。手元の確かめも同じ API で読む。
+- **決めること 12（`perf-loop.measure.ps1` の 993 行）**: 行の中で文面だけを書き替え、行を足さない（直した後 993 以下）。部品を足すのは `perf-loop.common.ps1` と新しいファイルの側。
+- **一時ファイルの置き場**（要件 10）: `<ワークツリー>\target\perf-loop-tmp\` の下に一意の名前で作り、使い終われば消す。`New-Item -ItemType Directory -Force` で `target\` ごと作り直す。
+
+### 9.5 組み立ての見直し（まとめる・作るか使うか・削る）
+
+- **まとめた物**: 子の PowerShell を起こす所 2 つを `Get-PwshChildArguments` 1 つにまとめた。孫の読み方は「相手が書く文字コードで読む」の 1 つの考えで 3 種（UTF-8 の相手は `Invoke-Utf8Child`・端末の文字コードで書く OS の道具は端末の文字コード・ファイルに値として残す OS の情報は Unicode の API）に分けた。
+- **作るか使うか**: 読み手は既にある `Invoke-Child`・`Invoke-Utf8Child` を使う。書き手は .NET の `StreamWriter`＋`SetOut`／`SetError`。端末の値と電源設定は Windows の API。判定は既にある構文解析の手と `Get-ConsoleRewrites` の見方を使い回す。新しい依存は無い。
+- **削った物**: 前置きを子のスクリプトの頭に置く形・ファイル渡し（案 B-1）・CIM（この机で動かない）・判定を `perf-loop.ps1 selftest` にも置く形・規則 D の範囲を見る追跡（名前で辿れば足りる）。
+
+### 9.6 危うさと手当て
+
+- 文字列の中身の検査が遅い → 字面の前の絞り（`Encoding`・`chcp`）を必ず入れる。
+- 規則 D の名前の追跡が広めに当たる → 当たったら変数の名前を分けて直す（見逃すより安全な側）。
+- 395 字句の書き直しで機械が読む行やファイルの形を誤って変える → 直す前に 7 本の機械の行を一覧にし、直した後に同じ字面で残っていることを確かめる（design の「端末へ出す文の規則」）。
+- 標準出力と標準エラーの交互の順が変わる（`Invoke-CheckQuietOnce`・`Invoke-Judge`）→ 人が読む写しだけで、機械が読む行に影響しない。
+- 手元の確かめの `rank-run -DryRun` は実行体が無いと走行を省き、子を起こさない → 実行体が在る状態で回し、子の行が出たことを確かめる。
+
+### 9.7 設計の議論で決めたこと（2026-10-16・全設計議題を推奨案で確定）
+
+- 検証（`design-validation.md`）は GO。指摘 3 つはどれも設計の書き足しで済ませた（R4・規則 C の例外を名前で狭める・規則 D の名前は大文字小文字を区別しない・静寂の確認を `-AutoQuiet -DryRun` で 1 回確かめる）。
+- 議題 1「手元の確かめの `areka.exe` の出どころ」: 空の置き物を `<ワークツリー>\target\perf-loop-check\bin\areka.exe` に置き、`-BinDir` で渡す。理由: 直すのは道具の配管だけで、`invoke-perf-run.ps1` の `-DryRun` は実行体を起こす手前（716 行）で終わり、在ることと SHA-256 しか見ない。`cargo build -p areka` を空のフォルダから回すと PC を何分も占める（7.3）。選ばなかった案: dev のビルド（本物で確かめられるが重い）。
+
+## 10. 手元での確かめの記録（要件 7.4・実装の段で書く）
+
+実装の段で、端末の文字コード・回したコマンド・終了コード・前と後の端末の値（OS から読んだ値）を書く。直す前に控えた要件 7.2 の終了コードもここに書く。
+
+### 10.1 確かめの足場（タスク 1.1・2026-10-16）
+
+- 手順書きは `<ワークツリー>\target\perf-loop-check\harness.ps1`（一時ファイル・`tools/` には置かない・コミットしない）。回し方は `pwsh -NoProfile -File <ワークツリー>\target\perf-loop-check\harness.ps1 -Tag before`（直した後は `-Tag after`）。
+- 外側の pwsh は `tools/utf8-child.ps1` の `Invoke-Utf8Child -OwnConsole` で、窓の無い自分だけの端末を持つ子（自分自身を `-Child` で回したもの）を起こす。開発者の端末には触れない。`-Child` を手で端末から回したときは何もせず 1 で終わる。
+- 子は自分の端末だけを 932 にする（`[Console]::OutputEncoding`／`InputEncoding` に 932。判定の `Set-OwnConsoleCp932` と同じ形）。道具を 1 本回すたびに、回す前に 932 に戻す（前の道具の影響を持ち越さないため）。
+- 前と後の端末の値は、子の中で `kernel32` の `GetConsoleOutputCP`／`GetConsoleCP` を `Add-Type`（メモリの中で組む）で呼んで OS から読む。プロセスが覚えた値（`[Console]::OutputEncoding.CodePage`）は使わない。
+- 道具は子と同じ端末を分け合う孫として `& pwsh -NoProfile -File tools\perf\perf-loop.ps1 …` で回す（開発者が 932 の端末から素で回すのと同じ形）。孫の出力は `target\perf-loop-check\<before|after>-<名前>.log` に UTF-8 で写す。
+- 実行体はビルドしない。空の置き物 `target\perf-loop-check\bin\areka.exe` を手順書きが `New-Item -ItemType File -Force` で置き、`-BinDir` で渡す。出力先は `-OutRoot <ワークツリー>\target\perf-loop-check`。
+
+### 10.2 直す前の結果（コミット `9668dfc3`・pwsh 7.6.7）
+
+| 回したコマンド（`-Goal draw-load-parity -OutRoot <wt>\target\perf-loop-check -BinDir <wt>\target\perf-loop-check\bin` を付ける） | 終了コード | 前の端末（出力・入力） | 後の端末（出力・入力） |
+|---|---|---|---|
+| `perf-loop.ps1 preflight` | 0 | 932・932 | **65001**・932 |
+| `perf-loop.ps1 rank-run -Iter 1 -DryRun` | 0 | 932・932 | **65001**・932 |
+
+末尾の `PERF-LOOP RESULT` の行（`<wt>` はワークツリーの絶対パス）:
+
+```
+PERF-LOOP RESULT preflight code=0 dir=<wt>\target\perf-loop-check\draw-load-parity
+PERF-LOOP RESULT rank-run code=0 dir=<wt>\target\perf-loop-check\draw-load-parity\iter-1\rank
+```
+
+- 直す前は、どちらも回し終えた後に端末の出力の文字コードが 932 から 65001 に変わっていた（要件 1.2 の穴がこの足場で再現する）。入力の文字コードは 932 のまま。
+- `preflight` は自己較正 9 本がすべて緑（`SELFTEST RESULT ok=9 ng=0`・`verdict=PREFLIGHT_OK`）。昇格していないので段③は `UNAVAILABLE reason=not_elevated`（止める理由にならず 0）。
+- `rank-run -DryRun` は `[invoke-perf-run]` の行（実行体の SHA-256 は空のファイルの値 `E3B0C442…B855`・32bit SHIORI ヘルパが無い注意の 1 行・`-DryRun のため起動しませんでした`）が出て、子の PowerShell が回ったことを確かめた。
+- 直した後は同じ手順書きを `-Tag after` で回し、終了コードと `PERF-LOOP RESULT` の行が同じで、前と後の端末がどちらも 932・932 であることを見る（要件 7.2）。
+
+### 10.3 機械が読む行の一覧（直す前・直した後の字面の比べの基準・要件 4.4）
+
+`tools/perf/*.ps1` の 7 本が端末（標準出力）へ出す行のうち、ほかの道具・スキル・エージェントが読む行。字面は下の型のまま 1 字も変えない（`<…>` は値）。`selftest … | <説明>` は `|` より前だけが機械の部分。
+
+| 行の型 | 出す所 | 読む所 |
+|---|---|---|
+| `PERF-LOOP RESULT <sub> code=<n> dir=<path>` | `perf-loop.common.ps1` 98 行（`$PERF_LOOP_RESULT_PREFIX`＝55 行） | スキル `perf-loop-iteration`・エージェント `perf-*` |
+| `SELFTEST RESULT ok=<n> ng=<n>` | `perf-loop.ps1` 397 行 | 同上 |
+| `selftest <道具> ok\|NG code=<n> \| <説明>` | `perf-loop.ps1` 365 行（`selftest python NG code=-1 \| …`）・379 行・390 行 | 同上 |
+| `[perf-loop] version=<v>` と `sub=`・`goal=`・`goal_file=`・`time_utc=`・`repo_root=`・`out_root=`・`out_dir=`・`elevated=`・`xperf=`・`xperf_path=`・`pdb=`・`pdb_path=`・`pdb_hint=`・`probe_available=`・`probe_reason=`・`function_stage=<s> reason=<r>`・`judge_script=`・`judge_version_goal=`・`judge_version_script=`・`judge_version_match=`・`python=<v> min=<v> ok=<b>`・`pwsh=<v> min=<n> ok=<b>`・`checkin_minutes=<n> source=<s> recommended=<n> warn_below=<n>`・`checkin_warn=`・`ledger=`・`ledger_exists=`・`goal_check=`・`selftest=<w> ok=<n> ng=<n>`・`sampling_backend=`・`capabilities=<k:v;…>`・`verdict=`・`code=`（ほか `checkin_note=`・`fail_reason=`） | `perf-loop.ps1` 566〜600 行（同じ文面を `preflight.txt` にも書く） | 同上・`preflight.txt` を読む側 |
+| `preflight_file=<path>` | `perf-loop.ps1` 608 行 | 同上 |
+| `[perf-loop] shiori_helper_present=<b> dir=<path>` | `perf-loop.measure.ps1` 381 行 | 同上 |
+| `[perf-loop] baseline build=<b> verdict=<v> dir=<path>` | `perf-loop.measure.ps1` 588 行 | 同上 |
+| `[perf-loop] 走行する実行体: <exe> sha256=<h> git_head=<h> git_dirty=<b>` | `perf-loop.common.ps1` 667 行 | 同上（`sha256=` 以降の `key=value`。前の日本語の地の文は design の規則 R1 で ASCII にする側） |
+| `CHECK-QUIET RESULT stage=<s> verdict=<v> code=<n> file=<path>` | `check-quiet.ps1` 536・540・661 行 | `invoke-perf-run.ps1`（`Invoke-CheckQuietOnce`・10.4 で訂正）・`perf-loop.ps1` の自己較正 |
+| `[check-quiet] version=<v>`、続けて `stage=`・`time_utc=`・`sample_sec=`・`machine_cpu_mean_pct=`・`machine_cpu_max_pct=`・`threshold_mean_pct=`・`heavy_process_names=`・`heavy_processes_found=`・`heavy_process_list=`・`target_pid_excluded=`・`verdict=`・`reason=`・`heavy_process_cpu_min_pct=`・`heavy_process_presence=`・`heavy_process_busy=`（静寂の確認の報告・16 行） | `check-quiet.ps1` 222〜239 行（`Format-QuietReport`）で組み、658 行で `quiet-*.txt` に書き、659 行（`[Console]::Out.Write($report)`）で同じ文面を端末にも出す | `perf-loop.common.ps1` 677〜678 行（`quiet-*.txt` の `verdict=`）・人と記録（`Invoke-CheckQuietOnce` が写す）。ソースの注記（218・235〜236 行）は読む側に「perf-ledger.py・judge 系」を挙げている。ただし `tools/perf/*.py` を grep しても、この報告の鍵を読む所は無かった。`perf_ledger_goal.py` 63 行の `machine_cpu_max_pct`・`sample_sec`・`heavy_process_names` は目標定義の TOML の `[quiet]` の鍵の名前で、報告は読まない。それでも注記に従い、読む側があるものとして扱う。**行の並びそのものも機械が読む**ので、並べ替えない。新しい行は末尾にだけ足す（236 行の注記） |
+| `counter_error=<s>` | `check-quiet.ps1` 660 行 | 人と記録 |
+| `INVOKE-CPU-SAMPLE RESULT <mode> code=<n> version=<v> [<key=value …>]` | `invoke-cpu-sample.ps1` 164 行（`Write-ResultLine`）。`<key=value>` は、probe の 387・398 行（`available=`・`reason=`）、start の 413 行（`etl=`）、stop の 426・464 行（`available=false reason=no_xperf`）・490 行（`dump=`・`sample_count=`・`stack_rows=`）・496 行（`dump=`・`sample_count=`・`areka_frames=0`）・500〜501 行（`sample_count=`・`areka_frames=`・`dump=`・`stack_rows=`・`resolved=`・`unresolved=`・`backend=`）、selftest の 584・588 行（`failures=`・`fixture_areka_frames=`・`fixture_sample_count=`・`red_areka_frames=`・`available=`・`reason=`） | `perf-loop.ps1` の自己較正（`LastLine`）・`perf-loop.measure.ps1` 668 行（stop の失敗の文に `$stop.LastLine` を写す） |
+| `sample_count=<n> areka_frames=<n> dump=<path>` | `invoke-cpu-sample.ps1` 498〜499 行（`Write-Info $summary`・単独の行） | 人と記録 |
+| `available=<b> reason=<r>` | `invoke-cpu-sample.ps1` 386・395・579 行 | `perf-loop.ps1` 431 行（`Get-SamplingProbe`）・`perf-loop.measure.ps1` 400〜401 行 |
+| `FOLLOWUP RESULT overall=<v> clickthrough=<v> drag=<v> dpi=<v> balloon_follow=<v> code=<n> dir=<path>` | `invoke-followup-checks.ps1` 233・848 行 | `perf-loop.measure.ps1` 918〜920 行 |
+
+- `invoke-perf-run.ps1` は端末へ機械が読む行を出さない（`[invoke-perf-run]` の行はすべて人が読む行。機械が読むのは `run-meta.txt` などのファイルで、要件 4.5 の側）。
+- ファイルにだけ出る `key=value`（`invoke-followup-checks.ps1` 443〜446 行と 508〜688 行の採取の行・`perf-loop.measure.ps1` 389 行）は端末へ出す文ではないので上の表に入れない（形は要件 4.5 で変えない）。
+- 日本語の地の文の中に `reason=<r>` などが混ざる行（`perf-loop.measure.ps1` 422・635・665 行、`perf-loop.ps1` 612 行、`check-quiet.ps1` 604 行の `[check-quiet] stage=… 秒数=… 閾値=…`）は人が読む行なので表に入れない。design の規則 R1 で行ごと ASCII の英文に書き直してよい。`perf-loop.common.ps1` 667 行を表に入れたのは、`sha256=` から後ろが値の並びとして読まれるため（前の地の文だけを R1 で直す）。
+- ほかの道具の出力をそのまま写す行（`invoke-followup-checks.ps1` 290 行が写す `judge-followup.py` の出力、`perf-loop.common.ps1` 247 行・`perf-loop.measure.ps1` 340 行・`invoke-perf-run.ps1` 409 行が写す子の出力）は、元の道具の行の型が上の表のとおりで、写す側は字を変えない。
+- 直す前の実際の字面は `target\perf-loop-check\before-preflight.log`（47 行）と `before-rank-run-dryrun.log`（18 行）にある。直した後は `after-*.log` の同じ型の行と字で比べる。
+
+### 10.4 判定と静的な確かめ（タスク 7.1・コミット `f40d227b`・pwsh 7.6.7）
+
+「差分が無い」の基準は `main` との分かれ目（`git merge-base HEAD main`＝`1e6590d8`・この spec の実装のコミットの前）。
+
+#### 判定（要件 5.2・5.4・5.5・5.6）
+
+- `pwsh -NoProfile -File tools/encoding-check.ps1` は終了コード 0、最後の行は `encoding check: all passed`。所要は約 12 秒。出力は `target\perf-loop-check\encoding-check-7.1.txt` に控えた。
+- `PASS calibration (34 samples)`（もとの 27 見本と足した 7 見本）。
+- 対象の合否はすべて `PASS`。`tools/*.ps1` の 8 本・`tools/perf/*.ps1` の 8 本・workflow の 2 本・規則 E の 4 行。直す前に赤だった `tools/perf` の 397 件は 0 件になった。`tools/*.ps1` と workflow の合否は直す前と同じ（どれも `PASS`）。
+- 932 の子の確かめは 7 行がすべて `PASS`。`own console code page 932`・`calibration (the plain call breaks the sample …)`・`production (Invoke-Utf8Child reads the sample exactly)`・`perf calibration (the plain call breaks the sample …)`・`perf real (Invoke-PwshChild delivers the 3 sample lines exactly)`・`perf console still 932 after Invoke-PwshChild`・`version=0.0.2 is the version this process read`。
+- 前後の端末の値は `PASS own console code pages unchanged (output 932, input 932)`。判定を回した端末は前も後も出力 932・入力 932 で同じ。
+
+#### 行数（要件 9.4）
+
+| ファイル | 行数 |
+|---|---|
+| `check-quiet.ps1` | 662 |
+| `invoke-cpu-sample.ps1` | 606 |
+| `invoke-followup-checks.ps1` | 865 |
+| `invoke-perf-run.ps1` | 926 |
+| `perf-loop.common.ps1` | 678 |
+| `perf-loop.measure.ps1` | 993（直す前と同じ・993 以下） |
+| `perf-loop.ps1` | 685 |
+| `perf-pwsh-child.ps1`（この spec で足した部品） | 41 |
+
+どれも 1,000 以下。
+
+#### 一時フォルダと出力先の根（要件 10.1・10.3）
+
+- `tools/perf/*.ps1` を `GetTempPath`・`GetTempFileName`・`New-TemporaryFile`・`$env:TMP` で grep して 0 件。`invoke-cpu-sample.ps1` の受け皿と `-Probe` の作業用のフォルダ、`perf-loop.ps1` の自己較正の作業用のフォルダは、どれもワークツリーの `target\perf-loop-tmp\` の下（`invoke-cpu-sample.ps1` 205〜223 行・`perf-loop.ps1` 273 行）。
+- `$env:TEMP` は `perf-loop.common.ps1` 485 行の 1 か所だけ残る。これは `Resolve-OutRoot`（481〜488 行）の中で、`%LOCALAPPDATA%` が無いときに出力先の根を決める所。出力先の根は一時ファイルではなく、決め方は変えない約束（要件 10.3・9.1）なので、そのまま残した。道具が自分で作る一時ファイルには使っていない。
+- `Resolve-OutRoot` の関数の本文を分かれ目と字で比べて差分なし（直す前は 487 行から・今は 481 行から。上の行が減って 6 行ずれただけ）。
+
+#### 機械が読む行（要件 4.4）
+
+- 分かれ目と今のコードで、10.3 の表の行を出す所を字で比べた。差分は 2 か所だけで、どちらも design の規則 R0・R1 のとおり機械の部分の外。`invoke-cpu-sample.ps1` 433・471 行の `Stop-Run` の `Message` と `perf-loop.measure.ps1` 376・380 行の人向けの警告も英文にしたが、`RESULT` の行と `-Extra` の字面は同じ。
+  - `perf-loop.common.ps1` の `[perf-loop] 走行する実行体: <exe>` が `[perf-loop] executable to run: <exe>` になった。`sha256=` から後ろは同じ字面。
+  - `perf-loop.ps1` の `selftest python NG code=-1 | <説明>` の `|` より後ろの説明が英文になった。`|` より前は同じ字面。
+- preflight の `key=value` の並び（`[perf-loop] version=` から `code=` まで）と `check-quiet.ps1` の `Format-QuietReport` の本文は、分かれ目と字で比べて差分なし。`invoke-cpu-sample.ps1` の `-Extra` に渡す `key=value` と `Write-ResultLine` の行も差分なし。`FOLLOWUP RESULT` の 2 行、`CHECK-QUIET RESULT` の 3 行、`counter_error=`・`preflight_file=`・`shiori_helper_present=`・`baseline build=` の行も差分なし。
+- 鍵の名前（`<名前>=`）の数を 7 本で比べると、増えたものはあるが減ったものは無い。増えたのは人が読む行を英文にしたときに値の前へ鍵の名前を書いた所（例: `check-quiet.ps1` 604 行の `[check-quiet] stage=… sample_sec=… threshold=… goal=…`）で、10.3 の表に入れていない人の行。
+
+直した後の行番号（10.3 の表の「出す所」と「読む所」で行がずれたもの。書いていないものはずれていない）:
+
+| 行の型 | 直す前の行 | 直した後の行 |
+|---|---|---|
+| `PERF-LOOP RESULT`（`perf-loop.common.ps1`） | 98（定数 55） | 102（定数 59） |
+| `SELFTEST RESULT`（`perf-loop.ps1`） | 397 | 399 |
+| `selftest <道具> ok\|NG`（`perf-loop.ps1`） | 365・379・390 | 367・381・392 |
+| preflight の `key=value`（`perf-loop.ps1`・`[perf-loop] version=` の行から `code=` の行まで） | 567〜599（10.3 の 566〜600 は前後の配列の括弧の行を含めた数え方） | 569〜601 |
+| `preflight_file=`（`perf-loop.ps1`） | 608 | 610 |
+| `[perf-loop] executable to run: … sha256=…`（`perf-loop.common.ps1`） | 667 | 661 |
+| 静寂の確認の報告（`check-quiet.ps1`） | 222〜239 で組む・658 で書く・659 で出す | 219 から（`Format-QuietReport`）・同じ 658・659 |
+| 静寂の確認の報告を読む所（`perf-loop.common.ps1` の `quiet-*.txt` の `verdict=`） | 677〜678 | 671〜672 |
+| `INVOKE-CPU-SAMPLE RESULT`（`invoke-cpu-sample.ps1` の `Write-ResultLine`） | 164 | 166 |
+| 同 probe の `-Extra` | 387・398 | 394・405 |
+| 同 start | 413 | 420 |
+| 同 stop | 426・464・490・496・500〜501 | 433・471・497・503・505〜508 |
+| 同 selftest | 584・588 | 591・595 |
+| `sample_count=… areka_frames=… dump=…`（`invoke-cpu-sample.ps1`） | 498〜499 | 505〜506 |
+| `available=<b> reason=<r>`（`invoke-cpu-sample.ps1`） | 386・395・579 | 393・402・586 |
+| `available=` を読む所（`perf-loop.ps1` の `Get-SamplingProbe`） | 431 | 433 |
+| `FOLLOWUP RESULT`（`invoke-followup-checks.ps1`） | 233・848 | 239・864 |
+
+- 10.3 の表で `CHECK-QUIET RESULT` を読む所に挙げた `Invoke-CheckQuietOnce` は、`perf-loop.common.ps1` ではなく `invoke-perf-run.ps1` にある（今は 439 行）。表の書き誤りで、読む所そのものは在る。10.3 のその欄は `invoke-perf-run.ps1` に直した（行番号は直す前のまま）。
+
+#### 触らない所と依存（要件 9.1・9.2・9.3・9.5）
+
+- `git diff --stat 1e6590d8 HEAD` を `tools/perf/*.py`・`tools/perf/fixtures`・`tools/perf/fixtures-loop`・`tools/perf/goals`・`tools/utf8-child.ps1`・`.github/workflows`・`tools/test-all.ps1`・`*.toml`・`Cargo.lock` に絞って 0 件。
+- 変わったファイルは spec の文書・`.kiro/steering/tech.md`・スキル `perf-loop-iteration` の `SKILL.md`・`tools/encoding-check.ps1`・`tools/perf/README.md`・`tools/perf/*.ps1` の 7 本と、足した `tools/perf/perf-pwsh-child.ps1` だけ。
+- 依存は増えていない。差分で足した読み込みは、`. utf8-child.ps1`（`invoke-perf-run.ps1` 151 行・`invoke-followup-checks.ps1` 140 行）と `. perf-pwsh-child.ps1`（`perf-loop.common.ps1` 52 行・`invoke-perf-run.ps1` 152 行）だけで、design の Allowed Dependencies の向きのとおり。`Add-Type` で足したのは `kernel32.dll` の `GetConsoleOutputCP`／`GetConsoleCP`（`tools/encoding-check.ps1`）と、`powrprof.dll` の 2 つと `kernel32.dll` の `LocalFree`（`invoke-perf-run.ps1` 325 行からの `Get-ActivePowerScheme`）だけ。`Import-Module`・`#Requires`・Python のパッケージ・crate は足していない。
+
+#### 棚卸の表と直した後のコード（要件 3.1・3.3）
+
+design の節「子の出力を受け取る所の棚卸」の表の扱いは、直した後のコードとすべて合う。直した後の行は次のとおり（扱いは表のまま）。
+
+| スクリプト | 受け取る所（直した後の行） | 扱い |
+|---|---|---|
+| `perf-loop.common.ps1` | `Invoke-Child`（192） | もとから |
+| | `Invoke-PythonChild`（274） | もとから |
+| | `Invoke-PwshChild`（291・引数は 306 行で `Get-PwshChildArguments`） | 直した |
+| | `Get-NarSampleMap`（126・`Invoke-Child` は 133） | もとから |
+| | `Sync-MeasureWorktreeBuild`（650・`Invoke-MeasureCargo` は 657） | もとから |
+| `perf-loop.measure.ps1` | `Invoke-PwshChild` 5 か所（267・293・638・659・913） | 部品の直しで足りる（行はずれていない） |
+| | `Invoke-PythonChild` 3 か所（337・424・811） | もとから |
+| | `Invoke-Child` 2 か所（448・449） | もとから |
+| | `Invoke-MeasureCargo`（464 で定義・470 で `Invoke-Child`） | もとから |
+| `perf-loop.ps1` | `Invoke-PythonChild` 5 か所（280・284・292・375・523） | もとから |
+| | `Invoke-Child`（420・`python -c`） | もとから |
+| | `Invoke-PwshChild` 2 か所（377・429） | 部品の直しで足りる |
+| `check-quiet.ps1` | なし | 0 件 |
+| `invoke-cpu-sample.ps1` | `Invoke-NativeCommand`（205・受け皿は `target\perf-loop-tmp\`・216〜217 行で端末の出力の文字コードで読む。呼ぶ所は 354・359・361・366・414・454・474・479） | 直した |
+| | dump の読み（493） | ファイル（変えていない） |
+| `invoke-followup-checks.ps1` | `Get-NarSampleMap` の cargo（252・`Invoke-Utf8Child`） | 直した |
+| | `Invoke-Judge` の python（302・`Invoke-Utf8Child`。呼ぶ所は 381・852） | 直した |
+| | `Start-Process areka.exe`（480）と実行ログの読み（`Read-RunLogText` 310・UTF-8） | ファイル（変えていない） |
+| `invoke-perf-run.ps1` | 電源設定（`Get-ActivePowerScheme` 325・`powrprof` の API。`powercfg` は呼ばなくなった） | 直した（API） |
+| | git の 3 つ（366・369・371・`Invoke-Utf8Child`） | 直した |
+| | `Invoke-CheckQuietOnce` の子の pwsh（446・`Invoke-Utf8Child`＋`Get-PwshChildArguments`） | 直した |
+| | `Start-Process areka.exe`（784）と実行ログの読み（901・`-Encoding utf8`） | ファイル（変えていない） |
+| `perf-pwsh-child.ps1`（足した部品） | なし（引数の配列を組むだけで子を起こさない） | 0 件 |
+
+- 素の `& cargo`・`& python`・`& git`・`& pwsh`・`& powercfg` で子の出力を受け取る所は、7 本のどこにも残っていない（注記の中の言及を除く）。
+
+### 10.5 932 の端末のまま道具を軽く回した結果（タスク 7.2・コミット `b1a2a693`・pwsh 7.6.7・2026-10-16）
+
+足場は 10.1 の `harness.ps1`。回す道具を選ぶ引数 `-Only`（既定は `preflight,rank-run-dryrun`）と、`selftest` と `invoke-perf-run.ps1 -AutoQuiet -DryRun` の 2 つを足した（どれもワークツリーの `target\` の下・コミットしない）。足した 2 つも、ほかと同じく窓の無い自分だけの端末を持つ子の中で、回す前にその端末を 932 にしてから孫として回す。前と後の端末の値は子の中で OS の API（`GetConsoleOutputCP`／`GetConsoleCP`）から読んだ。開発者の端末には触れていない。孫の出力は `target\perf-loop-check\7.2-<名前>.log` に UTF-8 で写した。
+
+回し方:
+
+- `pwsh -NoProfile -File <wt>\target\perf-loop-check\harness.ps1 -Tag 7.2 -Only selftest,preflight,rank-run-dryrun`（3 つで約 41 秒）
+- `pwsh -NoProfile -File <wt>\target\perf-loop-check\harness.ps1 -Tag 7.2 -Only autoquiet-dryrun`（1 回だけ・4 分 40 秒）
+
+| 回したコマンド | 終了コード | 前の端末（出力・入力） | 後の端末（出力・入力） |
+|---|---|---|---|
+| `perf-loop.ps1 selftest -Goal draw-load-parity` | 0 | 932・932 | 932・932 |
+| `perf-loop.ps1 preflight`（10.2 と同じ引数） | 0（直す前も 0） | 932・932 | 932・932（直す前は 65001・932） |
+| `perf-loop.ps1 rank-run -Iter 1 -DryRun`（10.2 と同じ引数） | 0（直す前も 0） | 932・932 | 932・932（直す前は 65001・932） |
+| `invoke-perf-run.ps1 -Profile short -Build release -GhostRoot <wt>\target\nar-samples\manual\emo2\ghost\emo2 -BalloonRoot <wt>\target\nar-samples\manual\emo2\balloon\emo2-kakukaku -OutDir <wt>\target\perf-loop-check\autoquiet-7.2-<日時> -AutoQuiet -Goal draw-load-parity -BinDir <wt>\target\perf-loop-check\bin -DryRun` | 2（静かでない） | 932・932 | 932・932 |
+
+#### selftest（要件 7.1）
+
+- 最後の 2 行は `SELFTEST RESULT ok=9 ng=0` と `PERF-LOOP RESULT selftest code=0 dir=-`。9 本の `selftest <道具> ok code=0` がすべて出た。
+- `judge-perf.py` の説明は日本語のまま（Python の道具はこの spec で触らない）で、932 の端末でも字が化けずに写っていた。ほかの 8 行は ASCII だけ。
+
+#### preflight と rank-run -DryRun（要件 7.2・1.2）
+
+- 末尾の `PERF-LOOP RESULT` の行は 10.2 の控えと字で同じ（`<wt>` はワークツリーの絶対パス）。
+
+```
+PERF-LOOP RESULT preflight code=0 dir=<wt>\target\perf-loop-check\draw-load-parity
+PERF-LOOP RESULT rank-run code=0 dir=<wt>\target\perf-loop-check\draw-load-parity\iter-1\rank
+```
+
+- 直す前は回し終えた後に端末の出力の文字コードが 65001 に変わっていたが、直した後はどちらも 932 のまま。
+- 機械が読む行（10.3 の表）を `before-*.log` と `7.2-*.log` で比べた（`time_utc=` の値は除く）。`rank-run` は差分なし。`preflight` の差分は 2 行だけで、どちらも design の規則 R1 のとおり機械の部分の外。
+  - `selftest goal-text-vs-goal-md ok code=0 | …` の `|` より後ろの説明が英文になった（`|` より前は同じ）。
+  - `pdb_hint=` の値（道具が書く説明の文）が英文になった（鍵の名前と行の形は同じ）。
+- 行数は直す前と同じ（`preflight` 47 行・`rank-run` 18 行）。`preflight` は自己較正 9 本がすべて緑（`SELFTEST RESULT ok=9 ng=0`）。
+
+#### 静寂の確認の道（要件 2.1・2.2・7.3）
+
+- `invoke-perf-run.ps1 -AutoQuiet -DryRun` は `check-quiet.ps1` を 4 回（最初の 1 回と確かめ直し 3 回・60 秒おき）呼び、4 回とも `CHECK-QUIET RESULT stage=before verdict=NOT_QUIET code=2 file=<wt>\target\perf-loop-check\autoquiet-7.2-20261016173557\quiet-before.txt` の行を自分の出力へ写した。その前には静寂の確認の報告（`[check-quiet] version=1.0.1` から `heavy_process_busy=` までの 16 行）も写っていた。
+- 静かでなかったのは、ほかのセッションのビルド（`rustc` など）が回っていたため（機械全体の CPU の平均 36.8〜63.4%・閾値 10.0%）。上限まで確かめ直して静かにならなかったので終了コード 2 で終わり、作りかけの出力先は `autoquiet-7.2-20261016173557-FAILED` に退避された。どれも道具の決めたとおりの動き。
+- 写された行と `[invoke-perf-run]` の行はすべて ASCII で、932 の端末で字が化けていない。
+- 静かと判定された後の道（静寂の確認の後に run-meta.txt を書く所）は今回は通っていない。-AutoQuiet の走行の前後の端末の値 932・932 は足場の標準出力に出ただけでファイルには残っていない。
+
+#### run-meta.txt の power_scheme（要件 1.3）
+
+- `rank-run -DryRun` が作った `<wt>\target\perf-loop-check\draw-load-parity\iter-1\rank\run-meta.txt` の 58 行は `power_scheme = d7a728f8-6d8b-4ab7-a3e3-7aaeb0f9871c (Sonos)` で、`<GUID> (<名前>)` の形。`AutoQuiet` の走行は静かでなかったので `run-meta.txt` を書く所まで進まない（静寂の確認は記録より先）。
+
+ビルドと、実機を何分も回す計測はしていない。

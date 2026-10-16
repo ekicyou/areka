@@ -172,7 +172,7 @@ $PYTHON_MIN_VERSION         = [Version]'3.11'
 $PWSH_MIN_MAJOR             = 7
 $XPERF_DEFAULT_PATH         = 'C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\xperf.exe'
 $RELEASE_PDB_RELPATH        = 'target\release\areka.pdb'
-$PDB_BUILD_HINT             = 'CARGO_PROFILE_RELEASE_DEBUG=line-tables-only を付けて cargo build --release すると出る'
+$PDB_BUILD_HINT             = 'set CARGO_PROFILE_RELEASE_DEBUG=line-tables-only and run cargo build --release to get it'
 $PREFLIGHT_FILE             = 'preflight.txt'
 $SELFTEST_TOKEN             = '12345678'
 
@@ -257,6 +257,7 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 # テンプレート（perf_ledger_goal.py の GOAL_TEXT_TEMPLATE）を直すと写しが黙ってずれる
 # ——ずれを見つけるのがこの検査である（tasks.md Implementation Notes (7.1)）。
 # 台帳は使い捨ての一時ファイルへ作る（本物の台帳の走行トークンには触れない）。
+# 作業用のフォルダはワークツリーの target\perf-loop-tmp\ の下だけに置き、無ければ作り直す（OS の一時フォルダは使わない）。
 function Test-GoalTextMatchesGoalMd {
     param(
         [Parameter(Mandatory = $true)][pscustomobject]$Python,
@@ -266,10 +267,10 @@ function Test-GoalTextMatchesGoalMd {
     $ledgerScript = Join-Path $PSScriptRoot 'perf-ledger.py'
     $goalMdPath   = Join-Path $PSScriptRoot (Join-Path 'goals' "$GoalName.goal.md")
     if (-not (Test-Path -LiteralPath $goalMdPath -PathType Leaf)) {
-        return [pscustomobject]@{ Ok = $false; Code = -1; Note = "条件文の写しがありません: $goalMdPath"; Lines = @() }
+        return [pscustomobject]@{ Ok = $false; Code = -1; Note = "goal statement copy not found: $goalMdPath"; Lines = @() }
     }
 
-    $temp = Join-Path ([System.IO.Path]::GetTempPath()) ("perf-loop-selftest-" + [Guid]::NewGuid().ToString('N'))
+    $temp = Join-Path (Join-Path $repoRoot 'target\perf-loop-tmp') ("perf-loop-selftest-" + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $temp | Out-Null
     try {
         $tempLedger = Join-Path $temp 'loop-ledger.md'
@@ -278,11 +279,11 @@ function Test-GoalTextMatchesGoalMd {
 
         $init = Invoke-PythonChild -Python $Python -Arguments (@($ledgerScript, 'init') + $common) -Quiet
         if ($init.Code -ne 0) {
-            return [pscustomobject]@{ Ok = $false; Code = $init.Code; Note = "台帳を作れません: $($init.LastLine)"; Lines = $init.Lines }
+            return [pscustomobject]@{ Ok = $false; Code = $init.Code; Note = "cannot create the ledger: $($init.LastLine)"; Lines = $init.Lines }
         }
         $check = Invoke-PythonChild -Python $Python -Arguments (@($ledgerScript, 'goal-check') + $common + @('--token', $SELFTEST_TOKEN)) -Quiet
         if ($check.Code -ne 0) {
-            return [pscustomobject]@{ Ok = $false; Code = $check.Code; Note = "goal-check が通りません: $($check.LastLine)"; Lines = $check.Lines }
+            return [pscustomobject]@{ Ok = $false; Code = $check.Code; Note = "goal-check failed: $($check.LastLine)"; Lines = $check.Lines }
         }
         # 条件文の本文（標準出力）と報告行（標準エラー）は分けて受け取る。
         # Invoke-PythonChild は端末のコードページに依らず UTF-8 で読む——ここを親の
@@ -290,7 +291,7 @@ function Test-GoalTextMatchesGoalMd {
         # 本文が一致していても不一致と報告してしまう（実際に踏んだ）。
         $text = Invoke-PythonChild -Python $Python -Arguments (@($ledgerScript, 'goal-text') + $common) -Quiet
         if ($text.Code -ne 0) {
-            return [pscustomobject]@{ Ok = $false; Code = $text.Code; Note = 'goal-text が通りません'; Lines = $text.Lines }
+            return [pscustomobject]@{ Ok = $false; Code = $text.Code; Note = 'goal-text failed'; Lines = $text.Lines }
         }
 
         $generated = ((@($text.Out) -join "`n") -replace $SELFTEST_TOKEN, '<token>')
@@ -298,7 +299,7 @@ function Test-GoalTextMatchesGoalMd {
         $marker    = "`n---`n"
         $at = $mdText.IndexOf($marker)
         if ($at -lt 0) {
-            return [pscustomobject]@{ Ok = $false; Code = -1; Note = "写しに区切り線（---）がありません: $goalMdPath"; Lines = @() }
+            return [pscustomobject]@{ Ok = $false; Code = -1; Note = "separator line (---) not found in the copy: $goalMdPath"; Lines = @() }
         }
         $body = $mdText.Substring($at + $marker.Length)
 
@@ -308,22 +309,23 @@ function Test-GoalTextMatchesGoalMd {
         if ($left -ceq $right) {
             # 本文が一致していても、写しのヘッダが書いている字数（「本文は 1,012 字」）は
             # テンプレートを直すと黙ってずれる。goal-text 自身が報告した字数と突き合わせる。
+            # 突き合わせる日本語（「文字」「本文は」「字」）は字句を ASCII に保つため `u{} で書く（字は同じ）。
             $reported = $null
             $errText = (@($text.Err) -join "`n")
-            if ($errText -match '(\d+)\s*文字') { $reported = [int]$Matches[1] }
+            if ($errText -match "(\d+)\s*`u{6587}`u{5B57}") { $reported = [int]$Matches[1] }
             $declared = $null
-            if ($mdText -match '本文は\s*([\d,]+)\s*字') { $declared = [int](($Matches[1]) -replace ',', '') }
+            if ($mdText -match "`u{672C}`u{6587}`u{306F}\s*([\d,]+)\s*`u{5B57}") { $declared = [int](($Matches[1]) -replace ',', '') }
             if ($null -ne $reported -and $null -ne $declared -and $reported -ne $declared) {
                 $detail = @(
-                    "$goalMdPath のヘッダが書いている字数が goal-text の報告と違います",
-                    "  goal-text : $reported 字",
-                    "  goal.md   : $declared 字",
-                    '  本文は一致しているので、直すのはヘッダの数字だけです。'
+                    "the char count in the header of $goalMdPath differs from what goal-text reports",
+                    "  goal-text : $reported chars",
+                    "  goal.md   : $declared chars",
+                    '  The body matches, so fix only the number in the header.'
                 )
-                return [pscustomobject]@{ Ok = $false; Code = 1; Note = "本文は一致・ヘッダの字数が違います（$declared ≠ $reported）"; Lines = $detail }
+                return [pscustomobject]@{ Ok = $false; Code = 1; Note = "body matches, header char count differs ($declared != $reported)"; Lines = $detail }
             }
-            $note = "本文 $(Format-LoopValue $reported) 字が一致"
-            if ($null -ne $declared) { $note += "（写しのヘッダの $declared 字とも一致）" }
+            $note = "body of $(Format-LoopValue $reported) chars matches"
+            if ($null -ne $declared) { $note += " (also matches the $declared chars in the copy header)" }
             return [pscustomobject]@{ Ok = $true; Code = 0; Note = $note; Lines = @() }
         }
 
@@ -333,17 +335,17 @@ function Test-GoalTextMatchesGoalMd {
         $maxCount = [Math]::Max($leftLines.Count, $rightLines.Count)
         $diffAt = -1
         for ($i = 0; $i -lt $maxCount; $i++) {
-            $a = if ($i -lt $leftLines.Count) { $leftLines[$i] } else { '(行なし)' }
-            $b = if ($i -lt $rightLines.Count) { $rightLines[$i] } else { '(行なし)' }
+            $a = if ($i -lt $leftLines.Count) { $leftLines[$i] } else { '(no line)' }
+            $b = if ($i -lt $rightLines.Count) { $rightLines[$i] } else { '(no line)' }
             if ($a -cne $b) { $diffAt = $i; break }
         }
         $detail = @(
-            "goal-text の出力と $goalMdPath の本文が違います（$($diffAt + 1) 行目）",
-            "  goal-text : $(if ($diffAt -lt $leftLines.Count) { $leftLines[$diffAt] } else { '(行なし)' })",
-            "  goal.md   : $(if ($diffAt -lt $rightLines.Count) { $rightLines[$diffAt] } else { '(行なし)' })",
-            '  直すのは perf_ledger_goal.py の GOAL_TEXT_TEMPLATE か goals/*.goal.md のどちらか一方です。'
+            "goal-text output differs from the body of $goalMdPath (line $($diffAt + 1))",
+            "  goal-text : $(if ($diffAt -lt $leftLines.Count) { $leftLines[$diffAt] } else { '(no line)' })",
+            "  goal.md   : $(if ($diffAt -lt $rightLines.Count) { $rightLines[$diffAt] } else { '(no line)' })",
+            '  Fix either GOAL_TEXT_TEMPLATE in perf_ledger_goal.py or goals/*.goal.md, not both.'
         )
-        return [pscustomobject]@{ Ok = $false; Code = 1; Note = "本文が食い違います（$($diffAt + 1) 行目）"; Lines = $detail }
+        return [pscustomobject]@{ Ok = $false; Code = 1; Note = "body differs (line $($diffAt + 1))"; Lines = $detail }
     } finally {
         Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
     }
@@ -362,7 +364,7 @@ function Invoke-SelfTestAll {
 
     $python = Get-PythonCommand
     if (-not $python) {
-        $line = "selftest python NG code=-1 | python が見つかりません（道具の 5 本は python で動きます）"
+        $line = "selftest python NG code=-1 | python not found (the 5 tools run on python)"
         Write-Info $line
         return [pscustomobject]@{ Ok = $false; OkCount = 0; NgCount = 1; Lines = @($line) }
     }
@@ -401,10 +403,10 @@ function Invoke-SelfTestAll {
 }
 
 function Invoke-SubSelfTest {
-    Write-Info "[perf-loop] 版 $SCRIPT_VERSION / 自己較正 $($SELFTEST_TOOLS.Count) 道具＋$SELFTEST_GOAL_TEXT_NAME"
+    Write-Info "[perf-loop] version $SCRIPT_VERSION / selftest of $($SELFTEST_TOOLS.Count) tools + $SELFTEST_GOAL_TEXT_NAME"
     $result = Invoke-SelfTestAll -GoalName $script:GoalName -GoalFilePath $script:GoalFilePath
     if ($result.Ok) { Exit-WithResult -Code $EXIT_OK }
-    Stop-Run -Code $EXIT_MEASURE_FAILED -Message "道具の自己較正が $($result.NgCount) 件赤です（計測失敗＝MEASURE_FAILED。直してから回すこと）"
+    Stop-Run -Code $EXIT_MEASURE_FAILED -Message "tool selftest has $($result.NgCount) red (MEASURE_FAILED; fix them before running)"
 }
 
 # =============================================================================
@@ -445,7 +447,7 @@ function Invoke-SubPreflight {
     $dir = New-LoopDir -Path (Get-LoopDir -Kind goal)
     $script:CurrentDir = $dir
 
-    Write-Info "[perf-loop] 版 $SCRIPT_VERSION / preflight 目標 $($script:GoalName) / 出力先 $dir"
+    Write-Info "[perf-loop] version $SCRIPT_VERSION / preflight goal $($script:GoalName) / out dir $dir"
 
     # --- 環境の見立て ---------------------------------------------------------
     $elevated  = Test-Elevated
@@ -496,7 +498,7 @@ function Invoke-SubPreflight {
             $checkinMinutes = $parsedCheckin
             $checkinSource = 'env'
         } else {
-            $checkinNote = "環境変数 $CHECKIN_ENV_NAME の値 '$checkinRaw' が整数として読めません（既定 $CHECKIN_DEFAULT_MINUTES 分として扱います）"
+            $checkinNote = "env var $CHECKIN_ENV_NAME value '$checkinRaw' is not an integer (using the default $CHECKIN_DEFAULT_MINUTES min)"
             $checkinSource = 'default'
         }
     }
@@ -513,7 +515,7 @@ function Invoke-SubPreflight {
     $ledgerPath = if ($Ledger) { $Ledger } else { $goalConfig.LedgerPath }
     $ledgerExists = ($ledgerPath -and (Test-Path -LiteralPath $ledgerPath -PathType Leaf))
     $goalCheck = 'skipped'
-    $goalCheckNote = '台帳がまだありません（perf-ledger.py init → goal-check → goal-text の順で作ること）'
+    $goalCheckNote = 'no ledger yet (create it with perf-ledger.py init, then goal-check, then goal-text)'
     if ($ledgerExists) {
         $goalCheckArgs = @((Join-Path $PSScriptRoot 'perf-ledger.py'), 'goal-check', '--ledger', $ledgerPath)
         if ($script:GoalFilePath) { $goalCheckArgs += @('--goal-file', $script:GoalFilePath) }
@@ -523,7 +525,7 @@ function Invoke-SubPreflight {
         $goalCheckNote = $result.LastLine
         if ($goalCheck -eq 'ng') {
             # 何が食い違ったかを黙って落とさない（版・閾値・goal 名のどれかが名指しされる）
-            Write-Info "[perf-loop] goal-check が通りません（終了コード $($result.Code)）:"
+            Write-Info "[perf-loop] goal-check failed (exit code $($result.Code)):"
             foreach ($childLine in $result.Lines) { Write-Info "    $childLine" }
         }
     }
@@ -539,13 +541,13 @@ function Invoke-SubPreflight {
     $failReason = ''
     if (-not $judgeMatch) {
         $code = $EXIT_MEASURE_FAILED
-        $failReason = "判定スクリプトの版が目標定義と違います（目標定義 $judgeDeclared / $(Format-LoopValue $judgeActual)）"
+        $failReason = "judge script version differs from the goal definition (goal $judgeDeclared / $(Format-LoopValue $judgeActual))"
     } elseif (-not $selftest.Ok) {
         $code = $EXIT_MEASURE_FAILED
-        $failReason = "道具の自己較正が $($selftest.NgCount) 件赤です"
+        $failReason = "tool selftest has $($selftest.NgCount) red"
     } elseif ($goalCheck -eq 'ng') {
         $code = $EXIT_MEASURE_FAILED
-        $failReason = "台帳と目標定義の突合（goal-check）が通りません: $goalCheckNote"
+        $failReason = "ledger vs goal definition check (goal-check) failed: $goalCheckNote"
     }
     $verdict = if ($code -eq $EXIT_OK) { $VERDICT_PREFLIGHT_OK } else { $VERDICT_PREFLIGHT_NG }
 
@@ -609,12 +611,12 @@ function Invoke-SubPreflight {
 
     # 黙って続けない——人が読む語でも一度書く。
     if ($stage -eq $STAGE_UNAVAILABLE) {
-        Write-Info "[perf-loop] 段③（関数別の帰属）は使えません: reason=$stageReason。段①②④で続行します（停止の理由にしません）。"
+        Write-Info "[perf-loop] stage 3 (per-function attribution) is unavailable: reason=$stageReason. Continuing with stages 1, 2 and 4 (not a reason to stop)."
     }
     if ($checkinWarn) {
-        Write-Problem "[perf-loop] 警告: check-in 間隔の実効値が $checkinMinutes 分です（$CHECKIN_WARN_BELOW_MINUTES 分未満）。25 分水準の背景計測に割り込みます。$CHECKIN_ENV_NAME=$checkinRecommended を勧めます。"
+        Write-Problem "[perf-loop] warning: effective check-in interval is $checkinMinutes min (below $CHECKIN_WARN_BELOW_MINUTES min). It will interrupt the 25-min background measurements. Set $CHECKIN_ENV_NAME=$checkinRecommended."
     }
-    if ($checkinNote) { Write-Problem "[perf-loop] 警告: $checkinNote" }
+    if ($checkinNote) { Write-Problem "[perf-loop] warning: $checkinNote" }
 
     if ($code -ne $EXIT_OK) { Stop-Run -Code $code -Message $failReason }
     Exit-WithResult -Code $EXIT_OK
@@ -624,26 +626,26 @@ function Invoke-SubPreflight {
 # 引数の検証
 # =============================================================================
 if (-not $Sub) {
-    Write-Problem "[perf-loop] サブコマンドがありません。使えるのは: $($SUBCOMMANDS -join '・')"
-    Stop-Run -Code $EXIT_BAD_ARGS -Message 'サブコマンドを 1 つ指定してください' -Sub '-'
+    Write-Problem "[perf-loop] no subcommand given. Available: $($SUBCOMMANDS -join ', ')"
+    Stop-Run -Code $EXIT_BAD_ARGS -Message 'specify one subcommand' -Sub '-'
 }
 if ($SUBCOMMANDS -notcontains $Sub) {
-    Write-Problem "[perf-loop] 使えるサブコマンド: $($SUBCOMMANDS -join '・')"
-    Stop-Run -Code $EXIT_BAD_ARGS -Message "未知のサブコマンドです: '$Sub'" -Sub '-'
+    Write-Problem "[perf-loop] available subcommands: $($SUBCOMMANDS -join ', ')"
+    Stop-Run -Code $EXIT_BAD_ARGS -Message "unknown subcommand: '$Sub'" -Sub '-'
 }
 if ($BUILD_KINDS -notcontains $Build) {
-    Stop-Run -Code $EXIT_BAD_ARGS -Message "-Build は $($BUILD_KINDS -join ' か ') です（受け取った値: '$Build'）"
+    Stop-Run -Code $EXIT_BAD_ARGS -Message "-Build must be $($BUILD_KINDS -join ' or ') (got: '$Build')"
 }
 if ($Iter -lt 0) {
-    Stop-Run -Code $EXIT_BAD_ARGS -Message "-Iter は 0 以上です（受け取った値: $Iter）"
+    Stop-Run -Code $EXIT_BAD_ARGS -Message "-Iter must be 0 or more (got: $Iter)"
 }
 if ($Date -and $Date -notmatch '^\d{8}$') {
-    Stop-Run -Code $EXIT_BAD_ARGS -Message "-Date は yyyyMMdd の 8 桁です（受け取った値: '$Date'）"
+    Stop-Run -Code $EXIT_BAD_ARGS -Message "-Date must be 8 digits yyyyMMdd (got: '$Date')"
 }
 
 $script:OutRootPath = Resolve-OutRoot -OutRoot $OutRoot
 if (-not $script:OutRootPath) {
-    Stop-Run -Code $EXIT_BAD_ARGS -Message '出力先の根が決まりません（%LOCALAPPDATA% も %TEMP% も無いので -OutRoot を指定してください）'
+    Stop-Run -Code $EXIT_BAD_ARGS -Message 'cannot decide the output root (neither %LOCALAPPDATA% nor %TEMP% is set; pass -OutRoot)'
 }
 
 # 目標定義。selftest は道具の較正が主目的なので、目標定義ファイルが無くても
@@ -659,7 +661,7 @@ if (Test-Path -LiteralPath $goalCandidate -PathType Leaf) {
         $script:GoalName = $script:GoalConfig.Name
     }
 } elseif ($Sub -ne $SUB_SELFTEST) {
-    Stop-Run -Code $EXIT_BAD_ARGS -Message "目標定義ファイルがありません: $goalCandidate（-Goal か -GoalFile を確かめてください）"
+    Stop-Run -Code $EXIT_BAD_ARGS -Message "goal definition file not found: $goalCandidate (check -Goal or -GoalFile)"
 }
 
 # =============================================================================
@@ -676,8 +678,8 @@ switch ($Sub) {
     'compare'          { Invoke-SubCompare }
     'followup'         { Invoke-SubFollowup }
     'final'            { Invoke-SubFinal }
-    default            { Stop-Run -Code $EXIT_BAD_ARGS -Message "未知のサブコマンドです: '$Sub'" -Sub '-' }
+    default            { Stop-Run -Code $EXIT_BAD_ARGS -Message "unknown subcommand: '$Sub'" -Sub '-' }
 }
 
 # ここへは来ない（各サブコマンドは必ず Exit-WithResult で終わる）。来たら道具の不具合。
-Stop-Run -Code $EXIT_MEASURE_FAILED -Message "サブコマンド '$Sub' が終了コードを返しませんでした（道具の不具合）"
+Stop-Run -Code $EXIT_MEASURE_FAILED -Message "subcommand '$Sub' returned no exit code (tool bug)"

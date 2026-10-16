@@ -6,18 +6,20 @@
 
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use temp_path_kit::TempPath;
 
 use super::Store;
 use super::test_support::{
     BROKEN_AT_T0, Nobody, T0, block_state_writes, home_in, names, participants, read_state,
-    store_in, store_noting_events, store_noting_pauses, tick, watch,
+    refuse_poll, store_in, store_noting_events, store_noting_pauses, tick, watch,
 };
-use crate::error::WatchError;
+use crate::error::{Damage, WatchError};
 use crate::home::Home;
 use crate::plan::{Applied, Command, Event, Presence, Verdict, apply};
 use crate::state::State;
+use crate::wait::WaitPort;
 
 /// [`T0`] に `clear` が状態ファイルを退避したときの名前。
 const CLEARED_AT_T0: &str = "state.json.cleared-20261003T040000Z";
@@ -39,12 +41,17 @@ fn merge(id: &str) -> impl FnOnce(&mut State, u64, &dyn Presence) -> (Applied, V
     }
 }
 
-/// 「作り直した」の出来事。`backup` は退避先（無かったので作ったときは `None`）。
-fn recovered_event(backup: Option<&Path>) -> Event {
+/// 「作り直した」の出来事。`backup` は退避先、`damage` は退避した訳（無かったので作ったときは
+/// どちらも `None`）。
+fn recovered_event(backup: Option<&Path>, damage: Option<Damage>) -> Event {
     Event::Recovered {
         backup: backup.map(lossy),
+        damage,
     }
 }
+
+/// `"not json"` を退避したときの訳。
+const NOT_JSON: Damage = Damage::NotJson { line: 1, column: 2 };
 
 /// 「全部消した」の出来事。`backup` は退避先（状態ファイルが無かったときは `None`）。
 fn cleared_event(backup: Option<&Path>) -> Event {
@@ -118,7 +125,7 @@ fn a_recovery_reaches_the_log_port_once_and_before_the_events_of_the_judgement()
     let (store, noted) = store_noting_events(&root);
     let returned = store.with_state(merge("a")).expect("変えられる");
     assert_eq!(returned.len(), 3, "判断が返した列（前提）");
-    let mut expected = vec![recovered_event(None)];
+    let mut expected = vec![recovered_event(None, None)];
     expected.extend(returned);
     assert_eq!(*noted.borrow(), expected);
     // 2 度目からは作り直しではない。
@@ -135,7 +142,10 @@ fn a_recovery_reaches_the_log_port_once_and_before_the_events_of_the_judgement()
     store.with_state(tick).expect("変えずに済む");
     assert_eq!(
         *noted.borrow(),
-        [recovered_event(Some(&home.dir.join(BROKEN_AT_T0)))]
+        [recovered_event(
+            Some(&home.dir.join(BROKEN_AT_T0)),
+            Some(NOT_JSON)
+        )]
     );
 }
 
@@ -162,7 +172,10 @@ fn when_the_write_fails_the_events_of_the_judgement_do_not_reach_the_log_port() 
     // 退避はもう起きているので渡る。書けなかった参加・申し込み・番は起きていないので渡らない。
     assert_eq!(
         *noted.borrow(),
-        [recovered_event(Some(&home.dir.join(BROKEN_AT_T0)))]
+        [recovered_event(
+            Some(&home.dir.join(BROKEN_AT_T0)),
+            Some(NOT_JSON)
+        )]
     );
 }
 
@@ -296,11 +309,28 @@ fn read_only_returns_the_state_without_taking_the_lock_or_writing() {
     );
 }
 
+/// 壊れた状態ファイルの 3 種と、読むだけの道が返す訳。
+fn broken_files() -> [(&'static str, Damage); 3] {
+    [
+        // JSON でない文。
+        ("not json", Damage::NotJson { line: 1, column: 2 }),
+        // JSON で版も 1 だが、2 行目の欄の型が違う。位置は元のバイト列を読み直して取る。
+        (
+            "{ \"version\": 1,
+  \"participants\": [] }",
+            Damage::WrongShape {
+                line: 2,
+                column: 18,
+            },
+        ),
+        // 版の数字が無い。
+        (r#"{ "x": 1 }"#, Damage::NoVersion),
+    ]
+}
+
 #[test]
-fn read_only_fails_on_a_broken_file_and_does_not_set_it_aside() {
-    // JSON でない文・JSON だが形が合わない・版の数字が無い。
-    let broken = ["not json", r#"{ "version": 1, "participants": [] }"#, "{}"];
-    for text in broken {
+fn read_only_fails_on_a_broken_file_with_its_damage_and_does_not_set_it_aside() {
+    for (text, damage) in broken_files() {
         let root = TempPath::under_target("impl-watch-store");
         let home = home_in(&root);
         fs::write(home.state_path(), text).expect("置ける");
@@ -308,7 +338,12 @@ fn read_only_fails_on_a_broken_file_and_does_not_set_it_aside() {
 
         let got = store.read_only();
 
-        assert!(matches!(got, Err(WatchError::Broken)), "{text}: {got:?}");
+        match got {
+            Err(WatchError::Broken(found)) => assert_eq!(found, damage, "{text}"),
+            other => panic!("{text}: {other:?}"),
+        }
+        let err = store.read_only().expect_err("2 度目も壊れている");
+        assert_eq!(err.to_string(), "state file is broken; see impl-watch.log");
         assert_eq!(
             fs::read_to_string(home.state_path()).expect("読める"),
             text,
@@ -316,6 +351,33 @@ fn read_only_fails_on_a_broken_file_and_does_not_set_it_aside() {
         );
         assert_eq!(names(&home.dir), ["state.json"], "退避も作成もしない");
         assert_eq!(*noted.borrow(), []);
+    }
+}
+
+#[test]
+fn a_change_sets_each_broken_file_aside_and_its_damage_reaches_the_log_port() {
+    for (text, damage) in broken_files() {
+        let root = TempPath::under_target("impl-watch-store");
+        let home = home_in(&root);
+        fs::write(home.state_path(), text).expect("置ける");
+        let (store, noted) = store_noting_events(&root);
+
+        store.with_state(tick).expect("退避して続けられる");
+
+        let backup = home.dir.join(BROKEN_AT_T0);
+        assert_eq!(
+            fs::read_to_string(&backup).expect("退避ファイルが在る"),
+            text
+        );
+        assert_eq!(
+            *noted.borrow(),
+            [recovered_event(Some(&backup), Some(damage))],
+            "{text}"
+        );
+        // 形が合わないときの位置は、元のバイト列を読み直して得た 1 以上の行と列。
+        if let Damage::WrongShape { line, column } = damage {
+            assert!(line >= 1 && column >= 1, "{damage:?}");
+        }
     }
 }
 
@@ -536,4 +598,145 @@ fn when_the_empty_state_cannot_be_written_the_backup_of_clear_remains() {
     let backup = home.dir.join(CLEARED_AT_T0);
     assert_eq!(fs::read(&backup).expect("退避ファイルが在る"), before);
     assert_eq!(*noted.borrow(), [cleared_event(Some(&backup))]);
+}
+
+// ───────── 待ちの口の時計 ─────────
+
+/// 時計を [`T0`] に止めた口を本物の待ちの口として渡すと、置かれた待ちの記録の始めた時刻は
+/// [`T0`] になる（待ちの記録の時刻も状態ファイルの口と同じ時計から取る）。停止要請中の
+/// 参加者の再開の待ちは最初の判定で終わるので、眠らない。
+#[test]
+fn the_wait_record_takes_its_start_time_from_the_clock_of_the_store() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use crate::presence::hold;
+    use crate::state::{Participant, ParticipantStatus};
+    use crate::wait::{WaitEnd, WaitSpec, run};
+
+    let root = TempPath::under_target("impl-watch-store");
+    let home = home_in(&root);
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let noted = Rc::clone(&seen);
+    let state_path = home.state_path();
+    let store = Store {
+        log: Box::new(move |event| {
+            if let Event::WaitRegistered { id, kind } = event {
+                let bytes = fs::read(&state_path).expect("状態ファイルが在る");
+                let state: State = serde_json::from_slice(&bytes).expect("状態として読める");
+                let record = state.waits.iter().find(|w| w.id == *id && w.kind == *kind);
+                noted.borrow_mut().push(record.map(|w| w.since));
+            }
+        }),
+        ..store_in(&root)
+    };
+    store
+        .with_state(|state, now, _| {
+            let participant = Participant {
+                id: "a".to_owned(),
+                repo: "areka".to_owned(),
+                status: ParticipantStatus::StopRequested,
+                since: now,
+                ..Participant::default()
+            };
+            state.participants.insert("a".to_owned(), participant);
+            let applied = Applied {
+                changed: true,
+                verdict: Verdict::Applied,
+                events: Vec::new(),
+            };
+            (applied, ())
+        })
+        .expect("変えられる");
+    let held = hold(&root.path().join("own.lock"))
+        .expect("握れる")
+        .expect("誰も握っていない");
+
+    let end = run(&WaitSpec::Resume { id: "a".to_owned() }, &store, held).expect("待てる");
+
+    assert!(
+        matches!(end, WaitEnd::Done(_)),
+        "最初の判定で終わる（前提）: {end:?}"
+    );
+    assert_eq!(*seen.borrow(), [Some(T0)], "始めた時刻は止めた時刻");
+}
+
+/// 待ちのループの 1 秒の眠りは状態ファイルの口の待ちを通る（要件 8.1）。
+#[test]
+fn the_wait_sleep_asks_the_store_for_one_second() {
+    let root = TempPath::new("store-wait-sleep");
+    let (store, pauses) = store_noting_pauses(&root);
+
+    WaitPort::sleep(&store);
+
+    assert_eq!(*pauses.borrow(), [Duration::from_secs(1)]);
+}
+
+/// 安全網は 1 秒の待ちをその場で止め、眠りを見分ける字を出す（要件 8.1）。
+#[test]
+fn the_safety_net_refuses_one_second() {
+    let stopped_by = std::panic::catch_unwind(|| refuse_poll(Duration::from_secs(1)))
+        .expect_err("1 秒の待ちを止めなかった");
+    assert_eq!(
+        stopped_by.downcast_ref::<&str>(),
+        Some(&"a test reached the real 1-second sleep")
+    );
+}
+
+/// 安全網は試しの間の短い待ちには何もしない（要件 8.1）。
+#[test]
+fn the_safety_net_lets_short_pauses_through() {
+    refuse_poll(Duration::from_millis(20));
+}
+
+/// 最後の抹消（[`WaitPort::finish`]）は、居る印を `state.lock` の排他の中で解く: ログの口の中
+/// （排他の中）で、印の探りが「居ない」かつ `state.lock` が握られているのが 1 件だけ見える
+/// （要件 6.1・6.4）。
+#[test]
+fn the_last_unregister_releases_the_presence_mark_inside_the_exclusion() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use crate::presence::{LockFilePresence, hold};
+    use crate::state::WaitKind;
+
+    let root = TempPath::under_target("impl-watch-store");
+    let home = home_in(&root);
+    store_in(&root)
+        .with_state(watch("a"))
+        .expect("見張りを始められる");
+    let held = hold(&home.alive_path("a", WaitKind::Watch))
+        .expect("握れる")
+        .expect("誰も握っていない");
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let noted = Rc::clone(&seen);
+    let probe = LockFilePresence::new(&home);
+    let lock_path = home.lock_path();
+    let store = Store {
+        presence: Box::new(LockFilePresence::new(&home)),
+        log: Box::new(move |_| {
+            let present = probe.is_present("a", WaitKind::Watch);
+            let file = File::open(&lock_path).expect("state.lock が在る");
+            let locked = match file.try_lock_shared() {
+                Ok(()) => {
+                    let _ = file.unlock();
+                    false
+                }
+                Err(std::fs::TryLockError::WouldBlock) => true,
+                Err(std::fs::TryLockError::Error(err)) => panic!("探れない: {err}"),
+            };
+            noted.borrow_mut().push((present, locked));
+        }),
+        ..store_in(&root)
+    };
+    let unregister = Command::UnregisterWait {
+        id: "a".to_owned(),
+        kind: WaitKind::Watch,
+    };
+
+    WaitPort::finish(&store, &unregister, "a", held).expect("消せる");
+
+    // (印が居るか, state.lock が握られているか)。
+    assert_eq!(*seen.borrow(), [(false, true)]);
+    assert!(read_state(&home).waits.is_empty(), "記録は消えた");
 }

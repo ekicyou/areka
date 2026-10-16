@@ -26,7 +26,7 @@ pwsh -NoProfile -File tools/perf/perf-loop.ps1 <sub> -Goal <goal> …
 ```
 
 `perf-loop.ps1` は標準出力の末尾に必ず `PERF-LOOP RESULT <sub> code=<n> dir=<path>` を出す。
-**判断はこの行の `code=` で行う**（説明文の日本語は端末の文字コードで化けることがある）。
+**判断はこの行の `code=` で行う**（道具が自分で出す文は ASCII なので化けないが、道具が写した子の中身（例: Python の判定器の日本語の報告）は、端末の文字コードと会話へ届ける仕組みの組み合わせで化けることがある）。
 
 | code | 意味 | このターンの扱い |
 |---|---|---|
