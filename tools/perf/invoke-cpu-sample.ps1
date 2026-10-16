@@ -534,7 +534,7 @@ function Invoke-SelfTestMode {
         $okSamples = $okStats.SampleCount
         if ($okStats.Problem) { $failures += "pass side: $($okStats.Problem) ($fixture)" }
         $failures += @(
-            (Test-Expected 'pass side' 'SampledProfile row count'$FIXTURE_EXPECT_SAMPLE_COUNT      $okStats.SampleCount),
+            (Test-Expected 'pass side' 'SampledProfile row count' $FIXTURE_EXPECT_SAMPLE_COUNT     $okStats.SampleCount),
             (Test-Expected 'pass side' 'Stack row count'         $FIXTURE_EXPECT_STACK_COUNT       $okStats.StackCount),
             (Test-Expected 'pass side' 'areka.exe frame count'  $FIXTURE_EXPECT_AREKA_FRAMES      $okStats.ArekaFrames),
             (Test-Expected 'pass side' 'resolved frame count'   $FIXTURE_EXPECT_RESOLVED_FRAMES   $okStats.ResolvedFrames),
@@ -558,7 +558,7 @@ function Invoke-SelfTestMode {
     $redStats = Measure-ArekaFrames -Text $redText
     $failures += @(
         (Test-Expected 'fail side' 'areka.exe frame count'  0 $redStats.ArekaFrames),
-        (Test-Expected 'fail side' 'SampledProfile row count'2 $redStats.SampleCount),
+        (Test-Expected 'fail side' 'SampledProfile row count' 2 $redStats.SampleCount),
         (Test-Expected 'fail side' 'Stack row count'         1 $redStats.StackCount),
         (Test-Expected 'fail side' 'unresolved frame count' 1 $redStats.UnresolvedFrames)
     ) | Where-Object { $_ }
