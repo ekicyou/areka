@@ -45,13 +45,23 @@ pub(super) fn home_in(root: &TempPath) -> Home {
     }
 }
 
-/// 時計が [`T0`] で止まり、全員が「居る」、待ちは眠らず、ログは捨てる口。
+/// テストのプロセスの安全網: 1 秒以上の待ち（待ちのループの眠り）を頼まれたら、終わらない
+/// テストにせずその場で止める。字は `cli_wait_tests.rs` の `call_until_first_sleep` が眠りを
+/// 見分ける字。試しの間の短い待ちには何もしない。
+pub(super) fn refuse_poll(length: Duration) {
+    if length >= Duration::from_secs(1) {
+        panic!("a test reached the real 1-second sleep");
+    }
+}
+
+/// 時計が [`T0`] で止まり、全員が「居る」、待ちは眠らず（1 秒以上なら安全網で止まる）、ログは
+/// 捨てる口。
 pub(super) fn store_in(root: &TempPath) -> Store {
     Store {
         home: home_in(root),
         clock: Box::new(|| Ok(T0)),
         presence: Box::new(Everyone),
-        pause: Box::new(|_| {}),
+        pause: Box::new(refuse_poll),
         log: Box::new(|_| {}),
     }
 }

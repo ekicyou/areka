@@ -74,7 +74,12 @@ pub fn open(home: Home, command: &'static str) -> Result<Store, WatchError> {
         home,
         clock: Box::new(|| unix_seconds(SystemTime::now())),
         presence: Box::new(presence),
-        pause: Box::new(std::thread::sleep),
+        pause: Box::new(|length| {
+            // テストのプロセスでだけ、待ちのループの 1 秒の眠りに来たら眠らずに止める。
+            #[cfg(test)]
+            test_support::refuse_poll(length);
+            std::thread::sleep(length);
+        }),
         log: Box::new(move |event| write_line(command, event)),
     })
 }
@@ -117,6 +122,11 @@ impl Store {
     /// 失敗はここでログに 1 行残して返す。
     pub(crate) fn time(&self) -> Result<u64, WatchError> {
         (self.clock)().inspect_err(|err| tracing::error!(error = %err, "[store] clock failed"))
+    }
+
+    /// 試しの間の待ちの口へ頼む（待ちのループの 1 秒の眠りもここを通る）。
+    pub(crate) fn pause_for(&self, length: Duration) {
+        (self.pause)(length);
     }
 
     /// 状態を変える 1 回。排他の中で 読む → `f`（判断）→ 変わっていれば置き換え書き → 読み物。

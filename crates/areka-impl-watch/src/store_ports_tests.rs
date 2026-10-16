@@ -8,18 +8,20 @@ use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use temp_path_kit::TempPath;
 
 use super::Store;
 use super::test_support::{
     BROKEN_AT_T0, Nobody, T0, block_state_writes, home_in, names, participants, read_state,
-    store_in, store_noting_events, store_noting_pauses, tick, watch,
+    refuse_poll, store_in, store_noting_events, store_noting_pauses, tick, watch,
 };
 use crate::error::{Damage, WatchError};
 use crate::home::Home;
 use crate::plan::{Applied, Command, Event, Presence, Verdict, apply};
 use crate::state::State;
+use crate::wait::WaitPort;
 
 /// [`T0`] に `clear` が状態ファイルを退避したときの名前。
 const CLEARED_AT_T0: &str = "state.json.cleared-20261003T040000Z";
@@ -703,4 +705,32 @@ fn the_wait_record_takes_its_start_time_from_the_clock_of_the_store() {
         "最初の判定で終わる（前提）: {end:?}"
     );
     assert_eq!(*seen.borrow(), [Some(T0)], "始めた時刻は止めた時刻");
+}
+
+/// 待ちのループの 1 秒の眠りは状態ファイルの口の待ちを通る（要件 8.1）。
+#[test]
+fn the_wait_sleep_asks_the_store_for_one_second() {
+    let root = TempPath::new("store-wait-sleep");
+    let (store, pauses) = store_noting_pauses(&root);
+
+    WaitPort::sleep(&store);
+
+    assert_eq!(*pauses.borrow(), [Duration::from_secs(1)]);
+}
+
+/// 安全網は 1 秒の待ちをその場で止め、眠りを見分ける字を出す（要件 8.1）。
+#[test]
+fn the_safety_net_refuses_one_second() {
+    let stopped_by = std::panic::catch_unwind(|| refuse_poll(Duration::from_secs(1)))
+        .expect_err("1 秒の待ちを止めなかった");
+    assert_eq!(
+        stopped_by.downcast_ref::<&str>(),
+        Some(&"a test reached the real 1-second sleep")
+    );
+}
+
+/// 安全網は試しの間の短い待ちには何もしない（要件 8.1）。
+#[test]
+fn the_safety_net_lets_short_pauses_through() {
+    refuse_poll(Duration::from_millis(20));
 }

@@ -218,12 +218,8 @@ impl WaitPort for Store {
     }
 
     fn sleep(&self) {
-        // 常時テストが本物の口に通すのは、直ちに終わる（眠りに入らない）場合だけ。眠りに来たなら
-        // 終わりの条件が壊れているので、終わらないテストにせず、その場で赤にする。
-        #[cfg(test)]
-        panic!("a test reached the real 1-second sleep");
-        #[cfg(not(test))]
-        std::thread::sleep(POLL);
+        // テストのプロセスでは、状態ファイルの口の待ちの安全網が 1 秒の眠りをその場で止める。
+        self.pause_for(POLL);
     }
 }
 
