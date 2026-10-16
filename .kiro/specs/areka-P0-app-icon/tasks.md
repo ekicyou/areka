@@ -86,3 +86,4 @@
 - 6.1（2026-10-16）: arm64 の道具は VS2022 の MSVC 14.44.35207 `Hostx64\arm64\link.exe`。debug で組んだ `target\aarch64-pc-windows-msvc\debug\areka.exe`（機械の種類 0xAA64）を `AREKA_ICON_CHECK_EXE` で検査し、飛ばしの行なしで緑。リンカは `icons.res` をそのまま受けた。
 - 6.2（2026-10-16）: 新しいワークツリーで `cargo test -p areka` を直に回すと、32 ビットの組み立ての出力（`shiori-host32-helper.exe`・`shiori_loadu.dll`）が無いので、実機の 2 本（`mcp_get_log_real_run`・`smoke_boot_loop_exit`）が赤になる。この仕様とは関係なく、`tools/test-all.ps1` は先にそれらを組むので起きない。組んでから回すと緑（単体 2920 通過）。
 - 6.3（2026-10-16）: 開発者が実機での見え方を合格とした（`target\icon-check\areka-icon-check-1016a.exe` と `tray-icon-check-1016a.ico` で確かめた）。
+- 最後の確かめ（2026-10-16・GO）: `.kiro/steering/structure.md` 187 行目の「`crates/*` に `build.rs` は 0 個」は、この仕様の前から古い。設計（43 行目）どおり `/kiro-complete` で、`crates/areka/build.rs` がマニフェストと `icon/icons.res` を埋めると書き直す。
