@@ -565,6 +565,31 @@ fn a_failed_fingerprint_ends_the_wait_with_the_error() {
     assert_eq!(port.trace(), format!("Rfr{}sf", idle(3)));
 }
 
+/// 登録の直後（眠り 0 回）の更新時刻と大きさの取得の失敗も、待ちを失敗で終える。「無い」に
+/// 畳まない: 番がすでに来ていても読まずに返り、自分の記録は消しに行かない。
+#[test]
+fn a_failed_fingerprint_right_after_registration_ends_the_wait_with_the_error() {
+    let denied = || WatchError::Io {
+        op: "stat state.json",
+        kind: "PermissionDenied".to_owned(),
+        code: 5,
+    };
+    let port =
+        FakePort::new().failing(move |call, sleeps| (call == 'f' && sleeps == 0).then(denied));
+    port.does("B", watching("B"));
+    port.does("B", asks_merge("B"));
+
+    let end = port.run(&merge("B", "areka"));
+
+    assert!(
+        matches!(end, Err(WatchError::Io { code: 5, .. })),
+        "{end:?}"
+    );
+    assert_eq!(port.trace(), "Rf");
+    assert_eq!(port.waits_of("B"), [WaitKind::Watch, WaitKind::Merge]);
+    assert!(!port.lock_is_held());
+}
+
 /// 答えの出た待ちは、最後の抹消が失敗しても答えのまま終わる（残った記録は、握りが解けるので
 /// 次の状態を変える呼び出しの回収が消す）。
 #[test]

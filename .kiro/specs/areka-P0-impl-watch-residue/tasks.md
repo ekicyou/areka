@@ -119,7 +119,7 @@
   - 読み物のテストの見本の識別を小文字へ揃える
   - 完了の状態: 読み物のテストが緑で、変異の記録が 1 件書かれている
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
-- [ ] 6.2 (h2): 登録の直後の更新時刻の取得の失敗
+- [x] 6.2 (h2): 登録の直後の更新時刻の取得の失敗
   - 眠り 0 回での更新時刻の取得の失敗で、待ちがその失敗で終わり、跡が読みの失敗で止まることを判定するテストを足し、最初の取得を「無い」に畳む変異で赤・戻して緑を確かめる
   - 完了の状態: 待ちのテストが緑で、変異の記録が 1 件書かれている
   - _Requirements: 9.1, 9.2, 9.4, 9.5_
@@ -160,6 +160,7 @@
 - 4.1: 本物の口の `WaitPort::finish` で居る印を排他の後で解いた（`drop(held)` を `with_state` の閉じた関数の外・返った後へ移した）→ `store::ports_tests::the_last_unregister_releases_the_presence_mark_inside_the_exclusion` が赤（`left: [(true, true)]`・`right: [(false, true)]`＝ログの口の中で印がまだ「居る」）。控え `target\mutation-backup\4.1-wait.rs` から素のコピーで戻し、sha256 一致（`be93604b6571ffd76e82c673709b9420ba31b44d193c3e3f520308a67cb99318`）を確かめて緑。
 - 4.2: 直す前の実物（`cli::waiting` の早い終わりが待ちの記録を消さない）に新しいテストを先に当てた → `cli::wait_tests::a_restarted_merge_wait_that_ends_at_once_removes_the_record_of_the_killed_wait` が赤（`left: [("a", Merge)]`・`right: []`＝殺された前の `(a, merge)` の記録が残る）。早い終わりで同じ排他の中に `UnregisterWait` を通して緑。
 - 6.1: `status::render_terminal` の `merging` の数え方に `.take(1)` を足して先頭の机だけを数えた → `status::tests::first_line_counts_every_merge_desk_with_a_holder_across_repos` が赤（`left: … merging=1 …`・`right: … merging=2 …`）。ほかの表示のテストは緑のまま。控え `target\mutation-backup\6.1-status.rs` から素のコピーで戻し、sha256 一致（`f7c8916cf35f500b6ba712e9021b414bef6e2109a77d602e408b8e76d2386d77`）を確かめて緑。(h8) の見本の識別の小文字化は変異を求めない（要件 9.3）。
+- 6.2: `wait::run` の登録の直後の `port.fingerprint()?` を `port.fingerprint().unwrap_or(None)`（失敗を「無い」に畳む）にした → `wait::loop_tests::a_failed_fingerprint_right_after_registration_ends_the_wait_with_the_error` が赤（`Ok(Done("granted merge repo=areka; last: none"))`＝失敗で終わらず、読んで番が来たと答えた）。控え `target\mutation-backup\6.2-wait.rs` から素のコピーで戻し、sha256 一致（`be93604b6571ffd76e82c673709b9420ba31b44d193c3e3f520308a67cb99318`）を確かめて緑。
 
 ## Implementation Notes
 
