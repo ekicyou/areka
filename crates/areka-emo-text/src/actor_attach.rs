@@ -1,4 +1,5 @@
-//! actor の子: 登録と再追従（装着先の解決・大きさの再追従・粗いバルーン定義の警告）。
+//! actor の子: 登録と再追従（装着先の解決・大きさの再追従・粗いバルーン定義の警告・
+//! 潰れた描画範囲の状態の変わり目の記録）。
 //! 足す予定の spec: balloon-font-file。
 
 use areka_emo_present::TextSlotView;
@@ -67,6 +68,47 @@ pub(super) fn warn_coarse_wrap_threshold(
 }
 
 impl TextLayerRuntime {
+    /// 描画範囲の潰れを場所の記憶と突き合わせ、状態の変わり目に 1 回だけ記録する
+    /// （件 2・要件 2.3〜2.5・2.7）。呼び手は登録口——普通のバルーンの
+    /// [`register_actor`](Self::register_actor)（装着・再追従が合流する）と箱の `register_box`。
+    ///
+    /// - 潰れに入った（記憶に無く、いま潰れている）: `warn!` 1 回。どのバルーンのどの値かが
+    ///   読めるよう、場所の名前と validrect の 4 辺と画像の大きさを載せる。
+    /// - 戻った（記憶に在り、いま幅・高さとも正）: `info!` 1 回（幅と高さ）。
+    /// - それ以外（潰れたまま・正のまま）: 記録しない。
+    ///
+    /// 記憶（`collapsed_regions`）は登録を外しても箱の束を差し替えても消さないので、隠す・出す・
+    /// 付け直しは「潰れたまま」に当たり記録が増えない。名前の欄は粗い定義の警告と同じ
+    /// （普通のバルーンは結線が入れた名前か `スコープ{番号}のバルーン`、箱は `balloon.*`ブレスの名前）。
+    pub(super) fn note_region_collapse(
+        &mut self,
+        place: &PlaceKey,
+        label: &str,
+        resolved: &ResolvedBalloonText,
+    ) {
+        let region = resolved.region;
+        if region.is_collapsed() {
+            if self.collapsed_regions.insert(place.clone()) {
+                warn!(
+                    balloon = label,
+                    left = region.left(),
+                    top = region.top(),
+                    right = region.right(),
+                    bottom = region.bottom(),
+                    image_size = ?region.image_size(),
+                    "文字の描画範囲が潰れている（幅か高さが 0 以下）——このバルーンの文字は描かない"
+                );
+            }
+        } else if self.collapsed_regions.remove(place) {
+            info!(
+                balloon = label,
+                width = region.right() - region.left(),
+                height = region.bottom() - region.top(),
+                "文字の描画範囲が戻った——次のフレームから文字を描く"
+            );
+        }
+    }
+
     /// actor と装着先（予約スロット）＋layout 入力の対応を登録する（結線側の口——
     /// `ActorKey → TargetId` の対応は結線側が所有し、emo-present `TextSlotView` の読み値
     /// から [`TextSlotBinding::new`]／[`ResolvedBalloonText::resolve`] で組んで渡す・R9.5）。
@@ -81,6 +123,8 @@ impl TextLayerRuntime {
     ///
     /// 範囲外ゆえ無視した `origin` 宣言の警告（本 spec 要件 3.1〜3.5）も同じ理由で本口が書く。
     /// 関数の本体だけは `actor_decoration.rs` に置く（本ファイルの行数の余白のため）。
+    ///
+    /// 描画範囲の潰れの状態の変わり目の記録（件 2）も本口が書く（`note_region_collapse`）。
     pub fn register_actor(
         &mut self,
         actor: ActorKey,
@@ -94,6 +138,7 @@ impl TextLayerRuntime {
         let label = self.balloon_label_of(&actor);
         warn_coarse_wrap_threshold(&label, &resolved, previous);
         decoration::warn_ignored_origin(&label, &resolved, previous);
+        self.note_region_collapse(&place, &label, &resolved);
         // 2 層（既定・無効表示・選択肢文字色）を純粋状態へ差し込む唯一の点（要件 3.1／4.6）。
         // 装着も再追従もここへ合流するので、`\f[default]`／`\f[disable]` の戻し先は
         // 常に「今装着されているバルーン定義」で解決した値になる。

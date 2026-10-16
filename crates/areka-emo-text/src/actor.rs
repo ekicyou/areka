@@ -260,6 +260,11 @@ pub struct TextLayerRuntime {
     /// 定義の 2 つの警告（折り返しの基準・無視した書き出し位置）を出した箱の名前。箱の登録には
     /// 前の配置の入力が毎回無いので、名前ごとに 1 度だけにする。箱の束を差し替えると空に戻す。
     box_definition_warned: BTreeSet<BoxName>,
+    /// いま描画範囲（validrect）が潰れている場所（幅か高さが 0 以下・件 2）。登録口
+    /// （`actor_attach.rs` の `note_region_collapse`）が状態の変わり目に 1 回だけ記録するための
+    /// 記憶で、登録を外しても・箱の束を差し替えても消さない＝隠す・出す・付け直しで記録が
+    /// 増えない（要件 2.3〜2.5・2.7）。
+    collapsed_regions: BTreeSet<PlaceKey>,
     /// スコープ → 最後に提示したフレームで文字が 1 字以上見えていた箱の四角（手前から・
     /// `actor_box.rs` の `shown_boxes`）。提示のたびに作り直し、出なくなった箱（`\c`・台詞の頭・
     /// 箱を隠す印・箱の同期が登録を外した箱）はその場で外す。台本の `\s` の受け取りでは外さない
@@ -295,6 +300,7 @@ impl TextLayerRuntime {
             box_sites: HashMap::new(),
             box_overflow_warned: BTreeSet::new(),
             box_definition_warned: BTreeSet::new(),
+            collapsed_regions: BTreeSet::new(),
             shown_boxes: HashMap::new(),
             lookahead: TalkLookahead::default(),
         }
@@ -621,6 +627,10 @@ mod scale_refresh_tests;
 #[cfg(test)]
 #[path = "actor_region_warn_tests.rs"]
 mod region_warn_tests;
+
+#[cfg(test)]
+#[path = "actor_region_collapse_tests.rs"]
+mod region_collapse_tests;
 
 #[cfg(test)]
 #[path = "actor_scroll_retain_tests.rs"]
