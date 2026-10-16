@@ -59,3 +59,10 @@
   - brief の「helper を起こす所（`areka-kanade` の host-32 の起動）」は場所が違う。置き場を決めるのは `areka` の `boot_config.rs`、起こすのは `shiori-host32-host` の `process_host.rs`。
   - 煙テスト（`crates/areka/tests/smoke_boot_loop_exit.rs` の、i686 の成果物を揃える関数）は、全体テストの x64 の段の中で i686 版を `areka.exe` の隣へ写す。だから「全体テストの後は x64 版」になる道筋は自明でない（写した版の更新時刻が古く、次の x64 のビルドが作り直す、という読みは確かめていない）。最初のタスクで、どの操作の後に x64 版へ戻るかをビルドだけで確かめる。
   - 本番の `areka` には、helper の場所を外から指す口が無い（テストの側だけ `HOST32_HELPER_EXE` を読む）。
+
+## 2026-10-16 棚卸㉕の再測定（main `12801f6d`・ウェーブ C7 の空き席）
+
+前提の変化: 版に縛らない列。今の版 v0.0.3 の 3 本（`baseware-root-list`・`balloon-text-bugs`・`app-icon`）と同じウェーブ C7 の空き席に入れた（v0.0.3 の着地のウェーブ数を増やさない条件＝先頭・3 本と重なり 0・1 本だけの席を取らない・見立ての上限が 16 以下・静かな机が要らない）。
+触るファイル: `tools/test-all.ps1` だけ（案 1・2）。`crates/areka/src/boot_config.rs` で直す案 3 は同じウェーブの `baseware-root-list` と重なるので取らない＝その形が要るなら `crates/shiori-host32-host/src/process_host.rs` の側。
+規模: 3〜5 タスク（手で 1 回起動して確かめる）。先に要るもの: なし。
+優先度の区分: C。要件定義のモデル: Opus。分割: なし。
