@@ -42,9 +42,9 @@ fn replaced_lines(lines: &[String]) -> Vec<&String> {
         .collect()
 }
 
-/// 並びを決める定数と登記の添字が食い違わない: 枠は 9 つ、①〜⑨の順、判別値が添字に一致する。
+/// 並びを決める定数と登記の添字が食い違わない: 枠は 10 個、①〜⑩の順、判別値が添字に一致する。
 #[test]
-fn frame_order_is_the_nine_frames_and_matches_slot_indices() {
+fn frame_order_is_the_ten_frames_and_matches_slot_indices() {
     assert_eq!(
         Frame::ORDER,
         [
@@ -54,11 +54,12 @@ fn frame_order_is_the_nine_frames_and_matches_slot_indices() {
             Frame::Update,
             Frame::Install,
             Frame::RootAdd,
+            Frame::RootFront,
             Frame::RootRemove,
             Frame::Readme,
             Frame::Close,
         ],
-        "並びは ①ゴースト ②シェル ③バルーン ④ネットワーク更新 ⑤インストール ⑥置き場を追加 ⑦置き場を外す ⑧説明書 ⑨終了"
+        "並びは ①ゴースト ②シェル ③バルーン ④ネットワーク更新 ⑤インストール ⑥置き場を追加 ⑦置き場を先頭へ ⑧置き場を外す ⑨説明書 ⑩終了"
     );
     assert_eq!(
         MenuRegistry::default().slots.len(),

@@ -46,6 +46,7 @@ pub(crate) const FRAME_CAPTIONS: &[(Option<&str>, Frame, &str)] = &[
         "インストール…",
     ),
     (None, Frame::RootAdd, "置き場を追加…"),
+    (None, Frame::RootFront, "置き場を先頭へ"),
     (None, Frame::RootRemove, "置き場を外す"),
     (Some("readmebutton.caption"), Frame::Readme, "説明書"),
     (Some("closebutton.caption"), Frame::Close, "終了"),

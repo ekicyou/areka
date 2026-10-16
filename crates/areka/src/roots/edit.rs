@@ -121,7 +121,6 @@ pub(crate) fn decide_front(roots: &BasewareRoots, origin: RootsOrigin, dir: &Pat
 
 /// UI スレッドの入口: 置き場を並びの先頭へ動かす（今のゴースト・バルーンは切り替えない）。
 /// 記憶へ書けなかった結果は `apply` の中で扱う（要件 3.9）。
-#[allow(dead_code)] // 7.2（メニューの「置き場を先頭へ ▸」）がつないだら外す
 pub(crate) fn move_to_front(world: &mut World, dir: PathBuf) {
     let Some(ctx) = world.get_resource::<BootContext>() else {
         tracing::error!(
