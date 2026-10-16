@@ -364,6 +364,7 @@ fn a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through(
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
+        copy: crate::emo2_boot::switch_copy::SwitchCopy::None,
     });
     let (reply, answer) = reply_channel();
     let mut got = None;

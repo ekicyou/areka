@@ -38,6 +38,8 @@ pub(crate) mod shell_balloon_switch;
 pub(crate) mod shell_box_assets;
 /// シェル・バルーンの差し替えの資産を背景で作る部品と荷物の置き場（areka-P0-shell-balloon-switch）。
 pub(crate) mod switch_assets;
+/// ゴーストの切替で同梱のゴーストを書ける根へ背景で写す（areka-P0-user-data-root）。
+pub(crate) mod switch_copy;
 /// `\![change,shell|balloon,…]` の受け口（areka-P0-shell-balloon-switch）。
 mod switch_cue;
 pub mod talk_clock;

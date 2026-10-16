@@ -147,14 +147,13 @@ pub(crate) fn copy_for_write(
 }
 
 /// 実行ファイルのフォルダ（`exe_location` の親・環境変数を読まず物も作らない）。
-fn exe_dir() -> Option<PathBuf> {
+pub(crate) fn exe_dir() -> Option<PathBuf> {
     crate::boot_config::exe_location()
         .and_then(Path::parent)
         .map(Path::to_path_buf)
 }
 
 /// 本番の口: [`copy_for_write`] に実行ファイルのフォルダを渡す。
-#[allow(dead_code)] // 呼び手は切替・インストール・更新のフック（task 4.2〜4.4）
 pub(crate) fn writable_copy(roots: &BasewareRoots, kind: StoreKind, dir: &Path) -> PathBuf {
     copy_for_write(roots, exe_dir().as_deref(), kind, dir)
 }

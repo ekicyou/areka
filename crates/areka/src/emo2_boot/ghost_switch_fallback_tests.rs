@@ -79,6 +79,7 @@ pub(super) fn switching_world(root: &BasewareRoot, target: &str) -> World {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
+        copy: crate::emo2_boot::switch_copy::SwitchCopy::None,
     });
     world
 }
