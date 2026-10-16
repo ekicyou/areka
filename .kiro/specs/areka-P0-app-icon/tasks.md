@@ -59,7 +59,7 @@
   - _Depends: 1.1_
   - _Requirements: 1.1, 1.2, 1.3, 2.4, 3.3, 5.2, 5.3, 5.8, 5.9, 6.3, 6.4_
 
-- [ ] 6. 全体の確かめ
+- [x] 6. 全体の確かめ
 - [x] 6.1 arm64 の exe にも同じ資源が入ることを確かめる
   - 先に、Rust の `aarch64-pc-windows-msvc` の対象と MSVC の ARM64 の組み立ての道具が入っているかを確かめる。対象が無ければ `rustup target add` で入れる。ARM64 の道具が無いときは「道具が無い」として開発者に報告し、資源の問題と分けて書く
   - arm64 の `areka.exe` を組み、環境変数 `AREKA_ICON_CHECK_EXE` にその絶対パスを入れて結合テストを回す（arm64 の exe は動かさない）
@@ -72,7 +72,7 @@
   - `cargo test -p areka` と `tools/app-icon.ps1 -SelfTest` を回す。重い全体テスト（`tools/test-all.ps1`）は回さない（`/kiro-complete` が 1 回回す）
   - 完了の状態: 上の差分がすべて 0 件で、`encoding check`・`cargo test -p areka`・`-SelfTest` が緑
   - _Requirements: 3.4, 3.8, 4.1, 4.2, 4.3, 5.5, 5.7_
-- [ ] 6.3 開発者に実機での見え方を確かめてもらう
+- [x] 6.3 開発者に実機での見え方を確かめてもらう
   - 組んだ `areka.exe` を `target\` の下に初めての名前で写し、説明の文書の手順（エクスプローラー・タスクマネージャー・ショートカット、明暗の表示設定、拡大率 100% と 200% 以上、16 ピクセルでアプリの絵と `tray.ico`）を開発者に渡す
   - 見分けにくいと言われたら、その寸法の PNG を整え直して道具を回し、4 のテストと 6.3 をやり直す
   - 完了の状態: 開発者が合格と言い、その日付を実装の記録に残す
@@ -85,3 +85,4 @@
 - 5 の README の「置き場」は今の場所と保管後の場所を両方書いている。`/kiro-complete` がパスを `completed/` へ書き換えると同じ文が 2 つ並ぶので、そのとき括弧の中を消して 1 つにまとめる。
 - 6.1（2026-10-16）: arm64 の道具は VS2022 の MSVC 14.44.35207 `Hostx64\arm64\link.exe`。debug で組んだ `target\aarch64-pc-windows-msvc\debug\areka.exe`（機械の種類 0xAA64）を `AREKA_ICON_CHECK_EXE` で検査し、飛ばしの行なしで緑。リンカは `icons.res` をそのまま受けた。
 - 6.2（2026-10-16）: 新しいワークツリーで `cargo test -p areka` を直に回すと、32 ビットの組み立ての出力（`shiori-host32-helper.exe`・`shiori_loadu.dll`）が無いので、実機の 2 本（`mcp_get_log_real_run`・`smoke_boot_loop_exit`）が赤になる。この仕様とは関係なく、`tools/test-all.ps1` は先にそれらを組むので起きない。組んでから回すと緑（単体 2920 通過）。
+- 6.3（2026-10-16）: 開発者が実機での見え方を合格とした（`target\icon-check\areka-icon-check-1016a.exe` と `tray-icon-check-1016a.ico` で確かめた）。
