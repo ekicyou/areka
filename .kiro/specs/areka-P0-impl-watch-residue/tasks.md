@@ -77,7 +77,7 @@
   - _Requirements: 8.1, 8.3, 8.4, 8.5_
 
 - [ ] 4. 待ちの後始末を同じ排他の中で行う
-- [ ] 4.1 見張りの最後の抹消と居る印の解きを同じ排他の中で行う
+- [x] 4.1 見張りの最後の抹消と居る印の解きを同じ排他の中で行う
   - 待ちの口に最後の抹消を足し、本物の口は状態の排他の中で判断に通した後に居る印を解き、排他は状態ファイルの書き・ログの口・読み物の後に放す（判断の核には触らない）
   - 待ちのループの最後をそれに替え、失敗は今の警告を残して答えを変えない。偽の口も合わせる
   - ログの口の中で、居る印の探りが「居ない」かつ状態の排他が握られていることを書き留め、最後の抹消の後に 1 件だけそうなっていることを常時テストで判定する
@@ -157,3 +157,4 @@
 - 1.4: `plan::merge_order` の鍵に `Reverse(index)` を足して同点の並びを逆にした → `cli::commands_tests::the_serving_order_the_position_and_the_reading_agree_with_ties_and_bugs_mixed` が赤（番の順の判定）。控え `target\mutation-backup\plan.rs.bak` から戻し、sha256 一致を確かめて緑。
 - 2.2: ① `store::parse` の読み直しを外し、`WrongShape` の位置を `from_value` の失敗の位置（0, 0）から取った → `store::ports_tests::a_change_sets_each_broken_file_aside_and_its_damage_reaches_the_log_port`・`store::ports_tests::read_only_fails_on_a_broken_file_with_its_damage_and_does_not_set_it_aside`・`store::ports_tests::read_only_logs_the_damage_of_a_broken_file_in_one_ascii_line` が赤。② `Store::load` で訳を捨てた（`damage: None` 相当）→ `store::ports_tests::a_change_sets_each_broken_file_aside_and_its_damage_reaches_the_log_port`・`store::ports_tests::a_recovery_reaches_the_log_port_once_and_before_the_events_of_the_judgement`・`store::ports_tests::when_the_write_fails_the_events_of_the_judgement_do_not_reach_the_log_port` が赤。どちらも控え `target\mutation-backup\store.rs` から素のコピーで戻し、sha256 一致（`e9f87617157773fc1d3a4e5a291fa85b25a80f59aab2739958bc5d67254c99d0`）を確かめて緑。
 - 3.2: 直す前の実物（`WaitPort::now` が `store::unix_now` の本物の時刻）に新しいテストを先に当てた → `store::ports_tests::the_wait_record_takes_its_start_time_from_the_clock_of_the_store` が赤（`left: [Some(1792132289)]`・`right: [Some(1791000000)]`＝置かれた待ちの記録の `since` が止めた時刻 `T0` でなく本物の時刻）。本物の口の `now` を `Store::time` にして緑。
+- 4.1: 本物の口の `WaitPort::finish` で居る印を排他の後で解いた（`drop(held)` を `with_state` の閉じた関数の外・返った後へ移した）→ `store::ports_tests::the_last_unregister_releases_the_presence_mark_inside_the_exclusion` が赤（`left: [(true, true)]`・`right: [(false, true)]`＝ログの口の中で印がまだ「居る」）。控え `target\mutation-backup\4.1-wait.rs` から素のコピーで戻し、sha256 一致（`be93604b6571ffd76e82c673709b9420ba31b44d193c3e3f520308a67cb99318`）を確かめて緑。

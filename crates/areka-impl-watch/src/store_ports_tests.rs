@@ -734,3 +734,55 @@ fn the_safety_net_refuses_one_second() {
 fn the_safety_net_lets_short_pauses_through() {
     refuse_poll(Duration::from_millis(20));
 }
+
+/// 最後の抹消（[`WaitPort::finish`]）は、居る印を `state.lock` の排他の中で解く: ログの口の中
+/// （排他の中）で、印の探りが「居ない」かつ `state.lock` が握られているのが 1 件だけ見える
+/// （要件 6.1・6.4）。
+#[test]
+fn the_last_unregister_releases_the_presence_mark_inside_the_exclusion() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use crate::presence::{LockFilePresence, hold};
+    use crate::state::WaitKind;
+
+    let root = TempPath::under_target("impl-watch-store");
+    let home = home_in(&root);
+    store_in(&root)
+        .with_state(watch("a"))
+        .expect("見張りを始められる");
+    let held = hold(&home.alive_path("a", WaitKind::Watch))
+        .expect("握れる")
+        .expect("誰も握っていない");
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let noted = Rc::clone(&seen);
+    let probe = LockFilePresence::new(&home);
+    let lock_path = home.lock_path();
+    let store = Store {
+        presence: Box::new(LockFilePresence::new(&home)),
+        log: Box::new(move |_| {
+            let present = probe.is_present("a", WaitKind::Watch);
+            let file = File::open(&lock_path).expect("state.lock が在る");
+            let locked = match file.try_lock_shared() {
+                Ok(()) => {
+                    let _ = file.unlock();
+                    false
+                }
+                Err(std::fs::TryLockError::WouldBlock) => true,
+                Err(std::fs::TryLockError::Error(err)) => panic!("探れない: {err}"),
+            };
+            noted.borrow_mut().push((present, locked));
+        }),
+        ..store_in(&root)
+    };
+    let unregister = Command::UnregisterWait {
+        id: "a".to_owned(),
+        kind: WaitKind::Watch,
+    };
+
+    WaitPort::finish(&store, &unregister, "a", held).expect("消せる");
+
+    // (印が居るか, state.lock が握られているか)。
+    assert_eq!(*seen.borrow(), [(false, true)]);
+    assert!(read_state(&home).waits.is_empty(), "記録は消えた");
+}

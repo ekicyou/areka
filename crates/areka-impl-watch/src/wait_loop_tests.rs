@@ -21,7 +21,7 @@ use super::test_support::{T0, load, merge, resume, watch};
 use super::{WaitEnd, WaitPort, WaitSpec, run};
 use crate::error::{Damage, WatchError};
 use crate::plan::{Applied, Command, Presence, apply};
-use crate::presence::hold;
+use crate::presence::{Held, hold};
 use crate::state::{ParticipantStatus, State, WaitKind, WaitRecord};
 
 /// 待ちのプロセスの番号（偽の口が答える）。
@@ -190,6 +190,14 @@ impl WaitPort for FakePort {
             _ => '?',
         })?;
         Ok(self.apply_as(caller, cmd, true))
+    }
+
+    /// 跡に `U` を残し、印が握られていたかを書き留め、判断に通してから印を落とす（失敗の
+    /// 差し込みでも落ちる）。
+    fn finish(&self, cmd: &Command, caller: &str, held: Held) -> Result<Applied, WatchError> {
+        let applied = self.change(cmd, caller);
+        drop(held);
+        applied
     }
 
     fn sleep(&self) {
