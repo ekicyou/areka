@@ -263,7 +263,7 @@ graph TB
 | 2.6 | `AREKA_NO_ALERT` は画面だけ | `stop_boot_with`・`tell_at_close` の `suppressed` | `alert::raise(scene, suppressed)` | — |
 | 2.7 | `alert.rs` の場面として足す・今の 5 場面は不変 | `AlertScene::MemoryWrite` | `alert_text` の 1 腕 | — |
 | 2.8 | 新しい SHIORI イベント 0 | （何も送らない） | — | — |
-| 2.9 | 確かめで物を残さない | `probe_dir` | 消えるファイル・フォルダは作らない | 起動の前 |
+| 2.9 | 確かめで物を残さない | `probe_dir`（`areka-user-data` の確かめの口） | フォルダを開いて閉じるだけ・何も作らない | 起動の前 |
 | 2.10 | 更新の作業フォルダは対象外 | （`areka-update` に触らない） | — | — |
 | 3.1 | 起動の時点で印を書けなければ止める | `boot_first_ghost`・`stop_boot` | `write_session_mark` の `Err` | 起動の前 |
 | 3.2 | 前回の印が残り書き替えられなければ止める | 同上（由来 `Halted` でも同じ道） | 同上 | 起動の前 |
