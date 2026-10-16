@@ -257,7 +257,7 @@ DoD ゲートより前に、**実装中に発生した未解決問題のうち�
 
    `{default-branch}` は1つの具体的なブランチ名として確定し、以降で再評価しない。
 
-3. **既定ブランチとの差を確かめる**: `git fetch {remote}` のあと `git log --oneline HEAD..{remote}/{default-branch}` が空でなければ、既定ブランチが先へ進んでいる。PR が衝突しないか（`git merge-tree --write-tree HEAD {remote}/{default-branch}` が衝突を報告しないか）を確かめ、衝突するならテストより前に取り込む（ハーネスのワークツリーなら `sync_with_base_branch`、それ以外は `git merge`）。取り込みはコードを変えるので、**全体テストの起動（ステップ5）より前**に済ませる。
+3. **既定ブランチとの差を確かめる**: `git fetch {remote}` のあと `git log --oneline HEAD..{remote}/{default-branch}` が空でなければ、既定ブランチが先へ進んでいる。PR が衝突しないか（`git merge-tree --write-tree HEAD {remote}/{default-branch}` が衝突を報告しないか）を確かめ、衝突するならテストより前に取り込む（`git fetch -q {remote} {default-branch}` と `git merge --no-edit {remote}/{default-branch}` で。前置きステップ 6 と同じく、ハーネスの同期の道具は使わない）。取り込みはコードを変えるので、**全体テストの起動（ステップ5）より前**に済ませる。
 
 > **以降のステップは、`origin`/`main` のハードコードではなく、ここで解決した `{remote}` / `{default-branch}` を用いる前提とする。** `{remote}` が none の場合、リモート同期（ステップ8）は安全にスキップし警告する。
 

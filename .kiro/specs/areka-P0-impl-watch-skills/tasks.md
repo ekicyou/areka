@@ -118,3 +118,5 @@
 - 7.2（residue の後に確かめる）: 今の実行ファイルは `clear --repo` を受けず 2 で返る（kiro-next の読み方の 2 の行）。0 の `cleared repo=…; left: …` の行は `areka-P0-impl-watch-residue` が入った後に確かめる。
 - 完了の棚卸へ申し送り: アプリの古い案内文（`error.rs:16`「…copy areka-impl-watch.exe there…」）を、`areka-P0-impl-watch-residue` の brief へ「件 N」として渡す（research の決めたこと 16・design 41 行）。
 - 完了の棚卸へ申し送り: 調停役 kiro-watch を指す記憶（memory）の呼び名を主の会話が直す（design 47 行）。
+- 完了時にその場で解決: kiro-complete のステップ0 の 3 の取り込みを `git fetch -q`／`git merge --no-edit` に揃え、ハーネスの同期の道具を使わない形にした（前置きステップ 6 と同じ）。
+- 完了時の棚卸で直さないと判定: kiro-next 42 行目の「merge-coordinator memory」は記憶のファイル `areka-merge-coordinator-2026-10-06.md` として実在し、調停役 kiro-watch のセッションを指すものではない。
