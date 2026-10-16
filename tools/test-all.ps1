@@ -12,7 +12,9 @@
   7. 道具の文字コードの判定（tools/encoding-check.ps1 を別のプロセスで・ネットを使わない）
   8. リリースノートの道具の自分の検査（tools/release-notes.ps1 -SelfTest を別のプロセスで・ネットを使わない）
   9. 俯瞰の HTML の道具の自分の検査（tools/roadmap-overview.ps1 -SelfTest を別のプロセスで・ネットを使わない）
-  10. -License のときだけ cargo deny check と cargo about generate（テストと同時に回すと rustc がメモリ不足で落ちるので最後に直列で）
+  10. 隣の helper を揃える道具の自分の検査（tools/sync-i686-helper.ps1 -SelfTest を別のプロセスで・ネットを使わない）
+  11. -License のときだけ cargo deny check と cargo about generate（テストと同時に回すと rustc がメモリ不足で落ちるので最後に直列で）
+  12. 最後の段: target\debug の隣の helper を i686 版に揃える（tools/sync-i686-helper.ps1・途中の段が x64 版で上書きしても、終わった後は areka.exe の隣が i686 版）
   段が赤でも止めずに最後まで回し、段ごとの合否を一覧にして、1 つでも赤なら終了コード 1 で終わる。
   一覧には検査したコミットと、始めた時点の未コミットの変更の件数も出す（「直近の緑」で再実行を省けるかの証拠）。
 
@@ -52,10 +54,12 @@ Step 'crates.io pre-publish check (package only)' { pwsh -NoProfile -File tools/
 Step 'encoding check' { pwsh -NoProfile -File tools/encoding-check.ps1 }
 Step 'release notes check' { pwsh -NoProfile -File tools/release-notes.ps1 -SelfTest }
 Step 'roadmap overview check' { pwsh -NoProfile -File tools/roadmap-overview.ps1 -SelfTest }
+Step 'i686 helper sync check' { pwsh -NoProfile -File tools/sync-i686-helper.ps1 -SelfTest }
 if ($License) {
     Step 'cargo deny check' { cargo deny check }
     Step 'cargo about generate' { cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md }
 }
+Step 'i686 helper beside areka.exe' { pwsh -NoProfile -File tools/sync-i686-helper.ps1 }
 
 Write-Host "`n==== results (commit $head, uncommitted changes at start: $dirty) ====" -ForegroundColor Cyan
 $failed = 0

@@ -73,33 +73,33 @@ fn load_request(id: &str, requested: u64) -> LoadRequest {
 }
 
 /// 設計の「状態の確認」の見本の状態。名前と内容は日本語（端末へ出てはならない値）。
-/// 生死は [`SAMPLE_PRESENCE`]（C の見張りだけが居ない）。
+/// 生死は [`SAMPLE_PRESENCE`]（c の見張りだけが居ない）。
 fn sample() -> State {
     let mut state = State::empty();
     put(
         &mut state,
-        participant("A", "あれか実装", "areka", ParticipantStatus::Working),
+        participant("a", "あれか実装", "areka", ParticipantStatus::Working),
     );
     let mut b = participant(
-        "B",
-        "B の見張り役",
+        "b",
+        "b の見張り役",
         "areka",
         ParticipantStatus::StopRequested,
     );
     b.stop_reason = Some(StopReason {
-        by: "C".to_owned(),
+        by: "c".to_owned(),
         purpose: "負荷の計測 5 回".to_owned(),
     });
     put(&mut state, b);
     put(
         &mut state,
-        participant("C", "計測係", "pasta", ParticipantStatus::Working),
+        participant("c", "計測係", "pasta", ParticipantStatus::Working),
     );
     state.merge.insert(
         "areka".to_owned(),
         MergeDesk {
             holder: Some(MergeHolder {
-                id: "A".to_owned(),
+                id: "a".to_owned(),
                 spec: "impl-watch-2".to_owned(),
                 bug: false,
                 requested: T0 + 10,
@@ -114,11 +114,11 @@ fn sample() -> State {
             }),
         },
     );
-    state.load.queue.push(load_request("C", T0 + 20));
+    state.load.queue.push(load_request("c", T0 + 20));
     state.waits = vec![
-        wait("A", WaitKind::Watch, Some("areka")),
-        wait("B", WaitKind::Watch, Some("areka")),
-        wait("C", WaitKind::Load, None),
+        wait("a", WaitKind::Watch, Some("areka")),
+        wait("b", WaitKind::Watch, Some("areka")),
+        wait("c", WaitKind::Load, None),
     ];
     state.push_recent(Recent {
         at: T0 + 1,
@@ -129,13 +129,13 @@ fn sample() -> State {
     state.push_recent(Recent {
         at: T0 + 5,
         kind: RecentKind::Reclaimed,
-        id: Some("Z".to_owned()),
+        id: Some("z".to_owned()),
         detail: "watch absent".to_owned(),
     });
     state
 }
 
-const SAMPLE_PRESENCE: WatchAbsent = WatchAbsent(&["C"]);
+const SAMPLE_PRESENCE: WatchAbsent = WatchAbsent(&["c"]);
 
 /// 端末向けの要約のうち、その識別の参加者の行。
 fn terminal_line(text: &str, id: &str) -> String {
@@ -176,11 +176,11 @@ fn terminal_summary_renders_the_design_sample() {
     let got = render_terminal(&sample(), &SAMPLE_PRESENCE);
     let want = "\
 participants=3 load-holder=none load-queued=1 merging=1 merge-queued=0 not-working=1 waits=3
-A areka working
-B areka stop-requested
-C pasta working absent
-merge areka: holder=A queue=0 last=PR#281 414d43eb impl-watch 2026-10-10T01:00:00Z
-load: holder=none queue=C
+a areka working
+b areka stop-requested
+c pasta working absent
+merge areka: holder=a queue=0 last=PR#281 414d43eb impl-watch 2026-10-10T01:00:00Z
+load: holder=none queue=c
 ";
     assert_eq!(got, want);
 }
@@ -190,21 +190,21 @@ fn terminal_summary_is_ascii_while_markdown_carries_the_japanese_values() {
     let mut state = sample();
     // 持ち主の内容も日本語にする（見本の机は持ち主が居ない）。
     state.load.holder = Some(LoadHolder {
-        id: "D".to_owned(),
+        id: "d".to_owned(),
         purpose: "走っている計測".to_owned(),
         requested: T0,
         granted: T0 + 1,
         running: true,
-        stopped: vec!["A".to_owned(), "B".to_owned()],
+        stopped: vec!["a".to_owned(), "b".to_owned()],
     });
     let terminal = render_terminal(&state, &SAMPLE_PRESENCE);
     assert!(terminal.is_ascii(), "{terminal}");
-    assert_has_line(&terminal, "load: holder=D queue=C");
+    assert_has_line(&terminal, "load: holder=d queue=c");
 
     let markdown = render_markdown(&state, &SAMPLE_PRESENCE, T0 + 100);
     for value in [
         "あれか実装",
-        "B の見張り役",
+        "b の見張り役",
         "計測係",
         "負荷の計測 5 回",
         "走っている計測",
@@ -247,7 +247,7 @@ fn marks_follow_the_presence_port_and_the_working_status() {
     ];
     for (status, awaiting, info, present, want) in cases {
         let label = format!("{status:?} awaiting={awaiting} info={info} present={present}");
-        let mut p = participant("P", "名前", "areka", status);
+        let mut p = participant("p", "名前", "areka", status);
         p.awaiting_watch_since = awaiting.then_some(T0 + 3);
         if !info {
             p.watch = None;
@@ -257,14 +257,14 @@ fn marks_follow_the_presence_port_and_the_working_status() {
         let presence = if present {
             ALL_PRESENT
         } else {
-            WatchAbsent(&["P"])
+            WatchAbsent(&["p"])
         };
 
-        let line = terminal_line(&render_terminal(&state, &presence), "P");
+        let line = terminal_line(&render_terminal(&state, &presence), "p");
         let tail = line.split(' ').nth(3).unwrap_or("");
         assert_eq!(tail, want, "端末: {label}: {line}");
 
-        let row = markdown_row(&render_markdown(&state, &presence, T0), "P");
+        let row = markdown_row(&render_markdown(&state, &presence, T0), "p");
         let shown = if want.is_empty() { "-" } else { want };
         assert_eq!(row[5], shown, "読み物: {label}: {row:?}");
     }
@@ -342,12 +342,12 @@ none
 fn markdown_carries_every_item_of_the_status_report() {
     let mut state = sample();
     state.load.holder = Some(LoadHolder {
-        id: "D".to_owned(),
+        id: "d".to_owned(),
         purpose: "走っている計測".to_owned(),
         requested: T0,
         granted: T0 + 1,
         running: true,
-        stopped: vec!["A".to_owned(), "B".to_owned()],
+        stopped: vec!["a".to_owned(), "b".to_owned()],
     });
     state.push_recent(Recent {
         at: T0 + 9,
@@ -361,32 +361,32 @@ fn markdown_carries_every_item_of_the_status_report() {
         "generated: 2026-10-03T04:01:40Z".to_owned(),
         // 参加者: 識別・名前・リポジトリ・状態・時刻・印・停止要請の理由・見張り。
         "| id | name | repo | status | since | mark | stop reason | watch |".to_owned(),
-        format!("| A | あれか実装 | areka | working | {T0_UTC} | - | - | {watch} |"),
+        format!("| a | あれか実装 | areka | working | {T0_UTC} | - | - | {watch} |"),
         format!(
-            "| B | B の見張り役 | areka | stop-requested | {T0_UTC} | - | by C: 負荷の計測 5 回 | {watch} |"
+            "| b | b の見張り役 | areka | stop-requested | {T0_UTC} | - | by c: 負荷の計測 5 回 | {watch} |"
         ),
-        format!("| C | 計測係 | pasta | working | {T0_UTC} | absent | - | {watch} |"),
+        format!("| c | 計測係 | pasta | working | {T0_UTC} | absent | - | {watch} |"),
         // 負荷テストの机: 持ち主（内容・走っている印・止まった一覧）と待ち行列。
         format!(
-            "- holder: D (requested {T0_UTC}, granted 2026-10-03T04:00:01Z, running: yes, stopped: A, B): 走っている計測"
+            "- holder: d (requested {T0_UTC}, granted 2026-10-03T04:00:01Z, running: yes, stopped: a, b): 走っている計測"
         ),
         "- queue:".to_owned(),
-        "  1. C (requested 2026-10-03T04:00:20Z): 負荷の計測 5 回".to_owned(),
+        "  1. c (requested 2026-10-03T04:00:20Z): 負荷の計測 5 回".to_owned(),
         // リポジトリごとのマージの机: 持ち主・待ち行列・直前のマージ。
         "### areka".to_owned(),
-        "- holder: A (spec impl-watch-2, bug: no, requested 2026-10-03T04:00:10Z, granted 2026-10-03T04:00:11Z)"
+        "- holder: a (spec impl-watch-2, bug: no, requested 2026-10-03T04:00:10Z, granted 2026-10-03T04:00:11Z)"
             .to_owned(),
         "- queue: none".to_owned(),
         "- last: PR#281 414d43eb impl-watch 2026-10-10T01:00:00Z".to_owned(),
         // 走っている待ち・見張り: 種類・識別・リポジトリ・プロセス番号・時刻。
         "| kind | id | repo | pid | since |".to_owned(),
-        format!("| watch | A | areka | 1234 | {T0_UTC} |"),
-        format!("| load | C | - | 1234 | {T0_UTC} |"),
+        format!("| watch | a | areka | 1234 | {T0_UTC} |"),
+        format!("| load | c | - | 1234 | {T0_UTC} |"),
         // 最近の回収・復旧・消した記録（新しい順）。
         "| at | kind | id | detail |".to_owned(),
         r"| 2026-10-03T04:00:09Z | cleared | - | C:\置き場\state.json.cleared-20261003T040009Z |"
             .to_owned(),
-        "| 2026-10-03T04:00:05Z | reclaimed | Z | watch absent |".to_owned(),
+        "| 2026-10-03T04:00:05Z | reclaimed | z | watch absent |".to_owned(),
         "| 2026-10-03T04:00:01Z | recovered | - | created |".to_owned(),
     ] {
         assert_has_line(&got, &line);
@@ -412,14 +412,14 @@ fn queues_are_shown_in_the_order_they_will_be_served() {
     );
     // 負荷テストは申し込みの早い順・同点は行列の前。
     state.load.queue = vec![
-        load_request("L3", T0 + 9),
-        load_request("L1", T0 + 2),
-        load_request("L2", T0 + 2),
+        load_request("l3", T0 + 9),
+        load_request("l1", T0 + 2),
+        load_request("l2", T0 + 2),
     ];
 
     let terminal = render_terminal(&state, &ALL_PRESENT);
     assert_has_line(&terminal, "merge areka: holder=none queue=4 last=none");
-    assert_has_line(&terminal, "load: holder=none queue=L1,L2,L3");
+    assert_has_line(&terminal, "load: holder=none queue=l1,l2,l3");
 
     let markdown = render_markdown(&state, &ALL_PRESENT, T0);
     let numbered: Vec<&str> = markdown
@@ -429,7 +429,7 @@ fn queues_are_shown_in_the_order_they_will_be_served() {
         .collect();
     assert_eq!(
         numbered,
-        ["L1", "L2", "L3", "bug", "tie1", "tie2", "late"],
+        ["l1", "l2", "l3", "bug", "tie1", "tie2", "late"],
         "{markdown}"
     );
     assert_has_line(
@@ -458,7 +458,7 @@ fn queues_are_shown_in_the_order_they_will_be_served() {
 fn first_line_counts_desks_with_a_holder_and_participants_not_working() {
     use ParticipantStatus::{StopRequested, Stopped, Working};
     let mut state = State::empty();
-    for (id, status) in [("A", Working), ("B", StopRequested), ("C", Stopped)] {
+    for (id, status) in [("a", Working), ("b", StopRequested), ("c", Stopped)] {
         put(&mut state, participant(id, "名前", "areka", status));
     }
     // 持ち主の居る机。
@@ -466,8 +466,8 @@ fn first_line_counts_desks_with_a_holder_and_participants_not_working() {
         "areka".to_owned(),
         MergeDesk {
             holder: Some(MergeHolder {
-                id: "A".to_owned(),
-                spec: "spec-A".to_owned(),
+                id: "a".to_owned(),
+                spec: "spec-a".to_owned(),
                 bug: false,
                 requested: T0,
                 granted: T0 + 1,
@@ -497,10 +497,36 @@ fn first_line_counts_desks_with_a_holder_and_participants_not_working() {
         first_line(&terminal),
         "participants=3 load-holder=none load-queued=0 merging=1 merge-queued=0 not-working=2 waits=0"
     );
-    assert_has_line(&terminal, "merge areka: holder=A queue=0 last=none");
+    assert_has_line(&terminal, "merge areka: holder=a queue=0 last=none");
     assert_has_line(
         &terminal,
         &format!("merge pasta: holder=none queue=0 last=PR#7 0123abcd spec-old {T0_UTC}"),
+    );
+}
+
+#[test]
+fn first_line_counts_every_merge_desk_with_a_holder_across_repos() {
+    let mut state = State::empty();
+    // 2 つのリポジトリの机に、それぞれ持ち主が居る。先頭の机だけを数える実装はここで外れる。
+    for (repo, id) in [("areka", "a"), ("pasta", "b")] {
+        state.merge.insert(
+            repo.to_owned(),
+            MergeDesk {
+                holder: Some(MergeHolder {
+                    id: id.to_owned(),
+                    spec: format!("spec-{id}"),
+                    bug: false,
+                    requested: T0,
+                    granted: T0 + 1,
+                }),
+                queue: Vec::new(),
+                last: None,
+            },
+        );
+    }
+    assert_eq!(
+        first_line(&render_terminal(&state, &ALL_PRESENT)),
+        "participants=0 load-holder=none load-queued=0 merging=2 merge-queued=0 not-working=0 waits=0"
     );
 }
 
@@ -509,9 +535,17 @@ fn markdown_keeps_free_text_inside_its_table_cell() {
     let mut state = State::empty();
     put(
         &mut state,
-        participant("A", "a|b\r\nc", "areka", ParticipantStatus::Working),
+        participant("a", "a|b\r\nc", "areka", ParticipantStatus::Working),
     );
-    let row = markdown_row(&render_markdown(&state, &ALL_PRESENT, T0), "A");
+    let row = markdown_row(&render_markdown(&state, &ALL_PRESENT, T0), "a");
     assert_eq!(row.len(), 8, "{row:?}");
     assert_eq!(row[1], r"a\|b  c");
+}
+
+#[test]
+fn id_list_is_none_when_empty_and_comma_space_joined_otherwise() {
+    assert_eq!(super::NONE, "none");
+    assert_eq!(super::id_list(&[]), "none");
+    assert_eq!(super::id_list(&["a".to_owned()]), "a");
+    assert_eq!(super::id_list(&["a".to_owned(), "b".to_owned()]), "a, b");
 }

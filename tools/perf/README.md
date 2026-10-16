@@ -550,9 +550,47 @@ CPU ではないためです。引受先は `present-write-coherence` です。
 
 - **32bit SHIORI ヘルパは実行体の隣に要る。** 合否判定の走行（measure-baseline／rank-run／final）は `run-meta.txt` の `shiori_helper_present=true` が関門で、偽なら発話の無い別条件として exit 4（25 分を失う）。ヘルパは `--target i686-pc-windows-msvc` で別ディレクトリに出るので、`perf-loop.measure.ps1` は走行の直前に `target\i686-pc-windows-msvc\release\shiori-host32-helper.exe` を `target\<release|debug>\` へ複製する（`Sync-MeasureShioriHelper`・2026-08-23 の baseline で実際に踏んだ穴）。どちらにも無ければ警告だけ出して既存の関門に任せる。
 
-- **`-BinDir` を渡さない走行（followup／rank-run／measure-baseline／final）は、走行の直前に作業ツリーから実行体を作り直す**（`Sync-MeasureWorktreeBuild`・2026-08-23 TOOLFIX 4）。`measure-ab` は B 側を `target\release` に作って残し、`prepare-ab` は A 側（HEAD）を残すので、これが無いと次の周の `rank-run` が前の周の B を測り、`followup` は B でなく A を測る（周 1〜3 で実際に起きた＝周 1 の「門 ON がドラッグを壊す」は A 実行体での失敗だった）。走行ログに `走行する実行体: … sha256=… git_head=… git_dirty=…` が 1 行出るので、run-meta の exe と突き合わせられる。
+- **`-BinDir` を渡さない走行（followup／rank-run／measure-baseline／final）は、走行の直前に作業ツリーから実行体を作り直す**（`Sync-MeasureWorktreeBuild`・2026-08-23 TOOLFIX 4）。`measure-ab` は B 側を `target\release` に作って残し、`prepare-ab` は A 側（HEAD）を残すので、これが無いと次の周の `rank-run` が前の周の B を測り、`followup` は B でなく A を測る（周 1〜3 で実際に起きた＝周 1 の「門 ON がドラッグを壊す」は A 実行体での失敗だった）。走行ログに `[perf-loop] executable to run: … sha256=… git_head=… git_dirty=…` が 1 行出るので、run-meta の exe と突き合わせられる。
 
 - **走行後の静寂確認が NOT_QUIET だった走行は `-Resume` で再利用しない**（`Test-MeasureQuietAfterOk`・2026-08-23 TOOLFIX 5）。退避先は `<走行>-NOTQUIET-<時刻>`（測ったものは消さない）。周 3 で A1／B1（走行後 21.4%／20.5%）がそのまま compare に使われた穴。
+
+### 端末の文字コードと子の出力
+
+道具は端末の文字コードを書き替えません（`[Console]::OutputEncoding` などへの代入も `chcp`
+も、親でも子の中でも使いません）。子のプロセスの出力は、端末が 932 でも 65001 でも同じに
+受け取れるよう、**読む側で UTF-8 として読みます**。
+
+- **読む所は 2 つ**です。perf-loop の部品 `Invoke-Child`（`perf-loop.common.ps1`）と、
+  `tools/utf8-child.ps1` の `Invoke-Utf8Child` です。どちらも端末を通さず、子の標準出力・
+  標準エラーを UTF-8 のバイトとして解きます。`perf-loop.ps1` とその部品（git・cargo・python・
+  pwsh の子）は `Invoke-Child` を、`invoke-perf-run.ps1`（git・静寂の確認）と
+  `invoke-followup-checks.ps1`（cargo・判定器）は `Invoke-Utf8Child` を使います。
+- **python の子**を perf-loop から回すとき（`Invoke-PythonChild`）は `PYTHONIOENCODING=utf-8` と
+  `PYTHONUTF8=1` を渡し、子が必ず UTF-8 で書くようにします。`invoke-followup-checks.ps1` が
+  回す `judge-followup.py` は、自分で標準出力と標準エラーを UTF-8 に寄せて書きます。
+- **pwsh の子**は `perf-pwsh-child.ps1` の `Get-PwshChildArguments` が組んだ引数で起こします
+  （perf-loop からは `Invoke-PwshChild`、`invoke-perf-run.ps1` の静寂の確認は `Invoke-Utf8Child`
+  に直接渡します）。この前置きは子の中で `[Console]::SetOut`／`[Console]::SetError` を使い、
+  その子自身の標準出力と標準エラーだけを BOM の無い UTF-8 の書き手に替えます。PowerShell は
+  渡された出力先へも端末の文字コードで書くので、この前置きが無いと 932 の端末から回した子の
+  出力は 932 のバイトで来ます。端末の文字コードの設定には触れないので、共有の端末は子が
+  終わっても元のままです。
+
+**道具が自分で端末へ出す文は ASCII だけです**（英語）。進みの表示・失敗の文・`RESULT` の行は
+どの端末でも化けません。注記や、ファイルにだけ書く記録（`run-meta.txt` の節の見出しと鍵
+など）には日本語が残ります。
+
+なお化けうるのは、**道具が端末へ写した子の中身**だけです（例: `judge-followup.py` の日本語の
+報告）。子からは字のとおりに受け取っていますが、写した先の端末の文字コードと、会話へ届ける
+仕組みの組み合わせで化けることがあります。判断は `code=` などの ASCII の行で行ってください。
+
+写し方の細かい点:
+
+- **判定器（`judge-followup.py`）の出力は、判定器が終わってからまとめて写します**
+  （`invoke-followup-checks.ps1`）。判定器が走っている間は何も出ません。標準出力の行の後に
+  標準エラーの行が続きます。
+- **静寂の確認（`check-quiet.ps1`）の写しも、標準出力の行の後に標準エラーの行の順です**
+  （`invoke-perf-run.ps1` の `-AutoQuiet`）。子が出した交互の順は保ちません。
 
 ## 12. 測り直すたびに確かめること（コマの間隔を見る判定式）
 

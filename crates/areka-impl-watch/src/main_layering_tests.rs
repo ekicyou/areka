@@ -3,10 +3,12 @@
 //! - 判断の中核（`plan.rs`）の本文が、ファイル・時計・プロセス・ログを読み込む綴りを持たない
 //!   （設計「依存の向き」。走査は `plan.rs` だけ。兄弟の `plan_*_tests.rs`・`plan_test_support.rs`
 //!   はテストで、時刻や偽の口を使ってよい）。
-//! - 端末へ出る文を持つファイルの文字列・文字のリテラルが ASCII だけ（要件 9.2）。対象は設計が
-//!   名指す 4 つ: 入口 `cli.rs`・表示 `status.rs`・待ちの終わりの 1 行を作る `wait.rs`・失敗の
-//!   本文を持つ `error.rs`（どれも、リテラルがそのまま端末へ出る）。兄弟のテストファイルは
-//!   日本語の値（名前・内容）をわざと入れるので対象に入れない。
+//! - 端末へ出る文を持つファイルの文字列・文字のリテラルが ASCII だけ（要件 9.2）。対象は本番
+//!   ファイルの全部から、リテラルの無い起動ファイル `main.rs` を除いた 9 本: 入口 `cli.rs`・表示
+//!   `status.rs`・待ちの終わりの 1 行を作る `wait.rs`・失敗の本文を持つ `error.rs`・状態ファイルの
+//!   口 `store.rs`・置き場所 `home.rs`・居る印のファイル `presence.rs`・判断の中核 `plan.rs`
+//!   （「当てはまらなかった」の文）・状態 `state.rs`（列挙の綴り）。どれも、リテラルがそのまま
+//!   端末へ出うる。兄弟のテストファイルは日本語の値（名前・内容）をわざと入れるので対象に入れない。
 //!
 //! 走査は [`split`] の 1 本: 本文を 1 字ずつ読んで、コメントを捨て、文字列・文字のリテラルを
 //! 抜き出す。コメントを捨てるのは、ここのコメントが日本語で書かれ、「`std::fs` を読まない」の
@@ -129,7 +131,11 @@ fn literals(source: &str) -> Vec<String> {
 #[test]
 fn the_judgement_core_spells_no_file_clock_process_or_log() {
     let found = impure_spellings(include_str!("plan.rs"));
-    assert!(found.is_empty(), "plan.rs spells {found:?}");
+    assert!(
+        found.is_empty(),
+        "plan.rs spells {found:?} (import from `std` one item per line: `std::{{...}}` and \
+         `std::*` are forbidden because they hide what was imported)"
+    );
 }
 
 /// 端末へ出る文を持つファイルの文字列・文字のリテラルは ASCII だけ。
@@ -140,6 +146,11 @@ fn files_that_write_to_the_terminal_have_ascii_only_literals() {
         ("status.rs", include_str!("status.rs")),
         ("wait.rs", include_str!("wait.rs")),
         ("error.rs", include_str!("error.rs")),
+        ("store.rs", include_str!("store.rs")),
+        ("home.rs", include_str!("home.rs")),
+        ("presence.rs", include_str!("presence.rs")),
+        ("plan.rs", include_str!("plan.rs")),
+        ("state.rs", include_str!("state.rs")),
     ];
     for (file, source) in sources {
         // 較正: リテラルを 1 つも拾えない走査は、何が書かれていても緑になる。

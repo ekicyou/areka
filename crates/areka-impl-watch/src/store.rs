@@ -24,7 +24,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
 
-use crate::error::WatchError;
+use crate::error::{Damage, WatchError};
 use crate::home::Home;
 use crate::plan::{Applied, Event, Presence};
 use crate::presence::LockFilePresence;
@@ -39,15 +39,12 @@ const LOCK_LIMIT: Duration = Duration::from_secs(10);
 const REPLACE_TRIES: u32 = 5;
 /// 置き換えの試しの間の待ち。
 const REPLACE_PAUSE: Duration = Duration::from_millis(20);
-/// 状態ファイルが無いときの `clear` が、「消した記録」の退避先の欄に書く綴り（端末へ出す
-/// `backup: none` も同じ綴り）。
-pub(crate) const NO_BACKUP: &str = "none";
 
 /// 置き場所のファイルへの口。
 pub struct Store {
     home: Home,
-    /// いまの時刻（UNIX 秒）。
-    clock: Box<dyn Fn() -> u64>,
+    /// いまの時刻（UNIX 秒）。取れなければ失敗（値を代えない）。
+    clock: Box<dyn Fn() -> Result<u64, WatchError>>,
     presence: Box<dyn Presence>,
     /// 試しの間の待ち（本物は眠る）。
     pause: Box<dyn Fn(Duration)>,
@@ -75,9 +72,14 @@ pub fn open(home: Home, command: &'static str) -> Result<Store, WatchError> {
     let presence = LockFilePresence::new(&home);
     Ok(Store {
         home,
-        clock: Box::new(unix_now),
+        clock: Box::new(|| unix_seconds(SystemTime::now())),
         presence: Box::new(presence),
-        pause: Box::new(std::thread::sleep),
+        pause: Box::new(|length| {
+            // テストのプロセスでだけ、待ちのループの 1 秒の眠りに来たら眠らずに止める。
+            #[cfg(test)]
+            test_support::refuse_poll(length);
+            std::thread::sleep(length);
+        }),
         log: Box::new(move |event| write_line(command, event)),
     })
 }
@@ -85,18 +87,24 @@ pub fn open(home: Home, command: &'static str) -> Result<Store, WatchError> {
 /// 本物のログの口: 出来事 1 件を 1 行にする（時刻は受け手が付ける）。識別と変化の中身は
 /// 出来事の綴りに在る。
 fn write_line(command: &'static str, event: &Event) {
-    if matches!(event, Event::Recovered { backup: Some(_) }) {
+    if matches!(
+        event,
+        Event::Recovered {
+            backup: Some(_),
+            ..
+        }
+    ) {
         tracing::warn!(command, event = ?event, "[store] state file was broken; set aside");
     } else {
         tracing::info!(command, event = ?event, "[store] state changed");
     }
 }
 
-/// 本物の時計（UNIX 秒）。
-pub(crate) fn unix_now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since| since.as_secs())
+/// 本物の時計の芯（UNIX 秒）。1970 年より前なら 0 に代えずに失敗する。
+fn unix_seconds(at: SystemTime) -> Result<u64, WatchError> {
+    at.duration_since(UNIX_EPOCH)
+        .map(|since| since.as_secs())
+        .map_err(|_| WatchError::io("read the clock", &io::Error::other("before 1970")))
 }
 
 /// 握っている `state.lock`。落とすと解ける（ファイルは残る）。
@@ -110,6 +118,17 @@ impl Drop for StateLock {
 }
 
 impl Store {
+    /// いまの時刻（UNIX 秒）。状態を変える呼び出し・全部消す・端末の要約はここから取る。
+    /// 失敗はここでログに 1 行残して返す。
+    pub(crate) fn time(&self) -> Result<u64, WatchError> {
+        (self.clock)().inspect_err(|err| tracing::error!(error = %err, "[store] clock failed"))
+    }
+
+    /// 試しの間の待ちの口へ頼む（待ちのループの 1 秒の眠りもここを通る）。
+    pub(crate) fn pause_for(&self, length: Duration) {
+        (self.pause)(length);
+    }
+
     /// 状態を変える 1 回。排他の中で 読む → `f`（判断）→ 変わっていれば置き換え書き → 読み物。
     ///
     /// `f` へ渡すのは、読んだ状態・いまの時刻・生死の口。`f` の返す 2 つ目の値がそのまま返る。
@@ -130,11 +149,17 @@ impl Store {
         f: impl FnOnce(&mut State, u64, &dyn Presence) -> (Applied, T),
     ) -> Result<T, WatchError> {
         let _lock = self.lock()?;
-        let now = (self.clock)();
+        let now = self.time()?;
         let (mut state, rebuilt) = self.load(now)?;
         // 退避はもう起きたことなので、この後の書きを待たずにログへ渡す。
         // 「無かったので作った」は、状態ファイルが書けてから渡す。
-        let set_aside = matches!(rebuilt, Some(Event::Recovered { backup: Some(_) }));
+        let set_aside = matches!(
+            rebuilt,
+            Some(Event::Recovered {
+                backup: Some(_),
+                ..
+            })
+        );
         if set_aside {
             rebuilt.iter().for_each(&self.log);
         }
@@ -157,13 +182,19 @@ impl Store {
     }
 
     /// 読むだけ。排他を取らず、作らず、退避もせず、読み物も書かない。
-    /// 無ければ `None`、読めない・形が合わなければ `Broken`、知らない版なら `VersionMismatch`。
+    /// 無ければ `None`、読めない・版が無い・形が合わなければ `Broken`（訳つき・訳はログの行にも
+    /// 載る）、知らない版なら `VersionMismatch`。
     pub fn read_only(&self) -> Result<Option<State>, WatchError> {
         let read = || match self.read()? {
-            Some(bytes) => parse(&bytes)?.map(Some).ok_or(WatchError::Broken),
+            Some(bytes) => parse(&bytes).map(Some),
             None => Ok(None),
         };
-        read().inspect_err(|err| tracing::error!(error = %err, "[store] read failed"))
+        read().inspect_err(|err| match err {
+            WatchError::Broken(damage) => {
+                tracing::error!(error = %err, damage = ?damage, "[store] read failed");
+            }
+            _ => tracing::error!(error = %err, "[store] read failed"),
+        })
     }
 
     /// 状態の確認。排他を取らずに読み（[`Store::read_only`]）、読み物を置き換え、端末向けの
@@ -173,7 +204,7 @@ impl Store {
         let Some(state) = self.read_only()? else {
             return Ok(None);
         };
-        self.write_status(&state, (self.clock)());
+        self.write_status(&state, self.time()?);
         let summary = status::render_terminal(&state, self.presence.as_ref());
         Ok(Some(summary))
     }
@@ -188,13 +219,13 @@ impl Store {
 
     fn wipe(&self) -> Result<Option<PathBuf>, WatchError> {
         let _lock = self.lock()?;
-        let now = (self.clock)();
+        let now = self.time()?;
         // 今のファイルは読まない（壊れていても、知らない版でも、退避して空からやり直せる）。
         let backup = self.set_aside("cleared", now)?;
         (self.log)(&Event::Cleared {
             backup: backup.as_deref().map(lossy),
         });
-        let recorded = backup.as_deref().unwrap_or(Path::new(NO_BACKUP));
+        let recorded = backup.as_deref().unwrap_or(Path::new(status::NONE));
         let state = State::cleared(now, recorded);
         self.write_state(&state)?;
         self.write_status(&state, now);
@@ -249,16 +280,18 @@ impl Store {
     /// 「作り直した」の出来事で、ログの口へ渡すのは呼び手。作り直したときは、その訳を
     /// 「最近の出来事」に足す（要件 8.4・8.5）。
     fn load(&self, now: u64) -> Result<(State, Option<Event>), WatchError> {
-        let backup = match self.read()? {
-            Some(bytes) => match parse(&bytes)? {
-                Some(state) => return Ok((state, None)),
-                // 読めない・形が合わないファイルは退避する。
-                None => self.set_aside("broken", now)?,
+        let (backup, damage) = match self.read()? {
+            Some(bytes) => match parse(&bytes) {
+                Ok(state) => return Ok((state, None)),
+                // 読めない・版が無い・形が合わないファイルは退避し、その訳を出来事に載せる。
+                Err(WatchError::Broken(damage)) => (self.set_aside("broken", now)?, Some(damage)),
+                Err(err) => return Err(err),
             },
-            None => None,
+            None => (None, None),
         };
         let event = Event::Recovered {
             backup: backup.as_deref().map(lossy),
+            damage,
         };
         let mut state = State::empty();
         state.push_recent(Recent {
@@ -332,25 +365,37 @@ impl Store {
     }
 }
 
-/// 状態ファイルの中身を状態として読む。JSON として読めない・形が合わないなら `None`。
+/// 状態ファイルの中身を状態として読む。読めない・版が無い・形が合わないなら `Broken`（訳つき）。
 ///
-/// 版の数字だけを先に見る。知らない版のファイルは、形を読まずに失敗にする。
-/// 版の数字が無いもの（どの版の実行ファイルも書かない）は、形の合わないファイル。
-fn parse(bytes: &[u8]) -> Result<Option<State>, WatchError> {
-    let value = serde_json::from_slice::<Value>(bytes).ok();
-    let version = value
-        .as_ref()
-        .and_then(|value| value.get("version"))
-        .and_then(Value::as_u64);
-    if let Some(found) = version.filter(|found| *found != u64::from(VERSION)) {
+/// 版の数字だけを先に見る。知らない版のファイルは、形を読まずに `VersionMismatch` にする。
+/// 版の数字が無いもの（どの版の実行ファイルも書かない）は `NoVersion`。
+fn parse(bytes: &[u8]) -> Result<State, WatchError> {
+    let value = serde_json::from_slice::<Value>(bytes).map_err(|err| {
+        WatchError::Broken(Damage::NotJson {
+            line: err.line(),
+            column: err.column(),
+        })
+    })?;
+    let found = value
+        .get("version")
+        .and_then(Value::as_u64)
+        .ok_or(WatchError::Broken(Damage::NoVersion))?;
+    if found != u64::from(VERSION) {
         return Err(WatchError::VersionMismatch {
             found,
             known: VERSION,
         });
     }
-    Ok(version
-        .and(value)
-        .and_then(|value| serde_json::from_value(value).ok()))
+    // 形へ写す道は今のまま。`Value` から写した失敗は位置が 0 なので、失敗したときだけ元の
+    // バイト列を読み直して位置を取る（通ればその状態を使う）。
+    serde_json::from_value(value).or_else(|_| {
+        serde_json::from_slice(bytes).map_err(|err| {
+            WatchError::Broken(Damage::WrongShape {
+                line: err.line(),
+                column: err.column(),
+            })
+        })
+    })
 }
 
 fn lossy(path: &Path) -> String {

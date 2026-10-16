@@ -19,9 +19,9 @@ use temp_path_kit::TempPath;
 
 use super::test_support::{T0, load, merge, resume, watch};
 use super::{WaitEnd, WaitPort, WaitSpec, run};
-use crate::error::WatchError;
+use crate::error::{Damage, WatchError};
 use crate::plan::{Applied, Command, Presence, apply};
-use crate::presence::hold;
+use crate::presence::{Held, hold};
 use crate::state::{ParticipantStatus, State, WaitKind, WaitRecord};
 
 /// 待ちのプロセスの番号（偽の口が答える）。
@@ -102,7 +102,7 @@ impl FakePort {
         let mut state = self.state.borrow_mut();
         let created = state.is_none();
         let state = state.get_or_insert_with(State::empty);
-        let applied = apply(state, cmd, Some(who), self.now(), self);
+        let applied = apply(state, cmd, Some(who), T0 + self.sleeps.get(), self);
         if stamped && (created || applied.changed) {
             self.stamp.set(self.stamp.get() + 1);
         }
@@ -158,8 +158,8 @@ impl Presence for FakePort {
 
 impl WaitPort for FakePort {
     /// 眠った回数だけが経過（1 回＝1 秒）。
-    fn now(&self) -> u64 {
-        T0 + self.sleeps.get()
+    fn now(&self) -> Result<u64, WatchError> {
+        Ok(T0 + self.sleeps.get())
     }
 
     fn pid(&self) -> u32 {
@@ -190,6 +190,14 @@ impl WaitPort for FakePort {
             _ => '?',
         })?;
         Ok(self.apply_as(caller, cmd, true))
+    }
+
+    /// 跡に `U` を残し、印が握られていたかを書き留め、判断に通してから印を落とす（失敗の
+    /// 差し込みでも落ちる）。
+    fn finish(&self, cmd: &Command, caller: &str, held: Held) -> Result<Applied, WatchError> {
+        let applied = self.change(cmd, caller);
+        drop(held);
+        applied
     }
 
     fn sleep(&self) {
@@ -506,13 +514,17 @@ fn a_failed_registration_is_the_error() {
 /// 次の状態を変える呼び出しの回収が消す）。
 #[test]
 fn a_failed_read_ends_the_wait_with_the_error() {
-    let port = b_queued_behind_a()
-        .failing(|call, sleeps| (call == 'r' && sleeps == 2).then_some(WatchError::Broken));
+    let port = b_queued_behind_a().failing(|call, sleeps| {
+        (call == 'r' && sleeps == 2).then_some(WatchError::Broken(Damage::NoVersion))
+    });
     port.at(2, Step::Call("C", watching("C")));
 
     let end = port.run(&merge("B", "areka"));
 
-    assert!(matches!(end, Err(WatchError::Broken)), "{end:?}");
+    assert!(
+        matches!(end, Err(WatchError::Broken(Damage::NoVersion))),
+        "{end:?}"
+    );
     assert_eq!(port.trace(), format!("Rfr{}sfr", idle(1)));
     assert_eq!(port.waits_of("B"), [WaitKind::Watch, WaitKind::Merge]);
     assert!(!port.lock_is_held());
@@ -551,6 +563,31 @@ fn a_failed_fingerprint_ends_the_wait_with_the_error() {
         "{end:?}"
     );
     assert_eq!(port.trace(), format!("Rfr{}sf", idle(3)));
+}
+
+/// 登録の直後（眠り 0 回）の更新時刻と大きさの取得の失敗も、待ちを失敗で終える。「無い」に
+/// 畳まない: 番がすでに来ていても読まずに返り、自分の記録は消しに行かない。
+#[test]
+fn a_failed_fingerprint_right_after_registration_ends_the_wait_with_the_error() {
+    let denied = || WatchError::Io {
+        op: "stat state.json",
+        kind: "PermissionDenied".to_owned(),
+        code: 5,
+    };
+    let port =
+        FakePort::new().failing(move |call, sleeps| (call == 'f' && sleeps == 0).then(denied));
+    port.does("B", watching("B"));
+    port.does("B", asks_merge("B"));
+
+    let end = port.run(&merge("B", "areka"));
+
+    assert!(
+        matches!(end, Err(WatchError::Io { code: 5, .. })),
+        "{end:?}"
+    );
+    assert_eq!(port.trace(), "Rf");
+    assert_eq!(port.waits_of("B"), [WaitKind::Watch, WaitKind::Merge]);
+    assert!(!port.lock_is_held());
 }
 
 /// 答えの出た待ちは、最後の抹消が失敗しても答えのまま終わる（残った記録は、握りが解けるので
