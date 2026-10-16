@@ -180,8 +180,9 @@ fn check_missing_path_logs_one_warning() {
 #[test]
 fn spawn_checks_helper_image_once_and_keeps_spawn_result() {
     let missing = Path::new("this_helper_exe_does_not_exist_areka_host32.exe");
-    let load_dir = std::env::temp_dir();
-    let (result, events) = log_capture_kit::capture(|| spawn(missing, &load_dir, "shiori.dll", 0));
+    // 無い helper で起こす前に失敗するので、読み込み先は触られない。
+    let load_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let (result, events) = log_capture_kit::capture(|| spawn(missing, load_dir, "shiori.dll", 0));
     assert!(matches!(result, Err(SpawnError::Spawn(_))));
     let logged = host32_events(&events);
     assert_eq!(logged.len(), 1, "{events:?}");

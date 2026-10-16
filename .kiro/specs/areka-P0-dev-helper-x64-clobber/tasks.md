@@ -57,7 +57,7 @@
   - _Depends: 2.2_
   - _Requirements: 3.1, 3.2, 3.3_
 
-- [ ] 5.2 実装の最後の全体テストを 1 回回す
+- [x] 5.2 実装の最後の全体テストを 1 回回す
   - 5.1 の後に、`tools/test-all.ps1` を 1 回だけ回す（回す前に所要時間を伝える）
   - 完了の状態: 一覧に `OK  i686 helper sync check` と `OK  i686 helper beside areka.exe` が出ていて、ほかの段の合否が今と同じであり、終わった後の `target\debug\shiori-host32-helper.exe` の機械の種類が `014C` である
   - _Depends: 3.2, 4, 5.1_
@@ -73,3 +73,4 @@
 - タスク 1: 写した i686 版の helper は写し元の古い更新時刻を持つので、素の `cargo build` は helper を作り直して隣を x64 版へ戻す（research.md 10 節）。`cargo build -p areka` は隣を触らない。
 - タスク 3.1: 置き先を塞いだときの HResult は `Move-Item -Force` の都合で 0x800700B7 になる（設計の 0x80070020 は書式の例）。自己検査は値に依らない。
 - 5.1: 実機（2026-10-16・debug）根 `<worktree>	arget\hxoot`・記憶 `target\hx\profile`・`RUST_LOG=info`。隣が x64（8664）で `helper_not_i686`（path・machine=0x8664・直し方）が 37 行目、`connect_failed` が 55 行目で 1 件ずつ、その後は今までどおり `shiori_failed`→`alert`。完了時の棚卸へ: 失敗の道の `alert` の `MessageBoxW` がメインスレッドを止め、`AREKA_APP_SMOKE_EXIT_MS` が発火しても閉じない（自分で起こした pid を強制終了した・本 spec の範囲外）。
+- 5.2: 全体テスト（commit 31a47af5）は新しい 2 段を含め `x64 workspace tests` 以外が OK・終わった後の隣は 014C。赤は `temp_path_guard_test` の 3 本で、2.2 のテストが `std::env::temp_dir()` を直に呼んでいたため。`CARGO_MANIFEST_DIR` に替えて直し、回し直しは赤のテストだけ（16 passed）。
