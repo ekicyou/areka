@@ -236,3 +236,218 @@
 - 完了 `areka-P0-winget-manifest-submission` の `verification/winget-local-check.md`（入れ先の綴り・`.db` の控え・リンクでないこと・消えた物 6）。
 - [winget の設定（Settings.md）](https://github.com/microsoft/winget-cli/blob/master/doc/Settings.md)・[winget settings（learn.microsoft.com）](https://learn.microsoft.com/windows/package-manager/winget/settings): `portablePackageUserRoot`／`portablePackageMachineRoot` で portable の入れ先の根を付け替えられる（絶対パス・portable の入れ方だけに効く）。
 - [winget-pkgs の FAQ（ARP の項）](https://github.com/agfeo/winget-pkgs/blob/master/FAQ.md): winget は ARP の記録で入っている物を見分ける。
+
+
+---
+
+# 設計の段の調べと決定（2026-10-16・`/kiro-spec-design -y`）
+
+## Summary
+- **Feature**: `areka-P0-user-data-root`
+- **Discovery Scope**: Extension（今の根の並び・記憶の置き場・インストールと更新の宛先を伸ばす）。軽い発見（`design-discovery-light.md`）と、winget の作りの外部調べ 1 件。
+- **使った手引き**: `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`、steering の `logging.md`（ライブラリは `tracing`・構造化の欄）・`structure.md`（1,000 行・兄弟テスト）。
+- **Key Findings**:
+  - winget は zip の入れ先へ隠しファイル `<名乗り>_<出どころ>.db` を置く（入れ先の根を付け替えても、`--location` でも置く）。名前の頭 `Areka.Areka.Portable_` を見れば、フォルダの一覧を読むだけで見分けられる。
+  - 「書けるか」は、フォルダのハンドルを `FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY` の権限で開くだけで、何も作らずに確かめられる（標準ライブラリの `OpenOptionsExt`）。
+  - `crates/areka/src` には `lib.rs` が無く、モジュールは `main.rs` で宣言する。＝新しいモジュールを `roots/` の下に置けば `main.rs` に触らずに済む。`ResolvedRoots` に欄を足すと、`roots/edit.rs` の `apply`（構造体を組む所）が壊れるので、欄は足さない。
+
+## Research Log
+
+### winget の portable の入れ先の見分け（ギャップ分析の調べ 1・3）
+- **Sources Consulted**:
+  - microsoft/winget-cli の `src/AppInstallerCLICore/PortableInstaller.{h,cpp}`・`Workflows/PortableFlow.cpp`・`src/AppInstallerCommonCore/Runtime.cpp`・`PortableARPEntry.cpp`・`src/AppInstallerRepositoryCore/Microsoft/PortableIndex.cpp`・`src/AppInstallerSharedLib/AppInstallerStrings.cpp`・`doc/Settings.md`（サブエージェントが GitHub の API で読んだ）。
+  - 完了 `areka-P0-winget-manifest-submission` の `verification/winget-local-check.md`。
+- **Findings**:
+  - 入れ先の根の既定: 利用者向けは `%LOCALAPPDATA%\Microsoft\WinGet\Packages`、機械の全員向けは `%ProgramFiles%\WinGet\Packages`（x86 の入れ方は `%ProgramFiles(x86)%\…`）。
+  - `portablePackageUserRoot`／`MachineRoot` は根そのものを替え、その下に製品コードのフォルダを足す。`--location` はその値をそのまま使う（下に足さない）。
+  - 製品コード＝`MakeSuitablePathPart(<名乗り> + "_" + <出どころ>)`（`<>:"/\|?*` を `_` に替える）。
+    - 手元のマニフェストでは `Areka.Areka.Portable__DefaultSource`（実測と合う）。
+    - winget-pkgs の出どころの綴り `Microsoft.Winget.Source_8wekyb3d8bbwe` は実機での観察で、ソースでは確かめていない。
+  - 書庫（zip）の入れ方では、入れ先に `<製品コード>.db`（SQLite・隠し属性）を作る。
+    - 1 つの exe だけの portable では作らない（areka は zip なので当たる）。
+    - `--location` でも作る。そのとき名前の頭はフォルダ名と一致しないが、名乗りの頭は一致する。
+  - 最も確かなのは ARP の記録の `InstallLocation`・`WinGetInstallerType=portable`・`WinGetPackageIdentifier`。鍵は 3 つの見方に分かれる（`HKCU`、`HKLM` の 64 ビット、x86・arm64 の `HKLM\…\Wow6432Node`）。
+- **Implications**: 見分けは「実行ファイルのフォルダの直下に `Areka.Areka.Portable_*.db` が在るか」にした（下の決定 1）。
+
+### 書けるかの見分け（調べ 2）
+- **Findings**:
+  - 試し書きは、zip の書ける形で一瞬だけ物を作る（要件 1.4 の「変わる物 0」と食い違う）。消せなければ物が残る。
+  - `AccessCheck` は正確だが、手数が多く `windows` の機能も要る。
+  - フォルダを `FILE_ADD_FILE`（0x2）`| FILE_ADD_SUBDIRECTORY`（0x4）の権限と `FILE_FLAG_BACKUP_SEMANTICS`（0x0200_0000・フォルダを開くための指定）で `CreateFileW` すると、開くときに OS が権限を確かめる。何も作らずに答えが出る。
+  - 標準ライブラリの `std::os::windows::fs::OpenOptionsExt::{access_mode, custom_flags}` で書ける。
+- **Implications**:
+  - 決定 2。
+  - 32 ビットの helper の UAC の仮想化（`VirtualStore`）は、確かめる側の areka（64 ビット）には効かないので、判断を狂わせない。
+  - 実測では、`VirtualStore` に物ができていないことを数える。
+
+### 写す部品（調べ 6）
+- **Findings**:
+  - `areka-nar` の `copy_existing` は非公開。作業の棚 `.nar-work` の片付け（`prepare_shelf`）は、他の走行の作業フォルダも消す。
+  - `std::fs::rename` は、入れ替え先のフォルダが在ると失敗する（＝先に写した方が勝つ）。
+  - `FileType::is_symlink` は、Windows ではジャンクションでも真になる。
+- **Implications**: 決定 6。
+
+### 呼び手の形（コードの確かめ）
+- `crates/areka/src/main.rs` がモジュールを宣言する（`lib.rs` は無い）。`roots/mod.rs` が宣言するのは `desk`・`edit`・`pick`・`report`・`resolve`。
+- `roots/edit.rs` の `apply` は `ResolvedRoots { roots, origin, status, skipped, memory_fell_back }` を組んで `log_roots` を呼ぶ。＝`ResolvedRoots` に欄を足すと、約束のファイルが壊れる。
+- `areka-nar` の `InstallRoots` は、配置ごとに 1 回だけ答えを尋ねる（`plan.rs` の `body_placement`・`companion_placement`・`existing_target_ghost`）。＝答えの中で写しても、写すのは 1 配置につき 1 回。
+- 切替（`ghost_switch::switch_to` → `boot_into`）は、UI スレッドの上の同期の手続き（降ろす・窓を閉じる・厳格な起動）。
+- 更新の対象は UI スレッドの `update/desk.rs` の `resolve` で解く。背景の走り手は根を持たない。
+- `areka-sylphya` の `PersistScope::Shell` は読み込み（`build_initial_image`）にだけ現れる。＝シェルの記憶を書く本番の呼び手は 0 の見込み（要件 8.3 は実装のタスクで確かめて書く）。
+- ログは標準エラーと記憶の中だけで、ファイルには書かない。＝実行ファイルの隣にログの物は増えない。
+
+## Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| 案 A | 判断を `boot_config.rs` に足す | ファイルが増えない | 中継に同じ判断を写す（食い違う）・`boot_config.rs` が膨らむ | 採らない |
+| 案 B | areka の中の新しいモジュールに全部置く | 判断を値で赤にできる | 中継が使えない（中継は areka に依存できない） | 一部採用 |
+| **案 C** | 判断・場所・記憶・写す手続きは共有の葉のクレート。プロセスの形と写す判断は `roots/user_root.rs`。並びは `resolve_roots_from` に入力を 1 つ足す。フックは 4 か所 | 中継と 1 つの規則・約束の 3 ファイルに触らない（最後の 1 タスクを除く）・前例の型に沿う | クレートが 1 つ増える | **採用** |
+
+## Design Decisions（ギャップ分析 §5.1 から持ち越した件と、要件の討議で残った B 区分の答え）
+
+### 決定 1: winget の入れ先の見分け（§5.1 の 1）
+- **Alternatives**: ⑴ 綴り `…\WinGet\Packages\<名>` ⑵ winget の控え `.db` ⑶ ARP のレジストリ ⑷ 組み合わせ。
+- **Selected**: ⑵ の形。実行ファイルのフォルダの直下に、`Areka.Areka.Portable_` で始まり `.db` で終わるファイルが在るかを見る（大文字と小文字は区別しない）。
+- **Rationale**:
+  - 利用者向け・機械の全員向け・根の付け替え・`--location`・winget-pkgs の出どころの、どれでも当たる。
+  - ファイルの一覧 1 回で済み、`windows` の機能を足さない。
+  - ⑴ は、根の付け替えと `--location` で外れる。
+  - ⑶ は最も確かだが、3 つの鍵の見方（64 ビット・32 ビット）とレジストリの機能の追加が要る。⑵ で外れる場面も無い。
+- **Trade-offs**:
+  - 入れ先のフォルダを丸ごと別の場所へ写して使うと、控えも付いて来るので「winget の入れ先」と見なす。書ける根を使う形になるだけで、害は無い。
+  - winget が名前の規則を変えると外れる（Revalidation Triggers）。機械の全員向けは決定 2 で拾える。
+- **Follow-up**: 実測で、winget-pkgs から入れた形の `.db` の名前を記録する。
+
+### 決定 2: 書けるかの見分け（§5.1 の 2）
+- **Selected**: 実行ファイルのフォルダのハンドルを `FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY` で開き、すぐ閉じる。
+  - `PermissionDenied` → 書けない。
+  - ほかの失敗 → 分からない（今の形のままにして warn）。
+  - 見るのは実行ファイルのフォルダだけ。
+- **Rationale**: 何も作らない（要件 1.4・4.1）。権限の確かめは OS に任せる。
+- **Trade-offs**: 「フォルダには書けるが `profile\` だけ書けない」のような部分の権限は拾わない。その失敗は `write-failure-notice` の確かめが拾う。
+
+### 決定 3: 判断を areka と中継で 1 つにする置き場（§5.1 の 3）
+- **Selected**: 新しい葉のクレート `crates/areka-user-data`（依存は `std`・`tracing` だけ・`publish = false`）。中に置く物:
+  - 判断（`decide`）・場所・記憶の置き場（`app_profile_dir`）。
+  - プロセスのはじめの準備（`establish`）: 書ける根を作る・記憶を引き継ぐ・記録を残す。
+  - 写す手続き（`copy_tree_atomic`）。
+- **Rationale**:
+  - 中継は `areka` に依存できない。`areka-mcp` は MCP の部品なので、置くと意味がずれる。
+  - 2 か所に写すと、今の中継の `from_values` のように黙って食い違う。
+  - 記録の文は ASCII にする（中継が標準エラーへ出すため・道具が端末へ出す文は ASCII の決まり）。`event` の欄で areka の記録とそろえる。
+- **Trade-offs**: クレートが 1 つ増える（ワークスペースは `crates/*` なので自動で入る）。
+
+### 決定 4: 形を持つ所（§5.1 の 4）
+- **Selected**: `crates/areka/src/roots/user_root.rs` の `OnceLock`（`exe_location` と同じ型）。`BootContext` には持たせない。
+- **Rationale**:
+  - `BootContext` を組むのは `main.rs`（約束のファイル）。
+  - `default_app_profile_dir` の中身を替えれば、全部の読み手がそろう（要件 5.6）。
+  - モジュールを `roots/` の下に置くのは、`main.rs` でモジュールを宣言しないため。
+
+### 決定 5: 切替のときの写しのスレッド（§5.1 の 5）
+- **Selected**:
+  - 切替: UI スレッドで同期に写す（`boot_into` の中）。
+  - 最初の起動: 窓を開く前に写す（`resolve_boot_from`）。
+  - インストール: 背景のスレッドで写す（`areka-nar` が答えを尋ねる所）。
+- **Rationale**:
+  - 切替はすでに「降ろす → 窓を閉じる → ゴーストを読んで起こす」の同期の手続き。写しは、それと同じ大きさの読みを 1 回足すだけ。
+  - 写すのは、同梱の物 1 つにつき一生に 1 回。
+  - 背景に出すと、切替の段に「写し中」の状態が 1 つ増え、`ghost_switch.rs`（917 行）の余裕を食う。
+- **Trade-offs**:
+  - 書けない所へ展開した大きいゴーストでは、初回の切替が写す間だけ固まる。
+  - `user_data_copied` の `ms` で実測し、長ければ背景へ出す（design の Open Questions 1・設計の討議へ）。
+
+### 決定 6: 写しの作業フォルダと写す部品（§5.1 の 6）
+- **Selected**:
+  - 棚は `<書ける根>\.copy-work\<pid>-<連番>\`。`.nar-work` は使い回さない。
+  - 部品は標準ライブラリで書く（`areka-nar` から借りない）。
+  - リンク（シンボリックリンク・ジャンクション）は辿らない。在れば写しを失敗にして、元を使う。
+  - 読み取り専用の属性は落とす。
+  - 入れ替えの先が在れば負け（`Raced`）として自分の作業を捨て、在る方を使う。
+- **Rationale**:
+  - `areka-nar` の棚の片付けは、他の走行の作業フォルダを消す。
+  - 写す部品を公開して借りると、`.nar` の手続きの境界が広がる。
+  - リンクを辿ると、書ける根の外の物まで写しうる。
+- **Trade-offs**: プロセスが写す途中で落ちたときの残骸は、自動では片付けない（ponytail: 要るなら `establish` で古い項目を消す）。
+
+### 決定 7: 入れ直し・supplement の写しの置き場（§5.1 の 7）
+- **Selected**: `CatalogDestinations::answer`（`InstallRoots` の答え）の中で写す。失敗したら元の根を答える。要件 4.7 の「元を使って続ける」と一致するので、答えの型は `PathBuf` のままでよい。
+- **Rationale**:
+  - `areka-nar` は配置ごとに 1 回だけ尋ねるので、写すのも 1 回。シェル・supplement の宛先ゴースト（`existing_target_ghost`）も同じ答えを通る。
+  - `install_into` の前段で書庫の宛先を引き直す案は、`areka-nar` の計画の規則（同梱のバルーンの名前など）を areka の側に写すことになる。
+  - `areka-nar` の計画で読み元と書き先を分ける案は、`.nar` の展開の中身に手を入れる（範囲外）。
+- **Trade-offs**: 利用条件で「いいえ」を選ぶなどして入れなかったときも、計画の時点で写しは済んでいる。写しは起こすときにどのみち作られる物なので、害は無い。
+
+### 決定 8: 写しの判断の条件（§5.1 の 9 と要件 3.7 の組み合わせ）
+- **Selected**:
+  - 最初に全部は写さず、1 体ずつ書く直前に写す（要件 4.3・4.5 の字面）。
+  - 写すのは、実行ファイルの隣の根の置き場の直下の物で、並びの上で書ける根が実行ファイルの隣の根より上に在るとき。
+  - `AREKA_ROOT` のときは並びに書ける根が無いので、写さない（要件 3.4）。
+- **Rationale**:
+  - 写しが上の根として下の同梱の物を隠すときだけ、写しと一覧・切替・更新が食い違わない。
+  - 利用者が「置き場を先頭へ ▸」で実行ファイルの隣を上へ動かしたら、その選びのとおり実行ファイルの隣を使う（要件 3.7 と同じ向き）。
+- **Follow-up**: 設計の討議へ（design の Open Questions 2）。
+
+### 決定 9: 書ける根の場所の環境変数の名前（§5.1 の 12）
+- **Selected**: `AREKA_USER_ROOT`。
+  - 在れば、要件 1.1・1.2 に関わらず書ける根を使う形にする（要件 1.3）。
+  - 空・相対の値は「決められない」として error を残し、今の形で続ける。
+  - `AREKA_PROFILE_DIR` も在るとき、記憶は `AREKA_PROFILE_DIR` に置く（要件 5.1）。
+- **Rationale**: `AREKA_ROOT`（根の並び）と対になる語で、「利用者の根」を指す。`AREKA_` の名前空間・ドメインの語の決まりに沿う。
+
+### 決定 10: 記憶の引き継ぎの「記憶が在る」（§5.1 の 13）
+- **Selected**:
+  - 「`<exe_dir>\profile\areka` がフォルダで、`<書ける根>\profile\areka` が無い」ときに、`profile\areka\` を丸ごと（`mcp-bridge\` を含む）写す。
+  - 引き継ぎは、areka と中継の両方の `establish` が行う。先に起きた方が写し、同時なら `rename` で先に入れ替えた方が勝つ。
+- **Rationale**:
+  - 中継が先に起きて `profile\areka\mcp-bridge\` を作ると、書ける根の側に `profile\areka` が在ることになり、areka の記憶を引き継げなくなる。中継も同じ準備を通せば、これが起きない。
+  - 中身の鍵（`sylphya.toml`）で見る案は、在るファイルと無いファイルを混ぜ合わせることになり、半端を残さない形にできない。
+
+### 決定 11: 中継の控えの 2 つの形（§5.1 の 14）
+- **Selected**:
+  - 隣に `areka.exe` が在る中継は、areka と同じ記憶の置き場の下の `mcp-bridge\`。
+  - 隣に無い中継は、今どおり `%LOCALAPPDATA%\areka\mcp-bridge\`（書ける根の直下に並ぶ）。そろえ直さない。
+- **Rationale**: 要件 6.2 の字面（今どおり）。隣に `areka.exe` が無い中継は、開発の机で `cargo install` した物だけ。
+
+### 決定 12: 並びの記録の根ごとの出どころ（§5.1 の 15）
+- **Selected**:
+  - `root_listed` の各行に欄 `user_root` を足す（書ける根なら `default`／`env_var`、ほかは空）。
+  - `ResolvedRoots` には欄を足さず、`log_roots` が `listed_user_root()` を見て付ける。判断は `log_roots_with` に置き、値で確かめる。
+- **Rationale**: `ResolvedRoots` に欄を足すと、約束のファイル `roots/edit.rs` の `apply` が壊れる。
+
+### 決定 13: 「置き場を先頭へ ▸」の置き場（討議で引き取った件）
+- **Selected**:
+  - 判断 `decide_front` と入口 `move_to_front` を `roots/edit.rs`（`decide_add`／`decide_remove` の隣）に置き、今の `apply` を呼ぶ。
+  - メニューの項目（`Frame::RootFront`）も、同じ最後のタスクに入れる。
+- **Rationale**:
+  - 並びを変える手続きを 1 か所にそろえる。記憶へ書く口と、書けなかった結果の受け渡しを 2 つに割らない。
+  - `write-failure-notice` の着地の後の `apply` の形に合わせる（要件 3.9）。
+
+## Synthesis（一般化・作るか借りるか・簡素化）
+- **一般化**:
+  - 「書く前に写す」を、5 つの場面（起こす・入れ直す・シェル・supplement・バルーンの更新）ごとに書かず、1 つの口 `writable_copy(roots, kind, dir)` にした。フックは 4 か所に 1〜数行ずつ。
+  - 形の判断と記憶の置き場は、areka と中継で同じ関数を使う。
+- **作るか借りるか**:
+  - 写す部品は標準ライブラリで作る（`areka-nar` の部品は非公開で、借りると境界が広がる）。
+  - 書けるかの確かめは、OS の権限の確かめ（ハンドルを開く）を借りる。
+  - winget の見分けは、winget 自身の控えを借りる。
+  - 新しい外部依存は 0。
+- **簡素化**:
+  - `BootContext`・`ResolvedRoots` に欄を足さない（`OnceLock` の口から読む）。
+  - 写しの版の記録は持たない（要件 4.9 の裁定）。
+  - 作業フォルダの残骸の自動の片付けは足さない。
+  - 中継の「隣に `areka.exe` が無い」形は、そろえ直さない。
+
+## Risks & Mitigations（設計の段）
+- 写しの経路の漏れが要件 4.1 の「0」を壊す — design の「書く経路の表」で、書く物の行き先を全部挙げた。実測で、実行ファイルのフォルダの下に areka が作った物を数える。
+- winget の控えの名前の規則が変わる — Revalidation Triggers に載せた。機械の全員向けは、書けるかの確かめが拾う。
+- 切替の写しで UI が固まる — 写すのは一生に 1 回で、`ms` を記録して実測する。長ければ背景へ出す（設計の討議へ）。
+- `write-failure-notice` が `apply` の形を変える — 「置き場を先頭へ ▸」のタスクを最後に置き、着地の後の形に合わせる。
+
+## References（設計の段）
+- [winget-cli PortableInstaller.cpp](https://github.com/microsoft/winget-cli/blob/master/src/AppInstallerCLICore/PortableInstaller.cpp) — 控えのファイル `<製品コード>.db` と ARP の記録。
+- [winget-cli PortableFlow.cpp](https://github.com/microsoft/winget-cli/blob/master/src/AppInstallerCLICore/Workflows/PortableFlow.cpp) — 製品コードの組み方と、控えを作る条件（書庫のとき）。
+- [winget-cli Runtime.cpp](https://github.com/microsoft/winget-cli/blob/master/src/AppInstallerCommonCore/Runtime.cpp) — portable の入れ先の根の既定と付け替え。
+- [winget の設定（Settings.md）](https://github.com/microsoft/winget-cli/blob/master/doc/Settings.md) — `portablePackageUserRoot`／`portablePackageMachineRoot`。
+- [CreateFileW（learn.microsoft.com）](https://learn.microsoft.com/windows/win32/api/fileapi/nf-fileapi-createfilew) — フォルダを開く `FILE_FLAG_BACKUP_SEMANTICS`。
