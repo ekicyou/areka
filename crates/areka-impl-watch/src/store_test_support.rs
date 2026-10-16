@@ -49,7 +49,7 @@ pub(super) fn home_in(root: &TempPath) -> Home {
 pub(super) fn store_in(root: &TempPath) -> Store {
     Store {
         home: home_in(root),
-        clock: Box::new(|| T0),
+        clock: Box::new(|| Ok(T0)),
         presence: Box::new(Everyone),
         pause: Box::new(|_| {}),
         log: Box::new(|_| {}),

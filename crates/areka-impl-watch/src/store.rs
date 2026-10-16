@@ -43,8 +43,8 @@ const REPLACE_PAUSE: Duration = Duration::from_millis(20);
 /// 置き場所のファイルへの口。
 pub struct Store {
     home: Home,
-    /// いまの時刻（UNIX 秒）。
-    clock: Box<dyn Fn() -> u64>,
+    /// いまの時刻（UNIX 秒）。取れなければ失敗（値を代えない）。
+    clock: Box<dyn Fn() -> Result<u64, WatchError>>,
     presence: Box<dyn Presence>,
     /// 試しの間の待ち（本物は眠る）。
     pause: Box<dyn Fn(Duration)>,
@@ -72,7 +72,7 @@ pub fn open(home: Home, command: &'static str) -> Result<Store, WatchError> {
     let presence = LockFilePresence::new(&home);
     Ok(Store {
         home,
-        clock: Box::new(unix_now),
+        clock: Box::new(|| unix_seconds(SystemTime::now())),
         presence: Box::new(presence),
         pause: Box::new(std::thread::sleep),
         log: Box::new(move |event| write_line(command, event)),
@@ -95,7 +95,14 @@ fn write_line(command: &'static str, event: &Event) {
     }
 }
 
-/// 本物の時計（UNIX 秒）。
+/// 本物の時計の芯（UNIX 秒）。1970 年より前なら 0 に代えずに失敗する。
+fn unix_seconds(at: SystemTime) -> Result<u64, WatchError> {
+    at.duration_since(UNIX_EPOCH)
+        .map(|since| since.as_secs())
+        .map_err(|_| WatchError::io("read the clock", &io::Error::other("before 1970")))
+}
+
+/// 本物の時計（UNIX 秒）。待ちの口だけが使う。
 pub(crate) fn unix_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -113,6 +120,12 @@ impl Drop for StateLock {
 }
 
 impl Store {
+    /// いまの時刻（UNIX 秒）。状態を変える呼び出し・全部消す・端末の要約はここから取る。
+    /// 失敗はここでログに 1 行残して返す。
+    pub(crate) fn time(&self) -> Result<u64, WatchError> {
+        (self.clock)().inspect_err(|err| tracing::error!(error = %err, "[store] clock failed"))
+    }
+
     /// 状態を変える 1 回。排他の中で 読む → `f`（判断）→ 変わっていれば置き換え書き → 読み物。
     ///
     /// `f` へ渡すのは、読んだ状態・いまの時刻・生死の口。`f` の返す 2 つ目の値がそのまま返る。
@@ -133,7 +146,7 @@ impl Store {
         f: impl FnOnce(&mut State, u64, &dyn Presence) -> (Applied, T),
     ) -> Result<T, WatchError> {
         let _lock = self.lock()?;
-        let now = (self.clock)();
+        let now = self.time()?;
         let (mut state, rebuilt) = self.load(now)?;
         // 退避はもう起きたことなので、この後の書きを待たずにログへ渡す。
         // 「無かったので作った」は、状態ファイルが書けてから渡す。
@@ -188,7 +201,7 @@ impl Store {
         let Some(state) = self.read_only()? else {
             return Ok(None);
         };
-        self.write_status(&state, (self.clock)());
+        self.write_status(&state, self.time()?);
         let summary = status::render_terminal(&state, self.presence.as_ref());
         Ok(Some(summary))
     }
@@ -203,7 +216,7 @@ impl Store {
 
     fn wipe(&self) -> Result<Option<PathBuf>, WatchError> {
         let _lock = self.lock()?;
-        let now = (self.clock)();
+        let now = self.time()?;
         // 今のファイルは読まない（壊れていても、知らない版でも、退避して空からやり直せる）。
         let backup = self.set_aside("cleared", now)?;
         (self.log)(&Event::Cleared {
