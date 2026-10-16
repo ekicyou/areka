@@ -98,3 +98,21 @@
 - 要件定義のモデル: Opus（決めごとは起票のときに済んでいる。残る議題は、更新を断ったときに送るイベントを ukadoc から選ぶ 1 件）。
 - 分割の案: なし。
 - 見つけた穴・古くなった記述: なし。
+
+## 2026-10-16 棚卸㉖の再測定（main `4cf510c1`）
+- 前提の変化: 先に要る `baseware-root-list` が 10-16 に着地した（PR#317）＝待ちは解けた。
+  - 「フォルダ名 → 場所」を引く口は `crates/areka-ghost/src/catalog_roots.rs` に集まった（`list_ghosts`・`list_balloons`・`find_ghost`・`find_balloon`・`install_root`・`survey`。どれも同じファイルの中の和を組む関数 `union` を通る）。エイリアスの段は `union` の手前に 1 枚足せば、メニュー・切替・`\![open,…]`（`crates/areka/src/readme/opener.rs` の `named_folder`）に全部効く。
+  - 一覧の各項目は自分の根を持つ（`catalog.rs` の `GhostEntry.root`・`BalloonEntry.root`）。シェルの項目（`ShellEntry`）は持たない。
+  - 根を決める環境変数と記憶を読む口は `crates/areka/src/roots/mod.rs` だけ。記憶の鍵の前例は `crates/areka-sylphya/src/persist/{mod,format}.rs` の `BasewareRoots` の行。
+- 気を付ける所: 起動中のゴーストへ入れ直すときの宛先は、ゴーストの場所の親の親を根とみなして組む（`install/destination.rs` の `running_root` 41〜63 行と `install_into` 135〜140 行）。エイリアスの先ではこれが成り立たないので、書き込みを断る分岐はこれより前に置く。
+- シェルの場所を自分で組む所は 3 つ: `catalog.rs` の `scan_shells`（150 行）・起動のシェルを決める `crates/areka/src/boot_resolve.rs` の `decide_boot_shell`（364〜382 行）・ゴーストを載せる読み手 `crates/areka-parsers/src/package/resolve_shell.rs`（28 行の `SHELL_ROOT`）。シェルのエイリアスはこの 3 つに要る。
+- 触るファイル: `catalog_roots.rs`・`catalog.rs`・`roots/mod.rs` と新しい読み手・`persist/{mod,format}.rs`・`install/destination.rs`・`update/desk.rs`（書き込みを断る）・上のシェルの 3 か所・`dist/README.txt`（自分の行）。棚卸㉓の「`boot_config.rs`（環境変数）」は古い。`menu/shell_frame.rs` は一覧を受け取るだけなら触らない。
+- 規模: 10〜14 タスク（シェルの場所の 3 か所が見えた分）。分割の案: 切らない。
+- 先に要るもの: 働きの上では無い＝先頭。
+- 重なり:
+  - 今の版: `user-data-root` と `roots/{mod,resolve}.rs`・説明書の「■ 置き場」で重なりうる＝同じウェーブに置かない。`write-failure-notice` とは `boot_resolve.rs` だけで、関数が別（向こうは 391〜579 行の印と記録、こちらは `decide_boot_shell`）。
+  - ほか: `config-parse-diagnostics`（記録を出す所を `package/` に選んだとき）・`property-name-case-fold`（`persist/` を畳むとき）・`install-live-target-hazards`（`install/`）・`network-update-canon-order`・`update-check-options`（`update/`）。
+- 版の席: 版に縛らない列。`user-data-root` とはファイルが重なり、`write-failure-notice` だけのウェーブでは見立ての上限 14 が向こうの下限 7 を超える＝今の版の間は隙間に入らない。
+- 人の手: 要らない（作業ツリーを `target\` の下に置いて確かめられる）。静かな机も全体テストの比べも要らない。依存も足さず、emo-text にも触らない。
+- 優先度の区分: A（開発者「特定のディレクトリを、特定 ID のゴースト・シェル・バルーンとしてエイリアス出来たら便利」）。要件定義のモデル: Opus（`baseware-root-list` の口の上に段を 1 枚足すだけ）。
+- 古くなった記述: 本文 15 行目の「着地の後は…前提」は今は事実。

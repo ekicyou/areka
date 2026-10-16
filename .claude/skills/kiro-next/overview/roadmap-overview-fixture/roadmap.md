@@ -3,7 +3,7 @@ inclusion: manual
 updated_at: 2026-01-02
 ---
 
-# Roadmap — 見本（tools/roadmap-overview.ps1 -SelfTest の入力・本物の roadmap.md の難所を写した断片）
+# Roadmap — 見本（roadmap-overview.ps1 -SelfTest の入力・本物の roadmap.md の難所を写した断片）
 
 > この断片は道具の自分の検査だけが読む。中身は架空の spec で、本物の roadmap.md とは関係しない。
 
@@ -53,6 +53,12 @@ updated_at: 2026-01-02
 |---|---|---|---|
 | **C9**（2 本並走・**Opus** 2） | ① `beta-next`（A・`c.rs` を触る） ∥ ② `areka-P0-theta-follow` | `/kiro-start` | 重なり 0 |
 | **次のウェーブの候補** | `omega-last` | — | 2 行目は着手中にしない |
+
+```
+Wave C9 2本
+Opus
+/kiro-start areka-P0-beta-next
+```
 
 ## spec 台帳（brief を持つ 8 本・見本）
 

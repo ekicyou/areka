@@ -85,3 +85,21 @@
   - `balloon-font-file` とは `actor_attach.rs` が重なる（あちらは普通のバルーンを登録する所を触る）＝同じウェーブに置けない。`text-typesetting` の前半とは `region.rs` が重なる。
   - 検査を兄弟の新しいファイルに置くと、emo-text の `lib.rs` の一覧（今 76 本）の席を使う。席を使う spec（`range-choice-tag` など）と並べるなら、今ある検査ファイルへ足す。
   - 並べられる相手: `range-choice-tag`・`choice-ranges-one-function`・`font-size-keywords`・`choice-marker-styling`（重なり 0）。
+
+## 2026-10-16 棚卸㉖の再測定（main `4cf510c1`）
+
+- **前提の変化**: `balloon-text-bugs` が着地した（10-16）。あちらは潰れた描画範囲の警告を、毎フレーム呼ばれる `TextRegion::resolve`（`crates/areka-emo-text/src/region.rs`）から外し、登録の口（`actor_attach.rs` の `note_region_collapse`）で「潰れた」「戻った」の変わり目に 1 回だけ出す形にした。本 spec の「状態が変わったときだけ出す」案は、この先例と同じ形で作れる（origin を書いていないことの記録を、登録の口の隣の「範囲外ゆえ無視した origin」の警告と同じ場所へ移す）。
+  - 毎フレームの `debug!` 2 種類は main に同じ形で残っている（`region.rs` の `resolve_origin_component` の「未指定の origin 成分を書字開始角へ寄せる」・`actor_attach.rs` の `refresh_actor_binding` の「同値のため再結線・再生成を行わない」）。焼き込みの警告（`crates/areka-emo-atlas/src/lib.rs` の全透明の element）も同じ。
+  - 上の棚卸㉔の「`balloon-text-bugs` の件 2 が `region.rs` で止める設計を選ぶと重なる」は解けた（あちらは着地済み）。
+- **触るファイル**（行数）: `crates/areka-emo-text/src/region.rs`（495）・`actor_attach.rs`（310）・origin の記録を登録の口へ移すなら `actor_decoration.rs`・`crates/areka-emo-atlas/src/lib.rs`（686）。
+- **新しいファイルと依存**: 検査を今ある `region_tests.rs`・`actor_region_warn_tests.rs`（登録の口の警告の回数を数えている）と `areka-emo-atlas` の `lib.rs` の中の検査へ足せば、emo-text の `lib.rs` の一覧の席を使わない。依存の追加は無い。
+- **規模**: 3〜5 タスク（`trace!` へ下げるだけなら 2〜3）。
+- **人の手・机**: 人の手の確かめは要らない。行数は決定論の検査（記録を捕まえて数え、上限と比べる）で固定できる。直した後の数え直しは、有界の自動終了つきの短い実走（約 50 秒・記録を絞り込んで数える）で AI が回せる。静かな机・前後の全体テストの比べ・長い負荷の走行は要らない。
+- **先に要るもの**: 無い。v0.0.3 の 2 本とは触るファイルが重ならない。同じウェーブに置けない相手: `region.rs` を触る `bottom-row-text-clip`（v0.1.0）と `text-typesetting` の前半、`actor_attach.rs` を触る `balloon-font-file`。`range-choice-tag`・`choice-ranges-one-function`・`font-size-keywords` とは重なり 0。
+- **優先度の区分**: C のまま（バグでない持ち越し）。
+- **要件定義のモデル**: Opus のまま。
+- **分割の案**: 切らない。
+- **見つけた穴・古くなった記述**:
+  - 同じ `TextRegion::resolve` の中に、毎フレーム出うる `debug!` がほかに 2 つある（`region.rs` の `resolve_or` の「未指定座標成分を既定辺へ縮退する」＝validrect を書いていないとき、`resolve_origin_component` の「宣言された origin 成分が文字を描いてよい範囲の外にある」）。実測の記録に出ていないのは同梱のバルーンが書いているから。同じ形の洪水になるので、一緒に扱うかを要件で決める。
+  - 上の棚卸㉔の行数（486・251）は古い。
+  - `crates/areka-emo-atlas/src/lib.rs` の 164〜166 行目と 167〜169 行目に、同じ 3 行の説明が 2 回続いている（その場で直せる）。

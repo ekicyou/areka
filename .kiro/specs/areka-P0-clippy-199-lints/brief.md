@@ -121,3 +121,19 @@ lint ごとに clippy の提案どおりの機械的な直しを当てる（`col
   - roadmap の「`wintf-tooltip` の持ち越し」が「申し送った」と書く 5 件は、この brief に節が無かった: `cargo clippy --workspace --all-targets` が止める水準の指摘 5 件で止まる（`crates/areka-emo-text/tests/` の `line_pitch_readback_test.rs`・`choice_fixture_test.rs`・`emo2_fixture_e2e_test.rs`・`decoration_readback_test.rs` と、kanade の `actor_raise_reply_tests.rs`。`absurd_extreme_comparisons` など）。
   - roadmap の「段 1（`dola`・`shiori-abi`・`shiori-host32-host/tests/`）は空き席でも取れる」は、`shiori-abi` が上のとおり条件つきになった。
   - 完了 `mcp-ghost-name-match` の記録に、`crates/areka/src/mcp/mcp_tests.rs` の `ok().expect()` 4 か所（10-03 から在る）。
+
+## 2026-10-16 棚卸㉖の再測定（main `4cf510c1`）
+
+`cargo clippy` は走らせていない（共通の決まり）。git の履歴と完了した spec の記録からの数え。
+
+- 前提の変化: 段 1 のファイル（`dola` の `validate/`・`runtime/`・`compile/` と、`shiori-host32-host/tests/` の `lifecycle_cyclic_e2e.rs`・`lifecycle_kill_e2e.rs`）は 10-10 から 1 行も動いていない。`balloon-text-bugs` が `dola` で触ったのは台本の再生の側（`cue/runtime.rs`・`cue/sink.rs`）とそのテストだけで、段 1 のフォルダの外。＝段 1 の指摘は前のまま（`dola` 23 か所・`shiori-host32-host` のテスト 6 か所・`shiori-abi` 1 か所）。
+- 段 2 は増えた見込み: ウェーブ C7 で約 2.7 万行が入った（`areka` の置き場の並び〔`roots/` ほか〕・emo-text の下線と描く範囲・`shiori-host32-host` の `process_host.rs` と新しいテスト `process_host_image_tests.rs`）。各 spec の検証は自分のクレートしか clippy を見ていない。`balloon-text-bugs` の記録は、emo-text のテスト 2 か所（`line_pitch_readback_test.rs` と `emo2_fixture_e2e_test.rs` の比べの式）が止める水準の指摘で落ちると書く（棚卸㉓の穴と同じもの・今も残る）。
+- ツールチェーンの版はリポジトリで固定していない（版を書いたファイルが無い）＝着手の日の clippy で数え直す。
+- 触るファイル: 8 クレート（`dola`・`shiori-abi`・`shiori-host32-host`・`areka-emo-compose`・`areka-seriko`・`areka-emo-text`・`areka-kanade`・`areka`）。場所は最初のタスクで測る。
+- 規模: 12〜18 タスク（`areka` の分を上げた）。段 1 だけなら 3〜5。新しい依存は足さない。人の手の確かめ・静かな机・前後の全体テストの比べは要らない。
+- 先に要るもの: 働きの上では無し。ただし段 2 の `areka` は今の版の 2 本と同じファイルに触る見込み（起票のときの指摘に `boot_config.rs` があり、`main.rs`・`boot_resolve.rs`・`emo2_boot/` も触られたばかり）＝丸ごと 1 本のままでは今の版の席に入らない（上限 18 も `user-data-root` の下限 12 を超える）。
+- 段 1 だけなら今の版の 2 本と重なり 0。`shiori-abi` は `shiori4-api` と、`shiori-host32-host/tests/` の 2 本は `test-roots-under-target` が例外表の直しまでやるときに重なる。
+- 優先度の区分: C（バグでない持ち越し）。
+- 要件定義のモデル: Opus。
+- 分割の案: 段 1（`dola` の 3 フォルダ・`shiori-host32-host/tests/` の 2 本・3〜5 タスク）を別の 1 本に切ると、今の版のどのウェーブの空き席にも入れられる。切らなければ、今の版の 2 本が着地してから 1 本で出す。切るかは開発者が決める（20 を超えるからではなく、席に入れるための切り方）。
+- 見つけた穴・古くなった記述: 起票のときの「`areka` 約 19」は棚卸㉓のとおり古い（実数は数倍の見込み）。棚卸㉓が段 2 の重なる相手に挙げた名前（`extent-element-offset`・`mcp-kanade-tools` ほか）は v0.1.0 の spec で、今の版のウェーブでは相手にならない。

@@ -87,3 +87,21 @@
 - 優先度の区分: C のまま。
 - 要件定義のモデル: Opus のまま。
 - 見つけた穴・古くなった記述: 読み手が黙って落とすものが 2 つ増えて見えた。`animation*.name` の行（`seriko-script-triggers` が読むようにする）と、知らない interval の語の後ろの数値（`bind+periodic,5` の `5`）。この spec が先に着地すると前者は「読まなかった行」として記録に出る＝あちらの着地で消えることを、記録の期待に入れておく。
+
+## 2026-10-16 棚卸㉖の再測定（main `4cf510c1`）
+- 前提の変化: 読み手のファイルは棚卸㉔から変わっていない（`kv/parse.rs` 43・`shell/decode.rs` 594・`shell/parse.rs` 28・`shell/lexer.rs` 222・`balloon/parse.rs` 252 行。前の測定から `areka-parsers` の変更は 0）。
+- `baseware-root-list` が入れた `crates/areka-ghost/src/catalog_roots.rs` の効き:
+  - 一覧と引き当て（`list_ghosts`・`find_ghost`・`survey` ほか）は、呼ばれるたびに全部の根の全部のゴーストとバルーンの descript を読み直す（`catalog.rs` の `read_descript` 361〜385 行が `parse_kv` を呼ぶ）。SSP のフォルダを置き場に足すと、メニューを開くたび・名前で引くたびに数百の descript を読む。
+  - ＝読み取りの中で記録を出す案（議題 1 の後者）だと、記録が溢れる。議題 1 は値で返す案を推す理由が強まった。`catalog.rs`・`catalog_roots.rs` は今の入口を使い続けるので触らない。
+- 文字とバルーンの列の頭 `range-choice-tag` との重なり: 0。向こうが触る読み手は台本の `sakura/{decode,model,mod}.rs` で、こちらの `kv/`・`shell/`・`balloon/parse.rs` とは別。emo-text にも触らない。
+- シェルの element の列の頭 `extent-element-offset`（`plan_extent.rs` だけ）とも重ならない。重なるのは `shell/decode.rs` を触る後ろの spec（`animated-image-import`・`collisionex-regions`・`element-clipping-option`・`draw-methods-canon`・`seriko-script-triggers`・`shell-tooltip`・`surfaces-basepos`）と、`balloon/parse.rs` を触る `balloon-markers`・`anchor-style-canon`・`emo-text-canon-residue`。どれも今の版ではない。
+- 記録を出す所はゴーストを載せる所で、設計で選ぶ:
+  - `crates/areka-ghost/src/runtime.rs` の載せる段を選ぶと、`user-data-root`（ゴーストの記憶を動かすときの 591〜596 行）と同じファイルになりうる。
+  - `crates/areka-parsers/src/package/` を選ぶと、`dev-folder-alias`（シェルのエイリアスの `resolve_shell.rs`）と同じファイルになりうる。
+  - どちらも関数は別の見込みだが、並べる前に照らす。
+- 触るファイル: 上の読み手 5 つと各兄弟のテスト・記録を出す所 1 つ。
+- 規模: 9〜13 タスク（変わらず）。分割の案: 切らない。
+- 先に要るもの: 無し＝先頭（作者が確かめる道の `mcp-reload` は無くても起動の記録で確かめられる）。
+- 版の席: 今の版の 2 本とは、記録を出す所を `runtime.rs` にしなければ重なり 0。1 本だけの席は取らない（`areka-parsers` は記録の部品に依存済み・emo-text に触らない）。人の待ち・静かな机・全体テストの比べも要らない。ただ見立ての上限 13 が `user-data-root` の下限 11 を超える＝今の版の隙間には入らない。
+- 優先度の区分: C（作者の調べものを助ける改良・利用者から見える不具合ではない）。要件定義のモデル: Opus。
+- 古くなった記述: 本文の「Adjacent」の `seriko-trigger-intervals`・`anchor-tag-canon` は着地済み。

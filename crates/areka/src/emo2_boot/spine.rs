@@ -749,14 +749,14 @@ impl SpineHarness {
         // ── move channel＋実 MoveCueSink（wire_emo2_boot 手順4 と同型・S-3 形＝task 9.3） ──
         // talk スレッドの MoveCueSink が送出端、UI スレッドの Emo2Wiring が受信端 move_rx（frame 相
         // drain＝run_move_drain_phase・task 9.2）を保持する。9.1 の throwaway 送出端を実 MoveCueSink へ
-        // 差し替え、production `wire_emo2_boot` の sink 構成（下記のとおり現在は 4 本）を spine でも
+        // 差し替え、production `wire_emo2_boot` の sink 構成（現在は 11 本＝`mod.rs` の `sinks`）を spine でも
         // 忠実に再現する。
         let (move_tx, move_rx) = mpsc::channel::<MoveDirective>();
         let move_sink = MoveCueSink::new(move_tx);
 
         // ── lifecycle channel＋実 BalloonLifecycleSink（wire_emo2_boot 手順4 と同型・task 4.1） ──
         // talk スレッドの BalloonLifecycleSink が送出端、UI スレッドの Emo2Wiring が受信端
-        // lifecycle_rx（バルーン可視性相＝task 4.4 が drain）を保持する。production と同じ 4-sink 構成を
+        // lifecycle_rx（バルーン可視性相＝task 4.4 が drain）を保持する。production と同じ sink 構成を
         // spine でも忠実に再現するため、throwaway ではなく実 sink を登録する。
         let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
         let lifecycle_sink = BalloonLifecycleSink::new(lifecycle_tx, clock.clone());

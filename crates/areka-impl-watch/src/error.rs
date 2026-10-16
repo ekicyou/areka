@@ -13,7 +13,7 @@ use std::path::Path;
 #[derive(thiserror::Error, Debug)]
 pub enum WatchError {
     #[error(
-        "AREKA_IMPL_WATCH_HOME is not set or empty. Set it to a folder (for example %USERPROFILE%\\.areka-impl-watch) and copy areka-impl-watch.exe there. See doc/impl-watch.md"
+        "AREKA_IMPL_WATCH_HOME is not set or empty. Set it to an absolute folder (for example %USERPROFILE%\\.areka-impl-watch), then run tools\\impl-watch-install.ps1 to build and place areka-impl-watch.exe there. See doc/impl-watch.md section 2"
     )]
     HomeUnset,
     /// `dir` は環境変数の値そのまま。ASCII の外の字は出すときに `\u{...}` へ逃がす。

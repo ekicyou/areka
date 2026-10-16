@@ -119,13 +119,14 @@ Last line: "briefs written: N/N".
 ## Step 7 — Write the roadmap (one script)
 Do all roadmap edits in one Python script in the scratch directory (run with `python -X utf8`; read with `newline=''`, split on the file's own line ending — the working copy of `roadmap.md` may be LF while `roadmap-history.md`/`focus.md` are CRLF; assert every anchor/replace target exists):
 - Append to `roadmap-history.md` a section "## <date> 棚卸NN退避（`roadmap.md` から逐語で移した・main `<BASE>`）" holding verbatim: the old wave table and its sub-notes, the old serial lanes, memo bullets promoted to briefs, the old "直接修正候補", the previous verdict section.
-- In `roadmap.md`: new "ウェーブ編成（着手順の正本・<date> 棚卸NN）" (rules, remaining in-flight row, the new wave row with files and promises, next-wave candidates, 保留); serial lanes with targeted edits (splits and new specs inserted, inventory note); spec ledger heading with the new real count and its history, split notes on the original rows, new rows before the first 据え置き row; memo minus promoted items; new "直接修正候補" (what was fixed, what was handed to specs); living rule 1 if the priority rules changed; new "棚卸NNの裁定" section (what was re-measured, fixes, splits and why, promotions and what stayed, the wave and why, Fable/Opus split, broken same-wave promises, holes found, decisions needed); a theme section "棚卸NNの分割と起票" (Existing Spec Updates + Specs (dependency order)) before "## 予約"; `updated_at` and the header note.
+- In `roadmap.md`: new "ウェーブ編成（着手順の正本・<date> 棚卸NN）" (rules, remaining in-flight row, the new wave row with files and promises, next-wave candidates, 保留, and right after the table the wave's start commands as the section's only fenced code block — a one-line bold caption `**<Cn> の開始コマンド**（…）:` then the block exactly as in Step 10 item 4; the overview page reads the first fenced block of this section and shows it with a copy button, developer 2026-10-16 「ウェーブのコード表示をコピペボタン付きで」); serial lanes with targeted edits (splits and new specs inserted, inventory note); spec ledger heading with the new real count and its history, split notes on the original rows, new rows before the first 据え置き row; memo minus promoted items; new "直接修正候補" (what was fixed, what was handed to specs); living rule 1 if the priority rules changed; new "棚卸NNの裁定" section (what was re-measured, fixes, splits and why, promotions and what stayed, the wave and why, Fable/Opus split, broken same-wave promises, holes found, decisions needed); a theme section "棚卸NNの分割と起票" (Existing Spec Updates + Specs (dependency order)) before "## 予約"; `updated_at` and the header note.
 - Then `focus.md` (counts line: completed entries, spec.json-active, brief count, priority rule), and stale bits of `product.md` / `structure.md`. Grep for old wording of changed rules and for references to moved sections.
 - Verify: `b'\r\r'` count 0, no lone `\n` in CRLF files, `git diff --numstat` proportional to the edit (a whole-file diff means broken line endings).
 
 ## Step 8 — Verify and commit
 - Run `cargo test -p ukadoc-survey` (skip and say so while a quiet-desk hold is active; run it when resumed).
 - Commit on the worktree branch, no push: `docs(roadmap): 棚卸NN＝<what landed>の後の再測定・<n> 本を分割・<m> 本を起票・ウェーブ <Cn> を <k> 本で組む`, with a short bullet body and the required attribution trailer.
+- **Overview page** (developer 2026-10-16: 「`roadmap-overview-2026-10-16.html` っぽく、最新の状況を html に」「URL をセッションで公開」): after the commit, build the page from the committed roadmap with `pwsh -NoProfile -File <worktree>\.claude\skills\kiro-next\overview\roadmap-overview.ps1 -OutFile <scratch>\roadmap-overview-latest.html` (expect `OK wrote …`; `WARN` lines are roadmap mismatches to mention in the report, `FAIL` means no page — report it and go on). The file stays in the scratch directory and is never committed (no new `doc/roadmap-overview-*.html` from this skill). Read the whole generated file before publishing (the Artifact rule for files Claude did not write), then publish it with the `Artifact` tool as a new private artifact: `file_path` = that file, `title` = `roadmap-overview-latest`, `icon` = `map`, `description` = `棚卸NN（main <BASE>）の時点のロードマップの俯瞰`. Keep the returned URL for the report. If publishing is refused or fails, say so in the report and go on.
 
 ## Step 9 — Memory
 - Update the priority-class memory if the rules changed; write the inventory memory (base SHA, counts, wave, splits, new briefs, pending items, branch/commit) and add it to the "進行中" part of `MEMORY.md`.
@@ -148,6 +149,9 @@ Opus
 /kiro-start areka-P0-<name>
 ```
 5. Decisions needed from the developer (none of them block the wave) and any manual steps.
+6. The overview page URL from Step 8 (one line, with the inventory number and base SHA).
+
+Write this whole report as ordinary text **before** the approval gate's question (and before any `wrap_up` call). The gate's question never replaces the report (developer 2026-10-16: 「ウェーブを教えてもらってないのに？」 — the wave was missing when only the approval box was shown).
 
 ## Step 11 — Approval gate (STOP here)
 - After the report, STOP. Do not push, open a PR or merge.

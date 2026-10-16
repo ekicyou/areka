@@ -74,3 +74,18 @@
 - **要件定義のモデル**: Fable（スレッドをまたぐ受け手の引き継ぎ・窓が閉じた後に子が出す記録の扱い＝並行）。
 - **分割の案**: なし。
 - **見つけた穴・古くなった記述**: 背景のスレッドは `spawn_actor` だけで起きていない。素のスレッドで起こす所が本番に 7 か所ある（`crates/areka/src/install/desk.rs`・`install/fetch_url.rs`・`emo2_boot/switch_assets.rs`・`mcp/dump_surface.rs`・`readme/opener.rs`・`shiori_host.rs`、kanade の `shiori/probe.rs`）。`spawn_actor` だけを直しても、これらの記録はテストの捕捉に入らない＝範囲に入れるか（同じ引き継ぎを通す小さな共通の起こし方を作るか）を要件で決める。
+
+## 2026-10-16 棚卸㉖の再測定（main `4cf510c1`）
+
+- 前提の変化: 記録の捕捉の部品（`crates/log-capture-kit/`）とアクターの起こし方（`crates/areka-actor/src/spawn.rs`・360 行）は、棚卸㉓から 1 行も動いていない。走り始めの差し込み口は今も「アクター名だけを受ける関数・プロセスに 1 度だけ」で、本番の役割名の登録（`crates/areka/src/thread_roles.rs`）が使っている。捕捉は今も呼んだスレッドの中だけで受け手を差し替える形（`capture.rs` の 66 行目）で、窓の中で書き込みの注目を作り直す（69 行目）。
+- インストールの側は `baseware-root-list` で大きく動いた（`install/` の 13 ファイル・置き場を決める `destination.rs` を新しく足した）。対照に挙げた `install/desk_overwrite_tests.rs`（686 行）は動いていない。
+- 素のスレッドで起こす本番の所が 1 つ増えた: 置き場の並びの係（`crates/areka/src/roots/desk.rs` の 101 行目・`baseware-root-list` が作った）。棚卸㉓の 7 か所と合わせて 8 か所。ほかにゴーストの中継（`areka-ghost` の `relay.rs`）と sylphya の写し（`mirror.rs`）にも素のスレッドが在る。
+- 触るファイル（アクターだけに絞る形）: `crates/areka-actor/src/spawn.rs` と、兄弟の新しいテストのファイル 1 本（今ある `spawn_hook_tests.rs` 60 行へ足してもよい）。要るときだけ `crates/log-capture-kit/src/capture.rs`（107 行）。
+- 規模: アクターだけに絞れば 3〜5 タスク。素のスレッドまで広げると 8〜12 で、`install/desk.rs`・`readme/opener.rs`・`roots/desk.rs`・`shiori_host.rs` などに触る。新しい依存は要らない（`areka-actor` は既に記録の部品を使っている）。人の手の確かめ・静かな机・前後の全体テストの比べは要らない（最後の全体テスト 1 回）。
+- 先に要るもの: なし（先頭）。
+- 今の版の 2 本との重なり: アクターだけに絞り、効いていることの対照を `areka-actor` の中の新しいテストで示すなら 0。brief の対照（`install/desk_overwrite_tests.rs` に手がかりを足す）を取ると、`user-data-root` が触る `install/desk.rs`（展開器へ作業の根を渡す所）の兄弟のテストに触る＝同じウェーブに置けない。＝今の版の席に入れるなら「アクターだけ・対照は自分のクレートの中」の形に限る。その形の上限 5 は `user-data-root` の下限 12 と `write-failure-notice` の下限 6 のどちらより小さい。
+- 気をつけること: アクターのスレッドが捕捉の窓の受け手を引き継ぐと、今まで窓に入らなかった背景の記録が入るようになる。「記録が無いこと」を確かめている既存のテストが赤に変わりうる＝最後の全体テストで洗う。
+- 優先度の区分: C（テストの道具の改善・本番の記録は変えない）。
+- 要件定義のモデル: Opus に改める（棚卸㉓は Fable）。呼んだスレッドの受け手を取って子のスレッドで既定にするのは記録の部品の決まった使い方で、新しい並行や順の保証を設計するのではない。窓が閉じた後の記録の扱いも、受け手の寿命の決めで足りる。
+- 分割の案: なし。素のスレッドまで広げる部分は、要るなら今の版の後に別の 1 本で足す。
+- 見つけた穴・古くなった記述: 棚卸㉓の「素のスレッドは 7 か所」は 8 か所になった（上の `roots/desk.rs`）。

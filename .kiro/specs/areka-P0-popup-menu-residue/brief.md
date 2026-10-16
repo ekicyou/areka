@@ -150,3 +150,22 @@
 - **見立て（未確認）**: 標準メニューのモーダルの間は UI スレッドのメッセージの回り方が変わる。その間に kero のバルーンの窓の中身（合成の面）が出し直されず、黒く見えている疑い。触る場所は `menu/trigger.rs`（メニューを開く所）と、窓の表示（wintf の合成）のどちらか。
 - **まとめた理由**: 同じ右クリックメニューを開く所（`menu/`）の残件で、この spec の触る場所と重なる（「小さいバグの起票は触る場所が同じものを 1 本にまとめる」）。原因が wintf の合成の側と分かったら、要件の段でその持ち主へ渡す。
 - **区分**: この件だけバグ（区分 B）。残りの件（区分 C）より先に取ってよい。まずは再現の条件を測る（実機・メニューを開く前後の画面と記録）。
+
+## 2026-10-16 棚卸㉖の再測定（main `4cf510c1`）
+- 前提の変化: `baseware-root-list`（PR#317）が `menu/` を広く触って着地し（`captions.rs`・`mod.rs`・新しい `roots_frame.rs` ほか）、完了の棚卸で件 11（メニューを開いている間、うにゅう側のバルーンが黒い四角）をここへ足した。待つ相手は無くなった。
+- 件ごとの今（どれも残っている）:
+  - 4: `crates/areka/src/menu/trigger.rs` 487 行の「`[menu] TrackPopupMenuEx failed`」と、それを逐語で見る `menu/trigger_show_tests.rs` の 263・439 行。
+  - 5: `crates/areka/src/emo2_boot/readme_cue.rs` の「`ReadmeCueSink:`」で始まる 7 か所（78〜133 行）。
+  - 6: `crates/areka-kanade/src/actor.rs` の 719・729・738 行（「——終了系列（Fault）へ」）。
+  - 7: `crates/areka/src/emo2_boot/spine.rs` の 752・759 行（「現在は 4 本」「4-sink 構成」）。本番は今も 11 本（`emo2_boot/mod.rs` の 653〜665 行）。
+  - 9: `menu/captions.rs` 76 行の `UNQUERIED_POPUPMENU_RESOURCES`。
+  - 3・8: テストの穴 2 件のまま。11: 再現の条件はまだ測っていない。
+- 本文の古い記述: 7 行目の「本仕様に残るのは 3〜10 の 8 件」は、今は 3〜9 と 11 の 8 件（2 と 10 は済み）。
+- 触るファイル: `menu/{trigger,win32,captions}.rs`・`menu/trigger_show_tests.rs`・`emo2_boot/readme_cue.rs`・`emo2_boot/spine.rs`（注記だけ・937 行）・`crates/areka-kanade/src/actor.rs`（901 行・文言だけで増えない）・揃えるなら `actor_resources.rs`・新しいテスト 1〜2 本。件 11 の原因が窓の表示（wintf の合成）の側と分かれば、その持ち主へ渡す。
+- 規模: 6〜9 タスク（件 3〜9 の 4〜6 に、件 11 の再現と直し）。分割の案: 無し。
+- 先に要るもの: 無し＝先頭。
+- 重なり: 今の版の 2 本（`user-data-root`・`write-failure-notice`）とは 0（どちらも `menu/`・kanade・`spine.rs`・`readme_cue.rs` に触らない）。重なる相手は kanade の列（`mcp-kanade-tools` ほか・`actor.rs`）・`extra-character-windows`（`captions.rs`）・`tasktray-icon`（`menu/mod.rs` を触るとき）。
+- 版の席: 1 本だけの席（依存・emo-text の新しいファイル）を取らず、静かな机も全体テストの比べも要らない。見立ての上限 9 は `user-data-root` の下限 11 以下＝`user-data-root` と同じウェーブなら隙間に入る。`write-failure-notice` だけのウェーブ（下限 7）では超える。
+  - ただし件 11 の再現は、実機でメニューを開いて画面を撮る仕事。areka の窓はクリックを通すので、前回は開発者の許しを得て入力を送った＝人の待ちになりうる。隙間に入れるなら、件 11 を人の手を待たずに撮れるかを先に確かめるか、件 11 だけ後へ回す。
+- 優先度の区分: C（記録の文言とテストの穴）。件 11 だけ B（見た目の不具合）。要件定義のモデル: Opus。
+- すぐ直せる候補: 件 7 の `spine.rs` 752・759 行の注記（spec を待たずに直せる）。
