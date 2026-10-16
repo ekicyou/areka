@@ -3,6 +3,7 @@
 //! 決め方の判断は [`resolve`]（純粋・値の注入だけでテストする）。プロセスの環境変数と
 //! 起動前の記憶を読むのは、この下の薄い口だけ（要件 12.7）。
 
+pub(crate) mod report;
 mod resolve;
 
 pub(crate) use resolve::*;
