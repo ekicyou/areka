@@ -3,7 +3,7 @@
 //! 下・子は自分の分だけ止める・待ちは上限つき）は `real.rs` の先頭に書いてある。
 
 use std::cell::Cell;
-use std::fs::{self, File};
+use std::fs::{self, File, TryLockError};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -140,10 +140,15 @@ impl Desk {
     /// 実行ファイルは、状態ファイルの置き換え → ログ → 読み物の置き換えの間じゅう `state.lock`
     /// を握る。記録が見えた後でこのロックが取れたなら、その呼び出しは終わっている。取れたら
     /// 直ちに放す（握るのは一瞬。実行ファイルは 10 ms ごとに 10 秒まで試し直す）。`state.lock`
-    /// は記録を書いた実行ファイルが作っているので、ここでは作らずに開く。
+    /// は記録を書いた実行ファイルが作っているので、ここでは作らずに開く。試し直すのは「握られて
+    /// いる」（`WouldBlock`）ときだけで、ほかの失敗は直ちに赤にする（上限まで待って畳まない）。
     pub fn settle(&self) {
         let lock = File::open(self.file("state.lock")).expect("state.lock を開ける");
-        retry("state.lock が空く", || lock.try_lock().ok());
+        retry("state.lock が空く", || match lock.try_lock() {
+            Ok(()) => Some(()),
+            Err(TryLockError::WouldBlock) => None,
+            Err(TryLockError::Error(err)) => panic!("state.lock を確かめられない: {err}"),
+        });
         lock.unlock().expect("state.lock を放せる");
     }
 
