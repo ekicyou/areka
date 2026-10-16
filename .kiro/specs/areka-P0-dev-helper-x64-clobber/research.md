@@ -158,3 +158,52 @@ cargo の作るつもりの一覧（ビルドはしない）を 2 通り出し�
 - **2026-10-06 の罠の道筋**: 全体テストの後に `cargo build` があったかは記録が無く確かめられない。実害は無い（要件は道筋に依らない）ので、確かめないままでよいかを討議で決める。
 - **`default-members` で glob が使えるか**（T3 を取るときだけ）。
 - **全体テストの段で終了コードを立てる書き方**: 今の `Step` は `$LASTEXITCODE` を読むので、PowerShell の文だけの段では明示に `$global:LASTEXITCODE` を立てるか、別のプロセスで回す形にするかを設計で決める（ほかの道具の段は `pwsh -NoProfile -File` で別のプロセスにしている）。
+
+## 8. 設計フェーズの記録（2026-10-16・`/kiro-spec-design -y`）
+
+### 8.1 要約
+
+- **調べ方**: 軽い調べ（既存の仕組みへの追加）。サブエージェントは使わず、主の文脈でコードを読んだ（`tools/test-all.ps1`・`shiori_wiring.rs`・`process_host.rs`・`lib.rs`・`Cargo.toml`・`smoke_boot_loop_exit.rs` の `is_i686_pe`・`real.rs` の `connect_failed`・`logging.md`・README と `tech.md` のビルドの行）。外の資料は要らなかった（新しい依存・新しい API が無い）。
+- **使ったスキル・決まり**: `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`。steering の `logging.md`（レベルの選び方・構造化フィールド）。
+- **見直しの門**: 1 回目で通った（局所の直し 1 か所＝実機の確かめで使う全体テストの 1 回を「実装の最後の検証の 1 回」と明記）。要件の穴・矛盾は無い。
+
+### 8.2 決めたこと（7.1 の 1・2・3・5 の残り）
+
+#### 決定: 記録を出す場所＝`shiori-host32-host` の `spawn` の入口（R-B）
+- **背景**: 要件 3.1（読む前に 1 行）。候補は R-A（`real_connect` の `spawn` の前）と R-B（`process_host.rs`）。
+- **選んだ形**: `process_host.rs` に判定と記録の関数を置き、`spawn` の最初の文で呼ぶ。`spawn_command`（`cmd.exe` などを起こすテスト用の下位の口）には置かない。
+- **理由**: 「helper は i686 であるべき」は host-32 の知識で、持ち主は host-32 の層。`spawn` は helper を起こすすべての道が通る 1 か所なので、呼び手ごとに足さずに済む。roadmap のウェーブ C7 の約束が名指しする逃げ先でもある。`real_connect`（`areka-ghost`）・kanade・`boot_config.rs`・`main.rs` を触らない＝同じウェーブの `baseware-root-list` と重ならない。
+- **引き換え**: 結合テストも `spawn` を通るが、渡すのは i686 の helper か無いパスなので、記録は 0 件か警告 1 件で害は無い。
+- **記録の文の「直し方」**: 要件 3.2 の「i686 版の helper を `areka.exe` の隣へ置く」は、記録の `path` の欄（＝本番では常に `areka.exe` の隣）と「このパスへ i686 版を置く」の本文で満たす。host-32 の部品が `areka.exe` という呼び手の名前を知らずに済む。
+
+#### 決定: 向きの見分け方＝見出しを自分で読む（D-1）・`MZ` と `PE\0\0` も確かめる
+- **選んだ形**: 先頭の最大 4 KiB を std だけで読み、純粋な関数 `classify_helper_image(&[u8]) -> HelperImage { I686, OtherMachine(u16), NotPe }` で判定する。
+- **理由**: 依存も `windows` の機能も足さない（`process_host` の「std だけ」の決まりを保つ）。合成したバイト列で決定論のテストが書ける。`GetBinaryTypeW`（D-2）は機能 `Win32_Storage_FileSystem` の追加と、テストに実ファイルが要るので取らない。署名まで見るのは、要件 3.5 の「実行ファイルの形をしていない」を「別の機械の種類」と分けて正しく言い分けるため（数行で済む）。
+- **既存の写しの扱い**: テストの側の `is_i686_pe`（2 つの写し）は本体から呼べない形のまま触らない（テストの領分・本仕様の境界の外）。
+- **上限**: `e_lfanew` が 4 KiB の外の実行ファイルは `NotPe`（警告）になる。MSVC の linker の helper は 0x100 前後。広げるなら `e_lfanew` へ seek して読む（コードに `ponytail:` の注記を残す）。
+
+#### 決定: 記録の後も起こす（今の失敗の道をそのまま通す）
+- **選んだ形**: 判定は戻り値を持たず、`spawn` の以後を変えない。x64 の helper なら今日と同じく LOAD の ack `[0]` → `connect_failed` → `ShioriDown`。
+- **理由**: 要件 3.3（今と同じ扱い）・3.4（i686 のときは起こし方を変えない）・3.5（確かめられないときも起こし方を変えない）を文字どおり満たす。早く `Err` にすると `connect_failed` の `reason` の文が変わり、失敗の道が 2 本になる。「ログ無しの失敗にしない（error! + Err）」は、本当の失敗が今日の `Err` の道で記録されることで保たれる。新しい 1 行はその原因の名指し。
+- **レベル**: 向きが違う＝`error!`（`helper_not_i686`・要件 3.1）。確かめられない＝`warn!`（`helper_image_unverified`・回復の見込みがある前置き。本当の失敗は続く `SpawnError` などが `error!` で記録する）。宛先は `target: "host32-helper"`（`shiori-charset`・`shiori-actor` と同じ「部品名の宛先」の形）。
+
+#### 決定: 全体テストの段＝最後の段 `i686 helper beside areka.exe`・スクリプトの中の関数・`$global:LASTEXITCODE`
+- **選んだ形**: `-License` の段の後（一覧を出す前）に 1 段。`Test-I686Pe` 関数（`MZ`・`PE\0\0`・0x014c）で置き先を見て、違えば `target\i686-pc-windows-msvc\debug\` の i686 版を一時名へ写して `Move-Item -Force` で置く。段の中のすべての出口で `$global:LASTEXITCODE` を 0 か 1 に立てる。
+- **理由**: 最後の段なら、どの段が赤でも（要件 1.2）、どの段も後から `target\debug\` を触らない（要件 1.1）。別のスクリプトに分けると、ファイルが増え、roadmap の約束「`tools/test-all.ps1` だけ」から外れる。`$LASTEXITCODE` を自分で立てないと前の段の値が残る（`Step` の決まり）。
+- **ASCII**: 端末の文は固定の英文。.NET の例外の本文は日本語に訳されることがあるので出さず、型の名前と `HResult` の 16 進だけを出す（要件 1.5・「道具が端末へ出す文は ASCII だけ」）。
+- **写し元**: debug だけ（全体テストは debug だけを作る・`target\release\` は範囲外）。
+
+#### 決定: 文書の書き替え（要件 1.6）
+- `README.md` の `cargo build` → `cargo build -p areka`。`tech.md` の `cargo build` → `cargo build -p areka`、`cargo build --release` → `cargo build -p areka --release`（素の `cargo build` の一種なので、要件 1.6 の「素の `cargo build` を手順として示さない」に合わせる）。
+
+### 8.3 まとめの 3 つの見方（design-synthesis）
+
+- **一般化**: 判定の規則（`MZ`・`PE\0\0`・0x014c）は本体の Rust とスクリプトの PowerShell の 2 か所に要るが、言語が違うので 1 つにまとめない。規則を両方の設計に同じ言葉で書き、ずれを防ぐ。
+- **作るか借りるか**: OS の `GetBinaryTypeW` は借りられるが、機能の追加とテストの実ファイルの手間が判定の数行より重い。標準ライブラリで作る。
+- **削ったもの**: 判定を公開の API にする案（呼び手が `spawn` だけ）・`real_connect` の側の重ねての判定・別のスクリプトの道具・揃えの段の `-SelfTest`・x64 の段から helper を外す変更（範囲外）・判定の結果で起こし方を変える分岐。記録の関数を判定と読みから分けたのは、i686 のときに記録 0 件であることをファイルなしで確かめるため（テストの継ぎ目として要る分だけ）。
+
+### 8.4 リスクと手当て
+
+- 開発者が `target\debug\areka.exe` を動かしている最中に全体テストを回すと、揃えの段の置き換えが断られる → 赤の行（`is areka.exe running?` の案内つき）で知らせる。要件 1.3 のとおり。
+- 判定の宛先や `event` の名前を後で変えると、ログの検索で確かめる下流の手順が読み替えになる → design.md の Revalidation Triggers に書いた。
+- `clippy-199-lints` が同じ `tools/test-all.ps1` に段を足すとき、揃えの段より後ろに置くと要件 1.1 の保証が崩れる → 同じく Revalidation Triggers に書いた。
