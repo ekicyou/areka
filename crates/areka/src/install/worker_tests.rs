@@ -90,7 +90,7 @@ fn raise_with(answers: &[Option<RaiseOutcome>]) -> (Raised, Vec<bool>, Vec<Captu
 /// 素性（根だけが意味を持つ）。
 fn facts_at(root: &Path) -> GhostFacts {
     GhostFacts {
-        root: root.to_path_buf(),
+        roots: areka_ghost::BasewareRoots::single(root.to_path_buf()),
         folder: Some("running".to_owned()),
         name: "Running".to_owned(),
         sakura_name: None,
@@ -305,7 +305,8 @@ fn gate_label_names_archive_and_destination() {
     let root = TempPath::new("install-worker-root");
     let dir = TempPath::new("install-worker-archive");
     let (path, archive) = ghost_archive(&dir);
-    let label = gate_label(&path, root.path(), &archive, Some("target"));
+    let roots = areka_ghost::BasewareRoots::single(root.path().to_path_buf());
+    let label = gate_label(&path, &roots, &archive, Some("target"));
     assert!(label.contains(&path.display().to_string()), "{label}");
     assert!(
         label.contains(&root.path().display().to_string()),

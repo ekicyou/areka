@@ -14,10 +14,12 @@ use std::sync::Arc;
 use std::sync::mpsc::Sender;
 
 use areka_actor::{ActorHandle, ReplySender, reply_channel, run_inbox, spawn_actor};
+use areka_ghost::BasewareRoots;
 use areka_kanade::RaiseOutcome;
-use areka_nar::{InstallOutcome, InstallRequest, NarArchive, NarError, SingleRoot};
+use areka_nar::{InstallOutcome, NarArchive, NarError};
 
 use super::InstallOrder;
+use super::destination::install_into;
 use super::judge::GhostFacts;
 use super::procedure::{InstallPorts, InstalledRecord, Overwritten, Raised, run_order};
 use super::terms::TermsNotice;
@@ -81,8 +83,8 @@ pub(crate) fn spawn_worker(
 pub(crate) struct DeskPorts {
     desk: Sender<DeskAsk>,
     gate: Arc<WorkGate>,
-    /// ベースウェアの根（素性を最後に尋ねたときの値）。
-    root: Option<PathBuf>,
+    /// ベースウェアの根の並びの写し（素性を最後に尋ねたときの値）。
+    roots: Option<BasewareRoots>,
     /// 今扱っている書庫のパス（`begin_archive` で覚える）。
     archive: PathBuf,
 }
@@ -92,7 +94,7 @@ impl DeskPorts {
         DeskPorts {
             desk,
             gate,
-            root: None,
+            roots: None,
             archive: PathBuf::new(),
         }
     }
@@ -171,7 +173,7 @@ impl InstallPorts for DeskPorts {
 
     fn ghost_facts(&mut self) -> Option<GhostFacts> {
         let facts = self.ask(|reply| DeskAsk::Facts { reply }).flatten()?;
-        self.root = Some(facts.root.clone());
+        self.roots = Some(facts.roots.clone());
         Some(facts)
     }
 
@@ -184,14 +186,14 @@ impl InstallPorts for DeskPorts {
         archive: &NarArchive,
         target_ghost: Option<&str>,
     ) -> Option<Result<InstallOutcome, NarError>> {
-        let root = match self.root.clone() {
-            Some(root) => root,
-            None => self.ghost_facts()?.root,
+        let roots = match self.roots.clone() {
+            Some(roots) => roots,
+            None => self.ghost_facts()?.roots,
         };
         // 門: 名前を宛先つきへ差し替える（要件 8.3）。終了が始まっていれば書く段へ入らない（要件 8.4）。
         if !self
             .gate
-            .begin(gate_label(&self.archive, &root, archive, target_ghost))
+            .begin(gate_label(&self.archive, &roots, archive, target_ghost))
         {
             return None;
         }
@@ -199,10 +201,7 @@ impl InstallPorts for DeskPorts {
             self.gate.end();
             return None;
         }
-        let result = archive.install(&InstallRequest {
-            roots: &SingleRoot(&root),
-            target_ghost,
-        });
+        let result = install_into(&roots, archive, target_ghost);
         // 書き終えた直後に手放す（間で終了が始まると「書く前」と記録されるので続けて呼ぶ）。
         self.gate.leave_write();
         self.gate.end();
@@ -234,10 +233,10 @@ impl InstallPorts for DeskPorts {
     }
 }
 
-/// 門に置く記録用の名前（書庫のパスと宛先＝要件 8.3）。
+/// 門に置く記録用の名前（書庫のパスと宛先＝要件 8.3）。宛先の根は並びの全部を `; ` でつなぐ。
 fn gate_label(
     path: &Path,
-    root: &Path,
+    roots: &BasewareRoots,
     archive: &NarArchive,
     target_ghost: Option<&str>,
 ) -> String {
@@ -245,10 +244,15 @@ fn gate_label(
     let target = target_ghost
         .map(|ghost| format!("・宛先のゴースト {ghost}"))
         .unwrap_or_default();
+    let roots = roots
+        .roots()
+        .iter()
+        .map(|root| root.dir().display().to_string())
+        .collect::<Vec<_>>()
+        .join("; ");
     format!(
-        "{} → 根 {} の {:?} {}{target}",
+        "{} → 根 {roots} の {:?} {}{target}",
         path.display(),
-        root.display(),
         manifest.kind,
         manifest.directory
     )

@@ -22,7 +22,7 @@ use std::sync::mpsc::{self, Receiver, SendError, Sender};
 use std::thread::{self, JoinHandle};
 
 use areka_actor::ReplySender;
-use areka_ghost::catalog_roots::{list_balloons, list_ghosts};
+use areka_ghost::catalog_roots::{find_balloon, find_ghost};
 use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod};
 use areka_nar::InstallKind;
 use areka_sylphya::{PersistKey, PersistScope};
@@ -333,26 +333,16 @@ fn answer(world: &mut World, ask: DeskAsk) {
 /// 入れた後の記録（要件 6.1・6.6・6.7・6.8・設計で決めたこと 14）: `ghost` は受け皿へ、`balloon`
 /// だけなら今のゴーストの「最後に使ったバルーン」の記憶へフォルダ名を書き、シェル・追加ファイルは
 /// 置換語だけ（表示は替えない）。シェルとバルーンは `lastinstalled` の控えも置く（shell-balloon-switch
-/// 要件 1.10・1.11）。フォルダ名と名前は入れた後の目録の綴り（`areka-nar` の綴りと
-/// 大文字小文字を無視して突き合わせる・目録に無ければ `areka-nar` の綴りと `install.txt` の `name`）。
+/// 要件 1.10・1.11）。フォルダ名と名前は入れた後の和の目録の綴り（`areka-nar` の綴りとフォルダ名の
+/// 1 つの規則で突き合わせる・目録に無ければ `areka-nar` の綴りと `install.txt` の `name`）。
 /// 最後に今のゴーストの記憶の書き手の反映を待つ（背景のスレッドへ答えるのはその後）。
 fn record_installed(world: &mut World, record: InstalledRecord) {
     let roots = world
         .get_resource::<BootContext>()
         .map(|ctx| ctx.roots.clone());
-    let ghosts = match (&roots, record.kind) {
-        (Some(root), InstallKind::Ghost | InstallKind::Shell | InstallKind::Supplement) => {
-            list_ghosts(root)
-        }
-        _ => Vec::new(),
-    };
-    let ghost_entry = |folder: &str| {
-        ghosts
-            .iter()
-            .find(|entry| entry.identity.folder.eq_ignore_ascii_case(folder))
-    };
+    let ghost_entry = |folder: &str| roots.as_ref().and_then(|roots| find_ghost(roots, folder));
     let ghost_name = record.ghost_folder.as_deref().map(|folder| {
-        match ghost_entry(folder).and_then(|entry| entry.identity.name.clone()) {
+        match ghost_entry(folder).and_then(|entry| entry.identity.name) {
             Some(name) => name,
             None if record.kind == InstallKind::Ghost => record.object_name.clone(),
             None => folder.to_owned(),
@@ -361,15 +351,14 @@ fn record_installed(world: &mut World, record: InstalledRecord) {
     match record.kind {
         InstallKind::Ghost => {
             let folder = ghost_entry(&record.folder)
-                .map_or_else(|| record.folder.clone(), |e| e.identity.folder.clone());
+                .map_or_else(|| record.folder.clone(), |e| e.identity.folder);
             record_last_installed(world, folder);
         }
         InstallKind::Balloon => {
-            let balloons = roots.as_ref().map(list_balloons).unwrap_or_default();
-            let folder = balloons
-                .iter()
-                .find(|entry| entry.identity.folder.eq_ignore_ascii_case(&record.folder))
-                .map_or_else(|| record.folder.clone(), |e| e.identity.folder.clone());
+            let folder = roots
+                .as_ref()
+                .and_then(|roots| find_balloon(roots, &record.folder))
+                .map_or_else(|| record.folder.clone(), |e| e.identity.folder);
             record_installed_balloon(world, folder.clone());
             remember_balloon(world, folder);
         }
@@ -431,8 +420,7 @@ fn ghost_facts(world: &World) -> Option<GhostFacts> {
         .or_else(|| folder.clone())
         .unwrap_or_else(|| dir.display().to_string());
     Some(GhostFacts {
-        // 移り途中（4.5 で宛先の部品へ）: 入れる根は見つかるいちばん上の根。
-        root: crate::roots::head_root(&ctx.roots).dir().to_path_buf(),
+        roots: ctx.roots.clone(),
         folder,
         name,
         sakura_name: areka_ghost::catalog::sakura_name(dir),

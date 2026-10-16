@@ -78,7 +78,7 @@ impl FakePorts {
         )
         .expect("起動中のゴーストの descript.txt を置ける");
         let facts = GhostFacts {
-            root: root.path().to_path_buf(),
+            roots: areka_ghost::BasewareRoots::single(root.path().to_path_buf()),
             folder: Some(RUNNING.to_owned()),
             name: "Running".to_owned(),
             sakura_name: Some(RUNNING_SAKURA.to_owned()),

@@ -403,7 +403,7 @@ fn facts_describe_the_running_ghost() {
     assert_eq!(
         ask_facts(&mut rig),
         Some(Some(GhostFacts {
-            root: tmp.path().to_path_buf(),
+            roots: areka_ghost::BasewareRoots::single(tmp.path().to_path_buf()),
             folder: Some("A".to_owned()),
             name: "A".to_owned(),
             sakura_name: Some("さくら".to_owned()),

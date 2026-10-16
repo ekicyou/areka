@@ -9,8 +9,9 @@
 use std::time::Instant;
 
 use areka_actor::ReplySender;
+use areka_ghost::same_folder_name;
 use areka_kanade::ChangeOrigin;
-use areka_nar::{InstallOutcome, InstallRequest, NarArchive, NarError, SingleRoot};
+use areka_nar::{InstallOutcome, NarArchive, NarError};
 use bevy_ecs::world::World;
 
 use super::{InstallDesk, reply_to};
@@ -19,6 +20,7 @@ use crate::boot_config::BootContext;
 use crate::emo2_boot::ghost_switch::{
     GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
 };
+use crate::install::destination::install_into;
 use crate::install::procedure::Overwritten;
 
 /// 預かった書庫の段。
@@ -91,7 +93,7 @@ fn request(world: &mut World) {
     // まま頼み、切替の入口の判定（`NoContext`）に任せる。
     let folder = match running {
         None => pending.folder.clone(),
-        Some(running) => match running.filter(|r| r.eq_ignore_ascii_case(&pending.folder)) {
+        Some(running) => match running.filter(|r| same_folder_name(r, &pending.folder)) {
             Some(running) => running,
             None => {
                 tracing::debug!(
@@ -139,14 +141,14 @@ fn request(world: &mut World) {
 }
 
 /// 降ろして全窓を閉じた直後・起こす前（`switch_to` から）: 段が「切替を頼んだ」で、切替の予約の
-/// 切替先が預かった宛先と同じ（ASCII の大文字小文字を無視）ときだけ、UI スレッドで同期に展開する。
+/// 切替先が預かった宛先と同じ（フォルダ名の 1 つの規則）ときだけ、UI スレッドで同期に展開する。
 pub(super) fn run_between(world: &mut World) {
     let target = world
         .get_non_send::<SwitchInFlight>()
         .map(|f| f.target.folder.clone());
-    let root = world
+    let roots = world
         .get_resource::<BootContext>()
-        .map(|ctx| crate::roots::head_root(&ctx.roots).dir().to_path_buf()); // 移り途中（4.5）
+        .map(|ctx| ctx.roots.clone());
     let Some(mut desk) = world.get_non_send_mut::<InstallDesk>() else {
         return;
     };
@@ -156,8 +158,8 @@ pub(super) fn run_between(world: &mut World) {
     let Stage::Requested(archive) = &pending.stage else {
         return;
     };
-    let ours = target.is_some_and(|t| t.eq_ignore_ascii_case(&pending.folder));
-    let (true, Some(root)) = (ours, root) else {
+    let ours = target.is_some_and(|t| same_folder_name(&t, &pending.folder));
+    let (true, Some(roots)) = (ours, roots) else {
         tracing::debug!(
             event = "install_overwrite_skipped",
             folder = %pending.folder,
@@ -166,10 +168,7 @@ pub(super) fn run_between(world: &mut World) {
         return;
     };
     let started = Instant::now();
-    let result = archive.install(&InstallRequest {
-        roots: &SingleRoot(&root),
-        target_ghost: pending.target_ghost.as_deref(),
-    });
+    let result = install_into(&roots, archive, pending.target_ghost.as_deref());
     let ms = started.elapsed().as_millis() as u64;
     tracing::info!(
         event = "install_overwrite_done",

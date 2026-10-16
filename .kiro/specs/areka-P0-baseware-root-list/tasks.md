@@ -85,7 +85,7 @@
   - _Depends: 3.1_
   - _Requirements: 9.4, 9.5, 9.6, 9.7, 9.8, 12.6_
 
-- [ ] 4. 呼び手を和と 1 つの比べ方へ寄せる
+- [x] 4. 呼び手を和と 1 つの比べ方へ寄せる
 - [x] 4.1 (P) 切替の呼び手を和とフォルダ名の 1 つの規則へ寄せる
   - ゴーストの切替（一覧の 3 か所・起こし直しに渡す並び）、切替先の決め方と `lastinstalled` のフォルダ名の比べ方を 1 つの規則にする（descript の `name` と特別な名前の比べ方は今のまま）
   - シェル・バルーンの切替の候補を並びから集め、候補のフォルダ名の比べ方を 1 つの規則にする。切替の文脈の根を並びにする
@@ -126,7 +126,7 @@
   - _Depends: 1.2, 1.4_
   - _Requirements: 5.1, 5.2, 5.3, 5.6, 12.4_
 
-- [ ] 4.6 インストールの窓口と背景スレッドを並びの宛先でつなぐ
+- [x] 4.6 インストールの窓口と背景スレッドを並びの宛先でつなぐ
   - ゴーストの素性を並びの写しで持ち、インストールの依頼を 4.5 の部品で組む（見つかる根が無ければ error `install_no_root`）。上書き・判断・手続きのフォルダ名の比べ方を 1 つの規則にし、すでにあるものの引き当てを和で行う
   - 入れ終えたら要素ごとに info `install_placed`（種類・根・フォルダ）を残す。選ぶ画面の旗はこの時点ではインストールの窓口のまま
   - 完了の姿: 2 つの根で、新しいゴーストが先頭の根へ入る・すでにあるものはその根で上書きされ下の根の同じ名前に触らない・同梱のバルーンが別の根へ入る・根をまたぐ途中の失敗で全部が元に戻ることを確かめるテストが緑になり、今のインストールのテストも緑のまま
@@ -220,3 +220,4 @@
 - 3.1: argv でゴーストを渡す起動では起動時の隠れの記録（`log_hidden`・`survey`）を出さない（要件 11.2「argv の起動は目録の外」と既存テストの「argv の起動は warn を出さない」を優先・`root_listed` は両経路で出す・テスト `boot_lists_roots_and_counts_hidden_only_without_argv` が固定）。要件 2.5 の欠けではない。
 - 3.1: 移り途中の仮の形は `crate::roots::head_root`（見つかる先頭の根・無ければ先頭）1 つに集めた。使う所: `boot_config.rs`（2 か所・3.2）・`ghost_switch.rs` `running_name`（3.2）・`main.rs` `running_name`／後始末の告知（3.2）・`install/desk.rs` `GhostFacts.root`／`install/overwrite.rs`（4.5・4.6）。`install/procedure.rs` の `list_balloons(&BasewareRoot::new(facts.root))` も 4.6。7.1 で `head_root` ごと消す。
 - 3.2: 格納フォルダの列を `; ` でつなぐ処理が `alert.rs::joined`・`boot_resolve.rs::joined`・`ghost_switch.rs::boot_into` の 3 か所にある。3.3 で告知の文面を仕上げるとき 1 つへ寄せてよい。
+- 4.6: `install_placed`・`install_no_root` は desk でなく worker と上書きの両経路が通る `install/destination.rs::install_into` で記録する（同じ 1 回ずつ）。見つかる根が無いときは `NarError::Io{phase: Stage, rolled_back: true}` を作って今の失敗の経路へ倒す（`archive` 欄は空・記録と告知は手続きの側の本当のパスを使う）。`crate::roots::head_root` は使い手が無くなったので削除済み。
