@@ -375,7 +375,7 @@ function Get-PwshChildArguments {
   - 緑（D）: 当たらない字だけの変数（`$a = @('build', '--release'); & cargo @a`）
 - **perf の 932 の判定**（6.1〜6.6）: 今の窓の無い子（`-Cp932Child`・自分だけの端末を 932 にする）の中で、今の 3 つの確かめの後に次を行う。
   - 子は `tools/perf/perf-loop.common.ps1` を読み込む（本物の `Invoke-PwshChild`・`Invoke-Child` を使うため）。
-  - 見本を出す孫は、このスクリプト自身を内部の引数 `-PerfSampleChild` で回したもの。孫は決まった見本 `<U+7248><U+2460><U+1F600>`（932 で 0x88 で終わる字・932 にある字・932 に無い字）を、`Write-Output`・`Write-Host`（標準出力）と `[Console]::Error.WriteLine`（標準エラー）で、`out1=`・`out2=`・`err1=` を頭に付けて 1 行ずつ出し、0 で終わる。手で端末から回したとき（標準出力か標準エラーが端末のとき）は、ASCII の 1 行を出して 1 で終わり、見本を出さない（端末へ ASCII だけ・5.6）。
+  - 見本を出す孫は、このスクリプト自身を内部の引数 `-PerfSampleChild` で回したもの。孫は決まった見本 `<U+7248><U+2460><U+1F600>`（UTF-8 の字の並びが 932 の先頭の字 0x88 で終わる字・932 にある字・932 に無い字）を、`Write-Output`・`Write-Host`（標準出力）と `[Console]::Error.WriteLine`（標準エラー）で、`out1=`・`out2=`・`err1=` を頭に付けて 1 行ずつ出し、0 で終わる。手で端末から回したとき（標準出力か標準エラーが端末のとき）は、ASCII の 1 行を出して 1 で終わり、見本を出さない（端末へ ASCII だけ・5.6）。
   - 較正の確かめ（6.3）: `Invoke-Child -Exe <pwsh> -Arguments @('-NoProfile', '-NonInteractive', '-File', <自分>, '-PerfSampleChild') -Quiet`（前置きの無い・端末に頼る形）で読んだ行が見本と 1 字違わず一致したら `FAIL … cannot detect a regression`（壊れない条件では戻りを捕まえられない）。
   - 本番の確かめ（6.1・6.2）: `Invoke-PwshChild -ScriptPath <自分> -Arguments @('-PerfSampleChild') -Quiet` の `Code` が 0、`Out` が `out1=<見本>`・`out2=<見本>` の 2 行、`Err` が `err1=<見本>` の 1 行と 1 字違わず一致すれば `PASS`、違えば `FAIL`（`Show-Ascii` で字を `\uXXXX` にして示す）。
   - 端末が変わっていないことの確かめ（1.2）: 本番の確かめの後、子は自分の端末の出力・入力の文字コードを OS から読み（`Get-ConsoleCodePages`）、932・932 のままでなければ `FAIL`（前置きが書き替えの形に戻されたとき、字は届いても端末が 65001 に変わるのでここで捕まる）。
