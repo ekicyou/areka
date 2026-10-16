@@ -227,3 +227,62 @@
 - §9 の調べ全部（切れ目を待つ間の切替・終了・`Send` と UI の側の受け取り・窓の位置の続く失敗のまとめ・実機の確かめの OS の理由の文）。
 
 > 2026-10-16 追記: 要件討議の議題 1 は「書けない＝致命として告知（`alert.rs`）を出して終わる」に決まった。上の §8-3（`OnTranslate`）と §8-4 のうちバルーンの台本・パスの `\` と `%` の直しは、ゴーストのバルーンに出す形の問いなので不要になった。§8-4 は「告知の文面」の問いとして残る。§3 の候補 (a-1)〜(a-3) と kanade の口も採らない（規模は 7〜9 タスクの見込み）。
+
+## 11. 設計の段の調べと決めたこと（2026-10-16・`/kiro-spec-design`）
+
+> 調べ方は「軽い調べ」（今在る仕組みを広げる形）。外の部品は足さない。読んだのは要件・この文書・steering（product・tech・structure・logging）と、下の各ファイルのコード。使ったスキルは `kiro-spec-design` の規則（design-principles・discovery-light・synthesis・review-gate）だけ。
+
+### 11.1 調べたこと
+
+- **告知の今の形**: `crates/areka/src/alert.rs` の `AlertScene`（5 場面）・`alert_text`（純粋に文面を組む）・`raise`（`error!(event="alert")` を必ず 1 件残し、抑止でなければ `MessageBoxW`）。抑止は `suppressed_from`（純粋）と `suppressed`（環境変数を読む薄い口）の 2 段。起動を止める告知は `main` が `alert::raise` の後に `Err(E_FAIL)` を返す形。SHIORI の失敗は出所 `ExitOrigin::KanadeStopped(Fault)` で `quit_app` → `run()` の後の `after_run` が場面を組む → 後始末で降ろして印を始末した後に告知、の順。
+- **終了の出所**: `crates/areka/src/app_exit.rs` の `ExitOrigin`・`FirstExit`（最初の出所だけを残す）・`fault_of`（告知と終了コードの判定）。`main.rs` の `session_mark_verdict` は出所を網羅の match で見る＝出所を足すと判定の漏れがビルドで止まる。
+- **書き手**: `crates/areka-sylphya/src/actor.rs` の `run_actor` は `Effect::PersistSave` ごとに `save_scope` を呼び、結果を返信端（`reply: Some` のときだけ）へ返す。今の本番の呼び手は全部 `reply: None`。`spawn_sylphya(SylphyaInit)` の `SylphyaInit {` を組む所は 32 か所（多くはテスト）。
+- **ゴーストの書き手の起こし方**: `areka-ghost` の `boot_with_origin(options, kanade_stop, origin, shell)` → `sylphya_wiring::spawn_ghost_sylphya(roots)`。`GhostBootOptions {` を組む所は 35 か所で、`boot_with_kanade_stop` の doc に「欄を足すと全構築点の書き換えになるので派生の関数・引数で足す」という前例の判断が書いてある。`boot_with_origin` を呼ぶのは本番 2 か所（`emo2_boot/mod.rs` の `wire_emo2_boot`・`ghost_session.rs` の倒れ先）とテスト 2 か所。どちらの本番の呼び口も `world: &mut World` を手元に持つ。
+- **UI スレッドの直の書き込み**: `boot_resolve.rs` の `write_session_mark`・`write_switch_drop`・`clear_session_mark`（`save_app` 経由）と `roots/edit.rs` の `apply`（ゴーストが居ないとき）。前 3 つは戻り値 `()`。
+- **印の始末**: `main.rs` の `settle_session_mark`（戻り値 `MarkVerdict`）を、`main` の後始末と `session_end.rs` と 2 つのテストファイル（`main_session_mark_tests.rs` 3 か所・`ghost_session_switch_memory_tests.rs` 1 か所）が呼ぶ。
+- **窓の実体**: `wintf` の窓は系 `create_windows`（`ecs/window/window_system.rs`）がスケジュールの中で作る。`open_ghost_windows` の後でも `run()` の前なら画面に窓は出ていない＝`boot_first_ghost` で起動を止めても、告知の背後に窓は無い。
+- **消えるファイル**: Windows の `FILE_FLAG_DELETE_ON_CLOSE`（値 `0x0400_0000`）で開いたファイルは、最後の取っ手が閉じた時点で OS が消す（プロセスが落ちても消える）。Rust の `tempfile` crate も同じ旗で一時ファイルを作る。std の `OpenOptionsExt::custom_flags` で渡せる（`windows` crate の `Win32_Storage_FileSystem` の機能は今のワークスペースで有効になっていないので、定数を 1 つ書く。新しい依存も機能も足さない）。
+- **README**: `dist/README.txt` に「■ 記憶の置き場」の節が今在る（中身は `user-data-root` が書き直す）。
+- **終了コードの登記**: `doc/COMPAT_ARCHITECTURE.md` の「SHIORI の失敗でプロセスが終わるときの終了コード」の行が「0 以外にするのは SHIORI の失敗が原因でプロセスそのものが終わるときだけ」「`fault_of`（Fault かどうかを決める唯一の判定）」と書いている。書けずに終わるときも 1 にするなら、この行を同じ変更で改める。
+- **記録の読み手**: 6 つの名前（`last_used_recorded`・`last_shell_recorded`・`last_balloon_recorded`・`install_balloon_remembered`・`session_mark_clear_degraded`・`session_mark_kept`）を読むのは 14 ファイル（§4.5 と同じ）。テストの中で文（「書きました」など）を照らす物は 0（grep で確かめた）。名前と出す時点を残せば、読み手の直しは 0 で済む。
+- **実機の確かめの前例**: `crates/areka/tests/smoke_boot_loop_exit.rs`（451 行）が子プロセスの areka を `AREKA_NO_ALERT=1` と一時の `AREKA_PROFILE_DIR` で起こし、終了コードと記録の文で判定する方向を 4 つ持つ。
+- **`user-data-root` の要件（同じウェーブ・向こうのコミット `8eb51bab`）**: 向こうの要件 1.2 は「実行ファイルのフォルダに今の権限で書けない」ときに書ける根を使う＝向こうにも「書けるかの確かめ」が要る。要件 4.1 は「実行ファイルのフォルダの下に作る物 0」。向こうは `main.rs`・`boot_resolve.rs`・`roots/edit.rs` に触らない約束で、`roots/edit.rs` には「置き場を先頭へ ▸」の関数を足して `apply` を呼ぶ（こちらの着地の後）。
+
+### 11.2 まとめの 3 つの見方（synthesis）
+
+- **一般化**: 要件 1.1・1.2 の 13 種の書き込み・要件 2.3 の印を消せない・要件 5.8 のインストールの記憶は、どれも「`save_scope` が `Degraded` を返した」という 1 つの事象。拾う所を 2 つ（書き手のアクターの中・UI スレッドの直の書き込みの戻り値）に絞り、行き先を 1 つ（`write_failure` の机）にする。書き込みの種類ごとの道は作らない。
+- **作るか借りるか**: 告知は今の `alert.rs` に場面を 1 つ足す（借りる）。終わり方は今の `quit_app` と後始末の順（借りる）。失敗の運び手は std の `mpsc`（借りる。運行の通知 `KanadeNotice` と同じ形）。書けるかの確かめは std の `OpenOptions` と OS の消えるファイル（借りる）。新しく作るのは失敗の中身の型 1 つと、机の小さなファイル 1 つだけ。
+- **削ったもの**: 切替の前の確かめ（D7）・成功の記録の行（D8）・印の代わりの補い（要件 3.5）・失敗の中身の別の型（D3 の案 B）・`SylphyaInit` への欄（D2）・`GhostBootInputs` と `wire_emo2_boot` の引数（D4）。
+
+### 11.3 決めたこと（§10 で設計へ回した問いの答え）
+
+| # | 問い（§10） | 決めたこと | 採らなかった案と理由 |
+|---|---|---|---|
+| D1 | 終わり方 | 起動の前に分かった失敗＝起動を止める告知（`main` が `Err` で戻る）。動いている途中の失敗＝出所 `ExitOrigin::MemoryWriteFailed` で `quit_app` → 今日の後始末 → 告知（SHIORI の失敗と同じ形） | kanade に閉じの台本を頼む形（終わる前に別れの台詞を喋らせる）＝書けない状態でさらに書き込みが走り、SHIORI の失敗の形（要件 2.2）とも違う |
+| D2 | §8-5 失敗を拾う口 | 書き手のアクターの受け口（`std::sync::mpsc::Sender<PersistFailure>`）を、書き手を起こすときに渡す。`SylphyaInit` は変えず、派生の関数 `spawn_sylphya_with_failures(init, failures)` を足す（`boot_with_kanade_stop` と同じ前例） | 起こした後に投函で登録する形（§4.2 の避け方）＝起こしてから登録までの間の書き込み（起動のトークの中のプロパティの書き込みなど）を取りこぼしうる（要件 1.3 の「0」に届かない）。呼び手ごとの返事（§4.1 ②）＝呼び手 9 か所の直し・talk のスレッドの `prop_sink` に覗く場所が無い・新しい呼び手が漏れる |
+| D3 | §8-6 中身の運び方 | `PersistOutcome::Degraded(PersistFailure)`（案 A）。`PersistFailure` は スコープ・置き場・覚えられなかった key・理由（`NoRoot`／OS の理由の文）。`Copy` を外す | 案 B（別の型）＝失敗の中身の出どころが 2 つになり、`Degraded` が中身を持たないまま残る |
+| D4 | 受け口の結線の場所 | 1 プロセスに 1 本の channel を `write_failure::install`（系の登録 `ghost_session::register_systems` の中）で作り、受け手と送り手を World に置く。`boot_with_origin` の本番の呼び口 2 か所が World から送り手を写して渡す | `GhostBootInputs` と `wire_emo2_boot`（呼び口 5 か所）に引数を足す形＝同じ値を 3 層通すだけの書き換え。`main` で作る形＝`main.rs` の行が増える |
+| D5 | UI スレッドの直の書き込み | 4 つとも `Result<(), PersistFailure>` を返し（`apply` は中で閉じる）、呼び手がその場で決める（起動の前＝止める・切替の降ろした直後と置き場の並び＝`write_failure::fatal`・終わり＝告知の候補） | 直の書き込みも channel へ送る形＝起動の前は channel を汲む系がまだ動いていない |
+| D6 | 起動の前の確かめ | `write_failure::probe_dir`: 置き場（無ければ在るいちばん深い親のフォルダ）に、消えるファイル（`FILE_FLAG_DELETE_ON_CLOSE`＋`create_new`）を作ってすぐ閉じる。フォルダは作らない。確かめるのは `default_app_profile_dir()` と `<決まったゴースト>\ghost\master\profile\areka`。呼ぶのは `resolve_boot` が返した直後（`user-data-root` の写しの後・`WinApp` の前） | 書いて消す形＝落ちると残る。`sylphya.toml` そのものを書き込みで開く確かめ＝ファイルの読み取り専用は印の書き込み（起動の前）と最初の書き込み（途中の致命）が拾うので、確かめを 2 段にしない |
+| D7 | 切替の前の確かめ（要件 2.2 の任意） | しない。切替先が書けなければ、定常に入ったときの最後に使ったものの書き込みが失敗し、途中の致命と同じ道で終わる | 確かめる形＝`ghost_switch.rs` に確かめの道がもう 1 本増え、`user-data-root` の切替の写しとの順序を同じファイルで合わせる必要が出る。結末（終わって告知）は同じ |
+| D8 | §8-7「書きました」の 4 行 | 名前と出す時点を残し、文を「…書くように頼みました」に改める。結果は失敗のときだけ `error!(memory_write_failed)` を 1 行（`fatal` が出す）。成功の行は足さない | 結果を見てから出す形＝返信を UI スレッドで待つか覗く仕組みが要る。成功の行を足す形＝要件 6.1（書けるときの記録の行の数を今日と同じ）に反する |
+| D9 | §8-8 印の文の材料 | 消せなかった直後と、残すと決めたときに、記憶の印を読み直し（`read_session_mark`）、残る印の値で文を決める。読めない・無いなら予告しない | この回に書けたかを旗で覚える形＝前回の印が残る場合や、定常の投函だけが落ちた場合に、旗と記憶がずれる |
+| D10 | §8-4 告知の文面 | 場面 1 つ `AlertScene::MemoryWrite { failure, moment }`。題名＝起動は「areka を起動できません」（要件 2.1）・途中は「areka の記憶を書けません」。本文 5 行（何が起きたか・覚えられなかったもの・置き場・理由・直し方）。環境変数の名前と既定の置き場の場所は書かない | 起動と途中で場面を 2 つに分ける形＝本文が同じで、題名と 1 行目だけが違う |
+| D11 | 1 回だけ（要件 2.5） | 起動の前は最初の失敗で戻る。途中は `FirstExit`（最初の出所だけ）。後始末の告知は `write_failure::tell_at_close` が 1 つだけ選ぶ（出所の場面 → 印を消せない → 降ろす途中の失敗の順） | — |
+| D12 | 終了コード | 書けずに終わるときは 1（起動の前・途中・印を消せない・降ろす途中のどれも）。`COMPAT_ARCHITECTURE.md` の終了コードの行を同じ変更で改める | 0 のまま＝開発者裁定 2026-09-24「main まで Result が Err で落ちる状況なら 0 以外が妥当」と合わない |
+| D13 | 印の判定 | 出所 `MemoryWriteFailed` は「きれいな終わり」の群へ入れる（降ろす手順は正規の道を通ったので、次の起動に「前回落ちた」を出さない）。今の理由と順序は変えない | 「残す」群へ入れる形＝ゴーストは落ちていないのに次の起動が既定のゴーストで Ref6/7 付きになる |
+| D14 | §8-9 インストールの語 | `IoPhase::Read` だけ `extraction`、`Stage`・`Commit`・`Rollback` は `fileio`（要件 5.1 のとおり） | — |
+
+### 11.4 危うさと手当て
+
+- **`PersistOutcome` から `Copy` が外れる**: `== PersistOutcome::Degraded` と比べる所（本体 2・テスト 4）は `matches!` へ直す。`Copy` を前提にした使い方は grep で 0（比べと match だけ）。
+- **`settle_session_mark` の戻り値が組になる**: 呼び手は本体 2（`main` の後始末・`session_end.rs`）とテスト 4 か所（2 ファイル）。テストは `.0` を足す型合わせだけで、`main_session_mark_tests.rs` に判定は足さない（要件 7.6）。
+- **`boot_resolve.rs` の 3 つの書き手の戻り値が `Result` になる**: `boot_resolve_tests.rs` の `session_mark_writers_warn_once_when_they_cannot_write` の `let ((), events)` を型合わせする。
+- **`main.rs` の行数**: 971 行 ＋ 約 14 行 ＝ 約 985 行（上限 1,000）。新しい判断は全部 `write_failure.rs` に置き、`main.rs` は呼び出しの行だけにする。
+- **書けない置き場の作り方（テスト）**: 権限を変えずに作れる形＝置き場のパスに普通のファイルを置く（`boot_resolve_tests.rs` の前例）。OS の理由の文は「アクセスが拒否されました」でなく「ディレクトリ名が無効です」などになるが、理由の文がそのまま告知と記録へ運ばれることの判定には足りる（理由の文の中身は OS の物で、areka は運ぶだけ）。
+- **`user-data-root` との重なり**: 約束のファイル（`boot_config.rs`・`roots/{mod,resolve}.rs`・`areka-update`・`areka-mcp-bridge`）には触らない。重なりうるのは `areka-ghost` の `runtime.rs`・`sylphya_wiring.rs` と `emo2_boot/ghost_switch.rs`（向こうが切替の写しをどこに置くかによる）。設計の「ウェーブの約束と重なり」の節に挙げ、進行役が向こうへ送る。
+
+### 11.5 参照
+
+- ukadoc `list_shiori_event.html`（`OnInstallFailure`・ネットワーク失敗理由の `fileio`）＝§5.2 と要件の Introduction のとおり（2026-10-16 に引き直し済み）。
+- Microsoft Learn「CreateFileW」の `FILE_FLAG_DELETE_ON_CLOSE`（最後の取っ手が閉じたら消える）。Rust の `tempfile` crate の Windows の実装が同じ旗で一時ファイルを作る（前例）。

@@ -1,18 +1,19 @@
 {
   "feature_name": "areka-P0-write-failure-notice",
   "created_at": "2026-10-16T12:54:41Z",
-  "updated_at": "2026-10-16T13:01:20Z",
+  "updated_at": "2026-10-16T14:06:52Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false,
+      "approved": true,
       "generated_at": "2026-10-16T13:01:20Z"
     },
     "design": {
-      "generated": false,
-      "approved": false
+      "generated": true,
+      "approved": false,
+      "generated_at": "2026-10-16T14:06:52Z"
     },
     "tasks": {
       "generated": false,
