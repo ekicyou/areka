@@ -242,3 +242,91 @@ pwsh の版は 7.6.7。
 - 決めること 10 → スキルの注記は消さずに、写した子の中身だけに狭めて書き直す（要件 8.4）。
 - 決めること 11 → OS の一時フォルダの 3 か所（`perf-loop.ps1:272`・`invoke-cpu-sample.ps1:202-203`・`:342`）と規則 D の穴は、この spec で直す（要件 10・要件 5.7）。
 - 残りの 2・3・5・6・7・8・9（確かめ方）・12 は設計の段で決める。
+
+---
+
+## 9. 設計の段の調べと決めたこと（2026-10-16・`/kiro-spec-design`）
+
+### 9.1 まとめ
+
+- **調べの種類**: 既存の道具の拡張（軽い調べ）。新しい依存は無い。使った手順: スキル `kiro-spec-design` の規則（`design-principles`・`design-discovery-light`・`design-synthesis`・`design-review-gate`）。簡素さの指針（ponytail）に沿い、既にある部品（`Invoke-Child`・`Invoke-Utf8Child`・判定の構文解析の手）を使い回した。
+- **主な分かったこと**:
+  - `powercfg` は渡された出力先へ**端末の出力の文字コード**で書く（932 で 932 のバイト・65001 で UTF-8・437 で `?????`）。`run-meta.txt` の `power_scheme` を端末に依らず字まで同じにするには `powercfg` をやめ、Unicode の API で取るしかない。
+  - CIM の `root\cimv2\power` の `Win32_PowerPlan` はこの机で失敗した（名前空間のエラー）。`powrprof.dll` の `PowerGetActiveScheme`＋`PowerReadFriendlyName` は `Add-Type` で呼べて、GUID と名前（`Sonos`）が取れた。
+  - xperf は端末の文字コードが 932・65001・437 のどれでも同じ ASCII のバイトを書き、パスの中の日本語の字は自分で落とす（道具の性質）。wpaexporter は今回の呼び方では日本語を出さず、書き方は決めきれなかった（.NET の画面の道具は既定で端末の出力の文字コードで書く）。
+  - 判定の規則 C を「すべての文字列を構文解析する」形に広げると、`tools/*.ps1`・`tools/perf/*.ps1` の 8,297 個の文字列のうち当たるのは `perf-loop.common.ps1:310`（直す所）と `tools/encoding-check.ps1` の 10 か所（規則の語彙と較正の見本）だけ。ただし全部を解析すると 15 秒かかる。
+  - 規則 D を「ファイルの中に `metadata` の字があれば」の粗い形にすると、`tools/crates-io.ps1` の `cargo publish … @pArgs` が誤って赤になる（同じファイルに `Invoke-Utf8Child cargo @('metadata', …)` がある）。値の流れを辿る形にする必要がある。
+
+### 9.2 調べの記録
+
+#### 9.2.1 OS の道具が渡された出力先へ書く文字コード
+
+- **きっかけ**: 決めること 4・設計の段の「調べること」1 つ目。
+- **やり方**: 窓の無い自分だけの端末（`Invoke-Utf8Child -OwnConsole`）を持つ子の中だけで、その端末を 932 → 65001 → 437 に切り替え、`Start-Process -RedirectStandardOutput` でファイルに受けたバイトを見た（開発者の端末には触れていない。見本のファイルは会話の作業場の一時フォルダ）。
+- **分かったこと**:
+  - `powercfg /getactivescheme`: 932 で `\x93d\x8C\xB9…`（932 の「電源設定の」）、65001 で `\xE9\x9B\xBB…`（UTF-8）、437 で `?????`。端末の出力の文字コードで書く。
+  - `xperf -i "<日本語の字を含むパス>"`: 3 つの文字コードで同じバイト（`xperf: error: …\x` で日本語の字の所から落ちる）。
+  - `wpaexporter`: 使い方の英文だけが出て、日本語の字の書き方は確かめられなかった。
+- **設計への影響**: `power_scheme` は `powrprof` の API で取る。xperf・wpaexporter の受け皿のファイルは端末の出力の文字コードで読む（書き替えを消すと端末は 932 のままなので、今の UTF-8 の読みでは食い違う）。
+
+#### 9.2.2 電源設定を Unicode で取る手
+
+- **試したこと**: `Get-CimInstance -Namespace root\cimv2\power -ClassName Win32_PowerPlan -Filter 'IsActive=True'` → この机で失敗。`Add-Type -MemberDefinition` で `powrprof.dll` の `PowerGetActiveScheme`（GUID・`LocalFree` で返す）と `PowerReadFriendlyName`（大きさを先に尋ねてから UTF-16 で受ける）→ `rc=0`・`d7a728f8-6d8b-4ab7-a3e3-7aaeb0f9871c`・`Sonos`。
+- **設計への影響**: 値の形は `<GUID> (<名前>)`。`powercfg` の地域語の行（`電源設定の GUID: … (Sonos)`）からは変わるが、`judge-perf.py` は `run-meta.txt` を見出しと鍵で読み、`power_scheme` を引かない（`read_run_meta`・`meta_lookup`）。鍵と節は変えない（要件 4.5）。
+
+#### 9.2.3 規則 C の文字列の中身の検査の当たり方と速さ
+
+- **やり方**: `tools/*.ps1`・`tools/perf/*.ps1` の全部の文字列（単引用符・二重引用符・ヒア文字列）を PowerShell として構文解析し、今の規則 C と同じ見方で当てた（読むだけ）。
+- **分かったこと**: 当たりは `perf-loop.common.ps1:310`（`[Console]::OutputEncoding=…` の展開文字列・`$false` は字のまま残るので代入として解ける）と、`tools/encoding-check.ps1` の 113 行（`'chcp'`・`'chcp.com'`）・306〜312 行・326 行（較正の見本。見本の名前の `'chcp inside child pwsh -c'` まで `chcp` のコマンドとして解ける）。8,297 個で 15 秒。
+- **設計への影響**: 字面に `Encoding` か `chcp` を含む文字列だけを先に絞ってから解析する。`tools/encoding-check.ps1` 自身にはこの文字列の中身の検査を当てない（文字列でない所と `-Command` の次の文字列の検査は今のまま当てる）。
+
+#### 9.2.4 規則 D の値の追跡
+
+- **分かったこと**: 素の `cargo` を変数で呼ぶ所は、今の対象では `tools/crates-io.ps1:308・311`（`@pArgs`）と workflow `crates-io.yml:160`（`@pArgs`）、perf では `invoke-followup-checks.ps1:245`（`@cargoArgs`）。`$pArgs = $PUBLISH | ForEach-Object { '-p', $_ }` はパイプの値。`$cargoArgs = @($NAR_SAMPLE_ARGS) + @(…)`・`$NAR_SAMPLE_ARGS = @('run', '-q', …, 'nar-sample-path', '--manifest-path')`。
+- **設計への影響**: 文字列の定数・配列・`+`・括弧・ほかの変数だけを辿り、コマンドの結果・メンバーの参照・メソッドの呼び出しは辿らない。これで `crates-io` は緑のまま（要件 5.5）、perf の 245 行は直す前は赤（要件 5.7）。
+
+#### 9.2.5 子のスクリプトの作り（前置きの置き場の決め手）
+
+- 子のスクリプト 4 本は単独で、`perf-loop.common.ps1` を読み込まない。`invoke-perf-run.ps1` は自前の `Write-Info`・`Stop-Run`（引数の形が違う）・`Get-PwshPath`（見つからなければ `'pwsh'` を返す）・`Get-UtcStamp`（末尾に `Z`）を持つので、`perf-loop.common.ps1` を読み込むと名前がぶつかり、`Invoke-PwshChild` が `invoke-perf-run.ps1` の `Get-PwshPath` を呼んで壊れる。
+- 子の PowerShell を起こす所は `Invoke-PwshChild` と `invoke-perf-run.ps1:407`（`check-quiet.ps1`）の 2 つ。
+
+### 9.3 形の比べ
+
+| 案 | 中身 | 良い点 | 気になる点 | 採否 |
+|---|---|---|---|---|
+| 前置きを `perf-loop.common.ps1` に置き、`invoke-perf-run.ps1` に写しを置く | 2 か所に同じ文 | ファイルが増えない | 片方だけ直されてずれる | 採らない |
+| `invoke-perf-run.ps1` が `perf-loop.common.ps1` を読み込む | 部品を共有 | 写しが無い | 名前がぶつかり壊れる（9.2.5） | 採らない |
+| `tools/utf8-child.ps1` に前置きを足す | 読み手と書き手の頼みを 1 か所に | 置き場として自然 | 範囲の外のファイル（要件の境界）を触る | 採らない |
+| **`tools/perf/perf-pwsh-child.ps1` に引数を組む部品を 1 つ置く** | `Get-PwshChildArguments` | 前置きと引用の規則の唯一の所在・名前がぶつからない | ファイルが 1 つ増える | **採る** |
+| `check-quiet.ps1` が自分の頭で書き手を替える | 子の側で頼む | 呼ぶ側を触らない | 手で `pwsh -File check-quiet.ps1` の出力を受けたときの読みが変わる（決めること 2） | 採らない |
+
+### 9.4 決めたこと（残りの決めること）
+
+- **決めること 2（前置きの置き場）**: 起こす側（`Get-PwshChildArguments`）だけ。子のスクリプトの頭には置かない。理由: 子を手で回したときの動きを変えない・前置きが 1 か所にまとまり判定で見張りやすい。
+- **決めること 3（単独のスクリプトの中の孫）**: `tools/utf8-child.ps1` の `Invoke-Utf8Child` を読み込んで使う（形は変えない）。標準出力と標準エラーの交互の順は保たない（人が読む写しだけで、機械が読む行は標準出力の 1 行）。
+- **決めること 4（OS の道具）**: `power_scheme` は `powrprof` の API（9.2.2）。xperf・wpaexporter は受け皿のファイルを端末の出力の文字コードで読む（9.2.1）。xperf の dump（`-o` で xperf が自分で書くファイル）は端末を通らないので変えない。
+- **決めること 5（ファイルにだけ出す日本語）**: 字で突き合わせる物・見出しとして読まれる物（`run-meta.txt` の見出し 6 つ・ログの目印 2 つ・`perf-loop.ps1` の正規表現 2 つ）は字を変えず、目印は `$LOG_MARKER_*` への代入、ほかは `` `u{…} `` で書く。人が読むだけの文（`DRY-RUN.txt`・`FAILED.txt`・`followup.txt` の覚え書き・`run-meta.txt` の値の失敗の札）は英文にする。これらを中身で読む道具は無い（判定器は `followup-verdict.txt` と `run-meta.txt` の鍵を読む。スキルの「`followup.txt` の総合」は判定器の報告と `FOLLOWUP RESULT` の行に当たり、覚え書きの文ではない）。英文にする理由: `` `u{…} `` で数十行の地の文を書くと、字句が読めなくなる。
+- **決めること 6（規則 C の穴）**: 全部の文字列を、字面の前の絞りの後に構文解析する（9.2.3）。正規表現で字面を探す形は採らない（今の判定の「字面で探さず構文で見る」の考えに合わせる）。`SetOut`／`SetError` は当てない。自分の例外は `tools/encoding-check.ps1` の文字列の中身の検査だけ。
+- **決めること 7（規則 B の 1 件）**: 失敗の文は目印を名前（`LOG_MARKER_SMOKE_GATE`）で言う。中身は `run-meta.txt` の `[較正値]` に残る。
+- **決めること 8（932 の判定の置き場）**: `tools/encoding-check.ps1` の窓の無い子の中だけ（全体テストのたびに回る）。本物の `Invoke-PwshChild` を `perf-loop.common.ps1` の読み込みで使う。見本を出す孫は `tools/encoding-check.ps1` 自身（内部の引数 `-PerfSampleChild`）。一時のスクリプトを書かないので「何も書き出さない」約束を保つ（要件 5.6・6.6）。`perf-loop.ps1 selftest` には足さない（性能改善ループを回すときしか回らない）。
+- **決めること 9（前後の端末の値の確かめ方）**: 判定の中は `GetConsoleOutputCP`／`GetConsoleCP`（`Add-Type`）で OS から読む。今の「own console code pages unchanged」もこの読み方に替える（.NET が覚えた値では子の書き替えに気付けない）。手元の確かめも同じ API で読む。
+- **決めること 12（`perf-loop.measure.ps1` の 993 行）**: 行の中で文面だけを書き替え、行を足さない（直した後 993 以下）。部品を足すのは `perf-loop.common.ps1` と新しいファイルの側。
+- **一時ファイルの置き場**（要件 10）: `<ワークツリー>\target\perf-loop-tmp\` の下に一意の名前で作り、使い終われば消す。`New-Item -ItemType Directory -Force` で `target\` ごと作り直す。
+
+### 9.5 組み立ての見直し（まとめる・作るか使うか・削る）
+
+- **まとめた物**: 子の PowerShell を起こす所 2 つを `Get-PwshChildArguments` 1 つにまとめた。孫の読み方は「相手が書く文字コードで読む」の 1 つの考えで 3 種（UTF-8 の相手は `Invoke-Utf8Child`・端末の文字コードで書く OS の道具は端末の文字コード・ファイルに値として残す OS の情報は Unicode の API）に分けた。
+- **作るか使うか**: 読み手は既にある `Invoke-Child`・`Invoke-Utf8Child` を使う。書き手は .NET の `StreamWriter`＋`SetOut`／`SetError`。端末の値と電源設定は Windows の API。判定は既にある構文解析の手と `Get-ConsoleRewrites` の見方を使い回す。新しい依存は無い。
+- **削った物**: 前置きを子のスクリプトの頭に置く形・ファイル渡し（案 B-1）・CIM（この机で動かない）・判定を `perf-loop.ps1 selftest` にも置く形・規則 D の範囲を見る追跡（名前で辿れば足りる）。
+
+### 9.6 危うさと手当て
+
+- 文字列の中身の検査が遅い → 字面の前の絞り（`Encoding`・`chcp`）を必ず入れる。
+- 規則 D の名前の追跡が広めに当たる → 当たったら変数の名前を分けて直す（見逃すより安全な側）。
+- 395 字句の書き直しで機械が読む行やファイルの形を誤って変える → 直す前に 7 本の機械の行を一覧にし、直した後に同じ字面で残っていることを確かめる（design の「端末へ出す文の規則」）。
+- 標準出力と標準エラーの交互の順が変わる（`Invoke-CheckQuietOnce`・`Invoke-Judge`）→ 人が読む写しだけで、機械が読む行に影響しない。
+- 手元の確かめの `rank-run -DryRun` は実行体が無いと走行を省き、子を起こさない → 実行体が在る状態で回し、子の行が出たことを確かめる。
+
+## 10. 手元での確かめの記録（要件 7.4・実装の段で書く）
+
+実装の段で、端末の文字コード・回したコマンド・終了コード・前と後の端末の値（OS から読んだ値）を書く。直す前に控えた要件 7.2 の終了コードもここに書く。
