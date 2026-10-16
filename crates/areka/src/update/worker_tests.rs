@@ -28,7 +28,8 @@ use temp_path_kit::TempPath;
 use super::*;
 use crate::exit_wait::{ClosingWaits, begin_close, register_gate};
 use crate::install::fetch_url_test_support::FakeFetch;
-use crate::update::{SummaryKind, UpdateOrder, UpdateReason};
+use crate::update::{SummaryKind, TargetKind, TargetSpec, UpdateOrder, UpdateReason};
+use areka_ghost::{BasewareRoot, BasewareRoots};
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -506,7 +507,13 @@ fn run_one(
     let (desk, asks) = mpsc::channel();
     let (jobs, handle) = spawn_worker(desk, gate, new_fetch, online);
     let (kanade, rx) = mpsc::channel();
-    jobs.send(UpdateJob { order, kanade }).expect("仕事を渡す");
+    jobs.send(UpdateJob {
+        order,
+        kanade,
+        roots: BasewareRoots::new(Vec::new()),
+        exe_dir: None,
+    })
+    .expect("仕事を渡す");
     (asks, rx, jobs, handle)
 }
 
@@ -627,6 +634,155 @@ fn standard_started_holds_online_until_the_ports_drop() {
     assert!(ONLINE.is_online(), "始まった後は通信中");
     drop(ports);
     assert!(!ONLINE.is_online(), "口を落とすと戻る");
+}
+
+// ---------------------------------------------------------------- バルーンの対象の写し
+
+/// 並びの材料（書ける根 `user`・実行ファイルの隣 `exe` と、その下の同梱のバルーン `b1`）。
+fn bundled_balloon(label: &str) -> (TempPath, PathBuf, PathBuf) {
+    let tmp = TempPath::under_target(label);
+    let (user, exe) = (tmp.child("user"), tmp.child("exe"));
+    std::fs::create_dir_all(&user).expect("書ける根");
+    let b1 = exe.join("balloon").join("b1");
+    std::fs::create_dir_all(&b1).expect("同梱のバルーン");
+    std::fs::write(
+        b1.join("descript.txt"),
+        "charset,UTF-8
+name,B
+",
+    )
+    .expect("descript");
+    (tmp, user, exe)
+}
+
+/// 同梱のバルーン 1 つを対象にした台本からの依頼でスレッドを走らせ、対象の始まりのイベントの
+/// Reference1（対象のフォルダ）を返す。返す時点で取り込み（エンジン）にはまだ入っていない。
+fn balloon_begin_dir(roots: BasewareRoots, exe: &Path) -> String {
+    let mut order = empty_order(UpdateReason::Script);
+    order.targets.push(TargetSpec {
+        kind: TargetKind::Balloon,
+        dir: exe.join("balloon").join("b1"),
+        name: "B".to_owned(),
+        descript_homeurl: Some(HOMEURL.to_owned()),
+    });
+    let (desk, asks) = mpsc::channel();
+    let (new_fetch, made) = counting_fetch();
+    let (jobs, handle) = spawn_worker(desk, Arc::default(), new_fetch, &UNOBSERVED);
+    let (kanade, rx) = mpsc::channel();
+    jobs.send(UpdateJob {
+        order,
+        kanade,
+        roots,
+        exe_dir: Some(exe.to_path_buf()),
+    })
+    .expect("仕事を渡す");
+
+    assert_eq!(asks.recv(), Ok(DeskAsk::Started));
+    let (ids, reply) = take_query(&rx);
+    let _ = reply.send(
+        ids.into_iter()
+            .map(|id| (id, ResourceOutcome::NoContent))
+            .collect(),
+    );
+    let dir = match rx.recv().expect("対象の始まりのイベントが届く") {
+        KanadeMsg::RaiseEvent { references, .. } => references[1].clone(),
+        _ => panic!("RaiseEvent のはず"),
+    };
+    assert_eq!(made.load(Ordering::SeqCst), 0, "取り込みの前");
+    // 返信端と受信端を落とす＝閉じたとして対象を捨て、依頼を終える。
+    drop(rx);
+    assert_eq!(asks.recv(), Ok(DeskAsk::OrderDone));
+    drop(jobs);
+    handle.join().expect("スレッドは終わる");
+    dir
+}
+
+/// 印の付いた並びでは、バルーンの対象は取り込みの前に書ける根の写しへ替わる（要件 4.4・10.4）。
+#[test]
+fn balloon_target_is_replaced_by_the_copy_before_import() {
+    let (_tmp, user, exe) = bundled_balloon("update-worker-balloon-copy");
+    let roots = BasewareRoots::new(vec![
+        BasewareRoot::user_root(user.clone(), false),
+        BasewareRoot::new(exe.clone()),
+    ]);
+    let copy = user.join("balloon").join("b1");
+    let dir = balloon_begin_dir(roots, &exe);
+    assert_eq!(
+        dir,
+        std::path::absolute(&copy)
+            .expect("絶対")
+            .display()
+            .to_string(),
+        "写しのフォルダが対象"
+    );
+    assert!(
+        copy.join("descript.txt").is_file(),
+        "同梱の中身が写っている"
+    );
+}
+
+/// 更新先（descript の homeurl）の無いバルーンは表示だけの物なので、印の付いた並びでも写さずに
+/// 飛ばす（要件 4.4・10.4）。
+#[test]
+fn balloon_without_homeurl_is_skipped_and_not_copied() {
+    let (_tmp, user, exe) = bundled_balloon("update-worker-balloon-no-homeurl");
+    let roots = BasewareRoots::new(vec![
+        BasewareRoot::user_root(user.clone(), false),
+        BasewareRoot::new(exe.clone()),
+    ]);
+    let mut order = empty_order(UpdateReason::Script);
+    order.targets.push(TargetSpec {
+        kind: TargetKind::Balloon,
+        dir: exe.join("balloon").join("b1"),
+        name: "B".to_owned(),
+        descript_homeurl: None,
+    });
+    let (desk, asks) = mpsc::channel();
+    let (new_fetch, made) = counting_fetch();
+    let (jobs, handle) = spawn_worker(desk, Arc::default(), new_fetch, &UNOBSERVED);
+    let (kanade, rx) = mpsc::channel();
+    jobs.send(UpdateJob {
+        order,
+        kanade,
+        roots,
+        exe_dir: Some(exe.clone()),
+    })
+    .expect("仕事を渡す");
+
+    assert_eq!(asks.recv(), Ok(DeskAsk::Started));
+    let (ids, reply) = take_query(&rx);
+    let _ = reply.send(
+        ids.into_iter()
+            .map(|id| (id, ResourceOutcome::NoContent))
+            .collect(),
+    );
+    assert_eq!(asks.recv(), Ok(DeskAsk::OrderDone), "飛ばして終える");
+    assert!(rx.try_recv().is_err(), "始まりのイベントは送らない");
+    assert_eq!(made.load(Ordering::SeqCst), 0, "取り込まない");
+    assert!(!user.join("balloon").exists(), "写さない");
+    drop(jobs);
+    handle.join().expect("スレッドは終わる");
+}
+
+/// 印の無い並びでは写さず、同梱のフォルダのまま（要件 3.4・1.4／設計「写す判断」）。
+#[test]
+fn unmarked_list_does_not_copy_the_balloon_target() {
+    let (_tmp, user, exe) = bundled_balloon("update-worker-balloon-unmarked");
+    let roots = BasewareRoots::new(vec![
+        BasewareRoot::new(user.clone()),
+        BasewareRoot::new(exe.clone()),
+    ]);
+    let dir = balloon_begin_dir(roots, &exe);
+    let bundled = exe.join("balloon").join("b1");
+    assert_eq!(
+        dir,
+        std::path::absolute(&bundled)
+            .expect("絶対")
+            .display()
+            .to_string(),
+        "同梱のフォルダのまま"
+    );
+    assert!(!user.join("balloon").exists(), "写さない");
 }
 
 // ---------------------------------------------------------------- 字面の検査
