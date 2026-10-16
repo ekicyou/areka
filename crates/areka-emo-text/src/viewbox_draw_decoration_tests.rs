@@ -832,11 +832,12 @@ fn an_underlined_line_overhang_covers_its_stroke() {
     let line = line_styles(&run, font.height, mode, &styles, default);
     assert_eq!(line.extent, EXTENT, "前提: 行の箱は縮めた丈");
     let layout = cached_line_layout(&mut exec, &run, &font, mode, &styles);
-    let strokes: Vec<_> = super::underline::collect_underlines(&layout, &line.underlines, 1.0)
-        .expect("集められる")
-        .iter()
-        .map(|r| crate::underline::stroke_rect(&r.raw, (0.0, 0.0)))
-        .collect();
+    let strokes: Vec<_> =
+        super::underline::collect_underlines(&layout, &line.underlines, 1.0, (0.0, 0.0))
+            .expect("集められる")
+            .iter()
+            .map(|r| crate::underline::stroke_rect(&r.raw, (0.0, 0.0)))
+            .collect();
     assert!(!strokes.is_empty(), "前提: 線が 1 本以上ある");
     let stroke_below = strokes.iter().map(|s| s.bottom).fold(f32::MIN, f32::max) - EXTENT;
     assert!(

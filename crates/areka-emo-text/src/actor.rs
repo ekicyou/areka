@@ -637,6 +637,10 @@ mod region_collapse_tests;
 mod region_collapse_present_tests;
 
 #[cfg(test)]
+#[path = "actor_underline_present_tests.rs"]
+mod underline_present_tests;
+
+#[cfg(test)]
 #[path = "actor_scroll_retain_tests.rs"]
 mod scroll_retain_tests;
 

@@ -7,6 +7,7 @@
 //! | §2 | 集めた後に区間の下線が立てる前の状態へ戻る（区間の外と、もともと立っていた所を含む） | 3.7 の前提 |
 //! | §3 | 集めるのが失敗しても戻し、`error!` を残して `Err` | log-first |
 //! | §4 | 描画効果のブラシを持ち、無い・写せない効果は既定の文字色の印（`None`） | 3.1 |
+//! | §5 | `render_styled` の中で集めるのに失敗したフレームは提示を見送り（面は前のまま）、次のフレームで再試行して塗る。変化の無いフレームは集めない（2.5）。失敗を仕込むのは行の生成のときの集め（可謬・plan より前）で、Phase 1 の `collect_underlines(...)?` は `apply_color_ranges` と同じ BeginDraw 前の `?` の結線を使う（Phase 1 だけの檻は持たない） | 3.1, 4.3 |
 
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::Graphics::Direct2D::{D2D1_DEVICE_CONTEXT_OPTIONS_NONE, ID2D1Brush};
@@ -123,7 +124,8 @@ fn horizontal_stroke_top_is_the_baseline_and_thickness_is_the_fonts_value() {
         let m = font_metrics(&factory, name);
         let thickness = m.underlineThickness as f32 * height as f32 / m.designUnitsPerEm as f32;
         for k in [1.0f32, 1.25, 1.5] {
-            let recorded = collect_underlines(&layout, &[range(0, length)], k).expect("集められる");
+            let recorded = collect_underlines(&layout, &[range(0, length)], k, (0.0, 0.0))
+                .expect("集められる");
             assert_eq!(recorded.len(), 1, "{name} k={k}: 区間 1 つに線 1 本");
             let raw = recorded[0].raw;
             assert_eq!(raw.reading, ReadingAxis::LeftToRight, "{name}");
@@ -161,8 +163,8 @@ fn collecting_restores_the_underline_state_of_each_range() {
     let before: Vec<bool> = (0..5).map(|p| underline_at(&layout, p)).collect();
     assert_eq!(before, [false, true, false, false, false]);
 
-    let recorded =
-        collect_underlines(&layout, &[range(0, 2), range(3, 2)], 1.0).expect("集められる");
+    let recorded = collect_underlines(&layout, &[range(0, 2), range(3, 2)], 1.0, (0.0, 0.0))
+        .expect("集められる");
     assert_eq!(recorded.len(), 2, "離れた 2 区間で 2 本");
 
     let after: Vec<bool> = (0..5).map(|p| underline_at(&layout, p)).collect();
@@ -177,8 +179,9 @@ fn a_failed_collection_still_restores_and_logs_an_error() {
     let factory = factory();
     let (_format, layout) = layout(&factory, "ＭＳ ゴシック", 12, "あいう");
     FAIL_RECORDING.set(true);
-    let (result, counts) =
-        log_capture_kit::count_levels(|| collect_underlines(&layout, &[range(0, 3)], 1.0));
+    let (result, counts) = log_capture_kit::count_levels(|| {
+        collect_underlines(&layout, &[range(0, 3)], 1.0, (0.0, 0.0))
+    });
     FAIL_RECORDING.set(false);
     assert!(
         matches!(result, Err(TextLayerError::Device { .. })),
@@ -224,7 +227,8 @@ fn drawing_effect_becomes_a_brush_or_the_default_color_marker() {
             .expect("ブラシでない効果");
     }
 
-    let recorded = collect_underlines(&layout, &[range(0, 3)], 1.0).expect("集められる");
+    let recorded =
+        collect_underlines(&layout, &[range(0, 3)], 1.0, (0.0, 0.0)).expect("集められる");
     assert_eq!(recorded.len(), 3, "効果の切れ目ごとに 1 本");
     let expected: ID2D1Brush = brush.cast().expect("ID2D1Brush");
     assert_eq!(
@@ -234,4 +238,84 @@ fn drawing_effect_becomes_a_brush_or_the_default_color_marker() {
     );
     assert!(recorded[1].brush.is_none(), "効果なし＝既定の文字色");
     assert!(recorded[2].brush.is_none(), "写せない効果＝既定の文字色");
+}
+
+// ────────────────────────── §5 描く段: 集めるのに失敗したフレームは見送り、次のフレームで再試行
+
+/// 下線の行を描くフレームで集めるのに失敗すると、`error!` を残して `Err` を返し、そのフレームは
+/// 提示しない（面は前のまま）。次のフレームで再試行して塗る。変化の無いフレームは集めない
+/// （失敗を仕込んでも `Ok(false)`）。
+///
+/// 失敗が当たるのは、最初に集める所＝行の生成のとき（行の保持庫・可謬・plan より前）の集めで
+/// ある（失敗した行は保持庫に入らないので、次のフレームで行の生成からやり直す）。Phase 1 で描く
+/// 行ごとに呼ぶ `collect_underlines(...)?` は、`apply_color_ranges` と同じ BeginDraw 前の `?` の
+/// 結線（失敗＝target 未設定のまま見送り）を使うだけなので、Phase 1 の失敗だけを仕込む檻は
+/// 別に持たない。
+#[test]
+fn a_failed_collection_skips_the_frame_and_the_next_frame_retries() {
+    use super::super::ViewboxExecutor;
+    use super::super::test_support::{build, geo_model, glyph_items, opaque_count};
+    use crate::look::{StyleTable, TextLook};
+    use crate::region::{ScaleContract, TextRegion};
+
+    let mut rig = Rig::new();
+    let image = (60u32, 30u32);
+    let mut surface = rig.attach(image, 1.0);
+    let mode = WritingMode::HorizontalTb;
+    let font = ResolvedFont::resolve(&geo_model(Some(12)));
+    let region = TextRegion::resolve(&geo_model(Some(12)), image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let default = &font.looks.default;
+    let mut styles = StyleTable::default();
+    let under = styles.intern(
+        &TextLook {
+            underline: true,
+            ..default.clone()
+        },
+        default,
+    );
+    let (mut canvas, window) = build(&glyph_items("あい"), &region, mode, 12.0);
+    if let crate::canvas::ResidentContent::GlyphRun(run) = &mut canvas.residents[0].content {
+        for glyph in &mut run.glyphs {
+            glyph.style = under;
+        }
+    }
+    let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+    let mut render = |surface: &mut crate::surface::TextSurface| {
+        exec.render_styled(&canvas, &window, &font, mode, &contract, surface, &styles)
+    };
+
+    FAIL_RECORDING.set(true);
+    let (failed, counts) = log_capture_kit::count_levels(|| render(&mut surface));
+    FAIL_RECORDING.set(false);
+    assert!(
+        matches!(failed, Err(TextLayerError::Device { .. })),
+        "集めるのに失敗したフレームは Err"
+    );
+    assert!(counts.error >= 1, "error! が残る");
+    assert_eq!(
+        opaque_count(&surface.read_back().expect("read_back")),
+        0,
+        "失敗したフレームは提示しない（面は前のまま）"
+    );
+
+    assert!(
+        render(&mut surface).expect("次のフレームは再試行して描く"),
+        "描いた"
+    );
+    let painted = surface.read_back().expect("read_back");
+    assert!(opaque_count(&painted) > 0, "字と線が描かれた");
+
+    FAIL_RECORDING.set(true);
+    let unchanged = render(&mut surface);
+    FAIL_RECORDING.set(false);
+    assert!(
+        matches!(unchanged, Ok(false)),
+        "変化の無いフレームは集めない（失敗を仕込んでも Ok(false)）: {unchanged:?}"
+    );
+    assert_eq!(
+        surface.read_back().expect("read_back"),
+        painted,
+        "面は変わらない"
+    );
 }

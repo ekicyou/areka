@@ -425,6 +425,7 @@ mod tests {
         "actor_scroll_retain_tests.rs",
         "actor_test_support.rs",
         "actor_tests.rs",
+        "actor_underline_present_tests.rs",
         "draw.rs",
         "draw_catalog.rs",
         "draw_catalog_tests.rs",

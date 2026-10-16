@@ -557,10 +557,14 @@ pub(crate) struct RecordedUnderline {
 
 /// 区間に下線を立て、`IDWriteTextLayout::Draw` を記録の受け手へ渡し、区間の下線を戻す。
 /// 戻しは集めるのが失敗しても行う。失敗は error! を残して Err（当該フレームを見送る）。
+/// `origin` は `Draw` に渡す原点＝D2D が字を描く原点（行の原点＋可視窓のずれ）。DirectWrite は
+/// 画素への寄せでベースラインを原点込みで装置の画素へ寄せるので、字と同じ原点で集める（実装で
+/// 改めた: 原点 (0,0) では原点×k が整数画素でない行で 1 装置画素ずれる）。線の値は原点込みで返る。
 pub(crate) fn collect_underlines(
     layout: &IDWriteTextLayout,
     ranges: &[DWRITE_TEXT_RANGE],
     scale: f32,
+    origin: (f32, f32),
 ) -> Result<Vec<RecordedUnderline>, TextLayerError>;
 ```
 - 受け手は `#[implement(IDWriteTextRenderer1)]`（実装で改めた: 縦書きの行の Draw は `IDWriteTextRenderer1` を持たない受け手を `DWRITE_E_TEXTRENDERERINCOMPATIBLE` で断る。角度つきの `DrawUnderline` で向きの角度が `stroke_rect` の前提（横書き 0°・縦書き 90°）と違えば `error!` を残して Err）。`DrawUnderline` だけを記録し、`DrawGlyphRun`・`DrawStrikethrough`・`DrawInlineObject` は何もしない。画素への寄せの問い（`IsPixelSnappingDisabled`・`GetCurrentTransform`・`GetPixelsPerDip`）は D2D の描画と同じ条件（拡大率 k の変換・1 DIP＝1 画像画素）を答える。
@@ -575,8 +579,8 @@ pub(crate) fn collect_underlines(
 
 **責務と制約**
 - 区間の選び: `line_styles` が `LineStyles::underlines` を作る。選ぶのは今 `SetUnderline(true)` を焼いている区間と同じ（既定と違う装飾の区間で、見た目の下線が真で、既定の下線と違うもの）。作者の `\f[underline,1]` とアンカーの既定の下線はどちらもこの区間に入る。`apply_font_ranges` は `SetUnderline` を焼かない＝D2D の `DrawTextLayout` は下線を描かない。
-- 行の生成のとき（保持庫・1 回）: 下線の区間がある行は `collect_underlines` で幾何を集め、`stroke_overhang` を実測のはみ出し（`LineOverhang`）と欄ごとの大きい方で合わせる。描き替えの範囲が線を取りこぼさない（寄せた線は寄せる前の線と字の箱の間にあるので、同じ範囲に入る）。
-- Phase 1（描く行ごと・色を焼いた後）: 下線の区間がある行だけ `collect_underlines` を呼び、`stroke_rect`（行の原点＋可視窓のずれ）で矩形を決め、見える窓の行なら `pull_inside`（`bound`＝面の物理寸 ÷ k）を掛け、ブラシ（無ければ既定の文字色）と組にして持つ。
+- 行の生成のとき（保持庫・1 回）: 下線の区間がある行は `collect_underlines` を原点 (0,0) で呼んで幾何を集め（はみ出しは行の箱に対する量なので、行の箱の原点で測る）、`stroke_overhang` を実測のはみ出し（`LineOverhang`）と欄ごとの大きい方で合わせる。描き替えの範囲が線を取りこぼさない（寄せた線は寄せる前の線と字の箱の間にあるので、同じ範囲に入る。原点 (0,0) で集めた線と、描く原点で集めた線の画素への寄せの違い（1 装置画素まで）は、描き替えの範囲のガード（全辺 `ceil(1 image px × k)` ≥ 1 装置画素）が覆う。1 字ずつ出す部分の描き替えの最後の面が 1 フレームで描いた面と同じことを実 GPU の檻で確かめる）。
+- Phase 1（描く行ごと・色を焼いた後）: 下線の区間がある行だけ `collect_underlines` を字を描く原点（行の原点＋可視窓のずれ）で呼び、`stroke_rect` は原点 (0,0)（値は原点込み）で矩形を決め、見える窓の行なら `pull_inside`（`bound`＝面の物理寸 ÷ k）を掛け、ブラシ（無ければ既定の文字色）と組にして持つ。
 - Phase 2（ダーティ矩形ごと）: その行の `DrawTextLayout` の後に、組にした矩形を `FillRectangle` で塗る（k の変換の下・矩形の範囲限定の中）。不可謬の区間の約束を守る（可謬の呼び出しは Phase 1 で済ます）。
 - 打ち消し線は今のまま `SetStrikethrough` を焼き、D2D が描く（要件 3.8）。配置・当たり行には触れない（要件 3.7・3.9）。
 

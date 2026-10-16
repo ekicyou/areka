@@ -45,11 +45,15 @@ pub(crate) struct RecordedUnderline {
 ///
 /// 戻す先は立てる前の状態（区間の中の下線の有無の切れ目ごと）。戻しは集めるのが失敗しても
 /// 行う。失敗は `error!` を残して `Err`（当該フレームを見送る）。`scale` は描画の拡大率 k
-/// （画素への寄せの問いに答える変換）。区間が空なら何もしない。
+/// （画素への寄せの問いに答える変換）。`origin` は `Draw` に渡す原点＝D2D が字を描く原点
+/// （DirectWrite はベースラインを原点込みで装置の画素へ寄せるので、原点×k が整数画素でない行で
+/// 原点 (0,0) で集めると字のベースラインと 1 装置画素ずれうる）。線の値はこの原点込みで返る。
+/// 区間が空なら何もしない。
 pub(crate) fn collect_underlines(
     layout: &IDWriteTextLayout,
     ranges: &[DWRITE_TEXT_RANGE],
     scale: f32,
+    origin: (f32, f32),
 ) -> Result<Vec<RecordedUnderline>, TextLayerError> {
     if ranges.is_empty() {
         return Ok(Vec::new());
@@ -59,7 +63,7 @@ pub(crate) fn collect_underlines(
     for &range in ranges {
         underline_runs(layout, range, &mut saved)?;
     }
-    let collected = set_and_draw(layout, ranges, scale);
+    let collected = set_and_draw(layout, ranges, scale, origin);
     let restored = restore(layout, &saved);
     let recorded = collected?;
     restored?;
@@ -101,6 +105,7 @@ fn set_and_draw(
     layout: &IDWriteTextLayout,
     ranges: &[DWRITE_TEXT_RANGE],
     scale: f32,
+    origin: (f32, f32),
 ) -> Result<Vec<RecordedUnderline>, TextLayerError> {
     for &range in ranges {
         unsafe { layout.SetUnderline(true, range) }
@@ -114,7 +119,7 @@ fn set_and_draw(
         failure: Rc::clone(&failure),
     }
     .into();
-    unsafe { layout.Draw(None, &renderer, 0.0, 0.0) }
+    unsafe { layout.Draw(None, &renderer, origin.0, origin.1) }
         .map_err(device_err("IDWriteTextLayout::Draw(下線を集める)"))?;
     // DirectWrite は `DrawUnderline` の失敗を `Draw` の戻り値へ伝えないので、受け手の側で見張る。
     if let Some(hresult) = failure.get() {
