@@ -449,10 +449,11 @@ function Get-PwshChildArguments {
 ### 手元での確かめ（要件 7・重い計測なし）
 
 - 回し方: 開発者の端末は触らない。窓の無い自分だけの端末を持つ子（`Invoke-Utf8Child -OwnConsole` で起こす・その子が自分の端末だけを 932 にする）の中から道具を回す。その子の手順書きは `<ワークツリー>\target\` の下に置く一時ファイルにし、`tools/` には置かない。前と後の端末の値は、その子の中で `GetConsoleOutputCP`／`GetConsoleCP` を OS から読む（1.2）。
+- 実行体: `areka.exe` はビルドせず、空の置き物を `<ワークツリー>\target\perf-loop-check\bin\areka.exe` に置き（`New-Item -ItemType File -Force`）、7.2 と静寂の確認のコマンドへ `-BinDir <ワークツリー>\target\perf-loop-check\bin` で渡す。`invoke-perf-run.ps1` の `-DryRun` は実行体を起こす手前（716 行）で終わり、実行体は在ることと SHA-256 だけを見るので、置き物で配管を確かめられる。32bit SHIORI ヘルパが無いことは注意の 1 行が出るだけ。`cargo build -p areka` は回さない（PC を何分も占めるため・7.3）。
 - 直す前に同じ条件で 7.2 のコマンドを回し、終了コードを控える（7.2 の「直す前と同じ」の基準）。
 - 7.1: `pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest -Goal <goal>` が 0 で終わり、`SELFTEST RESULT ok=<n> ng=0`、前後の値が 932・932（`invoke-cpu-sample.ps1 -SelfTest`・`check-quiet.ps1 -SelfTest`・`invoke-followup-checks.ps1 -SelfTest`（`Invoke-Judge`）を子の PowerShell で通る）。
-- 7.2: `preflight` と、子の PowerShell を起こす計測のサブコマンド 1 つ以上（例: `rank-run -Iter 1 -DryRun`。実行体が在る状態で回し、`invoke-perf-run.ps1` の行が出たことで子が回ったことを確かめる）を `-OutRoot <ワークツリー>\target\perf-loop-check` で回し、直す前と同じ終了コードと末尾の `PERF-LOOP RESULT` の行、前後の値が同じ。
-- 2 つ目の子の起こし方（`Invoke-CheckQuietOnce`）: `perf-loop` の `-DryRun` は子へ `-AutoQuiet` を渡さないので、上の 2 つはこの道を通らない。本番の計測はすべて `-AutoQuiet` で走るので、`pwsh -NoProfile -File tools/perf/invoke-perf-run.ps1 -Profile short -Build dev -AutoQuiet -Goal draw-load-parity -DryRun`（`-DryRun` でも静寂の確認は本当に回る・頭書 95 行）を同じ 932 の子の中で 1 回回し、`check-quiet.ps1` の `CHECK-QUIET RESULT` の行が写されることと終了コードを控える。静かでなければ 2 で終わるのも正しい結果（所要は 20 秒〜最長 4 分半＝確かめ 4 回×20 秒＋待ち 3 回×60 秒）。
+- 7.2: `preflight` と、子の PowerShell を起こす計測のサブコマンド 1 つ以上（例: `rank-run -Iter 1 -DryRun`。下の「実行体」の置き物を `-BinDir` で渡し、`invoke-perf-run.ps1` の行が出たことで子が回ったことを確かめる）を `-OutRoot <ワークツリー>\target\perf-loop-check` で回し、直す前と同じ終了コードと末尾の `PERF-LOOP RESULT` の行、前後の値が同じ。
+- 2 つ目の子の起こし方（`Invoke-CheckQuietOnce`）: `perf-loop` の `-DryRun` は子へ `-AutoQuiet` を渡さないので、上の 2 つはこの道を通らない。本番の計測はすべて `-AutoQuiet` で走るので、`pwsh -NoProfile -File tools/perf/invoke-perf-run.ps1 -Profile short -Build dev -AutoQuiet -Goal draw-load-parity -BinDir <ワークツリー>\target\perf-loop-check\bin -DryRun`（`-DryRun` でも静寂の確認は本当に回る・頭書 95 行）を同じ 932 の子の中で 1 回回し、`check-quiet.ps1` の `CHECK-QUIET RESULT` の行が写されることと終了コードを控える。静かでなければ 2 で終わるのも正しい結果（所要は 20 秒〜最長 4 分半＝確かめ 4 回×20 秒＋待ち 3 回×60 秒）。
 - 7.4: 端末の値・回したコマンド・終了コード・前後の値を `research.md` の節「手元での確かめの記録」に残す。
 
 ### 静的な確かめ
