@@ -167,3 +167,40 @@
 - **rmcp 3.5.0 の 5 秒**: `service.rs` 1762〜1803 行目。応答が 5 秒を越えたときに `timed out draining in-flight responses` を `warn` で出す（中継の既定の絞り `rmcp=error` では出ない）。
 - **件 5.1 で中継の側に当てられる変異の有無**（6 節の 10）。
 - **件 1 の確かめの所要時間**（6 節の 4 の (a) を選ぶとき）。
+
+## 9. 設計の段（2026-10-16・`/kiro-spec-design -y`）
+
+### 9.1 調べ方と確かめたこと
+
+- **調べ方**: 軽い調べ（今ある仕組みの延長）。外の調べは要らなかった（新しい依存なし）。読んだもの: 中継の `lib.rs`・`main.rs`・`scan.rs`・`http.rs`・`service_tests.rs`（道具）・`service_failure_tests.rs`・`tests/common/fake_server.rs`・`fake_server_tests.rs`・`tests/exe_test.rs`、`crates/areka-mcp/src/port.rs`・`port_tests.rs`、`tools/package.ps1` の `Read-PeInfo`・`Test-ZipContent`・説明と較正値、`doc/ssp-mcp/bridge-diff-areka.md`。
+- **rmcp 3.5.0 の 202**（`c:\rust\cargo\registry\src\index.crates.io-*\rmcp-3.5.0\src\transport\streamable_http_client.rs` 1628〜1667 行目）: `Accepted` の応答は `awaits_stream_response` になり、その `id` は待ちの表から外されない。中継の上限で `Timeout` になる（8 節の見立てどおり）。
+- **rmcp 3.5.0 の 5 秒**（同 `src/service.rs` 1762〜1803 行目）: `QuitReason::Closed` のとき `Duration::from_secs(5)` で途中の応答を待つ（`Cancelled` は 2 秒）。外から変えられない。
+- **PE の Subsystem**: オプションヘッダーの先頭から 68 バイト目の 2 バイト。PE32 は BaseOfData（4）と 4 バイトの ImageBase、PE32+ は BaseOfData なしで 8 バイトの ImageBase なので、どちらも 68 で同じ。2＝`IMAGE_SUBSYSTEM_WINDOWS_GUI`、3＝`IMAGE_SUBSYSTEM_WINDOWS_CUI`（Microsoft の PE の書式の文書の定義）。
+- **偽の受け口の自己確認**が使う項目は公開の型（`FakeServer`・`Script`・`Reply`・`Conn`。欄も公開）と `MCP_PATH`・`SERVER_NAME` だけ。非公開の定数（`WAIT` など）は使っていない。
+- **偽の受け口の止め方**: `stop` は自分の tokio を落とすので、`Reply::Delayed` で眠っている仕事は待たずに消える（件 5 のテストで 12 秒の遅れを使っても、テストの終わりが延びない）。
+- **記録の文を読むもの**: 「既定の候補で待ち受ける」を引くのは `port.rs`・`port_tests.rs` と、この spec の文書だけ（完了した spec の文書を除く全体を grep）。文を変えても壊れる読み手は無い。
+- **確かめの記録の前例**: 完了した `areka-P0-mcp-stdio-bridge` の `verification/package-red-runs.md`。
+
+### 9.2 6 節の決めごとの答え
+
+| 6 節 | 決めたこと | 理由 |
+|---|---|---|
+| 1 判定の番号 | 項目 5 の中（否の文は `5 wrong subsystem: ...`） | 9 にすると総括の行 `content checks 1-8 all passed` が変わり、要件 1.6 に当たる。項目 5 は「PE を読む所」 |
+| 2 端末の行 | 今の `machine ..., imports ...` の行は変えず、直後に `{名前}: subsystem {値}` を 1 行 | 今の行の形を変えない（要件 1.6） |
+| 3 `SCRIPT_VERSION` | 上げない | 版の扱いは境界の外 |
+| 4 1 回の確かめ | (a) `main.rs` の 1 行目を一時的に消して `package.ps1 -Arch x64` を 1 回。同じ走りに `areka.exe: subsystem 2`（合格の道筋）も出るので、緑の走りはもう回さない | (b)(c) は判定だけを走らせる口が無く、口を足すのは境界の外。負荷を 1 回に抑える |
+| 5 残す束 | 部品のテストの束（`src/lib.rs` に兄弟の宣言 `fake_server_tests`） | 自己確認は部品のテストで exe を起こさない。要件 2.3 は関数の名前で数える |
+| 6 接続の関数の置き場 | `http.rs` の `pub(crate) async fn connect` | 探索は既に `http.rs` を使う（下の層）。向きが今と同じ |
+| 7 件 6 の直し方 | (a) 共有の 2 行を中立の文「areka の MCP の口の番号に既定の候補を使う」に＋`port_tests.rs` の期待 | (b) は `config.rs`（触らない約束）を通る。中立の文は本体（待ち受けを試す）にも中継（探す）にも合う |
+| 8 件 6 のテスト | (a) `port_tests.rs` で「既定の候補を使う」があり「待ち受ける」が無いことを見る | 開発用の依存を足さない・exe ごしにしない（要件 8.1） |
+| 9 件 5.2 | 今のテストは判定していないと見て、1 本足す（`Reply::Delayed(1 秒)`） | 今のテストは「届けた要求が閉じた時点で途中」を決まって踏まない |
+| 10 件 5 の変異 | `main.rs` の `EXIT_WAIT` を 0 にすると 5.1（5 秒より前に終わる）と 5.2（応答の前に終わる）が赤。5.1 の「30 秒を待たない」の側は rmcp の決まりで、中継の側に変異が無い旨を記録する。件 4 は `http.rs` の `classify` の 202 の枝を `NoResponse` に替える | 要件 8.2 |
+| 11 件 7 の行 | 4 節 96 行目を書き直す（行は足さない） | 今の行が同じ件を書いている |
+| 12 件 8 の行 | 4 節に新しい行（96 行目の後）。頭の数を 22 → 23 | 限界は 7 と並べて読める所へ。「探索の待ち」は待ちの長さの行で、限界とは別 |
+
+### 9.3 まとめる・借りる・削る
+
+- **まとめる**: 件 2・3 はどちらも「同じものを 1 つにする」だけで、新しい抽象は作らない（`connect` は 1 つの関数・テストの宣言は 1 行の移し替え）。
+- **借りる**: 件 1 は今の `Read-PeInfo` と項目 5 の繰り返し、件 4 は `Reply::Accepted` と `Reply::Never` のテストの形、件 5 は `run_bridge`・`Reply::Delayed`・`Finished::waited`、件 6 は `port_tests.rs` の `capture`。新しい道具は 0。
+- **削る**: 較正値への名前の表の追加（境界の外・値は変わらない）・`SCRIPT_VERSION` の上げ・中継の側の記録の文のテスト・配布スクリプトの判定だけを走らせる口・緑の確かめの走り、はどれも取らない。
+- **使ったスキルの手引き**: `kiro-spec-design` の `rules/`（設計の原則・軽い調べ・まとめ方・審査の門）。
