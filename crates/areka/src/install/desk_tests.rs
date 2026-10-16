@@ -705,7 +705,8 @@ fn run_between_installs_only_on_the_switch_to_the_held_destination() {
 
 fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
     BootContext {
-        root: root.clone(),
+        roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
+        roots_origin: crate::roots::RootsOrigin::EnvVar,
         app_profile_dir: root.dir().join("profile"),
         helper_exe: root.dir().join("helper.exe"),
         argv_session: false,

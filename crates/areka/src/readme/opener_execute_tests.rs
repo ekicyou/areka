@@ -30,7 +30,7 @@ impl Fixture {
         let ctx = OpenContext {
             ghost: "G".to_owned(),
             ghost_dir,
-            baseware: Some(root),
+            baseware: Some(areka_ghost::BasewareRoots::single(root.dir().to_path_buf())),
         };
         Fixture { _tmp: tmp, ctx }
     }

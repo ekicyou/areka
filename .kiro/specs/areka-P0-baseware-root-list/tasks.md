@@ -59,7 +59,7 @@
   - _Requirements: 1.15, 2.5, 8.3, 9.1, 12.2_
 
 - [ ] 3. 起動を並びの上へ付け替える
-- [ ] 3.1 起動の文脈を根の並びへ置き換え、起動時の決め方と記録をつなぐ
+- [x] 3.1 起動の文脈を根の並びへ置き換え、起動時の決め方と記録をつなぐ
   - 起動の文脈の根 1 つの欄を、並びと出どころの 2 つの欄に置き換える。起動の決め方は 2.1 の決めた並び（またはその失敗）を受け、記録（2.2 の起動のとき）を残してから鎖へ進む
   - `boot_config` の旧の根の決め方（`resolve_root_from`・`resolve_root`）・失敗の型 `RootError`・出どころの型 `RootSource` を削除し、参照をすべて 2.1 の `roots::` の型へ切り替える（移すのではなく消す＝2 つ目の `RootError` は存在しない）。それを確かめていた今のテストの範囲は 2.1 の `roots/resolve_tests.rs` が受け持つ
   - 告知の `alert_text` の `RootMissing` の腕と、`alert_tests.rs` の `RootMissing` の場合を新しい `roots::` の失敗の値へ書き直す（文面は仮の最小のもので、仕上げは 3.3）。`main_config_input_tests.rs` の `resolve_root_from` の塊を落とし、`boot_config_balloon_tests.rs` の旧の型の組み立ても新しい型へ直す
@@ -217,3 +217,5 @@
 
 - 1.5: `areka-nar` は作業フォルダを根の綴りの完全一致でまとめる。同じ根を別の綴り（大文字小文字違い等）で答えると 2 つ目の掘りの掃除が 1 つ目の作業フォルダを消しうるので、4.5 の宛先の部品は 1 つの根に対してどの問いにも同じ綴り（並びの写しの綴り）を答えること。
 - 2.1: design の `RootError` は控えを持たなかったが、要件 1.7・1.9・1.12・1.13 の warn を起動が失敗する経路でも残すため、各腕に `skipped`・`memory_fell_back` を持たせた（進行役の判断）。2.2 の記録の部品は失敗の値からも控えと「既定へ倒した」を warn に出すこと。`main.rs` の `mod roots;` の `#[allow(dead_code)]` は 3.1 で外す。
+- 3.1: argv でゴーストを渡す起動では起動時の隠れの記録（`log_hidden`・`survey`）を出さない（要件 11.2「argv の起動は目録の外」と既存テストの「argv の起動は warn を出さない」を優先・`root_listed` は両経路で出す・テスト `boot_lists_roots_and_counts_hidden_only_without_argv` が固定）。要件 2.5 の欠けではない。
+- 3.1: 移り途中の仮の形は `crate::roots::head_root`（見つかる先頭の根・無ければ先頭）1 つに集めた。使う所: `boot_config.rs`（2 か所・3.2）・`ghost_switch.rs` `running_name`（3.2）・`main.rs` `running_name`／後始末の告知（3.2）・`install/desk.rs` `GhostFacts.root`／`install/overwrite.rs`（4.5・4.6）。`install/procedure.rs` の `list_balloons(&BasewareRoot::new(facts.root))` も 4.6。7.1 で `head_root` ごと消す。

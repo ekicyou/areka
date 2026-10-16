@@ -37,7 +37,7 @@ fn ghost_frame_item(world: &World, _ctx: &MenuContext) -> MenuItem {
         return frame(false, Vec::new());
     };
     let current = ctx.current.ghost.folder.as_deref();
-    let children: Vec<MenuItem> = areka_ghost::catalog::list_ghosts(&ctx.root)
+    let children: Vec<MenuItem> = areka_ghost::catalog_roots::list_ghosts(&ctx.roots)
         .into_iter()
         .map(|entry| {
             let folder = entry.identity.folder;

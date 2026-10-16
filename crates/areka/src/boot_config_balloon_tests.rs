@@ -5,9 +5,8 @@
 //! 「読んだ 2 鍵が鎖へ届くこと」「ゴーストの中の `balloon/` を読まないこと」「引数の腕は読まないこと」と
 //! 記録の件数だけ。根は `TempPath::under_target`（ワークツリーの `target\test-roots\` の下・要件 7.7）。
 
-use crate::boot_config::{RootSource, resolve_balloon_for_ghost, resolve_boot_from};
+use crate::boot_config::{resolve_balloon_for_ghost, resolve_boot_from};
 use crate::boot_resolve::BalloonRoute;
-use areka_ghost::BasewareRoot;
 use log_capture_kit::{CapturedEvent, capture};
 use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
@@ -66,7 +65,7 @@ fn put_memory(ghost: &Path, folder: &str) {
 /// 入力を集める口を呼び、(段, フォルダ名) と記録を返す。決まったバルーンの場所が
 /// `<根>/balloon/<フォルダ名>` であることもここで確かめる。
 fn resolve(tmp: &TempPath, ghost: &Path) -> ((BalloonRoute, String), Vec<CapturedEvent>) {
-    let root = BasewareRoot::new(tmp.path().to_path_buf());
+    let root = areka_ghost::BasewareRoots::single(tmp.path().to_path_buf());
     let (got, events) = capture(|| resolve_balloon_for_ghost(&root, ghost, no_pick));
     let got = got.expect("決まる");
     let folder = got.folder.expect("引数以外はフォルダ名が在る");
@@ -157,7 +156,7 @@ fn boot(tmp: &TempPath, rest: &[&Path]) -> (BalloonRoute, PathBuf, Vec<CapturedE
     let app_dir = tmp.child("app-profile");
     let (got, events) = capture(|| {
         resolve_boot_from(
-            Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
+            crate::roots::single_env(tmp.path().to_path_buf()),
             &args,
             &app_dir,
             no_pick,

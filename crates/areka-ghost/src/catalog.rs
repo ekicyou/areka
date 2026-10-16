@@ -33,7 +33,7 @@ pub struct BasewareRoot {
 }
 
 impl BasewareRoot {
-    /// 実在検査はしない（検査は bin の `resolve_root_from`）。
+    /// 実在検査はしない（見つかるかは `BasewareRoots::present` が呼ぶたびに見る）。
     pub fn new(dir: PathBuf) -> Self {
         Self { dir }
     }

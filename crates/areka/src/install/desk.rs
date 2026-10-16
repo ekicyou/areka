@@ -22,7 +22,7 @@ use std::sync::mpsc::{self, Receiver, SendError, Sender};
 use std::thread::{self, JoinHandle};
 
 use areka_actor::ReplySender;
-use areka_ghost::catalog::{list_balloons, list_ghosts};
+use areka_ghost::catalog_roots::{list_balloons, list_ghosts};
 use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod};
 use areka_nar::InstallKind;
 use areka_sylphya::{PersistKey, PersistScope};
@@ -337,10 +337,10 @@ fn answer(world: &mut World, ask: DeskAsk) {
 /// 大文字小文字を無視して突き合わせる・目録に無ければ `areka-nar` の綴りと `install.txt` の `name`）。
 /// 最後に今のゴーストの記憶の書き手の反映を待つ（背景のスレッドへ答えるのはその後）。
 fn record_installed(world: &mut World, record: InstalledRecord) {
-    let root = world
+    let roots = world
         .get_resource::<BootContext>()
-        .map(|ctx| ctx.root.clone());
-    let ghosts = match (&root, record.kind) {
+        .map(|ctx| ctx.roots.clone());
+    let ghosts = match (&roots, record.kind) {
         (Some(root), InstallKind::Ghost | InstallKind::Shell | InstallKind::Supplement) => {
             list_ghosts(root)
         }
@@ -365,7 +365,7 @@ fn record_installed(world: &mut World, record: InstalledRecord) {
             record_last_installed(world, folder);
         }
         InstallKind::Balloon => {
-            let balloons = root.as_ref().map(list_balloons).unwrap_or_default();
+            let balloons = roots.as_ref().map(list_balloons).unwrap_or_default();
             let folder = balloons
                 .iter()
                 .find(|entry| entry.identity.folder.eq_ignore_ascii_case(&record.folder))
@@ -431,7 +431,8 @@ fn ghost_facts(world: &World) -> Option<GhostFacts> {
         .or_else(|| folder.clone())
         .unwrap_or_else(|| dir.display().to_string());
     Some(GhostFacts {
-        root: ctx.root.dir().to_path_buf(),
+        // 移り途中（4.5 で宛先の部品へ）: 入れる根は見つかるいちばん上の根。
+        root: crate::roots::head_root(&ctx.roots).dir().to_path_buf(),
         folder,
         name,
         sakura_name: areka_ghost::catalog::sakura_name(dir),

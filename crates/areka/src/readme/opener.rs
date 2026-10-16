@@ -30,8 +30,8 @@ pub(crate) struct OpenContext {
     pub ghost: String,
     /// ゴーストのフォルダ（`ghost/<フォルダ>`）の絶対パス。
     pub ghost_dir: PathBuf,
-    /// ベースウェアの根（BootContext が無ければ None）。
-    pub baseware: Option<areka_ghost::BasewareRoot>,
+    /// ベースウェアの根の並び（BootContext が無ければ None）。
+    pub baseware: Option<areka_ghost::BasewareRoots>,
 }
 
 /// 解決の失敗。
@@ -189,7 +189,7 @@ pub(crate) fn submit(world: &World, destination: Destination) {
     let context = OpenContext {
         ghost,
         ghost_dir,
-        baseware: world.get_resource::<BootContext>().map(|c| c.root.clone()),
+        baseware: world.get_resource::<BootContext>().map(|c| c.roots.clone()),
     };
     if let Err(mpsc::SendError(job)) = opener.tx.send(OpenJob {
         destination,
@@ -300,7 +300,7 @@ fn named_folder(store: Store, name: &str, ctx: &OpenContext) -> Result<PathBuf, 
     let root = ctx.baseware.as_ref().ok_or(OpenFailure::NoBasewareRoot)?;
     let hit = match store {
         Store::Ghost => resolve_switch_target(
-            &areka_ghost::catalog::list_ghosts(root),
+            &areka_ghost::catalog_roots::list_ghosts(root),
             &GhostSpec::Name(name.to_owned()),
         )
         .map(|t| t.dir),

@@ -258,7 +258,7 @@ pub(crate) fn request_skin_switch_with(
     };
     let (candidates, current) = match req.kind {
         SkinKind::Shell => (shell_candidates(&ctx.ghost_dir), ctx.current_shell.clone()),
-        SkinKind::Balloon => (balloon_candidates(&ctx.root), ctx.current_balloon.clone()),
+        SkinKind::Balloon => (balloon_candidates(&ctx.roots), ctx.current_balloon.clone()),
     };
     let installed = installed_for(world, req.kind, &ctx.ghost_dir);
     let target = match resolve_skin_target(
@@ -350,7 +350,7 @@ pub(crate) fn request_skin_switch_with(
 
 /// 入口が受理に要る文脈（World から借りずに写し取ったもの）。
 struct SwitchContext {
-    root: areka_ghost::BasewareRoot,
+    roots: areka_ghost::BasewareRoots,
     ghost_dir: std::path::PathBuf,
     kanade: std::sync::mpsc::Sender<KanadeMsg>,
     /// 今のシェルのフォルダ名（実行系のマウントの末尾・実行系が無ければ無し）。
@@ -396,7 +396,7 @@ impl SwitchContext {
             return None;
         }
         Some(Self {
-            root: ctx.root.clone(),
+            roots: ctx.roots.clone(),
             ghost_dir: session.ghost_dir().to_path_buf(),
             kanade,
             current_shell: session.current_shell_folder(),

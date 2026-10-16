@@ -28,7 +28,7 @@ impl Fixture {
         let ctx = OpenContext {
             ghost: "G".to_owned(),
             ghost_dir: root.ghost_dir("g"),
-            baseware: Some(root),
+            baseware: Some(areka_ghost::BasewareRoots::single(root.dir().to_path_buf())),
         };
         Fixture { _tmp: tmp, ctx }
     }
@@ -263,7 +263,7 @@ fn named_fixture() -> (TempPath, OpenContext) {
     let ctx = OpenContext {
         ghost: "G".to_owned(),
         ghost_dir: root.ghost_dir("g"),
-        baseware: Some(root),
+        baseware: Some(areka_ghost::BasewareRoots::single(root.dir().to_path_buf())),
     };
     (tmp, ctx)
 }
@@ -311,7 +311,7 @@ fn named_shell_by_name_then_folder() {
 fn named_balloon_by_name_then_folder() {
     let (_tmp, ctx) = named_fixture();
     let os = FakeOs::default();
-    let root = ctx.baseware.clone().unwrap();
+    let root = ctx.baseware.clone().unwrap().roots()[0].clone();
     assert_eq!(
         resolve(&named("balloon", "bb"), &ctx, &os),
         Ok(want(Verb::Open, root.balloon_dir("ba"), None, None))

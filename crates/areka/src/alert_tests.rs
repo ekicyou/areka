@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use log_capture_kit::{CapturedEvent, capture};
 
 use super::*;
-use crate::boot_config::{RootError, RootSource};
+use crate::roots::{RootError, RootsOrigin};
 use areka_kanade::{ShioriFault, ShioriFaultKind};
 
 // ---------------------------------------------------------------- 道具立て
@@ -54,15 +54,27 @@ fn assert_contains_path(body: &str, path: &Path) {
     );
 }
 
+/// 実行ファイルの場所が取れない失敗の値。
+fn exe_unavailable() -> RootError {
+    RootError::ExeLocationUnavailable {
+        tried: Vec::new(),
+        origin: RootsOrigin::Default,
+        skipped: Vec::new(),
+        memory_fell_back: false,
+    }
+}
+
 // ---------------------------------------------------------------- 4 場面の記録
 
 /// 根なし: 決まった根が実在しない。本文に根の絶対パスが入る（要件 1.4・6.1）。
 #[test]
 fn root_missing_logs_one_error_with_absolute_root() {
     let dir = abs("no-such-root");
-    let scene = AlertScene::RootMissing(RootError::NotADirectory {
-        dir: dir.clone(),
-        source: RootSource::EnvVar,
+    let scene = AlertScene::RootMissing(RootError::NoneFound {
+        tried: vec![dir.clone()],
+        origin: RootsOrigin::EnvVar,
+        skipped: Vec::new(),
+        memory_fell_back: false,
     });
     let body = only_alert_body(&raise_suppressed(&scene));
     assert!(body.starts_with("根が決まりません"), "{body}");
@@ -145,9 +157,9 @@ fn ghost_missing_from_argv_names_the_given_path() {
 /// 空の `AREKA_ROOT` は空のパスを綴らず「空です」と告げる（絶対化できない唯一の場合）。
 #[test]
 fn root_missing_with_empty_env_says_it_is_empty() {
-    let scene = AlertScene::RootMissing(RootError::NotADirectory {
-        dir: PathBuf::new(),
-        source: RootSource::EnvVar,
+    let scene = AlertScene::RootMissing(RootError::EnvAllEmpty {
+        skipped: Vec::new(),
+        memory_fell_back: false,
     });
     let (_, body) = alert_text(&scene);
     assert!(body.starts_with("根が決まりません"), "{body}");
@@ -157,7 +169,7 @@ fn root_missing_with_empty_env_says_it_is_empty() {
 /// exe の場所が取れないときは `AREKA_ROOT` で根を渡す道を示す（要件 1.4）。
 #[test]
 fn root_missing_without_exe_location_points_to_env() {
-    let (_, body) = alert_text(&AlertScene::RootMissing(RootError::ExeLocationUnavailable));
+    let (_, body) = alert_text(&AlertScene::RootMissing(exe_unavailable()));
     assert!(body.starts_with("根が決まりません"), "{body}");
     assert!(body.contains("AREKA_ROOT"), "{body}");
 }
@@ -182,7 +194,7 @@ fn suppressed_from_reads_the_value() {
 #[test]
 fn startup_scenes_keep_the_startup_title() {
     let scenes = [
-        AlertScene::RootMissing(RootError::ExeLocationUnavailable),
+        AlertScene::RootMissing(exe_unavailable()),
         AlertScene::GhostMissing {
             ghost_store: abs("root").join("ghost"),
             argv: None,

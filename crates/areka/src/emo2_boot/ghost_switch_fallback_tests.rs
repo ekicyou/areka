@@ -39,7 +39,8 @@ pub(super) fn switching_world(root: &BasewareRoot, target: &str) -> World {
     let mut world = World::new();
     world.insert_non_send(AppExit::new());
     world.insert_resource(BootContext {
-        root: root.clone(),
+        roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
+        roots_origin: crate::roots::RootsOrigin::EnvVar,
         app_profile_dir: root.dir().join("profile"),
         helper_exe: root.dir().join("helper.exe"),
         argv_session: false,

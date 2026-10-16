@@ -20,7 +20,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::HSTRING;
 
-use crate::boot_config::{RootError, RootSource};
+use crate::roots::{RootError, RootsOrigin};
 
 /// 告知を抑える環境変数（要件 6.5・裁定 2）。設定されていれば抑える。
 /// ただし未設定・空・空白だけ・"0" は「設定されていない」と読む（`AREKA_TICK_GATE=0` と同じく 0 で切れる）。
@@ -76,28 +76,27 @@ pub(crate) fn fault_kind_text(kind: ShioriFaultKind) -> &'static str {
 /// 「失敗の内容」「確かめること」、SHIORI の場面は「どのゴーストか」「失敗の種類」「理由」）。
 pub(crate) fn alert_text(scene: &AlertScene) -> (String, String) {
     let lines: [String; 3] = match scene {
-        AlertScene::RootMissing(RootError::ExeLocationUnavailable) => [
+        // 文面は仮の最小のもの（並びに合わせた仕上げは 3.3）。
+        AlertScene::RootMissing(RootError::ExeLocationUnavailable { .. }) => [
             "根が決まりません: 実行ファイルの場所が取れません。".to_owned(),
             ROOT_BY_ENV.to_owned(),
             ROOT_SHAPE.to_owned(),
         ],
-        // 空の AREKA_ROOT は絶対化できない唯一の値。空のパスは綴らない。
-        AlertScene::RootMissing(RootError::NotADirectory {
-            dir,
-            source: RootSource::EnvVar,
-        }) if dir.as_os_str().is_empty() => [
+        AlertScene::RootMissing(RootError::EnvAllEmpty { .. }) => [
             "根が決まりません: 環境変数 AREKA_ROOT が空です。".to_owned(),
             ROOT_BY_ENV.to_owned(),
             ROOT_SHAPE.to_owned(),
         ],
-        AlertScene::RootMissing(RootError::NotADirectory { dir, source }) => {
-            let what = match source {
-                RootSource::EnvVar => "環境変数 AREKA_ROOT の指すフォルダがありません。",
-                RootSource::ExeDir => "実行ファイルのあるフォルダが見つかりません。",
+        AlertScene::RootMissing(RootError::NoneFound { tried, origin, .. }) => {
+            let what = match origin {
+                RootsOrigin::EnvVar => "環境変数 AREKA_ROOT の指すフォルダがありません。",
+                RootsOrigin::Memory => "アプリの記憶の指すフォルダがありません。",
+                RootsOrigin::Default => "実行ファイルのあるフォルダが見つかりません。",
             };
+            let tried: Vec<String> = tried.iter().map(|d| d.display().to_string()).collect();
             [
                 format!("根が決まりません: {what}"),
-                format!("置く場所: {}", dir.display()),
+                format!("置く場所: {}", tried.join("; ")),
                 ROOT_SHAPE.to_owned(),
             ]
         }

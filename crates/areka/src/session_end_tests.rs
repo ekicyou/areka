@@ -10,7 +10,6 @@
 use std::sync::mpsc;
 use std::time::Duration;
 
-use areka_ghost::BasewareRoot;
 use areka_kanade::{
     CancelReason, ChangeHandoff, KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFault,
     ShioriFaultKind,
@@ -73,7 +72,8 @@ fn bare_world(tmp: &TempPath) -> (World, mpsc::Sender<KanadeNotice>) {
     let (tx, rx) = mpsc::channel();
     world.insert_non_send(KanadeNoticeRx(rx));
     world.insert_resource(BootContext {
-        root: BasewareRoot::new(tmp.path().to_path_buf()),
+        roots: areka_ghost::BasewareRoots::single(tmp.path().to_path_buf()),
+        roots_origin: crate::roots::RootsOrigin::EnvVar,
         app_profile_dir: tmp.child("app-profile"),
         helper_exe: tmp.child("shiori-host32-helper.exe"),
         argv_session: false,

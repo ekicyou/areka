@@ -129,7 +129,8 @@ fn rig(label: &str) -> Rig {
     let mut world = World::new();
     world.init_resource::<Schedules>();
     world.insert_resource(BootContext {
-        root: root.clone(),
+        roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
+        roots_origin: crate::roots::RootsOrigin::EnvVar,
         app_profile_dir: temp.path().join("profile"),
         helper_exe: temp.path().join("helper.exe"),
         argv_session: false,

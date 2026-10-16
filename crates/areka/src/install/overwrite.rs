@@ -146,7 +146,7 @@ pub(super) fn run_between(world: &mut World) {
         .map(|f| f.target.folder.clone());
     let root = world
         .get_resource::<BootContext>()
-        .map(|ctx| ctx.root.dir().to_path_buf());
+        .map(|ctx| crate::roots::head_root(&ctx.roots).dir().to_path_buf()); // 移り途中（4.5）
     let Some(mut desk) = world.get_non_send_mut::<InstallDesk>() else {
         return;
     };

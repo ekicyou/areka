@@ -146,7 +146,9 @@ fn hidden_shell_by_name_and_the_current_one_are_candidates() {
         "今のものへも切り替える"
     );
 
-    let balloons = balloon_candidates(&root);
+    let balloons = balloon_candidates(&areka_ghost::BasewareRoots::single(
+        root.dir().to_path_buf(),
+    ));
     let hit = resolve_skin_target(
         &balloons,
         &by_name("かくかく"),
@@ -298,7 +300,9 @@ fn balloon_lastinstalled_resolves_only_when_in_the_catalog() {
     let resolve = |world: &World| {
         let installed = installed_for(world, SkinKind::Balloon, &ghost);
         folder(resolve_skin_target(
-            &balloon_candidates(&root),
+            &balloon_candidates(&areka_ghost::BasewareRoots::single(
+                root.dir().to_path_buf(),
+            )),
             &by_name("lastinstalled"),
             Some("kaku"),
             installed.as_deref().map_err(|r| *r),

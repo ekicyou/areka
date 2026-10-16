@@ -11,8 +11,8 @@
 
 use std::path::{Path, PathBuf};
 
-use areka_ghost::BasewareRoot;
-use areka_ghost::catalog::{list_all_shells, list_balloons, list_shells};
+use areka_ghost::BasewareRoots;
+use areka_ghost::catalog::{list_all_shells, list_shells};
 use bevy_ecs::prelude::Resource;
 use bevy_ecs::world::World;
 
@@ -107,8 +107,8 @@ pub(crate) fn shell_candidates(ghost_dir: &Path) -> Vec<SkinCandidate> {
 }
 
 /// 根の `balloon/` の目録のバルーン。
-pub(crate) fn balloon_candidates(root: &BasewareRoot) -> Vec<SkinCandidate> {
-    list_balloons(root)
+pub(crate) fn balloon_candidates(roots: &BasewareRoots) -> Vec<SkinCandidate> {
+    areka_ghost::catalog_roots::list_balloons(roots)
         .into_iter()
         .map(|e| SkinCandidate {
             dir: e.dir,

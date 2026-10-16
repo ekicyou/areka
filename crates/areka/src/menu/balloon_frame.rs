@@ -28,7 +28,7 @@ fn balloon_frame_item(world: &World, _ctx: &MenuContext) -> MenuItem {
         );
         return skin_frame(Frame::Balloon, SkinKind::Balloon, Vec::new(), None);
     };
-    let balloons = areka_ghost::catalog::list_balloons(&ctx.root)
+    let balloons = areka_ghost::catalog_roots::list_balloons(&ctx.roots)
         .into_iter()
         .map(|entry| entry.identity)
         .collect();

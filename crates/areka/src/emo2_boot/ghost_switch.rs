@@ -344,7 +344,7 @@ pub(crate) fn request_ghost_switch_with(
         );
         return SwitchVerdict::NoContext;
     };
-    let entries = areka_ghost::catalog::list_ghosts(&ctx.root);
+    let entries = areka_ghost::catalog_roots::list_ghosts(&ctx.roots);
     let current_folder = ctx.current.ghost.folder.clone();
     // 特別な名前は同名のゴーストより先に解く。メニューのフォルダの名指しは素通し。記録は読むだけ。
     let spec = match &req.ghost {
@@ -625,7 +625,7 @@ fn record_steady_memory(world: &World) {
         );
         return;
     }
-    let name = running_name(&ctx.root, &ctx.current.ghost);
+    let name = running_name(&crate::roots::head_root(&ctx.roots), &ctx.current.ghost);
     publisher.persist_put(
         PersistScope::App,
         vec![(PersistKey::LastRunning, name.clone())],
@@ -707,7 +707,7 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
 /// [`boot_into`]（由来＝前回落ちた・経路＝既定）。成功なら段を「迎え入れ（既定）」に。
 pub(crate) fn switch_to_default(world: &mut World, fallen_name: &str) {
     let default_dir = world.get_resource::<BootContext>().and_then(|ctx| {
-        areka_ghost::catalog::list_ghosts(&ctx.root)
+        areka_ghost::catalog_roots::list_ghosts(&ctx.roots)
             .into_iter()
             .find(|e| e.identity.folder == DEFAULT_GHOST_FOLDER)
             .map(|e| e.dir)
@@ -790,9 +790,9 @@ fn boot_into(
         false
     };
     // 作り口と文脈は同期の I/O の前に確かめる（無ければ何を解いても起こせない）。
-    let context = world.get_resource::<BootContext>().map(|c| c.root.clone());
+    let context = world.get_resource::<BootContext>().map(|c| c.roots.clone());
     let has_source = world.contains_non_send::<GhostBootInputsSource>();
-    let (Some(root), true) = (context, has_source) else {
+    let (Some(roots), true) = (context, has_source) else {
         let reason = if has_source {
             "boot_context"
         } else {
@@ -805,7 +805,7 @@ fn boot_into(
         );
         return failed("no_context", reason.to_owned());
     };
-    let balloon = match resolve_balloon_for_ghost(&root, &ghost.dir, pick_index) {
+    let balloon = match resolve_balloon_for_ghost(&roots, &ghost.dir, pick_index) {
         Ok(balloon) => balloon,
         Err(NoBalloon { balloon_store }) => {
             return failed("balloon", balloon_store.display().to_string());

@@ -234,6 +234,7 @@ fn has_invalid_chars(item: &str) -> bool {
 }
 
 /// 並びを記憶の値へ。実行ファイルのフォルダと同じ根は `<exe>`、ほかは絶対パスの綴り（要件 1.10・6.8）。純粋。
+#[allow(dead_code)] // 使い手は並びの変更の適用（tasks.md 5.3）
 pub(crate) fn encode_memory(roots: &BasewareRoots, exe_dir: Option<&Path>) -> String {
     roots
         .roots()

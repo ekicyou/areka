@@ -11,6 +11,7 @@ use super::resolve::{ResolvedRoots, RootError, RootSkip, RootsOrigin};
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum ReportOccasion {
     Boot,
+    #[allow(dead_code)] // 使い手は並びの変更の適用（tasks.md 5.3）
     Change,
 }
 
