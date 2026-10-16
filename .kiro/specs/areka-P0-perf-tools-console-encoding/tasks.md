@@ -115,7 +115,7 @@
   - _Boundary: InvokeCpuSample_
   - _Depends: 4.3_
   - _Requirements: 4.1, 4.2, 4.3, 4.4_
-- [ ] 5.6 (P) 追いの確かめの道具の文面と `followup.txt` の覚え書きを ASCII の英文にする
+- [x] 5.6 (P) 追いの確かめの道具の文面と `followup.txt` の覚え書きを ASCII の英文にする
   - 端末と `followup.txt` の両方へ出す止まりの文は R1、ファイルにだけ出す覚え書きは R3。`FOLLOWUP RESULT` の行とファイルの名前・行の並び・鍵は変えない
   - 完了の状態: `invoke-followup-checks.ps1` に規則 A・B が当たらず、機械が読む行が 1.1 の一覧と同じ字面
   - _Boundary: InvokeFollowupChecks_

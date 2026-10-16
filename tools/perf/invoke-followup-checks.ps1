@@ -231,9 +231,9 @@ function Write-Note {
 
 function Stop-Run {
     param([int]$Code, [string]$Reason)
-    Write-Host "[invoke-followup-checks] 中止: $Reason" -ForegroundColor Red
+    Write-Host "[invoke-followup-checks] stopped: $Reason" -ForegroundColor Red
     if ($script:NoteLines) {
-        Write-Note "中止: $Reason"
+        Write-Note "stopped: $Reason"
         Set-Content -LiteralPath $script:NotePath -Value ($script:NoteLines -join [Environment]::NewLine) -Encoding utf8
     }
     Write-Host ("FOLLOWUP RESULT overall=INCONCLUSIVE clickthrough=- drag=- dpi=- balloon_follow=- code={0} dir={1}" -f $Code, $script:OutDirPath)
@@ -250,11 +250,11 @@ function Get-NarSampleMap {
     $result = $null
     # cargo（と窓口）は UTF-8 で書くので、端末の文字コードに依らず UTF-8 で読む
     try { $result = Invoke-Utf8Child cargo $cargoArgs }
-    catch { Stop-Run $EXIT_FAIL "検体の窓口を呼べません（cargo $($cargoArgs -join ' ')）: $($_.Exception.Message)" }
+    catch { Stop-Run $EXIT_FAIL "cannot call the sample lookup (cargo $($cargoArgs -join ' ')): $($_.Exception.Message)" }
     if ($result.Code -ne 0) {
         # 標準エラーは端末へ直に出なくなったので、止める前に行のまま写す
         foreach ($errLine in $result.ErrLines) { Write-Info $errLine }
-        Stop-Run $EXIT_FAIL "検体の窓口が失敗しました（終了コード $($result.Code)・cargo $($cargoArgs -join ' ')）。理由は上の標準エラーに出ています。"
+        Stop-Run $EXIT_FAIL "the sample lookup failed (exit code $($result.Code), cargo $($cargoArgs -join ' ')). The reason is in the stderr lines above."
     }
     $lines = @($result.Out -split '\r?\n')
     $map = @{}
@@ -275,7 +275,7 @@ function Get-NarSamplePath {
     param([Parameter(Mandatory = $true)][string]$Sample, [Parameter(Mandatory = $true)][string]$Key)
     $map = Get-NarSampleMap -Sample $Sample
     if (-not $map.ContainsKey($Key) -or -not $map[$Key]) {
-        Stop-Run $EXIT_FAIL "検体の窓口の出力に '$Key=' の行がありません（検体 '$Sample'・出た鍵: $(($map.Keys | Sort-Object) -join ', ')）。"
+        Stop-Run $EXIT_FAIL "the sample lookup output has no '$Key=' line (sample '$Sample', keys seen: $(($map.Keys | Sort-Object) -join ', '))."
     }
     return $map[$Key]
 }
@@ -375,7 +375,7 @@ function Test-ExTransparent {
 if ($SelfTest) {
     $python = Get-PythonCommand
     if (-not $python) {
-        Write-Host '[invoke-followup-checks] python が見つかりません（自己較正は judge-followup.py を呼びます）。' -ForegroundColor Red
+        Write-Host '[invoke-followup-checks] python not found (the selftest calls judge-followup.py).' -ForegroundColor Red
         exit $EXIT_BAD_ARGS
     }
     Invoke-Judge -Python $python -Arguments @($judgePath, '--selftest')
@@ -406,12 +406,12 @@ foreach ($name in @($Checks | ForEach-Object { [string]$_ -split ',' })) {
     $trimmed = $name.Trim()
     if (-not $trimmed) { continue }
     if ($CHECK_ALL -notcontains $trimmed) {
-        Stop-Run $EXIT_BAD_ARGS "-Checks に未知の検査名があります: '$trimmed'（使えるのは $($CHECK_ALL -join '・')）"
+        Stop-Run $EXIT_BAD_ARGS "-Checks has an unknown check name: '$trimmed' (allowed: $($CHECK_ALL -join ', '))"
     }
     if ($requested -notcontains $trimmed) { $requested += $trimmed }
 }
 if ($requested.Count -eq 0) {
-    Stop-Run $EXIT_BAD_ARGS '-Checks が空です。確かめる検査が 0 件では、何も確かめずに合格を返してしまいます。'
+    Stop-Run $EXIT_BAD_ARGS '-Checks is empty. With 0 checks the run would pass without checking anything.'
 }
 # 判定表の並びは固定語彙の順に揃える（出力の並びが実行順で揺れないように）
 $requested = @($CHECK_ALL | Where-Object { $requested -contains $_ })
@@ -421,36 +421,36 @@ if (-not [System.IO.Path]::IsPathFullyQualified($BinDir)) { $BinDir = Join-Path 
 $binDirFull = [System.IO.Path]::GetFullPath($BinDir).TrimEnd('\')
 $exePath = Join-Path $binDirFull 'areka.exe'
 if (-not (Test-Path -LiteralPath $exePath -PathType Leaf)) {
-    Stop-Run $EXIT_FAIL "実行体がありません: $exePath（-BinDir を確かめるか cargo build -p areka を先に実行してください）"
+    Stop-Run $EXIT_FAIL "executable not found: $exePath (check -BinDir, or run cargo build -p areka first)"
 }
 
 if (-not $GhostRoot) { $GhostRoot = Get-NarSamplePath -Sample $SAMPLE_NAME -Key 'folder' }
 if (-not [System.IO.Path]::IsPathFullyQualified($GhostRoot)) {
-    Stop-Run $EXIT_BAD_ARGS "-GhostRoot は絶対パスで指定してください（相対だと SHIORI の読み込みに失敗します）: '$GhostRoot'"
+    Stop-Run $EXIT_BAD_ARGS "-GhostRoot must be an absolute path (a relative path makes SHIORI loading fail): '$GhostRoot'"
 }
 $ghostRootFull = [System.IO.Path]::GetFullPath($GhostRoot).TrimEnd('\')
 if (-not (Test-Path -LiteralPath $ghostRootFull -PathType Container)) {
-    Stop-Run $EXIT_BAD_ARGS "-GhostRoot のフォルダがありません: $ghostRootFull"
+    Stop-Run $EXIT_BAD_ARGS "-GhostRoot folder not found: $ghostRootFull"
 }
 if (-not $BalloonRoot) { $BalloonRoot = Get-NarSamplePath -Sample $SAMPLE_NAME -Key "balloon.$SAMPLE_BALLOON_NAME" }
 if (-not [System.IO.Path]::IsPathFullyQualified($BalloonRoot)) {
-    Stop-Run $EXIT_BAD_ARGS "-BalloonRoot は絶対パスで指定してください: '$BalloonRoot'"
+    Stop-Run $EXIT_BAD_ARGS "-BalloonRoot must be an absolute path: '$BalloonRoot'"
 }
 $balloonRootFull = [System.IO.Path]::GetFullPath($BalloonRoot).TrimEnd('\')
 if (-not (Test-Path -LiteralPath $balloonRootFull -PathType Container)) {
-    Stop-Run $EXIT_BAD_ARGS "-BalloonRoot のフォルダがありません: $balloonRootFull"
+    Stop-Run $EXIT_BAD_ARGS "-BalloonRoot folder not found: $balloonRootFull"
 }
 if ($ExitMs -lt 20000) {
-    Stop-Run $EXIT_BAD_ARGS "-ExitMs が短すぎます（$ExitMs ms）。表示成立と 4 検査に足りません（20000 ms 以上）。"
+    Stop-Run $EXIT_BAD_ARGS "-ExitMs is too short ($ExitMs ms). It is not enough for the show-ready point and the 4 checks (use 20000 ms or more)."
 }
 
 $python = Get-PythonCommand
 if (-not $python) {
-    Stop-Run $EXIT_BAD_ARGS 'python が見つかりません（判定は judge-followup.py が行います）。'
+    Stop-Run $EXIT_BAD_ARGS 'python not found (judge-followup.py does the judging).'
 }
 
-Write-Info "[invoke-followup-checks] 版 $SCRIPT_VERSION / 実行体 $exePath"
-Write-Info "[invoke-followup-checks] 出力先 $($script:OutDirPath) / 検査 $($requested -join ',') / 自動終了 ${ExitMs}ms"
+Write-Info "[invoke-followup-checks] version $SCRIPT_VERSION / executable $exePath"
+Write-Info "[invoke-followup-checks] output $($script:OutDirPath) / checks $($requested -join ',') / auto-exit ${ExitMs}ms"
 
 # =============================================================================
 # 実走の起動
@@ -462,8 +462,8 @@ Write-Probe -Check 'session' -Step 'begin' -Fields @(
     "bin_dir=$($binDirFull -replace '\s','_')"
 )
 Write-Note "invoke-followup-checks.ps1 $SCRIPT_VERSION"
-Write-Note "実行体: $exePath"
-Write-Note "検査  : $($requested -join ', ')"
+Write-Note "executable: $exePath"
+Write-Note "checks    : $($requested -join ', ')"
 
 $proc = $null
 $prevSmoke = [Environment]::GetEnvironmentVariable($SMOKE_EXIT_ENV_NAME)
@@ -484,17 +484,17 @@ try {
             -RedirectStandardError $errLogPath `
             -NoNewWindow -PassThru
     } catch {
-        Stop-Run $EXIT_FAIL "areka を起動できませんでした（$exePath）: $($_.Exception.Message)"
+        Stop-Run $EXIT_FAIL "could not start areka ($exePath): $($_.Exception.Message)"
     }
-    if ($null -eq $proc) { Stop-Run $EXIT_FAIL "areka を起動できませんでした（$exePath）。" }
-    Write-Info "[invoke-followup-checks] 起動しました（プロセス ID $($proc.Id)）。表示成立点を待ちます。"
+    if ($null -eq $proc) { Stop-Run $EXIT_FAIL "could not start areka ($exePath)." }
+    Write-Info "[invoke-followup-checks] started (process ID $($proc.Id)). Waiting for the show-ready point."
 
     # --- 表示成立点を待つ（ここから先が観測の前提）------------------------------
     $showReady = Wait-RunLogPattern -Path $runLogPath -Since $launchedAt `
         -Pattern $LOG_MARKER_SHOW_READY -TimeoutMs $SHOW_READY_TIMEOUT_MS
     if (-not $showReady) {
         Write-Probe -Check 'session' -Step 'show_ready' -Fields @("waited_ms=$SHOW_READY_TIMEOUT_MS", 'result=timeout')
-        Stop-Run $EXIT_FAIL "表示成立点（apply(ShowSurface)）が $SHOW_READY_TIMEOUT_MS ms 以内に出ませんでした。$runLogPath を確認してください。"
+        Stop-Run $EXIT_FAIL "the show-ready point (apply(ShowSurface)) did not appear within $SHOW_READY_TIMEOUT_MS ms. Check $runLogPath."
     }
     Start-Sleep -Milliseconds 1500   # 2 キャラ分の初期配置が落ち着くまで
     Write-Probe -Check 'session' -Step 'show_ready' -Fields @("waited_ms=$SHOW_READY_TIMEOUT_MS", 'result=ok')
@@ -529,8 +529,8 @@ try {
         "input_injection=$(if ($inputOk) { 'available' } else { 'unavailable' })",
         "injection=$injection"
     )
-    Write-Note "操作の注入: $injection（SetCursorPos ret=$setRet 実移動=$cursorMoved / SendInput 送出=$sent lasterr=$sendErr）"
-    Write-Info "[invoke-followup-checks] 操作の注入: $injection（カーソル=$cursorOk 入力=$inputOk）"
+    Write-Note "input injection: $injection (SetCursorPos ret=$setRet moved=$cursorMoved / SendInput sent=$sent lasterr=$sendErr)"
+    Write-Info "[invoke-followup-checks] input injection: $injection (cursor=$cursorOk input=$inputOk)"
 
     # --- 対象の窓を決める -------------------------------------------------------
     # キャラ窓とバルーン窓はクラス名も表題も同じ（実測: どちらも wintf-winmsg-executor）。
@@ -573,7 +573,7 @@ try {
             "x=$($win.X)", "y=$($win.Y)", "w=$($win.W)", "h=$($win.H)", "ex=$($ex.Ex)"
         )
     }
-    Write-Note "PID $targetPid の可視窓 $($windows.Count) 枚（うち種別の判った窓 $(@($windows | Where-Object { $_.Kind -ne '-' }).Count) 枚）"
+    Write-Note "PID $targetPid has $($windows.Count) visible windows ($(@($windows | Where-Object { $_.Kind -ne '-' }).Count) of known kind)"
 
     # 対になっているキャラ窓とバルーン窓のうち、最も小さい scope を対象にする（決定論）
     $charWin = $null; $balloonWin = $null
@@ -589,12 +589,12 @@ try {
         foreach ($name in $requested) {
             Write-Probe -Check $name -Step 'status' -Fields @('status=unavailable', 'reason=window_classification_failed')
         }
-        Write-Note 'キャラ窓とバルーン窓の対を特定できませんでした（[transition] の win_kind が出ていない）。'
+        Write-Note 'could not identify the character window and balloon window pair (no win_kind in [transition]).'
     } else {
         Write-Probe -Check 'windows' -Step 'target' -Fields @(
             "scope=$($charWin.Scope)", "char_hwnd=$($charWin.Key)", "balloon_hwnd=$($balloonWin.Key)"
         )
-        Write-Note "対象: キャラ窓 $($charWin.Key) / バルーン窓 $($balloonWin.Key)（scope=$($charWin.Scope)）"
+        Write-Note "target: character window $($charWin.Key) / balloon window $($balloonWin.Key) (scope=$($charWin.Scope))"
 
         # =====================================================================
         # 検査 1: clickthrough
@@ -602,7 +602,7 @@ try {
         if ($requested -contains 'clickthrough') {
             if (-not $cursorOk) {
                 Write-Probe -Check 'clickthrough' -Step 'status' -Fields @('status=unavailable', 'reason=cursor_injection_unavailable')
-                Write-Note 'clickthrough: カーソルを動かせないため判定不能（SetCursorPos が拒否された）。'
+                Write-Note 'clickthrough: inconclusive, the cursor cannot be moved (SetCursorPos was refused).'
             } else {
                 $begin = [DateTime]::UtcNow
                 $rect = Get-WindowRectObject -Hwnd $charWin.Hwnd
@@ -628,7 +628,7 @@ try {
                         "hwnd=$($charWin.Key)", "point=$($point.Name)", "ex=$($ex.Ex)",
                         "transparent=$observed", "expected=$($point.Expect)", "result=$result"
                     )
-                    Write-Note "clickthrough $($point.Name) 点 ($($point.X),$($point.Y)): ex=$($ex.Ex) transparent=$observed 期待=$($point.Expect) → $result"
+                    Write-Note "clickthrough $($point.Name) point ($($point.X),$($point.Y)): ex=$($ex.Ex) transparent=$observed expect=$($point.Expect) -> $result"
                 }
                 $null = [AkFollowupW32]::SetCursorPos($cursorBefore.X, $cursorBefore.Y)
                 Start-Sleep -Milliseconds $SETTLE_MS
@@ -646,7 +646,7 @@ try {
         if ($requested -contains 'drag') {
             if (-not $inputOk) {
                 Write-Probe -Check 'drag' -Step 'status' -Fields @('status=unavailable', 'reason=input_injection_unavailable')
-                Write-Note 'drag: 入力を注入できないため判定不能（SendInput が拒否された）。窓メッセージの偽装では実ドラッグと同じ経路を通らないので代替しない。'
+                Write-Note 'drag: inconclusive, input cannot be injected (SendInput was refused). Faked window messages do not take the same path as a real drag, so they are not used instead.'
             } else {
                 $begin = [DateTime]::UtcNow
                 foreach ($pair in @(@($charWin, 'char'), @($balloonWin, 'balloon'))) {
@@ -713,7 +713,7 @@ try {
                 } else {
                     Write-Probe -Check 'drag' -Step 'status' -Fields @('status=unavailable', 'reason=cursor_did_not_reach_target')
                 }
-                Write-Note "drag: ($fromX,$fromY) → ($toX,$toY) カーソル到達=$landed"
+                Write-Note "drag: ($fromX,$fromY) -> ($toX,$toY) cursor_reached=$landed"
             }
         }
 
@@ -747,11 +747,11 @@ try {
                 $index++
             }
             $distinctDpi = @($monitors | ForEach-Object { $_.Dpi } | Sort-Object -Unique)
-            Write-Note "モニタ $($monitors.Count) 面・DPI の種類 $($distinctDpi -join ',')"
+            Write-Note "monitors $($monitors.Count), distinct DPI $($distinctDpi -join ',')"
 
             if ($distinctDpi.Count -lt 2) {
                 Write-Probe -Check 'dpi' -Step 'status' -Fields @('status=unavailable', 'reason=single_dpi')
-                Write-Note 'dpi: DPI の異なるモニタが 2 面以上ないため判定不能。'
+                Write-Note 'dpi: inconclusive, there are not 2 or more monitors with different DPI.'
             } else {
                 $begin = [DateTime]::UtcNow
                 $homeRect = Get-WindowRectObject -Hwnd $charWin.Hwnd
@@ -798,7 +798,7 @@ try {
                     "end_t=$(Get-UtcStamp)"
                 )
                 Write-Probe -Check 'dpi' -Step 'status' -Fields @('status=done', 'reason=-')
-                Write-Note "dpi: $homeDpi → $($away.Dpi) へ移して戻した（出=$moveOk 戻=$backOk）"
+                Write-Note "dpi: moved $homeDpi -> $($away.Dpi) and back (out=$moveOk back=$backOk)"
             }
         }
 
@@ -814,7 +814,7 @@ try {
             }
             if ($notDone.Count -gt 0 -or $sources.Count -eq 0) {
                 Write-Probe -Check 'balloon_follow' -Step 'status' -Fields @('status=unavailable', 'reason=depends_on_drag_dpi')
-                Write-Note "balloon_follow: 前後で比べる操作（$($notDone -join '・')）が成立しなかったため判定不能。"
+                Write-Note "balloon_follow: inconclusive, the operations to compare before and after ($($notDone -join ', ')) did not complete."
             } else {
                 Write-Probe -Check 'balloon_follow' -Step 'status' -Fields @('status=done', 'reason=-')
             }
@@ -822,12 +822,12 @@ try {
     }
 
     # --- 有界自動終了を待つ（正規の終了経路を使い、ログを最後まで書かせる）-------
-    Write-Info '[invoke-followup-checks] 検査を終えました。有界自動終了を待ちます。'
+    Write-Info '[invoke-followup-checks] checks done. Waiting for the bounded auto-exit.'
     $deadline = $launchedAt.AddMilliseconds($ExitMs).AddSeconds($EXIT_MARGIN_SEC)
     while (-not $proc.HasExited) {
         if ([DateTime]::UtcNow -ge $deadline) {
             try { $proc.Kill() } catch { }
-            Write-Note "警告: 有界自動終了（${ExitMs}ms ＋猶予 ${EXIT_MARGIN_SEC}秒）を過ぎたため強制終了しました。"
+            Write-Note "warning: killed the process because the bounded auto-exit (${ExitMs}ms + margin ${EXIT_MARGIN_SEC}s) passed."
             break
         }
         Start-Sleep -Milliseconds 250
