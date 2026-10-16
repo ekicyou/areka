@@ -80,6 +80,7 @@ fn balloon(
         .iter()
         .map(|folder| areka_ghost::catalog::BalloonEntry {
             dir: root.balloon_dir(folder),
+            root: root.dir().to_path_buf(),
             identity: areka_ghost::catalog::Identity {
                 folder: folder.clone(),
                 ..Default::default()

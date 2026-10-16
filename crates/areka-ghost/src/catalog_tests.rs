@@ -253,6 +253,7 @@ fn temp_root_lists_requirement_8_1_layout() {
         ghosts,
         [
             GhostEntry {
+                root: root.dir().to_path_buf(),
                 dir: alpha.clone(),
                 identity: Identity {
                     folder: "alpha".into(),
@@ -265,6 +266,7 @@ fn temp_root_lists_requirement_8_1_layout() {
                 },
             },
             GhostEntry {
+                root: root.dir().to_path_buf(),
                 dir: root.ghost_dir("beta"),
                 identity: Identity {
                     folder: "beta".into(),
@@ -295,6 +297,7 @@ fn temp_root_lists_requirement_8_1_layout() {
         balloons,
         [
             BalloonEntry {
+                root: root.dir().to_path_buf(),
                 dir: staysee.clone(),
                 identity: Identity {
                     folder: "StayseeBalloon".into(),
@@ -307,6 +310,7 @@ fn temp_root_lists_requirement_8_1_layout() {
                 },
             },
             BalloonEntry {
+                root: root.dir().to_path_buf(),
                 dir: root.balloon_dir("kaku"),
                 identity: Identity {
                     folder: "kaku".into(),
@@ -347,6 +351,7 @@ fn sample_root_emo2_lists_one_ghost_one_balloon() {
     assert_eq!(
         ghosts,
         [GhostEntry {
+            root: emo2.root().to_path_buf(),
             dir: ghost.clone(),
             identity: Identity {
                 folder: "emo2".into(),
@@ -362,6 +367,7 @@ fn sample_root_emo2_lists_one_ghost_one_balloon() {
     assert_eq!(
         balloons,
         [BalloonEntry {
+            root: emo2.root().to_path_buf(),
             dir: kaku.clone(),
             identity: Identity {
                 folder: "emo2-kakukaku".into(),

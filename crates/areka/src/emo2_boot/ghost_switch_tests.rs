@@ -30,6 +30,7 @@ use crate::ghost_session::{GhostSession, GhostSlot};
 fn entry(folder: &str, name: Option<&str>) -> GhostEntry {
     GhostEntry {
         dir: PathBuf::from(format!(r"C:\ghost-switch-tests\ghost\{folder}")),
+        root: PathBuf::from(r"C:\ghost-switch-tests"),
         identity: Identity {
             folder: folder.to_owned(),
             name: name.map(str::to_owned),

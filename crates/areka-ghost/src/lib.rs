@@ -12,6 +12,7 @@
 //!   `shutdown`／`into_parts`（`GhostParts`・`GhostHandles`・`GhostShutdownError` を含む
 //!   終了統括一式）は task 3.2 が実装済み。
 //! - [`catalog`] — ベースウェアの根の目録（ゴースト・シェル・バルーンの列挙と素性・同梱バルーン）。
+//! - [`catalog_roots`] — 根の並び（上ほど先に探す）と、フォルダ名・根の比べ方。
 //! - [`config`] — 運行設定の値源解決（`KanadeConfig` 値源・shell descript 読解）。task 2.3。
 //! - [`dispatcher`] — 永続的な要求元と一時的な再生アクターの非対称吸収。task 2.5。
 //! - [`ticker`] — 差し替え可能な時刻供給コンポーネント。task 2.2。
@@ -25,6 +26,7 @@
 //! `SystemVarSource`／`SystemVarWiring` を re-export する。
 
 pub mod catalog;
+pub mod catalog_roots;
 pub mod config;
 pub mod dispatcher;
 pub mod prop_sink;
@@ -51,5 +53,7 @@ pub use runtime::{
 };
 // baseware-root-layout: 根の目録（列挙と素性）。bin は `areka_ghost::catalog::…` で引く。
 pub use catalog::{BalloonEntry, BasewareRoot, GhostEntry, Identity, ShellEntry, sakura_name};
+// baseware-root-list: 根の並びと、フォルダ名・根の比べ方。
+pub use catalog_roots::{BasewareRoots, fold_key, same_folder_name, same_root};
 // task 2.3: InProc 結線の connect closure 構成関数（D-3・テストの Recorder 合成と α 後の直接利用に供する）。
 pub use shiori_inproc::inproc_connect;

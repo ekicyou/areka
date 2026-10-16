@@ -94,6 +94,8 @@ pub struct Identity {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GhostEntry {
     pub dir: PathBuf,
+    /// 走査した根（要件 3.4: 項目からどの根の下にあるかを引く）。
+    pub root: PathBuf,
     pub identity: Identity,
 }
 
@@ -106,6 +108,8 @@ pub struct ShellEntry {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BalloonEntry {
     pub dir: PathBuf,
+    /// 走査した根（要件 3.4: 項目からどの根の下にあるかを引く）。
+    pub root: PathBuf,
     pub identity: Identity,
 }
 
@@ -118,7 +122,11 @@ pub fn list_ghosts(root: &BasewareRoot) -> Vec<GhostEntry> {
         .filter_map(|(folder, dir)| {
             let descript = read_descript(&master_descript(&dir))?;
             let identity = identity(folder, &dir, &descript);
-            Some(GhostEntry { dir, identity })
+            Some(GhostEntry {
+                dir,
+                root: root.dir().to_path_buf(),
+                identity,
+            })
         })
         .collect()
 }
@@ -169,7 +177,11 @@ pub fn list_balloons(root: &BasewareRoot) -> Vec<BalloonEntry> {
                 return None;
             }
             let identity = identity(folder, &dir, &descript);
-            Some(BalloonEntry { dir, identity })
+            Some(BalloonEntry {
+                dir,
+                root: root.dir().to_path_buf(),
+                identity,
+            })
         })
         .collect()
 }

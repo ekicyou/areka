@@ -24,6 +24,7 @@ fn entries(root: &BasewareRoot, v: &[(&str, Option<&str>)]) -> Vec<BalloonEntry>
     v.iter()
         .map(|(folder, name)| BalloonEntry {
             dir: root.balloon_dir(folder),
+            root: root.dir().to_path_buf(),
             identity: Identity {
                 folder: (*folder).to_owned(),
                 name: name.map(str::to_owned),
