@@ -51,7 +51,7 @@
 
 - 依存の向き: `areka-sylphya`（失敗の型・受け口）→ `areka-ghost`（書き手を起こすときに受け口を渡す）→ `areka`（机・告知・終わり方）。`areka-sylphya` は `areka-ghost`・`areka` を知らない。
 - `areka` の中: `write_failure` → `alert`・`app_exit`。`alert`・`app_exit` は `write_failure` を知らない。`boot_resolve` は記録の欄 `first` のために `app_exit::ExitOrigin` を読む（`keep_session_mark`）。`main.rs`・`ghost_switch.rs`・`roots/edit.rs`・`ghost_session.rs`・`emo2_boot/mod.rs` が `write_failure` を呼ぶ。
-- 使う物: std（`std::sync::mpsc`・`std::fs::OpenOptions`・`std::os::windows::fs::OpenOptionsExt`）、今の `windows` crate（`windows::core::Error` だけ）。新しい依存と `windows` crate の機能は足さない。
+- 使う物: std（`std::sync::mpsc`・`std::fs::OpenOptions`・`std::os::windows::fs::OpenOptionsExt`）、今の `windows` crate（`windows::core::Error` だけ）。外の新しい依存と `windows` crate の機能は足さない。ワークスペースの中の依存を 1 つ足す: `areka` → `areka-user-data`（`user-data-root` が作る葉のクレート・書けるかの確かめの口・設計討議の議題 1）。
 
 ### Revalidation Triggers
 
@@ -115,7 +115,7 @@ graph TB
 |---|---|---|---|
 | 記憶 | `areka-sylphya`（今の物） | 失敗の中身の型・アクターの受け口 | 保存の仕組みは変えない |
 | 運び手 | `std::sync::mpsc` | アクター（別のスレッド）から UI スレッドへ失敗を運ぶ | `KanadeNotice` と同じ形 |
-| 確かめ | `std::fs::OpenOptions`＋`OpenOptionsExt::custom_flags(FILE_FLAG_DELETE_ON_CLOSE)` | 消えるファイルで書けるかを確かめる | 定数 `0x0400_0000` を 1 つ書く（`windows` の機能は足さない） |
+| 確かめ | `areka-user-data` の確かめの口（`user-data-root` が作る） | フォルダを「ファイルを足す・フォルダを足す」権利つきで開いて閉じる（何も作らない） | こちらは「在るいちばん深いフォルダを選ぶ・フォルダでなければ書けない」を足して包むだけ |
 | 告知 | 今の `alert.rs`（`MessageBoxW`） | 場面を 1 つ足す | `AREKA_NO_ALERT` の意味は変えない |
 
 ## File Structure Plan
@@ -162,7 +162,7 @@ crates/
 - `crates/areka/src/install/judge.rs` — `FailureWord::FileIo`・`IoPhase` での振り分け。
 - `crates/areka/src/install/desk.rs` — `install_balloon_remembered` の文。
 - `crates/areka/src/install/judge_tests.rs`・`procedure_branch_tests.rs` — `every_io_phase_is_extraction` を新しい振り分けの判定へ改め、語の綴りを 4 つに（要件 5 の判定）。
-- 戻り値の型合わせだけ（判定は足さない・`main_session_mark_tests.rs` にも足さない）: `boot_resolve.rs` の 3 つの書き手を呼ぶ `boot_resolve_tests.rs`・`emo2_boot/ghost_switch_fallback_tests.rs`・`ghost_session_switch_memory_tests.rs`・`main_config_input_tests.rs`・`main_session_mark_fallback_tests.rs`・`main_session_mark_tests.rs`・`session_end_tests.rs`・`session_end_deadline_tests.rs`（成功を前提にする所は `.expect`、書けない置き場の所は `Err` を受ける）、`boot_first_ghost` と `settle_session_mark` を呼ぶ `main_session_mark_tests.rs`・`ghost_session_switch_memory_tests.rs`（`.expect`・`.0`）、`== PersistOutcome::Degraded` と比べる `boot_resolve_tests.rs`・`roots/edit_tests.rs`（`matches!`）。`session_end.rs` は `settle_session_mark` の戻り値を使わないので直さない。
+- 戻り値の型合わせだけ（判定は足さない・`main_session_mark_tests.rs` にも足さない）: `boot_resolve.rs` の 3 つの書き手を呼ぶ `boot_resolve_tests.rs`・`emo2_boot/ghost_switch_fallback_tests.rs`・`ghost_session_switch_memory_tests.rs`・`main_config_input_tests.rs`・`main_session_mark_fallback_tests.rs`・`main_session_mark_tests.rs`・`session_end_tests.rs`・`session_end_deadline_tests.rs`（成功を前提にする所は `.expect`、書けない置き場の所は `Err` を受ける）、`boot_first_ghost` と `settle_session_mark` を呼ぶ `main_session_mark_tests.rs`・`ghost_session_switch_memory_tests.rs`（`.expect`・`.0`）、`== PersistOutcome::Degraded` と比べる `boot_resolve_tests.rs`・`roots/edit_tests.rs`（`matches!`）。`crates/areka/src/session_end.rs` は、`settle_session_mark` の 2 つ目を `write_failure::log_only` へ渡す（告知は出さない・設計討議の議題 2）。
 - `crates/areka/tests/smoke_boot_loop_exit.rs` — 方向を 1 つ足す（⑤ 書けない方向・要件 7.7）。
 - `doc/COMPAT_ARCHITECTURE.md` — 「インストールの失敗理由の語の写し」の行（要件 5.6）と「SHIORI の失敗でプロセスが終わるときの終了コード」の行（D12）。
 - `.kiro/steering/roadmap.md` — emo2 の辞書の持ち主への申し送りの行（要件 8.2・最後のタスク）。
@@ -183,8 +183,17 @@ crates/
 - **書けなかった結果は `apply` の中で閉じる**: ゴーストが居ないときの直の書き込みが失敗したら、`error!(event = "roots_memory_write_failed")`（欄 `dir`・`reason`）を残して `crate::write_failure::fatal(world, failure)` を呼ぶ（正規の終了の道 → 告知）。ゴーストが動いているときの投函は、書き手の受け口から同じ `fatal` へ届く。
 - **呼び手がすること**: 戻り値を受け取らず、失敗のための分岐も書かない。`apply` を呼べば、書けなかった結果は握りつぶされずに致命の道へ渡る（向こうの要件 3.9 はこれで満たされる）。`apply` が戻った時点で終了の指示が出ていることがある（`quit_app` 済み）が、その後に記録を残すだけなら差し支えない（`add_root`・`remove_root` と同じ）。
 - **巻き戻さない**: 起動の文脈の並び（`BootContext.roots`）は書き込みの前に書き換わり、書けなくても戻さない（要件 1.5）。
-- **確かめの部品**: 書けるかの確かめは `crate::write_failure::probe_dir(dir: &Path) -> std::io::Result<()>` 1 つ（作る物 0・フォルダも作らない）。向こうの「実行ファイルのフォルダに書けるか」（向こうの要件 1.2）も同じ部品で足りる。先に着地した方の物を後の方が使い、2 つ作らない。
+- **確かめの部品**（2026-10-16 設計討議・議題 1 で確定）: 書けるかの確かめは両 spec で 1 つにする。
+  - **作るのは `user-data-root`**。葉のクレート `areka-user-data` に公開の口を 1 つ置く: フォルダを `access_mode(FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY)`＋`custom_flags(FILE_FLAG_BACKUP_SEMANTICS)` で開いてすぐ閉じ、OS の結果を `std::io::Result<()>` のまま返す（何も作らない）。向こうの `exe_dir_writability` はこの結果を `Writability` へ写すだけにする。
+  - **この spec は自前の確かめを作らない**。`write_failure::probe_dir` は、在るいちばん深いフォルダを選ぶ・選んだ所がフォルダでなければ書けない、の 2 つを足してその口を呼ぶ薄い包み。`Err` はどれも書けない（`PermissionDenied` だけでなく、読み取り専用の媒体の失敗なども OS の理由のまま告知へ）。
+  - 確かめで拾いきれない失敗（ディスクがいっぱい など）は、実際に書いた時点で致命の机が拾う。確かめは早めに止めるためのもので、最後の守りではない。
+- **着地の順**: `user-data-root` が先に着地する。この spec の「起動の前の確かめ」のタスクは、向こうの着地（main に `areka-user-data` の確かめの口が在ること）を待つ。ほかのタスク（受け口・机・告知・終わり方・記録の文・インストールの語）は待たずに進める。向こうはこの spec を待たない（`apply` の形が変わらないので、「置き場を先頭へ ▸」は今の `apply` を呼べばよい）＝待ちは片向きで、互いに待ち合う形にならない。
 
+### セッション間の打ち合わせの時点（タスクに入れる）
+
+1. **設計の確定の直後（済み・2026-10-16）**: 上の `apply` の形・確かめの部品の持ち主・着地の順を、`user-data-root` のセッションへ送った。
+2. **「起動の前の確かめ」のタスクの初め**: main を取り込み、`areka-user-data` の確かめの口が在るかを見る。在れば使う。無ければ、`user-data-root` のセッションへ着地の見込みを尋ね、そのタスクだけ止めて待つ（自前の確かめを作って先へ進めない）。
+3. **完了の前（`/kiro-complete` の前）**: `apply` が `write_failure::fatal` へ渡す形で着地することを、`user-data-root` のセッションへ知らせる（向こうの要件 3.9 の確かめのため）。
 ## System Flows
 
 ### 動いている途中で書けない（要件 1.3・2.2・2.5）
@@ -248,7 +257,7 @@ graph TB
 | 1.5 | 致命・巻き戻さない | 机・`apply` | `fatal`（`quit_app` だけ・巻き戻しなし） | 途中 |
 | 2.1 | 起動の時点で書けなければ止める | `check_boot_dirs`・`probe_dir`・`stop_boot`・`boot_first_ghost` | `AlertScene::MemoryWrite { moment: Boot }` | 起動の前 |
 | 2.2 | 途中は正規の終了の後に告知 | 机・`quit_app`・後始末 | `ExitOrigin::MemoryWriteFailed`・`after_run`・`tell_at_close` | 途中 |
-| 2.3 | 印を消せないときも告知 | `settle_session_mark`・`tell_at_close` | 戻り値の組の 2 つ目 | 後始末の告知の選び |
+| 2.3 | 印を消せないときも告知（OS の終了の中は記録だけ） | `settle_session_mark`・`tell_at_close`・`log_only` | 戻り値の組の 2 つ目 | 後始末の告知の選び |
 | 2.4 | 告知の 4 項目・環境変数の名前を書かない | `alert_text`・`remembered_text` | 本文 5 行 | — |
 | 2.5 | 1 回だけ | `FirstExit`・`tell_at_close`・起動の前の早い戻り | — | 後始末の告知の選び |
 | 2.6 | `AREKA_NO_ALERT` は画面だけ | `stop_boot_with`・`tell_at_close` の `suppressed` | `alert::raise(scene, suppressed)` | — |
@@ -426,8 +435,8 @@ pub(crate) fn fatal(world: &mut World, failure: PersistFailure);
 /// 毎フレーム: 受け手に溜まった失敗を全部取り出し、1 件ずつ `fatal` へ。
 fn drain_system(world: &mut World);
 
-/// 書けるかの確かめ: `dir`（無ければ在るいちばん深い親）に消えるファイルを作ってすぐ閉じる。
-/// 作る物 0・フォルダも作らない。
+/// 書けるかの確かめ: `dir`（無ければ在るいちばん深い親）を選び、フォルダでなければ Err、
+/// フォルダなら `areka-user-data` の確かめの口へ渡す（作る物 0・フォルダも作らない）。
 pub(crate) fn probe_dir(dir: &Path) -> std::io::Result<()>;
 
 /// 起動の前の確かめ: アプリの記憶の置き場 → ゴーストの記憶の置き場
@@ -444,6 +453,10 @@ pub(crate) fn stop_boot_with(failure: PersistFailure, suppressed: bool) -> windo
 /// 後始末で受け手を取り出す（OS のセッションの終了を処理済みなら None＝告げない）。
 pub(crate) fn take_receiver(world: &mut World) -> Option<Receiver<PersistFailure>>;
 
+/// OS のセッションの終了の中の後始末: 印を消せなかった失敗と、受け手に残っていた失敗を
+/// `memory_write_failed` で 1 件ずつ記録するだけ（告知は出さない・終了コードは問わない・要件 2.3 の例外）。
+pub(crate) fn log_only(world: &mut World, clear_failed: Option<PersistFailure>);
+
 /// 後始末の告知を 1 つだけ選んで告げる（System Flows「後始末の告知の選び」）。
 pub(crate) fn tell_at_close(
     scene: Option<AlertScene>,
@@ -456,14 +469,14 @@ pub(crate) fn tell_at_close(
 - 事前条件: `install` は系の登録の中で 1 回。`fatal` は UI スレッドから（`&mut World`）。
 - 事後条件: `fatal` の後は `FirstExit` が在る（最初の出所が残る）。`stop_boot_with` は抑止でも `Err` を返す（終わることは変えない・要件 2.6）。`tell_at_close` が告げるのは 0 か 1 件。
 - 記録 `memory_write_failed`（`error!`）の欄: `scope`・`what`（`alert::remembered_text`）・`dir`・`reason`・`moment`（`boot`／`running`）。どの致命も 1 件ずつ残す（汲み出した失敗・起動の前・印を消せない・降ろす途中に残っていた失敗）。
-- `probe_dir` の手順: ① `dir` から親へ辿り、在る最初のフォルダ（`dir` 自身を含む）を選ぶ（無ければ `NotFound` の `Err`）。② そこへ名前 `.areka-write-check-<pid>.tmp` を `create_new`＋`custom_flags(FILE_FLAG_DELETE_ON_CLOSE)` で開き、すぐ閉じる（OS が消す）。選んだ所がファイルなら OS の失敗がそのまま返る。
+- `probe_dir` の手順: ① `dir` から親へ辿り、在る最初の物（`dir` 自身を含む）を選ぶ（無ければ `NotFound` の `Err`）。② 選んだ物がフォルダでなければ `Err`（書けない）。③ フォルダなら `areka-user-data` の確かめの口（開いて閉じるだけ）を呼び、その結果を返す。
 - 確かめの置き場: `resolve_boot` が返した `ConfigInputs` を受け取り、その `ghost_root`（`user-data-root` の写しの後の、決まったゴーストのフォルダ）を見る。`main` の中で `ConfigInputs` は `resolve_boot` の結果からしか作れないので、確かめを写しの前へ動かすことは型の上でできない（要件 7.2 の「写しの後」はこれで守り、並びを照らす檻のテストは足さない）。アプリの記憶は `default_app_profile_dir()`（`main` が起動の文脈へ渡すのと同じ値）。シェルの記憶は areka が書かないので確かめない。
 - argv で始まったプロセスも同じ確かめをする（argv のプロセスもゴーストの記憶と置き場の並びを書く）。
 
 **Implementation Notes**
 - 汲み出しの系は `Update` の 1 本。受け口が World に無い（据えていない構成のテスト）なら何もしない。
 - 送り手は `Sender` の写しで、ゴーストを起こすたびに渡す（切替の相手も同じ channel）。
-- `probe_dir` の定数は `const FILE_FLAG_DELETE_ON_CLOSE: u32 = 0x0400_0000;`（`windows` の機能を足さない）。
+- `probe_dir` は定数も OS の口も持たない（確かめの口は `areka-user-data` の物を使う・設計討議の議題 1）。
 
 #### 告知の場面 `AlertScene::MemoryWrite`（`crates/areka/src/alert.rs`）
 
@@ -585,7 +598,7 @@ pub(crate) fn failure_word(error: &NarError) -> FailureWord {
 | 終わるときに印を消せない | `settle_session_mark` | 告知の候補（ほかに無ければ告げる）・終了コード 1 | `session_mark_clear_degraded`（warn）・`memory_write_failed` |
 | 降ろす途中に書けない | 後始末が受け手を取り出す | 告知の候補・終了コード 1 | `persist commit failed`・`memory_write_failed` |
 | 受け口が閉じている | アクター | 続ける | `warn!`（areka_sylphya::persist） |
-| OS のセッションの終了の中 | `after_run`・`take_receiver` | 告げない（OS の終了を塞がない・今どおり） | 失敗の記録は今どおり |
+| OS のセッションの終了の中 | `session_end.rs` → `log_only` | 告げない（OS の終了を塞がない・要件 2.3 の例外）・終了コードは問わない | `memory_write_failed` を 1 件ずつ |
 
 - `panic!` は使わない。失敗の道はどれも `error!` を 1 件以上残す。
 
@@ -609,7 +622,7 @@ pub(crate) fn failure_word(error: &NarError) -> FailureWord {
   - `check_boot_dirs`: アプリの置き場が書けない → `scope=App`・ゴーストの置き場が書けない → `scope=Ghost`・`dir=<ghost_root>\ghost\master\profile\areka`。元の置き場（写す前）を書けなくし、決まった置き場（写した先）だけ書けるとき `Ok`＝渡された `ConfigInputs` の置き場しか見ない（要件 2.1・7.2。写しの後に走る並びは、`ConfigInputs` を受け取る引数の型が守る）。
   - 汲み出し: 失敗 1 件 → `FirstExit` が `MemoryWriteFailed`・`memory_write_failed` が 1 件／2 件 → `FirstExit` は最初の 1 件のまま（要件 2.5）。
   - `stop_boot_with(failure, true)`: `alert` の記録が 1 件（`suppressed=true`・題名「areka を起動できません」）で、`Err` を返す（要件 2.6）。
-  - `tell_at_close`: 出所の場面＋印を消せない＋残りの失敗 → 告げるのは出所の場面 1 件／場面なし＋印を消せない → `Running` の 1 件で `Err`／何も無い → 0 件で `Ok`（要件 6.1・7.5）／抑止でも `Err` は変わらない（要件 2.6）。
+  - `log_only`: 印を消せない＋受け手の残り 1 件 → `memory_write_failed` が 2 件・`alert` の記録は 0 件（要件 2.3 の例外）。`tell_at_close`: 出所の場面＋印を消せない＋残りの失敗 → 告げるのは出所の場面 1 件／場面なし＋印を消せない → `Running` の 1 件で `Err`／何も無い → 0 件で `Ok`（要件 6.1・7.5）／抑止でも `Err` は変わらない（要件 2.6）。
 - `write_failure_sites_tests.rs`（要件 7.1）: 要件 1 の表の 13 種を 1 つずつ書けなくし、失敗が机へ届く（投函の物は受け口つきの書き手と必ず失敗する `PersistIo`、直の物は普通のファイルの置き場）ことを判定する。判定した種類の数が 13 と等しいことも判定する。置き場の並びは「ゴーストが居る（投函）」と「居ない（直）」の両方を踏む。13 種＝起動中の印を書く・降ろした直後・定常の印・印を消す・最後に使ったゴースト・置き場の並び・最後に使ったバルーン・最後に使ったシェル・最後のシェルだけ・最後のバルーンだけ・入れたバルーン・窓の位置・ゴーストのプロパティ。
 - `main_session_mark_write_tests.rs`（要件 7.2）: ⑴ 起動の時点で印を書けない（由来 `Plain`）→ `boot_first_ghost` が `Err`・置き場（`GhostSlot`）が空 ⑵ 前回の印がある起動（由来 `Halted`）で書けない → 同じ ⑶ 切替の降ろした直後に書けない → 切替先を起こさず `FirstExit` が `MemoryWriteFailed`・予約が無い、定常の印の投函が失敗 → 汲み出しで同じ ⑷ 終わるときに印を消せない → `settle_session_mark` の 2 つ目が `Some`・`tell_at_close` が `Running` の告知を 1 件。出所 `MemoryWriteFailed` の判定が `Clear` であること。
 - `boot_resolve_mark_text_tests.rs`（要件 7.3）: 4 行（要件 4.1）は書けたときも書けないときも「書きました」を含まず、書けないときだけ `memory_write_failed` が出る／`session_mark_clear_degraded` は印が残るときだけ「前回落ちたとして」を含む／`session_mark_kept` は印が在るときだけ「Ref6/7 付き」を含む。
@@ -622,8 +635,8 @@ pub(crate) fn failure_word(error: &NarError) -> FailureWord {
 
 ## Security Considerations
 
-- 確かめのファイルは自分のプロセス番号の名前で `create_new`（他の物を上書きしない）、閉じたら OS が消す。権限（ACL）は読みも変えもしない。
+- 確かめはフォルダを開いて閉じるだけで、何も作らない。権限（ACL）は読みも変えもしない。`FILE_FLAG_BACKUP_SEMANTICS` はフォルダを開くための指定で、バックアップの特権を有効にしない。
 
 ## Performance & Scalability
 
-- 起動の前の確かめはファイルを 2 回開いて閉じるだけ。汲み出しは毎フレーム `try_recv` 1 回（書けるときは空）。書けるときの書き込みの道は、アクターの `match` の腕が 1 つ増えるだけ。
+- 起動の前の確かめはフォルダを 2 回開いて閉じるだけ。汲み出しは毎フレーム `try_recv` 1 回（書けるときは空）。書けるときの書き込みの道は、アクターの `match` の腕が 1 つ増えるだけ。
