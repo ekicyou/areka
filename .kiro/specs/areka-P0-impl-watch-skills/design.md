@@ -412,7 +412,7 @@ else "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" clear --repo "$R" 2>&1; echo 
 | 2 節 | 手順 2（ビルドとコピー）を置き方の道具のコマンドに替える。手順 3 の確かめは道具の最後の行で済む旨にする | 9.2, 7.9 |
 | 3 節 | (a)(b) の 2 通りの手打ちを、道具の 1 本（いつも同じ道で入れ替え、古いものは消せなければ残して次に消す）に替える。「版が上がる更新」の段落は残す | 9.2, 7.9 |
 | 4 節 | 小節「スキルからの呼び方」を足す: 識別・リポジトリ・名前の求め方（机の前置き）／呼ぶ形（`2>&1; echo "exit=$?"`）／どのスキルのどの時点で `watch`・`loadtest --wait`・`stopped --wait`・`loaddone`・`merge --wait`・`merged`・`cancel`・`leave`・`clear --repo` を呼ぶか（kiro-impl・kiro-complete・kiro-next の時機の表）／立て直しは 1 回まで／1 作業木に 1 セッション | 9.1, 9.5 |
-| 5 節 | コマンドの表の `clear` の行に任意の `--repo` と「そのリポジトリの参加者を全員外し、マージの机と待ち行列を空にする（直前のマージは残す）・外した識別の 1 行（居なければ `none`）」を足す。「終了コードごとにセッションがすること」の `merge --wait`・`loadtest --wait` の 3 を、スキルの扱い（自分の `cancel` の後なら何もしない・それ以外は 1 行伝えて見張りを立ててから申し込み直す・`status` は訳を調べるときだけ）に合わせる。`watch` の 3 の行を「覚えが無ければ `status` で見て」から、終わり方の表（2.9・2.10）の言い方に合わせる。終了コード 1 の表に `a resume wait …`・`a merge wait …`・`a load wait … is already running` の行を足す | 9.3 |
+| 5 節 | コマンドの表の `clear` の行に任意の `--repo` と「そのリポジトリの参加者を全員外し、マージの机と待ち行列を空にする（直前のマージは残す）・出力は `cleared repo=<名前>; left: <識別>, …`（居なければ `left: none`）の 1 行で 0」を足す（字面は `areka-P0-impl-watch-residue` の design.md「`clear --repo` の約束」節が正本。research.md 決めたこと 17）。「終了コードごとにセッションがすること」の `merge --wait`・`loadtest --wait` の 3 を、スキルの扱い（自分の `cancel` の後なら何もしない・それ以外は 1 行伝えて見張りを立ててから申し込み直す・`status` は訳を調べるときだけ）に合わせる。`watch` の 3 の行を「覚えが無ければ `status` で見て」から、終わり方の表（2.9・2.10）の言い方に合わせる。終了コード 1 の表に `a resume wait …`・`a merge wait …`・`a load wait … is already running` の行を足す | 9.3 |
 | 6 節 | 「生きているのに外された」の「見張りが停止要請で終わるのと同時に再開が入り、その一瞬に別の呼び出しまで重なったときにも、ごくまれに起きる。」の一文を消す | 9.4 |
 | 7 節 | `areka-impl-watch.old.exe` の行を `areka-impl-watch.old-<UTC>.exe`（前の形の `.old.exe` も）と `areka-impl-watch.new.exe`（置き方の途中で止まったときだけ残る）に替え、「手で消してよいか」を「置き方の道具が次に消す」にする | 9.2 |
 
@@ -466,7 +466,7 @@ else "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" clear --repo "$R" 2>&1; echo 
 3. マージの番 → マージの記録 → 見張りの終わり: `merge --spec trial-spec --wait` → `granted merge repo=trial; last: none` → `merged --pr 1 --sha 0123456` → 見張りが `gone: removed` で 3。
 4. `already running`: 同じ識別で 2 本目の `watch`、2 本目の `stopped --wait`（再開の待ちの種類）がそれぞれ 1 と文。
 5. 記録が消えたときの立て直し: `leave --id trial-a` で a の見張りと待ちが 3 → 立て直しの `watch` が 0 のまま走る。
-6. `clear --repo`: 実行ファイルが受けるなら 0 と 1 行、受けないなら 2（どちらも記録し、`kiro-next` の読み方と合うこと）。
+6. `clear --repo`: 実行ファイルが受けるなら `cleared repo=trial; left: …` で 0、受けないなら `usage error: clear: --repo is not accepted; ...` で 2（どちらも記録し、`kiro-next` の読み方と合うこと）。
 7. 前置きの判定: 環境変数が空・実行ファイルの無いフォルダ・形に合わない識別で、前置きの 1 行がそれぞれ `desk: skip no-home`・`no-exe`・`bad-name` になること。
 8. 残りの見張りの外し方: a の見張りを走らせたまま、別の端末から「残りの見張りの外し方」の 1 本を字のまま走らせ、古い見張りが 3 で終わり、新しい見張りが `already running` にならずに走り続けること。
 
