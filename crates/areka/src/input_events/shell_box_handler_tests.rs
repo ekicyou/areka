@@ -18,6 +18,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use areka_emo_compose::{BoxName, EmoWorld, fold_boxes};
 use areka_emo_text::actor::{HitRectPx, ShownBox, TextLayerRuntime};
 use areka_emo_text::state::{SpanKind, TextLayerConfig};
+use areka_ghost::dispatcher::DispatcherMsg;
 use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind};
 use areka_parsers::shell::{parse, parse_boxes};
 use bevy_ecs::hierarchy::ChildOf;
@@ -613,7 +614,7 @@ fn press_row_and_drain(
     point: BoxPoint,
 ) -> (
     Vec<crate::placement::test_support::LogEvent>,
-    Vec<KanadeMsg>,
+    Vec<DispatcherMsg>,
 ) {
     use crate::input_events::choice_drain::{drain_choice_selections, wire_choice_drain};
     let mut f = Fixture::new();
@@ -670,7 +671,7 @@ fn box_anchor_press_records_anchor_selected_and_reaches_kanade_as_an_anchor() {
         references: Vec::new(),
     };
     assert!(
-        matches!(&msgs[..], [KanadeMsg::Anchor(a)] if *a == expected),
+        matches!(&msgs[..], [DispatcherMsg::Anchor(a)] if *a == expected),
         "アンカーの伝言が 1 件"
     );
 }
@@ -685,7 +686,7 @@ fn box_choice_press_still_records_choice_selected_and_reaches_kanade_as_a_choice
     assert_eq!(fields_of(lines[0]), selected_fields("choice_selected"));
     assert!(lines_of(&events, "anchor_selected").is_empty());
     assert!(
-        matches!(&msgs[..], [KanadeMsg::Choice(c)] if c.id == "q0" && c.label == "label0"),
+        matches!(&msgs[..], [DispatcherMsg::Choice(c)] if c.id == "q0" && c.label == "label0"),
         "選択肢の伝言が 1 件"
     );
 }

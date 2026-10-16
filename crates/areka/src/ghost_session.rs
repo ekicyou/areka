@@ -813,11 +813,12 @@ fn boot_wired(
     input_events::balloon::wire_balloon_choice(world);
     // 選択確定通知の受信結線（areka-P0-choice-select-events task 5・design C1 ChoiceDrain・
     // Req1.1/1.2/1.5/1.6/3.7）: 直上 `wire_balloon_choice` が挿入した `ChoiceSelectionInbox`
-    // （precondition）を毎フレーム drain し kanade へ全件転送する系（登録は [`register_systems`]）の
-    // 送り口を置く。位置・様式は `wire_mouse_input`（上方の同 boot スロット）と同型——kanade Sender
-    // クローンを持つ NonSend 資源挿入。
+    // （precondition）を毎フレーム drain し dispatcher の inbox 経由で kanade へ全件転送する系（登録は
+    // [`register_systems`]）の送り口を置く。送り先が dispatcher なのは、押下の選択を再生の
+    // `ChoiceWaiting` と同じ inbox に並べて追い越させないため（areka-P0-balloon-text-bugs 件 1・案 (b)）。
+    // 位置・様式は `wire_mouse_input`（上方の同 boot スロット）と同型——Sender クローンを持つ NonSend 資源挿入。
     if let Some(runtime) = outcome.ghost.as_ref() {
-        input_events::choice_drain::wire_choice_drain(world, runtime.kanade().clone());
+        input_events::choice_drain::wire_choice_drain(world, runtime.dispatcher().clone());
     }
     Ok(GhostSession {
         kanade: outcome.ghost.as_ref().map(|r| r.kanade().clone()),

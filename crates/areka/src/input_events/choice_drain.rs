@@ -1,23 +1,29 @@
 //! 選択確定通知の受信結線（areka-P0-choice-select-events・design C1 ChoiceDrain）。
 //!
 //! UI スレッドの受信口 [`ChoiceSelectionInbox`]（`wire_balloon_choice` が挿入・所有は
-//! choice-interact spec）を毎フレーム drain し、`KanadeMsg::Choice` へ写像して kanade へ
-//! 転送する薄い配線層。**判断・フィルタ・重複排除は一切行わない**——一回性の調停は
+//! choice-interact spec）を毎フレーム drain し、`DispatcherMsg::Choice` へ写像して dispatcher の
+//! inbox 経由で kanade へ転送する薄い配線層。**判断・フィルタ・重複排除は一切行わない**——一回性の調停は
 //! kanade 側が単一真実源であり（Req1.1・design C4）、上流 balloon 押下ハンドラは既に
 //! 一度きり発行を保証している。本層は**到着順に全件を素通し**する（Req1.2）。
 //!
-//! 判断分岐は「送出失敗（kanade 停止後）で warn 記録して継続する」1 点のみ（Req1.6）で、
+//! 判断分岐は「送出失敗（dispatcher 停止後）で warn 記録して継続する」1 点のみ（Req1.6）で、
 //! それと写像純関数 [`to_choice_input`] だけが檻の対象（ECS 結線は再テストしない・steering
 //! `test-only-decision-branches-not-proven-wiring`）。
 //!
-//! 知らせの種類がアンカー（`\_a`）なら、選択肢の伝言でなく `KanadeMsg::Anchor` にして送る
+//! 知らせの種類がアンカー（`\_a`）なら、選択肢の伝言でなく `DispatcherMsg::Anchor` にして送る
 //! （areka-P0-anchor-tag-canon）。種類で伝言を選ぶこの 1 分岐のほかは選択肢と同じで、届いた
 //! アンカーの知らせも全件そのまま送る（kanade 側でも改めて照合しない・要件 4.12）。
+//!
+//! 送り先は dispatcher の inbox（areka-P0-balloon-text-bugs 件 1・開発者の裁定 2026-10-16 案 (b)）。
+//! 押下の選択を再生の `ChoiceWaiting` と同じ inbox に並べ、dispatcher が判断せずにその順のまま
+//! kanade へ送る——選択待ちに入る前の押下を kanade が捨てるので、選択が `ChoiceWaiting` を
+//! 追い越さないことがここで保たれる。
 
 use std::sync::mpsc::{Receiver, Sender};
 
 use areka_emo_text::state::SpanKind;
-use areka_kanade::{AnchorInput, ChoiceInput, KanadeMsg};
+use areka_ghost::dispatcher::DispatcherMsg;
+use areka_kanade::{AnchorInput, ChoiceInput};
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
 use wintf::ecs::Input;
@@ -25,13 +31,13 @@ use wintf::ecs::pointer::dispatch_pointer_events;
 
 use super::balloon::{ChoiceSelection, ChoiceSelectionInbox};
 
-/// kanade への投函端（NonSend・UI スレッド所有・donor `MouseWiring` 同型）。
+/// dispatcher への投函端（NonSend・UI スレッド所有・donor `MouseWiring` 同型）。
 ///
-/// `Sender<KanadeMsg>` 単体は `Send` だが、受信口 [`ChoiceSelectionInbox`]（`Receiver` ゆえ
+/// `Sender<DispatcherMsg>` 単体は `Send` だが、受信口 [`ChoiceSelectionInbox`]（`Receiver` ゆえ
 /// `!Sync`）と対で UI スレッド固定運用ゆえ NonSend 資源として挿入する（`MouseWiring` 前例）。
 pub(crate) struct ChoiceForwarder {
-    /// `GhostRuntime::kanade()` クローン（`ghost_session::boot_ghost` 結線・std mpsc）。
-    kanade: Sender<KanadeMsg>,
+    /// `GhostRuntime::dispatcher()` クローン（`ghost_session::boot_ghost` 結線・std mpsc）。
+    dispatcher: Sender<DispatcherMsg>,
 }
 
 /// 選択確定通知 → kanade 入力への写像（純関数・不透明転写・Req1.5/3.7・DD-13）。
@@ -68,19 +74,19 @@ fn to_anchor_input(sel: ChoiceSelection) -> AnchorInput {
     }
 }
 
-/// 受信口を `try_recv` で drain し、到着順に全件を kanade へ転送する（Req1.2/1.6）。
+/// 受信口を `try_recv` で drain し、到着順に全件を dispatcher 経由で kanade へ転送する（Req1.2/1.6）。
 ///
 /// ECS から切り離した純粋な形（`Receiver` と `Sender` のみを取る）——排他システム
 /// [`drain_choice_selections`] はこの関数へ委譲するだけの配線。
 ///
 /// - **判断・フィルタ・重複排除をしない**: 受領した通知は 1 件残らず送出を試みる（Req1.2）。
 /// - **送出失敗で止まらない**: `warn!(event = "choice_forward_failed")` を記録して**次の件へ継続**
-///   する（kanade 停止後は終了系で正常・Req1.6・log-first）。アンカーの知らせは同じ形の記録を
+///   する（dispatcher 停止後は終了系で正常・Req1.6・log-first）。アンカーの知らせは同じ形の記録を
 ///   `anchor_forward_failed` の名前で残す。
-/// - **種類で伝言を選ぶ**: 選択肢は `KanadeMsg::Choice`、アンカーは `KanadeMsg::Anchor`。
+/// - **種類で伝言を選ぶ**: 選択肢は `DispatcherMsg::Choice`、アンカーは `DispatcherMsg::Anchor`。
 ///
 /// 戻り値は送出に成功した件数（呼び手は使わないが檻の観測点）。
-fn forward_all(inbox: &Receiver<ChoiceSelection>, kanade: &Sender<KanadeMsg>) -> usize {
+fn forward_all(inbox: &Receiver<ChoiceSelection>, dispatcher: &Sender<DispatcherMsg>) -> usize {
     let mut forwarded = 0usize;
     // try_recv ループ＝到着順に全件（滞留は 1 件も残さない・Req1.2）。
     while let Ok(sel) = inbox.try_recv() {
@@ -90,21 +96,21 @@ fn forward_all(inbox: &Receiver<ChoiceSelection>, kanade: &Sender<KanadeMsg>) ->
         // 種類で伝言を選ぶ（本層の振り分けはここだけ）。送れなかったときの記録の名前も種類ごと。
         let (msg, forward_failed) = match sel.kind {
             SpanKind::Choice => (
-                KanadeMsg::Choice(to_choice_input(sel)),
+                DispatcherMsg::Choice(to_choice_input(sel)),
                 "choice_forward_failed",
             ),
             SpanKind::Anchor => (
-                KanadeMsg::Anchor(to_anchor_input(sel)),
+                DispatcherMsg::Anchor(to_anchor_input(sel)),
                 "anchor_forward_failed",
             ),
         };
-        if kanade.send(msg).is_err() {
-            // kanade 停止後（終了系では正常）。無記録で打ち切らず、記録して次の件へ継続する（Req1.6）。
+        if dispatcher.send(msg).is_err() {
+            // dispatcher 停止後（終了系では正常）。無記録で打ち切らず、記録して次の件へ継続する（Req1.6）。
             tracing::warn!(
                 event = forward_failed,
                 scope,
                 id = %id,
-                "kanade Sender 送出失敗（actor 停止後）: 記録して次の通知へ継続"
+                "dispatcher Sender 送出失敗（actor 停止後）: 記録して次の通知へ継続"
             );
             continue;
         }
@@ -137,10 +143,10 @@ pub(crate) fn drain_choice_selections(world: &mut World) {
         );
         return;
     };
-    forward_all(&inbox.0, &forwarder.kanade);
+    forward_all(&inbox.0, &forwarder.dispatcher);
 }
 
-/// kanade 投函端を NonSend 挿入する（design C1 Contracts・donor `wire_mouse_input` 同型）。
+/// dispatcher 投函端を NonSend 挿入する（design C1 Contracts・donor `wire_mouse_input` 同型）。
 /// drain 排他システムの登録は [`register_choice_drain`] が行う。
 ///
 /// `ghost_session::boot_ghost` の `wire_balloon_choice` 呼出**直後**から `wire_mouse_input` と
@@ -150,8 +156,8 @@ pub(crate) fn drain_choice_selections(world: &mut World) {
 ///
 /// Precondition: `wire_balloon_choice` 済み（[`ChoiceSelectionInbox`] 存在）。
 /// Postcondition: 以降のフレームで受信済み通知は全件送出試行済み・失敗は warn 記録。
-pub(crate) fn wire_choice_drain(world: &mut World, kanade: Sender<KanadeMsg>) {
-    world.insert_non_send(ChoiceForwarder { kanade });
+pub(crate) fn wire_choice_drain(world: &mut World, dispatcher: Sender<DispatcherMsg>) {
+    world.insert_non_send(ChoiceForwarder { dispatcher });
 }
 
 /// 受信口の取り出しを入力の段へ登録する（登録だけ・持ち物は置かない）。
@@ -199,9 +205,9 @@ mod tests {
     fn wire_choice_drain_inserts_the_forwarder_without_registering() {
         let mut world = World::new();
         world.init_resource::<Schedules>();
-        let (kanade_tx, _kanade_rx) = mpsc::channel::<KanadeMsg>();
+        let (dispatcher_tx, _dispatcher_rx) = mpsc::channel::<DispatcherMsg>();
 
-        wire_choice_drain(&mut world, kanade_tx);
+        wire_choice_drain(&mut world, dispatcher_tx);
 
         assert!(
             !world.resource::<Schedules>().contains(Input),
@@ -254,11 +260,11 @@ mod tests {
         lines
     }
 
-    /// `KanadeMsg` から `ChoiceInput` を取り出す（他 variant は檻失敗）。
-    fn expect_choice(msg: KanadeMsg) -> ChoiceInput {
+    /// `DispatcherMsg` から `ChoiceInput` を取り出す（他 variant は檻失敗）。
+    fn expect_choice(msg: DispatcherMsg) -> ChoiceInput {
         match msg {
-            KanadeMsg::Choice(c) => c,
-            _ => panic!("KanadeMsg::Choice を期待"),
+            DispatcherMsg::Choice(c) => c,
+            _ => panic!("DispatcherMsg::Choice を期待"),
         }
     }
 
@@ -357,7 +363,7 @@ mod tests {
     #[test]
     fn forward_all_sends_every_selection_in_arrival_order_without_dedup() {
         let (sel_tx, sel_rx) = mpsc::channel::<ChoiceSelection>();
-        let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
+        let (dispatcher_tx, dispatcher_rx) = mpsc::channel::<DispatcherMsg>();
 
         let arrivals = ["first", "second", "first", "third"];
         for id in arrivals {
@@ -372,20 +378,20 @@ mod tests {
                 .expect("受信口は生存している");
         }
 
-        let forwarded = forward_all(&sel_rx, &kanade_tx);
+        let forwarded = forward_all(&sel_rx, &dispatcher_tx);
         assert_eq!(
             forwarded, 4,
             "滞留 4 件は全件送出される（暗黙に捨てない・Req1.2）"
         );
 
         for expected in arrivals {
-            let got = expect_choice(kanade_rx.try_recv().expect("到着順に届く"));
+            let got = expect_choice(dispatcher_rx.try_recv().expect("到着順に届く"));
             assert_eq!(got.id, expected, "到着順そのまま（並べ替えなし・Req1.2）");
             assert_eq!(got.label, format!("ラベル:{expected}"));
             assert_eq!(got.references, vec![expected.to_string()]);
         }
         assert!(
-            kanade_rx.try_recv().is_err(),
+            dispatcher_rx.try_recv().is_err(),
             "送出は受領件数ちょうど（水増しなし）"
         );
         assert_eq!(
@@ -399,20 +405,24 @@ mod tests {
     #[test]
     fn forward_all_on_empty_inbox_forwards_nothing() {
         let (_sel_tx, sel_rx) = mpsc::channel::<ChoiceSelection>();
-        let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
+        let (dispatcher_tx, dispatcher_rx) = mpsc::channel::<DispatcherMsg>();
 
-        assert_eq!(forward_all(&sel_rx, &kanade_tx), 0, "空 inbox は 0 件送出");
-        assert!(kanade_rx.try_recv().is_err(), "何も届かない");
+        assert_eq!(
+            forward_all(&sel_rx, &dispatcher_tx),
+            0,
+            "空 inbox は 0 件送出"
+        );
+        assert!(dispatcher_rx.try_recv().is_err(), "何も届かない");
     }
 
-    /// 転送失敗分岐（Req1.6）: kanade 受信端が drop 済みでも **panic せず**、
+    /// 転送失敗分岐（Req1.6）: dispatcher 受信端が drop 済みでも **panic せず**、
     /// `warn!(event = "choice_forward_failed")` を記録して**次の件へ継続**する
     /// （滞留全件が drain され、失敗件数ぶん warn が出る）。
     #[test]
-    fn forward_all_warns_and_continues_when_kanade_receiver_dropped() {
+    fn forward_all_warns_and_continues_when_dispatcher_receiver_dropped() {
         let (sel_tx, sel_rx) = mpsc::channel::<ChoiceSelection>();
-        let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
-        drop(kanade_rx); // kanade 停止後（終了系では正常・Req1.6）
+        let (dispatcher_tx, dispatcher_rx) = mpsc::channel::<DispatcherMsg>();
+        drop(dispatcher_rx); // dispatcher 停止後（終了系では正常・Req1.6）
 
         for id in ["a", "b", "c"] {
             sel_tx
@@ -428,7 +438,7 @@ mod tests {
 
         let mut forwarded = 0usize;
         let logs = capture_logs(|| {
-            forwarded = forward_all(&sel_rx, &kanade_tx);
+            forwarded = forward_all(&sel_rx, &dispatcher_tx);
         });
 
         assert_eq!(forwarded, 0, "受信端 drop 後は 1 件も送出成功しない");
@@ -473,7 +483,7 @@ mod tests {
     #[test]
     fn forward_all_routes_each_kind_to_its_own_message_in_arrival_order() {
         let (sel_tx, sel_rx) = mpsc::channel::<ChoiceSelection>();
-        let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
+        let (dispatcher_tx, dispatcher_rx) = mpsc::channel::<DispatcherMsg>();
         for sel in [
             dirty_selection(),
             dirty_anchor(),
@@ -483,7 +493,7 @@ mod tests {
             sel_tx.send(sel).expect("受信口は生存している");
         }
 
-        assert_eq!(forward_all(&sel_rx, &kanade_tx), 4, "4 件とも送る");
+        assert_eq!(forward_all(&sel_rx, &dispatcher_tx), 4, "4 件とも送る");
 
         let src = dirty_selection();
         let anchor = AnchorInput {
@@ -493,15 +503,15 @@ mod tests {
             references: src.references.clone(),
         };
         let choice = to_choice_input(src);
-        let got: Vec<KanadeMsg> = kanade_rx.try_iter().collect();
+        let got: Vec<DispatcherMsg> = dispatcher_rx.try_iter().collect();
         assert!(
             matches!(
                 &got[..],
                 [
-                    KanadeMsg::Choice(c0),
-                    KanadeMsg::Anchor(a1),
-                    KanadeMsg::Anchor(a2),
-                    KanadeMsg::Choice(c3),
+                    DispatcherMsg::Choice(c0),
+                    DispatcherMsg::Anchor(a1),
+                    DispatcherMsg::Anchor(a2),
+                    DispatcherMsg::Choice(c3),
                 ] if *c0 == choice && *a1 == anchor && *a2 == anchor && *c3 == choice
             ),
             "届いた順に、種類ごとの伝言へ（中身は知らせのまま）"
@@ -513,14 +523,14 @@ mod tests {
     #[test]
     fn forward_all_records_a_failed_anchor_under_its_own_name() {
         let (sel_tx, sel_rx) = mpsc::channel::<ChoiceSelection>();
-        let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
-        drop(kanade_rx);
+        let (dispatcher_tx, dispatcher_rx) = mpsc::channel::<DispatcherMsg>();
+        drop(dispatcher_rx);
         for sel in [dirty_anchor(), dirty_selection(), dirty_anchor()] {
             sel_tx.send(sel).expect("受信口は生存している");
         }
 
         let logs = capture_logs(|| {
-            forward_all(&sel_rx, &kanade_tx);
+            forward_all(&sel_rx, &dispatcher_tx);
         });
 
         let count = |event: &str| {

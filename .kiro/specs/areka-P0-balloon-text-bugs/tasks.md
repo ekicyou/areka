@@ -136,7 +136,7 @@
   - _Depends: 4.1, 4.4_
   - _Requirements: 1.10, 1.13, 4.1_
 
-- [ ] 4.6 選択を送れた押下の後にその場所の選択肢を済みにし、押下の選択を dispatcher 経由で送る
+- [x] 4.6 選択を送れた押下の後にその場所の選択肢を済みにし、押下の選択を dispatcher 経由で送る
   - 選択を送れた押下の後に、種類が選択肢のときだけ場所を済みにする 1 つの手順を入力の層に足す（アンカーは済みにしない・借用に失敗したら `error!` を残して何もしない）
   - 普通のバルーンの押下と箱の押下の両方で、送出に成功したときだけ呼ぶ（失敗・棄却では呼ばない）
   - 押下の選択の送り先を kanade への直接から dispatcher の inbox へ替える（設計の「押下の選択の取り次ぎ」・案 (b)）: dispatcher に選択肢とアンカーの 2 つの伝言を足し、判断せずに kanade へそのまま送る（slot と突き合わせない・送れなければ同じ名前の `warn!` で続ける）。受信口の取り出しは送り口を dispatcher の inbox に替え、種類で 2 つの伝言を選ぶ（到着順に全件・送れなければ今と同じ `warn!` で次へ）。結線は dispatcher の送り口を渡す
@@ -192,3 +192,4 @@
 - 2.6: 縦書きの写し方（時計回り）は D2D 自身の下線と一致した（本番コードの変更なし）。右から左の横書きはどの檻でも実物と突き合わせていないまま。
 - 範囲外（完了の棚卸で起票を判断）: `cargo clippy -p areka-emo-text --tests` が HEAD の時点から deny の `absurd_extreme_comparisons` で落ちる（`tests/line_pitch_readback_test.rs:705`・`tests/emo2_fixture_e2e_test.rs:638` の `overhang <= BAND_OVERHANG_MAX`）。
 - 4.4: `note_choice_wait_began`・`close_choice_wait`・`settle_all_choices` は `expect(dead_code)` で 4.5 の結線を待つ。4.5 で結んだらこの属性を外す。同じスコープの箱に済んでいない選択肢が残るとき `choice_active` が真のままの組は GPU なしの檻が無い（4.7 の箱の檻で一部覆う）。
+- 4.6: 押下のハンドラから済みまでを通しで動かす檻は 4.7 の実 GPU の範囲。箱の押下の `runtime_of(world)` が None のときは記録なしで抜ける（`locate` が runtime を前提にするので実際には通らない）。

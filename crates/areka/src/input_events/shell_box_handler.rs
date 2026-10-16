@@ -28,7 +28,10 @@ use bevy_ecs::world::World;
 use wintf::ecs::pointer::{PointerLeave, PointerState, dispatch_pointer_events};
 use wintf::ecs::{Input, find_owner_window};
 
-use super::balloon::{BalloonWiring, ChoiceSelection, HoverAction, hover_action, selection_events};
+use super::balloon::{
+    BalloonWiring, ChoiceSelection, HoverAction, hover_action, selection_events,
+    settle_after_selection,
+};
 use super::shell_box::{
     BoxMove, BoxPressVerdict, ShellBoxHover, box_under_point, judge_box_click, judge_box_move,
     next_box_hover,
@@ -269,6 +272,7 @@ pub(super) fn press_with_point(
 /// 記録の名前は種類で決まる（選択肢は `choice_selected`・アンカーは `anchor_selected`）。
 fn send_selection(world: &World, hit: &ShownBox, sel: ChoiceSelection) -> bool {
     let (selected, send_failed) = selection_events(sel.kind);
+    let kind = sel.kind;
     let (scope, id, label, references_len) = (
         sel.scope,
         sel.id.clone(),
@@ -284,6 +288,10 @@ fn send_selection(world: &World, hit: &ShownBox, sel: ChoiceSelection) -> bool {
         return false;
     };
     if wiring.send_selection(sel) {
+        // 送れた選択が選択肢なら、箱の選択肢を済みにする（件 1・アンカーは済まない）。
+        if let Some(runtime) = runtime_of(world) {
+            settle_after_selection(&runtime, &box_place(scope, &hit.name), kind);
+        }
         tracing::info!(
             event = selected,
             scope,

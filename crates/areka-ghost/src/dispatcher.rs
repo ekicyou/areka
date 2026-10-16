@@ -19,7 +19,7 @@ use std::ops::ControlFlow;
 use std::sync::mpsc::Sender;
 
 use areka_actor::{ActorHandle, reply_channel, run_inbox, spawn_actor};
-use areka_kanade::{KanadeMsg, MonotonicMs};
+use areka_kanade::{AnchorInput, ChoiceInput, KanadeMsg, MonotonicMs};
 use areka_sakura::contract::{
     ChoiceWaiting, CueSink, SakuraMsg, StartTalk, TalkCommand, TalkDone, TalkHandle, TalkId,
 };
@@ -46,6 +46,11 @@ pub enum DispatcherMsg {
     CancelChoice { talk_id: TalkId },
     /// per-talk transient からの選択待ち成立通知（`Done` と同一ポートを流れる・DD-6）。
     ChoiceWaiting(ChoiceWaiting),
+    /// UI の押下の選択（選択肢）。判断せず `KanadeMsg::Choice` としてそのまま送る
+    /// （areka-P0-balloon-text-bugs 件 1・`ChoiceWaiting` と同じ inbox に並べて順を保つ）。
+    Choice(ChoiceInput),
+    /// UI の押下の選択（アンカー）。判断せず `KanadeMsg::Anchor` としてそのまま送る。
+    Anchor(AnchorInput),
 }
 
 impl From<StartTalk> for DispatcherMsg {
@@ -128,7 +133,43 @@ impl DispatcherState {
             DispatcherMsg::ResolveChoice { talk_id, id } => self.on_resolve_choice(talk_id, &id),
             DispatcherMsg::CancelChoice { talk_id } => self.on_cancel_choice(talk_id),
             DispatcherMsg::ChoiceWaiting(waiting) => self.on_choice_waiting(waiting),
+            DispatcherMsg::Choice(input) => self.forward_selection(
+                input.id.clone(),
+                input.scope,
+                KanadeMsg::Choice(input),
+                "choice_forward_failed",
+            ),
+            DispatcherMsg::Anchor(input) => self.forward_selection(
+                input.id.clone(),
+                input.scope,
+                KanadeMsg::Anchor(input),
+                "anchor_forward_failed",
+            ),
         }
+    }
+
+    /// UI の押下の選択（`Choice`／`Anchor`）を kanade へそのまま送る（areka-P0-balloon-text-bugs 件 1）。
+    ///
+    /// slot とは突き合わせない（stale の棄却をしない）。受けるかどうかは今どおり kanade が決める。
+    /// 1 つの inbox を 1 本のスレッドで汲むので、inbox に入った順に kanade へ着く——`ChoiceWaiting` は
+    /// UI が選択待ちの始まりを受けるより先に inbox へ入るので、押下の選択は必ずその後に着く。
+    /// kanade の停止後は UI 側（`choice_drain`）と同じ名前の `warn!` を残して続ける（panic しない）。
+    fn forward_selection(
+        &self,
+        id: String,
+        scope: u32,
+        msg: KanadeMsg,
+        forward_failed: &'static str,
+    ) -> ControlFlow<()> {
+        if self.kanade.send(msg).is_err() {
+            tracing::warn!(
+                event = forward_failed,
+                scope,
+                id = %id,
+                "kanade Sender 送出失敗（actor 停止後）: 記録して次の伝言へ継続"
+            );
+        }
+        ControlFlow::Continue(())
     }
 
     /// 現行 slot が占有している talk の `talk_id`（空なら `None`）。

@@ -21,12 +21,13 @@
 //! 上流契約（collision-geometry の resolver・`Emo2Wiring::runtime()` の読み口）は消費のみ行い、
 //! 逆方向依存（上流が balloon.rs を知る）は禁止（design「依存方向」）。
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-#[cfg(test)]
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
-use areka_emo_text::actor::ChoiceHitRow;
+use areka_emo_text::actor::{ChoiceHitRow, TextLayerRuntime};
+use areka_emo_text::place::PlaceKey;
 use areka_emo_text::state::SpanKind;
 #[cfg(test)]
 use areka_sakura::ActorKey;
@@ -87,6 +88,33 @@ pub(super) fn selection_events(kind: SpanKind) -> (&'static str, &'static str) {
     match kind {
         SpanKind::Choice => ("choice_selected", "choice_selection_send_failed"),
         SpanKind::Anchor => ("anchor_selected", "anchor_selection_send_failed"),
+    }
+}
+
+/// 選択を送れた押下の後に呼ぶ（areka-P0-balloon-text-bugs 件 1・要件 1.10・1.11・1.13）。
+///
+/// 種類が選択肢のときだけ、押した場所の選択肢を済みにする（済んだ行は光らず、押しても選択に
+/// ならない）。アンカーはトークが終わっても押せるので済みにしない。選択待ちに入る前の押下では
+/// 文字の層の口が何もしない（kanade が捨てる押下なので押し直せるまま残す）。呼び手は普通のバルーンの
+/// 押下（`balloon_pressed.rs`）と箱の押下（`shell_box_handler.rs`）で、送出に成功したときだけ呼ぶ。
+///
+/// 文字の層を借りられなければ `error!` を残して何もしない（選択は送れているので、その場所の
+/// 選択肢はトークの終わりで済む・log-first）。
+pub(super) fn settle_after_selection(
+    runtime: &Rc<RefCell<TextLayerRuntime>>,
+    place: &PlaceKey,
+    kind: SpanKind,
+) {
+    if kind != SpanKind::Choice {
+        return;
+    }
+    match runtime.try_borrow_mut() {
+        Ok(mut rt) => rt.settle_choices_at(place),
+        Err(_) => tracing::error!(
+            event = "balloon_runtime_borrow_failed",
+            actor = %place.actor,
+            "runtime try_borrow_mut 失敗（押下の後の済み）: 選択肢を済みにせず縮退"
+        ),
     }
 }
 
@@ -441,6 +469,9 @@ pub(crate) fn register_balloon_leave_system(world: &mut World) {
     );
 }
 
+#[cfg(test)]
+#[path = "balloon_choice_settle_tests.rs"]
+mod choice_settle_tests;
 #[cfg(test)]
 #[path = "balloon_hover_flag_tests.rs"]
 mod hover_flag_tests;
