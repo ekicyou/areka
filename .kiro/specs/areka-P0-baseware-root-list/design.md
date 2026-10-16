@@ -154,6 +154,7 @@ crates/areka-ghost/src/
 └── lib.rs                      # 再輸出に BasewareRoots ほかを足す
 
 crates/areka-nar/src/
+├── lib.rs                      # NarArchive::install・place が根ごとに WorkArea を作る・log_failure の欄を作業フォルダの列に・使い方の例
 ├── install.rs                  # InstallRoots・InstallRequest の形・根ごとの作業フォルダ・戻しの列 1 本
 └── plan.rs                     # 宛先を InstallRoots に尋ねて組む・Placement に root 欄
 
@@ -191,11 +192,12 @@ crates/areka/src/emo2_boot/
 - `crates/areka-ghost/src/catalog.rs` — `list_ghosts`・`list_balloons` を `pub(crate) fn scan_ghosts`・`scan_balloons`（1 根）へ改名し、公開の一覧は `catalog_roots.rs` へ。`GhostEntry`・`BalloonEntry` に `root: PathBuf` を足して走査で詰める。`catalog_tests.rs` は `scan_*` を呼ぶ形へ。
 - `crates/areka-ghost/src/lib.rs` — `BasewareRoots`・`Hidden`・`StoreKind`・`Survey` を再輸出。
 - `crates/areka-sylphya/src/persist/mod.rs`・`format.rs`・`persist_tests.rs` — 鍵 1 つと TOML の表 1 つ。往復の檻（`all_families()`・綴りの固定）に足す。
-- `crates/areka-nar/src/install.rs`・`plan.rs`・`error.rs`（作業フォルダの複数を記録に載せる所だけ）と既存のテスト — `InstallRequest` の形の変更に合わせる。
+- `crates/areka-nar/src/lib.rs` — 作業フォルダを作って記録へ渡しているのはここ（`NarArchive::install`・`place`・`log_failure`）。①`place` が配置の根ごとに `WorkArea` を作る（`work: &mut Option<PathBuf>` → `works: &mut Vec<PathBuf>`）②`log_failure` の欄 `work` を作業フォルダの列にする（綴りは `; ` でつなぐ・根 1 つなら今と同じ）③`survivors` の約束を「どれかの作業フォルダの下」に改める ④冒頭の使い方の例（`rust,no_run`＝文書のテスト）を `InstallRequest { roots: &SingleRoot(root), target_ghost: None }` に直す。
+- `crates/areka-nar/src/install.rs`・`plan.rs`・`error.rs`（`survivors` の注記と作業フォルダの複数を記録に載せる所だけ）と既存のテスト — `InstallRequest` の形の変更に合わせる。
 - `crates/sample-ghost-kit/src/devroot.rs`・`examples/fold-samples.rs` — `InstallRequest` の作り方を単一の根の形へ（1 行ずつ）。
 - `crates/areka/src/boot_config.rs` — `resolve_root_from`・`resolve_root`・`RootError`・`RootSource` を `roots/` へ移す（それを確かめていた今のテストは `roots/resolve_tests.rs` へ書き直す）。`resolve_boot_from` が並びを受け、一覧を和で引く。`BootContext.root` → `roots: BasewareRoots`＋`roots_origin: RootsOrigin`。`BootResolved` の 5 つ目を `ResolvedRoots` に。`resolve_balloon_for_ghost` は並びを受ける。
-- `crates/areka/src/boot_resolve.rs` — `GhostInputs`・`BalloonInputs` から `root` を外し、`listed` をゴーストも項目の列（`&[GhostEntry]`）にし、`stores` を足す。`at` 閉包は項目の `dir` を使う。`find`・`find_balloon` は `same_folder_name`。`NoGhost`・`NoBalloon` は格納フォルダの列。`running_name` は並びを受ける。
-- `crates/areka/src/main.rs` — 3 か所の置き換え（`running_name(&ctx.roots, …)`・後始末の告知の既定ゴーストの場所を `find_ghost` で引く・`BootContext { roots, roots_origin, … }`）と `roots::install(world)` の 1 行。
+- `crates/areka/src/boot_resolve.rs` — `GhostInputs`・`BalloonInputs` から `root` を外し、`listed` をゴーストも項目の列（`&[GhostEntry]`）にし、`stores` を足す。`at` 閉包は項目の `dir` を使う。`find`・`find_balloon` は `same_folder_name`。`NoGhost`・`NoBalloon` は格納フォルダの列。`running_name` は根を受けず、決まったゴーストの場所（`ghost.dir`）の descript を直に読む。
+- `crates/areka/src/main.rs` — 3 か所の置き換え（`running_name(ghost)`・後始末の告知の既定ゴーストの場所を `find_ghost` で引く・`BootContext { roots, roots_origin, … }`）と `roots::install(world)` の 1 行。
 - `crates/areka/src/alert.rs` — `AlertScene::{RootMissing, GhostMissing, BalloonMissing}` の中身を並びに、`alert_text` の本文を行数可変に、文面を「置き場」の語に。
 - `crates/areka/src/emo2_boot/ghost_switch.rs` — 一覧を和で引く 3 か所・`boot_into` の並び・`resolve_switch_target` と `lastinstalled` のフォルダ名の比べ方・`same_folder_pin` の呼び出し 1 か所（足す分は 10 行以内）。
 - `crates/areka/src/emo2_boot/shell_balloon_resolve.rs` — `balloon_candidates(&BasewareRoots)`・候補のフォルダ名の比べ方を `same_folder_name` に。
@@ -495,7 +497,7 @@ pub fn same_root(a: &Path, b: &Path) -> bool;
 
 ### areka-nar
 
-#### AreKaNarRoots（`crates/areka-nar/src/install.rs`・`plan.rs`）
+#### AreKaNarRoots（`crates/areka-nar/src/lib.rs`・`install.rs`・`plan.rs`）
 
 | 欄 | 中身 |
 |---|---|
@@ -532,7 +534,8 @@ pub struct InstallRequest<'a> {
 ```
 
 - `Placement` に `root: PathBuf`（尋ねた答え）を足す。`InstalledElement.path` は今どおり宛先の絶対パス。
-- 失敗の形（`NarError::Io` ほか）と拒否語彙は変えない。作業フォルダを載せる記録の欄だけを「作業フォルダの列」にする（`log_failure` の引数）。
+- 失敗の形（`NarError::Io` ほか）と拒否語彙は変えない。作業フォルダを載せる記録の欄だけを「作業フォルダの列」にする（`lib.rs` の `log_failure` の引数）。`survivors`（戻せずに残ったもの）は「どれかの作業フォルダの下」にある、と約束を改める（`lib.rs` の `place` と `error.rs` の注記）。
+- 作業フォルダを掘るのは `lib.rs` の `place`（今は `WorkArea::create(request.root)` を 1 回）。配置の根ごとに 1 つ掘り、掘った場所を順に呼び手の列へ積む（途中で失敗しても、それまでに掘った場所が記録に載る）。
 - 前提: 答えの根はフォルダであること。フォルダでなければ今どおり作業フォルダを掘れずに `Io { phase: Stage }` で返る（何も入れない）。
 
 **Implementation Notes**
@@ -744,10 +747,12 @@ impl areka_nar::InstallRoots for CatalogDestinations { /* install_root(…) の 
 #### SameFolderPin（`crates/areka/src/emo2_boot/same_folder_pin.rs`）
 
 ```rust
-/// 切替先が今のゴーストと同じフォルダ名（`same_folder_name`）で、場所が違えば、切替先の場所を
-/// 今のゴーストの場所へ差し替える（info `ghost_switch_same_folder_kept`）。それ以外は手を触れない。
+/// 切替先が今のゴーストと同じフォルダ名（`same_folder_name`）で、場所が違えば、切替先を
+/// 今のゴーストへ差し替える（info `ghost_switch_same_folder_kept`）。それ以外は手を触れない。
 pub(crate) fn pin_to_current(target: SwitchTarget, current: &GhostDecision) -> SwitchTarget;
 ```
+
+- 差し替えるのは `dir` だけでなく、`name`・`sakura_name` も今のゴーストの場所の descript から読み直す（`catalog::descript_name`・`catalog::sakura_name` を `current.dir` に対して）。場所は今のゴースト・名前は別の根のゴースト、という食い違いを `OnGhostChanging` の参照に渡さない。
 
 - 呼び手は `ghost_switch.rs::request_ghost_switch_with`（`resolve_switch_target` の直後の 1 行）。
 - 振る舞い: 今のコードは今のゴーストを選ぶと「自分自身への切替」（降ろして同じ場所から起こし直す）になる。差し替えの後はそれと同じになり、別の根の同じフォルダ名のゴーストへは移らない（要件 8.7 の「今のゴーストを選んだものとして扱い、切り替えない」）。
@@ -778,8 +783,8 @@ pub(crate) fn pin_to_current(target: SwitchTarget, current: &GhostDecision) -> S
 | `boot_config.rs::resolve_boot_from` | 根 1 つで `list_ghosts` → フォルダ名の列 | `Result<ResolvedRoots, RootError>` を受け、`log_roots(Boot)` と `log_hidden(survey(..).hidden, Boot)` を残してから、`catalog_roots::list_ghosts` の項目の列を鎖へ。argv の検査の告知は `ghost_stores`。`resolve_boot` は `roots::resolve_roots(&default_app_profile_dir())` を渡す |
 | `boot_config.rs::resolve_balloon_for_ghost` | `list_balloons(root)` | 並びを受け `catalog_roots::list_balloons`。同梱・descript・記憶の鍵の読み方は今のまま |
 | `boot_resolve.rs::resolve_ghost`・`resolve_balloon` | `at` 閉包が `root.ghost_dir(folder)` で組む・`==` | 当たった項目の `dir`・`folder` を使う。突き合わせは `same_folder_name`。`warn!` の event 名と欄名（`ghost_store`・`balloon_store`）は今のまま、値は格納フォルダの列を `; ` でつないだもの（根 1 つなら今と同じ綴り） |
-| `boot_resolve.rs::running_name` | `list_ghosts(root)` から `==` | `catalog_roots::find_ghost(roots, folder)` の `name` |
-| `main.rs` | `running_name(&ctx.root, …)`・`ctx.root.ghost_dir(DEFAULT)` | `running_name(&ctx.roots, …)`・`find_ghost(&ctx.roots, DEFAULT).map(dir)`（無ければ並びの先頭の根の `ghost\emo2`） |
+| `boot_resolve.rs::running_name` | `list_ghosts(root)` から `==` | 和を引かない。`running_name(ghost: &GhostDecision)` が `catalog::descript_name(&ghost.dir.join("ghost").join("master"))`、無ければフォルダ名（根を外して同じフォルダ名が別の根から見えても、動いているゴーストの名前を書く・根 1 つなら今と同じ結果） |
+| `main.rs` | `running_name(&ctx.root, …)`・`ctx.root.ghost_dir(DEFAULT)` | `running_name(ghost)`・`find_ghost(&ctx.roots, DEFAULT).map(dir)`（無ければ並びの先頭の根の `ghost\emo2`） |
 | `ghost_switch.rs` | `list_ghosts(&ctx.root)` 3 か所・`boot_into` の `root` | `catalog_roots::list_ghosts(&ctx.roots)`・`roots` の写し。`resolve_switch_target` と `lastinstalled` のフォルダ名の比べ方は `same_folder_name`（`name` の突き合わせと特別な名前は今のまま区別する） |
 | `shell_balloon_resolve.rs::balloon_candidates` | `list_balloons(root)` | 並びを受ける。候補のフォルダ名の比べ方（シェルも含む）は `same_folder_name` |
 | `shell_balloon_switch.rs` | `SwitchContext.root` | `roots` |
@@ -855,8 +860,8 @@ ghost = "emo2"
 ### 結合（和の上で今の規則が動くこと）
 
 1. **和の上の呼び手**（12.3）: 2 つの根の和で、メニューのゴースト枠の一覧と印（`ghost_frame_tests.rs`）・`\![change,ghost,…]` の照合と `sequential`（`ghost_switch_tests.rs`）・既定ゴーストの採用と同梱のバルーンの引き当て（`boot_config_balloon_tests.rs`・`boot_resolve_tests.rs`）・起動中の印に書く名前（`main_session_mark_tests.rs` の仲間）が引けること。
-2. **根をまたぐインストール**（`areka-nar` の `install_commit_tests.rs` の仲間・`install/destination_tests.rs`・12.4）: 新しいものは先頭の根へ／すでにあるものはその根で上書き・下の根の同じ名前に触らない／同梱のバルーンが別の根へ入る／2 つの根にまたがる `.nar` で 2 つ目の配置の確定に失敗 → 1 つ目の根も元に戻る（偽の失敗を注入する今の檻の型を使う）／先頭の根が無いとき。
-3. **切替と並びの変更**（`same_folder_pin_tests.rs`・`roots/edit_tests.rs`・12.5）: 今のゴーストの根を外して下の根の同じフォルダ名が見えるようになった後、それを選んでも切替先の場所が今のゴーストの場所になる。
+2. **根をまたぐインストール**（`areka-nar` の `install_commit_tests.rs` の仲間・`install/destination_tests.rs`・`lib.rs` の使い方の例は文書のテストで組み立てられる・12.4）: 新しいものは先頭の根へ／すでにあるものはその根で上書き・下の根の同じ名前に触らない／同梱のバルーンが別の根へ入る／2 つの根にまたがる `.nar` で 2 つ目の配置の確定に失敗 → 1 つ目の根も元に戻る（偽の失敗を注入する今の檻の型を使う）／先頭の根が無いとき。
+3. **切替と並びの変更**（`same_folder_pin_tests.rs`・`roots/edit_tests.rs`・12.5）: 今のゴーストの根を外して下の根の同じフォルダ名が見えるようになった後、それを選んでも切替先の場所と名前（`name`・`sakura_name`）が今のゴーストのものになる。同じ状態で起動中の印に書く名前（`running_name`）も今のゴーストの名前になる。
 4. **受け口**（`roots/desk_tests.rs`）: 偽の `pick` で、決めた → 末尾に入る／取り消し → 変えない／失敗 → 変えない／2 つ目は出さない／`suppressed` のときは出さない。
 5. **単一の根の檻**（11.1）: 今のテストを `BasewareRoots::single` への置き換えだけで全部通す（振る舞いの変化は要件 11.1 の許す範囲だけ）。メニューの枠の数の檻（`mod_registry_tests.rs`・`captions_tests.rs`・`plan_tests.rs`）は 9 へ直す。
 
