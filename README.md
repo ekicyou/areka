@@ -75,7 +75,7 @@ crates.io に版を出しているのは、汎用のライブラリ `wintf`・`d
 
 ```powershell
 # ビルド
-cargo build
+cargo build -p areka
 
 # 全体テスト（i686 の成果物の準備込み）
 pwsh -NoProfile -File tools/test-all.ps1

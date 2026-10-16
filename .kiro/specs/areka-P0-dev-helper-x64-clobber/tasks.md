@@ -42,7 +42,7 @@
   - _Depends: 3.1_
   - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 2.4_
 
-- [ ] 4. 開発の手順の文書のビルドのコマンドを `cargo build -p areka` に替える
+- [x] 4. 開発の手順の文書のビルドのコマンドを `cargo build -p areka` に替える
   - `README.md` の「# ビルド」の下の 1 行と、`.kiro/steering/tech.md` の Common Commands のビルドの 2 行（debug と `--release`）を `-p areka` 付きに替える。ほかの説明文は変えない
   - 完了の状態: 両ファイルに素の `cargo build`（`-p` 無し）をビルドの手順として示す行が残っていない
   - _Depends: 1_
