@@ -98,7 +98,7 @@
   - _Boundary: PerfLoop_
   - _Depends: 4.4_
   - _Requirements: 4.1, 4.2, 4.3, 4.4_
-- [ ] 5.3 (P) 計測のサブコマンドの文面を、行を足さずに ASCII の英文にする
+- [x] 5.3 (P) 計測のサブコマンドの文面を、行を足さずに ASCII の英文にする
   - R0・R1 のとおり。行の中で書き替え、行数を増やさない
   - 完了の状態: `perf-loop.measure.ps1` に規則 A が当たらず、行数が 993 以下で、機械が読む行が 1.1 の一覧と同じ字面
   - _Boundary: PerfLoopMeasure_
