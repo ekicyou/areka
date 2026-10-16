@@ -434,6 +434,9 @@ pub(crate) struct BalloonVisibilityState {
     talk_end: TalkEnd,
     /// このトークの待ち時間（会話開始の信号で `Default` へ戻す・到着順に上書き）。
     talk_timeout: TalkTimeout,
+    /// このトークで選択肢を出した（`ChoiceShown` で立て、会話開始の信号で戻す・
+    /// areka-P0-balloon-text-bugs 要件 1.2〜1.4）。
+    talk_had_choice: bool,
     /// 利用者の中断でバルーンを隠したので、内容の増加では出し直さない
     /// （areka-P0-balloon-break 要件 4.8）。次の会話開始の信号で解く。
     ///

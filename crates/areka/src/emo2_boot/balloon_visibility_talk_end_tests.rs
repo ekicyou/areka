@@ -433,3 +433,27 @@ fn notice_carries_the_current_talk_id_and_is_withheld_without_one() {
             .contains(&VisibilityLogEvent::TimeoutNoticeWithoutTalkId)
     );
 }
+
+/// 「このトークで選択肢を出した」は `ChoiceShown` で立ち、次の会話の開始で戻る
+/// （areka-P0-balloon-text-bugs task 3.1・要件 1.2〜1.4・1.7）。
+#[test]
+fn choice_shown_marks_the_talk_until_the_next_talk_starts() {
+    let mut state = BalloonVisibilityState::default();
+    Frame::new(&[(0, seen(3, false))])
+        .at(0.0)
+        .talk_started()
+        .run(&mut state);
+    assert!(!state.talk_had_choice);
+
+    Frame::new(&[(0, seen(3, true))])
+        .at(1.0)
+        .signal(TalkLifecycleSignal::ChoiceShown)
+        .run(&mut state);
+    assert!(state.talk_had_choice);
+
+    Frame::new(&[(0, seen(3, true))])
+        .at(2.0)
+        .talk_started()
+        .run(&mut state);
+    assert!(!state.talk_had_choice);
+}

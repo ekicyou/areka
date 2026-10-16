@@ -16,9 +16,11 @@
 //! 既存の通知先は変えない」という制約に反する。α は `GhostBootOptions.sinks` へ 1 本足すだけで
 //! 上流（ghost / kanade / dola）の署名を一切変えない。
 //!
-//! α の既知の弱点は要件の別条項が吸収する——sink は `Barrier` / `Routing` を受け取らないため
-//! 選択肢バリア中の horizon は過小になりうるが、Requirement 5.4 の抑止が非表示を防ぎ、バリア
-//! 解除後の cue が horizon を引き上げて計測が正しく再開する。中断（Requirement 4.6）も起点は
+//! α の既知の弱点は別の合図が吸収する——sink は `Barrier` / `Routing` を受け取らないため
+//! 選択肢バリア中の horizon は過小になりうる。そこで選択肢の合図（`CueCommand::Choice`）を
+//! 初めて見たときに [`TalkLifecycleSignal::ChoiceShown`] を 1 回送り、判断の側がそのトークを
+//! 選択肢つきと覚えられるようにする（areka-P0-balloon-text-bugs 要件 1.2〜1.4）。バリア中は
+//! トークの終わりが届かないので計測は立たない。中断（Requirement 4.6）も起点は
 //! 正常終了と同一値（占有 horizon）になる。中断の時刻を起点に採るため、受け口は落ちる瞬間の
 //! talk 相対秒を [`TalkLifecycleSignal::TalkEnded`] で送る（areka-P0-balloon-lifecycle-events
 //! 要件 5.2・判断の側の採り方は `balloon_visibility_wait.rs`）。
@@ -42,7 +44,7 @@ use std::sync::mpsc::Sender;
 
 use areka_ghost::sink::BootCueSink;
 use areka_sakura::TalkId;
-use dola::cue::TalkCue;
+use dola::cue::{CueCommand, TalkCue};
 use tracing::{info, warn};
 use wintf::ecs::world::tick_wake;
 
@@ -52,7 +54,7 @@ use super::talk_clock::TalkClock;
 ///
 /// 送り手は 2 つある——talk スレッドの受け口 [`BalloonLifecycleSink`]（会話の開始・占有終端・
 /// 待ち時間の指定・会話の終わり）と、UI スレッドの押下ハンドラ（利用者の中断）。どちらも同じ
-/// 1 本の線へ流す。1 つのトークの中の順は `TalkStarted` →（`DisplayEndAt`・`BalloonTimeout` が
+/// 1 本の線へ流す。1 つのトークの中の順は `TalkStarted` →（`DisplayEndAt`・`BalloonTimeout`・`ChoiceShown` が
 /// 台本の順）→ `TalkEnded`。次のトークの `TalkStarted` は必ず前のトークの `TalkEnded` の後に届く
 /// （talk スレッドは受け口を落としてから完了を知らせる）。
 ///
@@ -76,6 +78,9 @@ pub(crate) enum TalkLifecycleSignal {
     DisplayEndAt(f64),
     /// `\![set,balloontimeout,時間]` が配られた（このトークの待ち時間の指定）。
     BalloonTimeout(TalkTimeout),
+    /// このトークで選択肢を出した（選択肢の合図を初めて見たときに 1 回だけ・アンカーは数えない・
+    /// 場所とスコープを問わない。areka-P0-balloon-text-bugs 要件 1.2〜1.4・1.8・1.13）。
+    ChoiceShown,
     /// このトークの受け口が落ちた（最後まで・中断・置き換えのどれでも）。`at` は落ちた瞬間の
     /// talk 相対秒で、時刻源が起点を持たないときは `None`。合図を 1 つでも送った複製だけが送る。
     TalkEnded { at: Option<f64> },
@@ -154,6 +159,8 @@ pub(crate) struct BalloonLifecycleSink {
     started: bool,
     /// 既知最大の占有終端。未観測は `NEG_INFINITY` ゆえ、最初の有限値は必ず送出される。
     horizon: f64,
+    /// この talk で [`TalkLifecycleSignal::ChoiceShown`] を送出済みか（複製ごとに `false` から）。
+    choice_sent: bool,
 }
 
 impl BalloonLifecycleSink {
@@ -166,6 +173,7 @@ impl BalloonLifecycleSink {
             talk_id: None,
             started: false,
             horizon: f64::NEG_INFINITY,
+            choice_sent: false,
         }
     }
 
@@ -215,7 +223,7 @@ impl BalloonLifecycleSink {
 /// （一括の実装に乗らないので、配送から番号を受け取る `begin_talk` を上書きできる）。
 ///
 /// dispatcher は talk 起動ごとに登録 sink を 1 回だけ複製し、その複製が当該 talk 専用
-/// インスタンスになる。複製で `talk_id` / `started` / `horizon` を初期状態へ戻すことで、
+/// インスタンスになる。複製で `talk_id` / `started` / `horizon` / `choice_sent` を初期状態へ戻すことで、
 /// 「複製＝会話境界」を型の側で構造的に保証する——「登録 sink 自身は決して `emit` されない」と
 /// いう上流の暗黙不変条件に依存しない。前の talk の horizon を持ち越すと、次の会話の表示終了
 /// 時刻が**過大**に見えて非表示が遅れる（あるいは永久に来ない）ため、複製時のリセットは
@@ -268,6 +276,13 @@ impl dola::cue::CueSink for BalloonLifecycleSink {
         // 待ち時間の指定（`\![set,balloontimeout,…]` だけ・台本の順に届く）。
         self.pick_balloon_timeout(&cue);
 
+        // 選択肢を出した（初めての選択肢の合図で 1 回だけ・台本の順の位置）。送出の成否に依らず
+        // 印を立てる理由は ⑴ と同じ。
+        if !self.choice_sent && matches!(cue.command, CueCommand::Choice { .. }) {
+            self.choice_sent = true;
+            self.send(TalkLifecycleSignal::ChoiceShown);
+        }
+
         // ⑵ 占有終端 = at + duration（dola の `to_talk_schedule` と同一式）。待機 cue も
         //    duration を運ぶ第一級 cue ゆえ、この式のまま horizon へ算入される（Requirement 4.1）。
         let end = cue.at + cue.duration;
@@ -301,3 +316,7 @@ mod tests;
 #[cfg(test)]
 #[path = "talk_lifecycle_signals_tests.rs"]
 mod signals_tests;
+
+#[cfg(test)]
+#[path = "talk_lifecycle_choice_tests.rs"]
+mod choice_tests;

@@ -124,6 +124,7 @@ fn apply_lifecycle_signals(
                 state.talk_id = talk_id;
                 state.talk_end = TalkEnd::NotYet;
                 state.talk_timeout = TalkTimeout::Default;
+                state.talk_had_choice = false;
                 // 次の会話が始まった。進行中の計測は破棄する（Requirement 4.5）。
                 if let Some(deadline) = state.deadline.take() {
                     logs.push(VisibilityLogEvent::MeasurementDiscarded {
@@ -174,6 +175,10 @@ fn apply_lifecycle_signals(
                 // トークの終わりの後にしか立たず、終わりの後には指定が届かないので、立っている
                 // 計測を捨てる相手は構造上無い。
                 state.talk_timeout = timeout;
+            }
+            TalkLifecycleSignal::ChoiceShown => {
+                // このトークは選択肢つき（areka-P0-balloon-text-bugs 要件 1.2〜1.4）。
+                state.talk_had_choice = true;
             }
             TalkLifecycleSignal::TalkEnded { at } => {
                 // 止まった時刻を丸めずに記す。時刻が無ければ「時刻なし」（要件 5.2・5.6）。
