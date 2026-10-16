@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1024" height="1024" viewBox="0 0 512 512">
+<defs><filter id="ua" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/></filter>
+<filter id="ga" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -0.3 -0.59 -0.11 0 1"/><feComponentTransfer><feFuncA type="linear" slope="20" intercept="-15.5"/></feComponentTransfer><feComposite in2="SourceAlpha" operator="in"/></filter>
+<filter id="s" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+<feGaussianBlur in="SourceAlpha" stdDeviation="6" result="b"/>
+<feComponentTransfer in="b" result="m"><feFuncA type="linear" slope="14" intercept="-6.5"/></feComponentTransfer>
+<feGaussianBlur in="m" stdDeviation="9" result="mb"/>
+<feComponentTransfer in="mb" result="d"><feFuncA type="linear" slope="20" intercept="-1"/></feComponentTransfer>
+<feFlood flood-color="#FFFFFF"/><feComposite in2="d" operator="in" result="ow"/>
+<feFlood flood-color="#6E78E6"/><feComposite in2="m" operator="in" result="fl"/>
+<feMerge><feMergeNode in="ow"/><feMergeNode in="fl"/></feMerge></filter></defs>
+<g filter="url(#s)"><image xlink:href="unyuu-mask.png" x="18" y="40" width="476" height="487" preserveAspectRatio="none" filter="url(#ua)"/></g>
+</svg>
