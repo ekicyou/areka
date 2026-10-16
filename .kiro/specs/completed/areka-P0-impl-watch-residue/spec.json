@@ -1,9 +1,9 @@
 {
   "feature_name": "areka-P0-impl-watch-residue",
   "created_at": "2026-10-16T01:48:26Z",
-  "updated_at": "2026-10-16T04:00:00Z",
+  "updated_at": "2026-10-16T07:53:51Z",
   "language": "ja",
-  "phase": "tasks-generated",
+  "phase": "completed",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -16,6 +16,10 @@
     "tasks": {
       "generated": true,
       "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-10-16T07:53:51Z"
     }
   },
   "ready_for_implementation": true
