@@ -17,7 +17,7 @@
 //! 5. 箱を隠す・出すで 0 回。箱の束を差し替えても記憶は残り、正の定義で戻れば情報 1 回。
 //!
 //! 片付けの口 `TextSurface::release`（要件 **2.9**）は後の節 `release`（ECS・実 GPU）が固定する。
-//! 提示（1.4）の檻は同じファイルの後の節に足す。
+//! 提示（1.4）の檻（実 GPU）は兄弟の `actor_region_collapse_present_tests.rs` に置く。
 //!
 //! ## 0 件の主張が恒真にならないようにする
 //!
@@ -47,16 +47,16 @@ const COLLAPSED: &str =
 const RECOVERED: &str = "文字の描画範囲が戻った——次のフレームから文字を描く";
 
 /// 普通のバルーンの画像の大きさ（image px）。
-const IMAGE: (u32, u32) = (100, 80);
+pub(super) const IMAGE: (u32, u32) = (100, 80);
 
 /// 左 50・右 100−60＝40 で幅が負に潰れる定義。
-const COLLAPSED_BALLOON: &str = concat!("validrect.left,50\n", "validrect.right,-60\n",);
+pub(super) const COLLAPSED_BALLOON: &str = concat!("validrect.left,50\n", "validrect.right,-60\n",);
 
 /// 左 10・右 100−10＝90 で幅 80・高さ 80 の正の定義。
-const HEALTHY_BALLOON: &str = concat!("validrect.left,10\n", "validrect.right,-10\n",);
+pub(super) const HEALTHY_BALLOON: &str = concat!("validrect.left,10\n", "validrect.right,-10\n",);
 
 /// 箱 c は幅が潰れている（左 60・右 100−50＝50）。サーフェス 0 と 1 の両方に置く。
-const SHELL_COLLAPSED: &str = "\
+pub(super) const SHELL_COLLAPSED: &str = "\
 balloon.c
 {
 size,100,50
@@ -74,7 +74,7 @@ element1,balloon,c,10,10
 ";
 
 /// 同じ名前の箱 c を正の範囲で定義し直した束（左 10・右 100−10＝90・高さ 50）。
-const SHELL_HEALTHY: &str = "\
+pub(super) const SHELL_HEALTHY: &str = "\
 balloon.c
 {
 size,100,50
@@ -88,13 +88,13 @@ element1,balloon,c,0,0
 ";
 
 /// シェルの窓のサーフェスの画像の大きさ。
-const SHELL_IMAGE: (u32, u32) = (200, 300);
+pub(super) const SHELL_IMAGE: (u32, u32) = (200, 300);
 
-fn model(source: &str) -> BalloonModel {
+pub(super) fn model(source: &str) -> BalloonModel {
     parse_str(source, None)
 }
 
-fn box_layout(source: &str) -> BoxLayout {
+pub(super) fn box_layout(source: &str) -> BoxLayout {
     let world = EmoWorld::build(&parse(source));
     let (layout, report) = fold_boxes(&parse_boxes(source), &BTreeMap::new(), &world);
     assert_eq!(report.issues, vec![], "文面は誤りを持たない");

@@ -633,6 +633,10 @@ mod region_warn_tests;
 mod region_collapse_tests;
 
 #[cfg(test)]
+#[path = "actor_region_collapse_present_tests.rs"]
+mod region_collapse_present_tests;
+
+#[cfg(test)]
 #[path = "actor_scroll_retain_tests.rs"]
 mod scroll_retain_tests;
 

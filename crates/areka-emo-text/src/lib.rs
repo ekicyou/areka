@@ -413,6 +413,7 @@ mod tests {
         "actor_decoration_tests.rs",
         "actor_lookahead_shapes_tests.rs",
         "actor_lookahead_tests.rs",
+        "actor_region_collapse_present_tests.rs",
         "actor_region_collapse_tests.rs",
         "actor_region_warn_tests.rs",
         "actor_route_tests.rs",

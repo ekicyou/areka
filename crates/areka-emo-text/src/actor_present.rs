@@ -38,6 +38,8 @@ use super::{ActorRender, ChoiceHitRow, ResolvedBalloonText, TextLayerRuntime};
 ///   `ActorRender` を破棄した直後のフレームでも再発火する（新 k の物理寸で再生成・R8.2）。
 /// - **装着済み actor のグリフ更新**: viewbox ダーティ矩形スクロール描画→（変化ありのフレームだけ）
 ///   swapchain Present で完結し、バルーン surface 本体の再合成（emo-compose 再駆動）を要求しない（R9.3）。
+/// - **描画範囲の潰れた場所**（件 2）: 装着せず描かず記録もせず、残った描画資源は外して捨てる。
+///   「提示した場所」に数えない（箱の写しに載せない）。ほかの場所の提示は続ける。
 /// - **デバイス失敗**: 失敗源で `error!` 済み（log-first）。当該 actor の当該フレーム提示を
 ///   skip して他 actor の処理は継続し、最初の失敗を `Err` として返す（次フレーム再試行）。
 pub fn present_frame(
@@ -70,7 +72,9 @@ pub fn present_frame(
     for place in &places {
         let actor = &place.actor;
         match present_actor(runtime, world, place, talk_time) {
-            Ok(()) => presented.push(place.clone()),
+            Ok(true) => presented.push(place.clone()),
+            // 描画範囲の潰れた場所: 描かなかったので「提示した場所」に数えない（箱の写しに載せない）。
+            Ok(false) => {}
             // 未解決 actor: 蓄積継続・描画スキップ・次フレーム再試行（正常経路・Err にしない）。
             Err(TextLayerError::SlotNotAttached { .. }) => {
                 if runtime.unresolved_warned.insert(place.clone()) {
@@ -106,12 +110,13 @@ pub fn present_frame(
 /// 1 場所分のフレーム提示（[`present_frame`] の内訳・log-first）。
 ///
 /// binding 未解決は [`TextLayerError::SlotNotAttached`]（呼び手が skip 写像）。
+/// 描画範囲の潰れた場所は描かずに `Ok(false)`、それ以外の成功は `Ok(true)`（提示した場所）。
 fn present_actor(
     runtime: &mut TextLayerRuntime,
     world: &mut World,
     place: &PlaceKey,
     talk_time: f64,
-) -> Result<(), TextLayerError> {
+) -> Result<bool, TextLayerError> {
     let actor = &place.actor;
     // ── 解決確認: binding＋layout 入力が揃うまでは蓄積のみ（描画スキップ） ──
     let (Some(binding), Some(resolved)) = (
@@ -122,6 +127,17 @@ fn present_actor(
             actor: actor.to_string(),
         });
     };
+
+    // ── 描画範囲の潰れた場所: 装着せず描かず記録もしない（件 2・要件 2.1・2.2・2.7） ──
+    // 描いた後に潰れた（再追従が描画資源を残した）なら、ここで差し込み口から外して前の字を残さない
+    // （要件 2.9）。当たり行の写しも外す。記録は登録口が状態の変わり目に 1 回だけ出す。
+    if resolved.region.is_collapsed() {
+        if let Some(render) = runtime.surfaces.remove(place) {
+            render.surface.release(world, binding.slot);
+        }
+        runtime.choice_snapshot.remove(place);
+        return Ok(false);
+    }
 
     let contract = ScaleContract::new(binding.scale, None);
     // 場所の左上の窓の中の位置（image px）: 箱は置き場所の (X,Y)、普通のバルーンは (0,0)。
@@ -250,11 +266,11 @@ fn present_actor(
         talk_time,
     ) else {
         // present_frame は state 由来の場所だけを渡す——防御的に空フレーム扱い。
-        return Ok(());
+        return Ok(true);
     };
     let Some(actor_state) = runtime.state.place_state(place) else {
         // 直前の arrange_lines が状態を引けている——構造上起こらない（防御的に空フレーム扱い）。
-        return Ok(());
+        return Ok(true);
     };
     let window = LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode);
 
@@ -347,7 +363,7 @@ fn present_actor(
         }
         render.surface.present()?;
     }
-    Ok(())
+    Ok(true)
 }
 
 /// 場所 1 つの行の割り当てを作る（「見える数 → 区切り → 配置」の 1 つの手順）。場所に状態が無ければ `None`。

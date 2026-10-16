@@ -279,9 +279,23 @@ impl TextLayerRuntime {
         // 装着と同一の導出（`ResolvedBalloonText::resolve` → `register_actor`）で binding／
         // layout 入力を再構築する（単一構築経路・R4.3）。純粋状態（TextLayerState）には
         // 触れない＝リビール進行・確定行は保存される（R4.7）。
+        let collapsed = resolved.region.is_collapsed();
         self.register_actor(actor.clone(), binding, resolved);
         // 描画資源だけを破棄する。次 present_frame の初回解決分岐が新しい k・面実寸の物理寸で
         // 再生成し、空の行 TextLayout キャッシュから保存済み状態を全再描画する（R4.3/R8.4）。
+        // 新しい領域が潰れているときは捨てずに残す: World を持つ提示が同じフレームの下流で
+        // 差し込み口から外す（ここで捨てると前の字の絵が差し込み口に残る・件 2 要件 2.9）。
+        if collapsed {
+            info!(
+                actor = %actor,
+                k_old,
+                k_new,
+                image_size = ?binding.image_size,
+                surface_size = ?binding.surface_size,
+                "文字層の再追従: binding と文字描画領域を再構築した——描画範囲が潰れているので描画資源は残し、同じフレームの提示が外す（戻るまで再生成しない・リビール状態は保存）"
+            );
+            return true;
+        }
         self.surfaces.remove(&place);
         info!(
             actor = %actor,
