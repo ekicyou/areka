@@ -481,8 +481,7 @@ fn replan(state: &mut State, now: u64, events: &mut Vec<Event>) {
         if desk.holder.is_some() {
             continue;
         }
-        let order = |(_, request): &(usize, &MergeRequest)| (!request.bug, request.requested);
-        let Some((first, _)) = desk.queue.iter().enumerate().min_by_key(order) else {
+        let Some(&first) = merge_order(&desk.queue).first() else {
             continue;
         };
         let request = desk.queue.remove(first);
@@ -504,9 +503,10 @@ fn replan(state: &mut State, now: u64, events: &mut Vec<Event>) {
 /// 何もせずに偽を返す。
 fn plan_load(state: &mut State, now: u64, events: &mut Vec<Event>) -> bool {
     let load = &state.load;
-    // 待ち行列の先頭＝申し込みの時刻がいちばん早い者（同じ時刻なら行列の前）。
-    let by_time = |(_, request): &(usize, &LoadRequest)| request.requested;
-    let first = load.queue.iter().enumerate().min_by_key(by_time);
+    // 待ち行列の先頭＝番の来る順の先頭。
+    let first = load_order(&load.queue)
+        .first()
+        .map(|&index| (index, &load.queue[index]));
     // 候補＝机の持ち主か、居なければ待ち行列の先頭。
     let (candidate, purpose, running) = match (&load.holder, first) {
         (Some(holder), _) => (holder.id.clone(), holder.purpose.clone(), holder.running),
@@ -568,6 +568,21 @@ fn plan_load(state: &mut State, now: u64, events: &mut Vec<Event>) -> bool {
         });
     }
     true
+}
+
+/// マージの待ち行列の、番の来る順の添字: バグ優先 → 申し込みの早い順・同点は行列の前。
+/// 番を選ぶ鍵はここにしか書かない（読み物と `pos=` も同じ順で並べる）。
+pub fn merge_order(queue: &[MergeRequest]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..queue.len()).collect();
+    order.sort_by_key(|&index| (!queue[index].bug, queue[index].requested));
+    order
+}
+
+/// 負荷テストの待ち行列の、番の来る順の添字: 申し込みの早い順・同点は行列の前。
+pub fn load_order(queue: &[LoadRequest]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..queue.len()).collect();
+    order.sort_by_key(|&index| queue[index].requested);
+    order
 }
 
 /// 参加を終える: [`erase`] で消し、何か消えたら出来事を 1 件。
