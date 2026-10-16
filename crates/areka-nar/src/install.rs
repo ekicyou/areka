@@ -39,10 +39,34 @@ static NEXT_SERIAL: AtomicU32 = AtomicU32::new(0);
 /// 巻き戻せなかった元の木を含む作業フォルダを片付けから守る期間（要件 2.7）。
 pub(crate) const SURVIVOR_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
+/// 宛先の根を答える口（要件 5.4・5.5）。答えは `<根>`（その下に `ghost\`・`balloon\` を組む）。
+///
+/// どの根へ入れるかは呼び手が決める。計画を組むとき配置ごとに 1 回だけ尋ね、
+/// 答えをその配置に固定する（同じ配置に 2 回は尋ねない）。
+pub trait InstallRoots {
+    /// ゴーストの本体の `directory`、またはシェル・サプリメントの宛先ゴーストのフォルダ名に対して。
+    fn ghost_root(&self, folder: &str) -> PathBuf;
+    /// バルーンの本体・同梱のバルーンの `directory` に対して。
+    fn balloon_root(&self, folder: &str) -> PathBuf;
+}
+
+/// 根 1 つ（どの問いにも同じ根を答える）。単一の根の呼び手とテストはこれを渡す。
+pub struct SingleRoot<'a>(pub &'a Path);
+
+impl InstallRoots for SingleRoot<'_> {
+    fn ghost_root(&self, _folder: &str) -> PathBuf {
+        self.0.to_path_buf()
+    }
+
+    fn balloon_root(&self, _folder: &str) -> PathBuf {
+        self.0.to_path_buf()
+    }
+}
+
 /// 展開の要求。根の場所は呼び出し側が決める（要件 5.1）。
 pub struct InstallRequest<'a> {
-    /// ベースウェアの根（絶対パス）。
-    pub root: &'a Path,
+    /// 宛先の根を答える口（絶対パスを答える）。
+    pub roots: &'a dyn InstallRoots,
     /// `shell`／`supplement` の宛先ゴーストのフォルダ名。
     ///
     /// `accept` から宛先を求めるのは呼び出し側の仕事（要件 5.6）。
@@ -67,9 +91,14 @@ fn at<T>(path: &Path, result: io::Result<T>) -> Result<T, StageError> {
     })
 }
 
-/// 1 回の展開が使う作業フォルダ `<根>/.nar-work/<プロセス識別子>-<連番>/`。
+/// 1 回の展開が宛先の根 1 つに使う作業フォルダ `<根>/.nar-work/<プロセス識別子>-<連番>/`。
+///
+/// 根をまたぐ `.nar` は根ごとに 1 つ持つ（同じ根は綴りの完全一致で 1 つにまとめる）。
+/// どの入れ替えも同じ根の中の `rename` で済む。
 #[derive(Debug)]
 pub(crate) struct WorkArea {
+    /// 掘った根（配置の `root` と綴りで突き合わせる）。
+    root: PathBuf,
     dir: PathBuf,
     /// 棚に残っていて消せなかった物と、生き残りを持つため期限まで消さずに残した物。
     /// [`InstallOutcome::leftovers`] に合流する。
@@ -104,7 +133,16 @@ impl WorkArea {
         let dir = next_address(&shelf, now, || NEXT_SERIAL.fetch_add(1, Ordering::Relaxed));
         let residue = prepare_shelf(&shelf, &dir, now)?;
         at(&dir, std::fs::create_dir_all(&dir))?;
-        Ok(WorkArea { dir, residue })
+        Ok(WorkArea {
+            root: root.to_path_buf(),
+            dir,
+            residue,
+        })
+    }
+
+    /// 掘った根。
+    pub(crate) fn root(&self) -> &Path {
+        &self.root
     }
 
     /// 作業フォルダそのもの。退避先 `old-<k>` もこの下に作る。
@@ -129,6 +167,14 @@ impl WorkArea {
     pub(crate) fn residue(&self) -> &[PathBuf] {
         &self.residue
     }
+}
+
+/// 配置の根に掘った作業フォルダ。呼び手は計画の全部の根に 1 つずつ掘ってから渡す。
+pub(crate) fn area_for<'a>(areas: &'a [WorkArea], root: &Path) -> &'a WorkArea {
+    areas
+        .iter()
+        .find(|area| area.root == root)
+        .expect("配置の根ごとに作業フォルダを掘ってから組み上げ・確定へ進む")
 }
 
 /// この走行の番地 `<プロセス識別子>-<連番>` を、保持中の項目を避けて取る。
@@ -373,7 +419,8 @@ enum Undo {
 /// 組み上げ済みの全配置を宛先と入れ替えて確定する（要件 5.10・5.11・6.4・6.6）。
 ///
 /// 配置の番号順に確定し、途中で失敗したら確定済みを逆順に元へ戻す。利用者から見えるのは
-/// 「全部入った」か「何も変わっていない」のどちらかだけになる（要件 5.11）。
+/// 「全部入った」か「何も変わっていない」のどちらかだけになる（要件 5.11）。`areas` は
+/// 配置の根ごとの作業フォルダで、戻しの列は根をまたいでも 1 本（本仕様 要件 5.9）。
 ///
 /// 退避した木を消すのは**全配置が確定した後**の後片付け 1 回にまとめてある。配置ごとに
 /// 消すと、後の配置が失敗したときに前の配置を戻す元が既に無い——要件 5.11 を満たせない
@@ -384,7 +431,7 @@ enum Undo {
 /// どれかの配置の入れ替えに失敗したとき [`CommitError`]。`rolled_back` が真なら宛先は
 /// 全て呼ぶ前の内容で、偽なら `committed` に挙げた配置が確定したまま残っている。
 pub(crate) fn commit_all(
-    area: &WorkArea,
+    areas: &[WorkArea],
     manifest: &InstallManifest,
     plan: &[Placement],
     states: &[ExistingState],
@@ -397,6 +444,7 @@ pub(crate) fn commit_all(
     let mut installed = Vec::with_capacity(plan.len());
     let mut undo = Vec::with_capacity(plan.len());
     for (k, (placement, existing)) in plan.iter().zip(states).enumerate() {
+        let area = area_for(areas, &placement.root);
         if let Err(failure) = commit_one(area, k, placement, *existing, &mut undo) {
             return Err(roll_back(undo, installed, failure));
         }
@@ -411,9 +459,12 @@ pub(crate) fn commit_all(
 
     // 空のまま残すと、開発用の根では原本に写って全複製に伝播する（設計）。失敗しても
     // 確定は取り消さないが、黙って忘れはしない。
-    let mut leftovers = area.residue().to_vec();
-    if remove_tree(area.path()).is_err() {
-        leftovers.push(area.path().to_path_buf());
+    let mut leftovers = Vec::new();
+    for area in areas {
+        leftovers.extend_from_slice(area.residue());
+        if remove_tree(area.path()).is_err() {
+            leftovers.push(area.path().to_path_buf());
+        }
     }
     Ok(InstallOutcome {
         name: manifest.name.clone(),

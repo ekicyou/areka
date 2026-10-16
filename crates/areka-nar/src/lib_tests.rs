@@ -326,7 +326,7 @@ fn install_does_not_inflate_a_second_time() {
 
     let outcome = archive
         .install(&InstallRequest {
-            root,
+            roots: &SingleRoot(root),
             target_ghost: None,
         })
         .expect("保持した中身だけで展開できる");
@@ -409,7 +409,7 @@ fn a_destination_in_use_fails_install_and_the_record_points_at_the_work_folder()
 
     let (result, records) = capture(|| {
         archive.install(&InstallRequest {
-            root,
+            roots: &SingleRoot(root),
             target_ghost: None,
         })
     });
@@ -462,6 +462,103 @@ fn a_destination_in_use_fails_install_and_the_record_points_at_the_work_folder()
     drop(handle);
 }
 
+// ---- 根をまたぐインストール（本仕様 要件 5.5・5.9） ----
+
+/// ゴーストは `ghost`、バルーンは `balloon` の根を答える。
+struct TwoRoots<'a> {
+    ghost: &'a Path,
+    balloon: &'a Path,
+}
+
+impl InstallRoots for TwoRoots<'_> {
+    fn ghost_root(&self, _folder: &str) -> PathBuf {
+        self.ghost.to_path_buf()
+    }
+
+    fn balloon_root(&self, _folder: &str) -> PathBuf {
+        self.balloon.to_path_buf()
+    }
+}
+
+/// 2 つの根にまたがる `.nar` で 2 つ目の配置（別の根の同梱バルーン）の確定が失敗すると、
+/// 1 つ目の根に確定済みのゴーストも元に戻り、記録の `work` に 2 つの根の作業フォルダが
+/// `; ` でつないで載る。
+#[test]
+fn a_failure_in_the_second_root_rolls_back_the_first_root_and_records_both_work_folders() {
+    let ghost_dir = WorkDir::new().expect("根を借りられる");
+    let balloon_dir = WorkDir::new().expect("根を借りられる");
+    let (ghost_root, balloon_root) = (ghost_dir.path(), balloon_dir.path());
+    let destination = balloon_root.join("balloon").join("kaku");
+    fs::create_dir_all(&destination).expect("宛先を掘れる");
+    fs::write(destination.join("balloon.txt"), b"old kaku").expect("置ける");
+    let ghost_before = tree(&ghost_root.join("ghost"));
+    let balloon_before = tree(&destination);
+    let path = put(ghost_root, "ghost.nar", &ghost_with_balloon());
+    let archive = NarArchive::open(&path).expect("開ける");
+    let handle = hold(&destination.join("balloon.txt"));
+
+    let (result, records) = capture(|| {
+        archive.install(&InstallRequest {
+            roots: &TwoRoots {
+                ghost: ghost_root,
+                balloon: balloon_root,
+            },
+            target_ghost: None,
+        })
+    });
+    let error = result.expect_err("使用中なので確定できない");
+
+    let NarError::Io {
+        phase,
+        path: failed,
+        rolled_back,
+        ..
+    } = &error
+    else {
+        panic!("I/O の失敗のはず: {error:?}");
+    };
+    assert_eq!(*phase, IoPhase::Commit, "確定の段で失敗した");
+    assert_eq!(failed, &destination, "対象は 2 つ目の根の掴んだ宛先");
+    assert!(*rolled_back, "巻き戻し済み");
+    assert_eq!(
+        tree(&ghost_root.join("ghost")),
+        ghost_before,
+        "1 つ目の根のゴーストも元に戻る"
+    );
+    assert_eq!(
+        tree(&destination),
+        balloon_before,
+        "2 つ目の根の宛先は元のまま"
+    );
+
+    let errors: Vec<_> = records
+        .iter()
+        .filter(|event| event.level == tracing::Level::ERROR)
+        .collect();
+    assert_eq!(errors.len(), 1, "失敗 1 回につき記録 1 件: {records:?}");
+    let recorded: Vec<&Path> = errors[0]
+        .field("work")
+        .expect("work の欄がある")
+        .split("; ")
+        .map(Path::new)
+        .collect();
+    assert_eq!(
+        recorded.len(),
+        2,
+        "根ごとに作業フォルダが 1 つ: {recorded:?}"
+    );
+    for (work, root) in recorded.iter().zip([ghost_root, balloon_root]) {
+        assert!(work.is_dir(), "work が実在しない: {}", work.display());
+        assert!(
+            work.starts_with(root.join(".nar-work")),
+            "{} が根 {} の .nar-work の配下にない（計画の順に積む）",
+            work.display(),
+            root.display()
+        );
+    }
+    drop(handle);
+}
+
 // ---- 何度呼んでも同じ結果（設計 `install`） ----
 
 /// 同じ根へ同じ書庫を 2 度入れると、2 度目は `Overlaid` になり中身は同じ。
@@ -472,7 +569,7 @@ fn install_is_idempotent() {
     let path = put(root, "ghost.nar", &ghost_with_balloon());
     let archive = NarArchive::open(&path).expect("開ける");
     let request = InstallRequest {
-        root,
+        roots: &SingleRoot(root),
         target_ghost: None,
     };
 
@@ -615,7 +712,7 @@ fn install_into_empty_root(nar: &NarBuilder, root: &Path) -> InstallOutcome {
     assert!(tree(root).is_empty(), "根が空でない");
     archive
         .install(&InstallRequest {
-            root,
+            roots: &SingleRoot(root),
             target_ghost: None,
         })
         .expect("入れられる")

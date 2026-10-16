@@ -87,7 +87,7 @@ use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use areka_nar::{InstallRequest, NarArchive};
+use areka_nar::{InstallRequest, NarArchive, SingleRoot};
 
 use crate::SampleError;
 
@@ -370,7 +370,7 @@ fn stage_into_cache(
     let work = WorkDir::in_namespace(namespace)?;
     let archive = NarArchive::open(nar)?;
     archive.install(&InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: None,
     })?;
     match std::fs::rename(work.path(), master) {

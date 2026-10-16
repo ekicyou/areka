@@ -90,8 +90,9 @@ fn raise_with(answers: &[Option<RaiseOutcome>]) -> (Raised, Vec<bool>, Vec<Captu
 /// 素性（根だけが意味を持つ）。
 fn facts_at(root: &Path) -> GhostFacts {
     GhostFacts {
-        root: root.to_path_buf(),
+        roots: areka_ghost::BasewareRoots::single(root.to_path_buf()),
         folder: Some("running".to_owned()),
+        running_dir: None,
         name: "Running".to_owned(),
         sakura_name: None,
         install_accept: Vec::new(),
@@ -305,7 +306,8 @@ fn gate_label_names_archive_and_destination() {
     let root = TempPath::new("install-worker-root");
     let dir = TempPath::new("install-worker-archive");
     let (path, archive) = ghost_archive(&dir);
-    let label = gate_label(&path, root.path(), &archive, Some("target"));
+    let roots = areka_ghost::BasewareRoots::single(root.path().to_path_buf());
+    let label = gate_label(&path, &roots, &archive, Some("target"));
     assert!(label.contains(&path.display().to_string()), "{label}");
     assert!(
         label.contains(&root.path().display().to_string()),
@@ -421,7 +423,7 @@ fn overwrite_ran_releases_the_gate() {
             panic!("上書きの頼みが届く");
         };
         let result = archive.install(&areka_nar::InstallRequest {
-            root: &desk_root,
+            roots: &areka_nar::SingleRoot(&desk_root),
             target_ghost: target_ghost.as_deref(),
         });
         let _ = reply.send(Overwritten::Ran(result));

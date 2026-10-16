@@ -103,16 +103,16 @@ fn name_then_folder_then_not_found() {
     );
 }
 
-/// 比較は大文字小文字を区別する（要件 1.6）。
+/// `name` は大文字小文字を区別し、フォルダ名は 1 つの規則で区別しない（要件 1.6・2.8）。
 #[test]
-fn matching_is_case_sensitive() {
+fn name_is_case_sensitive_folder_name_is_not() {
     let cands = [cand("Plain", None, false), cand("x", Some("Beta"), false)];
     let resolve = |spec: &SkinSpec| folder(resolve_skin_target(&cands, spec, None, NO_MEMO, never));
     assert_eq!(resolve(&by_name("beta")), Err(NotFoundReason::NoMatch));
-    assert_eq!(resolve(&by_name("plain")), Err(NotFoundReason::NoMatch));
+    assert_eq!(resolve(&by_name("plain")).as_deref(), Ok("Plain"));
     assert_eq!(
-        resolve(&SkinSpec::Folder("PLAIN".to_owned())),
-        Err(NotFoundReason::NoMatch)
+        resolve(&SkinSpec::Folder("PLAIN".to_owned())).as_deref(),
+        Ok("Plain")
     );
     assert_eq!(resolve(&by_name("Plain")).as_deref(), Ok("Plain"));
 }
@@ -146,7 +146,9 @@ fn hidden_shell_by_name_and_the_current_one_are_candidates() {
         "今のものへも切り替える"
     );
 
-    let balloons = balloon_candidates(&root);
+    let balloons = balloon_candidates(&areka_ghost::BasewareRoots::single(
+        root.dir().to_path_buf(),
+    ));
     let hit = resolve_skin_target(
         &balloons,
         &by_name("かくかく"),
@@ -298,7 +300,9 @@ fn balloon_lastinstalled_resolves_only_when_in_the_catalog() {
     let resolve = |world: &World| {
         let installed = installed_for(world, SkinKind::Balloon, &ghost);
         folder(resolve_skin_target(
-            &balloon_candidates(&root),
+            &balloon_candidates(&areka_ghost::BasewareRoots::single(
+                root.dir().to_path_buf(),
+            )),
             &by_name("lastinstalled"),
             Some("kaku"),
             installed.as_deref().map_err(|r| *r),

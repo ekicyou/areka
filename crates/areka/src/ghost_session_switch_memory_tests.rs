@@ -78,11 +78,13 @@ fn pump_to_welcoming(rig: &mut SwitchRig, attempt: WelcomeAttempt) -> bool {
 
 /// 目録の `folder` の descript の `name`（無ければフォルダ名）＝印に書かれるはずの名前。
 fn name_of(rig: &SwitchRig, folder: &str) -> String {
-    areka_ghost::catalog::list_ghosts(&rig.root)
-        .into_iter()
-        .find(|e| e.identity.folder == folder)
-        .and_then(|e| e.identity.name)
-        .unwrap_or_else(|| folder.to_owned())
+    areka_ghost::catalog_roots::list_ghosts(&areka_ghost::catalog_roots::BasewareRoots::single(
+        rig.root.dir().to_path_buf(),
+    ))
+    .into_iter()
+    .find(|e| e.identity.folder == folder)
+    .and_then(|e| e.identity.name)
+    .unwrap_or_else(|| folder.to_owned())
 }
 
 /// `run()` の後の後始末を `fn main` と同じ順で踏む: 置き場から取り出し → 有界に降ろす → 印の始末。

@@ -11,6 +11,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 
+use areka_ghost::same_folder_name;
 use bevy_ecs::world::World;
 
 use super::destination::{Destination, Store, Target};
@@ -30,8 +31,8 @@ pub(crate) struct OpenContext {
     pub ghost: String,
     /// ゴーストのフォルダ（`ghost/<フォルダ>`）の絶対パス。
     pub ghost_dir: PathBuf,
-    /// ベースウェアの根（BootContext が無ければ None）。
-    pub baseware: Option<areka_ghost::BasewareRoot>,
+    /// ベースウェアの根の並び（BootContext が無ければ None）。
+    pub baseware: Option<areka_ghost::BasewareRoots>,
 }
 
 /// 解決の失敗。
@@ -189,7 +190,7 @@ pub(crate) fn submit(world: &World, destination: Destination) {
     let context = OpenContext {
         ghost,
         ghost_dir,
-        baseware: world.get_resource::<BootContext>().map(|c| c.root.clone()),
+        baseware: world.get_resource::<BootContext>().map(|c| c.roots.clone()),
     };
     if let Err(mpsc::SendError(job)) = opener.tx.send(OpenJob {
         destination,
@@ -294,13 +295,13 @@ pub(crate) fn resolve(
 
 /// `\![open,explorer,種類,名前]` の名前を目録で引く（要件 4.4〜4.6）。
 ///
-/// ゴーストは `\![change,ghost,名前]` と同じ引き方、シェル・バルーンは descript の `name` →
-/// フォルダ名の順・大文字小文字を区別して引く。`random` などの特別な名前は解かない（名指しだけ）。
+/// 並び（`ctx.baseware`）の和で引く。ゴーストは `\![change,ghost,名前]` と同じ引き方、シェル・バルーンは descript の `name` →
+/// フォルダ名の順に引く（`name` は区別・フォルダ名は `same_folder_name`）。`random` などの特別な名前は解かない（名指しだけ）。
 fn named_folder(store: Store, name: &str, ctx: &OpenContext) -> Result<PathBuf, OpenFailure> {
     let root = ctx.baseware.as_ref().ok_or(OpenFailure::NoBasewareRoot)?;
     let hit = match store {
         Store::Ghost => resolve_switch_target(
-            &areka_ghost::catalog::list_ghosts(root),
+            &areka_ghost::catalog_roots::list_ghosts(root),
             &GhostSpec::Name(name.to_owned()),
         )
         .map(|t| t.dir),
@@ -313,12 +314,16 @@ fn named_folder(store: Store, name: &str, ctx: &OpenContext) -> Result<PathBuf, 
     })
 }
 
-/// 候補から descript の `name` → フォルダ名の順で 1 つ引く。
+/// 候補から descript の `name`（区別する）→ フォルダ名（`same_folder_name`）の順で 1 つ引く。
 fn skin_by_name(candidates: Vec<SkinCandidate>, want: &str) -> Option<PathBuf> {
     candidates
         .iter()
         .find(|c| c.name.as_deref() == Some(want))
-        .or_else(|| candidates.iter().find(|c| c.folder == want))
+        .or_else(|| {
+            candidates
+                .iter()
+                .find(|c| same_folder_name(&c.folder, want))
+        })
         .map(|c| c.dir.clone())
 }
 

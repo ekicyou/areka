@@ -30,6 +30,7 @@ use crate::ghost_session::{GhostSession, GhostSlot};
 fn entry(folder: &str, name: Option<&str>) -> GhostEntry {
     GhostEntry {
         dir: PathBuf::from(format!(r"C:\ghost-switch-tests\ghost\{folder}")),
+        root: PathBuf::from(r"C:\ghost-switch-tests"),
         identity: Identity {
             folder: folder.to_owned(),
             name: name.map(str::to_owned),
@@ -85,7 +86,8 @@ fn fixture_root(tmp: &TempPath) -> BasewareRoot {
 /// 今のゴーストを `current` のフォルダとする起動の文脈。
 fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
     BootContext {
-        root: root.clone(),
+        roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
+        roots_origin: crate::roots::RootsOrigin::EnvVar,
         app_profile_dir: root.dir().join("profile"),
         helper_exe: root.dir().join("helper.exe"),
         argv_session: false,
@@ -175,9 +177,9 @@ fn name_matches_before_folder_name() {
     );
 }
 
-/// 大文字小文字を区別する（名前でもフォルダ名でも）。
+/// `name` は大文字小文字を区別し、フォルダ名は 1 つの規則で区別しない（要件 2.8）。
 #[test]
-fn matching_is_case_sensitive() {
+fn name_is_case_sensitive_folder_name_is_not() {
     let entries = [entry("Alpha", Some("Emily"))];
     assert_eq!(
         (
@@ -189,8 +191,8 @@ fn matching_is_case_sensitive() {
         ),
         (
             None,
-            None,
-            None,
+            Some("Alpha".to_owned()),
+            Some("Alpha".to_owned()),
             Some("Alpha".to_owned()),
             Some("Alpha".to_owned())
         ),

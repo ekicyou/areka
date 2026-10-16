@@ -229,7 +229,10 @@ fn every_refusal_kind_has_a_fixture_and_is_recorded_once() {
             None => NarArchive::open(&path).map(|_| ()),
             Some(target_ghost) => NarArchive::open(&path)
                 .expect("install で拒否される入力は open を通る")
-                .install(&InstallRequest { root, target_ghost })
+                .install(&InstallRequest {
+                    roots: &SingleRoot(root),
+                    target_ghost,
+                })
                 .map(|_| ()),
         });
 
@@ -304,7 +307,7 @@ fn a_successful_install_writes_no_error_record() {
         NarArchive::open(&path)
             .expect("開ける")
             .install(&InstallRequest {
-                root,
+                roots: &SingleRoot(root),
                 target_ghost: None,
             })
             .expect("入る")
@@ -347,7 +350,7 @@ fn skipped_manifest_keys_are_warned_one_by_one() {
         NarArchive::open(&path)
             .expect("開ける")
             .install(&InstallRequest {
-                root,
+                roots: &SingleRoot(root),
                 target_ghost: None,
             })
             .expect("本体の展開は止まらない")

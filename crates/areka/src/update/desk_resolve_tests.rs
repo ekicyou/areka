@@ -77,7 +77,7 @@ impl Root {
     /// 今のゴースト `emo`・シェル `master`・バルーン `kaku`（SHIORI の名前は無し）。
     fn here(&self) -> Here {
         Here {
-            root: self.baseware(),
+            roots: areka_ghost::BasewareRoots::single(self.baseware().dir().to_path_buf()),
             ghost_dir: self.path("ghost/emo"),
             ghost_name: None,
             shell_dir: Some(self.path("ghost/emo/shell/master")),
@@ -274,7 +274,8 @@ fn world(root: &Root, ghost: &str, balloon: &str) -> (World, Receiver<KanadeMsg>
     world.init_resource::<Schedules>();
     register(&mut world);
     world.insert_resource(BootContext {
-        root: base.clone(),
+        roots: areka_ghost::BasewareRoots::single(base.dir().to_path_buf()),
+        roots_origin: crate::roots::RootsOrigin::EnvVar,
         app_profile_dir: root.path("profile"),
         helper_exe: root.path("helper.exe"),
         argv_session: false,

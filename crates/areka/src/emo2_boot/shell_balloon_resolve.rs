@@ -11,8 +11,8 @@
 
 use std::path::{Path, PathBuf};
 
-use areka_ghost::BasewareRoot;
-use areka_ghost::catalog::{list_all_shells, list_balloons, list_shells};
+use areka_ghost::catalog::{list_all_shells, list_shells};
+use areka_ghost::{BasewareRoots, same_folder_name};
 use bevy_ecs::prelude::Resource;
 use bevy_ecs::world::World;
 
@@ -107,8 +107,8 @@ pub(crate) fn shell_candidates(ghost_dir: &Path) -> Vec<SkinCandidate> {
 }
 
 /// 根の `balloon/` の目録のバルーン。
-pub(crate) fn balloon_candidates(root: &BasewareRoot) -> Vec<SkinCandidate> {
-    list_balloons(root)
+pub(crate) fn balloon_candidates(roots: &BasewareRoots) -> Vec<SkinCandidate> {
+    areka_ghost::catalog_roots::list_balloons(roots)
         .into_iter()
         .map(|e| SkinCandidate {
             dir: e.dir,
@@ -121,7 +121,7 @@ pub(crate) fn balloon_candidates(root: &BasewareRoot) -> Vec<SkinCandidate> {
 
 /// `lastinstalled` の控えを読む（読むだけ・消さない）。
 ///
-/// シェルは控えのゴーストが今のゴースト（`ghost_dir` のフォルダ名・大文字小文字を区別しない＝
+/// シェルは控えのゴーストが今のゴースト（`ghost_dir` のフォルダ名・`same_folder_name`＝
 /// インストールの記録と同じ比較）のときだけフォルダ名を返し、別のゴーストなら該当なし（ゴースト切替は
 /// 起こさない＝要件 1.10・裁定 3）。
 pub(crate) fn installed_for(
@@ -136,7 +136,7 @@ pub(crate) fn installed_for(
                 .ok_or(NotFoundReason::LastInstalledNone)?;
             let here = ghost_dir.file_name().and_then(|n| n.to_str());
             match (memo.ghost_folder.as_deref(), here) {
-                (Some(memo_ghost), Some(here)) if memo_ghost.eq_ignore_ascii_case(here) => {
+                (Some(memo_ghost), Some(here)) if same_folder_name(memo_ghost, here) => {
                     Ok(memo.folder.clone())
                 }
                 _ => Err(NotFoundReason::LastInstalledOtherGhost),
@@ -154,7 +154,7 @@ pub(crate) fn installed_for(
 /// `current`＝今のシェル／バルーンのフォルダ名、`installed`＝[`installed_for`] の答え（`lastinstalled`
 /// のときだけ読む）、`pick`＝乱数（本番は `boot_resolve::pick_index`・候補が 1 つ以上のときだけ呼ぶ）。
 /// `random`・`lastinstalled` は同名の候補より先に解く。`lastinstalled` の控えは候補のフォルダ名と
-/// 大文字小文字を区別せずに突き合わせる（控えはインストールの綴り）。fs・World は読まない。
+/// 突き合わせる。候補のフォルダ名はどれも `same_folder_name` で比べる（`name` は区別する）。fs・World は読まない。
 pub(crate) fn resolve_skin_target(
     candidates: &[SkinCandidate],
     spec: &SkinSpec,
@@ -162,7 +162,11 @@ pub(crate) fn resolve_skin_target(
     installed: Result<&str, NotFoundReason>,
     pick: impl FnOnce(usize) -> usize,
 ) -> Result<SkinCandidate, NotFoundReason> {
-    let by_folder = |want: &str| candidates.iter().find(|c| c.folder == want);
+    let by_folder = |want: &str| {
+        candidates
+            .iter()
+            .find(|c| same_folder_name(&c.folder, want))
+    };
     let hit = match spec {
         SkinSpec::Folder(want) => by_folder(want),
         SkinSpec::Name(name) if name == "random" => {
@@ -172,7 +176,7 @@ pub(crate) fn resolve_skin_target(
             let want = installed?;
             return candidates
                 .iter()
-                .find(|c| c.folder.eq_ignore_ascii_case(want))
+                .find(|c| same_folder_name(&c.folder, want))
                 .cloned()
                 .ok_or(NotFoundReason::LastInstalledMissing);
         }
@@ -190,7 +194,8 @@ fn pick_random(
     current: Option<&str>,
     pick: impl FnOnce(usize) -> usize,
 ) -> Result<SkinCandidate, NotFoundReason> {
-    let is_current = |c: &SkinCandidate| Some(c.folder.as_str()) == current;
+    let is_current =
+        |c: &SkinCandidate| current.is_some_and(|cur| same_folder_name(&c.folder, cur));
     let others: Vec<&SkinCandidate> = candidates
         .iter()
         .filter(|c| !c.hidden && !is_current(c))

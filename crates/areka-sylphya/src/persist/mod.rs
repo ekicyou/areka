@@ -151,6 +151,10 @@ pub enum PersistKey {
     /// 起動中の印（動いているゴーストの名前）→ 正準 key `areka.last.running`・TOML `[last]` running。
     /// 空文字は「無し」と読む（空文字を書けば消える）。載せるスコープは呼び手の契約（本番は App）。
     LastRunning,
+    /// 根の並び → 正準 key `areka.baseware.roots`・TOML `[baseware]` roots。値は 1 本の文字列
+    /// （中身の意味は呼び手が持ち、ここは運ぶだけ）。空文字は空文字のまま（「無し」に潰さない）。
+    /// 書けば並び全体を 1 回で置き換える。載せるスコープは呼び手の契約（本番は App）。
+    BasewareRoots,
 }
 
 impl PersistKey {
@@ -173,6 +177,7 @@ impl PersistKey {
             PersistKey::LastBalloon => "areka.last.balloon".to_string(),
             PersistKey::LastShell => "areka.last.shell".to_string(),
             PersistKey::LastRunning => "areka.last.running".to_string(),
+            PersistKey::BasewareRoots => "areka.baseware.roots".to_string(),
         }
     }
 }
@@ -195,7 +200,8 @@ pub enum PersistOutcome {
 ///   へ変換する。非数値スコープ ID（typed [`u32`] に載らない）は debug ＋ 当該エントリskip（寛容）。
 ///
 /// 返り値は決定論的順序（[`FormatDoc`] は [`std::collections::BTreeMap`] ゆえ scope ID 昇順、
-/// window → balloon-offset → boot → vanish → last（ghost → balloon → shell → running）、各 pair は x → y）。
+/// window → balloon-offset → boot → vanish → last（ghost → balloon → shell → running）→ baseware、
+/// 各 pair は x → y）。
 pub fn load_scope(
     scope: PersistScope,
     roots: &ScopeRoots,
@@ -322,6 +328,7 @@ fn apply_entry(doc: &mut FormatDoc, key: PersistKey, value: String) {
         PersistKey::LastBalloon => doc.last_balloon = Some(value),
         PersistKey::LastShell => doc.last_shell = Some(value),
         PersistKey::LastRunning => doc.last_running = Some(value),
+        PersistKey::BasewareRoots => doc.baseware_roots = Some(value),
     }
 }
 
@@ -361,6 +368,7 @@ fn doc_to_entries(scope: PersistScope, doc: &FormatDoc) -> Vec<(PersistKey, Stri
         (PersistKey::LastBalloon, &doc.last_balloon),
         (PersistKey::LastShell, &doc.last_shell),
         (PersistKey::LastRunning, &doc.last_running),
+        (PersistKey::BasewareRoots, &doc.baseware_roots),
     ] {
         if let Some(v) = value {
             out.push((key, v.clone()));

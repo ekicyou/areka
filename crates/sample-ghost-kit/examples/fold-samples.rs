@@ -39,7 +39,7 @@
 //! ことを見る（片側だけ数えても抜けは見えない）。写像の元は `install.txt` の解釈結果
 //! だけで、登記表の綴りは使わない（`--from` でも同じ突き合わせが働く）。
 
-use areka_nar::{InstallKind, InstallManifest, InstallRequest, NarArchive};
+use areka_nar::{InstallKind, InstallManifest, InstallRequest, NarArchive, SingleRoot};
 use sample_ghost_kit::fold_tree;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -138,7 +138,7 @@ fn fold_one(
     let archive = NarArchive::open(&nar)?;
     let manifest = archive.manifest();
     archive.install(&InstallRequest {
-        root: &dest_root,
+        roots: &SingleRoot(&dest_root),
         target_ghost: None,
     })?;
 

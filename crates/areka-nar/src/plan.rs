@@ -48,6 +48,8 @@ pub(crate) struct Placement {
     pub kind: ElementKind,
     /// ghost／shell／supplement／balloon 本体は `manifest.name`・同梱バルーンは `directory`。
     pub name: String,
+    /// 宛先の根。計画を組むとき呼び手に 1 回だけ尋ねた答え（要件 5.4・5.5）。
+    pub root: PathBuf,
     /// 置き先の絶対パス。
     pub destination: PathBuf,
     pub target_ghost: Option<String>,
@@ -99,31 +101,32 @@ fn body_placement(
     names: &[EntryName],
     request: &InstallRequest<'_>,
 ) -> Result<Placement, RefuseReason> {
-    let ghost_store = request.root.join(GHOST_STORE);
-    let (kind, destination, target_ghost) = match manifest.kind {
-        InstallKind::Ghost => (
-            ElementKind::Ghost,
-            ghost_store.join(&manifest.directory),
-            None,
-        ),
-        InstallKind::Balloon => (
-            ElementKind::Balloon,
-            request.root.join(BALLOON_STORE).join(&manifest.directory),
-            None,
-        ),
+    // 宛先の根は配置ごとに 1 回だけ尋ねる（要件 5.5）。
+    let (kind, root, destination, target_ghost) = match manifest.kind {
+        InstallKind::Ghost => {
+            let root = request.roots.ghost_root(&manifest.directory);
+            let destination = root.join(GHOST_STORE).join(&manifest.directory);
+            (ElementKind::Ghost, root, destination, None)
+        }
+        InstallKind::Balloon => {
+            let root = request.roots.balloon_root(&manifest.directory);
+            let destination = root.join(BALLOON_STORE).join(&manifest.directory);
+            (ElementKind::Balloon, root, destination, None)
+        }
         InstallKind::Shell => {
-            let target = existing_target_ghost(request)?;
-            let destination = ghost_store
+            let (target, root) = existing_target_ghost(request)?;
+            let destination = root
+                .join(GHOST_STORE)
                 .join(&target)
                 .join(SHELL_STORE)
                 .join(&manifest.directory);
-            (ElementKind::Shell, destination, Some(target))
+            (ElementKind::Shell, root, destination, Some(target))
         }
         // サプリメントの宛先はゴースト本体そのもの。`directory` は使わない（要件 5.8）。
         InstallKind::Supplement => {
-            let target = existing_target_ghost(request)?;
-            let destination = ghost_store.join(&target);
-            (ElementKind::Supplement, destination, Some(target))
+            let (target, root) = existing_target_ghost(request)?;
+            let destination = root.join(GHOST_STORE).join(&target);
+            (ElementKind::Supplement, root, destination, Some(target))
         }
     };
 
@@ -145,6 +148,7 @@ fn body_placement(
     Ok(Placement {
         kind,
         name: manifest.name.clone(),
+        root,
         destination,
         target_ghost,
         existing: manifest.existing.clone(),
@@ -179,10 +183,13 @@ fn companion_placement(
             source_directory: companion.source_directory.clone(),
         });
     }
+    // 同梱のバルーンも 1 つずつ尋ねる（ゴーストと別の根へ入ることがある＝要件 5.5）。
+    let root = request.roots.balloon_root(&companion.directory);
     Ok(Placement {
         kind: ElementKind::Balloon,
         name: companion.directory.clone(),
-        destination: request.root.join(BALLOON_STORE).join(&companion.directory),
+        destination: root.join(BALLOON_STORE).join(&companion.directory),
+        root,
         target_ghost: None,
         existing: companion.existing.clone(),
         skip_top_level_install_txt: false,
@@ -191,21 +198,26 @@ fn companion_placement(
     })
 }
 
-/// 呼び出し側が渡した宛先ゴーストの名前を検証し、根に実在することを確かめる（要件 5.7）。
+/// 呼び出し側が渡した宛先ゴーストの名前を検証し、その根を尋ね、答えの根に実在することを
+/// 確かめる（要件 5.4・5.7）。返すのは名前と答えの根。
 ///
 /// 渡されない・1 階層の名前でない・実在しないの 3 つを同じ理由で返す。利用者から
 /// 見ればどれも「その名前のゴーストが入っていない」で、`ghost-install` が採る手も
 /// 同じ（宛先を選び直す）。名前の形を**実在の検査より先に**見るのは、`..` のような
 /// 名前が `<根>/ghost/..` として実在してしまい、宛先が根の外へ出るため。
-fn existing_target_ghost(request: &InstallRequest<'_>) -> Result<String, RefuseReason> {
+fn existing_target_ghost(request: &InstallRequest<'_>) -> Result<(String, PathBuf), RefuseReason> {
     let missing = |target: Option<&str>| RefuseReason::TargetGhostMissing {
         target: target.map(str::to_owned),
     };
     let target = request.target_ghost.ok_or_else(|| missing(None))?;
-    if !is_valid_one_level_name(target) || !request.root.join(GHOST_STORE).join(target).is_dir() {
+    if !is_valid_one_level_name(target) {
         return Err(missing(Some(target)));
     }
-    Ok(target.to_owned())
+    let root = request.roots.ghost_root(target);
+    if !root.join(GHOST_STORE).join(target).is_dir() {
+        return Err(missing(Some(target)));
+    }
+    Ok((target.to_owned(), root))
 }
 
 /// エントリが `folder`（`/` 区切りの取り出し元）そのもの、またはその配下か。

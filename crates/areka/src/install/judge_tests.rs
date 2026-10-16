@@ -32,8 +32,9 @@ fn manifest(
 /// 起動中のゴースト `emo2`（`sakura.name`＝えもこ・`install.accept`＝emo,えもつー）。
 fn emo2() -> GhostFacts {
     GhostFacts {
-        root: PathBuf::from(r"C:\areka"),
+        roots: areka_ghost::BasewareRoots::single(PathBuf::from(r"C:\areka")),
         folder: Some("emo2".to_owned()),
+        running_dir: None,
         name: "emo2".to_owned(),
         sakura_name: Some("えもこ".to_owned()),
         install_accept: vec!["emo".to_owned(), "えもつー".to_owned()],

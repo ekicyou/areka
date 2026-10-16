@@ -5,6 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
+use areka_ghost::{BasewareRoots, same_folder_name};
 use areka_nar::{ElementKind, InstallKind, InstallManifest, NarError, RefuseReason};
 
 /// 複数の値の区切り（byte 値 1）。
@@ -13,9 +14,12 @@ pub(crate) const SEPARATOR: &str = "\u{1}";
 /// 照合と宛先の判断に要る、今のゴーストの素性。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GhostFacts {
-    pub root: PathBuf,
+    /// ベースウェアの根の並びの写し（入れる根と、すでにあるものの引き当てに使う）。
+    pub roots: BasewareRoots,
     /// 根の下のフォルダ名（argv で根の外から起こしたゴーストは None）。
     pub folder: Option<String>,
+    /// 起動中のゴーストの場所（`folder` が在るときだけ・起動中のゴーストへの上書きの宛先・要件 8.7）。
+    pub running_dir: Option<std::path::PathBuf>,
     pub name: String,
     pub sakura_name: Option<String>,
     pub install_accept: Vec<String>,
@@ -69,7 +73,7 @@ pub(crate) fn destination_of(manifest: &InstallManifest, ghost: &GhostFacts) -> 
     };
     match manifest.kind {
         InstallKind::Supplement => Destination::RunningGhost,
-        InstallKind::Ghost if manifest.directory.eq_ignore_ascii_case(folder) => {
+        InstallKind::Ghost if same_folder_name(&manifest.directory, folder) => {
             Destination::RunningGhost
         }
         InstallKind::Ghost | InstallKind::Shell | InstallKind::Balloon => Destination::Elsewhere,

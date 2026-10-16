@@ -21,7 +21,7 @@ pub(crate) fn register(world: &mut World) {
 fn install_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
         label: captions::default_label(Frame::Install).to_string(),
-        caption_resource: Some(captions::resource_for(Frame::Install)),
+        caption_resource: captions::resource_for(Frame::Install),
         enabled: desk::can_pick(world),
         checked: None,
         body: ItemBody::Action(Rc::new(|world: &mut World, _: &MenuContext| {

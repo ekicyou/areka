@@ -63,7 +63,12 @@ fn install(root: &Path, prepared: &Prepared) -> (PathBuf, Result<InstallOutcome,
     let area = WorkArea::create(root).expect("作業フォルダを作れる");
     let states = stage_into(&area, prepared);
     let work = area.path().to_path_buf();
-    let outcome = commit_all(&area, &prepared.manifest, &prepared.plan, &states);
+    let outcome = commit_all(
+        std::slice::from_ref(&area),
+        &prepared.manifest,
+        &prepared.plan,
+        &states,
+    );
     (work, outcome)
 }
 
@@ -115,7 +120,7 @@ fn element(
 fn committing_moves_every_placement_into_place_and_returns_the_element_list() {
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
     // `accept` と読み飛ばしたキーも結果に載る（要件 5.10 後段）ので、両方書いた
@@ -220,7 +225,7 @@ fn a_shell_carries_its_target_ghost_into_the_result() {
         .file("surface0.png", b"png")
         .done();
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: Some("test-ghost"),
     };
     let prepared = prepare(archive, &request);
@@ -262,7 +267,7 @@ fn a_shell_carries_its_target_ghost_into_the_result() {
 fn all_three_existing_states_are_judged_before_the_swap() {
     let fresh = WorkDir::new().expect("作業フォルダを取れる");
     let request = InstallRequest {
-        root: fresh.path(),
+        roots: &SingleRoot(fresh.path()),
         target_ghost: None,
     };
     let prepared = prepare(ghost_archive(&[]), &request);
@@ -285,7 +290,7 @@ fn all_three_existing_states_are_judged_before_the_swap() {
     make_tree(&ghost, &[("profile/ghost.dat", b"ghost state")]);
     make_tree(&balloon, &[("keep.dat", b"kept"), ("gone.dat", b"gone")]);
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
     let prepared = prepare(
@@ -339,7 +344,7 @@ fn a_destination_in_use_fails_the_commit_and_leaves_it_byte_identical() {
     );
     let before = tree(&destination);
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
     let prepared = prepare(balloon_archive(&[]), &request);
@@ -368,7 +373,7 @@ fn a_destination_held_briefly_by_another_process_still_commits() {
     let destination = work.path().join("balloon").join("test-balloon");
     make_tree(&destination, &[("descript.txt", b"old descript")]);
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
     let prepared = prepare(balloon_archive(&[]), &request);
@@ -386,7 +391,12 @@ fn a_destination_held_briefly_by_another_process_still_commits() {
         drop(handle);
     });
 
-    let outcome = commit_all(&area, &prepared.manifest, &prepared.plan, &states);
+    let outcome = commit_all(
+        std::slice::from_ref(&area),
+        &prepared.manifest,
+        &prepared.plan,
+        &states,
+    );
     release.join().expect("放す側は落ちない");
     let outcome = outcome.expect("短い掴みは待ち切って確定できる");
 
@@ -419,7 +429,7 @@ fn a_failing_second_rename_puts_the_retired_tree_back() {
     make_tree(&destination, &[("descript.txt", b"old descript")]);
     let before = tree(&destination);
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
     let prepared = prepare(balloon_archive(&[]), &request);
@@ -428,8 +438,13 @@ fn a_failing_second_rename_puts_the_retired_tree_back() {
     let states = stage_into(&area, &prepared);
     // 組み上げた木を掴む＝2 手目の `rename` だけが失敗する。
     let handle = hold(&area.stage(0).join("descript.txt"));
-    let failure = commit_all(&area, &prepared.manifest, &prepared.plan, &states)
-        .expect_err("2 手目が失敗する");
+    let failure = commit_all(
+        std::slice::from_ref(&area),
+        &prepared.manifest,
+        &prepared.plan,
+        &states,
+    )
+    .expect_err("2 手目が失敗する");
 
     assert_eq!(failure.phase, IoPhase::Commit, "確定の段で失敗した");
     assert_eq!(failure.path, destination, "対象パスが分かる");
@@ -462,7 +477,7 @@ fn a_failure_on_the_second_placement_rolls_the_first_one_back() {
     let ghost_before = tree(&ghost);
     let balloon_before = tree(&balloon);
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
     let prepared = prepare(ghost_archive(&[]), &request);
@@ -506,7 +521,7 @@ fn a_placement_that_was_new_is_removed_again_when_a_later_one_fails() {
     make_tree(&balloon, &[("shiori.dll", b"loaded")]);
     let balloon_before = tree(&balloon);
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
     let prepared = prepare(ghost_archive(&[]), &request);
@@ -554,7 +569,7 @@ fn a_placement_that_was_new_is_removed_again_when_a_later_one_fails() {
 fn a_new_placement_whose_destination_appeared_meanwhile_does_not_schedule_it_for_deletion() {
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
     let prepared = prepare(balloon_archive(&[]), &request);
@@ -600,7 +615,7 @@ fn leftovers_name_the_work_folder_when_the_cleanup_cannot_finish() {
     let destination = work.path().join("balloon").join("test-balloon");
     make_tree(&destination, &[("descript.txt", b"old descript")]);
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
     let prepared = prepare(balloon_archive(&[]), &request);
@@ -610,8 +625,13 @@ fn leftovers_name_the_work_folder_when_the_cleanup_cannot_finish() {
     let stuck = area.path().join("stuck.bin");
     fs::write(&stuck, b"stuck").expect("仕掛けを置ける");
     let handle = hold(&stuck);
-    let outcome =
-        commit_all(&area, &prepared.manifest, &prepared.plan, &states).expect("確定そのものは通る");
+    let outcome = commit_all(
+        std::slice::from_ref(&area),
+        &prepared.manifest,
+        &prepared.plan,
+        &states,
+    )
+    .expect("確定そのものは通る");
 
     assert_eq!(
         outcome.leftovers,
@@ -770,7 +790,7 @@ fn a_stray_work_folder_that_will_not_go_is_reported_instead_of_stopping_the_inst
     make_tree(&stray, &[("held.bin", b"held")]);
     let handle = hold(&stray.join("held.bin"));
     let request = InstallRequest {
-        root: work.path(),
+        roots: &SingleRoot(work.path()),
         target_ghost: None,
     };
     let prepared = prepare(balloon_archive(&[]), &request);
@@ -782,8 +802,13 @@ fn a_stray_work_folder_that_will_not_go_is_reported_instead_of_stopping_the_inst
         "消せなかった残骸が分かる"
     );
     let states = stage_into(&area, &prepared);
-    let outcome = commit_all(&area, &prepared.manifest, &prepared.plan, &states)
-        .expect("残骸があっても確定できる");
+    let outcome = commit_all(
+        std::slice::from_ref(&area),
+        &prepared.manifest,
+        &prepared.plan,
+        &states,
+    )
+    .expect("残骸があっても確定できる");
 
     assert_eq!(
         outcome.leftovers,

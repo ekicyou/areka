@@ -39,8 +39,8 @@ fn basewareroot_composes_store_paths_without_touching_fs() {
 fn missing_stores_list_zero() {
     let tmp = TempPath::new("catalog-missing");
     let root = BasewareRoot::new(tmp.path().to_path_buf());
-    assert!(list_ghosts(&root).is_empty());
-    assert!(list_balloons(&root).is_empty());
+    assert!(scan_ghosts(&root).is_empty());
+    assert!(scan_balloons(&root).is_empty());
     assert!(list_shells(&root.ghost_dir("nobody")).is_empty());
 }
 
@@ -56,7 +56,7 @@ fn ghosts_are_folders_with_master_descript_in_byte_order() {
     fs::create_dir_all(root.ghost_dir("no-descript").join("ghost").join("master")).unwrap();
     put(&root.ghost_store().join("stray.txt"), b"x");
 
-    let listed = list_ghosts(&root);
+    let listed = scan_ghosts(&root);
     let folders: Vec<&str> = listed.iter().map(|g| g.identity.folder.as_str()).collect();
     assert_eq!(folders, ["Z", "a", "b"], "バイト順（要件 2.5）");
     assert_eq!(listed[0].dir, root.ghost_dir("Z"));
@@ -80,7 +80,7 @@ fn identity_reads_seven_items_and_decodes_shift_jis() {
     put(&dir.join("manual.txt"), b"m");
     put(&dir.join("thumbnail.png"), b"p");
 
-    let listed = list_balloons(&root);
+    let listed = scan_balloons(&root);
     assert_eq!(listed.len(), 1);
     assert_eq!(
         listed[0].identity,
@@ -106,7 +106,7 @@ fn readme_falls_back_to_readme_txt_only_when_present() {
     let dangling = put_ghost(&root, "dangling", "charset,UTF-8\nreadme,gone.txt\n");
     put(&dangling.join("readme.txt"), b"r");
 
-    let listed = list_ghosts(&root);
+    let listed = scan_ghosts(&root);
     assert_eq!(listed[0].identity.folder, "dangling");
     assert_eq!(listed[0].identity.readme, None);
     assert_eq!(listed[1].identity.readme, Some(with.join("readme.txt")));
@@ -152,7 +152,7 @@ fn balloons_keep_absent_or_balloon_type_and_warn_on_others() {
     );
 
     let mut listed = Vec::new();
-    let events = capture(|| listed = list_balloons(&root));
+    let events = capture(|| listed = scan_balloons(&root));
     let folders: Vec<&str> = listed.iter().map(|b| b.identity.folder.as_str()).collect();
     assert_eq!(folders, ["plain", "typed"]);
     assert_logged_event(&events, Level::WARN, TARGET, "catalog_type_not_balloon");
@@ -195,7 +195,7 @@ fn empty_values_count_as_absent() {
         b"charset,UTF-8\ntype,\n",
     );
 
-    let ghosts = list_ghosts(&root);
+    let ghosts = scan_ghosts(&root);
     assert_eq!(
         ghosts[0].identity,
         Identity {
@@ -206,7 +206,7 @@ fn empty_values_count_as_absent() {
     assert_eq!(list_shells(&ghost).len(), 1, "menu, は隠さない");
     assert_eq!(companion_balloon(&ghost), None);
     let mut balloons = Vec::new();
-    let events = capture(|| balloons = list_balloons(&root));
+    let events = capture(|| balloons = scan_balloons(&root));
     assert_eq!(balloons.len(), 1, "type, は type 無しと同じ");
     assert!(
         events.iter().all(|e| e.target != TARGET),
@@ -243,8 +243,8 @@ fn temp_root_lists_requirement_8_1_layout() {
     let mut balloons = Vec::new();
     let mut shells = Vec::new();
     let events = capture(|| {
-        ghosts = list_ghosts(&root);
-        balloons = list_balloons(&root);
+        ghosts = scan_ghosts(&root);
+        balloons = scan_balloons(&root);
         shells = list_shells(&alpha);
     });
 
@@ -253,6 +253,7 @@ fn temp_root_lists_requirement_8_1_layout() {
         ghosts,
         [
             GhostEntry {
+                root: root.dir().to_path_buf(),
                 dir: alpha.clone(),
                 identity: Identity {
                     folder: "alpha".into(),
@@ -265,6 +266,7 @@ fn temp_root_lists_requirement_8_1_layout() {
                 },
             },
             GhostEntry {
+                root: root.dir().to_path_buf(),
                 dir: root.ghost_dir("beta"),
                 identity: Identity {
                     folder: "beta".into(),
@@ -295,6 +297,7 @@ fn temp_root_lists_requirement_8_1_layout() {
         balloons,
         [
             BalloonEntry {
+                root: root.dir().to_path_buf(),
                 dir: staysee.clone(),
                 identity: Identity {
                     folder: "StayseeBalloon".into(),
@@ -307,6 +310,7 @@ fn temp_root_lists_requirement_8_1_layout() {
                 },
             },
             BalloonEntry {
+                root: root.dir().to_path_buf(),
                 dir: root.balloon_dir("kaku"),
                 identity: Identity {
                     folder: "kaku".into(),
@@ -339,14 +343,15 @@ fn sample_root_emo2_lists_one_ghost_one_balloon() {
     let mut balloons = Vec::new();
     let mut shells = Vec::new();
     let events = capture(|| {
-        ghosts = list_ghosts(&root);
-        balloons = list_balloons(&root);
+        ghosts = scan_ghosts(&root);
+        balloons = scan_balloons(&root);
         shells = list_shells(&ghost);
     });
 
     assert_eq!(
         ghosts,
         [GhostEntry {
+            root: emo2.root().to_path_buf(),
             dir: ghost.clone(),
             identity: Identity {
                 folder: "emo2".into(),
@@ -362,6 +367,7 @@ fn sample_root_emo2_lists_one_ghost_one_balloon() {
     assert_eq!(
         balloons,
         [BalloonEntry {
+            root: emo2.root().to_path_buf(),
             dir: kaku.clone(),
             identity: Identity {
                 folder: "emo2-kakukaku".into(),
@@ -404,7 +410,7 @@ fn unreadable_descript_warns_once_and_is_excluded() {
     let _held = hold_exclusive(&locked.join("ghost").join("master").join("descript.txt"));
 
     let mut listed = Vec::new();
-    let events = capture(|| listed = list_ghosts(&root));
+    let events = capture(|| listed = scan_ghosts(&root));
     let folders: Vec<&str> = listed.iter().map(|g| g.identity.folder.as_str()).collect();
     assert_eq!(folders, ["ok"]);
     assert_eq!(catalog_warns(&events), ["catalog_descript_unreadable"]);
@@ -446,7 +452,7 @@ fn non_utf8_folder_name_warns_and_is_excluded() {
     );
 
     let mut listed = Vec::new();
-    let events = capture(|| listed = list_ghosts(&root));
+    let events = capture(|| listed = scan_ghosts(&root));
     let folders: Vec<&str> = listed.iter().map(|g| g.identity.folder.as_str()).collect();
     assert_eq!(folders, ["ok"]);
     assert_eq!(catalog_warns(&events), ["catalog_non_utf8_name"]);

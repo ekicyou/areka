@@ -20,7 +20,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::HSTRING;
 
-use crate::boot_config::{RootError, RootSource};
+use crate::roots::{RootError, RootsOrigin};
 
 /// 告知を抑える環境変数（要件 6.5・裁定 2）。設定されていれば抑える。
 /// ただし未設定・空・空白だけ・"0" は「設定されていない」と読む（`AREKA_TICK_GATE=0` と同じく 0 で切れる）。
@@ -33,11 +33,11 @@ pub(crate) enum AlertScene {
     RootMissing(RootError),
     /// ゴーストが無い（要件 4.7）／argv のフォルダがゴーストでない（要件 4.8・argv は Some）。
     GhostMissing {
-        ghost_store: PathBuf,
+        ghost_stores: Vec<PathBuf>,
         argv: Option<PathBuf>,
     },
     /// バルーンが無い（要件 5.8）。
-    BalloonMissing { balloon_store: PathBuf },
+    BalloonMissing { balloon_stores: Vec<PathBuf> },
     /// 起動窓を開けない（要件 6.4）。`reason` は失敗の内容（`PlacementError` の表示）。
     StartupWindow { reason: String },
     /// SHIORI が動かなくなった（起動時か会話中かは載せない）。
@@ -53,10 +53,10 @@ const TITLE: &str = "areka を起動できません";
 /// SHIORI が動かなくなった場面の題名（smoke の目印でもある）。
 const SHIORI_FAULT_TITLE: &str = "SHIORI が動かなくなりました";
 
-/// 根を渡す道（根の場所そのものが綴れないとき）。
-const ROOT_BY_ENV: &str =
-    "置く場所: 環境変数 AREKA_ROOT に根のフォルダの絶対パスを設定してください。";
+/// 置き場の場面の文面（利用者向けの語は「置き場」・要件 9.5）。
 const ROOT_SHAPE: &str = "置くもの: ghost フォルダと balloon フォルダを持つフォルダ";
+const ROOT_BY_ENV: &str =
+    "環境変数 AREKA_ROOT に、置き場のフォルダの絶対パスを ; で区切って複数渡せます。";
 const GHOST_SHAPE: &str = r"置くもの: ghost\master\descript.txt を持つゴーストのフォルダ";
 const BALLOON_SHAPE: &str = "置くもの: descript.txt を持つバルーンのフォルダ";
 
@@ -71,37 +71,42 @@ pub(crate) fn fault_kind_text(kind: ShioriFaultKind) -> &'static str {
     }
 }
 
-/// 題名と本文（純粋・テストで文面を固定する）。題名は場面ごと。本文は「何が無いか」
-/// 「置くべき場所の絶対パス」「置くものの形」の 3 行構成（起動窓の場面は「何が起きたか」
-/// 「失敗の内容」「確かめること」、SHIORI の場面は「どのゴーストか」「失敗の種類」「理由」）。
+/// 題名と本文（純粋・テストで文面を固定する）。題名は場面ごと。本文は行数可変（要件 9.5〜9.7）:
+/// 置き場の場面は「理由」「試した場所（1 行ずつ・出どころつき）」「置くもの」「AREKA_ROOT の案内」、
+/// ゴースト・バルーンの場面は「何が無いか」「探した場所（各置き場の `ghost\`／`balloon\` を 1 行ずつ）」
+/// 「置くもの」、起動窓の場面は「何が起きたか」「失敗の内容」「確かめること」、
+/// SHIORI の場面は「どのゴーストか」「失敗の種類」「理由」。
 pub(crate) fn alert_text(scene: &AlertScene) -> (String, String) {
-    let lines: [String; 3] = match scene {
-        AlertScene::RootMissing(RootError::ExeLocationUnavailable) => [
-            "根が決まりません: 実行ファイルの場所が取れません。".to_owned(),
-            ROOT_BY_ENV.to_owned(),
-            ROOT_SHAPE.to_owned(),
-        ],
-        // 空の AREKA_ROOT は絶対化できない唯一の値。空のパスは綴らない。
-        AlertScene::RootMissing(RootError::NotADirectory {
-            dir,
-            source: RootSource::EnvVar,
-        }) if dir.as_os_str().is_empty() => [
-            "根が決まりません: 環境変数 AREKA_ROOT が空です。".to_owned(),
-            ROOT_BY_ENV.to_owned(),
-            ROOT_SHAPE.to_owned(),
-        ],
-        AlertScene::RootMissing(RootError::NotADirectory { dir, source }) => {
-            let what = match source {
-                RootSource::EnvVar => "環境変数 AREKA_ROOT の指すフォルダがありません。",
-                RootSource::ExeDir => "実行ファイルのあるフォルダが見つかりません。",
+    let lines: Vec<String> = match scene {
+        AlertScene::RootMissing(error) => {
+            let (what, tried, origin) = match error {
+                RootError::ExeLocationUnavailable { tried, origin, .. } => (
+                    "置き場が決まりません: 実行ファイルの場所が取れません。",
+                    tried.as_slice(),
+                    *origin,
+                ),
+                RootError::EnvAllEmpty { .. } => (
+                    "置き場が決まりません: 環境変数 AREKA_ROOT が空です。",
+                    &[][..],
+                    RootsOrigin::EnvVar,
+                ),
+                RootError::NoneFound { tried, origin, .. } => (
+                    "置き場（ゴーストとバルーンを置くフォルダ）が見つかりません。",
+                    tried.as_slice(),
+                    *origin,
+                ),
             };
-            [
-                format!("根が決まりません: {what}"),
-                format!("置く場所: {}", dir.display()),
-                ROOT_SHAPE.to_owned(),
-            ]
+            let from = origin_text(origin);
+            std::iter::once(what.to_owned())
+                .chain(
+                    tried
+                        .iter()
+                        .map(|dir| format!("試した場所: {}（{from}）", dir.display())),
+                )
+                .chain([ROOT_SHAPE.to_owned(), ROOT_BY_ENV.to_owned()])
+                .collect()
         }
-        AlertScene::GhostMissing { ghost_store, argv } => [
+        AlertScene::GhostMissing { ghost_stores, argv } => store_lines(
             match argv {
                 None => "ゴーストが見つかりません。".to_owned(),
                 Some(given) => format!(
@@ -109,15 +114,15 @@ pub(crate) fn alert_text(scene: &AlertScene) -> (String, String) {
                     given.display()
                 ),
             },
-            format!("置く場所: {}", ghost_store.display()),
-            GHOST_SHAPE.to_owned(),
-        ],
-        AlertScene::BalloonMissing { balloon_store } => [
+            ghost_stores,
+            GHOST_SHAPE,
+        ),
+        AlertScene::BalloonMissing { balloon_stores } => store_lines(
             "バルーンが見つかりません。".to_owned(),
-            format!("置く場所: {}", balloon_store.display()),
-            BALLOON_SHAPE.to_owned(),
-        ],
-        AlertScene::StartupWindow { reason } => [
+            balloon_stores,
+            BALLOON_SHAPE,
+        ),
+        AlertScene::StartupWindow { reason } => vec![
             "起動窓を開けません。".to_owned(),
             format!("失敗の内容: {reason}"),
             "モニタの接続とゴーストのファイルを確かめてください。".to_owned(),
@@ -126,7 +131,7 @@ pub(crate) fn alert_text(scene: &AlertScene) -> (String, String) {
             ghost_name,
             ghost_root,
             fault,
-        } => [
+        } => vec![
             match ghost_name {
                 Some(name) => format!("ゴースト: {name}（{}）", ghost_root.display()),
                 None => format!("ゴースト: {}", ghost_root.display()),
@@ -143,6 +148,27 @@ pub(crate) fn alert_text(scene: &AlertScene) -> (String, String) {
         | AlertScene::StartupWindow { .. } => TITLE,
     };
     (title.to_owned(), lines.join("\n"))
+}
+
+/// 並びの出どころを利用者向けの語へ（要件 9.5）。
+fn origin_text(origin: RootsOrigin) -> &'static str {
+    match origin {
+        RootsOrigin::EnvVar => "環境変数 AREKA_ROOT",
+        RootsOrigin::Memory => "アプリの記憶",
+        RootsOrigin::Default => "既定（実行ファイルの隣）",
+    }
+}
+
+/// 格納フォルダの場面の行: 「何が無いか」、探した場所を 1 行ずつ、「置くもの」（要件 9.6・9.7）。
+fn store_lines(what: String, stores: &[PathBuf], shape: &str) -> Vec<String> {
+    std::iter::once(what)
+        .chain(
+            stores
+                .iter()
+                .map(|dir| format!("探した場所: {}", dir.display())),
+        )
+        .chain([shape.to_owned()])
+        .collect()
 }
 
 /// 値から抑止を判断する純粋な口（None／""／空白のみ／"0"（trim 後）→ false・それ以外 → true）。

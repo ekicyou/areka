@@ -23,21 +23,32 @@ use super::{Frame, ItemBody, MenuItem};
 ///
 /// 並びは [`Frame::ORDER`] と同じで、判別値がそのまま添字になる（[`resource_for`]・
 /// [`default_label`] はその前提で引く。並びが崩れたら兄弟テストが赤になる）。
-/// 既定名は正典が定めていないので本仕様の裁定である。
+/// 既定名は正典が定めていないので本仕様の裁定である。置き場の 2 枠（areka-P0-baseware-root-list）は
+/// SSP に当たる SHIORI のリソース名が無いので `None` で、いつも既定名で出る。
 ///
 /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html
-pub(crate) const FRAME_CAPTIONS: &[(&str, Frame, &str)] = &[
-    ("ghostrootbutton.caption", Frame::Ghost, "ゴースト"),
-    ("shellrootbutton.caption", Frame::Shell, "シェル"),
-    ("balloonrootbutton.caption", Frame::Balloon, "バルーン"),
-    ("updatebutton.caption", Frame::Update, "ネットワーク更新"),
+pub(crate) const FRAME_CAPTIONS: &[(Option<&str>, Frame, &str)] = &[
+    (Some("ghostrootbutton.caption"), Frame::Ghost, "ゴースト"),
+    (Some("shellrootbutton.caption"), Frame::Shell, "シェル"),
     (
-        "ghostinstallbutton.caption",
+        Some("balloonrootbutton.caption"),
+        Frame::Balloon,
+        "バルーン",
+    ),
+    (
+        Some("updatebutton.caption"),
+        Frame::Update,
+        "ネットワーク更新",
+    ),
+    (
+        Some("ghostinstallbutton.caption"),
         Frame::Install,
         "インストール…",
     ),
-    ("readmebutton.caption", Frame::Readme, "説明書"),
-    ("closebutton.caption", Frame::Close, "終了"),
+    (None, Frame::RootAdd, "置き場を追加…"),
+    (None, Frame::RootRemove, "置き場を外す"),
+    (Some("readmebutton.caption"), Frame::Readme, "説明書"),
+    (Some("closebutton.caption"), Frame::Close, "終了"),
 ];
 
 /// 本体側（スコープ 0）の窓でメニューを出してよいかを尋ねる名前（要件 3.6）。
@@ -72,8 +83,8 @@ pub(crate) const UNQUERIED_POPUPMENU_RESOURCES: &[&str] = &[
 /// 返事を待つ上限。超えたら全件を既定名にしてメニューを出す（要件 3.4）。
 pub(crate) const QUERY_TIMEOUT: Duration = Duration::from_millis(1000);
 
-/// 枠の項目名に使う SHIORI リソース名。
-pub(crate) fn resource_for(frame: Frame) -> &'static str {
+/// 枠の項目名に使う SHIORI リソース名。持たない枠は `None`。
+pub(crate) fn resource_for(frame: Frame) -> Option<&'static str> {
     row(frame).0
 }
 
@@ -83,7 +94,7 @@ pub(crate) fn default_label(frame: Frame) -> &'static str {
 }
 
 /// 枠の行を [`FRAME_CAPTIONS`] から取る。
-fn row(frame: Frame) -> &'static (&'static str, Frame, &'static str) {
+fn row(frame: Frame) -> &'static (Option<&'static str>, Frame, &'static str) {
     let row = &FRAME_CAPTIONS[frame as usize];
     debug_assert_eq!(row.1, frame, "対応表の並びが枠の並び順と食い違っている");
     row

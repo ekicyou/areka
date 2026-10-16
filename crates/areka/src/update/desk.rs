@@ -14,8 +14,9 @@ use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
 
 use areka_actor::ReplyReceiver;
-use areka_ghost::BasewareRoot;
-use areka_ghost::catalog::{descript_name, homeurl, list_balloons, list_shells};
+use areka_ghost::BasewareRoots;
+use areka_ghost::catalog::{descript_name, homeurl, list_shells};
+use areka_ghost::catalog_roots::list_balloons;
 use areka_kanade::online::OnlineCounter;
 use areka_kanade::resources::ResourceOutcome;
 use areka_kanade::{ChangeOrigin, KanadeMsg, ShioriMethod};
@@ -573,7 +574,7 @@ pub(crate) fn discard_for_exit(world: &mut World) {
 
 /// 今の 3 つを解く材料（World から写す）。
 struct Here {
-    root: BasewareRoot,
+    roots: BasewareRoots,
     /// 置き場のゴーストのフォルダ（`ghost/<フォルダ名>`）。
     ghost_dir: PathBuf,
     /// 実行系が読んだゴーストの名前（実行系が無ければ None）。
@@ -597,7 +598,7 @@ fn here(world: &World) -> Option<Here> {
     let ctx = world.get_resource::<BootContext>()?;
     let session = world.get_non_send::<GhostSlot>()?.0.as_ref()?;
     Some(Here {
-        root: ctx.root.clone(),
+        roots: ctx.roots.clone(),
         ghost_dir: session.ghost_dir().to_path_buf(),
         ghost_name: session.names().and_then(|n| n.name.clone()),
         shell_dir: session.runtime().map(|r| r.mount().shell.dir.clone()),
@@ -631,7 +632,7 @@ fn resolve(here: &Here, raw: &RawUpdateRequest) -> Vec<TargetSpec> {
                         .into_iter()
                         .find(|e| named(&e.identity.name))
                         .map(|e| e.dir),
-                    TargetKind::Balloon => list_balloons(&here.root)
+                    TargetKind::Balloon => list_balloons(&here.roots)
                         .into_iter()
                         .find(|e| named(&e.identity.name))
                         .map(|e| e.dir),

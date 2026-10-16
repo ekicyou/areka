@@ -7,6 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
+use areka_ghost::BasewareRoot;
 use areka_ghost::catalog::{BalloonEntry, Identity};
 use log_capture_kit::{CapturedEvent, capture};
 
@@ -24,6 +25,7 @@ fn entries(root: &BasewareRoot, v: &[(&str, Option<&str>)]) -> Vec<BalloonEntry>
     v.iter()
         .map(|(folder, name)| BalloonEntry {
             dir: root.balloon_dir(folder),
+            root: root.dir().to_path_buf(),
             identity: Identity {
                 folder: (*folder).to_owned(),
                 name: name.map(str::to_owned),
@@ -50,13 +52,13 @@ fn chain(
     pick: impl FnOnce(usize) -> usize,
 ) -> (Result<BalloonDecision, NoBalloon>, Vec<CapturedEvent>) {
     let inputs = BalloonInputs {
-        root,
         argv: given.argv,
         memory: given.memory,
         default_balloon_path: given.path,
         balloon_name: given.name,
         companion: given.companion,
         listed,
+        stores: &[root.balloon_store()],
     };
     capture(|| resolve_balloon(&inputs, pick))
 }
@@ -434,20 +436,24 @@ fn balloon_name_prefers_name_then_first_in_listing() {
     }
 }
 
-/// 大文字と小文字だけ違う: どちらの鍵も当たらず、鍵ごとに警告 1 件（要件 2.3・2.6）。
+/// 大文字と小文字だけ違う: フォルダ名の突き合わせは 1 つの規則（大文字小文字を区別しない・
+/// areka-P0-baseware-root-list 要件 2.8）で当たり、決まるフォルダ名は項目の綴り。`name` の
+/// 突き合わせは今のまま区別する（`DUP` は `name` の `dup` に当たらず、同じフォルダ名も無いので警告 1 件）。
 #[test]
-fn descript_match_is_case_sensitive() {
+fn descript_folder_match_ignores_case_but_name_match_does_not() {
     let root = root();
-    let (got, events) = descript(&root, Some("claudia"), Some("claudia"));
+    for (path, name) in [(Some("claudia"), None), (None, Some("claudia"))] {
+        let (got, events) = descript(&root, path, name);
+        assert_eq!(got, Ok(at(&root, BalloonRoute::Descript, "Claudia")));
+        assert!(events.is_empty(), "{events:?}");
+    }
+    let (got, events) = descript(&root, None, Some("DUP"));
     assert_eq!(got, Ok(at(&root, BalloonRoute::Companion, "bundled")));
     assert_eq!(
         descript_misses(&root, &events),
-        vec![
-            pair("default.balloon.path", "claudia"),
-            pair("balloon", "claudia"),
-        ]
+        vec![pair("balloon", "DUP")]
     );
-    assert_eq!(events.len(), 2, "{events:?}");
+    assert_eq!(events.len(), 1, "{events:?}");
 }
 
 /// `random`・`lastinstalled` は特別に解かない: その `name` のバルーンが在れば当たり、無ければ警告 1 件。

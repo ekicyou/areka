@@ -29,14 +29,6 @@ fn nested_install_txt() -> Vec<u8> {
     ])
 }
 
-/// 根だけを借りた要求で計画を組む。
-fn free_request(root: &WorkDir) -> InstallRequest<'_> {
-    InstallRequest {
-        root: root.path(),
-        target_ghost: None,
-    }
-}
-
 // ---- 固定入力 ----
 
 /// 取り出し元 `extra/bal1` の中身と、兄弟のファイル `extra/readme.txt` を持つ書庫。
@@ -122,7 +114,13 @@ fn overlapping_sources_archive() -> NarBuilder {
 #[test]
 fn a_nested_source_is_stripped_of_every_segment() {
     let root = root_with_ghost("other");
-    let plan = plan_of(nested_source_archive(), &free_request(&root));
+    let plan = plan_of(
+        nested_source_archive(),
+        &InstallRequest {
+            roots: &SingleRoot(root.path()),
+            target_ghost: None,
+        },
+    );
 
     assert_eq!(plan.len(), 2, "本体と同梱の 2 配置になる");
     let companion = &plan[1];
@@ -150,7 +148,13 @@ fn a_nested_source_is_stripped_of_every_segment() {
 #[test]
 fn a_sibling_of_the_nested_source_stays_with_the_body() {
     let root = root_with_ghost("other");
-    let plan = plan_of(nested_source_archive(), &free_request(&root));
+    let plan = plan_of(
+        nested_source_archive(),
+        &InstallRequest {
+            roots: &SingleRoot(root.path()),
+            target_ghost: None,
+        },
+    );
 
     let body = &plan[0];
     assert_eq!(
@@ -175,7 +179,10 @@ fn a_sibling_of_the_nested_source_stays_with_the_body() {
 #[test]
 fn a_folder_on_the_way_to_the_source_is_not_made_on_the_body_side() {
     let root = root_with_ghost("other");
-    let request = free_request(&root);
+    let request = InstallRequest {
+        roots: &SingleRoot(root.path()),
+        target_ghost: None,
+    };
     let with_entries = plan_of(passing_through_archive(true), &request);
     let without_entries = plan_of(passing_through_archive(false), &request);
 
@@ -208,7 +215,13 @@ fn a_folder_on_the_way_to_the_source_is_not_made_on_the_body_side() {
 #[test]
 fn every_segment_of_the_source_matches_ignoring_case() {
     let root = root_with_ghost("other");
-    let plan = plan_of(case_differs_archive(), &free_request(&root));
+    let plan = plan_of(
+        case_differs_archive(),
+        &InstallRequest {
+            roots: &SingleRoot(root.path()),
+            target_ghost: None,
+        },
+    );
 
     assert_eq!(
         relative_files(&plan[0]),
@@ -231,7 +244,13 @@ fn every_segment_of_the_source_matches_ignoring_case() {
 #[test]
 fn a_segment_with_a_longer_name_is_not_under_the_source() {
     let root = root_with_ghost("other");
-    let plan = plan_of(longer_sibling_archive(), &free_request(&root));
+    let plan = plan_of(
+        longer_sibling_archive(),
+        &InstallRequest {
+            roots: &SingleRoot(root.path()),
+            target_ghost: None,
+        },
+    );
 
     assert_eq!(
         relative_files(&plan[0]),
@@ -250,7 +269,10 @@ fn a_segment_with_a_longer_name_is_not_under_the_source() {
 #[test]
 fn refuses_a_nested_source_with_nothing_under_it() {
     let root = root_with_ghost("other");
-    let request = free_request(&root);
+    let request = InstallRequest {
+        roots: &SingleRoot(root.path()),
+        target_ghost: None,
+    };
     let shapes = [
         (
             "書庫に無い",
@@ -296,7 +318,13 @@ fn refuses_a_nested_source_with_nothing_under_it() {
 #[test]
 fn overlapping_sources_each_receive_everything_under_them() {
     let root = root_with_ghost("other");
-    let plan = plan_of(overlapping_sources_archive(), &free_request(&root));
+    let plan = plan_of(
+        overlapping_sources_archive(),
+        &InstallRequest {
+            roots: &SingleRoot(root.path()),
+            target_ghost: None,
+        },
+    );
 
     assert_eq!(plan.len(), 3);
     assert_eq!(relative_files(&plan[0]), vec!["install.txt"]);
@@ -323,7 +351,10 @@ fn overlapping_sources_each_receive_everything_under_them() {
 #[test]
 fn every_path_of_every_nested_source_plan_stays_under_the_root() {
     let root = root_with_ghost("other");
-    let request = free_request(&root);
+    let request = InstallRequest {
+        roots: &SingleRoot(root.path()),
+        target_ghost: None,
+    };
     let accepted = [
         ("nested-source", nested_source_archive()),
         (

@@ -13,6 +13,7 @@
 
 use super::*;
 use crate::container::{inflate_entry, read_central_directory};
+use crate::install::{InstallRoots, SingleRoot};
 use crate::manifest::{locate_install_txt, parse_manifest};
 use crate::names::validate_entry_names;
 use sample_ghost_kit::{NarBuilder, WorkDir, install_txt};
@@ -212,7 +213,7 @@ fn no_folder_entry_archive() -> NarBuilder {
 fn a_ghost_goes_under_the_root_ghost_folder_without_the_companion_source() {
     let root = root_with_ghost("other");
     let request = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
     let plan = plan_of(ghost_archive(), &request);
@@ -248,7 +249,7 @@ fn a_ghost_goes_under_the_root_ghost_folder_without_the_companion_source() {
 fn a_balloon_goes_under_the_root_balloon_folder() {
     let root = root_with_ghost("other");
     let request = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
     let plan = plan_of(balloon_archive(), &request);
@@ -275,7 +276,7 @@ fn a_balloon_goes_under_the_root_balloon_folder() {
 fn a_shell_goes_under_the_target_ghosts_shell_folder() {
     let root = root_with_ghost("test-ghost");
     let request = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: Some("test-ghost"),
     };
     let plan = plan_of(shell_archive(), &request);
@@ -306,7 +307,7 @@ fn a_shell_goes_under_the_target_ghosts_shell_folder() {
 fn a_supplement_overlays_the_target_ghost_without_the_top_level_install_txt() {
     let root = root_with_ghost("test-ghost");
     let request = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: Some("test-ghost"),
     };
     let plan = plan_of(supplement_archive(), &request);
@@ -337,7 +338,7 @@ fn a_supplement_overlays_the_target_ghost_without_the_top_level_install_txt() {
 fn a_companion_balloon_goes_to_the_balloon_folder_with_its_prefix_stripped() {
     let root = root_with_ghost("other");
     let request = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
     let plan = plan_of(ghost_archive(), &request);
@@ -374,7 +375,7 @@ fn a_companion_balloon_goes_to_the_balloon_folder_with_its_prefix_stripped() {
 fn the_companion_leaves_no_copy_on_the_ghost_side() {
     let root = root_with_ghost("other");
     let request = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
     let plan = plan_of(ghost_archive(), &request);
@@ -408,7 +409,7 @@ fn the_companion_leaves_no_copy_on_the_ghost_side() {
 fn the_companion_source_name_may_differ_from_its_destination() {
     let root = root_with_ghost("other");
     let request = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
     let archive = NarBuilder::new()
@@ -445,7 +446,7 @@ fn the_companion_source_name_may_differ_from_its_destination() {
 fn the_companion_source_matches_the_archive_spelling_ignoring_case() {
     let root = root_with_ghost("other");
     let request = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
     let archive = NarBuilder::new()
@@ -482,7 +483,7 @@ fn the_companion_source_matches_the_archive_spelling_ignoring_case() {
 fn the_companion_carries_its_own_refresh_policy() {
     let root = root_with_ghost("other");
     let request = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
     let archive = NarBuilder::new()
@@ -524,7 +525,7 @@ fn the_companion_carries_its_own_refresh_policy() {
 fn refuses_a_companion_whose_source_folder_is_empty() {
     let root = root_with_ghost("other");
     let request = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
     let archive = NarBuilder::new()
@@ -555,7 +556,7 @@ fn refuses_a_companion_whose_source_folder_is_empty() {
 fn refuses_a_companion_whose_source_folder_is_absent() {
     let root = root_with_ghost("other");
     let request = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
     let archive = NarBuilder::new()
@@ -590,7 +591,7 @@ fn refuses_a_companion_whose_source_folder_is_absent() {
 fn refuses_a_shell_or_supplement_without_a_target_ghost() {
     let root = root_with_ghost("test-ghost");
     let request = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
     for archive in [shell_archive(), supplement_archive()] {
@@ -606,7 +607,7 @@ fn refuses_a_shell_or_supplement_without_a_target_ghost() {
 fn refuses_a_target_ghost_that_is_not_on_disk() {
     let root = root_with_ghost("test-ghost");
     let request = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: Some("not-installed"),
     };
     for archive in [shell_archive(), supplement_archive()] {
@@ -628,7 +629,7 @@ fn refuses_a_target_ghost_name_that_is_not_a_one_level_name() {
     let root = root_with_ghost("test-ghost");
     for target in ["..", "../..", "a/b", "a\\b", "C:", "", "."] {
         let request = InstallRequest {
-            root: root.path(),
+            roots: &SingleRoot(root.path()),
             target_ghost: Some(target),
         };
         assert_eq!(
@@ -648,7 +649,7 @@ fn refuses_a_target_ghost_name_that_is_not_a_one_level_name() {
 fn folder_entries_become_folders_and_missing_parents_are_derived() {
     let root = root_with_ghost("other");
     let request = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
 
@@ -720,11 +721,11 @@ fn escapes(root: &Path, plan: &[Placement]) -> (Vec<PathBuf>, usize) {
 /// 受理される固定入力を全て並べる。無印の名前は差分を読むときの手掛かり。
 fn every_accepted_plan(root: &WorkDir) -> Vec<(&'static str, Vec<Placement>)> {
     let free = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
     let targeted = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: Some("test-ghost"),
     };
     vec![
@@ -771,6 +772,7 @@ fn the_containment_walk_catches_a_plan_that_leaves_the_root() {
     let planted = vec![Placement {
         kind: ElementKind::Ghost,
         name: "evil".to_owned(),
+        root: root.clone(),
         destination: root.join("ghost").join(".."),
         target_ghost: None,
         existing: ExistingPolicy::Overlay,
@@ -794,6 +796,7 @@ fn the_containment_walk_catches_a_plan_that_leaves_the_root() {
     let honest = vec![Placement {
         kind: ElementKind::Ghost,
         name: "emo".to_owned(),
+        root: root.clone(),
         destination: root.join("ghost").join("test-ghost"),
         target_ghost: None,
         existing: ExistingPolicy::Overlay,
@@ -859,15 +862,15 @@ fn build_plan_writes_nothing_under_the_root() {
     assert!(!before.is_empty(), "根が空なら突合は恒真で緑になる");
 
     let free = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
     let targeted = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: Some("test-ghost"),
     };
     let missing = InstallRequest {
-        root: root.path(),
+        roots: &SingleRoot(root.path()),
         target_ghost: Some("not-installed"),
     };
     let mut walked = 0;
@@ -917,3 +920,6 @@ fn the_snapshot_notices_every_shape_of_write() {
 
 #[path = "plan_source_path_tests.rs"]
 mod source_path;
+
+#[path = "plan_roots_tests.rs"]
+mod roots;
