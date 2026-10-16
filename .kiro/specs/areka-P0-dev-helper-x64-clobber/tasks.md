@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 素の `cargo build` が隣の helper を x64 版へ戻すかを確かめて記録する（ビルドだけ・重い回 0）
+- [x] 1. 素の `cargo build` が隣の helper を x64 版へ戻すかを確かめて記録する（ビルドだけ・重い回 0）
   - `target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe` が無ければ `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` で作る
   - その i686 版の helper を `target\debug\` の `areka.exe` の隣へ置き、見出しの機械の種類が `014C` であることを見る
   - その後にワークスペースの根で素の `cargo build`（作り直しが要らない状態のまま）を打ち、隣の helper の機械の種類を見直す。続けて `cargo build -p shiori-host32-helper` でも同じことを見る

@@ -222,3 +222,46 @@ cargo の作るつもりの一覧（ビルドはしない）を 2 通り出し�
     - 道具を別のプロセスで呼ぶので、終了コードは最後にもう一度 `Test-I686Pe` を見た 1 か所で決まる。
   - 取らなかった案 ⑵（一回きりの確かめ）: ファイルは増えないが、終了コードの立て忘れや一時ファイルの残りを見張れない。
   - 影響: ファイル 1 本と段 1 つが増える。触るファイルの約束（`tools/test-all.ps1` だけ）からは、さらに外れる。
+
+## 10. 素の `cargo build` が隣の helper を x64 版へ戻すかの実測（2026-10-16・タスク 1）
+
+> 7.2 の「fresh のときの結び直しの実測」の答え。ワークツリーの `target\` は空だったので、先に作った。手元は cargo 1.99.1。ビルドだけで、テストは回していない。
+
+### 10.1 やったこと
+
+すべてワークツリーの根で打った。機械の種類は、次の 1 行と同じ読み方で `target\debug\shiori-host32-helper.exe` の見出しを見た（`0x014C`＝i686・`0x8664`＝x64）。
+
+```powershell
+$b=[IO.File]::ReadAllBytes('target\debug\shiori-host32-helper.exe'); $e=[BitConverter]::ToInt32($b,0x3C); '0x{0:X4}' -f [BitConverter]::ToUInt16($b,$e+4)
+```
+
+1. 下ごしらえ: `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc`（i686 版を作る）→ `cargo build`（根・`-p` なし。全体を 1 回作る）。
+2. `Copy-Item target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe target\debug\shiori-host32-helper.exe -Force` で i686 版を隣へ置き、見る。
+3. `cargo build` を打って見る。
+4. 2 と同じく置き直し、`cargo build -p shiori-host32-helper` を打って見る。
+5. 2 と同じく置き直し、`cargo build -p areka` を打って見る（文書の書き替え先の確かめ）。
+6. もう一度 `cargo build` で x64 版へ戻した後、i686 版を置いて**更新時刻を今に変え**、`cargo build` を打って見る（本当に作り直しの要らない形の確かめ）。
+7. 最後に 2 と同じく i686 版を隣へ戻した。
+
+### 10.2 見えたもの
+
+i686 版の大きさは 263,168 バイト・更新時刻 15:12:32（i686 のビルドの時刻）。`Copy-Item` は写し元の更新時刻をそのまま持ってくる。
+
+| 時点 | cargo の出力 | 隣の helper の機械の種類 | 大きさ・更新時刻 |
+|---|---|---|---|
+| 1 の後 | — | `0x8664`（x64） | 299,520・15:14:48 |
+| 2 の後（置いた） | — | `0x014C`（i686） | 263,168・15:12:32 |
+| 3 `cargo build` の後 | `Compiling shiori-host32-helper`（2.30 秒） | **`0x8664`（x64）** | 299,520・15:16:27 |
+| 4 置き直し → `cargo build -p shiori-host32-helper` の後 | `Compiling shiori-host32-helper`（1 分 20 秒） | **`0x8664`（x64）** | 299,008・15:17:47 |
+| 5 置き直し → `cargo build -p areka` の後 | `Compiling areka`（helper は出ない） | `0x014C`（i686）のまま | 263,168・15:12:32 |
+| 6 置いて時刻を今に → `cargo build` の後 | `Compiling` の行なし（1.22 秒） | `0x014C`（i686）のまま | 263,168・15:21:41 |
+| 7 戻した後 | — | `0x014C`（i686） | 263,168・15:12:32 |
+
+### 10.3 読み
+
+- **戻る**。i686 版を隣へ写した後に素の `cargo build` を打つと、隣は x64 版になる。`cargo build -p shiori-host32-helper` でも同じ。
+- ただし理由は 3.1 の読み（「作り直しが要らなくても出力を結び直す」）とは違った。cargo は、隣の helper の更新時刻が自分の作った時刻より古いのを見て「作り直しが要る」と判じ、helper を作り直して x64 版を置いた（3・4 の `Compiling` の行）。写した i686 版は i686 のビルドの時刻を持つので、helper の x64 版より古くなるのが普通である。
+- 本当に作り直しの要らない形（6・置いた物の時刻が新しい）では、cargo は隣を触らなかった。つまり「fresh でも結び直す」は手元の 1.99.1 では起きない。
+- 実際の道筋（煙テストや `get_log` の実走の写し・本仕様の揃えの段の写し）は、どれも写し元の時刻を持ってくる写し方なので、3・4 の形になる。**全体テストの後に素の `cargo build` を打つと、隣は x64 版へ戻る**。2026-10-06 の罠の読み（3.3）とも合う。
+- `cargo build -p areka` は隣の helper を触らない（5）。文書の書き替え（要件 1.6）の根拠になる。
+- 設計は変えない（要件は道筋に依らない）。タスク 4 の README と `tech.md` の書き替えの根拠として、この節を使う。
