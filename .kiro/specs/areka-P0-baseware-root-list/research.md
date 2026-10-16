@@ -213,3 +213,79 @@
 - 項目 16（見つかるかの確かめ）→ 要件 9.3: 使うたびに確かめ、記録は起動と並びの変更のときだけ。
 - メニューの文言は「置き場を追加…」「置き場を外す ▸」（要件 6・7・10.1）。
 - 残りの項目 1・2・5〜8・10〜12・14・17 と第 6 節の調べものは設計の段で決める。
+
+## 10. 設計の段の調べと決定（2026-10-16・`/kiro-spec-design`）
+
+> 第 7 節で設計へ持ち越した項目 1・2・5〜8・10〜12・14・17 と、第 6 節の調べもの 1〜5 の答え。design.md が正本で、ここは根拠と比べた案の記録。
+
+### 10.1 発見の種類と使った手引き
+
+- 種類: 既存の仕組みの拡張（ライトの発見＋統合の要所の深掘り）。新しい外部の部品は無く、Win32 のフォルダ選択（`IFileOpenDialog`）だけが初めて使う OS の口。
+- 読んだ手引き: スキル `kiro-spec-design` の規則（design-principles・design-discovery-light・design-synthesis・design-review-gate）、steering の `product.md`・`tech.md`・`structure.md`（テストの置き方・`temp-path-kit` の `TempPath::under_target`）・`logging.md`（`error!`／`warn!`／`info!` の使い分け・構造化欄・テストの捕捉は `log-capture-kit`）。
+- 調べは 4 本に分けて並べた（記憶の入れ物・`areka-nar` の確定の仕方・メニューと選ぶ画面の通り道・`windows` 0.62 の機能）。結果は下の 10.2〜10.5。
+
+### 10.2 アプリの記憶（`crates/areka-sylphya/src/persist/`）
+
+- `PersistKey` の値はどれも `String` 1 つ。`load_scope`・`save_scope`・アクターの `PersistPut` も `(PersistKey, String)` を運ぶ。配列を通すと値の型が全部の層で変わる。
+- `save_scope` は「読んで重ねて書く」が、`FormatDoc` が知っている欄だけを書き戻す（知らない表・鍵は落ちる）。鍵を消す口は無い（`LastRunning` は空文字を書いて「無し」と読む）。
+- `to_canonical_key` は全部の鍵を鏡像（`areka.*` の点付きの名前）へ写す。写さない鍵の先例は無い。往復の檻は `persist_tests.rs` の `canonical_key_round_trips_with_to_canonical_string`（`all_families()` に足す）と、綴りを固定する `canonical_key_exact_strings`・`last_family_canonical_key_exact_strings`。
+- `save_scope` は書き込みの失敗（`commit`）で `error!` を残して `Degraded` を返す（無音の失敗なし）。アクター経由の `persist_put` も中で同じ `save_scope` を通る。
+- 動いているゴーストが居る間の App スコープの書き込みは、そのゴーストの記憶の書き手（`GhostSlot` → `runtime()` → `sylphya_publisher().persist_put(App, …)`）を通す約束（`boot_resolve.rs` の印の書き手の注記・`ghost_switch.rs` の `record_steady_memory`）。
+
+### 10.3 `areka-nar` の確定の仕方
+
+- 公開面は `InstallRequest { root, target_ghost }` と `NarArchive::install`。配置（`Placement`）は宛先の絶対パスを持つが、根の欄は持たない。宛先は `plan.rs` の `body_placement`（ゴースト・シェル・サプリメントは `<根>\ghost\…`、バルーンは `<根>\balloon\…`）と `companion_placement`（同梱のバルーンは `<根>\balloon\<directory>`・複数ありうる）が組む。
+- 「すでにある」は `install.rs::stage_placement` の `destination.is_dir()`。
+- 確定: `WorkArea::create(root)` が `<根>\.nar-work\<pid>-<連番>\` を掘る。配置ごとに `stage(k)`・`old-k` を同じ作業フォルダに置き、`rename` で入れ替える。戻しの手順（`Undo`）は配置をまたいで 1 本の列で、失敗したら逆順にたどる。`Undo` は絶対パスを持つので、作業フォルダが根ごとに分かれても、列が 1 本なら逆順の戻しはそのまま効く。
+- 作業フォルダの残骸の掃除は「入れる根」の棚だけを、入れる前に行う。
+
+### 10.4 メニューと選ぶ画面
+
+- 枠は `Frame` の 7 種・`Frame::ORDER: [Frame; 7]`・`MenuRegistry.slots: [Option<Supplier>; 7]`・`FRAME_CAPTIONS`（リソース名は `&str` で必須）・`plan.rs::group_of`（区切りの組）。7 を固定するテストは `mod_registry_tests.rs`・`captions_tests.rs`・`plan_tests.rs` の 3 本。
+- 動作（`MenuAction`）は `Rc<dyn Fn(&mut World, &MenuContext)>` の閉包で、メニューを閉じた後に UI スレッドで `&mut World` を受けて走る。子の項目は値を閉包に捕まえて名乗る（ゴースト枠はフォルダ名）。
+- 「インストール…」の選ぶ画面: `install/pick.rs::pick_archive`（`CoInitializeEx(APARTMENTTHREADED)`・持ち主の窓なし・`Ok(None)` が取り消し）を、`install/desk.rs::start_pick` が短命のスレッドで呼び、結果を `std::sync::mpsc` で UI スレッドの系 `drain` へ返す。2 つ目を出さない旗は `Arc<AtomicBool>` を落とすと下ろす `PickingFlag`。`AREKA_NO_ALERT`（`alert::suppressed()`）のときは出さずに取り消し扱い。
+
+### 10.5 フォルダ選択の API（第 6 節の 1・5）
+
+- `windows` 0.62.2 で `FileOpenDialog`・`IFileOpenDialog`・`FOS_PICKFOLDERS`／`FOS_FORCEFILESYSTEM`／`FOS_PATHMUSTEXIST`・`IShellItem::GetDisplayName(SIGDN_FILESYSPATH)` は機能 `Win32_UI_Shell` だけで使える。`CoCreateInstance`・`CoTaskMemFree` は `Win32_System_Com`。どちらも根の `Cargo.toml` で有効＝**`Cargo.toml` は触らない**（`Win32_UI_Shell_Common` が要るのはファイルの種類の絞り込み `SetFileTypes` だけで、フォルダ選択は使わない）。
+- 取り消しは `Show` が `HRESULT_FROM_WIN32(ERROR_CANCELLED)`（`0x800704C7`）で返る。
+- COM の口は `CoUninitialize` の前に手放す（内側の関数に閉じる）。
+- 持ち主の窓なしで別スレッドから出したとき、ゴーストの窓の後ろに出ないか（第 6 節の 5）は、今のファイル選択と同じ扱いにして実機の確認（要件 12.9 ③）で見る。
+
+### 10.6 設計の判断（第 7 節の残りの項目）
+
+| 項目 | 決めたこと | 退けた案と理由 |
+|---|---|---|
+| 1 並びの型と `BootContext` | 案 B。`areka-ghost` に並びの型 `BasewareRoots`（`BasewareRoot` の順の付いた列）を足し、`BasewareRoot` は 1 要素として残す。`BootContext.root` を `roots: BasewareRoots` と `roots_origin: RootsOrigin` に替え、メニューの動作が `get_resource_mut` で書き換える | 案 A（`BasewareRoot` の中身を並びに）: `ghost_store()` など「格納フォルダ 1 つ」の意味が並びで崩れ、後続のエイリアスの段を足す場所が曖昧になる |
+| 2 項目の「どの根か」 | `GhostEntry`・`BalloonEntry` に欄 `root: PathBuf` を足す（組み立ては本番 2 か所・テスト 4 ファイルだけ） | 「`dir` の親の親」: 後続の `ghost-inner-balloon`（ゴーストの中の置き場）で成り立たない |
+| 2.8 の字の範囲 | 1 字ずつ Unicode の単純大文字（1 字が 1 字へ写るときだけ写し、2 字以上へ広がる字はそのまま）にそろえて比べる。NTFS の大文字表と同じ考え方の純粋な関数 | `CompareStringOrdinal`（OS の比較）: 鍵（集合の鍵）を作れず比べるたびに OS を呼ぶ。ASCII だけ: 全角英字・ギリシア文字などで Windows のフォルダと食い違う |
+| 5 同じ根の判定 | 綴りの比較。`std::path::absolute` の後、末尾の区切りを落とし、上の字の規則で比べる。`canonicalize` は使わない | 実体の比較: `\?\` を持ち込む・失敗の口が増える（完了 `release-package-versioned` の経緯）。8.3 の短い名前・`subst`・ジャンクションは別の根とみなす（重複は 2.2 の隠れで実害が無い） |
+| 6 記憶の入れ物 | 鍵 `PersistKey::BasewareRoots` を 1 つ足し、値は 1 本の文字列に `|` で詰める（`|` は Windows のパスに使えない）。TOML は `[baseware] roots = "…"`、鏡像の名前は `areka.baseware.roots`。空文字は「0 項目」として「無し」と読み分ける | TOML の配列: 値の型が `load_scope`／`save_scope`／アクターの全部で変わる。番号付きの族: 消す口が無く、並びを短くしたときに残りが消えない |
+| 7 記憶へ書く経路 | 動いているゴーストの記憶の書き手が在ればそれを通し（`persist_put(App, …)`）、居なければ UI スレッドから直接 `save_scope`（今の約束どおり） | いつも直接: 動いている書き手と同時に書いて片方が消えうる |
+| 8 実行ファイルの隣の綴り | 記号 `<exe>`（`<`・`>` はパスに使えない）。書くときは「実行ファイルのフォルダと同じ根」を必ず `<exe>` で書く（6.8 も同じ規則で満たす） | 相対パス `.`: `AREKA_ROOT` の相対（カレント基準）と基準が食い違う |
+| 9 `areka-nar` の宛先（要件 5.5・5.9） | 宛先の根を配置ごとに呼び手へ尋ねる口（trait `InstallRoots` の `ghost_root(folder)`・`balloon_root(folder)`）。作業フォルダは宛先の根ごとに 1 つ掘り、戻しの列は 1 本 | 根を 2 つ（ゴースト用・バルーン用）渡す形: 同梱のバルーンが複数あり、それぞれ別の根にすでにあるとき足りない |
+| 10 メニューの 2 項目 | `Frame` に `RootAdd`・`RootRemove` を足し（7 → 9）、「インストール…」の直後・同じ区切りの組に置く。SHIORI のリソース名は持たない（`FRAME_CAPTIONS` のリソース名を `Option` に） | インストールの枠の中に入れる: 1 つの枠の供給関数は項目を 1 つしか返せない。「置き場 ▸」の下に 2 つ: 要件の文言（項目名）と食い違う |
+| 11 フォルダ選択の受け口 | 置き場の小さな受け口を新しく作る（`roots/desk.rs`・`std::sync::mpsc` と UI スレッドの系 1 つ）。2 つ目を出さない旗は `install/desk.rs` の `PickingFlag` を使い回す | インストールの窓口に相乗り: 通り道の型が `RawInstallRequest` で、意味の違う結果が混ざる |
+| 12 API | `IFileOpenDialog`＋`FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST` | `SHBrowseForFolderW`: 古い木の画面・ネットワークの仮想フォルダを選べてしまう |
+| 14 告知の形 | `alert_text` の本文を `Vec<String>`（行数可変）にし、試した根・探した格納フォルダを 1 行ずつ並べる。長い並びでも省かない（要件 9.5〜9.7 が「すべて」） | 先頭の数個だけ: 要件と食い違う |
+| 17 1,000 行 | `main.rs`・`ghost_switch.rs` には置き換えと数行の呼び出しだけを入れる。並びの決め方・記録・メニューの動作・フォルダ選択は新しいフォルダ `crates/areka/src/roots/` へ、和・隠れ・引き当ては `crates/areka-ghost/src/catalog_roots.rs` へ出す | `catalog.rs` に足す: 414 行に 200 行ほど増え、走査と和の責任が混ざる |
+
+### 10.7 要件 8.7 の読み方
+
+- 今のコードでは、メニューで今のゴーストを選ぶと「自分自身への切替」（降ろして同じ場所から起こし直す）になる（`ghost_session_switch_tests.rs::switch_to_self_takes_down_and_reboots_a`）。
+- 要件 8.7「それを選ばれても今のゴーストを選んだものとして扱い、切り替えない」は、**切替先の場所を今動いているゴーストの場所に差し替え**、今の「今のゴーストを選んだ」と同じ振る舞い（同じ場所での起こし直し）にする、と読む。別の根の同じフォルダ名のゴーストへは移らない。
+- この読みは要件 12.5「外したことで見えるようになった同じフォルダ名を選んでも切り替えない」とも食い違わない（別のゴーストへは切り替わらない）。
+
+### 10.8 まとめ直し（synthesis）
+
+- **一般化**: 「フォルダ名から場所を引く」は、起動・切替・メニュー・インストール・更新・`\![open,explorer,…]` で同じ 1 つの問題。`catalog_roots.rs` の和（`list_ghosts`・`list_balloons`）と引き当て（`find_ghost`・`find_balloon`）・入れる根（`install_root`）の 3 種に集め、1 根ずつの走査は外へ出さない（`pub(crate)` にする）＝型で要件 2.6 を守る。後続のエイリアスは、この 3 種の手前に段を足すだけで済む。
+- **作るか借りるか**: フォルダ選択は OS の標準（`IFileOpenDialog`）を借りる。記憶の入れ物は今の鍵の族を延ばす。大文字小文字は Rust の標準の `char::to_uppercase` を 1 字ずつ使う（新しい依存なし）。
+- **削ったもの**: 隠れの記録を一覧のたびに残す仕組み（起動と並びの変更のときだけで足りる＝要件 2.5・8.3）。並べ替えの画面（要件 7.4 で持たない）。根ごとの「見つかったか」の覚え（使うたびに `is_dir` で見る＝要件 9.3）。`areka-nar` 側の根の列の型（呼び手へ尋ねる 2 つの口で足りる）。
+
+### 10.9 危険と手当て
+
+- **古い版の areka が記憶の `[baseware]` を落とす**: `FormatDoc` が知らない表は書き戻さないので、この版の後に古い版で起動して App スコープを書くと並びが消える。古い版へ戻す運用は無い前提とし、説明書には書かない（戻しても既定の並び＝実行ファイルの隣に戻るだけで、フォルダは消えない）。
+- **鏡像に置き場のパスが載る**: `areka.baseware.roots` がプロパティとして読める。今ある鍵の扱いと同じで、伏せる先例は作らない。
+- **並びの変更が切替の途中に届く**: フォルダ選択の結果は非同期に届く。書き手の選び方（動いているゴーストの書き手が在れば通す・無ければ直接）で、同時に 2 つの書き手が同じファイルを書く形は作らない。
+- **めったに使わない根の作業フォルダの残骸**: 掃除は「入れる根」の棚だけなので、2 つ目の根の失敗の残骸は、次にその根へ入れるときまで残る（今と同じ性質・次にその根へ入れるときの掃除で消える。戻しきれなかった `old-*` を持つものは 7 日残す）。
+- **大文字小文字の規則の天井**: Unicode の版が NTFS の大文字表（ボリュームを作った時点の表）と違う字では、OS と判断が分かれうる。日常の字（ASCII・全角英字・ギリシア・キリル）は一致する。
