@@ -13,7 +13,7 @@ use areka_sylphya::{PersistFailure, PersistFailureCause};
 use bevy_ecs::prelude::*;
 use wintf::ecs::Update;
 
-use crate::alert::{WriteMoment, remembered_text};
+use crate::alert::{self, AlertScene, WriteMoment, remembered_text};
 use crate::app_exit::{ExitOrigin, quit_app};
 
 /// 受け口の送り手（World の NonSend・プロセスに 1 つ）。
@@ -78,6 +78,82 @@ fn drain_system(world: &mut World) {
     for failure in failures {
         fatal(world, failure);
     }
+}
+
+/// `main` が返す失敗（終了コード 1）。
+fn e_fail() -> windows::core::Error {
+    windows::core::Error::from_hresult(windows::Win32::Foundation::E_FAIL)
+}
+
+/// 起動を止める: `memory_write_failed` を記録し、`MemoryWrite { moment: Boot }` を告げ、
+/// `main` が返す `E_FAIL` を返す。`AREKA_NO_ALERT` を読む薄い口。
+pub(crate) fn stop_boot(failure: PersistFailure) -> windows::core::Error {
+    stop_boot_with(failure, alert::suppressed())
+}
+
+/// [`stop_boot`] の中身。抑止でも失敗を返す（画面だけを抑える・要件 2.6）。
+pub(crate) fn stop_boot_with(failure: PersistFailure, suppressed: bool) -> windows::core::Error {
+    log_failure(&failure, WriteMoment::Boot);
+    alert::raise(
+        &AlertScene::MemoryWrite {
+            failure,
+            moment: WriteMoment::Boot,
+        },
+        suppressed,
+    );
+    e_fail()
+}
+
+/// 後始末で受け手を取り出す（OS のセッションの終了を処理済みなら `None`＝告げない）。
+pub(crate) fn take_receiver(world: &mut World) -> Option<Receiver<PersistFailure>> {
+    if world.contains_resource::<crate::session_end::SessionEnded>() {
+        return None;
+    }
+    world.remove_non_send::<WriteFailureRx>().map(|rx| rx.0)
+}
+
+/// OS のセッションの終了の中の後始末: 印を消せなかった失敗と、受け手に残っていた失敗を
+/// `memory_write_failed` で 1 件ずつ記録するだけ（告知は出さない・要件 2.3 の例外）。
+pub(crate) fn log_only(world: &mut World, clear_failed: Option<PersistFailure>) {
+    if let Some(failure) = &clear_failed {
+        log_failure(failure, WriteMoment::Running);
+    }
+    if let Some(rx) = world.get_non_send::<WriteFailureRx>() {
+        for failure in rx.0.try_iter() {
+            log_failure(&failure, WriteMoment::Running);
+        }
+    }
+}
+
+/// 後始末の告知を 1 つだけ選んで告げる: 出所の場面 → 印を消せなかった失敗 → 降ろす途中の
+/// 失敗（受け手に残っていた最初の 1 件）の順。2・3 を告げたときは `Err(E_FAIL)`、1 のときの
+/// 終了コードは呼び手の旗が決める（`Ok`）。印を消せなかった失敗と残っていた失敗は、告げるかに
+/// 関わらず 1 件ずつ記録する。
+pub(crate) fn tell_at_close(
+    scene: Option<AlertScene>,
+    clear_failed: Option<PersistFailure>,
+    late: Option<Receiver<PersistFailure>>,
+    suppressed: bool,
+) -> windows::core::Result<()> {
+    let late: Vec<PersistFailure> = late.map(|rx| rx.try_iter().collect()).unwrap_or_default();
+    for failure in clear_failed.iter().chain(&late) {
+        log_failure(failure, WriteMoment::Running);
+    }
+    if let Some(scene) = scene {
+        alert::raise(&scene, suppressed);
+        return Ok(());
+    }
+    let Some(failure) = clear_failed.or_else(|| late.into_iter().next()) else {
+        return Ok(());
+    };
+    alert::raise(
+        &AlertScene::MemoryWrite {
+            failure,
+            moment: WriteMoment::Running,
+        },
+        suppressed,
+    );
+    Err(e_fail())
 }
 
 #[cfg(test)]
