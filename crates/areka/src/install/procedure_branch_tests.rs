@@ -333,7 +333,7 @@ fn read_failures_send_failure_with_the_single_table_word_and_ask_nothing() {
 }
 
 #[test]
-fn install_failure_sends_extraction_and_logs_each_survivor_with_seven_days() {
+fn install_failure_sends_fileio_and_logs_each_survivor_with_seven_days() {
     for survivors in [0, 2] {
         let mut ports = FakePorts::new();
         let trees: Vec<SurvivingTree> = (0..survivors)
@@ -345,12 +345,13 @@ fn install_failure_sends_extraction_and_logs_each_survivor_with_seven_days() {
         ports.elsewhere_error = Some(trees.clone());
         let (ends, events) = run_one(&mut ports, ghost_nar("newbie", &[]));
 
-        assert_eq!(ends, vec![ArchiveEnd::Failed(FailureWord::Extraction)]);
+        // 確定の段（`Commit`）の失敗は書けない側＝`fileio`（write-failure-notice 要件 5.1）。
+        assert_eq!(ends, vec![ArchiveEnd::Failed(FailureWord::FileIo)]);
         assert_eq!(
             ports.raised(),
             vec![
                 ("OnInstallBegin", Vec::new()),
-                ("OnInstallFailure", vec!["extraction".to_owned()]),
+                ("OnInstallFailure", vec!["fileio".to_owned()]),
             ]
         );
         assert_eq!(asks(&ports), 0, "画面を出さない（5.4）");

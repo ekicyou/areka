@@ -39,7 +39,7 @@
   - _Boundary: app_exit, session_mark_verdict_
   - _Requirements: 2.2, 3.6_
 
-- [ ] 3.3 (P) 書けないせいのインストールの失敗を `fileio` で伝える
+- [x] 3.3 (P) 書けないせいのインストールの失敗を `fileio` で伝える
   - 失敗理由の語に `fileio` を足し、読み書きの失敗は段の網羅で振り分ける（`.nar` 自体を読めない段だけ `extraction`、作業フォルダ・入れる先・確定・巻き戻しの段は `fileio`）。拒否の 3 種（破損・整合・名前）と `invalid type`・`unsupported` の写しは変えない
   - 入れる先の根が 1 つも無い失敗も同じ段の扱いで `fileio` になることを確かめる。`OnInstallFailure` の Reference0 は語 1 つのまま、記録 `install_failed` の欄も今のまま
   - 「読み書きの失敗はどれも `extraction`」と固定している今のテストを新しい振り分けの判定へ改め、段の 1 つずつ・根が無い失敗・語の綴り 4 つを判定する
