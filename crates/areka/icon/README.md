@@ -87,7 +87,7 @@ msedge --headless=new --default-background-color=00000000 --window-size=1024,102
 
 なぞりの元と生成の記録は、仕様のフォルダの `art/` に在ります（このフォルダには写していません。`app.svg`・`tray.svg` が同じ線を中に持つので、焼き直しには要りません）。
 
-- 置き場: `.kiro/specs/areka-P0-app-icon/art/`（仕様の完了の後は `.kiro/specs/completed/areka-P0-app-icon/art/`）
+- 置き場: `.kiro/specs/completed/areka-P0-app-icon/art/`
 - `girl.svg`: 女の子の輪郭の線。`girl-g0.png` の頭を 1.3 倍にして 8 度かしげ、太ももで切った影をなぞったもの
 - `unyuu.svg`: うにゅうの輪郭の線
 - `girl-g0.png`: 女の子の素の絵（生成した影絵を 1024 ピクセルで焼いたもの）

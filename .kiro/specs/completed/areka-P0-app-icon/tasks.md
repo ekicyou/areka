@@ -87,3 +87,4 @@
 - 6.2（2026-10-16）: 新しいワークツリーで `cargo test -p areka` を直に回すと、32 ビットの組み立ての出力（`shiori-host32-helper.exe`・`shiori_loadu.dll`）が無いので、実機の 2 本（`mcp_get_log_real_run`・`smoke_boot_loop_exit`）が赤になる。この仕様とは関係なく、`tools/test-all.ps1` は先にそれらを組むので起きない。組んでから回すと緑（単体 2920 通過）。
 - 6.3（2026-10-16）: 開発者が実機での見え方を合格とした（`target\icon-check\areka-icon-check-1016a.exe` と `tray-icon-check-1016a.ico` で確かめた）。
 - 最後の確かめ（2026-10-16・GO）: `.kiro/steering/structure.md` 187 行目の「`crates/*` に `build.rs` は 0 個」は、この仕様の前から古い。設計（43 行目）どおり `/kiro-complete` で、`crates/areka/build.rs` がマニフェストと `icon/icons.res` を埋めると書き直す。
+- 完了時（2026-10-16）: 棚卸の結果、その場で解決 0 件・起票 0 件。README の置き場の行は保管後の 1 つにまとめた。`structure.md` の build.rs の行は完了の文書更新で直す。
