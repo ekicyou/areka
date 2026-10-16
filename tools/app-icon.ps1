@@ -31,9 +31,18 @@
           FAIL input <file>: ...                  原画の欠けや違い。何も書かない
           FAIL write <file>: <reason>
 
-  終了コード: 0 3 つとも書けた（-Seed は FAIL なし）／1 FAIL の行を出した
+    -SelfTest（道具を直したとき・本物のフォルダは書かない）
+        本物のフォルダの入力と出力をワークツリーの target\app-icon-selftest\ へ写し（毎回作り直す）、
+        判定ごとに 1 行出す。
+          ok selftest <name>  /  FAIL selftest <name>
+        判定: same bytes twice・missing tuned fails・wrong size fails・not rgba fails・seed keeps existing
+
+  -Seed と -SelfTest は一緒に使えない（FAIL args の行・終了コード 1）。知らない引数は止まる。
+
+  終了コード: 0 3 つとも書けた（-Seed は FAIL なし・-SelfTest は全部 ok）／1 FAIL の行を出した
 #>
-param([switch]$Seed)
+[CmdletBinding()]
+param([switch]$Seed, [switch]$SelfTest)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -217,6 +226,12 @@ function Write-IconOutputs([string]$Dir, $Outputs) {
         }
     } catch {
         $msg = ConvertTo-Ascii $_.Exception.GetBaseException().Message
+        # Replace が今のファイルを .bak へ退かした後で新しいファイルを置けなかったとき、.bak を戻す
+        $cur = Join-Path $Dir $current
+        if (-not $swapped.Contains($current) -and -not (Test-Path -LiteralPath $cur) -and (Test-Path -LiteralPath "$cur.bak" -PathType Leaf)) {
+            try { [System.IO.File]::Move("$cur.bak", $cur) }
+            catch { $msg += "; restore $current failed: $(ConvertTo-Ascii $_.Exception.GetBaseException().Message)" }
+        }
         foreach ($name in $swapped) {
             $dest = Join-Path $Dir $name
             try {
@@ -241,7 +256,70 @@ function Invoke-Pack([string]$Dir) {
     Write-IconOutputs $Dir (New-IconOutputs $in.Png)
 }
 
-$lines = if ($Seed) { Invoke-Seed $IconDir } else { Invoke-Pack $IconDir }
+# 自分の検査: 本物のフォルダの写しで 5 つの判定を回す。戻り値: 端末へ出す行
+function Invoke-SelfTest {
+    $root = Join-Path (Split-Path $PSScriptRoot -Parent) 'target/app-icon-selftest'
+    if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+    $outNames = @('app.ico', 'tray.ico', $RES_FILE)
+    $inputs = @($outNames) + @('app.png', 'tray.png') + @(foreach ($g in $GROUPS) { foreach ($n in $SIZES) { "$($g.Name)-$n.png" } })
+    $script:caseNo = 0
+    $newCase = {
+        $script:caseNo++
+        $d = Join-Path $root "case$script:caseNo"
+        New-Item -ItemType Directory -Path $d -Force | Out-Null
+        foreach ($f in $inputs) { Copy-Item -LiteralPath (Join-Path $IconDir $f) -Destination $d }
+        $d
+    }
+    $readOut = { param($d) @($outNames | ForEach-Object { [Convert]::ToBase64String([System.IO.File]::ReadAllBytes((Join-Path $d $_))) }) -join '|' }
+    # 失敗して、名指しの行が出て、出力が前と同じ
+    $failsUnchanged = {
+        param($d, [string]$want)
+        $before = & $readOut $d
+        $r = Invoke-Pack $d
+        ($r -like 'FAIL *') -and ($r -like $want) -and ((& $readOut $d) -eq $before)
+    }
+    $checks = [ordered]@{
+        'same bytes twice'    = {
+            $d = & $newCase
+            $r1 = Invoke-Pack $d; $a = & $readOut $d
+            $r2 = Invoke-Pack $d; $b = & $readOut $d
+            -not ($r1 -like 'FAIL *') -and -not ($r2 -like 'FAIL *') -and $a -eq $b
+        }
+        'missing tuned fails' = {
+            $d = & $newCase
+            Remove-Item -LiteralPath (Join-Path $d 'tray-16.png')
+            & $failsUnchanged $d 'FAIL input tray-16.png: missing'
+        }
+        'wrong size fails'    = {
+            $d = & $newCase
+            Copy-Item -LiteralPath (Join-Path $d 'app-20.png') -Destination (Join-Path $d 'tray-16.png') -Force
+            & $failsUnchanged $d 'FAIL input tray-16.png: size 20x20, want 16x16'
+        }
+        'not rgba fails'      = {
+            $d = & $newCase
+            Add-Type -AssemblyName System.Drawing
+            $bmp = [System.Drawing.Bitmap]::new(32, 32, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
+            try { $bmp.Save((Join-Path $d 'app-32.png'), [System.Drawing.Imaging.ImageFormat]::Png) } finally { $bmp.Dispose() }
+            & $failsUnchanged $d 'FAIL input app-32.png: not 8-bit RGBA'
+        }
+        'seed keeps existing' = {
+            $d = & $newCase
+            Remove-Item -LiteralPath (Join-Path $d 'app-64.png')
+            $tray16 = [System.IO.File]::ReadAllBytes((Join-Path $d 'tray-16.png'))
+            $r = Invoke-Seed $d
+            ($r -join '|') -eq 'OK seeded app-64.png' -and
+                (Test-Path -LiteralPath (Join-Path $d 'app-64.png') -PathType Leaf) -and
+                [System.Linq.Enumerable]::SequenceEqual([System.IO.File]::ReadAllBytes((Join-Path $d 'tray-16.png')), $tray16)
+        }
+    }
+    , @(foreach ($name in $checks.Keys) {
+            try { if (& $checks[$name]) { "ok selftest $name" } else { "FAIL selftest $name" } }
+            catch { "FAIL selftest ${name}: $(ConvertTo-Ascii $_.Exception.GetBaseException().Message)" }
+        })
+}
+
+if ($Seed -and $SelfTest) { 'FAIL args: -Seed and -SelfTest cannot be used together'; exit 1 }
+$lines = if ($SelfTest) { Invoke-SelfTest } elseif ($Seed) { Invoke-Seed $IconDir } else { Invoke-Pack $IconDir }
 $lines
 if ($lines -like 'FAIL *') { exit 1 }
 exit 0
