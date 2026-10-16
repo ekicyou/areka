@@ -8,7 +8,9 @@ use std::path::Path;
 
 use log_capture_kit::CapturedEvent;
 
-use super::{HelperImage, classify_helper_image, report_helper_image};
+use super::{
+    HelperImage, SpawnError, check_helper_image, classify_helper_image, report_helper_image, spawn,
+};
 
 /// `MZ`・`e_lfanew=0x80`・`PE\0\0`・機械の種類 `machine` だけを持つ合成の見出し。
 fn pe_head(machine: u16) -> Vec<u8> {
@@ -146,4 +148,45 @@ fn report_unreadable_logs_one_warning_with_path_and_error() {
     assert_eq!(e.field_str("event"), Some("helper_image_unverified"));
     assert_eq!(e.field("path"), Some(HELPER));
     assert!(e.field("error").is_some(), "{e:?}");
+}
+
+/// 要件 3.1: 実ファイル（テストの実行体そのもの＝x64 か arm64）を読むとエラーの 1 行。
+#[test]
+fn check_real_non_i686_exe_logs_one_error() {
+    let exe = std::env::current_exe().expect("テストの実行体のパス");
+    let ((), events) = log_capture_kit::capture(|| check_helper_image(&exe));
+    let logged = host32_events(&events);
+    assert_eq!(logged.len(), 1, "{events:?}");
+    assert_eq!(logged[0].level, tracing::Level::ERROR);
+    assert_eq!(logged[0].field_str("event"), Some("helper_not_i686"));
+}
+
+/// 要件 3.5: 無いパスを読むと警告の 1 行。
+#[test]
+fn check_missing_path_logs_one_warning() {
+    let missing = Path::new("this_helper_exe_does_not_exist_areka_host32.exe");
+    let ((), events) = log_capture_kit::capture(|| check_helper_image(missing));
+    let logged = host32_events(&events);
+    assert_eq!(logged.len(), 1, "{events:?}");
+    assert_eq!(logged[0].level, tracing::Level::WARN);
+    assert_eq!(
+        logged[0].field_str("event"),
+        Some("helper_image_unverified")
+    );
+}
+
+/// 要件 3.1・3.3・3.5: `spawn` は起こす前に判定を 1 回呼び、起こし方（無い helper は
+/// `SpawnError::Spawn`）は変えない。
+#[test]
+fn spawn_checks_helper_image_once_and_keeps_spawn_result() {
+    let missing = Path::new("this_helper_exe_does_not_exist_areka_host32.exe");
+    let load_dir = std::env::temp_dir();
+    let (result, events) = log_capture_kit::capture(|| spawn(missing, &load_dir, "shiori.dll", 0));
+    assert!(matches!(result, Err(SpawnError::Spawn(_))));
+    let logged = host32_events(&events);
+    assert_eq!(logged.len(), 1, "{events:?}");
+    assert_eq!(
+        logged[0].field_str("event"),
+        Some("helper_image_unverified")
+    );
 }

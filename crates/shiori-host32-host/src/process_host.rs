@@ -22,6 +22,13 @@
 //! env は同値を二重供給する: [`PARENT_HWND_ENV`]（parent_hwnd 10進）・
 //! [`LOAD_DIR_ENV`]（load_dir）・[`SHIORI_NAME_ENV`]（shiori_name）。cwd
 //! （`current_dir`）は load_dir に設定する（伺か慣習・R3.3）。
+//!
+//! helper の向きの確かめ（dev-helper-x64-clobber 要件 3.1〜3.6）: [`spawn`] は起こす前に、
+//! 渡された helper の実行ファイルの見出し（先頭の最大 4 KiB）を読み、32bit（i686）版で
+//! なければ理由と直し方の入ったエラーの 1 行（`helper_not_i686`）を、確かめられなければ
+//! 警告の 1 行（`helper_image_unverified`）を残す。記録だけで、`spawn` の結果も起こし方も
+//! 変えない。見るのは渡されたパスだけ（探さない）。[`spawn_command`] では確かめない
+//! （helper でない子を起こすテストが記録を出さない）。
 
 use std::os::windows::process::CommandExt;
 use std::path::Path;
@@ -251,6 +258,7 @@ pub fn spawn(
     shiori_name: &str,
     parent_hwnd: u32,
 ) -> Result<HelperHandle, SpawnError> {
+    check_helper_image(helper_exe);
     let mut command = Command::new(helper_exe);
     let parent_hwnd_decimal = parent_hwnd.to_string();
     command
@@ -410,8 +418,6 @@ fn report_helper_image(helper_exe: &Path, image: std::io::Result<HelperImage>) {
 /// 先頭の最大 [`HELPER_HEAD_LIMIT`] バイトを読み、判定して記録する。
 ///
 /// 読み終えたら閉じる（ロックを持ち続けない）。見るのは渡されたパスだけ（探さない）。
-// タスク 2.2 で `spawn` の最初の文から呼ぶまでは本番の呼び手が無い。
-#[allow(dead_code)]
 fn check_helper_image(helper_exe: &Path) {
     use std::io::Read;
     let image = std::fs::File::open(helper_exe).and_then(|file| {
