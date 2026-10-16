@@ -34,7 +34,7 @@
                     version, printed as version=<v>
      The parent copies the child's lines, fails on a non-zero exit, reads the version itself and
      fails unless the child's version=<v> line is the same, and fails if its own two console code
-     pages changed. The parent never sets its own console.
+     pages (read from the OS, not the .NET cache) changed. The parent never sets its own console.
   All failures are collected and printed, then the exit code is decided once.
   Writes nothing, creates no temporary files, prints ASCII only, never prints the environment.
 
@@ -216,6 +216,18 @@ $root = Split-Path -Parent $PSScriptRoot
 $pwsh = [Environment]::ProcessPath
 $VersionPattern = '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$'
 
+# The console code pages read from the OS now: @(<output>, <input>). [Console]::OutputEncoding
+# is cached by .NET and misses a rewrite by a child. The type is built in memory, once.
+function Get-ConsoleCodePages {
+    if (-not ('ArekaEncodingCheck.ConsoleCp' -as [type])) {
+        Add-Type -Namespace ArekaEncodingCheck -Name ConsoleCp -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("kernel32.dll")] public static extern uint GetConsoleOutputCP();
+[System.Runtime.InteropServices.DllImport("kernel32.dll")] public static extern uint GetConsoleCP();
+'@
+    }
+    @([ArekaEncodingCheck.ConsoleCp]::GetConsoleOutputCP(), [ArekaEncodingCheck.ConsoleCp]::GetConsoleCP())
+}
+
 # The only console rewrite rule C allows: called only in the windowless child (-Cp932Child), on
 # the console that child owns alone.
 function Set-OwnConsoleCp932 {
@@ -292,7 +304,7 @@ if ($Cp932Child) {
 }
 
 $fails = [System.Collections.Generic.List[string]]::new()
-$cpBefore = @([Console]::OutputEncoding.CodePage, [Console]::InputEncoding.CodePage)
+$cpBefore = Get-ConsoleCodePages
 
 # ---- 1. calibration ----
 $jp = "`u{65E5}`u{672C}"
@@ -382,7 +394,7 @@ if ($null -ne $child) {
     }
     elseif ($childFails.Count -eq 0) { $fails.Add("FAIL cp932 child: expected one version= line, got $($childVersion.Count)") }
 }
-$cpAfter = @([Console]::OutputEncoding.CodePage, [Console]::InputEncoding.CodePage)
+$cpAfter = Get-ConsoleCodePages
 if (($cpBefore -join ',') -ceq ($cpAfter -join ',')) { "PASS own console code pages unchanged (output $($cpAfter[0]), input $($cpAfter[1]))" }
 else { $fails.Add("FAIL own console code pages changed: output $($cpBefore[0]) -> $($cpAfter[0]), input $($cpBefore[1]) -> $($cpAfter[1])") }
 
