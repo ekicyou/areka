@@ -22,10 +22,7 @@ pub(super) const CASES: &[Case] = &[
             // 会話が始まり、占有終端が届く。現在時刻はまだ占有終端より手前。
             Row {
                 signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
-                scopes: &[
-                    (0, 3, false, Watch::Off, Watch::Off),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 3, false, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(-5.0),
                 expect: &[Expect::Shown(0)],
@@ -34,10 +31,7 @@ pub(super) const CASES: &[Case] = &[
             // 計測が成り立つ最初の観測が占有終端から LATE 秒遅れて訪れる。
             Row {
                 signals: &[],
-                scopes: &[
-                    (0, 3, true, Watch::Off, Watch::Off),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 3, true, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(LATE),
                 expect: &[Expect::Started {
@@ -49,10 +43,7 @@ pub(super) const CASES: &[Case] = &[
             // 既知の最大より手前の占有終端が届く。状態は一切動かない。
             Row {
                 signals: &[Signal::DisplayEnd(-4.0)],
-                scopes: &[
-                    (0, 3, true, Watch::Off, Watch::Off),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 3, true, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(LATE + 1.0),
                 expect: &[],
@@ -61,10 +52,7 @@ pub(super) const CASES: &[Case] = &[
             // 全消去で消す対象が無くなり、計測が捨てられる。
             Row {
                 signals: &[],
-                scopes: &[
-                    (0, 0, true, Watch::Off, Watch::Off),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 0, true, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(LATE + 2.0),
                 expect: &[
@@ -79,10 +67,7 @@ pub(super) const CASES: &[Case] = &[
             // 次の可視コンテンツで計測が立ち直る。起点は**後退した値ではなく**既知の最大。
             Row {
                 signals: &[],
-                scopes: &[
-                    (0, 2, false, Watch::Off, Watch::Off),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 2, false, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(LATE + 3.0),
                 expect: &[
@@ -97,10 +82,7 @@ pub(super) const CASES: &[Case] = &[
             // 満了境界の直前。
             Row {
                 signals: &[],
-                scopes: &[
-                    (0, 2, true, Watch::Off, Watch::Off),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 2, true, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(TIMEOUT - EPS),
                 expect: &[],
@@ -109,10 +91,7 @@ pub(super) const CASES: &[Case] = &[
             // 満了境界に達したフレーム。消した scope の持ち越し可視は偽になる。
             Row {
                 signals: &[],
-                scopes: &[
-                    (0, 2, true, Watch::Off, Watch::Off),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 2, true, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(TIMEOUT),
                 expect: &[Expect::TimedOut(&[0])],
@@ -130,7 +109,7 @@ pub(super) const CASES: &[Case] = &[
         rows: &[
             Row {
                 signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
-                scopes: &[(0, 3, false, Watch::Off, Watch::Off)],
+                scopes: &[(0, 3, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(-5.0),
                 expect: &[Expect::Shown(0)],
@@ -138,7 +117,7 @@ pub(super) const CASES: &[Case] = &[
             },
             Row {
                 signals: &[],
-                scopes: &[(0, 3, true, Watch::Off, Watch::Off)],
+                scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
                 now: Now::At(LATE),
                 expect: &[Expect::Started {
@@ -150,7 +129,7 @@ pub(super) const CASES: &[Case] = &[
             // 占有終端が引き上がるが、引き上げ先は現在時刻より手前。
             Row {
                 signals: &[Signal::DisplayEnd(LATE - 2.0)],
-                scopes: &[(0, 3, true, Watch::Off, Watch::Off)],
+                scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
                 now: Now::At(LATE + 1.0),
                 expect: &[],
@@ -159,7 +138,7 @@ pub(super) const CASES: &[Case] = &[
             // 満了境界の直前。満了予定は最初の占有終端起点のまま動いていない。
             Row {
                 signals: &[],
-                scopes: &[(0, 3, true, Watch::Off, Watch::Off)],
+                scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
                 now: Now::At(TIMEOUT - EPS),
                 expect: &[],
@@ -167,7 +146,7 @@ pub(super) const CASES: &[Case] = &[
             },
             Row {
                 signals: &[],
-                scopes: &[(0, 3, true, Watch::Off, Watch::Off)],
+                scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
                 now: Now::At(TIMEOUT),
                 expect: &[Expect::TimedOut(&[0])],
@@ -183,10 +162,7 @@ pub(super) const CASES: &[Case] = &[
             // 信号が 1 件も届かないまま可視コンテンツが現れた。表示は保つが記録は残す。
             Row {
                 signals: &[Signal::TalkStarted],
-                scopes: &[
-                    (0, 3, false, Watch::Off, Watch::Off),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 3, false, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(-5.0),
                 expect: &[Expect::Shown(0), Expect::SignalMissing],
@@ -195,10 +171,7 @@ pub(super) const CASES: &[Case] = &[
             // 同じ会話の 2 つ目の scope では記録を繰り返さない。
             Row {
                 signals: &[],
-                scopes: &[
-                    (0, 3, true, Watch::Off, Watch::Off),
-                    (1, 2, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 3, true, Watch::Off), (1, 2, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(-4.0),
                 expect: &[Expect::Shown(1)],
@@ -207,10 +180,7 @@ pub(super) const CASES: &[Case] = &[
             // 次の会話が始まり、冒頭の全消去で両方が消える。
             Row {
                 signals: &[Signal::TalkStarted],
-                scopes: &[
-                    (0, 0, true, Watch::Off, Watch::Off),
-                    (1, 0, true, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 0, true, Watch::Off), (1, 0, true, Watch::Off)],
                 dragging: false,
                 now: Now::At(-3.0),
                 expect: &[Expect::Cleared(&[0, 1])],
@@ -219,10 +189,7 @@ pub(super) const CASES: &[Case] = &[
             // 次の会話でも信号が届かない。記録は改めて 1 件出る。
             Row {
                 signals: &[],
-                scopes: &[
-                    (0, 4, false, Watch::Off, Watch::Off),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 4, false, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(-2.0),
                 expect: &[Expect::Shown(0), Expect::SignalMissing],
@@ -231,10 +198,7 @@ pub(super) const CASES: &[Case] = &[
             // 遅れて占有終端とトークの終わりが届く。現在時刻はまだそこへ達していない。
             Row {
                 signals: &[Signal::Ended(0.0)],
-                scopes: &[
-                    (0, 4, true, Watch::Off, Watch::Off),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 4, true, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(-1.0),
                 expect: &[],
@@ -242,10 +206,7 @@ pub(super) const CASES: &[Case] = &[
             },
             Row {
                 signals: &[],
-                scopes: &[
-                    (0, 4, true, Watch::Off, Watch::Off),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 4, true, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(LATE),
                 expect: &[Expect::Started {
@@ -256,10 +217,7 @@ pub(super) const CASES: &[Case] = &[
             },
             Row {
                 signals: &[],
-                scopes: &[
-                    (0, 4, true, Watch::Off, Watch::Off),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 4, true, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(TIMEOUT),
                 expect: &[Expect::TimedOut(&[0])],
@@ -273,7 +231,7 @@ pub(super) const CASES: &[Case] = &[
         rows: &[
             Row {
                 signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
-                scopes: &[(0, 3, false, Watch::Off, Watch::Off)],
+                scopes: &[(0, 3, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(-5.0),
                 expect: &[Expect::Shown(0)],
@@ -281,7 +239,7 @@ pub(super) const CASES: &[Case] = &[
             },
             Row {
                 signals: &[],
-                scopes: &[(0, 3, true, Watch::Off, Watch::Off)],
+                scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
                 now: Now::At(LATE),
                 expect: &[Expect::Started {
@@ -293,7 +251,7 @@ pub(super) const CASES: &[Case] = &[
             // 満了予定の直前に抑止が成立。見送るものがまだ無いので無音のまま。
             Row {
                 signals: &[],
-                scopes: &[(0, 3, true, Watch::On, Watch::Off)],
+                scopes: &[(0, 3, true, Watch::On)],
                 dragging: false,
                 now: Now::At(TIMEOUT - EPS),
                 expect: &[],
@@ -302,14 +260,13 @@ pub(super) const CASES: &[Case] = &[
             // 満了予定に達したが抑止が続いている。ここで初めて見送りが記録される。
             Row {
                 signals: &[],
-                scopes: &[(0, 3, true, Watch::On, Watch::Off)],
+                scopes: &[(0, 3, true, Watch::On)],
                 dragging: false,
                 now: Now::At(TIMEOUT),
                 expect: &[Expect::Suppressed {
                     kinds: SuppressionKinds {
                         dragging: false,
                         hover: true,
-                        choice: false,
                     },
                     deadline: TIMEOUT,
                 }],
@@ -318,7 +275,7 @@ pub(super) const CASES: &[Case] = &[
             // 解除。現在時刻を起点に計り直す。
             Row {
                 signals: &[],
-                scopes: &[(0, 3, true, Watch::Off, Watch::Off)],
+                scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
                 now: Now::At(TIMEOUT + 1.0),
                 expect: &[Expect::Restarted {
@@ -330,14 +287,13 @@ pub(super) const CASES: &[Case] = &[
             // 二度目の抑止。記録も二度目が出る。
             Row {
                 signals: &[],
-                scopes: &[(0, 3, true, Watch::On, Watch::Off)],
+                scopes: &[(0, 3, true, Watch::On)],
                 dragging: false,
                 now: Now::At(TIMEOUT + 1.0 + TIMEOUT),
                 expect: &[Expect::Suppressed {
                     kinds: SuppressionKinds {
                         dragging: false,
                         hover: true,
-                        choice: false,
                     },
                     deadline: TIMEOUT + 1.0 + TIMEOUT,
                 }],
@@ -355,7 +311,7 @@ pub(super) const CASES: &[Case] = &[
             // 信号が届かないまま可視コンテンツが現れ、同時にポインタが滞在している。
             Row {
                 signals: &[Signal::TalkStarted],
-                scopes: &[(0, 3, false, Watch::On, Watch::Off)],
+                scopes: &[(0, 3, false, Watch::On)],
                 dragging: false,
                 now: Now::At(-5.0),
                 expect: &[Expect::Shown(0), Expect::SignalMissing],
@@ -364,7 +320,7 @@ pub(super) const CASES: &[Case] = &[
             // 滞在が解けた。占有終端が未確立なので満了予定は立たない。
             Row {
                 signals: &[],
-                scopes: &[(0, 3, true, Watch::Off, Watch::Off)],
+                scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
                 now: Now::At(-4.0),
                 expect: &[],
@@ -373,7 +329,7 @@ pub(super) const CASES: &[Case] = &[
             // 既定時間を大きく超えても保持したまま。
             Row {
                 signals: &[],
-                scopes: &[(0, 3, true, Watch::Off, Watch::Off)],
+                scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
                 now: Now::At(TIMEOUT * 2.0),
                 expect: &[],
@@ -387,10 +343,7 @@ pub(super) const CASES: &[Case] = &[
         rows: &[
             Row {
                 signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
-                scopes: &[
-                    (0, 3, false, Watch::Off, Watch::Off),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 3, false, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(-5.0),
                 expect: &[Expect::Shown(0)],
@@ -398,10 +351,7 @@ pub(super) const CASES: &[Case] = &[
             },
             Row {
                 signals: &[],
-                scopes: &[
-                    (0, 3, true, Watch::Off, Watch::Off),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 3, true, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(LATE),
                 expect: &[Expect::Started {
@@ -410,20 +360,16 @@ pub(super) const CASES: &[Case] = &[
                 }],
                 after: &[After::Deadline(TIMEOUT)],
             },
-            // ドラッグ・滞在・選択肢が同時に成立。記録は 1 件で、種別は 3 つとも立つ。
+            // ドラッグと滞在が同時に成立。記録は 1 件で、種別は 2 つとも立つ。
             Row {
                 signals: &[],
-                scopes: &[
-                    (0, 3, true, Watch::On, Watch::On),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 3, true, Watch::On), (1, 0, false, Watch::Off)],
                 dragging: true,
                 now: Now::At(TIMEOUT),
                 expect: &[Expect::Suppressed {
                     kinds: SuppressionKinds {
                         dragging: true,
                         hover: true,
-                        choice: true,
                     },
                     deadline: TIMEOUT,
                 }],
@@ -432,10 +378,7 @@ pub(super) const CASES: &[Case] = &[
             // 全て解けた。
             Row {
                 signals: &[],
-                scopes: &[
-                    (0, 3, true, Watch::Off, Watch::Off),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 3, true, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(TIMEOUT + 1.0),
                 expect: &[Expect::Restarted {
@@ -444,21 +387,17 @@ pub(super) const CASES: &[Case] = &[
                 }],
                 after: &[After::Deadline(TIMEOUT + 1.0 + TIMEOUT)],
             },
-            // 滞在の観測が取れないが、選択肢の表示中は観測できている。抑止は成立し、
-            // 記録の種別は選択肢だけが立つ。
+            // 滞在の観測が取れないが、ドラッグ中は観測できている。抑止は成立し、
+            // 記録の種別はドラッグだけが立つ。
             Row {
                 signals: &[],
-                scopes: &[
-                    (0, 3, true, Watch::Blind, Watch::On),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
-                dragging: false,
+                scopes: &[(0, 3, true, Watch::Blind), (1, 0, false, Watch::Off)],
+                dragging: true,
                 now: Now::At(TIMEOUT + 1.0 + TIMEOUT),
                 expect: &[Expect::Suppressed {
                     kinds: SuppressionKinds {
-                        dragging: false,
+                        dragging: true,
                         hover: false,
-                        choice: true,
                     },
                     deadline: TIMEOUT + 1.0 + TIMEOUT,
                 }],
@@ -476,10 +415,7 @@ pub(super) const CASES: &[Case] = &[
         rows: &[
             Row {
                 signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
-                scopes: &[
-                    (0, 3, false, Watch::Off, Watch::Off),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 3, false, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(-5.0),
                 expect: &[Expect::Shown(0)],
@@ -487,10 +423,7 @@ pub(super) const CASES: &[Case] = &[
             },
             Row {
                 signals: &[],
-                scopes: &[
-                    (0, 3, true, Watch::Off, Watch::Off),
-                    (1, 0, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 3, true, Watch::Off), (1, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(LATE),
                 expect: &[Expect::Started {
@@ -502,10 +435,7 @@ pub(super) const CASES: &[Case] = &[
             // 満了予定に達したフレームで scope 1 が喋り出し、そこへポインタが滞在している。
             Row {
                 signals: &[],
-                scopes: &[
-                    (0, 3, true, Watch::Off, Watch::Off),
-                    (1, 2, false, Watch::On, Watch::Off),
-                ],
+                scopes: &[(0, 3, true, Watch::Off), (1, 2, false, Watch::On)],
                 dragging: false,
                 now: Now::At(TIMEOUT),
                 expect: &[
@@ -514,7 +444,6 @@ pub(super) const CASES: &[Case] = &[
                         kinds: SuppressionKinds {
                             dragging: false,
                             hover: true,
-                            choice: false,
                         },
                         deadline: TIMEOUT,
                     },
@@ -532,10 +461,7 @@ pub(super) const CASES: &[Case] = &[
         rows: &[
             Row {
                 signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
-                scopes: &[
-                    (0, 3, false, Watch::Off, Watch::Off),
-                    (1, 2, false, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 3, false, Watch::Off), (1, 2, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(-5.0),
                 expect: &[Expect::Shown(0), Expect::Shown(1)],
@@ -543,10 +469,7 @@ pub(super) const CASES: &[Case] = &[
             },
             Row {
                 signals: &[],
-                scopes: &[
-                    (0, 3, true, Watch::Off, Watch::Off),
-                    (1, 2, true, Watch::Off, Watch::Off),
-                ],
+                scopes: &[(0, 3, true, Watch::Off), (1, 2, true, Watch::Off)],
                 dragging: false,
                 now: Now::At(LATE),
                 expect: &[Expect::Started {
@@ -559,10 +482,7 @@ pub(super) const CASES: &[Case] = &[
             // scope 1 は消える側なので抑止に数えず、scope 0 は満了で消える。
             Row {
                 signals: &[],
-                scopes: &[
-                    (0, 3, true, Watch::Off, Watch::Off),
-                    (1, 0, true, Watch::On, Watch::Off),
-                ],
+                scopes: &[(0, 3, true, Watch::Off), (1, 0, true, Watch::On)],
                 dragging: false,
                 now: Now::At(TIMEOUT),
                 expect: &[Expect::Cleared(&[1]), Expect::TimedOut(&[0])],
@@ -584,7 +504,7 @@ pub(super) const CASES: &[Case] = &[
         rows: &[
             Row {
                 signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
-                scopes: &[(0, 3, false, Watch::Off, Watch::Off)],
+                scopes: &[(0, 3, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(-5.0),
                 expect: &[Expect::Shown(0)],
@@ -592,7 +512,7 @@ pub(super) const CASES: &[Case] = &[
             },
             Row {
                 signals: &[],
-                scopes: &[(0, 3, true, Watch::Off, Watch::Off)],
+                scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
                 now: Now::At(LATE),
                 expect: &[Expect::Started {
@@ -604,14 +524,13 @@ pub(super) const CASES: &[Case] = &[
             // 滞在で見送る。
             Row {
                 signals: &[],
-                scopes: &[(0, 3, true, Watch::On, Watch::Off)],
+                scopes: &[(0, 3, true, Watch::On)],
                 dragging: false,
                 now: Now::At(TIMEOUT),
                 expect: &[Expect::Suppressed {
                     kinds: SuppressionKinds {
                         dragging: false,
                         hover: true,
-                        choice: false,
                     },
                     deadline: TIMEOUT,
                 }],
@@ -620,7 +539,7 @@ pub(super) const CASES: &[Case] = &[
             // 現在時刻が分からないフレームで滞在が解けた。計測にも抑止の持ち越しにも触れない。
             Row {
                 signals: &[],
-                scopes: &[(0, 3, true, Watch::Off, Watch::Off)],
+                scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
                 now: Now::Unknown,
                 expect: &[],
@@ -629,7 +548,7 @@ pub(super) const CASES: &[Case] = &[
             // 時刻が戻ったフレームで解除エッジが改めて立ち、現在時刻起点で計り直す。
             Row {
                 signals: &[],
-                scopes: &[(0, 3, true, Watch::Off, Watch::Off)],
+                scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
                 now: Now::At(TIMEOUT + 2.0),
                 expect: &[Expect::Restarted {
@@ -651,7 +570,7 @@ pub(super) const CASES: &[Case] = &[
             // 占有終端は届いたが、この時点で可視コンテンツは 1 つも無い。
             Row {
                 signals: &[Signal::TalkStarted, Signal::Ended(0.0)],
-                scopes: &[(0, 0, false, Watch::Off, Watch::Off)],
+                scopes: &[(0, 0, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(-5.0),
                 expect: &[],
@@ -661,7 +580,7 @@ pub(super) const CASES: &[Case] = &[
             // その満了予定は既に過去だが、本フレームに表示した scope は対象から外す。
             Row {
                 signals: &[],
-                scopes: &[(0, 3, false, Watch::Off, Watch::Off)],
+                scopes: &[(0, 3, false, Watch::Off)],
                 dragging: false,
                 now: Now::At(TIMEOUT + 1.0),
                 expect: &[
@@ -676,7 +595,7 @@ pub(super) const CASES: &[Case] = &[
             // 次のフレームで改めて満了する（満了予定を立て直さずに、残っていた分で消える）。
             Row {
                 signals: &[],
-                scopes: &[(0, 3, true, Watch::Off, Watch::Off)],
+                scopes: &[(0, 3, true, Watch::Off)],
                 dragging: false,
                 now: Now::At(TIMEOUT + 2.0),
                 expect: &[Expect::TimedOut(&[0])],

@@ -85,18 +85,33 @@ fn talk_timeout_secs(timeout: TalkTimeout, default_secs: f64) -> Option<f64> {
     }
 }
 
-/// 実効の表示終了と起点の採り方を決める（areka-P0-balloon-lifecycle-events 要件 5.1・5.3・5.6）。
+/// 実効の表示終了と起点の採り方を決める（areka-P0-balloon-lifecycle-events 要件 5.1・5.3・5.6・
+/// areka-P0-balloon-text-bugs 要件 1.2〜1.4・1.8）。
 ///
-/// トークの終わりが届くまでは `None`（計測を始めない）。届いていれば占有区間の終端と止まった
-/// 時刻の早い方で、ちょうど同じなら終端を採る。時刻が無ければ終端。
-fn effective_display_end(display_end: f64, talk_end: TalkEnd) -> Option<(f64, MeasurementOrigin)> {
-    match talk_end {
-        TalkEnd::NotYet => None,
-        TalkEnd::At(stopped) if stopped < display_end => {
+/// トークの終わりが届くまでは `None`（計測を始めない）。
+///
+/// - 選択肢つきでないトーク: 占有区間の終端と止まった時刻の早い方で、ちょうど同じなら終端を
+///   採る。時刻が無ければ終端。
+/// - 選択肢つきのトーク: 止まった時刻（＝選択の待ちが解けた時刻）をそのまま採り、終端とは
+///   比べない——終端は選択肢を出した所なので、比べると待ちの間に待ち時間を使い切った形になる。
+///   時刻が無ければ `now`（終わりを畳んだ後で計測が成り立つ最初のフレームの現在時刻）。
+fn effective_display_end(
+    display_end: f64,
+    talk_end: TalkEnd,
+    had_choice: bool,
+    now: f64,
+) -> Option<(f64, MeasurementOrigin)> {
+    match (talk_end, had_choice) {
+        (TalkEnd::NotYet, _) => None,
+        (TalkEnd::At(stopped), true) => {
+            Some((stopped, MeasurementOrigin::ChoiceWaitEndedAt(stopped)))
+        }
+        (TalkEnd::TimeUnknown, true) => Some((now, MeasurementOrigin::ChoiceWaitEndTimeMissing)),
+        (TalkEnd::At(stopped), false) if stopped < display_end => {
             Some((stopped, MeasurementOrigin::StoppedAt(stopped)))
         }
-        TalkEnd::At(_) => Some((display_end, MeasurementOrigin::DisplayEnd)),
-        TalkEnd::TimeUnknown => Some((display_end, MeasurementOrigin::StopTimeMissing)),
+        (TalkEnd::At(_), false) => Some((display_end, MeasurementOrigin::DisplayEnd)),
+        (TalkEnd::TimeUnknown, false) => Some((display_end, MeasurementOrigin::StopTimeMissing)),
     }
 }
 
@@ -172,7 +187,7 @@ pub(super) fn decide_timeout(
     let wait_secs = talk_timeout_secs(state.talk_timeout, timeout_secs);
     let eligible = match (state.display_end, wait_secs) {
         (Some(end), Some(wait)) if !visible.is_empty() => {
-            effective_display_end(end, state.talk_end)
+            effective_display_end(end, state.talk_end, state.talk_had_choice, now)
                 .filter(|&(effective, _)| now >= effective)
                 .map(|(effective, origin)| (end, effective, origin, wait))
         }
@@ -195,7 +210,8 @@ pub(super) fn decide_timeout(
         && state.deadline.is_none()
     {
         // 初期確立の起点は**実効の表示終了**＝占有終端と止まった時刻の早い方で、止まった時刻が
-        // 届かなければ占有終端である（Requirement 4.1 の正典起点「スクリプトの表示が終わって
+        // 届かなければ占有終端である（選択肢つきのトークは止まった時刻そのもの・
+        // `effective_display_end`・areka-P0-balloon-text-bugs 要件 1.2〜1.4）（Requirement 4.1 の正典起点「スクリプトの表示が終わって
         // から」・areka-P0-balloon-lifecycle-events 要件 5.1・5.3・5.6）。完了 spec
         // areka-P0-balloon-visibility では起点は占有終端だけだったが、本 spec がこう改めた。
         // 「計測が成り立った最初のフレームの現在時刻 + 待ち時間」ではない——観測はフレーム単位で
@@ -269,21 +285,17 @@ pub(super) fn decide_timeout(
 
 /// 本フレームに成立している抑止条件を数える（design「可視性の判断フロー」の抑止の式）。
 ///
-/// 観測が取れなかった条件（`None`）は成立しない側へ倒す（Requirement 5.5——消えないまま
-/// 固着する側へ倒さない）。ポインタの滞在は**可視である scope に限って**効かせる——不可視の
-/// 間は離脱の通知が届かず、滞在の記録が残ったままだと恒久的な抑止に固着するためである。
+/// 抑止はドラッグ中と可視のバルーンへの滞在の 2 つだけで、選択肢の行が残っていることは数えない
+/// （areka-P0-balloon-text-bugs 要件 1.5——選択を待つ間はトークの終わりが届かないので、待ちは
+/// 計測の手前で止まる）。観測が取れなかった滞在（`None`）は成立しない側へ倒す（Requirement 5.5——
+/// 消えないまま固着する側へ倒さない）。ポインタの滞在は**可視である scope に限って**効かせる——
+/// 不可視の間は離脱の通知が届かず、滞在の記録が残ったままだと恒久的な抑止に固着するためである。
 fn observe_suppression(obs: &VisibilityObservations, visible: &[u32]) -> SuppressionKinds {
-    let mut kinds = SuppressionKinds {
+    SuppressionKinds {
         dragging: obs.dragging,
-        ..SuppressionKinds::default()
-    };
-    for (scope, observed) in &obs.scopes {
-        if observed.hover == Some(true) && visible.contains(scope) {
-            kinds.hover = true;
-        }
-        if observed.choice_active == Some(true) {
-            kinds.choice = true;
-        }
+        hover: obs
+            .scopes
+            .iter()
+            .any(|(scope, observed)| observed.hover == Some(true) && visible.contains(scope)),
     }
-    kinds
 }

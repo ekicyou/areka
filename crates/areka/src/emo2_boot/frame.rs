@@ -14,7 +14,7 @@
 //!   適用する（**適用のみ**）。
 //! - balloon-visibility: 本フレームの表示指令を適用し終えた実状態からバルーンの可視性を決めて発行する
 //!   （`areka-P0-balloon-visibility` design 決定 D5・Requirement 3.5／6.6）。観測（可視状態・可視
-//!   グリフ数・選択肢表示中・ポインタ滞在・ドラッグ中・表示ライフサイクル信号）を集めて判断中核へ渡し、
+//!   グリフ数・ポインタ滞在・ドラッグ中・表示ライフサイクル信号）を集めて判断中核へ渡し、
 //!   返った遷移を発行して 1 行ずつ記録する。実装は `emo2_boot::balloon_visibility`（判断）と
 //!   その配線層 `balloon_visibility_phase.rs`。
 //! - zorder-drain: 台本から届いた `\![set,zorder,…]`／`\![reset,zorder]` を台帳へ適用し、台帳と

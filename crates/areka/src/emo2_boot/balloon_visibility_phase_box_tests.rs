@@ -20,9 +20,8 @@ use std::sync::mpsc;
 use areka_emo_compose::{BoxLayout, BoxName, EmoWorld, fold_boxes};
 use areka_emo_present::EmoPresenter;
 use areka_emo_text::actor::{HitRectPx, ShownBox, TextLayerRuntime};
-use areka_emo_text::state::{SurfaceKeyOutcome, TextLayerConfig};
+use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::shell::{parse, parse_boxes};
-use dola::cue::{CueCommand, TalkCue};
 use tracing::Level;
 
 use super::super::BalloonVisibilityState;
@@ -73,15 +72,6 @@ fn shown_a() -> Vec<ShownBox> {
     }]
 }
 
-fn cue(scope: u32, command: CueCommand) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: areka_sakura::ActorKey::from(scope.to_string()),
-        command,
-        duration: 0.5,
-    }
-}
-
 fn world_at(frame_now: f64) -> World {
     let mut world = World::new();
     world.insert_resource(FrameTime(frame_now));
@@ -92,21 +82,6 @@ fn runtime() -> Rc<RefCell<TextLayerRuntime>> {
     Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )))
-}
-
-/// 箱の束（[`SHELL`]）を受け取ったランタイム。`\s` の鍵は数字ならその番号。
-fn runtime_with_boxes(world: &mut World) -> Rc<RefCell<TextLayerRuntime>> {
-    let runtime = runtime();
-    runtime.borrow_mut().set_box_layout(
-        world,
-        layout(),
-        Box::new(|key: &str| {
-            key.parse()
-                .map_or(SurfaceKeyOutcome::Unresolved, SurfaceKeyOutcome::Show)
-        }),
-        Vec::new(),
-    );
-    runtime
 }
 
 fn box_hover_errors(events: &[crate::placement::test_support::LogEvent]) -> usize {
@@ -293,47 +268,6 @@ fn shell_window_drag_without_box_text_is_not_dragging() {
         "較正: 箱に文字は出ていない"
     );
     assert!(!observed.dragging);
-}
-
-/// 箱に選択肢が出ていれば、スコープの「選択肢が表示中」が真になって待ちを止める（要件 6.11・
-/// 数えるのは文字の層の `choice_active`＝スコープのどの場所かに選択肢があるか）。
-#[test]
-fn choice_in_a_box_is_observed_as_choice_active() {
-    let mut world = world_at(1.0);
-    world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
-    let mut presenter = EmoPresenter::new();
-    attach_headless(&mut presenter, &mut world, 0);
-    let runtime = runtime_with_boxes(&mut world);
-    {
-        let mut rt = runtime.borrow_mut();
-        rt.apply_cue(&cue(0, CueCommand::Emote { key: "0".into() }));
-        rt.apply_cue(&cue(
-            0,
-            CueCommand::Choice {
-                id: "OnA".into(),
-                text: "はい".into(),
-                references: Vec::new(),
-            },
-        ));
-    }
-    let mut state = BalloonVisibilityState::default();
-
-    let observed = collect_observations(
-        &presenter,
-        &runtime,
-        &mut world,
-        &[0],
-        Some(1.0),
-        Vec::new(),
-        &mut state,
-    );
-
-    assert_eq!(
-        observed.scopes[&0].visible_glyphs.map(|g| g.count),
-        Some(0),
-        "較正: 選択肢は箱の場所にあり、普通のバルーンの窓には出ていない"
-    );
-    assert_eq!(observed.scopes[&0].choice_active, Some(true));
 }
 
 // ---------------------------------------------------------------------------

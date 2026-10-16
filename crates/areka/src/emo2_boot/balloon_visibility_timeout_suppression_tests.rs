@@ -30,8 +30,8 @@
 //   → `a_scope_shown_in_the_same_frame_is_not_hidden_by_the_expired_deadline`
 // - 抑止の成立・解除・解除後の取り直しと、抑止中の超過の保留
 //   → `suppression_holds_the_expired_deadline_and_release_restarts_the_measurement`
-// - ドラッグ・選択肢が単独で抑止になること、不可視 scope への滞在が抑止にならないこと
-//   → `drag_and_choice_suppress_but_hover_on_an_invisible_scope_does_not`
+// - ドラッグが単独で抑止になること、不可視 scope への滞在が抑止にならないこと
+//   → `drag_suppresses_but_hover_on_an_invisible_scope_does_not`
 // - 抑止条件が 1 つも観測できないフレームを非抑止として扱うこと
 //   → `unobservable_suppression_inputs_are_treated_as_not_suppressed`
 // - 会話開始による計測の破棄 → `talk_started_discards_the_measurement_and_keeps_the_glyph_history`
@@ -50,8 +50,11 @@
 // ⑷ 満了予定に達する**前**の抑止は見送りの記録を出さない — 8.3 / 8.6
 // ⑸ 抑止が二度成立すれば記録も二度出る（1 回の抑止につき 1 件の再武装）— 8.3
 // ⑹ 抑止が解けても計測が成り立たなければ取り直さない（解除エッジの反対側の枝）— 5.3 / 4.8
-// ⑺ 複数の抑止条件が同時に成立したら 1 件の記録へ全種別が載る — 5.1 / 5.2 / 5.4 / 8.3
+// ⑺ 複数の抑止条件が同時に成立したら 1 件の記録へ全種別が載る — 5.1 / 5.2 / 8.3
 // ⑻ 抑止条件の一部だけが観測不能でも、残りの条件は抑止として効く — 5.5
+//
+// 抑止はドラッグ中と可視のバルーンへの滞在の 2 つ（areka-P0-balloon-text-bugs 要件 1.5 が
+// 「選択肢の表示中」を外した）。選択肢つきのトークの起点は `balloon_visibility_choice_wait_tests.rs`。
 // ⑼ 本フレームに表示した scope への滞在は抑止になる — 5.2
 // ⑽ 本フレームに全消去で消した scope への滞在は抑止にならない — 5.2 / 5.5
 // ⑾ 現在時刻が分からないフレームは抑止の持ち越しを止めず、時刻が戻ったフレームで解除
@@ -113,8 +116,8 @@ impl Watch {
     }
 }
 
-/// 表の観測 1 件: `(scope, 可視グリフ数, 現に可視か, ポインタ滞在, 選択肢表示)`。
-type Obs = (u32, usize, bool, Watch, Watch);
+/// 表の観測 1 件: `(scope, 可視グリフ数, 現に可視か, ポインタ滞在)`。
+type Obs = (u32, usize, bool, Watch);
 
 /// 本フレームに届く表示ライフサイクル信号。
 #[derive(Debug, Clone, Copy)]
@@ -293,12 +296,11 @@ fn run(case: &Case, failures: &mut Vec<String>) {
         let entries: Vec<(u32, ScopeObservation)> = row
             .scopes
             .iter()
-            .map(|&(scope, glyphs, visible, hover, choice)| {
+            .map(|&(scope, glyphs, visible, hover)| {
                 (
                     scope,
                     ScopeObservation {
                         hover: hover.observed(),
-                        choice_active: choice.observed(),
                         ..seen(glyphs, visible)
                     },
                 )
@@ -471,7 +473,7 @@ fn the_table_runner_reports_mismatches_instead_of_passing_silently() {
         name: "較正",
         rows: &[Row {
             signals: &[Signal::TalkStarted, Signal::DisplayEnd(0.0)],
-            scopes: &[(0, 3, false, Watch::Off, Watch::Off)],
+            scopes: &[(0, 3, false, Watch::Off)],
             dragging: false,
             now: Now::At(-5.0),
             // 実際には表示が起き、満了予定は立たない。

@@ -317,7 +317,6 @@ fn collect_observations(
                     hover_wiring.map(|w| w.is_balloon_hovered(scope as usize)),
                     box_hovered,
                 ),
-                choice_active: runtime.as_ref().map(|rt| rt.choice_active(&actor)),
                 box_showing,
             },
         );
@@ -330,8 +329,7 @@ fn collect_observations(
     }
 }
 
-/// 文字層ランタイムを借りる（失敗は誤りレベルで 1 回・当該フレームは「グリフ観測なし・
-/// 選択肢抑止なし」）。
+/// 文字層ランタイムを借りる（失敗は誤りレベルで 1 回・当該フレームは「グリフ観測なし」）。
 fn borrow_runtime<'r>(
     runtime: &'r Rc<RefCell<TextLayerRuntime>>,
     state: &mut BalloonVisibilityState,
@@ -345,7 +343,7 @@ fn borrow_runtime<'r>(
             if !state.observation_failure_logged.runtime {
                 state.observation_failure_logged.runtime = true;
                 error!(
-                    "[balloon-visibility] 文字層ランタイムを借用できない → 本フレームは可視グリフ数と選択肢表示中を観測せず、表示状態を変えない"
+                    "[balloon-visibility] 文字層ランタイムを借用できない → 本フレームは可視グリフ数を観測せず、表示状態を変えない"
                 );
             }
             None
@@ -698,6 +696,19 @@ fn emit_visibility_logs(logs: &[VisibilityLogEvent], not_shown: &[u32]) {
                     deadline,
                     "[balloon-visibility] タイムアウト計測を開始（止まった時刻が届かず、起点＝会話の占有終端）"
                 ),
+                MeasurementOrigin::ChoiceWaitEndedAt(stopped_at) => info!(
+                    origin = origin.as_str(),
+                    stopped_at,
+                    display_end,
+                    deadline,
+                    "[balloon-visibility] タイムアウト計測を開始（選択肢つきのトーク・起点＝選択の待ちが解けて止まった時刻）"
+                ),
+                MeasurementOrigin::ChoiceWaitEndTimeMissing => warn!(
+                    origin = origin.as_str(),
+                    display_end,
+                    deadline,
+                    "[balloon-visibility] タイムアウト計測を開始（選択肢つきのトークで止まった時刻が届かず、起点＝このフレームの現在時刻）"
+                ),
             },
             VisibilityLogEvent::MeasurementDiscarded { reason, deadline } => info!(
                 reason = reason.as_str(),
@@ -710,7 +721,6 @@ fn emit_visibility_logs(logs: &[VisibilityLogEvent], not_shown: &[u32]) {
             VisibilityLogEvent::TimeoutSuppressed { kinds, deadline } => info!(
                 dragging = kinds.dragging,
                 hover = kinds.hover,
-                choice = kinds.choice,
                 deadline,
                 "[balloon-visibility] 抑止が成立しているためタイムアウトによる非表示を見送った"
             ),
