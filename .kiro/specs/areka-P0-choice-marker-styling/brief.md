@@ -129,3 +129,8 @@
 - **同じウェーブに置けない相手**: `font-size-keywords`（`look.rs`・`state_decoration.rs`）・`balloon-font-file`（`viewbox_draw_render.rs`）・`balloon-text-bugs` の件 3（`viewbox_draw_decoration.rs`）・`anchor-style-canon`・`text-align-shadow-canon`。`choice-ranges-one-function` とは、あちらがまとめた関数を `choice.rs` に置くと重なる。
 - **優先度の区分**: C のまま。**要件定義のモデル**: Opus のまま。
 - **見つけた穴・古くなった記述**: 棚卸㉓の穴（descript の非選択の層が無い）はそのまま。`choice.rs` の 2 つの警告の文面の「M1 未対応」も残っている。
+
+## `balloon-text-bugs` からの申し送り（2026-10-16 着地）
+
+- 行の TextLayout に下線を焼くのをやめた。`viewbox_draw_decoration.rs` の `apply_font_ranges` はもう `SetUnderline` を渡さず、下線の区間（`LineStyles::underlines`）を DirectWrite に聞いて、areka が字の後にベースラインの直下へ塗る（`viewbox_draw_render.rs` の `render_styled`・`viewbox_draw_underline.rs` の `collect_underlines`・純粋層 `underline.rs`）。打ち消し線は今も焼いている。選択肢の印の見た目で下線を扱うときは、この塗る道に乗せる。
+- 済んだ選択肢（押した場所・トークの終わり）は当たり行の写しに入らず、強調も装飾へ渡されない（見た目は変えない）。

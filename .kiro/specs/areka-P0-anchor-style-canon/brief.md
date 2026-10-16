@@ -134,3 +134,7 @@
 - **見つけた穴・古くなった記述**:
   - 網羅台帳の持ち主は付け替え済みを確かめた（`assets.toml` 43 行・`sakura-script.toml` 16 行）。
   - 同じウェーブに置けない相手: `choice-marker-styling`・`font-size-keywords`・`text-align-shadow-canon`（`look.rs`・`state_decoration.rs`）・`balloon-text-bugs` の件 3（`viewbox_draw_decoration.rs`）・`balloon-font-file`（`viewbox_draw_render.rs`）・`range-choice-tag`（`state_anchor.rs` と `lib.rs` の席）・`choice-ranges-one-function`（`choice.rs`・`actor_present.rs`）。文字の層のほぼ全部の spec と重なる＝列の後ろのままが素直。
+
+## `balloon-text-bugs` からの申し送り（2026-10-16 着地）
+
+- 上の 4 の相手 `balloon-text-bugs` が先に着地した。下線は行の TextLayout に焼かず、areka が DirectWrite に幾何と描画効果を聞いてベースラインの直下へ塗る（`viewbox_draw_render.rs` の `render_styled`・`viewbox_draw_underline.rs`・`underline.rs`）。アンカーの既定の下線もこの道で塗られている（`push_current_style` が立てる写しの下線の区間を `line_styles` が拾う）。`anchor.style` の解決で下線を出し分けるときは、写しの下線の有無を変えればこの道がそのまま塗る。

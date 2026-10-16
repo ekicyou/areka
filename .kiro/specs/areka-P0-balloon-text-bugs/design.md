@@ -130,10 +130,16 @@ crates/areka-emo-text/src/
 ├── underline.rs                       # 純粋層: 下線の矩形（横書きはベースライン直下・縦書きは DirectWrite のまま）と面の内側への寄せ・はみ出しの足し分
 ├── underline_tests.rs                 # 上の決定論の檻（GPU なし）
 ├── viewbox_draw_underline.rs          # 描画実行部の子: DirectWrite に下線の幾何と描画効果を聞く受け手（#[implement(IDWriteTextRenderer1)]）と、区間の下線を立てて集めて戻す手順
-├── viewbox_draw_underline_tests.rs    # 実 DirectWrite の幾何の檻・実 GPU の読み戻しの檻（最下行・拡大率・縦書き・打ち消し線・字の画素）
+├── viewbox_draw_underline_tests.rs    # 実 DirectWrite の幾何の檻・縦書きと D2D 自身の下線の一致・集める失敗の後の再試行
+├── actor_underline_present_tests.rs   # 実 GPU の読み戻しの檻（最下行・拡大率・収まらない形・打ち消し線・字の画素・1 字ずつの描き替え・縦書きの端の列・箱）＝実装で分けた
 ├── actor_choice_settle_tests.rs       # 済みの境目・押下とトークの終わり・写しと強調の原子性・箱（GPU なしと実 GPU）
-├── actor_region_collapse_tests.rs     # 潰れた範囲の記録の回数・描かないこと・片付け・戻り・箱（実 GPU を含む）
+├── actor_region_collapse_tests.rs     # 潰れた範囲の記録の回数・片付け（ECS）・箱
+├── actor_region_collapse_present_tests.rs  # 潰れた範囲を描かないこと・描いた後の片付け・戻り・箱（実 GPU）＝実装で分けた
 └── sink_talk_end_tests.rs             # 文字の線のトークの終わり（複製ごとに 1 回・cue の後・原本は送らない・ドレインで全部の場所が済む）
+crates/areka-sakura/src/
+└── drive_choice_wait_began_tests.rs      # ChoiceWaiting を送った後に選択待ちの始まりを 1 回配る＝実装で足した
+crates/areka-ghost/src/
+└── dispatcher_choice_tests.rs（既存に足す）  # 押下の選択が ChoiceWaiting の後に kanade へ着く
 crates/areka/src/emo2_boot/
 ├── balloon_visibility_choice_wait_tests.rs  # 選択肢つきのトークの起点・待ちの間は隠さない・抑止と待ち時間の指定・箱
 └── talk_lifecycle_choice_tests.rs           # ChoiceShown の送り方（1 回・順・選択肢の無いトークとアンカーでは送らない）と、受け口から判断までの通し
@@ -442,7 +448,7 @@ impl TextLayerRuntime {
 ##### Event Contract
 ```rust
 // crates/dola/src/cue/sink.rs
-pub trait CueSink: Send {
+pub trait CueSink {
     fn emit(&mut self, cue: TalkCue);
     fn preview(&mut self, _upcoming: &[TalkCue]) {}
     /// 再生が選択待ちに入り、その事実を done の口へ送り終えた後に 1 回呼ばれる。既定は何もしない。
