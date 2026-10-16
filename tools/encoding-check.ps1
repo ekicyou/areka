@@ -9,7 +9,8 @@
 
   1. Calibration: every rule is run on built-in samples that must pass and samples that must fail.
      Samples are plain strings (single quotes or concatenation), so they are never code here.
-  2. Static rules over tools/*.ps1 and tools/perf/*.ps1 (direct children of each folder only; rules
+  2. Static rules over tools/*.ps1 and tools/perf/*.ps1 (direct children of each folder only) and
+     .claude/skills/**/*.ps1 (scripts kept inside a skill; rules
      A-D, the same for both) and the run: bodies of .github/workflows/*.yml
      (a step's `run: |` block or one-line scalar; a mapping-valued run: such as defaults.run is
      not a body). Each body is parsed as pwsh; a parse error is a failure.
@@ -488,6 +489,7 @@ if ($fails.Count -eq 0) { "PASS calibration ($($calib.Count) samples)" }
 # ---- 2. static rules over the real files ----
 $targets = @(Get-ChildItem -LiteralPath (Join-Path $root 'tools') -Filter '*.ps1' -File) +
 @(Get-ChildItem -LiteralPath (Join-Path $root 'tools/perf') -Filter '*.ps1' -File) +
+@(Get-ChildItem -LiteralPath (Join-Path $root '.claude/skills') -Filter '*.ps1' -File -Recurse) +
 @(Get-ChildItem -LiteralPath (Join-Path $root '.github/workflows') -Filter '*.yml' -File)
 $callWordsOf = @{}
 foreach ($file in $targets) {

@@ -3,7 +3,7 @@ inclusion: manual
 updated_at: 2026-01-02
 ---
 
-# Roadmap — 見本（tools/roadmap-overview.ps1 -SelfTest の入力・本物の roadmap.md の難所を写した断片）
+# Roadmap — 見本（roadmap-overview.ps1 -SelfTest の入力・本物の roadmap.md の難所を写した断片）
 
 > この断片は道具の自分の検査だけが読む。中身は架空の spec で、本物の roadmap.md とは関係しない。
 

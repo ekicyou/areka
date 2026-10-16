@@ -36,7 +36,7 @@
 どのフォルダから打っても動く。
 
 ```powershell
-pwsh -NoProfile -File C:\home\maz\git\areka\tools\roadmap-overview.ps1 -Open
+pwsh -NoProfile -File C:\home\maz\git\areka\.claude\skills\kiro-next\overview\roadmap-overview.ps1 -Open
 ```
 
 - `.kiro/steering/roadmap.md` を読み、`doc/roadmap-overview-{updated_at}.html` を書く（同じ日付のファイルは書き替え、ほかの日付のファイルには触らない）。`-Open` を付けると、書けたときだけ既定のブラウザで開く。`-OutFile <パス>` を付けると、`doc/` でなくそのファイルへ書く（`/kiro-next` は棚卸の最後に、作業用のフォルダの `roadmap-overview-latest.html` へ書いてセッションで公開する。コミットはしない）。roadmap.md の「ウェーブ編成」の節に ``` で囲んだ塊（次のウェーブの開始コマンド）があれば、頁の上にコピーのボタンつきで出す。開くだけなら作ったファイルをブラウザで開けばよい（ネットは使わない）。

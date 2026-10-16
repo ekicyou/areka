@@ -23,7 +23,7 @@
     -SelfTest
         自分の検査。判定を 1 つずつ「ok selftest {名前}」か「FAIL selftest {名前}」で印字する。
         判定の番号は design の SelfTest の番号。
-        見本は tools/roadmap-overview-fixture/（roadmap.md＝見本の断片・expected-data.json＝期待の値）。
+        見本はこのスクリプトの隣の roadmap-overview-fixture/（roadmap.md＝見本の断片・expected-data.json＝期待の値）。
           1 strings  文言のファイルが読めて、markers と labels の鍵がそろい、どれも空でない
                      （鍵を 1 つ外した写しと、1 つを空にした写しが落ちることも確かめる）
           2 template ひな形（TEMPLATE_FILE）が約束を守る: 差し込み口がちょうど 1 つ・CHARSET を持つ・
@@ -73,9 +73,9 @@
   自分の検査だけを回す。何も書かない。
 
 .EXAMPLE
-  pwsh -NoProfile -File tools/roadmap-overview.ps1 -Open
-  pwsh -NoProfile -File tools/roadmap-overview.ps1 -OutFile C:\some\folder\roadmap-overview-latest.html
-  pwsh -NoProfile -File tools/roadmap-overview.ps1 -SelfTest
+  pwsh -NoProfile -File .claude/skills/kiro-next/overview/roadmap-overview.ps1 -Open
+  pwsh -NoProfile -File .claude/skills/kiro-next/overview/roadmap-overview.ps1 -OutFile C:\some\folder\roadmap-overview-latest.html
+  pwsh -NoProfile -File .claude/skills/kiro-next/overview/roadmap-overview.ps1 -SelfTest
 #>
 #Requires -Version 7
 # 知らない引数（綴り違いを含む）は黙って捨てずに断る
@@ -116,10 +116,12 @@ $PLACEHOLDER    = '@@ROADMAP_DATA@@'
 $CHARSET        = '<meta charset="utf-8">'
 $EXTERNAL       = '(?i)<script\b[^>]*\ssrc\s*=|<link\b|@import|url\(|https?://'
 
-$root = Split-Path $PSScriptRoot -Parent
-
-# 子の出力を端末の文字コードに依らず UTF-8 で読む関数 Invoke-Utf8Child
-. (Join-Path $PSScriptRoot 'utf8-child.ps1')
+# リポジトリの根＝このスクリプトから上へ辿って最初に .kiro の在るフォルダ（スキルのフォルダの中に置くので、深さに依らない）。
+# 無ければスクリプトのフォルダ（roadmap.md が読めずに FAIL missing roadmap になる）
+$root = $PSScriptRoot
+for ($d = $PSScriptRoot; $d; $d = Split-Path $d -Parent) {
+    if ([System.IO.Directory]::Exists((Join-Path $d '.kiro'))) { $root = $d; break }
+}
 
 # ファイルを UTF-8 で読み、改行を LF にそろえて返す。無ければ $null
 function Read-Lf([string]$Path) {
@@ -152,10 +154,10 @@ function Test-Strings($Strings) {
 # 文言を UTF-8 で読んで返す。読めない・鍵が欠けるか空のときは throw（文は ASCII）
 function Read-Strings {
     $text = Read-Lf (Join-Path $PSScriptRoot $STRINGS_FILE)
-    if ($null -eq $text) { throw "cannot read tools/$STRINGS_FILE" }
-    try { $s = $text | ConvertFrom-Json } catch { throw "tools/$STRINGS_FILE is not valid JSON" }
+    if ($null -eq $text) { throw "cannot read $STRINGS_FILE" }
+    try { $s = $text | ConvertFrom-Json } catch { throw "$STRINGS_FILE is not valid JSON" }
     $bad = @(Test-Strings $s)
-    if ($bad.Count) { throw "missing or empty key(s) in tools/${STRINGS_FILE}: $($bad -join ', ')" }
+    if ($bad.Count) { throw "missing or empty key(s) in ${STRINGS_FILE}: $($bad -join ', ')" }
     $s
 }
 
@@ -674,7 +676,7 @@ if ($SelfTest) {
         (@(Test-Template ($template + "/* $([char]0x3042) */")) -join ',') -ceq 'ascii'
     }
 
-    # ---- 3〜6. 見本の読み取り（見本は tools/roadmap-overview-fixture/。中身の印は固定の値） ----
+    # ---- 3〜6. 見本の読み取り（見本はこのスクリプトの隣の roadmap-overview-fixture/。中身の印は固定の値） ----
     $fxDir = Join-Path $PSScriptRoot 'roadmap-overview-fixture'
     $fixture = Read-Lf (Join-Path $fxDir 'roadmap.md')
     $expected = Read-Lf (Join-Path $fxDir 'expected-data.json')
@@ -765,9 +767,9 @@ catch { "FAIL strings: $($_.Exception.Message -replace '[^\x20-\x7E]', '?')"; ex
 function ConvertTo-Ascii([string]$Text) { $Text -replace '[^\x20-\x7E]', '?' }
 
 $template = Read-Lf (Join-Path $PSScriptRoot $TEMPLATE_FILE)
-if ($null -eq $template) { "FAIL template: cannot read tools/$TEMPLATE_FILE"; exit 1 }
+if ($null -eq $template) { "FAIL template: cannot read $TEMPLATE_FILE"; exit 1 }
 $bad = @(Test-Template $template)
-if ($bad.Count) { "FAIL template: tools/$TEMPLATE_FILE breaks: $($bad -join ', ')"; exit 1 }
+if ($bad.Count) { "FAIL template: $TEMPLATE_FILE breaks: $($bad -join ', ')"; exit 1 }
 
 # 読むのは根の roadmap.md だけ（今のフォルダによらない）
 $roadmapRel = '.kiro/steering/roadmap.md'
@@ -777,8 +779,9 @@ if ($null -eq $text) { 'FAIL missing roadmap'; exit 1 }
 # 中身の印＝git hash-object の先頭 12 字（ファイルの中身だけで決まる。git log --find-object で辿れる）
 $blob = $null
 try {
-    $g = Invoke-Utf8Child git @('-C', $root, 'hash-object', '--', $roadmapRel)
-    if ($g.Code -eq 0 -and $g.Out.Trim() -cmatch '^[0-9a-f]{40,64}$') { $blob = $g.Out.Trim().Substring(0, 12) }
+    # 出力は 16 進の ASCII だけなので、端末の文字コードに依らず同じに読める（リポジトリの道具の関数に頼らない）
+    $g = (& git -C $root hash-object -- $roadmapRel 2>$null) -join ''
+    if ($LASTEXITCODE -eq 0 -and $g.Trim() -cmatch '^[0-9a-f]{40,64}$') { $blob = $g.Trim().Substring(0, 12) }
 } catch { }
 
 $r = Read-Roadmap $text $strings.markers ([pscustomobject]@{ blob = $blob })

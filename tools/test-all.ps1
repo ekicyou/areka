@@ -11,7 +11,7 @@
   6. crates.io 公開前の確認（tools/crates-io.ps1 の包むだけの形・ネットを使わない）
   7. 道具の文字コードの判定（tools/encoding-check.ps1 を別のプロセスで・ネットを使わない）
   8. リリースノートの道具の自分の検査（tools/release-notes.ps1 -SelfTest を別のプロセスで・ネットを使わない）
-  9. 俯瞰の HTML の道具の自分の検査（tools/roadmap-overview.ps1 -SelfTest を別のプロセスで・ネットを使わない）
+  9. 俯瞰の HTML の道具の自分の検査（.claude/skills/kiro-next/overview/roadmap-overview.ps1 -SelfTest を別のプロセスで・ネットを使わない）
   10. 隣の helper を揃える道具の自分の検査（tools/sync-i686-helper.ps1 -SelfTest を別のプロセスで・ネットを使わない）
   11. -License のときだけ cargo deny check と cargo about generate（テストと同時に回すと rustc がメモリ不足で落ちるので最後に直列で）
   12. 最後の段: target\debug の隣の helper を i686 版に揃える（tools/sync-i686-helper.ps1・途中の段が x64 版で上書きしても、終わった後は areka.exe の隣が i686 版）
@@ -53,7 +53,7 @@ Step 'i686 tests (host-32)' { cargo test -p shiori-host32-helper -p shiori-host3
 Step 'crates.io pre-publish check (package only)' { pwsh -NoProfile -File tools/crates-io.ps1 }
 Step 'encoding check' { pwsh -NoProfile -File tools/encoding-check.ps1 }
 Step 'release notes check' { pwsh -NoProfile -File tools/release-notes.ps1 -SelfTest }
-Step 'roadmap overview check' { pwsh -NoProfile -File tools/roadmap-overview.ps1 -SelfTest }
+Step 'roadmap overview check' { pwsh -NoProfile -File .claude/skills/kiro-next/overview/roadmap-overview.ps1 -SelfTest }
 Step 'i686 helper sync check' { pwsh -NoProfile -File tools/sync-i686-helper.ps1 -SelfTest }
 if ($License) {
     Step 'cargo deny check' { cargo deny check }
