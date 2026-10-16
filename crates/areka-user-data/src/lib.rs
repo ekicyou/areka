@@ -6,8 +6,10 @@
 //! 写す手続き（`copy` モジュール）は、この判断の上に載る。
 
 mod copy;
+mod establish;
 
 pub use copy::{CopyDone, CopyError, CopyStats, copy_tree_atomic};
+pub use establish::{establish, open_dir_for_add, probe};
 
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
