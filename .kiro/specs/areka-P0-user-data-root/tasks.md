@@ -43,7 +43,7 @@
   - _Depends: 1.2, 1.3, 2.1_
   - _Requirements: 3.4, 4.3, 4.4, 4.6, 4.7, 4.8, 4.9, 7.1, 10.3, 10.4, 10.6, 10.7_
 
-- [ ] 2.3 既定の並びと記憶の並びに書ける根を差し込む
+- [x] 2.3 既定の並びと記憶の並びに書ける根を差し込む
   - 並びを決める純粋な関数に書ける根の入力を 1 つ足し、本番の読み口は 2.2 の「並びに入れる書ける根」を渡す。既存のテストの呼び出しには「無し」を足す
   - 既定の腕は「書ける根（印付き）→ 実行ファイルの隣」、実行ファイルの場所が取れなければ書ける根だけで続ける。記憶の腕は、書ける根が並びに無ければ先頭へ足し、在れば記憶の順のまま印を付ける。環境変数の腕は書ける根を見ない
   - 出どころの値・並びの結果の欄・記憶へ書く口は増やさない（既定の並びを記憶に書かない）
@@ -156,3 +156,4 @@
 - areka には lib のターゲットが無い。クレートのテストは `cargo test -p areka --bin areka <filter>`。全体の `cargo test -p areka` は i686 の `shiori-host32-helper`・`shiori-host32-testdll-loadu` を先に組んでおく（`smoke_boot_loop_exit` 等）
 - ワークスペースの `clippy -D warnings` は HEAD の時点で触っていないクレート（dola・areka-kanade・areka-ghost の runtime.rs/ticker.rs）で赤。全体の検査（`tools/test-all.ps1`）は fmt と test だけ。変えた行だけ clippy を見る
 - 2.2 で後のタスクがつなぐ 5 つの関数に `#[allow(dead_code)]`（つなぐタスクの名前つき）を付けた。つないだタスクで外す
+- 2.3 から本番の `resolve_roots` が `layout()`（`establish`）を呼ぶ。本物の areka.exe を子として起こす統合テスト 3 本（`smoke_boot_loop_exit.rs`・`emo2_real_run.rs`・`mcp_get_log_real_run.rs`）は開発者の `AREKA_USER_ROOT` を受け継いでしまうので、3.1 で子の起こし方に `.env_remove("AREKA_USER_ROOT")` を足す

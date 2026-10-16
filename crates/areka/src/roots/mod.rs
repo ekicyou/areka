@@ -30,7 +30,7 @@ pub(crate) fn read_memory(app_profile_dir: &Path) -> Option<String> {
         .find_map(|(k, v)| (k == PersistKey::BasewareRoots).then_some(v))
 }
 
-/// 薄い読み口: `AREKA_ROOT`・記憶・実行ファイルのフォルダを読んで [`resolve_roots_from`] へ渡す。
+/// 薄い読み口: `AREKA_ROOT`・記憶・実行ファイルのフォルダ・並びに入れる書ける根を読んで [`resolve_roots_from`] へ渡す。
 /// プロセスの環境変数を読むのはここだけ。
 pub(crate) fn resolve_roots(app_profile_dir: &Path) -> Result<ResolvedRoots, RootError> {
     resolve_roots_from(
@@ -39,6 +39,7 @@ pub(crate) fn resolve_roots(app_profile_dir: &Path) -> Result<ResolvedRoots, Roo
         crate::boot_config::exe_location()
             .and_then(Path::parent)
             .map(Path::to_path_buf),
+        user_root::listed_user_root(),
     )
 }
 

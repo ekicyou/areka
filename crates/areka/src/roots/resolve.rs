@@ -9,6 +9,7 @@ use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
 
 use areka_ghost::{BasewareRoot, BasewareRoots, same_root};
+use areka_user_data::{UserRoot, UserRootOrigin};
 
 /// 根の並びを渡す環境変数（要件 1.5）。
 pub(crate) const ROOTS_ENV: &str = "AREKA_ROOT";
@@ -88,12 +89,18 @@ pub(crate) enum RootError {
 /// - `env`: `AREKA_ROOT` の値（`None`＝未設定）。在れば記憶は見ない。
 /// - `memory`: アプリの記憶の `[baseware] roots`（`None`＝鍵が無い・空文字は 0 項目）。
 /// - `exe_dir`: 実行ファイルのフォルダ（`None`＝取れない）。
+/// - `user_root`: 並びに入れる書ける根（`None`＝今の形）。環境変数の腕は見ない（要件 3.4）。
+///   既定の腕は「書ける根 → 実行ファイルの隣」、記憶の腕は無ければ先頭へ・在れば記憶の順のまま
+///   （要件 3.1・3.2）。どちらでもその項目に印を付ける。既定の並びは記憶に書かない（要件 3.5）。
 pub(crate) fn resolve_roots_from(
     env: Option<OsString>,
     memory: Option<String>,
     exe_dir: Option<PathBuf>,
+    user_root: Option<&UserRoot>,
 ) -> Result<ResolvedRoots, RootError> {
     let mut skipped = Vec::new();
+    // 印を付ける項目の位置（`items` の中・重複の除去の前）。
+    let mut user_at = None;
     let mut memory_fell_back = false;
     let (items, origin) = match (env, memory) {
         (Some(env), _) => {
@@ -115,10 +122,17 @@ pub(crate) fn resolve_roots_from(
                 items = decoded;
             }
             if items.is_empty() {
-                // 既定＝実行ファイルのフォルダ 1 つ（要件 1.3・1.13）。
-                match exe_dir.filter(|d| !d.as_os_str().is_empty()) {
-                    Some(dir) => (vec![dir], RootsOrigin::Default),
-                    None => {
+                // 既定＝（書ける根 →）実行ファイルのフォルダ（要件 1.3・1.13・3.1）。
+                let exe_dir = exe_dir.filter(|d| !d.as_os_str().is_empty());
+                match (user_root, exe_dir) {
+                    (Some(user), exe_dir) => {
+                        user_at = Some(0);
+                        let mut items = vec![user.dir.clone()];
+                        items.extend(exe_dir);
+                        (items, RootsOrigin::Default)
+                    }
+                    (None, Some(dir)) => (vec![dir], RootsOrigin::Default),
+                    (None, None) => {
                         return Err(RootError::ExeLocationUnavailable {
                             tried: Vec::new(),
                             origin: RootsOrigin::Default,
@@ -128,20 +142,34 @@ pub(crate) fn resolve_roots_from(
                     }
                 }
             } else {
+                if let Some(user) = user_root {
+                    // 記憶の並びに在れば記憶の順のまま、無ければ先頭へ（要件 3.2）。
+                    user_at = items.iter().position(|d| same_root(d, &user.dir));
+                    if user_at.is_none() {
+                        items.insert(0, user.dir.clone());
+                        user_at = Some(0);
+                    }
+                }
                 (items, RootsOrigin::Memory)
             }
         }
     };
 
-    // 重複は上を残して下を控える（要件 1.9）。
+    // 重複は上を残して下を控える（要件 1.9）。印の項目は同じ根の最初なので必ず残る。
     let mut kept: Vec<PathBuf> = Vec::with_capacity(items.len());
-    for dir in items {
+    let mut kept_user = None;
+    for (i, dir) in items.into_iter().enumerate() {
         match kept.iter().find(|k| same_root(k, &dir)) {
             Some(upper) => skipped.push(RootSkip::Duplicate {
                 dir,
                 kept: upper.clone(),
             }),
-            None => kept.push(dir),
+            None => {
+                if user_at == Some(i) {
+                    kept_user = Some(kept.len());
+                }
+                kept.push(dir);
+            }
         }
     }
 
@@ -162,7 +190,17 @@ pub(crate) fn resolve_roots_from(
         });
     }
     Ok(ResolvedRoots {
-        roots: BasewareRoots::new(kept.into_iter().map(BasewareRoot::new).collect()),
+        roots: BasewareRoots::new(
+            kept.into_iter()
+                .enumerate()
+                .map(|(i, dir)| match user_root {
+                    Some(user) if kept_user == Some(i) => {
+                        BasewareRoot::user_root(dir, user.origin == UserRootOrigin::EnvVar)
+                    }
+                    _ => BasewareRoot::new(dir),
+                })
+                .collect(),
+        ),
         origin,
         status,
         skipped,

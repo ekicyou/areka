@@ -14,7 +14,6 @@ use areka_user_data::{CopyDone, Layout, UserRoot};
 use super::ROOTS_ENV;
 
 /// プロセスに 1 つの形（初回に `establish` を 1 回だけ呼んで覚える）。
-#[allow(dead_code)] // 読み手は default_app_profile_dir（task 3.1）と listed_user_root
 pub(crate) fn layout() -> &'static Layout {
     static LAYOUT: OnceLock<Layout> = OnceLock::new();
     LAYOUT.get_or_init(|| {
@@ -24,7 +23,6 @@ pub(crate) fn layout() -> &'static Layout {
 }
 
 /// 並びに入れる書ける根（`AREKA_ROOT` が在るとき・今の形のときは `None`）。読み手は `resolve_roots` だけ。
-#[allow(dead_code)] // 読み手は resolve_roots（task 2.3）
 pub(crate) fn listed_user_root() -> Option<&'static UserRoot> {
     listed_from(std::env::var_os(ROOTS_ENV).as_deref(), layout())
 }
@@ -149,7 +147,6 @@ pub(crate) fn copy_for_write(
 }
 
 /// 実行ファイルのフォルダ（`exe_location` の親・環境変数を読まず物も作らない）。
-#[allow(dead_code)] // 呼び手は layout と writable_copy（上の 2 つと同じ時期に生きる）
 fn exe_dir() -> Option<PathBuf> {
     crate::boot_config::exe_location()
         .and_then(Path::parent)
