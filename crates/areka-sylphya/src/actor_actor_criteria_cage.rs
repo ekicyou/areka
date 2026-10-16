@@ -20,7 +20,7 @@ fn spawn_with_mirror_observer() -> (SharedMirror, SylphyaPublisher, areka_actor:
     let actor_shared = shared.clone();
     let io: Box<dyn PersistIo> = Box::new(FakePersistIo::new());
     let (tx, handle) = areka_actor::spawn_actor::<SylphyaMsg, _>("sylphya-epoch-cage", move |rx| {
-        run_actor(rx, actor_shared, ScopeRoots::default(), io, None);
+        run_actor(rx, actor_shared, ScopeRoots::default(), io, None, None);
     });
     (shared, SylphyaPublisher { tx }, handle)
 }

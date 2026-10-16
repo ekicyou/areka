@@ -58,7 +58,7 @@ mod test_log_capture;
 // --- 公開面 re-export（後続タスクが素直に使えるよう主要型を crate 直下へ）---
 pub use actor::{
     Effect, RuntimeCommandSink, SetClass, SylphyaCore, SylphyaInit, SylphyaMsg, SylphyaParts,
-    SylphyaPublisher, classify_set, spawn_sylphya,
+    SylphyaPublisher, classify_set, spawn_sylphya, spawn_sylphya_with_failures,
 };
 pub use asker::{AskerContext, AskerId};
 pub use key::{KeyParseError, PathSeg, PropPath, Selector, parse_dotted};

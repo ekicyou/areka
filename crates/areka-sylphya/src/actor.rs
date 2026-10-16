@@ -27,8 +27,8 @@ use crate::asker::AskerId;
 use crate::key::parse_dotted;
 use crate::mirror::{MirrorImage, SharedMirror};
 use crate::persist::{
-    PersistFailure, PersistFailureCause, PersistIo, PersistKey, PersistOutcome, PersistScope,
-    ScopeRoots, load_scope, save_scope,
+    PersistFailure, PersistIo, PersistKey, PersistOutcome, PersistScope, ScopeRoots, load_scope,
+    save_scope,
 };
 use crate::reader::SylphyaReader;
 use crate::vocab::dotted::{DOTTED_ROOTS, GENERIC_PROP_NAMES, SET_EFFECTIVE};
@@ -37,6 +37,9 @@ use std::sync::mpsc::Sender;
 
 /// ログ target（steering: areka-log-first-no-silent-failure・design Monitoring 固定名）。
 const LOG_TARGET: &str = "areka_sylphya::actor";
+
+/// 永続の失敗まわりのログ target（`persist` と同じ名・design「書き手のアクターの受け口」）。
+const PERSIST_LOG_TARGET: &str = "areka_sylphya::persist";
 
 /// sylphya アクター宛メッセージ封筒（`areka-actor` envelope 規約・design Service Interface）。
 ///
@@ -546,6 +549,16 @@ impl SylphyaPublisher {
 /// join 検出・拡張機構なし）に載る素のスレッド 1 本で、[`SylphyaCore::apply`] の効果列を直列
 /// 実行する（single-writer）。結線（どの供給者が何を publish するか）は呼び出し側の領分。
 pub fn spawn_sylphya(init: SylphyaInit) -> SylphyaParts {
+    spawn_sylphya_with_failures(init, None)
+}
+
+/// [`spawn_sylphya`] の派生（[`SylphyaInit`] に欄を足さない・spec areka-P0-write-failure-notice
+/// 要件 1.3）。`failures` が `Some` なら、投函の保存が `Degraded` になるたびに中身を 1 件送る
+/// （成功では送らない）。アクターは直列なので、同じ書き手の失敗は投函の順に届く。
+pub fn spawn_sylphya_with_failures(
+    init: SylphyaInit,
+    failures: Option<Sender<PersistFailure>>,
+) -> SylphyaParts {
     let SylphyaInit {
         roots,
         io,
@@ -559,7 +572,7 @@ pub fn spawn_sylphya(init: SylphyaInit) -> SylphyaParts {
     // 2. 供給アクターを spawn（inbox は spawn_actor が内部生成・body が Receiver を単独所有）。
     let actor_shared = shared.clone();
     let (tx, handle) = areka_actor::spawn_actor::<SylphyaMsg, _>("sylphya", move |rx| {
-        run_actor(rx, actor_shared, roots, io, runtime_sink);
+        run_actor(rx, actor_shared, roots, io, runtime_sink, failures);
     });
 
     // 3. 読み口・送信端・ハンドルを返す（reader は初期像を保持する shared を共有）。
@@ -604,6 +617,7 @@ fn run_actor(
     roots: ScopeRoots,
     io: Box<dyn PersistIo>,
     runtime_sink: Option<Box<dyn RuntimeCommandSink>>,
+    failures: Option<Sender<PersistFailure>>,
 ) {
     let core = SylphyaCore::new();
     loop {
@@ -649,7 +663,19 @@ fn run_actor(
                 Effect::PersistSave { scope, entries } => {
                     // write-through: 注入 IO で当該スコープを原子的保存。失敗は save_scope が
                     // error!＋Degraded で縮退（panic しない・R6.7）——ここは結果を reply へ中継。
-                    persist_outcome = Some(save_scope(scope, &roots, io.as_ref(), entries));
+                    let outcome = save_scope(scope, &roots, io.as_ref(), entries);
+                    if let (PersistOutcome::Degraded(failure), Some(failures)) =
+                        (&outcome, failures.as_ref())
+                        && failures.send(failure.clone()).is_err()
+                    {
+                        // 失敗そのものは save_scope が記録済み。受け手が落ちていても続ける。
+                        tracing::warn!(
+                            target: PERSIST_LOG_TARGET,
+                            scope = ?scope,
+                            "persist failure receiver closed; failure not forwarded (continuing)"
+                        );
+                    }
+                    persist_outcome = Some(outcome);
                 }
                 Effect::RuntimeCommandReserved { asker, key, value } => {
                     // SET 運行コマンド。M1 は sink 未登録（apply 側 warn 済み）→ 配送なし。
@@ -683,21 +709,23 @@ fn run_actor(
             }
             SylphyaMsg::PersistPut {
                 scope,
-                entries,
                 reply: Some(reply),
-            } => {
-                // 仮の中身（PersistPut は必ず PersistSave を出すので起きない）。task 1.2 で
-                // error! を残して返信端を落とす扱いへ替える。
-                let outcome = persist_outcome.unwrap_or_else(|| {
-                    PersistOutcome::Degraded(PersistFailure {
-                        scope,
-                        dir: None,
-                        keys: entries.iter().map(|(key, _)| *key).collect(),
-                        cause: PersistFailureCause::NoRoot,
-                    })
-                });
-                let _ = reply.send(outcome);
-            }
+                ..
+            } => match persist_outcome {
+                Some(outcome) => {
+                    let _ = reply.send(outcome);
+                }
+                None => {
+                    // PersistPut は必ず PersistSave を出すので起きない。中身を作らず返信端を落とす
+                    // （受け手は ReplyError::Dropped を見る）。panic しない。
+                    tracing::error!(
+                        target: LOG_TARGET,
+                        scope = ?scope,
+                        "persist put produced no save outcome; dropping reply"
+                    );
+                    drop(reply);
+                }
+            },
             _ => {}
         }
 
@@ -711,6 +739,11 @@ fn run_actor(
 #[cfg(test)]
 #[path = "actor_tests.rs"]
 mod tests;
+
+/// 書き手のアクターの失敗の受け口（spec areka-P0-write-failure-notice タスク 1.2）。
+#[cfg(test)]
+#[path = "actor_failure_sink_tests.rs"]
+mod failure_sink_tests;
 
 /// Task 5.2 アクター統合 決定論檻: spawn→publish→barrier→read の配線・barrier フェンス・
 /// アクター死亡観測（SendError／ReplyError／join panic）・reader 無ブロック・write-through 投影。
