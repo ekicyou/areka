@@ -330,9 +330,105 @@ pub fn poll_exit_kind(handle: &mut HelperHandle) -> Option<ExitKind> {
     }
 }
 
+/// helper の判定の記録の宛先（出す側＝`shiori-host32-host` の名前）。
+///
+/// `RUST_LOG` は **target 名**で指定する（`shiori-host32=debug`）。
+const LOG_TARGET: &str = "shiori-host32";
+
+/// PE の機械の種類 i386（32bit の SHIORI を読める helper の印）。
+const IMAGE_FILE_MACHINE_I386: u16 = 0x014C;
+
+/// helper の見出しとして読む先頭の上限。
+// ponytail: 先頭 4 KiB だけを見る。PE の見出しをこれより後ろに置く実行ファイルは `NotPe`
+// （警告）になる。MSVC の linker が作る helper の `e_lfanew` は 0x100 前後なので当たらない。
+// 当たったら `e_lfanew` へ seek して読む形へ広げる。
+const HELPER_HEAD_LIMIT: u64 = 4096;
+
+/// helper の実行ファイルの見出しが示す形（判定の結果）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HelperImage {
+    /// `MZ`・`PE\0\0`・機械の種類 0x014c（i386）。32bit の SHIORI を読める。
+    I686,
+    /// PE だが機械の種類が i386 でない（例: 0x8664＝x64・0xAA64＝arm64）。
+    OtherMachine(u16),
+    /// `MZ` が無い・`e_lfanew` が読んだ範囲の外・`PE\0\0` が無い。
+    NotPe,
+}
+
+/// 見出しのバイト列だけから判定する純粋な関数（I/O なし・決定論）。
+fn classify_helper_image(head: &[u8]) -> HelperImage {
+    let machine = (|| {
+        if head.get(0..2)? != b"MZ" {
+            return None;
+        }
+        let e_lfanew =
+            usize::try_from(u32::from_le_bytes(head.get(0x3C..0x40)?.try_into().ok()?)).ok()?;
+        if head.get(e_lfanew..e_lfanew.checked_add(4)?)? != b"PE\0\0" {
+            return None;
+        }
+        let at = e_lfanew + 4;
+        Some(u16::from_le_bytes(head.get(at..at + 2)?.try_into().ok()?))
+    })();
+    match machine {
+        Some(IMAGE_FILE_MACHINE_I386) => HelperImage::I686,
+        Some(m) => HelperImage::OtherMachine(m),
+        None => HelperImage::NotPe,
+    }
+}
+
+/// 判定の結果を記録する（`I686` は何も出さない・ほかはどれも 1 行）。
+///
+/// 記録だけを行い、helper の起こし方は変えない（判定は助言であり、失敗の道を作らない）。
+fn report_helper_image(helper_exe: &Path, image: std::io::Result<HelperImage>) {
+    match image {
+        Ok(HelperImage::I686) => {}
+        Ok(HelperImage::OtherMachine(machine)) => tracing::error!(
+            target: LOG_TARGET,
+            event = "helper_not_i686",
+            path = %helper_exe.display(),
+            machine = %format_args!("{machine:#06x}"),
+            "helper が 32bit（i686）版でないので 32bit の SHIORI を読めない——このパスへ i686 版の \
+             shiori-host32-helper.exe を置くこと"
+        ),
+        Ok(HelperImage::NotPe) => tracing::warn!(
+            target: LOG_TARGET,
+            event = "helper_image_unverified",
+            path = %helper_exe.display(),
+            reason = "not a PE image",
+            "helper の向きを確かめられなかった（実行ファイルの形をしていない）——起こし方は変えずに続ける"
+        ),
+        Err(e) => tracing::warn!(
+            target: LOG_TARGET,
+            event = "helper_image_unverified",
+            path = %helper_exe.display(),
+            error = %e,
+            "helper の向きを確かめられなかった（読めない・無い）——起こし方は変えずに続ける"
+        ),
+    }
+}
+
+/// 先頭の最大 [`HELPER_HEAD_LIMIT`] バイトを読み、判定して記録する。
+///
+/// 読み終えたら閉じる（ロックを持ち続けない）。見るのは渡されたパスだけ（探さない）。
+// タスク 2.2 で `spawn` の最初の文から呼ぶまでは本番の呼び手が無い。
+#[allow(dead_code)]
+fn check_helper_image(helper_exe: &Path) {
+    use std::io::Read;
+    let image = std::fs::File::open(helper_exe).and_then(|file| {
+        let mut head = Vec::new();
+        file.take(HELPER_HEAD_LIMIT).read_to_end(&mut head)?;
+        Ok(classify_helper_image(&head))
+    });
+    report_helper_image(helper_exe, image);
+}
+
 #[cfg(test)]
 #[path = "process_host_console_tests.rs"]
 mod console_tests;
+
+#[cfg(test)]
+#[path = "process_host_image_tests.rs"]
+mod image_tests;
 
 #[cfg(test)]
 mod tests {
