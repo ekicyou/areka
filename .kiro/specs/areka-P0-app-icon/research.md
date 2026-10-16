@@ -312,3 +312,8 @@
 - [CreateIconFromResourceEx](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-createiconfromresourceex) — `RT_ICON` の中身から絵を作る
 - [The evolution of the ICO file format, part 4: PNG images](https://devblogs.microsoft.com/oldnewthing/20101022-00/?p=12473) — PNG の絵は 32 ビット ARGB で、PNG の頭から始まる
 - [ICO (file format)](https://en.wikipedia.org/wiki/ICO_(file_format)) — 目録の形（256 は 0 と書く）
+
+## 設計の討議（2026-10-16）
+
+- **議題 2（推奨案で確定）**: 寸法ごとの PNG を 16 枚ともコミットして正本にし、道具の作り直しは「並べて組むだけ」にした。GDI+ で縮めるのは、無い寸法を 1 度だけ作る `-Seed` に分けた。理由: 縮めた絵のバイトは OS の版で変わりうるので、組むたびに縮めると、入力を変えていないのに机によって差分が出る（要件 5.5 の狙いが崩れる）。結合テストのバイトの突き合わせも 16 枚すべてに効くようになる。上の Synthesis の「在れば使い、無ければ縮める」の決まりと、Risks の GDI+ の項はこれで置き換わる。
+- **議題 3（推奨案で確定）**: README の権利は 2 つに分けて書く。女の子の絵・組み合わせ・色・縁取りは areka 本体（MIT）の一部。うにゅうの輪郭は元祖の伺かの相方の形に由来し、開発者の判断で使うもの。areka は元の形の権利を持たず、MIT の許諾はそこに及ばない。`dist/README.txt` には足さない（要件 5.9 の今の判断のまま）。
