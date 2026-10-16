@@ -138,14 +138,14 @@
   - 完了の状態: 実機テストが `#[ignore]` のまま組み上がる（走らせての確かめは 7.1）
   - _Requirements: 9.1, 9.3_
 
-- [ ] 7. 仕上げの確かめ
+- [x] 7. 仕上げの確かめ
 - [x] 7.1 実機テストを短い形で 1 回走らせ、`--help` の差を確かめる
   - 置き場所をワークツリーの `target\` の下の Windows 形の絶対パスで上書きして、実機テストを短い形（`--skip a_waiter_reclaims`）で 1 回走らせ、⑦ と (h5) の直しを含めて緑を確かめる
   - 5.2 で控えた直す前の `--help` と後の実行ファイルの `--help` を並べ、差が `clear --repo` の 1 行の足しだけであることを確かめて記録する（控えは 1.x〜5.1 の後の実物から取るが、それらは `--help` を変えないので直す前と同じ）
   - 完了の状態: 実機テストの緑と `--help` の差がこのファイルの記録にある
   - _Depends: 2.3, 5.2, 6.5_
   - _Requirements: 1.6, 8.5, 9.3, 10.1, 10.6, 11.10_
-- [ ] 7.2 変えないものと置き方の決まりを確かめる
+- [x] 7.2 変えないものと置き方の決まりを確かめる
   - クレートの常時テストが全部緑・本番とテストのファイルが全部 1,000 行以下・新しいテストが兄弟のファイルにあることを確かめる
   - `Cargo.toml`・`Cargo.lock`・`doc/impl-watch.md`・完了した spec の文書・`--help` の今ある行に差が無いことを、差分の対象が実在することを確かめた上で記録する
   - 状態ファイルの書き出しの失敗が今どおり失敗であること、失敗にしない例外が設計の 4 つだけであること、設計の末尾の移さない理由（6.4・8.2・9.1）と申し送り（6.5）が実物と合っていることを確かめる
@@ -177,3 +177,41 @@
   ```
         clear --repo <repo>: leave everyone of the repo and empty its merge desk (the last merge stays). prints "cleared repo=<repo>; left: <ids or none>". 0=done
   ```
+
+### 7.2
+
+基準は `git merge-base HEAD main` ＝ `1e6590d8`。
+
+- 常時テスト: `cargo test -p areka-impl-watch` → 単体 `279 passed; 0 failed; 0 ignored`、`tests\real.rs` は `0 passed; 0 failed; 11 ignored`（実機テストは明示したときだけ走るまま・要件 8.5）。`cargo fmt --all -- --check` は終了コード 0。`cargo clippy -p areka-impl-watch --all-targets` の警告は 0 件・エラーは 0 件。
+- 行数（要件 10.5）: `src\*.rs`・`tests\*.rs`・`tests\real\*.rs` の 33 本で最大は `cli.rs` と `cli_tests.rs` の 893 行。1,000 行を超えるファイルは 0 本。
+- 兄弟のファイル（要件 10.5）: 本番ファイル 10 本（`cli`・`error`・`home`・`main`・`plan`・`presence`・`state`・`status`・`store`・`wait`）の `#[test]` は各 0 件、差分で足された `#[test]` も 0 件。新しいテストファイルは `plan_clear_tests.rs` の 1 本（`plan.rs` の `#[path = "plan_clear_tests.rs"] mod clear_tests;`）で、ほかの新しいテストは今ある `*_tests.rs` に足した。
+- 差分が 0 のもの（対象の実在は `git ls-files -- <パス>` の件数で先に確かめた・作業ツリーの未コミットの差も 0）:
+
+  | 対象 | `git ls-files` の件数 | `git diff --stat 1e6590d8..HEAD` の行数 |
+  |---|---|---|
+  | `Cargo.toml` | 1 | 0 |
+  | `Cargo.lock` | 1 | 0 |
+  | `crates/areka-impl-watch/Cargo.toml` | 1 | 0 |
+  | `doc/impl-watch.md` | 1 | 0 |
+  | `.kiro/specs/completed`（完了した spec の文書） | 2060 | 0 |
+  | `crates/areka-impl-watch/src/main.rs` | 1 | 0 |
+  | `crates/areka-impl-watch/src/home.rs` | 1 | 0 |
+  | `crates/areka-impl-watch/src/presence.rs` | 1 | 0 |
+
+  差分のあるファイルは `crates/areka-impl-watch/` と `.kiro/specs/areka-P0-impl-watch-residue/` の下だけで、その外は 0 本（ワークスペースの迂回の見張りの例外表も変わっていない・要件 8.4）。
+- `--help` の今ある行（要件 10.1, 10.7）: `AREKA_IMPL_WATCH_HOME` を `C:\home\maz\git\areka\.claude\worktrees\areka-p0-watch-residue-a89e79\target\real-home-7-2` に上書きして `target\debug\areka-impl-watch.exe --help` を `target\help-after-7-2.txt` へ取り（終了コード 0・置き場所のフォルダは作られない）、`git diff --no-index --stat target\help-before.txt target\help-after-7-2.txt` → `1 insertion(+)`・削除 0 行。足されたのは 7.1 の `clear --repo <repo>: …` の 1 行だけ。
+- 状態ファイルの形式の版とコマンド（要件 10.2）: `state.rs` の `pub const VERSION: u32 = 1;` は基準と同じ。`state.rs` の差分は `git diff --numstat` で `+22/-0` で、中身は `ParticipantStatus::as_str` と `RecentKind::as_str` の 2 つの `impl` だけなので、書き出す形は変わらない。`cli.rs` のコマンドの表の `name:` の並び（15 個）は、`git show 1e6590d8:crates/areka-impl-watch/src/cli.rs | grep -o 'name: "[a-z-]*"'` と今のファイルから同じように抜いたものを `diff` で比べて差 0。足したのは今ある `clear` の `--repo` の形の `plan::Command::ClearRepo` だけで、新しいコマンド名は 0 個。
+- ASCII と判断の核の綴り（要件 10.4）: `main_layering_tests.rs` の構造テスト `files_that_write_to_the_terminal_have_ascii_only_literals`（ASCII の走査）と `the_judgement_core_spells_no_file_clock_process_or_log`（判断の核が `std::fs`・時計・`tracing` を綴らない）は、上の `279 passed; 0 failed` の中で緑。
+- 状態ファイルの書き出しの失敗（要件 7.3）: `Store::change` の `self.write_state(&state)?` が失敗を返し、`with_state` が `error!` を残す。`store_tests.rs` の `a_failed_write_of_the_state_leaves_the_original_files_as_they_were` が `Err(Io { op: "write state.json", .. })` と状態ファイル・読み物が元のままを判定して緑。
+- 失敗にしない例外（要件 7.1, 7.2, 7.4）: 本番ファイルで失敗を `warn!` に代えて先へ進む所は次の 4 か所だけで、設計の「失敗にしないもの」の表の 4 行と所も字面も一致。
+  - `store.rs` `write_status` → `[store] status.md not written; the result stands`
+  - `wait.rs` `run` の周期の `Tick` → `[wait] periodic round failed; still waiting`
+  - `wait.rs` `run` の `finish` → `[wait] wait record not removed; left to be reclaimed`
+  - `presence.rs` `unsure` → `[presence] probe failed; treated as present`
+
+  ほかの `warn!` は `store.rs` `write_line` の `[store] state file was broken; set aside`（退避の出来事の記録で、失敗を飲む道ではない）だけ。`let _ =` の 6 か所（ロックの解除 3＝`presence.rs` 2・`store.rs` 1、ログの受け手の 2 度目 1、一時ファイルの消去 1、標準エラーへの書き 1＝`cli.rs`）は、設計の棚卸（要件 7.5）の「失敗で終わる道の中の後始末」に当たる。
+- 設計の末尾と実物の突き合わせ:
+  - 移さない理由 6.4: `store_ports_tests.rs` の `the_last_unregister_releases_the_presence_mark_inside_the_exclusion` が順の不変を判定している（4.1 の変異で赤）。
+  - 移さない理由 8.2: 読み物の警告の行は実機テスト `tests\real.rs` の 605 行目（`WARN` と `: [store] status.md not written`）、`command=`・`event=` の項目は 571 行目で判定している。`Cargo.toml`・`Cargo.lock` の差分は上の表のとおり 0（要件 8.3）。
+  - 移さない理由 9.1: (h1)〜(h8) は 8 件とも採ってあり（6.1〜6.5・変異の記録）、採らない理由の行が無いことと合う。
+  - 申し送り 6.5: `doc/impl-watch.md` の 365 行目に「見張りが停止要請で終わるのと同時に再開が入り…ごくまれに起きる」の一文が書き替えられずに残り（差分 0）、設計の「申し送り」節が `areka-P0-impl-watch-skills` の要件 9.4 への申し送りとして記録している。
