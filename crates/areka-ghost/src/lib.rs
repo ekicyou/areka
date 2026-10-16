@@ -54,6 +54,8 @@ pub use runtime::{
 // baseware-root-layout: 根の目録（列挙と素性）。bin は `areka_ghost::catalog::…` で引く。
 pub use catalog::{BalloonEntry, BasewareRoot, GhostEntry, Identity, ShellEntry, sakura_name};
 // baseware-root-list: 根の並びと、フォルダ名・根の比べ方。
-pub use catalog_roots::{BasewareRoots, fold_key, same_folder_name, same_root};
+pub use catalog_roots::{
+    BasewareRoots, Hidden, InstallRoot, StoreKind, Survey, fold_key, same_folder_name, same_root,
+};
 // task 2.3: InProc 結線の connect closure 構成関数（D-3・テストの Recorder 合成と α 後の直接利用に供する）。
 pub use shiori_inproc::inproc_connect;

@@ -3,10 +3,12 @@
 //! 並びは呼び手（bin）が決めた順のまま持つ（上ほど先に探す）。重複を除くのは作り手。
 //! 見つからない根も並びに残り、在否（`is_dir`）は呼ぶたびに見直す（要件 9.3）。
 //! フォルダ名の同じ・違う（要件 2.8）と同じ根（要件 1.9）の規則を 1 つずつ持つ。
+//! 並び全体の和・隠れ・引き当て・入れる根は、どれも同じ和（`union`）の上で決める（要件 2.6）。
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::catalog::BasewareRoot;
+use crate::catalog::{self, BalloonEntry, BasewareRoot, GhostEntry};
 
 /// 根の順の付いた並び（上ほど先に探す）。重複を除くのは作り手。
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -42,6 +44,154 @@ impl BasewareRoots {
     pub fn balloon_stores(&self) -> Vec<PathBuf> {
         self.present().map(BasewareRoot::balloon_store).collect()
     }
+}
+
+/// 隠れの種類（ゴーストとバルーンは別々に判断する＝要件 2.4）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StoreKind {
+    Ghost,
+    Balloon,
+}
+
+/// 隠れた 1 件。`hidden` は隠れたフォルダ、`by` は隠したフォルダ（どちらも絶対）。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Hidden {
+    pub kind: StoreKind,
+    pub folder: String,
+    pub hidden: PathBuf,
+    pub by: PathBuf,
+}
+
+/// 和と隠れ（起動と並びの変更のときの記録用）。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Survey {
+    pub ghosts: Vec<GhostEntry>,
+    pub balloons: Vec<BalloonEntry>,
+    pub hidden: Vec<Hidden>,
+}
+
+/// 見つかる根を上から走査して和を組み、隠れを控える（要件 2.2〜2.4・2.7・3.1〜3.3）。
+pub fn survey(roots: &BasewareRoots) -> Survey {
+    let mut hidden = Vec::new();
+    let ghosts = union(
+        roots,
+        StoreKind::Ghost,
+        catalog::list_ghosts,
+        |e: &GhostEntry| (&e.identity.folder, &e.dir),
+        &mut hidden,
+    );
+    let balloons = union(
+        roots,
+        StoreKind::Balloon,
+        catalog::list_balloons,
+        |e: &BalloonEntry| (&e.identity.folder, &e.dir),
+        &mut hidden,
+    );
+    Survey {
+        ghosts,
+        balloons,
+        hidden,
+    }
+}
+
+/// 隠れを除いたゴーストの和（フォルダ名のバイト順）。
+pub fn list_ghosts(roots: &BasewareRoots) -> Vec<GhostEntry> {
+    union(
+        roots,
+        StoreKind::Ghost,
+        catalog::list_ghosts,
+        |e: &GhostEntry| (&e.identity.folder, &e.dir),
+        &mut Vec::new(),
+    )
+}
+
+/// 隠れを除いたバルーンの和（フォルダ名のバイト順）。
+pub fn list_balloons(roots: &BasewareRoots) -> Vec<BalloonEntry> {
+    union(
+        roots,
+        StoreKind::Balloon,
+        catalog::list_balloons,
+        |e: &BalloonEntry| (&e.identity.folder, &e.dir),
+        &mut Vec::new(),
+    )
+}
+
+/// 和からフォルダ名で 1 つ（`same_folder_name`・要件 2.1・2.6）。
+pub fn find_ghost(roots: &BasewareRoots, folder: &str) -> Option<GhostEntry> {
+    list_ghosts(roots)
+        .into_iter()
+        .find(|e| same_folder_name(&e.identity.folder, folder))
+}
+
+/// 和からフォルダ名で 1 つ（`same_folder_name`・要件 2.1・2.6）。
+pub fn find_balloon(roots: &BasewareRoots, folder: &str) -> Option<BalloonEntry> {
+    list_balloons(roots)
+        .into_iter()
+        .find(|e| same_folder_name(&e.identity.folder, folder))
+}
+
+/// 入れる根。見えているものがあればその根、無ければ見つかるいちばん上の根。
+/// `head_skipped` は先頭の根が見つからず飛ばしたときのその根（要件 5.2 の記録用）。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InstallRoot {
+    pub root: PathBuf,
+    pub head_skipped: Option<PathBuf>,
+}
+
+/// 入れる根を決める（要件 5.1〜5.3）。見つかる根が 1 つも無ければ `None`。
+pub fn install_root(roots: &BasewareRoots, kind: StoreKind, folder: &str) -> Option<InstallRoot> {
+    let visible = match kind {
+        StoreKind::Ghost => find_ghost(roots, folder).map(|e| e.root),
+        StoreKind::Balloon => find_balloon(roots, folder).map(|e| e.root),
+    };
+    if let Some(root) = visible {
+        return Some(InstallRoot {
+            root,
+            head_skipped: None,
+        });
+    }
+    let top = roots.present().next()?.dir().to_path_buf();
+    let head_skipped = roots
+        .roots()
+        .first()
+        .filter(|head| !head.dir().is_dir())
+        .map(|head| head.dir().to_path_buf());
+    Some(InstallRoot {
+        root: top,
+        head_skipped,
+    })
+}
+
+/// 見つかる根を上から 1 根ずつ走査して足す。同じフォルダ名がすでにあれば隠れとして控える。
+/// 最後にフォルダ名のバイト順に並べ直す。
+fn union<E>(
+    roots: &BasewareRoots,
+    kind: StoreKind,
+    scan: fn(&BasewareRoot) -> Vec<E>,
+    key: impl Fn(&E) -> (&String, &PathBuf),
+    hidden: &mut Vec<Hidden>,
+) -> Vec<E> {
+    let mut seen: HashMap<String, PathBuf> = HashMap::new();
+    let mut out = Vec::new();
+    for root in roots.present() {
+        for entry in scan(root) {
+            let (folder, dir) = key(&entry);
+            match seen.get(&fold_key(folder)) {
+                Some(by) => hidden.push(Hidden {
+                    kind,
+                    folder: folder.clone(),
+                    hidden: dir.clone(),
+                    by: by.clone(),
+                }),
+                None => {
+                    seen.insert(fold_key(folder), dir.clone());
+                    out.push(entry);
+                }
+            }
+        }
+    }
+    out.sort_by(|a, b| key(a).0.cmp(key(b).0));
+    out
 }
 
 /// フォルダ名の同じ・違う（要件 2.8 の 1 つの規則）。
