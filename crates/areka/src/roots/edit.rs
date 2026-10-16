@@ -87,7 +87,6 @@ pub(crate) fn decide_remove(
 }
 
 /// UI スレッドの入口: 置き場を足す（判断・適用・記録・design「RootsEdit」）。
-#[allow(dead_code)] // 呼び手は置き場を選ぶ画面の受け口（tasks.md 5.5）
 pub(crate) fn add_root(world: &mut World, picked: PathBuf) {
     let Some(ctx) = world.get_resource::<BootContext>() else {
         tracing::error!(

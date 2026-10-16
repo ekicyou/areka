@@ -208,8 +208,8 @@ where
     }
 }
 
-/// 選ぶ画面が出ている旗（落ちると降りる）。
-struct PickingFlag(Arc<AtomicBool>);
+/// 選ぶ画面が出ている旗（落ちると降りる・置き場を選ぶ画面の受け口 `roots::desk` も使い回す）。
+pub(crate) struct PickingFlag(pub(crate) Arc<AtomicBool>);
 
 impl Drop for PickingFlag {
     fn drop(&mut self) {

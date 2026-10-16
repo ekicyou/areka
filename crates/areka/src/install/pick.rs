@@ -28,7 +28,7 @@ const PATH_CAPACITY: usize = 32 * 1024;
 /// 選ぶ画面を出せなかった理由。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PickError {
-    /// COM を初期化できなかった。
+    /// COM の失敗（初期化できなかった・フォルダを選ぶ画面を作れない／出せない）。
     Com(HRESULT),
     /// 画面が失敗した（`CommDlgExtendedError` の値）。
     Dialog(u32),

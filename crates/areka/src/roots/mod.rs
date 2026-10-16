@@ -3,12 +3,13 @@
 //! 決め方の判断は [`resolve`]（純粋・値の注入だけでテストする）。プロセスの環境変数と
 //! 起動前の記憶を読むのは、この下の薄い口だけ（要件 12.7）。
 
+pub(crate) mod desk;
 mod edit;
 pub(crate) mod pick;
 pub(crate) mod report;
 mod resolve;
 
-#[allow(unused_imports)] // 使い手はメニューと受け口（tasks.md 5.5・5.6）
+pub(crate) use desk::install;
 pub(crate) use edit::*;
 pub(crate) use resolve::*;
 

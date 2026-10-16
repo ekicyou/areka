@@ -209,6 +209,7 @@ fn main() -> Result<()> {
     let (kanade_stop_tx, kanade_stop_rx) = std::sync::mpsc::channel();
     ghost_session::register_systems(app.world().borrow_mut().world_mut(), kanade_stop_rx);
     mcp::install(app.world().borrow_mut().world_mut(), mcp_inbox);
+    roots::install(app.world().borrow_mut().world_mut());
 
     // 起動の文脈と起動入力の作り口（本番版）を据える（切替と右クリックメニューの「ゴースト」枠が読む）。
     install_boot_context(
