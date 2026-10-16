@@ -86,3 +86,8 @@
 触るファイル: `.claude/skills/kiro-{impl,complete,watch}*`・`doc/impl-watch.md`・要るなら `CLAUDE.md` と `tools/` の新しいスクリプト。
 規模: 8〜12 タスク。先に要るもの: なし。`impl-watch-residue` とは、相手が `--help` の文と `doc/impl-watch.md` に触らない限り重ならない。
 優先度の区分: C。要件定義のモデル: Opus。分割: なし。
+
+## 2026-10-16 `impl-watch-residue` の完了からの申し送り
+
+- 手順書 `doc/impl-watch.md` の「見張りが停止要請で終わるのと同時に再開が入り…ごくまれに起きる」の一文は、`impl-watch-residue` の要件 6（最後の抹消と居る印の解きを同じ排他の中で行う）で窓が閉じたので古くなった（害は無い）。削除はこの spec で行う。
+- `impl-watch-residue` は `--help` に `clear --repo <repo>` の 1 行を足した（ほかの行は不変）。呼び方・結果の 1 行 `cleared repo=<repo>; left: <ids or none>`・終了コード 0 は `.kiro/specs/completed/areka-P0-impl-watch-residue/design.md` の「`clear --repo` の約束」のとおり。スキルや手順書で `clear --repo` を案内するときはそれに合わせる。
