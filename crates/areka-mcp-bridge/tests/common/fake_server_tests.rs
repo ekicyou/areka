@@ -1,5 +1,4 @@
-//! 偽の受け口の自己確認。部品のテスト（クレートの中）と通しのテスト（クレートの外）の
-//! 両方に読まれるので、それぞれの置き方で 1 回ずつ走る。
+//! 偽の受け口の自己確認。部品のテストの束（`src/lib.rs`）でだけ走る。
 
 use std::time::{Duration, Instant};
 
@@ -9,7 +8,9 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 
-use super::*;
+use areka_mcp::{MCP_PATH, SERVER_NAME};
+
+use crate::fake_server::*;
 
 async fn connect(port: u16) -> TcpStream {
     TcpStream::connect(("127.0.0.1", port))
