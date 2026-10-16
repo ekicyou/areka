@@ -65,7 +65,7 @@
 3. While このセッションが立てた見張りが走っている, the 机を使うスキル shall 見張りを重ねて立てない。
 4. The 机を使うスキル shall 参加を、`kiro-impl` の始まりから `kiro-complete` のマージの記録（`merged`）まで続ける（`kiro-impl` が GO で終わっても抜けず、完了の承認を待つ間も負荷テストの相手として止まる）。
 5. When `kiro-impl` が完了へ進まずに終わる（BLOCKED・開発者の取りやめ）, the kiro-impl skill shall 参加を終える（`leave`）。
-6. If 見張りが終了コード 1 で終わった and 標準エラーの文が `a watch wait for <識別> is already running` でない, then the 机を使うスキル shall 直ちに見張りを立て直す。
+6. If 見張りが終了コード 1 で終わった and 標準エラーの文が `a watch wait for <識別> is already running` でない, then the 机を使うスキル shall 直ちに見張りを立て直す。立て直した見張りが続けて同じ文の終了コード 1 で終わったときは、それ以上立て直さず Requirement 6.4 に従う。
 7. If 見張りが `already running` の文で終了コード 1 で終わった and 走っている見張りがこのセッションの立てたものである, then the 机を使うスキル shall 立て直さず、害の無いものとして扱う。
 8. If 見張りが `already running` の文で終了コード 1 で終わった and このセッションに見張りを立てた覚えが無い（前のセッションの残り）, then the 机を使うスキル shall プロセスを推測で止めず、手順書 6 節「同じ識別の `watch` が残っている」の「残さなくてよいとき」に従って参加を終えて（`leave`）から見張りを立て直し、その旨を開発者へ 1 行で伝える。
 9. If このセッションが参加を終えていないのに見張りが終了コード 3（記録が消えた）で終わった, then the 机を使うスキル shall 開発者へ 1 行で伝えて見張りを立て直し、持っていた申し込みがあれば申し込み直す（机を持っていたときの続きは Requirement 4.7 と 5.8）。
@@ -84,6 +84,7 @@
 7. When 見張りが `already stopped; …` の文で終了コード 0 で終わった, the 机を使うスキル shall 「止まった」を記録し直さず、再開の待ち（`resume`）を走らせる。
 8. If 再開の待ちが終了コード 3 で終わった, then the 机を使うスキル shall 見張りを立て直して作業を続ける。
 9. If 停止要請を受けた and 次にしたいことが負荷テストの申し込みである, then the 机を使うスキル shall 先に `stopped --wait` を走らせてから負荷テストを申し込む（申し込むだけでは「停止要請中」のままで、先に待っている負荷テストを止め続けるため）。
+10. If 再開の待ち（`stopped --wait`・`resume`）が `a resume wait for <識別> is already running` の文で終了コード 1 で終わった, then the 机を使うスキル shall 前の再開の待ちが走っているものとして何もせず、Requirement 6.4 の失敗として扱わない。
 
 ### Requirement 4: 負荷テストの机（kiro-impl）
 **Objective:** As a 計測をするセッション, I want 機械を独り占めする段の前に負荷テストの机の番を取ること, so that ほかの参加者が止まった静かな機械で測れる
@@ -109,7 +110,8 @@
 6. If 完了の手順を途中でやめると決めた（中断の条件・開発者の取りやめ）, then the kiro-complete skill shall その時点で申し込みと机を外し（`cancel`）、参加は続ける。直してすぐ続けるだけなら外さない。
 7. If マージの記録が終了コード 3（持ち主でない）で終わった, then the kiro-complete skill shall `status` の直前のマージに自分の PR が載っているかを見て、載っていなければ開発者へ伝える。
 8. If マージの机を持っている間に見張りが終了コード 3 で終わった（記録が消えた）, then the kiro-complete skill shall PR のマージへ進まず、見張りを立て直して申し込み直し、番が来てから既定の枝を取り込み直して続ける。
-9. The kiro-complete skill shall 完了のチェックリストの机の項目を、申し込み → 番 → マージの記録の流れ（または机が使えずに飛ばしたことと、その訳）を確かめる形にする。
+9. If マージの机の番の待ち（`merge --wait`）が終了コード 3 で終わった（申し込みが消えた）, then the kiro-complete skill shall 自分の `cancel` の後なら何もせず、それ以外は開発者へ 1 行で伝え、見張りを立ててから申し込み直す。
+10. The kiro-complete skill shall 完了のチェックリストの机の項目を、申し込み → 番 → マージの記録の流れ（または机が使えずに飛ばしたことと、その訳）を確かめる形にする。
 
 ### Requirement 6: 机が使えないとき
 **Objective:** As a 開発者, I want 机が使えないときにスキルが黙って止まらず、訳を 1 行で知らせて作業を続けること, so that 机の用意が無い機械や途中の故障で実装と完了が止まらない
@@ -144,7 +146,7 @@
 1. The リポジトリ shall 調停役のスキル `kiro-watch` のフォルダ（`SKILL.md`・`kiro-watch.ps1`・`messages.json`）を持たない。
 2. The 机を使うスキル shall 「一時停止中」の注記と、調停役へメッセージを送る文（`【kiro-watch】…` の形・セッションの一覧から調停役を探す手順）を持たない。
 3. The 今使う文書（`.claude/skills/` のスキル・`CLAUDE.md`・`.kiro/steering/` の今の規則・手順書）shall 調停役のセッションを今使うものとして指さない。
-4. The この spec の変更 shall 過去の記録（完了した spec・roadmap の履歴の行・リリースノートの見本）を書き替えない。
+4. The この spec の変更 shall 過去の記録（完了した spec・roadmap の履歴の行・リリースノートの見本 `tools/release-notes-fixture/`・生成済みの俯瞰の HTML `doc/roadmap-overview-*.html`）を書き替えない。
 5. The スキル `kiro-watch-clear` shall 説明の文から、調停役のセッションの状態への言及を、調停役が無い今の形に合わせる。
 6. The 手順書 shall 1 節の「スキルが書き替わるまでは、完了の手順は今の調停役の机を使う」の文を、スキルがアプリを呼ぶ今の形に書き直す（調停役との違いの表は経緯として残してよい）。
 
