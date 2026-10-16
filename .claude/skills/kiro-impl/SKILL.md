@@ -238,27 +238,103 @@ For tasks that add or change behavior, enforce RED → GREEN with a feature flag
 
 **Skip this protocol for**: refactoring, configuration, documentation, or tasks with no behavioral change.
 
-## Coordination with kiro-watch (only when the coordinator is running)
+## Desk coordination (areka-impl-watch)
 
-> **SUSPENDED (developer, 2026-10-10)**: kiro-watch coordination is paused. Skip this whole section — do not look for the coordinator and do not send any `【kiro-watch】` message, even if a session titled kiro-watch exists. To resume, delete this note.
+Parallel sessions share the desks of the console app `areka-impl-watch.exe` (participants, stop requests, the load-test desk, the merge desk). The app's state is the source of truth; this section is the convention for calling it. Runbook: `doc/impl-watch.md`.
 
-When a session titled **kiro-watch** (not archived) appears in the session list (`mcp__ccd_session_mgmt__list_sessions`), this session takes part in its desk coordination (developer, 2026-10-08). If there is no such session, skip this whole section. Send to its `local_...` id with SendMessage (or `mcp__ccd_session_mgmt__send_message`). Message texts stay in Japanese exactly as below.
+- **Only the main conversation calls desk commands.** Implementer, reviewer, debugger and validator subagents never run `areka-impl-watch.exe` (one session = one participant).
+- **One session per worktree uses the desk.** Two sessions in the same worktree get the same id and remove each other's watch.
+- The desk is a helper. When it cannot be used, skip the desk steps for this run only and keep working; never let the desk stop implementation.
 
-- **Join** once at the start of the run (Step 1), before dispatching the first task:
-  ```
-  【kiro-watch】参加します
-  repo: <repository name, e.g. areka>
-  ```
-- **Load tests**: before any step that needs the machine to itself (a quiet-CPU measurement, a deliberate CPU-load reproduction, a timing benchmark), request the load-test desk and do not start that step until "どうぞ" arrives:
-  ```
-  【kiro-watch】テストしたい
-  repo: <repository name>
-  内容: <what will run and roughly how long>
-  ```
-  Ordinary per-task test runs (crate tests, clippy, `tools/test-all.ps1`) are not load tests and need no request.
-  While waiting, continue with tasks that do not need the desk; if none remain, report "waiting for kiro-watch" and end the turn. When the measurement is done, send `【kiro-watch】済みました` at once — every other participant is stopped until then.
-- **Stop requests**: when kiro-watch asks this session to stop, finish the current task iteration through its commit (implementer → review → verify → mark `[x]` → commit). Never cut a running test or a subagent in the middle. Then send `【kiro-watch】停止しました`, report "stopped for kiro-watch" to the developer and end the turn. Continue from the next task only when `再開してよい` (or the cancel message) arrives. Do not start Step 4 (final validation) while stopped.
-- **Leaving without completing** (the run is abandoned or ends BLOCKED): send `【kiro-watch】抜けます`. Completion itself is coordinated by `/kiro-complete` (merge desk), which also ends the participation.
+### Desk preflight (one foreground Bash, once at the start of the run)
+
+```bash
+ID=$(basename "$(git rev-parse --show-toplevel)"); R=$(basename "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")")
+if [ -z "$AREKA_IMPL_WATCH_HOME" ]; then echo "desk: skip no-home"
+elif [ ! -f "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" ]; then echo "desk: skip no-exe"
+elif ! [[ "$ID" =~ ^[A-Za-z0-9._-]{1,100}$ && "$R" =~ ^[A-Za-z0-9._-]{1,100}$ ]]; then echo "desk: skip bad-name $ID $R"
+else echo "desk: id=$ID repo=$R"; fi
+```
+
+- `<ID>` (`--id`) is the name of the worktree's top folder, so a new Claude session in the same worktree gets the same id.
+- `<R>` (`--repo`) is the name of the folder that holds the common git folder (`.git`); it is the same from every worktree of the repository. Do not use the `origin` URL (it may carry credentials).
+- `--name` (and `merge --spec`) is the spec name `<feature>`.
+- `desk: skip no-home|no-exe|bad-name`: do not make up other values. Remember the reason, tell the developer one Japanese line, keep it in the final report, and call no desk command for the rest of the run:
+  - `no-home`: `机の段を飛ばしました（環境変数 AREKA_IMPL_WATCH_HOME が空）`
+  - `no-exe`: `机の段を飛ばしました（置き場所に areka-impl-watch.exe が無い）。置くには: <install command below>`
+  - `bad-name`: `机の段を飛ばしました（作業木かリポジトリの名前が識別の形に合わない: <ID> <R>）`
+- `desk: id=<ID> repo=<R>`: remember both values and write them literally into every later command (Bash variables do not survive between commands). If they are lost to context compaction, run the preflight again (it prints the same values).
+
+### Call form (every desk command)
+
+```bash
+"$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" <command> <args> 2>&1; echo "exit=$?"
+```
+
+- `2>&1` puts the one stderr line (`gone:`, `not applied:`, `already running`, refusals) into the same output. Read only the last `exit=<n>` and the one or two lines before it.
+- **Background** (Bash `run_in_background`): `watch`, `merge --wait`, `loadtest --wait`, `stopped --wait`, `resume`. When starting one, remember its kind and its run id ("own waits").
+- **Foreground**: `leave`, `merged`, `loaddone`, `cancel`, `loadrunning`, and `status` only when investigating a reason.
+
+### How each ending is handled
+
+| Ended | Output | Do | Req |
+|---|---|---|---|
+| watch | `exit=0`, `stop requested by <X>` | Stop request. Run `stopped --wait` at the stop boundary (after the current task's commit) | 3.1, 3.3 |
+| watch | `exit=0`, `already stopped; ...` | Do not record "stopped" again; run `resume` in the background | 3.7 |
+| watch | `exit=1`, `AREKA_IMPL_WATCH_HOME ...` | Stop the desk steps for this run; one line with the stderr line as is; keep it in the final report | 6.3 |
+| watch | `exit=1`, `a watch wait for <ID> is already running` | If your own watch is running, do nothing. If you have no record of one, run the leftover-watch removal one-liner below in the background and tell one line. If you held a request, request again before that one-liner ends | 2.3, 2.7, 2.8 |
+| watch | `exit=1`, anything else | Start the watch again once, at once. If the restart ends with the same `exit=1` line, follow the exit-1 rows below; if still broken, stop the desk steps for this run and keep it in the final report | 2.6, 6.4 |
+| watch | `exit=3` | If it is not the current watch (the last watch run started), do nothing. If it is the current watch and participation has ended (run-end `leave`), do nothing. Otherwise tell one line, start the watch again and re-submit any request you held (if you held the load-test desk, see 4.7) | 2.9, 2.10 |
+| resume wait (`stopped --wait`, `resume`) | `exit=0`, `resumed` | Start the watch again, then continue from the step after where you stopped | 3.5 |
+| resume wait | `exit=0`, `stop requested again by <X>` | Do not go back to work; run `stopped --wait` again | 3.6 |
+| resume wait | `exit=3` | Start the watch again and continue | 3.8 |
+| resume wait | `exit=1`, `a resume wait for <ID> is already running` | The earlier resume wait is still running. Do nothing (not a 6.4 failure) | 3.10 |
+| `merge --wait`, `loadtest --wait` | `exit=1`, `a merge wait ...` / `a load wait ... is already running` | If your own wait is running, do nothing. If you have no record of one: `cancel --id <ID>`, request again, one line | 6.4 |
+| `loaddone` | `exit=3`, `not applied: not the load-test holder` | The desk is no longer yours (e.g. the record was cleared). Do not return it again; tell one line and continue | 4.5, 6.4 |
+| `loadrunning` | `exit=3`, `not applied: the load-test desk already has a holder` | You did not become the holder. Tell one line and wait for the developer's instruction without recording that measurement | 4.6 |
+| `leave`, `merged`, `loaddone`, `cancel`, `loadrunning` | `exit=1`, other than the two rows below | Tell the stderr line as is and follow the exit-code-1 table in section 5 of `doc/impl-watch.md`. If still broken, stop the desk steps for this run and keep it in the final report | 6.3, 6.4 |
+| any | `exit=1`, `state.lock is busy ...` | Call once more right away (the exe already waits 10 seconds before refusing; do not wait on the skill side). If it repeats, 6.4 | 6.4 |
+| any | `exit=2` | Usage error, i.e. an error in this skill's text. Stop the desk steps for this run and keep it in the final report | 6.4 |
+
+- Restarts and re-submissions happen once each, even when two waits end back to back for the same event. A second one ending in `already running` is harmless.
+- Read endings by their output text. Your memory of "is this my watch" decides only the 2.7 / 2.8 split of `already running`.
+
+**Removing a leftover watch** (2.8): a leftover watch from an earlier session keeps holding this id's watch lock until its next poll (every second) sees that its record is gone after `leave`; an immediate restart would hit that lock. So remove, wait and restart in one background Bash, and wake the session only once at its end:
+
+```bash
+"$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" leave --id <ID> 2>&1; sleep 3; "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" watch --id <ID> --repo <R> --name <feature> 2>&1; echo "exit=$?"
+```
+
+- `sleep 3` is three poll intervals. Read only the last `exit=` and the watch lines (not the `leave` line). Remember this run as the current watch.
+- This `leave` does not count as ending participation (only the run-end `leave` does).
+- If this one-liner ends in `already running` again, do not repeat 2.8; follow 6.4.
+
+### What the conversation remembers
+
+- Desk steps `on` (`id`, `repo`) or `off` (reason).
+- The run id of the current watch: the last watch run started (including the 2.8 one-liner). An `exit=3` of an ended watch is handled only when it is the current watch; endings of older watches are read and ignored.
+- Stop state (none / stop requested / stopped) and the load-test desk (none / waiting / held).
+- Whether participation has ended (after the run-end `leave`; the `leave` inside the 2.8 one-liner does not count).
+- The app's state is the source of truth. If this memory is lost, the preflight and the ending table are enough to recover; only the 2.7 / 2.8 split is lost, and then fall to 2.8.
+
+### Never
+
+- Never set, change or rewrite `AREKA_IMPL_WATCH_HOME`: no `/c/...` conversion, no `cd`, no `AREKA_IMPL_WATCH_HOME=...` prefix before a command. Use the inherited value as is.
+- Never build, copy or replace the exe during desk steps. Never edit or delete files under the desk folder by hand.
+- Never stop another session's watch or wait processes (no `kill` by guess). Leftovers are removed from the record with `leave` / `cancel` and end on their own.
+- Never call `clear` (the whole-state clear).
+- No polling, no timed loops, no periodic `status`. In the normal flow read neither `status` nor `status.md`; the session wakes only when a wait command ends.
+- One line to the developer per desk event.
+
+### When the exe is missing (`desk: skip no-exe`)
+
+Point the developer at the install tool, written as an absolute path into the main working copy (the parent of `git rev-parse --path-format=absolute --git-common-dir`, in `C:\...` form, e.g. via `cygpath -w`):
+
+```
+pwsh -NoProfile -File <main working copy>\tools\impl-watch-install.ps1
+```
+
+Add that it should be run in a working copy that has taken in the latest default branch. The skill only shows this command and never runs it.
 
 ## Critical Constraints
 - **Out-of-scope findings go to the completion inventory, not to chips**: when implementation, review, debug or validation finds a problem outside the current spec (another crate's flaky test, an unrelated bug), do NOT call the harness `spawn_task` chip tool. Record it in `## Implementation Notes` of tasks.md; `/kiro-complete`'s opening inventory tickets it with `/kiro-discovery` (brief.md + roadmap row). Chips make the developer click and instruct each one and never reach the roadmap (developer, 2026-10-04).
