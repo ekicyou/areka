@@ -200,3 +200,115 @@
 7. **権利の記録の置き場**（議題 4 の続き）: アイコンのフォルダの説明の文書だけか、`dist/README.txt` の「■ 同梱物とライセンス」にも 1 項目足すか。
 8. **アイコンのフォルダの名前**（`crates/areka/icon/` など）と、手順の説明をどこに置くか（フォルダの README か `doc/` か）。
 9. **画像生成のモデルの選定**（7 節の 1 の確かめを済ませてから・要件 1.2・1.3）。
+
+---
+
+# 設計の段の調べと決定（2026-10-16・`/kiro-spec-design`）
+
+## Summary
+
+- **Feature**: `areka-P0-app-icon`
+- **Discovery Scope**: Extension（既存の `build.rs` の形に資源を 1 つ足す）。軽い調べ（design-discovery-light）で足りた。新しい依存は無い。
+- **使った手引き**: スキル `kiro-spec-design` の規則（design-principles・design-discovery-light・design-synthesis・design-review-gate）。ほかのスキルは読んでいない（絵は要件の段で決まっていて、画面や操作の設計は無い）。
+- **Key Findings**:
+  - Windows 11 の机で、PNG のまま入れた 16 ピクセルの絵を `CreateIconFromResourceEx` と `LoadImageW`（16・24・32）が読み、描けた（下の調べ 1）。アイコンのファイルの中は 8 寸法とも PNG で足りる。
+  - pwsh 7.6.7 の `System.Drawing`（GDI+）で 1024 の原画を縮めて PNG に書くと、同じ机では 2 回とも同じバイトになり、塊は `IHDR・sRGB・gAMA・pHYs・IDAT・IEND`（時刻の塊 `tIME` は無い）。色の形は 8 ビットの RGBA（色の型 6）。
+  - MSVC の `link.exe` は入力のファイルの中身を見て `.res` を資源として受け取る（拡張子で決めない）。`rustc-link-arg-bins` に `.res` の絶対パスを 1 つ足せば埋まる。
+  - `app.svg`・`tray.svg` は 2 人の輪郭の線（`girl.svg`・`unyuu.svg` の `d`）をそのまま中に持ち、外のファイルを読まない（`href` は 0 件）。焼き直しに要るのは `app.svg`・`tray.svg` の 2 つだけ。
+
+## Research Log
+
+### 調べ 1: PNG のまま入れた小さい絵を Windows が読むか
+- **Context**: ギャップ分析 7 節の 3。外の資料（Wikipedia の ICO の項・Raymond Chen の記事）は 256 の PNG しか語らず、16 ピクセルの PNG を読むかを書いていなかった。
+- **Sources Consulted**: 机での実測（Windows 11 Pro 10.0.26300・pwsh 7.6.7）。`tray.png` を GDI+ で 16・32・256 に縮めて PNG に書き、① 16 の PNG のバイトを `CreateIconFromResourceEx(…, fIcon=TRUE, 0x00030000, 16, 16, 0)` に渡す、② 3 寸法とも PNG の `.ico` を書いて `LoadImageW(…, IMAGE_ICON, n, n, LR_LOADFROMFILE)` で 16・24・32 を引く。
+- **Findings**: ① はハンドルを返し、`DrawIconEx` で 16×16 の地に描くと 192 画素が色を持った。② は 3 つともハンドルを返した（24 は 32 から縮めて引かれる）。
+- **Implications**: 8 寸法とも PNG にする（形 1）。道具は手で整えた PNG をバイトのまま入れられ、テストは exe の中の絵とフォルダの PNG をバイトで突き合わせられる。エクスプローラー・タスクマネージャー・ショートカットでの見え方は要件 6.3 の実機の確かめで見る。
+
+### 調べ 2: `.res` をリンカの引数で渡せるか
+- **Sources Consulted**: <https://learn.microsoft.com/en-us/cpp/build/reference/link-input-files>（LINK は拡張子で決めず中身を見る・入力の種類に `.res` がある）。
+- **Findings**: `.res` は COFF に直されて資源の節に入る。arm64 の `link.exe` も同じ入力を受ける（`.res` は機械の種別を持たない形式）。
+- **Implications**: 埋め方は `build.rs` に 2 行（`rerun-if-changed` と `rustc-link-arg-bins`）。arm64 で本当に通ることは、実装で `tools/package.ps1 -Arch arm64` を 1 回回して確かめる（要件 6.4 の手順でも見る）。
+
+### 調べ 3: 機械の種別の違う exe を資源として開けるか
+- **Sources Consulted**: <https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryexw>
+- **Findings**: `LOAD_LIBRARY_AS_DATAFILE` は「ファイルをデータとして写すだけで、動かす準備を何もしない」・「メッセージや資源を引くためだけに読むときに使う」。`FindResource` はこの写しを使える。機械の種別を問う記述は無い（動かす準備をしないので問わない）。
+- **Implications**: テストは `LOAD_LIBRARY_AS_DATAFILE` だけで開く（`LOAD_LIBRARY_AS_IMAGE_RESOURCE` は付けない＝像としての写しを避け、arm64 の exe を x64 のテストから開く道を素直にする）。arm64 の exe を実際に読めることは実装の確かめで 1 回見る。だめだったときは、std で PE の資源の目録を辿る形（ギャップ分析 4.4 のテスト 2）へ替える。
+
+### 調べ 4: GDI+ の縮小と PNG の書き出しの決まり方
+- **Findings**: 同じ机・同じ入力で 2 回書いた 24 ピクセルの PNG がバイトまで同じだった。GDI+ は OS の部品なので、OS の更新で縮め方か書き出しが変われば、入力が同じでも縮めた絵のバイトが変わりうる。
+- **Implications**: 要件 5.5（同じ入力から同じバイト）は「同じ机（同じ OS の版）で」守れる。OS の版で変わりうることを説明の文書に書き、差分が出たときは、入力を変えていないのに原画から縮めた寸法だけが変わったなら OS の変化と読む手順を添える。決まり方を OS から切り離すには縮め方と PNG の書き出しを自前で持つ必要があり、圧縮を自前で持たないと 256 の絵が 1 枚 256 KB になる。引き換えに見合わないので採らない。
+
+### 調べ 5: 埋めたマニフェストの読み方
+- **Findings**: `link.exe` の `/MANIFEST:EMBED` は `areka.manifest` を自分の既定（UAC の申告など）と合わせて書き直して埋める。属性の引用符や並びが変わりうるので、元のファイルとバイトで比べられない。
+- **Implications**: テストは `RT_MANIFEST` の 1 番の中に `Microsoft.Windows.Common-Controls` と `6.0.0.0` の 2 つの文字列があることを見る（引用符に依らない）。`.res` の側は `RT_ICON` と `RT_GROUP_ICON` しか書かないので、マニフェストが二重に入ることは道具の作りで起きない（同じ 1 番が 2 つあればリンカが落ちる）。
+
+## Architecture Pattern Evaluation
+
+| 案 | 中身 | 強み | 弱み | 結論 |
+|----|------|------|------|------|
+| 案 A（`.res` もコミット） | 道具が `.ico` 2 つと `.res` 1 つを書き、`build.rs` は `.res` をリンカへ渡すだけ | `build.rs` は 2 行増えるだけ。資源の形を知るのは道具 1 か所。組み立てに道具も依存も要らない。要件 5.1・5.4 の文言（「exe に渡すファイル」を道具が作る）のまま | バイナリを 3 つコミットする。道具の回し忘れ | **採る**。回し忘れは結合テストの突き合わせで拾う |
+| 案 A′（`build.rs` が std で `.res` を書く） | `.ico` だけコミットし、`build.rs` が `.ico` を読んで `OUT_DIR` に `.res` を書く | `.ico` と `.res` がずれない | 資源の形の知識が道具（PowerShell）と `build.rs`（Rust）の 2 か所に分かれる。`build.rs` が数倍に太る。要件 5.4 の「道具が exe に渡すファイルを作る」を直すことになる | 採らない |
+| 案 B（`.rc` を処理する依存） | `embed-resource` などを足す | よく使われる | 組むたびに SDK の `rc.exe` が要る（要件 4.2 とぶつかる）・`Cargo.lock` が変わる（要件 4.3 とぶつかる） | 要件の討議で既に不採用 |
+
+## Design Decisions
+
+### Decision: 埋め方は案 A
+- **Context**: 要件の討議が設計へ回した (a)。
+- **Selected Approach**: `tools/app-icon.ps1` が `app.ico`・`tray.ico`・`icons.res` を書き、3 つともコミットする。`build.rs` は「MSVC でなければ返る」の後ろで `icons.res` の絶対パスを `rustc-link-arg-bins` に渡し、`rerun-if-changed` に足す。
+- **Rationale**: 書く量が一番少なく、資源の形の知識が 1 か所に集まる。要件の文言とそのまま合う。
+- **Trade-offs**: 道具の回し忘れが起こりうる → 結合テストが exe の中の絵と `.ico` と手で整えた PNG をバイトで突き合わせて拾う（原画 1024 の直しだけは拾えない＝下の Risks）。
+
+### Decision: アイコンのファイルの中は 8 寸法とも PNG
+- **Context**: (b)。
+- **Selected Approach**: 8 寸法とも 32 ビット RGBA の PNG をそのまま並べる。
+- **Rationale**: 調べ 1 で 16 ピクセルの PNG を Windows が読むことを確かめた。手で整えた PNG をバイトのまま入れられ、突き合わせの検査がただで付く。areka の相手は Windows 10/11 だけ（`tech.md`）。
+- **Trade-offs**: XP など古い読み手は読めない（相手にしない）。
+
+### Decision: 番号はアプリ＝1・通知領域＝2・言語は 0
+- **Context**: (c)。
+- **Selected Approach**: `RT_GROUP_ICON` の 1 番＝アプリ、2 番＝通知領域。1 枚ずつの絵（`RT_ICON`）は 1〜8＝アプリ、9〜16＝通知領域（どちらも寸法の小さい順）。資源の言語はどれも 0（言語に依らない）。名前の付いた資源は使わない。
+- **Rationale**: エクスプローラーは資源の目録の並び（名前が先・番号は小さい順）で最初のアイコンの組を exe の絵にする。名前を使わず番号 1 をアプリにすれば、要件 3.1 がそのまま満たされる。言語 0 は表示言語によらず `FindResourceW`・`LoadIconMetric` が引ける。
+- **Follow-up**: 下流 `areka-P0-tasktray-icon` は 2 番を自分のモジュールの定数に置いて引く。明暗で分けた絵のために番号を空けておくことはしない（要件は 1 枚で両方の地に見えることを求める）。
+
+### Decision: 作り直しの道具は `tools/app-icon.ps1`（pwsh＋GDI+）
+- **Context**: (d)。
+- **Selected Approach**: 入力はアイコンのフォルダの 1024 の原画 `app.png`・`tray.png` と、手で整えた `<名>-<寸法>.png`。寸法ごとに、手で整えた PNG が在ればバイトのまま使い、無ければ原画を GDI+ で縮めて PNG に書く。通知領域用の 16〜48 は手で整えた PNG を必ず要する（無ければ失敗）。全部の検査とバイトの組み立てを先に済ませてから、一時ファイルに書いて置き換える。端末へ出す文は ASCII だけ。
+- **Alternatives Considered**: SDK の `rc.exe` を呼ぶ（机に SDK が要り、場所を探す処理が要る・`.res` は数十行で自前で書ける）／Rust の小さな実行ファイル（PNG を読むには `image` などを `areka` の依存に足すことになり `Cargo.lock` が変わる）／縮め方と PNG の書き出しを自前で持つ（調べ 4）。
+- **Rationale**: 前例（`tools/*.ps1`）に揃い、段 `encoding check` が自動で見張る（要件 5.7）。GDI+ は Windows に入っていて道具が増えない。
+- **Follow-up**: 道具の自分の検査 `-SelfTest`（同じバイト・入力の欠け・寸法違い・形式違い・上書きしないこと）を持つ。全体テストの段には足さない（要件の討議の決め「`tools/test-all.ps1` を触らない」）。
+
+### Decision: テストは `windows` の資源の API で組んだ exe を読む
+- **Context**: (e)。
+- **Selected Approach**: `crates/areka/tests/embedded_icon_test.rs`（`#![cfg(target_env = "msvc")]`）。`LoadLibraryExW(…, LOAD_LIBRARY_AS_DATAFILE)` で開き、`FindResourceW`・`LoadResource`・`LockResource`・`SizeofResource` で 2 つの組と 16 枚の絵とマニフェストを引く。exe の絵と `app.ico`・`tray.ico` の絵、在る `<名>-<寸法>.png` をバイトで突き合わせる。
+- **Rationale**: 必要な `windows` の機能（`Win32_System_LibraryLoader`・`Win32_UI_WindowsAndMessaging`・`Win32_Foundation`）は根の `[workspace.dependencies.windows]` に既に在り、`areka` の通常の依存なので結合テストから使える。依存も機能も足さない。
+
+### Decision: arm64 の確かめは同じテストに環境変数で exe を渡す
+- **Context**: (f)。
+- **Selected Approach**: 環境変数 `AREKA_ICON_CHECK_EXE` に exe の絶対パスがあれば、同じ検査をその exe にもかける。無ければ「飛ばした」を標準エラーへ 1 行出して通す（実機テストの流儀・`AREKA_EMO2_REAL_RUN` と同じ）。手順の説明に、arm64 の exe の作り方とこの変数での回し方を書く。
+- **Rationale**: 検査の本体を 1 つに保ったまま、全体テストに arm64 の組み立てを持ち込まない。
+
+### Decision: フォルダは `crates/areka/icon/`・説明は同じフォルダの `README.md`
+- **Context**: (g)・要件 5.1・5.3・5.8。
+- **Selected Approach**: 原画（`app.png`・`tray.png`）・焼き方の SVG（`app.svg`・`tray.svg`）・手で整えた PNG・出力（`app.ico`・`tray.ico`・`icons.res`）・説明（`README.md`）を 1 か所に置く。`README.md` に中身の一覧・番号の表・作り直し方・焼き直し方・出どころと権利・実機の確かめ方を書く。`girl.svg`・`unyuu.svg`・`girl-g0.png` は spec の `art/` に記録として残し、製品のフォルダには写さない（`app.svg`・`tray.svg` が同じ線を中に持つため）。
+- **Rationale**: 今の `crates/areka/shell/`（仮シェルの絵）と混ぜない。組み立ては spec のフォルダを読まない（要件 3.7）。
+
+## Synthesis
+
+- **まとめられたこと（一般化）**: 「寸法ごとに、手で整えた PNG が在ればそれ、無ければ原画を縮める」という 1 つの決まりで、通知領域用の 16〜48（要件 2.2 で必須）と、それ以外の寸法を同じに扱う。アプリ用の小さい寸法を実機の確かめ（要件 6.3）の後に手で整えたくなっても、ファイルを置くだけで済み、道具もテストも直さない。テストも同じ決まり（在る `<名>-<寸法>.png` を突き合わせる）で動く。
+- **作るか借りるか**: `.ico`・`.res` の書き手は借りない（`rc.exe` は机の道具を増やす・Rust のクレートは依存を増やす）。形はどちらも数十行で書ける単純な並び。縮めるのと PNG の書き出しは OS の GDI+ を借りる。資源の読み手は OS の API を借りる。
+- **削ったもの**: `build.rs` での `.res` の組み立て（案 A′）・`.res` の存在の前もっての検査（無ければ `link.exe` がファイル名を出して落ちる）・全体テストの段の追加・`.gitattributes`（git は NUL を含むファイルをバイナリと見なす・既存の PNG も `-text` で入っている）・明暗の絵のための空き番号・縮めた絵を別のファイルとして残すこと。
+
+## Risks & Mitigations
+
+- 原画 1024 を直して道具を回し忘れても、結合テストは拾えない（縮めた絵は道具の中でしか作られない）→ 説明の文書の作り直しの手順を「原画を直したら道具を回し、出力 3 つをコミット」と 1 本で書く。手で整えた PNG の直しの回し忘れはテストが拾う。
+- GDI+ の版で縮めた絵のバイトが変わりうる（調べ 4）→ 説明の文書に書く。
+- アプリ用の 16 ピクセル（2 人の影絵を縮めただけ）が明暗の地で見分けにくいかもしれない（要件 2.4）→ 実機の確かめで見て、足りなければ `app-16.png` などを手で整えて置く（決まりのまま・設計は変わらない）。
+- arm64 の `link.exe` が `.res` を受けない・x64 のテストから arm64 の exe を開けない → 実装で 1 回ずつ確かめる。開けなければテストの読み方を std で PE を辿る形へ替える（検査の中身は同じ）。
+
+## References
+
+- [LINK Input Files](https://learn.microsoft.com/en-us/cpp/build/reference/link-input-files) — `.res` を入力に取る
+- [LoadLibraryExW](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryexw) — `LOAD_LIBRARY_AS_DATAFILE` で資源だけを引く
+- [CreateIconFromResourceEx](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-createiconfromresourceex) — `RT_ICON` の中身から絵を作る
+- [The evolution of the ICO file format, part 4: PNG images](https://devblogs.microsoft.com/oldnewthing/20101022-00/?p=12473) — PNG の絵は 32 ビット ARGB で、PNG の頭から始まる
+- [ICO (file format)](https://en.wikipedia.org/wiki/ICO_(file_format)) — 目録の形（256 は 0 と書く）
