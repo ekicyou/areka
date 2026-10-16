@@ -40,11 +40,12 @@
 - 選択肢とアンカーの押せる範囲の作り方（`derive_hit_rows`・`to_window_physical`）・入る行の数え方（`layout.rs` の `visible_window`）・バルーン定義の読み方。
 - 打ち消し線・字のグリフの描き方（`DrawTextLayout` はそのまま）・縦書きの下線の側。
 - ドラッグ中・ポインタ滞在の抑止と、抑止が解けたときの測り直しの規則（触らない）。
-- 区切りに達する前に押された選択を kanade が捨てる今の振る舞い（リスクの節）。
+- 区切りに達する前に押された選択を kanade が捨てる今の振る舞い（`choice_rejected_no_wait`・`steady.rs` 245 行）。本 spec はそれを変えず、そういう押下では選択肢を済みにしない（設計の討議 議題 1）。
 
 ### 使ってよい依存
 
 - `crates/areka`（`emo2_boot`・`input_events`）→ `areka-emo-text` の公開の口（`TextLayerRuntime`・`TextMsg`・`EmoTextSink`）。逆向きは無い。
+- `areka-sakura` の再生（`drive.rs`）→ `dola` の `CuePlayer::announce_choice_wait`（新）→ 登録された受け口の `CueSink::choice_wait_began`（新・何もしない既定つき）。先渡しの `preview` と同じ向きと形（設計の討議 議題 1）。
 - `areka-emo-text` → `wintf`（`VisualGraphics`・`Arrangement` の部品）・`windows`（DirectWrite の `IDWriteTextRenderer`・`IDWriteTextLayout`）・**`windows-core`（`#[implement]` のため・ワークスペースの依存・新しい外部のクレートは 0）**。`areka-emo-text` は `areka-ghost` に依らないまま。
 - 可視性の判断は時計・GPU・World に触れない純関数のまま（`decide`）。
 - 新しい公開型は作らない。下線の受け手と幾何は `areka-emo-text` の中だけ（`pub(crate)`）。
@@ -52,7 +53,8 @@
 ### 確かめ直しが要る変化
 
 - `TalkLifecycleSignal` の形が変わる（`ChoiceShown` を足す）＝この線を読む相手（今は可視性の判断だけ）。
-- `TextMsg` に `TalkEnded` を足し、`handle_text_msg_with` が 4 つ目の受け口を取る＝例・検査の呼び手。
+- `TextMsg` に `TalkEnded` と `ChoiceWaitBegan` を足し、`handle_text_msg_with` が受け口を取る＝例・検査の呼び手。
+- `dola::cue::CueSink` に何もしない既定つきの `choice_wait_began` を足す＝crates.io に出している `dola` の口が 1 つ増える（既定つきなので外の実装は直さずに済む）。受け口を包むもの（`ClockedTextSink`）は中へ取り次ぐ（取り次がないと既定の何もしないに落ちて、押下で済まなくなる）。
 - `TextLayerRuntime::choice_active` の意味が「選択肢の行があるか」から「済んでいない選択肢があるか」へ変わる＝開発用の強調の注入（`emo2_boot/hover_inject.rs`）・`range-choice-tag`（範囲の選択肢も同じ境目に従う）。
 - 下線を areka が塗る＝`anchor-style-canon`（縦書きの側の決め直しと下線の見た目はこの受け手の上に乗る）・`choice-marker-styling`（「本物の下線」はこの塗り方を使う）。
 - `windows-core` を emo-text の依存に足す＝`Cargo.lock` の席（ウェーブ C7 は空き）。roadmap の約束の欄へ返す。
@@ -144,10 +146,14 @@ crates/areka/src/input_events/
 - `crates/areka/src/emo2_boot/balloon_visibility_test_support.rs`・`balloon_visibility_timeout_suppression_cases.rs`（⑺⑻ の `choice: true` の行）・`talk_lifecycle_tests.rs` ほか `choice_active` を書く既存の檻 — 外した欄に合わせて直す（陳腐化した行は外す）。
 
 **件 1（済んだ行）**
+- `crates/dola/src/cue/sink.rs` — `CueSink::choice_wait_began`（何もしない既定つき・`preview` の隣）。
+- `crates/dola/src/cue/runtime.rs` — `CuePlayer::announce_choice_wait`（登録された全部の受け口へ `choice_wait_began` を登録順に配る）。
+- `crates/areka-sakura/src/drive.rs` — `notify_choice_waiting_if_newly_waiting` が `ChoiceWaiting` を done の口へ送った**後**に `announce_choice_wait` を呼ぶ（順が逆だと、押下が kanade の待ちより先に着く窓が開く）。
+- `crates/areka/src/emo2_boot/talk_clock.rs` — `ClockedTextSink` が `choice_wait_began` を内側へ取り次ぐ。
 - `crates/areka-emo-text/src/state.rs` — `ActorTextState` に済みの境目の欄と読み書きの口。`TextLayerState` に場所を指す口と全部の場所の口。
 - `crates/areka-emo-text/src/state_decoration.rs` — `clear_content` で境目も戻す（1 行）。
-- `crates/areka-emo-text/src/sink.rs` — `TextMsg::TalkEnded`。`EmoTextSink` の複製の境界（手書きの `Clone`・`Drop`）。`handle_text_msg_with` の 4 つ目の受け口。新しいテストの接続宣言。
-- `crates/areka-emo-text/src/actor.rs` — `settle_choices_at`（公開）・全部の場所を済みにする内部の口・済みの選択肢を写しと強調から外す内部の手順・`choice_active` の意味の改め・`spawn_emo_text` で `TalkEnded` を受ける。新しいテストの接続宣言。
+- `crates/areka-emo-text/src/sink.rs` — `TextMsg::TalkEnded`・`TextMsg::ChoiceWaitBegan`。`EmoTextSink` の複製の境界（手書きの `Clone`・`Drop`）と `choice_wait_began` の実装。`handle_text_msg_with` の受け口。新しいテストの接続宣言。
+- `crates/areka-emo-text/src/actor.rs` — `settle_choices_at`（公開・選択待ちに入った後だけ効く）・選択待ちに入ったかの欄・全部の場所を済みにする内部の口・済みの選択肢を写しと強調から外す内部の手順・`choice_active` の意味の改め・`spawn_emo_text` で `ChoiceWaitBegan`・`TalkEnded` を受ける。新しいテストの接続宣言。
 - `crates/areka-emo-text/src/actor_present.rs` — 当たり行の写しから済みの選択肢を外す・済みの選択肢を指す強調を装飾へ渡さない。
 - `crates/areka/src/input_events/balloon.rs` — 押下の後に場所を済みにする 1 つの手順（選択肢のときだけ）。新しいテストの接続宣言。
 - `crates/areka/src/input_events/balloon_pressed.rs`・`shell_box_handler.rs` — 選択を送れたら上の手順を呼ぶ（普通のバルーンの場所・箱の場所）。
@@ -187,16 +193,19 @@ sequenceDiagram
     Talk->>Vis: TalkStarted
     Talk->>Runtime: Choice cues
     Talk->>Vis: ChoiceShown
+    Talk->>Kanade: ChoiceWaiting via dispatcher
+    Talk->>Runtime: ChoiceWaitBegan on text line
     User->>Input: click choice row
     Input->>Kanade: selection
-    Input->>Runtime: settle place
+    Input->>Runtime: settle place only after wait began
     Kanade->>Talk: resolve choice after response
     Talk->>Runtime: TalkEnded on text line
     Talk->>Vis: TalkEnded at stop time
     Vis->>Vis: deadline is stop time plus wait
 ```
 
-- 押した瞬間にその場所の選択肢が済む（光らない・押せない）。時間切れと中断では、文字の線の `TalkEnded` で全部の場所の選択肢が済む。
+- 押した瞬間にその場所の選択肢が済む（光らない・押せない）。ただし済ませるのは、文字の線で `ChoiceWaitBegan` を受けた後（＝再生が kanade へ `ChoiceWaiting` を送った後）の押下だけ。それより前の押下は今のまま（kanade が捨て、押し直せる）。時間切れと中断では、文字の線の `TalkEnded` で全部の場所の選択肢が済む。
+- 順の保証: 再生のスレッドは `ChoiceWaiting` を done の口へ送ってから `ChoiceWaitBegan` を文字の線へ積む。押下はそれを UI が受けた後にしか済みを付けない。`ChoiceWaiting` は dispatcher を経て kanade へ着くので、押下の選択が kanade に着く順がそれより後になることを、実装の最初のタスクで経路（押下の送り先と dispatcher の取り次ぎ）を読んで確かめる。後と言い切れない経路なら、そのタスクで止めて報告する。
 - 可視性は線の中の `ChoiceShown` でそのトークを選択肢つきと覚え、`TalkEnded` の止まった時刻を起点に測る。選択の応答が新しい台詞を始めたときは、次の `TalkStarted` が印と計測を戻す（要件 1.7）。
 - 2 本の線は互いを待たない。文字の層の状態は文字の線と押下だけが書き換え、可視性の状態は可視性の線だけが書き換える。
 
@@ -241,7 +250,7 @@ graph LR
 | 1.7 | 新しい台詞は今までどおり | 可視性の判断 | `TalkStarted` で印を戻す | 件 1 |
 | 1.8 | 待ちの長さと起点は今のまま・待ちが解けた時から測る | 可視性の判断 | 起点の規則・`talk_timeout_secs` | 件 1 |
 | 1.9 | 選択肢の時間切れそのものでは送らない | 可視性の判断 | トークの終わりの前は知らせを作らない | 件 1 |
-| 1.10 | 済んだ行を光らせない | 文字の層 | `settle_choices_at`・`TextMsg::TalkEnded`・強調の外し | 件 1 |
+| 1.10 | 済んだ行を光らせない | 文字の層・再生 | `settle_choices_at`（`ChoiceWaitBegan` の後だけ）・`TextMsg::TalkEnded`・強調の外し | 件 1 |
 | 1.11 | 済んだ行を押しても選択にしない・警告なし | 文字の層・入力 | 当たり行の写しから外す・押下の後の済み | 件 1 |
 | 1.12 | 見た目は今のまま | 文字の層 | 範囲の記録を消さない（装飾は全部の範囲で注釈） | 件 1 |
 | 1.13 | 箱でも同じ | 全部 | 場所の鍵・線は場所を問わない | 件 1 |
@@ -381,14 +390,18 @@ impl TextLayerState {
 ##### Service Interface
 ```rust
 impl TextLayerRuntime {
-    /// 押下の口: 場所の選択肢を済みにし、写しと強調から済みの選択肢をその場で外す。
+    /// 押下の口: 選択待ちに入った後なら、場所の選択肢を済みにし、写しと強調から済みの選択肢をその場で外す。
+    /// 選択待ちに入る前は何もしない（kanade が捨てる押下なので、押し直せるまま残す）。
     pub fn settle_choices_at(&mut self, place: &PlaceKey);
+    /// 文字の線の ChoiceWaitBegan: このトークが選択待ちに入ったと覚える。
+    fn note_choice_wait_began(&mut self);
     /// 文字の線のトークの終わり: 全部の場所の選択肢を済みにし、同じく写しと強調を揃える。
     fn settle_all_choices(&mut self);
     /// 済んでいない選択肢がスコープのどこかの場所にあるか（意味の改め）。
     pub fn choice_active(&self, actor: &ActorKey) -> bool;
 }
 ```
+- 選択待ちに入ったかの欄 `choice_wait_open: bool`: `ChoiceWaitBegan` で真、`TalkEnded` と次のトークの `Upcoming` で偽。トークは 1 体のゴーストで同時に 1 本なので、場所ごとでなくランタイムに 1 つ。
 - 事後条件（どちらの口も同じ・`Clear` と同じ原子性）: 戻ったときには、`choice_hit_rows_at(place)` に済みの選択肢の行が無い（アンカーの行は残る）・`choice_hover` が済みの選択肢を指していれば `None`・`choice_active` は境目を反映。提示を待たない。
 - 提示（`present_actor`）は写しを作り直すときも済みの選択肢を外し、装飾へ渡す強調は、済みの選択肢を指すなら `None` にする。装飾の注釈（`annotate_lines`）は全部の範囲で行う＝字・色・印は変わらない（要件 1.12）。
 - `hit_active`（押せる範囲があるか）は今のまま。済んだ選択肢しか無い場所では、押下は当たらず `choice_click_rejected`（`debug!`）で終わる＝kanade へ届かず警告は出ない（要件 1.11）。
@@ -407,6 +420,28 @@ impl TextLayerRuntime {
 - 受け手: `spawn_emo_text` のドレインが `handle_text_msg_with(msg, on_cue, on_upcoming, on_talk_end)` の 4 つ目で受け、`settle_all_choices` を呼ぶ。借用の競合は今の cue と同じく `Err` で返し、基盤が `error!`＋続行。`handle_text_msg`（2 つの受け口の形）は `TalkEnded` を読み飛ばす。
 - 送れなかったとき（ドレインの停止後・ゴーストを降ろす途中で起きうる）: ほかのトークごとの受け口の `Drop` の送り損ね（`BalloonLifecycleSink`・`NoUserBreakCueSink`）と同じく `warn!` 1 行・panic しない。
 
+#### 文字の線の選択待ちの始まり（`CueSink::choice_wait_began`）
+
+##### Event Contract
+```rust
+// crates/dola/src/cue/sink.rs
+pub trait CueSink: Send {
+    fn emit(&mut self, cue: TalkCue);
+    fn preview(&mut self, _upcoming: &[TalkCue]) {}
+    /// 再生が選択待ちに入り、その事実を done の口へ送り終えた後に 1 回呼ばれる。既定は何もしない。
+    fn choice_wait_began(&mut self) {}
+}
+
+// crates/dola/src/cue/runtime.rs
+impl CuePlayer {
+    /// 登録された全部の受け口へ choice_wait_began を登録順に配る。
+    pub fn announce_choice_wait(&mut self);
+}
+```
+- 呼び手: `areka-sakura` の `notify_choice_waiting_if_newly_waiting` が `ChoiceWaiting` を送った後に 1 回（`choice_notified` で 1 トーク 1 回）。`CuePlayer` の状態の移り（`tick` の中）では呼ばない＝`ChoiceWaiting` より先に文字の層へ着かない。
+- `EmoTextSink` は `TextMsg::ChoiceWaitBegan` を合図と同じ口へ積む。積めなかったときは `preview` と同じく `error!` 1 行・panic しない。`ClockedTextSink` は内側へ取り次ぐ。
+- 受け手: `spawn_emo_text` のドレインが `note_choice_wait_began` を呼ぶ。`handle_text_msg`（2 つの受け口の形）は読み飛ばす。
+
 #### 押下の後の済み（`input_events`）
 
 | 欄 | 中身 |
@@ -424,7 +459,7 @@ pub(super) fn settle_after_selection(
     kind: SpanKind,
 );
 ```
-- 呼び手: `balloon_pressed.rs`（場所＝普通のバルーン）と `shell_box_handler.rs`（場所＝箱）。送出に成功したときだけ。送出の失敗・棄却では呼ばない。
+- 呼び手: `balloon_pressed.rs`（場所＝普通のバルーン）と `shell_box_handler.rs`（場所＝箱）。送出に成功したときだけ。送出の失敗・棄却では呼ばない。選択待ちに入る前の押下は、送出に成功しても `settle_choices_at` が何もしない（議題 1）。
 - その場所の選択肢がまとめて済む（議題 1）。ほかの場所の選択肢はトークの終わりで済む。
 
 ### 潰れた描画範囲（件 2）
@@ -547,7 +582,7 @@ pub(crate) fn collect_underlines(
 
 **実装の注**
 - 結線: 箱も普通のバルーンも同じ `render_styled` を通る（要件 3.5）。
-- 確かめ: 縦書きの写し方（`stroke_rect` の上から下の腕）は、D2D 自身が描いた下線（今の描き方）と画素で一致することを実 GPU の檻で固定する。
+- 確かめ: 縦書きも横書きと同じ塗り方の 1 本の道で塗る（書き方ごとに D2D に任せる分かれ道を作らない・設計の討議 議題 2）。縦書きの写し方（`stroke_rect` の上から下の腕）は、D2D 自身が描いた下線（今の描き方）と次の合格の幅で一致することを実 GPU の檻で固定する: **線が覆う画素の範囲（濃さが 0 でない画素の集まり）が同じで、各画素の各成分の差が 4/255 以下**。この幅は実装の前に決めたもので、檻を通すために広げない。通らなければ写し方を直す。
 - リスク: 下線のある行を描くフレームだけ、区間の下線の立て・戻しと `Draw` の呼び出しが増える（下線の無い行と `NoChange` のフレームには足さない）。
 
 ## データの形
@@ -557,6 +592,7 @@ pub(crate) fn collect_underlines(
 | 持ち主 | 欄 | 型 | 寿命 | 意味 |
 |---|---|---|---|---|
 | `ActorTextState` | `settled` | `usize` | 範囲の列と同じ（`clear_content` で 0） | この序数より前の選択肢は済み |
+| `TextLayerRuntime` | `choice_wait_open` | `bool` | トーク（`ChoiceWaitBegan` で真・`TalkEnded` と次の `Upcoming` で偽） | このトークが選択待ちに入った＝押下で済ませてよい |
 | `TextLayerRuntime` | `collapsed_regions` | `BTreeSet<PlaceKey>` | ランタイムと同じ | いま描画範囲が潰れている場所 |
 | `BalloonVisibilityState` | `talk_had_choice` | `bool` | トーク（`TalkStarted` で偽） | このトークで選択肢を出した |
 | `BalloonLifecycleSink` | `choice_sent` | `bool` | 複製（トーク） | `ChoiceShown` を送った |
@@ -567,6 +603,7 @@ pub(crate) fn collect_underlines(
 
 - `TalkLifecycleSignal::ChoiceShown`（可視性の線・中身なし）。
 - `TextMsg::TalkEnded`（文字の線・中身なし）。
+- `TextMsg::ChoiceWaitBegan`（文字の線・中身なし）と、その元の `dola::cue::CueSink::choice_wait_began`（何もしない既定つき）・`CuePlayer::announce_choice_wait`。
 - `MeasurementOrigin::ChoiceWaitEndedAt(f64)`・`MeasurementOrigin::ChoiceWaitEndTimeMissing`（記録の語）。
 
 ### 外すもの
@@ -592,6 +629,7 @@ pub(crate) fn collect_underlines(
 | `TextMsg::TalkEnded` を送れない（ドレインの停止後） | `warn!` 1 行・panic しない（ほかのトークごとの受け口の `Drop` と同じ水準） |
 | ドレインで `TalkEnded` を適用できない（借用の競合） | `Err` で返し、基盤が `error!`＋続行（そのトークの選択肢は次の台詞の頭で消える） |
 | `TextSurface::release` で差し込み口が居ない | `warn!` して何もしない（差し込み口の寿命は emo-present の領分） |
+| `TextMsg::ChoiceWaitBegan` を送れない（ドレインの停止後） | `error!` 1 行・panic しない（`preview` と同じ水準）。そのトークでは押下で済まず、トークの終わりで済む |
 | 可視性の線で `ChoiceShown` を送れない | 今の `send` と同じ `warn!`・トークは続ける |
 
 ### 記録の一覧（実機の確かめが探す語）
@@ -608,8 +646,9 @@ pub(crate) fn collect_underlines(
 
 1. **時間切れの起点**（`balloon_visibility_choice_wait_tests.rs`・`decide` の表）: `ChoiceShown` の後でトークの終わりが無い間は、時間がどれだけ進んでも隠さず知らせも作らない（1.1・1.9）／占有終端 2.0・止まった時刻 60.0 で終わると満了予定 90.0、90.0 で隠して知らせを返す（1.2〜1.4・1.8。選んだ・時間切れ・中断の 3 つはどれも同じ合図の形になることを名前つきの 3 行で固定）／終わりのフレームに滞在があれば保留し、離れた時刻から既定の長さ（1.6）／`ChoiceShown` の後に `TalkStarted` が来ると選択肢つきでないトークの規則に戻る（1.7）／`\![set,balloontimeout]` のミリ秒・なしが選択肢つきのトークにも効く（1.8）／時刻なしの終わりはそのフレームの現在時刻が起点（記録の語）／箱だけに文字が出ている scope も同じ（1.13）。
 2. **選択肢の合図**（`talk_lifecycle_choice_tests.rs`）: 選択肢の合図 2 つで `ChoiceShown` は 1 回・`TalkStarted` の後・`TalkEnded` の前／選択肢の無いトーク・アンカーだけのトークでは送らない／複製ごとに印が戻る。受け口に cue を流して落とし、届いた合図の列を `decide` に通して止まった時刻＋待ち時間で隠れる通しの 1 本。
-3. **済みの境目**（`actor_choice_settle_tests.rs`・GPU なしの部分）: `settle_choices_at` の後、その場所の `choice_active` が偽・ほかの場所は真のまま／全部の場所を済みにすると偽／アンカーの範囲は `hit_active` に残る／`\c`・台詞の頭で境目が 0 に戻り、次の選択肢は済んでいない／済みにした後に足された選択肢は済んでいない／済みの選択肢を指す強調は外れる／写しから済みの選択肢の行がその場で消え、アンカーの行は残る（1.10・1.11・1.13）。
-4. **文字の線のトークの終わり**（`sink_talk_end_tests.rs`・実 `spawn_ui`）: cue を送った複製を落とすと `TalkEnded` が cue の後に 1 回届く／原本と cue を送らなかった複製は送らない／ドレインが `TalkEnded` を受けると全部の場所の選択肢が済む。
+3. **済みの境目**（`actor_choice_settle_tests.rs`・GPU なしの部分）: `ChoiceWaitBegan` の前の `settle_choices_at` は何もしない（その場所の `choice_active` は真のまま・当たり行も残る）／`ChoiceWaitBegan` の後の `settle_choices_at` の後、その場所の `choice_active` が偽・ほかの場所は真のまま／全部の場所を済みにすると偽／アンカーの範囲は `hit_active` に残る／`\c`・台詞の頭で境目が 0 に戻り、次の選択肢は済んでいない／済みにした後に足された選択肢は済んでいない／済みの選択肢を指す強調は外れる／写しから済みの選択肢の行がその場で消え、アンカーの行は残る（1.10・1.11・1.13）。
+4. **文字の線のトークの終わり**（`sink_talk_end_tests.rs`・実 `spawn_ui`）: cue を送った複製を落とすと `TalkEnded` が cue の後に 1 回届く／原本と cue を送らなかった複製は送らない／ドレインが `TalkEnded` を受けると全部の場所の選択肢が済み、`choice_wait_open` が偽に戻る／`choice_wait_began` が `ChoiceWaitBegan` として cue と同じ順で届く。
+4a. **選択待ちの始まりの送り方**（`dola` の `runtime` の檻・`areka-sakura` の `drive` の檻・`talk_clock` の檻）: `announce_choice_wait` が全部の受け口へ登録順に 1 回ずつ配る／既定の実装の受け口は何もしない／再生は `ChoiceWaiting` を done の口へ送った後に `choice_wait_began` を呼び、1 トークに 1 回（台本の最後に `\w` の待ちがあっても、待ちが明けて区切りに入るまで呼ばない）／`ClockedTextSink` が内側へ取り次ぐ。
 5. **押下の後の済み**（`balloon_choice_settle_tests.rs`）: 種類が選択肢なら場所が済む・アンカーなら済まない・借用の失敗で `error!` 1 行。
 6. **潰れの判定と記録**（`region_tests.rs`・`actor_region_collapse_tests.rs` の GPU なしの部分）: 幅 0・負・非数で潰れ・`resolve` は記録を出さない／潰れた領域の登録で `warn!` 1 回（場所の名前と 4 つの値）・同じ値の登録し直しで 0 回・正の領域で `info!` 1 回／箱の登録→外し→登録で記録は 1 回／隠す・出すで 0 回（2.3〜2.5・2.7）。
 7. **下線の幾何**（`underline_tests.rs`）: 横書きは上端＝ベースライン（offset を使わない）・左から右と右から左の幅／縦書きの写し／`pull_inside` は収まる線をそのまま返し、はみ出す線を太さを保って内側へ（`bound − thickness`）、太さが範囲より大きいと 0 の側／行内の軸は動かない／`stroke_overhang` がはみ出した側の欄にだけ量を入れる（3.10・3.11）。
@@ -619,14 +658,14 @@ pub(crate) fn collect_underlines(
 1. **下線の幾何の出どころ**（`viewbox_draw_underline_tests.rs`・DirectWrite のみ）: Yu Gothic UI 28 画素・ＭＳ ゴシック 12 画素・ほか 1 書体で、横書きの線の上端が `GetLineMetrics` のベースラインと一致し、太さが書体の `underlineThickness`×大きさ÷upem と一致する。集めた後に区間の下線が戻っている（3.2・3.10）。
 2. **最下行の下線**（実 GPU の読み戻し）: 実機の形（面の高さ 122・Yu Gothic UI 28 画素・4 行）で、最下行の作者の下線とアンカーの下線の画素が面の中にある。拡大率 1.0・1.25・1.5 で同じ。線が面に収まらない形（字を大きくして最下行の線が面の外へ出る）では、線が面の下端の内側に塗られる（3.1・3.3・3.11）。
 3. **見た目を変えないこと**（実 GPU）: 下線の矩形の外の画素は、下線の無い同じ台詞と 1 画素も違わない（3.6）。打ち消し線の画素は直す前の描き方と同じ（3.8）。下線の有無で行の列・`visible_window`・当たり行が同じ（3.7・3.9）。
-4. **縦書き**（実 GPU）: 端でない列の下線は、D2D 自身が描いた下線（今の描き方）と画素で一致する。端の列の線は面の内側にある（3.4）。
+4. **縦書き**（実 GPU）: 端でない列の下線は、D2D 自身が描いた下線（今の描き方）と合格の幅（覆う画素の範囲が同じ・各画素の各成分の差 4/255 以下）で一致する。端の列の線は面の内側にある（3.4）。
 5. **箱**（実 GPU）: 箱の文字の面でも 2〜4 が成り立つ（3.5）。
 6. **済んだ行**（`actor_choice_settle_tests.rs`・実 GPU）: 提示→当たり行あり→`settle_choices_at`→その座標の `click_selection` が `None`（選択の知らせを作らない・ログの檻で WARN 0 行）／済んだ行に強調を入れても読み戻しは強調なしと同じ／済む前と後で強調なしの読み戻しが同じ（1.10〜1.12）／箱の場所でも同じ（1.13）。
 7. **潰れた範囲**（`actor_region_collapse_tests.rs`・実 GPU）: 潰れた場所に文字があっても `present_frame` は `Ok`・面は作られない・数十フレームで `ERROR` 0 行と `WARN` 0 行／隣のスコープは描かれる／描いた後に潰すと差し込み口から文字の層の部品が外れ、当たり行が空／戻すと次のフレームで装着し、装着の記録の文が変わらない／差し込み口が枠の面より手前に戻る／箱でも同じ（2.1・2.2・2.4・2.6〜2.9）。
 
 ### 実機（要件 4.4・emo2 と同梱のバルーン・RUST_LOG は判定の分岐の記録まで開ける）
 
-1. 件 1: 選択肢つきの台詞で、⑴ 選んで応答が 204、⑵ 選択肢の時間切れで `OnChoiceTimeout` が 204、⑶ 中断の 3 つを回し、それぞれ済んでから既定の長さ（短縮の環境変数で測ってよい）で隠れて `OnBalloonTimeout` が届くこと、済んだ行が光らず押しても選択の知らせも警告も出ないことを記録で確かめる。箱の選択肢でも 1 回。
+1. 件 1: 選択肢つきの台詞で、⑴ 選んで応答が 204、⑵ 選択肢の時間切れで `OnChoiceTimeout` が 204、⑶ 中断の 3 つを回し、それぞれ済んでから既定の長さ（短縮の環境変数で測ってよい）で隠れて `OnBalloonTimeout` が届くこと、済んだ行が光らず押しても選択の知らせも警告も出ないことを記録で確かめる。箱の選択肢でも 1 回。⑷ 選択肢の後ろに字と `\w` の待ちを置いた台詞で、待ちの明ける前に押すと今のまま捨てられ（`choice_rejected_no_wait`）、待ちが明けた後に押し直すと選べることを確かめる。
 2. 件 2: 小さい面のバルーン（実機の再現の形）で、記録が「潰れている」1 行だけで、隠す・出すで増えず、面を切り替えて戻すと「戻った」1 行の後に文字が描かれること。
 3. 件 3: 文字の領域に 4 行入る台詞で、最下行の作者の下線とアンカーの下線を MCP の `dump_balloon` で撮り直して残す。同じ撮影で最下行の字の下の部分（`g`・`y`・`ぁ` を入れる）が欠けていないかを見て、欠けていれば範囲の外として起票する。縦書きのバルーンでも 1 枚。
 

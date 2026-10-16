@@ -318,3 +318,8 @@
 - 下線の受け手は `#[implement(IDWriteTextRenderer)]` で作り、emo-text に `windows-core = { workspace = true }` を足す（開発者「足すのは良い」）。
 - 版に注意する（開発者「今出てる 0.100.0 は互換性が無い。windows のバージョンと合わせるように」）。ワークスペースのピン `windows-core = "0.62.2"` が `windows = "0.62"`（`Cargo.lock` で `0.62.2`）と揃っているので、emo-text の `Cargo.toml` には版を書かない。`windows-core` だけを上げない。
 - C7 の「依存を足す席」⑴ を本 spec が使うと roadmap に書き戻した。
+
+### 設計の討議 議題 1・2 の決め（2026-10-16・開発者「議題1と2は推奨案で承認」）
+
+- **議題 1（区切りより前の押下）**: 押下で選択肢を済ませるのは、そのトークが選択待ちに入った後だけ。再生（`drive.rs` の `notify_choice_waiting_if_newly_waiting`）が `ChoiceWaiting` を done の口へ送った後に、`dola::cue::CueSink` の新しい既定つきメソッド `choice_wait_began` で文字の線へ `TextMsg::ChoiceWaitBegan` を積む（先渡しの `preview` と同じ型）。それより前の押下は今のまま kanade が捨て（`steady.rs` 245 行の `choice_rejected_no_wait`）、押し直せる。根拠: 押せる時を kanade が受け付ける時と同じ順で決められ、台本の最後の `\w` の待ちも正しく扱える。採らなかった案: 先渡しの `Upcoming` で文字の層だけで見分ける（最後の `\w` を見落とす）・範囲の外として起票（穴が残る）。残る確かめ: `ChoiceWaiting` は dispatcher を経て kanade へ着くので、押下の選択の着く順がそれより後と言えるかを実装の最初のタスクで経路を読んで確かめる。
+- **議題 2（縦書きの下線）**: 縦も横も同じ塗り方の 1 本の道。D2D が描いた縦書きの下線との一致の合格の幅を先に決めた（覆う画素の範囲が同じ・各画素の各成分の差 4/255 以下）。採らなかった案: 縦書きは D2D に描かせ端の列だけ自前で塗る（分かれ道とフレームごとの切り替えが増える）。
