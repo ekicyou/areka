@@ -4,6 +4,7 @@
 //! 起動前の記憶を読むのは、この下の薄い口だけ（要件 12.7）。
 
 mod edit;
+pub(crate) mod pick;
 pub(crate) mod report;
 mod resolve;
 

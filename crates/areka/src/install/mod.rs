@@ -23,7 +23,7 @@ pub(crate) mod fetch_url;
 pub(crate) mod fetch_url_test_support;
 pub(crate) mod judge;
 pub(crate) mod names;
-mod pick;
+pub(crate) mod pick;
 mod procedure;
 mod terms;
 mod worker;
