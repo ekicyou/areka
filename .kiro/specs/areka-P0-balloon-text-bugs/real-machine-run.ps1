@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  areka-P0-balloon-text-bugs タスク 5.3（件 1 を実機で確かめる）の根づくりと、起動・操作・記録。
+  areka-P0-balloon-text-bugs タスク 5.3（件 1）・5.4（件 2）を実機で確かめる根づくりと、起動・操作・記録。
 
 .DESCRIPTION
   -Prepare : areka（debug）と 32bit の補助プロセスを組み、検体 emo2 を nar-sample-path で展開して
@@ -16,6 +16,8 @@
              1 本目は起点の確かめ（済んだ後は触らない）、2 本目は済んだ行の確かめ（ポインタを乗せて押す）。
              選択肢の行の位置は、ポインタを縦に動かして強調の記録（choice_hover_inject／box_choice_hover_inject）
              で測ってから押す。入力デスクトップが Default でないときは操作せず止まる。
+             Collapse（タスク 5.4・件 2）: root の同梱バルーンに足した 8×8 の面 balloons20.png で \b[20]→\b[20]→\b[0]→\b[20] の
+             4 本を時間切れごとに流す。操作はせず、見えている間に areka の MCP の dump_balloon を dump-<名>.png に撮る。
 
 .EXAMPLE
   pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-anchor-tag-canon-da1fe5\.kiro\specs\areka-P0-balloon-text-bugs\real-machine-run.ps1 -Prepare
@@ -23,7 +25,7 @@
 #>
 param(
     [switch]$Prepare,
-    [ValidateSet('Chose', 'Timeout', 'Break', 'Box', 'Wait')]
+    [ValidateSet('Chose', 'Timeout', 'Break', 'Box', 'Wait', 'Collapse')]
     [string]$Run,
     [int]$ExitMs = 75000,
     [int]$TimeoutMs = 5000,
@@ -50,8 +52,17 @@ local SCEN = "__SCEN__"
 local n = 0
 local CHOICES = [==[\n\q[はい（いち）を選ぶ,OnBtbYes]\n\q[いいえ（に）を選ぶ,OnBtbNo]]==]
 
+-- 件 2（Collapse）: 8×8 のバルーンの面 \b[20] で潰す → 隠れて同じ面でもう一度出す → \b[0] へ戻す → また \b[20]
+local COLLAPSE = {
+    [==[\0\s[0]\b[20]ちいさい面（1）\e]==],
+    [==[\0\s[0]\b[20]ちいさい面（2）\e]==],
+    [==[\0\s[0]\b[0]もどった面（3）です\e]==],
+    [==[\0\s[0]\b[20]ちいさい面（4）\e]==],
+}
+
 local function talk()
     n = n + 1
+    if SCEN == "Collapse" then return COLLAPSE[n] end
     local s = [==[\0\s[0]]==]
     if SCEN == "Timeout" then s = s .. [==[\![set,choicetimeout,8000]]==] end
     s = s .. "選んでね（" .. tostring(n) .. "）" .. CHOICES
@@ -68,7 +79,8 @@ REG.OnBoot = function(act) return talk() end
 REG.OnFirstBoot = REG.OnBoot
 REG.OnGhostChanged = REG.OnBoot
 REG.OnBalloonTimeout = function(act)
-    if SCEN ~= "Wait" and n < 2 then return talk() end
+    if SCEN == "Collapse" and n < #COLLAPSE then return talk() end
+    if SCEN ~= "Wait" and SCEN ~= "Collapse" and n < 2 then return talk() end
     return nil
 end
 
@@ -116,6 +128,10 @@ if ($Prepare) {
         Copy-Item (Join-Path $wt 'target\debug\areka.exe') $root
         Copy-Item $helper $root
         foreach ($f in 'dispatch.pasta', 'hour.pasta') { Remove-Item (Join-Path $root "ghost\emo2\ghost\master\dic\$f") }
+        # 件 2: 余白（validrect の 36〜56 px）より小さい 8×8 のバルーンの面（\b[20]）を足す＝実機の再現の形
+        Add-Type -AssemblyName System.Drawing
+        $bmp = [Drawing.Bitmap]::new(8, 8); $g = [Drawing.Graphics]::FromImage($bmp); $g.Clear([Drawing.Color]::White); $g.Dispose()
+        $bmp.Save((Join-Path $root 'balloon\emo2-kakukaku\balloons20.png'), [Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
         "prepared $root (areka=$(Machine (Join-Path $root 'areka.exe')) helper=$(Machine (Join-Path $root 'shiori-host32-helper.exe')))"
     }
     $surfaces = Join-Path $base 'root-box\ghost\emo2\shell\master\surfaces.txt'
@@ -277,6 +293,23 @@ function Probe($c) {
     Home
 }
 
+# areka 自身の MCP の dump_balloon（scope 0）を撮って dump-<名>.png に残す。
+function Dump([string]$name) {
+    $body = @{ jsonrpc = '2.0'; id = 1; method = 'tools/call'; params = @{ name = 'dump_balloon'; arguments = @{ scope = 0 } } } | ConvertTo-Json -Depth 6 -Compress
+    try {
+        $r = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$Port/api/mcp/v1" -ContentType 'application/json; charset=utf-8' `
+            -Headers @{ Accept = 'application/json, text/event-stream' } -Body ([Text.Encoding]::UTF8.GetBytes($body)) -TimeoutSec 30
+    } catch { Note "dump $name EXC $($_.Exception.Message)"; return }
+    $img = $r.result.content | Where-Object { $_.type -eq 'image' } | Select-Object -First 1
+    $text = ($r.result.content | Where-Object { $_.type -eq 'text' } | Select-Object -First 1).text
+    if ($img) {
+        $png = Join-Path $base "dump-$name.png"
+        [IO.File]::WriteAllBytes($png, [Convert]::FromBase64String($img.data))
+        Add-Type -AssemblyName System.Drawing; $b = [Drawing.Bitmap]::new($png); $wh = "$($b.Width)x$($b.Height)"; $b.Dispose()
+        Note "dump $name isError=$([bool]$r.result.isError) png=$png size=$wh"
+    } else { Note "dump $name isError=$([bool]$r.result.isError) no image text=$text" }
+}
+
 $ok = $true
 try {
     switch ($Run) {
@@ -317,6 +350,22 @@ try {
             Start-Sleep -Milliseconds (3 * $TimeoutMs)
             $late = @(Lines | Select-Object -Skip $script:seen | Where-Object { $_ -match 'id=OnBalloonTimeout' })
             Note "OnBalloonTimeout after break: $($late.Count)"
+        }
+        'Collapse' {
+            # 件 2: 操作はしない。面ごとに記録を待ち、見えている間に dump_balloon で今の絵を撮る。
+            WaitFor '文字の描画範囲が潰れている' | Out-Null
+            Start-Sleep -Milliseconds 1500; Dump 'c1'
+            WaitFor 'id=OnBalloonTimeout' | Out-Null
+            WaitFor 'visible=true' | Out-Null
+            Start-Sleep -Milliseconds 1500; Dump 'c2'
+            WaitFor 'id=OnBalloonTimeout' | Out-Null
+            WaitFor '文字の描画範囲が戻った' | Out-Null
+            WaitFor 'テキスト供給面を予約スロットへ装着した' | Out-Null
+            Start-Sleep -Milliseconds 2000; Dump 'r3'
+            WaitFor 'id=OnBalloonTimeout' | Out-Null
+            WaitFor '文字の描画範囲が潰れている' | Out-Null
+            Start-Sleep -Milliseconds 1500; Dump 'c4'
+            WaitFor 'id=OnBalloonTimeout' | Out-Null
         }
         'Wait' {
             # 選択肢の行が出た後、\w の待ちの最中に押す（捨てられる）→ 待ちが明けた後に押し直す（選べる）

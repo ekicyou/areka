@@ -1,4 +1,4 @@
-# 実機の確かめの記録（areka-P0-balloon-text-bugs・タスク 5.3・件 1）
+# 実機の確かめの記録（areka-P0-balloon-text-bugs・タスク 5.3 件 1・タスク 5.4 件 2）
 
 設計「テストの方針 › 実機」の 1（件 1）を、本物の areka と emo2（同梱バルーン emo2-kakukaku・実 pasta.dll）で走らせ、記録で確かめた。操作（ポインタの移動・押下）は人の手を使わず、走らせる道具が `SendInput` で行った。
 
@@ -192,3 +192,74 @@ shell の窓の箱 `btbbox` に「選んでね（1）」と選択肢 2 行が出
 ## 5. 中断（要件 1.4）について
 
 要件 1.4 は「選択の待ちが中断され（利用者の割り込み・台本の中断）、バルーンが表示されたまま残った」ときの決まりである。実機の利用者の中断（バルーンの左ダブルクリック）は、完了 `balloon-break` 要件 4.1 のとおり**出ている全部のバルーンをその場で隠し**（`decide_user_break`）、`OnBalloonBreak` を送り、次のトークまで時間切れの計測をしない。kanade で選択の待ちを畳む道（`Action::CancelChoice`）は、利用者の中断（`schedule/user_break.rs`）と選択肢の時間切れの 204（`schedule/steady.rs`）の 2 つだけで、時間切れは ⑵ で確かめた。したがって「中断の後にバルーンが表示されたまま残る」場面は今の areka の実機では起きず、⑶ は「中断ではその場で隠れ、`OnBalloonTimeout` を送らない（今までの決まりのまま）」を確かめた形になる。中断の後の起点（止まった時刻）は、決定論のテスト（`balloon_visibility_choice_wait_tests.rs` の中断の行）が固定している。
+
+
+## 6. 件 2（タスク 5.4）: 文字の描画範囲が潰れたバルーン
+
+設計「テストの方針 › 実機」の 2 を、同じ道具・同じ版の areka（HEAD `7e996b33`・製品のコードは 5.3 と同じ）で走らせた。**結論: 要件 2.3・2.4・2.5 はすべて成立**（潰れに入ったときに「潰れている」が 1 行、隠す・出すでは増えない、面を戻すと「戻った」が 1 行出て、その後に文字が描かれる）。ERROR は 0 行。
+
+### 6.1 走らせ方
+
+| 項目 | 値 |
+|---|---|
+| 日時 | 2026-10-16 19:32〜19:33 JST（ログは UTC の 10:32〜10:33） |
+| 根 | `target\btb-signoff\root`（`-Prepare` で作り直した）。同梱バルーンの写し `balloon\emo2-kakukaku` に、8×8 の白一色の面 `balloons20.png` を足した。brief の実機の再現（10-06・8×8 の面に emo2-kakukaku の余白 36〜56 px を当てる）と同じ形 |
+| 台本 | 4 本を時間切れごとに順に返す（`OnBalloonTimeout` で次を返す）: ⑴ `\0\s[0]\b[20]ちいさい面（1）\e` ⑵ `\0\s[0]\b[20]ちいさい面（2）\e`（同じ潰れた面のまま、隠れた後にもう一度出す） ⑶ `\0\s[0]\b[0]もどった面（3）です\e`（普通の面へ戻す） ⑷ `\0\s[0]\b[20]ちいさい面（4）\e`（一度描いた後にまた潰す） |
+| 環境変数 | 5.3 と同じ（`RUST_LOG=info,kanade=trace,areka::input_events=debug`。潰れの `warn!`・戻りの `info!`・再追従の `info!`・装着の `info!` はどれも info 以上で、`areka_emo_text` の info が出る水準）・`AREKA_BALLOON_TIMEOUT_MS=5000`・`AREKA_MCP_PORT=39873` |
+| 操作 | なし（`SendInput` は使っていない）。見えている間に areka 自身の MCP の `dump_balloon`（scope 0）で今の絵を撮った（`dump-c1.png`・`dump-c2.png`・`dump-r3.png`・`dump-c4.png`） |
+| コマンド | `pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-anchor-tag-canon-da1fe5\.kiro\specs\areka-P0-balloon-text-bugs\real-machine-run.ps1 -Prepare` の後に、同じファイルを `-Run Collapse` で実行 |
+| 走行 | pid 10444・自動終了・終了コード 0（`runs.txt`）。記録は `target\btb-signoff\run-Collapse.log`、操作の控えは `run-Collapse.steps.txt` |
+
+### 6.2 判定
+
+| # | 確かめる項目（要件） | 結果 | 根拠（`run-Collapse.log` の行） |
+|---|---|---|---|
+| 1 | 潰れに入ったとき、どのバルーンのどの値で潰れたかが読める警告が 1 回だけ出る（2.3） | **成立**（⑴ で 1 行。名前・4 辺・画像の大きさが載っている） | 80 |
+| 2 | 潰れたままの間はエラーを 1 行も出さず、毎フレームの作り直しもしない（2.2） | **成立**（ERROR 0 行。⑴〜⑵ の約 11 秒の間、文字の層の記録は 80・81 行の 2 行だけ） | 80〜132 |
+| 3 | 潰れたまま隠す・出すで記録が増えない（2.5） | **成立**（⑴ が隠れ（94）、⑵ で出し直しても（105）「潰れている」は増えない） | 94・105 |
+| 4 | 面を切り替えて戻すと「戻った」が 1 回出て、文字が描かれる（2.4） | **成立**（⑶ で「戻った」1 行（133）→ 再追従（134）→ 装着（135・文は変わっていない＝2.8）。`dump-r3.png`（400×224）に「もどった面（3）です」が描かれている） | 133〜135 |
+| 5 | 一度描いた後にまた潰すと、前の文字が残らない（2.9） | **成立**（⑷ で「潰れている」がもう 1 回（新しい潰れの入り・160）。`dump-c4.png` は 8×8 の全部の画素が `FFFFFFFF`（白一色）で、⑶ の文字は残っていない） | 160・161 |
+| 6 | 実機の記録で上が確かめられる（4.4） | **成立** | — |
+
+「潰れている」の警告（`文字の描画範囲が潰れている（幅か高さが 0 以下）`）は 2 行（80・160）で、どちらも潰れの入り。「戻った」は 1 行（133）。`grep -c '潰れている'` が 4 になるのは、再追従の記録の文（81・161）にも「描画範囲が潰れているので」の語が入っているため。
+
+### 6.3 根拠（逐語の抜き書き）
+
+時刻は UTC。行頭の `actor{actor=emo-text}:` と長い Reference は省いた。
+
+```
+79   10:32:06.988731 INFO  [balloon-visibility] バルーンの可視状態が遷移した scope=0 trigger="content" visible=true
+80   10:32:06.989506 WARN  areka_emo_text::actor::attach: 文字の描画範囲が潰れている（幅か高さが 0 以下）——このバルーンの文字は描かない balloon="emo2-kakukaku" left=36.0 top=46.0 right=-36.0 bottom=-48.0 image_size=(8.0, 8.0)
+81   10:32:06.990325 INFO  areka_emo_text::actor::attach: 文字層の再追従: binding と文字描画領域を再構築した——描画範囲が潰れているので描画資源は残し、同じフレームの提示が外す（戻るまで再生成しない・リビール状態は保存） actor=0 k_old=2.0 k_new=2.0 image_size=(8, 8) surface_size=(16, 16)
+94   10:32:12.343059 INFO  [balloon-visibility] バルーンの可視状態が遷移した scope=0 trigger="timeout" visible=false
+97   10:32:12.346029 TRACE kanade: event="shiori_request" method=GET id=OnBalloonTimeout … status=Some("balloon(0=20)")
+105  10:32:12.393551 INFO  [balloon-visibility] バルーンの可視状態が遷移した scope=0 trigger="content" visible=true      ← ⑵ 同じ潰れた面で出し直す（記録は増えない）
+120  10:32:17.792990 INFO  [balloon-visibility] バルーンの可視状態が遷移した scope=0 trigger="timeout" visible=false
+123  10:32:17.795969 TRACE kanade: event="shiori_request" method=GET id=OnBalloonTimeout … status=Some("balloon(0=20)")
+132  10:32:17.844105 INFO  [balloon-visibility] バルーンの可視状態が遷移した scope=0 trigger="content" visible=true
+133  10:32:17.844460 INFO  areka_emo_text::actor::attach: 文字の描画範囲が戻った——次のフレームから文字を描く balloon="emo2-kakukaku" width=320.0 height=122.0
+134  10:32:17.844714 INFO  areka_emo_text::actor::attach: 文字層の再追従: binding と文字描画領域を再構築し描画資源を破棄した（次フレームで新しい物理寸へ再生成・リビール状態は保存） actor=0 k_old=2.0 k_new=2.0 image_size=(400, 224) surface_size=(800, 448)
+135  10:32:17.850910 INFO  areka_emo_text::actor::present: テキスト供給面を予約スロットへ装着した（ActorRender 不在時のみ・以降は Present のみ） actor=0 place=Balloon slot=32v0 physical_size=(640, 244) wrap=BudouxWordWrap
+147  10:32:23.343033 INFO  [balloon-visibility] バルーンの可視状態が遷移した scope=0 trigger="timeout" visible=false
+150  10:32:23.345925 TRACE kanade: event="shiori_request" method=GET id=OnBalloonTimeout … status=Some("balloon(0=0)")
+160  10:32:23.394181 WARN  areka_emo_text::actor::attach: 文字の描画範囲が潰れている（幅か高さが 0 以下）——このバルーンの文字は描かない balloon="emo2-kakukaku" left=36.0 top=46.0 right=-36.0 bottom=-48.0 image_size=(8.0, 8.0)
+161  10:32:23.394438 INFO  areka_emo_text::actor::attach: 文字層の再追従: …描画範囲が潰れているので描画資源は残し、同じフレームの提示が外す… image_size=(8, 8) surface_size=(16, 16)
+175  10:32:28.793478 INFO  [balloon-visibility] バルーンの可視状態が遷移した scope=0 trigger="timeout" visible=false
+178  10:32:28.796881 TRACE kanade: event="shiori_request" method=GET id=OnBalloonTimeout … status=Some("balloon(0=20)")
+```
+
+潰れた値（`left=36 top=46 right=-36 bottom=-48`・`image_size=(8,8)`）は、brief の 10-06 の実機の記録の値と同じ。直す前に毎フレーム出ていた `create_composition_swap_chain`（0x887A0001）と `present_frame が失敗` の ERROR は 0 行で、`解決後の validrect が退化している` の毎フレームの WARN も 0 行。
+
+`dump_balloon` の読み戻し（`run-Collapse.steps.txt`）:
+
+| 撮った時 | 絵 | 大きさ | 中身 |
+|---|---|---|---|
+| ⑴ 潰れた面（`dump-c1.png`） | `\b[20]` | 8×8 | 全部の画素が `FFFFFFFF`（文字なし） |
+| ⑵ 出し直し（`dump-c2.png`） | `\b[20]` | 8×8 | 全部の画素が `FFFFFFFF` |
+| ⑶ 戻した面（`dump-r3.png`） | `\b[0]` | 400×224 | 「もどった面（3）です」が文字の領域の 1 行目に描かれている（目で確かめた） |
+| ⑷ また潰した面（`dump-c4.png`） | `\b[20]` | 8×8 | 全部の画素が `FFFFFFFF`（⑶ の文字は残っていない） |
+
+### 6.4 そのほかの記録
+
+- WARN は 9 行: 件 2 の「潰れている」2 行（80・160）、5.3 と同じ自明の 4 行（`null.png` の 11・29 行、`折返し基準` の 59 行、`force_quit` の 241 行）、それに `balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=20 prefix=balloons file=balloons20.png` の 3 行（15・20・34 行）。最後の 3 行は、足した `balloons20.png` に scope 1 用の `balloonk20.png` が無いための、検体が原因の正しい縮退の知らせで、件 2 の判定には関わらない。`解決後の validrect が退化している`・`create_composition_swap_chain`・`present_frame が失敗` は 0 行。
+- 箱（要件 2.7）・ほかのバルーンを妨げないこと（要件 2.6）は、タスク 5.4 の範囲外（決定論と実 GPU のテスト `actor_region_collapse_tests.rs` が固定する）。
