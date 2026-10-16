@@ -22,7 +22,11 @@
           mentions Encoding or chcp (only exceptions, in tools/encoding-check.ps1: the strings of
           $calib and $chcpWords in Get-ConsoleRewrites); [Console]::SetOut / SetError are
           not rewrites
-       D  a cargo / cargo.exe command (bare or with &) with the element metadata or nar-sample-path
+       D  a cargo / cargo.exe command (bare or with &) with the element metadata or nar-sample-path,
+          also through a variable argument ($x, @x): the right-hand sides of = / += to that name
+          (case-insensitive, any scope) are followed through string constants, arrays, +,
+          parentheses and other variables (each once); pipelines, command results, members and
+          method values are not followed
        E  tools/package.ps1 (metadata and nar-sample-path), tools/crates-io.ps1 (metadata) and the
           run bodies of .github/workflows/release.yml (metadata) each have an Invoke-Utf8Child
           call with that element
@@ -86,6 +90,32 @@ function Get-CommandLeaf([CommandAst]$Cmd) {
 function Get-ArgWords([CommandAst]$Cmd) {
     foreach ($e in @($Cmd.CommandElements | Select-Object -Skip 1)) {
         foreach ($c in $e.FindAll({ param($n) $n -is [StringConstantExpressionAst] }, $true)) { $c.Value }
+    }
+}
+
+# Rule D's value tracing: the string constants an expression is built from. Follows string
+# constants, arrays (@(...) and , lists), +, parentheses and variables (through $Assigned: lower-case
+# name -> right-hand sides of = and +=, each name once via $Seen). Pipelines, command results,
+# members and method values are not followed.
+function Get-TracedWords([Ast]$Node, [hashtable]$Assigned, [System.Collections.Generic.HashSet[string]]$Seen) {
+    if ($Node -is [PipelineAst]) {
+        $el = $Node.PipelineElements
+        if ($el.Count -eq 1 -and $el[0] -is [CommandExpressionAst]) { Get-TracedWords $el[0].Expression $Assigned $Seen }
+    }
+    elseif ($Node -is [CommandExpressionAst]) { Get-TracedWords $Node.Expression $Assigned $Seen }
+    elseif ($Node -is [StringConstantExpressionAst]) { $Node.Value }
+    elseif ($Node -is [ArrayLiteralAst]) { foreach ($e in $Node.Elements) { Get-TracedWords $e $Assigned $Seen } }
+    elseif ($Node -is [ArrayExpressionAst]) { foreach ($s in $Node.SubExpression.Statements) { Get-TracedWords $s $Assigned $Seen } }
+    elseif ($Node -is [ParenExpressionAst]) { Get-TracedWords $Node.Pipeline $Assigned $Seen }
+    elseif ($Node -is [BinaryExpressionAst] -and $Node.Operator -eq [TokenKind]::Plus) {
+        Get-TracedWords $Node.Left $Assigned $Seen
+        Get-TracedWords $Node.Right $Assigned $Seen
+    }
+    elseif ($Node -is [VariableExpressionAst]) {
+        $name = $Node.VariablePath.UserPath.Split(':')[-1].ToLowerInvariant()
+        if ($Assigned.ContainsKey($name) -and $Seen.Add($name)) {
+            foreach ($r in $Assigned[$name]) { Get-TracedWords $r $Assigned $Seen }
+        }
     }
 }
 
@@ -190,10 +220,26 @@ function Get-Findings {
 
     # D, and the Invoke-Utf8Child elements for E
     $callWords = [System.Collections.Generic.List[string]]::new()
+    $assigned = @{}   # rule D: lower-case variable name -> right-hand sides of = and +=
+    foreach ($n in $ast.FindAll({ param($n) $n -is [AssignmentStatementAst] -and
+                    $n.Operator -in @([TokenKind]::Equals, [TokenKind]::PlusEquals) }, $true)) {
+        $l = $n.Left
+        if ($l -is [ConvertExpressionAst]) { $l = $l.Child }
+        if ($l -isnot [VariableExpressionAst]) { continue }
+        $name = $l.VariablePath.UserPath.Split(':')[-1].ToLowerInvariant()
+        if (-not $assigned.ContainsKey($name)) { $assigned[$name] = [System.Collections.Generic.List[Ast]]::new() }
+        $assigned[$name].Add($n.Right)
+    }
     foreach ($c in $ast.FindAll({ param($n) $n -is [CommandAst] }, $true)) {
         $leaf = Get-CommandLeaf $c
         if ($null -eq $leaf) { continue }
         $words = @(Get-ArgWords $c | Where-Object { $_ -in $CallWordSet })
+        if ($leaf -in @('cargo', 'cargo.exe') -and -not $words.Count) {
+            $seen = [System.Collections.Generic.HashSet[string]]::new()
+            $words = @(foreach ($e in @($c.CommandElements | Select-Object -Skip 1)) {
+                    Get-TracedWords $e $assigned $seen | Where-Object { $_ -in $CallWordSet }
+                })
+        }
         if ($leaf -in @('cargo', 'cargo.exe') -and $words.Count) { & $add 'D' $c.Extent.StartLineNumber $c.Extent.Text }
         if ($leaf -eq 'Invoke-Utf8Child') { foreach ($w in $words) { $callWords.Add($w) } }
     }
@@ -353,6 +399,8 @@ $calib = @(
     @{ Name = 'Set-OwnConsoleCp932 outside encoding-check'; Where = 'tools/package.ps1'; Text = 'function Set-OwnConsoleCp932 { chcp 932 }'; Expect = 'C' }
     @{ Name = 'rewrite prefix built in a variable and passed'; Text = '$inner = ''[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); '' + $x; $psi.ArgumentList.Add($inner)'; Expect = 'C' }
     @{ Name = 'chcp inside an argument array'; Text = '$a = @(''-Command'', ''chcp 65001'')'; Expect = 'C' }
+    @{ Name = 'bare cargo with metadata passed as an array variable'; Text = '$a = @(''metadata'', ''--no-deps''); cargo @a'; Expect = 'D' }
+    @{ Name = 'bare cargo with nar-sample-path through two variables'; Text = '$NAR_ARGS = @(''run'', ''--bin'', ''nar-sample-path''); $cargoArgs = @($nar_args) + @(''--'', ''x''); & cargo @cargoArgs'; Expect = 'D' }
     @{ Name = 'marker inside expandable string'; Text = '"$LOG_MARKER_A ' + $jp + '"'; Expect = 'B' }
     @{ Name = 'parse error'; Text = 'if ('; Expect = 'parse' }
     @{ Name = 'missing Invoke-Utf8Child call'; Text = 'cargo metadata'; Need = @('metadata'); Expect = 'E' }
@@ -368,6 +416,8 @@ $calib = @(
     @{ Name = 'Invoke-Utf8Child metadata'; Text = "Invoke-Utf8Child cargo @('metadata')"; Need = @('metadata'); Expect = $null }
     @{ Name = 'Set-OwnConsoleCp932 in encoding-check'; Where = $SelfWhere; Text = 'function Set-OwnConsoleCp932 { [Console]::OutputEncoding = [Text.Encoding]::GetEncoding(932); chcp 932 }'; Expect = $null }
     @{ Name = 'UTF-8 writer prefix for a child'; Text = '$pre = ''$u = [System.Text.UTF8Encoding]::new($false); $w = [System.IO.StreamWriter]::new([Console]::OpenStandardOutput(), $u); $w.AutoFlush = $true; [Console]::SetOut($w); $e = [System.IO.StreamWriter]::new([Console]::OpenStandardError(), $u); $e.AutoFlush = $true; [Console]::SetError($e); '''; Expect = $null }
+    @{ Name = 'bare cargo with a pipeline value'; Text = '$PUBLISH = @(''metadata''); $pArgs = $PUBLISH | ForEach-Object { ''-p'', $_ }; cargo publish @pArgs'; Expect = $null }
+    @{ Name = 'bare cargo with only other words in variables'; Text = '$x = @(''build'', ''--locked''); $x += $x; cargo @x $y'; Expect = $null }
     @{ Name = 'yaml name and comment only'; Yaml = $true; Text = "# " + $jp + "${nl}steps:${nl}  - name: " + $jp + "${nl}"; Expect = $null }
     @{ Name = 'yaml block ends at the next key'; Yaml = $true; Text = "steps:${nl}  - run: |${nl}      Write-Host 'ok'${nl}    name: " + $jp + "${nl}  - name: " + $jp + "${nl}"; Expect = $null }
     @{ Name = 'yaml defaults run mapping'; Yaml = $true; Text = "defaults:${nl}  run:${nl}    shell: pwsh${nl}    working-directory: " + $jp + "${nl}"; Expect = $null }
