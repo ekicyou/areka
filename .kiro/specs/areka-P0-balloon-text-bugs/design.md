@@ -30,13 +30,15 @@
 
 - **選択肢つきのトークの時間切れの起点**: 可視性の判断の中で、選択肢を出したトークは止まった時刻から測る（`balloon_visibility_wait.rs`）。そのための合図 `TalkLifecycleSignal::ChoiceShown`（`talk_lifecycle.rs`）。
 - **選択肢の「済み」**: 場所ごとの境目（`ActorTextState` の欄）と、それに従う当たり行の写し・強調・`choice_active`（`areka-emo-text`）。押下で付ける口（`input_events`）と、文字の線のトークの終わり `TextMsg::TalkEnded`（`sink.rs`）。
+- **押下の選択の送り先**（実装で改めた・開発者の裁定 2026-10-16・案 (b)）: 押下の選択とアンカーの知らせを kanade へ直接でなく dispatcher の inbox へ送り、dispatcher がそのまま kanade へ取り次ぐ（`choice_drain.rs`・`dispatcher.rs` の取り次ぎの腕 2 つ・`ghost_session.rs` の結線）。dispatcher は判断しない（素通し）。
 - **潰れた描画範囲の扱い**: `TextRegion::is_collapsed`・提示で描かないこと・差し込み口からの片付け・状態の変わり目の記録。
 - **areka が塗る下線**: 下線を引く区間の選び（今と同じ）・DirectWrite から幾何と色を集める受け手・横書きのベースライン直下への置き直し・面の内側への寄せ・行のはみ出しへの足し分。
 - 上の 4 つの決定論のテスト・実機の確かめの手順・COMPAT §8 の 4 行。
 
 ### 境界の外
 
-- kanade の選択の帳簿（`Waiting`／`Cascading`／`TimeoutInFlight`）と、選択・時間切れ・中断の決め方。kanade には触らない。
+- kanade の選択の帳簿（`Waiting`／`Cascading`／`TimeoutInFlight`）と、選択・時間切れ・中断の決め方。kanade には触らない（届く伝言の種類も中身も今のまま。変わるのは送り手のスレッドだけ）。
+- dispatcher のトークの差し替え・Close funnel・stale の棄却の規則（取り次ぎの腕を足すだけで、既存の腕には触らない）。
 - 選択肢とアンカーの押せる範囲の作り方（`derive_hit_rows`・`to_window_physical`）・入る行の数え方（`layout.rs` の `visible_window`）・バルーン定義の読み方。
 - 打ち消し線・字のグリフの描き方（`DrawTextLayout` はそのまま）・縦書きの下線の側。
 - ドラッグ中・ポインタ滞在の抑止と、抑止が解けたときの測り直しの規則（触らない）。
@@ -45,6 +47,7 @@
 ### 使ってよい依存
 
 - `crates/areka`（`emo2_boot`・`input_events`）→ `areka-emo-text` の公開の口（`TextLayerRuntime`・`TextMsg`・`EmoTextSink`）。逆向きは無い。
+- `crates/areka`（`input_events`・`ghost_session`）→ `areka-ghost` の `DispatcherMsg`・`GhostRuntime::dispatcher()`（どちらも既存の依存と口）。`areka-ghost` → `areka-kanade` の `ChoiceInput`・`AnchorInput`（既存の依存）。
 - `areka-sakura` の再生（`drive.rs`）→ `dola` の `CuePlayer::announce_choice_wait`（新）→ 登録された受け口の `CueSink::choice_wait_began`（新・何もしない既定つき）。先渡しの `preview` と同じ向きと形（設計の討議 議題 1）。
 - `areka-emo-text` → `wintf`（`VisualGraphics`・`Arrangement` の部品）・`windows`（DirectWrite の `IDWriteTextRenderer1`・`IDWriteTextLayout`）・**`windows-core`（`#[implement]` のため・ワークスペースの依存・新しい外部のクレートは 0）**。`areka-emo-text` は `areka-ghost` に依らないまま。
 - 可視性の判断は時計・GPU・World に触れない純関数のまま（`decide`）。
@@ -53,6 +56,7 @@
 ### 確かめ直しが要る変化
 
 - `TalkLifecycleSignal` の形が変わる（`ChoiceShown` を足す）＝この線を読む相手（今は可視性の判断だけ）。
+- `DispatcherMsg` に `Choice`・`Anchor` を足し、押下の選択が dispatcher を経て kanade へ着く＝完了 `choice-select-events`（「kanade へ直接・到着順に全件を素通し」）と完了 `anchor-tag-canon`（アンカーの知らせの送り方）の口の説明。素通し・到着順・送れなければ警告して次へ、は保つ。`DispatcherMsg` を網羅の `match` で読む相手（`handle` だけ）。
 - `TextMsg` に `TalkEnded` と `ChoiceWaitBegan` を足し、`handle_text_msg_with` が受け口を取る＝例・検査の呼び手。
 - `dola::cue::CueSink` に何もしない既定つきの `choice_wait_began` を足す＝crates.io に出している `dola` の口が 1 つ増える（既定つきなので外の実装は直さずに済む）。受け口を包むもの（`ClockedTextSink`）は中へ取り次ぐ（取り次がないと既定の何もしないに落ちて、押下で済まなくなる）。
 - `TextLayerRuntime::choice_active` の意味が「選択肢の行があるか」から「済んでいない選択肢があるか」へ変わる＝開発用の強調の注入（`emo2_boot/hover_inject.rs`）・`range-choice-tag`（範囲の選択肢も同じ境目に従う）。
@@ -86,11 +90,13 @@ graph TB
         Present[present actor]
         Painter[Underline probe and strokes]
     end
+    Dispatcher[dispatcher inbox]
     Kanade[kanade choice ledger]
     LifecycleSink -->|ChoiceShown TalkEnded at| Visibility
     TextSink -->|cues then TalkEnded| Runtime
     Input -->|settle place after send| Runtime
-    Input -->|selection| Kanade
+    Input -->|selection| Dispatcher
+    Dispatcher -->|ChoiceWaiting then selection| Kanade
     Runtime --> State
     Runtime --> Present
     Present --> Painter
@@ -157,6 +163,10 @@ crates/areka/src/input_events/
 - `crates/areka-emo-text/src/actor_present.rs` — 当たり行の写しから済みの選択肢を外す・済みの選択肢を指す強調を装飾へ渡さない。
 - `crates/areka/src/input_events/balloon.rs` — 押下の後に場所を済みにする 1 つの手順（選択肢のときだけ）。新しいテストの接続宣言。
 - `crates/areka/src/input_events/balloon_pressed.rs`・`shell_box_handler.rs` — 選択を送れたら上の手順を呼ぶ（普通のバルーンの場所・箱の場所）。
+- `crates/areka-ghost/src/dispatcher.rs` — `DispatcherMsg::Choice(ChoiceInput)`・`DispatcherMsg::Anchor(AnchorInput)` と、それを `KanadeMsg::Choice`／`KanadeMsg::Anchor` へそのまま送る腕 2 つ（実装で改めた・案 (b)）。
+- `crates/areka-ghost/src/dispatcher_choice_tests.rs` — inbox の順のまま kanade へ着く檻を足す。
+- `crates/areka/src/input_events/choice_drain.rs` — 送り口を `Sender<DispatcherMsg>` に替え、`DispatcherMsg::Choice`／`Anchor` を送る。冒頭の説明（「kanade へ転送」）と既存の檻の送り口の型を直す。
+- `crates/areka/src/ghost_session.rs` — `wire_choice_drain` へ `runtime.dispatcher().clone()` を渡す（今は `runtime.kanade().clone()`）。
 
 **件 2**
 - `crates/areka-emo-text/src/region.rs` — `TextRegion::is_collapsed` を足す。`resolve` の毎フレームの `warn!` を外し、doc の「退化した validrect の warn はそのまま残す」を改める。
@@ -187,17 +197,20 @@ sequenceDiagram
     participant User
     participant Input
     participant Runtime as TextLayerRuntime
+    participant Disp as Dispatcher
     participant Kanade
     participant Talk as Talk thread
     participant Vis as Visibility
     Talk->>Vis: TalkStarted
     Talk->>Runtime: Choice cues
     Talk->>Vis: ChoiceShown
-    Talk->>Kanade: ChoiceWaiting via dispatcher
+    Talk->>Disp: ChoiceWaiting into inbox
     Talk->>Runtime: ChoiceWaitBegan on text line
+    Disp->>Kanade: ChoiceWaiting
     User->>Input: click choice row
-    Input->>Kanade: selection
+    Input->>Disp: selection into same inbox
     Input->>Runtime: settle place only after wait began
+    Disp->>Kanade: selection
     Kanade->>Talk: resolve choice after response
     Talk->>Runtime: TalkEnded on text line
     Talk->>Vis: TalkEnded at stop time
@@ -205,7 +218,10 @@ sequenceDiagram
 ```
 
 - 押した瞬間にその場所の選択肢が済む（光らない・押せない）。ただし済ませるのは、文字の線で `ChoiceWaitBegan` を受けた後（＝再生が kanade へ `ChoiceWaiting` を送った後）の押下だけ。それより前の押下は今のまま（kanade が捨て、押し直せる）。時間切れと中断では、文字の線の `TalkEnded` で全部の場所の選択肢が済む。
-- 順の保証: 再生のスレッドは `ChoiceWaiting` を done の口へ送ってから `ChoiceWaitBegan` を文字の線へ積む。押下はそれを UI が受けた後にしか済みを付けない。`ChoiceWaiting` は dispatcher を経て kanade へ着くので、押下の選択が kanade に着く順がそれより後になることを、実装の最初のタスクで経路（押下の送り先と dispatcher の取り次ぎ）を読んで確かめる。後と言い切れない経路なら、そのタスクで止めて報告する。
+- 順の保証（実装で改めた・開発者の裁定 2026-10-16・案 (b)）: 押下の選択を `ChoiceWaiting` と同じ dispatcher の inbox へ送り、同じ列に並べる。つながりは「再生のスレッドが `ChoiceWaiting` を dispatcher の inbox へ送る → その後に `ChoiceWaitBegan` を文字の線へ積む → UI が受けて済ませてよい印を立てる → 押下 → UI が選択を同じ inbox へ送る（FIFO）→ dispatcher の 1 本のスレッドが順に汲み、`KanadeMsg::ChoiceWaiting` を送ってから選択を kanade へ送る」。kanade の口へ送るのが dispatcher の 1 本のスレッドだけになるので、kanade には必ずこの順で着く。
+  - 理由: タスク 4.1 で、今の押下は UI のスレッドから kanade へ直接送られ（`choice_drain.rs` 101 行）、`ChoiceWaiting` は dispatcher のスレッドが送る（`dispatcher.rs` 261〜270 行）ので、2 つの間に順の保証が無いと分かった（research.md「タスク 4.1 の確かめ」）。選択が先に着くと kanade が捨て（`choice_rejected_no_wait`・WARN）、UI では済みになっていて押し直せない＝選択が失われ、要件 1.11 にも反する。
+  - dispatcher の遅れ: inbox に先に積まれた伝言（`Tick`・`Done`、`Start`／`Close` の `join`・379 行）の分だけ選択が kanade に着くのは遅れうるが、順は崩れない。押下で済ませるのは UI の側でその場で行うので、遅れは見た目に出ない。`Start` が先に並んでいれば古いトークは差し替え済みで、その選択を受けるかは今どおり kanade が決める（dispatcher は判断しない）。
+  - 採らなかった案: (a) kanade が選択待ちを受けたことを UI へ知らせ、それを待って済ませる（kanade から UI への新しい線と kanade の改変が要る＝境界の外・線をまたぐ状態が増える）。(c) kanade が早すぎた選択を取っておき、待ちが来たら使う（kanade の帳簿の規則と「区切りより前の押下は捨てる」今の振る舞いを変える＝境界の外・取っておいた選択の寿命の決めが新しく要る）。
 - 可視性は線の中の `ChoiceShown` でそのトークを選択肢つきと覚え、`TalkEnded` の止まった時刻を起点に測る。選択の応答が新しい台詞を始めたときは、次の `TalkStarted` が印と計測を戻す（要件 1.7）。
 - 2 本の線は互いを待たない。文字の層の状態は文字の線と押下だけが書き換え、可視性の状態は可視性の線だけが書き換える。
 
@@ -251,7 +267,7 @@ graph LR
 | 1.8 | 待ちの長さと起点は今のまま・待ちが解けた時から測る | 可視性の判断 | 起点の規則・`talk_timeout_secs` | 件 1 |
 | 1.9 | 選択肢の時間切れそのものでは送らない | 可視性の判断 | トークの終わりの前は知らせを作らない | 件 1 |
 | 1.10 | 済んだ行を光らせない | 文字の層・再生 | `settle_choices_at`（`ChoiceWaitBegan` の後だけ）・`TextMsg::TalkEnded`・強調の外し | 件 1 |
-| 1.11 | 済んだ行を押しても選択にしない・警告なし | 文字の層・入力 | 当たり行の写しから外す・押下の後の済み | 件 1 |
+| 1.11 | 済んだ行を押しても選択にしない・警告なし | 文字の層・入力・dispatcher | 当たり行の写しから外す・押下の後の済み・選択を dispatcher の inbox 経由で送る（`ChoiceWaiting` より先に着かない） | 件 1 |
 | 1.12 | 見た目は今のまま | 文字の層 | 範囲の記録を消さない（装飾は全部の範囲で注釈） | 件 1 |
 | 1.13 | 箱でも同じ | 全部 | 場所の鍵・線は場所を問わない | 件 1 |
 | 2.1 | 潰れたら供給面を作らず描かない | 提示 | `TextRegion::is_collapsed`・装着の枝 | 件 2 |
@@ -274,7 +290,7 @@ graph LR
 | 3.9 | 押せる範囲と知らせは今のまま | 当たり行 | `derive_hit_rows` に触れない | 件 3 |
 | 3.10 | 横書きはどの行もベースラインの直下 | 下線の塗り | `stroke_rect`（横書き） | 件 3 |
 | 3.11 | 収まらなければ面の内側へ寄せる | 下線の塗り | `pull_inside` | 件 3 |
-| 4.1 | 件 1 の決定論のテスト（普通と箱） | 検査 | `balloon_visibility_choice_wait_tests.rs`・`talk_lifecycle_choice_tests.rs`・`actor_choice_settle_tests.rs`・`sink_talk_end_tests.rs`・`balloon_choice_settle_tests.rs` | — |
+| 4.1 | 件 1 の決定論のテスト（普通と箱） | 検査 | `balloon_visibility_choice_wait_tests.rs`・`talk_lifecycle_choice_tests.rs`・`actor_choice_settle_tests.rs`・`sink_talk_end_tests.rs`・`balloon_choice_settle_tests.rs`・`dispatcher_choice_tests.rs` | — |
 | 4.2 | 件 2 の決定論のテスト（普通と箱） | 検査 | `actor_region_collapse_tests.rs`・`region_tests.rs` | — |
 | 4.3 | 件 3 の決定論のテスト | 検査 | `underline_tests.rs`・`viewbox_draw_underline_tests.rs` | — |
 | 4.4 | 3 件の実機の確かめ・最下行の撮り直し | 実機の手順 | テストの節の「実機」 | — |
@@ -290,6 +306,7 @@ graph LR
 | 済みの口（`TextLayerRuntime`） | emo-text・結線 | 済みを付け、写し・強調・問いを揃える | 1.10〜1.13 | 済みの境目（P0） | Service |
 | 文字の線のトークの終わり（`EmoTextSink`・`TextMsg`） | emo-text・結線 | トークの終わりを cue と同じ線で届ける | 1.10・1.13 | `UiSender`（P0） | Event |
 | 押下の後の済み（`input_events`） | areka・UI | 選択を送れたらその場所を済みにする | 1.10・1.11・1.13 | 済みの口（P0） | Service |
+| 押下の選択の取り次ぎ（`choice_drain`・`DispatcherMsg::Choice`／`Anchor`） | areka・UI → ghost・dispatcher | 押下の選択を `ChoiceWaiting` と同じ inbox に並べて kanade へ送る | 1.11 | dispatcher の inbox（P0） | Event |
 | 潰れの判定（`TextRegion::is_collapsed`） | emo-text・純粋 | 幅か高さが正でないか | 2.1・2.7 | なし | Service |
 | 潰れの記録（登録口） | emo-text・結線 | 状態の変わり目に 1 回ずつ記録 | 2.3〜2.5・2.7 | 場所の記憶（P0） | State |
 | 潰れの提示（`present_actor`） | emo-text・結線 | 描かない・片付ける・数えない | 2.1・2.2・2.6・2.8・2.9 | `TextSurface::release`（P0） | Service |
@@ -462,6 +479,32 @@ pub(super) fn settle_after_selection(
 - 呼び手: `balloon_pressed.rs`（場所＝普通のバルーン）と `shell_box_handler.rs`（場所＝箱）。送出に成功したときだけ。送出の失敗・棄却では呼ばない。選択待ちに入る前の押下は、送出に成功しても `settle_choices_at` が何もしない（議題 1）。
 - その場所の選択肢がまとめて済む（議題 1）。ほかの場所の選択肢はトークの終わりで済む。
 
+#### 押下の選択の取り次ぎ（`choice_drain.rs`・`dispatcher.rs`）
+
+実装で改めた（開発者の裁定 2026-10-16・案 (b)）。理由と採らなかった案は「流れ」の件 1 の順の保証を見よ。
+
+| 欄 | 中身 |
+|---|---|
+| 役目 | 押下の選択を `ChoiceWaiting` と同じ dispatcher の inbox に並べ、その順のまま kanade へ送る |
+| 要件 | 1.11 |
+
+##### Event Contract
+```rust
+// crates/areka-ghost/src/dispatcher.rs
+pub enum DispatcherMsg {
+    // …既存の 7 つ…
+    /// UI の押下の選択（選択肢）。判断せず KanadeMsg::Choice としてそのまま送る。
+    Choice(ChoiceInput),
+    /// UI の押下の選択（アンカー）。判断せず KanadeMsg::Anchor としてそのまま送る。
+    Anchor(AnchorInput),
+}
+```
+- 送り手: `drain_choice_selections`（UI のスレッド・入力の段）。`ChoiceForwarder` の送り口を `Sender<KanadeMsg>` から `Sender<DispatcherMsg>` に替え、種類で `DispatcherMsg::Choice`／`Anchor` を選ぶ（写し `to_choice_input`／`to_anchor_input` は今のまま）。結線は `ghost_session.rs` が `runtime.dispatcher().clone()` を渡す。
+- 受け手: dispatcher の `handle` の腕 2 つ。slot との突き合わせ（stale の棄却）はしない＝届いた選択は全件そのまま送る（受けるかどうかは今どおり kanade が決める）。
+- 順の保証: 1 つの inbox・1 本のスレッドで汲むので、inbox に入った順に kanade へ送る。`ChoiceWaiting` は `ChoiceWaitBegan` より先に inbox へ入り、押下は `ChoiceWaitBegan` を UI が受けた後なので、選択は `ChoiceWaiting` の後に kanade へ着く。
+- アンカーも同じ道へ移す: アンカーは済みにしないので、この順の問題そのものは無い（kanade の `on_anchor` は選択待ちの帳簿を見ずに受ける）。それでも同じ道にするのは、1 つの受信口を到着順に全件送る今の約束（完了 `choice-select-events`）を保つため。選択肢とアンカーを別の道に分けると、先に押した選択肢を後に押したアンカーが追い越しうる。送り口も 1 つで済む。
+- 送れなかったとき: UI の側（dispatcher の停止後）は今と同じ `warn!`（`choice_forward_failed`／`anchor_forward_failed`）を残して次の件へ続ける。dispatcher の側（kanade の停止後）も同じ名前の `warn!` を残して続ける。どちらも panic しない。
+
 ### 潰れた描画範囲（件 2）
 
 #### 潰れの判定・記録・提示
@@ -609,6 +652,7 @@ pub(crate) fn collect_underlines(
 - `TextMsg::TalkEnded`（文字の線・中身なし）。
 - `TextMsg::ChoiceWaitBegan`（文字の線・中身なし）と、その元の `dola::cue::CueSink::choice_wait_began`（何もしない既定つき）・`CuePlayer::announce_choice_wait`。
 - `MeasurementOrigin::ChoiceWaitEndedAt(f64)`・`MeasurementOrigin::ChoiceWaitEndTimeMissing`（記録の語）。
+- `DispatcherMsg::Choice(ChoiceInput)`・`DispatcherMsg::Anchor(AnchorInput)`（押下の選択を dispatcher の inbox へ・実装で改めた）。
 
 ### 外すもの
 
@@ -635,6 +679,8 @@ pub(crate) fn collect_underlines(
 | `TextSurface::release` で差し込み口が居ない | `warn!` して何もしない（差し込み口の寿命は emo-present の領分） |
 | `TextMsg::ChoiceWaitBegan` を送れない（ドレインの停止後） | `error!` 1 行・panic しない（`preview` と同じ水準）。そのトークでは押下で済まず、トークの終わりで済む |
 | 可視性の線で `ChoiceShown` を送れない | 今の `send` と同じ `warn!`・トークは続ける |
+| 押下の選択を dispatcher の inbox へ送れない（dispatcher の停止後） | 今と同じ `warn!`（`choice_forward_failed`／`anchor_forward_failed`）・次の件へ続ける |
+| dispatcher が押下の選択を kanade へ送れない（kanade の停止後） | 同じ名前の `warn!`・dispatcher は続ける |
 
 ### 記録の一覧（実機の確かめが探す語）
 
@@ -654,6 +700,7 @@ pub(crate) fn collect_underlines(
 4. **文字の線のトークの終わり**（`sink_talk_end_tests.rs`・実 `spawn_ui`）: cue を送った複製を落とすと `TalkEnded` が cue の後に 1 回届く／原本と cue を送らなかった複製は送らない／ドレインが `TalkEnded` を受けると全部の場所の選択肢が済み、`choice_wait_open` が偽に戻る／`choice_wait_began` が `ChoiceWaitBegan` として cue と同じ順で届く。
 4a. **選択待ちの始まりの送り方**（`dola` の `runtime` の檻・`areka-sakura` の `drive` の檻・`talk_clock` の檻）: `announce_choice_wait` が全部の受け口へ登録順に 1 回ずつ配る／既定の実装の受け口は何もしない／再生は `ChoiceWaiting` を done の口へ送った後に `choice_wait_began` を呼び、1 トークに 1 回（台本の最後に `\w` の待ちがあっても、待ちが明けて区切りに入るまで呼ばない）／`ClockedTextSink` が内側へ取り次ぐ。
 5. **押下の後の済み**（`balloon_choice_settle_tests.rs`）: 種類が選択肢なら場所が済む・アンカーなら済まない・借用の失敗で `error!` 1 行。
+5a. **押下の選択の取り次ぎ**（`dispatcher_choice_tests.rs`・`choice_drain.rs` の檻）: 稼働中のトークの `ChoiceWaiting` の後に `DispatcherMsg::Choice` を inbox へ積むと、kanade の口には `KanadeMsg::ChoiceWaiting` → `KanadeMsg::Choice` の順で着く（間に `Tick` と `Start` を挟んでも順は同じ）／slot が空でも `Choice`・`Anchor` は棄却せず送る／中身を変えない／kanade の停止後は `warn!` 1 行で dispatcher が続く。`choice_drain` は選択肢とアンカーを到着順に `DispatcherMsg::Choice`／`Anchor` で送り、dispatcher の停止後は今と同じ `warn!` で次へ続ける（既存の檻の送り口の型を直す）。
 6. **潰れの判定と記録**（`region_tests.rs`・`actor_region_collapse_tests.rs` の GPU なしの部分）: 幅 0・負・非数で潰れ・`resolve` は記録を出さない／潰れた領域の登録で `warn!` 1 回（場所の名前と 4 つの値）・同じ値の登録し直しで 0 回・正の領域で `info!` 1 回／箱の登録→外し→登録で記録は 1 回／隠す・出すで 0 回（2.3〜2.5・2.7）。
 7. **下線の幾何**（`underline_tests.rs`）: 横書きは上端＝ベースライン（offset を使わない）・左から右と右から左の幅／縦書きの写し／`pull_inside` は収まる線をそのまま返し、はみ出す線を太さを保って内側へ（`bound − thickness`）、太さが範囲より大きいと 0 の側／行内の軸は動かない／`stroke_overhang` がはみ出した側の欄にだけ量を入れる（3.10・3.11）。
 
@@ -686,4 +733,5 @@ pub(crate) fn collect_underlines(
 
 - データの移し替えは無い。3 件は独立に着地できる（触るファイルの重なりは `actor_present.rs` だけで、別の段）。順の目安は件 2 → 件 3 → 件 1（brief の目安のまま）。
 - 件 1 は `range-choice-tag` より先に着地させる（`actor.rs`・`state.rs`・`input_events` の重なり・開発者の裁定）。
+- 件 1 の押下の選択の取り次ぎ（案 (b)）は、押下で済ませる結線（タスク 4.6）と同じ着地に入れる。取り次ぎだけを先に入れても今の振る舞い（選択が kanade に届く・区切りより前は捨てる）は変わらない。
 - `windows-core` の追加で `Cargo.lock` が変わる（emo-text の列の 1 行だけ）。ウェーブ C7 の「依存を足す席」を本 spec が使うことは roadmap の約束の欄へ返した（設計の討議 議題 3）。確かめ: 着地の前に `Cargo.lock` の `windows` と `windows-core` が同じ `0.62.2` のままで、`windows-core` の項が 2 つに割れていない（`0.100` 系が入っていない）こと。

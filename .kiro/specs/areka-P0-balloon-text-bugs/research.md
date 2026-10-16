@@ -321,7 +321,7 @@
 
 ### 設計の討議 議題 1・2 の決め（2026-10-16・開発者「議題1と2は推奨案で承認」）
 
-- **議題 1（区切りより前の押下）**: 押下で選択肢を済ませるのは、そのトークが選択待ちに入った後だけ。再生（`drive.rs` の `notify_choice_waiting_if_newly_waiting`）が `ChoiceWaiting` を done の口へ送った後に、`dola::cue::CueSink` の新しい既定つきメソッド `choice_wait_began` で文字の線へ `TextMsg::ChoiceWaitBegan` を積む（先渡しの `preview` と同じ型）。それより前の押下は今のまま kanade が捨て（`steady.rs` 245 行の `choice_rejected_no_wait`）、押し直せる。根拠: 押せる時を kanade が受け付ける時と同じ順で決められ、台本の最後の `\w` の待ちも正しく扱える。採らなかった案: 先渡しの `Upcoming` で文字の層だけで見分ける（最後の `\w` を見落とす）・範囲の外として起票（穴が残る）。残る確かめ: `ChoiceWaiting` は dispatcher を経て kanade へ着くので、押下の選択の着く順がそれより後と言えるかを実装の最初のタスクで経路を読んで確かめる。
+- **議題 1（区切りより前の押下）**: 押下で選択肢を済ませるのは、そのトークが選択待ちに入った後だけ。再生（`drive.rs` の `notify_choice_waiting_if_newly_waiting`）が `ChoiceWaiting` を done の口へ送った後に、`dola::cue::CueSink` の新しい既定つきメソッド `choice_wait_began` で文字の線へ `TextMsg::ChoiceWaitBegan` を積む（先渡しの `preview` と同じ型）。それより前の押下は今のまま kanade が捨て（`steady.rs` 245 行の `choice_rejected_no_wait`）、押し直せる。根拠: 押せる時を kanade が受け付ける時と同じ順で決められ、台本の最後の `\w` の待ちも正しく扱える。採らなかった案: 先渡しの `Upcoming` で文字の層だけで見分ける（最後の `\w` を見落とす）・範囲の外として起票（穴が残る）。残る確かめ: `ChoiceWaiting` は dispatcher を経て kanade へ着くので、押下の選択の着く順がそれより後と言えるかを実装の最初のタスクで経路を読んで確かめる。→ タスク 4.1 で「後と言い切れない」と分かり、開発者の裁定（2026-10-16・案 (b)）で押下の選択を dispatcher の inbox 経由にして決着（下の「タスク 4.1 の確かめ」・design.md「流れ」件 1 の順の保証）。
 - **議題 2（縦書きの下線）**: 縦も横も同じ塗り方の 1 本の道。D2D が描いた縦書きの下線との一致の合格の幅を先に決めた（覆う画素の範囲が同じ・各画素の各成分の差 4/255 以下）。採らなかった案: 縦書きは D2D に描かせ端の列だけ自前で塗る（分かれ道とフレームごとの切り替えが増える）。
 
 ### タスク 4.1 の確かめ: 押下の選択と `ChoiceWaiting` が kanade に着く順（2026-10-16・結論は「後と言い切れない」）
@@ -333,3 +333,4 @@ kanade の入口は 1 本の mpsc（`crates/areka-ghost/src/runtime.rs:724` の 
 - 再生のスレッドで「done の口へ送った」が「文字の線へ積んだ」より先なのは言えるが、それは **dispatcher の inbox に入った**ことまでしか保証しない。dispatcher が kanade へ送り出す（261 行）ことと、UI が kanade へ送る（101 行）ことの間には同期が無い＝happens-before が無い。dispatcher の inbox に先に積まれた伝言（`Tick`・`Done`、`Start`／`Close` なら 379 行の `join` で待つ）を汲み終えるまで、A の送り出しは遅れうる。
 - B が先に着いた時の結果: kanade は帳簿が無いので `crates/areka-kanade/src/schedule/steady.rs:239` の `on_choice` が 248 行の `choice_rejected_no_wait`（WARN）で捨てる。UI 側ではその場所の選択肢は既に済み（押せない）ので、利用者は押し直せず選択が失われ、要件 1.11 の「警告を出さない」にも反する。
 - 実際の窓は「UI の受け取り＋押下の処理」と「dispatcher のスレッドの起き上がり」の競り合いで狭いが、構造では閉じていない。タスク 4.1 の指示どおり、ここで止めて開発者へ報告する（4.2 以降へ進まない）。コードは変えていない。
+- **開発者の裁定（2026-10-16・案 (b)）**: 押下の選択を dispatcher の inbox へ送り、`ChoiceWaiting` と同じ列に並べる（`DispatcherMsg::Choice`／`Anchor` を足し、dispatcher が判断せず kanade へ送る）。kanade の口へ送るのが dispatcher の 1 本のスレッドだけになり、選択は必ず `ChoiceWaiting` の後に着く。アンカーも同じ道へ移す（順の問題は無いが、受信口を到着順に全件送る今の約束を保つ）。採らなかった案: (a) kanade から UI へ待ちの始まりを知らせる（kanade の改変・新しい線）・(c) kanade が早い選択を取っておく（帳簿の規則と区切り前の押下を捨てる今の振る舞いを変える）。design.md の順の保証・押下の選択の取り次ぎと tasks.md の 4.1・4.6 を改めた。
