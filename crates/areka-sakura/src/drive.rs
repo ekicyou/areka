@@ -312,7 +312,7 @@ where
     fn settle_after_tick(
         &mut self,
         talk_id: TalkId,
-        player: CuePlayer,
+        mut player: CuePlayer,
         end: TalkEndReason,
         last_tick: f64,
     ) -> ControlFlow<()> {
@@ -328,7 +328,7 @@ where
             // 選択待ち成立の一度きり検出＋通知（tick 経路。`on_resolve_choice` からの合流でも
             // 呼ばれるが、`resolve_choice` 成功直後の状態は `Playing`/`Completed` であって
             // `WaitingForChoice` にはなり得ないため構造的に no-op である）。
-            self.notify_choice_waiting_if_newly_waiting(talk_id, &player);
+            self.notify_choice_waiting_if_newly_waiting(talk_id, &mut player);
             self.phase = TalkPhase::Driving {
                 talk_id,
                 player,
@@ -356,7 +356,12 @@ where
     ///
     /// 二重送出は [`choice_notified`](Self::choice_notified) が塞ぐ。送信失敗は `error!` を記録して
     /// 黙殺せず、talk は終端させない（`TalkDone` 送出と同規律・受信端不在は致命ではない）。
-    fn notify_choice_waiting_if_newly_waiting(&mut self, talk_id: TalkId, player: &CuePlayer) {
+    ///
+    /// 送った**後**に、登録された受け口へ選択待ちの始まり（[`CuePlayer::announce_choice_wait`]）を
+    /// 1 回配る（areka-P0-balloon-text-bugs 要件 1.10/1.11）。押下の選択は始まりを受けた UI から
+    /// `ChoiceWaiting` と同じ dispatcher の inbox へ送られるので、この順なら選択は必ず待ちの後に
+    /// kanade へ着く。再生器の状態の移りの中では配らない（`ChoiceWaiting` より先に文字の層へ着く）。
+    fn notify_choice_waiting_if_newly_waiting(&mut self, talk_id: TalkId, player: &mut CuePlayer) {
         if self.choice_notified || !matches!(player.state(), CuePlayerState::WaitingForChoice) {
             return;
         }
@@ -398,6 +403,7 @@ where
         if self.done.send(D::from(waiting)).is_err() {
             tracing::error!(talk_id = talk_id.0, "ChoiceWaiting done receiver dropped");
         }
+        player.announce_choice_wait();
         self.choice_notified = true;
     }
 
@@ -554,6 +560,9 @@ mod choice_tests;
 #[cfg(test)]
 #[path = "drive_choice_timeout_tests.rs"]
 mod choice_timeout_tests;
+#[cfg(test)]
+#[path = "drive_choice_wait_began_tests.rs"]
+mod choice_wait_began_tests;
 #[cfg(test)]
 #[path = "drive_delivery_tests.rs"]
 mod delivery_tests;
