@@ -23,7 +23,7 @@
 ## Boundary Commitments
 
 ### This Spec Owns
-- `tools/test-all.ps1` の新しい段「隣の helper を i686 版に揃える」（段の名前・置き場・合否の決め方・端末へ出す ASCII の文）。
+- `tools/test-all.ps1` の新しい段 2 つ（自己検査の段と、最後の段「隣の helper を i686 版に揃える」）と、その中身の道具 `tools/sync-i686-helper.ps1`（段の名前・置き場・合否の決め方・端末へ出す ASCII の文・`-SelfTest`）。
 - `shiori_host32_host::process_host` の中の helper の見出しの判定（純粋な判定の関数・記録の関数）と、`spawn` の入口でそれを呼ぶこと。記録の宛先（`target`）・`event` の名前・レベル。
 - 上の判定と記録の兄弟のテスト `crates/shiori-host32-host/src/process_host_image_tests.rs`。
 - `README.md` のビルドのコマンドの行と、`.kiro/steering/tech.md` の Common Commands のビルドの 2 行。
@@ -37,7 +37,7 @@
 
 ### Allowed Dependencies
 - Rust の側は標準ライブラリ（`std::fs::File`・`std::io::Read`）と、`shiori-host32-host` が既に持つ `tracing` だけ。新しい依存も `windows` の機能の追加も無い（`Cargo.toml`・`Cargo.lock` は変わらない）。テストは既に dev-dependencies に在る `log-capture-kit` だけを使う。
-- PowerShell の側は .NET の `System.IO.File` と既存の `Step` の仕組みだけ。別の道具のスクリプトを呼ばない。
+- PowerShell の側は .NET の `System.IO.File` と既存の `Step` の仕組みだけ。新しい道具 `tools/sync-i686-helper.ps1` はほかの道具のスクリプトを呼ばない（`test-all.ps1` から呼ばれるだけ）。
 - 依存の向き: `areka` → `areka-ghost` → `shiori-host32-host`（判定と記録はここ）。上の層は判定を呼ばない・知らない。kanade には host-32 のための分岐を足さない。
 
 ### Revalidation Triggers
@@ -92,14 +92,16 @@ crates/shiori-host32-host/src/
 ├── process_host.rs                 # 変更: 見出しの判定・記録の 3 関数と HelperImage を足し、spawn の入口で呼ぶ
 └── process_host_image_tests.rs     # 新規: 上の判定と記録の兄弟のテスト（#[path] で process_host.rs から読む）
 tools/
-└── test-all.ps1                    # 変更: Test-I686Pe 関数と最後の段 'i686 helper beside areka.exe'
+├── sync-i686-helper.ps1            # 新規: 隣の helper を i686 版に揃える道具（-SelfTest つき）
+└── test-all.ps1                    # 変更: 自己検査の段 'i686 helper sync check' と最後の段 'i686 helper beside areka.exe' を足す
 README.md                           # 変更: ビルドのコマンドの行
 .kiro/steering/tech.md              # 変更: Common Commands のビルドの 2 行
 ```
 
 ### Modified Files
 - `crates/shiori-host32-host/src/process_host.rs` — `HelperImage`・`classify_helper_image`・`report_helper_image`・`check_helper_image` を足す。`spawn` の最初の文として `check_helper_image(helper_exe)` を呼ぶ。`#[cfg(test)] #[path = "process_host_image_tests.rs"] mod image_tests;` を既存の `console_tests` の並びに足す。モジュールの頭の文書に「`spawn` の入口で helper の向きを見て、違えば記録する（起こし方は変えない）」を 1 段落足す。
-- `tools/test-all.ps1` — `.DESCRIPTION` に 11 番目の段を書き足す。`Test-I686Pe` 関数（PE の見出しを読む）を `Step` の近くに置く。`-License` の段の後、一覧を出す前に `Step 'i686 helper beside areka.exe' { ... }` を置く。
+- `tools/sync-i686-helper.ps1`（新規）— `Test-I686Pe`（PE の見出しを読む）と `Sync-I686Helper -Dest -Source`（揃えて 0／1 を返す）を持つ。引数なしは既定の置き先と写し元で揃える。`-SelfTest` は `target\` の下の使い捨ての作業場に偽の小さな PE を作り、分かれ道ごとの文と終了コードを確かめる（`release-notes.ps1`・`roadmap-overview.ps1` の `-SelfTest` と同じ形・設計議題 1）。
+- `tools/test-all.ps1` — `.DESCRIPTION` に 2 つの段を書き足す。`roadmap overview check` の段の後に `Step 'i686 helper sync check' { pwsh -NoProfile -File tools/sync-i686-helper.ps1 -SelfTest }`、`-License` の段の後・一覧を出す前に `Step 'i686 helper beside areka.exe' { pwsh -NoProfile -File tools/sync-i686-helper.ps1 }` を置く。
 - `README.md` — 「# ビルド」の下の `cargo build` を `cargo build -p areka` に替える。
 - `.kiro/steering/tech.md` — `# Build: cargo build` を `# Build: cargo build -p areka`、`# Build (Release最適化): cargo build --release` を `# Build (Release最適化): cargo build -p areka --release` に替える（素の `cargo build` を手順として示さない・要件 1.6）。
 
@@ -148,7 +150,7 @@ flowchart TD
 |-------------|---------|------------|------------|-------|
 | 1.1 | 全体テストの終わりに隣が i686 版 | SyncI686HelperStep | `Test-I686Pe`・段 `i686 helper beside areka.exe` | 揃えの段 |
 | 1.2 | 途中が赤でも止めずに 1.1 | SyncI686HelperStep | `Step`（止めない・最後の段） | 揃えの段 |
-| 1.3 | 揃えられないときは赤の行と終了コード 1・合否は終わりの状態だけ | SyncI686HelperStep | `$global:LASTEXITCODE`・一覧の `FAIL` 行・`exit 1` | 揃えの段 |
+| 1.3 | 揃えられないときは赤の行と終了コード 1・合否は終わりの状態だけ | SyncI686HelperStep | 道具の `exit 1`・一覧の `FAIL` 行・`-SelfTest` の分かれ道 ⑷〜⑹ | 揃えの段 |
 | 1.4 | 直後に claudia を `0x800700C1` なしで起こせる | SyncI686HelperStep（状態の保証）・実機の確かめ | — | 揃えの段 |
 | 1.5 | 端末へ出す新しい文は ASCII | SyncI686HelperStep | 段の名前と文の固定の英文 | — |
 | 1.6 | 文書のビルドの手順は `cargo build -p areka` | DevDocs | README.md・tech.md の行 | — |
@@ -168,7 +170,7 @@ flowchart TD
 | Component | Domain/Layer | Intent | Req Coverage | Key Dependencies (P0/P1) | Contracts |
 |-----------|--------------|--------|--------------|--------------------------|-----------|
 | HelperImageCheck | `shiori-host32-host::process_host` | helper の見出しを読み、i686 でなければ記録する | 3.1〜3.6 | `std::fs`（P0）・`tracing`（P0） | Service |
-| SyncI686HelperStep | `tools/test-all.ps1` | 全体テストの最後に隣の helper を i686 版に揃え、合否を返す | 1.1〜1.5・2.1 | `Step`（P0）・i686 の成果物（P1） | Batch |
+| SyncI686HelperStep | `tools/sync-i686-helper.ps1`（`tools/test-all.ps1` の段から呼ぶ） | 全体テストの最後に隣の helper を i686 版に揃え、合否を返す。`-SelfTest` で分かれ道を毎回確かめる | 1.1〜1.5・2.1 | `Step`（P0）・i686 の成果物（P1） | Batch |
 | DevDocs | 文書 | ビルドの手順を `cargo build -p areka` で示す | 1.6 | — | — |
 
 ### shiori-host32-host
@@ -257,7 +259,7 @@ fn check_helper_image(helper_exe: &Path);
 ##### Batch / Job Contract
 - Trigger: スクリプトの最後の段として毎回（`-Format`・`-License` の有無に依らない）。
 - Input / validation: 置き先 `target\debug\shiori-host32-helper.exe`・写し元 `target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe`（どちらもリポジトリの根から。スクリプトは既に根へ `Set-Location` している）。
-- Output / destination: 置き先が i686 版になる。段の中で `$global:LASTEXITCODE` を立てる（揃っていれば `0`、揃わなければ `1`）。`Step` がそれを読み、一覧に `OK` か `FAIL` の行が出て、赤なら全体が終了コード 1 で終わる（1.3）。
+- Output / destination: 置き先が i686 版になる。道具の終了コードは揃っていれば `0`、揃わなければ `1`。`Step` がそれを読み、一覧に `OK` か `FAIL` の行が出て、赤なら全体が終了コード 1 で終わる（1.3）。
 - 端末の文（例・ASCII）:
   - 揃っていた: `helper is i686: target\debug\shiori-host32-helper.exe`
   - 置いた: `placed i686 helper: <source> -> <dest>`
@@ -267,8 +269,8 @@ fn check_helper_image(helper_exe: &Path);
 - Idempotency & recovery: 置き先が既に i686 版なら何も写さない（何度回しても同じ）。失敗したときは一時名のファイルを消してから赤にする（`target\debug\` に `*.tmp` を残さない）。
 
 **Implementation Notes**
-- Integration: `Step` は段の後の `$LASTEXITCODE` を読む。この段は PowerShell の文だけなので、前の段の値が残らないよう、段の中のすべての出口で `$global:LASTEXITCODE` を立てる。
-- Validation: 実装の段では、関数と段の本体を単独で回す一回きりの確かめ（x64 の helper を置いた状態・i686 版が在る状態・写し元が無い状態）で分岐を見る。最後の 1 回の全体テストで一覧に `OK  i686 helper beside areka.exe` が出ることを見る。
+- Integration: 段の中身は `tools/sync-i686-helper.ps1` に置き、`test-all.ps1` は別のプロセス（`pwsh -NoProfile -File`）で呼ぶ。`Step` は段の後の `$LASTEXITCODE` を読むので、道具の `exit 0`／`exit 1` がそのまま合否になる（前の段の値が残る心配が無い）。道具の終了コードは、最後にもう一度 `Test-I686Pe $Dest` を見た結果の 1 か所だけで決める（途中の出口で立て忘れる形を作らない）。
+- Validation（設計議題 1 で確定）: `-SelfTest` を全体テストの段 `i686 helper sync check` で毎回回す。`target\` の下の使い捨ての作業場（プロセス番号つきの名前）に、i686 と x64 の偽の小さな PE（`MZ`・`e_lfanew`・`PE\0\0`・機械の種類だけの数十バイト）を作り、次の分かれ道ごとに終了コードと端末の文の先頭を突き合わせる: ⑴ 置き先が既に i686 → 0・写さない ⑵ 置き先が x64・写し元が i686 → 0・置き先が i686 になる ⑶ 置き先が無い・写し元が i686 → 0 ⑷ 写し元が無い → 1 ⑸ 写し元が x64 → 1 ⑹ 置き先を `FileShare.None` で開いて塞いだまま → 1・`*.tmp` が残らない。ネットも実物の helper も使わず、作業場は終わりに消す。最後の 1 回の全体テストでは、一覧に `OK  i686 helper sync check` と `OK  i686 helper beside areka.exe` が出ることを見る。
 - Risks: 開発者が `target\debug\areka.exe` を動かしている最中は helper が使われていて置き換えが断られる → 赤の行で知らせる（1.3 のとおり・自動で止めない）。
 
 #### DevDocs（要約のみ）
@@ -307,11 +309,11 @@ fn check_helper_image(helper_exe: &Path);
   - テストの実行体そのもの（`std::env::current_exe()`・x64 か arm64）を渡す → `ERROR` 1 件（読む道が実ファイルで働く・一時ファイル不要）。
   - 無いパスを渡す → `WARN` 1 件。
   - 既存の `spawn_missing_exe_returns_spawn_error_and_no_handle` が今と同じく `SpawnError::Spawn` を返すこと（3.3・3.5 の「起こし方は変えない」）。
-- 全体テストのスクリプト: 実装の段で揃えの段の分岐を単独で確かめる（Implementation Notes）。最後の 1 回の全体テストで、`i686 helper beside areka.exe` が `OK` で、終わった後の `target\debug\shiori-host32-helper.exe` の machine が `014C` であること（1.1・2.1〜2.4 は既存の段の合否が今と同じであること）。
+- 全体テストのスクリプト: 揃えの道具の分かれ道は `-SelfTest`（段 `i686 helper sync check`・偽の小さな PE・毎回の全体テストで走る）で決定論に確かめる（SyncI686HelperStep の Implementation Notes）。最後の 1 回の全体テストで、`i686 helper sync check` と `i686 helper beside areka.exe` が `OK` で、終わった後の `target\debug\shiori-host32-helper.exe` の machine が `014C` であること（1.1・2.1〜2.4 は既存の段の合否が今と同じであること）。
 - 実機（重い回 0・`target\` の下の短い絶対パスの根・有界の自動終了・ログの検索）:
   - `cargo build -p areka` の後に `cargo build -p shiori-host32-helper`（x64）で隣を x64 版にして claudia を起こす → `helper_not_i686` の 1 行が `connect_failed` より前に 1 件（3.1〜3.3）。
   - 全体テストの 1 回の後（新しく回さず、実装の最後の検証で回す 1 回を使う）に、写す手間なしで `target\debug\areka.exe` で claudia を起こす → `0x800700C1` が出ず、`connect_failed` 0 件・`helper_not_i686` 0 件（1.4・3.4）。
-  - 順番は必ず「x64 版を置いての確かめ」→「実装の最後の全体テスト 1 回」→「写さずに claudia を起こす確かめ」。x64 版を置いた後片付けは、続く全体テストの揃えの段に任せる（その段が i686 版へ戻すこと自体が要件 1.1 の確かめになる）。逆の順にすると 2 つ目の確かめの前提（隣が i686 版）が崩れ、 x800700C1 が設計の不具合と見分けられなくなる。
+  - 順番は必ず「x64 版を置いての確かめ」→「実装の最後の全体テスト 1 回」→「写さずに claudia を起こす確かめ」。x64 版を置いた後片付けは、続く全体テストの揃えの段に任せる（その段が i686 版へ戻すこと自体が要件 1.1 の確かめになる）。逆の順にすると 2 つ目の確かめの前提（隣が i686 版）が崩れ、`0x800700C1` が設計の不具合と見分けられなくなる。
 - 最初のタスク（ビルドだけ・重い回 0）: research.md 7.2 の確かめ。i686 版を隣へ置いた後に素の `cargo build`（または `cargo build -p shiori-host32-helper`）を打つと、作り直しが要らなくても隣が x64 版へ戻るかを machine 欄で見て記録する。結果は設計を変えない（要件は道筋に依らない）が、文書の書き替え（1.6）の根拠になる。
 
 ## Performance & Scalability
