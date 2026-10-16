@@ -286,6 +286,7 @@ name = "areka-mcp-bridge"
 version = "0.0.2"
 dependencies = [
  "areka-mcp",
+ "areka-user-data",
  "futures",
  "http",
  "httparse",

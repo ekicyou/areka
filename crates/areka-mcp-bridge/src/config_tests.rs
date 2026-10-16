@@ -9,7 +9,7 @@ use std::time::Duration;
 use super::*;
 
 fn candidates_of(port_value: Option<&str>) -> Vec<u16> {
-    Config::from_values(port_value, None, None, false, None).candidates
+    Config::from_values(port_value, None, None, None).candidates
 }
 
 /// `AREKA_MCP_PORT` の 4 通り（要件 2.1・2.4・2.5・2.6）。並びは areka 本体と同じ関数の結果（8.2）。
@@ -44,15 +44,13 @@ fn port_value_maps_to_candidates_in_four_ways() {
 
 fn cache_dir_of(
     profile_dir: Option<&str>,
-    exe: Option<&str>,
-    areka_beside: bool,
+    beside_profile: Option<&str>,
     local_app_data: Option<&str>,
 ) -> Option<PathBuf> {
     Config::from_values(
         None,
         profile_dir.map(PathBuf::from),
-        exe.map(PathBuf::from),
-        areka_beside,
+        beside_profile.map(PathBuf::from),
         local_app_data.map(PathBuf::from),
     )
     .cache_dir
@@ -61,44 +59,75 @@ fn cache_dir_of(
 /// `LOCALAPPDATA` の値の見本（組むだけで開かない）。
 const LOCAL: &str = r"C:\Users\u\AppData\Local";
 
-/// 控えの置き場の 4 通り（設計 D-7 の 3 段＋なし）。
+/// 控えの置き場の段の順（user-data-root 要件 6.1〜6.3）: 記憶の置き場の環境変数 →
+/// 隣の areka と同じに決めた記憶の置き場 → `LOCALAPPDATA\areka` → なし。どれもその下の `mcp-bridge`。
 #[test]
-fn cache_dir_follows_the_three_steps() {
-    let exe = Some(r"app\areka-mcp-bridge.exe");
+fn cache_dir_follows_the_steps_in_order() {
+    let beside = Some(r"C:\Users\u\AppData\Local\areka\profile\areka");
 
     // ⑴ `AREKA_PROFILE_DIR` があれば、ほかが揃っていてもその下。
     assert_eq!(
-        cache_dir_of(Some("prof"), exe, true, Some(LOCAL)),
+        cache_dir_of(Some("prof"), beside, Some(LOCAL)),
         Some(PathBuf::from(r"prof\mcp-bridge"))
     );
-    // ⑵ 無ければ、隣に `areka.exe` が居るときだけ exe の隣の木。
+    // ⑵ 無ければ、隣の areka と同じに決めた記憶の置き場の下。
     assert_eq!(
-        cache_dir_of(None, exe, true, Some(LOCAL)),
-        Some(PathBuf::from(r"app\profile\areka\mcp-bridge"))
+        cache_dir_of(None, beside, Some(LOCAL)),
+        Some(PathBuf::from(
+            r"C:\Users\u\AppData\Local\areka\profile\areka\mcp-bridge"
+        ))
     );
-    // ⑶ 隣に居なければ `LOCALAPPDATA` の下。
+    // ⑶ 隣に areka が居ない（決めた置き場が無い）なら `LOCALAPPDATA` の下（今どおり・6.2）。
     assert_eq!(
-        cache_dir_of(None, exe, false, Some(LOCAL)),
+        cache_dir_of(None, None, Some(LOCAL)),
         Some(PathBuf::from(r"C:\Users\u\AppData\Local\areka\mcp-bridge"))
     );
-    // どの段も取れなければ控えなし。
-    assert_eq!(cache_dir_of(None, exe, false, None), None);
+    // どの段も取れなければ控えなし（6.3）。
+    assert_eq!(cache_dir_of(None, None, None), None);
 }
 
-/// 隣に居ると言われても exe の場所が取れていなければ、exe の隣の木は組めないので次の段へ。
+/// 隣の areka の置き場を areka と同じ関数（`app_profile_dir`）で決めて渡すと（要件 6.1・10.5）、
+/// 書ける根を使う形なら `<書ける根>\profile\areka\mcp-bridge`、今の形なら exe の隣の木の下になる。
 #[test]
-fn cache_dir_without_exe_location_falls_to_local_app_data() {
+fn beside_profile_from_the_shared_rule_lands_under_the_areka_profile() {
+    let exe_dir = std::path::Path::new(r"C:\app");
+    let user_root = areka_user_data::Layout {
+        user_root: Some(areka_user_data::UserRoot {
+            dir: PathBuf::from(r"C:\Users\u\AppData\Local\areka"),
+            origin: areka_user_data::UserRootOrigin::Default,
+        }),
+        reason: areka_user_data::Reason::Unwritable,
+    };
+    let beside = areka_user_data::Layout {
+        user_root: None,
+        reason: areka_user_data::Reason::Neither,
+    };
+    let cache = |layout: &areka_user_data::Layout| {
+        Config::from_values(
+            None,
+            None,
+            areka_user_data::app_profile_dir(None, layout, Some(exe_dir)),
+            Some(PathBuf::from(LOCAL)),
+        )
+        .cache_dir
+    };
     assert_eq!(
-        cache_dir_of(None, None, true, Some(LOCAL)),
-        Some(PathBuf::from(r"C:\Users\u\AppData\Local\areka\mcp-bridge"))
+        cache(&user_root),
+        Some(PathBuf::from(
+            r"C:\Users\u\AppData\Local\areka\profile\areka\mcp-bridge"
+        ))
+    );
+    assert_eq!(
+        cache(&beside),
+        Some(PathBuf::from(r"C:\app\profile\areka\mcp-bridge"))
     );
 }
 
 /// 空・相対の `LOCALAPPDATA` は使わない（起こされた場所しだいの相対の置き場に黙って書かない）。
 #[test]
 fn cache_dir_ignores_a_local_app_data_that_is_not_absolute() {
-    assert_eq!(cache_dir_of(None, None, false, Some("")), None);
-    assert_eq!(cache_dir_of(None, None, false, Some("local")), None);
+    assert_eq!(cache_dir_of(None, None, Some("")), None);
+    assert_eq!(cache_dir_of(None, None, Some("local")), None);
 }
 
 /// 待つ時間の既定は 3 つの定数（設計 D-11）。
@@ -108,7 +137,7 @@ fn default_timeouts_are_the_three_constants() {
     assert_eq!(VERIFY_WAIT, Duration::from_secs(3));
     assert_eq!(REPLY_WAIT, Duration::from_secs(30));
 
-    let timeouts = Config::from_values(None, None, None, false, None).timeouts;
+    let timeouts = Config::from_values(None, None, None, None).timeouts;
     assert_eq!(timeouts.connect, CONNECT_WAIT);
     assert_eq!(timeouts.verify, VERIFY_WAIT);
     assert_eq!(timeouts.reply, REPLY_WAIT);

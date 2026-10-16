@@ -49,6 +49,9 @@ fn run(port: u16, profile_dir: &Path, input: &str, read_stdout: bool) -> Finishe
     let mut child = Command::new(env!("CARGO_BIN_EXE_areka-mcp-bridge"))
         .env(areka_mcp::PORT_ENV, port.to_string())
         .env("AREKA_PROFILE_DIR", profile_dir)
+        // 建った exe の隣（target\debug）には areka.exe が在り、中継は areka と同じ形の準備を通る。
+        // 開発者の書ける根の環境変数を受け継ぐとそこを作るので外す（user-data-root 3.1 の申し送りと同じ）。
+        .env_remove("AREKA_USER_ROOT")
         .env_remove("RUST_LOG")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
