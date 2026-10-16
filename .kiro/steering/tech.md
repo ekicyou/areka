@@ -115,8 +115,8 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 ### Common Commands
 ```bash
 # Dev (サンプル実行): cargo run -p wintf --example taffy_flex_demo
-# Build: cargo build
-# Build (Release最適化): cargo build --release
+# Build: cargo build -p areka
+# Build (Release最適化): cargo build -p areka --release
 # Test: cargo test
 # Full test (DoD gate・i686 の準備込み・PowerShell): pwsh -NoProfile -File tools/test-all.ps1 [-Format] [-License]
 ```
