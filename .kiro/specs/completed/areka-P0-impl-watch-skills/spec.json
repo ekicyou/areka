@@ -1,0 +1,26 @@
+{
+  "feature_name": "areka-P0-impl-watch-skills",
+  "created_at": "2026-10-16T01:51:39Z",
+  "updated_at": "2026-10-16T08:16:30Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-10-16T08:16:30Z"
+    }
+  },
+  "ready_for_implementation": true
+}

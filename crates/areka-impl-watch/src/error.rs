@@ -34,9 +34,9 @@ pub enum WatchError {
         "state file version mismatch: file has {found}, this exe knows {known}. Do not mix old and new exes; see doc/impl-watch.md"
     )]
     VersionMismatch { found: u64, known: u32 },
-    /// 読むだけ（`status`）のときに状態ファイルが壊れていた。
+    /// 読むだけ（`status`）のときに状態ファイルが壊れていた。訳はログにだけ載り、文には出ない。
     #[error("state file is broken; see impl-watch.log")]
-    Broken,
+    Broken(Damage),
     /// `id` は引数の形の決まり（ASCII）を通ったもの、`kind` は待ちの種類の ASCII の名前。
     #[error("a {kind} wait for {id} is already running")]
     AlreadyRunning { id: String, kind: &'static str },
@@ -50,6 +50,18 @@ pub enum WatchError {
     /// `From<serde_json::Error>` で作る（中身は行と列だけ）。
     #[error("json: {0}")]
     Json(String),
+}
+
+/// 状態ファイルが壊れていた訳。ログにだけ載り、端末の文には出ない。中身は種類の名前と数だけ
+/// （`serde_json::Error` の文は入力の値を含むので写さない）。ログでは `Debug` の綴りで載る。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Damage {
+    /// JSON として読めない（途中で切れた・BOM 付きを含む）。行と列は serde_json の示す位置。
+    NotJson { line: usize, column: usize },
+    /// 版は 1 だが欄の形が合わない。行と列は元のバイト列を読み直して得た位置。
+    WrongShape { line: usize, column: usize },
+    /// 版の数字が無い・数でない・一番外が表でない。
+    NoVersion,
 }
 
 impl WatchError {

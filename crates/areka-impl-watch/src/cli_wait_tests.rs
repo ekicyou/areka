@@ -149,6 +149,32 @@ fn merge_wait_makes_the_request_before_waiting() {
 }
 
 #[test]
+fn a_restarted_merge_wait_that_ends_at_once_removes_the_record_of_the_killed_wait() {
+    let root = TempPath::under_target("impl-watch-cli-wait");
+    let home = home_in(&root);
+    let _held = hold_watches(&home, &["a"]);
+    // a はすでに areka の机の持ち主。前の `merge --wait` は殺され、その記録だけが残っている
+    // （居る印は殺されたときに解けている）。
+    call(&home, &MERGE_A);
+    let mut state = read_state(&home);
+    state.waits.push(WaitRecord {
+        id: "a".to_owned(),
+        kind: WaitKind::Merge,
+        repo: Some("areka".to_owned()),
+        pid: 4242,
+        since: 1,
+    });
+    put_state(&home, &serde_json::to_string(&state).expect("状態を書ける"));
+
+    // 始め直した待ちは直ちに番で終わる（文と終了コードは今のまま）。
+    let granted = done("granted merge repo=areka; last: none");
+    assert_eq!(waiting(&home, &MERGE_A), granted);
+
+    // 殺された前の待ちの記録は、同じ呼び出しで消えている。
+    assert_eq!(waits(&home), []);
+}
+
+#[test]
 fn loadtest_wait_is_granted_at_once_when_nobody_has_to_stop() {
     let root = TempPath::under_target("impl-watch-cli-wait");
     let home = home_in(&root);
@@ -359,4 +385,39 @@ fn resume_for_a_stop_requested_participant_ends_at_once_saying_who_asked_and_rec
     assert_eq!(state.waits, []);
     // 居る印も握ったままにしない: 呼び直しても 1 にならない。
     assert_eq!(call(&home, &resume), asked_again);
+}
+
+#[test]
+fn stopped_wait_ends_with_stop_requested_again_when_the_same_call_hands_the_load_desk_on() {
+    let root = TempPath::under_target("impl-watch-cli-wait");
+    let home = home_in(&root);
+    // 負荷テストの机の持ち主 h（作業中・見張りなし）・待ち行列の c（見張りの印を握る）・作業中の a。
+    put_state(
+        &home,
+        r#"{
+          "version": 1,
+          "participants": {
+            "a": { "id": "a", "repo": "areka" },
+            "c": { "id": "c", "repo": "areka" },
+            "h": { "id": "h", "repo": "areka" }
+          },
+          "load": {
+            "holder": { "id": "h", "purpose": "負荷の計測" },
+            "queue": [ { "id": "c", "purpose": "負荷の計測", "requested": 10 } ]
+          }
+        }"#,
+    );
+    let _held = hold_watches(&home, &["c"]);
+
+    // 同じ呼び出しの回収で h が外れ、番の決め直しで c が a を止める。眠らずに 0 で終わる。
+    let asked_again = done("stop requested again by c");
+    assert_eq!(waiting(&home, &["stopped", "--id", "a"]), asked_again);
+
+    let state = read_state(&home);
+    assert!(!state.participants.contains_key("h"), "{state:?}");
+    assert_eq!(
+        state.participants["a"].status,
+        ParticipantStatus::StopRequested
+    );
+    assert_eq!(state.waits, []);
 }

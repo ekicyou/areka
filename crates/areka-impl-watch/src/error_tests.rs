@@ -6,7 +6,7 @@ use std::path::Path;
 
 use temp_path_kit::TempPath;
 
-use super::{WatchError, escape_path};
+use super::{Damage, WatchError, escape_path};
 
 /// 全部の種類の見本。ASCII の外の字が来うる所（置き場所の道筋・OS と JSON の元の文）には
 /// 日本語を入れてある。
@@ -21,7 +21,7 @@ fn samples() -> Vec<WatchError> {
         WatchError::home_not_creatable(Path::new("C:\\利用者\\置き場"), &os),
         WatchError::LockBusy,
         WatchError::VersionMismatch { found: 2, known: 1 },
-        WatchError::Broken,
+        WatchError::Broken(Damage::NotJson { line: 1, column: 2 }),
         WatchError::AlreadyRunning {
             id: "areka-P0-impl-watch".to_string(),
             kind: "watch",
@@ -41,7 +41,7 @@ fn variant_index(err: &WatchError) -> usize {
         WatchError::HomeNotCreatable { .. } => 1,
         WatchError::LockBusy => 2,
         WatchError::VersionMismatch { .. } => 3,
-        WatchError::Broken => 4,
+        WatchError::Broken(_) => 4,
         WatchError::AlreadyRunning { .. } => 5,
         WatchError::Io { .. } => 6,
         WatchError::Json(_) => 7,
@@ -89,6 +89,31 @@ fn messages_spell_the_design_text() {
     assert_eq!(
         texts[8],
         "AREKA_IMPL_WATCH_HOME must be an absolute path such as C:\\Users\\me\\.areka-impl-watch, but it is '..\\\\u{7f6e}\\u{304d}\\u{5834}'. See doc/impl-watch.md"
+    );
+}
+
+#[test]
+fn broken_keeps_the_terminal_text_and_its_damage_is_ascii() {
+    let damages = [
+        Damage::NotJson { line: 1, column: 2 },
+        Damage::WrongShape {
+            line: 2,
+            column: 17,
+        },
+        Damage::NoVersion,
+    ];
+    for damage in damages {
+        // 端末の文は訳によらず今のまま（訳はログにだけ載る）。
+        assert_eq!(
+            WatchError::Broken(damage).to_string(),
+            "state file is broken; see impl-watch.log"
+        );
+        let spelled = format!("{damage:?}");
+        assert!(spelled.is_ascii() && !spelled.contains('\n'), "{spelled}");
+    }
+    assert_eq!(
+        format!("{:?}", damages[0]),
+        "NotJson { line: 1, column: 2 }"
     );
 }
 
