@@ -160,6 +160,9 @@
 13. **手順書 5 節の終了コード 1 の表に足す行**（要件 9.3・6.4）: `a resume|merge|load wait for <識別> is already running` の行と、そのときスキルがすること。
 14. **過去の記録の扱いの線**（要件 8.4）: 生成済みの俯瞰の HTML（`doc/roadmap-overview-2026-10-16.html`）と見本 `tools/release-notes-fixture/subjects.txt:10` に `kiro-watch` の字が残る。どちらも過去の記録・見本として書き替えない側に数えるか。
 
+15. **番が来たときの既定の枝の取り込み**（要件 5.4・2.1 の 8）: `kiro-complete` のステップ0 の `sync_with_base_branch` は、資格情報つきの URL のために断られる。机の段の取り込みを `git fetch` と `git merge` にするか。
+16. **アプリの断りの文**（2.1 の 6・`error.rs:16`）: 「exe をコピーせよ」の言い方が置き方の手順とずれる。アプリは範囲外なので、完了のときに `areka-P0-impl-watch-residue` の brief へ「件 N」で申し送る。
+
 ---
 
 ## 7. 設計へのおすすめ（決めごとではない）
