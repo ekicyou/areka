@@ -165,8 +165,8 @@
   - 5 つのクレートのテストが緑で、`Cargo.lock` の確かめが通った状態
   - _Requirements: 4.1, 4.2, 4.3_
 
-- [ ] 5.3 件 1 を実機で確かめる
-  - emo2 で、選んで応答が 204・選択肢の時間切れで `OnChoiceTimeout` が 204・中断の 3 つを回し、それぞれ済んでから既定の長さ（短縮の環境変数で可）で隠れて `OnBalloonTimeout` が届く（`origin=choice_wait_ended_at` の記録）
+- [x] 5.3 件 1 を実機で確かめる
+  - emo2 で、選んで応答が 204・選択肢の時間切れで `OnChoiceTimeout` が 204・中断の 3 つを回し、それぞれ済んでから既定の長さ（短縮の環境変数で可）で隠れて `OnBalloonTimeout` が届く（`origin=choice_wait_ended_at` の記録）（実機で改めた（2026-10-16）: ⑶ の利用者の中断（バルーンの左ダブルクリック）は、完了 `balloon-break` 要件 4.1 のとおり出ている全部のバルーンをその場で隠し、`OnBalloonBreak` を送って `OnBalloonTimeout` は送らない。要件 1.4 の前提「中断の後にバルーンが表示されたまま残る」は実機では起きないので、実機では「その場で隠れ、`OnBalloonTimeout` が来ない」を確かめる。中断の起点は決定論のテスト `balloon_visibility_choice_wait_tests.rs:115` だけが固定する。記録は `real-machine-signoff.md` 5 章）
   - 済んだ行が光らず、押しても選択の知らせも警告も出ない。箱の選択肢でも 1 回
   - 選択肢の後ろに字と `\w` の待ちを置いた台詞で、明ける前の押下は今のまま捨てられ（`choice_rejected_no_wait`）、明けた後の押し直しで選べる
   - RUST_LOG を判定の分岐の記録まで開けた実機の記録で、上が全部確かめられた状態
@@ -193,3 +193,4 @@
 - 範囲外（完了の棚卸で起票を判断）: `cargo clippy -p areka-emo-text --tests` が HEAD の時点から deny の `absurd_extreme_comparisons` で落ちる（`tests/line_pitch_readback_test.rs:705`・`tests/emo2_fixture_e2e_test.rs:638` の `overhang <= BAND_OVERHANG_MAX`）。
 - 4.4: `note_choice_wait_began`・`close_choice_wait`・`settle_all_choices` は `expect(dead_code)` で 4.5 の結線を待つ。4.5 で結んだらこの属性を外す。同じスコープの箱に済んでいない選択肢が残るとき `choice_active` が真のままの組は GPU なしの檻が無い（4.7 の箱の檻で一部覆う）。
 - 4.6: 押下のハンドラから済みまでを通しで動かす檻は 4.7 の実 GPU の範囲。箱の押下の `runtime_of(world)` が None のときは記録なしで抜ける（`locate` が runtime を前提にするので実際には通らない）。
+- 範囲外の観察（5.3 実機・判定には使っていない・完了の棚卸で起票を判断）: ⑴ ポインタの移動と押下を 1 回の SendInput で同時に送ると areka の記録に移動も押下も残らなかった（`targettb-signoffun-Wait-1.log`・先に移動してから押すと通る）。⑵ 操作していない時間に `[visibility-guard]` と `[balloon-limit] Clamp` が 565 行続いた（`run-Timeout-1.log`・直前に `loop ticker catch-up`・窓の 1 枚が -32768 の位置・再走では再現せず）。
