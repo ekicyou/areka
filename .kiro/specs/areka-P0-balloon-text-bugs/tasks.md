@@ -159,7 +159,7 @@
   - §8 に 4 行が載り、完了 `balloon-visibility` 5.4 と完了 `text-decoration-canon` 5.7 を改めた旨が読める状態
   - _Requirements: 4.5_
 
-- [ ] 5.2 触ったクレートの決定論のテストと層の檻をまとめて通す
+- [x] 5.2 触ったクレートの決定論のテストと層の檻をまとめて通す
   - `dola`・`areka-sakura`・`areka-emo-text`・`areka-ghost`・`areka` のテストを回し、層の檻（純粋層の母数）が新しいファイル全部を数えていることを確かめる
   - `Cargo.lock` の `windows` と `windows-core` が同じ `0.62.2` のままで、`windows-core` の項が 2 つに割れていないことを確かめる
   - 5 つのクレートのテストが緑で、`Cargo.lock` の確かめが通った状態
