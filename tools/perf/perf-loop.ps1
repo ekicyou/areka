@@ -257,6 +257,7 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 # テンプレート（perf_ledger_goal.py の GOAL_TEXT_TEMPLATE）を直すと写しが黙ってずれる
 # ——ずれを見つけるのがこの検査である（tasks.md Implementation Notes (7.1)）。
 # 台帳は使い捨ての一時ファイルへ作る（本物の台帳の走行トークンには触れない）。
+# 作業用のフォルダはワークツリーの target\perf-loop-tmp\ の下だけに置き、無ければ作り直す（OS の一時フォルダは使わない）。
 function Test-GoalTextMatchesGoalMd {
     param(
         [Parameter(Mandatory = $true)][pscustomobject]$Python,
@@ -269,7 +270,7 @@ function Test-GoalTextMatchesGoalMd {
         return [pscustomobject]@{ Ok = $false; Code = -1; Note = "条件文の写しがありません: $goalMdPath"; Lines = @() }
     }
 
-    $temp = Join-Path ([System.IO.Path]::GetTempPath()) ("perf-loop-selftest-" + [Guid]::NewGuid().ToString('N'))
+    $temp = Join-Path (Join-Path $repoRoot 'target\perf-loop-tmp') ("perf-loop-selftest-" + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $temp | Out-Null
     try {
         $tempLedger = Join-Path $temp 'loop-ledger.md'
@@ -308,11 +309,12 @@ function Test-GoalTextMatchesGoalMd {
         if ($left -ceq $right) {
             # 本文が一致していても、写しのヘッダが書いている字数（「本文は 1,012 字」）は
             # テンプレートを直すと黙ってずれる。goal-text 自身が報告した字数と突き合わせる。
+            # 突き合わせる日本語（「文字」「本文は」「字」）は字句を ASCII に保つため `u{} で書く（字は同じ）。
             $reported = $null
             $errText = (@($text.Err) -join "`n")
-            if ($errText -match '(\d+)\s*文字') { $reported = [int]$Matches[1] }
+            if ($errText -match "(\d+)\s*`u{6587}`u{5B57}") { $reported = [int]$Matches[1] }
             $declared = $null
-            if ($mdText -match '本文は\s*([\d,]+)\s*字') { $declared = [int](($Matches[1]) -replace ',', '') }
+            if ($mdText -match "`u{672C}`u{6587}`u{306F}\s*([\d,]+)\s*`u{5B57}") { $declared = [int](($Matches[1]) -replace ',', '') }
             if ($null -ne $reported -and $null -ne $declared -and $reported -ne $declared) {
                 $detail = @(
                     "$goalMdPath のヘッダが書いている字数が goal-text の報告と違います",
