@@ -22,7 +22,7 @@ use crate::surface::TextSurface;
 use crate::wrap::WrapMode;
 
 use super::decoration;
-use super::{ActorRender, ChoiceHitRow, ResolvedBalloonText, TextLayerRuntime};
+use super::{ActorRender, ChoiceHitRow, ResolvedBalloonText, TextLayerRuntime, is_settled_ordinal};
 
 /// フレーム提示ステップ（毎フレーム UI スレッドで呼ぶ・example/emo2-boot が駆動）:
 /// `talk_time` は注入時刻（talk 起点相対秒・実時間 sleep 不使用・R3.3）。
@@ -287,8 +287,14 @@ fn present_actor(
     // 帯 14 画素になり、文字の上下がクリックできない（要件 11.5）。装飾の無い行では行矩形のブロック軸寸が
     // 既定の大きさに等しいので、従来と 1 画素も変わらない。
     let bands = line_bands(&lines, resolved.mode, &render.metrics);
-    // hover 印は per-actor 保持値（未注入＝None＝ハイライト無し・8.1）。
-    let hover = runtime.choice_hover.get(place).copied().flatten();
+    // hover 印は per-actor 保持値（未注入＝None＝ハイライト無し・8.1）。済んだ選択肢を指す強調は
+    // 装飾へ渡さない（注釈は全部の範囲のまま＝字・色・印は変わらない・件 1 の要件 1.10／1.12）。
+    let hover = runtime
+        .choice_hover
+        .get(place)
+        .copied()
+        .flatten()
+        .filter(|&ordinal| !is_settled_ordinal(actor_state, ordinal));
     // 装飾: hover 行へ塗り/文字色を焼く。セグメント空（選択肢無し）は decorate が恒等＝canvas 無変更（非退行）。
     let canvas = ContentCanvas::from_layout(&lines, &resolved.region, resolved.mode);
     let canvas = decorate_canvas(
@@ -327,9 +333,11 @@ fn present_actor(
         let snapshot: Vec<ChoiceHitRow> = hit_rows
             .iter()
             .filter_map(|row| {
+                // 済んだ選択肢の行は写しに入れない＝押しても当たらない（アンカーの行は残る・件 1 の要件 1.11）。
                 spans
                     .iter()
                     .find(|span| span.ordinal == row.ordinal)
+                    .filter(|span| !actor_state.is_settled_choice(span))
                     .map(|span| ChoiceHitRow {
                         kind: span.kind,
                         ordinal: row.ordinal,

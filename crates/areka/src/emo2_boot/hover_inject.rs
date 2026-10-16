@@ -133,7 +133,9 @@ pub fn run_hover_inject_with(
     };
     let period_secs = *period_ms as f64 / 1000.0;
     for (actor, active, hit_rows) in actors {
-        // 「選択肢表示中」でない actor はスキップ（照会のみ・8.4 の実ポインタ非依存）。
+        // 「済んでいない選択肢がある」でない actor はスキップ（照会のみ・8.4 の実ポインタ非依存）。
+        // 選択肢が全部済んだ actor には注入しない。一部の場所だけが済んだときに巡回の番号が済んだ
+        // 選択肢を指しても、提示がその強調を装飾へ渡さない（areka-P0-balloon-text-bugs 件 1）。
         if !active {
             continue;
         }

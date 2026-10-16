@@ -4,6 +4,11 @@
 //! （`TextLayerState`）の口だけを固定する: 境目の範囲・消去（`\c`・台詞の頭）で 0 に戻ること・
 //! 済みにした後に足された選択肢は済んでいないこと・アンカーは済みにならないこと・
 //! 場所が無ければ何もしないこと・空回しの写しが境目も写すこと。
+//!
+//! タスク 4.4 の部分も GPU なしで、ランタイム（`TextLayerRuntime`）の済みの口を固定する: 選択待ちの
+//! 前の押下の口は何もしない・後ならその場所の選択肢の問いが偽でほかの場所は真・全部済みで偽・
+//! アンカーは押せる範囲に残る・強調が外れる・当たり行の写しから選択肢の行がその場で消える。
+//! 提示で写しを作り直すときの外し方は実 GPU の檻（タスク 4.7）が固定する。
 
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
@@ -192,4 +197,150 @@ fn rehearsal_copy_carries_the_boundary() {
     let copy = state.rehearsal_copy();
     assert!(!place(&copy, "0").has_live_choice());
     assert_eq!(settled_flags(&copy, "0"), vec![(SpanKind::Choice, true)]);
+}
+
+// ══ タスク 4.4: ランタイムの済みの口（写し・強調・問いを同時に揃える・GPU なし） ══
+
+use super::{ChoiceHitRow, TextLayerRuntime};
+use crate::choice::HitRectPx;
+use crate::state::TextLayerConfig;
+
+/// 範囲の列から当たり行の写しを作る（提示の代わり・矩形は使わないので 0）。
+fn seed_snapshot(rt: &mut TextLayerRuntime, actor: &str) {
+    let place = balloon(actor);
+    let rows: Vec<ChoiceHitRow> = rt
+        .state
+        .place_state(&place)
+        .expect("場所の状態がある")
+        .choices()
+        .iter()
+        .map(|span| ChoiceHitRow {
+            kind: span.kind,
+            ordinal: span.ordinal,
+            id: span.id.clone(),
+            label: span.label.clone(),
+            references: span.references.clone(),
+            rect: HitRectPx {
+                left: 0.0,
+                top: 0.0,
+                right: 0.0,
+                bottom: 0.0,
+            },
+        })
+        .collect();
+    rt.choice_snapshot.insert(place, rows);
+}
+
+/// スコープ 0 に選択肢 2 つとアンカー 1 つ、スコープ 1 に選択肢 1 つ。写しを入れ、
+/// スコープ 0 の選択肢 0・スコープ 1 の選択肢 0 に強調を入れる。
+fn runtime_with_choices() -> TextLayerRuntime {
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    let mut cues = vec![choice("0", "a"), choice("0", "b")];
+    cues.extend(anchor("0", "link"));
+    cues.push(choice("1", "c"));
+    for c in &cues {
+        rt.apply_cue(c);
+    }
+    seed_snapshot(&mut rt, "0");
+    seed_snapshot(&mut rt, "1");
+    rt.inject_choice_hover_at(&balloon("0"), Some(0));
+    rt.inject_choice_hover_at(&balloon("1"), Some(0));
+    rt
+}
+
+fn row_kinds(rt: &TextLayerRuntime, actor: &str) -> Vec<(SpanKind, usize)> {
+    rt.choice_hit_rows_at(&balloon(actor))
+        .iter()
+        .map(|row| (row.kind, row.ordinal))
+        .collect()
+}
+
+fn hover(rt: &TextLayerRuntime, actor: &str) -> Option<usize> {
+    rt.choice_hover.get(&balloon(actor)).copied().flatten()
+}
+
+/// 選択待ちに入る前の押下の口は何もしない（押し直せるまま残す）。
+#[test]
+fn press_before_the_choice_wait_does_nothing() {
+    let mut rt = runtime_with_choices();
+    let rows_before = row_kinds(&rt, "0");
+    rt.settle_choices_at(&balloon("0"));
+    assert!(
+        rt.choice_active(&ActorKey::from("0")),
+        "選択肢の問いは真のまま"
+    );
+    assert_eq!(row_kinds(&rt, "0"), rows_before, "当たり行は残る");
+    assert_eq!(hover(&rt, "0"), Some(0), "強調も残る");
+    assert!(
+        !place(&rt.state, "0")
+            .choices()
+            .iter()
+            .any(|s| place(&rt.state, "0").is_settled_choice(s))
+    );
+}
+
+/// 選択待ちに入った後の押下の口: その場所の選択肢が済み、問いが偽・ほかの場所は真・
+/// 写しから選択肢の行がその場で消え（アンカーの行は残る）・済んだ選択肢を指す強調が外れる。
+#[test]
+fn press_after_the_choice_wait_settles_that_place_at_once() {
+    let mut rt = runtime_with_choices();
+    rt.note_choice_wait_began();
+    rt.settle_choices_at(&balloon("0"));
+
+    assert!(
+        !rt.choice_active(&ActorKey::from("0")),
+        "その場所の選択肢の問いは偽"
+    );
+    assert!(
+        rt.choice_active(&ActorKey::from("1")),
+        "ほかの場所は真のまま"
+    );
+    assert!(
+        rt.hit_active(&ActorKey::from("0")),
+        "アンカーは押せる範囲に残る"
+    );
+    assert_eq!(
+        row_kinds(&rt, "0"),
+        vec![(SpanKind::Anchor, 2)],
+        "写しから選択肢の行が消え、アンカーの行は残る（提示を待たない）"
+    );
+    assert_eq!(hover(&rt, "0"), None, "済んだ選択肢を指す強調は外れる");
+    assert_eq!(row_kinds(&rt, "1"), vec![(SpanKind::Choice, 0)]);
+    assert_eq!(hover(&rt, "1"), Some(0), "ほかの場所の強調は残る");
+}
+
+/// アンカーを指す強調は、場所が済んでも外れない。
+#[test]
+fn hover_on_an_anchor_survives_settling() {
+    let mut rt = runtime_with_choices();
+    rt.inject_choice_hover_at(&balloon("0"), Some(2));
+    rt.note_choice_wait_began();
+    rt.settle_choices_at(&balloon("0"));
+    assert_eq!(hover(&rt, "0"), Some(2));
+}
+
+/// 全部の場所を済みにする内部の口: どこにも済んでいない選択肢が残らず、写しはアンカーの行だけ・
+/// 強調は外れる（選択待ちに入っていなくても効く＝トークの終わりの口）。
+#[test]
+fn settle_all_settles_every_place_and_aligns_rows_and_hover() {
+    let mut rt = runtime_with_choices();
+    rt.settle_all_choices();
+    assert!(!rt.choice_active(&ActorKey::from("0")));
+    assert!(!rt.choice_active(&ActorKey::from("1")));
+    assert!(rt.hit_active(&ActorKey::from("0")), "アンカーは残る");
+    assert_eq!(row_kinds(&rt, "0"), vec![(SpanKind::Anchor, 2)]);
+    assert!(row_kinds(&rt, "1").is_empty());
+    assert_eq!(hover(&rt, "0"), None);
+    assert_eq!(hover(&rt, "1"), None);
+}
+
+/// 戻す口の後は、押下の口がまた何もしなくなる。
+#[test]
+fn closing_the_choice_wait_makes_the_press_a_no_op_again() {
+    let mut rt = runtime_with_choices();
+    rt.note_choice_wait_began();
+    rt.close_choice_wait();
+    rt.settle_choices_at(&balloon("0"));
+    assert!(rt.choice_active(&ActorKey::from("0")));
+    assert_eq!(row_kinds(&rt, "0").len(), 3);
 }

@@ -273,6 +273,10 @@ pub struct TextLayerRuntime {
     /// 先渡しの空回しで求めた区間の全文の持ち主（[`preview_talk`](Self::preview_talk) が入れ、
     /// 合図の適用が消去と届いた数を数える）。正本ではない（届いた字の正本は `state`）。
     lookahead: TalkLookahead,
+    /// このトークが選択待ちに入ったか（文字の線の `ChoiceWaitBegan` で真・`TalkEnded` と次のトークの
+    /// 先渡しで偽）。真のときだけ押下の口 [`settle_choices_at`](Self::settle_choices_at) が場所を済ませる。
+    /// トークは 1 体のゴーストで同時に 1 本なので、場所ごとでなくランタイムに 1 つ（件 1）。
+    choice_wait_open: bool,
 }
 
 impl TextLayerRuntime {
@@ -303,6 +307,7 @@ impl TextLayerRuntime {
             collapsed_regions: BTreeSet::new(),
             shown_boxes: HashMap::new(),
             lookahead: TalkLookahead::default(),
+            choice_wait_open: false,
         }
     }
 
@@ -475,17 +480,77 @@ impl TextLayerRuntime {
         self.choice_snapshot.get(place).map_or(&[], Vec::as_slice)
     }
 
-    /// 「選択肢表示中」照会（R1.3・照会のみ＝バリア解決はしない）。
+    /// 「済んでいない選択肢があるか」照会（R1.3・照会のみ＝バリア解決はしない・件 1 で意味を改めた）。
     ///
     /// **表示層自身**の範囲の記録（[`ActorTextState::choices`](crate::state::ActorTextState::choices)）に
-    /// 種類が選択肢のものがあることを表す（DD-6——供給側 `CuePlayerState::WaitingForChoice` バリアの真実源とは別）。
+    /// 種類が選択肢で済みの境目より後のもの（[`ActorTextState::has_live_choice`](crate::state::ActorTextState::has_live_choice)）があることを表す（DD-6——供給側 `CuePlayerState::WaitingForChoice` バリアの真実源とは別）。
     /// スコープの**どの場所か**（普通のバルーン・箱）に選択肢があれば真（要件 8.4——時間切れの
     /// 待ちを止める条件と kanade の選択待ちの単位がスコープだから）。アンカーの範囲は数えない
     /// （アンカーはバルーンの時間切れを遅らせない）。未知 actor・選択肢なしは `false`。
     pub fn choice_active(&self, actor: &ActorKey) -> bool {
-        self.state.places().any(|(key, s)| {
-            key.actor == *actor && s.choices().iter().any(|span| span.kind == SpanKind::Choice)
-        })
+        self.state
+            .places()
+            .any(|(key, s)| key.actor == *actor && s.has_live_choice())
+    }
+
+    /// 押下の口: 選択待ちに入った後なら、場所の選択肢を済みにし、当たり行の写しと強調から
+    /// 済んだ選択肢をその場で外す（提示を待たない・`Clear` と同じ原子性・要件 1.10〜1.13）。
+    /// 選択待ちに入る前は何もしない（kanade が捨てる押下なので、押し直せるまま残す）。
+    pub fn settle_choices_at(&mut self, place: &PlaceKey) {
+        if !self.choice_wait_open {
+            debug!(actor = %place.actor, "選択待ちの前の押下——選択肢を済みにしない（押し直せるまま）");
+            return;
+        }
+        if self.state.settle_choices_at(place) {
+            self.drop_settled_choices(place);
+        }
+    }
+
+    /// 文字の線の `ChoiceWaitBegan`: このトークが選択待ちに入ったと覚える。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "文字の線のドレインへはタスク 4.5 が結ぶ")
+    )]
+    fn note_choice_wait_began(&mut self) {
+        self.choice_wait_open = true;
+    }
+
+    /// 選択待ちに入ったかの欄を戻す（`TalkEnded` と次のトークの先渡し）。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "文字の線のドレインへはタスク 4.5 が結ぶ")
+    )]
+    fn close_choice_wait(&mut self) {
+        self.choice_wait_open = false;
+    }
+
+    /// 文字の線のトークの終わり: 全部の場所の選択肢を済みにし、押下の口と同じく写しと強調を揃える。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "文字の線のドレインへはタスク 4.5 が結ぶ")
+    )]
+    fn settle_all_choices(&mut self) {
+        self.state.settle_all_choices();
+        let places: Vec<PlaceKey> = self.state.places().map(|(key, _)| key.clone()).collect();
+        for place in &places {
+            self.drop_settled_choices(place);
+        }
+    }
+
+    /// 場所の当たり行の写しから済んだ選択肢の行を外し（アンカーの行は残る）、済んだ選択肢を指す
+    /// 強調を `None` にする。
+    fn drop_settled_choices(&mut self, place: &PlaceKey) {
+        let Some(state) = self.state.place_state(place) else {
+            return;
+        };
+        if let Some(rows) = self.choice_snapshot.get_mut(place) {
+            rows.retain(|row| !is_settled_ordinal(state, row.ordinal));
+        }
+        if let Some(hover) = self.choice_hover.get_mut(place)
+            && hover.is_some_and(|ordinal| is_settled_ordinal(state, ordinal))
+        {
+            *hover = None;
+        }
     }
 
     /// 「押せる範囲があるか」の照会（選択肢かアンカー・種類を問わない）。
@@ -596,6 +661,15 @@ mod boxes;
 
 #[path = "actor_present.rs"]
 mod present;
+
+/// その序数の範囲が済んだ選択肢か（範囲が無い序数は済んでいない扱い）。押下の口・トークの終わりの口と
+/// 提示（`actor_present.rs`）が同じ判定で写しと強調から外す。
+fn is_settled_ordinal(state: &crate::state::ActorTextState, ordinal: usize) -> bool {
+    state
+        .choices()
+        .iter()
+        .any(|span| span.ordinal == ordinal && state.is_settled_choice(span))
+}
 
 pub use boxes::ShownBox;
 pub use present::present_frame;
