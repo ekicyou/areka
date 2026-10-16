@@ -7,7 +7,9 @@
 use std::path::{Path, PathBuf};
 
 use areka_ghost::BasewareRoots;
-use areka_ghost::catalog_roots::{StoreKind, install_root, same_folder_name, same_root};
+use areka_ghost::catalog_roots::{
+    StoreKind, find_balloon, find_ghost, install_root, same_folder_name, same_root,
+};
 use areka_nar::{InstallOutcome, InstallRequest, IoPhase, NarArchive, NarError};
 
 /// 並びの写しで `InstallRoots` に答える。見つかる根が 1 つも無ければ作れない。
@@ -17,6 +19,8 @@ pub(crate) struct CatalogDestinations {
     first: PathBuf,
     /// 起動中のゴーストの場所（`<根>\ghost\<フォルダ>`・根の下のゴーストのときだけ）。
     running: Option<PathBuf>,
+    /// 実行ファイルのフォルダ（写す判断に渡す・テストは [`Self::with_exe_dir`] で差し替える）。
+    exe_dir: Option<PathBuf>,
 }
 
 impl CatalogDestinations {
@@ -27,7 +31,14 @@ impl CatalogDestinations {
             roots,
             first,
             running: None,
+            exe_dir: crate::roots::user_root::exe_dir(),
         })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_exe_dir(mut self, exe_dir: Option<PathBuf>) -> Self {
+        self.exe_dir = exe_dir;
+        self
     }
 
     /// 起動中のゴーストの場所を渡す（要件 8.7: 起動中のゴーストへの上書きはその根へ書く）。
@@ -62,7 +73,27 @@ impl CatalogDestinations {
         Some(root)
     }
 
+    /// 見えている物が実行ファイルの隣の根に在れば写し、写しになったら書ける根の綴り（要件 4.4・4.8）。
+    /// 並びに印の付いた項目が無ければ何も見ない（要件 7.1）。1 配置につき 1 回尋ねられるので写すのも 1 回。
+    fn copied_root(&self, kind: StoreKind, folder: &str) -> Option<PathBuf> {
+        let user = self.roots.user_root()?.dir();
+        let dir = match kind {
+            StoreKind::Ghost => find_ghost(&self.roots, folder)?.dir,
+            StoreKind::Balloon => find_balloon(&self.roots, folder)?.dir,
+        };
+        let used = crate::roots::user_root::copy_for_write(
+            &self.roots,
+            self.exe_dir.as_deref(),
+            kind,
+            &dir,
+        );
+        (used != dir).then(|| user.to_path_buf())
+    }
+
     fn answer(&self, kind: StoreKind, folder: &str) -> PathBuf {
+        if let Some(root) = self.copied_root(kind, folder) {
+            return root;
+        }
         // 答えが出ない（尋ねた間に全部の根が消えた）ときは作ったときの根を答える。
         // `areka-nar` が作業フォルダを掘れずに失敗として返し、記録は `areka-nar` の今の `error!`。
         let Some(dest) = install_root(&self.roots, kind, folder) else {
