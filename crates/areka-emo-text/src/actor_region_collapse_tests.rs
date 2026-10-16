@@ -16,7 +16,8 @@
 //! 4. 箱の登録→外し→登録で 1 回（記憶は登録を外しても消えない）。
 //! 5. 箱を隠す・出すで 0 回。箱の束を差し替えても記憶は残り、正の定義で戻れば情報 1 回。
 //!
-//! 片付け（1.3）と提示（1.4）の檻は同じファイルの後の節に足す。
+//! 片付けの口 `TextSurface::release`（要件 **2.9**）は後の節 `release`（ECS・実 GPU）が固定する。
+//! 提示（1.4）の檻は同じファイルの後の節に足す。
 //!
 //! ## 0 件の主張が恒真にならないようにする
 //!
@@ -426,4 +427,151 @@ fn replacing_the_bundle_keeps_the_memory_and_recovery_logs_info_once() {
     );
     assert_eq!(number(&infos[0], "width"), 80.0);
     assert_eq!(number(&infos[0], "height"), 50.0);
+}
+
+// ── 面の片付け（要件 2.9・ECS・実 GPU） ──
+//
+// 描いた後に潰れたら、提示（1.4）が `TextSurface::release` で前の字の面を外す。ここは片付けの口
+// そのものを固定する: 差し込み口の面は差し込み口から文字の層の部品を外し、差し込み口の entity と
+// 窓の `Children` の並びは残す（付け直しで wintf の `visual_sync` が `Children` の順に入れ直す）。
+// 窓の子の面は窓の子ごと消す。差し込み口が居なければ警告して何もしない。
+
+mod release {
+    use bevy_ecs::hierarchy::{ChildOf, Children};
+    use bevy_ecs::name::Name;
+    use bevy_ecs::prelude::World;
+    use log_capture_kit::capture;
+    use windows::UI::Composition::Compositor;
+    use wintf::ecs::{Arrangement, GraphicsCore, Visual, VisualGraphics, WucGraphicsResource};
+
+    use super::super::TextSlotBinding;
+    use super::super::test_support::com_world;
+    use super::IMAGE;
+    use crate::surface::TextSurface;
+
+    /// emo-present の装着と同じ並び（差し込み口が先＝枠の面より手前）の窓を組む。
+    /// 返り値は (world, window, slot, frame)。
+    fn window_with_frame() -> (
+        World,
+        bevy_ecs::entity::Entity,
+        bevy_ecs::entity::Entity,
+        bevy_ecs::entity::Entity,
+    ) {
+        let (mut world, window, slot) = com_world();
+        let frame = world
+            .spawn((Name::new("emo-surface"), Visual::default(), ChildOf(window)))
+            .id();
+        world.flush();
+        (world, window, slot, frame)
+    }
+
+    /// 装着の口は World と GraphicsCore を別々に借りるので、GraphicsCore は資源から抜いて渡す。
+    fn gpu(world: &mut World) -> (Compositor, GraphicsCore) {
+        let compositor = world
+            .resource::<WucGraphicsResource>()
+            .compositor()
+            .cloned()
+            .expect("Compositor");
+        let core = world
+            .remove_resource::<GraphicsCore>()
+            .expect("GraphicsCore");
+        (compositor, core)
+    }
+
+    fn children(world: &World, window: bevy_ecs::entity::Entity) -> Vec<bevy_ecs::entity::Entity> {
+        world
+            .get::<Children>(window)
+            .map(|c| c.iter().copied().collect())
+            .unwrap_or_default()
+    }
+
+    /// 差し込み口の面を外すと文字の層の部品（`VisualGraphics`・`Arrangement`）が無くなり、差し込み口の
+    /// entity と並びは残る。付け直すと差し込み口は枠の面より手前のまま、未同期の絵として装着される
+    /// （`visual_sync` が `Children` の順に入れ直す印＝親の Visual がまだ無い）。
+    #[test]
+    fn releasing_the_slot_surface_strips_the_parts_and_reattach_returns_in_front_of_the_frame() {
+        let (mut world, window, slot, frame) = window_with_frame();
+        let (compositor, core) = gpu(&mut world);
+        let binding = TextSlotBinding::new(slot, window, 1.0, IMAGE, IMAGE);
+
+        let surface =
+            TextSurface::attach(&mut world, &binding, &compositor, &core, (4, 3), (2.0, 1.0))
+                .expect("装着");
+        assert!(world.get::<VisualGraphics>(slot).is_some());
+
+        surface.release(&mut world, slot);
+        assert!(
+            world.get::<VisualGraphics>(slot).is_none(),
+            "片付けの後の差し込み口に文字の絵が残っている（要件 2.9）"
+        );
+        assert!(
+            world.get::<Arrangement>(slot).is_none(),
+            "片付けの後の差し込み口に文字の配置が残っている"
+        );
+        assert!(
+            world.get::<Visual>(slot).is_some() && world.get::<Name>(slot).is_some(),
+            "差し込み口そのもの（emo-present の領分）は残る"
+        );
+        assert_eq!(children(&world, window), vec![slot, frame]);
+
+        let _again =
+            TextSurface::attach(&mut world, &binding, &compositor, &core, (4, 3), (2.0, 1.0))
+                .expect("付け直し");
+        assert_eq!(
+            children(&world, window),
+            vec![slot, frame],
+            "付け直しても差し込み口は枠の面より手前"
+        );
+        let vg = world.get::<VisualGraphics>(slot).expect("付け直しの絵");
+        assert!(vg.is_valid());
+        assert!(
+            vg.parent_visual().is_none(),
+            "付け直しの絵は未同期＝visual_sync が Children の順に入れ直す"
+        );
+    }
+
+    /// 窓の子の面は窓の子ごと消える（差し込み口には触れない）。
+    #[test]
+    fn releasing_a_window_child_surface_despawns_the_child() {
+        let (mut world, window, slot, frame) = window_with_frame();
+        let (compositor, core) = gpu(&mut world);
+
+        let surface = TextSurface::attach_window_child(
+            &mut world,
+            window,
+            1,
+            &compositor,
+            &core,
+            (4, 3),
+            (0.0, 0.0),
+        )
+        .expect("窓の子の装着");
+        let child = surface.window_child().expect("窓の子");
+        assert_eq!(children(&world, window), vec![slot, child, frame]);
+
+        surface.release(&mut world, slot);
+        assert!(world.get_entity(child).is_err(), "窓の子が消えていない");
+        assert_eq!(children(&world, window), vec![slot, frame]);
+        assert!(world.get_entity(slot).is_ok(), "差し込み口は残る");
+    }
+
+    /// 差し込み口が居なければ警告 1 回で何もしない（ほかの entity に触れない）。
+    #[test]
+    fn releasing_into_a_missing_slot_warns_and_does_nothing() {
+        let (mut world, window, slot, frame) = window_with_frame();
+        let (compositor, core) = gpu(&mut world);
+        let binding = TextSlotBinding::new(slot, window, 1.0, IMAGE, IMAGE);
+        let surface =
+            TextSurface::attach(&mut world, &binding, &compositor, &core, (4, 3), (2.0, 1.0))
+                .expect("装着");
+        world.despawn(slot);
+
+        let ((), events) = capture(|| surface.release(&mut world, slot));
+        let warns = events
+            .iter()
+            .filter(|e| e.level == tracing::Level::WARN)
+            .count();
+        assert_eq!(warns, 1, "差し込み口が居ないときは警告 1 回");
+        assert_eq!(children(&world, window), vec![frame]);
+    }
 }
