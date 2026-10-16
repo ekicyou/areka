@@ -22,8 +22,8 @@
              1 本流し、終わってから dump_balloon で撮る。Vertical は root-tate（基層に vertical,1 と wordwrappoint.y,-56）。
 
 .EXAMPLE
-  pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-anchor-tag-canon-da1fe5\.kiro\specs\areka-P0-balloon-text-bugs\real-machine-run.ps1 -Prepare
-  pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-anchor-tag-canon-da1fe5\.kiro\specs\areka-P0-balloon-text-bugs\real-machine-run.ps1 -Run Chose
+  pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-anchor-tag-canon-da1fe5\.kiro\specs\completed\areka-P0-balloon-text-bugs\real-machine-run.ps1 -Prepare
+  pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-anchor-tag-canon-da1fe5\.kiro\specs\completed\areka-P0-balloon-text-bugs\real-machine-run.ps1 -Run Chose
 #>
 param(
     [switch]$Prepare,
