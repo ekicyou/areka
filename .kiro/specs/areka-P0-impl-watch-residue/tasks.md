@@ -114,7 +114,7 @@
   - _Requirements: 10.1, 10.2, 11.4, 11.5, 11.6, 11.8, 11.9, 11.10_
 
 - [ ] 6. テストの穴を埋める（変異を当てるので並べない）
-- [ ] 6.1 (h1) と (h8): マージの机の持ち主が 2 人以上のときの要約と、見本の識別
+- [x] 6.1 (h1) と (h8): マージの机の持ち主が 2 人以上のときの要約と、見本の識別
   - 2 つのリポジトリの机に持ち主が居る状態で、端末の要約の 1 行目が `merging=2` であることを判定するテストを足し、先頭の机だけを数える変異で赤・戻して緑を確かめる
   - 読み物のテストの見本の識別を小文字へ揃える
   - 完了の状態: 読み物のテストが緑で、変異の記録が 1 件書かれている
@@ -159,6 +159,7 @@
 - 3.2: 直す前の実物（`WaitPort::now` が `store::unix_now` の本物の時刻）に新しいテストを先に当てた → `store::ports_tests::the_wait_record_takes_its_start_time_from_the_clock_of_the_store` が赤（`left: [Some(1792132289)]`・`right: [Some(1791000000)]`＝置かれた待ちの記録の `since` が止めた時刻 `T0` でなく本物の時刻）。本物の口の `now` を `Store::time` にして緑。
 - 4.1: 本物の口の `WaitPort::finish` で居る印を排他の後で解いた（`drop(held)` を `with_state` の閉じた関数の外・返った後へ移した）→ `store::ports_tests::the_last_unregister_releases_the_presence_mark_inside_the_exclusion` が赤（`left: [(true, true)]`・`right: [(false, true)]`＝ログの口の中で印がまだ「居る」）。控え `target\mutation-backup\4.1-wait.rs` から素のコピーで戻し、sha256 一致（`be93604b6571ffd76e82c673709b9420ba31b44d193c3e3f520308a67cb99318`）を確かめて緑。
 - 4.2: 直す前の実物（`cli::waiting` の早い終わりが待ちの記録を消さない）に新しいテストを先に当てた → `cli::wait_tests::a_restarted_merge_wait_that_ends_at_once_removes_the_record_of_the_killed_wait` が赤（`left: [("a", Merge)]`・`right: []`＝殺された前の `(a, merge)` の記録が残る）。早い終わりで同じ排他の中に `UnregisterWait` を通して緑。
+- 6.1: `status::render_terminal` の `merging` の数え方に `.take(1)` を足して先頭の机だけを数えた → `status::tests::first_line_counts_every_merge_desk_with_a_holder_across_repos` が赤（`left: … merging=1 …`・`right: … merging=2 …`）。ほかの表示のテストは緑のまま。控え `target\mutation-backup\6.1-status.rs` から素のコピーで戻し、sha256 一致（`f7c8916cf35f500b6ba712e9021b414bef6e2109a77d602e408b8e76d2386d77`）を確かめて緑。(h8) の見本の識別の小文字化は変異を求めない（要件 9.3）。
 
 ## Implementation Notes
 
