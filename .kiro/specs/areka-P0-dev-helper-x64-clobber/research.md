@@ -45,7 +45,7 @@ cargo の作るつもりの一覧（ビルドはしない）を 2 通り出し�
 
 - テスト用の実行ファイルは `target\debug\` へ出さない（`src/compiler/build_runner/compilation_files.rs` の `uplift_to`「Tests, check, doc, etc. should not be uplifted」＝`mode` が `Build` のときだけ出す）。
 - 結合テスト（`tests/`）があるクレートは、**同じクレートの** bin を `Build` で作る（`src/compiler/unit_dependencies.rs` の「If any integration tests/benches are being run, make sure that binaries are built as well」＝`unit.pkg.targets()` だけ）。helper のクレートには結合テストが無いので、x64 の段で helper の bin は `Build` にならない。`areka.exe` は `areka` に結合テストがあるので `Build` で作られて `target\debug\` に出る。
-- 作り直しが要らない（fresh）ときも出力を結び直す（`src/compiler/mod.rs` の「Need to link targets on both the dirty and fresh」）。
+- 作り直しが要らない（fresh）ときも出力を結び直す（`src/compiler/mod.rs` の「Need to link targets on both the dirty and fresh」）。 → 10 節の実測では起きなかった（戻る理由は写した物の古い更新時刻による作り直し）。
 
 ### 3.2 全体テストの 1 回の中の流れ
 
@@ -58,7 +58,7 @@ cargo の作るつもりの一覧（ビルドはしない）を 2 通り出し�
 
 ### 3.3 開発者が踏む道筋の読み
 
-- 全体テストの後に素の `cargo build`（README と `tech.md` の手順どおり）を打つと、helper が x64 で作られる（または fresh のまま結び直される）ので、写した i686 版が x64 版へ戻る。2026-10-06 の `ghost-standard-balloon` 6.2 の「全体テストの後は x64 版」は、この順（全体テスト → `cargo build` → 実機）だった読みが最も自然である。**確かめてはいない**（その日の操作の記録が無い）。
+- 全体テストの後に素の `cargo build`（README と `tech.md` の手順どおり）を打つと、helper が x64 で作られる（10 節の実測: 写した i686 版の古い更新時刻を見て helper を作り直す）ので、写した i686 版が x64 版へ戻る。2026-10-06 の `ghost-standard-balloon` 6.2 の「全体テストの後は x64 版」は、この順（全体テスト → `cargo build` → 実機）だった読みが最も自然である。**確かめてはいない**（その日の操作の記録が無い）。
 - `cargo build -p areka`・`cargo run -p areka`・`cargo test -p areka` は helper を作らない（`areka` は helper を依存に持たない）。`cargo clippy`・`cargo check` は実行ファイルを出さない。`cargo build --workspace`・`cargo build -p shiori-host32-helper`（x64）は出す。
 - 結論: 要件が「どの操作で x64 版になるかに依らない形」で書かれているのは正しい。全体テストの側の直し（要件 1）だけでは開発者の罠は消えず、要件 3 の記録が罠を知らせる主役になる。
 

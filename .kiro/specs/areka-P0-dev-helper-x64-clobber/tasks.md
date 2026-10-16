@@ -75,3 +75,5 @@
 - 5.1: 実機（2026-10-16・debug）根 `<worktree>	arget\hxoot`・記憶 `target\hx\profile`・`RUST_LOG=info`。隣が x64（8664）で `helper_not_i686`（path・machine=0x8664・直し方）が 37 行目、`connect_failed` が 55 行目で 1 件ずつ、その後は今までどおり `shiori_failed`→`alert`。完了時の棚卸へ: 失敗の道の `alert` の `MessageBoxW` がメインスレッドを止め、`AREKA_APP_SMOKE_EXIT_MS` が発火しても閉じない（自分で起こした pid を強制終了した・本 spec の範囲外）。
 - 5.2: 全体テスト（commit 31a47af5）は新しい 2 段を含め `x64 workspace tests` 以外が OK・終わった後の隣は 014C。赤は `temp_path_guard_test` の 3 本で、2.2 のテストが `std::env::temp_dir()` を直に呼んでいたため。`CARGO_MANIFEST_DIR` に替えて直し、回し直しは赤のテストだけ（16 passed）。
 - 5.3: 5.2 の直後に何も写さず `target\debugreka.exe`・根は 5.1 と同じ・記憶は空の `target\hx\profile53`。`boot_talk`・`boot_complete` の後に自動終了で終了コード 0。`helper_not_i686`・`connect_failed`・`0x800700C1`・`helper_image_unverified` はすべて 0 件。
+- 完了時にその場で解決: research.md 3.1・3.3 に 10 節の実測への導線を足した／design.md の置き換えの断りの文の HResult を書式の例に直した。
+- 完了時の棚卸: 5.1 で areka が閉じなかったのは `alert` の告知（`MessageBoxW`）で、`AREKA_NO_ALERT` で抑える仕組みが既にある（実機の確かめでは付ける）。不具合ではないので起票しない。起票 0 件。

@@ -264,7 +264,7 @@ fn check_helper_image(helper_exe: &Path);
   - 揃っていた: `helper is i686: target\debug\shiori-host32-helper.exe`
   - 置いた: `placed i686 helper: <source> -> <dest>`
   - 写し元が無い・i686 でない: `cannot place i686 helper: source missing or not i686: <source>`
-  - 置き換えが断られた: `cannot place i686 helper: <ExceptionType> (HResult 0x80070020): <dest> (is areka.exe running?)`
+  - 置き換えが断られた: `cannot place i686 helper: <ExceptionType> (HResult 0x........): <dest> (is areka.exe running?)`（HResult の値は例。`Move-Item -Force` では 0x800700B7 になる）
   - 置いた後も i686 でない: `helper beside areka.exe is still not i686: <dest>`
 - Idempotency & recovery: 置き先が既に i686 版なら何も写さない（何度回しても同じ）。失敗したときは一時名のファイルを消してから赤にする（`target\debug\` に `*.tmp` を残さない）。
 
