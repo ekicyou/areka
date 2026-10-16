@@ -147,3 +147,29 @@
 - 要件定義のモデル: Opus に改める。伝える道は「切替の失敗の知らせ」（`OnBoot` の Reference6・7）、失敗の語は「ネットワーク更新の輸送の語の足し方」という先例が決める。新しい境界・並行の保証・骨格の分かれ目に当たらない。
 - 分割の案: 切らない。
 - 見つけた穴・古くなった記述: roadmap の「版をまたぐ依存の確かめ（2026-10-15）」の行と「棚卸㉔で列に足したこと」の鎖の順は、`ghost-inner-balloon` を前に置いたまま（直しは棚卸の報告へ）。本文の触る所に `running_name` の呼び手が無い。
+
+## 2026-10-16 棚卸㉖の再測定（main `4cf510c1`）
+- 前提の変化: `baseware-root-list` が着地した（PR#317）。印に書く名前を引く `running_name` は根を受け取らない形になった（`crates/areka/src/boot_resolve.rs` 491〜501 行・決まったゴーストだけを受け取る）＝棚卸㉕の「`running_name(&ctx.root, …)` の呼び手で順が決まる」は消えた。呼び手は `main.rs` 477 行・`emo2_boot/ghost_switch.rs` 638 行・`emo2_boot/same_folder_pin.rs` 32 行で、この spec は名前の引き方に触らない。
+- 書けない場所が増えた（`baseware-root-list` の要件 8.5 が「利用者への知らせはこの spec の持ち物」と書いた）:
+  - 置き場の並びを記憶へ書けないとき（`crates/areka/src/roots/edit.rs` の `apply` 186〜194 行・記録 `roots_memory_write_failed`。ゴーストが動いている間は書き手へ投函するだけで結果を見ない 178〜180 行）。
+  - 見つかる根が 1 つも無くて入れられないとき（`install/destination.rs` の `install_into` 99〜127 行）も、読み書きの失敗として「ファイル破損」の語 `extraction` になる。
+- 「書きました」と先に言う記録は `last_used_recorded` のほかに 3 つ在る: `record_last_shell`（`boot_resolve.rs` 559〜563 行）・`record_last_balloon`（574〜578 行）・入れたバルーンの記憶（`install/desk.rs` の `remember_balloon` 394〜398 行）。どれも投函だけで結果を待たない。
+- 印の書き損じの記録 `session_mark_write_degraded` の文は直っている（436 行）。直っていないのは消し損じ `clear_session_mark` の文（484 行）。
+- 触るファイルと関数:
+  - `boot_resolve.rs` の 391〜579 行（`save_app`・`write_session_mark`・`write_switch_drop`・`clear_session_mark`・`LastUsed::record`・`record_last_shell`・`record_last_balloon`）。
+  - `main.rs` の `boot_first_ghost`（463〜506 行）・`settle_session_mark`（693〜714 行）・要れば `session_mark_verdict`（648〜689 行）。知らせを起動のイベントに載せるなら `first_boot_origin`（449〜454 行）とその呼び出し（306〜313 行）。
+  - `emo2_boot/ghost_switch.rs` の `record_steady_memory`（604〜648 行）と `switch_to` の書き込み（671〜680 行）。
+  - `install/judge.rs` の失敗の語（80〜128 行）・`roots/edit.rs` の `apply`・`install/desk.rs` の `remember_balloon`・要れば `crates/areka-sylphya/src/actor.rs`（書き手から結果を返す口は 83・686 行に在る）と `alert.rs`（267 行）・`doc/COMPAT_ARCHITECTURE.md` の §8。
+- 行数: `main.rs` は 971 行（956 から増えた）。知らせの配線を `main.rs` に足すと 1,000 を超えうる（印の判定の枝と起動の関数で 10〜30 行）＝新しいファイルか `boot_resolve.rs`（615 行）へ置く。`ghost_switch.rs` は 917 行。印のテスト `main_session_mark_tests.rs`（941 行）には足さず兄弟のファイルへ。
+- 規模: 7〜11 タスク（並びの記憶と 3 つの記録の文が増えた分）。分割の案: 切らない。
+- 先に要るもの: 無し＝今の版の先頭。
+- `user-data-root` と同じファイルを触るか: 確実に重なるファイルは 0。重なりうるのは `boot_resolve.rs`（向こうが議題 7 で `ghost_roots` 352〜357 行を触るときだけ）・`roots/edit.rs`（向こうが書ける根を守るときの `decide_remove` 67〜89 行）・`main.rs`（向こうが置き場を `main` の中で 1 度だけ決めるときの 171〜231 行）。どれもこちらとは関数が別。
+- ほかの重なり: `multi-ghost-runtime`（`main.rs`・`boot_resolve.rs`・`ghost_switch.rs`）・`mcp-reload`（`ghost_switch.rs`）・`tasktray-icon`（`main.rs`）・`default-balloon-selfmade`（`boot_resolve.rs` 32 行の定数）・`install-live-target-hazards` と `emily-ghost-verification`（`install/judge.rs` を触るときだけ）・`property-name-case-fold`（保存の口を変えるときだけ）。
+- 人の手: 要らない（書けない置き場は `target\` の下のフォルダか偽の保存の口で作る）。静かな机も前後の全体テストの比べも要らない。依存も足さない。
+- 優先度の区分: B（書けないことが利用者に伝わらない）。要件定義のモデル: Opus（伝える道も失敗の語の足し方も前例が決める）。
+- 古くなった記述（ロードマップ）: 「次のウェーブの候補」の「`running_name` の呼び手 3 か所」と、「棚卸㉔で列に足したこと」の「`main.rs`（956 行）」。
+
+## 2026-10-16 棚卸㉖のウェーブの約束（C8・`user-data-root` と同じウェーブ）
+- `user-data-root` と同じウェーブに並べる。向こうは `main.rs`・`boot_resolve.rs`・`roots/edit.rs` に触らない約束をした（どうしても `boot_resolve.rs` の `ghost_roots` に触るなら、こちらの着地の後に main を取り込んでから）。
+- この spec が触らないもの: `crates/areka/src/boot_config.rs`・`crates/areka/src/roots/{mod,resolve}.rs`・`crates/areka-update/`・`crates/areka-mcp-bridge/`（向こうの持ち物）。
+- `main.rs` は 971 行。知らせの結線を足すなら新しいファイルか `boot_resolve.rs` へ置き、`main.rs` は呼び出しの行だけにする。

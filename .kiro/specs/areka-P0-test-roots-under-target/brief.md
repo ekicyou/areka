@@ -61,3 +61,17 @@
   - 入口を通らずに OS の一時フォルダを直に引く所が、見張りの例外表に 19 ファイルある（`areka-ghost` 5・`areka` 3・`areka-emo-present` 1・`shiori-host32-helper` 3・`shiori-host32-host` 6・`shiori-host32-testdll-loadu` 1）。brief の 240 か所はこれを数えていない。「`%TEMP%` に何も作らない」を満たすにはここも要る。うち `crates/areka/src/install/fetch_url.rs` は本番のコード（ダウンロードの置き場・テストの根ではない）＝対象から外す。`shiori-host32-host/tests/` の `lifecycle_cyclic_e2e.rs`・`lifecycle_kill_e2e.rs` は `clippy-199-lints` の段 1 と重なる。
   - 置き場が `target\test-roots` になると、ワークツリーの中ではパスが OS の一時フォルダより約 40 字長くなる。札（名前の材料）が 60 字を超えるテストがあり（`areka-ghost` の `runtime_tests.rs` ほか）、実物の `pasta.dll` を読む結合テスト（`tests/ghost/real_pasta_test.rs`）は短いパスが前提＝長さの上限を先に確かめ、要るなら名前を短くする。
   - `under_target` は `CARGO_TARGET_DIR` を見ず、いつもワークスペースの根の `target` を使う（検体の置き場 `sample-ghost-kit` の引き方とは別）。決まりには合うが、brief の「正しく引けることを確かめる」はこの違いを決める話になる。
+
+## 2026-10-16 棚卸㉖の再測定（main `4cf510c1`）
+
+- 前提の変化: OS の一時フォルダに根を作る入口（`TempPath::new`）は 80 ファイル・240 か所 → **81 ファイル・237 か所**（`areka` 46 ファイル・164 か所〔4 減った〕・`areka-impl-watch` 1 か所〔`store_ports_tests.rs` の 667 行目・増えた〕。ほかのクレートは同じ）。`target\` の下に作る入口（`TempPath::under_target`）を使うテストは 2 ファイル → **29 ファイル**に増えた（`areka-impl-watch` 10・中継 4・`baseware-root-list` が足した `roots/`・`menu/`・`boot_config` ほかのテスト 13・既定バルーンの 2）。入口の部品（`crates/temp-path-kit/`）と見張り（`crates/log-capture-kit/tests/temp_path_guard_test.rs`・例外 19 件のまま）は 10-10 から動いていない。
+- 前後の全体テストの比べは要らない（棚卸㉓・㉕の見立てを改める）: 比べる理由は「置き場が動くと所要時間が変わりうる」だけで、望む結果（`%TEMP%` に何も作らない）の確かめではない。`target\` の下の根で走るテストはすでに 29 ファイル在り、C7 の 8 本の完了の全体テストはそれで緑だった。確かめは、どの spec とも同じ最後の全体テスト 1 回で足りる。時間が気になるなら、その 1 回の所要時間を C7 の完了の記録と並べて書けばよく、余分な走行も静かな机も要らない。
+- 触るファイル（入口の中身だけ替える案）: `crates/temp-path-kit/src/lib.rs`（148 行）・`lib_tests.rs`（165 行）・見張り `temp_path_guard_test.rs`（783 行）。237 か所は一度に動き、書き換えは要らない。例外表の 19 ファイル（直に OS の一時フォルダを引く所）まで直すなら、`shiori-host32-*` の 11 本・`areka-ghost` の 5 本・`areka` の `placement/` のテスト 2 本・emo-present の 1 本が足される（`install/fetch_url.rs` は本番のダウンロードの置き場なので外す）。
+- 規模: 入口を替える案で 4〜7 タスク（例外表まで入れると 8〜11）。新しい依存は足さない。人の手の確かめは要らない。
+- 先に要るもの: なし（先頭）。入口を替える案なら今の版の 2 本と重なり 0（例外表まで入れても、`placement/` のテスト 2 本は `user-data-root` が触る `placement/persist.rs` とは別のファイル）。
+- 今の版の席に入れられるか: 入口を替える案の上限 7 は `user-data-root` の下限 12 以下＝`user-data-root` と同じウェーブなら入れられる。`write-failure-notice`（下限 6）だけのウェーブでは超える。
+- 気をつけること: パスが長くなる。ワークツリーの `target\test-roots\` は OS の一時フォルダより約 50 字長い（ワークツリーの名前の長さで変わる）。短いパスが要る実物の `pasta.dll` の結合テスト（`areka-ghost` の `tests/ghost/real_pasta_test.rs`）と、札が長いテストを先に確かめる。
+- 優先度の区分: C（開発の決まり「一時フォルダは `target\` の下だけ」による持ち越し）。
+- 要件定義のモデル: Opus。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: brief 本文の「呼ぶのは 80 ファイル・240 か所」「`under_target` を使うのは 2 ファイル」は上のとおり古い。例外表のうち `shiori-host32-host/src/process_host.rs` は `dev-helper-x64-clobber` が 10-16 に触った（例外の行はそのまま）。

@@ -164,9 +164,6 @@ pub fn bake_with_limits(
         // 0 寸/全透明 element の早期警告（ゴースト制作者ミスの可能性が高いため・設計ディスカッション #1）。
         // **ログのみの増分**: bake の生成結果（索引表・placement・trim 矩形）は一切変更しない。
         // (a) 元画像 0 寸（0×0）／(b) α=0 トリム後 0 寸（全透明→placement None）を判別してログ。
-        // 0 寸/全透明 element の早期警告（ゴースト制作者ミスの可能性が高いため・設計ディスカッション #1）。
-        // **ログのみの増分**: bake の生成結果（索引表・placement・trim 矩形）は一切変更しない。
-        // (a) 元画像 0 寸（0×0）／(b) α=0 トリム後 0 寸（全透明→placement None）を判別してログ。
         if trim.original.w == 0 || trim.original.h == 0 {
             tracing::warn!(
                 target: "areka_emo_atlas",

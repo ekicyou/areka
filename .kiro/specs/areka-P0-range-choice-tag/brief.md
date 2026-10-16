@@ -108,3 +108,22 @@
 
 - バルーンの時間切れの判定は、もう `TextLayerRuntime::choice_active` を読まない。選択肢つきのトークは、可視性の線の合図 `ChoiceShown` で覚え、トークの終わりの時刻から測り直す（`crates/areka/src/emo2_boot/balloon_visibility_wait.rs` の `effective_display_end`）。範囲の選択肢でも時間切れを正しく扱うには、`crates/areka/src/emo2_boot/talk_lifecycle.rs` の `BalloonLifecycleSink` が範囲の選択肢の cue でも `ChoiceShown` を 1 回送ればよい。
 - `choice_active` の意味は「済んでいない選択肢があるか」に変わった（押した場所の選択肢は済み・選択肢の時間切れと中断ではトークの終わりに全部済む）。範囲の選択肢も済みの境目（`ActorTextState::settled`）に乗る形で作る。押下の選択は dispatcher の受け口を通って kanade へ届く（`DispatcherMsg::Choice`／`Anchor`）。
+
+## 2026-10-16 棚卸㉖の再測定（main `4cf510c1`）
+
+- **前提の変化**: `balloon-text-bugs` が着地し（10-16）、本 spec が文字とバルーンの列の先頭になった。あちらが変えた所のうち本 spec に効くもの:
+  - 選択肢つきのトークの時間切れは、`crates/areka/src/emo2_boot/talk_lifecycle.rs` の `BalloonLifecycleSink` が選択肢の合図（`CueCommand::Choice`）を初めて見たときに `ChoiceShown` を 1 回送る形になった。範囲の選択肢を新しい合図の種類で運ぶなら、ここにも腕が要る。
+  - dola の受け手に「選択待ちの始まり」の口が足された（`crates/dola/src/cue/sink.rs` の `choice_wait_began`・`runtime.rs` の `announce_choice_wait`）。本 spec は同じ `runtime.rs` の選択待ちの照合の一覧（`pending_choices`）を触る。
+  - 押した選択肢は「済み」になり、強調も当たりも消える（`crates/areka-emo-text/src/actor_present.rs` の絞り・`state.rs` の済みの境目）。範囲の選択肢も種類を選択肢にすればそのまま乗る＝`actor_present.rs`・`choice.rs` は今も触らずに済む見込み。
+  - 選択の送り口の記録が 2 行出る件は今も在る（`crates/areka/src/input_events/balloon.rs` の `send_selection` の `warn!` と、`balloon_pressed.rs`・`shell_box_handler.rs` の `error!`）。
+- **触るファイル**（行数）: 台本の読み手 `crates/areka-parsers/src/sakura/{decode.rs 502, model.rs 172, mod.rs 47}` と検査 `parse_bare_tag_tests.rs`／台本の変換 `crates/areka-sakura/src/{compile.rs 481, anchor_pair.rs 68, lib.rs 49}`／dola `crates/dola/src/cue/{command.rs 351, sink.rs 97, runtime.rs 417}`／`crates/areka-ghost/src/sink.rs`（421）／emo-text `crates/areka-emo-text/src/{state.rs 751, state_anchor.rs 112, actor.rs 768, lookahead.rs 328}`／**新しく** `crates/areka/src/emo2_boot/talk_lifecycle.rs`（322）／`crates/areka/src/mcp/check_script_judge.rs`（218）／`crates/areka/src/input_events/{balloon.rs 495, balloon_pressed.rs 198, shell_box_handler.rs 386}`／台帳 `sakura-script.toml` の `\__q` の行・`doc/COMPAT_ARCHITECTURE.md` §8・`doc/ssp-mcp/areka-tools.md`。1,000 行に近いものは無い。
+- **規模**: 10〜14 タスクのまま。
+- **新しいファイルと依存**: 依存の追加は無い。emo-text の検査を今ある `choice_anchor_tests.rs`（273 行）・`actor_choice_settle_tests.rs`（515 行）へ足せば、emo-text の `lib.rs` の一覧の席を使わずに済む（検査のファイルでも、新しく足すと `lib.rs` の一覧に名前を書く）。
+- **人の手・机**: 実機で範囲の選択肢を押して確かめる項目が要る見込み（`anchor-tag-canon` では開発者が押した）。静かな机・前後の全体テストの比べは要らない。
+- **先に要るもの**: 無い（文字とバルーンの列と、台本の読み手の列の先頭）。同じウェーブに置けない相手: `choice-ranges-one-function`（あちらが `actor.rs` を触る形のとき）・`font-size-keywords`（`check_script_judge.rs`）・`bottom-row-text-clip`（`shell_box_handler.rs` の `send_selection`）・`talk-fast-forward`。v0.0.3 の `user-data-root`・`write-failure-notice` とはファイルが重ならない（あちらの `areka-ghost` は `catalog.rs`・`runtime.rs`・`sylphya_wiring.rs`。どちらかが `areka-ghost` に検査ファイルを足すと `lib.rs` を分け合う）。
+- **優先度の区分**: A のまま（開発者の 10-05 の問いから起票し、開発者が別の spec にすると決めた）。
+- **要件定義のモデル**: Opus に改める。範囲を押せるようにする仕組み（開きと閉じの合図・対応の判定・種類つきの範囲の列）は `anchor-tag-canon` が先に作ってあり、本 spec はそこへ選択肢の種類を足すだけ。新しい境目・新しい並行の決めごと・先例で決まらない骨組みの分かれ目は無い。ukadoc の記述が薄い所（自動改行・閉じ忘れ・範囲の中の `\q`）は議題が多いだけで、Fable の理由にならない。
+- **分割の案**: 切らない。
+- **見つけた穴・古くなった記述**:
+  - 上の棚卸㉔の「kanade と `crates/areka/src/emo2_boot/` は触らない見込み」は古い（`talk_lifecycle.rs` が要る）。roadmap の「直列の列」の注記「kanade と `emo2_boot/` には触らない」も同じく古い。
+  - dola の合図の種類（`crates/dola/src/cue/command.rs` の `CueCommand`）には「種類が増えうる」の印が無い。種類を足すと、dola を使う外の人の、全部の種類を並べる分け方が壊れる＝次のリリースへの申し送りに 1 項目足す（`anchor-tag-canon` と同じ扱い）。

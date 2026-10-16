@@ -65,3 +65,24 @@
 - 中継の exe をテストで起こすときは、番号（0 か自分で取った番号）と控えの置き場（`target\` の下）を必ず渡す（机の本物の 9801〜9830 と `%LOCALAPPDATA%` に触れない）。
 - 全体テストの負荷で偽の赤になりうるテストの一覧が `completed/areka-P0-mcp-stdio-bridge/tasks.md` の Implementation Notes（3.4・4.1・4.2・4.4・4.5・5.2）に在る。
 - 区分 C（バグでない持ち越し）。規模 S〜M（6〜10）。
+
+## 2026-10-16 棚卸㉖の再測定（main `4cf510c1`）
+
+- 前提の変化: 中継のコード（`crates/areka-mcp-bridge/`）・共有の番号の読み（`crates/areka-mcp/src/port.rs`）・配布スクリプト（`tools/package.ps1`）は、中継の着地（10-11）から 1 行も動いていない。9 件の記述はどれも今も当たる（偽の受け口は `src/lib.rs` の 17 行目と `tests/exe_test.rs` の 24 行目の 2 か所から読まれる・上限つきの接続は `scan.rs` の `open` と `http.rs` の `post` の 2 か所・番号の記録の 2 行〔`port.rs` の 46 行目と 67 行目〕は今も「待ち受ける」と書く・配布スクリプトに窓の作りの検査は無い）。
+- 件 1 は小さく済む: 配布スクリプトには PE のバイト列から機種と取り込みの DLL を読む関数が既に在る（`tools/package.ps1` の 349 行目あたり）。同じ読みに窓の作りの欄を 1 つ足せばよい。
+- 触るファイル: `crates/areka-mcp-bridge/` の `src/lib.rs`・`scan.rs`・`http.rs`・`stdio.rs` と兄弟のテスト・`tests/exe_test.rs`・`tests/common/fake_server.rs`、`tools/package.ps1`（746 行）の中身の判定、要るなら `port.rs`（76 行）の 2 行、`doc/ssp-mcp/bridge-diff-areka.md` と `dist/README.txt` の自分の行。新しいファイルは無い。1,000 行に近いのは `service_tests.rs`（869 行）だけで、ここへは足さない。
+- 規模: 6〜10 タスク（変わらず）。新しい依存は足さない。人の手の確かめも、静かな机も、前後の全体テストの比べも要らない（最後の全体テスト 1 回だけ）。
+- 先に要るもの: なし（先頭）。今の版の 2 本（`user-data-root`・`write-failure-notice`）とは触るファイルが重ならない。ただし次の 2 つの約束を付ける。
+  - 中継の控えの置き場を決める `crates/areka-mcp-bridge/src/config.rs` には触らない（下の穴＝`user-data-root` が触る見込み）。
+  - 件 9 は外の待ちなので、この spec の範囲から外す（下）。
+- 今の版の席に入れられるか: 上限 10 は `user-data-root` の下限 12 以下＝`user-data-root` と同じウェーブなら入れられる。`write-failure-notice`（6〜10）だけのウェーブでは上限が下限 6 を超えるので入れない。
+- 優先度の区分: C（完了した中継の拾い残し・バグではない）。
+- 要件定義のモデル: Opus（新しい境目も、並行や順の保証の新しい設計も無い。今ある中継の掃除とテストの足し）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述:
+  - 件 9（arm64 の機械で中継が起きるか）は、次のリリース `v0.0.3` の走りでしか見られず、`v0.0.3` は今の版の 2 本が着地した後に打つ。しかもその走りは arm64 の組み立てまでで、arm64 の機械で起こすことはしない（開発者の机は x64）。＝この spec の中では閉じられない外の待ち。範囲から外し、`/release` の走りの記録で見る申し送りにするのがよい。
+  - 中継の控えの置き場は、areka の記憶の置き場の決め方を中継の側に写したもの（`config.rs` の 82〜98 行目＝`AREKA_PROFILE_DIR` → exe の隣の `profile\areka` → `LOCALAPPDATA`）。`user-data-root` が areka の記憶を exe の隣から動かすなら、中継の側もそろえないと控えだけ exe の隣に残り、winget の上げ直しで消える。`user-data-root` の brief はこのファイルを挙げていない（向こうの穴・こちらは触らない）。
+
+## 2026-10-16 棚卸㉖のウェーブの約束（C8・割り込み）
+- 件 9（arm64 の機械で中継が起きるか）は範囲から外し、「次のリリースへの申し送り」へ移した（`/release` の `v0.0.3` の走りの記録で見る）。
+- 触らないもの: `crates/areka-mcp-bridge/src/config.rs`（同じウェーブの `user-data-root` が、控えの置き場を areka の記憶の置き場にそろえるために持つ）。`tools/package.ps1` は件 1 の PE の読み取りの所だけ。

@@ -219,3 +219,17 @@ ukadoc 網羅調査の文書（`doc/ukadoc-coverage/roadmap-draft.md`・`briefin
    - `roadmap-draft.md` の `[[spec]]` の `areka-P0-seriko-trigger-intervals` の行の `wave = "C5 の候補"`（正本のロードマップでは C5 の ② で、2026-10-10 に着地した）。
    - 束「サーフェスアニメーション」の、段階の表の「依存する既存 spec」の欄に `areka-P0-shell-implicit-surface`（2 件）が載っていない。
    - 台帳 `assets.toml` の `endtalk`・`starttalk`・`never`・`yen-e` の 4 行（持ち主は空）と `animation*.interval,インターバル` の行の備考が、動く間隔の語を「2 語だけ」「4 つ」と書いたまま（今は 8 語。詳しくは `seriko-interval-combinations` の brief の同じ日の申し送り）。
+
+## 2026-10-16 棚卸㉖の再測定（main `4cf510c1`）
+
+- 前提の変化: ウェーブ C7 の 8 本は、網羅の文書と台帳（`doc/ukadoc-coverage/`）と見張りの道具（`crates/ukadoc-survey/`）に 1 行も触っていない。棚卸㉓（10-10）の後に台帳を動かしたのは `anchor-tag-canon` と `seriko-trigger-intervals` の 2 本だけで、どちらもこの brief に申し送りの節を足してある。
+- 数え直し（main `4cf510c1`）: 持ち主の spec が完了したのに完了の表（`briefing.md` の `[[owner_completed]]`・14 本のまま）に居ない＝24 本・150 行 → **26 本・157 行**（`anchor-tag-canon` 4・`seriko-trigger-intervals` 3 が増えた）／ `roadmap-draft.md` の spec の表は 48 行のうち 29 → **50 行のうち 31** が完了済み／ 持ち主が空の行は 1,217 → **1,212**。
+- 古いまま残っているもの（どれも今も確かめた）: `roadmap-draft.md` の `seriko-trigger-intervals` の行の「C5 の候補」（826 行目）・裁定の候補 W-2（1670 行目）・台帳 `shiori.toml` の「名前を書いた場合だけは別」の 210 行・`doc/ukadoc-coverage/README.md` の申し送り先が完了済みの `ukadoc-coverage-roadmap` のまま。
+- 新しく古くなったもの: steering は 10-15 に「ウェーブ」から「版の段」（v0.0.3〜）へ並べ方を替え、「α」の語もやめた。`roadmap-draft.md` の spec の表の「波」の欄は 50 行とも古い名前のまま（W13 8・W14 6・W15 5・W16 4・A0 3・「α 後」1 ほか）。直すなら版の番号へ写す形になる。
+- 触るファイル: 棚卸㉓のまま（`doc/ukadoc-coverage/` の `briefing*.md`・`roadmap-draft.md`・`README.md`・台帳 3 本・作り直す報告、`crates/ukadoc-survey/tests/consistency/` の `spec_checks.rs` 660 行・`documents.rs` 392 行・`documents_non_vacuity.rs` 766 行）。足す分: 申し送りの「報告の道具が行末を LF で書く」を直すなら `crates/ukadoc-survey/src/` の報告を書き出す所。`linkage_checks.rs` 944 行・`checks.rs` 893 行には足さない。
+- 規模: 16〜20 タスク（棚卸㉓の 14〜18 の後に、申し送りが 2 節・8 件増えた。道具の直しと「状態を動かすときに触る所」の一覧を含む）。新しい依存は足さない。人の手の確かめ・静かな机・前後の全体テストの比べは要らない。
+- 先に要るもの: なし（先頭）。今の版の 2 本の brief は台帳と網羅の文書に触ると書いていない＝ファイルは重ならない。ただし上限 20 が `user-data-root` の下限 12 を超えるので、今の版の席には入らない。
+- 優先度の区分: C（網羅台帳の番・製品は壊れない）。
+- 要件定義のモデル: Opus に改める（棚卸㉓は Fable）。決めることは台帳の行と文書の扱いで、開発者の決めごとは多いが、新しい境目・並行の保証・先例の無い骨格の分かれ目のどれにも当たらない。
+- 分割の案: 要件の段で 20 を超えたら、「数を道具の出力にする（`ukadoc-survey` の道具と見張り）」と「台帳の行と文書の撮り直し」の 2 本に分ける。超えなければ 1 本のまま。
+- 見つけた穴・古くなった記述: 上の「波」の欄。`briefing-property.md` は 1,047 行（文書なので 1,000 行の見張りの外だが、撮り直しで足すなら別の文書へ）。

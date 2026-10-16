@@ -182,3 +182,34 @@
 - 見つけた穴・古くなった記述:
   - 本文の触る所に `areka-update` の作業フォルダが無い（上）。
   - 雛形の注意書き（`dist/winget/**` の `InstallationNotes`＝上げ直しで消えるという知らせ）を外す持ち主がいない。この spec は「雛形の持ち主の仕事」と書き、`winget-manifest-submission` は完了し、`winget-release-automation` は `dist/winget/**` を範囲外にしている＝要件の段で持ち主を決める（`winget-release-automation` が持つのが自然）。
+
+## 2026-10-16 棚卸㉖の再測定（main `4cf510c1`）
+- 前提の変化: `baseware-root-list` が 10-16 に着地した（PR#317）。根は並びになり、決め方は `crates/areka/src/roots/` へ移った（環境変数と記憶を読む口は `roots/mod.rs` の `resolve_roots`、並びを決める本体は `roots/resolve.rs` の `resolve_roots_from`。何も無いときの既定＝exe のフォルダ 1 つは同じ関数の 117〜129 行）。本文の「`boot_config.rs` の `resolve_root_from`」「根は 1 つだけ（`BootContext.root`）」は古い（今は `BootContext.roots`）。
+- インストールの側は済んだ所が多い: 新しく入れる物は見つかるいちばん上の根へ入り（`crates/areka/src/install/destination.rs`）、展開の作業フォルダもその根ごとに作る（`crates/areka-nar/src/install.rs` の作業フォルダの型）。＝書ける根を既定の並びの先頭に置けば、新しく入れる物と作業フォルダは付いてくる。`install/desk.rs` を触る見込みは消えた。
+- 残る穴（この spec が持つ・議題 7 と一緒に決める）:
+  - すでにある物の入れ直しは「見えている根でその場で上書き」なので、exe の隣の同梱のゴーストを入れ直すと exe の隣へ書く（`catalog_roots.rs` の `install_root`）。
+  - ネットワーク更新の作業フォルダ（`crates/areka-update/src/paths.rs` の `WORK_DIR`・`work.rs` の 39・156 行）は今も対象のゴーストの中。`baseware-root-list` は `areka-update` に触っていない。
+  - 利用者がメニューの「置き場を外す」で書ける根を外すと、新しく入れる物が exe の隣へ戻る（外せないようにするかを議題に足す）。
+- 触るファイル（今の見立て）:
+  - 必ず: `crates/areka/src/boot_config.rs` の `default_app_profile_dir`（373〜381 行と説明の注記）・`roots/resolve.rs` の `resolve_roots_from`・`roots/mod.rs` の `resolve_roots`・`dist/README.txt` の「■ 置き場」「■ 記憶の置き場」の行。
+  - 選び方しだい: 書ける根を守るなら `roots/edit.rs` の `decide_remove`（67〜89 行）。記憶に書く綴りに `<exe>` のような印を足すなら `roots/resolve.rs` の `decode_memory`・`encode_memory`。
+  - 議題 7 でゴーストとシェルの記憶を動かすなら: `crates/areka-ghost/src/{sylphya_wiring,runtime}.rs`（`profile_areka_root` と 591〜596 行）・`crates/areka/src/boot_resolve.rs` の `ghost_roots`（352〜357 行だけ）・`placement/persist.rs`（282〜284 行）。
+  - `main.rs`（971 行）は触らない見込み（220 行が `default_app_profile_dir` を呼ぶだけ）。`emo2_boot/ghost_switch.rs`・`install/judge.rs` も触らない。
+- 規模: 11〜18 タスク（インストールの側が済んだ分だけ下がる。入れ直しと更新の作業フォルダを入れると上の方）。分割の案: 切らない。
+- 先に要るもの: 無し（`baseware-root-list` は着地）＝今の版の先頭。
+- `write-failure-notice` と同じファイルを触るか（棚卸㉕の開発者への問い ⑴）: 上の見立てなら、確実に重なるファイルは 0。重なりうるのは次の 3 つで、どれも関数が別。
+  - `boot_resolve.rs`: こちらは議題 7 を選んだときの `ghost_roots`（352〜357 行）、向こうは 391〜579 行の印と記録の関数。
+  - `roots/edit.rs`: こちらは書ける根を守るときの `decide_remove`、向こうは並びを記憶へ書けないときの `apply`（157〜218 行）。
+  - `main.rs`: こちらが置き場を `main` の中で 1 度だけ決めて渡す形を選んだときだけ（171〜231 行）。向こうは `boot_first_ghost`・`settle_session_mark` ほか。
+  - 説明書と `doc/COMPAT_ARCHITECTURE.md` の §8 は別の行（許す重なり）。
+- ほかの重なり: `dev-folder-alias`（`roots/{mod,resolve}.rs`・説明書の「■ 置き場」）・`ghost-inner-balloon`・`shell-companion-balloon`（`boot_config.rs` の別の関数）・`multi-ghost-runtime`・`dpi-realign-remembered-chain`（議題 7 のとき `placement/persist.rs`）・`network-update-canon-order`・`update-check-options`（更新の作業フォルダを動かすとき）・`install-live-target-hazards`（入れ直しの宛先を変えるとき）。
+- 人の手: winget で入れた形の実測（上げ直し・外す・機械の全員向け）に開発者の手が要る。静かな机は要らない。依存は足さない（利用者ごとの場所は環境変数 `LOCALAPPDATA` で取れる。前例は中継の `crates/areka-mcp-bridge/src/config.rs` の 69 行）。
+- 優先度の区分: A（開発者「消えるなら winget は使えない」）。要件定義のモデル: Opus（前例の延長で、新しい境界も並行の保証も無い）。
+
+## 2026-10-16 棚卸㉖のウェーブの約束（C8・`write-failure-notice` と同じウェーブ）
+- 測り直しで、`write-failure-notice` と確実に重なるファイルは 0、重なりうる 3 つ（`boot_resolve.rs`・`roots/edit.rs`・`main.rs`）は選び方しだいと分かった。ウェーブ C8 では次の約束で同じファイルに触らないことにして、2 本を並べる（v0.0.3 の着地を 1 ウェーブで済ませる）。
+- この spec が触らないもの: `crates/areka/src/main.rs`・`crates/areka/src/boot_resolve.rs`・`crates/areka/src/roots/edit.rs`（3 つとも向こうが触る）。
+  - 書ける根を外せないようにするなら、`roots/edit.rs` の `decide_remove` ではなく、並びを決める `roots/resolve.rs` の側で書ける根をいつも含める形にする。
+  - 置き場は `main` の中で決めて渡す形を取らず、`boot_config.rs` の `default_app_profile_dir` の中身を替える。
+  - 議題 7 でゴーストの記憶を動かすときは、まず `crates/areka-ghost/src/{sylphya_wiring,runtime}.rs` の側で済ませる。`boot_resolve.rs` の `ghost_roots` に手を入れないと済まないと分かったら、そのタスクを最後に置き、`write-failure-notice` の着地を待って main を取り込んでから直す。
+- この spec が持つと決めたもの: 中継 `crates/areka-mcp-bridge/src/config.rs`（82〜98 行・控えの置き場が areka の記憶の置き場の決め方を写している）。areka の記憶を exe の隣から動かすなら、中継の側も同じ置き場へそろえる（そろえないと中継の控えだけが exe の隣に残り、winget の上げ直しで消える）。同じウェーブの `mcp-stdio-bridge-residue` はこのファイルに触らない約束。

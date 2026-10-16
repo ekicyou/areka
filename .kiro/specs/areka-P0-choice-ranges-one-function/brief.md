@@ -85,3 +85,19 @@
   - 同じウェーブに置けない相手: `range-choice-tag`・`balloon-font-file`（`actor.rs`）・`balloon-text-bugs`（`actor_present.rs`）。`choice-marker-styling` とは、まとめた関数を `actor_present.rs` に置けば重ならない（`choice.rs` に置くと重なる）。
   - 並べられる相手: `font-size-keywords`・`real-run-log-noise`（重なり 0）。
   - `range-choice-tag` より前に入れると、あちらが範囲の選択肢の検査を書くときに、まとめた関数を最初から呼べる。後になっても直す所は増えない見込み（範囲の選択肢は、種類つきの同じ列に乗るだけ）。
+
+## 2026-10-16 棚卸㉖の再測定（main `4cf510c1`）
+
+- **前提の変化**: `balloon-text-bugs` が着地し（10-16）、先に要るものは無くなった。`crates/areka-emo-text/src/actor_present.rs` の `present_actor` の並び（行の割り当て → 行の帯 → 強調の描画 → 描き替えがあったときだけ当たりの行）は同じ。変わったのは次の 3 つ:
+  - 描画範囲が潰れた場所は、並びに入る前に描かずに抜ける入口が足された。
+  - 済んだ選択肢を強調から外す絞り（ホバーの印）と、当たりの写しから外す絞りが足された。どちらも 3 つの関数の外（呼び手の側）にある。まとめた関数にこの絞りを入れるかは設計で決める（入れなくても見た目と当たりは今と同じ）。
+  - 検査の側で 3 つを並べ直す所は 2 か所のまま（`actor_lookahead_shapes_tests.rs` と `choice_anchor_tests.rs` の補助の関数）。`layout_cluster_tests.rs` も 3 つを同じ順で呼ぶが、関数ごとの検査で本番の並びの見張りではない。`layout_styled_tests.rs` に足された検査は当たりの行の関数だけを呼ぶ。
+- **触るファイル**（行数）: `crates/areka-emo-text/src/actor_present.rs`（435）・`choice.rs`（748・まとめた関数をここに置くなら）・検査 `actor_lookahead_shapes_tests.rs`（421）・`choice_anchor_tests.rs`（273）。`actor.rs`（768）は、検査用の読み口 `arrange_for_test` をそのまま使い、決まった字幅を検査の側からまとめた関数へ渡せば触らずに済む。
+- **新しいファイルと依存**: 足さない＝emo-text の `lib.rs` の一覧の席を使わない。依存の追加も無い。
+- **規模**: 3〜5 タスク。
+- **人の手・机**: 実機の確かめは要らない（見た目と当たりを変えない直しで、決定論の検査だけで確かめられる）。静かな机・前後の全体テストの比べも要らない。
+- **先に要るもの**: 無い。v0.0.3 の 2 本とは触るファイルが重ならない。同じウェーブに置けない相手: `actor.rs` を触る形にしたときの `range-choice-tag`・`balloon-font-file`、`choice.rs` に置いたときの `choice-marker-styling`、`actor_present.rs` を触る `bottom-row-text-clip`。本 spec が `actor.rs` に触らず、`range-choice-tag` が `actor_present.rs`・`choice.rs` に触らなければ、`range-choice-tag` と同じウェーブに置ける。`real-run-log-noise` とは重なり 0。
+- **優先度の区分**: C のまま（バグではない。検査が本番の並びを見張れない穴）。
+- **要件定義のモデル**: Opus のまま（新しい境目も並行の決めごとも無い）。
+- **分割の案**: 切らない。
+- **見つけた穴・古くなった記述**: 上の棚卸㉔の行数（`actor_present.rs` 411・`actor.rs` 663）は古い。`actor.rs` を「検査用の読み口」として触る前提は要らない見込み。
