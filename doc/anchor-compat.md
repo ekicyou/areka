@@ -120,7 +120,7 @@
 
 - 押せる範囲の記録 `ChoiceSpan`・当たりの行 `ChoiceHitRow`・選択の知らせ `ChoiceSelection` は、種類 `SpanKind`（`Choice`／`Anchor`）の欄を持つ。型の名前は選択肢だけだった頃のままである。
 - 通し番号（`ordinal`）は選択肢とアンカーで共通。同じ種類の範囲は重ならず、アンカーは選択肢を包んでよい（`choice_anchor_tests.rs` の `same_kind_ranges_are_disjoint_and_an_anchor_may_wrap_a_choice`）。
-- `TextLayerRuntime::choice_active` は「選択肢の範囲があるか」（バルーンの時間切れを止める観測が読む）、`TextLayerRuntime::hit_active` は「押せる範囲があるか（種類を問わない）」（ホバーと押下の前段が読む）。どちらを読むかを変える spec は、A-5 を確かめる。
+- `TextLayerRuntime::choice_active` は「済んでいない選択肢の範囲があるか」（2026-10-16 の `balloon-text-bugs` からバルーンの時間切れの観測はこれを読まない。選択待ちの間の時間切れは、トークの終わりの時刻を起点に測り直して扱う）、`TextLayerRuntime::hit_active` は「押せる範囲があるか（種類を問わない）」（ホバーと押下の前段が読む）。どちらを読むかを変える spec は、A-5 を確かめる。
 
 ### 3.2 申し送り
 

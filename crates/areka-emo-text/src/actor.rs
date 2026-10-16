@@ -484,9 +484,9 @@ impl TextLayerRuntime {
     ///
     /// **表示層自身**の範囲の記録（[`ActorTextState::choices`](crate::state::ActorTextState::choices)）に
     /// 種類が選択肢で済みの境目より後のもの（[`ActorTextState::has_live_choice`](crate::state::ActorTextState::has_live_choice)）があることを表す（DD-6——供給側 `CuePlayerState::WaitingForChoice` バリアの真実源とは別）。
-    /// スコープの**どの場所か**（普通のバルーン・箱）に選択肢があれば真（要件 8.4——時間切れの
-    /// 待ちを止める条件と kanade の選択待ちの単位がスコープだから）。アンカーの範囲は数えない
-    /// （アンカーはバルーンの時間切れを遅らせない）。未知 actor・選択肢なしは `false`。
+    /// スコープの**どの場所か**（普通のバルーン・箱）に済んでいない選択肢があれば真（kanade の
+    /// 選択待ちの単位がスコープだから）。アンカーの範囲は数えない。バルーンの時間切れの観測は
+    /// これを読まない（選択肢つきのトークはトークの終わりの時刻から測る）。未知 actor・選択肢なしは `false`。
     pub fn choice_active(&self, actor: &ActorKey) -> bool {
         self.state
             .places()
@@ -544,8 +544,8 @@ impl TextLayerRuntime {
     /// 「押せる範囲があるか」の照会（選択肢かアンカー・種類を問わない）。
     ///
     /// スコープの**どの場所か**（普通のバルーン・箱）に範囲の記録があれば真。ホバーと押下の
-    /// 前段が見る。バルーンの時間切れの待ちを止める条件には使わない（それは
-    /// [`choice_active`](Self::choice_active)）。未知 actor・範囲なしは `false`。
+    /// 前段が見る。バルーンの時間切れの待ちを止める条件には使わない（済んでいない選択肢の
+    /// 有無は [`choice_active`](Self::choice_active)）。未知 actor・範囲なしは `false`。
     pub fn hit_active(&self, actor: &ActorKey) -> bool {
         self.state
             .places()
