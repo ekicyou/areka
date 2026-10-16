@@ -214,7 +214,7 @@ fn report_helper_image(helper_exe: &Path, image: std::io::Result<HelperImage>);
 fn check_helper_image(helper_exe: &Path);
 ```
 - 判定の規則（`classify_helper_image`）: `head[0..2] == b"MZ"`、`e_lfanew = u32::from_le_bytes(head[0x3C..0x40])`、`head[e_lfanew..e_lfanew+4] == b"PE\0\0"`、`machine = u16::from_le_bytes(head[e_lfanew+4..e_lfanew+6])`。どれかが範囲外か不一致なら `NotPe`。`machine == 0x014C` なら `I686`、それ以外は `OtherMachine(machine)`。
-- 記録の規則（`report_helper_image`）。宛先は `target: "host32-helper"`、どれも 1 行:
+- 記録の規則（`report_helper_image`）。宛先は `target: "shiori-host32"`（出す側＝`shiori-host32-host` の名前。同じクレートの `charset.rs` と同じく `const LOG_TARGET: &str = "shiori-host32";` を `process_host.rs` に置いて使う）、どれも 1 行:
 
 | 結果 | レベル | `event` | 構造化フィールド | 本文（要旨） |
 |---|---|---|---|---|
@@ -300,7 +300,7 @@ fn check_helper_image(helper_exe: &Path);
   - 同じ形で machine `0x8664` → `OtherMachine(0x8664)`、`0xAA64` → `OtherMachine(0xAA64)`（3.1 の前提）。
   - `MZ` が無い・`PE\0\0` が無い・`e_lfanew` が長さの外・長さ 0 → どれも `NotPe`（3.5 の前提）。
 - Unit（`report_helper_image`・`log_capture_kit::capture`）:
-  - `Ok(I686)` → `target: "host32-helper"` の記録 0 件（3.4）。
+  - `Ok(I686)` → `target: "shiori-host32"` の記録 0 件（3.4）。
   - `Ok(OtherMachine(0x8664))` → `ERROR` 1 件・`event == "helper_not_i686"`・`path` の欄にパス・本文に「i686」と直し方が在る（3.1・3.2）。
   - `Ok(NotPe)` と `Err(NotFound)` → それぞれ `WARN` 1 件・`event == "helper_image_unverified"`・`path` の欄にパス（3.5）。
 - Integration（`check_helper_image`・実ファイル）:
@@ -311,6 +311,7 @@ fn check_helper_image(helper_exe: &Path);
 - 実機（重い回 0・`target\` の下の短い絶対パスの根・有界の自動終了・ログの検索）:
   - `cargo build -p areka` の後に `cargo build -p shiori-host32-helper`（x64）で隣を x64 版にして claudia を起こす → `helper_not_i686` の 1 行が `connect_failed` より前に 1 件（3.1〜3.3）。
   - 全体テストの 1 回の後（新しく回さず、実装の最後の検証で回す 1 回を使う）に、写す手間なしで `target\debug\areka.exe` で claudia を起こす → `0x800700C1` が出ず、`connect_failed` 0 件・`helper_not_i686` 0 件（1.4・3.4）。
+  - 順番は必ず「x64 版を置いての確かめ」→「実装の最後の全体テスト 1 回」→「写さずに claudia を起こす確かめ」。x64 版を置いた後片付けは、続く全体テストの揃えの段に任せる（その段が i686 版へ戻すこと自体が要件 1.1 の確かめになる）。逆の順にすると 2 つ目の確かめの前提（隣が i686 版）が崩れ、 x800700C1 が設計の不具合と見分けられなくなる。
 - 最初のタスク（ビルドだけ・重い回 0）: research.md 7.2 の確かめ。i686 版を隣へ置いた後に素の `cargo build`（または `cargo build -p shiori-host32-helper`）を打つと、作り直しが要らなくても隣が x64 版へ戻るかを machine 欄で見て記録する。結果は設計を変えない（要件は道筋に依らない）が、文書の書き替え（1.6）の根拠になる。
 
 ## Performance & Scalability
