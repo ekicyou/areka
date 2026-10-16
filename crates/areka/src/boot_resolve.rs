@@ -544,7 +544,7 @@ impl LastUsed<'_> {
             ghost = ghost.unwrap_or("-"),
             balloon = balloon.unwrap_or("-"),
             shell = self.shell_folder,
-            "[boot_resolve] 最後に使ったものを記憶へ書きました（- は argv なので書いていない）"
+            "[boot_resolve] 最後に使ったものを記憶へ書くように頼みました（- は argv なので書いていない）"
         );
     }
 }
@@ -559,7 +559,7 @@ pub(crate) fn record_last_shell(publisher: &SylphyaPublisher, folder: &str) {
     tracing::info!(
         event = "last_shell_recorded",
         shell = folder,
-        "[boot_resolve] 最後のシェルだけを記憶へ書きました"
+        "[boot_resolve] 最後のシェルだけを記憶へ書くように頼みました"
     );
 }
 
@@ -574,7 +574,7 @@ pub(crate) fn record_last_balloon(publisher: &SylphyaPublisher, folder: &str) {
     tracing::info!(
         event = "last_balloon_recorded",
         balloon = folder,
-        "[boot_resolve] 最後のバルーンだけを記憶へ書きました"
+        "[boot_resolve] 最後のバルーンだけを記憶へ書くように頼みました"
     );
 }
 

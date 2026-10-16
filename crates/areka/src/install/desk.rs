@@ -394,7 +394,7 @@ fn remember_balloon(world: &World, folder: String) {
     tracing::info!(
         event = "install_balloon_remembered",
         folder = %folder,
-        "[install] 今のゴーストの「最後に使ったバルーン」を入れたバルーンへ書き換えました"
+        "[install] 今のゴーストの「最後に使ったバルーン」を入れたバルーンへ書き換えるように頼みました"
     );
 }
 
