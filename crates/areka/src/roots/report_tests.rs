@@ -131,3 +131,31 @@ fn failure_value_still_warns_skips_and_fell_back() {
     assert_eq!(skips[0].field_str("reason"), Some("exe_unavailable"));
     assert_eq!(of(&events, "roots_memory_fell_back").len(), 1);
 }
+
+#[test]
+fn only_marked_roots_carry_user_root_origin() {
+    let dirs = [r"C:\u", r"C:\e", r"C:\p"];
+    let r = ResolvedRoots {
+        roots: BasewareRoots::new(vec![
+            BasewareRoot::user_root(PathBuf::from(dirs[0]), false),
+            BasewareRoot::user_root(PathBuf::from(dirs[1]), true),
+            BasewareRoot::new(PathBuf::from(dirs[2])),
+        ]),
+        origin: RootsOrigin::Default,
+        status: dirs
+            .iter()
+            .map(|d| RootStatus {
+                dir: PathBuf::from(d),
+                found: true,
+            })
+            .collect(),
+        skipped: Vec::new(),
+        memory_fell_back: false,
+    };
+    let ((), events) = capture(|| log_roots(&r, ReportOccasion::Change));
+    let listed = of(&events, "root_listed");
+    assert_eq!(listed.len(), 3);
+    assert_eq!(listed[0].field_str("user_root"), Some("default"));
+    assert_eq!(listed[1].field_str("user_root"), Some("env_var"));
+    assert_eq!(listed[2].field_str("user_root"), Some(""));
+}

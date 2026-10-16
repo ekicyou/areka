@@ -3,7 +3,7 @@
 //! 記録は起動と並びの変更のときだけ残す（要件 9.3）。判断の関数は失敗を値で返し、
 //! 記録はここで残す（起動が失敗した値からも控えと「既定へ倒した」を warn に出す）。
 
-use areka_ghost::{Hidden, StoreKind};
+use areka_ghost::{Hidden, RootMark, StoreKind};
 
 use super::resolve::{ResolvedRoots, RootError, RootSkip, RootsOrigin};
 
@@ -31,16 +31,27 @@ fn origin_str(origin: RootsOrigin) -> &'static str {
     }
 }
 
-/// 並びの 1 根ごとに info（絶対パス・出どころ・見つかったか）、見つからない根は warn（9.1）、
+/// 書ける根の出どころ（項目の印だけから・要件 3.6）。印なしは空。
+fn user_root_str(mark: RootMark) -> &'static str {
+    match mark {
+        RootMark::Plain => "",
+        RootMark::UserRoot { from_env: false } => "default",
+        RootMark::UserRoot { from_env: true } => "env_var",
+    }
+}
+
+/// 並びの 1 根ごとに info（絶対パス・出どころ・書ける根の出どころ・見つかったか）、見つからない根は warn（9.1）、
 /// 控え（`RootSkip`）と `memory_fell_back` は warn。
 pub(crate) fn log_roots(resolved: &ResolvedRoots, occasion: ReportOccasion) {
     let occ = occasion.as_str();
     let origin = origin_str(resolved.origin);
-    for s in &resolved.status {
+    // `status` は `roots` と同じ順・同じ数（`ResolvedRoots` の約束）。
+    for (s, root) in resolved.status.iter().zip(resolved.roots.roots()) {
         tracing::info!(
             event = "root_listed",
             path = %s.dir.display(),
             origin,
+            user_root = user_root_str(root.mark()),
             found = s.found,
             occasion = occ,
             "[RootsReport] ベースウェアの根"
