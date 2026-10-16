@@ -70,6 +70,8 @@ Select skills for the current task even when steering/spec context is already av
 **Establish repo baseline**:
 - Run `git status --porcelain` and note any pre-existing uncommitted changes
 
+**Desk preflight and watch** (last Preflight step, both modes): Desk timing 1 in "Desk coordination (areka-impl-watch)" below.
+
 ### Step 2: Select Tasks & Determine Mode
 
 **Parse arguments**:
@@ -101,6 +103,8 @@ Select skills for the current task even when steering/spec context is already av
 
 For each task (one at a time):
 
+**Desk** (see "Desk coordination (areka-impl-watch)"): before each task apply Desk timing 2 (stop request, load-test step detection, desk-free tasks while waiting); on a granted turn Desk timings 3; on a stop request Desk timing 4, then Desk timing 5 on resume; Desk timings 8 and 9 whenever they occur.
+
 **a) Dispatch implementer**:
 - Read `templates/implementer-prompt.md` from this skill's directory
 - Construct a prompt by combining the template with task-specific context:
@@ -113,6 +117,7 @@ For each task (one at a time):
   - **Previous learnings**: Include any `## Implementation Notes` entries from tasks.md that are relevant to this task's boundary or dependencies (e.g., "better-sqlite3 requires separate rebuild for Electron"). This prevents the same mistakes from recurring.
 - The implementer subagent will read the spec files and build its own Task Brief (acceptance criteria, completion definition, design constraints, verification method) before implementation
 - Preserve this task context, including selected skill guidance, on every implementer re-dispatch (context requests, review remediation, and debug retries); append the new context or feedback.
+- Append the two desk sentences of "Desk coordination (areka-impl-watch)" verbatim to the end of every implementer prompt (only the first while desk steps are off)
 - Dispatch via **Agent tool** as a fresh subagent; set `model` from the Preflight tier for this task and role (omit it when `OWN_MODEL` is Opus or lower)
 
 **Effort escalation** (local customization — keep when regenerating this skill): this skill explicitly sets the Agent tool's `effort` parameter as follows. Escalate only on these triggers; never lower effort below the session default.
@@ -126,6 +131,7 @@ For each task (one at a time):
 - If `STATUS` is missing, ambiguous, or replaced with prose, re-dispatch the implementer once requesting the exact structured status block only. Do NOT proceed to review without a parseable `READY_FOR_REVIEW | BLOCKED | NEEDS_CONTEXT` value.
 - **READY_FOR_REVIEW** → proceed to review
 - **BLOCKED** → dispatch debug subagent (see section below); do NOT immediately skip
+- **NEEDS_CONTEXT** with `MISSING: load-test desk` → request the desk and re-dispatch per "Desk coordination (areka-impl-watch)" (not counted as the one re-dispatch below, no effort escalation)
 - **NEEDS_CONTEXT** → re-dispatch once with the requested additional context; if still unresolved → dispatch debug subagent
 
 **c) Review the task**:
@@ -172,11 +178,12 @@ For each task (one at a time):
 - Resolve `../kiro-debug/SKILL.md` relative to this skill's directory and pass its absolute path as `DEBUG_PROTOCOL_PATH`
 - Supply the task brief/boundary, exact spec references, failure output, reviewer findings, current changed files/diff, and relevant Implementation Notes/runtime constraints
 - Include attempted fixes and their observed results concisely, without copying the failed workers' conversation history
+- Append the two desk sentences of "Desk coordination (areka-impl-watch)" verbatim to the end of the prompt (only the first while desk steps are off)
 - Dispatch via **Agent tool** as a fresh subagent with `effort: "xhigh"` (see Effort escalation); it reads the canonical `kiro-debug` procedure itself. Set `model` from the Preflight tier for this task and role (omit it when `OWN_MODEL` is Opus or lower)
 
 **Handle debug report**:
-- Require a `## Debug Report` and parse its exact `- NEXT_ACTION:` field (`RETRY_TASK | BLOCK_TASK | STOP_FOR_HUMAN`). If the protocol or a valid report is missing, stop this feature and report the missing input; do not guess a next action or dispatch another implementer.
-- If `NEXT_ACTION: STOP_FOR_HUMAN` → append `_Blocked: <ROOT_CAUSE>_` to tasks.md, stop the feature run, and report that human review is required before continuing
+- Require a `## Debug Report` and parse its exact `- NEXT_ACTION:` field (`RETRY_TASK | BLOCK_TASK | STOP_FOR_HUMAN`). If the protocol or a valid report is missing, stop this feature (Desk timing 7) and report the missing input; do not guess a next action or dispatch another implementer.
+- If `NEXT_ACTION: STOP_FOR_HUMAN` → append `_Blocked: <ROOT_CAUSE>_` to tasks.md, stop the feature run (Desk timing 7), and report that human review is required before continuing
 - If `NEXT_ACTION: BLOCK_TASK` → append `_Blocked: <ROOT_CAUSE>_` to tasks.md, skip to next task
 - If `NEXT_ACTION: RETRY_TASK` → preserve the current worktree; do NOT reset or discard unrelated changes. Spawn a **new** implementer subagent (`effort: "high"`, see Effort escalation) with the original task context (including selected skill guidance), the debug report's `FIX_PLAN`, `NOTES`, and the current `git diff`, and require it to repair the task with explicit edits only
   - If the new implementer succeeds (READY_FOR_REVIEW → reviewer APPROVED) → normal flow
@@ -186,11 +193,11 @@ For each task (one at a time):
 
 **`(P)` markers**: Tasks marked `(P)` in tasks.md indicate they have no inter-dependencies and could theoretically run in parallel. However, kiro-impl processes them sequentially (one at a time) to avoid git conflicts and simplify review. The `(P)` marker is informational for task planning, not an execution directive.
 
-**Completion check**: If all remaining tasks are BLOCKED, stop and report blocked tasks with reasons to the user.
+**Completion check**: If all remaining tasks are BLOCKED, run Desk timing 7 (`leave`), then stop and report blocked tasks with reasons to the user.
 
 #### Manual Mode (main context)
 
-For each selected task:
+For each selected task (the same Desk timing 2, 3, 4, 5, 8 and 9 as in Autonomous mode apply; with no implementer, timing 3's `loaddone` comes as soon as the measuring step is done):
 
 **1. Build Task Brief**:
 Before writing any code, read the relevant sections of requirements.md and design.md for this task and clarify:
@@ -214,14 +221,16 @@ Before writing any code, read the relevant sections of requirements.md and desig
 
 ### Step 4: Final Validation
 
+**Desk**: before this step apply Desk timing 6 (not stopped, not holding the load-test desk). When the run ends in any way (GO, NO-GO stop, MANUAL_VERIFY_REQUIRED stop, STOP_FOR_HUMAN, missing debug report stop, BLOCKED, developer abandon, or all tasks BLOCKED) apply Desk timing 7 (`leave`), in both modes.
+
 **Autonomous mode**:
 - After all tasks complete, run `/kiro-validate-impl {feature}` as a GO/NO-GO gate
 - Pass the Preflight policy along: state `DISPATCH_POLICY=tiered OWN_MODEL=<name>` in the `/kiro-validate-impl` invocation so its own subagent dispatches follow the same tiering
 - If validation returns GO → before reporting feature success, apply `kiro-verify-completion` to the feature-level claim using the validation result and fresh supporting evidence
 - If validation returns NO-GO:
   - Fix only concrete findings from the validation report
-  - Cap remediation at 3 rounds; if still NO-GO, stop and report remaining findings
-- If validation returns MANUAL_VERIFY_REQUIRED → stop and report the missing verification step
+  - Cap remediation at 3 rounds; if still NO-GO, stop (Desk timing 7) and report remaining findings
+- If validation returns MANUAL_VERIFY_REQUIRED → stop (Desk timing 7) and report the missing verification step
 
 **Manual mode**:
 - Suggest running `/kiro-validate-impl {feature}` but do not auto-execute
@@ -279,13 +288,13 @@ else echo "desk: id=$ID repo=$R"; fi
 
 | Ended | Output | Do | Req |
 |---|---|---|---|
-| watch | `exit=0`, `stop requested by <X>` | Stop request. Run `stopped --wait` at the stop boundary (after the current task's commit) | 3.1, 3.3 |
+| watch | `exit=0`, `stop requested by <X>` | Stop request. Run `stopped --wait` at the stop boundary (Desk timing 4) | 3.1, 3.3 |
 | watch | `exit=0`, `already stopped; ...` | Do not record "stopped" again; run `resume` in the background | 3.7 |
 | watch | `exit=1`, `AREKA_IMPL_WATCH_HOME ...` | Stop the desk steps for this run; one line with the stderr line as is; keep it in the final report | 6.3 |
 | watch | `exit=1`, `a watch wait for <ID> is already running` | If your own watch is running, do nothing. If you have no record of one, run the leftover-watch removal one-liner below in the background and tell one line. If you held a request, request again before that one-liner ends | 2.3, 2.7, 2.8 |
 | watch | `exit=1`, anything else | Start the watch again once, at once. If the restart ends with the same `exit=1` line, follow the exit-1 rows below; if still broken, stop the desk steps for this run and keep it in the final report | 2.6, 6.4 |
-| watch | `exit=3` | If it is not the current watch (the last watch run started), do nothing. If it is the current watch and participation has ended (run-end `leave`), do nothing. Otherwise tell one line, start the watch again and re-submit any request you held (if you held the load-test desk, see 4.7) | 2.9, 2.10 |
-| resume wait (`stopped --wait`, `resume`) | `exit=0`, `resumed` | Start the watch again, then continue from the step after where you stopped | 3.5 |
+| watch | `exit=3` | If it is not the current watch (the last watch run started), do nothing. If it is the current watch and participation has ended (run-end `leave`), do nothing. Otherwise tell one line, start the watch again and re-submit any request you held (if you held the load-test desk, Desk timing 8) | 2.9, 2.10 |
+| resume wait (`stopped --wait`, `resume`) | `exit=0`, `resumed` | Start the watch again, then continue from the step after where you stopped (Desk timing 5) | 3.5 |
 | resume wait | `exit=0`, `stop requested again by <X>` | Do not go back to work; run `stopped --wait` again | 3.6 |
 | resume wait | `exit=3` | Start the watch again and continue | 3.8 |
 | resume wait | `exit=1`, `a resume wait for <ID> is already running` | The earlier resume wait is still running. Do nothing (not a 6.4 failure) | 3.10 |
@@ -316,6 +325,37 @@ else echo "desk: id=$ID repo=$R"; fi
 - Stop state (none / stop requested / stopped) and the load-test desk (none / waiting / held).
 - Whether participation has ended (after the run-end `leave`; the `leave` inside the 2.8 one-liner does not count).
 - The app's state is the source of truth. If this memory is lost, the preflight and the ending table are enough to recover; only the 2.7 / 2.8 split is lost, and then fall to 2.8.
+
+### Desk timings (Autonomous and Manual)
+
+The execution steps point here as "Desk timing N". Every command uses the call form above. While desk steps are `off`, skip all of them.
+
+1. **End of Preflight**: run the desk preflight. On `desk: skip ...`, follow its bullet above and go on without the desk (6.1, 6.2). On `desk: id=<ID> repo=<R>`, before the first task start the watch in the background (2.1):
+   ```bash
+   "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" watch --id <ID> --repo <R> --name <feature> 2>&1; echo "exit=$?"
+   ```
+2. **Before each task**:
+   - If a stop request has come, do not start the next task (3.4); go to timing 4.
+   - Decide from the task text, its `_Boundary:_` and the design's verification description whether the task contains a machine-exclusive step (quiet-CPU measurement, deliberate CPU-load reproduction, timing comparison). Ordinary tests (crate tests, clippy, `tools/test-all.ps1`) do not count (4.2). If it does, request the load-test desk in the background and do not hand over (dispatch, or in Manual mode start) that task until the turn comes (4.1):
+     ```bash
+     "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" loadtest --id <ID> --repo <R> --purpose "<what, roughly how many minutes>" --wait 2>&1; echo "exit=$?"
+     ```
+   - While waiting for the turn, continue tasks whose dependencies are done and that need no desk. If none are left, tell one line `負荷テストの机の番待ち` and end the turn (4.3).
+3. **Turn granted** (`granted load; stopped: ...`): if it was granted while stopped, start the watch again once (4.4). Hand that task over (Autonomous: dispatch with the line `The load-test desk is held.` added to the prompt). As soon as it is done (the implementer returns, success or not), run `loaddone --id <ID>` in the foreground (4.5). If review or remediation needs to measure again, request again (timing 2).
+4. **Stop request** (watch `stop requested by <X>`): carry the current task through implementer → review → verification → `[x]` → commit; never cut a running test or subagent (3.1). At that commit boundary run `stopped --id <ID> --wait` in the background, tell one line `負荷テストのために止まった（停止要請: <X>）` and end the turn (3.2). If the next thing to do is a load-test request, run `stopped --wait` first and request after it (3.9). If no work is in progress (e.g. the turn ended waiting for the load-test desk), you are already at the boundary: run `stopped --wait` at once.
+5. **Resume**: per the ending table. On `resumed`, start the watch again, then go on to the next task without waiting for developer input (3.5).
+6. **Before Step 4 (final validation)**: confirm you are not stopped (no stop request pending) and do not hold the load-test desk (3.4). Otherwise finish timing 3 or 4 first.
+7. **Run end**, any end of the run (GO, NO-GO stop, MANUAL_VERIFY_REQUIRED stop, STOP_FOR_HUMAN, missing debug report stop, BLOCKED, developer abandon, or all tasks BLOCKED): run `leave` in the foreground (2.5). An `exit=3` of a watch or wait that ends after it needs nothing (2.10). While waiting for completion approval the session is not a participant (2.4).
+   ```bash
+   "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" leave --id <ID> 2>&1; echo "exit=$?"
+   ```
+8. **`exit=3` of the watch or the turn wait while holding the load-test desk**: do not start the next measurement; start the watch, request the load-test desk again, and continue measuring only after the turn comes (4.7).
+9. **Only when the developer says to record a load test that is already running**: `loadrunning --id <ID> --repo <R> --purpose "<what>"` in the foreground, and `loaddone --id <ID>` when it is done (4.6).
+
+**Two sentences for the implementer and the debugger**: on every dispatch (re-dispatches included), append them verbatim to the end of the prompt. While desk steps are `off`, append only the first: the load-test desk does not exist this run, so machine-exclusive steps go ahead without it (6.1). The templates stay unchanged.
+- `Do not run areka-impl-watch.exe; the controller owns the desk commands.` (1.6)
+- `Do not run a machine-exclusive step (quiet-CPU measurement, deliberate CPU-load reproduction, timing comparison) unless this prompt says the load-test desk is held. If the task needs one, stop before it and report NEEDS_CONTEXT with "MISSING: load-test desk: <what and roughly how long>".`
+- When an implementer returns `MISSING: load-test desk`, request the load-test desk as in timing 2; when the turn comes, re-dispatch with `The load-test desk is held.` added (timing 3). This re-dispatch counts neither as the one `NEEDS_CONTEXT` re-dispatch nor as an effort escalation (4.1).
 
 ### Never
 
@@ -371,7 +411,7 @@ Add that it should be run in a working copy that has taken in the latest default
 - **Action**: Debug and fix, then re-run
 
 **All Tasks Blocked**:
-- Stop and report all blocked tasks with reasons
+- Run Desk timing 7 (`leave`), then stop and report all blocked tasks with reasons
 - Human review needed to resolve blockers
 
 **Spec Conflicts with Reality**:
