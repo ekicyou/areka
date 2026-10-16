@@ -121,12 +121,16 @@ Do all roadmap edits in one Python script in the scratch directory (run with `py
 1. Immediate fixes done (and what was handed to specs).
 2. Briefing: re-measured count, splits, new briefs, resulting brief count.
 3. Dependency-tree summary: largest heads and why they were or were not taken.
-4. The wave, exactly in this form (one code block, Fable first; no per-spec notes inside):
+4. The wave, exactly in this form (one code block; first the specs of the current version — the version the wave really advances — then the fillers that entered the spare seats; inside each group Fable first; omit an empty Fable/Opus line and an empty filler group; no per-spec notes inside). Developer 2026-10-16: the report must show which specs are the real next version and which are cut-ins:
 ```
-Wave <Cn> <k>本
+Wave <Cn> <k>本（<version> <a>本＋割り込み <b>本）
+【本来の次の版 <version>】
 Fable
 /kiro-start areka-P0-<name>
+Opus
+/kiro-start areka-P0-<name>
 
+【割り込み（版に縛らない・<version> の着地を遅らせない）】
 Opus
 /kiro-start areka-P0-<name>
 ```
