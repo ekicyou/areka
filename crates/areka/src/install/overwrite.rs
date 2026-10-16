@@ -10,7 +10,7 @@ use std::time::Instant;
 
 use areka_actor::ReplySender;
 use areka_kanade::ChangeOrigin;
-use areka_nar::{InstallOutcome, InstallRequest, NarArchive, NarError};
+use areka_nar::{InstallOutcome, InstallRequest, NarArchive, NarError, SingleRoot};
 use bevy_ecs::world::World;
 
 use super::{InstallDesk, reply_to};
@@ -167,7 +167,7 @@ pub(super) fn run_between(world: &mut World) {
     };
     let started = Instant::now();
     let result = archive.install(&InstallRequest {
-        root: &root,
+        roots: &SingleRoot(&root),
         target_ghost: pending.target_ghost.as_deref(),
     });
     let ms = started.elapsed().as_millis() as u64;

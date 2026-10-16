@@ -39,10 +39,34 @@ static NEXT_SERIAL: AtomicU32 = AtomicU32::new(0);
 /// 巻き戻せなかった元の木を含む作業フォルダを片付けから守る期間（要件 2.7）。
 pub(crate) const SURVIVOR_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
+/// 宛先の根を答える口（要件 5.4・5.5）。答えは `<根>`（その下に `ghost\`・`balloon\` を組む）。
+///
+/// どの根へ入れるかは呼び手が決める。計画を組むとき配置ごとに 1 回だけ尋ね、
+/// 答えをその配置に固定する（同じ配置に 2 回は尋ねない）。
+pub trait InstallRoots {
+    /// ゴーストの本体の `directory`、またはシェル・サプリメントの宛先ゴーストのフォルダ名に対して。
+    fn ghost_root(&self, folder: &str) -> PathBuf;
+    /// バルーンの本体・同梱のバルーンの `directory` に対して。
+    fn balloon_root(&self, folder: &str) -> PathBuf;
+}
+
+/// 根 1 つ（どの問いにも同じ根を答える）。単一の根の呼び手とテストはこれを渡す。
+pub struct SingleRoot<'a>(pub &'a Path);
+
+impl InstallRoots for SingleRoot<'_> {
+    fn ghost_root(&self, _folder: &str) -> PathBuf {
+        self.0.to_path_buf()
+    }
+
+    fn balloon_root(&self, _folder: &str) -> PathBuf {
+        self.0.to_path_buf()
+    }
+}
+
 /// 展開の要求。根の場所は呼び出し側が決める（要件 5.1）。
 pub struct InstallRequest<'a> {
-    /// ベースウェアの根（絶対パス）。
-    pub root: &'a Path,
+    /// 宛先の根を答える口（絶対パスを答える）。
+    pub roots: &'a dyn InstallRoots,
     /// `shell`／`supplement` の宛先ゴーストのフォルダ名。
     ///
     /// `accept` から宛先を求めるのは呼び出し側の仕事（要件 5.6）。

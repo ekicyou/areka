@@ -15,7 +15,7 @@ use std::sync::mpsc::Sender;
 
 use areka_actor::{ActorHandle, ReplySender, reply_channel, run_inbox, spawn_actor};
 use areka_kanade::RaiseOutcome;
-use areka_nar::{InstallOutcome, InstallRequest, NarArchive, NarError};
+use areka_nar::{InstallOutcome, InstallRequest, NarArchive, NarError, SingleRoot};
 
 use super::InstallOrder;
 use super::judge::GhostFacts;
@@ -200,7 +200,7 @@ impl InstallPorts for DeskPorts {
             return None;
         }
         let result = archive.install(&InstallRequest {
-            root: &root,
+            roots: &SingleRoot(&root),
             target_ghost,
         });
         // 書き終えた直後に手放す（間で終了が始まると「書く前」と記録されるので続けて呼ぶ）。

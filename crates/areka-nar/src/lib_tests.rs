@@ -326,7 +326,7 @@ fn install_does_not_inflate_a_second_time() {
 
     let outcome = archive
         .install(&InstallRequest {
-            root,
+            roots: &SingleRoot(root),
             target_ghost: None,
         })
         .expect("保持した中身だけで展開できる");
@@ -409,7 +409,7 @@ fn a_destination_in_use_fails_install_and_the_record_points_at_the_work_folder()
 
     let (result, records) = capture(|| {
         archive.install(&InstallRequest {
-            root,
+            roots: &SingleRoot(root),
             target_ghost: None,
         })
     });
@@ -472,7 +472,7 @@ fn install_is_idempotent() {
     let path = put(root, "ghost.nar", &ghost_with_balloon());
     let archive = NarArchive::open(&path).expect("開ける");
     let request = InstallRequest {
-        root,
+        roots: &SingleRoot(root),
         target_ghost: None,
     };
 
@@ -615,7 +615,7 @@ fn install_into_empty_root(nar: &NarBuilder, root: &Path) -> InstallOutcome {
     assert!(tree(root).is_empty(), "根が空でない");
     archive
         .install(&InstallRequest {
-            root,
+            roots: &SingleRoot(root),
             target_ghost: None,
         })
         .expect("入れられる")

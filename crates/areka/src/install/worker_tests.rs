@@ -421,7 +421,7 @@ fn overwrite_ran_releases_the_gate() {
             panic!("上書きの頼みが届く");
         };
         let result = archive.install(&areka_nar::InstallRequest {
-            root: &desk_root,
+            roots: &areka_nar::SingleRoot(&desk_root),
             target_ghost: target_ghost.as_deref(),
         });
         let _ = reply.send(Overwritten::Ran(result));

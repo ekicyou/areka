@@ -9,7 +9,7 @@
 //! # 2 段で使う
 //!
 //! ```rust,no_run
-//! use areka_nar::{InstallKind, InstallOutcome, InstallRequest, NarArchive, NarError};
+//! use areka_nar::{InstallKind, InstallOutcome, InstallRequest, NarArchive, NarError, SingleRoot};
 //! use std::path::Path;
 //!
 //! fn install(nar: &Path, root: &Path) -> Result<InstallOutcome, NarError> {
@@ -19,7 +19,7 @@
 //!         println!("{} を入れます", archive.manifest().name);
 //!     }
 //!     // ⑵ 入れる。失敗したら宛先は呼ぶ前のまま（巻き戻せなかったぶんは理由に載る）。
-//!     match archive.install(&InstallRequest { root, target_ghost: None }) {
+//!     match archive.install(&InstallRequest { roots: &SingleRoot(root), target_ghost: None }) {
 //!         Err(NarError::Refused { reason, .. }) => {
 //!             // 短い語をそのまま `OnInstallFailure` の理由に写せる。
 //!             println!("拒否: {}", reason.kind());
@@ -57,7 +57,7 @@ pub use error::{
     ElementKind, ExistingState, InstalledElement, Integrity, IoPhase, ManifestWarning, NarError,
     RefuseReason, SurvivingTree, UnsafeWhy, Unsupported,
 };
-pub use install::{InstallOutcome, InstallRequest};
+pub use install::{InstallOutcome, InstallRequest, InstallRoots, SingleRoot};
 pub use manifest::{Companion, ExistingPolicy, InstallKind, InstallManifest};
 
 /// 検証を終えた `.nar` 1 本。
@@ -190,7 +190,8 @@ impl NarArchive {
         };
         let plan = build_plan(&self.manifest, &self.names, request).map_err(refused)?;
 
-        let area = WorkArea::create(request.root)
+        // 計画の先頭は必ず本体の配置。作業フォルダはその根に掘る。
+        let area = WorkArea::create(&plan[0].root)
             .map_err(|failure| self.io(IoPhase::Stage, failure.path, failure.source))?;
         *work = Some(area.path().to_path_buf());
 

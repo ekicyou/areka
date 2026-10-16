@@ -7,7 +7,9 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use areka_nar::{InstallOutcome, InstallRequest, IoPhase, NarArchive, NarError, SurvivingTree};
+use areka_nar::{
+    InstallOutcome, InstallRequest, IoPhase, NarArchive, NarError, SingleRoot, SurvivingTree,
+};
 use sample_ghost_kit::{NarBuilder, install_txt};
 use temp_path_kit::TempPath;
 
@@ -123,7 +125,7 @@ impl FakePorts {
         target_ghost: Option<&str>,
     ) -> Result<InstallOutcome, NarError> {
         archive.install(&InstallRequest {
-            root: self.root.path(),
+            roots: &SingleRoot(self.root.path()),
             target_ghost,
         })
     }
