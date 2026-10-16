@@ -177,9 +177,9 @@ fn name_matches_before_folder_name() {
     );
 }
 
-/// 大文字小文字を区別する（名前でもフォルダ名でも）。
+/// `name` は大文字小文字を区別し、フォルダ名は 1 つの規則で区別しない（要件 2.8）。
 #[test]
-fn matching_is_case_sensitive() {
+fn name_is_case_sensitive_folder_name_is_not() {
     let entries = [entry("Alpha", Some("Emily"))];
     assert_eq!(
         (
@@ -191,8 +191,8 @@ fn matching_is_case_sensitive() {
         ),
         (
             None,
-            None,
-            None,
+            Some("Alpha".to_owned()),
+            Some("Alpha".to_owned()),
             Some("Alpha".to_owned()),
             Some("Alpha".to_owned())
         ),

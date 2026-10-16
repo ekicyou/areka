@@ -308,7 +308,7 @@ pub(crate) fn request_skin_switch_with(
         let current_name = current.as_deref().map_or_else(String::new, |folder| {
             candidates
                 .iter()
-                .find(|c| c.folder == folder)
+                .find(|c| areka_ghost::same_folder_name(&c.folder, folder))
                 .map_or_else(|| folder.to_owned(), skin_ref_name)
         });
         GapRaise {
