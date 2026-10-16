@@ -378,7 +378,7 @@ PERF-LOOP RESULT rank-run code=0 dir=<wt>\target\perf-loop-check\draw-load-parit
 | `[perf-loop] shiori_helper_present=<b> dir=<path>` | `perf-loop.measure.ps1` 381 行 | 同上 |
 | `[perf-loop] baseline build=<b> verdict=<v> dir=<path>` | `perf-loop.measure.ps1` 588 行 | 同上 |
 | `[perf-loop] 走行する実行体: <exe> sha256=<h> git_head=<h> git_dirty=<b>` | `perf-loop.common.ps1` 667 行 | 同上（`sha256=` 以降の `key=value`。前の日本語の地の文は design の規則 R1 で ASCII にする側） |
-| `CHECK-QUIET RESULT stage=<s> verdict=<v> code=<n> file=<path>` | `check-quiet.ps1` 536・540・661 行 | `perf-loop.common.ps1`（`Invoke-CheckQuietOnce`）・`perf-loop.ps1` の自己較正 |
+| `CHECK-QUIET RESULT stage=<s> verdict=<v> code=<n> file=<path>` | `check-quiet.ps1` 536・540・661 行 | `invoke-perf-run.ps1`（`Invoke-CheckQuietOnce`・10.4 で訂正）・`perf-loop.ps1` の自己較正 |
 | `[check-quiet] version=<v>`、続けて `stage=`・`time_utc=`・`sample_sec=`・`machine_cpu_mean_pct=`・`machine_cpu_max_pct=`・`threshold_mean_pct=`・`heavy_process_names=`・`heavy_processes_found=`・`heavy_process_list=`・`target_pid_excluded=`・`verdict=`・`reason=`・`heavy_process_cpu_min_pct=`・`heavy_process_presence=`・`heavy_process_busy=`（静寂の確認の報告・16 行） | `check-quiet.ps1` 222〜239 行（`Format-QuietReport`）で組み、658 行で `quiet-*.txt` に書き、659 行（`[Console]::Out.Write($report)`）で同じ文面を端末にも出す | `perf-loop.common.ps1` 677〜678 行（`quiet-*.txt` の `verdict=`）・人と記録（`Invoke-CheckQuietOnce` が写す）。ソースの注記（218・235〜236 行）は読む側に「perf-ledger.py・judge 系」を挙げている。ただし `tools/perf/*.py` を grep しても、この報告の鍵を読む所は無かった。`perf_ledger_goal.py` 63 行の `machine_cpu_max_pct`・`sample_sec`・`heavy_process_names` は目標定義の TOML の `[quiet]` の鍵の名前で、報告は読まない。それでも注記に従い、読む側があるものとして扱う。**行の並びそのものも機械が読む**ので、並べ替えない。新しい行は末尾にだけ足す（236 行の注記） |
 | `counter_error=<s>` | `check-quiet.ps1` 660 行 | 人と記録 |
 | `INVOKE-CPU-SAMPLE RESULT <mode> code=<n> version=<v> [<key=value …>]` | `invoke-cpu-sample.ps1` 164 行（`Write-ResultLine`）。`<key=value>` は、probe の 387・398 行（`available=`・`reason=`）、start の 413 行（`etl=`）、stop の 426・464 行（`available=false reason=no_xperf`）・490 行（`dump=`・`sample_count=`・`stack_rows=`）・496 行（`dump=`・`sample_count=`・`areka_frames=0`）・500〜501 行（`sample_count=`・`areka_frames=`・`dump=`・`stack_rows=`・`resolved=`・`unresolved=`・`backend=`）、selftest の 584・588 行（`failures=`・`fixture_areka_frames=`・`fixture_sample_count=`・`red_areka_frames=`・`available=`・`reason=`） | `perf-loop.ps1` の自己較正（`LastLine`）・`perf-loop.measure.ps1` 668 行（stop の失敗の文に `$stop.LastLine` を写す） |
@@ -391,3 +391,106 @@ PERF-LOOP RESULT rank-run code=0 dir=<wt>\target\perf-loop-check\draw-load-parit
 - 日本語の地の文の中に `reason=<r>` などが混ざる行（`perf-loop.measure.ps1` 422・635・665 行、`perf-loop.ps1` 612 行、`check-quiet.ps1` 604 行の `[check-quiet] stage=… 秒数=… 閾値=…`）は人が読む行なので表に入れない。design の規則 R1 で行ごと ASCII の英文に書き直してよい。`perf-loop.common.ps1` 667 行を表に入れたのは、`sha256=` から後ろが値の並びとして読まれるため（前の地の文だけを R1 で直す）。
 - ほかの道具の出力をそのまま写す行（`invoke-followup-checks.ps1` 290 行が写す `judge-followup.py` の出力、`perf-loop.common.ps1` 247 行・`perf-loop.measure.ps1` 340 行・`invoke-perf-run.ps1` 409 行が写す子の出力）は、元の道具の行の型が上の表のとおりで、写す側は字を変えない。
 - 直す前の実際の字面は `target\perf-loop-check\before-preflight.log`（47 行）と `before-rank-run-dryrun.log`（18 行）にある。直した後は `after-*.log` の同じ型の行と字で比べる。
+
+### 10.4 判定と静的な確かめ（タスク 7.1・コミット `f40d227b`・pwsh 7.6.7）
+
+「差分が無い」の基準は `main` との分かれ目（`git merge-base HEAD main`＝`1e6590d8`・この spec の実装のコミットの前）。
+
+#### 判定（要件 5.2・5.4・5.5・5.6）
+
+- `pwsh -NoProfile -File tools/encoding-check.ps1` は終了コード 0、最後の行は `encoding check: all passed`。所要は約 12 秒。出力は `target\perf-loop-check\encoding-check-7.1.txt` に控えた。
+- `PASS calibration (34 samples)`（もとの 27 見本と足した 7 見本）。
+- 対象の合否はすべて `PASS`。`tools/*.ps1` の 8 本・`tools/perf/*.ps1` の 8 本・workflow の 2 本・規則 E の 4 行。直す前に赤だった `tools/perf` の 397 件は 0 件になった。`tools/*.ps1` と workflow の合否は直す前と同じ（どれも `PASS`）。
+- 932 の子の確かめは 7 行がすべて `PASS`。`own console code page 932`・`calibration (the plain call breaks the sample …)`・`production (Invoke-Utf8Child reads the sample exactly)`・`perf calibration (the plain call breaks the sample …)`・`perf real (Invoke-PwshChild delivers the 3 sample lines exactly)`・`perf console still 932 after Invoke-PwshChild`・`version=0.0.2 is the version this process read`。
+- 前後の端末の値は `PASS own console code pages unchanged (output 932, input 932)`。判定を回した端末は前も後も出力 932・入力 932 で同じ。
+
+#### 行数（要件 9.4）
+
+| ファイル | 行数 |
+|---|---|
+| `check-quiet.ps1` | 662 |
+| `invoke-cpu-sample.ps1` | 606 |
+| `invoke-followup-checks.ps1` | 865 |
+| `invoke-perf-run.ps1` | 926 |
+| `perf-loop.common.ps1` | 678 |
+| `perf-loop.measure.ps1` | 993（直す前と同じ・993 以下） |
+| `perf-loop.ps1` | 685 |
+| `perf-pwsh-child.ps1`（この spec で足した部品） | 41 |
+
+どれも 1,000 以下。
+
+#### 一時フォルダと出力先の根（要件 10.1・10.3）
+
+- `tools/perf/*.ps1` を `GetTempPath`・`GetTempFileName`・`New-TemporaryFile`・`$env:TMP` で grep して 0 件。`invoke-cpu-sample.ps1` の受け皿と `-Probe` の作業用のフォルダ、`perf-loop.ps1` の自己較正の作業用のフォルダは、どれもワークツリーの `target\perf-loop-tmp\` の下（`invoke-cpu-sample.ps1` 205〜223 行・`perf-loop.ps1` 273 行）。
+- `$env:TEMP` は `perf-loop.common.ps1` 485 行の 1 か所だけ残る。これは `Resolve-OutRoot`（481〜488 行）の中で、`%LOCALAPPDATA%` が無いときに出力先の根を決める所。出力先の根は一時ファイルではなく、決め方は変えない約束（要件 10.3・9.1）なので、そのまま残した。道具が自分で作る一時ファイルには使っていない。
+- `Resolve-OutRoot` の関数の本文を分かれ目と字で比べて差分なし（直す前は 487 行から・今は 481 行から。上の行が減って 6 行ずれただけ）。
+
+#### 機械が読む行（要件 4.4）
+
+- 分かれ目と今のコードで、10.3 の表の行を出す所を字で比べた。差分は 2 か所だけで、どちらも design の規則 R0・R1 のとおり機械の部分の外。`invoke-cpu-sample.ps1` 433・471 行の `Stop-Run` の `Message` と `perf-loop.measure.ps1` 376・380 行の人向けの警告も英文にしたが、`RESULT` の行と `-Extra` の字面は同じ。
+  - `perf-loop.common.ps1` の `[perf-loop] 走行する実行体: <exe>` が `[perf-loop] executable to run: <exe>` になった。`sha256=` から後ろは同じ字面。
+  - `perf-loop.ps1` の `selftest python NG code=-1 | <説明>` の `|` より後ろの説明が英文になった。`|` より前は同じ字面。
+- preflight の `key=value` の並び（`[perf-loop] version=` から `code=` まで）と `check-quiet.ps1` の `Format-QuietReport` の本文は、分かれ目と字で比べて差分なし。`invoke-cpu-sample.ps1` の `-Extra` に渡す `key=value` と `Write-ResultLine` の行も差分なし。`FOLLOWUP RESULT` の 2 行、`CHECK-QUIET RESULT` の 3 行、`counter_error=`・`preflight_file=`・`shiori_helper_present=`・`baseline build=` の行も差分なし。
+- 鍵の名前（`<名前>=`）の数を 7 本で比べると、増えたものはあるが減ったものは無い。増えたのは人が読む行を英文にしたときに値の前へ鍵の名前を書いた所（例: `check-quiet.ps1` 604 行の `[check-quiet] stage=… sample_sec=… threshold=… goal=…`）で、10.3 の表に入れていない人の行。
+
+直した後の行番号（10.3 の表の「出す所」と「読む所」で行がずれたもの。書いていないものはずれていない）:
+
+| 行の型 | 直す前の行 | 直した後の行 |
+|---|---|---|
+| `PERF-LOOP RESULT`（`perf-loop.common.ps1`） | 98（定数 55） | 102（定数 59） |
+| `SELFTEST RESULT`（`perf-loop.ps1`） | 397 | 399 |
+| `selftest <道具> ok\|NG`（`perf-loop.ps1`） | 365・379・390 | 367・381・392 |
+| preflight の `key=value`（`perf-loop.ps1`・`[perf-loop] version=` の行から `code=` の行まで） | 567〜599（10.3 の 566〜600 は前後の配列の括弧の行を含めた数え方） | 569〜601 |
+| `preflight_file=`（`perf-loop.ps1`） | 608 | 610 |
+| `[perf-loop] executable to run: … sha256=…`（`perf-loop.common.ps1`） | 667 | 661 |
+| 静寂の確認の報告（`check-quiet.ps1`） | 222〜239 で組む・658 で書く・659 で出す | 219 から（`Format-QuietReport`）・同じ 658・659 |
+| 静寂の確認の報告を読む所（`perf-loop.common.ps1` の `quiet-*.txt` の `verdict=`） | 677〜678 | 671〜672 |
+| `INVOKE-CPU-SAMPLE RESULT`（`invoke-cpu-sample.ps1` の `Write-ResultLine`） | 164 | 166 |
+| 同 probe の `-Extra` | 387・398 | 394・405 |
+| 同 start | 413 | 420 |
+| 同 stop | 426・464・490・496・500〜501 | 433・471・497・503・505〜508 |
+| 同 selftest | 584・588 | 591・595 |
+| `sample_count=… areka_frames=… dump=…`（`invoke-cpu-sample.ps1`） | 498〜499 | 505〜506 |
+| `available=<b> reason=<r>`（`invoke-cpu-sample.ps1`） | 386・395・579 | 393・402・586 |
+| `available=` を読む所（`perf-loop.ps1` の `Get-SamplingProbe`） | 431 | 433 |
+| `FOLLOWUP RESULT`（`invoke-followup-checks.ps1`） | 233・848 | 239・864 |
+
+- 10.3 の表で `CHECK-QUIET RESULT` を読む所に挙げた `Invoke-CheckQuietOnce` は、`perf-loop.common.ps1` ではなく `invoke-perf-run.ps1` にある（今は 439 行）。表の書き誤りで、読む所そのものは在る。10.3 のその欄は `invoke-perf-run.ps1` に直した（行番号は直す前のまま）。
+
+#### 触らない所と依存（要件 9.1・9.2・9.3・9.5）
+
+- `git diff --stat 1e6590d8 HEAD` を `tools/perf/*.py`・`tools/perf/fixtures`・`tools/perf/fixtures-loop`・`tools/perf/goals`・`tools/utf8-child.ps1`・`.github/workflows`・`tools/test-all.ps1`・`*.toml`・`Cargo.lock` に絞って 0 件。
+- 変わったファイルは spec の文書・`.kiro/steering/tech.md`・スキル `perf-loop-iteration` の `SKILL.md`・`tools/encoding-check.ps1`・`tools/perf/README.md`・`tools/perf/*.ps1` の 7 本と、足した `tools/perf/perf-pwsh-child.ps1` だけ。
+- 依存は増えていない。差分で足した読み込みは、`. utf8-child.ps1`（`invoke-perf-run.ps1` 151 行・`invoke-followup-checks.ps1` 140 行）と `. perf-pwsh-child.ps1`（`perf-loop.common.ps1` 52 行・`invoke-perf-run.ps1` 152 行）だけで、design の Allowed Dependencies の向きのとおり。`Add-Type` で足したのは `kernel32.dll` の `GetConsoleOutputCP`／`GetConsoleCP`（`tools/encoding-check.ps1`）と、`powrprof.dll` の 2 つと `kernel32.dll` の `LocalFree`（`invoke-perf-run.ps1` 325 行からの `Get-ActivePowerScheme`）だけ。`Import-Module`・`#Requires`・Python のパッケージ・crate は足していない。
+
+#### 棚卸の表と直した後のコード（要件 3.1・3.3）
+
+design の節「子の出力を受け取る所の棚卸」の表の扱いは、直した後のコードとすべて合う。直した後の行は次のとおり（扱いは表のまま）。
+
+| スクリプト | 受け取る所（直した後の行） | 扱い |
+|---|---|---|
+| `perf-loop.common.ps1` | `Invoke-Child`（192） | もとから |
+| | `Invoke-PythonChild`（274） | もとから |
+| | `Invoke-PwshChild`（291・引数は 306 行で `Get-PwshChildArguments`） | 直した |
+| | `Get-NarSampleMap`（126・`Invoke-Child` は 133） | もとから |
+| | `Sync-MeasureWorktreeBuild`（650・`Invoke-MeasureCargo` は 657） | もとから |
+| `perf-loop.measure.ps1` | `Invoke-PwshChild` 5 か所（267・293・638・659・913） | 部品の直しで足りる（行はずれていない） |
+| | `Invoke-PythonChild` 3 か所（337・424・811） | もとから |
+| | `Invoke-Child` 2 か所（448・449） | もとから |
+| | `Invoke-MeasureCargo`（464 で定義・470 で `Invoke-Child`） | もとから |
+| `perf-loop.ps1` | `Invoke-PythonChild` 5 か所（280・284・292・375・523） | もとから |
+| | `Invoke-Child`（420・`python -c`） | もとから |
+| | `Invoke-PwshChild` 2 か所（377・429） | 部品の直しで足りる |
+| `check-quiet.ps1` | なし | 0 件 |
+| `invoke-cpu-sample.ps1` | `Invoke-NativeCommand`（205・受け皿は `target\perf-loop-tmp\`・216〜217 行で端末の出力の文字コードで読む。呼ぶ所は 354・359・361・366・414・454・474・479） | 直した |
+| | dump の読み（493） | ファイル（変えていない） |
+| `invoke-followup-checks.ps1` | `Get-NarSampleMap` の cargo（252・`Invoke-Utf8Child`） | 直した |
+| | `Invoke-Judge` の python（302・`Invoke-Utf8Child`。呼ぶ所は 381・852） | 直した |
+| | `Start-Process areka.exe`（480）と実行ログの読み（`Read-RunLogText` 310・UTF-8） | ファイル（変えていない） |
+| `invoke-perf-run.ps1` | 電源設定（`Get-ActivePowerScheme` 325・`powrprof` の API。`powercfg` は呼ばなくなった） | 直した（API） |
+| | git の 3 つ（366・369・371・`Invoke-Utf8Child`） | 直した |
+| | `Invoke-CheckQuietOnce` の子の pwsh（446・`Invoke-Utf8Child`＋`Get-PwshChildArguments`） | 直した |
+| | `Start-Process areka.exe`（784）と実行ログの読み（901・`-Encoding utf8`） | ファイル（変えていない） |
+| `perf-pwsh-child.ps1`（足した部品） | なし（引数の配列を組むだけで子を起こさない） | 0 件 |
+
+- 素の `& cargo`・`& python`・`& git`・`& pwsh`・`& powercfg` で子の出力を受け取る所は、7 本のどこにも残っていない（注記の中の言及を除く）。
