@@ -83,7 +83,7 @@
   - _Depends: 1, 4.2, 5.1_
   - _Requirements: 1.2, 1.4, 1.7, 8.3, 8.4_
 
-- [ ] 6. 中継と共有の番号の読みのテストを通して締める
+- [x] 6. 中継と共有の番号の読みのテストを通して締める
   - `cargo test -p areka-mcp-bridge` と `cargo test -p areka-mcp` を 1 回ずつ走らせて緑を確かめる（回す前に所要の見込みを伝える）
   - 触ったテストのファイルがどれも 1,000 行以内で、`service_tests.rs`・`Cargo.toml`・`Cargo.lock`・`config.rs` に差分が無いことを確かめる
   - 完了の状態: 2 つのクレートのテストが緑で、上の差分の無いことが `git diff --stat` で見える
