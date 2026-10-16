@@ -109,7 +109,7 @@
   - 完了の状態: `check-quiet.ps1` に規則 A が当たらず、`-SelfTest` が今と同じく通る
   - _Boundary: CheckQuiet_
   - _Requirements: 4.1, 4.2, 4.3, 4.4_
-- [ ] 5.5 (P) CPU の標本取りの道具の文面を ASCII の英文にする
+- [x] 5.5 (P) CPU の標本取りの道具の文面を ASCII の英文にする
   - R0・R1 のとおり（失敗の前置きを英語に）
   - 完了の状態: `invoke-cpu-sample.ps1` に規則 A が当たらず、機械が読む行が 1.1 の一覧と同じ字面
   - _Boundary: InvokeCpuSample_
