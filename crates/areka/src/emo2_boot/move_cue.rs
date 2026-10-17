@@ -1,9 +1,10 @@
 //! `\![move]`（キャラクタ移動）の型と受け口（design.md「PositionSink」「MoveArgs」）。
 //!
 //! 本ファイルは指令の型（[`MoveDirective`]・[`AxisSpec`]・[`MoveBase`]・[`RefPoint`]）と、
-//! talk スレッドの受け口 [`MoveCueSink`]、UI 末端の結線（`BaseposResolver`／
-//! `CanonDefaultBasepos`／`apply_move_directive`）を持つ。引数の読みは兄弟の
-//! `move_cue_args.rs`（子モジュール `args`）にあり、[`parse_move_directive`] として再輸出する。
+//! talk スレッドの受け口 [`MoveCueSink`]、UI 末端の結線（`apply_move_directive`）を持つ。
+//! 引数の読みは兄弟の `move_cue_args.rs`（子モジュール `args`）にあり、[`parse_move_directive`]
+//! として再輸出する。移動先の計算と基準位置の解き手（`BaseposResolver`／`CanonDefaultBasepos`）は
+//! 兄弟の `move_cue_geometry.rs`（子モジュール `geometry`）にある。
 //!
 //! 名前付きの形と旧い位置の形は同じ [`MoveDirective`] へ読まれ、読めない値・知らない語は
 //! SSP 2.9.18 の実測と同じ値へ置き換えて `MoveNote` に記録される（受け口が
@@ -14,8 +15,8 @@ use std::sync::mpsc::Sender;
 use bevy_ecs::prelude::World;
 use dola::cue::{CueCommand, TalkCue};
 use tracing::{debug, info, warn};
+use wintf::ecs::WindowPos;
 use wintf::ecs::world::tick_wake;
-use wintf::ecs::{SizeI, WindowPos};
 
 use areka_emo_compose::ScaleRatio;
 
@@ -27,6 +28,13 @@ use crate::placement::spawn::GhostWindows;
 #[path = "move_cue_args.rs"]
 mod args;
 pub use args::parse_move_directive;
+
+// 移動先の計算（純粋）。`compute_move_target` の呼び手は 3.1 の適用（それまではテストだけ）
+// なので、3.1 で配線するまで dead_code を許す。
+#[allow(dead_code)]
+#[path = "move_cue_geometry.rs"]
+mod geometry;
+pub use geometry::{BaseposResolver, CanonDefaultBasepos};
 
 /// `\![move]` の 1 件の意味（design.md「MoveArgs」）。
 ///
@@ -150,37 +158,9 @@ pub enum Axis {
 }
 
 // =============================================================================
-// basepos 型シーム＋座標算出（task 7.2・R5.2・全て物理 px・R-6 対策）
+// 座標算出（task 7.2・R5.2・全て物理 px・R-6 対策）。basepos の型シームは兄弟の
+// `move_cue_geometry.rs` へ移した（areka-P0-move-canon 1.2）。
 // =============================================================================
-
-/// basepos（基準位置）解決の**型シーム**（R5.2・design「BaseposResolver」）。
-///
-/// M1 実導出は [`CanonDefaultBasepos`]（正典既定＝x=サーフェス幅÷2・y=下端）のみ。宣言
-/// `point.basepos` の実導出は本 spec の範囲外であり、このトレイトは追跡 spec
-/// `areka-P0-surfaces-basepos` が別実装（宣言値を差す resolver）を差し込むための**差替点**
-/// として型のみを予約する（doc/COMPAT_ARCHITECTURE.md §8 対応表に登記）。
-///
-/// 入力は窓寸法（物理 px・`WindowPos.size` 由来）のみ——論理 px 系（BoxStyle）を経由しない
-/// ことで 2026-07-05 の二重スケール欠陥（R-6）を型で構造遮断する。
-pub trait BaseposResolver {
-    /// 窓寸法（物理 px）に対する basepos（窓左上原点相対・物理 px）を返す。
-    fn basepos(&self, window_size: SizeI) -> PointPx;
-}
-
-/// 正典既定の basepos（x=サーフェス幅÷2・y=下端＝height・R5.2・A-1 裁定）。
-///
-/// emo2 は `point.basepos` を宣言せず、この正典既定がそのまま適用される正規経路。y の「下端」は
-/// 窓左上原点からの相対＝サーフェス高さ（`height`）そのもの。奇数幅は整数除算で切り捨てる。
-pub struct CanonDefaultBasepos;
-
-impl BaseposResolver for CanonDefaultBasepos {
-    fn basepos(&self, window_size: SizeI) -> PointPx {
-        PointPx {
-            x: window_size.width / 2,
-            y: window_size.height,
-        }
-    }
-}
 
 /// 基準窓・対象窓の [`WindowPos`]（物理 px）と [`MoveDirective`] から、対象窓の**最終位置**を
 /// 算出する純粋関数（決定論・no I/O・R5.2）。
