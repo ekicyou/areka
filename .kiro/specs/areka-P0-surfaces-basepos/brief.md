@@ -104,3 +104,7 @@ surfaces.txt の `point.basepos.x/y` 宣言が parse で転記され、move 解�
 - 要件定義のモデル: Opus。
 - 分割の案: 無し。
 - 見つけた穴・古くなった記述: 無し。
+
+## 申し送り（2026-10-17・`areka-P0-move-canon` の要件ディスカッションから）
+
+- `\![move]` の座標の式がもう一度変わる。`move-canon` は参照点（`base-offset`／`move-offset` の 9 点と `base`）を読むようになり、`BaseposResolver`（既定の basepos）を使うのは参照点 `base` の解決だけになる。上の追記(63)の式は「`base.base` で合わせたとき」の特例になる。宣言された basepos へ差し替えるときに変わるのは、参照点 `base` の解決だけ。

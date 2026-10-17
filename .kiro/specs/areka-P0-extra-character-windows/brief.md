@@ -121,3 +121,7 @@
 - 見つけた穴・古くなった記述:
   - 触るファイルの一覧に `emo2_boot/assets.rs` が無かった。最初に出す面の番号を「スコープ 0 なら 0・それ以外は 10」の決め打ちで決めている所で、descript の `char*.seriko.defaultsurface`（`sakura.`・`kero.` も）はどこも読んでいない。同じ 10 の決め打ちは `placement/measure.rs` にも在る。
   - `emo2_boot/mod.rs` は 912 行・`placement/mod.rs` は 902 行＝足す分は兄弟ファイルへ出す。
+
+## 申し送り（2026-10-17・`areka-P0-move-canon` の要件ディスカッションから）
+
+- `move-canon` の `\![move]`（動かす窓・基準のスコープの番号）と、`\![execute,resetwindowpos]`／メニューの「シェル位置初期化」の並べ直しは、スコープ 0・1 の窓で確かめる。3 人目以降の窓を足すときは、その窓も動かす・基準にする・並べ直すことを本 spec の要件に入れて確かめる。

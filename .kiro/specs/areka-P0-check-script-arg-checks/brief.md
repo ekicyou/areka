@@ -102,3 +102,7 @@ MCP のツール `check_script` は、台本を再生せずに「areka で効く
   - 重なり 0: `mcp-kanade-tools`・`mcp-receiver-bugs`・`mcp-stdio-bridge-residue`。
 - 優先度の区分: C のまま。要件定義のモデル: Opus のまま。
 - 見つけた穴・古くなった記述: 本文 Current State の「診断の種類は 6 つ」「`check_script_judge.rs`・196 行」は古い。Adjacent と棚卸㉓の節の「`mcp-reload`（`change_cue.rs`）」は当たらない（向こうの触るファイルに無い）。同じ節の `anchor-tag-canon` は着地済み。
+
+## 申し送り（2026-10-17・`areka-P0-move-canon` の要件ディスカッションから）
+
+- `move-canon` の後、`parse_move_directive` は名前付きの形（`--X=` ほか）も読む。使えない組み合わせと読めない値は断らず、SSP 2.9.18 と同じに置き換えて記録する（`MoveDegradation::NamedForm`・`UnsupportedBase` は無くなる見込み）。`\![move]` の診断は「何を何に置き換えたか」を作者へ知らせる形になる。

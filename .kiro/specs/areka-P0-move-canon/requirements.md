@@ -42,15 +42,15 @@ ukadoc が黙っている点は、SSP 2.9.18 の実測（`research.md` §8）に
   - `\![execute,resetwindowpos]`、右クリックのメニューの「シェル位置初期化」の項目、`OnResetWindowPos` の送出と返事が無いときの既定の並べ直し
   - 互換の対応表（`doc/COMPAT_ARCHITECTURE.md` §8）と網羅台帳の該当行の改め
   - emo2 の 2026-10-17 版での実機の確かめ
-- **Out of scope**:
-  - `--time` の補間（途中の位置を通って動くこと）と、移動の時間に合わせて台本の進みを待たせること
-  - 窓の固定と解除（`\![set,position]`／`\![reset,position]` の働き。SSP 2.9.18 も実装していない）
-  - `\![moveasync]`・`\![moveasync,cancel]`（dola の改造〔v0.2.0〕の後）
-  - `\![set,alignmenttodesktop]`・`\![set,sticky-window]`／`\![reset,sticky-window]`、`--option=ignore-sticky-window` の効き目（`areka-P0-window-link-directives`・v0.1.0）
-  - surfaces.txt に宣言された `point.basepos` を面ごとに使うこと（`areka-P0-surfaces-basepos`）
-  - `check_script` による `\![move]` の引数の診断（`areka-P0-check-script-arg-checks`）
-  - `\![execute,resetballoonpos]` とメニューの「バルーン位置初期化」、位置初期化のキーボードの近道
-  - 他のゴーストの名前の基準の解決（複数のゴーストを同時に動かす `areka-P0-multi-ghost-runtime` の後）・3 人目以降の窓（`areka-P0-extra-character-windows`）
+- **Out of scope**（どれも申し送り先がある。申し送りは 2026-10-17 に各 brief へ書いた）:
+  - `--time` の補間（途中の位置を通って動くこと）と、移動の時間に合わせて台本の進みを待たせること・`\![moveasync]`・`\![moveasync,cancel]` → roadmap の覚え書き「`sakura-time-directives` から戻した C・D 群」（v0.2.0 の dola の改造の後に起票すると登記済み）
+  - 窓の固定と解除の働き → 申し送り先なし（SSP 2.9.18 も実装していない＝受けないことを本 spec の要件 7 で決め、台帳に書く）
+  - `\![set,alignmenttodesktop]`・`\![set,sticky-window]`／`\![reset,sticky-window]`、`--option=ignore-sticky-window` の効き目 → `areka-P0-window-link-directives`（v0.1.0）
+  - `\![execute,resetballoonpos]`・メニューの「バルーン位置初期化」（`resetballoonpositionbutton.caption`）・位置初期化の 2 つのキーボードの近道（SSP ヘルプの「よくある質問」と「ショートカット一覧」） → `areka-P0-window-link-directives`（v0.1.0）
+  - surfaces.txt に宣言された `point.basepos` を面ごとに使うこと → `areka-P0-surfaces-basepos`
+  - `check_script` による `\![move]` の引数の診断 → `areka-P0-check-script-arg-checks`
+  - 他のゴーストの名前の基準の解決（今はスコープ 0 へ置き換える・要件 3.8） → `areka-P0-multi-ghost-runtime`
+  - 3 人目以降の窓の `\![move]` と並べ直し → `areka-P0-extra-character-windows`
 - **Adjacent expectations**:
   - 台本の指令で動いた窓は位置の記憶に書かない、という今の決まり（完了 spec `areka-P0-char-position-save-on-exit`・COMPAT §8 の位置の記憶の行）を保つ。本 spec はそれに「シェル位置初期化」の後の扱いだけを足す（要件 8.8）。
   - 台本の X・Y に拡大率を掛ける今の決まり（COMPAT §8・SSP との意図した差）を保つ。
