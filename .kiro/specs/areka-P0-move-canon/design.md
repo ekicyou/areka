@@ -489,7 +489,7 @@ pub enum PositionCue {
   3. `compute_move_target` で吸い付きの前の位置を求め、`FrameNote` を 1 件ずつ `warn!(event = "move_frame_substituted")`（4.7）。
   4. 対象の窓の `Anchored` を読み、`project_anchor(anchor, position, size, MonitorSnapshot)` を通す（2.10・2.11）。`Anchored` が無いときは `warn!(event = "move_anchor_missing")` のうえで当て直さない（`Free` と同じ扱い）。
   5. `move_window_to` で書く（バルーンが付いて動く・記憶に書かない・画面の内へ寄せない＝2.7〜2.9）。
-  6. 書けたら `info!(event = "move_applied", scope, base, base_offset, move_offset, anchor, from_x, from_y, script_x, script_y, to_x, to_y)`（9.1・`script_*` は吸い付きの前、`to_*` は後）。
+  6. 書けたら `info!(event = "move_applied", scope, base, base_offset, move_offset, anchor, base_left, base_top, base_right, base_bottom, from_x, from_y, script_x, script_y, to_x, to_y)`（9.1・`script_*` は吸い付きの前、`to_*` は後・`base_*` は解いた基準の枠の矩形で、`Origin` のときは 0）。実機の判定はこの 1 行で閉じる（議題 2）。
 - `ignore_sticky_window` は読まない（1.9）。
 - `Anchored` は読むだけで書かない（今の檻「適用前後で `Anchored` がビット同一」を保つ）。
 
@@ -661,8 +661,13 @@ pub enum ResetDecision { Wait, Reset, Leave }
 ### 実機（9.4・9.5）
 
 - emo2 の 2026-10-17 版（`vendors/sample_ghost/emo2.nar`）を、作業ツリーの `target\` の下の根へ絶対パスで展開して起こす。画面の拡大率 100% と 200% の 2 回（拡大率の切り替えは開発者の OS の設定）。
-- 「エモの位置調整」の選択肢と同じイベントを areka の MCP の `raise_event` で起こし（選択肢の ID は検体の `menu.pasta` から取る）、MCP の `get_log` で `move_applied` の行（`scope=1`・`base=Scope(0)`・`to_x`・`to_y`）を読み、`\0` の窓の矩形と比べて「`\1` の右端＝`\0` の左端・`\1` の下端＝`\0` の下端」を判定する。結果と記録の抜粋を `.kiro/specs/areka-P0-move-canon/signoff.md` に残す。
-- あわせて「シェル位置初期化」を選び（`reset_pos_menu_outcome` と `reset_window_pos` の行）、次の起動で同じ位置に出ることを確かめる。
+- areka の MCP は使わない（`raise_event` は `NG:not implemented yet` を返すだけ・`get_log` に tracing の行は入らない・設計の討議 議題 2）。今ある道具だけで閉じる:
+  - 起こし方: `RUST_LOG` を `move_applied`・`move_arg_substituted`・`move_frame_substituted`・`reset_window_pos`・`reset_pos_menu_outcome` が出る水準まで開け、ログファイルを同じ `target\` の下へ書かせる。
+  - 操作: 右クリックのメニューから「エモの位置調整」の選択肢と「シェル位置初期化」を選ぶ。areka の窓はクリックを透過して computer-use の右クリックが届かないので、その場で開発者の許可を得てから SendInput で選ぶ（`baseware-root-list` の実機と同じ手）。
+  - 判定: ログファイルの `move_applied` の行（`scope=1`・`base=Scope(0)`）の `to_*` と基準の矩形の欄（`base_left`・`base_top`・`base_right`・`base_bottom`＝`\0` の窓の矩形）から「`\1` の右端＝`\0` の左端・`\1` の下端＝`\0` の下端」を判定する。
+  - 並べ直し: 「シェル位置初期化」の後の `reset_pos_menu_outcome` と `reset_window_pos` の行を取り、終了して起こし直し、同じ位置に出ることを窓の位置の記録で確かめる。
+- 結果と記録の抜粋を `.kiro/specs/areka-P0-move-canon/signoff.md` に残す。
+- 調べてみて手間の大きい壁（SendInput が選択肢へ届かない等）に当たったら、そこで止めずに `/kiro-discovery` で申し送りの spec を起票し、signoff.md に申し送り先を書く（開発者の 2026-10-17 の指示）。
 
 ## Migration Strategy
 
@@ -677,6 +682,6 @@ pub enum ResetDecision { Wait, Reset, Leave }
 ## Open Questions / Risks
 
 - **並べ直しの位置（D7）**: 起動の既定の位置は「採寸した面 0 の幅で解き、表示の幅で中央を保ち、連鎖を直す」2 段で決まる。本設計は同じ規則（P1〜P4）を今の窓の大きさで 1 度解く。採寸の面と表示の面の幅が同じなら起動と同じ位置、違う面を表示しているときは先頭のスコープが右端にそろう（起動は幅の差の半分だけ左右にずれる）。要件 8.6 の「起動で並べるのと同じ既定の位置」をこの読みで満たすとしたが、設計の討議で確かめる点である。
-- **`OnResetWindowPos` の `NotSteady`（D8）**: 起動中・切替中・終了中に選ばれたときも並べ直す（台本が来なかったので）。切替で窓の組が入れ替わる途中なら、受け手が切れて並べ直さない。
+- **`OnResetWindowPos` の `NotSteady`（D8・設計の討議 議題 3 で確定）**: 起動中・切替中・終了中に選ばれたときも並べ直す（利用者が選んだ操作で、台本は来ない）。切替で窓の組が入れ替わる途中なら、受け手が切れて並べ直さない。
 - **相の順の入れ替え（D4）**: move drain を再スナップの後へ移す。相の順を前提にした既存のテストがあれば書き改める。守れるのは面の指令と `\![move]` が同じフレームに届いたときだけで、別のフレームに割れた場合の隙間は扱わない（今の作りにもある）。
 - **並走**: kanade の許可表の件数を他の spec が同時に動かしたら、後から着地した側が合わせ直す。
