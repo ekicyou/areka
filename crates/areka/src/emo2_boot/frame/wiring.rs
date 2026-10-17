@@ -27,7 +27,7 @@ use super::super::talk_lifecycle::TalkLifecycleSignal;
 use super::super::zorder_cue::ZOrderDirective;
 use super::status_report::BalloonStatusLedger;
 use super::zorder_descript::{apply_descript_base, apply_descript_rebase};
-use super::{BootAssets, DpiChangedQuery, MoveDirective, TalkClock};
+use super::{BootAssets, DpiChangedQuery, PositionCue, TalkClock};
 use crate::placement::zorder_group_ledger::ZOrderGroupLedger;
 
 // ---------------------------------------------------------------------------
@@ -56,13 +56,13 @@ pub struct Emo2Wiring {
     pub(in crate::emo2_boot) presenter: EmoPresenter,
     /// worker（seriko 経由 `PresentBridge`）からの表示指令受信端（task 4.2 の drain で消費）。
     pub(super) rx: Receiver<PresentCommand>,
-    /// talk スレッド（`MoveCueSink`）からの `\![move]` 指令受信端（frame 相 drain＝[`run_move_drain_phase`]
-    /// が消費）。
+    /// talk スレッド（`MoveCueSink`）からの窓の位置の指令（`\![move]`・`\![execute,resetwindowpos]`）
+    /// 受信端（frame 相 drain＝[`run_move_drain_phase`] が消費）。
     ///
     /// `PresentBridge` の `rx` と同型の配線: `wire_emo2_boot`（task 9.1）が
-    /// `mpsc::channel::<MoveDirective>()` の受信端を受け渡し、frame 相の [`emo2_frame_system`] が
+    /// `mpsc::channel::<PositionCue>()` の受信端を受け渡し、frame 相の [`emo2_frame_system`] が
     /// [`run_move_drain_phase`] 経由で `try_iter` し `apply_move_directive` へ適用する（task 9.2）。
-    pub(super) move_rx: Receiver<MoveDirective>,
+    pub(super) move_rx: Receiver<PositionCue>,
     /// talk スレッド（`BalloonLifecycleSink`）からの表示ライフサイクル信号受信端
     /// （バルーン可視性相が消費・Requirements 4.1／4.5）。
     ///
@@ -173,7 +173,7 @@ impl Emo2Wiring {
     pub fn new(
         presenter: EmoPresenter,
         rx: Receiver<PresentCommand>,
-        move_rx: Receiver<MoveDirective>,
+        move_rx: Receiver<PositionCue>,
         lifecycle_rx: Receiver<TalkLifecycleSignal>,
         zorder_rx: Receiver<ZOrderDirective>,
         runtime: Rc<RefCell<TextLayerRuntime>>,
@@ -288,7 +288,7 @@ impl Emo2Wiring {
     /// 適用する。9.1 段階では channel 配線の到達性（`MoveCueSink`→`Emo2Wiring` の受信端が届く）を
     /// 決定論に固定するための最小 read 口として `#[cfg(test)]` で開ける（本番表面は増やさない）。
     #[cfg(test)]
-    pub(crate) fn drain_move_directives(&self) -> Vec<MoveDirective> {
+    pub(crate) fn drain_move_directives(&self) -> Vec<PositionCue> {
         self.move_rx.try_iter().collect()
     }
 

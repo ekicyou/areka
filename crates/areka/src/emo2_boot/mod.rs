@@ -123,7 +123,7 @@ use self::assets::{
 use self::change_cue::ChangeCueSink;
 use self::frame::{Emo2Wiring, KanadeNoticeRx, emo2_frame_system, ghost_quit_system};
 use self::install_cue::InstallCueSink;
-use self::move_cue::{MoveCueSink, MoveDirective};
+use self::move_cue::{MoveCueSink, PositionCue};
 use self::readme_cue::ReadmeCueSink;
 use self::shell_balloon_switch::SkinRequestRaw;
 use self::switch_cue::SwitchCueSink;
@@ -476,7 +476,7 @@ pub fn wire_emo2_boot(
     let bridge = PresentBridge::new(tx).with_swap_slot(swap_slot.clone());
     // move channel（PresentBridge と同型の配線・task 9.1）: talk スレッドの MoveCueSink が送出端、
     // UI スレッドの Emo2Wiring が受信端（frame 相 drain＝task 9.2 が消費）を保持する。
-    let (move_tx, move_rx) = std::sync::mpsc::channel::<MoveDirective>();
+    let (move_tx, move_rx) = std::sync::mpsc::channel::<PositionCue>();
     let move_sink = MoveCueSink::new(move_tx);
     // 表示ライフサイクル channel（move channel と同型の配線・task 4.1）: talk スレッドの
     // BalloonLifecycleSink が送出端、UI スレッドの Emo2Wiring が受信端（バルーン可視性相＝
@@ -617,7 +617,7 @@ pub fn wire_emo2_boot(
     // 手順5: boot（実 sink 注入）。Err は既存 is_benign_boot_error 分類（R7.4）＋wired=false。
     // sinks は broadcast 登録先で、surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）の
     // 3 sink を第 1〜3 要素として渡す（task 9.1）。move_sink は `\![move]` を名前選別で消費し、
-    // MoveDirective を move channel 経由で UI スレッド（Emo2Wiring の move_rx）へ送出する。
+    // PositionCue を move channel 経由で UI スレッド（Emo2Wiring の move_rx）へ送出する。
     // 第 4 要素の lifecycle_sink（task 4.1）は cue を選別せず全件観測して占有区間の終端を集約し、
     // 会話の開始と表示終了時刻を lifecycle channel 経由で UI スレッド（Emo2Wiring の lifecycle_rx）
     // へ送出する。上流（ghost／kanade／dola）の署名も既存 3 sink の登録も変えない（決定 D4＝α）。

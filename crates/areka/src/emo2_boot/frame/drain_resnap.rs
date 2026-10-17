@@ -17,10 +17,11 @@ use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use crate::placement::dpi_sync::{self, HoldSite};
 use crate::placement::follow::{move_window_to, resize_window_to};
 use crate::placement::persist::persist_unremembered_char_positions;
+use crate::placement::reset_pos::reset_window_positions;
 use crate::placement::resolver::{PointPx, SizePx};
 use crate::placement::spawn::GhostWindows;
 
-use super::{Emo2Wiring, apply_move_directive, shell_target};
+use super::{Emo2Wiring, PositionCue, apply_move_directive, shell_target};
 
 // ---------------------------------------------------------------------------
 // drain・text フェーズ＋排他 system（tasks.md task 4.2・design「UI 毎フレーム結線 / frame」の
@@ -63,8 +64,10 @@ pub fn run_drain_phase(wiring: &mut Emo2Wiring, world: &mut World) {
 }
 
 /// move drain フェーズ（`\![move]` の末端結線・design「frame 相で drain→`apply_move_directive`」・
-/// R5.1/5.3/5.5/R6・task 9.2）: talk スレッド（`MoveCueSink`）から mpsc で届いた [`MoveDirective`]
-/// を非ブロックで FIFO 全件 drain し、UI スレッド上で [`apply_move_directive`] へ適用する。
+/// R5.1/5.3/5.5/R6・task 9.2）: talk スレッド（`MoveCueSink`）から mpsc で届いた [`PositionCue`]
+/// を非ブロックで FIFO 全件 drain し、UI スレッド上で種類ごとに適用する——`Move` は
+/// [`apply_move_directive`]、`ResetWindowPos` は [`reset_window_positions`]（`OnResetWindowPos` は
+/// 送らない・areka-P0-move-canon 要件 8.7）。
 ///
 /// `PresentBridge`（[`run_drain_phase`]）と同型の跨ぎパターンだが、ゲートは `attached`（GPU）でなく
 /// **`GhostWindows` の存在**である——move は GPU 表示層でなくキャラ窓 entity（`GhostWindows` が spawn 時
@@ -73,8 +76,8 @@ pub fn run_drain_phase(wiring: &mut Emo2Wiring, world: &mut World) {
 /// 一括適用する（OnFirstBoot の位置調整を早期に取りこぼさないための buffering・present drain の
 /// 「attach 前は保留」と同じ意図）。
 ///
-/// 各 directive の適用は [`apply_move_directive`] が完結させる: 窓/`WindowPos`/作業領域/主モニタの
-/// 不在はいずれも同関数内で `warn!`＋`false`（log-first・非 panic・R5.5）ゆえ、本フェーズは
+/// 各指令の適用は [`apply_move_directive`]／[`reset_window_positions`] が完結させる: 窓/`WindowPos`/
+/// 作業領域/主モニタ/並べ直しの材料の不在はいずれも同関数内で `warn!`＋`false`（log-first・非 panic・R5.5）ゆえ、本フェーズは
 /// 戻り値を捨てて次 directive へ進む（1 件の縮退が他 directive・talk を巻き込まない）。`try_iter` は
 /// チャネルが空か全送信端 drop で尽きる（ブロックしない・empty/disconnected でも panic しない）。
 pub fn run_move_drain_phase(wiring: &Emo2Wiring, world: &mut World) {
@@ -83,13 +86,23 @@ pub fn run_move_drain_phase(wiring: &Emo2Wiring, world: &mut World) {
     if world.get_resource::<GhostWindows>().is_none() {
         return;
     }
-    // try_iter: 現時点でキュー済みの MoveDirective を非ブロックで FIFO 全件取り出す（空・全送信端 drop で尽きる）。
+    // try_iter: 現時点でキュー済みの PositionCue を非ブロックで FIFO 全件取り出す（空・全送信端 drop で尽きる）。
     // wiring.move_rx（shared 借用）と world（mut 借用・別オブジェクト）は互いに素ゆえ両立する。
-    for directive in wiring.move_rx.try_iter() {
+    for cue in wiring.move_rx.try_iter() {
+        let directive = match cue {
+            PositionCue::Move(directive) => directive,
+            // 並べ直しは拡大率の値を読まない（今の窓の大きさがすでに今の拡大率で描いた大きさ・
+            // research §13 議題 1）。失敗は関数内で warn! 済みゆえ戻り値を捨てて次へ進む。
+            PositionCue::ResetWindowPos => {
+                reset_window_positions(world);
+                continue;
+            }
+        };
         // 台本のオフセットは**作者基準 px**ゆえ、対象スコープのシェルへ実適用中の k で物理 px へ
         // 換算する（`move_cue_geometry.rs` の `compute_move_target`・`windowposition.x/y` と同じ写像）。
         // 真実源は表示層の `applied_ratio`＝「いま画面に載っている絵に実際に掛かった k」であり、
-        // 導出しただけで適用に失敗した k は漏れてこない。
+        // 導出しただけで適用に失敗した k は漏れてこない。k はこの 1 か所からだけ取り、モニタの DPI から
+        // 計算し直さない（将来の利用者の倍率もこの値に含めれば追従する・research §13 議題 1）。
         //
         // 表示未成立（初回 ShowSurface 前）・未登録 target は `None`。このとき恒等へ縮退する——
         // まだ拡大が掛かっていない状態であり、従来（k 非適用）と同じ値になる安全側の既定である。

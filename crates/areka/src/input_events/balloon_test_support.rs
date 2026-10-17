@@ -21,7 +21,7 @@ use wintf::ecs::pointer::PointerLeave;
 
 use crate::emo2_boot::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
 use crate::emo2_boot::frame::Emo2Wiring;
-use crate::emo2_boot::move_cue::MoveDirective;
+use crate::emo2_boot::move_cue::PositionCue;
 use crate::emo2_boot::talk_clock::TalkClock;
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use crate::placement::spawn::BalloonWindowMarker;
@@ -107,7 +107,7 @@ pub(crate) fn headless_emo2_wiring(runtime: Rc<RefCell<TextLayerRuntime>>) -> Em
     Emo2Wiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<MoveDirective>().1,
+        mpsc::channel::<PositionCue>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
         mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         runtime,

@@ -110,7 +110,7 @@ use super::balloon_visibility::run_balloon_visibility_phase;
 // `scale_text::run_text_phase` が `super::hover_inject::drive` で辿る先（移設前は本ファイルから
 // `super::hover_inject` が emo2_boot を指していた）。呼び出し本文を書き換えないための束縛。
 use super::hover_inject;
-use super::move_cue::{MoveDirective, apply_move_directive};
+use super::move_cue::{PositionCue, apply_move_directive};
 use super::talk_clock::TalkClock;
 use super::target_map::{balloon_target, shell_target};
 

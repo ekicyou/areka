@@ -76,7 +76,7 @@ fn boot_wiring(
     Emo2Wiring::new(
         EmoPresenter::new(),
         rx,
-        mpsc::channel::<MoveDirective>().1,
+        mpsc::channel::<PositionCue>().1,
         lifecycle_rx,
         mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(

@@ -1,7 +1,7 @@
 //! `\![move]`（キャラクタ移動）の型と受け口（design.md「PositionSink」「MoveArgs」）。
 //!
-//! 本ファイルは指令の型（[`MoveDirective`]・[`AxisSpec`]・[`MoveBase`]・[`RefPoint`]）と、
-//! talk スレッドの受け口 [`MoveCueSink`] を持つ。引数の読みは兄弟の `move_cue_args.rs`
+//! 本ファイルは指令の型（[`MoveDirective`]・[`AxisSpec`]・[`MoveBase`]・[`RefPoint`]・線を流れる
+//! [`PositionCue`]）と、talk スレッドの受け口 [`MoveCueSink`] を持つ。引数の読みは兄弟の `move_cue_args.rs`
 //! （子モジュール `args`）にあり、[`parse_move_directive`] として再輸出する。移動先の計算と
 //! 基準位置の解き手（`BaseposResolver`／`CanonDefaultBasepos`）は兄弟の `move_cue_geometry.rs`
 //! （子モジュール `geometry`）に、UI スレッドでの適用（`apply_move_directive`）は兄弟の
@@ -28,6 +28,18 @@ pub use geometry::{BaseposResolver, CanonDefaultBasepos};
 #[path = "move_cue_place.rs"]
 mod place;
 pub use place::apply_move_directive;
+
+/// 台本から UI スレッドへ運ぶ窓の位置の指令（design.md「PositionSink」の Event Contract）。
+///
+/// [`MoveCueSink`] が送り、frame 相の move drain が種類ごとに適用する。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PositionCue {
+    /// `\![move]`——1 つの窓を動かす（`apply_move_directive`）。
+    Move(MoveDirective),
+    /// `\![execute,resetwindowpos]`——すべての窓を既定の位置へ並べ直す
+    /// （`placement::reset_pos::reset_window_positions`・`OnResetWindowPos` は送らない＝要件 8.7）。
+    ResetWindowPos,
+}
 
 /// `\![move]` の 1 件の意味（design.md「MoveArgs」）。
 ///
@@ -155,11 +167,13 @@ pub enum Axis {
 // （task 7.3・R4.5・R8.5）
 // =============================================================================
 
-/// `\![move]` の talk スレッド側消費 sink（design「MoveCueSink＋純粋解釈＋UI 適用」・R4.5）。
+/// 窓の位置の指令（`\![move]` と `\![execute,resetwindowpos]`）の talk スレッド側消費 sink
+/// （design「PositionSink」・R4.5）。
 ///
 /// broadcast された全 cue のうち、キャリア正準形（`Custom` の String Array）であり自らの
-/// コマンド名リテラル `"move"` を運ぶもの**だけ**を名前自己選別して解釈し、
-/// [`parse_move_directive`] の結果を mpsc で UI スレッド（frame 相の
+/// コマンド名リテラル `"move"`、または `"execute"` で第 1 引数が `resetwindowpos` を運ぶもの**だけ**を
+/// 名前自己選別して解釈し、[`PositionCue`]（`move` は [`parse_move_directive`] の結果を包んだ
+/// `Move`・`execute,resetwindowpos` は残りの引数を読まない `ResetWindowPos`）を mpsc で UI スレッド（frame 相の
 /// `apply_move_directive`＝task 7.4／channel 配線＝task 9.1）へ送出する。それ以外
 /// （非キャリア・担当外コマンド名・非数値 scope）は**記録付き良性スキップ**へ
 /// 縮退する——無音破棄でも panic でもない（R4.5／R8.5・log-first）。
@@ -181,16 +195,16 @@ pub enum Axis {
 /// dispatcher は talk ごとに sink を clone する（`GhostBootOptions.sinks` は
 /// `dola::cue::CueSink + Clone + Send + 'static`）。内側 [`Sender`] は常に `Clone` で、全 clone は
 /// 単一の受信端（`Emo2Wiring` の `Receiver`）への送信端＝配送意味は同一ゆえ、そのまま `derive(Clone)`
-/// が成り立つ（`MoveDirective: Send` により `Sender<MoveDirective>: Send`）。
+/// が成り立つ（`PositionCue: Send` により `Sender<PositionCue>: Send`）。
 #[derive(Clone)]
 pub struct MoveCueSink {
     /// UI スレッド（frame 相 drain）への送出端（Clone 可・全 clone は単一受信端へ配送）。
-    tx: Sender<MoveDirective>,
+    tx: Sender<PositionCue>,
 }
 
 impl MoveCueSink {
     /// mpsc 送信端（`Emo2Wiring` の `Receiver` と対・task 9.1 が生成）から sink を構築する。
-    pub fn new(tx: Sender<MoveDirective>) -> Self {
+    pub fn new(tx: Sender<PositionCue>) -> Self {
         Self { tx }
     }
 }
@@ -205,6 +219,8 @@ impl dola::cue::CueSink for MoveCueSink {
         //    Custom なのに非正準 params のときの severity は**宛名規律**（D8④）で分ける:
         //    宛名（`Custom{command}` フィールド・params 非正準でも読める）が "move"＝自分宛の
         //    壊れ物ゆえ warn・他人宛/未知名＝担当外ゆえ debug（報告責任は宛名の担当者）。
+        //    "execute" 宛も debug——第 1 引数が読めず resetwindowpos か分からないうえ、execute 宛の
+        //    壊れ物の warn は InstallCueSink が持つ（同じ荷物に warn を 2 行出さない）。
         let Some((name, tokens)) = cue.command.as_command_carrier() else {
             match &cue.command {
                 CueCommand::Custom { command, .. } if command == "move" => warn!(
@@ -223,9 +239,14 @@ impl dola::cue::CueSink for MoveCueSink {
             return;
         };
 
-        // 2) 名前自己選別（消費者自身のコマンド名リテラル）。"move" のみ解釈する。
+        // 2) 名前自己選別（消費者自身のコマンド名リテラル）。"move" と (execute,resetwindowpos) のみ。
         //    dola は名前語彙を持たず、一意性（1 名前=高々 1 消費者）は areka 消費者台帳（task 2.5）
         //    が保証する——本 sink は中央権威表に依存せず自らの名前で自己選別する（R4.5）。
+        //    並べ直しは残りの引数を読まず、scope も使わない（全スコープが対象・要件 8.7）。
+        if name == "execute" && tokens.first() == Some(&"resetwindowpos") {
+            self.send(PositionCue::ResetWindowPos);
+            return;
+        }
         if name != "move" {
             debug!(
                 name,
@@ -257,9 +278,16 @@ impl dola::cue::CueSink for MoveCueSink {
                 "MoveCueSink: \\![move] の引数を置き換えて受理"
             );
         }
-        if self.tx.send(parsed.directive).is_err() {
+        self.send(PositionCue::Move(parsed.directive));
+    }
+}
+
+impl MoveCueSink {
+    /// 線へ 1 件送り、次の画面更新を起こす。envelope の `duration` には触れない（要件 5.2）。
+    fn send(&self, cue: PositionCue) {
+        if self.tx.send(cue).is_err() {
             // 受信端（Emo2Wiring）切断は talk を殺さない（log-first・非 panic・R5.5）。
-            warn!("MoveCueSink: MoveDirective の送出に失敗（受信端切断）");
+            warn!("MoveCueSink: PositionCue の送出に失敗（受信端切断）");
         }
         // 窓を動かす指令が UI へ届いた＝次の画面更新に仕事がある（設計 C16 の
         // `PRESENT`）。送出の後に立てる理由は `PresentBridge::send` と同じ。

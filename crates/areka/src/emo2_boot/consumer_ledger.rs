@@ -38,11 +38,11 @@
 //!    同居すると `\![set,zorder,…]` の 1 出現に 2 つの担当が作用してしまうため、
 //!    [`LedgerError::SelectorConflict`] で拒む。順序はどちらでも同じく拒む。
 //!
-//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 24 行（`move`・`bind`・
+//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 25 行（`move`・`bind`・
 //! `(set,zorder)`・`(reset,zorder)`・`\f`・`(open,readme)`・`(open,file)`・`(open,browser)`・
 //! `(open,explorer)`・`(open,editor)`・`(open,mailer)`・`\j`・`(enter,nouserbreakmode)`・
 //! `(leave,nouserbreakmode)`・`(change,ghost)`・`(change,shell)`・`(change,balloon)`・
-//! `(execute,install)`・`updatebymyself`・`update`・`updateother`・`(set,choicetimeout)`・
+//! `(execute,install)`・`(execute,resetwindowpos)`・`updatebymyself`・`update`・`updateother`・`(set,choicetimeout)`・
 //! `areka.prop.set`・`(set,balloontimeout)`）を登記し、違反があれば構築時に panic する（正準表は一意
 //! ゆえ実際には発火しない・回帰檻）。
 //!
@@ -70,8 +70,10 @@ type LedgerKey = (String, Option<String>);
 /// dola はコマンド名語彙を持たないため、本 enum は**結線層が誰にコマンド名を割り当てたか**を
 /// 宣言するためだけの識別子である（実際の消費は各消費者が自らの名前で自己選別する）。
 ///
-/// - [`MoveSink`](CommandConsumer::MoveSink): `\![move]` を消費する
-///   [`MoveCueSink`](super::move_cue::MoveCueSink)（talk スレッド側名前選別 sink）。
+/// - [`MoveSink`](CommandConsumer::MoveSink): 窓の位置の指令（`\![move]` と
+///   `\![execute,resetwindowpos]`）を消費する [`MoveCueSink`](super::move_cue::MoveCueSink)
+///   （talk スレッド側名前選別 sink）。正準台帳が `move` と `(execute, resetwindowpos)` の 2 行を
+///   登記する（areka-P0-move-canon 要件 8.7）。
 /// - [`Seriko`](CommandConsumer::Seriko): `\![bind]`（着せ替え）を消費する表示系 seriko。
 ///   正準台帳（[`ConsumerLedger::canonical`]）が `bind` → `Seriko` を登記する（task 7.2）。
 /// - [`ZOrderSink`](CommandConsumer::ZOrderSink): 重なり指定・重なり解除を消費する
@@ -110,7 +112,8 @@ type LedgerKey = (String, Option<String>);
 ///   （areka-P0-mcp-author-tools 要件 3.2）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandConsumer {
-    /// `\![move]` の担当消費者（[`MoveCueSink`](super::move_cue::MoveCueSink)）。
+    /// 窓の位置の指令（`\![move]` と `\![execute,resetwindowpos]`）の担当消費者
+    /// （[`MoveCueSink`](super::move_cue::MoveCueSink)）。
     MoveSink,
     /// `\![bind]`（着せ替え）の担当消費者（表示系 seriko）。正準台帳が登記する（task 7.2）。
     Seriko,
@@ -328,7 +331,8 @@ impl ConsumerLedger {
     /// `(enter, nouserbreakmode)` と `(leave, nouserbreakmode)` →
     /// [`CommandConsumer::UserBreakSink`]・`(change, ghost)` → [`CommandConsumer::ChangeSink`]・
     /// `(change, shell)` と `(change, balloon)` → [`CommandConsumer::SwitchSink`]・
-    /// `(execute, install)` → [`CommandConsumer::InstallSink`]・`updatebymyself`・`update`・
+    /// `(execute, install)` → [`CommandConsumer::InstallSink`]・`(execute, resetwindowpos)` →
+    /// [`CommandConsumer::MoveSink`]・`updatebymyself`・`update`・
     /// `updateother` → [`CommandConsumer::UpdateSink`]・`(set, choicetimeout)` →
     /// [`CommandConsumer::ScriptCompile`]・運搬名 `areka.prop.set` →
     /// [`CommandConsumer::PropertyWrite`]・`(set, balloontimeout)` →
@@ -401,6 +405,9 @@ impl ConsumerLedger {
         ledger
             .try_register("execute", Some("install"), CommandConsumer::InstallSink)
             .expect("正準台帳: ('execute','install') は一意（重複・排他違反は編集ミス）");
+        ledger
+            .try_register("execute", Some("resetwindowpos"), CommandConsumer::MoveSink)
+            .expect("正準台帳: ('execute','resetwindowpos') は一意（重複・排他違反は編集ミス）");
         for name in ["updatebymyself", "update", "updateother"] {
             ledger
                 .try_register(name, None, CommandConsumer::UpdateSink)
@@ -724,12 +731,12 @@ mod tests {
     /// 増減は本檻と本 doc の 2 か所を明示的に編集させる。
     #[test]
     fn canonical_builds_without_duplicate() {
-        // canonical() は内部 try_register（24 行）が Ok（重複なら expect が panic する）。
+        // canonical() は内部 try_register（25 行）が Ok（重複なら expect が panic する）。
         let ledger = ConsumerLedger::canonical();
         assert_eq!(
             ledger.entry_count(),
-            24,
-            "正準台帳の登記は 24 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
+            25,
+            "正準台帳の登記は 25 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
              (open,readme)／(open,file)／(open,browser)／(open,explorer)／(open,editor)／\
              (open,mailer)／運搬名 \\j／(enter,nouserbreakmode)／(leave,nouserbreakmode)／\
              (change,ghost)／(change,shell)／(change,balloon)／(execute,install)／\
@@ -758,7 +765,7 @@ mod tests {
             Some(CommandConsumer::ZOrderSink)
         );
 
-        // 24 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
+        // 25 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
         // 検出される。
         let mut ext = ledger.clone();
         let err = ext
@@ -770,7 +777,7 @@ mod tests {
                 name: "bind".to_string(),
                 selector: None,
             },
-            "24 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
+            "25 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
         );
         // 既登記の担当は据え置き（上書きしない）。
         assert_eq!(ext.consumer_of("bind", None), Some(CommandConsumer::Seriko));
@@ -898,19 +905,27 @@ mod tests {
         );
     }
 
-    /// areka-P0-ghost-install 要件 1.5〜1.7: 正準台帳は `(execute, install)` の 1 組だけを
-    /// 書庫を入れるタグの受け口の担当として登記し、`execute` の他の第 1 引数は登記しない。
+    /// areka-P0-ghost-install 要件 1.5〜1.7: install の受け口は `(execute, install)` の 1 組だけを
+    /// 担当する。`execute` の第 1 引数のうち表に載るのは `install` と、窓の位置の受け口の
+    /// `resetwindowpos`（areka-P0-move-canon 要件 8.7）の 2 つだけで、他の第 1 引数・裸の
+    /// `execute` は登記しない。
     #[test]
-    fn canonical_registers_only_execute_install_for_the_install_sink() {
+    fn canonical_install_sink_owns_only_execute_install() {
         let ledger = ConsumerLedger::canonical();
         assert_eq!(
             [
                 ledger.consumer_of("execute", Some("install")),
+                ledger.consumer_of("execute", Some("resetwindowpos")),
                 ledger.consumer_of("execute", Some("http-get")),
                 ledger.consumer_of("execute", None),
             ],
-            [Some(CommandConsumer::InstallSink), None, None],
-            "(execute,install) だけが担当あり（execute の他の第 1 引数・裸の execute は担当なし）"
+            [
+                Some(CommandConsumer::InstallSink),
+                Some(CommandConsumer::MoveSink),
+                None,
+                None
+            ],
+            "install の受け口は (execute,install) だけ・(execute,resetwindowpos) は窓の位置の受け口             （execute の他の第 1 引数・裸の execute は担当なし）"
         );
     }
 

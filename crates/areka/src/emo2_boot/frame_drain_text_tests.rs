@@ -2,6 +2,7 @@ use areka_emo_text::state::TextLayerConfig;
 use std::sync::{Arc, Mutex, mpsc};
 use wintf::ecs::Point;
 
+use crate::emo2_boot::move_cue::MoveDirective;
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 
 use super::test_support::{
@@ -222,7 +223,7 @@ fn fixture_move_directive() -> MoveDirective {
 /// gate 閉で未消費の実証）。move はキャラ窓生成後に一括適用され OnFirstBoot 移動を取りこぼさない。
 #[test]
 fn run_move_drain_phase_buffers_until_ghost_windows_present() {
-    let (tx, rx) = mpsc::channel::<MoveDirective>();
+    let (tx, rx) = mpsc::channel::<PositionCue>();
     let wiring = Emo2Wiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
@@ -235,7 +236,7 @@ fn run_move_drain_phase_buffers_until_ghost_windows_present() {
         zero_clock(),
         synth_assets(&[(0, 0)]),
     );
-    tx.send(fixture_move_directive())
+    tx.send(PositionCue::Move(fixture_move_directive()))
         .expect("送出は成功する（受信端は wiring 保持）");
 
     // GhostWindows 未挿入の素の World → drain せず保留（try_iter を呼ばない）。
@@ -250,8 +251,9 @@ fn run_move_drain_phase_buffers_until_ghost_windows_present() {
         "GhostWindows 未挿入では drain せず保留する（取りこぼしなし）"
     );
     assert_eq!(
-        remaining[0].scope, 1,
-        "保留された directive は fixture（scope1）"
+        remaining[0],
+        PositionCue::Move(fixture_move_directive()),
+        "保留された指令は fixture（scope1）"
     );
 }
 
@@ -270,7 +272,7 @@ fn run_move_drain_phase_applies_directive_when_ghost_windows_present() {
         "前提: 移動前の scope1 初期位置"
     );
 
-    let (tx, rx) = mpsc::channel::<MoveDirective>();
+    let (tx, rx) = mpsc::channel::<PositionCue>();
     let wiring = Emo2Wiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
@@ -283,7 +285,8 @@ fn run_move_drain_phase_applies_directive_when_ghost_windows_present() {
         zero_clock(),
         synth_assets(&[(0, 0)]),
     );
-    tx.send(fixture_move_directive()).expect("送出は成功する");
+    tx.send(PositionCue::Move(fixture_move_directive()))
+        .expect("送出は成功する");
 
     run_move_drain_phase(&wiring, &mut world);
 
@@ -299,4 +302,48 @@ fn run_move_drain_phase_applies_directive_when_ghost_windows_present() {
         0,
         "drain 後チャネルは空（全件消費・二重適用なし）"
     );
+}
+
+/// 並べ直しの指令は 2.1 の手続きへ渡り（`OnResetWindowPos` は送らない）、その失敗は後ろの
+/// 移動を止めない（areka-P0-move-canon 3.2・要件 8.7・design MoveDrain）。
+///
+/// `resnap_world` は並べ直しの材料（`DefaultPlacementBasis`）を置かないので、並べ直しは
+/// `reset_window_pos_skipped` の WARN で何もしない。その後ろの移動は fixture の検算位置へ届く。
+#[test]
+fn run_move_drain_phase_routes_reset_and_continues_after_its_failure() {
+    let (mut world, gw) = resnap_world();
+    let target = gw.char_window(1).unwrap();
+    let (tx, rx) = mpsc::channel::<PositionCue>();
+    let wiring = Emo2Wiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        rx,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
+        zero_clock(),
+        synth_assets(&[(0, 0)]),
+    );
+    tx.send(PositionCue::ResetWindowPos)
+        .expect("送出は成功する");
+    tx.send(PositionCue::Move(fixture_move_directive()))
+        .expect("送出は成功する");
+
+    let logs = capture_logs(|| run_move_drain_phase(&wiring, &mut world));
+
+    assert_eq!(
+        logs.iter()
+            .filter(|l| l.contains("level=WARN") && l.contains("reset_window_pos_skipped"))
+            .count(),
+        1,
+        "並べ直しは 2.1 の手続きへ渡った（材料が無いので記録だけ）: {logs:?}"
+    );
+    assert_eq!(
+        pos_of(&world, target),
+        Some(Point { x: 1208, y: 1087 }),
+        "並べ直しの失敗の後ろの移動も適用される"
+    );
+    assert!(wiring.drain_move_directives().is_empty(), "全件消費");
 }

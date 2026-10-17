@@ -93,7 +93,7 @@ use super::frame::{
     Emo2Wiring, KanadeNoticeRx, run_attach_phase, run_dpi_phase, run_move_drain_phase,
     run_text_phase, run_text_scale_phase,
 };
-use super::move_cue::{MoveCueSink, MoveDirective};
+use super::move_cue::{MoveCueSink, PositionCue};
 use super::talk_clock::{ClockedTextSink, TalkClock};
 use super::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use super::target_map::{balloon_target, shell_target};
@@ -751,7 +751,7 @@ impl SpineHarness {
         // drain＝run_move_drain_phase・task 9.2）を保持する。9.1 の throwaway 送出端を実 MoveCueSink へ
         // 差し替え、production `wire_emo2_boot` の sink 構成（現在は 11 本＝`mod.rs` の `sinks`）を spine でも
         // 忠実に再現する。
-        let (move_tx, move_rx) = mpsc::channel::<MoveDirective>();
+        let (move_tx, move_rx) = mpsc::channel::<PositionCue>();
         let move_sink = MoveCueSink::new(move_tx);
 
         // ── lifecycle channel＋実 BalloonLifecycleSink（wire_emo2_boot 手順4 と同型・task 4.1） ──

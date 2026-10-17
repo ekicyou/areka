@@ -267,7 +267,7 @@ use std::sync::mpsc::channel;
 /// `MoveDirective` を返す（sink の名前選別＋`cue.actor`→scope＋`parse_move_directive`＋
 /// channel handoff を実経路で通す＝末端 pipeline の前段そのもの）。
 fn directive_via_sink(actor: &str, tokens: &[&str]) -> MoveDirective {
-    let (tx, rx) = channel::<MoveDirective>();
+    let (tx, rx) = channel::<PositionCue>();
     let mut sink = MoveCueSink::new(tx);
     sink.emit(TalkCue {
         at: 0.0,
@@ -278,8 +278,10 @@ fn directive_via_sink(actor: &str, tokens: &[&str]) -> MoveDirective {
         ),
         duration: 0.0,
     });
-    rx.try_recv()
-        .expect("move キャリアは sink→channel を通って MoveDirective を送出する")
+    match rx.try_recv() {
+        Ok(PositionCue::Move(directive)) => directive,
+        other => panic!("move キャリアは sink→channel を通って移動の指令を送出する: {other:?}"),
+    }
 }
 
 /// R5.3/6.1/6.2/9.5: fixture `\1\![move,-353,,,0,base,base]` を **sink→channel→apply**

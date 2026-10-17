@@ -185,7 +185,7 @@ fn run_attach_phase_without_gpu_does_not_attach_or_consume_assets() {
     let mut wiring = Emo2Wiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<MoveDirective>().1,
+        mpsc::channel::<PositionCue>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
         mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(
@@ -287,7 +287,7 @@ fn attach_supplies_each_scope_its_own_balloon_model_to_map_and_text_layer() {
     let mut wiring = Emo2Wiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<MoveDirective>().1,
+        mpsc::channel::<PositionCue>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
         mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::clone(&runtime),
@@ -364,7 +364,7 @@ fn attach_establishes_balloons_invisible_with_slot_and_surface() {
     let mut wiring = Emo2Wiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<MoveDirective>().1,
+        mpsc::channel::<PositionCue>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
         mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(
@@ -418,7 +418,7 @@ fn presenter_accessor_feeds_resolve_hit_region() {
     let wiring = Emo2Wiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<MoveDirective>().1,
+        mpsc::channel::<PositionCue>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
         mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(
@@ -443,7 +443,7 @@ fn presenter_accessor_feeds_resolve_hit_region() {
 }
 
 /// task 9.1 存在檻: `MoveCueSink`（送出端）→ `Emo2Wiring`（受信端 `move_rx`）の channel 配線が
-/// 到達可能であること（`wire_emo2_boot` が `mpsc::channel::<MoveDirective>()` を生成し送出端を
+/// 到達可能であること（`wire_emo2_boot` が `mpsc::channel::<PositionCue>()` を生成し送出端を
 /// sinks 第 3 要素の `MoveCueSink` へ、受信端を `Emo2Wiring` へ渡す配線の縮図）。
 ///
 /// 送出端を持つ `MoveCueSink` に `\![move]` キャリア cue を `emit` すると、`Emo2Wiring` が保持する
@@ -454,7 +454,7 @@ fn move_cue_sink_reaches_emo2_wiring_receiver() {
     use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 
     // wire_emo2_boot 手順4 と同型: 単一 channel の送出端を sink へ、受信端を Emo2Wiring へ。
-    let (move_tx, move_rx) = mpsc::channel::<MoveDirective>();
+    let (move_tx, move_rx) = mpsc::channel::<PositionCue>();
     let mut move_sink = MoveCueSink::new(move_tx);
     let wiring = Emo2Wiring::new(
         EmoPresenter::new(),
@@ -489,9 +489,12 @@ fn move_cue_sink_reaches_emo2_wiring_receiver() {
         1,
         "sink→Emo2Wiring の受信端へちょうど 1 件届く"
     );
-    assert_eq!(drained[0].scope, 1, "scope は cue.actor（\\1）由来");
+    let PositionCue::Move(directive) = &drained[0] else {
+        panic!("移動の指令が届く: {drained:?}");
+    };
+    assert_eq!(directive.scope, 1, "scope は cue.actor（\\1）由来");
     assert_eq!(
-        drained[0].base,
+        directive.base,
         crate::emo2_boot::move_cue::MoveBase::Scope(0),
         "base=scope0（fixture 形）"
     );
@@ -520,7 +523,7 @@ fn talk_playback_reaches_emo2_wiring_lifecycle_receiver() {
     let wiring = Emo2Wiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<MoveDirective>().1,
+        mpsc::channel::<PositionCue>().1,
         lifecycle_rx,
         mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(
@@ -650,7 +653,7 @@ fn connect_balloon_text_resolves_text_with_the_background_at_attach_time() {
     let mut wiring = Emo2Wiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<MoveDirective>().1,
+        mpsc::channel::<PositionCue>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
         mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(
@@ -839,7 +842,7 @@ fn attach_hands_the_box_bundle_and_the_balloon_folder_name_to_the_text_layer() {
     let mut wiring = Emo2Wiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
-        mpsc::channel::<MoveDirective>().1,
+        mpsc::channel::<PositionCue>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
         mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::clone(&runtime),

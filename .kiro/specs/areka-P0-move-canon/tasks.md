@@ -46,7 +46,7 @@
   - _Depends: 1.2, 2.1_
   - _Requirements: 1.9, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10, 2.11, 2.12, 3.1, 3.2, 3.3, 3.5, 3.6, 3.7, 4.7, 9.1_
 
-- [ ] 3.2 窓の位置の指令の型を足し、受け口・消費者の台帳・move drain を一緒に替える（結合のタスク）
+- [x] 3.2 窓の位置の指令の型を足し、受け口・消費者の台帳・move drain を一緒に替える（結合のタスク）
   - 線の型と台帳の一致の檻は一緒に替えないとビルドとテストが通らないので、1 つの結合のタスクにする。替えるファイル: `move_cue.rs`・`frame/drain_resnap.rs`・`frame/wiring.rs`・`frame.rs`（import だけ）・`emo2_boot/mod.rs`・`spine.rs`・`consumer_ledger.rs`・`consumer_ledger_agreement_tests.rs`・`move_cue_move_sink_tests.rs`・`move_cue_move_severity_log_tests.rs`・`frame_drain_text_tests.rs`・`frame_attach_tests.rs`・`frame_test_support.rs`・`frame_visibility_integration_tests.rs`・`balloon_visibility_lifecycle_e2e_tests.rs`・`spine_move_cue_tests.rs`・`input_events/balloon_test_support.rs`
   - 線を流れる型を「移動」と「並べ直し」の 2 種にし、線の受け手・取り出しの戻り・emo2 の起動と spine の型名を新しい型へ替える。線の型を綴るテストと支えのファイル（設計の Modified Files に挙げたもの）は機械的に置き換える
   - 受け口は `move` を「移動」として送り（読みの記録は 1.1 のまま）、`execute` で第 1 引数が `resetwindowpos` なら「並べ直し」を送り、残りの引数は読まない。開けない荷物の `warn!` は宛名が `move` のときだけにし、`execute` 宛は `debug!` にする。台本の進み（envelope の時間）には触れない
