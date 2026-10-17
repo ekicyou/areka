@@ -181,6 +181,9 @@ fn main() -> Result<()> {
             ));
         }
     };
+    // 書けるかの確かめ（argv の起動も同じ道・写しの後の置き場を見る・write-failure-notice 要件 2.1）。
+    write_failure::check_boot_dirs(&cfg, &default_app_profile_dir())
+        .map_err(write_failure::stop_boot)?;
 
     // MCP の待受（areka-P0-mcp-server-core 設計判断 B-3）。畳むのは取っ手の `Drop` で、`down?` の
     // 早い戻りを含む `main` のどの出口でも閉じる。`app` より先に宣言する＝`app` の後に落ちる。

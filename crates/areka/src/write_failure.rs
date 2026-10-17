@@ -7,14 +7,17 @@
 //! [`ExitOrigin::MemoryWriteFailed`] で [`quit_app`] を呼ぶ（巻き戻しはしない）。
 //! 最初の出所が勝つ規則は [`quit_app`] が持つので、2 件目以降は記録だけが増える。
 
+use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
-use areka_sylphya::{PersistFailure, PersistFailureCause};
+use areka_ghost::sylphya_wiring::profile_areka_root;
+use areka_sylphya::{PersistFailure, PersistFailureCause, PersistScope};
 use bevy_ecs::prelude::*;
 use wintf::ecs::Update;
 
 use crate::alert::{self, AlertScene, WriteMoment, remembered_text};
 use crate::app_exit::{ExitOrigin, quit_app};
+use crate::boot_config::ConfigInputs;
 
 /// 受け口の送り手（World の NonSend・プロセスに 1 つ）。
 pub(crate) struct WriteFailureTx(pub(crate) Sender<PersistFailure>);
@@ -104,6 +107,51 @@ pub(crate) fn stop_boot_with(failure: PersistFailure, suppressed: bool) -> windo
     e_fail()
 }
 
+/// 書けるかの確かめ: `dir`（無ければ在るいちばん深い親）を選び、フォルダでなければ Err、
+/// フォルダなら `areka-user-data` の確かめの口へ渡す（作る物 0・フォルダも作らない）。
+pub(crate) fn probe_dir(dir: &Path) -> std::io::Result<()> {
+    let Some((found, meta)) = dir
+        .ancestors()
+        .find_map(|p| std::fs::metadata(p).ok().map(|m| (p, m)))
+    else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("在るフォルダが見つからない: {}", dir.display()),
+        ));
+    };
+    if !meta.is_dir() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotADirectory,
+            format!("フォルダでない物が在る: {}", found.display()),
+        ));
+    }
+    areka_user_data::open_dir_for_add(found)
+}
+
+/// 起動の前の確かめ: アプリの記憶の置き場 → ゴーストの記憶の置き場
+/// （`<cfg.ghost_root>\ghost\master\profile\areka`）の順で、最初の失敗を返す。
+/// 見るのは渡された `cfg`（`resolve_boot` が返した＝写しの後の置き場）だけ。シェルの記憶は見ない。
+pub(crate) fn check_boot_dirs(
+    cfg: &ConfigInputs,
+    app_profile_dir: &Path,
+) -> Result<(), PersistFailure> {
+    let ghost_dir = profile_areka_root(&cfg.ghost_root.join("ghost").join("master"));
+    for (scope, dir) in [
+        (PersistScope::App, app_profile_dir.to_path_buf()),
+        (PersistScope::Ghost, ghost_dir),
+    ] {
+        if let Err(e) = probe_dir(&dir) {
+            return Err(PersistFailure {
+                scope,
+                dir: Some(dir),
+                keys: vec![],
+                cause: PersistFailureCause::Io(e.to_string()),
+            });
+        }
+    }
+    Ok(())
+}
+
 /// 後始末で受け手を取り出す（OS のセッションの終了を処理済みなら `None`＝告げない）。
 pub(crate) fn take_receiver(world: &mut World) -> Option<Receiver<PersistFailure>> {
     if world.contains_resource::<crate::session_end::SessionEnded>() {
@@ -163,3 +211,7 @@ mod tests;
 #[cfg(test)]
 #[path = "write_failure_sites_tests.rs"]
 mod sites_tests;
+
+#[cfg(test)]
+#[path = "write_failure_probe_tests.rs"]
+mod probe_tests;
