@@ -164,7 +164,7 @@ ukadoc が黙っている点は、SSP 2.9.18 の実測（`research.md` §8）に
 3. When 利用者がその項目を選んだとき, the areka shall ゴーストへ `OnResetWindowPos` を送る。
 4. When ゴーストが `OnResetWindowPos` に台本を返したとき, the areka shall その台本を再生し、自分からは並べ直さない。
 5. If ゴーストが `OnResetWindowPos` に台本を返さなかった場合（空の返事・返事なし・エラーの返事を含む）, then the areka shall `\![execute,resetwindowpos]` と同じ並べ直しを行う。
-6. When 台本が `\![execute,resetwindowpos]` を実行したとき, the areka shall すべてのキャラクターの窓を、位置の記憶が無いときに起動で並べるのと同じ既定の位置へ並べ直す。
+6. When 台本が `\![execute,resetwindowpos]` を実行したとき, the areka shall すべてのキャラクターの窓を、位置の記憶が無いときに起動で並べるのと同じ配置の規則を、今表示している窓の大きさ（＝今の拡大率で描いた大きさ）で解いた既定の位置へ並べ直す。
 7. When 台本が `\![execute,resetwindowpos]` を実行したとき, the areka shall `OnResetWindowPos` を送らずに並べ直す（`OnResetWindowPos` を送るのはメニューから選んだときだけ・SSP 2.9.18 の実測と同じ）。
 8. When 並べ直しが行われた後に次の起動をしたとき, the areka shall 並べ直した窓を既定の位置に出す（並べ直しの後に利用者がドラッグした窓は、ドラッグした位置に出す）。
 9. When 並べ直しで窓が動いたとき, the areka shall バルーンの窓をこれまでどおりキャラクターの窓に付いて動かす。
