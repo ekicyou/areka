@@ -16,7 +16,7 @@ fn default_helper_exe_path_ends_with_expected_filename() {
     );
 }
 
-/// `ghost_boot_options` は渡された `ghost_root`／`helper_exe` をそのまま
+/// `ghost_boot_options` は渡された `ghost_root`／`helper_exe`／置き場をそのまま
 /// `GhostBootOptions` へ写し、`ShioriWiring::Helper`・`DefaultEncoding::Ansi`・
 /// `TickerMode::Real` を選ぶ（design.md「main の ghost boot／shutdown 結線」）。
 #[test]
@@ -24,9 +24,17 @@ fn ghost_boot_options_wires_expected_fields() {
     let ghost_root = PathBuf::from("C:/custom/ghost");
     let helper_exe = PathBuf::from("C:/custom/exe-dir/shiori-host32-helper.exe");
 
-    let options = ghost_boot_options(ghost_root.clone(), helper_exe.clone());
+    // 置き場は書かない固定のパスを渡す（本物の環境で置き場を決めない・user-data-root 要件 10.6）。
+    let app_profile_dir = PathBuf::from("C:/custom/profile/areka");
+
+    let options = ghost_boot_options(
+        ghost_root.clone(),
+        helper_exe.clone(),
+        Some(app_profile_dir.clone()),
+    );
 
     assert_eq!(options.ghost_root, ghost_root);
+    assert_eq!(options.app_profile_dir, Some(app_profile_dir));
     assert_eq!(options.default_encoding, DefaultEncoding::Ansi);
     match options.shiori {
         ShioriWiring::Helper {

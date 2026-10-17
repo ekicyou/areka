@@ -138,7 +138,8 @@ impl ShioriSession {
         // `handle` は非 RAII（detach）で、アクターは sink 内包 publisher が生存する限り生き続けるため
         // 破棄してよい（in-proc serving surface は join 不要・spawn_app_sylphya_sink の doc 参照）。
         let asker = areka_sylphya::AskerId::new(load_dir.to_string());
-        let (sink, _handle) = crate::shiori_host::spawn_app_sylphya_sink(asker);
+        // テスト専用の入口ゆえ App の置き場は付けない（本物の環境で置き場を決めない・user-data-root 要件 10.6）。
+        let (sink, _handle) = crate::shiori_host::spawn_app_sylphya_sink(asker, None);
         let host: IShioriHost = sink.into();
         // factory 経由生成: load 完了済みの IShiori を受領する（旧 ShioriExt::load 経路の置換・要件 2.1）。
         // 失敗は ShioriError（CreateFailed）へ写る（半構築非露出・要件 8.6）。

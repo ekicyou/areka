@@ -359,6 +359,24 @@ impl GhostBootInputs {
         kanade_stop: Sender<KanadeNotice>,
         boot_origin: BootOrigin,
     ) -> Self {
+        Self::production_at(
+            cfg,
+            helper_exe,
+            kanade_stop,
+            boot_origin,
+            Some(default_app_profile_dir()),
+        )
+    }
+
+    /// [`Self::production`] の中身で、記憶の置き場を呼び手が渡すもの。テストはこれを使い、本物の環境で
+    /// 置き場を決めない（user-data-root 要件 10.6）。
+    pub(crate) fn production_at(
+        cfg: &ConfigInputs,
+        helper_exe: PathBuf,
+        kanade_stop: Sender<KanadeNotice>,
+        boot_origin: BootOrigin,
+        app_profile_dir: Option<PathBuf>,
+    ) -> Self {
         Self {
             wiring: emo2_boot::Emo2BootInputs {
                 ghost_root: cfg.ghost_root.clone(),
@@ -367,7 +385,7 @@ impl GhostBootInputs {
                     helper_exe: helper_exe.clone(),
                 },
                 ticker: areka_ghost::TickerMode::Real(Default::default()),
-                app_profile_dir: Some(default_app_profile_dir()),
+                app_profile_dir,
                 boot_origin,
             },
             helper_exe,
@@ -642,8 +660,8 @@ pub(crate) fn boot_ghost(
         kanade_stop,
     } = inputs;
     // fallback の腕が使う根と App スコープの置き場（結線の入力は `boot_wired` へ move するので先に写す）。
-    // 置き場は本番では `GhostBootInputs::production` の `Some(default_app_profile_dir())`＝
-    // `ghost_boot_options` の既定と同じ値（振る舞いは不変・要件 4.7）。テストは土台の置き場か `None`。
+    // 置き場は本番では `GhostBootInputs::production` の `Some(default_app_profile_dir())`（振る舞いは
+    // 不変・要件 4.7）。テストは土台の置き場か `None`。
     let ghost_root = wiring.ghost_root.clone();
     let app_profile_dir = wiring.app_profile_dir.clone();
     // 起動のシェルは結線ありの腕と倒れ先で同じ値を使う（取り出すのはここの 1 回だけ・要件 6.4）。
@@ -668,10 +686,7 @@ pub(crate) fn boot_ghost(
     // 確かめているので、ここでの `MountError::StartPointMissing` は解決後の消失（起動中の削除等）
     // に限られ、`warn!` の上で `None` として骨格起動を継続する（要件 8.2）。それ以外の予期しない
     // 失敗（読取不能・shell 不在等）は `error!`（`is_benign_boot_error` の分類は不変・R7.4）。
-    let ghost_options = areka_ghost::GhostBootOptions {
-        app_profile_dir,
-        ..ghost_boot_options(ghost_root.clone(), helper_exe)
-    };
+    let ghost_options = ghost_boot_options(ghost_root.clone(), helper_exe, app_profile_dir);
     // 停止通知の送出端つきで起動する（SHIORI の失敗で kanade が止まったら終了相へ届く・要件 6.4）。
     // 倒れ先も起動のシェルでマウントする（areka-P0-shell-balloon-switch 要件 6.4）。
     let runtime = match areka_ghost::boot_with_origin(

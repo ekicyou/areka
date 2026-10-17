@@ -127,14 +127,15 @@ fn strict_boot_returns_err_without_falling_back() {
 }
 
 /// 作り口（[`GhostBootInputsSource`]）に渡した由来が、起動の結線の入力（`Emo2BootInputs`）へ
-/// そのまま載る（要件 8.6）。本番の組み立て（[`GhostBootInputs::production`]）を閉じた作り口で、
+/// そのまま載る（要件 8.6）。本番の組み立て（[`GhostBootInputs::production_at`]）を閉じた作り口で、
 /// 3 つの由来をそれぞれ通す。
 #[test]
 fn origin_given_to_source_reaches_wiring_inputs() {
     let (kanade_stop, _rx) = mpsc::channel::<KanadeNotice>();
     let helper_exe = PathBuf::from("ghost_session_strict_tests/使わない/helper.exe");
     let source = GhostBootInputsSource(Box::new(move |cfg, origin| {
-        GhostBootInputs::production(cfg, helper_exe.clone(), kanade_stop.clone(), origin)
+        // 置き場は `None`（本物の環境で置き場を決めない・user-data-root 要件 10.6）。
+        GhostBootInputs::production_at(cfg, helper_exe.clone(), kanade_stop.clone(), origin, None)
     }));
     let cfg = ConfigInputs {
         ghost_root: PathBuf::from("ghost_session_strict_tests/ghost/B"),

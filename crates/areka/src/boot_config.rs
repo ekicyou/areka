@@ -405,16 +405,16 @@ pub(crate) fn default_app_profile_dir() -> std::path::PathBuf {
 ///   `DiscardSink` で埋めることで cue ごと 1 回ログへ正す（設計 D4 Topic 2）。
 /// - `system_vars`: 本番 provider（`SystemVarWiring::FromSylphya`＝boot が据えた sylphya reader
 ///   由来のスナップショット・R7.1）。
-/// - `app_profile_dir`: App スコープの sylphya profile root（`default_app_profile_dir()`＝env
-///   `AREKA_PROFILE_DIR` 優先・既定は実行ファイル隣接 `profile/areka/`・R8.2）。
+/// - `app_profile_dir`: App スコープの sylphya profile root。呼び手が渡す（本番の fallback の腕は結線の
+///   入力の置き場＝`default_app_profile_dir()`）。ここで本物の環境から決めないので、テストが書ける根の
+///   形を作らない（user-data-root 要件 10.6）。
 /// - `ticker`: `TickerMode::Real` を既定 `TickerConfig`（`base_interval=50ms`／
 ///   `kanade_interval=1000ms`／実クロック `GetTickCount64`）で駆動する。
 ///
-/// `app_profile_dir` の解決は env（`AREKA_PROFILE_DIR`）・起動した exe の本当の場所（`exe_location`）を読むため厳密には純粋
-/// ではない（副作用のない read のみ）。他フィールドの決定は従来どおり引数からの写しに留まる。
 pub(crate) fn ghost_boot_options(
     ghost_root: std::path::PathBuf,
     helper_exe: std::path::PathBuf,
+    app_profile_dir: Option<std::path::PathBuf>,
 ) -> areka_ghost::GhostBootOptions {
     areka_ghost::GhostBootOptions {
         ghost_root,
@@ -425,7 +425,7 @@ pub(crate) fn ghost_boot_options(
             Box::new(areka_ghost::sink::DiscardSink::new()),
         ],
         system_vars: areka_ghost::SystemVarWiring::FromSylphya,
-        app_profile_dir: Some(default_app_profile_dir()),
+        app_profile_dir,
         ticker: areka_ghost::TickerMode::Real(Default::default()),
     }
 }
