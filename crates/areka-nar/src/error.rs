@@ -18,7 +18,7 @@ macro_rules! refuse_reasons {
         $(#[$variant_attr:meta])*
         $variant:ident { $( $(#[$field_attr:meta])* $field:ident : $ty:ty ),* $(,)? }
     ),* $(,)?) => {
-        /// 拒否の理由。14 変種で閉じる（要件 9.2）。
+        /// 拒否の理由。13 変種で閉じる（要件 9.2。取り出し元の無い同梱は断らずに飛ばす）。
         ///
         /// `kind()` が返す短い語をそのまま `OnInstallFailure` の理由に写せる。
         #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -91,10 +91,6 @@ refuse_reasons! {
     /// `directory` の値が 1 階層のフォルダ名として使えない（要件 3.8）。
     #[error("{key} のフォルダ名が使えない: {value}")]
     InvalidDirectoryName { key: String, value: String },
-
-    /// 同梱バルーンの取り出し元フォルダに 1 件もエントリが無い（要件 5.4）。
-    #[error("{key} の取り出し元フォルダが無い: {source_directory}")]
-    CompanionSourceMissing { key: String, source_directory: String },
 
     /// `shell`／`supplement` の宛先ゴーストが無い（要件 5.7）。
     #[error("宛先のゴーストが無い: {}", target.as_deref().unwrap_or("（指定なし）"))]

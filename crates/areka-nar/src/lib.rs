@@ -110,8 +110,8 @@ impl NarArchive {
     ///
     /// # Errors
     ///
-    /// 宛先ゴーストが無い・同梱バルーンの取り出し元が無いとき [`NarError::Refused`]
-    /// （宛先には触れていない）。組み上げ・確定・巻き戻しの I/O が失敗したとき
+    /// 宛先ゴーストが無いとき [`NarError::Refused`]（宛先には触れていない）。同梱バルーンの
+    /// 取り出し元が無いときは断らず、その同梱を飛ばして [`InstallOutcome::skipped`] に載せる。組み上げ・確定・巻き戻しの I/O が失敗したとき
     /// [`NarError::Io`]（どこまで確定したかと巻き戻せたかを持つ＝要件 6.4）。
     pub fn install(&self, request: &InstallRequest<'_>) -> Result<InstallOutcome, NarError> {
         let mut work = Vec::new();

@@ -2,7 +2,7 @@
 //!
 //! # なぜ 1 本のテストなのか
 //!
-//! 14 変種それぞれの固定入力をこの 1 本が自分で組み、得た短い語の集合を
+//! 13 変種それぞれの固定入力をこの 1 本が自分で組み、得た短い語の集合を
 //! [`RefuseReason::ALL_KINDS`] と**完全一致**で突き合わせる。別ファイルの兄弟テストの
 //! 結果を集める形にすると、テスト間で状態を共有できないぶん「どれか 1 つが走らなかった」
 //! が集合の欠けとして現れず、母数の減った突合が緑のまま通ってしまう（設計
@@ -48,7 +48,7 @@ fn with_manifest() -> NarBuilder {
         .done()
 }
 
-/// 14 変種それぞれに 1 つずつ対応する固定入力。宣言順は [`RefuseReason::ALL_KINDS`] と同じ。
+/// 13 変種それぞれに 1 つずつ対応する固定入力。宣言順は [`RefuseReason::ALL_KINDS`] と同じ。
 pub(super) fn cases() -> Vec<Case> {
     vec![
         Case {
@@ -161,24 +161,6 @@ pub(super) fn cases() -> Vec<Case> {
             install: None,
         },
         Case {
-            kind: "CompanionSourceMissing",
-            note: "同梱バルーンの取り出し元フォルダが書庫に 1 件も無い（計画で分かる）",
-            nar: NarBuilder::new()
-                .file(
-                    "install.txt",
-                    &install_txt(&[
-                        "type,ghost",
-                        "name,テスト",
-                        "directory,tester",
-                        "balloon.directory,kaku",
-                    ]),
-                )
-                .done()
-                .file("ghost/master/descript.txt", b"charset,Shift_JIS\r\n")
-                .done(),
-            install: Some(None),
-        },
-        Case {
             kind: "TargetGhostMissing",
             note: "shell の宛先ゴーストが渡されていない（計画で分かる）",
             nar: NarBuilder::new()
@@ -210,7 +192,7 @@ fn at(records: &[CapturedEvent], level: tracing::Level) -> Vec<&CapturedEvent> {
 
 // ---- 全数対応（要件 9.2・9.3） ----
 
-/// 14 変種それぞれに固定入力が 1 つ対応し、得た短い語の集合が全数の一覧と完全に一致する。
+/// 13 変種それぞれに固定入力が 1 つ対応し、得た短い語の集合が全数の一覧と完全に一致する。
 ///
 /// 同時に、失敗 1 回につき error の記録がちょうど 1 件出ること（要件 9.1）と、
 /// その記録が確定済みの件数と巻き戻せたかを欄として持つこと（要件 6.4）も見る。
@@ -271,7 +253,7 @@ fn every_refusal_kind_has_a_fixture_and_is_recorded_once() {
             "{} の記録の欄が足りない（確定済みの件数と巻き戻せたかは要件 6.4）",
             case.kind
         );
-        // 14 件はすべて拒否＝作業フォルダを掘る前に止まっている。空でなければ、
+        // 13 件はすべて拒否＝作業フォルダを掘る前に止まっている。空でなければ、
         // 書く準備を始めてから拒否した（＝拒否が「触れていない」を満たしていない）。
         assert!(
             recorded[0]
@@ -290,7 +272,11 @@ fn every_refusal_kind_has_a_fixture_and_is_recorded_once() {
         RefuseReason::ALL_KINDS.iter().copied().collect(),
         "固定入力の集合と拒否語彙の全数が一致しない"
     );
-    assert_eq!(observed.len(), 14, "語彙は 14 変種で閉じる（要件 9.2）");
+    assert_eq!(
+        observed.len(),
+        13,
+        "語彙は 13 変種で閉じる（要件 9.2・取り出し元の無い同梱は断らない）"
+    );
 }
 
 /// 上の数え方の較正。受理される一周では error の記録が 1 件も出ない。

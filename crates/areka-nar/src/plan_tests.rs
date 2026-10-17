@@ -1,5 +1,5 @@
 //! `plan` の兄弟テスト——4 種の宛先・同梱バルーンの接頭辞剥がしと複製の不在・
-//! 拒否 3 種・フォルダの作り分け・根の外へ出ないことの全数勘定（要件 4.8・5.1〜5.8・6.3）。
+//! 宛先ゴーストの拒否 3 種・取り出し元の無い同梱の飛ばし・フォルダの作り分け・根の外へ出ないことの全数勘定（要件 4.8・5.1〜5.8・6.3）。
 //!
 //! 期待値の置き方は 3 つ。⑴ 受理の側は組み上がった [`Placement`] の**全ての欄**を
 //! 突き合わせる（「置かれた」ではなく「どこに何が置かれるか」を見る）。⑵ 拒否の側は
@@ -37,12 +37,20 @@ fn planned(
     build_plan(&manifest, &names, request)
 }
 
-/// 受理された計画だけを取り出す。拒否されたら主張ごと落とす。
-fn plan_of(builder: NarBuilder, request: &InstallRequest<'_>) -> Vec<Placement> {
+/// 受理された計画を、置く配置と飛ばした同梱の 2 つの列のまま取り出す。拒否されたら主張ごと落とす。
+fn plan_and_skipped_of(
+    builder: NarBuilder,
+    request: &InstallRequest<'_>,
+) -> (Vec<Placement>, Vec<SkippedCompanion>) {
     match planned(builder, request) {
-        Ok((plan, _skipped)) => plan,
+        Ok(planned) => planned,
         Err(reason) => panic!("受理されるはずの書庫が拒否された: {reason}"),
     }
+}
+
+/// 受理された計画の置く配置だけを取り出す。拒否されたら主張ごと落とす。
+fn plan_of(builder: NarBuilder, request: &InstallRequest<'_>) -> Vec<Placement> {
+    plan_and_skipped_of(builder, request).0
 }
 
 /// 拒否だけを取り出す。受理されたら主張ごと落とす。
@@ -520,9 +528,11 @@ fn the_companion_carries_its_own_refresh_policy() {
     );
 }
 
-/// 取り出し元がフォルダのエントリだけ（中身が 1 件も無い）なら拒否する（要件 5.4）。
+/// 取り出し元がフォルダのエントリだけ（中身が 1 件も無い）なら、その同梱を飛ばして
+/// 本体だけを置く（要件 1.1・1.2）。`*.source.directory` を書かない同梱なので、鍵は
+/// `*.directory` の鍵・値は置き場の名前（要件 1.4）。
 #[test]
-fn refuses_a_companion_whose_source_folder_is_empty() {
+fn skips_a_companion_whose_source_folder_is_empty() {
     let root = root_with_ghost("other");
     let request = InstallRequest {
         roots: &SingleRoot(root.path()),
@@ -542,18 +552,29 @@ fn refuses_a_companion_whose_source_folder_is_empty() {
         .done()
         .dir("test-balloon");
 
+    let (plan, skipped) = plan_and_skipped_of(archive, &request);
+    assert_eq!(plan.len(), 1, "置く配置は本体だけ");
+    assert_eq!(plan[0].kind, ElementKind::Ghost);
+    assert_eq!(relative_files(&plan[0]), vec!["install.txt"]);
+    assert!(
+        plan[0].dirs.is_empty(),
+        "取り出し元の抜け殻が本体に作られる: {:?}",
+        plan[0].dirs
+    );
     assert_eq!(
-        refusal_of(archive, &request),
-        RefuseReason::CompanionSourceMissing {
-            key: "balloon.source.directory".to_owned(),
-            source_directory: "test-balloon".to_owned(),
-        }
+        skipped,
+        vec![SkippedCompanion {
+            directory: "test-balloon".to_owned(),
+            key: "balloon.directory".to_owned(),
+            source: "test-balloon".to_owned(),
+        }]
     );
 }
 
-/// 取り出し元の名前が書庫のどこにも無ければ拒否する（要件 5.4）。
+/// 取り出し元の名前が書庫のどこにも無ければ、その同梱を飛ばして本体だけを置く
+/// （要件 1.1・1.2）。鍵は書かれていた `*.source.directory`・値は書かれていた値（要件 1.4）。
 #[test]
-fn refuses_a_companion_whose_source_folder_is_absent() {
+fn skips_a_companion_whose_source_folder_is_absent() {
     let root = root_with_ghost("other");
     let request = InstallRequest {
         roots: &SingleRoot(root.path()),
@@ -575,12 +596,21 @@ fn refuses_a_companion_whose_source_folder_is_absent() {
         .file("test-balloon/descript.txt", b"d")
         .done();
 
+    let (plan, skipped) = plan_and_skipped_of(archive, &request);
+    assert_eq!(plan.len(), 1, "置く配置は本体だけ");
+    assert_eq!(plan[0].kind, ElementKind::Ghost);
     assert_eq!(
-        refusal_of(archive, &request),
-        RefuseReason::CompanionSourceMissing {
+        relative_files(&plan[0]),
+        vec!["install.txt", "test-balloon/descript.txt"],
+        "取り出し元でないフォルダは今どおり本体に残る"
+    );
+    assert_eq!(
+        skipped,
+        vec![SkippedCompanion {
+            directory: "test-balloon".to_owned(),
             key: "balloon.source.directory".to_owned(),
-            source_directory: "nowhere".to_owned(),
-        }
+            source: "nowhere".to_owned(),
+        }]
     );
 }
 

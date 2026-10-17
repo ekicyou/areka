@@ -155,7 +155,7 @@ fn open_changes_nothing_under_the_root() {
 
     let before = tree(root);
     assert!(
-        before.len() >= 15,
+        before.len() >= 14,
         "固定入力が置かれていない根で突き合わせても何も測れない: {}",
         before.len()
     );
