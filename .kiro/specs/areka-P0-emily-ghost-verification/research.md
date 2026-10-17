@@ -181,3 +181,38 @@
 - 6 節の 6（3 人目以降の窓）: 窓を scope 0・1 に絞る最小の直し。開発者「最低限パニックは回避して欲しい」を受け、実機で当たるのを待たずに、`char2` 以降の鍵を持つ固定入力の決定論のテストで panic しないことを確かめる（要件 6.7）。7 節の調べ物 1 は、このテストで答えを出す。
 - 6 節の 7（20 の線）: 最初の実機の走行の後に、崩れた所の一覧と直しの見積もりをそろえて測る（要件 6.4）。
 - 一部が入らなかったことの知らせ: 警告のダイアログを 1 つ出す（要件 1.12・6 節の 10）。
+---
+
+## 10. 設計の段の調べと決め（2026-10-17・kiro-spec-design）
+
+- 種類: 既存の仕組みの拡張（軽い調べ）。新しい外部の部品は 0。ukadoc「Install設定」の `*.source.directory` を MCP で引き直し、取り出し元が書庫に無いときの扱いに沈黙していることを確かめた。
+- 使った手引き: `kiro-spec-design` の規則（設計の原則・軽い調べ・まとめ方・設計の関門）。steering は `product.md`・`tech.md`・`structure.md`・`logging.md`。
+
+### 10.1 調べ物の答え
+
+- **調べ物 1（3 人目以降の窓）**: 作られる。`placement/config.rs` の `detect_scopes`（144〜164 行）が `char{n}.` の鍵（n が 2 以上）から scope を足し、`placement/mod.rs` の `prepare_stages_for_shell`（406・407 行）→ `resolver.rs` の `resolve_placement` → `spawn.rs` の `spawn_ghost_windows`（415〜472 行）が scope ごとにキャラクターの窓とバルーンの窓を作る。`ghost_session.rs` 282〜294 行がその全部にポインタ・メニュー・投げ込みの受け手を付ける。起動の絵の側（`emo2_boot/mod.rs` 289〜291 行 `derive_scopes` は `[0, 1]` 固定）は scope 2 の窓に絵を付けず、`attach.rs` 196〜200 行の `warn!` で済む。
+- **panic の道**: debug 版の `debug_assert!(scope <= 1)` の 2 か所だけ。`input_events/mod.rs` 398 行（`char_scope`・マウスの移動・ダブルクリック・ドラッグ・右クリックの離しから来る）と `menu/captions.rs` 110 行（`visible_resource_for`）。ほかの道（`GhostWindows` の引き当て・測り・窓の位置・バルーンの面の引き当てなど）は scope 2 以上でも落ちない。
+- **絞る場所**: `build_placement_config` は呼び手 3 か所（`placement/mod.rs` 406 行・`reseed.rs` 62 行・`emo2_boot/frame/switch.rs` 448 行）がすべて通る。その中の `detect_scopes` が根の 1 か所。
+- **`areka-P0-extra-character-windows` の持ち分**: scope の導き方を 1 か所にまとめる・2 か所の `debug_assert!` を外す・3 人目以降の窓を正しく作る。本 spec の絞りは、その spec が後で外す前提の最小の直し。
+
+### 10.2 設計の議題の決め（6 節の 2・3・4・8・9・10）
+
+- **6 節の 2（警告の型）**: 案 B を採る。`ManifestWarning` に足さず、`InstallOutcome` に「飛ばした同梱」の欄 `skipped`（型 `SkippedCompanion`）を足す。理由は 2 つ。⑴ 要件 1.12 の警告のダイアログが、飛ばした同梱の置き場の名前を値として読む必要がある（警告の列を変種で選り分けるより素直）。⑵ 記録の文言（`[areka_nar] manifest entry skipped`）と事実がずれない。`InstallOutcome` を値で組むのは `areka-nar` の `commit_all` 1 か所だけ（全ワークスペースを検索）なので、欄を足しても外は壊れない。
+- **6 節の 3（鍵と値）**: `Companion` に `source_written: Option<String>`（`*.source.directory` に書かれていた値・書かれていない／空なら `None`）を足す。鍵は `Some` なら `<接頭辞>.source.directory`・`None` なら `<接頭辞>.directory`。値は書かれていた値（`..` を取り除く前・長さは今の拒否の理由と同じく `bounded_value` で縛る）。`None` のときの値は `*.directory` の値。取り除いた後の値は今どおり `SourceDirectoryCleaned` の記録に載る。
+- **6 節の 4（既存の拒否のテスト 3 本）**: 同じ場所で「飛ばして 1 件」の判定へ書き替える（`plan_tests.rs` の 2 本・`plan_source_path_tests.rs` の 1 本）。行は増えない。新しい場面（要件 7.1 の 6 つ）は新しい兄弟 `lib_skip_tests.rs` に置く（`open` から `install` まで通し、記録も捕まえる）。
+- **6 節の 8（要件 7.3 の置き場）**: `sample-ghost-kit` の `lib_tests.rs` に 1 本足す。検体の窓口の内側（`devroot::nar_dir()`）から `emily4.nar` を読み、一時の根へ入れて、入った物・置かれなかった物・飛ばした 1 件の中身を見る。`areka-nar` から検体の場所を知る道は作らない（`areka-nar` は検体の在処を知らない、が今の決まり）。
+- **6 節の 9（人の手の項目）**: 要件 3.8 のとおり AI が操作する。areka の窓のクリック透過で画面の操作の道具が効かないときは、開発者の許可を得て SendInput で行う。
+- **6 節の 10（警告のダイアログ）**: ⑴ 告知の口 `alert.rs` に「OK だけの警告」の口を 1 つ足す（`ask_yes_no` と同じ形・`MessageBoxW` の `MB_OK | MB_ICONWARNING`・`AREKA_NO_ALERT` で抑える）。起動を止める告知（`raise`）は `error!` と赤い印なので使わない。⑵ 出すのは締めの知らせ（`OnInstallCompleteEx`／`OnInstallComplete`）を送った後。ゴーストの完了の台詞をダイアログの後ろに待たせない。締めの知らせが「閉じた」で返っても、入った事実は変わらないので出す。⑶ 出すのはインストールの背景のスレッド（利用条件の画面と同じ）。UI スレッドとゴーストの会話は止まらない。このとき門（終了の待ち）は既に手放しているので、終了も待たせない。⑷ 手続きの口 `InstallPorts` に 1 つ足す（`warn_skipped`）。テストの偽の口がその呼び出しを数え、題名と本文を持つ。
+
+### 10.3 まとめ方の 3 つの見方
+
+- **一般化**: 「取り出し元が無い」の扱いは、ゴースト・シェルの両方と、無印・番号付きの全部が `build_plan` の同梱の 1 本の道を通るので、直す所は 1 か所。ダイアログもメニュー・台本・投げ込み・網から取ってくる・起動中のゴーストの上書きの全部が `procedure.rs` の `archive_steps` を通るので 1 か所。
+- **作るか借りるか**: ダイアログは OS の `MessageBoxW`（既存の `alert.rs` の口と同じ）。新しい部品・依存は 0。
+- **削ったもの**: ⑴ `ManifestWarning` の変種と記録の出口の分岐（案 A・C）は採らない。⑵ 「置かなかった物」一般の受け皿は作らない（今は同梱のバルーンだけ）。⑶ 3 人目以降の窓は作り直さず、`detect_scopes` で n ≥ 2 を足さないだけにする（`char_scope_of` は呼び手が無くなるので消す）。2 か所の `debug_assert!` は残す（外すのは `extra-character-windows`）。⑷ 実機の根を組む道具は作らない（今ある `nar-sample-path` と複写で足りる）。
+
+### 10.4 危うさ
+
+- `detect_scopes` の絞りは、scope 2 以上を数えていた 3 本のテスト（`config.rs` 570 行 `t_c3_char_n_prefix_adds_scope_n`・`config_limit_tests.rs` 85 行・`reseed_tests.rs` 195 行）の期待を変える。`extra-character-windows` がやり直すときは、この 3 本と本 spec の新しいテストを戻すことになる（設計の「後で確かめ直す条件」に書く）。
+- `examples/window-placement.rs` は `placement` を `#[path]` で読み込み、自前の `scope >= 2` の枝を持つ。絞った後はその枝に来ないが、ビルドは通る（枝は消さない）。
+- 警告のダイアログが開いている間、同じ依頼の次の書庫は待つ（利用条件の画面と同じ）。
+- `areka/src/main.rs` は 1,000 行ちょうど。本 spec は触らない。
