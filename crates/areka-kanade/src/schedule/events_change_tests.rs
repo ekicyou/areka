@@ -37,8 +37,9 @@ fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
     // 翻訳の `OnTranslate` を足して 46 語（areka-P0-translate-pipeline 要件 3.4）、
     // ドラッグの 2 語を足して 48 語（areka-P0-mouse-drag-events 要件 7.1）、
     // バルーンの寿命の 3 語を足して 51 語（areka-P0-balloon-lifecycle-events 要件 3.5・6.4）、
-    // アンカーの 2 語を足して 53 語（areka-P0-anchor-tag-canon 要件 4.1・4.2）。
-    assert_eq!(ALLOWED_EVENT_IDS.len(), 53);
+    // アンカーの 2 語を足して 53 語（areka-P0-anchor-tag-canon 要件 4.1・4.2）、
+    // シェル位置初期化の `OnResetWindowPos` を足して 54 語（areka-P0-move-canon 要件 8.3）。
+    assert_eq!(ALLOWED_EVENT_IDS.len(), 54);
     for id in [
         "OnGhostChanging",
         "OnGhostChanged",
@@ -76,6 +77,7 @@ fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
         "OnShellChanging",
         "OnShellChanged",
         "OnBalloonChange",
+        "OnResetWindowPos",
     ] {
         assert_eq!(allowed_static(id), Some(id));
         assert!(is_allowed_event_id(id));

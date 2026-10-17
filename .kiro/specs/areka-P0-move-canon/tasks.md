@@ -61,7 +61,7 @@
   - _Requirements: 2.5, 2.12, 8.7_
 
 - [ ] 4. 右クリックのメニューに「シェル位置初期化」を足す
-- [ ] 4.1 (P) kanade の許可表に `OnResetWindowPos` と `switchmovetodefaultpositionbutton.caption` を足す
+- [x] 4.1 (P) kanade の許可表に `OnResetWindowPos` と `switchmovetodefaultpositionbutton.caption` を足す
   - イベントの許可表に `OnResetWindowPos`（ukadoc の URL のコメント付き）、リソースの許可表に `switchmovetodefaultpositionbutton.caption` を足し、件数の檻（53 → 54・12 → 13）と履歴の注記・doc の「メニュー 9 名」→ 10 名を合わせる
   - areka-kanade の許可表の檻が新しい件数で緑になる
   - _Boundary: areka-kanade schedule_
@@ -108,3 +108,4 @@
 ## Implementation Notes
 - 2.2: 並べ直しの材料 `DefaultPlacementBasis` は、起動では吹き出しのずらしの拡大と windowposition を当てた後の設定、シェルの切り替えでは descript から組んだままの設定を持つ。並べ直しが読むのは `char_pos` だけなので結果は同じだが、後で吹き出しの位置もこの材料から求めるなら、両者をそろえること。
 - 3.1: Bottom の吸い付きで `MonitorSnapshot` が無いとき、`project_anchor` は台本の Y をそのまま返し debug だけを出す（ドラッグと同じ縮退・本番は起動で必ず置く）。軸が `Fix` でも作業領域・原点の置き換えの記録は `move_frame_substituted` に出る（要件 4.1/4.2 の「base と書かれた場合」に沿う）。
+- 4.1: `crates/areka/src/menu/captions_tests.rs` の注記「引く 9 名」は 4.3 で枠を足すときに 10 名へ合わせる。

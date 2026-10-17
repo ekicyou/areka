@@ -22,14 +22,15 @@
 use crate::msg::{EventId, ShioriCall};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 
-/// SHIORI Resource 照会で送出し得るリソース ID の確定ホワイトリスト（利用者名＋メニュー 9 名＋更新 2 名・Req4.1）。
+/// SHIORI Resource 照会で送出し得るリソース ID の確定ホワイトリスト（利用者名＋メニュー 10 名＋更新 2 名・Req4.1）。
 ///
 /// イベント発火の許可集合（[`crate::schedule::events::ALLOWED_EVENT_IDS`]）とは**別族**である。
 /// egress ガードは「イベント許可 ∨ リソース許可」で判定するため、本集合の要素は許可外拒否を
 /// 免れて送出される（ただし送出経路・往復規律はイベントと共通）。
 ///
 /// 内訳は利用者名（boot prefetch）・メニュー枠 7 種の項目名（要件 3.1）・本体側／相方側の
-/// メニュー表示可否（要件 3.6）である。`popupmenu.type` 系は**問い合わせない**裁定なので載せない
+/// メニュー表示可否（要件 3.6）・更新先と番号の起点・「シェル位置初期化」の項目名
+/// （areka-P0-move-canon 要件 8.2）である。`popupmenu.type` 系は**問い合わせない**裁定なので載せない
 /// （要件 3.8）。n≧2 の `char*.popupmenu.visible` も α に窓が無いので載せない（要件 3.6）。
 ///
 /// SEAM(α 後・159 項目汎用化): SHIORI Resource は正典で 159 項目ある。語彙拡張は本集合への
@@ -61,6 +62,9 @@ pub const ALLOWED_RESOURCE_IDS: &[&str] = &[
     "homeurl",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#useorigin1:1
     "useorigin1",
+    // 右クリックのメニューの「シェル位置初期化」の項目名（areka-P0-move-canon 要件 8.2）。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#switchmovetodefaultpositionbutton.caption:1
+    "switchmovetodefaultpositionbutton.caption",
 ];
 
 /// `id` がリソース送出許可集合（[`ALLOWED_RESOURCE_IDS`]）に属するかを判定する（Req4.1）。
@@ -165,10 +169,10 @@ mod tests {
         );
     }
 
-    /// リソース許可集合は厳密にこの 12 名（語彙の凍結檻・Req4.1／要件 3.2・
-    /// areka-P0-network-update 要件 9.13）。
+    /// リソース許可集合は厳密にこの 13 名（語彙の凍結檻・Req4.1／要件 3.2・
+    /// areka-P0-network-update 要件 9.13・areka-P0-move-canon 要件 8.2 で 12→13）。
     #[test]
-    fn allowed_resource_ids_are_exactly_the_twelve_names() {
+    fn allowed_resource_ids_are_exactly_the_thirteen_names() {
         assert_eq!(
             ALLOWED_RESOURCE_IDS,
             &[
@@ -184,8 +188,9 @@ mod tests {
                 "kero.popupmenu.visible",
                 "homeurl",
                 "useorigin1",
+                "switchmovetodefaultpositionbutton.caption",
             ],
-            "リソース許可集合は利用者名＋枠 7 種の項目名＋本体側／相方側の表示可否＋更新先と番号の起点の 12 名"
+            "リソース許可集合は利用者名＋枠 8 種の項目名＋本体側／相方側の表示可否＋更新先と番号の起点の 13 名"
         );
         for id in ALLOWED_RESOURCE_IDS {
             assert!(
