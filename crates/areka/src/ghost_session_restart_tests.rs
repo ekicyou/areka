@@ -397,6 +397,7 @@ fn boots_twice_in_one_process_without_double_registration() {
                 Frame::Update,
                 Frame::Install,
                 Frame::RootAdd,
+                Frame::RootFront,
                 Frame::RootRemove,
                 Frame::Readme,
                 Frame::Close
@@ -410,6 +411,7 @@ fn boots_twice_in_one_process_without_double_registration() {
                 Frame::Update,
                 Frame::Install,
                 Frame::RootAdd,
+                Frame::RootFront,
                 Frame::RootRemove,
                 Frame::Readme,
                 Frame::Close

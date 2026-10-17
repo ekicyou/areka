@@ -36,7 +36,7 @@ fn s(p: &Path) -> String {
 fn default_is_exe_dir_alone() {
     let tmp = TempPath::under_target("roots-default");
     let exe = real_dir(&tmp, "exe");
-    let r = resolve_roots_from(None, None, Some(exe.clone())).unwrap();
+    let r = resolve_roots_from(None, None, Some(exe.clone()), None).unwrap();
     assert_eq!(dirs(&r), vec![exe.clone()]);
     assert_eq!(r.origin, RootsOrigin::Default);
     assert_eq!(
@@ -53,7 +53,7 @@ fn default_is_exe_dir_alone() {
 #[test]
 fn default_without_exe_location_fails() {
     assert_eq!(
-        resolve_roots_from(None, None, None),
+        resolve_roots_from(None, None, None, None),
         Err(RootError::ExeLocationUnavailable {
             tried: vec![],
             origin: RootsOrigin::Default,
@@ -70,7 +70,7 @@ fn memory_keeps_its_order() {
     let a = real_dir(&tmp, "a");
     let b = real_dir(&tmp, "b");
     let value = format!("{}|{EXE_TOKEN}|{}", s(&b), s(&a));
-    let r = resolve_roots_from(None, Some(value), Some(exe.clone())).unwrap();
+    let r = resolve_roots_from(None, Some(value), Some(exe.clone()), None).unwrap();
     assert_eq!(dirs(&r), vec![b, exe, a]);
     assert_eq!(r.origin, RootsOrigin::Memory);
     assert!(r.skipped.is_empty());
@@ -83,7 +83,7 @@ fn env_single_ignores_memory() {
     let exe = real_dir(&tmp, "exe");
     let a = real_dir(&tmp, "a");
     let b = real_dir(&tmp, "b");
-    let r = resolve_roots_from(env(&s(&a)), Some(s(&b)), Some(exe)).unwrap();
+    let r = resolve_roots_from(env(&s(&a)), Some(s(&b)), Some(exe), None).unwrap();
     assert_eq!(dirs(&r), vec![a]);
     assert_eq!(r.origin, RootsOrigin::EnvVar);
 }
@@ -98,6 +98,7 @@ fn env_multiple_keeps_order_and_ignores_memory() {
         env(&format!("{};{}", s(&b), s(&a))),
         Some(EXE_TOKEN.to_string()),
         Some(exe),
+        None,
     )
     .unwrap();
     assert_eq!(dirs(&r), vec![b, a]);
@@ -110,11 +111,11 @@ fn env_empty_items_are_skipped_and_noted() {
     let tmp = TempPath::under_target("roots-env-empty");
     let a = real_dir(&tmp, "a");
     let b = real_dir(&tmp, "b");
-    let r = resolve_roots_from(env(&format!("{};;{}", s(&a), s(&b))), None, None).unwrap();
+    let r = resolve_roots_from(env(&format!("{};;{}", s(&a), s(&b))), None, None, None).unwrap();
     assert_eq!(dirs(&r), vec![a.clone(), b]);
     assert_eq!(r.skipped, vec![RootSkip::Empty { index: 1 }]);
 
-    let r = resolve_roots_from(env(&format!("{};", s(&a))), None, None).unwrap();
+    let r = resolve_roots_from(env(&format!("{};", s(&a))), None, None, None).unwrap();
     assert_eq!(dirs(&r), vec![a]);
     assert_eq!(r.skipped, vec![RootSkip::Empty { index: 1 }]);
 }
@@ -123,7 +124,7 @@ fn env_empty_items_are_skipped_and_noted() {
 fn env_all_empty_fails() {
     for (value, count) in [("", 1), (";", 2), (";;", 3)] {
         assert_eq!(
-            resolve_roots_from(env(value), Some("x".into()), None),
+            resolve_roots_from(env(value), Some("x".into()), None, None),
             Err(RootError::EnvAllEmpty {
                 skipped: (0..count).map(|index| RootSkip::Empty { index }).collect(),
                 memory_fell_back: false,
@@ -141,6 +142,7 @@ fn duplicates_keep_the_upper_one() {
     let trailing = PathBuf::from(format!("{}\\", s(&a)));
     let r = resolve_roots_from(
         env(&format!("{};{};{}", s(&a), s(&lower), s(&trailing))),
+        None,
         None,
         None,
     )
@@ -166,7 +168,7 @@ fn relative_env_item_is_absolutized_against_cwd() {
     let tmp = TempPath::under_target("roots-relative");
     let a = real_dir(&tmp, "a");
     let rel = "areka-roots-relative-item-that-does-not-exist";
-    let r = resolve_roots_from(env(&format!("{};{rel}", s(&a))), None, None).unwrap();
+    let r = resolve_roots_from(env(&format!("{};{rel}", s(&a))), None, None, None).unwrap();
     let expected = std::path::absolute(rel).unwrap();
     assert!(expected.is_absolute());
     assert_eq!(dirs(&r), vec![a.clone(), expected.clone()]);
@@ -190,7 +192,7 @@ fn relative_env_item_is_absolutized_against_cwd() {
 fn memory_empty_string_falls_back_to_default() {
     let tmp = TempPath::under_target("roots-memory-empty");
     let exe = real_dir(&tmp, "exe");
-    let r = resolve_roots_from(None, Some(String::new()), Some(exe.clone())).unwrap();
+    let r = resolve_roots_from(None, Some(String::new()), Some(exe.clone()), None).unwrap();
     assert_eq!(dirs(&r), vec![exe]);
     assert_eq!(r.origin, RootsOrigin::Default);
     assert!(r.memory_fell_back);
@@ -203,7 +205,7 @@ fn memory_unreadable_items_are_skipped_and_noted() {
     let exe = real_dir(&tmp, "exe");
     let a = real_dir(&tmp, "a");
     let value = format!("|relative\\dir|C:\\bad*name|{}", s(&a));
-    let r = resolve_roots_from(None, Some(value), Some(exe)).unwrap();
+    let r = resolve_roots_from(None, Some(value), Some(exe), None).unwrap();
     assert_eq!(dirs(&r), vec![a]);
     assert_eq!(r.origin, RootsOrigin::Memory);
     assert!(!r.memory_fell_back);
@@ -230,7 +232,7 @@ fn memory_unreadable_items_are_skipped_and_noted() {
 fn memory_with_no_readable_item_falls_back_with_marker() {
     let tmp = TempPath::under_target("roots-memory-zero");
     let exe = real_dir(&tmp, "exe");
-    let r = resolve_roots_from(None, Some("rel|".into()), Some(exe.clone())).unwrap();
+    let r = resolve_roots_from(None, Some("rel|".into()), Some(exe.clone()), None).unwrap();
     assert_eq!(dirs(&r), vec![exe]);
     assert_eq!(r.origin, RootsOrigin::Default);
     assert!(r.memory_fell_back);
@@ -240,7 +242,7 @@ fn memory_with_no_readable_item_falls_back_with_marker() {
 #[test]
 fn memory_exe_token_without_exe_location_falls_back_and_fails() {
     assert_eq!(
-        resolve_roots_from(None, Some(format!("|{EXE_TOKEN}")), None),
+        resolve_roots_from(None, Some(format!("|{EXE_TOKEN}")), None, None),
         // 失敗しても控えと「既定へ倒した」は残る（記録の warn のため）。
         Err(RootError::ExeLocationUnavailable {
             tried: vec![],
@@ -276,9 +278,9 @@ fn exe_token_follows_the_moved_exe() {
     let after = real_dir(&tmp, "after");
     let b = real_dir(&tmp, "b");
     let value = format!("{EXE_TOKEN}|{}", s(&b));
-    let r = resolve_roots_from(None, Some(value.clone()), Some(before.clone())).unwrap();
+    let r = resolve_roots_from(None, Some(value.clone()), Some(before.clone()), None).unwrap();
     assert_eq!(dirs(&r), vec![before, b.clone()]);
-    let r = resolve_roots_from(None, Some(value), Some(after.clone())).unwrap();
+    let r = resolve_roots_from(None, Some(value), Some(after.clone()), None).unwrap();
     assert_eq!(dirs(&r), vec![after, b]);
 }
 
@@ -288,7 +290,12 @@ fn no_root_found_fails_with_all_tried() {
     let x = tmp.path().join("missing-x");
     let y = tmp.path().join("missing-y");
     assert_eq!(
-        resolve_roots_from(env(&format!("{};;{};{}", s(&x), s(&y), s(&x))), None, None),
+        resolve_roots_from(
+            env(&format!("{};;{};{}", s(&x), s(&y), s(&x))),
+            None,
+            None,
+            None
+        ),
         // 失敗しても空の項目と重複の控えは残る（記録の warn のため）。
         Err(RootError::NoneFound {
             tried: vec![x.clone(), y],
@@ -305,7 +312,7 @@ fn no_root_found_fails_with_all_tried() {
     );
     let exe = tmp.path().join("missing-exe");
     assert_eq!(
-        resolve_roots_from(None, None, Some(exe.clone())),
+        resolve_roots_from(None, None, Some(exe.clone()), None),
         Err(RootError::NoneFound {
             tried: vec![exe],
             origin: RootsOrigin::Default,
@@ -335,4 +342,106 @@ fn encode_and_decode_round_trip() {
         encode_memory(&BasewareRoots::single(b.clone()), None),
         s(&b)
     );
+}
+
+// ---- 書ける根の差し込み（areka-P0-user-data-root 要件 2.5・3.1・3.2・3.4・3.5・7.2・10.3） ----
+
+use areka_ghost::RootMark;
+use areka_user_data::{UserRoot, UserRootOrigin};
+
+fn user(dir: &Path) -> UserRoot {
+    UserRoot {
+        dir: dir.to_path_buf(),
+        origin: UserRootOrigin::Default,
+    }
+}
+
+fn marks(r: &ResolvedRoots) -> Vec<RootMark> {
+    r.roots.roots().iter().map(|x| x.mark()).collect()
+}
+
+const MARKED: RootMark = RootMark::UserRoot { from_env: false };
+
+#[test]
+fn default_is_user_root_then_exe_dir() {
+    let tmp = TempPath::under_target("roots-user-default");
+    let exe = real_dir(&tmp, "exe");
+    let ur = real_dir(&tmp, "user");
+    let r = resolve_roots_from(None, None, Some(exe.clone()), Some(&user(&ur))).unwrap();
+    assert_eq!(dirs(&r), vec![ur, exe]);
+    assert_eq!(marks(&r), vec![MARKED, RootMark::Plain]);
+    assert_eq!(r.origin, RootsOrigin::Default);
+    assert!(r.skipped.is_empty());
+}
+
+#[test]
+fn default_without_exe_location_keeps_user_root_alone() {
+    let tmp = TempPath::under_target("roots-user-no-exe");
+    let ur = real_dir(&tmp, "user");
+    let from_env = UserRoot {
+        dir: ur.clone(),
+        origin: UserRootOrigin::EnvVar,
+    };
+    let r = resolve_roots_from(None, None, None, Some(&from_env)).unwrap();
+    assert_eq!(dirs(&r), vec![ur]);
+    assert_eq!(marks(&r), vec![RootMark::UserRoot { from_env: true }]);
+    assert_eq!(r.origin, RootsOrigin::Default);
+}
+
+#[test]
+fn memory_without_user_root_gets_it_prepended() {
+    let tmp = TempPath::under_target("roots-user-memory-prepend");
+    let exe = real_dir(&tmp, "exe");
+    let a = real_dir(&tmp, "a");
+    let ur = real_dir(&tmp, "user");
+    let value = format!("{}|{EXE_TOKEN}", s(&a));
+    let r = resolve_roots_from(None, Some(value), Some(exe.clone()), Some(&user(&ur))).unwrap();
+    assert_eq!(dirs(&r), vec![ur, a, exe]);
+    assert_eq!(marks(&r), vec![MARKED, RootMark::Plain, RootMark::Plain]);
+    assert_eq!(r.origin, RootsOrigin::Memory);
+    assert!(r.skipped.is_empty());
+}
+
+#[test]
+fn memory_with_user_root_keeps_memory_order_and_never_doubles() {
+    let tmp = TempPath::under_target("roots-user-memory-order");
+    let exe = real_dir(&tmp, "exe");
+    let a = real_dir(&tmp, "a");
+    let ur = real_dir(&tmp, "user");
+    // 前の起動で先頭へ動かした順（`<exe>` が先・書ける根が下）を次の起動でも守る。
+    let value = format!("{EXE_TOKEN}|{}|{}", s(&a), s(&ur));
+    let r = resolve_roots_from(None, Some(value), Some(exe.clone()), Some(&user(&ur))).unwrap();
+    assert_eq!(dirs(&r), vec![exe.clone(), a, ur.clone()]);
+    assert_eq!(marks(&r), vec![RootMark::Plain, RootMark::Plain, MARKED]);
+    assert!(r.skipped.is_empty());
+    // 末尾の区切りが違っても同じ根＝足さずに印だけ付ける。
+    let value = format!(r"{}\|{EXE_TOKEN}", s(&ur));
+    let r = resolve_roots_from(None, Some(value), Some(exe), Some(&user(&ur))).unwrap();
+    assert_eq!(r.roots.roots().len(), 2);
+    assert_eq!(marks(&r), vec![MARKED, RootMark::Plain]);
+}
+
+#[test]
+fn areka_root_env_ignores_user_root() {
+    let tmp = TempPath::under_target("roots-user-env");
+    let a = real_dir(&tmp, "a");
+    let ur = real_dir(&tmp, "user");
+    let exe = real_dir(&tmp, "exe");
+    let r = resolve_roots_from(env(&s(&a)), None, Some(exe), Some(&user(&ur))).unwrap();
+    assert_eq!(dirs(&r), vec![a]);
+    assert_eq!(marks(&r), vec![RootMark::Plain]);
+    assert_eq!(r.origin, RootsOrigin::EnvVar);
+}
+
+#[test]
+fn no_user_root_leaves_every_item_plain() {
+    let tmp = TempPath::under_target("roots-user-none");
+    let exe = real_dir(&tmp, "exe");
+    let a = real_dir(&tmp, "a");
+    let r = resolve_roots_from(None, None, Some(exe.clone()), None).unwrap();
+    assert_eq!(marks(&r), vec![RootMark::Plain]);
+    let value = format!("{}|{EXE_TOKEN}", s(&a));
+    let r = resolve_roots_from(None, Some(value), Some(exe.clone()), None).unwrap();
+    assert_eq!(dirs(&r), vec![a, exe]);
+    assert_eq!(marks(&r), vec![RootMark::Plain, RootMark::Plain]);
 }

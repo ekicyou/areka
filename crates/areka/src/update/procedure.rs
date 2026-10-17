@@ -32,6 +32,9 @@ pub(crate) trait UpdatePorts {
     fn request_reload(&self, ghost_dir: &Path, tail: Vec<(&'static str, Vec<String>)>);
     /// 標準の手続きが始まったと窓口へ知らせる（`OnUpdateProcessExec` の段を抜けた直後・要求 1 件につき高々 1 回）。
     fn standard_started(&self);
+    /// 照会が通った後・対象を扱う前に、対象のフォルダを書ける所へ替える（本番はバルーンの写し・
+    /// spec: areka-P0-user-data-root 要件 4.4。照会で依頼をやめたときは呼ばない）。既定は何もしない。
+    fn prepare_targets(&self, _targets: &mut [TargetSpec]) {}
 }
 
 /// イベントへの応え。
@@ -131,10 +134,12 @@ pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEn
         "[update] リソースを照会しました"
     );
     let numbering = Numbering::from_useorigin1(resources.useorigin1.as_deref());
+    let mut targets = order.targets.clone();
+    ports.prepare_targets(&mut targets);
 
     // 後送りの列（決めたこと 21・要件 2.16）: ゴーストの成功の締めを取っておき、最後に総括を足す。
     let mut tail: Vec<(&'static str, Vec<String>)> = Vec::new();
-    for spec in &order.targets {
+    for spec in &targets {
         let target_end = run_target(spec, order.reason, &resources, numbering, ports, &mut tail);
         let abandoned = target_end == TargetEnd::Abandoned;
         end.ends.push(target_end);
@@ -150,7 +155,7 @@ pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEn
     }
 
     // 総括を列の最後へ（飛ばした対象は載せない・全部飛ばせば列は空で送らない。要件 3・1.10）。
-    let pairs: Vec<(&TargetSpec, &TargetEnd)> = order.targets.iter().zip(&end.ends).collect();
+    let pairs: Vec<(&TargetSpec, &TargetEnd)> = targets.iter().zip(&end.ends).collect();
     let summary = refs::summary_refs(order.summary, &pairs);
     if summary.is_empty() {
         tracing::info!(

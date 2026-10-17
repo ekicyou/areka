@@ -256,6 +256,7 @@ fn plant_ghost_switch(world: &mut World) {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
+        copy: crate::emo2_boot::switch_copy::SwitchCopy::None,
     });
 }
 

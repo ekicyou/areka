@@ -283,6 +283,7 @@ fn a_switch_reservation_refuses_with_no_event_and_one_warning() {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
+        copy: crate::emo2_boot::switch_copy::SwitchCopy::None,
     });
     let (verdict, events) = capture(|| rig.submit(UpdateReason::Manual));
     assert_eq!(verdict, SubmitVerdict::NotSteady);

@@ -238,6 +238,7 @@ fn next_boot(rig: &mut SwitchRig) -> NextBoot {
         &["areka.exe".to_owned()],
         &app,
         |n| panic!("無作為の段へ届いてはならない（候補 {n}）"),
+        |_, dir| dir.to_path_buf(),
     )
     .expect("決まる");
     rig.world.remove_resource::<FirstExit>();
@@ -737,6 +738,7 @@ fn default_ghost_fault_keeps_its_own_name() {
         &["areka.exe".to_owned()],
         &app,
         |n| panic!("無作為の段へ届いてはならない（候補 {n}）"),
+        |_, dir| dir.to_path_buf(),
     )
     .expect("決まる");
 
@@ -801,6 +803,7 @@ fn argv_session_neither_reads_writes_nor_clears_mark() {
         &["areka.exe".to_owned(), argv_dir.display().to_string()],
         &app,
         |n| panic!("無作為の段へ届いてはならない（候補 {n}）"),
+        |_, dir| dir.to_path_buf(),
     )
     .expect("argv で決まる")
     .3;

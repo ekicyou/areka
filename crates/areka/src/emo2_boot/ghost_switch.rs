@@ -68,6 +68,7 @@ pub(crate) fn register_change_drain(world: &mut World) {
 ///
 /// 受信端が無ければ無操作（LogSink の起動・結線の前）。受け口の借用を切ってから入口を呼ぶ。
 pub(crate) fn drain_change_requests(world: &mut World) {
+    super::switch_copy::poll(world);
     let Some(rx) = world.get_non_send::<ChangeRx>() else {
         tracing::trace!(
             event = "change_drain_no_wiring",
@@ -143,6 +144,8 @@ pub(crate) enum SwitchStage {
     SendOff,
     /// 起こしたゴーストの定常到達を待っている（起こしたのが切替先か既定か）。
     Welcoming { attempt: WelcomeAttempt },
+    /// 前のゴーストは止まったが写しが終わっていない（[`super::switch_copy::poll`] が続きを走らせる）。
+    CopyWait,
 }
 
 /// 迎え入れているゴースト（既定へ戻す試みは 1 回だけ＝`Default` からは戻らない・要件 6.5）。
@@ -160,6 +163,8 @@ pub(crate) struct SwitchInFlight {
     pub stage: SwitchStage,
     /// 切替先を起こすときの起動の知らせ（[`SwitchRequest::boot_event`] の写し）。
     pub boot_event: Option<(&'static str, Vec<String>)>,
+    /// 写しの見込み（受理の直後に [`super::switch_copy::start`] が決める）。
+    pub copy: super::switch_copy::SwitchCopy,
 }
 
 /// 純粋: 目録の項目と指し方から切替先を決める（要件 1.5・1.8・11.8）。
@@ -448,11 +453,14 @@ pub(crate) fn request_ghost_switch_with(
         boot_event = ?req.boot_event.as_ref().map(|(id, _)| *id),
         "切替の要求を kanade へ送った"
     );
+    let exe_dir = crate::roots::user_root::exe_dir();
+    let copy = super::switch_copy::start(&ctx.roots, exe_dir.as_deref(), &target.dir);
     world.insert_non_send(SwitchInFlight {
         target,
         prev,
         stage: SwitchStage::SendOff,
         boot_event: req.boot_event,
+        copy,
     });
     SwitchVerdict::Accepted
 }
@@ -485,8 +493,8 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
     };
     let cause = stopped.cause;
     match (stage, stopped.handoff) {
-        (SwitchStage::SendOff, Some(handoff)) => switch_to(world, handoff),
-        (SwitchStage::SendOff, None) => {
+        (SwitchStage::SendOff | SwitchStage::CopyWait, Some(handoff)) => switch_to(world, handoff),
+        (SwitchStage::SendOff | SwitchStage::CopyWait, None) => {
             tracing::warn!(
                 event = "ghost_switch_not_accepted",
                 cause = ?cause,
@@ -663,6 +671,10 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
         );
         return;
     };
+    // 写し中なら段を「写し待ち」にして戻る（前のゴーストはそのまま・`switch_copy::poll` が続きを走らせる）。
+    let Some(dir) = super::switch_copy::boot_dir(world, &handoff) else {
+        return;
+    };
     take_down(world);
     // 降ろし終えた直後（前のゴーストの記憶の書き手は処理し切って join 済み＝動いている実行系は 0）に
     // 最後のゴースト＝既定・印＝切替先を 1 回で書く（要件 12.6）。UI スレッドが App スコープへ直接
@@ -696,7 +708,7 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     };
     let ghost = GhostDecision {
         route: GhostRoute::Switched,
-        dir: target.dir.clone(),
+        dir,
         folder: Some(target.folder.clone()),
     };
     if boot_into(world, closed, ghost, origin) {
@@ -717,7 +729,14 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
 /// [`boot_into`]（由来＝前回落ちた・経路＝既定）。成功なら段を「迎え入れ（既定）」に。
 pub(crate) fn switch_to_default(world: &mut World, fallen_name: &str) {
     let default_dir = world.get_resource::<BootContext>().and_then(|ctx| {
-        areka_ghost::catalog_roots::find_ghost(&ctx.roots, DEFAULT_GHOST_FOLDER).map(|e| e.dir)
+        // 非常口は起こす前に同期で写す（要件 4.3・写せなければ元のフォルダ・要件 4.7）。
+        areka_ghost::catalog_roots::find_ghost(&ctx.roots, DEFAULT_GHOST_FOLDER).map(|e| {
+            crate::roots::user_root::writable_copy(
+                &ctx.roots,
+                areka_ghost::StoreKind::Ghost,
+                &e.dir,
+            )
+        })
     });
     let Some(dir) = default_dir else {
         fatal(
@@ -790,6 +809,7 @@ fn boot_into(
         tracing::error!(
             event = "ghost_switch_boot_failed",
             ghost = %name,
+            dir = %ghost.dir.display(),
             stage,
             detail = %detail,
             "ゴーストを起こせなかった（窓は投函していない）"

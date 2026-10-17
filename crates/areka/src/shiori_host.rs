@@ -181,8 +181,8 @@ impl ShioriHostSink {
 /// sink を構築する（sink 組立各所〔shiori_session 系〕共通の App-root-only spawn・R7.3・design.md
 /// §bin（ShioriHostSink 統合）「spawn_sylphya〔App root のみ・ghost/shell root なし〕」）。
 ///
-/// - App root は bin の [`crate::default_app_profile_dir`]（env `AREKA_PROFILE_DIR` 優先・既定は
-///   実行ファイル隣接 `profile/areka/`・R8.2）を供給する。ghost/shell/balloon root は付けない
+/// - App root は呼び手が渡す（本番の demo は bin の [`crate::default_app_profile_dir`]・テストは
+///   `None`＝本物の環境で置き場を決めない・user-data-root 要件 10.6）。ghost/shell/balloon root は付けない
 ///   （bin の serving surface は App スコープのみを据える・ghost/shell スコープは ghost boot 系列が
 ///   `<shiori.dir>`／`<shell.dir>` から導く・design.md §boot 系列）。
 /// - 本番 IO は [`areka_sylphya::persist::FsPersistIo`]、運行 sink は未配線（M1・`None`）。
@@ -192,10 +192,13 @@ impl ShioriHostSink {
 /// sink が生きている間はアクターも生存する（publisher の投函は失敗しない）。呼び出し側は join して
 /// panic を観測したい場合のみ handle を保持すればよく、本経路（in-proc serving surface）は join を
 /// 要さないため handle を drop（detach）してよい。
-pub(crate) fn spawn_app_sylphya_sink(asker: AskerId) -> (ShioriHostSink, areka_actor::ActorHandle) {
+pub(crate) fn spawn_app_sylphya_sink(
+    asker: AskerId,
+    app: Option<std::path::PathBuf>,
+) -> (ShioriHostSink, areka_actor::ActorHandle) {
     let parts = areka_sylphya::spawn_sylphya(areka_sylphya::SylphyaInit {
         roots: areka_sylphya::ScopeRoots {
-            app: Some(crate::default_app_profile_dir()),
+            app,
             ghost: None,
             shell: None,
             balloon: None,

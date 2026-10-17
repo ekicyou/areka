@@ -134,7 +134,8 @@ fn origin_given_to_source_reaches_wiring_inputs() {
     let (kanade_stop, _rx) = mpsc::channel::<KanadeNotice>();
     let helper_exe = PathBuf::from("ghost_session_strict_tests/使わない/helper.exe");
     let source = GhostBootInputsSource(Box::new(move |cfg, origin| {
-        GhostBootInputs::production(cfg, helper_exe.clone(), kanade_stop.clone(), origin)
+        // 置き場は `None`（本物の環境で置き場を決めない・user-data-root 要件 10.6）。
+        GhostBootInputs::production(cfg, helper_exe.clone(), kanade_stop.clone(), origin, None)
     }));
     let cfg = ConfigInputs {
         ghost_root: PathBuf::from("ghost_session_strict_tests/ghost/B"),

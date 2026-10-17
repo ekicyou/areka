@@ -424,13 +424,15 @@ fn finish_after_run(
 
 /// 起動の文脈と起動入力の作り口（本番版）を World へ据える（系の登録の直後に 1 回）。
 /// 作り口は本番の入力の組み立て（[`ghost_session::GhostBootInputs::production`]）を文脈の helper の
-/// パスと停止通知の送出端の写しで閉じたもの（切替が相手のゴーストを起こすときにも同じ入力になる）。
+/// パスと停止通知の送出端の写しと文脈の記憶の置き場で閉じたもの（切替が相手のゴーストを起こすときにも同じ入力になる）。
 fn install_boot_context(
     world: &mut World,
     ctx: boot_config::BootContext,
     kanade_stop: std::sync::mpsc::Sender<areka_kanade::KanadeNotice>,
 ) {
     let helper_exe = ctx.helper_exe.clone();
+    // 記憶の置き場は文脈のもの（本番は `default_app_profile_dir()` と同じ値・要件 10.6）。
+    let app_profile_dir = ctx.app_profile_dir.clone();
     world.insert_resource(ctx);
     world.insert_non_send(ghost_session::GhostBootInputsSource(Box::new(
         move |cfg, origin| {
@@ -439,6 +441,7 @@ fn install_boot_context(
                 helper_exe.clone(),
                 kanade_stop.clone(),
                 origin,
+                Some(app_profile_dir.clone()),
             )
         },
     )));

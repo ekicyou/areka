@@ -71,12 +71,12 @@ pub(crate) fn build(snapshot: Vec<(Frame, MenuItem)>, captions: &CaptionMap) -> 
     plan
 }
 
-/// 区切り線のための群。{①②③}{④⑤⑥⑦}{⑧}{⑨} の隣り合う非空の群の間に 1 本入れる
+/// 区切り線のための群。{①②③}{④⑤⑥⑦⑧}{⑨}{⑩} の隣り合う非空の群の間に 1 本入れる
 /// （要件 2.6 の設計裁定）。空の群は間にあっても区切りを増やさない。
 fn group_of(frame: Frame) -> u8 {
     match frame {
         Frame::Ghost | Frame::Shell | Frame::Balloon => 0,
-        Frame::Update | Frame::Install | Frame::RootAdd | Frame::RootRemove => 1,
+        Frame::Update | Frame::Install | Frame::RootAdd | Frame::RootFront | Frame::RootRemove => 1,
         Frame::Readme => 2,
         Frame::Close => 3,
     }

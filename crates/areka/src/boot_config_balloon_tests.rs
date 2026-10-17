@@ -160,6 +160,7 @@ fn boot(tmp: &TempPath, rest: &[&Path]) -> (BalloonRoute, PathBuf, Vec<CapturedE
             &args,
             &app_dir,
             no_pick,
+            |_, dir| dir.to_path_buf(),
         )
     });
     let (cfg, _, balloon, _, _) = got.expect("決まる");

@@ -17,23 +17,28 @@ use std::sync::Arc;
 use std::sync::mpsc::Sender;
 
 use areka_actor::{ActorHandle, reply_channel, run_inbox, spawn_actor};
+use areka_ghost::{BasewareRoots, StoreKind};
 use areka_kanade::online::{OnlineCounter, OnlineGuard};
 use areka_kanade::resources::ResourceOutcome;
 use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod};
 use areka_update::{Fetch, FetchError, Progress, UpdateRequest, WinHttpFetch};
 
-use super::UpdateOrder;
 use super::procedure::{EngineRun, GhostResources, Raised, UpdatePorts, run_order};
+use super::{TargetKind, TargetSpec, UpdateOrder};
 use crate::exit_wait::WorkGate;
 
 /// 照会する SHIORI リソース（1 回の照会で 2 つ）。
 const HOMEURL: &str = "homeurl";
 const USEORIGIN1: &str = "useorigin1";
 
-/// 窓口から背景スレッドへ渡す仕事（依頼と、依頼を受けた時点の kanade の送出端の写し）。
+/// 窓口から背景スレッドへ渡す仕事（依頼と、依頼を受けた時点の kanade の送出端・並びの写し）。
 pub(crate) struct UpdateJob {
     pub order: UpdateOrder,
     pub kanade: Sender<KanadeMsg>,
+    /// 並び（バルーンの対象を写す判断に使う・spec: areka-P0-user-data-root 要件 4.4）。
+    pub roots: BasewareRoots,
+    /// 実行ファイルのフォルダ（本番は `roots::user_root::exe_dir()`・テストは差し替える）。
+    pub exe_dir: Option<PathBuf>,
 }
 
 /// 背景スレッドから窓口への頼み（返事は待たない）。
@@ -77,6 +82,8 @@ pub(crate) fn spawn_worker(
                 new_fetch: new_fetch.clone(),
                 online,
                 online_guard: Cell::new(None),
+                roots: job.roots,
+                exe_dir: job.exe_dir,
             };
             let end = run_order(&job.order, &ports);
             // 口を落として通信中の数を戻してから「終わった」を頼む（窓口が `Idle` へ移る時点で戻っている）。
@@ -98,6 +105,10 @@ pub(crate) struct KanadePorts {
     online: &'static OnlineCounter,
     /// 標準の手続きの間の守り手（[`UpdatePorts::standard_started`] で立て、口を落とすと戻る）。
     online_guard: Cell<Option<OnlineGuard>>,
+    /// 並び（バルーンの対象を写す判断に使う・spec: areka-P0-user-data-root 要件 4.4）。
+    roots: BasewareRoots,
+    /// 実行ファイルのフォルダ（本番は `roots::user_root::exe_dir()`・テストは差し替える）。
+    exe_dir: Option<PathBuf>,
 }
 
 impl UpdatePorts for KanadePorts {
@@ -238,6 +249,23 @@ impl UpdatePorts for KanadePorts {
                 tail,
             },
         );
+    }
+
+    /// バルーンの対象を写す口へ通して答えのフォルダへ替える（spec: areka-P0-user-data-root 要件 4.4・10.4）。
+    /// ゴースト・シェルは起こしたフォルダ（写し）なので通さない。バルーンの更新先は descript の homeurl
+    /// だけなので、それの無いもの（表示だけ・`run_target` が飛ばす）も写さない。
+    fn prepare_targets(&self, targets: &mut [TargetSpec]) {
+        for spec in targets
+            .iter_mut()
+            .filter(|spec| spec.kind == TargetKind::Balloon && spec.descript_homeurl.is_some())
+        {
+            spec.dir = crate::roots::user_root::copy_for_write(
+                &self.roots,
+                self.exe_dir.as_deref(),
+                StoreKind::Balloon,
+                &spec.dir,
+            );
+        }
     }
 
     fn standard_started(&self) {

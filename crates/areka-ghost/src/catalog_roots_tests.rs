@@ -269,3 +269,33 @@ fn install_root_branches() {
     let none = BasewareRoots::new(vec![BasewareRoot::new(gone)]);
     assert_eq!(install_root(&none, StoreKind::Ghost, "new"), None);
 }
+
+/// 今の口 `new`・`single` は印の無い項目（`Plain`）を作る。印の付いた項目が無い並びは `user_root` が無し。
+#[test]
+fn existing_constructors_make_plain_items() {
+    use crate::catalog::RootMark;
+    assert_eq!(
+        BasewareRoot::new(PathBuf::from(r"C:\a")).mark(),
+        RootMark::Plain
+    );
+    let single = BasewareRoots::single(PathBuf::from(r"C:\a"));
+    assert_eq!(single.roots()[0].mark(), RootMark::Plain);
+    assert_eq!(single.user_root(), None);
+}
+
+/// 印の付いた項目（書ける根）は並びのどこにあっても `user_root` で引ける（要件 2.5・10.3）。
+#[test]
+fn marked_item_is_found_in_the_list() {
+    use crate::catalog::RootMark;
+    let marked = BasewareRoot::user_root(PathBuf::from(r"C:\user"), true);
+    assert_eq!(marked.mark(), RootMark::UserRoot { from_env: true });
+    assert_eq!(marked.dir(), Path::new(r"C:\user"));
+    let roots = BasewareRoots::new(vec![
+        BasewareRoot::new(PathBuf::from(r"C:\a")),
+        marked.clone(),
+        BasewareRoot::new(PathBuf::from(r"C:\b")),
+    ]);
+    assert_eq!(roots.user_root(), Some(&marked));
+    // 同じ場所でも印の有無で別の項目（並びを組み直す呼び手が印を落とさないための目印）。
+    assert_ne!(marked, BasewareRoot::new(PathBuf::from(r"C:\user")));
+}

@@ -358,6 +358,7 @@ fn a_reload_that_cannot_run_sends_or_drops_the_tail_by_reason() {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
+        copy: crate::emo2_boot::switch_copy::SwitchCopy::None,
     });
     assert_not_reloaded(&mut rig, a_dir.clone(), skipped("switching"), Fate::Sent);
     rig.world.remove_non_send::<SwitchInFlight>();

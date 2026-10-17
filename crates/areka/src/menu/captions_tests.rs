@@ -78,10 +78,10 @@ fn visibility_of(outcome: ResourceOutcome) -> (Visibility, Vec<String>) {
     (interpreted.visibility, lines)
 }
 
-/// 対応表は枠の数と同じ長さで、[`Frame::ORDER`] の順に要件 3.1 の組と、置き場の 2 枠
+/// 対応表は枠の数と同じ長さで、[`Frame::ORDER`] の順に要件 3.1 の組と、置き場の 3 枠
 /// （SHIORI のリソース名を持たない・areka-P0-baseware-root-list 要件 6.1・7.1）を並べる。
 #[test]
-fn frame_captions_table_is_the_nine_rows() {
+fn frame_captions_table_is_the_ten_rows() {
     assert_eq!(
         FRAME_CAPTIONS.len(),
         Frame::ORDER.len(),
@@ -108,6 +108,7 @@ fn frame_captions_table_is_the_nine_rows() {
                 "インストール…"
             ),
             (None, Frame::RootAdd, "置き場を追加…"),
+            (None, Frame::RootFront, "置き場を先頭へ"),
             (None, Frame::RootRemove, "置き場を外す"),
             (Some("readmebutton.caption"), Frame::Readme, "説明書"),
             (Some("closebutton.caption"), Frame::Close, "終了"),
@@ -119,7 +120,7 @@ fn frame_captions_table_is_the_nine_rows() {
     }
 }
 
-/// 枠からリソース名と既定名を引く。置き場の 2 枠はリソース名を持たない。
+/// 枠からリソース名と既定名を引く。置き場の 3 枠はリソース名を持たない。
 #[test]
 fn resource_for_and_default_label_read_the_table() {
     assert_eq!(resource_for(Frame::Readme), Some("readmebutton.caption"));
@@ -130,6 +131,8 @@ fn resource_for_and_default_label_read_the_table() {
     assert_eq!(default_label(Frame::Update), "ネットワーク更新");
     assert_eq!(resource_for(Frame::RootAdd), None);
     assert_eq!(default_label(Frame::RootAdd), "置き場を追加…");
+    assert_eq!(resource_for(Frame::RootFront), None);
+    assert_eq!(default_label(Frame::RootFront), "置き場を先頭へ");
     assert_eq!(resource_for(Frame::RootRemove), None);
     assert_eq!(default_label(Frame::RootRemove), "置き場を外す");
 }

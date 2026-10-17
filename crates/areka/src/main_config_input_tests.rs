@@ -48,6 +48,7 @@ mod boot {
             &args(&[&given]),
             root.path(),
             no_pick,
+            |_, dir| dir.to_path_buf(),
         );
         assert_eq!(
             got.map(|_| ()),
@@ -83,6 +84,7 @@ mod boot {
                 &args(&[&ghost, &balloon]),
                 root.path(),
                 no_pick,
+                |_, dir| dir.to_path_buf(),
             )
         });
         let (cfg, g, b, _halted, _) = got.expect("argv で決まる");
@@ -104,6 +106,7 @@ mod boot {
             &args(&[]),
             root.path(),
             no_pick,
+            |_, dir| dir.to_path_buf(),
         );
         assert_eq!(
             got.map(|_| ()),
@@ -128,6 +131,7 @@ mod boot {
                 &args(&[]),
                 root.path(),
                 no_pick,
+                |_, dir| dir.to_path_buf(),
             )
         });
         assert!(has(&events, "root_listed"), "{events:?}");
@@ -141,6 +145,7 @@ mod boot {
                 &args(&[&given]),
                 root.path(),
                 no_pick,
+                |_, dir| dir.to_path_buf(),
             )
         });
         assert!(has(&events, "root_listed"), "{events:?}");
@@ -268,6 +273,7 @@ mod switch_balloon {
             &args,
             tmp.path(),
             no_pick,
+            |_, dir| dir.to_path_buf(),
         )
         .expect("argv で決まる");
         assert_eq!((b.route, b.dir), (BalloonRoute::Argv, argv_balloon));
@@ -289,6 +295,7 @@ mod switch_balloon {
             &args,
             tmp.path(),
             no_pick,
+            |_, dir| dir.to_path_buf(),
         )
         .expect("決まる");
         assert_eq!(g.dir, ghost);
@@ -338,6 +345,7 @@ mod switch_balloon {
                 &args,
                 &app_dir,
                 no_pick,
+                |_, dir| dir.to_path_buf(),
             )
             .expect("決まる");
             (g.route, g.folder, mark)
@@ -391,6 +399,7 @@ mod switch_balloon {
                 &args,
                 &app_dir,
                 no_pick,
+                |_, dir| dir.to_path_buf(),
             )
             .expect("argv で決まる")
             .3
@@ -417,6 +426,7 @@ mod switch_balloon {
             &["areka.exe".to_owned()],
             tmp.path(),
             no_pick,
+            |_, dir| dir.to_path_buf(),
         )
         .expect("決まる");
         let mut world = bevy_ecs::world::World::new();

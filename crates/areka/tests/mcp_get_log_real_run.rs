@@ -241,6 +241,7 @@ fn get_log_status_over_real_socket_keeps_lines_hidden_from_stdout_and_bodies_int
         .env("AREKA_APP_SMOKE_EXIT_MS", "20000")
         .env("AREKA_PROFILE_DIR", scratch.0.join("profile"))
         .env_remove("AREKA_ROOT")
+        .env_remove("AREKA_USER_ROOT")
         .stdout(file(&out_path))
         .stderr(file(&err_path))
         .spawn()

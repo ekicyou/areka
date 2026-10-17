@@ -50,7 +50,10 @@ const NOTIFY_CONTENT: &str = "NOTIFY SHIORI/3.0 OnFirstBoot";
 
 /// factory を取得し、即時→遅延+complete→raise→notify→drop teardown の各経路を駆動して
 /// `tracing::info!` で観測可能にする（design.md §ConsumerFollowup）。
-pub fn run_demo() -> Result<(), DemoError> {
+///
+/// `app_profile_dir` は sylphya の App の置き場（本番は `default_app_profile_dir()`・テストは `None`＝
+/// 本物の環境で置き場を決めない・user-data-root 要件 10.6）。
+pub fn run_demo(app_profile_dir: Option<std::path::PathBuf>) -> Result<(), DemoError> {
     // 1. 生成入口: `shiori_factory` で refcount 1 の IShioriFactory を取得・所有する。
     let mut out: *mut core::ffi::c_void = ptr::null_mut();
     // Safety: `out` は有効な書込先スタックスロット。成功時 refcount 1 の IShioriFactory が書き込まれる。
@@ -76,7 +79,8 @@ pub fn run_demo() -> Result<(), DemoError> {
     //    から構築する。`_sylphya_handle` は非 RAII（detach）で、アクターは sink 内包 publisher が生存
     //    する限り生き続けるため run_demo の生存期間だけ保持すれば足りる（join は要さない）。
     let asker = areka_sylphya::AskerId::new("C:/ghost/master");
-    let (sink, _sylphya_handle) = crate::shiori_host::spawn_app_sylphya_sink(asker);
+    let (sink, _sylphya_handle) =
+        crate::shiori_host::spawn_app_sylphya_sink(asker, app_profile_dir);
     let host: IShioriHost = sink.into();
     let brain: IShiori = match factory.create(
         &HSTRING::from("C:/ghost/master"),
@@ -219,7 +223,10 @@ pub fn demo_enabled() -> bool {
 }
 
 /// 有効フラグを入力に取り、有効時のみ [`run_demo`] を駆動する純粋入力コア（単体テスト可能）。
-fn run_demo_if_enabled_with(enabled: bool) -> Result<(), DemoError> {
+fn run_demo_if_enabled_with(
+    enabled: bool,
+    app_profile_dir: Option<std::path::PathBuf>,
+) -> Result<(), DemoError> {
     if !enabled {
         tracing::debug!(
             env = DEMO_ENV,
@@ -227,12 +234,13 @@ fn run_demo_if_enabled_with(enabled: bool) -> Result<(), DemoError> {
         );
         return Ok(());
     }
-    run_demo()
+    run_demo(app_profile_dir)
 }
 
 /// 環境変数ゲートを評価し、明示有効化時のみデモを駆動する。
 pub fn run_demo_if_enabled() -> Result<(), DemoError> {
-    run_demo_if_enabled_with(demo_enabled())
+    // 置き場は起動の解決（`resolve_boot`）で決まった形のもの（`layout()` は既に据わっている）。
+    run_demo_if_enabled_with(demo_enabled(), Some(crate::default_app_profile_dir()))
 }
 
 #[cfg(test)]
@@ -263,7 +271,7 @@ mod tests {
     #[test]
     fn demo_drives_all_paths_and_emits_info_logs() {
         let all = capture_lines_joined(|| {
-            super::run_demo().expect("demo ok");
+            super::run_demo(None).expect("demo ok");
         });
         assert!(
             all.contains("path=\"immediate\""),
@@ -289,7 +297,7 @@ mod tests {
     #[test]
     fn gate_disabled_does_not_drive() {
         let all = capture_lines_joined(|| {
-            super::run_demo_if_enabled_with(false).expect("disabled gate returns Ok");
+            super::run_demo_if_enabled_with(false, None).expect("disabled gate returns Ok");
         });
         assert!(
             !all.contains("path=\"immediate\""),
@@ -314,7 +322,7 @@ mod tests {
     #[test]
     fn gate_enabled_drives() {
         let all = capture_lines_joined(|| {
-            super::run_demo_if_enabled_with(true).expect("enabled gate drives demo ok");
+            super::run_demo_if_enabled_with(true, None).expect("enabled gate drives demo ok");
         });
         assert!(
             all.contains("path=\"immediate\""),

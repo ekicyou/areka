@@ -162,6 +162,8 @@ fn emo2_real_run_boots_talks_and_exits_zero() {
         // 取りこぼさない）。design.md「実機確認セット」Trigger 手順に合わせ `kanade=trace` も併せて有効化する
         // （折返し解決の info! 自体は info レベルゆえ `info` だけでも捕捉されるが、手順の再現性のため一致させる）。
         .env("RUST_LOG", "info,kanade=trace")
+        // 開発者の書ける根の指定を受け継がない（user-data-root 要件 10.6）。
+        .env_remove("AREKA_USER_ROOT")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

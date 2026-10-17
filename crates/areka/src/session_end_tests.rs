@@ -196,6 +196,7 @@ fn send_off_reservation() -> SwitchInFlight {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
+        copy: crate::emo2_boot::switch_copy::SwitchCopy::None,
     }
 }
 

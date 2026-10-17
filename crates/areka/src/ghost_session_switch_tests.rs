@@ -377,6 +377,7 @@ fn script_change_tag_switches_a_to_b_and_reaches_steady() {
                     Frame::Update,
                     Frame::Install,
                     Frame::RootAdd,
+                    Frame::RootFront,
                     Frame::RootRemove,
                     Frame::Readme,
                     Frame::Close
