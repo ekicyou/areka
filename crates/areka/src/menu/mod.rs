@@ -1,6 +1,6 @@
 //! 右クリックメニュー（areka-P0-popup-menu-minimal）。
 //!
-//! このファイルは登記の口を持つ: 枠 10 種とその並び（[`Frame::ORDER`]）、登記の単位
+//! このファイルは登記の口を持つ: 枠 11 種とその並び（[`Frame::ORDER`]）、登記の単位
 //! （[`MenuItem`]）、枠ごとに 1 つだけ持つ供給関数（[`Supplier`]）、登記・取り消し・写しの
 //! 取得（[`MenuRegistry`]）。列挙・切替・インストール・更新の各 spec はメニュー本体を
 //! 触らず、自分の枠へ供給関数を登記して項目を足している（要件 6.1・登記者は `*_frame.rs`）。
@@ -13,7 +13,8 @@
 //! [`shell_frame`]・[`balloon_frame`]（「シェル」「バルーン」枠の供給関数・areka-P0-shell-balloon-switch）・
 //! [`install_frame`]（「インストール」枠の供給関数・areka-P0-ghost-install）・
 //! [`update_frame`]（「ネットワーク更新」枠の供給関数・areka-P0-network-update）・
-//! [`roots_frame`]（「置き場を追加…」「置き場を外す」枠の供給関数・areka-P0-baseware-root-list）。
+//! [`roots_frame`]（「置き場を追加…」「置き場を外す」枠の供給関数・areka-P0-baseware-root-list）・
+//! [`reset_pos_frame`]（「シェル位置初期化」枠の供給関数・areka-P0-move-canon）。
 
 pub(crate) mod balloon_frame;
 pub(crate) mod captions;
@@ -43,7 +44,7 @@ use crate::placement::spawn::CharWindowMarker;
 use crate::readme;
 use trigger::PendingQuery;
 
-/// メニューの枠。宣言順がそのまま並び順（①〜⑩・要件 2.1）で、判別値を登記の添字に使う。
+/// メニューの枠。宣言順がそのまま並び順（①〜⑪・要件 2.1）で、判別値を登記の添字に使う。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum Frame {
     /// ① ゴースト
@@ -52,28 +53,31 @@ pub(crate) enum Frame {
     Shell,
     /// ③ バルーン
     Balloon,
-    /// ④ ネットワーク更新
+    /// ④ シェル位置初期化（areka-P0-move-canon 要件 8.1）
+    ResetPosition,
+    /// ⑤ ネットワーク更新
     Update,
-    /// ⑤ インストール
+    /// ⑥ インストール
     Install,
-    /// ⑥ 置き場を追加（areka-P0-baseware-root-list 要件 6.1）
+    /// ⑦ 置き場を追加（areka-P0-baseware-root-list 要件 6.1）
     RootAdd,
-    /// ⑦ 置き場を先頭へ（areka-P0-user-data-root 要件 3.8）
+    /// ⑧ 置き場を先頭へ（areka-P0-user-data-root 要件 3.8）
     RootFront,
-    /// ⑧ 置き場を外す（areka-P0-baseware-root-list 要件 7.1）
+    /// ⑨ 置き場を外す（areka-P0-baseware-root-list 要件 7.1）
     RootRemove,
-    /// ⑨ 説明書
+    /// ⑩ 説明書
     Readme,
-    /// ⑩ 終了
+    /// ⑪ 終了
     Close,
 }
 
 impl Frame {
     /// 枠の並び順。並びを決める場所はここだけで、写しも計画もこの順に従う。
-    pub(crate) const ORDER: [Frame; 10] = [
+    pub(crate) const ORDER: [Frame; 11] = [
         Frame::Ghost,
         Frame::Shell,
         Frame::Balloon,
+        Frame::ResetPosition,
         Frame::Update,
         Frame::Install,
         Frame::RootAdd,
@@ -235,7 +239,8 @@ fn wire_menu_with(world: &mut World, mut wiring: MenuWiring) {
     world.insert_non_send(wiring);
 }
 
-/// 照会の返事の取り出しを毎 tick の入力の段へ登録する（登録だけ・持ち物は置かない）。
+/// 照会の返事の取り出しと「シェル位置初期化」の答えの見張り（[`reset_pos_frame::poll_reset_raise`]）を
+/// 毎 tick の入力の段へ登録する（登録だけ・持ち物は置かない）。
 ///
 /// 並びは `dispatch_pointer_events` の後——解放ハンドラが同じ tick に預けた返事待ちを、
 /// その tick のうちに 1 度覗けるようにする。
@@ -246,6 +251,9 @@ pub(crate) fn register_menu_poll(world: &mut World) {
         Input,
         trigger::poll_menu_query.after(dispatch_pointer_events),
     );
+    world
+        .resource_mut::<Schedules>()
+        .add_systems(Input, reset_pos_frame::poll_reset_raise);
 }
 
 /// 全 [`CharWindowMarker`] 窓へ解放ハンドラ（[`trigger::on_char_pointer_released`]）を付ける。
@@ -295,7 +303,7 @@ pub(crate) fn attach_release_handlers(world: &mut World) {
 /// 何もしない。呼び手は「ゴースト」枠の [`ghost_frame::register`]・「シェル」枠の
 /// [`shell_frame::register`]・「バルーン」枠の [`balloon_frame::register`]・「インストール」枠の
 /// [`install_frame::register`]・「ネットワーク更新」枠の [`update_frame::register`]・置き場の 2 枠の
-/// [`roots_frame::register`]（どれもゴーストを起こすたび）。
+/// [`roots_frame::register`]・「シェル位置初期化」枠の [`reset_pos_frame::register`]（どれもゴーストを起こすたび）。
 pub(crate) fn register(world: &mut World, frame: Frame, supplier: Supplier) {
     let Some(mut wiring) = world.get_non_send_mut::<MenuWiring>() else {
         tracing::warn!(
@@ -308,7 +316,7 @@ pub(crate) fn register(world: &mut World, frame: Frame, supplier: Supplier) {
     wiring.registry.register(frame, supplier);
 }
 
-/// ⑨「説明書」の供給関数。有効／無効は写しを取るたびにファイルの在否で決まる
+/// ⑩「説明書」の供給関数。有効／無効は写しを取るたびにファイルの在否で決まる
 /// （要件 4.3・6.2・11.4）。項目名とリソース名は [`captions::FRAME_CAPTIONS`] から引く。
 fn readme_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
@@ -325,7 +333,7 @@ fn open_readme(world: &mut World, _ctx: &MenuContext) {
     readme::open_from_world(world, readme::MENU_TAG);
 }
 
-/// ⑩「終了」の供給関数。常に選べる（要件 2.2）。
+/// ⑪「終了」の供給関数。常に選べる（要件 2.2）。
 fn close_item(_world: &World, _ctx: &MenuContext) -> MenuItem {
     MenuItem {
         label: captions::default_label(Frame::Close).to_string(),

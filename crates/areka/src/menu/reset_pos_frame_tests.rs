@@ -219,3 +219,95 @@ fn poll_dropped_receiver_warns_without_reset_and_clears_pending() {
         "並べ直さない"
     );
 }
+
+// ---------------------------------------------------------------- 項目の登記（要件 8.1〜8.3・task 4.3）
+
+/// メニューを結線し「シェル位置初期化」枠を登記した World（`windows` が真なら窓の組も置く）。
+/// 運行への送り口は `GhostSlot` に置き、その受信端を返す。
+fn wired_world(windows: bool) -> (World, mpsc::Receiver<KanadeMsg>) {
+    let mut world = World::new();
+    world.init_resource::<bevy_ecs::schedule::Schedules>();
+    let (tx, rx) = mpsc::channel();
+    world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
+        Some(tx),
+        PathBuf::from("ghost/A"),
+    ))));
+    crate::menu::wire_menu(&mut world, mpsc::channel().0);
+    super::register(&mut world);
+    if windows {
+        crate::placement::spawn::spawn_ghost_windows(
+            &mut world,
+            &[],
+            &crate::placement::source::GhostTitles::from_scope_titles(Vec::<(usize, String)>::new()),
+        );
+    }
+    (world, rx)
+}
+
+/// メニューを出したときの「シェル位置初期化」枠の項目（登記が無ければ None）。
+fn reset_item(world: &World) -> Option<crate::menu::MenuItem> {
+    world
+        .non_send::<crate::menu::MenuWiring>()
+        .registry
+        .snapshot(world, &crate::menu::MenuContext { scope: 0 })
+        .into_iter()
+        .find_map(|(frame, item)| (frame == crate::menu::Frame::ResetPosition).then_some(item))
+}
+
+/// 写しを計画にして「シェル位置初期化」の葉の（文言・選べるか）を返す。
+fn planned(world: &World, captions: &crate::menu::captions::CaptionMap) -> (String, bool) {
+    let item = reset_item(world).expect("登記されている");
+    let plan = crate::menu::plan::build(vec![(crate::menu::Frame::ResetPosition, item)], captions);
+    match &plan.entries[..] {
+        [crate::menu::plan::PlanEntry::Item { label, enabled, .. }] => (label.clone(), *enabled),
+        other => panic!("葉 1 つでない: {other:?}"),
+    }
+}
+
+/// 既定の名前「シェル位置初期化」とゴーストの返す名前（`switchmovetodefaultpositionbutton.caption`）の
+/// 両方で出て、窓の組が在り答えを待っていなければ選べる（要件 8.1・8.2）。
+#[test]
+fn item_shows_with_default_and_ghost_names() {
+    let (world, _rx) = wired_world(true);
+    let mut ghost = crate::menu::captions::CaptionMap::default();
+    ghost.insert(
+        "switchmovetodefaultpositionbutton.caption",
+        "位置を戻す(&P)".to_owned(),
+    );
+    assert_eq!(
+        (
+            planned(&world, &Default::default()),
+            planned(&world, &ghost)
+        ),
+        (
+            ("シェル位置初期化".to_owned(), true),
+            ("位置を戻す(&P)".to_owned(), true)
+        )
+    );
+}
+
+/// 選ぶと `OnResetWindowPos` が送られて保留が置かれ、保留がある間は選べない（要件 8.3）。
+#[test]
+fn choosing_places_pending_and_greys_the_item_until_answered() {
+    let (mut world, rx) = wired_world(true);
+    let crate::menu::ItemBody::Action(action) = reset_item(&world).expect("登記されている").body
+    else {
+        panic!("葉でない");
+    };
+    action(&mut world, &crate::menu::MenuContext { scope: 0 });
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(KanadeMsg::RaiseEvent { ref id, .. }) if id == "OnResetWindowPos"
+    ));
+    assert!(world.get_non_send::<PendingResetRaise>().is_some());
+    assert_eq!(reset_item(&world).map(|i| i.enabled), Some(false));
+    world.remove_non_send::<PendingResetRaise>();
+    assert_eq!(reset_item(&world).map(|i| i.enabled), Some(true));
+}
+
+/// 窓の組が無ければ選べない（枠は出る）。
+#[test]
+fn item_is_disabled_without_ghost_windows() {
+    let (world, _rx) = wired_world(false);
+    assert_eq!(reset_item(&world).map(|i| i.enabled), Some(false));
+}

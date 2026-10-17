@@ -36,6 +36,11 @@ pub(crate) const FRAME_CAPTIONS: &[(Option<&str>, Frame, &str)] = &[
         "バルーン",
     ),
     (
+        Some("switchmovetodefaultpositionbutton.caption"),
+        Frame::ResetPosition,
+        "シェル位置初期化",
+    ),
+    (
         Some("updatebutton.caption"),
         Frame::Update,
         "ネットワーク更新",

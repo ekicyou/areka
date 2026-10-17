@@ -81,7 +81,7 @@ fn visibility_of(outcome: ResourceOutcome) -> (Visibility, Vec<String>) {
 /// 対応表は枠の数と同じ長さで、[`Frame::ORDER`] の順に要件 3.1 の組と、置き場の 3 枠
 /// （SHIORI のリソース名を持たない・areka-P0-baseware-root-list 要件 6.1・7.1）を並べる。
 #[test]
-fn frame_captions_table_is_the_ten_rows() {
+fn frame_captions_table_is_the_eleven_rows() {
     assert_eq!(
         FRAME_CAPTIONS.len(),
         Frame::ORDER.len(),
@@ -96,6 +96,11 @@ fn frame_captions_table_is_the_ten_rows() {
                 Some("balloonrootbutton.caption"),
                 Frame::Balloon,
                 "バルーン"
+            ),
+            (
+                Some("switchmovetodefaultpositionbutton.caption"),
+                Frame::ResetPosition,
+                "シェル位置初期化",
             ),
             (
                 Some("updatebutton.caption"),
@@ -129,6 +134,11 @@ fn resource_for_and_default_label_read_the_table() {
     assert_eq!(default_label(Frame::Close), "終了");
     assert_eq!(resource_for(Frame::Ghost), Some("ghostrootbutton.caption"));
     assert_eq!(default_label(Frame::Update), "ネットワーク更新");
+    assert_eq!(
+        resource_for(Frame::ResetPosition),
+        Some("switchmovetodefaultpositionbutton.caption")
+    );
+    assert_eq!(default_label(Frame::ResetPosition), "シェル位置初期化");
     assert_eq!(resource_for(Frame::RootAdd), None);
     assert_eq!(default_label(Frame::RootAdd), "置き場を追加…");
     assert_eq!(resource_for(Frame::RootFront), None);
@@ -146,7 +156,7 @@ fn visible_resource_is_chosen_by_scope() {
     assert_eq!(visible_resource_for(1), "kero.popupmenu.visible");
 }
 
-/// 問い合わせない 4 名は運行の許可表に 1 つも無く、引く 9 名はすべて許可表にある（要件 3.8・3.1・3.6）。
+/// 問い合わせない 4 名は運行の許可表に 1 つも無く、引く 10 名はすべて許可表にある（要件 3.8・3.1・3.6）。
 #[test]
 fn unqueried_resources_are_absent_from_the_real_allow_table() {
     assert_eq!(

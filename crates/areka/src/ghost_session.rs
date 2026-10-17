@@ -805,6 +805,8 @@ fn boot_wired(
         menu::roots_frame::register(world);
         // 「ネットワーク更新」枠の登記（network-update 要件 1.2）: 同じ理由で起こすたびにやり直す。
         menu::update_frame::register(world);
+        // 「シェル位置初期化」枠の登記（move-canon 要件 8.1）: 同じ理由で起こすたびにやり直す。
+        menu::reset_pos_frame::register(world);
         // 置換語 %lastghostname・%lastobjectname の載せ直し（記憶の置き場は起こすたびに新しくなる）。
         crate::install::names::reseed(world, runtime);
         // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: wire_mouse_input とは

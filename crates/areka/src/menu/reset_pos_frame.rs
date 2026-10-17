@@ -6,13 +6,37 @@
 //! それ以外の答えでは並べ直す。待つ時間に上限は設けない（kanade は答えを 1 回必ず返し、会話が
 //! 終われば受け手が切れる）。
 
+use std::rc::Rc;
+
 use areka_actor::{ReplyError, ReplyReceiver, reply_channel};
 use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod};
 use bevy_ecs::world::World;
 use tracing::{info, warn};
 
+use super::{Frame, ItemBody, MenuContext, MenuItem, captions};
 use crate::ghost_session::GhostSlot;
 use crate::placement::reset_pos::reset_window_positions;
+use crate::placement::spawn::GhostWindows;
+
+/// 「シェル位置初期化」枠の供給関数を登記する。呼び手はゴーストを起こすたびの結線（`wire_menu` の後）。
+pub(crate) fn register(world: &mut World) {
+    super::register(world, Frame::ResetPosition, Rc::new(reset_pos_item));
+}
+
+/// 「シェル位置初期化」の葉（要件 8.1・8.2）。選べるのは窓の組が在り、答えを待っていないとき
+/// （動作は再入を拒まないので、待っている間はここで灰色にする）。
+fn reset_pos_item(world: &World, _ctx: &MenuContext) -> MenuItem {
+    MenuItem {
+        label: captions::default_label(Frame::ResetPosition).to_string(),
+        caption_resource: captions::resource_for(Frame::ResetPosition),
+        enabled: world.contains_resource::<GhostWindows>()
+            && !world.contains_non_send::<PendingResetRaise>(),
+        checked: None,
+        body: ItemBody::Action(Rc::new(|world: &mut World, _: &MenuContext| {
+            raise_reset_window_pos(world)
+        })),
+    }
+}
 
 /// `OnResetWindowPos` の答えの受け手（NonSend・高々 1 つ）。在る間は答えを待っている。
 pub(crate) struct PendingResetRaise(pub(crate) ReplyReceiver<RaiseOutcome>);

@@ -316,9 +316,9 @@ fn an_attached_handler_without_any_wiring_ignores_the_release() {
 }
 
 /// 結線は系を登録せず、続けて登録関数を呼ぶと（本番は `ghost_session::register_systems`）
-/// 入力の段へ system がちょうど 1 つ載る。
+/// 入力の段へ system がちょうど 2 つ（返事の取り出し・「シェル位置初期化」の答えの見張り）載る。
 #[test]
-fn wiring_then_registering_puts_one_system_into_the_input_schedule() {
+fn wiring_then_registering_puts_two_systems_into_the_input_schedule() {
     let (mut world, _rx) = wired_world();
     assert!(
         !world.resource::<Schedules>().contains(Input),
@@ -329,7 +329,7 @@ fn wiring_then_registering_puts_one_system_into_the_input_schedule() {
 
     let schedules = world.resource::<Schedules>();
     let input = schedules.get(Input).expect("入力の段がある");
-    assert_eq!(input.systems_len(), 1);
+    assert_eq!(input.systems_len(), 2);
 }
 
 /// 登録された system は返事待ちを覗くものである。順序は本番と同じ: 結線と登録（窓はまだ無い）→ 窓を
@@ -409,9 +409,9 @@ fn registering_after_the_wiring_places_the_frame_in_order() {
 
 // ---------------------------------------------------------------- 登録と登記の一覧（areka-P0-ghost-restart-unit 要件 2.1・2.3）
 
-/// 登録専用の関数は単独で呼べ、入力の段へ返事の取り出しをちょうど 1 つ足し、持ち物は置かない。
+/// 登録専用の関数は単独で呼べ、入力の段へ返事の取り出しと答えの見張りの 2 つを足し、持ち物は置かない。
 #[test]
-fn register_menu_poll_alone_adds_one_system_without_wiring() {
+fn register_menu_poll_alone_adds_two_systems_without_wiring() {
     let mut world = empty_world();
 
     register_menu_poll(&mut world);
@@ -420,7 +420,10 @@ fn register_menu_poll_alone_adds_one_system_without_wiring() {
         .resource::<Schedules>()
         .get(Input)
         .map_or(0, |s| s.systems_len());
-    assert_eq!(input, 1, "返事の取り出しの 1 本だけが載る");
+    assert_eq!(
+        input, 2,
+        "返事の取り出しと「シェル位置初期化」の答えの見張りの 2 本が載る"
+    );
     assert!(
         world.get_non_send::<MenuWiring>().is_none(),
         "登録は持ち物を置かない"
