@@ -73,10 +73,19 @@ fn log_failure(failure: &PersistFailure, moment: WriteMoment) {
 
 /// 毎フレーム: 受け手に溜まった失敗を全部取り出し、1 件ずつ [`fatal`] へ。
 /// 受け口が World に無い（据えていない構成）なら何もしない。
+/// 別の出所で終わり始めた後（OS のセッションの終了を除く）は取り出さずに受け手へ残す。
+/// [`fatal`] へ渡しても最初の出所が勝って告知が出ないので、後始末の [`tell_at_close`] が
+/// 降ろす途中の失敗として告げる。
 fn drain_system(world: &mut World) {
     let Some(rx) = world.get_non_send::<WriteFailureRx>() else {
         return;
     };
+    let other_origin = world
+        .get_resource::<crate::app_exit::FirstExit>()
+        .is_some_and(|first| !matches!(first.0, ExitOrigin::MemoryWriteFailed(_)));
+    if other_origin && !world.contains_resource::<crate::session_end::SessionEnded>() {
+        return;
+    }
     let failures: Vec<PersistFailure> = rx.0.try_iter().collect();
     for failure in failures {
         fatal(world, failure);
@@ -215,3 +224,7 @@ mod sites_tests;
 #[cfg(test)]
 #[path = "write_failure_probe_tests.rs"]
 mod probe_tests;
+
+#[cfg(test)]
+#[path = "write_failure_late_tests.rs"]
+mod late_tests;
