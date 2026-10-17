@@ -458,6 +458,7 @@ fn build_layered_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
         animations: vec![Animation {
             id: 2000,
             interval: Interval::Bind,
+            interval_written: true,
             patterns: vec![Pattern {
                 index: 0,
                 method: DrawMethod::new("overlay".to_string()),

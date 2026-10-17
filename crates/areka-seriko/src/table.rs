@@ -584,6 +584,7 @@ mod tests {
         Animation {
             id,
             interval,
+            interval_written: true,
             patterns,
         }
     }

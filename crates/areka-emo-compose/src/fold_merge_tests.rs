@@ -167,3 +167,40 @@ animation9.pattern1,overlay,201,60,0,0
     patterns.sort();
     assert_eq!(patterns, vec![(0, 100, 50), (1, 201, 60)]);
 }
+
+/// interval 行を書かない後のブレスは前の interval を変えない（書いた行だけが勝つ）。
+/// pattern は pattern番号ごとに後の行が勝ち、重ならない番号は足される。
+#[test]
+fn later_brace_without_interval_line_keeps_the_earlier_interval() {
+    let text = "\
+surface8
+{
+animation1.interval,always
+animation1.pattern0,overlay,100,50,0,0
+animation1.pattern1,overlay,101,50,0,0
+}
+
+surface8
+{
+animation1.pattern1,overlay,201,60,0,0
+animation1.pattern2,overlay,202,70,0,0
+}
+";
+    let world = EmoWorld::build(&parse(text));
+    let face = world.surface(8).expect("面 8");
+
+    assert_eq!(face.animations.len(), 1);
+    let anim = &face.animations[0];
+    assert_eq!(
+        anim.interval,
+        Interval::Other("always".into()),
+        "interval 行の無い後のブレスは前の interval を Bind へ戻さない"
+    );
+    let mut patterns: Vec<(u32, i64, u32)> = anim
+        .patterns
+        .iter()
+        .map(|p| (p.index, p.surface_id, p.wait))
+        .collect();
+    patterns.sort();
+    assert_eq!(patterns, vec![(0, 100, 50), (1, 201, 60), (2, 202, 70)]);
+}

@@ -111,11 +111,9 @@ fn fold_plain_surface(world: &mut World, surface: &Surface) {
 /// - element: 同じ element番号（layer）の前の行を除いてから足し、layer 昇順へ安定ソート。
 /// - collision: 同じ collision番号の前の行を除いてから末尾へ足す（書き直した行は後に書かれた行＝
 ///   画家のアルゴリズムで手前・`SurfaceMaster::collisions` の登場順の不変条件）。
-/// - animation: 同じ animation番号は interval を後の行にし、同じ pattern番号の前の行を除いてから
-///   後の pattern を足す。無い番号は末尾へ足す。
-///
-/// ponytail: 転記層は interval 行が無い animation を `Interval::Bind` で埋めるので、後のブレスが
-/// pattern だけを書くと interval も `Bind` に戻る。転記が「書かれていない」を持つまでの天井。
+/// - animation: 同じ animation番号は、後のブレスが interval 行を書いたとき（`interval_written`）
+///   だけ interval を後の行にする（書かなければ前の interval が残る）。同じ pattern番号の前の行を
+///   除いてから後の pattern を足す。無い番号は末尾へ足す。
 fn merge_brace(master: &mut SurfaceMaster, later: SurfaceMaster) {
     master
         .elements
@@ -131,7 +129,10 @@ fn merge_brace(master: &mut SurfaceMaster, later: SurfaceMaster) {
     for add in later.animations {
         match master.animations.iter_mut().find(|a| a.id == add.id) {
             Some(anim) => {
-                anim.interval = add.interval;
+                if add.interval_written {
+                    anim.interval = add.interval;
+                    anim.interval_written = true;
+                }
                 anim.patterns
                     .retain(|p| !add.patterns.iter().any(|l| l.index == p.index));
                 anim.patterns.extend(add.patterns);

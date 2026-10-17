@@ -87,6 +87,7 @@ fn anim(id: u32) -> Animation {
     Animation {
         id,
         interval: Interval::Bind,
+        interval_written: true,
         patterns: Vec::new(),
     }
 }
@@ -385,6 +386,7 @@ fn append_animation_last_wins_and_new_id_added() {
     let replacement = Animation {
         id: 1,
         interval: Interval::Random { k: 5 },
+        interval_written: true,
         patterns: Vec::new(),
     };
     let ap = append_def(

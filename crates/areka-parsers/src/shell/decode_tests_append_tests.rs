@@ -79,6 +79,7 @@ animation0.pattern0,overlay,2206,0,0,0
         vec![Animation {
             id: 0,
             interval: Interval::Random { k: 4 },
+            interval_written: true,
             patterns: vec![Pattern {
                 index: 0,
                 method: DrawMethod::new("overlay".to_string()),

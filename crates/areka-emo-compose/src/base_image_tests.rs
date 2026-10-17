@@ -432,6 +432,7 @@ fn surface_with_patterns(id: u32, patterns: Vec<Pattern>) -> Surface {
         animations: vec![Animation {
             id: 0,
             interval: Interval::Random { k: 2 },
+            interval_written: true,
             patterns,
         }],
     }

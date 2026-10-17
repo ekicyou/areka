@@ -43,6 +43,7 @@ fn build_target_assets_with_bind(
         animations: vec![Animation {
             id: 2000,
             interval: Interval::Bind,
+            interval_written: true,
             patterns: vec![Pattern {
                 index: 0,
                 method: DrawMethod::new("overlay".to_string()),

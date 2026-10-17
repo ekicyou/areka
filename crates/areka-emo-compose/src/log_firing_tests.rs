@@ -61,6 +61,7 @@ fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animation {
     Animation {
         id,
         interval: Interval::Bind,
+        interval_written: true,
         patterns: vec![Pattern {
             index: 0,
             method: DrawMethod::new("overlay".to_string()),
@@ -252,6 +253,7 @@ fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
     let blink = Animation {
         id: 1400,
         interval: Interval::BindRandom { k: 4 },
+        interval_written: true,
         patterns: vec![Pattern {
             index: 1,
             method: DrawMethod::new("overlay".to_string()),

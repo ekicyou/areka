@@ -72,6 +72,7 @@ animation0.pattern1,overlay,101,5,0,0
         vec![Animation {
             id: 0,
             interval: Interval::Bind,
+            interval_written: true,
             patterns: vec![
                 Pattern {
                     index: 0,
@@ -271,6 +272,7 @@ animation0.pattern0,overlay,2206,0,0,0
         vec![Animation {
             id: 0,
             interval: Interval::Bind,
+            interval_written: true,
             patterns: vec![Pattern {
                 index: 0,
                 method: DrawMethod::new("overlay".to_string()),
@@ -343,6 +345,7 @@ animation0.pattern1,overlay,901,4,0,0
         vec![Animation {
             id: 0,
             interval: Interval::Other("always".into()),
+            interval_written: true,
             patterns: vec![
                 Pattern {
                     index: 0,

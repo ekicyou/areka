@@ -29,6 +29,7 @@ fn animation_bind_interval_with_single_pattern() {
         vec![Animation {
             id: 100,
             interval: Interval::Bind,
+            interval_written: true,
             patterns: vec![Pattern {
                 index: 0,
                 method: DrawMethod::new("overlay".to_string()),
@@ -181,4 +182,26 @@ fn animation_without_interval_defaults_to_bind() {
     assert_eq!(shell.surfaces[0].animations[0].id, 7);
     assert_eq!(shell.surfaces[0].animations[0].interval, Interval::Bind);
     assert_eq!(shell.surfaces[0].animations[0].patterns.len(), 1);
+}
+
+/// interval 行を書いた animation だけ `interval_written` が立つ（pattern だけなら立たず
+/// interval は既定 Bind）。後の同じ番号のブレスが前の interval を上書きするかの判定に使う。
+#[test]
+fn interval_written_is_true_only_when_the_interval_line_is_present() {
+    let input = "surface1\n{\n\
+animation1.pattern0,overlay,10,0,0,0\n\
+animation2.pattern0,overlay,20,0,0,0\n\
+animation2.interval,bind\n\
+}\n";
+    let shell = decode(lex(input));
+    let anims = &shell.surfaces[0].animations;
+    assert_eq!(anims.len(), 2);
+    assert_eq!(
+        (anims[0].id, &anims[0].interval, anims[0].interval_written),
+        (1, &Interval::Bind, false)
+    );
+    assert_eq!(
+        (anims[1].id, &anims[1].interval, anims[1].interval_written),
+        (2, &Interval::Bind, true)
+    );
 }

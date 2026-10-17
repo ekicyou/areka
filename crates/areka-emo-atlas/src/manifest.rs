@@ -161,6 +161,7 @@ mod tests {
         Animation {
             id: anim_id,
             interval: Interval::Bind,
+            interval_written: true,
             patterns: vec![Pattern {
                 index: 0,
                 method: DrawMethod::new("overlay".to_string()),

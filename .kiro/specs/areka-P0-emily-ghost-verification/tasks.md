@@ -121,5 +121,7 @@
 - `/kiro-complete` 向け: `.kiro/steering/roadmap.md:343`（本 spec の台帳の行）は起票時の説明（`CompanionSourceMissing` で断る・未登記）のまま。完了で台帳から外すときに一緒に片付ける
 - 5.2／5.3: 1 回目の走行で、えみりの `surfaces.txt` が面ごとのブレス（絵）と共有のブレス（当たり判定・着せ替え）を足し合わせる前提なのに、areka が同じ番号の 2 つ目のブレスで前を全置換する（`fold.rs` の `upsert_surface`）ため姿が消えると分かった。開発者の決め（2026-10-17）で「足し合わせる」。直しは 6.1 の 1 本。目視の判定は開発者がまだ見ていないので 6.2 でまとめて受ける
 - 実機の操作: areka の窓はクリック透過で道具の右クリックが効かない。開発者の許可（2026-10-17・この spec の走行のあいだ）で SendInput を使う。メニュー・ファイルを選ぶ画面・ダイアログは道具のクリックで効く。終了コードは起動と同じ呼び出しで `WaitForExit` して取る
-- 6.1: 同じ番号の `surface*` ブレスは足し合わせる（同じ名前の行は後勝ち）。`fold.rs` の `merge_brace`・`boxes.rs` の `distribute`。既知の限界（後のブレスが pattern だけを書くと interval が bind になる・登記の 5 体で 0 件）は `/kiro-complete` で開発者へ「起票するか、方針で受けないか」を聞く
+- 6.1: 同じ番号の `surface*` ブレスは足し合わせる（同じ名前の行は後勝ち）。`fold.rs` の `merge_brace`・`boxes.rs` の `distribute`。既知の限界（後のブレスが pattern だけを書くと interval が bind になる・登記の 5 体で 0 件）は完了時にその場で解決（下の行）
 - `/kiro-complete` 向け: 2 回目の走行でメニューが見えずに閉じる件（verification.md の崩れた所 6）を棚卸で起票する（範囲の外・メニューの前面の取り方）。再現を測るときは `RUST_LOG` に `areka::menu=debug` を足す
+- 完了時にその場で解決（2026-10-18）: interval が bind になる既知の限界。転記の `Animation` に `interval_written` を持たせ、`merge_brace` は後のブレスが interval 行を書いたときだけ上書きする（`later_brace_without_interval_line_keeps_the_earlier_interval`・`interval_written_is_true_only_when_the_interval_line_is_present`）
+- 完了時の棚卸の起票（2026-10-18・新しい spec は 0 本・既存の brief へ追記 2 件）: メニューが選ばれずに閉じる・見えない件を `popup-menu-residue` の件 12 へ（起票の条件 4: 実機の走行を何度も回す）。3 人目の文字が溜まる疑いを `extra-character-windows` へ（条件 4: 長い実機の走行が要る）
