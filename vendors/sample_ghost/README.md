@@ -11,7 +11,7 @@
 | `konnoyayame.nar` | ゴースト（YAYA 標準テンプレート「紺野ややめ」・**配布物そのまま**） | 125 | 820,368 バイト |
 | `StayseeBalloon.nar` | バルーン（areka の既定バルーン・CC0） | 29 | 73,021 バイト |
 | `claudia.nar` | ゴースト（YAYA・「悪役令嬢クローディア」・同梱バルーン `claudia`／`claudia_vertical`・**配布物そのまま**） | 135 | 3,651,357 バイト |
-| `emily4.nar` | ゴースト（YAYA 32bit・SSP 同梱の「Emily/Phase4.5」・**受け取ったバイト列そのまま・登記表 `SAMPLES` に未登記**＝下の節） | 260 | 2,677,923 バイト |
+| `emily4.nar` | ゴースト（YAYA 32bit・SSP 同梱の「Emily/Phase4.5」・同梱バルーン `emily4` は書庫に無く入らない・**受け取ったバイト列そのまま**＝下の節） | 260 | 2,677,923 バイト |
 
 - `StayseeBalloon.nar` の出どころとライセンス: CC0（書庫の中の `LICENSE`・`readme.txt`）。上流は <https://github.com/ponapalt/StayseeBalloon>。areka の既定バルーンで、畳み直してよく、areka の配布物へ同梱してよい。29 本のハッシュと上流との突き合わせは `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/provenance.md` の §1・§3 にある。
 
@@ -40,7 +40,7 @@
   sha256 `ebc87c6daa108116b9afdc6608059aa35ffbe183e0da83eb1b01888c824d39c0`
 - 中身は SSP の `ghost/emily4/` から起動記録（`ghost/master/profile/`・`shell/master/profile/`・`ghost/master/yaya_variable.cfg`）を除いたもの。**SSP の走行の残り `ghost/master/yaya_ssp_debug.log`（356 バイト）が 1 本入っている**が、受け取ったバイト列のまま置いた（deflate と無圧縮が混在＝239／21）。
 - ライセンス（書庫の中の `readme.txt` が出どころ）: 「Emily/Phase4.5（ghost/emily4フォルダ以下）」は **CC BY-NC 4.0**（<https://creativecommons.org/licenses/by-nc/4.0/deed.ja>）。このリポジトリの MIT ライセンスは**この 1 本には及ばない**。`konnoyayame` のシェルと同じく、**開発用の検体としてだけ使い、areka の配布物へ同梱しない**。
-- **登記表にまだ載せていない。** `install.txt` が `balloon.directory,emily4`・`balloon.source.directory,balloon` を名乗るのに、書庫に `balloon/` が無い（SSP ではバルーンが別の `balloon/emily4/` に入っているため、ゴーストのフォルダだけを畳むと抜ける）。今の `areka-nar` はこれを `CompanionSourceMissing` で断るので、登記すると `every_registered_sample_lands_where_its_registry_row_says` と `every_sample_nar_installs_exactly_the_elements_its_registry_row_declares` が赤になる。扱いを決めて登記するのは `areka-P0-emily-ghost-verification` の仕事。
+- **同梱のバルーンは入らない。** `install.txt` が `balloon.directory,emily4`・`balloon.source.directory,balloon` を名乗るのに、書庫に `balloon/` が無い（SSP ではバルーンが別の `balloon/emily4/` に入っているため、ゴーストのフォルダだけを畳むと抜ける）。`areka-nar` は取り出し元の無い同梱のバルーンを断らずに飛ばし、ゴースト `emily4` だけを入れる（`<根>/balloon/emily4/` は作らない）。飛ばしたことは記録に 1 件（鍵 `balloon.source.directory`・値 `balloon`・置き場 `emily4`）残り、areka の画面からのインストールでは警告のダイアログが 1 つ出る。起動するとバルーンは、ほかに当たるものが無ければ既定のバルーンになる。登記表の行もこの形（ゴースト 1 つ・同梱のバルーン 0）で、判定は `crates/sample-ghost-kit/src/lib_tests.rs` の `emily4_nar_installs_the_ghost_alone_and_skips_its_missing_companion`。
 
 ## 取り出し方
 
