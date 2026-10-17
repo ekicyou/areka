@@ -93,17 +93,27 @@ fn non_numeric_actor_is_skipped() {
     );
 }
 
-/// parse の `Err`（名前付き `--` 形）→ 記録付き良性スキップ・何も送出しない・非 panic（R5.4）。
+/// 名前付きの形も旧い形と同じく読んで送る（要件 1.1・areka-P0-move-canon）。
 #[test]
-fn parse_err_named_form_is_skipped() {
+fn named_form_is_sent() {
     let (tx, rx) = channel::<MoveDirective>();
     let mut sink = MoveCueSink::new(tx);
-    sink.emit(carrier_cue("0", "move", &["--X=80", "--Y=-400"]));
-    assert_eq!(
-        rx.try_recv(),
-        Err(TryRecvError::Empty),
-        "名前付き -- 形は Err 縮退で送出しない"
-    );
+    sink.emit(carrier_cue(
+        "1",
+        "move",
+        &[
+            "--X=0",
+            "--Y=0",
+            "--base=0",
+            "--base-offset=left.bottom",
+            "--move-offset=right.bottom",
+        ],
+    ));
+    let d = rx.try_recv().expect("名前付きの形も送出する");
+    assert_eq!(d.scope, 1);
+    assert_eq!((d.x, d.y), (AxisSpec::Px(0), AxisSpec::Px(0)));
+    assert_eq!(d.base, MoveBase::Scope(0));
+    assert_eq!(rx.try_recv(), Err(TryRecvError::Empty), "送出は 1 件のみ");
 }
 
 /// `MoveCueSink` は Clone: clone 側から送出しても同一受信端へ届く

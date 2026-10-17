@@ -183,3 +183,33 @@ fn canonical_non_move_carrier_debug_skips() {
         );
     }
 }
+
+/// 読みの置き換えの記録は `move_arg_substituted` の WARN として 1 件ずつ出て、指令は送られる
+/// （要件 4.7・5.1・areka-P0-move-canon 1.1）。台本どおりの読みは WARN を出さない。
+#[test]
+fn parse_notes_warn_once_each_and_directive_is_sent() {
+    let (tx, rx) = channel::<MoveDirective>();
+    let mut sink = MoveCueSink::new(tx);
+    let cue = |tokens: &[&str]| TalkCue {
+        at: 0.0,
+        actor: ActorKey::from("1"),
+        command: CueCommand::command_carrier(
+            "move",
+            tokens.iter().map(|s| s.to_string()).collect(),
+        ),
+        duration: 0.0,
+    };
+
+    let logs = capture_logs(|| sink.emit(cue(&["--X=abc", "--bogus=1", "--time=500"])));
+    let substituted: Vec<&String> = logs
+        .iter()
+        .filter(|l| l.contains("level=WARN") && l.contains("move_arg_substituted"))
+        .collect();
+    assert_eq!(substituted.len(), 3, "記録 3 件 = WARN 3 行: {logs:?}");
+    assert_eq!(count_level(&logs, "WARN"), 3, "{logs:?}");
+    assert!(rx.try_recv().is_ok(), "置き換えがあっても指令は送られる");
+
+    let clean = capture_logs(|| sink.emit(cue(&["-353", "", "", "0", "base", "base"])));
+    assert_eq!(count_level(&clean, "WARN"), 0, "{clean:?}");
+    assert!(rx.try_recv().is_ok());
+}

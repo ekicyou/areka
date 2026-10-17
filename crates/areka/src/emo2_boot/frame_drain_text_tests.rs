@@ -212,7 +212,7 @@ fn fixture_move_directive() -> MoveDirective {
             .map(|s| s.to_string())
             .collect::<Vec<_>>(),
     )
-    .expect("fixture move は Ok")
+    .directive
 }
 
 /// 9.2 ゲート檻: `GhostWindows` 未挿入の間は `move_rx` を drain せず保留する（取りこぼしなし）。

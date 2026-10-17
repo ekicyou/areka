@@ -97,7 +97,7 @@ fn fixture_directive() -> MoveDirective {
             .map(|s| s.to_string())
             .collect::<Vec<_>>(),
     )
-    .expect("fixture move は Ok")
+    .directive
 }
 
 /// R5.1: fixture の即時移動が対象窓へ反映される。
@@ -219,7 +219,7 @@ fn apply_non_scope_base_returns_false() {
             .map(|s| s.to_string())
             .collect::<Vec<_>>(),
     )
-    .expect("screen 基準は語彙保持で Ok");
+    .directive;
     assert_eq!(directive.base, MoveBase::Screen);
 
     assert!(

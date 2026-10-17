@@ -1,33 +1,13 @@
-//! `\![move]`（キャラクタ移動）の**完全語彙型**と**純粋解釈**（design.md「MoveCueSink＋純粋
-//! 解釈＋UI 適用」・R5.2/R5.4）。
+//! `\![move]`（キャラクタ移動）の型と受け口（design.md「PositionSink」「MoveArgs」）。
 //!
-//! 本ファイルは純粋な型と `parse_move_directive`、UI 末端の結線
-//! （`MoveCueSink`／`BaseposResolver`／`CanonDefaultBasepos`／`apply_move_directive`）を
-//! 持つ。
+//! 本ファイルは指令の型（[`MoveDirective`]・[`AxisSpec`]・[`MoveBase`]・[`RefPoint`]）と、
+//! talk スレッドの受け口 [`MoveCueSink`]、UI 末端の結線（`BaseposResolver`／
+//! `CanonDefaultBasepos`／`apply_move_directive`）を持つ。引数の読みは兄弟の
+//! `move_cue_args.rs`（子モジュール `args`）にあり、[`parse_move_directive`] として再輸出する。
 //!
-//! # 正典 positional 形（ukadoc `\![move]`）
-//!
-//! `\![move,dx,dy,time,base,X基準.Y基準,...]`——`parse_move_directive` が受け取る `tokens` は
-//! キャリア cue の `params`（コマンド名 `move` を除いた引数列）で、位置は次のとおり:
-//!
-//! | idx | 意味 | 型 | 省略時既定 |
-//! |----:|------|----|-----------|
-//! | 0 | dx（X 座標/差分） | [`AxisSpec`] | `Fix` |
-//! | 1 | dy（Y 座標/差分） | [`AxisSpec`] | `Fix` |
-//! | 2 | time（移動時間 ms） | `u32` | `0` |
-//! | 3 | base（基準） | [`MoveBase`] | `Screen` |
-//! | 4 | base-offset（基準位置） | [`RefPoint`] | `left.top` |
-//! | 5 | move-offset（合わせる自窓位置） | [`RefPoint`] | `left.top` |
-//!
-//! 名前付き `--key=value` 形（ukadoc 記述例）は M1 では positional のみ実導出ゆえ
-//! **記録付き縮退（`Err(MoveDegradation::NamedForm)`＝良性スキップ・語彙は将来 additive）**。
-//!
-//! # 互換裁量（doc/COMPAT_ARCHITECTURE.md §8 対応表に登記）
-//!
-//! - 裸 `base`（ドット無し）≡ `base.base`（正典形式は `X基準.Y基準`・fixture の de-facto・R5.2 明文）。
-//! - 基準 `screen`/`primaryscreen`/`me`/`global` は語彙保持のみ・M1 は数値スコープのみ実導出
-//!   （[`MoveDirective::m1_degradations`] が `UnsupportedBase` として surface）。
-//! - `time>0` は最終位置へ即時反映＋記録（`Ok` のまま `duration_ms` 保持・R5.4）。
+//! 名前付きの形と旧い位置の形は同じ [`MoveDirective`] へ読まれ、読めない値・知らない語は
+//! SSP 2.9.18 の実測と同じ値へ置き換えて `MoveNote` に記録される（受け口が
+//! `move_arg_substituted` の `warn!` で出す）。裸 `base`（ドット無し）≡ `base.base`。
 
 use std::sync::mpsc::Sender;
 
@@ -44,11 +24,13 @@ use crate::placement::resolver::PointPx;
 use crate::placement::scale_signed;
 use crate::placement::spawn::GhostWindows;
 
-/// `\![move]` の完全語彙型（design.md Service Interface・R5.2）。
+#[path = "move_cue_args.rs"]
+mod args;
+pub use args::parse_move_directive;
+
+/// `\![move]` の 1 件の意味（design.md「MoveArgs」）。
 ///
-/// M1 実導出は positional＋数値スコープ基準のみ。残り（名前付き形・非スコープ基準・time>0）は
-/// **語彙を第一級で保持**したうえで縮退（Err または [`m1_degradations`](Self::m1_degradations)
-/// による記録）へ分類する。
+/// 両方の形から [`parse_move_directive`] が読み、置き換え済みの値だけを持つ（どの欄も正典の語彙の中）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MoveDirective {
     /// 移動対象スコープ（cue.actor 由来・`\0`=0／`\1`=1）。
@@ -57,7 +39,7 @@ pub struct MoveDirective {
     pub x: AxisSpec,
     /// Y 軸指定（同上）。
     pub y: AxisSpec,
-    /// 移動時間 ms（省略=0）。`>0` は M1 では即時へ縮退（記録・語彙保持・R5.4）。
+    /// 移動時間 ms（省略=0）。`>0` は補間せず即時に置く（読みが記録する・要件 5.1）。
     pub duration_ms: u32,
     /// 基準（数値スコープのみ M1 実導出・他は語彙保持＋縮退）。
     pub base: MoveBase,
@@ -65,27 +47,8 @@ pub struct MoveDirective {
     pub base_offset: RefPoint,
     /// 自窓側の参照点（省略=left.top）。
     pub move_offset: RefPoint,
-}
-
-impl MoveDirective {
-    /// `Ok` で保持したまま M1 で縮退する語彙を列挙する（記録用・語彙自体は保持・R5.4）。
-    ///
-    /// - `base` が非スコープ（screen/primaryscreen/me/global）→ [`MoveDegradation::UnsupportedBase`]。
-    /// - `duration_ms > 0`（時間付き移動）→ [`MoveDegradation::TimedMoveImmediate`]。
-    ///
-    /// 名前付き `--` 形はそもそも `parse_move_directive` が `Err` を返すため、ここには現れない。
-    pub fn m1_degradations(&self) -> Vec<MoveDegradation> {
-        let mut out = Vec::new();
-        if !self.base.is_m1_derived() {
-            out.push(MoveDegradation::UnsupportedBase(self.base.clone()));
-        }
-        if self.duration_ms > 0 {
-            out.push(MoveDegradation::TimedMoveImmediate {
-                duration_ms: self.duration_ms,
-            });
-        }
-        out
-    }
+    /// `--option=ignore-sticky-window`。今は誰も読まない（window-link-directives が意味を持たせる）。
+    pub ignore_sticky_window: bool,
 }
 
 /// 軸指定（X/Y 共通）。
@@ -114,13 +77,6 @@ pub enum MoveBase {
     Me,
     /// 全画面仮想デスクトップ（M1 縮退）。
     Global,
-}
-
-impl MoveBase {
-    /// M1 で実導出される基準か（数値スコープのみ true・R5.2）。
-    pub fn is_m1_derived(&self) -> bool {
-        matches!(self, MoveBase::Scope(_))
-    }
 }
 
 /// 参照点（基準位置／自窓位置）。正典形式 `X基準.Y基準`。
@@ -186,134 +142,11 @@ impl RefY {
     }
 }
 
-/// `\![move]` の縮退分類（記録付き・非 panic・語彙保持）。
-///
-/// **`Err` として返る（parse 不能・良性スキップ）**:
-/// - [`NamedForm`](MoveDegradation::NamedForm)（`--key=value` 形・M1 は positional のみ）
-/// - [`UnparsableAxis`](MoveDegradation::UnparsableAxis)（X/Y が fix でも i32 でもない）
-/// - [`UnparsableDuration`](MoveDegradation::UnparsableDuration)（time が非数値）
-/// - [`UnknownBase`](MoveDegradation::UnknownBase)（base が数値でも既知語でもない）
-/// - [`UnknownRefPoint`](MoveDegradation::UnknownRefPoint)（基準語が未知）
-///
-/// **`Ok` のまま [`MoveDirective::m1_degradations`] が記録として surface する（語彙保持）**:
-/// - [`UnsupportedBase`](MoveDegradation::UnsupportedBase)（非スコープ基準・M1 非実導出）
-/// - [`TimedMoveImmediate`](MoveDegradation::TimedMoveImmediate)（time>0＝即時反映＋記録・R5.4）
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MoveDegradation {
-    /// `--key=value` 名前付き形の混入（positional のみ M1 実導出・語彙は将来 additive）。
-    NamedForm(String),
-    /// X/Y 軸トークンが `fix` でも i32 でもない。
-    UnparsableAxis { axis: Axis, token: String },
-    /// time トークンが非数値（u32 に読めない）。
-    UnparsableDuration(String),
-    /// base トークンが数値でも既知の基準語でもない。
-    UnknownBase(String),
-    /// 基準位置トークン（`X.Y`／裸）が未知の基準語を含む。
-    UnknownRefPoint(String),
-    /// 非スコープ基準（screen/primaryscreen/me/global）＝M1 非実導出（語彙保持・記録）。
-    UnsupportedBase(MoveBase),
-    /// time>0 の移動＝最終位置へ即時反映＋記録（語彙保持・R5.4）。
-    TimedMoveImmediate { duration_ms: u32 },
-}
-
-/// [`MoveDegradation::UnparsableAxis`] の軸識別。
+/// 軸の識別（読みの記録・基準の置き換えの記録が使う）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Axis {
     X,
     Y,
-}
-
-/// `\![move]` の positional 引数列を[`MoveDirective`]へ純粋に解釈する（決定論・no I/O・R5.2）。
-///
-/// `scope` は移動対象（cue.actor 由来・`\1`=1）。`tokens` はキャリア cue の `params`
-/// （コマンド名 `move` を除いた引数列）で、位置意味論はモジュール doc の表に従う。
-///
-/// 名前付き `--key=value` 形の混入は [`MoveDegradation::NamedForm`] で `Err`（記録付きスキップ・
-/// 語彙は将来 additive）。非スコープ基準・time>0 は `Ok` のまま保持し、
-/// [`MoveDirective::m1_degradations`] が記録として surface する。
-pub fn parse_move_directive(
-    scope: u32,
-    tokens: &[String],
-) -> Result<MoveDirective, MoveDegradation> {
-    // 名前付き `--` 形の混入は M1 縮退（positional のみ実導出・R5.2 対応表）。負数 `-353` は
-    // `--` 前置でないため誤検出しない。
-    if let Some(named) = tokens.iter().find(|t| t.starts_with("--")) {
-        return Err(MoveDegradation::NamedForm(named.clone()));
-    }
-
-    let tok = |i: usize| tokens.get(i).map(String::as_str).unwrap_or("");
-
-    let x = parse_axis(tok(0), Axis::X)?;
-    let y = parse_axis(tok(1), Axis::Y)?;
-    let duration_ms = parse_duration(tok(2))?;
-    let base = parse_base(tok(3))?;
-    let base_offset = parse_ref_point(tok(4))?;
-    let move_offset = parse_ref_point(tok(5))?;
-
-    Ok(MoveDirective {
-        scope,
-        x,
-        y,
-        duration_ms,
-        base,
-        base_offset,
-        move_offset,
-    })
-}
-
-/// 軸: 省略/"fix"＝`Fix`・i32＝`Px`・他＝`Err(UnparsableAxis)`。
-fn parse_axis(token: &str, axis: Axis) -> Result<AxisSpec, MoveDegradation> {
-    if token.is_empty() || token.eq_ignore_ascii_case("fix") {
-        Ok(AxisSpec::Fix)
-    } else {
-        token
-            .parse::<i32>()
-            .map(AxisSpec::Px)
-            .map_err(|_| MoveDegradation::UnparsableAxis {
-                axis,
-                token: token.to_string(),
-            })
-    }
-}
-
-/// time: 省略=0・u32・他＝`Err(UnparsableDuration)`。
-fn parse_duration(token: &str) -> Result<u32, MoveDegradation> {
-    if token.is_empty() {
-        Ok(0)
-    } else {
-        token
-            .parse::<u32>()
-            .map_err(|_| MoveDegradation::UnparsableDuration(token.to_string()))
-    }
-}
-
-/// base: 省略=`Screen`（正典既定）・数値=`Scope`・既知語=各 variant・他＝`Err(UnknownBase)`。
-fn parse_base(token: &str) -> Result<MoveBase, MoveDegradation> {
-    if token.is_empty() {
-        return Ok(MoveBase::Screen);
-    }
-    match token.to_ascii_lowercase().as_str() {
-        "screen" => Ok(MoveBase::Screen),
-        "primaryscreen" => Ok(MoveBase::PrimaryScreen),
-        "me" => Ok(MoveBase::Me),
-        "global" => Ok(MoveBase::Global),
-        _ => token
-            .parse::<u32>()
-            .map(MoveBase::Scope)
-            .map_err(|_| MoveDegradation::UnknownBase(token.to_string())),
-    }
-}
-
-/// 参照点: 省略=`left.top`・`X.Y`＝各基準・裸トークン＝`token.token`（裸 base≡base.base・R5.2）。
-fn parse_ref_point(token: &str) -> Result<RefPoint, MoveDegradation> {
-    if token.is_empty() {
-        return Ok(RefPoint::LEFT_TOP);
-    }
-    // ドット無し（裸）は `X基準=Y基準=token` として展開（裸 base≡base.base の一般化）。
-    let (xs, ys) = token.split_once('.').unwrap_or((token, token));
-    let x = RefX::parse(xs).ok_or_else(|| MoveDegradation::UnknownRefPoint(token.to_string()))?;
-    let y = RefY::parse(ys).ok_or_else(|| MoveDegradation::UnknownRefPoint(token.to_string()))?;
-    Ok(RefPoint { x, y })
 }
 
 // =============================================================================
@@ -439,7 +272,7 @@ pub fn resolve_move_target_position(
 /// コマンド名リテラル `"move"` を運ぶもの**だけ**を名前自己選別して解釈し、
 /// [`parse_move_directive`] の結果を mpsc で UI スレッド（frame 相の
 /// `apply_move_directive`＝task 7.4／channel 配線＝task 9.1）へ送出する。それ以外
-/// （非キャリア・担当外コマンド名・非数値 scope・parse 縮退）は**記録付き良性スキップ**へ
+/// （非キャリア・担当外コマンド名・非数値 scope）は**記録付き良性スキップ**へ
 /// 縮退する——無音破棄でも panic でもない（R4.5／R8.5・log-first）。
 ///
 /// # 名前自己選別（R4.5・高々 1 消費者）
@@ -524,31 +357,24 @@ impl dola::cue::CueSink for MoveCueSink {
             }
         };
 
-        // 4) 純粋解釈（決定論・no I/O）。Err（名前付き -- 形等）は記録付き良性スキップ（非 panic・R5.4）。
+        // 4) 純粋な読み（決定論・no I/O）。常に指令を返し、置き換えは 1 件ずつ記録する（要件 4.7・5.1）。
         let tokens: Vec<String> = tokens.iter().map(|s| s.to_string()).collect();
-        match parse_move_directive(scope, &tokens) {
-            Ok(directive) => {
-                for degradation in directive.m1_degradations() {
-                    warn!(
-                        ?degradation,
-                        "MoveCueSink: \\![move] を縮退して受理（語彙保持・R5.4）"
-                    );
-                }
-                if self.tx.send(directive).is_err() {
-                    // 受信端（Emo2Wiring）切断は talk を殺さない（log-first・非 panic・R5.5）。
-                    warn!("MoveCueSink: MoveDirective の送出に失敗（受信端切断）");
-                }
-                // 窓を動かす指令が UI へ届いた＝次の画面更新に仕事がある（設計 C16 の
-                // `PRESENT`）。送出の後に立てる理由は `PresentBridge::send` と同じ。
-                tick_wake::mark(tick_wake::PRESENT);
-            }
-            Err(degradation) => {
-                warn!(
-                    ?degradation,
-                    "MoveCueSink: \\![move] の縮退を記録付き良性スキップ（語彙保持・R5.4）"
-                );
-            }
+        let parsed = parse_move_directive(scope, &tokens);
+        for note in &parsed.notes {
+            warn!(
+                event = "move_arg_substituted",
+                scope,
+                ?note,
+                "MoveCueSink: \\![move] の引数を置き換えて受理"
+            );
         }
+        if self.tx.send(parsed.directive).is_err() {
+            // 受信端（Emo2Wiring）切断は talk を殺さない（log-first・非 panic・R5.5）。
+            warn!("MoveCueSink: MoveDirective の送出に失敗（受信端切断）");
+        }
+        // 窓を動かす指令が UI へ届いた＝次の画面更新に仕事がある（設計 C16 の
+        // `PRESENT`）。送出の後に立てる理由は `PresentBridge::send` と同じ。
+        tick_wake::mark(tick_wake::PRESENT);
     }
 }
 
