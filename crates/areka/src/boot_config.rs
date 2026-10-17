@@ -204,11 +204,16 @@ pub(crate) fn resolve_boot(args: &[String]) -> Result<BootResolved, crate::alert
         args,
         &app_profile_dir,
         crate::boot_resolve::pick_index,
+        crate::roots::user_root::writable_ghost,
     )
 }
 
 /// 根の並び → ゴースト → バルーン → `ConfigInputs`（design「起動解決」）。決まらなければ告知の場面を返す。
 /// 並びは決まっても決まらなくても先に記録を残す（要件 1.15・2.5）。
+///
+/// argv でないゴースト（前回きれいに終わらなかったときの既定も）は `prepare_ghost`（本番は
+/// `user_root::writable_ghost`）の答えのフォルダへ替え、バルーンと `ConfigInputs` もそのフォルダで
+/// 決める（user-data-root 要件 4.3・7.4）。表示するだけのバルーンは写さない（要件 4.5）。
 ///
 /// argv がある側は列挙も記憶も読まない（要件 4.1・5.1）。argv のゴーストは「ゴーストか」の 1 検査
 /// だけ（要件 4.8）。決まるたびに経路と場所を info に残す（要件 4.10・5.11）。
@@ -217,6 +222,7 @@ pub(crate) fn resolve_boot_from(
     args: &[String],
     app_profile_dir: &std::path::Path,
     pick: fn(usize) -> usize,
+    prepare_ghost: fn(&areka_ghost::BasewareRoots, &std::path::Path) -> std::path::PathBuf,
 ) -> Result<BootResolved, crate::alert::AlertScene> {
     use crate::alert::AlertScene;
     use crate::boot_resolve::{self, BalloonInputs, GhostInputs, NoBalloon, NoGhost};
@@ -270,7 +276,7 @@ pub(crate) fn resolve_boot_from(
             areka_ghost::catalog_roots::list_ghosts(&resolved.roots),
         ),
     };
-    let ghost = boot_resolve::resolve_ghost(
+    let mut ghost = boot_resolve::resolve_ghost(
         &GhostInputs {
             argv: argv_ghost,
             memory: memory.as_deref(),
@@ -283,6 +289,10 @@ pub(crate) fn resolve_boot_from(
         ghost_stores,
         argv: None,
     })?;
+    // 書く前に写す（user-data-root 要件 4.3）: argv で渡したフォルダは写さない（要件 10.3）。
+    if ghost.route != boot_resolve::GhostRoute::Argv {
+        ghost.dir = prepare_ghost(&resolved.roots, &ghost.dir);
+    }
     tracing::info!(event = "ghost_resolved", route = ?ghost.route, dir = %ghost.dir.display(), "起動するゴーストを決めました");
 
     let balloon = match argv_balloon {
@@ -365,19 +375,22 @@ pub(crate) fn default_helper_exe_path() -> std::path::PathBuf {
 ///
 /// - 環境変数 `AREKA_PROFILE_DIR` が設定されていればそのパスを採用する（本番 env は `AREKA_`
 ///   名前空間・記憶 areka-runtime-env-naming）。
-/// - 未設定なら実行ファイル隣接の `profile/areka/`（起動した exe の本当の場所（`exe_location`）の親ディレクトリ／`current_exe()`
+/// - 未設定でプロセスの形に書ける根が在れば `<書ける根>\profile\areka`（`areka_user_data::app_profile_dir`）。
+/// - 無ければ実行ファイル隣接の `profile/areka/`（起動した exe の本当の場所（`exe_location`）の親ディレクトリ／`current_exe()`
 ///   失敗時は `"."` へ寛容フォールバック——boot 呼び出し自体が非致命ゆえ panic/Err 伝播は不要）。
 ///
 /// App スコープはマウント解決に現れない（ghost/shell スコープは `<shiori.dir>`／`<shell.dir>` から
 /// ghost が導く）ため、bin が本関数で供給して `GhostBootOptions.app_profile_dir` へ渡す。
 pub(crate) fn default_app_profile_dir() -> std::path::PathBuf {
-    if let Some(dir) = std::env::var_os("AREKA_PROFILE_DIR") {
-        return std::path::PathBuf::from(dir);
-    }
-    let base = exe_location()
-        .and_then(std::path::Path::parent)
-        .unwrap_or(std::path::Path::new("."));
-    base.join("profile").join("areka")
+    // 共有の決め方（user-data-root 要件 5.1〜5.3）: env → 書ける根 → 実行ファイルの隣。
+    let exe_dir = exe_location().and_then(std::path::Path::parent);
+    areka_user_data::app_profile_dir(
+        std::env::var_os(areka_user_data::PROFILE_DIR_ENV).as_deref(),
+        crate::roots::user_root::layout(),
+        exe_dir,
+    )
+    // 決まらない（実行ファイルの場所が取れない）ときは今どおり `"."` の下。
+    .unwrap_or_else(|| std::path::Path::new(".").join("profile").join("areka"))
 }
 
 /// `ghost_root`／helper パスから `GhostBootOptions` を組み立てる純粋ヘルパ
@@ -392,16 +405,16 @@ pub(crate) fn default_app_profile_dir() -> std::path::PathBuf {
 ///   `DiscardSink` で埋めることで cue ごと 1 回ログへ正す（設計 D4 Topic 2）。
 /// - `system_vars`: 本番 provider（`SystemVarWiring::FromSylphya`＝boot が据えた sylphya reader
 ///   由来のスナップショット・R7.1）。
-/// - `app_profile_dir`: App スコープの sylphya profile root（`default_app_profile_dir()`＝env
-///   `AREKA_PROFILE_DIR` 優先・既定は実行ファイル隣接 `profile/areka/`・R8.2）。
+/// - `app_profile_dir`: App スコープの sylphya profile root。呼び手が渡す（本番の fallback の腕は結線の
+///   入力の置き場＝`default_app_profile_dir()`）。ここで本物の環境から決めないので、テストが書ける根の
+///   形を作らない（user-data-root 要件 10.6）。
 /// - `ticker`: `TickerMode::Real` を既定 `TickerConfig`（`base_interval=50ms`／
 ///   `kanade_interval=1000ms`／実クロック `GetTickCount64`）で駆動する。
 ///
-/// `app_profile_dir` の解決は env（`AREKA_PROFILE_DIR`）・起動した exe の本当の場所（`exe_location`）を読むため厳密には純粋
-/// ではない（副作用のない read のみ）。他フィールドの決定は従来どおり引数からの写しに留まる。
 pub(crate) fn ghost_boot_options(
     ghost_root: std::path::PathBuf,
     helper_exe: std::path::PathBuf,
+    app_profile_dir: Option<std::path::PathBuf>,
 ) -> areka_ghost::GhostBootOptions {
     areka_ghost::GhostBootOptions {
         ghost_root,
@@ -412,7 +425,7 @@ pub(crate) fn ghost_boot_options(
             Box::new(areka_ghost::sink::DiscardSink::new()),
         ],
         system_vars: areka_ghost::SystemVarWiring::FromSylphya,
-        app_profile_dir: Some(default_app_profile_dir()),
+        app_profile_dir,
         ticker: areka_ghost::TickerMode::Real(Default::default()),
     }
 }
@@ -448,3 +461,7 @@ mod balloon_tests;
 #[cfg(test)]
 #[path = "boot_config_roots_tests.rs"]
 mod roots_tests;
+
+#[cfg(test)]
+#[path = "boot_config_copy_tests.rs"]
+mod copy_tests;

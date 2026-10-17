@@ -52,25 +52,34 @@ pub struct Config {
 impl Config {
     /// 環境（`AREKA_MCP_PORT`・`AREKA_PROFILE_DIR`・exe の場所と隣の `areka.exe` の有無・
     /// `LOCALAPPDATA`）を読む唯一の口。exe の場所は `current_exe` のまま（リンクは辿らない）。
+    ///
+    /// 隣に `areka.exe` が在れば、areka と同じ `establish(exe_dir, AREKA_PROFILE_DIR)` と
+    /// `app_profile_dir` で areka の記憶の置き場を決めて渡す（user-data-root 要件 6.1）。
     pub fn from_env() -> Config {
-        let exe = std::env::current_exe().ok();
-        let areka_beside = exe
+        let exe_dir = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(PathBuf::from));
+        let profile_env = std::env::var_os(PROFILE_DIR_ENV);
+        let beside_profile = exe_dir
             .as_deref()
-            .is_some_and(|exe| exe.with_file_name(AREKA_EXE_FILE_NAME).is_file());
+            .filter(|dir| dir.join(AREKA_EXE_FILE_NAME).is_file())
+            .and_then(|dir| {
+                let layout = areka_user_data::establish(Some(dir), profile_env.as_deref());
+                areka_user_data::app_profile_dir(profile_env.as_deref(), &layout, Some(dir))
+            });
         // UTF-8 でない値を「未設定」に丸めない: 読めない字を U+FFFD に替えた文は数として読めないので、
         // 共有の関数が `warn!` を 1 件残して既定の 20 個にする（要件 2.5）。
         let port_value =
             std::env::var_os(areka_mcp::PORT_ENV).map(|v| v.to_string_lossy().into_owned());
         let config = Config::from_values(
             port_value.as_deref(),
-            std::env::var_os(PROFILE_DIR_ENV).map(PathBuf::from),
-            exe,
-            areka_beside,
+            profile_env.map(PathBuf::from),
+            beside_profile,
             std::env::var_os("LOCALAPPDATA").map(PathBuf::from),
         );
         if config.cache_dir.is_none() {
             warn!(
-                "[bridge] no place for the cache (AREKA_PROFILE_DIR, areka.exe beside the bridge, LOCALAPPDATA: none available); running without it"
+                "[bridge] no place for the cache (AREKA_PROFILE_DIR, areka profile beside the bridge, LOCALAPPDATA: none available); running without it"
             );
         }
         config
@@ -79,24 +88,20 @@ impl Config {
     /// 値 → 設定（I/O なし）。
     ///
     /// 候補の列は areka 本体と同じ関数の結果そのもの（読めない値の `warn!` もその関数が出す）。
-    /// 控えの置き場は 3 段: `profile_dir` の下 → `areka_beside` のときだけ `exe` の隣の
-    /// `profile\areka` の下 → `local_app_data` の `areka` の下 → なし。`local_app_data` は絶対パスの
+    /// 控えの置き場は 3 段: `profile_dir` の下 → `beside_profile`（隣の areka と同じに決めた記憶の
+    /// 置き場）の下 → `local_app_data` の `areka` の下 → なし。`local_app_data` は絶対パスの
     /// ときだけ使う（空・相対の値で、起こされた場所しだいの置き場に黙って書かない）。
     pub fn from_values(
         port_value: Option<&str>,
         profile_dir: Option<PathBuf>,
-        exe: Option<PathBuf>,
-        areka_beside: bool,
+        beside_profile: Option<PathBuf>,
         local_app_data: Option<PathBuf>,
     ) -> Config {
-        let beside = exe
-            .filter(|_| areka_beside)
-            .and_then(|exe| Some(exe.parent()?.join("profile").join("areka")));
         let local = local_app_data
             .filter(|dir| dir.is_absolute())
             .map(|dir| dir.join("areka"));
         let cache_dir = profile_dir
-            .or(beside)
+            .or(beside_profile)
             .or(local)
             .map(|dir| dir.join(CACHE_DIR_NAME));
         Config::from_parts(

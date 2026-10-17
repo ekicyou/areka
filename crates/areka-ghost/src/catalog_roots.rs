@@ -30,6 +30,13 @@ impl BasewareRoots {
         &self.roots
     }
 
+    /// 印の付いた項目（書ける根）。無ければ None。
+    pub fn user_root(&self) -> Option<&BasewareRoot> {
+        self.roots
+            .iter()
+            .find(|r| matches!(r.mark(), catalog::RootMark::UserRoot { .. }))
+    }
+
     /// 今見つかる（`is_dir`）根を上から。呼ぶたびに見直す。
     pub fn present(&self) -> impl Iterator<Item = &BasewareRoot> {
         self.roots.iter().filter(|r| r.dir().is_dir())

@@ -185,6 +185,7 @@ fn judge(world: &mut World, raw: RawUpdateRequest, reason: UpdateReason) -> Subm
     };
     let ghost_dir = session.ghost_dir().to_path_buf();
     let ghost_folder = ctx.current.ghost.folder.clone();
+    let roots = ctx.roots.clone();
     let targets = desk::resolve_targets(world, &raw);
     if targets.is_empty() {
         return SubmitVerdict::NoTargets;
@@ -200,7 +201,13 @@ fn judge(world: &mut World, raw: RawUpdateRequest, reason: UpdateReason) -> Subm
         ghost_dir,
         ghost_folder,
     };
-    desk::hand_over(world, worker::UpdateJob { order, kanade })
+    let job = worker::UpdateJob {
+        order,
+        kanade,
+        roots,
+        exe_dir: crate::roots::user_root::exe_dir(),
+    };
+    desk::hand_over(world, job)
 }
 
 /// 窓口を据え、取り出しの系を Input の段（`dispatch_pointer_events` の後＝投げ込みの捌きの後）へ

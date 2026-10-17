@@ -115,6 +115,7 @@ dependencies = [
  "areka-seriko",
  "areka-sylphya",
  "areka-update",
+ "areka-user-data",
  "async-io",
  "bevy_ecs",
  "dola",
@@ -285,6 +286,7 @@ name = "areka-mcp-bridge"
 version = "0.0.2"
 dependencies = [
  "areka-mcp",
+ "areka-user-data",
  "futures",
  "http",
  "httparse",
@@ -375,6 +377,14 @@ dependencies = [
  "thiserror",
  "tracing",
  "windows",
+]
+
+[[package]]
+name = "areka-user-data"
+version = "0.0.2"
+dependencies = [
+ "temp-path-kit",
+ "tracing",
 ]
 
 [[package]]

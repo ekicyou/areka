@@ -28,16 +28,41 @@ const DEFAULT_README: &str = "readme.txt";
 /// サムネイルのファイル名（有無だけを見る）。
 const THUMBNAIL_FILE: &str = "thumbnail.png";
 
-/// ベースウェアの根（直下に ghost/ と balloon/）。値型・パスの解釈だけを持つ。
+/// 並びの項目の印（areka-P0-user-data-root 要件 2.5・10.3）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum RootMark {
+    #[default]
+    Plain,
+    /// 書ける根（`from_env`＝`AREKA_USER_ROOT` で決まった）。付けるのは `resolve_roots_from` だけ。
+    UserRoot { from_env: bool },
+}
+
+/// ベースウェアの根（直下に ghost/ と balloon/）。値型・パスの解釈と印だけを持つ。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BasewareRoot {
     dir: PathBuf,
+    mark: RootMark,
 }
 
 impl BasewareRoot {
-    /// 実在検査はしない（見つかるかは `BasewareRoots::present` が呼ぶたびに見る）。
+    /// 実在検査はしない（見つかるかは `BasewareRoots::present` が呼ぶたびに見る）。印は `Plain`。
     pub fn new(dir: PathBuf) -> Self {
-        Self { dir }
+        Self {
+            dir,
+            mark: RootMark::Plain,
+        }
+    }
+
+    /// 書ける根の印を付けた項目。
+    pub fn user_root(dir: PathBuf, from_env: bool) -> Self {
+        Self {
+            dir,
+            mark: RootMark::UserRoot { from_env },
+        }
+    }
+
+    pub fn mark(&self) -> RootMark {
+        self.mark
     }
 
     pub fn dir(&self) -> &Path {

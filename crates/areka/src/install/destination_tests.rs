@@ -321,3 +321,48 @@ fn no_found_root_fails_before_writing_with_an_error() {
     assert_eq!(logged.level, tracing::Level::ERROR);
     assert!(!tmp.child("a").exists(), "何も作らない");
 }
+
+// ---- 同梱の物は写しの根で答える（areka-P0-user-data-root task 4.3・要件 4.4・4.8・10.4） ----
+
+/// 並び `[書ける根（印付き）, 実行ファイルの隣]` と、実行ファイルの隣の同梱のゴースト `emo2`。
+fn bundled(label: &str) -> (TempPath, PathBuf, PathBuf) {
+    let tmp = TempPath::under_target(label);
+    let (user, exe) = (tmp.child("user"), tmp.child("exe"));
+    std::fs::create_dir_all(&user).expect("書ける根");
+    put_ghost(&exe, "emo2");
+    (tmp, user, exe)
+}
+
+/// 同梱のゴーストへシェルを足すとき（`ghost_root(対象)`）、写してから写しの根を並びの綴りで答える。
+/// 2 回目は写しが見えているのでそのまま写しの根（写し直さない）。
+#[test]
+fn bundled_ghost_answers_the_copy_root() {
+    let (_tmp, user, exe) = bundled("install-destination-bundled-copy");
+    let roots = BasewareRoots::new(vec![
+        BasewareRoot::user_root(user.clone(), false),
+        BasewareRoot::new(exe.clone()),
+    ]);
+    let dest = CatalogDestinations::new(roots)
+        .expect("作れる")
+        .with_exe_dir(Some(exe.clone()));
+    assert_eq!(dest.ghost_root("EMO2"), user, "写しの根");
+    let copy = user.join("ghost").join("emo2");
+    assert_eq!(
+        tree(&copy),
+        tree(&exe.join("ghost").join("emo2")),
+        "同梱の中身が写っている"
+    );
+    assert_eq!(dest.ghost_root("emo2"), user, "2 回目も写しの根");
+    assert_eq!(dest.ghost_root("Fresh"), user, "新しい物は今どおり先頭");
+}
+
+/// 印の無い並びでは写さず、今と同じ根（同梱のゴーストの根）を答える。
+#[test]
+fn unmarked_list_answers_the_same_root_as_today() {
+    let (_tmp, user, exe) = bundled("install-destination-bundled-unmarked");
+    let dest = CatalogDestinations::new(list(&[user.clone(), exe.clone()]))
+        .expect("作れる")
+        .with_exe_dir(Some(exe.clone()));
+    assert_eq!(dest.ghost_root("emo2"), exe, "今と同じ根");
+    assert!(!user.join("ghost").exists(), "写さない");
+}

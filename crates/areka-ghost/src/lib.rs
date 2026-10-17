@@ -52,7 +52,9 @@ pub use runtime::{
     boot_with_origin,
 };
 // baseware-root-layout: 根の目録（列挙と素性）。bin は `areka_ghost::catalog::…` で引く。
-pub use catalog::{BalloonEntry, BasewareRoot, GhostEntry, Identity, ShellEntry, sakura_name};
+pub use catalog::{
+    BalloonEntry, BasewareRoot, GhostEntry, Identity, RootMark, ShellEntry, sakura_name,
+};
 // baseware-root-list: 根の並びと、フォルダ名・根の比べ方。
 pub use catalog_roots::{
     BasewareRoots, Hidden, InstallRoot, StoreKind, Survey, fold_key, same_folder_name, same_root,

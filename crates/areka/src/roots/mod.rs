@@ -8,6 +8,7 @@ mod edit;
 pub(crate) mod pick;
 pub(crate) mod report;
 mod resolve;
+pub(crate) mod user_root;
 
 pub(crate) use desk::install;
 pub(crate) use edit::*;
@@ -29,15 +30,14 @@ pub(crate) fn read_memory(app_profile_dir: &Path) -> Option<String> {
         .find_map(|(k, v)| (k == PersistKey::BasewareRoots).then_some(v))
 }
 
-/// 薄い読み口: `AREKA_ROOT`・記憶・実行ファイルのフォルダを読んで [`resolve_roots_from`] へ渡す。
+/// 薄い読み口: `AREKA_ROOT`・記憶・実行ファイルのフォルダ・並びに入れる書ける根を読んで [`resolve_roots_from`] へ渡す。
 /// プロセスの環境変数を読むのはここだけ。
 pub(crate) fn resolve_roots(app_profile_dir: &Path) -> Result<ResolvedRoots, RootError> {
     resolve_roots_from(
         std::env::var_os(ROOTS_ENV),
         read_memory(app_profile_dir),
-        crate::boot_config::exe_location()
-            .and_then(Path::parent)
-            .map(Path::to_path_buf),
+        user_root::exe_dir(),
+        user_root::listed_user_root(),
     )
 }
 

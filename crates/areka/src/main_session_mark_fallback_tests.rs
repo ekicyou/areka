@@ -243,6 +243,7 @@ fn argv_session_falling_back_neither_reads_writes_nor_clears_mark() {
         &["areka.exe".to_owned(), argv_dir.display().to_string()],
         &app,
         |n| panic!("無作為の段へ届いてはならない（候補 {n}）"),
+        |_, dir| dir.to_path_buf(),
     )
     .expect("argv で決まる")
     .3;

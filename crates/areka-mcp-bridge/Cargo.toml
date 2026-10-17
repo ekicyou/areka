@@ -25,6 +25,9 @@ path = "src/main.rs"
 # （tools/package.ps1）の写しと zip の中身の検査が見る。
 # 受け口の実行時の部品（start など）は本番では呼ばない。
 areka-mcp = { path = "../areka-mcp" }
+# 控えの置き場を areka と同じ関数で決める（spec: areka-P0-user-data-root 要件 6.1）:
+# 書ける根を使う形の判断・準備（establish）と記憶の置き場（app_profile_dir）。
+areka-user-data = { path = "../areka-user-data" }
 # MCP の公式 SDK。版は areka-mcp と同じ = で固定し、上げるときは中継のテストも全部通す。
 # 既定機能（macros・base64）は切る。transport-io は使わない（標準入出力の輸送は自前）。
 # reqwest・hyper の client 機能は Cargo.lock に無いクレートを引くので使わない（HTTP の送り手は自前）。
