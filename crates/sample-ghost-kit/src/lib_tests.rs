@@ -1,13 +1,15 @@
 //! 窓口 [`SampleRoot`](super::SampleRoot) と登記表 [`SAMPLES`](super::SAMPLES) の自己テスト
-//! （要件 1.1・1.2・1.3・1.4・1.5・7.4・8.4・9.5）。
+//! （要件 1.1・1.2・1.3・1.4・1.5・7.4・8.4・9.5。`emily4` の 1 本は spec:
+//! `areka-P0-emily-ghost-verification` 要件 1.10・2.3・7.3）。
 //!
 //! 窓口は `vendors/sample_ghost/<名>.nar` を展開した原本から**使い捨ての複製**を作って配る。
-//! だから主張は 7 本——登記した検体が登記どおりの位置（`<根>/ghost/<名>`・
-//! `<根>/balloon/<名>`）に実在し、値を捨てると複製ごと消える／未登録名は既知の 7 つを
+//! だから主張は 8 本——登記した検体が登記どおりの位置（`<根>/ghost/<名>`・
+//! `<根>/balloon/<名>`）に実在し、値を捨てると複製ごと消える／未登録名は既知の 8 つを
 //! 含む失敗になる／同梱していないバルーン名は既知の一覧を含む失敗になる／展開結果が
 //! 登記と食い違えば理由付きの失敗になる／種別と同梱バルーンが登記されている／登記した
 //! 各 `.nar` を空の根へ展開すると要素が登記の 1 行とちょうど一致する（登記の往復）／
-//! 取得した根へ書いた起動記録が次に取得した根に現れない。
+//! 取得した根へ書いた起動記録が次に取得した根に現れない／取り出し元の無い同梱を名乗る
+//! `emily4` の `.nar` は同梱を飛ばしてゴーストだけを入れる。
 //!
 //! 「借用しか返さないので取得した値を捨てるとコンパイルできない」ことは、コンパイル自体を
 //! 判定に使うので rustdoc の `compile_fail` 例（[`SampleRoot::root`](super::SampleRoot::root)・
@@ -114,14 +116,14 @@ fn refused(
     (shown, expected, installed)
 }
 
-/// 登記した 7 つの検体は、登記の行から導いた位置に実在し、値を捨てると複製ごと消える
+/// 登記した 8 つの検体は、登記の行から導いた位置に実在し、値を捨てると複製ごと消える
 /// （要件 1.1・1.2・1.3・7.4）。
 ///
 /// 位置は `<根>/<格納先>/<名>` の等式で判定する。検体ごとの第 2 の表や専用関数があれば
 /// この等式は破れる（要件 1.5）。
 #[test]
 fn every_registered_sample_lands_where_its_registry_row_says() {
-    assert_eq!(SAMPLES.len(), 7, "登記は検体 7 つ");
+    assert_eq!(SAMPLES.len(), 8, "登記は検体 8 つ");
     for sample in SAMPLES {
         let acquired = SampleRoot::acquire(sample.name).expect("登記済みの名前は取得できるはず");
 
@@ -175,9 +177,9 @@ fn every_registered_sample_lands_where_its_registry_row_says() {
     }
 }
 
-/// 未登録の検体名は、既知の名前 7 つを含む理由付きの失敗になる（要件 1.4）。
+/// 未登録の検体名は、既知の名前 8 つを含む理由付きの失敗になる（要件 1.4）。
 #[test]
-fn unknown_sample_fails_with_all_seven_known_names() {
+fn unknown_sample_fails_with_all_eight_known_names() {
     let err = SampleRoot::acquire("no-such-ghost").expect_err("未登録名は失敗するはず");
     let SampleError::UnknownSample { requested, known } = &err else {
         panic!("未登録名の失敗は UnknownSample であるはず: {err:?}");
@@ -193,6 +195,7 @@ fn unknown_sample_fails_with_all_seven_known_names() {
             "konnoyayame",
             "StayseeBalloon",
             "claudia",
+            "emily4",
         ]
     );
     let shown = err.to_string();
@@ -203,6 +206,7 @@ fn unknown_sample_fails_with_all_seven_known_names() {
         "emo2-kakukaku-wplimit",
         "konnoyayame",
         "StayseeBalloon",
+        "emily4",
     ] {
         assert!(shown.contains(name), "失敗の表示に {name} が無い: {shown}");
     }
@@ -408,8 +412,8 @@ fn declared_elements_with_kind(sample: &Sample) -> Vec<String> {
 fn every_sample_nar_installs_exactly_the_elements_its_registry_row_declares() {
     assert_eq!(
         SAMPLES.len(),
-        7,
-        "登記は検体 7 つ（母数 0 で緑にならない較正）"
+        8,
+        "登記は検体 8 つ（母数 0 で緑にならない較正）"
     );
     for sample in SAMPLES {
         let root = WorkDir::new().expect("空の根は取れるはず");
@@ -463,6 +467,49 @@ fn every_sample_nar_installs_exactly_the_elements_its_registry_row_declares() {
             sample.name
         );
     }
+}
+
+/// `emily4.nar` は `balloon.source.directory,balloon` を名乗るのに書庫に `balloon/` が無い。
+/// 空の根へ入れると、入るのはゴースト `emily4` だけで、同梱は置かれず 1 件だけ飛ばした
+/// 列に載る（spec: `areka-P0-emily-ghost-verification` 要件 1.10・7.3）。
+#[test]
+fn emily4_nar_installs_the_ghost_alone_and_skips_its_missing_companion() {
+    let root = WorkDir::new().expect("空の根は取れるはず");
+    let nar = devroot::nar_dir().join("emily4.nar");
+    let outcome = areka_nar::NarArchive::open(&nar)
+        .expect("emily4.nar は受理されるはず")
+        .install(&areka_nar::InstallRequest {
+            roots: &areka_nar::SingleRoot(root.path()),
+            target_ghost: None,
+        })
+        .expect("emily4.nar は空の根へ入るはず（同梱は飛ばす）");
+
+    let installed: Vec<(areka_nar::ElementKind, PathBuf)> = outcome
+        .installed
+        .iter()
+        .map(|element| (element.kind.clone(), element.path.clone()))
+        .collect();
+    assert_eq!(
+        installed,
+        [(
+            areka_nar::ElementKind::Ghost,
+            root.path().join("ghost").join("emily4")
+        )],
+        "入るのはゴースト emily4 だけ"
+    );
+    assert!(
+        !root.path().join("balloon").join("emily4").exists(),
+        "飛ばした同梱の置き場は作られない"
+    );
+    assert_eq!(
+        outcome.skipped,
+        [areka_nar::SkippedCompanion {
+            directory: "emily4".to_owned(),
+            key: "balloon.source.directory".to_owned(),
+            source: "balloon".to_owned(),
+        }],
+        "飛ばした同梱は 1 件"
+    );
 }
 
 /// 窓口から取得した根へ起動記録を書いて捨てても、次に取得した根には現れない
