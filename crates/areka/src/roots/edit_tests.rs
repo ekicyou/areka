@@ -334,7 +334,8 @@ mod apply {
         );
         // 記憶を直に読む口で読み戻すと同じ並び（要件 8.1）。
         let value = read_memory(&profile).expect("記憶に並びが書かれる");
-        let (decoded, skipped) = decode_memory(&value, super::super::exe_dir().as_deref());
+        let (decoded, skipped) =
+            decode_memory(&value, crate::roots::user_root::exe_dir().as_deref());
         assert_eq!(decoded, vec![a.clone(), b.clone()]);
         assert!(skipped.is_empty());
         // 次に引く和に足した根のゴーストが入る。
@@ -383,7 +384,7 @@ mod apply {
 
         assert_eq!(world.resource::<BootContext>().roots, roots_of(&[&a]));
         let value = read_memory(&profile).expect("記憶に並びが書かれる");
-        let (decoded, _) = decode_memory(&value, super::super::exe_dir().as_deref());
+        let (decoded, _) = decode_memory(&value, crate::roots::user_root::exe_dir().as_deref());
         assert_eq!(decoded, vec![a.clone()]);
         assert!(b.is_dir(), "フォルダは消さない（要件 7.2）");
     }
@@ -441,7 +442,7 @@ mod apply {
         );
         assert_eq!(ctx.current.ghost.dir, a.join(r"ghost\ga"));
         let value = read_memory(&profile).expect("記憶に並びが書かれる");
-        let (decoded, _) = decode_memory(&value, super::super::exe_dir().as_deref());
+        let (decoded, _) = decode_memory(&value, crate::roots::user_root::exe_dir().as_deref());
         assert_eq!(decoded, vec![b.clone(), a.clone()]);
         let moved = named(&events, "roots_moved_to_front");
         assert_eq!(moved.len(), 1, "{events:?}");

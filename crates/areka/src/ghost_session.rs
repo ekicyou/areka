@@ -30,7 +30,7 @@ use crate::input_events;
 use crate::menu;
 use crate::placement;
 use crate::readme;
-use crate::{ConfigInputs, default_app_profile_dir, ghost_boot_options, is_benign_boot_error};
+use crate::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
 
 /// 系の登録をプロセスに 1 回・1 か所から行う（要件 2.1・2.2・3.3）。
 ///
@@ -351,26 +351,10 @@ pub(crate) struct GhostBootInputs {
 }
 
 impl GhostBootInputs {
-    /// 本番の値: SHIORI は `Helper { helper_exe }`・時計は `Real` 既定・記憶の置き場は
-    /// `Some(default_app_profile_dir())`・根は構成入力のもの・起動の由来は呼び手が渡したもの。
+    /// 本番の値: SHIORI は `Helper { helper_exe }`・時計は `Real` 既定・根は構成入力のもの・起動の由来と
+    /// 記憶の置き場は呼び手が渡したもの（本番は起動の文脈の置き場・テストは本物の環境で置き場を決めない
+    /// ＝user-data-root 要件 10.6）。
     pub(crate) fn production(
-        cfg: &ConfigInputs,
-        helper_exe: PathBuf,
-        kanade_stop: Sender<KanadeNotice>,
-        boot_origin: BootOrigin,
-    ) -> Self {
-        Self::production_at(
-            cfg,
-            helper_exe,
-            kanade_stop,
-            boot_origin,
-            Some(default_app_profile_dir()),
-        )
-    }
-
-    /// [`Self::production`] の中身で、記憶の置き場を呼び手が渡すもの。テストはこれを使い、本物の環境で
-    /// 置き場を決めない（user-data-root 要件 10.6）。
-    pub(crate) fn production_at(
         cfg: &ConfigInputs,
         helper_exe: PathBuf,
         kanade_stop: Sender<KanadeNotice>,
@@ -660,8 +644,8 @@ pub(crate) fn boot_ghost(
         kanade_stop,
     } = inputs;
     // fallback の腕が使う根と App スコープの置き場（結線の入力は `boot_wired` へ move するので先に写す）。
-    // 置き場は本番では `GhostBootInputs::production` の `Some(default_app_profile_dir())`（振る舞いは
-    // 不変・要件 4.7）。テストは土台の置き場か `None`。
+    // 置き場は本番では `GhostBootInputs::production` へ渡る起動の文脈の置き場（`default_app_profile_dir()`
+    // と同じ値・振る舞いは不変・要件 4.7）。テストは土台の置き場か `None`。
     let ghost_root = wiring.ghost_root.clone();
     let app_profile_dir = wiring.app_profile_dir.clone();
     // 起動のシェルは結線ありの腕と倒れ先で同じ値を使う（取り出すのはここの 1 回だけ・要件 6.4）。

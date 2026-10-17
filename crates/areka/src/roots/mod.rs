@@ -36,9 +36,7 @@ pub(crate) fn resolve_roots(app_profile_dir: &Path) -> Result<ResolvedRoots, Roo
     resolve_roots_from(
         std::env::var_os(ROOTS_ENV),
         read_memory(app_profile_dir),
-        crate::boot_config::exe_location()
-            .and_then(Path::parent)
-            .map(Path::to_path_buf),
+        user_root::exe_dir(),
         user_root::listed_user_root(),
     )
 }

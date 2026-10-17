@@ -136,7 +136,7 @@ pub(crate) fn move_to_front(world: &mut World, dir: PathBuf) {
                 path = %dir.display(),
                 "[RootsEdit] 置き場を並びの先頭へ動かしました"
             );
-            return apply(world, roots, exe_dir());
+            return apply(world, roots, super::user_root::exe_dir());
         }
         FrontVerdict::AlreadyFront => "already_front",
         FrontVerdict::EnvLocked => "env_var",
@@ -168,7 +168,7 @@ pub(crate) fn add_root(world: &mut World, picked: PathBuf) {
                     "[RootsEdit] 足した置き場の直下に ghost も balloon もありません"
                 );
             }
-            apply(world, roots, exe_dir());
+            apply(world, roots, super::user_root::exe_dir());
         }
         AddVerdict::AlreadyListed { existing } => tracing::warn!(
             event = "roots_add_already_listed",
@@ -195,7 +195,9 @@ pub(crate) fn remove_root(world: &mut World, dir: PathBuf) {
         return;
     };
     let reason = match decide_remove(&ctx.roots, ctx.roots_origin, &dir) {
-        RemoveVerdict::Removed { roots, .. } => return apply(world, roots, exe_dir()),
+        RemoveVerdict::Removed { roots, .. } => {
+            return apply(world, roots, super::user_root::exe_dir());
+        }
         RemoveVerdict::LastOne => "last_one",
         RemoveVerdict::EnvLocked => "env_var",
         RemoveVerdict::Stale => "stale",
@@ -206,13 +208,6 @@ pub(crate) fn remove_root(world: &mut World, dir: PathBuf) {
         reason,
         "[RootsEdit] 置き場を外せないので変えません"
     );
-}
-
-/// 実行ファイルのフォルダ（記憶へ `<exe>` で書く相手）。
-fn exe_dir() -> Option<PathBuf> {
-    crate::boot_config::exe_location()
-        .and_then(Path::parent)
-        .map(Path::to_path_buf)
 }
 
 /// 適用: ①起動の文脈の並びと出どころ（記憶）を書き換える（その回に効かせる・要件 8.2・8.5）

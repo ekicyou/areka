@@ -79,6 +79,8 @@ fn ports_counting(
             new_fetch,
             online,
             online_guard: Cell::new(None),
+            roots: BasewareRoots::new(Vec::new()),
+            exe_dir: None,
         },
         asks,
     )
@@ -759,6 +761,42 @@ fn balloon_without_homeurl_is_skipped_and_not_copied() {
     assert_eq!(asks.recv(), Ok(DeskAsk::OrderDone), "飛ばして終える");
     assert!(rx.try_recv().is_err(), "始まりのイベントは送らない");
     assert_eq!(made.load(Ordering::SeqCst), 0, "取り込まない");
+    assert!(!user.join("balloon").exists(), "写さない");
+    drop(jobs);
+    handle.join().expect("スレッドは終わる");
+}
+
+/// 照会で依頼をやめたとき（`update_abandoned at=resources`）は、印の付いた並びで更新先の在る
+/// バルーンでも写さない（写すのは照会が通った後だけ・要件 4.4）。
+#[test]
+fn abandoned_at_resources_does_not_copy_the_balloon_target() {
+    let (_tmp, user, exe) = bundled_balloon("update-worker-balloon-abandoned");
+    let roots = BasewareRoots::new(vec![
+        BasewareRoot::user_root(user.clone(), false),
+        BasewareRoot::new(exe.clone()),
+    ]);
+    let mut order = empty_order(UpdateReason::Script);
+    order.targets.push(TargetSpec {
+        kind: TargetKind::Balloon,
+        dir: exe.join("balloon").join("b1"),
+        name: "B".to_owned(),
+        descript_homeurl: Some(HOMEURL.to_owned()),
+    });
+    let (desk, asks) = mpsc::channel();
+    let (jobs, handle) = spawn_worker(desk, Arc::default(), counting_fetch().0, &UNOBSERVED);
+    let (kanade, rx) = mpsc::channel();
+    jobs.send(UpdateJob {
+        order,
+        kanade,
+        roots,
+        exe_dir: Some(exe.clone()),
+    })
+    .expect("仕事を渡す");
+
+    assert_eq!(asks.recv(), Ok(DeskAsk::Started));
+    let (_ids, reply) = take_query(&rx);
+    drop(reply);
+    assert_eq!(asks.recv(), Ok(DeskAsk::OrderDone), "照会でやめる");
     assert!(!user.join("balloon").exists(), "写さない");
     drop(jobs);
     handle.join().expect("スレッドは終わる");

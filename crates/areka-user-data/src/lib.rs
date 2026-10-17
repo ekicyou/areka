@@ -74,7 +74,7 @@ pub enum Reason {
     Neither,
 }
 
-/// 書ける根を決められない・作れない理由（要件 2.4）。
+/// 書ける根を決められない理由（要件 2.4・作れないは `create` が記録する）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Unlocatable {
     EnvEmpty,
@@ -85,10 +85,6 @@ pub enum Unlocatable {
     LocalAppDataMissing,
     LocalAppDataRelative {
         value: PathBuf,
-    },
-    CreateFailed {
-        dir: PathBuf,
-        error: String,
     },
 }
 

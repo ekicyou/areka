@@ -192,10 +192,7 @@ fn user_root_child_is_disabled_others_unchanged() {
 
 /// 実行ファイルのフォルダ（「置き場を先頭へ ▸」が印の付いた並びで選べなくする子）。
 fn exe_dir() -> PathBuf {
-    crate::boot_config::exe_location()
-        .and_then(Path::parent)
-        .expect("テストの実行ファイルのフォルダ")
-        .to_path_buf()
+    crate::roots::user_root::exe_dir().expect("テストの実行ファイルのフォルダ")
 }
 
 /// 書ける根を使わない形: 「置き場を先頭へ ▸」は既定名で SHIORI のリソース名なしに出て、見出しは選べ、

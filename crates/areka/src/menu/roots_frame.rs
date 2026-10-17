@@ -8,8 +8,6 @@
 
 use std::rc::Rc;
 
-use std::path::Path;
-
 use areka_ghost::{RootMark, same_root};
 use bevy_ecs::world::World;
 
@@ -98,14 +96,14 @@ fn front_item(world: &World, _ctx: &MenuContext) -> MenuItem {
     let marked = roots
         .iter()
         .any(|r| matches!(r.mark(), RootMark::UserRoot { .. }));
-    let exe_dir = crate::boot_config::exe_location().and_then(Path::parent);
+    let exe_dir = crate::roots::user_root::exe_dir();
     let enabled = roots.len() > 1 && ctx.is_some_and(|ctx| ctx.roots_origin != RootsOrigin::EnvVar);
     let children = roots
         .into_iter()
         .enumerate()
         .map(|(i, root)| {
             let dir = root.dir().to_path_buf();
-            let exe_side = marked && exe_dir.is_some_and(|exe| same_root(exe, &dir));
+            let exe_side = marked && exe_dir.as_deref().is_some_and(|exe| same_root(exe, &dir));
             MenuItem {
                 label: dir.display().to_string(),
                 caption_resource: None,

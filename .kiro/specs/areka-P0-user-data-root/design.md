@@ -438,13 +438,12 @@ pub enum Reason {
     Neither,
 }
 
-/// 書ける根を決められない・作れない理由（要件 2.4）。
+/// 書ける根を決められない理由（要件 2.4・作れないは `create` が記録する）。
 pub enum Unlocatable {
     EnvEmpty,
     EnvRelative { value: std::path::PathBuf },
     LocalAppDataMissing,
     LocalAppDataRelative { value: std::path::PathBuf },
-    CreateFailed { dir: std::path::PathBuf, error: String },
 }
 
 /// 判断の結果。

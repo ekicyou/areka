@@ -232,8 +232,6 @@ fn unlocatable(error: &Unlocatable) -> (&'static str, String) {
         Unlocatable::LocalAppDataRelative { value } => {
             ("local_app_data_relative", value.display().to_string())
         }
-        // `decide` は作らないので返さない（作れないは `create` が記録する）。
-        Unlocatable::CreateFailed { dir, .. } => ("create_failed", dir.display().to_string()),
     }
 }
 
