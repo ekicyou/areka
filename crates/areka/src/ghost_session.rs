@@ -228,6 +228,9 @@ pub(crate) fn prepare_ghost_windows(
     // 重なりの基底の生の値も同じ読取から取り出す（解釈は結線の先＝台帳の層が行う・
     // areka-P0-scope-zorder-pinning 要件 5.2）。`prepared` を分解する前に写す。
     let zorder_raw = prepared.zorder_raw.clone();
+    // 並べ直しの材料（配置を解いた設定）も同じ読取から取り出し、窓の組と一緒に置く
+    // （areka-P0-move-canon 要件 8.6・読むのは並べ直しだけ）。
+    let default_basis = placement::reset_pos::DefaultPlacementBasis(prepared.default_basis);
     // 復元は**起動時の作業領域源を 1 度だけ**読む（atom 要件 5.7）。以後の同期段は
     // この判定へ効かせない——拡大率をまたぐ保存位置の追従は行わない裁定
     // （`windowposition-limit` の開発者裁定）を踏襲する。
@@ -263,6 +266,7 @@ pub(crate) fn prepare_ghost_windows(
         world.insert_resource(sources.snapshot);
         world.insert_resource(sources.dpi_table);
         let windows = placement::spawn::spawn_ghost_windows(world, &placements, &titles);
+        world.insert_resource(default_basis);
         // 保存位置が復元されたスコープは既定配置ではない（scg 7.3）。台帳の
         // 既定位置を落として連鎖の再解決から常に除外する——さもないと次回起動で
         // 利用者のドラッグ位置が隣接位置へ引き戻される。spawn が Resource として

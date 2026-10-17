@@ -42,8 +42,10 @@ use crate::emo2_boot::shell_balloon_switch::{
 use crate::emo2_boot::shell_box_assets::ShellBoxAssets;
 use crate::emo2_boot::switch_assets::{SwapPayload, SwapSlot};
 use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::placement::config::build_placement_config;
 use crate::placement::reseed::BalloonPlacementInputs;
 use crate::placement::reseed::tests as reseed_tests;
+use crate::placement::reset_pos::DefaultPlacementBasis;
 use crate::placement::source::{DescriptSource, GhostTitles};
 use crate::placement::zorder_group_ledger::GroupSource;
 
@@ -630,6 +632,32 @@ fn shell_finish_moves_char_windows_to_the_new_alignment() {
         (tops, xs.0 == xs.1, stage(&rig.world)),
         (vec![0, 0], true, None),
         "(キャラ窓の上端, 横位置は保つか, 印) 起動の位置={before:?}"
+    );
+}
+
+/// 並べ直しの材料は新しいシェルの descript から組んだ設定へ替わる（areka-P0-move-canon 要件 8.6・
+/// design ResetPos State Management (2)）: 起動のシェルの設定（重なりの宣言なし）が、後始末の後は
+/// 新しいシェルの設定（`seriko.zorder` は `1,0`）になる。
+#[test]
+fn shell_finish_replaces_the_default_placement_basis() {
+    let mut rig = rig(SkinKind::Shell, false);
+    let old = build_placement_config(&BTreeMap::new(), &BTreeMap::new());
+    rig.world
+        .insert_resource(DefaultPlacementBasis(old.clone()));
+    answer(&mut rig, 0, Ok(()));
+    answer(&mut rig, 1, Ok(()));
+    frame(&mut rig);
+    let SwapFinish::Shell { source, .. } = shell_finish() else {
+        unreachable!("shell_finish はシェルの後始末")
+    };
+    let new = build_placement_config(&source.ghost_kv, &source.shell_kv);
+    assert_ne!(new, old, "前提: 新旧の設定は違う");
+    assert_eq!(
+        rig.world
+            .get_resource::<DefaultPlacementBasis>()
+            .map(|b| &b.0),
+        Some(&new),
+        "材料は新しいシェルの設定"
     );
 }
 

@@ -179,6 +179,7 @@ fn on_ghost_window_marker_remove(mut world: DeferredWorld, hook: HookContext) {
 /// `ScopeConfig.balloon_limit` → `ScopePlacement.balloon_limit` → 本 Component の
 /// **一方向転写**で、spawn 時に焼き込んだあとは不変（永続化もしない。limit は
 /// 毎起動 `descript.txt` から解決し直す）。
+/// 例外は並べ直しだけが読む材料 `reset_pos::DefaultPlacementBasis`（設定ごと置くが limit の運び手ではない）。
 ///
 /// # 付与対象はバルーン窓のみ（要件 2.8 の構造保証）
 ///

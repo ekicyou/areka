@@ -24,7 +24,11 @@ use super::{DefaultPlacementBasis, reset_window_positions};
 use crate::placement::config::build_placement_config;
 use crate::placement::follow::{Anchored, BalloonFollow, OffsetBase};
 use crate::placement::persist::PersistWiring;
-use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use crate::placement::prepare_ghost_windows_with_work_area;
+use crate::placement::resolver::{
+    Anchor, PointPx, ScopeInput, ScopePlacement, SizePx, resolve_placement,
+};
+use crate::placement::shared_test_support::{WA, balloon_root, emo2_root, with_com_initialized};
 use crate::placement::source::GhostTitles;
 use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
 use crate::placement::test_support::{LogEvent, capture_logs};
@@ -341,6 +345,7 @@ fn scope_without_size_is_left_out_and_rest_is_solved() {
     assert_eq!(skips.len(), 1, "{events:?}");
     assert_eq!(skips[0].level, tracing::Level::WARN);
     assert_eq!(skips[0].field("scope"), Some("0"));
+    assert_eq!(skips[0].field_str("reason"), Some("no_window_size"));
     assert_eq!(rig.char_pos(0), SCOPES[0].1, "外したスコープは動かない");
     // 残ったスコープ 1 だけで解くので右端から並ぶ。
     assert_eq!(
@@ -351,4 +356,34 @@ fn scope_without_size_is_left_out_and_rest_is_solved() {
         }
     );
     rig.finish();
+}
+
+/// 起動の準備の結果は並べ直しの材料（配置の設定）を運ぶ（design ResetPos State Management (1)）:
+/// 運んだ設定を準備と同じ窓の大きさ・作業領域・DPI で解き直すと、準備が解いた配置と同じになる。
+#[test]
+fn boot_prepare_carries_the_default_placement_basis() {
+    with_com_initialized(|| {
+        let p = prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(96))
+            .expect("emo2 fixture の配置準備は成功する");
+        let inputs: Vec<ScopeInput> = p
+            .placements
+            .iter()
+            .map(|s| ScopeInput {
+                scope: s.scope,
+                char_size: s.char_size,
+                balloon_size: s.balloon_size,
+            })
+            .collect();
+        assert_eq!(
+            resolve_placement(
+                &p.default_basis,
+                WA,
+                &inputs,
+                wintf::ecs::DPI::from_dpi(96, 96)
+            ),
+            p.placements,
+            "運んだ設定で解き直すと準備の配置と同じ"
+        );
+        assert_eq!(p.default_basis.zorder_raw, p.zorder_raw, "同じ読取の設定");
+    });
 }

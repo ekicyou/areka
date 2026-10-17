@@ -272,6 +272,11 @@ pub struct PreparedPlacement {
     /// 値の解釈は placement では一切行わない（生の転記＝`PlacementConfig::zorder_raw` の
     /// そのまま）。窓の位置も寸法もこの値では 1 mm も動かない。
     pub zorder_raw: Option<String>,
+    /// 配置を解いた設定そのもの（areka-P0-move-canon 要件 8.6・design ResetPos）。
+    ///
+    /// 窓の組を作った後に並べ直しの材料 [`reset_pos::DefaultPlacementBasis`] として置く。
+    /// 起動で解いたのと同じ設定を同じ規則で解き直すための搬送で、spawn は読まない。
+    pub default_basis: PlacementConfig,
 }
 
 /// 準備パイプラインの中間結果（load→config→measure まで・work area 非依存部）。
@@ -302,7 +307,8 @@ impl PreparedStages {
             titles: self.titles,
             author_dpi: self.author_dpi,
             // 解釈せずそのまま搬送する（重なりの基底の出所は 1 つ＝この読取・要件 5.2）。
-            zorder_raw: self.cfg.zorder_raw,
+            zorder_raw: self.cfg.zorder_raw.clone(),
+            default_basis: self.cfg,
         }
     }
 }
