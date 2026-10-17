@@ -200,7 +200,7 @@ fn emo2_frame_system_removes_runs_and_reinserts_wiring() {
 // ── task 9.2: run_move_drain_phase（frame 相 move drain→apply）の存在＋ゲート檻 ──────
 //
 // 9.1 の channel 到達（`move_cue_sink_reaches_emo2_wiring_receiver`）と 7.4 の apply 単体
-// （move_cue.rs `apply_move_tests`）を frame 相 drain で接ぐ結線の存在チェック。full spine
+// （`move_cue_apply_move_tests.rs`・`move_cue_place_tests.rs`）を frame 相 drain で接ぐ結線の存在チェック。full spine
 // （cue→CueSheet→dispatch→sink→channel→frame）は task 9.3 が所有する。
 
 /// fixture `\1\![move,-353,,,0,base,base]` の `MoveDirective`（scope1・base scope0）。
@@ -259,7 +259,7 @@ fn run_move_drain_phase_buffers_until_ghost_windows_present() {
 /// 対象窓を fixture 検算位置へ即時移動する（channel→frame 相 drain→apply→窓移動の結線存在）。
 ///
 /// base scope0 (1483,757,434,687)・target scope1 (1049,1087,278,357)・x=Px(-353)・y=Fix:
-/// x' = 1483 + 434/2 − 353 − 278/2 = 1208・y は現状維持 1087（`resolve_move_target_position` 検算）。
+/// x' = 1483 + 434/2 − 353 − 278/2 = 1208・y は現状維持 1087（`move_cue_geometry.rs` の `compute_move_target` 検算）。
 #[test]
 fn run_move_drain_phase_applies_directive_when_ghost_windows_present() {
     let (mut world, gw) = resnap_world();

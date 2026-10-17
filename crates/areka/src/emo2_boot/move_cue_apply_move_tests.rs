@@ -14,8 +14,8 @@ use areka_emo_compose::ScaleRatio;
 use bevy_ecs::prelude::{Entity, World};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 
-use crate::placement::follow::{Anchored, BalloonFollow};
-use crate::placement::resolver::{Anchor, ScopePlacement, SizePx};
+use crate::placement::follow::{Anchored, BalloonFollow, MonitorSnapshot};
+use crate::placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
 use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
 use wintf::ecs::{Point, WindowHandle, WindowPos};
@@ -205,13 +205,23 @@ fn apply_leaves_anchored_bit_identical() {
     );
 }
 
-/// R5.5: 非スコープ基準（M1 非実導出）は warn＋false（座標算出へ進まない）。
+/// 非スコープの基準でも動く（areka-P0-move-canon 要件 3.1・4.1・2.10）。
+///
+/// `screen` は対象窓の中心のモニタの作業領域 (0,0)-(1920,1040)。`base` は `center` へ置き換わり
+/// x' = 960 − 353 − 300/2 = 457。Y は `fix` だが窓は下端に吸い付く（spawn の `Anchor::Bottom`）
+/// ので作業領域の下端 − 高さ = 1040 − 434 = 606。
 #[test]
-fn apply_non_scope_base_returns_false() {
+fn apply_non_scope_base_moves() {
     let (mut world, gw) = move_world();
+    world.insert_resource(MonitorSnapshot {
+        work_areas: vec![RectPx {
+            left: 0,
+            top: 0,
+            right: 1920,
+            bottom: 1040,
+        }],
+    });
     let target = gw.char_window(1).unwrap();
-    let before = pos_of(&world, target);
-    // base=screen（非スコープ・M1 縮退）。x=Px(-353)・y=Fix。
     let directive = parse_move_directive(
         1,
         &["-353", "", "", "screen", "base", "base"]
@@ -223,10 +233,10 @@ fn apply_non_scope_base_returns_false() {
     assert_eq!(directive.base, MoveBase::Screen);
 
     assert!(
-        !apply_move_directive(&mut world, &directive, ScaleRatio::ONE),
-        "非スコープ基準は M1 非実導出のため false（R5.5）"
+        apply_move_directive(&mut world, &directive, ScaleRatio::ONE),
+        "非スコープの基準でも動く"
     );
-    assert_eq!(pos_of(&world, target), before, "適用不成立で対象窓は不動");
+    assert_eq!(pos_of(&world, target), Point { x: 457, y: 606 });
 }
 
 // -------------------------------------------------------------------------

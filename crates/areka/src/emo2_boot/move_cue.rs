@@ -1,10 +1,11 @@
 //! `\![move]`（キャラクタ移動）の型と受け口（design.md「PositionSink」「MoveArgs」）。
 //!
 //! 本ファイルは指令の型（[`MoveDirective`]・[`AxisSpec`]・[`MoveBase`]・[`RefPoint`]）と、
-//! talk スレッドの受け口 [`MoveCueSink`]、UI 末端の結線（`apply_move_directive`）を持つ。
-//! 引数の読みは兄弟の `move_cue_args.rs`（子モジュール `args`）にあり、[`parse_move_directive`]
-//! として再輸出する。移動先の計算と基準位置の解き手（`BaseposResolver`／`CanonDefaultBasepos`）は
-//! 兄弟の `move_cue_geometry.rs`（子モジュール `geometry`）にある。
+//! talk スレッドの受け口 [`MoveCueSink`] を持つ。引数の読みは兄弟の `move_cue_args.rs`
+//! （子モジュール `args`）にあり、[`parse_move_directive`] として再輸出する。移動先の計算と
+//! 基準位置の解き手（`BaseposResolver`／`CanonDefaultBasepos`）は兄弟の `move_cue_geometry.rs`
+//! （子モジュール `geometry`）に、UI スレッドでの適用（`apply_move_directive`）は兄弟の
+//! `move_cue_place.rs`（子モジュール `place`）にある。
 //!
 //! 名前付きの形と旧い位置の形は同じ [`MoveDirective`] へ読まれ、読めない値・知らない語は
 //! SSP 2.9.18 の実測と同じ値へ置き換えて `MoveNote` に記録される（受け口が
@@ -12,29 +13,21 @@
 
 use std::sync::mpsc::Sender;
 
-use bevy_ecs::prelude::World;
 use dola::cue::{CueCommand, TalkCue};
-use tracing::{debug, info, warn};
-use wintf::ecs::WindowPos;
+use tracing::{debug, warn};
 use wintf::ecs::world::tick_wake;
-
-use areka_emo_compose::ScaleRatio;
-
-use crate::placement::follow::move_window_to;
-use crate::placement::resolver::PointPx;
-use crate::placement::scale_signed;
-use crate::placement::spawn::GhostWindows;
 
 #[path = "move_cue_args.rs"]
 mod args;
 pub use args::parse_move_directive;
 
-// 移動先の計算（純粋）。`compute_move_target` の呼び手は 3.1 の適用（それまではテストだけ）
-// なので、3.1 で配線するまで dead_code を許す。
-#[allow(dead_code)]
 #[path = "move_cue_geometry.rs"]
 mod geometry;
 pub use geometry::{BaseposResolver, CanonDefaultBasepos};
+
+#[path = "move_cue_place.rs"]
+mod place;
+pub use place::apply_move_directive;
 
 /// `\![move]` の 1 件の意味（design.md「MoveArgs」）。
 ///
@@ -49,7 +42,7 @@ pub struct MoveDirective {
     pub y: AxisSpec,
     /// 移動時間 ms（省略=0）。`>0` は補間せず即時に置く（読みが記録する・要件 5.1）。
     pub duration_ms: u32,
-    /// 基準（数値スコープのみ M1 実導出・他は語彙保持＋縮退）。
+    /// 基準（解き方は適用の側 `move_cue_place.rs`）。
     pub base: MoveBase,
     /// 基準側の参照点（省略=left.top）。
     pub base_offset: RefPoint,
@@ -66,24 +59,24 @@ pub enum AxisSpec {
     Fix,
     /// **作者基準 px**（台本に書かれた値そのまま・転記層は解釈しない）。
     ///
-    /// 物理 px への換算（k 倍）は解決側（[`resolve_move_target_position`]）の責務である。
+    /// 物理 px への換算（k 倍）は移動先の計算（`move_cue_geometry.rs` の `compute_move_target`）の責務である。
     /// `windowposition.x/y` と同種の「作者基準で書かれた画面オフセット」であり、同じ
     /// 写像（`placement::scale_signed`）を通す。差分/座標の解釈は基準解決に委ねる（R-6）。
     Px(i32),
 }
 
-/// 移動基準（design.md `MoveBase`）。M1 実導出は [`Scope`](MoveBase::Scope) のみ。
+/// 移動基準（design.md `MoveBase`・要件 3.1〜3.7）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MoveBase {
-    /// 数値スコープの窓（M1 唯一の実導出経路）。
+    /// 数値スコープの窓（無ければ `screen` へ倒す）。
     Scope(u32),
-    /// デスクトップ全体（省略時既定・M1 縮退＝語彙保持）。
+    /// 動かす窓の中心のモニタの作業領域（省略時既定・外れたら最近傍）。
     Screen,
-    /// プライマリスクリーン（M1 縮退）。
+    /// 主モニタの作業領域。
     PrimaryScreen,
-    /// 自窓相対（M1 縮退）。
+    /// 動かす前の自分の窓。
     Me,
-    /// 全画面仮想デスクトップ（M1 縮退）。
+    /// システムの座標の原点（主モニタの左上）。
     Global,
 }
 
@@ -155,90 +148,6 @@ impl RefY {
 pub enum Axis {
     X,
     Y,
-}
-
-// =============================================================================
-// 座標算出（task 7.2・R5.2・全て物理 px・R-6 対策）。basepos の型シームは兄弟の
-// `move_cue_geometry.rs` へ移した（areka-P0-move-canon 1.2）。
-// =============================================================================
-
-/// 基準窓・対象窓の [`WindowPos`]（物理 px）と [`MoveDirective`] から、対象窓の**最終位置**を
-/// 算出する純粋関数（決定論・no I/O・R5.2）。
-///
-/// 全て物理 px——窓寸法は `WindowPos.size`（物理）のみを源とし、論理 px 系（BoxStyle）を
-/// 経由しない（R-6 対策）。基準位置の解決は `resolver`（M1 は [`CanonDefaultBasepos`]）へ委ね、
-/// 宣言 `point.basepos` の追跡 spec がこの引数の差し替えで別 basepos を供給できる。
-///
-/// # 算出式（design「座標算出」）
-///
-/// - X: [`AxisSpec::Fix`] なら対象窓の現在 X を**現状維持**。[`AxisSpec::Px`]`(dx)` なら
-///   `x' = base_pos.x + basepos(base窓).x + k·dx − basepos(対象窓).x`。
-/// - Y: 同型（`Fix`＝現状維持／`Px(dy)`＝`base_pos.y + basepos(base窓).y + k·dy − basepos(対象窓).y`）。
-///
-/// # 台本オフセットの k 倍（作者空間 → 物理 px）
-///
-/// `base_pos`・`basepos(…)` は既に物理 px だが、`dx`／`dy` は**台本に書かれた作者基準の値**
-/// であり、そのまま加算してはならない。`windowposition.x/y` が実測で `wp.x × k` と確定して
-/// いる（`placement/windowposition.rs` の SSP 実測表）のと同種の値であり、同じ写像
-/// [`scale_signed`] を通す——大きさは既存丸め権威 `ScaleRatio::scale_len` へ委譲し符号のみ
-/// 保存する（新しい丸め規約を導入しない）。
-///
-/// 素通しにすると 96 前提で書かれたゴーストが高 DPI で崩れる。実測（emo2・拡大率 200%・
-/// `\![move,-353,…]`）では `dx` が k 倍されず二体が 365px 重なっていた（過剰分 353px は
-/// スケールし損ねた `dx` そのもの）。
-///
-/// fixture 検算（`\1\![move,-353,,,0,base,base]`・x=Px(-353)・y=Fix）:
-/// `x' = pos0.x + w0/2 + k·(−353) − w1/2`・y は現状維持（k=1 なら従来式と一致）。
-///
-/// # 縮退（`None`）
-///
-/// 対象窓の position 欠落、または Px 軸を含むのに基準窓の position／両窓の size が欠落
-/// （窓生成前等）で算出できないとき `None`（呼び出し側＝7.4 が warn＋talk 継続・R5.5）。
-/// 両軸 [`AxisSpec::Fix`]（現状維持のみ）は basepos 不要ゆえ、基準窓・寸法が欠けても
-/// 対象窓の現在位置を返す。極端入力でも panic しない（`saturating_*`・placement と同流儀）。
-pub fn resolve_move_target_position(
-    resolver: &impl BaseposResolver,
-    base: &WindowPos,
-    target: &WindowPos,
-    directive: &MoveDirective,
-    k: ScaleRatio,
-) -> Option<PointPx> {
-    let target_pos = target.position?;
-
-    // 両軸 Fix（現状維持のみ）は基準窓・寸法を要さない（no-op 移動）。
-    if directive.x == AxisSpec::Fix && directive.y == AxisSpec::Fix {
-        return Some(PointPx {
-            x: target_pos.x,
-            y: target_pos.y,
-        });
-    }
-
-    // Px 軸を含む＝基準窓の位置と両窓の寸法（basepos 算出）が要る。欠落（窓生成前等）は
-    // 算出不能ゆえ None（呼び出し側が warn＋継続・R5.5）。
-    let base_pos = base.position?;
-    let base_bp = resolver.basepos(base.size?);
-    let target_bp = resolver.basepos(target.size?);
-
-    let x = match directive.x {
-        AxisSpec::Fix => target_pos.x, // 現状維持
-        // x' = base_pos.x + basepos(base窓).x + k·dx − basepos(対象窓).x
-        // （base_pos／basepos は物理 px・dx は作者基準ゆえ scale_signed で k 倍する）
-        AxisSpec::Px(dx) => base_pos
-            .x
-            .saturating_add(base_bp.x)
-            .saturating_add(scale_signed(dx, k))
-            .saturating_sub(target_bp.x),
-    };
-    let y = match directive.y {
-        AxisSpec::Fix => target_pos.y, // 現状維持（Y は Fix なら同型）
-        AxisSpec::Px(dy) => base_pos
-            .y
-            .saturating_add(base_bp.y)
-            .saturating_add(scale_signed(dy, k))
-            .saturating_sub(target_bp.y),
-    };
-
-    Some(PointPx { x, y })
 }
 
 // =============================================================================
@@ -357,124 +266,6 @@ impl dola::cue::CueSink for MoveCueSink {
         tick_wake::mark(tick_wake::PRESENT);
     }
 }
-
-// =============================================================================
-// apply_move_directive（UI スレッド適用）— frame 相 drain 先の実窓反映
-// （task 7.4・R5.1/5.3/5.5/R6/9.5）
-// =============================================================================
-
-/// `\![move]` の [`MoveDirective`] を UI スレッド上で実窓へ反映する（design「MoveCueSink＋
-/// 純粋解釈＋UI 適用」・R5.1/5.3/5.5/6.1/6.2/9.5）。
-///
-/// `directive.scope`／基準スコープ→[`GhostWindows`]（Resource・World から読む）で対象・基準の
-/// キャラ窓 entity を解決し、両窓の [`WindowPos`]（物理 px）から basepos シーム
-/// （[`CanonDefaultBasepos`]・M1 実導出）経由で最終座標を算出し（[`resolve_move_target_position`]）、
-/// [`move_window_to`] **のみ**を呼んで反映する。`&mut World` 署名で UI スレッド専有を型担保する。
-///
-/// # 永続分離（R6/6.1/6.2/9.5）
-///
-/// 本関数は唯一の位置ライター [`move_window_to`] だけを呼び、[`Anchored`](crate::placement::follow::Anchored)
-/// （ドラッグ確定系の単一真実源）にも DragEnd 観測点（`on_char_drag_end`/`on_balloon_drag`）にも
-/// 構造的に触れない——表示位置のみを動かし永続確定値を更新せず（R6.1）、第二の位置ライターを
-/// 新設しない（R6.2）。統合檻は「適用前後で `Anchored` がビット同一」を直接 assert する。
-/// バルーン随伴の offset 維持（R5.3）は `move_window_to` が内部で担う。
-///
-/// # 縮退（warn＋継続・`false`・R5.5）
-///
-/// 非スコープ基準（screen/primaryscreen/me/global＝M1 非実導出・emo2 未使用）・`GhostWindows`
-/// 未挿入・対象/基準 scope の窓不在・`WindowPos` 不在・座標算出不能（位置/寸法欠落）はいずれも
-/// warn＋`false`——silent no-op でも panic でもなく talk を殺さない（log-first・
-/// [[areka-log-first-no-silent-failure]]）。
-///
-/// `k` は対象スコープのシェルへ**実際に適用中**の拡大率（表示層 `applied_ratio` 由来）。
-/// 台本オフセットの作者空間 → 物理 px 換算に用いる（[`resolve_move_target_position`] の doc）。
-pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: ScaleRatio) -> bool {
-    // 基準は M1 では数値スコープのみ実導出。非スコープ（screen 等）は語彙保持のうえ warn＋スキップ。
-    let MoveBase::Scope(base_scope) = directive.base else {
-        warn!(
-            base = ?directive.base,
-            scope = directive.scope,
-            "apply_move_directive: 非スコープ基準は M1 非実導出のためスキップ（R5.5）"
-        );
-        return false;
-    };
-
-    // scope→GhostWindows（Resource）で対象・基準のキャラ窓 entity を解決する。
-    let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
-        warn!("apply_move_directive: GhostWindows 未挿入のため \\![move] をスキップ（R5.5）");
-        return false;
-    };
-    let Some(target) = ghost_windows.char_window(directive.scope as usize) else {
-        warn!(
-            scope = directive.scope,
-            "apply_move_directive: 対象 scope の char 窓が GhostWindows に無い（R5.5）"
-        );
-        return false;
-    };
-    let Some(base_window) = ghost_windows.char_window(base_scope as usize) else {
-        warn!(
-            base_scope,
-            "apply_move_directive: 基準 scope の char 窓が GhostWindows に無い（R5.5）"
-        );
-        return false;
-    };
-
-    // 両窓の WindowPos（物理 px・`Copy`）を読む。move_window_to は `&mut World` を要するため、
-    // ここで値コピーして共有 borrow を解放する。不在（窓生成前の異常系）は warn＋false。
-    let Some(base_pos) = world.get::<WindowPos>(base_window).copied() else {
-        warn!(
-            ?base_window,
-            "apply_move_directive: 基準窓の WindowPos 不在（窓生成前）のためスキップ（R5.5）"
-        );
-        return false;
-    };
-    let Some(target_pos) = world.get::<WindowPos>(target).copied() else {
-        warn!(
-            ?target,
-            "apply_move_directive: 対象窓の WindowPos 不在（窓生成前）のためスキップ（R5.5）"
-        );
-        return false;
-    };
-
-    // basepos シーム（M1 は CanonDefaultBasepos）経由で最終座標を算出（全て物理 px・R-6 対策）。
-    // 位置/寸法欠落で算出不能なら None＝warn＋継続（R5.5）。
-    let Some(pos) =
-        resolve_move_target_position(&CanonDefaultBasepos, &base_pos, &target_pos, directive, k)
-    else {
-        warn!(
-            scope = directive.scope,
-            "apply_move_directive: 位置・寸法欠落で座標算出不能のためスキップ（R5.5）"
-        );
-        return false;
-    };
-
-    // 反映は move_window_to のみ（唯一の位置ライター・バルーン随伴 offset 維持を内包・R5.3/6.2）。
-    // Anchored・DragEnd 観測点には触れない（R6/9.5）。
-    let moved = move_window_to(world, target, pos.x, pos.y);
-
-    // 成功経路の positive ログ（実機 OnFirstBoot サインオフ／R9.6 の grep 拠点）。degradation は
-    // 全て上で warn＋false 済みゆえ、ここは唯一の真の成功点——move_window_to が実際に窓を動かした
-    // （`true`）ときのみ 1 本出す（`false`＝窓ハンドル未生成の縮退では出さない）。target_pos.position
-    // は resolve 成功が Some を保証（[`resolve_move_target_position`] が None で早期 return）。
-    if moved {
-        let (from_x, from_y) = target_pos.position.map(|p| (p.x, p.y)).unwrap_or_default();
-        info!(
-            scope = directive.scope,
-            base_scope,
-            from_x,
-            from_y,
-            to_x = pos.x,
-            to_y = pos.y,
-            "apply_move_directive: move 適用完了（scope→物理px移動）"
-        );
-    }
-
-    moved
-}
-
-#[cfg(test)]
-#[path = "move_cue_tests.rs"]
-mod tests;
 
 #[cfg(test)]
 #[path = "move_cue_move_sink_tests.rs"]

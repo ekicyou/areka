@@ -36,7 +36,7 @@
   - _Requirements: 8.6_
 
 - [ ] 3. `\![move]` の適用と、窓の位置の指令を運ぶ線をつなぐ
-- [ ] 3.1 `\![move]` の適用を、基準の解決・吸い付きの当て直し・記録つきで作り直す
+- [x] 3.1 `\![move]` の適用を、基準の解決・吸い付きの当て直し・記録つきで作り直す
   - 適用の本体を `move_cue.rs` から新しい兄弟のファイルへ移して書き直す。基準をスコープ（その窓・無ければ `screen` へ倒して記録）・`me`（動かす前の自分）・`screen`（自分の中心の作業領域・外れたら最近傍）・`primaryscreen`（主モニタの作業領域）・`global`（原点）に解き、1.2 の計算に渡し、置き換えの記録を `move_frame_substituted` の `warn!` で 1 件ずつ出す
   - 求めた位置を対象の窓の `Anchored` で吸い付きの射影に通してから `move_window_to` で書き、`move_applied` の `info!`（scope・基準・両方の参照点・吸い付き・基準の枠の矩形・前・台本・後の位置）を残す。`Anchored` が無ければ `move_anchor_missing` の `warn!` で当て直さずに書く。窓・位置・大きさ・作業領域が無ければ `move_skipped` の `warn!` で動かさない。`ignore_sticky_window` は読まない
   - 今の計算（`resolve_move_target_position`）を外し、`move_cue_tests.rs` のその檻は新しい計算の檻（`move_cue_geometry_tests.rs`）へ移すか重複として外す（旧い emo2 の着地の k=1・2 と `Fix` の軸の場合は残す）。`frame_drain_text_tests.rs` の doc の参照も直す。`move_cue_tests.rs` が空になるなら接続宣言ごと外す
@@ -107,3 +107,4 @@
 
 ## Implementation Notes
 - 2.2: 並べ直しの材料 `DefaultPlacementBasis` は、起動では吹き出しのずらしの拡大と windowposition を当てた後の設定、シェルの切り替えでは descript から組んだままの設定を持つ。並べ直しが読むのは `char_pos` だけなので結果は同じだが、後で吹き出しの位置もこの材料から求めるなら、両者をそろえること。
+- 3.1: Bottom の吸い付きで `MonitorSnapshot` が無いとき、`project_anchor` は台本の Y をそのまま返し debug だけを出す（ドラッグと同じ縮退・本番は起動で必ず置く）。軸が `Fix` でも作業領域・原点の置き換えの記録は `move_frame_substituted` に出る（要件 4.1/4.2 の「base と書かれた場合」に沿う）。

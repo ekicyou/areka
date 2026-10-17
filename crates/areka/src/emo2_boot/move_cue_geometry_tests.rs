@@ -6,9 +6,8 @@
 use super::*;
 use crate::emo2_boot::move_cue::{
     Axis, AxisSpec, MoveBase, MoveDirective, RefPoint, RefX, RefY, parse_move_directive,
-    resolve_move_target_position,
 };
-use wintf::ecs::{Point, SizeI, WindowPos};
+use wintf::ecs::SizeI;
 
 const K1: ScaleRatio = ScaleRatio::ONE;
 
@@ -518,41 +517,82 @@ fn emo2_adjust_aligns_bottom_right_to_bottom_left() {
     }
 }
 
-/// 旧い emo2（`-353,,,0,base,base`）は今の計算（`resolve_move_target_position`）と同じ値。
+/// 旧い emo2（`-353,,,0,base,base`）の着地は本機能の前（基準位置どうしの式
+/// `x' = x0 + w0/2 + k·(−353) − w1/2`・Y は `fix` で今のまま）と同じ値（要件 2.6・2.4）。
+/// 本機能の前の計算（`resolve_move_target_position`）の檻から移した値で固定する。
 #[test]
-fn legacy_emo2_matches_current_formula() {
+fn legacy_emo2_lands_where_it_did_before() {
     let d = parse(&["-353", "", "", "0", "base", "base"]);
-    let base_win = WindowPos {
-        position: Some(Point { x: 1483, y: 377 }),
-        size: Some(SizeI::new(435, 687)),
-        ..Default::default()
-    };
-    let target_win = WindowPos {
-        position: Some(Point { x: 1200, y: 800 }),
-        size: Some(SizeI::new(279, 434)),
-        ..Default::default()
-    };
-    let frame_rect = rect(1483, 377, 1483 + 435, 377 + 687);
-    let target = rect(1200, 800, 1200 + 279, 800 + 434);
-    for k in [K1, k2()] {
-        let current =
-            resolve_move_target_position(&CanonDefaultBasepos, &base_win, &target_win, &d, k)
-                .expect("位置と大きさが揃う");
+    // (基準の窓, 動かす窓, k, 後の左上)
+    let rows = [
+        // 1000 + 200 − 353 − 150 = 697
+        (
+            rect(1000, 500, 1400, 1187),
+            rect(1200, 800, 1500, 1234),
+            K1,
+            pt(697, 800),
+        ),
+        // 1000 + 200 − 706 − 150 = 344（台本の値だけが k 倍）
+        (
+            rect(1000, 500, 1400, 1187),
+            rect(1200, 800, 1500, 1234),
+            k2(),
+            pt(344, 800),
+        ),
+        // 1483 + 217 − 353 − 139 = 1208
+        (
+            rect(1483, 377, 1918, 1064),
+            rect(1200, 800, 1479, 1234),
+            K1,
+            pt(1208, 800),
+        ),
+        // 1483 + 217 − 706 − 139 = 855
+        (
+            rect(1483, 377, 1918, 1064),
+            rect(1200, 800, 1479, 1234),
+            k2(),
+            pt(855, 800),
+        ),
+    ];
+    for (base, target, k, want) in rows {
         let frame = BaseFrame::Window {
-            rect: frame_rect,
-            basepos: canon(frame_rect),
+            rect: base,
+            basepos: canon(base),
         };
         let got = compute_move_target(&frame, target, canon(target), &d, k);
-        assert_eq!(got.position, current, "k={k:?}");
+        assert_eq!(got.position, want, "k={k:?}");
+        assert!(got.notes.is_empty());
     }
-    // k=2: 1483 + 217 − 706 − 139 = 855・Y は今のまま。
+}
+
+/// 基準位置どうしで Y も書くと、両軸とも符号を保って k 倍される（Y が `fix` に固定されて
+/// いないことの檻・本機能の前の檻から移した値）。
+#[test]
+fn legacy_base_base_scales_both_axes_with_sign() {
+    let d = parse(&["100", "50", "", "0", "base", "base"]);
+    let base = rect(1000, 500, 1400, 1187);
+    let target = rect(1200, 800, 1500, 1234);
     let frame = BaseFrame::Window {
-        rect: frame_rect,
-        basepos: canon(frame_rect),
+        rect: base,
+        basepos: canon(base),
     };
+    // x' = 1000 + 200 + 200 − 150 = 1250・y' = 500 + 687 + 100 − 434 = 853
     assert_eq!(
         compute_move_target(&frame, target, canon(target), &d, k2()).position,
-        pt(855, 800)
+        pt(1250, 853)
+    );
+}
+
+/// 今の既定の基準位置は（幅÷2・下端）。奇数の幅は切り捨て（要件 2.3）。
+#[test]
+fn canon_default_basepos_is_half_width_and_bottom() {
+    assert_eq!(
+        CanonDefaultBasepos.basepos(SizeI::new(400, 687)),
+        pt(200, 687)
+    );
+    assert_eq!(
+        CanonDefaultBasepos.basepos(SizeI::new(435, 100)),
+        pt(217, 100)
     );
 }
 
