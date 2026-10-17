@@ -164,3 +164,4 @@
 - 6.2 の COMPAT §8 の行は「並べ替えは外して足し直す」のまま。7 が着地したら同じ行に「置き場を先頭へ ▸」（書ける根を使う形では実行ファイルの隣の子も選べない）を足す（7.2 で行う）
 - 着地（main へのマージ）したら write-failure-notice のセッションへ知らせる（開発者の指示・2026-10-17）。中身は「マージした PR の番号」と「main の先頭のコミット」。向こうは `open_dir_for_add` を待って 5.4・6.4 を止めていて、知らせを受けたら main を取り込んで再開する
 - 確かめていない件（完了の棚卸で起票を判断）: Microsoft Store 版の Claude Desktop が隣に置いた中継を起こしたとき、中継の控えと書ける根の作成がアプリの箱（`Packages\Claude_…\LocalCache`）へ逸らされるか。実測で、Claude アプリの Bash から起こした areka の `%LOCALAPPDATA%` が逸らされることは見た（PowerShell からは逸らされない）。説明書には書いていない
+- 完了時の棚卸（2026-10-17）: その場で解決 1 件＝説明書の Store 版の Claude Desktop が起こした中継の控えの場所を、利用者ごとの置き場の形にも合わせた（`c28dd71e`）。起票 2 件＝`bridge-store-user-root`（区分 B・v0.1.0）・`background-result-tick-wake`（区分 C・版に縛らない）
