@@ -177,7 +177,9 @@ crates/areka/src/
 - `doc/ukadoc-coverage/report/`（生成物）— `cargo run -p ukadoc-survey -- report` と `report-summary` で作り直し、台帳と同じコミットに入れる。
 - `.kiro/specs/areka-P0-move-canon/signoff.md`（実装の段で作る）— 実機の確かめの手順と結果。
 
-触らないファイル（明示）: `placement/follow/window_move.rs`・`placement/follow/drag_follow.rs`・`placement/follow/anchor.rs`・`placement/resolver.rs`・`placement/persist.rs`・`placement/chain_finalize.rs`・`main.rs`・`zorder_cue.rs`・`install_cue.rs`。
+注記だけ直すファイル: `placement/follow/window_move.rs` の `move_window_to` の doc（:38「唯一の消費者が `\![move]` cue」）。呼び手はすでに連鎖の確定もあり、本 spec で並べ直しも加わるので、「呼び手（`\![move]`・連鎖の確定・並べ直し）はどれも `MoveCue` を名乗る」へ書き改める。行数は増やさない（例外表のファイル）。
+
+触らないファイル（明示）: `placement/follow/drag_follow.rs`・`placement/follow/anchor.rs`・`placement/resolver.rs`・`placement/persist.rs`・`placement/chain_finalize.rs`・`main.rs`・`zorder_cue.rs`・`install_cue.rs`。
 
 ## System Flows
 
@@ -649,7 +651,7 @@ pub enum ResetDecision { Wait, Reset, Leave }
   - バルーンのずらしが保たれる・位置の記憶に何も送られない・画面の外へ出ても寄せない・`Anchored` がビット同一（2.7〜2.9）。`move_applied` の 1 行に基準と参照点の欄が出ること（9.1）。
   - 作業領域・主モニタ・`Anchored` が無いときの `warn!` と、トークを止めないこと（4.7）。
 - `move_cue_move_sink_tests.rs`・`move_cue_move_severity_log_tests.rs`（1.10・4.7・5.2・8.7）: `move` → `PositionCue::Move`、`(execute,resetwindowpos)` → `PositionCue::ResetWindowPos`、`(execute,install)` と `(set,position)` は送らない、読みの記録が `warn!` で出る、開けない `execute` の荷物を `warn!` にしない。
-- `frame_move_order_tests.rs`（新・`frame.rs` の兄弟・x64 の多フレームのハーネス・2.5・2.12・D4）: 同じフレームで表示の面の大きさが変わる指令と `\![move]` が届いたとき、移動が新しい大きさで計算されること（右下どうしがそろう）。`ResetWindowPos` が `reset_window_positions` へ届くこと。
+- `frame_move_order_tests.rs`（新・`frame.rs` の兄弟・x64 の多フレームのハーネス・2.5・2.12・D4）: 同じフレームで表示の面の大きさが変わる指令と `\![move]` が届いたとき、移動が新しい大きさで計算されること（右下どうしがそろう）。`ResetWindowPos` が `reset_window_positions` へ届くこと。面の指令と `\![move]` は別々の線で届くので、2 つが別のフレームに割れて届くと移動は古い大きさで計算される。この隙間は今の作りにもあり、本 spec では扱わない（檻の注記に書く）。
 - `consumer_ledger_agreement_tests.rs`（7.1）: `(execute,resetwindowpos)` の見本が `MoveSink` にだけ届く、`\![set,position,100,100,1]` と `\![reset,position]` がどの受け口にも届かない。
 - `reset_pos_tests.rs`（8.6・8.8・8.9・9.2）: 2 スコープの World で、ずらした窓が `resolve_placement` の位置へ戻る・`default_char_pos` が書かれる・位置の記憶へ両スコープの位置が送られる（偽の発行口で受ける）・バルーンが付いて動く・`Anchored` と `BalloonFollow.offset` が変わらない・`DefaultPlacementBasis` や主モニタが無いときの `warn!`。記憶から戻した（`default_char_pos == None`）スコープも並べ直され `Some` になること。
 - `reset_pos_frame_tests.rs`（8.1〜8.5）: `decide_reset` の 6 分類（まだ・`Script`・`NoReply`・`NotSteady`・`NotAllowed`・`Failed`・切れた）。項目が待っている間は灰色。送り口が無いときに並べ直すこと。
@@ -676,5 +678,5 @@ pub enum ResetDecision { Wait, Reset, Leave }
 
 - **並べ直しの位置（D7）**: 起動の既定の位置は「採寸した面 0 の幅で解き、表示の幅で中央を保ち、連鎖を直す」2 段で決まる。本設計は同じ規則（P1〜P4）を今の窓の大きさで 1 度解く。採寸の面と表示の面の幅が同じなら起動と同じ位置、違う面を表示しているときは先頭のスコープが右端にそろう（起動は幅の差の半分だけ左右にずれる）。要件 8.6 の「起動で並べるのと同じ既定の位置」をこの読みで満たすとしたが、設計の討議で確かめる点である。
 - **`OnResetWindowPos` の `NotSteady`（D8）**: 起動中・切替中・終了中に選ばれたときも並べ直す（台本が来なかったので）。切替で窓の組が入れ替わる途中なら、受け手が切れて並べ直さない。
-- **相の順の入れ替え（D4）**: move drain を再スナップの後へ移す。相の順を前提にした既存のテストがあれば書き改める。
+- **相の順の入れ替え（D4）**: move drain を再スナップの後へ移す。相の順を前提にした既存のテストがあれば書き改める。守れるのは面の指令と `\![move]` が同じフレームに届いたときだけで、別のフレームに割れた場合の隙間は扱わない（今の作りにもある）。
 - **並走**: kanade の許可表の件数を他の spec が同時に動かしたら、後から着地した側が合わせ直す。
