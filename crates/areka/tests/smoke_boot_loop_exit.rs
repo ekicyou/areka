@@ -14,6 +14,9 @@
 //!   残し、本物の窓を開かずに **非 0** で終わる（窓 0 で居座らない）。
 //! - **④ 失敗方向**（SHIORI を `loadu` が偽を返す検証用 DLL にした emo2 の複製）: 告知の記録を
 //!   1 件残して **非 0** で終わる（areka-P0-shiori-fault-notice 要件 4.3〜4.5）。
+//! - **⑤ 書けない方向**（アプリの記憶の置き場が普通のファイル）: 窓を作る前の書けるかの確かめで
+//!   止まり、「areka を起動できません」の告知を残して **非 0** で終わる
+//!   （areka-P0-write-failure-notice 要件 6.1・7.6・7.7）。
 //!
 //! 全方向で `AREKA_NO_ALERT=1`（告知のモーダルで番犬の締切まで止まらない・要件 9.2）。
 //! ②③ の `AREKA_PROFILE_DIR` は一時フォルダ（開発者のアプリの記憶を読まず・書かない）。
@@ -449,4 +452,57 @@ fn fault_direction_shiori_connect_failure_exits_nonzero_with_one_alert() {
         all.contains(REAL_WINDOWS),
         "窓は出てから閉じるはず（本物のゴースト窓の目印なし）。\n--- child output ---\n{all}"
     );
+}
+
+/// ⑤ 書けない方向（areka-P0-write-failure-notice 要件 6.1・7.6・7.7）: `AREKA_ROOT` に検体の根、
+/// アプリの記憶の置き場 `AREKA_PROFILE_DIR` に `target\` の下の**普通のファイル**を渡す。起動の前の
+/// 書けるかの確かめで止まり、`memory_write_failed` と「areka を起動できません」の告知を残して
+/// **非 0** で終わる。窓を作る前に止まるので、本物のゴースト窓の目印も印を書いた記録も 0
+/// （モニタの有無によらない）。
+#[test]
+fn unwritable_direction_stops_boot_with_memory_write_alert() {
+    let emo2 = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
+    let root = emo2.root();
+    let dir = TempPath::under_target("smoke-unwritable-profile");
+    let profile = dir.child("profile-is-a-file");
+    std::fs::write(&profile, b"not a folder").expect("置き場の代わりの普通のファイル");
+
+    let (status, out, err) = run_smoke(
+        &[],
+        &[
+            ("AREKA_ROOT", root.to_str().expect("検体パスは UTF-8")),
+            (
+                "AREKA_PROFILE_DIR",
+                profile.to_str().expect("一時パスは UTF-8"),
+            ),
+        ],
+    );
+    let all = format!("{out}\n{err}");
+
+    assert!(
+        !status.success(),
+        "記憶を書けないときは非 0 で終わるべきですが status={status:?} でした。\
+         \n--- child output ---\n{all}"
+    );
+    assert_line_has(&all, "event=\"memory_write_failed\"", "moment=\"boot\"");
+    let alerts = all
+        .lines()
+        .filter(|l| {
+            l.contains("event=\"alert\"")
+                && l.contains("areka を起動できません")
+                && l.contains("記憶を書けないので")
+        })
+        .count();
+    assert_eq!(
+        alerts, 1,
+        "「areka を起動できません」（記憶を書けないので）の告知の記録はちょうど 1 件のはずが {alerts} 件。\
+         \n--- child output ---\n{all}"
+    );
+    for mark in [REAL_WINDOWS, "session_mark_written"] {
+        let n = all.lines().filter(|l| l.contains(mark)).count();
+        assert_eq!(
+            n, 0,
+            "「{mark}」の行が {n} 件（0 のはず）。\n--- child output ---\n{all}"
+        );
+    }
 }
