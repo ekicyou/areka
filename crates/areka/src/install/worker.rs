@@ -231,6 +231,11 @@ impl InstallPorts for DeskPorts {
         overwritten
     }
 
+    fn warn_skipped(&mut self, title: &str, body: &str) {
+        // インストールの背景のスレッドの上で出す（UI スレッドとゴーストの会話は止まらない）。
+        alert::warn_ok(title, body, alert::suppressed());
+    }
+
     fn record(&mut self, record: InstalledRecord) {
         // 窓口が居なければ記録は反映されない。続く `raise` が閉じた扱いで手続きを止める。
         let _ = self.ask(|reply| DeskAsk::Record { record, reply });

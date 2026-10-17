@@ -356,3 +356,19 @@ fn ask_yes_no_suppressed_returns_suppressed_and_logs_one_info() {
     assert_eq!(ev.field_str("title"), Some("利用条件"));
     assert_eq!(ev.field("suppressed"), Some("true"));
 }
+
+// ---------------------------------------------------------------- OK だけの警告（emily-ghost-verification 要件 1.12）
+
+/// 抑止ありなら画面を出さず、`warn!(event = "install_warning_dialog")` をちょうど 1 件残す
+/// （欄は題名・本文・抑えたか）。抑止なしの呼び出しはモーダルで止まるので決定論テストに入れない。
+#[test]
+fn warn_ok_suppressed_shows_nothing_and_logs_one_warn() {
+    let ((), events) = capture(|| warn_ok("インストールの警告 - X", "書庫: x.nar\n本文", true));
+    assert_eq!(events.len(), 1, "記録はちょうど 1 件: {events:?}");
+    let ev = &events[0];
+    assert_eq!(ev.level, tracing::Level::WARN);
+    assert_eq!(ev.field_str("event"), Some("install_warning_dialog"));
+    assert_eq!(ev.field_str("title"), Some("インストールの警告 - X"));
+    assert_eq!(ev.field_str("body"), Some("書庫: x.nar\n本文"));
+    assert_eq!(ev.field("suppressed"), Some("true"));
+}
