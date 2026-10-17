@@ -133,9 +133,20 @@ impl NarArchive {
                         "[areka_nar] work folder left behind"
                     );
                 }
+                // 取り出し元の無い同梱は断らずに飛ばした（要件 1.4）。1 件ずつ出す。
+                for skip in &outcome.skipped {
+                    tracing::warn!(
+                        archive = %self.archive.display(),
+                        key = skip.key.as_str(),
+                        source = skip.source.as_str(),
+                        directory = skip.directory.as_str(),
+                        "[areka_nar] companion balloon skipped: its source folder is not in the archive"
+                    );
+                }
                 tracing::info!(
                     archive = %self.archive.display(),
                     installed = outcome.installed.len(),
+                    skipped = outcome.skipped.len(),
                     "[areka_nar] installed"
                 );
                 Ok(outcome)
@@ -327,3 +338,7 @@ mod entry_tests;
 #[cfg(test)]
 #[path = "lib_peek_tests.rs"]
 mod peek_tests;
+
+#[cfg(test)]
+#[path = "lib_skip_tests.rs"]
+mod skip_tests;

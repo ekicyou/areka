@@ -60,7 +60,7 @@ fn ghost_with_balloon() -> NarBuilder {
 /// 木の全内容。ファイルは相対パス → バイト列、フォルダは末尾 `/` の相対パス → 空。
 ///
 /// フォルダが無ければ空の写像を返す。
-fn tree(root: &Path) -> BTreeMap<String, Vec<u8>> {
+pub(super) fn tree(root: &Path) -> BTreeMap<String, Vec<u8>> {
     let mut out = BTreeMap::new();
     if root.is_dir() {
         walk(root, "", &mut out);
@@ -686,7 +686,7 @@ fn the_deflate_scan_looks_at_real_files_and_catches_the_spelling() {
 // ---- 同梱のバルーンを公開の入口で通す（areka-P0-install-companion-reading 要件 8.2・8.3） ----
 
 /// 根の下の全てのファイルの相対パス（フォルダは除く）。
-fn files_under(root: &Path) -> Vec<String> {
+pub(super) fn files_under(root: &Path) -> Vec<String> {
     tree(root)
         .into_keys()
         .filter(|path| !path.ends_with('/'))
