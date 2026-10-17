@@ -6,7 +6,7 @@
   - areka の利用者。SSP から取り出したえみり（SSP に同梱の既定ゴースト「Emily/Phase4.5」・フォルダ名 `emily4`）の `.nar` を areka へ入れようとすると断られる。areka を使ってくれた人からの報告で、優先度が高い（2026-10-17 開発者）。
   - areka の開発者。SSP のために作られたゴーストで areka の何が崩れるかを、まだ一度も確かめていない。今の検体（`emo2`・里々と YAYA のテンプレート・`claudia` ほか）は、どれも SSP 以外でも動くように書かれている。
 - **今の状況**:
-  - えみりの書庫の `install.txt` は `balloon.directory,emily4`・`balloon.source.directory,balloon` を名乗るが、書庫に `balloon/` が無い（SSP ではバルーンが別の `balloon/emily4/` にあり、ゴーストのフォルダだけを畳むと抜ける）。areka はこれを「取り出し元フォルダが無い」として、インストール全体を断る（完了 `areka-P0-nar-install` の要件 4.4）。利用者には「種類が正しくない」の語で伝わる。
+  - えみりの書庫の `install.txt` は `balloon.directory,emily4`・`balloon.source.directory,balloon` を名乗るが、書庫に `balloon/` が無い（SSP ではバルーンが別の `balloon/emily4/` にあり、ゴーストのフォルダだけを畳むと抜ける）。areka はこれを「取り出し元フォルダが無い」として、インストール全体を断る（完了 `areka-P0-nar-install` の要件 5.4）。利用者には「種類が正しくない」の語で伝わる。
   - 検体 `vendors/sample_ghost/emily4.nar` は受け取ったバイト列のまま置いてあるが、検体の登記表にはまだ載っていない。
   - えみりは 32 ビットの YAYA・キャラクター 3 人・α の無い絵と `.pna`・着せ替え・オーナードローのメニューの絵など、SSP 前提の作りを多く持つ。
 - **変えたいこと**:
@@ -36,7 +36,10 @@
 - **理由 3**: 飛ばしたバルーンの代わりは、完了 `areka-P0-ghost-standard-balloon` の決まりで既定のバルーンに落ちる。ゴーストの descript.txt の `balloon,emily4` が解けないからである。利用者はバルーンの無いゴーストを受け取らない。
 - **理由 4**: 案 (b) は、受け取ったバイト列から検体を外す。足すバルーンのライセンスも、書庫の `readme.txt` に書かれていない。
 
-この扱いは、完了 `areka-P0-nar-install` の要件 4.4（取り出し元フォルダが無ければ理由付きで拒否する）を上書きする。
+この扱いは、次の完了 spec の要件を上書きする。
+
+- `areka-P0-nar-install` の要件 5.4（取り出し元フォルダが無ければ理由付きで拒否する）。
+- `areka-P0-install-companion-reading` の要件 2.5 と `areka-P0-install-companion-canon` の要件 2.5（取り出し元の配下に何も無ければ、今どおりインストール全体を断る）。
 
 「何とか動く」の線を越える直しは、本 spec に入れない。同じく、areka の方針で受けないものも入れない。どちらも記録と起票に回す。
 
@@ -80,7 +83,7 @@
 4. When 同梱のバルーンを 1 つ飛ばしたとき, the areka shall 警告を 1 件残す。警告には、`.nar` のファイル名・その同梱の `*.source.directory` の鍵（`*.source.directory` が書かれていないときは `*.directory` の鍵）・書かれていた取り出し元の値を載せる。
 5. When 同梱のバルーンを飛ばしたほかに入れる妨げが無いとき, the areka shall インストールを成功として扱い、利用者とゴーストへは、今の成功と同じ形で伝える（新しいイベント・新しい失敗の語は作らない）。
 6. The areka shall 飛ばした同梱のバルーンの置き場（`<根>/balloon/<*.directory>/`）に、フォルダを作らず、すでに在る中身も変えない（変更 0）。
-7. The areka shall 取り出し元の無い同梱のバルーンを理由に、インストールを断らない（完了 `areka-P0-nar-install` の要件 4.4 を上書きする）。
+7. The areka shall 取り出し元の無い同梱のバルーンを理由に、インストールを断らない（完了 `areka-P0-nar-install` の要件 5.4、`areka-P0-install-companion-reading` の要件 2.5、`areka-P0-install-companion-canon` の要件 2.5 を上書きする）。
 8. The areka shall 同梱のバルーンの取り出し元が書庫に在るときの置き方と結果を、今と変えない（変更 0）。
 9. The areka shall 取り出し元の無い同梱のほかの拒否の理由（壊れた書庫・安全でないパス・必須の鍵が無いなど）を、今と変えない（変更 0）。
 10. When えみりの `.nar`（`vendors/sample_ghost/emily4.nar`）を入れたとき, the areka shall ゴースト `emily4` を `<根>/ghost/emily4/` に置き、バルーン `emily4` を置かず、警告を 1 件残す。
@@ -113,7 +116,8 @@
 4. While 実機の検証を回している, the 実機の検証 shall 判定に使う分岐の記録が出る水準まで記録の水準を開け、自動終了は安全弁として、1 回の走行の所要より長い上限で置く。
 5. The 実機の検証 shall 他の spec の実機の窓を出す回・負荷の走行と、同じ時間に回さない。
 6. The 実機の検証 shall 表示と記録を、MCP の面の撮影・バルーンの撮影・記録の取得で撮って記録に残す。
-7. If 実機の検証の途中でプロセスを外から止める必要があるとき, then the 開発者 shall その走行で自分が起こしたと確かめたプロセスだけを止める。
+7. If 実機の検証の途中でプロセスを外から止める必要があるとき, then the 実機の検証を回す者 shall その走行で自分が起こしたと確かめたプロセスだけを止める。
+8. The 実機の検証 shall 撫で・右クリック・メニューの選択などの操作を AI が行う。areka の窓のクリック透過で画面の操作の道具が効かないときは、開発者の許可を得て OS の入力の送り込み（SendInput）で行う。開発者の手に残すのは、Requirement 4 の 8 項の目視の判定だけとする。
 
 ### Requirement 4: 「何とか動く」の線
 
@@ -190,6 +194,6 @@
 #### Acceptance Criteria
 
 1. The `doc/COMPAT_ARCHITECTURE.md` shall インストールの扱いの節に、取り出し元の無い同梱のバルーンは飛ばして記録に残し、ゴーストは入れることと、その理由を記す。理由は、ukadoc が書いていないこと・SSP から取り出した形の `.nar` が出回ること・飛ばした分は既定のバルーンへ落ちることの 3 つ。
-2. The `doc/COMPAT_ARCHITECTURE.md` shall 完了 `areka-P0-nar-install` の要件 4.4 を本 spec が上書きしたことを記す。
+2. The `doc/COMPAT_ARCHITECTURE.md` shall 完了 spec の要件のうち本 spec が上書きしたもの（`areka-P0-nar-install` の要件 5.4、`areka-P0-install-companion-reading` の要件 2.5、`areka-P0-install-companion-canon` の要件 2.5）を記す。
 3. The 網羅台帳 shall `descript_install` の `*.source.directory` の行に、取り出し元が書庫に無いときの areka の扱いを述べる。
 4. The 網羅台帳 shall 実機の検証で分かった、えみりが使う項目の対応の有無を、記録と食い違わない形にする（本 spec の後に偽の記述を 0 件）。

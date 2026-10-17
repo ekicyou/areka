@@ -71,7 +71,7 @@
 | 5 | 検証の記録の型（同定・機械の構成・環境変数・走行ごとの日時・項目ごとの結果） | 無い | 文書だけ。前例は完了 spec の `tasks.md` の実機の節 |
 | 5.4 | 起票は `/kiro-discovery` | 制約 | |
 | 6.3 | SHIORI の `load` に渡すパスの形（`…\ghost/master`・区切りの混在・末尾の区切りなし。出どころは `crates/areka-parsers/src/package/resolve_shell.rs` の `GHOST_MASTER`） | 制約 | 直すなら全部のゴーストへ渡すバイト列が変わる＝要件どおり開発者に聞く |
-| 6.5 | 上書きする完了 spec の要件 | 直す | 要件が名指ししているのは `areka-P0-nar-install` の 4.4 だけ。ほかにも上書きになる要件がある（6 節の 1） |
+| 6.5 | 上書きする完了 spec の要件 | 直す | 要件が名指ししているのは `areka-P0-nar-install` の 4.4（正しくは 5.4。要件の討議で直した）だけ。ほかにも上書きになる要件がある（6 節の 1） |
 | 7.1〜7.4 | 計画のテスト `plan_tests.rs`（925 行）・`plan_source_path_tests.rs`（390 行）・`plan_roots_tests.rs`、語彙のテスト `lib_vocabulary_tests.rs`、写しのテスト `judge_tests.rs` | 直す・無い | `plan_tests.rs` は 1,000 行の目安に近いので、新しい場面は新しい兄弟のテストへ置く |
 | 8.1・8.2 | `doc/COMPAT_ARCHITECTURE.md` §8 の表に、同梱の番号の読み方（331 行）・`*.source.directory` の読み方（332 行）・`*.directory` の区切り（333 行）の行がある。失敗理由の語の写しの行（287 行）が `CompanionSourceMissing` を `invalid type` に挙げている | 直す | 行を 1 つ足し、287 行の列挙を直す（語彙を消す場合） |
 | 8.3 | 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` 3863 行（`*.source.directory`）。注記は「壊れ方: 明示エラー」で、取り出し元が無いときの扱いは書いていない | 直す | |
@@ -108,7 +108,7 @@
 | | 消す（14 → 13） | 残す（使われない語彙） |
 |---|---|---|
 | 触る所 | `error.rs`（「14 変種で閉じる」の注記）・`judge.rs` 129 行・`judge_tests.rs` 219 行・`lib_vocabulary_tests.rs`（164 行の場面・`observed.len(), 14`）・`error_tests.rs` 69・289 行・`COMPAT_ARCHITECTURE.md` 287 行 | `lib_vocabulary_tests.rs` の「どの語彙にも固定入力が 1 つ在る」が満たせなくなる（作れる入力が無い）。完全一致の突き合わせを曲げるか、除外の宣言が要る |
-| 上書きする完了要件 | `areka-P0-nar-install` 4.4・9.2（語彙に「取り出し元フォルダが無い」を含む）・9.3（拒否の固定入力に「取り出し元フォルダ無し」）／`areka-P0-install-companion-reading` 2.5（今どおり断る） | 同じ（4.4・2.5 は残す場合も上書き） |
+| 上書きする完了要件 | `areka-P0-nar-install` 5.4・9.2（語彙に「取り出し元フォルダが無い」を含む）・9.3（拒否の固定入力に「取り出し元フォルダ無し」）／`areka-P0-install-companion-reading` 2.5・`areka-P0-install-companion-canon` 2.5（今どおり断る） | 同じ（5.4・2.5 は残す場合も上書き） |
 | 写しの網羅 | `failure_word` はワイルドカードの腕を置かないので、消せばビルドが場所を教える | 使われない腕が残る |
 
 ---
@@ -140,7 +140,7 @@
 
 ## 6. 設計へ持ち越す議題（答えで作業が変わるもの）
 
-1. **拒否の語彙 `CompanionSourceMissing` を消すか残すか。** 消すと語彙は 13 になり、`areka-P0-nar-install` の 9.2・9.3 も上書きする。残すと語彙のテストの「全部に固定入力が在る」が崩れる。どちらでも `areka-P0-install-companion-reading` の 2.5（今どおり断る）は上書きになるが、要件の文書は `nar-install` の 4.4 しか名指ししていない。要件 6.5・8.2 に合わせて、上書きする要件の番号の全部をどこに書くかも決める。
+1. **拒否の語彙 `CompanionSourceMissing` を消すか残すか。** 消すと語彙は 13 になり、`areka-P0-nar-install` の 9.2・9.3 も上書きする。残すと語彙のテストの「全部に固定入力が在る」が崩れる。どちらでも `areka-P0-install-companion-reading` の 2.5（今どおり断る）は上書きになるが、要件の文書は `nar-install` の 4.4 しか名指ししていなかった（要件の討議で 5.4 に直し、`install-companion-reading` 2.5・`install-companion-canon` 2.5 も足した）。要件 6.5・8.2 に合わせて、上書きする要件の番号の全部をどこに書くかも決める。
 2. **警告の型と記録の文言。** `ManifestWarning` に 1 変種（案 A）／別の型（案 B）／型は 1 変種で文言だけ分ける（案 C）。`InstallOutcome.warnings` の並び（マニフェストの警告の後ろに計画の警告を足すか）も決める。
 3. **警告に載せる鍵と値。** 要件 1.4 は「`*.source.directory` が書かれていないときは `*.directory` の鍵」「書かれていた取り出し元の値」。⑴ `Companion` に「書かれていたか」を持たせる形でよいか。⑵ `..` を取り除いた値（`SourceDirectoryCleaned` の後）のとき、載せるのは書かれていた値か、取り除いた後の値か（突き合わせに使ったのは後の値）。
 4. **既存の拒否のテスト 3 本の行き先。** `plan_tests.rs` の `refuses_a_companion_whose_source_folder_is_empty`・`refuses_a_companion_whose_source_folder_is_absent` と、`plan_source_path_tests.rs` の 3 つの形（配下の外だけ・フォルダのエントリだけ・前方一致する兄弟だけ）を、「飛ばして警告 1 件」の判定へ書き替えるか、新しい兄弟のテストへ移すか。`plan_tests.rs` は 925 行で、足すと 1,000 行を超える。
