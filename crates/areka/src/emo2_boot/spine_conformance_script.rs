@@ -505,7 +505,8 @@ pub(super) const MOVE_MENU_TALK: &str = concat!(
 
 /// 位置調整の実施（`Onエモの位置調整選択` の応答）。
 ///
-/// 移動量は実物 `menu.pasta:65` の逐語（`\1\![move,-353,,,0,base,base]`）をそのまま用いる。
+/// 移動量は 2026-10-03 版の実物 `menu.pasta:65` の逐語（`\1\![move,-353,,,0,base,base]`）をそのまま用いる
+/// （2026-10-17 版は名前付きの形 `--X=0,…` へ移った）。
 /// 既存の決定論テストが同じ逐語で着地を固定している（`spine_move_cue_tests.rs:89`）。
 pub(super) const MOVE_APPLY_TALK: &str = r"\1\![move,-353,,,0,base,base]\e";
 
