@@ -145,14 +145,19 @@ graph TB
 crates/areka-user-data/              # 新: 書ける根の形の判断と手続き（areka と中継が共有する葉のクレート）
 ├── Cargo.toml                       # std と tracing だけ・publish = false
 └── src/
-    ├── lib.rs                       # 定数・型・decide（純粋）・app_profile_dir（純粋）・probe（薄い I/O）・establish（1 プロセス 1 回）
-    ├── lib_tests.rs                 # 判断・場所・記憶の置き場・引き継ぎの決定論テスト
+    ├── lib.rs                       # 定数・型・decide（純粋）・app_profile_dir（純粋）
+    ├── lib_tests.rs                 # 判断・場所・記憶の置き場の決定論テスト
+    ├── establish.rs                 # probe（薄い I/O）・establish（1 プロセス 1 回・引き継ぎ）・open_dir_for_add（実装で lib.rs から分けた）
+    ├── establish_tests.rs           # 見分け・準備・引き継ぎの決定論テスト（target\ の下）
     ├── copy.rs                      # copy_tree_atomic（作業フォルダで組んで rename・半端を残さない）
     └── copy_tests.rs                # 写す手続きの決定論テスト（target\ の下）
 
 crates/areka/src/roots/
 ├── user_root.rs                     # 新: プロセスに 1 つの形（OnceLock）・並びに入れる書ける根・写す判断 plan_copy（純粋）と writable_copy
 └── user_root_tests.rs               # 新: plan_copy の分岐・AREKA_ROOT のときの扱いの決定論テスト
+
+crates/areka/src/
+└── boot_config_copy_tests.rs        # 新（実装で足した）: 最初の起動のゴーストを写しへ替えるテスト（BootHook）
 
 crates/areka/src/emo2_boot/
 ├── switch_copy.rs                   # 新: 切替の写しを背景のスレッドで走らせ、写し終わりを UI スレッドへ知らせる（段「写し待ち」）
@@ -176,7 +181,7 @@ crates/areka/src/emo2_boot/
 - `crates/areka/src/emo2_boot/ghost_switch.rs` — 受理の直後に `switch_copy::start` を呼んで予約に持たせ、`switch_to` の先頭で写し待ちなら段を「写し待ち」にして戻る（数行・本体は `switch_copy.rs`）。`switch_to_default`（既定への戻し・非常口）は `boot_into` の前に同期の `writable_copy` を通す。
 - `crates/areka/src/emo2_boot/mod.rs` — `switch_copy` の宣言だけ。写し終わりは、今の取り出しの系 `drain_change_requests`（`ghost_switch.rs` の中）の先頭で `switch_copy::poll(world)` を呼んで受け取る（系は増やさない＝「入力の段の系はちょうど 1 つ」のテストを保つ）。
 - `crates/areka/src/install/destination.rs` — `CatalogDestinations::answer` が、見えている物が実行ファイルの隣の根に在るとき `writable_copy` を通してから根を答える（インストールは背景のスレッド）。
-- `crates/areka/src/update/desk.rs`・`update/worker.rs` — `resolve` は値の関数のまま。バルーンの対象の写しは更新の作業スレッドで、取り込みの前に `writable_copy` を通す。
+- `crates/areka/src/update/mod.rs`・`update/worker.rs`・`update/procedure.rs` — `update/desk.rs` の `resolve` は値の関数のまま（触らない）。`update/mod.rs` の `judge` が更新の仕事 `UpdateJob` に並び（`roots`）と実行ファイルのフォルダ（`exe_dir`）を持たせ、`update/procedure.rs` の `run_order` が照会（リソースの照会）の後・対象を扱う前に口 `UpdatePorts::prepare_targets` を呼ぶ。本番の口（`update/worker.rs`）が、`homeurl` を持つバルーンの対象を `copy_for_write(&roots, exe_dir, StoreKind::Balloon, &dir)` へ通して答えのフォルダへ替える（実装で確定した分け方）。
 - `crates/areka/src/menu/roots_frame.rs` — 「置き場を外す ▸」の子のうち書ける根（印の付いた項目）を選べない形にする（要件 3.3）。「置き場を先頭へ ▸」の供給関数 `front_item` を足す（要件 3.7・3.8・最後のタスク）。
 - `crates/areka/src/menu/mod.rs`・`menu/captions.rs`・`menu/plan.rs` — 枠 `Frame::RootFront`（「置き場を追加…」と「置き場を外す」の間）・既定名「置き場を先頭へ」・区切りの群 1（最後のタスク）。並び順を固定しているテスト（`menu/mod_registry_tests.rs`・`menu/plan_tests.rs`・`menu/roots_frame_tests.rs`）を 10 枠に直す。
 - `crates/areka/src/roots/edit.rs`・`roots/edit_tests.rs` — **約束の外（下の節）**。`decide_front`（純粋）と UI スレッドの入口 `move_to_front` を足し、今の `apply` を呼ぶ（最後のタスク）。
@@ -347,7 +352,7 @@ flowchart TD
 | 同梱の物の入れ直し・シェル・supplement | `CatalogDestinations::answer` → `writable_copy` | `<書ける根>\` の写し |
 | 起こしたゴーストの記憶・SHIORI の書き残し・シェルの記憶 | 起こしたフォルダ（`writable_ghost`／`boot_into` の `writable_copy`） | 写しの中 |
 | ゴースト・シェルのネットワーク更新（`.update-work` を含む） | 起こしたフォルダ | 写しの中 |
-| バルーンのネットワーク更新（`.update-work` を含む） | `update/desk.rs` の `resolve` → `writable_copy` | `<書ける根>\balloon\` の写し |
+| バルーンのネットワーク更新（`.update-work` を含む） | `update/procedure.rs` の `run_order` が照会の後に呼ぶ `UpdatePorts::prepare_targets`（本番は `update/worker.rs`）→ `copy_for_write` | `<書ける根>\balloon\` の写し |
 | 書けるかの確かめ | `exe_dir_writability`（中は `open_dir_for_add`） | 何も作らない（ハンドルを開いて閉じるだけ） |
 | 写しの作業 | `copy_tree_atomic` | `<書ける根>\.copy-work\` |
 
@@ -357,16 +362,16 @@ flowchart TD
 
 | Component | Domain/Layer | Intent | Req Coverage | Key Dependencies (P0/P1) | Contracts |
 |-----------|--------------|--------|--------------|--------------------------|-----------|
-| UserDataCore | `areka-user-data`（lib.rs） | 形の判断・場所・記憶の置き場・一度きりの準備 | 1.1〜1.6, 2.1〜2.4, 5.1〜5.5, 6.1, 7.5 | std (P0), tracing (P1) | Service, State |
+| UserDataCore | `areka-user-data`（lib.rs・establish.rs） | 形の判断・場所・記憶の置き場・一度きりの準備 | 1.1〜1.6, 2.1〜2.4, 5.1〜5.5, 6.1, 7.5 | std (P0), tracing (P1) | Service, State |
 | CopyTree | `areka-user-data`（copy.rs） | 木を半端なく写す | 4.6, 4.7, 5.4, 5.5 | std (P0) | Service |
 | UserRootContext | `areka::roots::user_root` | プロセスに 1 つの形・並びに入れる書ける根・写す判断 | 1.4, 3.4, 4.3〜4.9, 7.1 | UserDataCore (P0), areka-ghost (P0) | Service, State |
 | RootsResolveExt | `areka::roots::resolve` | 書ける根を並びへ差し込む | 2.5, 3.1, 3.2, 3.4, 3.5, 4.2, 7.2 | UserDataCore 型 (P0) | Service |
 | RootsReportExt | `areka::roots::report` | 並びの記録に書ける根の印 | 3.6 | UserRootContext (P1) | Service |
 | ProfileDirHook | `areka::boot_config` | 記憶の置き場を 1 つに | 5.1〜5.3, 5.6 | UserDataCore (P0), UserRootContext (P0) | Service |
 | BootHook | `areka::boot_config::resolve_boot_from` | 最初の起動のゴーストを写しへ | 4.3, 7.4 | UserRootContext (P0) | Service |
-| SwitchHook | `areka::emo2_boot::ghost_switch::boot_into` | 切替・既定への戻しのゴーストを写しへ | 4.3 | UserRootContext (P0) | — |
+| SwitchHook | `areka::emo2_boot::ghost_switch::boot_into`・`emo2_boot::switch_copy` | 切替・既定への戻しのゴーストを写しへ | 4.3 | UserRootContext (P0) | — |
 | InstallHook | `areka::install::destination` | 入れ直し・シェル・supplement の宛先を写しへ | 4.4 | UserRootContext (P0), areka-nar (P1) | — |
-| UpdateHook | `areka::update::desk::resolve` | バルーンの更新の対象を写しへ | 4.4 | UserRootContext (P0) | — |
+| UpdateHook | `areka::update::procedure`（`UpdatePorts::prepare_targets`・本番は `update::worker`） | バルーンの更新の対象を写しへ | 4.4 | UserRootContext (P0) | — |
 | RootsMenu | `areka::menu::roots_frame` 他 | 書ける根を外せない・「置き場を先頭へ ▸」 | 3.3, 3.8 | UserRootContext (P1), RootsFront (P0) | — |
 | RootsFront | `areka::roots::edit` | 先頭へ動かす判断と適用 | 3.7, 3.9 | `apply`（形は今のまま・中で `write_failure::fatal`） (P0) | Service |
 | BridgeConfig | `areka-mcp-bridge::config` | 控えの置き場を areka と同じ関数で | 6.1〜6.3 | UserDataCore (P0) | Service |
@@ -726,7 +731,7 @@ pub(crate) fn resolve_boot_from(
 |---|---|---|---|
 | SwitchHook | `emo2_boot/ghost_switch.rs`・`emo2_boot/switch_copy.rs` | 下の「切替の写し」。`switch_to`（メニュー・`\![change,ghost,…]`・更新の後の読み直し）は背景で写し、`switch_to_default`（既定への戻し・非常口）は `boot_into` の前に同期の `writable_copy` | 4.3 |
 | InstallHook | `install/destination.rs` の `CatalogDestinations::answer` | `install_root` の答えが「見えている物」のとき（`find_ghost`／`find_balloon` の項目）、その項目のフォルダを `writable_copy` に通し、答えが変われば写しの根を答える。答える綴りは並びの中の書ける根の `dir()` そのまま（`areka-nar` は作業フォルダを根の綴りの完全一致でまとめるため・`destination.rs` の冒頭の注記）。`running_root` の腕は変えない（起動中のゴーストはすでに写し）。`areka-nar` は配置ごとに 1 回だけ尋ねる（`InstallRoots` の約束）ので、写すのも 1 配置 1 回。インストールは背景のスレッドで走る | 4.4 |
-| UpdateHook | `update/desk.rs`・`update/worker.rs` | `resolve` は値の関数のまま（写さない）。更新の仕事 `UpdateJob` に並び（`here.roots`）を持たせ、作業スレッドが `TargetKind::Balloon` の対象を取り込みの前に `writable_copy(&roots, StoreKind::Balloon, &dir)` へ通し、答えのフォルダを更新する。ゴースト・シェルは起こしたフォルダ（写し）なので通さない | 4.4 |
+| UpdateHook | `update/mod.rs`・`update/procedure.rs`・`update/worker.rs` | `update/desk.rs` の `resolve` は値の関数のまま（写さない・触らない）。`update/mod.rs` の `judge` が更新の仕事 `UpdateJob` に並び（`roots`）と `exe_dir` を持たせ、`update/procedure.rs` の `run_order` がリソースの照会の後・対象を扱う前に口 `UpdatePorts::prepare_targets`（既定は何もしない）を呼ぶ。本番の口（`update/worker.rs`）が、`homeurl` を持つ `TargetKind::Balloon` の対象を `copy_for_write(&roots, exe_dir, StoreKind::Balloon, &dir)` へ通し、答えのフォルダへ替える。照会で依頼をやめたときは写さない。ゴースト・シェルは起こしたフォルダ（写し）なので通さない | 4.4 |
 
 - 表示だけのバルーン（`resolve_balloon_for_ghost`・バルーンの切替）にはフックを置かない（要件 4.5）。
 
@@ -865,12 +870,15 @@ impl Config {
 | 記憶を引き継げない | 書ける根の `profile\areka\` を置き場に続ける | error `app_memory_migrate_failed` |
 | 写せない（読み・書き・リンク） | 元のフォルダを使う | error `user_data_copy_failed`（`kind`・`from`・`to`・`error`） |
 | 写しの作業フォルダを消せない | 続ける | warn `user_data_copy_work_left`（`dir`） |
+| 切替の写しのスレッドが答えを返さずに終わった | 元のフォルダから起こす | error `ghost_switch_copy_lost`（`ghost`） |
+| 「写し待ち」で預けた握手の中身が無い | 続きを走らせない | error `ghost_switch_copy_wait_lost` |
 | 「置き場を先頭へ」を受け付けない | 変えない | warn `roots_front_refused`（`reason`） |
 | 並びを記憶へ書けない（先頭へ） | `apply` の中で向こうの致命の道へ（`write_failure::fatal`） | `apply` が残す（向こうの持ち物） |
 
 ### Monitoring
 
 - 起動ごとに info `user_data_layout` が 1 行（形と理由）と、`root_listed` の各行の `user_root` 欄。実機の確かめはこの 2 つと `user_data_copied`（`ms`）を grep する。
+- 切替の写しが前のゴーストの停止に間に合わなかったときは info `ghost_switch_copy_wait`（`ghost`）が 1 行（段「写し待ち」へ入った印）。
 
 ## Testing Strategy
 

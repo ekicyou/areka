@@ -157,9 +157,10 @@
 - ワークスペースの `clippy -D warnings` は HEAD の時点で触っていないクレート（dola・areka-kanade・areka-ghost の runtime.rs/ticker.rs）で赤。全体の検査（`tools/test-all.ps1`）は fmt と test だけ。変えた行だけ clippy を見る
 - 2.2 で後のタスクがつなぐ 5 つの関数に `#[allow(dead_code)]`（つなぐタスクの名前つき）を付けた。つないだタスクで外す
 - 2.3 から本番の `resolve_roots` が `layout()`（`establish`）を呼ぶ。本物の areka.exe を子として起こす統合テスト 3 本（`smoke_boot_loop_exit.rs`・`emo2_real_run.rs`・`mcp_get_log_real_run.rs`）は開発者の `AREKA_USER_ROOT` を受け継いでしまうので、3.1 で子の起こし方に `.env_remove("AREKA_USER_ROOT")` を足す
-- 3.1 から bin の単体テスト 2 本（`main_ghost_wiring_tests.rs` の `ghost_boot_options`・`ghost_session_strict_tests.rs` の `GhostBootInputs::production`）が本物の環境で `layout()` を 1 回動かす。今の形では何も作らないが、開発者のシェルに `AREKA_USER_ROOT` が在るとそこを作る。完了の点検で扱いを決める
+- （解決済み・2026-10-17）3.1 から bin の単体テストが本物の環境で `layout()` を動かしていた件（実際は 15 本）。記憶の置き場を呼び手が渡す形に直し、`layout()` の先頭に panic を置く試しで 0 本を確かめた（`21b0b948`・`0151b711`）。最後の 1 本の直しで `main.rs` を 3 行触った（開発者がこのセッションに全範囲を開けた・ウェーブ C8 の約束は main の取り込み後に解いた）
 - 4.2 の写しの答えは起床の旗を立てず、次の回（遅くても心拍 30 コマ）で拾う。既存の背景の結果（switch_assets・change_cue）と同じ扱いで設計どおり。背景の結果の全般に旗を立てるかは範囲外の議題
 - 4.4 の写しは `run_order` の前なので、リソースの照会で依頼ごとやめるときも homeurl のあるバルーンは写る（点検の任意の指摘・影響小・未対応）
 - 6.1 の 0.0.2 の注意の仮置きの行は `dist/README.txt` の「・0.0.2 を winget で入れた方へ:」で始まる。8.1 で書き方を確定する
 - 6.2 の COMPAT §8 の行は「並べ替えは外して足し直す」のまま。7 が着地したら同じ行に「置き場を先頭へ ▸」（書ける根を使う形では実行ファイルの隣の子も選べない）を足す（7.2 で行う）
 - 着地（main へのマージ）したら write-failure-notice のセッションへ知らせる（開発者の指示・2026-10-17）。中身は「マージした PR の番号」と「main の先頭のコミット」。向こうは `open_dir_for_add` を待って 5.4・6.4 を止めていて、知らせを受けたら main を取り込んで再開する
+- 確かめていない件（完了の棚卸で起票を判断）: Microsoft Store 版の Claude Desktop が隣に置いた中継を起こしたとき、中継の控えと書ける根の作成がアプリの箱（`Packages\Claude_…\LocalCache`）へ逸らされるか。実測で、Claude アプリの Bash から起こした areka の `%LOCALAPPDATA%` が逸らされることは見た（PowerShell からは逸らされない）。説明書には書いていない
