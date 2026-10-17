@@ -125,7 +125,7 @@ fn default_ghost_after_unclean_exit_goes_through_the_copy() {
     let tmp = TempPath::under_target("cfg-copy-mark");
     let copy = fixture(&tmp, crate::boot_resolve::DEFAULT_GHOST_FOLDER);
     put_ghost(&tmp.child("ghost").join("other"), "b1");
-    write_session_mark(&tmp.child("app-profile"), "other");
+    write_session_mark(&tmp.child("app-profile"), "other").expect("印を書けること");
     ANSWER.with(|a| *a.borrow_mut() = Some(copy.clone()));
     let (cfg, ghost, _, mark, _) = boot(&tmp, &["areka.exe".to_owned()], fake_copy);
     assert_eq!(mark.as_deref(), Some("other"));

@@ -285,6 +285,7 @@ fn failure_in_the_second_root_restores_both_roots() {
 }
 
 /// 見つかる根が無ければ入れずに error `install_no_root` を残し、書く前の失敗として返す。
+/// 段は `Stage` なので、失敗理由の語は `fileio`（write-failure-notice 要件 5.2）。
 #[test]
 fn no_found_root_fails_before_writing_with_an_error() {
     let tmp = TempPath::under_target("install-into-no-root");
@@ -307,6 +308,11 @@ fn no_found_root_fails_before_writing_with_an_error() {
             })
         ),
         "{result:?}"
+    );
+    let error = result.expect_err("入らない");
+    assert_eq!(
+        crate::install::judge::failure_word(&error).as_ref_str(),
+        "fileio"
     );
     let logged = events
         .iter()

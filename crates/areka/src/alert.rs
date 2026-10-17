@@ -1,7 +1,8 @@
 //! 無いときの告知（areka-P0-baseware-root-layout 要件 6）。
 //!
 //! 起動を止める 4 場面（根なし／ゴーストなし／バルーンなし／起動窓を開けない）と
-//! SHIORI が動かなくなった場面（areka-P0-shiori-fault-notice 要件 1・5）を
+//! SHIORI が動かなくなった場面（areka-P0-shiori-fault-notice 要件 1・5）と
+//! 記憶を書けない場面（areka-P0-write-failure-notice 要件 2.4・2.7・6.2）を
 //! [`AlertScene`] 1 つの型で数え、利用者向けのメッセージボックス（`MessageBoxW`）と
 //! 同じ内容の `error!` を出す。文面は [`alert_text`] が純粋に組む（テストで固定する）。
 //! 告知は環境変数 `AREKA_NO_ALERT` で抑えられる（自動テストでモーダルが止まらない）。
@@ -14,6 +15,7 @@
 use std::path::PathBuf;
 
 use areka_kanade::{ShioriFault, ShioriFaultKind};
+use areka_sylphya::{PersistFailure, PersistFailureCause, PersistKey, PersistScope};
 use windows::Win32::UI::WindowsAndMessaging::{
     IDNO, IDYES, MB_ICONERROR, MB_ICONQUESTION, MB_OK, MB_SETFOREGROUND, MB_TOPMOST, MB_YESNO,
     MessageBoxW,
@@ -46,12 +48,31 @@ pub(crate) enum AlertScene {
         ghost_root: PathBuf,
         fault: ShioriFault,
     },
+    /// 記憶を書けない（write-failure-notice 要件 2.1〜2.4）。起動の時点か途中かを載せる。
+    MemoryWrite {
+        failure: PersistFailure,
+        moment: WriteMoment,
+    },
 }
 
-/// 題名（起動を止める 4 場面で共通）。
+/// 記憶を書けなかった時点（write-failure-notice 要件 6.2・足す告知は 2 つの時点だけ）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WriteMoment {
+    /// 起動の時点（ゴーストを起こす前）。
+    Boot,
+    /// 動いている途中。
+    Running,
+}
+
+/// 題名（起動を止める 4 場面と、起動の時点で記憶を書けない場面で共通）。
 const TITLE: &str = "areka を起動できません";
 /// SHIORI が動かなくなった場面の題名（smoke の目印でもある）。
 const SHIORI_FAULT_TITLE: &str = "SHIORI が動かなくなりました";
+/// 動いている途中で記憶を書けなくなった場面の題名（起動の時点は [`TITLE`]）。
+const MEMORY_WRITE_TITLE: &str = "areka の記憶を書けません";
+/// 記憶を書けない場面の直し方（環境変数の名前と既定の置き場の場所は書かない・要件 2.4）。
+/// 説明書の節の名前は user-data-root の `dist/README.txt` に合わせる。
+const MEMORY_WRITE_FIX: &str = "直し方: この置き場を書ける状態にしてください。置き場の変え方は、説明書（README.txt）の「■ 記憶の置き場」にあります。";
 
 /// 置き場の場面の文面（利用者向けの語は「置き場」・要件 9.5）。
 const ROOT_SHAPE: &str = "置くもの: ghost フォルダと balloon フォルダを持つフォルダ";
@@ -71,11 +92,42 @@ pub(crate) fn fault_kind_text(kind: ShioriFaultKind) -> &'static str {
     }
 }
 
+/// 覚えられなかったものの利用者向けの語（純粋・`memory_write_failed` の欄 `what` も同じ物）。
+/// key ごとの語を出た順に同じ語は 1 回だけ「・」で繋ぐ。key が空（起動の前の確かめ）ならスコープの語。
+pub(crate) fn remembered_text(failure: &PersistFailure) -> String {
+    if failure.keys.is_empty() {
+        return match failure.scope {
+            PersistScope::App => "areka の記憶",
+            PersistScope::Ghost => "ゴーストの記憶",
+            PersistScope::Shell => "シェルの記憶",
+            PersistScope::Balloon => "バルーンの記憶",
+        }
+        .to_owned();
+    }
+    let mut words: Vec<&str> = Vec::new();
+    for key in &failure.keys {
+        let word = match key {
+            PersistKey::LastRunning => "起動中の印",
+            PersistKey::LastGhost => "最後に使ったゴースト",
+            PersistKey::LastBalloon => "最後に使ったバルーン",
+            PersistKey::LastShell => "最後に使ったシェル",
+            PersistKey::BasewareRoots => "置き場の並び",
+            PersistKey::WindowPos { .. } | PersistKey::BalloonOffset { .. } => "窓の位置",
+            PersistKey::BootCount | PersistKey::VanishCount => "ゴーストのプロパティ",
+        };
+        if !words.contains(&word) {
+            words.push(word);
+        }
+    }
+    words.join("・")
+}
+
 /// 題名と本文（純粋・テストで文面を固定する）。題名は場面ごと。本文は行数可変（要件 9.5〜9.7）:
 /// 置き場の場面は「理由」「試した場所（1 行ずつ・出どころつき）」「置くもの」「AREKA_ROOT の案内」、
 /// ゴースト・バルーンの場面は「何が無いか」「探した場所（各置き場の `ghost\`／`balloon\` を 1 行ずつ）」
 /// 「置くもの」、起動窓の場面は「何が起きたか」「失敗の内容」「確かめること」、
-/// SHIORI の場面は「どのゴーストか」「失敗の種類」「理由」。
+/// SHIORI の場面は「どのゴーストか」「失敗の種類」「理由」、
+/// 記憶の場面は「何が起きたか」「覚えられなかったもの」「置き場」「理由」「直し方」の 5 行。
 pub(crate) fn alert_text(scene: &AlertScene) -> (String, String) {
     let lines: Vec<String> = match scene {
         AlertScene::RootMissing(error) => {
@@ -139,9 +191,34 @@ pub(crate) fn alert_text(scene: &AlertScene) -> (String, String) {
             format!("失敗の種類: {}", fault_kind_text(fault.kind)),
             format!("理由: {}", fault.reason),
         ],
+        AlertScene::MemoryWrite { failure, moment } => vec![
+            match moment {
+                WriteMoment::Boot => "記憶を書けないので、ゴーストを起こさずに起動を止めました。",
+                WriteMoment::Running => "記憶を書けなくなったので、areka を終了しました。",
+            }
+            .to_owned(),
+            format!("覚えられなかったもの: {}", remembered_text(failure)),
+            match &failure.dir {
+                Some(dir) => format!("置き場: {}", dir.display()),
+                None => "置き場: 決まっていません".to_owned(),
+            },
+            match &failure.cause {
+                PersistFailureCause::Io(reason) => format!("理由: {reason}"),
+                PersistFailureCause::NoRoot => "理由: 記憶の置き場が決まっていません".to_owned(),
+            },
+            MEMORY_WRITE_FIX.to_owned(),
+        ],
     };
     let title = match scene {
         AlertScene::ShioriFault { .. } => SHIORI_FAULT_TITLE,
+        AlertScene::MemoryWrite {
+            moment: WriteMoment::Running,
+            ..
+        } => MEMORY_WRITE_TITLE,
+        AlertScene::MemoryWrite {
+            moment: WriteMoment::Boot,
+            ..
+        } => TITLE,
         AlertScene::RootMissing(_)
         | AlertScene::GhostMissing { .. }
         | AlertScene::BalloonMissing { .. }
@@ -265,3 +342,7 @@ pub(crate) fn ask_yes_no(title: &str, body: &str, suppressed: bool) -> YesNo {
 #[cfg(test)]
 #[path = "alert_tests.rs"]
 mod alert_tests;
+
+#[cfg(test)]
+#[path = "alert_memory_write_tests.rs"]
+mod alert_memory_write_tests;

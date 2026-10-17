@@ -40,8 +40,8 @@ fn named_shell_boot_mounts_it_and_set_shell_dir_rewrites_it() {
         ticker: TickerMode::Disabled,
     };
 
-    let mut runtime =
-        boot_with_origin(options, None, BootOrigin::Plain, Some("B")).expect("boot should succeed");
+    let mut runtime = boot_with_origin(options, None, BootOrigin::Plain, Some("B"), None)
+        .expect("boot should succeed");
     assert_eq!(runtime.mount().shell.dir, shell_b);
 
     let deadline = Instant::now() + Duration::from_secs(10);

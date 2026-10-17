@@ -547,7 +547,7 @@ pub fn boot_with_kanade_stop(
     options: GhostBootOptions,
     kanade_stop: Option<Sender<KanadeNotice>>,
 ) -> Result<GhostRuntime, GhostBootError> {
-    boot_with_origin(options, kanade_stop, BootOrigin::Plain, None)
+    boot_with_origin(options, kanade_stop, BootOrigin::Plain, None, None)
 }
 
 /// 起動の由来つきで ghost を起動する（要件 4.1・8.6）。
@@ -561,11 +561,16 @@ pub fn boot_with_kanade_stop(
 /// `shell` は起動するシェルのフォルダ名（要件 6.4）。`Some(名)` なら `shell/<名>/` をマウントし、
 /// `OnBoot` の Ref0 もそのシェルの名前になる。`None` は今日の規則
 /// （`seriko.defaultsurfacedirectoryname`、無ければ `master`）。[`GhostBootOptions`] に欄は足さない。
+///
+/// `persist_failures` はゴーストの記憶の書き手の失敗の受け口（要件 1.3）。`Some` なら、書き手が
+/// 保存に失敗するたびに書けなかった中身（[`areka_sylphya::PersistFailure`]）が 1 件届く。
+/// 書き手を起こすときに渡すので、起動のトークの最中の書き込みも取りこぼさない。`None` なら送らない。
 pub fn boot_with_origin(
     mut options: GhostBootOptions,
     kanade_stop: Option<Sender<KanadeNotice>>,
     origin: BootOrigin,
     shell: Option<&str>,
+    persist_failures: Option<Sender<areka_sylphya::PersistFailure>>,
 ) -> Result<GhostRuntime, GhostBootError> {
     // 1. マウント解決（失敗は即座に打ち切り・要件 2.1/2.5）。シェル名つき（要件 6.4）。
     let mount = match resolve_with_shell(&options.ghost_root, options.default_encoding, shell) {
@@ -617,7 +622,7 @@ pub fn boot_with_origin(
         reader: sylphya_reader,
         publisher: sylphya_publisher,
         handle: sylphya_handle,
-    } = crate::sylphya_wiring::spawn_ghost_sylphya(scope_roots);
+    } = crate::sylphya_wiring::spawn_ghost_sylphya(scope_roots, persist_failures);
 
     // ghost 自身の AskerId（MountModel.shiori.dir 由来の正準文字列・provider／prefetch sink が共有）。
     let ghost_asker = crate::sylphya_wiring::ghost_asker_id(&mount.shiori.dir);

@@ -351,7 +351,7 @@ mod switch_balloon {
             (g.route, g.folder, mark)
         };
         let without_mark = boot();
-        write_session_mark(&app_dir, "落ちた子");
+        let _ = write_session_mark(&app_dir, "落ちた子");
         let (first, events) = capture(boot);
         let second = boot();
         let found = events
@@ -391,7 +391,7 @@ mod switch_balloon {
         let tmp = TempPath::new("switch-balloon-mark-argv");
         let ghost = fixture(&tmp);
         let app_dir = tmp.child("app-profile");
-        write_session_mark(&app_dir, "落ちた子");
+        let _ = write_session_mark(&app_dir, "落ちた子");
         let args = vec!["areka.exe".to_owned(), ghost.display().to_string()];
         let (got, events) = capture(|| {
             resolve_boot_from(

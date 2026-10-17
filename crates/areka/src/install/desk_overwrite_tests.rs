@@ -66,7 +66,8 @@ fn first(events: &[CapturedEvent], name: &str) -> Option<usize> {
 /// 呼び出しの列の確かめに添える手がかり: 起こした回ごとの列・`OnInstallFailure` の Reference・捕まえた
 /// 記録のうち warn 以上。手続きの失敗の詳しい記録（`install_failed`・`areka_nar` の失敗）は背景の
 /// スレッド `install` で出るので、呼び手のスレッドだけを捕える `capture` には映らない。Reference の語
-/// （`extraction` は展開か確定の入出力の失敗）がその代わりになる。
+/// （`extraction` は `.nar` そのものを読めない失敗・`fileio` は作業フォルダ・入れる先・確定・巻き戻しの
+/// 入出力の失敗）がその代わりになる。
 fn clues(rig: &SwitchRig, folder: &str, events: &[CapturedEvent]) -> String {
     let failures: Vec<_> = rig
         .calls(folder)
@@ -532,7 +533,7 @@ fn a_running_ghost_missing_from_the_catalog_is_installed_elsewhere_and_closed_on
 }
 
 /// 宛先の中のファイルを開いたまま入れると確定が失敗して巻き戻り、同じゴーストが元の中身で起き直って、
-/// 定常に入ってから `OnInstallFailure`（Reference0＝`extraction`）が出る。`areka-nar` の失敗の記録の
+/// 定常に入ってから `OnInstallFailure`（Reference0＝`fileio`）が出る。`areka-nar` の失敗の記録の
 /// 作業フォルダの欄は空でなく、根の `.nar-work` の配下を指す（要件 7.4・11.7）。
 #[test]
 fn a_failed_commit_boots_the_same_ghost_with_its_old_contents_and_reports_failure() {
@@ -570,7 +571,7 @@ fn a_failed_commit_boots_the_same_ghost_with_its_old_contents_and_reports_failur
             .as_ref()
             .and_then(|refs| refs.first())
             .map(String::as_str),
-        Some("extraction"),
+        Some("fileio"),
         "{failure:?}"
     );
     assert!(!touched, "元の中身のまま（目印は入らない）");

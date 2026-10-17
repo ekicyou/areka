@@ -203,7 +203,7 @@ fn switch_to_records_drop_once_and_fallback_keeps_it() {
         let mut world = switching_world(&root, "B");
         world.resource_mut::<BootContext>().argv_session = argv_session;
         let profile = world.resource::<BootContext>().app_profile_dir.clone();
-        crate::boot_resolve::write_session_mark(&profile, "A");
+        let _ = crate::boot_resolve::write_session_mark(&profile, "A");
 
         let ((), events) = capture(|| switch_to(&mut world, ChangeHandoff { script: None }));
 

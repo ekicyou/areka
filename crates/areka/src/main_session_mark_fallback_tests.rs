@@ -236,7 +236,7 @@ fn logsink_fallback_ended_by_os_session_end_keeps_mark() {
 fn argv_session_falling_back_neither_reads_writes_nor_clears_mark() {
     let mut rig = rig_with(FakeShiori::BalloonMissing);
     let app = app_dir(&rig);
-    write_session_mark(&app, "前の印");
+    let _ = write_session_mark(&app, "前の印");
     let argv_dir = rig.root.ghost_dir("A");
     let found = resolve_boot_from(
         crate::roots::single_env(rig.root.dir().to_path_buf()),

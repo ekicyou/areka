@@ -285,13 +285,15 @@ fn every_refuse_kind_maps_to_its_canonical_word() {
     );
 }
 
+/// 読み書きの失敗は段で振り分ける: `.nar` そのものを読めない `Read` だけ `extraction`、作業フォルダ・
+/// 入れる先・確定・巻き戻しの段は `fileio`（write-failure-notice 要件 5.1・7.4・9.2）。
 #[test]
-fn every_io_phase_is_extraction() {
-    for phase in [
-        IoPhase::Read,
-        IoPhase::Stage,
-        IoPhase::Commit,
-        IoPhase::Rollback,
+fn io_failures_route_by_phase_only_read_is_extraction() {
+    for (phase, expected) in [
+        (IoPhase::Read, FailureWord::Extraction),
+        (IoPhase::Stage, FailureWord::FileIo),
+        (IoPhase::Commit, FailureWord::FileIo),
+        (IoPhase::Rollback, FailureWord::FileIo),
     ] {
         let error = NarError::Io {
             archive: PathBuf::from(r"C:\in\a.nar"),
@@ -302,15 +304,16 @@ fn every_io_phase_is_extraction() {
             rolled_back: true,
             survivors: Box::new([]),
         };
-        assert_eq!(failure_word(&error), FailureWord::Extraction, "{phase:?}");
+        assert_eq!(failure_word(&error), expected, "{phase:?}");
     }
 }
 
 #[test]
-fn failure_words_are_the_three_canonical_spellings() {
+fn failure_words_are_the_four_canonical_spellings() {
     assert_eq!(FailureWord::Extraction.as_ref_str(), "extraction");
     assert_eq!(FailureWord::InvalidType.as_ref_str(), "invalid type");
     assert_eq!(FailureWord::Unsupported.as_ref_str(), "unsupported");
+    assert_eq!(FailureWord::FileIo.as_ref_str(), "fileio");
 }
 
 // ---- kind_word・Reference（要件 2.4・2.5・2.6・3.2・12.7・11.1） ----

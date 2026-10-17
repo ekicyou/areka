@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 
 use areka_ghost::{BasewareRoots, same_folder_name};
-use areka_nar::{ElementKind, InstallKind, InstallManifest, NarError, RefuseReason};
+use areka_nar::{ElementKind, InstallKind, InstallManifest, IoPhase, NarError, RefuseReason};
 
 /// 複数の値の区切り（byte 値 1）。
 pub(crate) const SEPARATOR: &str = "\u{1}";
@@ -80,12 +80,15 @@ pub(crate) fn destination_of(manifest: &InstallManifest, ghost: &GhostFacts) -> 
     }
 }
 
-/// 正典の失敗理由の語（3 値だけ・要件 5.3）。
+/// 正典の失敗理由の語（要件 5.3 の 3 値と、書けない失敗の `fileio`・write-failure-notice 要件 5.1）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FailureWord {
     Extraction,
     InvalidType,
     Unsupported,
+    /// インストールの失敗理由の一覧に「書けない」の語が無いので、ukadoc の「ネットワーク失敗理由」の
+    /// `fileio` を借りる（`doc/COMPAT_ARCHITECTURE.md` §8）。
+    FileIo,
 }
 
 impl FailureWord {
@@ -95,16 +98,24 @@ impl FailureWord {
             FailureWord::Extraction => "extraction",
             FailureWord::InvalidType => "invalid type",
             FailureWord::Unsupported => "unsupported",
+            FailureWord::FileIo => "fileio",
         }
     }
 }
 
 /// `areka-nar` の失敗を正典の失敗理由の語へ写す（要件 5.2 の表）。
 ///
-/// ワイルドカードの腕を置かない＝`areka-nar` の拒否の種類が増えたらここでビルドが止まる。
+/// ワイルドカードの腕を置かない＝`areka-nar` の拒否の種類や読み書きの段が増えたらここでビルドが止まる。
 pub(crate) fn failure_word(error: &NarError) -> FailureWord {
     let reason = match error {
-        NarError::Io { .. } => return FailureWord::Extraction,
+        // `.nar` そのものを読めないときだけ書庫の失敗。作業フォルダ・入れる先・確定・巻き戻しは
+        // 書けない側（根が無い失敗も `Stage`）。
+        NarError::Io { phase, .. } => {
+            return match phase {
+                IoPhase::Read => FailureWord::Extraction,
+                IoPhase::Stage | IoPhase::Commit | IoPhase::Rollback => FailureWord::FileIo,
+            };
+        }
         NarError::Refused { reason, .. } => reason,
     };
     match reason {

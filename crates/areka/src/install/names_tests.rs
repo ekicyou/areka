@@ -19,7 +19,7 @@ use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standar
 
 /// 値を本物の記憶の書き手へ載せ、台詞の開始の表で 2 語を展開する（`%lastghostname`, `%lastobjectname`）。
 fn resolved(names: &LastInstallNames) -> (ResolvedVar, ResolvedVar) {
-    let parts = spawn_ghost_sylphya(ScopeRoots::default());
+    let parts = spawn_ghost_sylphya(ScopeRoots::default(), None);
     let asker = AskerId::new("ghost/install-names");
     publish(&parts.publisher, asker.clone(), names);
     parts.publisher.barrier().expect("書き手は生きている");

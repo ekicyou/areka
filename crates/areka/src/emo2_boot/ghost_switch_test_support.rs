@@ -193,6 +193,8 @@ pub(crate) struct SwitchRig {
     factory_calls: Rc<Cell<u64>>,
     /// 起こす実行系に App スコープの置き場（[`SwitchRig::app_dir`]）を渡すか（既定は渡さない＝
     /// 最後に使ったゴーストと印を実行系の記憶の書き手が書かない）。[`SwitchRig::wire_app_memory`] で立てる。
+    /// `Update` の段（致命の机の汲み出し）を回す足場は必ず立てる。本番は App の置き場が必ず在り、
+    /// 置き場が無いと App スコープの投函が致命の机で終了を招くため。
     app_memory: Rc<Cell<bool>>,
     /// 注入した Tick の合成の時刻（単調増加・ゴーストをまたいでも戻さない）。
     talk_clock_ms: u64,

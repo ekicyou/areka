@@ -356,15 +356,15 @@ fn none_root_load_is_empty() {
 #[test]
 fn none_root_save_is_degraded_no_panic() {
     let io = FakePersistIo::new();
-    assert_eq!(
+    assert!(matches!(
         save_scope(
             PersistScope::Ghost,
             &ScopeRoots::default(),
             &io,
             vec![(PersistKey::BootCount, "1".into())]
         ),
-        PersistOutcome::Degraded
-    );
+        PersistOutcome::Degraded(_)
+    ));
 }
 
 // --- IO 障害の寛容縮退（read/commit 故障注入）---
@@ -403,15 +403,15 @@ fn save_commit_failure_is_degraded_and_leaves_prior_intact() {
         vec![(PersistKey::BootCount, "1".into())],
     );
     io.fail_next_commit();
-    assert_eq!(
+    assert!(matches!(
         save_scope(
             PersistScope::Ghost,
             &roots,
             &io,
             vec![(PersistKey::BootCount, "2".into())]
         ),
-        PersistOutcome::Degraded
-    );
+        PersistOutcome::Degraded(_)
+    ));
     // 既存内容は無傷（原子的確定・R6.2）——1 のまま。
     assert!(
         load_scope(PersistScope::Ghost, &roots, &io).contains(&(PersistKey::BootCount, "1".into()))
@@ -474,9 +474,8 @@ fn save_commit_failure_emits_error_log() {
             &io,
             vec![(PersistKey::BootCount, "2".into())],
         );
-        assert_eq!(
-            outcome,
-            PersistOutcome::Degraded,
+        assert!(
+            matches!(outcome, PersistOutcome::Degraded(_)),
             "commit 失敗は Degraded 縮退（panic なし）"
         );
     });

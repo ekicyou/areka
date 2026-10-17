@@ -182,7 +182,8 @@ fn first_boot(rig: &mut SwitchRig, ghost: GhostDecision, origin: BootOrigin, arg
         },
         &ghost,
         &balloon,
-    );
+    )
+    .expect("印を書ける");
 }
 
 /// 土台の根の `folder` を記憶の経路で決まったゴーストとして初回の起動で起こす。
@@ -203,7 +204,7 @@ fn after_run_and_settle(rig: &mut SwitchRig) -> (bool, Option<MarkVerdict>) {
     let verdict = after
         .mark
         .as_ref()
-        .map(|mark| settle_session_mark(mark, end(true, down_ok, false)));
+        .map(|mark| settle_session_mark(mark, end(true, down_ok, false)).0);
     (down_ok, verdict)
 }
 
@@ -407,6 +408,13 @@ fn session_mark_verdict_table() {
         ExitOrigin::Smoke,
         ExitOrigin::OsClose,
         ExitOrigin::SessionEnd,
+        // 記憶を書けなかった終わりも降ろす手順は正規の道を通る＝消す側（write-failure-notice 要件 3.6）。
+        ExitOrigin::MemoryWriteFailed(areka_sylphya::PersistFailure {
+            scope: PersistScope::App,
+            dir: None,
+            keys: vec![PersistKey::LastRunning],
+            cause: areka_sylphya::PersistFailureCause::NoRoot,
+        }),
     ];
     let quit = ExitOrigin::KanadeStopped(Quit);
     let session_end = ExitOrigin::SessionEnd;
@@ -587,14 +595,14 @@ fn settle_session_mark_applies_the_verdict() {
         ),
     ] {
         let app_profile_dir = tmp.child(event);
-        write_session_mark(&app_profile_dir, "A");
+        let _ = write_session_mark(&app_profile_dir, "A");
         let mark = MarkInputs {
             app_profile_dir: app_profile_dir.clone(),
             argv_session,
             first,
             logsink_fallback: false,
         };
-        let (verdict, events) = capture(|| settle_session_mark(&mark, end(true, true, false)));
+        let (verdict, events) = capture(|| settle_session_mark(&mark, end(true, true, false)).0);
         let logged = events
             .iter()
             .filter(|e| e.level == level && e.field_str("event") == Some(event))
@@ -647,7 +655,7 @@ fn boot_fault_keeps_mark_and_next_boot_is_default_with_halt() {
     let verdict = after
         .mark
         .as_ref()
-        .map(|mark| settle_session_mark(mark, end(true, down_a, false)));
+        .map(|mark| settle_session_mark(mark, end(true, down_a, false)).0);
     let mark_kept = read_session_mark(&app);
     plant_last_ghost(&app, "A");
     let next = next_boot(&mut rig);
@@ -796,7 +804,7 @@ fn clean_exit_clears_mark_and_next_boot_follows_memory() {
 fn argv_session_neither_reads_writes_nor_clears_mark() {
     let mut rig = rig_with(FakeShiori::ConnectFail);
     let app = app_dir(&rig);
-    write_session_mark(&app, "前の印");
+    let _ = write_session_mark(&app, "前の印");
     let argv_dir = rig.root.ghost_dir("A");
     let found = resolve_boot_from(
         crate::roots::single_env(rig.root.dir().to_path_buf()),

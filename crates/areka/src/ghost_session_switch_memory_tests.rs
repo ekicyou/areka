@@ -102,6 +102,7 @@ fn after_run_and_settle(rig: &mut SwitchRig) -> (bool, Option<MarkVerdict>) {
                 shiori_cut: false,
             },
         )
+        .0
     });
     (down_ok, verdict)
 }
@@ -127,7 +128,7 @@ fn switch_lap(argv_session: bool) -> (LapMemory, Vec<CapturedEvent>) {
     rig.plant_boot_record("B");
     rig.wire_app_memory();
     let prior = if argv_session { PRIOR_MARK } else { "A" };
-    write_session_mark(&rig.app_dir(), prior);
+    let _ = write_session_mark(&rig.app_dir(), prior);
     rig.boot("A");
     rig.world.resource_mut::<BootContext>().argv_session = argv_session;
 
@@ -284,7 +285,7 @@ fn default_fallback_keeps_target_mark_until_default_steady() {
         Some(default_ghost()),
     );
     rig.wire_app_memory();
-    write_session_mark(&rig.app_dir(), "A");
+    let _ = write_session_mark(&rig.app_dir(), "A");
     rig.boot("A");
     let steady_a = rig.wait_steady();
     let reached = pump_to_welcoming(&mut rig, WelcomeAttempt::Default);
@@ -318,7 +319,7 @@ fn default_fallback_keeps_target_mark_until_default_steady() {
 fn switch_fatal_leaves_default_last_ghost_and_target_mark() {
     let mut rig = fallback_rig(ghost_a(A_TO_B, None), FakeShiori::ConnectFail, None);
     rig.wire_app_memory();
-    write_session_mark(&rig.app_dir(), "A");
+    let _ = write_session_mark(&rig.app_dir(), "A");
     rig.boot("A");
     let steady_a = rig.wait_steady();
     let exited = rig.pump_talking_until(SwitchRig::exit_requested);
