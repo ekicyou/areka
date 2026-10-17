@@ -123,6 +123,7 @@ fn reservation(stage: SwitchStage) -> SwitchInFlight {
         },
         stage,
         boot_event: None,
+        copy: crate::emo2_boot::switch_copy::SwitchCopy::None,
     }
 }
 

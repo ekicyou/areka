@@ -106,7 +106,6 @@
   - このタスクだけが `user-data-root` の着地を待つ。待つ間も 6.1〜6.3 は進めてよい
   - _Depends: 4.2, 5.2_
   - _Requirements: 2.1, 2.9, 3.1, 7.2_
-  - _Blocked: `areka_user_data::open_dir_for_add` が main に未着地（user-data-root のブランチのコミット 6b08d23e・着地の日時は未定）。着地の知らせを受けたら main を取り込んで再開する（research.md §13）_
 
 - [ ] 6. 書けない場面を決定論のテストと実機で固定する
 - [x] 6.1 (P) 13 種の書き込みが机へ届く行列のテスト
@@ -133,7 +132,6 @@
   - 煙のテストの新しい方向が緑になる
   - _Depends: 5.4_
   - _Requirements: 6.1, 7.6, 7.7_
-  - _Blocked: 5.4 の待ちに続く_
 
 - [ ] 7. 申し送りと、境界の締めの確かめ
 - [x] 7.1 emo2 の辞書の持ち主への申し送りと、境界の確かめ
@@ -152,3 +150,4 @@
 - 4.1: 致命の机の汲み出しは `Update` で走る。`SwitchRig` の上で `Update` を回す足場（LapRig・GpuRig）は `wire_app_memory()` を `boot` の前に呼ばないと、App スコープの投函が `NoRoot` で致命になり赤になる（本番は App の置き場が必ず在る）。
 - 5.2: `main.rs` は 994 行。5.4 に残るのは 6 行だけなので、呼び出しの行だけを足し、処理の中身は `write_failure.rs` 側へ置く。
 - 6.1: 13 種の行列は、投函の物にも偽の保存の口ではなく本物の `FsPersistIo` を使い、置き場を普通のファイルにして書けなくした（要件 7.1 が両方を認める）。`install/desk.rs` の `remember_balloon` をテストから呼ぶため `pub(crate)` に広げた（振る舞いは変えない）。
+- 着地の取り込み（10-17・main `311e8863`＝PR#322）: `areka` → `areka-user-data` の依存は向こうの PR で既に入っていた（5.4 で Cargo.toml を足す要は無い）。`SwitchInFlight` に `copy` の欄が足され、こちらの兄弟テスト 2 つと向こうの `boot_config_copy_tests` の印の書き手の呼び出しを合わせた。取り込み後の `main.rs` は 997 行（5.4 で足せるのは 3 行）
