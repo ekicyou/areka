@@ -130,3 +130,8 @@
   - 足したテスト 4 本（「3 人目の窓は作らない」「`\p[2]` は読み捨てて会話を続ける」を前提にしている）: `placement/placement_char_clamp_tests.rs`、`input_events/input_events_char_clamp_tests.rs`、`menu/trigger_wired_tests.rs` の `a_right_click_on_every_emily_shaped_window_builds_a_menu_without_panic`、`emo2_boot/spine_third_scope_talk_tests.rs`。
   - `debug_assert!(scope <= 1)` の 2 か所: `input_events/mod.rs` の `char_scope` と `menu/captions.rs` の `visible_resource_for`。
 - 網羅台帳の 2 行を縮退へ動かし、宛先の欄は空のまま残した: `doc/ukadoc-coverage/ledger/assets.toml` の `char*.name` と `ledger/sakura-script.toml` の `\p[ID番号]`。本 spec が `doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` に載ったら、この 2 行の宛先を本 spec にする（載る前に書くと台帳の検査が赤になる）。
+### 2026-10-18 追記: 3 人目の文字が溜まり続ける疑い（`areka-P0-emily-ghost-verification` の完了時の棚卸）
+
+- 3 人目からの窓が無い今は、`\p[2]` の後の文字が文字の層で「装着先（予約スロット）が未解決」の actor として溜まるだけで捨てられない（`crates/areka-emo-text/src/actor_present.rs` の warn!「状態を蓄積し描画をスキップして次フレームで再試行する」）。えみりの実機の走行で 1 件ずつ出た（`.kiro/specs/completed/areka-P0-emily-ghost-verification/verification.md` の崩れた所 2）。
+- 長く動かしたときに増え続けるかはまだ測っていない。3 人目の窓を出せば溜まらなくなるので本 spec の持ち場だが、窓を出す前に「装着先が無い scope の文字は捨てる」で止めるかを、要件の段で決める。
+- 起票の理由: 確かめるのに長い実機の走行が要る（完了時の棚卸の起票の条件 4）。
