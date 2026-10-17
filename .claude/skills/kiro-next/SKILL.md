@@ -39,6 +39,7 @@ Run one full roadmap inventory ("棚卸") on the current harness worktree branch
 ## Step 0 — Resolve context
 - Repository root = current worktree. Steering: `.kiro/steering/`. Specs: `.kiro/specs/` (completed under `completed/`). Default branch from `git symbolic-ref refs/remotes/origin/HEAD` (fallback `main`).
 - Scratch directory = the session scratchpad (never `/tmp`, never `C:\`).
+- **Session title** (developer 2026-10-17: 「セッション名を「{リポジトリ名}棚卸」に」): first thing in Step 0, rename this session to `<repo>棚卸`, where `<repo>` is the main checkout's folder name (`basename "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"`, e.g. `areka` → `areka棚卸`). Call `mcp__ccd_session_mgmt__set_session_title` with `session_id` = `self` (load it with `ToolSearch` `select:mcp__ccd_session_mgmt__set_session_title` if deferred). Skip silently when the title already matches; if the tool is missing or the rename is declined, say so in one line and go on.
 - Load memory relevant to inventories: the merge-coordinator memory (who is in flight), the previous inventory memory, the priority-class memory, the parallel-spec report format.
 - Clear this repository's desk records once (last item of Step 0, before the sync in Step 1 and before any inventory work). At inventory time nobody works in this repository, so leftover records of dead sessions are removed here. Run this one Bash call in the foreground, exactly once:
 
