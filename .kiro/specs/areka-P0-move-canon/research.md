@@ -174,6 +174,8 @@
 ### 7.2 設計で決めること
 
 > 2026-10-17 要件ディスカッションで、SSP の実測（§8）により次が片付いた: 3（作業領域の規則〔中心・最近傍あり〕に決まった・要件 3.1〜3.3）・6 と 7（窓の固定は受けない・要件 7）。2 の新しい分類は「断る」ではなく「SSP と同じ置き換え＋記録」になった（要件 3.7・3.8・4）。1 の宛名の見直しから `(set,position)`・`(reset,position)` は外れる。
+>
+> 追加の決めごと 13（議題 4・要件 2.10〜2.12）: `\![move]` の移動先を `project_anchor`（`placement/follow/anchor.rs:104`）に通す場所。`move_window_to` は `window_move.rs`（例外表の超過ファイル）にあるので、当て直しは `apply_move_directive` 側（`move_cue.rs` の兄弟）で `Anchored` と `MonitorSnapshot` を読んで行うのが前提。今は `move_window_to` が `Anchored` を通らず、後の大きさの変化（`window_move.rs:311`）で吸い戻される。
 
 1. **受け口の分け方**: `MoveCueSink` を広げる（案 A）か、位置の指令の受け口を新しく作る（案 B）か。どちらでも `ZOrderCueSink` の宛名の述語（`set`／`reset` を名前だけで自分宛とする・`zorder_cue.rs:65-68`）と、台帳の一致の檻（`consumer_ledger_agreement_tests.rs`）の見直しが要る。
 2. **縮退の型の改め**: `NamedForm`・`UnsupportedBase` は役目を終える（固定しているテスト `move_cue_tests.rs:85-133` は陳腐化テストとして改める）。新しい分類（使えない組み合わせ・他のゴーストの基準・知らないキー・重複・固定中）を「読む段で `Err`」にするか「適用の段で弾く」にするか。使えない組み合わせは基準の語と参照点だけで決まるので読む段で弾ける。固定中の判定は World を要するので適用の段。

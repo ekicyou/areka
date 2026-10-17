@@ -91,8 +91,11 @@ ukadoc が黙っている点は、SSP 2.9.18 の実測（`research.md` §8）に
 5. The areka shall 参照点の位置を画面に出ている窓の実際の大きさから求め、拡大率がどの値でも参照点どうしがそろうようにする。
 6. The areka shall 旧い emo2 の `\1\![move,-353,,,0,base,base]` で相方の窓が着く位置を、本機能の前と同じに保つ。
 7. When 動かす窓が動いたとき, the areka shall そのスコープのバルーンの窓をこれまでどおり窓に付いて動かす。
-8. The areka shall 移動先が画面の外にかかっても、本機能によって移動先を画面の内へ寄せない（今の振る舞いを保つ）。
+8. The areka shall 移動先が画面の外にかかっても、要件 2.10 の当て直しのほかは、本機能によって移動先を画面の内へ寄せない（今の振る舞いを保つ）。
 9. The areka shall `\![move]` で動いた窓の位置を位置の記憶に書かない（今の決まりを保つ）。
+10. While 動かす窓が画面の端に吸い付いている間（descript の `seriko.alignmenttodesktop` が決める向き・既定は下端）, when `\![move]` を行うとき, the areka shall 移動先を、ドラッグ・窓の大きさの変化・作業領域の変化のときと同じ吸い付きの当て直しに通し、吸い付いている軸には台本の値を使わない（下端なら Y を無視する・SSP 2.9.18 の実測と同じ）。
+11. When 吸い付きの向きが `free` のとき, the areka shall 台本から求めた移動先をそのまま使う。
+12. The areka shall `\![move]` で動いた窓が、その後の表情の切り替え（窓の大きさの変化）で別の位置へ吸い戻されないようにする（要件 2.10 により、移動の時点で吸い付きの位置にそろっている）。
 
 ### Requirement 3: 基準の解決
 
@@ -174,7 +177,7 @@ ukadoc が黙っている点は、SSP 2.9.18 の実測（`research.md` §8）に
 
 1. When `\![move]` で窓を動かしたとき, the areka shall どのスコープの窓をどこからどこへ動かしたかと、使った基準・基準の参照点・動かす窓の参照点を記録する。
 2. When 窓を並べ直したとき, the areka shall その対象の窓と位置を記録する。
-3. The areka shall 二つの書き方の解釈・参照点の計算・基準の解決・使えない組み合わせと読めない値の置き換え・窓の固定の指令を受けないこと・並べ直しの判断の各分岐を、実際の画面を使わない決定論のテストで確かめられるようにする。
+3. The areka shall 二つの書き方の解釈・参照点の計算・基準の解決・吸い付きの当て直し・使えない組み合わせと読めない値の置き換え・窓の固定の指令を受けないこと・並べ直しの判断の各分岐を、実際の画面を使わない決定論のテストで確かめられるようにする。
 4. The areka shall emo2 の 2026-10-17 版を拡大率 100% と 200% で動かし、「エモの位置調整」を選んだ後の窓の位置と記録から要件 6.1 の成立を判定できる実機の証跡を残す。
 5. The areka shall 実機の確かめに使う根と検体を、作業ツリーの `target\` の下だけに置く。
 
@@ -185,6 +188,6 @@ ukadoc が黙っている点は、SSP 2.9.18 の実測（`research.md` §8）に
 #### Acceptance Criteria
 
 1. When 本機能が完成したとき, the 互換の対応表（`doc/COMPAT_ARCHITECTURE.md` §8） shall `\![move]` の名前付きの形・基準・参照点・時間の行を新しい振る舞いに合わせて改め、「emo2 は位置の形だけを使う」を根拠にした記述を残さない。
-2. When 本機能が完成したとき, the 互換の対応表 shall 正典が黙っている点について本 spec で決めた扱いと SSP 2.9.18 の実測に合わせた扱い（`move-offset` の既定・`screen` と `primaryscreen` は作業領域・使えない組み合わせと読めない値の置き換え・無いスコープと他のゴーストの名前の基準の置き換え・X・Y に拡大率を掛ける SSP との意図した差・`\![set,position]`／`\![reset,position]` を受けないこと・`\![execute,resetwindowpos]` は `OnResetWindowPos` を送らないこと・並べ直しの後の位置の記憶・`OnResetWindowPos` の返事が無いときの扱い）を行として持つ。
+2. When 本機能が完成したとき, the 互換の対応表 shall 正典が黙っている点について本 spec で決めた扱いと SSP 2.9.18 の実測に合わせた扱い（`move-offset` の既定・`screen` と `primaryscreen` は作業領域・使えない組み合わせと読めない値の置き換え・無いスコープと他のゴーストの名前の基準の置き換え・X・Y に拡大率を掛ける SSP との意図した差・吸い付いている間の `\![move]` は吸い付いた軸の値を使わないこと・`\![set,position]`／`\![reset,position]` を受けないこと・`\![execute,resetwindowpos]` は `OnResetWindowPos` を送らないこと・並べ直しの後の位置の記憶・`OnResetWindowPos` の返事が無いときの扱い）を行として持つ。
 3. When 本機能が完成したとき, the 網羅台帳 shall `move` の行の持ち主を本 spec へ付け替え、時間の部分（補間と台本の進み）が残りであることを書く。
 4. When 本機能が完成したとき, the 網羅台帳 shall `set,position`・`reset,position`・`execute,resetwindowpos`・`OnResetWindowPos`・`switchmovetodefaultpositionbutton.caption` の行を、実装した状態と持ち主に合わせて改める（`set,position`・`reset,position` は要件 7.2 のとおり受けない理由を書く）。
