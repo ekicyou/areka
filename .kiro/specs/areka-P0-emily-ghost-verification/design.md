@@ -127,9 +127,15 @@ crates/areka/src/
     ├── mod.rs               # 新しい兄弟テストの接続 1 行
     ├── placement_shared_test_support.rs  # char2 以降の鍵を持つ descript の固定入力
     └── placement_char_clamp_tests.rs     # 新規: 配置の準備で scope が 0・1 だけ
+├── input_events/
+│   ├── mod.rs               # 新しい兄弟テストの接続 1 行
+│   └── input_events_char_clamp_tests.rs  # 新規: 全 scope の窓でマウスを動かしても panic しない
 crates/sample-ghost-kit/src/
 ├── lib.rs                   # 登記表に emily4 の 1 行
 └── lib_tests.rs             # 数 7 → 8・emily4 の 1 本
+doc/ukadoc-coverage/ledger/
+├── assets.toml              # *.source.directory の行の注記
+└── shiori.toml              # OnInstallFailure の備考「拒否の 14 種」→ 13 種
 .kiro/specs/areka-P0-emily-ghost-verification/
 └── verification.md          # 新規: 実機の検証の記録
 ```
@@ -145,12 +151,12 @@ crates/sample-ghost-kit/src/
 - `crates/areka-nar/src/plan_source_path_tests.rs` — 305 行付近の 3 つの形（配下の外だけ・フォルダのエントリだけ・前方一致する兄弟だけ）を同じく飛ばしの判定へ。
 - `crates/areka-nar/src/plan_roots_tests.rs` — `build_plan` の戻りの形に合わせる（中身の判定は変えない）。
 - `crates/areka-nar/src/install_tests.rs`・`install_commit_tests.rs` — `commit_all` の新しい引数（空の列）を渡す。
-- `crates/areka-nar/src/manifest_tests.rs`・`manifest_companion_tests.rs`・`manifest_companion_reading_tests.rs` — `Companion` の値の組みに `source_written` を足す。`source.directory` が書かれた場面と書かれない場面で値を確かめる。
+- `crates/areka-nar/src/manifest_tests.rs`・`manifest_companion_tests.rs` — `Companion` の値の組みに `source_written` を足す（`Companion` を値で組むのはこの 2 つと `manifest.rs` だけ）。`manifest_companion_reading_tests.rs` は組みを変えず、`source.directory` が書かれた場面と書かれない場面で `source_written` の値を確かめる判定を足す。
 - `crates/areka-nar/src/lib_vocabulary_tests.rs` — `CompanionSourceMissing` の固定入力を消し、数 14 を 13 へ。冒頭の注記を直す。
-- `crates/areka-nar/src/error_tests.rs` — 69 行・289 行の `CompanionSourceMissing` を消す。
+- `crates/areka-nar/src/error_tests.rs` — 69 行・289 行の `CompanionSourceMissing` を消す。79〜85 行の `all_kinds_has_fourteen_entries` を `all_kinds_has_thirteen_entries`（13 と比べる）へ。
 - `crates/areka/src/install/judge.rs` — `failure_word` の `CompanionSourceMissing` の腕を消す。
-- `crates/areka/src/install/judge_tests.rs` — 219 行の場面を消す。
-- `crates/areka/src/install/procedure.rs` — 口 `warn_skipped`・純粋な文面の関数 `skipped_notice`・`archive_steps` の出す時点。兄弟 `procedure_skip_tests.rs` の接続。
+- `crates/areka/src/install/judge_tests.rs` — 219 行の場面を消す。176 行の注釈「14 種」を 13 種へ。
+- `crates/areka/src/install/procedure.rs` — 5 行の注釈「口の 7 つ」を 8 つへ。口 `warn_skipped`・純粋な文面の関数 `skipped_notice`・`archive_steps` の出す時点。兄弟 `procedure_skip_tests.rs` の接続。
 - `crates/areka/src/install/procedure_test_support.rs` — `Call::Warn { title, body }` と、それを集める助手 `warned()`。
 - `crates/areka/src/install/worker.rs` — `DeskPorts::warn_skipped` が `alert::warn_ok(title, body, alert::suppressed())` を呼ぶ。
 - `crates/areka/src/alert.rs` — `warn_ok` を足す（`unsafe` は `MessageBoxW` 呼び出しに閉じる、の注記も直す）。
@@ -159,14 +165,16 @@ crates/sample-ghost-kit/src/
 - `crates/areka/src/placement/config_limit_tests.rs` — 85 行の期待 `[0, 1, 2]` を `[0, 1]` へ。
 - `crates/areka/src/placement/reseed_tests.rs` — 195 行のテストの「scope 2 の `reseed_scope_not_running` が 1 件」の期待を、絞った後の答え（0 件）へ直す。
 - `crates/areka/src/placement/mod.rs` — `placement_char_clamp_tests.rs` の接続 1 行。
-- `crates/areka/src/placement/placement_shared_test_support.rs` — えみりと同じ形の固定入力（ゴーストの descript に `char2.name`・シェルの descript に `char2.*`・`char3.*`・`char4.*`）を `pub(crate)` の定数で持つ。`input_events` と `menu` のテストから読めるよう、`placement/mod.rs` での接続が `cfg(test)` の `pub(crate)` でなければそこだけ広げる。
-- `crates/areka/src/input_events/input_events_tests.rs` — その固定入力から組んだ配置の全 scope の窓でマウスを動かしても panic しない、の 1 本。
+- `crates/areka/src/placement/placement_shared_test_support.rs` — えみりと同じ形の固定入力（ゴーストの descript に `char2.name`・シェルの descript に `char2.*`・`char3.*`・`char4.*`）を `pub(crate)` の定数で持つ。`placement/mod.rs` の接続（896 行の `mod shared_test_support;`）は今は非公開なので、`cfg(test)` のまま `pub(crate) mod` へ広げ、`input_events` と `menu` のテストから読めるようにする。
+- `crates/areka/src/input_events/input_events_char_clamp_tests.rs`（新規）と `input_events/mod.rs` の接続 1 行 — その固定入力から組んだ配置の全 scope の窓でマウスを動かしても panic しない、の 1 本。`input_events_tests.rs` は 890 行で 1,000 行の目安に近いので、そこへは足さない。
 - `crates/areka/src/menu/trigger_wired_tests.rs` — 同じく全 scope の窓で右クリックしても panic しない、の 1 本。
 - `crates/sample-ghost-kit/src/lib.rs` — `SAMPLES` に `Sample { name: "emily4", kind: SampleKind::Ghost, balloons: &[] }`。
-- `crates/sample-ghost-kit/src/lib_tests.rs` — 直書きの 7 を全部 8 へ（数の主張 2・注釈 3・名前の一覧・関数名）。`emily4` の 1 本を足す。
+- `crates/sample-ghost-kit/src/lib_tests.rs` — 検体の数として直書きされた 7 を全部 8 へ（6 行の「既知の 7 つ」を含む数の主張 2・注釈 3・名前の一覧・関数名）。5 行の「主張は 7 本」は検体の数でなく主張の数で、`emily4` の 1 本（取り出し元の無い同梱を飛ばしてゴーストだけ入る）を主張に足すので 8 本へ直し、列挙に 1 つ足す。
 - `vendors/sample_ghost/README.md` — `emily4.nar` の行と節の「未登記」を外し、取り出し元の無い同梱は飛ばして入ることを書く。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 に 1 行足し、287 行の写しから `CompanionSourceMissing` を外し「14 種」を「13 種」へ。
 - `doc/ukadoc-coverage/ledger/assets.toml` — `*.source.directory` の行の注記。実機の後に、えみりが使う項目の行を記録と合わせる。
+- `doc/ukadoc-coverage/ledger/shiori.toml` — 3445 行の `OnInstallFailure` の備考「areka-nar の拒否の 14 種」を 13 種へ（どのテストも気付かないので手で直す）。
+- 数の洗い出しの締め: 上の直しの後に、`14 種`・`14 変種`・`fourteen`・`7 つ`・`7 本`・`seven` をソースと文書の全体で検索し、出た行を全部「直した」か「この数とは別の数（理由つき）」に片付ける（1.7・2.3・7.4・8.2・8.4）。
 
 ## System Flows
 
@@ -253,7 +261,7 @@ sequenceDiagram
 | 7.4 | 語彙のテストが 13 種 | `lib_vocabulary_tests.rs` | | |
 | 7.5 | 直した不具合ごとに赤 → 緑のテスト | 直しの進め方 | | |
 | 8.1・8.2 | `COMPAT_ARCHITECTURE.md` | 文書 | §8 の行 | |
-| 8.3・8.4 | 網羅台帳 | 文書 | `assets.toml` | |
+| 8.3・8.4 | 網羅台帳 | 文書 | `assets.toml`・`shiori.toml` | |
 
 ## Components and Interfaces
 
@@ -443,7 +451,7 @@ pub(crate) fn warn_ok(title: &str, body: &str, suppressed: bool);
 
 - `SAMPLES` に `emily4`（ゴースト・同梱のバルーン 0）の 1 行を足す。窓口（`SampleRoot::acquire`・`nar-sample-path`）は今の道のままで、`areka-nar` が飛ばしを受けるので通る。
 - 同梱のバルーンが 0 なので、検体のパスの綴りの番人が見張る語は増えない（2.8）。登記の後に番人を回して確かめ、赤なら対象を見直して理由を記録に書く。
-- 検体 1 つ分（2.6 MB の展開）だけ、登記のテストと `nar_sample_path_test.rs` の時間が延びる。
+- 検体 1 つ分（書庫 2.6 MB・展開すると約 3.8 MB・260 エントリ）だけ、登記のテストと `nar_sample_path_test.rs` の時間が延びる。
 
 ## 実機の検証の手順（要件 3・4）
 
@@ -559,7 +567,8 @@ pub(crate) fn warn_ok(title: &str, body: &str, suppressed: bool);
 固定入力はえみりと同じ形にする。ゴーストの descript は `kero.name` と `char2.name`、シェルの descript は `char2.balloon.offsetx`・`char3.seriko.alignmenttodesktop`・`char4.seriko.alignmenttodesktop` を持つ。どれも直す前に赤・直した後に緑。
 
 - `placement_char_clamp_tests.rs`: `build_placement_config` の scope が `{0, 1}`。`prepare_ghost_windows_for_shell`（一時のゴースト・シェル・バルーン）の配置の scope が `[0, 1]`。
-- `input_events_tests.rs`: 上の固定入力から組んだ配置の全 scope の窓（`CharWindowMarker`）で `on_char_pointer_moved` を通しても panic しない。直す前は scope 2 の窓が作られ、debug 版の検査で落ちる。
+- 窓（`CharWindowMarker`）の scope は手で書かず、固定入力から `build_placement_config` が返した scope の全部で作る（今の `input_events_tests.rs`・`trigger_wired_tests.rs` は scope を手で書いて窓を作っているので、その形のままだと直す前に赤にならない）。
+- `input_events_char_clamp_tests.rs`: 上の固定入力から組んだ配置の全 scope の窓で `on_char_pointer_moved` を通しても panic しない。直す前は scope 2 の窓が作られ、debug 版の検査で落ちる。
 - `trigger_wired_tests.rs`: 同じ全 scope の窓で右クリックの道（押して離す → メニューの組み立て）を通しても panic しない。
 - 期待を直す既存の 3 本: `config.rs` の `t_c3_char_n_prefix_adds_scope_n`（`[0, 1]`・scope 3 の設定は無い）、`config_limit_tests.rs` の `t_l2_…`（`[0, 1]`）、`reseed_tests.rs` の `t_rs01_…`（scope 2 の `reseed_scope_not_running` は 0 件）。
 
