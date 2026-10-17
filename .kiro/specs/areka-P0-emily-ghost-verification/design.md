@@ -254,7 +254,7 @@ sequenceDiagram
 | 6.4 | 20 タスクを超えそうなら聞く | 直しの進め方 | 最初の走行の後に測る | |
 | 6.5 | 上書きした完了要件を書く | 文書 | `COMPAT_ARCHITECTURE.md` | |
 | 6.6 | えみりの辞書・書庫を変えない | 直しの進め方 | | |
-| 6.7 | `char2` 以降で panic しない | scope の絞り | `detect_scopes`・3 本のテスト | |
+| 6.7 | `char2` 以降で panic しない | scope の絞り | `detect_scopes`・3 本のテスト・会話が止まらないテスト | |
 | 7.1 | 6 場面の決定論のテスト | `lib_skip_tests.rs`・`procedure_skip_tests.rs` | | |
 | 7.2 | 入った物・置かれない物・成否・記録・ダイアログの求め | 同上 | `log-capture-kit`・`Call::Warn` | |
 | 7.3 | `emily4.nar` はゴーストだけ | 検体の登記のテスト | `lib_tests.rs` | |
@@ -439,6 +439,7 @@ pub(crate) fn warn_ok(title: &str, body: &str, suppressed: bool);
 - これで、`build_placement_config` を通る 3 つの呼び手（起動とゴーストの切替の準備・シェルの切替の配り直し・切替の重なり順）の全部で、scope 2 以上の窓が作られない。起動の絵の側（`derive_scopes` の `[0, 1]`）と答えがそろう。
 - `char{n}.*` の鍵そのもの（`resolve_scope`・`scope_prefixes`・題名の `build_titles`）は変えない。scope が作られないので読まれないだけ。
 - 2 か所の `debug_assert!(scope <= 1)` は残す（外すのは `areka-P0-extra-character-windows`）。scope 2 の窓が作られなくなるので、当たる道が無くなる。
+- 「panic の道はこの 2 か所」は、scope 2 の窓が在る形で調べた結論。絞った後は「台本が `\p[2]` で scope 2 を指すが、窓もバルーンも無い」形になる（えみりの起動・終了の辞書に 50 回・メニューの辞書に 36 回）。この形で会話が止まらないことは、実機の前に決定論のテストで確かめる（設計の討議の議題 1・下の「会話が止まらないテスト」）。
 - `examples/window-placement.rs` の `scope >= 2` の枝は消さない（来なくなるだけ・ビルドは通る）。
 
 **契約**: Service [x]
@@ -571,6 +572,12 @@ pub(crate) fn warn_ok(title: &str, body: &str, suppressed: bool);
 - `input_events_char_clamp_tests.rs`: 上の固定入力から組んだ配置の全 scope の窓で `on_char_pointer_moved` を通しても panic しない。直す前は scope 2 の窓が作られ、debug 版の検査で落ちる。
 - `trigger_wired_tests.rs`: 同じ全 scope の窓で右クリックの道（押して離す → メニューの組み立て）を通しても panic しない。
 - 期待を直す既存の 3 本: `config.rs` の `t_c3_char_n_prefix_adds_scope_n`（`[0, 1]`・scope 3 の設定は無い）、`config_limit_tests.rs` の `t_l2_…`（`[0, 1]`）、`reseed_tests.rs` の `t_rs01_…`（scope 2 の `reseed_scope_not_running` は 0 件）。
+
+### 会話が止まらないテスト（設計の討議の議題 1・4.1・4.2・4.5・6.7）
+
+- scope を `{0, 1}` に絞った配置で、`\p[2]` を含む台本を流す。会話が最後まで進み（待つ側が止まらない）、終了のイベントの台詞（`\p[2]` を含み `\-` で終わる）の後に終わることを確かめる。
+- 固定入力は上の panic を避けるテストと同じえみりの形。会話を流す既存の固定入力があればそれを使い、無ければ台本を組んで再生する層（sakura → cue の再生）で「最後まで進む」を確かめる形に留める。置き場（兄弟のテストのファイル）はタスクの段で、その固定入力の在る所に決める。
+- 止まると分かったら、それは 6.1 の「線を妨げる不具合」として本 spec で直す（直す前に赤・直した後に緑）。実機の最初の走行を待たない。
 
 ### 実機（E2E）
 
