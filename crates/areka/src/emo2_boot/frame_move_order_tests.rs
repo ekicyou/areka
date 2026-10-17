@@ -17,6 +17,7 @@
 //! が `frame.rs` の本文で押さえる。
 
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc::{self, Sender};
 
@@ -28,6 +29,7 @@ use wintf::ecs::Point;
 use crate::emo2_boot::move_cue::{MoveDirective, PositionCue, parse_move_directive};
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use crate::emo2_boot::zorder_cue::ZOrderDirective;
+use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::placement::chain_finalize::ChainFinalized;
 
 use super::test_support::{
@@ -170,6 +172,45 @@ fn a_reset_reaches_the_reset_procedure_in_the_frame_order() {
     assert!(
         wiring.drain_move_directives().is_empty(),
         "指令が線に残っている（取り出されていない）"
+    );
+}
+
+/// 台本の `\![execute,resetwindowpos]` は並べ直しの手続きへ届くが、kanade へは何も送らない
+/// （要件 8.7・`OnResetWindowPos` を送るのはメニューから選んだときだけ）。メニューの経路が読むのと
+/// 同じ送り口（`GhostSlot` の会話の kanade）を World に置き、その受け手が空のままであることを見る。
+#[test]
+fn a_script_reset_sends_nothing_to_kanade() {
+    let mut harness = steady_harness();
+    let (kanade_tx, kanade_rx) = mpsc::channel();
+    harness
+        .world
+        .insert_non_send(GhostSlot(Some(GhostSession::for_test(
+            Some(kanade_tx),
+            PathBuf::from("ghost/A"),
+        ))));
+    let (tx, wiring) = wiring();
+    tx.send(PositionCue::ResetWindowPos)
+        .expect("送出は成功する");
+
+    let logs = capture_logs(|| run_move_drain_phase(&wiring, &mut harness.world));
+
+    assert_eq!(
+        logs.iter()
+            .filter(|l| l.contains("reset_window_pos_skipped"))
+            .count(),
+        1,
+        "並べ直しが手続きへ届いていない: {logs:?}"
+    );
+    assert!(
+        matches!(kanade_rx.try_recv(), Err(mpsc::TryRecvError::Empty)),
+        "台本の並べ直しが kanade へ何かを送った（OnResetWindowPos はメニューの経路だけ）"
+    );
+    assert!(
+        harness
+            .world
+            .get_non_send::<crate::menu::reset_pos_frame::PendingResetRaise>()
+            .is_none(),
+        "答えの受け手が置かれている（メニューの経路を通った）"
     );
 }
 
