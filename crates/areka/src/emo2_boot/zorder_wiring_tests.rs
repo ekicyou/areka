@@ -459,7 +459,9 @@ fn t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring() {
         "起動窓の戻り値から重なりの生の値を受け取る行が本文に無い"
     );
     assert!(
-        squeezed.contains("&descript, &ghost_decision, &balloon_decision, );"),
+        squeezed.contains(
+            "&descript, &ghost_decision, &balloon_decision, ) .map_err(write_failure::stop_boot)?;"
+        ),
         "起動窓の戻り値がゴーストごとの結線（boot_ghost）へ渡されていない: {squeezed}"
     );
     assert!(
