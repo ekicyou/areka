@@ -76,7 +76,7 @@
   - _Requirements: 1.7, 2.3, 2.5, 2.7, 6.5, 7.4, 8.1, 8.2, 8.3_
 
 - [ ] 5. えみりを実機で起こし、崩れた所を記録する
-- [ ] 5.1 実機の前提を確かめ、配布物と同じ形の根と、検証の記録の冒頭を用意する
+- [x] 5.1 実機の前提を確かめ、配布物と同じ形の根と、検証の記録の冒頭を用意する
   - 1〜4 の自動テストの対象のクレート（`areka-nar`・`areka`・`sample-ghost-kit`・`log-capture-kit`）が緑なのを確かめてから始める
   - debug 版の `areka.exe` をビルドし、`tools/sync-i686-helper.ps1` を回して終了コード 0 で i686 の補助プログラムが隣に在ることを確かめる。机の仕組みで、他の spec の実機の窓を出す回・負荷の走行が無い時間を取る
   - `nar-sample-path` で `emo2` と `StayseeBalloon` を開き、ワークツリーの `target\emily-verify\root\` に `ghost\emo2`・`balloon\emo2-kakukaku`・`balloon\StayseeBalloon` を写す。記憶の置き場は空の `target\emily-verify\profile\`。えみりの `.nar` は根に写さない

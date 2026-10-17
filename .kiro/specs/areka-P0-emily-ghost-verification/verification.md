@@ -4,11 +4,80 @@
 
 ## 同定
 
+準備（タスク 5.1）は 2026-10-17 22:21（日本時間）に行った。
+
+| 項目 | 値 |
+|---|---|
+| コミット | `2af9e369f8449069bbb5219a1246b0a2292c2b26`（準備のときの `git rev-parse HEAD`。走行の前にコミットが進んだら、走行の節にその時のコミットを書く） |
+| ビルド | debug 版（`cargo build -p areka`・`dev` の形）。`C:\home\maz\git\areka\.claude\worktrees\kiro-start-areka-p0-dev-cad680\target\debug\areka.exe` |
+| 検体 | `vendors\sample_ghost\emily4.nar`（2,677,923 バイト）。sha256 `ebc87c6daa108116b9afdc6608059aa35ffbe183e0da83eb1b01888c824d39c0`（PowerShell の `Get-FileHash -Algorithm SHA256` で測った。`vendors/sample_ghost/README.md` に書かれた値と同じ） |
+
+走らせる前の確かめ:
+
+- 自動テスト: `cargo test -p areka-nar -p sample-ghost-kit -p log-capture-kit` は 436 本が通り、落ちた 0・無視 2（終了コード 0）。`cargo test -p areka` は 3,099 本が通り、落ちた 0・無視 2（終了コード 0）。
+- 32 ビットの補助プログラム（要件 3.3）: `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` の後に `pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\kiro-start-areka-p0-dev-cad680\tools\sync-i686-helper.ps1` を回し、終了コード 0・出力は `helper is i686: target\debug\shiori-host32-helper.exe`。`areka.exe` の隣の `target\debug\shiori-host32-helper.exe` は i686 版。全体テストの後などで x64 版に替わることがあるので、走行の直前にもう一度回す。
+
 ## 機械の構成
+
+| 項目 | 値 | 測り方 |
+|---|---|---|
+| OS | Windows 11 Pro・版 26H2・ビルド 10.0.26300.9711 | `cmd /c ver` と、レジストリ `HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion` の `DisplayVersion`・`CurrentBuild`・`UBR`（同じキーの `ProductName` は古い名残で「Windows 10 Pro」と出るが、ビルド 26300 は Windows 11） |
+| 画面 1（主） | 2880×1800・拡大率 200%（DPI 192）・左上 (0, 0) | PowerShell の中で、プロセスをモニターごとの DPI に合わせる形（`SetProcessDpiAwarenessContext(-4)`）にしてから `EnumDisplayMonitors` と `GetDpiForMonitor` で読んだ。`HKCU:\Control Panel\Desktop\WindowMetrics` の `AppliedDPI` も 192 |
+| 画面 2 | 2560×1600・拡大率 150%（DPI 144）・左上 (-2560, 195)（主の画面の左） | 同上 |
 
 ## 環境変数
 
+areka が読む環境変数と、その値。パスはどれも `C:\` から始まる絶対パスで、ワークツリーの `target\` の下だけを使う（`C:\` の直下・`C:\tmp` は使わない・要件 3.1）。
+
+| 名前 | 値 | 理由 |
+|---|---|---|
+| `AREKA_ROOT` | `C:\home\maz\git\areka\.claude\worktrees\kiro-start-areka-p0-dev-cad680\target\emily-verify\root` | 置き場の根。配布物と同じ形（下の木）。在ると書ける根（`%LOCALAPPDATA%\areka`）は並びに入らない |
+| `AREKA_PROFILE_DIR` | `C:\home\maz\git\areka\.claude\worktrees\kiro-start-areka-p0-dev-cad680\target\emily-verify\profile` | areka の記憶の置き場（`crates/areka-user-data/src/lib.rs` の `PROFILE_DIR_ENV`）。準備の時点で空 |
+| `RUST_LOG` | `info,areka::install=debug,areka::boot_resolve=debug,areka_nar=debug` | 判定に使う分岐（インストールの飛ばし・起動のゴーストとバルーンの決め方）の記録が出る水準（要件 3.4） |
+| `AREKA_APP_SMOKE_EXIT_MS` | `1800000`（30 分） | 自動で終わる上限。1 回の走行の所要より長くし、安全弁としてだけ置く（要件 3.4） |
+| `NO_COLOR` | `1` | 記録に色の制御文字を混ぜず、検索しやすい平文にする（`crates/areka/tests/smoke_boot_loop_exit.rs` と同じ扱い） |
+| `AREKA_NO_ALERT` | 設定しない（起動の前に消す） | 設定すると警告のダイアログが出ない。インストールの警告（要件 1.12）を確かめるため |
+| `AREKA_USER_ROOT` | 設定しない（起動の前に消す） | 書ける根を強いる変数。`target\debug\` は書けて winget の控えも無いので、設定しなければ書ける根は使わない形になり、本物の `%LOCALAPPDATA%\areka` に触らない（`crates/areka-user-data/src/lib.rs` の `decide`） |
+
+記録の行き先: areka は記録を標準出力へ出す（`crates/areka/src/log_history.rs` の `init`）。起動の命令で `target\emily-verify\logs\` の下のファイルへ受ける。
+
+根の形（準備の時点・上の 2 段）:
+
+```text
+target\emily-verify\
+├─ profile\                  （空）
+└─ root\
+   ├─ ghost\
+   │  └─ emo2\               （93 ファイル）
+   └─ balloon\
+      ├─ emo2-kakukaku\      （21 ファイル）
+      └─ StayseeBalloon\     （29 ファイル）
+```
+
+`emo2` と `emo2-kakukaku` は `cargo run -q -p sample-ghost-kit --bin nar-sample-path -- emo2`、`StayseeBalloon` は `cargo run -q -p sample-ghost-kit --bin nar-sample-path -- StayseeBalloon` が開いた `target\nar-samples\manual\` の下から写した（`tools/package.ps1` の組み立てと同じ 3 つ）。えみりの `.nar` は根に写していない（名前に `emily` を含む物は 0 件）。走行の中で、メニューの「インストール…」から `C:\home\maz\git\areka\.claude\worktrees\kiro-start-areka-p0-dev-cad680\vendors\sample_ghost\emily4.nar` を入れる。
+
 ## 走行
+
+### 起動の命令（予定・まだ回していない）
+
+PowerShell から、どのフォルダで打っても同じに動く形。`$v` と `$w` は絶対パスだけから組む。起動したプロセスの番号を出すので、止めるときはこの番号だけを使う（要件 3.7）。
+
+```powershell
+$w = 'C:\home\maz\git\areka\.claude\worktrees\kiro-start-areka-p0-dev-cad680'
+$v = 'C:\home\maz\git\areka\.claude\worktrees\kiro-start-areka-p0-dev-cad680\target\emily-verify'
+pwsh -NoProfile -File "$w\tools\sync-i686-helper.ps1"; "sync exit=$LASTEXITCODE"
+$null = New-Item -ItemType Directory -Force -Path "$v\logs"
+Remove-Item Env:AREKA_NO_ALERT, Env:AREKA_USER_ROOT -ErrorAction SilentlyContinue
+$env:AREKA_ROOT = "$v\root"
+$env:AREKA_PROFILE_DIR = "$v\profile"
+$env:RUST_LOG = 'info,areka::install=debug,areka::boot_resolve=debug,areka_nar=debug'
+$env:AREKA_APP_SMOKE_EXIT_MS = '1800000'
+$env:NO_COLOR = '1'
+$p = Start-Process -FilePath "$w\target\debug\areka.exe" -WorkingDirectory $v -RedirectStandardOutput "$v\logs\run1.stdout.log" -RedirectStandardError "$v\logs\run1.stderr.log" -PassThru
+"areka pid=$($p.Id)"
+```
+
+2 回目の走行（直した後・要件 5.6）は、根と記憶を作り直してから、記録のファイル名を `run2.*` にして同じ命令で回す。
 
 ## 崩れた所の表
 
