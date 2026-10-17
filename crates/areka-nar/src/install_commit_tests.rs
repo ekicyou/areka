@@ -67,6 +67,7 @@ fn install(root: &Path, prepared: &Prepared) -> (PathBuf, Result<InstallOutcome,
         std::slice::from_ref(&area),
         &prepared.manifest,
         &prepared.plan,
+        Vec::new(),
         &states,
     );
     (work, outcome)
@@ -395,6 +396,7 @@ fn a_destination_held_briefly_by_another_process_still_commits() {
         std::slice::from_ref(&area),
         &prepared.manifest,
         &prepared.plan,
+        Vec::new(),
         &states,
     );
     release.join().expect("放す側は落ちない");
@@ -442,6 +444,7 @@ fn a_failing_second_rename_puts_the_retired_tree_back() {
         std::slice::from_ref(&area),
         &prepared.manifest,
         &prepared.plan,
+        Vec::new(),
         &states,
     )
     .expect_err("2 手目が失敗する");
@@ -629,6 +632,7 @@ fn leftovers_name_the_work_folder_when_the_cleanup_cannot_finish() {
         std::slice::from_ref(&area),
         &prepared.manifest,
         &prepared.plan,
+        Vec::new(),
         &states,
     )
     .expect("確定そのものは通る");
@@ -806,6 +810,7 @@ fn a_stray_work_folder_that_will_not_go_is_reported_instead_of_stopping_the_inst
         std::slice::from_ref(&area),
         &prepared.manifest,
         &prepared.plan,
+        Vec::new(),
         &states,
     )
     .expect("残骸があっても確定できる");

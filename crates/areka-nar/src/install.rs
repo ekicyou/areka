@@ -369,6 +369,17 @@ fn kept(keep: Option<&[String]>, name: &OsStr) -> bool {
     }
 }
 
+/// 取り出し元が書庫に無いので置かなかった同梱のバルーン 1 つ。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SkippedCompanion {
+    /// `*.directory` の値（置くはずだった `<根>/balloon/<directory>/` の名前）。
+    pub directory: String,
+    /// 取り出し元を決めた鍵。`*.source.directory` が書かれていればその鍵、無ければ `*.directory` の鍵。
+    pub key: String,
+    /// その鍵に書かれていた値（`..` を取り除く前・`bounded_value` で縛った物）。
+    pub source: String,
+}
+
 /// 展開が成功したときに返るもの（要件 5.10）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InstallOutcome {
@@ -385,6 +396,8 @@ pub struct InstallOutcome {
     /// 棚から消せなかった他の走行の置き土産、および巻き戻せなかった元の木（`old-`）を
     /// 持つため保持の期限（7 日）まで消さずに残した作業フォルダ。
     pub leftovers: Vec<PathBuf>,
+    /// 飛ばした同梱のバルーン。探索の順。飛ばしていなければ空。
+    pub skipped: Vec<SkippedCompanion>,
 }
 
 /// 確定に失敗したときの形。`archive` を足すと [`crate::NarError::Io`] になる（タスク 4.4）。
@@ -430,10 +443,13 @@ enum Undo {
 ///
 /// どれかの配置の入れ替えに失敗したとき [`CommitError`]。`rolled_back` が真なら宛先は
 /// 全て呼ぶ前の内容で、偽なら `committed` に挙げた配置が確定したまま残っている。
+///
+/// `skipped` は計画の段が飛ばした同梱で、判断せずに結果へ写すだけ。
 pub(crate) fn commit_all(
     areas: &[WorkArea],
     manifest: &InstallManifest,
     plan: &[Placement],
+    skipped: Vec<SkippedCompanion>,
     states: &[ExistingState],
 ) -> Result<InstallOutcome, CommitError> {
     debug_assert_eq!(
@@ -472,6 +488,7 @@ pub(crate) fn commit_all(
         installed,
         warnings: manifest.warnings.clone(),
         leftovers,
+        skipped,
     })
 }
 

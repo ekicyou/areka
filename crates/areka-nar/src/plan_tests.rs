@@ -25,7 +25,7 @@ use std::path::{Component, Path};
 fn planned(
     builder: NarBuilder,
     request: &InstallRequest<'_>,
-) -> Result<Vec<Placement>, RefuseReason> {
+) -> Result<(Vec<Placement>, Vec<SkippedCompanion>), RefuseReason> {
     let bytes = builder.bytes();
     let raw = read_central_directory(&bytes).expect("書庫そのものは無傷");
     let names = validate_entry_names(&raw).expect("名前は安全");
@@ -40,7 +40,7 @@ fn planned(
 /// 受理された計画だけを取り出す。拒否されたら主張ごと落とす。
 fn plan_of(builder: NarBuilder, request: &InstallRequest<'_>) -> Vec<Placement> {
     match planned(builder, request) {
-        Ok(plan) => plan,
+        Ok((plan, _skipped)) => plan,
         Err(reason) => panic!("受理されるはずの書庫が拒否された: {reason}"),
     }
 }
@@ -48,7 +48,7 @@ fn plan_of(builder: NarBuilder, request: &InstallRequest<'_>) -> Vec<Placement> 
 /// 拒否だけを取り出す。受理されたら主張ごと落とす。
 fn refusal_of(builder: NarBuilder, request: &InstallRequest<'_>) -> RefuseReason {
     match planned(builder, request) {
-        Ok(plan) => panic!(
+        Ok((plan, _skipped)) => panic!(
             "拒否されるはずの書庫が受理された: {:?}",
             plan.iter().map(|p| &p.destination).collect::<Vec<_>>()
         ),

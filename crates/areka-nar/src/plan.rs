@@ -28,7 +28,7 @@
 //! 木が 1 つも変わらないことを突き合わせる。
 
 use crate::error::{ElementKind, RefuseReason};
-use crate::install::InstallRequest;
+use crate::install::{InstallRequest, SkippedCompanion};
 use crate::manifest::{Companion, ExistingPolicy, INSTALL_TXT, InstallKind, InstallManifest};
 use crate::names::{EntryName, is_valid_one_level_name};
 use std::collections::BTreeSet;
@@ -72,8 +72,9 @@ pub(crate) struct Placement {
 
 /// マニフェストとエントリ列と要求から配置計画を組む。
 ///
-/// 返る列の先頭は必ず本体の配置で、その後ろに同梱バルーンが探索の順（無印 →
-/// `balloon0` → `balloon1` …）で並ぶ。
+/// 返すのは「置く配置」と「飛ばした同梱」の 2 つの列。置く配置の先頭は必ず本体の
+/// 配置で、その後ろに同梱バルーンが探索の順（無印 → `balloon0` → `balloon1` …）で
+/// 並ぶ。飛ばした同梱の列も探索の順（今はいつも空）。
 /// 組み上げも確定もこの順で行い、巻き戻しは逆順になる（タスク 4.3）。
 ///
 /// # Errors
@@ -86,13 +87,13 @@ pub(crate) fn build_plan(
     manifest: &InstallManifest,
     names: &[EntryName],
     request: &InstallRequest<'_>,
-) -> Result<Vec<Placement>, RefuseReason> {
+) -> Result<(Vec<Placement>, Vec<SkippedCompanion>), RefuseReason> {
     let mut placements = Vec::with_capacity(1 + manifest.companions.len());
     placements.push(body_placement(manifest, names, request)?);
     for companion in &manifest.companions {
         placements.push(companion_placement(companion, names, request)?);
     }
-    Ok(placements)
+    Ok((placements, Vec::new()))
 }
 
 /// 本体（ゴースト／バルーン／シェル／サプリメント）の配置を組む（要件 5.2・5.5・5.6・5.8）。

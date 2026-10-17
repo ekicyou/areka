@@ -57,7 +57,7 @@ pub use error::{
     ElementKind, ExistingState, InstalledElement, Integrity, IoPhase, ManifestWarning, NarError,
     RefuseReason, SurvivingTree, UnsafeWhy, Unsupported,
 };
-pub use install::{InstallOutcome, InstallRequest, InstallRoots, SingleRoot};
+pub use install::{InstallOutcome, InstallRequest, InstallRoots, SingleRoot, SkippedCompanion};
 pub use manifest::{Companion, ExistingPolicy, InstallKind, InstallManifest};
 
 /// 検証を終えた `.nar` 1 本。
@@ -189,7 +189,7 @@ impl NarArchive {
             archive: self.archive.clone(),
             reason,
         };
-        let plan = build_plan(&self.manifest, &self.names, request).map_err(refused)?;
+        let (plan, skipped) = build_plan(&self.manifest, &self.names, request).map_err(refused)?;
 
         // 棚の掃除は掘るときに行うので、触るのはこの `.nar` の根の棚だけ。同じ根に 2 度
         // 掘ると 2 度目の掃除が 1 度目の作業フォルダを消すので、綴りが同じ根は 1 つにする。
@@ -213,14 +213,16 @@ impl NarArchive {
             states.push(state);
         }
 
-        commit_all(&areas, &self.manifest, &plan, &states).map_err(|failure| NarError::Io {
-            archive: self.archive.clone(),
-            phase: failure.phase,
-            path: failure.path,
-            source: failure.source,
-            committed: failure.committed,
-            rolled_back: failure.rolled_back,
-            survivors: failure.survivors.into_boxed_slice(),
+        commit_all(&areas, &self.manifest, &plan, skipped, &states).map_err(|failure| {
+            NarError::Io {
+                archive: self.archive.clone(),
+                phase: failure.phase,
+                path: failure.path,
+                source: failure.source,
+                committed: failure.committed,
+                rolled_back: failure.rolled_back,
+                survivors: failure.survivors.into_boxed_slice(),
+            }
         })
     }
 

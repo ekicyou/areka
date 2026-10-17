@@ -58,7 +58,7 @@ fn prepare(builder: NarBuilder, request: &InstallRequest<'_>) -> Prepared {
         .iter()
         .map(|entry| inflate_entry(&bytes, entry).expect("エントリを伸長できる"))
         .collect();
-    let plan = build_plan(&manifest, &names, request).expect("計画は組める");
+    let (plan, _skipped) = build_plan(&manifest, &names, request).expect("計画は組める");
     Prepared {
         manifest,
         plan,
