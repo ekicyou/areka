@@ -16,7 +16,9 @@
 
 今の areka は旧い位置の形だけを読み、基準はスコープの番号だけを解決し、参照点は読まずに常に「両窓の基準位置どうし」で計算する。旧い emo2 の `\1\![move,-353,,,0,base,base]` がたまたま `base.base` だったので表に出なかった。emo2 の 2026-10-17 版が名前付きの形と `left.bottom`／`right.bottom` を使い始めたため、この前提が崩れた。
 
-本 spec は瞬間の移動の正典化に絞る。あわせて、瞬間の位置の指令である `\![set,position]`／`\![reset,position]`（窓をその位置に固定する・解除する）と、`\![execute,resetwindowpos]`／`OnResetWindowPos`（メニューの「シェル位置初期化」と同じ働きで窓を既定の位置へ戻す）を受ける。
+本 spec は瞬間の移動の正典化に絞る。あわせて、`\![execute,resetwindowpos]`／`OnResetWindowPos`（メニューの「シェル位置初期化」と同じ働きで窓を既定の位置へ戻す）を受ける。`\![set,position]`／`\![reset,position]`（窓の固定と解除）は、SSP 2.9.18 も実装していない（「unknown subcommand」で何もしない・2026-10-17 実測）ので受けない。
+
+ukadoc が黙っている点は、SSP 2.9.18 の実測（`research.md` §8）に合わせる。
 
 ### 用語
 
@@ -34,14 +36,15 @@
   - `\![move]` の名前付きの形の解釈と、旧い位置の形との同じ意味での解釈（キーの大小・順・省略・`fix`・`--option` の繰り返し）
   - 参照点 9 点＋`base` による位置の計算（両方の形に効く）
   - 基準 `screen`・`primaryscreen`・`global`・`me`・スコープの番号の解決
-  - 正典で使えない組み合わせ・他のゴーストの名前の基準・読めない値を、記録を残して飛ばすこと
+  - 正典で使えない組み合わせ・他のゴーストの名前の基準・読めない値を、SSP と同じ置き換えで動かし、置き換えたことを記録すること
   - `--option` の語彙（`ignore-sticky-window` は受け取るが、今は動きを変えない）
-  - `\![set,position,x,y,スコープID]`／`\![reset,position]` による窓の固定と解除
+  - `\![set,position]`／`\![reset,position]` を受けないこと（SSP と同じ）を確かめ、台帳に書くこと
   - `\![execute,resetwindowpos]`、右クリックのメニューの「シェル位置初期化」の項目、`OnResetWindowPos` の送出と返事が無いときの既定の並べ直し
   - 互換の対応表（`doc/COMPAT_ARCHITECTURE.md` §8）と網羅台帳の該当行の改め
   - emo2 の 2026-10-17 版での実機の確かめ
 - **Out of scope**:
   - `--time` の補間（途中の位置を通って動くこと）と、移動の時間に合わせて台本の進みを待たせること
+  - 窓の固定と解除（`\![set,position]`／`\![reset,position]` の働き。SSP 2.9.18 も実装していない）
   - `\![moveasync]`・`\![moveasync,cancel]`（dola の改造〔v0.2.0〕の後）
   - `\![set,alignmenttodesktop]`・`\![set,sticky-window]`／`\![reset,sticky-window]`、`--option=ignore-sticky-window` の効き目（`areka-P0-window-link-directives`・v0.1.0）
   - surfaces.txt に宣言された `point.basepos` を面ごとに使うこと（`areka-P0-surfaces-basepos`）
@@ -97,26 +100,28 @@
 
 #### Acceptance Criteria
 
-1. When 基準が `screen` のとき（基準を省略したときを含む）, the areka shall 動かす窓が今いるモニタの全体の矩形（タスクバーを除いた作業領域ではない）を基準の矩形とする。
-2. The areka shall 動かす窓がどのモニタにいるかを、今の areka が窓の属するモニタを決めるのと同じ決まりで決める。
-3. When 基準が `primaryscreen` のとき, the areka shall 主モニタの全体の矩形を基準の矩形とする。
+1. When 基準が `screen` のとき（基準を省略したときを含む）, the areka shall 動かす窓が今いるモニタの作業領域（タスクバーを除いた矩形）を基準の矩形とする（SSP 2.9.18 の実測と同じ）。
+2. The areka shall 動かす窓がどのモニタにいるかを、今の areka が窓の属する作業領域を決めるのと同じ決まり（窓の中心で決め、どのモニタにもいなければ一番近いモニタ）で決める（SSP 2.9.18 の実測と同じ）。
+3. When 基準が `primaryscreen` のとき, the areka shall 主モニタの作業領域を基準の矩形とする（SSP 2.9.18 の実測と同じ）。
 4. When 基準が `global` のとき, the areka shall システムの座標の原点（主モニタの左上）を基準の点とする。
 5. When 基準がスコープの番号のとき, the areka shall そのスコープのキャラクターの窓の矩形を基準の矩形とする。
 6. When 基準が `me` のとき, the areka shall 動かす窓自身の、動かす前の矩形を基準の矩形とする。
-7. If 基準がスコープの番号で、そのスコープのキャラクターの窓が無い場合, then the areka shall 窓を動かさず、そのことを記録する。
-8. If 基準が正典の語でもスコープの番号でもない語（他のゴーストの名前など）の場合, then the areka shall 窓を動かさず、他のゴーストの基準は今は解決先が無いことを記録する。
+7. If 基準がスコープの番号で、そのスコープのキャラクターの窓が無い場合, then the areka shall 基準を `screen` に置き換えて動かし、置き換えたことを記録する（SSP 2.9.18 の実測と同じ）。
+8. If 基準が正典の語でもスコープの番号でもない語（他のゴーストの名前など）の場合, then the areka shall 基準をスコープ 0 に置き換えて動かし、他のゴーストの基準は今は解決先が無いため置き換えたことを記録する（SSP 2.9.18 の実測と同じ）。
 
-### Requirement 4: 正典で使えない組み合わせと読めない値
+### Requirement 4: 正典で使えない組み合わせと読めない値（SSP と同じ置き換え）
 
-**Objective:** As a ゴースト作者, I want 書き間違えた `\![move]` で何が起きたかを知りたい, so that 黙って無視されて原因を追えない状況を避けられる
+**Objective:** As a ゴースト作者, I want 書き間違えた `\![move]` でも SSP と同じに動き、何を置き換えたかを知りたい, so that SSP で確かめた台本が areka でも同じに動き、原因も追える
 
 #### Acceptance Criteria
 
-1. If 基準が `screen` または `primaryscreen` で、基準の参照点のどちらかの軸に `base` が書かれた場合, then the areka shall 窓を動かさず、使えない組み合わせであることを記録する。
-2. If 基準が `global` で、基準の参照点に `right`・`bottom`・`center`・`base` のどれかが書かれた場合, then the areka shall 窓を動かさず、使えない組み合わせであることを記録する。
-3. The areka shall 要件 4.1・4.2 の制限を基準の参照点にだけ当て、動かす窓の参照点には当てない。
-4. If X・Y・`time` の値が整数として読めない場合、または参照点に正典に無い語が書かれた場合, then the areka shall 窓を動かさず、受け取った値と理由を記録する。
-5. The areka shall 窓を動かさなかったどの場合も、トークを止めずに続け、何を受け取りなぜ動かさなかったかを記録に残す（記録を残さないまま黙って諦めない）。
+1. If 基準が `screen` または `primaryscreen` で、基準の参照点の軸に `base` が書かれた場合, then the areka shall その軸を `center` に置き換えて動かし、置き換えたことを記録する（SSP 2.9.18 の実測と同じ）。
+2. If 基準が `global` で、基準の参照点が `left.top` 以外の場合, then the areka shall 基準の参照点を使わず原点そのものを基準の点として動かし、置き換えたことを記録する（SSP 2.9.18 の実測と同じ）。
+3. The areka shall 要件 4.1・4.2 の置き換えを基準の参照点にだけ当て、動かす窓の参照点には当てない。
+4. If 参照点に正典に無い語が書かれた場合, then the areka shall その軸を `left`（横）または `top`（縦）に置き換えて動かし、受け取った語と置き換えを記録する（SSP 2.9.18 の実測と同じ）。
+5. If X または Y の値が整数として読めない場合, then the areka shall その軸を `fix`（今の座標を保つ）として動かし、受け取った値と置き換えを記録する（SSP 2.9.18 の実測と同じ）。
+6. If `time` の値が整数として読めない場合, then the areka shall `time` を 0 として動かし、受け取った値と置き換えを記録する。
+7. The areka shall 置き換えたどの場合も、トークを止めずに続け、何を受け取り何に置き換えたかを記録に残す（記録を残さないまま黙って置き換えない）。
 
 ### Requirement 5: 時間つきの移動の扱い
 
@@ -136,22 +141,14 @@
 1. When 利用者が emo2 の 2026-10-17 版のメニューで「エモの位置調整」を選んだとき, the areka shall エモ（`\1`）の窓の右下の角を、むらさき（`\0`）の窓の左下の角にそろえる。
 2. The areka shall 要件 6.1 を、表示の拡大率が 100% のときと 200% のときの両方で成り立たせる。
 
-### Requirement 7: 窓の固定と解除
+### Requirement 7: 窓の固定の指令を受けない（SSP と同じ）
 
-**Objective:** As a ゴースト作者, I want キャラクターの窓を決めた位置に固定し、後で解きたい, so that 演出の間に利用者のドラッグで窓がずれない
+**Objective:** As a ゴースト作者, I want `\![set,position]`／`\![reset,position]` を書いても SSP と同じ結果になってほしい, so that SSP で確かめた台本が areka で別の動きをしない
 
 #### Acceptance Criteria
 
-1. When 台本が `\![set,position,x,y,スコープID]` を実行したとき, the areka shall 指定したスコープのキャラクターの窓を、`\![move,--X=x,--Y=y,--base=global,--base-offset=left.top,--move-offset=left.top]` と同じ位置へ置き、その位置に固定する。
-2. If `\![set,position]` のスコープ ID が省略された場合, then the areka shall タグを実行したスコープのキャラクターの窓を対象にする。
-3. While 窓が固定されている間, the areka shall 利用者がその窓をドラッグしても窓を動かさない。
-4. While 窓が固定されている間, the areka shall その窓のクリック・ダブルクリック・右クリックのメニューを、固定の前と同じに働かせる。
-5. While 窓が固定されている間, when `\![move]` がその窓を動かそうとしたとき, the areka shall 窓を動かさず、固定中のため動かさなかったことを記録する。
-6. When 固定されている窓に `\![set,position]` がもう一度実行されたとき, the areka shall 窓を新しい位置へ置き直して固定を続ける。
-7. When 台本が `\![reset,position]` を実行したとき, the areka shall すべての窓の固定を解き、窓をその場に残したまま、利用者がドラッグで動かせる状態へ戻す。
-8. If `\![set,position]` の x・y が整数として読めない場合、または指定したスコープのキャラクターの窓が無い場合, then the areka shall 窓を固定も移動もせず、受け取った値と理由を記録する。
-9. The areka shall 固定をゴーストが終わるまで有効にし、次の起動へ持ち越さない。
-10. The areka shall 固定した位置を位置の記憶に書かず、固定の前に記憶にあった位置を保つ。
+1. When 台本が `\![set,position]` または `\![reset,position]` を実行したとき, the areka shall 窓を動かさず固定もせず、トークを止めずに続ける（SSP 2.9.18 は「unknown subcommand」で何もしない・2026-10-17 実測）。
+2. The 網羅台帳 shall `set,position`・`reset,position` の行に、SSP 2.9.18 も実装していないため受けないことを書く。
 
 ### Requirement 8: 窓を既定の位置へ戻す
 
@@ -164,20 +161,20 @@
 3. When 利用者がその項目を選んだとき, the areka shall ゴーストへ `OnResetWindowPos` を送る。
 4. When ゴーストが `OnResetWindowPos` に台本を返したとき, the areka shall その台本を再生し、自分からは並べ直さない。
 5. If ゴーストが `OnResetWindowPos` に台本を返さなかった場合（空の返事・返事なし・エラーの返事を含む）, then the areka shall `\![execute,resetwindowpos]` と同じ並べ直しを行う。
-6. When 台本が `\![execute,resetwindowpos]` を実行したとき, the areka shall 固定されていないすべてのキャラクターの窓を、位置の記憶が無いときに起動で並べるのと同じ既定の位置へ並べ直す。
-7. While 窓が固定されている間, when 並べ直しが行われたとき, the areka shall 固定されている窓を動かさず、固定中のため動かさなかったことを記録する。
+6. When 台本が `\![execute,resetwindowpos]` を実行したとき, the areka shall すべてのキャラクターの窓を、位置の記憶が無いときに起動で並べるのと同じ既定の位置へ並べ直す。
+7. When 台本が `\![execute,resetwindowpos]` を実行したとき, the areka shall `OnResetWindowPos` を送らずに並べ直す（`OnResetWindowPos` を送るのはメニューから選んだときだけ・SSP 2.9.18 の実測と同じ）。
 8. When 並べ直しが行われた後に次の起動をしたとき, the areka shall 並べ直した窓を既定の位置に出す（並べ直しの後に利用者がドラッグした窓は、ドラッグした位置に出す）。
 9. When 並べ直しで窓が動いたとき, the areka shall バルーンの窓をこれまでどおりキャラクターの窓に付いて動かす。
 
 ### Requirement 9: 記録と確かめ
 
-**Objective:** As a 開発者, I want 窓の移動・固定・並べ直しをログとテストで判定したい, so that 目視だけに頼らず後から確かめ直せる
+**Objective:** As a 開発者, I want 窓の移動・並べ直しをログとテストで判定したい, so that 目視だけに頼らず後から確かめ直せる
 
 #### Acceptance Criteria
 
 1. When `\![move]` で窓を動かしたとき, the areka shall どのスコープの窓をどこからどこへ動かしたかと、使った基準・基準の参照点・動かす窓の参照点を記録する。
-2. When 窓を固定したとき、固定を解いたとき、並べ直したとき, the areka shall その対象の窓と位置を記録する。
-3. The areka shall 二つの書き方の解釈・参照点の計算・基準の解決・使えない組み合わせ・読めない値・固定中の移動・並べ直しの判断の各分岐を、実際の画面を使わない決定論のテストで確かめられるようにする。
+2. When 窓を並べ直したとき, the areka shall その対象の窓と位置を記録する。
+3. The areka shall 二つの書き方の解釈・参照点の計算・基準の解決・使えない組み合わせと読めない値の置き換え・窓の固定の指令を受けないこと・並べ直しの判断の各分岐を、実際の画面を使わない決定論のテストで確かめられるようにする。
 4. The areka shall emo2 の 2026-10-17 版を拡大率 100% と 200% で動かし、「エモの位置調整」を選んだ後の窓の位置と記録から要件 6.1 の成立を判定できる実機の証跡を残す。
 5. The areka shall 実機の確かめに使う根と検体を、作業ツリーの `target\` の下だけに置く。
 
@@ -188,6 +185,6 @@
 #### Acceptance Criteria
 
 1. When 本機能が完成したとき, the 互換の対応表（`doc/COMPAT_ARCHITECTURE.md` §8） shall `\![move]` の名前付きの形・基準・参照点・時間の行を新しい振る舞いに合わせて改め、「emo2 は位置の形だけを使う」を根拠にした記述を残さない。
-2. When 本機能が完成したとき, the 互換の対応表 shall 正典が黙っている点について本 spec で決めた扱い（`move-offset` の既定・`screen` の矩形・使えない組み合わせの扱い・`primaryscreen` と `global` の参照点の制限・`\![set,position]` の座標とスコープの省略・固定中の移動と並べ直し・並べ直しの後の位置の記憶・`OnResetWindowPos` の返事が無いときの扱い）を行として持つ。
+2. When 本機能が完成したとき, the 互換の対応表 shall 正典が黙っている点について本 spec で決めた扱いと SSP 2.9.18 の実測に合わせた扱い（`move-offset` の既定・`screen` と `primaryscreen` は作業領域・使えない組み合わせと読めない値の置き換え・無いスコープと他のゴーストの名前の基準の置き換え・X・Y に拡大率を掛ける SSP との意図した差・`\![set,position]`／`\![reset,position]` を受けないこと・`\![execute,resetwindowpos]` は `OnResetWindowPos` を送らないこと・並べ直しの後の位置の記憶・`OnResetWindowPos` の返事が無いときの扱い）を行として持つ。
 3. When 本機能が完成したとき, the 網羅台帳 shall `move` の行の持ち主を本 spec へ付け替え、時間の部分（補間と台本の進み）が残りであることを書く。
-4. When 本機能が完成したとき, the 網羅台帳 shall `set,position`・`reset,position`・`execute,resetwindowpos`・`OnResetWindowPos`・`switchmovetodefaultpositionbutton.caption` の行を、実装した状態と持ち主に合わせて改める。
+4. When 本機能が完成したとき, the 網羅台帳 shall `set,position`・`reset,position`・`execute,resetwindowpos`・`OnResetWindowPos`・`switchmovetodefaultpositionbutton.caption` の行を、実装した状態と持ち主に合わせて改める（`set,position`・`reset,position` は要件 7.2 のとおり受けない理由を書く）。
