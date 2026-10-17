@@ -33,6 +33,8 @@ pub mod persist;
 /// シェルの差し替えで、新しいシェルの見た目の値を走っている窓の部品へ入れ直す
 /// （areka-P0-shell-balloon-switch 要件 2.7）。
 pub(crate) mod reseed;
+/// 既定の位置への並べ直し（areka-P0-move-canon 要件 8.6・design ResetPos）。
+pub(crate) mod reset_pos;
 pub mod resolver;
 pub mod source;
 pub mod spawn;
@@ -844,7 +846,9 @@ pub fn prepare_ghost_windows_with_work_area(
 ///   （窓は生やす方針・design「Error Handling」）
 /// - 0 台: `None`（架空の既定モニタは発明しない。work area 側の致命判定は
 ///   [`work_area_of`]・DPI 側の縮退は [`build_measure_scaling`] がそれぞれ担う）
-fn primary_monitor(monitors: &[Monitor]) -> Option<&Monitor> {
+///
+/// crate の中から使える（並べ直し [`reset_pos`] と `\![move]` の `primaryscreen`）。
+pub(crate) fn primary_monitor(monitors: &[Monitor]) -> Option<&Monitor> {
     if let Some(primary) = monitors.iter().find(|m| m.is_primary) {
         return Some(primary);
     }

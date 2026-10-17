@@ -35,7 +35,7 @@ use super::{
 /// # 経路タグ（Req 1.2／2.4・D13・task 1.4）
 ///
 /// 対象窓の書込は [`PlacementRoute::MoveCue`]・随伴バルーンは
-/// [`PlacementRoute::BalloonFollow`] として記録する。唯一の消費者が `\![move]` cue である
+/// [`PlacementRoute::BalloonFollow`] として記録する。呼び手（`\![move]`・連鎖の確定・並べ直し）はどれも `MoveCue` を名乗る
 /// ため route は引数で受けない（呼出側が渡せる値が 1 つしか無く、取り違えの余地だけを
 /// 増やす＝`resize_window_keep_position` と同じ判断）。**スクリプトの明示操作**ゆえ
 /// 遷移ガードは適用しない（ドラッグ・`Restore` と同族・D13 帰結⑵）。
