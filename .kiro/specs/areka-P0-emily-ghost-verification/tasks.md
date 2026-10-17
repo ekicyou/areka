@@ -38,7 +38,7 @@
   - _Requirements: 1.5, 1.12, 7.1, 7.2_
 
 - [ ] 3. `char2` 以降の鍵を持つゴーストで 3 人目以降の窓を作らず、panic と会話の止まりを避ける
-- [ ] 3.1 (P) 窓の scope を 0・1 に絞り、えみりの形の固定入力で配置・ポインタ・右クリックの道が panic しないことを、直す前に赤・直した後に緑で確かめる
+- [x] 3.1 (P) 窓の scope を 0・1 に絞り、えみりの形の固定入力で配置・ポインタ・右クリックの道が panic しないことを、直す前に赤・直した後に緑で確かめる
   - 先に固定入力を足す: えみりと同じ形（ゴーストの descript に `kero.name`・`char2.name`、シェルの descript に `char2.balloon.offsetx`・`char3.seriko.alignmenttodesktop`・`char4.seriko.alignmenttodesktop`）を配置のテストの共有の助手に `pub(crate)` の定数で置き、その助手の接続を `cfg(test)` のまま `pub(crate)` へ広げて、入力とメニューのテストから読めるようにする
   - 先に赤のテストを足す: 配置の兄弟の新しいテスト（設定の scope が 0・1 だけ、シェルの切替の準備の配置の scope が 0・1 だけ）、入力の兄弟の新しいテスト（`input_events_char_clamp_tests.rs`・全 scope の窓でマウスを動かしても panic しない）、メニューの右クリックの道（`trigger_wired_tests.rs`・押して離してメニューを組んでも panic しない）。窓は手で書かず、固定入力から配置の設定が返した scope の全部で作る。直す前は scope 2 の窓が作られて赤になることを確かめる
   - 直す: scope を決める所で `char{n}.` の鍵（n ≥ 2）から scope を足さないようにし、呼び手の無くなる補助を消す。`char{n}.*` の鍵の読み・題名・2 か所の `debug_assert!(scope <= 1)`・起動の絵の側の scope の導き方は変えない

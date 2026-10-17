@@ -153,3 +153,79 @@ fn a_right_click_on_the_wired_menu_ends_in_one_close_request() {
         "メニューの送り口には照会のほか何も流れない"
     );
 }
+
+/// えみりの形の固定入力から組んだ配置の全 scope の窓で、右クリックの道（押して離す →
+/// 照会への返事 → メニューの組み立て）を通しても panic しない（spec:
+/// areka-P0-emily-ghost-verification 要件 4.7・6.7）。窓の scope は手で書かず、配置の設定が
+/// 返した scope の全部で作る。scope 2 以上の窓があると `char_scope` と
+/// `visible_resource_for` の `debug_assert!(scope <= 1)` で落ちる。
+#[test]
+fn a_right_click_on_every_emily_shaped_window_builds_a_menu_without_panic() {
+    let (menu_tx, menu_rx) = channel::<KanadeMsg>();
+    let (mouse_tx, _mouse_rx) = channel::<KanadeMsg>();
+    let mut world = World::new();
+    world.init_resource::<Schedules>();
+    world.insert_non_send(MouseWiring::new(mouse_tx, RegionSource::Mock(no_region)));
+    let dir = TempPath::new("menu-wired-emily-shaped");
+    let (_readme_tx, readme_rx) = channel::<crate::readme::ReadmeRequest>();
+    crate::readme::wire_readme(&mut world, dir.child("readme.txt"), readme_rx);
+    crate::menu::wire_menu_with(
+        &mut world,
+        MenuWiring::with_to_screen(menu_tx, shifted_to_screen),
+    );
+    let windows: Vec<Entity> = crate::placement::shared_test_support::emily_shaped_scopes()
+        .into_iter()
+        .map(|scope| {
+            world
+                .spawn((
+                    CharWindowMarker { scope },
+                    WindowHandle {
+                        hwnd: HWND((0x1000 + scope) as *mut _),
+                        instance: HINSTANCE::default(),
+                    },
+                ))
+                .id()
+        })
+        .collect();
+    crate::menu::attach_release_handlers(&mut world);
+
+    let mut built = Vec::new();
+    for e in windows {
+        let now = Instant::now();
+        let press = Phase::Bubble(PointerState {
+            client_point: Point { x: 30, y: 40 },
+            double_click: wintf::ecs::pointer::DoubleClick::Right,
+            ..Default::default()
+        });
+        assert!(crate::input_events::on_char_pointer_pressed(
+            &mut world, e, e, &press
+        ));
+        let release = PointerState {
+            client_point: Point { x: 30, y: 40 },
+            released: ButtonReleased {
+                right: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(handle_release(&mut world, e, &release, now));
+        let KanadeMsg::ResourceQuery { ids, reply } = menu_rx.try_recv().expect("照会が 1 件届く")
+        else {
+            panic!("ResourceQuery を期待");
+        };
+        reply
+            .send(
+                ids.iter()
+                    .map(|id| (*id, ResourceOutcome::NoContent))
+                    .collect(),
+            )
+            .expect("受け口は生きている");
+        let ready = poll_once(&mut world, now + Duration::from_millis(16)).expect("計画ができる");
+        built.push(ready.request.scope);
+    }
+    assert_eq!(
+        built,
+        vec![0, 1],
+        "メニューは scope 0 と 1 の窓でだけ組まれる"
+    );
+}
