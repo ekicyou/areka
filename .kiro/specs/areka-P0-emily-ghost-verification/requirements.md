@@ -40,6 +40,7 @@
 
 - `areka-P0-nar-install` の要件 5.4（取り出し元フォルダが無ければ理由付きで拒否する）。
 - `areka-P0-install-companion-reading` の要件 2.5 と `areka-P0-install-companion-canon` の要件 2.5（取り出し元の配下に何も無ければ、今どおりインストール全体を断る）。
+- `areka-P0-nar-install` の要件 9.2・9.3 のうち、拒否の語彙に「取り出し元フォルダが無い」を含め、その固定入力を持つ部分（拒否の理由でなくなるので、語彙から外す）。
 
 「何とか動く」の線を越える直しは、本 spec に入れない。同じく、areka の方針で受けないものも入れない。どちらも記録と起票に回す。
 
@@ -83,7 +84,7 @@
 4. When 同梱のバルーンを 1 つ飛ばしたとき, the areka shall 警告を 1 件残す。警告には、`.nar` のファイル名・その同梱の `*.source.directory` の鍵（`*.source.directory` が書かれていないときは `*.directory` の鍵）・書かれていた取り出し元の値を載せる。
 5. When 同梱のバルーンを飛ばしたほかに入れる妨げが無いとき, the areka shall インストールを成功として扱い、ゴーストへは今の成功と同じ形で伝える（新しいイベント・新しい失敗の語は作らない）。利用者への警告は 12 項のとおりとする。
 6. The areka shall 飛ばした同梱のバルーンの置き場（`<根>/balloon/<*.directory>/`）に、フォルダを作らず、すでに在る中身も変えない（変更 0）。
-7. The areka shall 取り出し元の無い同梱のバルーンを理由に、インストールを断らない（完了 `areka-P0-nar-install` の要件 5.4、`areka-P0-install-companion-reading` の要件 2.5、`areka-P0-install-companion-canon` の要件 2.5 を上書きする）。
+7. The areka shall 取り出し元の無い同梱のバルーンを理由に、インストールを断らない（完了 `areka-P0-nar-install` の要件 5.4、`areka-P0-install-companion-reading` の要件 2.5、`areka-P0-install-companion-canon` の要件 2.5 を上書きする）。拒否の理由の閉じた語彙から「取り出し元フォルダが無い」を外す（14 種 → 13 種。完了 `areka-P0-nar-install` の要件 9.2・9.3 の該当部分を上書きする）。
 8. The areka shall 同梱のバルーンの取り出し元が書庫に在るときの置き方と結果を、今と変えない（変更 0）。
 9. The areka shall 取り出し元の無い同梱のほかの拒否の理由（壊れた書庫・安全でないパス・必須の鍵が無いなど）を、今と変えない（変更 0）。
 10. When えみりの `.nar`（`vendors/sample_ghost/emily4.nar`）を入れたとき, the areka shall ゴースト `emily4` を `<根>/ghost/emily4/` に置き、バルーン `emily4` を置かず、警告を 1 件残す。
@@ -113,7 +114,7 @@
 #### Acceptance Criteria
 
 1. The 実機の検証 shall debug 版の `areka.exe` を、ワークツリーの `target\` の下に置いた根から、絶対パスで起動して回す（`C:\` の直下・`C:\tmp` は使わない）。
-2. The 実機の検証 shall 根へのえみりの入れ方を、Requirement 1 のインストールを通した形とする（検体の窓口か、`.nar` を入れる操作のどちらか。どちらを使ったかを記録に書く）。
+2. The 実機の検証 shall 根を areka の配布物と同じ形（ゴースト `emo2`・バルーン `emo2-kakukaku`・`StayseeBalloon`）に組み、その上で areka のインストールの操作（`.nar` の投げ込みか、メニューの「インストール…」）でえみりの `.nar` を入れる。どちらの操作を使ったかを記録に書く。こうして、利用者の報告の再現・Requirement 1 の 12 項の警告のダイアログ・Requirement 1 の 11 項の既定のバルーン（`StayseeBalloon`）を、同じ走行で確かめる。
 3. While 実機の検証を回している, the 実機の検証 shall 32 ビットの SHIORI を読むための i686 の補助プログラムが `areka.exe` の隣に在ることを、走らせる前に確かめる（全体テストの後に x64 版へ替わっていることがあるため）。
 4. While 実機の検証を回している, the 実機の検証 shall 判定に使う分岐の記録が出る水準まで記録の水準を開け、自動終了は安全弁として、1 回の走行の所要より長い上限で置く。
 5. The 実機の検証 shall 他の spec の実機の窓を出す回・負荷の走行と、同じ時間に回さない。
@@ -164,12 +165,16 @@
 
 #### Acceptance Criteria
 
-1. When 実機の検証で、Requirement 4 の 1 項から 5 項のどれかを妨げる areka 側の不具合が見つかったとき, the 開発者 shall それを本 spec の中で根本から直し、決定論の自動テストを添える（2026-10-17 開発者「分割せず、対応するための spec を 0.0.3 のゴールとして設定せよ」）。
+1. When 実機の検証で、Requirement 4 の 1 項から 5 項のどれかを妨げる areka 側の不具合が見つかったとき, the 開発者 shall それを本 spec の中で根本から直し、決定論の自動テストを添える（2026-10-17 開発者「分割せず、対応するための spec を 0.0.3 のゴールとして設定せよ」）。この線は、棚卸㉓の「本 spec の中で直すのは 1 タスクで閉じるもの 4 件まで、残りは起票」を置き換える。
 2. When Requirement 4 の 1 項から 5 項を妨げない崩れ（見た目の違い・一部の機能の欠け）が見つかったとき, the 開発者 shall それを本 spec では直さず、Requirement 5 の 4 項のとおり起票するか「方針で受けない」とする。
 3. If 1 項の直しが、すべてのゴーストへ SHIORI へ渡すバイト列を変えるとき, then the 開発者 shall 直す前に開発者の決めを仰ぐ。例: SHIORI の `load` へ渡すフォルダのパスの形（区切りの混在・末尾の区切りなし）。
-4. If 1 項の直しを足すと本 spec のタスクが 20 を超える見込みになったとき, then the 開発者 shall 直しを進める前に、残りの崩れの一覧を添えて開発者の決めを仰ぐ（黙って起票へ回さない・黙って膨らませない）。
+4. If 1 項の直しを足すと本 spec のタスクが 20 を超える見込みになったとき, then the 開発者 shall 直しを進める前に、残りの崩れの一覧を添えて開発者の決めを仰ぐ（黙って起票へ回さない・黙って膨らませない）。20 を超えるかは、最初の実機の走行の後に、崩れた所の一覧と直しの見積もりをそろえて測る。
 5. The 本 spec の直し shall 完了 spec の要件を黙って変えない。完了 spec の要件を上書きするときは、上書きした要件の番号を文書に書く。
 6. The 本 spec の直し shall えみりの辞書・書庫を書き換えて通すことをしない（直すのは areka の側だけ）。
+7. The areka shall えみりのように `char2` 以降の鍵（ゴーストの descript.txt の `char2.name`、シェルの `char2.*`・`char3.*`・`char4.*` など）を持つゴーストを起こしても、panic しない（2026-10-17 開発者「最低限パニックは回避して欲しい」）。
+   - 3 人目以降の窓が作られ、debug 版の検査（scope は 1 以下）に当たるなら、窓を scope 0・1 に絞る最小の直しで避ける。起動の絵の側が今も scope 0・1 だけを扱うのと、答えを揃える。
+   - 3 人目以降の窓を正しく作るのは `areka-P0-extra-character-windows` が後でやり直す。本 spec は、その spec の要件を先に取り込まない。
+   - 実機で当たるのを待たない。`char2` 以降の鍵を持つ固定入力で、起動の配置・ポインタの入力・右クリックメニューの道を通して panic しないことを、決定論の自動テストで確かめる（当たる道があるなら、直す前に赤・直した後に緑）。
 
 ### Requirement 7: 決定論の自動テスト
 
@@ -186,7 +191,7 @@
    - 同梱のバルーンの取り出し元が全部在る（置き方・結果・記録が今と同じ）。
 2. The 自動テスト shall 1 項の各場面で、入った物・置かれなかった物・成功か失敗か・記録の件数と中身・警告のダイアログを出す求めの件数と中身（飛ばしたものが無い場面では 0 件）を確かめる。
 3. The 自動テスト shall 検体 `emily4.nar` を入れると、ゴースト `emily4` だけが入り、バルーン `emily4` が置かれないことを確かめる。
-4. The 自動テスト shall 拒否の理由の語彙を検査する既存のテストを、取り出し元の無い同梱がもう拒否の理由でないことに合わせ、ほかの理由の検査を緑のまま保つ。
+4. The 自動テスト shall 拒否の理由の語彙を検査する既存のテストを、語彙が 13 種になったこと（取り出し元の無い同梱がもう拒否の理由でないこと）に合わせ、ほかの理由の検査を緑のまま保つ。
 5. The 自動テスト shall Requirement 6 の 1 項で直した不具合ごとに、直す前に赤になり直した後に緑になる決定論のテストを少なくとも 1 本持つ。
 
 ### Requirement 8: 正典との対応の記録
@@ -196,6 +201,6 @@
 #### Acceptance Criteria
 
 1. The `doc/COMPAT_ARCHITECTURE.md` shall インストールの扱いの節に、取り出し元の無い同梱のバルーンは飛ばして記録に残し、利用者へ警告のダイアログを出し、ゴーストは入れることと、その理由を記す。理由は、ukadoc が書いていないこと・SSP から取り出した形の `.nar` が出回ること・飛ばした分は既定のバルーンへ落ちることの 3 つ。
-2. The `doc/COMPAT_ARCHITECTURE.md` shall 完了 spec の要件のうち本 spec が上書きしたもの（`areka-P0-nar-install` の要件 5.4、`areka-P0-install-companion-reading` の要件 2.5、`areka-P0-install-companion-canon` の要件 2.5）を記す。
+2. The `doc/COMPAT_ARCHITECTURE.md` shall 完了 spec の要件のうち本 spec が上書きしたもの（`areka-P0-nar-install` の要件 5.4・9.2 と 9.3 の該当部分、`areka-P0-install-companion-reading` の要件 2.5、`areka-P0-install-companion-canon` の要件 2.5）を記す。失敗理由の語の写しの行から `CompanionSourceMissing` を外す。
 3. The 網羅台帳 shall `descript_install` の `*.source.directory` の行に、取り出し元が書庫に無いときの areka の扱いを述べる。
 4. The 網羅台帳 shall 実機の検証で分かった、えみりが使う項目の対応の有無を、記録と食い違わない形にする（本 spec の後に偽の記述を 0 件）。
