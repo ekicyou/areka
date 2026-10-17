@@ -1,6 +1,6 @@
 # areka.exe のアイコン
 
-`areka.exe` に入れるアプリのアイコンと通知領域用のアイコンの、絵と作り直しの手順と権利の記録です。
+`areka.exe` に入れるアプリのアイコンと通知領域用のアイコン、それに GitHub の Social preview の絵の、絵と作り直しの手順と権利の記録です。
 組み立て（`crates/areka/build.rs`）はこのフォルダの `icons.res` をリンカに渡すだけで、絵は組みません。
 
 ## 中身の一覧
@@ -16,6 +16,8 @@
 | `app.ico` | 道具の出力。アプリのアイコンのファイル（8 寸法・PNG） |
 | `tray.ico` | 道具の出力。通知領域用のアイコンのファイル（8 寸法・PNG） |
 | `icons.res` | 道具の出力。`areka.exe` に渡す資源のファイル（アイコンの組 2 つ・絵 16 枚） |
+| `social-preview.svg` | GitHub の Social preview（リポジトリのリンクを貼ったときに出る絵）の焼き方。640×320 の比で、`app.svg` と同じ 2 人の線・縁取り・色を中に持つ（外の画像を読まない） |
+| `social-preview.png` | `social-preview.svg` を 1280×640 で焼いたもの。GitHub に登録する絵。`areka.exe` には入らない |
 | `README.md` | この文書 |
 
 - 寸法ごとの PNG 16 枚が正本です。手で整えた小さい寸法も、`-Seed` で縮めて作った寸法も、コミットした PNG がそのまま `areka.exe` に入ります。
@@ -85,6 +87,14 @@ msedge --headless=new --default-background-color=00000000 --window-size=1024,102
 
 焼いた原画を置いたら、上の「原画（`app.png`・`tray.png`）を変えたとき」の手順に進みます。
 
+Social preview の絵（`social-preview.png`）は、同じやり方で `social-preview.svg` を 1280×640 で焼きます（地は透明にしません）。
+
+```powershell
+msedge --headless=new --hide-scrollbars --window-size=1280,640 --screenshot=<リポジトリの絶対パス>\crates\areka\icon\social-preview.png <social-preview.svg の file URL>
+```
+
+`app.svg` の線を変えたときは、`social-preview.svg` の中の同じ線も直してから焼き直します（自動では追従しません）。焼き直した絵は、GitHub のリポジトリの Settings → General → Social preview で登録し直します。
+
 なぞりの元と生成の記録は、仕様のフォルダの `art/` に在ります（このフォルダには写していません。`app.svg`・`tray.svg` が同じ線を中に持つので、焼き直しには要りません）。
 
 - 置き場: `.kiro/specs/completed/areka-P0-app-icon/art/`
@@ -116,9 +126,18 @@ msedge --headless=new --default-background-color=00000000 --window-size=1024,102
 - どちらにも、作った絵に出どころの表示を求める記載は無い。そのため配布の zip の `README.txt`（`dist/README.txt`）には書き足していない。
 - 確かめた日: 2026-10-16（要件の段で確かめ、この文書を書くときにもう一度確かめた）。
 
+### Social preview の絵の出どころ
+
+| 項目 | 内容 |
+| --- | --- |
+| 元にした絵 | `app.svg` の 2 人の線・縁取り・色をそのまま写した（新しく生成した絵は無い） |
+| 合言葉 | 「あれか？」（名前の areka の読み）と、その英訳「That the one?」 |
+| 文字 | Windows に入っている字体（Segoe UI Variable・Yu Gothic UI・Consolas）で焼いた。字体のファイルは入れていない |
+| 作った日 | 2026-10-17（4 案から、方眼の地にコンソール風の文字を置き、絵はドット絵でなくアイコンと同じ絵にした案を開発者が選んだ） |
+
 ### 権利
 
-権利は 2 つに分けて扱います。依存のライセンスから作る `THIRD-PARTY-NOTICES.md` には載せません。
+権利は 2 つに分けて扱います。Social preview の絵も、うにゅうの輪郭を含むので同じ扱いです。依存のライセンスから作る `THIRD-PARTY-NOTICES.md` には載せません。
 
 **areka 本体（MIT）の部分**
 
