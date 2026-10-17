@@ -20,6 +20,7 @@ pub(crate) mod captions;
 pub(crate) mod ghost_frame;
 pub(crate) mod install_frame;
 pub(crate) mod plan;
+pub(crate) mod reset_pos_frame;
 pub(crate) mod roots_frame;
 pub(crate) mod shell_frame;
 pub(crate) mod trigger;

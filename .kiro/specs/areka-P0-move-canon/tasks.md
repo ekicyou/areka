@@ -67,7 +67,7 @@
   - _Boundary: areka-kanade schedule_
   - _Requirements: 8.2, 8.3_
 
-- [ ] 4.2 (P) `OnResetWindowPos` を送り、答えに応じて並べ直すかを決める葉の中身を作る
+- [x] 4.2 (P) `OnResetWindowPos` を送り、答えに応じて並べ直すかを決める葉の中身を作る
   - menu に新しい葉のファイルを作り、`menu/mod.rs` にはその `mod` の宣言だけを足す（枠の種類・登記・見張りの登記は 4.3）。`OnResetWindowPos` を答えの受け手つきで kanade へ送って受け手を保留の Resource（高々 1 つ）に置く動作と、毎 tick の答えの見張りを作る。送り口が無い・送れないときは `warn!` のうえ並べ直す
   - 答えの分類を純粋な判定にする: まだ → 待つ、台本 → 並べ直さない（`info!`）、返事なし → 並べ直す（`info!`）、`NotSteady`・`NotAllowed`・`Failed` → 並べ直す（`warn!`）、受け手が切れた → `warn!` だけで並べ直さない。どの答えでも保留を外し、`reset_pos_menu_outcome` の記録を残す。待つ時間に上限を設けない
   - 新しい兄弟のテストで、判定の 7 分類・送り口が無いときに並べ直すこと・答えの後に保留が外れること、が緑になる
