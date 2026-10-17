@@ -307,3 +307,132 @@
 | 固定中の面の大きさの変化（決めごと 6・R2） | 固定は測れない。参考に、吸着なしの窓は面の大きさが変わると基準位置（横の中央・下端）を保つ（M8） | 固定中も「基準位置を保つ」のが SSP の普段の動きに近い |
 
 **新しく見つかった論点（下端への吸着）**: SSP の既定は `alignmenttodesktop`＝`bottom` で、吸着中のキャラクターの窓には `\![move]` の Y が効かない（8.2・M1-b）。本 spec は吸着を範囲外（`areka-P0-window-link-directives`）とし、areka の窓は吸着を持たないので、たとえば `\1\![move,100,0,0,0]` は SSP では `\1` が下端に残るのに、areka では `\1` の上端が `\0` の上端にそろい、窓が浮く。emo2 の位置調整（要件 6）は下端どうしをそろえるので影響しないが、R3 の同梱の検体の点検と合わせて、Y の扱い（吸着を先に入れるか、COMPAT に意図した差として書くか）を要件か設計で決める必要がある。
+
+## 9. 設計の段の調べ物（2026-10-17 `kiro-spec-design`）
+
+> 発見の型は **拡張（light）**。新しい外部の依存は無く、既存の道（`\![move]` の受け口・配置の解決・メニューの枠・kanade のイベント送出）に足す形である。外部の調べ物（WebSearch）は要らなかった。コードは Grep／Read と 2 本の調べ物のサブエージェント（配置と位置の記憶・メニューとイベントと台帳）で読み直した。行番号は 2026-10-17 の作業木の値。
+
+### 9.1 吸い付きの当て直し（決めごと 13・要件 2.10〜2.12）
+
+- **Context**: `\![move]` の移動先を、ドラッグ・大きさの変化と同じ当て直しに通す場所を実コードで確かめる。
+- **Sources**: `placement/follow/anchor.rs:104-165`（`project_anchor`）・`:180-181`（`Anchored`）、`placement/follow/drag_follow.rs:255-289`（`policy_mapped_position` が `project_anchor` を呼ぶ）、`placement/follow/window_move.rs:180-340`（`resize_window_to` が `Anchored` を読み、下端なら中央 x を保って `project_anchor`）、`placement/follow.rs`（`pub use self::anchor::{Anchored, project_anchor}`）。
+- **Findings**:
+  - `project_anchor(anchor, raw, size, snapshot)` は純粋で公開されている。`Bottom` は `BottomSnapPolicy`（x はそのまま・`y = 窓の中心が属する作業領域の下端 − h`）、`Free` は素通し、`MonitorSnapshot` が無い・空・寸法が非正なら素通し（`debug!`）。
+  - `move_window_to`（`window_move.rs:45`）は `Anchored` を読まない。今の `\![move]` は吸い付きを通らず、次の大きさの変化（`resize_window_to` の `project_anchor`・:311）で下端へ吸い戻される（要件 2.12 の不具合の形）。
+  - 当て直しは `apply_move_directive` 側で `Anchored` と `MonitorSnapshot` を読んで `project_anchor` を呼べば足り、`window_move.rs`（1,221 行・例外表）にも `drag_follow.rs`（937 行）にも `anchor.rs` にも手を入れない。
+- **Implications**: 移動先は「台本から求めた位置 → `project_anchor` → `move_window_to`」の順。下端に吸い付いた窓は移動の時点で下端にそろうので、後の表情の切り替え（`resize_window_to`）は中央 x を保つだけで別の位置へ吸い戻さない（要件 2.12）。
+
+### 9.2 同じフレームの中の順序（要件 2.5）
+
+- **Context**: 参照点は「画面に出ている窓の実際の大きさ」から求める。台本が `\s[..]` と `\![move]` を同じ時刻に出すと、同じフレームで表情の切り替えと移動が届く。
+- **Sources**: `emo2_boot/frame.rs:301-395`（相の並び）・`window_move.rs:633-735`（`enqueue_window_set_pos` が `WindowPos` の写しをその場で書く）。
+- **Findings**: 今の並びは drain（表示の指令）→ 報告寸の照合 → **move drain** → zorder drain → **`resnap_shell_targets`**（表示寸へ窓の大きさを合わせる）→ 連鎖の確定。move drain は窓の大きさが表示寸へ合う**前**に読むので、同じフレームで面の大きさが変わると、移動は古い大きさで計算され、その後の再スナップが中央 x を保ってずらす（右下どうしの位置合わせが崩れる）。`WindowPos` の写しは書込と同時に更新されるので、move drain を `resnap_shell_targets` の**後**（連鎖の確定の前）へ移せば、同じフレームのうちに確定した大きさで計算できる。
+- **Implications**: 1 フレーム遅らせる解ではなく、同じフレームの中で相の順を入れ替える（`frame.rs` の 1 行の移動）。連鎖の確定（`finalize_chain_once`）より前という位置は今と同じなので、確定との関係は変わらない（確定は `default_char_pos` と一致する窓だけを動かし、`\![move]` は既定位置を追わないので、台本で動いた窓は確定に巻き込まれない）。
+
+### 9.3 主モニタの作業領域（要件 3.3・8.6）
+
+- **Sources**: `placement/follow/work_area.rs:34-58`（`MonitorSnapshot` は作業領域の列だけ・主の印なし）、`emo2_boot/frame/work_area_sync.rs:67-71`（毎フレーム `world.query::<&Monitor>()` から作り直す）、`wintf/src/ecs/window/monitor.rs`（`Monitor { handle, bounds, work_area, dpi, is_primary }`）、`placement/mod.rs:847-861`（`primary_monitor`・私有・印が無ければ先頭で代えて `warn!`）。
+- **Findings**: 走っている間も World に `Monitor` の component が在り、`is_primary` を持つ。`MonitorSnapshot` に欄を足すと構造体の直書き 71 か所が壊れる。
+- **Implications**: 主モニタは `Monitor` を問い合わせて `primary_monitor` で選ぶ（`pub(crate)` にするだけ）。`MonitorSnapshot` は変えない。決定論テストは headless の World に偽の `Monitor` を spawn して回す（`frame_test_support.rs:608` に前例）。
+
+### 9.4 並べ直しの材料（決めごと 8・10）
+
+- **Sources**: `placement/reseed.rs:55-170`、`placement/resolver.rs:243-383`、`placement/spawn.rs:177-181,256-392,574`、`placement/chain_finalize.rs`、`emo2_boot/frame/drain_resnap.rs:323-411`、`placement/persist.rs:61-99,500-623`、`ghost_session.rs:181-309`、`emo2_boot/frame/switch.rs:417-451`。
+- **Findings**:
+  - キャラクターの窓の位置は `resolve_placement` の P1〜P4 だけで決まり、その材料は `PlacementConfig` のスコープごとの `alignment`・`default_x`・`default_y`・作業領域・窓の大きさである（バルーン側の合流と換算は窓の位置に効かない）。
+  - `PlacementConfig` は走っている間どこにも残らない（`spawn.rs:177-181` の注記）。起動の準備（`PreparedStages.cfg`）とシェルの切替（`apply_shell_descript` の先頭・`finish_shell` の重なりの基底）で組まれ、捨てられる。重なりの基底 `zorder_raw` は `PreparedPlacement` に載せて運ぶ前例がある（`placement/mod.rs:262-272`）。
+  - 起動の連鎖の確定（`finalize_chain_once_with`）は `move_window_to`（経路 `MoveCue`）で書き、`GhostWindows::set_default_char_pos` を自分で書き、最後に `persist_unremembered_char_positions` で「既定の位置にいる窓」を位置の記憶へ書く。**記憶の無い起動でも、並べ終えた位置は記憶へ書かれる**。
+  - 位置の記憶に消す口は無い（`persist_put` だけ）。
+  - 起動の既定の位置は 2 段で決まる: 採寸した面 0 の大きさで解き、最初の表示で下端中央を保って大きさを合わせ、連鎖の確定で横の並びを直す。先頭のスコープは `wa.right − 採寸幅/2 − 表示幅/2` に着く。走っている窓の大きさで解き直すと `wa.right − 表示幅` で、採寸幅と表示幅が同じときだけ一致する。
+- **Implications**: 下の決定 D6・D7。
+
+### 9.5 メニューとイベントの送出（決めごと 9・11）
+
+- **Sources**: `menu/mod.rs:47-125,179-190,243-248,298-308`、`menu/captions.rs:30-53,123-129,235-310`、`menu/update_frame.rs`・`install_frame.rs`、`menu/trigger.rs:120-131,296-547`、`menu/plan.rs:76-83`、`ghost_session.rs:394,447-449,792-803`、`areka-kanade/src/msg.rs:232-242`、`areka-kanade/src/change.rs:110-122`、`areka-kanade/src/actor.rs:179-222,366-375`、`areka-kanade/src/schedule/steady.rs:745-751`、`update/worker.rs:115-162`、`areka-actor/src/reply.rs:21-24,75-80`。
+- **Findings**:
+  - 葉 1 つの枠は 30 行ほど（`MenuItem` の名前・リソース・選べるか・動作）。動作はメニューが閉じた後に UI スレッドで `&mut World` を持って呼ばれ、止めてはいけない。
+  - `RaiseEvent { reply: Some(..) }` の答えは 1 回だけ届き、`Script` のときの台本は **kanade が自分で再生する**（呼び手は分類だけを受ける）。`NoReply` は 204・空・空白だけ・エラーの返事を含む。`NotSteady` は起動中・切替中・終了中で送っていない。`Failed` は往復の失敗。
+  - UI を止めない待ちは `ReplyReceiver::try_recv` を tick ごとに覗く形が 3 つある（メニューの照会・スキンの切替・更新の机）。送り口は `GhostSlot` → `GhostSession::kanade()` の取り方が 3 か所で使われている。
+  - 許可表: `ALLOWED_EVENT_IDS`（53 語・件数は `events_change_tests.rs:41`）、`ALLOWED_RESOURCE_IDS`（12 名・件数は `resources.rs:168-196`）。メニューの名前のリソースは許可表に載れば照会に乗る（`captions.rs:123-129`）。
+  - 枠の並びを固定する檻: `mod_registry_tests.rs:47-72`・`captions_tests.rs:84-121,168-172`・`plan_tests.rs:91-109`。
+- **Implications**: 下の決定 D8・D9。
+
+### 9.6 受け口の台帳と `execute`（決めごと 1）
+
+- **Sources**: `emo2_boot/consumer_ledger.rs:41-47,111-190,344-429,726-737,903-915`、`consumer_ledger_agreement_tests.rs:51-334`、`install_cue.rs:58-84`、`zorder_cue.rs:28-32,69-71,119-144`、`emo2_boot/frame/wiring.rs:58-90,173-188,291`、`emo2_boot/mod.rs:479,655-667,712-721`、`spine.rs:754,773-801`。
+- **Findings**:
+  - `execute` は選別子つきの `(execute,install)` だけが登記されている。`(execute,resetwindowpos)` は同じ形で足せる（選別子なしの `execute` とは共存しない規則に触れない）。
+  - `\![set,position]`／`\![reset,position]` は今どの受け口も `debug!` で読み飛ばし、窓は動かない＝**既に要件 7.1 の振る舞い**。`ZOrderCueSink` の宛名の述語（`set`／`reset` を名前だけで自分宛）は、開けない荷物の水準だけに効く。本 spec は `set`／`reset` に新しい担当を付けないので、この述語の見直しは要らない（決めごと 1 の残りは消えた）。
+  - 受け口を新しく作ると、`emo2_boot/mod.rs`（916 行）・`spine.rs`（937 行）・`Emo2Wiring::new` の位置引数と、それを呼ぶテスト 7 ファイル 15 か所・一致の檻の受け口の数 9 が動く。`MoveCueSink` の送り先の型を列挙型にすれば、受け口の数は変わらず、`mod.rs`・`spine.rs` は型名 1 か所ずつの置き換えで済む（テストの 15 か所も型名の置き換え）。
+- **Implications**: 下の決定 D5。
+
+### 9.7 使った skill と steering
+
+- skill: `kiro-spec-design`（規則 `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）。設計・a11y・UX の skill は該当しない（画面の新しい部品は OS のメニューの項目 1 つ）。
+- steering: `product.md`・`tech.md`・`structure.md`（テストの兄弟ファイルの命名・最長 stem 規則・1,000 行）・`logging.md`（水準と構造化欄）。
+
+## 10. 総合（Synthesis）
+
+- **一般化**: `\![move]` の 5 種の基準（スコープ・`me`・`screen`・`primaryscreen`・`global`）は、どれも「基準の枠（窓の矩形と基準位置／作業領域／原点）の上の参照点」の 3 形に畳める。計算は枠の形だけを見る 1 本の純粋関数にし、基準の解決（World を読む）と分ける。正典で使えない組み合わせ（要件 4.1・4.2）は「枠の形に無い参照点を、その形の決まりで置き換える」として計算の中の 1 か所で扱う。こうすると、無いスコープの基準を `screen` へ倒した後の `base` の置き換え（要件 3.7 と 4.1 の重なり）も同じ道を通る。
+- **作るか借りるか**: 外の部品は使わない。吸い付きは `project_anchor`、モニタの帰属は `work_area_for_window`、主モニタは `primary_monitor`、既定の位置は `resolve_placement`、記憶は `persist_unremembered_char_positions`、イベントは `RaiseEvent`、待ちは `try_recv` の前例、メニューは葉の枠の前例をそのまま使う。
+- **簡素化**:
+  - 受け口は増やさない（`MoveCueSink` の送り先を列挙型にする・D5）。
+  - 並べ直しの経路語は増やさない（連鎖の確定と同じく `move_window_to`＋`set_default_char_pos`・D7）。
+  - `--option` は語彙が 1 語なので集合でなく真偽 1 つで持つ。
+  - `OnResetWindowPos` の待ちに上限の時間を設けない（kanade は答えを必ず 1 回返し、送り口が切れれば受け手が `Err` を返す）。
+  - `MonitorSnapshot` に主の印を足さない（`Monitor` を直に問う）。
+
+## 11. 設計の決定（`design.md` の D1〜D10 の根拠）
+
+### Decision: D1 読みは失敗しない（置き換え＋記録）
+- **Context**: 要件 3.7・3.8・4 は SSP と同じく「動かさない」でなく「置き換えて動かす」。
+- **Alternatives**: (1) 今の `Result<_, MoveDegradation>` を保ち `Err` を増やす (2) 読みは常に `MoveDirective` を返し、置き換えを記録の列で返す
+- **Selected**: (2)。`parse_move_directive` は `ParsedMove { directive, notes }` を返す。
+- **Rationale**: 置き換えの後も移動は続くので `Err` は意味が合わない。旧い `NamedForm`・`UnsupportedBase`・`UnknownBase`・`UnknownRefPoint` の `Err` は役目を終える（固定していた `move_cue_tests.rs` の檻は陳腐化テストとして書き改める）。
+- **Trade-offs**: 記録の列を運ぶ分だけ型が増える。
+
+### Decision: D2 置き換えの記録は 2 か所で出す
+- **Selected**: 台本だけで決まる置き換え（知らないキー・形の違う引数・知らない `--option`・重複・読めない X/Y/time・知らない参照点の語・他のゴーストの名前・time>0）は talk スレッドの受け口で、窓と画面を見て初めて決まる置き換え（無いスコープ → `screen`・`screen`／`primaryscreen` の `base` → `center`・`global` の参照点 → 原点）は UI スレッドの適用で、どちらも `warn!` 1 行ずつ出す。
+- **Rationale**: 要件 3.7 の置き換えの後に要件 4.1 が効くので、後者は基準を解決した後でしか決められない。
+
+### Decision: D3 吸い付きは適用の側で当てる
+- **Selected**: `apply_move_directive` が `Anchored`・`MonitorSnapshot` を読み、`project_anchor` を通してから `move_window_to` を呼ぶ（9.1）。`window_move.rs`・`drag_follow.rs`・`anchor.rs` は変えない。
+
+### Decision: D4 move drain をフレームの再スナップの後へ移す
+- **Selected**: 9.2。同じフレームの中で確定した窓の大きさを読む（1 フレーム遅らせない）。
+
+### Decision: D5 `\![execute,resetwindowpos]` は `MoveCueSink` が受ける
+- **Alternatives**: (1) 新しい受け口と新しい線 (2) `MoveCueSink` の送り先を列挙型 `PositionCue { Move, ResetWindowPos }` にする
+- **Selected**: (2)。台帳に `(execute, resetwindowpos) → MoveSink` を 1 行足す。
+- **Rationale**: 9.6。窓の位置を書く指令が 1 本の線・1 つの drain に集まり、受け口の数・`Emo2Wiring::new` の引数の数・一致の檻の数が変わらない。
+- **Trade-offs**: `MoveCueSink` の名前と担当がずれる（doc で「窓の位置の指令の受け口」と書き直す）。開けない `execute` の荷物の `warn!` は `InstallCueSink` が持ったまま（`MoveCueSink` は `move` 宛だけを `warn!`）。
+
+### Decision: D6 並べ直しの材料は配置の設定を Resource で持つ
+- **Alternatives**: (a) 起動とシェルの切替で組んだ `PlacementConfig` を Resource に置く (b) 並べ直しのたびに descript を読み直す（UI スレッドのファイル読み、または切替と同じ背景の組み立て） (c) `default_char_pos` だけを使う（記憶から戻したスコープは `None`）
+- **Selected**: (a)。`DefaultPlacementBasis(PlacementConfig)` を起動の準備（`PreparedPlacement` に載せて運ぶ・`zorder_raw` と同じ形）とシェルの切替の後始末（`finish_shell`）で置き換える。
+- **Rationale**: 窓の位置に効く材料は descript の値だけで、走っている間に変わるのはシェルの切替のときだけ。読み直しは UI スレッドで止まるか、背景の組み立てと待ちの仕組みが要る。`spawn.rs` の「捨てる」注記は窓の部品の正本を二重にしないためのもので、本 Resource は並べ直しだけが読む読み取り専用の材料である（注記に 1 行足す）。
+- **Follow-up**: `PlacementConfig` を組む所が増えたら、そこでも置き換える（再検証の引き金）。
+
+### Decision: D7 並べ直しは起動と同じ規則を今の窓の大きさで解く
+- **Selected**: 主モニタの作業領域・`DefaultPlacementBasis`・今の窓の大きさ（`WindowPos.size`）で `resolve_placement` を 1 度解き、各スコープのキャラクターの窓だけを `move_window_to` で置き、`set_default_char_pos` を書き、`persist_unremembered_char_positions` で記憶へ書く（連鎖の確定の前例そのまま）。
+- **Rationale**: 起動の 2 段（採寸の幅で解く → 表示の幅で中央を保つ → 連鎖の確定）は採寸と表示の食い違いを後から直す手順で、規則そのもの（P1〜P4: 下端・右から隙間なく連鎖・作業領域へクランプ）は今の大きさで 1 度解いた結果と同じである。採寸の面と表示の面の幅が同じなら起動の位置と一致する。違う面を表示しているときは、先頭のスコープが「右端にそろう」位置になる（起動は採寸の幅の中央を保つので、幅の差の半分だけ左右にずれる）。記憶へは起動と同じく並べ終えた位置を書く（要件 8.8: 次の起動はその位置＝既定の位置に出る。後でドラッグした窓はドラッグの確定がその位置を書く）。
+- **Trade-offs**: 「起動と 1 画素も違わない位置」ではなく「起動と同じ規則の位置」。設計の討議で確かめてもらう点として `design.md` の Open Questions に書く。
+
+### Decision: D8 `OnResetWindowPos` は答えを tick ごとに覗いて待つ
+- **Selected**: メニューの動作が `RaiseEvent { id: "OnResetWindowPos", reply: Some }` を送り、受け手を NonSend の Resource に置く。毎 tick `try_recv` で覗き、`Script` なら何もしない（kanade が再生する）、`NoReply`・`Failed`・`NotSteady`・`NotAllowed` なら並べ直す、受け手が切れた（kanade が終わった）なら並べ直さず `warn!`。待つ時間の上限は設けない。待っている間はメニューの項目を灰色にする。
+- **Rationale**: 要件 8.5 は「台本を返さなかった場合」を並べ直しとし、空・返事なし・エラーの返事を例に挙げる。送っていない（`NotSteady`）・送れなかった（`NotAllowed`）・往復が壊れた（`Failed`）も「台本が来なかった」に入る。受け手が切れたのはゴーストの会話が終わった（切替・終了）ことで、窓の組も入れ替わるので並べ直さない。
+
+### Decision: D9 メニューの項目はバルーンの枠の後に置く
+- **Selected**: `Frame::ResetPosition` を `Frame::ORDER` の `Balloon` の直後（4 番目）に置き、区切りの組は Ghost・Shell・Balloon と同じ組 0。既定の名前「シェル位置初期化」・リソース `switchmovetodefaultpositionbutton.caption`。選べないのは、窓の組（`GhostWindows`）が無いときと `OnResetWindowPos` の答えを待っている間。
+- **Rationale**: シェル・バルーンと同じ「見え方」の項目の並び。SSP の並びを写す正典は無い（ukadoc は項目の位置を書かない）。
+
+### Decision: D10 記録の水準
+- **Selected**: 置き換え（D2）はどれも `warn!`（作者の書き間違いか、正典の外の書き方）。動かせなかった（窓の組・対象の窓・寸法・作業領域・主モニタが無い）は `warn!`＋動かさずに続ける。移動と並べ直しの成功は `info!` 1 行ずつ（要件 9.1・9.2）。メニューの答えの分類は `Script`・`NoReply` が `info!`、`NotSteady`・`NotAllowed`・`Failed`・受け手切れが `warn!`。`event = "…"` の名前は `move_arg_substituted`・`move_frame_substituted`・`move_applied`・`move_skipped`・`move_anchor_missing`・`reset_window_pos`・`reset_window_pos_skipped`・`reset_pos_menu_outcome` にそろえる。
+
+## 12. 危うさと手当て
+
+- **move drain の順の入れ替え（D4）**: 相の順を固定するテストがあれば書き換えになる。手当て: 入れ替えた理由を `frame.rs` の注記に書き、同じフレームで面の大きさと移動が届く決定論テストを足す。
+- **並べ直しの位置が起動とずれる場合（D7）**: 採寸の面と表示の面の幅が違うとき。手当て: 規則が同じであることを決定論テストで固定し、討議の議題に出す。
+- **`MoveCueSink` を広げる（D5）**: テストの線の型の置き換えが 7 ファイルに散る。手当て: 機械的な置き換えだけで、振る舞いは変えない。
+- **同梱の検体の `\![move]`（R3）**: 旧い形で参照点を省いた用法は、本 spec の後は `left.top` どうしになる（SSP の実測 M2-a と同じ）。手当て: 実装の段で `vendors/sample_ghost/` の辞書を点検し、使っていれば COMPAT と台帳に書く。
+- **並走（R5）**: kanade の許可表（`events.rs`）と件数の見張りを他の spec も触る可能性。手当て: 後から着地した側が件数を合わせ直す（件数の見張りの注記の履歴の流儀）。
