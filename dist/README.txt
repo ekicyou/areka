@@ -172,7 +172,7 @@ zip を展開して使っているとき:
 今の版には、シェルの記憶を作る操作はありません（上の場所に記憶があれば読みますが、areka が書くことはありません）。
 
 これらのフォルダを消すと、areka が覚えていたことは初めての起動と同じ状態に戻ります。
-中継の控えは、中継を areka.exe と別の場所に置いたときは %LOCALAPPDATA%\areka\mcp-bridge\ にあります。Microsoft Store 版の Claude Desktop が起動した中継では、%LOCALAPPDATA%\Packages\ の中の Claude_ で始まるフォルダの LocalCache\Local\areka\mcp-bridge\ です。控えは消しても、次に Claude Desktop を起動し直して areka へつないだときに作り直します。
+中継の控えは、中継を areka.exe と別の場所に置いたときは %LOCALAPPDATA%\areka\mcp-bridge\ にあります。Microsoft Store 版の Claude Desktop が起動した中継では、中継が %LOCALAPPDATA% の下へ書く物は %LOCALAPPDATA%\Packages\ の中の Claude_ で始まるフォルダの LocalCache\Local\ の下へ回されます（たとえば別の場所に置いたときは LocalCache\Local\areka\mcp-bridge\、利用者ごとの置き場を使っているときは LocalCache\Local\areka\profile\areka\mcp-bridge\）。控えは消しても、次に Claude Desktop を起動し直して areka へつないだときに作り直します。
 
 
 ■ 入手のしかた
