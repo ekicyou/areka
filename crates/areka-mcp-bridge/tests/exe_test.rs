@@ -466,6 +466,58 @@ fn stdin_closed_while_stdout_is_never_read_exits_with_code_0_by_the_bound() {
     );
 }
 
+/// 中継が rmcp の待ちから自分で戻って終わったこと（中継の 6 秒の見切りの枝ではない）。
+fn finished_by_itself(stderr: &str) {
+    record(stderr, "[bridge] finished");
+    assert!(
+        !stderr.contains("[bridge] stdout is still not read"),
+        "the bridge quit by its own bound: {stderr}"
+    );
+}
+
+/// 要件 5.1・5.3・5.4・8.1: 受け口へ届けた要求の応答が、標準入力が閉じてから 5 秒を越えて来るなら、
+/// 中継は rmcp の 5 秒だけ待ち、応答を書かずに終了コード 0 で終わる（応答も 30 秒の上限も待たない）。
+/// このテストは約 5 秒かかる（待つだけで、計算はしない）。
+#[test]
+fn a_reply_coming_more_than_5s_after_stdin_closed_is_dropped_and_the_exit_code_is_0() {
+    let late = Reply::Delayed(Duration::from_secs(12), Box::new(called()));
+    let areka = FakeServer::start(Script::areka().on("tools/call", late));
+    let profile = TempPath::under_target("bridge-exe");
+
+    let done = run_bridge(areka.port(), profile.path(), &call(1));
+
+    let Finished { stdout, stderr, .. } = &done;
+    assert_eq!(done.code, Some(0), "stdout: {stdout}\nstderr: {stderr}");
+    assert!(stdout.is_empty(), "stdout: {stdout:?}\nstderr: {stderr}");
+    assert_eq!(areka.requests_of("tools/call").len(), 1, "stderr: {stderr}");
+    let waited = done.waited;
+    assert!(
+        (Duration::from_secs(5)..Duration::from_secs(12)).contains(&waited),
+        "the bridge exited {waited:?} after stdin closed\nstderr: {stderr}"
+    );
+    finished_by_itself(stderr);
+}
+
+/// 要件 5.2・5.3・5.4・8.1: 受け口へ届けた要求の応答が、標準入力が閉じてから 5 秒以内に来るなら、
+/// 中継はその応答を書いてから終了コード 0 で終わる。
+#[test]
+fn a_reply_coming_within_5s_after_stdin_closed_is_written_before_exit_code_0() {
+    let soon = Reply::Delayed(Duration::from_secs(1), Box::new(called()));
+    let areka = FakeServer::start(Script::areka().on("tools/call", soon));
+    let profile = TempPath::under_target("bridge-exe");
+
+    let done = run_bridge(areka.port(), profile.path(), &call(1));
+
+    let Finished { stdout, stderr, .. } = &done;
+    assert_eq!(done.code, Some(0), "stdout: {stdout}\nstderr: {stderr}");
+    let answers = answer_lines(&done);
+    assert_eq!(answers.len(), 1, "stdout: {stdout}\nstderr: {stderr}");
+    let answer = answer_to(&answers, 1);
+    assert_eq!(answer["result"]["content"][0]["text"], "done", "{answer}");
+    assert_eq!(areka.requests_of("tools/call").len(), 1, "stderr: {stderr}");
+    finished_by_itself(stderr);
+}
+
 /// 要件 3.5・3.12・設計 D-18: areka も控えも無い（誰も待ち受けていない番号・空の控えの置き場）とき、
 /// `initialize` と `tools/list` に、中継が自分で持っている答えで答え、方法ごとに記録を残す。
 /// 組み込みの答えは控えに書かない（置き場にファイルができない）。終了コード 0。

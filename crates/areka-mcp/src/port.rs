@@ -43,7 +43,7 @@ pub fn candidates_from_env_value(value: Option<&str>) -> Vec<u16> {
             warn!(
                 env = PORT_ENV,
                 value = %raw,
-                "[mcp] ポートとして読めない値なので既定の候補で待ち受ける（1〜65535 か、待ち受けないなら 0）"
+                "[mcp] ポートとして読めない値なので、areka の MCP の口の番号に既定の候補を使う（1〜65535 か、MCP を使わないなら 0）"
             );
             default_candidates()
         }
@@ -64,7 +64,7 @@ fn candidates_from_var(var: Result<String, VarError>) -> Vec<u16> {
         Err(VarError::NotUnicode(_)) => {
             warn!(
                 env = PORT_ENV,
-                "[mcp] ポートの指定が UTF-8 でないので既定の候補で待ち受ける"
+                "[mcp] ポートの指定が UTF-8 でないので、areka の MCP の口の番号に既定の候補を使う"
             );
             default_candidates()
         }

@@ -4,20 +4,15 @@
 //! 最初に areka と名乗った 1 つで決める。あとの候補の接続は 1 バイトも書かずに閉じる（設計 D-5）。
 //! 決めた番号には、自前の送り手（`OwnHttp`）の上に rmcp のクライアントを立てる（設計 D-3）。
 
-use std::io;
-use std::net::Ipv4Addr;
-use std::time::Duration;
-
 use areka_mcp::{MCP_PATH, SERVER_NAME};
 use futures::future::join_all;
 use rmcp::service::{RoleClient, RunningService, serve_client};
 use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
-use tokio::net::TcpStream;
 use tracing::{debug, info, warn};
 
 use crate::config::Timeouts;
-use crate::http::{HttpError, OwnHttp, verify};
+use crate::http::{HttpError, OwnHttp, connect, verify};
 use crate::service::BridgeClient;
 
 /// areka とつながった印: areka の側へ立てた rmcp のクライアント 1 本。`peer_info()` が areka の
@@ -61,7 +56,9 @@ async fn pick(
 ) -> Option<u16> {
     // 並べて開く: 居ない番号への接続は断られるまで約 2 秒かかる机があるので、順には待たない。
     // 全部の結果が出てから確かめるので、areka が先頭に居ても、開かない番号があれば上限 1 回分は待つ。
-    let opening = candidates.iter().map(|&port| open(port, timeouts.connect));
+    let opening = candidates
+        .iter()
+        .map(|&port| connect(port, timeouts.connect));
     let opened = join_all(opening).await;
     for (&port, stream) in candidates.iter().zip(opened) {
         let stream = match stream {
@@ -92,15 +89,6 @@ async fn pick(
         }
     }
     None
-}
-
-/// `127.0.0.1` の番号へ接続を開く。上限 `wait` を過ぎたら `TimedOut`。
-async fn open(port: u16, wait: Duration) -> io::Result<TcpStream> {
-    let connect = TcpStream::connect((Ipv4Addr::LOCALHOST, port));
-    match tokio::time::timeout(wait, connect).await {
-        Ok(result) => result,
-        Err(_) => Err(io::ErrorKind::TimedOut.into()),
-    }
 }
 
 /// 番号に rmcp のクライアントを立てる（旧式の `initialize` → `notifications/initialized`）。
