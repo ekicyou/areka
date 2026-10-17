@@ -1463,16 +1463,18 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2cresetwindowpos_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-move-canon"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、窓の位置が初期位置へ戻らない）。
-ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。すべてのキャラクターの窓を、位置の記憶が無いときに起動で並べるのと同じ配置の規則を今表示している窓の大きさ（今の拡大率で描いた大きさ）で解いた既定の位置へ並べ直し、並べ終えた位置を位置の記憶へ書く（次の起動でも同じ位置に出る）。バルーンは今のずらしのまま窓に付いて動く。吸い付きの設定は変えない。
+OnResetWindowPos は送らない（送るのは右クリックのメニューの「シェル位置初期化」を選んだときだけ・SSP 2.9.18 の 2026-10-17 の実測と同じ）。
+壊れ方: 無い。並べ直す材料（窓の組・配置の設定・主モニタ）が無いときは何もしない。
+ログ: 並べ直したら info! の reset_window_pos に対象の窓と位置を残す。材料が無いときや大きさの揃わない窓を外したときは warn! の reset_window_pos_skipped。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (execute, resetwindowpos) を窓の位置の指令の受け口（MoveCueSink）へ登記し、並べ直しは crates/areka/src/placement/reset_pos.rs の reset_window_positions。
 [群: 窓の位置の初期化]
 [版: 本文は 2.7 RC1 と書くがカタログの規則で拾えない（3 桁の番号だけを拾うため）。単なる世代不明と区別するためにここへ写す]
 [頻度: 里々 0 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![execute。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![executesntp の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
@@ -1773,17 +1775,18 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bmove_5d:1"]
 status = "degraded"
 introduced = ""
-owner = "areka-P0-sakura-time-directives"
+owner = "areka-P0-move-canon"
 priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 見た目の差 — MoveCueSink::emit が名前の完全一致で自分を選び、parse_move_directive が位置引数の形を解いて実窓を動かす。動く用法＝位置引数で書き、基準に数値スコープを使い、時間を省くか 0 にする形。動かない用法＝⑴ 名前付きの --key=value 形（正典の記述例そのものの書き方）は解釈が Err になり記録付きで読み飛ばされて窓が動かない ⑵ 基準 screen・primaryscreen・me・global は縮退として記録され、数値スコープ基準しか解かれない ⑶ 時間指定が 0 より大きいときも補間せず最終位置へ即時に飛ぶ。
-ログ: 出る（名前付き形は emit の Err の腕が warn!、非スコープ基準と座標算出不能は適用側が warn!、担当外の名前は debug!）。
-[転記元: doc/COMPAT_ARCHITECTURE.md の「\\![move] の名前付き --key=value 形」「\\![move] の基準 screen／primaryscreen／me／global」「\\![move] の時間指定 time>0（アニメーション付き移動）」の 3 行]
+壊れ方: 見た目の差 — 時間の部分だけが残り。位置は正典どおりに決まる: 名前付きの形（--キー=値・キーの大小は問わない）と旧い位置の形の両方を同じ既定（X・Y＝今のまま・time＝0・base＝screen・base-offset と move-offset＝left.top）で 1 つの指令へ読み、基準 screen・primaryscreen（どちらも作業領域）・me・global・スコープの番号を解き、参照点 left・right・center・base を軸ごとに基準の矩形と動かす窓の両方に当てる。X・Y には動かす窓に今かかっている拡大率を掛ける（SSP との意図した差）。下端などに吸い付いている窓は吸い付いた軸の値を使わない。残りは時間の部分——time が 0 より大きくても補間せず最終の位置へすぐ置き、台本の進みも変えない（補間・台本の進み・moveasync は後の spec。今は持ち主が無い）。
+ログ: 出る（動かしたら info! の move_applied、読みの置き換えと time>0 を補間しなかったことは warn! の move_arg_substituted、基準の置き換えは warn! の move_frame_substituted、動かせないときは warn! の move_skipped、担当外の名前は debug!）。
+置き換え（SSP 2.9.18 の 2026-10-17 の実測と同じ）: 読めない X・Y は fix、読めない time は 0、知らない参照点の語は横 left・縦 top、screen と primaryscreen の基準の参照点の base は center、global の基準の参照点が left.top 以外なら原点そのもの、窓の無いスコープの基準は screen、他のゴーストの名前などの知らない基準はスコープ 0。どれもトークを止めずに記録する。
+同梱の検体の用法: emo2 の 2026-10-17 版は名前付きの形（「エモの位置調整」の \\1\\![move,--X=0,--Y=0,--base=0,--base-offset=left.bottom,--move-offset=right.bottom]）を使う。emily4 は旧い位置の形 \\p[4] の \\![move,0,0,0,0,center.top,center.bottom]（スコープ 4 の窓の下端の中央をスコープ 0 の窓の上端の中央へ）を使う。旧い位置の形で参照点を省いた用法は、これまでの基準位置どうしでなく left.top どうしで合わせる（SSP と同じ）が、同梱の検体には無い。
+[転記元: doc/COMPAT_ARCHITECTURE.md §8 の「\\![move]」の行（2 つの書き方・参照点・基準・置き換え・時間・拡大率・吸い付き）]
 [版: カタログの規則で拾える版番号は無い。本文に現れる 2.5 は記述例の「2.5 秒かけて移動する」という所要時間であって版番号ではないので、本文が 2 桁の版を書いている項目には数えない]
-[裁定待ち: areka-P0-surfaces-basepos（基準位置 base の解決）と areka-P0-sakura-time-directives（時間引数の枠）が別々に主張し、互いに相手を 1 度も名指ししていない。裁定案は「引数ごとに分ける」——案であって決定ではなく、決めるのは統合担当]
-[裁定（統合担当）: 裁定案「引数ごとに分ける」のうち、時間の側を areka-P0-sakura-time-directives が持つ点は採り、基準の側を areka-P0-surfaces-basepos が持つ点は採らない。採らない理由は 2 つ——同 spec の brief が自分の範囲を宣言 point.basepos の実導出に限って「このタグの他の意味論」を範囲外と明記していることと、上の「壊れ方」の行が挙げる 3 つのどれもその範囲では消えないことである（基準 base は正典既定の解決が既にあり、3 つの中に入っていない）。担当の欄は areka-P0-sakura-time-directives を書いた——3 つのうち時間指定を正面から、名前付きの key=value 形をその中の時間の指定を通じて動かす唯一の brief である。残る基準 screen・primaryscreen・me・global の 4 語はどちらの brief の範囲にも入っていないので、束「窓の配置と重なり」の候補 spec の側が引き受ける。候補 spec には brief がまだ無く、要件 7.4 ⑶ が brief の無い名前を担当の欄へ書くことを禁じているので、担当の欄には書かない]
+[宛先の付け替え: areka-P0-sakura-time-directives から areka-P0-move-canon へ（2026-10-18）。前の宛先が挙げた 3 つの縮退のうち、名前付きの形と基準 screen・primaryscreen・me・global は areka-P0-move-canon が実装した。残る時間の部分は areka-P0-sakura-time-directives の範囲からも外れている（同 spec の brief が roadmap の覚え書きへ戻した）]
 [頻度: 里々 1 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![move。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![moveasync の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
 
@@ -2796,14 +2799,14 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breset_2cposition_5d:1"]
-status = "absent"
+status = "not-applicable"
 introduced = ""
-owner = ""
-priority = "A2"
+owner = "areka-P0-move-canon"
+priority = ""
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、窓の位置を既定へ戻せず、動かした場所に居座る）。
+対象外: 受けない。SSP 2.9.18 もこの指令を実装していない（2026-10-17 の実測でエラーログ unknown subcommand (reset,position) を出して何もしない）ので、SSP で確かめた台本と同じ結果になるよう areka も窓を動かさず、トークを止めずに続ける（areka-P0-move-canon 要件 7）。窓を既定の位置へ戻すのは \\![execute,resetwindowpos] の行。
 ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
 [運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
 [群: 窓の位置と見え方]
@@ -3148,14 +3151,14 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cposition_2cx_2cy_2c_30b9_30b3_30fc_30d7ID_5d:1"]
-status = "absent"
+status = "not-applicable"
 introduced = ""
-owner = ""
-priority = "A2"
+owner = "areka-P0-move-canon"
+priority = ""
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、窓を名指しした座標へ置けず、今の場所から動かない）。
+対象外: 受けない。SSP 2.9.18 もこの指令を実装していない（2026-10-17 の実測でエラーログ unknown subcommand (set,position) を出して何もしない）ので、SSP で確かめた台本と同じ結果になるよう areka も窓を動かさず固定もせず、トークを止めずに続ける（areka-P0-move-canon 要件 7）。窓を座標へ置くのは \\![move] の行。
 ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
 [運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
 [群: 窓の位置と見え方]

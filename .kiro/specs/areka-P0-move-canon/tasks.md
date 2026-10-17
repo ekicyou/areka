@@ -83,7 +83,7 @@
   - _Depends: 2.2, 4.1, 4.2_
   - _Requirements: 8.1, 8.2, 8.3_
 
-- [ ] 5. 互換の対応表と網羅台帳を新しい振る舞いに合わせる
+- [x] 5. 互換の対応表と網羅台帳を新しい振る舞いに合わせる
   - `doc/COMPAT_ARCHITECTURE.md` §8 の `\![move]` の 5 行を書き直し、要件 10.2 の決めた扱いを行として足す（X・Y の k 倍の行は保ち、位置の記憶の行に並べ直しの後の扱いを足す）。「emo2 は位置の形だけを使う」を根拠にした記述を消す
   - 台帳 `sakura-script.toml` の `move`（持ち主を本 spec へ・時間の部分が残り）・`execute,resetwindowpos`（実装済み）・`set,position`／`reset,position`（SSP 2.9.18 も実装していないので受けない）、`shiori.toml` の `OnResetWindowPos`・`switchmovetodefaultpositionbutton.caption`（実装済み）を改める
   - 同梱の検体（`vendors/sample_ghost/`）の辞書の `\![move]` の用法を点検し、あれば COMPAT と台帳の note に書く
@@ -110,3 +110,4 @@
 - 3.1: Bottom の吸い付きで `MonitorSnapshot` が無いとき、`project_anchor` は台本の Y をそのまま返し debug だけを出す（ドラッグと同じ縮退・本番は起動で必ず置く）。軸が `Fix` でも作業領域・原点の置き換えの記録は `move_frame_substituted` に出る（要件 4.1/4.2 の「base と書かれた場合」に沿う）。
 - 4.1: `crates/areka/src/menu/captions_tests.rs` の注記「引く 9 名」は 4.3 で枠を足すときに 10 名へ合わせる。
 - 4.3: `ghost_session.rs` の注記「`Input` の 10 系」は本 spec より前から実際の系の数（12 以上）と合っていない。数を固定する檻は無い。
+- 5: `set,position`／`reset,position` は `not-applicable`（持ち主は本 spec）にしたので、linkage の target は 1,550、`MIN_LINKAGE_CITED_IDS` も 1,550。`.kiro/specs/areka-P0-sakura-time-directives/brief.md:72` の持ち主の数「10（…move…）」は古いまま（同 brief の :116 が着手時の付け替えを予告）。

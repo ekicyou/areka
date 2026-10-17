@@ -114,6 +114,7 @@ type LedgerKey = (String, Option<String>);
 pub enum CommandConsumer {
     /// 窓の位置の指令（`\![move]` と `\![execute,resetwindowpos]`）の担当消費者
     /// （[`MoveCueSink`](super::move_cue::MoveCueSink)）。
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cresetwindowpos_5d:1
     MoveSink,
     /// `\![bind]`（着せ替え）の担当消費者（表示系 seriko）。正準台帳が登記する（task 7.2）。
     Seriko,

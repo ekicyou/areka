@@ -5189,26 +5189,26 @@ versions 欄で数えると 11 件である。12 は正典本文を正規表現�
 """
 
 [entry."ukadoc:list_shiori_event:OnResetWindowPos:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-move-canon"
 priority = "A2"
 values = []
 links = [
   { kind = "triggers", to = "ukadoc:list_sakura_script:_5c_21_5bexecute_2cresetwindowpos_5d:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+実装済み。右クリックのメニューの「シェル位置初期化」を選んだときに、GET で Reference なしで送る。
+台本が返ればそれを再生し、areka からは並べ直さない。台本が返らなかったとき（空の返事・返事なし・
+起動中や切替中で送れなかった・往復の失敗）は \\![execute,resetwindowpos] と同じ並べ直しを行う。
+返事を待つ間に会話が終わって答えの受け手が切れたときは並べ直さない。\\![execute,resetwindowpos] の
+タグからは送らない（SSP 2.9.18 の 2026-10-17 の実測と同じ。上の links は正典の対応を示すだけである）。
+壊れ方: 無い。
+ログ: 答えを分けたときに reset_pos_menu_outcome を残す（台本・返事なしは info!、送れなかった・往復の
+失敗・受け手が切れたときは warn!）。送出の直前には trace のログ shiori_request が 1 行出る。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており
+（正典 URL の注記がある）、送るのは crates/areka/src/menu/reset_pos_frame.rs の
+raise_reset_window_pos、並べ直すかの分け方は同じファイルの decide_reset。
 テーマ: 付けない。シェルの位置を初期化する指示が出た出来事で、無いと利用者がゴーストの何を失うかを 1
 文で言えないため付けない（迷ったら付けないという上流の補足に従う）。
 """
@@ -14965,25 +14965,22 @@ areka の素の言葉のままになる。
 """
 
 [entry."ukadoc:list_shiori_resource:switchmovetodefaultpositionbutton.caption:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-move-canon"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
-文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
-らしい見え方が出ないという形で現れる。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+実装済み。右クリックでメニューを出すたびにこの名前を SHIORI へ引き、返った文言を「シェル位置初期化」の
+項目名に使う。値は持ち越さず、出すたびに引き直す。引く仕組みは areka-P0-popup-menu-minimal が置き、
+「シェル位置初期化」枠へ項目を登記するのは本仕様（crates/areka/src/menu/reset_pos_frame.rs の register）。
+壊れ方: 無い。空・値なし・失敗・時間切れのときは既定名「シェル位置初期化」に落ち、メニューはそのまま出る。
+ログ: 空と値なしは debug! に名前を、返事そのものが得られなかったときは warn! に理由を 1 回だけ残す。
+根拠の場所: crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS（正典 URL の注記が
+ある）と crates/areka/src/menu/captions.rs の FRAME_CAPTIONS。
 画面の材料: 右クリックのメニューに並ぶ項目の文言。正典では「シェル位置初期化の名称」とされ、その項目
 に出る言葉である。
-無いと失うもの: 右クリックのメニューの「シェル位置初期化」の項目が、そのゴーストらしい言い回しになら
-ず、areka の素の言葉のままになる。
 """
 
 [entry."ukadoc:list_shiori_resource:switchproxybutton.caption:1"]
