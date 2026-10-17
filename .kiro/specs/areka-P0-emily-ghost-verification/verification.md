@@ -248,6 +248,43 @@ $p = Start-Process -FilePath "$w\target\debug\areka.exe" -WorkingDirectory $v -R
 - 登記した検体での件数: **0 件**。登記したゴースト 5 体（`emo2`・`R_POST_and_KOMAINU`・`konnoyayame`・`claudia`・`emily4`）のシェルは各 1 本（`shell/master`）の計 5 本で、6 本ではない。数え方: `target\nar-samples\cache\` に展開済みの各検体の `ghost\<名>\shell\master\surfaces.txt` を、小さな数え上げの道具（使い捨て・ワークツリーの外）で読んだ。`surface.append` でないブレスごとに、pattern の行（`animationN.patternM`・旧書式 `NpatternM`）はあるが同じ N の interval の行（`animationN.interval`・旧書式 `Ninterval`）が無いブレスを数え、5 本とも 0（ブレスの数は `emo2` 59（ほかに `surface.append` のブレス 5）・`R_POST_and_KOMAINU` 9・`konnoyayame` 10・`claudia` 13・`emily4` 60）。較正: `claudia` の `animation0.interval` の 1 行と、えみりの最初の `animation50.interval` の 1 行をそれぞれ消した写しでは 1 件と数えた。
 - 開発者へ残す問い: 「起票するか、方針で受けないか」（完了のときに聞く）。
 
+## 網羅台帳との突き合わせ（タスク 6.2・要件 8.4）
+
+2026-10-18 に、えみりが使う項目と、この記録が触れる項目の網羅台帳の行を、この記録と今のコードに照らして読み直した。読み直しの中で、タスク 3.1（3 人目以降の窓を作らない）の後も「`charN.` の綴りでキャラクタが立つ」と書いたままの行が見つかったので、それも直した（3.1 で消した `placement::config::char_scope_of` の名前を挙げている行が 20 行あった）。
+
+### 直した行
+
+| ファイル | 行（id の見出し） | 直したこと |
+|---|---|---|
+| `ledger/assets.toml` | `descript_ghost` の `char*.name` | 状態を実装済み → 縮退。名前は読むが 3 人目以降の窓を作らないので画面に出ない、と書き直した（崩れた所 2）。束の行の下位区分も縮退に揃えた。宛先の欄は空のまま（`areka-P0-extra-character-windows` は網羅の道筋の spec の表に載っておらず、宛先に書くと検査が赤になる）で、担当の spec の名前は備考に書いた |
+| `ledger/assets.toml` | `descript_ghost` の `char*.balloon.defaultsurface`・`char*.seriko.defaultsurface`、`descript_shell` の `char*.` で始まる 18 行（`balloon.dontmove`・`balloon.syncscale`・`bindgroup*.addid`・`bindgroup*.default`・`bindgroup*.name`・`bindoption*.group`・`defaultleft`・`defaulttop`・`defaultx`・`defaulty`・`icon.frame.color.r/g/b`・`menu`・`menuitem*`・`menuitemex*`・`name`・`seriko.alignmenttodesktop`） | 「`charN.` の番号が 2 以上ならそのキャラクタを立てる（`char_scope_of`）」を、「番号が 2 以上でもキャラクタを立てない（2026-10-17・タスク 3.1。絞りを外すのは `areka-P0-extra-character-windows`）」へ。窓の置き方の 4 行と `seriko.alignmenttodesktop` は「番号が 2 以上の値は使われない」を足した。えみりの `char2.balloon.offsetx` は台帳に行が無い（見出しが無い）ので、直す行も無い。`char3`・`char4.seriko.alignmenttodesktop` はこの直しに入る。状態はどれも未対応のまま |
+| `ledger/assets.toml` | `descript_shell` の `sakura.` で始まる 16 行（`balloon.dontmove`・`balloon.offsetx/y`・`balloon.syncscale`・`defaultleft`・`defaulttop`・`defaultx`・`defaulty`・`icon.frame.color.r/g/b`・`menu`・`menuitem*`・`menuitemex*`・`name`・`name2`） | 「人数を決める材料は `kero.` と `charN.` の綴り」を「`kero.` の綴りだけ」へ |
+| `ledger/assets.toml` | `descript_shell_surfaces` の `element*` | 2026-10-17 の注記を足した。同じ番号の 2 つ目の `surface*`ブレスは前の定義へ足す（同じ名前の行は後勝ち・記録は debug!）、全置換だったころはえみりの絵が消えた（崩れた所 1）。状態と担当は変えていない |
+| `ledger/assets.toml` | `descript_shell_surfaces` の `animation*.interval` | 2026-10-17 の注記を足した。後のブレスが pattern定義だけを書くと間隔が `bind` になる既知の限界（上の「既知の限界」・登記した検体では 0 件） |
+| `ledger/sakura-script.toml` | `\p[ID番号]` | 状態を実装済み → 縮退。番号が 2 以上の話し手は窓が無く、文字は出ず面の指示は読み捨てられ、会話は止まらない（タスク 3.2）と書いた。「ログ: 出ない」を、番号が 2 以上では error!（未装着ターゲット）と warn!（装着先が未解決）が出る、へ直した（2 回目の走行で ERROR 47 件・WARN 1 件）。宛先の欄は空のまま（理由は `char*.name` と同じ） |
+
+状態を 2 行動かしたので、機械が作る報告（`doc/ukadoc-coverage/report/assets.md`・`sakura-script.md`・`summary.md`）を `report` と `report-summary` で作り直し、`doc/ukadoc-coverage/briefing.md` の 4-2 の `descript_ghost` の数（実装済み 17 → 16・縮退 1 → 2）とその説明の 1 文を直した。
+
+### 読んで、直さなかった行
+
+| ファイル | 行 | 直さなかった理由 |
+|---|---|---|
+| `ledger/assets.toml` | `descript_install` の `*.source.directory` | 4.2 で直した文（取り出し元の無い同梱は飛ばして warn!・警告のダイアログ 1 つ・起動のバルーンは他に当たらなければ既定）が、2 回の走行（`companion balloon skipped` 1 件・ダイアログ 1 回・`StayseeBalloon` が着いた）と合う |
+| `ledger/assets.toml` | `descript_install` の `*.directory` | 同梱の最初の 1 個が標準のバルーンになる、は同梱が置き場に在るときの話で、えみりでは `companion_balloon_not_found` を残して次の段へ進んだ（`boot_resolve.rs` の同梱の段どおり） |
+| `ledger/assets.toml` | `descript_ghost` の `balloon` | 当たらないとき `descript_balloon_not_found` を残して次へ進む、が走行の記録と合う |
+| `ledger/assets.toml` | `descript_shell` の `seriko.use_self_alpha` | `.pna` は使わず、添えてあった数を warn! で残す、が走行の WARN（`.pna` を使わない 2 件）と合う（裁定 2026-10-05） |
+| `ledger/assets.toml` | `descript_ghost` の `readme` | メニューの「説明書」（えみりの見出しは「よんでね」）が既定の関連付けで `readme.txt` を開く、が走行と合う |
+| `ledger/shiori.toml` | `OnMouseMove`・`OnMouseDoubleClick`・`OnSecondChange`・`OnClose`・`OnGhostChanged` | どれも実際に SHIORI へ送る、と書いてあり、走行で台詞が返った（撫で・ダブルクリック・時間で出る話・終了の台詞・切り替え） |
+| `ledger/shiori.toml` | `OnInstallCompleteEx`・`OnInstallComplete` | 入れた物だけを並べる（飛ばした同梱は入れた物に入らない）。`judge.rs` の `complete_ex_refs`・`complete_legacy_refs` が入れた物の列から組むので、書いてあることと食い違わない。`OnInstallFailure` の「拒否の 13 種」は 4.2 で直してある |
+| `ledger/shiori.toml` | `char*.popupmenu.type`・`char*.popupmenu.visible` | 「2026-09-18 の時点で起票は 0 本」と時点を付けて書いた文で、偽にはならない。3 人目以降の窓が無いことは今も同じ |
+| `ledger/assets.toml` | `descript_shell_surfaces` の `collision*`・`animation*.pattern*` | 書いてあるのは一つの行の読み方（矩形だけ・`overlay` だけ）で、同じ番号のブレスの重なり方には触れていない。足し方は `element*` と `animation*.interval` の注記と COMPAT §8 にある |
+
+`surface*`ブレスそのもの（`surface.append` を含む）は、ukadoc で項目の見出しになっていないので台帳に行が無い（`manual_shell` の行の備考のとおり）。同じ番号のブレスを足す決めごとと、追記の後に来た波括弧の扱いは `doc/COMPAT_ARCHITECTURE.md` §8 にある。
+
+台帳に「同じ番号の 2 つ目のブレスで前の定義を全置換する」と書いた行は、直す前から 0 件だった（台帳の 4 本を「全置換」「後勝ち」で検索して確かめた）。直した後に、台帳の 4 本で `char_scope_of` を検索して 0 件、「`kero.` と `charN.` の綴りだけ」も 0 件。**えみりが使う項目と、この記録が触れる項目で、記録や今のコードと食い違う記述（偽の記述）は 0 件。**
+
+網羅台帳の検査: `cargo test -p ukadoc-survey` は 601＋6＋113＋5 本が通り、落ちた 0（終了コード 0）。
+
 ## 数の洗い出し
 
 タスク 4.2 で、ソースと文書の全体を `14 種`・`14 変種`・`fourteen`・`7 つ`・`7 本`・`seven` で検索した（2026-10-17・`git grep -n -I -E "14 種|14 変種|fourteen|7 つ|7 本|seven"`）。本 spec で変わった数は 2 つ——拒否の閉じた語彙（14 種 → 13 種）と、登記した検体の数（7 → 8）。外した場所を除いて 183 行が当たり、全部を下のどれかに片付けた（直した 2 行は直した後は当たらないので、183 行はどれも、この数とは別の数か、変わったことそのものを書いた行）。**片付いていない行は 0 件。**

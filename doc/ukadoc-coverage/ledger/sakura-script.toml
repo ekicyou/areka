@@ -5324,15 +5324,16 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5cp_5bID_756a_53f7_5d:1"]
-status = "implemented"
+status = "degraded"
 introduced = ""
 owner = ""
 priority = "A1"
 values = ["掛け合い"]
 links = []
 note = """
-壊れ方: 見た目の差 — decode_tag の \"p\" の腕が番号を SpeakerScope にし、compile が以降の cue の actor へ転写する。引数が数として読めなければ 0（本体側）になる。
-ログ: 出ない（正常経路）。
+壊れ方: 見た目の差 — decode_tag の \"p\" の腕が番号を SpeakerScope にし、compile が以降の cue の actor へ転写する。引数が数として読めなければ 0（本体側）になる。番号が 2 以上の話し手は、2026-10-17 から窓を作らない（areka の placement::config::detect_scopes が `charN.` の綴りでキャラクタを立てない。areka-P0-emily-ghost-verification のタスク 3.1・要件 4.7）ので、その話し手の文字は出ず、面の指示は読み捨てられる。会話は止まらずに最後まで進む（同 spec のタスク 3.2）。それまでは実装済みとしていたが、この絞りで縮退へ移した。
+ログ: 番号が 0 と 1 では出ない（正常経路）。番号が 2 以上では、面の指示に error!（areka-emo-present の presenter の「apply(ShowSurface): 未装着ターゲット」など）、文字に warn!（areka-emo-text の actor_present の「actor の装着先（予約スロット）が未解決——状態を蓄積し描画をスキップして次フレームで再試行する」）が出る。えみり（`emily4`）の 2 回目の走行では ERROR 47 件・WARN 1 件（同 spec の検証の記録 verification.md「崩れた所の表」の 2）。
+担当 spec は areka-P0-extra-character-windows（3 人目以降の窓を作る）。宛先の欄は空にした。台帳の非空の宛先は roadmap-draft.md の [[spec]] の名前か、briefing.md の完了済み spec の列挙（[[owner_completed]]）の名前でなければならず（areka-P0-ukadoc-coverage-roadmap 要件 11.1 ⑸ の検査）、areka-P0-extra-character-windows はどちらにも載っていない。表へ足すのは棚卸の仕事である。
 [テーマ: 3 体目以降へ話し手を渡せず、二人より多い掛け合いが組めない]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\p。綴りが短く別の語の一部にも当たるぶん過大に出る）]
 """
