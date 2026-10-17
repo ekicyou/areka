@@ -1,0 +1,56 @@
+# Brief: areka-P0-window-link-directives
+
+> 2026-10-17 `/kiro-discovery` で起票（開発者「新しい move 形式を含む周辺仕様を ukadoc から取り込み」→「とりあえず 1 本、2 本目は 0.1.0 に回す。アニメーションに絡むのは、dola の改造後」）。1 本目は `move-canon`（v0.0.3）。着手の区分は **A（開発者が起票）**。版は **v0.1.0**。
+
+## Problem
+
+ukadoc の窓の位置の台本の指令のうち、窓どうしをつなぐもの（`\![set,sticky-window]`）と、窓を画面の端へ吸着させるもの（`\![set,alignmenttodesktop]`）を areka は受けない。どちらも運ばれるだけで誰も受け取らず、黙って何も起きない。`\![move]` の新しい形の `--option=ignore-sticky-window` も、つなぐ仕組みが無いので意味を持たない。
+
+## Current State
+
+- `\![set,alignmenttodesktop,方向]`: 台本の指令は未実装。descript の 4 段の優先（`seriko.alignmenttodesktop` と `sakura.`／`kero.`／`char*.`）は実装済み＝`placement/config.rs:120-223` → `Anchor` → 部品 `Anchored`（`placement/follow/anchor.rs:180`）。受ける側の system `anchor_changed_system`（`placement/follow/window_move.rs:412-423`）は定義だけあり「cue の振り分けは非所有」と書いてある。
+- `\![set,sticky-window]`／`\![reset,sticky-window]`: 未実装。descript の `seriko.sticky-window` は生のまま書き写すだけ（`placement/config.rs:106,135`）。プロパティ `currentghost.seriko.sticky-window` は sylphya の語彙表に名前だけ（`areka-sylphya/src/vocab/dotted.rs:132`）。
+- 網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml`: `set,alignmenttodesktop` と `,free`（:3151）・`set,sticky-window`（:3266）・`reset,sticky-window`（:2948）は absent・持ち主なし。
+- 受け手の登録は `emo2_boot/consumer_ledger.rs`（943 行）。
+
+### ukadoc の正典（2026-10-17 に読んだ）
+
+- `\![set,alignmenttodesktop,方向]`: 方向は top・bottom・left・right・free・default。上下に吸着すると上下へドラッグできず、左右も同様。「ゴースト終了まで有効」。`alignmentondesktop` の綴りでも効く。兄弟の項目 `\![set,alignmenttodesktop,free]`。
+- `\![set,sticky-window,スコープID,スコープID,...]`（2.3.77）: 「ドラッグ中やmoveタグを実行中にセットで動く」。組を複数作れて、組んだ ID を含むタグをもう一度打つとエラー。解除は `\![reset,sticky-window]`（2.3.77・descript の値へ戻る）。descript の `seriko.sticky-window`（2.4）・プロパティ `currentghost.seriko.sticky-window`（2.8.78）。
+- `\![move]` の `--option=ignore-sticky-window`: 「\![set,sticky-window]での連携設定を無視して単独で動かす」。
+
+## Desired Outcome
+
+- `\![set,alignmenttodesktop,方向]` で、台本からキャラクターの窓の吸着を変えられる（`default` で descript の値へ戻る）。吸着した向きにはドラッグで動かない。
+- `\![set,sticky-window,…]` で組んだ窓が、ドラッグと `\![move]` で一緒に動く。`\![reset,sticky-window]` で descript の値へ戻る。descript の `seriko.sticky-window` も効く。
+- `\![move]` の `--option=ignore-sticky-window` で、組を無視して 1 つだけ動く。
+- 台帳の 3 行と COMPAT §8 が新しい実装に合う。
+
+## Approach
+
+`move-canon` の後に、受け手を足して既存の部品へ流す。吸着は `Anchored` と `anchor_changed_system` が既に在るので、台本の指令を振り分けるだけ。つなぐ組は新しい部品（組の持ち主）を置き、ドラッグの道と `\![move]` の適用（`apply_move_directive`）の両方から組の相手を同じだけ動かす。時間つきの移動（dola の改造の後）では組の相手も同じ時間で動く必要がある＝そのときは時間の spec が引き取る。
+
+## Scope
+- **In**: `\![set,alignmenttodesktop]`（`alignmentondesktop` の綴りと `free`・`default` を含む）・`\![set,sticky-window]`・`\![reset,sticky-window]`・descript の `seriko.sticky-window` を効かせる・`--option=ignore-sticky-window` の効き目・ドラッグと瞬間の `\![move]` での組の連れ動き・台帳と COMPAT の行
+- **Out**: 時間つきの移動・`\![moveasync]` での連れ動き（dola の改造の後）・ほかのアプリの窓への吸着（`window-snap`・夢）・3 人目以降の窓（`extra-character-windows`）・プロパティ `currentghost.seriko.sticky-window` の値（`currentghost-property-tree`）
+
+## Boundary Candidates
+- 吸着の台本の指令（受け手 → `Anchored` の書き換え → `anchor_changed_system`）
+- つなぐ組の持ち主（部品）と、ドラッグ・`\![move]` からの連れ動き
+
+## Out of Boundary
+- 吸着の相手を作業領域の辺から広げること（`window-snap`）
+- 時間つきの移動での連れ動き
+
+## Upstream / Downstream
+- **Upstream**: `move-canon`（v0.0.3・`--option` の語彙と参照点の計算・`apply_move_directive`）・✅ `window-placement`（`Anchored`・吸着の 4 段の優先）・✅ `scope-zorder-pinning`（組を扱う受け手の型）
+- **Downstream**: `window-snap`（吸着の土台の持ち主の議題 1）・`extra-character-windows`（3 人目以降の窓での組）・`currentghost-property-tree`（`currentghost.seriko.sticky-window`）・時間つきの移動（dola の改造の後）
+
+## Existing Spec Touchpoints
+- **Extends**: なし
+- **Adjacent**: `move-canon`（同じ `move_cue.rs`・`consumer_ledger.rs`＝この spec が後）・`window-snap`（同 brief の議題 1「土台の持ち主」にこの spec が答える）・`tasktray-*`（`consumer_ledger.rs` に行を足す＝1 本ずつ）
+
+## Constraints
+- 台本で動いた窓は位置の記憶に書かない（`char-position-save-on-exit`）。組の相手も同じ。
+- `consumer_ledger.rs`（943 行）は 1,000 行の決まりに近い＝受け手の中身は兄弟のファイルへ。
+- 「ゴースト終了まで有効」は台本の指令の効き目の寿命＝ゴーストの切り替えで descript の値へ戻る。
