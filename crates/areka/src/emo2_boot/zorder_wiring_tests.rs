@@ -385,12 +385,15 @@ fn t_zwi06_the_frame_system_is_ordered_before_the_chain_apply() {
     );
 }
 
-/// 相の呼出は既存の指令適用の相（`\![move]` の取り出し）の**直後**に 1 つだけ在る。
+/// 相の呼出は窓寸 reconcile の**後**・再スナップの**前**に 1 つだけ在る。
+///
+/// `\![move]` の取り出しは areka-P0-move-canon（design D4）で再スナップの後へ移ったが、
+/// 本相の置き場は変えていない（鎖の適用系より前であることは段の並びが担う）。
 ///
 /// 呼出を丸ごと削っても判断の檻は 1 本も赤くならない（task 4.2／5.1／5.2 で三度実証）。
 /// ここが唯一その削除を捕まえる。
 #[test]
-fn t_zwi07_the_frame_calls_the_zorder_drain_right_after_the_move_drain() {
+fn t_zwi07_the_frame_calls_the_zorder_drain_after_the_size_reconcile() {
     let raw = include_str!("frame.rs");
     let code = code_only(raw);
     let squeezed = squeeze(&code);
@@ -407,11 +410,15 @@ fn t_zwi07_the_frame_calls_the_zorder_drain_right_after_the_move_drain() {
         "取り出しの相の呼出がちょうど 1 つではない（二重に回すと指令が二度適用される）"
     );
 
-    let move_at = index_of(&squeezed, "run_move_drain_phase(&wiring, world);");
+    let reconcile_at = index_of(
+        &squeezed,
+        "reconcile_reported_sizes(&mut wiring.presenter, world);",
+    );
     let zorder_at = index_of(&squeezed, "run_zorder_drain_phase(");
+    let resnap_at = index_of(&squeezed, "resnap_shell_targets(&wiring.presenter, world);");
     assert!(
-        move_at < zorder_at,
-        "取り出しの相が `\\![move]` の相より前に置かれている（設計の相順と食い違う・move={move_at}・zorder={zorder_at}）"
+        reconcile_at < zorder_at && zorder_at < resnap_at,
+        "取り出しの相が窓寸 reconcile の後・再スナップの前に無い（設計の相順と食い違う・reconcile={reconcile_at}・zorder={zorder_at}・resnap={resnap_at}）"
     );
 
     // 対照——落とし過ぎ／落とし漏れが無いこと。

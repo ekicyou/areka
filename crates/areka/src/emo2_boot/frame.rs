@@ -19,7 +19,7 @@
 //!   その配線層 `balloon_visibility_phase.rs`。
 //! - zorder-drain: 台本から届いた `\![set,zorder,…]`／`\![reset,zorder]` を台帳へ適用し、台帳と
 //!   窓の在庫から**望む鎖 1 本**を組んで wintf の受け口（`ZOrderChainPlan`）へ置く。公開は内容が
-//!   前回と異なるときだけで、窓の出現・破棄はこの門で自然に検出される。`\![move]` の取り出しの
+//!   前回と異なるときだけで、窓の出現・破棄はこの門で自然に検出される。窓寸 reconcile の
 //!   直後・鎖の適用系より前（scope-zorder-pinning）。実装は `frame/zorder_drain.rs`。
 //! - 窓寸 reconcile: 表示成立点の状態照合報告（`take_pending_resize`）で窓寸を反映する（第 2 経路）。
 //!   可視性の相が発行した表示が積む窓寸要求も、同一フレームのここで landing する。
@@ -262,7 +262,7 @@ pub(super) fn ghost_quit_system(world: &mut World) {
 /// `Update` 登録の排他 system（donor パターン: remove→各フェーズ→insert・DD-1/DD-4）。
 ///
 /// `Emo2Wiring`（NonSend）を [`World::remove_non_send`] で取り出してから
-/// attach→dpi→drain→差し替え→balloon-visibility→窓寸 reconcile→move-drain→resnap→連鎖確定→連鎖再解決→
+/// attach→dpi→drain→差し替え→balloon-visibility→窓寸 reconcile→zorder-drain→resnap→move-drain→連鎖確定→連鎖再解決→
 /// text-scale→text→status-report
 /// の順に各フェーズを駆動し、[`World::insert_non_send`] で戻す。
 /// remove→insert は `&mut World` を各フェーズへ排他に渡すための donor 慣行（借用衝突回避・
@@ -348,12 +348,8 @@ pub fn emo2_frame_system(world: &mut World) {
     // （`frame_text_scale_tests.rs::emo2_frame_system_runs_dpi_phase_without_writes_when_unattached`）が
     // この経路をそのまま覆っている。
     reconcile_reported_sizes(&mut wiring.presenter, world);
-    // `\![move]` の末端結線: talk スレッドの MoveCueSink から届いた MoveDirective を drain し
-    // apply_move_directive で実窓へ即時反映する（GhostWindows ゲート・R5・task 9.2）。present drain
-    // とは独立で、GPU attach でなく GhostWindows 存在を待つ（move はキャラ窓 entity へ作用するため）。
-    run_move_drain_phase(&wiring, world);
     // 重なりの指令の取り出し（scope-zorder-pinning design「zorder drain 相」・要件 1.4／4.1／
-    // 5.1／7.1／8.4／14.5／15.3）: `\![move]` の取り出しの**直後**に置く。同じ跨ぎ（台本の
+    // 5.1／7.1／8.4／14.5／15.3）: 窓寸 reconcile の**直後**に置く。`\![move]` と同じ跨ぎ（台本の
     // スレッドが送り出した指令を画面を持つ側で取り出す）であり、こちらは適用した台帳と窓の
     // 在庫から**望む鎖 1 本**を組み、内容が前回と異なるときだけ wintf の受け口
     // （`ZOrderChainPlan`）へ公開するところまでを行う。
@@ -368,6 +364,16 @@ pub fn emo2_frame_system(world: &mut World) {
     // アンカー再適用を駆動する（適用後の実寸を読むため drain の**後**・同一 World・同一 tick 内の
     // 直接呼び・Req4.1/4.3/1.3）。text の前後とは機能的に無関係だが drain の後であることが必須。
     resnap_shell_targets(&wiring.presenter, world);
+    // `\![move]` の末端結線: talk スレッドの MoveCueSink から届いた PositionCue を drain し、`Move` は
+    // apply_move_directive で実窓へ即時反映し、`ResetWindowPos` は並べ直しの手続きへ渡す
+    // （GhostWindows ゲート・R5・task 9.2・areka-P0-move-canon 3.2）。present drain とは独立で、GPU
+    // attach でなく GhostWindows 存在を待つ（move はキャラ窓 entity へ作用するため）。
+    // resnap の**後**に置く（areka-P0-move-canon design D4・要件 2.5／2.12）: 同じフレームで表示の面の
+    // 大きさが変わったとき、移動は再スナップが書いた**新しい大きさ**で位置を決める。前に置くと古い
+    // 大きさで右下などをそろえ、続く再スナップが下端中央を保って大きさだけ変えるので位置がずれる。
+    // 連鎖の確定の**前**でもある（確定は一度きりで、定常のフレームでは何もしない）。面の指令と
+    // `\![move]` は別の線で届くので、別のフレームに割れて届いた場合の隙間はここでは扱わない。
+    run_move_drain_phase(&wiring, world);
     // 初期配置の確定（scg 要件 7・C6）: 再アンカーが landing して全スコープの実表示寸が
     // 確定したフレームで**一度だけ**連鎖を解き直し、サーフェス差替で崩れた隣接を戻す。
     // resnap の**後**に置く（各窓の再アンカー結果を入力として受け取るため）。
@@ -456,6 +462,12 @@ mod transition_branch_tests;
 #[cfg(all(test, target_pointer_width = "64"))]
 #[path = "frame_work_area_resnap_hold_tests.rs"]
 mod work_area_resnap_hold_tests;
+
+// move drain の置き場（areka-P0-move-canon task 3.3・design D4）の檻。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_move_order_tests.rs"]
+mod move_order_tests;
 
 // 終了相の判断（areka-P0-emo2-conformance-e2e タスク 6.9・R15.4）。GPU も実窓も要らない。
 #[cfg(test)]
