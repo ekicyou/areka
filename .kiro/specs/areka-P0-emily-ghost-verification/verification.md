@@ -160,7 +160,7 @@ $p = Start-Process -FilePath "$w\target\debug\areka.exe" -WorkingDirectory $v -R
 
 | 番号 | 症状 | 根拠 | 原因 | 扱い | 起票した spec か裁定 |
 |---|---|---|---|---|---|
-| 1 | 1 人目が面 5・6 で、2 人目が面 11 で姿が消える。MCP の `dump_surface`（面 5）も白紙 | 13:39:20・13:41:15 の記録（`EmptyComposition surface_id=11`・`全透明退化 → Hide`）、`05-timed-talk-sakura-gone.jpg`・`06-both-gone.jpg`・`09-dump-surface-scope0-s5.png`。WARN `surface id 重複` 135 件 | えみりの `surfaces.txt` は、面ごとの `surface5` などのブレスに element定義（絵）を書き、`surface0,3,5,6,8,21,28` などの共有のブレスに当たり判定と着せ替えを書く。areka は同じ番号の 2 つ目のブレスで前の定義を丸ごと置き換える（`crates/areka-emo-compose/src/fold.rs` の `upsert_surface`・「後勝ち全置換」）ので、絵が消える。面 11 は自分の絵の画像ファイルが無く、全部消えて外形 0×0 になる | 直す（要件 4.1 を妨げる）。直し方は開発者の決め（2026-10-17）で「足し合わせる」 | 2026-10-17 開発者の決め（下の「直しの見積もりと 20 本の線」） |
+| 1 | 1 人目が面 5・6 で、2 人目が面 11 で姿が消える。MCP の `dump_surface`（面 5）も白紙 | 13:39:20・13:41:15 の記録（`EmptyComposition surface_id=11`・`全透明退化 → Hide`）、`05-timed-talk-sakura-gone.jpg`・`06-both-gone.jpg`・`09-dump-surface-scope0-s5.png`。WARN `surface id 重複` 135 件 | えみりの `surfaces.txt` は、面ごとの `surface5` などのブレスに element定義（絵）を書き、`surface0,3,5,6,8,21,28` などの共有のブレスに当たり判定と着せ替えを書く。areka は同じ番号の 2 つ目のブレスで前の定義を丸ごと置き換える（`crates/areka-emo-compose/src/fold.rs` の `upsert_surface`・「後勝ち全置換」）ので、絵が消える。面 11 は自分の絵の画像ファイルが無く、全部消えて外形 0×0 になる | 直した（要件 4.1 を妨げていた・タスク 6.1）。直し方は開発者の決め（2026-10-17）で「足し合わせる」 | 2026-10-17 開発者の決め（下の「直しの見積もりと 20 本の線」の「直した結果」） |
 | 2 | 3 人目・4 人目への面の指示が ERROR「未装着ターゲット」（43 件）。3 人目の文字が装着先未解決で溜まる | 13:39:15〜の記録（`TargetId(4)`・`TargetId(6)`・`actor=2`） | 3 人目からの窓を作らない決め（タスク 3.1）。areka は 3 人目からのキャラクターに対応していない | 起票済み（範囲の外） | `extra-character-windows` |
 | 3 | MCP の `sakurascript` が `NG:not implemented yet` | 13:42 の MCP の答え | areka が MCP の `sakurascript` にまだ対応していない | 起票済み（範囲の外） | `mcp-kanade-tools` |
 | 4 | `.pna` を使わない | WARN 2 件（27 枚） | 裁定どおり | 方針で受けない | 2026-10-05 裁定（areka は α 付き画像だけを正しく使う・`.pna` は無視） |
@@ -176,6 +176,23 @@ $p = Start-Process -FilePath "$w\target\debug\areka.exe" -WorkingDirectory $v -R
 - 見積もり: タスク 1 本（6.1・直す前に赤のテスト → 直す → 文書）。直す場所が 1 か所なので、6.1 を件ごとのタスクに分けない。
 - 20 本の線: いま決まっている 13 本（1.1〜6.2）から 6.1 を除いた 12 本＋直しのタスク 1 本＝13 本。**20 本を超えない。**
 - SHIORI へ渡すバイト列を全部のゴーストで変える直しは含まない（要件 6.3 の聞き取りは不要）。
+
+#### 直した結果（タスク 6.1）
+
+- 直した場所:
+  - `crates/areka-emo-compose/src/fold.rs` の `fold_plain_surface`（同じ番号が既に在れば作り直さず、前の定義へ足す）と `merge_brace`（足し方。element定義は element番号・当たり判定は collision番号・アニメーションは animation番号と pattern番号で、同じ名前の行は後の行が勝つ）。
+  - `crates/areka-emo-compose/src/boxes.rs` の `distribute`（シェル内バルーン `elementN,balloon,…` の置き場所の行も同じ規則で足す）。箱の行は絵の行と同じ見出しの展開で配っているので、絵だけを足して箱を全置換のままにすると、同じ `surfaces.txt` から組んだ絵と箱の畳み込みが食い違う。両方を同じ規則に揃えた。
+- 直す前に赤・直した後に緑のテスト（`crates/areka-emo-compose/src/fold_merge_tests.rs`）: `shared_brace_adds_to_the_per_face_brace_instead_of_replacing_it`（えみりと同じ形・ファイル名は作り物）と `same_named_line_in_a_later_brace_wins`（同じ名前の行の後勝ち）。
+- 直す前の赤（直す前の `fold.rs` に上の 2 本だけを足して `cargo test -p areka-emo-compose --lib merge_tests`）: 2 本とも赤——`assertion left == right failed: 面 5 の絵が共有のブレスで消えない  left: []  right: [(0, "body5.png"), (1, "face5.png")]`、もう 1 本は `left: [(1, "b1.png", (2, 2)), (2, "b2.png", (3, 3))]  right: [(0, "a0.png", (0, 0)), (1, "b1.png", (2, 2)), (2, "b2.png", (3, 3))]`（element0 が消えた）。
+- 全置換を前提に書かれていたので、足す規則の判定へ書き直したテスト: `fold_tests.rs` の `duplicate_id_same_layer_line_is_last_wins`・`interleaved_redefinition_is_appearance_order_deterministic`、`log_firing_tests.rs` の `duplicate_surface_id_merge_logs_debug_not_warn`、`boxes_tests.rs` の `later_surface_brace_adds_to_the_placements`、`base_image_tests.rs` の `brace_after_append_merges_into_the_image_only_face`。
+- 記録の重さ: 同じ番号の 2 つ目のブレスの記録を `warn!`「既存定義を全置換する（後勝ち）」から `debug!`「前の定義へ後のブレスの行を足す（同じ名前の行は後勝ち）」へ下げた。足すのは定めた振る舞いで失敗ではなく、えみりでは 1 本のシェルで 135 件当たる（走行の WARN の数）。
+- 上書きした完了 spec の要件（`doc/COMPAT_ARCHITECTURE.md` §8 に書いた）: `areka-P0-emo-compose` 要件 2.1（既存の番号は全置換）と、`areka-P0-shell-implicit-surface` の設計が §8 に書いた行（`surface.append` の後に来た同じ番号の波括弧は全置換）。`surface.append` の規則（`areka-P0-emo-compose` 要件 2.4）は変えていない。
+
+#### 既知の限界（完了のときに開発者へ聞く）
+
+- 後のブレスが、ある animation番号の pattern を書くのにその `animationN.interval` の行を書かないと、足した後の interval は `bind` になる。転記層（parser）は interval の行が無いアニメーションを `bind` で埋めるので、「書かれていない」と「`bind` と書かれた」を見分けられない。「同じ名前の行は後の行が勝つ」を字面どおりに読むと、書かれていない行は前の行を上書きしないはずなので、この点だけ規則に合わない。
+- 登記した検体での件数: **0 件**。登記したゴースト 5 体（`emo2`・`R_POST_and_KOMAINU`・`konnoyayame`・`claudia`・`emily4`）のシェルは各 1 本（`shell/master`）の計 5 本で、6 本ではない。数え方: `target\nar-samples\cache\` に展開済みの各検体の `ghost\<名>\shell\master\surfaces.txt` を、小さな数え上げの道具（使い捨て・ワークツリーの外）で読んだ。`surface.append` でないブレスごとに、pattern の行（`animationN.patternM`・旧書式 `NpatternM`）はあるが同じ N の interval の行（`animationN.interval`・旧書式 `Ninterval`）が無いブレスを数え、5 本とも 0（ブレスの数は `emo2` 59（ほかに `surface.append` のブレス 5）・`R_POST_and_KOMAINU` 9・`konnoyayame` 10・`claudia` 13・`emily4` 60）。較正: `claudia` の `animation0.interval` の 1 行と、えみりの最初の `animation50.interval` の 1 行をそれぞれ消した写しでは 1 件と数えた。
+- 開発者へ残す問い: 「起票するか、方針で受けないか」（完了のときに聞く）。
 
 ## 数の洗い出し
 

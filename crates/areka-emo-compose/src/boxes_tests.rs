@@ -498,21 +498,25 @@ fn shared_header_gives_every_id_the_same_boxes() {
 }
 
 #[test]
-fn later_surface_brace_replaces_the_placements_wholesale() {
-    // 同じ番号の `surface*`ブレスは置き場所を丸ごと置き換える（画像の畳み込みと同じ後勝ち）。
+fn later_surface_brace_adds_to_the_placements() {
+    // 同じ番号の `surface*`ブレスは前の置き場所へ足し、同じ element番号は後勝ち（画像の畳み込みと
+    // 同じ規則・areka-P0-emily-ghost-verification 開発者の決め 2026-10-17「足し合わせる」）。
     let text = [
         two_braces(),
         block("surface0", &["element1,balloon,a,0,0"]),
         block("surface.append0", &["element3,balloon,b,0,0"]),
-        block("surface0", &["element2,balloon,b,5,5"]),
+        block("surface0", &["element1,balloon,a,9,9"]),
         block("surface1", &["element1,balloon,a,0,0"]),
         block("surface1", &["element0,overlay,body.png,0,0"]),
     ]
     .concat();
     let (layout, report, _) = fold_images(&text, &[]);
     assert_eq!(report.issues, vec![]);
-    assert_eq!(layout.placements(0), &[place(2, "b", 5, 5)]);
-    assert_eq!(layout.placements(1), NONE);
+    assert_eq!(
+        layout.placements(0),
+        &[place(1, "a", 9, 9), place(3, "b", 0, 0)]
+    );
+    assert_eq!(layout.placements(1), &[place(1, "a", 0, 0)]);
     assert!(!layout.is_empty());
 }
 
@@ -744,7 +748,7 @@ fn append_existence_matches_image_fold_for_forward_reference() {
 fn append_existence_matches_image_fold_for_image_only_faces() {
     // 面の画像だけで在る番号にも追記は届く（base_image_tests の画像だけの面と同じ形）。先の追記が
     // 届いた面へ後の追記も届く。宣言も画像も無い番号へは届かず報告に載る。後の `surface*`ブレスは
-    // 画像だけの面も丸ごと置き換える。
+    // 画像だけの面へも追記へ足す（追記が残る・画像の畳み込みと同じ）。
     let text = [
         two_braces(),
         block("surface.append7,8,9", APPEND_BODY),
@@ -753,7 +757,7 @@ fn append_existence_matches_image_fold_for_image_only_faces() {
     ]
     .concat();
     let (layout, report, world) = fold_images(&text, &[(7, "surface7.png"), (8, "surface8.png")]);
-    assert_eq!(reached(&layout, &world), (vec![7], vec![7]));
+    assert_eq!(reached(&layout, &world), (vec![7, 8], vec![7, 8]));
     assert_eq!(
         layout.placements(7),
         &[place(2, "a", 0, 0), place(4, "b", 0, 0)]

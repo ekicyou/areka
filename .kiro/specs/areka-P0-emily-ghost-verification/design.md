@@ -130,6 +130,11 @@ crates/areka/src/
 ├── input_events/
 │   ├── mod.rs               # 新しい兄弟テストの接続 1 行
 │   └── input_events_char_clamp_tests.rs  # 新規: 全 scope の窓でマウスを動かしても panic しない
+crates/areka-emo-compose/src/
+├── fold.rs                  # タスク 6.1: 同じ番号の 2 つ目の surface*ブレスを前の定義へ足す（merge_brace・同じ名前の行は後勝ち）
+├── fold_merge_tests.rs      # 新規（6.1）: えみりと同じ形の固定入力で足し合わせと後勝ちを判定
+├── boxes.rs                 # 6.1: シェル内バルーンの置き場所も同じ規則で足す（distribute）
+└── fold_tests.rs ほか       # 6.1: 全置換を期待していた 4 本を足し合わせの期待へ
 crates/sample-ghost-kit/src/
 ├── lib.rs                   # 登記表に emily4 の 1 行
 └── lib_tests.rs             # 数 7 → 8・emily4 の 1 本
@@ -173,6 +178,11 @@ doc/ukadoc-coverage/ledger/
 - `vendors/sample_ghost/README.md` — `emily4.nar` の行と節の「未登記」を外し、取り出し元の無い同梱は飛ばして入ることを書く。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 に 1 行足し、287 行の写しから `CompanionSourceMissing` を外し「14 種」を「13 種」へ。
 - `doc/ukadoc-coverage/ledger/assets.toml` — `*.source.directory` の行の注記。実機の後に、えみりが使う項目の行を記録と合わせる。
+- `crates/areka-emo-compose/src/fold.rs` — タスク 6.1（崩れた所 1）。`fold_plain_surface` は既にある番号へ新しく作り直さず `merge_brace` で前の定義へ足す（element は element番号・collision は collision番号・animation は animation番号と pattern番号ごとに後勝ち。書き直した collision は末尾へ＝後の定義が手前）。重複の記録は `warn!` から `debug!` へ。`upsert_surface` は無い番号の新設だけになる。
+- `crates/areka-emo-compose/src/fold_merge_tests.rs`（新規）と `fold.rs` の接続 3 行 — えみりと同じ形（面ごとのブレスの絵＋後の共有のブレスの当たり判定・着せ替え）で絵が残ること、同じ名前の行が後勝ちになることの 2 本（直す前に赤）。ファイル名は作り物。
+- `crates/areka-emo-compose/src/boxes.rs` — `distribute` の `surface*`ブレスの腕を、丸ごと置き換えから「前の行へ足す・同じ element番号は後勝ち」へ（画像の畳み込みと規則を割らない）。
+- `crates/areka-emo-compose/src/fold_tests.rs`・`base_image_tests.rs`・`log_firing_tests.rs`・`boxes_tests.rs` — 全置換を期待していたテストを足し合わせの期待へ直し、名前も変える（`duplicate_id_same_layer_line_is_last_wins`・`brace_after_append_merges_into_the_image_only_face`・`duplicate_surface_id_merge_logs_debug_not_warn`・`later_surface_brace_adds_to_the_placements`）。
+- `doc/COMPAT_ARCHITECTURE.md` — §8 に「同じ番号が 2 つ以上の `surface*`ブレスに出たとき」の【上書き】の行（`areka-P0-emo-compose` 要件 2.1 を上書き）を足し、追記の後の波括弧の行を【上書き】（`areka-P0-shell-implicit-surface` の設計の行を上書き）へ直す。
 - `doc/ukadoc-coverage/ledger/shiori.toml` — 3445 行の `OnInstallFailure` の備考「areka-nar の拒否の 14 種」を 13 種へ（どのテストも気付かないので手で直す）。
 - 数の洗い出しの締め: 上の直しの後に、`14 種`・`14 変種`・`fourteen`・`7 つ`・`7 本`・`seven` をソースと文書の全体で検索し、出た行を全部「直した」か「この数とは別の数（理由つき）」に片付ける（1.7・2.3・7.4・8.2・8.4）。
 
