@@ -133,6 +133,7 @@ kero.surface.alias
                 Animation {
                     id: 0,
                     interval: Interval::Bind,
+                    interval_written: true,
                     patterns: vec![Pattern {
                         index: 0,
                         method: DrawMethod::new("overlay".to_string()),
@@ -145,6 +146,7 @@ kero.surface.alias
                 Animation {
                     id: 1,
                     interval: Interval::Random { k: 4 },
+                    interval_written: true,
                     patterns: vec![
                         Pattern {
                             index: 0,
@@ -168,6 +170,7 @@ kero.surface.alias
                 Animation {
                     id: 2,
                     interval: Interval::BindRandom { k: 7 },
+                    interval_written: true,
                     // 疎 index（0,2・pattern1 欠番）を合成せず保持（要件 5.4）。
                     patterns: vec![
                         Pattern {
@@ -213,6 +216,7 @@ kero.surface.alias
             animations: vec![Animation {
                 id: 0,
                 interval: Interval::Random { k: 3 },
+                interval_written: true,
                 patterns: vec![Pattern {
                     index: 0,
                     method: DrawMethod::new("overlay".to_string()),

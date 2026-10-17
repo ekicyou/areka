@@ -126,7 +126,6 @@ pub(crate) fn failure_word(error: &NarError) -> FailureWord {
         | RefuseReason::UnsupportedType { found: None }
         | RefuseReason::MissingRequiredKey { .. }
         | RefuseReason::InvalidDirectoryName { .. }
-        | RefuseReason::CompanionSourceMissing { .. }
         | RefuseReason::TargetGhostMissing { .. } => FailureWord::InvalidType,
         RefuseReason::UnsupportedEntry { .. }
         | RefuseReason::UnsupportedType { found: Some(_) }

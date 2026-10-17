@@ -175,7 +175,8 @@ impl EmoWorld {
     /// fold による entity 常駐段（single-pass fold への唯一の呼び出し口）。
     ///
     /// 空 `Shell`（surface/append/alias 皆無）に対しては何も積まず、World を空のまま保つ。
-    /// plain `surface` ヘッダの展開＝全 id 新設（task 3.2）は [`crate::fold::fold_shell`] が担う。
+    /// plain `surface` ヘッダの展開（無い id は新設・既にある id へは行を足す・task 3.2、
+    /// spec: areka-P0-emily-ghost-verification）は [`crate::fold::fold_shell`] が担う。
     /// append/alias の意味論は後続 task が同 fold 経路へ差し込む。
     fn populate_from_shell(&mut self, shell: &Shell) {
         crate::fold::fold_shell(&mut self.world, shell);

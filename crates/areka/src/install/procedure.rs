@@ -2,7 +2,7 @@
 //!
 //! 書庫 1 本の一周（`OnInstallBegin` → 読み取りと検査 → `accept` の照合 → 利用条件 → 展開 →
 //! 入れた後の記録 → 締めの知らせ）と、依頼 1 件の一周を正典の順で進める。World も
-//! スレッドも門も知らず、外とのやり取りは口 [`InstallPorts`] の 7 つだけ（本番は背景の
+//! スレッドも門も知らず、外とのやり取りは口 [`InstallPorts`] の 8 つだけ（本番は背景の
 //! スレッドの口・テストは偽物）。口に切替を頼む関数は無い＝手続きが切替を要求することは
 //! 型の上で起きない（要件 6.2）。
 
@@ -10,7 +10,8 @@ use std::path::{Path, PathBuf};
 
 use areka_ghost::catalog_roots::find_balloon;
 use areka_nar::{
-    ElementKind, InstallKind, InstallOutcome, IoPhase, NarArchive, NarError, SurvivingTree,
+    ElementKind, InstallKind, InstallOutcome, IoPhase, NarArchive, NarError, SkippedCompanion,
+    SurvivingTree,
 };
 
 use super::judge::{
@@ -62,6 +63,8 @@ pub(crate) trait InstallPorts {
     ) -> Overwritten;
     /// 入れた後の記録（受け皿・バルーンの記憶・置換語）。反映が済んでから戻る。
     fn record(&mut self, record: InstalledRecord);
+    /// 飛ばした同梱があったことを利用者へ警告する（OK だけの画面）。答えは持たない。
+    fn warn_skipped(&mut self, title: &str, body: &str);
 }
 
 /// イベントを送った結果。
@@ -261,14 +264,24 @@ fn archive_steps(
     );
     ports.record(installed_record(kind, &outcome));
 
-    // 締めの知らせ（応えが無いときだけ旧仕様へ続ける＝要件 2.6・2.7）。
-    if send(ports, ON_INSTALL_COMPLETE_EX, complete_ex_refs(&items))? == Raised::NoReply {
-        send(
-            ports,
-            ON_INSTALL_COMPLETE,
-            complete_legacy_refs(&outcome.name, &items),
-        )?;
+    // 締めの知らせ（応えが無いときだけ旧仕様へ続ける＝要件 2.6・2.7）。結果は一度受けておき、
+    // 飛ばした同梱があれば「閉じた」でも警告を求めてから返す（emily-ghost-verification 要件 1.12）。
+    let closing =
+        send(ports, ON_INSTALL_COMPLETE_EX, complete_ex_refs(&items)).and_then(|raised| {
+            if raised == Raised::NoReply {
+                send(
+                    ports,
+                    ON_INSTALL_COMPLETE,
+                    complete_legacy_refs(&outcome.name, &items),
+                )?;
+            }
+            Ok(())
+        });
+    if !outcome.skipped.is_empty() {
+        let (title, body) = skipped_notice(path, &outcome.name, &items, &outcome.skipped);
+        ports.warn_skipped(&title, &body);
     }
+    closing?;
     Ok(ArchiveEnd::Installed(items))
 }
 
@@ -427,6 +440,42 @@ fn installed_items(outcome: &InstallOutcome, facts: &GhostFacts) -> Vec<Installe
         .collect()
 }
 
+/// 警告のダイアログの題名と本文（純粋・design「手続きの警告」）。`skipped` は空でない。
+fn skipped_notice(
+    archive: &Path,
+    manifest_name: &str,
+    items: &[InstalledItem],
+    skipped: &[SkippedCompanion],
+) -> (String, String) {
+    let file = archive.file_name().map_or_else(
+        || archive.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    );
+    let lines = std::iter::once(format!("書庫: {file}"))
+        .chain(items.iter().map(|item| {
+            let kind = match item.kind {
+                "ghost" => "ゴースト",
+                "shell" => "シェル",
+                "balloon" => "バルーン",
+                "supplement" => "追加ファイル",
+                other => other,
+            };
+            format!("入った物: {kind} {}", item.name)
+        }))
+        .chain(skipped.iter().map(|skip| {
+            format!(
+                "入らなかったバルーン: {}（書庫に取り出し元 {} が無かったため）",
+                skip.directory, skip.source
+            )
+        }))
+        .chain(["入らなかったバルーンの代わりに、入っている別のバルーンが使われます。".to_owned()])
+        .collect::<Vec<_>>();
+    (
+        format!("インストールの警告 - {manifest_name}"),
+        lines.join("\n"),
+    )
+}
+
 /// 入れた後に覚えること。フォルダ名は本体（`installed` の先頭）の置き場の名前。
 fn installed_record(kind: InstallKind, outcome: &InstallOutcome) -> InstalledRecord {
     let body = outcome.installed.first();
@@ -460,3 +509,7 @@ mod procedure_tests;
 #[cfg(test)]
 #[path = "procedure_branch_tests.rs"]
 mod procedure_branch_tests;
+
+#[cfg(test)]
+#[path = "procedure_skip_tests.rs"]
+mod procedure_skip_tests;

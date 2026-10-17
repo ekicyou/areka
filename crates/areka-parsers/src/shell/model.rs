@@ -107,8 +107,12 @@ impl ElementPath {
 pub struct Animation {
     /// animation ID（要件 5.6）。
     pub id: u32,
-    /// interval 指定（要件 5.1-5.3）。
+    /// interval 指定（要件 5.1-5.3）。interval 行が無いときは既定 `Interval::Bind`。
     pub interval: Interval,
+    /// `animationN.interval` 行が書かれていたか。`false` なら `interval` は既定の `Bind`。
+    /// 同じ番号の後の `surface*`ブレスが前の interval を上書きするのは、これが `true` のときだけ
+    /// （同じ名前の行は後勝ち・spec: areka-P0-emily-ghost-verification）。
+    pub interval_written: bool,
     /// pattern index を明示保持する pattern 群（疎許容・要件 5.4）。
     pub patterns: Vec<Pattern>,
 }

@@ -57,7 +57,7 @@ pub use error::{
     ElementKind, ExistingState, InstalledElement, Integrity, IoPhase, ManifestWarning, NarError,
     RefuseReason, SurvivingTree, UnsafeWhy, Unsupported,
 };
-pub use install::{InstallOutcome, InstallRequest, InstallRoots, SingleRoot};
+pub use install::{InstallOutcome, InstallRequest, InstallRoots, SingleRoot, SkippedCompanion};
 pub use manifest::{Companion, ExistingPolicy, InstallKind, InstallManifest};
 
 /// 検証を終えた `.nar` 1 本。
@@ -110,8 +110,8 @@ impl NarArchive {
     ///
     /// # Errors
     ///
-    /// 宛先ゴーストが無い・同梱バルーンの取り出し元が無いとき [`NarError::Refused`]
-    /// （宛先には触れていない）。組み上げ・確定・巻き戻しの I/O が失敗したとき
+    /// 宛先ゴーストが無いとき [`NarError::Refused`]（宛先には触れていない）。同梱バルーンの
+    /// 取り出し元が無いときは断らず、その同梱を飛ばして [`InstallOutcome::skipped`] に載せる。組み上げ・確定・巻き戻しの I/O が失敗したとき
     /// [`NarError::Io`]（どこまで確定したかと巻き戻せたかを持つ＝要件 6.4）。
     pub fn install(&self, request: &InstallRequest<'_>) -> Result<InstallOutcome, NarError> {
         let mut work = Vec::new();
@@ -133,9 +133,20 @@ impl NarArchive {
                         "[areka_nar] work folder left behind"
                     );
                 }
+                // 取り出し元の無い同梱は断らずに飛ばした（要件 1.4）。1 件ずつ出す。
+                for skip in &outcome.skipped {
+                    tracing::warn!(
+                        archive = %self.archive.display(),
+                        key = skip.key.as_str(),
+                        source = skip.source.as_str(),
+                        directory = skip.directory.as_str(),
+                        "[areka_nar] companion balloon skipped: its source folder is not in the archive"
+                    );
+                }
                 tracing::info!(
                     archive = %self.archive.display(),
                     installed = outcome.installed.len(),
+                    skipped = outcome.skipped.len(),
                     "[areka_nar] installed"
                 );
                 Ok(outcome)
@@ -189,7 +200,7 @@ impl NarArchive {
             archive: self.archive.clone(),
             reason,
         };
-        let plan = build_plan(&self.manifest, &self.names, request).map_err(refused)?;
+        let (plan, skipped) = build_plan(&self.manifest, &self.names, request).map_err(refused)?;
 
         // 棚の掃除は掘るときに行うので、触るのはこの `.nar` の根の棚だけ。同じ根に 2 度
         // 掘ると 2 度目の掃除が 1 度目の作業フォルダを消すので、綴りが同じ根は 1 つにする。
@@ -213,14 +224,16 @@ impl NarArchive {
             states.push(state);
         }
 
-        commit_all(&areas, &self.manifest, &plan, &states).map_err(|failure| NarError::Io {
-            archive: self.archive.clone(),
-            phase: failure.phase,
-            path: failure.path,
-            source: failure.source,
-            committed: failure.committed,
-            rolled_back: failure.rolled_back,
-            survivors: failure.survivors.into_boxed_slice(),
+        commit_all(&areas, &self.manifest, &plan, skipped, &states).map_err(|failure| {
+            NarError::Io {
+                archive: self.archive.clone(),
+                phase: failure.phase,
+                path: failure.path,
+                source: failure.source,
+                committed: failure.committed,
+                rolled_back: failure.rolled_back,
+                survivors: failure.survivors.into_boxed_slice(),
+            }
         })
     }
 
@@ -325,3 +338,7 @@ mod entry_tests;
 #[cfg(test)]
 #[path = "lib_peek_tests.rs"]
 mod peek_tests;
+
+#[cfg(test)]
+#[path = "lib_skip_tests.rs"]
+mod skip_tests;

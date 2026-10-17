@@ -183,6 +183,26 @@ pub(super) fn synth_declared_dpi_ghost(
     (root.path().to_path_buf(), balloon_dir)
 }
 
+/// えみり（`emily4`）と同じ形のゴーストの `descript.txt`（spec: areka-P0-emily-ghost-verification
+/// 要件 6.7）。`kero.name` に加えて `char2.name` を持つ。名前は架空で、えみりの文面は写さない。
+pub(crate) const EMILY_SHAPED_GHOST_DESCRIPT: &str =
+    "charset,UTF-8\nname,かたち\nsakura.name,ひとり\nkero.name,ふたり\nchar2.name,さんにん\n";
+
+/// えみりと同じ形のシェルの `descript.txt`（同上）。`char2.balloon.offsetx`・
+/// `char3.seriko.alignmenttodesktop`・`char4.seriko.alignmenttodesktop` を持つ。
+pub(crate) const EMILY_SHAPED_SHELL_DESCRIPT: &str = "charset,UTF-8\nseriko.use_self_alpha,1\nseriko.alignmenttodesktop,bottom\nsakura.defaultx,0\nkero.defaultx,0\nchar2.balloon.offsetx,0\nchar3.seriko.alignmenttodesktop,free\nchar4.seriko.alignmenttodesktop,free\n";
+
+/// えみりの形の固定入力から配置の設定が返す scope の全部（窓を手で書かずに作るための元）。
+pub(crate) fn emily_shaped_scopes() -> Vec<usize> {
+    super::config::build_placement_config(
+        &areka_parsers::kv::parse_kv(EMILY_SHAPED_GHOST_DESCRIPT),
+        &areka_parsers::kv::parse_kv(EMILY_SHAPED_SHELL_DESCRIPT),
+    )
+    .scopes
+    .into_keys()
+    .collect()
+}
+
 /// 里々の標準テンプレート `R_POST_and_KOMAINU` 検体（spec: areka-P0-shell-implicit-surface 要件 7.11）。
 static R_POST_AND_KOMAINU: LazyLock<SampleRoot> = LazyLock::new(|| {
     SampleRoot::acquire("R_POST_and_KOMAINU").expect("R_POST_and_KOMAINU は登記済みの検体")

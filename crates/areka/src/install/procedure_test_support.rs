@@ -35,6 +35,7 @@ pub(super) enum Call {
     Elsewhere(Option<String>),
     Overwrite(Option<String>),
     Record(InstalledRecord),
+    Warn { title: String, body: String },
 }
 
 /// `overwrite_running` の応え方。
@@ -64,7 +65,7 @@ pub(super) struct FakePorts {
 
 impl FakePorts {
     pub(super) fn new() -> Self {
-        let root = TempPath::new("install-procedure");
+        let root = TempPath::under_target("install-procedure");
         let master = root
             .path()
             .join("ghost")
@@ -110,6 +111,17 @@ impl FakePorts {
             .iter()
             .filter_map(|call| match call {
                 Call::Raise(id, refs) => Some((*id, refs.clone())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// 飛ばした同梱の警告（題名と本文）を順に。
+    pub(super) fn warned(&self) -> Vec<(String, String)> {
+        self.calls
+            .iter()
+            .filter_map(|call| match call {
+                Call::Warn { title, body } => Some((title.clone(), body.clone())),
                 _ => None,
             })
             .collect()
@@ -192,6 +204,13 @@ impl InstallPorts for FakePorts {
 
     fn record(&mut self, record: InstalledRecord) {
         self.calls.push(Call::Record(record));
+    }
+
+    fn warn_skipped(&mut self, title: &str, body: &str) {
+        self.calls.push(Call::Warn {
+            title: title.to_owned(),
+            body: body.to_owned(),
+        });
     }
 }
 

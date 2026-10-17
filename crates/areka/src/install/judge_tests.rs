@@ -173,7 +173,7 @@ fn refused(reason: RefuseReason) -> NarError {
     }
 }
 
-/// 14 種を 1 つずつ組み、要件 5.2 の表の語と突き合わせる。`UnsupportedType` は `found` の有無で 2 通り。
+/// 13 種を 1 つずつ組み、要件 5.2 の表の語と突き合わせる。`UnsupportedType` は `found` の有無で 2 通り。
 #[test]
 fn every_refuse_kind_maps_to_its_canonical_word() {
     use FailureWord as W;
@@ -212,13 +212,6 @@ fn every_refuse_kind_maps_to_its_canonical_word() {
             RefuseReason::InvalidDirectoryName {
                 key: s(),
                 value: s(),
-            },
-            W::InvalidType,
-        ),
-        (
-            RefuseReason::CompanionSourceMissing {
-                key: s(),
-                source_directory: s(),
             },
             W::InvalidType,
         ),

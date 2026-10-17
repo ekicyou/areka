@@ -167,6 +167,7 @@ fn every_real_sample_install_txt_is_accepted_verbatim_without_a_single_warning()
             directory: "emo2-kakukaku".to_owned(),
             source_directory: "emo2-kakukaku".to_owned(),
             existing: ExistingPolicy::Overlay,
+            source_written: Some("emo2-kakukaku".to_owned()),
         }]
     );
     assert_eq!(emo2.warnings, vec![]);

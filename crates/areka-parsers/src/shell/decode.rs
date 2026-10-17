@@ -300,7 +300,8 @@ fn field_u32(fields: &[String], idx: usize) -> u32 {
 ///   slot を確定させる（interval のみで pattern が無くとも初出順で animation を積む）。
 ///   pattern が interval 行より先に現れても同一 ID へ束ねる（順序寛容）。
 /// - **既定 interval**: ある ID に pattern はあるが interval 行が一度も現れない場合、
-///   pattern を失わせずパニックも起こさぬよう既定 `Interval::Bind` で `Animation` を積む。
+///   pattern を失わせずパニックも起こさぬよう既定 `Interval::Bind` で `Animation` を積む
+///   （`interval_written` は `false`＝interval 行を書いた ID だけ `true`）。
 /// - **pattern の忠実転記＋疎 index ＋負センチネル**（要件 4.6/5.4/5.5/8.4）:
 ///   `patternM,描画メソッド,ID,WAIT,X,Y` の M（`pattern` 以降の数字・`unwrap_or(0)`）を
 ///   **そのまま**保持し、欠番を合成しない（疎許容・要件 5.4）。field[1] を描画メソッドと
@@ -339,6 +340,7 @@ fn decode_animations(body: &[Vec<String>]) -> Vec<Animation> {
             let interval = normalize_interval(fields);
             let anim = animation_slot(&mut animations, id);
             anim.interval = interval;
+            anim.interval_written = true;
             continue;
         }
 
@@ -380,6 +382,7 @@ fn animation_slot(animations: &mut Vec<Animation>, id: u32) -> &mut Animation {
         id,
         // 認識可能な interval 行を見るまでの暫定既定（要件 5.1 の既定挙動）。
         interval: Interval::Bind,
+        interval_written: false,
         patterns: Vec::new(),
     });
     let last = animations.len() - 1;

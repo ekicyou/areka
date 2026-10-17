@@ -1057,6 +1057,7 @@ mod tick_loop_tests {
             vec![Animation {
                 id: anim_id,
                 interval,
+                interval_written: true,
                 patterns,
             }],
         )])
@@ -1240,6 +1241,7 @@ mod tick_loop_tests {
                 vec![Animation {
                     id: 0,
                     interval: Interval::Random { k: 4 },
+                    interval_written: true,
                     patterns: vec![pat(0, 500, 0), pat(1, 501, 100)],
                 }],
             ),
@@ -1248,6 +1250,7 @@ mod tick_loop_tests {
                 vec![Animation {
                     id: 0,
                     interval: Interval::Random { k: 4 },
+                    interval_written: true,
                     patterns: vec![pat(0, 700, 0), pat(1, 701, 100)],
                 }],
             ),

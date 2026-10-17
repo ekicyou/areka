@@ -355,11 +355,11 @@ fn append_to_unknown_id_still_warns_and_creates_nothing() {
     assert!(logs.contains("未存在"), "未存在メッセージ: {logs}");
 }
 
-/// 画像だけの面へ追記した後で同じ番号の波括弧が来たら、既存の全置換の規則と `warn!` のまま。
-///
-/// 追記で実際に定義ができた後の置換なので、この警告は事実どおりである（design「面の表の構築の中の順序」）。
+/// 画像だけの面へ追記した後で同じ番号の波括弧が来たら、追記した定義へ波括弧の行を足す
+/// （areka-P0-shell-implicit-surface の「全置換」を areka-P0-emily-ghost-verification が上書き・
+/// 開発者の決め 2026-10-17「足し合わせる」）。定めた振る舞いなので `warn!` は出さない。
 #[test]
-fn brace_after_append_replaces_the_image_only_face() {
+fn brace_after_append_merges_into_the_image_only_face() {
     let shell = shell_mixed(
         vec![surface_def(
             7,
@@ -382,22 +382,32 @@ fn brace_after_append_replaces_the_image_only_face() {
     });
     let world = built.expect("構築された面の表");
 
-    // 波括弧が全置換するので、追記した層 5 は残らない。
+    // 波括弧は前へ足すので、追記した層 5 も残る。
     let face7 = world.surface(7).expect("面 7 が在る");
     let layers: Vec<(u32, &str)> = face7
         .elements
         .iter()
         .map(|e| (e.layer, e.path.as_str()))
         .collect();
-    assert_eq!(layers, vec![(0, "brace0.png")], "波括弧が全置換する");
+    assert_eq!(
+        layers,
+        vec![(0, "brace0.png"), (5, "deco.png")],
+        "波括弧は追記した定義へ足す"
+    );
     assert_eq!(
         world.base_images().shadowed,
         images(&[(7, "surface7.png")]),
         "ウ: 波括弧の element0 が在るので画像は使わない",
     );
 
-    assert!(logs.contains("level=WARN"), "重複は WARN: {logs}");
-    assert!(logs.contains("重複"), "既存の重複メッセージのまま: {logs}");
+    assert!(
+        !logs.contains("level=WARN"),
+        "足し合わせは WARN を出さない: {logs}"
+    );
+    assert!(
+        logs.contains("level=DEBUG") && logs.contains("重複"),
+        "足し合わせは DEBUG で残る: {logs}"
+    );
 }
 
 /// コマ 1 本（描画メソッドの綴りは原文のまま・位置とウェイトは判定に使わないので 0）。
@@ -422,6 +432,7 @@ fn surface_with_patterns(id: u32, patterns: Vec<Pattern>) -> Surface {
         animations: vec![Animation {
             id: 0,
             interval: Interval::Random { k: 2 },
+            interval_written: true,
             patterns,
         }],
     }

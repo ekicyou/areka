@@ -83,7 +83,7 @@ fn t_l1_balloon_x_mode_variants_are_distinct() {
 /// バルーン定義側からの反映は task 2.2 の取得経路が所有する。
 #[test]
 fn t_l2_build_placement_config_keeps_canonical_defaults_for_all_scopes() {
-    // emo2 実測相当（scope0/1）＋ char2 で 3 scope
+    // emo2 実測相当（scope0/1）＋ char2（scope は足さない・areka-P0-emily-ghost-verification）
     let ghost = kv(&[("kero.name", "エモ"), ("char2.name", "三人目")]);
     let shell = kv(&[
         ("seriko.alignmenttodesktop", "bottom"),
@@ -94,10 +94,7 @@ fn t_l2_build_placement_config_keeps_canonical_defaults_for_all_scopes() {
     ]);
     let cfg = build_placement_config(&ghost, &shell);
 
-    assert_eq!(
-        cfg.scopes.keys().copied().collect::<Vec<_>>(),
-        vec![0, 1, 2]
-    );
+    assert_eq!(cfg.scopes.keys().copied().collect::<Vec<_>>(), vec![0, 1]);
     for (scope, sc) in &cfg.scopes {
         assert!(
             sc.balloon_limit,

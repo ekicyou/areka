@@ -138,9 +138,12 @@ pub fn build_placement_config(
 }
 
 /// スコープ検出（DD6）: scope0 常設・scope1 は「ghost `kero.name` **or** shell の
-/// `kero.` 接頭キー存在」・`char{n}.`（n≥2）接頭キーは ghost/shell どちら側でも
-/// scope n を追加。`char0.`/`char1.` は別名（値の受理のみ）でありスコープ検出
+/// `kero.` 接頭キー存在」。`char0.`/`char1.` は別名（値の受理のみ）でありスコープ検出
 /// シグナルではない。
+///
+/// `char{n}.`（n≥2）接頭キーからは scope を足さない（spec: areka-P0-emily-ghost-verification
+/// 要件 4.7・6.7）。3 人目以降の窓はまだ作らない——作ると入力とメニューの
+/// `debug_assert!(scope <= 1)` に当たる。絞りを外すのは `areka-P0-extra-character-windows`。
 fn detect_scopes(
     ghost_kv: &BTreeMap<String, String>,
     shell_kv: &BTreeMap<String, String>,
@@ -152,26 +155,7 @@ fn detect_scopes(
         set.insert(1);
     }
 
-    for key in ghost_kv.keys().chain(shell_kv.keys()) {
-        if let Some(n) = char_scope_of(key) {
-            if n >= 2 {
-                set.insert(n);
-            }
-        }
-    }
-
     set
-}
-
-/// `char{n}.` 接頭キーからスコープ番号を抽出する。`charset` 等の非該当キー・
-/// 数値化不能（空・巨大値含む）は None（panic しない）。
-fn char_scope_of(key: &str) -> Option<usize> {
-    let rest = key.strip_prefix("char")?;
-    let (digits, _) = rest.split_once('.')?;
-    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
-        return None;
-    }
-    digits.parse().ok()
 }
 
 /// スコープ別キーのプレフィックス（正典, 別名）。scope0=`sakura.`（別名 `char0.`）・
@@ -565,18 +549,15 @@ mod tests {
         assert_eq!(cfg.scopes.keys().copied().collect::<Vec<_>>(), vec![0, 1]);
     }
 
-    /// T-C3: `char{n}.`（n≥2）キーは ghost/shell どちら側でも scope n を追加する。
+    /// T-C3: `char{n}.`（n≥2）キーは ghost/shell どちら側でも scope を足さない
+    /// （spec: areka-P0-emily-ghost-verification 要件 4.7・6.7）。scope 3 の設定は無い。
     #[test]
-    fn t_c3_char_n_prefix_adds_scope_n() {
+    fn t_c3_char_n_prefix_does_not_add_scope_n() {
         let ghost = kv(&[("kero.name", "エモ"), ("char2.name", "三人目")]);
         let shell = kv(&[("char3.defaultx", "0")]);
         let cfg = build_placement_config(&ghost, &shell);
-        assert_eq!(
-            cfg.scopes.keys().copied().collect::<Vec<_>>(),
-            vec![0, 1, 2, 3]
-        );
-        // 追加スコープにもスコープ別キーが効く
-        assert_eq!(cfg.scopes[&3].default_x, Some(0));
+        assert_eq!(cfg.scopes.keys().copied().collect::<Vec<_>>(), vec![0, 1]);
+        assert!(!cfg.scopes.contains_key(&3));
     }
 
     /// T-C3: `charset` キーは `char{n}.` 検出に誤マッチしない。

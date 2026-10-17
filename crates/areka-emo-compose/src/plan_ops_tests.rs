@@ -871,6 +871,7 @@ fn single_pattern_anim(id: u32, interval: Interval, index: u32, ref_surface_id: 
     Animation {
         id,
         interval,
+        interval_written: true,
         patterns: vec![Pattern {
             index,
             method: DrawMethod::new("overlay".to_string()),
@@ -934,6 +935,7 @@ fn coexisting_pattern0_and_pattern1_composes_only_index0() {
     let anim = Animation {
         id: 1,
         interval: Interval::Bind,
+        interval_written: true,
         patterns: vec![
             Pattern {
                 index: 0,
@@ -1001,6 +1003,7 @@ fn bind_anim_method(id: u32, ref_surface_id: i64, method: &str) -> Animation {
     Animation {
         id,
         interval: Interval::Bind,
+        interval_written: true,
         patterns: vec![Pattern {
             index: 0,
             method: DrawMethod::new(method.to_string()),

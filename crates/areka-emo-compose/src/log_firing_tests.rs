@@ -61,6 +61,7 @@ fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animation {
     Animation {
         id,
         interval: Interval::Bind,
+        interval_written: true,
         patterns: vec![Pattern {
             index: 0,
             method: DrawMethod::new("overlay".to_string()),
@@ -252,6 +253,7 @@ fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
     let blink = Animation {
         id: 1400,
         interval: Interval::BindRandom { k: 4 },
+        interval_written: true,
         patterns: vec![Pattern {
             index: 1,
             method: DrawMethod::new("overlay".to_string()),
@@ -537,26 +539,35 @@ fn empty_composition_error_fires_with_surface_id() {
     assert!(logs.contains("EmptyComposition"), "分類名が載る: {logs}");
 }
 
-// ── 1.4: fold の重なり warn（fold.rs upsert_surface / fold_append）────────────────────
+// ── 1.4: fold の重なりの記録（fold.rs fold_plain_surface / fold_append）────────────────────
 
-/// 要件 1.4/2.1: surface id 重複（後勝ち全置換）で WARN（id つき）が発火する。
+/// 要件 2.1（areka-P0-emily-ghost-verification が上書き）: surface id 重複は前の定義へ足す
+/// 定めた振る舞いなので WARN を出さず、DEBUG（id つき）で残す。
 ///
-/// 同一 id を 2 度 plain 定義すると、後の定義が前を全置換し、de-facto 挙動として WARN を出す。
+/// 同一 id を 2 度 plain 定義すると、同じ layer の行は後勝ち・違う layer の行は足される。
 #[test]
-fn duplicate_surface_id_replacement_warn_fires_with_id() {
-    let first = surface(7, vec![elem(0, "old.png", 0, 0)]);
-    let second = surface(7, vec![elem(0, "new.png", 5, 6)]); // 同 id 再定義＝後勝ち置換。
+fn duplicate_surface_id_merge_logs_debug_not_warn() {
+    let first = surface(7, vec![elem(0, "old.png", 0, 0), elem(1, "keep.png", 0, 0)]);
+    let second = surface(7, vec![elem(0, "new.png", 5, 6)]); // 同 id 再定義＝前へ足す。
 
     let logs = capture_logs(|| {
-        // fold は EmoWorld::build 内で走る（populate_from_shell→fold_shell→upsert_surface）。
+        // fold は EmoWorld::build 内で走る（populate_from_shell→fold_shell→fold_plain_surface）。
         let world = EmoWorld::build(&shell_of(vec![first, second]));
-        // 副作用: 後勝ちで new.png が残る（前提の実証）。
+        // 副作用: layer 0 は後勝ちで new.png・layer 1 の keep.png は残る（前提の実証）。
         let master = world.surface(7).expect("id=7 常駐");
-        assert_eq!(master.elements.len(), 1, "全置換で 1 本のみ");
-        assert_eq!(master.elements[0].path.as_str(), "new.png", "後勝ち");
+        let paths: Vec<&str> = master.elements.iter().map(|e| e.path.as_str()).collect();
+        assert_eq!(
+            paths,
+            vec!["new.png", "keep.png"],
+            "前へ足す・同じ layer は後勝ち"
+        );
     });
 
-    assert!(logs.contains("level=WARN"), "id 重複は WARN: {logs}");
+    assert!(
+        !logs.contains("level=WARN"),
+        "足し合わせは WARN を出さない: {logs}"
+    );
+    assert!(logs.contains("level=DEBUG"), "id 重複は DEBUG: {logs}");
     assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
     assert!(logs.contains("id=7"), "重複 id を載せる: {logs}");
     assert!(logs.contains("重複"), "id 重複メッセージ: {logs}");

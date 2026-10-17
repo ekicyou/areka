@@ -1012,13 +1012,14 @@ not_applicable = 0
 7 語の定義は `README.md`）。`descript_shell` の 1 は 2026-10-06 に `areka-P0-self-alpha-declaration` が
 `seriko.use_self_alpha` を未対応から縮退へ移したもの、`descript_ghost` の 1 は 2026-10-07 に
 `areka-P0-ghost-standard-balloon` が `default.balloon.path` を縮退として登記したもので、どちらもそれまでは 0 だった。
+`descript_ghost` はその後、2026-10-17 に `areka-P0-emily-ghost-verification` が `char*.name` を実装済みから縮退へ移して 2 になった（3 人目以降の窓を作らなくなり、名前が画面に出ないため）。
 
 ```toml
 [[barrier]]
 page = "descript_ghost"
-implemented = 17
+implemented = 16
 vocabulary_only = 0
-degraded = 1
+degraded = 2
 absent = 56
 alias = 0
 not_applicable = 0

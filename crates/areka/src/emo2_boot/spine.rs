@@ -933,5 +933,8 @@ mod test_support;
 #[path = "spine_text_scale_tests.rs"]
 mod text_scale_tests;
 #[cfg(test)]
+#[path = "spine_third_scope_talk_tests.rs"]
+mod third_scope_talk_tests;
+#[cfg(test)]
 #[path = "spine_wait_tests.rs"]
 mod wait_tests;

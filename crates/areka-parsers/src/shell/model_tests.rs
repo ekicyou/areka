@@ -186,6 +186,7 @@ fn assembled_shell_preserves_structure_and_duplicate_alias_keys() {
             animations: vec![Animation {
                 id: 4,
                 interval: Interval::Random { k: 4 },
+                interval_written: true,
                 patterns: vec![Pattern {
                     index: 0,
                     method: DrawMethod::new("overlay".to_string()),

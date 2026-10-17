@@ -28,7 +28,7 @@
 //! 木が 1 つも変わらないことを突き合わせる。
 
 use crate::error::{ElementKind, RefuseReason};
-use crate::install::InstallRequest;
+use crate::install::{InstallRequest, SkippedCompanion};
 use crate::manifest::{Companion, ExistingPolicy, INSTALL_TXT, InstallKind, InstallManifest};
 use crate::names::{EntryName, is_valid_one_level_name};
 use std::collections::BTreeSet;
@@ -72,27 +72,51 @@ pub(crate) struct Placement {
 
 /// マニフェストとエントリ列と要求から配置計画を組む。
 ///
-/// 返る列の先頭は必ず本体の配置で、その後ろに同梱バルーンが探索の順（無印 →
-/// `balloon0` → `balloon1` …）で並ぶ。
+/// 返すのは「置く配置」と「飛ばした同梱」の 2 つの列。置く配置の先頭は必ず本体の
+/// 配置で、その後ろに同梱バルーンが探索の順（無印 → `balloon0` → `balloon1` …）で
+/// 並ぶ。取り出し元の配下にエントリが 1 件も無い同梱は置く配置に入れず、飛ばした同梱の
+/// 列へ探索の順で積む（要件 1.1〜1.3）。2 つの列を足すと、本体 1 つと同梱の全部になる。
 /// 組み上げも確定もこの順で行い、巻き戻しは逆順になる（タスク 4.3）。
 ///
 /// # Errors
 ///
 /// 宛先ゴーストが渡されない・1 階層の名前でない・根に実在しないとき
-/// [`RefuseReason::TargetGhostMissing`]（要件 5.7）。同梱バルーンの取り出し元
-/// フォルダの配下にエントリが 1 件も無いとき [`RefuseReason::CompanionSourceMissing`]
-/// （要件 5.4）。
+/// [`RefuseReason::TargetGhostMissing`]（要件 5.7）。同梱のせいで断ることは無い（要件 1.7）。
 pub(crate) fn build_plan(
     manifest: &InstallManifest,
     names: &[EntryName],
     request: &InstallRequest<'_>,
-) -> Result<Vec<Placement>, RefuseReason> {
+) -> Result<(Vec<Placement>, Vec<SkippedCompanion>), RefuseReason> {
     let mut placements = Vec::with_capacity(1 + manifest.companions.len());
+    let mut skipped = Vec::new();
     placements.push(body_placement(manifest, names, request)?);
     for companion in &manifest.companions {
-        placements.push(companion_placement(companion, names, request)?);
+        match companion_placement(companion, names, request) {
+            Some(placement) => placements.push(placement),
+            None => skipped.push(skipped_companion(companion)),
+        }
     }
-    Ok(placements)
+    Ok((placements, skipped))
+}
+
+/// 飛ばした同梱 1 件の値を組む（要件 1.4）。`*.source.directory` が書かれていれば
+/// その鍵と書かれていた値、無ければ `*.directory` の鍵と置き場の名前。
+fn skipped_companion(companion: &Companion) -> SkippedCompanion {
+    let (key, source) = match &companion.source_written {
+        Some(written) => (
+            format!("{}.source.directory", companion.key),
+            written.clone(),
+        ),
+        None => (
+            format!("{}.directory", companion.key),
+            companion.directory.clone(),
+        ),
+    };
+    SkippedCompanion {
+        directory: companion.directory.clone(),
+        key,
+        source,
+    }
 }
 
 /// 本体（ゴースト／バルーン／シェル／サプリメント）の配置を組む（要件 5.2・5.5・5.6・5.8）。
@@ -158,7 +182,7 @@ fn body_placement(
     })
 }
 
-/// 同梱バルーン 1 件の配置を組む（要件 5.3・5.4・6.3）。
+/// 同梱バルーン 1 件の配置を組む（要件 5.3・6.3）。取り出し元が書庫に無ければ `None`。
 ///
 /// 取り出し元の全ての段を剥がしてバルーン格納先へ写す（要件 2.2）。宛先のパスには
 /// 取り出し元の値を継ぎ足さない——置く相対パスは検証済みのエントリ名の尾だけになる。
@@ -168,24 +192,21 @@ fn companion_placement(
     companion: &Companion,
     names: &[EntryName],
     request: &InstallRequest<'_>,
-) -> Result<Placement, RefuseReason> {
+) -> Option<Placement> {
     // `in_folder` が通したエントリは取り出し元の段数以上を持つので、剥がしは範囲を外れない。
     let (files, dirs) = collect_tree(
         names,
         |entry| in_folder(entry, &companion.source_directory),
         segment_count(&companion.source_directory),
     );
-    // フォルダのエントリだけがあって配下が空の書庫も「取り出せない」に含める。
-    // 空のバルーンを作っても利用者には何も届かないので、拒否のほうが正直。
+    // フォルダのエントリだけがあって配下が空の書庫も「取り出せない」に含める（要件 1.2）。
+    // 空のバルーンを作っても利用者には何も届かないので、置かずに飛ばす。根も尋ねない。
     if files.is_empty() && dirs.is_empty() {
-        return Err(RefuseReason::CompanionSourceMissing {
-            key: format!("{}.source.directory", companion.key),
-            source_directory: companion.source_directory.clone(),
-        });
+        return None;
     }
     // 同梱のバルーンも 1 つずつ尋ねる（ゴーストと別の根へ入ることがある＝要件 5.5）。
     let root = request.roots.balloon_root(&companion.directory);
-    Ok(Placement {
+    Some(Placement {
         kind: ElementKind::Balloon,
         name: companion.directory.clone(),
         destination: root.join(BALLOON_STORE).join(&companion.directory),
