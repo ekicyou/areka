@@ -79,7 +79,7 @@ fn unreadable_file_is_set_aside_under_a_time_stamped_name_and_recorded() {
     // JSON でない文・途中で切れた JSON・UTF-8 でないバイト列。
     let broken: [&[u8]; 3] = [
         b"not json",
-        br#"{ "version": 1, "participants": {"#,
+        br#"{ "version": 2, "participants": {"#,
         b"\xff\xfe\x00",
     ];
     for bytes in broken {
@@ -114,8 +114,8 @@ fn unreadable_file_is_set_aside_under_a_time_stamped_name_and_recorded() {
 fn json_of_the_wrong_shape_is_broken_too() {
     // どれも JSON としては読める。版の数字が無いもの（`{}`・文字の版）も「形が合わない」。
     let wrong = [
-        r#"{ "version": 1, "participants": [] }"#,
-        r#"{ "version": 1, "waits": [ { "id": "A" } ] }"#,
+        r#"{ "version": 2, "participants": [] }"#,
+        r#"{ "version": 2, "waits": [ { "id": "A" } ] }"#,
         r#"[ 1, 2 ]"#,
         r#""text""#,
         r#"{}"#,
@@ -168,7 +168,7 @@ fn a_second_break_in_the_same_second_does_not_overwrite_the_first_backup() {
 fn unknown_version_fails_without_reading_or_touching_the_file() {
     // 版の数字が在って、この実行ファイルの知らないもの（0 も含む）。中身の形は見ない。
     let cases = [
-        (r#"{ "version": 2, "participants": {} }"#, 2),
+        (r#"{ "version": 1, "participants": {} }"#, 1),
         (r#"{ "version": 0 }"#, 0),
         (r#"{ "version": 7, "participants": "new shape" }"#, 7),
     ];
@@ -184,7 +184,7 @@ fn unknown_version_fails_without_reading_or_touching_the_file() {
         });
 
         assert!(
-            matches!(got, Err(WatchError::VersionMismatch { found, known: 1 }) if found == version),
+            matches!(got, Err(WatchError::VersionMismatch { found, known: 2 }) if found == version),
             "{text}: {got:?}"
         );
         assert!(!called.get(), "判断は呼ばれない");

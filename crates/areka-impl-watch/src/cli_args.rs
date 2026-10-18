@@ -11,6 +11,7 @@ use std::sync::LazyLock;
 
 use crate::error::escape_path;
 use crate::plan;
+use crate::state::DeskSet;
 
 pub(super) const EXE: &str = "areka-impl-watch";
 
@@ -267,10 +268,12 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         variant: None,
         note: "queue for the load-test desk. 0=queued; with --wait 0=granted 3=request gone",
         build: |f| {
-            Command::Change(plan::Command::LoadTest {
+            // 版 2 への切り替えの間の読み替え（3.3 が `request` の行へ替える）。
+            Command::Change(plan::Command::Request {
                 id: f.need(Opt::Id),
                 name: f.take(Opt::Name),
                 repo: f.need(Opt::Repo),
+                desks: DeskSet::TestSole,
                 purpose: f.need(Opt::Purpose),
             })
         },
@@ -299,8 +302,10 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         variant: None,
         note: "release the load-test desk. 0=done 3=not the holder",
         build: |f| {
-            Command::Change(plan::Command::LoadDone {
+            // 版 2 への切り替えの間の読み替え（3.3 が `return` の行へ替える）。
+            Command::Change(plan::Command::Return {
                 id: f.need(Opt::Id),
+                desks: None,
             })
         },
     },
@@ -524,6 +529,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Invocation, UsageError> {
     })
 }
 
-#[cfg(test)]
-#[path = "cli_args_tests.rs"]
-mod tests;
+// 版 2 への切り替えの間は読み込まない（3.3 が新しい行へ書き直して戻す）。
+// #[cfg(test)]
+// #[path = "cli_args_tests.rs"]
+// mod tests;

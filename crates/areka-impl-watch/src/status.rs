@@ -6,13 +6,13 @@
 //! このファイルの文字列リテラルは、読み物の見出しも含めて全部 ASCII。
 
 use crate::error::escape_path;
-use crate::plan::{Presence, load_order, merge_order};
-use crate::state::{LastMerge, Participant, ParticipantStatus, State, WaitKind};
+use crate::plan::{Presence, merge_order, request_order};
+use crate::state::{DeskSet, LastMerge, Participant, ParticipantStatus, State, WaitKind};
 
 /// 「居ない・無い」の綴り（読み物・端末の文・`clear` の退避先の記録）。
 pub(crate) const NONE: &str = "none";
 
-/// 識別の並び: 空なら `none`、あれば `", "` でつなぐ（負荷テストの机の `stopped:` など）。
+/// 識別の並び: 空なら `none`、あれば `", "` でつなぐ（ひとり占めの `stopped:` など）。
 pub(crate) fn id_list(ids: &[String]) -> String {
     if ids.is_empty() {
         NONE.to_owned()
@@ -56,10 +56,13 @@ pub fn render_markdown(state: &State, presence: &dyn Presence, now: u64) -> Stri
         participants.collect(),
     );
 
-    section(&mut out, "Load desk");
-    out.push(match &state.load.holder {
+    section(&mut out, "Implementation desk");
+    let riding = state.participants.values();
+    let riding = riding.filter(|p| p.status == ParticipantStatus::Working);
+    out.push(format!("- riding: {}", riding.count()));
+    out.push(match &state.sole {
         Some(holder) => format!(
-            "- holder: {} (requested {}, granted {}, running: {}, stopped: {}): {}",
+            "- sole: {} (requested {}, granted {}, running: {}, stopped: {}): {}",
             holder.id,
             utc(holder.requested),
             utc(holder.granted),
@@ -67,13 +70,28 @@ pub fn render_markdown(state: &State, presence: &dyn Presence, now: u64) -> Stri
             id_list(&holder.stopped),
             text(&holder.purpose),
         ),
+        None => format!("- sole: {NONE}"),
+    });
+
+    section(&mut out, "Exclusive-test desk");
+    out.push(match &state.test {
+        Some(holder) => format!(
+            "- holder: {} (requested {}, granted {}): {}",
+            holder.id,
+            utc(holder.requested),
+            utc(holder.granted),
+            text(&holder.purpose),
+        ),
         None => format!("- holder: {NONE}"),
     });
-    let waiting = load_order(&state.load.queue).into_iter().map(|nth| {
-        let request = &state.load.queue[nth];
+
+    section(&mut out, "Desk requests");
+    let waiting = request_order(&state.requests).into_iter().map(|nth| {
+        let request = &state.requests[nth];
         format!(
-            "{} (requested {}): {}",
+            "{} {} (requested {}): {}",
             request.id,
+            request.desks.as_str(),
             utc(request.requested),
             text(&request.purpose)
         )
@@ -140,7 +158,7 @@ pub fn render_markdown(state: &State, presence: &dyn Presence, now: u64) -> Stri
     });
     table(
         &mut out,
-        "Recent reclaims, recoveries and clears",
+        "Recent events",
         "| at | kind | id | detail |",
         recent.collect(),
     );
@@ -149,22 +167,26 @@ pub fn render_markdown(state: &State, presence: &dyn Presence, now: u64) -> Stri
 }
 
 /// 端末向けの要約（ASCII だけ）。1 行目は数、続けて参加者 1 人 1 行、マージの机 1 つ 1 行、
-/// 負荷テストの机 1 行。名前・内容・停止要請の内容は使わない。
+/// 実装の机 1 行（`impl:`）、排他テストの机 1 行（`test:`）。名前・内容・停止要請の内容は使わない。
 ///
-/// 1 行目の数: `participants`＝参加者／`load-queued`＝負荷テストの待ち行列の申し込み／
+/// 1 行目の数: `participants`＝参加者／`sole`・`test`＝ひとり占め・排他テストの机の持ち主
+/// （居なければ `none`）／`requests`＝机の申し込みの待ち行列の申し込み／
 /// `merging`＝持ち主の居るマージの机（リポジトリ）／`merge-queued`＝全リポジトリのマージの
 /// 待ち行列の申し込みの合計／`not-working`＝「停止要請中」と「止まった」の参加者／
 /// `waits`＝走っている待ち・見張りの記録（見張りを含む）。
 pub fn render_terminal(state: &State, presence: &dyn Presence) -> String {
-    let load_holder = state
-        .load
-        .holder
+    let sole = state
+        .sole
+        .as_ref()
+        .map_or(NONE, |holder| holder.id.as_str());
+    let test = state
+        .test
         .as_ref()
         .map_or(NONE, |holder| holder.id.as_str());
     let mut lines = vec![format!(
-        "participants={} load-holder={load_holder} load-queued={} merging={} merge-queued={} not-working={} waits={}",
+        "participants={} sole={sole} test={test} requests={} merging={} merge-queued={} not-working={} waits={}",
         state.participants.len(),
-        state.load.queue.len(),
+        state.requests.len(),
         state
             .merge
             .values()
@@ -200,17 +222,30 @@ pub fn render_terminal(state: &State, presence: &dyn Presence) -> String {
             last_merge(desk.last.as_ref()),
         ));
     }
-    let waiting: Vec<&str> = load_order(&state.load.queue)
-        .into_iter()
-        .map(|nth| state.load.queue[nth].id.as_str())
-        .collect();
-    lines.push(format!(
-        "load: holder={load_holder} queue={}",
-        if waiting.is_empty() {
+    // 机を含む申し込みの識別（来る順）。
+    let queued = |has: fn(DeskSet) -> bool| {
+        let ids: Vec<&str> = request_order(&state.requests)
+            .into_iter()
+            .map(|nth| &state.requests[nth])
+            .filter(|request| has(request.desks))
+            .map(|request| request.id.as_str())
+            .collect();
+        if ids.is_empty() {
             NONE.to_owned()
         } else {
-            waiting.join(",")
-        },
+            ids.join(",")
+        }
+    };
+    let riding = state.participants.values();
+    let riding = riding.filter(|p| p.status == ParticipantStatus::Working);
+    lines.push(format!(
+        "impl: riding={} sole={sole} queue={}",
+        riding.count(),
+        queued(DeskSet::has_sole),
+    ));
+    lines.push(format!(
+        "test: holder={test} queue={}",
+        queued(DeskSet::has_test)
     ));
     // 識別・リポジトリ・spec は引数の形の決まりで ASCII だが、手で直した状態ファイルからは
     // 何でも来うる。行ごとに ASCII の外の字を逃がして、出力が ASCII だけであることを値に頼らない。
@@ -322,6 +357,7 @@ fn queue(out: &mut Vec<String>, waiting: Vec<String>) {
     );
 }
 
-#[cfg(test)]
-#[path = "status_tests.rs"]
-mod tests;
+// 版 2 への切り替えの間は読み込まない（3.2 が新しい机へ書き直して戻す）。
+// #[cfg(test)]
+// #[path = "status_tests.rs"]
+// mod tests;

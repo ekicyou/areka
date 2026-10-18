@@ -2,8 +2,8 @@
 
 use super::{Applied, Command, Event, Presence, Verdict, apply};
 use crate::state::{
-    LoadHolder, LoadRequest, MergeHolder, MergeRequest, Participant, ParticipantStatus, State,
-    StopReason, WaitKind, WaitRecord, WatchInfo,
+    DeskRequest, DeskSet, MergeHolder, MergeRequest, Participant, ParticipantStatus, SoleHolder,
+    State, StopReason, TestHolder, WaitKind, WaitRecord, WatchInfo,
 };
 
 /// テストの「いま」の起点（UNIX 秒）。後の時刻は `T0 + n` と書く。
@@ -15,7 +15,7 @@ pub(super) const REPO: &str = "areka";
 /// 支えの組み立てる見張り・待ちのプロセス番号。
 pub(super) const PID: u32 = 1234;
 
-/// 支えの組み立てる負荷テストの内容（停止要請の理由にも同じものを書く）。
+/// 支えの組み立てる申し込みの内容（停止要請の理由にも同じものを書く）。
 pub(super) const PURPOSE: &str = "負荷の計測";
 
 /// 偽の生死。何も言わなければ誰のどの待ちも「居る」と答え、「居ない」は
@@ -102,18 +102,29 @@ pub(super) fn hold_merge(state: &mut State, repo: &str, id: &str) {
     });
 }
 
-/// 負荷テストの待ち行列の末尾へ申し込みを足す。
-pub(super) fn queue_load(state: &mut State, id: &str, requested: u64) {
-    state.load.queue.push(LoadRequest {
+/// 机の申し込みの待ち行列の末尾へ、内容が [`PURPOSE`] の申し込みを足す。
+pub(super) fn queue_request(state: &mut State, id: &str, desks: DeskSet, requested: u64) {
+    state.requests.push(DeskRequest {
         id: id.to_owned(),
+        desks,
         purpose: PURPOSE.to_owned(),
         requested,
     });
 }
 
-/// 番の来た負荷テストの持ち主にする。`stopped` は番が来たときに止まっていた識別。
-pub(super) fn hold_load(state: &mut State, id: &str, stopped: &[&str]) {
-    state.load.holder = Some(LoadHolder {
+/// 排他テストの机の持ち主にする。
+pub(super) fn hold_test(state: &mut State, id: &str) {
+    state.test = Some(TestHolder {
+        id: id.to_owned(),
+        purpose: PURPOSE.to_owned(),
+        requested: T0,
+        granted: T0,
+    });
+}
+
+/// 番の来たひとり占めの持ち主にする。`stopped` は番が来たときに止まっていた識別。
+pub(super) fn hold_sole(state: &mut State, id: &str, stopped: &[&str]) {
+    state.sole = Some(SoleHolder {
         id: id.to_owned(),
         purpose: PURPOSE.to_owned(),
         requested: T0,
@@ -123,13 +134,15 @@ pub(super) fn hold_load(state: &mut State, id: &str, stopped: &[&str]) {
     });
 }
 
-/// 「すでに走っている負荷テスト」の持ち主にする（走っている印つき＝誰にも停止要請が出ない）。
+/// 「すでに走っている負荷テスト」の持ち主にする（排他テストの机とひとり占めの両方・走っている
+/// 印つき＝誰にも停止要請が出ない）。
 pub(super) fn hold_running_load(state: &mut State, id: &str) {
-    hold_load(state, id, &[]);
-    state.load.holder.as_mut().expect("いま置いた").running = true;
+    hold_test(state, id);
+    hold_sole(state, id, &[]);
+    state.sole.as_mut().expect("いま置いた").running = true;
 }
 
-/// `by` の負荷テストのための「停止要請中」にする。
+/// `by` のひとり占めのための「停止要請中」にする。
 pub(super) fn ask_to_stop(state: &mut State, id: &str, by: &str) {
     let participant = state.participants.get_mut(id).expect("参加者が居る");
     participant.status = ParticipantStatus::StopRequested;
@@ -139,24 +152,29 @@ pub(super) fn ask_to_stop(state: &mut State, id: &str, by: &str) {
     });
 }
 
-/// `by` の負荷テストのために「止まった」にする。
+/// `by` のひとり占めのために「止まった」にする。
 pub(super) fn stop_for(state: &mut State, id: &str, by: &str) {
     ask_to_stop(state, id, by);
     state.participants.get_mut(id).expect("参加者が居る").status = ParticipantStatus::Stopped;
 }
 
-/// 名前を省いた、内容が [`PURPOSE`] の負荷テストの申し込み（支えの組み立てる申し込みと同じ綴り）。
-pub(super) fn load_test(id: &str) -> Command {
-    Command::LoadTest {
+/// 名前を省いた、内容が [`PURPOSE`] の机の申し込み（支えの組み立てる申し込みと同じ綴り）。
+pub(super) fn request(id: &str, desks: DeskSet) -> Command {
+    Command::Request {
         id: id.to_owned(),
         name: None,
         repo: REPO.to_owned(),
+        desks,
         purpose: PURPOSE.to_owned(),
     }
 }
 
-pub(super) fn load_done(id: &str) -> Command {
-    Command::LoadDone { id: id.to_owned() }
+/// 返す。`None` はマージの机のほかの全部。
+pub(super) fn give_back(id: &str, desks: Option<DeskSet>) -> Command {
+    Command::Return {
+        id: id.to_owned(),
+        desks,
+    }
 }
 
 pub(super) fn stopped(id: &str) -> Command {
