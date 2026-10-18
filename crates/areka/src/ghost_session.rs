@@ -47,7 +47,7 @@ use crate::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
 ///
 /// 各系の並び（`before`／`after`・`chain`）は各登録関数が持つ。ここは順に呼ぶだけ。
 ///
-/// 今日との差: `Input` の 10 系と `Update` の毎フレームの相（`emo2_frame_system`）は LogSink の
+/// 今日との差: `Input` の各系と `Update` の毎フレームの相（`emo2_frame_system`）は LogSink の
 /// 起動でも登録される。どれも状態（`NonSend`）が無ければ無操作で戻る（記録は `trace!` か無し）
 /// ので、見え方は変わらない（インストールと更新の窓口だけは登録と同時に据わるが、依頼が無ければ
 /// 何もしない）。バルーンの離脱の系だけは `BalloonWiring` 不在で

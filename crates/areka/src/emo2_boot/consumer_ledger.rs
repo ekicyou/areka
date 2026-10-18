@@ -740,7 +740,7 @@ mod tests {
             "正準台帳の登記は 25 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
              (open,readme)／(open,file)／(open,browser)／(open,explorer)／(open,editor)／\
              (open,mailer)／運搬名 \\j／(enter,nouserbreakmode)／(leave,nouserbreakmode)／\
-             (change,ghost)／(change,shell)／(change,balloon)／(execute,install)／\
+             (change,ghost)／(change,shell)／(change,balloon)／(execute,install)／(execute,resetwindowpos)／\
              updatebymyself／update／updateother／(set,choicetimeout)／\
              areka.prop.set／(set,balloontimeout)）——増減させたら本檻と doc の 2 か所を編集すること"
         );
@@ -926,7 +926,8 @@ mod tests {
                 None,
                 None
             ],
-            "install の受け口は (execute,install) だけ・(execute,resetwindowpos) は窓の位置の受け口             （execute の他の第 1 引数・裸の execute は担当なし）"
+            "install の受け口は (execute,install) だけ・(execute,resetwindowpos) は窓の位置の受け口\
+             （execute の他の第 1 引数・裸の execute は担当なし）"
         );
     }
 
