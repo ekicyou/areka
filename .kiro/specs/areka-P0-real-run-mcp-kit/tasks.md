@@ -52,7 +52,7 @@
   - _Boundary: 偽の子_
   - _Requirements: 10.1_
 
-- [ ] 3. 出力の待ちを使う部品
+- [x] 3. 出力の待ちを使う部品
 - [x] 3.1 利用者と同じ閉じ方と止め方を作る
   - 子が生きていることを取っ手で確かめてから、その番号へだけ強制なしの閉じる知らせを送る。受け取りの行か子の終わりを観測するまで 1 秒ごとに送り直し、受け取った後は送り直さない
   - 締切を過ぎたら窓口の取っ手の子だけを止めて回収し、締切切れ・出力の場所・末尾・最後の送りの終了コードを書いて試験を失敗させる。破棄から呼ぶ形は同じ手順で失敗させず、止めた旨を標準エラーへ 1 行書く
@@ -63,7 +63,7 @@
   - _Boundary: close_
   - _Depends: 2.2_
   - _Requirements: 3.7, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
-- [ ] 3.2 (P) MCP の呼び出しを作る
+- [x] 3.2 (P) MCP の呼び出しを作る
   - 走りごとに 1 つの単一スレッドの非同期の器を持ち、呼び手には同期の関数だけを見せる
   - まだなら子の記録に待受の 3 行（始めた・束ねられなかった・待ち受けない）のどれかが出るのを待つ。始めた → 観測済み・失敗の 2 行 → その行と選んだ番号を添えた失敗・子の終わり → 子の終わり・締切 → つながらない
   - 中継の走査で名乗りを確かめたつなぎを使い回し、公式 SDK でツールを呼ぶ。呼び出しは締切と子の終わりの見回りと並べ、輸送の失敗のときは子の終わりを短い猶予まで観測して子の終わりかつながらないかを決め、つなぎを捨てる
@@ -159,3 +159,4 @@
 - 2.3: `RunDirs` の読み口は `run()`・`root()`・`profile()`・`stdout_log()`・`stderr_log()`・`sample() -> Option<&SampleRoot>`。試験の継ぎ目は私有の `create_with(sample, FnMut() -> TempPath)`。
 - 2.4: 偽の子は表示しない最上位の窓（`WS_OVERLAPPEDWINDOW`）のままで強制なしの `taskkill /PID` が届く（道具窓へ替えていない）。手順が尽きたら 0 で終わるので、生かす試験は最後に `hang` か `window` を置く（`listen-drop` だけは自分で生き続ける）。`env` の行は `env <名>=<値>`／`env <名> 無い`、位置の引数は `arg <番号>=<値>`（1 から）。`listen` は本物の `read_port_candidates()`。echo の `after` の既定は 1。
 - 3.1: `Ended`・`EndedBy` は close.rs が定め lib.rs が再輸出。入口 `close`・`wait_exit`・`stop_quietly` の素の `#[allow(dead_code)]` は run（4.1）が使い始めたら外す。起動直後の子は窓が無く taskkill が 1 で失敗し、送り直しで届く（実測）。送り直しごとに `wait_any` を呼ぶので 1 秒ごとに全文を読み直す（重ければ Tail を持ち越す形に）。
+- 3.2: `McpChannel::new(port)`・`call(&mut self, child: &mut Child, files: [&Path; 2], name, args_json, waits: Waits)`・`call_until(.., needle, waits)`・`Waits { deadline, poll, call_retry, exit_grace }`（子と出力のファイルは呼び出しごとに run が貸す）。`call_until` の締切切れは途中の呼び出しの締切も含めて panic（最後の答え か「答え無し」を添える）、`call` の締切は `Unreachable`。dead_code の許しは `McpChannel`・`Waits` にあり run が使い始めたら外す。

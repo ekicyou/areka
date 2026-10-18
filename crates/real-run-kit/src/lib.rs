@@ -12,4 +12,5 @@ mod output;
 mod run;
 
 pub use close::{Ended, EndedBy};
+pub use mcp::{McpError, ToolReply};
 pub use output::ChildExited;
