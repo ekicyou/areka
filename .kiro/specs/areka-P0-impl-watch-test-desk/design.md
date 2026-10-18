@@ -115,7 +115,7 @@ graph TB
 | 審査係のテスト | `kiro-impl` が審査係へ渡すテストのコマンドに、机の要る段は主の会話が排他テストの机を持つときだけ入れる |
 | `release` の机の段の置き場所 | 正本の `procedure.md` に新しい節を置き、`SKILL.md` は 1 行で指す。全体テスト（3.1）と起動の確かめ（3.3）で 1 回ずつ取って返す |
 | `kiro-watch-clear` | 説明文の机の語と、`clear` の後に見える要約の行を合わせる（呼び方は同じ） |
-| 机を持つ者の `merge` | 今どおり受け付ける（要件 7.1）。行き詰まりは「排他テストの机とひとり占めは、ほかの番を待たずに走行の後で返す」の約束で防ぐ（下の「行き詰まりが無い訳」） |
+| 机を持つ者の `merge`・マージを待つ者の `request` | どちらも状態を変えずに当てはまらない（3）で断る（要件 4.7・4.8。設計の討議で確定）。待ちの向きが「マージの持ち主 → 排他テストの机」だけになり、輪はアプリの形で生まれない（下の「行き詰まりが無い訳」）。スキルの約束どおりなら断られる場面は無く、pasta の呼び方も変わらない |
 | ファイルの割り方 | `cli.rs` → `cli.rs`（手順）＋`cli_args.rs`（引数の表と読み）。`plan.rs` → `plan.rs`＋`plan_turns.rs`（申し込み・返し・番の決め直し） |
 
 ## コマンドの表（変わる行だけ。ほかは今のまま）
@@ -140,7 +140,8 @@ graph TB
 
 | 呼び出し | 0 の標準出力 | 3 の標準エラー |
 |---|---|---|
-| `request`（番が来ている） | `granted <机>`、ひとり占めを含むなら `granted <机>; stopped: <識別>, … ｜ none` | `not applied: a different desk request is already waiting` ／ `not applied: desks are held; only a merge holder may add the test desk` |
+| `request`（番が来ている） | `granted <机>`、ひとり占めを含むなら `granted <机>; stopped: <識別>, … ｜ none` | `not applied: a different desk request is already waiting` ／ `not applied: desks are held; only a merge holder may add the test desk` ／ `not applied: a merge request is waiting; request desks after the merge desk is granted` |
+| `merge`（排他テストの机かひとり占めを持つ者） | — | `not applied: return the test and sole desks before merge` |
 | `request`（並んだ） | `queued <机> pos=<順番>` | 同上 |
 | `request --wait` | 番が来た 1 行（上と同じ） | 上の `not applied: …`、または `gone: request gone` |
 | `return` | `returned <机>` | `not applied: not the holder of that desk` ／ `not applied: holds no desk to return` |
@@ -187,7 +188,7 @@ flowchart TB
 - 待ちの向きは次だけ: 排他テストの机の申し込み → 排他テストの机の持ち主／候補 → 止まる必要のある者（その者は今のタスクの切れ目まで進めるので、排他テストの机の持ち主を待つことがある）とマージの持ち主（排他テストの机を受けられるので済んで空く）／マージの待ち → マージの持ち主。
 - 排他テストの机とひとり占めの持ち主は、ほかのどの番も待たずに、走行が終わったら返す（スキルの約束。10.2・11.3・12.1。アプリも止まった報告で排他テストの机を空ける＝6.2）。だから待ちの向きは、出口の無い輪を作らない。
 - 持ちながら別の机を待てるのは「マージの持ち主の排他テストの申し込み」だけ（4.1・4.2）で、その間ひとり占めの候補はマージの持ち主へ排他テストの机を譲る（決まり 3）ので、マージは済んで空き、候補の番が来る。
-- `merge` は今どおり誰からでも受け付ける（7.1）。排他テストの机の持ち主が `merge` で待っても、その者は走行の後で排他テストの机を返すので輪にならない。これを常時テストの全探索の「協力的な進め方」に入れて確かめる。
+- 排他テストの机かひとり占めを持つ者の `merge` と、マージを待つ（まだ持たない）者の `request` は断る（4.7・4.8）。だから排他テストの机とひとり占めの持ち主は何も待たず、待ちの輪はスキルの約束に頼らずアプリの形で生まれない。スキルの約束（走行の後で返す）が要るのは、待ちが有限の時間で終わることだけ。全探索は、この形を不変の決まりとしてすべての到達した状態で確かめる。
 
 ## File Structure Plan
 
@@ -300,6 +301,8 @@ sequenceDiagram
 | 4.4 | 名指しなしはマージの机のほかを全部 | plan_turns | `Return { desks: None }` | — |
 | 4.5 | 持っていない机 → 当てはまらない | plan_turns | `NotApplied("not the holder of that desk")` ほか | — |
 | 4.6 | ひとり占めを返すと再開 | plan_turns | 番の決め直しの再開の段 | 負荷テスト |
+| 4.7 | 机を持つ者の `merge` は当てはまらない | plan | `NotApplied("return the test and sole desks before merge")` | — |
+| 4.8 | マージを待つ者の申し込みは当てはまらない | plan_turns | `Request` の分岐 3a | — |
 | 5.1 | 停止要請の相手 | plan_turns | 停止要請の段（今の `plan_load` の写し） | 負荷テスト |
 | 5.2 | ひとり占めを渡す条件 | plan_turns | 決まり 4 | 負荷テスト |
 | 5.3 | 候補が在る間は新しいマージの持ち主を作らない | plan_turns | 決まり 6 | 番の決め直し |
@@ -417,7 +420,7 @@ pub enum RecentKind { Reclaimed, Recovered, Cleared, TestFreed } // "test-freed"
 **責務と制約**
 - `apply` の順は今のまま「回収 → コマンド → `turns::replan`」。
 - `remove_from(state, id, why, now, events)` が、マージの机（全リポジトリ）・`requests`・`test`・`sole` からその識別を外す唯一の場所。排他テストの机を外すときは `turns::free_test` を通して訳を残す。訳は呼び手が渡す: 取り下げ `cancelled`・離脱 `left`・マージ済み `merged`・回収 `reclaimed`・`clear --repo` は `left`。
-- マージの申し込み（`Merge`）・`Merged`・参加の決まりは変えない（7.1・7.2）。判断はリポジトリの名前で分岐しない（1.5）。
+- マージの申し込み（`Merge`）・`Merged`・参加の決まりは、今ある状態では変えない（7.1・7.2）。足すのは 1 つだけ: `Merge` の申し込み手が `test` か `sole` を持てば、状態を変えずに `NotApplied("return the test and sole desks before merge")`（4.7。今は無い状態なので互換を崩さない）。判断はリポジトリの名前で分岐しない（1.5）。
 
 **約束**: Service
 
@@ -474,6 +477,7 @@ pub fn merge_order(queue: &[MergeRequest]) -> Vec<usize>;   // 今のまま
   1. 自分の申し込みが `requests` に在る: 同じ組なら何も変えず `Applied`（2.7）。違う組なら `NotApplied("a different desk request is already waiting")`（2.8）。
   2. `test` か `sole` を持つ: 持つ組が同じ組なら `Applied`（直ちに番。2.7）。違えば `NotApplied("desks are held; only a merge holder may add the test desk")`（4.2）。
   3. どこかのリポジトリでマージの机を持つ: 組が `Test` だけなら次へ（4.1）。ほかは 2 と同じ断り（4.2）。
+  3a. どこかのリポジトリでマージの机を待つ（持ってはいない）: `NotApplied("a merge request is waiting; request desks after the merge desk is granted")`（4.8）。
   4. 参加（無ければ作業中で登録・名前とリポジトリを更新）→ `requests` の末尾へ `DeskRequest { requested: now }` を足し、`DeskRequested` を出す（2.1・2.6）。申し込んだ者の状態（作業中・停止要請中・止まった）は変えない。
 - `Return`: 持つ組を「`test` の持ち主か」「`sole` の持ち主か」で求める。名指しありは名指しの全部を持つときだけ全部を空ける（`not the holder of that desk`）。名指しなしは持つ全部を空ける（何も持たなければ `holds no desk to return`）。排他テストの机は `free_test(why="returned")`、ひとり占めは外して `DeskReturned` を出す（4.3〜4.5）。再開は番の決め直しの段が行う（4.6）。
 - `LoadRunning`: `test` か `sole` に持ち主が居れば断る（5.6）。居なければ参加 → 「作業中」へ戻す → 自分の申し込みを `requests` から外す → 両方の持ち主にする（`sole.running = true`・`stopped` は空。5.5）。
@@ -655,7 +659,7 @@ status: <置き場所>\status.md
 
 - 終了コードは今どおり 0 できた・1 失敗・2 使い方の誤り・3 当てはまらなかった（8.4）。
 - 使い方の誤り（2）: `--desk` の形（空・2 度・知らない名前・`merge`）・要る引数の欠け。何も読み書きしない（2.5）。
-- 当てはまらない（3）: 申し込みの 2.8・4.2、返しの 4.5、`loadrunning` の 5.6。状態を変えない（回収の分は今どおり書かれる）。`--wait` 付きでも待たずに 3。
+- 当てはまらない（3）: 申し込みの 2.8・4.2・4.8、机を持つ者の `merge` の 4.7、返しの 4.5、`loadrunning` の 5.6。状態を変えない（回収の分は今どおり書かれる）。`--wait` 付きでも待たずに 3。
 - 失敗（1）: 今のまま。待ちの二重は `a request wait for <id> is already running`。
 - ログ: 出来事は 1 件 1 行（今の口のまま）。排他テストの机が空いた訳はログの `TestFreed` と読み物の最近の出来事の両方に残る（6.2）。
 
@@ -677,9 +681,9 @@ status: <置き場所>\status.md
   - 固定点: どの場面でも `replan` を 2 度続けて呼んだ 2 度目は何も変えない。
 - 書き直す既存のテスト（`plan_stop_tests.rs` ほか）: 停止要請の相手・止まった・再開・取り消しと出し直し・後から参加した者・マージの持ち主と待つ者を止めない・候補の間はマージの番を出さない、を `request --desk test,sole` で同じ答えに（5.1〜5.4）。回収・取り下げ・離脱・マージ済み・`clear --repo` で排他テストの机と申し込みが外れ、`TestFreed` の訳がそれぞれの綴りになる（6.1・6.3・6.4）。
 - `plan_liveness_tests.rs`（3.6・13.3）:
-  - 名前のある場面: マージの持ち主の排他テストの申し込み＋負荷テストの待ち＋停止要請中の参加者の UI テストの申し込みが重なる組と、その並びを入れ替えた組で、協力的な進め方で全部が渡る。
+  - 名前のある場面: マージの持ち主の排他テストの申し込み＋負荷テストの待ち＋停止要請中の参加者の UI テストの申し込みが重なる組と、その並びを入れ替えた組で、協力的な進め方で全部が渡る。排他テストの机の持ち主の `merge` と、マージを待つ者の `request` が 3 で断られ、状態が 1 バイトも変わらない（4.7・4.8）。
   - 小さな全探索: 参加者 3 人・リポジトリ 2 つ・字母（`merge`・`request` の 3 つの組・名前なしの `return`・名指しの `return`（`test`・`sole`）・`loadrunning`・`merged`・`stopped`・`cancel`）で、時刻を固定し、直列化した状態で重複を除いて到達できる状態を深さの上限まで全部たどる。深さはテストに書いた固定の定数（6〜8 の間で、実装で 1 秒に収まることを確かめた値。機械の速さで変えない）。
-    - 到達したすべての状態で確かめる不変の決まり: `requests` に居る識別は `test`・`sole` を持たない・1 つの識別は `requests` に高々 1 回・`sole` が走っている印つきなら `test` も同じ識別が持つ・`replan` を 2 度続けて呼んだ 2 度目は何も変えない（固定点）。
+    - 到達したすべての状態で確かめる不変の決まり: `requests` に居る識別は `test`・`sole` を持たない・1 つの識別は `requests` に高々 1 回・`sole` が走っている印つきなら `test` も同じ識別が持つ・`test`・`sole` の持ち主と `requests` に居る識別はどのマージの待ち行列にも居ない（待ちの輪が生まれない形・4.7・4.8）・`replan` を 2 度続けて呼んだ 2 度目は何も変えない（固定点）。
     - どの到達した状態からも、協力的な進め方を決まった上限の手数まで進めると、申し込みとマージの待ちが全部渡って空になる。協力的な進め方: 排他テストの机とひとり占めの持ち主は返す・マージの持ち主は完了の手順の本筋どおり `request --desk test` を申し込み、受けたら返し、そのあと `merged`・申し込みの無い停止要請中の者は `stopped`・止まった者は待つ。
     - 生死の口は全員「居る」（回収は別のテストで見る）。
 - `cli_args_tests.rs`: 表が 14 行・`--desk` の形の受け／断り（2.5）・`request` と `return` の引数・`--help` に新しい行と 3 の意味が出る（8.4）。
