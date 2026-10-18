@@ -649,3 +649,72 @@ fn a_diverged_round_checks_each_attach_and_refuses_the_unreadable_one() {
     assert_eq!(refused.len(), 1, "{out}");
     assert!(refused[0].contains("reason=Unreadable"), "{out}");
 }
+
+// 外し損ねの 3 つの源（去る窓の切離し・鎖の撤去・組の外し）は、どれか 1 つだけでも確かめを
+// 入れる。鎖の撤去の源は上の 2 項が受け持ち、残りの 2 つの源を 1 項ずつ固定する。
+
+/// 去る窓の切離しだけが外せなかった巡: 鎖の付与 `a ← b` の直前に確かめの読み取りが入る。
+#[test]
+fn a_failed_departing_detach_alone_checks_the_attach() {
+    let mut world = World::new();
+    let gone = world.spawn_empty().id();
+    world.spawn((
+        handle(5),
+        CrossOwnerLink {
+            owner: gone,
+            owned_hwnd: h(5),
+            owner_hwnd: h(6),
+            segment: ChainSegment::Group(0),
+        },
+    ));
+    let [a, b] = [1, 2].map(|v| world.spawn(handle(v)).id());
+    publish(&mut world, chain(vec![a, b], vec![edge(a, b)]));
+    let mut script = Script::default();
+    script.owner_of.insert(5, 6);
+    script.clear_fails.insert(5);
+
+    let (_, used) = run_once(&mut world, script);
+
+    assert_eq!(
+        reads(&used),
+        [Call::ReadOwner(5), Call::ReadOwner(2)],
+        "{:?}",
+        used.calls
+    );
+    let at = |c: Call| used.calls.iter().position(|x| *x == c);
+    assert!(
+        at(Call::ReadOwner(2)) < at(Call::SetOwner(1, 2)),
+        "{:?}",
+        used.calls
+    );
+}
+
+/// 組の外しだけが食い違った巡: 鎖の付与 `s0 ← b0` の直前に確かめの読み取りが入る。
+#[test]
+fn a_diverged_pair_release_alone_checks_the_attach() {
+    let mut world = World::new();
+    let (b0, s0) = linked_pair(&mut world, 10, 11);
+    publish(&mut world, chain(vec![s0, b0], vec![edge(s0, b0)]));
+    let mut script = Script::default();
+    script.owner_of.insert(10, 99);
+
+    let (_, used) = run_once(&mut world, script);
+
+    assert_eq!(
+        reads(&used),
+        [
+            Call::ReadOwner(10),
+            Call::ReadOwner(10),
+            Call::ReadOwner(99)
+        ],
+        "{:?}",
+        used.calls
+    );
+    let at = |c: Call| used.calls.iter().position(|x| *x == c);
+    assert!(
+        at(Call::ReadOwner(99)) < at(Call::SetOwner(11, 10)),
+        "{:?}",
+        used.calls
+    );
+    assert!(world.get::<PairReleased>(b0).is_some());
+}

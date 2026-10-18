@@ -645,6 +645,11 @@ mod written_order_tests;
 #[path = "zorder_group_branch_coverage_tests.rs"]
 mod branch_coverage_tests;
 
+// `areka-P0-zorder-scope-inversion` 要件 8.2 の分岐の対応表（wintf 側の錨もファイルを読んで確かめる）。
+#[cfg(test)]
+#[path = "zorder_inversion_branch_coverage_tests.rs"]
+mod zorder_inversion_branch_coverage_tests;
+
 // 先送りしたプロパティ `currentghost.seriko.zorder` の不提供を固定する檻（要件 13.1／13.2／13.5）。
 // 台帳の兄弟に置くのは、要件 13.2 後段「窓の重なりの状態を変更しない」の主張に台帳が要るため。
 #[cfg(test)]

@@ -111,7 +111,7 @@
   - _Requirements: 1.2, 3.3, 4.5, 6.1, 6.2, 6.4, 8.4_
   - _Depends: 1.3, 3.4, 3.5_
 
-- [ ] 4.3 要件 8.2 の分岐からテストへの対応表を機械で確かめる
+- [x] 4.3 要件 8.2 の分岐からテストへの対応表を機械で確かめる
   - 要件 8.2 の 10 分岐と、結び直しの 5 通り・外し損ねの巡の輪の確かめごとに、覆うテストの錨（ファイルと関数名）を並べる
   - 新しいテストのファイルは台帳の本番ファイルから、完了 spec の対応表と同じく `#[path]` で繋ぐ
   - 錨が実在し、`#[test]` が付いていることを機械で確かめる（wintf 側の錨はファイルを読んで確かめる）
@@ -186,3 +186,4 @@
 - 3.4: `zorder_chain_apply.rs` は 925 行（残り 75 行）。外し損ねの 3 つの源（去る窓の切離し・鎖の撤去・組の外し）のうち、去る窓と組の外しの源ごとの檻が無い（`||` を 1 本抜く変異が赤にならない）→ 4.3 の分岐の対応表で 1 項ずつ足す。`ExecOutcome { missed: pair.missed, .. }`（263 行あたり）は組んだ後で読まれていない
 - 3.5: 見送りの理由が 6 種になったが、`zorder_pair_record_tests.rs` の `skip_line_names_a_distinct_reason_for_every_skip`・`record_decision_reports_every_skip_reason_and_yields_no_fix` は「全理由」をうたって 5 種のまま（設計の「約束の外」の表に無いので未改）。`zorder_pair.rs` 786 行あたりの説明「見送り 5 種」も同じ。完了の棚卸で表へ足して 6 種へ直す（`zorder_pair_tests.rs` 755 行の 5 種は `decide_pair_fix` の出す理由なので正しい）
 - 4.2: 公開の規則（`zorder_drain.rs` の非公開 `publish_chain_plan`）は実窓のテストの中へ 10 行で写した（frame が非公開のため）。規則そのものは t_zdw が固定。根のキャラクター（s1）を壊しても道連れにはならない（レビューで実測）
+- 4.3: 対応表の分岐名は要件 8.2 の逐語（バッククォート込み）でないと差し戻しになる。3.4 の残り（去る窓・組の外しの源ごとの檻）は `a_failed_departing_detach_alone_checks_the_attach`・`a_diverged_pair_release_alone_checks_the_attach` で解消
