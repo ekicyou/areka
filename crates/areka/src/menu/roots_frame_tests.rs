@@ -28,7 +28,7 @@ fn wired_world(dirs: &[PathBuf], origin: RootsOrigin) -> World {
 }
 
 /// 印つきの項目を含む並び `roots` で [`wired_world`] と同じ World を作る。
-fn wired_world_roots(roots: Vec<BasewareRoot>, origin: RootsOrigin) -> World {
+pub(super) fn wired_world_roots(roots: Vec<BasewareRoot>, origin: RootsOrigin) -> World {
     let a = roots[0].dir().to_path_buf();
     let mut world = World::new();
     world.init_resource::<Schedules>();
@@ -62,7 +62,7 @@ fn wired_world_roots(roots: Vec<BasewareRoot>, origin: RootsOrigin) -> World {
 }
 
 /// メニューを出したときの枠 `frame` の項目。
-fn item(world: &World, frame: Frame) -> MenuItem {
+pub(super) fn item(world: &World, frame: Frame) -> MenuItem {
     world
         .non_send::<MenuWiring>()
         .registry
@@ -73,7 +73,7 @@ fn item(world: &World, frame: Frame) -> MenuItem {
 }
 
 /// 外すの子の（名前・選べるか）。
-fn children(item: &MenuItem) -> Vec<(String, bool)> {
+pub(super) fn children(item: &MenuItem) -> Vec<(String, bool)> {
     match &item.body {
         ItemBody::Submenu(children) => children
             .iter()
@@ -83,7 +83,7 @@ fn children(item: &MenuItem) -> Vec<(String, bool)> {
     }
 }
 
-fn label(dir: &Path) -> String {
+pub(super) fn label(dir: &Path) -> String {
     dir.display().to_string()
 }
 
