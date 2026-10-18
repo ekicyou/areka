@@ -37,16 +37,17 @@
 //! よって語彙の保全（要件 9.5）は割れない。2 つの住処が実際に分かれていることは
 //! 兄弟テストが捕捉した行の出力先で固定している。
 //!
-//! # `dead_code` 許可は組の受け渡しの 6 項目だけ
+//! # `dead_code` 許可は組の受け渡しの 2 項目だけ
 //!
 //! 適用系（[`zorder_chain_apply`](super::zorder_chain_apply)）が着地したことで、差分の
 //! 純判断・後押しの選定・記録の出口には本番の呼び手が付いた。段階的実装のために
 //! モジュール全体を覆っていた許可は撤去してある。
 //!
-//! 例外は `areka-P0-zorder-scope-inversion` が足した組の受け渡しの純関数と記録の出口
-//! （`pair_released_by_chain`・`plan_pair_ops`・`check_owner_loop`・`log_chain_pair_released`・
-//! `log_chain_pair_restored`・`log_chain_link_refused`）である。呼び手（鎖の適用系と組の系）は
-//! 同じ spec の後続の工事で付き、そのとき項目ごとの許可を外す。
+//! 例外は `areka-P0-zorder-scope-inversion` が足した輪の確かめ（`check_owner_loop`）と
+//! その記録の出口（`log_chain_link_refused`）である。呼び手（外し損ねの巡の鎖の適用系）は
+//! 同じ spec の後続の工事で付き、そのとき項目ごとの許可を外す。組の外し・結び直しの
+//! 判定と操作列と記録の出口（`pair_released_by_chain`・`plan_pair_ops`・
+//! `log_chain_pair_released`・`log_chain_pair_restored`）には鎖の適用系の呼び手が付いた。
 
 use bevy_ecs::prelude::*;
 use tracing::{debug, error};
@@ -268,7 +269,6 @@ pub struct PairReleased;
 /// バルーンのすぐ奥（次の要素）に居ないときだけ。組の系（確立・維持・沈降の観測）と鎖の
 /// 適用系はすべてこれを呼ぶ——判定を 2 箇所に持つと、片方が外した組を片方が張り直す往復が
 /// 生まれる。
-#[allow(dead_code)] // 呼び手は鎖の適用系と組の系（同じ spec の後続の工事）
 pub(crate) fn pair_released_by_chain(
     chain: Option<&ChainPlan>,
     balloon: Entity,
@@ -308,7 +308,6 @@ pub(crate) enum PairOp {
 /// 全部の [`PairOp::Release`] が先・全部の [`PairOp::Restore`] が後で、各群の中はバルーンの
 /// `Entity` の昇順（決定論）。印の有無が望み（[`pair_released_by_chain`]）と一致する組には
 /// 操作を出さない。鎖が `None` なら外す組は 0 で、印の付いた組は全部結び直す。
-#[allow(dead_code)] // 呼び手は鎖の適用系と組の系（同じ spec の後続の工事）
 pub(crate) fn plan_pair_ops(chain: Option<&ChainPlan>, pairs: &[PairState]) -> Vec<PairOp> {
     let mut release: Vec<&PairState> = Vec::new();
     let mut restore: Vec<&PairState> = Vec::new();
@@ -587,7 +586,6 @@ pub(crate) fn log_chain_unlink_failed(owned_hwnd: Option<HWND>, error: &windows:
 // 本モジュールの 1 本に保つためここから撃つ。行の組立は同じく `zorder_chain_diag`。
 
 /// 組の結び目を外した事実を記録する（debug・要件 1.1／2.1／7.2）。
-#[allow(dead_code)] // 呼び手は鎖の適用系と組の系（同じ spec の後続の工事）
 pub(crate) fn log_chain_pair_released(
     entity: Entity,
     peer: Entity,
@@ -602,7 +600,6 @@ pub(crate) fn log_chain_pair_released(
 }
 
 /// 外していた組の結び目を張り直した事実を記録する（debug・要件 4.5／6.4）。
-#[allow(dead_code)] // 呼び手は鎖の適用系と組の系（同じ spec の後続の工事）
 pub(crate) fn log_chain_pair_restored(
     entity: Entity,
     peer: Entity,

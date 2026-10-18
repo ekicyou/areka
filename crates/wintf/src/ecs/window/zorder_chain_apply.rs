@@ -12,8 +12,13 @@
 //! 2. [`plan_chain_ops`] で差分を得る（**撤去がすべて先・付与がすべて後**）
 //! 3. 各撤去: **外す前に現況の所有者を読み**、帳簿の控えと一致するときだけ外す。
 //!    食い違えば実行環境を呼ばずに帳簿だけ落とす（要件 8.3・§12.6）
+//! 3a. 組の外し・組の結び直し（[`plan_pair_ops`]・`areka-P0-zorder-scope-inversion`）——望む鎖が
+//!    組の 2 枚を連続させない間は組の結び目を外して印 [`PairReleased`] を付け、連続へ戻れば
+//!    張り直して印を外す。**鎖の撤去の後・鎖の付与の前**に置くので、撤去が全部先・付与が
+//!    全部後の規律が組の結び目まで広がり、途中で持ち主の輪ができない
 //! 4. 各付与: 所有関係を張る。失敗した繋ぎは**その 1 本だけ**飛ばし、残りは張る（要件 8.2）
-//! 5. 実際に操作が走った巡だけ、鎖全体へ**後押しを 1 回**（[`nudge_command`]・要件 11.1）。
+//! 5. 実際に操作が走った巡（鎖か組のどちらかが窓口を呼んだ巡）だけ、鎖全体へ
+//!    **後押しを 1 回**（[`nudge_command`]・要件 11.1）。
 //!    挿入位置の 2 択のため、指令を組む直前に**現況を 1 度だけ**読む（周期的な観測ではない）
 //! 6. 後押しの**直後に**重なりを実測し、宣言と実測を同じ 1 行へ載せる（要件 9.2／9.3）
 //! 7. 変化の印を落とす。**追加の起床は要求しない**（要件 14.5）
@@ -84,12 +89,16 @@ use crate::api::{clear_window_owner, get_window_long_ptr, set_window_owner};
 use super::WindowHandle;
 use super::command::{SetWindowPosCommand, guarded_set_window_pos};
 use super::zorder_chain::{
-    ChainOp, CrossEdge, CrossOwnerLink, ZOrderChainPlan, log_chain_link_failed, log_chain_linked,
+    ChainOp, CrossEdge, CrossOwnerLink, PairOp, PairReleased, PairState, ZOrderChainPlan,
+    log_chain_link_failed, log_chain_linked, log_chain_pair_released, log_chain_pair_restored,
     log_chain_settled, log_chain_skipped, log_chain_unlink_failed, log_chain_unlinked,
-    nudge_command, plan_chain_ops,
+    nudge_command, plan_chain_ops, plan_pair_ops,
 };
 use super::zorder_chain_diag::{ChainSegment, ChainSkipReason, DetachReason};
-use super::zorder_pair::measure_windows_in_front;
+use super::zorder_pair::{
+    KeepDirectlyAbove, OwnerLink, PairFixDecision, SkipReason, measure_windows_in_front,
+    record_decision,
+};
 
 // ============================================================================
 // クエリの形
@@ -103,6 +112,20 @@ type CrossLinkQuery<'w, 's> = Query<'w, 's, (Entity, &'static CrossOwnerLink)>;
 /// `Err` は実体が消えた（despawn された）こと、`Ok(None)` は実体は在るが OS のハンドルが
 /// まだ／もう無いことを意味する。既存ペア機構の `HandleQuery` と同じ形である。
 type HandleQuery<'w, 's> = Query<'w, 's, Option<&'static WindowHandle>>;
+
+/// 組（バルーン窓と、その `KeepDirectlyAbove` の相手）の現況を見るクエリ。
+///
+/// 鎖の帳簿のクエリとは別の欄を読むので交わらない。
+type PairQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static KeepDirectlyAbove,
+        Option<&'static OwnerLink>,
+        Option<&'static PairReleased>,
+    ),
+>;
 
 // ============================================================================
 // 適用系（system）
@@ -135,6 +158,7 @@ pub fn apply_zorder_chain(
     mut commands: Commands,
     plan: Option<ResMut<ZOrderChainPlan>>,
     links: CrossLinkQuery,
+    pairs: PairQuery,
     handles: HandleQuery,
     // 直前の巡が「窓ハンドル待ち」で持ち越したか。持ち越しは同じ計画・同じ理由のまま
     // 何巡も続きうるので、見送りの記録は**待ち始めた 1 回だけ**出す（毎巡出すと実機の
@@ -173,7 +197,17 @@ pub fn apply_zorder_chain(
     // 差し替える（撤去の記録に載る区間が古いままにならないようにする）。
     refresh_ledger_segments(&mut commands, &desired, &current);
 
-    if ops.is_empty() {
+    let pair_states: Vec<PairState> = pairs
+        .iter()
+        .map(|(balloon, decl, _, released)| PairState {
+            balloon,
+            peer: decl.peer,
+            released: released.is_some(),
+        })
+        .collect();
+    let pair_ops = plan_pair_ops(plan.chain.as_ref(), &pair_states);
+
+    if ops.is_empty() && pair_ops.is_empty() {
         // 印は立っていたが出す操作が無い（同じ内容の再公開・ペアだけの鎖）。
         log_chain_skipped(ChainSkipReason::NoChange);
         // **ここも待ちの出口である**——直前で `dirty` を落としており、持ち越しは終わっている。
@@ -185,16 +219,39 @@ pub fn apply_zorder_chain(
         return;
     }
 
-    let outcome = execute_ops(
+    // 鎖の撤去 → 組の外し → 組の結び直し → 鎖の付与。`plan_chain_ops` は撤去を全部先に
+    // 並べるので、最初の付与の位置で 2 つに割れば、組の操作を撤去と付与の間へ挟める。
+    let split = ops
+        .iter()
+        .position(|op| matches!(op, ChainOp::Attach { .. }))
+        .unwrap_or(ops.len());
+    // 待ち始めの 1 巡だけ見送りを記録する（2 巡目以降は同じ行を積まない）。
+    let record_handle_missing = !*carry_announced;
+    let detached = execute_ops(
         &mut commands,
-        &ops,
+        &ops[..split],
         &desired,
         &current,
         &members,
         &handles,
-        // 待ち始めの 1 巡だけ見送りを記録する（2 巡目以降は同じ行を積まない）。
-        !*carry_announced,
+        record_handle_missing,
     );
+    let pair_acted = execute_pair_ops(&mut commands, &pair_ops, &pairs, &handles);
+    let attached = execute_ops(
+        &mut commands,
+        &ops[split..],
+        &desired,
+        &current,
+        &members,
+        &handles,
+        record_handle_missing,
+    );
+    // 持ち越しの判断は**鎖の操作の結果だけ**で行う——組の操作の分で持ち越しが解けると、
+    // ハンドルが揃っても鎖が永久に書かれない。組の印の付け外しは上で済んでいる。
+    let outcome = ExecOutcome {
+        acted: detached.acted || attached.acted,
+        handle_missing: detached.handle_missing || attached.handle_missing,
+    };
     if !outcome.acted {
         // 1 度も実行環境を呼べなかった（ハンドル未取得・食い違いだけの巡）。理由は
         // 各操作の側で記録済みであり、後押しを出す根拠が無いので鎖には触れない。
@@ -220,12 +277,136 @@ pub fn apply_zorder_chain(
             // 持ち越さない巡（食い違いだけ等）。次に待ち始めたらまた 1 回記録する。
             *carry_announced = false;
         }
+        // 後押しの要否は鎖と組のどちらかが窓口を呼んだかで決める。
+        if pair_acted {
+            nudge_and_measure(&members, &handles);
+        }
         return;
     }
 
     // 1 本でも書けた＝待ちは解けた。
     *carry_announced = false;
     nudge_and_measure(&members, &handles);
+}
+
+// ============================================================================
+// ⑶a 組の外しと結び直し（望む鎖が組の 2 枚を連続させない間だけ外す）
+// ============================================================================
+
+/// 組の操作列を順に実行する。窓口へ 1 度でも書いたら `true`（後押しの要否）。
+fn execute_pair_ops(
+    commands: &mut Commands,
+    ops: &[PairOp],
+    pairs: &PairQuery,
+    handles: &HandleQuery,
+) -> bool {
+    let mut acted = false;
+    for op in ops {
+        match *op {
+            PairOp::Release { balloon, peer } => {
+                let link = pairs
+                    .get(balloon)
+                    .ok()
+                    .and_then(|(_, _, link, _)| link.copied());
+                acted |= release_pair(commands, balloon, peer, link, handles);
+            }
+            PairOp::Restore { balloon, peer } => {
+                let linked = pairs
+                    .get(balloon)
+                    .is_ok_and(|(_, _, link, _)| link.is_some());
+                acted |= restore_pair(commands, balloon, peer, linked, handles);
+            }
+        }
+    }
+    acted
+}
+
+/// 組の結び目を外して印を付ける。外す書込みを窓口へ出したら `true`（読んだだけは数えない）。
+///
+/// 外すのは、結び目が張られていて、今の持ち主が帳簿（[`OwnerLink`]）と一致したときだけ
+/// ——他が書いた関係は壊さない。読めない・食い違う・外せないときは外さずに印だけ付ける。
+/// どの道でも帳簿は取り下げる（`OwnerLink` と `PairReleased` は同時に付かない）。
+fn release_pair(
+    commands: &mut Commands,
+    balloon: Entity,
+    peer: Entity,
+    link: Option<OwnerLink>,
+    handles: &HandleQuery,
+) -> bool {
+    commands
+        .entity(balloon)
+        .remove::<OwnerLink>()
+        .insert(PairReleased);
+    let owned_hwnd = hwnd_of(handles, balloon);
+    let (Some(link), Some(hwnd)) = (link, owned_hwnd) else {
+        // 結び目が張られていない（または読む窓が無い）——印だけ。
+        log_chain_pair_released(balloon, peer, owned_hwnd, link.map(|l| l.owner_hwnd), false);
+        return false;
+    };
+    let owner_hwnd = Some(link.owner_hwnd);
+    match os_read_owner(hwnd) {
+        Ok(actual) if actual == link.owner_hwnd => {
+            match os_clear_owner(hwnd) {
+                Ok(()) => log_chain_pair_released(balloon, peer, Some(hwnd), owner_hwnd, true),
+                Err(err) => log_chain_unlink_failed(Some(hwnd), &err),
+            }
+            true
+        }
+        Ok(_) => {
+            // 食い違い。**外さない**（読んだだけ・鎖の撤去の `detach_one` と同じく書いていない）。
+            log_chain_pair_released(balloon, peer, Some(hwnd), owner_hwnd, false);
+            false
+        }
+        Err(err) => {
+            log_chain_unlink_failed(Some(hwnd), &err);
+            log_chain_pair_released(balloon, peer, Some(hwnd), owner_hwnd, false);
+            false
+        }
+    }
+}
+
+/// 印を外して組の結び目を張り直す（5 通り）。窓口を呼んだら `true`。
+///
+/// ⑴ 相手の実体が無い ⑵ どちらかのハンドルが無い（ハンドルが付いた巡に確立系が張る）
+/// ⑶ 同じ巡に確立系が既に張っている——の 3 つは窓口を呼ばず印を外すだけ。
+/// ⑷ 張れた: 帳簿を付けて `pair-restored`。⑸ 張れない: `link-failed segment=-`（残りは続ける）。
+fn restore_pair(
+    commands: &mut Commands,
+    balloon: Entity,
+    peer: Entity,
+    linked: bool,
+    handles: &HandleQuery,
+) -> bool {
+    commands.entity(balloon).remove::<PairReleased>();
+    let Ok(peer_handle) = handles.get(peer) else {
+        record_decision(
+            balloon,
+            peer,
+            PairFixDecision::Skip(SkipReason::PeerMissing),
+        );
+        return false;
+    };
+    let (Some(owned_hwnd), Some(owner_hwnd)) =
+        (hwnd_of(handles, balloon), peer_handle.map(|h| h.hwnd))
+    else {
+        record_decision(
+            balloon,
+            peer,
+            PairFixDecision::Skip(SkipReason::HandleMissing),
+        );
+        return false;
+    };
+    if linked {
+        return false;
+    }
+    match os_set_owner(owned_hwnd, owner_hwnd) {
+        Ok(()) => {
+            commands.entity(balloon).insert(OwnerLink { owner_hwnd });
+            log_chain_pair_restored(balloon, peer, Some(owned_hwnd), Some(owner_hwnd));
+        }
+        Err(err) => log_chain_link_failed(None, Some(owned_hwnd), Some(owner_hwnd), &err),
+    }
+    true
 }
 
 // ============================================================================
@@ -634,6 +815,11 @@ pub(crate) mod double;
 #[cfg(test)]
 #[path = "zorder_chain_apply_tests.rs"]
 mod zorder_chain_apply_tests;
+
+/// 1 巡の組の外しと結び直しの檻（替え玉で窓口の呼び出し列を固定する）。
+#[cfg(test)]
+#[path = "zorder_chain_apply_release_tests.rs"]
+mod zorder_chain_apply_release_tests;
 
 /// 実窓での最終形の檻（替え玉を据えないので、上の 6 つの窓口はそのまま Win32 を呼ぶ）。
 #[cfg(test)]
