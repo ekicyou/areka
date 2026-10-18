@@ -495,7 +495,6 @@ impl GhostSession {
 
     /// 実行系だけを外す（窓の側＝seriko・ticker・送り手・束は残る・areka-P0-mcp-reload 要件 4.2）。
     /// kanade の送出端も外す。実行系が無ければ `None`。
-    #[allow(dead_code)] // 呼び手は 7.2（実行系だけの組み直し）で付く。
     pub(crate) fn split_runtime(&mut self) -> Option<areka_ghost::GhostRuntime> {
         self.kanade = None;
         self.ghost.take()
@@ -503,7 +502,6 @@ impl GhostSession {
 
     /// 新しい実行系を付け、kanade の送出端を写す（要件 4.2）。付いていた実行系は降ろさずに
     /// 落ちるので、先に [`GhostSession::split_runtime`] で外しておくこと（外し忘れは `error!`）。
-    #[allow(dead_code)] // 呼び手は 7.2（実行系だけの組み直し）で付く。
     pub(crate) fn attach_runtime(&mut self, runtime: areka_ghost::GhostRuntime) {
         if self.ghost.is_some() {
             tracing::error!(
@@ -516,7 +514,6 @@ impl GhostSession {
     }
 
     /// 受け口の送出端の束（結線ありの腕だけ `Some`・要件 4.2）。
-    #[allow(dead_code)] // 本番の呼び手は 7.2（実行系だけの組み直し）で付く。
     pub(crate) fn sink_sources(&self) -> Option<&CueSinkSources> {
         self.sinks.as_ref()
     }

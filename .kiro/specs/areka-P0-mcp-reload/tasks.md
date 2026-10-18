@@ -141,7 +141,7 @@
   - `ghost_switch_reload_tests.rs`（`SwitchRig`）で、印があるとき偽 SHIORI の受けた要求に `OnBoot`・`OnGhostChanged`・`OnGhostChanging`・`OnClose` が無く `OnInitialize`・`username`・`basewareversion` があり、印が無ければ今までどおり
   - _Depends: 2.1, 6.2_
   - _Requirements: 3.2, 3.3, 3.4, 3.5, 3.6, 12.2, 12.4_
-- [ ] 7.2 窓を残して実行系だけを組み直す本体を作る
+- [x] 7.2 窓を残して実行系だけを組み直す本体を作る
   - `rebuild_runtime_in_place` が置き場の単位から実行系を外して降ろし、降ろした直後の記憶を書き、起動時と同じ SHIORI の結線（`GhostBootInputsSource`）で `Reloaded{Shiori}` の実行系を今のシェルで起こし、付け直して `rewire_runtime_consumers` をやり直す
   - 答えは 3 つ（組み直した・起こせなかった・記憶を書けなかった）に分け、起こせなかったときは実行系の無い単位を置き場に戻す
   - `ghost_session_runtime_tests.rs` で起こせなかったとき単位が置き場に戻り、seriko・ticker が残ることが固定される
@@ -198,3 +198,4 @@
 - 6.3: shiori で kanade へ送れなかったときは（受理の後なので）`reload_started` の後に `reload_failed(kanade_gone)` を残す。design の ReloadDesk 節の「NoContext」の文言は完了のときに揃える。`ReloadInFlight`・`ReloadStage` は `ReplyReceiver` を持つので Debug を外した。
 - 6.4: `skin_is_reload(world, kind, dir)`・`skin_phase_ended(world, kind, dir)` は相の鍵を引数で受ける。`frame/switch.rs::run_switch_phase` が `SkinSwitchInFlight` を World から外してから `finish_*` を呼ぶため。7.4 は `finish_*` が受ける `&target` と、match の前に控えた `(flight.kind, flight.target.dir)` を渡す。`skin_applied(world)` は設計どおり。design.md 478–480・518・680 は完了のときに直す。3 つの関数の allow は 7.4 で外す。
 - 6.4: 自分の予約がゴースト切替の commit で取りやめになると、理由は `overtaken` でなく `skin_failed` になる（design は決めていない・実機で気になれば語を分ける）。
+- 7.2: `rebuild_runtime_in_place(world, target_name) -> RuntimeRebuild { Rebuilt, BootFailed, WriteFailed(PersistFailure) }`（design.md 569 行の `-> bool` は完了のときに直す）。`ghost_session_runtime` は `ghost_session` の私有 mod なので、7.3 で `switch_to` から呼ぶ口（`pub(crate) mod` か再輸出）が要る。関数と型の allow は 7.3 で外す。降ろした時間は既存の `ghost_switch_down_ms`・`ghost_switch_down_failed` を使い回す。7.2 のテストは ChangeGhost を通さないので、古い SHIORI に OnClose が来ないことは 7.3 の通しテストで固定する。
