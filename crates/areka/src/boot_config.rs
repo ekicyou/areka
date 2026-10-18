@@ -250,10 +250,40 @@ pub(crate) fn resolve_boot_with(
     use crate::roots::report::{self, ReportOccasion};
     use areka_ghost::catalog;
 
-    let resolved = resolved.map_err(|err| {
+    let mut resolved = resolved.map_err(|err| {
         report::log_root_error(&err, ReportOccasion::Boot);
         AlertScene::RootMissing(err)
     })?;
+    // `--ghost` の指し先（3.1〜3.3・4.1〜4.4）。一時の置き場は並びと状態の先頭に同じ順で足し、
+    // 以後の目録はこの並びで読む。
+    let pointed = request
+        .ghost
+        .as_deref()
+        .map_or(Pointed::Miss, |v| point_ghost(v, &resolved.roots));
+    if let Pointed::Path {
+        temporary: Some(dir),
+        ..
+    } = &pointed
+    {
+        let roots = std::iter::once(areka_ghost::BasewareRoot::temporary(dir.clone()))
+            .chain(resolved.roots.roots().iter().cloned())
+            .collect();
+        resolved.roots = areka_ghost::BasewareRoots::new(roots);
+        resolved.status.insert(
+            0,
+            crate::roots::RootStatus {
+                dir: dir.clone(),
+                found: true,
+            },
+        );
+        tracing::info!(event = "temporary_root_added", dir = %dir.display(), "--ghost の親のフォルダを、この起動のあいだだけの置き場として並びの先頭に足しました");
+    }
+    let pointed_at = match &pointed {
+        Pointed::Path { dir, folder, .. } | Pointed::Name { dir, folder } => {
+            Some((dir.as_path(), folder.as_str()))
+        }
+        Pointed::Miss => None,
+    };
     report::log_roots(&resolved, ReportOccasion::Boot);
     let ghost_stores = resolved.roots.ghost_stores();
     let (argv_ghost, argv_balloon) = (
@@ -290,8 +320,8 @@ pub(crate) fn resolve_boot_with(
     let (memory, listed) = match argv_ghost {
         Some(_) => (None, Vec::new()),
         None => (
-            // `--random` は記憶を読まない（startup-options 要件 5.1）。
-            (mark.is_none() && !request.random)
+            // `--random` と指し先は記憶を読まない（startup-options 要件 3.1・4.3・5.1）。
+            (mark.is_none() && pointed_at.is_none() && !request.random)
                 .then(|| boot_resolve::read_last_ghost(app_profile_dir))
                 .flatten(),
             areka_ghost::catalog_roots::list_ghosts(&resolved.roots),
@@ -300,7 +330,7 @@ pub(crate) fn resolve_boot_with(
     let mut ghost = boot_resolve::resolve_ghost(
         &GhostInputs {
             argv: argv_ghost,
-            pointed: None,
+            pointed: pointed_at,
             random: request.random,
             memory: memory.as_deref(),
             listed: &listed,
@@ -314,11 +344,7 @@ pub(crate) fn resolve_boot_with(
     })?;
     // 書く前に写す（user-data-root 要件 4.3）: 位置の引数で渡したフォルダ（要件 10.3）と絶対パスの
     // 指し先（startup-options 要件 3.8）は写さない。名前の指し先は写す（要件 4.3）。
-    let pointed_by_path = ghost.route == boot_resolve::GhostRoute::Pointed
-        && request
-            .ghost
-            .as_deref()
-            .is_some_and(|v| std::path::Path::new(v).is_absolute());
+    let pointed_by_path = matches!(pointed, Pointed::Path { .. });
     if ghost.route != boot_resolve::GhostRoute::Argv && !pointed_by_path {
         ghost.dir = prepare_ghost(&resolved.roots, &ghost.dir);
     }
@@ -356,6 +382,65 @@ pub(crate) fn resolve_boot_with(
         balloon_root: balloon.dir.clone(),
     };
     Ok((cfg, ghost, balloon, mark, resolved))
+}
+
+/// `--ghost` の値の指し先（design「BootResolve」）。
+enum Pointed {
+    /// 絶対パス（3.1）。`temporary` は先頭に足す一時の置き場（3.2）・None は 3.3。
+    Path {
+        dir: std::path::PathBuf,
+        folder: String,
+        temporary: Option<std::path::PathBuf>,
+    },
+    /// 名前（4.2）。
+    Name {
+        dir: std::path::PathBuf,
+        folder: String,
+    },
+    /// 指せなかった・値が無い（3.10・4.4 の warn は `point_ghost` が出す）。
+    Miss,
+}
+
+/// `--ghost` の値を指し先へ解く（fs を読む）。絶対パスは `ghost\master\descript.txt` を持つかを見て、
+/// 親がどの置き場の `ghost\` とも同じでなければ一時の置き場にする（3.1〜3.3・3.10）。
+/// 絶対パスでなければ切り替えと同じ名前の引き当て（`name` が先・フォルダ名が後）で並びのゴーストから探す（4.1〜4.4）。
+fn point_ghost(value: &str, roots: &areka_ghost::BasewareRoots) -> Pointed {
+    use crate::emo2_boot::ghost_switch::{GhostSpec, resolve_switch_target};
+    let path = std::path::Path::new(value);
+    if !path.is_absolute() {
+        let listed = areka_ghost::catalog_roots::list_ghosts(roots);
+        return match resolve_switch_target(&listed, &GhostSpec::Name(value.to_owned())) {
+            Some(hit) => Pointed::Name {
+                dir: hit.dir,
+                folder: hit.folder,
+            },
+            None => {
+                tracing::warn!(
+                    event = "ghost_option_not_found",
+                    value,
+                    "--ghost の名前のゴーストが置き場に見つからないので、いつもの選び方で起こします"
+                );
+                Pointed::Miss
+            }
+        };
+    }
+    if !areka_ghost::catalog::is_ghost_dir(path) {
+        tracing::warn!(event = "ghost_option_not_ghost_dir", dir = %path.display(), "--ghost のフォルダは ghost\\master\\descript.txt を持たないので、いつもの選び方で起こします");
+        return Pointed::Miss;
+    }
+    let parent = path.parent().unwrap_or(path);
+    let in_store = roots
+        .ghost_stores()
+        .iter()
+        .any(|store| areka_ghost::catalog_roots::same_root(store, parent));
+    Pointed::Path {
+        dir: path.to_path_buf(),
+        folder: path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        temporary: (!in_store).then(|| parent.to_path_buf()),
+    }
 }
 
 /// argv 無しの分岐（そのゴーストの最後のバルーンの記憶 → ゴーストの descript.txt の
