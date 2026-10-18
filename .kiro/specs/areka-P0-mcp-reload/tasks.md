@@ -57,7 +57,7 @@
   - _Boundary: GhostRuntime_
   - _Requirements: 7.3_
 
-- [ ] 3. 振り分けと台本の受け口
+- [x] 3. 振り分けと台本の受け口
 - [x] 3.1 (P) 読み直しの対象の振り分けを純粋関数で作る
   - MCP の `target` の 6 語を ASCII の大小を区別せず照らし、前後の空白は削らない（空・知らない語は Unknown、makoto は別の答え）
   - 台本の 7 綴り（`reloadsurface` を含む）から対象へ写し、引数なしの `reload`・`makoto`・`aigraph`・ほかの命令は拾わない
@@ -71,7 +71,7 @@
   - `reload_cue_tests.rs` で拾う綴りは送られ、`\![reload,makoto]` などは送られない
   - _Depends: 3.1_
   - _Requirements: 1.4, 1.5, 10.3_
-- [ ] 3.3 台帳に読み直しの受け取り手を登記する
+- [x] 3.3 台帳に読み直しの受け取り手を登記する
   - `("reload", Some(ghost|shiori|shell|balloon|descript))` の 5 行と `("reloadsurface", None)` を新しい受け取り手で登記し、`("reload", Some("makoto"))` は後から足せるよう空けておく
   - `bind` の行の名前を `areka_seriko::BIND_COMMAND` から引く
   - 網羅台帳 `sakura-script.toml` の 5 行（と別名の行）の状態と持ち主を更新し、`reload,makoto`・`reload,aigraph` は変えない
@@ -187,7 +187,8 @@
 - 2.6: テストの道筋は `runtime::names_tests::…`（`cargo test -p areka-ghost names_tests` で回る）。`set_names` は投函だけで barrier を待たない。6.4 の Names の段で要るなら呼び手が barrier を打つ。
 - 3.1: `reload_args.rs` は呼び手が揃うまでモジュール全体に `#![allow(dead_code)]`。7.5 の後に外す。design.md 158 行の `ScriptReload::parse`・`DescriptParams::parse` は同じ文書のコードの塊（`parse_script`・`parse_descript_params`）と食い違う。完了のときに文書を直す。
 - 3.2: design.md 431 行の `ReloadRaw { target, notes }` は `reload_args::ScriptReload` で代えた（欄は同じ）。完了のときに文書を直す。受信端 `ReloadRx`（`try_iter()` 付き）と `wire_reload_rx` は `reload_cue.rs` にある。`reload_cue.rs` の `#![allow(dead_code)]` は 4.1（受け口の登録と据え付け）と 6.1（取り出し）で呼び手が付いたら外す。
-- 3.3（止まり）: 網羅台帳の owner を本 spec へ直すと `ukadoc-survey` の consistency/spec_checks が 2 本赤（`roadmap-draft.md` の `[[spec]]` に本 spec が無い・balloon-canon-residue の owner_count 22→21）。要件 13.1 の範囲外の `roadmap-draft.md`（と `check_script_judge_tests.rs`・report の生成物）を触る裁定を開発者に求めた。作業は WIP コミットに置いた。
+- 3.3: 網羅台帳の owner を本 spec へ直すと `ukadoc-survey` の整合が赤になるので、開発者の裁定（10-19）で要件 13.1 の外の `roadmap-draft.md`（本 spec の行・件数の直し・説明の段落）・`check_script_judge_tests.rs` のテスト 1 本・`report/*.md` の作り直しを本 spec で触った。束は多い方の「切替」（切替 3・開発者機能 2）、段 B、ウェーブ C9-④。`consumer_ledger_tests.rs:304` の assert の文言に `
+` と空白が混じる（判定には響かない）。
 - 4.1: 起動の失敗の記録は `boot_runtime` の中で 1 度だけ残す（既存の warn!/error! の分け方のまま）。7.2 の呼び手は記録し直さない。design.md 543 行（分類と記録は呼び手）は 289・655 行と食い違う。完了のときに文書を直す。166 行の `RuntimeBootInputs` は実際には `Emo2BootInputs`。
 - 4.1: `reload_cue.rs` のモジュール全体の allow は外し、`ReloadRx::try_iter` だけに 6.1 までの allow を付けた。`Emo2BootOutcome.sources` の欄の allow は 4.2 で外す。既存の字面の檻 `zorder_wiring_tests.rs` の t_zwi05 は、sink の組み立てを移したので `runtime_boot.rs` を見るように直した。
 - 4.2: `emo2_boot::runtime_boot` は `pub(crate)`。GhostSession の 4 つの口の allow は 7.2（split・attach・sink_sources）と 6.4（set_names）で外す。ghost_session.rs は 907 行（7.2 で本体を ghost_session_runtime.rs に置く）。
