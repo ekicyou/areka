@@ -22,8 +22,14 @@
 //! # 使い方
 //!
 //! [`SampleRoot::acquire`] に検体名を渡し、**得た値を束縛したまま**パスを借りる。取得の
-//! たびに `vendors/sample_ghost/<名>.nar` を展開した原本の**使い捨ての複製**が配られ、
-//! 値を捨てた時点でその複製は消える（起動記録の無い新品で始まる＝要件 7.4）。
+//! たびに検体の書庫を展開した原本の**使い捨ての複製**が配られ、値を捨てた時点でその複製は
+//! 消える（起動記録の無い新品で始まる＝要件 7.4）。書庫の在処は登記の行の形で決まる
+//! （下の「検体を足すとき」）。
+//!
+//! URL の行の検体（`pasta-in-windows` など）は、先に取り寄せの段
+//! `pwsh -NoProfile -File <ワークツリー>\tools\sample-fetch.ps1` を 1 回回して置き場へ
+//! 書庫を取っておく（ワークツリーごとに 1 回・手順は `vendors/sample_ghost/README.md`）。
+//! 窓口は通信しない。
 //!
 //! ```rust,no_run
 //! use sample_ghost_kit::SampleRoot;
@@ -52,8 +58,19 @@
 //!
 //! # 検体を足すとき
 //!
-//! 2 手で終わる（要件 1.5）——`vendors/sample_ghost/<名>.nar` を 1 つ置き、[`SAMPLES`] に
-//! 1 行足す。検体ごとの専用関数は増やさない。
+//! 登記の行は 2 つの形のどちらかで、どちらも 2 手で終わる（要件 1.5）。検体ごとの専用関数は
+//! 増やさない。
+//!
+//! - **今の行**（[`SampleSource::Vendored`]）: `vendors/sample_ghost/<名>.nar` を 1 つ置き、
+//!   [`SAMPLES`] に 1 行足す。
+//! - **URL の行**（[`SampleSource::Fetched`]）: 書庫をリポジトリへ入れず、[`SAMPLES`] に URL を
+//!   持つ 1 行を足す。取り寄せ先は開発者が管理するもので、書庫の隣に sha256sum の形の
+//!   `<URL>.sha256` を公開していること（登記は URL だけを持ち、ハッシュも大きさも持たない）。
+//!   取り寄せの段 `tools/sample-fetch.ps1` が書庫とハッシュのファイルを置き場
+//!   `<target>\nar-samples\fetched\<名>.nar`・`<名>.nar.sha256` へ取り、いつも最新の版に
+//!   追従する。窓口は通信せず、置き場の書庫が置き場のハッシュのファイルと合うときだけ使う
+//!   （無ければ [`SampleError::FetchedNarMissing`]、合わなければ
+//!   [`SampleError::FetchedNarMismatch`]）。
 //!
 //! # 返す位置
 //!
@@ -189,13 +206,18 @@ pub struct SampleRoot {
 impl SampleRoot {
     /// 検体名から検体を取得する（要件 1.1）。
     ///
-    /// `vendors/sample_ghost/<名>.nar` を展開した原本から**使い捨ての複製**を作って配る。
+    /// 検体の書庫を展開した原本から**使い捨ての複製**を作って配る。書庫は、今の行なら
+    /// `vendors/sample_ghost/<名>.nar`、URL の行なら取り寄せの段が置いた
+    /// `<target>\nar-samples\fetched\<名>.nar`（置き場の `<名>.nar.sha256` と合うものだけ）。
     ///
     /// # Errors
     ///
     /// 未登録の名前なら [`SampleError::UnknownSample`]（既知の名前の一覧を含む・要件 1.4）。
-    /// 展開結果が登記と食い違えば [`SampleError::RegistryMismatch`]。`.nar` の取り回しの
-    /// 失敗は [`SampleError::Nar`]・[`SampleError::Io`]・[`SampleError::TargetDirNotFound`]。
+    /// 展開結果が登記と食い違えば [`SampleError::RegistryMismatch`]。URL の行で置き場の
+    /// 書庫かハッシュのファイルが無ければ [`SampleError::FetchedNarMissing`]、ハッシュの
+    /// ファイルの形が違えば [`SampleError::FetchedChecksumInvalid`]、合わなければ
+    /// [`SampleError::FetchedNarMismatch`]。`.nar` の取り回しの失敗は [`SampleError::Nar`]・
+    /// [`SampleError::Io`]・[`SampleError::TargetDirNotFound`]。
     pub fn acquire(name: &str) -> Result<SampleRoot, SampleError> {
         let sample = registered(name)?;
         SampleRoot::from_copy(sample, devroot::fresh_root(sample.name)?)
