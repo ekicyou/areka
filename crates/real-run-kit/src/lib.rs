@@ -11,4 +11,5 @@ mod mcp;
 mod output;
 mod run;
 
+pub use close::{Ended, EndedBy};
 pub use output::ChildExited;
