@@ -136,7 +136,7 @@ fn find_target_dir(configured: Option<&str>, exe: &Path) -> Result<PathBuf, Samp
 }
 
 /// 本仕様専用の名前空間の絶対パス。
-fn namespace_dir() -> Result<PathBuf, SampleError> {
+pub(crate) fn namespace_dir() -> Result<PathBuf, SampleError> {
     let exe = std::env::current_exe().map_err(|source| SampleError::Io {
         what: "実行ファイルの場所の取得",
         path: PathBuf::new(),

@@ -24,7 +24,7 @@
   - 終わった状態: 登記の数は 8 のまま、`cargo test -p sample-ghost-kit` と `cargo build --workspace` が今と同じに緑（外のクレートは書き替えない）
   - _Requirements: 1.1, 1.2, 1.4, 3.5, 3.6_
 
-- [ ] 3.2 取り寄せの置き場の位置と、大きさと SHA-256 の照合を作る
+- [x] 3.2 取り寄せの置き場の位置と、大きさと SHA-256 の照合を作る
   - 名前空間の下の `fetched` の棚に `<名前>.nar` を置く位置を決める唯一の式・置き場の書庫を大きさ → SHA-256 の順で照合する道（大きさが違っても SHA-256 は計算して文に載せる）・取り寄せの段のコマンドの文（リポジトリの根の絶対パス）・ASCII の外の字を `\u{XXXX}` に写す部品を、通信も子のプロセスも持たずに作る
   - 3.1 の 2 種の失敗の表示を英語の ASCII で仕上げる（パスとコマンドは ASCII に写す・直し方 2 つ＝取り寄せの段のコマンドと手で置く口の README）
   - 行から取り寄せの置き場のパスを返す公開の口を足す（リポジトリに置く行には置き場が無いことを返し、名前空間が決まらなければ失敗を返す）
@@ -114,3 +114,4 @@
 - 実装の段の裁定 1（2026-10-18）: ghost_dev が非公開で raw の URL は未ログインで 404。ぱすたは GitHub Pages の公開 URL を登記し、ぱすたのリリースのたびに登記の大きさと SHA-256 を直す（3,042,433 バイト・`816d7183…`）。`/kiro-complete` の文書の手当てで `roadmap.md` の `pasta-in-windows-verification` の行と棚卸㉗の記録の「コミット `e1e0559` の固定の URL」も合わせる。
 - 2: `lib.rs` の `mod sha256;` の `#[cfg_attr(not(test), allow(dead_code))]` は、`fetched.rs` が使い始めたら外す（3.2）。
 - 3.1: `FetchedNarMismatch` の仮の `#[error]` 文に字下げの空白が入っている。3.2 で文を作り直すときに消す。`lib_tests.rs` の `current_rows_are_registered_as_vendored` の数 8 は、4 でぱすたを足しても Vendored は 8 のままなので、Fetched の行を許す形へ直す。
+- 3.2: `fetched::verified_nar_in` の一時の `#[cfg_attr(not(test), allow(dead_code))]` は 3.3 でつないだら外す。設計の判定のうち「照合に落ちたら `cache\` に原本ができない」「合えば `fresh_root_in` まで通る」「同じ書庫で 2 回取ると同じ刻印」は 3.3 で足す。`fetched_row_form` は `#[cfg(test)] pub(crate)`（4 で `lib_tests` から使う）。

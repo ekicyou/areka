@@ -392,6 +392,24 @@ fn named_descript(bytes: &[u8], name: &str) -> Vec<u8> {
     out
 }
 
+/// URL の行の書庫を置く場所（`<名前空間>\fetched\<name>.nar`）。`nar-sample-path --fetch-list` が使う。
+///
+/// 今の行（Vendored）には置き場が無いので `Ok(None)`。
+///
+/// # Errors
+///
+/// 名前空間（ビルド成果物の置き場の下）が決まらなければ [`SampleError::TargetDirNotFound`]
+/// か [`SampleError::Io`]。
+pub fn fetched_archive_path(sample: &Sample) -> Result<Option<PathBuf>, SampleError> {
+    match sample.source {
+        SampleSource::Vendored => Ok(None),
+        SampleSource::Fetched { .. } => Ok(Some(fetched::fetched_path_in(
+            &devroot::namespace_dir()?,
+            sample.name,
+        ))),
+    }
+}
+
 /// 検体名を登記の 1 行に引き当てる（要件 1.1・1.4）。
 ///
 /// 未登録の名前を受けたら既知の名前の一覧を添えて断る。窓口も下の [`manual_paths`] も
@@ -562,7 +580,7 @@ pub enum SampleError {
         source: std::io::Error,
     },
     /// URL の行の書庫が置き場に無い（spec `areka-P0-sample-url-fetch` 要件 3.5）。
-    #[error("fetched sample {sample:?} archive not found at {path:?}")]
+    #[error("{}", fetched::missing_text(sample, path))]
     FetchedNarMissing {
         /// 検体名。
         sample: &'static str,
@@ -571,7 +589,8 @@ pub enum SampleError {
     },
     /// URL の行の書庫が登記と合わない（spec `areka-P0-sample-url-fetch` 要件 3.6）。
     #[error(
-        "fetched sample {sample:?} archive at {path:?} does not match the registry:          size {actual_size} (expected {expected_size}),          sha256 {actual_sha256} (expected {expected_sha256})"
+        "{}",
+        fetched::mismatch_text(sample, path, *expected_size, *actual_size, expected_sha256, actual_sha256)
     )]
     FetchedNarMismatch {
         /// 検体名。
@@ -590,13 +609,12 @@ pub enum SampleError {
 }
 
 mod devroot;
+mod fetched;
 pub use devroot::WorkDir;
 
 mod nar_writer;
 pub use nar_writer::{Corrupt, Damage, EntryBuilder, NarBuilder, fold_tree, install_txt};
 
-// 照合（タスク 3 以降の `fetched.rs`）が使うまでは、テストの外で呼び手が無い。
-#[cfg_attr(not(test), allow(dead_code))]
 mod sha256;
 
 #[cfg(test)]
