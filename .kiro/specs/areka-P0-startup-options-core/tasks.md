@@ -72,7 +72,7 @@
   - _Requirements: 3.5, 3.9_
 
 - [ ] 4. SHIORI を読まない起動
-- [ ] 4.1 (P) 何を聞かれても中身なしで答える SHIORI を作る
+- [x] 4.1 (P) 何を聞かれても中身なしで答える SHIORI を作る
   - 問い合わせには中身なし、知らせには成功、終わりにはきれいな終了、状態には動いている、で答える SHIORI と、差し替え口に渡す閉包を `areka-ghost` の SHIORI の結線に置く（窓もプロセスも作らず `descript.txt` の SHIORI の行を読まない）
   - 終わった形: `shiori_wiring_empty_tests.rs` が 4 つの答えと、SHIORI の行の無いゴーストを差し替え口で起こして起動が成功し起動と終了の問い合わせが中身なしで返ることを確かめて緑
   - _Boundary: EmptyShiori_
@@ -139,3 +139,4 @@
 - 2.3: `--x=`（`=` の後ろが空）は値なし。1 つ・省略できる 1 つの名前は `=` があれば次の引数を読まない（`--sstp-listen=`＝Off）。ただし `--sstp-listen ""`（空の次の引数）は値 `""` として AllRejected のまま。`Parsed.option_words` は設計に無い橋渡しの欄で、2.4 で畳むか記録する。`ParseNote::MissingValue` は今の表では出ない。
 - 2.4: `Parsed.option_words` は畳んで `Parsed { options, notes }` に戻した。`cli::read()` は args[0] も `from_os` で直す（読み方は i=1 から）。
 - 3.1: `BasewareRoot::temporary(dir)` と `is_temporary()` を足した（3.2〜3.4 で使える）。`install_root` は一時の置き場を見える根・いちばん上の根の両方で飛ばす。
+- 4.1: 起動中の CloseRequest は Steady まで pending_close で待つ（kanade の既存の設計・boot.rs:22）。起動のテストは dispatcher にも Tick を送る。EmptyShiori の欠陥ではない。
