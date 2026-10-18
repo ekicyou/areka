@@ -36,8 +36,9 @@ fn merge(home: &Path, id: &str) -> (u8, String, String) {
     call(home, &[&words[..], &["--name", NAME]].concat())
 }
 
-fn loadtest(home: &Path, id: &str) -> (u8, String, String) {
-    let words = ["loadtest", "--id", id, "--repo", "areka"];
+/// 机の申し込み（`desks` は `--desk` の値）。
+fn request(home: &Path, id: &str, desks: &str) -> (u8, String, String) {
+    let words = ["request", "--id", id, "--repo", "areka", "--desk", desks];
     call(
         home,
         &[&words[..], &["--purpose", PURPOSE, "--name", NAME]].concat(),
@@ -159,7 +160,7 @@ fn merged_by_a_holder_of_two_desks_prints_one_line_per_desk_in_repo_order() {
     put_state(
         &home,
         r#"{
-          "version": 1,
+          "version": 2,
           "participants": { "a": { "id": "a", "repo": "areka" } },
           "merge": {
             "zeta": { "holder": { "id": "a", "spec": "s" } },
@@ -177,63 +178,80 @@ fn merged_by_a_holder_of_two_desks_prints_one_line_per_desk_in_repo_order() {
     assert_eq!(holders.count(), 0);
 }
 
-// ---- 負荷テストの机・停止要請 ----
+// ---- 排他テストの机とひとり占め（負荷テスト）・停止要請 ----
 
 #[test]
-fn a_load_round_trip_prints_the_design_lines_and_exit_codes() {
+fn a_sole_round_trip_prints_the_design_lines_and_exit_codes() {
     let root = TempPath::under_target("impl-watch-cli");
     let home = home_in(&root);
     let _held = hold_watches(&home, &["a", "b"]);
 
     // b を、申し込みの無いただの参加者にする（止まる相手が居なければ番は直ちに来る）。
-    assert_eq!(loadtest(&home, "b"), done("granted load; stopped: none"));
+    let granted_alone = done("granted test,sole; stopped: none");
+    assert_eq!(request(&home, "b", "test,sole"), granted_alone);
     assert_eq!(call(&home, &["cancel", "--id", "b"]), done("cancelled"));
 
-    // a の申し込みで b に停止要請が出る。b が止まるまで番は来ない。
-    assert_eq!(loadtest(&home, "a"), done("queued load pos=1"));
+    // a の申し込みで b に停止要請が出る。b が止まるまで番は来ない。並べた順に依らず綴りは揃う。
+    assert_eq!(
+        request(&home, "a", "sole,test"),
+        done("queued test,sole pos=1")
+    );
     let stopped = |id| call(&home, &["stopped", "--id", id]);
     assert_eq!(stopped("a"), not_applied("not asked to stop"));
     assert_eq!(stopped("b"), done("stopped"));
     assert_eq!(stopped("b"), not_applied("not asked to stop"));
-    assert_eq!(loadtest(&home, "a"), done("granted load; stopped: b"));
+    // 同じ組の申し込み直しは、持っていれば直ちに番の 1 行。
+    assert_eq!(
+        request(&home, "a", "test,sole"),
+        done("granted test,sole; stopped: b")
+    );
 
     let unstop_a = ["unstop", "--id", "a"];
     assert_eq!(call(&home, &unstop_a), not_applied("nobody to unstop"));
     assert_eq!(call(&home, &["unstop"]), done("unstopped n=1"));
 
-    let loaddone = |id| call(&home, &["loaddone", "--id", id]);
-    assert_eq!(loaddone("b"), not_applied("not the load-test holder"));
-    assert_eq!(loaddone("a"), done("load done"));
-    assert_eq!(loaddone("a"), not_applied("not the load-test holder"));
+    let give_back = |id| call(&home, &["return", "--id", id]);
+    assert_eq!(give_back("b"), not_applied("holds no desk to return"));
+    assert_eq!(give_back("a"), done("returned test,sole"));
+    assert_eq!(give_back("a"), not_applied("holds no desk to return"));
 }
 
 #[test]
-fn the_load_position_counts_in_serving_order_earliest_request_first() {
+fn the_request_position_counts_in_serving_order_earliest_request_first() {
     let root = TempPath::under_target("impl-watch-cli");
     let home = home_in(&root);
     // 待ち行列の並び（到着順）と申し込みの時刻の順が食い違う状態。マージの持ち主 m が居るので、
-    // 負荷テストの番は来ない。
+    // ひとり占めの番は来ない。
     put_state(
         &home,
         r#"{
-          "version": 1,
+          "version": 2,
           "participants": {
             "a": { "id": "a", "repo": "areka" },
             "b": { "id": "b", "repo": "areka" },
             "m": { "id": "m", "repo": "areka" }
           },
           "merge": { "areka": { "holder": { "id": "m", "spec": "s" } } },
-          "load": { "queue": [ { "id": "a", "requested": 20 }, { "id": "b", "requested": 10 } ] }
+          "requests": [
+            { "id": "a", "desks": "test,sole", "requested": 20 },
+            { "id": "b", "desks": "test,sole", "requested": 10 }
+          ]
         }"#,
     );
     let _held = hold_watches(&home, &["a", "b", "m"]);
 
-    assert_eq!(loadtest(&home, "a"), done("queued load pos=2"));
-    assert_eq!(loadtest(&home, "b"), done("queued load pos=1"));
+    assert_eq!(
+        request(&home, "a", "test,sole"),
+        done("queued test,sole pos=2")
+    );
+    assert_eq!(
+        request(&home, "b", "test,sole"),
+        done("queued test,sole pos=1")
+    );
 }
 
 #[test]
-fn loadrunning_records_the_holder_and_is_3_while_the_desk_is_held() {
+fn loadrunning_records_the_holder_and_is_3_while_a_desk_is_held() {
     let root = TempPath::under_target("impl-watch-cli");
     let home = home_in(&root);
     let _held = hold_watches(&home, &["a", "b"]);
@@ -246,7 +264,7 @@ fn loadrunning_records_the_holder_and_is_3_while_the_desk_is_held() {
     let before = state_bytes(&home);
     assert_eq!(
         running("b"),
-        not_applied("the load-test desk already has a holder")
+        not_applied("the test desk or the sole desk already has a holder")
     );
     // 断った b は参加もしていない。
     assert_eq!(state_bytes(&home), before);
@@ -276,11 +294,12 @@ fn leave_cancel_and_tick_print_one_fixed_line_each() {
 fn status_changes_nothing_and_keeps_japanese_values_off_the_terminal() {
     let root = TempPath::under_target("impl-watch-cli");
     let home = home_in(&root);
-    // a だけが居る印を持つ。b は見張りの無い「作業中」（次の状態を変える呼び出しで回収される）。
-    let _held = hold_watches(&home, &["a"]);
+    // a と c が居る印を持つ。b は見張りの無い「作業中」（次の状態を変える呼び出しで回収される
+    // ので、最後に呼ぶ）。c のひとり占めの申し込みは、マージの持ち主 a が居るので渡らない。
+    let _held = hold_watches(&home, &["a", "c"]);
     merge(&home, "a");
+    request(&home, "c", "test,sole");
     merge(&home, "b");
-    loadtest(&home, "b");
     let before = state_bytes(&home);
     fs::remove_file(home.join("status.md")).expect("消せる");
 
@@ -289,11 +308,13 @@ fn status_changes_nothing_and_keeps_japanese_values_off_the_terminal() {
     let path = escape_path(&home.join("status.md").to_string_lossy());
     assert!(path.contains("\\u{"), "道筋に ASCII の外の字が無い: {path}");
     let expected = format!(
-        "participants=2 load-holder=none load-queued=1 merging=1 merge-queued=1 not-working=0 waits=0\n\
+        "participants=3 sole=none test=none requests=1 merging=1 merge-queued=1 not-working=0 waits=0\n\
          a areka working\n\
          b areka working absent\n\
+         c areka working\n\
          merge areka: holder=a queue=1 last=none\n\
-         load: holder=none queue=b\n\
+         impl: riding=3 sole=none queue=c\n\
+         test: holder=none queue=c\n\
          status: {path}\n"
     );
     assert_eq!(
@@ -339,9 +360,9 @@ fn status_over_a_broken_state_file_is_1_and_does_not_move_or_change_it() {
 fn a_version_mismatched_state_file_is_1_and_stays_byte_identical() {
     let root = TempPath::under_target("impl-watch-cli");
     let home = home_in(&root);
-    let file = r#"{ "version": 2, "participants": { "x": {} } }"#;
+    let file = r#"{ "version": 1, "participants": { "x": {} } }"#;
     put_state(&home, file);
-    let text = "state file version mismatch: file has 2, this exe knows 1. \
+    let text = "state file version mismatch: file has 1, this exe knows 2. \
                 Do not mix old and new exes; see doc/impl-watch.md\n";
 
     assert_eq!(
@@ -552,13 +573,13 @@ fn join_all(state: &mut crate::state::State, ids: &[&str]) {
     }
 }
 
-/// 読み物の待ち行列（`  1. <id> (...`）の識別を上から順に。
+/// 読み物の待ち行列（`  1. <id> ...`）の識別を上から順に。
 fn reading_queue(state: &crate::state::State) -> Vec<String> {
     let reading = crate::status::render_markdown(state, &AllPresent, 0);
     let ids = reading.lines().filter_map(|line| {
         let (nth, rest) = line.strip_prefix("  ")?.split_once(". ")?;
         nth.parse::<usize>().ok()?;
-        Some(rest.split_once(" (")?.0.to_owned())
+        Some(rest.split_once(' ')?.0.to_owned())
     });
     ids.collect()
 }
@@ -566,7 +587,9 @@ fn reading_queue(state: &crate::state::State) -> Vec<String> {
 #[test]
 fn the_serving_order_the_position_and_the_reading_agree_with_ties_and_bugs_mixed() {
     use crate::plan::{Command, apply};
-    use crate::state::{LoadHolder, LoadRequest, MergeDesk, MergeHolder, MergeRequest, State};
+    use crate::state::{
+        DeskRequest, DeskSet, MergeDesk, MergeHolder, MergeRequest, State, TestHolder,
+    };
 
     // マージ: バグと通常が混ざり、時刻の同点が両方の区分に在る。行列の並びは番の順と食い違う。
     let request = |id: &str, bug, requested| MergeRequest {
@@ -628,14 +651,15 @@ fn the_serving_order_the_position_and_the_reading_agree_with_ties_and_bugs_mixed
     }
     assert_eq!(reading_queue(&held), expected);
 
-    // 負荷テスト: 同点入り（負荷テストの待ちが在るとマージの番が出ないので別の状態）。
-    let request = |id: &str, requested| LoadRequest {
+    // 机の申し込み: 同点入り（机の申し込みはマージの番と別の行列）。
+    let request = |id: &str, requested| DeskRequest {
         id: id.to_owned(),
+        desks: DeskSet::Test,
         purpose: PURPOSE.to_owned(),
         requested,
     };
-    let mut load = State::empty();
-    load.load.queue = vec![
+    let mut desks = State::empty();
+    desks.requests = vec![
         request("l1", 10),
         request("l2", 5),
         request("l3", 10),
@@ -643,32 +667,33 @@ fn the_serving_order_the_position_and_the_reading_agree_with_ties_and_bugs_mixed
     ];
     let expected = ["l2", "l4", "l1", "l3"];
 
-    let mut served = load.clone();
+    let mut served = desks.clone();
     let mut granted = Vec::new();
     while let Some(holder) = {
         apply(&mut served, &Command::Tick, None, 0, &AllPresent);
-        served.load.holder.take()
+        served.test.take()
     } {
         granted.push(holder.id);
     }
     assert_eq!(granted, expected);
 
-    let mut held = load;
+    let mut held = desks;
     join_all(&mut held, &expected);
-    held.load.holder = Some(LoadHolder {
+    held.test = Some(TestHolder {
         id: "h".to_owned(),
-        ..LoadHolder::default()
+        ..TestHolder::default()
     });
     for (nth, id) in expected.iter().enumerate() {
-        let command = Command::LoadTest {
+        let command = Command::Request {
             id: (*id).to_owned(),
             name: None,
             repo: "areka".to_owned(),
+            desks: DeskSet::Test,
             purpose: PURPOSE.to_owned(),
         };
         assert_eq!(
-            super::result_line("loadtest", &command, &held, &[]),
-            format!("queued load pos={}", nth + 1)
+            super::result_line("request", &command, &held, &[]),
+            format!("queued test pos={}", nth + 1)
         );
     }
     assert_eq!(reading_queue(&held), expected);

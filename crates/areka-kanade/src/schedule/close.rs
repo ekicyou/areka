@@ -223,6 +223,7 @@ mod tests {
             external: Default::default(),
             translate: None,
             reply_source: None,
+            ..State::initial()
         }
     }
 
@@ -249,6 +250,7 @@ mod tests {
             external: Default::default(),
             translate: None,
             reply_source: None,
+            ..State::initial()
         }
     }
 

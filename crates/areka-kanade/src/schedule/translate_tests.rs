@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget, ShioriMethod};
-use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, ShioriFaultKind};
+use crate::msg::{CloseReason, EventId, KanadeConfig, MonotonicMs, ShioriFaultKind};
 use crate::schedule::change::ChangeState;
 use crate::schedule::log_capture::{CapturedEvent, assert_not_logged, capture, logged_once};
 use crate::schedule::translate_test_support::pass_translate;
@@ -26,7 +26,10 @@ fn read(outcome: ShioriOutcome) -> (ReplyReading, Vec<CapturedEvent>) {
     let mut out = None;
     let ev = capture(|| {
         out = Some(read_reply(
-            &choice_source(),
+            &ScriptSource::Event(SourceEvent {
+                id: choice_source(),
+                references: Vec::new(),
+            }),
             "展開済みの元の台詞".to_string(),
             outcome,
         ))
@@ -311,10 +314,10 @@ const FINAL: &str = "\\0最終の台詞\\e";
 fn request(script: &str) -> TranslateRequest {
     TranslateRequest {
         script: script.to_string(),
-        source: SourceEvent {
+        source: ScriptSource::Event(SourceEvent {
             id: EventId::Static("OnBoot"),
             references: Vec::new(),
-        },
+        }),
         status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
     }
 }
@@ -345,7 +348,10 @@ fn waiting(phase: Phase, deferred: Vec<Action>) -> State {
         phase,
         translate: Some(TranslateWait {
             talk_id: TALK,
-            source: EventId::Static("OnBoot"),
+            source: ScriptSource::Event(SourceEvent {
+                id: EventId::Static("OnBoot"),
+                references: Vec::new(),
+            }),
             deferred,
         }),
         ..State::initial()
@@ -653,17 +659,23 @@ fn shiori_script_is_captured_into_a_single_translate_action() {
     assert_eq!(req.script, ORIGINAL, "SHIORI が返したまま（展開の前）");
     assert_eq!(
         req.source,
-        SourceEvent {
+        ScriptSource::Event(SourceEvent {
             id: EventId::Static("OnBoot"),
             references: vec!["r0".to_string()],
-        }
+        })
     );
     // Status は捕まえた時点（腕が相を決めた後＝新しいトークを再生する相）の状態から導く。
     assert_eq!(req.status, ExecutionStatus::derive(&s.snapshot()));
     assert!(s.snapshot().talk_active, "捕まえた時点の相は再生中");
     let wait = s.translate.as_ref().expect("帳簿を置く");
     assert_eq!(wait.talk_id, TalkId(7), "一括の再生の開始の talk_id");
-    assert_eq!(wait.source, EventId::Static("OnBoot"));
+    assert_eq!(
+        wait.source,
+        ScriptSource::Event(SourceEvent {
+            id: EventId::Static("OnBoot"),
+            references: vec!["r0".to_string()],
+        })
+    );
     assert!(matches!(wait.deferred.as_slice(), [Action::StartTalk(t)] if t.talk_id == TalkId(7)));
     assert_eq!(s.reply_source, None, "翻訳の依頼は往復なので控えを空にする");
     let hit = logged_once(&ev, Level::DEBUG, "translate_begin");

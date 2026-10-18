@@ -196,30 +196,51 @@ pub(crate) struct CurrentGhost {
     pub balloon: crate::boot_resolve::BalloonDecision,
 }
 
-/// env（`AREKA_ROOT`・`AREKA_PROFILE_DIR`）・アプリの記憶・起動した exe の本当の場所を読んで [`resolve_boot_from`] へ渡す薄い口。
-pub(crate) fn resolve_boot(args: &[String]) -> Result<BootResolved, crate::alert::AlertScene> {
+/// env（`AREKA_ROOT`・`AREKA_PROFILE_DIR`）・アプリの記憶・起動した exe の本当の場所を読んで [`resolve_boot_with`] へ渡す薄い口。
+pub(crate) fn resolve_boot(
+    request: &crate::cli::BootRequest,
+) -> Result<BootResolved, crate::alert::AlertScene> {
     let app_profile_dir = default_app_profile_dir();
-    resolve_boot_from(
+    resolve_boot_with(
         crate::roots::resolve_roots(&app_profile_dir),
-        args,
+        request,
         &app_profile_dir,
         crate::boot_resolve::pick_index,
         crate::roots::user_root::writable_ghost,
     )
 }
 
-/// 根の並び → ゴースト → バルーン → `ConfigInputs`（design「起動解決」）。決まらなければ告知の場面を返す。
-/// 並びは決まっても決まらなくても先に記録を残す（要件 1.15・2.5）。
-///
-/// argv でないゴースト（前回きれいに終わらなかったときの既定も）は `prepare_ghost`（本番は
-/// `user_root::writable_ghost`）の答えのフォルダへ替え、バルーンと `ConfigInputs` もそのフォルダで
-/// 決める（user-data-root 要件 4.3・7.4）。表示するだけのバルーンは写さない（要件 4.5）。
-///
-/// argv がある側は列挙も記憶も読まない（要件 4.1・5.1）。argv のゴーストは「ゴーストか」の 1 検査
-/// だけ（要件 4.8）。決まるたびに経路と場所を info に残す（要件 4.10・5.11）。
+/// テストの口: 引数の列を読み方（`cli::parse`）に通し、起動の求めで [`resolve_boot_with`] を呼ぶ。
+#[cfg(test)]
 pub(crate) fn resolve_boot_from(
     resolved: Result<crate::roots::ResolvedRoots, crate::roots::RootError>,
     args: &[String],
+    app_profile_dir: &std::path::Path,
+    pick: fn(usize) -> usize,
+    prepare_ghost: fn(&areka_ghost::BasewareRoots, &std::path::Path) -> std::path::PathBuf,
+) -> Result<BootResolved, crate::alert::AlertScene> {
+    resolve_boot_with(
+        resolved,
+        &crate::cli::parse::parse(args).options.boot,
+        app_profile_dir,
+        pick,
+        prepare_ghost,
+    )
+}
+
+/// 根の並び → ゴースト → バルーン → `ConfigInputs`（design「起動解決」）。決まらなければ告知の場面を返す。
+/// 並びは決まっても決まらなくても先に記録を残す（要件 1.15・2.5）。
+///
+/// 位置の引数のゴーストでも絶対パスの指し先でもないゴースト（前回きれいに終わらなかったときの既定も）は
+/// `prepare_ghost`（本番は `user_root::writable_ghost`）の答えのフォルダへ替え、バルーンと
+/// `ConfigInputs` もそのフォルダで決める（user-data-root 要件 4.3・7.4）。表示するだけのバルーンは写さない（要件 4.5）。
+///
+/// 位置の引数のゴーストがある側は列挙も記憶も読まない（要件 4.1・5.1）。位置の引数のゴーストは
+/// 「ゴーストか」の 1 検査だけ（要件 4.8）。起動中の印は位置の引数のゴーストが無く `nobootcheck` でない
+/// ときに読む（startup-options 要件 6.2・6.8）。決まるたびに経路と場所を info に残す（要件 4.10・5.11）。
+pub(crate) fn resolve_boot_with(
+    resolved: Result<crate::roots::ResolvedRoots, crate::roots::RootError>,
+    request: &crate::cli::BootRequest,
     app_profile_dir: &std::path::Path,
     pick: fn(usize) -> usize,
     prepare_ghost: fn(&areka_ghost::BasewareRoots, &std::path::Path) -> std::path::PathBuf,
@@ -229,15 +250,45 @@ pub(crate) fn resolve_boot_from(
     use crate::roots::report::{self, ReportOccasion};
     use areka_ghost::catalog;
 
-    let resolved = resolved.map_err(|err| {
+    let mut resolved = resolved.map_err(|err| {
         report::log_root_error(&err, ReportOccasion::Boot);
         AlertScene::RootMissing(err)
     })?;
+    // `--ghost` の指し先（3.1〜3.3・4.1〜4.4）。一時の置き場は並びと状態の先頭に同じ順で足し、
+    // 以後の目録はこの並びで読む。
+    let pointed = request
+        .ghost
+        .as_deref()
+        .map_or(Pointed::Miss, |v| point_ghost(v, &resolved.roots));
+    if let Pointed::Path {
+        temporary: Some(dir),
+        ..
+    } = &pointed
+    {
+        let roots = std::iter::once(areka_ghost::BasewareRoot::temporary(dir.clone()))
+            .chain(resolved.roots.roots().iter().cloned())
+            .collect();
+        resolved.roots = areka_ghost::BasewareRoots::new(roots);
+        resolved.status.insert(
+            0,
+            crate::roots::RootStatus {
+                dir: dir.clone(),
+                found: true,
+            },
+        );
+        tracing::info!(event = "temporary_root_added", dir = %dir.display(), "--ghost の親のフォルダを、この起動のあいだだけの置き場として並びの先頭に足しました");
+    }
+    let pointed_at = match &pointed {
+        Pointed::Path { dir, folder, .. } | Pointed::Name { dir, folder } => {
+            Some((dir.as_path(), folder.as_str()))
+        }
+        Pointed::Miss => None,
+    };
     report::log_roots(&resolved, ReportOccasion::Boot);
     let ghost_stores = resolved.roots.ghost_stores();
     let (argv_ghost, argv_balloon) = (
-        args.get(1).map(std::path::Path::new),
-        args.get(2).map(std::path::Path::new),
+        request.positional_ghost.as_deref(),
+        request.positional_balloon.as_deref(),
     );
 
     // 隠れの記録は目録を読む。argv でゴーストを渡した起動は目録の外なので読まない（要件 11.2）。
@@ -253,13 +304,12 @@ pub(crate) fn resolve_boot_from(
             argv: Some(argv.to_path_buf()),
         });
     }
-    // 起動中の印（要件 12.4・12.5）: argv でゴーストを指定した起動（開発者の上書き）は読まない。
-    // 在れば前回はきれいに終わらなかったので、最後のゴーストの記憶を読まずに残りの段
+    // 起動中の印（要件 12.4・12.5）: argv でゴーストを指定した起動（開発者の上書き）と `nobootcheck`
+    // （startup-options 要件 6.2）は読まない。`--ghost`・`--random` でも読み、値は返す（要件 6.8）。在れば前回はきれいに終わらなかったので、最後のゴーストの記憶を読まずに残りの段
     // （唯一 → 既定 → 無作為）で解く。印は読むだけで消さない（起こす前の書き込みが上書きする）。
-    let mark = match argv_ghost {
-        Some(_) => None,
-        None => boot_resolve::read_session_mark(app_profile_dir),
-    };
+    let mark = (argv_ghost.is_none() && !request.no_boot_check)
+        .then(|| boot_resolve::read_session_mark(app_profile_dir))
+        .flatten();
     if let Some(ghost) = &mark {
         tracing::info!(
             event = "session_mark_found",
@@ -270,7 +320,8 @@ pub(crate) fn resolve_boot_from(
     let (memory, listed) = match argv_ghost {
         Some(_) => (None, Vec::new()),
         None => (
-            mark.is_none()
+            // `--random` と指し先は記憶を読まない（startup-options 要件 3.1・4.3・5.1）。
+            (mark.is_none() && pointed_at.is_none() && !request.random)
                 .then(|| boot_resolve::read_last_ghost(app_profile_dir))
                 .flatten(),
             areka_ghost::catalog_roots::list_ghosts(&resolved.roots),
@@ -279,6 +330,8 @@ pub(crate) fn resolve_boot_from(
     let mut ghost = boot_resolve::resolve_ghost(
         &GhostInputs {
             argv: argv_ghost,
+            pointed: pointed_at,
+            random: request.random,
             memory: memory.as_deref(),
             listed: &listed,
             stores: &ghost_stores,
@@ -289,9 +342,20 @@ pub(crate) fn resolve_boot_from(
         ghost_stores,
         argv: None,
     })?;
-    // 書く前に写す（user-data-root 要件 4.3）: argv で渡したフォルダは写さない（要件 10.3）。
-    if ghost.route != boot_resolve::GhostRoute::Argv {
+    // 書く前に写す（user-data-root 要件 4.3）: 位置の引数で渡したフォルダ（要件 10.3）と絶対パスの
+    // 指し先（startup-options 要件 3.8）は写さない。名前の指し先は写す（要件 4.3）。
+    let pointed_by_path = matches!(pointed, Pointed::Path { .. });
+    if ghost.route != boot_resolve::GhostRoute::Argv && !pointed_by_path {
         ghost.dir = prepare_ghost(&resolved.roots, &ghost.dir);
+    }
+    // 指されたゴーストを起こすので `--random` は使わない（startup-options 要件 5.3）。
+    if request.random
+        && matches!(
+            ghost.route,
+            boot_resolve::GhostRoute::Argv | boot_resolve::GhostRoute::Pointed
+        )
+    {
+        tracing::info!(event = "random_unused", route = ?ghost.route, "指されたゴーストを起こすので --random は使いません");
     }
     tracing::info!(event = "ghost_resolved", route = ?ghost.route, dir = %ghost.dir.display(), "起動するゴーストを決めました");
 
@@ -318,6 +382,65 @@ pub(crate) fn resolve_boot_from(
         balloon_root: balloon.dir.clone(),
     };
     Ok((cfg, ghost, balloon, mark, resolved))
+}
+
+/// `--ghost` の値の指し先（design「BootResolve」）。
+enum Pointed {
+    /// 絶対パス（3.1）。`temporary` は先頭に足す一時の置き場（3.2）・None は 3.3。
+    Path {
+        dir: std::path::PathBuf,
+        folder: String,
+        temporary: Option<std::path::PathBuf>,
+    },
+    /// 名前（4.2）。
+    Name {
+        dir: std::path::PathBuf,
+        folder: String,
+    },
+    /// 指せなかった・値が無い（3.10・4.4 の warn は `point_ghost` が出す）。
+    Miss,
+}
+
+/// `--ghost` の値を指し先へ解く（fs を読む）。絶対パスは `ghost\master\descript.txt` を持つかを見て、
+/// 親がどの置き場の `ghost\` とも同じでなければ一時の置き場にする（3.1〜3.3・3.10）。
+/// 絶対パスでなければ切り替えと同じ名前の引き当て（`name` が先・フォルダ名が後）で並びのゴーストから探す（4.1〜4.4）。
+fn point_ghost(value: &str, roots: &areka_ghost::BasewareRoots) -> Pointed {
+    use crate::emo2_boot::ghost_switch::{GhostSpec, resolve_switch_target};
+    let path = std::path::Path::new(value);
+    if !path.is_absolute() {
+        let listed = areka_ghost::catalog_roots::list_ghosts(roots);
+        return match resolve_switch_target(&listed, &GhostSpec::Name(value.to_owned())) {
+            Some(hit) => Pointed::Name {
+                dir: hit.dir,
+                folder: hit.folder,
+            },
+            None => {
+                tracing::warn!(
+                    event = "ghost_option_not_found",
+                    value,
+                    "--ghost の名前のゴーストが置き場に見つからないので、いつもの選び方で起こします"
+                );
+                Pointed::Miss
+            }
+        };
+    }
+    if !areka_ghost::catalog::is_ghost_dir(path) {
+        tracing::warn!(event = "ghost_option_not_ghost_dir", dir = %path.display(), "--ghost のフォルダは ghost\\master\\descript.txt を持たないので、いつもの選び方で起こします");
+        return Pointed::Miss;
+    }
+    let parent = path.parent().unwrap_or(path);
+    let in_store = roots
+        .ghost_stores()
+        .iter()
+        .any(|store| areka_ghost::catalog_roots::same_root(store, parent));
+    Pointed::Path {
+        dir: path.to_path_buf(),
+        folder: path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        temporary: (!in_store).then(|| parent.to_path_buf()),
+    }
 }
 
 /// argv 無しの分岐（そのゴーストの最後のバルーンの記憶 → ゴーストの descript.txt の
@@ -396,7 +519,7 @@ pub(crate) fn default_app_profile_dir() -> std::path::PathBuf {
 /// `ghost_root`／helper パスから `GhostBootOptions` を組み立てる純粋ヘルパ
 /// （design.md「main の ghost boot／shutdown 結線」）。
 ///
-/// - `shiori`: `ShioriWiring::Helper { helper_exe }`（実行ファイル隣接の 32bit helper・本番結線）。
+/// - `shiori`: `shiori_wiring_for(modules, helper_exe)`（「読む」は実行ファイル隣接の 32bit helper・本番結線、「読まない」は差し替え口）。
 /// - `default_encoding`: `DefaultEncoding::Ansi`（charset 未宣言時の SSP 既定・記憶
 ///   areka-descript-encoding-ishiori-utf8）。
 /// - `sinks`: 可変長 sink 列（S-3）を `vec![LogSink, DiscardSink]` で埋める。broadcast（D4）で
@@ -415,11 +538,12 @@ pub(crate) fn ghost_boot_options(
     ghost_root: std::path::PathBuf,
     helper_exe: std::path::PathBuf,
     app_profile_dir: Option<std::path::PathBuf>,
+    modules: crate::cli::ModulePolicy,
 ) -> areka_ghost::GhostBootOptions {
     areka_ghost::GhostBootOptions {
         ghost_root,
         default_encoding: areka_parsers::charset::DefaultEncoding::Ansi,
-        shiori: areka_ghost::ShioriWiring::Helper { helper_exe },
+        shiori: shiori_wiring_for(modules, helper_exe),
         sinks: vec![
             Box::new(areka_ghost::sink::LogSink::new()),
             Box::new(areka_ghost::sink::DiscardSink::new()),
@@ -427,6 +551,21 @@ pub(crate) fn ghost_boot_options(
         system_vars: areka_ghost::SystemVarWiring::FromSylphya,
         app_profile_dir,
         ticker: areka_ghost::TickerMode::Real(Default::default()),
+    }
+}
+
+/// SHIORI の読み方の指定から結線を決める純粋な口（要件 7.1）。「読む」は今の補助のプロセス
+/// （`Helper { helper_exe }`）、「読まない」は何を聞かれても中身なしで答える差し替え口
+/// （`Custom(empty_connect())`）。倒れ先の [`ghost_boot_options`] と結線ありの起動の両方が使う。
+pub(crate) fn shiori_wiring_for(
+    modules: crate::cli::ModulePolicy,
+    helper_exe: std::path::PathBuf,
+) -> areka_ghost::ShioriWiring {
+    match modules {
+        crate::cli::ModulePolicy::Load => areka_ghost::ShioriWiring::Helper { helper_exe },
+        crate::cli::ModulePolicy::Skip => {
+            areka_ghost::ShioriWiring::Custom(Box::new(areka_ghost::shiori_wiring::empty_connect()))
+        }
     }
 }
 
@@ -465,3 +604,7 @@ mod roots_tests;
 #[cfg(test)]
 #[path = "boot_config_copy_tests.rs"]
 mod copy_tests;
+
+#[cfg(test)]
+#[path = "boot_config_option_tests.rs"]
+mod option_tests;

@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use temp_path_kit::TempPath;
 
+use super::args::Opt::{self, Bug, Desk, Id, Name, Pr, Purpose, Repo, Sha, Spec, Wait};
 use super::{Outcome, exit_code, run_with};
 use crate::error::WatchError;
 use crate::home::Home;
@@ -15,6 +16,33 @@ use crate::state::{State, WaitKind};
 
 pub(super) fn args(words: &[&str]) -> Vec<String> {
     words.iter().map(|word| (*word).to_owned()).collect()
+}
+
+/// 引数の綴りと、形に合う値（値を取らないものは `None`）。
+pub(super) fn sample(opt: Opt) -> (&'static str, Option<&'static str>) {
+    match opt {
+        Id => ("--id", Some("a1")),
+        Repo => ("--repo", Some("areka")),
+        Spec => ("--spec", Some("areka-P0-impl-watch")),
+        Name => ("--name", Some("見張り役")),
+        Purpose => ("--purpose", Some("負荷の計測")),
+        Desk => ("--desk", Some("test")),
+        Pr => ("--pr", Some("281")),
+        Sha => ("--sha", Some("414d43eb")),
+        Bug => ("--bug", None),
+        Wait => ("--wait", None),
+    }
+}
+
+/// コマンドの名前の後ろに、引数を形に合う値つきで並べる。
+pub(super) fn line(name: &str, opts: &[Opt]) -> Vec<String> {
+    let mut words = vec![name];
+    for opt in opts {
+        let (flag, value) = sample(*opt);
+        words.push(flag);
+        words.extend(value);
+    }
+    args(&words)
 }
 
 /// 差し替えた書き手で走らせ、結果・標準出力・標準エラーを返す。

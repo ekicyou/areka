@@ -33,15 +33,17 @@ use std::sync::mpsc::Sender;
 
 use areka_actor::{ActorHandle, ReplyError, ReplySender, reply_channel, run_inbox, spawn_actor};
 
+use crate::actor_sstp::{FirstReply, SstpReply, first_reply_of};
+use crate::actor_stop::{handoff_of, notify_stop, send_notice, stop_cause_of};
 use crate::change::{ChangeHandoff, KanadeNotice, RaiseOutcome, TalkGap};
 use crate::msg::{
-    EventId, KanadeConfig, KanadeMsg, KanadeStopCause, KanadeStopped, ShioriCall, ShioriFailure,
-    ShioriFault, ShioriMsg, ShioriOutcome,
+    EventId, KanadeConfig, KanadeMsg, KanadeStopCause, ShioriCall, ShioriFailure, ShioriMsg,
+    ShioriOutcome,
 };
 use crate::online::OnlineCounter;
 use crate::schedule::resources::ResourceSink;
 use crate::schedule::translate::TranslateResult;
-use crate::schedule::{Action, Input, Phase, State, TermCause, step};
+use crate::schedule::{Action, Input, State, step};
 use crate::shiori::real::ABSENT_REFERENCE;
 use crate::status::ExecutionStatus;
 use crate::talk::TalkCommand;
@@ -86,7 +88,7 @@ pub fn spawn_kanade(
 /// （[`spawn_kanade`] は `None` を渡す薄い包み＝既存の呼び手は 1 つも変わらない）。
 ///
 /// `stop_sink` は運行の通知（[`KanadeNotice`]）の送出端である。`Some` なら、[`Action::StopSelf`]
-/// の実行点で [`KanadeNotice::Stopped`]`(`[`KanadeStopped`]`{ cause, handoff })` を**ちょうど 1 度**
+/// の実行点で [`KanadeNotice::Stopped`]`(`[`KanadeStopped`](crate::msg::KanadeStopped)`{ cause, handoff })` を**ちょうど 1 度**
 /// 送る。受信端が既に落ちていても `warn!`（`event="stop_notify_failed"`）を残して停止は完走する
 /// （panic しない・log-first）。運行表の「通知を送る」（[`Action::Notice`]）もこの送出端へ流す。
 /// `None` なら通知は一切出ない（従来どおり）。
@@ -133,6 +135,8 @@ pub fn spawn_kanade_translating(
         run_inbox::<KanadeMsg, Infallible>(rx, move |msg| {
             // 汎用の通知の入口の返信端と、返事の材料（名前・許可表に在るか）。運行表へ渡す前に控える。
             let mut raise_reply: Option<(ReplySender<RaiseOutcome>, String, bool)> = None;
+            // SSTP の 2 つの入口の返信端と受け付けの判定。これも運行表へ渡す前に控える。
+            let mut sstp_reply: Option<SstpReply> = None;
             // 通信中の数はどのメッセージの処理よりも先に写す（新しい kanade も Boot の前に読む＝要件 2.6・5.1）。
             sync_online(config.online, &mut state);
             // 停止規約: Close は step を経ず即時 Break（積み残しは rx drop で破棄）。
@@ -199,6 +203,30 @@ pub fn spawn_kanade_translating(
                 }
                 KanadeMsg::ExecutionState(update) => Input::ExecutionState(update),
                 KanadeMsg::BalloonTimeout { talk_id } => Input::BalloonTimeout { talk_id },
+                // SSTP の 2 つの入口: 受け付けの判定は運行表の腕と同じ関数で、渡す前の状態で控える。
+                KanadeMsg::SstpSend {
+                    script,
+                    strict,
+                    reply,
+                } => {
+                    let accepted = crate::schedule::sstp::accepts(&state);
+                    sstp_reply = Some(SstpReply::Send { reply, accepted });
+                    Input::SstpSend { script, strict }
+                }
+                KanadeMsg::SstpNotify {
+                    event,
+                    references,
+                    strict,
+                    reply,
+                } => {
+                    let accepted = crate::actor_sstp::notify_accepted(&state, &event, &references);
+                    sstp_reply = Some(SstpReply::Notify { reply, accepted });
+                    Input::SstpNotify {
+                        event,
+                        references,
+                        strict,
+                    }
+                }
             };
             let (flow, first_reply) = drive_translating(
                 &mut state,
@@ -213,12 +241,19 @@ pub fn spawn_kanade_translating(
             // 返事はこの依頼の処理（応答を入れ直して動作を実行し終えるまで）が済んだ後に 1 回だけ送る。
             // 往復が無かったのは、許可表に無い名前か定常以外での依頼（どちらも運行表が捨てた）。
             if let Some((tx, id, allowed)) = raise_reply {
-                let outcome = match (allowed, first_reply) {
+                let outcome = match (allowed, &first_reply) {
                     (false, _) => RaiseOutcome::NotAllowed,
                     (true, None) => RaiseOutcome::NotSteady,
-                    (true, Some(outcome)) => outcome,
+                    (true, Some(first)) => first.raise_outcome(),
                 };
                 send_raise_reply(tx, &id, outcome);
+            }
+            if let Some(pending) = sstp_reply {
+                crate::actor_sstp::answer(
+                    pending,
+                    matches!(flow, Drive::Stop),
+                    first_reply.as_ref(),
+                );
             }
             // 台詞の切れ目の結果は、決まった依頼の処理の後に 1 回だけ送る（停止の直前でも送る）。
             if let Some(outcome) = crate::schedule::talk_gap::take_outcome(&mut state) {
@@ -250,7 +285,7 @@ fn drive(
     stop_sink: Option<&Sender<KanadeNotice>>,
 ) -> (Drive, Option<RaiseOutcome>) {
     let seams = TranslateSeams::passthrough();
-    drive_translating(
+    let (flow, first) = drive_translating(
         state,
         input,
         config,
@@ -259,15 +294,16 @@ fn drive(
         resource_sink,
         stop_sink,
         &seams,
-    )
+    );
+    (flow, first.map(|f| f.raise_outcome()))
 }
 
 /// DD-2 同期往復ループ: `step` の Action バッチを全実行し、最後の往復の結果のみを再投入して
 /// Actions が尽きるまで反復する（execute-batch/reinject-last）。入れ直すものが SHIORI の応答なら
 /// `Input::ShioriReply`、翻訳の結果なら `Input::TranslateDone` を入れる。
 ///
-/// 戻り値の 2 つ目は、最初の一括の往復の結果を [`RaiseOutcome`] へ写したもの（往復が無ければ
-/// `None`）。汎用の通知の入口の返事の材料で、他の入力では呼び手が読み捨てる。
+/// 戻り値の 2 つ目は、最初の一括の往復の結果を [`FirstReply`] へ写したもの（往復が無ければ
+/// `None`）。汎用の通知の入口と SSTP の入口の返事の材料で、他の入力では呼び手が読み捨てる。
 #[allow(clippy::too_many_arguments)]
 fn drive_translating(
     state: &mut State,
@@ -278,7 +314,7 @@ fn drive_translating(
     resource_sink: &ResourceSink,
     stop_sink: Option<&Sender<KanadeNotice>>,
     seams: &TranslateSeams,
-) -> (Drive, Option<RaiseOutcome>) {
+) -> (Drive, Option<FirstReply>) {
     // 終了原因の受け渡し（R15.3）: [`Action::StopSelf`] は必ず `Unloading{cause}` からの遷移で
     // 生まれる（発行点は `schedule::unloading_reply` の 1 箇所だけで、そこへ入れるのは
     // `Phase::Unloading` の先行アームだけ）。その遷移で `Phase` は `Stopped` へ書き換わり原因が
@@ -307,7 +343,7 @@ fn drive_translating(
         if std::mem::take(&mut first_batch) {
             first_reply = last_reply
                 .as_ref()
-                .map(|(outcome, _)| raise_outcome_of(outcome));
+                .map(|(outcome, _)| first_reply_of(outcome));
         }
         if stop {
             *state = st;
@@ -354,23 +390,6 @@ fn answer_status(state: &State, reply: ReplySender<ExecutionStatus>) {
             event = "status_query_reply_dropped",
             "状態の問い合わせの受け手は既に待ちを諦めている——答えを捨てる"
         );
-    }
-}
-
-/// SHIORI の往復の結果を汎用の通知の入口の返事へ写す。
-///
-/// 空の台本と空白だけの台本は返事なしに数える（運行表の再生の振る舞いは変えない）。エラー応答は
-/// 送出点（[`round_trip_request`]）で既に 204／NOTIFY の完了へ写っているので返事なしになる。
-/// `Unloaded` は通知の入口の往復からは生じない（降ろす往復の結果）が、写しの表を閉じるため
-/// 返事なしに置く。
-fn raise_outcome_of(outcome: &ShioriOutcome) -> RaiseOutcome {
-    match outcome {
-        ShioriOutcome::Value(script) if !script.trim().is_empty() => RaiseOutcome::Script,
-        ShioriOutcome::Value(_)
-        | ShioriOutcome::NoContent
-        | ShioriOutcome::Notified
-        | ShioriOutcome::Unloaded => RaiseOutcome::NoReply,
-        ShioriOutcome::Failed(_) => RaiseOutcome::Failed,
     }
 }
 
@@ -486,6 +505,7 @@ fn execute_batch(
                     ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => match id {
                         EventId::Static(s) => *s,
                         EventId::Choice(_) => "OnChoiceEvent",
+                        EventId::Sstp(_) => crate::schedule::sstp::NOTIFY_ORIGIN,
                     },
                 };
                 last_reply = Some((round_trip_request(shiori, call), origin));
@@ -642,6 +662,9 @@ pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -
                 || crate::schedule::resources::is_allowed_resource_id(s)
         }
         EventId::Choice(name) => crate::schedule::events::is_allowed_choice_event(name),
+        // 外から頼まれた名前（`EventId::Sstp`）: 入口と同じ検査を満たすかだけで決める。許可の表と
+        // スケジューラ起源の恒久禁止は効かせない（呼び手が 1 回ずつ頼むもの＝選択起源と同じ理屈）。
+        EventId::Sstp(name) => crate::sstp::validate_notify(name, references).is_ok(),
     };
     if !allowed {
         tracing::error!(
@@ -772,98 +795,6 @@ fn send_talk_command(sakura: &Sender<TalkCommand>, command: TalkCommand) {
     }
 }
 
-/// 運行状態が終了系列（`Unloading{cause}`）に居るなら、その原因を公開語彙へ写す（R15.3）。
-/// 運行状態は手放さないので、原因は clone して写す（Fault は種類と理由ごと）。
-///
-/// 写すのはここ 1 箇所だけである——内部の `TermCause` は `pub(crate)` に閉じたままで、公開面へ
-/// 出るのは [`KanadeStopCause`] の 5 値だけになる（DD-9 の露出規律）。終了系列でなければ `None`。
-///
-/// wildcard を置かないため、`TermCause` に値が増えたときは本表での判断がコンパイル時に要求される。
-fn stop_cause_of(state: &State) -> Option<KanadeStopCause> {
-    let Phase::Unloading { cause } = &state.phase else {
-        return None;
-    };
-    Some(match cause {
-        TermCause::Quit => KanadeStopCause::Quit,
-        TermCause::Forced => KanadeStopCause::Forced,
-        TermCause::CloseSilent => KanadeStopCause::CloseSilent,
-        TermCause::DeadlineExceeded => KanadeStopCause::DeadlineExceeded,
-        TermCause::Fault(fault) => KanadeStopCause::Fault(fault.clone()),
-    })
-}
-
-/// 運行状態の切替の帳簿を、停止通知に載せる切替の中身へ写す（切替の相を経ていなければ `None`）。
-fn handoff_of(state: &State) -> Option<ChangeHandoff> {
-    state.change.as_ref().map(|change| ChangeHandoff {
-        script: change.script.clone(),
-    })
-}
-
-/// 停止通知を投函する（R15.3・design D15 の 2）。
-///
-/// `sink` が `None` なら何もしない（通知端を結線していない構成＝既存の呼び手はすべてこちら）。
-/// 送出失敗は受信端（UI）が既に落ちていることを意味するだけで異常ではないが、**沈黙で捨てる
-/// 経路を作らない**（steering: areka-log-first-no-silent-failure）ため `warn!` を 1 件残す。
-/// panic はしない——ここで落ちると終了系列そのものが完走しなくなる。
-///
-/// `cause` が `None` になるのは、`Unloading` を経ずに `StopSelf` が現れた場合だけである
-/// （現在の運行表には存在しない経路）。その場合も通知は出す——窓を閉じる合図としての意味は
-/// 原因に依らないためで、原因不明であることは記録に残し、種類 `Unknown` の Fault として送る。
-fn notify_stop(
-    sink: Option<&Sender<KanadeNotice>>,
-    cause: Option<KanadeStopCause>,
-    handoff: Option<ChangeHandoff>,
-) {
-    let Some(tx) = sink else {
-        return;
-    };
-    if cause.is_none() {
-        tracing::warn!(
-            target: "kanade",
-            event = "stop_cause_unknown",
-            "終了系列の原因を控えられないまま StopSelf に至った——Fault として通知する"
-        );
-    }
-    let cause = cause.unwrap_or_else(|| KanadeStopCause::Fault(ShioriFault::unknown()));
-    // 送出に失敗した値は SendError に載って戻るので、記録にはそれを使う（clone しない）。
-    let stopped = KanadeStopped { cause, handoff };
-    // 戻ってくるのは送った「停止」そのものなので、腕は 1 つで足りる。
-    if let Err(std::sync::mpsc::SendError(KanadeNotice::Stopped(unsent))) =
-        tx.send(KanadeNotice::Stopped(stopped))
-    {
-        tracing::warn!(
-            target: "kanade",
-            event = "stop_notify_failed",
-            cause = ?unsent.cause,
-            "停止通知の送出に失敗（受信端＝UI は既に切断）——停止は完走する"
-        );
-    }
-}
-
-/// 運行表の「通知を送る」（[`Action::Notice`]）を送出端へ流す。
-///
-/// 送出端が無い構成（既存の呼び手）では `debug!` を 1 件残すだけ。受け口が消えていれば
-/// `warn!`（`event="notice_send_failed"`）を残して続ける（panic しない・運行は止めない）。
-fn send_notice(sink: Option<&Sender<KanadeNotice>>, notice: KanadeNotice) {
-    let Some(tx) = sink else {
-        tracing::debug!(
-            target: "kanade",
-            event = "notice_no_sink",
-            notice = ?notice,
-            "運行の通知の送出端が無い——通知は送らない"
-        );
-        return;
-    };
-    if let Err(std::sync::mpsc::SendError(unsent)) = tx.send(notice) {
-        tracing::warn!(
-            target: "kanade",
-            event = "notice_send_failed",
-            notice = ?unsent,
-            "運行の通知の送出に失敗（受信端＝UI は既に切断）——運行は続ける"
-        );
-    }
-}
-
 #[cfg(test)]
 #[path = "actor_tests.rs"]
 mod tests;
@@ -889,6 +820,11 @@ mod raise_reply_tests;
 #[cfg(test)]
 #[path = "actor_talk_gap_tests.rs"]
 mod talk_gap_tests;
+
+// SSTP の 2 つの入口の返事の檻（areka-P0-mcp-kanade-tools 要件 1.3・2.3・3.6）。
+#[cfg(test)]
+#[path = "actor_sstp_tests.rs"]
+mod sstp_tests;
 
 // 殻が通信中の数を毎メッセージ読んで写しへ渡すことの檻（areka-P0-status-execution-states 要件 2.5・2.6・5.1）。
 #[cfg(test)]

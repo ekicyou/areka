@@ -17,7 +17,10 @@ use areka_kanade::{ShioriBackend, ShioriConnection};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::ShioriMount;
 use shiori_host32_host::process_host::LOAD_ACK_TIMEOUT;
-use shiori_host32_host::{Charset, CharsetNegotiator, HelperLifecycle, ParentMessageWindow, spawn};
+use shiori_host32_host::{
+    Charset, CharsetNegotiator, ExitKind, HelperLifecycle, HelperStatus, ParentMessageWindow,
+    RequestError, ShutdownError, spawn,
+};
 use shiori_host32_ipc::MsgTag;
 
 /// ハンドシェイク（HELLO 受領）の上限時間（既存 E2E の `HANDSHAKE_TIMEOUT` と同値）。
@@ -202,6 +205,49 @@ pub fn real_connect(
     }
 }
 
+/// 何を聞かれても中身なしで答える SHIORI（`--option dontloadmodule`・要件 7.2〜7.5）。
+///
+/// 問い合わせには中身なし（204）、知らせには成功、終わりにはきれいな終了、状態には
+/// 動いている、で答える。起動の問い合わせの 204 は台本なしで次へ進み（要件 7.3）、
+/// 終了の問い合わせの 204 は終わる（要件 7.5）——どちらも kanade の今の決まりのまま。
+pub struct EmptyShiori;
+
+impl ShioriBackend for EmptyShiori {
+    fn get(
+        &mut self,
+        _id: &str,
+        _references: &[String],
+        _status: Option<&str>,
+    ) -> Result<Option<String>, RequestError> {
+        Ok(None)
+    }
+
+    fn notify(
+        &mut self,
+        _id: &str,
+        _references: &[String],
+        _status: Option<&str>,
+    ) -> Result<(), RequestError> {
+        Ok(())
+    }
+
+    fn unload(&mut self) -> Result<ExitKind, ShutdownError> {
+        Ok(ExitKind::Clean)
+    }
+
+    fn status(&mut self) -> HelperStatus {
+        HelperStatus::Running
+    }
+}
+
+/// `ShioriWiring::Custom` に渡す [`EmptyShiori`] の閉包。
+///
+/// 窓もプロセスも作らず、`descript.txt` の SHIORI の行（`mount.shiori`）を読まないので、
+/// SHIORI の行が無い・読めない SHIORI を指すゴーストでも起動は失敗にならない（要件 7.4）。
+pub fn empty_connect() -> impl FnOnce() -> Result<Box<dyn ShioriBackend>, String> + Send + 'static {
+    || Ok(Box::new(EmptyShiori) as Box<dyn ShioriBackend>)
+}
+
 #[cfg(test)]
 mod tests {
     use areka_parsers::charset::DefaultEncoding;
@@ -297,3 +343,7 @@ mod tests {
 #[cfg(test)]
 #[path = "shiori_wiring_charset_tests.rs"]
 mod shiori_wiring_charset_tests;
+
+#[cfg(test)]
+#[path = "shiori_wiring_empty_tests.rs"]
+mod shiori_wiring_empty_tests;

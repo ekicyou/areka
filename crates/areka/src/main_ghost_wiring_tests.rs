@@ -31,6 +31,7 @@ fn ghost_boot_options_wires_expected_fields() {
         ghost_root.clone(),
         helper_exe.clone(),
         Some(app_profile_dir.clone()),
+        crate::cli::ModulePolicy::Load,
     );
 
     assert_eq!(options.ghost_root, ghost_root);

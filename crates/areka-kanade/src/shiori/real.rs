@@ -316,7 +316,7 @@ fn run_shiori_loop(
                         tracing::info!(
                             target: "shiori-actor",
                             event = "unload_clean",
-                            "正規 clean shutdown 完了（unload → helper 正常終了 exit(0)）"
+                            "正規 clean shutdown 完了（unload が正常終了を返した）"
                         );
                         let _ = reply.send(ShioriOutcome::Unloaded);
                     }

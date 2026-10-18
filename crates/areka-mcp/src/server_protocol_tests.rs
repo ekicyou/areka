@@ -444,3 +444,118 @@ fn body_over_limit_is_413() {
     );
     assert_eq!(response.status, 413, "{response:?}");
 }
+
+/// 版ごとの話し方で要求 1 件を送る。旧式の 4 版は `MCP-Protocol-Version` を付ける（`initialize` だけは
+/// 付けない＝クライアントの送り方どおり）。`2026-07-28` は `MCP-Protocol-Version`・`Mcp-Method` を付け、
+/// `params` に `_meta` を入れる（`name` が文字列なら `Mcp-Name` も付ける）。
+fn speak(
+    addr: std::net::SocketAddr,
+    version: &str,
+    id: u64,
+    method: &str,
+    params: Option<Value>,
+) -> Response {
+    let mut headers: Vec<(&str, String)> = Vec::new();
+    if version == "2026-07-28" {
+        let mut params = params.unwrap_or_else(|| json!({}));
+        if let Some(name) = params.get("name").and_then(Value::as_str) {
+            headers.push(("Mcp-Name", name.to_owned()));
+        }
+        params["_meta"] = stateless_meta();
+        headers.push(("MCP-Protocol-Version", version.to_owned()));
+        headers.push(("Mcp-Method", method.to_owned()));
+        let extra: Vec<(&str, &str)> = headers.iter().map(|(n, v)| (*n, v.as_str())).collect();
+        return post_rpc(addr, &extra, &rpc(method, Some(id), Some(params)));
+    }
+    if method != "initialize" {
+        headers.push(("MCP-Protocol-Version", version.to_owned()));
+    }
+    let extra: Vec<(&str, &str)> = headers.iter().map(|(n, v)| (*n, v.as_str())).collect();
+    post_rpc(addr, &extra, &rpc(method, Some(id), params))
+}
+
+/// (要件 1.1・1.2・1.4・2.1・2.3) `params` の欠かせない 3 つのメソッドに形の合わない `params` を送ると、
+/// 5 つの版のどれでも `{"code":-32602,"message":"invalid params for <m>"}`（`data`・`result` なし）。
+/// HTTP の状態は未登録の名前の `tools/call` と同じ（旧式 200・`2026-07-28` 400）。
+/// `params` なしは旧式の 4 版だけ（`2026-07-28` は `_meta` を `params` に入れるので送れない）。
+#[test]
+fn malformed_params_of_params_required_methods_are_invalid_params_in_every_version() {
+    let (_server, addr) = serve(ToolRegistry::default());
+    for version in SUPPORTED_VERSIONS {
+        let baseline = speak(
+            addr,
+            version,
+            1,
+            "tools/call",
+            Some(json!({ "name": "no_such_tool", "arguments": {} })),
+        );
+        assert_eq!(
+            baseline.json()["error"]["code"],
+            -32602,
+            "{version}: {baseline:?}"
+        );
+        let expected_status = if version == "2026-07-28" { 400 } else { 200 };
+        assert_eq!(baseline.status, expected_status, "{version}: {baseline:?}");
+        let mut cases = vec![
+            ("tools/call", Some(json!({ "name": 7 }))),
+            ("tools/call", Some(json!({}))),
+            (
+                "tools/call",
+                Some(json!({ "name": "get_status", "arguments": 7 })),
+            ),
+            ("initialize", Some(json!({ "protocolVersion": 7 }))),
+            ("completion/complete", Some(json!({ "ref": 7 }))),
+        ];
+        if version != "2026-07-28" {
+            cases.push(("tools/call", None));
+        }
+        for (id, (method, params)) in (2..).zip(cases) {
+            let response = speak(addr, version, id, method, params.clone());
+            assert_eq!(
+                response.status, baseline.status,
+                "{version} {method} {params:?}: {response:?}"
+            );
+            let value = response.json();
+            assert!(value.get("result").is_none(), "{version}: {value}");
+            assert_eq!(
+                value["error"],
+                json!({ "code": -32602, "message": format!("invalid params for {method}") }),
+                "{version} {method} {params:?}"
+            );
+        }
+    }
+}
+
+/// (要件 1.3・1.6・2.1・2.3) 受け付けないメソッドは 5 つの版のどれでも今のまま `-32601`（文は名前）。
+/// `2026-07-28` の `ping` も `-32601`・404。`tools/list` の形の違う `cursor` は受け流して成功のまま。
+#[test]
+fn methods_not_accepted_keep_method_not_found_and_list_methods_keep_passing_in_every_version() {
+    let (_server, addr) = serve(ToolRegistry::default());
+    for version in SUPPORTED_VERSIONS {
+        let response = speak(addr, version, 1, "nope/unknown", Some(json!({ "name": 7 })));
+        let value = response.json();
+        assert!(value.get("result").is_none(), "{version}: {value}");
+        assert_eq!(
+            value["error"],
+            json!({ "code": -32601, "message": "nope/unknown" }),
+            "{version}: {response:?}"
+        );
+        if version == "2026-07-28" {
+            let response = speak(addr, version, 2, "ping", None);
+            assert_eq!(response.status, 404, "{response:?}");
+            assert_eq!(
+                response.json()["error"],
+                json!({ "code": -32601, "message": "ping" }),
+                "{response:?}"
+            );
+        }
+        let list = result_of(&speak(
+            addr,
+            version,
+            3,
+            "tools/list",
+            Some(json!({ "cursor": 7 })),
+        ));
+        assert_eq!(list["tools"], json!([]), "{version}: {list}");
+    }
+}

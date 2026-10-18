@@ -1,4 +1,4 @@
-//! 本物の実行ファイルを子プロセスで立てて、机の往復を実時間で通す実機テスト（要件 12.5・`#[ignore]`）。
+//! 本物の実行ファイルを子プロセスで立てて、机の往復を実時間で通す実機テスト（要件 13.4・13.5・`#[ignore]`）。
 //!
 //! 実行: `cargo test -p areka-impl-watch --test real -- --ignored --nocapture`（約 30 秒）
 //! 短い形: `cargo test -p areka-impl-watch --test real -- --ignored --nocapture --skip a_waiter_reclaims`
@@ -49,7 +49,7 @@ const ONE_POLL: Duration = Duration::from_millis(1200);
 /// 机が空いていて、直前のマージの記録も無いときの、マージの番の 1 行。
 const GRANTED: &str = "granted merge repo=areka; last: none\n";
 /// 版の合わない状態ファイルを読んだときの失敗の文。
-const MISMATCH: &str = "state file version mismatch: file has 2, this exe knows 1. Do not mix old and new exes; see doc/impl-watch.md\n";
+const MISMATCH: &str = "state file version mismatch: file has 1, this exe knows 2. Do not mix old and new exes; see doc/impl-watch.md\n";
 /// 他へ許すのは読みだけ（消し＝置き換えを許さない）で開く、の指定。
 const SHARE_READ: u32 = 1;
 const SHARE_WRITE: u32 = 2;
@@ -127,22 +127,22 @@ fn a_merge_wait_ends_by_its_turn_and_merged_ends_the_watch() {
     desk.assert_logged("merge", ended);
 }
 
-/// 流れ ③: 負荷テストの待ち → 別の参加者の見張りが 0 で終わる → 「止まった」と再開の待ち →
-/// 負荷テストの番 → 「済んだ」で再開。止まっている間に停止要請が出し直されたら、再開の待ちが
-/// それを知らせて 0 で終わる（要件 5.16）。止まっている参加者の負荷テストの申し込みは、その
-/// 参加者の状態も候補の番も変えない（要件 5.9）。
+/// 流れ ③: 排他テストの机とひとり占めの申し込みの待ち → 別の参加者の見張りが 0 で終わる →
+/// 「止まった」と再開の待ち → 番 → 返しで再開。止まっている間に停止要請が出し直されたら、再開の
+/// 待ちがそれを知らせて 0 で終わる。止まっている参加者のひとり占めを含む申し込みは、その
+/// 参加者の状態も候補の番も変えない。
 #[test]
 #[ignore = "実機: 本物の実行ファイルを子プロセスで立てる。cargo test -p areka-impl-watch --test real -- --ignored --nocapture"]
-fn a_load_test_stops_the_others_and_done_resumes_them() {
+fn a_sole_request_stops_the_others_and_return_resumes_them() {
     let desk = Desk::new("impl-watch-real-stop");
     let status_md = desk.file("status.md");
     let mut watch_a = desk.watch("a");
     let named = "watch --id b --repo areka --name 作業B";
     let mut watch_b = desk.waiter("b", "watch", named);
-    // 負荷テストの机はマシンに 1 つ: 別のリポジトリの c の申し込みで、areka の a と b が止まる。
+    // ひとり占めはマシンに 1 つ: 別のリポジトリの c の申し込みで、areka の a と b が止まる。
     let mut watch_c = desk.waiter("c", "watch", "watch --id c --repo pasta");
-    let load = "loadtest --id c --repo pasta --purpose 計測5回 --wait";
-    let mut load_c = desk.waiter("c", "load", load);
+    let sole = "request --id c --repo pasta --desk test,sole --purpose 計測5回 --wait";
+    let mut sole_c = desk.waiter("c", "request", sole);
 
     // a と b の見張りが停止要請で終わる。端末には識別と読み物の道筋だけ（内容は読み物に在る）。
     let told = format!("stop requested by c\ndetails: {}\n", status_md.display());
@@ -184,24 +184,25 @@ fn a_load_test_stops_the_others_and_done_resumes_them() {
     // もう一度「止まった」と言う（前の待ちは終わっているので、2 本は重ならない）。
     let mut stopped_b = desk.waiter("b", "resume", stopped);
 
-    // 止まっている b が負荷テストを申し込んでも、b は「止まった」のまま並ぶだけ。
-    let queued = desk.call("loadtest --id b --repo areka --purpose p");
-    assert_eq!(queued, ok("queued load pos=2\n"));
+    // 止まっている b がひとり占めを申し込んでも、b は「止まった」のまま並ぶだけ。
+    let queued = desk.call("request --id b --repo areka --desk test,sole --purpose p");
+    assert_eq!(queued, ok("queued test,sole pos=2\n"));
     let state = desk.state();
     assert_eq!(state["participants"]["b"]["status"], "stopped", "{state}");
     std::thread::sleep(ONE_POLL);
     stopped_b.assert_waiting_silently();
-    load_c.assert_waiting_silently();
+    sole_c.assert_waiting_silently();
 
     // a も「止まった」→ 同じ呼び出しで c の番が出て、c の待ちが止まった識別つきで終わる
     // （b の申し込みは c の番を止めない）。
     let mut stopped_a = desk.waiter("a", "resume", "stopped --id a --wait");
-    assert_eq!(load_c.end(), ok("granted load; stopped: a, b\n"));
-    // 負荷テストの候補・持ち主に停止要請は出ない: c の見張りは走り続ける。
+    assert_eq!(sole_c.end(), ok("granted test,sole; stopped: a, b\n"));
+    // ひとり占めの候補・持ち主に停止要請は出ない: c の見張りは走り続ける。
     watch_c.assert_waiting_silently();
     let state = desk.state();
     assert_eq!(state["participants"]["b"]["status"], "stopped", "{state}");
-    assert_eq!(state["load"]["holder"]["id"], "c", "{state}");
+    assert_eq!(state["test"]["id"], "c", "{state}");
+    assert_eq!(state["sole"]["id"], "c", "{state}");
 
     // 殺された再開の待ちの記録は、次の状態を変える呼び出しが消す。待ちは `resume` で始め直せる。
     stopped_b.kill();
@@ -214,10 +215,10 @@ fn a_load_test_stops_the_others_and_done_resumes_them() {
     std::thread::sleep(ONE_POLL);
     resume_b.assert_waiting_silently();
 
-    // 持ち主でない「済んだ」は 3。持ち主の「済んだ」で a と b が再開する。
-    let refused = done(3, "", "not applied: not the load-test holder\n");
-    assert_eq!(desk.call("loaddone --id b"), refused);
-    assert_eq!(desk.call("loaddone --id c"), ok("load done\n"));
+    // 持ち主でない返しは 3。持ち主の返しで a と b が再開する。
+    let refused = done(3, "", "not applied: not the holder of that desk\n");
+    assert_eq!(desk.call("return --id b --desk test,sole"), refused);
+    assert_eq!(desk.call("return --id c"), ok("returned test,sole\n"));
     assert_eq!(resume_b.end(), ok("resumed\n"));
     assert_eq!(stopped_a.end(), ok("resumed\n"));
 
@@ -238,12 +239,60 @@ fn a_load_test_stops_the_others_and_done_resumes_them() {
     assert_eq!(desk.call("leave --id b"), ok("left\n"));
     assert_eq!(watch_b.end(), gone("removed"));
 
-    desk.assert_logged("loadtest", "StopRequested { id: \"b\", by: \"c\" }");
+    desk.assert_logged("request", "StopRequested { id: \"b\", by: \"c\" }");
     desk.assert_logged("unstop", "StopRequested { id: \"b\", by: \"c\" }");
     desk.assert_logged("stopped", "Stopped { id: \"b\" }");
-    let granted = "LoadGranted { id: \"c\", stopped: [\"a\", \"b\"] }";
+    let granted = "DeskGranted { id: \"c\", desks: TestSole, stopped: [\"a\", \"b\"] }";
     desk.assert_logged("stopped", granted);
-    desk.assert_logged("loaddone", "Resumed { id: \"b\", why: \"no-load\" }");
+    desk.assert_logged("return", "Resumed { id: \"b\", why: \"no-sole\" }");
+}
+
+/// 要件 13.4: 2 つの子プロセスが排他テストの机を待ちつきで取り合うと、1 つだけが番で終わり、
+/// もう 1 つは黙って待ち続ける。勝った方が返すと、もう 1 つが番で終わる。
+#[test]
+#[ignore = "実機: 本物の実行ファイルを子プロセスで立てる。cargo test -p areka-impl-watch --test real -- --ignored --nocapture"]
+fn two_processes_contend_for_the_test_desk_and_one_wins_at_a_time() {
+    let desk = Desk::new("impl-watch-real-test-desk");
+    let mut watches = [desk.watch("a"), desk.watch("b")];
+    let ids = ["a", "b"];
+    let line = |id: &str| format!("request --id {id} --repo areka --desk test --purpose t --wait");
+    // 記録を待たずに続けて立てる（取り合わせる）。
+    let mut waits = ids.map(|id| desk.start(&line(id)));
+
+    let state = desk.until(
+        "一方が机を持ち、もう一方が待ちを記録する",
+        |state| {
+            let holder = state["test"]["id"].as_str();
+            let other = ids.into_iter().find(|id| Some(*id) != holder);
+            holder.is_some() && other.is_some_and(|id| has_wait(state, id, "request"))
+        },
+    );
+    desk.settle();
+    let winner = usize::from(state["test"]["id"] == "b");
+    let loser = 1 - winner;
+    assert_eq!(count(&state["requests"]), 1, "{state}");
+    assert_eq!(state["requests"][0]["id"], ids[loser], "{state}");
+    assert_eq!(waits[winner].end(), ok("granted test\n"));
+    std::thread::sleep(ONE_POLL);
+    waits[loser].assert_waiting_silently();
+
+    // 勝った方が返す → もう一方が番で終わる。
+    let returned = desk.call(&format!("return --id {} --desk test", ids[winner]));
+    assert_eq!(returned, ok("returned test\n"));
+    assert_eq!(waits[loser].end(), ok("granted test\n"));
+    let state = desk.state();
+    assert_eq!(state["test"]["id"], ids[loser], "{state}");
+    assert_eq!(count(&state["requests"]), 0, "{state}");
+    assert_eq!(
+        count(&state["waits"]),
+        2,
+        "見張りの 2 本だけが残る: {state}"
+    );
+
+    for (id, watch) in ids.iter().zip(&mut watches) {
+        assert_eq!(desk.call(&format!("leave --id {id}")), ok("left\n"));
+        assert_eq!(watch.end(), gone("removed"));
+    }
 }
 
 /// 流れ ④: 見張りを殺すと、次の状態を変える呼び出しがその参加者を回収し、同じ呼び出しで
@@ -322,7 +371,7 @@ fn a_recorded_pid_of_another_living_process_does_not_count_as_present() {
     // このテストのプロセス（生きている）の番号を、見張りの番号として書いておく。
     let pid = std::process::id();
     let state = json!({
-        "version": 1,
+        "version": 2,
         "participants": { "z": {
             "id": "z", "name": "z", "repo": "areka", "status": "working", "since": 1,
             "watch": { "pid": pid, "since": 1 }
@@ -338,7 +387,7 @@ fn a_recorded_pid_of_another_living_process_does_not_count_as_present() {
     desk.assert_logged("tick", "Reclaimed { id: \"z\", why: \"watch absent\" }");
 }
 
-/// 流れ ⑤: `clear` で、走っていた見張り・マージの待ち・負荷テストの待ち・再開の待ちが
+/// 流れ ⑤: `clear` で、走っていた見張り・マージの待ち・ひとり占めの申し込みの待ち・再開の待ちが
 /// 全部 3 で終わる。消す前の状態は別名で残る。
 #[test]
 #[ignore = "実機: 本物の実行ファイルを子プロセスで立てる。cargo test -p areka-impl-watch --test real -- --ignored --nocapture"]
@@ -355,23 +404,23 @@ fn clear_ends_every_running_wait_and_watch_with_3() {
     let mut watch_c = desk.watch("c");
     let mut watch_l = desk.watch("l");
 
-    // l の負荷テストの申し込みで止まるのは c だけ（マージの持ち主 a とマージ待ちの b は対象外）。
-    let load = "loadtest --id l --repo areka --purpose p --wait";
-    let mut load_l = desk.waiter("l", "load", load);
+    // l のひとり占めの申し込みで止まるのは c だけ（マージの持ち主 a とマージ待ちの b は対象外）。
+    let sole = "request --id l --repo areka --desk test,sole --purpose p --wait";
+    let mut sole_l = desk.waiter("l", "request", sole);
     let status_md = desk.file("status.md");
     let told = format!("stop requested by l\ndetails: {}\n", status_md.display());
     assert_eq!(watch_c.end(), ok(&told));
     let mut stopped_c = desk.waiter("c", "resume", "stopped --id c --wait");
-    // マージの持ち主が「済んだ」と言うまで、負荷テストの番は来ない。
+    // マージの持ち主が「済んだ」と言うまで、ひとり占めの番は来ない。
     std::thread::sleep(ONE_POLL);
     let state = desk.state();
-    assert!(state["load"]["holder"].is_null(), "{state}");
+    assert!(state["sole"].is_null(), "{state}");
     assert_eq!(state["participants"]["c"]["status"], "stopped", "{state}");
     assert_eq!(state["participants"]["a"]["status"], "working", "{state}");
     assert_eq!(state["participants"]["b"]["status"], "working", "{state}");
     let (watches, requests) = (
         [&mut watch_a, &mut watch_b, &mut watch_l, &mut stopped_c],
-        [&mut wait_b, &mut load_l],
+        [&mut wait_b, &mut sole_l],
     );
     for running in watches.into_iter().chain(requests) {
         running.assert_waiting_silently();
@@ -393,21 +442,23 @@ fn clear_ends_every_running_wait_and_watch_with_3() {
     assert_eq!(watch_l.end(), gone("removed"));
     assert_eq!(stopped_c.end(), gone("removed"));
     assert_eq!(wait_b.end(), gone("request gone"));
-    assert_eq!(load_l.end(), gone("request gone"));
+    assert_eq!(sole_l.end(), gone("request gone"));
 
     // 残るのは版と「消した記録」だけ。
     let state = desk.state();
-    assert_eq!(state["version"], 1, "{state}");
+    assert_eq!(state["version"], 2, "{state}");
     assert_eq!(state["participants"], json!({}), "{state}");
     assert_eq!(state["merge"], json!({}), "{state}");
-    assert_eq!(state["load"], json!({ "holder": null, "queue": [] }));
+    assert_eq!(state["test"], Value::Null, "{state}");
+    assert_eq!(state["sole"], Value::Null, "{state}");
+    assert_eq!(count(&state["requests"]), 0, "{state}");
     assert_eq!(count(&state["waits"]), 0, "{state}");
     assert_eq!(count(&state["recent"]), 1, "{state}");
     assert_eq!(state["recent"][0]["kind"], "cleared", "{state}");
     assert_eq!(state["recent"][0]["detail"], backup, "{state}");
     desk.assert_logged("clear", "Cleared { backup: Some(");
     let summary = desk.status();
-    let first = "participants=0 load-holder=none load-queued=0 merging=0 merge-queued=0 not-working=0 waits=0\n";
+    let first = "participants=0 sole=none test=none requests=0 merging=0 merge-queued=0 not-working=0 waits=0\n";
     assert!(summary.starts_with(first), "{summary}");
 }
 
@@ -510,7 +561,7 @@ fn replacing_goes_through_while_another_process_holds_the_state_file_open() {
 #[test]
 #[ignore = "実機: 本物の実行ファイルを子プロセスで立てる。cargo test -p areka-impl-watch --test real -- --ignored --nocapture"]
 fn the_log_keeps_event_lines_and_failure_lines_across_processes() {
-    const OTHER_VERSION: &str = "{\"version\": 2}";
+    const OTHER_VERSION: &str = "{\"version\": 1}";
     let desk = Desk::new("impl-watch-real-log");
     let state_json = desk.file("state.json");
 
@@ -530,7 +581,7 @@ fn the_log_keeps_event_lines_and_failure_lines_across_processes() {
     assert_eq!(desk.call("tick"), done(1, "", MISMATCH));
     assert_eq!(desk.call("status"), done(1, "", MISMATCH));
     assert_eq!(read(&state_json), OTHER_VERSION);
-    let mismatch = "error=state file version mismatch: file has 2, this exe knows 1";
+    let mismatch = "error=state file version mismatch: file has 1, this exe knows 2";
     let changing = format!("[store] state change failed {mismatch}");
     let reading = format!("[store] read failed {mismatch}");
     assert_eq!(desk.log_lines("ERROR", &changing), 1, "{}", desk.log());

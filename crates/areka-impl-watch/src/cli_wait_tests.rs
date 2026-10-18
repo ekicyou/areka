@@ -1,4 +1,4 @@
-//! 待つコマンド（`watch`・`merge --wait`・`loadtest --wait`・`stopped --wait`・`resume`）の
+//! 待つコマンド（`watch`・`merge --wait`・`request --wait`・`stopped --wait`・`resume`）の
 //! 手順のテスト。
 //!
 //! 本物の口（状態ファイル・ロックファイル・本物の時計・1 秒の眠り）を、ワークツリーの `target\`
@@ -22,20 +22,23 @@ use crate::error::escape_path;
 use crate::state::{ParticipantStatus, WaitKind, WaitRecord};
 
 const MERGE_A: [&str; 7] = ["merge", "--id", "a", "--repo", "areka", "--spec", "x"];
-const LOAD_A: [&str; 7] = [
-    "loadtest",
+const SOLE_A: [&str; 9] = [
+    "request",
     "--id",
     "a",
     "--repo",
     "areka",
+    "--desk",
+    "test,sole",
     "--purpose",
     "負荷の計測",
 ];
 const WATCH_A: [&str; 5] = ["watch", "--id", "a", "--repo", "areka"];
 
-/// 負荷テストの机: c が待っている（a が止まるまで番は来ない）。
-const C_QUEUED: &str =
-    r#"{ "queue": [ { "id": "c", "purpose": "負荷の計測", "requested": 10 } ] }"#;
+/// 机の申し込み: c が排他テストの机とひとり占めを待っている（a が止まるまで番は来ない）。
+const C_QUEUED: &str = r#""requests": [
+    { "id": "c", "desks": "test,sole", "purpose": "負荷の計測", "requested": 10 }
+]"#;
 
 /// `--wait` を付けた呼び出し。
 fn waiting(home: &Path, words: &[&str]) -> (u8, String, String) {
@@ -80,25 +83,25 @@ fn details(home: &Path) -> String {
 }
 
 /// a が c の負荷テストのために `status`（停止要請中・止まった）になっている状態を置く。
-/// `load` は負荷テストの机（c が待っている・持っている）。
-fn put_not_working(home: &Path, status: &str, load: &str) {
+/// `desks` は机の項目（c が申し込んでいる・持っている）。
+fn put_not_working(home: &Path, status: &str, desks: &str) {
     put_state(
         home,
         &format!(
             r#"{{
-              "version": 1,
+              "version": 2,
               "participants": {{
                 "a": {{ "id": "a", "repo": "areka", "status": "{status}",
                         "stop_reason": {{ "by": "c", "purpose": "負荷の計測" }} }},
                 "c": {{ "id": "c", "repo": "areka" }}
               }},
-              "load": {load}
+              {desks}
             }}"#
         ),
     );
 }
 
-// ---- マージの番・負荷テストの番 ----
+// ---- マージの番・机の番 ----
 
 #[test]
 fn merge_wait_ends_at_once_with_the_last_merge_when_the_turn_has_already_come() {
@@ -175,17 +178,18 @@ fn a_restarted_merge_wait_that_ends_at_once_removes_the_record_of_the_killed_wai
 }
 
 #[test]
-fn loadtest_wait_is_granted_at_once_when_nobody_has_to_stop() {
+fn request_wait_is_granted_at_once_when_nobody_has_to_stop() {
     let root = TempPath::under_target("impl-watch-cli-wait");
     let home = home_in(&root);
 
-    let granted = done("granted load; stopped: none");
-    assert_eq!(waiting(&home, &LOAD_A), granted);
+    let granted = done("granted test,sole; stopped: none");
+    assert_eq!(waiting(&home, &SOLE_A), granted);
 
     let state = read_state(&home);
-    assert_eq!(state.load.holder.expect("持ち主が居る").id, "a");
+    assert_eq!(state.sole.expect("持ち主が居る").id, "a");
+    assert_eq!(state.test.expect("持ち主が居る").id, "a");
     assert_eq!(state.waits, []);
-    assert_eq!(waiting(&home, &LOAD_A), granted);
+    assert_eq!(waiting(&home, &SOLE_A), granted);
 }
 
 #[test]
@@ -272,7 +276,8 @@ fn watch_for_a_stopped_participant_ends_at_once_saying_what_to_run() {
     put_not_working(
         &home,
         "stopped",
-        r#"{ "holder": { "id": "c", "purpose": "負荷の計測", "stopped": ["a"] } }"#,
+        r#""test": { "id": "c", "purpose": "負荷の計測" },
+           "sole": { "id": "c", "purpose": "負荷の計測", "stopped": ["a"] }"#,
     );
     let _held = hold_watches(&home, &["c"]);
     let told = format!(
@@ -360,7 +365,7 @@ fn stopped_wait_records_stopped_before_it_starts_to_wait() {
     // 再開を待っている。
     let state = read_state(&home);
     assert_eq!(state.participants["a"].status, ParticipantStatus::Stopped);
-    assert_eq!(state.load.holder.expect("持ち主が居る").id, "c");
+    assert_eq!(state.sole.expect("持ち主が居る").id, "c");
     assert_eq!(waits(&home), [("a".to_owned(), WaitKind::Resume)]);
 }
 
@@ -381,30 +386,32 @@ fn resume_for_a_stop_requested_participant_ends_at_once_saying_who_asked_and_rec
     let state = read_state(&home);
     let status = state.participants["a"].status;
     assert_eq!(status, ParticipantStatus::StopRequested);
-    assert_eq!(state.load.holder, None);
+    assert_eq!(state.sole, None);
     assert_eq!(state.waits, []);
     // 居る印も握ったままにしない: 呼び直しても 1 にならない。
     assert_eq!(call(&home, &resume), asked_again);
 }
 
 #[test]
-fn stopped_wait_ends_with_stop_requested_again_when_the_same_call_hands_the_load_desk_on() {
+fn stopped_wait_ends_with_stop_requested_again_when_the_same_call_hands_the_sole_desk_on() {
     let root = TempPath::under_target("impl-watch-cli-wait");
     let home = home_in(&root);
-    // 負荷テストの机の持ち主 h（作業中・見張りなし）・待ち行列の c（見張りの印を握る）・作業中の a。
+    // 排他テストの机とひとり占めの持ち主 h（作業中・見張りなし）・申し込みの c（見張りの印を
+    // 握る）・作業中の a。
     put_state(
         &home,
         r#"{
-          "version": 1,
+          "version": 2,
           "participants": {
             "a": { "id": "a", "repo": "areka" },
             "c": { "id": "c", "repo": "areka" },
             "h": { "id": "h", "repo": "areka" }
           },
-          "load": {
-            "holder": { "id": "h", "purpose": "負荷の計測" },
-            "queue": [ { "id": "c", "purpose": "負荷の計測", "requested": 10 } ]
-          }
+          "test": { "id": "h", "purpose": "負荷の計測" },
+          "sole": { "id": "h", "purpose": "負荷の計測" },
+          "requests": [
+            { "id": "c", "desks": "test,sole", "purpose": "負荷の計測", "requested": 10 }
+          ]
         }"#,
     );
     let _held = hold_watches(&home, &["c"]);

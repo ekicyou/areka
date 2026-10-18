@@ -1,28 +1,57 @@
 //! 停止要請・止まった・再開の判断（規則 2・5・7）の決定論テスト。時刻と生死は引数で渡し、眠らない。
+//!
+//! 負荷テストは「排他テストの机とひとり占めを並べた申し込み（`test,sole`）」で、済んだら名指し
+//! なしで返す。今の負荷テストの机と同じ答えになることを確かめる（要件 5.1〜5.5）。
 
 use super::test_support::{
     PID, PURPOSE, REPO, T0, applied, ask_to_stop, assert_not_applied, hold_load, hold_merge,
     hold_running_load, load_done, load_test, queue_load, queue_merge, run, state_with, stop_for,
-    stopped, watch_registered,
+    stopped, test_freed, test_freed_record, watch_registered,
 };
 use super::{Command, Event};
-use crate::state::{LoadDesk, LoadHolder, Participant, ParticipantStatus, State};
+use crate::state::{
+    DeskRequest, DeskSet, Participant, ParticipantStatus, SoleHolder, State, TestHolder,
+};
 
 use ParticipantStatus::{StopRequested, Stopped, Working};
 
 fn load_requested(id: &str) -> Event {
-    Event::LoadRequested { id: id.to_owned() }
+    Event::DeskRequested {
+        id: id.to_owned(),
+        desks: DeskSet::TestSole,
+    }
 }
 
 fn load_granted(id: &str, stopped: &[&str]) -> Event {
-    Event::LoadGranted {
+    Event::DeskGranted {
         id: id.to_owned(),
+        desks: DeskSet::TestSole,
         stopped: stopped.iter().map(|id| (*id).to_owned()).collect(),
     }
 }
 
-fn load_finished(id: &str) -> Event {
-    Event::LoadDone { id: id.to_owned() }
+/// 負荷テストの 2 つの机を名指しなしで返した出来事（排他テストの机が空いた・返した）に、
+/// 続く出来事 `rest` を並べたもの。
+fn load_finished(id: &str, rest: Vec<Event>) -> Vec<Event> {
+    let returned = Event::DeskReturned {
+        id: id.to_owned(),
+        desks: DeskSet::TestSole,
+    };
+    [vec![test_freed(id, "returned"), returned], rest].concat()
+}
+
+/// 排他テストの机・ひとり占め・机の申し込みの待ち行列（負荷テストの机に当たる部分）。
+fn desks(state: &State) -> (Option<TestHolder>, Option<SoleHolder>, Vec<DeskRequest>) {
+    (
+        state.test.clone(),
+        state.sole.clone(),
+        state.requests.clone(),
+    )
+}
+
+/// 机が全部空いて、申し込みも無い。
+fn no_desks() -> (Option<TestHolder>, Option<SoleHolder>, Vec<DeskRequest>) {
+    (None, None, Vec::new())
 }
 
 fn stop_requested(id: &str, by: &str) -> Event {
@@ -135,34 +164,33 @@ fn a_stop_round_trip_reports_one_event_per_change() {
     let got = run(&mut state, &stopped("A"), Some("A"), T0 + 6);
     assert_eq!(got, applied(true, vec![stop_reported("A")]));
     assert_eq!(seen(&state, "A"), (Stopped, T0 + 6, Some("C"), None));
-    assert_eq!(state.load.holder, None);
+    assert_eq!(state.sole, None);
 
     // 最後の「止まった」と同じ呼び出しで番が来て、そのとき止まっていた識別が控えられる。
     let got = run(&mut state, &stopped("B"), Some("B"), T0 + 7);
     let events = vec![stop_reported("B"), load_granted("C", &["A", "B"])];
     assert_eq!(got, applied(true, events));
-    let desk = LoadDesk {
-        holder: Some(LoadHolder {
-            id: "C".to_owned(),
-            purpose: PURPOSE.to_owned(),
-            requested: T0 + 5,
-            granted: T0 + 7,
-            running: false,
-            stopped: vec!["A".to_owned(), "B".to_owned()],
-        }),
-        queue: Vec::new(),
+    let test = TestHolder {
+        id: "C".to_owned(),
+        purpose: PURPOSE.to_owned(),
+        requested: T0 + 5,
+        granted: T0 + 7,
     };
-    assert_eq!(state.load, desk);
+    let sole = SoleHolder {
+        id: "C".to_owned(),
+        purpose: PURPOSE.to_owned(),
+        requested: T0 + 5,
+        granted: T0 + 7,
+        running: false,
+        stopped: vec!["A".to_owned(), "B".to_owned()],
+    };
+    assert_eq!(desks(&state), (Some(test), Some(sole), Vec::new()));
     // 「作業中」のまま番を受けた持ち主は、何も変わらない（見張りは走り続けている）。
     assert_eq!(seen(&state, "C"), (Working, T0, None, None));
 
     // 済んだら全員が「作業中」へ戻り、理由が消え、見張りを立て直すまでの印が付く。
     let got = run(&mut state, &load_done("C"), Some("C"), T0 + 20);
-    let events = vec![
-        load_finished("C"),
-        resumed("A", "no-load"),
-        resumed("B", "no-load"),
-    ];
+    let events = load_finished("C", vec![resumed("A", "no-sole"), resumed("B", "no-sole")]);
     assert_eq!(got, applied(true, events));
     let mut expected = state_with(&["A", "B", "C"]);
     for id in ["A", "B"] {
@@ -170,6 +198,7 @@ fn a_stop_round_trip_reports_one_event_per_change() {
         participant.since = T0 + 20;
         participant.awaiting_watch_since = Some(T0 + 20);
     }
+    expected.recent = vec![test_freed_record("C", "returned", T0 + 20)];
     assert_eq!(state, expected);
 }
 
@@ -191,7 +220,7 @@ fn merge_holders_and_merge_waiters_are_not_asked_to_stop_and_the_grant_waits_for
     // 止まる必要のある全員が止まっても、マージの持ち主が居る間は番が来ない。
     let got = run(&mut state, &stopped("S"), Some("S"), T0 + 6);
     assert_eq!(got, applied(true, vec![stop_reported("S")]));
-    assert_eq!(state.load.holder, None);
+    assert_eq!(state.sole, None);
 
     // 「マージが済んだ」と同じ呼び出しで番が来る。空いたマージの机の番は W に出ない。
     let cmd = Command::Merged {
@@ -262,16 +291,16 @@ fn the_stop_requested_and_the_stopped_go_back_to_work_when_no_load_test_is_left(
     ask_to_stop(&mut wanted, "B", "C");
     let cancel = Command::Cancel { id: "C".to_owned() };
     let cancelled = Event::Cancelled { id: "C".to_owned() };
+    let back = || vec![resumed("A", "no-sole"), resumed("B", "no-sole")];
 
-    for (mut state, cmd, first) in [
-        (held, load_done("C"), load_finished("C")),
-        (wanted, cancel, cancelled),
+    for (mut state, cmd, events) in [
+        (held, load_done("C"), load_finished("C", back())),
+        (wanted, cancel, [vec![cancelled], back()].concat()),
     ] {
         let got = run(&mut state, &cmd, Some("C"), T0 + 20);
 
-        let events = vec![first, resumed("A", "no-load"), resumed("B", "no-load")];
         assert_eq!(got, applied(true, events), "{cmd:?}");
-        assert_eq!(state.load, LoadDesk::default(), "{cmd:?}");
+        assert_eq!(desks(&state), no_desks(), "{cmd:?}");
         for id in ["A", "B"] {
             let back = (Working, T0 + 20, None, Some(T0 + 20));
             assert_eq!(seen(&state, id), back, "{cmd:?} {id}");
@@ -291,18 +320,18 @@ fn a_queued_load_test_keeps_everyone_stopped_and_takes_the_desk_next() {
 
     // C が済んでも、続けて並ぶ B の負荷テストがあるので誰も戻らない。今度は C が止まる番。
     let got = run(&mut state, &load_done("C"), Some("C"), T0 + 20);
-    let events = vec![load_finished("C"), stop_requested("C", "B")];
+    let events = load_finished("C", vec![stop_requested("C", "B")]);
     assert_eq!(got, applied(true, events));
     assert_eq!(seen(&state, "A"), still_stopped);
     assert_eq!(seen(&state, "B"), still_stopped);
-    assert_eq!(state.load.holder, None);
+    assert_eq!(state.sole, None);
 
     // C が止まると B の番。止まっていた B は「作業中」へ戻り、見張りを立て直すまでの印が付く。
     let got = run(&mut state, &stopped("C"), Some("C"), T0 + 21);
     let events = vec![
         stop_reported("C"),
         load_granted("B", &["A", "C"]),
-        resumed("B", "load-granted"),
+        resumed("B", "sole-granted"),
     ];
     assert_eq!(got, applied(true, events));
     assert_eq!(seen(&state, "A"), still_stopped);
@@ -310,11 +339,7 @@ fn a_queued_load_test_keeps_everyone_stopped_and_takes_the_desk_next() {
 
     // B も済んで、並ぶ負荷テストが無くなったら全員が戻る。
     let got = run(&mut state, &load_done("B"), Some("B"), T0 + 30);
-    let events = vec![
-        load_finished("B"),
-        resumed("A", "no-load"),
-        resumed("C", "no-load"),
-    ];
+    let events = load_finished("B", vec![resumed("A", "no-sole"), resumed("C", "no-sole")]);
     assert_eq!(got, applied(true, events));
 }
 
@@ -375,17 +400,17 @@ fn a_load_request_from_a_stopped_participant_does_not_hold_back_the_candidate() 
     let events = vec![stop_reported("X"), load_granted("C", &["A", "B", "X"])];
     assert_eq!(got, applied(true, events));
     assert_eq!(seen(&state, "B"), (Stopped, T0 + 3, Some("C"), None));
-    assert_eq!(state.load.queue[0].id, "B");
+    assert_eq!(state.requests[0].id, "B");
 
     // C が済んだら次の候補は B。C が止まった呼び出しで、止まっていた B が番を受けて戻る。
     let got = run(&mut state, &load_done("C"), Some("C"), T0 + 6);
-    let events = vec![load_finished("C"), stop_requested("C", "B")];
+    let events = load_finished("C", vec![stop_requested("C", "B")]);
     assert_eq!(got, applied(true, events));
     let got = run(&mut state, &stopped("C"), Some("C"), T0 + 7);
     let events = vec![
         stop_reported("C"),
         load_granted("B", &["A", "C", "X"]),
-        resumed("B", "load-granted"),
+        resumed("B", "sole-granted"),
     ];
     assert_eq!(got, applied(true, events));
     assert_eq!(seen(&state, "B"), (Working, T0 + 7, None, Some(T0 + 7)));
@@ -413,7 +438,8 @@ fn recording_a_running_load_test_takes_the_desk_without_asking_anyone_to_stop() 
 
     let got = run(&mut state, &load_running("Z"), Some("Z"), T0 + 5);
 
-    // A も B も「作業中」のまま、Z が走っている印つきの持ち主になる。
+    // A も B も「作業中」のまま、Z が排他テストの机とひとり占めの両方の、走っている印つきの
+    // 持ち主になる。
     expected.participants.insert(
         "Z".to_owned(),
         Participant {
@@ -424,7 +450,13 @@ fn recording_a_running_load_test_takes_the_desk_without_asking_anyone_to_stop() 
             ..Participant::default()
         },
     );
-    expected.load.holder = Some(LoadHolder {
+    expected.test = Some(TestHolder {
+        id: "Z".to_owned(),
+        purpose: PURPOSE.to_owned(),
+        requested: T0 + 5,
+        granted: T0 + 5,
+    });
+    expected.sole = Some(SoleHolder {
         id: "Z".to_owned(),
         purpose: PURPOSE.to_owned(),
         requested: T0 + 5,
@@ -481,7 +513,7 @@ fn while_the_running_mark_is_on_nobody_is_asked_to_stop_and_no_merge_grant_comes
         repo: "areka".to_owned(),
         id: "A".to_owned(),
     };
-    assert_eq!(got, applied(true, vec![load_finished("C"), granted]));
+    assert_eq!(got, applied(true, load_finished("C", vec![granted])));
 }
 
 #[test]
@@ -490,7 +522,7 @@ fn recording_a_running_load_test_while_the_desk_is_held_changes_nothing() {
     // いない識別。断るときは名前・リポジトリの更新も、参加も、「作業中」への戻しもしない
     // （元のスクリプトは断っても参加させて「作業中」へ戻す）。
     let mut marked = c_holds_with_a_stopped(&["A", "C"]);
-    marked.load.holder.as_mut().expect("C が持つ").running = true;
+    marked.sole.as_mut().expect("C が持つ").running = true;
     for (held, label) in [
         (c_holds_with_a_stopped(&["A", "C"]), "plain"),
         (marked, "running"),
@@ -513,6 +545,36 @@ fn recording_a_running_load_test_while_the_desk_is_held_changes_nothing() {
 }
 
 #[test]
+fn a_merge_waiter_recording_a_running_load_test_changes_nothing() {
+    // 机が両方空いていても、マージの机を待つ者は記録しない（要件 5.7）。A が areka の
+    // マージの机を持ち、B がその後ろで待つ。
+    let mut before = state_with(&["A", "B"]);
+    hold_merge(&mut before, "areka", "A");
+    queue_merge(&mut before, "areka", "B", T0 + 1);
+    let mut state = before.clone();
+
+    let got = run(&mut state, &load_running("B"), Some("B"), T0 + 9);
+
+    assert_eq!(state, before);
+    assert_not_applied(&got, "B");
+    let text =
+        "a merge request is waiting; record the running load after the merge desk is granted";
+    assert_eq!(got.verdict, super::Verdict::NotApplied(text));
+
+    // マージの机の持ち主（A）は、机が両方空いていれば今どおり記録できる（要件 5.5）。
+    let got = run(&mut state, &load_running("A"), Some("A"), T0 + 9);
+
+    assert_eq!(got, applied(true, vec![recorded_running("A")]));
+    assert!(state.test.as_ref().is_some_and(|t| t.id == "A"));
+    assert!(
+        state
+            .sole
+            .as_ref()
+            .is_some_and(|s| s.id == "A" && s.running)
+    );
+}
+
+#[test]
 fn a_queued_requester_who_records_a_running_load_test_leaves_the_queue_and_goes_back_to_work() {
     // A と B が並び、候補は A。B は A のための停止要請中、C は A のために止まっている。
     let mut state = state_with(&["A", "B", "C"]);
@@ -532,7 +594,13 @@ fn a_queued_requester_who_records_a_running_load_test_leaves_the_queue_and_goes_
     // B は待ち行列から外れて持ち主になり、自分の負荷テストのために「作業中」へ戻る。
     let events = vec![recorded_running("B"), resumed("B", "load-running")];
     assert_eq!(got, applied(true, events));
-    let holder = LoadHolder {
+    let test = TestHolder {
+        id: "B".to_owned(),
+        purpose: "走っている計測".to_owned(),
+        requested: T0 + 9,
+        granted: T0 + 9,
+    };
+    let sole = SoleHolder {
         id: "B".to_owned(),
         purpose: "走っている計測".to_owned(),
         requested: T0 + 9,
@@ -540,8 +608,11 @@ fn a_queued_requester_who_records_a_running_load_test_leaves_the_queue_and_goes_
         running: true,
         stopped: Vec::new(),
     };
-    assert_eq!(state.load.holder, Some(holder));
-    let queued: Vec<_> = state.load.queue.iter().map(|r| r.id.as_str()).collect();
+    assert_eq!(
+        (state.test.clone(), state.sole.clone()),
+        (Some(test), Some(sole))
+    );
+    let queued: Vec<_> = state.requests.iter().map(|r| r.id.as_str()).collect();
     assert_eq!(queued, ["A"]);
     assert_eq!(seen(&state, "B"), (Working, T0 + 9, None, Some(T0 + 9)));
     // ほかの参加者は記録の前のまま（新しい停止要請も、再開も無い）。
@@ -552,7 +623,7 @@ fn a_queued_requester_who_records_a_running_load_test_leaves_the_queue_and_goes_
 #[test]
 fn unstop_puts_the_stop_requested_and_the_stopped_back_to_work() {
     let mut state = c_runs_with_a_stopped_and_b_asked();
-    let desk = state.load.clone();
+    let desk = desks(&state);
 
     let got = run(&mut state, &unstop(None), None, T0 + 9);
 
@@ -563,7 +634,7 @@ fn unstop_puts_the_stop_requested_and_the_stopped_back_to_work() {
         assert_eq!(seen(&state, id), back, "{id}");
     }
     assert_eq!(seen(&state, "C"), (Working, T0, None, None));
-    assert_eq!(state.load, desk);
+    assert_eq!(desks(&state), desk);
 }
 
 #[test]
@@ -589,7 +660,7 @@ fn unstop_is_followed_by_new_stop_requests_while_a_load_test_without_the_mark_is
     ask_to_stop(&mut held, "B", "C");
 
     for (mut state, label) in [(wanted, "wanted"), (held, "held")] {
-        let desk = state.load.clone();
+        let desk = desks(&state);
 
         let got = run(&mut state, &unstop(None), None, T0 + 9);
 
@@ -605,7 +676,7 @@ fn unstop_is_followed_by_new_stop_requests_while_a_load_test_without_the_mark_is
             let asked_again = (StopRequested, T0 + 9, Some("C"), Some(T0 + 9));
             assert_eq!(seen(&state, id), asked_again, "{label} {id}");
         }
-        assert_eq!(state.load, desk, "{label}");
+        assert_eq!(desks(&state), desk, "{label}");
     }
 }
 

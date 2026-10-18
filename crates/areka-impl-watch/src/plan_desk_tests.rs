@@ -1,19 +1,23 @@
 //! 机と待ち行列の判断（規則 1・3・4・6）の決定論テスト。時刻と生死は引数で渡し、眠らない。
 //!
+//! 負荷テストは「排他テストの机とひとり占めを並べた申し込み（`test,sole`）」で、済んだら名指し
+//! なしで返す。今の負荷テストの机と同じ答えになることを確かめる（要件 5.1〜5.4）。
+//!
 //! 組み立てる状態は、番の到来を主題にするテストのほかは、どれも「番を決め直しても動かない」姿に
-//! してある（持ち主の居ない机に待ち行列を残さない・負荷テストの机は走っている印つきか、ほかの
+//! してある（持ち主の居ない机に待ち行列を残さない・ひとり占めは走っている印つきか、ほかの
 //! 全員が止まっている）。
 //! 主題でない段が状態を動かして、判定が主題から外れないようにするため。
 
 use super::test_support::{
-    PID, PURPOSE, REPO, T0, applied, ask_to_stop, assert_not_applied, hold_load, hold_merge,
-    hold_running_load, load_done, load_test, queue_load, queue_merge, run, state_with, stop_for,
-    stopped, wait_record, watch_registered,
+    PID, PURPOSE, REPO, T0, applied, ask_to_stop, assert_not_applied, give_back, hold_load,
+    hold_merge, hold_running_load, hold_test, load_done, load_test, queue_load, queue_merge,
+    queue_request, run, state_with, stop_for, stopped, test_freed, test_freed_record, wait_record,
+    watch_registered,
 };
-use super::{Command, Event};
+use super::{Command, Event, Verdict};
 use crate::state::{
-    LastMerge, LoadDesk, LoadHolder, MergeDesk, MergeHolder, MergeRequest, Participant,
-    ParticipantStatus, State, WaitKind, WaitRecord, WatchInfo,
+    DeskSet, LastMerge, MergeDesk, MergeHolder, MergeRequest, Participant, ParticipantStatus,
+    SoleHolder, State, TestHolder, WaitKind, WaitRecord, WatchInfo,
 };
 
 fn watch(id: &str, name: Option<&str>, repo: &str, pid: u32) -> Command {
@@ -105,24 +109,24 @@ fn merge_holders(state: &State) -> Vec<(&str, &str)> {
         .collect()
 }
 
-/// C がマージの机（pasta）と、すでに走っている負荷テストの机を持ち、`waiters` が申し込みの順に
-/// その両方を待つ。`ids` は参加者。
+/// C がすでに走っている負荷テスト（排他テストの机とひとり占め）を持ち、`waiters` が申し込みの
+/// 順に負荷テストを申し込んで待つ。`ids` は参加者。
 fn desks_held_by_c(ids: &[&str], waiters: &[&str]) -> State {
     let mut state = state_with(ids);
-    hold_merge(&mut state, "pasta", "C");
     hold_running_load(&mut state, "C");
     for (id, requested) in waiters.iter().zip(T0 + 1..) {
-        queue_merge(&mut state, "pasta", id, requested);
         queue_load(&mut state, id, requested);
     }
     state
 }
 
-/// A が areka のマージの机を持ち、C の持つ 2 つの机を B の後ろで待ち、マージの待ちを走らせている。
+/// A が areka のマージの机を持ったまま、C の持つ排他テストの机を B の後ろで申し込み、申し込みの
+/// 待ちを走らせている（マージの机の持ち主は排他テストの机を足せる・要件 4.1）。
 fn a_holds_and_waits() -> State {
-    let mut state = desks_held_by_c(&["A", "B", "C"], &["B", "A"]);
+    let mut state = desks_held_by_c(&["A", "B", "C"], &["B"]);
     hold_merge(&mut state, "areka", "A");
-    state.waits.push(wait_record("A", WaitKind::Merge));
+    queue_request(&mut state, "A", DeskSet::Test, T0 + 2);
+    state.waits.push(wait_record("A", WaitKind::Request));
     state
 }
 
@@ -306,13 +310,13 @@ fn cancel_removes_requests_and_desks_but_keeps_the_participant() {
 
         let got = run(&mut state, &cancel("A"), caller, T0 + 10);
 
-        // 参加者の記録と見張りは残る。走っているマージの待ちの記録も残り、待ちの側が
+        // 参加者の記録と見張りは残る。走っている申し込みの待ちの記録も残り、待ちの側が
         // 「申し込みが消えた」と読んで自分で消す。
         let mut expected = desks_held_by_c(&["A", "B", "C"], &["B"]);
         expected
             .merge
             .insert("areka".to_owned(), MergeDesk::default());
-        expected.waits.push(wait_record("A", WaitKind::Merge));
+        expected.waits.push(wait_record("A", WaitKind::Request));
         assert_eq!(state, expected, "{caller:?}");
         let cancelled = Event::Cancelled { id: "A".to_owned() };
         assert_eq!(got, applied(true, vec![cancelled]), "{caller:?}");
@@ -320,15 +324,74 @@ fn cancel_removes_requests_and_desks_but_keeps_the_participant() {
 }
 
 #[test]
-fn leave_and_cancel_release_the_load_desk() {
-    for cmd in [leave("A"), cancel("A")] {
+fn leave_and_cancel_release_both_desks_of_a_load_test() {
+    for (cmd, why) in [(leave("A"), "left"), (cancel("A"), "cancelled")] {
         let mut state = state_with(&["A", "B"]);
         hold_running_load(&mut state, "A");
 
         let got = run(&mut state, &cmd, Some("A"), T0 + 10);
 
-        assert_eq!(state.load, LoadDesk::default(), "{cmd:?}");
-        assert!(got.changed, "{cmd:?}");
+        assert_eq!((&state.test, &state.sole), (&None, &None), "{cmd:?}");
+        assert_eq!(state.recent, [test_freed_record("A", why, T0 + 10)]);
+        assert_eq!(got.events[0], test_freed("A", why), "{cmd:?}");
+    }
+}
+
+/// 取り下げ・離脱・マージ済みで排他テストの机が外れ、空けた訳がそれぞれの綴りで出来事と最近の
+/// 出来事に残り、待っていた申し込みに同じ呼び出しで番が来る（要件 6.3・6.4・11.4）。
+#[test]
+fn leave_cancel_and_merged_free_the_test_desk_with_their_own_reason() {
+    let left = |why| Event::Left {
+        id: "A".to_owned(),
+        why,
+    };
+    let cancelled = Event::Cancelled { id: "A".to_owned() };
+    let cases = [
+        (
+            leave("A"),
+            vec![test_freed("A", "left"), left("leave")],
+            "left",
+        ),
+        (
+            cancel("A"),
+            vec![test_freed("A", "cancelled"), cancelled],
+            "cancelled",
+        ),
+        (
+            merged("A"),
+            vec![
+                merge_done("A", REPO),
+                test_freed("A", "merged"),
+                left_merged("A"),
+            ],
+            "merged",
+        ),
+    ];
+    for (cmd, mut events, why) in cases {
+        // 完了の手順の途中: A はマージの机を持ったまま排他テストの机を受けている。B が後ろで待つ。
+        let mut state = state_with(&["A", "B"]);
+        hold_merge(&mut state, REPO, "A");
+        hold_test(&mut state, "A");
+        queue_request(&mut state, "B", DeskSet::Test, T0 + 1);
+
+        let got = run(&mut state, &cmd, Some("A"), T0 + 10);
+
+        events.push(Event::DeskGranted {
+            id: "B".to_owned(),
+            desks: DeskSet::Test,
+            stopped: Vec::new(),
+        });
+        assert_eq!(got, applied(true, events), "{cmd:?}");
+        let holder = TestHolder {
+            id: "B".to_owned(),
+            purpose: PURPOSE.to_owned(),
+            requested: T0 + 1,
+            granted: T0 + 10,
+        };
+        assert_eq!(state.test, Some(holder), "{cmd:?}");
+        assert!(state.requests.is_empty(), "{cmd:?}");
+        assert_eq!(state.merge[REPO].holder, None, "{cmd:?}");
+        assert_eq!(state.recent, [test_freed_record("A", why, T0 + 10)]);
     }
 }
 
@@ -614,10 +677,11 @@ fn a_merge_round_trip_reports_one_event_per_change() {
 fn a_load_request_joins_and_gets_the_desk_at_once_when_nobody_has_to_stop() {
     let mut state = State::empty();
 
-    let cmd = Command::LoadTest {
+    let cmd = Command::Request {
         id: "A".to_owned(),
         name: Some("えー".to_owned()),
         repo: "areka".to_owned(),
+        desks: DeskSet::TestSole,
         purpose: PURPOSE.to_owned(),
     };
     let got = run(&mut state, &cmd, Some("A"), T0 + 5);
@@ -635,7 +699,13 @@ fn a_load_request_joins_and_gets_the_desk_at_once_when_nobody_has_to_stop() {
             ..Participant::default()
         },
     );
-    expected.load.holder = Some(LoadHolder {
+    expected.test = Some(TestHolder {
+        id: "A".to_owned(),
+        purpose: PURPOSE.to_owned(),
+        requested: T0 + 5,
+        granted: T0 + 5,
+    });
+    expected.sole = Some(SoleHolder {
         id: "A".to_owned(),
         purpose: PURPOSE.to_owned(),
         requested: T0 + 5,
@@ -646,9 +716,13 @@ fn a_load_request_joins_and_gets_the_desk_at_once_when_nobody_has_to_stop() {
     assert_eq!(state, expected);
     let events = vec![
         joined("A"),
-        Event::LoadRequested { id: "A".to_owned() },
-        Event::LoadGranted {
+        Event::DeskRequested {
             id: "A".to_owned(),
+            desks: DeskSet::TestSole,
+        },
+        Event::DeskGranted {
+            id: "A".to_owned(),
+            desks: DeskSet::TestSole,
             stopped: Vec::new(),
         },
     ];
@@ -665,10 +739,11 @@ fn a_repeated_load_request_keeps_the_first_one() {
         queue_load(&mut state, "A", T0 + 1);
         let before = state.clone();
 
-        let cmd = Command::LoadTest {
+        let cmd = Command::Request {
             id: id.to_owned(),
             name: None,
             repo: REPO.to_owned(),
+            desks: DeskSet::TestSole,
             purpose: "別の内容".to_owned(),
         };
         let got = run(&mut state, &cmd, Some(id), T0 + 9);
@@ -691,7 +766,7 @@ fn the_next_load_holder_is_the_earliest_request() {
     }
 
     // 持ち主が「済んだ」と言い、次の候補のために止まるたびに、次の番が出る。
-    let holder = |state: &State| state.load.holder.as_ref().expect("持ち主が居る").id.clone();
+    let holder = |state: &State| state.sole.as_ref().expect("持ち主が居る").id.clone();
     let mut order = Vec::new();
     for now in T0 + 10..T0 + 13 {
         let done = holder(&state);
@@ -702,19 +777,23 @@ fn the_next_load_holder_is_the_earliest_request() {
 
     // 時刻が早い順。同じ時刻なら行列の前（B）が先。
     assert_eq!(order, ["B", "C", "A"]);
-    // 番の時刻は「いま」。申し込みの中身はそのまま持ち主へ写る。
-    let desk = LoadDesk {
-        holder: Some(LoadHolder {
-            id: "A".to_owned(),
-            purpose: PURPOSE.to_owned(),
-            requested: T0 + 3,
-            granted: T0 + 12,
-            running: false,
-            stopped: vec!["B".to_owned(), "C".to_owned(), "D".to_owned()],
-        }),
-        queue: Vec::new(),
+    // 番の時刻は「いま」。申し込みの中身はそのまま 2 つの机の持ち主へ写る。
+    let sole = SoleHolder {
+        id: "A".to_owned(),
+        purpose: PURPOSE.to_owned(),
+        requested: T0 + 3,
+        granted: T0 + 12,
+        running: false,
+        stopped: vec!["B".to_owned(), "C".to_owned(), "D".to_owned()],
     };
-    assert_eq!(state.load, desk);
+    let test = TestHolder {
+        id: "A".to_owned(),
+        purpose: PURPOSE.to_owned(),
+        requested: T0 + 3,
+        granted: T0 + 12,
+    };
+    assert_eq!((state.sole, state.test), (Some(sole), Some(test)));
+    assert!(state.requests.is_empty());
 }
 
 #[test]
@@ -732,7 +811,7 @@ fn no_repo_gets_a_merge_holder_while_a_load_test_is_wanted_or_held() {
 
     // 持たれている間も同じ。
     run(&mut state, &stopped("D"), Some("D"), T0 + 4);
-    let holder = state.load.holder.as_ref().expect("C の番が来た");
+    let holder = state.sole.as_ref().expect("C の番が来た");
     assert_eq!(holder.id, "C");
     assert_eq!(merge_holders(&state), []);
 
@@ -740,10 +819,14 @@ fn no_repo_gets_a_merge_holder_while_a_load_test_is_wanted_or_held() {
     let got = run(&mut state, &load_done("C"), Some("C"), T0 + 5);
     assert_eq!(merge_holders(&state), [("areka", "A"), ("pasta", "B")]);
     let events = vec![
-        Event::LoadDone { id: "C".to_owned() },
+        test_freed("C", "returned"),
+        Event::DeskReturned {
+            id: "C".to_owned(),
+            desks: DeskSet::TestSole,
+        },
         Event::Resumed {
             id: "D".to_owned(),
-            why: "no-load",
+            why: "no-sole",
         },
         merge_granted("A", "areka"),
         merge_granted("B", "pasta"),
@@ -770,6 +853,44 @@ fn load_done_by_a_non_holder_changes_nothing() {
 }
 
 #[test]
+fn a_merge_request_from_a_desk_requester_changes_nothing() {
+    // 机の申し込みを待つ者はマージの待ち行列に入らない（要件 2.8・2.4 の全探索の不変）。
+    // B は C の机の後ろで排他テストの机を待つ／A はマージの持ち主のまま排他テストの机を待ち、
+    // 別のリポジトリのマージを申し込む。
+    let mut b_waits = desks_held_by_c(&["A", "B", "C"], &[]);
+    queue_request(&mut b_waits, "B", DeskSet::Test, T0 + 1);
+    for (before, id, repo) in [(b_waits, "B", "areka"), (a_holds_and_waits(), "A", "pasta")] {
+        let mut state = before.clone();
+
+        let got = run(&mut state, &merge(id, repo, false), Some(id), T0 + 9);
+
+        assert_eq!(state, before, "{id}");
+        assert_not_applied(&got, id);
+        let text = "a desk request is waiting; merge after it is granted and returned";
+        assert_eq!(got.verdict, Verdict::NotApplied(text), "{id}");
+    }
+}
+
+#[test]
+fn returning_only_the_test_desk_of_a_running_load_test_changes_nothing() {
+    // 走っている負荷テストの記録は 2 つの机を 1 組で返す（専用の断りの文）。
+    let before = desks_held_by_c(&["A", "C"], &[]);
+    let mut state = before.clone();
+
+    let got = run(
+        &mut state,
+        &give_back("C", Some(DeskSet::Test)),
+        Some("C"),
+        T0 + 9,
+    );
+
+    assert_eq!(state, before);
+    assert_not_applied(&got, "C");
+    let text = "a running load test returns test and sole together";
+    assert_eq!(got.verdict, Verdict::NotApplied(text));
+}
+
+#[test]
 fn merge_order_puts_bugs_first_then_earliest_and_keeps_ties_in_queue_order() {
     let request = |id: &str, bug: bool, requested: u64| MergeRequest {
         id: id.to_owned(),
@@ -790,13 +911,14 @@ fn merge_order_puts_bugs_first_then_earliest_and_keeps_ties_in_queue_order() {
 }
 
 #[test]
-fn load_order_puts_earliest_first_and_keeps_ties_in_queue_order() {
+fn request_order_puts_earliest_first_and_keeps_ties_in_queue_order() {
+    // 組（`test`・`sole`・`test,sole`）は順に関わらない。
     let mut state = State::default();
-    queue_load(&mut state, "A", T0 + 2);
-    queue_load(&mut state, "B", T0);
-    queue_load(&mut state, "C", T0 + 2);
-    queue_load(&mut state, "D", T0);
+    queue_request(&mut state, "A", DeskSet::Test, T0 + 2);
+    queue_request(&mut state, "B", DeskSet::TestSole, T0);
+    queue_request(&mut state, "C", DeskSet::Sole, T0 + 2);
+    queue_request(&mut state, "D", DeskSet::Test, T0);
 
-    assert_eq!(super::load_order(&state.load.queue), vec![1, 3, 0, 2]);
-    assert!(super::load_order(&[]).is_empty());
+    assert_eq!(super::request_order(&state.requests), vec![1, 3, 0, 2]);
+    assert!(super::request_order(&[]).is_empty());
 }
