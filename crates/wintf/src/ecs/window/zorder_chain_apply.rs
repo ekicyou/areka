@@ -923,3 +923,8 @@ mod zorder_chain_order_lifecycle_tests;
 #[cfg(test)]
 #[path = "zorder_chain_order_outsider_tests.rs"]
 mod zorder_chain_order_outsider_tests;
+
+/// 実窓での逆転・非隣接の重なりと、解除で組へ戻る檻（`areka-P0-zorder-scope-inversion`）。
+#[cfg(test)]
+#[path = "zorder_chain_order_inversion_tests.rs"]
+mod zorder_chain_order_inversion_tests;
