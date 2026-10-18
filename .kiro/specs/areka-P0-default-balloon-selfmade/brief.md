@@ -172,3 +172,22 @@ communicatebox.x,8     communicatebox.y,21  communicatebox.width,385  communicat
 - 要件定義のモデル: **Opus に改める**（棚卸㉔は Fable を勧めた）。議題 9 つは開発者に聞く選びで、10-15 の基準のどれにも当たらない。絵の案は主のセッションが出す（変わらず）。
 - 分割の案: 無し。
 - 見つけた穴・古くなった記述: 鎖の当たりに `catalog.rs` を数える読みは当たらない（名前を持つのは `boot_resolve.rs` だけ）。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 前提の変化: v0.1.0 のゴールの組み直しの後も、開発者の決め（10-18）で v0.1.0 に残る。`emily-ghost-verification`（登記表の 8 行目 `emily4`）・`user-data-root`・`write-failure-notice`・`move-canon` が着地した。`crates/areka/src/boot_resolve.rs` は 609 行から 676 行に伸びた（起動中の印と記録の関数）が、既定の名前の定数は 34 行目 `DEFAULT_BALLOON_FOLDER`（説明は 10 行目）、使うのは `resolve_balloon` の段 6（291〜292 行）だけのまま。
+- 棚卸㉗で足した範囲: 無し。
+- 触るファイル: 本文と棚卸㉕のとおり。既定の名前の綴りの数は `boot_resolve_tests.rs` 15・`boot_resolve_balloon_tests.rs` 6・`boot_config_balloon_tests.rs` 3・`main_config_input_tests.rs` 4。登記の数のテストは **9 を 10 に**（`dot-sakura-specimen` の後）。
+- `boot_resolve.rs` の当たり（新しい v0.1.0 の 2 本）:
+  - `startup-options-core`: 触るのは解決の入口（引数の配列でなく起動オプションの値を受ける・`--random`）と `nobootcheck`。定数の行とは別の行だが、`resolve_balloon` の同じ関数に入る見込み。さらに `boot_config.rs` の `resolve_boot_from` が値を受ける形に替わるので、その檻 `main_config_input_tests.rs`（既定の名前を 4 か所書く）と `boot_resolve_tests.rs` を両方が書き換える＝**テストのファイルで重なる**。
+  - `readonly-mode`: 触るのは書く側の関数（`save_app`・`write_session_mark`・`clear_session_mark`・`record_last_*` など 394〜639 行）。定数とも段 6 とも別の関数＝行の当たりは無い見込み。
+  - 進め方は棚卸㉕と同じ: 差し替えのタスクを実装の最後に置き、直前に main を取り込む。`startup-options-core` が先に着地していれば、檻の新しい形の上で名前を替えるだけ。
+- 登記表の順: `dot-sakura-specimen`（8→9）→ この spec（9→10）→ `sample-url-fetch`（全部の行を書き換える）→ `pasta-in-windows-verification`（URL の行・10→11）。`dot-sakura-specimen` へは働きの依存（どっとさくらに被せる実機の確かめ）。`sample-url-fetch` との間はファイルの順（登記表・`tools/package.ps1`）で、この spec が先なら配布の道具が検体の取り寄せに触れずに済む。
+- 規模: 8〜12 タスク（変わらず）。
+- 先に要るもの: `dot-sakura-specimen`。議題 3 で `.webp` を選ぶなら `balloon-webp-names`（10-18 に v0.1.0 から外れた）。
+- 同じウェーブに置けない相手: `dot-sakura-specimen`・`sample-url-fetch`・`pasta-in-windows-verification`（登記表）・`startup-options-core`（`boot_resolve.rs`・`main_config_input_tests.rs`・`boot_resolve_tests.rs`）・`ghost-inner-balloon`（v0.1.0 に入った・`resolve_balloon` を作り直す）。`readonly-mode` は別の関数＝着手の前に照らす。`winget-release-automation` は根の `README.md`・`dist/README.txt` の別の節。
+- 優先度の区分: A。
+- 要件定義のモデル: Opus（棚卸㉕のまま）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述:
+  - 議題 3 の答えが版に効くようになった: `.webp` を選ぶと `balloon-webp-names` が働きの前提として v0.1.0 へ戻る。α 付きの PNG なら v0.1.0 の中で閉じる。要件の段の最初に決める。
+  - `ghost-inner-balloon` が `resolve_balloon` に名前で探す段を足す見込み＝段 6（既定）の前後の並びが変われば、既定の名前を期待するテストを読み直す。

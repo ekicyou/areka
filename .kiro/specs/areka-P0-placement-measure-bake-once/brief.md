@@ -103,3 +103,14 @@
 - 要件定義のモデル: Opus（変わらず）。案 A は起動の段取りの順に触れるが、1 本の道の中の順で、並行の新しい設計ではない。
 - 分割の案: 無し。
 - 見つけた穴・古くなった記述: 案 A は `multi-ghost-runtime` がゴーストごとに分け直す起動の道と同じ場所を作り直す＝v0.1.0 の中では `multi-ghost-runtime` の後に置くか、当たりの小さい案 B を選ぶ。棚卸㉓の節の `emo2_boot/mod.rs`「912 行」は今 911 行（差し支え無し）。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 版: **v0.1.0（棚卸㉗でゴールを組み直した後も残る）**。理由が 2 つになった: ⑴ **試験の速さ**: 動く絵の多いシェルは起動の焼き込みが release で 0.19 秒から 3.2 秒（上限いっぱいの動く絵 1 つ・4 つで 13.2 秒・debug では 64.5 秒）になり、うち約半分は採寸で読んで捨てる分。実機の試験は起動を何度もくり返すので、この分がそのまま試験の時間に乗る。MCP の `reload`（`mcp-reload`）の返事の上限 10 秒にも近づく。⑵ **ぱすたが SSP と同じに動く**: ぱすた（窓際のぱすたさん）のシェルは surface1000 に動く WebP の element を 3 つ持つ（`shell/master/window/ball/` の `eback.webp` 40 コマ・`base_rings.webp` 48 コマ・`efront.webp` 40 コマ・ghost_dev の `surfaces.txt` 120〜122 行目＝2026-10-18 に読み取りだけで確かめた）。起票のときの「今は踏まない（検体に動く絵は 0 枚）」は、ぱすたを検体にした今は外れた。
+- 前提の変化: 触る所の中身は棚卸㉕から変わらない（採寸 `placement/measure.rs` 450 行・資産組み立て `emo2_boot/assets.rs` 547 行が別々に焼く）。行数: `placement/mod.rs` 902→**915**・`crates/areka/src/ghost_session.rs` 873→**885**・`emo2_boot/mod.rs` 911→**916**（`move-canon`・`write-failure-notice` ほか）。`crates/areka-emo-present/src/shell_target.rs` 757・`balloon.rs` 701 は変わらず。
+- 触るファイル: 案 A＝`placement/{mod,measure}.rs`・`ghost_session.rs`・`emo2_boot/{mod,assets}.rs`（上限の近い 3 本には足さず新しいファイルへ）。案 B＝`placement/measure.rs`・`shell_target.rs`・要れば `balloon.rs`・`crates/areka/src/mcp/dump_surface_gpu_test_support.rs`。
+- 規模: 案 A 10〜14・案 B 5〜8 のまま。
+- 先に要るもの: なし。測り直しにぱすたの絵を使うなら `sample-url-fetch`（ぱすたを検体として取り寄せる）の後が楽。測りは上限いっぱいの合成の検体でもできる。
+- 同じウェーブに置けない相手（v0.1.0）: 案 A＝`mcp-reload`（`emo2_boot/mod.rs`）・`offline-surface-dump` は `load_shell_target` を読むだけ＝0。案 B＝`offline-surface-dump`（同じ `load_shell_target` の口を変えるなら照合）。後回しの段: `multi-ghost-runtime`（案 A）・`balloon-webp-names`（案 B の `balloon.rs`）。
+- 優先度の区分: C のまま（性能の持ち越し）。ただし v0.1.0 では試験の速さとぱすたの起動の速さに効く項目として扱う。
+- 要件定義のモデル: Opus のまま。分割の案: なし。
+- 見つけた穴・古くなった記述: Problem の「今は踏まない」はぱすたで外れた（上）。行数（902・873・911）は古い。

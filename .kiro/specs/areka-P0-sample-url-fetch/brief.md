@@ -119,3 +119,14 @@
 - 要件定義のモデル: Opus に改める（棚卸㉔は Fable）。取り寄せ先・置き場の例外・置く権利は開発者の決めごとで、新しい境目・並行の保証・先例の無い骨格の分かれ目には当たらない。
 - 分割の案: なし。
 - 見つけた穴・古くなった記述: 無し。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 前提の変化: 検体は `emily4` の登記で 8 本・`vendors/sample_ghost/` に約 13.6 MB。登記表は `crates/sample-ghost-kit/src/lib.rs` の `SAMPLES`（548 行）で、行は「名前・種別・同梱のバルーン」だけ。
+- 棚卸㉗で足した範囲（理由と証拠）: **v0.1.0 へ移した**（版に縛らない列から）。v0.1.0 のゴールの検体「窓際のぱすたさん」を、書庫をこのリポジトリに入れずに URL とハッシュで登記する（シェルの絵は TH さまがこのゴースト専用にくれたもので、別のリポジトリへの置き直しが許されるか分からない＝ぱすた開発の答え）。取り寄せ先は ghost_dev のコミットを固定した URL `https://raw.githubusercontent.com/ekicyou/ghost_dev/e1e05590dbed0a4a4b1afadf55ca896f36d82c14/release/pasta-in-windows/pasta-in-windows.nar`（3,025,198 バイト・sha256 `04a8e1c19b534b38e39d24f93ac7735c74e186249965b3a0876a893cb41fe35b`）。書庫は ghost_dev の git に入っていて、コミットを固定すれば議題 1 の「上流が消す」心配は無い（履歴を書き換えない限り）。
+- **前の 2 本の順は働きの依存ではなくなった**: `dot-sakura-specimen`・`default-balloon-selfmade` は v0.1.0 の外（行き先待ち）へ移った。本文 Upstream の「`dot-sakura-specimen`（取り寄せ先がすでに在る最初の検体）」は、最初の検体をぱすたにすれば要らない。2 本と残るのは登記表・数のテスト・検体の README のファイルの重なりだけ＝同じウェーブに置かなければよい。配布の道（`tools/package.ps1` が `StayseeBalloon` を検体の窓口から引く）は、`StayseeBalloon` を今の置き場に残すかぎり取り寄せに左右されない＝`default-balloon-selfmade` を待つ理由も無い。
+- 分割の案（推し）: v0.1.0 では「URL とハッシュの行・取り寄せの段・手で置く口・ぱすたの 1 行」まで（6〜9 タスク）。今の 8 本の書庫を `vendors/` から外す移し替え（議題 5〜9）は後へ回す（今の 8 本は置いたまま動く）。
+- 触るファイル: `crates/sample-ghost-kit/src/lib.rs`（548）・`devroot.rs`（696）・`bin/nar-sample-path.rs`・`lib_tests.rs`（648）・新しい取り寄せのスクリプト（`tools/` の下・新）・`tools/test-all.ps1`・`vendors/sample_ghost/README.md`・steering `tech.md`／`structure.md` の検体の節。検体のパスの綴りの番人（`crates/log-capture-kit/tests/sample_path_guard_test.rs`）は見張る語を登記表から組むので、行を足せば自動で見張る（回して緑を確かめるだけ）。
+- 規模: 6〜9 タスク（分けた場合）・本文のままなら 8〜12。
+- 先に要るもの: なし。重なり: `pasta-in-windows-verification`（新・登記表の 1 行＝この spec の後）・`test-roots-under-target`（`sample-ghost-kit`）・`dot-sakura-specimen`・`default-balloon-selfmade`（行き先待ち）・`tools/test-all.ps1` を触る spec。
+- 優先度の区分: A のまま。要件定義のモデル: Opus のまま。
+- 議題の答えの見込み: 議題 1 はぱすたについて「ghost_dev のコミットを固定した URL」で答えが出る（ghost_dev の履歴を書き換えない約束を開発者に確かめる）。議題 4（取り寄せた書庫の置き場）は残る。

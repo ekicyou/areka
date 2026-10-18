@@ -237,3 +237,14 @@ emo2 を新しい写しから起こした実機の走行が、1 回だけ、SHIO
 - 同じウェーブに置けない相手: 検査の側だけなら 24 本のどれとも 0。アプリの側を選んだら `main.rs` を触る `baseware-root-list`・`user-data-root`・`write-failure-notice`・`multi-ghost-runtime` と直列。件 2 で仲介を直すなら `shiori_proxy.rs` を疑い先に挙げる `emily-ghost-verification` と照合。
 - 優先度の区分: B のまま。要件定義のモデル: Opus のまま。分割の案: なし。
 - 見つけた穴・古くなった記述: 件 1 の棚卸㉓の節の「`main.rs` は `mcp-kanade-tools`・`mcp-stdio-bridge` なども触る」は誤り（`mcp-kanade-tools` の brief は `main.rs` に触らないと書く・`mcp-stdio-bridge` は着地済み）。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 版: **v0.1.0（棚卸㉗でゴールを組み直した後も残る）**。areka を本物の窓と SHIORI で起こす唯一の自動の通しが赤では、「SSP並みの自動試験」の土台が立たない。件 2（新しい写しの最初の LOAD の失敗）も、自動の試験をくり返すほど理由の分からない赤として混ざる。
+- 前提の変化: 10-16 から関係のファイルは変わっていない（`crates/areka/tests/emo2_real_run.rs` 249 行・自動終了 3,000 ミリ秒〔60 行目〕・`crates/shiori-host32-helper/src/shiori_proxy.rs` 814 行・閉じる道 `crates/areka/src/app_exit.rs` 310 行の `on_ghost_os_close`）。`emo2_real_run.rs` は子の出力をパイプで受け、`AREKA_ROOT`・`AREKA_PROFILE_DIR` を外していない（ほかの実機の試験 2 本と組が違う）。
+- **`real-run-mcp-kit`（棚卸㉗の新しい 1 本）との関わり**: 件 1 の直しの候補（子の出力を走りながら読み、印を見てから利用者と同じ道〔OS の閉じる知らせ → `OnClose`〕で閉じる・自動終了は保険）は、`real-run-mcp-kit` の窓口の「出力を探して待つ」「閉じる」と**同じ仕組み**。2 本で別々に作らない。推し: `real-run-mcp-kit` が窓口の中に作り、本 spec の件 1 はその窓口へ `emo2_real_run.rs` が移った後に待ち方だけを直す（同じウェーブに置かない・窓口が先）。逆に本 spec を先にするなら、件 1 の閉じ方を窓口へ渡せる形（試験のファイルの中に閉じ込めない）で作る。件 2 の数十回のくり返しも窓口の上で回すと、落ちた回の根と出力を残す手順を書き直さずに済む。
+- 触るファイル: 件 1＝`crates/areka/tests/emo2_real_run.rs`（窓口が先なら移った後の形）。件 2＝再現しなければ 0、すれば `shiori_proxy.rs` か起こし直しの順。
+- 規模: 4〜13 のまま（窓口が先なら件 1 は 2〜4 に縮む）。
+- 先に要るもの: なし（窓口を待つかは上の推し・要件の段で決める）。
+- 同じウェーブに置けない相手: `real-run-mcp-kit`（`emo2_real_run.rs`・閉じ方）。検査の側だけならほかは 0。
+- 優先度の区分: B のまま。要件定義のモデル: Opus のまま。分割の案: なし。
+- 見つけた穴・古くなった記述: `emo2_real_run.rs` の行数は 247→249。

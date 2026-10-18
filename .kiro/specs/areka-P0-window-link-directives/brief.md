@@ -61,3 +61,23 @@ ukadoc の窓の位置の台本の指令のうち、窓どうしをつなぐも�
 - `--option=ignore-sticky-window` は `move-canon` で語彙として受け取るだけで、動きは変えない。効き目を持たせるのは本 spec。
 - SSP 2.9.18 の実測（`move-canon` の `research.md` §8）: `\![move]` の基準 `screen`・`primaryscreen` は作業領域。`\![set,position]`／`\![reset,position]` は SSP も実装していない（「unknown subcommand」）。
 - `move-canon` で `\![move]` は今の吸い付き（`Anchored`・`project_anchor`）に従うようになる（下端に吸い付いている間は Y を無視・SSP 2.9.18 の実測と同じ）。本 spec の `\![set,alignmenttodesktop,方向]` で向きを変えれば、`\![move]` もその向きに従う＝本 spec で `\![move]` 側に足すものは無い見込み。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 前提の変化: 上流の `move-canon` が着地した（10-18・PR#332）。`--option=ignore-sticky-window` は語として読まれて欄 `ignore_sticky_window` に入るが、誰も読まない（`crates/areka/src/emo2_boot/move_cue.rs` 63 行「今は誰も読まない（window-link-directives が意味を持たせる）」・台本の移動の適用 `emo2_boot/move_cue_place.rs` の `apply_move_directive` も 103 行で「読まない」）。シェルの `seriko.sticky-window` は今も生のまま写すだけ（`placement/config.rs` 107・135 行）。
+- 棚卸㉗で足した範囲（理由と証拠）: 範囲は変えないが、v0.1.0 のゴール「ぱすたが SSP と同じレベルで動く」が待つ相手になった。ぱすたはシェルの descript に `seriko.sticky-window,0,1`（窓の枠＝相方と、ぱすた＝本体を同じ位置に重ねて一緒にドラッグ）を書き、辞書の「窓あわせ」で `\![move,…,--option=ignore-sticky-window]` を出して相方だけを動かす（ゴースト「窓際のぱすたさん」の `shell/master/descript.txt`・`dic/tategaki.pasta`）。
+  - ぱすたが使うのは組と `ignore-sticky-window` だけ。`\![set,alignmenttodesktop]` は使わない（descript の `seriko.alignmenttodesktop,free` は実装済み）。
+  - 組の窓のバルーンも一緒に追従することを確かめる項目に入れる（ぱすたの縦書きのバルーンは窓の枠の絵に重ねてある）。
+- 触るファイル: `emo2_boot/move_cue_place.rs`（206）・`move_cue.rs`（308）・`placement/config.rs`（687）・`placement/follow/drag_follow.rs`（937・1,000 行の近く＝足す分は兄弟へ）・`placement/follow/anchor.rs`（181）・`emo2_boot/consumer_ledger.rs`（960）・新しい組の持ち主のファイル・申し送りの「バルーン位置初期化」を足すなら `menu/reset_pos_frame.rs`（139・`move-canon` が足した枠）・網羅台帳の 3 行・COMPAT §8。`placement/follow/window_move.rs`（1,221・行数の番人の例外）は触らずに済ませたい。
+- 規模: 10〜14 タスク（吸着の指令 2〜3・組 5〜6・バルーン位置初期化 2〜3・記録 1）。
+- 先に要るもの: 無し（`move-canon` は着地済み）。
+- 重なり: `descript-window-keys`（新・`placement/config.rs`・`drag_follow.rs` のバルーンのドラッグの入口）・`dpi-realign-remembered-chain`（下の穴）・受け手の表 `consumer_ledger.rs` に行を足す v0.1.0 の spec（`stay-on-top-directives`・`script-small-tags`・`descript-window-keys`・`mcp-reload`・`mcp-strict-errors`・`script-security-level`＝行を足すだけなので 1 本ずつ）・`extra-character-windows`・`window-snap`（いつか）。
+- 優先度の区分: A（開発者が起票・v0.1.0）。要件定義のモデル: Opus（先例＝`move-canon` の参照点と `Anchored`）。
+- 分割の案: 20 を超えそうなら「吸着の指令」と「組」に分ける。ぱすたに要るのは「組」の側。
+- 見つけた穴・古くなった記述:
+  - 本文 Upstream の「`move-canon`（v0.0.3・…）」は着地済み。本文に規模と要件定義のモデルが無かった（上に書いた）。
+  - 拡大率が変わった後の詰め直し（`placement/chain_realign.rs`）が、同じ位置に重ねた組の窓を横に並べ直さないこと。組の側と詰め直しの側のどちらが持つかを要件で決める（`dpi-realign-remembered-chain` にも書いた）。
+  - SSP で測る: 組の片方をドラッグしたとき、相手のバルーンも一緒に動くか。
+
+## 2026-10-18 棚卸㉗の申し送り（持ち主が居なかった残り物）
+
+- 完了 `move-canon` の tasks.md の Implementation Notes 2.2: 既定の位置の基準（`DefaultPlacementBasis`）が、起動のときとシェルの切り替えのときで違う設定を持つ。`\![execute,resetballoonpos]`（本 spec の範囲）でバルーンの位置をこの基準から出すなら、先に 2 つをそろえること（そろえないと、起動の直後とシェルを替えた後で並べ直しの結果が変わる）。

@@ -179,3 +179,16 @@ MCP でいちばん使われるのは「台本を流して見る」（`sakurascr
 - 要件定義のモデル: **Opus**（2026-10-15 の厳しい基準で付け直した＝C6 の表も Opus）。再生中・選択肢の最中の扱いは SSP に合わせて決める問いで、返事を待つ形は `mcp-get-status` の先例（`mcp::later`）がある＝新しい並行の設計にも新しい境界にも当たらない。
 - 分割の案: なし（一度切り出した spec）。
 - 見つけた穴・古くなった記述: 棚卸㉓・㉔の節の「要件定義のモデル: Fable」は 10-15 の付け直しで Opus になった。roadmap の「3 段目の spec が触るファイル」の表の本 spec の行に、着地済みの `get_status.rs` が残っている。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 版: **v0.1.0（棚卸㉗でゴールを組み直した後も残る）**。新しいゴール「SSP並みの自動試験・開発のスピードアップ」の芯。`sakurascript` と `raise_event` が無いと、MCP で台本を流して・イベントを起こして返った台本を見る自動の試験が組めない。ぱすた開発のセッションも、SSP で毎日この 2 つと `get_log`（script）を使っている（棚卸㉗の問い合わせの答え）。
+- 前提の変化: 10-16 からの着地（`mcp-stdio-bridge-residue`・`user-data-root`・`write-failure-notice`・`emily-ghost-verification`・`move-canon`）で触るファイルの行数: `msg.rs` 930・`actor.rs` 901・`schedule/mod.rs` 969・`schedule/events.rs` 845→**850**（`move-canon`）・`schedule/change.rs` 425・`schedule/steady.rs` 957（触らない）。今も `NG:not implemented yet` を返すのは `crates/areka/src/mcp/` の `sakurascript.rs`・`raise_event.rs`・`reload.rs`。
+- **棚卸㉗で足した範囲: 再生したトークを全部 script の記録へ出す**（MCP で送った台本だけでなく）。理由: SSP の `get_log` の `script` は再生したさくらスクリプトの全部。areka は取り決めの target `areka::log::script` を出す本番の行が 0 で（`log_history.rs` の定数とテストだけ）、`get_log` の script は今いつも空＝ぱすた開発の「台本の記録を読む」確かめが areka では何も返らない。場所は kanade の殻 `crates/areka-kanade/src/actor.rs` の `execute_batch` の `Action::StartTalk` の腕（471 行目）の 1 か所（翻訳 `OnTranslate` の後の、実際に再生する台本が通る所）。+1〜2 タスク。
+  - 見つけた穴: 取り決めの欄（`ghost`・`label`・`doc/ssp-mcp/log-convention.md`）を埋める材料がその場に無い。トークの起動 `StartTalk`（`crates/areka-talk/src/lib.rs`）は `talk_id`・`script`・`epilogue` だけでイベント名を持たず、kanade の起動の設定 `KanadeConfig`（`msg.rs` 457 行目）はゴーストの名前を持たない。推し: ゴーストの名前は `KanadeConfig` に 1 つ足す（組むのは `crates/areka-ghost/src/config.rs`・`runtime.rs` の 2 か所）。どのイベントのトークかは、`StartTalk` に欄を足すと構築点 11 か所と `script-security-level` に波及するので、殻の中で「直前の SHIORI の往復の出どころ」を控えて添える形を設計で選ぶ。`label` の語は SSP に合わせる（SSP で測る: `get_log` の script の行の `[…]` の語）。
+- 触るファイル: 棚卸㉓・㉔のとおり＋上の記録の 1 か所（`actor.rs`）・`msg.rs` の `KanadeConfig`・`crates/areka-ghost/src/{config,runtime}.rs`（名前を渡す 1 行ずつ）。
+- 規模: M〜L（14〜19 タスク）。20 の内。
+- 先に要るもの: なし＝今すぐ始められる。
+- 同じウェーブに置けない相手（v0.1.0）: `script-security-level`（kanade の 5 ファイル）・`mcp-strict-errors`（`crates/areka/src/mcp/{sakurascript,raise_event}.rs`）・`mouse-click-wheel-events`（棚卸㉗で v0.1.0 へ・`msg.rs`・`schedule/events.rs`・`schedule/boot.rs`）・`mcp-reload`（約束つきで 0 のまま。ただし本 spec が `crates/areka-ghost/src/runtime.rs` に 1 行足すので、`\![reload,shiori]` を含めた `mcp-reload` とは重なる）。後回しの段: `multi-ghost-runtime`（`msg.rs`）。
+- 優先度の区分: A のまま。要件定義のモデル: **Opus** のまま（記録の 1 か所は今ある tracing の行を足すだけ・新しい並行の設計ではない）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: roadmap 470 行目の本 spec の行は、`get_status.rs` を「2026-10-06 に `mcp-get-status` が作った」という括弧の注記として持つだけになっている＝触るファイルとしては読まれない。棚卸㉓〜㉕の節の「roadmap の行に `get_status.rs` が残っている」は半分古い（注記ごと消すのは次の roadmap の更新で）。

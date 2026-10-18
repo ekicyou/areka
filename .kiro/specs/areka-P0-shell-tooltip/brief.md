@@ -101,3 +101,12 @@
 - **見つけた穴・古くなった記述**:
   - SHIORI の `tooltip` は Reference0〜4（座標・スコープ・当たり判定の名前）を付けて尋ねるが、今の照会の組み立て（`resources.rs` の `resource_get`）は Reference を付けない形だけ＝付ける形を 1 つ足す。
   - Constraints の「シェルの element の列（`shell/{model,decode}.rs`）に掛かる見込み」は、2 つ目の転記にすれば掛からない（棚卸㉓で指摘済み・本文はまだ古いまま）。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 前提の変化: 本文 Out の「マウスカーソルの差し替え」を、別の spec `shell-mouse-cursor`（v0.1.0・新）として起票した（ツールチップとは分ける）。カーソルとツールチップは同じ「窓ごとに、今どの当たり判定の上に居るか」を使う。その追跡は `mouse-click-wheel-events`（v0.1.0・`OnMouseEnter`／`OnMouseLeave` を足した）か `shell-mouse-cursor` が先に作り（案: 新しいファイル `crates/areka/src/input_events/hover_region.rs`）、この spec は使うだけになる。「マウスが止まった」の検出は wintf のツールチップの口のまま。
+- 触るファイル: 棚卸㉖のまま。キャラクター窓の配線は `input_events/` の追跡の隣に置く。
+- 規模: 8〜12 タスク（追跡を使えば下の方）。
+- 先に要るもの: 働きの上では無し（追跡を作る 2 本の後なら軽い）。ファイルの上では `mouse-click-wheel-events`・`shell-mouse-cursor`（`input_events/`・`emo2_boot/hit_region.rs`）・`balloon-link-hover` と同じウェーブに置かない。
+- 版: 版に縛らない列のまま（ぱすたはツールチップを使わない＝v0.1.0 に入れない）。
+- 優先度の区分: A のまま。要件定義のモデル: Opus のまま。分割の案: なし。
+- 古くなった記述: 本文 Out の「マウスカーソルの差し替え（`mousehover*` などのカーソルの項目）」の持ち主は `shell-mouse-cursor`。
