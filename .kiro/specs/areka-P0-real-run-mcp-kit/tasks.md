@@ -169,3 +169,4 @@
 - 6.3（D-14 の子の環境の変化）: 開発者の根と記憶の置き場を受け継がず（HEAD は実行ファイルの隣を既定の根にしていた）、回の空の根・回の `profile`・空いた番号で立つ。`RUST_LOG=info,kanade=trace` は全体が info なので窓口は何も足さない。仲介は窓口が揃える。走りの揺れ: 機械が混んでいる時間に 2 回赤（(4) `wrap=BudouxWordWrap` が出ない・3 秒の保険の自動終了が pasta の読み込み約 3 秒に負ける）。同じ時間に HEAD の版も同じ所で赤＝`emo2-real-run-stability` の件 1（本 spec の Non-Goal）。回し直しは 6.26 秒・6.82 秒で緑。
 - 仕上げの検証の直し（1 回目）: 要件 1.10 の穴（仲介を揃える段が先に走り、無い実行ファイルが場所と理由の無い文で落ちていた）を、`spawn` の頭で実行ファイルの有無を確かめる形に直した（`launch_tests.rs` に 2 本）。
 - 申し送り（直さない・小さい）: `wait_exit` の締切 → 止める → panic の道に直の試験が無い（`close` の締切と破棄の道は試験あり）。`try_wait` の見回りと出力の読み直しが close・mcp・output に少しずつ重なる（正しさには影響なし）。
+- 完了時にその場で解決: `wait_exit` の締切 → 止める → 失敗の道の直の試験（`fake_wait_close_test.rs` の `wait_exit_stops_hanging_child_after_deadline`）と、`close` の締切の文に「締切切れ」が入ることの確かめを足した。棚卸の件数: その場で解決 1 件・起票 0 件（emo2 の揺れは起票済みの `emo2-real-run-stability` の件 1。close・mcp・output の小さな重なりと、close の送り直しごとの全文の読み直しは不具合でないので直さない）。
