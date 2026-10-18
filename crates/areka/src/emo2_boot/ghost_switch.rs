@@ -169,6 +169,31 @@ pub(crate) struct SwitchInFlight {
     pub copy: super::switch_copy::SwitchCopy,
 }
 
+/// 予約の終わり（[`end_switch`] へ渡す出口の語彙）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SwitchEnd {
+    /// 迎え入れたゴーストが定常に入った。
+    Steady { attempt: WelcomeAttempt },
+    /// 切替は中止された。
+    Cancelled,
+    /// kanade が受理しないまま止まった。
+    NotAccepted,
+    /// 迎え入れたゴーストが失敗以外で止まった。
+    TargetQuit,
+    /// 既定ゴーストの SHIORI が失敗した。
+    DefaultFault,
+    /// 既定ゴーストへ戻せなかった。
+    Fatal,
+    /// 降ろした直後の記憶を書けなかった。
+    WriteFailure,
+}
+
+/// 予約を下ろす唯一の口（OS のセッションの終了の 1 か所 `session_end` を除く）。
+/// 出口の語彙はまだ読まない（予約を下ろすだけ）。
+pub(crate) fn end_switch(world: &mut World, _end: SwitchEnd) {
+    world.remove_non_send::<SwitchInFlight>();
+}
+
 /// 純粋: 目録の項目と指し方から切替先を決める（要件 1.5・1.8・11.8）。
 ///
 /// 名前は `descript.txt` の `name` と先に突き合わせ、一致が無ければフォルダ名と突き合わせる。
@@ -291,8 +316,28 @@ pub(crate) fn request_ghost_switch_with(
         );
         return SwitchVerdict::NotFound;
     };
-    let mut target = super::same_folder_pin::pin_to_current(target, &ctx.current.ghost);
+    let target = super::same_folder_pin::pin_to_current(target, &ctx.current.ghost);
+    accept_switch(world, target, req)
+}
 
+/// 受理の後半: 置き場のゴーストと `PrevGhost` → `sakura_name` → `ChangeGhost` 送出 →
+/// [`super::switch_copy::start`] → [`SwitchInFlight`]。[`request_ghost_switch_with`] は目録の解決の後に
+/// これを呼ぶ。文脈・置き場の送出端が無ければ `warn!(ghost_switch_no_context)`、送出に失敗したら
+/// `error!(ghost_switch_send_failed)` で予約は立てない。
+pub(crate) fn accept_switch(
+    world: &mut World,
+    mut target: SwitchTarget,
+    req: SwitchRequest,
+) -> SwitchVerdict {
+    let Some(ctx) = world.get_resource::<BootContext>() else {
+        tracing::warn!(
+            event = "ghost_switch_no_context",
+            reason = "boot_context",
+            "起動の文脈が無いので切替要求を無視する"
+        );
+        return SwitchVerdict::NoContext;
+    };
+    let current_folder = ctx.current.ghost.folder.clone();
     let session = world
         .get_non_send::<GhostSlot>()
         .and_then(|slot| slot.0.as_ref());
@@ -390,7 +435,7 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
                 cause = ?cause,
                 "kanade が切替の要求を受理しないまま止まった（終了要求と競合）——切替をやめて今日どおり終了する"
             );
-            world.remove_non_send::<SwitchInFlight>();
+            end_switch(world, SwitchEnd::NotAccepted);
             quit_app(world, ExitOrigin::KanadeStopped(cause));
         }
         (SwitchStage::Welcoming { attempt }, _) => match (attempt, cause) {
@@ -411,7 +456,7 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
                     reason = %fault.reason,
                     "既定ゴーストの SHIORI が失敗した（戻す試みは済んだ／切替先が既定）——今日の失敗の経路で終了する"
                 );
-                world.remove_non_send::<SwitchInFlight>();
+                end_switch(world, SwitchEnd::DefaultFault);
                 quit_app(
                     world,
                     ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault)),
@@ -424,7 +469,7 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
                     cause = ?cause,
                     "迎え入れたゴーストが失敗以外で止まった——今日どおり終了する"
                 );
-                world.remove_non_send::<SwitchInFlight>();
+                end_switch(world, SwitchEnd::TargetQuit);
                 quit_app(world, ExitOrigin::KanadeStopped(cause));
             }
         },
@@ -443,7 +488,7 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
             match stage {
                 Some(SwitchStage::Welcoming { attempt }) => {
                     record_steady_memory(world);
-                    world.remove_non_send::<SwitchInFlight>();
+                    end_switch(world, SwitchEnd::Steady { attempt });
                     let ghost = world
                         .get_resource::<BootContext>()
                         .and_then(|c| c.current.ghost.folder.clone());
@@ -468,7 +513,8 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
             crate::update::desk::on_steady(world);
         }
         KanadeNotice::ChangeCancelled { reason } => {
-            if world.remove_non_send::<SwitchInFlight>().is_some() {
+            if world.get_non_send::<SwitchInFlight>().is_some() {
+                end_switch(world, SwitchEnd::Cancelled);
                 tracing::info!(
                     event = "ghost_switch_cancelled",
                     reason = ?reason,
@@ -577,7 +623,7 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
                 &ctx.app_profile_dir,
                 (!ctx.argv_session).then_some(target.name.as_str()),
             ) {
-                world.remove_non_send::<SwitchInFlight>();
+                end_switch(world, SwitchEnd::WriteFailure);
                 crate::write_failure::fatal(world, failure);
                 return;
             }
@@ -794,7 +840,7 @@ fn set_stage(world: &mut World, attempt: WelcomeAttempt) {
 /// 致命: 予約を下ろし、出所「既定ゴーストへ戻せなかった」で終了を指示する（要件 6.4）。
 /// 告知と終了コード 1 は `main` の後始末が今日の SHIORI の失敗の経路で行う。
 fn fatal(world: &mut World, reason: String) {
-    world.remove_non_send::<SwitchInFlight>();
+    end_switch(world, SwitchEnd::Fatal);
     tracing::error!(
         event = "ghost_switch_fatal",
         reason = %reason,

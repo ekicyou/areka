@@ -93,7 +93,7 @@
   - _Requirements: 4.2, 7.3_
 
 - [ ] 5. 既存の切替の道の受理の後半を切り出す（純移動・判断は不変）
-- [ ] 5.1 (P) ゴースト切替の受理の後半と予約の終わりを 1 口にする
+- [x] 5.1 (P) ゴースト切替の受理の後半と予約の終わりを 1 口にする
   - 受理の後半を `accept_switch` に切り出し、`SwitchInFlight` を下ろす 7 か所（記憶の書き込みの失敗と `fatal` を含む）を `pub(crate) fn end_switch(SwitchEnd)` に通す（`session_end.rs` の 1 か所はそのまま）
   - 7 か所がそれぞれ `SwitchEnd` の 7 つの変種の 1 つに対応し、既存のゴースト切替のテストが 1 本も変わらず緑のまま
   - _Boundary: GhostSwitch_
@@ -191,3 +191,4 @@
 - 4.1: 起動の失敗の記録は `boot_runtime` の中で 1 度だけ残す（既存の warn!/error! の分け方のまま）。7.2 の呼び手は記録し直さない。design.md 543 行（分類と記録は呼び手）は 289・655 行と食い違う。完了のときに文書を直す。166 行の `RuntimeBootInputs` は実際には `Emo2BootInputs`。
 - 4.1: `reload_cue.rs` のモジュール全体の allow は外し、`ReloadRx::try_iter` だけに 6.1 までの allow を付けた。`Emo2BootOutcome.sources` の欄の allow は 4.2 で外す。既存の字面の檻 `zorder_wiring_tests.rs` の t_zwi05 は、sink の組み立てを移したので `runtime_boot.rs` を見るように直した。
 - 4.2: `emo2_boot::runtime_boot` は `pub(crate)`。GhostSession の 4 つの口の allow は 7.2（split・attach・sink_sources）と 6.4（set_names）で外す。ghost_session.rs は 907 行（7.2 で本体を ghost_session_runtime.rs に置く）。
+- 5.1: `end_switch(world, _end)` は今は予約を下ろすだけ。7.1 で `reload::on_switch_end` を足すときに引数名を `end` に戻す。`accept_switch` は `BootContext` を読み直す（無ければ `NoContext`＋warn!・6.2 の直接の呼び手のための枝）。
