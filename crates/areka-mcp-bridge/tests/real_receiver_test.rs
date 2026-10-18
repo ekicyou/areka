@@ -192,8 +192,8 @@ async fn compare(version: &str) {
         (first, "/result", json!({}))
     };
     let (ok, fail) = (json!({"mode": "ok"}), json!({"mode": "fail"}));
-    // 最後の行: 形の違う `params`（`name` が文字列でない）の `tools/call` は、受け口の rmcp が知らない
-    // メソッドとして読んで `-32601` で答える。中継も型のない要求として届けるので、同じ答えになる。
+    // 最後の行: 形の違う `params`（`name` が文字列でない）の `tools/call` は、受け口が `-32602` で答え、
+    // 中継も型のない要求として届けるので、同じ答えになる。
     let cases = json!([
         first,
         {"id": 2, "method": "tools/list", "at": "/result/tools/0/name", "is": TOOL},
@@ -205,7 +205,7 @@ async fn compare(version: &str) {
         {"id": 6, "method": "nope/unknown", "at": "/error/code", "is": -32601},
         {"id": 7, "method": "tools/call", "params": {"name": "no_such_tool", "arguments": {}},
             "at": "/error/code", "is": -32602},
-        {"id": 8, "method": "tools/call", "params": {"name": 7}, "at": "/error/code", "is": -32601},
+        {"id": 8, "method": "tools/call", "params": {"name": 7}, "at": "/error/code", "is": -32602},
     ]);
 
     for case in cases.as_array().expect("配列") {
