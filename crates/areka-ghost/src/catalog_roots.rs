@@ -47,9 +47,12 @@ impl BasewareRoots {
         self.present().map(BasewareRoot::ghost_store).collect()
     }
 
-    /// 見つかる根の `balloon\`（上から）。
+    /// 見つかる根の `balloon\`（上から・一時の置き場は飛ばす）。
     pub fn balloon_stores(&self) -> Vec<PathBuf> {
-        self.present().map(BasewareRoot::balloon_store).collect()
+        self.present()
+            .filter(|r| !r.is_temporary())
+            .map(BasewareRoot::balloon_store)
+            .collect()
     }
 }
 
@@ -146,21 +149,33 @@ pub struct InstallRoot {
 }
 
 /// 入れる根を決める（要件 5.1〜5.3）。見つかる根が 1 つも無ければ `None`。
+/// 一時の置き場は入れ先にしない（見えている項目の根でも、いちばん上の根でも飛ばす）。
 pub fn install_root(roots: &BasewareRoots, kind: StoreKind, folder: &str) -> Option<InstallRoot> {
     let visible = match kind {
         StoreKind::Ghost => find_ghost(roots, folder).map(|e| e.root),
         StoreKind::Balloon => find_balloon(roots, folder).map(|e| e.root),
     };
-    if let Some(root) = visible {
+    let temporary = |dir: &Path| {
+        roots
+            .roots()
+            .iter()
+            .any(|r| r.is_temporary() && same_root(r.dir(), dir))
+    };
+    if let Some(root) = visible.filter(|root| !temporary(root)) {
         return Some(InstallRoot {
             root,
             head_skipped: None,
         });
     }
-    let top = roots.present().next()?.dir().to_path_buf();
+    let top = roots
+        .present()
+        .find(|r| !r.is_temporary())?
+        .dir()
+        .to_path_buf();
     let head_skipped = roots
         .roots()
-        .first()
+        .iter()
+        .find(|r| !r.is_temporary())
         .filter(|head| !head.dir().is_dir())
         .map(|head| head.dir().to_path_buf());
     Some(InstallRoot {
@@ -247,6 +262,9 @@ fn root_key(p: &Path) -> String {
     fold_key(trimmed)
 }
 
+#[cfg(test)]
+#[path = "catalog_roots_temporary_tests.rs"]
+mod temporary_tests;
 #[cfg(test)]
 #[path = "catalog_roots_tests.rs"]
 mod tests;
