@@ -166,7 +166,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 2.3, 8.1, 8.2, 8.3, 8.5, 10.1, 10.2, 12.1, 12.6_
 
 - [ ] 8. 検証
-- [ ] 8.1 回帰と触る範囲を確かめる
+- [x] 8.1 回帰と触る範囲を確かめる
   - 触ったクレートのテストが全部緑で、既存の切替・終了・更新のテストが 1 本も変わっていない
   - 変更したファイルが要件 13.1 の一覧（補正込み）に収まり、13.3 のファイルの差分が 0 行、どのファイルも 1,000 行以下
   - _Requirements: 12.4, 13.1, 13.2, 13.3, 13.4_
@@ -202,3 +202,4 @@
 - 7.2: `rebuild_runtime_in_place(world, target_name) -> RuntimeRebuild { Rebuilt, BootFailed, WriteFailed(PersistFailure) }`（design.md 569 行の `-> bool` は完了のときに直す）。`ghost_session_runtime` は `ghost_session` の私有 mod なので、7.3 で `switch_to` から呼ぶ口（`pub(crate) mod` か再輸出）が要る。関数と型の allow は 7.3 で外す。降ろした時間は既存の `ghost_switch_down_ms`・`ghost_switch_down_failed` を使い回す。7.2 のテストは ChangeGhost を通さないので、古い SHIORI に OnClose が来ないことは 7.3 の通しテストで固定する。
 - 7.4: `frame/switch_reload_tests.rs` は親の土台を使うため `switch_finish_tests.rs` の末尾の mod 宣言（4 行）から読む。request_reload からの通しテストは無い（ヘッドレスの土台に実行系が無い）。実機（8.2 ⑵）で通す。`reload_skin_tests.rs` 冒頭の「呼び手は 7.4」の説明は古い。
 - 7.5: `log_history.rs` は要件 13.1 の外なので触らない。`last_id()` に残る `#[allow(dead_code)]` と「mcp-strict-errors が読む口」のコメントは古い（本 spec が最初の呼び手）。design.md 98 行と一緒に完了のときに申し送る。受理の文は `answer` に偽の窓口を渡して固定した（実行系の無い World では受理まで行かない）。
+- 8.1（完了のときに記録）: `crates/areka-kanade/src/lib.rs` の `pub use change::{…}` に `ReloadScope` を 1 語足した（2.1）。要件 13.1 の一覧にも設計の補正にも無い。`change` の公開型を同じ並びで出す慣例に合わせたもので、振る舞いは変わらない。`/kiro-complete` で 13.1 の補正に足すか裁定として記録する。完了の全体テストの前に、ワークツリーで i686 の `shiori-host32-helper`・`shiori-host32-testdll-loadu` を建てておく（建てないと `tests/mcp_get_log_real_run.rs`・`tests/smoke_boot_loop_exit.rs` が前提の欠けで赤になる）。
