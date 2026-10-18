@@ -32,7 +32,7 @@ mod reload_args;
 /// `\![reload,…]`・`\![reloadsurface]` の受け口（areka-P0-mcp-reload）。
 mod reload_cue;
 /// 実行系の側の起動（受け口の送出端の束・areka-P0-mcp-reload）。
-mod runtime_boot;
+pub(crate) mod runtime_boot;
 /// 同じフォルダ名のゴーストを今のゴーストとして扱う（areka-P0-baseware-root-list）。
 pub(crate) mod same_folder_pin;
 /// シェル・バルーンの切替先の名前の解決とインストールの控え（areka-P0-shell-balloon-switch）。
@@ -254,9 +254,7 @@ pub struct Emo2BootOutcome {
     /// （areka-P0-shell-balloon-switch 要件 8.5）。
     pub seriko_sink: Option<SerikoSink>,
     /// 受け口の送出端の束（実行系を組み直すたびに複製して sink を組む・不成立時 `None`・
-    /// areka-P0-mcp-reload 要件 4.2）。
-    #[allow(dead_code)]
-    // 読み手は 4.2 で付く（`GhostSession` が持ち、降ろす最初の段で落とす）。
+    /// areka-P0-mcp-reload 要件 4.2）。持ち主は `GhostSession` で、降ろす最初の段で落とす。
     pub(crate) sources: Option<CueSinkSources>,
 }
 

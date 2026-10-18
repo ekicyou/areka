@@ -79,14 +79,14 @@
   - _Depends: 1.1, 2.3, 3.2_
   - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 13.5_
 
-- [ ] 4. 起動の結線の 2 段化（窓の側と実行系の側）
+- [x] 4. 起動の結線の 2 段化（窓の側と実行系の側）
 - [x] 4.1 実行系の側の起動を独立させる
   - 受け口の送出端の束 `CueSinkSources` を窓の側で 1 度組み、`boot_runtime` が束の複製から 12 本の sink（12 本目は読み直しの受け口）を組んで実行系を起こし、成立したときだけ受信端を World に据える
   - `wire_emo2_boot` は窓の側の手順の後に `boot_runtime` を呼ぶ結線だけになり、`Emo2BootOutcome` が束を運ぶ（sink の並びは今の順のまま）
   - `runtime_boot_tests.rs` で失敗のとき World が変わらず、成功で受信端が据わる。既存の起動のテストが緑
   - _Depends: 3.2_
   - _Requirements: 4.2, 13.4_
-- [ ] 4.2 ゴーストの単位から実行系だけを外して付け直せるようにする
+- [x] 4.2 ゴーストの単位から実行系だけを外して付け直せるようにする
   - `GhostSession` に束の欄を足して降ろす順の ① で落とし、`split_runtime`・`attach_runtime`・`sink_sources`・`set_names` を足す
   - `ghost_session_reload_tests.rs` で外した後も seriko・ticker が残り、付け直した実行系の kanade の送出端が写り、降ろすときの join が戻る
   - _Depends: 2.6, 4.1_
@@ -190,3 +190,4 @@
 - 3.3（止まり）: 網羅台帳の owner を本 spec へ直すと `ukadoc-survey` の consistency/spec_checks が 2 本赤（`roadmap-draft.md` の `[[spec]]` に本 spec が無い・balloon-canon-residue の owner_count 22→21）。要件 13.1 の範囲外の `roadmap-draft.md`（と `check_script_judge_tests.rs`・report の生成物）を触る裁定を開発者に求めた。作業は WIP コミットに置いた。
 - 4.1: 起動の失敗の記録は `boot_runtime` の中で 1 度だけ残す（既存の warn!/error! の分け方のまま）。7.2 の呼び手は記録し直さない。design.md 543 行（分類と記録は呼び手）は 289・655 行と食い違う。完了のときに文書を直す。166 行の `RuntimeBootInputs` は実際には `Emo2BootInputs`。
 - 4.1: `reload_cue.rs` のモジュール全体の allow は外し、`ReloadRx::try_iter` だけに 6.1 までの allow を付けた。`Emo2BootOutcome.sources` の欄の allow は 4.2 で外す。既存の字面の檻 `zorder_wiring_tests.rs` の t_zwi05 は、sink の組み立てを移したので `runtime_boot.rs` を見るように直した。
+- 4.2: `emo2_boot::runtime_boot` は `pub(crate)`。GhostSession の 4 つの口の allow は 7.2（split・attach・sink_sources）と 6.4（set_names）で外す。ghost_session.rs は 907 行（7.2 で本体を ghost_session_runtime.rs に置く）。

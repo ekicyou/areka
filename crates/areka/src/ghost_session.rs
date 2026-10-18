@@ -26,6 +26,7 @@ use wintf::ecs::widget::bitmap_source::{BoxedCommand, CommandSender, WintfTaskPo
 use crate::app_exit::{self, WindowsClosed};
 use crate::boot_resolve::{BalloonDecision, GhostDecision};
 use crate::emo2_boot;
+use crate::emo2_boot::runtime_boot::CueSinkSources;
 use crate::input_events;
 use crate::menu;
 use crate::placement;
@@ -417,6 +418,9 @@ pub(crate) struct GhostSession {
     /// seriko の送り手の複製（シェル・バルーンの差し替えを seriko へ頼む口）。結線ありの腕だけが
     /// 持ち、テスト用の組み立てと LogSink の腕は `None`。降ろす最初の段で落とす（要件 8.5）。
     seriko_sink: Option<areka_seriko::SerikoSink>,
+    /// 受け口の送出端の束（実行系を組み直すたびに複製して sink を組む・areka-P0-mcp-reload 要件 4.2）。
+    /// 結線ありの腕だけが持つ。束にも seriko の送り手が載るので、降ろす最初の段で落とす。
+    sinks: Option<CueSinkSources>,
     /// kanade への送出端の写し（実行系が無ければ `None`）。実行系から毎回引かずに持つのは、
     /// テストが実行系を起こさずに送出端だけを差せるようにするため（[`GhostSession::for_test`]）。
     kanade: Option<Sender<KanadeMsg>>,
@@ -488,6 +492,46 @@ impl GhostSession {
         }
     }
 
+    /// 実行系だけを外す（窓の側＝seriko・ticker・送り手・束は残る・areka-P0-mcp-reload 要件 4.2）。
+    /// kanade の送出端も外す。実行系が無ければ `None`。
+    #[allow(dead_code)] // 呼び手は 7.2（実行系だけの組み直し）で付く。
+    pub(crate) fn split_runtime(&mut self) -> Option<areka_ghost::GhostRuntime> {
+        self.kanade = None;
+        self.ghost.take()
+    }
+
+    /// 新しい実行系を付け、kanade の送出端を写す（要件 4.2）。付いていた実行系は降ろさずに
+    /// 落ちるので、先に [`GhostSession::split_runtime`] で外しておくこと（外し忘れは `error!`）。
+    #[allow(dead_code)] // 呼び手は 7.2（実行系だけの組み直し）で付く。
+    pub(crate) fn attach_runtime(&mut self, runtime: areka_ghost::GhostRuntime) {
+        if self.ghost.is_some() {
+            tracing::error!(
+                ghost_dir = %self.ghost_dir.display(),
+                "実行系を外さずに付け直した（前の実行系は降ろさずに落ちる）"
+            );
+        }
+        self.kanade = Some(runtime.kanade().clone());
+        self.ghost = Some(runtime);
+    }
+
+    /// 受け口の送出端の束（結線ありの腕だけ `Some`・要件 4.2）。
+    #[allow(dead_code)] // 本番の呼び手は 7.2（実行系だけの組み直し）で付く。
+    pub(crate) fn sink_sources(&self) -> Option<&CueSinkSources> {
+        self.sinks.as_ref()
+    }
+
+    /// ゴーストの名前を替える（実行系へ委ねる・要件 7.3）。実行系が無ければ偽。
+    #[allow(dead_code)] // 呼び手は 6.4（descript の読み直しの Names の段）で付く。
+    pub(crate) fn set_names(&mut self, names: GhostNames) -> bool {
+        match self.ghost.as_mut() {
+            Some(runtime) => {
+                runtime.set_names(names);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// テスト用の組み立てに記憶の書き手を持たせる（差し替えの後始末の記憶を観測するため）。
     #[cfg(test)]
     pub(crate) fn with_memory_publisher(
@@ -514,6 +558,7 @@ impl GhostSession {
             seriko: None,
             loop_ticker: None,
             seriko_sink: None,
+            sinks: None,
             kanade,
             ghost_dir,
             logsink_fallback: false,
@@ -534,7 +579,7 @@ impl GhostSession {
         &self.ghost_dir
     }
 
-    /// 降ろす（要件 1.1・1.3・1.5・1.6）: ① loop ticker の停止（seriko の送り手の複製も落とす）
+    /// 降ろす（要件 1.1・1.3・1.5・1.6）: ① loop ticker の停止（seriko の送り手の複製と束も落とす）
     /// → ② ゴースト実行系の終了
     /// （`reason` を渡す）→ ③ seriko の join。無い段は飛ばし、②③ の失敗は `error!` の上で
     /// `Err` を返して以降を飛ばす。perf の最終報告はプロセスに 1 回なので呼び手が後で行う。
@@ -584,6 +629,8 @@ impl GhostSession {
         // セッションが持つ seriko の送り手の複製（差し替えの口）も ① で落とす。残すと self の残りの欄
         // として関数の終わりまで生き、③ の join が「全 Sender drop」を待ち続けて hang する（要件 8.5）。
         drop(self.seriko_sink);
+        // 受け口の送出端の束も同じ理由で ① で落とす（束の seriko の送り手・areka-P0-mcp-reload 要件 4.2）。
+        drop(self.sinks);
 
         // ② 終了握手（task 5.2・design「終了握手（R6）」・DD-10）: boot 済み（`Some`）のときのみ
         // `shutdown` を呼ぶ。終了理由は呼び手が渡す（`fn main` は `CloseReason::User { scope: 0 }`＝
@@ -722,6 +769,7 @@ pub(crate) fn boot_ghost(
         seriko: None,
         loop_ticker: None,
         seriko_sink: None,
+        sinks: None,
         ghost_dir: ghost_root,
         logsink_fallback: true,
         #[cfg(test)]
@@ -806,6 +854,7 @@ fn boot_wired(
         seriko: outcome.seriko,
         loop_ticker: outcome.loop_ticker,
         seriko_sink: outcome.seriko_sink,
+        sinks: outcome.sources,
         ghost_dir,
         logsink_fallback: false,
         #[cfg(test)]
@@ -852,3 +901,7 @@ mod shell_balloon_switch_session_update_tests;
 #[cfg(test)]
 #[path = "ghost_session_switch_translate_tests.rs"]
 mod switch_translate_tests;
+
+#[cfg(test)]
+#[path = "ghost_session_reload_tests.rs"]
+mod reload_tests;
