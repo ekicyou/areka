@@ -353,3 +353,151 @@ fn handle_wait_carries_over_even_when_the_pair_release_called_the_os() {
     assert!(!world.resource::<ZOrderChainPlan>().dirty);
     assert!(world.get::<PairReleased>(b0).is_some());
 }
+
+// ===========================================================================
+// 解除の後押しの出し分け（要件 4.5・7.3）
+// ===========================================================================
+
+const SETTLED: &str = "[zorder-chain] settled";
+
+/// 非隣接 `b1,s0,s1,b0`（組は 2 つとも外れ、鎖の繋ぎは `s0 ← b1`・`s1 ← s0`・`b0 ← s1`）から
+/// 解除（鎖 `None`）。呼び出し列は「鎖の撤去 → 組の張り直し → 組ごとの後押し → 前面走査」で、
+/// 後押しは結び直した組ごとに `[バルーン, キャラクター]` へ 1 回ずつ、`settled` も 1 行ずつ。
+#[test]
+fn reset_to_none_nudges_each_restored_pair() {
+    let mut world = World::new();
+    let s0 = world.spawn(handle(11)).id();
+    let s1 = world.spawn(handle(21)).id();
+    let mut balloons = [world.spawn_empty().id(), world.spawn_empty().id()];
+    balloons.sort();
+    let [b0, b1] = balloons;
+    world
+        .entity_mut(b0)
+        .insert((handle(10), KeepDirectlyAbove { peer: s0 }, PairReleased));
+    world
+        .entity_mut(b1)
+        .insert((handle(20), KeepDirectlyAbove { peer: s1 }, PairReleased));
+    for (owned, owner, owned_hwnd, owner_hwnd) in
+        [(s0, b1, 11, 20), (s1, s0, 21, 11), (b0, s1, 10, 21)]
+    {
+        world.entity_mut(owned).insert(CrossOwnerLink {
+            owner,
+            owned_hwnd: h(owned_hwnd),
+            owner_hwnd: h(owner_hwnd),
+            segment: ChainSegment::Group(0),
+        });
+    }
+    publish(&mut world, None);
+    let mut script = Script::default();
+    script.owner_of.extend([(11, 20), (21, 11), (10, 21)]);
+
+    let (out, used) = run_once(&mut world, script);
+
+    assert!(
+        used.calls[..6]
+            .iter()
+            .all(|c| matches!(c, Call::ReadOwner(_) | Call::ClearOwner(_))),
+        "鎖の撤去が先に済んでいない: {:?}",
+        used.calls
+    );
+    assert_eq!(
+        used.calls[6..],
+        [
+            Call::SetOwner(10, 11),
+            Call::SetOwner(20, 21),
+            Call::RawNext(10),
+            Call::Nudge(11, 10),
+            Call::MeasureFront(11),
+            Call::RawNext(20),
+            Call::Nudge(21, 20),
+            Call::MeasureFront(21),
+        ],
+        "組の張り直し → 組ごとの後押し → 前面走査の順でない: {:?}",
+        used.calls
+    );
+    let settled = lines(&out, SETTLED);
+    assert_eq!(settled.len(), 2, "{out}");
+    assert!(settled[0].contains("declared=0xA,0xB"), "{out}");
+    assert!(settled[1].contains("declared=0x14,0x15"), "{out}");
+}
+
+/// 逆転 `s0,b0,b1,s1`（`b0` の組は外れ、繋ぎは `s0 ← b0`・`b0 ← b1`）を作り、descript の
+/// 基底 `b0,s0,b1,s1`（繋ぎ `s0 ← b1`）へ戻す公開を出す。`fail_restore` なら結び直しを失敗させる。
+fn inversion_back_to_base(fail_restore: bool) -> (String, Script) {
+    let mut world = World::new();
+    let s0 = world.spawn(handle(11)).id();
+    let b0 = released_pair(&mut world, 10, s0);
+    let (b1, s1) = linked_pair(&mut world, 20, 21);
+    for (owned, owner, owned_hwnd, owner_hwnd) in [(s0, b0, 11, 10), (b0, b1, 10, 20)] {
+        world.entity_mut(owned).insert(CrossOwnerLink {
+            owner,
+            owned_hwnd: h(owned_hwnd),
+            owner_hwnd: h(owner_hwnd),
+            segment: ChainSegment::Group(0),
+        });
+    }
+    publish(&mut world, chain(vec![b0, s0, b1, s1], vec![edge(s0, b1)]));
+    let mut script = Script::default();
+    script.owner_of.extend([(11, 10), (10, 20), (20, 21)]);
+    if fail_restore {
+        script.set_fails.insert(10);
+    }
+    run_once(&mut world, script)
+}
+
+/// 鎖が残る解除: 組の張り直しの後に鎖の付与、そして鎖全体の後押しが 1 回だけ。
+#[test]
+fn reset_to_descript_base_nudges_the_whole_chain_once() {
+    let (out, used) = inversion_back_to_base(false);
+
+    let tail: Vec<&Call> = used
+        .calls
+        .iter()
+        .filter(|c| !matches!(c, Call::ReadOwner(_) | Call::ClearOwner(_)))
+        .collect();
+    assert!(
+        matches!(
+            tail[..],
+            [
+                Call::SetOwner(10, 11),
+                Call::SetOwner(11, 20),
+                Call::RawNext(_),
+                Call::Nudge(..),
+                Call::MeasureFront(_),
+            ]
+        ),
+        "組の張り直し → 鎖の付与 → 鎖全体の後押し 1 回の順でない: {:?}",
+        used.calls
+    );
+    assert_eq!(lines(&out, SETTLED).len(), 1, "{out}");
+    assert!(
+        lines(&out, SETTLED)[0].contains("declared=0xA,0xB,0x14,0x15"),
+        "{out}"
+    );
+}
+
+/// 結び直しの 5 通りの ⑸ の続き: 組が張れなくても、鎖の付与と鎖全体の後押しは続く。
+#[test]
+fn a_failed_restore_still_lets_the_chain_attach_and_nudge() {
+    let (out, used) = inversion_back_to_base(true);
+
+    assert!(
+        used.calls.contains(&Call::SetOwner(11, 20)),
+        "{:?}",
+        used.calls
+    );
+    assert_eq!(
+        used.calls
+            .iter()
+            .filter(|c| matches!(c, Call::Nudge(..)))
+            .count(),
+        1,
+        "{:?}",
+        used.calls
+    );
+    let failed = lines(&out, LINK_FAILED);
+    assert_eq!(failed.len(), 1, "{out}");
+    assert!(failed[0].contains("segment=-"), "{out}");
+    assert!(lines(&out, PAIR_RESTORED).is_empty(), "{out}");
+    assert_eq!(lines(&out, SETTLED).len(), 1, "{out}");
+}

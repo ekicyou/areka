@@ -18,7 +18,7 @@
 //!    全部後の規律が組の結び目まで広がり、途中で持ち主の輪ができない
 //! 4. 各付与: 所有関係を張る。失敗した繋ぎは**その 1 本だけ**飛ばし、残りは張る（要件 8.2）
 //! 5. 実際に操作が走った巡（鎖か組のどちらかが窓口を呼んだ巡）だけ、鎖全体へ
-//!    **後押しを 1 回**（[`nudge_command`]・要件 11.1）。
+//!    **後押しを 1 回**（[`nudge_command`]・要件 11.1）。鎖が無くなる解除では結び直した組ごとに 1 回。
 //!    挿入位置の 2 択のため、指令を組む直前に**現況を 1 度だけ**読む（周期的な観測ではない）
 //! 6. 後押しの**直後に**重なりを実測し、宣言と実測を同じ 1 行へ載せる（要件 9.2／9.3）
 //! 7. 変化の印を落とす。**追加の起床は要求しない**（要件 14.5）
@@ -236,7 +236,7 @@ pub fn apply_zorder_chain(
         &handles,
         record_handle_missing,
     );
-    let pair_acted = execute_pair_ops(&mut commands, &pair_ops, &pairs, &handles);
+    let (pair_acted, restored) = execute_pair_ops(&mut commands, &pair_ops, &pairs, &handles);
     let attached = execute_ops(
         &mut commands,
         &ops[split..],
@@ -279,28 +279,47 @@ pub fn apply_zorder_chain(
         }
         // 後押しの要否は鎖と組のどちらかが窓口を呼んだかで決める。
         if pair_acted {
-            nudge_and_measure(&members, &handles);
+            nudge_round(plan.chain.is_some(), &members, &restored, &handles);
         }
         return;
     }
 
     // 1 本でも書けた＝待ちは解けた。
     *carry_announced = false;
-    nudge_and_measure(&members, &handles);
+    nudge_round(plan.chain.is_some(), &members, &restored, &handles);
+}
+
+/// 後押しの出し分け（要件 4.5）: 鎖が在れば鎖全体へ 1 回（結び直した組も鎖が並べ直す）。
+/// 鎖が無くなる解除では、結び直した組ごとに `[バルーン, キャラクター]` へ同じ後押しを当てる。
+/// 結び直した組が無ければ今のまま（窓が 2 枚未満の見送り `TooFewPresent` を記録する）。
+fn nudge_round(
+    has_chain: bool,
+    members: &[Entity],
+    restored: &[[Entity; 2]],
+    handles: &HandleQuery,
+) {
+    if has_chain || restored.is_empty() {
+        return nudge_and_measure(members, handles);
+    }
+    for pair in restored {
+        nudge_and_measure(pair, handles);
+    }
 }
 
 // ============================================================================
 // ⑶a 組の外しと結び直し（望む鎖が組の 2 枚を連続させない間だけ外す）
 // ============================================================================
 
-/// 組の操作列を順に実行する。窓口へ 1 度でも書いたら `true`（後押しの要否）。
+/// 組の操作列を順に実行する。窓口へ 1 度でも書いたら `true`（後押しの要否）と、
+/// 結び目を張れた組の `[バルーン, キャラクター]` を返す。
 fn execute_pair_ops(
     commands: &mut Commands,
     ops: &[PairOp],
     pairs: &PairQuery,
     handles: &HandleQuery,
-) -> bool {
+) -> (bool, Vec<[Entity; 2]>) {
     let mut acted = false;
+    let mut restored = Vec::new();
     for op in ops {
         match *op {
             PairOp::Release { balloon, peer } => {
@@ -314,11 +333,11 @@ fn execute_pair_ops(
                 let linked = pairs
                     .get(balloon)
                     .is_ok_and(|(_, _, link, _)| link.is_some());
-                acted |= restore_pair(commands, balloon, peer, linked, handles);
+                acted |= restore_pair(commands, balloon, peer, linked, handles, &mut restored);
             }
         }
     }
-    acted
+    (acted, restored)
 }
 
 /// 組の結び目を外して印を付ける。外す書込みを窓口へ出したら `true`（読んだだけは数えない）。
@@ -376,6 +395,7 @@ fn restore_pair(
     peer: Entity,
     linked: bool,
     handles: &HandleQuery,
+    restored: &mut Vec<[Entity; 2]>,
 ) -> bool {
     commands.entity(balloon).remove::<PairReleased>();
     let Ok(peer_handle) = handles.get(peer) else {
@@ -403,6 +423,7 @@ fn restore_pair(
         Ok(()) => {
             commands.entity(balloon).insert(OwnerLink { owner_hwnd });
             log_chain_pair_restored(balloon, peer, Some(owned_hwnd), Some(owner_hwnd));
+            restored.push([balloon, peer]);
         }
         Err(err) => log_chain_link_failed(None, Some(owned_hwnd), Some(owner_hwnd), &err),
     }
