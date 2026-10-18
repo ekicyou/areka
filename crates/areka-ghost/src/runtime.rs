@@ -15,7 +15,7 @@ use areka_kanade::{
     TranslateSeams, WaitBudget, spawn_kanade_translating, spawn_shiori_actor,
 };
 use areka_parsers::charset::DefaultEncoding;
-use areka_parsers::package::{MountError, MountModel, resolve_with_shell};
+use areka_parsers::package::{GhostNames, MountError, MountModel, resolve_with_shell};
 use areka_sakura::contract::SystemVarSnapshot;
 use areka_sylphya::{
     AskerContext, AskerId, DottedResolution, PersistKey, SylphyaPublisher, SylphyaReader,
@@ -265,6 +265,24 @@ impl GhostRuntime {
             "current shell dir replaced"
         );
         self.mount.shell.dir = dir;
+    }
+
+    /// 動作中のゴーストの名前（`mount().names`）を替え、静的プロパティ（`selfname` ほか・
+    /// `baseware.*`）を新しい名前で出し直す（mcp-reload 要件 7.3・descript の読み直し）。
+    pub fn set_names(&mut self, names: GhostNames) {
+        tracing::info!(
+            target: "ghost-runtime",
+            from = ?self.mount.names,
+            to = ?names,
+            "ghost names replaced"
+        );
+        self.mount.names = names;
+        crate::sylphya_wiring::publish_ghost_statics(
+            &self.sylphya_publisher,
+            crate::sylphya_wiring::ghost_asker_id(&self.mount.shiori.dir),
+            &self.mount.names,
+            env!("CARGO_PKG_VERSION"),
+        );
     }
 
     /// 期限つきの終了統括。見張りを `budget` で張ってから [`GhostRuntime::shutdown`] をそのまま
@@ -791,3 +809,7 @@ mod within_tests;
 #[cfg(test)]
 #[path = "runtime_shell_tests.rs"]
 mod shell_tests;
+
+#[cfg(test)]
+#[path = "runtime_names_tests.rs"]
+mod names_tests;

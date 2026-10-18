@@ -21,7 +21,7 @@
   - _Boundary: GhostSession_
   - _Requirements: 13.4_
 
-- [ ] 2. 下の層の小さな口
+- [x] 2. 下の層の小さな口
 - [x] 2.1 (P) kanade に「知らせを送らない読み直し」の起動の由来を足す
   - `BootOrigin::Reloaded { scope }` と `ReloadScope { Ghost, Shiori }` を足す
   - 下書きの返事の後、`Reloaded` なら起動の根を見ずに `basewareversion` へ直行し `boot_reload_silent` を記録する（`first_boot` でも `OnFirstBoot` を送らない）
@@ -51,7 +51,7 @@
   - 兄弟のテストで差し替えの後の readme の取り出しが新しい置き場を開く
   - _Boundary: Readme_
   - _Requirements: 7.3_
-- [ ] 2.6 (P) 動作中のゴーストの名前を差し替える口を実行系に足す
+- [x] 2.6 (P) 動作中のゴーストの名前を差し替える口を実行系に足す
   - `GhostRuntime::set_names` が名前を替えて静的プロパティを出し直す（`set_shell_dir` と同じ形）
   - `runtime_names_tests.rs` で差し替えの後に `selfname` などの静的プロパティが新しい名前で読める
   - _Boundary: GhostRuntime_
@@ -183,3 +183,5 @@
 ## Implementation Notes
 - 2.4: `install::desk::is_busy` に呼び手が来るまでの `#[allow(dead_code)]` を付けた。6.1 で呼び手を足すときに外す。
 - 2.5: `readme::set_path` にも 6.4 までの `#[allow(dead_code)]` を付けた。6.4 で外す。
+- 2.6（範囲外・完了の棚卸しで起票）: sylphya の `PublishStatic` は上書きだけで平らな名前を消す効果が無い。descript の読み直しで `sakura.name`・`sakura.name2`・`kero.name` の項目を消すと、前の `selfname` などが残る（書き換え・追加は正しく替わる）。直すには sylphya に消す口が要る。
+- 2.6: テストの道筋は `runtime::names_tests::…`（`cargo test -p areka-ghost names_tests` で回る）。`set_names` は投函だけで barrier を待たない。6.4 の Names の段で要るなら呼び手が barrier を打つ。
