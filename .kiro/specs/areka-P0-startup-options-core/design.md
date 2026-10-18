@@ -160,6 +160,7 @@ crates/areka-ghost/src/
 - `crates/areka/src/roots/report.rs` — `user_root_str` の網羅の `match` に `RootMark::Temporary => "temporary"`。
 - `crates/areka/src/menu/roots_frame.rs` — 一時の項目の子を選べなくする・先頭へ動かせない子の判定と見出しの選べる判定を覚える置き場で数える。テストの宣言を足す。
 - `crates/areka/src/readme.rs` — `mod os_port;` を `pub(crate) mod os_port;` にする（`cli::help` が `WindowsShell` を使う）。
+- `crates/areka/src/install/destination.rs` — 一時の置き場を入れ先にしない（3.5）: `running_root`（58 行目の「`dir` の 2 つ上が根」の決めつけ）は、動いているゴーストが一時の置き場にいるとき答えず `answer` に任せる。`copied_root` は一時の置き場のゴーストを同じフォルダ名の相手に数えない。`CatalogDestinations::new` の控えの根と `install_into` の記録の根（170 行目）も一時の置き場を飛ばす。テストは兄弟の `install/destination_temporary_tests.rs`。
 - `crates/areka-ghost/src/catalog.rs` — `RootMark::Temporary`・`BasewareRoot::temporary(dir)`・`ghost_store()` が `Temporary` なら `dir()` を返す・`scan_balloons` が `Temporary` を飛ばす。
 - `crates/areka-ghost/src/catalog_roots.rs` — `balloon_stores()` が `Temporary` を飛ばす・`install_root` が `Temporary` の項目を入れ先にしない。テストの宣言を足す。
 - `crates/areka-ghost/src/shiori_wiring.rs` — `EmptyShiori` と `empty_connect()`。テストの宣言を足す。
@@ -251,7 +252,7 @@ flowchart TB
 | 3.2 | 一時の置き場を先頭に足す | PointGhost・TemporaryRoot | `BasewareRoot::temporary`・`with_temporary` | 決め方 |
 | 3.3 | 親がすでに置き場の `ghost\` | PointGhost | `same_root(parent, ghost_store)` | 決め方 |
 | 3.4 | 記憶に書かない | RootsEdit | `encode_memory` が飛ばす | — |
-| 3.5 | 入れ先にしない | TemporaryRoot | `install_root` が飛ばす | — |
+| 3.5 | 入れ先にしない | TemporaryRoot・InstallDest | `install_root` が飛ばす・`running_root`／`copied_root`／控えの根が一時の置き場を使わない | — |
 | 3.6 | 先頭へ・外すで動かない | RootsEdit・RootsMenu | `FrontVerdict::Temporary`・`RemoveVerdict::Temporary`・子を選べない | — |
 | 3.7 | 足せば普通の置き場 | RootsEdit | `decide_add` が一時の項目を重なりと見ない | — |
 | 3.8 | 指されたフォルダそのもの | BootResolve | 絶対パスの指し先は写さない・`dir` を直に使う | 決め方 |
@@ -297,7 +298,7 @@ flowchart TB
 | 9.2 | ほかを効かせない | Main | `main` の早い戻り | 起動 |
 | 9.3 | 無い・開けない | CliHelp | `HelpError`＋error＋非 0 | 起動 |
 | 9.4 | `--help` の値 | CliParse | `ParseNote::HelpValueIgnored` | 起動 |
-| 10.1 | 書き方と効く 6 つ・位置の引数は `--ghost` の前 | Readme | `dist/README.txt` の「■ 起動オプション」 | — |
+| 10.1 | 書き方と効く 6 つ・位置の引数はすべての起動オプションの前 | Readme | `dist/README.txt` の「■ 起動オプション」 | — |
 | 10.2 | 受けて何もしない語・扱わないものは記録して無視 | Readme | 同上 | — |
 | 10.3 | オプションなしで今どおり・`--sstp-listen` の強さと違い | Readme | 同上と「■ 起動」の書き直し | — |
 | 11.1 | 読み方のテスト | テスト | `cli/parse_tests.rs`・`cli/listen_tests.rs` | — |
@@ -584,6 +585,7 @@ impl BasewareRoot {
 - 和（`union`）は今のまま上から走査するので、先頭の一時の置き場のゴーストが同じフォルダ名のほかのゴーストより先に当たる（3.9）。
 - `install_root` は、見えている項目の根が `Temporary` ならそれを使わず、「見つかるいちばん上の根」も `Temporary` を飛ばして決める（3.5）。
 - 状態: 一時の項目は `BootContext.roots` の中だけに在り、プロセスが終われば消える（3.4）。
+- `.nar` の入れ先（`install/destination.rs`・InstallDest）: 動いているゴーストが一時の置き場にいるとき、`running_root` は「`dir` の 2 つ上」を根とみなさず答えない（一時の置き場ではゴーストは `<一時の置き場>\<フォルダ>` にいて、2 つ上は置き場の外）。`copied_root`・控えの根・記録の根も一時の置き場を飛ばし、入れ先は `install_root` の答え（覚える置き場）になる（3.5・3.9）。
 
 #### RootsEdit・RootsMenu（`crates/areka`）
 
@@ -669,7 +671,7 @@ pub fn empty_connect() -> impl FnOnce() -> Result<Box<dyn ShioriBackend>, String
 
 すべて実機を使わない決定論のテスト。作業用のフォルダと検体はワークツリーの `target\` の下（11.5・今のテストの組み立てと同じ置き場）。
 
-- **読み方（`cli/parse_tests.rs`・11.1）**: 1 つの表で「引数の列 → `BootRequest`・`ModulePolicy`・`help`・`notes` の種類」を並べる。行の例: `--ghost a` と `--ghost=a`（1.1・1.2）・`/g a`・`-g a`・`/G a`（1.3・1.5）・`/g=a`（1.4）・`--install x y --random`（1.6 の値の読み飛ばし）・`--foo bar`（1.7＝`bar` は位置の引数）・`--option` だけ（1.8・6.7）・`--option a --option b`（1.9）・`--ghost a --ghost b`（1.10）・`--sstp-listen 1 --sstp-listen 2`（1.11）・まとめが最後に 1 件（1.12）・`from_os` の置き換え（1.14）・位置の 3 つ目（2.3）・位置と `--ghost`（2.4）・`--ghost A B --random`（4.5・4.6）・`--ghost --random`（4.7）・`nobootcheck,bootunlock,readonly,xyz,,`（6.1・6.4〜6.7）・`--help x`（9.4）・実走の 3 本と同じ形（絶対パス 2 つ）で位置の引数だけになり notes がまとめ 1 件だけ（2.6 の読み方側）。
+- **読み方（`cli/parse_tests.rs`・11.1）**: 1 つの表で「引数の列 → `BootRequest`・`ModulePolicy`・`help`・`notes` の種類」を並べる。行の例: `--ghost a` と `--ghost=a`（1.1・1.2）・`/g a`・`-g a`・`/G a`（1.3・1.5）・`/g=a`（1.4）・`--install x y --random`（1.6 の値の読み飛ばし）・`--foo bar`（1.7＝`bar` は位置の引数）・`--option` だけ（1.8・6.7）・`--option a --option b`（1.9）・`--ghost a --ghost b`（1.10）・`--sstp-listen 1 --sstp-listen 2`（1.11）・まとめが最後に 1 件（1.12）・`from_os` の置き換え（1.14）・位置の 3 つ目（2.3）・位置と `--ghost`（2.4）・`--ghost A B --random`（4.5・4.6）・`--ghost --random`（4.7）・`nobootcheck,bootunlock,readonly,xyz,,`（6.1・6.4〜6.7）・`--help x`（9.4）・`--sstp-listen C:\g\emily C:\b\x`（省略できる値が後ろの位置の引数を値として読む今のふるまいを固める＝説明書の「位置の引数はすべての起動オプションより前に」の根拠）・実走の 3 本と同じ形（絶対パス 2 つ）で位置の引数だけになり notes がまとめ 1 件だけ（2.6 の読み方側）。
 - **待受（`cli/listen_tests.rs`・11.3）**: `plan` の表（`9900`・`localhost:9900`・`127.0.0.1:9900`・`9900,9901` の順・`none`・`NONE`・値なし・`0`・`70000`・`abc`・`none,9900`・`0.0.0.0:9900`・`192.168.0.5:9900`・`[::1]:9900`・全部はねる）で 8.1〜8.6・8.7。`start_mcp` は `NotGiven` が `read_port_candidates` を使うこと（8.8）と、`Off`・`AllRejected` で待受を立てないこと（記録の捕捉）を確かめる。
 - **起動の答え（`boot_config_option_tests.rs`・`boot_resolve_option_tests.rs`・11.2）**: 検体の根と外のゴーストのフォルダを作り、`resolve_boot_from(["areka", …])` の答え（経路・`dir`・並びの先頭・印の値）を見る。オプションなしは今の答えと同じ（2.2）・位置と `--ghost`（2.4）・絶対パスで一時の置き場が先頭に付く（3.1・3.2）・親が置き場の `ghost\` なら付かない（3.3）・同じフォルダ名と写しがあっても指されたフォルダ（3.8）・ゴーストのフォルダでない（3.10）・次の起動で記憶が見つからない（3.11）・名前は `name` が先でフォルダ名が後（4.2・4.3）・見つからない（4.4）・余り（4.5）・値なし（4.7）・無作為（1 体・2 体・0 体＝5.1・5.2・5.4）・指し先と無作為（5.3）・`nobootcheck` で印を読まない（6.2）・`--ghost` でも印の値が返る（6.8）。
 - **目録と置き場（`catalog_roots_temporary_tests.rs`・`roots/edit_temporary_tests.rs`・`menu/roots_frame_temporary_tests.rs`）**: 一時の置き場のゴーストが和で先に当たり、`balloon\` は探さない（3.2・3.9）・入れ先にならない（3.5）・`encode_memory` に出ない（3.4）・外す・先頭へが断る、覚える置き場の先頭へ入る（3.6）・同じフォルダを足すと普通の置き場として足りる（3.7）・メニューの子が選べない（3.6）。
@@ -679,5 +681,5 @@ pub fn empty_connect() -> impl FnOnce() -> Result<Box<dyn ShioriBackend>, String
 
 ## Supporting References
 
-- `dist/README.txt` の節に書くこと（10.1〜10.3）: 書き方 4 つ（`--名前 値`・`--名前=値`・`/x`・`--option a,b`）／効く 6 つ（`--ghost`・`--random`・`--option nobootcheck`・`--option dontloadmodule`・`--sstp-listen`・`--help`）の働き／位置の引数は `--ghost` より前に・Windows の綴り（`C:\…`）で書く（`/` で始まると起動オプションとして読まれる）／受けて何もしない語（`bootunlock`・`standalone`・`layered`・`region`・`dpiaware`）と、まだ扱わない名前・語は記録に残して無視する／起動オプションが無くても今までどおり起動でき、`areka.exe <ゴースト> <バルーン>` も使える／`--sstp-listen` は `AREKA_MCP_PORT` より強く、MCP の中継は `--sstp-listen` を読まない／SSP と違い、最初に待ち受けられた 1 つだけで、127.0.0.1 だけで待ち受ける（`::1` では待ち受けない）。「■ 起動」の「引数は要りません」は「引数が無くても起動できます」へ。
+- `dist/README.txt` の節に書くこと（10.1〜10.3）: 書き方 4 つ（`--名前 値`・`--名前=値`・`/x`・`--option a,b`）／効く 6 つ（`--ghost`・`--random`・`--option nobootcheck`・`--option dontloadmodule`・`--sstp-listen`・`--help`）の働き／位置の引数はすべての起動オプションより前に（`--ghost` は次のオプションまでを全部、`--sstp-listen`・`--help` などの省略できる値も次の引数を値として読むため）・Windows の綴り（`C:\…`）で書く（`/` で始まると起動オプションとして読まれる）／受けて何もしない語（`bootunlock`・`standalone`・`layered`・`region`・`dpiaware`）と、まだ扱わない名前・語は記録に残して無視する／起動オプションが無くても今までどおり起動でき、`areka.exe <ゴースト> <バルーン>` も使える／`--sstp-listen` は `AREKA_MCP_PORT` より強く、MCP の中継は `--sstp-listen` を読まない／SSP と違い、最初に待ち受けられた 1 つだけで、127.0.0.1 だけで待ち受ける（`::1` では待ち受けない）。「■ 起動」の「引数は要りません」は「引数が無くても起動できます」へ。
 - 調べと決めの詳しい記録は `research.md` の 10 節。

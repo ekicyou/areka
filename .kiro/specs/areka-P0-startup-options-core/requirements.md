@@ -212,7 +212,7 @@ release 版の areka は窓だけのアプリで、端末へは何も出さな�
 
 #### Acceptance Criteria
 
-1. The areka の配布物の説明書（`dist/README.txt`） shall 起動オプションの節を持ち、書き方（`--名前 値`・`--名前=値`・短い形・`--option` のカンマ区切り）と、この spec が効かせるオプション（`--ghost`・`--random`・`--option nobootcheck`・`--option dontloadmodule`・`--sstp-listen`・`--help`）の働きを書く。`--ghost` は次の起動オプションの前までを全部その値として読むので、位置の引数は `--ghost` より前に書くことも書く。
+1. The areka の配布物の説明書（`dist/README.txt`） shall 起動オプションの節を持ち、書き方（`--名前 値`・`--名前=値`・短い形・`--option` のカンマ区切り）と、この spec が効かせるオプション（`--ghost`・`--random`・`--option nobootcheck`・`--option dontloadmodule`・`--sstp-listen`・`--help`）の働きを書く。`--ghost` は次の起動オプションの前までを全部その値として読み、値を省けるオプションも次の引数を値として読むので、位置の引数はすべての起動オプションより前に書くことも書く。
 2. The 配布物の説明書 shall 受けて何もしない `--option` の語と、まだ扱わない起動オプション・語が記録に残って無視されることを書く。
 3. The 配布物の説明書 shall 起動オプションが無くても今までどおり起動できること、並べて渡す今の形（`areka.exe <ゴースト> <バルーン>`）が使えること、`--sstp-listen` が `AREKA_MCP_PORT` より強く、MCP の中継は `--sstp-listen` を読まないことを書く。`--sstp-listen` が SSP と違い、最初に待ち受けられた 1 つだけで、127.0.0.1 だけで待ち受けることも書く。
 
