@@ -191,3 +191,4 @@
 - 5.1: 較正の実走ログは別ワークツリー（`areka-p0-anchor-tag-canon-da1fe5	argettb-signoffun-Box.log`・md5 `484B262D…`）の写しで、この機械の `target\` にしか無い。5.2 の後で `defaultun.log` を spec フォルダへ控えて較正の既定にし、手順書 §6.1 の出典の書き方を直す
 - 5.3: COMPAT §8 の重なり順の行は `path.rs:NNN（名前）` で引くので、本 spec のコードが動くと行番号がずれる（1 回差し戻し）。着地の前（完了の段）に 204〜218 行の参照をもう一度当て直す
 - 5.2: computer-use の撮影は登録外の areka.exe を覆い隠すので、目視の撮影は PowerShell の `Graphics.CopyFromScreen`（DPI 対応）で採る。今の配置では目で前後が判じられるのは s0/b1 の 1 組だけ（b0/s0 の前後を目で見るには配置をずらす必要がある）
+- 最終検証（10-19・GO）: 完了の棚卸で ⑴ design の「約束の外」の表へ `zorder_chain_diag_tests.rs`・`zorder_chain_tests.rs`・`zorder_pair_record_tests.rs` の行を足す ⑵ `zorder_pair_record_tests.rs` の 2 テスト（229 行あたり）を見送りの理由 6 種へ直す（`zorder_pair.rs` の説明は 6 種に直っている）⑶ COMPAT §8 の 204〜218 行の file:line を当て直す ⑷ （任意）`ExecOutcome { missed: pair.missed }` の読まれない代入を片づける ⑸ `stay-on-top-directives` へ `PairReleased` と鎖の適用系の 1 巡の新しい順を申し送る
