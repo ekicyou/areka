@@ -7,3 +7,7 @@
 pub(crate) const SEND_ORIGIN: &str = "SstpSend";
 /// SSTP NOTIFY の応答の `origin`（殻が `EventId::Sstp` の往復に載せる固定のラベル）。
 pub(crate) const NOTIFY_ORIGIN: &str = "SstpNotify";
+
+#[cfg(test)]
+#[path = "sstp_tests.rs"]
+mod tests;
