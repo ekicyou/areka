@@ -27,6 +27,9 @@ AI のクライアント（Claude Code・Claude Desktop など）から見た ar
   - `params` の中の `arguments` がツールの定義（`inputSchema`）に合わないときの検査（今も `-32602` で、変えない）。未登録のツール名への答え（今も `-32602`）。
   - ツールの中身・中継の作り（中継のコードは直さない見込み）・SSP の受け口がこの形にどう答えるか（測らない）。
   - 通知（`id` の無い要求）の形の違い・`id` の形の違い（どちらも今の答え＝本文なしの受け付けのまま）。
+  - SDK が `params` の形の違いを受け流すメソッド（`tools/list` など・要件 1.6）。拾うには SDK の手前で JSON-RPC を読み直すしかなく「プロトコルは公式 SDK に任せる」決まりに反し、中継も SDK の型で書き直して届けるので中継ごしで揃わない。
+  - **既知の限界**: `params` がオブジェクトでない要求（`7`・`[1]`・`"x"`）。SDK が要求ごと読めず、受け口は HTTP 415 の平文、中継は自分で `-32600` を返す。`-32602` にはならないまま残す（上と同じ理由）。
+  - 件 2 の確かめを回し直せる実走のテストとして残すこと（実走の起こし方は並走の `real-run-mcp-kit` が 1 つの道具にまとめる。本 spec は手で回して記録に残す＝要件 3.2）。
   - MCP の待ちの上限（10 秒）や呼び出し側の時間切れの値の引き上げ（症状止めはしない）。
   - バルーンの描き方・装着の待ちの段数。`dump_surface` の変更（件 2 の原因が `dump_surface` と分け合う所にあると分かったときだけ範囲に入る＝要件 3.6）。
 - **Adjacent expectations**:
@@ -43,12 +46,12 @@ AI のクライアント（Claude Code・Claude Desktop など）から見た ar
 
 #### Acceptance Criteria
 
-1. When 受け付けるメソッド（その版の話し方で形の正しい `params` を送れば `-32601` 以外で答えるメソッド。`tools/call`・`tools/list` など）に、そのメソッドの `params` の形に合わない要求（`id` の有るもの）が届いたとき, the areka の MCP の受け口 shall エラーの番号 `-32602` で答える。
+1. When 受け付けるメソッドのうち `params` が欠かせないもの（その版の話し方で形の正しい `params` を送れば `-32601` 以外で答え、かつ `params` の無い・形の合わない要求を受け流さないメソッド。今は `tools/call`・`initialize`・`completion/complete` の 3 つ。`completion/complete` は能力を名乗っていないが形の正しい要求に成功で答えているので含める）に、そのメソッドの `params` の形に合わない要求（`id` の有るもの・`params` はオブジェクトか無し）が届いたとき, the areka の MCP の受け口 shall エラーの番号 `-32602` で答える。
 2. The areka の MCP の受け口 shall 1 の形の違いとして、少なくとも `tools/call` の `name` が文字列でない（`{"name": 7}`）・`name` が無い、の 2 つを `-32602` で答える。
 3. When 受け付けないメソッド（知らない名前・その版の話し方に無いメソッド。例: `2026-07-28` の話し方の `ping`）の要求が届いたとき, the areka の MCP の受け口 shall `params` の形に関わらず、今のとおりエラーの番号 `-32601`（文はメソッドの名前）で答える。
 4. When 1 の `-32602` で答えるとき, the areka の MCP の受け口 shall 同じ版の話し方で未登録のツール名の `tools/call` に答える `-32602` と同じ HTTP の状態と同じエラーの欄の組（`code`・`message`）で答える。
 5. When 1 の `-32602` で答えるとき, the areka の MCP の受け口 shall `arguments` がツールの定義に合わないときと同じ段（`debug`）で、メソッドの名前を添えた記録を 1 件残す。
-6. The areka の MCP の受け口 shall 形の正しい要求・`arguments` がツールの定義に合わない `tools/call`（`-32602`）・未登録のツール名の `tools/call`（`-32602`）・通知・`id` の形の違う要求への答えを、本 spec の前と同じにする。
+6. The areka の MCP の受け口 shall 形の正しい要求・`arguments` がツールの定義に合わない `tools/call`（`-32602`）・未登録のツール名の `tools/call`（`-32602`）・通知・`id` の形の違う要求への答えを、本 spec の前と同じにする。`params` の形の違いを SDK が受け流すメソッド（`tools/list`・`prompts/list`・`resources/list`・`resources/templates/list`・`ping`・`server/discover`。例: `tools/list` の `{"cursor":7}` は成功）への答えも、今のまま（受け流した答え）とする。
 
 ### Requirement 2: 5 つの版と中継ごしで同じ答え（件 1）
 
@@ -71,7 +74,7 @@ AI のクライアント（Claude Code・Claude Desktop など）から見た ar
 #### Acceptance Criteria
 
 1. When 今の main から作った debug 版の areka で、ゴースト claudia と emo2 をそれぞれ起こしバルーンを出した状態で、中継ごしに `dump_balloon` を 5 回ずつ（計 10 回）呼んだとき, the areka shall どの回も、待ちの上限（10 秒）と呼び出し側の時間切れより前に、バルーンの絵か、`mcp-dump-images` が決めた断りの答え（`isError: true` と理由）を返す。
-2. The 開発の手順 shall 1 の確かめの条件（areka の版と元のコミット・debug 版であること・ゴースト・バルーン・呼び方）と、各回の結果（絵か、断りの理由か、返らなかったか）と所要時間を本 spec の記録に残す。
+2. The 開発の手順 shall 1 の確かめの条件（areka の版と元のコミット・debug 版であること・ゴースト・バルーン・呼び方）と、各回の結果（絵か、断りの理由か、返らなかったか）と所要時間を本 spec の記録に残す。確かめは PowerShell の小さな台本で手で回し（台本は記録に添える）、そのために areka のコードやテストのファイルを足さない。要件 2.7 の 1 回も同じ台本・同じ起動で送る。
 3. If 1 の 10 回がどれも答えを返した, then the 開発の手順 shall 件 2 を「再現しない」として記録して閉じ、areka のコードを変えない。
 4. If 1 のどれかの回で、areka が待ちの上限の答え（`NG:areka did not respond within 10 seconds`）を返した、または呼び出し側の時間切れで答えが返らなかった, then the 開発の手順 shall 待ちが止まった場所を areka の記録（その分岐が見える段まで開けたもの）で突き止め、根本の原因を直す。
 5. If 4 で直した, then the areka shall 直す前には赤になり直した後は緑になる決定論テストを 1 本持ち、直した後に 1 と同じ条件の 10 回がどれも答えを返す。
