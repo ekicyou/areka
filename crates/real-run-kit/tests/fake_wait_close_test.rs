@@ -150,12 +150,28 @@ fn deaf_window_is_stopped_after_deadline() {
         note(&run, seen);
         run.close();
     });
+    assert!(text.contains("締切切れ"), "締切切れの文でない: {text}");
     assert!(text.contains(&format!("PID {pid}")), "{text}");
     assert!(text.contains("を止めた"), "止めたことが文に無い: {text}");
     assert!(
         text.contains("回収した終わり方 exit code: 1"),
         "終了コードが文に無い: {text}"
     );
+    assert!(!alive(pid), "止めた後も子（PID {pid}）が生きている");
+}
+
+/// 5.4: 自分で終わらない子を `wait_exit` で待つと、締切 → 止める → 止めたことを含む panic。
+#[test]
+fn wait_exit_stops_hanging_child_after_deadline() {
+    let (text, pid) = expect_panic(|seen| {
+        let mut run = fake("hang").deadline(Duration::from_secs(1)).spawn();
+        note(&run, seen);
+        run.wait_exit();
+    });
+    assert!(text.contains("締切切れ"), "締切切れの文でない: {text}");
+    assert!(text.contains("wait_exit"), "{text}");
+    assert!(text.contains(&format!("PID {pid}")), "{text}");
+    assert!(text.contains("を止めた"), "止めたことが文に無い: {text}");
     assert!(!alive(pid), "止めた後も子（PID {pid}）が生きている");
 }
 
