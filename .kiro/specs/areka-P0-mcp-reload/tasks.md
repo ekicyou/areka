@@ -8,7 +8,7 @@
   - 移したテストが移す前と同じ件数で緑になる
   - _Boundary: Ledger_
   - _Requirements: 13.4_
-- [ ] 1.2 (P) 特別な名前の解決をゴースト切替から別ファイルへ出す
+- [x] 1.2 (P) 特別な名前の解決をゴースト切替から別ファイルへ出す
   - `resolve_special_name`・`NameResolution`・`UnresolvedReason`・`LastInstalledGhost` を `special_name.rs` へ純移動し、`ghost_switch.rs` を約 850 行にする（`emo2_boot/mod.rs` には `mod` の 1 行を足すだけ）
   - 既存のゴースト切替のテストが 1 本も変わらず緑のまま
   - _Boundary: GhostSwitch_
