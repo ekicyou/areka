@@ -91,6 +91,20 @@ const GATEWAY_DEFINITION_PREFIX: &str = "crates/sample-ghost-kit/src/";
 /// 窓口 crate のパッケージ名（本番依存の見張りが使う）。
 const KIT_PACKAGE: &str = "sample-ghost-kit";
 
+/// 本番の表に窓口 crate を持ってよいクレートの例外表（設計 D-2）。
+///
+/// 表のクレート自身はどこの本番の表にも載れない（[`a_gateway_user_never_appears_in_a_production_dependency_table`]）。
+/// 本番の道で窓口 crate に届くには「本番の表に窓口 crate を持つクレート」を通るしかないので、
+/// 間接の道も塞がる。項目の追加は表と [`GATEWAY_USERS_COUNT`] の 2 箇所を明示的に編集する。
+const GATEWAY_USERS: &[(&str, &str)] = &[(
+    "real-run-kit",
+    "実機の試験の窓口。検体を名前で引いて子の areka の根を作るので本番の表に持つ。\
+     自身はテスト専用で [dev-dependencies] からだけ引かれる",
+)];
+
+/// [`GATEWAY_USERS`] の件数（逐語）。表と食い違えば赤。
+const GATEWAY_USERS_COUNT: usize = 1;
+
 /// 本見張り自身の相対パス。
 const THIS_GUARD: &str = "crates/log-capture-kit/tests/sample_path_guard_test.rs";
 
@@ -642,22 +656,30 @@ fn a_spelling_in_a_comment_is_not_a_hit_but_the_same_line_of_code_is() {
 // 本番依存の見張り（要件 1.7・10.3）
 // ---------------------------------------------------------------------------
 
-/// 開発側の依存として窓口 crate を引いているか（純関数・較正の陽性側）。
-fn has_dev_kit_dependency(src: &str) -> bool {
+/// 開発側の依存として `package` を引いているか（純関数・較正の陽性側）。
+fn has_dev_dependency(src: &str, package: &str) -> bool {
     manifest_lines(src).iter().any(|l| {
         l.section.contains("dev-dependencies")
             && if l.is_header {
-                mentions_crate(&l.section, KIT_PACKAGE)
+                mentions_crate(&l.section, package)
             } else {
-                mentions_crate(&l.text, KIT_PACKAGE)
+                mentions_crate(&l.text, package)
             }
     })
+}
+
+/// 例外表のクレートか。
+fn is_gateway_user(name: &str) -> bool {
+    GATEWAY_USERS.iter().any(|(user, _)| *user == name)
 }
 
 #[test]
 fn the_sample_gateway_never_appears_in_a_production_dependency_table() {
     let mut violations: Vec<String> = Vec::new();
     for (name, text) in workspace_manifests(KIT_PACKAGE) {
+        if is_gateway_user(&name) {
+            continue;
+        }
         for line in production_dependencies_on(&text, KIT_PACKAGE) {
             violations.push(format!(
                 "  crates/{name}/Cargo.toml:{} [{}] {}",
@@ -685,7 +707,7 @@ fn the_sample_gateway_is_actually_pulled_in_as_a_dev_dependency() {
     );
     let dev: Vec<&str> = manifests
         .iter()
-        .filter(|(_, text)| has_dev_kit_dependency(text))
+        .filter(|(_, text)| has_dev_dependency(text, KIT_PACKAGE))
         .map(|(name, _)| name.as_str())
         .collect();
     assert!(
@@ -737,10 +759,120 @@ fn a_dev_dependency_on_the_sample_gateway_is_not_a_violation() {
             "[{section}] は開発側なので違反ではない"
         );
         assert!(
-            has_dev_kit_dependency(&src),
+            has_dev_dependency(&src, KIT_PACKAGE),
             "[{section}] は開発側の依存として検出されるはず"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// 例外表のクレート（設計 D-2）
+// ---------------------------------------------------------------------------
+
+#[test]
+fn the_gateway_user_table_declares_its_own_size_and_reasons() {
+    assert_eq!(
+        GATEWAY_USERS.len(),
+        GATEWAY_USERS_COUNT,
+        "例外表の件数が宣言と食い違う。項目の追加は表と件数の 2 箇所を明示的に編集すること"
+    );
+    let unique: BTreeSet<&str> = GATEWAY_USERS.iter().map(|(user, _)| *user).collect();
+    assert_eq!(
+        unique.len(),
+        GATEWAY_USERS_COUNT,
+        "例外表に重複した項目がある"
+    );
+    for (user, reason) in GATEWAY_USERS {
+        assert!(!reason.trim().is_empty(), "例外には理由が要る: {user}");
+    }
+}
+
+#[test]
+fn a_gateway_user_never_appears_in_a_production_dependency_table() {
+    let mut violations: Vec<String> = Vec::new();
+    for (user, _) in GATEWAY_USERS {
+        // 自分の manifest は workspace_manifests が除く。
+        for (name, text) in workspace_manifests(user) {
+            for line in production_dependencies_on(&text, user) {
+                violations.push(format!(
+                    "  crates/{name}/Cargo.toml:{} [{}] {}",
+                    line.line, line.section, line.text
+                ));
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "例外表のクレートは窓口 crate を本番の表に持つので、どこの本番の表にも載れない\
+         （載ると窓口 crate が配布物の依存へ入る＝要件 10.3）:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn each_gateway_user_is_actually_pulled_in_as_a_dev_dependency() {
+    // 較正: 上の検査が名前の照合の壊れで空になっていないことを示す。
+    for (user, _) in GATEWAY_USERS {
+        let dev: Vec<String> = workspace_manifests(user)
+            .into_iter()
+            .filter(|(_, text)| has_dev_dependency(text, user))
+            .map(|(name, _)| name)
+            .collect();
+        assert!(
+            !dev.is_empty(),
+            "例外表のクレート {user} を dev-dependency として引く crate が 0 件＝検査が空振りしている疑い"
+        );
+    }
+    let areka = workspace_manifests(KIT_PACKAGE)
+        .into_iter()
+        .find(|(name, _)| name == "areka")
+        .expect("crates/areka/Cargo.toml があるはず");
+    assert!(
+        has_dev_dependency(&areka.1, "real-run-kit"),
+        "areka の [dev-dependencies] に real-run-kit が無い"
+    );
+}
+
+#[test]
+fn each_gateway_user_really_holds_the_sample_gateway_in_a_production_table() {
+    // 較正: 陳腐化した例外（もう窓口 crate を本番の表に持たないクレート）を赤にする。
+    let manifests = workspace_manifests(KIT_PACKAGE);
+    for (user, _) in GATEWAY_USERS {
+        let (_, text) = manifests
+            .iter()
+            .find(|(name, _)| name == user)
+            .unwrap_or_else(|| panic!("例外表が実在しないクレートを指している: {user}"));
+        assert!(
+            !production_dependencies_on(text, KIT_PACKAGE).is_empty(),
+            "例外表の {user} はもう窓口 crate を本番の表に持たない＝例外を表から外すこと"
+        );
+    }
+}
+
+#[test]
+fn a_production_dependency_on_a_gateway_user_is_a_violation() {
+    let line = "real-run-kit = { path = \"../real-run-kit\" }";
+    for section in [
+        "dependencies",
+        "build-dependencies",
+        "target.'cfg(windows)'.dependencies",
+    ] {
+        let src = manifest_fixture(section, line);
+        let found = production_dependencies_on(&src, "real-run-kit");
+        assert_eq!(
+            found.len(),
+            1,
+            "[{section}] の依存は違反として出るはず: {found:?}"
+        );
+        assert_eq!(found[0].line, 6, "行番号は元の manifest のもの");
+    }
+    let dev = manifest_fixture("dev-dependencies", line);
+    assert_eq!(
+        production_dependencies_on(&dev, "real-run-kit"),
+        Vec::new(),
+        "[dev-dependencies] は違反ではない"
+    );
+    assert!(has_dev_dependency(&dev, "real-run-kit"));
 }
 
 // ---------------------------------------------------------------------------

@@ -122,6 +122,7 @@ dependencies = [
  "human-panic",
  "log-capture-kit",
  "miniz_oxide 0.9.1",
+ "real-run-kit",
  "sample-ghost-kit",
  "shiori-abi",
  "shiori-host32-host",
@@ -1776,6 +1777,23 @@ name = "raw-window-handle"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
+
+[[package]]
+name = "real-run-kit"
+version = "0.0.3"
+dependencies = [
+ "areka-mcp",
+ "areka-mcp-bridge",
+ "areka-user-data",
+ "rmcp",
+ "sample-ghost-kit",
+ "serde_json",
+ "temp-path-kit",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "windows",
+]
 
 [[package]]
 name = "rectangle-pack"

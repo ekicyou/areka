@@ -9,7 +9,7 @@ use crate::msg::{EventId, ShioriCall, ShioriMsg, ShioriOutcome};
 use crate::schedule::Action;
 use crate::schedule::events::SourceEvent;
 use crate::schedule::resources::ResourceSink;
-use crate::schedule::translate::TranslateRequest;
+use crate::schedule::translate::{ScriptSource, TranslateRequest};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use crate::talk::TalkCommand;
 
@@ -44,10 +44,10 @@ fn run_batch(actions: Vec<Action>) -> (super::BatchResult, Vec<String>) {
 fn translate(script: &str) -> Action {
     Action::Translate(TranslateRequest {
         script: script.to_string(),
-        source: SourceEvent {
+        source: ScriptSource::Event(SourceEvent {
             id: EventId::Static("OnBoot"),
             references: Vec::new(),
-        },
+        }),
         status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
     })
 }

@@ -88,3 +88,6 @@ temp-path-kit = { path = "../temp-path-kit" }
 # テスト・example が検体の在処を自前で綴らないための leaf・テスト専用であり、
 # log-capture-kit と同じく [dependencies] へは決して置かない。
 sample-ghost-kit = { path = "../sample-ghost-kit" }
+# 実機の試験の窓口（spec: areka-P0-real-run-mcp-kit）。検体の窓口を本番の表に持つので、
+# [dependencies] へは決して置かない（見張り sample_path_guard_test が赤にする＝D-2）。
+real-run-kit = { path = "../real-run-kit" }

@@ -4,7 +4,9 @@
 //! [`ArekaHandler::new`] が 1 度だけ `ToolRouter` へ写し、呼び出し・定義の取得はそこへ委ねる
 //! （未登録の名前は `ToolRouter::call` が `-32602` にする＝設計 B-6）。一覧は `ToolRouter` が
 //! 名前順に並べ替えるので、写すときに登録順で積んだ列を返す。写しの中で `arguments` を
-//! 登録した `inputSchema` に照らし、合わなければ `-32602` にする。
+//! 登録した `inputSchema` に照らし、合わなければ `-32602` にする。`params` の形が合わない
+//! `tools/call`・`initialize`・`completion/complete` は `-32602`、ほかの型のない要求は rmcp の既定と
+//! 同じ `-32601` で答える（[`custom_request_error`]）。
 
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -12,9 +14,10 @@ use std::sync::Arc;
 use rmcp::handler::server::router::tool::{ToolRoute, ToolRouter};
 use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::model::{
-    CacheScope, CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock,
-    Implementation, ListToolsResult, PaginatedRequestParams, ProtocolVersion, ServerCapabilities,
-    ServerConfig, Tool,
+    CacheScope, CallToolRequestMethod, CallToolRequestParams, CallToolResponse, CallToolResult,
+    CompleteRequestMethod, ConstString, ContentBlock, CustomRequest, CustomResult, ErrorCode,
+    Implementation, InitializeResultMethod, ListToolsResult, PaginatedRequestParams,
+    ProtocolVersion, ServerCapabilities, ServerConfig, Tool,
 };
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer, ServerHandler};
@@ -100,6 +103,24 @@ fn to_call_tool_result(outcome: ToolOutcome) -> CallToolResult {
     }
 }
 
+/// `params` が欠かせないメソッド。形の正しい要求なら -32601 以外で答え、
+/// 形の合わない要求は rmcp が型のない要求として渡してくる（版を問わない）。
+const PARAMS_REQUIRED: [&str; 3] = [
+    CallToolRequestMethod::VALUE,
+    InitializeResultMethod::VALUE,
+    CompleteRequestMethod::VALUE,
+];
+
+/// 型のない要求への答え。表の中は `-32602`（文は `invalid params for <method>`・記録は debug を 1 件）、
+/// 表の外は rmcp の既定と同じ `-32601`（文はメソッドの名前・記録なし）。`params` の中身は見ない。
+pub(crate) fn custom_request_error(method: &str) -> ErrorData {
+    if PARAMS_REQUIRED.contains(&method) {
+        debug!(method, "MCP: params の形がメソッドに合わない");
+        return ErrorData::invalid_params(format!("invalid params for {method}"), None);
+    }
+    ErrorData::new(ErrorCode::METHOD_NOT_FOUND, method.to_owned(), None)
+}
+
 impl ServerHandler for ArekaHandler {
     /// tools の能力だけ（resources・prompts なし）。版の交渉は rmcp の既定に任せる（設計 B-11）。
     fn get_info(&self) -> ServerConfig {
@@ -141,4 +162,17 @@ impl ServerHandler for ArekaHandler {
     fn get_tool(&self, name: &str) -> Option<Tool> {
         self.router.get(name).cloned()
     }
+
+    /// 型の合わない要求（rmcp の `CustomRequest`）。成功は返さない。
+    async fn on_custom_request(
+        &self,
+        request: CustomRequest,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<CustomResult, ErrorData> {
+        Err(custom_request_error(&request.method))
+    }
 }
+
+#[cfg(test)]
+#[path = "handler_tests.rs"]
+mod handler_tests;
