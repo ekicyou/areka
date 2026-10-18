@@ -116,7 +116,7 @@
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 10.1_
 
 - [ ] 6. 今の実機の試験 3 本の移し替え
-- [ ] 6.1 smoke_boot_loop_exit を窓口へ移す
+- [x] 6.1 smoke_boot_loop_exit を窓口へ移す
   - 実機の走りの前に、32bit の仲介（`cargo build -p shiori-host32-helper --target i686-pc-windows-msvc`）と失敗方向の試験用の DLL（`shiori-host32-testdll-loadu`）を建てておく（6.2・6.3 も仲介を使う）
   - 5 方向（本物・根・0 体・失敗・書けない）を移し替えの表どおりの起動の指定と自分で終わるのを待つ形に替え、失敗方向は起こす直前の書き換えと試験用の 32bit の DLL の揃えを窓口で行う
   - 確かめの関数（SHIORI の失敗 0 件・行の有無と数・`route=` の目印・モニタ 0 台の受理・本物の窓と終了コード）は中身を変えずに残し、本物方向で受理しなかったときに保険の自動終了で終わったことを足す
@@ -163,3 +163,5 @@
 - 4.1: 構築は `Run::new(..)`（pub(crate)・launch が呼ぶ）。`Run::new` の `#[allow(dead_code)]`・`impl RunDirs` の `cfg_attr`・i686 の許しは 4.2 で launch が使い始めたら外す。Drop は `Ended` が無いときだけ `stop_quietly`。`wait_for` は `Ended` を記録しない。
 - 4.2: `EnvFilter`（tracing-subscriber 0.3.23 `filter/env/directive.rs:246`）は出所を素の文字列の前方一致で照らす（`::` の境目なし）。`compose_rust_log` の「名指している」も同じ規則（`"areka=debug"` は変えない・`"areka_mcp=debug"` には `,areka::app_exit=info` を足す＝design.md の Testing Strategy を訂正）。`I686Spec` は寿命の引数つき。dead_code の許しはクレートから全部消えた。
 - 5.3: 窓口の標準エラーの 1 行は libtest が捕まえるので、試験の実行ファイル自身を `--exact <名> --nocapture`＋印の環境変数で起こし直して読む。`target\` の下の確かめは `CARGO_MANIFEST_DIR` の 2 つ上の `target	est-roots` に照らす（temp-path-kit と同じ決め方）。
+- 6.1（D-14 の子の環境の変化）: ① は開発者の本物の記憶の置き場をやめ回の `profile`（target の下）を使う。②③④ の記憶の置き場は OS の一時フォルダから回の置き場へ。③ の根は回の空の根へ。①④ の位置の引数で立てる回にも `AREKA_ROOT`＝回の空の根を渡す。5 方向とも `AREKA_MCP_PORT`＝空いた番号と `RUST_LOG=info` を明示。32bit の仲介は ③⑤ も含め毎回自動で揃える。実走の時間は移す前 23.1 秒・移した後 14.8〜29.4 秒（確かめの結果は同じ）。
+- このセッションの道具は、書き込む文字列の中の `\r\n` や行末の `\` を生の改行と空白に化かすことがある（1.2・6.1 で 2 度）。文字列を書いた後はバイトで確かめる（Git Bash の `grep $'\r'` は当てにならない・python か od で見る）。

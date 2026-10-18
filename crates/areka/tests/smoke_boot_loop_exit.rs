@@ -18,11 +18,11 @@
 //!   止まり、「areka を起動できません」の告知を残して **非 0** で終わる
 //!   （areka-P0-write-failure-notice 要件 6.1・7.6・7.7）。
 //!
-//! 全方向で `AREKA_NO_ALERT=1`（告知のモーダルで番犬の締切まで止まらない・要件 9.2）。
-//! ②③ の `AREKA_PROFILE_DIR` は一時フォルダ（開発者のアプリの記憶を読まず・書かない）。
-//!
-//! ①② は i686 の `shiori-host32-helper.exe` が `areka.exe` の隣にあることを前提にし、テストが
-//! 自分で揃える（`ensure_helper_beside_areka`・x64 の helper は置き換える）。そのうえで
+//! 子の起こし方・終わりの待ち・環境の整え方は実機の試験の窓口 `real-run-kit` に任せる
+//! （areka-P0-real-run-mcp-kit 要件 7.1〜7.4）。窓口は全方向で `AREKA_NO_ALERT=1`（告知のモーダルで
+//! 締切まで止まらない）・`NO_COLOR=1`（`route=Only` を ANSI に分断されずに照合する）を渡し、開発者の
+//! 根・記憶の置き場を持ち込まず、記憶の置き場は回の置き場（`target\` の下）に取る。i686 の
+//! `shiori-host32-helper.exe` も窓口が `areka.exe` の隣へ揃える。そのうえで ①② は
 //! 「SHIORI が動かなくなりました」の行が 0 件＝SHIORI の失敗で終わっていないことも見る
 //! （areka-P0-shiori-fault-notice 要件 4.1・4.2）。
 //!
@@ -31,185 +31,27 @@
 //! （旧「ダミー窓で完走を受理」の置き換え。ダミー窓は退役済み）。
 //!
 //! 実装規律:
-//! - 子プロセスは `cargo run` ではなく Cargo が用意する `CARGO_BIN_EXE_areka`（統合テスト用に
-//!   Cargo が bin を先にビルドして渡すパス）を直接起動する。再コンパイルによるノイズを避ける。
-//! - タイムアウト番犬は純 std（`std::process` + `std::thread`/`std::time`・新規依存なし・R6.1）。
-//!   `try_wait()` を短周期でポーリングし、寛大な締切内に終了しなければ `kill()` してテスト失敗。
 //! - **合否は終了コード＋経路マーカー（tracing のメッセージ本文と `route=` 欄）で判定する**。
-//!   子へ `NO_COLOR=1` を渡し、欄の名前と値の間に ANSI の着色が挟まらないようにする
-//!   （`route=Only` をそのまま照合できる）。
 //!   良性の teardown warn（`WARN ... Could not despawn entity ... generation 1`・smoke timer と
 //!   window-registry close の二重 despawn 競合）は warn レベルで exit 0 に影響しないため
 //!   assert 対象にしない（tasks.md Implementation Notes・実測済み）。
-//! - 検体は**テストごとに** `SampleRoot::acquire` する（使い捨ての複製）。① と ② は並走しうるので
-//!   同じ複製を共有させない（② がゴーストの記憶 `last.balloon` を複製へ書くため、共有すると同じ
-//!   複製での後続の起動が `route=Memory` へ変わりうる）。複製は取得のたびに新品なので、実行を
-//!   何度重ねても ② は `route=Companion` のまま。
+//! - 検体は窓口が**走りごとに**使い捨ての複製を取る。① と ② は並走しうるので同じ複製を共有させない
+//!   （② がゴーストの記憶 `last.balloon` を複製へ書くため、共有すると同じ複製での後続の起動が
+//!   `route=Memory` へ変わりうる）。複製は取得のたびに新品なので、何度重ねても ② は `route=Companion`。
 
-use sample_ghost_kit::SampleRoot;
-use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus, Stdio};
-use std::sync::OnceLock;
-use std::time::{Duration, Instant};
+use real_run_kit::{Ended, EndedBy, Launch, RealRun};
+use std::process::ExitStatus;
+use std::time::Duration;
 use temp_path_kit::TempPath;
 
-/// 子プロセスへ渡す自動 close 遅延（ms）。起動窓を開き run ループを一巡させるだけの
-/// 十分小さな値。0 でも受理されるが（即時発火）、窓生成と run 立ち上げの前後関係を
-/// 現実的にするため小さな正値を与える。
-const SMOKE_EXIT_MS: &str = "500";
-
-/// タイムアウト番犬の締切。初回起動は遅い（窓生成＋COM/DPI 初期化）ため寛大に取る。
-/// これを超えて終了しなければハング＝テスト失敗（TIMEOUT）と判定する。
-const WATCHDOG_DEADLINE: Duration = Duration::from_secs(60);
-
-/// `try_wait()` のポーリング周期。
-const POLL_INTERVAL: Duration = Duration::from_millis(50);
+/// 子へ渡す保険の自動終了。起動窓を開き run ループを一巡させるだけの十分小さな値。
+const SMOKE_EXIT: Duration = Duration::from_millis(500);
 
 /// wire 成立マーカー（`emo2_boot` の `info!`・実 sink 結線が end-to-end で踏まれた証跡・task 7.1）。
 const WIRED: &str = "emo2-boot: 実 sink 結線が成立しました（wire 成立）";
 
 /// 本物のゴースト窓を開いたマーカー（`ghost_session::prepare_ghost_windows` が組む窓を作るクロージャ）。
 const REAL_WINDOWS: &str = "本物のゴースト窓を開きました";
-
-/// env ゲートを立てた areka バイナリを与えた引数と env で起動し、番犬締切内の終了を待って
-/// `(status, stdout, stderr)` を返す共通ドライバ（3 方向で共有）。
-fn run_smoke(args: &[&str], envs: &[(&str, &str)]) -> (ExitStatus, String, String) {
-    let bin = env!("CARGO_BIN_EXE_areka");
-
-    // 子プロセス起動: env ゲートを立て、診断用に stdout/stderr を捕捉する。
-    // stdout/stderr を piped にすることで、失敗時に子の tracing 出力を assert メッセージへ回せる。
-    let mut child = Command::new(bin)
-        .args(args)
-        .env("AREKA_APP_SMOKE_EXIT_MS", SMOKE_EXIT_MS)
-        // 告知のメッセージボックスを抑える（モーダルで番犬の締切まで止まらず、非 0 で即座に終わる）。
-        .env("AREKA_NO_ALERT", "1")
-        // 欄の着色を切る（`route=Only` を ANSI に分断されずに照合する）。
-        .env("NO_COLOR", "1")
-        // 開発者のシェルの根・記憶の場所を持ち込まない（方向ごとに envs で与える）。
-        .env_remove("AREKA_ROOT")
-        .env_remove("AREKA_PROFILE_DIR")
-        .env_remove("AREKA_USER_ROOT")
-        .envs(envs.iter().copied())
-        // RUST_LOG は明示しない（骨格既定 info でよい）。診断は捕捉出力から得る。
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap_or_else(|e| panic!("areka smoke バイナリの起動に失敗しました（{bin}）: {e}"));
-
-    // タイムアウト番犬: try_wait() を短周期でポーリングし、締切内の終了を待つ。
-    let start = Instant::now();
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) => {
-                if start.elapsed() >= WATCHDOG_DEADLINE {
-                    // ハング: 子を kill してから明示的に失敗する（マスクしない）。
-                    // kill 後に wait_with_output() で子を回収しつつ捕捉出力を診断へ回す。
-                    let _ = child.kill();
-                    let (out, err) = child
-                        .wait_with_output()
-                        .map(|o| {
-                            (
-                                String::from_utf8_lossy(&o.stdout).into_owned(),
-                                String::from_utf8_lossy(&o.stderr).into_owned(),
-                            )
-                        })
-                        .unwrap_or_default();
-                    panic!(
-                        "smoke プロセスが番犬締切（{:?}）内に終了しませんでした（ハング）。\
-                         boot→loop→exit の欠陥の疑い。\n--- child stdout ---\n{out}\n--- child stderr ---\n{err}",
-                        WATCHDOG_DEADLINE
-                    );
-                }
-                std::thread::sleep(POLL_INTERVAL);
-            }
-            Err(e) => panic!("子プロセスの状態取得（try_wait）に失敗しました: {e}"),
-        }
-    };
-
-    // 終了済み: 診断・経路マーカー assert のため出力を回収する。
-    let output = child.wait_with_output();
-    let (out, err) = output
-        .map(|o| {
-            (
-                String::from_utf8_lossy(&o.stdout).into_owned(),
-                String::from_utf8_lossy(&o.stderr).into_owned(),
-            )
-        })
-        .unwrap_or_default();
-
-    (status, out, err)
-}
-
-/// PE の機械種別が i386（0x014c）かを見る。`cargo build --workspace` は x64 の helper を
-/// `areka.exe` の隣へ置くので、「隣にある」だけでは i686 の前提を満たさない（x64 の helper は
-/// 32bit の SHIORI DLL を読めず接続に失敗する）。
-fn is_i686_pe(path: &Path) -> bool {
-    let Ok(b) = std::fs::read(path) else {
-        return false;
-    };
-    let at = |i: usize, n: usize| b.get(i..i + n);
-    let Some(pe) = at(0x3c, 4).map(|s| u32::from_le_bytes(s.try_into().unwrap()) as usize) else {
-        return false;
-    };
-    at(pe + 4, 2) == Some(&[0x4c, 0x01][..])
-}
-
-/// i686 成果物 `name` を `dest_dir` に揃えてそのパスを返す（要件 4.1）。`dest_dir` に i686 の
-/// `name` があればそのまま。無ければ env `env_var` → `<target>/i686-pc-windows-msvc/{debug,release}`
-/// の順で探し、一時名へ書いてから改名で置く（並走するテストの子が書きかけを起動しない）。
-/// どこにも無ければ建て方を案内して失敗する。
-fn ensure_i686_artifact(name: &str, env_var: &str, dest_dir: &Path) -> PathBuf {
-    let dest = dest_dir.join(name);
-    if is_i686_pe(&dest) {
-        return dest;
-    }
-    // CARGO_BIN_EXE_areka＝<target>/<profile>/areka.exe → <target>
-    let target = Path::new(env!("CARGO_BIN_EXE_areka"))
-        .ancestors()
-        .nth(2)
-        .expect("areka.exe の 2 つ上は target")
-        .join("i686-pc-windows-msvc");
-    // 環境変数で指したのに無い／i686 でないなら、黙って target へ移らず止める（既存の探索と同じ）。
-    let explicit = std::env::var_os(env_var).map(PathBuf::from).inspect(|p| {
-        assert!(
-            is_i686_pe(p),
-            "{env_var}={} が指すファイルが無いか i686 ではありません（i686 の {name} を先にビルド）",
-            p.display()
-        )
-    });
-    let src = explicit
-        .into_iter()
-        .chain(["debug", "release"].map(|p| target.join(p).join(name)))
-        .find(|p| p.is_file())
-        .unwrap_or_else(|| {
-            panic!(
-                "i686 の {name} が見つかりません（env {env_var} → {}\\{{debug,release}}）。\
-                 PowerShell で先に建ててください: \
-                 cargo build -p shiori-host32-helper --target i686-pc-windows-msvc ; \
-                 cargo build -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc",
-                target.display()
-            )
-        });
-    let tmp = dest_dir.join(format!("{name}.{}.tmp", std::process::id()));
-    std::fs::copy(&src, &tmp)
-        .unwrap_or_else(|e| panic!("{} → {} の複製に失敗: {e}", src.display(), tmp.display()));
-    std::fs::rename(&tmp, &dest)
-        .unwrap_or_else(|e| panic!("{} → {} の改名に失敗: {e}", tmp.display(), dest.display()));
-    dest
-}
-
-/// `areka.exe` の隣に i686 の `shiori-host32-helper.exe` を揃える（①② の前提・要件 4.1）。
-/// 置き先は同じバイナリの並走するテストで共有されるので、同じプロセス内で 1 度だけ行う。
-fn ensure_helper_beside_areka() {
-    static DONE: OnceLock<PathBuf> = OnceLock::new();
-    DONE.get_or_init(|| {
-        let dir = Path::new(env!("CARGO_BIN_EXE_areka"))
-            .parent()
-            .expect("areka.exe の親");
-        ensure_i686_artifact("shiori-host32-helper.exe", "HOST32_HELPER_EXE", dir)
-    });
-}
 
 /// SHIORI の失敗の告知の題名（`alert.rs` の `SHIORI_FAULT_TITLE` と同じ綴り・bin crate の定数は
 /// テストから参照できないので写す）。これを含む行の数で「SHIORI の失敗で終わったか」を見る。
@@ -284,28 +126,37 @@ fn assert_real_windows_and_exit_zero(status: ExitStatus, all: &str) {
     );
 }
 
+/// 保険の自動終了を既定（500 ms）にした起動の指定。
+fn smoke() -> RealRun {
+    RealRun::new(env!("CARGO_BIN_EXE_areka")).safety_exit(SMOKE_EXIT)
+}
+
+/// 起こして、子が自分で終わるのを待ち（窓口の締切 60 秒）、終わり方と出力の全文を返す（要件 7.4）。
+fn run_to_exit(spec: RealRun) -> (Ended, String) {
+    let mut run = spec.spawn();
+    let ended = run.wait_exit();
+    (ended, run.output())
+}
+
+fn emo2_sample() -> Launch {
+    Launch::Sample {
+        name: "emo2".into(),
+        balloon: Some("emo2-kakukaku".into()),
+    }
+}
+
+fn emo2_root() -> Launch {
+    Launch::SampleRoot {
+        name: "emo2".into(),
+    }
+}
+
 /// ① 本物方向（要件 7.1）: emo2 検体のゴースト／バルーンを argv の絶対パスで供給し、
 /// 本物のゴースト窓構成（2 スコープ）で自動終了 → **exit 0** で完走する。
 #[test]
 fn argv_direction_boots_real_ghost_windows_and_exits_zero() {
-    ensure_helper_beside_areka();
-    let emo2 = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
-    let ghost_root = emo2.folder();
-    let balloon_root = emo2.balloon("emo2-kakukaku").expect("emo2 の同梱バルーン");
-    assert!(
-        ghost_root.is_absolute() && ghost_root.join("ghost/master/descript.txt").exists(),
-        "emo2 検体が見つかりません（絶対パス前提）: {}",
-        ghost_root.display()
-    );
-
-    let (status, out, err) = run_smoke(
-        &[
-            ghost_root.to_str().expect("検体パスは UTF-8"),
-            balloon_root.to_str().expect("検体パスは UTF-8"),
-        ],
-        &[],
-    );
-    let all = format!("{out}\n{err}");
+    let (ended, all) = run_to_exit(smoke().launch(emo2_sample()));
+    let status = ended.status;
 
     // argv の経路で決まる（列挙も記憶も見ない・要件 4.1・5.1）。
     assert_line_has(&all, "起動するゴーストを決めました", "route=Argv");
@@ -316,6 +167,13 @@ fn argv_direction_boots_real_ghost_windows_and_exits_zero() {
         return;
     }
     assert_real_windows_and_exit_zero(status, &all);
+    // 保険の自動終了で終わった（窓口の綴りの本物の檻・D-19）。
+    assert_eq!(
+        ended.by,
+        EndedBy::SafetyExit,
+        "保険の自動終了（origin=Smoke）で終わるはず。\
+         \n--- child output ---\n{all}"
+    );
 }
 
 /// ② 根方向（要件 1.6）: argv なし・`AREKA_ROOT` に検体の根をそのまま渡す。根の下の唯一の
@@ -323,23 +181,8 @@ fn argv_direction_boots_real_ghost_windows_and_exits_zero() {
 /// 本物のゴースト窓を開き、自動終了 → **exit 0** で完走する。
 #[test]
 fn root_direction_resolves_only_ghost_and_companion_balloon() {
-    ensure_helper_beside_areka();
-    let emo2 = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
-    let root = emo2.root();
-    assert!(root.is_absolute(), "検体の根は絶対パス: {}", root.display());
-    let profile = TempPath::new("smoke-root-profile");
-
-    let (status, out, err) = run_smoke(
-        &[],
-        &[
-            ("AREKA_ROOT", root.to_str().expect("検体パスは UTF-8")),
-            (
-                "AREKA_PROFILE_DIR",
-                profile.path().to_str().expect("一時パスは UTF-8"),
-            ),
-        ],
-    );
-    let all = format!("{out}\n{err}");
+    let (ended, all) = run_to_exit(smoke().launch(emo2_root()));
+    let status = ended.status;
 
     assert_line_has(&all, "起動するゴーストを決めました", "route=Only");
     assert_line_has(&all, "バルーンを決めました", "route=Companion");
@@ -355,23 +198,8 @@ fn root_direction_resolves_only_ghost_and_companion_balloon() {
 /// 本物の窓を開かずに **非 0** で終わる（モニタの有無によらない＝窓を開く前に止まる）。
 #[test]
 fn empty_root_direction_alerts_ghost_missing_and_exits_nonzero() {
-    let root = TempPath::new("smoke-empty-root");
-    let profile = TempPath::new("smoke-empty-profile");
-
-    let (status, out, err) = run_smoke(
-        &[],
-        &[
-            (
-                "AREKA_ROOT",
-                root.path().to_str().expect("一時パスは UTF-8"),
-            ),
-            (
-                "AREKA_PROFILE_DIR",
-                profile.path().to_str().expect("一時パスは UTF-8"),
-            ),
-        ],
-    );
-    let all = format!("{out}\n{err}");
+    let (ended, all) = run_to_exit(smoke().launch(Launch::Empty));
+    let status = ended.status;
 
     assert!(
         !status.success(),
@@ -393,37 +221,32 @@ fn empty_root_direction_alerts_ghost_missing_and_exits_nonzero() {
 /// 「接続できなかった」が起き、告知は抑止のうえ記録だけ残して **非 0** で終わる。
 #[test]
 fn fault_direction_shiori_connect_failure_exits_nonzero_with_one_alert() {
-    ensure_helper_beside_areka();
-    let emo2 = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
-    let ghost_root = emo2.folder();
-    let balloon_root = emo2.balloon("emo2-kakukaku").expect("emo2 の同梱バルーン");
-    let master = ghost_root.join("ghost/master");
-    // SHIORI を検証用 DLL にした最小の descript（本番コードに口を足さない・要件 4.4）。
-    std::fs::write(
-        master.join("descript.txt"),
-        "charset,UTF-8\r\nname,emo2-fault\r\nshiori,shiori_loadu.dll\r\n\
-         seriko.defaultsurfacedirectoryname,master\r\n",
-    )
-    .expect("descript.txt の差し替え");
-    ensure_i686_artifact("shiori_loadu.dll", "HOST32_TESTDLL_LOADU_DLL", &master);
-    let profile = TempPath::new("smoke-fault-profile");
-
-    let (status, out, err) = run_smoke(
-        &[
-            ghost_root.to_str().expect("検体パスは UTF-8"),
-            balloon_root.to_str().expect("検体パスは UTF-8"),
-        ],
-        &[
-            ("HOST32_TESTDLL_LOADU_FAIL", "1"),
-            // 失敗（数秒）を自動終了より先に起こす。見張り 60 秒の内側（要件 4.5）。
-            ("AREKA_APP_SMOKE_EXIT_MS", "20000"),
-            (
-                "AREKA_PROFILE_DIR",
-                profile.path().to_str().expect("一時パスは UTF-8"),
-            ),
-        ],
-    );
-    let all = format!("{out}\n{err}");
+    let spec = smoke()
+        .launch(emo2_sample())
+        .before_spawn(|staged| {
+            let master = staged
+                .ghost_folder()
+                .expect("Sample はゴーストのフォルダを持つ")
+                .join("ghost/master");
+            // SHIORI を検証用 DLL にした最小の descript（本番コードに口を足さない・要件 4.4）。
+            std::fs::write(
+                master.join("descript.txt"),
+                "charset,UTF-8\r\nname,emo2-fault\r\nshiori,shiori_loadu.dll\r\n\
+                 seriko.defaultsurfacedirectoryname,master\r\n",
+            )
+            .expect("descript.txt の差し替え");
+            staged.ensure_i686(
+                "shiori_loadu.dll",
+                "HOST32_TESTDLL_LOADU_DLL",
+                "shiori-host32-testdll-loadu",
+                &master,
+            );
+        })
+        .env("HOST32_TESTDLL_LOADU_FAIL", "1")
+        // 失敗（数秒）を自動終了より先に起こす。窓口の締切 60 秒の内側（要件 4.5）。
+        .safety_exit(Duration::from_secs(20));
+    let (ended, all) = run_to_exit(spec);
+    let status = ended.status;
 
     if accepted_as_no_monitor(status, &all) {
         return;
@@ -461,23 +284,12 @@ fn fault_direction_shiori_connect_failure_exits_nonzero_with_one_alert() {
 /// （モニタの有無によらない）。
 #[test]
 fn unwritable_direction_stops_boot_with_memory_write_alert() {
-    let emo2 = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
-    let root = emo2.root();
     let dir = TempPath::under_target("smoke-unwritable-profile");
     let profile = dir.child("profile-is-a-file");
     std::fs::write(&profile, b"not a folder").expect("置き場の代わりの普通のファイル");
 
-    let (status, out, err) = run_smoke(
-        &[],
-        &[
-            ("AREKA_ROOT", root.to_str().expect("検体パスは UTF-8")),
-            (
-                "AREKA_PROFILE_DIR",
-                profile.to_str().expect("一時パスは UTF-8"),
-            ),
-        ],
-    );
-    let all = format!("{out}\n{err}");
+    let (ended, all) = run_to_exit(smoke().launch(emo2_root()).profile_dir(&profile));
+    let status = ended.status;
 
     assert!(
         !status.success(),
