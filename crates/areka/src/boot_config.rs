@@ -396,7 +396,7 @@ pub(crate) fn default_app_profile_dir() -> std::path::PathBuf {
 /// `ghost_root`／helper パスから `GhostBootOptions` を組み立てる純粋ヘルパ
 /// （design.md「main の ghost boot／shutdown 結線」）。
 ///
-/// - `shiori`: `ShioriWiring::Helper { helper_exe }`（実行ファイル隣接の 32bit helper・本番結線）。
+/// - `shiori`: `shiori_wiring_for(modules, helper_exe)`（「読む」は実行ファイル隣接の 32bit helper・本番結線、「読まない」は差し替え口）。
 /// - `default_encoding`: `DefaultEncoding::Ansi`（charset 未宣言時の SSP 既定・記憶
 ///   areka-descript-encoding-ishiori-utf8）。
 /// - `sinks`: 可変長 sink 列（S-3）を `vec![LogSink, DiscardSink]` で埋める。broadcast（D4）で
@@ -415,11 +415,12 @@ pub(crate) fn ghost_boot_options(
     ghost_root: std::path::PathBuf,
     helper_exe: std::path::PathBuf,
     app_profile_dir: Option<std::path::PathBuf>,
+    modules: crate::cli::ModulePolicy,
 ) -> areka_ghost::GhostBootOptions {
     areka_ghost::GhostBootOptions {
         ghost_root,
         default_encoding: areka_parsers::charset::DefaultEncoding::Ansi,
-        shiori: areka_ghost::ShioriWiring::Helper { helper_exe },
+        shiori: shiori_wiring_for(modules, helper_exe),
         sinks: vec![
             Box::new(areka_ghost::sink::LogSink::new()),
             Box::new(areka_ghost::sink::DiscardSink::new()),
@@ -427,6 +428,21 @@ pub(crate) fn ghost_boot_options(
         system_vars: areka_ghost::SystemVarWiring::FromSylphya,
         app_profile_dir,
         ticker: areka_ghost::TickerMode::Real(Default::default()),
+    }
+}
+
+/// SHIORI の読み方の指定から結線を決める純粋な口（要件 7.1）。「読む」は今の補助のプロセス
+/// （`Helper { helper_exe }`）、「読まない」は何を聞かれても中身なしで答える差し替え口
+/// （`Custom(empty_connect())`）。倒れ先の [`ghost_boot_options`] と結線ありの起動の両方が使う。
+pub(crate) fn shiori_wiring_for(
+    modules: crate::cli::ModulePolicy,
+    helper_exe: std::path::PathBuf,
+) -> areka_ghost::ShioriWiring {
+    match modules {
+        crate::cli::ModulePolicy::Load => areka_ghost::ShioriWiring::Helper { helper_exe },
+        crate::cli::ModulePolicy::Skip => {
+            areka_ghost::ShioriWiring::Custom(Box::new(areka_ghost::shiori_wiring::empty_connect()))
+        }
     }
 }
 

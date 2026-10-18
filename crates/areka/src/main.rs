@@ -936,6 +936,10 @@ mod monitor_snapshot_seam_tests;
 #[path = "main_finish_after_run_tests.rs"]
 mod finish_after_run_tests;
 
+/// SHIORI の読み方の指定から結線を決める口と倒れ先の表（startup-options-core 4.2・要件 7.1・11.4）。
+#[cfg(test)]
+#[path = "main_module_policy_tests.rs"]
+mod module_policy_tests;
 /// 据え付けと `run()` の後・起動中の印（task 8.5・11.1・要件 8.1・8.2・12.1〜12.5・12.12）のテスト。
 #[cfg(test)]
 #[path = "main_session_mark_tests.rs"]

@@ -677,7 +677,12 @@ pub(crate) fn boot_ghost(
     // 確かめているので、ここでの `MountError::StartPointMissing` は解決後の消失（起動中の削除等）
     // に限られ、`warn!` の上で `None` として骨格起動を継続する（要件 8.2）。それ以外の予期しない
     // 失敗（読取不能・shell 不在等）は `error!`（`is_benign_boot_error` の分類は不変・R7.4）。
-    let ghost_options = ghost_boot_options(ghost_root.clone(), helper_exe, app_profile_dir);
+    let ghost_options = ghost_boot_options(
+        ghost_root.clone(),
+        helper_exe,
+        app_profile_dir,
+        crate::cli::ModulePolicy::Load,
+    );
     // 停止通知の送出端つきで起動する（SHIORI の失敗で kanade が止まったら終了相へ届く・要件 6.4）。
     // 倒れ先も起動のシェルでマウントする（areka-P0-shell-balloon-switch 要件 6.4）。
     let runtime = match areka_ghost::boot_with_origin(
