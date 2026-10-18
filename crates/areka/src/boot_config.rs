@@ -279,6 +279,8 @@ pub(crate) fn resolve_boot_from(
     let mut ghost = boot_resolve::resolve_ghost(
         &GhostInputs {
             argv: argv_ghost,
+            pointed: None,
+            random: false,
             memory: memory.as_deref(),
             listed: &listed,
             stores: &ghost_stores,

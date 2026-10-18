@@ -92,7 +92,7 @@
   - _Requirements: 7.1, 7.6, 11.4_
 
 - [ ] 5. 起動の解決（ゴースト・バルーン・置き場の並び）
-- [ ] 5.1 ゴーストの選び方に指し先の段と無作為の段を足す
+- [x] 5.1 ゴーストの選び方に指し先の段と無作為の段を足す
   - 経路に「指し先」を足し、選び方の入力に指し先（場所とフォルダ名）と無作為の旗の 2 欄を足す
   - 段の並びを「位置の引数 → 指し先 → 無作為の旗なら無作為（0 体＝ゴーストなし・1 体＝その 1 体・2 体以上＝選ぶ・選んだものと候補の数を info）→ 記憶 → 唯一 → 既定 → 無作為」にする。今の組み立ての 2 か所（`boot_config.rs` の起動の解決と `boot_resolve_tests.rs` の手伝い）に新しい 2 欄を空で足す
   - 終わった形: `boot_resolve_option_tests.rs` が指し先・無作為の 0／1／2 体の答えと info を確かめて緑、既存の `boot_resolve_tests` も中身を変えずに緑
@@ -141,3 +141,4 @@
 - 3.1: `BasewareRoot::temporary(dir)` と `is_temporary()` を足した（3.2〜3.4 で使える）。`install_root` は一時の置き場を見える根・いちばん上の根の両方で飛ばす。
 - 4.1: 起動中の CloseRequest は Steady まで pending_close で待つ（kanade の既存の設計・boot.rs:22）。起動のテストは dispatcher にも Tick を送る。EmptyShiori の欠陥ではない。
 - 4.3: ghost_session.rs の差分は +11/-7（rustfmt の折り返しと欄の doc を含む・mcp-reload の触る所とは重ならない）。`ghost_session_strict_tests.rs` の `production` 呼び出し 3 か所目にも Load を足した。
+- 5.1: `boot_config.rs` の写しの条件 `ghost.route != Argv` は今のままだと `Pointed` にも写しを掛ける。5.2 で絶対パスの指し先を写しから外す。
