@@ -131,7 +131,7 @@
 
 - [ ] 5. 仕上げ: 実機の確かめと互換の記録
 
-- [ ] 5.1 実機の確かめの手順書と判定の道具を置く
+- [x] 5.1 実機の確かめの手順書と判定の道具を置く
   - 本 spec の下に手順書と判定の道具を置く。検体は既存の検体ゴーストから派生させ（再生成が正本・コミットしない）、起動の台本に `\![reset,zorder]\![set,zorder,s0,b0,s1]` を差し込む。逆転の無い明示の記法・数字だけの記法・指定なしの対照も同じ回に取れるようにする
   - 道具はログから `[zorder-group] applied ... normalized=0:inverted,1:false+b1`・`pair-released`・`linked`・`settled`（宣言の列と実測の列が同じ）を冠込みで照合し、押した後・他のアプリから戻った後の前面走査の並びを判定する
   - 実機の根・検体・一時フォルダはワークツリーの `target\` の下だけにする。道具が端末へ出す文は ASCII だけ
@@ -188,3 +188,4 @@
 - 4.2: 公開の規則（`zorder_drain.rs` の非公開 `publish_chain_plan`）は実窓のテストの中へ 10 行で写した（frame が非公開のため）。規則そのものは t_zdw が固定。根のキャラクター（s1）を壊しても道連れにはならない（レビューで実測）
 - 4.3: 対応表の分岐名は要件 8.2 の逐語（バッククォート込み）でないと差し戻しになる。3.4 の残り（去る窓・組の外しの源ごとの檻）は `a_failed_departing_detach_alone_checks_the_attach`・`a_diverged_pair_release_alone_checks_the_attach` で解消
 - 4.4（10-19）: `cargo fmt --all -- --check` 0・`cargo test -p wintf` 0・`cargo test -p areka` は本体 3169 本＋統合 9 本が緑。1 回目に t_zic2 が赤だったのは、レビュー係が変異を控えから戻したとき更新時刻が古く、cargo が変異入りの古いビルドを使ったため（触って回し直して緑）。本番ファイルは最大 930 行（`zorder_chain_apply.rs`）・完了アーカイブの下の変更 0
+- 5.1: 較正の実走ログは別ワークツリー（`areka-p0-anchor-tag-canon-da1fe5	argettb-signoffun-Box.log`・md5 `484B262D…`）の写しで、この機械の `target\` にしか無い。5.2 の後で `defaultun.log` を spec フォルダへ控えて較正の既定にし、手順書 §6.1 の出典の書き方を直す
