@@ -72,8 +72,6 @@ fn read_shelf(
 /// どちらかが無い（NotFound）→ [`SampleError::FetchedNarMissing`]（無かった方のパス・
 /// ハッシュのファイルから見る）。形が違う → [`SampleError::FetchedChecksumInvalid`]。
 /// 合わない → [`SampleError::FetchedNarMismatch`]。ほかの読み取りの失敗 → [`SampleError::Io`]。
-// 窓口の 3 つの入口がこれを通るのはタスク 3.4。それまでテストの外に呼び手が無い。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn verified_nar_in(
     namespace: &Path,
     name: &'static str,
