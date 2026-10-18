@@ -637,6 +637,7 @@ pub enum SampleError {
 mod devroot;
 mod fetched;
 pub use devroot::WorkDir;
+pub use fetched::checksum_url;
 
 mod nar_writer;
 pub use nar_writer::{Corrupt, Damage, EntryBuilder, NarBuilder, fold_tree, install_txt};

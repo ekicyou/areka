@@ -1,4 +1,9 @@
-//! コマンド `nar-sample-path` の検査（spec: `areka-P0-nar-install` 要件 1.9）。
+//! コマンド `nar-sample-path` の検査（spec: `areka-P0-nar-install` 要件 1.9・
+//! `areka-P0-sample-url-fetch` 要件 2.9・3.5〜3.7）。
+//!
+//! URL の行の失敗（終了コード 3）と `--fetch-list` は、`CARGO_TARGET_DIR` を私有の場所
+//! （[`WorkDir`]）へ振って置き場をそこへ移して判定する。置き場のパスは `--fetch-list` から
+//! 得て、名前空間の綴りはこのファイルに書かない（`sample_path_guard_test` の見張りの対象）。
 //!
 //! # 組み上がった実行体を起こす
 //!
@@ -18,7 +23,7 @@
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
-use sample_ghost_kit::{SAMPLES, SampleKind};
+use sample_ghost_kit::{SAMPLES, SampleKind, SampleSource, WorkDir};
 
 /// 組み上がった実行体。cargo が結合テストにだけ教える。
 const COMMAND: &str = env!("CARGO_BIN_EXE_nar-sample-path");
@@ -35,10 +40,20 @@ fn manual_lock() -> MutexGuard<'static, ()> {
 
 /// 実行体を起こして (終了コード, 標準出力, 標準エラー) を取る。
 fn run(name: &str) -> (Option<i32>, String, String) {
-    let out = std::process::Command::new(COMMAND)
-        .arg(name)
-        .output()
-        .expect("実行体を起こせること");
+    finish(std::process::Command::new(COMMAND).arg(name))
+}
+
+/// `CARGO_TARGET_DIR` を私有の場所へ振って実行体を起こす。置き場もその下に決まる。
+fn run_in(target: &Path, arg: &str) -> (Option<i32>, String, String) {
+    finish(
+        std::process::Command::new(COMMAND)
+            .arg(arg)
+            .env("CARGO_TARGET_DIR", target),
+    )
+}
+
+fn finish(command: &mut std::process::Command) -> (Option<i32>, String, String) {
+    let out = command.output().expect("実行体を起こせること");
     (
         out.status.code(),
         String::from_utf8(out.stdout).expect("標準出力は UTF-8"),
@@ -193,4 +208,114 @@ fn an_unregistered_name_prints_the_reason_to_standard_error_and_exits_with_two()
             sample.name
         );
     }
+}
+
+/// 登記の URL の行の (名前, URL)。母数 0 で緑にしない較正つき。
+fn url_rows() -> Vec<(&'static str, &'static str)> {
+    let rows: Vec<_> = SAMPLES
+        .iter()
+        .filter_map(|sample| match sample.source {
+            SampleSource::Fetched { url } => Some((sample.name, url)),
+            SampleSource::Vendored => None,
+        })
+        .collect();
+    assert!(!rows.is_empty(), "較正: URL の行が 1 つ以上在ること");
+    rows
+}
+
+/// `--fetch-list` を私有の場所で回し、行を 5 列に割る。
+fn fetch_list_in(target: &Path) -> Vec<Vec<String>> {
+    let (code, out, err) = run_in(target, "--fetch-list");
+    assert_eq!(code, Some(0), "--fetch-list の終了コード: {err}");
+    assert!(
+        err.is_empty(),
+        "成功時は標準エラーに何も出さないこと: {err:?}"
+    );
+    out.lines()
+        .map(|line| line.split('\t').map(str::to_owned).collect())
+        .collect()
+}
+
+/// 終了コード 3 の共通の形: 標準出力は空・標準エラーは ASCII で名前と取り寄せの段を含む。
+fn assert_fetched_failure(name: &str, (code, out, err): &(Option<i32>, String, String)) {
+    assert_eq!(*code, Some(3), "URL の行の失敗の終了コード: {err}");
+    assert!(out.is_empty(), "標準出力には何も出さないこと: {out:?}");
+    assert!(err.is_ascii(), "標準エラーは ASCII だけ: {err:?}");
+    assert!(err.contains(name), "名前が載ること: {err:?}");
+    assert!(
+        err.contains("sample-fetch.ps1"),
+        "取り寄せの段のコマンドが載ること: {err:?}"
+    );
+}
+
+/// 置き場が空の私有の場所で URL の行を引くと終了コード 3（要件 3.5・3.7）。
+#[test]
+fn a_url_row_with_an_empty_shelf_exits_with_three() {
+    let private = WorkDir::new().expect("私有の場所");
+    for (name, _) in url_rows() {
+        assert_fetched_failure(name, &run_in(private.path(), name));
+    }
+}
+
+/// `--fetch-list` は URL の行ごとに 5 列の 1 行を登記の順で出し、置き場のパスは
+/// `CARGO_TARGET_DIR` の下を指す（要件 2.9）。
+#[test]
+fn fetch_list_prints_five_columns_per_url_row_under_the_target_dir() {
+    let private = WorkDir::new().expect("私有の場所");
+    let lines = fetch_list_in(private.path());
+    let rows = url_rows();
+    assert_eq!(
+        lines.len(),
+        rows.len(),
+        "URL の行の数だけ出ること: {lines:?}"
+    );
+    for (line, (name, url)) in lines.iter().zip(rows) {
+        assert_eq!(line.len(), 5, "列は 5 つ: {line:?}");
+        assert_eq!(line[0], name, "1 列目は名前（登記の順）");
+        assert_eq!(line[1], url, "2 列目は URL");
+        assert_eq!(line[2], format!("{url}.sha256"), "3 列目は URL＋.sha256");
+        for shelf in &line[3..] {
+            let path = Path::new(shelf);
+            assert!(path.is_absolute(), "置き場のパスは絶対: {shelf}");
+            assert!(
+                path.starts_with(private.path()),
+                "置き場は私有の場所の下: {shelf}"
+            );
+        }
+        assert_eq!(
+            Path::new(&line[3]).file_name(),
+            Some(std::ffi::OsStr::new(&format!("{name}.nar"))),
+            "4 列目は書庫"
+        );
+        assert_eq!(
+            line[4],
+            format!("{}.sha256", line[3]),
+            "5 列目は書庫＋.sha256"
+        );
+    }
+}
+
+/// 置き場の書庫とハッシュのファイルが合わないと終了コード 3、ハッシュのファイルの値が載る。
+/// 形の違うハッシュのファイルも 3（要件 3.6・3.7）。
+#[test]
+fn a_mismatched_or_malformed_checksum_on_the_shelf_exits_with_three() {
+    let private = WorkDir::new().expect("私有の場所");
+    let lines = fetch_list_in(private.path());
+    let line = &lines[0];
+    let (name, nar, checksum) = (&line[0], Path::new(&line[3]), Path::new(&line[4]));
+    std::fs::create_dir_all(nar.parent().expect("置き場の棚")).expect("棚を作れること");
+    std::fs::write(nar, b"abc").expect("書庫を置けること");
+
+    let expected = "0".repeat(64);
+    std::fs::write(checksum, format!("{expected}  {name}.nar\n")).expect("置けること");
+    let mismatch = run_in(private.path(), name);
+    assert_fetched_failure(name, &mismatch);
+    assert!(
+        mismatch.2.contains(&expected),
+        "ハッシュのファイルの SHA-256 が載ること: {:?}",
+        mismatch.2
+    );
+
+    std::fs::write(checksum, b"not-a-hash\n").expect("置けること");
+    assert_fetched_failure(name, &run_in(private.path(), name));
 }

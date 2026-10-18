@@ -29,10 +29,9 @@ pub(crate) fn fetched_checksum_path_in(namespace: &Path, name: &str) -> PathBuf 
         .join(format!("{name}.nar{CHECKSUM_SUFFIX}"))
 }
 
-/// `<url>.sha256`（`--fetch-list` の 3 列目）。
-// `--fetch-list` が使うのはタスク 5。それまでテストの外に呼び手が無い。
-#[cfg_attr(not(test), allow(dead_code))]
-pub(crate) fn checksum_url(url: &str) -> String {
+/// URL の行の隣に公開されたハッシュのファイルの URL `<url>.sha256`
+/// （`nar-sample-path --fetch-list` の 3 列目）。
+pub fn checksum_url(url: &str) -> String {
     format!("{url}{CHECKSUM_SUFFIX}")
 }
 
