@@ -134,8 +134,10 @@ fn wait_after(command: &plan::Command) -> Option<WaitSpec> {
 ///
 /// 居る印を握るのがいちばん先。同じ識別・同じ種類の待ちがすでに走っていれば、申し込みも
 /// せず（状態を何も変えず）に失敗で返る。`request` は `--wait` の前半（申し込み・「止まった」の
-/// 記録）で、当てはまらなくても断らずに待ちへ進む（始め直した待ちは元の申し込みを引き継ぎ、
-/// 停止要請中でない `stopped --wait` は再開の待ちだけになる）。その時点でもう終わっていれば
+/// 記録）。申し込み（`merge`・`request`）が当てはまらなければ待ちに入らず、残っていた自分の
+/// 待ちの記録を同じ排他の中で消して、標準エラーへ `not applied: <訳>` を出して 3 で終わる
+/// （始め直した待ちの同じ申し込みは当てはまるので、元の申し込みを引き継ぐ）。`stopped --wait`
+/// だけは断らず、停止要請中でなければ再開の待ちだけになる。その時点でもう終わっていれば
 /// （番が来ている・作業中に戻っている・停止要請が出し直されている・記録が無い）、待ちの記録を
 /// 置かずに直ちに終わる。`request` の無い見張りと `resume` は、登録（見張りは参加を兼ねる）
 /// からループに任せる（停止要請中の参加者の `resume` は、最初の判定で直ちに終わる）。
@@ -167,7 +169,13 @@ fn waiting(
     let early = match request {
         Some(command) => store.with_state(|state, now, alive| {
             let mut applied = plan::apply(state, command, Some(id), now, alive);
-            let end = wait::judge(spec, Some(state));
+            // 当てはまらなかった申し込みは待たない（`stopped --wait` のほか）。
+            let end = match applied.verdict {
+                Verdict::NotApplied(why) if !matches!(command, plan::Command::Stopped { .. }) => {
+                    Some(Err(why))
+                }
+                _ => wait::judge(spec, Some(state)).map(Ok),
+            };
             if end.is_some() {
                 // 殺された前の待ち（同じ識別・同じ種類）の記録を、答えを決めたのと同じ排他の中で
                 // 消す。終わりの 1 行は 1 回目の判定のまま。
@@ -184,7 +192,11 @@ fn waiting(
         None => None,
     };
     let end = match early {
-        Some(end) => end,
+        Some(Ok(end)) => end,
+        Some(Err(why)) => {
+            say(err, "stderr", &format!("not applied: {why}"))?;
+            return Ok(Outcome::NotApplied);
+        }
         None => wait::run(spec, &store, held)?,
     };
     match end {
@@ -373,21 +385,22 @@ fn say(to: &mut dyn Write, op: &'static str, line: &str) -> Result<(), WatchErro
     })
 }
 
-// 版 2 への切り替えの間は使い手のテストと一緒に読み込まない（`args::Opt` に `--desk` が
-// 増え、支えの `sample` の照合が尽くされなくなる。3.4 が `--desk` を足して戻す）。
-// #[cfg(test)]
-// #[path = "cli_test_support.rs"]
-// mod test_support;
+#[cfg(test)]
+#[path = "cli_test_support.rs"]
+mod test_support;
 
-// 版 2 への切り替えの間は読み込まない（3.4 が新しい机へ書き直して戻す）。
-// #[cfg(test)]
-// #[path = "cli_tests.rs"]
-// mod tests;
-//
-// #[cfg(test)]
-// #[path = "cli_commands_tests.rs"]
-// mod commands_tests;
-//
-// #[cfg(test)]
-// #[path = "cli_wait_tests.rs"]
-// mod wait_tests;
+#[cfg(test)]
+#[path = "cli_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[path = "cli_commands_tests.rs"]
+mod commands_tests;
+
+#[cfg(test)]
+#[path = "cli_wait_tests.rs"]
+mod wait_tests;
+
+#[cfg(test)]
+#[path = "cli_desk_tests.rs"]
+mod desk_tests;

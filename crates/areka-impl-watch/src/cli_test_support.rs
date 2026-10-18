@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use temp_path_kit::TempPath;
 
-use super::args::Opt::{self, Bug, Id, Name, Pr, Purpose, Repo, Sha, Spec, Wait};
+use super::args::Opt::{self, Bug, Desk, Id, Name, Pr, Purpose, Repo, Sha, Spec, Wait};
 use super::{Outcome, exit_code, run_with};
 use crate::error::WatchError;
 use crate::home::Home;
@@ -26,6 +26,7 @@ pub(super) fn sample(opt: Opt) -> (&'static str, Option<&'static str>) {
         Spec => ("--spec", Some("areka-P0-impl-watch")),
         Name => ("--name", Some("見張り役")),
         Purpose => ("--purpose", Some("負荷の計測")),
+        Desk => ("--desk", Some("test")),
         Pr => ("--pr", Some("281")),
         Sha => ("--sha", Some("414d43eb")),
         Bug => ("--bug", None),
