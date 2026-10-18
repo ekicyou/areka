@@ -30,7 +30,7 @@
 - 起動オプションの中身から、起動するゴースト・バルーン・置き場の並びを決める段（`--ghost` の指し先・`--random`・`nobootcheck`）。
 - 一時の置き場（`RootMark::Temporary`）の印と、それが効く所の決まり（記憶への書き出し・入れ先・先頭へ・外す・足す・メニュー・記録・バルーンの目録）。
 - `--sstp-listen` の値から MCP の待受の候補を作る決まりと、`none`・全部はねたときの記録。
-- 何を聞かれても中身なしで答える SHIORI（`EmptyShiori`）と、`dontloadmodule` のときにそれを差す 2 か所（作り口の閉包・倒れ先の `ghost_boot_options`）。
+- 何を聞かれても中身なしで答える SHIORI（`EmptyShiori`）と、`dontloadmodule` の指定を起動の入力（`GhostBootInputs.modules`）に値として持たせ、そこから 2 か所（結線ありの起動と切替・倒れ先の `ghost_boot_options`）の SHIORI の結線を決めること。
 - `--help` で配布物の説明書を開いて終わる道。
 - `dist/README.txt` の起動オプションの節。
 - 上のすべての決定論のテスト。
@@ -41,7 +41,7 @@
 - ゴーストの選び方の今の段（記憶 → 唯一 → 既定 → 無作為）・起動中の印の書き方と消し方・`OnBoot` の由来・利用者ごとの置き場への写しの判断（`user_root::plan_copy`）。
 - 名前の引き当ての決まり（`ghost_switch::resolve_switch_target`）。呼ぶだけで動かさない。
 - MCP の待受の束ね方・`AREKA_MCP_PORT` の読み方（`crates/areka-mcp/**`）。触らない。
-- `areka-ghost/src/runtime.rs`・`config.rs`・`crates/areka/src/ghost_session.rs`・`emo2_boot/ghost_switch.rs`・実走の 3 本のテスト。触らない。
+- `areka-ghost/src/runtime.rs`・`config.rs`・`emo2_boot/ghost_switch.rs`・実走の 3 本のテスト。触らない。`crates/areka/src/ghost_session.rs` は `GhostBootInputs` の欄と倒れ先の呼び出しだけを触る（下の申し合わせ）。
 - SHIORI が中身なしで答えたときの kanade の振る舞い（`OnBoot` の 204 で次へ・`OnClose` の 204 で終わる）。今のまま使う。
 
 ### Allowed Dependencies
@@ -64,8 +64,9 @@
 
 ### 並走の申し合わせ（ウェーブ C9）
 
-- `crates/areka/src/ghost_session.rs`・`crates/areka-mcp/**`・`areka-ghost/src/runtime.rs`・`config.rs`・`emo2_boot/ghost_switch.rs`・実走の 3 本は**触らない**。
-- ④ `mcp-reload` へ: `\![reload,shiori]`・MCP の `reload` で SHIORI を読み直すときは、作り口（`GhostBootInputsSource`）か `boot_config::shiori_wiring(helper_exe)` を通して SHIORI の結線を決めること（`dontloadmodule` の起動では中身なしの SHIORI を読み直す＝要件 7.6 と同じ考え）。この申し合わせは着手の前に areka棚卸 へ知らせ、④ と確かめる。
+- `crates/areka-mcp/**`・`areka-ghost/src/runtime.rs`・`config.rs`・`emo2_boot/ghost_switch.rs`・実走の 3 本は**触らない**。
+- `crates/areka/src/ghost_session.rs` は**触る**（約 6 行: `GhostBootInputs` に `modules` の欄・`production` に引数 `modules`・倒れ先の `ghost_boot_options` へ `modules` を渡す）。④ `mcp-reload` も「本物の SHIORI の読み直し」を選ぶと同じファイルに触る見込みなので、タスクの生成の前に areka棚卸 へ知らせ、④ と「どちらが先に入れ、後の方が取り込みでつなぎ直すか」を申し合わせる（2026-10-18 設計の討議で決定）。
+- ④ `mcp-reload` へ: `\![reload,shiori]`・MCP の `reload` で SHIORI を読み直すときは、起動の入力の `modules`（`GhostBootInputs.modules`）か作り口（`GhostBootInputsSource`）を通して SHIORI の結線を決めること（`dontloadmodule` の起動では中身なしの SHIORI を読み直す＝要件 7.6 と同じ考え）。
 - `emo2_boot/ghost_switch.rs` は ④ が先に割る。`resolve_switch_target` の場所が変わったら、取り込みで `use` の 1 行をつなぎ直す。
 
 ## Architecture
@@ -75,7 +76,7 @@
 - `main` は記録の初期化 → `resolve_boot(&args)`（根 → ゴースト → バルーン）→ 書けるかの確かめ → MCP の待受 → `WinApp` → 起動の文脈と作り口の据え付け → 窓 → 初回の起動、の順。この並びは変えない。
 - 起動の解決は「純粋な判断（`boot_resolve::resolve_ghost`・`resolve_balloon`）に、`boot_config::resolve_boot_from` が値を集めて渡す」形。指し先・無作為の旗はこの形に入力を足すだけで入る。
 - 置き場の並びは `BootContext.roots`（プロセスに 1 つ）で、目録・メニュー・切替・入れ先・記憶の書き出しがすべてここを読む。一時の置き場はこの並びに印つきで入れれば、どこもその 1 本だけを見ればよい。
-- SHIORI の結線は 2 か所で決まる: 結線ありの起動と切替＝作り口の閉包（`main.rs` の `install_boot_context`）、倒れ先＝`boot_config::ghost_boot_options`（`ghost_session.rs:680` が呼ぶ）。どちらも `crates/areka` の中の触ってよい所で差し替えられる。
+- SHIORI の結線は 2 か所で決まる: 結線ありの起動と切替＝`GhostBootInputs::production`（作り口の閉包が呼ぶ・`ghost_session.rs:364`）、倒れ先＝`boot_config::ghost_boot_options`（`ghost_session.rs:680` が呼ぶ）。どちらも同じ `GhostBootInputs` の値から決まるので、`modules` をその値に持たせれば 2 か所がそろう。
 
 ### Architecture Pattern & Boundary Map
 
@@ -88,7 +89,7 @@ graph TB
     Help --> OsPort[readme os_port]
     Opts --> Listen[cli listen]
     Listen --> Mcp[areka_mcp start]
-    Opts --> Policy[boot_config module policy]
+    Opts --> Policy[GhostBootInputs modules]
     Opts --> Resolve[boot_config resolve_boot_with]
     Resolve --> Point[point_ghost]
     Point --> Roots[BasewareRoots with Temporary]
@@ -113,7 +114,7 @@ graph TB
 
 | 層 | 選んだもの | この機能での役目 | メモ |
 |---|---|---|---|
-| アプリ（`crates/areka`） | Rust 2024・std（`std::env::args_os`・`std::net::Ipv4Addr`・`OnceLock`） | 引数を読む・起動の解決・待受の候補・説明書を開く | 新しい依存なし |
+| アプリ（`crates/areka`） | Rust 2024・std（`std::env::args_os`・`std::net::Ipv4Addr`） | 引数を読む・起動の解決・待受の候補・説明書を開く | 新しい依存なし |
 | ゴーストの結線（`crates/areka-ghost`） | 今ある `ShioriWiring::Custom`・`ShioriBackend` | 中身なしの SHIORI・一時の置き場の印 | `lib.rs` に触らない |
 | OS | `ShellExecuteExW`（`readme/os_port.rs` の `WindowsShell`） | `--help` で説明書を開く | 今ある口 |
 | MCP | `areka_mcp::start(&[u16])` | `--sstp-listen` の候補で待ち受ける | `areka-mcp` に触らない |
@@ -150,8 +151,10 @@ crates/areka-ghost/src/
 
 ### Modified Files
 
-- `crates/areka/src/main.rs` — ① 自動 close の仕掛け（275〜305 行の仕掛け・904〜925 行の定数と関数・931〜937 行のテストの宣言）を `smoke_exit.rs` へ出し、`smoke_exit::arm(&app)` の 1 行にする（記録の文・環境変数の名前は同じ）。② `mod cli;`・`mod smoke_exit;` と、テストの宣言 `main_module_policy_tests` を足す。③ 171〜183 行を「`cli::read()` → `--help` なら `cli::help::run()` で戻る → `boot_config::set_module_policy` → `resolve_boot(&opts.boot)`」へ。④ 196〜200 行の MCP を `cli::listen::start_mcp(&opts.listen, …)` へ。⑤ `install_boot_context` に `modules: cli::ModulePolicy` の引数を足し、閉包の中で `inputs.wiring.shiori = boot_config::shiori_wiring_for(modules, helper_exe.clone())` で上書きする。全体として行は減る（約 55 行減・約 20 行増）。
-- `crates/areka/src/boot_config.rs` — `resolve_boot(&BootRequest)`・`resolve_boot_with`（本番）・`#[cfg(test)] resolve_boot_from(&[String])`（今のテストの口）・`point_ghost`・一時の置き場の付け足し・`ModulePolicy` の置き場（`set_module_policy`・`module_policy`）・`shiori_wiring_for`・`ghost_boot_options` の中で `shiori_wiring_for(module_policy(), …)`。テストの宣言 `boot_config_option_tests` を足す。
+- `crates/areka/src/main.rs` — ① 自動 close の仕掛け（275〜305 行の仕掛け・904〜925 行の定数と関数・931〜937 行のテストの宣言）を `smoke_exit.rs` へ出し、`smoke_exit::arm(&app)` の 1 行にする（記録の文・環境変数の名前は同じ）。② `mod cli;`・`mod smoke_exit;` と、テストの宣言 `main_module_policy_tests` を足す。③ 171〜183 行を「`cli::read()` → `--help` なら `cli::help::run()` で戻る → `Skip` なら info（`shiori_skipped`）→ `resolve_boot(&opts.boot)`」へ。④ 196〜200 行の MCP を `cli::listen::start_mcp(&opts.listen, …)` へ。⑤ `install_boot_context` に `modules: cli::ModulePolicy` の引数を足し、閉包の中で `GhostBootInputs::production(.., modules)` へ渡す（閉包は値を写して持つ）。全体として行は減る（約 55 行減・約 20 行増）。
+- `crates/areka/src/boot_config.rs` — `resolve_boot(&BootRequest)`・`resolve_boot_with`（本番）・`#[cfg(test)] resolve_boot_from(&[String])`（今のテストの口）・`point_ghost`・一時の置き場の付け足し・純粋な `shiori_wiring_for(modules, helper_exe)`・`ghost_boot_options` に引数 `modules` を足し、SHIORI を `shiori_wiring_for(modules, …)` で決める。テストの宣言 `boot_config_option_tests` を足す。
+- `crates/areka/src/ghost_session.rs` — 約 6 行: `GhostBootInputs` に `pub modules: cli::ModulePolicy`・`production` に引数 `modules`（`wiring.shiori` を `boot_config::shiori_wiring_for(modules, helper_exe.clone())` で決める）・`boot_ghost` の倒れ先が `ghost_boot_options(.., modules)` を呼ぶ・厳格な入口（740 行目）の分解に `modules: _`。④ `mcp-reload` との申し合わせの対象（上の「並走の申し合わせ」）。
+- 欄が増えるのでつなぎ直すテスト（中身は変えず `modules: ModulePolicy::Load` を足すだけ）: `ghost_session_restart_tests.rs:213`・`ghost_session_strict_tests.rs:209`・`emo2_boot/ghost_switch_test_support.rs:284`（`GhostBootInputs` の組み立て）・`main_ghost_wiring_tests.rs:30`（`ghost_boot_options` の呼び出し）。`ghost_switch_test_support.rs` は ④ が割る `ghost_switch.rs` の兄弟なので、同じ申し合わせに含める。
 - `crates/areka/src/boot_resolve.rs` — `GhostRoute::Pointed`・`GhostInputs` に `pointed`・`random` の 2 欄・`resolve_ghost` に段 1b（指し先）と無作為の段。テストの宣言 `boot_resolve_option_tests` を足す。
 - `crates/areka/src/boot_resolve_tests.rs` — `GhostInputs` を組む手伝いの 1 か所に `pointed: None, random: false` を足す（中身は変えない）。
 - `crates/areka/src/main_session_mark_tests.rs` — `install_boot_context` の呼び出し 1 か所に `ModulePolicy::Load` を足す。
@@ -182,7 +185,6 @@ sequenceDiagram
         Main->>Cli: help run
         Cli-->>Main: exit 0 or 1
     else normal
-        Main->>Cfg: set_module_policy
         Main->>Cfg: resolve_boot BootRequest
         Cfg-->>Main: cfg ghost balloon halted roots
         Main->>Mcp: start_mcp ListenPlan
@@ -278,13 +280,13 @@ flowchart TB
 | 6.6 | 正典に無い語 | CliParse | `ParseNote::WordUnknown` | 起動 |
 | 6.7 | 空の語 | CliParse | `ParseNote::WordEmpty` | 起動 |
 | 6.8 | `--ghost`・`--random` でも印は読む | BootResolve | 印を読む条件 | 決め方 |
-| 7.1 | SHIORI・MAKOTO・helper を起こさない | ModulePolicy・EmptyShiori | `shiori_wiring_for(Skip)`＝`Custom(empty_connect)` | — |
+| 7.1 | SHIORI・MAKOTO・helper を起こさない | ModulePolicy・EmptyShiori | `shiori_wiring_for(Skip)`＝`Custom(empty_connect)`（`production` と倒れ先の `ghost_boot_options` の両方） | — |
 | 7.2 | 中身なしで答える | EmptyShiori | `get→Ok(None)`・`notify→Ok(())` | — |
 | 7.3 | 中身なしの起動と同じ見た目 | EmptyShiori | kanade の `OnBoot` の 204（今のまま） | — |
 | 7.4 | SHIORI の行が無くても起こす | EmptyShiori | `Custom` は `mount.shiori` を読まない | — |
 | 7.5 | 「終了」で終わる | EmptyShiori | kanade の `OnClose` の 204（今のまま）・`unload→Ok(Clean)` | — |
-| 7.6 | 切替の先も読まない | ModulePolicy | 作り口の閉包の上書き | — |
-| 7.7 | info 1 件 | ModulePolicy | `set_module_policy` の `shiori_skipped` | 起動 |
+| 7.6 | 切替の先も読まない | ModulePolicy | 作り口の閉包が `production(.., modules)` を呼ぶ | — |
+| 7.7 | info 1 件 | ModulePolicy | `main` の `shiori_skipped` | 起動 |
 | 7.8 | PLUGIN など | — | areka に読む働きが無い（何もしない） | — |
 | 8.1 | 指定だけを候補に | CliListen | `ListenPlan::Ports` | 起動 |
 | 8.2 | ループバックの 3 書式 | CliListen | `plan` | 起動 |
@@ -603,19 +605,40 @@ impl BasewareRoot {
 
 ```rust
 // boot_config.rs
-/// main が起動の解決の前に 1 度だけ詰める（2 度目は error を残して最初の値を保つ）。Skip なら info（`shiori_skipped`・7.7）。
-pub(crate) fn set_module_policy(policy: cli::ModulePolicy);
-/// 詰めていなければ Load（テストは詰めない）。
-pub(crate) fn module_policy() -> cli::ModulePolicy;
 /// 純粋: Load → `Helper { helper_exe }`・Skip → `Custom(Box::new(empty_connect()))`。
-pub(crate) fn shiori_wiring_for(policy: cli::ModulePolicy, helper_exe: PathBuf) -> areka_ghost::ShioriWiring;
-/// 今の形のまま（`ghost_session.rs:680` の呼び手を変えない）。SHIORI は `shiori_wiring_for(module_policy(), helper_exe)`。
-pub(crate) fn ghost_boot_options(ghost_root: PathBuf, helper_exe: PathBuf, app_profile_dir: Option<PathBuf>) -> GhostBootOptions;
+pub(crate) fn shiori_wiring_for(modules: cli::ModulePolicy, helper_exe: PathBuf) -> areka_ghost::ShioriWiring;
+/// 倒れ先の起動の選び。SHIORI は `shiori_wiring_for(modules, helper_exe)`。
+pub(crate) fn ghost_boot_options(
+    ghost_root: PathBuf,
+    helper_exe: PathBuf,
+    app_profile_dir: Option<PathBuf>,
+    modules: cli::ModulePolicy,
+) -> GhostBootOptions;
+
+// ghost_session.rs
+pub(crate) struct GhostBootInputs {
+    pub wiring: emo2_boot::Emo2BootInputs,
+    pub helper_exe: PathBuf,
+    pub kanade_stop: Sender<KanadeNotice>,
+    /// `--option dontloadmodule`（結線ありの起動・倒れ先の両方がこの値で SHIORI を決める）。
+    pub modules: cli::ModulePolicy,
+}
+impl GhostBootInputs {
+    pub(crate) fn production(
+        cfg: &ConfigInputs,
+        helper_exe: PathBuf,
+        kanade_stop: Sender<KanadeNotice>,
+        boot_origin: BootOrigin,
+        app_profile_dir: Option<PathBuf>,
+        modules: cli::ModulePolicy,
+    ) -> Self;
+}
 
 // main.rs
 fn install_boot_context(world: &mut World, ctx: BootContext, kanade_stop: Sender<KanadeNotice>, modules: cli::ModulePolicy);
 ```
-- 2 か所の結線: 結線ありの起動と切替は作り口の閉包（`install_boot_context` が `production(..)` の後に `wiring.shiori` を上書き＝7.6）、倒れ先は `ghost_boot_options`。`main` は同じ `opts.modules` を `set_module_policy` と `install_boot_context` へ渡す。
+- 指定は値として流れる: `main` が `opts.modules` を `install_boot_context` へ渡し、作り口の閉包が `production(.., modules)` を呼ぶ（初回の起動と切替＝7.6）。`boot_ghost` は同じ入力の `modules` を倒れ先の `ghost_boot_options` へ渡す（7.1）。プロセスに 1 つの値は持たない。
+- `main` は `opts.modules == Skip` のとき info（`shiori_skipped`）を 1 件出す（7.7）。
 - MAKOTO: areka は MAKOTO を読み込まない（今の `TranslateSeams::passthrough`）ので、7.1 の MAKOTO の部分は今のまま満たす。PLUGIN・HEADLINE・CALENDAR は読む働きが無い（7.8）。
 
 #### EmptyShiori（`areka-ghost/src/shiori_wiring.rs`）
@@ -640,7 +663,7 @@ pub fn empty_connect() -> impl FnOnce() -> Result<Box<dyn ShioriBackend>, String
 **Implementation Notes**
 - Integration: `main.rs` の差し替えは 1,000 行を超えないことを `file_length_guard` で確かめる。
 - Validation: 7.3 の見た目は実機で 1 度確かめる（`--option dontloadmodule` で既定のゴーストを起こし、面が出て「終了」で終わる）。
-- Risks: ④ の読み直しが作り口を通らない形になると 7.6 が破れる（並走の申し合わせ）。
+- Risks: ④ の読み直しが `GhostBootInputs.modules` か作り口を通らない形になると 7.6 が破れる。`ghost_session.rs` は ④ も触りうる（並走の申し合わせ）。
 
 ## Error Handling
 
@@ -649,7 +672,7 @@ pub fn empty_connect() -> impl FnOnce() -> Result<Box<dyn ShioriBackend>, String
 - 読み方の誤り（知らない名前・書式・重ね・語）は warn の記録だけで続ける。起動を止めない・終了コードを変えない・メッセージボックスを出さない（1.13）。
 - 指し先の失敗（3.10・4.4・4.7）は warn の記録といつもの選び方。
 - 起動できない（根なし・ゴーストなし・バルーンなし）は今の告知の道（`alert`）。この spec は告知を足さない。
-- 失敗の道は必ず記録する: `--help` の説明書が無い・開けない（`error!`＋`Err(E_FAIL)`）・`--sstp-listen` が全部はねた（`error!`）・`set_module_policy` の 2 度目（`error!`）。
+- 失敗の道は必ず記録する: `--help` の説明書が無い・開けない（`error!`＋`Err(E_FAIL)`）・`--sstp-listen` が全部はねた（`error!`）。
 
 ### Monitoring
 
@@ -675,7 +698,7 @@ pub fn empty_connect() -> impl FnOnce() -> Result<Box<dyn ShioriBackend>, String
 - **待受（`cli/listen_tests.rs`・11.3）**: `plan` の表（`9900`・`localhost:9900`・`127.0.0.1:9900`・`9900,9901` の順・`none`・`NONE`・値なし・`0`・`70000`・`abc`・`none,9900`・`0.0.0.0:9900`・`192.168.0.5:9900`・`[::1]:9900`・全部はねる）で 8.1〜8.6・8.7。`start_mcp` は `NotGiven` が `read_port_candidates` を使うこと（8.8）と、`Off`・`AllRejected` で待受を立てないこと（記録の捕捉）を確かめる。
 - **起動の答え（`boot_config_option_tests.rs`・`boot_resolve_option_tests.rs`・11.2）**: 検体の根と外のゴーストのフォルダを作り、`resolve_boot_from(["areka", …])` の答え（経路・`dir`・並びの先頭・印の値）を見る。オプションなしは今の答えと同じ（2.2）・位置と `--ghost`（2.4）・絶対パスで一時の置き場が先頭に付く（3.1・3.2）・親が置き場の `ghost\` なら付かない（3.3）・同じフォルダ名と写しがあっても指されたフォルダ（3.8）・ゴーストのフォルダでない（3.10）・次の起動で記憶が見つからない（3.11）・名前は `name` が先でフォルダ名が後（4.2・4.3）・見つからない（4.4）・余り（4.5）・値なし（4.7）・無作為（1 体・2 体・0 体＝5.1・5.2・5.4）・指し先と無作為（5.3）・`nobootcheck` で印を読まない（6.2）・`--ghost` でも印の値が返る（6.8）。
 - **目録と置き場（`catalog_roots_temporary_tests.rs`・`roots/edit_temporary_tests.rs`・`menu/roots_frame_temporary_tests.rs`）**: 一時の置き場のゴーストが和で先に当たり、`balloon\` は探さない（3.2・3.9）・入れ先にならない（3.5）・`encode_memory` に出ない（3.4）・外す・先頭へが断る、覚える置き場の先頭へ入る（3.6）・同じフォルダを足すと普通の置き場として足りる（3.7）・メニューの子が選べない（3.6）。
-- **SHIORI を読まない（`shiori_wiring_empty_tests.rs`・`main_module_policy_tests.rs`・11.4）**: `EmptyShiori` の 4 つの答え（7.2）・`shiori` の行の無いゴーストを `Custom(empty_connect())` で `areka_ghost::boot` して起動が `Ok` になり、起動と終了の問い合わせが中身なしで返る（7.4・areka-ghost の今の起動のテストの組み立てを使う）・`install_boot_context(.., ModulePolicy::Skip)` の作り口が `Custom` を返し、`Load` なら今の `Helper`（7.1・7.6）・`shiori_wiring_for` と `ghost_boot_options` の表（倒れ先）。
+- **SHIORI を読まない（`shiori_wiring_empty_tests.rs`・`main_module_policy_tests.rs`・11.4）**: `EmptyShiori` の 4 つの答え（7.2）・`shiori` の行の無いゴーストを `Custom(empty_connect())` で `areka_ghost::boot` して起動が `Ok` になり、起動と終了の問い合わせが中身なしで返る（7.4・areka-ghost の今の起動のテストの組み立てを使う）・`install_boot_context(.., ModulePolicy::Skip)` の作り口が `Custom` を返し、`Load` なら今の `Helper`（7.1・7.6）・`shiori_wiring_for` と `ghost_boot_options(.., modules)` の表（倒れ先・`Skip` で `Custom`、`Load` で `Helper`＝値を渡すだけなので、テストどうしが互いに影響しない）。
 - **説明書（`cli/help_tests.rs`）**: 偽の `OsPort` で、在れば `Verb::Open` で 1 回だけ呼ぶ（9.1）・無い・OS が断る・exe の場所が無い（9.3）。
 - **今のテストの保ち**: 実走の 3 本・`main_config_input_tests.rs` ほか `resolve_boot_from` の 18 か所・`smoke_exit_tests.rs`（名前替えだけ）がそのまま緑。
 
