@@ -30,7 +30,7 @@ pub mod move_cue;
 mod readme_cue;
 /// 読み直しの窓口（areka-P0-mcp-reload）。
 pub(crate) mod reload;
-mod reload_args;
+pub(crate) mod reload_args;
 /// `\![reload,…]`・`\![reloadsurface]` の受け口（areka-P0-mcp-reload）。
 mod reload_cue;
 /// 実行系の側の起動（受け口の送出端の束・areka-P0-mcp-reload）。

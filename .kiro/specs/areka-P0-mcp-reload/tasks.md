@@ -158,7 +158,7 @@
   - `frame/switch_reload_tests.rs` で印の下では知らせと記憶が出ず、印が無ければ既存のテストが今までどおり
   - _Depends: 6.4_
   - _Requirements: 5.2, 5.3, 5.4, 6.2, 6.3, 6.4, 8.4_
-- [ ] 7.5 MCP の `reload` を本物にする
+- [x] 7.5 MCP の `reload` を本物にする
   - 照合 → 窓口 → 返事（受理は `OK:reload requested…since_id=<N>` を `last_id()` で即答・断りは `NG:Cannot reload now (…)`・知らない語は `NG:Unknown target (…)`・makoto は `NG:Reloading makoto is not supported yet`＋`warn!`・終了の途中は返事を落とす）
   - `mcp/mod.rs` の振り分けは変えない（`handle` は既に `&mut World` を受ける）
   - `mcp/reload_tests.rs` を新しい振る舞いの期待へ書き換え、各返事がその場で返ることが固定される
@@ -200,3 +200,4 @@
 - 6.4: 自分の予約がゴースト切替の commit で取りやめになると、理由は `overtaken` でなく `skin_failed` になる（design は決めていない・実機で気になれば語を分ける）。
 - 7.2: `rebuild_runtime_in_place(world, target_name) -> RuntimeRebuild { Rebuilt, BootFailed, WriteFailed(PersistFailure) }`（design.md 569 行の `-> bool` は完了のときに直す）。`ghost_session_runtime` は `ghost_session` の私有 mod なので、7.3 で `switch_to` から呼ぶ口（`pub(crate) mod` か再輸出）が要る。関数と型の allow は 7.3 で外す。降ろした時間は既存の `ghost_switch_down_ms`・`ghost_switch_down_failed` を使い回す。7.2 のテストは ChangeGhost を通さないので、古い SHIORI に OnClose が来ないことは 7.3 の通しテストで固定する。
 - 7.4: `frame/switch_reload_tests.rs` は親の土台を使うため `switch_finish_tests.rs` の末尾の mod 宣言（4 行）から読む。request_reload からの通しテストは無い（ヘッドレスの土台に実行系が無い）。実機（8.2 ⑵）で通す。`reload_skin_tests.rs` 冒頭の「呼び手は 7.4」の説明は古い。
+- 7.5: `log_history.rs` は要件 13.1 の外なので触らない。`last_id()` に残る `#[allow(dead_code)]` と「mcp-strict-errors が読む口」のコメントは古い（本 spec が最初の呼び手）。design.md 98 行と一緒に完了のときに申し送る。受理の文は `answer` に偽の窓口を渡して固定した（実行系の無い World では受理まで行かない）。

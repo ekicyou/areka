@@ -41,7 +41,6 @@ use crate::log_history::TARGET_ERROR;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ReloadOrigin {
     Script,
-    #[allow(dead_code)] // 呼び手の MCP の `reload` は task 7.5 で付く。
     Mcp,
 }
 
