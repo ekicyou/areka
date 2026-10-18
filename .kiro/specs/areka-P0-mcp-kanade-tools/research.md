@@ -354,3 +354,4 @@ L2 を採る場合、翻訳を通ったトークのために「預けた一括�
 
 - **R1 済み**: SSP 2.9.05 の `POST http://127.0.0.1:9801/api/mcp/v1` へ `tools/call` `raise_event`（`OnAiTalk`・宛先省略＝悪役令嬢クローディア）を `curl` で直に当てた。生の JSON の本文は `OK:the ghost returned a script and it is being played.\r\nScript: <台本>`＝区切りは `\r\n`、2 行目は `Script: `（コロンの後に空白 1 つ）。
 - 設計の検証の重大な問題 3 点（`SstpNotify` の検査を運行表でもう一度・0 文字の台本は記録しない・殻のテスト 3 の書き直し）は、設計の討議で自明な直しとして design.md に入れた。
+- 設計の討議の議題 3 件（起動の挨拶の見分け・script 種別のログの置き場・strict の運び先）は推奨案で確定した（開発者「承認」）。根拠は design.md の「設計の討議で確定したこと」。

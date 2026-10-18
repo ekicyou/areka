@@ -812,3 +812,11 @@ pub(super) fn record(config: &KanadeConfig, actions: &[Action], source: Option<&
 - **`property-query-channels`・`mcp-shiori-query` へ**: 許可の表を通さずに任意の名前を送る口は `KanadeMsg::SstpNotify`＋`sstp::validate_notify`。返った台本は再生される（再生させずに値だけ欲しい用途は、その spec で入口を足す）。
 - **`sakura-time-critical` へ**: `\t` を持つときは、外からの台本は Owned SSTP として「割り込み禁止状態でも割り込み再生」に従う（ukadoc SSTP）。`accepts` に `\t` の条件を足さない。
 - **`real-run-log-noise` へ**: 全部のトークの台本が info で標準出力にも出る。
+- **ウェーブの後に `schedule/boot.rs` を触る spec へ**: 起動の挨拶の印の綴り `"boot"` を、`schedule/sstp.rs` の `BOOT_GREETING_ORIGIN` と同じ定数から取る 1 行に替える（本 spec は同じウェーブの約束で `boot.rs` に触らないため、綴りが 2 か所にあり、テストで一致を縛っている）。
+- **ウェーブを組む人へ**: `schedule/steady_choice_script.rs`（`start_talk` を `mod.rs` へ移す）は `script-security-level` と同じファイル。
+
+## 設計の討議で確定したこと（2026-10-18・開発者「承認」）
+
+1. 起動の挨拶の見分けは `ActiveTalk::origin` の綴り `"boot"` の照合で行い、「挨拶の最中は断る」テストで綴りを縛る。`boot.rs` を共通の定数へ替えるのはウェーブの後（上の申し送り）。
+2. script 種別のログは運行表の出口（`schedule::step` の最後）で出す（棚卸㉗の brief が推した殻の `execute_batch` ではない。表示の語に元のイベント名が要り、決定論テストが呼んだスレッドで捕まえられるため）。
+3. `strict` は kanade の状態の `StrictNote{talk_id, strict}`（最後の 1 件）まで運ぶ。`TalkCommand`・`StartTalk` へ運ぶかは `mcp-strict-errors` が決める。
