@@ -70,7 +70,7 @@
 置き場は**ワークツリーの `target\zorder-inversion-signoff\` の下だけ**である（根・検体・一時フォルダ・書ける根のすべて）。
 
 ```powershell
-pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\areka-P0-zorder-scope-inversion\signoff-run.ps1 -Prepare
+pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\completed\areka-P0-zorder-scope-inversion\signoff-run.ps1 -Prepare
 ```
 
 `-Prepare` がすること:
@@ -93,10 +93,10 @@ pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-sc
 ### 4.2 走行のコマンド
 
 ```powershell
-pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\areka-P0-zorder-scope-inversion\signoff-run.ps1 -Run inverted -Press
-pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\areka-P0-zorder-scope-inversion\signoff-run.ps1 -Run explicit
-pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\areka-P0-zorder-scope-inversion\signoff-run.ps1 -Run numeric
-pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\areka-P0-zorder-scope-inversion\signoff-run.ps1 -Run default
+pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\completed\areka-P0-zorder-scope-inversion\signoff-run.ps1 -Run inverted -Press
+pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\completed\areka-P0-zorder-scope-inversion\signoff-run.ps1 -Run explicit
+pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\completed\areka-P0-zorder-scope-inversion\signoff-run.ps1 -Run numeric
+pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\completed\areka-P0-zorder-scope-inversion\signoff-run.ps1 -Run default
 ```
 
 所要は `-Press` 付きが約 90 秒、他は約 30 秒（`-ExitMs` で変えられる）。採れるもの:
@@ -136,7 +136,7 @@ pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-sc
 
 ```powershell
 $s = 'C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\target\zorder-inversion-signoff'
-$j = 'C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\areka-P0-zorder-scope-inversion\signoff-judge.ps1'
+$j = 'C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\completed\areka-P0-zorder-scope-inversion\signoff-judge.ps1'
 pwsh -NoProfile -File $j -Log "$s\inverted\run.log" -Case inverted -Probe "$s\inverted\probe.txt"; "exit=$LASTEXITCODE"
 pwsh -NoProfile -File $j -Log "$s\explicit\run.log" -Case explicit -Probe "$s\explicit\probe.txt"; "exit=$LASTEXITCODE"
 pwsh -NoProfile -File $j -Log "$s\numeric\run.log"  -Case numeric  -Probe "$s\numeric\probe.txt";  "exit=$LASTEXITCODE"
@@ -156,7 +156,7 @@ pwsh -NoProfile -File $j -Log "$s\default\run.log"  -Case default  -Probe "$s\de
 - **作ったログ**: 実走のログをそのまま頭に置き、その後ろへ本番の行の組立（`zorder_chain_diag.rs` の書式・`zorder_drain.rs` の受理の本文。どちらも兄弟テストが逐語で固定）で組んだ行を足す。窓のハンドルは実走のログの `owner-established` の 2 行から取る（手で決めた値を使わない）。前面走査の控えも同じハンドルで組む。
 
 ```powershell
-pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\areka-P0-zorder-scope-inversion\signoff-calibrate.ps1; "exit=$LASTEXITCODE"
+pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\completed\areka-P0-zorder-scope-inversion\signoff-calibrate.ps1; "exit=$LASTEXITCODE"
 ```
 
 道具は標本を作り、25 通りに判定の道具を当てて期待の終了コードと比べ、全部合えば exit 0 を返す。
