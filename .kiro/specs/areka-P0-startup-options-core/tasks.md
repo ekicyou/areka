@@ -142,4 +142,4 @@
 - 4.1: 起動中の CloseRequest は Steady まで pending_close で待つ（kanade の既存の設計・boot.rs:22）。起動のテストは dispatcher にも Tick を送る。EmptyShiori の欠陥ではない。
 - 4.3: ghost_session.rs の差分は +11/-7（rustfmt の折り返しと欄の doc を含む・mcp-reload の触る所とは重ならない）。`ghost_session_strict_tests.rs` の `production` 呼び出し 3 か所目にも Load を足した。
 - 5.1: `boot_config.rs` の写しの条件 `ghost.route != Argv` は今のままだと `Pointed` にも写しを掛ける。5.2 で絶対パスの指し先を写しから外す。
-- 5.2: 記憶を読む条件はまだ `mark.is_none() \&\& !request.random` だけ。5.3 で解決できた指し先が在るときも読まない条件（`pointed.is_none()`）を足す。`main` は今 `resolve_boot(\&cli::read().boot)` とその場で読む。6.1 で `cli::read()` を記録の初期化の後へ 1 回だけにし、この呼び出しを置き換える（足すだけだと 2 回読み・注記も 2 回出る）。
+- 5.2: 記憶を読む条件はまだ `mark.is_none() && !request.random` だけ。5.3 で解決できた指し先が在るときも読まない条件（`pointed.is_none()`）を足す。`main` は今 `resolve_boot(&cli::read().boot)` とその場で読む。6.1 で `cli::read()` を記録の初期化の後へ 1 回だけにし、この呼び出しを置き換える（足すだけだと 2 回読み・注記も 2 回出る）。
