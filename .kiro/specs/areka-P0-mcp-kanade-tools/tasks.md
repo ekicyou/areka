@@ -130,7 +130,7 @@
   - _Depends: 3.5, 5.1_
   - _Requirements: 4.1, 4.2, 7.3_
 
-- [ ] 6. 差の一覧・回帰・実機の確認
+- [x] 6. 差の一覧・回帰・実機の確認
 - [x] 6.1 SSP との差の一覧を書き、翻訳の Reference1 の行を改める
   - `doc/ssp-mcp/` の下に既存の差の一覧と同じ形で、⑴ 手順の途中は断る ⑵ 切替の途中は宛先が居ないときの `NG:` ⑶ 空の `event` はツールの結果の `NG:` ⑷ CR・LF・NUL を断る ⑸ 中断の無効化モードの最中も割り込む ⑹ `OnTranslate` の Reference1 の値 ⑺ `\t` を持たない ⑻ 往復から生まれていないトークの表示の語、を SSP の印（実測・未実測・対応物なし）とともに書く。2 行の区切りは「SSP と同じ（実測）」と書く
   - `doc/COMPAT_ARCHITECTURE.md` の `OnTranslate` の Reference1 の行を「MCP の `sakurascript` の台本は `sstp-send,owned`、それ以外は欠番」へ改める
@@ -141,7 +141,7 @@
   - 触らないファイルの差分が 0 であることを確かめる
   - 完了の姿: 対象のテストが全部緑で、触らないファイルの差分 0 を記録できる
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
-- [ ] 6.3 実機で確かめ、検体の README を本来の手順へ戻す
+- [x] 6.3 実機で確かめ、検体の README を本来の手順へ戻す
   - Claude Code から既定のゴースト（emo2・絶対パス）へ ⑴ 台本を送ると `OK` と台詞 ⑵ 長く待つ台本の再生中に 2 本目で中断 ⑶ 表情を変えた後に `dump_surface` で変わった姿 ⑷ 台本を返すイベントで台本入りの答えと台詞 ⑸ 知らない名前で `OK:the ghost returned no script.` ⑹ `get_log` の `script` に 3 種の語の台本 ⑺ 呼ぶ間も描画が止まらず warn 以上が増えない、を確かめる。根・検体・一時フォルダはワークツリーの `target\` の下だけ
   - 結果を本 spec の `verification/signoff.md` に残し、⑴ が通ったら `trigger-intervals` の検体の README の読み替えの 1 文を `sakurascript` で送る本来の手順へ戻す
   - 完了の姿: 記録のファイルに ⑴〜⑺ の結果があり、README の読み替えが消えている
@@ -157,3 +157,4 @@
 - 4.2: kanade の殻のスレッドで出る warn は、テストのバイナリの「呼んだスレッドの記録」では捕まえられない（全スレッドの記録には番人の例外表の変更が要る）。そのため「warn 1 件」は部品ごとに縛った（`notify_accepted` の直のテスト、`drive` の warn 1 件、`answer` の warn 0 件）。
 - 5.1: areka はライブラリの target を持たない＝MCP のテストは `cargo test -p areka -j 4 --bin areka mcp::`。ワークツリーで areka の全体を回す前に、i686 の `shiori-host32-helper` と `shiori-host32-testdll-loadu` をビルドしておく（無いと実走の 2 本が赤になる）。
 - 5.2（範囲外・完了の棚卸で起票の候補）: 5.2 のレビューで `cargo test -p areka --bin areka mcp::` を回したところ、`mcp::check_script::check_script_tests::omitted_or_matching_name_answers_with_the_running_ghost` が 1 回だけ落ちた。本 spec の触っていないファイルのテストで、別スレッドの答えを待つ形。回し直すと緑だった（揺れ）。
+- 6.3（範囲外・完了の棚卸で `/kiro-discovery` に起票）: 実機で、トークごとのスレッド `sakura-talk-N`（`crates/areka-sakura/src/drive.rs` の `spawn_talk`）がトークの終わった後も残り続けた（15→35 本、トーク 1 つにつき 1 本）。MCP の前の起動の挨拶の分も残るので、既存の問題。詳しくは verification/signoff.md。
