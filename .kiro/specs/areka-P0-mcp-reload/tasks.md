@@ -147,7 +147,7 @@
   - `ghost_session_runtime_tests.rs` で起こせなかったとき単位が置き場に戻り、seriko・ticker が残ることが固定される
   - _Depends: 2.1, 4.2, 5.1_
   - _Requirements: 4.2, 4.4_
-- [ ] 7.3 shiori の読み直しを `switch_to` の分かれ目につなぐ
+- [x] 7.3 shiori の読み直しを `switch_to` の分かれ目につなぐ
   - `switch_to` の `take_down` の手前で `wants_runtime_only` のとき 7.2 を呼び、組み直せたら段を進め、起こせなければ既定のゴーストへ戻し（既定も起きなければ致命）、記憶を書けなければ既存と同じく `end_switch(WriteFailure)`＋致命にする。`take_down`・`close_windows_for_restart`・`run_overwrite_between` は呼ばない
   - `SwitchRig` の足場を足すなら `ghost_switch_test_support.rs` の末尾に足すだけ（`startup-options-core` との申し合わせ）
   - `ghost_switch_reload_tests.rs` で窓が閉じられず（`WindowsEpoch` 不変）、古い SHIORI に `OnDestroy(reload)` → unload、新しい SHIORI に load → `OnInitialize(reload)`、GET 0、seriko・ticker が同じもの、組み直しの失敗で既定へ戻ることが固定される

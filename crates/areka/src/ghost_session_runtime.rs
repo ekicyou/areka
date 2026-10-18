@@ -66,7 +66,6 @@ pub(crate) fn rewire_runtime_consumers(
 
 /// shiori だけの読み直しの答え（呼び手 `switch_to` が段・既定への戻し・致命を選ぶ）。
 #[derive(Debug)]
-#[allow(dead_code)] // 呼び手の `switch_to` は task 7.3 で付く。
 pub(crate) enum RuntimeRebuild {
     /// 新しい実行系を同じ単位に付け直し、窓側の結線をやり直した。
     Rebuilt,
@@ -83,7 +82,6 @@ pub(crate) enum RuntimeRebuild {
 ///
 /// 外している間も単位は置き場に戻しておく＝失敗して呼び手が既定へ戻す `take_down` は seriko・ticker
 /// を正しく降ろす。起動の失敗の記録は `boot_runtime` が 1 度だけ残す（ここでは記録し直さない）。
-#[allow(dead_code)] // 呼び手の `switch_to` は task 7.3 で付く。
 pub(crate) fn rebuild_runtime_in_place(world: &mut World, target_name: &str) -> RuntimeRebuild {
     let no_context = |reason: &str| {
         tracing::error!(

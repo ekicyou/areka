@@ -490,7 +490,6 @@ pub(crate) fn boot_origin_override(world: &World) -> Option<BootOrigin> {
 
 /// `switch_to` の分かれ目: 印が shiori の読み直しで、進行中の予約が窓口自身のものなら真（窓を閉じずに
 /// 実行系だけ組み直す）。
-#[allow(dead_code)] // 呼び手の `switch_to` は task 7.3 で付く。
 pub(crate) fn wants_runtime_only(world: &World) -> bool {
     own_switch(world).is_some_and(|f| f.target == ReloadTarget::Shiori)
 }

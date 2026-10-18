@@ -35,6 +35,7 @@ use crate::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
 
 #[path = "ghost_session_runtime.rs"]
 mod ghost_session_runtime;
+pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place};
 
 /// 系の登録をプロセスに 1 回・1 か所から行う（要件 2.1・2.2・3.3）。
 ///

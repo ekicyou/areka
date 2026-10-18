@@ -35,7 +35,8 @@ use crate::boot_resolve::{
     write_switch_drop,
 };
 use crate::ghost_session::{
-    GhostBootInputsSource, GhostSlot, boot_ghost_strict, commit_ghost_windows, reopen_ghost_windows,
+    GhostBootInputsSource, GhostSlot, RuntimeRebuild, boot_ghost_strict, commit_ghost_windows,
+    rebuild_runtime_in_place, reopen_ghost_windows,
 };
 
 /// 台本の `\![change,ghost,名(,--option=raise-event)]` から届く切替要求（受け口
@@ -597,6 +598,12 @@ fn record_steady_memory(world: &World) {
 /// 予約の切替先へ: 置き場のゴーストを同期で降ろす → 全窓を閉じる → [`boot_into`]（由来＝切替で
 /// 来た〔予約に起動の知らせが在ればネットワーク更新で読み直した〕・経路＝切替）。成功なら段を「迎え入れ（切替先）」に。同期の失敗は、切替先が既定なら致命、
 /// そうでなければ [`switch_to_default`]（窓は投函していないので壊れた切替先の窓は生えない）。
+///
+/// shiori の読み直し（窓口自身の予約・[`super::reload::wants_runtime_only`]）だけは降ろさず・窓を閉じず・
+/// 起動中のゴーストへ入れる一周も回さずに、[`rebuild_runtime_in_place`] で実行系だけを組み直す
+/// （要件 4.1〜4.4・design Flow 3）。組み直せたら段を「迎え入れ（切替先）」に。降ろした直後の記憶を
+/// 書けなければ予約を下ろして書けない致命へ。起こせなければ、切替先が既定なら致命、そうでなければ
+/// [`switch_to_default`]。
 pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     let Some((target, prev, boot_event)) = world
         .get_non_send::<SwitchInFlight>()
@@ -612,6 +619,27 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     let Some(dir) = super::switch_copy::boot_dir(world, &handoff) else {
         return;
     };
+    // shiori の読み直し（窓口自身の予約）: 窓・seriko・loop ticker を残して実行系だけを組み直す
+    // （要件 4.2・4.4・design Flow 3）。`take_down`・`close_windows_for_restart`・`run_overwrite_between` は呼ばない。
+    if super::reload::wants_runtime_only(world) {
+        match rebuild_runtime_in_place(world, &target.name) {
+            RuntimeRebuild::Rebuilt => set_stage(world, WelcomeAttempt::Target),
+            RuntimeRebuild::WriteFailed(failure) => {
+                end_switch(world, SwitchEnd::WriteFailure);
+                crate::write_failure::fatal(world, failure);
+            }
+            RuntimeRebuild::BootFailed
+                if same_folder_name(&target.folder, DEFAULT_GHOST_FOLDER) =>
+            {
+                fatal(
+                    world,
+                    format!("読み直した既定ゴースト {} を起こせなかった", target.name),
+                )
+            }
+            RuntimeRebuild::BootFailed => switch_to_default(world, &target.name),
+        }
+        return;
+    }
     take_down(world);
     // 降ろし終えた直後（前のゴーストの記憶の書き手は処理し切って join 済み＝動いている実行系は 0）に
     // 最後のゴースト＝既定・印＝切替先を 1 回で書く（要件 12.6）。UI スレッドが App スコープへ直接
