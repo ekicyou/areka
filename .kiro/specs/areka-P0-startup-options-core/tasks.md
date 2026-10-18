@@ -121,12 +121,12 @@
   - _Depends: 2.1, 2.2, 2.4, 4.3, 5.2_
   - _Requirements: 1.13, 7.7, 8.1, 8.4, 8.7, 8.8, 9.1, 9.2, 9.3_
 
-- [ ] 7. 説明書と仕上げの確かめ
+- [x] 7. 説明書と仕上げの確かめ
 - [x] 7.1 配布物の説明書に起動オプションの節を足す
   - `dist/README.txt` の「■ 起動」の「引数は要りません」を「引数が無くても起動できます」へ替え、「■ 起動オプション」の節を足す（設計の Supporting References の中身。並走の `sample-url-fetch` の書き替えとは別の行に収める）
   - 終わった形: 節に書き方 4 つ・効く 6 つ・位置の引数は起動オプションより前・Windows の綴り・受けて何もしない語と無視されるもの・オプションなしで今どおり・`--sstp-listen` の強さと SSP との違いがそろっている
   - _Requirements: 10.1, 10.2, 10.3_
-- [ ] 7.2 全体の確かめと実機での見た目の 1 回
+- [x] 7.2 全体の確かめと実機での見た目の 1 回
   - ワークスペースの全テストを 1 回回して緑、実走の 3 本（`emo2_real_run.rs`・`mcp_get_log_real_run.rs`・`smoke_boot_loop_exit.rs`）のファイルが main からの差分 0 で、そのまま緑
   - `crates/areka-ghost/src/runtime.rs`・`crates/areka-ghost/src/config.rs`・`crates/areka/src/emo2_boot/ghost_switch.rs`・`crates/areka-mcp/**` の差分が 0
   - 実機で `--option dontloadmodule` で既定のゴーストを有界の自動終了つきで起こし、面が出て終わること・`shiori_skipped` が記録に 1 件あることを記録で確かめる（根と検体はワークツリーの `target\` の下）
@@ -144,3 +144,4 @@
 - 5.1: `boot_config.rs` の写しの条件 `ghost.route != Argv` は今のままだと `Pointed` にも写しを掛ける。5.2 で絶対パスの指し先を写しから外す。
 - 5.2: 記憶を読む条件はまだ `mark.is_none() && !request.random` だけ。5.3 で解決できた指し先が在るときも読まない条件（`pointed.is_none()`）を足す。`main` は今 `resolve_boot(&cli::read().boot)` とその場で読む。6.1 で `cli::read()` を記録の初期化の後へ 1 回だけにし、この呼び出しを置き換える（足すだけだと 2 回読み・注記も 2 回出る）。
 - 7.1: 「■ 既知の制限」の更新の行（287 行目）を「位置の引数で…」へ直した（--ghost の指し先は folder=Some で、更新で引っ込んで戻る）。
+- 7.2: 全体テスト（tools/test-all.ps1）は 6d811e1e で 1 回・全段緑（x64 は 12,073 通過・失敗 0）。実機 `--option dontloadmodule` は面が出て Smoke で正常終了・`shiori_skipped` 1 件・`charset_initial` 0 件（補助のプロセスは結線されていない）。範囲外の申し送り: `areka-kanade/src/shiori/real.rs:318` の「unload → helper 正常終了」の文は補助のプロセスでない SHIORI でも出る（文言が誤解を招く）。
