@@ -5,7 +5,8 @@
 //! [`cli::exit_code`] の 1 か所。設計「Error Handling / 終了コード」）。
 //!
 //! モジュールの読み込みの向きは `error` → `state` → `plan` → `home`／`presence`／`status`
-//! → `store` → `wait` → `cli` → `main` の一方向だけ（逆向きは誤り）。
+//! → `store` → `wait` → `cli`（子 `args`＝`cli_args.rs` は引数の表と読みで、`cli` だけが読む）
+//! → `main` の一方向だけ（逆向きは誤り）。
 
 use std::process::ExitCode;
 

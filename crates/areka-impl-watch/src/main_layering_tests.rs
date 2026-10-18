@@ -4,7 +4,8 @@
 //!   （設計「依存の向き」。走査は `plan.rs` だけ。兄弟の `plan_*_tests.rs`・`plan_test_support.rs`
 //!   はテストで、時刻や偽の口を使ってよい）。
 //! - 端末へ出る文を持つファイルの文字列・文字のリテラルが ASCII だけ（要件 9.2）。対象は本番
-//!   ファイルの全部から、リテラルの無い起動ファイル `main.rs` を除いた 9 本: 入口 `cli.rs`・表示
+//!   ファイルの全部から、リテラルの無い起動ファイル `main.rs` を除いた 10 本: 入口 `cli.rs`・引数の
+//!   表と `--help` の本文 `cli_args.rs`・表示
 //!   `status.rs`・待ちの終わりの 1 行を作る `wait.rs`・失敗の本文を持つ `error.rs`・状態ファイルの
 //!   口 `store.rs`・置き場所 `home.rs`・居る印のファイル `presence.rs`・判断の中核 `plan.rs`
 //!   （「当てはまらなかった」の文）・状態 `state.rs`（列挙の綴り）。どれも、リテラルがそのまま
@@ -143,6 +144,7 @@ fn the_judgement_core_spells_no_file_clock_process_or_log() {
 fn files_that_write_to_the_terminal_have_ascii_only_literals() {
     let sources = [
         ("cli.rs", include_str!("cli.rs")),
+        ("cli_args.rs", include_str!("cli_args.rs")),
         ("status.rs", include_str!("status.rs")),
         ("wait.rs", include_str!("wait.rs")),
         ("error.rs", include_str!("error.rs")),
