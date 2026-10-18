@@ -99,3 +99,13 @@ pub mod resources {
         resource_username,
     };
 }
+
+/// script 種別のログの公開ファサード（[`events`] と同じ露出規律）。
+///
+/// 運行表の出口が出す記録の target・表示の語・1 件を出す手を、MCP の側（`areka` の `get_log` の
+/// 読み口のテスト）が同じ正本で使うための唯一の経路。
+pub mod script_log {
+    pub use crate::schedule::script_log::{
+        PLAIN_LABEL, SSTP_SEND_LABEL, TARGET, emit, event_label,
+    };
+}

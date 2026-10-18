@@ -44,6 +44,8 @@ pub(crate) mod log_capture;
 /// SHIORI Resource 照会の許可集合（イベント檻とは別族・Req4.1）。DD-9 の例外として `pub`。
 /// submit ガードはイベント許可 ∨ リソース許可で判定する（`crate::actor` の egress チョークポイント）。
 pub mod resources;
+/// script 種別のログ（表示の語・出口の記録）。クレート公開面へは [`crate::script_log`] ファサード経由。
+pub mod script_log;
 /// SSTP の入口（外からの台本・外から頼まれたイベント）。
 pub(crate) mod sstp;
 pub(crate) mod steady;
@@ -133,11 +135,14 @@ pub(crate) fn step(mut state: State, input: Input, config: &KanadeConfig) -> (St
     let marked_reply = talk_gap::marked_reply(&state, &input);
     // 応答の入力なら、応答を待っていた GET の元のイベントの控えを取り出す（1 回だけ使う）。
     let replied = translate::before(&mut state, &input);
+    // この入力で始まるトークの出どころ（script 種別のログの表示の語の素・入力が消費される前に控える）。
+    let talk_source = script_log::source_of(&state, &input, &replied);
     let (mut state, actions) = route(state, input, config);
     let actions = translate::after(&mut state, replied, actions);
     talk_gap::observe(&mut state, marked_reply);
     // 出口: 相手を失った控えの掃除と、再生を始めたトークの控え（最終の台本で取る）。
     balloon_events::settle(&mut state, &actions);
+    script_log::record(config, &actions, talk_source.as_ref());
     (state, actions)
 }
 

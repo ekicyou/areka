@@ -88,10 +88,6 @@ pub(super) struct Replied {
 
 impl Replied {
     /// 入力が台詞の応答で元のイベントが分かるときの出どころ（script 種別の記録の材料）。
-    #[expect(
-        dead_code,
-        reason = "script 種別の記録（ScriptLog）を足す仕事で使い始める"
-    )]
     pub(super) fn talk_source(&self) -> Option<ScriptSource> {
         self.script.as_ref()?;
         self.source.clone().map(ScriptSource::Event)
