@@ -187,3 +187,4 @@
 - 2.6: テストの道筋は `runtime::names_tests::…`（`cargo test -p areka-ghost names_tests` で回る）。`set_names` は投函だけで barrier を待たない。6.4 の Names の段で要るなら呼び手が barrier を打つ。
 - 3.1: `reload_args.rs` は呼び手が揃うまでモジュール全体に `#![allow(dead_code)]`。7.5 の後に外す。design.md 158 行の `ScriptReload::parse`・`DescriptParams::parse` は同じ文書のコードの塊（`parse_script`・`parse_descript_params`）と食い違う。完了のときに文書を直す。
 - 3.2: design.md 431 行の `ReloadRaw { target, notes }` は `reload_args::ScriptReload` で代えた（欄は同じ）。完了のときに文書を直す。受信端 `ReloadRx`（`try_iter()` 付き）と `wire_reload_rx` は `reload_cue.rs` にある。`reload_cue.rs` の `#![allow(dead_code)]` は 4.1（受け口の登録と据え付け）と 6.1（取り出し）で呼び手が付いたら外す。
+- 3.3（止まり）: 網羅台帳の owner を本 spec へ直すと `ukadoc-survey` の consistency/spec_checks が 2 本赤（`roadmap-draft.md` の `[[spec]]` に本 spec が無い・balloon-canon-residue の owner_count 22→21）。要件 13.1 の範囲外の `roadmap-draft.md`（と `check_script_judge_tests.rs`・report の生成物）を触る裁定を開発者に求めた。作業は WIP コミットに置いた。

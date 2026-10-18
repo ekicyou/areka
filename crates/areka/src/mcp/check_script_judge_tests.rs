@@ -110,6 +110,32 @@ fn row05_bang_first_argument_nobody_handles() {
     silent(r"\![set,zorder,0,1]");
 }
 
+/// 読み直しの 7 綴りは表に担当があり、`makoto`・`aigraph` は誰も拾わない（areka-P0-mcp-reload 要件 11.3）。
+#[test]
+fn row05_reload_spellings_are_known_but_makoto_and_aigraph_are_not() {
+    for script in [
+        r"\![reload,ghost]",
+        r"\![reload,shiori]",
+        r"\![reload,shell]",
+        r"\![reload,balloon]",
+        r"\![reload,descript]",
+        r"\![reload,descript,ghost shell]",
+        r"\![reloadsurface]",
+    ] {
+        silent(script);
+    }
+    fires(
+        r"\![reload,makoto]",
+        Kind::UnknownCommand,
+        MSG_UNKNOWN_COMMAND,
+    );
+    fires(
+        r"\![reload,aigraph]",
+        Kind::UnknownCommand,
+        MSG_UNKNOWN_COMMAND,
+    );
+}
+
 #[test]
 fn row06_raw_surface_id_missing_or_out_of_range() {
     fires(r"\s[99999]", Kind::MissingSurface, MSG_MISSING_SURFACE);

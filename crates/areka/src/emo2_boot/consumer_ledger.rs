@@ -38,12 +38,13 @@
 //!    同居すると `\![set,zorder,…]` の 1 出現に 2 つの担当が作用してしまうため、
 //!    [`LedgerError::SelectorConflict`] で拒む。順序はどちらでも同じく拒む。
 //!
-//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 25 行（`move`・`bind`・
+//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 31 行（`move`・`bind`・
 //! `(set,zorder)`・`(reset,zorder)`・`\f`・`(open,readme)`・`(open,file)`・`(open,browser)`・
 //! `(open,explorer)`・`(open,editor)`・`(open,mailer)`・`\j`・`(enter,nouserbreakmode)`・
 //! `(leave,nouserbreakmode)`・`(change,ghost)`・`(change,shell)`・`(change,balloon)`・
 //! `(execute,install)`・`(execute,resetwindowpos)`・`updatebymyself`・`update`・`updateother`・`(set,choicetimeout)`・
-//! `areka.prop.set`・`(set,balloontimeout)`）を登記し、違反があれば構築時に panic する（正準表は一意
+//! `areka.prop.set`・`(set,balloontimeout)`・`(reload,ghost|shiori|shell|balloon|descript)`・
+//! `reloadsurface`）を登記し、違反があれば構築時に panic する（正準表は一意
 //! ゆえ実際には発火しない・回帰檻）。
 //!
 //! # 宣言する表であって、選別する機構ではない
@@ -52,7 +53,7 @@
 //! （消費者は自らの名前と選別子で自己選別する）。両者は一致していなければならないが、
 //! 依存はしない——`ZOrderCueSink` が受理する組と、正準台帳に載る zorder の 2 行
 //! （`("set", Some("zorder"))`・`("reset", Some("zorder"))`）が同じであることは、本モジュールの
-//! テストがその組を名指しで固定する。`emo2_boot` の 8 つの受け口については、表の全行と、表に
+//! テストがその組を名指しで固定する。`emo2_boot` の 10 の受け口については、表の全行と、表に
 //! 無い組の掛け合わせを実際に配って一致を固定する（`consumer_ledger_agreement_tests.rs`・
 //! areka-P0-mcp-author-tools 要件 3.11）。
 
@@ -110,6 +111,10 @@ type LedgerKey = (String, Option<String>);
 ///   `areka_ghost` の `PropSetCueSink`。正準台帳が運搬名
 ///   [`PROP_SET_CUE_NAME`](areka_ghost::prop_sink::PROP_SET_CUE_NAME) を選別子なしで登記する
 ///   （areka-P0-mcp-author-tools 要件 3.2）。
+/// - [`ReloadSink`](CommandConsumer::ReloadSink): `\![reload,…]`・`\![reloadsurface]` を消費する
+///   [`ReloadCueSink`](super::reload_cue::ReloadCueSink)。正準台帳が `(reload, ghost|shiori|shell|
+///   balloon|descript)` の 5 組と `reloadsurface`（選別子なし）を登記する（areka-P0-mcp-reload
+///   要件 11.1）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandConsumer {
     /// 窓の位置の指令（`\![move]` と `\![execute,resetwindowpos]`）の担当消費者
@@ -191,6 +196,17 @@ pub enum CommandConsumer {
     ///
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1
     LifecycleSink,
+    /// 読み直しのタグの担当消費者（[`ReloadCueSink`](super::reload_cue::ReloadCueSink)）。`reload` は
+    /// 名前だけでは決まらず、第 1 引数が `ghost`・`shiori`・`shell`・`balloon`・`descript` の出現だけを
+    /// 担当する（`makoto` は areka-P0-makoto-reload-directives が後から足す余地・`aigraph` は担当なし・
+    /// areka-P0-mcp-reload 要件 11.2）。旧い `reloadsurface` は選別子なしで担当する。
+    ///
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cghost_5d:1
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cshiori_5d:1
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cshell_5d:1
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cballoon_5d:1
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cdescript_2c_30d1_30e9_30e1_30fc_30bf_5d:1
+    ReloadSink,
 }
 
 /// 選別子を記録本文へ書くときの見え方（「無い」側も読める形にする——片側だけの本文では
@@ -337,7 +353,8 @@ impl ConsumerLedger {
     /// `updateother` → [`CommandConsumer::UpdateSink`]・`(set, choicetimeout)` →
     /// [`CommandConsumer::ScriptCompile`]・運搬名 `areka.prop.set` →
     /// [`CommandConsumer::PropertyWrite`]・`(set, balloontimeout)` →
-    /// [`CommandConsumer::LifecycleSink`]）。
+    /// [`CommandConsumer::LifecycleSink`]・`(reload, ghost|shiori|shell|balloon|descript)` と
+    /// `reloadsurface` → [`CommandConsumer::ReloadSink`]）。
     ///
     /// zorder の 2 行は `ZOrderCueSink` が自己選別する組とちょうど同じである（表は宣言し、受け口は
     /// 自ら選別する——実行時に受け口が本表を引くわけではない）。中断の無効化の 2 行と
@@ -352,7 +369,7 @@ impl ConsumerLedger {
             .try_register("move", None, CommandConsumer::MoveSink)
             .expect("正準台帳: 'move'（選別子なし）は一意（重複・排他違反は編集ミス）");
         ledger
-            .try_register("bind", None, CommandConsumer::Seriko)
+            .try_register(areka_seriko::BIND_COMMAND, None, CommandConsumer::Seriko)
             .expect("正準台帳: 'bind'（選別子なし）は一意（重複・排他違反は編集ミス）");
         ledger
             .try_register("set", Some("zorder"), CommandConsumer::ZOrderSink)
@@ -433,6 +450,15 @@ impl ConsumerLedger {
                 CommandConsumer::LifecycleSink,
             )
             .expect("正準台帳: ('set','balloontimeout') は一意（重複・排他違反は編集ミス）");
+        // `(reload, makoto)` は areka-P0-makoto-reload-directives が後から足す（要件 11.2）。
+        for selector in ["ghost", "shiori", "shell", "balloon", "descript"] {
+            ledger
+                .try_register("reload", Some(selector), CommandConsumer::ReloadSink)
+                .expect("正準台帳: 読み直しの ('reload',…) 5 組は一意（重複・排他違反は編集ミス）");
+        }
+        ledger
+            .try_register("reloadsurface", None, CommandConsumer::ReloadSink)
+            .expect("正準台帳: 'reloadsurface'（選別子なし）は一意（重複・排他違反は編集ミス）");
         ledger
     }
 }

@@ -291,17 +291,17 @@ fn exclusion_applies_only_within_the_same_name() {
 /// 増減は本檻と本 doc の 2 か所を明示的に編集させる。
 #[test]
 fn canonical_builds_without_duplicate() {
-    // canonical() は内部 try_register（25 行）が Ok（重複なら expect が panic する）。
+    // canonical() は内部 try_register（31 行）が Ok（重複なら expect が panic する）。
     let ledger = ConsumerLedger::canonical();
     assert_eq!(
         ledger.entry_count(),
-        25,
-        "正準台帳の登記は 25 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
+        31,
+        "正準台帳の登記は 31 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
          (open,readme)／(open,file)／(open,browser)／(open,explorer)／(open,editor)／\
          (open,mailer)／運搬名 \\j／(enter,nouserbreakmode)／(leave,nouserbreakmode)／\
          (change,ghost)／(change,shell)／(change,balloon)／(execute,install)／(execute,resetwindowpos)／\
          updatebymyself／update／updateother／(set,choicetimeout)／\
-         areka.prop.set／(set,balloontimeout)）——増減させたら本檻と doc の 2 か所を編集すること"
+         areka.prop.set／(set,balloontimeout)／(reload,ghost)／(reload,shiori)／(reload,shell)／\n         (reload,balloon)／(reload,descript)／reloadsurface）——増減させたら本檻と doc の 2 か所を編集すること"
     );
     // 待ち時間の指定は受け口 LifecycleSink に結び付く（areka-P0-balloon-lifecycle-events 要件 9.10）。
     assert_eq!(
@@ -325,7 +325,7 @@ fn canonical_builds_without_duplicate() {
         Some(CommandConsumer::ZOrderSink)
     );
 
-    // 25 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
+    // 31 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
     // 検出される。
     let mut ext = ledger.clone();
     let err = ext
@@ -337,7 +337,7 @@ fn canonical_builds_without_duplicate() {
             name: "bind".to_string(),
             selector: None,
         },
-        "25 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
+        "31 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
     );
     // 既登記の担当は据え置き（上書きしない）。
     assert_eq!(ext.consumer_of("bind", None), Some(CommandConsumer::Seriko));
@@ -510,5 +510,45 @@ fn canonical_registers_the_three_update_names_for_the_update_sink() {
         ledger.consumer_of("updatex", None),
         None,
         "似た名前は担当なし"
+    );
+}
+
+/// areka-P0-mcp-reload 要件 11.1・11.2: 正準台帳は `reload` を第 1 引数で 5 組
+/// （`ghost`・`shiori`・`shell`・`balloon`・`descript`）に分け、旧い `reloadsurface` を選別子なしで、
+/// どれも読み直しの受け口の担当として登記する。`makoto`・`aigraph`・裸の `reload`・大小違いは
+/// 担当なしで、`(reload, makoto)` は後から別の担当として足せる（本 spec の登記が塞がない）。
+#[test]
+fn canonical_registers_reload_rows_and_leaves_makoto_open() {
+    let ledger = ConsumerLedger::canonical();
+    for selector in ["ghost", "shiori", "shell", "balloon", "descript"] {
+        assert_eq!(
+            ledger.consumer_of("reload", Some(selector)),
+            Some(CommandConsumer::ReloadSink),
+            "(reload,{selector}) は読み直しの受け口"
+        );
+    }
+    assert_eq!(
+        ledger.consumer_of("reloadsurface", None),
+        Some(CommandConsumer::ReloadSink),
+        "reloadsurface は選別子なしで読み直しの受け口"
+    );
+    for selector in [Some("makoto"), Some("aigraph"), Some("Ghost"), None] {
+        assert_eq!(
+            ledger.consumer_of("reload", selector),
+            None,
+            "(reload,{selector:?}) は担当なし"
+        );
+    }
+    let mut ext = ledger.clone();
+    ext.try_register("reload", Some("makoto"), CommandConsumer::Seriko)
+        .expect("(reload,makoto) は後から足せる（要件 11.2）");
+}
+
+/// areka-P0-mcp-reload 要件 13.5: `bind` の行の名前は拾う側（seriko）と共有する定数そのもの。
+#[test]
+fn canonical_bind_row_uses_the_seriko_constant() {
+    assert_eq!(
+        ConsumerLedger::canonical().consumer_of(areka_seriko::BIND_COMMAND, None),
+        Some(CommandConsumer::Seriko)
     );
 }
