@@ -148,7 +148,7 @@
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 8.4, 8.5, 8.6_
   - _Depends: 5.1_
 
-- [ ] 5.3 (P) 互換の記録と網羅台帳の行を書き替える
+- [x] 5.3 (P) 互換の記録と網羅台帳の行を書き替える
   - `doc/COMPAT_ARCHITECTURE.md` §8 の「隣接と矛盾するときの優先順位」の行を「書かれた順を採る（逆転・非隣接とも）」へ、根拠（正典の「厳密に制御される」・プロパティの例 `s0,b0,s1;s2,b2`）と出典 spec を伴って書き替える
   - 覆した完了 spec の要件の番号を記録する（`areka-P0-scope-zorder-pinning` の 2.4・6.3・12.2、`areka-P0-ghost-window-zorder` の 1.1・1.2・1.3・1.4・2.6 の読み替え）
   - 「片方だけ名指し」の行の根拠を、補った窓の置き場が見える結果を変えうる形に合わせて書き直す
@@ -189,3 +189,4 @@
 - 4.3: 対応表の分岐名は要件 8.2 の逐語（バッククォート込み）でないと差し戻しになる。3.4 の残り（去る窓・組の外しの源ごとの檻）は `a_failed_departing_detach_alone_checks_the_attach`・`a_diverged_pair_release_alone_checks_the_attach` で解消
 - 4.4（10-19）: `cargo fmt --all -- --check` 0・`cargo test -p wintf` 0・`cargo test -p areka` は本体 3169 本＋統合 9 本が緑。1 回目に t_zic2 が赤だったのは、レビュー係が変異を控えから戻したとき更新時刻が古く、cargo が変異入りの古いビルドを使ったため（触って回し直して緑）。本番ファイルは最大 930 行（`zorder_chain_apply.rs`）・完了アーカイブの下の変更 0
 - 5.1: 較正の実走ログは別ワークツリー（`areka-p0-anchor-tag-canon-da1fe5	argettb-signoffun-Box.log`・md5 `484B262D…`）の写しで、この機械の `target\` にしか無い。5.2 の後で `defaultun.log` を spec フォルダへ控えて較正の既定にし、手順書 §6.1 の出典の書き方を直す
+- 5.3: COMPAT §8 の重なり順の行は `path.rs:NNN（名前）` で引くので、本 spec のコードが動くと行番号がずれる（1 回差し戻し）。着地の前（完了の段）に 204〜218 行の参照をもう一度当て直す
