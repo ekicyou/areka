@@ -65,7 +65,7 @@
 ### 並走の申し合わせ（ウェーブ C9）
 
 - `crates/areka-mcp/**`・`areka-ghost/src/runtime.rs`・`config.rs`・`emo2_boot/ghost_switch.rs`・実走の 3 本は**触らない**。
-- `crates/areka/src/ghost_session.rs` は**触る**（約 6 行: `GhostBootInputs` に `modules` の欄・`production` に引数 `modules`・倒れ先の `ghost_boot_options` へ `modules` を渡す）。④ `mcp-reload` も「本物の SHIORI の読み直し」を選ぶと同じファイルに触る見込みなので、タスクの生成の前に areka棚卸 へ知らせ、④ と「どちらが先に入れ、後の方が取り込みでつなぎ直すか」を申し合わせる（2026-10-18 設計の討議で決定）。
+- `crates/areka/src/ghost_session.rs` は**触る**（約 6 行: `GhostBootInputs` に `modules` の欄・`production` に引数 `modules`・倒れ先の `ghost_boot_options` へ `modules` を渡す）。④ `mcp-reload` も「本物の SHIORI の読み直し」を選ぶと同じファイルに触る見込みなので、タスクの生成の前に areka棚卸 へ知らせ、④ と「どちらが先に入れ、後の方が取り込みでつなぎ直すか」を申し合わせる（2026-10-18 設計の討議で決定）。**申し合わせ済み（2026-10-18 areka棚卸 経由）**: 先にマージした方が先・後の方が main の取り込みでつなぎ直す。追加の取り決めは無い。④ が `ghost_session.rs`・`ghost_switch_test_support.rs` に触る予定は ④ から直接届く。
 - ④ `mcp-reload` へ: `\![reload,shiori]`・MCP の `reload` で SHIORI を読み直すときは、起動の入力の `modules`（`GhostBootInputs.modules`）か作り口（`GhostBootInputsSource`）を通して SHIORI の結線を決めること（`dontloadmodule` の起動では中身なしの SHIORI を読み直す＝要件 7.6 と同じ考え）。
 - `emo2_boot/ghost_switch.rs` は ④ が先に割る。`resolve_switch_target` の場所が変わったら、取り込みで `use` の 1 行をつなぎ直す。
 
