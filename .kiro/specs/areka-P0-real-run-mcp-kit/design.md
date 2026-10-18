@@ -442,6 +442,8 @@ pub struct Limits {
 pub struct Run { /* 私有 */ }
 
 /// 子が待ちの途中で終わった（3.5・4.8）。締切切れ（panic）と見分けられる値。
+/// 定めるのは output.rs（下の段の close・mcp も使うため）。run とクレートの入口が再輸出する。
+/// close・mcp は Limits を受けず、各欄を引数で受ける（Run が渡す）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChildExited { pub status: ExitStatus }
 
