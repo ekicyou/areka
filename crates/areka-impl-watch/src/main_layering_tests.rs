@@ -1,14 +1,14 @@
 //! 構造テスト: 層の向きと、端末へ出る文の ASCII を、本番ファイルの綴りで見張る。
 //!
-//! - 判断の中核（`plan.rs`）の本文が、ファイル・時計・プロセス・ログを読み込む綴りを持たない
-//!   （設計「依存の向き」。走査は `plan.rs` だけ。兄弟の `plan_*_tests.rs`・`plan_test_support.rs`
-//!   はテストで、時刻や偽の口を使ってよい）。
+//! - 判断の中核（`plan.rs` と子の `plan_turns.rs`）の本文が、ファイル・時計・プロセス・ログを
+//!   読み込む綴りを持たない（設計「依存の向き」。走査はこの 2 本だけ。兄弟の `plan_*_tests.rs`・
+//!   `plan_test_support.rs` はテストで、時刻や偽の口を使ってよい）。
 //! - 端末へ出る文を持つファイルの文字列・文字のリテラルが ASCII だけ（要件 9.2）。対象は本番
-//!   ファイルの全部から、リテラルの無い起動ファイル `main.rs` を除いた 10 本: 入口 `cli.rs`・引数の
+//!   ファイルの全部から、リテラルの無い起動ファイル `main.rs` を除いた 11 本: 入口 `cli.rs`・引数の
 //!   表と `--help` の本文 `cli_args.rs`・表示
 //!   `status.rs`・待ちの終わりの 1 行を作る `wait.rs`・失敗の本文を持つ `error.rs`・状態ファイルの
 //!   口 `store.rs`・置き場所 `home.rs`・居る印のファイル `presence.rs`・判断の中核 `plan.rs`
-//!   （「当てはまらなかった」の文）・状態 `state.rs`（列挙の綴り）。どれも、リテラルがそのまま
+//!   （「当てはまらなかった」の文）・番の決め直し `plan_turns.rs`・状態 `state.rs`（列挙の綴り）。どれも、リテラルがそのまま
 //!   端末へ出うる。兄弟のテストファイルは日本語の値（名前・内容）をわざと入れるので対象に入れない。
 //!
 //! 走査は [`split`] の 1 本: 本文を 1 字ずつ読んで、コメントを捨て、文字列・文字のリテラルを
@@ -128,15 +128,21 @@ fn literals(source: &str) -> Vec<String> {
 
 // ---- 主張 ----
 
-/// 判断の中核は、ファイル・時計・プロセス・ログを読み込まない。
+/// 判断の中核（`plan.rs` と子の `plan_turns.rs`）は、ファイル・時計・プロセス・ログを読み込まない。
 #[test]
 fn the_judgement_core_spells_no_file_clock_process_or_log() {
-    let found = impure_spellings(include_str!("plan.rs"));
-    assert!(
-        found.is_empty(),
-        "plan.rs spells {found:?} (import from `std` one item per line: `std::{{...}}` and \
-         `std::*` are forbidden because they hide what was imported)"
-    );
+    let sources = [
+        ("plan.rs", include_str!("plan.rs")),
+        ("plan_turns.rs", include_str!("plan_turns.rs")),
+    ];
+    for (file, source) in sources {
+        let found = impure_spellings(source);
+        assert!(
+            found.is_empty(),
+            "{file} spells {found:?} (import from `std` one item per line: `std::{{...}}` and \
+             `std::*` are forbidden because they hide what was imported)"
+        );
+    }
 }
 
 /// 端末へ出る文を持つファイルの文字列・文字のリテラルは ASCII だけ。
@@ -152,6 +158,7 @@ fn files_that_write_to_the_terminal_have_ascii_only_literals() {
         ("home.rs", include_str!("home.rs")),
         ("presence.rs", include_str!("presence.rs")),
         ("plan.rs", include_str!("plan.rs")),
+        ("plan_turns.rs", include_str!("plan_turns.rs")),
         ("state.rs", include_str!("state.rs")),
     ];
     for (file, source) in sources {
