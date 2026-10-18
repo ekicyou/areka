@@ -35,7 +35,7 @@
 - 受け口の決定論テストのうち、形の違う `params` の答えを 5 つの版で固定する部分（`server_protocol_tests.rs` への追記と、新しい兄弟 `handler_tests.rs`）。
 - 中継の比較テスト `crates/areka-mcp-bridge/tests/real_receiver_test.rs` の `id` が 8 の行の期待と、その行の上の説明。
 - 差の記録 `doc/ssp-mcp/bridge-diff-areka.md` の「形の違う `params` の `tools/call`」の行の areka の欄。
-- 件 2 の確かめの台本と記録（`.kiro/specs/areka-P0-mcp-receiver-bugs/verification/` の下）。
+- 件 2 の確かめの台本と記録（`.kiro/specs/completed/areka-P0-mcp-receiver-bugs/verification/` の下）。
 - 件 2 が再現したときに限り、`dump_balloon`（と、原因を分け合うなら `dump_surface`）の待ちの直しと、その決定論テスト 1 本。
 
 ### Out of Boundary
@@ -115,7 +115,7 @@ crates/areka-mcp-bridge/tests/
 └── real_receiver_test.rs      # 変更: id が 8 の行の期待を -32602 に・その上の説明を新しい答えに
 doc/ssp-mcp/
 └── bridge-diff-areka.md       # 変更: 「形の違う params の tools/call」の行の areka の欄
-.kiro/specs/areka-P0-mcp-receiver-bugs/verification/
+.kiro/specs/completed/areka-P0-mcp-receiver-bugs/verification/
 ├── debug-dump-balloon.ps1     # 新規: 件 2 と要件 2.7 の確かめの台本（areka のコードでもテストでもない）
 └── debug-dump-balloon.md      # 新規: 確かめの条件と各回の結果の記録
 ```
