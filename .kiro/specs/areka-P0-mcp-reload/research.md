@@ -239,3 +239,12 @@
 - **設計の判断（design.md「持ち越し項目への答え」の表が正本）**: A1＋A3 相当・B1（`BootOrigin::Reloaded { scope }`・`first_boot` 無視・epilogue は既存の腕）・C1・D1・E は不要・`ghost_switch.rs` は先に削る・まとめの失敗の記録は窓口・壊れた辞書の観測は実機で・roadmap の行は完了の片付け。
 - **要件 13.1 の補正（設計ディスカッションへ）**: `schedule/events.rs`（`OnDestroy` の許可 1 行）・`install/desk.rs`（`is_busy`）・`readme.rs`（`set_path`）・`areka-seriko/src/lib.rs`（定数の再輸出 1 行）。並走 spec の持ち物に触る箇所は 0。
 - **設計レビューの門**: 要件 ID 1.1〜13.5 の全部が設計の追跡表に載ることを機械で確かめた（欠けは 13.2 の 1 件で、行を分けて補った）。境界の 4 節・File Structure Plan・部品と ファイルの対応は埋まっている。真の要件の穴は見つからなかった（窓のタイトルの扱いと 13.1 の補正は設計ディスカッションの議題）。
+
+## 12. 設計ディスカッションの決定（2026-10-18）
+
+- **検証（design-validation.md・GO）の 3 点**: 1 と 3 は自明な直しとして design.md に入れた（shiori の分かれ目を `take_down` の手前へ・印の述語は窓口自身の予約の鍵と照合）。2 は議題 2。
+- **議題 1（承認）**: 要件 13.1 に `schedule/events.rs`・`install/desk.rs`・`readme.rs`・`areka-seriko/src/lib.rs`・新 `ghost_session_runtime.rs` を足した。避ける形はどれも禁止ファイル（`msg.rs`）か要件違反（2.1・7.3）か公開面の決まり（structure.md）に当たる。
+- **議題 2（承認）**: `events.rs` は `mcp-kanade-tools` と重なる。本 spec が `"OnDestroy"` を `"OnClose"` の直後に足し、許可表のテストは名前から件数の語を外す。順番は先にマージした方が先。開発者の指示で `mcp-kanade-tools` のセッションと直接申し合わせる（design.md「ウェーブの申し合わせ」）。
+- **議題 3（承認）**: 窓のタイトルは descript の読み直しで替える値の一覧から外し、起票もしない（wintf に動作中の書き戻しの口が無く、画面にも出ず、areka も読まない）。
+- **`startup-options-core` との申し合わせ**: `ghost_session.rs` の触る所は重ならない（areka棚卸 経由で了解）。
+- **`mcp-kanade-tools` との申し合わせ（直接・了解済み）**: 向こうは `events.rs` に `sstp_notify`・`on_translate_sstp`・`REF1_SSTP_SEND_OWNED` を `on_translate` の近くに足すだけで、`ALLOWED_EVENT_IDS`・冒頭の表・`on_initialize`・`events_tests.rs` には触らない（迂回は新しい出所 `EventId::Sstp` で作り、表に語を足さない・テストは `schedule/sstp_tests.rs`）。許可表のテストの改名は本 spec が行う。順番は先にマージした方が先。

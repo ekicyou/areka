@@ -57,7 +57,7 @@
 
 ### 要件 13.1 の一覧の補正（設計で照合した結果・ウェーブの調整の種）
 
-本質の形で設計すると、要件 13.1 の一覧に無い次の 4 ファイルに**小さな口**が要る。どれも**ほかの並走 spec の持ち物ではない**（要件 13.3 の禁止には触れない）が、13.1 の「ほかを触る要が出たら止めて報告する」に当たるので、設計ディスカッションで一覧へ足す承認を得る。
+本質の形で設計すると、要件 13.1 の元の一覧に無い次の 4 ファイルに**小さな口**が要る。どれも要件 13.3 の禁止には触れない。設計ディスカッション（議題 1）で一覧へ足すことが承認され、requirements.md 13.1 を改訂した（`ghost_session_runtime.rs` も同じく足した）。
 
 | ファイル | 足すもの | 大きさ | 要る要件 | 避ける形とその代償 |
 |---|---|---|---|---|
@@ -66,7 +66,17 @@
 | `crates/areka/src/readme.rs` | `pub(crate) fn set_path(world, PathBuf)`（`ReadmeWiring.path` の差し替え） | 約 8 行 | 7.3（`readme` は動作中に使い続ける値） | 受信端を抱えた `ReadmeWiring` を作り直すには受信端が要り、送出端は走っている dispatcher の中＝作り直せない |
 | `crates/areka-seriko/src/lib.rs` | `pub use actor::BIND_COMMAND;`（13.5 の定数の再輸出） | 1 行 | 13.5 | seriko の公開面は `lib.rs` の `pub use` だけ（structure.md）。`actor` は私有 mod |
 
-ほかの並走 spec（`mcp-kanade-tools`・`mcp-receiver-bugs`）の持ち物に触る箇所は **0**。`mcp-kanade-tools` が `crates/areka-ghost/src/runtime.rs` に 1 行足す予定とは、本 spec の `set_names`（`set_shell_dir` の隣に置く 1 メソッド）が別の場所なので衝突しない見込み（マージ時に照合）。
+並走 spec と重なるのは **`schedule/events.rs` の 1 か所だけ**（`mcp-kanade-tools` の触るファイルに「許可表を迂回する印」として載っている・設計ディスカッション議題 2）。本 spec が足すのは `ALLOWED_EVENT_IDS` の `"OnDestroy"` 1 語で、置き場は `"OnClose"` の直後（末尾でない）。`events_tests.rs` の `allowed_event_ids_are_exactly_the_fifty_four_and_exclude_ontalk_onhour` は配列に 1 語足し、名前から件数の語を外す（`…_exactly_the_listed_set_…`）＝語を足すたびに名前と配列の両方が競合する形をやめる。冒頭の表の `OnInitialize` の行と `on_initialize` の doc コメントの「M1 にリロード概念なし」を直す（関数の中身は変えない）。順番は「先にマージした方が先・後の方が main の取り込みでつなぎ直す」。`mcp-kanade-tools` との申し合わせは下の「ウェーブの申し合わせ」に記す。`mcp-receiver-bugs` の持ち物に触る箇所は 0。`mcp-kanade-tools` が `crates/areka-ghost/src/runtime.rs` に 1 行足す予定とは、本 spec の `set_names`（`set_shell_dir` の隣に置く 1 メソッド）が別の場所なので衝突しない見込み（マージ時に照合）。
+
+### ウェーブの申し合わせ（設計ディスカッションで決めたこと）
+
+| 相手 | 重なるファイル | 本 spec が触る所 | 相手が触る所 | 順番 |
+|---|---|---|---|---|
+| `startup-options-core` | `crates/areka/src/ghost_session.rs` | `GhostSession` の定義（欄 1 つ）・`impl`（4 メソッド）・`shutdown_impl` ①・`boot_wired` の boot 後の塊（`ghost_session_runtime.rs` へ純移動）・`register_systems` 1 行 | `GhostBootInputs`（欄 `modules`）・`production`・`boot_ghost`・`boot_ghost_strict` | 先にマージした方が先（棚卸 経由で両者了解・10-18） |
+| `startup-options-core` | `emo2_boot/ghost_switch_test_support.rs` | 触らない見込み（触るなら末尾に新しいメソッドを足すだけ） | `GhostBootInputs` の組み立てに `modules` を足す | 同上 |
+| `mcp-kanade-tools` | `crates/areka-kanade/src/schedule/events.rs`・`events_tests.rs` | `ALLOWED_EVENT_IDS` に `"OnDestroy"`（`"OnClose"` の直後）・許可表のテストの配列 1 語と改名（改名は本 spec が行う）・冒頭の表と doc コメントの注釈 | 新しい関数 `sstp_notify`・`on_translate_sstp`・定数 `REF1_SSTP_SEND_OWNED` を `on_translate` の近くに足すだけ（`ALLOWED_EVENT_IDS`・冒頭の表・`on_initialize`・`events_tests.rs` には触らない・テストは新しい兄弟 `schedule/sstp_tests.rs`）＝同じファイルの別の場所 | 先にマージした方が先（`mcp-kanade-tools` と直接了解・10-18） |
+
+shiori の読み直しは SHIORI の結線を作り口 `GhostBootInputsSource` から得る＝`startup-options-core` の `dontloadmodule` は読み直しでも効く。
 
 ### Revalidation Triggers
 
@@ -608,7 +618,7 @@ pub enum ReloadScope { Ghost, Shiori }
 | シェルの `seriko.dpi`・`seriko.use_self_alpha`・surfaces | 資産 | シェルの組み直し | Shell |
 | バルーンの文字の模型・色・`dpi`・`windowposition.*`・`wordwrappoint.*`・`use_self_alpha` ほか | `BalloonModel`・背景色・資産 | バルーンの差し替えの後始末（`finish_balloon`） | Balloon |
 
-**一覧に入れない値（起動のときにだけ読む＝次の起動で読み直される）**: `KanadeConfig.shell_name`（`OnBoot` の Ref0 だけ・要件ディスカッションで確定）、`homeurl`・`default.balloon.path`・`balloon`（使うときに読む）、**窓のタイトル**（`sakura.name`／`kero.name`／`char{n}.name`・`GhostTitles`）。窓のタイトルは `spawn_ghost_windows` が窓を作るときに 1 度だけ `Window.title` へ渡し、wintf は作るときに 1 度 `SetWindowTextW` するだけで、動作中に書き直す口が無い（areka にも wintf にも）。ゴーストの窓は枠の無い透過窓でタイトルは画面に出ず、areka が動作中にこの値を**読む**場所も無い。ghost の読み直しと切替では窓ごと作り直すので替わる。`descript` の読み直しで替えるには wintf に「`Window.title` の変化を書き戻す系」を足す必要があり、本 spec の範囲（`crates/areka`・kanade・ghost・seriko）の外になるので一覧から外し、要るなら完了のときに `/kiro-discovery` で起票する（設計ディスカッションの議題として明示）。
+**一覧に入れない値（起動のときにだけ読む＝次の起動で読み直される）**: `KanadeConfig.shell_name`（`OnBoot` の Ref0 だけ・要件ディスカッションで確定）、`homeurl`・`default.balloon.path`・`balloon`（使うときに読む）、**窓のタイトル**（`sakura.name`／`kero.name`／`char{n}.name`・`GhostTitles`）。窓のタイトルは `spawn_ghost_windows` が窓を作るときに 1 度だけ `Window.title` へ渡し、wintf は作るときに 1 度 `SetWindowTextW` するだけで、動作中に書き直す口が無い（areka にも wintf にも）。ゴーストの窓は枠の無い透過窓でタイトルは画面に出ず、areka が動作中にこの値を**読む**場所も無い。ghost の読み直しと切替では窓ごと作り直すので替わる。`descript` の読み直しで替えるには wintf に「`Window.title` の変化を書き戻す系」を足す必要があり、本 spec の範囲（`crates/areka`・kanade・ghost・seriko）の外になるので一覧から外す。利用者にも AI にも見えない値なので起票もしない（設計ディスカッション議題 3 で確定。タイトルが見える場面が実機で見つかったら、そのとき起票する）。
 
 ### State Management（ReloadInFlight）
 
@@ -695,10 +705,10 @@ emo2（または複製したぱすたさん）を argv で起こし、⑴ 辞書
 | 1 | 「知らせなし」の持ち方（A1／A2・A3） | **A1**（別の印 `ReloadInFlight`・`SwitchInFlight` の形は変えない）＋**A3 相当**（目録を引かず今のゴーストから `SwitchTarget` を組む `accept_switch`）。寿命は `end_switch` の 1 口で予約に合わせる | GhostSwitch の口・Data Models |
 | 2 | kanade の変種と `first_boot` の順・初回起動の記録の epilogue | `BootOrigin::Reloaded { scope }`。`on_prefetch_reply` で `boot_root` より前に見る＝`first_boot` を無視して `OnFirstBoot` も送らない。epilogue は `to_baseware_version` の既存の腕に任せる（台詞は出ず記録だけ） | KanadeBootOrigin |
 | 3 | シェル／バルーンの分かれ目（C1／C2） | **C1**（印を `finish_*` が読む・`SkinSwitchInFlight` の形は変えない＝兄弟のテストの構築点に触らない） | SkinSwitch の口 |
-| 4 | descript の作り方（D1／D2）・`descript,shell` が画像まで読み直してよいか・窓のタイトル・`readme` | **D1**（シェル・バルーンの読み直しに乗せる＋名前・静的プロパティ・`readme` の差し替え）。`descript,shell` は画像も読み直す（要件より広いが漏れが出ない）。`readme` は `readme::set_path`。窓のタイトルは一覧から外す（理由は表の下） | 替える値の表 |
+| 4 | descript の作り方（D1／D2）・`descript,shell` が画像まで読み直してよいか・窓のタイトル・`readme` | **D1**（シェル・バルーンの読み直しに乗せる＋名前・静的プロパティ・`readme` の差し替え）。`descript,shell` は画像も読み直す（要件より広いが漏れが出ない）。`readme` は `readme::set_path`。窓のタイトルは一覧から外し起票もしない（議題 3・理由は表の下） | 替える値の表 |
 | 5 | MCP の終わりの知らせ方（E1／E2）・中止／既定へ戻ったときの答え | 裁定 6 で不要（すぐ答える）。終わりは記録（`reload_done`／`reload_failed(reason)`）。既定へ戻ったときは `fell_back_to_default` の失敗 | McpReload・Error Handling |
 | 6 | `ghost_switch.rs` を先に削るか | 削る: 特別な名前の解決（約 100 行）を `special_name.rs` へ純移動（最初のタスク群） | File Structure Plan |
 | 7 | まとめの失敗の記録（`TARGET_ERROR`＋`ghost`） | 窓口が終わりの出口で 1 件（既存の `[SYSTEM]` の記録は変えない） | Error Handling |
 | 8 | 壊れた辞書を areka が観測できるか | 実装の段の実機で確かめ、観測できなければ `verification/` に記す（設計では決めない） | Testing Strategy |
 | 9 | roadmap の C9 ④ の行の触るファイル | 完了の片付け（`update/desk.rs`・`areka-tools.md` は触らない形で確定） | — |
-| 10 | 要件 13.1 の一覧との照合 | 4 ファイルの小さな口が要る（補正の表）。並走 spec の持ち物は 0 | Boundary Commitments |
+| 10 | 要件 13.1 の一覧との照合 | 4 ファイルの小さな口＋`ghost_session_runtime.rs`（13.1 を改訂・議題 1）。並走 spec と重なるのは `events.rs` の 1 か所（議題 2・申し合わせ済み） | Boundary Commitments |
