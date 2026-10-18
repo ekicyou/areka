@@ -124,7 +124,7 @@ doc/ssp-mcp/
 
 - `crates/areka-mcp/src/handler.rs` — `on_custom_request` の上書き・`custom_request_error`・表 `PARAMS_REQUIRED` を足す。頭の説明に「`params` の形が合わない 3 つのメソッドは `-32602`、ほかの型のない要求は rmcp の既定と同じ `-32601`」を 1 文足す。末尾に `#[cfg(test)] #[path = "handler_tests.rs"] mod handler_tests;`。144 行から 190 行ほど。
 - `crates/areka-mcp/src/server_protocol_tests.rs` — 版ごとの話し方で要求を組む小さな部品 1 つと、テスト 2 本を足す（446 行から 560 行ほど。1,000 行の目安の内）。今の `LEGACY_VERSIONS`・`SUPPORTED_VERSIONS`・`stateless_meta` を使い回す。
-- `crates/areka-mcp-bridge/tests/real_receiver_test.rs` — 196〜197 行目の説明と 208 行目の `"is": -32601` だけ。ほかの行の期待は変えない（2.6）。
+- `crates/areka-mcp-bridge/tests/real_receiver_test.rs` — 195〜196 行目の説明と 208 行目の `"is": -32601` だけ。ほかの行の期待は変えない（2.6）。
 - `doc/ssp-mcp/bridge-diff-areka.md` — 93 行目の areka の欄。
 - 完了の段で `/kiro-complete` が文書を揃えるとき: `.kiro/steering/structure.md` 357 行目の `handler.rs` の説明に「形の合わない `params` を `-32602` に」を 1 句足す（本 spec の実装のタスクでは触らない）。
 
@@ -312,7 +312,7 @@ impl ServerHandler for ArekaHandler {
 
 #### BridgeCompare（`real_receiver_test.rs`）
 
-- `id` が 8 の行を `{"id": 8, "method": "tools/call", "params": {"name": 7}, "at": "/error/code", "is": -32602}` に替える。説明（196〜197 行目）は「形の違う `params`（`name` が文字列でない）の `tools/call` は、受け口が `-32602` で答える。中継も型のない要求として届けるので、同じ答えになる」に替える。
+- `id` が 8 の行を `{"id": 8, "method": "tools/call", "params": {"name": 7}, "at": "/error/code", "is": -32602}` に替える。説明（195〜196 行目）は「形の違う `params`（`name` が文字列でない）の `tools/call` は、受け口が `-32602` で答える。中継も型のない要求として届けるので、同じ答えになる」に替える。
 - 比べ方（直接の答えと中継ごしの答えの全体が等しいこと・5 つの版）はそのまま。中継のコードは変えない（2.2）。`2026-07-28` の 400 の本文も、`id` が 7 の行（未登録の名前・400）と同じ道で中継が返すことを今のテストが示している。
 
 #### DiffRecord（`bridge-diff-areka.md` 93 行目）
@@ -359,7 +359,7 @@ impl ServerHandler for ArekaHandler {
 
 #### RunRecord（`verification/debug-dump-balloon.md`）
 
-- 書くこと（3.2）: areka の版（`Cargo.toml` の版）と元のコミット（`git rev-parse HEAD`）・debug 版であること・ゴーストとバルーン・呼び方（中継ごし・`scope` 0・`2025-06-18`）・2 つの上限の値（受け口 10 秒・中継 30 秒・台本の読み 40 秒）・2.7 の答え・各回の分類と所要時間（待ちの回も含める）・結論。
+- 書くこと（3.2）: areka の版（`Cargo.toml` の版）と元のコミット（`git rev-parse HEAD`）・main との分かれ目（`git merge-base HEAD origin/main`）と、その間の差が件 1 の直し（`crates/areka-mcp/**`・テスト・文書）だけで `crates/areka/src/mcp/` に触れていないことを示す `git diff --stat <分かれ目> HEAD`（要件 3.1 の「今の main から作った」を辿れるようにする）・debug 版であること・ゴーストとバルーン・呼び方（中継ごし・`scope` 0・`2025-06-18`）・2 つの上限の値（受け口 10 秒・中継 30 秒・台本の読み 40 秒）・2.7 の答え・各回の分類と所要時間（待ちの回も含める）・結論。
 - 結論の書き方: 10 回（各ゴースト 5 回）がどれも ⑴ か ⑵ なら「件 2 は再現しない」と書いて閉じる（3.3）。そうでなければ 3.4 へ進み、直した後の 10 回をこの記録に足す（3.5）。
 
 ### 再現したときの直し
