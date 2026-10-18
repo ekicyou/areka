@@ -96,7 +96,7 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 
 #### Acceptance Criteria
 
-1. If 読み直しを頼まれたとき、ゴーストの切替・シェルかバルーンの切替・別の読み直し・ネットワーク更新のどれかが進行中である, the areka shall 新しい読み直しを重ねずに断り、理由を添えた `warn!` を 1 件残す。
+1. If 読み直しを頼まれたとき、ゴーストの切替・シェルかバルーンの切替・別の読み直し・ネットワーク更新・インストールのどれかが進行中である, the areka shall 新しい読み直しを重ねずに断り、理由を添えた `warn!` を 1 件残す。
 2. If 読み直しを頼まれたとき、areka が終了の途中である, the areka shall 読み直しを始めない（MCP の返事は既存の「終了の途中」の答えに任せる）。
 3. When 断った読み直しが MCP から来たものである, the areka shall 本文 `NG:Cannot reload now (another switch, reload or update is in progress)`（`isError: true`）で答える。
 4. While ゴーストが台詞を再生している, when ghost または shiori の読み直しを頼まれた, the areka shall 既存のゴースト切替と同じく、そのトークが終わってから読み直しを始める。
@@ -108,7 +108,7 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 
 #### Acceptance Criteria
 
-1. When ghost の読み直しを始めた, the areka shall 今のゴーストを同じフォルダのゴーストとして降ろして起こし直し、ゴーストのフォルダの辞書・descript.txt・シェル・バルーンをディスクから読み直す（自分自身へのゴースト切替と同じ道を通る）。
+1. When ghost の読み直しを始めた, the areka shall 今のゴーストを同じフォルダのゴーストとして降ろして起こし直し、ゴーストのフォルダの辞書・descript.txt・シェル・バルーンをディスクから読み直す（自分自身へのゴースト切替と同じ道を通る）。起動の引数で直に指したゴースト（ゴーストの一覧に載らないもの）も、今のゴーストのフォルダをそのまま指して読み直す。
 2. The areka shall ghost の読み直しで、降ろす側に `OnGhostChanging`・`OnClose` を送らない。
 3. The areka shall ghost の読み直しで、起こす側に `OnBoot`・`OnGhostChanged`・`OnFirstBoot` などの起動の知らせ（台詞を求める GET）を 1 つも送らない。
 4. The areka shall ghost の読み直しで起こし直した SHIORI へ、ふつうの起動と同じ情報の通知（`OnInitialize`・`basewareversion` など環境を伝える NOTIFY と、`username` などのリソースの問い合わせ）を送る。
@@ -137,7 +137,7 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 
 1. When shell の読み直しを始めた, the areka shall 今のシェルと同じフォルダのシェルを、ディスクから読み直して差し替える（画像・surfaces.txt・シェルの descript.txt を含む）。
 2. The areka shall shell の読み直しで、SHIORI を読み直さず、ゴーストの記憶と会話の状態を保つ。
-3. The areka shall shell の読み直しで、`OnShellChanging`・`OnShellChanged` を送らない。
+3. The areka shall shell の読み直しで、`OnShellChanging`・`OnShellChanged` を送らず、前回のシェルの記憶（`LastShell`）を書き換えない。
 4. If shell の読み直しで、新しいシェルを組めなかった, the areka shall 今のシェルを表示したまま保ち、組めなかった理由を `error!` で残す。
 
 ### Requirement 6: バルーンの読み直し（`balloon`）
@@ -146,9 +146,9 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 
 #### Acceptance Criteria
 
-1. When balloon の読み直しを始めた, the areka shall 今のバルーンと同じフォルダのバルーンをディスクから読み直して差し替え、バルーンを選び直さない。
+1. When balloon の読み直しを始めた, the areka shall 今のバルーンと同じフォルダのバルーンをディスクから読み直して差し替え、バルーンを選び直さない。今のバルーンがバルーンの一覧の外（起動の引数・ゴーストの descript の指定・同梱のもの）でも、今のバルーンのフォルダをそのまま指して読み直す。
 2. The areka shall balloon の読み直しで、SHIORI を読み直さず、ゴーストの記憶と会話の状態を保つ。
-3. The areka shall balloon の読み直しで、`OnBalloonChange` を送らない。
+3. The areka shall balloon の読み直しで、`OnBalloonChange` を送らず、前回のバルーンの記憶（`LastBalloon`）とバルーンの決め方（どこから選んだか）を書き換えない。
 4. If balloon の読み直しで、新しいバルーンを組めなかった, the areka shall 今のバルーンを表示したまま保ち、組めなかった理由を `error!` で残す。
 
 ### Requirement 7: descript の読み直し（`descript`）
@@ -159,7 +159,7 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 
 1. When `\![reload,descript]` または MCP の `target: "descript"` で読み直しを始めた, the areka shall 今のゴースト・今のシェル・今のバルーンの descript.txt をすべて読み直す。
 2. When `\![reload,descript,パラメータ]` で読み直しを始めた, the areka shall パラメータを半角スペースで区切った語のうち `ghost`・`shell`・`balloon` に当たるものの descript.txt だけを読み直す（同じ語が重なっても 1 度だけ）。
-3. The areka shall descript の読み直しの後、areka が動作中に使う descript.txt の値（ゴーストの名前など・シェルとバルーンの配置の値など）を、読み直したファイルの値に替え、SHIORI を読み直さず、SHIORI イベントを送らない（動作中に使う値の一覧は設計で洗い出し、一覧の値は 1 つ残らず替える）。
+3. The areka shall descript の読み直しの後、areka が動作中に使う descript.txt の値（ゴーストの名前など・シェルとバルーンの配置の値など）を、読み直したファイルの値に替え、SHIORI を読み直さず、SHIORI イベントを送らない（動作中に使い続ける値の一覧は設計で洗い出し、一覧の値は 1 つ残らず替える。起動のときにだけ読む値＝次の起動で読み直される値（kanade が `OnBoot` の Ref0 にだけ使うシェルの名前など）は一覧に入れない）。
 4. If パラメータに areka に無い種類（`headline`・`plugin`・`language`・`calendar.skin`・`calendar.plugin`、および `calendar skin`・`calendar plugin` の表記）が含まれる, the areka shall その語ごとに「areka には無い種類」と分かる `warn!` を 1 件残して飛ばし、残りの語の読み直しを続ける。
 5. If パラメータに知らない語が含まれる、またはパラメータに読み直せる語が 1 つも無い, the areka shall 知らない語ごとに `warn!` を 1 件残し（語が 1 つも無いときはその旨を 1 件）、読み直せる語だけを読み直す。
 6. If descript.txt を読めなかった, the areka shall その対象の今の値を保ち、読めなかったファイルと理由を `error!` で残す。
@@ -216,7 +216,7 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 
 #### Acceptance Criteria
 
-1. The areka shall 次の判断の分岐をそれぞれ決定論テストで固定する: ⑴ `target` の 6 語と知らない語・空・大小違いの振り分け、⑵ 台本の綴り（`\![reloadsurface]` を含む）から対象への写し、⑶ 重なりで断る各場面（ゴースト切替中・シェルかバルーンの切替中・読み直し中・更新中）、⑷ makoto の縮退の答えと記録、⑸ `\![reload,descript,パラメータ]` の語の振り分け（`ghost`・`shell`・`balloon`・areka に無い種類・知らない語・重なり・語が無い）、⑹ MCP の答えが読み直しの終わりまで返らず、成功で `OK`・失敗で `NG:…` になること。
+1. The areka shall 次の判断の分岐をそれぞれ決定論テストで固定する: ⑴ `target` の 6 語と知らない語・空・大小違いの振り分け、⑵ 台本の綴り（`\![reloadsurface]` を含む）から対象への写し、⑶ 重なりで断る各場面（ゴースト切替中・シェルかバルーンの切替中・読み直し中・更新中・インストール中）、⑷ makoto の縮退の答えと記録、⑸ `\![reload,descript,パラメータ]` の語の振り分け（`ghost`・`shell`・`balloon`・areka に無い種類・知らない語・重なり・語が無い）、⑹ MCP の答えが読み直しの終わりまで返らず、成功で `OK`・失敗で `NG:…` になること。
 2. The areka shall ghost の読み直しで起動の知らせ（台詞を求める GET）が 1 つも送られず、情報の通知は送られることを、起動の根を選ぶ所の決定論テストで固定する。
 3. The areka shall 既存の起動の由来（`Plain`・`ChangedFrom`・`Halted`・`Updated`）が選ぶ知らせが変わらないことを、既存のテストを 1 本も変えずに緑のまま保って確かめる。
 4. The areka shall 既存の終了経路・ゴースト切替・シェルとバルーンの切替・ネットワーク更新の読み直しの決定論テストを 1 本も落とさない。
@@ -230,8 +230,8 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 
 #### Acceptance Criteria
 
-1. The areka shall 本 spec で変更するソースファイルを、MCP の `reload` のファイル（`crates/areka/src/mcp/reload.rs`・`reload_tests.rs`）・新しい読み直しの受け口と入口のファイル（`crates/areka/src/emo2_boot/` の下の新しいファイルと兄弟のテスト）・`emo2_boot/consumer_ledger.rs` とそのテスト・`emo2_boot/mod.rs`・`emo2_boot/ghost_switch.rs`・`emo2_boot/shell_balloon_switch.rs`（とその兄弟）・差し替えの相 `emo2_boot/frame/switch.rs`（読み直しのときに `OnShellChanged`／`OnBalloonChange` を送らない分かれ目が要るなら）・kanade の `crates/areka-kanade/src/change.rs`・`crates/areka-kanade/src/schedule/boot.rs`・網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml` に限る（ほかを触る要が出たら止めて報告する）。
+1. The areka shall 本 spec で変更するソースファイルを、MCP の `reload` のファイル（`crates/areka/src/mcp/reload.rs`・`reload_tests.rs`）・新しい読み直しの受け口と入口のファイル（`crates/areka/src/emo2_boot/` の下の新しいファイルと兄弟のテスト）・`emo2_boot/consumer_ledger.rs` とそのテスト・`emo2_boot/mod.rs`・`emo2_boot/ghost_switch.rs`・`emo2_boot/shell_balloon_switch.rs`（とその兄弟）・差し替えの相 `emo2_boot/frame/switch.rs` とその兄弟のテスト（読み直しのときに `OnShellChanged`／`OnBalloonChange` と記憶の書き込みを止める分かれ目）・descript の読み直しでゴーストの名前を替える口のための `crates/areka-ghost/src/runtime.rs`・`crates/areka/src/ghost_session.rs`（要件 4 と無関係に要る）・要件 13.5 のための seriko の `crates/areka-seriko/src/actor.rs`（名前の定数 1 つ）・kanade の `crates/areka-kanade/src/change.rs`・`crates/areka-kanade/src/schedule/boot.rs`・網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml` に限る（ほかを触る要が出たら止めて報告する）。
 2. Where 要件 4 を含む, the areka shall 変更するソースファイルに `crates/areka-ghost/src/runtime.rs` と `crates/areka/src/ghost_session.rs` を加え（`mcp-kanade-tools` が `runtime.rs` に 1 行足すので、設計で照合する）、要件 13.3 の kanade のファイルには触らない形（窓を残して実行系を組み直す形など）で作る。触らずに作れないと分かったら止めて報告する。
 3. The areka shall 次のファイルを変えない（変える行 0）: kanade の `msg.rs`・`actor.rs`・`schedule/mod.rs`・`schedule/change.rs`（`mcp-kanade-tools` の持ち物）・`crates/areka-mcp/` の下の全ファイル（`handler.rs`・`REPLY_WAIT` を含む・`mcp-receiver-bugs` の持ち物）・`crates/areka/src/mcp/mod.rs`・`crates/areka/src/mcp/resolve.rs`・`doc/ssp-mcp/areka-tools.md`・すべての `Cargo.toml`（新しい依存 0）。
-4. The areka shall 1 ファイル 1,000 行以下の目安を、変更するすべてのファイルで守る。行を足す前に、`consumer_ledger.rs` のファイルの中のテストを兄弟のテストファイルへ出し、`ghost_switch.rs` には同じゴーストへ載せ替える入口を足さずに新しい兄弟のファイルへ置く（`emo2_boot/mod.rs` へ足すのは `mod` の宣言と系の登録だけ）。
+4. The areka shall 1 ファイル 1,000 行以下の目安を、変更するすべてのファイルで守る。行を足す前に、`consumer_ledger.rs` のファイルの中のテストを兄弟のテストファイルへ出し、`ghost_switch.rs` には同じゴーストへ載せ替える入口を足さずに新しい兄弟のファイルへ置く（`emo2_boot/mod.rs` へ足すのは `mod` の宣言・台本の受け口の結線・系の登録だけ）。
 5. Where `consumer_ledger.rs` に触る, the areka shall 台帳の `bind` の行の名前を、拾う側（seriko）と共有する定数から引く形へ直す（完了 `mcp-author-tools` からの申し送り。seriko のファイルに触れないウェーブなら、次に台帳へ触る spec へ送り、その旨を記録する）。
