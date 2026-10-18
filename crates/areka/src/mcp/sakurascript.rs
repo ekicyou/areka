@@ -106,3 +106,7 @@ pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: 
 #[cfg(test)]
 #[path = "sakurascript_tests.rs"]
 mod sakurascript_tests;
+
+#[cfg(test)]
+#[path = "sakurascript_log_tests.rs"]
+mod log_tests;
