@@ -158,3 +158,5 @@
 - 5.1: areka はライブラリの target を持たない＝MCP のテストは `cargo test -p areka -j 4 --bin areka mcp::`。ワークツリーで areka の全体を回す前に、i686 の `shiori-host32-helper` と `shiori-host32-testdll-loadu` をビルドしておく（無いと実走の 2 本が赤になる）。
 - 5.2（範囲外・完了の棚卸で起票の候補）: 5.2 のレビューで `cargo test -p areka --bin areka mcp::` を回したところ、`mcp::check_script::check_script_tests::omitted_or_matching_name_answers_with_the_running_ghost` が 1 回だけ落ちた。本 spec の触っていないファイルのテストで、別スレッドの答えを待つ形。回し直すと緑だった（揺れ）。
 - 6.3（範囲外・完了の棚卸で `/kiro-discovery` に起票）: 実機で、トークごとのスレッド `sakura-talk-N`（`crates/areka-sakura/src/drive.rs` の `spawn_talk`）がトークの終わった後も残り続けた（15→35 本、トーク 1 つにつき 1 本）。MCP の前の起動の挨拶の分も残るので、既存の問題。詳しくは verification/signoff.md。
+- 完了時の棚卸: その場で解決 0 件・起票 1 本（`areka-P0-talk-thread-count-growth`＝6.3 のトークごとのスレッドが残る件。持ち場の `dispatcher.rs` がウェーブの触らない約束の一覧に在り、直ったことを確かめるには実機のスレッドの数を見る必要があるため）＋既存の brief への追記 1 件（`areka-P0-check-script-arg-checks` の件 2・理由は同じ）。
+- 完了時の申し送り: `cargo clippy` は、本 spec が触っていない kanade のファイルで元から赤のまま（ツールチェーンの lint の変化による・1.1 の注）。clippy は `tools/test-all.ps1` の判定に入っていないので、直さずに申し送った。
