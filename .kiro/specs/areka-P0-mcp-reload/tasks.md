@@ -165,12 +165,12 @@
   - _Depends: 6.1_
   - _Requirements: 1.1, 1.2, 1.3, 2.3, 8.1, 8.2, 8.3, 8.5, 10.1, 10.2, 12.1, 12.6_
 
-- [ ] 8. 検証
+- [x] 8. 検証
 - [x] 8.1 回帰と触る範囲を確かめる
   - 触ったクレートのテストが全部緑で、既存の切替・終了・更新のテストが 1 本も変わっていない
   - 変更したファイルが要件 13.1 の一覧（補正込み）に収まり、13.3 のファイルの差分が 0 行、どのファイルも 1,000 行以下
   - _Requirements: 12.4, 13.1, 13.2, 13.3, 13.4_
-- [ ] 8.2 実機で 5 つの読み直しを確かめる
+- [x] 8.2 実機で 5 つの読み直しを確かめる
   - emo2（または複製したぱすたさん）を `target\` の下の根から argv で起こし、⑴ 辞書の書き換えが `ghost` で効き挨拶が出ない ⑵ シェルの画像の差し替えが `shell` で見える ⑶ 壊した辞書の `ghost` が `get_log` に出る（出なければ出どころを `verification/` に記す）⑷ `makoto` の縮退 ⑸ `shiori` で窓が閉じず（`hwnd` 同じ）辞書が効き `OnDestroy(reload)`・`OnInitialize(reload)` が送られる
   - 設計の Risks（同梱の根からの写し・`OnDestroy` と unload の隙間）も併せて記録する
   - 結果が `verification/` に記録されている
@@ -203,3 +203,5 @@
 - 7.4: `frame/switch_reload_tests.rs` は親の土台を使うため `switch_finish_tests.rs` の末尾の mod 宣言（4 行）から読む。request_reload からの通しテストは無い（ヘッドレスの土台に実行系が無い）。実機（8.2 ⑵）で通す。`reload_skin_tests.rs` 冒頭の「呼び手は 7.4」の説明は古い。
 - 7.5: `log_history.rs` は要件 13.1 の外なので触らない。`last_id()` に残る `#[allow(dead_code)]` と「mcp-strict-errors が読む口」のコメントは古い（本 spec が最初の呼び手）。design.md 98 行と一緒に完了のときに申し送る。受理の文は `answer` に偽の窓口を渡して固定した（実行系の無い World では受理まで行かない）。
 - 8.1（完了のときに記録）: `crates/areka-kanade/src/lib.rs` の `pub use change::{…}` に `ReloadScope` を 1 語足した（2.1）。要件 13.1 の一覧にも設計の補正にも無い。`change` の公開型を同じ並びで出す慣例に合わせたもので、振る舞いは変わらない。`/kiro-complete` で 13.1 の補正に足すか裁定として記録する。完了の全体テストの前に、ワークツリーで i686 の `shiori-host32-helper`・`shiori-host32-testdll-loadu` を建てておく（建てないと `tests/mcp_get_log_real_run.rs`・`tests/smoke_boot_loop_exit.rs` が前提の欠けで赤になる）。
+- 8.2（裁定待ち）: ghost の読み直しの後、キャラクターの窓に面が出ない（挨拶の `\s` を送らないため `TargetId(0)`・`(2)` の `ShowSurface` が 0 件）。根本は既存の `emo2_boot/frame/attach.rs:113` の `initial_surface_id` が本番で読まれず、最初の面が挨拶の `\s` 頼みであること。本 spec の要件への違反ではないが、直すなら要件 13.1 の外。`descript-window-keys` の brief の「areka は面 0 を出す」という前提は誤り。
+- 8.2（完了の棚卸で起票の候補）: ⑴ `reload_started` に読むフォルダのパスを添える（同梱の根から起こすと 2 回目から写しを読む）。⑵ MCP の返事の「get_status が答えるまで待つ」は areka では読み直しの終わりの合図にならない（要件 8.1・8.3 どおり・終わりは get_log の reload_done／reload_failed）。⑶ pasta のデバッグ待受 127.0.0.1:9276 がぶつかり、pasta のゴーストを入れた areka は同時に 2 つ動かせない（ぱすた側の持ち物）。
