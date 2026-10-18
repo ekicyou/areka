@@ -53,7 +53,7 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 
 | # | 議題 | 暫定の裁定 | 根拠 | 載せた要件 |
 |---|---|---|---|---|
-| 1 | `\![reload,shiori]` を本 spec に含めるか | **含める形で書き、要件 4 として切り離せるようにする**（外すなら要件 4 と、それに結びつく 12.5・13.2 の一部を消すだけで残りが閉じる） | 棚卸㉗は「ghost の読み直しが SHIORI を降ろして読み直すので、ぱすたの辞書はそれで読み直される＝外す案」を出し、開発者に問うとした。要件 4 を外したときの代わりの道は要件 3 | 4・12.5・13.2 |
+| 1 | `\![reload,shiori]` を本 spec に含めるか | **✅ 確定（2026-10-18 開発者）: 含める。シェルと窓を残して SHIORI だけを読み直す本物を作る**（ghost の読み直しの別名にはしない・本 spec から外さない） | 開発者「シェルを維持して SHIORI だけリロードする需要は高い。省略すべきでない」。タスクが 20 を少しまたいでも本 spec から切り出さない | 4・12.5・13.2 |
 | 2 | ゴーストの読み直しで起動の知らせを送るか | **送らない**（`OnBoot`・`OnGhostChanged`・`OnFirstBoot` も送らない）。起動の由来に「知らせを送らない」1 種を足す既定の方針 | ukadoc「SHIORIイベントが発生しない」。ぱすた開発の注意「ゴーストの読み直しで OnBoot は送られない」 | 3.2・3.3 |
 | 3 | 起こし直しのときの情報の通知（`basewareversion` など、SHIORI へ環境を伝える NOTIFY） | **ふつうの起動と同じく送る** | 読み直した SHIORI は前の値を持っていない。台詞を生む GET の知らせとは別のもの。SSP で測って違えば改める | 3.4 |
 | 4 | shell・balloon・shiori の読み直しで SHIORI イベント（`OnShellChanging`・`OnShellChanged`・`OnBalloonChange` など）を送るか | **送らない** | ukadoc は ghost の読み直しについて「SHIORIイベントが発生しない」と書く。読み直しは切替ではない。SSP で測って違えば改める | 4.3・5.3・6.3 |
@@ -118,7 +118,7 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 
 ### Requirement 4: SHIORI だけの読み直し（`shiori`）
 
-> 要件ディスカッションで外せる（暫定の裁定 1）。外したときは本要件と、12.5・13.2 の `crates/areka-ghost/src/runtime.rs` の項を消す。台本の `\![reload,shiori]` と MCP の `target: "shiori"` は、外したときは要件 1.5 と同じく「拾わない」・MCP では本文 `NG:Unknown target …` ではなく 10.1 と同じ型の縮退の答えにする（どちらにするかは外すと決めたときに決める）。
+> 2026-10-18 の要件ディスカッションで確定（裁定 1）: 本 spec に含め、ghost の読み直しの別名にはしない。シェルと窓を残したまま SHIORI だけを読み直す。
 
 **Objective:** As a ぱすたさんを作る開発者, I want シェルと窓を残したまま SHIORI だけを読み直せること, so that 辞書の書き換えを、窓の閉じ開きなしに素早く効かせられる
 
@@ -207,7 +207,7 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 1. The areka shall `\!` の受け取り手の台帳（`ConsumerLedger::canonical`）に、本 spec が拾う組（`reload` と第 1 引数 `ghost`・`shiori`・`shell`・`balloon`・`descript`、および `reloadsurface`）を登記し、台帳と実際に拾う側が一致することを固定するテスト（`consumer_ledger_agreement_tests.rs`）に見本を足す。
 2. The areka shall 台帳の登記を、`makoto-reload-directives` が後から `reload` と第 1 引数 `makoto` の組を足せる形にする（本 spec の登記がその組を塞がない）。
 3. When 台帳に要件 11.1 の組を登記した, the areka shall `check_script` が `\![reload,ghost]` などを「知らない命令」と答えなくなり、`\![reload,makoto]`・`\![reload,aigraph]` は今と同じく「知らない命令」と答えることを確かめる。
-4. The areka shall 網羅台帳（`doc/ukadoc-coverage/ledger/sakura-script.toml`）の `reload,ghost`・`reload,shell`・`reload,balloon`・`reload,descript,パラメータ`・`reload,shiori`（要件 4 を含むとき）の行を、実装に合わせた状態と `owner = "areka-P0-mcp-reload"` に直す（`reload,balloon` の古い `owner` も直す）。別名の行（`reload,descript`・`reloadsurface`）は写像先と同じ扱いにする。
+4. The areka shall 網羅台帳（`doc/ukadoc-coverage/ledger/sakura-script.toml`）の `reload,ghost`・`reload,shell`・`reload,balloon`・`reload,descript,パラメータ`・`reload,shiori` の行を、実装に合わせた状態と `owner = "areka-P0-mcp-reload"` に直す（`reload,balloon` の古い `owner` も直す）。別名の行（`reload,descript`・`reloadsurface`）は写像先と同じ扱いにする。
 5. The areka shall 網羅台帳の `reload,makoto`・`reload,aigraph` の行を変えない。
 
 ### Requirement 12: 決定論テストと実機確認
@@ -220,9 +220,9 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 2. The areka shall ghost の読み直しで起動の知らせ（台詞を求める GET）が 1 つも送られず、情報の通知は送られることを、起動の根を選ぶ所の決定論テストで固定する。
 3. The areka shall 既存の起動の由来（`Plain`・`ChangedFrom`・`Halted`・`Updated`）が選ぶ知らせが変わらないことを、既存のテストを 1 本も変えずに緑のまま保って確かめる。
 4. The areka shall 既存の終了経路・ゴースト切替・シェルとバルーンの切替・ネットワーク更新の読み直しの決定論テストを 1 本も落とさない。
-5. Where 要件 4 を含む, the areka shall shiori の読み直しで窓を閉じず、SHIORI を unload して load し直し、台詞を求める GET を送らないことを決定論テストで固定する。
+5. The areka shall shiori の読み直しで窓を閉じず、SHIORI を unload して load し直し、台詞を求める GET を送らないことを決定論テストで固定する。
 6. The areka shall `NG:not implemented yet` を期待していた `reload_tests.rs` のテストを、新しい振る舞いの期待へ書き換える。
-7. When 実装が済んだ, the areka shall 実機で emo2（または複製したぱすたさん）を起こし、⑴ 辞書を書き換えて MCP の `reload`（`target: "ghost"`）→ 書き換えが効き、起動の挨拶が出ないこと、⑵ シェルの画像を差し替えて `target: "shell"` → 差し替えが見えること、⑶ 壊した辞書で読み直したときに `get_log`（`log_type=error`）に失敗が載ること、⑷ `target: "makoto"` の縮退の答え、⑸ 要件 4 を含むなら `target: "shiori"` で窓が閉じずに辞書が効くこと、を確かめ、結果を本 spec の `verification/` に残す。実機の根・検体はワークツリーの `target\` の下に置く。
+7. When 実装が済んだ, the areka shall 実機で emo2（または複製したぱすたさん）を起こし、⑴ 辞書を書き換えて MCP の `reload`（`target: "ghost"`）→ 書き換えが効き、起動の挨拶が出ないこと、⑵ シェルの画像を差し替えて `target: "shell"` → 差し替えが見えること、⑶ 壊した辞書で読み直したときに `get_log`（`log_type=error`）に失敗が載ること、⑷ `target: "makoto"` の縮退の答え、⑸ `target: "shiori"` で窓が閉じずに辞書が効くこと、を確かめ、結果を本 spec の `verification/` に残す。実機の根・検体はワークツリーの `target\` の下に置く。
 
 ### Requirement 13: 触る範囲
 
@@ -231,7 +231,7 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 #### Acceptance Criteria
 
 1. The areka shall 本 spec で変更するソースファイルを、MCP の `reload` のファイル（`crates/areka/src/mcp/reload.rs`・`reload_tests.rs`）・新しい読み直しの受け口と入口のファイル（`crates/areka/src/emo2_boot/` の下の新しいファイルと兄弟のテスト）・`emo2_boot/consumer_ledger.rs` とそのテスト・`emo2_boot/mod.rs`・`emo2_boot/ghost_switch.rs`・`emo2_boot/shell_balloon_switch.rs`（とその兄弟）・差し替えの相 `emo2_boot/frame/switch.rs` とその兄弟のテスト（読み直しのときに `OnShellChanged`／`OnBalloonChange` と記憶の書き込みを止める分かれ目）・descript の読み直しでゴーストの名前を替える口のための `crates/areka-ghost/src/runtime.rs`・`crates/areka/src/ghost_session.rs`（要件 4 と無関係に要る）・要件 13.5 のための seriko の `crates/areka-seriko/src/actor.rs`（名前の定数 1 つ）・kanade の `crates/areka-kanade/src/change.rs`・`crates/areka-kanade/src/schedule/boot.rs`・網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml` に限る（ほかを触る要が出たら止めて報告する）。
-2. Where 要件 4 を含む, the areka shall 変更するソースファイルに `crates/areka-ghost/src/runtime.rs` と `crates/areka/src/ghost_session.rs` を加え（`mcp-kanade-tools` が `runtime.rs` に 1 行足すので、設計で照合する）、要件 13.3 の kanade のファイルには触らない形（窓を残して実行系を組み直す形など）で作る。触らずに作れないと分かったら止めて報告する。
+2. The areka shall 要件 4 を、変更するソースファイル `crates/areka-ghost/src/runtime.rs` と `crates/areka/src/ghost_session.rs`（13.1 に挙げたもの）の中で作り（`mcp-kanade-tools` が `runtime.rs` に 1 行足すので、設計で照合する）、要件 13.3 の kanade のファイルには触らない形（窓を残して実行系を組み直す形など）で作る。触らずに作れないと分かったら止めて報告する。
 3. The areka shall 次のファイルを変えない（変える行 0）: kanade の `msg.rs`・`actor.rs`・`schedule/mod.rs`・`schedule/change.rs`（`mcp-kanade-tools` の持ち物）・`crates/areka-mcp/` の下の全ファイル（`handler.rs`・`REPLY_WAIT` を含む・`mcp-receiver-bugs` の持ち物）・`crates/areka/src/mcp/mod.rs`・`crates/areka/src/mcp/resolve.rs`・`doc/ssp-mcp/areka-tools.md`・すべての `Cargo.toml`（新しい依存 0）。
 4. The areka shall 1 ファイル 1,000 行以下の目安を、変更するすべてのファイルで守る。行を足す前に、`consumer_ledger.rs` のファイルの中のテストを兄弟のテストファイルへ出し、`ghost_switch.rs` には同じゴーストへ載せ替える入口を足さずに新しい兄弟のファイルへ置く（`emo2_boot/mod.rs` へ足すのは `mod` の宣言・台本の受け口の結線・系の登録だけ）。
 5. Where `consumer_ledger.rs` に触る, the areka shall 台帳の `bind` の行の名前を、拾う側（seriko）と共有する定数から引く形へ直す（完了 `mcp-author-tools` からの申し送り。seriko のファイルに触れないウェーブなら、次に台帳へ触る spec へ送り、その旨を記録する）。
