@@ -219,9 +219,7 @@ pub fn spawn_kanade_translating(
                     strict,
                     reply,
                 } => {
-                    // 検査を破った知らせは運行表が送らないので、受け付けなかったと控える。
-                    let accepted = crate::schedule::sstp::accepts(&state)
-                        && crate::sstp::validate_notify(&event, &references).is_ok();
+                    let accepted = crate::actor_sstp::notify_accepted(&state, &event, &references);
                     sstp_reply = Some(SstpReply::Notify { reply, accepted });
                     Input::SstpNotify {
                         event,

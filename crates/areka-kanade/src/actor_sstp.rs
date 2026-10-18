@@ -47,6 +47,19 @@ impl FirstReply {
     }
 }
 
+/// 外から頼まれたイベントの「受け付けた」の控え: 普段の状態（運行表の腕と同じ
+/// [`crate::schedule::sstp::accepts`]）で、かつ名前と Reference が検査を満たすときだけ真。
+///
+/// 検査を破った知らせは運行表の腕が `warn!` 1 件だけ残して送らないので、受け付けなかったと控え、
+/// 殻の「受け付けたのに往復が無い」の `warn!` を重ねない。
+pub(crate) fn notify_accepted(
+    state: &crate::schedule::State,
+    event: &str,
+    references: &[String],
+) -> bool {
+    crate::schedule::sstp::accepts(state) && crate::sstp::validate_notify(event, references).is_ok()
+}
+
 /// 返事の控え（運行表へ渡す前の状態での受け付けの判定と返信端）。
 pub(crate) enum SstpReply {
     Send {
