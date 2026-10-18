@@ -29,7 +29,7 @@
   - `boot_reload_tests.rs` で台詞を求める GET が 0 件・`OnInitialize` の References の違いが固定され、既存の `boot_root_tests.rs` が緑のまま
   - _Boundary: KanadeBootOrigin_
   - _Requirements: 3.3, 3.4, 4.3, 12.2, 12.3_
-- [ ] 2.2 (P) kanade の送出許可表に `OnDestroy` を足す
+- [x] 2.2 (P) kanade の送出許可表に `OnDestroy` を足す
   - `ALLOWED_EVENT_IDS` の `"OnClose"` の直後に `"OnDestroy"` を足し、許可表のテストの配列に 1 語足して名前から件数を外す（`allowed_event_ids_are_exactly_the_listed_set_and_exclude_ontalk_onhour`）
   - 冒頭の表の `OnInitialize` の行と `on_initialize` の doc コメントの「M1 にリロード概念なし」を直す（関数の中身は不変）
   - `sstp_notify` など `mcp-kanade-tools` が足す場所には触らない

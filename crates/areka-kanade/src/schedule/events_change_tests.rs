@@ -38,8 +38,9 @@ fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
     // ドラッグの 2 語を足して 48 語（areka-P0-mouse-drag-events 要件 7.1）、
     // バルーンの寿命の 3 語を足して 51 語（areka-P0-balloon-lifecycle-events 要件 3.5・6.4）、
     // アンカーの 2 語を足して 53 語（areka-P0-anchor-tag-canon 要件 4.1・4.2）、
-    // シェル位置初期化の `OnResetWindowPos` を足して 54 語（areka-P0-move-canon 要件 8.3）。
-    assert_eq!(ALLOWED_EVENT_IDS.len(), 54);
+    // シェル位置初期化の `OnResetWindowPos` を足して 54 語（areka-P0-move-canon 要件 8.3）、
+    // shiori の読み直しの `OnDestroy` を足して 55 語（areka-P0-mcp-reload 要件 4.1）。
+    assert_eq!(ALLOWED_EVENT_IDS.len(), 55);
     for id in [
         "OnGhostChanging",
         "OnGhostChanged",

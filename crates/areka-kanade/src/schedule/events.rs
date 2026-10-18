@@ -17,7 +17,7 @@
 //! # ukadoc Reference 表（本モジュールが唯一の実装点）
 //! | イベント | Method | M1 送出値 |
 //! |---|---|---|
-//! | `OnInitialize` | NOTIFY | References なし（空 Vec・M1 にリロード概念なし） |
+//! | `OnInitialize` | NOTIFY | References なし（空 Vec）。SHIORI だけの読み直しの起動でだけ Ref0=`reload`（`boot.rs` が載せる・areka-P0-mcp-reload 要件 4.3） |
 //! | `OnFirstBoot` | GET | Ref0=`"0"`（固定・Req 1.6） |
 //! | `OnBoot` | GET | Ref0=`config.shell_name`（前回落ちたときだけ Ref1〜5=空・Ref6=`halt`・Ref7=落ちたゴースト名） |
 //! | `basewareversion` | NOTIFY | Ref0=`config.baseware_version`・Ref1=`config.baseware_name`（Ref2 省略） |
@@ -124,6 +124,9 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnSecondChange",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnClose:1
     "OnClose",
+    // shiori の読み直しの 1 語（areka-P0-mcp-reload 要件 4.1・54→55 語）。NOTIFY・Ref0=`reload`。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnDestroy:1
+    "OnDestroy",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseMove:1
     "OnMouseMove",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseDoubleClick:1
@@ -285,7 +288,8 @@ pub fn is_allowed_choice_event(id: &str) -> bool {
 
 /// `OnInitialize`（NOTIFY・References なし）。
 ///
-/// M1 にリロード概念がないため Ref0（正典: リロード時 `reload`）は送出せず空 Vec とする。
+/// ふつうの起動では Ref0（正典: リロード時 `reload`）を送らず空 Vec とする。SHIORI だけの読み直しの
+/// 起動の Ref0=`reload` は `boot.rs` がこの呼び出しの代わりに載せる（areka-P0-mcp-reload 要件 4.3）。
 pub fn on_initialize(snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Notify {
         id: EventId::Static("OnInitialize"),
