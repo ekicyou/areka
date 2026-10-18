@@ -160,6 +160,7 @@ Script: \p[0]\s[1000]\![bind,腕,組み,1]\![bind,紅,差し,0]\![bind,口,に�
 ## 気付いたこと（本 spec の範囲の外）
 
 - **トークごとのスレッド `sakura-talk-<番号>` が、トークが終わっても残り続ける。** 10 秒ごとの報告で、プロセスのスレッド数が起動直後の 15 から終了前の 35 まで増え、増えた分はすべて `sakura-talk-1`〜`sakura-talk-<番号>` だった（トーク 1 つにつき 1 本）。MCP を呼ぶ前に終わった起動の挨拶の `sakura-talk-1` も残っているので、MCP の呼び出しとは関係なく、`crates/areka-sakura/src/drive.rs` の `spawn_talk` が起こすスレッドの後始末の問題と見られる。本 spec の境界（kanade の SSTP の入口と MCP の 2 ツール）の外なので、ここでは直さず、起票へ回す。
+  - 完了の棚卸での補足（2026-10-19）: 上の「スレッド数」は 10 秒ごとの報告（`crates/areka/src/perf_thread_report.rs` の `threads=`）の値で、これはスレッドの名簿（`crates/wintf/src/ecs/world/thread_registry.rs` の `snapshot()`）の件数。名簿は終わったスレッドの項目も持ち続ける作りなので、OS から見て生きているスレッドが本当に増えたのかは確かめていない。起票 `areka-P0-talk-thread-count-growth` の最初の仕事で切り分ける。
 
 ## 要件 7.7（検体の README）
 
