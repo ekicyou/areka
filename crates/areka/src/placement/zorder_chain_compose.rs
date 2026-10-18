@@ -214,3 +214,9 @@ mod written_order_tests;
 #[cfg(test)]
 #[path = "zorder_chain_tail_order_tests.rs"]
 mod zorder_chain_tail_order_tests;
+
+/// ぱすたと同じ指定から、台帳・合成・確定段の 3 本を繋いで前 3 枚の重なりを**実窓**で測る檻
+/// （`areka-P0-zorder-scope-inversion` 要件 1.2／3.3／4.5／6.1／6.2／6.4／8.4）。
+#[cfg(test)]
+#[path = "zorder_chain_inversion_order_tests.rs"]
+mod zorder_chain_inversion_order_tests;

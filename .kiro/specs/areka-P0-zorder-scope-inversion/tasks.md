@@ -102,7 +102,7 @@
   - _Requirements: 1.2, 2.2, 4.5, 8.3_
   - _Depends: 3.4, 3.5_
 
-- [ ] 4.2 areka 側で合成・確立・鎖の適用を繋ぎ、ぱすたと同じ指定から前 3 枚が成り立つことを測る（統合タスク）
+- [x] 4.2 areka 側で合成・確立・鎖の適用を繋ぎ、ぱすたと同じ指定から前 3 枚が成り立つことを測る（統合タスク）
   - 新しいテストのファイルは合成の本番ファイルから `#[path]` で繋ぐ（`mod.rs` は触らない・本番ファイルの行数を数え直す）
   - `\![reset,zorder]\![set,zorder,s0,b0,s1]` を台帳へ当て、合成した計画を受け口へ公開し、確立系・維持系・鎖の適用系を確定段の並びで回して、実窓の並びが手前から s0, b0, b1, s1 になることを確かめる
   - バルーンの窓が後から現れたとき・破棄されて再び現れたとき・キャラクターの窓が破棄されたときに、書かれた順へ繋ぎ直されることを確かめる
@@ -185,3 +185,4 @@
 - 3.3: `zorder_chain_apply.rs` は 864 行（3.4 の残り 136 行）。7⑸ の未固定は `a_failed_restore_still_lets_the_chain_attach_and_nudge` で解消
 - 3.4: `zorder_chain_apply.rs` は 925 行（残り 75 行）。外し損ねの 3 つの源（去る窓の切離し・鎖の撤去・組の外し）のうち、去る窓と組の外しの源ごとの檻が無い（`||` を 1 本抜く変異が赤にならない）→ 4.3 の分岐の対応表で 1 項ずつ足す。`ExecOutcome { missed: pair.missed, .. }`（263 行あたり）は組んだ後で読まれていない
 - 3.5: 見送りの理由が 6 種になったが、`zorder_pair_record_tests.rs` の `skip_line_names_a_distinct_reason_for_every_skip`・`record_decision_reports_every_skip_reason_and_yields_no_fix` は「全理由」をうたって 5 種のまま（設計の「約束の外」の表に無いので未改）。`zorder_pair.rs` 786 行あたりの説明「見送り 5 種」も同じ。完了の棚卸で表へ足して 6 種へ直す（`zorder_pair_tests.rs` 755 行の 5 種は `decide_pair_fix` の出す理由なので正しい）
+- 4.2: 公開の規則（`zorder_drain.rs` の非公開 `publish_chain_plan`）は実窓のテストの中へ 10 行で写した（frame が非公開のため）。規則そのものは t_zdw が固定。根のキャラクター（s1）を壊しても道連れにはならない（レビューで実測）
