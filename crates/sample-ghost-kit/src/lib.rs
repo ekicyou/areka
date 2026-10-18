@@ -543,6 +543,10 @@ pub use devroot::WorkDir;
 mod nar_writer;
 pub use nar_writer::{Corrupt, Damage, EntryBuilder, NarBuilder, fold_tree, install_txt};
 
+// 照合（タスク 3 以降の `fetched.rs`）が使うまでは、テストの外で呼び手が無い。
+#[cfg_attr(not(test), allow(dead_code))]
+mod sha256;
+
 #[cfg(test)]
 #[path = "lib_tests.rs"]
 mod tests;

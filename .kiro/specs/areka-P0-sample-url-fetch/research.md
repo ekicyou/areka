@@ -222,3 +222,43 @@
 - `install.txt` の `directory` が `pasta-in-windows` でない／同梱のバルーンを名乗る → 最初のタスクで読んで行を合わせる（要件 5.2）。
 - `impl-watch-test-desk` が `tools/test-all.ps1` の形を大きく変える → つなぎのタスクは取り込んだ後の形を読み直して置く。契約は「最初のテストの段より前・失敗で止まる・自分の検査の段を並べる」だけに絞った。
 - デバッグ版の SHA-256 が想定より遅い → タスクで実測する。遅ければ開発者へ報告して手当て（`[profile.dev.package.sample-ghost-kit]` の最適化など。依存は動かない）を決める。
+
+## 11. 実物の確かめ（2026-10-18・タスク 1）
+
+### 取り寄せ
+
+- **登記の URL は認証なしでは取れない**: `%SystemRoot%\System32\curl.exe --fail --location` で登記の URL（`raw.githubusercontent.com/ekicyou/ghost_dev/e1e05590…/release/pasta-in-windows/pasta-in-windows.nar`）を取ると `curl: (22) The requested URL returned error: 404`（終了コード 22）。`gh api repos/ekicyou/ghost_dev` の `private` が `true`＝**ghost_dev は非公開のリポジトリ**で、認証なしの `raw.githubusercontent.com` は 404 を返す。コミット `e1e05590dbed0a4a4b1afadf55ca896f36d82c14` とファイル `release/pasta-in-windows/pasta-in-windows.nar`（3,025,198 バイト）は在る。
+- 確かめのため、同じコミットの同じファイルを認証つきの `gh api -H "Accept: application/vnd.github.raw" "repos/ekicyou/ghost_dev/contents/release/pasta-in-windows/pasta-in-windows.nar?ref=e1e05590…"` で `<ワークツリー>\target\nar-samples\fetched\pasta-in-windows.nar` へ取った。
+- **大きさ 3,025,198 バイト・SHA-256 `04a8e1c19b534b38e39d24f93ac7735c74e186249965b3a0876a893cb41fe35b`（`Get-FileHash`）＝登記どおり**。
+- 取り寄せの段（`curl.exe` で登記の URL を取る・要件 2）は、ghost_dev を公開するか、URL を認証なしで取れる取り寄せ先へ替えるまで通らない（開発者の裁定待ち）。
+
+### `install.txt`
+
+```
+Charset,UTF-8
+type,ghost
+name,窓際のぱすたさん
+directory,pasta-in-windows
+```
+
+- `balloon.directory`／`balloonN.directory` は無い。縦書きのバルーン `pasta_tategaki\`（`descript.txt` と png 5 枚）は書庫の根に在り、展開ではゴーストのフォルダの直下に入る（ゴーストの一部として配られる）。
+- 書庫の項目は 68（すべてファイル）。根の並び: `ghost\master\`・`shell\master\`・`pasta_tategaki\`・`install.txt`・`readme.txt`・`updates.txt`。
+
+### 決めた行
+
+- `name`: `pasta-in-windows`（`directory` が見込みどおり）
+- `kind`: `SampleKind::Ghost`（`type,ghost`）
+- `balloons`: `&[]`（同梱のバルーンの鍵が無い）
+- design.md「ぱすたの行」の見込みの値のままでよい。
+
+### 展開器が受け入れるか
+
+- **受け入れた**（要件 5.7 の止まる条件に当たらない）。`devroot::cached_root_in(<私有の名前空間>, "pasta-in-windows", <置き場の書庫>)` を使い捨てのテスト（`devroot_tests.rs` に一時に足して走らせ、すぐ戻した・コミットしない・`Cargo.toml` は変えない）で呼び、`<ワークツリー>\target\task1-probe-ns\` の空の根へ展開した。
+- 展開した木: 根の下に `ghost\pasta-in-windows\` だけ（作業の棚 `.nar-work\` は空）。`ghost\pasta-in-windows\` の下のファイルは **68**（書庫の項目の数と同じ）。直下の並び: `ghost`・`install.txt`・`pasta_tategaki`・`readme.txt`・`shell`・`updates.txt`。
+- 私有の名前空間は確かめの後に消した。
+
+## 12. SHA-256 の計算時間（2026-10-18・タスク 2）
+
+- 測り方: `crates/sample-ghost-kit/src/sha256.rs` の `sha256_hex` を、`<ワークツリー>\target\nar-samples\fetched\pasta-in-windows.nar`（3,025,198 バイト）を読み込んだバイト列に 3 回かけた。デバッグ版（`cargo test -p sample-ghost-kit` の既定の組み方）・使い捨ての `#[ignore]` のテストを `sha256_tests.rs` に一時に足して走らせ、すぐ消した（コミットしない）。読み込みの時間は含まない。機械を空けての比べではない一回きりの目安。
+- 結果: **190 ms・179 ms・181 ms**（3 回とも 1 秒を下回る＝design.md「性能」の見込みどおり）。
+- 3 回とも `04a8e1c19b534b38e39d24f93ac7735c74e186249965b3a0876a893cb41fe35b`＝登記の SHA-256（§11 の `Get-FileHash` の値）と一致。
