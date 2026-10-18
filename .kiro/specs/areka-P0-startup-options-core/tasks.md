@@ -1,7 +1,7 @@
 # 実装計画
 
 - [ ] 1. 土台: `main.rs` の行を空け、起動オプションの読み口の枠を置く
-- [ ] 1.1 自動 close の仕掛けを `main.rs` から別のファイルへ出す
+- [x] 1.1 自動 close の仕掛けを `main.rs` から別のファイルへ出す
   - `main.rs` の自動 close の仕掛け（仕掛けの本体・定数と関数・テストの宣言）を新しい `smoke_exit` へそのまま移し、`main` からは 1 行で呼ぶ
   - 記録の文・環境変数の名前・振る舞いは変えない。今のテスト `main_startup_window_tests.rs` は `smoke_exit_tests.rs` へ名前を替えるだけで中身は変えない
   - 終わった形: `smoke_exit_tests` と `file_length_guard` が緑で、`main.rs` の行数が移した分だけ減っている。実走の煙の試験 `smoke_boot_loop_exit.rs` は 1 行も変わっていない
