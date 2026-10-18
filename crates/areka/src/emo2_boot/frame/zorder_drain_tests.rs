@@ -126,13 +126,14 @@ fn t_zdr03_accepted_tag_is_recorded_with_the_ledger_content() {
     );
 }
 
-/// 明示モードで作者の書いた順を採らなかったときは、その事実が受理の記録に載る（要件 2.4）。
+/// 明示モードでは、書かれた順のまま採った各スコープの並びの形が受理の記録に載る
+/// （`areka-P0-zorder-scope-inversion` 要件 1.4）。
 ///
-/// 対照として数値モードを並べる——あちらは調整そのものが起きないので番兵になる。
+/// 対照として数値モードを並べる——あちらは作者が窓単位で書いた並びではないので番兵になる。
 /// 片側だけだと「常に番兵」でも「常に何か載る」でも通ってしまう。
 #[test]
-fn t_zdr04_normalization_is_surfaced_only_when_the_author_order_was_adjusted() {
-    // 反転（s1 が b1 より前）＝作者の順をそのままでは採らなかった。
+fn t_zdr04_the_written_order_shape_is_surfaced_only_for_the_explicit_mode() {
+    // 逆転（s1 が b1 より前）＝書かれた順のまま採り、逆転と記録する。
     let (tx, rx) = directive_channel();
     let mut ledger = ZOrderGroupLedger::default();
     let mut world = world_with_scopes(&[0, 1]);
@@ -140,12 +141,12 @@ fn t_zdr04_normalization_is_surfaced_only_when_the_author_order_was_adjusted() {
     let logs = capture_logs(|| run_zorder_drain_phase(&rx, &mut ledger, &mut world));
     let line = lines_with(&logs, "[zorder-group] applied")[0];
     assert!(
-        line.contains("normalized=1:true,0:false"),
-        "同一スコープの調整の有無が両方載っていない: {line}"
+        line.contains("normalized=1:inverted,0:false"),
+        "スコープごとの並びの形が両方載っていない: {line}"
     );
     assert!(
-        line.contains("members=b1,s1,b0,s0"),
-        "隣接ブロックへ寄せた後の要素列が載っていない: {line}"
+        line.contains("members=s1,b1,b0,s0"),
+        "書かれた順のままの要素列が載っていない: {line}"
     );
 
     // 数値モード＝エンジンが組んだ並びゆえ調整の記録は無い（番兵）。
@@ -157,7 +158,7 @@ fn t_zdr04_normalization_is_surfaced_only_when_the_author_order_was_adjusted() {
     let line2 = lines_with(&logs2, "[zorder-group] applied")[0];
     assert!(
         line2.contains("normalized=-"),
-        "数値モードで調整の記録が出ている（作者の指定順ではない並びを調整と呼んでいる）: {line2}"
+        "数値モードで並びの形の記録が出ている（作者が窓単位で書いた並びではない）: {line2}"
     );
 }
 
@@ -171,7 +172,7 @@ fn t_zdr04_normalization_is_surfaced_only_when_the_author_order_was_adjusted() {
 /// あわせて、畳み込みの導入で**嘘をつくようになっていないこと**を 2 方向から見る。
 /// ⑴ 補ったスコープの欄が `1:false` のままだと「作者の書いた順をそのまま採った」と
 ///    読めてしまう（窓 2 枚を黙って足しておきながら「調整していない」と言う行）。
-/// ⑵ 2 窓そろって書かれたスコープの字面は 1 バイトも変わっていない（要件 9.5）。
+/// ⑵ 2 窓そろって書かれたスコープは補いの欄を持たず、並びの形の語だけが載る。
 #[test]
 fn t_zdr11_an_implied_partner_window_is_named_in_the_accepted_record() {
     let (tx, rx) = directive_channel();
@@ -190,7 +191,7 @@ fn t_zdr11_an_implied_partner_window_is_named_in_the_accepted_record() {
         "窓 2 枚を暗黙に加えておきながら「調整していない」と読める行が出ている: {line}"
     );
 
-    // 対照: 2 窓そろって書かれたスコープの字面は据え置き（既存の檻が読む語）。
+    // 対照: 2 窓そろって書かれたスコープは書かれた順のまま・並びの形の語だけ。
     let (tx2, rx2) = directive_channel();
     let mut ledger2 = ZOrderGroupLedger::default();
     let mut world2 = world_with_scopes(&[0, 1]);
@@ -198,8 +199,8 @@ fn t_zdr11_an_implied_partner_window_is_named_in_the_accepted_record() {
     let logs2 = capture_logs(|| run_zorder_drain_phase(&rx2, &mut ledger2, &mut world2));
     let line2 = lines_with(&logs2, "[zorder-group] applied")[0];
     assert!(
-        line2.contains("members=b1,s1,b0,s0 normalized=1:true,0:false"),
-        "2 窓そろったスコープの字面が畳み込みの導入で変わっている（要件 9.5）: {line2}"
+        line2.contains("members=s1,b1,b0,s0 normalized=1:inverted,0:false"),
+        "2 窓そろったスコープの字面が書かれた順と並びの形になっていない: {line2}"
     );
     assert!(
         !line2.contains("+b"),

@@ -166,15 +166,15 @@ fn t_zgl2_non_overlapping_tags_accumulate_as_separate_groups() {
     assert_eq!(ledger.groups()[1].source, GroupSource::Tag);
 }
 
-/// 台帳は解釈が返した要素列をそのまま持つ。同一スコープの 2 窓が
-/// `[Balloon, Char]` の隣接ブロックであるという不変条件⑶は、解釈の側で既に
-/// 成立している（task 1.2）ものを台帳が壊さない、という形で保たれる。
+/// 台帳は解釈が返した要素列をそのまま持つ。明示の記法で名前の挙がったスコープは
+/// 2 枚とも並びに居る（補い済み）という不変条件⑶は、解釈の側で既に成立している
+/// ものを台帳が壊さない、という形で保たれる（`areka-P0-zorder-scope-inversion`）。
 #[test]
 fn t_zgl3_the_ledger_stores_the_normalized_element_list_verbatim() {
     let mut ledger = ZOrderGroupLedger::default();
 
-    // 反転（`s1,b1`）と片方だけの指名（`b2`）を含む指定。解釈の側で寄せられ、
-    // 指名されなかった相棒窓（`s2`）も畳み込まれている（要件 2.4／2.6）。
+    // 逆転かつ非隣接（`s1 … b1`）と片方だけの指名（`b2`）を含む指定。解釈は書かれた順を
+    // 保ち、指名されなかった相棒窓（`s2`）だけを `b2` のすぐ奥へ補う。
     expect_added(&mut ledger, &["s1", "b2", "b1"]);
 
     assert_eq!(
@@ -184,8 +184,8 @@ fn t_zgl3_the_ledger_stores_the_normalized_element_list_verbatim() {
     );
     assert_eq!(
         ledger.groups()[0].members,
-        vec![b(1), s(1), b(2), s(2)],
-        "正規化済みの並びがそのまま載る"
+        vec![s(1), b(2), s(2), b(1)],
+        "書かれた順（＋補った相棒）がそのまま載る"
     );
 }
 
