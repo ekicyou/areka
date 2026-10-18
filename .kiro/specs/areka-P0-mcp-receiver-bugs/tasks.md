@@ -36,7 +36,7 @@
   - _Requirements: 1.6, 2.6_
 
 - [ ] 4. debug 版の `dump_balloon` を実機で確かめる（件 2）
-- [ ] 4.1 (P) 確かめの台本を書く
+- [x] 4.1 (P) 確かめの台本を書く
   - spec の `verification/` の下に PowerShell の台本を置く（areka のコードでもテストでもなく、全体テスト・配布に入らない）。絶対パスで `pwsh -File` から起こせ、ワークツリーの根は台本の場所から決める。引数は `-Ghost`（既定 claudia,emo2）・`-Calls`（既定 5）・`-Tool`（既定 dump_balloon・3.6 のときだけ dump_surface）
   - `-Ghost` と `-Tool` の値は建てるより前に確かめ、知らない値なら理由を 1 行出して終了コード 2 で終わる
   - 建てる（debug の areka と中継、続けて i686 の helper）→ i686 の helper を `areka.exe` の隣へ最後に写し PE の機械種別 `0x014c` を確かめる → 検体の置き場を `nar-sample-path` で取る（バルーンは claudia が `claudia`、emo2 が `emo2-kakukaku`）→ 作業の置き場 `target\mcp-receiver-bugs\<ゴースト>\` を毎回作り直す
