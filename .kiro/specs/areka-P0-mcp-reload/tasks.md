@@ -3,7 +3,7 @@
 > 入力: requirements.md（13 要件）・design.md（議題は確定）・research.md。判断の分岐は決定論テストで固定し、テストは実装と同じディレクトリの兄弟ファイルに置く。既存の切替・終了・更新のテストは 1 本も変えない（12.4）。kanade の `msg.rs`・`actor.rs`・`schedule/mod.rs`・`schedule/change.rs`、`crates/areka-mcp/**`、`mcp/mod.rs`・`mcp/resolve.rs` には触らない（13.3）。
 
 - [ ] 1. 行数の確保（純移動・振る舞いは変えない）
-- [ ] 1.1 (P) 受け取り手の台帳のテストの塊を兄弟ファイルへ出す
+- [x] 1.1 (P) 受け取り手の台帳のテストの塊を兄弟ファイルへ出す
   - `consumer_ledger.rs` の中のテストを `consumer_ledger_tests.rs` へそのまま移し、本体を約 450 行にする
   - 移したテストが移す前と同じ件数で緑になる
   - _Boundary: Ledger_
