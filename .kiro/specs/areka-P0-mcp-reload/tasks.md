@@ -66,7 +66,7 @@
   - `reload_args_tests.rs` で 12.1 ⑴⑵⑸ の各場合が固定され、どの入力でも panic しない
   - _Boundary: ReloadArgs_
   - _Requirements: 1.2, 1.3, 1.4, 1.5, 7.2, 7.4, 7.5, 8.5, 10.3, 12.1_
-- [ ] 3.2 台本の `\![reload,…]`・`\![reloadsurface]` の受け口を作る
+- [x] 3.2 台本の `\![reload,…]`・`\![reloadsurface]` の受け口を作る
   - `change_cue.rs` と同じ型で、拾う綴りのときだけ受信端へ送り、送れなければ `warn!` を残す
   - `reload_cue_tests.rs` で拾う綴りは送られ、`\![reload,makoto]` などは送られない
   - _Depends: 3.1_
@@ -186,3 +186,4 @@
 - 2.6（範囲外・完了の棚卸しで起票）: sylphya の `PublishStatic` は上書きだけで平らな名前を消す効果が無い。descript の読み直しで `sakura.name`・`sakura.name2`・`kero.name` の項目を消すと、前の `selfname` などが残る（書き換え・追加は正しく替わる）。直すには sylphya に消す口が要る。
 - 2.6: テストの道筋は `runtime::names_tests::…`（`cargo test -p areka-ghost names_tests` で回る）。`set_names` は投函だけで barrier を待たない。6.4 の Names の段で要るなら呼び手が barrier を打つ。
 - 3.1: `reload_args.rs` は呼び手が揃うまでモジュール全体に `#![allow(dead_code)]`。7.5 の後に外す。design.md 158 行の `ScriptReload::parse`・`DescriptParams::parse` は同じ文書のコードの塊（`parse_script`・`parse_descript_params`）と食い違う。完了のときに文書を直す。
+- 3.2: design.md 431 行の `ReloadRaw { target, notes }` は `reload_args::ScriptReload` で代えた（欄は同じ）。完了のときに文書を直す。受信端 `ReloadRx`（`try_iter()` 付き）と `wire_reload_rx` は `reload_cue.rs` にある。`reload_cue.rs` の `#![allow(dead_code)]` は 4.1（受け口の登録と据え付け）と 6.1（取り出し）で呼び手が付いたら外す。

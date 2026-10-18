@@ -29,6 +29,8 @@ mod install_cue;
 pub mod move_cue;
 mod readme_cue;
 mod reload_args;
+/// `\![reload,…]`・`\![reloadsurface]` の受け口（areka-P0-mcp-reload）。
+mod reload_cue;
 /// 同じフォルダ名のゴーストを今のゴーストとして扱う（areka-P0-baseware-root-list）。
 pub(crate) mod same_folder_pin;
 /// シェル・バルーンの切替先の名前の解決とインストールの控え（areka-P0-shell-balloon-switch）。
