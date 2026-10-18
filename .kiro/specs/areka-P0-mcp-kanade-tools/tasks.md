@@ -131,7 +131,7 @@
   - _Requirements: 4.1, 4.2, 7.3_
 
 - [ ] 6. 差の一覧・回帰・実機の確認
-- [ ] 6.1 SSP との差の一覧を書き、翻訳の Reference1 の行を改める
+- [x] 6.1 SSP との差の一覧を書き、翻訳の Reference1 の行を改める
   - `doc/ssp-mcp/` の下に既存の差の一覧と同じ形で、⑴ 手順の途中は断る ⑵ 切替の途中は宛先が居ないときの `NG:` ⑶ 空の `event` はツールの結果の `NG:` ⑷ CR・LF・NUL を断る ⑸ 中断の無効化モードの最中も割り込む ⑹ `OnTranslate` の Reference1 の値 ⑺ `\t` を持たない ⑻ 往復から生まれていないトークの表示の語、を SSP の印（実測・未実測・対応物なし）とともに書く。2 行の区切りは「SSP と同じ（実測）」と書く
   - `doc/COMPAT_ARCHITECTURE.md` の `OnTranslate` の Reference1 の行を「MCP の `sakurascript` の台本は `sstp-send,owned`、それ以外は欠番」へ改める
   - 完了の姿: 差の一覧のファイルが在り 8 項目と印がそろい、互換の文書の行が改まっている
