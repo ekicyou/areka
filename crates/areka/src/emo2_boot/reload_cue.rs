@@ -12,9 +12,8 @@
 //!
 //! 受信端が閉じていても（ゴーストが居ない場面）台本は殺さない（`warn!` を残して継続する）。
 //!
-//! 受信端 [`ReloadRx`] とその据え付け [`wire_reload_rx`] もここに置く。呼び手は後で付く——受け口の
-//! dispatcher への登録と受信端の据え付けは 4.1、毎フレームの取り出しは 6.1。それまではテストだけが呼ぶ。
-#![allow(dead_code)]
+//! 受信端 [`ReloadRx`] とその据え付け [`wire_reload_rx`] もここに置く。受け口の dispatcher への登録と
+//! 受信端の据え付けは `runtime_boot` が行う。毎フレームの取り出し（`try_iter` の呼び手）は 6.1 で付く。
 
 use std::sync::mpsc::{Receiver, Sender, TryIter};
 
@@ -90,6 +89,7 @@ pub(crate) struct ReloadRx(Receiver<ScriptReload>);
 
 impl ReloadRx {
     /// 溜まった要求を待たずに取り出す（取り出しの系が全件を読む）。
+    #[allow(dead_code)] // 呼び手は 6.1（毎フレームの取り出し）で付く。
     pub(crate) fn try_iter(&self) -> TryIter<'_, ScriptReload> {
         self.0.try_iter()
     }
