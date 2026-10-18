@@ -37,6 +37,7 @@ fn user_root_str(mark: RootMark) -> &'static str {
         RootMark::Plain => "",
         RootMark::UserRoot { from_env: false } => "default",
         RootMark::UserRoot { from_env: true } => "env_var",
+        RootMark::Temporary => "temporary",
     }
 }
 

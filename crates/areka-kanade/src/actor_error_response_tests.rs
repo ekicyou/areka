@@ -107,3 +107,99 @@ fn other_failures_stay_failed_without_error_response_record() {
         );
     }
 }
+
+/// 偽の shiori が受けた名前と Reference（送られなければ None）。
+type Sent = Option<(String, Vec<String>)>;
+
+/// 1 件の Request を受け、送られた名前と Reference を控えて `NoContent` を返す偽の shiori を立てて
+/// `call` を往復させる。戻り値は応答・偽の shiori が受けた中身（送られなければ None）・捕えた記録。
+fn round_trip_recording(call: ShioriCall) -> (ShioriOutcome, Sent, Vec<CapturedEvent>) {
+    let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
+    let helper = thread::spawn(move || {
+        if let Ok(ShioriMsg::Request { call, reply }) = shiori_rx.recv() {
+            let (ShioriCall::Get { id, references, .. }
+            | ShioriCall::Notify { id, references, .. }) = call;
+            let _ = reply.send(ShioriOutcome::NoContent);
+            return Some((id.as_str().to_string(), references));
+        }
+        None
+    });
+
+    let mut outcome: Option<ShioriOutcome> = None;
+    let events = capture(|| {
+        outcome = Some(round_trip_request(&shiori_tx, call));
+    });
+    drop(shiori_tx);
+    let sent = helper.join().expect("fake shiori thread");
+    (outcome.expect("round_trip_request returns"), sent, events)
+}
+
+/// 外から頼まれた名前（`EventId::Sstp`）の GET。
+fn probe_sstp_call(event: &str, references: &[&str]) -> ShioriCall {
+    ShioriCall::Get {
+        id: EventId::Sstp(event.to_string()),
+        references: references.iter().map(|r| r.to_string()).collect(),
+        status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
+    }
+}
+
+/// 送出の檻の `EventId::Sstp` の受理（mcp-kanade-tools 要件 2.1・2.7・6.1）: 検査を満たす名前は
+/// 許可の表にも `On` 接頭にも依らず逐語で送られ、警告もエラーも出ない。スケジューラ起源の
+/// 恒久禁止（`OnTalk`）も効かない。
+#[test]
+fn sstp_origin_valid_name_is_sent_verbatim_without_warning() {
+    for (event, references) in [
+        ("OnTalk", vec![]),
+        ("UserDefined", vec!["a\u{1}b", "\tx"]),
+        ("OnMenuExec", vec!["", "r1"]),
+    ] {
+        let (outcome, sent, events) = round_trip_recording(probe_sstp_call(event, &references));
+        assert!(
+            matches!(outcome, ShioriOutcome::NoContent),
+            "{event:?} は送られて偽の shiori の応答が返るはず"
+        );
+        assert_eq!(
+            sent,
+            Some((
+                event.to_string(),
+                references.iter().map(|r| r.to_string()).collect()
+            )),
+            "名前と Reference は逐語で送られるはず"
+        );
+        assert!(
+            !events
+                .iter()
+                .any(|e| e.level == Level::WARN || e.level == Level::ERROR),
+            "{event:?} の送出は警告もエラーも出さない（要件 2.1）"
+        );
+    }
+}
+
+/// 検査を破る `EventId::Sstp`（名前か Reference に CR・LF・NUL・空の名前）は送らず、今日の檻と同じ
+/// `error!`（`event_id_not_allowed`）＋`Failed(Internal)` になる。
+#[test]
+fn sstp_origin_invalid_name_or_reference_is_not_sent_and_logs_error() {
+    for (event, references) in [
+        ("On\rX", vec![]),
+        ("On\nX", vec![]),
+        ("On\0X", vec![]),
+        ("", vec![]),
+        ("  ", vec![]),
+        ("OnX", vec!["a\rb"]),
+        ("OnX", vec!["a\nb"]),
+        ("OnX", vec!["a\0b"]),
+    ] {
+        let (outcome, sent, events) = round_trip_recording(probe_sstp_call(event, &references));
+        assert!(
+            matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Internal(_))),
+            "{event:?}／{references:?} は Failed(Internal) に写るはず"
+        );
+        assert_eq!(sent, None, "{event:?}／{references:?} は送られてはならない");
+        assert!(
+            events.iter().any(|e| e.target == "kanade"
+                && e.level == Level::ERROR
+                && e.event.as_deref() == Some("event_id_not_allowed")),
+            "{event:?}／{references:?} は event_id_not_allowed の error! を残すはず"
+        );
+    }
+}
