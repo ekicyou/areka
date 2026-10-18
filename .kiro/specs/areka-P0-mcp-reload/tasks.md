@@ -135,7 +135,7 @@
   - _Depends: 4.2_
   - _Requirements: 2.5, 5.1, 6.1, 7.1, 7.2, 7.3, 7.6, 8.4, 9.1, 9.2, 9.3_
 
-- [ ] 7. 既存の道への分かれ目の結線と入口
+- [x] 7. 既存の道への分かれ目の結線と入口
 - [x] 7.1 ゴースト切替の起こし方に読み直しの由来を通す
   - `switch_to` が由来を `boot_origin_override` で上書きし、`end_switch` から `on_switch_end` を呼ぶ
   - `ghost_switch_reload_tests.rs`（`SwitchRig`）で、印があるとき偽 SHIORI の受けた要求に `OnBoot`・`OnGhostChanged`・`OnGhostChanging`・`OnClose` が無く `OnInitialize`・`username`・`basewareversion` があり、印が無ければ今までどおり
