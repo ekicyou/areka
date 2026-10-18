@@ -58,7 +58,7 @@
   - _Requirements: 7.3_
 
 - [ ] 3. 振り分けと台本の受け口
-- [ ] 3.1 (P) 読み直しの対象の振り分けを純粋関数で作る
+- [x] 3.1 (P) 読み直しの対象の振り分けを純粋関数で作る
   - MCP の `target` の 6 語を ASCII の大小を区別せず照らし、前後の空白は削らない（空・知らない語は Unknown、makoto は別の答え）
   - 台本の 7 綴り（`reloadsurface` を含む）から対象へ写し、引数なしの `reload`・`makoto`・`aigraph`・ほかの命令は拾わない
   - `descript` のパラメータを半角スペースで区切り、ghost／shell／balloon・areka に無い種類・知らない語・語なしに仕分ける（第 3 引数より後ろは見ない・重複は 1 度）
@@ -185,3 +185,4 @@
 - 2.5: `readme::set_path` にも 6.4 までの `#[allow(dead_code)]` を付けた。6.4 で外す。
 - 2.6（範囲外・完了の棚卸しで起票）: sylphya の `PublishStatic` は上書きだけで平らな名前を消す効果が無い。descript の読み直しで `sakura.name`・`sakura.name2`・`kero.name` の項目を消すと、前の `selfname` などが残る（書き換え・追加は正しく替わる）。直すには sylphya に消す口が要る。
 - 2.6: テストの道筋は `runtime::names_tests::…`（`cargo test -p areka-ghost names_tests` で回る）。`set_names` は投函だけで barrier を待たない。6.4 の Names の段で要るなら呼び手が barrier を打つ。
+- 3.1: `reload_args.rs` は呼び手が揃うまでモジュール全体に `#![allow(dead_code)]`。7.5 の後に外す。design.md 158 行の `ScriptReload::parse`・`DescriptParams::parse` は同じ文書のコードの塊（`parse_script`・`parse_descript_params`）と食い違う。完了のときに文書を直す。
