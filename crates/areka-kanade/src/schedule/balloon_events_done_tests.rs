@@ -12,6 +12,7 @@ use crate::change::{
     CancelReason, ChangeOrigin, ChangeRequest, ChangeTarget, GapRaise, KanadeNotice, ShioriMethod,
 };
 use crate::msg::{CloseReason, MonotonicMs, ShioriCall, ShioriOutcome};
+use crate::schedule::translate::ScriptSource;
 use crate::schedule::{Action, State};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
 use tracing::Level;
@@ -132,7 +133,8 @@ fn b3_reply_script_is_translated_and_204_stays_steady() {
     feed(&mut s, done(talk, TalkEndReason::Interrupted, false));
     let actions = reply_value(&mut s, ORIGINAL, "OnBalloonBreak");
     assert!(
-        matches!(actions.as_slice(), [Action::Translate(req)] if req.source.id.as_str() == "OnBalloonBreak"),
+        matches!(actions.as_slice(), [Action::Translate(req)]
+            if matches!(&req.source, ScriptSource::Event(e) if e.id.as_str() == "OnBalloonBreak")),
         "台本の応答は元のイベント OnBalloonBreak として翻訳へ預ける"
     );
     let actions = feed(&mut s, Input::TranslateDone(Ok(FINAL.to_string())));
