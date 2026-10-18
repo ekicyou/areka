@@ -9,7 +9,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use areka_kanade::{BootOrigin, ChangeOrigin, ReloadScope};
+use areka_actor::{ReplyReceiver, reply_channel};
+use areka_kanade::{
+    BootOrigin, ChangeOrigin, GapRaise, KanadeMsg, ReloadScope, ShioriMethod, TalkGap,
+};
 use bevy_ecs::prelude::Resource;
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
@@ -82,7 +85,6 @@ impl RefusedReason {
 /// 進行中の印（World の NonSend・高々 1 つ）。在れば次の読み直しは断る。
 ///
 /// 消すのは対象ごとの終わり（6.2〜6.4）と終了の片付け [`discard_for_exit`]。
-#[derive(Debug)]
 pub(crate) struct ReloadInFlight {
     pub target: ReloadTarget,
     pub origin: ReloadOrigin,
@@ -91,9 +93,10 @@ pub(crate) struct ReloadInFlight {
     pub stage: ReloadStage,
 }
 
-/// 印の段（shiori の切れ目の待ち＝6.3・shell／balloon／descript の列＝6.4 が変種を足す）。
-#[derive(Debug)]
+/// 印の段（shell／balloon／descript の列＝6.4 が変種を足す）。
 pub(crate) enum ReloadStage {
+    /// shiori: 切れ目の印（`OnDestroy`）の返事を待っている（予約はまだ無い・下ろすのは [`drain`]）。
+    AwaitingDestroy { gap: ReplyReceiver<TalkGap> },
     /// ghost／shiori: ゴースト切替の予約に乗っている（終わりは [`on_switch_end`] が告げる）。
     /// `reserved` は窓口自身が `accept_switch` で立てた予約の鍵（`SwitchTarget.dir`）。
     Switching { reserved: PathBuf },
@@ -115,18 +118,21 @@ pub(crate) fn register(world: &mut World) {
     exit_wait::register_gate(world, "reload", gate, discard_for_exit);
 }
 
-/// 溜まった台本の読み直しの要求を全件取り出し、1 件ごとに窓口へ「台本」の出どころで渡す（Input の系）。
+/// 溜まった台本の読み直しの要求を全件取り出し、1 件ごとに窓口へ「台本」の出どころで渡してから、
+/// shiori の切れ目の返事を覗く（[`poll_destroy`]・Input の系）。
 ///
-/// 受信端が無ければ無操作（LogSink の起動・結線の前）。受信端の借用を切ってから窓口を呼ぶ。
+/// 受信端が無ければ取り出しは無操作（LogSink の起動・結線の前）。受信端の借用を切ってから窓口を呼ぶ。
 pub(crate) fn drain(world: &mut World) {
-    let Some(rx) = world.get_non_send::<ReloadRx>() else {
-        tracing::trace!(
-            event = "reload_drain_no_wiring",
-            "台本の読み直しの要求の受信端が無い——取り出しは無操作"
-        );
-        return;
+    let pending: Vec<ScriptReload> = match world.get_non_send::<ReloadRx>() {
+        Some(rx) => rx.try_iter().collect(),
+        None => {
+            tracing::trace!(
+                event = "reload_drain_no_wiring",
+                "台本の読み直しの要求の受信端が無い——取り出しは無操作"
+            );
+            Vec::new()
+        }
     };
-    let pending: Vec<ScriptReload> = rx.try_iter().collect();
     for raw in pending {
         request_reload(
             world,
@@ -137,6 +143,57 @@ pub(crate) fn drain(world: &mut World) {
             },
         );
     }
+    poll_destroy(world);
+}
+
+/// 印が `AwaitingDestroy` なら切れ目の返事を覗く（要件 2.4・4.1）。まだなら何もしない。`Reached` なら
+/// 印を下ろして [`start_switch`] へ（予約が立てば `Switching` の印に替わる）。それ以外は始めずに
+/// 印を下ろし、`reload_failed(gap_*)` を 1 件残す（利用者の取りやめ・ほかの切替は `warn!`、許可表の
+/// 漏れと kanade の脱落は `error!`・要件 9.1・9.3）。
+fn poll_destroy(world: &mut World) {
+    let Some(reply) = world
+        .get_non_send::<ReloadInFlight>()
+        .and_then(|f| match &f.stage {
+            ReloadStage::AwaitingDestroy { gap } => Some(gap.try_recv()),
+            _ => None,
+        })
+    else {
+        return;
+    };
+    if matches!(reply, Ok(None)) {
+        return;
+    }
+    let Some(flight) = world.remove_non_send::<ReloadInFlight>() else {
+        return;
+    };
+    let ReloadInFlight {
+        target,
+        origin,
+        ghost,
+        ..
+    } = flight;
+    let (reason, left) = match reply {
+        Ok(Some(TalkGap::Reached { .. })) => {
+            start_switch(world, target, origin, ghost);
+            return;
+        }
+        Ok(Some(TalkGap::CancelledByUser)) => ("gap_cancelled", None),
+        Ok(Some(TalkGap::Left { reason })) => ("gap_left", Some(reason)),
+        Ok(Some(TalkGap::NotSent { .. })) => {
+            return failed(&ghost, &target, origin, "gap_not_sent");
+        }
+        Ok(None) | Err(_) => return failed(&ghost, &target, origin, "kanade_gone"),
+    };
+    tracing::warn!(
+        target: TARGET_ERROR,
+        ghost = %ghost,
+        event = "reload_failed",
+        reason = reason,
+        left = ?left,
+        target = ?target,
+        origin = ?origin,
+        "台詞の切れ目に達しなかった（利用者の取りやめ・ほかの切替）ので shiori を読み直さない"
+    );
 }
 
 /// 唯一の入口。判定 → 語の記録 → 始めの記録 → 対象ごとの始め方。
@@ -236,16 +293,16 @@ fn overlap_or_context(world: &World) -> Option<RefusedReason> {
     None
 }
 
-/// 対象ごとの始め方の継ぎ目（ghost＝ここ・shiori＝6.3・shell／balloon／descript＝6.4 が埋め、始めたら
+/// 対象ごとの始め方の継ぎ目（ghost・shiori＝ここ・shell／balloon／descript＝6.4 が埋め、始めたら
 /// 印 [`ReloadInFlight`] を置く）。まだ始め方の無い対象は、印を置かずに `reload_failed` を残して終える
 /// （黙って受理だけしない・要件 9.3）。
 fn start(world: &mut World, target: ReloadTarget, origin: ReloadOrigin, ghost: String) {
     match &target {
         ReloadTarget::Ghost => start_switch(world, target, origin, ghost),
-        ReloadTarget::Shiori
-        | ReloadTarget::Shell
-        | ReloadTarget::Balloon
-        | ReloadTarget::Descript(_) => failed(&ghost, &target, origin, "not_implemented"),
+        ReloadTarget::Shiori => start_shiori(world, target, origin, ghost),
+        ReloadTarget::Shell | ReloadTarget::Balloon | ReloadTarget::Descript(_) => {
+            failed(&ghost, &target, origin, "not_implemented")
+        }
     }
 }
 
@@ -300,6 +357,33 @@ fn start_switch(world: &mut World, target: ReloadTarget, origin: ReloadOrigin, g
     }
 }
 
+/// shiori の読み直し（要件 2.4・4.1）: 台詞の切れ目の待ちに `OnDestroy`（Reference0＝`reload`・NOTIFY）
+/// の印を載せて kanade へ送り、返事の受け手を `AwaitingDestroy` の印に置く（返事は [`drain`] が覗く）。
+/// 送れなければ印を置かずに `reload_failed(kanade_gone)`。
+fn start_shiori(world: &mut World, target: ReloadTarget, origin: ReloadOrigin, ghost: String) {
+    let (reply, gap) = reply_channel();
+    let raise = Some(GapRaise {
+        id: "OnDestroy".to_owned(),
+        references: vec!["reload".to_owned()],
+        method: ShioriMethod::Notify,
+    });
+    let sent = world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .and_then(|session| session.kanade())
+        .is_some_and(|k| k.send(KanadeMsg::AwaitTalkGap { raise, reply }).is_ok());
+    if !sent {
+        failed(&ghost, &target, origin, "kanade_gone");
+        return;
+    }
+    world.insert_non_send(ReloadInFlight {
+        target,
+        origin,
+        ghost,
+        stage: ReloadStage::AwaitingDestroy { gap },
+    });
+}
+
 /// 失敗の終わりの記録（要件 9.2・`TARGET_ERROR`＋`ghost`）。
 fn failed(ghost: &str, target: &ReloadTarget, origin: ReloadOrigin, reason: &str) {
     tracing::error!(
@@ -316,7 +400,9 @@ fn failed(ghost: &str, target: &ReloadTarget, origin: ReloadOrigin, reason: &str
 /// 進行中の予約が窓口自身の予約か（印が `Switching { reserved }` で `reserved == SwitchInFlight.target.dir`）。
 fn own_switch(world: &World) -> Option<&ReloadInFlight> {
     let flight = world.get_non_send::<ReloadInFlight>()?;
-    let ReloadStage::Switching { reserved } = &flight.stage;
+    let ReloadStage::Switching { reserved } = &flight.stage else {
+        return None;
+    };
     let switch = world.get_non_send::<SwitchInFlight>()?;
     (switch.target.dir == *reserved).then_some(flight)
 }

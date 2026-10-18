@@ -120,7 +120,7 @@
   - `boot_origin_override`・`wants_runtime_only` が自分の予約のときだけ効き、他人の予約なら偽で `reload_failed(overtaken)` を残す
   - `reload_tests.rs` で各終わり方の記録と印の消え方、他人の予約での偽が固定される
   - _Requirements: 2.4, 3.1, 3.2, 3.7, 8.4, 9.2, 9.3, 12.1_
-- [ ] 6.3 shiori の読み直しの始め方（台詞の切れ目で `OnDestroy(reload)`）を作る
+- [x] 6.3 shiori の読み直しの始め方（台詞の切れ目で `OnDestroy(reload)`）を作る
   - 台詞の切れ目の待ちに `OnDestroy`（Reference0＝`reload`・NOTIFY）の印を載せて送り、`drain` が返事を覗く
   - `Reached` なら `accept_switch` へ進み、それ以外（利用者の取りやめ・ほかの切替・許可表の漏れ・kanade の脱落）は記録を残して印を下ろす
   - `reload_tests.rs` で返事の各場合の記録と印の消え方、`Reached` で `SwitchInFlight` が立つことが固定される
@@ -195,3 +195,4 @@
 - 5.2: `info!(skin_switch_requested)` は origin を持つので `accept_skin` の外（入口）に残した。読み直しの道は `reload_started` だけを残す。design.md 512 行のコメントは完了のときに直す。`SwitchContext` は `pub(crate)`（欄と `read` は `pub(super)`）。
 - 6.1: 受理の後の `start()` は対象ごとの腕で、今は `error!(reload_failed, reason="not_implemented")` を残して印を置かない。6.2〜6.4 が自分の腕を差し替え、`ReloadInFlight` に `stage: ReloadStage` の欄を足す（テストの `plant_reload` と `accepted_leaves_one_started_record` も直す）。`ReloadOrigin::Mcp` の allow は 7.5 で外す。`drain` はまだ `AwaitingDestroy` を覗かない（6.3）。NoWords は `reload_descript_no_words` の 1 件だけで、`reload_refused` は出さない（要件 7.5）。
 - 6.2: 7.1 は `end_switch` の中で予約を下ろす前に `reload::on_switch_end` を呼ぶこと（鍵を照合するため）。6.3・6.4 で `ReloadStage` に変種を足すとき、`own_switch` の `let ReloadStage::Switching { reserved } = …` は `let … else { return None }` に直す。SwitchEnd の写しは WriteFailure・DefaultFault・Fatal → `fatal`、Steady{Default} → `fell_back_to_default`。
+- 6.3: shiori で kanade へ送れなかったときは（受理の後なので）`reload_started` の後に `reload_failed(kanade_gone)` を残す。design の ReloadDesk 節の「NoContext」の文言は完了のときに揃える。`ReloadInFlight`・`ReloadStage` は `ReplyReceiver` を持つので Debug を外した。

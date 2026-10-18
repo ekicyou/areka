@@ -7,9 +7,12 @@
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver};
 
+use areka_actor::ReplySender;
 use areka_actor::reply_channel;
 use areka_ghost::BasewareRoot;
-use areka_kanade::{BootOrigin, KanadeMsg, ReloadScope};
+use areka_kanade::{
+    BootOrigin, GapLeft, GapRaise, KanadeMsg, RaiseOutcome, ReloadScope, ShioriMethod, TalkGap,
+};
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
@@ -466,8 +469,9 @@ fn ghost_reload_reserves_the_current_ghost() {
     let reserved = rig
         .world
         .get_non_send::<ReloadInFlight>()
-        .map(|f| match &f.stage {
-            ReloadStage::Switching { reserved } => reserved.clone(),
+        .and_then(|f| match &f.stage {
+            ReloadStage::Switching { reserved } => Some(reserved.clone()),
+            _ => None,
         });
     assert_eq!(
         (
@@ -639,5 +643,174 @@ fn foreign_reservation_is_false_and_ends_as_overtaken() {
             vec![(Level::ERROR, Some("overtaken".to_owned()))],
             true,
         )
+    );
+}
+
+/// shiori の受理を 1 件出し、kanade へ届いた台詞の切れ目の待ち（印・返信端）を取り出す。
+fn start_shiori_reload(rig: &mut Rig) -> (Vec<Option<GapRaise>>, ReplySender<TalkGap>) {
+    assert_eq!(
+        request_reload(&mut rig.world, mcp(ReloadTarget::Shiori)),
+        ReloadVerdict::Accepted
+    );
+    let mut raises = Vec::new();
+    let mut reply = None;
+    for msg in rig._kanade.try_iter() {
+        if let KanadeMsg::AwaitTalkGap { raise, reply: r } = msg {
+            raises.push(raise);
+            reply = Some(r);
+        }
+    }
+    (
+        raises,
+        reply.expect("AwaitTalkGap が kanade へ届いていない"),
+    )
+}
+
+fn awaiting(world: &World) -> bool {
+    world
+        .get_non_send::<ReloadInFlight>()
+        .is_some_and(|f| matches!(f.stage, ReloadStage::AwaitingDestroy { .. }))
+}
+
+/// shiori の受理: 台詞の切れ目の待ちに `OnDestroy`（Ref0＝`reload`・NOTIFY）を載せて送り、印は
+/// `AwaitingDestroy`（予約はまだ無い・返事が来るまで覗いても変わらない）。`Reached` が届くと `drain` が
+/// 今のゴーストの場所で `raise_event: false` の切替を送り、`SwitchInFlight` が立ち、印は自分の予約の
+/// `Switching` になる＝実行系だけの組み直しが真・由来は `Reloaded{Shiori}`（要件 2.4・4.1）。
+#[test]
+fn shiori_reload_raises_on_destroy_and_reached_reserves_the_switch() {
+    let mut rig = rig("areka-reload-shiori-start");
+    let dir = rig
+        .world
+        .resource::<BootContext>()
+        .current
+        .ghost
+        .dir
+        .clone();
+    let (raises, reply) = start_shiori_reload(&mut rig);
+    let before = (
+        awaiting(&rig.world),
+        rig.world.get_non_send::<SwitchInFlight>().is_some(),
+    );
+    drain(&mut rig.world);
+    let pending = awaiting(&rig.world);
+    reply
+        .send(TalkGap::Reached { marked: None })
+        .expect("受け手は印にある");
+    let ((), events) = capture(|| drain(&mut rig.world));
+    let sent = rig
+        ._kanade
+        .try_iter()
+        .map(|m| match m {
+            KanadeMsg::ChangeGhost(c) => Some((c.raise_event, c.target.dir)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let reserved = rig
+        .world
+        .get_non_send::<ReloadInFlight>()
+        .and_then(|f| match &f.stage {
+            ReloadStage::Switching { reserved } => Some((f.target.clone(), reserved.clone())),
+            _ => None,
+        });
+    assert_eq!(
+        (
+            raises,
+            before,
+            pending,
+            sent,
+            rig.world
+                .get_non_send::<SwitchInFlight>()
+                .map(|f| f.target.dir.clone()),
+            reserved,
+            named(&events, "reload_failed").len(),
+            wants_runtime_only(&rig.world),
+            boot_origin_override(&rig.world),
+        ),
+        (
+            vec![Some(GapRaise {
+                id: "OnDestroy".to_owned(),
+                references: vec!["reload".to_owned()],
+                method: ShioriMethod::Notify,
+            })],
+            (true, false),
+            true,
+            vec![Some((false, rig.ghost.clone()))],
+            Some(dir.clone()),
+            Some((ReloadTarget::Shiori, dir)),
+            0,
+            true,
+            Some(BootOrigin::Reloaded {
+                scope: ReloadScope::Shiori
+            }),
+        )
+    );
+}
+
+/// 切れ目の返事が `Reached` でない: 利用者の取りやめ・ほかの切替（`Left`）は `warn!`、許可表の漏れ
+/// （`NotSent`）と kanade の脱落（返信端の drop）は `error!` で、どれも `reload_failed(gap_*)` を
+/// `TARGET_ERROR`＋ゴースト名で 1 件残して印を下ろし、切替は送らない（要件 4.1・9.1・9.3）。
+#[test]
+fn shiori_gap_replies_other_than_reached_drop_the_mark() {
+    let mut rig = rig("areka-reload-shiori-gap");
+    let replies: [Option<TalkGap>; 4] = [
+        Some(TalkGap::CancelledByUser),
+        Some(TalkGap::Left {
+            reason: GapLeft::GhostChange,
+        }),
+        Some(TalkGap::NotSent {
+            outcome: RaiseOutcome::NotAllowed,
+        }),
+        None,
+    ];
+    let mut got = Vec::new();
+    for answer in replies {
+        let (_, reply) = start_shiori_reload(&mut rig);
+        match answer {
+            Some(gap) => reply.send(gap).expect("受け手は印にある"),
+            None => drop(reply),
+        }
+        let ((), events) = capture(|| drain(&mut rig.world));
+        let ends = named(&events, "reload_failed")
+            .into_iter()
+            .map(|e| {
+                (
+                    e.level,
+                    e.target.clone(),
+                    e.field_str("reason").map(str::to_owned),
+                    e.field("ghost").map(str::to_owned),
+                )
+            })
+            .collect::<Vec<_>>();
+        let switched = rig
+            ._kanade
+            .try_iter()
+            .any(|m| matches!(m, KanadeMsg::ChangeGhost(_)));
+        got.push((
+            ends,
+            rig.world.get_non_send::<ReloadInFlight>().is_none(),
+            switched || rig.world.get_non_send::<SwitchInFlight>().is_some(),
+        ));
+    }
+    let ghost = Some(rig.ghost.clone());
+    let end = |level: Level, reason: &str| {
+        (
+            vec![(
+                level,
+                TARGET_ERROR.to_owned(),
+                Some(reason.to_owned()),
+                ghost.clone(),
+            )],
+            true,
+            false,
+        )
+    };
+    assert_eq!(
+        got,
+        vec![
+            end(Level::WARN, "gap_cancelled"),
+            end(Level::WARN, "gap_left"),
+            end(Level::ERROR, "gap_not_sent"),
+            end(Level::ERROR, "kanade_gone"),
+        ]
     );
 }
