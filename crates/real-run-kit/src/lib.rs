@@ -10,3 +10,5 @@ mod launch;
 mod mcp;
 mod output;
 mod run;
+
+pub use output::ChildExited;
