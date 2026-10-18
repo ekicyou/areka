@@ -106,7 +106,7 @@
   - _Requirements: 12.4_
 
 - [ ] 6. 読み直しの窓口
-- [ ] 6.1 窓口の判定・断り・始めの記録・終了の門を作る
+- [x] 6.1 窓口の判定・断り・始めの記録・終了の門を作る
   - 判定の順（終了の途中 → 別の読み直し → ゴースト切替 → シェル／バルーン切替 → ネットワーク更新 → インストール → 文脈）で断り、断りごとに `reload_refused` を 1 件残す
   - 受理で `reload_started`（対象・出どころ・ゴースト）を残し、終了の門 `reload` を登録して終了の途中は `Closing` を返す・印は終了で `reload_dropped` で下りる
   - descript の語の仕分けの結果を受理の前に語ごとの `warn!`（無い種類・知らない語）で残し、読み直せる語が無ければ `NoWords` で断る
@@ -193,3 +193,4 @@
 - 4.2: `emo2_boot::runtime_boot` は `pub(crate)`。GhostSession の 4 つの口の allow は 7.2（split・attach・sink_sources）と 6.4（set_names）で外す。ghost_session.rs は 907 行（7.2 で本体を ghost_session_runtime.rs に置く）。
 - 5.1: `end_switch(world, _end)` は今は予約を下ろすだけ。7.1 で `reload::on_switch_end` を足すときに引数名を `end` に戻す。`accept_switch` は `BootContext` を読み直す（無ければ `NoContext`＋warn!・6.2 の直接の呼び手のための枝）。
 - 5.2: `info!(skin_switch_requested)` は origin を持つので `accept_skin` の外（入口）に残した。読み直しの道は `reload_started` だけを残す。design.md 512 行のコメントは完了のときに直す。`SwitchContext` は `pub(crate)`（欄と `read` は `pub(super)`）。
+- 6.1: 受理の後の `start()` は対象ごとの腕で、今は `error!(reload_failed, reason="not_implemented")` を残して印を置かない。6.2〜6.4 が自分の腕を差し替え、`ReloadInFlight` に `stage: ReloadStage` の欄を足す（テストの `plant_reload` と `accepted_leaves_one_started_record` も直す）。`ReloadOrigin::Mcp` の allow は 7.5 で外す。`drain` はまだ `AwaitingDestroy` を覗かない（6.3）。NoWords は `reload_descript_no_words` の 1 件だけで、`reload_refused` は出さない（要件 7.5）。

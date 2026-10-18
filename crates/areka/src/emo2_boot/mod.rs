@@ -28,6 +28,8 @@ pub mod hover_inject;
 mod install_cue;
 pub mod move_cue;
 mod readme_cue;
+/// 読み直しの窓口（areka-P0-mcp-reload）。
+pub(crate) mod reload;
 mod reload_args;
 /// `\![reload,…]`・`\![reloadsurface]` の受け口（areka-P0-mcp-reload）。
 mod reload_cue;

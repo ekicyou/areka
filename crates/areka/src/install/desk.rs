@@ -147,11 +147,18 @@ pub(crate) fn raw_sender(world: &World) -> Sender<RawInstallRequest> {
 
 /// インストールの窓口が忙しいか（背景のスレッドが依頼を扱っている・待っている依頼が在る・起動中の
 /// ゴーストへ入れる書庫を預かっている）。読み直しの入口が断るのに使う（mcp-reload 要件 2.1）。
-#[allow(dead_code)] // 呼び手の読み直しの窓口は mcp-reload の task 6.1 で足す
 pub(crate) fn is_busy(world: &World) -> bool {
     world
         .get_non_send::<InstallDesk>()
         .is_some_and(|desk| desk.busy || !desk.queue.is_empty() || desk.overwrite.is_some())
+}
+
+/// 依頼を扱っている最中の窓口を据える（テスト用・背景スレッドは起こさない）。
+#[cfg(test)]
+pub(crate) fn insert_busy_desk_for_test(world: &mut World) {
+    let mut desk = InstallDesk::new(Arc::new(WorkGate::default()));
+    desk.busy = true;
+    world.insert_non_send(desk);
 }
 
 /// メニュー「インストール…」を選べるか（窓口が在り・終了が始まっておらず・選ぶ画面が出ていない）。

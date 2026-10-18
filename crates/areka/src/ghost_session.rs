@@ -68,6 +68,7 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
     readme::register_readme_drain(world);
     emo2_boot::ghost_switch::register_change_drain(world);
     emo2_boot::shell_balloon_switch::register_switch_drain(world);
+    emo2_boot::reload::register(world);
     input_events::user_break::register_user_break_drain(world);
     menu::register_menu_poll(world);
     input_events::balloon::register_balloon_leave_system(world);
