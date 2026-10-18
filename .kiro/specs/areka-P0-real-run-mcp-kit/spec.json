@@ -1,16 +1,16 @@
 {
   "feature_name": "areka-P0-real-run-mcp-kit",
   "created_at": "2026-10-18T12:09:41Z",
-  "updated_at": "2026-10-18T12:13:09Z",
+  "updated_at": "2026-10-18T12:52:59Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {

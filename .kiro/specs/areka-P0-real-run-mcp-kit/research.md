@@ -221,3 +221,83 @@
 - 選択肢 B（新しいクレート）を前提に、議題 1〜16 のうち答えで作業が変わるもの（1・2・4・5・7・10・14）を要件の討議に挙げる。
 - 使い回す部品: `SampleRoot::acquire`／`TempPath::under_target`／`areka_mcp_bridge::scan::scan` と `Timeouts`／本物の `areka_mcp::start(&[0], …)`（偽の受け口）／`Child` の取っ手（自分が起こした子の確かめ）／`taskkill`（強制なし）の実機の先例。
 - 移し替えのとき、3 本の確かめ（2.1 の表と要件 7.2）を 1 つずつ照らして、消えた確かめが 0 であることを記録する。
+
+---
+
+## 9. 設計の段の調べと決めたこと（2026-10-18・`/kiro-spec-design -y`）
+
+### 9.1 要約
+
+- **Feature**: `areka-P0-real-run-mcp-kit`
+- **Discovery Scope**: Extension（ワークスペースに在る部品の寄せ集め＋新しいテスト専用のクレート 1 つ）。調べは軽い形（`design-discovery-light`）で、外の新しい依存は 0 個なので外の文書の調べは rmcp 3.5.0 のソース（`Cargo.lock` が固定する版）の確かめだけにした。
+- **Key Findings**:
+  - rmcp 3.5.0 の `Peer<RoleClient>::call_tool(CallToolRequestParams)` がそのまま使える（`CallToolRequestParams::new(name).with_arguments(map)`・答えは `CallToolResult`）。中継の `scan::scan` の `Link` の `peer()` から呼べる。
+  - ゴーストの窓は同じ tick の中で HWND が付き（wintf `create_windows`＝排他の段）、同じ tick の `FrameFinalize` で `OnCloseRequest` が差される。OS の閉じる知らせは tick の外で届くので、届いた時点のゴーストの窓には受け手が付いている。窓が無い子へは `taskkill`（強制なし）が失敗する＝送り直しで扱える。
+  - 窓口が頼る記録の行は 2 つの出所に集まる: `areka_mcp::server`（待受の 3 行）と `areka::app_exit`（`[os_close]` の受け取りの行・`[quit_app]` の終わり方の行）。`RUST_LOG` にこの 2 つを `=info` で足せば、呼び手が段を絞っても見える。`mcp_get_log` の「標準出力に出ないはずの行」（出所 `areka::ghost_session`）は増えない。
+
+### 9.2 調べの記録
+
+#### rmcp 3.5.0 のツールの呼び方
+- **Context**: 要件 4.2・10.5（公式 SDK で話す・手で組まない）。
+- **Sources Consulted**: `c:\rust\cargo\registry\src\…\rmcp-3.5.0\src\model.rs`（`CallToolRequestParams` 4247 行〜・`#[non_exhaustive]`・`new`・`with_arguments`）・`src\service\client.rs`（`call_tool` 1966 行〜）・`crates/areka-mcp-bridge/src/scan.rs`（`Link`＝`RunningService<RoleClient, BridgeClient>`）。
+- **Findings**: `CallToolRequestParams` は `#[non_exhaustive]` なので構造体の式では作れず、`new`＋`with_arguments` で作る。`call_tool` は `Result<CallToolResult, ServiceError>`。`is_error` は `Option<bool>`。
+- **Implications**: 窓口は rmcp を `client` だけで引けば足りる（中継が `server`・`transport-streamable-http-client` を有効にしているので、機能はワークスペースで統合される）。
+
+#### 待受の行と終わり方の行
+- **Context**: 要件 4.3〜4.5・5.3。
+- **Sources Consulted**: `crates/areka-mcp/src/server.rs`（`start` 33〜93 行）・`crates/areka/src/app_exit.rs`（`quit_app` 102〜135 行・`on_ghost_os_close` 257〜289 行）・`crates/areka/src/log_history.rs` 409〜414 行（未設定の `RUST_LOG` は `info`）。
+- **Findings**: 待受の行は `MCP: 待受を始めた`（移った版は同じ頭で始まる）・`MCP: どの候補のポートも束ねられなかった（待ち受けない）`（`error`）・`MCP: 待ち受けない（AREKA_MCP_PORT が 0）`。`quit_app` は最初の出所だけを `info`（`event="app_exit"`・`origin=?origin`）で出し、2 度目からは `debug`。`on_ghost_os_close` は `info`（`event="os_close_request"`）。
+- **Implications**: 窓口は綴りを私有の定数で持つ。待受の綴りは偽の子が本物の `start` を呼ぶことで檻に入る。終わり方の綴りは偽の子では檻にならないので、移し替えた実機の試験に 2 つの確かめを足す（設計 D-19）。
+
+#### 閉じる知らせを送ってよい時点
+- **Context**: `research.md` 2.6・7 の「調べが要るもの」。
+- **Sources Consulted**: `crates/wintf/src/ecs/window/window_system.rs`（`create_windows` は排他の段で `WindowHandle` を即時に挿す）・`crates/wintf/src/runtime/window_factory.rs` 150〜198 行（生成中の窓の手続きは World の借用中で飛ばされる）・`crates/areka/src/ghost_session.rs` 76〜82 行（`attach_os_close_request` は `FrameFinalize`）。
+- **Findings**: HWND が付く tick と受け手が差される tick は同じ。`taskkill` の知らせは窓の手続きで tick の外に届く。
+- **Implications**: 時点の目印の行を待たずに、`taskkill` を受け取りの行か子の終わりまで 1 秒ごとに送り直す形でよい（設計 D-3）。表示しない窓へ `taskkill` が届くかは、偽の子を相手に最初の実装のタスクで確かめる（届かなければ偽の子の窓を画面の外の 1×1 の道具窓にする・窓口の外は変わらない）。
+
+#### 見張りとテスト専用のクレートの決まり
+- **Context**: 要件 10.3・10.4・10.6。
+- **Sources Consulted**: `crates/log-capture-kit/tests/sample_path_guard_test.rs` 641〜750 行・`tests/workspace_scan/mod.rs`（`workspace_manifests`・`production_dependencies_on`）・`tests/with_default_guard_test.rs` 冒頭（捕捉先を直接差す 3 語・`env-filter` を宣言してよいのは wintf だけ）・`tools/crates-io.ps1` 判定「理由」（出さないクレートは `publish = false # 理由` の行）・`tools/test-all.ps1` 段 2（i686 の成果物を常時のテストより先に建てる）。
+- **Findings**: 本番の道で `sample-ghost-kit` に届くには、本番の表に `sample-ghost-kit` を持つクレートを通るしかない。`[dev-dependencies]` は推移しない。
+- **Implications**: 例外表（`real-run-kit` 1 件）と「`real-run-kit` がどの本番の表にも載らない」検査で、今と同じ強さになる（共有の走査器 `workspace_scan/mod.rs` には触らない）。偽の子は `tracing-subscriber` を `workspace = true` で引き、`init()` で据える。
+
+#### 既にある部品の使い回し
+- `areka_user_data::copy_tree_atomic`（`crates/areka-user-data/src/copy.rs` 55 行）: 落ちた回の検体の写しの複写にそのまま使える（作業フォルダに組んで改名・既に在れば書かない）。`sample-ghost-kit` の写しの消え方（`devroot.rs` の `NotFound` を黙って通すふるまい）に頼らずに済む。
+- `areka-user-data` の判断（`decide`）: `AREKA_USER_ROOT` が無く、実行ファイルの隣に書け、winget の控えが無ければ、書ける根は使わない（実行ファイルの隣＝`target\` の下）。窓口は `AREKA_USER_ROOT` を外したまま渡さない。
+
+### 9.3 形の比べ
+
+| 案 | 中身 | 強み | 弱み | 採否 |
+|---|---|---|---|---|
+| B 新しいクレート | `crates/real-run-kit/` に全部（`research.md` 4 章） | C9 の約束どおり・役が 1 つ・使う側は 1 行 | 見張りの直しが要る | 採る（D-1） |
+| 閉じ方 `taskkill` | 強制なしの `taskkill /PID` を送り直す | 依存なし・`unsafe` なし・実機の先例 | 窓の数だけ届く（先例では問題なし） | 採る（D-3） |
+| 閉じ方 `windows` で 1 枚へ | 子の最上位の窓を数えて 1 枚へ `WM_CLOSE` | 届く数が 1 | 窓口のライブラリに `unsafe`・窓の見分けが要る | 採らない |
+| 写し 改名で移す | 落ちた回に写しのフォルダを改名 | 複写なし | `devroot.rs` の中に頼る（同じウェーブの ⑤ が触る）・別のドライブで失敗 | 採らない |
+| 写し 落ちた回だけ複写 | `copy_tree_atomic` で `<回>\sample\` | 中に頼らない・成功の回は 0 | 落ちた回に複写の時間 | 採る（D-6） |
+| 写し 最初から複写 | 回の置き場に丸ごと写して使う | 回が 1 つにまとまる | 走りごとに数 MB の複写 | 採らない |
+| 待受の観測 つないで確かめる | 記録でなく `scan` をくり返す | 段に左右されない | 要件 4.3 の字面と違う | 採らない |
+
+### 9.4 まとめ方の 3 つの目（design-synthesis）
+
+- **まとめられるもの**: 「文字列を待つ」「待受の行を待つ」「閉じる知らせの受け取りを待つ」は、どれも「出力のファイルに文字列のどれかが現れる・子が終わる・締切」の 3 択。`output::wait_any` 1 つにまとめた。仲介と試験用の DLL の揃え方も 1 つの `ensure`（定めを引数で渡す）。
+- **作るか使うか**: MCP の話し方は rmcp＋中継の `scan`（作らない）。偽の受け口は本物の `areka_mcp::start`（作らない）。置き場は `temp-path-kit`・`sample-ghost-kit`、複写は `copy_tree_atomic`（作らない）。閉じる知らせは Windows 標準の `taskkill`（作らない）。作るのは待ち・閉じ方の送り直し・証拠を残す判定・偽の子だけ。
+- **削ったもの**: 呼び出しごとの締切の上書き（走りの締切 1 つで足りる）・引数の JSON の型（文で受ける）・`Launch` に根と位置の引数を同時に渡す形（使う試験が無い）・偽の子の窓と保険の自動終了の同時の手順（別々で確かめられる）。
+
+### 9.5 危うさと手当て
+
+- 偽の子の表示しない窓へ `taskkill` が届かない → 最初の実装のタスクで確かめ、届かなければ画面の外の道具窓に替える（窓口の外は変わらない）。
+- 位置の引数で立てる回にも空の根を渡す（要件 1.4）ことで、根の列挙の記録の行が増えうる → 移し替えのタスクで実機の出力を見る（確かめの対象の行は変わらない）。
+- 子が受け口を閉じてから終わるまでの間の輸送の失敗 → `exit_grace` の内に終われば `ChildExited`、超えれば `Unreachable`（どちらも締切の内）。
+- 窓口が頼る記録の綴りが areka の側で変わる → 待受は偽の子の檻、終わり方は移し替えた実機の 2 つの確かめ（D-19）が赤で知らせる。
+- 見張りのファイルは roadmap の C9 の ⑥ の触るファイルの欄に無い → 設計の決定 D-2 として記録し、欄の追記を棚卸の側へ申し送る。
+
+### 9.6 参照したスキルと手引き
+
+- `kiro-spec-design`（`rules/design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）と、`.kiro/settings/templates/specs/design.md`・`research.md` の型を使った。
+- steering は `product.md`・`tech.md`・`structure.md`（Temp Path Kit・Sample Ghost Kit・Log Capture Kit の節）・`roadmap.md`（「ウェーブ編成」C9 の行 ⑥ と 1 本だけの席）を読んだ。
+- 開発の決まり（記憶）として、公式 SDK を使う・tokio を閉じ込める・待ちは観測で有界・試験の置き場は `target\` の下の短い絶対パス・自分が起こしたプロセスだけを止める・1,000 行・`std::env::temp_dir` は `temp-path-kit` の外で使わない・失敗を黙って通さない、を設計の縛りにした。
+
+### 9.7 設計の段の審査の結果
+
+- 機械の確かめ: `requirements.md` の 60 個の番号（1.1〜10.6）がすべて design.md の対応表にある・Boundary の 4 節と File Structure Plan が埋まっている・部品はすべて File Structure Plan にファイルがある。
+- 判断の確かめで直したもの（1 回目）: `Run` ができる前の失敗でも回が残るよう `RunDirs` に自分の `Drop` を持たせた・手引きに書く項目を 10.2 のとおり並べた・偽の子の `smoke` と窓を別の手順にした・破棄で閉じたことを確かめる印のファイルを足した・`McpError` の文に出力の場所を入れない形にした・roadmap の欄に足すファイルを全部挙げた。2 回目の審査で残りは 0。
