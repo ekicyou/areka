@@ -225,7 +225,7 @@ fn kinds_and_ids_are_independent() {
         .expect("誰も握っていない");
 
     assert!(probe.is_present("a", WaitKind::Merge));
-    for kind in [WaitKind::Watch, WaitKind::Load, WaitKind::Resume] {
+    for kind in [WaitKind::Watch, WaitKind::Request, WaitKind::Resume] {
         assert!(!probe.is_present("a", kind), "{kind:?} は握っていない");
     }
     assert!(!probe.is_present("b", WaitKind::Merge), "別の識別");

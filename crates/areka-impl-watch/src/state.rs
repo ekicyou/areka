@@ -308,7 +308,6 @@ impl RecentKind {
     }
 }
 
-// 版 2 への切り替えの間は読み込まない（3.5 が新しい型へ直して戻す）。
-// #[cfg(test)]
-// #[path = "state_tests.rs"]
-// mod tests;
+#[cfg(test)]
+#[path = "state_tests.rs"]
+mod tests;

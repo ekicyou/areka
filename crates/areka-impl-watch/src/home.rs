@@ -70,7 +70,6 @@ impl Home {
     }
 }
 
-// 版 2 への切り替えの間は読み込まない（3.5 が新しい綴りへ直して戻す）。
-// #[cfg(test)]
-// #[path = "home_tests.rs"]
-// mod tests;
+#[cfg(test)]
+#[path = "home_tests.rs"]
+mod tests;

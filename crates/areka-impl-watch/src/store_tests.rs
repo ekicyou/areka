@@ -199,6 +199,32 @@ fn unknown_version_fails_without_reading_or_touching_the_file() {
 }
 
 #[test]
+fn a_version_1_file_is_refused_byte_for_byte_and_clear_still_goes_through() {
+    // 古い実行ファイルが書いた版 1 の形（負荷テストの机の項目 `load` を持つ）。
+    let root = TempPath::under_target("impl-watch-store");
+    let home = home_in(&root);
+    let old = "{\r\n  \"version\": 1,\r\n  \"participants\": {},\r\n  \"merge\": {},\r\n  \
+               \"load\": { \"holder\": null, \"queue\": [] },\r\n  \"waits\": [],\r\n  \
+               \"recent\": []\r\n}";
+    fs::write(home.state_path(), old).expect("置ける");
+
+    let err = store_in(&root)
+        .with_state(|_, _, _| (unchanged(), ()))
+        .expect_err("版 1 は読まない");
+
+    assert!(
+        err.to_string().contains("file has 1, this exe knows 2"),
+        "{err}"
+    );
+    assert_eq!(fs::read(home.state_path()).expect("読める"), old.as_bytes());
+
+    // `clear` は版を見ずに退避して通る（7.5）。退避したファイルも 1 バイトも変わらない。
+    let backup = store_in(&root).clear().expect("消せる").expect("退避した");
+    assert_eq!(fs::read(&backup).expect("在る"), old.as_bytes());
+    assert_eq!(read_state(&home), State::cleared(T0, &backup));
+}
+
+#[test]
 fn a_state_file_that_cannot_be_opened_fails_and_is_not_set_aside() {
     // 状態ファイルの名前のフォルダ: 読みが OS の失敗になる（「壊れている」とは見なさない）。
     let root = TempPath::under_target("impl-watch-store");
