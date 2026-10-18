@@ -226,7 +226,7 @@ fn fix_line_carries_the_command_and_the_measurement_on_one_line() {
     );
 }
 
-/// 見送りの記録は必ず理由を名乗り、5 種の理由が互いに区別できる（要件 6.3）。
+/// 見送りの記録は必ず理由を名乗り、6 種の理由が互いに区別できる（要件 6.3・areka-P0-zorder-scope-inversion で `ReleasedByChain` が加わった）。
 #[test]
 fn skip_line_names_a_distinct_reason_for_every_skip() {
     let (balloon_entity, char_entity) = pair_entities();
@@ -236,6 +236,7 @@ fn skip_line_names_a_distinct_reason_for_every_skip() {
         (SkipReason::HandleMissing, "HandleMissing"),
         (SkipReason::EchoOrIrrelevant, "EchoOrIrrelevant"),
         (SkipReason::StrategyDisabled, "StrategyDisabled"),
+        (SkipReason::ReleasedByChain, "ReleasedByChain"),
     ];
 
     let mut rendered: Vec<String> = Vec::new();
@@ -448,6 +449,7 @@ fn record_decision_reports_every_skip_reason_and_yields_no_fix() {
         SkipReason::HandleMissing,
         SkipReason::EchoOrIrrelevant,
         SkipReason::StrategyDisabled,
+        SkipReason::ReleasedByChain,
     ] {
         let mut taken = Some(PairFixDecision::Skip(reason));
         let out = capture_under_filter(SIGNOFF_DIRECTIVES, || {

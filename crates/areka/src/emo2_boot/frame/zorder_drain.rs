@@ -321,16 +321,17 @@ fn publish_chain_plan(world: &mut World, plan: Option<ChainPlan>) {
 // 記録の本文（純関数・`tracing` を含まない）
 // ---------------------------------------------------------------------------
 
-/// 受理（`\![set,zorder,...]`）の本文——台帳に載った内容と、正規化で調整した内容。
+/// 受理（`\![set,zorder,...]`）の本文——台帳に載った内容と、各スコープの並びの形。
 ///
-/// `normalized` に載るのは、明示モードで名前の挙がったスコープごとの正規化の記録である。
-/// `scope:true` は「作者が書いた順をそのままの形では採用しなかった」（同一スコープの
-/// 2 窓を隣接ブロックへ寄せた・要件 2.4）を意味する。
+/// `normalized` に載るのは、明示モードで名前の挙がったスコープごとの記録である。
+/// 台帳は書かれた順を組み替えないので（`areka-P0-zorder-scope-inversion` 要件 1・2）、
+/// 語は書かれた並びの形を語る——`scope:false`（バルーンのすぐ奥にキャラ窓）・
+/// `scope:inverted`（逆転）・`scope:split`（非隣接）・`scope:inverted-split`
+/// （逆転かつ非隣接）の 4 通りである（要件 1.4・2.3）。
 ///
 /// 片方の窓しか書かれていなかったスコープには `+bN`／`+sN` が続き、**こちらが補った
-/// 相棒窓**を名指しする（畳み込み・要件 2.6）。補いのときは並べ替えるべき 2 窓が
-/// そもそも書かれていないので、字面は必ず `scope:false+bN` の形になる——`scope:false`
-/// だけの欄は「2 窓とも書かれていて、その順をそのまま採った」を意味し続ける。
+/// 相棒窓**を名指しする（要件 3.1・3.2）。補った窓は相棒のすぐ隣に入るので、字面は
+/// 必ず `scope:false+bN` の形になる。
 ///
 /// 数値モードでは調整も補いも起きないので常に番兵になる。
 ///
@@ -415,13 +416,12 @@ fn members_text(members: &[GroupElement]) -> String {
 
 /// 正規化の記録を 1 欄へ（空列は番兵）。
 ///
-/// 1 スコープぶんの字面は `scope:reordered`。相棒窓を補ったスコープ（畳み込み・
-/// 要件 2.6）だけ、そこへ `+bN`／`+sN` を続けて**補った窓そのもの**を名指しする。
+/// 1 スコープぶんの字面は `scope:{並びの形}`（`WrittenOrder::as_str`）。相棒窓を
+/// 補ったスコープだけ、そこへ `+bN`／`+sN` を続けて**補った窓そのもの**を名指しする。
 /// 要素列の欄（`members=`）と同じ省略記法を使うので、行の中で照らし合わせられる。
 ///
-/// 2 窓そろって書かれたスコープの字面は畳み込みの導入前と 1 バイトも変わらない
-/// ——既存の檻（`zorder_drain_tests.rs` の受理行・`zorder_descript_tests.rs` の
-/// 起動行）が読み続けている語だからである（要件 9.5）。
+/// 隣り合いの語 `false` と補いの綴り `+bN`／`+sN` は既存の読み手のために据え置く
+/// （要件 7.4）。
 fn normalizations_text(normalizations: &[Normalization]) -> String {
     if normalizations.is_empty() {
         return NO_VALUE.to_string();
@@ -429,7 +429,7 @@ fn normalizations_text(normalizations: &[Normalization]) -> String {
     normalizations
         .iter()
         .map(|n| {
-            let mut field = format!("{}:{}", n.scope, n.reordered);
+            let mut field = format!("{}:{}", n.scope, n.order.as_str());
             if let Some(kind) = n.implied_partner {
                 field.push('+');
                 field.push_str(&element_text(&GroupElement {
@@ -454,3 +454,7 @@ mod tests;
 #[cfg(test)]
 #[path = "zorder_drain_projection_tests.rs"]
 mod projection_tests;
+
+#[cfg(test)]
+#[path = "zorder_drain_written_order_tests.rs"]
+mod written_order_tests;
