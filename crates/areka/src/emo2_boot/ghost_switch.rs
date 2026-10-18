@@ -189,8 +189,9 @@ pub(crate) enum SwitchEnd {
 }
 
 /// 予約を下ろす唯一の口（OS のセッションの終了の 1 か所 `session_end` を除く）。
-/// 出口の語彙はまだ読まない（予約を下ろすだけ）。
-pub(crate) fn end_switch(world: &mut World, _end: SwitchEnd) {
+/// 読み直しの窓口へ終わりを告げてから下ろす（窓口は予約の鍵を照合する）。
+pub(crate) fn end_switch(world: &mut World, end: SwitchEnd) {
+    super::reload::on_switch_end(world, end);
     world.remove_non_send::<SwitchInFlight>();
 }
 
@@ -636,8 +637,9 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     let closed = close_windows_for_restart(world);
     // 起動中のゴーストへ入れる一周（預かった宛先への切替のときだけ・降ろした後・起こす前に展開する）。
     crate::install::desk::run_overwrite_between(world);
-    // 起動の知らせが在れば（読み直し）それを根に、無ければ今日どおり「切替で来た」（決めたこと 23）。
-    let origin = match boot_event {
+    // 読み直しの窓口自身の予約なら読み直しの由来（要件 3.2〜3.4）。それ以外は、起動の知らせが在れば
+    // （ネットワーク更新の読み直し）それを根に、無ければ今日どおり「切替で来た」（決めたこと 23・要件 3.6）。
+    let origin = super::reload::boot_origin_override(world).unwrap_or_else(|| match boot_event {
         Some((id, references)) => BootOrigin::Updated { id, references },
         None => BootOrigin::ChangedFrom(ChangedFrom {
             sakura_name: prev.sakura_name.unwrap_or_default(),
@@ -648,7 +650,7 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
                 .display()
                 .to_string(),
         }),
-    };
+    });
     let ghost = GhostDecision {
         route: GhostRoute::Switched,
         dir,
@@ -882,3 +884,7 @@ mod roots_tests;
 #[cfg(test)]
 #[path = "ghost_switch_drop_write_tests.rs"]
 mod drop_write_tests;
+
+#[cfg(test)]
+#[path = "ghost_switch_reload_tests.rs"]
+mod reload_tests;

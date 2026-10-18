@@ -441,7 +441,6 @@ fn own_switch(world: &World) -> Option<&ReloadInFlight> {
 /// ゴースト切替の予約が下りる全部の出口から（呼び手 `ghost_switch::end_switch`・**予約を下ろす前**に呼ぶ）。
 /// 印が `Switching` なら終わりの記録を 1 件残して印を下ろす（要件 3.7・8.4）。予約が窓口自身の
 /// ものでなければ `reload_failed(overtaken)`。印が無い・別の段なら何もしない。
-#[allow(dead_code)] // 呼び手の `end_switch` は task 7.1 で付く。
 pub(crate) fn on_switch_end(world: &mut World, end: SwitchEnd) {
     if !matches!(
         world.get_non_send::<ReloadInFlight>().map(|f| &f.stage),
@@ -480,7 +479,6 @@ pub(crate) fn on_switch_end(world: &mut World, end: SwitchEnd) {
 
 /// `switch_to` が由来を決めるとき（要件 3.2・3.3）: 印が ghost／shiori の読み直しで、進行中の予約が
 /// 窓口自身のものなら `Some(Reloaded{scope})`。他人の予約なら `None`（既存の由来のまま）。
-#[allow(dead_code)] // 呼び手の `switch_to` は task 7.1 で付く。
 pub(crate) fn boot_origin_override(world: &World) -> Option<BootOrigin> {
     let scope = match own_switch(world)?.target {
         ReloadTarget::Ghost => ReloadScope::Ghost,

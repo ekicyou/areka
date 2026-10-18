@@ -105,7 +105,7 @@
   - _Boundary: SkinSwitch_
   - _Requirements: 12.4_
 
-- [ ] 6. 読み直しの窓口
+- [x] 6. 読み直しの窓口
 - [x] 6.1 窓口の判定・断り・始めの記録・終了の門を作る
   - 判定の順（終了の途中 → 別の読み直し → ゴースト切替 → シェル／バルーン切替 → ネットワーク更新 → インストール → 文脈）で断り、断りごとに `reload_refused` を 1 件残す
   - 受理で `reload_started`（対象・出どころ・ゴースト）を残し、終了の門 `reload` を登録して終了の途中は `Closing` を返す・印は終了で `reload_dropped` で下りる
@@ -136,7 +136,7 @@
   - _Requirements: 2.5, 5.1, 6.1, 7.1, 7.2, 7.3, 7.6, 8.4, 9.1, 9.2, 9.3_
 
 - [ ] 7. 既存の道への分かれ目の結線と入口
-- [ ] 7.1 ゴースト切替の起こし方に読み直しの由来を通す
+- [x] 7.1 ゴースト切替の起こし方に読み直しの由来を通す
   - `switch_to` が由来を `boot_origin_override` で上書きし、`end_switch` から `on_switch_end` を呼ぶ
   - `ghost_switch_reload_tests.rs`（`SwitchRig`）で、印があるとき偽 SHIORI の受けた要求に `OnBoot`・`OnGhostChanged`・`OnGhostChanging`・`OnClose` が無く `OnInitialize`・`username`・`basewareversion` があり、印が無ければ今までどおり
   - _Depends: 2.1, 6.2_
