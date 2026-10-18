@@ -31,9 +31,9 @@
   - 完了状態: 新しい合成のテストが緑で、同じスコープの対の除外を経路から外す変異で赤になる
   - _Requirements: 1.1, 1.2, 1.6, 2.1, 2.2, 3.3, 4.3, 8.2_
 
-- [ ] 2. 基盤: 組を外す判定と記録の語（wintf）
+- [x] 2. 基盤: 組を外す判定と記録の語（wintf）
 
-- [ ] 2.1 (P) 組を外す判定・組の操作列・持ち主の輪の確かめを純関数で置き、新しい記録 3 語を足す
+- [x] 2.1 (P) 組を外す判定・組の操作列・持ち主の輪の確かめを純関数で置き、新しい記録 3 語を足す
   - 望む鎖が在り、バルーンとキャラクターの両方が並びに居て、キャラクターがバルーンのすぐ奥に居ないときだけ「外す」と答える判定を 1 本だけ置く。組の系と鎖の適用系はすべてこれを呼ぶ
   - 組の結び目を鎖のために外している印（値を持たない）を置く。付け外しは鎖の適用系だけが行う
   - 組の現況と望む鎖から操作列を導く純関数を置く: 外しが全部先・結び直しが全部後、各群はバルーンの実体の昇順。印と望みが一致する組には操作を出さず、鎖が無ければ印の付いた組は全部結び直し
@@ -177,3 +177,7 @@
 - 1.1: 新しいワークツリーで `cargo test -p areka` を通しで回すと、統合テスト（`mcp_get_log_real_run`・`smoke_boot_loop_exit`）は i686 の部品が未ビルドだと赤になる。先に `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` と `cargo build -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` を通す（本 spec の欠陥ではない）
 - 1.1: 錨の名前が変わった: `t_zdr04_the_written_order_shape_is_surfaced_only_for_the_explicit_mode`・`t_zdb04_an_inverted_setting_is_seated_in_written_order_and_recorded`。新しい台帳の檻は `zorder_group_ledger_written_order_tests.rs`（t_zwo01〜12）
 - 変異の確かめで `git checkout -- <file>` を使うと未コミットの直しまで消える（1.3 で説明の直しが一度消えた）。変異は控えのコピーから戻すこと
+- 2.1: 新しい純関数・記録の出口 7 か所に一時の `#[allow(dead_code)]`（zorder_chain.rs に 6・zorder_chain_diag.rs の `LinkRefusedReason` に 1）。呼び手が入る 3.2〜3.5 で許可を外し、両ファイル冒頭の「`dead_code` 許可は…だけ」の説明も書き戻すこと
+- 2.1: 設計の「約束の外」の表に無い既存テスト 2 本を直した（`zorder_chain_diag_tests.rs::no_extra_tag_hides_outside_the_two_rosters` を名簿 7＋3 の和へ・`zorder_chain_tests.rs::the_tracing_macros_for_the_chain_have_exactly_one_home` を debug 7・error 3 へ）。設計が足す語と出口を数える檻なので避けられない。完了の棚卸で design の表へ 2 行を足す
+- 2.1: bevy の `Entity` の順は作った順と限らない。テストで並びを期待するなら作った実体を並べ替えてから使う
+- 変異の確かめを `Copy-Item` で戻すと更新時刻が古いままで cargo が再ビルドを飛ばすことがある。戻した後はファイルの更新時刻を新しくする

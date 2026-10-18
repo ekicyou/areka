@@ -723,16 +723,17 @@ fn the_tracing_macros_for_the_chain_have_exactly_one_home() {
     let here = code_only(include_str!("zorder_chain.rs"));
     let diag = code_only(include_str!("zorder_chain_diag.rs"));
 
-    // こちら: debug 5 本（linked・unlinked・settled・absent・skipped）＋ error 2 本。
+    // こちら: debug 5 本（linked・unlinked・settled・absent・skipped）＋ error 2 本に、
+    // 組の受け渡しの debug 2 本（pair-released・pair-restored）＋ error 1 本（link-refused）。
     assert_eq!(
         here.matches("debug!(").count(),
-        5,
-        "鎖の debug 記録の本数が 5 本でない"
+        7,
+        "鎖の debug 記録の本数が 7 本でない"
     );
     assert_eq!(
         here.matches("error!(").count(),
-        2,
-        "鎖の error 記録の本数が 2 本でない"
+        3,
+        "鎖の error 記録の本数が 3 本でない"
     );
 
     // あちら: 保全語彙 2 語ぶん（debug 1・warn 1）だけ。鎖の記録は 1 本も出さない。
