@@ -36,7 +36,7 @@
   - 改名した許可表のテストが `OnDestroy` を含めて緑
   - _Boundary: KanadeEvents_
   - _Requirements: 4.1_
-- [ ] 2.3 (P) seriko の `bind` の命令名を共有の定数にする
+- [x] 2.3 (P) seriko の `bind` の命令名を共有の定数にする
   - `actor.rs` に `BIND_COMMAND` を置いて比較をそれに替え、`lib.rs` で再輸出する
   - seriko の既存テストが緑で、外のクレートから `areka_seriko::BIND_COMMAND` が引ける
   - _Boundary: Seriko_
