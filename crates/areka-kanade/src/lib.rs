@@ -26,6 +26,8 @@ pub mod anchor_input;
 pub mod change;
 // 殻で答える複数件のリソース照会（`KanadeMsg::ResourceQuery`）。`actor.rs` を薄く保つための分室。
 mod actor_resources;
+// 殻の SSTP の 2 つの入口の返事（返事の控え・最初の往復の写し・返事の送り）。
+mod actor_sstp;
 // 殻の停止と通知の手 4 つ（`actor.rs` を薄く保つための分室・殻は同じ名前で使う）。
 mod actor_stop;
 // 殻が翻訳の依頼（`Action::Translate`）を実行する 1 関数（呼び手は `actor` の `execute_batch` の腕）。
