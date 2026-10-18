@@ -302,15 +302,14 @@ pub fn run(spec: &WaitSpec, port: &dyn WaitPort, held: Held) -> Result<WaitEnd, 
     Ok(end)
 }
 
-// 版 2 への切り替えの間は読み込まない（3.1 が新しい机へ書き直して戻す）。
-// #[cfg(test)]
-// #[path = "wait_test_support.rs"]
-// mod test_support;
-//
-// #[cfg(test)]
-// #[path = "wait_tests.rs"]
-// mod tests;
-//
-// #[cfg(test)]
-// #[path = "wait_loop_tests.rs"]
-// mod loop_tests;
+#[cfg(test)]
+#[path = "wait_test_support.rs"]
+mod test_support;
+
+#[cfg(test)]
+#[path = "wait_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[path = "wait_loop_tests.rs"]
+mod loop_tests;
