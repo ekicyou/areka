@@ -205,3 +205,147 @@ L2 を採る場合、翻訳を通ったトークのために「預けた一括�
 - **最初の 2 タスク**は brief どおり上限の近いファイルを割る（`msg.rs` のテストを兄弟の `msg_tests.rs` へ・`schedule/mod.rs` の型の塊を兄弟へ出して同じ名前で見せる。`schedule/boot.rs` を変えないことを割り方の条件にする）。
 - **② `startup-options-core` への申し送り**: 本 spec は `crates/areka-ghost/src/shiori_wiring.rs` に触らない。
 - **④ `mcp-reload` への申し送り**: 本 spec は `crates/areka-ghost/src/runtime.rs` に触らない見込み（ゴーストの名前は `config.rs` の中で入れる）。議題 9 で `runtime.rs` が要ると決まったときだけ申し合わせる。`schedule/close.rs` は W1 の ⒝・⒞ を採らなければ触らない。
+
+---
+
+# 設計の段の調べと決定（2026-10-18・`/kiro-spec-design -y`）
+
+> 本節より上はギャップ分析（決定しない）。本節は設計の段で調べたことと決めたことの記録で、結論は [design.md](design.md) に書き写してある。SSP には何も送っていない・実機も動かしていない。
+
+## Summary
+
+- **Feature**: `areka-P0-mcp-kanade-tools`
+- **Discovery Scope**: Extension（既存の kanade と MCP の入口へ足す）→ 軽い調べ（`design-discovery-light`）。新しい外部のライブラリは無いので外の調べはしていない。
+- **Key Findings**:
+  - 外から台本を流す入口と任意の名前のイベントを送る入口は、**新しい 2 変種**（`KanadeMsg::SstpSend`・`SstpNotify`）にすれば、既存の `RaiseEvent` の呼び手 7 ファイルと `RaiseOutcome`（`src/change.rs`）を 1 行も変えずに済む。
+  - 起動の相（`BootVersion`）は `basewareversion` の往復と同じ一括で `Steady` へ移るので、**知らせの切れ目では起動の挨拶はいつも `Steady{talk: Some(origin = "boot")}` で流れている**。要件 3.6 の「起動の挨拶を含む」を満たすには、相でなく `ActiveTalk::origin` の控えで見分ける必要がある。
+  - script 種別のログは運行表の出口（`step` の最後）で出すと、元のイベント（`reply_source`・`TranslateWait::source`）と最終の台本が両方手元にあり、`step` を呼んだスレッドで決定論テストが書ける。
+
+## Research Log
+
+### 既存の資産の確かめ直し（ギャップ分析の 2 節を設計の目で読み直した）
+
+- **Context**: 設計で使う関数・型の正確な形と、触れない約束のファイルとの境を確かめる。
+- **Sources Consulted**: `crates/areka-kanade/src/{msg.rs, actor.rs, lib.rs, change.rs, translate.rs, actor_translate.rs}`、`schedule/{mod.rs, steady.rs, steady_choice_script.rs, translate.rs, events.rs, talk_gap.rs, change.rs, boot.rs, balloon_events.rs, log_capture.rs}`、`crates/areka/src/mcp/{mod.rs, get_status.rs, sakurascript.rs, raise_event.rs, resolve.rs}`、`crates/areka-mcp/src/tools/outcome.rs`、`crates/areka/src/log_history.rs`、`crates/areka-ghost/src/{config.rs, runtime.rs}`、`crates/areka-parsers/src/package/model.rs`、`doc/ssp-mcp/{log-convention.md, survey.md, get-status-diff-areka.md}`。
+- **Findings**:
+  - `start_talk` は `steady.rs` の中の非公開の子 `choice_script`（`#[path = "steady_choice_script.rs"]`）に在り、`schedule` の別の子からは道が通らない。呼び手は `steady_choice_script.rs` の 1 か所だけ。→ `schedule/mod.rs` の共通の手（`clear_choice_ledger` の隣）へ移せば `steady.rs` に触らずに済む。
+  - `drive_translating` の 2 つ目の返り値（最初の一括の往復の結果）を直に読むテストは `actor_stop_notify_tests.rs` の `drive(` 1 か所だけ（`#[cfg(test)]` の包み経由）。返り値の型を変えても包みの型を保てば既存のテストは変わらない。
+  - `on_translate` は kanade の外でも 2 か所（`crates/areka/src/emo2_boot/spine_conformance_script.rs`・`crates/areka-ghost/tests/ghost/spine_e2e_test.rs`）が呼ぶ。→ 署名を変えず、SSTP SEND の組み立ては別の関数 `on_translate_sstp` にする。
+  - `EventId` を網羅の `match` で読むのは kanade の `actor.rs` の 2 か所と `msg.rs` の `as_str` だけ（kanade の外は `EventId::Choice` を作る 1 か所だけ）。
+  - `KanadeConfig` を構造体の字面で組む所は 0（全部 `KanadeConfig::new` か `..KanadeConfig::new(..)`）。欄を足しても既存の構築点は壊れない。
+  - `runtime.rs` の `boot_with_origin` は `resolve_kanade_config` の返り値の `first_boot`・`vanish_count`・`first_boot_epilogue`・`boot_origin`・`shell_folder` を書き換えるだけ。→ ゴーストの名前は `config.rs` の中で入れれば `runtime.rs` は不要（ギャップ分析の W4 の回避の形が成り立つ）。
+  - `MountModel` はゴーストの根を持たないが、`shiori.dir` は「ghost_root/ghost/master」（型の説明）なので 2 つ上が根。MCP の宛先の値は `std::path::absolute(GhostSession::ghost_dir())` の末尾の区切りを除いた字。
+  - `talk_gap.rs` の `marked_reply` は `origin == 印の名前` で印の応答を見分ける。外から頼まれた名前に固定のラベル（`"SstpNotify"`）を載せれば、`OnShellChanging` を頼まれても印の仕組みを誤って動かさない。外からの台本が印の台詞を置き換えたときは `decide` が `MarkedEnd::Replaced` に決める（マウスの置き換えで既に在る道）。
+  - `balloon_events::settle` は出口の `StartTalk` で「最後に再生を始めたトーク」を控え、相手を失った控えを掃除する。外からの台本の置き換えも同じ出口を通るので、バルーンの 3 つのイベントの控えは今のマウスの置き換えと同じに扱われる。
+  - dispatcher・sakura は中断の無効化モードを見ない（`crates/areka-ghost/src`・`crates/areka-sakura/src` に `no_user_break`・`nouserbreak` の語が無い）。置き換えはモードに依らない＝要件 3.4 は作りのまま。
+- **Implications**: 新しい部品は兄弟の新しいファイルへ置き、上限の近いファイルには振り分けの数行だけを足す。`steady.rs`・`boot.rs`・`close.rs`・`schedule/change.rs`・`src/change.rs`・`runtime.rs` には触らない。
+
+### `raise_event` の 2 行の区切りの字（要件 2.3）
+
+- **Context**: 要件は「SSP の生の応答で設計の段に確かめる」。本 spec の設計の段では SSP に送らない指示。
+- **Sources Consulted**: `doc/ssp-mcp/survey.md`（`get_expression_table` の行区切り `\r\n`・`get_log` の行区切り `\r\n`＝どちらも 2.9.05 の実測）。
+- **Findings**: SSP の MCP は、測った 2 本で複数行の本文の区切りが `\r\n`。`raise_event` そのものは未実測。
+- **Implications**: 既定は `\r\n`（定数 `SCRIPT_LINE_BREAK` 1 か所）。実装の段で SSP に 1 回当てて生の JSON を記録し、違えば定数だけを直す。測れなければ差の一覧に「未実測」と書く（design「実装の段で測ること」）。
+
+### strict の先の使われ方（要件 5）
+
+- **Context**: 「再生する側へ渡す」をどこまでと読むか（ギャップ分析の議題 1・W1）。
+- **Sources Consulted**: `doc/ssp-mcp/survey.md` §2（strict＝存在しないサーフェス・アニメーション・バルーン・未知のタグ・`\![コマンド]`・`\&[実体参照]` をエラーログに記録）、`.kiro/specs/areka-P0-mcp-strict-errors/brief.md`（案 ⑴ 入口で診断／案 ⑵ 印を再生の各所まで運ぶ、が未決）。
+- **Findings**: 後続の spec の 2 案のどちらでも、kanade が「strict の値とトークの番号」を持っていれば足りる（⑴ は MCP の側の値を使い、⑵ はそこから再生の側へ広げる）。`StartTalk` に欄を足すと `schedule/boot.rs` の字面 2 か所に当たり、`script-security-level` の入れ物の決定を先取りする。
+- **Implications**: kanade の運行状態に `StrictNote{talk_id, strict}` を持つ形にする（W1 の ⒜）。要件の Introduction は kanade を「台本の実行と SHIORI の往復を受け持つ部分」と定義しており、kanade が「再生する側」に当たる。
+
+## Architecture Pattern Evaluation
+
+| 案 | 中身 | 強み | 弱み | 採否 |
+|---|---|---|---|---|
+| 入口 A: 既存の `RaiseEvent` を広げる | 欄と返事の型を足す | 変種が増えない | `update/desk.rs`（`mcp-reload`）ほか 7 ファイルと `src/change.rs` に当たる・要件 6.2 を型で守れない | 不採用 |
+| 入口 B: 新しい 2 変種＋新しいファイル | `SstpSend`・`SstpNotify`・`sstp.rs`・`actor_sstp.rs`・`schedule/sstp.rs` | 既存の呼び手と `RaiseOutcome` が無変更・SSTP の受け口が将来同じ入口を使える | ファイルが増える | **採用** |
+| ログ L1: 殻の `execute_batch` | 送る直前 | 「再生を始める」に最も近い | イベント名が無い・殻のスレッドで決定論テストが書けない | 不採用 |
+| ログ L2: 運行表の出口 | `step` の最後 | 元のイベントと最終の台本が手元・呼んだスレッドで捕まえられる・構築点に触らない | 再生の側が落ちていたときも 1 件残る（`error!` が同時に残るので許す） | **採用** |
+| ログ L3: `StartTalk` に欄 | 語を台本と一緒に運ぶ | 語が離れない | `boot.rs` と `script-security-level` に当たる | 不採用 |
+| 翻訳 T1: 出どころの型を足して預ける | `ScriptSource`・`defer` | 帳簿と組み立てを共有・「外から SHIORI の応答を注入できない」作りを守る | 既存のテスト数か所の字面を包み直す | **採用** |
+| 翻訳 T2: 偽の SHIORI の応答として入れる | `capture` に乗せる | 変更が小さい | DD-2 の作りを崩す | 不採用 |
+
+## Design Decisions
+
+### Decision: 入口の名前を SSTP 寄りにする（`SstpSend`・`SstpNotify`・`EventId::Sstp`）
+
+- **Context**: brief「将来 SSTP が同じ変種を使えるよう名前は SSTP 寄りに付けてよい」。SSP の説明は `sakurascript` を Owned SSTP の SEND、`raise_event` を SSTP NOTIFY の Event 相当と書く。
+- **Alternatives Considered**: `External*`（外からの）— `status.rs` の `ExternalStates`（外から届いた実行状態）と紛れる。
+- **Selected Approach**: `SstpSend`・`SstpNotify`。出所カテゴリは `EventId::Sstp(String)`。翻訳の出どころは `ScriptSource::SstpSend`。
+- **Rationale**: 正典の語（Reference1 の `sstp-send`）と揃い、SSTP の受け口が来ても名前を変えずに済む。
+- **Trade-offs**: 表示の語 `SSTP(Local,Auth)` は MCP（Owned）に固定。遠くからの SSTP を足すときは欄を足す（Revalidation Triggers に書いた）。
+
+### Decision: 受け付けの判定を 1 つの純粋な関数にし、殻と運行表の両方から呼ぶ
+
+- **Context**: `SstpSend` は受け付けると最初の一括が翻訳の依頼で、往復の結果から受け付けたかを読めない。
+- **Alternatives Considered**: 1. 運行表が結果を状態に書き、殻が取り出す（`talk_gap::take_outcome` の形）2. 殻が `step` の前に同じ判定を呼ぶ（`RaiseEvent` の許可の表の照合の形）。
+- **Selected Approach**: 2。`schedule::sstp::accepts(&State)`。
+- **Rationale**: 状態に一時の欄を足さずに済み、同じ状態に同じ関数なので 2 か所が食い違わない。
+- **Follow-up**: 殻のテストで「起動の途中は `NotAccepted`」と「受け付けたら `Accepted`」を両方固定する。
+
+### Decision: 起動の挨拶の最中を `ActiveTalk::origin` の控えで見分ける
+
+- **Context**: 要件 3.6 は「起動の手順（起動の挨拶を含む）」の途中を断る。起動の相は同じ一括で `Steady` へ移るので、相で見ると挨拶の最中を一度も断れない。
+- **Alternatives Considered**: 1. 相だけで見る（挨拶の最中は受け付ける）— 要件 3.6 の「起動の挨拶を含む」が空になる 2. 起動の挨拶の印を状態に足す — 書く所が `schedule/boot.rs`（約束で触れない）3. `ActiveTalk::origin == "boot"` で見る。
+- **Selected Approach**: 3。綴りは定数 `BOOT_GREETING_ORIGIN` 1 か所、`boot.rs` の綴りが変わったら赤になるテストを置く。挨拶がマウスの反応などに置き換わった後は受け付ける。切替で来たゴーストの最初の挨拶（`OnGhostChanged`）も同じ控えなので断る。
+- **Rationale**: 要件の字面どおりで、`boot.rs` に触れない。
+- **Trade-offs**: 「書くだけで読まない欄」だった `origin` を初めて読む。
+
+### Decision: script 種別のログは運行表の出口で、入力ごとに出どころを決めて出す
+
+- **Context**: 要件 4.1〜4.3。表示の語は出どころで変わる。
+- **Selected Approach**: `step` が `route` の前に `script_log::source_of`（応答なら元のイベント・翻訳の結果なら帳簿の出どころ・外からの台本なら SSTP SEND・それ以外は無し）を控え、出口で `script_log::record` が `StartTalk` ごとに 1 件出す。出し口 `emit` と語の定数は公開し、MCP の側のテスト（要件 7.3）も同じ `emit` を通す。
+- **Rationale**: 翻訳に預けた一括は出口に出ないので重複せず、輸送路の失敗では自然に 0 件になる。
+- **Trade-offs**: 「指示を返した」の時点で数えるので、再生の側が落ちていたときも 1 件残る（そのときは `talk_command_send_failed` の `error!` が同時に残る）。
+
+### Decision: SSTP SEND の台本も今の翻訳の帳簿に預ける（`ScriptSource`・`defer`）
+
+- **Context**: 要件 4.4。外からの台本は SHIORI の応答ではないので `capture` に乗らない。
+- **Selected Approach**: `TranslateRequest::source`・`TranslateWait::source` を `ScriptSource`（`Event(SourceEvent)`・`SstpSend`）にし、`capture` の後半を `defer` に切り出して外からの台本の腕からも呼ぶ。殻は出どころで `on_translate`／`on_translate_sstp` を選ぶ。`on_translate_sstp` は Reference を Ref1 で止め、Ref2・3 の欠番は行を出さないことで表す（欠番の印を使わない）。MAKOTO の口の 2 つ目は SSTP SEND では空文字（元のイベントが無い・本番は素通し）。
+- **Rationale**: 帳簿・再開・故障の扱い・控えの書き換え（`rewrite_notes`）を全部共有でき、外から SHIORI の応答を注入できない作り（DD-2）を守る。
+
+### Decision: strict は kanade の運行状態に、トークの番号と結んで持つ（`StrictNote`）
+
+- **Context**: 要件 5.1〜5.3・ギャップ分析の W1。
+- **Selected Approach**: `KanadeMsg` の `strict` → `Input` → `schedule::sstp` が始めたトークの番号と一緒に `State::sstp_strict` へ。読むのは記録の欄とテストだけ。
+- **Rationale**: `StartTalk`・`TalkCommand`・`boot.rs` に触らず、`mcp-strict-errors` の 2 案のどちらにも開いている。
+
+### Decision: 上限の近いファイルは先に割る（`schedule/types.rs`・`msg_tests.rs`・`actor_stop.rs`）
+
+- **Context**: `msg.rs` 930・`actor.rs` 901・`schedule/mod.rs` 969 行。本 spec はどれにも数行〜数十行を足す。
+- **Selected Approach**: `schedule/mod.rs` の型の塊を `types.rs` へ（`pub(crate) use` で同じ名前で見せ、`boot.rs` の `use super::{…}` を変えない）、`msg.rs` のファイルの中のテストを `msg_tests.rs` へ、`actor.rs` の停止と通知の手 4 つを `actor_stop.rs` へ。どれも中身を変えずに移すだけ。`steady.rs` は触らないので割らない。
+- **Rationale**: 増える前に割る（同じウェーブの約束と 1,000 行の目安）。後ろに並ぶ kanade の spec（`script-security-level` ほか）も割った後の形に足せる。
+
+### Decision: MCP の側の共通の部品は `sakurascript.rs` に置く
+
+- **Context**: `crates/areka/src/mcp/mod.rs` に触らない約束（新しいファイルには `mod` の宣言が要る）。`resolve.rs` も brief で触らない。
+- **Selected Approach**: `script_target`・`NOT_NOW`・`UNAVAILABLE` を `sakurascript.rs` に `pub(super)` で置き、`raise_event.rs` が `super::sakurascript::…` で使う。`get_status.rs` は変えない（重複は 2 つの形のまま）。MCP の側のログのテストは `sakurascript.rs` が `#[path]` で接続する兄弟のファイルに置く。
+
+### Generalization・Build vs Adopt・Simplification（設計の総合）
+
+- **一般化**: 「SSTP の出どころ」を 1 つの概念にまとめた。`EventId::Sstp`（送出の檻の受理）・`ScriptSource::SstpSend`（翻訳と記録の語）・`validate_notify`（入口と送出の檻の共通の検査）。後続の `property-query-channels`・`mcp-shiori-query` は同じ入口を使える（ただし返った台本は再生される。値だけ欲しい用途はその spec で入口を足す＝今は作らない）。
+- **作るか借りるか**: 新しい依存は無い。返事を待つ形は `mcp::later`（`get_status` の先例）、トークの開始は `start_talk`、置き換えの後始末は dispatcher の既存の「閉じてから起こす」、記録の受け手は `log_history` を借りる。
+- **削ったもの**: 外からの頼みの待ち行列（SSP は積まずに中断する）・strict を再生の側へ運ぶ配線（後続の spec）・`get_status.rs` の共通化（約束の外の書き換え）・遠くからの SSTP の表示の語（受け口が無い）。
+
+### 使ったスキルと指針
+
+- `kiro-spec-design`（本手順）と、その `rules/design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`。
+- steering: `product.md`・`tech.md`・`structure.md`（1 ファイル 1,000 行・兄弟のテストファイル・`log-capture-kit` を迂回しない）・`logging.md`（`error!`／`warn!`／`debug!` の使い分け・構造化の欄）。
+- 審査の門: 1 回目で「追跡の表に定義の無い部品名」「`actor.rs` を割らずに増やす」「`runtime.rs` の関数名の誤り」の 3 つを直し、2 回目で通った。
+
+## Risks & Mitigations
+
+- **運行表の出口に全部のトークの記録を足す** — target が `areka::log::script` で `kanade` と別なので、`target = "kanade"` を数える既存の主張には当たらない。target を絞らずに info を数える既存のテストがあれば、実装の段で記録の件数を見直す（主張の意味は変えない）。
+- **送出の檻に第 3 の出所カテゴリを足す** — 受理の規則は `validate_notify` 1 つに寄せ、`Static`・`Choice` の規則は 1 字も変えない。檻のテストで「同じ名前を `RaiseEvent` で送ると今日どおり断る」を固定する。
+- **`schedule/mod.rs` の型の塊を割る** — `boot.rs` の `use super::{…}` が同じ名前で解けることを割り方の条件にし、割った直後に kanade の全テストを通す。
+- **起動の挨拶の見分けが綴りに頼る** — 定数 1 か所＋赤になるテスト。
+- **名前の無いゴーストのログの名の一致** — `config.rs` のテストで作りを固定。根の渡し方が変わったら（`runtime.rs` 側の変更）一致を見直す（`mcp-reload` への申し送り）。
+- **標準出力の記録の増加** — 警告ではない。`real-run-log-noise` へ申し送る。
+
+## References
+
+- ukadoc SSTP（`nobreak`・Owned SSTP）・`OnTranslate`（Reference1 の出どころの語）— 要件の Introduction の引用。
+- `doc/ssp-mcp/survey.md` — SSP 2.9.05 の実測（区切り `\r\n`・strict の意味）。
+- `doc/ssp-mcp/log-convention.md` — script 種別のログの取り決め（target・欄・既定）。
+- `.kiro/specs/areka-P0-mcp-strict-errors/brief.md` — strict の後続の案。
