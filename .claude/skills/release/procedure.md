@@ -170,6 +170,8 @@ else echo "desk: id=$ID repo=$R"; fi
 
 ### 終わり方の扱い
 
+`kiro-impl`・`kiro-complete` の終わり方の表と同じ行を、`release` の呼ぶコマンドに絞ったもの（`loadrunning` と、ひとり占めを持たないので `a running load test returns test and sole together` の `return` の行は無い）。扱いが違う行には「`kiro-impl` と違う」と書く（開発者の指示を待たずに手順を続けるため）。
+
 | 終わったもの | 出力 | すること |
 |---|---|---|
 | `watch` | `exit=0`、`stop requested by <X>` | 上の「停止要請」 |
@@ -177,15 +179,15 @@ else echo "desk: id=$ID repo=$R"; fi
 | `watch` | `exit=1`、`AREKA_IMPL_WATCH_HOME …` | その回の机の段をやめて続ける。標準エラーの 1 行をそのまま伝え、段 7 に書く |
 | `watch` | `exit=1`、`a watch wait for <ID> is already running` | 自分の見張りが走っていれば何もしない。覚えが無ければ前のセッションの残りなので、下の「残りの見張りの外し方」をバックグラウンドで回し、1 行伝える |
 | `watch` | `exit=1`、ほかの文 | 直ちに 1 回だけ立て直す。立て直しも 1 で終わったら `doc/impl-watch.md` 5 節の終了コード 1 の表に従い、直らなければ机の段をやめて続ける |
-| `watch` | `exit=3` | 最後に立てた見張りでない・参加を終えた（`leave`）後なら何もしない。それ以外は 1 行伝えて `watch` を立て直し、番を待っていた申し込みがあれば申し込み直す。机を持って走行中だったなら申し込み直さない（走っている確かめは止めず、終わったら `return`。返しが 3 でもそのまま続ける） |
+| `watch` | `exit=3` | 最後に立てた見張りでない・参加を終えた（`leave`）後なら何もしない。それ以外は 1 行伝えて `watch` を立て直し、番を待っていた申し込みがあれば申し込み直す。机を持って走行中だったなら申し込み直さない（走っている確かめは止めず、終わったら `return`。返しが 3 でもそのまま続ける。`kiro-impl` と違う: 走行の途中で申し込み直さない） |
 | `stopped --wait`・`resume` | `exit=0`、`resumed` | `watch` を立て直して次の項目へ |
 | `stopped --wait`・`resume` | `exit=0`、`stop requested again by <X>` | 次の項目に入らず、もう一度 `stopped --wait` |
 | `stopped --wait`・`resume` | `exit=3` | `watch` を立て直して続ける |
 | `stopped --wait`・`resume` | `exit=1`、`a resume wait for <ID> is already running` | 前の再開の待ちがまだ走っている。何もしない |
 | `request --wait` | `exit=0`、`granted test` | 番が来た。その走行を 1 回回し、終わったら（成否によらず）直ちに `return` |
 | `request --wait` | `exit=3`、`not applied: desks are held; only a merge holder may add the test desk` | 机を持ったまま申し込んだ。状態は変わっていない。`status` は読まずに `return` してから申し込み直す。1 行伝える |
-| `request --wait` | `exit=3`、`not applied: a different desk request is already waiting` | `release` は `test` しか申し込まないので、同じ識別の前のセッションの残りである。`cancel --id <ID>` を前景で回し、直ちに申し込み直す。1 行伝える |
-| `request --wait` | `exit=3`、`not applied: a merge request is waiting; …` | 同じ識別でマージの机を待つ者が居る（`release` はマージの机を取らない）。`cancel` はしない（相手のマージの申し込みまで消える）。その回の机の段をやめて手順を続け、1 行伝えて段 7 に書く |
+| `request --wait` | `exit=3`、`not applied: a different desk request is already waiting` | `release` は `test` しか申し込まないので、同じ識別の前のセッションの残りである。`cancel --id <ID>` を前景で回し、直ちに申し込み直す。1 行伝える（`kiro-impl` と違う: 自分の申し込みかを見分けない） |
+| `request --wait` | `exit=3`、`not applied: a merge request is waiting; …` | 同じ識別でマージの机を待つ者が居る（`release` はマージの机を取らない）。`cancel` はしない（相手のマージの申し込みまで消える）。その回の机の段をやめて手順を続け、1 行伝えて段 7 に書く（`kiro-impl` と違う: 開発者の指示を待たない） |
 | `request --wait` | `exit=3`、`gone: request gone` | 自分で `cancel` した後なら何もしない。それ以外は 1 行伝え、先に `watch` を立て直してから申し込み直す |
 | `request --wait` | `exit=1`、`a request wait for <ID> is already running` | 自分の待ちが走っていれば何もしない。覚えが無ければ `cancel --id <ID>` の後に申し込み直す。1 行伝える |
 | `return` | `exit=3`、`not applied: not the holder of that desk`／`not applied: holds no desk to return` | 机はもう自分の物でない（記録が消えた など）。返し直さず、1 行伝えて続ける |

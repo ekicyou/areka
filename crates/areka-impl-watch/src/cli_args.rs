@@ -264,7 +264,7 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         optional: &[Opt::Bug, Opt::Name],
         wait: true,
         variant: None,
-        note: "queue for the merge desk of the repo. 0=queued; with --wait 0=granted 3=request gone",
+        note: "queue for the merge desk of the repo. 0=queued 3=not applied; with --wait 0=granted 3=request gone or not applied",
         build: |f| {
             Command::Change(plan::Command::Merge {
                 id: f.need(Opt::Id),

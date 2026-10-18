@@ -756,10 +756,14 @@ fn desk_refuses_empty_twice_unknown_and_merge() {
 }
 
 #[test]
-fn usage_shows_the_request_return_and_loadrunning_lines_of_the_design() {
+fn usage_shows_the_merge_request_return_and_loadrunning_lines_of_the_design() {
     let text = usage();
     let lines: Vec<&str> = text.lines().collect();
     for (command, note) in [
+        (
+            "  merge --id <id> --repo <repo> --spec <spec> [--bug] [--name <name>] [--wait]",
+            "queue for the merge desk of the repo. 0=queued 3=not applied; with --wait 0=granted 3=request gone or not applied",
+        ),
         (
             "  request --id <id> --repo <repo> --desk <desk> --purpose <purpose> [--name <name>] [--wait]",
             "queue one request for the listed desks; all are granted at once. 0=queued or granted 3=not applied; with --wait 0=granted 3=request gone or not applied",

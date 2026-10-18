@@ -369,7 +369,7 @@ else echo "desk: id=$ID repo=$R"; fi
 | コマンド | 要る引数 | 任意の引数 | すること | 0 | 3 |
 |---|---|---|---|---|---|
 | `watch` | `--id` `--repo` | `--name` | 参加して「居る」印になり、停止要請が出るまで終わらない | 停止要請が出た（すでに止まっているときも） | 記録が消えた |
-| `merge` | `--id` `--repo` `--spec` | `--bug` `--name` `--wait` | そのリポジトリのマージの机に並ぶ（参加を兼ねる）。`--wait` なら番が来るまで終わらない | 並んだ。`--wait` つきは番が来た | `--wait` つきは申し込みが消えた。排他テストの机かひとり占めを持つ・机の申し込みを待つ者の申し込みは当てはまらない（状態を変えず、`--wait` つきでも待たない） |
+| `merge` | `--id` `--repo` `--spec` | `--bug` `--name` `--wait` | そのリポジトリのマージの机に並ぶ（参加を兼ねる）。`--wait` なら番が来るまで終わらない | 並んだ。`--wait` つきは番が来た | 当てはまらない（排他テストの机かひとり占めを持つ・机の申し込みを待つ。状態を変えず、`--wait` つきでも待たない）。`--wait` つきは、加えて申し込みが消えた |
 | `merged` | `--id` `--pr` `--sha` | — | マージの机を空け、直前のマージを記録し、参加を終える | 済んだ | 持ち主でない |
 | `request` | `--id` `--repo` `--desk` `--purpose` | `--name` `--wait` | 並べた机の申し込み 1 つ（参加を兼ねる。申し込んだ参加者の状態は変えない）。並べた机は全部が一度に渡る。`--wait` なら番が来るまで終わらない | 並んだ・番が来た。`--wait` つきは番が来た | 当てはまらない（状態を変えず、`--wait` つきでも待たない）。`--wait` つきは、加えて申し込みが消えた |
 | `return` | `--id` | `--desk` | 名指しした机を返す。名指しが無ければ、マージの机のほかの全部を返す | 返した | 持ち主でない（持っていない机） |
@@ -458,7 +458,7 @@ else echo "desk: id=$ID repo=$R"; fi
 | `AREKA_IMPL_WATCH_HOME cannot be created: …` | 変数の値（書ける場所か）を直す |
 | `a watch wait for <識別> is already running` | 同じ識別の見張りがまだ走っている。自分で立てた見張りなら行動は要らない。覚えが無ければ前のセッションの残りなので、4 節の「スキルからの呼び方」の外し方の 1 本を走らせる（手で外すときは 6 節） |
 | `a resume wait for <識別> is already running` | 前の再開の待ち（`stopped --wait`・`resume`）がまだ走っている。行動は要らない |
-| `a merge wait for <識別> is already running`・`a request wait for <識別> is already running` | 同じ識別の番の待ちがまだ走っている。自分で走らせた待ちなら行動は要らない。覚えが無ければ `cancel --id <識別>` を呼んでから申し込み直す |
+| `a merge wait for <識別> is already running`・`a request wait for <識別> is already running` | 同じ識別の番の待ちがまだ走っている。自分で走らせた待ちなら行動は要らない。覚えが無ければ `cancel --id <識別>` を呼んでから申し込み直す。ただし `kiro-complete` の `request --wait` は、覚えが無くても `cancel` しない（`cancel` はマージの机とマージの申し込みも外すので、持っているマージの机を失う）。1 行伝えて開発者の指示を待つ |
 | `state file version mismatch: …` | 3 節の「版が上がる更新のとき」 |
 | `state file is broken; see impl-watch.log` | `status`、または走っていた待ち・見張りが、状態ファイルを読めなかった。6 節の「状態ファイルが壊れた」 |
 | `state.lock is busy for 10 s; …` | 間を置かずに 1 回だけ呼び直す（実行ファイルが 10 秒待ってから断っているので、待ち足さなくてよい）。続くなら、止まったままの `areka-impl-watch.exe` が無いか見る |

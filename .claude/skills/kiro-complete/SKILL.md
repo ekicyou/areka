@@ -114,10 +114,10 @@ elif ! [[ "$ID" =~ ^[A-Za-z0-9._-]{1,100}$ && "$R" =~ ^[A-Za-z0-9._-]{1,100}$ ]]
 else echo "desk: id=$ID repo=$R"; fi
 ```
 
-- 識別 `<ID>` は作業木の最上位のフォルダの名前（1.1）。作業木の名前から求めるので、Claude のセッションが替わっても同じ値になる（1.2）。
-- リポジトリ `<R>` は共通の git フォルダ（`.git`）の親の名前で、どの作業木から呼んでも同じ（1.3）。`origin` の URL は資格情報つきなので使わない。
-- 名前 `--name` には spec の名前を渡す（1.4）。`merge` の `--spec` にも同じ名前を渡す。
-- 形に合わなければ別の値をこしらえず `skip`（1.5）。
+- 識別 `<ID>` は作業木の最上位のフォルダの名前。作業木の名前から求めるので、Claude のセッションが替わっても同じ値になる。
+- リポジトリ `<R>` は共通の git フォルダ（`.git`）の親の名前で、どの作業木から呼んでも同じ。`origin` の URL は資格情報つきなので使わない。
+- 名前 `--name` には spec の名前を渡す。`merge` の `--spec` にも同じ名前を渡す。
+- 形に合わなければ別の値をこしらえず `skip`。
 - 出力の `id=`・`repo=` の値を覚え、以後のコマンドへ字のまま書く（Bash の変数はコマンドをまたいで残らないため）。会話の圧縮で忘れたら、前置きをもう 1 度呼ぶ（同じ値が出る）。
 
 **呼ぶ形**（どのコマンドも同じ）:
@@ -128,7 +128,7 @@ else echo "desk: id=$ID repo=$R"; fi
 
 - `2>&1` で標準エラーの 1 行（`gone:`・`not applied:`・`already running`・断りの文）も同じ出力に入れる。読むのは最後の `exit=<n>` とその前の 1〜2 行だけ。
 - **バックグラウンド**（Bash の `run_in_background`）: `watch`・`merge --wait`・`request --wait`・`stopped --wait`・`resume`。走らせたら、その種類と実行の番号を会話に覚える（「自分の待ち」）。
-- **前景**: `leave`・`merged`・`return`・`cancel`・`loadrunning`、それに 5.7 と訳を調べるときの `status`。
+- **前景**: `leave`・`merged`・`return`・`cancel`・`loadrunning`、それに訳を調べるときの `status`。
 - このスキルが呼ぶ排他テストの机の申し込みと返し（ステップ5-2 の「全体テストの前後の机」）:
   ```bash
   "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" request --id <ID> --repo <R> --desk test --purpose "kiro-complete full test" --wait 2>&1; echo "exit=$?"
@@ -140,35 +140,35 @@ else echo "desk: id=$ID repo=$R"; fi
 
 `kiro-impl` の「How each ending is handled」と同じ行を、日本語で写したもの。`kiro-complete` はマージの机を持つので、`cancel` を使う行だけ扱いが違う（行の中に「`kiro-impl` と違う」と書く）。`cancel` は識別の申し込み・排他テストの机・ひとり占めに加えて、マージの机とマージの申し込みも外す（`plan.rs` の `remove_from`）ため、マージの机を持つ間や待つ間に呼ぶとマージの番を失う。
 
-| 終わったもの | 出力 | すること | 要件 |
-|---|---|---|---|
-| 見張り | `exit=0`・`stop requested by <X>` | 停止要請。各スキルの「止まる切れ目」で `stopped --wait` | 3.1, 3.3 |
-| 見張り | `exit=0`・`already stopped; …` | 「止まった」を記録し直さず `resume` をバックグラウンドで | 3.7 |
-| 見張り | `exit=1`・`AREKA_IMPL_WATCH_HOME …` | その回の机の段を止めて 1 行（標準エラーの行をそのまま）・最後の報告にも残す | 6.3 |
-| 見張り | `exit=1`・`a watch wait for <ID> is already running` | 自分の見張りが走っていれば何もしない。覚えが無ければ、下の「残りの見張りの外し方」の 1 本をバックグラウンドで走らせ、1 行で伝える。抜けたので持っていた申し込みがあれば、その 1 本が終わる前に申し込み直す | 2.3, 2.7, 2.8 |
-| 見張り | `exit=1`・上のほか | 直ちに 1 回だけ立て直す。立て直しも同じ文の 1 なら終了コード 1 の表の行に従い、直らなければその回の机の段を止めて最後の報告に残す | 2.6, 6.4 |
-| 見張り | `exit=3` | 今の見張り（最後に走らせた見張りの実行）でなければ何もしない。今の見張りで、参加を終えた（実行の終わりの `leave`・`merged`）後なら何もしない。それ以外は 1 行伝えて立て直し、持っていた申し込みを申し込み直す（マージの机を持っていた・待っていたら前置きステップの 7。排他テストの机を持っていた・待っていたらステップ5-2 の「全体テストの前後の机」の 4） | 2.9, 2.10 |
-| 再開の待ち（`stopped --wait`・`resume`） | `exit=0`・`resumed` | 見張りを立て直してから、止まった所の次へ | 3.5 |
-| 再開の待ち | `exit=0`・`stop requested again by <X>` | 作業に戻らず、もう一度 `stopped --wait` | 3.6 |
-| 再開の待ち | `exit=3` | 見張りを立て直して続ける | 3.8 |
-| 再開の待ち | `exit=1`・`a resume wait for <ID> is already running` | 前の再開の待ちが走っている。何もしない（6.4 の失敗に数えない） | 3.10 |
-| `merge --wait` | `exit=1`・`a merge wait for <ID> is already running` | 自分の待ちが走っていれば何もしない。覚えが無ければ `cancel --id <ID>` → 申し込み直す → 1 行（`kiro-complete` だけの行。`merge --wait` を呼ぶのは前置きステップの 5 と 7 だけで、そのときはどの机も持っていない） | 6.4 |
-| `request --wait` | `exit=0`・`granted test` | 番が来た（ステップ5-2 の「全体テストの前後の机」の 2） | 11.2 |
-| `request --wait` | `exit=3`・`not applied: desks are held; only a merge holder may add the test desk` | 机を持ったまま別の組を申し込んだ。状態は変わっていない。`status` を読まずに、持っている机を `return --id <ID>`（`--desk` なし。マージの机は返さない）で返してから申し込み直し、1 行で知らせる | 4.2 |
-| `request --wait` | `exit=3`・`not applied: a different desk request is already waiting` | この識別で別の組の申し込みが待っている。状態は変わっていない。`status` を読まない（`return` は申し込みを外さない）。**`kiro-impl` と違う**: マージの机を持つ間は排他テストの机のほかの組を申し込めず、別の組の申し込みを持つ者はマージの机を申し込めないので、この手順の中では起きない（前のセッションの残りなどの思わぬ状態）。`cancel` はマージの机も外すので呼ばない。1 行伝えて開発者の指示を待つ | 2.8 |
-| `request --wait` | `exit=3`・`not applied: a merge request is waiting; …` | この識別がマージの机を待っている（まだ持っていない）。状態は変わっていない。`cancel` しない。**`kiro-impl` と違う**: 自分が前置きステップの 7 で申し込み直したマージの待ちなら、その `granted merge …` を待ち、前置きステップの 6 の形で既定の枝を取り込み直してから申し込み直す（1 行）。覚えが無ければ、同じ作業木のほかのセッションか残りの記録が待っている。1 行伝えて開発者の指示を待つ | 4.8 |
-| `request --wait` | `exit=3`・`gone: request gone` | 申し込みが外された（取り下げ・実行の終わり・回収・消去）。自分の `cancel` の後なら何もしない。それ以外は 1 行伝え、見張りを先に立て直してから申し込み直す（記録ごと消えてマージの机も失っていれば前置きステップの 7、排他テストの机を持っていた・待っていたらステップ5-2 の「全体テストの前後の机」の 4） | 6.1, 6.3, 6.4 |
-| `request --wait` | `exit=1`・`a request wait for <ID> is already running` | 自分の待ちが走っていれば何もしない。**`kiro-impl` と違う**: 覚えが無くても `cancel --id <ID>` しない（マージの机も外れる）。前のセッションの残りの待ちが同じ申し込みを待っているので、1 行伝えて開発者の指示を待つ | 6.4 |
-| `return` | `exit=3`・`not applied: not the holder of that desk`／`not applied: holds no desk to return` | 机はすでに自分のものでない（記録が消えた など）。返し直さず、1 行伝えて続ける | 4.5 |
-| `return` | `exit=3`・`not applied: a running load test returns test and sole together` | `--desk` を付けずに `return --id <ID>` を呼び直す（マージの机は返さない） | 4.3 |
-| `loadrunning` | `exit=3`・`not applied: the test desk or the sole desk already has a holder`／`not applied: a merge request is waiting; …` | 持ち主にならない。1 行伝え、その計測を記録しないまま開発者の指示を待つ | 5.6, 5.7 |
-| `leave`・`merged`・`return`・`cancel`・`loadrunning` | `exit=1`・下の 2 行のほか | 標準エラーの 1 行をそのまま伝え、手順書 5 節の終了コード 1 の表に従う。直らなければその回の机の段を止めて最後の報告に残す | 6.3, 6.4 |
-| どれでも | `exit=1`・`state.lock is busy …` | 間を置かずに 1 回だけ呼び直す（実行ファイルが自分で 10 秒待ってから断るので、スキルの側で待たない）。続けば 6.4 | 6.4 |
-| どれでも | `exit=2` | 呼び方の誤り。スキルの文の誤りなので、その回の机の段を止めて最後の報告に残す | 6.4 |
+| 終わったもの | 出力 | すること |
+|---|---|---|
+| 見張り | `exit=0`・`stop requested by <X>` | 停止要請。各スキルの「止まる切れ目」で `stopped --wait` |
+| 見張り | `exit=0`・`already stopped; …` | 「止まった」を記録し直さず `resume` をバックグラウンドで |
+| 見張り | `exit=1`・`AREKA_IMPL_WATCH_HOME …` | その回の机の段を止めて 1 行（標準エラーの行をそのまま）・最後の報告にも残す |
+| 見張り | `exit=1`・`a watch wait for <ID> is already running` | 自分の見張りが走っていれば何もしない。覚えが無ければ、下の「残りの見張りの外し方」の 1 本をバックグラウンドで走らせ、1 行で伝える。抜けたので持っていた申し込みがあれば、その 1 本が終わる前に申し込み直す |
+| 見張り | `exit=1`・上のほか | 直ちに 1 回だけ立て直す。立て直しも同じ文の 1 なら終了コード 1 の表の行に従い、直らなければその回の机の段を止めて最後の報告に残す |
+| 見張り | `exit=3` | 今の見張り（最後に走らせた見張りの実行）でなければ何もしない。今の見張りで、参加を終えた（実行の終わりの `leave`・`merged`）後なら何もしない。それ以外は 1 行伝えて立て直し、持っていた申し込みを申し込み直す（マージの机を持っていた・待っていたら前置きステップの 7。排他テストの机を持っていた・待っていたらステップ5-2 の「全体テストの前後の机」の 4） |
+| 再開の待ち（`stopped --wait`・`resume`） | `exit=0`・`resumed` | 見張りを立て直してから、止まった所の次へ |
+| 再開の待ち | `exit=0`・`stop requested again by <X>` | 作業に戻らず、もう一度 `stopped --wait` |
+| 再開の待ち | `exit=3` | 見張りを立て直して続ける |
+| 再開の待ち | `exit=1`・`a resume wait for <ID> is already running` | 前の再開の待ちが走っている。何もしない |
+| `merge --wait` | `exit=1`・`a merge wait for <ID> is already running` | 自分の待ちが走っていれば何もしない。覚えが無ければ `cancel --id <ID>` → 申し込み直す → 1 行（`kiro-complete` だけの行。`merge --wait` を呼ぶのは前置きステップの 5 と 7 だけで、そのときはどの机も持っていない） |
+| `request --wait` | `exit=0`・`granted test` | 番が来た（ステップ5-2 の「全体テストの前後の机」の 2） |
+| `request --wait` | `exit=3`・`not applied: desks are held; only a merge holder may add the test desk` | 机を持ったまま別の組を申し込んだ。状態は変わっていない。`status` を読まずに、持っている机を `return --id <ID>`（`--desk` なし。マージの机は返さない）で返してから申し込み直し、1 行で知らせる |
+| `request --wait` | `exit=3`・`not applied: a different desk request is already waiting` | この識別で別の組の申し込みが待っている。状態は変わっていない。`status` を読まない（`return` は申し込みを外さない）。**`kiro-impl` と違う**: マージの机を持つ間は排他テストの机のほかの組を申し込めず、別の組の申し込みを持つ者はマージの机を申し込めないので、この手順の中では起きない（前のセッションの残りなどの思わぬ状態）。`cancel` はマージの机も外すので呼ばない。1 行伝えて開発者の指示を待つ |
+| `request --wait` | `exit=3`・`not applied: a merge request is waiting; …` | この識別がマージの机を待っている（まだ持っていない）。状態は変わっていない。`cancel` しない。**`kiro-impl` と違う**: 自分が前置きステップの 7 で申し込み直したマージの待ちなら、その `granted merge …` を待ち、前置きステップの 6 の形で既定の枝を取り込み直してから申し込み直す（1 行）。覚えが無ければ、同じ作業木のほかのセッションか残りの記録が待っている。1 行伝えて開発者の指示を待つ |
+| `request --wait` | `exit=3`・`gone: request gone` | 申し込みが外された（取り下げ・実行の終わり・回収・消去）。自分の `cancel` の後なら何もしない。それ以外は 1 行伝え、見張りを先に立て直してから申し込み直す（記録ごと消えてマージの机も失っていれば前置きステップの 7、排他テストの机を持っていた・待っていたらステップ5-2 の「全体テストの前後の机」の 4） |
+| `request --wait` | `exit=1`・`a request wait for <ID> is already running` | 自分の待ちが走っていれば何もしない。**`kiro-impl` と違う**: 覚えが無くても `cancel --id <ID>` しない（マージの机も外れる）。前のセッションの残りの待ちが同じ申し込みを待っているので、1 行伝えて開発者の指示を待つ |
+| `return` | `exit=3`・`not applied: not the holder of that desk`／`not applied: holds no desk to return` | 机はすでに自分のものでない（記録が消えた など）。返し直さず、1 行伝えて続ける |
+| `return` | `exit=3`・`not applied: a running load test returns test and sole together` | `--desk` を付けずに `return --id <ID>` を呼び直す（マージの机は返さない） |
+| `loadrunning` | `exit=3`・`not applied: the test desk or the sole desk already has a holder`／`not applied: a merge request is waiting; …` | 持ち主にならない。1 行伝え、その計測を記録しないまま開発者の指示を待つ |
+| `leave`・`merged`・`return`・`cancel`・`loadrunning` | `exit=1`・下の 2 行のほか | 標準エラーの 1 行をそのまま伝え、手順書 5 節の終了コード 1 の表に従う。直らなければその回の机の段を止めて最後の報告に残す |
+| どれでも | `exit=1`・`state.lock is busy …` | 間を置かずに 1 回だけ呼び直す（実行ファイルが自分で 10 秒待ってから断るので、スキルの側で待たない）。続けばその回の机の段を止めて最後の報告に残す |
+| どれでも | `exit=2` | 呼び方の誤り。スキルの文の誤りなので、その回の机の段を止めて最後の報告に残す |
 
-- 立て直し・申し込み直しは、同じ出来事で 2 つの待ちが続けて終わっても、それぞれ 1 回だけ行う。2 度目が `already running` で終わっても害の無いものとして扱う（4.4 と同じ扱い）。
-- 終わりの知らせは中身（出力の文）で読む。「自分の見張り・待ち・申し込みか」の覚えに頼るのは、`already running` の 2.7 と 2.8 の分かれ目と、申し込みの `already running`・`a merge request is waiting` の自分か残りかの分かれ目だけ。
-- **残りの見張りの外し方**（2.8）: 前のセッションの残りの見張りは、`leave` の後に記録の消えたことを次の見回り（実行ファイルの見回りは 1 秒ごと・`wait.rs` の `POLL`）で見つけて終わるまで、自分の識別の見張りの錠を持ち続ける。直ちに立て直すと、その錠にぶつかって `already running` になる。そこで、外す・待つ・立て直すを 1 本のバックグラウンドの Bash にまとめ、セッションを起こすのは終わりの 1 回だけにする:
+- 立て直し・申し込み直しは、同じ出来事で 2 つの待ちが続けて終わっても、それぞれ 1 回だけ行う。2 度目が `already running` で終わっても害の無いものとして扱う。
+- 終わりの知らせは中身（出力の文）で読む。「自分の見張り・待ち・申し込みか」の覚えに頼るのは、見張りの `already running` の自分か残りかの分かれ目と、申し込みの `already running`・`a merge request is waiting` の自分か残りかの分かれ目だけ。
+- **残りの見張りの外し方**: 前のセッションの残りの見張りは、`leave` の後に記録の消えたことを次の見回り（実行ファイルの見回りは 1 秒ごと・`wait.rs` の `POLL`）で見つけて終わるまで、自分の識別の見張りの錠を持ち続ける。直ちに立て直すと、その錠にぶつかって `already running` になる。そこで、外す・待つ・立て直すを 1 本のバックグラウンドの Bash にまとめ、セッションを起こすのは終わりの 1 回だけにする:
 
 ```bash
 "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" leave --id <ID> 2>&1; sleep 3; "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" watch --id <ID> --repo <R> --name <feature> 2>&1; echo "exit=$?"
@@ -176,13 +176,13 @@ else echo "desk: id=$ID repo=$R"; fi
 
   - `sleep 3` は見回りの間隔 1 秒の 3 回分。読むのは最後の `exit=` と見張りの行だけ（`leave` の行は読まない）。この 1 本を「今の見張り」として覚える。
   - この `leave` は参加を終えたことに数えない（参加を終えるのは実行の終わりの `leave` と `merged` だけ）。
-  - この 1 本がまた `already running` で終わったら、2.8 をもう 1 度は行わず 6.4 に従う。
+  - この 1 本がまた `already running` で終わったら、繰り返さず、その回の机の段を止めて最後の報告に残す。
 
 
 #### 会話が覚えるもの
-- 会話が覚えるもの: 机の段が `on`（`id`・`repo`）か `off`（訳）／見張りの実行の番号／停止の状態（無し・停止要請を受けた・止まった）／排他テストの机（無し・待っている・持っている）と、その申し込みがどの全体テストの走行（5-2・7-4 の回し直し）のためか／マージの机（無し・待っている・持っている・自分で外した）／参加を終えたか（実行の終わりの `leave`・`merged` の後。2.8 の外し方の `leave` は数えない）。
-- 「今の見張り」は最後に走らせた見張り（2.8 の 1 本を含む）の実行の番号。終わった見張りの 3 は、それが今の見張りのときだけ扱う。立て直す前の古い見張りの終わりは読み流す。
-- 正本はアプリの状態である。会話の覚えが消えても、前置きと終わり方の表だけで元へ戻れる（失うのは 2.7／2.8 の見分けと、`already running`・`a different desk request is already waiting`・`a merge request is waiting` の自分か残りかの見分けだけ。見張りは 2.8 に倒し、申し込みの 3 行は「覚えが無い」の扱いに倒す）。
+- 会話が覚えるもの: 机の段が `on`（`id`・`repo`）か `off`（訳）／見張りの実行の番号／停止の状態（無し・停止要請を受けた・止まった）／排他テストの机（無し・待っている・持っている）と、その申し込みがどの全体テストの走行（5-2・7-4 の回し直し）のためか／マージの机（無し・待っている・持っている・自分で外した）／参加を終えたか（実行の終わりの `leave`・`merged` の後。残りの見張りの外し方の `leave` は数えない）。
+- 「今の見張り」は最後に走らせた見張り（残りの見張りの外し方の 1 本を含む）の実行の番号。終わった見張りの 3 は、それが今の見張りのときだけ扱う。立て直す前の古い見張りの終わりは読み流す。
+- 正本はアプリの状態である。会話の覚えが消えても、前置きと終わり方の表だけで元へ戻れる（失うのは見張りの `already running` の自分か残りかの見分けと、申し込みの `already running`・`a different desk request is already waiting`・`a merge request is waiting` の自分か残りかの見分けだけ。見張りは残りの扱いに倒し、申し込みの 3 行は「覚えが無い」の扱いに倒す）。
 
 #### 実行ファイルが無いときの案内（`desk: skip no-exe`）
 

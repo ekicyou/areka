@@ -530,6 +530,7 @@ pub fn held(state: &State, id: &str) -> Option<DeskSet>;
 - `Opt::Desk`（`--desk`）と `Shape::Desks` を足す。`Shape::Desks` の `accepts` は上の「`--desk` の値の形」、`rule` は `test, sole or test,sole (the merge desk is requested with merge)`。読んだ値は表の `build` で `DeskSet` にする（`accepts` を通った値だけが来る）。
 - 表の行: `watch`・`merge`・`merged`・`request`（要る `--id --repo --desk --purpose`・任意 `--name`・`--wait`）・`return`（要る `--id`・任意 `--desk`）・`loadrunning`・`stopped`・`resume`・`unstop`・`cancel`・`leave`・`tick`・`status`・`clear`。
 - 行の `note`（`--help` に出る 1 行）:
+  - `merge`: `queue for the merge desk of the repo. 0=queued 3=not applied; with --wait 0=granted 3=request gone or not applied`（今の 1 行に、`--wait` の有無によらない断り（4.7・2.8）の 3 を足す）
   - `request`: `queue one request for the listed desks; all are granted at once. 0=queued or granted 3=not applied; with --wait 0=granted 3=request gone or not applied`
   - `return`: `return the named desks, or every desk but the merge desk. 0=returned 3=not the holder`
   - `loadrunning`: `record an already running load test as the holder of the test and sole desks. 0=recorded 3=either desk has a holder or a merge request is waiting`
