@@ -67,6 +67,7 @@ pub(crate) fn table_single(
         vec![Animation {
             id: anim_id,
             interval,
+            interval_written: true,
             patterns,
         }],
     )])
@@ -366,11 +367,13 @@ fn lottery_consumes_in_animation_id_order() {
             Animation {
                 id: 5,
                 interval: Interval::Random { k: 4 },
+                interval_written: true,
                 patterns: vec![pat(0, 5000, 0)],
             },
             Animation {
                 id: 2,
                 interval: Interval::Random { k: 4 },
+                interval_written: true,
                 patterns: vec![pat(0, 2000, 0)],
             },
         ],
@@ -407,6 +410,7 @@ fn lottery_consumes_in_scope_ascending_order() {
         vec![Animation {
             id: 0,
             interval: Interval::Random { k: 4 },
+            interval_written: true,
             patterns: vec![pat(0, 1000, 0)],
         }],
     );
@@ -415,6 +419,7 @@ fn lottery_consumes_in_scope_ascending_order() {
         vec![Animation {
             id: 0,
             interval: Interval::Random { k: 4 },
+            interval_written: true,
             patterns: vec![pat(0, 1100, 0)],
         }],
     );
@@ -717,12 +722,14 @@ fn non_bind_anim_is_unaffected_by_progress_phase_bind_check() {
             Animation {
                 id: 7,
                 interval: Interval::BindRandom { k: 4 },
+                interval_written: true,
                 // 1412(w0)/1411(w150)/1410(w22) ⇒ t=[0,150,172]。
                 patterns: vec![pat(0, 1412, 0), pat(1, 1411, 150), pat(2, 1410, 22)],
             },
             Animation {
                 id: 9000,
                 interval: Interval::Random { k: 4 },
+                interval_written: true,
                 // 2106(w0)/2110(w150) ⇒ t=[0,150]。末尾非負＝到達後も残留する。
                 patterns: vec![pat(0, 2106, 0), pat(1, 2110, 150)],
             },

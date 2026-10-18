@@ -47,6 +47,7 @@ fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animation {
     Animation {
         id,
         interval: Interval::Bind,
+        interval_written: true,
         patterns: vec![Pattern {
             index: 0,
             method: DrawMethod::new("overlay".to_string()),

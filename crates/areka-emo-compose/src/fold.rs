@@ -1,7 +1,7 @@
 //! single-pass fold: parser の登場順定義ストリームを `EmoWorld` へ畳み込む。
 //!
-//! plain `surfaceN,M`／`N-M` は全 id を新設・`surface.append` は既にある id のみへ追記
-//! （存在条件付き・ukadoc 意味論）。「既にある」には、波括弧が 1 行も無くてもファイル名だけで
+//! plain `surfaceN,M`／`N-M` は無い id を新設し、既にある id へは行を足す（同じ名前の行は
+//! 後勝ち）・`surface.append` は既にある id のみへ追記（存在条件付き・ukadoc 意味論）。「既にある」には、波括弧が 1 行も無くてもファイル名だけで
 //! 置かれた絵を持つ番号（`SurfaceImages`）を含む（要件 3.7）。ターゲット記述子の単一・列挙・
 //! 範囲を展開し、除外指定
 //! （`!N`／`!a-b`）を展開時に減算適用する。複数定義が同一 surface に効く場合は登場順を保った
@@ -22,7 +22,8 @@ use crate::world::{AliasMap, SurfaceId, SurfaceIndex};
 
 /// `Shell.definitions` を登場順に single-pass で走査し `World` へ畳み込む（要件 1.7）。
 ///
-/// plain `surface` ヘッダ（[`DefRef::Surface`]）は全 id 新設、`surface.append`
+/// plain `surface` ヘッダ（[`DefRef::Surface`]）は無い id を新設し、既にある id へは行を足す
+/// （同じ名前の行は後勝ち・[`fold_plain_surface`]）、`surface.append`
 /// （[`DefRef::Append`]）は展開後その時点で既にある id のみへ追記する（存在条件付き・要件 2.2。
 /// 「既にある」は画像だけで存在する面を含む＝[`fold_append`]）。登場順で走査するため、append は「その時点までに積まれた状態」に対して効き、後続で
 /// 定義される surface へは遡及しない（要件 2.3・前方参照なし）。alias（[`DefRef::Alias`]）は
@@ -77,14 +78,67 @@ pub(crate) fn fold_shell(world: &mut World, shell: &Shell) {
     }
 }
 
-/// plain `surface` 定義 1 件を展開し、各 id を新規 surface として常駐させる（要件 1.1/2.1）。
+/// plain `surface` 定義 1 件を展開し、各 id を surface として常駐させる（要件 1.1/2.1）。
 ///
 /// ターゲット記述子（単一・列挙・範囲）を記述順に展開し、共有ボディ（element/collision/animation）
-/// から正規化 [`SurfaceMaster`] を id ごとに生成して登録する。既存 id は全置換（後勝ち・`warn`）。
+/// から正規化 [`SurfaceMaster`] を id ごとに生成する。無い id は新設し、既にある id（前の波括弧・
+/// 追記で定義された番号）は前の定義へ後のブレスの行を足す（[`merge_brace`]・同じ名前の行は後勝ち・
+/// spec: areka-P0-emily-ghost-verification 開発者の決め 2026-10-17「足し合わせる」）。
 fn fold_plain_surface(world: &mut World, surface: &Surface) {
     for id in expand_targets(&surface.targets) {
-        let master = normalize_surface(id, surface);
-        upsert_surface(world, id, master);
+        let later = normalize_surface(id, surface);
+        let existing = world.resource::<SurfaceIndex>().0.get(&id).copied();
+        let merged = existing.and_then(|entity| world.get_mut::<SurfaceMaster>(entity));
+        match merged {
+            Some(mut master) => {
+                // 失敗ではなく定めた振る舞い（えみりは 1 本のシェルで百数十回当たる）なので debug。
+                tracing::debug!(
+                    target: "areka_emo_compose",
+                    id,
+                    "surface id 重複: 前の定義へ後のブレスの行を足す（同じ名前の行は後勝ち）"
+                );
+                merge_brace(&mut master, later);
+            }
+            None => {
+                upsert_surface(world, id, later);
+            }
+        }
+    }
+}
+
+/// 同じ番号の後の `surface*`ブレスを前の定義へ足す。同じ名前の行は後の行が勝つ。
+///
+/// - element: 同じ element番号（layer）の前の行を除いてから足し、layer 昇順へ安定ソート。
+/// - collision: 同じ collision番号の前の行を除いてから末尾へ足す（書き直した行は後に書かれた行＝
+///   画家のアルゴリズムで手前・`SurfaceMaster::collisions` の登場順の不変条件）。
+/// - animation: 同じ animation番号は、後のブレスが interval 行を書いたとき（`interval_written`）
+///   だけ interval を後の行にする（書かなければ前の interval が残る）。同じ pattern番号の前の行を
+///   除いてから後の pattern を足す。無い番号は末尾へ足す。
+fn merge_brace(master: &mut SurfaceMaster, later: SurfaceMaster) {
+    master
+        .elements
+        .retain(|e| !later.elements.iter().any(|l| l.layer == e.layer));
+    master.elements.extend(later.elements);
+    master.elements.sort_by_key(|e| e.layer);
+
+    master
+        .collisions
+        .retain(|c| !later.collisions.iter().any(|l| l.index == c.index));
+    master.collisions.extend(later.collisions);
+
+    for add in later.animations {
+        match master.animations.iter_mut().find(|a| a.id == add.id) {
+            Some(anim) => {
+                if add.interval_written {
+                    anim.interval = add.interval;
+                    anim.interval_written = true;
+                }
+                anim.patterns
+                    .retain(|p| !add.patterns.iter().any(|l| l.index == p.index));
+                anim.patterns.extend(add.patterns);
+            }
+            None => master.animations.push(add),
+        }
     }
 }
 
@@ -294,18 +348,18 @@ fn normalize_element(element: &Element) -> NormalizedElement {
     }
 }
 
-/// id→entity を登録し、その entity を返す。既存 id は全置換（後勝ち）＋ `warn`
-/// （要件 2.1・ukadoc 明文規則なし＝de-facto）。
+/// id を新設して id→entity を登録し、その entity を返す。既にある id の定義へは波括弧なら
+/// [`merge_brace`]・追記なら in-place で足すので、ここへ来るのは無い id だけ（索引は在るが
+/// component が欠けた不整合のときだけ、古い entity を除いて作り直す）。
 fn upsert_surface(world: &mut World, id: u32, master: SurfaceMaster) -> Entity {
-    let existing = world.resource::<SurfaceIndex>().0.get(&id).copied();
-    if let Some(old_entity) = existing {
+    if let Some(stale) = world.resource::<SurfaceIndex>().0.get(&id).copied() {
+        // 本来生じない不整合（索引は指すが SurfaceMaster が無い）。黙らずに残して作り直す。
         tracing::warn!(
             target: "areka_emo_compose",
             id,
-            "surface id 重複: 既存定義を全置換する（後勝ち）"
+            "SurfaceIndex は指すが SurfaceMaster component が欠落: 作り直す"
         );
-        // 全置換のため旧 entity を除去してから新設する（画素バッファは持たない・要件 10.6）。
-        world.despawn(old_entity);
+        world.despawn(stale);
     }
     let entity = world.spawn((SurfaceId(id), master)).id();
     world.resource_mut::<SurfaceIndex>().0.insert(id, entity);
@@ -315,3 +369,7 @@ fn upsert_surface(world: &mut World, id: u32, master: SurfaceMaster) -> Entity {
 #[cfg(test)]
 #[path = "fold_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "fold_merge_tests.rs"]
+mod merge_tests;

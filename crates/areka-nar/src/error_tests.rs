@@ -1,8 +1,8 @@
-//! `error` の兄弟テスト。拒否語彙が 14 で閉じていること、短い語が重複しないこと、
+//! `error` の兄弟テスト。拒否語彙が 13 で閉じていること、短い語が重複しないこと、
 //! 宣言順の一覧と実際の変種が双方向で一致すること、詳細を持つ変種の表示が
 //! その詳細を落とさないことを判定する（要件 9.2）。
 //!
-//! ここでは固定入力の `.nar` を通さない。実物のアーカイブから 14 変種すべてに
+//! ここでは固定入力の `.nar` を通さない。実物のアーカイブから 13 変種すべてに
 //! 到達できることの判定はタスク 4.4 が `ALL_KINDS` と突き合わせて行う。
 
 use super::*;
@@ -66,10 +66,6 @@ fn samples_in_declaration_order() -> Vec<RefuseReason> {
             key: "directory".to_string(),
             value: "../外".to_string(),
         },
-        RefuseReason::CompanionSourceMissing {
-            key: "balloon0".to_string(),
-            source_directory: "kakukaku".to_string(),
-        },
         RefuseReason::TargetGhostMissing {
             target: Some("emo2".to_string()),
         },
@@ -77,11 +73,11 @@ fn samples_in_declaration_order() -> Vec<RefuseReason> {
 }
 
 #[test]
-fn all_kinds_has_fourteen_entries() {
+fn all_kinds_has_thirteen_entries() {
     assert_eq!(
         RefuseReason::ALL_KINDS.len(),
-        14,
-        "拒否語彙は 14 変種で閉じる（要件 9.2・長すぎる名前＝要件 1.4）"
+        13,
+        "拒否語彙は 13 変種で閉じる（要件 9.2・長すぎる名前＝要件 1.4・取り出し元の無い同梱は飛ばす）"
     );
 }
 
@@ -280,19 +276,6 @@ fn case_collision_display_names_both_sides() {
     .to_string();
     assert!(
         shown.contains("A.txt") && shown.contains("a.txt"),
-        "{shown}"
-    );
-}
-
-#[test]
-fn companion_source_missing_display_names_key_and_source() {
-    let shown = RefuseReason::CompanionSourceMissing {
-        key: "balloon0".to_string(),
-        source_directory: "kakukaku".to_string(),
-    }
-    .to_string();
-    assert!(
-        shown.contains("balloon0") && shown.contains("kakukaku"),
         "{shown}"
     );
 }

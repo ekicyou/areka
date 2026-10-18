@@ -347,6 +347,7 @@ fn accepted_terms_come_after_begin_and_before_the_install() {
             Call::Elsewhere(_) => "elsewhere",
             Call::Overwrite(_) => "overwrite",
             Call::Record(_) => "record",
+            Call::Warn { .. } => "warn",
         })
         .collect();
     assert_eq!(

@@ -324,3 +324,39 @@ fn still_refuses_a_separator_in_the_companion_directory() {
         );
     }
 }
+
+// ---- 書かれていた値（`source_written`） ----
+
+/// `*.source.directory` が書かれていれば、その値をそのまま持つ（設計 `Companion.source_written`）。
+#[test]
+fn keeps_the_written_source_directory_value() {
+    let manifest = read_source("extra\\bal1");
+    assert_eq!(
+        manifest.companions[0].source_written.as_deref(),
+        Some("extra\\bal1")
+    );
+}
+
+/// `..` を含む値は、取り除く前の書かれていた値を持つ（取り出し元は取り除いた後の値）。
+#[test]
+fn keeps_the_written_value_before_removing_dot_dot() {
+    let manifest = read_source("../extra/bal1");
+    assert_eq!(manifest.companions[0].source_directory, "extra/bal1");
+    assert_eq!(
+        manifest.companions[0].source_written.as_deref(),
+        Some("../extra/bal1")
+    );
+}
+
+/// 書かれていない・空なら `None`（取り出し元は宛先の名前に倒れる）。
+#[test]
+fn has_no_written_value_when_the_source_directory_is_absent_or_empty() {
+    for lines in [
+        &["balloon.directory,bal"][..],
+        &["balloon.directory,bal", "balloon.source.directory,"][..],
+    ] {
+        let manifest = parsed_ghost(lines);
+        assert_eq!(manifest.companions[0].source_directory, "bal", "{lines:?}");
+        assert_eq!(manifest.companions[0].source_written, None, "{lines:?}");
+    }
+}

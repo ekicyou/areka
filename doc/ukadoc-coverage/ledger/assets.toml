@@ -2603,7 +2603,7 @@ areka はキャラクタ番号で指すスコープのバルーンの初期表�
 ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表の `ghost descript の balloon.defaultsurface / kero.balloon.defaultsurface / char*.balloon.defaultsurface による初期表示面宣言` の行が、正典の既定である面 ID 0 だけを実装した状態を非追従として引き受けている。ただし areka にはこの欄を受け取る経路そのものが無いので、状態は縮退ではなく未対応とした（受け取る経路が無い項目は転記元の行があっても未対応とする裁定）。
 担当 spec は areka-P0-balloon-canon-residue。ただし担当 spec の記述が古い——同 brief が名前を挙げているのは接頭辞の無い綴りと相方側の綴りだけで、キャラクタ番号で指す綴りを挙げていない（沈黙ルール対応表の行は挙げている）。
-1 つ補いがある——読まれないのはこの欄が宣言する値であって、`charN.` の番号は条件付きで効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
+読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
 束: 最初に出る吹き出しの面・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 29——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -2660,17 +2660,17 @@ note = """
 """
 
 [entry."ukadoc:descript_ghost:char_2a.name_2c_540d_524d:1"]
-status = "implemented"
+status = "degraded"
 introduced = "2.6.66"
 owner = ""
 priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
-壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた値を書いたときに記録が出る項目では、その記録をこの下の行に書く）。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、正典自身が値を使わないと注記する `maxwidth,ピクセル` でも採っている）。
-areka の placement::source::char_name_scope_of が番号を取り出し、同 build_titles が 2 番以降のスコープの窓の題に使う（窓を作る placement::spawn まで届く）。0 番と 1 番の題は `sakura.name`／`kero.name` が正本で、こちらは写さない。
+壊れ方: 見た目の差（3 人目以降の名前が画面に出ない）。記録: なし。名前は読むが、その名前を題に付ける 3 人目以降の窓を作らない。
+areka の placement::source::char_name_scope_of が番号を取り出し、同 build_titles が 2 番以降のスコープの窓の題として持つ。ただし 2026-10-17 から 3 人目以降の窓を作らない（areka の placement::config::detect_scopes が `charN.` の綴りでキャラクタを立てない。areka-P0-emily-ghost-verification のタスク 3.1・要件 4.7）ので、題は窓を作る placement::spawn まで届かず、画面にも出ない。それまでは実装済みとしていたが、この絞りで縮退へ移した。えみり（`emily4`）の `char2.name` もこの扱いで、3 人目は出なかった（同 spec の検証の記録 verification.md「崩れた所の表」の 2）。担当 spec は areka-P0-extra-character-windows（3 人目以降の窓を作る）。宛先の欄は空にした。台帳の非空の宛先は roadmap-draft.md の [[spec]] の名前か、briefing.md の完了済み spec の列挙（[[owner_completed]]）の名前でなければならず（areka-P0-ukadoc-coverage-roadmap 要件 11.1 ⑸ の検査）、areka-P0-extra-character-windows はどちらにも載っていない。表へ足すのは棚卸の仕事である。0 番と 1 番の題は `sakura.name`／`kero.name` が正本で、こちらは写さない。
 シェルの descript にも同じ綴りの項目があるが、areka が窓の題に使う名前はゴーストの descript の側からしか採らない——上に書いた題の組み立ては起点の descript の表だけを走査する。だから同じ綴りでもページごとに状態が割れる。名前で引かず、ページを決めてから引くこと。
-束: 本体と相方の名前・正典どおりに動く（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 68——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束: 本体と相方の名前・引き受けたうえで縮めている（記録なし）（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 68——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。縮退へ移したので、下位区分を実物に揃えた。順位 68 は実装済みだったときに付いた値のままで、priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_ghost:char_2a.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
@@ -2700,7 +2700,7 @@ areka はキャラクタ番号で指すスコープの初期サーフェス番�
 よく似た綴りが別ドメインのプロパティの側にもあるが、そちらはスコープの接頭辞を持たない別の項目で、areka-sylphya の vocab::SET_EFFECTIVE が書き込みの効く名前として予約しているだけである（書き込みそのものは行わない）。名前で引かず、ページを決めてから引くこと。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
-1 つ補いがある——読まれないのはこの欄が宣言する値であって、`charN.` の番号は条件付きで効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
+読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
 束: 最初に出るサーフェス・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 32——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -3868,8 +3868,8 @@ priority = "B1"
 values = []
 links = []
 note = """
-実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec のインストールの手続き（crates/areka/src/install/procedure.rs の run_order が書庫ごとに開いて InstallManifest を読み、accept の照合・宛先の判断・イベントの Reference の組み立ては crates/areka/src/install/judge.rs の judge_accept・destination_of・complete_ex_refs などが行う）。同時インストールのバルーンの、書庫の中の取り出し元として SSP 2.9.00 以降の形で読む。値を \\ と / のどちらでも段に分け、空の段と .. の段を取り除き（.. は手前の段を打ち消さない）、残った段を / で繋いだ相対パスを取り出し元にする（extra\\bal1 は extra/bal1）。段が 1 つも残らない・1 階層の名前でない段が在る・全体が UTF-16 で 200 単位を超える、のどれかなら書庫ごと拒否する。段を 1 つでも取り除いたときだけ、鍵ごとに 1 件「取り除いた」と書かれていた値・取り除いた後の値を記録する（区切りが \\ か / かだけの違いは記録しない）。無い・空なら *.directory と同じ名前を使う。配置では取り出し元の全ての段を書庫の中の名前と ASCII の大小を無視して段ごとに突き合わせ、全ての段を剥がして宛先の配下へ置く。宛先（*.directory）の無い接頭辞の断片は読み飛ばして記録する。この読み方は areka-P0-install-companion-reading が、完了 areka-P0-nar-install 要件 3.9 のうち取り出し元の部分（1 階層の名前に限る）を上書きして決めた。
-壊れ方: 明示エラー。記録: error!（[areka_nar] refused or failed）。書庫ごと拒否し、宛先には 1 バイトも触れない。読み飛ばしと、段を取り除いたことは warn!（[areka_nar] manifest entry skipped）。
+実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec のインストールの手続き（crates/areka/src/install/procedure.rs の run_order が書庫ごとに開いて InstallManifest を読み、accept の照合・宛先の判断・イベントの Reference の組み立ては crates/areka/src/install/judge.rs の judge_accept・destination_of・complete_ex_refs などが行う）。同時インストールのバルーンの、書庫の中の取り出し元として SSP 2.9.00 以降の形で読む。値を \\ と / のどちらでも段に分け、空の段と .. の段を取り除き（.. は手前の段を打ち消さない）、残った段を / で繋いだ相対パスを取り出し元にする（extra\\bal1 は extra/bal1）。段が 1 つも残らない・1 階層の名前でない段が在る・全体が UTF-16 で 200 単位を超える、のどれかなら書庫ごと拒否する。段を 1 つでも取り除いたときだけ、鍵ごとに 1 件「取り除いた」と書かれていた値・取り除いた後の値を記録する（区切りが \\ か / かだけの違いは記録しない）。無い・空なら *.directory と同じ名前を使う。取り出し元が書庫に無いとき（取り出し元の配下に書庫のファイルもフォルダも 1 件も無い。フォルダのエントリだけが在って配下が空のときも同じ）は、断らずにその同梱のバルーンだけを置かずに飛ばし、書庫の残り（ゴースト・シェルの本体と、取り出し元の在るほかの同梱）は今どおり入れる。飛ばした同梱の置き場（<根>/balloon/<*.directory>/）にはフォルダを作らず、すでに在る中身も変えない。インストールは成功として扱い、ゴーストへは今の成功と同じ知らせを送る。飛ばした同梱は 1 件ずつ、鍵（この鍵、書かれていなければ *.directory の鍵）・書かれていた値・置き場の名前を記録し、areka の画面からのインストールでは利用者へ警告のダイアログを 1 つ出す。起動の時のバルーンは、ほかに当たるものが無ければ既定のバルーンになる。この扱いは areka-P0-emily-ghost-verification が、完了 areka-P0-nar-install 要件 5.4 と、areka-P0-install-companion-reading・areka-P0-install-companion-canon の要件 2.5 を上書きして決めた（理由は doc/COMPAT_ARCHITECTURE.md §8）。配置では取り出し元の全ての段を書庫の中の名前と ASCII の大小を無視して段ごとに突き合わせ、全ての段を剥がして宛先の配下へ置く。宛先（*.directory）の無い接頭辞の断片は読み飛ばして記録する。この読み方は areka-P0-install-companion-reading が、完了 areka-P0-nar-install 要件 3.9 のうち取り出し元の部分（1 階層の名前に限る）を上書きして決めた。
+壊れ方: 明示エラー。記録: error!（[areka_nar] refused or failed）。書庫ごと拒否し、宛先には 1 バイトも触れない。読み飛ばしと、段を取り除いたことは warn!（[areka_nar] manifest entry skipped）。取り出し元が書庫に無くて飛ばした同梱は断らず、warn!（[areka_nar] companion balloon skipped: its source folder is not in the archive）を 1 件ずつ残す。
 束: 配布ファイルを入れる指示・正典どおりに動く（先に要る仕組み: 配布と更新の仕組み。書庫の install.txt を読んで入れる側は、読み手 areka-nar〔areka-P0-nar-install〕と、それを呼ぶ本体の入口〔右クリックのメニューの「インストール…」と台本 \\![execute,install,path,…]・areka-P0-ghost-install〕で在る。網の先から取ってくる側と、更新の差分を当てる側はまだ無い）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」から実物に揃えた。順位 47 は下位区分が「読む経路が無い」だったときに付いた値のままで、priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 根拠の場所: crates/areka-nar/src/manifest.rs の COMPANION_SUFFIXES（同時インストールのキーの後半の表）の上の正典 URL の行。
 """
@@ -4206,7 +4206,7 @@ note = """
 areka はバルーンを利用者が動かせなくする宣言を読む経路を持たない。
 areka のバルーンはドラッグで動かせる（単独のドラッグを扱うのは areka の placement::follow::on_balloon_drag）ので、この宣言を書いても利用者は動かせてしまう。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-1 つ補いがある——この欄の値は読まれないが、`charN.` の綴りはキャラクタの人数に効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4223,7 +4223,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はバルーンの拡大率をゴーストと連動させることを強いる宣言を読む経路を持たない。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-1 つ補いがある——この欄の値は読まれないが、`charN.` の綴りはキャラクタの人数に効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 吹き出しの大きさを本体に合わせる・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 22——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4239,7 +4239,7 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は連れ立って着せる相手の指定を、どの綴りでも受け取らない。`addid` という綴りは areka のソースに 1 つも無く、キャラクタ番号で指すこの綴りは、そのうえ転記側の接頭辞の照合（areka-parsers の package::read_bindgroup_defaults が見るのは `sakura.` と `kero.` だけ）にも掛からない。
-1 つ補いがある——読まれないのはこの欄が宣言する値であって、`charN.` の番号は条件付きで効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
+読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-mayuna-compose。同 spec は連れ立って着せる指定を「語彙として持つだけで実挙動は持たない」と仕分けているが、その語彙が置かれているのは同 spec の文書と、後から差し替えられるように開けてある型の形であって、areka のコードにこの綴りは無い。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4256,7 +4256,7 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はキャラクタ番号で指すスコープの着せ替えの初期状態を受け取る経路を持たない。起動時に着せる番号を集める areka の emo2_boot::assets::default_bind_ids が見るのは `sakura.` で始まる綴りだけで、転記側の areka-parsers の package::read_bindgroup_defaults も `sakura.` と `kero.` の 2 つしか照合しない。
-1 つ補いがある——読まれないのはこの欄が宣言する値であって、`charN.` の番号は条件付きで効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
+読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-mayuna-compose。同 spec は着せ替えの宣言の扱いを 3 つに仕分けた表を持ち、キャラクタ番号で指す綴りを最初の一里塚では取り込まないと決めて、後の段階へ回している。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4273,7 +4273,7 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はキャラクタ番号で指すスコープの着せ替えの名前宣言を受け取る経路を持たない。名前を転記する areka-parsers の package::read_bindgroup_defaults が照合する接頭辞は `sakura.` と `kero.` の 2 つだけで、`charN.` で始まる綴りはどの分岐にも入らない。名前で着せ替えを着脱する指示は、この番号の登場人物については解けない。
-1 つ補いがある——読まれないのはこの欄が宣言する値であって、`charN.` の番号は条件付きで効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
+読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-mayuna-compose。同 spec は着せ替えの名前宣言の取り込みを自分のものとし、その設計でキャラクタ番号で指す綴りを最初の一里塚では取り込まないと決めて、後の段階へ回している。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4290,7 +4290,7 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はキャラクタ番号で指すスコープの排他の指定を受け取る経路を持たない。シェルの descript から着せ替えの宣言を読む areka-parsers の package::read_bindgroup_defaults が照合する接頭辞は `sakura.` と `kero.` の 2 つだけで、`charN.` で始まる綴りはどの分岐にも入らない。作者が複数選べると書いても、同時に選べる数の判断そのものが起きない。
-1 つ補いがある——読まれないのはこの欄が宣言する値であって、`charN.` の番号は条件付きで効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
+読まれないのはこの欄が宣言する値で、`charN.` の番号もキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-bindoption-exclusivity。同 spec の brief は自分が直す正典として、本体側・相方側・キャラクタ番号で指す側の 3 つの綴りを並べて引いている。ただし着地した実装が照合するのは前の 2 つだけである。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4310,7 +4310,7 @@ areka は `defaultleft` を `defaultx` と区別しない。
 areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defaultleft` を同じ横の欄へ、`defaulty` と `defaulttop` を同じ縦の欄へ畳んで、先に書いてある方を採る（areka の placement::config::resolve_scope）。畳んだ後にどう解くかは机上の揃えだけで決まる——既定（下端）のときは横を連鎖の基準からの左方向のずらし量として使い、縦は丸ごと捨てる。`free` のときは横も縦も作業領域の左上を原点とする画面上の座標として使う（areka の placement::resolver）。つまり、どちらの綴りで書いたかは結果に効かない。
 正典は `defaultleft` を画面上の X 座標と定めている。areka が画面上の座標として解くのは揃えが `free` のときだけで、既定（下端）のときは連鎖の基準からのずらし量として使ってしまう。同じ descript に `defaultx` も書いてあれば、そちらが先に採られてこの欄は黙って落ちる。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-`charN.` の綴りは、値の行き先のほかにキャラクタの人数にも効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない——値のほうは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られる（areka の placement::config::scope_prefixes と placement::config::scoped_value）。
+`charN.` の綴りは、キャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない——値のほうは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られる（areka の placement::config::scope_prefixes と placement::config::scoped_value）。番号が 2 以上の値は、そのキャラクタが立たないので使われない。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4330,7 +4330,7 @@ areka は `defaulttop` を `defaulty` と区別しない。
 areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defaultleft` を同じ横の欄へ、`defaulty` と `defaulttop` を同じ縦の欄へ畳んで、先に書いてある方を採る（areka の placement::config::resolve_scope）。畳んだ後にどう解くかは机上の揃えだけで決まる——既定（下端）のときは横を連鎖の基準からの左方向のずらし量として使い、縦は丸ごと捨てる。`free` のときは横も縦も作業領域の左上を原点とする画面上の座標として使う（areka の placement::resolver）。つまり、どちらの綴りで書いたかは結果に効かない。
 正典は `defaulttop` を画面上の Y 座標と定め、揃えが `free` のときだけ有効とも書いている。`free` のときの解き方はその定めに沿うが、同じ descript に `defaulty` も書いてあればそちらが先に採られてこの欄は黙って落ち、画像基準のつもりで書かれた値が画面上の座標として使われる。原点も画面そのものではなく作業領域の左上である。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-`charN.` の綴りは、値の行き先のほかにキャラクタの人数にも効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない——値のほうは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られる（areka の placement::config::scope_prefixes と placement::config::scoped_value）。
+`charN.` の綴りは、キャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない——値のほうは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られる（areka の placement::config::scope_prefixes と placement::config::scoped_value）。番号が 2 以上の値は、そのキャラクタが立たないので使われない。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4350,7 +4350,7 @@ areka は `defaultx` を `defaultleft` と区別しない。
 areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defaultleft` を同じ横の欄へ、`defaulty` と `defaulttop` を同じ縦の欄へ畳んで、先に書いてある方を採る（areka の placement::config::resolve_scope）。畳んだ後にどう解くかは机上の揃えだけで決まる——既定（下端）のときは横を連鎖の基準からの左方向のずらし量として使い、縦は丸ごと捨てる。`free` のときは横も縦も作業領域の左上を原点とする画面上の座標として使う（areka の placement::resolver）。つまり、どちらの綴りで書いたかは結果に効かない。
 正典は `defaultx` を画像を基準にした X 座標（既定は画像の中央）と定め、`defaultleft` を画面上の X 座標と別々に定めている。areka はどちらの基準にも解かないので、書いた作者の意図した位置には立たない。
 横の値の使い道そのものには裁定がある——沈黙ルール対応表の「複数スコープの既定 X 連鎖規則」が `defaultx` を名指しし、連鎖の基準からの左方向のずらし量（0＝基準に密着）として扱うことを意味論不変と決めている（担当は areka-P0-scope-chain-gap）。ただしその行が確かめたのはスコープどうしの相対位置であって、この欄 1 つの基準点ではない。本台帳が未対応として記録する食い違いは基準点の方であり、それを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-`charN.` の綴りは、値の行き先のほかにキャラクタの人数にも効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない——値のほうは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られる（areka の placement::config::scope_prefixes と placement::config::scoped_value）。
+`charN.` の綴りは、キャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない——値のほうは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られる（areka の placement::config::scope_prefixes と placement::config::scoped_value）。番号が 2 以上の値は、そのキャラクタが立たないので使われない。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4370,7 +4370,7 @@ areka は `defaulty` を `defaulttop` と区別しない。
 areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defaultleft` を同じ横の欄へ、`defaulty` と `defaulttop` を同じ縦の欄へ畳んで、先に書いてある方を採る（areka の placement::config::resolve_scope）。畳んだ後にどう解くかは机上の揃えだけで決まる——既定（下端）のときは横を連鎖の基準からの左方向のずらし量として使い、縦は丸ごと捨てる。`free` のときは横も縦も作業領域の左上を原点とする画面上の座標として使う（areka の placement::resolver）。つまり、どちらの綴りで書いたかは結果に効かない。
 正典は `defaulty` を画像を基準にした Y 座標（既定は画像の下端）と定めており、揃えを問わない。areka はこれを画像基準として解く枝を持たず、既定の揃えでは捨て、`free` では画面上の座標として使う。どちらも正典の言う基準ではない。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-`charN.` の綴りは、値の行き先のほかにキャラクタの人数にも効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない——値のほうは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られる（areka の placement::config::scope_prefixes と placement::config::scoped_value）。
+`charN.` の綴りは、キャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない——値のほうは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られる（areka の placement::config::scope_prefixes と placement::config::scoped_value）。番号が 2 以上の値は、そのキャラクタが立たないので使われない。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4389,7 +4389,7 @@ note = """
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の青の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-1 つ補いがある——この欄の値は読まれないが、`charN.` の綴りはキャラクタの人数に効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 通知領域とゴースト一覧の絵・読む経路が無い（先に要る仕組み: 通知領域とゴースト一覧の画面）。束の順位: 54——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4407,7 +4407,7 @@ note = """
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の緑の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-1 つ補いがある——この欄の値は読まれないが、`charN.` の綴りはキャラクタの人数に効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 通知領域とゴースト一覧の絵・読む経路が無い（先に要る仕組み: 通知領域とゴースト一覧の画面）。束の順位: 54——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4425,7 +4425,7 @@ note = """
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の赤の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-1 つ補いがある——この欄の値は読まれないが、`charN.` の綴りはキャラクタの人数に効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 通知領域とゴースト一覧の絵・読む経路が無い（先に要る仕組み: 通知領域とゴースト一覧の画面）。束の順位: 54——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4443,7 +4443,7 @@ note = """
 areka には着せ替えのメニューが無く、その出しかたを決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-1 つ補いがある——この欄の値は読まれないが、`charN.` の綴りはキャラクタの人数に効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4461,7 +4461,7 @@ note = """
 areka には着せ替えのメニューが無く、その並びの決まった位置に項目を置くこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-1 つ補いがある——この欄の値は読まれないが、`charN.` の綴りはキャラクタの人数に効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4479,7 +4479,7 @@ note = """
 areka には着せ替えのメニューが無く、その並びに階層を作って項目を置くこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-1 つ補いがある——この欄の値は読まれないが、`charN.` の綴りはキャラクタの人数に効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4497,7 +4497,7 @@ note = """
 areka が 2 人目以降の窓の題に使う名前は起点の descript の側からしか採らず、シェルの descript に書かれた同じ綴りは引かれない。
 題を組み立てる areka の placement::source::build_titles が走査するのは起点の表だけである。同じ綴りでも状態はページごとに別に決まる。同じ名前の見出しがゴーストの descript にもある。名前で引かず、ページを決めてから引くこと。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-1 つ補いがある——この欄の値は読まれないが、`charN.` の綴りはキャラクタの人数に効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
+この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 本体と相方の名前・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 30——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -4513,7 +4513,7 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: warn!。areka が実際に導出するのは `bottom` と `free` の 2 つだけで、正典の `top`／`left`／`right` はいずれも記録を残したうえで `bottom` と同じ置き方になる（areka の placement::config の `Alignment::Seam` と placement::resolver の警告）。書いた作者の意図とは違う場所にゴーストが立つので、受理しているが正典どおりには動かない。沈黙ルール対応表と見直し表のすべての行を当たったが、この食い違いを引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 同じ名前の見出しがゴーストの descript にもある。areka は両方の表を読み、シェル側がゴースト側に勝ち、スコープを名指しした欄が全体の欄に勝つ重ね方（areka の placement::config::resolve_scope）で 1 つに決める。id は別なので同一視せず、名前で引かず、ページを決めてから引くこと。
-1 つ補いがある——`charN.` の番号は、値の行き先とは別にキャラクタの人数にも効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。この欄の値そのものは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として、2 以上なら書いたとおりのキャラクタの欄として受け取られる（areka の placement::config::scoped_value）。相方が立つのは起点の descript に相方の名前があるか、シェルの descript に `kero.` で始まるキーがあるときで、`char1.` の綴りそのものは相方を立てない。
+`charN.` の番号は、キャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは areka-P0-extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。この欄の値そのものは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られ、2 以上ならそのキャラクタが立たないので使われない（areka の placement::config::scoped_value）。相方が立つのは起点の descript に相方の名前があるか、シェルの descript に `kero.` で始まるキーがあるときで、`char1.` の綴りそのものは相方を立てない。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
@@ -5487,7 +5487,7 @@ note = """
 areka はバルーンを利用者が動かせなくする宣言を読む経路を持たない。
 areka のバルーンはドラッグで動かせる（単独のドラッグを扱うのは areka の placement::follow::on_balloon_drag）ので、この宣言を書いても利用者は動かせてしまう。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-`sakura.` で始まるキーには、`kero.` や `charN.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` と `charN.` の綴りだけである）。
+`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5506,7 +5506,7 @@ areka は横だけを書いたバルーンのずらし量の宣言を黙って�
 areka の placement::config::resolve_scope は横と縦の両方が書かれているときだけ調整量を作る（2 つを組にしてから初めて値にする）。正典は 1 軸だけの宣言も意味を持つ座標として定めている。
 もう 1 つ落ちるものがある——正典は綴りの後ろに `l`／`r` を付けた形（例 `offsetxr`）で左右に出すときのずらし量を別々に書けると定めているが、areka が照合するのは接尾辞の無い綴りだけで、付いた形はどこからも引かれない。
 このキーを名指しする行は沈黙ルール対応表にある——「キーワード指定時に `windowposition.y` などの調整量をどう扱うか」は、バルーンの基本位置をキーワードで決めたときにも調整量の加算を続けるかどうかに答えており（担当は areka-P0-windowposition-limit）、「バルーン位置オフセットの単位空間契約」は、作者が書いた値をどの拡大率の軸で物理 px へ換算して持つかに答えている（担当は areka-P0-balloon-offset-dpi）。どちらも「片方だけの宣言が落ちること」には答えていない。本台帳が未対応として記録するのはその食い違いであり、これを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-`sakura.` で始まるキーには、`kero.` や `charN.` のようなキャラクタの人数への効き目は無い（areka の placement::config::detect_scopes が材料にするのは `kero.` と `charN.` の綴りだけである）。
+`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目は無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 担当 spec は areka-P0-balloon-offset-dpi。同 spec の brief は範囲の In にシェルの descript のこの欄の拡大率の当て方をそろえることを挙げている。
 同じ綴りの項目がシェルの surfaces.txt にもあるが、別の項目である——こちらはスコープごとに 1 つ決める定数で、areka の placement::config::resolve_scope が実際に引く。surfaces.txt のほうはサーフェスごとに宣言する形で、areka-parsers の shell モジュールがどの走査でも見ない。どちらも書いたとおりには効かないが落ちる場所が違う——こちらは横と縦が揃わないと組にならずに捨てられ、あちらは読む経路そのものが無い。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5526,7 +5526,7 @@ areka は縦だけを書いたバルーンのずらし量の宣言を黙って�
 areka の placement::config::resolve_scope は横と縦の両方が書かれているときだけ調整量を作る（2 つを組にしてから初めて値にする）。正典は 1 軸だけの宣言も意味を持つ座標として定めている。
 もう 1 つ落ちるものがある——正典は綴りの後ろに `l`／`r` を付けた形（例 `offsetxr`）で左右に出すときのずらし量を別々に書けると定めているが、areka が照合するのは接尾辞の無い綴りだけで、付いた形はどこからも引かれない。
 このキーを名指しする行は沈黙ルール対応表にある——「キーワード指定時に `windowposition.y` などの調整量をどう扱うか」は、バルーンの基本位置をキーワードで決めたときにも調整量の加算を続けるかどうかに答えており（担当は areka-P0-windowposition-limit）、「バルーン位置オフセットの単位空間契約」は、作者が書いた値をどの拡大率の軸で物理 px へ換算して持つかに答えている（担当は areka-P0-balloon-offset-dpi）。どちらも「片方だけの宣言が落ちること」には答えていない。本台帳が未対応として記録するのはその食い違いであり、これを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-`sakura.` で始まるキーには、`kero.` や `charN.` のようなキャラクタの人数への効き目は無い（areka の placement::config::detect_scopes が材料にするのは `kero.` と `charN.` の綴りだけである）。
+`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目は無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 担当 spec は areka-P0-balloon-offset-dpi。同 spec の brief は範囲の In にシェルの descript のこの欄の拡大率の当て方をそろえることを挙げている。
 同じ綴りの項目がシェルの surfaces.txt にもあるが、別の項目である——こちらはスコープごとに 1 つ決める定数で、areka の placement::config::resolve_scope が実際に引く。surfaces.txt のほうはサーフェスごとに宣言する形で、areka-parsers の shell モジュールがどの走査でも見ない。どちらも書いたとおりには効かないが落ちる場所が違う——こちらは横と縦が揃わないと組にならずに捨てられ、あちらは読む経路そのものが無い。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5544,7 +5544,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はバルーンの拡大率をゴーストと連動させることを強いる宣言を読む経路を持たない。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-`sakura.` で始まるキーには、`kero.` や `charN.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` と `charN.` の綴りだけである）。
+`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 吹き出しの大きさを本体に合わせる・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 22——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5621,7 +5621,7 @@ areka は `defaultleft` を `defaultx` と区別しない。
 areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defaultleft` を同じ横の欄へ、`defaulty` と `defaulttop` を同じ縦の欄へ畳んで、先に書いてある方を採る（areka の placement::config::resolve_scope）。畳んだ後にどう解くかは机上の揃えだけで決まる——既定（下端）のときは横を連鎖の基準からの左方向のずらし量として使い、縦は丸ごと捨てる。`free` のときは横も縦も作業領域の左上を原点とする画面上の座標として使う（areka の placement::resolver）。つまり、どちらの綴りで書いたかは結果に効かない。
 正典は `defaultleft` を画面上の X 座標と定めている。areka が画面上の座標として解くのは揃えが `free` のときだけで、既定（下端）のときは連鎖の基準からのずらし量として使ってしまう。同じ descript に `defaultx` も書いてあれば、そちらが先に採られてこの欄は黙って落ちる。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-`sakura.` で始まるキーには、`kero.` や `charN.` のようなキャラクタの人数への効き目は無い（areka の placement::config::detect_scopes が材料にするのは `kero.` と `charN.` の綴りだけである）。
+`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目は無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5641,7 +5641,7 @@ areka は `defaulttop` を `defaulty` と区別しない。
 areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defaultleft` を同じ横の欄へ、`defaulty` と `defaulttop` を同じ縦の欄へ畳んで、先に書いてある方を採る（areka の placement::config::resolve_scope）。畳んだ後にどう解くかは机上の揃えだけで決まる——既定（下端）のときは横を連鎖の基準からの左方向のずらし量として使い、縦は丸ごと捨てる。`free` のときは横も縦も作業領域の左上を原点とする画面上の座標として使う（areka の placement::resolver）。つまり、どちらの綴りで書いたかは結果に効かない。
 正典は `defaulttop` を画面上の Y 座標と定め、揃えが `free` のときだけ有効とも書いている。`free` のときの解き方はその定めに沿うが、同じ descript に `defaulty` も書いてあればそちらが先に採られてこの欄は黙って落ち、画像基準のつもりで書かれた値が画面上の座標として使われる。原点も画面そのものではなく作業領域の左上である。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-`sakura.` で始まるキーには、`kero.` や `charN.` のようなキャラクタの人数への効き目は無い（areka の placement::config::detect_scopes が材料にするのは `kero.` と `charN.` の綴りだけである）。
+`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目は無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5661,7 +5661,7 @@ areka は `defaultx` を `defaultleft` と区別しない。
 areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defaultleft` を同じ横の欄へ、`defaulty` と `defaulttop` を同じ縦の欄へ畳んで、先に書いてある方を採る（areka の placement::config::resolve_scope）。畳んだ後にどう解くかは机上の揃えだけで決まる——既定（下端）のときは横を連鎖の基準からの左方向のずらし量として使い、縦は丸ごと捨てる。`free` のときは横も縦も作業領域の左上を原点とする画面上の座標として使う（areka の placement::resolver）。つまり、どちらの綴りで書いたかは結果に効かない。
 正典は `defaultx` を画像を基準にした X 座標（既定は画像の中央）と定め、`defaultleft` を画面上の X 座標と別々に定めている。areka はどちらの基準にも解かないので、書いた作者の意図した位置には立たない。
 横の値の使い道そのものには裁定がある——沈黙ルール対応表の「複数スコープの既定 X 連鎖規則」が `defaultx` を名指しし、連鎖の基準からの左方向のずらし量（0＝基準に密着）として扱うことを意味論不変と決めている（担当は areka-P0-scope-chain-gap）。ただしその行が確かめたのはスコープどうしの相対位置であって、この欄 1 つの基準点ではない。本台帳が未対応として記録する食い違いは基準点の方であり、それを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-`sakura.` で始まるキーには、`kero.` や `charN.` のようなキャラクタの人数への効き目は無い（areka の placement::config::detect_scopes が材料にするのは `kero.` と `charN.` の綴りだけである）。
+`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目は無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5681,7 +5681,7 @@ areka は `defaulty` を `defaulttop` と区別しない。
 areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defaultleft` を同じ横の欄へ、`defaulty` と `defaulttop` を同じ縦の欄へ畳んで、先に書いてある方を採る（areka の placement::config::resolve_scope）。畳んだ後にどう解くかは机上の揃えだけで決まる——既定（下端）のときは横を連鎖の基準からの左方向のずらし量として使い、縦は丸ごと捨てる。`free` のときは横も縦も作業領域の左上を原点とする画面上の座標として使う（areka の placement::resolver）。つまり、どちらの綴りで書いたかは結果に効かない。
 正典は `defaulty` を画像を基準にした Y 座標（既定は画像の下端）と定めており、揃えを問わない。areka はこれを画像基準として解く枝を持たず、既定の揃えでは捨て、`free` では画面上の座標として使う。どちらも正典の言う基準ではない。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-`sakura.` で始まるキーには、`kero.` や `charN.` のようなキャラクタの人数への効き目は無い（areka の placement::config::detect_scopes が材料にするのは `kero.` と `charN.` の綴りだけである）。
+`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目は無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5700,7 +5700,7 @@ note = """
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の青の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-`sakura.` で始まるキーには、`kero.` や `charN.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` と `charN.` の綴りだけである）。
+`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 通知領域とゴースト一覧の絵・読む経路が無い（先に要る仕組み: 通知領域とゴースト一覧の画面）。束の順位: 54——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5718,7 +5718,7 @@ note = """
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の緑の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-`sakura.` で始まるキーには、`kero.` や `charN.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` と `charN.` の綴りだけである）。
+`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 通知領域とゴースト一覧の絵・読む経路が無い（先に要る仕組み: 通知領域とゴースト一覧の画面）。束の順位: 54——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5736,7 +5736,7 @@ note = """
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の赤の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-`sakura.` で始まるキーには、`kero.` や `charN.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` と `charN.` の綴りだけである）。
+`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 通知領域とゴースト一覧の絵・読む経路が無い（先に要る仕組み: 通知領域とゴースト一覧の画面）。束の順位: 54——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5754,7 +5754,7 @@ note = """
 areka には着せ替えのメニューが無く、その出しかたを決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-`sakura.` で始まるキーには、`kero.` や `charN.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` と `charN.` の綴りだけである）。
+`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5772,7 +5772,7 @@ note = """
 areka には着せ替えのメニューが無く、その並びの決まった位置に項目を置くこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-`sakura.` で始まるキーには、`kero.` や `charN.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` と `charN.` の綴りだけである）。
+`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5790,7 +5790,7 @@ note = """
 areka には着せ替えのメニューが無く、その並びに階層を作って項目を置くこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-`sakura.` で始まるキーには、`kero.` や `charN.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` と `charN.` の綴りだけである）。
+`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5808,7 +5808,7 @@ note = """
 areka がもう 1 つの呼び名として採るのは起点の descript の側だけで、シェルの descript に書かれた同じ綴りは一度も引かれない。
 呼び名を写すのは areka-parsers の package::resolve で、走査するのは起点の descript から作った表 1 つだけである。同じ綴りでも状態はページごとに別に決まる。同じ名前の見出しがゴーストの descript にもある。名前で引かず、ページを決めてから引くこと。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-`sakura.` で始まるキーには、`kero.` や `charN.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` と `charN.` の綴りだけである）。
+`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 本体と相方の名前・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 30——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5826,7 +5826,7 @@ note = """
 areka が本体側の名前として採るのは起点の descript の側だけで、シェルの descript に書かれた同じ綴りは一度も引かれない。
 名前を写すのは areka-parsers の package::resolve で、走査するのは起点の descript から作った表 1 つだけである。同じ綴りでも状態はページごとに別に決まる。同じ名前の見出しがゴーストの descript にもある。名前で引かず、ページを決めてから引くこと。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-`sakura.` で始まるキーには、`kero.` や `charN.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` と `charN.` の綴りだけである）。
+`sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 束: 本体と相方の名前・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 30——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -6100,6 +6100,7 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: debug!。縮退の転記元: 見直し表の `areka-P0-seriko-runtime`。areka-parsers の shell::decode_animations が忠実に転記し、areka-seriko の table が実際に再生を駆動するのは `random`・`bind+random` と、2026-09-20 に加わった `sometimes`・`rarely` の 4 つである（後の 2 つは table::AnimationTable::from_world が `random,2`／`random,4` と同じ引き金へ読み替えて採録する。`areka-P0-shell-implicit-surface` の要件 11.1・11.2）。2026-10-06 からは単独の `always` も駆動する（`areka-P0-animated-image-playback`）。`bind` は静的な着せ替えゆえ非駆動、`runonce`／`never` などと、`bind+always` のように `+` で区切った組み合わせは元の語を添えて非駆動のままである。どちらも記録は控えめな段にしか出ず、既定の記録の水準（areka の main が既定とする段）では見えない。見出しの `*` は 1 個以上の数字。
 担当 spec は areka-P0-shell-parse。同 spec の brief は範囲の In に surfaces.txt の解析を挙げ、その中身として間隔の語を名指ししている。
+2026-10-17 の注記（areka-P0-emily-ghost-verification・2026-10-18 に書き直した）: 同じサーフェスの番号の後の `surface*`ブレスが、ある animation番号の pattern定義だけを書いてこの行を書かないときは、前の定義の間隔が残る（同じ名前の行は後勝ち＝書かれていない行は上書きしない）。この行を書いたかは転記層の areka-parsers が shell::Animation の interval_written に持ち、行の無いアニメーションの間隔は今までどおり既定の `bind` で埋める。完了のときに解決した（それまでは後のブレスが pattern定義だけを書くと間隔が `bind` に戻る既知の限界で、登記した検体 5 体のシェルでは当たる所は 0 件だった・同 spec の検証の記録 verification.md「既知の限界」）。判定は areka-emo-compose の fold_merge_tests.rs の later_brace_without_interval_line_keeps_the_earlier_interval。足し方の決めごとは doc/COMPAT_ARCHITECTURE.md の §8「同じ面の番号が 2 つ以上の `surface*`ブレスに出たとき」にある。
 束: アニメーションの定義・引き受けたうえで縮めている（控えめな記録）（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 15——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -7025,6 +7026,7 @@ note = """
 動く GIF は非対応のまま（開発者裁定 2026-10-04）で、今までどおり 1 枚の絵として読む。
 element定義のオプション（座標より後ろの欄）は読まないので、`--clipping` を付けた element定義の動く絵も動く絵として読み、動かす（正典は `--clipping` を使うとアニメーションの読み込みが無効になると書く）。このずれは areka-P0-element-clipping-option が着地するまで残る。
 上の 2026-10-04 の注記の「自動アニメーションの再生はまだ無い」は、この注記で古くなった。状態と担当はこの注記では変えていない（縮退の根は `overlay` と `base` 以外の描画メソッドの読み飛ばしのままだからである）。再生の決めごとは doc/COMPAT_ARCHITECTURE.md の §8「動く絵と `always` の再生」に 1 節で登記してある。
+2026-10-17 の注記（areka-P0-emily-ghost-verification）: 同じサーフェスの番号が 2 つ以上の `surface*`ブレスに出たとき、areka は前の定義に後のブレスの element定義を足す（同じ element番号の行は後の行が勝つ。当たり判定とアニメーションも同じ規則）。それまでは後のブレスが前の定義を丸ごと置き換えていたので、面ごとのブレスに element定義を書き、後の共有のブレスに当たり判定と着せ替えを書くえみり（`emily4`）では絵が消えた（同 spec の検証の記録 verification.md「崩れた所の表」の 1）。足すときの記録は debug! の 1 行で、warn! は出さない。足し方は areka-emo-compose の fold::fold_plain_surface と fold::merge_brace、決めごとは doc/COMPAT_ARCHITECTURE.md の §8「同じ面の番号が 2 つ以上の `surface*`ブレスに出たとき」に登記してある。状態と担当はこの注記では変えていない（縮退の根は `overlay` と `base` 以外の描画メソッドの読み飛ばしのままだからである）。
 束: 絵の重ね合わせの行・引き受けたうえで縮めている（記録なし）（先に要る仕組み: emo の合成器）。束の順位: 17——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 

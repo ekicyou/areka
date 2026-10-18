@@ -132,6 +132,12 @@ pub const SAMPLES: &[Sample] = &[
         kind: SampleKind::Ghost,
         balloons: &["claudia", "claudia_vertical"],
     },
+    // 同梱を名乗るが取り出し元が書庫に無い。`areka-nar` が飛ばすので同梱は 0。
+    Sample {
+        name: "emily4",
+        kind: SampleKind::Ghost,
+        balloons: &[],
+    },
 ];
 
 /// 取得した検体。**この値を束縛している間だけ**パスを借りられる。

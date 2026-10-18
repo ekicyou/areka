@@ -569,3 +569,7 @@ mod tests;
 #[cfg(test)]
 #[path = "input_events_menu_tests.rs"]
 mod menu_tests;
+
+#[cfg(test)]
+#[path = "input_events_char_clamp_tests.rs"]
+mod char_clamp_tests;

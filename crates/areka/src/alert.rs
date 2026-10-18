@@ -8,17 +8,18 @@
 //! 告知は環境変数 `AREKA_NO_ALERT` で抑えられる（自動テストでモーダルが止まらない）。
 //! 終了コードは呼び手（`main`）の責務で、ここは告げるだけ。
 //!
-//! はい／いいえを尋ねる口 [`ask_yes_no`]（areka-P0-ghost-install 要件 4.4）も置く。
+//! はい／いいえを尋ねる口 [`ask_yes_no`]（areka-P0-ghost-install 要件 4.4）と、
+//! OK だけの警告の口 [`warn_ok`]（areka-P0-emily-ghost-verification 要件 1.12）も置く。
 //!
-//! この module の `unsafe` は [`raise`] と [`ask_yes_no`] の `MessageBoxW` 呼び出しに閉じる。
+//! この module の `unsafe` は [`raise`]・[`ask_yes_no`]・[`warn_ok`] の `MessageBoxW` 呼び出しに閉じる。
 
 use std::path::PathBuf;
 
 use areka_kanade::{ShioriFault, ShioriFaultKind};
 use areka_sylphya::{PersistFailure, PersistFailureCause, PersistKey, PersistScope};
 use windows::Win32::UI::WindowsAndMessaging::{
-    IDNO, IDYES, MB_ICONERROR, MB_ICONQUESTION, MB_OK, MB_SETFOREGROUND, MB_TOPMOST, MB_YESNO,
-    MessageBoxW,
+    IDNO, IDYES, MB_ICONERROR, MB_ICONQUESTION, MB_ICONWARNING, MB_OK, MB_SETFOREGROUND,
+    MB_TOPMOST, MB_YESNO, MessageBoxW,
 };
 use windows::core::HSTRING;
 
@@ -336,6 +337,41 @@ pub(crate) fn ask_yes_no(title: &str, body: &str, suppressed: bool) -> YesNo {
             );
             YesNo::Unavailable
         }
+    }
+}
+
+/// OK だけの警告の画面を出す（インストールの警告・2026-10-17 開発者の例外）。
+/// `warn!(event = "install_warning_dialog")` を必ず 1 件残し、`suppressed` が真なら画面を出さない。
+/// 出せなかったら `error!(event = "warning_box_failed")` を 1 件足す。持ち主の窓は渡さない。
+pub(crate) fn warn_ok(title: &str, body: &str, suppressed: bool) {
+    tracing::warn!(
+        event = "install_warning_dialog",
+        title,
+        body,
+        suppressed,
+        "[alert] 利用者へ警告します"
+    );
+    if suppressed {
+        return;
+    }
+    let (title, body) = (HSTRING::from(title), HSTRING::from(body));
+    // SAFETY: `title`／`body` は終端 0 付きで呼び出しの間ずっと生存し、他の引数は None と定数。
+    let result = unsafe {
+        MessageBoxW(
+            None,
+            &body,
+            &title,
+            MB_OK | MB_ICONWARNING | MB_SETFOREGROUND | MB_TOPMOST,
+        )
+    };
+    // 0 は出せなかった。押されたボタンは OK だけなので 0 以外は見ない。
+    if result.0 == 0 {
+        let e = windows::core::Error::from_thread();
+        tracing::error!(
+            event = "warning_box_failed",
+            error = %e,
+            "[alert] MessageBoxW failed: the warning was only logged"
+        );
     }
 }
 

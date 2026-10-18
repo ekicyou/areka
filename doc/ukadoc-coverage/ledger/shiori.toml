@@ -3442,7 +3442,7 @@ note = """
 壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。書庫の読み取り・検査・展開の
 どれかが失敗したときと、accept の無い shell／supplement の書庫のときに GET で送る。Reference0 は
 正典の失敗理由の語 1 つだけ（extraction・invalid type・unsupported。unlha32・artificial・password は
-送らない）で、Reference1 以降は無い。areka-nar の拒否の 14 種と I/O の失敗をどの語へ写すかは
+送らない）で、Reference1 以降は無い。areka-nar の拒否の 13 種と I/O の失敗をどの語へ写すかは
 doc/COMPAT_ARCHITECTURE.md §8 に登記した。失敗はメッセージボックスを出さず、このイベントと記録で
 伝える。ゴーストが応えなくても代わりの画面や台詞は出さない。
 ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは error のログ（install_failed・

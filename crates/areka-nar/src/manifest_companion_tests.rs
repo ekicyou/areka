@@ -25,6 +25,7 @@ fn reads_the_balloon_companion_with_its_own_source_directory() {
             directory: "emo2-kakukaku".to_owned(),
             source_directory: "kakukaku-src".to_owned(),
             existing: ExistingPolicy::Overlay,
+            source_written: Some("kakukaku-src".to_owned()),
         }]
     );
     assert_eq!(manifest.warnings, vec![]);

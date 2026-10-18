@@ -48,6 +48,7 @@ pub(super) fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animati
     Animation {
         id,
         interval: Interval::Bind,
+        interval_written: true,
         patterns: vec![
             Pattern {
                 index: 0,

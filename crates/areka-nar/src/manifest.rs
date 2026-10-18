@@ -114,6 +114,9 @@ pub struct Companion {
     /// 名前。`..`・空の段・`\` を含まない。
     pub source_directory: String,
     pub existing: ExistingPolicy,
+    /// `*.source.directory` に書かれていた値（`..` を取り除く前・`bounded_value` で
+    /// 縛った物）。書かれていない・空なら `None`。飛ばした同梱の記録に載せる。
+    pub source_written: Option<String>,
 }
 
 /// `install.txt` の解釈の結果（要件 3.5〜3.16）。
@@ -426,16 +429,19 @@ fn collect_companions(
         check_one_level(&format!("{prefix}.directory"), &directory)?;
         let source_key = format!("{prefix}.source.directory");
         // `*.source.directory` が無い（または空）なら宛先と同じ名前を取り出し元にする。
-        let source_directory = match non_empty(keys, &source_key) {
-            Some(written) => read_source_directory(&source_key, &written, warnings)?,
+        let written = non_empty(keys, &source_key);
+        let source_directory = match &written {
+            Some(written) => read_source_directory(&source_key, written, warnings)?,
             None => directory.clone(),
         };
+        let source_written = written.as_deref().map(bounded_value);
         let existing = existing_policy(keys, &format!("{prefix}."), warnings);
         companions.push(Companion {
             key: prefix,
             directory,
             source_directory,
             existing,
+            source_written,
         });
     }
     Ok(companions)

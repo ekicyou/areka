@@ -896,6 +896,9 @@ fn work_area_of(monitor: Option<&Monitor>) -> Result<RectPx, PlacementError> {
 #[path = "balloon_offset_supply_tests.rs"]
 mod balloon_offset_supply_tests;
 #[cfg(test)]
+#[path = "placement_char_clamp_tests.rs"]
+mod char_clamp_tests;
+#[cfg(test)]
 #[path = "placement_monitor_tests.rs"]
 mod monitor_tests;
 #[cfg(test)]
@@ -903,7 +906,7 @@ mod monitor_tests;
 mod prepare_tests;
 #[cfg(test)]
 #[path = "placement_shared_test_support.rs"]
-mod shared_test_support;
+pub(crate) mod shared_test_support;
 #[cfg(test)]
 #[path = "placement_windowposition_tests.rs"]
 mod windowposition_tests;

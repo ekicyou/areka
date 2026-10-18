@@ -13,7 +13,7 @@
 - 窓の数を決める所が 0 と 1 に固定されている: `crates/areka/src/emo2_boot/mod.rs` の `derive_scopes()` は `vec![0, 1]` を返すだけ（コメントは「M1 受容トレードオフ」）。
 - 3 人目を想定しない検査が 2 か所ある: `crates/areka/src/input_events/mod.rs` の `char_scope` と、`crates/areka/src/menu/captions.rs` の n≧2 の扱い（どちらも `debug_assert!(scope <= 1, …)`）。メニュー側は `UNQUERIED_POPUPMENU_RESOURCES` に `char*.popupmenu.visible`（n≧2）を「聞かない資源」として登記してある。
 - 既にできている部分:
-  - placement: `crates/areka/src/placement/config.rs` の `detect_scopes`・`char_scope_of` が `char{n}.` 接頭のキーから scope n を見つける。`placement/source.rs` は `char{n}.name` を窓の題に使う。`placement/measure.rs` も scope≧2 の分岐を持つ。
+  - placement: `crates/areka/src/placement/config.rs` の `detect_scopes` は、起票の時は `char_scope_of` で `char{n}.` 接頭のキーから scope n を見つけていた。2026-10-18 の今は scope 0・1 しか返さず、`char_scope_of` は消してある（末尾の「2026-10-18 `areka-P0-emily-ghost-verification` からの申し送り」）。`placement/source.rs` は `char{n}.name` を窓の題に使う。`placement/measure.rs` も scope≧2 の分岐を持つ。
   - バルーン: `crates/areka-emo-present/src/balloon.rs` は scope n（n≧2）の流用の連鎖（`balloonp{n}def` → `balloonk` → …）を正典どおりに持つ。
   - 台本: `crates/areka-parsers/src/sakura/decode.rs` は `\p[n]` と `\pN` を `SpeakerScope{n}` へ写す。
 - つまり、読む側と描く側の部品は n≧2 を知っているのに、窓を作る入口が 2 つに絞っている。
@@ -125,3 +125,17 @@
 ## 申し送り（2026-10-17・`areka-P0-move-canon` の要件ディスカッションから）
 
 - `move-canon` の `\![move]`（動かす窓・基準のスコープの番号）と、`\![execute,resetwindowpos]`／メニューの「シェル位置初期化」の並べ直しは、スコープ 0・1 の窓で確かめる。3 人目以降の窓を足すときは、その窓も動かす・基準にする・並べ直すことを本 spec の要件に入れて確かめる。
+
+## 2026-10-18 `areka-P0-emily-ghost-verification` からの申し送り
+
+- 窓の scope を 0・1 に絞った（同 spec のタスク 3.1・commit `aa8de76b`・同 spec 要件 4.7・6.7）。`crates/areka/src/placement/config.rs` の `detect_scopes` は `char{n}.`（n≧2）の鍵から scope を足さず、`char_scope_of` は消した。上の「既にできている部分」の placement の行と「議題 1」の「今の `detect_scopes` は ghost と shell の両方の `char{n}.` を見る」は、この時点では成り立たない。完了 `window-placement` の設計 DD6・テスト T-C3 を上書きした記録は `doc/COMPAT_ARCHITECTURE.md` §8 の【上書き】の行「`char{n}.`（n≥2）の鍵を持つゴーストの窓の数」。
+- 3 人目からの窓を作るときに見直すもの:
+  - 期待を書き替えたテスト 3 本: `placement/config.rs` の `t_c3_char_n_prefix_does_not_add_scope_n`、`placement/config_limit_tests.rs` の `t_l2_build_placement_config_keeps_canonical_defaults_for_all_scopes`、`placement/reseed_tests.rs` の `t_rs01_new_offset_and_alignment_reach_the_char_window_parts`。
+  - 足したテスト 4 本（「3 人目の窓は作らない」「`\p[2]` は読み捨てて会話を続ける」を前提にしている）: `placement/placement_char_clamp_tests.rs`、`input_events/input_events_char_clamp_tests.rs`、`menu/trigger_wired_tests.rs` の `a_right_click_on_every_emily_shaped_window_builds_a_menu_without_panic`、`emo2_boot/spine_third_scope_talk_tests.rs`。
+  - `debug_assert!(scope <= 1)` の 2 か所: `input_events/mod.rs` の `char_scope` と `menu/captions.rs` の `visible_resource_for`。
+- 網羅台帳の 2 行を縮退へ動かし、宛先の欄は空のまま残した: `doc/ukadoc-coverage/ledger/assets.toml` の `char*.name` と `ledger/sakura-script.toml` の `\p[ID番号]`。本 spec が `doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` に載ったら、この 2 行の宛先を本 spec にする（載る前に書くと台帳の検査が赤になる）。
+### 2026-10-18 追記: 3 人目の文字が溜まり続ける疑い（`areka-P0-emily-ghost-verification` の完了時の棚卸）
+
+- 3 人目からの窓が無い今は、`\p[2]` の後の文字が文字の層で「装着先（予約スロット）が未解決」の actor として溜まるだけで捨てられない（`crates/areka-emo-text/src/actor_present.rs` の warn!「状態を蓄積し描画をスキップして次フレームで再試行する」）。えみりの実機の走行で 1 件ずつ出た（`.kiro/specs/completed/areka-P0-emily-ghost-verification/verification.md` の崩れた所 2）。
+- 長く動かしたときに増え続けるかはまだ測っていない。3 人目の窓を出せば溜まらなくなるので本 spec の持ち場だが、窓を出す前に「装着先が無い scope の文字は捨てる」で止めるかを、要件の段で決める。
+- 起票の理由: 確かめるのに長い実機の走行が要る（完了時の棚卸の起票の条件 4）。

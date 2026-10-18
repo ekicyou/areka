@@ -123,7 +123,8 @@ fn fake_handle(raw: usize) -> WindowHandle {
 }
 
 /// 新しいシェル: 揃え方は free・sakura のバルーンは右で (30,40)・kero は (-7,9)。
-/// `char2.` のキーで設定にだけスコープ 2 が現れる（走っている窓には無い）。
+/// `char2.` のキーを持つが、設定にスコープ 2 は現れない（spec: areka-P0-emily-ghost-verification
+/// 要件 4.7・6.7——`char{n}.`（n≥2）からは scope を足さない）。
 pub(crate) fn new_shell(extra: &[(&str, &str)]) -> DescriptSource {
     let kv = |pairs: &[(&str, &str)]| -> BTreeMap<String, String> {
         pairs
@@ -190,7 +191,8 @@ fn saved_balloon_offset(scope: u32, x: i32, y: i32) -> Vec<(PersistKey, String)>
 }
 
 /// 新しいシェルのずらしと揃え方がキャラ窓の部品に入り、窓の位置とスコープの集合は保たれ、
-/// バルーン窓は新しいずらしで 1 度置き直される。設定にだけ在るスコープは読み飛ばす。
+/// バルーン窓は新しいずらしで 1 度置き直される。`char2.` のキーがあっても設定にスコープ 2 は
+/// 現れないので、読み飛ばしの記録は 0 件。
 #[test]
 fn t_rs01_new_offset_and_alignment_reach_the_char_window_parts() {
     let (mut world, windows) = booted_world(96);
@@ -254,9 +256,7 @@ fn t_rs01_new_offset_and_alignment_reach_the_char_window_parts() {
         .iter()
         .filter(|e| e.field_str("event") == Some("reseed_scope_not_running"))
         .collect();
-    assert_eq!(skipped.len(), 1, "{events:?}");
-    assert_eq!(skipped[0].level, tracing::Level::DEBUG);
-    assert_eq!(skipped[0].field("scope"), Some("2"));
+    assert_eq!(skipped.len(), 0, "{events:?}");
 }
 
 /// 保存済みのバルーンのずらしは新しいシェルの値より優先して保たれる（起動と同じ規則）。

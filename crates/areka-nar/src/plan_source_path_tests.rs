@@ -263,11 +263,13 @@ fn a_segment_with_a_longer_name_is_not_under_the_source() {
 
 // ---- 配下が空（要件 2.5） ----
 
-/// 階層付きの取り出し元の配下が書庫に無ければ、鍵と正規化した取り出し元を載せて断る。
+/// 階層付きの取り出し元の配下が書庫に無ければ、その同梱を飛ばして本体だけを置く
+/// （要件 1.1・1.2）。飛ばした列には鍵と書かれていた値（`\` 区切りのまま）と置き場の名前が載る。
 ///
 /// 書庫に無い形・フォルダのエントリだけが在る形・綴りが前方一致する兄弟だけが在る形の 3 つ。
+/// 本体の木は今と同じ（取り出し元の外のものは本体に残る）。
 #[test]
-fn refuses_a_nested_source_with_nothing_under_it() {
+fn skips_a_nested_source_with_nothing_under_it() {
     let root = root_with_ghost("other");
     let request = InstallRequest {
         roots: &SingleRoot(root.path()),
@@ -281,6 +283,8 @@ fn refuses_a_nested_source_with_nothing_under_it() {
                 .done()
                 .file("extra/readme.txt", b"readme")
                 .done(),
+            vec!["install.txt", "extra/readme.txt"],
+            vec!["extra"],
         ),
         (
             "フォルダのエントリだけ",
@@ -289,6 +293,8 @@ fn refuses_a_nested_source_with_nothing_under_it() {
                 .done()
                 .dir("extra")
                 .dir("extra/bal1"),
+            vec!["install.txt"],
+            vec![],
         ),
         (
             "前方一致する兄弟だけ",
@@ -297,16 +303,24 @@ fn refuses_a_nested_source_with_nothing_under_it() {
                 .done()
                 .file("extra/bal10/x.png", b"x")
                 .done(),
+            vec!["install.txt", "extra/bal10/x.png"],
+            vec!["extra", "extra/bal10"],
         ),
     ];
-    for (label, archive) in shapes {
+    for (label, archive, body_files, body_dirs) in shapes {
+        let (plan, skipped) = plan_and_skipped_of(archive, &request);
+        assert_eq!(plan.len(), 1, "{label} の形で置く配置が本体だけでない");
+        assert_eq!(plan[0].kind, ElementKind::Ghost, "{label}");
+        assert_eq!(relative_files(&plan[0]), body_files, "{label}");
+        assert_eq!(plan[0].dirs, body_dirs, "{label}");
         assert_eq!(
-            refusal_of(archive, &request),
-            RefuseReason::CompanionSourceMissing {
+            skipped,
+            vec![SkippedCompanion {
+                directory: "test-balloon".to_owned(),
                 key: "balloon.source.directory".to_owned(),
-                source_directory: "extra/bal1".to_owned(),
-            },
-            "{label} の形が断られない"
+                source: "extra\\bal1".to_owned(),
+            }],
+            "{label} の形の飛ばした列"
         );
     }
 }
