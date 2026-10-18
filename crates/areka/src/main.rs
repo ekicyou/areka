@@ -174,19 +174,18 @@ fn main() -> Result<()> {
     // 根 → ゴースト → バルーン → 構成入力。決まらなければ告知して終了コード 1 で終える
     // （要件 1.4・4.7・4.8・5.8・6.3）。`warn!` で起動を続ける経路は作らない（要件 6.6）。
     // 決まった経路とフォルダは boot の分岐まで持ち越す（boot 成功直後の記憶の書き込みに使う）。
-    let args: Vec<String> = std::env::args().collect();
     // 4 つ目は起動中の印の値＝前回きれいに終わらなかったゴーストの名前（読むだけで消さない）。
     // 初回の起動の由来になる（要件 12.4）。
-    let (cfg, ghost_decision, balloon_decision, halted, resolved_roots) = match resolve_boot(&args)
-    {
-        Ok(resolved) => resolved,
-        Err(scene) => {
-            alert::raise(&scene, alert::suppressed());
-            return Err(windows::core::Error::from_hresult(
-                windows::Win32::Foundation::E_FAIL,
-            ));
-        }
-    };
+    let (cfg, ghost_decision, balloon_decision, halted, resolved_roots) =
+        match resolve_boot(&cli::read().boot) {
+            Ok(resolved) => resolved,
+            Err(scene) => {
+                alert::raise(&scene, alert::suppressed());
+                return Err(windows::core::Error::from_hresult(
+                    windows::Win32::Foundation::E_FAIL,
+                ));
+            }
+        };
     // 書けるかの確かめ（argv の起動も同じ道・写しの後の置き場を見る・write-failure-notice 要件 2.1）。
     write_failure::check_boot_dirs(&cfg, &default_app_profile_dir())
         .map_err(write_failure::stop_boot)?;

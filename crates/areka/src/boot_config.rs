@@ -196,30 +196,51 @@ pub(crate) struct CurrentGhost {
     pub balloon: crate::boot_resolve::BalloonDecision,
 }
 
-/// env（`AREKA_ROOT`・`AREKA_PROFILE_DIR`）・アプリの記憶・起動した exe の本当の場所を読んで [`resolve_boot_from`] へ渡す薄い口。
-pub(crate) fn resolve_boot(args: &[String]) -> Result<BootResolved, crate::alert::AlertScene> {
+/// env（`AREKA_ROOT`・`AREKA_PROFILE_DIR`）・アプリの記憶・起動した exe の本当の場所を読んで [`resolve_boot_with`] へ渡す薄い口。
+pub(crate) fn resolve_boot(
+    request: &crate::cli::BootRequest,
+) -> Result<BootResolved, crate::alert::AlertScene> {
     let app_profile_dir = default_app_profile_dir();
-    resolve_boot_from(
+    resolve_boot_with(
         crate::roots::resolve_roots(&app_profile_dir),
-        args,
+        request,
         &app_profile_dir,
         crate::boot_resolve::pick_index,
         crate::roots::user_root::writable_ghost,
     )
 }
 
-/// 根の並び → ゴースト → バルーン → `ConfigInputs`（design「起動解決」）。決まらなければ告知の場面を返す。
-/// 並びは決まっても決まらなくても先に記録を残す（要件 1.15・2.5）。
-///
-/// argv でないゴースト（前回きれいに終わらなかったときの既定も）は `prepare_ghost`（本番は
-/// `user_root::writable_ghost`）の答えのフォルダへ替え、バルーンと `ConfigInputs` もそのフォルダで
-/// 決める（user-data-root 要件 4.3・7.4）。表示するだけのバルーンは写さない（要件 4.5）。
-///
-/// argv がある側は列挙も記憶も読まない（要件 4.1・5.1）。argv のゴーストは「ゴーストか」の 1 検査
-/// だけ（要件 4.8）。決まるたびに経路と場所を info に残す（要件 4.10・5.11）。
+/// テストの口: 引数の列を読み方（`cli::parse`）に通し、起動の求めで [`resolve_boot_with`] を呼ぶ。
+#[cfg(test)]
 pub(crate) fn resolve_boot_from(
     resolved: Result<crate::roots::ResolvedRoots, crate::roots::RootError>,
     args: &[String],
+    app_profile_dir: &std::path::Path,
+    pick: fn(usize) -> usize,
+    prepare_ghost: fn(&areka_ghost::BasewareRoots, &std::path::Path) -> std::path::PathBuf,
+) -> Result<BootResolved, crate::alert::AlertScene> {
+    resolve_boot_with(
+        resolved,
+        &crate::cli::parse::parse(args).options.boot,
+        app_profile_dir,
+        pick,
+        prepare_ghost,
+    )
+}
+
+/// 根の並び → ゴースト → バルーン → `ConfigInputs`（design「起動解決」）。決まらなければ告知の場面を返す。
+/// 並びは決まっても決まらなくても先に記録を残す（要件 1.15・2.5）。
+///
+/// 位置の引数のゴーストでも絶対パスの指し先でもないゴースト（前回きれいに終わらなかったときの既定も）は
+/// `prepare_ghost`（本番は `user_root::writable_ghost`）の答えのフォルダへ替え、バルーンと
+/// `ConfigInputs` もそのフォルダで決める（user-data-root 要件 4.3・7.4）。表示するだけのバルーンは写さない（要件 4.5）。
+///
+/// 位置の引数のゴーストがある側は列挙も記憶も読まない（要件 4.1・5.1）。位置の引数のゴーストは
+/// 「ゴーストか」の 1 検査だけ（要件 4.8）。起動中の印は位置の引数のゴーストが無く `nobootcheck` でない
+/// ときに読む（startup-options 要件 6.2・6.8）。決まるたびに経路と場所を info に残す（要件 4.10・5.11）。
+pub(crate) fn resolve_boot_with(
+    resolved: Result<crate::roots::ResolvedRoots, crate::roots::RootError>,
+    request: &crate::cli::BootRequest,
     app_profile_dir: &std::path::Path,
     pick: fn(usize) -> usize,
     prepare_ghost: fn(&areka_ghost::BasewareRoots, &std::path::Path) -> std::path::PathBuf,
@@ -236,8 +257,8 @@ pub(crate) fn resolve_boot_from(
     report::log_roots(&resolved, ReportOccasion::Boot);
     let ghost_stores = resolved.roots.ghost_stores();
     let (argv_ghost, argv_balloon) = (
-        args.get(1).map(std::path::Path::new),
-        args.get(2).map(std::path::Path::new),
+        request.positional_ghost.as_deref(),
+        request.positional_balloon.as_deref(),
     );
 
     // 隠れの記録は目録を読む。argv でゴーストを渡した起動は目録の外なので読まない（要件 11.2）。
@@ -253,13 +274,12 @@ pub(crate) fn resolve_boot_from(
             argv: Some(argv.to_path_buf()),
         });
     }
-    // 起動中の印（要件 12.4・12.5）: argv でゴーストを指定した起動（開発者の上書き）は読まない。
-    // 在れば前回はきれいに終わらなかったので、最後のゴーストの記憶を読まずに残りの段
+    // 起動中の印（要件 12.4・12.5）: argv でゴーストを指定した起動（開発者の上書き）と `nobootcheck`
+    // （startup-options 要件 6.2）は読まない。`--ghost`・`--random` でも読み、値は返す（要件 6.8）。在れば前回はきれいに終わらなかったので、最後のゴーストの記憶を読まずに残りの段
     // （唯一 → 既定 → 無作為）で解く。印は読むだけで消さない（起こす前の書き込みが上書きする）。
-    let mark = match argv_ghost {
-        Some(_) => None,
-        None => boot_resolve::read_session_mark(app_profile_dir),
-    };
+    let mark = (argv_ghost.is_none() && !request.no_boot_check)
+        .then(|| boot_resolve::read_session_mark(app_profile_dir))
+        .flatten();
     if let Some(ghost) = &mark {
         tracing::info!(
             event = "session_mark_found",
@@ -270,7 +290,8 @@ pub(crate) fn resolve_boot_from(
     let (memory, listed) = match argv_ghost {
         Some(_) => (None, Vec::new()),
         None => (
-            mark.is_none()
+            // `--random` は記憶を読まない（startup-options 要件 5.1）。
+            (mark.is_none() && !request.random)
                 .then(|| boot_resolve::read_last_ghost(app_profile_dir))
                 .flatten(),
             areka_ghost::catalog_roots::list_ghosts(&resolved.roots),
@@ -280,7 +301,7 @@ pub(crate) fn resolve_boot_from(
         &GhostInputs {
             argv: argv_ghost,
             pointed: None,
-            random: false,
+            random: request.random,
             memory: memory.as_deref(),
             listed: &listed,
             stores: &ghost_stores,
@@ -291,9 +312,24 @@ pub(crate) fn resolve_boot_from(
         ghost_stores,
         argv: None,
     })?;
-    // 書く前に写す（user-data-root 要件 4.3）: argv で渡したフォルダは写さない（要件 10.3）。
-    if ghost.route != boot_resolve::GhostRoute::Argv {
+    // 書く前に写す（user-data-root 要件 4.3）: 位置の引数で渡したフォルダ（要件 10.3）と絶対パスの
+    // 指し先（startup-options 要件 3.8）は写さない。名前の指し先は写す（要件 4.3）。
+    let pointed_by_path = ghost.route == boot_resolve::GhostRoute::Pointed
+        && request
+            .ghost
+            .as_deref()
+            .is_some_and(|v| std::path::Path::new(v).is_absolute());
+    if ghost.route != boot_resolve::GhostRoute::Argv && !pointed_by_path {
         ghost.dir = prepare_ghost(&resolved.roots, &ghost.dir);
+    }
+    // 指されたゴーストを起こすので `--random` は使わない（startup-options 要件 5.3）。
+    if request.random
+        && matches!(
+            ghost.route,
+            boot_resolve::GhostRoute::Argv | boot_resolve::GhostRoute::Pointed
+        )
+    {
+        tracing::info!(event = "random_unused", route = ?ghost.route, "指されたゴーストを起こすので --random は使いません");
     }
     tracing::info!(event = "ghost_resolved", route = ?ghost.route, dir = %ghost.dir.display(), "起動するゴーストを決めました");
 
@@ -483,3 +519,7 @@ mod roots_tests;
 #[cfg(test)]
 #[path = "boot_config_copy_tests.rs"]
 mod copy_tests;
+
+#[cfg(test)]
+#[path = "boot_config_option_tests.rs"]
+mod option_tests;
