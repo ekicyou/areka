@@ -106,3 +106,23 @@ areka の検体は、pasta（`emo2`）・里々（`R_POST_and_KOMAINU`）・YAYA
 - 要件定義のモデル: Opus（10-15 の厳しい基準に当たる所が無い。議題 3 つは実測で答えが出る）。
 - 分割の案: 無し。
 - 見つけた穴・古くなった記述: 議題 1（見張りの語の当たり）を数えた＝今のソース（`crates/`・`tools/` の `.rs`・`.toml`・`.ps1`）に `bottle`・`dot_sakura` の綴りは 0 件。当たらない見込み（登記のときに見張りのテストを回して確かめる）。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 前提の変化: v0.1.0 のゴールが「SSP 並みの自動試験」と「ぱすたが SSP と同じに動く」に組み直された。開発者の決め（10-18）で、この spec は v0.1.0 に残る。`emily-ghost-verification` が着地し、`emily4` が登記表の 8 行目に入った（`crates/sample-ghost-kit/src/lib.rs` の `SAMPLES`・548 行）。`dot_sakura.nar` はまだ無い。
+- 棚卸㉗で足した範囲: 無し。
+- 触るファイル: 本文のとおり。数のテスト `lib_tests.rs`（648 行）は、数の直書き `8` が 2 か所（126・415 行）と説明の「8」（7・119・180 行ほか）＝**8 を 9 に**直す。根の `README.md` の検体の表（40〜45 行）・`vendors/sample_ghost/README.md`（146 行）。
+- 登記表の新しい順（4 本とも v0.1.0 になった）: この spec（8→9）→ `default-balloon-selfmade`（9→10）→ `sample-url-fetch`（全部の行に URL とハッシュの欄を足す）→ `pasta-in-windows-verification`（URL の行を 1 つ・10→11）。
+  - 働きの依存: `default-balloon-selfmade` の実機の確かめ（どっとさくらに被せた見え方）はこの spec の検体を使う。`pasta-in-windows-verification` は `sample-url-fetch` の URL の行に働きで依存する。
+  - この spec と `sample-url-fetch` の間はファイルの順だけ（登記表・数のテスト・README の表）。
+  - 別の並べ方: `sample-url-fetch` を先にすれば、`dot_sakura` は書庫をリポジトリに入れず URL の行で足せる（取り寄せ先がもう在る）。入れた書庫を後で外す手間が無くなるが、10-10 の決め（今の形で足す）を変える＝下の議題 4。
+- ファイルの重なり: 登記表を触る `default-balloon-selfmade`・`sample-url-fetch`・`pasta-in-windows-verification`（同じウェーブに置かない）。`real-run-mcp-kit` は案 ⑴ なら `lib.rs` に `mod` の 1 行（登記表とは別の所）。根の `README.md` は `default-balloon-selfmade`（既定のバルーンの 1 行）・`sample-url-fetch`・`winget-release-automation`（「## 入手と起動」）＝節は別。
+- 規模: 4〜6 タスク（変わらず）。
+- 先に要るもの: 無し。
+- 優先度の区分: A（開発者「ゴースト検体に『どっとさくら』を追加」）。
+- 要件定義のモデル: Opus（10-15 の基準に当たる所が無い）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述:
+  - 見張りの語（`bottle`・`dot_sakura`）は、今のソース（`crates/`・`tools/` の `.rs`・`.toml`・`.ps1`）で 0 件のまま。
+  - 根の `README.md` の検体の表に `emily4` が無い（えみりの着地で足されなかった）。同じ表に 1 行足すとき、並べて足すかを要件の段で決める。
+  - `pasta-in-windows-verification` の見立ては「8 を 9 へ」と書く＝上の順なら向こうは 10→11 になる（後から着地する方が数を合わせる）。
+  - 議題 4（新）: `sample-url-fetch` が同じ v0.1.0 に入ったので、書庫をリポジトリに入れる（10-10 の決め）か、URL の行で足すかを開発者に聞き直す。答えで登記表の順と、この spec の作業（書庫を置く・置かない）が変わる。

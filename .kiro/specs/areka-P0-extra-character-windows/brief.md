@@ -139,3 +139,13 @@
 - 3 人目からの窓が無い今は、`\p[2]` の後の文字が文字の層で「装着先（予約スロット）が未解決」の actor として溜まるだけで捨てられない（`crates/areka-emo-text/src/actor_present.rs` の warn!「状態を蓄積し描画をスキップして次フレームで再試行する」）。えみりの実機の走行で 1 件ずつ出た（`.kiro/specs/completed/areka-P0-emily-ghost-verification/verification.md` の崩れた所 2）。
 - 長く動かしたときに増え続けるかはまだ測っていない。3 人目の窓を出せば溜まらなくなるので本 spec の持ち場だが、窓を出す前に「装着先が無い scope の文字は捨てる」で止めるかを、要件の段で決める。
 - 起票の理由: 確かめるのに長い実機の走行が要る（完了時の棚卸の起票の条件 4）。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 前提の変化: 10-18 の 2 つの申し送りの後、触るファイルのソースは変わっていない。
+- 棚卸㉗の振り分け: 最初に出す面の決め打ち（棚卸㉓の「見つけた穴」・descript の `sakura.`・`kero.`・`char*.seriko.defaultsurface` を読まない）は、新しい spec `descript-window-keys`（v0.1.0）が持つ。そちらが 3 つの鍵を読み、起動・切り替え・リロードの最初の面と大きさの測り（`crates/areka/src/emo2_boot/assets.rs`・`placement/measure.rs`）を直す。この spec は、3 人目からの窓を作るときに、その値をスコープ 2 以降へ使うだけになる（えみりの `char2.seriko.defaultsurface,200`）。
+- 触るファイル: 棚卸㉓のまま。`emo2_boot/assets.rs`・`placement/measure.rs` は、`descript-window-keys` の後なら決め打ちの書き換えが要らない。
+- 規模: 14〜20 タスクのまま（最初の面の分は向こうへ）。
+- 重なり（足す分）: `descript-window-keys`（同じ 2 ファイル）。
+- 版: いつかのまま。
+- 優先度の区分: C のまま。要件定義のモデル: Fable のまま。
+- 古くなった記述: 棚卸㉓の「触るファイルの一覧に `emo2_boot/assets.rs` が無かった（最初の面）」は `descript-window-keys` へ移った。

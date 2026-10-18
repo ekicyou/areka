@@ -192,3 +192,13 @@ AI のクライアントが、形の違う `params` の `tools/call`（`name` �
 - 要件定義のモデル: Opus（原因の分かった小さい直しと確かめ）。
 - 分割の案: なし。件 2 は、`mcp-kanade-tools` の実機確認（debug 版で `dump_surface` を呼ぶ申し送り）に「`dump_balloon` を 5 回」を相乗りさせ、返れば記録して閉じる手もある（棚卸㉓のまま）。
 - 見つけた穴・古くなった記述: 本 brief の Adjacent と件 1 の節は `mcp-kanade-tools`・`mcp-reload` を `handler.rs` を触る spec に数えているが、どちらも触らない（触るのは `mcp-strict-errors`・`mcp-user-response`・`mcp-shiori-query`）。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 版: **v0.1.0（棚卸㉗でゴールを組み直した後も残る）**。「MCP サポートの安定化」（開発者の指示）にそのまま当たる。件 1 は AI のクライアントに「ツールを呼べない」と誤って読ませうる答えの番号、件 2 は実機の確かめでバルーンの絵が撮れない恐れ。どちらも自動の試験の足元。
+- 前提の変化: 10-16 から本 spec の触るファイルは動いていない。`crates/areka-mcp/src/handler.rs`（144 行）に `on_custom_request` はまだ無い。今の答えを固定している 2 か所も同じ所に在る（`crates/areka-mcp-bridge/tests/real_receiver_test.rs` 208 行目・`doc/ssp-mcp/bridge-diff-areka.md` 93 行目）。`mcp-stdio-bridge-residue`（10-17）は中継のテストのファイルを変えたが、この 2 行には触れていない。件 2 の `crates/areka/src/mcp/dump_balloon.rs` 163 行・`mcp/mod.rs` 152 行も同じ。
+- **前の記述の誤りの直し（本文と件 1 の節の Adjacent）**: 本文の「Existing Spec Touchpoints」と件 1 の節は、`crates/areka-mcp/src/handler.rs` を触る spec として `mcp-kanade-tools`・`mcp-reload` を挙げているが、**どちらも `handler.rs` を触らない**（両方の brief の触るファイルに無い・roadmap の MCP の 3 段目の約束でも `handler.rs` は「3 段目が触らない共有ファイル」）。`handler.rs` を触るのは `mcp-strict-errors`（案内文の最後の 1 文）・`mcp-user-response`・`mcp-shiori-query`。古い文はそのまま残し、ここで正す。
+- 触るファイル: 件 1＝`handler.rs`・受け口の決定論のテスト（`server_protocol_tests.rs` か新しい兄弟）・上の 2 か所。件 2＝再現しなければ 0、すれば `dump_balloon.rs` か `mcp/mod.rs` の `later`。
+- 規模: 4〜12（件 1＝3〜5・件 2＝確かめだけ 1〜2／再現すれば 4〜7）。
+- 先に要るもの: なし。件 2 の確かめは `real-run-mcp-kit` の窓口で書くと 1 本の試験で済む（debug 版の areka を立てて `dump_balloon` を 5 回）。窓口の後に回せば、その試験が残る。
+- 同じウェーブに置けない相手（v0.1.0）: `mcp-strict-errors`（`handler.rs`）だけ。`mcp-kanade-tools`・`mcp-reload` とは 0。
+- 優先度の区分: B のまま。要件定義のモデル: **Opus** のまま。分割の案: なし。

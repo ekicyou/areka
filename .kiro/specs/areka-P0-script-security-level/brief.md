@@ -150,3 +150,16 @@ areka はこの「出どころ」を運ばない。そのため、ゴースト�
 - 要件定義のモデル: **Fable**（roadmap の表も ○）。当たる基準＝**先例の無い公開の契約を新しく引く**: ⑴ 出どころの型を kanade → `areka-talk` → `areka-sakura` → `emo2_boot` の受け取り手まで運ぶ（今ある `ChangeOrigin`・`BootOrigin` は kanade の中の切替と起動の理由だけで、台本の出どころの先例にならない）。⑵ SHIORI へ追加のヘッダを運ぶ入れ物を、公開の `ShioriBackend`（実装 20 か所）に足す形を決める＝後の `property-query-channels`・`mcp-shiori-query` が同じ入れ物を使う。roadmap の推し（引数を変えず、既定の実装を持つメソッドを足す）は候補で、決まった先例ではない。32bit の仲介との間は `shiori3.rs` が要求の文を組む所に行を足すだけ＝そこは新しい境界ではない。
 - 分割の案: 上の条件つきの 1 つだけ。
 - 見つけた穴・古くなった記述: 新しいものは無い（`check_script` に出どころの診断を出すかは議題のまま）。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 版: **v0.1.0（棚卸㉗でゴールを組み直した後も残る）**。MCP の `sakurascript` が開けば、外から流せる台本に ukadoc が「外部からは不可」と書いたタグを止める守りが要る。自動の試験で MCP を常に開いて使うほど、この守りの無い期間が長くなる。`mcp-kanade-tools` の直後に置く「止めると困る後続」のまま。
+- 前提の変化: 10-16 からの着地で触るファイルに入った変更は小さい: `crates/areka-ghost/src/dispatcher.rs`（+47 行・`move-canon` ほか）・`crates/areka-sakura/src/drive.rs`（+15 行）・kanade の `schedule/events.rs`（+5 行・850 行）・`schedule/resources.rs`・`crates/shiori-host32-host/src/process_host.rs`（`emily-ghost-verification`・本 spec の `shiori3.rs`・`client.rs` とは別のファイル）。`SecurityLevel: local` は今も `crates/shiori-host32-host/src/shiori3.rs` 137 行目が直に書く。`ShioriBackend` の実装は 20 か所のまま。
+- `mcp-kanade-tools` の棚卸㉗の範囲（再生したトークを全部 script の記録へ）は、トークの出どころを `StartTalk` に載せず殻の中で控える形を推した。本 spec が出どころを `StartTalk`（`crates/areka-talk/src/lib.rs`）へ載せるなら、そのとき記録の `label` も本 spec の出どころから引けるよう、`mcp-kanade-tools` の控えを置き換える 1 か所が増える（設計で照合）。
+- 触るファイル: 棚卸㉓のとおり（アンカーへ写すなら `schedule/anchor.rs` も）。
+- 規模: L（16〜22）。20 を超えたら ⒜ ヘッダと応答の読み取り → ⒝ 台本の印とタグの止め（棚卸㉓のまま）。
+- 先に要るもの: ファイルの上で `mcp-kanade-tools` の後（`msg.rs` と `schedule/mod.rs` を割った形に足す）。
+- 同じウェーブに置けない相手（v0.1.0）: `mcp-kanade-tools`・`mcp-reload`（`schedule/boot.rs`）・`mouse-click-wheel-events`（`schedule/boot.rs`・`schedule/events.rs`）・`mcp-strict-errors` の案 ⑵。後回しの段: `multi-ghost-runtime`（`msg.rs`）。
+- 優先度の区分: A のまま。
+- 要件定義のモデル: **Fable** のまま（先例の無い公開の契約を新しく引く＝出どころの型を kanade → `areka-talk` → `areka-sakura` → `emo2_boot` の受け取り手まで運ぶ・公開の `ShioriBackend` へ追加のヘッダの入れ物を足す。棚卸㉕の基準のとおり）。
+- 分割の案: 上の条件つきの 1 つだけ。
+- 見つけた穴・古くなった記述: なし。

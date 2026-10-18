@@ -160,3 +160,16 @@ AI エージェントは辞書やシェルを書き換えたら、ゴースト�
 - 優先度の区分: A のまま。要件定義のモデル: **Opus**（10-15 の付け直し。載せ替えは今ある切替の道 `request_ghost_switch` に乗る＝新しい境界ではない）。
 - 分割の案: 上の 1 つだけ（20 を超えたら）。
 - 見つけた穴・古くなった記述: 棚卸㉓・㉔の「Fable のまま」は古い。`mcp-receiver-bugs` の brief の Adjacent は本 spec を `handler.rs` を触る spec に数えている（本 spec は触らない）。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 版: **v0.1.0（棚卸㉗でゴールを組み直した後も残る）**。ぱすた開発の毎日の流れ「辞書を書き換える → 読み直す → 確かめる」の真ん中（棚卸㉗の問い合わせの答え＝SSP の MCP の `reload` を ghost・shiori・shell で使っている）。これが無いと、areka で試すたびに終了と起動をやり直すことになり、開発の速さのゴールに直に効く。
+- 前提の変化: 上限の近いファイルが伸びた。`emo2_boot/consumer_ledger.rs` **960**（943→・ファイルの中のテストの塊が 441〜957 行の約 517 行）・`emo2_boot/ghost_switch.rs` **948**（902→・テストは既に兄弟へ出してあり本体が約 920 行）・`emo2_boot/mod.rs` **916**（911→）。`shell_balloon_switch.rs` 442・kanade の `src/change.rs` 175・`schedule/boot.rs` 345・`crates/areka-ghost/src/runtime.rs` 793 は変わらず。**足す前に分けるのが先**: 最初のタスクで `consumer_ledger.rs` のテストを兄弟のファイルへ出し、`ghost_switch.rs` は同じゴーストへの載せ替えの入口を新しい兄弟のファイル（例 `reload_cue.rs` の子）へ置く形に決める。
+- **棚卸㉗で狭めうる範囲: `\![reload,shiori]` を外す案**。理由: ゴーストの読み直し（同じゴーストへの載せ替え＝`crates/areka/src/update/desk.rs` の `fn reload`〔173 行目〕の形）は SHIORI を降ろして読み込み直すので、ぱすたの辞書はそれで読み直される。ぱすた開発の要る形（書き換え → 読み直し → 確かめ）は ghost の読み直しで満たせる。外せば `runtime.rs` に触らず、規模は 14〜17 になる。外すかどうかは要件の段で開発者に問う（SSP で測る: `reload` の shiori と ghost で、ぱすたの `OnBoot` が送られるか・シェルの窓が閉じるか）。ぱすた開発の注意「ゴーストの読み直しで OnBoot は送られない」を守る（知らせを送らない起動の由来を足す、の既定の方針どおり）。
+- 要件で確かめること: MCP の返事を読み込みの終わりまで待つか。返事の上限は 10 秒（`crates/areka-mcp/src/tools/mod.rs` 34 行目 `REPLY_WAIT`）で、動く WebP の多いシェルの起動の焼き込みは release で 3.2 秒（`placement-measure-bake-once`）。ぱすたは動く WebP 3 つ（48・40・40 コマ）を持つ。待つなら、待つ間にほかのツールが答えられるか。
+- 触るファイル: 棚卸㉓のとおり＋分ける先の兄弟のファイル（`consumer_ledger_tests.rs` など・新）。
+- 規模: L（17〜22）・`\![reload,shiori]` を外せば 14〜17（分ける 1〜2 タスクを含む）。
+- 先に要るもの: 働きの前提なし（`baseware-root-list` PR#317・`write-failure-notice` PR#323 は着地した）。
+- 同じウェーブに置けない相手（v0.1.0）: `script-security-level`・`mouse-click-wheel-events`（`schedule/boot.rs`）・`mcp-strict-errors`（`areka-tools.md`・案 ⑵ なら `consumer_ledger.rs`）・`window-link-directives`（`consumer_ledger.rs`）・`placement-measure-bake-once` の案 A（`emo2_boot/mod.rs`）・`readonly-mode`（`update/desk.rs`）。後回しの段: `multi-ghost-runtime`・`ghost-call`。`mcp-kanade-tools` とは約束つきで 0（向こうが `crates/areka-ghost/src/runtime.rs` に 1 行足すので、`\![reload,shiori]` を含めるときは照合する）。
+- 優先度の区分: A のまま。要件定義のモデル: **Opus** のまま。
+- 分割の案: `\![reload,shiori]` を外すか、20 を超えたら後の 1 本へ（前からの案）。
+- 見つけた穴・古くなった記述: 棚卸㉓〜㉕の行数（943・902・911）は古い。

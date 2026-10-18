@@ -94,3 +94,16 @@ kanade のマウスの出来事に「クリック」と「ホイール」を足�
 - 先に要るもの: なし。同じウェーブに置けない相手: `mcp-kanade-tools`（`msg.rs`・`schedule/events.rs`。案 A なら `schedule/mod.rs` も）・`inputbox-user-input`・`script-security-level`・`sakura-time-critical` ほか kanade の `schedule/events.rs` に触る spec、`input_events/mod.rs` に触る spec（Adjacent のとおり）。`mcp-kanade-tools` が `msg.rs` と `schedule/mod.rs` を分けた後に着手するのが安い。重なり 0: `mcp-reload`・`mcp-receiver-bugs`・`mcp-stdio-bridge-residue`・`check-script-arg-checks`。
 - 優先度の区分: C のまま。要件定義のモデル: Fable のまま。
 - 見つけた穴・古くなった記述: Adjacent の `anchor-tag-canon` は着地済み。本文 Current State の「前例は 2 つ」は 3 つ。Constraints の行数（`msg.rs` 926・`schedule/steady.rs` 950）は上の数に読み替える。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 前提の変化: **v0.3.0 から v0.1.0 へ移した**（下の理由）。行数: `schedule/events.rs` 850・`msg.rs` 930・`schedule/steady.rs` 957・`schedule/mod.rs` 969・`crates/areka/src/input_events/mod.rs` 575（`emily-ghost-verification` が scope の検査を足した）・`throttle.rs` 276・`menu/trigger.rs` 573。単発のクリックは今も送らない（`input_events/mod.rs` の `on_char_pointer_pressed` の説明）。
+- 棚卸㉗で足した範囲（理由と証拠）:
+  - **v0.1.0 へ移した理由**: ぱすたは × の印の左クリック（`OnMouseClick`・当たり判定「閉じる」・Reference5＝0）で終わり、ボールの左クリック（当たり判定「セキュリティボール」）でボールのトークを出す（ゴースト「窓際のぱすたさん」の `dic/window.pasta`・`dic/ball.pasta`）。areka ではどちらも起きない。
+  - **`OnMouseEnter`・`OnMouseLeave` を In へ**（本文の Out から移す）: ぱすたは × の印に乗ると `\![bind,閉じる,赤,1]`、離れると `0` で × を赤くする（同じ `window.pasta`・Reference3＝スコープ・Reference4＝当たり判定の名前を見る・`Status` の talking の間は何もしない）。正典（ukadoc）: `OnMouseEnter`＝マウスが当たり判定に入った・Reference0〜6 は `OnMouseMove` と同じ並び（5 は常に 0）。`OnMouseLeave` も同じ形。入力の配線は同じ（窓ごとに「今どの当たり判定の上か」を覚え、変わったときに Leave → Enter）。3〜4 タスク増える。
+  - 窓ごとの当たり判定の追跡は `shell-mouse-cursor`（新）と後の `shell-tooltip` も使う＝この spec が先に作り（案: 新しいファイル `crates/areka/src/input_events/hover_region.rs`）、後の 2 本は使うだけにする。
+- 触るファイル: 本文のとおり＋追跡の新しいファイル・`schedule/events.rs` の表と組み立てに 2 つ・台帳 `shiori.toml` の 2 行（`OnMouseEnterAll`・`OnMouseLeaveAll` も入れるなら 4 行）。
+- 規模: 10〜16 タスク（議題 1 が案 B なら 10〜13・案 A なら 13〜16）。
+- 先に要るもの: なし。同じウェーブに置けない相手: `shell-mouse-cursor`（新・`input_events/` の追跡）・kanade の `schedule/events.rs`・`msg.rs` を触る v0.1.0 の spec（`mcp-kanade-tools`・`mcp-strict-errors`・`mcp-reload`・`script-security-level`）・`input_events/mod.rs` を触る `balloon-markers`・`collisionex-regions`（v0.2.0）。
+- 優先度の区分: **A に改める**（C から。開発者の指示＝v0.1.0 のゴール・ぱすた）。要件定義のモデル: **Opus に改める**（棚卸㉔までは Fable。10-15 の基準で、`OnMouseUp` → `OnMouseClick` の 2 段は選択肢・アンカーの前例があり、先例の無い骨格に当たらない）。分割の案: なし。
+- 議題を 1 つ足す: 5. `OnMouseEnterAll`／`OnMouseLeaveAll`（窓に入った・出た）も入れるか（ぱすたは使わない）。SSP で測る: 当たり判定から当たり判定へ直に移ったときの Leave と Enter の順・窓の外へ出たときの Leave。
+- 古くなった記述: 本文 Out の「`OnMouseEnter`／`Leave`／`Hover`」は「`OnMouseHover`」だけになる。Downstream に `shell-mouse-cursor`・`shell-tooltip`・`pasta-in-windows-verification` を足す。

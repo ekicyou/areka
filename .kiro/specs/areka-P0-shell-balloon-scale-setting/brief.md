@@ -65,3 +65,14 @@
 - DPI 追従が基本設計（k は D2D の変換行列で当てる・合成は元の大きさのまま）を崩さない。
 - 1 ファイル 1,000 行の番人（`placement/mod.rs` 902 行・`emo2_boot` の大きいファイル）。
 - 実機の確かめは実 emo2・DPI ≠ 96 で、根と検体はワークツリーの `target\` の下。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 前提の変化: 起票の後に着地した spec の中で、この brief の指し先に効いたのは `move-canon` だけ。`\![move]` の量の計算は `emo2_boot/move_cue_geometry.rs`・`move_cue_place.rs` へ移った（本文 Current State の「`emo2_boot/move_cue.rs:585`」は古い・`move_cue.rs` は 308 行）。
+- 棚卸㉗で足した範囲（理由と証拠）: ぱすたが `balloon.syncscale,true` と `OnShellScaling`／`OnBalloonScaling` を使う（ゴースト「窓際のぱすたさん」の `ghost/master/descript.txt`「縦書きバルーンは窓（シェル）の絵に重ねているので、バルーンの倍率をシェルの倍率に連動させる」・`dic/tategaki.pasta` がこの 2 つのイベントで位置と重ね順を出し直す）。v0.1.0 には利用者が倍率を変える道が無いので、ぱすたのゴールには効かない＝この spec に足すだけ。
+  - **`balloon.syncscale,true` を In へ**: 正典（ukadoc・SSP 2.7 RC1）＝ゴーストの descript の `balloon.syncscale,true` は、バルーンの拡大縮小率のゴーストとの連動を強制的に ON にする（true だけ有効・利用者の操作を阻害するので濫用しない）。シェルの `sakura.`・`kero.`・`char*.balloon.syncscale` も同じ（既定はゴーストの値）。この spec の「バルーンも連携する」の切り替えを、descript が強制で ON にする形。網羅台帳 `assets.toml` の 4 行は absent・持ち主なし。
+  - **`OnShellScaling`・`OnBalloonScaling` の覚え書き**: 正典＝シェル（バルーン）の倍率が変わったときに起きる・Reference0／1＝横の変わった後／前（％）・2／3＝縦の後／前。本文は Out（タグや画面で倍率が変わる道とまとめて起票）。表示倍率を変える道を作るこの spec が「表示倍率が変わったとき」に送るかを要件の段で決める。拡大率の違う画面へ移ったときに SSP が送るかは SSP で測る（送るなら `dpi-realign-remembered-chain`〔v0.1.0〕の側の議題）。
+- 触るファイル: 本文のとおり＋ゴーストとシェルの descript の `syncscale` の読み取り（配置の設定の近く）・イベントを送るなら kanade の `schedule/events.rs` の表。
+- 規模: 11〜16 タスク（本文の 10〜14 に、syncscale 1・イベントを送るなら 2〜3）。
+- 先に要るもの: 本文のとおり（v0.2.0 の 3 本）。
+- 版: v0.4.0 のまま（v0.2.0 の改造の後・入口の設定画面は windows-reactor 待ち）。
+- 優先度の区分: A のまま。要件定義のモデル: Opus（本文に無かった。先例＝`ScalePolicy.app_scale` の口と DPI の変化の鎖）。分割の案: なし。

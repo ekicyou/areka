@@ -87,3 +87,15 @@
 - 要件定義のモデル: **Opus**（10-15 の付け直し。2 案の分かれ目は、DPI 追従の基本設計と位置の記憶の 3 つの決まりで決まる＝先例で決まらない骨格には当たらない）。
 - 分割の案: なし。
 - 見つけた穴・古くなった記述: 棚卸㉓の節の「要件定義のモデル: Fable」は古い。`placement/chain_realign.rs` 30 行目の説明「誰も触っていないスコープは対象に残る」は 2 回目の起動から成り立たない（棚卸㉓のまま・本 spec が判定と一緒に書き直す）。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 前提の変化: v0.1.0 のゴールに「ぱすたが SSP と同じレベルで動く」が入った。ぱすたは拡大率 200% と 150% の画面をまたいでドラッグされる（開発の機械の主の画面は 200%・ぱすた開発の答え）。`move-canon` の着地で `emo2_boot/frame/drain_resnap.rs` が 546 行・`emo2_boot/frame.rs` が 580 行になった（詰め直しの判定は変わらない）。ほかは棚卸㉕のまま（`placement/chain_realign.rs` 245・`chain_finalize.rs` 320・`spawn.rs` 776・`persist.rs` 642・`frame/dpi.rs` 508）。
+- 棚卸㉗で足した範囲（理由と証拠）: **重ねて置いた 2 つの窓を、詰め直しで横に並べない**。ぱすたは窓の枠（相方）とぱすた（本体）を同じ左上に重ね（`\![move,--X=0,--Y=0,…,--base-offset=left.top,--move-offset=left.top]`）、`seriko.sticky-window,0,1` で一緒に動かす（ゴースト「窓際のぱすたさん」の `dic/tategaki.pasta`・`shell/master/descript.txt`）。本文の案「隣と接していた（隙間が一定以下）組を詰め直す」は、重なり＝隙間が負の組を「接していた」と読むと、窓の枠をぱすたの横へ並べてしまう。重なっていた組は重なったまま保つ（または詰め直しから外す）ことを要件に入れる。
+  - ぱすたは落とした後（`OnMouseDragEnd`）と倍率の変更（`OnShellScaling`）で位置と重ね順を出し直す（同じ辞書）。詰め直しが出し直しの後に走ると、ずれが残る＝順を確かめる。
+- 触るファイル: 棚卸㉓のまま（上の行数）。
+- 規模: 6〜10 タスク（重ねた組の扱いで 1 つ増）。
+- 先に要るもの: なし。順の案は `window-link-directives`（組の持ち主）→ この spec（組の窓は詰め直しから外す、で済む見込み）。
+- 重なり: `window-link-directives`（同じ `placement/`）・`zorder-scope-inversion`（重ね順＝wintf の鎖・別のファイル）・`descript-window-keys`（`placement/config.rs`・別のファイル）・`placement-measure-bake-once`（別のファイル）。`multi-ghost-runtime` は v0.1.0 の外（行き先待ち）へ移った＝ファイルの重なりは棚卸㉕のままだが、今は同じウェーブに入らない。
+- 優先度の区分: B のまま（重ねた組の分は開発者の指示＝A の範囲）。要件定義のモデル: Opus のまま。分割の案: なし。
+- 見つけた穴:
+  - SSP で測る: 拡大率の違う画面へドラッグしたときに `OnShellScaling` が来るか。来るなら、areka で送る持ち主をこの spec か `shell-balloon-scale-setting`（v0.4.0）かで要件の段に決める（ぱすたの付け直しの合図になる）。重ねた 2 つの窓を SSP がどう並べるか。

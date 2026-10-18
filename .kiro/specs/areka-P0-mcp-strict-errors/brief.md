@@ -154,3 +154,15 @@ AI が書いた台本は、存在しない surface 番号や綴りを誤った�
 - 要件定義のモデル: **Opus**（10-15 の付け直し。⑴ と ⑵ の分かれ目は開発者に問う議題だが、⑴ の形は `check_script` の `diagnose` が先例として決めている＝先例で決まらない骨格の分かれ目には当たらない）。
 - 分割の案: なし。⑵ で 20 を超えたら棚卸㉑の切り方。
 - 見つけた穴・古くなった記述: 棚卸㉓・㉔の「Fable のまま」は古い。10-08 の申し送りの「6 類」の表に `unpaired_tag` の行が無い・文面の定数と文書の一致をテストで見ていない（どちらも㉔のまま）。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 版: **v0.1.0（棚卸㉗でゴールを組み直した後も残る）**。自動の試験で AI が自分の台本の誤りを `get_log(error)` から知るための仕組みで、ぱすた開発が SSP で使っている「strict の誤りの記録」に当たる（棚卸㉗の問い合わせの答え＝`sakurascript` の strict で着せ替えを試す）。
+- 前提の変化: 10-16 から触るファイルは動いていない（`crates/areka-mcp/src/handler.rs` 144 行・案内文は 36 行目の定数で最後の 1 文が「not implemented yet」・`crates/areka/src/mcp/check_script_judge.rs` 218 行・文面の定数 `MSG_*` 10 個）。中継の側は `mcp-stdio-bridge-residue` が変えたが、案内文の定数を読む形は同じ＝最後の 1 文を消すと中継の答えも一緒に変わるのは前のまま。
+- 触るファイル: 棚卸㉓のとおり（案 ⑴＝入口で診る・案 ⑵＝再生まで印を運ぶ）。
+- 規模: ⑴ なら 6〜10・⑵ なら 12〜18。
+- 先に要るもの: `mcp-kanade-tools`（strict を受ける口と `raise_event` の返り台本）・`mcp-reload`（案内文の 1 文を消す順）。
+- 同じウェーブに置けない相手（v0.1.0）: `mcp-receiver-bugs`（`handler.rs`）・`mcp-kanade-tools`・`mcp-reload`（`areka-tools.md`）。⑵ のときは `script-security-level`・`window-link-directives`（`consumer_ledger.rs`）も。
+- 優先度の区分: A のまま。要件定義のモデル: **Opus** のまま。
+- 分割の案: なし。
+- 自動の試験のための注記: `real-run-mcp-kit` の窓口が着地していれば、strict の記録の実機の確かめ（台本を流す → `get_log(error, since_id)`）をその窓口の 1 本の試験で書ける。
+- 見つけた穴・古くなった記述: 10-08 の申し送りの「6 類」の表に `unpaired_tag` の行が無い・文面の定数と文書の一致をテストで見ていない（㉔・㉕のまま）。

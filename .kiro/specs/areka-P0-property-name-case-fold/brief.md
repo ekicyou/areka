@@ -96,3 +96,13 @@ SSP はプロパティの名前の英字の大小を区別しない（`BASEWARE.
 - 要件定義のモデル: Opus のまま（畳む範囲は `mcp-ghost-name-match` の決まりが手本）。
 - 分割の案: なし。
 - 見つけた穴・古くなった記述: `doc/ssp-mcp/survey.md` の 121 行目（7.3 節の 6「名前を完全一致で比べ、空文字を省略と同じに扱う」）は `mcp-ghost-name-match` の着地で偽のまま＝すぐ直せる。roadmap の列「プロパティの動く値」に `reader.rs`・`persist/` が無い（棚卸㉓のまま）。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 版: **v0.1.0（棚卸㉗でゴールを組み直した後も残る）**。ぱすた（窓際のぱすたさん）は `\![get,property,…]` とプロパティ `currentghost.scope(0).scaling` などを読む（棚卸㉗の問い合わせの答え）。SSP で動くように書かれたゴーストが名前の大小を混ぜていると areka では値が取れず、「ぱすたが SSP と同じに動く」のもう 1 つのゴールの守りになる。書き込みの検査を大小で迂回できる穴も v0.1.0 のうちに塞ぐ（MCP と台本から書く道が開く前）。
+- 前提の変化: `baseware-root-list`（PR#317）と `write-failure-notice`（PR#323）が sylphya に触った。`crates/areka-sylphya/src/actor.rs` 754→**799**（書き込みの仕分け `classify_set` は 140 行目・正準語彙の判定 `is_canonical_vocab` は 154 行目＝中身は同じ）・`persist/mod.rs` 403→**451**・`persist/format.rs` 533→**566**（どちらも書けないときの結果と置き場の並びの鍵）。`key.rs` 411・`reader.rs` 584 は変わらず。
+- 触るファイル: 棚卸㉓のとおり。1,000 行に近いファイルは無い。
+- 規模: S〜M（5〜9）のまま。
+- 先に要るもの: なし。
+- 同じウェーブに置けない相手: 名前の解釈と書き込みの仕分け（`key.rs`・`actor.rs`・`reader.rs`）だけなら v0.1.0 のどれとも 0（`readonly-mode` は `persist/io.rs`・`persist/mod.rs` を触るが `actor.rs` の保存の流し込みは呼び手として読むだけの見込み＝設計で照合）。**保存された名前の読み戻しまで畳む（`persist/`）と**、`readonly-mode`（`persist/{io,mod}.rs`）・後回しの段の `multi-ghost-runtime`・`dev-folder-alias`・`ghost-inner-balloon`（`persist/` を挙げる）と重なる。推しは棚卸㉕のまま（読み戻しは畳まない）。
+- 優先度の区分: C のまま（v0.1.0 では守りの穴として扱う）。要件定義のモデル: Opus のまま。分割の案: なし。
+- 見つけた穴・古くなった記述: 棚卸㉓・㉕の行数（`actor.rs` 754・`persist/mod.rs` 403・`format.rs` 533）は古い。`doc/ssp-mcp/survey.md` 121 行目（7.3 節の 6）は今も偽のまま。
