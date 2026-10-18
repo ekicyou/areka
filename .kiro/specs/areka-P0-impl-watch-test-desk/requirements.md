@@ -42,7 +42,7 @@
 4. **「全体テスト・UI テスト」の判定の基準**: Requirement 9 のとおり。クレートのテスト（`--ignored` を付けない `cargo test -p`）・clippy・整形・ビルドは数えない（実装の机の上で回る）。
 5. **`/release` の机**: 全体テストと起動の確かめ（窓を出す）の間だけ排他テストの机を取る。マージの机は取らない（`release` は roadmap も台帳も触らず、main が動いたときの取り込みと確かめ直しを手順の中にすでに持つ。Requirement 12）。
 
-規模の見立て: アプリ 8〜9・スキルと手順書 4・実機の確かめ 1 で 13〜14 タスク（20 を超えないので 1 本のまま）。
+規模の見立て: アプリ 8〜11・スキルと手順書 4・実機の確かめ 1 で 13〜16 タスク（ギャップ分析の見立てに合わせた。20 を超えないので 1 本のまま）。
 
 ## Boundary Context
 
@@ -50,7 +50,7 @@
   - `areka-impl-watch` の机を 3 種類に組み直すこと（状態・番の決め方・複数の机の一度の申し込み・持ちながらの申し込みと一部の返し方・落ちた参加者の後始末・呼び方・終了コード・`status` と `status.md` の表示・状態ファイルの版と古い実行ファイルとの混在の扱い）。
   - 常時テスト（決定論）と、明示したときだけ走る実機テスト。
   - 手順書 `doc/impl-watch.md` の机の表・決まり・呼び方・終わり方・スキルからの呼び方・判定の基準・更新の注意。
-  - スキル `kiro-impl`・`kiro-complete`・`release` の机の段。
+  - スキル `kiro-impl`・`kiro-complete`・`release` の机の段と、`kiro-watch-clear` の説明文の机の語（呼び方は変えない）。
   - 「全体テスト・UI テスト」と「負荷テスト」の判定の基準。
 - **Out of scope**:
   - 全体テストのスクリプト `tools/test-all.ps1` の中身。
@@ -61,7 +61,7 @@
   - 古い形の状態ファイルを新しい形へ移す仕組み（今どおり `clear` でやり直す。Requirement 7）。
   - 机の種類をこの 3 種類より増やすこと。
 - **Adjacent expectations**:
-  - 棚卸のスキル `kiro-next`（`clear --repo`）と `kiro-watch-clear`（`clear` と `status`）は今の呼び方のまま動き、この spec では直さない。
+  - 棚卸のスキル `kiro-next`（`clear --repo`）と `kiro-watch-clear`（`clear` と `status`）は今の呼び方のまま動く。`kiro-next` は直さない。`kiro-watch-clear` は説明文の「負荷テストの机」の語だけを 3 つの机に合わせる。
   - 机は助けである。使えないとき（環境変数が無い・実行ファイルが無い・直らない失敗）は、どのスキルも今と同じく机の段を飛ばして作業を続け、訳を最後の報告に残す。
   - 負荷テストや実機の走行を使うこれからの spec（`areka-test-binary-stability`・`present-emit-tail-latency`・`install-live-target-hazards`・`real-run-input-guard-observations` など）は、この机が着地した後なら番を取って回せる。それらの brief に机の古い呼び方が書かれていれば合わせる（2026-10-18 の時点で 0 件）。
   - steering の `structure.md` の `areka-impl-watch` の節（「机は 2 種類」の記述）は、完了の手順の文書の同期で合わせる。
