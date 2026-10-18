@@ -124,7 +124,7 @@
 
 1. When 宛先の解決を通った `raise_event` の呼び出しが届き、そのゴーストが普段の状態にある, the areka shall `event` の名前のイベントを、`references` の各要素を順に Reference0・Reference1…として、そのゴーストの SHIORI へ 1 回送る（areka がふだん送るイベントの許可の表に無い名前でも送り、表に無い名前を送ったことを理由にゴーストを止めない・警告も残さない）。
 2. The areka shall 許可の表に在る名前を頼まれたときも、渡された Reference だけをそのまま送り、ふだんそのイベントに補っている Reference を足さない。
-3. When SHIORI が空でない台本を返す, the areka shall その台本を新しいトークとして再生し、1 行目 `OK:the ghost returned a script and it is being played.`・2 行目 `Script: ` に続けて SHIORI が返した台本そのまま（翻訳の前）の本文・`isError: false` の結果で答える（2 つの行の区切りの字は SSP と同じにする。SSP の生の応答で設計の段に確かめる）。
+3. When SHIORI が空でない台本を返す, the areka shall その台本を新しいトークとして再生し、1 行目 `OK:the ghost returned a script and it is being played.`・2 行目 `Script: ` に続けて SHIORI が返した台本そのまま（翻訳の前）の本文・`isError: false` の結果で答える（2 つの行の区切りの字は SSP と同じ `\r\n`。2026-10-18 設計の討議で SSP の生の応答を測って確かめた）。
 4. When SHIORI が台本を返さない（返り値なし・空か空白だけの台本・エラーの応答）, the areka shall 何も再生せず（今の再生にも触れず）、本文 `OK:the ghost returned no script.`・`isError: false` の結果で答える。
 5. The areka shall 答えを、SHIORI の答えが返った時点で返し、返った台本の再生の終わりを待たない。
 6. If `event` が空文字か空白だけである, then the areka shall SHIORI を呼ばず、本文 `NG:event is empty`・`isError: true` の結果で答える。

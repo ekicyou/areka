@@ -1,6 +1,6 @@
 # 設計書: areka-P0-mcp-kanade-tools
 
-> 本書の実測は **2026-10-18・本ブランチ**（main `2d86dbff` の上に spec の 5 コミット）。コードは「何の定義か」（関数名・型名・定数名＋ファイルパス）で指す。調べた記録と比べた案は [research.md](research.md)（前半＝ギャップ分析・後半＝設計の段の調べ）。SSP には何も送っていない・実機も動かしていない。
+> 本書の実測は **2026-10-18・本ブランチ**（main `e2370df8` を取り込んだ上に spec のコミット）。コードは「何の定義か」（関数名・型名・定数名＋ファイルパス）で指す。調べた記録と比べた案は [research.md](research.md)（前半＝ギャップ分析・後半＝設計の段の調べ）。SSP には何も送っていない・実機も動かしていない。
 
 ## Overview
 
@@ -394,7 +394,7 @@ pub(super) fn script_target(world: &World, ghost_name: Option<&str>) -> ScriptTa
 **責務と制約**
 - 先頭で `areka_kanade::sstp::validate_notify(&args.event, &args.references)` を呼び、`EmptyEvent` → `NG:event is empty`、`ControlCharacter` → `NG:event or reference contains a control character`（どちらも SHIORI を呼ばない）。
 - 部品（`script_target`・`NOT_NOW`・`UNAVAILABLE`）は `super::sakurascript` から使う。
-- 2 行の区切りの字は定数 `SCRIPT_LINE_BREAK` 1 か所に置く。既定は `"\r\n"`（SSP の MCP は測った 2 本＝`get_expression_table`・`get_log` の行の区切りがどちらも `\r\n`・`doc/ssp-mcp/survey.md`）。`raise_event` そのものの区切りは未実測なので、実装の段で SSP の生の応答を 1 回確かめる（下の「実装の段で測ること」）。
+- 2 行の区切りの字は定数 `SCRIPT_LINE_BREAK` 1 か所に置き、`"\r\n"` とする（2026-10-18 設計の討議で SSP 2.9.05 の `POST /api/mcp/v1` へ `raise_event`（`OnAiTalk`）を直に当て、生の JSON の本文が `…being played.\r\nScript: …` であることを確かめた）。
 
 **Contracts**: Service [x]
 
@@ -476,7 +476,7 @@ pub enum KanadeMsg {
         reply: areka_actor::ReplySender<crate::sstp::SstpSendOutcome>,
     },
     /// 外から頼まれた任意の名前のイベント（SSTP NOTIFY の Event 相当・GET）。許可の表を通さない。
-    /// 名前と Reference は呼び手が `sstp::validate_notify` で検査済みであること。
+    /// 名前と Reference は呼び手が `sstp::validate_notify` で検査しておく（運行表の腕も同じ検査をもう一度行い、破れていれば送らない）。
     SstpNotify {
         event: String,
         references: Vec<String>,
@@ -601,7 +601,9 @@ pub(crate) fn accepts(state: &State) -> bool;
 /// で翻訳へ預ける（0 文字なら預けずにそのまま返す）。
 pub(super) fn on_send(state: State, script: String, strict: Option<bool>) -> (State, Vec<Action>);
 
-/// `Input::SstpNotify` の腕。受け付けないなら同上。受け付けたら `sstp_notify = Some(NotifyStage{strict})` を置き、
+/// `Input::SstpNotify` の腕。受け付けないなら同上。名前か Reference が `sstp::validate_notify` を破っていれば
+/// （呼び手の不具合）送らずに状態を変えず、`warn!`（`sstp_notify_invalid`）を 1 件残して空の一括を返し、殻は `NotAccepted` を返す
+/// （送出の檻で `Failed(Internal)` になりゴーストが倒れる道へ入れない）。受け付けたら `sstp_notify = Some(NotifyStage{strict})` を置き、
 /// `events::sstp_notify(event, references, &state.snapshot())` の GET 1 つを返す（`debug!` `sstp_notify_sent`）。
 pub(super) fn on_notify(state: State, event: String, references: Vec<String>, strict: Option<bool>) -> (State, Vec<Action>);
 
@@ -680,11 +682,12 @@ pub fn on_translate_sstp(expanded: &str, status: ExecutionStatus) -> ShioriCall;
 /// ShioriReply → replied.talk_source()、TranslateDone → state.translate の source の複製、
 /// SstpSend → Some(ScriptSource::SstpSend)、それ以外 → None。
 pub(super) fn source_of(state: &State, input: &Input, replied: &Replied) -> Option<ScriptSource>;
-/// 出口で呼ぶ。返す一括の `Action::StartTalk` ごとに `emit(&config.ghost_name, &label, &start.script)` を 1 回。
+/// 出口で呼ぶ。返す一括の `Action::StartTalk` のうち台本が 0 文字でないものごとに `emit(&config.ghost_name, &label, &start.script)` を 1 回。
 pub(super) fn record(config: &KanadeConfig, actions: &[Action], source: Option<&ScriptSource>);
 ```
 
 - 出す出来事: target `areka::log::script`・レベル info・欄 `ghost`（`%`）・`label`（`%`）・本文＝台本。
+- 0 文字の台本のトーク（200 の空の応答で始まったトーク・初回起動の後ろ書きだけのトークなど）は記録しない。毎秒の `OnSecondChange` に空の応答を返す SHIORI で、空の記録が種別ごとの上限（`log_history` の `PER_KIND_CAP`）を埋めて本物の台本を押し出すのを防ぐ。
 - 1 件ずつ・重複なし: 同じトークの `StartTalk` は 1 つの `step` の出口に 1 回しか現れない（翻訳に預けた一括は出口に出ない）。
 - 「指示を返した」と「殻が再生の側へ送れた」の間で再生の側が落ちていた（`talk_command_send_failed` の `error!`）ときも 1 件残る。再生の側が落ちるのはゴーストが倒れる途中だけで、`error!` の記録が同じ時に残るので許す（research の決定「ログの置き場」）。
 
@@ -759,13 +762,14 @@ pub(super) fn record(config: &KanadeConfig, actions: &[Action], source: Option<&
 7. ⑺ 許可の表に在る名前（`OnBalloonTimeout`・`OnAnchorSelect`）の `SstpNotify` → Reference を補わず渡された列のまま（0 個なら 0 個）。
 8. ⑼ `OnTranslate` の Reference: `SstpSend` の翻訳の依頼が Ref0＝展開済み・Ref1＝`sstp-send,owned`・Ref2 以降なし（`events::on_translate_sstp` の組み立て）。`SstpNotify` の台本の翻訳の依頼は Ref1＝欠番・Ref2＝名前・Ref3＝Reference をバイト値 1 で連ねたもの。
 9. 要件 5.3: `strict` が真・偽・省略の 3 通りで、`State::sstp_strict` の番号が始めたトークの番号と一致し、値が渡した値と一致する（`SstpNotify` は台本で始まったトークの番号）。
-10. ⑽ 起動の挨拶（`Ghost:OnBoot`）・定常の自発の台本（`Ghost:OnSecondChange`）・マウスの反応・選択肢の `script:`（`Ghost`）・`SstpSend`（`SSTP(Local,Auth)`）・`SstpNotify`（`Ghost:<名前>`）・終了の挨拶（`Ghost:OnClose`）・翻訳の輸送路の失敗（0 件）の各道で、`target = "areka::log::script"` の info がトーク 1 つにつき 1 件、欄 `ghost` が `KanadeConfig::ghost_name`、`label` が表のとおり、本文が翻訳の後の台本。
+10. ⑽ 起動の挨拶（`Ghost:OnBoot`）・定常の自発の台本（`Ghost:OnSecondChange`）・マウスの反応・選択肢の `script:`（`Ghost`）・`SstpSend`（`SSTP(Local,Auth)`）・`SstpNotify`（`Ghost:<名前>`）・終了の挨拶（`Ghost:OnClose`）・翻訳の輸送路の失敗（0 件）・0 文字の台本のトーク（0 件）の各道で、`target = "areka::log::script"` の info がトーク 1 つにつき 1 件、欄 `ghost` が `KanadeConfig::ghost_name`、`label` が表のとおり、本文が翻訳の後の台本。
 
 ### kanade 殻（`actor_sstp_tests.rs`・既存の殻のテスト）
 
 1. 本物の殻で `SstpSend` → `Accepted`、再生の側に `TalkCommand::Start` が 1 つ、偽の shiori に `GET OnTranslate`。
 2. `SstpNotify` → 偽の shiori に `GET <名前>`（許可の表に無い名前）。台本 → `Script(SHIORI が返したまま)`（翻訳の偽の答えと違う字で、翻訳の前であることを見分ける）。204・空白だけ・エラー応答 → `NoScript`。
-3. 起動の途中（`Boot` の前・`Boot` 直後に止めた偽の shiori）→ `NotAccepted`。
+3. 起動の途中は知らせを 1 通ずつ処理する作り（要件 3.7）に合わせて 3 場面で見る: ⑴ `Boot` を送る前 → `NotAccepted` ⑵ 起動の挨拶が流れている間（`Steady{talk: Some(origin = "boot")}`）→ `NotAccepted` ⑶ 挨拶の `TalkDone` の後 → `Accepted`。
+3b. 呼び手の検査を破った `SstpNotify`（名前に LF）を殻へ直に送る → 偽の shiori に何も届かず `NotAccepted`、`warn!` 1 件、ゴーストは止まらない（後続の呼び手の不具合でゴーストを倒さない）。
 4. 往復の失敗（偽の shiori が `Failed(Ipc)`）・翻訳の輸送路の失敗 → `Failed`、続けて停止の通知。
 5. 返事の受け手を落としてから送る → 再生の側に `Start` が届き、殻は止まらない（要件 3.8）。
 6. ⑻ 同じ許可の表に無い名前を `RaiseEvent` で送ると今日どおり `NotAllowed`（送られない）。既存の `actor_raise_reply_tests.rs` の 5 値がそのまま緑（要件 6.1・6.2）。
@@ -802,7 +806,7 @@ pub(super) fn record(config: &KanadeConfig, actions: &[Action], source: Option<&
 
 ## 実装の段で測ること・申し送り
 
-- **測ること（R1）**: `raise_event` の 2 行の区切りの字。実装の段で開発者の机の SSP の MCP に `raise_event`（台本を返すイベント）を 1 回当て、生の JSON の本文を記録する。`\r\n` と違えば定数 `SCRIPT_LINE_BREAK` だけを直す。測れなければ既定 `\r\n` のまま差の一覧に「未実測」と書く。
+- **測ったこと（R1・設計の討議で済み）**: `raise_event` の 2 行の区切りの字は `\r\n`（SSP 2.9.05 へ `curl` で直に当てた生の JSON）。差の一覧には「SSP と同じ（実測）」と書く。
 - **`mcp-reload` へ**: 本 spec は `crates/areka-ghost/src/runtime.rs`・kanade の `src/change.rs`・`schedule/boot.rs` に触らない。ゴーストの名前は `config.rs` の中で入れる。`schedule/mod.rs` を割った後も `boot.rs` の `use super::{…}` は同じ名前で解ける。
 - **`mcp-strict-errors` へ**: strict は `KanadeMsg::SstpSend`／`SstpNotify` の `strict` から運行状態の `StrictNote{talk_id, strict}` まで届く。入口で診断する案 ⑴ なら MCP の側の値をそのまま使え、再生の各所まで運ぶ案 ⑵ なら `StrictNote` から `StartTalk` 側へ運ぶ形に広げる（`script-security-level` の入れ物と合わせる）。
 - **`property-query-channels`・`mcp-shiori-query` へ**: 許可の表を通さずに任意の名前を送る口は `KanadeMsg::SstpNotify`＋`sstp::validate_notify`。返った台本は再生される（再生させずに値だけ欲しい用途は、その spec で入口を足す）。

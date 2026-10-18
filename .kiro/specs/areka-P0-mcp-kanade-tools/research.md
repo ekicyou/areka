@@ -349,3 +349,8 @@ L2 を採る場合、翻訳を通ったトークのために「預けた一括�
 - `doc/ssp-mcp/survey.md` — SSP 2.9.05 の実測（区切り `\r\n`・strict の意味）。
 - `doc/ssp-mcp/log-convention.md` — script 種別のログの取り決め（target・欄・既定）。
 - `.kiro/specs/areka-P0-mcp-strict-errors/brief.md` — strict の後続の案。
+
+## 設計の討議での実測（2026-10-18）
+
+- **R1 済み**: SSP 2.9.05 の `POST http://127.0.0.1:9801/api/mcp/v1` へ `tools/call` `raise_event`（`OnAiTalk`・宛先省略＝悪役令嬢クローディア）を `curl` で直に当てた。生の JSON の本文は `OK:the ghost returned a script and it is being played.\r\nScript: <台本>`＝区切りは `\r\n`、2 行目は `Script: `（コロンの後に空白 1 つ）。
+- 設計の検証の重大な問題 3 点（`SstpNotify` の検査を運行表でもう一度・0 文字の台本は記録しない・殻のテスト 3 の書き直し）は、設計の討議で自明な直しとして design.md に入れた。
