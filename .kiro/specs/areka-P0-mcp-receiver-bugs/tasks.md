@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 受け口が形の違う `params` に `-32602` で答える（件 1）
+- [x] 1. 受け口が形の違う `params` に `-32602` で答える（件 1）
 - [x] 1.1 型のない要求への答えを決める純粋な関数と、rmcp の拡張の口の上書きを足す
   - `params` が欠かせない 3 つのメソッド（`tools/call`・`initialize`・`completion/complete`）の表を rmcp の名前の定数で持ち、表の中なら `-32602`（文は `invalid params for <メソッドの名前>`・`data` なし）と `debug` の記録 1 件（欄 `method`・文 `MCP: params の形がメソッドに合わない`）、表の外なら rmcp の既定と同じ `-32601`（文はメソッドの名前・`data` なし・記録なし）を返す
   - 上書きは常にその関数の答えを `Err` で返すだけにし、`params` の中身は読まず記録にも載せない。HTTP の状態の決め方・`dispatch.rs`・中継のコードは変えない
@@ -10,7 +10,7 @@
   - _Boundary: ParamsAnswer, HandlerTests_
   - _Requirements: 1.1, 1.3, 1.4, 1.5, 1.6_
 
-- [ ] 1.2 5 つの版の実ソケットで新しい答えと変わらない答えを固定する
+- [x] 1.2 5 つの版の実ソケットで新しい答えと変わらない答えを固定する
   - 版ごとの話し方で要求を組む小さな部品を 1 つ足す（旧式の 4 版は `MCP-Protocol-Version` の札・`initialize` だけは札なし、`2026-07-28` は `MCP-Protocol-Version`・`Mcp-Method`・`params` の `_meta`・`name` が文字列なら `Mcp-Name`）。今の版の並びと `_meta` の部品を使い回す
   - テスト 1: 5 つの版それぞれで、比べる相手として未登録の名前の `tools/call` の HTTP の状態を控え、`tools/call` の `{"name":7}`・`{}`・`{"name":"get_status","arguments":7}`・`params` なし（旧式の 4 版だけ）、`initialize` の `{"protocolVersion":7}`、`completion/complete` の `{"ref":7}` が、本文の `error` が `{"code":-32602,"message":"invalid params for <m>"}` に等しく（`data`・`result` なし）、状態が比べる相手と同じ（旧式 200・`2026-07-28` 400 を値でも書く）ことを確かめる
   - テスト 2: 5 つの版それぞれで、`nope/unknown` の `{"name":7}` が `{-32601, "nope/unknown"}`、`2026-07-28` だけ `ping` が `{-32601, "ping"}`・404、`tools/list` の `{"cursor":7}` が成功のままであることを確かめる
