@@ -228,7 +228,7 @@ doc/impl-watch.md               # 1・3・4・5・6・7 節を 3 つの机へ・
 - `src/plan_desk_tests.rs`・`src/plan_stop_tests.rs`・`src/plan_reclaim_tests.rs`・`src/plan_clear_tests.rs`・`src/plan_test_support.rs` — 負荷テストの机のテストを、`request --desk test,sole`／`return` の同じ振る舞いへ書き直す（停止要請・止まった・再開・取り消しの決まりは変えずに引き継ぐ＝5.4 の檻）。どれも 1,000 行を超えない（超えそうなら新しいテストは `plan_turns_tests.rs` へ置く）。
 - `src/cli_tests.rs` — 引数の読みと `--help` のテストを `cli_args_tests.rs` へ移し、置き場所の失敗など入口のテストを残す。
 - `src/cli_commands_tests.rs`・`src/cli_wait_tests.rs`・`src/cli_test_support.rs` — `loadtest` の往復と待ちのテストを `request` へ（新しい往復は `cli_desk_tests.rs`）。
-- `src/status_tests.rs`・`src/state_tests.rs`・`src/store_tests.rs`・`src/store_ports_tests.rs`・`src/wait_tests.rs`・`src/wait_loop_tests.rs`・`src/presence_tests.rs` — 新しい型・綴り・版の文へ。
+- `src/status_tests.rs`・`src/state_tests.rs`・`src/store_tests.rs`・`src/store_ports_tests.rs`・`src/wait_tests.rs`・`src/wait_loop_tests.rs`・`src/presence_tests.rs`・`src/home_tests.rs`（待ちの種類の綴り `request`） — 新しい型・綴り・版の文へ。
 - `src/main_layering_tests.rs` — 純粋さの見張りを `plan.rs` と `plan_turns.rs` の 2 本へ広げ、ASCII の見張りの一覧に `cli_args.rs`・`plan_turns.rs` を足す（11 本）。足さないと見張りが空振りする。
 
 ## System Flows
