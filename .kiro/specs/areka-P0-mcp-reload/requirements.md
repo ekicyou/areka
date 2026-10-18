@@ -58,16 +58,17 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 | 3 | 起こし直しのときの情報の通知（`basewareversion` など、SHIORI へ環境を伝える NOTIFY） | **ふつうの起動と同じく送る** | 読み直した SHIORI は前の値を持っていない。台詞を生む GET の知らせとは別のもの（✅ 2026-10-18 SSP で実測して一致・research.md 10 節） | 3.4 |
 | 4 | shell・balloon・shiori の読み直しで SHIORI イベント（`OnShellChanging`・`OnShellChanged`・`OnBalloonChange` など）を送るか | **送らない** | ukadoc は ghost の読み直しについて「SHIORIイベントが発生しない」と書く。読み直しは切替ではない（✅ 2026-10-18 SSP で実測して一致・research.md 10 節） | 4.3・5.3・6.3 |
 | 5 | `\![reload,balloon]` はバルーンを選び直すか | **今のバルーンのフォルダを読み直すだけで、選び直さない**（ゴーストの descript の指定 → 記憶 → 同梱、の順で決め直さない） | 棚卸㉓の見込み。読み直しは「同じものを読み込み直す」操作 | 6.1 |
-| 6 | MCP の返事をいつ返すか | **読み直しが終わってから返す**（後から答える置き場に預ける）。10 秒を超えたら橋の時間切れの答えになり、読み直しは続け、結果は記録に残す | 読み直しの直後に AI エージェントが次のツールを呼ぶと、終わる前なら「起動中でない」と答えられて紛らわしい。SSP の説明文は「失敗はエラーログで見よ」と書く。橋の上限 `REPLY_WAIT` は `crates/areka-mcp` にあり、本 spec は触らない | 8.1〜8.5 |
-| 7 | 成功・失敗の本文 | 成功 `OK`（`isError: false`）。知らない `target` は SSP の実測の文。読み直しを始められない・読み込みに失敗した・makoto は `NG:` で始まる英文（下の要件に置いた暫定の文） | SSP の成功の本文は未実測。`sakurascript` の成功が `OK` なので型をそろえる。SSP で測って違えば SSP の文にそろえる | 8.2・8.3・9.1・10.1 |
+| 6 | MCP の返事をいつ返すか | **✅ 確定（2026-10-18 要件ディスカッション・議題 3）: 読み直しの終わりを待たずにすぐ、SSP と同じ文で答える** | SSP の実測（research.md 10.1）。SSP 向けの AI エージェントの手順（`get_status` を待って `get_log`）がそのまま使え、橋の上限 10 秒の時間切れも起きない | 8.1〜8.4 |
+| 7 | 成功・失敗の本文 | **✅ 確定（議題 3）**: 受け付けたら SSP の文 `OK:reload requested. …since_id=<N>`。知らない `target` は SSP の実測の文。読み直しを始められない・makoto は `NG:` で始まる英文（下の要件に置いた文）。読み込みの失敗は返事でなく記録で伝える | SSP の実測（research.md 10.1） | 8.1・2.3・9.1・10.1 |
 | 8 | `target` の英字の大小 | **大小を区別しない**（ASCII の範囲だけ。前後の空白は削らない） | 同じ MCP の `get_log` の `log_type` の扱い（`Kind::from_log_type`）にそろえる（✅ 2026-10-18 SSP で実測して一致・research.md 10 節） | 1.2 |
 | 9 | `\![reload,descript,…]` の中で areka に無い種類（`headline`・`plugin`・`language`・`calendar.*`）と知らない語 | **その語だけ `warn!` を 1 件残して飛ばし、残りの語は読み直す** | areka にヘッドライン・プラグイン・言語ファイル・カレンダーは無い。黙って捨てない（ログの無い失敗の禁止）。SSP は知らない語を黙って捨てる（実測）が、areka は記録を残す側を採る | 7.4・7.5 |
 | 10 | 台本の `\![reload,makoto]` | **本 spec では拾わない**（今と同じく「誰も拾わない `\!`」のまま）。拾うのは `makoto-reload-directives` | 同 spec の brief が `\![reload,makoto]` の消費者と台帳の行を持つ。本 spec は MCP の `target: "makoto"` の縮退の口だけ | 10.3 |
+| 11 | `OnDestroy` を送るか | **✅ 確定（2026-10-18 要件ディスカッション・議題 4）: shiori の読み直しにだけ本 spec で `OnDestroy`（Reference0＝`reload`）を送る**。ふつうの終了・切替・ghost の読み直しで送る空の `OnDestroy` は本 spec の外（完了のときに `/kiro-discovery` で起票する） | ukadoc `OnDestroy`・SSP の実測（research.md 10.2）。areka は今 `OnDestroy` を一度も送らない＝終わり方全体の話は別の spec が持つ | 4.1・13 |
 
 ## Boundary Context
 
 - **In scope**: 5 対象（ghost／shiori／shell／balloon／descript）の読み直し・台本の `\![reload,ghost／shiori／shell／balloon／descript]`・`\![reload,descript,パラメータ]`・`\![reloadsurface]` の受け取り・MCP の `reload` の中身（対象の振り分け・答え）・makoto の縮退の口（MCP だけ）・読み直しの失敗をエラーログへ残すこと・`\!` の受け取り手の台帳と網羅台帳の行・決定論テストと実機確認・行数の上限に近いファイルを先に分けること。
-- **Out of scope**: makoto の本体と台本の `\![reload,makoto]`（`makoto-dll-host`・`makoto-reload-directives`）・`\![reload,aigraph]`・別のゴースト／シェル／バルーンへの切替（既存）・ファイルの変更を見張って自動で読み直すこと・ほかの 9 本の MCP ツールの中身・MCP の案内文（`crates/areka-mcp/src/handler.rs` の `INSTRUCTIONS`）の「not implemented yet」の 1 文を消すこと（`mcp-strict-errors`）・橋の返事の上限（`REPLY_WAIT`）の変更・右クリックメニューに「読み直し」を足すこと・`doc/ssp-mcp/areka-tools.md` の受け取り手の数の 1 行（数を書かない形への直しごと `check-script-arg-checks`／`mcp-strict-errors` に預ける）。
+- **Out of scope**: ふつうの終了・切替・ghost の読み直しで送る `OnDestroy`（Reference0 空・今の areka は送らない＝完了のときに `/kiro-discovery` で起票する・裁定 11）・makoto の本体と台本の `\![reload,makoto]`（`makoto-dll-host`・`makoto-reload-directives`）・`\![reload,aigraph]`・別のゴースト／シェル／バルーンへの切替（既存）・ファイルの変更を見張って自動で読み直すこと・ほかの 9 本の MCP ツールの中身・MCP の案内文（`crates/areka-mcp/src/handler.rs` の `INSTRUCTIONS`）の「not implemented yet」の 1 文を消すこと（`mcp-strict-errors`）・橋の返事の上限（`REPLY_WAIT`）の変更・右クリックメニューに「読み直し」を足すこと・`doc/ssp-mcp/areka-tools.md` の受け取り手の数の 1 行（数を書かない形への直しごと `check-script-arg-checks`／`mcp-strict-errors` に預ける）。
 - **Adjacent expectations**:
   - `mcp-tool-entrances` の振り分け（`dispatch`）が `ghost_name` を解決し、0 体・名前違いを `handle` の手前で `NG:` に終える。本 spec はこれに頼り、変えない。
   - 既存のゴースト切替（`request_ghost_switch`）とシェル・バルーン切替（`request_skin_switch`）の判定・差し替え・失敗時の扱いを、読み直しはそのまま使う。既存の切替・終了・ネットワーク更新の読み直しの振る舞いは 1 つも変えない（roadmap の保存義務）。
@@ -124,7 +125,7 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 
 #### Acceptance Criteria
 
-1. When shiori の読み直しを始めた, the areka shall 今の SHIORI を unload して、同じゴーストの SHIORI を load し直す（結果として辞書ファイルをすべて読み直す）。
+1. When shiori の読み直しを始めた, the areka shall 今の SHIORI へ NOTIFY `OnDestroy`（Reference0＝`reload`）を送ってから unload して、同じゴーストの SHIORI を load し直す（結果として辞書ファイルをすべて読み直す。ukadoc `OnDestroy`「リロード時にreload」・SSP の実測も同じ）。
 2. The areka shall shiori の読み直しの間、キャラクターとバルーンの窓を閉じず、表示中のシェルとバルーンを読み直さない。
 3. The areka shall shiori の読み直しで、SHIORI イベント（`OnClose`・`OnBoot`・`OnGhostChanged` など台詞を求める GET）を送らず、load し直した SHIORI へは要件 3.4 と同じ情報の通知を送る。このときの `OnInitialize` には Reference0＝`reload` を付ける（ukadoc `OnInitialize`「リロード時にreload」・SSP の実測も同じ）。
 4. If load し直しに失敗した, the areka shall 要件 3.7 と同じく既定のゴーストへ戻し、失敗の理由を `error!` で残す。
@@ -166,16 +167,15 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 
 ### Requirement 8: MCP の答え
 
-**Objective:** As a AI エージェント, I want `reload` の答えを受け取った時点で読み直しが終わっていること, so that 続けて呼ぶツールが読み直した後のゴーストに届く
+**Objective:** As a AI エージェント, I want `reload` の答えが SSP と同じ形ですぐ返ること, so that SSP と同じ手順（`get_status` が答えるまで待ってから `get_log` を見る）で読み直しの結果を確かめられる
 
 #### Acceptance Criteria
 
-1. When MCP の `reload` で始めた読み直しが終わった, the areka shall その時点で返事を返す（始めた時点では返さない）。終わった時点とは、ghost・shiori はゴーストが起動を終えて定常に入った時点（既定のゴーストへ戻ったときは戻った時点）、shell・balloon・descript は差し替え（または値の入れ替え）を終えた時点とする。
-2. When 読み直しが成功した, the areka shall 本文 `OK`（`isError: false`）で答える。
-3. If 読み直しが失敗した（要件 3.7・4.4・5.4・6.4・7.6）, the areka shall 本文 `NG:Failed to reload. Check the error log with get_log tool (log_type=error)`（`isError: true`）で答える。
-4. While 読み直しの返事を待たせている, the areka shall ほかの MCP のツールの要求を止めずに受け付けて答える（宛先のゴーストが降りている間に届いた要求は、既存の振り分けどおり「起動中でない」の答えになってよい）。
-5. If 読み直しが橋の返事の上限（10 秒）のうちに終わらなかった, the areka shall 読み直しを途中でやめずに最後まで行い、終わったときの結果を記録に残す（返事は橋の時間切れの答えになる）。
-6. The areka shall `reload` のどの入力・どの場面でも panic しない。
+1. When MCP の `reload` で読み直しを受け付けた, the areka shall 読み直しの終わりを待たずにすぐ、本文 `OK:reload requested. It runs asynchronously; errors while loading (dictionary errors etc.) will be recorded to the error log. Wait until get_status answers again, then check get_log tool (log_type=error, since_id=<N>)`（`isError: false`）で答える（SSP の実測の文・`<N>` は答えた時点の areka の記録の最後の番号＝その番号より後ろを `get_log` の `since_id` で読めば、この読み直しの記録が出る）。
+2. The areka shall 読み直しの成功・失敗を MCP の返事には載せず、要件 9 の記録として残す（成否は `get_log` で確かめる）。
+3. While 読み直しが進んでいる, the areka shall ほかの MCP のツールの要求を止めずに受け付けて答える（宛先のゴーストが降りている間に届いた要求は、既存の振り分けどおり「起動中でない」の答えになってよい）。
+4. When 読み直しが終わった, the areka shall 対象・ゴースト・成否を添えた記録を 1 件残す（成功は `info!`・失敗は要件 9 のとおり）。終わった時点とは、ghost・shiori はゴーストが起動を終えて定常に入った時点（既定のゴーストへ戻ったときは戻った時点）、shell・balloon・descript は差し替え（または値の入れ替え）を終えた時点とする。
+5. The areka shall `reload` のどの入力・どの場面でも panic しない。
 
 ### Requirement 9: 失敗をエラーログへ残す
 
@@ -216,7 +216,7 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 
 #### Acceptance Criteria
 
-1. The areka shall 次の判断の分岐をそれぞれ決定論テストで固定する: ⑴ `target` の 6 語と知らない語・空・大小違いの振り分け、⑵ 台本の綴り（`\![reloadsurface]` を含む）から対象への写し、⑶ 重なりで断る各場面（ゴースト切替中・シェルかバルーンの切替中・読み直し中・更新中・インストール中）、⑷ makoto の縮退の答えと記録、⑸ `\![reload,descript,パラメータ]` の語の振り分け（`ghost`・`shell`・`balloon`・areka に無い種類・知らない語・重なり・語が無い）、⑹ MCP の答えが読み直しの終わりまで返らず、成功で `OK`・失敗で `NG:…` になること。
+1. The areka shall 次の判断の分岐をそれぞれ決定論テストで固定する: ⑴ `target` の 6 語と知らない語・空・大小違いの振り分け、⑵ 台本の綴り（`\![reloadsurface]` を含む）から対象への写し、⑶ 重なりで断る各場面（ゴースト切替中・シェルかバルーンの切替中・読み直し中・更新中・インストール中）、⑷ makoto の縮退の答えと記録、⑸ `\![reload,descript,パラメータ]` の語の振り分け（`ghost`・`shell`・`balloon`・areka に無い種類・知らない語・重なり・語が無い）、⑹ MCP の答えが読み直しの終わりを待たずに SSP と同じ文（`since_id` に答えた時点の記録の最後の番号）で返ること、と終わりの記録（成否）。
 2. The areka shall ghost の読み直しで起動の知らせ（台詞を求める GET）が 1 つも送られず、情報の通知は送られることを、起動の根を選ぶ所の決定論テストで固定する。
 3. The areka shall 既存の起動の由来（`Plain`・`ChangedFrom`・`Halted`・`Updated`）が選ぶ知らせが変わらないことを、既存のテストを 1 本も変えずに緑のまま保って確かめる。
 4. The areka shall 既存の終了経路・ゴースト切替・シェルとバルーンの切替・ネットワーク更新の読み直しの決定論テストを 1 本も落とさない。
