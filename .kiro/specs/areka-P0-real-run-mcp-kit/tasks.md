@@ -94,7 +94,7 @@
   - _Depends: 2.1, 2.3, 4.1_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.9, 1.10, 2.1, 2.5, 3.1, 4.1, 4.4, 8.1, 8.2, 8.3, 9.1_
 
-- [ ] 5. 偽の子を相手にした窓口の統合テスト
+- [x] 5. 偽の子を相手にした窓口の統合テスト
 - [x] 5.1 待ち・閉じ方・止め方・環境を偽の子で確かめる
   - 文字列を待って見つかる・終了コード 3 で子の終わりと終了コード・生き続ける子に短い締切で失敗し子が止まっている・大量の出力でも子が止まらず終わる・子に届いた環境変数と引数・窓に閉じるで利用者と同じ閉じ方と 0・知らせを無視する窓に閉じるで締切 → 止める → 止めたことと終了コードを含む失敗・保険の形に自分で終わるのを待つで保険の自動終了・閉じずに取っ手を捨てると破棄が閉じる知らせで子を終わらせている（目印のファイル）・2 つの走りを同時に立てて置き場と番号が別
   - 常時のテストとして緑になる
@@ -107,7 +107,7 @@
   - _Boundary: fake_mcp_test_
   - _Depends: 2.4, 4.2_
   - _Requirements: 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 9.2, 10.1, 10.5_
-- [ ] 5.3 (P) 証拠の残し方を偽の子で確かめる
+- [x] 5.3 (P) 証拠の残し方を偽の子で確かめる
   - 成功で回の置き場が消える・失敗の途中（`catch_unwind` の中の失敗）で置き場が残り、標準エラーの 1 行が場所を名指す・残した場所が `target\` の下にある
   - 残った置き場は試験の最後に自分で消す
   - 常時のテストとして緑になる
@@ -162,3 +162,4 @@
 - 3.2: `McpChannel::new(port)`・`call(&mut self, child: &mut Child, files: [&Path; 2], name, args_json, waits: Waits)`・`call_until(.., needle, waits)`・`Waits { deadline, poll, call_retry, exit_grace }`（子と出力のファイルは呼び出しごとに run が貸す）。`call_until` の締切切れは途中の呼び出しの締切も含めて panic（最後の答え か「答え無し」を添える）、`call` の締切は `Unreachable`。dead_code の許しは `McpChannel`・`Waits` にあり run が使い始めたら外す。
 - 4.1: 構築は `Run::new(..)`（pub(crate)・launch が呼ぶ）。`Run::new` の `#[allow(dead_code)]`・`impl RunDirs` の `cfg_attr`・i686 の許しは 4.2 で launch が使い始めたら外す。Drop は `Ended` が無いときだけ `stop_quietly`。`wait_for` は `Ended` を記録しない。
 - 4.2: `EnvFilter`（tracing-subscriber 0.3.23 `filter/env/directive.rs:246`）は出所を素の文字列の前方一致で照らす（`::` の境目なし）。`compose_rust_log` の「名指している」も同じ規則（`"areka=debug"` は変えない・`"areka_mcp=debug"` には `,areka::app_exit=info` を足す＝design.md の Testing Strategy を訂正）。`I686Spec` は寿命の引数つき。dead_code の許しはクレートから全部消えた。
+- 5.3: 窓口の標準エラーの 1 行は libtest が捕まえるので、試験の実行ファイル自身を `--exact <名> --nocapture`＋印の環境変数で起こし直して読む。`target\` の下の確かめは `CARGO_MANIFEST_DIR` の 2 つ上の `target	est-roots` に照らす（temp-path-kit と同じ決め方）。
