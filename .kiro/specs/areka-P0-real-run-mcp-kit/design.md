@@ -741,7 +741,7 @@ pub(crate) fn ensure(spec: &I686Spec, env_value: Option<OsString>, i686_target: 
 
 ### Unit Tests（兄弟のファイル）
 
-- `launch_tests.rs`: 外す 4 つの環境変数が組んだ `Command` の外す側に在ること（1.5）・既定の 6 つの値（1.7・4.1）・上書きの順で呼び手の `env` が最後に勝つこと（1.6）・`Launch` の 5 通りの位置の引数と根（1.1・1.4）・`compose_rust_log` の足し方（`"warn,areka::boot_config=info"` には足す・`"info,kanade=trace"`・`"trace"`・`"debug"`・`"areka=debug"`・`"areka_mcp=debug"`・既に `areka::app_exit=trace` を含む値・空の値は変わらない＝4.4・1.6）・相対のパスが絶対になり `\\?\` が付かないこと（1.9）。
+- `launch_tests.rs`: 外す 4 つの環境変数が組んだ `Command` の外す側に在ること（1.5）・既定の 6 つの値（1.7・4.1）・上書きの順で呼び手の `env` が最後に勝つこと（1.6）・`Launch` の 5 通りの位置の引数と根（1.1・1.4）・`compose_rust_log` の足し方（`"warn,areka::boot_config=info"` には足す・`"info,kanade=trace"`・`"trace"`・`"debug"`・`"areka=debug"`（`EnvFilter` は出所を素の文字列の前方一致で照らすので `areka` は `areka_mcp::server` も覆う）・既に `areka::app_exit=trace` を含む値の app_exit・空の値は変わらない＝4.4・1.6。`"areka_mcp=debug"` は `areka::app_exit` を覆わないので `,areka::app_exit=info` を足す＝実装の段の訂正）・相対のパスが絶対になり `\\?\` が付かないこと（1.9）。
 - `run_tests.rs`: `Limits::default()` で `safety_exit < deadline`・中継の答えの上限 30 秒 ＜ `deadline`（1.8）。
 - `output_tests.rs`: 追記されて現れた文字列で終わる・子が先に終わったら `ChildExited`・終わる直前に書かれた文字列は拾う・締切の文に場所と末尾が入る（3.2〜3.5）。
 - `i686_tests.rs`: 探す順と各失敗の文（2.2〜2.4）・改名の先が既に 32bit なら通す（2.6）。

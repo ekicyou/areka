@@ -12,6 +12,7 @@ mod output;
 mod run;
 
 pub use close::{Ended, EndedBy};
+pub use launch::{Launch, RealRun, Staged};
 pub use mcp::{McpError, ToolReply};
 pub use output::ChildExited;
 pub use run::{Limits, Run};

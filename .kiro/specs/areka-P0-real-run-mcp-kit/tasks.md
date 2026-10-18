@@ -75,7 +75,7 @@
   - _Depends: 2.2_
   - _Requirements: 4.2, 4.3, 4.5, 4.6, 4.7, 4.8, 4.9, 9.2, 10.5_
 
-- [ ] 4. 呼び手から見える窓口
+- [x] 4. 呼び手から見える窓口
 - [x] 4.1 走りの取っ手と既定の時間を作る
   - 子・出力の 2 つのパス・MCP の呼び出し・回の置き場・既定の時間・選んだ番号・最初に観測した終わりを持つ
   - 出力を標準出力だけ・標準エラーだけ・両方の並びで、途中でも終わった後でも読める（読めない字は置き換え）
@@ -84,7 +84,7 @@
   - 兄弟のテストで、既定の時間の保険の自動終了 ＜ 締切 と MCP の答えの上限 ＜ 締切 が緑になる
   - _Depends: 2.3, 3.1, 3.2_
   - _Requirements: 1.8, 3.2, 3.3, 3.4, 3.5, 3.6, 4.2, 4.9, 5.1, 5.2, 5.3, 5.4, 5.5_
-- [ ] 4.2 起動の指定と子へ渡す形の組み立てを作り、公開の型を出す
+- [x] 4.2 起動の指定と子へ渡す形の組み立てを作り、公開の型を出す
   - 起動するものの 5 通り（検体の名前・任意のゴースト・検体の写しの根・任意の根・空）と、記憶の置き場・番号・記録の段・保険の時間・締切・任意の環境変数と引数・仲介を揃えない形の指定を受ける
   - 子の環境を「開発者の 4 つの環境変数を外す → 窓口の既定 → 呼び手の論理の指定 → 呼び手の任意の環境変数」の順で組み、起動の約束の綴りはこの 1 か所だけが書く。パスは Windows の形の絶対パスにし `\\?\` を付けない
   - 記録の段は、窓口が頼る 2 つの出所の実効の段が info より絞られているときだけ info を足す（出所か親を名指していれば・全体の段が info 以上なら足さない）
@@ -161,3 +161,4 @@
 - 3.1: `Ended`・`EndedBy` は close.rs が定め lib.rs が再輸出。入口 `close`・`wait_exit`・`stop_quietly` の素の `#[allow(dead_code)]` は run（4.1）が使い始めたら外す。起動直後の子は窓が無く taskkill が 1 で失敗し、送り直しで届く（実測）。送り直しごとに `wait_any` を呼ぶので 1 秒ごとに全文を読み直す（重ければ Tail を持ち越す形に）。
 - 3.2: `McpChannel::new(port)`・`call(&mut self, child: &mut Child, files: [&Path; 2], name, args_json, waits: Waits)`・`call_until(.., needle, waits)`・`Waits { deadline, poll, call_retry, exit_grace }`（子と出力のファイルは呼び出しごとに run が貸す）。`call_until` の締切切れは途中の呼び出しの締切も含めて panic（最後の答え か「答え無し」を添える）、`call` の締切は `Unreachable`。dead_code の許しは `McpChannel`・`Waits` にあり run が使い始めたら外す。
 - 4.1: 構築は `Run::new(..)`（pub(crate)・launch が呼ぶ）。`Run::new` の `#[allow(dead_code)]`・`impl RunDirs` の `cfg_attr`・i686 の許しは 4.2 で launch が使い始めたら外す。Drop は `Ended` が無いときだけ `stop_quietly`。`wait_for` は `Ended` を記録しない。
+- 4.2: `EnvFilter`（tracing-subscriber 0.3.23 `filter/env/directive.rs:246`）は出所を素の文字列の前方一致で照らす（`::` の境目なし）。`compose_rust_log` の「名指している」も同じ規則（`"areka=debug"` は変えない・`"areka_mcp=debug"` には `,areka::app_exit=info` を足す＝design.md の Testing Strategy を訂正）。`I686Spec` は寿命の引数つき。dead_code の許しはクレートから全部消えた。

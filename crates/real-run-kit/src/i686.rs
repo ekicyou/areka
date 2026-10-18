@@ -10,16 +10,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, PoisonError};
 
 /// 揃える 32bit の成果物の定め（ファイル名・元を指す環境変数・建て方のパッケージ）。
-pub(crate) struct I686Spec {
-    pub file_name: &'static str,
-    pub env_var: &'static str,
-    pub package: &'static str,
+pub(crate) struct I686Spec<'a> {
+    pub file_name: &'a str,
+    pub env_var: &'a str,
+    pub package: &'a str,
 }
 
 /// 32bit の仲介の定め。`areka.exe` の隣へ揃える（要件 2.1）。
-// launch が使うまでは試験の外で使われない。
-#[cfg_attr(not(test), allow(dead_code))]
-pub(crate) const HELPER: I686Spec = I686Spec {
+pub(crate) const HELPER: I686Spec<'static> = I686Spec {
     file_name: "shiori-host32-helper.exe",
     env_var: "HOST32_HELPER_EXE",
     package: "shiori-host32-helper",
@@ -43,8 +41,6 @@ pub(crate) fn is_i686_pe(path: &Path) -> bool {
 /// 置き先が 32bit ならそのまま。そうでなければ元を 環境変数 → debug → release の順に
 /// 32bit であるものから選んで写す。環境変数が指す物が無いか 32bit でなければ、黙って
 /// ほかへ移らずに panic する。どこにも無ければ探した場所と建て方を添えて panic する。
-// launch が使うまでは試験の外で使われない。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn ensure(
     spec: &I686Spec,
     env_value: Option<OsString>,

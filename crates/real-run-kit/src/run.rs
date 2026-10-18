@@ -58,8 +58,6 @@ pub struct Run {
 
 impl Run {
     /// 起こした子と回の置き場から取っ手を作る（起こすのは launch）。
-    // launch（4.2）が使い始めるまでは試験の外で使われない。
-    #[allow(dead_code)]
     pub(crate) fn new(child: Child, dirs: RunDirs, port: u16, limits: Limits) -> Run {
         Run {
             child,

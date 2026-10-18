@@ -20,8 +20,6 @@ pub(crate) struct RunDirs {
     sample: Option<SampleRoot>,
 }
 
-// 作る口と根・記憶・検体の読み口は launch（4.2）が使い始めるまでは試験の外で使われない。
-#[cfg_attr(not(test), allow(dead_code))]
 impl RunDirs {
     /// 回の置き場を新しく作り、検体の名前があれば新しい写しを取る（1.2・1.4）。
     ///
