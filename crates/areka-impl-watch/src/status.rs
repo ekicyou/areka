@@ -357,7 +357,6 @@ fn queue(out: &mut Vec<String>, waiting: Vec<String>) {
     );
 }
 
-// 版 2 への切り替えの間は読み込まない（3.2 が新しい机へ書き直して戻す）。
-// #[cfg(test)]
-// #[path = "status_tests.rs"]
-// mod tests;
+#[cfg(test)]
+#[path = "status_tests.rs"]
+mod tests;
