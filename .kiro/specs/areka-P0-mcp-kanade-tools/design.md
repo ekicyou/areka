@@ -528,7 +528,7 @@ pub fn emit(ghost: &str, label: &str, script: &str);
 | 要件 | 1.3, 1.7, 2.3, 2.5, 2.8, 3.6, 3.7, 3.8, 6.2 |
 
 **責務と制約**
-- 振り分けの腕は、`step` へ渡す**前の**状態で `schedule::sstp::accepts(&state)` を呼んで控える（運行表の腕も同じ関数で判断する。`RaiseEvent` の許可の表の照合と同じ形）。
+- 振り分けの腕は、`step` へ渡す**前の**状態で `schedule::sstp::accepts(&state)` を呼んで控える（運行表の腕も同じ関数で判断する。`RaiseEvent` の許可の表の照合と同じ形）。`SstpNotify` の控えは `accepts(&state) && sstp::validate_notify(..).is_ok()` とする（検査を破った知らせは運行表の腕の `warn!`（`sstp_notify_invalid`）1 件だけで `NotAccepted` になり、殻の「受け付けたのに往復が無い」の `warn!` を重ねない＝殻のテスト 3b の「warn 1 件」。タスク生成のレビューで足した）。
 - 一括の処理（`drive_translating`）が `Drive::Stop` で終わったら、どちらの入口も `Failed`。
 - `SstpNotify` は最初の一括の往復の結果（`FirstReply`）から写す。受け付けたのに往復が無いのは構造上起きない（起きたら `warn!` の上で `NotAccepted`）。
 - 返信端の受け手が居ない（待ちの上限で先に答えた）は `debug!`（`event="sstp_reply_dropped"`）だけで運行を続ける（要件 3.8）。
