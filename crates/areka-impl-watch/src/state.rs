@@ -1,15 +1,19 @@
-//! 状態の型（版 1）・空の状態・参加者の状態の列挙。
+//! 状態の型（版 2）・空の状態・参加者の状態の列挙。
 //!
 //! 状態ファイル `state.json` はこの [`State`] 1 つをそのまま書いたもの（参加者・リポジトリごとの
-//! マージの机・負荷テストの机・走っている待ち・最近の出来事が全部ここに在る）。時刻は全部 UNIX 秒。
+//! マージの机・排他テストの机とひとり占めの持ち主・机の申し込みの待ち行列・走っている待ち・
+//! 最近の出来事が全部ここに在る）。実装の机は「作業中」の参加者の集まりで、別の項目は持たない。
+//! 時刻は全部 UNIX 秒。
 //!
 //! 不変（守るのは `plan`）: 1 つの識別は、1 つのリポジトリのマージの待ち行列に高々 1 回、
-//! 負荷テストの待ち行列に高々 1 回。持ち主と待ち行列に同時には居ない。`waits` は
-//! `(id, kind)` で高々 1 件。
+//! 机の申し込みの待ち行列 `requests` に高々 1 回。マージの持ち主と待ち行列に同時には居ない。
+//! `requests` に居る識別は `test`・`sole` を持たない。`sole` が走っている印つきなら `test` も
+//! 同じ識別が持つ。`waits` は `(id, kind)` で高々 1 件。
 //!
 //! 項目には `#[serde(default)]` が付いていて、同じ版の中で項目が増えても古いファイルが読める。
-//! 例外は記録の種類（[`WaitRecord::kind`]・[`Recent::kind`]）で、欠けたときに入れる中立の値が
-//! 無いので、欠けていれば形の合わないファイルとして読まない。
+//! 例外は記録の種類（[`WaitRecord::kind`]・[`Recent::kind`]）と申し込みの机の組
+//! （[`DeskRequest::desks`]）で、欠けたときに入れる中立の値が無いので、欠けていれば形の合わない
+//! ファイルとして読まない。
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -17,7 +21,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 /// この実行ファイルの知っている状態ファイルの版。項目の意味を変える・消すときに上げる。
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 
 /// [`State::recent`] に残す件数の上限。
 pub const RECENT_MAX: usize = 50;
@@ -30,7 +34,12 @@ pub struct State {
     pub participants: BTreeMap<String, Participant>,
     /// リポジトリ名 → マージの机。
     pub merge: BTreeMap<String, MergeDesk>,
-    pub load: LoadDesk,
+    /// 排他テストの机の持ち主。
+    pub test: Option<TestHolder>,
+    /// 実装の机のひとり占めの持ち主。
+    pub sole: Option<SoleHolder>,
+    /// 排他テストの机・ひとり占めの申し込みの待ち行列（1 本）。
+    pub requests: Vec<DeskRequest>,
     pub waits: Vec<WaitRecord>,
     /// 新しい順・最大 [`RECENT_MAX`] 件。足すときは [`State::push_recent`] を通す。
     pub recent: Vec<Recent>,
@@ -151,24 +160,74 @@ pub struct LastMerge {
     pub at: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(default)]
-pub struct LoadDesk {
-    pub holder: Option<LoadHolder>,
-    pub queue: Vec<LoadRequest>,
+/// 申し込みに並べる机の組。空の組は作れない。綴りは `test`・`sole`・`test,sole`。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DeskSet {
+    #[serde(rename = "test")]
+    Test,
+    #[serde(rename = "sole")]
+    Sole,
+    #[serde(rename = "test,sole")]
+    TestSole,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(default)]
-pub struct LoadRequest {
+impl DeskSet {
+    /// 排他テストの机を含むか。
+    pub const fn has_test(self) -> bool {
+        matches!(self, DeskSet::Test | DeskSet::TestSole)
+    }
+
+    /// ひとり占めを含むか。
+    pub const fn has_sole(self) -> bool {
+        matches!(self, DeskSet::Sole | DeskSet::TestSole)
+    }
+
+    /// ASCII の綴り。状態ファイルの綴りと同じで、端末の文に使う。
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            DeskSet::Test => "test",
+            DeskSet::Sole => "sole",
+            DeskSet::TestSole => "test,sole",
+        }
+    }
+
+    /// 2 つの机の有無から組を作る。どちらも無ければ `None`。
+    pub const fn from_parts(test: bool, sole: bool) -> Option<DeskSet> {
+        match (test, sole) {
+            (true, false) => Some(DeskSet::Test),
+            (false, true) => Some(DeskSet::Sole),
+            (true, true) => Some(DeskSet::TestSole),
+            (false, false) => None,
+        }
+    }
+}
+
+/// 机の申し込み 1 つ。`desks` は欠けたら読まない（中立の値が無い）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeskRequest {
+    #[serde(default)]
     pub id: String,
+    pub desks: DeskSet,
+    #[serde(default)]
     pub purpose: String,
+    #[serde(default)]
     pub requested: u64,
 }
 
+/// 排他テストの机の持ち主。
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default)]
-pub struct LoadHolder {
+pub struct TestHolder {
+    pub id: String,
+    pub purpose: String,
+    pub requested: u64,
+    pub granted: u64,
+}
+
+/// 実装の机のひとり占めの持ち主。
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SoleHolder {
     pub id: String,
     pub purpose: String,
     pub requested: u64,
@@ -198,7 +257,7 @@ pub struct WaitRecord {
 pub enum WaitKind {
     Watch,
     Merge,
-    Load,
+    Request,
     Resume,
 }
 
@@ -208,13 +267,13 @@ impl WaitKind {
         match self {
             WaitKind::Watch => "watch",
             WaitKind::Merge => "merge",
-            WaitKind::Load => "load",
+            WaitKind::Request => "request",
             WaitKind::Resume => "resume",
         }
     }
 }
 
-/// 最近の出来事（回収・状態ファイルの復旧・`clear`）。
+/// 最近の出来事（回収・状態ファイルの復旧・`clear`・排他テストの机の空け）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Recent {
     #[serde(default)]
@@ -232,6 +291,9 @@ pub enum RecentKind {
     Reclaimed,
     Recovered,
     Cleared,
+    /// 排他テストの机が空いた。`detail` は訳（`returned`・`stopped`・`reclaimed`・`cancelled`・
+    /// `left`・`merged`）。
+    TestFreed,
 }
 
 impl RecentKind {
@@ -241,6 +303,7 @@ impl RecentKind {
             RecentKind::Reclaimed => "reclaimed",
             RecentKind::Recovered => "recovered",
             RecentKind::Cleared => "cleared",
+            RecentKind::TestFreed => "test-freed",
         }
     }
 }

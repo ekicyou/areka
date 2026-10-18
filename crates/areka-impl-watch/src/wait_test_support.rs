@@ -21,8 +21,8 @@ pub(super) fn merge(id: &str, repo: &str) -> WaitSpec {
     }
 }
 
-pub(super) fn load(id: &str) -> WaitSpec {
-    WaitSpec::Load { id: id.to_owned() }
+pub(super) fn request(id: &str) -> WaitSpec {
+    WaitSpec::Request { id: id.to_owned() }
 }
 
 pub(super) fn resume(id: &str) -> WaitSpec {

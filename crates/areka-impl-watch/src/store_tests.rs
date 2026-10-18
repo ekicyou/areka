@@ -79,7 +79,7 @@ fn unreadable_file_is_set_aside_under_a_time_stamped_name_and_recorded() {
     // JSON でない文・途中で切れた JSON・UTF-8 でないバイト列。
     let broken: [&[u8]; 3] = [
         b"not json",
-        br#"{ "version": 1, "participants": {"#,
+        br#"{ "version": 2, "participants": {"#,
         b"\xff\xfe\x00",
     ];
     for bytes in broken {
@@ -114,8 +114,8 @@ fn unreadable_file_is_set_aside_under_a_time_stamped_name_and_recorded() {
 fn json_of_the_wrong_shape_is_broken_too() {
     // どれも JSON としては読める。版の数字が無いもの（`{}`・文字の版）も「形が合わない」。
     let wrong = [
-        r#"{ "version": 1, "participants": [] }"#,
-        r#"{ "version": 1, "waits": [ { "id": "A" } ] }"#,
+        r#"{ "version": 2, "participants": [] }"#,
+        r#"{ "version": 2, "waits": [ { "id": "A" } ] }"#,
         r#"[ 1, 2 ]"#,
         r#""text""#,
         r#"{}"#,
@@ -168,7 +168,7 @@ fn a_second_break_in_the_same_second_does_not_overwrite_the_first_backup() {
 fn unknown_version_fails_without_reading_or_touching_the_file() {
     // 版の数字が在って、この実行ファイルの知らないもの（0 も含む）。中身の形は見ない。
     let cases = [
-        (r#"{ "version": 2, "participants": {} }"#, 2),
+        (r#"{ "version": 1, "participants": {} }"#, 1),
         (r#"{ "version": 0 }"#, 0),
         (r#"{ "version": 7, "participants": "new shape" }"#, 7),
     ];
@@ -184,7 +184,7 @@ fn unknown_version_fails_without_reading_or_touching_the_file() {
         });
 
         assert!(
-            matches!(got, Err(WatchError::VersionMismatch { found, known: 1 }) if found == version),
+            matches!(got, Err(WatchError::VersionMismatch { found, known: 2 }) if found == version),
             "{text}: {got:?}"
         );
         assert!(!called.get(), "判断は呼ばれない");
@@ -196,6 +196,32 @@ fn unknown_version_fails_without_reading_or_touching_the_file() {
         // 退避も読み物も一時ファイルも作らない。
         assert_eq!(names(&home.dir), ["state.json", "state.lock"]);
     }
+}
+
+#[test]
+fn a_version_1_file_is_refused_byte_for_byte_and_clear_still_goes_through() {
+    // 古い実行ファイルが書いた版 1 の形（負荷テストの机の項目 `load` を持つ）。
+    let root = TempPath::under_target("impl-watch-store");
+    let home = home_in(&root);
+    let old = "{\r\n  \"version\": 1,\r\n  \"participants\": {},\r\n  \"merge\": {},\r\n  \
+               \"load\": { \"holder\": null, \"queue\": [] },\r\n  \"waits\": [],\r\n  \
+               \"recent\": []\r\n}";
+    fs::write(home.state_path(), old).expect("置ける");
+
+    let err = store_in(&root)
+        .with_state(|_, _, _| (unchanged(), ()))
+        .expect_err("版 1 は読まない");
+
+    assert!(
+        err.to_string().contains("file has 1, this exe knows 2"),
+        "{err}"
+    );
+    assert_eq!(fs::read(home.state_path()).expect("読める"), old.as_bytes());
+
+    // `clear` は版を見ずに退避して通る（7.5）。退避したファイルも 1 バイトも変わらない。
+    let backup = store_in(&root).clear().expect("消せる").expect("退避した");
+    assert_eq!(fs::read(&backup).expect("在る"), old.as_bytes());
+    assert_eq!(read_state(&home), State::cleared(T0, &backup));
 }
 
 #[test]

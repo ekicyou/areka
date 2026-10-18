@@ -260,7 +260,7 @@ fn alive_path_is_id_dot_kind_dot_lock_for_every_kind() {
     for (kind, name) in [
         (WaitKind::Watch, "watch"),
         (WaitKind::Merge, "merge"),
-        (WaitKind::Load, "load"),
+        (WaitKind::Request, "request"),
         (WaitKind::Resume, "resume"),
     ] {
         assert_eq!(
