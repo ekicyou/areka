@@ -622,24 +622,21 @@ fn drop_where<T>(items: &mut Vec<T>, mut gone: impl FnMut(&T) -> bool) -> bool {
 }
 
 #[cfg(test)]
-// 版 2 への切り替えの間は使い手のテストを読み込まないので、使われない支えが出る（2.2 で外す）。
-#[allow(dead_code)]
 #[path = "plan_test_support.rs"]
 mod test_support;
 
-// 版 2 への切り替えの間は読み込まない（2.2 が新しい机へ書き直して戻す）。
-// #[cfg(test)]
-// #[path = "plan_desk_tests.rs"]
-// mod desk_tests;
-//
-// #[cfg(test)]
-// #[path = "plan_stop_tests.rs"]
-// mod stop_tests;
-//
-// #[cfg(test)]
-// #[path = "plan_reclaim_tests.rs"]
-// mod reclaim_tests;
-//
-// #[cfg(test)]
-// #[path = "plan_clear_tests.rs"]
-// mod clear_tests;
+#[cfg(test)]
+#[path = "plan_desk_tests.rs"]
+mod desk_tests;
+
+#[cfg(test)]
+#[path = "plan_stop_tests.rs"]
+mod stop_tests;
+
+#[cfg(test)]
+#[path = "plan_reclaim_tests.rs"]
+mod reclaim_tests;
+
+#[cfg(test)]
+#[path = "plan_clear_tests.rs"]
+mod clear_tests;

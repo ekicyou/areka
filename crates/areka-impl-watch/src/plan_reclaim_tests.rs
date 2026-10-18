@@ -5,11 +5,13 @@
 
 use super::test_support::{
     FakePresence, PID, PURPOSE, REPO, T0, applied, ask_to_stop, hold_load, hold_merge,
-    hold_running_load, queue_load, queue_merge, run, state_with, stop_for, wait_record,
+    hold_running_load, hold_test, queue_load, queue_merge, queue_request, run, state_with,
+    stop_for, test_freed, test_freed_record, wait_record,
 };
 use super::{Applied, Command, Event, apply};
 use crate::state::{
-    LoadDesk, LoadHolder, MergeDesk, MergeHolder, Recent, RecentKind, State, WaitKind, WaitRecord,
+    DeskSet, MergeDesk, MergeHolder, Recent, RecentKind, SoleHolder, State, TestHolder, WaitKind,
+    WaitRecord,
 };
 
 /// 周期の一回りを 1 回呼ぶ。
@@ -97,19 +99,21 @@ fn ids(state: &State) -> Vec<&str> {
 
 #[test]
 fn a_merge_holder_without_a_watch_is_reclaimed_and_the_next_holder_comes_in_the_same_call() {
-    // A は areka の机を持ち、C の持つ pasta の机を待ち、その待ちを走らせている。B は areka を待つ。
-    // A の見張りだけが居ない（マージの待ちのプロセスは生きている＝待ちは居る印にならない）。
+    // A は areka の机を持ったまま、C の持つ排他テストの机を申し込み、その待ちを走らせている。
+    // B は areka を待つ。A の見張りだけが居ない（申し込みの待ちのプロセスは生きている＝待ちは
+    // 居る印にならない）。
     let mut state = state_with(&["A", "B", "C"]);
     hold_merge(&mut state, "areka", "A");
     queue_merge(&mut state, "areka", "B", T0 + 1);
-    hold_merge(&mut state, "pasta", "C");
-    queue_merge(&mut state, "pasta", "A", T0 + 2);
-    state.waits.push(wait_record("A", WaitKind::Merge));
+    hold_test(&mut state, "C");
+    queue_request(&mut state, "A", DeskSet::Test, T0 + 2);
+    state.waits.push(wait_record("A", WaitKind::Request));
 
     let got = tick(&mut state, Some("B"), T0 + 10, &no_watch(&["A"]));
 
-    // A の机・申し込み・待ちの記録（見張りもマージの待ちも）・参加者の記録が消え、回収が
-    // 「最近の出来事」に識別・理由・時刻つきで残る。空いた机の次の番は同じ呼び出しで B に来る。
+    // A の机・申し込み（マージの机も排他テストの机の申し込みも）・待ちの記録（見張りも申し込みの
+    // 待ちも）・参加者の記録が消え、回収が「最近の出来事」に識別・理由・時刻つきで残る。空いた机の
+    // 次の番は同じ呼び出しで B に来る（要件 6.1）。
     let mut expected = state_with(&["B", "C"]);
     expected.merge.insert(
         "areka".to_owned(),
@@ -118,7 +122,7 @@ fn a_merge_holder_without_a_watch_is_reclaimed_and_the_next_holder_comes_in_the_
             ..MergeDesk::default()
         },
     );
-    hold_merge(&mut expected, "pasta", "C");
+    hold_test(&mut expected, "C");
     expected.recent = vec![reclaim_record("A", T0 + 10)];
     assert_eq!(state, expected);
     let granted = Event::MergeGranted {
@@ -130,7 +134,8 @@ fn a_merge_holder_without_a_watch_is_reclaimed_and_the_next_holder_comes_in_the_
 
 #[test]
 fn a_load_holder_without_a_watch_is_reclaimed_and_the_others_go_on_in_the_same_call() {
-    // A が負荷テストの机を持ち、B はそのために止まっている。C はマージを待っている。
+    // A が負荷テスト（排他テストの机とひとり占め）を持ち、B はそのために止まっている。C はマージを
+    // 待っている。
     let mut state = state_with(&["A", "B", "C"]);
     hold_load(&mut state, "A", &["B"]);
     stop_for(&mut state, "B", "A");
@@ -138,7 +143,8 @@ fn a_load_holder_without_a_watch_is_reclaimed_and_the_others_go_on_in_the_same_c
 
     let got = tick(&mut state, Some("C"), T0 + 10, &no_watch(&["A"]));
 
-    // 負荷テストが無くなったので、同じ呼び出しで B が再開し、C にマージの番が来る。
+    // 2 つの机が外れ、排他テストの机は訳 `reclaimed` で空く。負荷テストが無くなったので、同じ
+    // 呼び出しで B が再開し、C にマージの番が来る（要件 6.1）。
     let mut expected = state_with(&["B", "C"]);
     let b = expected.participants.get_mut("B").expect("B が居る");
     b.since = T0 + 10;
@@ -150,17 +156,26 @@ fn a_load_holder_without_a_watch_is_reclaimed_and_the_others_go_on_in_the_same_c
             ..MergeDesk::default()
         },
     );
-    expected.recent = vec![reclaim_record("A", T0 + 10)];
+    expected.recent = vec![
+        reclaim_record("A", T0 + 10),
+        test_freed_record("A", "reclaimed", T0 + 10),
+    ];
     assert_eq!(state, expected);
     let resumed = Event::Resumed {
         id: "B".to_owned(),
-        why: "no-load",
+        why: "no-sole",
     };
     let granted = Event::MergeGranted {
         repo: REPO.to_owned(),
         id: "C".to_owned(),
     };
-    assert_eq!(got, applied(true, vec![reclaimed("A"), resumed, granted]));
+    let events = vec![
+        test_freed("A", "reclaimed"),
+        reclaimed("A"),
+        resumed,
+        granted,
+    ];
+    assert_eq!(got, applied(true, events));
 }
 
 #[test]
@@ -174,22 +189,25 @@ fn reclaiming_the_merge_holder_lets_the_waiting_load_test_take_its_desk_in_the_s
     let got = tick(&mut state, Some("C"), T0 + 10, &no_watch(&["A"]));
 
     assert_eq!(ids(&state), ["B", "C"]);
-    assert_eq!(
-        state.load,
-        LoadDesk {
-            holder: Some(LoadHolder {
-                id: "C".to_owned(),
-                purpose: PURPOSE.to_owned(),
-                requested: T0 + 1,
-                granted: T0 + 10,
-                running: false,
-                stopped: vec!["B".to_owned()],
-            }),
-            queue: vec![],
-        }
-    );
-    let granted = Event::LoadGranted {
+    let test = TestHolder {
         id: "C".to_owned(),
+        purpose: PURPOSE.to_owned(),
+        requested: T0 + 1,
+        granted: T0 + 10,
+    };
+    let sole = SoleHolder {
+        id: "C".to_owned(),
+        purpose: PURPOSE.to_owned(),
+        requested: T0 + 1,
+        granted: T0 + 10,
+        running: false,
+        stopped: vec!["B".to_owned()],
+    };
+    assert_eq!((state.test, state.sole), (Some(test), Some(sole)));
+    assert!(state.requests.is_empty());
+    let granted = Event::DeskGranted {
+        id: "C".to_owned(),
+        desks: DeskSet::TestSole,
         stopped: vec!["B".to_owned()],
     };
     assert_eq!(got, applied(true, vec![reclaimed("A"), granted]));
@@ -400,28 +418,33 @@ fn registering_a_wait_puts_its_record_and_the_same_kind_replaces_it() {
 #[test]
 fn wait_records_of_one_identity_and_different_kinds_stand_side_by_side() {
     let mut state = state_with(&["A", "B"]);
-    for kind in [WaitKind::Merge, WaitKind::Load, WaitKind::Resume] {
+    for kind in [WaitKind::Merge, WaitKind::Request, WaitKind::Resume] {
         run(&mut state, &register("A", kind, PID, T0), Some("A"), T0);
         run(&mut state, &register("B", kind, PID, T0), Some("B"), T0);
     }
     let all = [
         WaitKind::Watch,
         WaitKind::Merge,
-        WaitKind::Load,
+        WaitKind::Request,
         WaitKind::Resume,
     ];
     assert_eq!(kinds(&state, "A"), all);
     assert_eq!(kinds(&state, "B"), all);
 
     // 抹消も、その識別の、その種類の記録だけ。
-    let got = run(&mut state, &unregister("A", WaitKind::Load), Some("A"), T0);
+    let got = run(
+        &mut state,
+        &unregister("A", WaitKind::Request),
+        Some("A"),
+        T0,
+    );
 
     assert_eq!(
         kinds(&state, "A"),
         [WaitKind::Watch, WaitKind::Merge, WaitKind::Resume]
     );
     assert_eq!(kinds(&state, "B"), all);
-    let removed = wait_removed("A", WaitKind::Load, "ended");
+    let removed = wait_removed("A", WaitKind::Request, "ended");
     assert_eq!(got, applied(true, vec![removed]));
 }
 
@@ -508,7 +531,7 @@ fn a_watch_that_removes_its_own_record_marks_its_working_participant_as_awaiting
 
 #[test]
 fn a_wait_of_another_kind_that_removes_its_record_marks_nobody() {
-    for kind in [WaitKind::Merge, WaitKind::Load, WaitKind::Resume] {
+    for kind in [WaitKind::Merge, WaitKind::Request, WaitKind::Resume] {
         let mut state = state_with(&["A", "B"]);
         state.waits.push(wait_record("A", kind));
 

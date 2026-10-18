@@ -2,8 +2,8 @@
 
 use super::{Applied, Command, Event, Presence, Verdict, apply};
 use crate::state::{
-    DeskRequest, DeskSet, MergeHolder, MergeRequest, Participant, ParticipantStatus, SoleHolder,
-    State, StopReason, TestHolder, WaitKind, WaitRecord, WatchInfo,
+    DeskRequest, DeskSet, MergeHolder, MergeRequest, Participant, ParticipantStatus, Recent,
+    RecentKind, SoleHolder, State, StopReason, TestHolder, WaitKind, WaitRecord, WatchInfo,
 };
 
 /// テストの「いま」の起点（UNIX 秒）。後の時刻は `T0 + n` と書く。
@@ -134,6 +134,18 @@ pub(super) fn hold_sole(state: &mut State, id: &str, stopped: &[&str]) {
     });
 }
 
+/// 負荷テスト（排他テストの机とひとり占めの 1 組）の番が来た持ち主にする（走っている印なし）。
+/// `stopped` は番が来たときに止まっていた識別。
+pub(super) fn hold_load(state: &mut State, id: &str, stopped: &[&str]) {
+    hold_test(state, id);
+    hold_sole(state, id, stopped);
+}
+
+/// 机の申し込みの待ち行列の末尾へ、負荷テスト（`test,sole`）の申し込みを足す。
+pub(super) fn queue_load(state: &mut State, id: &str, requested: u64) {
+    queue_request(state, id, DeskSet::TestSole, requested);
+}
+
 /// 「すでに走っている負荷テスト」の持ち主にする（排他テストの机とひとり占めの両方・走っている
 /// 印つき＝誰にも停止要請が出ない）。
 pub(super) fn hold_running_load(state: &mut State, id: &str) {
@@ -177,6 +189,16 @@ pub(super) fn give_back(id: &str, desks: Option<DeskSet>) -> Command {
     }
 }
 
+/// 負荷テスト（`test,sole`）の申し込み。
+pub(super) fn load_test(id: &str) -> Command {
+    request(id, DeskSet::TestSole)
+}
+
+/// 負荷テストが済んだ: 名指しせずに全部を返す。
+pub(super) fn load_done(id: &str) -> Command {
+    give_back(id, None)
+}
+
 pub(super) fn stopped(id: &str) -> Command {
     Command::Stopped { id: id.to_owned() }
 }
@@ -191,6 +213,24 @@ pub(super) fn watch_registered(id: &str) -> Event {
     Event::WaitRegistered {
         id: id.to_owned(),
         kind: WaitKind::Watch,
+    }
+}
+
+/// 排他テストの机が空いた出来事。`why` は空けた訳の綴り。
+pub(super) fn test_freed(id: &str, why: &'static str) -> Event {
+    Event::TestFreed {
+        id: id.to_owned(),
+        why,
+    }
+}
+
+/// 排他テストの机が空いた「最近の出来事」1 件。
+pub(super) fn test_freed_record(id: &str, why: &str, at: u64) -> Recent {
+    Recent {
+        at,
+        kind: RecentKind::TestFreed,
+        id: Some(id.to_owned()),
+        detail: why.to_owned(),
     }
 }
 
