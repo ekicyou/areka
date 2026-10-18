@@ -52,7 +52,7 @@
 - **Adjacent expectations**:
   - `areka-P0-impl-watch-test-desk`（同じウェーブ C9・`tools/test-all.ps1` の持ち物）: この spec は同 spec が着地するまで `tools/test-all.ps1` に触らず、着地を取り込んでから取り寄せの段をつなぐ。この spec の着地（squash マージ）も同 spec の着地の後にする（要件 6.2・6.3）。同じウェーブの約束「つなぐのは ① の着地の後」の内で、同時に触らない。
   - ウェーブ C9 のほかの兄弟: この spec が着地した後に完了する兄弟は、全体テストの入口が取り寄せの段を回すので、取り寄せの段を手で回さなくても全体テストが通る（通信できる場所なら）。
-  - `areka-P0-pasta-in-windows-verification`（後続・この spec の後）: この spec が作る URL の行と、登記した「窓際のぱすたさん」を使って実機で確かめる。「窓際のぱすたさん」の行を足すのはこの spec（討議の議題 3）なので、同 spec の brief（Scope の In の「登記」）と `roadmap.md` の「検体の登記表の順を改めた」（URL の行を足すのは同 spec、の記述と登記の数の読み替え）を、この spec の完了のときに合わせて直す。
+  - `areka-P0-pasta-in-windows-verification`（後続・この spec の後）: この spec が作る URL の行と、登記した「窓際のぱすたさん」を使って実機で確かめる。「窓際のぱすたさん」の行を足すのはこの spec（討議の議題 3）なので、同 spec の brief（Scope の In の「登記」）と `roadmap.md` の「検体の登記表の順を改めた」（URL の行を足すのは同 spec、の記述と登記の数の読み替え）を、この spec の完了のときに合わせて直す。棚卸セッションの了承（2026-10-18）で、完了のときに直す所に次の 3 つを加える: ⑴ `roadmap.md` の直列の列「棚卸㉗で列に足したこと」の検体の登記表の順を「この spec（URL の欄＋ぱすたの行・8 → 9）→ `dot-sakura-specimen`（9 → 10）→ `default-balloon-selfmade`（10 → 11）」にし、`pasta-in-windows-verification` は登記表に触らない形にする ⑵ `pasta-in-windows-verification` の brief の「規模」と「触るファイル」から登記の分を外す ⑶ `roadmap.md` の C9 の行の ⑤ の注（`pasta-in-windows-verification` → … の並び）。
   - `areka-P0-dot-sakura-specimen`・`areka-P0-default-balloon-selfmade`（行き先待ち）: 働きの依存は無い。登記表・数のテスト・検体の README が重なるので同じウェーブに置かない。`dot-sakura-specimen` を書庫で置くか URL の行で置くかは同 spec の議題。
   - `areka-P0-test-roots-under-target`: 検体・一時のフォルダはワークツリーの `target\` の下だけ、の決まり。取り寄せた書庫の置き場はこの決まりに従う（議題 2 で例外にしない限り）。
   - 完了 `areka-P0-nar-install`: 登記表と窓口を作り「検体は配布形のまま保管する」と決めた。この spec は URL の行の検体について、その保管の決めごとを改める。
