@@ -41,7 +41,7 @@
   - seriko の既存テストが緑で、外のクレートから `areka_seriko::BIND_COMMAND` が引ける
   - _Boundary: Seriko_
   - _Requirements: 13.5_
-- [ ] 2.4 (P) インストールの窓口が忙しいかを外から読める口を足す
+- [x] 2.4 (P) インストールの窓口が忙しいかを外から読める口を足す
   - `install::desk::is_busy`（実行中・待ち行列・上書きの 3 条件）を足す
   - `install/desk_tests.rs` で 3 条件それぞれが真になり、どれも無ければ偽になる
   - _Boundary: InstallDesk_
@@ -179,3 +179,6 @@
 ## 完了の手順に回す要件
 
 - 10.4（`makoto-reload-directives` の brief への申し送り）は `/kiro-complete` の手順で行う（コードの作業でないためタスクにしない）。
+
+## Implementation Notes
+- 2.4: `install::desk::is_busy` に呼び手が来るまでの `#[allow(dead_code)]` を付けた。6.1 で呼び手を足すときに外す。
