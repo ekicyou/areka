@@ -38,6 +38,8 @@ pub mod online;
 #[allow(dead_code)]
 pub(crate) mod schedule;
 pub mod shiori;
+// SSTP の入口の外向けの型と検査（MCP の側と送出の檻が使う正本・std だけ）。
+pub mod sstp;
 pub mod status;
 pub mod talk;
 pub mod translate;
