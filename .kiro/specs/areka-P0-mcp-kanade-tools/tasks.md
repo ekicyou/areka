@@ -2,7 +2,7 @@
 
 > 設計の正本は [design.md](design.md)。コードの名前・ファイルの置き場はそちらに従う。同じウェーブ（C9）の約束で、kanade の `src/change.rs`・`schedule/boot.rs`・`schedule/steady.rs`・`schedule/close.rs`・`schedule/change.rs`、`crates/areka-ghost/src/runtime.rs`・`dispatcher.rs`、`crates/areka-mcp/**`、`crates/areka/src/main.rs`、`crates/areka/src/mcp/mod.rs`・`resolve.rs`・`get_status.rs`、`crates/areka-talk/**`、`doc/ssp-mcp/areka-tools.md`、実走の 3 本のテストには触らない。どのファイルも 1,000 行未満に保ち、決定論テストは兄弟のファイルに置く。
 
-- [ ] 1. 先に割る: 上限の近いファイルを振る舞いを変えずに分ける
+- [x] 1. 先に割る: 上限の近いファイルを振る舞いを変えずに分ける
 - [x] 1.1 運行表の型の塊を兄弟のファイルへ移し、同じ名前で見せる
   - 入力・相・流れているトーク・選択肢の控え・運行状態・終了の原因・行動の型を運行表の型の兄弟ファイルへ移し、運行表の本体からは同じ名前で再び見せる
   - 起動の手順のファイル（`schedule/boot.rs`）と子のモジュールの import・テストの `use super::*` が 1 字も変わらずに解ける
@@ -19,7 +19,7 @@
   - 完了の姿: kanade の全テストが緑で、殻のファイルの行数が約 95 行減る
   - _Boundary: kanade 殻（actor.rs・actor_stop.rs・lib.rs の宣言 1 行）_
   - _Requirements: 6.3_
-- [ ] 1.4 「台本 1 つを新しいトークとして始める」共通の手を運行表の本体へ移す
+- [x] 1.4 「台本 1 つを新しいトークとして始める」共通の手を運行表の本体へ移す
   - 選択肢の台本のファイルにある定義を、選択肢の帳簿の掃除の手と並べて運行表の本体へ移し、元の呼び出しは移した先を呼ぶ
   - 完了の姿: 振る舞いが同じで、kanade の全テストが緑（採番と枠の差し替えの既存テストが無変更で通る）
   - _Requirements: 6.3_

@@ -20,14 +20,12 @@
 
 use crate::msg::{CloseReason, KanadeConfig, ShioriFault, ShioriOutcome};
 use crate::status::ExecutionStateUpdate;
-use crate::talk::{TalkDone, TalkEndReason, TalkId};
+use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 // テストの `use super::*` が引く名前（型の塊を `types.rs` へ出す前と同じ顔ぶれを保つ）。
 #[cfg(test)]
 use crate::msg::{ChoiceInput, MonotonicMs, ShioriCall};
 #[cfg(test)]
 use crate::status::ExecutionSnapshot;
-#[cfg(test)]
-use crate::talk::StartTalk;
 
 /// アンカーの選択の受理と 2 段の送出（帳簿なし・段の記憶だけ）。
 pub(crate) mod anchor;
@@ -96,6 +94,26 @@ pub(super) fn clear_choice_ledger(state: &mut State, at: &'static str) {
             "選択帳簿を消去——帳簿の対象と現行トークの食い違いを残さない（C4 規則 7）"
         );
     }
+}
+
+/// 台本 1 つを新しいトークとして始める（採番・枠の差し替え・再生開始の行動を返す）。
+///
+/// 選択肢の帳簿・`choice_prev_talk`・解決・記録は呼び手の仕事で、ここでは触らない。
+pub(in crate::schedule) fn start_talk(
+    state: &mut State,
+    origin: &'static str,
+    script: String,
+) -> (TalkId, Action) {
+    let talk_id = TalkId(state.next_talk_id);
+    state.next_talk_id += 1;
+    state.phase = Phase::Steady {
+        talk: Some(ActiveTalk {
+            talk_id,
+            origin,
+            script: script.clone(),
+        }),
+    };
+    (talk_id, Action::StartTalk(StartTalk::new(talk_id, script)))
 }
 
 /// 唯一の遷移入口。現在の [`State`] と [`Input`] から次の [`State`] と副作用指示
