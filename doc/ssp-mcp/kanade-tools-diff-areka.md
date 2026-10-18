@@ -2,7 +2,7 @@
 
 台本を流して見る `sakurascript` と、イベントを起こして反応を見る `raise_event` について、SSP と areka で答えが違う場合、または SSP の答えをまだ測っていない場合を行ごとに並べる。成功の本文（`OK`・`OK:the ghost returned no script.`・`OK:the ghost returned a script and it is being played.` と `Script: <返った台本>` の 2 行）、再生中や選択肢の最中に届いた台本が今の台本を止めて新しい台本を再生すること、空の `script` の `NG:script is empty` のように SSP と同じものは載せない。ただし、SSP と同じでも違うと思われやすいものは「SSP と同じ（実測）」として載せる。輸送の差は [transport-diff-areka.md](transport-diff-areka.md)、script 種別のログの取り決めは [log-convention.md](log-convention.md) にある。
 
-- **SSP の印**: 「実測」は SSP で測ったもの（2026-10-18 に開発者の机の SSP へ SSP の MCP で当てた。測った結果の正本は `.kiro/specs/areka-P0-mcp-kanade-tools/requirements.md` の「SSP で測ったこと」の節）。「未実測」は SSP で測っていないもの。「対応物なし」は SSP にその仕組みが無いもの
+- **SSP の印**: 「実測」は SSP で測ったもの（2026-10-18 に開発者の机の SSP へ SSP の MCP で当てた。測った結果の正本は `.kiro/specs/completed/areka-P0-mcp-kanade-tools/requirements.md` の「SSP で測ったこと」の節）。「未実測」は SSP で測っていないもの。「対応物なし」は SSP にその仕組みが無いもの
 - **areka の根拠**: 答えを返す処理は `crates/areka/src/mcp/sakurascript.rs` と `crates/areka/src/mcp/raise_event.rs` の `handle`。外からの台本とイベントを受け付けるかの判断は `crates/areka-kanade/src/schedule/sstp.rs` の `accepts`、`raise_event` の引数の検査は `crates/areka-kanade/src/sstp.rs` の `validate_notify`。`OnTranslate` の Reference1 の値は `crates/areka-kanade/src/schedule/events.rs` の `REF1_SSTP_SEND_OWNED`、script 種別のログの表示の語は `crates/areka-kanade/src/schedule/script_log.rs`
 
 | 項目 | areka | SSP | SSP の印 |
