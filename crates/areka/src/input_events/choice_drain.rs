@@ -149,12 +149,12 @@ pub(crate) fn drain_choice_selections(world: &mut World) {
 /// dispatcher 投函端を NonSend 挿入する（design C1 Contracts・donor `wire_mouse_input` 同型）。
 /// drain 排他システムの登録は [`register_choice_drain`] が行う。
 ///
-/// `ghost_session::boot_ghost` の `wire_balloon_choice` 呼出**直後**から `wire_mouse_input` と
-/// 同型にゴーストごとに**同期**（schedule 実行外の World 変更）で呼ばれる（状態の載せ替え＝n 回。
+/// `ghost_session_runtime::rewire_runtime_consumers` の末尾（`ghost_session::boot_ghost` の結線で
+/// `wire_balloon_choice` の直前）から `wire_mouse_input` と同型にゴーストごとに**同期**（schedule 実行外の World 変更）で呼ばれる（状態の載せ替え＝n 回。
 /// 系の登録は `ghost_session::register_systems` からプロセスに 1 回）。同期呼出ゆえ実行中
 /// スケジュールを触らない。
 ///
-/// Precondition: `wire_balloon_choice` 済み（[`ChoiceSelectionInbox`] 存在）。
+/// Precondition: drain の時点で `wire_balloon_choice` 済み（[`ChoiceSelectionInbox`] 存在・挿入どうしは互いを読まない）。
 /// Postcondition: 以降のフレームで受信済み通知は全件送出試行済み・失敗は warn 記録。
 pub(crate) fn wire_choice_drain(world: &mut World, dispatcher: Sender<DispatcherMsg>) {
     world.insert_non_send(ChoiceForwarder { dispatcher });

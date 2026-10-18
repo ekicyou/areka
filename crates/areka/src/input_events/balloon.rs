@@ -443,7 +443,7 @@ pub(crate) fn attach_balloon_pointer_handlers(world: &mut World) {
 /// **同期**（schedule 実行外）で呼ばれる（状態の載せ替え＝n 回。系は登録しない＝離脱の系の登録は
 /// `ghost_session::register_systems` からプロセスに 1 回）。同期呼出ゆえ実行中スケジュールを触らない。
 /// 発行シンク `ChoiceSelectionInbox` の受信は W6 `choice-select-events` が着地済みで、送り口は
-/// `ghost_session::boot_ghost` の `wire_choice_drain` が置き、毎フレームの drain の系は
+/// `ghost_session_runtime::rewire_runtime_consumers` の `wire_choice_drain` が置き、毎フレームの drain の系は
 /// `register_choice_drain`（`register_systems` から 1 回）が載せる（5.3 の seam は消費済み）。
 pub(crate) fn wire_balloon_choice(world: &mut World) {
     let (tx, rx) = channel::<ChoiceSelection>();
