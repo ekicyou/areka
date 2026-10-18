@@ -288,7 +288,7 @@ pub enum SampleSource {
     Vendored,
     /// 書庫を取り寄せの段が取り寄せる行（URL の行）。
     Fetched {
-        /// 取り寄せる URL（`https://`・コミットやタグを固定したもの）。
+        /// 取り寄せる URL（`https://`・ログインなしに取れるもの）。中身が差し替わったら登記の大きさと SHA-256 を直す。
         url: &'static str,
         /// 書庫の SHA-256（小文字 16 進 64 桁）。
         sha256: &'static str,
@@ -338,13 +338,14 @@ Sample {
     kind: SampleKind::Ghost,
     balloons: &[],
     source: SampleSource::Fetched {
-        url: "https://raw.githubusercontent.com/ekicyou/ghost_dev/e1e05590dbed0a4a4b1afadf55ca896f36d82c14/release/pasta-in-windows/pasta-in-windows.nar",
-        sha256: "04a8e1c19b534b38e39d24f93ac7735c74e186249965b3a0876a893cb41fe35b",
-        size: 3_025_198,
+        url: "https://ekicyou.github.io/ghost_dev/pasta-in-windows/pasta-in-windows.nar",
+        sha256: "816d7183ab7c92fe1d601e386d5d60f9ca9f4238d265143a1b96915aa5bfb020",
+        size: 3_042_433,
     },
 },
 ```
 
+- URL・大きさ・SHA-256 は実装の段の裁定 1（requirements.md・2026-10-18）の値。ghost_dev は非公開なので、コミットを固定した raw の URL は未ログインで 404 になる。公開されている GitHub Pages の URL は中身がぱすたのリリースのたびに差し替わるので、そのたびにこの 2 つの値を直す（直すまでのあいだは取り寄せの段が「合わない」で失敗し、窓口は使わない）。
 - `name`・`kind`・`balloons` は最初のタスクで実物の `install.txt` から確かめて決める（`type`・`directory`・`balloon.directory`／`balloonN.directory`）。上の値は `pasta-in-windows-verification` の brief の調べ（`install.txt` に `balloon.directory` が無い・縦書きのバルーンはゴーストのフォルダの直下）からの見込み。`directory` が違えば `name` をそれに合わせる（5.2 が正）。
 
 #### Resolver（`crates/sample-ghost-kit/src/devroot.rs` の `sample_nar`）
@@ -503,12 +504,12 @@ pub(crate) fn sha256_hex(bytes: &[u8]) -> String;
 要件 4.3・5.5・6.4・7.1〜7.6 の書き場所:
 
 - README 先頭: 2 つの形（書庫を置く行／URL の行）の説明と、表に「置き方」の列（または URL の行の別の表）。ぱすたの行（種別・中のファイル数・大きさ・置き方＝URL）。「展開した木は追跡しない」は今のまま。
-- README「`pasta-in-windows`（URL の行）の出どころ」の節（5.5・7.2）: ghost_dev・固定したコミット `e1e05590…`・URL・SHA-256・大きさ・書庫を入れない理由（寄贈のシェルの絵の置き直しが許されるか分からない）・ghost_dev はその履歴を書き換えない（固定したコミットを消さない）と開発者が約束したこと（2026-10-18）。
+- README「`pasta-in-windows`（URL の行）の出どころ」の節（5.5・7.2）: ghost_dev の GitHub Pages の公開 URL・SHA-256・大きさ（2026-10-18 の版）・書庫を入れない理由（寄贈のシェルの絵の置き直しが許されるか分からない）・中身はぱすたのリリースのたびに同じ URL のまま差し替わり、そのたびに登記の大きさと SHA-256 を直す運用（開発者の裁定・2026-10-18）と、直すまでのあいだは取り寄せの段が「合わない」で失敗すること。
 - README「取り寄せの段」の節（7.4・6.4）: コマンド `pwsh -NoProfile -File <ワークツリーの絶対パス>\tools\sample-fetch.ps1`、ワークツリーごとに 1 回（2 回目からは通信しない）、全体テストの入口を通さずにテストを回すときは先に 1 回回すこと、置き場 `<ワークツリー>\target\nar-samples\fetched\<名前>.nar`（`CARGO_TARGET_DIR` を設定しているならその下の `nar-samples\fetched\`）、失敗したときの直し方（回し直す・手で置く口）、`cargo clean` で消えたら取り寄せ直すこと。
 - README「手で置く口」の節（4.3）: 置き場のパス・ファイル名 `<名前>.nar`・確かめ方（取り寄せの段を回す＝合えば通信せずに `present`、または `Get-FileHash -Algorithm SHA256` で README の値と比べる）。
-- README「検体を 1 本足す手順」に「URL の行で足す」手順（7.1）と、取り寄せ先に求める条件（7.2: 置いた書庫を消さない・同じ URL のバイト列を書き換えない＝コミットやタグを固定した URL）。
-- README `claudia.nar` の節の「URL とハッシュだけ記録して…形にしないのはこのためである」を、「上流の消えるリリースには頼らない。消えない固定した取り寄せ先からなら URL の行を使ってよい（`pasta-in-windows`）」に書き直す（7.3）。
-- `tech.md`「検体は配布形 `.nar` のまま保管し…」の項を、今の行（`vendors/sample_ghost/*.nar`）と URL の行（固定した取り寄せ先・SHA-256・大きさ・`target\` の下の置き場・取り寄せの段）の 2 つの形に書き直す（7.5）。
+- README「検体を 1 本足す手順」に「URL の行で足す」手順（7.1）と、取り寄せ先に求める条件（7.2: ログインなしに取れる `https://`・置いた書庫を消さない・中身が差し替わるなら登記を追従できる＝開発者が管理する取り寄せ先）。
+- README `claudia.nar` の節の「URL とハッシュだけ記録して…形にしないのはこのためである」を、「上流の消えるリリースには頼らない。開発者が管理していて登記を追従できる取り寄せ先からなら URL の行を使ってよい（`pasta-in-windows`）」に書き直す（7.3）。
+- `tech.md`「検体は配布形 `.nar` のまま保管し…」の項を、今の行（`vendors/sample_ghost/*.nar`）と URL の行（開発者が管理する取り寄せ先・SHA-256・大きさ・`target\` の下の置き場・取り寄せの段・差し替わったら登記を直す）の 2 つの形に書き直す（7.5）。
 - `structure.md` の Sample Ghost Kit の節（Purpose・Pattern「2 手で終わる」・Modules に `fetched.rs`・`sha256.rs`）と、最上位の `tools/` の列挙に `sample-fetch.ps1` を足す（7.6）。
 - crate の doc（`lib.rs` の「検体を足すとき」「使い方」・`SampleRoot::acquire` の doc）も 2 つの形に合わせる（文書の古び止め・7.6 の続き）。
 

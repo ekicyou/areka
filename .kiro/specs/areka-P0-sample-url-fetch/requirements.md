@@ -20,7 +20,7 @@
 - テストは検体の窓口 `sample-ghost-kit` の登記表 `SAMPLES`（`crates/sample-ghost-kit/src/lib.rs`。行は「名前・種別・同梱のバルーン」だけ）越しに `SampleRoot::acquire("<名>")` で引く。書庫の在処は `devroot::nar_dir()` が `vendors/sample_ghost` を直に指して決める。窓口は書庫を `<target>/nar-samples/` の下へ展開し、原本に刻印（長さと CRC）を付けて陳腐化を見る。登記の数は `lib_tests.rs` が 8 と書いている。登記表の全部の行を引く判定（`every_registered_sample_lands_where_its_registry_row_says` ほか）が在る。
 - 実機の手順は `nar-sample-path`（`crates/sample-ghost-kit/src/bin/nar-sample-path.rs`）で検体の絶対パスを引く（未登録の名前は終了コード 2）。
 - 窓口は通信の依存を持たない。`tools/` に取り寄せの段は無い。
-- 「窓際のぱすたさん」の書庫は ghost_dev の git に入っている。コミットを固定した URL `https://raw.githubusercontent.com/ekicyou/ghost_dev/e1e05590dbed0a4a4b1afadf55ca896f36d82c14/release/pasta-in-windows/pasta-in-windows.nar`（3,025,198 バイト・sha256 `04a8e1c19b534b38e39d24f93ac7735c74e186249965b3a0876a893cb41fe35b`）で取れる。ghost_dev の履歴を書き換えない限り、この URL は消えない。
+- 「窓際のぱすたさん」の書庫は ghost_dev の `release/` に入っており、GitHub Pages の公開 URL `https://ekicyou.github.io/ghost_dev/pasta-in-windows/pasta-in-windows.nar` でログインなしに取れる（2026-10-18 の版は 3,042,433 バイト・sha256 `816d7183ab7c92fe1d601e386d5d60f9ca9f4238d265143a1b96915aa5bfb020`）。ghost_dev は非公開のリポジトリなので、コミットを固定した raw の URL は未ログインでは 404 になる。公開 URL の中身は、ぱすたのリリースのたびに同じ URL のまま差し替わる（2026-10-18 の実装の段の確かめ・「ぱすた開発」セッションの答え）。
 - 配布の道具 `tools/package.ps1` は `emo2`・`StayseeBalloon` を窓口から引くが、どちらも今の置き場に残るので、この spec で取り寄せに左右されない。
 
 ### 何を変えるか
@@ -121,11 +121,11 @@
 
 #### Acceptance Criteria
 
-1. The 検体の登記表 shall 「窓際のぱすたさん」を URL の行として登記し、URL を `https://raw.githubusercontent.com/ekicyou/ghost_dev/e1e05590dbed0a4a4b1afadf55ca896f36d82c14/release/pasta-in-windows/pasta-in-windows.nar`、大きさを 3,025,198 バイト、SHA-256 を `04a8e1c19b534b38e39d24f93ac7735c74e186249965b3a0876a893cb41fe35b` とする。
+1. The 検体の登記表 shall 「窓際のぱすたさん」を URL の行として登記し、URL を `https://ekicyou.github.io/ghost_dev/pasta-in-windows/pasta-in-windows.nar`、大きさを 3,042,433 バイト、SHA-256 を `816d7183ab7c92fe1d601e386d5d60f9ca9f4238d265143a1b96915aa5bfb020` とする（2026-10-18 の版。ぱすたのリリースで公開 URL の中身が差し替わったら、登記の大きさと SHA-256 をその版の値へ直す＝実装の段の裁定 1）。
 2. The 検体の登記表 shall 「窓際のぱすたさん」の行の名前・種別・同梱のバルーンを、その書庫が実際に入れる物（`install.txt` の `directory` と、同時に入るバルーン）に合わせる（登記表の全部の行を引く判定が、この行でも合う）。
 3. The リポジトリ shall 「窓際のぱすたさん」の書庫を、`vendors/` にも配布物にも、ほかのどの追跡ファイルとしても持たない。
 4. When この spec が着地する, the 窓口の決定論テスト shall 登記の数を 9 とする（8 → 9）。
-5. The 検体の README shall 「窓際のぱすたさん」の出どころ（ghost_dev・固定したコミット）・ハッシュと大きさ・書庫をこのリポジトリに入れない理由（寄贈のシェルの絵の置き直しが許されるか分からない）を登記する。
+5. The 検体の README shall 「窓際のぱすたさん」の出どころ（ghost_dev の GitHub Pages の公開 URL・中身はぱすたのリリースのたびに差し替わり、そのたびに登記の大きさと SHA-256 を直すこと）・ハッシュと大きさ・書庫をこのリポジトリに入れない理由（寄贈のシェルの絵の置き直しが許されるか分からない）を登記する。
 6. When 取り寄せの段を回した後に「窓際のぱすたさん」を `SampleRoot::acquire` と `nar-sample-path` で引く, the 窓口 shall 今の行の検体と同じ形の木を配る。
 7. If 展開器 `areka-nar` が「窓際のぱすたさん」の書庫を受け入れない, then the この spec の実装 shall 行の登記で回避せずに止めて開発者へ報告する（展開器の直しはこの spec の範囲の外・最初のタスクで実物を取り寄せて確かめる）。
 
@@ -146,9 +146,9 @@
 
 #### Acceptance Criteria
 
-1. The 検体の README shall URL の行で検体を足す手順を「取り寄せ先の固定した URL を決める → 登記表に 1 行（名前・種別・同梱のバルーン・URL・ハッシュ・大きさ）→ README の登記の表と出どころの節 → 取り寄せの段で確かめる」の形で書く。
-2. The 検体の README shall 取り寄せ先に求める条件（置いた書庫を消さない・同じ URL のバイト列を書き換えない＝コミットやタグを固定した URL を使う）と、「窓際のぱすたさん」の取り寄せ先 ghost_dev はその履歴を書き換えない（固定したコミットを消さない）と開発者が約束したこと（2026-10-18）を書く。
-3. The 検体の README shall 「URL とハッシュだけ記録して取得時にダウンロードする形にしない」とした今の記述（`claudia.nar` の節）を、上流の消えるリリースでなく、消えない固定した取り寄せ先から取るなら URL の行を使ってよい、という形に書き直す。
+1. The 検体の README shall URL の行で検体を足す手順を「取り寄せ先の URL を決める → 登記表に 1 行（名前・種別・同梱のバルーン・URL・ハッシュ・大きさ）→ README の登記の表と出どころの節 → 取り寄せの段で確かめる」の形で書く。
+2. The 検体の README shall 取り寄せ先に求める条件（ログインなしに取れる `https://` の URL・置いた書庫を消さない・同じ URL のバイト列が差し替わるなら、差し替わるたびに登記の大きさと SHA-256 を直す運用を持てる取り寄せ先＝開発者が管理する取り寄せ先）と、「窓際のぱすたさん」は最新の公開 URL を登記し、ぱすたのリリースのたびに登記を直す運用にしたこと（開発者の裁定・2026-10-18）を書く。
+3. The 検体の README shall 「URL とハッシュだけ記録して取得時にダウンロードする形にしない」とした今の記述（`claudia.nar` の節）を、上流の消えるリリースには頼らないが、開発者が管理していて登記を追従できる取り寄せ先から取るなら URL の行を使ってよい、という形に書き直す。
 4. The 検体の README shall 取り寄せの段の回し方・置き場のパス・失敗したときの直し方を書く。
 5. The steering `tech.md` shall 「検体は配布形 `.nar` のまま保管」の項を、今の行と URL の行の 2 つの形に書き直す。
 6. The steering `structure.md` shall Sample Ghost Kit の節（登記表の形・検体を足す作業・書庫の在処）を、2 つの形に書き直す。
@@ -165,4 +165,8 @@
 - 議題 1（取り寄せ先）: ぱすたは ghost_dev のコミットを固定した URL（上の議題 4 の確かめだけが残る）。今の 8 本の取り寄せ先は、移し替えの後続で決める。
 - 議題 3（いつ・誰が通信するか）: 新しい依存なしの取り寄せの段（PowerShell の標準の取り寄せ）＝本文。全体テストへのつなぎは上の議題 1。
 - 議題 5〜9（どの検体を移すか・製品の資産・置く権利・畳み直した検体・履歴・移す順番）: 今の 8 本の移し替えごと後続へ回した（範囲の外）。この spec は履歴を書き換えない。
+- 議題 4（ghost_dev の履歴を書き換えない約束）は、下の実装の段の裁定 1 で取り寄せ先が公開 URL に替わったため、ぱすたの登記の前提ではなくなった。
+
+**実装の段の裁定（2026-10-18）**:
+1. **ぱすたの取り寄せ先** → コミットを固定した raw の URL は ghost_dev が非公開のため未ログインで 404（タスク 1 の確かめ）。「ぱすた開発」セッションに相談した結果、公開されているのは GitHub Pages の `https://ekicyou.github.io/ghost_dev/pasta-in-windows/pasta-in-windows.nar` だけで、中身はリリースのたびに差し替わる（版ごとの固定 URL は無い）。開発者の裁定: **最新の公開 URL をそのまま登記し、ぱすたのリリースのたびに登記の大きさと SHA-256 を直す運用でよい。今の版の値（3,042,433 バイト・`816d7183…`）で進める**。差し替わってから登記を直すまでのあいだ、取り寄せの段は「合わない」で失敗し（要件 2.4）、窓口は使わない（要件 3.6）＝黙って違うバイト列を使うことは無い。要件 5.1・5.5・7.1〜7.3 をこの形に改めた。
 - 旧 Upstream（`dot-sakura-specimen`・`default-balloon-selfmade` の後に着手）: 働きの依存ではなくなった（最初の URL の行はぱすた）。残るのはファイルの重なりだけ。
