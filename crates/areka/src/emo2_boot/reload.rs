@@ -6,15 +6,20 @@
 //! 断りはどれも `warn!(reload_refused)` を 1 件残す（終了の途中だけは `debug!`・返事は落とす）。
 //! 受理したら `info!(reload_started)` を残し、対象ごとの始め方へ渡す。
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
+use areka_kanade::{BootOrigin, ChangeOrigin, ReloadScope};
 use bevy_ecs::prelude::Resource;
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
-use super::ghost_switch::SwitchInFlight;
+use super::ghost_switch::{
+    GhostSpec, SwitchEnd, SwitchInFlight, SwitchRequest, SwitchTarget, SwitchVerdict,
+    WelcomeAttempt, accept_switch,
+};
 use super::reload_args::{DescriptNotes, ReloadTarget, ScriptReload};
 use super::reload_cue::ReloadRx;
 use super::shell_balloon_switch::SkinSwitchInFlight;
@@ -83,6 +88,15 @@ pub(crate) struct ReloadInFlight {
     pub origin: ReloadOrigin,
     /// 記録に添えるゴーストの名前（`get_active_ghost_list` と同じ綴り・`TARGET_ERROR` の `ghost` 欄）。
     pub ghost: String,
+    pub stage: ReloadStage,
+}
+
+/// 印の段（shiori の切れ目の待ち＝6.3・shell／balloon／descript の列＝6.4 が変種を足す）。
+#[derive(Debug)]
+pub(crate) enum ReloadStage {
+    /// ghost／shiori: ゴースト切替の予約に乗っている（終わりは [`on_switch_end`] が告げる）。
+    /// `reserved` は窓口自身が `accept_switch` で立てた予約の鍵（`SwitchTarget.dir`）。
+    Switching { reserved: PathBuf },
 }
 
 /// 終了の門（`register` が据える・無ければ終了の途中ではない）。
@@ -191,14 +205,7 @@ pub(crate) fn request_reload(world: &mut World, req: ReloadRequest) -> ReloadVer
         ghost = %ghost,
         "読み直しを始める"
     );
-    start(
-        world,
-        ReloadInFlight {
-            target: req.target,
-            origin: req.origin,
-            ghost,
-        },
-    );
+    start(world, req.target, req.origin, ghost);
     ReloadVerdict::Accepted
 }
 
@@ -229,25 +236,148 @@ fn overlap_or_context(world: &World) -> Option<RefusedReason> {
     None
 }
 
-/// 対象ごとの始め方の継ぎ目（ghost＝6.2・shiori＝6.3・shell／balloon／descript＝6.4 が埋め、始めたら
+/// 対象ごとの始め方の継ぎ目（ghost＝ここ・shiori＝6.3・shell／balloon／descript＝6.4 が埋め、始めたら
 /// 印 [`ReloadInFlight`] を置く）。まだ始め方の無い対象は、印を置かずに `reload_failed` を残して終える
 /// （黙って受理だけしない・要件 9.3）。
-fn start(_world: &mut World, flight: ReloadInFlight) {
-    match flight.target {
-        ReloadTarget::Ghost
-        | ReloadTarget::Shiori
+fn start(world: &mut World, target: ReloadTarget, origin: ReloadOrigin, ghost: String) {
+    match &target {
+        ReloadTarget::Ghost => start_switch(world, target, origin, ghost),
+        ReloadTarget::Shiori
         | ReloadTarget::Shell
         | ReloadTarget::Balloon
-        | ReloadTarget::Descript(_) => tracing::error!(
-            target: TARGET_ERROR,
-            ghost = %flight.ghost,
-            event = "reload_failed",
-            reason = "not_implemented",
-            target = ?flight.target,
-            origin = ?flight.origin,
-            "この対象の読み直しはまだ始め方が無い——読み直さない"
-        ),
+        | ReloadTarget::Descript(_) => failed(&ghost, &target, origin, "not_implemented"),
     }
+}
+
+/// ghost の読み直し（要件 3.1）: 目録を引かず今のゴースト（`BootContext.current.ghost`）から切替先を組み、
+/// `raise_event: false` で [`accept_switch`] を呼ぶ。受理されたら立った予約の鍵を印に控えて置く。
+/// 受理されなければ印を置かずに `reload_failed(not_accepted)`（`accept_switch` が理由を記録済み）。
+fn start_switch(world: &mut World, target: ReloadTarget, origin: ReloadOrigin, ghost: String) {
+    let Some(current) = world
+        .get_resource::<BootContext>()
+        .map(|ctx| ctx.current.ghost.clone())
+    else {
+        failed(&ghost, &target, origin, "no_context");
+        return;
+    };
+    // 起動の引数で直に指したゴースト（`folder` が無い）はフォルダの末尾を名乗る。
+    let folder = current.folder.clone().unwrap_or_else(|| {
+        current
+            .dir
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    });
+    let to = SwitchTarget {
+        dir: current.dir.clone(),
+        name: crate::boot_resolve::running_name(&current),
+        folder: folder.clone(),
+        sakura_name: None,
+    };
+    let req = SwitchRequest {
+        ghost: GhostSpec::Folder(folder),
+        raise_event: false,
+        origin: ChangeOrigin::Automatic,
+        boot_event: None,
+    };
+    match accept_switch(world, to, req) {
+        SwitchVerdict::Accepted => {
+            let reserved = world
+                .get_non_send::<SwitchInFlight>()
+                .map(|f| f.target.dir.clone())
+                .unwrap_or(current.dir);
+            world.insert_non_send(ReloadInFlight {
+                target,
+                origin,
+                ghost,
+                stage: ReloadStage::Switching { reserved },
+            });
+        }
+        verdict => {
+            tracing::debug!(event = "reload_switch_verdict", verdict = ?verdict, "切替の受理の判定");
+            failed(&ghost, &target, origin, "not_accepted");
+        }
+    }
+}
+
+/// 失敗の終わりの記録（要件 9.2・`TARGET_ERROR`＋`ghost`）。
+fn failed(ghost: &str, target: &ReloadTarget, origin: ReloadOrigin, reason: &str) {
+    tracing::error!(
+        target: TARGET_ERROR,
+        ghost = %ghost,
+        event = "reload_failed",
+        reason = reason,
+        target = ?target,
+        origin = ?origin,
+        "読み直しが終わらなかった"
+    );
+}
+
+/// 進行中の予約が窓口自身の予約か（印が `Switching { reserved }` で `reserved == SwitchInFlight.target.dir`）。
+fn own_switch(world: &World) -> Option<&ReloadInFlight> {
+    let flight = world.get_non_send::<ReloadInFlight>()?;
+    let ReloadStage::Switching { reserved } = &flight.stage;
+    let switch = world.get_non_send::<SwitchInFlight>()?;
+    (switch.target.dir == *reserved).then_some(flight)
+}
+
+/// ゴースト切替の予約が下りる全部の出口から（呼び手 `ghost_switch::end_switch`・**予約を下ろす前**に呼ぶ）。
+/// 印が `Switching` なら終わりの記録を 1 件残して印を下ろす（要件 3.7・8.4）。予約が窓口自身の
+/// ものでなければ `reload_failed(overtaken)`。印が無い・別の段なら何もしない。
+#[allow(dead_code)] // 呼び手の `end_switch` は task 7.1 で付く。
+pub(crate) fn on_switch_end(world: &mut World, end: SwitchEnd) {
+    if !matches!(
+        world.get_non_send::<ReloadInFlight>().map(|f| &f.stage),
+        Some(ReloadStage::Switching { .. })
+    ) {
+        return;
+    }
+    let own = own_switch(world).is_some();
+    let Some(flight) = world.remove_non_send::<ReloadInFlight>() else {
+        return;
+    };
+    let reason = match end {
+        _ if !own => "overtaken",
+        SwitchEnd::Steady {
+            attempt: WelcomeAttempt::Target,
+        } => {
+            tracing::info!(
+                event = "reload_done",
+                target = ?flight.target,
+                origin = ?flight.origin,
+                ghost = %flight.ghost,
+                "読み直しが終わった"
+            );
+            return;
+        }
+        SwitchEnd::Steady {
+            attempt: WelcomeAttempt::Default,
+        } => "fell_back_to_default",
+        SwitchEnd::Cancelled => "cancelled",
+        SwitchEnd::NotAccepted => "not_accepted",
+        SwitchEnd::TargetQuit => "target_quit",
+        SwitchEnd::DefaultFault | SwitchEnd::Fatal | SwitchEnd::WriteFailure => "fatal",
+    };
+    failed(&flight.ghost, &flight.target, flight.origin, reason);
+}
+
+/// `switch_to` が由来を決めるとき（要件 3.2・3.3）: 印が ghost／shiori の読み直しで、進行中の予約が
+/// 窓口自身のものなら `Some(Reloaded{scope})`。他人の予約なら `None`（既存の由来のまま）。
+#[allow(dead_code)] // 呼び手の `switch_to` は task 7.1 で付く。
+pub(crate) fn boot_origin_override(world: &World) -> Option<BootOrigin> {
+    let scope = match own_switch(world)?.target {
+        ReloadTarget::Ghost => ReloadScope::Ghost,
+        ReloadTarget::Shiori => ReloadScope::Shiori,
+        _ => return None,
+    };
+    Some(BootOrigin::Reloaded { scope })
+}
+
+/// `switch_to` の分かれ目: 印が shiori の読み直しで、進行中の予約が窓口自身のものなら真（窓を閉じずに
+/// 実行系だけ組み直す）。
+#[allow(dead_code)] // 呼び手の `switch_to` は task 7.3 で付く。
+pub(crate) fn wants_runtime_only(world: &World) -> bool {
+    own_switch(world).is_some_and(|f| f.target == ReloadTarget::Shiori)
 }
 
 /// 終了が始まった（`exit_wait::begin_close` が呼ぶ）: 印があれば `info!(reload_dropped, reason=exit)` を

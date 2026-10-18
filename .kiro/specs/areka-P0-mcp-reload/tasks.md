@@ -114,7 +114,7 @@
   - `reload_tests.rs` で 6 種の重なり・終了の途中・語なしが断られ、記録が 1 件ずつ残る
   - _Depends: 2.4, 3.2, 4.1, 5.1, 5.2_
   - _Requirements: 1.1, 1.6, 2.1, 2.2, 7.4, 7.5, 9.1, 9.2, 12.1_
-- [ ] 6.2 ghost の読み直しの始め方と終わりの記録を作る
+- [x] 6.2 ghost の読み直しの始め方と終わりの記録を作る
   - 目録を引かず今のゴーストから切替先を組み、`raise_event: false` で `accept_switch` を呼び、立てた予約の鍵を印に控える
   - `on_switch_end` が各 `SwitchEnd` を `reload_done`／`reload_failed(reason)`（`TARGET_ERROR`＋`ghost`）に写して印を下ろす
   - `boot_origin_override`・`wants_runtime_only` が自分の予約のときだけ効き、他人の予約なら偽で `reload_failed(overtaken)` を残す
@@ -194,3 +194,4 @@
 - 5.1: `end_switch(world, _end)` は今は予約を下ろすだけ。7.1 で `reload::on_switch_end` を足すときに引数名を `end` に戻す。`accept_switch` は `BootContext` を読み直す（無ければ `NoContext`＋warn!・6.2 の直接の呼び手のための枝）。
 - 5.2: `info!(skin_switch_requested)` は origin を持つので `accept_skin` の外（入口）に残した。読み直しの道は `reload_started` だけを残す。design.md 512 行のコメントは完了のときに直す。`SwitchContext` は `pub(crate)`（欄と `read` は `pub(super)`）。
 - 6.1: 受理の後の `start()` は対象ごとの腕で、今は `error!(reload_failed, reason="not_implemented")` を残して印を置かない。6.2〜6.4 が自分の腕を差し替え、`ReloadInFlight` に `stage: ReloadStage` の欄を足す（テストの `plant_reload` と `accepted_leaves_one_started_record` も直す）。`ReloadOrigin::Mcp` の allow は 7.5 で外す。`drain` はまだ `AwaitingDestroy` を覗かない（6.3）。NoWords は `reload_descript_no_words` の 1 件だけで、`reload_refused` は出さない（要件 7.5）。
+- 6.2: 7.1 は `end_switch` の中で予約を下ろす前に `reload::on_switch_end` を呼ぶこと（鍵を照合するため）。6.3・6.4 で `ReloadStage` に変種を足すとき、`own_switch` の `let ReloadStage::Switching { reserved } = …` は `let … else { return None }` に直す。SwitchEnd の写しは WriteFailure・DefaultFault・Fatal → `fatal`、Steady{Default} → `fell_back_to_default`。

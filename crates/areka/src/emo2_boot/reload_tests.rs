@@ -1,5 +1,5 @@
 //! 読み直しの窓口の判定・断り・始めの記録・終了の門の決定論テスト（areka-P0-mcp-reload 要件 1.1・1.6・
-//! 2.1・2.2・7.4・7.5・9.1・9.2・12.1 ⑶）。
+//! 2.1・2.2・2.4・3.1・3.2・3.7・7.4・7.5・8.4・9.1・9.2・9.3・12.1 ⑶⑹）。
 //!
 //! 置き場のゴーストは kanade の送出端だけを持つテスト用の組み立て（名前が無いので、記録のゴースト名は
 //! ルートフォルダの絶対パス）。判定は集めてから 1 回。
@@ -9,7 +9,7 @@ use std::sync::mpsc::{self, Receiver};
 
 use areka_actor::reply_channel;
 use areka_ghost::BasewareRoot;
-use areka_kanade::KanadeMsg;
+use areka_kanade::{BootOrigin, KanadeMsg, ReloadScope};
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
@@ -19,7 +19,9 @@ use tracing::Level;
 use super::*;
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::emo2_boot::ghost_switch::{PrevGhost, SwitchStage, SwitchTarget};
+use crate::emo2_boot::ghost_switch::{
+    PrevGhost, SwitchEnd, SwitchStage, SwitchTarget, WelcomeAttempt,
+};
 use crate::emo2_boot::reload_args::DescriptParts;
 use crate::emo2_boot::shell_balloon_resolve::SkinCandidate;
 use crate::emo2_boot::shell_balloon_switch::{SkinKind, SkinSwitchStage};
@@ -94,6 +96,9 @@ fn plant_reload(world: &mut World) {
         target: ReloadTarget::Shell,
         origin: ReloadOrigin::Script,
         ghost: "planted".to_owned(),
+        stage: ReloadStage::Switching {
+            reserved: PathBuf::from("planted"),
+        },
     });
 }
 
@@ -418,5 +423,221 @@ fn drain_hands_script_requests_to_the_desk() {
             (Some("Shell".to_owned()), Some("Script".to_owned())),
             (Some("Balloon".to_owned()), Some("Script".to_owned())),
         ]
+    );
+}
+
+/// 印と同じ鍵か違う鍵の予約を置く（`plant_ghost_switch` の切替先の場所だけ差し替える）。
+fn plant_switch_to(world: &mut World, dir: PathBuf) {
+    plant_ghost_switch(world);
+    world.non_send_mut::<SwitchInFlight>().target.dir = dir;
+}
+
+fn plant_switching(world: &mut World, target: ReloadTarget, reserved: PathBuf) {
+    world.insert_non_send(ReloadInFlight {
+        target,
+        origin: ReloadOrigin::Mcp,
+        ghost: "planted".to_owned(),
+        stage: ReloadStage::Switching { reserved },
+    });
+}
+
+/// ghost の受理: 目録を引かず今のゴーストの場所で `raise_event: false` の切替を kanade へ送り、
+/// 立った予約の鍵（切替先の場所）を印に控える。自分の予約なので由来は `Reloaded{Ghost}`、実行系だけの
+/// 組み直しは偽（要件 2.4・3.1・3.2）。
+#[test]
+fn ghost_reload_reserves_the_current_ghost() {
+    let mut rig = rig("areka-reload-ghost-start");
+    let dir = rig
+        .world
+        .resource::<BootContext>()
+        .current
+        .ghost
+        .dir
+        .clone();
+    let (verdict, events) = capture(|| request_reload(&mut rig.world, mcp(ReloadTarget::Ghost)));
+    let sent = rig
+        ._kanade
+        .try_iter()
+        .map(|m| match m {
+            KanadeMsg::ChangeGhost(c) => Some((c.raise_event, c.target.dir)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let reserved = rig
+        .world
+        .get_non_send::<ReloadInFlight>()
+        .map(|f| match &f.stage {
+            ReloadStage::Switching { reserved } => reserved.clone(),
+        });
+    assert_eq!(
+        (
+            verdict,
+            sent,
+            rig.world
+                .get_non_send::<SwitchInFlight>()
+                .map(|f| f.target.dir.clone()),
+            reserved,
+            named(&events, "reload_failed").len(),
+            boot_origin_override(&rig.world),
+            wants_runtime_only(&rig.world),
+        ),
+        (
+            ReloadVerdict::Accepted,
+            vec![Some((false, rig.ghost.clone()))],
+            Some(dir.clone()),
+            Some(dir),
+            0,
+            Some(BootOrigin::Reloaded {
+                scope: ReloadScope::Ghost
+            }),
+            false,
+        )
+    );
+}
+
+/// 予約の各終わり方を終わりの記録 1 件へ写して印を下ろす: 定常（切替先）は `reload_done`、それ以外は
+/// `reload_failed(reason)` を `TARGET_ERROR`＋ゴースト名で（要件 3.7・8.4・9.2・9.3・12.1 ⑹）。
+#[test]
+fn switch_end_leaves_one_end_record_and_drops_the_mark() {
+    let mut rig = rig("areka-reload-switch-end");
+    let ends = [
+        SwitchEnd::Steady {
+            attempt: WelcomeAttempt::Target,
+        },
+        SwitchEnd::Steady {
+            attempt: WelcomeAttempt::Default,
+        },
+        SwitchEnd::Cancelled,
+        SwitchEnd::NotAccepted,
+        SwitchEnd::TargetQuit,
+        SwitchEnd::DefaultFault,
+        SwitchEnd::Fatal,
+        SwitchEnd::WriteFailure,
+    ];
+    let mut got = Vec::new();
+    for end in ends {
+        assert_eq!(
+            request_reload(&mut rig.world, mcp(ReloadTarget::Ghost)),
+            ReloadVerdict::Accepted
+        );
+        let ((), events) = capture(|| on_switch_end(&mut rig.world, end));
+        // 予約は呼び手（`end_switch`）が下ろす。
+        rig.world.remove_non_send::<SwitchInFlight>();
+        let ends = events
+            .iter()
+            .filter(|e| matches!(e.field_str("event"), Some("reload_done" | "reload_failed")))
+            .map(|e| {
+                (
+                    e.level,
+                    e.target.clone(),
+                    e.field_str("event").map(str::to_owned),
+                    e.field_str("reason").map(str::to_owned),
+                    e.field("ghost").map(str::to_owned),
+                )
+            })
+            .collect::<Vec<_>>();
+        got.push((ends, rig.world.get_non_send::<ReloadInFlight>().is_none()));
+    }
+    let ghost = Some(rig.ghost.clone());
+    let fail = |reason: &str| {
+        (
+            vec![(
+                Level::ERROR,
+                TARGET_ERROR.to_owned(),
+                Some("reload_failed".to_owned()),
+                Some(reason.to_owned()),
+                ghost.clone(),
+            )],
+            true,
+        )
+    };
+    assert_eq!(
+        got,
+        vec![
+            (
+                vec![(
+                    Level::INFO,
+                    "areka::emo2_boot::reload".to_owned(),
+                    Some("reload_done".to_owned()),
+                    None,
+                    ghost.clone(),
+                )],
+                true,
+            ),
+            fail("fell_back_to_default"),
+            fail("cancelled"),
+            fail("not_accepted"),
+            fail("target_quit"),
+            fail("fatal"),
+            fail("fatal"),
+            fail("fatal"),
+        ]
+    );
+}
+
+/// 印があっても他人の予約（鍵が違う・予約が無い）なら述語は偽で、終わりは `reload_failed(overtaken)`。
+/// 自分の予約の shiori の印なら実行系だけの組み直しが真・由来は `Reloaded{Shiori}`。印の無い終わりは
+/// 何も残さない（要件 3.2・9.3・12.1 ⑹）。
+#[test]
+fn foreign_reservation_is_false_and_ends_as_overtaken() {
+    let mut rig = rig("areka-reload-overtaken");
+    let ((), none) = capture(|| on_switch_end(&mut rig.world, SwitchEnd::Cancelled));
+
+    plant_switching(&mut rig.world, ReloadTarget::Shiori, PathBuf::from("A"));
+    plant_switch_to(&mut rig.world, PathBuf::from("A"));
+    let own = (
+        boot_origin_override(&rig.world),
+        wants_runtime_only(&rig.world),
+    );
+    plant_switch_to(&mut rig.world, PathBuf::from("B"));
+    let foreign = (
+        boot_origin_override(&rig.world),
+        wants_runtime_only(&rig.world),
+    );
+    rig.world.remove_non_send::<SwitchInFlight>();
+    let no_switch = (
+        boot_origin_override(&rig.world),
+        wants_runtime_only(&rig.world),
+    );
+    plant_switch_to(&mut rig.world, PathBuf::from("B"));
+    let ((), events) = capture(|| {
+        on_switch_end(
+            &mut rig.world,
+            SwitchEnd::Steady {
+                attempt: WelcomeAttempt::Target,
+            },
+        )
+    });
+    let overtaken = events
+        .iter()
+        .filter(|e| {
+            e.field_str("event")
+                .is_some_and(|n| n.starts_with("reload_"))
+        })
+        .map(|e| (e.level, e.field_str("reason").map(str::to_owned)))
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        (
+            none.len(),
+            own,
+            foreign,
+            no_switch,
+            overtaken,
+            rig.world.get_non_send::<ReloadInFlight>().is_none(),
+        ),
+        (
+            0,
+            (
+                Some(BootOrigin::Reloaded {
+                    scope: ReloadScope::Shiori
+                }),
+                true
+            ),
+            (None, false),
+            (None, false),
+            vec![(Level::ERROR, Some("overtaken".to_owned()))],
+            true,
+        )
     );
 }
