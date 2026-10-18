@@ -105,7 +105,7 @@
   - _Requirements: 1.3, 1.7, 2.1, 2.3, 2.4, 2.5, 2.7, 2.8, 3.6, 3.7, 3.8, 6.1, 6.2, 6.5, 7.1_
 
 - [ ] 5. MCP の側: 本物の答え
-- [ ] 5.1 (P) `sakurascript` の本物の答えと、2 本で使う部品を作る
+- [x] 5.1 (P) `sakurascript` の本物の答えと、2 本で使う部品を作る
   - 空文字の台本は kanade へ送らず `NG:script is empty`。宛先の kanade の送り口と「降りた」の文言を引く部品・「今は受け付けられない」「送り口が無い」の文言を同じファイルに置く（振り分けのファイルには触らない）
   - 外からの台本の知らせを送り、後から答える口で毎フレーム覗く。受け付けた → `OK`、受け付けなかった → `NG:the ghost cannot accept a script now`、失敗・返信端の落ち・送れなかった → 宛先が居ないときの `NG:`、送り口なし → `NG:Script is not available`（warn 1 件）
   - ダミーを固定していたテストを書き換え、偽の kanade の送り口で各答えの本文と `isError`、strict の真・偽・省略が知らせに載ること、`ghost_name` の有無で 2 通りの `NG:`、空の台本で kanade に何も届かないこと、成功と 3.5・3.6 の答えで warn 以上 0 件、その場で返り答えが後から届くこと、を固定する
@@ -155,3 +155,4 @@
 - 3.3: `State` に欄を足すと `schedule/close.rs` のテスト用の組み立てが通らなくなる件は、持ち場の mcp-reload と合意のうえ、テスト用の補助を `..State::initial()` に替えて解いた（本番のコードは無変更）。ほかのテスト用の組み立て 12 か所も同じ形にしてある。
 - 3.3: 選択肢の帳簿が古くても、steady.rs のトークの番号の照合が下流で止める。そのため帳簿の消去はイベントの数では見えず、ログ（`choice_timeout_ledger_stale` が出ないこと、`choice_rejected_no_wait` の理由）で縛っている。
 - 4.2: kanade の殻のスレッドで出る warn は、テストのバイナリの「呼んだスレッドの記録」では捕まえられない（全スレッドの記録には番人の例外表の変更が要る）。そのため「warn 1 件」は部品ごとに縛った（`notify_accepted` の直のテスト、`drive` の warn 1 件、`answer` の warn 0 件）。
+- 5.1: areka はライブラリの target を持たない＝MCP のテストは `cargo test -p areka -j 4 --bin areka mcp::`。ワークツリーで areka の全体を回す前に、i686 の `shiori-host32-helper` と `shiori-host32-testdll-loadu` をビルドしておく（無いと実走の 2 本が赤になる）。
