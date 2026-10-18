@@ -22,6 +22,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# 想定外の例外は ASCII の 1 行を出して 2 で終わる（1 は上限の答え・中継の時間切れ・返らなかった だけに取っておく）。
+trap {
+    Write-Host ("error: unexpected: " + ("$_" -replace '[^\x20-\x7E]', '?'))
+    exit 2
+}
+
+# 環境の変数を書く。$null は空にせず消す（PowerShell は string の引数へ $null を "" で渡すため NullString を使う）。
+function Set-EnvVar([string]$name, $value) {
+    if ($null -eq $value) { [Environment]::SetEnvironmentVariable($name, [NullString]::Value) }
+    else { [Environment]::SetEnvironmentVariable($name, [string]$value) }
+}
+
 # ゴースト -> バルーン（nar-sample-path の balloon.<名>= の名）。
 $Balloons = @{ claudia = 'claudia'; emo2 = 'emo2-kakukaku' }
 $Tools = @('dump_balloon', 'dump_surface')
@@ -179,13 +191,13 @@ function Invoke-Ghost([string]$g) {
             AREKA_APP_SMOKE_EXIT_MS = "$AutoExitMs"; AREKA_ROOT = $null; AREKA_USER_ROOT = $null
         }
         $saved = @{}
-        foreach ($k in $set.Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k); [Environment]::SetEnvironmentVariable($k, $set[$k]) }
+        foreach ($k in $set.Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k); Set-EnvVar $k $set[$k] }
         try {
             $areka = Start-Process -FilePath $ArekaExe -ArgumentList "`"$($result.ghost_folder)`"", "`"$($result.balloon_folder)`"" `
                 -WorkingDirectory $work -NoNewWindow -PassThru `
                 -RedirectStandardOutput (Join-Path $work 'areka-stdout.log') -RedirectStandardError (Join-Path $work 'areka-stderr.log')
         } finally {
-            foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k]) }
+            foreach ($k in $saved.Keys) { Set-EnvVar $k $saved[$k] }
         }
         $null = $areka.Handle  # 終了コードを後で読めるように握る
         $arekaStart = [Diagnostics.Stopwatch]::StartNew()
