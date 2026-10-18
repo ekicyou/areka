@@ -54,14 +54,14 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 | # | 議題 | 暫定の裁定 | 根拠 | 載せた要件 |
 |---|---|---|---|---|
 | 1 | `\![reload,shiori]` を本 spec に含めるか | **✅ 確定（2026-10-18 開発者）: 含める。シェルと窓を残して SHIORI だけを読み直す本物を作る**（ghost の読み直しの別名にはしない・本 spec から外さない） | 開発者「シェルを維持して SHIORI だけリロードする需要は高い。省略すべきでない」。タスクが 20 を少しまたいでも本 spec から切り出さない | 4・12.5・13.2 |
-| 2 | ゴーストの読み直しで起動の知らせを送るか | **送らない**（`OnBoot`・`OnGhostChanged`・`OnFirstBoot` も送らない）。起動の由来に「知らせを送らない」1 種を足す既定の方針 | ukadoc「SHIORIイベントが発生しない」。ぱすた開発の注意「ゴーストの読み直しで OnBoot は送られない」 | 3.2・3.3 |
-| 3 | 起こし直しのときの情報の通知（`basewareversion` など、SHIORI へ環境を伝える NOTIFY） | **ふつうの起動と同じく送る** | 読み直した SHIORI は前の値を持っていない。台詞を生む GET の知らせとは別のもの。SSP で測って違えば改める | 3.4 |
-| 4 | shell・balloon・shiori の読み直しで SHIORI イベント（`OnShellChanging`・`OnShellChanged`・`OnBalloonChange` など）を送るか | **送らない** | ukadoc は ghost の読み直しについて「SHIORIイベントが発生しない」と書く。読み直しは切替ではない。SSP で測って違えば改める | 4.3・5.3・6.3 |
+| 2 | ゴーストの読み直しで起動の知らせを送るか | **送らない**（`OnBoot`・`OnGhostChanged`・`OnFirstBoot` も送らない）。起動の由来に「知らせを送らない」1 種を足す既定の方針 | ukadoc「SHIORIイベントが発生しない」。ぱすた開発の注意「ゴーストの読み直しで OnBoot は送られない」（✅ 2026-10-18 SSP で実測して一致・research.md 10 節） | 3.2・3.3 |
+| 3 | 起こし直しのときの情報の通知（`basewareversion` など、SHIORI へ環境を伝える NOTIFY） | **ふつうの起動と同じく送る** | 読み直した SHIORI は前の値を持っていない。台詞を生む GET の知らせとは別のもの（✅ 2026-10-18 SSP で実測して一致・research.md 10 節） | 3.4 |
+| 4 | shell・balloon・shiori の読み直しで SHIORI イベント（`OnShellChanging`・`OnShellChanged`・`OnBalloonChange` など）を送るか | **送らない** | ukadoc は ghost の読み直しについて「SHIORIイベントが発生しない」と書く。読み直しは切替ではない（✅ 2026-10-18 SSP で実測して一致・research.md 10 節） | 4.3・5.3・6.3 |
 | 5 | `\![reload,balloon]` はバルーンを選び直すか | **今のバルーンのフォルダを読み直すだけで、選び直さない**（ゴーストの descript の指定 → 記憶 → 同梱、の順で決め直さない） | 棚卸㉓の見込み。読み直しは「同じものを読み込み直す」操作 | 6.1 |
 | 6 | MCP の返事をいつ返すか | **読み直しが終わってから返す**（後から答える置き場に預ける）。10 秒を超えたら橋の時間切れの答えになり、読み直しは続け、結果は記録に残す | 読み直しの直後に AI エージェントが次のツールを呼ぶと、終わる前なら「起動中でない」と答えられて紛らわしい。SSP の説明文は「失敗はエラーログで見よ」と書く。橋の上限 `REPLY_WAIT` は `crates/areka-mcp` にあり、本 spec は触らない | 8.1〜8.5 |
 | 7 | 成功・失敗の本文 | 成功 `OK`（`isError: false`）。知らない `target` は SSP の実測の文。読み直しを始められない・読み込みに失敗した・makoto は `NG:` で始まる英文（下の要件に置いた暫定の文） | SSP の成功の本文は未実測。`sakurascript` の成功が `OK` なので型をそろえる。SSP で測って違えば SSP の文にそろえる | 8.2・8.3・9.1・10.1 |
-| 8 | `target` の英字の大小 | **大小を区別しない**（ASCII の範囲だけ。前後の空白は削らない） | 同じ MCP の `get_log` の `log_type` の扱い（`Kind::from_log_type`）にそろえる。SSP で測って違えば改める | 1.2 |
-| 9 | `\![reload,descript,…]` の中で areka に無い種類（`headline`・`plugin`・`language`・`calendar.*`）と知らない語 | **その語だけ `warn!` を 1 件残して飛ばし、残りの語は読み直す** | areka にヘッドライン・プラグイン・言語ファイル・カレンダーは無い。黙って捨てない（ログの無い失敗の禁止） | 7.4・7.5 |
+| 8 | `target` の英字の大小 | **大小を区別しない**（ASCII の範囲だけ。前後の空白は削らない） | 同じ MCP の `get_log` の `log_type` の扱い（`Kind::from_log_type`）にそろえる（✅ 2026-10-18 SSP で実測して一致・research.md 10 節） | 1.2 |
+| 9 | `\![reload,descript,…]` の中で areka に無い種類（`headline`・`plugin`・`language`・`calendar.*`）と知らない語 | **その語だけ `warn!` を 1 件残して飛ばし、残りの語は読み直す** | areka にヘッドライン・プラグイン・言語ファイル・カレンダーは無い。黙って捨てない（ログの無い失敗の禁止）。SSP は知らない語を黙って捨てる（実測）が、areka は記録を残す側を採る | 7.4・7.5 |
 | 10 | 台本の `\![reload,makoto]` | **本 spec では拾わない**（今と同じく「誰も拾わない `\!`」のまま）。拾うのは `makoto-reload-directives` | 同 spec の brief が `\![reload,makoto]` の消費者と台帳の行を持つ。本 spec は MCP の `target: "makoto"` の縮退の口だけ | 10.3 |
 
 ## Boundary Context
@@ -111,7 +111,7 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 1. When ghost の読み直しを始めた, the areka shall 今のゴーストを同じフォルダのゴーストとして降ろして起こし直し、ゴーストのフォルダの辞書・descript.txt・シェル・バルーンをディスクから読み直す（自分自身へのゴースト切替と同じ道を通る）。起動の引数で直に指したゴースト（ゴーストの一覧に載らないもの）も、今のゴーストのフォルダをそのまま指して読み直す。
 2. The areka shall ghost の読み直しで、降ろす側に `OnGhostChanging`・`OnClose` を送らない。
 3. The areka shall ghost の読み直しで、起こす側に `OnBoot`・`OnGhostChanged`・`OnFirstBoot` などの起動の知らせ（台詞を求める GET）を 1 つも送らない。
-4. The areka shall ghost の読み直しで起こし直した SHIORI へ、ふつうの起動と同じ情報の通知（`OnInitialize`・`basewareversion` など環境を伝える NOTIFY と、`username` などのリソースの問い合わせ）を送る。
+4. The areka shall ghost の読み直しで起こし直した SHIORI へ、ふつうの起動と同じ情報の通知（`OnInitialize`・`basewareversion` など環境を伝える NOTIFY と、`username` などのリソースの問い合わせ）を送る。`OnInitialize` の Reference0 は、ふつうの起動と同じく付けない（SSP の実測でも空）。
 5. The areka shall ghost の読み直しの後、窓を、同じゴーストを起動し直したときと同じ位置の記憶に従って並べる。
 6. The areka shall 既存のゴースト切替（`\![change,ghost]`・メニュー）とネットワーク更新の読み直しが送る知らせを、本 spec の前と同じに保つ（`OnGhostChanged`・更新の起動の知らせ・`OnBoot` の Ref6=halt）。
 7. If ghost の読み直しで、ゴーストを起こせなかった, the areka shall 既存のゴースト切替の失敗と同じく既定のゴーストへ戻し（既定も起きなければ既存どおり致命）、起こせなかった理由を `error!` で残す。
@@ -126,7 +126,7 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 
 1. When shiori の読み直しを始めた, the areka shall 今の SHIORI を unload して、同じゴーストの SHIORI を load し直す（結果として辞書ファイルをすべて読み直す）。
 2. The areka shall shiori の読み直しの間、キャラクターとバルーンの窓を閉じず、表示中のシェルとバルーンを読み直さない。
-3. The areka shall shiori の読み直しで、SHIORI イベント（`OnClose`・`OnBoot`・`OnGhostChanged` など台詞を求める GET）を送らず、load し直した SHIORI へは要件 3.4 と同じ情報の通知を送る。
+3. The areka shall shiori の読み直しで、SHIORI イベント（`OnClose`・`OnBoot`・`OnGhostChanged` など台詞を求める GET）を送らず、load し直した SHIORI へは要件 3.4 と同じ情報の通知を送る。このときの `OnInitialize` には Reference0＝`reload` を付ける（ukadoc `OnInitialize`「リロード時にreload」・SSP の実測も同じ）。
 4. If load し直しに失敗した, the areka shall 要件 3.7 と同じく既定のゴーストへ戻し、失敗の理由を `error!` で残す。
 
 ### Requirement 5: シェルの読み直し（`shell`・`\![reloadsurface]`）
@@ -158,7 +158,7 @@ SSP の MCP の `reload`: 引数は `target`（ghost／shiori／shell／balloon�
 #### Acceptance Criteria
 
 1. When `\![reload,descript]` または MCP の `target: "descript"` で読み直しを始めた, the areka shall 今のゴースト・今のシェル・今のバルーンの descript.txt をすべて読み直す。
-2. When `\![reload,descript,パラメータ]` で読み直しを始めた, the areka shall パラメータを半角スペースで区切った語のうち `ghost`・`shell`・`balloon` に当たるものの descript.txt だけを読み直す（同じ語が重なっても 1 度だけ）。
+2. When `\![reload,descript,パラメータ]` で読み直しを始めた, the areka shall パラメータを半角スペースで区切った語のうち `ghost`・`shell`・`balloon` に当たるものの descript.txt だけを読み直す（同じ語が重なっても 1 度だけ）。第 3 引数より後ろ（`\![reload,descript,shell,balloon]` の `balloon`）は見ない（SSP の実測と同じ）。
 3. The areka shall descript の読み直しの後、areka が動作中に使う descript.txt の値（ゴーストの名前など・シェルとバルーンの配置の値など）を、読み直したファイルの値に替え、SHIORI を読み直さず、SHIORI イベントを送らない（動作中に使い続ける値の一覧は設計で洗い出し、一覧の値は 1 つ残らず替える。起動のときにだけ読む値＝次の起動で読み直される値（kanade が `OnBoot` の Ref0 にだけ使うシェルの名前など）は一覧に入れない）。
 4. If パラメータに areka に無い種類（`headline`・`plugin`・`language`・`calendar.skin`・`calendar.plugin`、および `calendar skin`・`calendar plugin` の表記）が含まれる, the areka shall その語ごとに「areka には無い種類」と分かる `warn!` を 1 件残して飛ばし、残りの語の読み直しを続ける。
 5. If パラメータに知らない語が含まれる、またはパラメータに読み直せる語が 1 つも無い, the areka shall 知らない語ごとに `warn!` を 1 件残し（語が 1 つも無いときはその旨を 1 件）、読み直せる語だけを読み直す。
