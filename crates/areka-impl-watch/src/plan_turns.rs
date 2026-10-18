@@ -96,9 +96,12 @@ pub(super) fn give_back(
     let owns = (!give.has_test() || holds.has_test()) && (!give.has_sole() || holds.has_sole());
     // 走っている負荷テストの記録は 2 つの机を 1 組で持つ（状態の不変）。排他テストの机だけを
     // 外すと、走っている計測の最中に別の者が排他テストの机を受けられるので、1 組のまま返させる。
-    let running = state.sole.as_ref().is_some_and(|sole| sole.running);
-    if !owns || (running && give == DeskSet::Test) {
+    if !owns {
         return Verdict::NotApplied("not the holder of that desk");
+    }
+    let running = state.sole.as_ref().is_some_and(|sole| sole.running);
+    if running && give == DeskSet::Test {
+        return Verdict::NotApplied("a running load test returns test and sole together");
     }
     if give.has_sole() {
         state.sole = None;
@@ -126,6 +129,12 @@ pub(super) fn load_running(
 ) -> Verdict {
     if state.test.is_some() || state.sole.is_some() {
         return Verdict::NotApplied("the test desk or the sole desk already has a holder");
+    }
+    // マージの机を待つ者は持ち主にしない（要件 5.7。持ち主はマージの待ち行列に居ない形を保つ）。
+    if waits_merge(state, id) {
+        return Verdict::NotApplied(
+            "a merge request is waiting; record the running load after the merge desk is granted",
+        );
     }
     let participant = join(state, id, name, repo, now, events);
     events.push(Event::LoadRunning { id: id.to_owned() });

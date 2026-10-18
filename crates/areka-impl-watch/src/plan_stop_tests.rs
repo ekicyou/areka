@@ -545,6 +545,36 @@ fn recording_a_running_load_test_while_the_desk_is_held_changes_nothing() {
 }
 
 #[test]
+fn a_merge_waiter_recording_a_running_load_test_changes_nothing() {
+    // 机が両方空いていても、マージの机を待つ者は記録しない（要件 5.7）。A が areka の
+    // マージの机を持ち、B がその後ろで待つ。
+    let mut before = state_with(&["A", "B"]);
+    hold_merge(&mut before, "areka", "A");
+    queue_merge(&mut before, "areka", "B", T0 + 1);
+    let mut state = before.clone();
+
+    let got = run(&mut state, &load_running("B"), Some("B"), T0 + 9);
+
+    assert_eq!(state, before);
+    assert_not_applied(&got, "B");
+    let text =
+        "a merge request is waiting; record the running load after the merge desk is granted";
+    assert_eq!(got.verdict, super::Verdict::NotApplied(text));
+
+    // マージの机の持ち主（A）は、机が両方空いていれば今どおり記録できる（要件 5.5）。
+    let got = run(&mut state, &load_running("A"), Some("A"), T0 + 9);
+
+    assert_eq!(got, applied(true, vec![recorded_running("A")]));
+    assert!(state.test.as_ref().is_some_and(|t| t.id == "A"));
+    assert!(
+        state
+            .sole
+            .as_ref()
+            .is_some_and(|s| s.id == "A" && s.running)
+    );
+}
+
+#[test]
 fn a_queued_requester_who_records_a_running_load_test_leaves_the_queue_and_goes_back_to_work() {
     // A と B が並び、候補は A。B は A のための停止要請中、C は A のために止まっている。
     let mut state = state_with(&["A", "B", "C"]);

@@ -258,6 +258,12 @@ pub fn apply(
             if held(state, id).is_some() {
                 break 'merge Verdict::NotApplied("return the test and sole desks before merge");
             }
+            // 机の申し込みを待つ者もマージの待ち行列に入れない（要件 2.8。2026-10-18 の裁定）。
+            if state.requests.iter().any(|request| request.id == *id) {
+                break 'merge Verdict::NotApplied(
+                    "a desk request is waiting; merge after it is granted and returned",
+                );
+            }
             join(state, id, name.as_deref(), repo, now, &mut events);
             // 二重の判定はリポジトリごと（別のリポジトリの机は独立に申し込める）。
             let desk = state.merge.entry(repo.clone()).or_default();

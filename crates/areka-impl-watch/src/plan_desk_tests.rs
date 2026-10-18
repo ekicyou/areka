@@ -9,12 +9,12 @@
 //! 主題でない段が状態を動かして、判定が主題から外れないようにするため。
 
 use super::test_support::{
-    PID, PURPOSE, REPO, T0, applied, ask_to_stop, assert_not_applied, hold_load, hold_merge,
-    hold_running_load, hold_test, load_done, load_test, queue_load, queue_merge, queue_request,
-    run, state_with, stop_for, stopped, test_freed, test_freed_record, wait_record,
+    PID, PURPOSE, REPO, T0, applied, ask_to_stop, assert_not_applied, give_back, hold_load,
+    hold_merge, hold_running_load, hold_test, load_done, load_test, queue_load, queue_merge,
+    queue_request, run, state_with, stop_for, stopped, test_freed, test_freed_record, wait_record,
     watch_registered,
 };
-use super::{Command, Event};
+use super::{Command, Event, Verdict};
 use crate::state::{
     DeskSet, LastMerge, MergeDesk, MergeHolder, MergeRequest, Participant, ParticipantStatus,
     SoleHolder, State, TestHolder, WaitKind, WaitRecord, WatchInfo,
@@ -850,6 +850,44 @@ fn load_done_by_a_non_holder_changes_nothing() {
         assert_eq!(state, before, "{id}");
         assert_not_applied(&got, id);
     }
+}
+
+#[test]
+fn a_merge_request_from_a_desk_requester_changes_nothing() {
+    // 机の申し込みを待つ者はマージの待ち行列に入らない（要件 2.8・2.4 の全探索の不変）。
+    // B は C の机の後ろで排他テストの机を待つ／A はマージの持ち主のまま排他テストの机を待ち、
+    // 別のリポジトリのマージを申し込む。
+    let mut b_waits = desks_held_by_c(&["A", "B", "C"], &[]);
+    queue_request(&mut b_waits, "B", DeskSet::Test, T0 + 1);
+    for (before, id, repo) in [(b_waits, "B", "areka"), (a_holds_and_waits(), "A", "pasta")] {
+        let mut state = before.clone();
+
+        let got = run(&mut state, &merge(id, repo, false), Some(id), T0 + 9);
+
+        assert_eq!(state, before, "{id}");
+        assert_not_applied(&got, id);
+        let text = "a desk request is waiting; merge after it is granted and returned";
+        assert_eq!(got.verdict, Verdict::NotApplied(text), "{id}");
+    }
+}
+
+#[test]
+fn returning_only_the_test_desk_of_a_running_load_test_changes_nothing() {
+    // 走っている負荷テストの記録は 2 つの机を 1 組で返す（専用の断りの文）。
+    let before = desks_held_by_c(&["A", "C"], &[]);
+    let mut state = before.clone();
+
+    let got = run(
+        &mut state,
+        &give_back("C", Some(DeskSet::Test)),
+        Some("C"),
+        T0 + 9,
+    );
+
+    assert_eq!(state, before);
+    assert_not_applied(&got, "C");
+    let text = "a running load test returns test and sole together";
+    assert_eq!(got.verdict, Verdict::NotApplied(text));
 }
 
 #[test]

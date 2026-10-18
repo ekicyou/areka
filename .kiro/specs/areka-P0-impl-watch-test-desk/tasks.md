@@ -139,8 +139,8 @@
   - _Requirements: 7.3, 8.3, 8.4, 13.1, 13.5_
 
 ## Implementation Notes
-- 2.1: 走っている印つきのひとり占めの持ち主の `return --desk test` は、不変（走っている sole なら test も同じ者が持つ）を守るため `not the holder of that desk` で断る形にした。設計が決めていない分岐で、断りの文が実態に合わない。2.3 か設計の段で文と振る舞いを確定させる。
+- 2.1（2026-10-18 開発者の裁定で解決）: 走っている印つきのひとり占めの持ち主の `return --desk test` は、状態を変えずに専用の文 `not applied: a running load test returns test and sole together` で断る（要件 4.3 の但し書き・設計の `return` の分岐と出力の表）。判断の核とテスト（`plan_desk_tests.rs`）は裁定の段で直した。入口の終了コード 3 は 3.4 で出す。
 - 2.1: `Resumed` の why は `no-sole`・`sole-granted`、status.md の最近の見出しは "Recent events" になった（2.2・3.2 のテストで確定させる）。
 - 2.1: `#[allow(dead_code)]` を `cli.rs`（3.4 で外す）と `plan.rs`（2.2 で外す）の `mod test_support` に一時的に付けた。`turns::request` の `#[allow(clippy::too_many_arguments)]` は設計の引数 8 つのため。
 - 2.1: `--wait` 付きの断り（2.8・4.7・持っている組の再申し込み）は今は待ちの判定へ流れる。3.4 の完了の条件で必ず「待ちに入らず 3」にする。
-- 2.1（裁定待ち）: 要件 2.8 の但し書き（マージの申し込みは今どおり受け付ける）のため、申し込みを待つ者の `merge` と、マージを待つ者の `loadrunning` を受け付けている。設計の不変の決まり「`test`・`sole` の持ち主と `requests` に居る識別はどのマージの待ち行列にも居ない」と食い違い、2.4 の全探索が赤になる。2.4 の前に開発者の裁定を仰ぐ。
+- 2.1（2026-10-18 開発者の裁定で解決）: 申し込みを待つ者の `merge` は `not applied: a desk request is waiting; merge after it is granted and returned`、マージを待つ者の `loadrunning` は `not applied: a merge request is waiting; record the running load after the merge desk is granted` で、どちらも参加より先に見て状態を変えずに断る（要件 2.8 の但し書きを改め、要件 5.7 を足した。マージの机の持ち主の `loadrunning` は 5.5 のとおり通る）。設計の不変の決まり「`test`・`sole` の持ち主と `requests` に居る識別はどのマージの待ち行列にも居ない」と合った。判断の核とテスト（`plan_desk_tests.rs`・`plan_stop_tests.rs`）は裁定の段で直した。入口の終了コード 3 は 3.4 で出す。
