@@ -663,7 +663,6 @@ fn end_skins(world: &mut World, reason: &str) {
 /// 終えようとしている相の `kind`・`dir`（`SkinSwitchInFlight.target.dir`）が窓口の控えた予約の鍵と一致
 /// するときだけ真。印があっても他人の予約（利用者の `\![change,shell,…]` など）なら偽。相は印を
 /// World から外して進むので、鍵は呼び手が渡す。
-#[allow(dead_code)] // 呼び手は 7.4。
 pub(crate) fn skin_is_reload(world: &World, kind: SkinKind, dir: &Path) -> bool {
     world.get_non_send::<ReloadInFlight>().is_some_and(|f| {
         matches!(&f.stage, ReloadStage::Skins { reserved: Some((k, d)), .. } if *k == kind && d == dir)
@@ -671,7 +670,6 @@ pub(crate) fn skin_is_reload(world: &World, kind: SkinKind, dir: &Path) -> bool 
 }
 
 /// 読み直しの差し替えが済んだ（[`skin_is_reload`] が真のときの `finish_*` から）。
-#[allow(dead_code)] // 呼び手は 7.4。
 pub(crate) fn skin_applied(world: &mut World) {
     if let Some(mut flight) = world.get_non_send_mut::<ReloadInFlight>()
         && let ReloadStage::Skins { applied, .. } = &mut flight.stage
@@ -684,7 +682,6 @@ pub(crate) fn skin_applied(world: &mut World) {
 /// 印が `Skins` でなければ何もしない。窓口自身の予約で `applied` なら次の段へ、`applied` 無しなら
 /// `reload_failed(skin_failed)`（理由は相の既存の記録が残している）、他人の予約なら
 /// `reload_failed(overtaken)` で印を下ろす。
-#[allow(dead_code)] // 呼び手は 7.4。
 pub(crate) fn skin_phase_ended(world: &mut World, kind: SkinKind, dir: &Path) {
     let Some(applied) = world
         .get_non_send::<ReloadInFlight>()

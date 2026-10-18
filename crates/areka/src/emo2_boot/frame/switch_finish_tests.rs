@@ -816,3 +816,7 @@ fn balloon_switch_renames_the_balloon_warning_field() {
         "警告の名前の欄は新しいバルーンのフォルダ名（前の名前 kaku が残らない）"
     );
 }
+
+/// 読み直しの分かれ目（areka-P0-mcp-reload task 7.4）は、この土台をそのまま使う。
+#[path = "switch_reload_tests.rs"]
+mod reload_tests;
