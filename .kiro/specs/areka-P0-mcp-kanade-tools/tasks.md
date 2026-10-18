@@ -3,7 +3,7 @@
 > 設計の正本は [design.md](design.md)。コードの名前・ファイルの置き場はそちらに従う。同じウェーブ（C9）の約束で、kanade の `src/change.rs`・`schedule/boot.rs`・`schedule/steady.rs`・`schedule/close.rs`・`schedule/change.rs`、`crates/areka-ghost/src/runtime.rs`・`dispatcher.rs`、`crates/areka-mcp/**`、`crates/areka/src/main.rs`、`crates/areka/src/mcp/mod.rs`・`resolve.rs`・`get_status.rs`、`crates/areka-talk/**`、`doc/ssp-mcp/areka-tools.md`、実走の 3 本のテストには触らない。どのファイルも 1,000 行未満に保ち、決定論テストは兄弟のファイルに置く。
 
 - [ ] 1. 先に割る: 上限の近いファイルを振る舞いを変えずに分ける
-- [ ] 1.1 運行表の型の塊を兄弟のファイルへ移し、同じ名前で見せる
+- [x] 1.1 運行表の型の塊を兄弟のファイルへ移し、同じ名前で見せる
   - 入力・相・流れているトーク・選択肢の控え・運行状態・終了の原因・行動の型を運行表の型の兄弟ファイルへ移し、運行表の本体からは同じ名前で再び見せる
   - 起動の手順のファイル（`schedule/boot.rs`）と子のモジュールの import・テストの `use super::*` が 1 字も変わらずに解ける
   - 移した先の型のファイルは、兄弟のモジュールの型（錨の段・切替の状態・切れ目の見張りなど）を `super::` の道で引く
@@ -146,3 +146,7 @@
   - 結果を本 spec の `verification/signoff.md` に残し、⑴ が通ったら `trigger-intervals` の検体の README の読み替えの 1 文を `sakurascript` で送る本来の手順へ戻す
   - 完了の姿: 記録のファイルに ⑴〜⑺ の結果があり、README の読み替えが消えている
   - _Requirements: 7.6, 7.7_
+
+## Implementation Notes
+
+- 1.1: `cargo clippy -p areka-kanade --all-targets` は本 spec 以前から赤（actor_raise_reply_tests.rs ほか触っていないファイルの "this loop never actually loops" 等）。clippy は触ったファイルに新しい警告が無いかで見る。
