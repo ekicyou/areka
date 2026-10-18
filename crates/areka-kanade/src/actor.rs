@@ -200,6 +200,26 @@ pub fn spawn_kanade_translating(
                 }
                 KanadeMsg::ExecutionState(update) => Input::ExecutionState(update),
                 KanadeMsg::BalloonTimeout { talk_id } => Input::BalloonTimeout { talk_id },
+                // SSTP の 2 つの入口は運行表の腕がまだ無いので、受け付けなかったとすぐ答える。
+                // 受け手が居なければ `debug!` だけで運行を続ける。
+                KanadeMsg::SstpSend { reply, .. } => {
+                    if reply
+                        .send(crate::sstp::SstpSendOutcome::NotAccepted)
+                        .is_err()
+                    {
+                        tracing::debug!(target: "kanade", event = "sstp_reply_dropped", "SSTP の結果の受け手が居ない");
+                    }
+                    return Ok(ControlFlow::Continue(()));
+                }
+                KanadeMsg::SstpNotify { reply, .. } => {
+                    if reply
+                        .send(crate::sstp::SstpNotifyOutcome::NotAccepted)
+                        .is_err()
+                    {
+                        tracing::debug!(target: "kanade", event = "sstp_reply_dropped", "SSTP の結果の受け手が居ない");
+                    }
+                    return Ok(ControlFlow::Continue(()));
+                }
             };
             let (flow, first_reply) = drive_translating(
                 &mut state,
@@ -487,6 +507,7 @@ fn execute_batch(
                     ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => match id {
                         EventId::Static(s) => *s,
                         EventId::Choice(_) => "OnChoiceEvent",
+                        EventId::Sstp(_) => crate::schedule::sstp::NOTIFY_ORIGIN,
                     },
                 };
                 last_reply = Some((round_trip_request(shiori, call), origin));
@@ -643,6 +664,9 @@ pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -
                 || crate::schedule::resources::is_allowed_resource_id(s)
         }
         EventId::Choice(name) => crate::schedule::events::is_allowed_choice_event(name),
+        // 外から頼まれた名前（`EventId::Sstp`）: 入口と同じ検査を満たすかだけで決める。許可の表と
+        // スケジューラ起源の恒久禁止は効かせない（呼び手が 1 回ずつ頼むもの＝選択起源と同じ理屈）。
+        EventId::Sstp(name) => crate::sstp::validate_notify(name, references).is_ok(),
     };
     if !allowed {
         tracing::error!(

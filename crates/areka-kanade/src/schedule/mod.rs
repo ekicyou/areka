@@ -44,6 +44,8 @@ pub(crate) mod log_capture;
 /// SHIORI Resource 照会の許可集合（イベント檻とは別族・Req4.1）。DD-9 の例外として `pub`。
 /// submit ガードはイベント許可 ∨ リソース許可で判定する（`crate::actor` の egress チョークポイント）。
 pub mod resources;
+/// SSTP の入口（外からの台本・外から頼まれたイベント）。
+pub(crate) mod sstp;
 pub(crate) mod steady;
 pub(crate) mod talk_gap;
 /// 運行表の翻訳（`OnTranslate`）——帳簿の型・元のイベントの控え・応答の読み。

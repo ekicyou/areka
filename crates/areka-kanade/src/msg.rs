@@ -264,6 +264,22 @@ pub enum KanadeMsg {
         /// 時間切れで隠れたバルーンに出ていたトークの番号（表示の側が再生の開始で受けた番号）。
         talk_id: crate::talk::TalkId,
     },
+    /// 外からの台本（Owned SSTP の SEND 相当）。普段の状態なら新しいトークとして再生し、
+    /// 処理の後に結果をちょうど 1 回返す（kanade が落ちれば受け手には `ReplyError::Dropped`）。
+    SstpSend {
+        script: String,
+        /// 呼び手の strict（真・偽・省略）。始めたトークの番号と結んで運行状態に控える。
+        strict: Option<bool>,
+        reply: areka_actor::ReplySender<crate::sstp::SstpSendOutcome>,
+    },
+    /// 外から頼まれた任意の名前のイベント（SSTP NOTIFY の Event 相当・GET）。許可の表を通さない。
+    /// 名前と Reference は呼び手が `sstp::validate_notify` で検査しておく（運行表の腕も同じ検査をもう一度行い、破れていれば送らない）。
+    SstpNotify {
+        event: String,
+        references: Vec<String>,
+        strict: Option<bool>,
+        reply: areka_actor::ReplySender<crate::sstp::SstpNotifyOutcome>,
+    },
 }
 
 /// shiori アクター inbox（real／mock が同一型を受ける＝Req 5.1 の差し替え面）。
@@ -302,6 +318,8 @@ pub enum EventId {
     Static(&'static str),
     /// 作者が ID に書いた任意の名前（選択肢・アンカー）のイベント（逐語・カテゴリ規則で検証）。
     Choice(String),
+    /// 外から頼まれた任意の名前（`schedule::events::sstp_notify` だけが作る・逐語）。
+    Sstp(String),
 }
 
 impl EventId {
@@ -310,6 +328,7 @@ impl EventId {
         match self {
             EventId::Static(id) => id,
             EventId::Choice(name) => name.as_str(),
+            EventId::Sstp(name) => name.as_str(),
         }
     }
 }
@@ -481,6 +500,9 @@ pub struct KanadeConfig {
     pub shell_folder: String,
     /// 殻が毎メッセージ読む通信中の数（既定 `&online::PROCESS`・テストは関数内の `static` へ差し替える）。
     pub online: &'static OnlineCounter,
+    /// script 種別の記録の名（`get_active_ghost_list` と同じ値）。既定は空文字。結線は
+    /// `areka-ghost` の `resolve_kanade_config` が入れる。
+    pub ghost_name: String,
 }
 
 impl KanadeConfig {
@@ -503,6 +525,7 @@ impl KanadeConfig {
             choice_timeout_default_ms: 30_000,
             boot_origin: BootOrigin::Plain,
             online: &online::PROCESS,
+            ghost_name: String::new(),
         }
     }
 }

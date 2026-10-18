@@ -153,6 +153,9 @@ fn existing_eight_kanade_msg_variants_are_unchanged_by_additive_growth() {
             KanadeMsg::BalloonTimeout { talk_id: _ } => "BalloonTimeout",
             // アンカーの選択（additive・既存の判別結果を変えない）。
             KanadeMsg::Anchor(_) => "Anchor",
+            // SSTP の 2 つの入口（additive・既存の判別結果を変えない）。
+            KanadeMsg::SstpSend { .. } => "SstpSend",
+            KanadeMsg::SstpNotify { .. } => "SstpNotify",
         }
     }
     let existing = [
@@ -227,6 +230,11 @@ fn event_id_as_str_is_verbatim_wire_form_for_both_origins() {
     assert_eq!(
         EventId::Choice("OnMenuBack".to_string()).to_string(),
         "OnMenuBack"
+    );
+    // 外から頼まれた任意の名前も逐語（On 接頭を要さない）。
+    assert_eq!(
+        EventId::Sstp("UserDefined".to_string()).as_str(),
+        "UserDefined"
     );
 }
 
@@ -362,6 +370,8 @@ fn kanade_config_new_defaults_additive_fields() {
         config.first_boot_epilogue.is_empty(),
         "first_boot_epilogue default must be empty (何も添付しない)"
     );
+    // script 種別の記録の名は結線側が入れる（既定は空文字）。
+    assert_eq!(config.ghost_name, "");
 }
 
 #[test]

@@ -31,7 +31,7 @@
   - 兄弟のテストで、空・空白だけ・CR・LF・NUL（名前と Reference それぞれ）・バイト値 1 と TAB は通す、を固定する
   - 完了の姿: 検査のテストが緑で、MCP の側（areka クレート）から公開の型と検査を参照できる
   - _Requirements: 2.6, 2.7_
-- [ ] 2.2 kanade の知らせに 2 つの入口を足し、出所カテゴリと起動の設定のゴーストの名前を足す
+- [x] 2.2 kanade の知らせに 2 つの入口を足し、出所カテゴリと起動の設定のゴーストの名前を足す
   - 外からの台本の知らせ（台本・strict・返信端）と外から頼まれたイベントの知らせ（名前・Reference の列・strict・返信端）を足す。返信端は必須
   - 外から頼まれた任意の名前の出所カテゴリを足し、名前を取り出す腕を 1 つ足す
   - 起動の設定にゴーストの名前の欄を足し、既定は空文字にする（既存の呼び手は全部 `new` か `..new(..)` で組むので変えない）
@@ -150,3 +150,4 @@
 ## Implementation Notes
 
 - 1.1: `cargo clippy -p areka-kanade --all-targets` は本 spec 以前から赤（actor_raise_reply_tests.rs ほか触っていないファイルの "this loop never actually loops" 等）。clippy は触ったファイルに新しい警告が無いかで見る。
+- 2.2: `schedule/sstp.rs` は `pub(crate) mod sstp;`（actor.rs が `NOTIFY_ORIGIN` を引くため）。`SEND_ORIGIN` は `#[expect(dead_code)]` 付き＝3.x で使い始めたら外す。`BOOT_GREETING_ORIGIN` は 3.3 で足す。`actor_tests.rs` は 970 行＝新しい殻のテストは別の兄弟ファイルへ。
