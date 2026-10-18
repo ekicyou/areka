@@ -268,3 +268,42 @@ directory,pasta-in-windows
 - 結果: **190 ms・179 ms・181 ms**（3 回とも 1 秒を下回る＝design.md「性能」の見込みどおり）。
 - 3 回とも `04a8e1c19b534b38e39d24f93ac7735c74e186249965b3a0876a893cb41fe35b`＝当初の登記の SHA-256（§11 の `gh api` で確かめた値）と一致。
 - この計測は裁定 1 の前の書庫（3,025,198 バイト）で取った。今の登記の書庫（3,042,433 バイト）との差は約 0.6% で小さいので、測り直していない。
+
+## 13. 追跡しないこと・通信しないこと・緑の確かめ（2026-10-19・タスク 8）
+
+- 回した場所: PowerShell 7 から、すべて絶対パスで（作業の根 `C:\home\maz\git\areka\.claude\worktrees\areka-p0-sample-url-fetch-835511`）。下の 1・2 はこの節を書き足す前に回した。
+
+### 1. 取り寄せの段を 2 回（要件 2.6）
+
+```
+pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-sample-url-fetch-835511\tools\sample-fetch.ps1
+```
+
+| 回 | 出力 | 終了コード |
+|---|---|---|
+| 1 回目 | `sample-fetch: pasta-in-windows: present`／`sample-fetch: fetched 0, present 1, failed 0` | 0 |
+| 2 回目 | `sample-fetch: pasta-in-windows: present`／`sample-fetch: fetched 0, present 1, failed 0` | 0 |
+
+- 置き場（`target\nar-samples\fetched\`）は前のタスクで埋まっていたので、1 回目から `fetched 0`。どちらの回も書庫は取らず、取ったのは隣のハッシュのファイル（`<URL>.sha256`）だけで、置き場の書庫と合ったので `present` になった（実装の段の裁定 2）。
+
+### 2. 追跡しないこと（要件 1.6・5.3）
+
+```
+git -C C:\home\maz\git\areka\.claude\worktrees\areka-p0-sample-url-fetch-835511 status --porcelain
+git -C C:\home\maz\git\areka\.claude\worktrees\areka-p0-sample-url-fetch-835511 ls-files '*.nar'
+```
+
+- `git status --porcelain`: 取り寄せの 2 回の後も**空**（0 行）。
+- `git ls-files '*.nar'`: `vendors/sample_ghost/` の 8 本（`R_POST_and_KOMAINU.nar`・`StayseeBalloon.nar`・`claudia.nar`・`emily4.nar`・`emo2-kakukaku-offsetdpi.nar`・`emo2-kakukaku-wplimit.nar`・`emo2.nar`・`konnoyayame.nar`）だけ。**`pasta-in-windows.nar` は 0 件**。
+
+### 3. 緑の確かめ（要件 5.6）
+
+| コマンド | 結果 | 終了コード |
+|---|---|---|
+| `cargo test -p sample-ghost-kit` | 82 passed・0 passed（doc）・6 passed・5 passed・3 passed、失敗 0 | 0 |
+| `cargo test -p log-capture-kit --test sample_path_guard_test` | 16 passed、失敗 0 | 0 |
+| `pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-sample-url-fetch-835511\tools\sample-fetch.ps1 -SelfTest` | `PASS 1`〜`PASS 8`・`selftest: all passed` | 0 |
+| `pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-sample-url-fetch-835511\tools\encoding-check.ps1` | `encoding check: all passed` | 0 |
+| `cargo fmt --all -- --check` | 差分なし（出力 0 行） | 0 |
+
+- テスト（`cargo test` の 2 本）は置き場の書庫を読むだけで通信しない。通信したのは 1 の取り寄せの段だけ。

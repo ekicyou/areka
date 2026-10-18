@@ -110,7 +110,7 @@
   - _Depends: 6.2_
   - _Requirements: 7.5, 7.6_
 
-- [ ] 8. 検証の手順で、追跡しないこと・通信しないこと・緑を確かめる
+- [x] 8. 検証の手順で、追跡しないこと・通信しないこと・緑を確かめる
   - 取り寄せの段を 2 回回して 2 回目が `fetched 0` で 0 で終わる（2 回目に取るのは小さいハッシュのファイルだけ）
   - `git status --porcelain` が取り寄せの後も空、`git ls-files '*.nar'` にぱすたが無い
   - `cargo test -p sample-ghost-kit`・`cargo test -p log-capture-kit --test sample_path_guard_test`・`tools/sample-fetch.ps1 -SelfTest`・`tools/encoding-check.ps1` が緑、`cargo fmt --check` が通る
