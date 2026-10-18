@@ -165,3 +165,68 @@
 - 要件の議論で 6 節の議題（とくに 1・3・4・5）を決める。答えによっては要件 3.2・3.3・3.8 の文言が変わる。
 - **2026-10-18 要件の討議で決まった**: 議題 1＝親そのものを「ゴーストだけの置き場」として足す（案 ⒝）。議題 3・4＝一時の置き場は並びの先頭に置き、写しがあっても指されたフォルダそのものを起こす。議題 5＝`nobootcheck` なしなら印を読み、`OnBoot` の由来は今までどおり渡す（要件 6.8）。議題 14＝網羅台帳は足さない。残りの議題（2・6〜13・15）は設計の段で決める。
 - その後 `/kiro-design areka-P0-startup-options-core` で設計へ。設計では案 C を土台に、4 節の小さな分かれ道と 7 節の調べものを片付ける。
+
+## 10. 設計の段の調べと決めごと（2026-10-18・kiro-spec-design）
+
+- **調べの種類**: 軽い調べ（今ある仕組みの拡張）。新しい部品（クレート）は無いので外の調べはしない。正典は ukadoc MCP の `ssphelp:option` を全文で読み直し、短い形の対応（`/o`・`/r`・`/g`・`/?`・`/f`＝`--fmo-name`・`/m`＝`--ukagaka-link`・`/i`＝`--install`・`/s`＝`--ssf`）と、値の取り方（`--install`・`--ghost`＝空白区切りで複数／`--fmo-name`・`--ukagaka-link`・`--ssf`・`--offline-dump`・`--offline-tool`・`--target-dir`・`--output`・`--guifont`＝1 つ／`--windowmode`・`--dump-*`・`--password`・`--help`・`--sstp-listen`＝省略できる 1 つ）を確かめた。
+- **使ったスキルと決まり**: `kiro-spec-design` の規則（境界を先に・型・図・レビューの関門）・steering の `logging.md`（`event=` と `[部品名]` の前置き）・記憶の決まり（1,000 行・兄弟のテスト・依存を足さない・`error!`＋`Err`・メッセージボックスを出さない・試験の根は `target\`）。
+
+### 10.1 コードで確かめたこと
+
+| 問い | 答え | 根拠 |
+|---|---|---|
+| SHIORI の行が無いゴーストをマウントできるか（7.4） | できる。`ShioriMount.file` は `Option` のまま通り、DLL の名前を読むのは接続の閉包（`real_connect`・`inproc_connect`）だけ。`ShioriWiring::Custom` は `mount.shiori` を読まない | `areka-parsers/src/package/model.rs:201`・`areka-ghost/src/runtime.rs:660-673` |
+| 中身なしの SHIORI を `lib.rs` に触らずに外へ出せるか | 出せる。`shiori_wiring` は `pub mod` | `areka-ghost/src/lib.rs` |
+| 倒れ先の起動の SHIORI はどこで決まるか | `ghost_session.rs:680` が `boot_config::ghost_boot_options` を呼び、その中で `Helper` を詰める。`ghost_boot_options` の中で決め方を替えれば `ghost_session.rs` に触らずに済む | `boot_config.rs:414` |
+| 結線ありの起動と切替の SHIORI はどこで決まるか | `main.rs` の `install_boot_context` が据える作り口の閉包（`GhostBootInputs::production` を呼ぶ）。閉包の中で `wiring.shiori` を上書きできる（欄は `pub`） | `main.rs:436-456`・`ghost_session.rs:364-388` |
+| 中身なしの SHIORI の死活 | 実行系は `status()` が `Exited` を返したときだけ落ちたと見る。常に `Running` を返せばよい（`InProc` と同じ） | `areka-kanade/src/shiori/real.rs:228-250` |
+| `RootMark` を網羅の `match` で見ている所 | `roots/report.rs:37` だけ。ほかは `matches!` | grep |
+| 置き場の項目を探す判断 | `decide_add`・`decide_remove`・`decide_front` は `same_root(r.dir(), …)` で最初の一致を取る。一時の置き場と普通の置き場が同じフォルダを指すと、一時の方を掴む | `roots/edit.rs` |
+| 入れ先の決め方 | `install_root`（`install/destination.rs:99` が呼ぶ 1 か所）。見えている項目の根か、見つかるいちばん上の根 | `areka-ghost/src/catalog_roots.rs:149` |
+| `--help` で開く口 | `readme/os_port.rs` の `WindowsShell`（`ShellExecuteExW`・`SEE_MASK_FLAG_NO_UI`）と `init_com_for_shell`。`readme.rs` の中で `mod os_port;`（私有）なので、外から使うには `pub(crate) mod` に替える 1 行が要る | `readme.rs:197` |
+| MCP の待受の空の列 | `areka_mcp::start(&[])` は「AREKA_MCP_PORT が 0」の info を出す＝要件 8.4・8.7 の文に合わない。`start` を呼ばなければよい（`areka-mcp` に触らない） | `areka-mcp/src/server.rs:35-39` |
+| 実走の 3 本の引数 | どれも絶対パス 2 つだけで、`-`・`/` で始まらない。`smoke_boot_loop_exit.rs:311` は `route=Argv` を照合する | `tests/*.rs` |
+| `main.rs` の外へ出せる塊 | 自動 close の仕掛け（`smoke_exit_ms` の塊・275〜305 行・904〜937 行の約 60 行）。テストは `main_startup_window_tests.rs` の 1 本（`use super::*` で `smoke_exit_ms_from` を見るだけ）で、ほかの関数に触らない | `main.rs` |
+
+### 10.2 議題の残り（2・6〜13・15）の決め
+
+| 議題 | 決め | 理由 |
+|---|---|---|
+| 2 一時の置き場の表し方 | `RootMark::Temporary` を足す。項目の `dir()` はゴーストのフォルダを並べたフォルダそのもので、`ghost_store()` は `dir()` を返す。バルーンは探さない（`scan_balloons`・`balloon_stores` が飛ばす） | 印の先例（`UserRoot`）と同じ形。目録・入れ先・メニュー・記憶が並び 1 本だけを見ればよい |
+| 6 経路の名前 | `--ghost` で決まったら新しい `GhostRoute::Pointed`。`--random` は今の `Random` を使い、記録の `event` で分ける（`ghost_random_requested`） | 位置の引数の `Argv` はそのまま（実走の照合）。`Random` を特別に扱う所は無い |
+| 7 候補 1 体の `--random` | その 1 体（`pick` を呼ばない）。記録の候補の数は 1 | `pick` は 2 以上が前提 |
+| 8 中身なしの SHIORI と旗 | `areka-ghost/src/shiori_wiring.rs` に `EmptyShiori` と `empty_connect()`。旗（`ModulePolicy`）は `install_boot_context` の引数で作り口の閉包へ渡し、倒れ先のためにプロセスに 1 つの値として `boot_config` にも置く（`main` が 1 度だけ詰める）。`ghost_session.rs` には触らない | 倒れ先の呼び手（`ghost_session.rs:680`）の形を変えずに済む唯一の道。作り口の側は引数にしたのでテストで確かめられる |
+| 9 `--sstp-listen` | `crates/areka/src/cli/listen.rs` で読み、`areka_mcp::start(&[u16])` へ渡す。`none`・全部はねたときは `start` を呼ばずに areka が記録する。`areka-mcp` に触らない | 並走 ⑧ の持ち物を避ける。今の `start` が 8.3（最初に束ねた 1 つ・127.0.0.1）をそのまま満たす |
+| 10 `--help` の開き方 | 起動の解決・MCP・窓の前に、`WindowsShell::shell_execute` を 1 回だけ同期に呼ぶ（先に `init_com_for_shell`）。OS が受け付けたら 0、断ったら error＋1 | World も専用のスレッドもまだ無い |
+| 11 `main.rs` の 1,000 行 | 自動 close の仕掛けを新しい `smoke_exit.rs` へ出す（テストは `main_startup_window_tests.rs` を `smoke_exit_tests.rs` へ名前替え）。記録の文と環境変数の名前は変えない | ほかの関数とテストを動かさずに約 55 行減る |
+| 12 試験の呼び手 18 か所 | 本番は `resolve_boot(&BootRequest)`→`resolve_boot_with`。今の `resolve_boot_from(resolved, &[String], …)` はテストのための口（`#[cfg(test)]`）として残し、中で `cli::parse` を通してから `resolve_boot_with` を呼ぶ | 18 か所を書き換えずに済み、新しいテストも引数の列のまま書ける |
+| 13 引数の細部 | ⒜ `std::env::args_os()` で読み、UTF-8 でないものは置き換えて warn（1.14）⒝ `/c/...` は短い形として読まれ、知らない名前で warn＋無視（説明書に「位置の引数は Windows の綴り `C:\…` で」と書く）⒞ 位置の引数は `--ghost` の前に書く（説明書・10.1） | 正典の読み方どおり |
+| 15 名前の引き当て | `ghost_switch::resolve_switch_target` を呼ぶだけ（動かさない）。④ `mcp-reload` が `ghost_switch.rs` を割って場所が変わったら、取り込みで `use` の行をつなぎ直す | 並走の約束 |
+
+### 10.3 そのほかの決め（要件の文が決めていない細部）
+
+- `--名前=値` を値を取らない名前（`--random=x`）に付けたとき: 名前は効かせ、値は使わずに warn を 1 件（`option_value_ignored`）。要件 1.13 の「止めない」の内。
+- `--ghost=A B` は `--ghost A B` と同じ（要件 1.2「`--名前 値` と同じ意味」）。
+- `--ghost` だけ（値なし）と位置の引数のゴーストが両方あるとき: `--ghost` が渡されたとみなし、位置の引数のゴーストは使わない（2.4 の warn）・4.7 の warn・いつもの選び方。
+- `--ghost` の指し先が見つからない（3.10・4.4・4.7）ときの「いつもの選び方」は、用語の定めどおり `--random` と `nobootcheck` の効いた選び方。5.3 の「`--random` を使わなかった」の info は、指されたゴースト（または位置の引数のゴースト）を実際に起こしたときだけ出す。
+- `--sstp-listen` の値の中の `none` は、値の全体が `none` のときだけ「待ち受けない」。ほかの待ち受け先と並んだ `none` は書式の誤り（8.5 の warn）。`127.0.0.1` 以外の `127.x.x.x` は 8.6 の warn。
+- 一時の置き場があるあいだの「置き場を先頭へ」: 先頭は「覚える置き場の先頭」＝一時の置き場の直後へ入れる（一時の置き場は並びの先頭のまま＝3.9）。「置き場を外す」の「最後の 1 つ」は覚える置き場だけで数える。3 つの判断は覚える置き場だけを探す（一時の置き場と普通の置き場が同じフォルダを指しても取り違えない）。
+- `--ghost` の名前で決まったゴーストは、記憶の段で決まったのと同じに利用者ごとの置き場へ写す（3.9・4.3）。絶対パスで決まったゴーストは写さない（3.8）。
+
+### 10.4 まとめ方（design-synthesis）
+
+- **一般化**: `--ghost` の指し先・`--random`・記憶・唯一・既定・無作為を 1 本の選び方（`resolve_ghost`）の段として並べる。指し先は段 1 の位置の引数の直後の段で、選び方は 2 本にならない。起動オプションの読み方は表 1 本（名前・短い形・値の取り方・種類）で、後に続く 3 本（`offline-surface-dump`・`readonly-mode`・`startup-install-option`）は表の行を「扱わない」から「効かせる」へ移して `StartupOptions` に欄を足すだけ。
+- **作るか借りるか**: 引数を読む部品は借りない（依存を足さない・SSP の書き方〔`/x`・`--x=v`・空白区切りで複数・省略できる値〕に合う部品が無い）。先例は `areka-impl-watch/src/cli.rs` の表。MCP の待受・名前の引き当て・OS で開く口・SHIORI の差し替え口は今あるものを借りる。
+- **削ったもの**: 新しいクレート・`areka-mcp` の新しい入口・`cli/` の中の記録専用のファイル・`BootContext` の新しい欄（使う所が 1 つも無いのに 23 のテストを書き換えることになる）・`--help ファイル名` の働き。
+
+### 10.5 危うさ
+
+- **倒れ先のためのプロセスに 1 つの値**: `boot_config` の `OnceLock`。`main` が起動の解決の前に 1 度だけ詰め、テストは詰めない（既定は「読む」）。2 度目は配線の誤りとして error を残して最初の値を保つ。
+- **④ `mcp-reload` の SHIORI の読み直し**: 作り口（`GhostBootInputsSource`）か `boot_config::shiori_wiring` を通らずに `real_connect` を直に呼ぶ形になると、`dontloadmodule` が読み直しで破れる。着手の前に areka棚卸 へ知らせ、④ と申し合わせる（design.md の「並走の申し合わせ」）。
+- **一時の置き場とバルーン**: 一時の置き場の下の `balloon\` は探さない（要件 3.2）。`BasewareRoot::balloon_store()` 自体は一時の置き場でも綴りを返すので、和と `balloon_stores` が必ず飛ばす。新しい呼び手が `balloon_store()` を直に使うときは印を見る。
+- **`--ghost` で exe の隣のゴーストを絶対パスで指した起動**: 写さないので、Program Files などの書けない場所なら今の位置の引数と同じく書けるかの確かめ（`write_failure::check_boot_dirs`）で止まる。今の決まりのまま。
+
+### 10.6 設計のレビューの関門
+
+- 1 回目: 機械の確かめで要件 10.1〜10.3 が対応表の行に無い（範囲の 1 行にまとめていた）→ 3 行に割って直した。境界の 4 節・ファイルの計画・部品とファイルの対応は空きなし。
+- 2 回目: 78 の要件がすべて対応表にあり、部品はすべてファイルの計画に載る。要件の穴・食い違いは見つからない（細部の決めは 10.3）。関門を通った。
