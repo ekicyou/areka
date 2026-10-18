@@ -161,6 +161,15 @@ pub const SAMPLES: &[Sample] = &[
         balloons: &[],
         source: SampleSource::Vendored,
     },
+    // 窓際のぱすたさん。書庫は取り寄せの段が置き場へ取る（`tools/sample-fetch.ps1`）。
+    Sample {
+        name: "pasta-in-windows",
+        kind: SampleKind::Ghost,
+        balloons: &[],
+        source: SampleSource::Fetched {
+            url: "https://ekicyou.github.io/ghost_dev/pasta-in-windows/pasta-in-windows.nar",
+        },
+    },
 ];
 
 /// 取得した検体。**この値を束縛している間だけ**パスを借りられる。

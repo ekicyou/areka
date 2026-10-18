@@ -55,7 +55,7 @@
   - _Depends: 3.3_
   - _Requirements: 1.4, 3.1, 3.2, 3.4, 3.8, 3.9_
 
-- [ ] 4. 「窓際のぱすたさん」を登記し、登記の数を 9 にする
+- [x] 4. 「窓際のぱすたさん」を登記し、登記の数を 9 にする
   - タスク 1 で決めた名前・種別・同梱のバルーンと、登記の URL だけで URL の行を 1 行足す（SHA-256 と大きさは登記しない）
   - 登記の数の直書き 2 か所を 9 にし、未登録の名前の一覧に足す。全部の行を引く判定 2 本は、失敗を `Display` の文で出して落ちる形にし、書庫のパスを 3.4 の解決から得る
   - 3.3 の欄の形の判定関数を登記表の全部の URL の行にかけ、すべて通ることを判定する
@@ -133,3 +133,4 @@
 - 3.1: `FetchedNarMismatch` の仮の `#[error]` 文に字下げの空白が入っている。3.2 で文を作り直すときに消す。`lib_tests.rs` の `current_rows_are_registered_as_vendored` の数 8 は、4 でぱすたを足しても Vendored は 8 のままなので、Fetched の行を許す形へ直す。
 - 3.2: `fetched::verified_nar_in` の一時の `#[cfg_attr(not(test), allow(dead_code))]` は 3.4 でつないだら外す。設計の判定のうち「照合に落ちたら `cache\` に原本ができない」「合えば `fresh_root_in` まで通る」「同じ書庫で 2 回取ると同じ刻印」は 3.4 で足す。`fetched_row_form` は `#[cfg(test)] pub(crate)`（4 で `lib_tests` から使う・3.3 で引数から SHA-256 と大きさを外す）。3.1 の `FetchedNarMismatch` の字下げの注は、3.3 で欄を改めるときにも残らないようにする。
 - 3.3: `fetched::checksum_url` の一時の dead_code の許しは 5（`--fetch-list`）で外す。`verified_nar_in` の許しは 3.4 で外す。両方の書庫が無いときは、ハッシュのファイルのパスで Missing を返す（読む順のとおり）。
+- 4: ぱすたの行を足した後は、置き場（`target\nar-samples\fetched\`）に書庫とハッシュのファイルが無いと `cargo test -p sample-ghost-kit` の全部の行の判定 2 本が赤になる（要件 6.1 どおり）。5 以降のタスクは置き場が埋まっている前提で回す。

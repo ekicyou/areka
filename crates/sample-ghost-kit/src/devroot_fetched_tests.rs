@@ -65,7 +65,10 @@ fn a_vendored_row_resolves_to_the_repository_nar_without_asking_for_the_namespac
         nar_dir().join("vendored-row-probe.nar")
     );
     // 登記表の今の行は全部この形（今の 8 本の引き方は変わらない）。
-    for sample in crate::SAMPLES {
+    for sample in crate::SAMPLES
+        .iter()
+        .filter(|s| s.source == SampleSource::Vendored)
+    {
         assert_eq!(
             sample_nar(sample.name).expect("登記済みの名前は引ける"),
             nar_dir().join(format!("{}.nar", sample.name)),
