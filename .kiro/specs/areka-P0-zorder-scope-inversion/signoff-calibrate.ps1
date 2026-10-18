@@ -17,7 +17,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $wt = (Resolve-Path (git -C $PSScriptRoot rev-parse --show-toplevel)).Path
 $out = Join-Path $wt 'target\zorder-inversion-signoff\calibration'
-if (-not $RealLog) { $RealLog = Join-Path $out 'real-default.log' }
+# 既定は task 5.2 の指定なしの実走のログの控え（本書と同じフォルダ・コミット済み）。
+if (-not $RealLog) { $RealLog = Join-Path $PSScriptRoot 'signoff-real-default.log' }
 if (-not (Test-Path -LiteralPath $RealLog)) { Write-Output "BAD-ARGS: real log not found: $RealLog"; exit 3 }
 $judge = Join-Path $PSScriptRoot 'signoff-judge.ps1'
 New-Item -ItemType Directory -Force $out | Out-Null

@@ -152,7 +152,7 @@ pwsh -NoProfile -File $j -Log "$s\default\run.log"  -Case default  -Probe "$s\de
 
 ### 6.1 標本の作り方（**再生成が正本**）
 
-- **既存の実走のログ**: 指定の無い emo2 の実走ログ（`RUST_LOG` に `wintf::ecs::window=debug` を含む・`[zorder-pair] owner-established` が 2 行・`[zorder-group]`／`[zorder-chain]` が 0 行）を `target\zorder-inversion-signoff\calibration\real-default.log` に置く。今回は `areka-P0-anchor-tag-canon` の実走ログ `run-Box.log`（2026-10-16・359 行・md5 `484B262DC6921399DD1551463BE5ADEA`）を写した。task 5.2 の後は `default\run.log` を `-RealLog` に渡して作り直せる。
+- **既存の実走のログ**: 指定の無い emo2 の実走ログ（`RUST_LOG` に `wintf::ecs::window=debug` を含む・`[zorder-pair] owner-established` が 2 行・`[zorder-group]`／`[zorder-chain]` が 0 行）。既定は本書と同じフォルダの `signoff-real-default.log`（コミット済み）で、task 5.2 の `default` の走行の `run.log` の写し（2026-10-19・214 行・md5 `5F1CF6AA6DE98D3E05D230C2964D6B21`）である。別の実走ログは `-RealLog` に渡して当てられる。task 5.1 の初回の較正は `areka-P0-anchor-tag-canon` の実走ログ `run-Box.log`（2026-10-16・359 行・md5 `484B262DC6921399DD1551463BE5ADEA`・この機械の `target\` にしか無い）で行い、同じ 25 通り 0 食い違いだった。
 - **作ったログ**: 実走のログをそのまま頭に置き、その後ろへ本番の行の組立（`zorder_chain_diag.rs` の書式・`zorder_drain.rs` の受理の本文。どちらも兄弟テストが逐語で固定）で組んだ行を足す。窓のハンドルは実走のログの `owner-established` の 2 行から取る（手で決めた値を使わない）。前面走査の控えも同じハンドルで組む。
 
 ```powershell
@@ -197,32 +197,32 @@ pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-sc
 - `inverted` の「正の宣言列の頭 2 つが s0・b0」の検査を外す → 18 行目が exit 2 になり食い違い 1。
 - 戻した後は 25 通り 0 食い違い。
 
-### 6.3 標本の md5（2026-10-19・再現の錨）
+### 6.3 標本の md5（2026-10-19・task 5.2 の後に既定の実走ログを差し替えて取り直した・再現の錨）
 
-生成は決定論である。`real-default.log` が同じなら下表と一致する。一致しなければ、本番の行の書式か受理の本文が動いている。
+生成は決定論である。`signoff-real-default.log` が同じなら下表と一致する。一致しなければ、本番の行の書式か受理の本文が動いている。
 
 | 標本 | md5 |
 |---|---|
-| `real-default.log`・`real.log` | `484B262DC6921399DD1551463BE5ADEA` |
-| `inv-good.log` | `810809C18F6C760D154C3B13993054B7` |
-| `inv-untied.log` | `240EEC8B421E5336B3B30BF028EFE913` |
-| `inv-oldword.log` | `4F608566218A65FA3047CE36946B5A6F` |
-| `inv-noreleased.log` | `AF8F562BBF1C6CFFF3112E0832518A85` |
-| `inv-unsettled.log` | `C9A42F1ACD4BF8E2B9B5B862FE8B0F28` |
-| `inv-refused.log` | `1FB018CE49043B009249AF9F35C6C1D8` |
-| `inv-noapplied.log` | `6734CFF3461732C69811509F5952AF81` |
-| `inv-pairorder.log` | `E930997DEC10012D103CD04C0BCFBE1C` |
-| `exp-good.log`・`num-wrongword.log`（同じ中身） | `F36A5DD505CF465801AA2050CC0D16D0` |
-| `exp-released.log` | `A8BC83FE6A94E2617ADF6826E9DE5AD9` |
-| `num-good.log` | `FE637D6EFDF4CE75F7A1E4D6CF760566` |
-| `def-chainleak.log` | `041C0719FBFAA6D852F8D23166284F17` |
-| `nopair.log` | `A2101AAEA1AB4F0FE7EA7646AFAA5D46` |
-| `probe-good.txt` | `7573EE2171FB3BE06501B336B9EBEC50` |
-| `probe-press-flip.txt` | `CF5A7A4A0ECCE7AD1CD35F38C73F76B3` |
-| `probe-split.txt` | `078ED6719CB716C8BCCB03C63C769BD8` |
-| `probe-missing.txt` | `5D9EBF62527BFB29C8A0C8DFDE31FE65` |
-| `probe-pairs-good.txt` | `69B68D3DA52F8D18C3F2D46CA5067F8A` |
-| `probe-pairs-flip.txt` | `F9679D092A7626C2C7D974E26BDFDCBA` |
+| `signoff-real-default.log`・`real.log` | `5F1CF6AA6DE98D3E05D230C2964D6B21` |
+| `inv-good.log` | `F9236DB721CFF3104418956D9FF422DE` |
+| `inv-untied.log` | `6ADDC372AA513384FEDB3934C44F1955` |
+| `inv-oldword.log` | `0BB1BCB177D651BE939838DE2E5DBD1E` |
+| `inv-noreleased.log` | `E70CFDE7C114437A80C07662131B12DF` |
+| `inv-unsettled.log` | `34D220D4291BCFC5F2D4D7828800309F` |
+| `inv-refused.log` | `9931D2B1DEF77CF7CB25DA149EE04CC8` |
+| `inv-noapplied.log` | `F270423A512B1A08CB12E4BB800236AD` |
+| `inv-pairorder.log` | `B398771CDB23DB6373B355AA83C14B4A` |
+| `exp-good.log`・`num-wrongword.log`（同じ中身） | `183A501A30047A13BC74848F9AFB6349` |
+| `exp-released.log` | `2F3771F255494A49AA72227DA612FA4E` |
+| `num-good.log` | `0394F4AD182B94F108659DF60F66CE43` |
+| `def-chainleak.log` | `3BB9AA205D355B486CFE42D353A9005E` |
+| `nopair.log` | `DAA54E8E57FA114919D4ED4A676EF22B` |
+| `probe-good.txt` | `76FF712BE5F1DA8D611A01D77CD85C24` |
+| `probe-press-flip.txt` | `1233CF81D1CFD2C679D2FADC9DFF8B1C` |
+| `probe-split.txt` | `266C99654D7DD6DB324CF30F052FA38C` |
+| `probe-missing.txt` | `688131CFA6B9C3AC6EDC20802605D3CE` |
+| `probe-pairs-good.txt` | `AC1683FF41EBF544092A132926782BA3` |
+| `probe-pairs-flip.txt` | `72CB8307FD382ED03955447D764ED960` |
 
 ### 6.4 判定の道具が見ないこと（意図的）
 
@@ -230,6 +230,130 @@ pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-sc
 - `settled` の `nudge_ok=` は判定に使わない。後押しが失敗しても並びが宣言どおりなら成立しており、崩れたなら S が終状態で捕まえる。
 - 前面走査は見えている窓だけを読む（不可視の補助窓を読まない・R2）。`default` の前面走査は組の隣り合いだけを見る（鎖が無いのでスコープの間の順は決まりの外）。
 
-## 7. 実走の記録（task 5.2 で追記）
+## 7. 実走の記録（task 5.2・2026-10-19）
 
-（未実施）
+### 7.1 走らせたもの
+
+入力デスクトップは `Default`（`steps.txt` の頭の行 `desktop=Default`）。押下（SendInput）は開発者の許可を得て `-Press` の走行の間だけ使った。4 本を同じ回に順に走らせた。
+
+| # | コマンド | 走行の終了コード | 時刻（開始 → 終了） |
+|---|---|---|---|
+| 0 | `pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\areka-P0-zorder-scope-inversion\signoff-run.ps1 -Prepare` | 0（4 種類とも `areka=8664`・`helper=014C`・指定入りは `tagged_scenes=16`） | — |
+| 1 | `pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\areka-P0-zorder-scope-inversion\signoff-run.ps1 -Run inverted -Press` | 0（`inverted exit=0 ok=True`） | 07:34:54 → 07:36:26 |
+| 2 | `pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\areka-P0-zorder-scope-inversion\signoff-run.ps1 -Run explicit` | 0（`explicit exit=0 ok=True`） | 07:36:41 → 07:37:12 |
+| 3 | `pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\areka-P0-zorder-scope-inversion\signoff-run.ps1 -Run numeric` | 0（`numeric exit=0 ok=True`） | 07:37:14 → 07:37:45 |
+| 4 | `pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\areka-P0-zorder-scope-inversion\signoff-run.ps1 -Run default` | 0（`default exit=0 ok=True`） | 07:37:47 → 07:38:18 |
+| 5 | `pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\areka-P0-zorder-scope-inversion\signoff-run.ps1 -Run inverted -ExitMs 75000`（目視のための追加の 1 本・押下なし） | 0 | 07:54:48 → 07:56:03 |
+
+5 本目は §7.6 の目視のために、押さずに画面を撮るだけの走行として足した（SendInput は使っていない）。道具は `inverted\` へ書くので、走った後に採れたものを `inverted-visual-run\` へ移し、1 本目（`-Press`）の採れたものを `inverted\` へ戻した（戻した `inverted\run.log` の md5 は §7.3 と同じ。控えの写しが `inverted-press-run\` にもある）。そのため `inverted-visual-run\steps.txt` の頭の行の `root=` は移す前の `inverted\root` を指している。
+
+### 7.2 判定（§5 のコマンド・終了コードで取った）
+
+| 種類 | 判定の終了コード | 項目 |
+|---|---|---|
+| `inverted` | **0** | A=PASS R=PASS L=PASS S=PASS P=PASS（6 場面とも ok） |
+| `explicit` | **0** | A=PASS R=PASS L=PASS S=PASS P=PASS |
+| `numeric` | **0** | A=PASS R=PASS L=PASS S=PASS P=PASS |
+| `default` | **0** | D=PASS P=PASS |
+| `inverted`（5 本目・`inverted-visual-run\`） | 2 | A=PASS R=PASS L=PASS S=PASS P=INCONCLUSIVE（`missing probes: press-s0,press-b0,drag-s0,other-app,returned`） |
+
+5 本目の 2 は、押下の無い走行なので前面走査が `boot` の 1 場面しか無く、`inverted` の判定が 6 場面を求めるため（§6.2 の 11 行目と同じ「場面が欠ければ判定不能」）。採れた `boot` の 1 場面は ok で、ログの側の 4 項目は緑。task 5.2 の判定は 1〜4 本目の 4 本が担い、5 本目は目視の材料である。判定の道具は変えていない。
+
+### 7.3 一次証跡の md5（判定の前に控えた）
+
+置き場は `C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\target\zorder-inversion-signoff\<種類>\`（コミットしない）。`default` の `run.log` だけは `signoff-real-default.log` として本書と同じフォルダへ控えた（§6.1）。
+
+| ファイル | 行数 | md5 |
+|---|---|---|
+| `inverted\run.log` | 335 | `A744A3005E12B672C88BB1A3806C8A74` |
+| `inverted\probe.txt` | 6 | `E01CA69564D7F5234D3ABCFDE03AAA08` |
+| `explicit\run.log` | 205 | `60AF1C6E12F54130A5527F47EF5A0D90` |
+| `explicit\probe.txt` | 1 | `68952D8A27D3165271576CEB8DB067D0` |
+| `numeric\run.log` | 213 | `8E9C725492AD7E40C8DA9F41717CC247` |
+| `numeric\probe.txt` | 1 | `9B2CF5663AF26D3885B9F3598CB31976` |
+| `default\run.log`（＝`signoff-real-default.log`） | 214 | `5F1CF6AA6DE98D3E05D230C2964D6B21` |
+| `default\probe.txt` | 1 | `1A882BE76ED32D6E93B2C4AA0B4933BB` |
+| `inverted-visual-run\run.log`（5 本目） | 148 | `6AA351F14F929D44B7E68432A4798D6C` |
+| `inverted-visual-run\probe.txt`（5 本目） | 1 | `2CCA51C699851ED36DA7034849EC4695` |
+
+### 7.4 鍵の行（冠込み・時刻と発信元の前置きを外して逐語）
+
+`inverted`（窓: s0=`0x121474`・b0=`0x1F00D34`・b1=`0x80141A`・s1=`0x600D56`）:
+
+```
+[zorder-pair] owner-established entity=25v0 peer=26v0 owned_hwnd=0x1F00D34 owner_hwnd=0x121474 measured_prev=0x600D56
+[zorder-pair] owner-established entity=27v0 peer=28v0 owned_hwnd=0x80141A owner_hwnd=0x600D56 measured_prev=0x1F00D34
+[zorder-group] applied action=reset groups=0 base=-
+[zorder-group] applied action=set group_id=0 source=Tag members=s0,b0,b1,s1 normalized=0:inverted,1:false+b1
+[zorder-chain] pair-released entity=25v0 peer=26v0 owned_hwnd=0x1F00D34 owner_hwnd=0x121474 unlinked=true
+[zorder-chain] linked segment=g0 owned=26v0 owner=25v0 owned_hwnd=0x121474 owner_hwnd=0x1F00D34 pos=1/4
+[zorder-chain] linked segment=g0 owned=25v0 owner=27v0 owned_hwnd=0x1F00D34 owner_hwnd=0x80141A pos=2/4
+[zorder-chain] settled nudged_hwnd=0x600D56 insert_after=0x121474 declared=0x121474,0x1F00D34,0x80141A,0x600D56 measured=0x121474,0x1F00D34,0x80141A,0x600D56 nudge_ok=true
+```
+
+`explicit`:
+
+```
+[zorder-group] applied action=set group_id=0 source=Tag members=b0,s0,b1,s1 normalized=0:false,1:false
+[zorder-chain] linked segment=g0 owned=26v0 owner=27v0 owned_hwnd=0x2A13F4 owner_hwnd=0x1D501FA pos=2/4
+[zorder-chain] settled nudged_hwnd=0x4C511C6 insert_after=0x2040FB8 declared=0x2040FB8,0x2A13F4,0x1D501FA,0x4C511C6 measured=0x2040FB8,0x2A13F4,0x1D501FA,0x4C511C6 nudge_ok=true
+```
+
+`numeric`:
+
+```
+[zorder-group] applied action=set group_id=0 source=Tag members=b0,s0,b1,s1 normalized=-
+[zorder-chain] linked segment=g0 owned=26v0 owner=27v0 owned_hwnd=0x7A1256 owner_hwnd=0xD612F2 pos=2/4
+[zorder-chain] settled nudged_hwnd=0xA512A8 insert_after=0x4C611C6 declared=0x4C611C6,0x7A1256,0xD612F2,0xA512A8 measured=0x4C611C6,0x7A1256,0xD612F2,0xA512A8 nudge_ok=true
+```
+
+`explicit`・`numeric` とも `[zorder-chain] pair-released` は 0 行（組は隣り合うので外さない＝本機能の前と同じ・要件 8.6）。
+
+`default`: `[zorder-group]`・`[zorder-chain]` の行は 0 行。`[zorder-pair] owner-established` が 2 行（b0=`0xA612A8`→s0=`0x7C1280`・b1=`0xAA1358`→s1=`0x2C13F4`）。
+
+### 7.5 押した後の並び（`inverted\steps.txt`・`probe.txt`）
+
+| 場面 | 押した点（物理画素） | その後の前面の窓 | 前面走査（手前 → 奥） |
+|---|---|---|---|
+| `boot` | — | `0x400C6`（他のアプリ） | `*,0x121474,0x1F00D34,0x80141A,0x600D56,*` |
+| `press-s0` | 2446,1157（1 点目で届いた） | `0x121474`（s0） | `*,0x121474,0x1F00D34,0x80141A,0x600D56,*` |
+| `press-b0` | 2196,576（1 点目で届いた） | `0x1F00D34`（b0） | `*,0x121474,0x1F00D34,0x80141A,0x600D56,*` |
+| `drag-s0` | 掴んで左へ 60 画素・離した点 2386,1157 | `0x121474`（s0） | `*,0x121474,0x1F00D34,0x80141A,0x600D56,*` |
+| `other-app` | 280,200（道具の窓） | `0x2115FC`（道具の窓） | `*,0x121474,0x1F00D34,0x80141A,0x600D56,*` |
+| `returned` | 1728,1304（s1） | `0x600D56`（s1） | `*,0x121474,0x1F00D34,0x80141A,0x600D56,*` |
+
+- 6 場面とも並びは宣言列 s0 → b0 → b1 → s1 のままで、ゴーストの窓の間に他のアプリの窓（`*`）は 1 度も挟まらなかった。§4.4 の止める条件（R3）には当たらず、押下で塊のまま上がった（要件 5.1・5.3・5.4）。
+- `press-s0`・`press-b0` の後もむらさきのバルーン（b0）はむらさき（s0）より奥のまま（要件 5.2）。
+
+### 7.6 目視の結果（要件 8.4）
+
+**撮り方**: 5 本目の走行（§7.1・押下なし）の起動から約 20 秒後（07:55:10。`[zorder-chain] settled` は 07:54:49）に、PowerShell の `Graphics.CopyFromScreen`（DPI を正しく扱う設定で、物理画素のまま）で画面を撮った。画面の撮影の道具（computer-use）は登録の無いアプリを覆い隠し、作業ツリーの検体の `areka.exe` が写らないので使っていない。
+
+| ファイル（`target\zorder-inversion-signoff\visual\`） | 中身 | 大きさ | md5 |
+|---|---|---|---|
+| `screen0.png` | 主モニタの全体（ゴーストはここ） | 2880x1800 | `1865076680B4F10291114F3D2B54439A` |
+| `screen1.png` | 副モニタの全体 | 3413x2133 | `9A248B0F0BF9322378777E06A6D43D51` |
+| `z_s0_b0_b1.png` | `screen0` の切り抜き（x2100 y700・500x450） | 500x450 | `1383F906D99F403A24AFF305E032EFFE` |
+| `z_b1_s1.png` | `screen0` の切り抜き（x1600 y900・500x400） | 500x400 | `3E28EBC66632CF835752D1B9B51C0750` |
+
+この走行の窓: s0=`0x16C0F26`・b0=`0x11A0D6C`・b1=`0xE512F2`・s1=`0x1F30D34`（`inverted-visual-run\run.log` の `pair-released` と `linked`）。最後の `[zorder-chain] settled` は `declared=0x16C0F26,0x11A0D6C,0xE512F2,0x1F30D34` で `measured=` も同じ 4 窓。`boot` の前面走査（07:54:53）も `*,0x16C0F26,0x11A0D6C,0xE512F2,0x1F30D34,*` だった。
+
+**見えたもの**（`screen0.png`）:
+
+- むらさき（s0）が右に立ち、むらさきのバルーン（b0・「ふぁ‥‥、おはよ！もう朝なん！？はやっ！」）がその左上にあって、しっぽがむらさきの頭へ向いている。
+- エモ（s1）が左下に座り、エモのバルーン（b1・「切り替え早すぎない？」）が 2 人の間にあって、しっぽがエモへ向いている。
+- むらさきの髪が b1 の枠の右の端の上に描かれている（`z_s0_b0_b1.png` で枠の線が髪の後ろへ隠れる）。つまり s0 は b1 より手前。
+- どちらのバルーンもむらさきに掛かっていない（バルーンがむらさきより手前へ出ていない）。
+
+以上は、重なっている画素から読める限りで、宣言の並び 手前 s0 → b0 → b1 → s1 と合っている。
+
+**目では見えないこと（限り）**:
+
+- この配置では b0 と b1、b1 と s1、b0 と s1 は画面の上で重なっていない（`z_b1_s1.png` でも b1 のしっぽとエモの髪は離れている）。そのためこれらの組の前後は目では判じられない。これらの組の順は、同じ走行の `settled` の宣言と実測の一致と `boot` の前面走査（上）、および 1 本目の 6 場面の前面走査（§7.5）が裏付ける。
+- 目で前後が見えたのは s0 と b1 の 1 組だけである。要件 8.4 の前 3 枚（s0 → b0 → s1）のうち、s0 が b0 にも s1 にも隠されていないことは見えたが、b0 と s1 の前後は上のとおりログと前面走査による。
+- 押した後（`press-s0` の後に b0 が s0 より手前へ出ないこと・要件 5.2）は、5 本目が押下なしの走行なので目では見ていない。§7.5 の前面走査による。
+- 撮った時、主モニタの右下に Claude アプリの通知（他のアプリの窓）がむらさきの下の方に重なって出ていた。ゴーストの並びの手前にある他のアプリの窓で、並びの間には入っていない（前面走査の頭の `*`）。
+
+### 7.7 較正の取り直し（§6）
+
+`pwsh -NoProfile -File C:\home\maz\git\areka\.claude\worktrees\areka-p0-zorder-scope-87951c\.kiro\specs\areka-P0-zorder-scope-inversion\signoff-calibrate.ps1` を、既定を `signoff-real-default.log` に替えて回した: `calibration: 25 rows, 0 wrong`・**exit=0**。標本の md5 は §6.3 を取り直した値で、窓のハンドル（`s0=0x7C1280 b0=0xA612A8 s1=0x2C13F4 b1=0xAA1358`）が新しい実走ログから取られている。
