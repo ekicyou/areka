@@ -76,7 +76,7 @@
   - _Requirements: 4.2, 4.3, 4.5, 4.6, 4.7, 4.8, 4.9, 9.2, 10.5_
 
 - [ ] 4. 呼び手から見える窓口
-- [ ] 4.1 走りの取っ手と既定の時間を作る
+- [x] 4.1 走りの取っ手と既定の時間を作る
   - 子・出力の 2 つのパス・MCP の呼び出し・回の置き場・既定の時間・選んだ番号・最初に観測した終わりを持つ
   - 出力を標準出力だけ・標準エラーだけ・両方の並びで、途中でも終わった後でも読める（読めない字は置き換え）
   - 文字列の待ち（締切切れは失敗）・呼ぶ・呼び直す・閉じる・自分で終わるのを待つを、既定の時間の各欄を引数として下の部品へ渡して束ねる。閉じた後は 2 度目からも同じ終わりを返す
@@ -160,3 +160,4 @@
 - 2.4: 偽の子は表示しない最上位の窓（`WS_OVERLAPPEDWINDOW`）のままで強制なしの `taskkill /PID` が届く（道具窓へ替えていない）。手順が尽きたら 0 で終わるので、生かす試験は最後に `hang` か `window` を置く（`listen-drop` だけは自分で生き続ける）。`env` の行は `env <名>=<値>`／`env <名> 無い`、位置の引数は `arg <番号>=<値>`（1 から）。`listen` は本物の `read_port_candidates()`。echo の `after` の既定は 1。
 - 3.1: `Ended`・`EndedBy` は close.rs が定め lib.rs が再輸出。入口 `close`・`wait_exit`・`stop_quietly` の素の `#[allow(dead_code)]` は run（4.1）が使い始めたら外す。起動直後の子は窓が無く taskkill が 1 で失敗し、送り直しで届く（実測）。送り直しごとに `wait_any` を呼ぶので 1 秒ごとに全文を読み直す（重ければ Tail を持ち越す形に）。
 - 3.2: `McpChannel::new(port)`・`call(&mut self, child: &mut Child, files: [&Path; 2], name, args_json, waits: Waits)`・`call_until(.., needle, waits)`・`Waits { deadline, poll, call_retry, exit_grace }`（子と出力のファイルは呼び出しごとに run が貸す）。`call_until` の締切切れは途中の呼び出しの締切も含めて panic（最後の答え か「答え無し」を添える）、`call` の締切は `Unreachable`。dead_code の許しは `McpChannel`・`Waits` にあり run が使い始めたら外す。
+- 4.1: 構築は `Run::new(..)`（pub(crate)・launch が呼ぶ）。`Run::new` の `#[allow(dead_code)]`・`impl RunDirs` の `cfg_attr`・i686 の許しは 4.2 で launch が使い始めたら外す。Drop は `Ended` が無いときだけ `stop_quietly`。`wait_for` は `Ended` を記録しない。

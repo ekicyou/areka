@@ -11,8 +11,6 @@ use temp_path_kit::TempPath;
 const CREATE_TRIES: usize = 16;
 
 /// 走り 1 回の置き場と検体の写し。破棄で、落ちた回なら残し、成功なら消す。
-// launch・run が使うまでは試験の外で使われない。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) struct RunDirs {
     /// 回の置き場。落ちた回は `forget` して残すので `Option` で持つ。
     dir: Option<TempPath>,
@@ -22,6 +20,7 @@ pub(crate) struct RunDirs {
     sample: Option<SampleRoot>,
 }
 
+// 作る口と根・記憶・検体の読み口は launch（4.2）が使い始めるまでは試験の外で使われない。
 #[cfg_attr(not(test), allow(dead_code))]
 impl RunDirs {
     /// 回の置き場を新しく作り、検体の名前があれば新しい写しを取る（1.2・1.4）。

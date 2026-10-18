@@ -23,8 +23,6 @@ pub struct ChildExited {
 }
 
 /// 文字列が現れる前に待ちが終わった訳。
-// run・mcp・close が使うまでは試験の外で使われない。
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WaitEnd {
     /// 子が先に終わった（3.5）。
@@ -40,8 +38,6 @@ pub(crate) struct Tail {
     carry: Vec<u8>,
 }
 
-// run・mcp・close が使うまでは試験の外で使われない。
-#[cfg_attr(not(test), allow(dead_code))]
 impl Tail {
     pub(crate) fn new(path: PathBuf) -> Self {
         Tail {
@@ -85,8 +81,6 @@ fn contains(hay: &[u8], needle: &[u8]) -> bool {
 ///
 /// 1 回ごとに ⑴ 増えた分に文字列があればその番号 ⑵ 子が終わっていれば、もう 1 度だけ増えた分を
 /// 読んでから `ChildExited` ⑶ 締切を過ぎていれば `Deadline` ⑷ `poll` だけ待って ⑴ へ。
-// run・mcp・close が使うまでは試験の外で使われない。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn wait_any(
     files: [&Path; 2],
     needles: &[&str],
@@ -114,8 +108,6 @@ pub(crate) fn wait_any(
 
 /// 締切切れの文（3.4・5.4 で共用）: 待っていた文字列・待った時間・2 つのファイルの場所・
 /// 各ファイルの末尾 64 KiB（全文はファイルにある旨を添える）。末尾は全文から取る。
-// run・close が使うまでは試験の外で使われない。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn failure_text(needles: &[&str], waited: Duration, files: [&Path; 2]) -> String {
     let mut text = format!("締切切れ: {needles:?} を {waited:?} 待ったが現れなかった\n");
     for path in files {

@@ -63,8 +63,6 @@ impl fmt::Display for McpError {
 impl std::error::Error for McpError {}
 
 /// 呼び出しの時間（既定の時間の型には頼らない・呼び手の run が既定の値を渡す）。
-// run（4.1）が使い始めるまでは試験の外で使われない。
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Waits {
     /// 呼び出し 1 回（`call_until` は呼び直し全体）の締切。
@@ -78,8 +76,6 @@ pub(crate) struct Waits {
 }
 
 /// 走り 1 つ分の MCP の呼び口。`Link` は器より先に捨てる（欄の順）。
-// run（4.1）が使い始めるまでは試験の外で使われない。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) struct McpChannel {
     link: Option<Link>,
     port: u16,
@@ -87,8 +83,6 @@ pub(crate) struct McpChannel {
     rt: tokio::runtime::Runtime,
 }
 
-// run（4.1）が使い始めるまでは試験の外で使われない。
-#[cfg_attr(not(test), allow(dead_code))]
 impl McpChannel {
     /// 選んだ番号への呼び口（まだつながない）。器を作れないのは試験の机の故障なので panic。
     pub(crate) fn new(port: u16) -> Self {

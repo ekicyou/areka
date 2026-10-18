@@ -84,8 +84,6 @@ fn debug_value(s: &str) -> &str {
 }
 
 /// 閉じる知らせを送り直しながら終わりを待つ（5.1）。締切で子を止めて回収し、panic する（5.4）。
-// run が使うまでは使われない（兄弟のテストは読み分けだけを確かめ、偽の子との試験は 5.1）。
-#[allow(dead_code)]
 pub(crate) fn close(
     child: &mut Child,
     files: [&Path; 2],
@@ -100,8 +98,6 @@ pub(crate) fn close(
 }
 
 /// 破棄から呼ぶ形（5.5）: `close` と同じ手順で、締切で止めても panic せず、止めた旨を標準エラーへ 1 行書く。
-// run が使うまでは使われない（兄弟のテストは読み分けだけを確かめ、偽の子との試験は 5.1）。
-#[allow(dead_code)]
 pub(crate) fn stop_quietly(
     child: &mut Child,
     files: [&Path; 2],
@@ -121,8 +117,6 @@ pub(crate) fn stop_quietly(
 }
 
 /// 閉じる知らせを送らずに子が自分で終わるのを待つ（5.2）。締切で子を止めて回収し、panic する（5.4）。
-// run が使うまでは使われない（兄弟のテストは読み分けだけを確かめ、偽の子との試験は 5.1）。
-#[allow(dead_code)]
 pub(crate) fn wait_exit(
     child: &mut Child,
     files: [&Path; 2],
