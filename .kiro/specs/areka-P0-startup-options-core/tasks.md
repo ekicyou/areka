@@ -146,3 +146,7 @@
 - 7.1: 「■ 既知の制限」の更新の行（287 行目）を「位置の引数で…」へ直した（--ghost の指し先は folder=Some で、更新で引っ込んで戻る）。
 - 7.2: 全体テスト（tools/test-all.ps1）は 6d811e1e で 1 回・全段緑（x64 は 12,073 通過・失敗 0）。実機 `--option dontloadmodule` は面が出て Smoke で正常終了・`shiori_skipped` 1 件・`charset_initial` 0 件（補助のプロセスは結線されていない）。範囲外の申し送り: `areka-kanade/src/shiori/real.rs:318` の「unload → helper 正常終了」の文は補助のプロセスでない SHIORI でも出る（文言が誤解を招く）。
 - 最終検証（GO）の申し送り: `--ghost` のフォルダがある置き場の dir の直下にあると、一時の置き場の dir がその置き場と同じになり、素の `areka_ghost::install_root`（catalog_roots.rs:158）は普通の置き場まで一時とみなす（本番の入れ先は `CatalogDestinations::new` が先に外すので影響なし）。一時の dir が exe の dir と同じときは切替で戻すと `plan_copy` が写しうる。どちらもまれ・完了の棚卸で扱う。要件 7.5 の実機は Smoke の終了の道で確かめた（メニューのクリックではない）。
+- 完了時にその場で解決: `plan_copy` が exe の側の根を dir で探すため、exe のフォルダと同じ dir の一時の置き場が先頭にあると exe の側のゴーストが写されなかった（要件 3.9）。一時の置き場を飛ばして探すように直した（`roots/user_root.rs`・テスト付き）。
+- 完了時にその場で解決: 空白の形の空の値（`--sstp-listen ""`・`--help ""`・`--ghost ""`）も `=` の形と同じく値なしにした（要件 1.2・テスト付き）。2.1・2.3 の注記の食い違いは解消。
+- 完了時にその場で解決: `areka-kanade/src/shiori/real.rs` の `unload_clean` の記録の文を、補助のプロセスに依らない言い方へ替えた（本 spec の境界の外・文言だけ・event 名は同じ）。
+- 完了時の棚卸で直さないと決めたもの: 素の `areka_ghost::install_root` で一時の置き場と普通の置き場の dir が同じ場合は、いちばん上の根を印で選ぶので答えは同じ根になり、欠陥ではない。`ParseNote::MissingValue` は設計が 1.8 の口として残す。要件 7.5 のメニューからの終了は単体のテスト（OnClose に 204）と実機の Smoke の終了の道で確かめた。起票は 0 件。
