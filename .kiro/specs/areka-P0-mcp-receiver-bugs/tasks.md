@@ -78,3 +78,4 @@
 
 - 4.2（2026-10-18）: 件 2 は再現しなかった（claudia 5/5・emo2 5/5 が絵）。記録は `verification/debug-dump-balloon.md`。5.1・5.2 は 5 の但し書きどおり、記録の結論をもって完了とし、コードは触っていない。
 - PowerShell で `[Environment]::SetEnvironmentVariable($k, $null)` は変数を消さず空の値を置く（`$null` が `""` になる）。消すときは `[NullString]::Value` を渡す。
+- 完了時の棚卸（2026-10-18）: その場で解決 0 件・起票 0 件。4.1 のレビューの提案 2 点（`nar-sample-path` の出力を UTF-8 の子として読む・締切で止めるときに helper まで木ごと止める）は、記録に添えた台本を走らせた形のまま残すため直さない（いまのワークツリーのパスは ASCII だけ・締切の道は今回の走行で通っていない）。
