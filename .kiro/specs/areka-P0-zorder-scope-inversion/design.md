@@ -188,6 +188,9 @@ crates/wintf/src/ecs/window/
 | `crates/areka/src/emo2_boot/frame/zorder_drain_tests.rs` | 139〜201 行付近の受理の行の期待値（`normalized=1:true,0:false`・`members=b1,s1,b0,s0`）を新しい語と書かれた順へ | 期待値だけ変わる |
 | `crates/areka/src/emo2_boot/frame/zorder_descript_tests.rs` | 206〜251 行付近（`t_zdb04`）の「正規化を要する並び」の主張を、書かれた順と `inverted` の記録へ書き直す | 期待値だけ変わる |
 | `crates/areka/src/placement/spawn.rs` | **説明のコメントだけ**（538〜557 行付近の「本宣言が張るスコープ内ペアには 1 本も触れない」）を、「鎖が組の 2 枚を連続させない間は、鎖の適用系が結び目を外して結び直す」へ。コードと結線は変えない | 事実と食い違う説明を残さない |
+| `crates/wintf/src/ecs/window/zorder_chain_diag_tests.rs` | `no_extra_tag_hides_outside_the_two_rosters` の数え合わせを、既存の 7 語の名簿と新しい 3 語の名簿の和（10）へ（実装の時に足した行） | 本番ファイルの冠の字面を数えて名簿と突き合わせる檻なので、新しい 3 語を足すと必ず赤になる。主張（名簿の外に隠れた語は 0）は変わらない |
+| `crates/wintf/src/ecs/window/zorder_chain_tests.rs` | `the_tracing_macros_for_the_chain_have_exactly_one_home` のマクロの本数を debug 7・error 3 へ（実装の時に足した行） | 鎖の記録の出口を数える檻なので、新しい出口 3 本を足すと必ず赤になる。主張（鎖の記録はこのモジュールだけから出る）は変わらない |
+| `crates/wintf/src/ecs/window/zorder_pair_record_tests.rs` | 見送りの理由の全数を挙げる 2 本（`skip_line_names_a_distinct_reason_for_every_skip`・`record_decision_reports_every_skip_reason_and_yields_no_fix`）に `ReleasedByChain` を足して 6 種へ（完了の時に足した行） | 「全理由」をうたう檻が 5 種のままだと、新しい理由の語が他と区別できることを固定しない |
 
 触らないと決めたもの: `crates/wintf/src/ecs/window/mod.rs`（新しい本番ファイルが無い）、`zorder_pair_deferred_vocabulary_tests.rs` の名簿（同）、`spawn.rs` の `wire_zorder_pair`（確定段の並びを変えない）、`ChainPlan` を字面で組む既存のテスト 11 本（欄を足さない）、既存の替え玉の呼び出し順の檻（正常な巡の窓口の呼び出しは変わらない）。
 
