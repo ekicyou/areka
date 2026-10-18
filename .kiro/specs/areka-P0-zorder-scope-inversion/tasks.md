@@ -93,7 +93,7 @@
   - _Boundary: PairSystems_
   - _Depends: 2.1_
 
-- [ ] 4. 統合と検証: 実窓・分岐の対応表・全体の確かめ
+- [x] 4. 統合と検証: 実窓・分岐の対応表・全体の確かめ
 
 - [x] 4.1 wintf の実窓で、逆転・非隣接の重なりと解除での組への戻りを測る
   - 4 枚の実窓で `s0,b0,b1,s1` と `b1,s0,s1,b0` の計画を当て、前面走査の可視の並びが宣言どおりになることを確かめる（不可視の補助窓が挟まっても読み飛ばされること）
@@ -119,7 +119,7 @@
   - _Requirements: 8.2_
   - _Depends: 4.1, 4.2_
 
-- [ ] 4.4 全体の確かめ
+- [x] 4.4 全体の確かめ
   - `cargo fmt --all -- --check` と、`cargo test -p areka`・`cargo test -p wintf` を PowerShell から回し、終了コードで緑を取る
   - 本機能の新しいテストを単独で回した結果と一括で回した結果が同じであることを確かめる
   - 触った本番ファイルがどれも 1,000 行以下であることを数える
@@ -187,3 +187,4 @@
 - 3.5: 見送りの理由が 6 種になったが、`zorder_pair_record_tests.rs` の `skip_line_names_a_distinct_reason_for_every_skip`・`record_decision_reports_every_skip_reason_and_yields_no_fix` は「全理由」をうたって 5 種のまま（設計の「約束の外」の表に無いので未改）。`zorder_pair.rs` 786 行あたりの説明「見送り 5 種」も同じ。完了の棚卸で表へ足して 6 種へ直す（`zorder_pair_tests.rs` 755 行の 5 種は `decide_pair_fix` の出す理由なので正しい）
 - 4.2: 公開の規則（`zorder_drain.rs` の非公開 `publish_chain_plan`）は実窓のテストの中へ 10 行で写した（frame が非公開のため）。規則そのものは t_zdw が固定。根のキャラクター（s1）を壊しても道連れにはならない（レビューで実測）
 - 4.3: 対応表の分岐名は要件 8.2 の逐語（バッククォート込み）でないと差し戻しになる。3.4 の残り（去る窓・組の外しの源ごとの檻）は `a_failed_departing_detach_alone_checks_the_attach`・`a_diverged_pair_release_alone_checks_the_attach` で解消
+- 4.4（10-19）: `cargo fmt --all -- --check` 0・`cargo test -p wintf` 0・`cargo test -p areka` は本体 3169 本＋統合 9 本が緑。1 回目に t_zic2 が赤だったのは、レビュー係が変異を控えから戻したとき更新時刻が古く、cargo が変異入りの古いビルドを使ったため（触って回し直して緑）。本番ファイルは最大 930 行（`zorder_chain_apply.rs`）・完了アーカイブの下の変更 0
