@@ -6,7 +6,7 @@
 //! フェーズ分岐として呼び出せるようにする。
 
 use super::{Action, ActiveTalk, Input, Phase, State, events, resources};
-use crate::change::{BootOrigin, KanadeNotice, ShioriMethod};
+use crate::change::{BootOrigin, KanadeNotice, ReloadScope, ShioriMethod};
 use crate::msg::{CloseReason, KanadeConfig, ShioriCall, ShioriOutcome};
 use crate::talk::{StartTalk, TalkDone, TalkId};
 use resources::ResourceOutcome;
@@ -24,7 +24,7 @@ use resources::ResourceOutcome;
 pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     match input {
         // 起動指示（Idle 前提・非 Idle は mod.rs 側で warn!＋無視済み）。
-        Input::Boot => boot_start(state),
+        Input::Boot => boot_start(state, config),
         // 応答進行（各待ち点で直前呼出の結果を受ける）。origin（DD-IE-3）は boot では未使用。
         Input::ShioriReply { outcome, .. } => on_reply(state, outcome, config),
         // boot 中の close 指示は保留記録のみ（boot 継続・握手は後続層）。
@@ -42,10 +42,29 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
 }
 
 /// Idle + Boot: `OnInitialize` NOTIFY を発行し BootInit へ（Req 1.1）。
-fn boot_start(mut state: State) -> (State, Vec<Action>) {
+///
+/// SHIORI だけの読み直し（[`BootOrigin::Reloaded`] の [`ReloadScope::Shiori`]）では Ref0＝`reload`
+/// を載せる（ukadoc `OnInitialize`「リロード時にreload」・areka-P0-mcp-reload 要件 4.3）。それ以外は
+/// References なし（ゴーストの読み直しも含む・要件 3.4）。
+fn boot_start(mut state: State, config: &KanadeConfig) -> (State, Vec<Action>) {
     tracing::info!(target: "kanade", event = "boot_start", "起動指示を受領——OnInitialize NOTIFY を発行");
     state.phase = Phase::BootInit;
-    let call = events::on_initialize(&state.snapshot_without_talk());
+    let snapshot = &state.snapshot_without_talk();
+    let call = if matches!(
+        config.boot_origin,
+        BootOrigin::Reloaded {
+            scope: ReloadScope::Shiori
+        }
+    ) {
+        events::raise(
+            "OnInitialize",
+            vec!["reload".to_string()],
+            ShioriMethod::Notify,
+            snapshot,
+        )
+    } else {
+        events::on_initialize(snapshot)
+    };
     (state, vec![Action::ShioriRequest(call)])
 }
 
@@ -187,6 +206,15 @@ fn on_prefetch_reply(
         id: "username",
         outcome: resource_outcome,
     };
+    // 読み直しで起こし直した → 起動の根も OnBoot も見ずに basewareversion へ直行する（`first_boot`
+    // も見ない＝OnFirstBoot も送らない・areka-P0-mcp-reload 要件 3.3・4.3）。初回の記録の epilogue は
+    // `to_baseware_version` の既存の腕に任せる（台詞は出ず記録だけ）。
+    if matches!(config.boot_origin, BootOrigin::Reloaded { .. }) {
+        tracing::info!(target: "kanade", event = "boot_reload_silent", "読み直しの起動——起動の知らせを送らず basewareversion へ");
+        let (state, mut actions) = to_baseware_version(state, None, config);
+        actions.insert(0, sink);
+        return (state, actions);
+    }
     // 起動の根（username 照会の応答後に 1 つだけ選ぶ・照会の段は不変）。根があれば BootType で
     // その応答を待ち、既存の腕（204 → OnBoot・台本 → OnBoot を飛ばす）へ合流する。根が無ければ
     // OnBoot（BootMain）へ直行する（今日の boot_gate の枝）。
@@ -233,6 +261,8 @@ fn boot_root(state: &State, config: &KanadeConfig) -> Option<ShioriCall> {
             ))
         }
         BootOrigin::Plain | BootOrigin::Halted { .. } => None,
+        // 読み直しは `on_prefetch_reply` が手前で basewareversion へ直行させる（網羅のため・到達しない）。
+        BootOrigin::Reloaded { .. } => None,
     }
 }
 
@@ -343,3 +373,7 @@ mod reply_branch_tests;
 #[cfg(test)]
 #[path = "boot_root_tests.rs"]
 mod root_tests;
+
+#[cfg(test)]
+#[path = "boot_reload_tests.rs"]
+mod reload_tests;

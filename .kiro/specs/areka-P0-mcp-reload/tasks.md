@@ -22,7 +22,7 @@
   - _Requirements: 13.4_
 
 - [ ] 2. 下の層の小さな口
-- [ ] 2.1 (P) kanade に「知らせを送らない読み直し」の起動の由来を足す
+- [x] 2.1 (P) kanade に「知らせを送らない読み直し」の起動の由来を足す
   - `BootOrigin::Reloaded { scope }` と `ReloadScope { Ghost, Shiori }` を足す
   - 下書きの返事の後、`Reloaded` なら起動の根を見ずに `basewareversion` へ直行し `boot_reload_silent` を記録する（`first_boot` でも `OnFirstBoot` を送らない）
   - `Reloaded{Shiori}` のときだけ `OnInitialize` を Reference0＝`reload` の NOTIFY で送る・`Reloaded{Ghost}` は References なし
