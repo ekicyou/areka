@@ -26,6 +26,7 @@ fn unwirable_inputs() -> GhostBootInputs {
         },
         helper_exe: PathBuf::from("ghost_session_strict_tests/使わない/helper.exe"),
         kanade_stop,
+        modules: crate::cli::ModulePolicy::Load,
     }
 }
 
@@ -135,7 +136,14 @@ fn origin_given_to_source_reaches_wiring_inputs() {
     let helper_exe = PathBuf::from("ghost_session_strict_tests/使わない/helper.exe");
     let source = GhostBootInputsSource(Box::new(move |cfg, origin| {
         // 置き場は `None`（本物の環境で置き場を決めない・user-data-root 要件 10.6）。
-        GhostBootInputs::production(cfg, helper_exe.clone(), kanade_stop.clone(), origin, None)
+        GhostBootInputs::production(
+            cfg,
+            helper_exe.clone(),
+            kanade_stop.clone(),
+            origin,
+            None,
+            crate::cli::ModulePolicy::Load,
+        )
     }));
     let cfg = ConfigInputs {
         ghost_root: PathBuf::from("ghost_session_strict_tests/ghost/B"),
@@ -219,6 +227,7 @@ fn logsink_arm_sets_fallback_flag_and_uses_wiring_app_dir() {
         },
         helper_exe: PathBuf::from("ghost_session_strict_tests/使わない/helper.exe"),
         kanade_stop,
+        modules: crate::cli::ModulePolicy::Load,
     };
     let fallen = boot_ghost(
         &mut rig.world,

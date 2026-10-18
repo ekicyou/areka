@@ -240,6 +240,7 @@ fn main() -> Result<()> {
             },
         },
         kanade_stop_tx.clone(),
+        cli::ModulePolicy::Load, // 起動オプションの指定は 6.1 で渡す
     );
 
     // tick の門の既定を起動時に一度だけ上書きする（`AREKA_TICK_GATE=1|0`・A/B と安全弁）。
@@ -413,6 +414,7 @@ fn install_boot_context(
     world: &mut World,
     ctx: boot_config::BootContext,
     kanade_stop: std::sync::mpsc::Sender<areka_kanade::KanadeNotice>,
+    modules: cli::ModulePolicy,
 ) {
     let helper_exe = ctx.helper_exe.clone();
     // 記憶の置き場は文脈のもの（本番は `default_app_profile_dir()` と同じ値・要件 10.6）。
@@ -426,6 +428,7 @@ fn install_boot_context(
                 kanade_stop.clone(),
                 origin,
                 Some(app_profile_dir.clone()),
+                modules,
             )
         },
     )));

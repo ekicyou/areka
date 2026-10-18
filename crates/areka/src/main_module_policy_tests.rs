@@ -50,3 +50,49 @@ fn fallback_boot_options_follow_module_policy() {
         assert_wiring(policy, options.shiori);
     }
 }
+
+/// 据え付けた作り口が指定どおりの結線を組む: 初回の起動（`Plain`）と切替の先（別の根）の両方で、
+/// 「読まない」なら差し替え口、「読む」なら helper の結線（要件 7.1・7.6）。
+#[test]
+fn installed_source_follows_module_policy_for_first_boot_and_switch() {
+    use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+    let base = PathBuf::from("C:/custom/root");
+    let cfg = |name: &str| ConfigInputs {
+        ghost_root: base.join("ghost").join(name),
+        balloon_root: base.join("balloon").join("b"),
+    };
+    for policy in [ModulePolicy::Load, ModulePolicy::Skip] {
+        let ctx = boot_config::BootContext {
+            roots: areka_ghost::BasewareRoots::single(base.clone()),
+            roots_origin: crate::roots::RootsOrigin::EnvVar,
+            app_profile_dir: base.join("app-profile"),
+            helper_exe: helper(),
+            argv_session: false,
+            current: boot_config::CurrentGhost {
+                cfg: cfg("A"),
+                ghost: GhostDecision {
+                    route: GhostRoute::Memory,
+                    dir: base.join("ghost").join("A"),
+                    folder: Some("A".to_owned()),
+                },
+                balloon: BalloonDecision {
+                    route: BalloonRoute::Default,
+                    dir: base.join("balloon").join("b"),
+                    folder: Some("b".to_owned()),
+                },
+            },
+        };
+        let mut world = World::new();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        install_boot_context(&mut world, ctx, tx, policy);
+        let source = world.non_send::<ghost_session::GhostBootInputsSource>();
+        for (name, origin) in [
+            ("A", areka_kanade::BootOrigin::Plain),
+            ("B", areka_kanade::BootOrigin::Plain),
+        ] {
+            let inputs = (source.0)(&cfg(name), origin);
+            assert_eq!(inputs.modules, policy);
+            assert_wiring(policy, inputs.wiring.shiori);
+        }
+    }
+}

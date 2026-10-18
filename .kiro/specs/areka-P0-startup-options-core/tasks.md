@@ -71,7 +71,7 @@
   - _Depends: 3.1_
   - _Requirements: 3.5, 3.9_
 
-- [ ] 4. SHIORI を読まない起動
+- [x] 4. SHIORI を読まない起動
 - [x] 4.1 (P) 何を聞かれても中身なしで答える SHIORI を作る
   - 問い合わせには中身なし、知らせには成功、終わりにはきれいな終了、状態には動いている、で答える SHIORI と、差し替え口に渡す閉包を `areka-ghost` の SHIORI の結線に置く（窓もプロセスも作らず `descript.txt` の SHIORI の行を読まない）
   - 終わった形: `shiori_wiring_empty_tests.rs` が 4 つの答えと、SHIORI の行の無いゴーストを差し替え口で起こして起動が成功し起動と終了の問い合わせが中身なしで返ることを確かめて緑
@@ -84,7 +84,7 @@
   - 終わった形: 純粋な口と倒れ先の表（読む＝補助のプロセス・読まない＝差し替え口）を確かめるテストが `main_module_policy_tests.rs` で緑、既存の `main_ghost_wiring_tests` も緑
   - _Depends: 1.2, 4.1_
   - _Requirements: 7.1, 11.4_
-- [ ] 4.3 起動の入力に指定を持たせ、結線ありの起動・切替・倒れ先へ通す
+- [x] 4.3 起動の入力に指定を持たせ、結線ありの起動・切替・倒れ先へ通す
   - 起動の入力（`GhostBootInputs`）に指定の欄を足し、本番の組み立て（`production`）に引数を足して 4.2 の口で SHIORI を決める。倒れ先は 4.2 の仮の「読む」を同じ入力の指定へ替える。`boot_ghost` の分解（648 行目）と厳格な入口の分解（740 行目）に欄を足す（`ghost_session.rs` はこの約 7 行だけ）
   - 起動の文脈の据え付け（`install_boot_context`）に指定の引数を足し、作り口の閉包が値を写して持って `production` へ渡す。`main` の呼び出し（221 行目）は 6.1 まで「読む」を渡す
   - 欄と引数が増えた所（`ghost_session_restart_tests.rs`・`ghost_session_strict_tests.rs` の 2 か所（16・209 行目）・`emo2_boot/ghost_switch_test_support.rs`・`main_session_mark_tests.rs`）は「読む」を足すだけでつなぎ直す
@@ -140,3 +140,4 @@
 - 2.4: `Parsed.option_words` は畳んで `Parsed { options, notes }` に戻した。`cli::read()` は args[0] も `from_os` で直す（読み方は i=1 から）。
 - 3.1: `BasewareRoot::temporary(dir)` と `is_temporary()` を足した（3.2〜3.4 で使える）。`install_root` は一時の置き場を見える根・いちばん上の根の両方で飛ばす。
 - 4.1: 起動中の CloseRequest は Steady まで pending_close で待つ（kanade の既存の設計・boot.rs:22）。起動のテストは dispatcher にも Tick を送る。EmptyShiori の欠陥ではない。
+- 4.3: ghost_session.rs の差分は +11/-7（rustfmt の折り返しと欄の doc を含む・mcp-reload の触る所とは重ならない）。`ghost_session_strict_tests.rs` の `production` 呼び出し 3 か所目にも Load を足した。
