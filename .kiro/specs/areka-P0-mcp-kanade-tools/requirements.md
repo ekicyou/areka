@@ -1,6 +1,6 @@
 # Requirements Document
 
-> 本文の実測は **2026-10-18・本ブランチ**（main `2d86dbff`）。brief は main の `e2370df8`（棚卸㉗の節を足したもの・本ブランチへはまだ取り込んでいない）も読んだ。コードは「何の定義か」（関数名・型名・定数名＋ファイルパス）で指し、行番号では指さない。
+> 本文の実測は **2026-10-18・本ブランチ**（main `2d86dbff`）。その後 main `e2370df8`（棚卸㉗の節を足した brief）を本ブランチへ取り込んだ。コードは「何の定義か」（関数名・型名・定数名＋ファイルパス）で指し、行番号では指さない。
 > 「要件の段での暫定の裁定」の表は、brief が議題とした点と、要件を書く途中で答えが要った点に対する**推奨案による暫定の確定**であり、要件ディスカッションで覆せる（覆したら該当要件も改める）。
 > SSP の答えは、2026-10-18 に開発者の机の SSP（起動中のゴースト「悪役令嬢クローディア」「窓際のぱすたさんDEBUG」）へ SSP の MCP で当てた実測（下の「SSP で測ったこと」）と、[doc/ssp-mcp/survey.md](../../../doc/ssp-mcp/survey.md)・ツールの説明文の逐語（[doc/ssp-mcp/tools-list-ssp-2.9.05.json](../../../doc/ssp-mcp/tools-list-ssp-2.9.05.json)）・ukadoc による。
 
@@ -42,7 +42,9 @@
 | 7 | 台本の再生中に `raise_event`（`OnAiTalk`）を送る | 6 と同じ形の答え。返った台本が再生された（中断して差し替え） |
 | 8 | `raise_event` の `event` が空文字 | JSON-RPC の `Invalid params`（ツールの結果でなくエラー） |
 
-測っていないこと: 2 行目との区切りの字（`\n` か `\r\n` か。MCP クライアントの表示からは区別できない）・切替の最中・起動の挨拶や終了の挨拶の最中・`\t` の最中・中断の無効化モードの最中・`OnTranslate` の Reference1 の実際の値（記録する検体ゴーストが要る）。
+| 9 | 15 秒待つ台本を `\![enter,nouserbreakmode]` の中で再生している最中に、別の `sakurascript` を送る（要件ディスカッションの前に追加で測った） | 2 本目も `OK`。script ログで 2 本目が同じ分のうちに出て、その直後に `[Ghost:OnSecondChange]` の自発の会話が始まった＝**中断の無効化モードの最中でも中断され、2 本目が再生された** |
+
+測っていないこと: 2 行目との区切りの字（`\n` か `\r\n` か。MCP クライアントの表示からは区別できない）・切替の最中・起動の挨拶や終了の挨拶の最中・`\t` の最中・`OnTranslate` の Reference1 の実際の値（記録する検体ゴーストが要る）。
 
 ### いま何が起きているか（2026-10-18 実測）
 
@@ -59,7 +61,7 @@
 |---|---|---|---|---|
 | 1 | 再生中に届いた台本（`sakurascript`）と、再生中に `raise_event` で返った台本 | **今の台本を中断し、新しい台本を再生する**（積まない・断らない） | SSP の実測 2・7。ukadoc の SSTP の `nobreak` が「指定すれば中断せず積む」＝既定は中断 | 3.1・3.2 |
 | 2 | 選択肢を待っている最中に届いたとき | **選択肢を取り下げ、新しい台本を再生する**。取り下げた選択肢について選択や時間切れのイベントは送らない | SSP の実測 3。選択肢を出した台本が中断されたのと同じ扱い | 3.3 |
-| 3 | 中断の無効化モード（`\![enter,nouserbreakmode]`）の最中 | **割り込む**（裁定 1 と同じ） | 中断の無効化は利用者のクリックによる中断を止めるもので、SSP の MCP の台本は Owned SSTP（`\t` すら越えて割り込む）として扱われる。SSP は未実測 | 3.4 |
+| 3 | 中断の無効化モード（`\![enter,nouserbreakmode]`）の最中 | **割り込む**（裁定 1 と同じ） | SSP の実測 9。中断の無効化は利用者のクリックによる中断を止めるもので、SSP の MCP の台本は Owned SSTP（`\t` すら越えて割り込む）として扱われる | 3.4 |
 | 4 | 切替の最中（ゴーストの置き場が空） | **宛先が居ないときと同じ文言**（`ghost_name` を渡していれば `NG:Cannot find active ghost from specified name`、省略なら `NG:Specified ghost is not active`） | `mcp-get-status` の裁定 5 と同じ答えにそろえる。SSP は未実測 | 3.5 |
 | 5 | 起動の挨拶・終了の挨拶・切り替えのお別れの台詞の最中（ゴーストは置き場に居るが普段の状態でない） | **台本を流さず・SHIORI を呼ばず、`NG:the ghost cannot accept a script now`・`isError: true` で答える**（文言は areka 独自） | 起動・終了・切替の手順の途中に外の台本が割り込むと、その手順の台詞と後始末の順序が崩れる。待てば普段の状態に戻るので、エージェントは後で送り直せる。SSP は未実測＝差の一覧に書く | 3.6 |
 | 6 | `sakurascript` の台本を `OnTranslate` に通すか・Reference1 に何を入れるか（brief の議題） | **通す**。Reference1 は `sstp-send,owned`（SSTP SEND かつ Owned SSTP の扱い）、Reference2・3 は欠番（イベントが原因でない）。`doc/COMPAT_ARCHITECTURE.md` の「常に欠番」の行を改める | ukadoc: SEND の台本は `notranslate` が無ければ翻訳を通り、Reference1 は該当する出どころの語をカンマ区切りで並べる。SSP は MCP の台本を Owned SSTP と同様に扱う。実際の値は SSP で未実測＝要件ディスカッションで測るか決める | 4.4 |
@@ -94,7 +96,7 @@
   - `translate-pipeline`（完了）: 再生の前の翻訳の経路。本 spec は MCP の台本の出どころの語を渡す。
   - `mcp-strict-errors`: 本 spec が下流へ渡す `strict` の印を使い、記録と答えの文言を足す。
   - `property-query-channels`・`mcp-shiori-query`: 本 spec が作る「許可の表を通さずに任意の名前のイベントを送る口」を使う。
-  - `mcp-reload`: 重なり 0 の約束（本 spec は kanade の `src/change.rs`・`schedule/boot.rs` に触らない。上限の近いファイルを分けるときは型を同じ名前で見せ、`schedule/boot.rs` を変えない）。
+  - 同じウェーブ（C9）の約束: 本 spec は kanade の `src/change.rs`・`schedule/boot.rs` と `crates/areka-ghost/src/runtime.rs`（`mcp-reload` の持ち物・ゴーストの名前を渡す所が `runtime.rs` に要るなら `mcp-reload` と申し合わせて片方だけが触る）、`crates/areka-mcp/**`、`crates/areka/src/main.rs`、実走の 3 本のテストに触らない。上限の近いファイルを分けるときは型を同じ名前で見せ、`schedule/boot.rs` を変えない。
   - 同じウェーブに置けない相手（同じファイルを触る）: `script-security-level`・`multi-ghost-runtime`・`mcp-strict-errors` ほか（roadmap の干渉台帳）。
 
 ## Requirements
@@ -111,6 +113,7 @@
 4. If `script` が空文字である, then the areka shall 何も再生せず、本文 `NG:script is empty`・`isError: true` の結果で答える。
 5. The areka shall 台本の長さを理由に断らない（長い台本でも描画・アニメーション・クリックの受け取りを止めない）。
 6. The areka shall `sakurascript` に `NG:not implemented yet` を返す経路を残さない。
+7. If 台本の翻訳（`OnTranslate`）の往復が失敗した（輸送路が死んだ）, then the areka shall 要件 3.5 の文言で答える（要件 2.8 と同じ扱い・kanade がその後に進む道は今日のまま変えない）。
 
 ### Requirement 2: `raise_event` で任意のイベントを起こし、返った台本を再生して結果に含める
 
@@ -189,6 +192,6 @@
 2. The areka shall MCP の側の答えを決定論テストに固定する: 要件 1.1・1.4・2.3・2.4・2.6・2.7・3.5（`ghost_name` の有無の 2 通り）・3.6 の本文と `isError`。
 3. The areka shall script 種別のログ（要件 4.1・4.2）が `get_log` の `log_type=script` で読めること（表示の語・ゴーストの名前・本文）を、MCP の側の決定論テストに固定する。
 4. The areka shall `mcp-tool-entrances` が置いたダミーのテスト（`NG:not implemented yet` を固定するもの）を、本 spec の振る舞いを固定するテストへ書き換える。
-5. The areka shall SSP との差の一覧（`doc/ssp-mcp/` の下・既存の `*-diff-areka.md` と同じ形）に、⑴ 起動・終了・切替の手順の途中は `NG:the ghost cannot accept a script now` で断ること（裁定 5）、⑵ 切替の途中は宛先が居ないときの `NG:` で答えること（裁定 4）、⑶ `event` が空のときツールの結果の `NG:` で答えること（SSP は JSON-RPC のエラー・裁定 10）、⑷ 制御文字を含むイベント名・Reference を断ること（裁定 11）、⑸ 中断の無効化モードの最中も割り込むこと（裁定 3）、⑹ `OnTranslate` の Reference1 の値（裁定 6）、⑺ `\t` を持たないこと、⑻ SHIORI の往復から生まれていないトークの表示の語（裁定 13）、を「SSP の印」（実測・未実測・対応物なし）とともに書く。
+5. The areka shall SSP との差の一覧（`doc/ssp-mcp/` の下・既存の `*-diff-areka.md` と同じ形）に、⑴ 起動・終了・切替の手順の途中は `NG:the ghost cannot accept a script now` で断ること（裁定 5）、⑵ 切替の途中は宛先が居ないときの `NG:` で答えること（裁定 4）、⑶ `event` が空のときツールの結果の `NG:` で答えること（SSP は JSON-RPC のエラー・裁定 10）、⑷ 制御文字を含むイベント名・Reference を断ること（裁定 11）、⑸ 中断の無効化モードの最中も割り込むこと（裁定 3・SSP と同じ＝実測）、⑹ `OnTranslate` の Reference1 の値（裁定 6）、⑺ `\t` を持たないこと、⑻ SHIORI の往復から生まれていないトークの表示の語（裁定 13）、を「SSP の印」（実測・未実測・対応物なし）とともに書く。
 6. The areka shall 実機で確かめ、結果を本 spec の `verification/signoff.md` に残す: Claude Code から既定のゴースト（emo2）へ ⑴ `sakurascript` で台本を送ると `OK` が返り台詞が表示される、⑵ 長く待つ台本の再生中に 2 本目を送ると 1 本目が中断され 2 本目が表示される、⑶ `sakurascript` で表情を変えた後に `dump_surface` を 1 回呼ぶと変わった姿が返る（`mcp-dump-images` の要件 7.7 ⑵ の本来の手順）、⑷ `raise_event` で台本を返すイベントを起こすと台本の文字列を含む答えが返り台詞が表示される、⑸ ゴーストが知らない名前で `OK:the ghost returned no script.` が返る、⑹ `get_log`（`log_type=script`）に、MCP で送った台本（`[SSTP(Local,Auth)]`）・`raise_event` で返った台本（`[Ghost:<イベント名>]`）・ゴーストの自発の会話の台本が読める、⑺ 呼んでいる間も描画が止まらず warn 以上の記録が増えない。
 7. When 要件 7.6 ⑴ が通る, the areka shall `seriko-trigger-intervals` の検体の README（`crates/areka-seriko/tests/fixtures/trigger-intervals/README.md` の「実機の確かめ」）の、`sakurascript` を使えないための読み替えの記述を、`sakurascript` で送る本来の手順へ戻す。
