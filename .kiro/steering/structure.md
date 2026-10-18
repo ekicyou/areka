@@ -423,6 +423,14 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Dependencies**: `areka-nar`（展開器）・`miniz_oxide`・`thiserror`・`publish = false`
 **Consumers**: テスト専用（`[dev-dependencies]`）。**`[dependencies]` へは決して置かない**（`log-capture-kit/tests/sample_path_guard_test.rs` が赤にする）。**迂回の検知が別 crate にあるのは `temp-path-kit` と同じ意図的な設計**（走査部品を複製しないため）
 
+### Real Run Kit Crate（real-run-kit）
+**Location**: `/crates/real-run-kit/`
+**Purpose**: 実機の試験の窓口を**ワークスペースで唯一定義する**テスト専用のクレート（`areka-P0-real-run-mcp-kit` 2026-10-19）。本物の areka を子として立てる（`Launch` の 5 通り＝検体・任意のゴースト・検体の根・任意の根・空の根）・出力を待つ・MCP のツールを呼ぶ（`call`・`call_until`）・利用者と同じ閉じ方で閉じる（`close`）か自分で終わるのを待つ（`wait_exit`）・落ちた回の証拠を `target\test-roots\areka-rr-…` に残す、を 1 か所で持つ。32bit の仲介の判定と揃え方・空いた番号の選び方・子の番犬もここだけにある。使い方の正本は `doc/testing.md` の「実機の試験」の節。
+**Pattern**: 起動の指定 `RealRun`（組み立て → `spawn`）と走りの取っ手 `Run`。落ちたかは取っ手の破棄の時の panic の有無で決める（試験は `Result` でなく panic で落とす）。MCP は公式 SDK `rmcp` の呼び手の側で話し、tokio の器は呼ぶ間だけ回して呼び手に見せない。窓口自身の試験は偽の子 `src/bin/real-run-fake-areka.rs` と本物の受け口で、窓・GPU・SHIORI を使わずに決定論で回す。
+**Modules**: `launch.rs`（起動の指定・子へ渡す形を綴る唯一の場所）／`run.rs`（取っ手・既定の時間 `Limits`・破棄の順）／`output.rs`（出力の待ち）／`mcp.rs`（MCP の呼び出しと失敗の見分け）／`close.rs`（閉じ方と終わり方の読み分け）／`evidence.rs`（回の置き場と証拠）／`i686.rs`（32bit の仲介）
+**Dependencies**: `sample-ghost-kit`・`temp-path-kit`・`areka-mcp-bridge`・`areka-mcp`（偽の子だけが使う）・`areka-user-data`・`rmcp`（`client`）・`tokio`・`serde_json`・`windows`・`tracing`・`tracing-subscriber`（新しい外の依存 0）・`publish = false`
+**Consumers**: テスト専用（`[dev-dependencies]`）で `areka`。**`[dependencies]` へは決して置かない**（`log-capture-kit/tests/sample_path_guard_test.rs` が、`sample-ghost-kit` を引く例外の 1 件として載せたうえで、このクレートがどの本番の依存にも現れないことを判定する＝間接の道も赤にする）
+
 ### ukadoc Survey Toolkit Crate（ukadoc-survey）
 **Location**: `/crates/ukadoc-survey/`（データは `/doc/ukadoc-coverage/`）
 **Purpose**: ukadoc（SSP 公式仕様書）の項目について「正典の写し（カタログ）」と「areka の判定（台帳）」を建て、その整合を常時走るテスト（`tests/consistency.rs`）で守る**調査道具**（`areka-P0-ukadoc-survey-toolkit`）。**areka の実行時コードからは 1 行も参照されない leaf**・`publish = false`。

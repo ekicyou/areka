@@ -21,6 +21,7 @@
 | `choice-cascade-compat.md` | 選択関連イベントの互換対応表（カスケード則・Reference の割付・タイムアウト） | 今も効く |
 | `crates-io-publish.md` | `wintf`・`dola` を crates.io へ出す手順書 | 今も効く |
 | `impl-watch.md` | 机の貸し出し `areka-impl-watch` の手順書（道具のエラー文がこの場所を名指す） | 今も効く |
+| `testing.md` | 試験の手引き（実機の試験の窓口 `real-run-kit` の立て方・呼び方・閉じ方・残した証拠の読み方） | 今も効く |
 | `roadmap-overview-{YYYY-MM-DD}.html` | roadmap.md の俯瞰図（版の段ごとの帯と spec のカード）。下の「俯瞰の HTML」の道具で作る | その日の姿のスナップショット（上の例外） |
 | `ukadoc-coverage/` | ukadoc の全項目の網羅台帳（`ukadoc-survey` が読む。`report/` は作り直す生成物） | 今も効く |
 | `ssp-mcp/` | SSP の内蔵 MCP サーバの実測の控えと areka との差の一覧（`tools-list-ssp-2.9.05.json`・`log-convention.md` はテストが読む） | 今も効く |
