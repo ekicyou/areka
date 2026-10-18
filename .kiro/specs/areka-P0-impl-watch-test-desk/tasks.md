@@ -75,7 +75,7 @@
   - 完了の状態: 表示のテストが緑で、日本語の内容が読み物にだけ出て端末の要約に出ないことが確かめられている
   - _Boundary: status_
   - _Requirements: 1.2, 2.6, 6.2, 8.1, 8.2, 8.3_
-- [ ] 3.3 (P) コマンドの表に申し込みと返しを足し、古い負荷テストの行を消す
+- [x] 3.3 (P) コマンドの表に申し込みと返しを足し、古い負荷テストの行を消す
   - 表から `loadtest`・`loaddone` を消して `request`・`return` を足し（14 行のまま）、`--desk` の値の形（空・2 度・知らない名前・`merge` は使い方の誤り）と `--help` の 1 行を設計の綴りにする。`loadrunning`・`stopped` の 1 行を設計どおりに直す
   - 引数の読みのテストに 14 行・`--desk` の受けと断り・新しい行の `--help` を足して読み込みを戻す。入口のテストの支え（`cli_test_support.rs`）は触らず、要る手助けは `cli_args_tests.rs` の中に置く
   - 完了の状態: 引数のテストが緑で、`--desk test,test`・`--desk merge`・`--desk ""` が終了コード 2 で何も読み書きしない
@@ -145,3 +145,4 @@
 - 2.1: `--wait` 付きの断り（2.8・4.7・持っている組の再申し込み）は今は待ちの判定へ流れる。3.4 の完了の条件で必ず「待ちに入らず 3」にする。
 - 2.1（2026-10-18 開発者の裁定で解決）: 申し込みを待つ者の `merge` は `not applied: a desk request is waiting; merge after it is granted and returned`、マージを待つ者の `loadrunning` は `not applied: a merge request is waiting; record the running load after the merge desk is granted` で、どちらも参加より先に見て状態を変えずに断る（要件 2.8 の但し書きを改め、要件 5.7 を足した。マージの机の持ち主の `loadrunning` は 5.5 のとおり通る）。設計の不変の決まり「`test`・`sole` の持ち主と `requests` に居る識別はどのマージの待ち行列にも居ない」と合った。判断の核とテスト（`plan_desk_tests.rs`・`plan_stop_tests.rs`）は裁定の段で直した。入口の終了コード 3 は 3.4 で出す。
 - 2.4: 全探索は深さ 6（1,570 状態・全体の中で約 0.5 秒）。1 本の糸では 1.3 秒かかるため段ごとに `std::thread::scope` で並べる（結果は 1 本と同じ）。協力的な進め方の停止要請中の扱いと重複の除き方の文を design.md の Testing Strategy で実態に合わせて直した（振る舞いの変更なし）。
+- 3.3: `Opt::Desk` を足すと `cli_test_support.rs` の `sample` の照合が尽くさなくなるため、`cli.rs` の `mod test_support` を 3.4 まで外した。3.4 で `sample` に `Desk` を足し、`cli.rs` の 3 行を戻す。

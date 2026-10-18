@@ -23,6 +23,7 @@ pub(crate) enum Opt {
     Spec,
     Name,
     Purpose,
+    Desk,
     Pr,
     Sha,
     Bug,
@@ -30,12 +31,13 @@ pub(crate) enum Opt {
 }
 
 /// 引数の全部（使い方に並べる順）。
-const OPTIONS: [Opt; 9] = [
+const OPTIONS: [Opt; 10] = [
     Opt::Id,
     Opt::Repo,
     Opt::Spec,
     Opt::Name,
     Opt::Purpose,
+    Opt::Desk,
     Opt::Pr,
     Opt::Sha,
     Opt::Bug,
@@ -49,6 +51,8 @@ enum Shape {
     Token,
     /// 名前・内容。`--` で始まらなければ何でもよい（端末へは出さない）。
     Text,
+    /// 机の並び（`test`・`sole` を `,` でつなぐ）。
+    Desks,
     Digits,
     Hex,
     /// 値を取らない。
@@ -63,6 +67,7 @@ impl Opt {
             Opt::Spec => "--spec",
             Opt::Name => "--name",
             Opt::Purpose => "--purpose",
+            Opt::Desk => "--desk",
             Opt::Pr => "--pr",
             Opt::Sha => "--sha",
             Opt::Bug => "--bug",
@@ -74,6 +79,7 @@ impl Opt {
         match self {
             Opt::Id | Opt::Repo | Opt::Spec => Shape::Token,
             Opt::Name | Opt::Purpose => Shape::Text,
+            Opt::Desk => Shape::Desks,
             Opt::Pr => Shape::Digits,
             Opt::Sha => Shape::Hex,
             Opt::Bug | Opt::Wait => Shape::Flag,
@@ -100,6 +106,7 @@ impl Shape {
                         .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
             }
             Shape::Text | Shape::Flag => true,
+            Shape::Desks => desk_set(value).is_some(),
             Shape::Digits => !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit()),
             Shape::Hex => {
                 (7..=40).contains(&value.len()) && value.bytes().all(|b| b.is_ascii_hexdigit())
@@ -112,11 +119,29 @@ impl Shape {
         match self {
             Shape::Token => "1-100 chars of A-Z a-z 0-9 . _ -",
             Shape::Text => "any text not starting with --",
+            Shape::Desks => "test, sole or test,sole (the merge desk is requested with merge)",
             Shape::Digits => "digits only",
             Shape::Hex => "7-40 hex digits",
             Shape::Flag => "no value",
         }
     }
+}
+
+/// `--desk` の値を机の組にする。空・同じ名前を 2 度・知らない名前（`merge` を含む）は `None`。
+fn desk_set(value: &str) -> Option<DeskSet> {
+    let (mut test, mut sole) = (false, false);
+    for name in value.split(',') {
+        let seen = match name {
+            "test" => &mut test,
+            "sole" => &mut sole,
+            _ => return None,
+        };
+        if *seen {
+            return None;
+        }
+        *seen = true;
+    }
+    DeskSet::from_parts(test, sole)
 }
 
 /// 読んだコマンド。
@@ -171,6 +196,11 @@ impl Found {
     /// 先に断っているので、ここへ来たときは必ず在る）。
     fn need(&mut self, opt: Opt) -> String {
         self.take(opt).unwrap_or_default()
+    }
+
+    /// `--desk` の組。読みが形を確かめた値だけが来るので、在れば必ず組になる。
+    fn desks(&mut self) -> Option<DeskSet> {
+        self.take(Opt::Desk).as_deref().and_then(desk_set)
     }
 }
 
@@ -261,20 +291,34 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         },
     },
     Spec {
-        name: "loadtest",
-        required: &[Opt::Id, Opt::Repo, Opt::Purpose],
+        name: "request",
+        required: &[Opt::Id, Opt::Repo, Opt::Desk, Opt::Purpose],
         optional: &[Opt::Name],
         wait: true,
         variant: None,
-        note: "queue for the load-test desk. 0=queued; with --wait 0=granted 3=request gone",
+        note: "queue one request for the listed desks; all are granted at once. 0=queued or granted 3=not applied; with --wait 0=granted 3=request gone or not applied",
         build: |f| {
-            // 版 2 への切り替えの間の読み替え（3.3 が `request` の行へ替える）。
             Command::Change(plan::Command::Request {
                 id: f.need(Opt::Id),
                 name: f.take(Opt::Name),
                 repo: f.need(Opt::Repo),
-                desks: DeskSet::TestSole,
+                // 要る引数なので必ず在る（`need` と同じ。既定の組は使われない）。
+                desks: f.desks().unwrap_or(DeskSet::TestSole),
                 purpose: f.need(Opt::Purpose),
+            })
+        },
+    },
+    Spec {
+        name: "return",
+        required: &[Opt::Id],
+        optional: &[Opt::Desk],
+        wait: false,
+        variant: None,
+        note: "return the named desks, or every desk but the merge desk. 0=returned 3=not the holder",
+        build: |f| {
+            Command::Change(plan::Command::Return {
+                id: f.need(Opt::Id),
+                desks: f.desks(),
             })
         },
     },
@@ -284,7 +328,7 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         optional: &[Opt::Name],
         wait: false,
         variant: None,
-        note: "record an already running load test as the holder. 0=recorded 3=the desk has a holder",
+        note: "record an already running load test as the holder of the test and sole desks. 0=recorded 3=either desk has a holder or a merge request is waiting",
         build: |f| {
             Command::Change(plan::Command::LoadRunning {
                 id: f.need(Opt::Id),
@@ -295,27 +339,12 @@ pub(crate) static COMMANDS: [Spec; 14] = [
         },
     },
     Spec {
-        name: "loaddone",
-        required: &[Opt::Id],
-        optional: &[],
-        wait: false,
-        variant: None,
-        note: "release the load-test desk. 0=done 3=not the holder",
-        build: |f| {
-            // 版 2 への切り替えの間の読み替え（3.3 が `return` の行へ替える）。
-            Command::Change(plan::Command::Return {
-                id: f.need(Opt::Id),
-                desks: None,
-            })
-        },
-    },
-    Spec {
         name: "stopped",
         required: &[Opt::Id],
         optional: &[],
         wait: true,
         variant: None,
-        note: "report stopped. 0=recorded 3=no stop request; with --wait 0=resumed, or stop requested again 3=record gone",
+        note: "report stopped; the test desk held is freed. 0=recorded 3=no stop request; with --wait 0=resumed, or stop requested again 3=record gone",
         build: |f| {
             Command::Change(plan::Command::Stopped {
                 id: f.need(Opt::Id),
@@ -529,7 +558,6 @@ pub(crate) fn parse(args: &[String]) -> Result<Invocation, UsageError> {
     })
 }
 
-// 版 2 への切り替えの間は読み込まない（3.3 が新しい行へ書き直して戻す）。
-// #[cfg(test)]
-// #[path = "cli_args_tests.rs"]
-// mod tests;
+#[cfg(test)]
+#[path = "cli_args_tests.rs"]
+mod tests;

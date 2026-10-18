@@ -4,20 +4,20 @@
 //! （本番の表を書き換えると、このファイルのテストが赤になる）。
 
 use super::super::subject;
-use super::super::test_support::{args, line, sample};
 use super::{COMMANDS, Command, Invocation, Opt, parse, usage};
 use crate::plan;
+use crate::state::DeskSet;
 
-use Opt::{Bug, Id, Name, Pr, Purpose, Repo, Sha, Spec, Wait};
+use Opt::{Bug, Desk, Id, Name, Pr, Purpose, Repo, Sha, Spec, Wait};
 
 /// 設計のコマンドの表: 名前・要る引数・任意の引数・`--wait` を取るか（14 行・同じ並び）。
 const DESIGN: [(&str, &[Opt], &[Opt], bool); 14] = [
     ("watch", &[Id, Repo], &[Name], false),
     ("merge", &[Id, Repo, Spec], &[Bug, Name], true),
     ("merged", &[Id, Pr, Sha], &[], false),
-    ("loadtest", &[Id, Repo, Purpose], &[Name], true),
+    ("request", &[Id, Repo, Desk, Purpose], &[Name], true),
+    ("return", &[Id], &[Desk], false),
     ("loadrunning", &[Id, Repo, Purpose], &[Name], false),
-    ("loaddone", &[Id], &[], false),
     ("stopped", &[Id], &[], true),
     ("resume", &[Id], &[], false),
     ("unstop", &[], &[Id], false),
@@ -28,7 +28,39 @@ const DESIGN: [(&str, &[Opt], &[Opt], bool); 14] = [
     ("clear", &[], &[], false),
 ];
 
-const ALL_OPTIONS: [Opt; 9] = [Id, Repo, Spec, Name, Purpose, Pr, Sha, Bug, Wait];
+const ALL_OPTIONS: [Opt; 10] = [Id, Repo, Spec, Name, Purpose, Desk, Pr, Sha, Bug, Wait];
+
+fn args(words: &[&str]) -> Vec<String> {
+    words.iter().map(|word| (*word).to_owned()).collect()
+}
+
+/// 引数の綴りと、形に合う値（値を取らないものは `None`）。入口のテストの支え
+/// （`cli_test_support.rs`）とは別に持つ（`--desk` を含む）。
+fn sample(opt: Opt) -> (&'static str, Option<&'static str>) {
+    match opt {
+        Id => ("--id", Some("a1")),
+        Repo => ("--repo", Some("areka")),
+        Spec => ("--spec", Some("areka-P0-impl-watch")),
+        Name => ("--name", Some("見張り役")),
+        Purpose => ("--purpose", Some("負荷の計測")),
+        Desk => ("--desk", Some("test,sole")),
+        Pr => ("--pr", Some("281")),
+        Sha => ("--sha", Some("414d43eb")),
+        Bug => ("--bug", None),
+        Wait => ("--wait", None),
+    }
+}
+
+/// コマンドの名前の後ろに、引数を形に合う値つきで並べる。
+fn line(name: &str, opts: &[Opt]) -> Vec<String> {
+    let mut words = vec![name];
+    for opt in opts {
+        let (flag, value) = sample(*opt);
+        words.push(flag);
+        words.extend(value);
+    }
+    args(&words)
+}
 
 /// 誤りの文（使い方の誤りでなければ落ちる）。
 fn refusal(words: &[String]) -> String {
@@ -86,13 +118,21 @@ fn every_command_parses_in_its_full_form() {
             false,
         ),
         (
-            change(plan::Command::LoadTest {
+            change(plan::Command::Request {
                 id: id.clone(),
                 name: name.clone(),
                 repo: repo.clone(),
+                desks: DeskSet::TestSole,
                 purpose: purpose.clone(),
             }),
             true,
+        ),
+        (
+            change(plan::Command::Return {
+                id: id.clone(),
+                desks: Some(DeskSet::TestSole),
+            }),
+            false,
         ),
         (
             change(plan::Command::LoadRunning {
@@ -103,7 +143,6 @@ fn every_command_parses_in_its_full_form() {
             }),
             false,
         ),
-        (change(plan::Command::LoadDone { id: id.clone() }), false),
         (change(plan::Command::Stopped { id: id.clone() }), true),
         (Command::Resume { id: id.clone() }, false),
         (
@@ -285,11 +324,13 @@ fn pr_is_digits_only_and_sha_is_7_to_40_hex_digits() {
 #[test]
 fn name_and_purpose_take_any_text() {
     let got = parse(&args(&[
-        "loadtest",
+        "request",
         "--id",
         "a",
         "--repo",
         "r",
+        "--desk",
+        "test",
         "--purpose",
         "a b/c 負荷",
         "--name",
@@ -298,10 +339,11 @@ fn name_and_purpose_take_any_text() {
     .expect("通る");
     assert_eq!(
         got.command,
-        Command::Change(plan::Command::LoadTest {
+        Command::Change(plan::Command::Request {
             id: s("a"),
             name: Some(s("")),
             repo: s("r"),
+            desks: DeskSet::Test,
             purpose: s("a b/c 負荷"),
         })
     );
@@ -356,21 +398,24 @@ fn only_the_id_is_folded_and_the_other_values_stay_as_typed() {
             bug: false,
         })
     );
-    let loadtest = [
-        "loadtest",
+    let request = [
+        "request",
         "--id",
         "A",
         "--repo",
         "Areka",
+        "--desk",
+        "sole",
         "--purpose",
         "PurPose",
     ];
     assert_eq!(
-        parse(&args(&loadtest)).expect("通る").command,
-        Command::Change(plan::Command::LoadTest {
+        parse(&args(&request)).expect("通る").command,
+        Command::Change(plan::Command::Request {
             id: s("a"),
             name: None,
             repo: s("Areka"),
+            desks: DeskSet::Sole,
             purpose: s("PurPose"),
         })
     );
@@ -401,6 +446,9 @@ fn malformed_command_lines_are_usage_errors() {
         (args(&["-h"]), "unknown command '-h'"),
         (args(&["join"]), "unknown command 'join'"),
         (args(&["Watch"]), "unknown command 'Watch'"),
+        // 古い負荷テストの呼び方は表から消えた（読み替えは手順書）。
+        (args(&["loadtest"]), "unknown command 'loadtest'"),
+        (args(&["loaddone"]), "unknown command 'loaddone'"),
         (
             args(&["--help", "merge"]),
             "--help: unexpected argument 'merge'",
@@ -436,7 +484,7 @@ fn malformed_command_lines_are_usage_errors() {
         // 名前・内容も `--` で始まる値は取らない（使い方の `any text not starting with --`）。
         (
             args(&[
-                "loadtest",
+                "loadrunning",
                 "--id",
                 "a",
                 "--repo",
@@ -444,7 +492,7 @@ fn malformed_command_lines_are_usage_errors() {
                 "--purpose",
                 "--release x5",
             ]),
-            "loadtest: --purpose needs a value (a value cannot start with --)",
+            "loadrunning: --purpose needs a value (a value cannot start with --)",
         ),
         (
             args(&["leave", "--id", "a", "--id", "a"]),
@@ -506,6 +554,10 @@ fn usage_is_ascii_and_shows_every_command_argument_and_exit_code() {
         (Spec, "1-100 chars of A-Z a-z 0-9 . _ -"),
         (Name, "any text not starting with --"),
         (Purpose, "any text not starting with --"),
+        (
+            Desk,
+            "test, sole or test,sole (the merge desk is requested with merge)",
+        ),
         (Pr, "digits only"),
         (Sha, "7-40 hex digits"),
         (Bug, "no value"),
@@ -540,9 +592,9 @@ fn usage_notes_say_what_3_means_for_exactly_the_commands_that_can_end_with_3() {
         "watch",
         "merge",
         "merged",
-        "loadtest",
+        "request",
+        "return",
         "loadrunning",
-        "loaddone",
         "stopped",
         "resume",
         "unstop",
@@ -570,7 +622,7 @@ fn usage_notes_of_the_resume_waits_say_that_0_is_resumed_or_a_stop_requested_aga
     for (command, note) in [
         (
             "  stopped --id <id> [--wait]",
-            "report stopped. 0=recorded 3=no stop request; with --wait 0=resumed, or stop requested again 3=record gone",
+            "report stopped; the test desk held is freed. 0=recorded 3=no stop request; with --wait 0=resumed, or stop requested again 3=record gone",
         ),
         (
             "  resume --id <id>",
@@ -597,6 +649,142 @@ fn usage_foot_names_the_reissued_stop_request_the_home_failures_and_the_id_foldi
     }
 }
 
+// ---- 机の申し込みと返し ----
+
+fn request_with(desk: &str) -> Vec<String> {
+    args(&[
+        "request",
+        "--id",
+        "a",
+        "--repo",
+        "r",
+        "--desk",
+        desk,
+        "--purpose",
+        "p",
+    ])
+}
+
+fn return_with(desk: &str) -> Vec<String> {
+    args(&["return", "--id", "a", "--desk", desk])
+}
+
+/// 読んだ申し込み・返しが並べた机。
+fn desks_of(words: &[String]) -> Option<DeskSet> {
+    let got = parse(words).unwrap_or_else(|err| panic!("{words:?}: {}", err.0));
+    match got.command {
+        Command::Change(plan::Command::Request { desks, .. }) => Some(desks),
+        Command::Change(plan::Command::Return { desks, .. }) => desks,
+        other => panic!("{words:?}: {other:?}"),
+    }
+}
+
+#[test]
+fn desk_takes_test_and_sole_in_either_order() {
+    for (value, desks) in [
+        ("test", DeskSet::Test),
+        ("sole", DeskSet::Sole),
+        ("test,sole", DeskSet::TestSole),
+        ("sole,test", DeskSet::TestSole),
+    ] {
+        assert_eq!(desks_of(&request_with(value)), Some(desks), "{value}");
+        assert_eq!(desks_of(&return_with(value)), Some(desks), "{value}");
+    }
+    // 名指しの無い返しはマージの机のほかの全部。
+    assert_eq!(desks_of(&args(&["return", "--id", "a"])), None);
+}
+
+/// 空・同じ名前を 2 度・知らない名前・マージの机は使い方の誤り（要件 2.5）。断りは読みの中で
+/// 決まり（読みは何も読み書きしない）、入口は使い方の誤りを終了コード 2 で返す。
+#[test]
+fn desk_refuses_empty_twice_unknown_and_merge() {
+    const WHY: &str =
+        "--desk must be test, sole or test,sole (the merge desk is requested with merge)";
+    for value in [
+        "",
+        "test,test",
+        "sole,sole",
+        "test,sole,test",
+        "merge",
+        "test,merge",
+        "Test",
+        "both",
+        "test,",
+        ",sole",
+        ",",
+        "test sole",
+    ] {
+        assert_eq!(
+            refusal(&request_with(value)),
+            format!("request: {WHY}"),
+            "{value:?}"
+        );
+        assert_eq!(
+            refusal(&return_with(value)),
+            format!("return: {WHY}"),
+            "{value:?}"
+        );
+    }
+    assert_eq!(
+        refusal(&args(&[
+            "request",
+            "--id",
+            "a",
+            "--repo",
+            "r",
+            "--desk",
+            "test",
+            "--desk",
+            "sole",
+            "--purpose",
+            "p",
+        ])),
+        "request: --desk given twice"
+    );
+    assert_eq!(
+        refusal(&args(&[
+            "request",
+            "--id",
+            "a",
+            "--repo",
+            "r",
+            "--purpose",
+            "p"
+        ])),
+        "request: missing --desk"
+    );
+}
+
+#[test]
+fn usage_shows_the_request_return_and_loadrunning_lines_of_the_design() {
+    let text = usage();
+    let lines: Vec<&str> = text.lines().collect();
+    for (command, note) in [
+        (
+            "  request --id <id> --repo <repo> --desk <desk> --purpose <purpose> [--name <name>] [--wait]",
+            "queue one request for the listed desks; all are granted at once. 0=queued or granted 3=not applied; with --wait 0=granted 3=request gone or not applied",
+        ),
+        (
+            "  return --id <id> [--desk <desk>]",
+            "return the named desks, or every desk but the merge desk. 0=returned 3=not the holder",
+        ),
+        (
+            "  loadrunning --id <id> --repo <repo> --purpose <purpose> [--name <name>]",
+            "record an already running load test as the holder of the test and sole desks. 0=recorded 3=either desk has a holder or a merge request is waiting",
+        ),
+        (
+            "  cancel --id <id>",
+            "drop the requests and desks of the id; the participant stays. 0=done",
+        ),
+    ] {
+        let at = lines.iter().position(|l| *l == command);
+        let at = at.unwrap_or_else(|| panic!("{command} の行が無い:\n{text}"));
+        assert_eq!(lines[at + 1].trim_start(), note);
+    }
+    assert!(!text.contains("loadtest"), "{text}");
+    assert!(!text.contains("loaddone"), "{text}");
+}
+
 // ---- clear --repo ----
 
 /// `--help` に足すのは `clear` の説明の行の直後の 1 行だけ。名前の行は `  clear` のまま。
@@ -617,13 +805,16 @@ fn usage_adds_exactly_one_clear_repo_line_after_the_clear_note() {
             "  --help",
         ]
     );
-    // 別の形の行はこの 1 行だけ（説明の行の字下げ 6 つの後にコマンドの名前が来るのはここだけ）。
+    // 別の形の行はこの 1 行だけ（説明の行の字下げ 6 つの後にコマンドの名前と引数が来るのは
+    // ここだけ。`return` の説明は動詞の return で始まるので、名前の次の `--` まで見る）。
     let variants = lines
         .iter()
         .filter(|l| {
             l.strip_prefix("      ")
-                .and_then(|l| l.split(' ').next())
-                .is_some_and(|word| COMMANDS.iter().any(|spec| spec.name == word))
+                .and_then(|l| l.split_once(' '))
+                .is_some_and(|(word, rest)| {
+                    rest.starts_with("--") && COMMANDS.iter().any(|spec| spec.name == word)
+                })
         })
         .count();
     assert_eq!(variants, 1, "{}", usage());

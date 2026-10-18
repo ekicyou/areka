@@ -373,11 +373,11 @@ fn say(to: &mut dyn Write, op: &'static str, line: &str) -> Result<(), WatchErro
     })
 }
 
-#[cfg(test)]
-// 版 2 への切り替えの間は使い手のテストを読み込まないので、使われない支えが出る（3.4 で外す）。
-#[allow(dead_code)]
-#[path = "cli_test_support.rs"]
-mod test_support;
+// 版 2 への切り替えの間は使い手のテストと一緒に読み込まない（`args::Opt` に `--desk` が
+// 増え、支えの `sample` の照合が尽くされなくなる。3.4 が `--desk` を足して戻す）。
+// #[cfg(test)]
+// #[path = "cli_test_support.rs"]
+// mod test_support;
 
 // 版 2 への切り替えの間は読み込まない（3.4 が新しい机へ書き直して戻す）。
 // #[cfg(test)]
