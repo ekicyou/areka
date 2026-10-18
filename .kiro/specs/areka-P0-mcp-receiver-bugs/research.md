@@ -255,3 +255,54 @@
 ### 次の段
 
 `/kiro-requirements-discussion areka-P0-mcp-receiver-bugs` で上の議題 1・2・4（要件の字面に関わるもの）を先に決め、その後 `/kiro-design areka-P0-mcp-receiver-bugs`。
+
+---
+
+## 10. 設計の段の調べと決めたこと（2026-10-18）
+
+- 調べの種類: **軽い調べ（既存の作りへの足し）**。外の資料は引かず、rmcp 3.5.0 の元のソース（`c:\rust\cargo\registry\src\…\rmcp-3.5.0`）と今のコードを読み、1 点だけ測った。
+- 使ったスキルの決まり: `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`。
+
+### 10.1 測ったこと: `2026-07-28` の札と `_meta` を揃えた形の違う `initialize`
+
+- 道具: `target\gap-probe\src\bin\init_probe.rs`（ワークツリーの `target\` の下・git の外）。本番の 11 本を登録した受け口に、`MCP-Protocol-Version: 2026-07-28`・`Mcp-Method: initialize`・`params._meta` を揃えて送った。`cargo run --offline -q --bin init_probe` で同じ結果が出る。
+- 結果:
+
+| 要求 | 答え |
+|---|---|
+| `initialize` `{"protocolVersion":7}`（札と `_meta` を揃える） | 404・`{"code":-32601,"message":"initialize"}`（rmcp の既定の `on_custom_request` の答え＝handler まで届いている） |
+| `initialize` `{}`（同） | 404・同じ |
+| `initialize` 形の正しいもの（同） | 200・成功（`protocolVersion` は `2025-11-25`） |
+| 旧式（札も `_meta` も無し）の `{"protocolVersion":7}` | 200・`-32601` `"initialize"` |
+| `2026-07-28` の未登録の名前の `tools/call`（比べる相手） | 400・`{"code":-32602,"message":"tool not found"}` |
+| `2026-07-28` の `completion/complete` `{"ref":7}` | 404・`-32601` `"completion/complete"` |
+
+- 分かったこと: 3 つのメソッドはどれも、5 つの版のどの話し方でも `on_custom_request` に届く。直した後の `-32602` は rmcp の `jsonrpc_http_status`（`tower.rs` 646 行）で `2026-07-28` は 400、旧式は 200 になり、未登録の名前の答えと同じ状態になる（要件 1.4）。
+
+### 10.2 rmcp の公開面（使うもの）
+
+- `ServerHandler::on_custom_request(&self, CustomRequest, RequestContext<RoleServer>) -> Result<CustomResult, ErrorData>`（`handler/server.rs` 553 行）。既定は `ErrorData::new(ErrorCode::METHOD_NOT_FOUND, method, None)`。
+- 名前の定数: `CallToolRequestMethod::VALUE == "tools/call"`（4238 行）・`InitializeResultMethod::VALUE == "initialize"`（1055 行）・`CompleteRequestMethod::VALUE == "completion/complete"`（3631 行）。トレイト `ConstString`（79 行）が `VALUE` を持つ。
+- 通知は `on_custom_notification`（594 行）の道で、`on_custom_request` には来ない。
+
+### 10.3 預かった議題の結論（理由の詳細は design.md の「設計で決めたこと」）
+
+- 議題 3 → 表は版を見ない（3 つの名前だけ）。
+- 議題 5 → 文は `invalid params for <メソッドの名前>`・`data` なし。テストは答えの全体を逐語に固定する。
+- 議題 6 → 判断と `debug` の記録を純粋な関数 `custom_request_error` に置き、テストのスレッドで `capture` で数える。
+- 議題 7 → 実ソケットのテストは `server_protocol_tests.rs` に追記、純粋な関数のテストは新しい兄弟 `handler_tests.rs`。中継の比較テストは 1 行の差し替えだけ。
+- 議題 8 → `transport-diff-areka.md` には足さない。
+- 議題 10 → 起動の台詞でバルーンが出るのを待ち、`dump_balloon` が初めて絵を返したことで「出た」と見る。台本は `verification/debug-dump-balloon.ps1`、記録は `verification/debug-dump-balloon.md`。
+
+### 10.4 まとめ方の 3 つの見方（synthesis）
+
+- 一般化: 3 つのメソッドの直しは「型のない要求への答え」1 か所に集まる。表 1 つと関数 1 つで足り、メソッドごとの処理は作らない。
+- 作るか使うか: rmcp の拡張の口（`on_custom_request`）・名前の定数・HTTP の状態の決め方をそのまま使う。本文を自分で読み直す道（案 D）と、serde の理由の文を取り直す道（案 C）は採らない。
+- 削ったもの: 表の版の分け方・`params` の中身を読む処理・実ソケットのテストの新しいファイル・`transport-diff-areka.md` の行・実走のテストのファイル。どれも今の要件に無い備え。
+
+### 10.5 危うさと手当て
+
+- rmcp を上げて型のない要求へ落ちる道が変わる → 追記したテストが 5 つの版で赤になる。`Cargo.toml` の注記どおり `server_*tests.rs` を全部通す。
+- 起動の台詞でバルーンが出ないと件 2 の条件が作れない → 台本が終了コード 2 で分ける。
+- debug 版は遅く、他のセッションの重いビルドでフレームが遅れうる → 上限の答えが出たら 3.4 の調べで、記録から止まった段を読み分ける。
+- 自動終了を待つので、1 体あたり約 6〜7 分かかる → 回す前に伝える。
