@@ -184,7 +184,7 @@ crates/real-run-kit/
 - `crates/areka/tests/smoke_boot_loop_exit.rs` — 窓口へ移す。`run_smoke`・`is_i686_pe`・`ensure_i686_artifact`・`ensure_helper_beside_areka` を消す。確かめの関数（`assert_no_shiori_fault`・`assert_line_has`・`accepted_as_no_monitor`・`assert_real_windows_and_exit_zero`）は残す。
 - `crates/log-capture-kit/tests/sample_path_guard_test.rs` — D-2 の直し（約 794 行 → 約 860 行の見込み・1,000 行の内）。
 - `Cargo.lock` — ワークスペースのクレート `real-run-kit` の行（外の依存は増えない）。
-- `doc/testing.md`（新規）— 試験の手引き。「実機の試験」の節（D-16・10.2）に、立て方（`Launch` の 5 通りと上書き）・ツールの呼び方（`call`・`call_until`・失敗の見分け）・閉じ方（`close`）と自分で終わるのを待つ形（`wait_exit`）の使い分け・残した証拠の場所（`target\test-roots\areka-rr-…`）と読み方（`stdout.log`・`stderr.log`・`sample\`）・試験を `Result` でなく panic で落とすこと・32bit の仲介の建て方（`cargo build -p shiori-host32-helper --target i686-pc-windows-msvc`）・負荷の走り（`areka-test-binary-stability`）と同じ時間に回さないこと・実機の試験を 1 本ずつ回す机（`doc/impl-watch.md` を指す）を書く。
+- `doc/testing.md`（新規）— 試験の手引き。「実機の試験」の節（D-16・10.2）に、立て方（`Launch` の 5 通りと上書き）・ツールの呼び方（`call`・`call_until`・失敗の見分け）・閉じ方（`close`）と自分で終わるのを待つ形（`wait_exit`）の使い分け・残した証拠の場所（`target\test-roots\areka-rr-…`）と読み方（`stdout.log`・`stderr.log`・`sample\`・空の棚 `.copy-work\` は気にしなくてよい）と、残った置き場は自分で消すこと・試験を `Result` でなく panic で落とすこと・32bit の仲介の建て方（`cargo build -p shiori-host32-helper --target i686-pc-windows-msvc`）・負荷の走り（`areka-test-binary-stability`）と同じ時間に回さないこと・実機の試験を 1 本ずつ回す机（`doc/impl-watch.md` を指す）を書く。
 - `doc/README.md` — 直下の表に `testing.md` の 1 行。
 - `.kiro/steering/structure.md` — Temp Path Kit・Sample Ghost Kit の並びに Real Run Kit の節（D-17）。
 
@@ -345,7 +345,7 @@ stateDiagram-v2
 | `RUST_LOG` | `compose_rust_log(呼び手の値 か "info")` | `rust_log(s)` |
 | `AREKA_USER_ROOT` | 渡さない（外したまま＝書ける根は実行ファイルの隣＝`target\` の下） | `env` |
 
-`compose_rust_log(base)` は、`base` が名指していない出所だけを `,<出所>=info` で末尾へ足す（D-4）。足す出所は `areka_mcp::server`（待受の行）と `areka::app_exit`（閉じる知らせの受け取りの行と終わり方の行）。`base` が既にその出所の名前を含めば足さない（呼び手の指定を下げない）。
+`compose_rust_log(base)` は、窓口が頼る 2 つの出所（`areka_mcp::server`＝待受の行・`areka::app_exit`＝閉じる知らせの受け取りの行と終わり方の行）の実効の段が `info` より絞られているときだけ、`,<出所>=info` を末尾へ足す（D-4）。`EnvFilter` は細かい出所の指定が勝つので、むやみに足すと呼び手の `debug`・`trace` を下げてしまう。そこで ⑴ `base` がその出所そのものか親（`areka`・`areka_mcp`）を名指していれば足さない ⑵ 全体の段（出所の無い指定）が `info`・`debug`・`trace` なら足さない（未設定の既定 `info` もこれ）⑶ 全体の段が `warn`・`error`・`off` で、出所も親も名指されていないときだけ足す（呼び手の指定を下げない）。
 
 **Contracts**: Service [x] / State [ ]
 
@@ -434,6 +434,7 @@ pub struct Limits {
     pub deadline: Duration,     // 60 秒: 各待ちの始まりから数える
     pub safety_exit: Duration,  // 45 秒: 子の起動から数える保険の自動終了
     pub poll: Duration,         // 50 ms: 出力・子の状態を読み直す間隔
+    pub call_retry: Duration,   // 250 ms: call_until の呼び直しの間隔
     pub close_retry: Duration,  // 1 秒: 閉じる知らせを送り直す間隔
     pub exit_grace: Duration,   // 2 秒: MCP の輸送の失敗の後に子の終わりを観測する上限
 }
@@ -488,16 +489,17 @@ impl Run {
 | Requirements | 3.2〜3.5・3.7 |
 
 **Responsibilities & Constraints**
-- `wait_any(files, needles, child, deadline, poll) -> Result<usize, WaitEnd>`: 1 回ごとに ⑴ 2 つのファイルを全部読み直し、`needles` のどれかを含めばその番号を返す ⑵ 子の終わりを `try_wait` で見て、終わっていればもう 1 度だけ読み直してから `ChildExited` ⑶ 締切を過ぎていれば `Deadline` ⑷ `poll` だけ待って ⑴ へ。眠るのは観測を読み直す間隔だけ（3.7）。
+- `wait_any(files, needles, child, deadline, poll) -> Result<usize, WaitEnd>`: 1 回ごとに ⑴ 2 つのファイルの、前に読んだ位置から増えた分だけを読み（境目をまたぐ一致のために、前回の末尾の「探す文字列のうち最も長いもののバイト数 − 1」を重ねて探す）、`needles` のどれかを含めばその番号を返す ⑵ 子の終わりを `try_wait` で見て、終わっていればもう 1 度だけ増えた分を読んでから `ChildExited` ⑶ 締切を過ぎていれば `Deadline` ⑷ `poll` だけ待って ⑴ へ。眠るのは観測を読み直す間隔だけ（3.7）。
 - `Run::wait_for` は `Deadline` を panic にし（3.4）、`mcp` は `Deadline` を `Unreachable` に写す（4.7）。
 - 締切切れの文（3.4・5.4 で共用）: 待っていた文字列・待った時間・2 つのファイルの場所・各ファイルの末尾 64 KiB（全文はファイルにある旨を添える）。
-- 読み直しは毎回ファイルの全文。走りの出力は数 MB までで、待つ試験は `trace` を開けない前提（`emo2_real_run` は待たずに終わりだけを待つ）。
+- 読むのは増えた分だけ（読んだ位置はファイルごとに待ちの部品が持つ）。`kanade=trace` を開けた数 MB の走りで待っても、1 秒に 20 回全文を読み直さない（次の利用者 `emo2-real-run-stability` が `info,kanade=trace` のまま印を待ち、数十回くり返すため）。`Run::stdout`・`output` の読み口（3.6）と締切切れの文の末尾 64 KiB は全文から取る。
 
 **Contracts**: Service [x]
 
 **Implementation Notes**
 - Validation: `output_tests.rs` で、手で書いたファイル（後から追記するスレッドつき）と、終わった子（偽の子 `exit:N` の代わりに `std::process::Command` で起こす `cmd /c exit 3`）で ⑴〜⑶ の分岐を確かめる。統合テストで偽の子の大量の出力（`flood`）でも子が止まらないこと（3.1）を確かめる。
-- Risks: 出力が数十 MB になる走りで待つと、読み直しが重くなる。そのときは読んだ位置から先だけを読む形へ替える（窓口の中だけの変更）。
+- Validation（追加）: `output_tests.rs` に、探す文字列が 2 回の追記の境目をまたいで書かれても拾うことを足す。
+- Risks: UTF-8 の多バイトの途中で読みが切れても、探すのはバイト列の一致なので取りこぼさない（重ねる分で吸う）。
 
 ### MCP
 
@@ -517,7 +519,7 @@ impl Run {
   - 子の終わり → `ChildExited`（4.8）。
   - 締切 → `Unreachable { reason: "答えを <時間> 待った" }`（4.7）。
   - `ServiceError`（輸送・読めない答え） → `exit_grace` まで子の終わりを観測し、終わればその終了コードで `ChildExited`、生きていれば `Unreachable { reason: エラーの文 }`。`Link` を捨て、次の呼び出しはつなぎ直す。
-- 呼び直し（4.9）: `call_until` は締切の内で `call` をくり返す。答えの文が `needle` を含めば返す。`is_error` の答えと含まない答えは `poll` だけ待って呼び直す。`ListenFailed`・`Unreachable`・`ChildExited` はそのまま返す。締切は panic（3.4 と同じ文の形・最後の答えを添える）。
+- 呼び直し（4.9）: `call_until` は締切の内で `call` をくり返す。答えの文が `needle` を含めば返す。`is_error` の答えと含まない答えは `call_retry`（250 ms・出力の見回りの `poll` とは別＝`get_log` の答えは履歴の全文で大きい）だけ待って呼び直す。`ListenFailed`・`Unreachable`・`ChildExited` はそのまま返す。締切は panic（3.4 と同じ文の形・最後の答えを添える）。
 
 **Contracts**: Service [x]
 
@@ -600,7 +602,7 @@ pub(crate) fn ended_by(output: &str) -> EndedBy; // close_tests.rs が綴りの�
 | Requirements | 1.2・1.4・6.1〜6.4・9.1・10.6 |
 
 **Responsibilities & Constraints**
-- `RunDirs::create(sample: Option<&str>)`: `TempPath::under_target("rr")`（`<ワークスペース>\target\test-roots\areka-rr-<pid>-<連番>`・約 100 字＝1.9）を作り、その下に `root\`（空の根）・`profile\`（記憶の置き場）・`stdout.log`・`stderr.log` の場所を持つ。検体の名前があれば `SampleRoot::acquire` で新しい写しを持つ（1.2）。取得の失敗は panic（`SampleError` の文つき）。
+- `RunDirs::create(sample: Option<&str>)`: `TempPath::under_target("rr")`（`<ワークスペース>\target\test-roots\areka-rr-<pid>-<連番>`・約 100 字＝1.9）を作る。配られたフォルダが空でなければ（プロセスの番号の使い回しで、前に残した落ちた回と同じ名前を引いた）、その `TempPath` を `std::mem::forget` して前の証拠を消さずに次を取り直す（上限 16 回・超えたら panic）。その下に `root\`（空の根）・`profile\`（記憶の置き場）・`stdout.log`・`stderr.log` の場所を持つ。検体の名前があれば `SampleRoot::acquire` で新しい写しを持つ（1.2）。取得の失敗は panic（`SampleError` の文つき）。
 - `RunDirs` は自分の `Drop` で `finish(std::thread::panicking())` を呼ぶ。だから `Run` ができる前の失敗（`before_spawn` の中の panic・子を起こせない＝1.10）でも、回は残る。`Run` の `Drop` は子を止めることだけを行い、その後に欄の破棄として `RunDirs` の `Drop` が走る。
 - `finish(failed: bool)`（私有・`Drop` からだけ呼ぶ・panic しない・兄弟のテストは真偽を直に渡す）:
   - `failed == false`（6.3）: 何もしない＝`TempPath` と `SampleRoot` の破棄が消す。
@@ -611,7 +613,7 @@ pub(crate) fn ended_by(output: &str) -> EndedBy; // close_tests.rs が綴りの�
 
 ##### State Management
 - State model: 回の置き場は走りの持ち物で、走りが終わる（`Run` の破棄）ときに残すか消すかが 1 度だけ決まる。
-- Persistence & consistency: 残した回は誰も消さない（次の走りが掃除しない＝`TempPath` の名前は毎回新しい）。検体の写しの元の場所は `SampleRoot` の破棄で消える（複写した方が残る）。
+- Persistence & consistency: 残した回は誰も消さない（次の走りが掃除しない）。名前が一意なのは同じ時間に生きているプロセスの間だけなので、`create` は中身のあるフォルダを使わずに取り直す（前の回の証拠を混ぜない・消さない）。残った回の置き場は開発者が自分で消す（手引きに書く）。検体の写しの元の場所は `SampleRoot` の破棄で消える（複写した方が残る）。
 - Concurrency strategy: 名前はプロセスの番号と連番で一意（9.1）。
 
 ### 成果物
@@ -737,13 +739,13 @@ pub(crate) fn ensure(spec: &I686Spec, env_value: Option<OsString>, i686_target: 
 
 ### Unit Tests（兄弟のファイル）
 
-- `launch_tests.rs`: 外す 4 つの環境変数が組んだ `Command` の外す側に在ること（1.5）・既定の 6 つの値（1.7・4.1）・上書きの順で呼び手の `env` が最後に勝つこと（1.6）・`Launch` の 5 通りの位置の引数と根（1.1・1.4）・`compose_rust_log` の足し方（`"warn,areka::boot_config=info"`・`"info,kanade=trace"`・既に `areka::app_exit=trace` を含む値・空の値＝4.4）・相対のパスが絶対になり `\\?\` が付かないこと（1.9）。
+- `launch_tests.rs`: 外す 4 つの環境変数が組んだ `Command` の外す側に在ること（1.5）・既定の 6 つの値（1.7・4.1）・上書きの順で呼び手の `env` が最後に勝つこと（1.6）・`Launch` の 5 通りの位置の引数と根（1.1・1.4）・`compose_rust_log` の足し方（`"warn,areka::boot_config=info"` には足す・`"info,kanade=trace"`・`"trace"`・`"debug"`・`"areka=debug"`・`"areka_mcp=debug"`・既に `areka::app_exit=trace` を含む値・空の値は変わらない＝4.4・1.6）・相対のパスが絶対になり `\\?\` が付かないこと（1.9）。
 - `run_tests.rs`: `Limits::default()` で `safety_exit < deadline`・中継の答えの上限 30 秒 ＜ `deadline`（1.8）。
 - `output_tests.rs`: 追記されて現れた文字列で終わる・子が先に終わったら `ChildExited`・終わる直前に書かれた文字列は拾う・締切の文に場所と末尾が入る（3.2〜3.5）。
 - `i686_tests.rs`: 探す順と各失敗の文（2.2〜2.4）・改名の先が既に 32bit なら通す（2.6）。
 - `close_tests.rs`: `ended_by` の表（`origin=KanadeStopped(Quit)`・`OsClose`・`Smoke`・`MemoryWriteFailed(…)`・行なし・2 行あれば最初の行）（5.3）。
 - `mcp_tests.rs`: 文の片の繋ぎ方・`is_error` の `None` の扱い・引数の文（object でない・壊れた JSON は panic）（4.2・4.6）。
-- `evidence_tests.rs`: `finish(true)` で置き場と `sample\` が残る・`finish(false)` で消える（6.1・6.3・6.4）。
+- `evidence_tests.rs`: `finish(true)` で置き場と `sample\` が残る・`finish(false)` で消える・中身のあるフォルダを配られたら使わず消しもしない（6.1・6.3・6.4・9.1）。
 
 ### Integration Tests（偽の子・`tests/`）
 
@@ -780,16 +782,16 @@ pub(crate) fn ensure(spec: &I686Spec, env_value: Option<OsString>, i686_target: 
 | D-1 | 窓口は新しいクレート `crates/real-run-kit/`（`publish = false`・テスト専用） | 要件の討議 1・C9 の約束（`sample-ghost-kit/src/lib.rs` に触らない） |
 | D-2 | 見張りに例外表（`real-run-kit` 1 件・件数の定数）と「`real-run-kit` がどの本番の表にも載らない」検査と較正を足す。**roadmap の C9 の行 ⑥ の触るファイルの欄に `crates/log-capture-kit/tests/sample_path_guard_test.rs` を足す必要がある**（あわせて、欄に名前の無い `crates/areka/Cargo.toml` の `[dev-dependencies]` の 1 行・`doc/testing.md`（新規）・`doc/README.md` の 1 行も。`Cargo.lock` は 1 本だけの席で既に ⑥・steering は許す重なり）。本 spec の決定として記録し、roadmap は棚卸の側で直す | 10.3（間接の道を 1 段で塞ぐ・共有の走査器を増やさない） |
 | D-3 | 閉じ方は `taskkill /PID`（強制なし）を、受け取りの行か子の終わりを観測するまで 1 秒ごとに送り直す | 依存なし・`unsafe` なし・実機の先例・窓が無い時点の失敗を送り直しで吸う |
-| D-4 | `RUST_LOG` に `areka_mcp::server=info`・`areka::app_exit=info` を、呼び手の値が名指していないときだけ足す。既定の値は `info` | 4.4・5.3 を本番を変えずに満たす。ほかの行は増えない |
+| D-4 | `RUST_LOG` に `areka_mcp::server=info`・`areka::app_exit=info` を、その出所の実効の段が `info` より絞られているときだけ足す（出所か親を名指していれば足さない・全体の段が `info` 以上に開いていれば足さない）。既定の値は `info` | 4.4・5.3 を本番を変えずに満たす。ほかの行は増えない。呼び手の `debug`・`trace` を下げない（設計の確かめ 件 1） |
 | D-5 | 終わり方は最初の `event="app_exit"` の行の `origin=` で見分ける | `quit_app` は最初の出所だけを `info` で出す |
 | D-6 | 検体の写しは、落ちた回だけ子が終わった後に `copy_tree_atomic` で `<回>\sample\` へ複写する | `sample-ghost-kit` の中のふるまい（写しの消え方）に頼らない・成功の回は複写しない |
-| D-7 | 回の置き場は `TempPath::under_target("rr")`。落ちた回は `forget` で残す。判定は `std::thread::panicking()` | `temp-path-kit` に触らない・取っ手を持たないので残しても副作用が無い |
+| D-7 | 回の置き場は `TempPath::under_target("rr")`。配られたフォルダが空でなければ `forget` して取り直す（上限 16 回）。落ちた回は `forget` で残す。判定は `std::thread::panicking()` | `temp-path-kit` に触らない・取っ手を持たないので残しても副作用が無い・番号の使い回しで前の証拠を混ぜない（設計の確かめ 件 2） |
 | D-8 | `areka.exe` の場所は呼び手が `env!("CARGO_BIN_EXE_areka")` で渡す | 窓口のライブラリはその名前を展開できない・偽の子へも同じ口で差し替わる |
-| D-9 | 出力はファイルへ直に向け、50 ms ごとに全文を読み直して探す | パイプの詰まりが無い・途中でも後でも読める・眠りは観測の読み直しの間隔だけ |
+| D-9 | 出力はファイルへ直に向け、50 ms ごとに前に読んだ位置から増えた分だけを読んで探す（境目は探す文字列の長さ − 1 バイトを重ねる） | パイプの詰まりが無い・途中でも後でも読める・眠りは観測の読み直しの間隔だけ・`trace` を開けた走りで待っても重くならない（設計の確かめ 件 3） |
 | D-10 | MCP は中継の `scan` で名乗りを確かめた `Link` に rmcp の `call_tool`。器は走りごとの `current_thread`。引数は JSON の文で受ける | 公式 SDK・areka に `serde_json` の依存を足させない・非同期を見せない |
 | D-11 | 偽の子は窓口のクレートの `[[bin]]`。振る舞いは環境変数 1 つの手順で選ぶ | 試験のバイナリを起こし直す形より読みやすい・窓口の外へ漏れない |
 | D-12 | 失敗の返し方は Error Handling の表（締切と準備の失敗は panic、子の先の終わりと MCP の失敗は値） | 要件の「試験を失敗させる」と「失敗を返す」の書き分け |
-| D-13 | 既定の時間: 締切 60 秒・保険の自動終了 45 秒・見回り 50 ms・送り直し 1 秒・輸送の失敗の後の観測 2 秒・MCP の答えの上限 30 秒（中継の既定） | 1.8（45 ＜ 60・30 ＜ 60）・今の番犬 60 秒と同じ |
+| D-13 | 既定の時間: 締切 60 秒・保険の自動終了 45 秒・見回り 50 ms・呼び直し 250 ms・送り直し 1 秒・輸送の失敗の後の観測 2 秒・MCP の答えの上限 30 秒（中継の既定） | 1.8（45 ＜ 60・30 ＜ 60）・今の番犬 60 秒と同じ |
 | D-14 | 移し替えで子の環境が変わること（Migration の一覧）を移し替えのタスクの記録に書く | 確かめの中身は変わらないが、子が立つ条件は変わる |
 | D-15 | 選んだ番号が先に取られていたら `ListenFailed` で止め、立て直さない | 要件の討議 4 |
 | D-16 | 手引きは新しい `doc/testing.md`（試験の手引き）の「実機の試験」の節。`doc/README.md` の表に 1 行。机のことは `doc/impl-watch.md` を指すだけ | `doc/` に試験の手引きが無い・机は ① の持ち物 |
@@ -805,4 +807,4 @@ pub(crate) fn ensure(spec: &I686Spec, env_value: Option<OsString>, i686_target: 
 ## Performance & Scalability
 
 - 走りの準備（写しの取得・仲介の確かめ）は今の 3 本と同じ。成功した回は複写しない（D-6）。
-- 待ちの読み直しは 50 ms ごとの全文読み。待つ走りの出力は数 MB までを前提にし、超えたら読んだ位置からの読みに替える（output の Risks）。
+- 待ちの読み直しは 50 ms ごとに増えた分だけ（D-9）。出力の量に比例した重さで済む。
