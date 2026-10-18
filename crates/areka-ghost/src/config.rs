@@ -31,7 +31,27 @@ pub fn resolve_kanade_config(
     default_encoding: DefaultEncoding,
 ) -> KanadeConfig {
     let shell_name = resolve_shell_name(mount, default_encoding);
-    KanadeConfig::new(shell_name, env!("CARGO_PKG_VERSION"))
+    KanadeConfig {
+        ghost_name: listed_ghost_name(mount),
+        ..KanadeConfig::new(shell_name, env!("CARGO_PKG_VERSION"))
+    }
+}
+
+/// script 種別のログに出すゴーストの名前。descript の `name` が空でなければそれ、
+/// 無い・空なら根（`ghost/master` の 2 つ上）の絶対パスから末尾の区切りを除いた字
+/// （MCP の `resolve::listed_value` と同じ作り・要件 4.1）。
+fn listed_ghost_name(mount: &MountModel) -> String {
+    if let Some(name) = mount.names.name.as_deref().filter(|n| !n.is_empty()) {
+        return name.to_string();
+    }
+    let master = &mount.shiori.dir;
+    let root = master.ancestors().nth(2).unwrap_or(master);
+    std::path::absolute(root)
+        .unwrap_or_else(|_| root.to_path_buf())
+        .display()
+        .to_string()
+        .trim_end_matches(['\\', '/'])
+        .to_string()
 }
 
 /// shell descript から `name` キーを読み取る。読取不能・欠落は shell ディレクトリ
@@ -128,6 +148,69 @@ mod tests {
 
         areka_parsers::package::resolve(root, DefaultEncoding::Utf8)
             .expect("fixture tree resolves to a MountModel")
+    }
+
+    /// ゴースト側 descript に `name_line`（例 `"name,えみり"`）を足した最小のツリーを
+    /// 組んで解決する（`None` なら name 行を書かない）。shell descript は置かない。
+    fn resolve_mount_with_ghost_name(root: &PathBuf, name_line: Option<&str>) -> MountModel {
+        let _ = fs::remove_dir_all(root);
+        let ghost_master = root.join("ghost").join("master");
+        fs::create_dir_all(&ghost_master).expect("create ghost/master");
+        let name_line = name_line.map(|l| format!("{l}\n")).unwrap_or_default();
+        fs::write(
+            ghost_master.join("descript.txt"),
+            format!("charset,UTF-8\n{name_line}").as_bytes(),
+        )
+        .expect("write ghost descript.txt");
+        fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
+        areka_parsers::package::resolve(root, DefaultEncoding::Utf8)
+            .expect("fixture tree resolves to a MountModel")
+    }
+
+    /// 根の絶対パス（末尾の区切りなし）＝ MCP の `listed_value` と同じ作りの期待値。
+    fn expected_root_value(root: &PathBuf) -> String {
+        std::path::absolute(root)
+            .expect("absolute root")
+            .display()
+            .to_string()
+            .trim_end_matches(['\\', '/'])
+            .to_string()
+    }
+
+    #[test]
+    fn resolve_kanade_config_sets_ghost_name_from_descript_name() {
+        let temp = unique_temp_dir("ghost-name-from-descript");
+        let root = temp.path().to_path_buf();
+        let mount = resolve_mount_with_ghost_name(&root, Some("name,えみり"));
+
+        let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
+
+        assert_eq!(config.ghost_name, "えみり");
+    }
+
+    #[test]
+    fn resolve_kanade_config_sets_ghost_name_to_root_path_when_name_missing() {
+        let temp = unique_temp_dir("ghost-name-missing");
+        let root = temp.path().to_path_buf();
+        let mount = resolve_mount_with_ghost_name(&root, None);
+
+        let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
+
+        assert_eq!(config.ghost_name, expected_root_value(&root));
+        assert!(std::path::Path::new(&config.ghost_name).is_absolute());
+        assert!(!config.ghost_name.ends_with(['\\', '/']));
+    }
+
+    #[test]
+    fn resolve_kanade_config_sets_ghost_name_to_root_path_when_name_empty() {
+        let temp = unique_temp_dir("ghost-name-empty");
+        let root = temp.path().to_path_buf();
+        let mount = resolve_mount_with_ghost_name(&root, Some("name,"));
+
+        let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
+
+        assert_eq!(config.ghost_name, expected_root_value(&root));
+        assert!(!config.ghost_name.ends_with(['\\', '/']));
     }
 
     #[test]

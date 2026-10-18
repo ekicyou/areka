@@ -106,3 +106,15 @@ MCP のツール `check_script` は、台本を再生せずに「areka で効く
 ## 申し送り（2026-10-17・`areka-P0-move-canon` の要件ディスカッションから）
 
 - `move-canon` の後、`parse_move_directive` は名前付きの形（`--X=` ほか）も読む。使えない組み合わせと読めない値は断らず、SSP 2.9.18 と同じに置き換えて記録する（`MoveDegradation::NamedForm`・`UnsupportedBase` は無くなる見込み）。`\![move]` の診断は「何を何に置き換えたか」を作者へ知らせる形になる。
+
+## 2026-10-19 追記: 件 2（揺れるテスト・`areka-P0-mcp-kanade-tools` の完了時の棚卸）
+
+> 本文の引数の診断を件 1 と読み、この節を件 2 とする。触る場所（`crates/areka/src/mcp/check_script_tests.rs`）が本文の触るファイルと同じなので、新しい spec にせずここへまとめた（小さいバグの起票は触る場所が同じものを 1 本にまとめる決まり）。
+
+**件 2: `mcp::check_script::check_script_tests::omitted_or_matching_name_answers_with_the_running_ghost` が 1 回だけ赤になった。**
+
+- 見たもの: `areka-P0-mcp-kanade-tools` のタスク 5.2 のレビューで `cargo test -p areka --bin areka mcp::` を回したとき 1 回だけ落ち、回し直すと緑だった。同 spec の 6.2 の回帰では 1 回目から緑（`completed/areka-P0-mcp-kanade-tools/tasks.md` の Implementation Notes の 5.2）。同 spec はこのテストのファイルに触っていない。
+- 見立て（未確定）: 補助の `dispatch_and_wait` は、`crate::mcp::dispatch` の直後に `pending.try_answer()` で「その場の答え」を読み、無ければ `wait_answer()` で別のスレッドの答えを待つ。テストは「その場の答えは無く、待った答えにゴーストの名前が付く」（`(None, Some(..))`）を期待する。別のスレッドが `try_answer` より先に答えると、同じ答えが「その場の答え」の側に入り、`(Some(..), None)` になって赤になる。時刻の競り合いで、負荷が高いと起きやすい。
+- 直す所: テストの補助（`dispatch_and_wait`）か期待の形。その場で断る答え（`NG:`）と別のスレッドの答えを、届いた時刻でなく中身で分ける形を推す（例: その場で返る `NG:` は名前が付かない、別のスレッドの答えは名前が付く、で判定する）。本番の `check_script` の振る舞いは変えない。
+- 守る決まり: テストの本質（省略と当たる名前が起動中の 1 体へ解決され、そのゴーストの名前を添えて答える）を外さない。待ちを長くする・回し直すで逃げない。
+- 規模: +1 タスク（本文の M〔8〜12〕に足す）。

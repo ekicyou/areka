@@ -18,6 +18,7 @@ use super::events::SourceEvent;
 use super::log_capture::{assert_not_logged, capture, logged_once};
 use super::steady::test_support::base_state;
 use super::talk_gap::Marked;
+use super::translate::ScriptSource;
 use super::*;
 use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget, GapRaise, ShioriMethod};
 use crate::msg::{ChoiceInput, MouseButton, MouseEventKind, ShioriFailure, ShioriFaultKind};
@@ -258,7 +259,11 @@ fn assert_path(prepare: Prepare, expected: &[&str]) -> (Drive, Vec<Action>) {
         panic!("一括は翻訳の行動 1 つだけのはず: {:?}", shapes(&actions));
     };
     assert_eq!(req.script, ORIGINAL, "SHIORI が返したまま（展開の前）");
-    assert_eq!(req.source, sent, "元のイベント＝応答を待っていた GET");
+    assert_eq!(
+        req.source,
+        ScriptSource::Event(sent),
+        "元のイベント＝応答を待っていた GET"
+    );
     assert_eq!(
         req.status,
         ExecutionStatus::derive(&d.s.snapshot()),

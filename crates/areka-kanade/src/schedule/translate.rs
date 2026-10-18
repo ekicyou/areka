@@ -13,16 +13,45 @@
 
 use super::events::SourceEvent;
 use super::{Action, Input, Phase, State};
-use crate::msg::{EventId, ShioriCall, ShioriFailure, ShioriFault, ShioriOutcome};
+use crate::msg::{ShioriCall, ShioriFailure, ShioriFault, ShioriOutcome};
 use crate::status::ExecutionStatus;
 use crate::talk::TalkId;
+
+/// 台本の出どころ（翻訳の組み立てと script 種別の記録の表示の語の素）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ScriptSource {
+    /// SHIORI のイベントへの応答（元の GET の ID と Reference）。
+    Event(SourceEvent),
+    /// 外からの台本（Owned SSTP の SEND 相当）。
+    SstpSend,
+}
+
+impl ScriptSource {
+    /// MAKOTO の口の 2 つ目（元のイベントの ID）。SSTP SEND は元のイベントが無いので空文字。
+    pub(crate) fn makoto_id(&self) -> &str {
+        match self {
+            Self::Event(source) => source.id.as_str(),
+            Self::SstpSend => "",
+        }
+    }
+}
+
+/// 記録の欄の表示: イベントはその ID、SSTP SEND は `sstp-send`。
+impl std::fmt::Display for ScriptSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Event(source) => f.write_str(source.id.as_str()),
+            Self::SstpSend => f.write_str("sstp-send"),
+        }
+    }
+}
 
 /// 翻訳の待ちの帳簿（[`State::translate`](super::State)）。高々 1 つ。
 pub(crate) struct TranslateWait {
     /// 預けた一括の再生の開始の `talk_id`。
     pub talk_id: TalkId,
-    /// 元のイベントの ID（記録用）。
-    pub source: EventId,
+    /// 台本の出どころ（記録用）。
+    pub source: ScriptSource,
     /// 腕が返した一括をそのまま（順序を保つ）。
     pub deferred: Vec<Action>,
 }
@@ -31,8 +60,8 @@ pub(crate) struct TranslateWait {
 pub(crate) struct TranslateRequest {
     /// SHIORI が返したままの台詞（展開の前）。
     pub script: String,
-    /// 元のイベント（`OnTranslate` の Reference2・3 の源）。
-    pub source: SourceEvent,
+    /// 台本の出どころ（`OnTranslate` の組み立ての選び・Reference2・3 の源）。
+    pub source: ScriptSource,
     /// 捕まえた時点の状態から導いた Status。
     pub status: ExecutionStatus,
 }
@@ -55,6 +84,14 @@ pub(super) struct Replied {
     script: Option<String>,
     /// 応答を待っていた GET の元のイベント（控えから取り出したもの）。
     source: Option<SourceEvent>,
+}
+
+impl Replied {
+    /// 入力が台詞の応答で元のイベントが分かるときの出どころ（script 種別の記録の材料）。
+    pub(super) fn talk_source(&self) -> Option<ScriptSource> {
+        self.script.as_ref()?;
+        self.source.clone().map(ScriptSource::Event)
+    }
 }
 
 /// [`step`](super::step) が `route` の前に呼ぶ。入力が SHIORI の応答なら、応答を待っていた GET の
@@ -132,10 +169,22 @@ fn capture(state: &mut State, replied: Replied, actions: Vec<Action>) -> Vec<Act
         return actions;
     }
     tracing::debug!(target: "kanade", event = "translate_begin", talk_id = talk_id.0, source = %source.id, "台詞の再生開始を預けて OnTranslate へ");
+    defer(state, talk_id, ScriptSource::Event(source), script, actions)
+}
+
+/// 一括を帳簿へ預け、翻訳の行動 1 つに替える（[`capture`] と外からの台本の腕が使う）。
+/// Status は預ける時点の状態から導く。
+pub(super) fn defer(
+    state: &mut State,
+    talk_id: TalkId,
+    source: ScriptSource,
+    script: String,
+    actions: Vec<Action>,
+) -> Vec<Action> {
     let status = ExecutionStatus::derive(&state.snapshot());
     state.translate = Some(TranslateWait {
         talk_id,
-        source: source.id.clone(),
+        source: source.clone(),
         deferred: actions,
     });
     vec![Action::Translate(TranslateRequest {
@@ -148,10 +197,10 @@ fn capture(state: &mut State, replied: Replied, actions: Vec<Action>) -> Vec<Act
 /// `OnTranslate` の生の結果を読む（殻が呼ぶ純粋な関数）。
 ///
 /// `expanded` は展開済みの元の台詞（204・エラー応答・GET では起きない結果で使う）。輸送路の
-/// 失敗以外は、元のイベントの ID（`source`）つきの `translate_reply` を 1 件残す。輸送路の
+/// 失敗以外は、出どころの表示（`source`＝イベントの ID か `sstp-send`）つきの `translate_reply` を 1 件残す。輸送路の
 /// 失敗の記録は、運行表が結果を受けたときの `translate_failed` が受け持つ（重ねて出さない）。
 pub(crate) fn read_reply(
-    source: &EventId,
+    source: &ScriptSource,
     expanded: String,
     outcome: ShioriOutcome,
 ) -> ReplyReading {

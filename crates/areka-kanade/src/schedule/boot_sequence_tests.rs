@@ -240,6 +240,7 @@ fn boot_main_no_content_emits_no_talk() {
         external: Default::default(),
         translate: None,
         reply_source: None,
+        ..State::initial()
     };
     let (s, actions) = step(
         s,
@@ -289,6 +290,7 @@ fn boot_talk_ids_are_unique_and_monotonic() {
         external: Default::default(),
         translate: None,
         reply_source: None,
+        ..State::initial()
     };
     let (s1, actions1) = step(
         s1,
@@ -322,6 +324,7 @@ fn boot_talk_ids_are_unique_and_monotonic() {
         external: Default::default(),
         translate: None,
         reply_source: None,
+        ..State::initial()
     };
     let (s2, actions2) = step(
         s2,
@@ -368,6 +371,7 @@ fn close_request_during_boot_records_pending_only() {
             external: Default::default(),
             translate: None,
             reply_source: None,
+            ..State::initial()
         };
         let phase_before = std::mem::discriminant(&s.phase);
         let (s, actions) = step(
@@ -493,6 +497,7 @@ fn baseware_version_status_reflects_greeting_tracking() {
         external: Default::default(),
         translate: None,
         reply_source: None,
+        ..State::initial()
     };
     let (_, actions) = step(
         greeting,
@@ -525,6 +530,7 @@ fn baseware_version_status_reflects_greeting_tracking() {
         external: Default::default(),
         translate: None,
         reply_source: None,
+        ..State::initial()
     };
     let (_, actions) = step(
         no_greeting,
