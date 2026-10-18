@@ -1,4 +1,4 @@
-//! 本物の実行ファイルを子プロセスで立てて、机の往復を実時間で通す実機テスト（要件 12.5・`#[ignore]`）。
+//! 本物の実行ファイルを子プロセスで立てて、机の往復を実時間で通す実機テスト（要件 13.4・13.5・`#[ignore]`）。
 //!
 //! 実行: `cargo test -p areka-impl-watch --test real -- --ignored --nocapture`（約 30 秒）
 //! 短い形: `cargo test -p areka-impl-watch --test real -- --ignored --nocapture --skip a_waiter_reclaims`

@@ -94,11 +94,11 @@ pub(super) fn give_back(
     };
     let give = desks.unwrap_or(holds);
     let owns = (!give.has_test() || holds.has_test()) && (!give.has_sole() || holds.has_sole());
-    // 走っている負荷テストの記録は 2 つの机を 1 組で持つ（状態の不変）。排他テストの机だけを
-    // 外すと、走っている計測の最中に別の者が排他テストの机を受けられるので、1 組のまま返させる。
     if !owns {
         return Verdict::NotApplied("not the holder of that desk");
     }
+    // 走っている負荷テストの記録は 2 つの机を 1 組で持つ（状態の不変）。排他テストの机だけを
+    // 外すと、走っている計測の最中に別の者が排他テストの机を受けられるので、1 組のまま返させる。
     let running = state.sole.as_ref().is_some_and(|sole| sole.running);
     if running && give == DeskSet::Test {
         return Verdict::NotApplied("a running load test returns test and sole together");
