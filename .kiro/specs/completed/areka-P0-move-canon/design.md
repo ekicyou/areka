@@ -175,7 +175,7 @@ crates/areka/src/
 - `doc/ukadoc-coverage/ledger/sakura-script.toml` — `move`（:1773）・`execute,resetwindowpos`（:1465）・`set,position`（:3150）・`reset,position`（:2798）。
 - `doc/ukadoc-coverage/ledger/shiori.toml` — `OnResetWindowPos`（:5191）・`switchmovetodefaultpositionbutton.caption`（:14967）。
 - `doc/ukadoc-coverage/report/`（生成物）— `cargo run -p ukadoc-survey -- report` と `report-summary` で作り直し、台帳と同じコミットに入れる。
-- `.kiro/specs/areka-P0-move-canon/signoff.md`（実装の段で作る）— 実機の確かめの手順と結果。
+- `.kiro/specs/completed/areka-P0-move-canon/signoff.md`（実装の段で作る）— 実機の確かめの手順と結果。
 
 注記だけ直すファイル: `placement/follow/window_move.rs` の `move_window_to` の doc（:38「唯一の消費者が `\![move]` cue」）。呼び手はすでに連鎖の確定もあり、本 spec で並べ直しも加わるので、「呼び手（`\![move]`・連鎖の確定・並べ直し）はどれも `MoveCue` を名乗る」へ書き改める。行数は増やさない（例外表のファイル）。
 
@@ -666,7 +666,7 @@ pub enum ResetDecision { Wait, Reset, Leave }
   - 操作: 右クリックのメニューから「エモの位置調整」の選択肢と「シェル位置初期化」を選ぶ。areka の窓はクリックを透過して computer-use の右クリックが届かないので、その場で開発者の許可を得てから SendInput で選ぶ（`baseware-root-list` の実機と同じ手）。
   - 判定: ログファイルの `move_applied` の行（`scope=1`・`base=Scope(0)`）の `to_*` と基準の矩形の欄（`base_left`・`base_top`・`base_right`・`base_bottom`＝`\0` の窓の矩形）から「`\1` の右端＝`\0` の左端・`\1` の下端＝`\0` の下端」を判定する。
   - 並べ直し: 「シェル位置初期化」の後の `reset_pos_menu_outcome` と `reset_window_pos` の行を取り、終了して起こし直し、同じ位置に出ることを窓の位置の記録で確かめる。
-- 結果と記録の抜粋を `.kiro/specs/areka-P0-move-canon/signoff.md` に残す。
+- 結果と記録の抜粋を `.kiro/specs/completed/areka-P0-move-canon/signoff.md` に残す。
 - 調べてみて手間の大きい壁（SendInput が選択肢へ届かない等）に当たったら、そこで止めずに `/kiro-discovery` で申し送りの spec を起票し、signoff.md に申し送り先を書く（開発者の 2026-10-17 の指示）。
 
 ## Migration Strategy

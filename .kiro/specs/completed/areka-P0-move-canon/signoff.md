@@ -4,7 +4,7 @@
 
 ## 手順
 
-- 道具: `.kiro/specs/areka-P0-move-canon/real-machine-run.ps1`（PowerShell から `-Prepare` → `-Run Adjust -Tag <名>` → `-Run Reboot -Tag <名>`）。
+- 道具: `.kiro/specs/completed/areka-P0-move-canon/real-machine-run.ps1`（PowerShell から `-Prepare` → `-Run Adjust -Tag <名>` → `-Run Reboot -Tag <名>`）。
 - 検体: `vendors/sample_ghost/emo2.nar`（更新日 2026-10-17 20:30）を `nar-sample-path` で展開し、`target\move-canon-signoff\root` へ写した。ゴーストの雑談を止めるため、写しから `dispatch.pasta`・`hour.pasta` を外した。areka は debug、32bit の補助プロセスは i686（`014C` を確かめた）。
 - 根・記録はすべて作業ツリーの `target\move-canon-signoff\` の下（要件 9.5）。ゴーストの根は絶対パスで渡した。書ける根（`%LOCALAPPDATA%\areka`）は子プロセスだけ `target\move-canon-signoff\<名>\localappdata` へ向けた。位置の記憶はゴーストの profile（`root\ghost\emo2\ghost\master\profile\areka\sylphya.toml`）に書かれる。
 - 起こし方: `RUST_LOG=info,kanade=trace,areka::input_events=debug`（`move_applied`・`move_arg_substituted`・`move_frame_substituted`・`reset_window_pos`・`reset_pos_menu_outcome` はすべて info／warn なので出る）。`AREKA_NO_ALERT=1`、有界の自動終了は `AREKA_APP_SMOKE_EXIT_MS`（Adjust 90 秒・Reboot 25 秒）。

@@ -101,7 +101,7 @@
   - `vendors/sample_ghost/emo2.nar` を `target\` の下の根へ絶対パスで展開し、`RUST_LOG` を `move_applied`・`move_arg_substituted`・`move_frame_substituted`・`reset_window_pos`・`reset_pos_menu_outcome` が出る水準まで開けて、ログファイルを `target\` の下へ書かせて起こす
   - その場で開発者の許可を得てから、SendInput で右クリックのメニューの「エモの位置調整」と「シェル位置初期化」を選ぶ（拡大率の切り替えは開発者の OS の設定）
   - `move_applied`（`scope=1`・`base=Scope(0)`）の `to_*` と基準の矩形の欄から「`\1` の右端＝`\0` の左端・`\1` の下端＝`\0` の下端」を 100% と 200% の両方で判定し、並べ直しの後は終了して起こし直して同じ位置に出ることを記録で確かめる
-  - 手間の大きい壁に当たったら止めずに `/kiro-discovery` で申し送りの spec を起票し、結果・記録の抜粋・申し送り先を `.kiro/specs/areka-P0-move-canon/signoff.md` に残す
+  - 手間の大きい壁に当たったら止めずに `/kiro-discovery` で申し送りの spec を起票し、結果・記録の抜粋・申し送り先を `.kiro/specs/completed/areka-P0-move-canon/signoff.md` に残す
   - signoff.md に 100% と 200% の判定の行と並べ直しの確かめが載る
   - _Requirements: 6.1, 6.2, 9.4, 9.5_
 
