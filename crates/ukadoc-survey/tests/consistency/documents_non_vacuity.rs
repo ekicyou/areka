@@ -90,7 +90,11 @@ const MIN_OWNER_COMPLETED_ROWS: usize = 1;
 /// `[tally].target`＝対象 4 状態の全数でもある。束の `members` が対象を過不足なく
 /// 並べる以上、`linkage.md` の引用 id はこの数を下回れない。地の文の 1 件を足して
 /// 1,553 に釘付けしないのは、それが本文の書き方次第で増減する余りだからである。
-const MIN_LINKAGE_CITED_IDS: usize = 1_552;
+///
+/// 2026-10-18 に 1,552 から 1,550 へ下げた。`areka-P0-move-canon` が `\![set,position]` と
+/// `\![reset,position]` の 2 項目を「SSP 2.9.18 も実装していないので受けない」として対象外へ
+/// 移し、`[tally].target` が 1,550 になったからである（束の構成からも除いた）。
+const MIN_LINKAGE_CITED_IDS: usize = 1_550;
 
 /// 判定 ⑴ の母数——`briefing.md` の引用 id 数の下限。
 ///

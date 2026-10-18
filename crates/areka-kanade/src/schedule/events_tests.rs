@@ -209,8 +209,10 @@ fn on_close_notify_is_notify_with_reason_and_derived_status() {
 /// 同じ前例に倣い足した（48→51・いずれも正典固定 ID・正典に無い `OnBalloonClick` は載せない）。
 /// アンカーの 2 語（OnAnchorSelectEx/OnAnchorSelect）は anchor-tag-canon 4.1 で同じ前例に倣い
 /// 足した（51→53・いずれも正典固定 ID）。
+/// シェル位置初期化の `OnResetWindowPos` は move-canon 4.1 で同じ前例に倣い足した（53→54・
+/// 正典固定 ID）。
 #[test]
-fn allowed_event_ids_are_exactly_the_fifty_three_and_exclude_ontalk_onhour() {
+fn allowed_event_ids_are_exactly_the_fifty_four_and_exclude_ontalk_onhour() {
     assert_eq!(
         ALLOWED_EVENT_IDS,
         &[
@@ -267,6 +269,7 @@ fn allowed_event_ids_are_exactly_the_fifty_three_and_exclude_ontalk_onhour() {
             "OnBalloonTimeout",
             "OnAnchorSelectEx",
             "OnAnchorSelect",
+            "OnResetWindowPos",
         ]
     );
     assert!(

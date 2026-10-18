@@ -47,7 +47,7 @@ use crate::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
 ///
 /// 各系の並び（`before`／`after`・`chain`）は各登録関数が持つ。ここは順に呼ぶだけ。
 ///
-/// 今日との差: `Input` の 10 系と `Update` の毎フレームの相（`emo2_frame_system`）は LogSink の
+/// 今日との差: `Input` の各系と `Update` の毎フレームの相（`emo2_frame_system`）は LogSink の
 /// 起動でも登録される。どれも状態（`NonSend`）が無ければ無操作で戻る（記録は `trace!` か無し）
 /// ので、見え方は変わらない（インストールと更新の窓口だけは登録と同時に据わるが、依頼が無ければ
 /// 何もしない）。バルーンの離脱の系だけは `BalloonWiring` 不在で
@@ -228,6 +228,9 @@ pub(crate) fn prepare_ghost_windows(
     // 重なりの基底の生の値も同じ読取から取り出す（解釈は結線の先＝台帳の層が行う・
     // areka-P0-scope-zorder-pinning 要件 5.2）。`prepared` を分解する前に写す。
     let zorder_raw = prepared.zorder_raw.clone();
+    // 並べ直しの材料（配置を解いた設定）も同じ読取から取り出し、窓の組と一緒に置く
+    // （areka-P0-move-canon 要件 8.6・読むのは並べ直しだけ）。
+    let default_basis = placement::reset_pos::DefaultPlacementBasis(prepared.default_basis);
     // 復元は**起動時の作業領域源を 1 度だけ**読む（atom 要件 5.7）。以後の同期段は
     // この判定へ効かせない——拡大率をまたぐ保存位置の追従は行わない裁定
     // （`windowposition-limit` の開発者裁定）を踏襲する。
@@ -263,6 +266,7 @@ pub(crate) fn prepare_ghost_windows(
         world.insert_resource(sources.snapshot);
         world.insert_resource(sources.dpi_table);
         let windows = placement::spawn::spawn_ghost_windows(world, &placements, &titles);
+        world.insert_resource(default_basis);
         // 保存位置が復元されたスコープは既定配置ではない（scg 7.3）。台帳の
         // 既定位置を落として連鎖の再解決から常に除外する——さもないと次回起動で
         // 利用者のドラッグ位置が隣接位置へ引き戻される。spawn が Resource として
@@ -801,6 +805,8 @@ fn boot_wired(
         menu::roots_frame::register(world);
         // 「ネットワーク更新」枠の登記（network-update 要件 1.2）: 同じ理由で起こすたびにやり直す。
         menu::update_frame::register(world);
+        // 「シェル位置初期化」枠の登記（move-canon 要件 8.1）: 同じ理由で起こすたびにやり直す。
+        menu::reset_pos_frame::register(world);
         // 置換語 %lastghostname・%lastobjectname の載せ直し（記憶の置き場は起こすたびに新しくなる）。
         crate::install::names::reseed(world, runtime);
         // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: wire_mouse_input とは

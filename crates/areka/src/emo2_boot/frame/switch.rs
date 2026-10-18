@@ -45,6 +45,7 @@ use crate::placement::config::build_placement_config;
 use crate::placement::reseed::{
     BalloonPlacementInputs, apply_shell_descript, reanchor_char_windows,
 };
+use crate::placement::reset_pos::DefaultPlacementBasis;
 use crate::placement::source::DescriptSource;
 use crate::placement::spawn::GhostWindows;
 
@@ -413,7 +414,7 @@ fn poll_replies(
 
 /// シェルの後始末（design「SwitchPhase」の完了の後始末・この順）: 箱の束を文字の層へ渡す
 /// （areka-P0-shell-balloon）→ 配置の値を入れ直す → 重なりの
-/// 基底を置き直す → 実行系の今のシェルを書き換える → `LastShell` だけを書く → `OnShellChanged`。
+/// 基底と並べ直しの材料を置き直す → 実行系の今のシェルを書き換える → `LastShell` だけを書く → `OnShellChanged`。
 fn finish_shell(
     wiring: &mut Emo2Wiring,
     world: &mut World,
@@ -444,11 +445,11 @@ fn finish_shell(
             "reseed: 窓の正本が無いので見た目の値を入れ直さない（古い値のまま）"
         ),
     }
-    wiring.reseed_zorder_descript_base(
-        build_placement_config(&source.ghost_kv, &source.shell_kv)
-            .zorder_raw
-            .as_deref(),
-    );
+    // 新しいシェルの設定は 1 度だけ組み、重なりの基底と並べ直しの材料の両方へ配る
+    // （材料は areka-P0-move-canon 要件 8.6・読むのは並べ直しだけ）。
+    let placement_cfg = build_placement_config(&source.ghost_kv, &source.shell_kv);
+    wiring.reseed_zorder_descript_base(placement_cfg.zorder_raw.as_deref());
+    world.insert_resource(DefaultPlacementBasis(placement_cfg));
     let replaced = world
         .get_non_send_mut::<GhostSlot>()
         .is_some_and(|mut slot| {

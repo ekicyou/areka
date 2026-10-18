@@ -68,6 +68,7 @@
 //! | `OnBalloonTimeout` | GET | Ref0=時間切れで隠れたバルーンに出ていた台本・Ref1=`0` |
 //! | `OnAnchorSelectEx` | GET | Ref0=アンカーの範囲の文字・Ref1=ID・Ref2 以降=引数（記述順・無ければ位置なし） |
 //! | `OnAnchorSelect` | GET | Ref0=ID |
+//! | `OnResetWindowPos` | GET（汎用の入口） | References なし（メニューの「シェル位置初期化」から） |
 
 use crate::change::{BootOrigin, ChangeRequest, ChangedFrom, ShioriMethod};
 use crate::msg::{CloseReason, EventId, KanadeConfig, MonotonicMs, MouseButton, ShioriCall};
@@ -234,6 +235,10 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnAnchorSelectEx",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnAnchorSelect:1
     "OnAnchorSelect",
+    // シェル位置初期化の 1 語（areka-P0-move-canon 要件 8.3・53→54 語）。右クリックのメニューの
+    // 「シェル位置初期化」を選んだときに送る。`\![execute,resetwindowpos]` からは送らない（要件 8.7）。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnResetWindowPos:1
+    "OnResetWindowPos",
 ];
 
 /// `id` が送出許可集合（[`ALLOWED_EVENT_IDS`]）に属するかを判定する（Req3.1）。

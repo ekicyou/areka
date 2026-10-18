@@ -3578,7 +3578,6 @@ members = [
   "ukadoc:list_sakura_script:_5c_21_5block_2crepaint_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5bmove_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5bmoveasync_5d:1",
-  "ukadoc:list_sakura_script:_5c_21_5breset_2cposition_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5breset_2csticky-window_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5breset_2czorder_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5bset_2calignmentondesktop_2cbottom_307e_305f_306ftop_5d:1",
@@ -3587,7 +3586,6 @@ members = [
   "ukadoc:list_sakura_script:_5c_21_5bset_2calpha_2c_6570_5024_2c_30aa_30d7_30b7_30e7_30f3_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5bset_2cballoonalign_2cID_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5bset_2cballoonoffset_2cx_2cy_5d:1",
-  "ukadoc:list_sakura_script:_5c_21_5bset_2cposition_2cx_2cy_2c_30b9_30b3_30fc_30d7ID_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5bset_2csticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1",
   "ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2c_21stayontop_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cstayontop_5d:1",
@@ -3703,7 +3701,6 @@ hand = [
   "ukadoc:list_sakura_script:_5c_21_5block_2crepaint_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5bmove_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5bmoveasync_5d:1",
-  "ukadoc:list_sakura_script:_5c_21_5breset_2cposition_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5breset_2csticky-window_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5breset_2czorder_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5bset_2calignmentondesktop_2cbottom_307e_305f_306ftop_5d:1",
@@ -3712,7 +3709,6 @@ hand = [
   "ukadoc:list_sakura_script:_5c_21_5bset_2calpha_2c_6570_5024_2c_30aa_30d7_30b7_30e7_30f3_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5bset_2cballoonalign_2cID_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5bset_2cballoonoffset_2cx_2cy_5d:1",
-  "ukadoc:list_sakura_script:_5c_21_5bset_2cposition_2cx_2cy_2c_30b9_30b3_30fc_30d7ID_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2c_21stayontop_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cstayontop_5d:1",
   "ukadoc:list_sakura_script:_5c_21_5bunlock_2cballoonmove_5d:1",
@@ -3746,7 +3742,7 @@ themes = ["気配", "掛け合い", "装い"]
 
 **欠けると壊れる既存ゴーストの振る舞い**: 作者が決めた初期位置が読まれないので、起動のたびに画面の同じ隅へ出る。台本で位置を動かす指示も効かず、相方が本体の後ろに隠れたまま出てこない。画面の外へはみ出しても気づかない。
 
-構成 id は 126 件で、うち機械の束から来たものが 5 件、人手で足したものが 121 件である（`hand` の行を数えた）。`machine` に引いた機械の束の構成 id と重なるのが 5 件で、残りは人手で足した。
+構成 id は 124 件で、うち機械の束から来たものが 5 件、人手で足したものが 119 件である（`hand` の行を数えた）。`machine` に引いた機械の束の構成 id と重なるのが 5 件で、残りは人手で足した。
 
 ### 入力窓とダイアログ（段階 A 相当）
 
@@ -4847,12 +4843,12 @@ themes = []
 
 ```toml
 [tally]
-target = 1552
+target = 1550
 from_machine = 195
-by_hand = 1353
+by_hand = 1351
 singles = 4
 alias_excluded = 27
-not_applicable_excluded = 170
+not_applicable_excluded = 172
 
 [tally.singles_by_domain]
 assets = 4

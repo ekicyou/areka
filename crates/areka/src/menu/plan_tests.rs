@@ -1,6 +1,6 @@
 //! 計画の組み立て（[`build`]）の決定論テスト（要件 9.1）。
 //!
-//! 確かめること: 10 枠の並び・未登記の枠が出ないこと・区切り線の位置・サブメニューの子の順と
+//! 確かめること: 11 枠の並び・未登記の枠が出ないこと・区切り線の位置・サブメニューの子の順と
 //! チェック位置・無効の写し・識別子の一意性と逆引き・アクセラレータ記法 `&` の 2 系統。
 //!
 //! 期待値はすべて書き下した値で、[`Frame::ORDER`] や [`build`] 自身から導かない
@@ -69,14 +69,16 @@ fn run(plan: &MenuPlan, id: u32) -> (Frame, Vec<&'static str>) {
     (frame, trace)
 }
 
-/// 10 枠すべてが登記されているとき、並びは ①〜⑩で、群 {①②③}{④⑤⑥⑦⑧}{⑨}{⑩} の間に
-/// 区切り線が 1 本ずつ入る（要件 2.1・2.6・置き場の 3 枠はインストールと同じ群）。先頭と末尾には入らない。
+/// 11 枠すべてが登記されているとき、並びは ①〜⑪で、群 {①②③④}{⑤⑥⑦⑧⑨}{⑩}{⑪} の間に
+/// 区切り線が 1 本ずつ入る（要件 2.1・2.6・置き場の 3 枠はインストールと同じ群・「シェル位置初期化」は
+/// バルーンと同じ群＝areka-P0-move-canon 要件 8.1）。先頭と末尾には入らない。
 #[test]
-fn all_ten_frames_follow_the_declared_order_with_three_separators() {
+fn all_eleven_frames_follow_the_declared_order_with_three_separators() {
     let snapshot = vec![
         (Frame::Ghost, leaf("ゴースト", "ghost")),
         (Frame::Shell, leaf("シェル", "shell")),
         (Frame::Balloon, leaf("バルーン", "balloon")),
+        (Frame::ResetPosition, leaf("シェル位置初期化", "reset_pos")),
         (Frame::Update, leaf("ネットワーク更新", "update")),
         (Frame::Install, leaf("インストール…", "install")),
         (Frame::RootAdd, leaf("置き場を追加…", "root_add")),
@@ -94,19 +96,20 @@ fn all_ten_frames_follow_the_declared_order_with_three_separators() {
             plain(1, "ゴースト"),
             plain(2, "シェル"),
             plain(3, "バルーン"),
+            plain(4, "シェル位置初期化"),
             PlanEntry::Separator,
-            plain(4, "ネットワーク更新"),
-            plain(5, "インストール…"),
-            plain(6, "置き場を追加…"),
-            plain(7, "置き場を先頭へ"),
-            plain(8, "置き場を外す"),
+            plain(5, "ネットワーク更新"),
+            plain(6, "インストール…"),
+            plain(7, "置き場を追加…"),
+            plain(8, "置き場を先頭へ"),
+            plain(9, "置き場を外す"),
             PlanEntry::Separator,
-            plain(9, "説明書"),
+            plain(10, "説明書"),
             PlanEntry::Separator,
-            plain(10, "終了"),
+            plain(11, "終了"),
         ]
     );
-    assert_eq!(plan.item_count(), 10);
+    assert_eq!(plan.item_count(), 11);
 }
 
 /// 本仕様が登記する 2 枠だけのとき（第 1 スライスの既定の姿）: 説明書・区切り・終了。

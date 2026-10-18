@@ -86,6 +86,8 @@ fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)> {
             Some("install"),
             vec!["install", "path", ABSOLUTE],
         ),
+        // move_cue_move_sink_tests.rs の execute_resetwindowpos_sends_reset（areka-P0-move-canon）
+        ("execute", Some("resetwindowpos"), vec!["resetwindowpos"]),
         // update_cue_tests.rs の four_entry_forms_become_the_expected_request
         ("updatebymyself", None, vec![]),
         ("update", None, vec!["all"]),
@@ -331,4 +333,23 @@ fn pairs_without_a_ledger_row_reach_no_sink() {
         }
     }
     assert!(checked > 0, "表に担当の無い組を少なくとも 1 つ確かめた");
+}
+
+/// 位置の指定・解除（`\![set,position,…]`・`\![reset,position]`）は SSP 2.9.18 も受けないので、
+/// 表に行が無く、9 つのどれにも届かない（areka-P0-move-canon 要件 7.1）。
+#[test]
+fn set_and_reset_position_reach_no_sink() {
+    let ledger = ConsumerLedger::canonical();
+    for (name, args) in [
+        ("set", &["position", "100", "100", "1"][..]),
+        ("reset", &["position"][..]),
+    ] {
+        assert_eq!(ledger.consumer_of(name, Some("position")), None, "{name}");
+        assert_eq!(
+            reached(name, args),
+            Vec::<CommandConsumer>::new(),
+            "\\![{name},{}] はどの受け口にも届かない",
+            args.join(",")
+        );
+    }
 }

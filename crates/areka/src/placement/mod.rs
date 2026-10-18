@@ -33,6 +33,8 @@ pub mod persist;
 /// シェルの差し替えで、新しいシェルの見た目の値を走っている窓の部品へ入れ直す
 /// （areka-P0-shell-balloon-switch 要件 2.7）。
 pub(crate) mod reseed;
+/// 既定の位置への並べ直し（areka-P0-move-canon 要件 8.6・design ResetPos）。
+pub(crate) mod reset_pos;
 pub mod resolver;
 pub mod source;
 pub mod spawn;
@@ -270,6 +272,11 @@ pub struct PreparedPlacement {
     /// 値の解釈は placement では一切行わない（生の転記＝`PlacementConfig::zorder_raw` の
     /// そのまま）。窓の位置も寸法もこの値では 1 mm も動かない。
     pub zorder_raw: Option<String>,
+    /// 配置を解いた設定そのもの（areka-P0-move-canon 要件 8.6・design ResetPos）。
+    ///
+    /// 窓の組を作った後に並べ直しの材料 [`reset_pos::DefaultPlacementBasis`] として置く。
+    /// 起動で解いたのと同じ設定を同じ規則で解き直すための搬送で、spawn は読まない。
+    pub default_basis: PlacementConfig,
 }
 
 /// 準備パイプラインの中間結果（load→config→measure まで・work area 非依存部）。
@@ -300,7 +307,8 @@ impl PreparedStages {
             titles: self.titles,
             author_dpi: self.author_dpi,
             // 解釈せずそのまま搬送する（重なりの基底の出所は 1 つ＝この読取・要件 5.2）。
-            zorder_raw: self.cfg.zorder_raw,
+            zorder_raw: self.cfg.zorder_raw.clone(),
+            default_basis: self.cfg,
         }
     }
 }
@@ -844,7 +852,9 @@ pub fn prepare_ghost_windows_with_work_area(
 ///   （窓は生やす方針・design「Error Handling」）
 /// - 0 台: `None`（架空の既定モニタは発明しない。work area 側の致命判定は
 ///   [`work_area_of`]・DPI 側の縮退は [`build_measure_scaling`] がそれぞれ担う）
-fn primary_monitor(monitors: &[Monitor]) -> Option<&Monitor> {
+///
+/// crate の中から使える（並べ直し [`reset_pos`] と `\![move]` の `primaryscreen`）。
+pub(crate) fn primary_monitor(monitors: &[Monitor]) -> Option<&Monitor> {
     if let Some(primary) = monitors.iter().find(|m| m.is_primary) {
         return Some(primary);
     }

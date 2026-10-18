@@ -923,7 +923,7 @@ shared = 0
 [stage.A]
 bundles = 25
 singles = 0
-items = 874
+items = 872
 
 [stage.B]
 bundles = 9
@@ -981,17 +981,17 @@ items = 166
 ```toml
 [[barrier]]
 page = "list_shiori_event"
-implemented = 52
+implemented = 53
 vocabulary_only = 0
 degraded = 1
-absent = 234
+absent = 233
 alias = 3
 not_applicable = 0
 
 [[barrier]]
 page = "list_shiori_resource"
-implemented = 12
-vocabulary_only = 147
+implemented = 13
+vocabulary_only = 146
 degraded = 0
 absent = 0
 alias = 0
@@ -1638,16 +1638,16 @@ sakura-script 1）である。実装済みを空にするか値を入れるか�
 | ドメイン | A | B | C | D | E | 空 | 合計 |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | shiori | 224 | 83 | 58 | 64 | 76 | 172 | 677 |
-| sakura-script | 193 | 23 | 20 | 16 | 69 | 21 | 342 |
+| sakura-script | 191 | 23 | 20 | 16 | 69 | 23 | 342 |
 | assets | 395 | 76 | 12 | 40 | 15 | 4 | 542 |
 | property | 62 | 28 | 79 | 13 | 6 | 0 | 188 |
-| 合計 | 874 | 210 | 169 | 133 | 166 | 197 | 1,749 |
+| 合計 | 872 | 210 | 169 | 133 | 166 | 199 | 1,749 |
 
 4 本の作り方の違いは消えた。どのドメインも 5 段階すべてに項目を持ち、段階は束の帰属から
 一意に決まる。property の空 0 は、このドメインに別名の項目も対象外の項目も 1 件も無いことを
 状態の欄で数えて確かめた 0 である（property の 188 項目は語彙のみ 178・縮退 8・実装済み 2）。
-段階ごとの合計 874・210・169・133・166 は 3-7 の `[stage.*]` の `items` と一致し、その和は
-1,552 である。空欄の 197 は別名 27 と対象外 170 の和で、前の 240 とは中身が違う（前の 240 に
+段階ごとの合計 872・210・169・133・166 は 3-7 の `[stage.*]` の `items` と一致し、その和は
+1,550 である。空欄の 199 は別名 27 と対象外 172 の和で、前の 240 とは中身が違う（前の 240 に
 含まれていた実装済み 46 は段階を持つ側へ移り、値が入っていた別名 3 件は空へ移った）。
 
 **走らせた副手続きと結果**: `cargo run -p ukadoc-survey -- priority-apply` を 2 回続けて
@@ -1677,12 +1677,12 @@ empty = 172
 
 [[after]]
 domain = "sakura-script"
-A = 193
+A = 191
 B = 23
 C = 20
 D = 16
 E = 69
-empty = 21
+empty = 23
 
 [[after]]
 domain = "assets"
@@ -1704,7 +1704,7 @@ empty = 0
 
 [priority_blank]
 alias = 27
-not_applicable = 170
+not_applicable = 172
 ```
 
 ### 5-3. 宛先の欄の整理（要件 7.4・7.5）

@@ -54,3 +54,10 @@ ukadoc の窓の位置の台本の指令のうち、窓どうしをつなぐも�
 - 台本で動いた窓は位置の記憶に書かない（`char-position-save-on-exit`）。組の相手も同じ。
 - `consumer_ledger.rs`（943 行）は 1,000 行の決まりに近い＝受け手の中身は兄弟のファイルへ。
 - 「ゴースト終了まで有効」は台本の指令の効き目の寿命＝ゴーストの切り替えで descript の値へ戻る。
+
+## 申し送り（2026-10-17・`areka-P0-move-canon` の要件ディスカッションから）
+
+- `\![execute,resetballoonpos]`（ukadoc 2.7.41「各バルーンの位置を初期位置に戻す。メニューの「バルーン位置初期化」と同じ働きをする」）・メニューの「バルーン位置初期化」（`resetballoonpositionbutton.caption`）・SSP ヘルプ（「よくある質問」「ショートカット一覧」）の「シェル位置初期化」「バルーン位置初期化」のキーボードの近道を、本 spec で引き取る。`move-canon` が入れるのは「シェル位置初期化」の項目・`\![execute,resetwindowpos]`・`OnResetWindowPos` だけ（並べ直しの関数とメニューの枠は `move-canon` の設計を下敷きにできる）。
+- `--option=ignore-sticky-window` は `move-canon` で語彙として受け取るだけで、動きは変えない。効き目を持たせるのは本 spec。
+- SSP 2.9.18 の実測（`move-canon` の `research.md` §8）: `\![move]` の基準 `screen`・`primaryscreen` は作業領域。`\![set,position]`／`\![reset,position]` は SSP も実装していない（「unknown subcommand」）。
+- `move-canon` で `\![move]` は今の吸い付き（`Anchored`・`project_anchor`）に従うようになる（下端に吸い付いている間は Y を無視・SSP 2.9.18 の実測と同じ）。本 spec の `\![set,alignmenttodesktop,方向]` で向きを変えれば、`\![move]` もその向きに従う＝本 spec で `\![move]` 側に足すものは無い見込み。

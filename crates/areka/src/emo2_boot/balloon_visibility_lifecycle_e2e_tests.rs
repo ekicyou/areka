@@ -37,7 +37,7 @@ use wintf::ecs::FrameTime;
 
 use crate::emo2_boot::assets::{BootAssets, LoopTables};
 use crate::emo2_boot::frame::Emo2Wiring;
-use crate::emo2_boot::move_cue::MoveDirective;
+use crate::emo2_boot::move_cue::PositionCue;
 use crate::emo2_boot::talk_clock::TalkClock;
 use crate::emo2_boot::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use crate::emo2_boot::target_map::balloon_target;
@@ -94,7 +94,7 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     let mut wiring = Emo2Wiring::new(
         EmoPresenter::new(),
         mpsc::channel().1,
-        mpsc::channel::<MoveDirective>().1,
+        mpsc::channel::<PositionCue>().1,
         lifecycle_rx,
         mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::clone(&runtime),

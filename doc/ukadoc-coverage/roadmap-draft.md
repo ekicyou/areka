@@ -404,6 +404,23 @@ spec 名の案の欄は変えていない。足した行の中身は `stage = "A
 数え直した値で、引き算では出していない。2 つの枝はどちらも自分の 1 行だけを足して「49 行」と書いていた）。
 `[briefs].count` はこの 50 に合わせ、`snapshot_on` は **2026-10-10** のままにした。
 
+**2026-10-18 の付け替えと追加（`areka-P0-move-canon`）**: `areka-P0-move-canon` の行を 1 行足し、
+`areka-P0-sakura-time-directives` の `owner_count` を 10 から 9 へ直した。`areka-P0-move-canon` が `\![move]` の
+2 つの書き方・参照点・基準を正典どおりに動かし、`\![execute,resetwindowpos]` と「シェル位置初期化」の項目
+（`OnResetWindowPos`・`switchmovetodefaultpositionbutton.caption`）を実装したので、台帳の 6 項目の宛先をこの spec に
+した。そのうち `\![move]` の項目（`ukadoc:list_sakura_script:_5c_21_5bmove_5d:1`）は `areka-P0-sakura-time-directives`
+から移した（状態は縮退のまま。時間の部分が残る）。`\![set,position]` と `\![reset,position]` の 2 項目
+（`ukadoc:list_sakura_script:_5c_21_5bset_2cposition_2cx_2cy_2c_30b9_30b3_30fc_30d7ID_5d:1`・
+`ukadoc:list_sakura_script:_5c_21_5breset_2cposition_5d:1`）は、SSP 2.9.18 も実装していないので受けないと決めて
+対象外へ移し、`linkage.md` の束「窓の配置と重なり」の構成から除いた。このため段階 A の表と節の「窓の配置と重なり」は、
+構成を 126 件から 124 件へ、`areka-P0-sakura-time-directives` の件数を 2 件から 1 件へ直し、`areka-P0-move-canon`
+（3 件）を足した。「メニュー」の行にも `areka-P0-move-canon`（1 件・`switchmovetodefaultpositionbutton.caption`）を
+足した。足した行の中身は `stage = "A"`・`bundle = "窓の配置と重なり"`・`owner_count = 6`・`wave = "v0.0.3"` で、
+束は 6 項目のうち 3 項目が属する束、ウェーブは正本のロードマップの版の写しである。3 件・1 件はどちらの束でも
+⑴（全数）にも ⑵（過半）にも当たらないので、候補 spec 名の案の欄は変えていない。行数は **51 行**（`[[spec]]` の
+塊を数えた）で、うち束を持つ行が **37 行**・`none = true` の行が **14 行**である（3 つとも数え直した値）。
+`[briefs].count` はこの 51 に合わせ、`snapshot_on` は **2026-10-18** にした。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -438,8 +455,8 @@ spec 名の案の欄は変えていない。足した行の中身は `stage = "A
 
 ```toml
 [briefs]
-count = 50
-snapshot_on = "2026-10-10"
+count = 51
+snapshot_on = "2026-10-18"
 ```
 
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
@@ -542,7 +559,7 @@ wave = "A0"
 name = "areka-P0-sakura-time-directives"
 stage = "A"
 bundle = "会話"
-owner_count = 10
+owner_count = 9
 wave = "W16"
 
 [[spec]]
@@ -831,6 +848,13 @@ stage = "A"
 bundle = "サーフェスアニメーション"
 owner_count = 1
 wave = "シェルの element の列（seriko-trigger-intervals・extent-element-offset の後）"
+
+[[spec]]
+name = "areka-P0-move-canon"
+stage = "A"
+bundle = "窓の配置と重なり"
+owner_count = 6
+wave = "v0.0.3"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -844,7 +868,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 順位 | 束 | 候補 spec 名の案 | 依存する既存 spec | 波の案 |
 | ---: | --- | --- | --- | --- |
 | 1 | 会話 | `areka-P0-talk-script-canon` | `areka-P0-balloon-lifecycle-events`（C4-⑩・4 件）／`areka-P0-sakura-time-directives`（W16・4 件）／`areka-P0-balloon-canon-residue`（W14・1 件）／`areka-P0-anchor-tag-canon`（C5-①・3 件）／`areka-P0-sakura-time-critical`（C4 の候補・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件）／`areka-P0-choice-timeout-directive`（C1-②・1 件）／`areka-P0-choice-script-prefix`（C4-⑭・1 件） | 第 1 波（先頭ウェーブ） |
-| 2 | 窓の配置と重なり | `areka-P0-window-placement-canon` | `areka-P0-currentghost-property-tree`（W15・16 件）／`areka-P0-surfaces-basepos`（W13 任意／W14・2 件）／`areka-P0-sakura-time-directives`（W16・2 件）／`areka-P0-zorder-property`（W15・1 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件）／`areka-P0-sylphya-set-ledger`（完了・1 件） | 第 1 波（先頭ウェーブ） |
+| 2 | 窓の配置と重なり | `areka-P0-window-placement-canon` | `areka-P0-currentghost-property-tree`（W15・16 件）／`areka-P0-surfaces-basepos`（W13 任意／W14・2 件）／`areka-P0-sakura-time-directives`（W16・1 件）／`areka-P0-move-canon`（v0.0.3・3 件）／`areka-P0-zorder-property`（W15・1 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件）／`areka-P0-sylphya-set-ledger`（完了・1 件） | 第 1 波（先頭ウェーブ） |
 | 3 | 名前の記憶 | `areka-P0-user-name-memory` | `areka-P0-currentghost-property-tree`（W15・1 件）／`areka-P0-package-mount`（完了・2 件）／`areka-P0-sylphya`（完了・2 件）／`areka-P0-sakura-dialogue-tags`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件） | 第 1 波（先頭ウェーブ） |
 | 4 | 起動と挨拶 | `areka-P0-boot-greeting-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-package-mount`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・3 件） | 第 1 波（先頭ウェーブ） |
 | 5 | バルーンの文字 | `areka-P0-balloon-font-canon`（残余） | `areka-P0-currentghost-property-tree`（W15・13 件）／`areka-P0-text-align-shadow-canon`（W15・9 件）／`areka-P0-text-decoration-canon`（完了・16 件）／`areka-P0-balloon-font-descript-keys`（完了・7 件）／`areka-P0-balloon-parse`（完了・5 件）／`areka-P0-balloon-vertical-canon`（完了・4 件）／`areka-P0-cursor-tag-canon`（完了・1 件） | 第 1 波（先頭ウェーブ） |
@@ -856,7 +880,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 10 | descript の転記 | `areka-P0-descript-transcribe` | `areka-P0-balloon-canon-residue`（W14・4 件）／`areka-P0-package-mount`（完了・1 件）／`areka-P0-ghost-standard-balloon`（C4-⑪・2 件） | 第 2 波 |
 | 10 | バルーンのリンク | `areka-P0-anchor-style-canon`（既存 spec がそのまま引受先・構成 60 件のうち未対応の 59 件の全数を `owner` に持つ。残る 1 件は `areka-P0-anchor-tag-canon` が実装済みにした） | `areka-P0-anchor-style-canon`（文字とバルーンの列・59 件）／`areka-P0-anchor-tag-canon`（C5-①・1 件） | 第 2 波 |
 | 10 | マウスの矢印 | `areka-P0-mouse-cursor-canon` | `areka-P0-currentghost-property-tree`（W15・15 件） | 第 2 波 |
-| 11 | メニュー | `areka-P0-ownerdraw-menu-canon` | `areka-P0-popup-menu-minimal`（A0・8 件）／`areka-P0-property-catalog-lists`（W16・4 件）／`areka-P0-shell-balloon-switch`（B8・2 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件）／`areka-P0-ghost-install`（B5-②・1 件）／`areka-P0-network-update`（B7・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・1 件） | 第 2 波 |
+| 11 | メニュー | `areka-P0-ownerdraw-menu-canon` | `areka-P0-popup-menu-minimal`（A0・8 件）／`areka-P0-property-catalog-lists`（W16・4 件）／`areka-P0-shell-balloon-switch`（B8・2 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件）／`areka-P0-ghost-install`（B5-②・1 件）／`areka-P0-network-update`（B7・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・1 件）／`areka-P0-move-canon`（v0.0.3・1 件） | 第 2 波 |
 | 12 | 撫で | `areka-P0-touch-events-canon` | `areka-P0-currentghost-property-tree`（W15・5 件）／`areka-P0-shell-parse`（完了・1 件）／`areka-P0-mouse-drag-events`（C3-④・2 件） | 第 2 波 |
 | 13 | バルーンの付属画像 | `areka-P0-balloon-inline-image` | `areka-P0-balloon-canon-residue`（W14・9 件） | 第 2 波 |
 | 14 | イベントの呼び起こし | `areka-P0-raise-event-tag` | `areka-P0-property-query-channels`（W14・1 件） | 第 2 波 |
@@ -1032,12 +1056,12 @@ spec 台帳で、この表はそれを写した写真である。
 **3 行の要約**
 
 - 問題: 立ち位置・相方との隣接・バルーンの貼り付き・重なり順が 1 つの束で決まるのに、構成の 3 分の 2 が未対応で、作者が定義ファイルに書いた位置の指定がほとんど効かない。
-- 現状: 構成 126 件の状態は実装済み 7・未対応 84・語彙のみ 30・縮退 5 で、壊れる 75 件のうち 7 件がここにある。M1 の実機一周はこの束を 8 項目（項目 1・9・10・12・16・17・18・19）で見て全部合格しているが、それは emo2 の 1 体で使う範囲である。
+- 現状: 構成 124 件の状態は実装済み 9・未対応 80・語彙のみ 30・縮退 5 で、壊れる 75 件のうち 7 件がここにある。M1 の実機一周はこの束を 8 項目（項目 1・9・10・12・16・17・18・19）で見て全部合格しているが、それは emo2 の 1 体で使う範囲である。
 - 何が変わるか: 作者が書いた原点と余白と重なりの指定どおりに二体とバルーンが並び、拡大率を変えても隣接が崩れなくなる。
 
-**依存する既存 spec**: `areka-P0-currentghost-property-tree`（W15・16 件）／`areka-P0-surfaces-basepos`（W13 任意／W14・2 件）／`areka-P0-sakura-time-directives`（W16・2 件）／`areka-P0-zorder-property`（W15・1 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件）／`areka-P0-sylphya-set-ledger`（完了・1 件）
+**依存する既存 spec**: `areka-P0-currentghost-property-tree`（W15・16 件）／`areka-P0-surfaces-basepos`（W13 任意／W14・2 件）／`areka-P0-sakura-time-directives`（W16・1 件）／`areka-P0-move-canon`（v0.0.3・3 件）／`areka-P0-zorder-property`（W15・1 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件）／`areka-P0-sylphya-set-ledger`（完了・1 件）
 
-**構成 id（全 126 件）**
+**構成 id（全 124 件）**
 
 - `ukadoc:descript_balloon:dpi_2c_63a8_5968DPI:1`
 - `ukadoc:descript_balloon:windowposition.limit_2c0_2f1:1`
@@ -1131,7 +1155,6 @@ spec 台帳で、この表はそれを写した写真である。
 - `ukadoc:list_sakura_script:_5c_21_5block_2crepaint_5d:1`
 - `ukadoc:list_sakura_script:_5c_21_5bmove_5d:1`
 - `ukadoc:list_sakura_script:_5c_21_5bmoveasync_5d:1`
-- `ukadoc:list_sakura_script:_5c_21_5breset_2cposition_5d:1`
 - `ukadoc:list_sakura_script:_5c_21_5breset_2csticky-window_5d:1`
 - `ukadoc:list_sakura_script:_5c_21_5breset_2czorder_5d:1`
 - `ukadoc:list_sakura_script:_5c_21_5bset_2calignmentondesktop_2cbottom_307e_305f_306ftop_5d:1`
@@ -1140,7 +1163,6 @@ spec 台帳で、この表はそれを写した写真である。
 - `ukadoc:list_sakura_script:_5c_21_5bset_2calpha_2c_6570_5024_2c_30aa_30d7_30b7_30e7_30f3_5d:1`
 - `ukadoc:list_sakura_script:_5c_21_5bset_2cballoonalign_2cID_5d:1`
 - `ukadoc:list_sakura_script:_5c_21_5bset_2cballoonoffset_2cx_2cy_5d:1`
-- `ukadoc:list_sakura_script:_5c_21_5bset_2cposition_2cx_2cy_2c_30b9_30b3_30fc_30d7ID_5d:1`
 - `ukadoc:list_sakura_script:_5c_21_5bset_2csticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1`
 - `ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2c_21stayontop_5d:1`
 - `ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cstayontop_5d:1`
