@@ -35,7 +35,7 @@
   - _Requirements: 1.5, 1.6, 3.3, 3.4, 3.5, 3.6, 3.9, 4.1, 4.2_
   - 注: 照合の物差し（登記の大きさと SHA-256）・欄の形の判定・判定の 4 通りは 3.3 で裁定 2 の形へ改める。置き場の位置の式・ASCII の写し・取り寄せの段のコマンドの文はそのまま使う
 
-- [ ] 3.3 登記と照合を `.sha256` の形へ改める
+- [x] 3.3 登記と照合を `.sha256` の形へ改める
   - 実装の段の裁定 2 に合わせ、行の URL の欄を `SampleSource::Fetched { url }` だけにする（SHA-256 と大きさの欄を外す）
   - 失敗の種類を design.md の形にする: `FetchedNarMissing { sample, path }`（書庫かハッシュのファイルの無い方のパス）・新しい `FetchedChecksumInvalid { sample, path }`（ハッシュのファイルが sha256sum の形でない）・`FetchedNarMismatch { sample, path, expected_sha256: String, actual_sha256: String }`（大きさの欄を外す）。3 種の表示は英語の ASCII で、パスを写し、直し方 2 つ（取り寄せの段のコマンド／手で置く口＝2 つのファイルを置く・README）を載せる
   - `fetched.rs` に、ハッシュのファイルの後ろの綴り `.sha256` の定数（公開の URL と置き場の両方に使う唯一の所）・置き場のハッシュのファイルの位置 `<名前空間>\fetched\<名前>.nar.sha256` の式・`<URL>.sha256` を作る式・sha256sum の 1 行を読む関数（最初の語が 16 進 64 桁なら小文字へ揃えて返す）を置く
@@ -132,3 +132,4 @@
 - 2: `lib.rs` の `mod sha256;` の `#[cfg_attr(not(test), allow(dead_code))]` は、`fetched.rs` が使い始めたら外す（3.2）。
 - 3.1: `FetchedNarMismatch` の仮の `#[error]` 文に字下げの空白が入っている。3.2 で文を作り直すときに消す。`lib_tests.rs` の `current_rows_are_registered_as_vendored` の数 8 は、4 でぱすたを足しても Vendored は 8 のままなので、Fetched の行を許す形へ直す。
 - 3.2: `fetched::verified_nar_in` の一時の `#[cfg_attr(not(test), allow(dead_code))]` は 3.4 でつないだら外す。設計の判定のうち「照合に落ちたら `cache\` に原本ができない」「合えば `fresh_root_in` まで通る」「同じ書庫で 2 回取ると同じ刻印」は 3.4 で足す。`fetched_row_form` は `#[cfg(test)] pub(crate)`（4 で `lib_tests` から使う・3.3 で引数から SHA-256 と大きさを外す）。3.1 の `FetchedNarMismatch` の字下げの注は、3.3 で欄を改めるときにも残らないようにする。
+- 3.3: `fetched::checksum_url` の一時の dead_code の許しは 5（`--fetch-list`）で外す。`verified_nar_in` の許しは 3.4 で外す。両方の書庫が無いときは、ハッシュのファイルのパスで Missing を返す（読む順のとおり）。

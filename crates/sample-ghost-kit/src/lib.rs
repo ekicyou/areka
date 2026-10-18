@@ -104,12 +104,9 @@ pub enum SampleSource {
     Vendored,
     /// 書庫を取り寄せの段が取り寄せる行（URL の行）。
     Fetched {
-        /// 取り寄せる URL（`https://`・ログインなしに取れるもの）。中身が差し替わったら登記の大きさと SHA-256 を直す。
+        /// 取り寄せる URL（`https://`・ログインなしに取れるもの）。隣に `<url>.sha256`（sha256sum の形）が
+        /// 公開されていること。中身が差し替わっても登記は直さない（取り寄せの段がいつも最新を取る）。
         url: &'static str,
-        /// 書庫の SHA-256（小文字 16 進 64 桁）。
-        sha256: &'static str,
-        /// 書庫の大きさ（バイト）。
-        size: u64,
     },
 }
 
@@ -401,12 +398,25 @@ fn named_descript(bytes: &[u8], name: &str) -> Vec<u8> {
 /// 名前空間（ビルド成果物の置き場の下）が決まらなければ [`SampleError::TargetDirNotFound`]
 /// か [`SampleError::Io`]。
 pub fn fetched_archive_path(sample: &Sample) -> Result<Option<PathBuf>, SampleError> {
+    on_shelf(sample, fetched::fetched_path_in)
+}
+
+/// 同じく、置き場のハッシュのファイル（`<名前空間>\fetched\<name>.nar.sha256`）。
+///
+/// # Errors
+///
+/// [`fetched_archive_path`] と同じ。
+pub fn fetched_checksum_path(sample: &Sample) -> Result<Option<PathBuf>, SampleError> {
+    on_shelf(sample, fetched::fetched_checksum_path_in)
+}
+
+fn on_shelf(
+    sample: &Sample,
+    position: fn(&Path, &str) -> PathBuf,
+) -> Result<Option<PathBuf>, SampleError> {
     match sample.source {
         SampleSource::Vendored => Ok(None),
-        SampleSource::Fetched { .. } => Ok(Some(fetched::fetched_path_in(
-            &devroot::namespace_dir()?,
-            sample.name,
-        ))),
+        SampleSource::Fetched { .. } => Ok(Some(position(&devroot::namespace_dir()?, sample.name))),
     }
 }
 
@@ -579,30 +589,37 @@ pub enum SampleError {
         #[source]
         source: std::io::Error,
     },
-    /// URL の行の書庫が置き場に無い（spec `areka-P0-sample-url-fetch` 要件 3.5）。
+    /// URL の行の書庫か、置き場のハッシュのファイルが無い（spec `areka-P0-sample-url-fetch`
+    /// 要件 3.5）。
     #[error("{}", fetched::missing_text(sample, path))]
     FetchedNarMissing {
         /// 検体名。
         sample: &'static str,
-        /// 探した置き場のパス。
+        /// 無かった方のファイル（書庫かハッシュのファイル）。
         path: PathBuf,
     },
-    /// URL の行の書庫が登記と合わない（spec `areka-P0-sample-url-fetch` 要件 3.6）。
+    /// 置き場のハッシュのファイルが sha256sum の形でない（spec `areka-P0-sample-url-fetch`
+    /// 要件 3.6）。
+    #[error("{}", fetched::invalid_text(sample, path))]
+    FetchedChecksumInvalid {
+        /// 検体名。
+        sample: &'static str,
+        /// ハッシュのファイルのパス。
+        path: PathBuf,
+    },
+    /// 置き場の書庫の SHA-256 が、置き場のハッシュのファイルと合わない
+    /// （spec `areka-P0-sample-url-fetch` 要件 3.6）。
     #[error(
         "{}",
-        fetched::mismatch_text(sample, path, *expected_size, *actual_size, expected_sha256, actual_sha256)
+        fetched::mismatch_text(sample, path, expected_sha256, actual_sha256)
     )]
     FetchedNarMismatch {
         /// 検体名。
         sample: &'static str,
-        /// 置き場のパス。
+        /// 置き場の書庫のパス。
         path: PathBuf,
-        /// 登記の大きさ（バイト）。
-        expected_size: u64,
-        /// 得た大きさ（バイト）。
-        actual_size: u64,
-        /// 登記の SHA-256。
-        expected_sha256: &'static str,
+        /// ハッシュのファイルの値（小文字へ揃えたもの）。
+        expected_sha256: String,
         /// 得た SHA-256。
         actual_sha256: String,
     },
