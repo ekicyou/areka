@@ -273,3 +273,22 @@ fn compose_rust_log_table() {
         assert_eq!(&compose_rust_log(base), want, "base={base:?}");
     }
 }
+
+/// 無い実行ファイルの場所（作らない・`target\` の下の名前だけ）。隣に仲介も無いフォルダ。
+fn missing_exe() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/real-run-kit-missing-exe/debug/no-such-areka.exe")
+}
+
+// 1.10: 仲介を揃える前に、実行ファイルの場所と理由で失敗させる。
+#[test]
+#[should_panic(expected = "no-such-areka.exe（ファイルが無い）")]
+fn missing_exe_panics_with_path_and_reason_before_helper() {
+    RealRun::new(missing_exe()).spawn();
+}
+
+#[test]
+#[should_panic(expected = "no-such-areka.exe（ファイルが無い）")]
+fn missing_exe_panics_with_path_and_reason_without_helper() {
+    RealRun::new(missing_exe()).without_host32_helper().spawn();
+}

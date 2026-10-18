@@ -140,6 +140,12 @@ impl RealRun {
     /// 起こせなかった回の置き場は、panic の途中で破棄されるので落ちた回として残る（6.1）。
     pub fn spawn(mut self) -> Run {
         let exe = abs(&self.areka_exe);
+        // 仲介は exe の隣を見るので、先に exe を確かめて場所と理由で落とす（1.10）。
+        assert!(
+            exe.is_file(),
+            "子を起こせませんでした: {}（ファイルが無い）",
+            exe.display()
+        );
         let i686_target = i686_target(&exe);
         if self.host32_helper {
             let helper = i686::HELPER;
