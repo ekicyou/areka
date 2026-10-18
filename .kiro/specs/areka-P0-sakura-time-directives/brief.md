@@ -69,7 +69,7 @@ compile の汎用キャリアアームへ allowlist 判定を追加（純関数�
 - 崩れた前提／古くなった位置:
   - `crates/areka-sakura/src/compile.rs` は 411 行（前回 346）。汎用キャリアの腕は `compile` の `Instruction::GenericCommand { name, raw_args }` の腕。`choice-timeout-directive` が `\![set,choicetimeout]` の先読みをここへ入れた＝本 spec の「位置によらない属性の先読み」の雛形が在る（`compile_choice_timeout_tests.rs`）。
   - `\_q` は字句で正しく切れない既知の不具合（`anchor-tag-canon` の brief の棚卸⑫の追記）が `\_` の 2 文字の裸の形すべてに在る。`\_q` を実装するなら、その直し（`anchor-tag-canon` の働きの側の先頭）の後でないと動かない。
-  - 網羅台帳 `sakura-script.toml` で本 spec が持ち主の行は 10（`\_q`・`quicksection` 2・`balloonwait`・`move`・`scaling` 2・`alpha`・`sound,wait`・`wait,syncobject`）。`\![set,balloontimeout]` の行の持ち主は `areka-P0-balloon-canon-residue` のまま（受ける側は `balloon-lifecycle-events` の項目 7）。
+  - 網羅台帳 `sakura-script.toml` で本 spec が持ち主の行は 9（`\_q`・`quicksection` 2・`balloonwait`・`scaling` 2・`alpha`・`sound,wait`・`wait,syncobject`）。`move` の行は 2026-10-18 に `areka-P0-move-canon` へ移った（時間の部分は持ち主の無い残りとして台帳の note に記す）。`\![set,balloontimeout]` の行の持ち主は `areka-P0-balloon-canon-residue` のまま（受ける側は `balloon-lifecycle-events` の項目 7）。
 - 触るファイル（並走の照合用・⒜）:
   - `crates/areka-sakura/src/compile.rs`・`crates/areka-sakura/src/duration.rs`（文字ごとの時間の焼き込み）と兄弟のテスト
   - `\_q` を含めるなら `crates/areka-parsers/src/sakura/{lexer,decode}.rs`
@@ -113,7 +113,7 @@ compile の汎用キャリアアームへ allowlist 判定を追加（純関数�
 - 先に要るもの: 働きの前提は無い。ファイルの順は台本のコンパイルの列（`anchor-tag-canon` → `range-choice-tag` → `talk-fast-forward` の後）。早送りとの決め（早送り中の倍率・`\_q` の中の早送り）は後から着地する側が検査で固定する。
 - 優先度の区分: C（ukadoc の先送りの追跡）。
 - 要件定義のモデル: Opus（コンパイルの中で閉じる・`\_q` の議題は解けた）。
-- 見つけた穴・古くなった記述: 網羅台帳で本 spec が持ち主の 10 行のうち 6 行（同期の `\![move]`・`\![set,alpha]`・`\![set,scaling]` の 2 行・`\![sound,wait]`・`\![wait,syncobject]`）は、棚卸㉑で範囲から外したのに持ち主が本 spec のまま＝着手のときに付け替える。冒頭の「着手ゲート: M1 外」「allowlist 8 コマンド族」は今の範囲（3 語）と合わない。
+- 見つけた穴・古くなった記述: 網羅台帳で本 spec が持ち主の 9 行のうち 5 行（`\![set,alpha]`・`\![set,scaling]` の 2 行・`\![sound,wait]`・`\![wait,syncobject]`）は、棚卸㉑で範囲から外したのに持ち主が本 spec のまま＝着手のときに付け替える。冒頭の「着手ゲート: M1 外」「allowlist 8 コマンド族」は今の範囲（3 語）と合わない。
 
 ## 2026-10-10 `areka-P0-seriko-trigger-intervals` の完了時の申し送り
 
