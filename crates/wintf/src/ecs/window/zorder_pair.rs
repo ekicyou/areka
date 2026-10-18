@@ -43,6 +43,10 @@ use crate::api::{get_window_above, get_window_below, is_window_always_on_top, is
 /// バルーン窓）にのみ付き、対になる窓は `peer` で指す。スコープ間には宣言を張らない
 /// ——これが「スコープ間の上下関係を固定の規則で決めない」（要件 3.1）と「是正時に
 /// 当該スコープの 2 窓しか動かさない」（要件 3.4）の構造的な根拠である。
+///
+/// 望む鎖（[`ChainPlan`](super::ChainPlan)）が組の 2 枚を連続させない間は、鎖の適用系が
+/// 結び目を外す（宣言は残る）。その間、組の系は確立・再断行・沈降の観測のどれも行わず
+/// [`SkipReason::ReleasedByChain`] を記録する（判定は `pair_released_by_chain` だけが持つ）。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KeepDirectlyAbove {
     pub peer: Entity,
@@ -220,6 +224,9 @@ pub(crate) enum SkipReason {
     EchoOrIrrelevant,
     /// 現在のストラテジがこのトリガを扱わない構成になっている
     StrategyDisabled,
+    /// 望む鎖が組の 2 枚を連続させないため、結び目を外している（組の系は触れない）。
+    /// [`decide_pair_fix`] はこの理由を返さない——判断の表は変えない。
+    ReleasedByChain,
 }
 
 /// 是正判断の入力。実測値は呼出側（維持系）が同一巡で採取したものを渡す。
@@ -780,7 +787,8 @@ pub(crate) fn log_sink_observed(
 ///
 /// 確立系（[`establish_owner_links`](super::establish_owner_links)）も見送りをここへ通す
 /// ——確立は [`decide_pair_fix`] を経由しない判断だが、**見送りの記録語彙は 1 つ**であり、
-/// 理由も既存の 5 種で尽きるため、入口を分けない。
+/// 理由も [`SkipReason`] の 6 種で尽きるため、入口を分けない（鎖のための見送り
+/// [`SkipReason::ReleasedByChain`] も組の系の 3 つの system がここへ通す）。
 pub(crate) fn record_decision(
     entity: Entity,
     peer: Entity,

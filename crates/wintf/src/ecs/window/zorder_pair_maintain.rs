@@ -80,6 +80,7 @@ use bevy_ecs::system::NonSendMarker;
 use windows::Win32::Foundation::HWND;
 
 use super::transition_diag::{ORIGIN_ZORDER_PAIR, WriteTag};
+use super::zorder_chain::pair_released_by_chain;
 use super::zorder_pair::{
     InsertSpec, PairFixDecision, PairObservation, PairTrigger, PeerLoss, SkipReason,
     decide_pair_fix, log_orphan_request_dropped, log_owner_detach_failed, log_owner_detached,
@@ -89,7 +90,7 @@ use super::zorder_pair::{
 use super::zorder_pair_sink::{SinkMarkQuery, observe_marked_pair_sinks};
 use super::{
     ExpectedOrder, KeepDirectlyAbove, OwnerLink, ReassertZOrder, SetWindowPosCommand, WindowHandle,
-    WindowPos, ZOrder, ZOrderPairStrategy,
+    WindowPos, ZOrder, ZOrderChainPlan, ZOrderPairStrategy,
 };
 use crate::api::clear_window_owner;
 
@@ -328,6 +329,12 @@ fn detach_owner_links_for_lost_peers(
 /// ペアは①のまま次巡へ持ち越される（module doc「複数ペアが同じ巡で…」）。持ち越しは
 /// 見送りではない——要求は残り、次巡の新しい実測で必ずやり直される。
 ///
+/// # 鎖が外させる組の要求（要件 5.2・5.5・6.3）
+///
+/// 同じフレームに公開済みの望む鎖を直に読み、`pair_released_by_chain` が真の組に付いた
+/// 要求は、未適用でも検証待ちでも判断・照合をせずに `ReleasedByChain` を記録して落とす
+/// （直上へ直す指令を 1 本も積まない）。沈降の観測にも同じ鎖を渡す。
+///
 /// # 相手が居ない巡（要件 1.5）
 ///
 /// 検証待ちであっても、相手の実体やハンドルが先に消えていれば実測照合へは進まない
@@ -348,6 +355,8 @@ pub fn apply_zorder_pair_maintenance(
     _ui_thread: NonSendMarker,
     mut commands: Commands,
     strategy: Option<Res<ZOrderPairStrategy>>,
+    // 同じフレームに公開済みの望む鎖（未挿入は鎖なし）。
+    chain: Option<Res<ZOrderChainPlan>>,
     mut requests: Query<(
         Entity,
         &KeepDirectlyAbove,
@@ -381,6 +390,7 @@ pub fn apply_zorder_pair_maintenance(
 
     // ストラテジ未挿入は結線前の状態。既定（案 A）で動く（design.md「State」の既定値）。
     let strategy = strategy.map(|s| *s).unwrap_or_default();
+    let chain = chain.as_deref().and_then(|plan| plan.chain.as_ref());
 
     // 破棄の後始末を先に済ませる——相手が消えた窓の owner は、この巡のうちに外れていないと
     // 登録の取り崩し（`DestroyWindow`）に間に合わない。
@@ -389,7 +399,7 @@ pub fn apply_zorder_pair_maintenance(
     // 前の巡に非活性化された窓の沈降を、いま実測して記録する（読み取りのみ）。
     // 是正の処理より先に置くのは、記録に載る実測が**この巡の是正より前の重なり**である
     // ことを明らかにするためである（是正の書込はいずれにせよ tick 後の flush で起きる）。
-    observe_marked_pair_sinks(&mut commands, &sink_marks, &handles);
+    observe_marked_pair_sinks(&mut commands, &sink_marks, &handles, chain);
 
     for entity in orphans.iter() {
         log_orphan_request_dropped(entity);
@@ -402,6 +412,18 @@ pub fn apply_zorder_pair_maintenance(
 
     for (entity, declaration, mut request, issued) in requests.iter_mut() {
         let peer = declaration.peer;
+        if pair_released_by_chain(chain, entity, peer) {
+            // 鎖が結び目を外している組。直上へ直せば書かれた並びを崩す。
+            record_decision(
+                entity,
+                peer,
+                PairFixDecision::Skip(SkipReason::ReleasedByChain),
+            );
+            commands
+                .entity(entity)
+                .remove::<(ReassertZOrder, IssuedPairFix)>();
+            continue;
+        }
         let above_hwnd = handles.get(entity).ok().flatten().map(|h| h.hwnd);
         let peer_lookup = handles.get(peer);
         let below_alive = peer_lookup.is_ok();
@@ -529,3 +551,7 @@ mod survivor_tests;
 #[cfg(test)]
 #[path = "zorder_pair_maintain_always_on_top_tests.rs"]
 mod always_on_top_tests;
+
+#[cfg(test)]
+#[path = "zorder_pair_maintain_release_tests.rs"]
+mod release_tests;

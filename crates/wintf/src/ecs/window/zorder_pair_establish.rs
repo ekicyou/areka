@@ -17,11 +17,14 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::system::NonSendMarker;
 use windows::Win32::Foundation::HWND;
 
+use super::zorder_chain::pair_released_by_chain;
 use super::zorder_pair::{
     PairFixDecision, SkipReason, log_owner_establish_failed, log_owner_established,
     measure_window_above, record_decision,
 };
-use super::{KeepDirectlyAbove, OwnerLink, ReassertZOrder, WindowHandle, ZOrderPairStrategy};
+use super::{
+    KeepDirectlyAbove, OwnerLink, ReassertZOrder, WindowHandle, ZOrderChainPlan, ZOrderPairStrategy,
+};
 use crate::api::set_window_owner;
 
 // ============================================================================
@@ -84,6 +87,13 @@ unsafe impl Sync for OwnerEstablishFailed {}
 /// 4. 失敗: error 水準で記録し（要件 6.2）、同じハンドルの組では再試行しないよう
 ///    [`OwnerEstablishFailed`] を付ける。窓は現行どおり表示され続ける（要件 6.4）。
 ///
+/// # 鎖が外させる組は張らない（要件 1.3・6.1）
+///
+/// 同じフレームの `Update` で公開済みの望む鎖（[`ZOrderChainPlan`]）を直に読み、
+/// `pair_released_by_chain` が真の組は張らずに `ReleasedByChain` を記録する。
+/// 鎖の適用系が後で付ける印 `PairReleased` は読まない——同じ巡に公開された逆転でも、
+/// ここで先に張って維持系が直上へ直す形を作らないため。失敗の印も再断行の要求も付けない。
+///
 /// # 二度張らない仕掛け
 ///
 /// 確立済み（[`OwnerLink`] 保持）のペアはクエリの絞り込みで外れるため、以後どれだけ
@@ -98,6 +108,8 @@ pub fn establish_owner_links(
     _ui_thread: NonSendMarker,
     mut commands: Commands,
     strategy: Option<Res<ZOrderPairStrategy>>,
+    // 同じフレームに公開済みの望む鎖（未挿入は鎖なし）。
+    chain: Option<Res<ZOrderChainPlan>>,
     declarations: Query<
         (Entity, &KeepDirectlyAbove, Option<&OwnerEstablishFailed>),
         Without<OwnerLink>,
@@ -108,6 +120,7 @@ pub fn establish_owner_links(
 ) {
     // ストラテジ未挿入は結線前の状態。既定（案 A）で動く（design.md「State」の既定値）。
     let strategy = strategy.map(|s| *s).unwrap_or_default();
+    let chain = chain.as_deref().and_then(|plan| plan.chain.as_ref());
 
     for (entity, declaration, failed) in declarations.iter() {
         let peer = declaration.peer;
@@ -134,6 +147,16 @@ pub fn establish_owner_links(
                 entity,
                 peer,
                 PairFixDecision::Skip(SkipReason::StrategyDisabled),
+            );
+            continue;
+        }
+
+        if pair_released_by_chain(chain, entity, peer) {
+            // 鎖がこの組の 2 枚を連続させない。張れば鎖の適用系が外し直すだけになる。
+            record_decision(
+                entity,
+                peer,
+                PairFixDecision::Skip(SkipReason::ReleasedByChain),
             );
             continue;
         }
@@ -195,3 +218,7 @@ pub fn establish_owner_links(
 #[cfg(test)]
 #[path = "zorder_pair_establish_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "zorder_pair_establish_release_tests.rs"]
+mod release_tests;

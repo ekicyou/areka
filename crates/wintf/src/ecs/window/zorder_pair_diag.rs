@@ -64,7 +64,7 @@ fn tristate_field(value: Option<bool>) -> String {
 impl SkipReason {
     /// 記録に載る理由語（サインオフの grep 判定語）。
     ///
-    /// 5 種が互いに異なる語であることがそのまま要件 6.3 の「理由を伴う見送り」の
+    /// 6 種が互いに異なる語であることがそのまま要件 6.3 の「理由を伴う見送り」の
     /// 実質になる——1 語へ潰れると記録があっても理由が読めない。
     pub(crate) fn as_str(&self) -> &'static str {
         match self {
@@ -73,6 +73,7 @@ impl SkipReason {
             SkipReason::HandleMissing => "HandleMissing",
             SkipReason::EchoOrIrrelevant => "EchoOrIrrelevant",
             SkipReason::StrategyDisabled => "StrategyDisabled",
+            SkipReason::ReleasedByChain => "ReleasedByChain",
         }
     }
 }
