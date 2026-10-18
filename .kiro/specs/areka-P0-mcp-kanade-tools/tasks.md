@@ -114,7 +114,7 @@
   - _Boundary: SakurascriptHandler（crates/areka/src/mcp/sakurascript.rs・sakurascript_tests.rs）_
   - _Depends: 2.2_
   - _Requirements: 1.1, 1.3, 1.4, 1.5, 1.6, 1.7, 3.5, 3.6, 3.9, 5.1, 6.4, 6.5, 7.2, 7.4_
-- [ ] 5.2 `raise_event` の本物の答えを作る
+- [x] 5.2 `raise_event` の本物の答えを作る
   - 先頭で検査を呼び、空 → `NG:event is empty`、制御文字 → `NG:event or reference contains a control character`（kanade に送らない）
   - 外から頼まれたイベントの知らせを送り、台本 → `OK:the ghost returned a script and it is being played.`＋区切り `\r\n`（定数 1 か所）＋`Script: `＋台本、台本なし → `OK:the ghost returned no script.`、それ以外は 5.1 と同じ答え（部品は 5.1 のものを使う）
   - ダミーを固定していたテストを書き換え、各答えの本文と `isError`、strict の 3 通り、検査の誤りで kanade に何も届かないこと、warn 以上 0 件、を固定する
@@ -156,3 +156,4 @@
 - 3.3: 選択肢の帳簿が古くても、steady.rs のトークの番号の照合が下流で止める。そのため帳簿の消去はイベントの数では見えず、ログ（`choice_timeout_ledger_stale` が出ないこと、`choice_rejected_no_wait` の理由）で縛っている。
 - 4.2: kanade の殻のスレッドで出る warn は、テストのバイナリの「呼んだスレッドの記録」では捕まえられない（全スレッドの記録には番人の例外表の変更が要る）。そのため「warn 1 件」は部品ごとに縛った（`notify_accepted` の直のテスト、`drive` の warn 1 件、`answer` の warn 0 件）。
 - 5.1: areka はライブラリの target を持たない＝MCP のテストは `cargo test -p areka -j 4 --bin areka mcp::`。ワークツリーで areka の全体を回す前に、i686 の `shiori-host32-helper` と `shiori-host32-testdll-loadu` をビルドしておく（無いと実走の 2 本が赤になる）。
+- 5.2（範囲外・完了の棚卸で起票の候補）: 5.2 のレビューで `cargo test -p areka --bin areka mcp::` を回したところ、`mcp::check_script::check_script_tests::omitted_or_matching_name_answers_with_the_running_ghost` が 1 回だけ落ちた。本 spec の触っていないファイルのテストで、別スレッドの答えを待つ形。回し直すと緑だった（揺れ）。
