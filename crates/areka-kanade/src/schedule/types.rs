@@ -4,7 +4,7 @@
 //! テストは `super::State` などのまま参照できる。兄弟のモジュールの型は `super::` から引く。
 
 use super::{
-    anchor, balloon_events, change, events, resources, talk_active_of, talk_gap, translate,
+    anchor, balloon_events, change, events, resources, sstp, talk_active_of, talk_gap, translate,
 };
 use crate::msg::{
     ChoiceInput, CloseReason, MonotonicMs, MouseInput, ShioriCall, ShioriFault, ShioriOutcome,
@@ -89,6 +89,12 @@ pub(crate) enum Input {
     /// 時間切れでバルーンを隠した知らせ（表示の側 → kanade）。判断は [`balloon_events::on_timeout_notice`] が持つ。
     BalloonTimeout {
         talk_id: TalkId,
+    },
+    /// 外からの台本（MCP の `sakurascript`・殻 → 運行表）。判断は [`sstp::on_send`] が持つ。
+    SstpSend {
+        script: String,
+        /// 呼び手の strict（真・偽・省略）。始めたトークの番号と結んで控える。
+        strict: Option<bool>,
     },
 }
 
@@ -224,6 +230,8 @@ pub(crate) struct State {
     ///
     /// 書くのは [`translate::after`]、SHIORI の応答の入力で 1 回だけ取り出すのは [`translate::before`]。
     pub reply_source: Option<events::SourceEvent>,
+    /// 最後に始めた外からの台本のトークの strict（次の外からの台本で上書き・[`sstp::StrictNote`]）。
+    pub sstp_strict: Option<sstp::StrictNote>,
 }
 
 impl State {
@@ -248,6 +256,7 @@ impl State {
             external: ExternalStates::default(),
             translate: None,
             reply_source: None,
+            sstp_strict: None,
         }
     }
 

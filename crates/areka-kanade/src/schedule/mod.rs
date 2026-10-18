@@ -261,6 +261,9 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
         // BalloonTimeout: 番号の照合と送るかどうかごと balloon_events::on_timeout_notice へ渡す（表 D）。
         Input::BalloonTimeout { talk_id } => balloon_events::on_timeout_notice(state, talk_id),
 
+        // SstpSend: 受け付けの判定ごと sstp::on_send へ渡す。
+        Input::SstpSend { script, strict } => sstp::on_send(state, script, strict),
+
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 
         // Idle 以外での Boot は不整合（warn!＋現 Phase 維持・Req 6.2）。Idle のみ boot へ委譲。

@@ -61,7 +61,7 @@
   - 型の形が変わる既存のテスト（翻訳・翻訳の経路・バルーンのイベント・殻の翻訳の 2 本）をイベントの出どころで包むよう追随させる（主張は変えない）
   - 完了の姿: kanade の全テストが緑で、MCP 以外の翻訳の Reference が変わらない
   - _Requirements: 4.4, 4.5, 4.6_
-- [ ] 3.3 受け付けの判定と、外からの台本の腕を作る
+- [x] 3.3 受け付けの判定と、外からの台本の腕を作る
   - 運行表の入力に外からの台本の変種を足して振り分けに腕を 1 つ足し、入力の変種の網羅テストにその腕を 1 つ足す。運行状態に「最後の外からの台本の strict の控え（トークの番号と結ぶ）」の欄を足す
   - 殻から運行表への写しはまだ無い（2.2 の仮の腕のまま）ので、テストは運行表の 1 歩を直に呼んで行う
   - 受け付けの判定: 相が普段（Steady）で、流れているトークが起動の挨拶でなく、保留の終了も保留の切替も無いときだけ受け付ける。起動の挨拶の綴りは定数 1 か所に置く
@@ -152,3 +152,5 @@
 - 1.1: `cargo clippy -p areka-kanade --all-targets` は本 spec 以前から赤（actor_raise_reply_tests.rs ほか触っていないファイルの "this loop never actually loops" 等）。clippy は触ったファイルに新しい警告が無いかで見る。
 - 2.2: `schedule/sstp.rs` は `pub(crate) mod sstp;`（actor.rs が `NOTIFY_ORIGIN` を引くため）。`SEND_ORIGIN` は `#[expect(dead_code)]` 付き＝3.x で使い始めたら外す。`BOOT_GREETING_ORIGIN` は 3.3 で足す。`actor_tests.rs` は 970 行＝新しい殻のテストは別の兄弟ファイルへ。
 - 3.2: `Replied::talk_source` は `#[expect(dead_code)]` 付き＝3.5 で使い始めたら外す。
+- 3.3: `State` に欄を足すと `schedule/close.rs` のテスト用の組み立てが通らなくなる件は、持ち場の mcp-reload と合意のうえ、テスト用の補助を `..State::initial()` に替えて解いた（本番のコードは無変更）。ほかのテスト用の組み立て 12 か所も同じ形にしてある。
+- 3.3: 選択肢の帳簿が古くても、steady.rs のトークの番号の照合が下流で止める。そのため帳簿の消去はイベントの数では見えず、ログ（`choice_timeout_ledger_stale` が出ないこと、`choice_rejected_no_wait` の理由）で縛っている。
