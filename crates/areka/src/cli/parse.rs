@@ -209,8 +209,9 @@ pub(crate) fn parse(args: &[String]) -> Parsed {
                 // `=` の形は値を同じ引数に持つので、空でも次の引数は読まない（1.2）。
                 None if had_eq => {}
                 // 次の引数が名前でなければ値として読む（設計の「値の読み方の決まり」）。
+                // 空の値は `=` の形と同じく値なし（1.2）。
                 None if i < args.len() && !is_option(&args[i]) => {
-                    values.push(args[i].clone());
+                    values.extend(Some(args[i].clone()).filter(|v| !v.is_empty()));
                     i += 1;
                 }
                 None => {}
@@ -218,8 +219,9 @@ pub(crate) fn parse(args: &[String]) -> Parsed {
             Arity::Many => {
                 // 「複数」は `=` の値を 1 つ目として続く引数も読む（`--ghost=A B`＝`--ghost A B`）。
                 values.extend(eq_value);
+                // 空の引数は値なし（`--ghost ""`＝`--ghost=`・要件 1.2）。読み飛ばすだけで位置の引数にもしない。
                 while i < args.len() && !is_option(&args[i]) {
-                    values.push(args[i].clone());
+                    values.extend(Some(args[i].clone()).filter(|v| !v.is_empty()));
                     i += 1;
                 }
             }

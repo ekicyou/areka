@@ -263,6 +263,12 @@ fn boot_request_and_notes_table() {
             boot(None, None, None, false),
             vec![ParseNote::GhostEmpty],
         ),
+        // 1.2: 空白の形でも空の値は値なし（`--ghost=` と同じ）
+        (
+            vec!["--ghost", ""],
+            boot(None, None, None, false),
+            vec![ParseNote::GhostEmpty],
+        ),
         // 9.4: `--help` の値は使わない
         (
             vec!["--help", "x"],
@@ -321,6 +327,8 @@ fn sstp_listen_table() {
         (vec!["--sstp-listen", "--random"], Off, vec![]),
         (vec!["--sstp-listen="], Off, vec![]),
         (vec!["--sstp-listen=", "C:\\g\\emily"], Off, vec![]),
+        // 1.2: 空白の形でも空の値は値なし（`--sstp-listen=` と同じ）
+        (vec!["--sstp-listen", ""], Off, vec![]),
         // 1.11: 後勝ち＋warn
         (
             vec!["--sstp-listen", "1", "--sstp-listen", "2"],
@@ -366,6 +374,8 @@ fn help_table() {
         (vec!["--help="], true, vec![]),
         // `=` の後ろが空なら次の引数を値に取らない（1.2）
         (vec!["--help=", "x"], true, vec![]),
+        // 1.2: 空白の形でも空の値は値なし（`--help=` と同じ・空の引数は位置の引数にしない）
+        (vec!["--help", ""], true, vec![]),
         (
             vec!["--help=x"],
             true,
@@ -463,6 +473,13 @@ fn option_words_table() {
             vec![ParseNote::WordEmpty],
         ),
         (vec!["--option="], false, Load, vec![ParseNote::WordEmpty]),
+        // 1.2: 空白の形でも空の値は値なし（`--option=` と同じ）
+        (
+            vec!["--option", ""],
+            false,
+            Load,
+            vec![ParseNote::WordEmpty],
+        ),
         (
             vec!["--option=", "a"],
             false,
