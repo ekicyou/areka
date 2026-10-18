@@ -315,7 +315,7 @@ fn choice_phase_active(phase: &ChoicePhase) -> bool {
 
 /// 終了系列の起因（ログ語彙・遷移は共通）。
 ///
-/// `Clone` は停止通知が原因を控えるため（`actor::stop_cause_of`）。
+/// `Clone` は停止通知が原因を控えるため（`actor_stop::stop_cause_of`）。
 #[derive(Clone)]
 pub(crate) enum TermCause {
     Quit,
