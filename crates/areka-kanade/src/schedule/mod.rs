@@ -161,6 +161,11 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
 
         // ShioriReply: Unload 完了・呼出失敗（Failed）の横断判定を先に行い、
         // それ以外は応答待ちフェーズへ委譲する（Req 6.1）。origin は応答の出所（DD-IE-3）。
+        // 任意の名前の GET の応答待ちの控えが在れば、通常の応答の処理より先に sstp::on_notify_reply が
+        // 控えを取り出す（失敗などは向こうから on_shiori_reply へ戻る）。
+        Input::ShioriReply { outcome, origin } if state.sstp_notify.is_some() => {
+            sstp::on_notify_reply(state, outcome, origin, config)
+        }
         Input::ShioriReply { outcome, origin } => on_shiori_reply(state, outcome, origin, config),
 
         // Mouse（DD-IE-8）: Steady でのみ受理し steady::on_mouse へ委譲する。他フェーズ
@@ -263,6 +268,13 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
 
         // SstpSend: 受け付けの判定ごと sstp::on_send へ渡す。
         Input::SstpSend { script, strict } => sstp::on_send(state, script, strict),
+
+        // SstpNotify: 受け付けの判定と引数の検査ごと sstp::on_notify へ渡す。
+        Input::SstpNotify {
+            event,
+            references,
+            strict,
+        } => sstp::on_notify(state, event, references, strict),
 
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 

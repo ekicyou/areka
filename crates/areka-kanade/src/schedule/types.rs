@@ -96,6 +96,14 @@ pub(crate) enum Input {
         /// 呼び手の strict（真・偽・省略）。始めたトークの番号と結んで控える。
         strict: Option<bool>,
     },
+    /// 外から頼まれたイベント（MCP の `raise_event`・殻 → 運行表）。判断は [`sstp::on_notify`] が持つ。
+    SstpNotify {
+        event: String,
+        /// 渡された Reference の列（補わない・そのまま送る）。
+        references: Vec<String>,
+        /// 呼び手の strict（真・偽・省略）。返った台本のトークの番号と結んで控える。
+        strict: Option<bool>,
+    },
 }
 
 /// 運行フェーズ（可視化は System Flows の状態機械図）。各待ち点は「直前に発行した
@@ -232,6 +240,10 @@ pub(crate) struct State {
     pub reply_source: Option<events::SourceEvent>,
     /// 最後に始めた外からの台本のトークの strict（次の外からの台本で上書き・[`sstp::StrictNote`]）。
     pub sstp_strict: Option<sstp::StrictNote>,
+    /// 任意の名前の GET の応答待ちの控え（送る直前に置き、応答で必ず取り出す・[`sstp::NotifyStage`]）。
+    ///
+    /// 往復は殻の 1 つの一括の中で閉じるので、知らせの切れ目では常に `None`。
+    pub sstp_notify: Option<sstp::NotifyStage>,
 }
 
 impl State {
@@ -257,6 +269,7 @@ impl State {
             translate: None,
             reply_source: None,
             sstp_strict: None,
+            sstp_notify: None,
         }
     }
 
