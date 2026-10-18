@@ -70,7 +70,10 @@ pub(crate) fn plan_copy(
     let user_at = items
         .iter()
         .position(|r| matches!(r.mark(), RootMark::UserRoot { .. }));
-    let exe_at = items.iter().position(|r| same_root(r.dir(), exe_dir));
+    // 一時の置き場（`--ghost` の親）が実行ファイルのフォルダと同じ綴りでも、隣の根とは数えない（要件 3.9）。
+    let exe_at = items
+        .iter()
+        .position(|r| !r.is_temporary() && same_root(r.dir(), exe_dir));
     match (user_at, exe_at) {
         (Some(u), Some(e)) if u < e && same_root(parent, &store_of(&items[e], kind)) => {
             CopyPlan::Copy {
