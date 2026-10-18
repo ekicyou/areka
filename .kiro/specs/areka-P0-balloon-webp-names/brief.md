@@ -79,3 +79,17 @@
 - 要件定義のモデル: Opus（10-15 の基準に当たる所が無い）。
 - 分割の案: 無し。
 - 見つけた穴・古くなった記述: 本文に要件定義のモデルが書かれていない。議題 3（読み手を替えるとシェルの絵にも効く）は `decode.rs` の振り分けの 1 か所で決まる。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 前提の変化: v0.1.0 のゴールが「SSP 並みの自動試験」と「ぱすたが SSP と同じに動く」に組み直され、開発者の決め（10-18）で**この spec は v0.1.0 から外れた**（行き先は後で決める）。
+  - 例外: `default-balloon-selfmade`（v0.1.0 に残る）が議題 3 で絵を `.webp` で持つと決めたら、この spec はその働きの前提になり、v0.1.0 へ戻る。α 付きの PNG を選べば外れたまま。
+- ソースの変更: 起票から 0。`crates/areka-emo-present/src/balloon.rs`（701 行）の拡張子の定数 `FRAME_SUFFIX`（45 行）・系列の表 `BALLOON_FAMILY`（72 行）・面の番号を取る `face_digits_of`（238 行）と、振り分け `crates/areka-emo-atlas/src/decode.rs`（380 行）・`decode/image_arm.rs`（151 行）・`decode/sniff.rs`（122 行）はそのまま。
+- 棚卸㉗で足した範囲: 無し。
+- 触るファイル: 棚卸㉕のとおり。
+- 規模: 4〜7 タスク（変わらず）。
+- 先に要るもの: 無し。
+- 同じウェーブに置けない相手: `placement-measure-bake-once`（v0.1.0・`balloon.rs` に上限を渡す口を足す案のとき）。版に縛らない `balloon-markers`・`balloon-canon-residue`・`extra-character-windows`・`talk-fast-forward` も `balloon.rs` を挙げる。`decode/` を挙げる `offline-surface-dump`（v0.1.0）は WIC の腕 `wic_arm.rs` を使うだけで振り分けには触らない見込み＝重なり 0。`install-live-target-hazards`・`compose-f16-precision` は読み手の腕を挙げる（着手の前に照らす）。
+- 優先度の区分: A（開発者「画像ファイルなどは現代的なフォーマットにする」）。
+- 要件定義のモデル: Opus（10-15 の基準に当たる所が無い）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述: 本文の Downstream「`default-balloon-selfmade`（面の絵を `.webp` の名前で持つ）」は、向こうの議題 3 が決まるまでは見込み。v0.1.0 へ戻るかは、向こうの要件の段の最初の答えで決まる。

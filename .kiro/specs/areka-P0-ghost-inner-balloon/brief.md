@@ -125,3 +125,16 @@
   - `emily-ghost-verification` とは、書庫に鍵を足さない限り 0（棚卸㉓のまま）。
 - 優先度の区分: A。要件定義のモデル: Fable（どちらも変わらず）。
 - 見つけた穴・古くなった記述: 本文「Constraints」の「並びは `shell-companion-balloon` の後」は古い（待つ理由はファイルだけと棚卸㉓で分かった。区分 A のこちらが先）。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 前提の変化: カタログの鎖の 3 本（`baseware-root-list`・`user-data-root`・`write-failure-notice`）が着地した。一覧は `crates/areka-ghost/src/catalog_roots.rs`（252）の `list_balloons` が根の並びの `<根>/balloon/` を集め（`catalog.rs` 453 の `scan_balloons`）、起動の決め方は `crates/areka/src/boot_resolve.rs`（676）の `resolve_balloon` と `boot_config.rs`（467）の `resolve_balloon_for_ghost`。ゴーストの中は今も見ない。
+- 棚卸㉗で足した範囲（理由と証拠）: **ゴーストのフォルダの中の、`balloon/` の外に置いたバルーンを名前で見つける**へ広げる。ぱすたは縦書きのバルーンを `<ゴースト>/pasta_tategaki/`（ゴーストのフォルダの直下）に置き、`install.txt` に `balloon.directory` を書かず、ゴーストの descript で `balloon,窓際のぱすたさん縦書き`（バルーンの `name`）と名前で指す（ゴースト「窓際のぱすたさん」の `install.txt`・`ghost/master/descript.txt`・`pasta_tategaki/descript.txt`）。areka は `<根>/balloon/` しか見ないので、既定の横書きのバルーンへ落ちる＝ぱすたで見込みいちばん大きく見える崩れ。本文の前提「`<ゴースト>/balloon/<名>`」だけでは当たらない。
+  - 書庫の入れ方は今のままで足りる（`balloon.directory` で名指しされないフォルダは、ゴーストのフォルダへそのまま入る＝棚卸㉓）。
+  - 正典: ukadoc「全体の構成」は、バルーンはゴーストごとでなく全ゴーストで共有されると書き、ゴーストの中のバルーンを書いていない＝areka の決め（SSP の実際に合わせる）。
+  - **v0.1.0 へ移した**（版に縛らない列から）。
+- 触るファイル: 棚卸㉓・㉔のまま（`catalog.rs` 453・`catalog_roots.rs` 252・`boot_resolve.rs` 676・`boot_config.rs` 467・`emo2_boot/shell_balloon_resolve.rs`・`menu/balloon_frame.rs`・`update/desk.rs`・`install/procedure.rs`・`readme/opener.rs`・記憶の形を変えるなら `crates/areka-sylphya/src/persist/`）。`areka-nar` は触らない見込み。
+- 規模: 14〜20 タスク（探し方の段を足す分で上へ）。20 を超えそうなら「ゴーストの中を探して起動で使う」（ぱすたに要る分）と「メニュー・記憶・切り替え」に分ける案があるが、本文 Constraints の「起動はできるが、メニューに無く…バルーンを作らない」と食い違う＝分けるかは開発者が決める。
+- 先に要るもの: なし（前の 3 本は着地済み）。重なり: `startup-options-core`（新・`boot_resolve.rs`・`boot_config.rs`）・`dev-folder-alias`（`catalog.rs`・`catalog_roots.rs`・`boot_resolve.rs`）・`shell-companion-balloon`・`config-parse-diagnostics`・`install-live-target-hazards`・`default-balloon-selfmade`（行き先待ち）。
+- 優先度の区分: A のまま。要件定義のモデル: Fable のまま（ukadoc に無い独自の拡張・探し方と記憶と優先の骨格の分かれ目）。SSP の実測で探し方が決まれば Opus に下げてよい。
+- 議題を足す（本文の 6 つの前に）: 0. **SSP で測る**（最初）: ぱすたを SSP 2.9.18 に入れたとき、`pasta_tategaki` をどう見つけるか（使っているバルーンの名前・置き場のプロパティ）・ゴーストの直下の他のフォルダも探すのか・バルーンのメニューに出るか・ほかのゴーストから見えるか。
+- 古くなった記述: 本文 Desired Outcome の例の置き場（`<ゴースト>/balloon/<名>`）に、ぱすたの形（ゴーストの直下の名前の違うフォルダ）を足す。

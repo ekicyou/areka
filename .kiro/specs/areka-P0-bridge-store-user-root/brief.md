@@ -69,3 +69,13 @@
 ## 優先度の区分
 
 B（バグ。Store 版の利用者で、中継の控えが本当の置き場に届かず、箱の中に置き場の写しができうる）。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 版: **v0.1.0（棚卸㉗でゴールを組み直した後も残る）**。開発者の機械の Claude アプリは Microsoft Store 版で、AI のエージェントが areka の MCP へつなぐ道はこの中継を通る。中継の控えが箱の中に回ると、開発者の Claude から areka を試すときに、areka 本体の記憶の置き場とは別の写しが箱の中にでき、どちらを見ているかが分からなくなる＝「MCP サポートの安定化」の 1 つ。
+- 前提の変化: 起票（10-17）から触るファイルは動いていない。中継は今も `crates/areka-mcp-bridge/src/config.rs`（130 行）の 67〜68 行目で `areka_user_data::establish(Some(dir), …)` を呼び（置き場を作る・写す）、`app_profile_dir` で控えの置き場を決める。`crates/areka-user-data/src/establish.rs` は 240 行。`dist/README.txt` 175 行目の段落（Store 版の書き込みは `LocalCache\Local\` の下へ回る）も同じ。
+- 触るファイル: `crates/areka-mcp-bridge/src/config.rs` と `config_tests.rs`・`dist/README.txt` の 175 行目の段落・要れば中継の起動の記録の行。`areka-user-data` の決め方は変えない。
+- 規模: S（4〜7）のまま。
+- 先に要るもの: なし。最初のタスクの実機の測りは、Claude Desktop を落とす・起動し直すことになったら開発者に頼む。
+- 同じウェーブに置けない相手: `config.rs` を挙げる brief はほかに無い。`dist/README.txt` の別の行は `startup-options-core`・`readonly-mode`・`startup-install-option`・`offline-surface-dump`（起動オプションの節を足す）と重なるが、説明書の別々の行は許す重なり。
+- 優先度の区分: B のまま。要件定義のモデル: Opus のまま。分割の案: なし。
+- 見つけた穴・古くなった記述: なし。Adjacent の `write-failure-notice` は 10-17 に着地した（`config.rs` には触れていない）。

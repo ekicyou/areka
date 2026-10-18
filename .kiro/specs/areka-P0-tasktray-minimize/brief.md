@@ -96,3 +96,10 @@ areka にはアイコン化（最小化）が無い。キャラクターを一�
 - ファイルの重なり: `tasktray-ghost-icon`・`tasktray-balloon`（上の表）・`tasktray-balloon` と kanade の列の spec（`schedule/events.rs`）・`baseware-root-list`・`popup-menu-residue`（`menu/`）。
 - 優先度の区分: A。要件定義のモデル: Fable を勧める（アイコン化の間に喋るか・時計を進めるかの議題）。
 - 見つけた穴・古くなった記述: 本文に規模と要件定義のモデルが書かれていない（roadmap の行には規模が在る）。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 前提の変化: 無し（windows-reactor 待ちのまま・ソースの変更 0）。
+- 棚卸㉗の振り分け: `\v`・`\![set,windowstate,stayontop]`・`\![set,windowstate,!stayontop]` は、新しい spec `stay-on-top-directives`（v0.1.0）が持つ。本文 Scope の Out の行は、持ち主の居ない項目として書いた行＝古い（今は持ち主が居る）。
+- 受け手の形の申し送り: `stay-on-top-directives` が `\![set,windowstate,…]` の受け手（受け手の表 `crates/areka/src/emo2_boot/consumer_ledger.rs` の `("set", "windowstate")`）を作り、第 2 引数で分ける。この spec は `minimize` の腕を同じ受け手へ足す（受け手を 2 つ作らない）。アイコン化から戻すとき、常に手前の状態も戻す。
+- 版: windows-reactor 待ちのまま。
+- 古くなった記述: 本文 Adjacent の「重なり順を触る spec（`\![set,zorder,…]` の周り）」に `stay-on-top-directives`・`zorder-scope-inversion` を足す。

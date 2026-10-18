@@ -211,3 +211,18 @@ PR に直しを求める印 `Needs-Author-Feedback` が付いたら、**10 日�
 - **上の「6」の制限**（説明書に winget の行を載せない・winget-pkgs へ次の版を出さない）のうち、あの spec の着地を待つ分は、着地で解ける。winget-pkgs の PR 450070 の取り込みを待つ分は、別に残る。
 - **実測の結果**（`.kiro/specs/completed/areka-P0-user-data-root/verification/winget-user-data-check.md`・2026-10-17）: 要件 10.8 の 3 つは、利用者向けの上げ直し 0・外し方で消えた利用者の物 0・機械の全員向けの書き込みの失敗 0。0.0.2 からの最初の上げ直しで消えた物（要件 9.1）は **6**（後から入れたゴースト 1＝`ghost\claudia`・後から入れたバルーン 3＝`balloon\claudia`・`balloon\claudia_vertical`・`balloon\emo2-kakukaku-wplimit`・ゴーストの記憶 2＝えも？？とクローディアの `ghost\master\profile\areka`。クローディアの記憶はゴースト 1 と重ねて数える）＝上の「外せない場合」に当たる。
 - **外した後に残る入れ先のフォルダ**: 0.0.2 から上げ直した入れ先は、外した後も `profile\areka\sylphya.toml`（0.0.2 が隣へ書いた記憶。この版は写して使い、元は消さない＝あの spec の要件 5.4）と空の `.nar-work` が残り、フォルダが消えない。0.0.2 を経ずにこの版だけを入れて外した場合は、残った物 0（入れ先のフォルダは消えた）。説明書（`dist/README.txt` の「■ 記憶の置き場」）には、0.0.2 から上げ直した人向けに「外した後も入れ先のフォルダが残ることがあるので、手で消す」の 1 行を、あの spec が足した。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 前提の変化: v0.1.0 のゴールの組み直しの後も、開発者の決め（10-18）で v0.1.0 に残る。ただし着手は winget-pkgs の人の承認待ち。2026-10-18 に `gh pr view 450070 --repo microsoft/winget-pkgs --json state,mergedAt` で読んだ（読むだけ）: `state` は OPEN・`mergedAt` は空・印は `Azure-Pipeline-Passed`・`Validation-Completed`・`New-Package` の 3 つ・最後の更新は 2026-10-11＝**まだ取り込まれていない**（提出の 10-10 から 8 日）。
+- 解けた条件: `user-data-root` が着地した（PR#322）。上げ直しで消える物は 0（`.kiro/specs/completed/areka-P0-user-data-root/verification/winget-user-data-check.md`）。残る条件は PR 450070 の取り込みと、開発者の PAT の登録の 2 つ。
+- v0.0.3 は 2026-10-18 に出た（`2d86dbff`）が、winget-pkgs へは出していない（申し送り 6 の制限どおり）。議題 2（取り込みまでに出た版を手で出すか、次の版まで待つか）の相手は 0.0.3 の 1 版になった。
+- 触るファイル: `.github/workflows/winget.yml`（新規・今の `.github/workflows/` は `release.yml`・`crates-io.yml` の 2 本のまま）・根の `README.md` の「## 入手と起動」（52 行）・`dist/README.txt` の「■ 入手のしかた」（178 行）と「■ 既知の制限」（217 行）。注意書きを外す仕事を持つなら、`dist/winget/0.0.2/` の 2 ロケールの `InstallationNotes`（今も在る）か、更新の PR の作り方の側。
+- リリースの手順（`.claude/skills/release/procedure.md`）: この spec は触らない（本文の Scope どおり）。段 6.2 の表（204・208 行）は、`winget.yml` がタグのコミットに在れば自動で winget を見守りに入れる。PR を探す `gh pr list --repo microsoft/winget-pkgs` の絞り込みが `winget-releaser` の PR の題と合うかだけ、確かめで 1 度見る（合わなければ手順の 1 行を直す＝そのときだけ重なる）。
+- `impl-watch-test-desk` との当たり: 向こうが触るのは `procedure.md` の「全体テストの前後で机を取る」段。この spec は上のとおり触らない見込み＝重なりは 0。向こうの brief（棚卸㉕）の「同じウェーブに置けない」は、この spec が手順に触る前提で多めに数えている。手順の 1 行を直すことになっても、節が別（6.2 の表の winget の行と、全体テストの段）なので取り込みで足りる。
+- ほかのファイルの重なり: `dist/README.txt` は v0.1.0 の `startup-options-core`・`readonly-mode`・`startup-install-option`・`offline-surface-dump`・`bridge-store-user-root`・`ghost-inner-balloon` も触るが、節が別。「■ 既知の制限」は `release-code-signing` と同じ節。根の `README.md` は `dot-sakura-specimen`・`default-balloon-selfmade`（検体の表と既定のバルーンの 1 行）＝節は別。
+- 規模: 3〜5 タスク（変わらず）。
+- 先に要るもの: PR 450070 の取り込み（人の承認）・PAT の登録。働きの依存はほかに無い。
+- 優先度の区分: A。要件定義のモデル: Opus。分割の案: 切らない。
+- 見つけた穴・古くなった記述:
+  - 申し送り 6 の「`user-data-root` の着地まで説明書に winget の行を載せない」は解けた。PR 450070 の取り込みを待つ分は残る。
+  - 議題 4（新）: v0.1.0 を出す時までに取り込みが来なかったら、この spec を待つか、v0.1.0 から外して次の版へ送るか。待つと版の門が人の承認で止まる。

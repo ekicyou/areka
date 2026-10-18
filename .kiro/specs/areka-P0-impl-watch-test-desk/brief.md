@@ -121,3 +121,15 @@
 3. **areka のマージで排他テストの机を持つ長さ**: 完了の手順の全部か、ステップ 5 の全体テストの間だけか。推し: 全体テストの間だけ（回し直し〔ステップ 7-4〕でも取り直す）。
 4. **「全体テスト・UI テスト」の判定の基準**: タスクの文からどう読み取るか（`#[ignore]` の実機テスト・実機の走行の道具・`SendInput`・computer-use）。クレートのテスト（`cargo test -p`）は数えない（実装の机の上で回る）でよいか。
 5. **`/release` の机**: 全体テストの前後で排他テストの机を取るほかに、版上げの PR のマージでマージの机を取るか。
+
+## 2026-10-18 棚卸㉗の再測定（main 2d86dbff）
+- 版: **v0.1.0（棚卸㉗で引き上げた）**。開発者の指示の「kiro-watchの機能追加」に当たる（開発者が「kiro-watch」と呼ぶのは机の貸し出しのアプリ `areka-impl-watch.exe` とスキルの机の段）。今は全体テストや実機の UI テストが机を取らずに回り、areka が 2 つ立って窓と入力を取り合う。自動の試験を増やすほど偽の赤が増え、開発の速さのゴールに直に効く。棚卸㉗の調べでは、ほかに「kiro-watch」の新しい要る機能は見つからなかった。
+- 前提の変化: 起票（10-17）から触るファイルは動いていない（`crates/areka-impl-watch/src/` の `cli.rs` **893 行＝上限の近く**・`plan.rs` 750・`wait.rs` 305・`status.rs` 327・`state.rs` 250・`doc/impl-watch.md` 486 行）。`cli.rs` に申し込みの形を足す前に、コマンドごとの扱いを兄弟のファイルへ出す 1 タスクが要る見込み。10-16 の `kiro-complete` の直し（PR#325・棚卸の小さな問題をその場で解く）は机の段に触れていない。
+- 触るファイル: 本文の Scope のとおり（`crates/areka-impl-watch/src/{state,plan,cli,wait,status}.rs` と兄弟のテスト・`doc/impl-watch.md`・`.claude/skills/{kiro-impl,kiro-complete,release}/` の机の段）。
+- 規模: M（12〜16）のまま。20 を超えそうなら、アプリとスキルの 2 本に分ける（本文のとおり）。
+- 先に要るもの: なし。
+- 同じウェーブに置けない相手: `test-roots-under-target`（版に縛らない列・`areka-impl-watch` のテストの一時フォルダを書き換える）・後回しの段の `winget-release-automation`（`.claude/skills/release/procedure.md`）・`clippy-199-lints`（`kiro-complete` の文に触れるなら）。ほかの v0.1.0 の spec とは 0（触るのは道具とスキルだけ）。
+- 自動の試験との関わり: `real-run-mcp-kit`・`emo2-real-run-stability`・`pasta-in-windows-verification` の実機の試験は、本 spec の後なら「排他テストの机」を取って回せる。`areka-test-binary-stability` は本 spec の後に置くのが理想（負荷テストの机が「排他テストの机＋実装の机のひとり占め」になってから測る）。
+- 優先度の区分: A のまま。要件定義のモデル: Opus のまま（先例＝今の 2 つの机と停止要請の仕組み）。
+- 分割の案: 上の条件つきの 1 つだけ。
+- 見つけた穴・古くなった記述: 本文 Downstream の `real-run-input-guard-observations` は v0.1.0 の外（版に縛らない列）。
