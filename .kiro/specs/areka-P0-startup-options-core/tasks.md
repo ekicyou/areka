@@ -145,3 +145,4 @@
 - 5.2: 記憶を読む条件はまだ `mark.is_none() && !request.random` だけ。5.3 で解決できた指し先が在るときも読まない条件（`pointed.is_none()`）を足す。`main` は今 `resolve_boot(&cli::read().boot)` とその場で読む。6.1 で `cli::read()` を記録の初期化の後へ 1 回だけにし、この呼び出しを置き換える（足すだけだと 2 回読み・注記も 2 回出る）。
 - 7.1: 「■ 既知の制限」の更新の行（287 行目）を「位置の引数で…」へ直した（--ghost の指し先は folder=Some で、更新で引っ込んで戻る）。
 - 7.2: 全体テスト（tools/test-all.ps1）は 6d811e1e で 1 回・全段緑（x64 は 12,073 通過・失敗 0）。実機 `--option dontloadmodule` は面が出て Smoke で正常終了・`shiori_skipped` 1 件・`charset_initial` 0 件（補助のプロセスは結線されていない）。範囲外の申し送り: `areka-kanade/src/shiori/real.rs:318` の「unload → helper 正常終了」の文は補助のプロセスでない SHIORI でも出る（文言が誤解を招く）。
+- 最終検証（GO）の申し送り: `--ghost` のフォルダがある置き場の dir の直下にあると、一時の置き場の dir がその置き場と同じになり、素の `areka_ghost::install_root`（catalog_roots.rs:158）は普通の置き場まで一時とみなす（本番の入れ先は `CatalogDestinations::new` が先に外すので影響なし）。一時の dir が exe の dir と同じときは切替で戻すと `plan_copy` が写しうる。どちらもまれ・完了の棚卸で扱う。要件 7.5 の実機は Smoke の終了の道で確かめた（メニューのクリックではない）。
