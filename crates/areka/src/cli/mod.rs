@@ -44,6 +44,22 @@ pub(crate) enum ModulePolicy {
     Skip,
 }
 
+/// 本物の口: OS の引数を読み（1.14）、読み方を通し、記録を出して中身を返す。
+/// 記録の初期化の後に呼ぶ。
+pub(crate) fn read() -> StartupOptions {
+    read_from(&std::env::args_os().collect::<Vec<_>>())
+}
+
+/// `read` の中身（テストは OS の引数の代わりに列を渡す）。まとめは最後に出る。
+fn read_from(args: &[std::ffi::OsString]) -> StartupOptions {
+    let (args, os_notes) = parse::from_os(args);
+    let parsed = parse::parse(&args);
+    for note in os_notes.iter().chain(&parsed.notes) {
+        note.log();
+    }
+    parsed.options
+}
+
 #[cfg(test)]
 #[path = "mod_tests.rs"]
 mod mod_tests;

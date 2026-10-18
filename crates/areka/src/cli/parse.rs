@@ -1,11 +1,13 @@
 //! 起動オプションの名前と値を読む表と読み方（要件 1・2・4・6・9.4）。
 //!
-//! 純粋: ファイル・環境変数・時計に触らず、記録も出さない。書式の誤りでも `Err` を返さない（1.13）。
+//! 純粋: ファイル・環境変数・時計に触らない。記録を出すのは `ParseNote::log` だけ。
+//! 書式の誤りでも `Err` を返さない（1.13）。
 
+use std::ffi::OsString;
 use std::path::PathBuf;
 
-use super::StartupOptions;
 use super::listen::{self, ListenNote};
+use super::{ModulePolicy, StartupOptions};
 
 /// 値の取り方。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -159,8 +161,6 @@ pub(crate) enum ParseNote {
 #[derive(Debug)]
 pub(crate) struct Parsed {
     pub options: StartupOptions,
-    /// `--option` の値をカンマで割った語（書いた順・重ねは合わせる＝1.9）。読み分けは 2.4。
-    pub option_words: Vec<String>,
     /// 記録の材料。最後は必ず `Summary` が 1 件。
     pub notes: Vec<ParseNote>,
 }
@@ -168,9 +168,9 @@ pub(crate) struct Parsed {
 /// 引数の列を読む。`args[0]` は exe（読まない）。純粋で、`Err` を返さない（1.13）。
 pub(crate) fn parse(args: &[String]) -> Parsed {
     let mut options = StartupOptions::default();
-    let mut option_words = Vec::new();
     let mut notes = Vec::new();
     let mut effective: Vec<String> = Vec::new();
+    let mut noop: Vec<String> = Vec::new();
     let mut ignored: Vec<String> = Vec::new();
 
     let mut positional: Vec<String> = Vec::new();
@@ -234,9 +234,44 @@ pub(crate) fn parse(args: &[String]) -> Parsed {
                 ghosts.extend(values);
             }
             Kind::Option => {
-                // 値なし（`--option` だけ）は空の語 1 つ（6.7）。
+                // 値なし（`--option` だけ）は空の語 1 つ（6.7）。重ねは語を合わせる（1.9）。
                 let value = values.pop().unwrap_or_default();
-                option_words.extend(value.split(',').map(str::to_owned));
+                for word in value.split(',') {
+                    let lower = word.to_ascii_lowercase();
+                    match lower.as_str() {
+                        "" => notes.push(ParseNote::WordEmpty),
+                        "nobootcheck" | "dontloadmodule" => {
+                            if lower == "nobootcheck" {
+                                options.boot.no_boot_check = true;
+                            } else {
+                                options.modules = ModulePolicy::Skip;
+                            }
+                            if !effective.contains(&lower) {
+                                effective.push(lower);
+                            }
+                        }
+                        "bootunlock" | "standalone" | "layered" | "region" | "dpiaware" => {
+                            notes.push(ParseNote::WordNoop {
+                                word: lower.clone(),
+                            });
+                            noop.push(lower);
+                        }
+                        "readonly" | "kiosk" | "callghost" | "deletesource" => {
+                            notes.push(ParseNote::WordPending {
+                                word: lower.clone(),
+                            });
+                            ignored.push(lower);
+                        }
+                        _ => {
+                            notes.push(ParseNote::WordUnknown {
+                                word: word.to_owned(),
+                            });
+                            ignored.push(word.to_owned());
+                        }
+                    }
+                }
+                // 名前 `option` はまとめに並べない（効かせる語が並ぶ）。
+                continue;
             }
             Kind::Random | Kind::SstpListen | Kind::Help => {
                 if !first {
@@ -294,16 +329,124 @@ pub(crate) fn parse(args: &[String]) -> Parsed {
         options.listen = plan;
         notes.extend(listen_notes.into_iter().map(ParseNote::Listen));
     }
-    // ponytail: まとめは今ある材料だけ（語の読み分けは 2.4 で `noop` などへ入れる）。
     notes.push(ParseNote::Summary {
         effective,
-        noop: Vec::new(),
+        noop,
         ignored,
     });
-    Parsed {
-        options,
-        option_words,
-        notes,
+    Parsed { options, notes }
+}
+
+/// OS の引数を文字列へ。UTF-8 として読めない文字は置き換え、その引数ごとに `NonUtf8`（1.14）。
+pub(crate) fn from_os(args: &[OsString]) -> (Vec<String>, Vec<ParseNote>) {
+    let mut notes = Vec::new();
+    let strings = args
+        .iter()
+        .map(|a| match a.to_str() {
+            Some(s) => s.to_owned(),
+            None => {
+                let lossy = a.to_string_lossy().into_owned();
+                notes.push(ParseNote::NonUtf8 {
+                    lossy: lossy.clone(),
+                });
+                lossy
+            }
+        })
+        .collect();
+    (strings, notes)
+}
+
+impl ParseNote {
+    /// 記録を 1 件出す（設計の Monitoring の `event` と前置き `[cli]`）。
+    pub(crate) fn log(&self) {
+        use tracing::{info, warn};
+        match self {
+            Self::Unknown { arg } => warn!(
+                event = "startup_option_unknown",
+                arg = %arg,
+                "[cli] 知らない起動オプションなので、この引数を無視する"
+            ),
+            Self::Unsupported { name } => warn!(
+                event = "startup_option_unsupported",
+                name = %name,
+                "[cli] areka が扱わない起動オプションなので、値ごと無視する"
+            ),
+            Self::MissingValue { name } => warn!(
+                event = "startup_option_missing_value",
+                name = %name,
+                "[cli] 起動オプションに値が無いので無視する"
+            ),
+            Self::Repeated { name } => warn!(
+                event = "startup_option_repeated",
+                name = %name,
+                "[cli] 起動オプションが重なったので、後に書かれた値を使う"
+            ),
+            Self::ValueIgnored { name } => warn!(
+                event = "option_value_ignored",
+                name = %name,
+                "[cli] 値を取らない起動オプションに値が付いていたので、値を使わない"
+            ),
+            Self::ExtraPositional { args } => warn!(
+                event = "positional_extra",
+                args = ?args,
+                "[cli] 3 つ目からの位置の引数は使わない"
+            ),
+            Self::PositionalGhostIgnored { arg } => warn!(
+                event = "positional_ghost_ignored",
+                arg = %arg,
+                "[cli] --ghost があるので、位置の引数のゴーストを使わない"
+            ),
+            Self::ExtraGhosts { rest } => warn!(
+                event = "ghost_option_extra",
+                rest = ?rest,
+                "[cli] --ghost の最初の 1 つだけを起こし、残りは使わない"
+            ),
+            Self::GhostEmpty => warn!(
+                event = "ghost_option_empty",
+                "[cli] --ghost に値が無いので、いつもの選び方で起こす"
+            ),
+            Self::WordNoop { word } => info!(
+                event = "option_word_noop",
+                word = %word,
+                "[cli] --option の語を受け取ったが、今の areka では振る舞いが変わらない"
+            ),
+            Self::WordPending { word } => warn!(
+                event = "option_word_pending",
+                word = %word,
+                "[cli] --option の語をまだ扱わないので、働きは変わらない"
+            ),
+            Self::WordUnknown { word } => warn!(
+                event = "option_word_unknown",
+                word = %word,
+                "[cli] --option の知らない語なので、この語を無視する"
+            ),
+            Self::WordEmpty => warn!(
+                event = "option_word_empty",
+                "[cli] --option の空の語を無視する"
+            ),
+            Self::NonUtf8 { lossy } => warn!(
+                event = "startup_arg_not_utf8",
+                arg = %lossy,
+                "[cli] 引数に読めない文字があったので、置き換えて読む"
+            ),
+            Self::HelpValueIgnored { value } => warn!(
+                event = "help_value_ignored",
+                value = %value,
+                "[cli] --help の値は使わない"
+            ),
+            Self::Listen(note) => note.log(),
+            Self::Summary {
+                effective,
+                noop,
+                ignored,
+            } => info!(
+                event = "startup_options",
+                effective = ?effective,
+                noop = ?noop,
+                ignored = ?ignored,
+                "[cli] 起動オプションを読み終えた"
+            ),
+        }
     }
 }
 

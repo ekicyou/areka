@@ -1,6 +1,6 @@
-//! 引数の列 → 起動オプションの中身と記録の材料（要件 1・2.1・2.3・2.4・4.5〜4.7・8.4・9.4・11.1）。
+//! 引数の列 → 起動オプションの中身と記録の材料（要件 1・2.1・2.3・2.4・4.5〜4.7・6.1・6.4〜6.7・8.4・9.4・11.1）。
 //!
-//! 最後のまとめ（`Summary`）は「最後に 1 件ある」ことだけを見て、中身は見ない（中身は 2.4）。
+//! 最後のまとめ（`Summary`）の中身は `summary_table` で見る（1.12）。
 
 use super::*;
 use crate::cli::listen::ListenNote;
@@ -245,7 +245,7 @@ fn boot_request_and_notes_table() {
         (
             vec!["--option=", "a"],
             boot(Some("a"), None, None, false),
-            vec![],
+            vec![ParseNote::WordEmpty],
         ),
         (
             vec!["--help=", "x"],
@@ -385,29 +385,252 @@ fn help_table() {
     }
 }
 
-/// `--option` の値は語の列として合わせて受け取る（1.9・1.8・6.7 の読み方側。語の読み分けは 2.4）。
+fn noop(w: &str) -> ParseNote {
+    ParseNote::WordNoop { word: s(w) }
+}
+
+fn pending(w: &str) -> ParseNote {
+    ParseNote::WordPending { word: s(w) }
+}
+
+fn word_unknown(w: &str) -> ParseNote {
+    ParseNote::WordUnknown { word: s(w) }
+}
+
+/// `--option` の語（1.5・1.8・1.9・6.1・6.2・6.4〜6.7・7.1 の読み方側）。
 #[test]
-fn option_values_merge_into_words() {
-    let rows: Vec<(Vec<&str>, Vec<&str>)> = vec![
-        (vec![], vec![]),
-        (vec!["--option", "a"], vec!["a"]),
-        (vec!["--option", "a", "--option", "b"], vec!["a", "b"]),
-        (vec!["/o", "a,b", "-O=c"], vec!["a", "b"]),
-        (vec!["--option=a,b", "--OPTION", "c"], vec!["a", "b", "c"]),
-        // 値なし（`--option` だけ・`=` の後ろが空）は空の語 1 つ（6.7 の warn は 2.4）。
+fn option_words_table() {
+    use ModulePolicy::*;
+    let rows: Vec<(Vec<&str>, bool, ModulePolicy, Vec<ParseNote>)> = vec![
+        (vec![], false, Load, vec![]),
+        // 6.1・6.4〜6.7: 語ごとに 1 件（空の語も 1 つずつ）
+        (
+            vec!["--option", "nobootcheck,bootunlock,readonly,xyz,,"],
+            true,
+            Load,
+            vec![
+                noop("bootunlock"),
+                pending("readonly"),
+                word_unknown("xyz"),
+                ParseNote::WordEmpty,
+                ParseNote::WordEmpty,
+            ],
+        ),
+        // 7.1・1.5: 大文字小文字を問わない
+        (vec!["--option", "DontLoadModule"], false, Skip, vec![]),
+        (
+            vec!["--option=standalone,layered,region,dpiaware"],
+            false,
+            Load,
+            vec![
+                noop("standalone"),
+                noop("layered"),
+                noop("region"),
+                noop("dpiaware"),
+            ],
+        ),
+        (
+            vec!["/o", "kiosk,callghost,deletesource"],
+            false,
+            Load,
+            vec![
+                pending("kiosk"),
+                pending("callghost"),
+                pending("deletesource"),
+            ],
+        ),
+        // 1.9: 重ねは語を合わせ、後勝ちの warn は出ない
+        (
+            vec!["--option", "nobootcheck", "-O", "dontloadmodule"],
+            true,
+            Skip,
+            vec![],
+        ),
+        // 1.4: 短い形の `=` は知らない名前
+        (
+            vec!["/o", "x", "-O=c"],
+            false,
+            Load,
+            vec![word_unknown("x"), unknown("-O=c")],
+        ),
+        // 1.8・6.7: 値なしは空の語 1 つ（1.8 の warn は出さない）。
         // `=` の後ろが空なら次の引数を語に取らない（1.2・次は位置の引数）
-        (vec!["--option"], vec![""]),
-        (vec!["--option", "--random"], vec![""]),
-        (vec!["--option="], vec![""]),
-        (vec!["--option=", "a"], vec![""]),
+        (vec!["--option"], false, Load, vec![ParseNote::WordEmpty]),
+        (
+            vec!["--option", "--random"],
+            false,
+            Load,
+            vec![ParseNote::WordEmpty],
+        ),
+        (vec!["--option="], false, Load, vec![ParseNote::WordEmpty]),
+        (
+            vec!["--option=", "a"],
+            false,
+            Load,
+            vec![ParseNote::WordEmpty],
+        ),
     ];
-    for (args, want) in rows {
+    for (args, want_nbc, want_modules, want_notes) in rows {
         let parsed = run(&args);
-        assert_eq!(parsed.option_words, want, "{args:?}");
+        assert_eq!(parsed.options.boot.no_boot_check, want_nbc, "{args:?}");
+        assert_eq!(parsed.options.modules, want_modules, "{args:?}");
+        assert_eq!(
+            notes_before_summary(&parsed),
+            want_notes.as_slice(),
+            "{args:?}"
+        );
     }
-    // 1.9: 重ねても後勝ちの warn は出ない。値なしも 1.8 の warn を出さない（6.7 が意味を定める）
-    for args in [vec!["--option", "a", "--option", "b"], vec!["--option"]] {
-        assert_eq!(notes_before_summary(&run(&args)), &[], "{args:?}");
+}
+
+/// 1.12: まとめは最後に 1 件で、効かせるもの・受けて何もしないもの・無視したものを並べる。
+#[test]
+fn summary_table() {
+    let rows: Vec<(Vec<&str>, Vec<&str>, Vec<&str>, Vec<&str>)> = vec![
+        (vec![], vec![], vec![], vec![]),
+        // 位置の引数は起動オプションではないので並ばない
+        (vec![r"C:\g\emily", r"C:\b\x"], vec![], vec![], vec![]),
+        (
+            vec![
+                "--ghost",
+                "a",
+                "--random",
+                "--option",
+                "nobootcheck,bootunlock,readonly,xyz,,",
+                "--foo",
+                "--install",
+                "x",
+                "--sstp-listen",
+                "9900",
+                "/o",
+                "DONTLOADMODULE",
+            ],
+            vec![
+                "ghost",
+                "random",
+                "nobootcheck",
+                "sstp-listen",
+                "dontloadmodule",
+            ],
+            vec!["bootunlock"],
+            vec!["readonly", "xyz", "--foo", "install"],
+        ),
+        // 重ねても 1 つ
+        (vec!["--help", "/?"], vec!["help"], vec![], vec![]),
+    ];
+    for (args, effective, noop, ignored) in rows {
+        let parsed = run(&args);
+        notes_before_summary(&parsed);
+        let want = ParseNote::Summary {
+            effective: effective.into_iter().map(s).collect(),
+            noop: noop.into_iter().map(s).collect(),
+            ignored: ignored.into_iter().map(s).collect(),
+        };
+        assert_eq!(parsed.notes.last(), Some(&want), "{args:?}");
+    }
+}
+
+/// 1.14: 読めない文字を置き換えた引数ごとに 1 件。読める引数はそのまま。
+#[cfg(windows)]
+#[test]
+fn from_os_replaces_non_utf8_per_arg() {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStringExt;
+    let bad = OsString::from_wide(&[0x61, 0xD800]);
+    let args = vec![
+        OsString::from("areka"),
+        bad.clone(),
+        OsString::from("--random"),
+        bad,
+    ];
+    let (strings, notes) = from_os(&args);
+    assert_eq!(
+        strings,
+        vec![s("areka"), s("a\u{FFFD}"), s("--random"), s("a\u{FFFD}")]
+    );
+    let lossy = || ParseNote::NonUtf8 {
+        lossy: s("a\u{FFFD}"),
+    };
+    assert_eq!(notes, vec![lossy(), lossy()]);
+    let (strings, notes) = from_os(&[OsString::from("areka"), OsString::from("名前")]);
+    assert_eq!(strings, vec![s("areka"), s("名前")]);
+    assert!(notes.is_empty());
+}
+
+/// 記録の形: 材料ごとに 1 件、設計の `event` の名前と重さ、前置き `[cli]`。
+#[test]
+fn notes_log_one_event_each_with_cli_prefix() {
+    use tracing::Level;
+    let rows: Vec<(ParseNote, Level, &str)> = vec![
+        (unknown("--foo"), Level::WARN, "startup_option_unknown"),
+        (
+            unsupported("install"),
+            Level::WARN,
+            "startup_option_unsupported",
+        ),
+        (
+            ParseNote::MissingValue { name: s("x") },
+            Level::WARN,
+            "startup_option_missing_value",
+        ),
+        (repeated("random"), Level::WARN, "startup_option_repeated"),
+        (
+            ParseNote::ValueIgnored { name: s("random") },
+            Level::WARN,
+            "option_value_ignored",
+        ),
+        (
+            ParseNote::ExtraPositional { args: vec![s("c")] },
+            Level::WARN,
+            "positional_extra",
+        ),
+        (
+            ParseNote::PositionalGhostIgnored { arg: s("a") },
+            Level::WARN,
+            "positional_ghost_ignored",
+        ),
+        (
+            ParseNote::ExtraGhosts { rest: vec![s("b")] },
+            Level::WARN,
+            "ghost_option_extra",
+        ),
+        (ParseNote::GhostEmpty, Level::WARN, "ghost_option_empty"),
+        (noop("bootunlock"), Level::INFO, "option_word_noop"),
+        (pending("readonly"), Level::WARN, "option_word_pending"),
+        (word_unknown("xyz"), Level::WARN, "option_word_unknown"),
+        (ParseNote::WordEmpty, Level::WARN, "option_word_empty"),
+        (
+            ParseNote::NonUtf8 { lossy: s("a") },
+            Level::WARN,
+            "startup_arg_not_utf8",
+        ),
+        (
+            ParseNote::HelpValueIgnored { value: s("x") },
+            Level::WARN,
+            "help_value_ignored",
+        ),
+        (
+            ParseNote::Listen(ListenNote::NotLoopback {
+                item: s("0.0.0.0:1"),
+            }),
+            Level::WARN,
+            "mcp_listen_not_loopback",
+        ),
+        (
+            ParseNote::Summary {
+                effective: vec![s("random")],
+                noop: vec![],
+                ignored: vec![],
+            },
+            Level::INFO,
+            "startup_options",
+        ),
+    ];
+    for (note, level, event) in rows {
+        let ((), events) = log_capture_kit::capture(|| note.log());
+        assert_eq!(events.len(), 1, "{note:?}: {events:?}");
+        assert_eq!(events[0].level, level, "{note:?}");
+        assert_eq!(events[0].field_str("event"), Some(event), "{note:?}");
+        assert!(events[0].message().starts_with("[cli] "), "{note:?}");
     }
 }
 
@@ -424,7 +647,6 @@ fn real_run_shape_is_positional_only() {
     assert_eq!(parsed.options.listen, ListenPlan::NotGiven);
     assert_eq!(parsed.options.modules, ModulePolicy::Load);
     assert!(!parsed.options.help);
-    assert!(parsed.option_words.is_empty());
     assert_eq!(parsed.notes.len(), 1);
     assert!(matches!(parsed.notes[0], ParseNote::Summary { .. }));
 }
