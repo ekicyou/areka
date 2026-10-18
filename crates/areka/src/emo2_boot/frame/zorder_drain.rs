@@ -454,3 +454,7 @@ mod tests;
 #[cfg(test)]
 #[path = "zorder_drain_projection_tests.rs"]
 mod projection_tests;
+
+#[cfg(test)]
+#[path = "zorder_drain_written_order_tests.rs"]
+mod written_order_tests;

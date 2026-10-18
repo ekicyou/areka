@@ -17,7 +17,7 @@
   - 完了状態: `cargo test -p areka` が緑（赤のまま次のタスクへ渡さない）で、`true` の語を出す経路が本番のコードに残らず、補いを経路から外す変異と分類を 1 通り潰す変異のそれぞれで新しいテストが赤になる
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 3.4, 3.5, 4.2, 4.6, 4.7, 8.1_
 
-- [ ] 1.2 受理の行・起動の段・解除と読み直しの新しい振る舞いを固定する
+- [x] 1.2 受理の行・起動の段・解除と読み直しの新しい振る舞いを固定する
   - 新しい兄弟のテスト（受理の相の隣）で、逆転のタグの受理の行が `normalized=0:inverted,1:false+b1` になること、非隣接の行の語、descript の逆転が起動の時に同じ解釈を通ること、`\![reset,zorder]` と descript の読み直しで受け口の計画が組の並びへ戻ることを固定する
   - 既存の記録の名前と、`false`・`+bN` の綴りが変わっていないことを逐語で確かめる
   - 逆転のタグの受理と受け口への公開が同じ相の中で済む（タグへの応答として計画が出る）ことを確かめる
@@ -171,3 +171,8 @@
 - `| tail` は終了コードを隠す。緑の判定は終了コードで取る
 - 記録の語の照合は必ず冠（角括弧）込みで行う
 - 確定段の系の並び（確立 → 維持 → 鎖）と `wire_zorder_pair` は変えない
+
+## Implementation Notes
+
+- 1.1: 新しいワークツリーで `cargo test -p areka` を通しで回すと、統合テスト（`mcp_get_log_real_run`・`smoke_boot_loop_exit`）は i686 の部品が未ビルドだと赤になる。先に `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` と `cargo build -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` を通す（本 spec の欠陥ではない）
+- 1.1: 錨の名前が変わった: `t_zdr04_the_written_order_shape_is_surfaced_only_for_the_explicit_mode`・`t_zdb04_an_inverted_setting_is_seated_in_written_order_and_recorded`。新しい台帳の檻は `zorder_group_ledger_written_order_tests.rs`（t_zwo01〜12）
