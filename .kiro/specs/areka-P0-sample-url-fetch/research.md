@@ -161,3 +161,64 @@
 - **設計の段で決めるもの（カテゴリ B）**: 決めごと 2（窓口の SHA-256 の手段）・3（登記を 1 か所から読む道）・4 の ⒜／⒝（`target\` の下のどこに置くか）・5（`nar-sample-path` の新しい終了コードの値）・7（取り寄せの段の失敗の道の決定論テストと、その自分の検査を誰がいつ回すか）、6 章の調べ（取り寄せの道具・同時に回したときの取り合い）、8 章の書き替えが要るテスト。
 - 決めごと 2 の縛り: 要件 3.4（窓口が SHA-256 を確かめる）は変えない・依存を足さない（C9 の約束）＝案 イ（`windows` の `BCryptHash`）と案 エ（要件 3.4 を改める）は採らず、案 ア か 案 ウ から選ぶ。
 - 決めごと 4 の ⒞（ワークツリーをまたぐ置き場）は、開発者の絶対ルール（検体・一時フォルダはワークツリーの `target\` の下だけ）で採らない。
+
+## 10. 設計の段の調べと決めごと（2026-10-18・`/kiro-spec-design -y`）
+
+### 要約
+
+- **調べの種類**: 軽い調べ（既存の窓口の拡張）。新しい依存は無いので外の資料の調べは要らなかった。書庫（`pasta-in-windows.nar`）は取り寄せていない（最初のタスクで取り寄せて確かめる＝要件 5.7）。
+- 使ったスキルの決まり: `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`。領域のスキル（UI・アクセシビリティ）は当たらない。
+- **主な発見**:
+  - `Sample` を組む式は `SAMPLES` のほかに `lib_tests.rs` の固定入力 2 つ（`GHOST_WITH_BALLOON`・`GHOST_ALONE`）にも在る（§2.1 の「`SAMPLES` の中にしか無い」を補う）。欄を足すとこの 2 つも直す。
+  - 検体の見張り `sample_path_guard_test.rs` の走査から外れるのは `crates/sample-ghost-kit/src/` だけで、`crates/sample-ghost-kit/tests/` は見張られる。結合テストは名前空間の綴り（`nar-samples`）をコードに書けないので、置き場のパスは `--fetch-list` の出力から得る。
+  - `fresh_root`・`manual_root`・`cached_root` は `name: &str` を受け、書庫のパスだけを `nar_dir().join(...)` で組む。ここを「行から書庫のパスを決める 1 つの関数」に替えれば、呼び手（`lib.rs`・`devroot_cache_tests.rs`・`devroot_sweep_tests.rs`）は 1 文字も変えずに済む。並走の検査が使う `RACE_SAMPLE`（`emo2-kakukaku-wplimit`）は今の行なので、子の `CARGO_TARGET_DIR` を振っても影響が無い。
+  - 全部の行を引く判定 `every_registered_sample_lands_where_its_registry_row_says` は `expect` で落ちる（`Debug` が出る）。要件 6.1 の「3.5 の文で失敗」に合わせて `Display` を出す形へ替える。
+  - `tech.md` のフルテストの節は段を 1 つずつ書いている。全体テストへのつなぎのタスク（ゲート後）で、ここにも 2 つの段を足す。
+  - `curl.exe`（`%SystemRoot%\System32`）は `file://` を受けるので、取り寄せの段の自分の検査が本物の取り寄せの道（終了コード・一時のファイル・付け替え）を通信なしで通せる。`Invoke-WebRequest` は `file://` を受けない（§2.2 の実測）。
+
+### 決めごと
+
+#### 決めごと 2（窓口の SHA-256）→ 案 ア（標準ライブラリだけで手書き）
+
+- **選ばなかった案**: 案 ウ（窓口から `Get-FileHash`／`certutil` を子として起こす）。子のプロセスの失敗の扱いと遅さを窓口へ持ち込み、テストの決定論を外の道具に預ける。案 イ・案 エは §9 の縛りで採らない。
+- **形**: `src/sha256.rs` に `sha256_hex(&[u8]) -> String`（小文字 16 進）。判定は FIPS 180-4 の試験値 4 つ（`src/sha256_tests.rs`）。
+- **照合は取得のたびに行う**（刻印つきの原本が在っても省かない）。デバッグ版で 3 MB は 1 秒を下回る見込み（約 4.7 万の塊）。SHA-256 を足すタスクで実測を記録する。省く手当て（原本の刻印で照合を飛ばす）は、CRC-32 を SHA-256 の代わりにすることになるので採らない。
+
+#### 決めごと 3（登記を 1 か所から読む道）→ 案 ①（`nar-sample-path --fetch-list`）
+
+- 新しい実行体は作らず、今の `nar-sample-path` に呼び方を 1 つ足す（実行体を増やさない・`tools/encoding-check.ps1` の規則 D がこの呼び出しも見る）。
+- 出力は URL の行ごとに 1 行、タブ区切りで `<name>\t<size>\t<sha256>\t<url>\t<置き場の絶対パス>`。タブにするのは、パスに空白は在りうるが制御文字は在りえないため。名前・URL・SHA-256 に空白と制御文字が無いことは行の形の判定が保証する。検体の名前が `--` で始まらないことも同じ判定に入れる（呼び方の取り違えを防ぐ）。
+- 取り寄せの段は `Invoke-Utf8Child cargo @('run', '--quiet', '-p', 'sample-ghost-kit', '--bin', 'nar-sample-path', '--', '--fetch-list')` で聞く。`--locked`・`--offline` は付けない（全体テストのほかの `cargo` と同じ条件にする。依存が手元に在れば `cargo` は通信しない）。
+
+#### 決めごと 4（置き場の位置）→ ⒜ 窓口の名前空間の下 `<target>\nar-samples\fetched\<名前>.nar`
+
+- 置き場の位置を決める式は Rust の 1 か所（`fetched::fetched_path_in`）で、取り寄せの段は `--fetch-list` でそれを聞くので、`CARGO_TARGET_DIR` を設定した走行でも窓口と食い違わない（§4 の決めごと 4 の心配が起きない）。
+- `fetched\` は新しい棚。今の掃除（`sweep`＝`work\` だけ）と回収（`reclaim_stale`＝`cache\` だけ）はどちらも走査しない。窓口はこの棚に書かない。
+- ⒝（ワークスペースの根の `target` に固定）は、取り寄せの段が自分で綴れる利点が案 ① で要らなくなったので採らない。⒞ は §9 のとおり採らない。
+
+#### 決めごと 5（`nar-sample-path` の新しい終了コード）→ 3
+
+- URL の行の書庫が無い・合わない（`FetchedNarMissing`・`FetchedNarMismatch`）だけを 3 にし、ほかの失敗は今の 2 のまま。読み手（`tools/perf/` の 3 本・`tools/package.ps1`）は「0 以外なら止める」なので壊れない。
+
+#### 決めごと 7（取り寄せの段の失敗の道の決定論テストと、誰がいつ回すか）
+
+- 取り寄せの道具は `curl.exe`（`--fail --location --silent --show-error --connect-timeout 30 --speed-limit 1 --speed-time 60`）。`--speed-*` は止まった取り寄せの検出で、全体の時間の締切ではない（テストの待ちに締切を置かない決まりとは別の話＝通信の相手が止まったときに全体テストが永久に止まらないため）。`curl` の失敗の文は英語の ASCII で、`Invoke-WebRequest` の例外の文のように言語に左右されない。
+- `-SelfTest` は偽の行（`file:///` の URL）を本物の `curl.exe` に渡し、私有の場所 `<リポジトリ>\target\sample-fetch-selftest\<プロセス識別子>\` で 8 つの判定（取り寄せる・2 回目は通信しない・合わないものは捨てる・届かない・手で置いた正しい書庫・手で置いた違う書庫・数と終了コード・出力が ASCII）を通す。取り寄せの部品を差し替える仕掛けは作らない（本物の道を通せるので要らない）。
+- 誰がいつ回すか: 実装のタスクが回す。`impl-watch-test-desk` の着地を取り込んだ後は、全体テストの段 `sample fetch check`（赤でも止めない）が回す。取り寄せそのものは段 `sample fetch`（最初のテストの段より前・失敗で止まる）。
+
+#### 失敗の文の ASCII（要件 3.7・2.8）
+
+- 窓口の 2 種の表示は英語の ASCII で、パスとコマンドの文は ASCII の外の字を `\u{XXXX}` に写す（ASCII だけのパスはそのまま）。取り寄せの段も外から来る文を同じ考え方で写す（`encoding-check.ps1` の `Show-Ascii` と同じ）。
+
+### 合成（design-synthesis）
+
+- **一般化**: 「行から書庫のパスを決める」を 1 つの関数 `sample_nar` に寄せ、今の行と URL の行の違いをそこだけに閉じ込めた。後続の URL の行（`dot-sakura-specimen` など）は登記表に 1 行足すだけで同じ道を通る。今の 8 本を移す後続も、行の `source` を替えるだけで済む形。
+- **作るか採るか**: SHA-256 は手書き（依存を足さない約束のため・採る候補の `sha2` は約束に反する）。取り寄せは Windows 標準の `curl.exe`、ハッシュの確かめは `Get-FileHash`（どちらも採る）。子の出力の読み方は既存の `Invoke-Utf8Child` を採る。
+- **削ったもの**: 取り寄せの部品の差し替えの仕掛け（`curl.exe` が `file://` を受けるので要らない）・新しい実行体（`nar-sample-path` に呼び方を足す）・置き場の位置をスクリプトが綴ること（Rust が教える）・照合の省略の仕組み（毎回 SHA-256 で足りる）・`fresh_root` などの引数の形の変更（呼び手を書き替えない）。
+
+### 危うさと手当て
+
+- ぱすたの書庫を `areka-nar` が受け入れない → 最初のタスクで取り寄せて確かめ、受け入れなければ止めて報告する（要件 5.7）。
+- `install.txt` の `directory` が `pasta-in-windows` でない／同梱のバルーンを名乗る → 最初のタスクで読んで行を合わせる（要件 5.2）。
+- `impl-watch-test-desk` が `tools/test-all.ps1` の形を大きく変える → つなぎのタスクは取り込んだ後の形を読み直して置く。契約は「最初のテストの段より前・失敗で止まる・自分の検査の段を並べる」だけに絞った。
+- デバッグ版の SHA-256 が想定より遅い → タスクで実測する。遅ければ開発者へ報告して手当て（`[profile.dev.package.sample-ghost-kit]` の最適化など。依存は動かない）を決める。
