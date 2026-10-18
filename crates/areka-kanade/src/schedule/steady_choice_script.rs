@@ -5,9 +5,9 @@
 //! 出し、帳簿は `on_choice` が取り出し済みである。SHIORI への往復も翻訳の依頼も作らない。
 
 use super::super::choice::script_body;
-use super::super::{Action, ActiveTalk, Phase, State};
+use super::super::{Action, State, start_talk};
 use crate::msg::ChoiceInput;
-use crate::talk::{StartTalk, TalkId};
+use crate::talk::TalkId;
 
 /// `script:` の選択肢を受け付けた後の結末を決める。
 ///
@@ -57,26 +57,6 @@ pub(in crate::schedule) fn begin(
         "script: の後ろを新しいトークとして始める"
     );
     Some(action)
-}
-
-/// 台本 1 つを新しいトークとして始める（採番・枠の差し替え・再生開始の行動を返す）。
-///
-/// 選択肢の帳簿・`choice_prev_talk`・解決・記録は呼び手の仕事で、ここでは触らない。
-pub(in crate::schedule) fn start_talk(
-    state: &mut State,
-    origin: &'static str,
-    script: String,
-) -> (TalkId, Action) {
-    let talk_id = TalkId(state.next_talk_id);
-    state.next_talk_id += 1;
-    state.phase = Phase::Steady {
-        talk: Some(ActiveTalk {
-            talk_id,
-            origin,
-            script: script.clone(),
-        }),
-    };
-    (talk_id, Action::StartTalk(StartTalk::new(talk_id, script)))
 }
 
 #[cfg(test)]
