@@ -28,7 +28,7 @@
   - _Depends: 1.1_
   - _Requirements: 2.2, 2.4, 2.5, 2.6_
 
-- [ ] 3. 受け口と中継の既存のテストが期待を変えずに緑であることを確かめる
+- [x] 3. 受け口と中継の既存のテストが期待を変えずに緑であることを確かめる
   - `cargo test -p areka-mcp` と `cargo test -p areka-mcp-bridge` を通し、`tools_call_any_name_is_invalid_params`・`unknown_method_is_jsonrpc_error_from_rmcp`・`unknown_protocol_version_header_is_rejected` を含む既存のテストが 2 の 1 行のほかは期待を変えずに緑であることを確かめる
   - 完了の状態: 2 つのクレートのテストがすべて緑で、`git diff` の期待の変更が 2 の 1 行だけ
   - 確かめだけの段で、ファイルは変えない
