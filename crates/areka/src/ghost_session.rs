@@ -522,7 +522,6 @@ impl GhostSession {
     }
 
     /// ゴーストの名前を替える（実行系へ委ねる・要件 7.3）。実行系が無ければ偽。
-    #[allow(dead_code)] // 呼び手は 6.4（descript の読み直しの Names の段）で付く。
     pub(crate) fn set_names(&mut self, names: GhostNames) -> bool {
         match self.ghost.as_mut() {
             Some(runtime) => {

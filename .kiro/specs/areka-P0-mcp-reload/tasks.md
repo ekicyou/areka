@@ -126,7 +126,7 @@
   - `reload_tests.rs` で返事の各場合の記録と印の消え方、`Reached` で `SwitchInFlight` が立つことが固定される
   - _Depends: 2.2_
   - _Requirements: 2.4, 4.1, 9.1, 9.3_
-- [ ] 6.4 shell・balloon・descript の読み直しの列を作る
+- [x] 6.4 shell・balloon・descript の読み直しの列を作る
   - 対象から段の列（`[Shell]`・`[Balloon]`・`[Names, Shell, Balloon]`・語の集合から）を組み、今のフォルダから組んだ切替先で `accept_skin(raise: None)` を段ごとに直列に進める
   - Names の段は descript.txt を読み直して名前と readme の置き場を差し替え、読めなければ値を保って `reload_descript_read_failed` を残し列を続ける
   - `skin_is_reload` は自分の予約のときだけ真・`skin_applied` で次の段へ・`applied` 無しの相の終わりで `reload_failed(skin_failed)`、他人の予約なら `overtaken`
@@ -196,3 +196,5 @@
 - 6.1: 受理の後の `start()` は対象ごとの腕で、今は `error!(reload_failed, reason="not_implemented")` を残して印を置かない。6.2〜6.4 が自分の腕を差し替え、`ReloadInFlight` に `stage: ReloadStage` の欄を足す（テストの `plant_reload` と `accepted_leaves_one_started_record` も直す）。`ReloadOrigin::Mcp` の allow は 7.5 で外す。`drain` はまだ `AwaitingDestroy` を覗かない（6.3）。NoWords は `reload_descript_no_words` の 1 件だけで、`reload_refused` は出さない（要件 7.5）。
 - 6.2: 7.1 は `end_switch` の中で予約を下ろす前に `reload::on_switch_end` を呼ぶこと（鍵を照合するため）。6.3・6.4 で `ReloadStage` に変種を足すとき、`own_switch` の `let ReloadStage::Switching { reserved } = …` は `let … else { return None }` に直す。SwitchEnd の写しは WriteFailure・DefaultFault・Fatal → `fatal`、Steady{Default} → `fell_back_to_default`。
 - 6.3: shiori で kanade へ送れなかったときは（受理の後なので）`reload_started` の後に `reload_failed(kanade_gone)` を残す。design の ReloadDesk 節の「NoContext」の文言は完了のときに揃える。`ReloadInFlight`・`ReloadStage` は `ReplyReceiver` を持つので Debug を外した。
+- 6.4: `skin_is_reload(world, kind, dir)`・`skin_phase_ended(world, kind, dir)` は相の鍵を引数で受ける。`frame/switch.rs::run_switch_phase` が `SkinSwitchInFlight` を World から外してから `finish_*` を呼ぶため。7.4 は `finish_*` が受ける `&target` と、match の前に控えた `(flight.kind, flight.target.dir)` を渡す。`skin_applied(world)` は設計どおり。design.md 478–480・518・680 は完了のときに直す。3 つの関数の allow は 7.4 で外す。
+- 6.4: 自分の予約がゴースト切替の commit で取りやめになると、理由は `overtaken` でなく `skin_failed` になる（design は決めていない・実機で気になれば語を分ける）。

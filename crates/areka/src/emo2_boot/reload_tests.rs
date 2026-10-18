@@ -345,8 +345,9 @@ fn descript_words_warn_per_word_and_no_words_refuses() {
     );
 }
 
-/// 受理: `reload_started` が対象・出どころ・ゴースト名つきで 1 件。始め方の無い対象は印を置かずに
-/// `reload_failed`（not_implemented）を `TARGET_ERROR` で残す（要件 1.6・9.3）。
+/// 受理: `reload_started` が対象・出どころ・ゴースト名つきで 1 件。ここの置き場（結線も seriko の送り手も
+/// 無い）では descript の列のシェルの段が始められず、印を下ろして `reload_failed`（no_context）を
+/// `TARGET_ERROR` で残す（要件 1.6・9.3・列の本体は `reload_skin_tests.rs`）。
 #[test]
 fn accepted_leaves_one_started_record() {
     let mut rig = rig("areka-reload-started");
@@ -377,7 +378,11 @@ fn accepted_leaves_one_started_record() {
             named(&events, "reload_descript_unknown").len(),
             named(&events, "reload_failed")
                 .iter()
-                .map(|e| (e.level, e.target.clone()))
+                .map(|e| (
+                    e.level,
+                    e.target.clone(),
+                    e.field_str("reason").map(str::to_owned)
+                ))
                 .collect::<Vec<_>>(),
             rig.world.get_non_send::<ReloadInFlight>().is_none(),
         ),
@@ -389,7 +394,11 @@ fn accepted_leaves_one_started_record() {
                 Some(rig.ghost.clone())
             )],
             1,
-            vec![(Level::ERROR, TARGET_ERROR.to_owned())],
+            vec![(
+                Level::ERROR,
+                TARGET_ERROR.to_owned(),
+                Some("no_context".to_owned())
+            )],
             true,
         )
     );

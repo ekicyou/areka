@@ -6,13 +6,16 @@
 //! 断りはどれも `warn!(reload_refused)` を 1 件残す（終了の途中だけは `debug!`・返事は落とす）。
 //! 受理したら `info!(reload_started)` を残し、対象ごとの始め方へ渡す。
 
-use std::path::PathBuf;
+use std::collections::VecDeque;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use areka_actor::{ReplyReceiver, reply_channel};
 use areka_kanade::{
     BootOrigin, ChangeOrigin, GapRaise, KanadeMsg, ReloadScope, ShioriMethod, TalkGap,
 };
+use areka_parsers::charset::DefaultEncoding;
+use areka_parsers::package::resolve_with_shell;
 use bevy_ecs::prelude::Resource;
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
@@ -25,7 +28,10 @@ use super::ghost_switch::{
 };
 use super::reload_args::{DescriptNotes, ReloadTarget, ScriptReload};
 use super::reload_cue::ReloadRx;
-use super::shell_balloon_switch::SkinSwitchInFlight;
+use super::shell_balloon_resolve::SkinCandidate;
+use super::shell_balloon_switch::{
+    SkinKind, SkinSwitchInFlight, SkinVerdict, SwitchContext, accept_skin,
+};
 use crate::boot_config::BootContext;
 use crate::exit_wait::{self, WorkGate};
 use crate::ghost_session::GhostSlot;
@@ -93,13 +99,29 @@ pub(crate) struct ReloadInFlight {
     pub stage: ReloadStage,
 }
 
-/// 印の段（shell／balloon／descript の列＝6.4 が変種を足す）。
+/// 印の段。
 pub(crate) enum ReloadStage {
     /// shiori: 切れ目の印（`OnDestroy`）の返事を待っている（予約はまだ無い・下ろすのは [`drain`]）。
     AwaitingDestroy { gap: ReplyReceiver<TalkGap> },
     /// ghost／shiori: ゴースト切替の予約に乗っている（終わりは [`on_switch_end`] が告げる）。
     /// `reserved` は窓口自身が `accept_switch` で立てた予約の鍵（`SwitchTarget.dir`）。
     Switching { reserved: PathBuf },
+    /// shell／balloon／descript: 列を進めている。`reserved` は進行中の段で窓口自身が [`accept_skin`] で
+    /// 立てた予約の鍵（`SkinKind`＋`SkinCandidate.dir`）。`Names` の段と段の間は `None`。
+    Skins {
+        queue: VecDeque<SkinStep>,
+        applied: bool,
+        reserved: Option<(SkinKind, PathBuf)>,
+    },
+}
+
+/// shell／balloon／descript の列の段（この順に直列に進める）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SkinStep {
+    /// ゴーストの descript.txt の値（名前・readme の置き場）を替える（同期）。
+    Names,
+    Shell,
+    Balloon,
 }
 
 /// 終了の門（`register` が据える・無ければ終了の途中ではない）。
@@ -293,15 +315,24 @@ fn overlap_or_context(world: &World) -> Option<RefusedReason> {
     None
 }
 
-/// 対象ごとの始め方の継ぎ目（ghost・shiori＝ここ・shell／balloon／descript＝6.4 が埋め、始めたら
-/// 印 [`ReloadInFlight`] を置く）。まだ始め方の無い対象は、印を置かずに `reload_failed` を残して終える
-/// （黙って受理だけしない・要件 9.3）。
+/// 対象ごとの始め方の継ぎ目（始めたら印 [`ReloadInFlight`] を置く）。
 fn start(world: &mut World, target: ReloadTarget, origin: ReloadOrigin, ghost: String) {
     match &target {
         ReloadTarget::Ghost => start_switch(world, target, origin, ghost),
         ReloadTarget::Shiori => start_shiori(world, target, origin, ghost),
         ReloadTarget::Shell | ReloadTarget::Balloon | ReloadTarget::Descript(_) => {
-            failed(&ghost, &target, origin, "not_implemented")
+            let queue = skin_steps(&target);
+            world.insert_non_send(ReloadInFlight {
+                target,
+                origin,
+                ghost,
+                stage: ReloadStage::Skins {
+                    queue,
+                    applied: false,
+                    reserved: None,
+                },
+            });
+            advance_skins(world);
         }
     }
 }
@@ -466,6 +497,224 @@ pub(crate) fn wants_runtime_only(world: &World) -> bool {
     own_switch(world).is_some_and(|f| f.target == ReloadTarget::Shiori)
 }
 
+/// 対象から段の列を組む（Flow 4・要件 5.1・6.1・7.1・7.2）: `shell`（`reloadsurface` も）→ `[Shell]`、
+/// `balloon` → `[Balloon]`、`descript` → 語の集合から（`ghost` は `Names`＋`Shell`＝ゴーストの descript の
+/// 配置の値はシェルの差し替えの後始末が入れ直す・重なった段は 1 度）。
+fn skin_steps(target: &ReloadTarget) -> VecDeque<SkinStep> {
+    let (names, shell, balloon) = match target {
+        ReloadTarget::Shell => (false, true, false),
+        ReloadTarget::Balloon => (false, false, true),
+        ReloadTarget::Descript(parts) => (parts.ghost, parts.ghost || parts.shell, parts.balloon),
+        ReloadTarget::Ghost | ReloadTarget::Shiori => (false, false, false),
+    };
+    [
+        (names, SkinStep::Names),
+        (shell, SkinStep::Shell),
+        (balloon, SkinStep::Balloon),
+    ]
+    .into_iter()
+    .filter_map(|(on, step)| on.then_some(step))
+    .collect()
+}
+
+/// 列を進める: 先頭の段を取り、`Names` は同期で済ませて次へ、`Shell`／`Balloon` は今のフォルダから
+/// 組んだ切替先で `accept_skin(raise: None)` を呼んで予約の鍵を印に控えて戻る（終わりは差し替えの相の
+/// [`skin_phase_ended`] が告げる）。列が空なら `reload_done` を残して印を下ろす（要件 8.4）。始められ
+/// なければ `reload_failed` を残して印を下ろす（要件 9.3）。
+fn advance_skins(world: &mut World) {
+    loop {
+        let Some(step) = world
+            .get_non_send_mut::<ReloadInFlight>()
+            .and_then(|mut f| match &mut f.stage {
+                ReloadStage::Skins { queue, .. } => Some(queue.pop_front()),
+                _ => None,
+            })
+        else {
+            return;
+        };
+        let kind = match step {
+            None => {
+                if let Some(done) = world.remove_non_send::<ReloadInFlight>() {
+                    tracing::info!(
+                        event = "reload_done",
+                        target = ?done.target,
+                        origin = ?done.origin,
+                        ghost = %done.ghost,
+                        "読み直しが終わった"
+                    );
+                }
+                return;
+            }
+            Some(SkinStep::Names) => {
+                if !reload_names(world) {
+                    return end_skins(world, "names_failed");
+                }
+                continue;
+            }
+            Some(SkinStep::Shell) => SkinKind::Shell,
+            Some(SkinStep::Balloon) => SkinKind::Balloon,
+        };
+        // 段の間に通った他人の切替の予約を上書きしない（印は他人の切替に追い越された）。
+        if world.get_non_send::<SkinSwitchInFlight>().is_some()
+            || world.get_non_send::<SwitchInFlight>().is_some()
+        {
+            return end_skins(world, "overtaken");
+        }
+        let Some(ctx) = SwitchContext::read(world) else {
+            return end_skins(world, "no_context");
+        };
+        let Some(to) = current_skin(world, &ctx, kind) else {
+            return end_skins(world, "no_context");
+        };
+        let dir = to.dir.clone();
+        if accept_skin(world, &ctx, kind, to, None) != SkinVerdict::Accepted {
+            return end_skins(world, "kanade_gone");
+        }
+        if let Some(mut flight) = world.get_non_send_mut::<ReloadInFlight>()
+            && let ReloadStage::Skins {
+                applied, reserved, ..
+            } = &mut flight.stage
+        {
+            *applied = false;
+            *reserved = Some((kind, dir));
+        }
+        return;
+    }
+}
+
+/// 今のシェル（実行系のマウントの `shell.dir`）／今のバルーン（`BootContext.current.balloon.dir`）を
+/// 目録を引かずに切替先として組む（要件 5.1・6.1）。実行系が無くシェルが分からなければ `None`。
+fn current_skin(world: &World, ctx: &SwitchContext, kind: SkinKind) -> Option<SkinCandidate> {
+    let (dir, folder) = match kind {
+        SkinKind::Shell => {
+            let dir = world
+                .get_non_send::<GhostSlot>()
+                .and_then(|slot| slot.0.as_ref())
+                .and_then(|session| session.runtime())
+                .map(|runtime| runtime.mount().shell.dir.clone())?;
+            (dir, ctx.current_shell.clone()?)
+        }
+        SkinKind::Balloon => {
+            let folder = ctx.current_balloon.clone().unwrap_or_else(|| {
+                ctx.balloon_dir
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            });
+            (ctx.balloon_dir.clone(), folder)
+        }
+    };
+    Some(SkinCandidate {
+        dir,
+        folder,
+        name: None,
+        hidden: false,
+    })
+}
+
+/// `Names` の段（要件 7.3・7.6・design「descript の読み直しで替える値」）: ゴーストの descript.txt を
+/// 今のシェルの名前つきで読み直し、名前（`set_names`＝sylphya の静的構成も）と readme の置き場を替える。
+/// 読めなければ今の値を保って `reload_descript_read_failed` を残し、真を返して列を続ける。実行系が無く
+/// 名前を替えられなければ偽。sylphya への投函の barrier は待たない（読み手は次に問い合わせるとき見る）。
+fn reload_names(world: &mut World) -> bool {
+    let ghost = world
+        .get_non_send::<ReloadInFlight>()
+        .map(|f| f.ghost.clone())
+        .unwrap_or_default();
+    let Some((root, shell)) = world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .map(|s| (s.ghost_dir().to_path_buf(), s.current_shell_folder()))
+    else {
+        return false;
+    };
+    let model = match resolve_with_shell(&root, DefaultEncoding::Ansi, shell.as_deref()) {
+        Ok(model) => model,
+        Err(err) => {
+            tracing::error!(
+                target: TARGET_ERROR,
+                ghost = %ghost,
+                event = "reload_descript_read_failed",
+                file = %root.join("ghost").join("master").join("descript.txt").display(),
+                reason = ?err,
+                "ゴーストの descript.txt を読めなかった——今の名前と readme の置き場を保つ"
+            );
+            return true;
+        }
+    };
+    let replaced = world
+        .get_non_send_mut::<GhostSlot>()
+        .and_then(|mut slot| slot.0.as_mut().map(|s| s.set_names(model.names)))
+        .unwrap_or(false);
+    if replaced {
+        crate::readme::set_path(
+            world,
+            crate::readme::resolve_path(&root, model.readme.as_deref()),
+        );
+    }
+    replaced
+}
+
+/// 列の途中の失敗の終わり（印を下ろして `reload_failed` を 1 件）。
+fn end_skins(world: &mut World, reason: &str) {
+    if let Some(flight) = world.remove_non_send::<ReloadInFlight>() {
+        failed(&flight.ghost, &flight.target, flight.origin, reason);
+    }
+}
+
+/// 差し替えの相の分かれ目（呼び手 `frame/switch.rs` の `finish_shell`／`finish_balloon`）: 印が `Skins` で、
+/// 終えようとしている相の `kind`・`dir`（`SkinSwitchInFlight.target.dir`）が窓口の控えた予約の鍵と一致
+/// するときだけ真。印があっても他人の予約（利用者の `\![change,shell,…]` など）なら偽。相は印を
+/// World から外して進むので、鍵は呼び手が渡す。
+#[allow(dead_code)] // 呼び手は 7.4。
+pub(crate) fn skin_is_reload(world: &World, kind: SkinKind, dir: &Path) -> bool {
+    world.get_non_send::<ReloadInFlight>().is_some_and(|f| {
+        matches!(&f.stage, ReloadStage::Skins { reserved: Some((k, d)), .. } if *k == kind && d == dir)
+    })
+}
+
+/// 読み直しの差し替えが済んだ（[`skin_is_reload`] が真のときの `finish_*` から）。
+#[allow(dead_code)] // 呼び手は 7.4。
+pub(crate) fn skin_applied(world: &mut World) {
+    if let Some(mut flight) = world.get_non_send_mut::<ReloadInFlight>()
+        && let ReloadStage::Skins { applied, .. } = &mut flight.stage
+    {
+        *applied = true;
+    }
+}
+
+/// 差し替えの相が終わった（`run_switch_phase` が印を残さなかったとき・鍵は終えた相の `kind`・`dir`）。
+/// 印が `Skins` でなければ何もしない。窓口自身の予約で `applied` なら次の段へ、`applied` 無しなら
+/// `reload_failed(skin_failed)`（理由は相の既存の記録が残している）、他人の予約なら
+/// `reload_failed(overtaken)` で印を下ろす。
+#[allow(dead_code)] // 呼び手は 7.4。
+pub(crate) fn skin_phase_ended(world: &mut World, kind: SkinKind, dir: &Path) {
+    let Some(applied) = world
+        .get_non_send::<ReloadInFlight>()
+        .and_then(|f| match &f.stage {
+            ReloadStage::Skins { applied, .. } => Some(*applied),
+            _ => None,
+        })
+    else {
+        return;
+    };
+    match (skin_is_reload(world, kind, dir), applied) {
+        (false, _) => end_skins(world, "overtaken"),
+        (true, false) => end_skins(world, "skin_failed"),
+        (true, true) => {
+            if let Some(mut flight) = world.get_non_send_mut::<ReloadInFlight>()
+                && let ReloadStage::Skins {
+                    applied, reserved, ..
+                } = &mut flight.stage
+            {
+                *applied = false;
+                *reserved = None;
+            }
+            advance_skins(world);
+        }
+    }
+}
+
 /// 終了が始まった（`exit_wait::begin_close` が呼ぶ）: 印があれば `info!(reload_dropped, reason=exit)` を
 /// 残して下ろす。
 pub(crate) fn discard_for_exit(world: &mut World) {
@@ -511,3 +760,7 @@ fn ghost_name(world: &World) -> String {
 #[cfg(test)]
 #[path = "reload_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "reload_skin_tests.rs"]
+mod skin_tests;
