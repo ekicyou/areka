@@ -102,7 +102,7 @@
   - _Requirements: 7.4, 13.4, 13.5_
 
 - [ ] 5. 手順書とスキルの机の段
-- [ ] 5.1 (P) 手順書と `kiro-watch-clear` を 3 つの机へ書き直す
+- [x] 5.1 (P) 手順書と `kiro-watch-clear` を 3 つの机へ書き直す
   - 手順書の 1・3・4・5・6・7 節を設計の「手順書の中身」どおりに直し、判定の基準の小節（`/kiro-validate-impl` を単独で呼ぶときは机を取らないことを含む）と `loadtest`／`loaddone` の読み替えの表を足す
   - `kiro-watch-clear` の説明文の机の語と、`clear` の後に見える要約の行を新しい形へ直す（呼ぶコマンドは変えない）
   - 完了の状態: 手順書のコマンドの表と終了コードの 1 行が `--help` の出力と一致し、手順書とスキルに `loadtest`・`loaddone`・`load=` が読み替えの表のほかに残らない
@@ -146,3 +146,4 @@
 - 2.1（2026-10-18 開発者の裁定で解決）: 申し込みを待つ者の `merge` は `not applied: a desk request is waiting; merge after it is granted and returned`、マージを待つ者の `loadrunning` は `not applied: a merge request is waiting; record the running load after the merge desk is granted` で、どちらも参加より先に見て状態を変えずに断る（要件 2.8 の但し書きを改め、要件 5.7 を足した。マージの机の持ち主の `loadrunning` は 5.5 のとおり通る）。設計の不変の決まり「`test`・`sole` の持ち主と `requests` に居る識別はどのマージの待ち行列にも居ない」と合った。判断の核とテスト（`plan_desk_tests.rs`・`plan_stop_tests.rs`）は裁定の段で直した。入口の終了コード 3 は 3.4 で出す。
 - 2.4: 全探索は深さ 6（1,570 状態・全体の中で約 0.5 秒）。1 本の糸では 1.3 秒かかるため段ごとに `std::thread::scope` で並べる（結果は 1 本と同じ）。協力的な進め方の停止要請中の扱いと重複の除き方の文を design.md の Testing Strategy で実態に合わせて直した（振る舞いの変更なし）。
 - 3.3: `Opt::Desk` を足すと `cli_test_support.rs` の `sample` の照合が尽くさなくなるため、`cli.rs` の `mod test_support` を 3.4 まで外した。3.4 で `sample` に `Desk` を足し、`cli.rs` の 3 行を戻す。
+- 5.1: `--help` の `merge` の 1 行に `--wait` なしの断りの 3（not applied・4.7 と 2.8 の裁定）が載っていない（design の note の指定にも無い）。手順書は実際の動きどおり。6.1 でアプリの `--help` と design を直す。

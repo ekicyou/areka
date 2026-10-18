@@ -1,6 +1,6 @@
 ---
 name: kiro-watch-clear
-description: 'Clear the whole desk state of areka-impl-watch (participants, merge desks and queues, load-test desk and queue, stop requests, wait and watch records) in one go, then show the resulting status. Calls `areka-impl-watch.exe clear` and `status` from the folder named by the environment variable AREKA_IMPL_WATCH_HOME; the previous state is kept as a backup file. Use when: /kiro-watch-clear, 机の状況を全部消す, 机を最初からやり直す, impl-watch を clear. DO NOT USE FOR: removing one session (use `areka-impl-watch.exe leave --id <id>`), only looking at the state (use `status`), installing or updating the exe (use tools/impl-watch-install.ps1; doc/impl-watch.md 2-3).'
+description: 'Clear the whole desk state of areka-impl-watch (participants, merge desks and queues, exclusive-test desk, sole desk and desk requests, stop requests, wait and watch records) in one go, then show the resulting status. Calls `areka-impl-watch.exe clear` and `status` from the folder named by the environment variable AREKA_IMPL_WATCH_HOME; the previous state is kept as a backup file. Use when: /kiro-watch-clear, 机の状況を全部消す, 机を最初からやり直す, impl-watch を clear. DO NOT USE FOR: removing one session (use `areka-impl-watch.exe leave --id <id>`), only looking at the state (use `status`), installing or updating the exe (use tools/impl-watch-install.ps1; doc/impl-watch.md 2-3).'
 allowed-tools: Bash, Read
 argument-hint: ''
 ---
@@ -35,7 +35,7 @@ It does the four steps in order and stops at the first one that does not hold:
 1. **Environment variable empty** → prints `stop: no-home`. Nothing was called and nothing was cleared. Go to "Stopped without clearing".
 2. **Exe not in the home folder** → prints `stop: no-exe`. Nothing was called, nothing was cleared, no file was created. Go to "Stopped without clearing".
 3. **`clear`** → prints `cleared; backup: <path>` (or `cleared; backup: none` when there was no state file to back up).
-4. **`status`** (only after `clear` ended with 0) → prints the summary line `participants=0 load-holder=none load-queued=0 merging=0 merge-queued=0 not-working=0 waits=0`, the load desk line, and `status: <path of status.md>`.
+4. **`status`** (only after `clear` ended with 0) → prints the summary line `participants=0 sole=none test=none requests=0 merging=0 merge-queued=0 not-working=0 waits=0`, the implementation desk line `impl: riding=0 sole=none queue=none`, the exclusive-test desk line `test: holder=none queue=none`, and `status: <path of status.md>`.
 
 The last line `exit=<n>` is the exit code of the last command that ran.
 
