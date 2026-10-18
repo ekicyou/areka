@@ -220,3 +220,22 @@
 | 7 成功の本文 `OK` | `OK:reload requested. …since_id=N` | ❌ SSP の文にそろえる |
 | 8 大小を区別しない・空白は削らない | そのとおり | ✅ 一致 |
 | 9 descript の areka に無い語・知らない語は `warn!` | SSP は黙って捨てる | areka の「ログの無い失敗の禁止」で `warn!` を残す（SSP との差として記録） |
+
+## 11. 設計の段のディスカバリと統合（2026-10-18・design.md の根拠）
+
+- **ディスカバリの種類**: 既存システムの拡張（integration-focused・`design-discovery-light.md`）。外部の依存・新しいクレートは 0 なので Web の調査はしていない。コードの掃引（`SwitchRequest`／`SwitchInFlight` の構築点・descript の値の持ち主・`mcp::later`・`log_history::last_id`・終了の門・受け口の型・kanade の起動系列）は読み取り専用のサブエージェント 1 本に出し、要件 4 に関わるファイル（`ghost_session.rs`・`runtime.rs`・`emo2_boot/mod.rs`・`ghost_switch.rs`・`shell_balloon_switch.rs`・`frame/switch.rs`・kanade `boot.rs`・`change.rs`）は主文脈で全文を読んだ。参照したスキル: `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`。
+- **掃引で分かったこと（設計を変えた点）**:
+  - `SwitchInFlight` の構築点は本番 1（`request_ghost_switch_with`）・テスト 12 ファイル、`SwitchRequest` は本番 4・テスト 10 ファイル。欄を足す案（A2・C2）は 13.1 の外へ広がるので採らない（A1・C1 で確定）。
+  - 窓側で実行系の取っ手を抱える状態: `MouseWiring`・`MenuWiring`（kanade の送出端）・`UserBreakWiring`（kanade の送出端＋受信端）・`ChoiceForwarder`（dispatcher の送出端）・`PersistWiring`（sylphya の書き手）・`ReadmeWiring`／`ChangeRx`／`SwitchRx`（受信端）。`Emo2Wiring` が抱える受信端は表示・move・lifecycle・zorder の 4 本だけで、その送出端（`Sender`・`SerikoSink`・`EmoTextSink`・`TalkClock`）はどれも `Clone`。→ 実行系を組み直すとき、4 本は送出端の複製（`CueSinkSources`）で張り直し、ほかの線は受信端ごと新品にする（`UserBreakWiring` も新品＝`user_break.rs` に触らない）。
+  - `KanadeMsg::AwaitTalkGap` の印 `GapRaise` は NOTIFY でも使え（`Reached{marked: NoTalk}`）、許可表 `ALLOWED_EVENT_IDS` を通る。`OnDestroy` は表に無い＝`schedule/events.rs` に 1 行（13.1 の補正）。kanade に新しいメッセージを足さずに「切れ目で `OnDestroy(reload)` を送ってから `ChangeGhost(raise_event: false)` で unload する」順が組める。
+  - `frame.rs` の停止通知の振り分けは「`SwitchInFlight` が在れば `on_ghost_stopped`、無ければ終了」。shiori だけの読み直しも `SwitchInFlight` の予約に乗せれば `frame.rs` に触らずに済む（寿命・失敗時の既定への戻し・定常到達の記憶も既存のまま得られる）。
+  - `install/desk.rs` に「実行中か」を外から読む口が無い（欄は `pub(super)`）→ `is_busy` を足す（13.1 の補正）。`readme` の行き先は `ReadmeWiring.path`（私有）で受信端を抱えるので差し替えの口 `set_path` が要る（同）。窓のタイトルは wintf が窓を作るときに 1 度 `SetWindowTextW` するだけで、動作中に書き直す系が無い（`GhostTitles` の読み手は `spawn_ghost_windows` だけ）。
+  - `log_history::last_id()` は既にあり（`#[allow(dead_code)]`・本 spec が最初の呼び手）、`get_log` の `since_id` は「番号より大きい」で絞る。`mcp::later` は裁定 6 で不要。
+  - `switch_copy::start` は `plan_copy` が `AsIs` なら何もしない。今のゴーストのフォルダへの切替で写しになる条件は実装の段で確かめる（design の Risks）。
+- **統合（design-synthesis）**:
+  - 一般化: 5 対象の読み直しは「切替先＝今のもの・知らせと記憶を書かない切替」の特別な場合。だから新しい載せ替えの道は作らず、既存の 2 つの入口の**受理の後半**（`accept_switch`・`accept_skin`）を切り出して読み直しが直接呼ぶ形にした。印 `ReloadInFlight` 1 つで ghost／shiori／skin の 3 系統を持ち、終わりの合図は予約を下ろす 1 口（`end_switch`）と差し替えの相の末尾の 1 口に集めた。
+  - 採用／自作: すべて既存の部品（`request_ghost_switch` の道・`request_skin_switch` の道・`AwaitTalkGap`・`boot_with_origin`・`register_gate`・`TARGET_ERROR` の取り決め）。自作は純粋な振り分け（`reload_args`）と窓口だけ。
+  - 簡素化: `later` を使わない（裁定 6）。`UserBreakWiring` の送出端の差し替え口は作らず新品にする。descript は値だけの道（D2）を作らずシェル・バルーンの読み直しに乗せる（D1）。`SwitchInFlight`／`SkinSwitchInFlight` に欄を足さない。
+- **設計の判断（design.md「持ち越し項目への答え」の表が正本）**: A1＋A3 相当・B1（`BootOrigin::Reloaded { scope }`・`first_boot` 無視・epilogue は既存の腕）・C1・D1・E は不要・`ghost_switch.rs` は先に削る・まとめの失敗の記録は窓口・壊れた辞書の観測は実機で・roadmap の行は完了の片付け。
+- **要件 13.1 の補正（設計ディスカッションへ）**: `schedule/events.rs`（`OnDestroy` の許可 1 行）・`install/desk.rs`（`is_busy`）・`readme.rs`（`set_path`）・`areka-seriko/src/lib.rs`（定数の再輸出 1 行）。並走 spec の持ち物に触る箇所は 0。
+- **設計レビューの門**: 要件 ID 1.1〜13.5 の全部が設計の追跡表に載ることを機械で確かめた（欠けは 13.2 の 1 件で、行を分けて補った）。境界の 4 節・File Structure Plan・部品と ファイルの対応は埋まっている。真の要件の穴は見つからなかった（窓のタイトルの扱いと 13.1 の補正は設計ディスカッションの議題）。
