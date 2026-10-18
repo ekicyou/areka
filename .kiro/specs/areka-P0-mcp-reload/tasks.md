@@ -46,7 +46,7 @@
   - `install/desk_tests.rs` で 3 条件それぞれが真になり、どれも無ければ偽になる
   - _Boundary: InstallDesk_
   - _Requirements: 2.1_
-- [ ] 2.5 (P) readme の置き場を動作中に差し替える口を足す
+- [x] 2.5 (P) readme の置き場を動作中に差し替える口を足す
   - `readme::set_path` が `ReadmeWiring` の置き場だけを差し替える
   - 兄弟のテストで差し替えの後の readme の取り出しが新しい置き場を開く
   - _Boundary: Readme_
@@ -182,3 +182,4 @@
 
 ## Implementation Notes
 - 2.4: `install::desk::is_busy` に呼び手が来るまでの `#[allow(dead_code)]` を付けた。6.1 で呼び手を足すときに外す。
+- 2.5: `readme::set_path` にも 6.4 までの `#[allow(dead_code)]` を付けた。6.4 で外す。

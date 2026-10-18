@@ -69,6 +69,22 @@ pub(crate) fn wire_readme(world: &mut World, path: PathBuf, rx: Receiver<ReadmeR
     });
 }
 
+/// 説明書の置き場だけを動作中に差し替える（areka-P0-mcp-reload 要件 7.3・descript の読み直し）。
+///
+/// 持ち物を作り直さないのは、受信端の送出端が走っている dispatcher の中にあり作り直せないため。
+#[allow(dead_code)] // 呼び手は mcp-reload の task 6.4 で足す
+pub(crate) fn set_path(world: &mut World, path: PathBuf) {
+    let Some(mut wiring) = world.get_non_send_mut::<ReadmeWiring>() else {
+        tracing::warn!(
+            event = "readme_set_path_no_wiring",
+            path = %path.display(),
+            "[readme] ReadmeWiring absent: the readme path is not replaced"
+        );
+        return;
+    };
+    wiring.path = path;
+}
+
 /// 要求の取り出しを入力の段へ登録し、開く専用のスレッドの持ち物（[`opener::Opener`]）が
 /// 無ければ 1 度だけ起こして入れる（説明書の持ち物は置かない）。
 ///

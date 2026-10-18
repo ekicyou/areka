@@ -405,3 +405,49 @@ fn only_the_os_port_spells_shell_execute() {
         "綴るのは readme/os_port.rs だけ"
     );
 }
+
+// -------------------------------------------------------------------------
+// set_path（areka-P0-mcp-reload 要件 7.3・descript の読み直しで替える値）
+// -------------------------------------------------------------------------
+
+/// 置き場を差し替えた後の取り出しは、新しい置き場を開く処理へ渡す（受信端はそのまま使う）。
+#[test]
+fn set_path_makes_the_drain_open_the_new_readme() {
+    let dir = TempPath::new("readme-set-path");
+    let old = dir.child("readme.txt");
+    let new = dir.child("readme-new.txt");
+    std::fs::write(&old, "古い説明書").expect("一時ディレクトリへ書けるはず");
+    std::fs::write(&new, "新しい説明書").expect("一時ディレクトリへ書けるはず");
+    let mut world = World::new();
+    let tx = wired(&mut world, old);
+    let jobs = with_opener(&mut world, dir.path().to_path_buf());
+
+    set_path(&mut world, new.clone());
+    tx.send(ReadmeRequest::Readme)
+        .expect("差し替えの後も同じ受信端が生きている");
+    drain_readme_requests(&mut world);
+
+    let job = jobs.try_recv().expect("1 件渡す");
+    let abs = std::path::absolute(&new)
+        .expect("絶対パスにできる")
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(
+        job.destination.target,
+        Target::Path(abs),
+        "新しい置き場を開く"
+    );
+    assert!(jobs.try_recv().is_err(), "ちょうど 1 件");
+}
+
+/// 持ち物が無ければ差し替えずに `warn!` で記録する（無記録の失敗経路を作らない）。
+#[test]
+fn set_path_warns_without_wiring() {
+    let mut world = World::new();
+
+    let lines = capture(|| set_path(&mut world, PathBuf::from("readme.txt")));
+
+    let warned = lines_of(&lines, "readme_set_path_no_wiring");
+    assert_eq!(warned.len(), 1, "不在を 1 行記録する: {lines:?}");
+    assert!(warned[0].contains("level=WARN"), "不在は warn!: {warned:?}");
+}
