@@ -27,14 +27,12 @@
 //! 無い」の区別が事後に付かなくなる。よってすべての欄は必ず `field=value` の形で現れ、
 //! 値が無いときは [`UNKNOWN`] になる（既存ペア機構と同じ字面）。
 //!
-//! # `dead_code` 許可は `LinkRefusedReason` の 1 つだけ
+//! # `dead_code` 許可は 1 つも無い
 //!
 //! 適用系（[`zorder_chain_apply`](super::zorder_chain_apply)）の着地と、望む鎖へ区間の
 //! 帰属を載せる工事によって、本モジュールの全項目に本番の呼び手が付いた。段階的実装の
-//! ためにモジュール全体を覆っていた許可は撤去してある。
-//!
-//! 例外は `areka-P0-zorder-scope-inversion` が足した [`LinkRefusedReason`] で、作り手（鎖の
-//! 適用系）が同じ spec の後続の工事で付き、そのとき許可を外す。
+//! ためにモジュール全体を覆っていた許可は撤去してある。`areka-P0-zorder-scope-inversion` が
+//! 足した [`LinkRefusedReason`] も、外し損ねの巡の鎖の適用系が作る。
 //!
 //! # 組の受け渡しの 3 語
 //!
@@ -147,7 +145,6 @@ pub(crate) enum ChainSkipReason {
 }
 
 /// 付与を見送った理由（`link-refused` の `reason=` 欄・要件 7.1）。
-#[allow(dead_code)] // 作り手は鎖の適用系（同じ spec の後続の工事）
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum LinkRefusedReason {
     /// 張ると持ち主の輪になる（辿りの上限を超えた場合も含む）。

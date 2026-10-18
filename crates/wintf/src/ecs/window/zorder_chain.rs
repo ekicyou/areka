@@ -37,17 +37,14 @@
 //! よって語彙の保全（要件 9.5）は割れない。2 つの住処が実際に分かれていることは
 //! 兄弟テストが捕捉した行の出力先で固定している。
 //!
-//! # `dead_code` 許可は組の受け渡しの 2 項目だけ
+//! # `dead_code` 許可は 1 つも無い
 //!
 //! 適用系（[`zorder_chain_apply`](super::zorder_chain_apply)）が着地したことで、差分の
 //! 純判断・後押しの選定・記録の出口には本番の呼び手が付いた。段階的実装のために
-//! モジュール全体を覆っていた許可は撤去してある。
-//!
-//! 例外は `areka-P0-zorder-scope-inversion` が足した輪の確かめ（`check_owner_loop`）と
-//! その記録の出口（`log_chain_link_refused`）である。呼び手（外し損ねの巡の鎖の適用系）は
-//! 同じ spec の後続の工事で付き、そのとき項目ごとの許可を外す。組の外し・結び直しの
-//! 判定と操作列と記録の出口（`pair_released_by_chain`・`plan_pair_ops`・
-//! `log_chain_pair_released`・`log_chain_pair_restored`）には鎖の適用系の呼び手が付いた。
+//! モジュール全体を覆っていた許可は撤去してある。`areka-P0-zorder-scope-inversion` が
+//! 足した組の外し・結び直しの判定と操作列（`pair_released_by_chain`・`plan_pair_ops`）、
+//! 外し損ねの巡の輪の確かめ（`check_owner_loop`）、記録の出口（`log_chain_pair_released`・
+//! `log_chain_pair_restored`・`log_chain_link_refused`）にも鎖の適用系の呼び手が付いている。
 
 use bevy_ecs::prelude::*;
 use tracing::{debug, error};
@@ -356,7 +353,6 @@ pub(crate) enum OwnerLoopCheck {
 /// `owner` から持ち主を辿り、`owned` に出会えば `Loop`、持ち主の無い窓（null）に着けば
 /// `Clear`、読めなければ `Unreadable`。読むのは上限 [`OWNER_WALK_LIMIT`] 回までで、
 /// それで着かなければ `Loop`。
-#[allow(dead_code)] // 呼び手は鎖の適用系と組の系（同じ spec の後続の工事）
 pub(crate) fn check_owner_loop(
     owned: HWND,
     owner: HWND,
@@ -613,7 +609,6 @@ pub(crate) fn log_chain_pair_restored(
 }
 
 /// 持ち主の輪を作る付与を見送った事実を記録する（error・要件 7.1／7.2）。
-#[allow(dead_code)] // 呼び手は鎖の適用系と組の系（同じ spec の後続の工事）
 pub(crate) fn log_chain_link_refused(
     owned: Entity,
     owner: Entity,

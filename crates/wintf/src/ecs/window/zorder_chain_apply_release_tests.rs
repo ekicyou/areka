@@ -501,3 +501,151 @@ fn a_failed_restore_still_lets_the_chain_attach_and_nudge() {
     assert!(lines(&out, PAIR_RESTORED).is_empty(), "{out}");
     assert_eq!(lines(&out, SETTLED).len(), 1, "{out}");
 }
+
+// ===========================================================================
+// 外し損ねの巡だけの輪の確かめ（要件 7.1・7.2）
+// ===========================================================================
+
+const LINK_REFUSED: &str = "[zorder-chain] link-refused";
+
+fn reads(used: &Script) -> Vec<Call> {
+    used.calls
+        .iter()
+        .copied()
+        .filter(|c| matches!(c, Call::ReadOwner(_)))
+        .collect()
+}
+
+/// 逆転 `s0,b0,s1,b1`（組は 2 つとも外れ、帳簿に `s0 ← b0`）を解除する巡。
+/// `stuck` なら `s0 ← b0` の撤去を外せなくする。戻り値の末尾は `[b0, b1]`。
+fn reset_after_inversion(stuck: bool) -> (String, Script, World, [Entity; 2]) {
+    let mut world = World::new();
+    let s0 = world.spawn(handle(11)).id();
+    let s1 = world.spawn(handle(21)).id();
+    let mut balloons = [world.spawn_empty().id(), world.spawn_empty().id()];
+    balloons.sort();
+    let [b0, b1] = balloons;
+    world
+        .entity_mut(b0)
+        .insert((handle(10), KeepDirectlyAbove { peer: s0 }, PairReleased));
+    world
+        .entity_mut(b1)
+        .insert((handle(20), KeepDirectlyAbove { peer: s1 }, PairReleased));
+    world.entity_mut(s0).insert(CrossOwnerLink {
+        owner: b0,
+        owned_hwnd: h(11),
+        owner_hwnd: h(10),
+        segment: ChainSegment::Group(0),
+    });
+    publish(&mut world, None);
+    let mut script = Script::default();
+    script.owner_of.insert(11, 10);
+    if stuck {
+        script.clear_fails.insert(11);
+    }
+    let (out, used) = run_once(&mut world, script);
+    (out, used, world, balloons)
+}
+
+/// 正常な解除の巡では、確かめの読み取りが 1 回も入らない（読むのは撤去の照合だけ）。
+#[test]
+fn a_clean_reset_reads_no_owner_before_restoring() {
+    let (out, used, _, _) = reset_after_inversion(false);
+
+    assert_eq!(reads(&used), [Call::ReadOwner(11)], "{:?}", used.calls);
+    assert!(used.calls.contains(&Call::SetOwner(10, 11)));
+    assert!(lines(&out, LINK_REFUSED).is_empty(), "{out}");
+}
+
+/// 鎖の撤去が外せずに `s0 ← b0` が残った巡の解除: `b0 ← s0` は輪になるので張らずに
+/// `link-refused reason=Loop` を記録して印を外す。残りの組（`b1 ← s1`）は確かめて張る。
+#[test]
+fn a_stuck_detach_refuses_the_restore_that_would_loop() {
+    let (out, used, world, [b0, b1]) = reset_after_inversion(true);
+
+    assert_eq!(
+        reads(&used),
+        [
+            Call::ReadOwner(11),
+            Call::ReadOwner(11),
+            Call::ReadOwner(21)
+        ],
+        "{:?}",
+        used.calls
+    );
+    assert!(
+        !used.calls.contains(&Call::SetOwner(10, 11)),
+        "輪を張った: {:?}",
+        used.calls
+    );
+    assert!(used.calls.contains(&Call::SetOwner(20, 21)));
+    let refused = lines(&out, LINK_REFUSED);
+    assert_eq!(refused.len(), 1, "{out}");
+    assert!(refused[0].contains(&format!("owned={b0:?}")), "{out}");
+    assert!(refused[0].contains("reason=Loop"), "{out}");
+    assert!(world.get::<PairReleased>(b0).is_none(), "印が残った");
+    assert!(
+        world.get::<OwnerLink>(b0).is_none(),
+        "見送った組に帳簿が付いた"
+    );
+    assert!(world.get::<OwnerLink>(b1).is_some());
+}
+
+/// 鎖 `a,b,c,d`（繋ぎ `a ← b`・`b ← c`・`c ← d`）への組み替えで、帳簿の `a ← c` を外す巡。
+/// `diverged` なら `a` の今の持ち主を帳簿と食い違わせる。`c` の持ち主は読めない。
+fn relink_chain(diverged: bool) -> (String, Script) {
+    let mut world = World::new();
+    let [a, b, c, d] = [1, 2, 3, 4].map(|v| world.spawn(handle(v)).id());
+    world.entity_mut(a).insert(CrossOwnerLink {
+        owner: c,
+        owned_hwnd: h(1),
+        owner_hwnd: h(3),
+        segment: ChainSegment::Group(0),
+    });
+    publish(
+        &mut world,
+        chain(vec![a, b, c, d], vec![edge(a, b), edge(b, c), edge(c, d)]),
+    );
+    let mut script = Script::default();
+    script.owner_of.insert(1, if diverged { 99 } else { 3 });
+    script.read_fails.insert(3);
+    run_once(&mut world, script)
+}
+
+/// 正常な巡の鎖の付与には確かめの読み取りが入らない（読めない窓が在っても全部張る）。
+#[test]
+fn a_clean_round_attaches_without_owner_reads() {
+    let (out, used) = relink_chain(false);
+
+    assert_eq!(reads(&used), [Call::ReadOwner(1)], "{:?}", used.calls);
+    for set in [
+        Call::SetOwner(1, 2),
+        Call::SetOwner(2, 3),
+        Call::SetOwner(3, 4),
+    ] {
+        assert!(used.calls.contains(&set), "{set:?}: {:?}", used.calls);
+    }
+    assert!(lines(&out, LINK_REFUSED).is_empty(), "{out}");
+}
+
+/// 食い違いの巡は各付与の直前に確かめる。辿れない `b ← c` だけを `reason=Unreadable` で
+/// 見送り、残りは張る。
+#[test]
+fn a_diverged_round_checks_each_attach_and_refuses_the_unreadable_one() {
+    let (out, used) = relink_chain(true);
+
+    let checks = reads(&used);
+    for read in [Call::ReadOwner(2), Call::ReadOwner(3), Call::ReadOwner(4)] {
+        assert!(checks.contains(&read), "{read:?}: {:?}", used.calls);
+    }
+    assert!(used.calls.contains(&Call::SetOwner(1, 2)));
+    assert!(used.calls.contains(&Call::SetOwner(3, 4)));
+    assert!(
+        !used.calls.contains(&Call::SetOwner(2, 3)),
+        "辿れない付与を張った: {:?}",
+        used.calls
+    );
+    let refused = lines(&out, LINK_REFUSED);
+    assert_eq!(refused.len(), 1, "{out}");
+    assert!(refused[0].contains("reason=Unreadable"), "{out}");
+}
