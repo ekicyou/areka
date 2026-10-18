@@ -178,3 +178,45 @@
 
 - **要件へ入れた（自明な直し）**: 重なりの一覧にインストールの実行中（要件 2.1・12.1）・起動の引数で指したゴーストと一覧の外のバルーンも今のフォルダを直に指して読み直す（3.1・6.1）・シェル／バルーンの読み直しは記憶と選び方を書き換えない（5.3・6.3）・起動のときにだけ読む値は descript の一覧に入れない（7.3。`KanadeConfig.shell_name` は `OnBoot` の Ref0 にだけ使われ、起動のたびに組み直される＝3 節 5 の衝突は消えた）・触るファイルに `runtime.rs`・`ghost_session.rs`・seriko `actor.rs`・`frame/switch.rs` の兄弟のテストを足し、`emo2_boot/mod.rs` の結線を認めた（13.1・13.4）。
 - **設計の段で決める**: 「知らせなし」の持ち方（5 節 A1／A2・A3）・kanade の変種と `first_boot` の順と初回起動の記録の epilogue（B1・8 節 8）・シェル／バルーンの分かれ目（C1／C2）・descript の作り方（D1／D2・`descript,shell` が画像まで読み直してよいか）と窓のタイトル・`readme` の扱い・MCP の終わりの知らせ方と中止／既定へ戻ったときの答え（E1／E2）・`ghost_switch.rs` を先に削るか・まとめの失敗の記録（`TARGET_ERROR`＋`ghost`）・壊れた辞書を areka が観測できるか（7 節 8・要件 12.7 ⑶ の満たし方）・roadmap の C9 ④ の行の触るファイルの直し（完了の片付け）。
+
+## 10. SSP での実測（2026-10-18・開発者の許可のもと・SSP 2.9.18）
+
+測り方: 開発者の SSP（起動中の「窓際のぱすたさんDEBUG」＝pasta・`C:\home\maz\git\ghost_dev\project\pasta-in-windows\ghost\pasta-in-windows\`）へ MCP の `reload` と `sakurascript` を打ち、SSP が SHIORI へ送った要求の控え（ゴーストの `ghost\master\ssp_shiori_log.txt`・SSP が要求と応答を逐一書く）の、打つ前のバイト位置から後ろを読んだ。窓の位置（`currentghost.scope(0).rect` = `588,99,1696,1467`）は前後で変わらず、戻すものは無かった。エラーログ（`get_log` `log_type=error` `since_id=293`）は全部の試しの後も 0 件。
+
+### 10.1 MCP の `reload` の答え
+
+- **成功の本文（6 対象とも同じ・すぐ返る）**: `OK:reload requested. It runs asynchronously; errors while loading (dictionary errors etc.) will be recorded to the error log. Wait until get_status answers again, then check get_log tool (log_type=error, since_id=293)`。`since_id` は打った時点のエラーログの最後の番号（このとき #293）。**読み直しの終わりを待たずに返る**（要件の暫定の裁定 6「終わってから返す」と食い違う）。
+- `target` の照合: `Shell` は通る（**英字の大小を区別しない**）。` shell`（前に空白）・`aigraph`・空は `NG:Unknown target (ghost / shiori / shell / balloon / makoto / descript)`（**空白は削らない**）＝暫定の裁定 8 のとおり。
+- `makoto`: makoto を持たないゴーストでも上の `OK:reload requested…` が返る。
+- **MCP の `reload` の中身は、台本 `\![reload,<target>]` をそのゴーストへ送ること**: 要求の控えでは、どの対象でもまず `GET OnTranslate`（`Sender: MCP`・Reference0＝`\![reload,shiori]` など）が来て、その再生として読み直しが走る＝要件 1.1「台本の同じ綴りと同じ操作」と一致。
+
+### 10.2 対象ごとに SSP が SHIORI へ送ったもの（定期の `OnSecondChange`・着せ替えの `OnDressupChanged` などは除く）
+
+| 対象 | 降ろす側 | 起こす側・その後 | 台詞を求める GET（`OnBoot`・`OnClose`・`OnGhostChanged`・`OnShellChanged`・`OnBalloonChange` など） | 窓 |
+|---|---|---|---|---|
+| `ghost` | NOTIFY `OnDestroy`（Reference0 **空**）→ unload → DLL を外す | DLL を載せ直す → load → `GET Version` → `version` → NOTIFY `OnLanguageChange`・`OnInitialize`（Reference0 **空**）・`ownerghostname`・`basewareversion`・`capability`・`OnNotifyOSInfo`・…（ふつうの起動と同じ情報の通知の並び）→ GET `username`・`menu.*`・`sakura.recommendsites` ほか資源の問い合わせ → NOTIFY `uniqueid`・`hwnd`（**値が変わった＝窓を作り直した**） | **0 件** | 作り直し・位置は保つ |
+| `shiori` | NOTIFY `OnDestroy`（Reference0＝**`reload`**）→ unload → DLL を外す | 載せ直す → load → `OnInitialize`（Reference0＝**`reload`**）→ 同じ情報の通知の並び（資源の問い合わせの `menu.*` は無し）→ `hwnd` は**前と同じ値** | **0 件** | **閉じない** |
+| `shell` | — | GET `menu.*`（資源）→ NOTIFY `OnNotifySelfInfo`・`OnNotifyShellInfo`・`OnNotifyDressupInfo`・`installedshellname`・`otherghostname` | **0 件** | 閉じない |
+| `balloon` | — | NOTIFY `OnNotifySelfInfo`・`OnNotifyBalloonInfo` | **0 件** | 閉じない |
+| `descript` | — | NOTIFY `installedshellname`・`installedsakuraname`・`installedkeroname`・`installedghostname`・`installedballoonname`・`installedheadlinename`・`installedplugin`（**入っているもの全部の一覧を読み直した**） | **0 件** | 閉じない |
+
+- ukadoc（`list_shiori_event`）: `OnDestroy`＝「終了が指示された際に発生。[NOTIFY]」Reference0＝「リロード時にreload、それ以外は無し（空文字列またはReference0自体が来ない）」。`OnInitialize`＝「起動した際に発生。[NOTIFY]」Reference0 も同じ文。SSP は `shiori` の読み直しにだけ `reload` を付け、`ghost` の読み直しは空で送った。
+- areka の今: `OnDestroy` を一度も送らない（網羅台帳 `shiori.toml` の `OnDestroy:1` は `status = "absent"`・`owner` 空）。`OnInitialize` は References なし（kanade の `schedule/events.rs` の注釈「M1 にリロード概念なし」）。`OnNotifyShellInfo`・`OnNotifyBalloonInfo`・`OnNotifySelfInfo`・`installed*`・`menu.*` の資源の問い合わせも、起動時を含めて送っていない（本 spec の範囲外の既存の差）。
+
+### 10.3 台本の `\![reload,descript,パラメータ]`
+
+- `\![reload,descript,shell]` → `installedshellname` だけ。
+- `\![reload,descript,shell balloon headline nosuchword]` → `installedshellname`・`installedballoonname`・`installedheadlinename`。**知らない語は黙って捨てる**（エラーログ 0 件）。
+- `\![reload,descript,shell,balloon]`（カンマ区切り）→ `installedshellname` だけ＝**第 3 引数より後ろは見ない**。
+
+### 10.4 暫定の裁定との突き合わせ
+
+| 暫定の裁定 | 実測 | 判定 |
+|---|---|---|
+| 2 ghost の読み直しで起動の知らせを送らない | GET 0 件 | ✅ 一致。ただし `OnDestroy`（NOTIFY）は送られる |
+| 3 情報の通知は送る | ふつうの起動と同じ並び | ✅ 一致（areka が起動時に送るものを送る） |
+| 4 shell・balloon・shiori で SHIORI イベントを送らない | GET 0 件 | ✅ 一致（情報の NOTIFY は送られる・shiori は `OnDestroy`／`OnInitialize` に `reload`） |
+| 6 MCP の返事は終わってから | すぐ返る（`OK:reload requested…`） | ❌ 食い違い＝議題 |
+| 7 成功の本文 `OK` | `OK:reload requested. …since_id=N` | ❌ SSP の文にそろえる |
+| 8 大小を区別しない・空白は削らない | そのとおり | ✅ 一致 |
+| 9 descript の areka に無い語・知らない語は `warn!` | SSP は黙って捨てる | areka の「ログの無い失敗の禁止」で `warn!` を残す（SSP との差として記録） |
