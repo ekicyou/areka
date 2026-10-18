@@ -63,7 +63,7 @@
 - 置き場の位置（`fetched\` の名前・名前空間の決め方）が変わる → README の手で置く口・取り寄せの段・`--fetch-list` の出力を確かめ直す。
 - `nar-sample-path` の終了コードや出力の形が変わる → 読み手（`tools/perf/` の 3 本・`tools/package.ps1`・`release.yml`）を確かめ直す。今の読み手は「0 以外なら止める」なので、3 を足しても壊れない。
 - `--fetch-list` の列の並び・区切りが変わる → `tools/sample-fetch.ps1` を同時に直す。
-- `tools/test-all.ps1` の段の並びが変わる → 取り寄せの段が「テストより先・失敗で止まる」を保つかを確かめ直す。
+- `tools/test-all.ps1` の段の並びが変わる → 取り寄せの段が「`cargo test` の段より先・失敗したら `cargo test` の段を回さない」を保つかを確かめ直す。
 
 ## Architecture
 
@@ -196,7 +196,7 @@ sequenceDiagram
     Script-->>Dev: counts and exit code
 ```
 
-- 一時のファイルは置き場と同じフォルダの `<名前>.nar.part-<プロセス識別子>`（同じボリュームなので名前の付け替えは 1 回の `rename`）。`try`／`finally` で、成功の付け替え以外の道（失敗・Ctrl+C）ではかならず消す。行を始めるときに、前の走行の消し残し `<名前>.nar.part-*` を消してみる（開かれていて消せないものは触らない＝並走する走行の物）。
+- 一時のファイルは置き場と同じフォルダの `<名前>.nar.part-<プロセス識別子>`（同じボリュームなので名前の付け替えは 1 回の `rename`）。`try`／`finally` で、成功の付け替え以外の道（失敗・Ctrl+C）ではかならず消す。行を始めるときに、前の走行の消し残し `<名前>.nar.part-<pid>` のうち、`<pid>` のプロセスがもう生きていないものだけを消す（生きている走行の物は触らない）。行ごとの想定外の例外はその行の `failed` にし、最後の数の行はかならず出す。
 - 置き場に合わない書庫が在るときは、合わない旨（2.4 と同じ文の形）を出してから取り寄せ直す。取り寄せに成功すれば上書きされ、失敗すれば合わない書庫はそのまま残る（開発者の物を黙って消さない。窓口は 3.6 の文で使わない）。
 
 ## Requirements Traceability
@@ -239,7 +239,7 @@ sequenceDiagram
 | 5.6 | 同じ形の木 | LibTests・NarSamplePathTest | 全部の行の判定 3 本 | 窓口の流れ |
 | 5.7 | 受け入れなければ止める | Task 1 | 最初のタスクの止まる条件 | 実物の確かめ |
 | 6.1 | 取り寄せていなければ 3.5 の文で赤 | LibTests・NarSamplePathTest | 全部の行の判定が `Display` を出す | 窓口の流れ |
-| 6.2 | 全体テストが先に取り寄せる | TestAllHook | 段 `sample fetch`（失敗で止まる） | 取り寄せの段 |
+| 6.2 | 全体テストが先に取り寄せる | TestAllHook | 段 `sample fetch`（失敗したら `cargo test` の段を回さない） | 取り寄せの段 |
 | 6.3 | ゲートの後にだけ変える | TestAllHook | ゲート後のタスク | — |
 | 6.4 | README に先に回す手順 | Docs | README の節 | — |
 | 7.1 | URL の行で足す手順 | Docs | README の節 | — |
@@ -321,7 +321,8 @@ pub enum SampleError {
 }
 
 /// URL の行の書庫を置く場所（`<名前空間>\fetched\<name>.nar`）。`nar-sample-path --fetch-list` が使う。
-pub fn fetched_archive_path(sample: &Sample) -> Result<PathBuf, SampleError>;
+/// 今の行（Vendored）には置き場が無いので `Ok(None)`。名前空間が決まらなければ `Err`。
+pub fn fetched_archive_path(sample: &Sample) -> Result<Option<PathBuf>, SampleError>;
 ```
 
 - 2 つの失敗の表示（`Display`）は英語の ASCII。パスと取り寄せの段のコマンドは `fetched::ascii` で写す（ASCII の外の字は `\u{XXXX}`。ASCII だけのパスはそのまま）。
@@ -451,14 +452,15 @@ pub(crate) fn sha256_hex(bytes: &[u8]) -> String;
 **Contracts**: Batch [x]
 
 - 起動: `pwsh -NoProfile -File <リポジトリの絶対パス>\tools\sample-fetch.ps1`（引数なし）／`-SelfTest`。根は `$PSScriptRoot` の親で、どのディレクトリから呼んでも同じに動く（2.1）。`#Requires -Version 7`・`Set-StrictMode -Version 3.0`・`$ErrorActionPreference = 'Stop'`。
-- 入力: `Invoke-Utf8Child cargo @('run', '--quiet', '-p', 'sample-ghost-kit', '--bin', 'nar-sample-path', '--', '--fetch-list')` を根で起こし、行をタブで 5 つに割る（2.9）。終了コードが 0 でない・列が 5 つでない行が在る → その旨を出して終了コード 1（取り寄せに進まない）。
+- 入力: `Invoke-Utf8Child cargo @('run', '--quiet', '-p', 'sample-ghost-kit', '--bin', 'nar-sample-path', '--', '--fetch-list')` を根で起こし、行をタブで 5 つに割る（2.9）。終了コードが 0 でない・列が 5 つでない行が在る → その旨を出して終了コード 1（取り寄せに進まない）。URL が `https://` で始まらない行は、取り寄せずにその行を `failed`（`only https:// URLs are fetched`）にする（登記の行の形の判定と同じ決まりを、実行時にも守る。`-SelfTest` は `--fetch-list` を通さず `Sync-FetchedSample` へ直に偽の `file:///` の行を渡すので、この判定に当たらない）。
 - 1 行の処理 `Sync-FetchedSample`（結果は `present`／`fetched`／`failed` と、出す文の行）:
-  1. 前の走行の消し残し `<名前>.nar.part-*` を消してみる（消せないものは触らない）。
+  1. 前の走行の消し残し `<名前>.nar.part-<pid>` のうち、名前の `<pid>` のプロセスがもう生きていないものだけを消す（生きている走行の一時のファイルは触らない＝並走する取り寄せの段の付け替え前のファイルを消さない）。消せないものは触らない。
   2. 置き場に `<名前>.nar` が在れば大きさと SHA-256（`Get-FileHash -Algorithm SHA256` を小文字へ）を見る。合えば `present`（`curl.exe` を起こさない＝2.6・4.1）。合わなければ合わない旨を出して 3 へ（4.2・2.2）。
   3. `"$env:SystemRoot\System32\curl.exe"` を `Invoke-Utf8Child` で起こす: `--fail --location --silent --show-error --connect-timeout 30 --speed-limit 1 --speed-time 60 --output <一時のファイル> <URL>`。`--speed-*` は「60 秒のあいだ 1 バイト/秒を下回ったら止める」＝止まった取り寄せの検出で、全体の時間の締切ではない。
   4. 終了コードが 0 でない → 一時のファイルを消し、失敗の文（名前・URL・理由＝`curl` の終了コードと標準エラー・直し方＝回し直す／手で置く口のパスと README）で `failed`（2.5）。
   5. 一時のファイルの大きさと SHA-256 が合わない → 消して、失敗の文（名前・URL・登記と得た大きさ・登記と得た SHA-256）で `failed`（2.4）。
   6. 合う → `[System.IO.File]::Move(<一時>, <置き場>, $true)` で付け替えて `fetched`（2.3）。
+- 行ごとの想定外の例外: `Sync-FetchedSample` の呼び出しを行ごとに `try`／`catch` で包み、`Move`・`Get-FileHash`・削除などが投げた例外は、その行を `failed`（文は名前・URL・例外の文を ASCII に写したもの・直し方）にして次の行へ進む。最後の数の行は、行の例外の有無にかかわらずかならず出す（2.7）。
 - 出力: 行ごとに `sample-fetch: <name>: present|fetched|FAILED ...`、最後に `sample-fetch: fetched <n>, present <n>, failed <n>`。失敗が 1 つでも在れば終了コード 1、無ければ 0（2.7）。
 - ASCII（2.8）: 字句はすべて ASCII（`tools/encoding-check.ps1` の規則 A の対象）。外から来る文（パス・`curl` の標準エラー・例外の文）は `ConvertTo-AsciiText`（ASCII の外の字を `\uXXXX` に写す・`encoding-check.ps1` の `Show-Ascii` と同じ考え方）を通してから出す。
 - `cargo` の呼び出しは `Invoke-Utf8Child` を通すので、規則 D（`nar-sample-path` の素の呼び出し）に当たらない。端末の文字コードは読みも書きもしない（規則 C）。
@@ -489,7 +491,7 @@ pub(crate) fn sha256_hex(bytes: &[u8]) -> String;
 
 - **このタスクは `areka-P0-impl-watch-test-desk` が `main` へ squash マージされ、その `main` をこの枝へ取り込んだ後にだけ着手する**（6.3・C9 の約束）。それまで `tools/test-all.ps1` を 1 文字も変えない。着手のときは取り込んだ後の `test-all.ps1` を読み直し、その形に合わせて置く。
 - つなぎ方（契約）:
-  - 段 `sample fetch` = `pwsh -NoProfile -File tools/sample-fetch.ps1`。**最初のテストの段より前**に置く（作業の場所と `PATH` の手当ての後）。終了コードが 0 でなければ、`sample fetch failed (exit code <n>); tests were not run` を出して、ほかの段を回さずに終了コード 1 で終わる（6.2。今の「赤でも最後まで回す」の例外はこの段だけ）。
+  - 段 `sample fetch` = `pwsh -NoProfile -File tools/sample-fetch.ps1`。**`cargo test` を回す最初の段より前**に置く（取り込んだ後の `test-all.ps1` の段の名前で指す。今の形なら作業の場所と `PATH` の手当ての後・`x64 workspace tests` の前）。終了コードが 0 でなければ、`sample fetch` を FAIL として一覧に載せ、`cargo test` を回す段だけを `skipped (sample fetch failed)` として回さず（6.2＝テストへ進まない）、整形・文字コード・ライセンス・各 `-SelfTest` など通信も検体も要らない段は今の「赤でも最後まで回して一覧にする」作りのまま回す。全体の終了コードは 0 でない（FAIL が在るので今の作りどおり）。
   - 段 `sample fetch check` = `pwsh -NoProfile -File tools/sample-fetch.ps1 -SelfTest`。ほかの自分の検査の段（`release notes check` など）と並べ、赤でも止めない。
   - `.SYNOPSIS`／`.DESCRIPTION` の段の一覧に 2 つを足す。
 - 同じタスクで `tech.md` の「フルテスト」の節に 2 つの段を書き、「ネットへ出るテストは常時テストに入れない」の項に「通信するのはテストの前の段 `sample fetch` だけで、テストは通信しない」を足す。
@@ -554,7 +556,7 @@ pub(crate) fn sha256_hex(bytes: &[u8]) -> String;
 | 取り寄せの段 | 登記を聞けない | 終了コード 1 | `cargo` の終了コードと標準エラー（ASCII に写す） |
 | 取り寄せの段 | 取り寄せの失敗 | 行は `failed` | 名前・URL・理由・直し方 |
 | 取り寄せの段 | 取り寄せたものが合わない | 行は `failed` | 名前・URL・登記と得た大きさと SHA-256 |
-| 全体テストの入口 | 取り寄せの段が 1 | 終了コード 1 | `sample fetch failed ...; tests were not run` |
+| 全体テストの入口 | 取り寄せの段が 1 | `cargo test` の段だけ飛ばし、ほかの段は回す・全体は 0 でない | 一覧に `sample fetch` の FAIL と、飛ばした段の `skipped (sample fetch failed)` |
 
 ### Monitoring
 
@@ -598,7 +600,7 @@ pub(crate) fn sha256_hex(bytes: &[u8]) -> String;
 ## Security Considerations
 
 - 窓口が使うのは SHA-256 が登記と合ったバイト列だけ（取り寄せ先や途中の経路が書庫を差し替えても使われない）。
-- 取り寄せの段は登記の `https://` の URL だけを取る（行の形の判定が `https://` を求める）。`file:///` は `-SelfTest` の偽の行だけ。
+- 取り寄せの段は登記の `https://` の URL だけを取る（行の形の判定が `https://` を求め、取り寄せの段も `--fetch-list` から読んだ行で `https://` 以外を断る）。`file:///` は `-SelfTest` が `Sync-FetchedSample` へ直に渡す偽の行だけ。
 - 取り寄せた書庫は `target\` の下に置くだけで、展開は窓口の今の道（`areka-nar`）を通る。
 
 ## 実装の順（タスクの段への申し送り）
