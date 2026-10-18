@@ -32,6 +32,7 @@ const GHOST_WITH_BALLOON: Sample = Sample {
     name: "probe-window",
     kind: SampleKind::Ghost,
     balloons: &[PROBE_BALLOON],
+    source: SampleSource::Vendored,
 };
 
 /// 食い違いの検査で使う登記の行（同梱バルーンを持たないゴースト）。
@@ -39,6 +40,7 @@ const GHOST_ALONE: Sample = Sample {
     name: "probe-window",
     kind: SampleKind::Ghost,
     balloons: &[],
+    source: SampleSource::Vendored,
 };
 
 /// 固定入力の同梱バルーンの `directory`。
@@ -114,6 +116,21 @@ fn refused(
     };
     assert_eq!(sample, registry.name, "失敗に載る検体名");
     (shown, expected, installed)
+}
+
+/// 書庫をリポジトリに置く今の 8 行は、出どころを `Vendored` と登記する
+/// （spec `areka-P0-sample-url-fetch` 要件 1.1・1.4）。
+#[test]
+fn current_rows_are_registered_as_vendored() {
+    let names = |pick: fn(&Sample) -> bool| -> Vec<&str> {
+        SAMPLES.iter().filter(|s| pick(s)).map(|s| s.name).collect()
+    };
+    assert_eq!(
+        names(|s| s.source != SampleSource::Vendored),
+        Vec::<&str>::new(),
+        "今の行はどれも Vendored"
+    );
+    assert_eq!(names(|s| s.source == SampleSource::Vendored).len(), 8);
 }
 
 /// 登記した 8 つの検体は、登記の行から導いた位置に実在し、値を捨てると複製ごと消える

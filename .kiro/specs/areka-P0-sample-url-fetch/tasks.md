@@ -18,7 +18,7 @@
   - _Requirements: 3.4_
 
 - [ ] 3. 登記表の行の区別と、窓口の照合の道
-- [ ] 3.1 登記表の行に出どころの区別と、URL の行の失敗 2 種を足す
+- [x] 3.1 登記表の行に出どころの区別と、URL の行の失敗 2 種を足す
   - 行に「書庫をリポジトリに置く行／URL・SHA-256・大きさを持つ URL の行」の区別を足し、今の 8 行と単体テストの固定入力 2 つを「リポジトリに置く行」にする
   - URL の行の「置き場に無い」「登記と合わない」の 2 種の失敗を、design.md の欄（名前・パス・登記と得た大きさと SHA-256）で足す。表示の文の仕上げ（ASCII への写し・取り寄せの段のコマンド・直し方）は 3.2 で行う
   - 終わった状態: 登記の数は 8 のまま、`cargo test -p sample-ghost-kit` と `cargo build --workspace` が今と同じに緑（外のクレートは書き替えない）
@@ -108,3 +108,9 @@
   - `tech.md` のフルテストの節に 2 つの段を書き、「ネットへ出るテストは常時テストに入れない」の項に「通信するのはテストの前の段 `sample fetch` だけで、テストは通信しない」を足す
   - 終わった状態: `tools/test-all.ps1` の段の一覧で `sample fetch` が `cargo test` の段より前に在り、`sample fetch` が失敗した道では `cargo test` を回す段がすべて `skipped (sample fetch failed)` と載り、全体の終了コードが 0 でないことをコードで確かめ、`tools/encoding-check.ps1` が通る。全体テストの 1 回の走行は `/kiro-complete` が回す
   - _Requirements: 6.2, 6.3_
+
+## Implementation Notes
+
+- 実装の段の裁定 1（2026-10-18）: ghost_dev が非公開で raw の URL は未ログインで 404。ぱすたは GitHub Pages の公開 URL を登記し、ぱすたのリリースのたびに登記の大きさと SHA-256 を直す（3,042,433 バイト・`816d7183…`）。`/kiro-complete` の文書の手当てで `roadmap.md` の `pasta-in-windows-verification` の行と棚卸㉗の記録の「コミット `e1e0559` の固定の URL」も合わせる。
+- 2: `lib.rs` の `mod sha256;` の `#[cfg_attr(not(test), allow(dead_code))]` は、`fetched.rs` が使い始めたら外す（3.2）。
+- 3.1: `FetchedNarMismatch` の仮の `#[error]` 文に字下げの空白が入っている。3.2 で文を作り直すときに消す。`lib_tests.rs` の `current_rows_are_registered_as_vendored` の数 8 は、4 でぱすたを足しても Vendored は 8 のままなので、Fetched の行を許す形へ直す。

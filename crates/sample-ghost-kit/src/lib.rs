@@ -93,6 +93,24 @@ pub struct Sample {
     pub kind: SampleKind,
     /// 同時にインストールされるバルーンの `directory` 名。
     pub balloons: &'static [&'static str],
+    /// 書庫の出どころ。
+    pub source: SampleSource,
+}
+
+/// 検体の書庫の出どころ。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SampleSource {
+    /// 書庫をリポジトリの `vendors/sample_ghost/<name>.nar` に置く行（今の行）。
+    Vendored,
+    /// 書庫を取り寄せの段が取り寄せる行（URL の行）。
+    Fetched {
+        /// 取り寄せる URL（`https://`・ログインなしに取れるもの）。中身が差し替わったら登記の大きさと SHA-256 を直す。
+        url: &'static str,
+        /// 書庫の SHA-256（小文字 16 進 64 桁）。
+        sha256: &'static str,
+        /// 書庫の大きさ（バイト）。
+        size: u64,
+    },
 }
 
 /// 検体の登記表。**検体を足す作業はここに 1 行**（要件 1.5）。
@@ -101,42 +119,50 @@ pub const SAMPLES: &[Sample] = &[
         name: "emo2",
         kind: SampleKind::Ghost,
         balloons: &["emo2-kakukaku"],
+        source: SampleSource::Vendored,
     },
     Sample {
         name: "R_POST_and_KOMAINU",
         kind: SampleKind::Ghost,
         balloons: &[],
+        source: SampleSource::Vendored,
     },
     Sample {
         name: "emo2-kakukaku-offsetdpi",
         kind: SampleKind::Balloon,
         balloons: &[],
+        source: SampleSource::Vendored,
     },
     Sample {
         name: "emo2-kakukaku-wplimit",
         kind: SampleKind::Balloon,
         balloons: &[],
+        source: SampleSource::Vendored,
     },
     Sample {
         name: "konnoyayame",
         kind: SampleKind::Ghost,
         balloons: &[],
+        source: SampleSource::Vendored,
     },
     Sample {
         name: "StayseeBalloon",
         kind: SampleKind::Balloon,
         balloons: &[],
+        source: SampleSource::Vendored,
     },
     Sample {
         name: "claudia",
         kind: SampleKind::Ghost,
         balloons: &["claudia", "claudia_vertical"],
+        source: SampleSource::Vendored,
     },
     // 同梱を名乗るが取り出し元が書庫に無い。`areka-nar` が飛ばすので同梱は 0。
     Sample {
         name: "emily4",
         kind: SampleKind::Ghost,
         balloons: &[],
+        source: SampleSource::Vendored,
     },
 ];
 
@@ -534,6 +560,32 @@ pub enum SampleError {
         /// 元の失敗。
         #[source]
         source: std::io::Error,
+    },
+    /// URL の行の書庫が置き場に無い（spec `areka-P0-sample-url-fetch` 要件 3.5）。
+    #[error("fetched sample {sample:?} archive not found at {path:?}")]
+    FetchedNarMissing {
+        /// 検体名。
+        sample: &'static str,
+        /// 探した置き場のパス。
+        path: PathBuf,
+    },
+    /// URL の行の書庫が登記と合わない（spec `areka-P0-sample-url-fetch` 要件 3.6）。
+    #[error(
+        "fetched sample {sample:?} archive at {path:?} does not match the registry:          size {actual_size} (expected {expected_size}),          sha256 {actual_sha256} (expected {expected_sha256})"
+    )]
+    FetchedNarMismatch {
+        /// 検体名。
+        sample: &'static str,
+        /// 置き場のパス。
+        path: PathBuf,
+        /// 登記の大きさ（バイト）。
+        expected_size: u64,
+        /// 得た大きさ（バイト）。
+        actual_size: u64,
+        /// 登記の SHA-256。
+        expected_sha256: &'static str,
+        /// 得た SHA-256。
+        actual_sha256: String,
     },
 }
 
