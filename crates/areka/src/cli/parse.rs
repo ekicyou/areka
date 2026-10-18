@@ -122,6 +122,8 @@ pub(crate) enum ParseNote {
     /// 扱わない名前（1.6）。warn
     Unsupported { name: String },
     /// 値を取る名前の値が無く、意味も定まっていない（1.8）。warn
+    // 今の表には値なしの意味が定まっていない名前が無いので作られない（設計は 1.8 の口として残す）。
+    #[allow(dead_code)]
     MissingValue { name: String },
     /// `--option`・`--ghost` 以外の重ね（1.11）。warn
     Repeated { name: String },

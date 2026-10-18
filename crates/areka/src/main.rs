@@ -159,6 +159,19 @@ fn main() -> Result<()> {
     // try_from_default_env() が Err を返し "info" へフォールバックする（panic 経路なし）。
     log_history::init();
 
+    // 起動オプションを 1 度だけ読む（記録はここで出る）。`--help` は起動の解決・書けるかの確かめ・
+    // MCP・アプリの窓のどれよりも前に説明書を開いて戻る（開けなければ 0 でない終了・要件 9.1〜9.3）。
+    let opts = cli::read();
+    if opts.help {
+        return cli::help::run();
+    }
+    if opts.modules == cli::ModulePolicy::Skip {
+        tracing::info!(
+            event = "shiori_skipped",
+            "[main] --option dontloadmodule により、SHIORI を読まずに起動する"
+        );
+    }
+
     // アクタースレッドの役割宣言フックを導入する（draw-load-parity 要件 2.3）。
     // 以後 `spawn_actor` で起きるスレッド（ticker／loop-ticker／各アクター）は走り始めに
     // 自分の役割名を宣言して wintf のスレッド名簿へ載る。**すべての結線より前**に置くのは、
@@ -177,7 +190,7 @@ fn main() -> Result<()> {
     // 4 つ目は起動中の印の値＝前回きれいに終わらなかったゴーストの名前（読むだけで消さない）。
     // 初回の起動の由来になる（要件 12.4）。
     let (cfg, ghost_decision, balloon_decision, halted, resolved_roots) =
-        match resolve_boot(&cli::read().boot) {
+        match resolve_boot(&opts.boot) {
             Ok(resolved) => resolved,
             Err(scene) => {
                 alert::raise(&scene, alert::suppressed());
@@ -193,13 +206,14 @@ fn main() -> Result<()> {
     // MCP の待受（areka-P0-mcp-server-core 設計判断 B-3）。畳むのは取っ手の `Drop` で、`down?` の
     // 早い戻りを含む `main` のどの出口でも閉じる。`app` より先に宣言する＝`app` の後に落ちる。
     // 待受の失敗は `error!` に残すだけで終了コードには響かない（`start` は `Result` を返さない）。
+    // 待受の候補は `--sstp-listen` の指定で決まる（無ければ今どおり・要件 8.1・8.8）。
     // SSP と同じ 10 本＋独自のツールの登録表と受け口（受け口は `register_systems` の後で World へ置く・
     // mcp-tool-entrances・mcp-author-tools）。
     // 3 つ目は help の Claude Desktop の設定例に載せる中継の置き場＝起動した exe の本当の場所の隣
     // （補助 exe と同じ決まり。場所が取れなければ「なし」・areka-P0-mcp-stdio-bridge 設計判断 D-14）。
     let (mcp_tools, mcp_inbox) = areka_mcp::tools::all_entrances(areka_mcp::tools::REPLY_WAIT);
-    let _mcp = areka_mcp::start(
-        &areka_mcp::read_port_candidates(),
+    let _mcp = cli::listen::start_mcp(
+        &opts.listen,
         mcp_tools,
         boot_config::exe_location().map(|exe| exe.with_file_name(areka_mcp::BRIDGE_EXE_FILE_NAME)),
     );
@@ -239,7 +253,7 @@ fn main() -> Result<()> {
             },
         },
         kanade_stop_tx.clone(),
-        cli::ModulePolicy::Load, // 起動オプションの指定は 6.1 で渡す
+        opts.modules,
     );
 
     // tick の門の既定を起動時に一度だけ上書きする（`AREKA_TICK_GATE=1|0`・A/B と安全弁）。

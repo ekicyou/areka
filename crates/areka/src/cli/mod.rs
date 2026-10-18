@@ -2,8 +2,6 @@
 //!
 //! 引数の列を読む口と、読んだ中身の型。読んだ値は `main` が起動の解決・MCP の待受・
 //! SHIORI の結線へ渡す。
-// 6.1 で `main` へ結線するまで使われない型と口がある。6.1 で外す。
-#![allow(dead_code)]
 
 pub(crate) mod help;
 pub(crate) mod listen;
