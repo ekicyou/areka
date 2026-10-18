@@ -32,6 +32,7 @@ areka のリリース 1 回分の手順。段・コマンド・判定・表は�
 - **マージの後にタグを打てなくなったとき**（段 5 の判定が外れた・許可の判定に断られた）: main の版は上がったまま待つ。後で再開すれば、同じ squash のコミットにタグを打てる。
 - **`git` の失敗**: 標準エラーを捨てているので、終了コードが 0 でないときは、事実の読み直し（`ls-remote`・`gh pr view`）で何が起きたかを確かめてから報告する。接続先を出して調べることはしない。
 - **許可の判定に断られたとき**: 言い換えず、別の道具へ回さない。そのコマンドと断られた理由を示して止まる。
+- **机の待ちは止まりに数えない**: 「机の段」の排他テストの机の番待ちと、停止要請の後の再開待ちは止まりではない。開発者に承認を求めず、1 行だけ伝えて、待ちが終わればそのまま続ける。机が使えないときも止まらず、机の段を飛ばして続ける。
 
 ## 段 1: 前提を確かめる
 
@@ -98,14 +99,123 @@ areka のリリース 1 回分の手順。段・コマンド・判定・表は�
 - その場で `pwsh -NoProfile -File tools/release-notes.ps1 -Check -Version {版}` を回し、欠けが出たら直してから段 3 へ進む（3.1 の全体テストも同じファイルの形を見るので、欠けたまま進むと、長い全体テストが終わりの近くで赤になる）。
 - 判定: `doc/release-notes/v{版}.md` が在り、その場の `-Check` が終了コード 0。PR を出す前の判定は 3.5 が持つ。
 
+## 机の段
+
+段 3 の全体テスト（3.1）と起動の確かめ（3.3）、4.2 の 4 の回し直しは、ほかのセッションの全体テスト・UI テストと重ならないよう、走行の間だけ `areka-impl-watch.exe` の**排他テストの机**を持って回す。机の決まり・判定の基準・コマンドの正本は手順書 `doc/impl-watch.md` で、この節は `release` からの呼び方だけを持つ（`kiro-impl` のスキルは読まない）。
+
+- **マージの机は取らない。** `release` は roadmap も台帳も触らず、main が動いたときの取り込みと確かめ直し（4.2）を手順の中にすでに持つ。`merge`・`merged` は呼ばない。
+- **机は助けである。** 机が使えないとき（下の `desk: skip …`・直らない失敗）は、その回は机の段を飛ばして手順を続け、訳を段 7 の報告に書く。机のせいでリリースを止めない。
+- **机の待ちは止まりではない。** 番待ちと再開待ちの間は 1 行（`排他テストの机の番待ち`・`止まった（停止要請: <識別>）`）だけ伝え、開発者に承認を求めない（「止まり方の決まり」）。待ちのコマンドが終わればそのまま続ける。
+- 見回り・時間を決めた繰り返し・定期の `status` はしない。`clear` は呼ばない。ほかのセッションの見張りや待ちのプロセスを止めない。`AREKA_IMPL_WATCH_HOME` を書き替えない（`/c/…` への読み替え・`cd`・先頭への `AREKA_IMPL_WATCH_HOME=…` もしない）。
+
+### 前置き（段 3 に入る前に 1 回）
+
+次の 1 回の Bash（前景）で、識別とリポジトリを求める。4.2 の 4 から始める再開（「再開のときの事実の読み方」）や、値を覚えていないときも、使う前に同じものを 1 回回す（同じ値が出る）。
+
+```bash
+ID=$(basename "$(git rev-parse --show-toplevel)"); R=$(basename "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")")
+if [ -z "$AREKA_IMPL_WATCH_HOME" ]; then echo "desk: skip no-home"
+elif [ ! -f "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" ]; then echo "desk: skip no-exe"
+elif ! [[ "$ID" =~ ^[A-Za-z0-9._-]{1,100}$ && "$R" =~ ^[A-Za-z0-9._-]{1,100}$ ]]; then echo "desk: skip bad-name $ID $R"
+else echo "desk: id=$ID repo=$R"; fi
+```
+
+- `desk: id=<ID> repo=<R>`: 2 つの値を覚え、以後のコマンドへ字のまま書く（Bash の変数は次の呼び出しに残らない）。
+- `desk: skip no-home|no-exe|bad-name`: 別の値をこしらえず、その回は机のコマンドを 1 つも呼ばない。次の 1 行を伝え、段 7 の報告にも書く。
+  - `no-home`: `机の段を飛ばしました（環境変数 AREKA_IMPL_WATCH_HOME が空）`
+  - `no-exe`: `机の段を飛ばしました（置き場所に areka-impl-watch.exe が無い）。置くには: <置き方のコマンド>`。置き方のコマンドは `pwsh -NoProfile -File <本体の作業コピー>\tools\impl-watch-install.ps1` で、`<本体の作業コピー>` は本体の作業コピーの絶対パス（`git rev-parse --path-format=absolute --git-common-dir` の親を `C:\…` の形にした物）。手順の側からは回さない。
+  - `bad-name`: `机の段を飛ばしました（作業木かリポジトリの名前が識別の形に合わない: <ID> <R>）`
+
+### 呼ぶ形
+
+どのコマンドも次の形で呼び、最後の `exit=<n>` とその前の 1〜2 行だけを読む（`2>&1` で標準エラーの 1 行も同じ出力に入る）。
+
+```bash
+"$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" <コマンド> <引数> 2>&1; echo "exit=$?"
+```
+
+- バックグラウンド（Bash の `run_in_background`）: `watch`・`request --wait`・`stopped --wait`・`resume`。立てたら、その種類と走りの番号を覚える（自分の待ち）。
+- 前景: `return`・`leave`・`cancel`。`status` は訳を調べるときだけ。
+- `release` が呼ぶコマンド（`{版}` は置き換える）:
+  ```bash
+  "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" watch --id <ID> --repo <R> --name release-v{版} 2>&1; echo "exit=$?"
+  "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" request --id <ID> --repo <R> --desk test --purpose "release {版} 3.1" --wait 2>&1; echo "exit=$?"
+  "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" request --id <ID> --repo <R> --desk test --purpose "release {版} 3.3" --wait 2>&1; echo "exit=$?"
+  "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" return --id <ID> 2>&1; echo "exit=$?"
+  "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" leave --id <ID> 2>&1; echo "exit=$?"
+  "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" stopped --id <ID> --wait 2>&1; echo "exit=$?"
+  "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" resume --id <ID> 2>&1; echo "exit=$?"
+  "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" cancel --id <ID> 2>&1; echo "exit=$?"
+  ```
+  番は `granted test` で来る。`return` は名指しなしで、持っている机を全部返す（`returned <机>`）。
+
+### 流れ
+
+1. **参加**: 3.1 の前に `watch` をバックグラウンドで立てる。
+2. **3.1**: `cargo metadata` の確かめは机なしで回す。全体テストの前に `request … --purpose "release {版} 3.1" --wait` をバックグラウンドで回し、`排他テストの机の番待ち` を 1 行伝える。`granted test` で終わってから全体テストを回し、終わりの知らせを受けたら（成否によらず）、判定より先に `return` を前景で回す。
+3. **3.2**: 机を持たずに読む。
+4. **3.3**: 起動の確かめの前に `request … --purpose "release {版} 3.3" --wait`、`granted test` で終わってから回し、終わりの知らせを受けたら（成否によらず）、判定より先に `return`。
+5. **参加を終える**: 3.3 の `return` の後に `leave` を前景で回す。3.4・3.5 は机を持たず、参加者でもない。
+6. **4.2 の回し直し**: 4 で 3.1 を回し直すときは、そのときにまた `watch` → `request … --purpose "release {版} 3.1" --wait` → 番が来てから全体テスト → `return` → `leave`。
+- **途中で止まるとき**（段 3 の欠け・4.2 の止まり・「この文書に無い状態」など、手順のどこで止まっても）: 机を持っていれば `return`、参加していれば `leave` を回してから止まる。机の申し込みや待ちを残したまま報告しない。
+- 机を持つのは走行の間だけ。赤の後の調べ・直しの相談の間は持たない（この手順は回し直しを自分で決めない）。
+
+### 停止要請
+
+見張りが `exit=0` `stop requested by <X>` で終わったら、ほかのセッションの負荷テストのための停止要請である。
+
+- 走っている確かめ（机を持つ走行なら、その終わりの知らせと `return` まで、机の要らない項目ならその項目の判定まで）を終えた切れ目で、次の項目に入らずに `stopped --id <ID> --wait` をバックグラウンドで回し、1 行 `止まった（停止要請: <X>）` を伝える。走っているテストを途中で止めない。
+- 番待ちの間に受けたら（何も走っていない）、そこが切れ目である。申し込みの待ちは残したまま、直ちに `stopped --wait` を回す（止まった者には番が来ず、再開と同じ呼び出しで来る）。
+- 再開の待ちが `resumed` で終わったら、`watch` を立て直してから次の項目へ進む。開発者の入力は待たない。
+
+### 終わり方の扱い
+
+| 終わったもの | 出力 | すること |
+|---|---|---|
+| `watch` | `exit=0`、`stop requested by <X>` | 上の「停止要請」 |
+| `watch` | `exit=0`、`already stopped; …` | 「止まった」を記録し直さず、`resume` をバックグラウンドで回す |
+| `watch` | `exit=1`、`AREKA_IMPL_WATCH_HOME …` | その回の机の段をやめて続ける。標準エラーの 1 行をそのまま伝え、段 7 に書く |
+| `watch` | `exit=1`、`a watch wait for <ID> is already running` | 自分の見張りが走っていれば何もしない。覚えが無ければ前のセッションの残りなので、下の「残りの見張りの外し方」をバックグラウンドで回し、1 行伝える |
+| `watch` | `exit=1`、ほかの文 | 直ちに 1 回だけ立て直す。立て直しも 1 で終わったら `doc/impl-watch.md` 5 節の終了コード 1 の表に従い、直らなければ机の段をやめて続ける |
+| `watch` | `exit=3` | 最後に立てた見張りでない・参加を終えた（`leave`）後なら何もしない。それ以外は 1 行伝えて `watch` を立て直し、番を待っていた申し込みがあれば申し込み直す。机を持って走行中だったなら申し込み直さない（走っている確かめは止めず、終わったら `return`。返しが 3 でもそのまま続ける） |
+| `stopped --wait`・`resume` | `exit=0`、`resumed` | `watch` を立て直して次の項目へ |
+| `stopped --wait`・`resume` | `exit=0`、`stop requested again by <X>` | 次の項目に入らず、もう一度 `stopped --wait` |
+| `stopped --wait`・`resume` | `exit=3` | `watch` を立て直して続ける |
+| `stopped --wait`・`resume` | `exit=1`、`a resume wait for <ID> is already running` | 前の再開の待ちがまだ走っている。何もしない |
+| `request --wait` | `exit=0`、`granted test` | 番が来た。その走行を 1 回回し、終わったら（成否によらず）直ちに `return` |
+| `request --wait` | `exit=3`、`not applied: desks are held; only a merge holder may add the test desk` | 机を持ったまま申し込んだ。状態は変わっていない。`status` は読まずに `return` してから申し込み直す。1 行伝える |
+| `request --wait` | `exit=3`、`not applied: a different desk request is already waiting` | `release` は `test` しか申し込まないので、同じ識別の前のセッションの残りである。`cancel --id <ID>` を前景で回し、直ちに申し込み直す。1 行伝える |
+| `request --wait` | `exit=3`、`not applied: a merge request is waiting; …` | 同じ識別でマージの机を待つ者が居る（`release` はマージの机を取らない）。`cancel` はしない（相手のマージの申し込みまで消える）。その回の机の段をやめて手順を続け、1 行伝えて段 7 に書く |
+| `request --wait` | `exit=3`、`gone: request gone` | 自分で `cancel` した後なら何もしない。それ以外は 1 行伝え、先に `watch` を立て直してから申し込み直す |
+| `request --wait` | `exit=1`、`a request wait for <ID> is already running` | 自分の待ちが走っていれば何もしない。覚えが無ければ `cancel --id <ID>` の後に申し込み直す。1 行伝える |
+| `return` | `exit=3`、`not applied: not the holder of that desk`／`not applied: holds no desk to return` | 机はもう自分の物でない（記録が消えた など）。返し直さず、1 行伝えて続ける |
+| `return`・`leave`・`cancel` | `exit=1`、下の行のほか | 標準エラーの 1 行をそのまま伝え、`doc/impl-watch.md` 5 節の終了コード 1 の表に従う。直らなければ机の段をやめて続け、段 7 に書く |
+| どれでも | `exit=1`、`state.lock is busy …` | 間を置かずに 1 回だけ呼び直す。続けば机の段をやめて続け、段 7 に書く |
+| どれでも | `exit=2` | 呼び方の誤り＝この節の文の誤り。机の段をやめて続け、段 7 に書く |
+
+- 立て直しと申し込み直しは、同じ出来事で待ちが 2 つ続けて終わっても 1 回ずつ。2 つ目が `already running` で終わっても害は無い。
+- 終わり方は出力の文で読む。「自分の見張り・待ちか」の覚えは、`already running` の自分か残りかの分け方にだけ使う。覚えを失ったら残りとして扱う。
+- 「机の段をやめて続ける」とき: 待ちが走っていれば放っておき（記録が消えれば 3 で終わる）、以後はその回の机のコマンドを呼ばない。走行は机なしで回す。
+
+**残りの見張りの外し方**: 前のセッションの見張りは、次の見回り（1 秒ごと）で自分の記録が消えたと知るまで識別の見張りの錠を持つ。外して、待って、立て直すまでを 1 回のバックグラウンドの Bash で行う。
+
+```bash
+"$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" leave --id <ID> 2>&1; sleep 3; "$AREKA_IMPL_WATCH_HOME/areka-impl-watch.exe" watch --id <ID> --repo <R> --name release-v{版} 2>&1; echo "exit=$?"
+```
+
+- 最後の `exit=` と見張りの行だけを読む。これを最後に立てた見張りとして覚える。この `leave` は参加の終わりに数えない。待っていた申し込みは、この 1 本が終わる前に申し込み直す（`leave` で消えるため）。
+- これがまた `already running` で終わったら繰り返さず、机の段をやめて続け、段 7 に書く。
+
 ## 段 3: 手元で確かめる
 
-上から順に、1 つずつ回す（同時に回さない。`cargo` の置き場と記憶を取り合う）。どれかが欠けたら、版上げの PR を出さずに止まり、欠けた確かめの名前を報告する。作業木はそのまま残し、消したり戻したりしない。
+上から順に、1 つずつ回す（同時に回さない。`cargo` の置き場と記憶を取り合う）。3.1 の全体テストと 3.3 の起動の確かめは、「机の段」のとおり排他テストの机を取って回す（入る前に机の段の前置きを 1 回）。どれかが欠けたら、版上げの PR を出さずに止まり、欠けた確かめの名前を報告する。作業木はそのまま残し、消したり戻したりしない。
 
 ### 3.1 lock の整合と全体テストを回す
 
 - `cargo metadata --locked --no-deps --format-version 1` が終了コード 0 であること。出力の `packages` の数を `N` として覚える。
+- 机の段の「流れ」の 1・2: `watch` を立て、`request --desk test --purpose "release {版} 3.1" --wait` の番が来てから次を回す。
 - `pwsh -NoProfile -File tools/test-all.ps1 -License` を裏で回し、終わりの知らせを待つ（約 19 分）。`-Format` は付けない。付けなくても `cargo fmt --all -- --check` は回る。`-License` は `THIRD-PARTY-NOTICES.md` を作り直す。
+- 終わりの知らせを受けたら（成否によらず）、判定より先に `return`。
 - 判定: 2 つとも終了コード 0。
 
 ### 3.2 版上げの差分の範囲を判定する
@@ -125,7 +235,9 @@ areka のリリース 1 回分の手順。段・コマンド・判定・表は�
 
 ### 3.3 起動の確かめ（x64）を回す
 
+- 机の段の「流れ」の 4: `request --desk test --purpose "release {版} 3.3" --wait` の番が来てから次を回す。
 - `pwsh -NoProfile -File tools/package.ps1 -Check` を裏で回し、終わりの知らせを待つ（窓を出す）。3.1 と同時に回さない。
+- 終わりの知らせを受けたら（成否によらず）、判定より先に `return`、続けて `leave`（机の段の「流れ」の 5）。
 - 判定: 終了コード 0。
 
 ### 3.4 公開前の確かめを回す
@@ -155,7 +267,7 @@ areka のリリース 1 回分の手順。段・コマンド・判定・表は�
   1. 新しく main に入った変更の題名を `git log --first-parent --format=%s {確かめた main}..{remote}/main` で読んで控える（`{確かめた main}` は覚えてある SHA。覚え直す前に読む）。
   2. `git merge {remote}/main` で取り込む。衝突したら止まる。
   3. 1 で控えた題名が 1 件でも在れば、2.3 の一覧を、先を `-To {remote}/main` にして出し直し、新しく入った変更に `doc/release-notes/README.md` の「必ず載せるもの」に当たる物が在るかを読む。在れば見どころのファイルに足し、3.5 を回し直して、`git add doc/release-notes/v{版}.md` だけを足したコミットを 1 つ作る（題は `chore(release): v{版} の見どころの直し`。版上げの PR に載り、squash で 1 つのコミットになる）。無ければ何もしない。どちらでも止まらない。控えた題名と、足したかどうかを最後の報告に書く。
-  4. 3.1 を回し直す。後で作業木がきれいでなければ、コミットせずに止まって報告する（回し直した `-License` が `THIRD-PARTY-NOTICES.md` を変えた＝main に依存の変更が入った）。
+  4. 3.1 を回し直す。全体テストは机の段の「流れ」の 6 のとおり `watch` → `request --desk test --purpose "release {版} 3.1" --wait` → 番が来てから回す → 終わったら（成否によらず）`return` → `leave`。後で作業木がきれいでなければ、コミットせずに止まって報告する（回し直した `-License` が `THIRD-PARTY-NOTICES.md` を変えた＝main に依存の変更が入った）。
   5. 3.2 を回し直す。版上げはもうコミット済みなので、比べる相手を読み替える: 表の `git diff … HEAD` を `git diff … {remote}/main HEAD` にする。見どころのファイルはコミット済みなので、「動いたファイルの集まり」に足したファイルとして出て、`??` の行は 1 行も無い。
   6. `git push --quiet {remote} HEAD` の後、`gh pr view {番号} --json files` が 4.1 と同じファイルの集まりを返すことを確かめ、新しい先端を「確かめた main」として覚え直す。
 - 再開で「確かめた main」を覚えていないとき（「再開のときの事実の読み方」）は、main が動いていなくても 2〜6 を 1 回行う。3 は題名の有無によらず行う。
@@ -233,6 +345,7 @@ areka のリリース 1 回分の手順。段・コマンド・判定・表は�
 - 途中で main を取り込んだ回は、取り込んだ題名と、見どころに足したかどうか。
 - 使った申し送りと、「消してよい申し送り」（1.4）。
 - 途中で気付いた事（範囲の外の問題は、開発者の判断を得て `/kiro-discovery` で起票する）。
+- 机の段を飛ばした・途中でやめたときは、その訳（`desk: skip …` の訳や、出た文）。
 - **見どころの全文**: `doc/release-notes/v{版}.md` の中身をそのまま載せる。開発者はここで読む。「直しが要れば言ってください。公開の頁と main のファイルを直します」と添える。
 
 ## 公開の後に見どころの直しを頼まれたら
@@ -273,9 +386,10 @@ areka のリリース 1 回分の手順。段・コマンド・判定・表は�
 - `release.yml`・`crates-io.yml` のきっかけ（タグ `v*` の push）・待ちの上限・Release に添える物の数（今は 5 つ）・Release の本文のもと（今はその版の見どころのファイル）。
 - 版の置き場（今は根の `Cargo.toml` の 2 行だけ）。3 行目が増えたら段 2 と 3.2 を直す。
 - `tools/test-all.ps1`・`tools/package.ps1`・`tools/crates-io.ps1`・`tools/release-notes.ps1` の引数の名前や終了コードの意味。
+- `areka-impl-watch.exe` のコマンドの名前・引数・出力の 1 行・終了コードの意味（`doc/impl-watch.md`）。変われば「机の段」の呼ぶ形と終わり方の表を合わせ直す。
 - 見どころのファイルの置き場所・名前（今は `doc/release-notes/v{版}.md`）。
 - `winget.yml` が main に入る（6.2 の見守りの相手が増える）。
-- この文書の節の名前（「再開のときの事実の読み方」「止まり方の決まり」「公開の後に見どころの直しを頼まれたら」「開発者の設定」）。`SKILL.md` が名前で指している。
+- この文書の節の名前（「再開のときの事実の読み方」「止まり方の決まり」「机の段」「公開の後に見どころの直しを頼まれたら」「開発者の設定」）。`SKILL.md` が名前で指している。
 
 ## 開発者の設定（初めて打つ前に）
 

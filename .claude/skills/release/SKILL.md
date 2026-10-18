@@ -41,6 +41,7 @@ Perform exactly one release by executing `procedure.md` (next to this file) from
 - Never move or delete a pushed tag, never publish the same version twice, never use `git push --tags`, `--follow-tags` or `--force`, never run `gh release create`, `gh release upload` or `cargo publish` by hand.
 - Do not edit `tools/`, `.github/workflows/` or any crate while releasing. A problem found on the way goes into the final report; an out-of-scope one is ticketed with `/kiro-discovery` after the developer decides.
 - A red run is the developer's call: show the facts and the table row, then wait. Do not re-run by yourself.
+- Run the stage 3 full tests (3.1, and its rerun in 4.2) and the startup check (3.3) holding the exclusive-test desk of `areka-impl-watch.exe`, as 「机の段」 of `procedure.md` says (never the merge desk). Waiting for the desk or for a resume is not a stop; when the desk cannot be used, skip it and keep going.
 - The local full tests and the startup check are heavy. Run each once per release unless `procedure.md` tells you to run it again.
 
 </instructions>
