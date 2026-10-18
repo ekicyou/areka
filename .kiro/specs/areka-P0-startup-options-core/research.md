@@ -156,7 +156,7 @@
 | `areka-ghost/src/catalog.rs`・`catalog_roots.rs` | 一時の印で触る。C9 のほかの 7 本の触るファイルには無い |
 | `crates/areka-mcp/**`（④ が「⑧ の持ち物」と書く・⑧ の実際は `handler.rs`・`real_receiver_test.rs`） | roadmap は ② に `port.rs` を割り当て済み。`lib.rs` の再輸出の 1 行も触るなら ⑧ と申し合わせ。案 ⑵ なら触らない |
 | `emo2_boot/ghost_switch.rs`（④ が先に割る） | 呼ぶだけ。触らない（議題 15 で移すなら触る） |
-| `ghost_session.rs`（885 行） | 倒れ先と作り口の SHIORI の旗で触る。C9 のほかの 7 本の触るファイルには無い（④ の brief では Adjacent） |
+| `ghost_session.rs`（885 行） | 倒れ先と作り口の SHIORI の旗で触る。C9 のほかの 7 本の触るファイルには無い（④ の brief では Adjacent）。**2026-10-18 areka棚卸 の申し送り**: ③ ④ とも `shiori_wiring.rs` に触らない（`dontloadmodule` は入れてよい）。ただし ④ は「本物の SHIORI の読み直し」を選ぶと `ghost_session.rs` に触る見込み。設計では `shiori_wiring.rs`・`boot_config.rs` の中で済ませる形を先に探し、`ghost_session.rs`（倒れ先 680 行目）に触るなら着手の前に areka棚卸 へ知らせて ④ と申し合わせる |
 | `dist/README.txt`（⑤ と別々の行） | 10 行目の書き直しと新しい節。⑤ の brief の触るファイルに `dist/README.txt` は無い |
 | `main.rs` 1,000 行 | 先に外へ出すタスクが要る（議題 11）。全体としては減らす |
 
