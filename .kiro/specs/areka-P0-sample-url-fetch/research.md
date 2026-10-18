@@ -225,12 +225,17 @@
 
 ## 11. 実物の確かめ（2026-10-18・タスク 1）
 
-### 取り寄せ
+### 最初の取り寄せ（コミットを固定した raw の URL）
 
-- **登記の URL は認証なしでは取れない**: `%SystemRoot%\System32\curl.exe --fail --location` で登記の URL（`raw.githubusercontent.com/ekicyou/ghost_dev/e1e05590…/release/pasta-in-windows/pasta-in-windows.nar`）を取ると `curl: (22) The requested URL returned error: 404`（終了コード 22）。`gh api repos/ekicyou/ghost_dev` の `private` が `true`＝**ghost_dev は非公開のリポジトリ**で、認証なしの `raw.githubusercontent.com` は 404 を返す。コミット `e1e05590dbed0a4a4b1afadf55ca896f36d82c14` とファイル `release/pasta-in-windows/pasta-in-windows.nar`（3,025,198 バイト）は在る。
-- 確かめのため、同じコミットの同じファイルを認証つきの `gh api -H "Accept: application/vnd.github.raw" "repos/ekicyou/ghost_dev/contents/release/pasta-in-windows/pasta-in-windows.nar?ref=e1e05590…"` で `<ワークツリー>\target\nar-samples\fetched\pasta-in-windows.nar` へ取った。
-- **大きさ 3,025,198 バイト・SHA-256 `04a8e1c19b534b38e39d24f93ac7735c74e186249965b3a0876a893cb41fe35b`（`Get-FileHash`）＝登記どおり**。
-- 取り寄せの段（`curl.exe` で登記の URL を取る・要件 2）は、ghost_dev を公開するか、URL を認証なしで取れる取り寄せ先へ替えるまで通らない（開発者の裁定待ち）。
+- **認証なしでは取れなかった**: `%SystemRoot%\System32\curl.exe --fail --location` で当初の URL（`raw.githubusercontent.com/ekicyou/ghost_dev/e1e05590…/release/pasta-in-windows/pasta-in-windows.nar`）を取ると `curl: (22) The requested URL returned error: 404`（終了コード 22）。
+- 原因: `gh api repos/ekicyou/ghost_dev` の `private` が `true`＝**ghost_dev は非公開のリポジトリ**で、認証なしの `raw.githubusercontent.com` は 404 を返す。コミット `e1e05590dbed0a4a4b1afadf55ca896f36d82c14` とファイル（3,025,198 バイト・SHA-256 `04a8e1c19b534b38e39d24f93ac7735c74e186249965b3a0876a893cb41fe35b`）自体は在ることを、認証つきの `gh api` で確かめた。
+- この結果を受けた開発者の裁定: 取り寄せ先を GitHub Pages の公開 URL へ改め、ぱすたのリリースのたびに登記の大きさと SHA-256 を直す（requirements.md「実装の段の裁定（2026-10-18）」の 1）。
+
+### 公開 URL からの取り寄せ（裁定 1 の後）
+
+- URL: `https://ekicyou.github.io/ghost_dev/pasta-in-windows/pasta-in-windows.nar`
+- `%SystemRoot%\System32\curl.exe --fail --location`（認証なし・`gh` を使わない）で `<ワークツリー>\target\nar-samples\fetched\pasta-in-windows.nar` へ取った（前の書庫は置き換えた）。終了コード 0。
+- **大きさ 3,042,433 バイト・SHA-256 `816d7183ab7c92fe1d601e386d5d60f9ca9f4238d265143a1b96915aa5bfb020`（`Get-FileHash`）＝裁定 1 の値どおり**。
 
 ### `install.txt`
 
@@ -241,8 +246,8 @@ name,窓際のぱすたさん
 directory,pasta-in-windows
 ```
 
-- `balloon.directory`／`balloonN.directory` は無い。縦書きのバルーン `pasta_tategaki\`（`descript.txt` と png 5 枚）は書庫の根に在り、展開ではゴーストのフォルダの直下に入る（ゴーストの一部として配られる）。
-- 書庫の項目は 68（すべてファイル）。根の並び: `ghost\master\`・`shell\master\`・`pasta_tategaki\`・`install.txt`・`readme.txt`・`updates.txt`。
+- 前の書庫と同じ中身。`balloon.directory`／`balloonN.directory` は無い。縦書きのバルーン `pasta_tategaki\` は書庫の根に在り、展開ではゴーストのフォルダの直下に入る（ゴーストの一部として配られる）。
+- 書庫の項目は 68。
 
 ### 決めた行
 
@@ -261,4 +266,5 @@ directory,pasta-in-windows
 
 - 測り方: `crates/sample-ghost-kit/src/sha256.rs` の `sha256_hex` を、`<ワークツリー>\target\nar-samples\fetched\pasta-in-windows.nar`（3,025,198 バイト）を読み込んだバイト列に 3 回かけた。デバッグ版（`cargo test -p sample-ghost-kit` の既定の組み方）・使い捨ての `#[ignore]` のテストを `sha256_tests.rs` に一時に足して走らせ、すぐ消した（コミットしない）。読み込みの時間は含まない。機械を空けての比べではない一回きりの目安。
 - 結果: **190 ms・179 ms・181 ms**（3 回とも 1 秒を下回る＝design.md「性能」の見込みどおり）。
-- 3 回とも `04a8e1c19b534b38e39d24f93ac7735c74e186249965b3a0876a893cb41fe35b`＝登記の SHA-256（§11 の `Get-FileHash` の値）と一致。
+- 3 回とも `04a8e1c19b534b38e39d24f93ac7735c74e186249965b3a0876a893cb41fe35b`＝当初の登記の SHA-256（§11 の `gh api` で確かめた値）と一致。
+- この計測は裁定 1 の前の書庫（3,025,198 バイト）で取った。今の登記の書庫（3,042,433 バイト）との差は約 0.6% で小さいので、測り直していない。

@@ -3,7 +3,7 @@
 > 正本は `design.md`（部品・口・流れ）と `requirements.md`。実装の順は design.md「実装の順（タスクの段への申し送り）」に従う。
 > 守ること（全タスク共通）: `Cargo.toml`・`Cargo.lock` を変えない／検体と一時のフォルダはワークツリーの `target\` の下だけ／テストは通信しない（通信するのはタスク 1 の実物の確かめと取り寄せの段だけ）／道具が端末へ出す文は ASCII だけ／ソースは 1 ファイル 1,000 行未満・新しいテストは兄弟の `*_tests.rs`／**タスク 9 より前は `tools/test-all.ps1` を 1 文字も変えない**。
 
-- [ ] 1. 「窓際のぱすたさん」の実物を取り寄せて、展開器が受け入れるかを確かめる
+- [x] 1. 「窓際のぱすたさん」の実物を取り寄せて、展開器が受け入れるかを確かめる
   - 登記の URL から書庫をワークツリーの取り寄せの置き場（`<ワークツリー>\target\nar-samples\fetched\pasta-in-windows.nar`）へ Windows 標準の `curl.exe` で取り寄せ、大きさ 3,042,433 バイトと SHA-256 `816d7183…` が登記どおりかを確かめる（実装の段の裁定 1 で取り寄せ先を GitHub Pages の公開 URL `https://ekicyou.github.io/ghost_dev/pasta-in-windows/pasta-in-windows.nar` に改めた）
   - 書庫の `install.txt` から `type`・`directory`・同梱のバルーンの鍵（`balloon.directory`／`balloonN.directory`）を読み、行の名前・種別・同梱のバルーンを決める（`directory` が見込みの `pasta-in-windows` と違えば名前をそれに合わせる）
   - 展開器 `areka-nar` が `target\` の下の空の根へ展開できるかを確かめる。`areka-nar` には実行体が無いので、`sample-ghost-kit` の今の展開の道（書庫のパスを引数で受ける入口）を私有の場所で呼ぶ使い捨てのテストで確かめる（コミットしない・`Cargo.toml` を変えない・確かめた後に消す）。**受け入れなければここで止めて開発者へ報告し、以降のタスクへ進まない**（行の登記で回避しない）
