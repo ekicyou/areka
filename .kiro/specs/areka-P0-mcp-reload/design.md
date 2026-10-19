@@ -69,6 +69,7 @@
 | `crates/areka/src/emo2_boot/frame/wiring.rs`（2026-10-19 追加・タスク 8.3） | `Emo2Wiring` に欄 `shell_carry: Option<ShellCarry>`（`new` では `None`）と `static_binds: BindSet`（`new` で資産から写す） | 約 10 行 | 3.8 | 控えを結線と同じ寿命にする（World に置くと、装着が来ないまま次の切替が来たとき別のゴーストの窓に効く） |
 | `crates/areka-emo-present/src/presenter/snapshot.rs`（2026-10-19 追加・タスク 8.3） | `EmoPresenter::last_binds(target) -> Option<&BindSet>`（最後に表示した着せ替えの集合の読み取り） | 約 9 行 | 3.8 | 着せ替えの状態の正本は seriko のスレッドにあり、読むには seriko に問い合わせの電文を足すことになる。表示層は同じ集合を最後の `Show` で持っている |
 | `crates/areka-seriko/src/bind.rs`（2026-10-19 追加・タスク 8.3） | `BindResolver` に `#[derive(Clone)]` と逆引き `name_of(ns, id)`。元から 1,043 行で 1,000 行を超えていたので、中のテストを兄弟 `bind_tests.rs` へ純移動した（375 行に） | 約 18 行＋テストの純移動 | 3.8 | 着せ替えを台本と同じ名前の合図で出し直すには、番号から読み直したシェルの名前を引く口が要る |
+| `crates/log-capture-kit/tests/file_length_guard_test.rs`（2026-10-19 追加・タスク 8.3） | 1,000 行の超過の例外表 `OVER_LIMIT_ALLOWED` から `crates/areka-seriko/src/bind.rs` の 1 項を外し、件数の宣言 `OVER_LIMIT_ALLOWED_COUNT` を 10 → 9 にする（テストの純移動で 375 行になり、表の「まだ超えている」検査が赤になるため） | 5 行減・1 行変更 | 13.4 | 例外表は超過の事実だけを持つ。超えなくなった項を残すと見張りのテストが落ちる |
 | `crates/areka/src/emo2_boot/mod.rs`（2026-10-19・タスク 8.3） | `wire_emo2_boot` で結線の資産に `bind_resolver` の写し（今までは空の表）を持たせ、seriko へは `clone` を渡す（13.4 の「mod の宣言・結線・系の登録だけ」の外の 3 行） | 3 行 | 3.8 | 装着の相が読み直したシェルの名前表を引けるように |
 | `crates/areka/src/emo2_boot/frame_attach_tests.rs`（2026-10-19 追加・タスク 8.3） | 末尾に兄弟 `frame_attach_carry_tests.rs` の `mod` 宣言（4 行） | 4 行 | 3.8・12.1 | GPU の装着の土台（`gpu_attach_world`）を使い回すため。`frame.rs` には触らない |
 
