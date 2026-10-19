@@ -136,3 +136,4 @@
 - 4: ぱすたの行を足した後は、置き場（`target\nar-samples\fetched\`）に書庫とハッシュのファイルが無いと `cargo test -p sample-ghost-kit` の全部の行の判定 2 本が赤になる（要件 6.1 どおり）。5 以降のタスクは置き場が埋まっている前提で回す。
 - 6.2: 主の行の回しは `Invoke-FetchRows -Rows -ExitCode ([ref]) [-AnyScheme]`。`-AnyScheme`（https の決まりを飛ばす）は `-SelfTest` の塊の中だけが付ける。
 - 最後の検証（2026-10-19・GO）: `/kiro-complete` の文書の手当てでは design.md の 4 項目に加えて、`roadmap.md` の `pasta-in-windows-verification` の行（「コミット `e1e0559` の書庫」「URL とハッシュで登記」）と `.kiro/specs/areka-P0-pasta-in-windows-verification/brief.md` の固定の URL を、GitHub Pages の公開 URL＋`.sha256` で最新を追う形（裁定 2）へ直す。
+- 完了時にその場で解決（2026-10-19）: ⑴ `lib_tests.rs` の `only_vendored_rows_have_a_nar_in_the_repository` の doc の要件番号を 1.3・1.4・5.3 へ直した ⑵ `pasta-in-windows-verification` の brief の固定の URL・登記の範囲・規模・議題 2 と 3 を、Pages の公開の URL＋`.sha256` で最新を追う形（裁定 2）と登記済みに合わせた。起票は 0 件（test-all の `SKIP` の行の二重の括弧は、タスクの文の綴りどおりなので直さない）。
