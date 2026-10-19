@@ -175,6 +175,13 @@
   - 設計の Risks（同梱の根からの写し・`OnDestroy` と unload の隙間）も併せて記録する
   - 結果が `verification/` に記録されている
   - _Requirements: 12.7_
+- [x] 8.3 ghost の読み直しの後もシェルの面を保つ（2026-10-19 の開発者の裁定・8.2 の実機で見つかった件）
+  - 窓口自身の ghost の読み直しのときだけ、`switch_to` が `take_down` の手前で各スコープの表示中の面を控え（`shell_carry::capture_for_reload`）、`boot_into` の成功の後に新しい `Emo2Wiring` へ渡す（`hand_over`）。述語 `reload::carries_shell_state` は `wants_runtime_only` の鏡
+  - 装着の相（`frame/attach.rs`）が、読み直したシェルに面が在ればその面、無ければ既定の面（`initial_surface_id`）、それも無ければ出さないと決め（`shell_carry::decide`）、着せ替えは読み直しの前の既定との差（台本で着た・脱いだ分）を読み直したシェルの既定の上に名前で決め（`decide_binds`・名前の無いものは `warn!` で落とす・descript の既定の書き換えは効く）、置き場のゴーストの seriko へ `\![bind,…]`・`\s[面]` と同じ合図を着せ替えから順に送る（`replay`・最初の `Show` から着せ替えた姿）。シェル側のアニメの進行・バルーンの面は持ち越さない（2026-10-19 の差し戻しで着せ替えは持ち越すに改めた）
+  - `shell_carry_tests.rs`（面の決め方の 3 枝・控えの組み方・着せ替えの決め方 7 本（既定の書き換え 1→0・0→1 は送らない・台本で着た・脱いだ分は既定が変わっても送る を含む）・結線が無いときの `warn!`・seriko の最初の `Show` がもう着せ替えた集合）・`frame/switch_tests.rs`（シェルの差し替えで結線の既定の写しを置き直し、バルーンでは変えない）・`reload_tests.rs`（述語が自分の予約の ghost でだけ真）・`ghost_switch_reload_tests.rs`（読み直しは控えを渡し、印の無い自分自身への切替は渡さない・起こし直しに失敗して既定へ戻ったときは渡さない）・`frame_attach_carry_tests.rs`（実 GPU の装着の相で在る面はそのまま・無い面は既定・着せ替えは名前の在るものを着せ直し無いものを落とす・控えなしは 1 つも出さない）が緑。既存のテストは 1 本も変えていない
+  - 実機で ghost の読み直しの前後に同じ面と着せ替えが出ている（`verification/8.3-shell-carry.md`）
+  - _Boundary: ShellCarry・GhostSwitch・ReloadDesk・frame/attach.rs・frame/wiring.rs・frame/switch.rs（既定の写しの置き直し）・emo2_boot/mod.rs（結線の資産の名前表）・areka-emo-present `snapshot.rs`・areka-seriko `bind.rs`_
+  - _Requirements: 3.5, 3.6, 3.8, 12.1, 12.4_
 
 ## 完了の手順に回す要件
 
@@ -203,5 +210,10 @@
 - 7.4: `frame/switch_reload_tests.rs` は親の土台を使うため `switch_finish_tests.rs` の末尾の mod 宣言（4 行）から読む。request_reload からの通しテストは無い（ヘッドレスの土台に実行系が無い）。実機（8.2 ⑵）で通す。`reload_skin_tests.rs` 冒頭の「呼び手は 7.4」の説明は古い。
 - 7.5: `log_history.rs` は要件 13.1 の外なので触らない。`last_id()` に残る `#[allow(dead_code)]` と「mcp-strict-errors が読む口」のコメントは古い（本 spec が最初の呼び手）。design.md 98 行と一緒に完了のときに申し送る。受理の文は `answer` に偽の窓口を渡して固定した（実行系の無い World では受理まで行かない）。
 - 8.1（完了のときに記録）: `crates/areka-kanade/src/lib.rs` の `pub use change::{…}` に `ReloadScope` を 1 語足した（2.1）。要件 13.1 の一覧にも設計の補正にも無い。`change` の公開型を同じ並びで出す慣例に合わせたもので、振る舞いは変わらない。`/kiro-complete` で 13.1 の補正に足すか裁定として記録する。完了の全体テストの前に、ワークツリーで i686 の `shiori-host32-helper`・`shiori-host32-testdll-loadu` を建てておく（建てないと `tests/mcp_get_log_real_run.rs`・`tests/smoke_boot_loop_exit.rs` が前提の欠けで赤になる）。
-- 8.2（裁定待ち）: ghost の読み直しの後、キャラクターの窓に面が出ない（挨拶の `\s` を送らないため `TargetId(0)`・`(2)` の `ShowSurface` が 0 件）。根本は既存の `emo2_boot/frame/attach.rs:113` の `initial_surface_id` が本番で読まれず、最初の面が挨拶の `\s` 頼みであること。本 spec の要件への違反ではないが、直すなら要件 13.1 の外。`descript-window-keys` の brief の「areka は面 0 を出す」という前提は誤り。
+- 8.2（→ 8.3 で解決）: ghost の読み直しの後、キャラクターの窓に面が出なかった件は、開発者の裁定（2026-10-19「本来 ghost 読み直し時はシェルの状態は維持すべき」）で要件 3.8 を足し、8.3 で直した（`descript-window-keys` の brief へは送らない）。ただし `descript-window-keys` の brief の「areka は面 0 を出す」という前提は、ふつうの起動については今も誤り（ふつうの起動・切替は最初の `\s` まで面を出さない＝defect #5 のまま）。
+- 8.3（13.1 の補正・2026-10-19）: 要件 13.1 の一覧の外の `emo2_boot/frame/attach.rs`（装着の相で控えを使う・約 17 行）・`emo2_boot/frame/wiring.rs`（`Emo2Wiring.shell_carry` の欄・5 行）・`emo2_boot/frame_attach_tests.rs`（末尾の `mod` 宣言 4 行）を触った。差し戻し（着せ替えの持ち越し）で `crates/areka-emo-present/src/presenter/snapshot.rs`（`last_binds` の読み取り・9 行）・`crates/areka-seriko/src/bind.rs`（`BindResolver` の `Clone` と逆引き `name_of`・18 行。元から 1,043 行だったので中のテストを兄弟 `bind_tests.rs` へ純移動し 375 行に・seriko のテストは移す前と同じ 416 件で緑）・`emo2_boot/mod.rs` の結線（結線の資産に名前表の写しを持たせる 3 行＝13.4 の「mod の宣言・結線・系の登録だけ」の外）も触った。design.md「要件 13.1 の一覧の補正」の表に足した。`/kiro-complete` で requirements.md 13.1 の一覧へ足すか裁定として記録する。
+- 8.3: main の取り込み（`d2e9343e`）で `GhostBootInputs` に `modules` の欄が増え、本 spec の `ghost_session_reload_tests.rs` の 2 か所がコンパイルできなくなっていた。`modules: crate::cli::ModulePolicy::Load` を足して直した（`ghost_switch_test_support.rs` と同じ値）。
+- 8.3: 控えは表示層の `current_surface_id`（最後に確立した面）から取る。文字の層の「スコープの今の面」（`\b[名前]` の箱の行き先）は次の `\s` まで未設定のまま（ふつうの起動の最初の `\s` の前と同じ）。持ち越しの合図を文字の層へも送ると台詞の始まりの扱いが動くので送らない。
+- 8.3（差し戻し・2026-10-19）: 着せ替えは「静的な既定＋動的」を合わせた集合を表示層の最後の `Show` から控え、読み直しの前の既定（`Emo2Wiring.static_binds`）との差（台本で着た・脱いだ分）だけを、読み直したシェルの既定の上に名前の合図で送る（2 度目の差し戻しで、新しい既定との差から改めた: そうしないと descript の既定の書き換えを読み直しが打ち消す）。合図は着せ替えを面より先に送る（面の出ていないスコープの着せ替えは seriko で状態だけが変わり、最初の `Show` からもう着せ替えた姿＝既定の姿のフレームが出ない）。`Emo2Wiring.static_binds` はシェルの差し替えを seriko へ頼めた時点（`frame/switch.rs` の `commit`）で置き直す。同じ着せ替えかは bindgroup の番号で見る（番号が変わって名前が同じ着せ替えは別物として落ちる）。隠したまま着せ替えたスコープは、隠してからの着せ替えが控えに入らない（表示層は最後の `Show` の集合しか持たない・正本は seriko）。気になれば seriko へ問い合わせの電文を足して正本から控える。
+- 8.3: `frame/switch_reload_tests.rs:76` に clippy の `clone_on_copy`（`BalloonRoute`）が 1 件残っている（7.4 の分・振る舞いには響かない）。
 - 8.2（完了の棚卸で起票の候補）: ⑴ `reload_started` に読むフォルダのパスを添える（同梱の根から起こすと 2 回目から写しを読む）。⑵ MCP の返事の「get_status が答えるまで待つ」は areka では読み直しの終わりの合図にならない（要件 8.1・8.3 どおり・終わりは get_log の reload_done／reload_failed）。⑶ pasta のデバッグ待受 127.0.0.1:9276 がぶつかり、pasta のゴーストを入れた areka は同時に 2 つ動かせない（ぱすた側の持ち物）。

@@ -493,6 +493,12 @@ pub(crate) fn wants_runtime_only(world: &World) -> bool {
     own_switch(world).is_some_and(|f| f.target == ReloadTarget::Shiori)
 }
 
+/// `switch_to` の分かれ目: 印が ghost の読み直しで、進行中の予約が窓口自身のものなら真（窓を作り直す
+/// 前に表示中の面を控え、作り直した窓へ出し直す・要件 3.8）。
+pub(crate) fn carries_shell_state(world: &World) -> bool {
+    own_switch(world).is_some_and(|f| f.target == ReloadTarget::Ghost)
+}
+
 /// 対象から段の列を組む（Flow 4・要件 5.1・6.1・7.1・7.2）: `shell`（`reloadsurface` も）→ `[Shell]`、
 /// `balloon` → `[Balloon]`、`descript` → 語の集合から（`ghost` は `Names`＋`Shell`＝ゴーストの descript の
 /// 配置の値はシェルの差し替えの後始末が入れ直す・重なった段は 1 度）。

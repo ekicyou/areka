@@ -43,6 +43,8 @@ pub(crate) mod shell_balloon_resolve;
 pub(crate) mod shell_balloon_switch;
 /// 箱の束（置き場所の表・別名の写し・在るサーフェス番号・フォントの探す場所・areka-P0-shell-balloon）。
 pub(crate) mod shell_box_assets;
+/// ghost の読み直しで表示中の面を作り直した窓へ持ち越す（areka-P0-mcp-reload 要件 3.8）。
+pub(crate) mod shell_carry;
 mod special_name;
 /// シェル・バルーンの差し替えの資産を背景で作る部品と荷物の置き場（areka-P0-shell-balloon-switch）。
 pub(crate) mod switch_assets;
@@ -113,8 +115,8 @@ use areka_ghost::{ShioriWiring, TickerMode};
 use areka_kanade::{BootOrigin, KanadeNotice, MonotonicMs};
 use areka_parsers::package::MountError;
 use areka_seriko::{
-    AnimationTable, BindResolver, SerikoClock, SerikoLoopConfig, SerikoSink, SurfaceResolver,
-    seeded_rng, spawn_seriko_clocked,
+    AnimationTable, SerikoClock, SerikoLoopConfig, SerikoSink, SurfaceResolver, seeded_rng,
+    spawn_seriko_clocked,
 };
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
@@ -538,7 +540,7 @@ pub fn wire_emo2_boot(
     let (surface_sink, seriko_handle) = spawn_seriko_clocked(
         resolver,
         static_binds.clone(),
-        bind_resolver,
+        bind_resolver.clone(),
         loop_config,
         bridge,
         Some(Arc::clone(&seriko_clock)),
@@ -549,8 +551,9 @@ pub fn wire_emo2_boot(
         // attach は resolver を一切読まない（Task 4.1 申し送り）ため無害なプレースホルダ。
         resolver: SurfaceResolver::new(BTreeMap::new()),
         static_binds,
-        // 実 bind_resolver は seriko が値消費済み（attach は bind_resolver を読まない）ため空表プレースホルダ。
-        bind_resolver: BindResolver::empty(),
+        // 実 bind_resolver の写し: attach は ghost の読み直しで持ち越す着せ替えの名前を引くのにだけ使う
+        // （areka-P0-mcp-reload 要件 3.8）。名前の解決そのものは seriko の写しが担う。
+        bind_resolver,
         // 実 loop_tables は loop_config へ移送済み（attach は loop_tables を読まない）ため空表プレースホルダ。
         loop_tables: LoopTables {
             shell: AnimationTable::empty(),

@@ -56,6 +56,15 @@ impl EmoPresenter {
         Some((*surface_id, composed))
     }
 
+    /// 最後に表示が成立したときの着せ替えの集合（静的な既定＋動的な着せ替え）。未登録・一度も表示して
+    /// いない → `None`。`last_show` は `Hide` で消えないので、隠していても `Some`。記録を出さない。
+    ///
+    /// ゴーストの読み直しで着せ替えを作り直した窓へ持ち越すのに使う（areka-P0-mcp-reload 要件 3.8）。
+    pub fn last_binds(&self, target: TargetId) -> Option<&BindSet> {
+        let (_, binds, _) = self.targets.get(&target)?.last_show.as_ref()?;
+        Some(binds)
+    }
+
     /// surface を単体で画面の外に合成して返す。未登録の target は `None`。
     ///
     /// 着せ替え＝最後に表示したときの集合（一度も表示していなければ空）、アニメーション＝空。

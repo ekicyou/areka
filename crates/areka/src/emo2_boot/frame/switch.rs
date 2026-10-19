@@ -271,6 +271,12 @@ fn commit(
         return false;
     };
     let (targets, replace, finish) = split(built, epoch);
+    // seriko は差し替えの依頼で静的な着せ替えを新しいシェルの既定へ置き直す。結線の写しも依頼が届いた
+    // 時点で置き直す（ghost の読み直しで控える着せ替えの基準・areka-P0-mcp-reload 要件 3.8）。
+    let new_static = match &replace {
+        SerikoReplace::Shell { static_binds, .. } => Some(static_binds.clone()),
+        SerikoReplace::Balloon { .. } => None,
+    };
     let mut replies = Vec::new();
     let mut receivers = Vec::new();
     for &(scope, ..) in &targets {
@@ -301,6 +307,9 @@ fn commit(
             .unwrap_or_else(PoisonError::into_inner)
             .take();
         return false;
+    }
+    if let Some(new_static) = new_static {
+        wiring.static_binds = new_static;
     }
     flight.stage = SkinSwitchStage::Committed {
         epoch,

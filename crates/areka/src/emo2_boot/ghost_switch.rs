@@ -640,6 +640,8 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
         }
         return;
     }
+    // ghost の読み直し（窓口自身の予約）だけは、窓を閉じる前に表示中の面を控える（要件 3.8）。
+    let carry = super::shell_carry::capture_for_reload(world);
     take_down(world);
     // 降ろし終えた直後（前のゴーストの記憶の書き手は処理し切って join 済み＝動いている実行系は 0）に
     // 最後のゴースト＝既定・印＝切替先を 1 回で書く（要件 12.6）。UI スレッドが App スコープへ直接
@@ -685,6 +687,7 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
         folder: Some(target.folder.clone()),
     };
     if boot_into(world, closed, ghost, origin) {
+        super::shell_carry::hand_over(world, carry);
         set_stage(world, WelcomeAttempt::Target);
     } else if same_folder_name(&target.folder, DEFAULT_GHOST_FOLDER) {
         fatal(

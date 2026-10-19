@@ -12,6 +12,7 @@ use areka_parsers::balloon::BalloonModel;
 use areka_sakura::ActorKey;
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
+use crate::emo2_boot::shell_carry;
 use crate::placement::spawn::GhostWindows;
 
 use super::{
@@ -60,7 +61,8 @@ pub struct PlannedAttach {
     /// 初期表示 surface id（`ScopeAssets.initial_surface_id`・DD-9）。
     ///
     /// **注記（defect #5・2026-07-13 実機#5）**: attach フェーズはこの値でシェル初回表示を駆動しなく
-    /// なった（シェルは最初の `\s` cue まで非表示）。planner の突き合わせ・DD-9 の記録として carry する。
+    /// なった（シェルは最初の `\s` cue まで非表示）。ghost の読み直しで控えた面が読み直したシェルに
+    /// 無いときの戻り先として使う（areka-P0-mcp-reload 要件 3.8・[`shell_carry::decide`]）。
     pub initial_surface_id: u32,
     /// `assets.shells` 内の対応添字（attach フェーズの add 消費用）。
     pub shell_index: usize,
@@ -212,12 +214,14 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         balloons,
         // resolver は attach では未使用（seriko へは wire_emo2_boot=task 5.1 が手渡す）。
         resolver: _,
-        // static_binds は attach では未使用（defect #5・2026-07-13 実機#5）: シェル初回表示を attach で
+        // static_binds はシェルの初回表示には使わない（defect #5・2026-07-13 実機#5）: シェル初回表示を attach で
         // 焼き付けなくなったため。起動時オンの bindgroup default は seriko が保持し（spawn_seriko へ
         // 手渡し済み）、最初の `\s` cue が駆動する Show{shell,id,binds=static_binds} に載って表示層へ届く。
-        static_binds: _,
-        // bind_resolver は attach では未使用（seriko の actor へは task 7.2 が手渡す）。
-        bind_resolver: _,
+        // ghost の読み直しで控えた着せ替えを、読み直したシェルの既定との差として名前で出し直すのにだけ
+        // 使う（areka-P0-mcp-reload 要件 3.8・[`shell_carry::decide_binds`]）。
+        static_binds,
+        // bind_resolver の写しも同じく読み直しの着せ替えの名前を引くのにだけ使う（解決は seriko の写し）。
+        bind_resolver,
         // loop_tables は attach では未使用（SERIKO ループ表は spawn_seriko の actor 構築＝task 9.2 が
         // 手渡す）。attach 相はループを駆動しないため破棄する。
         loop_tables: _,
@@ -245,6 +249,11 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
 
     let planned_count = plan.items.len();
     let mut attached_count = 0usize;
+    // ghost の読み直しの前に控えた面と着せ替え（読み直しの起こし直しのときだけ在る・要件 3.8）。装着
+    // できたシェルごとに、読み直したシェルで出す面と着せ替えを決めておき、ループの後で seriko へ送る。
+    let carry = wiring.shell_carry.take();
+    let mut carried_shows = Vec::new();
+    let mut carried_binds = Vec::new();
 
     for item in &plan.items {
         let scope = item.scope;
@@ -271,6 +280,12 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             atlas: shell_atlas,
             ..
         } = shell_assets;
+        // 控えた面が読み直したシェルに在るかは、装着で move する前の World で引く。
+        let carried = carry.as_ref().and_then(|c| c.surface(scope)).map(|id| {
+            shell_carry::decide(id, item.initial_surface_id, |s| {
+                shell_world.surface(s).is_some()
+            })
+        });
 
         if let Err(e) = wiring.presenter.attach_target(
             world,
@@ -295,6 +310,17 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         // 発行するため、talk 開始直後にシェルは表示される）。
         // シェル target の装着成功を計上（DD-12 の planned==attached 積極 assert 用・balloon と対で 1 scope）。
         attached_count += 1;
+        carried_shows.extend(carried.map(|show| (scope, show)));
+        if let Some(binds) = carry.as_ref().and_then(|c| c.binds(scope)) {
+            let decided = shell_carry::decide_binds(
+                scope,
+                binds,
+                carry.as_ref().map_or(&static_binds, |c| c.old_static()),
+                &static_binds,
+                &bind_resolver,
+            );
+            carried_binds.push((scope, decided));
+        }
 
         // --- balloon target（同 scope の資産がある場合）: attach → 可視性を外部所有へ →
         //     不可視のままの確立（ShowSurface 面0・default）→ text_slot_view → register_actor_view ---
@@ -411,6 +437,10 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         unused = plan.unused_assets.len(),
         "emo2 attach: 装着計画を実行（planned＝計画件数・attached＝実装着件数）"
     );
+
+    // ghost の読み直しの前の面と着せ替えを、台本の `\s[面]`・`\![bind,…]` と同じ道で seriko へ出し直す
+    // （target は装着済み）。
+    shell_carry::replay(world, &carried_shows, &carried_binds);
 
     // ゲートを通過した attach 試行の完了。以降は no-op（高々 1 回）。
     wiring.attached = true;

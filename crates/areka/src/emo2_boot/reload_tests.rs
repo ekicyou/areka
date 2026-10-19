@@ -823,3 +823,28 @@ fn shiori_gap_replies_other_than_reached_drop_the_mark() {
         ]
     );
 }
+
+/// シェルの面の持ち越し（要件 3.8）は、自分の予約の ghost の読み直しのときだけ真。shiori の読み直し・
+/// 他人の予約・予約なし・印なしは偽（ふつうの切替と shiori の読み直しは今までどおり）。
+#[test]
+fn shell_state_is_carried_only_by_its_own_ghost_reload() {
+    let mut rig = rig("areka-reload-carry");
+    let no_mark = carries_shell_state(&rig.world);
+
+    plant_switching(&mut rig.world, ReloadTarget::Ghost, PathBuf::from("A"));
+    plant_switch_to(&mut rig.world, PathBuf::from("A"));
+    let own_ghost = carries_shell_state(&rig.world);
+    plant_switch_to(&mut rig.world, PathBuf::from("B"));
+    let foreign = carries_shell_state(&rig.world);
+    rig.world.remove_non_send::<SwitchInFlight>();
+    let no_switch = carries_shell_state(&rig.world);
+
+    plant_switching(&mut rig.world, ReloadTarget::Shiori, PathBuf::from("A"));
+    plant_switch_to(&mut rig.world, PathBuf::from("A"));
+    let own_shiori = carries_shell_state(&rig.world);
+
+    assert_eq!(
+        (no_mark, own_ghost, foreign, no_switch, own_shiori),
+        (false, true, false, false, false)
+    );
+}

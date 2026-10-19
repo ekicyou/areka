@@ -467,3 +467,133 @@ fn a_shiori_rebuild_that_cannot_write_the_drop_memory_is_fatal() {
         "(書けない記録・窓を閉じた・切替の致命): {events:?}"
     );
 }
+
+/// 新しい結線が読み直しの前の面の控えを持つか（`Emo2Wiring` が無ければ `None`）。
+fn carry_handed_over(rig: &SwitchRig) -> Option<bool> {
+    rig.world
+        .get_non_send::<crate::emo2_boot::frame::Emo2Wiring>()
+        .map(|w| w.shell_carry.is_some())
+}
+
+/// 控えを取った記録（取れた・取れなかった）の件数。
+fn carry_records(events: &[CapturedEvent]) -> usize {
+    named(events, "reload_shell_captured") + named(events, "reload_shell_carry_unavailable")
+}
+
+/// ghost の読み直しは窓を閉じる前に表示中の面を控え、起こし直した新しい結線へ渡す（要件 3.8）。
+/// 窓口を通さない自分自身への切替は控えない（要件 3.6・今までどおり最初の `\s` まで面を出さない）。
+///
+/// # 非空虚性
+/// `switch_to` が控えを取らない・渡さないと、読み直しの側が `Some(false)` で赤。読み直しでない切替でも
+/// 控えると、切替の側が `Some(true)` で赤。
+#[test]
+fn a_ghost_reload_hands_the_shown_surfaces_to_the_new_windows_but_a_switch_does_not() {
+    let mut rig = running_a();
+    let (flow, events) = capture(|| {
+        let verdict = request_reload(
+            &mut rig.world,
+            ReloadRequest {
+                target: ReloadTarget::Ghost,
+                origin: ReloadOrigin::Script,
+                notes: DescriptNotes::default(),
+            },
+        );
+        (verdict, rig.pump_talking_until(a_rebooted))
+    });
+    let reloaded = carry_handed_over(&rig);
+    assert!(rig.shutdown());
+    assert_eq!(flow, (ReloadVerdict::Accepted, true), "{events:?}");
+    assert_eq!(reloaded, Some(true), "{events:?}");
+    // 窓の生えない土台では窓の一覧が無いので、控えは空（`reload_shell_carry_unavailable`）になる。
+    assert_eq!(carry_records(&events), 1, "{events:?}");
+
+    let mut rig = running_a();
+    let (flow, events) = capture(|| {
+        (
+            plain_switch_to_a(&mut rig),
+            rig.pump_talking_until(a_rebooted),
+        )
+    });
+    let switched = carry_handed_over(&rig);
+    assert!(rig.shutdown());
+    assert_eq!(flow, (SwitchVerdict::Accepted, true), "{events:?}");
+    assert_eq!(switched, Some(false), "{events:?}");
+    assert_eq!(carry_records(&events), 0, "{events:?}");
+}
+
+/// ghost の読み直しで起こし直しに失敗し既定のゴーストへ戻ったときは、控えを既定のゴーストの窓へ渡さない
+/// （要件 3.7・3.8: 控えは読み直したゴーストの面と着せ替えで、別のゴーストの窓には効かせない）。
+///
+/// # 非空虚性
+/// `hand_over` を `boot_into` の成否より前（または `switch_to_default` の後）に呼ぶと、既定のゴーストの
+/// 結線が控えを持って `Some(true)` で赤。
+#[test]
+fn a_failed_ghost_reload_hands_no_carry_to_the_default_ghost() {
+    use crate::boot_resolve::DEFAULT_GHOST_FOLDER;
+    use crate::ghost_session::GhostBootInputsSource;
+
+    let mut rig = running_a_with(vec![
+        ("A", a_script()),
+        (
+            DEFAULT_GHOST_FOLDER,
+            FakeShiori::Scripted(Box::new(|| standard_script(r"\0emo2\e"))),
+        ),
+    ]);
+    let original = rig
+        .world
+        .remove_non_send::<GhostBootInputsSource>()
+        .expect("作り口が据わっている");
+    rig.world.insert_non_send(GhostBootInputsSource(Box::new(
+        move |cfg: &crate::ConfigInputs, origin| {
+            let mut inputs = (original.0)(cfg, origin);
+            if cfg.ghost_root.ends_with("A") {
+                inputs.wiring.ghost_root = cfg.ghost_root.join("実在しない根");
+            }
+            inputs
+        },
+    )));
+
+    let (flow, events) = capture(|| {
+        let verdict = request_reload(
+            &mut rig.world,
+            ReloadRequest {
+                target: ReloadTarget::Ghost,
+                origin: ReloadOrigin::Script,
+                notes: DescriptNotes::default(),
+            },
+        );
+        let done = rig.pump_talking_until(|rig| {
+            rig.exit_requested()
+                || (rig.calls(DEFAULT_GHOST_FOLDER).len() == 1
+                    && rig.world.get_non_send::<SwitchInFlight>().is_none()
+                    && rig.world.get_non_send::<ReloadInFlight>().is_none())
+        });
+        (verdict, done)
+    });
+    let exited = rig.exit_requested();
+    let carried = carry_handed_over(&rig);
+    assert!(rig.shutdown());
+
+    assert_eq!(flow, (ReloadVerdict::Accepted, true), "{events:?}");
+    assert!(!exited, "既定へ戻って続く: {events:?}");
+    assert_eq!(
+        carry_records(&events),
+        1,
+        "読み直しの前に控えは取る: {events:?}"
+    );
+    assert_eq!(
+        carried,
+        Some(false),
+        "既定のゴーストの結線は控えを持たない: {events:?}"
+    );
+    let reasons: Vec<_> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("reload_failed"))
+        .map(|e| e.field_str("reason").map(str::to_owned))
+        .collect();
+    assert_eq!(
+        reasons,
+        [Some("fell_back_to_default".to_owned())],
+        "{events:?}"
+    );
+}
