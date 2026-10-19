@@ -9,21 +9,10 @@
       "Bash(gh pr merge:*)"
     ]
   },
-  "extraKnownMarketplaces": {
-    "ponytail": {
-      "source": {
-        "source": "github",
-        "repo": "DietrichGebert/ponytail"
-      }
-    }
-  },
   "autoMode": {
     "allow": [
       "$defaults",
       "gh pr merge による pull request の default ブランチ（main 等）への squash マージを許可する。self-created PR を含み、kiro-complete の完了フローでの自動マージを想定する。"
     ]
-  },
-  "enabledPlugins": {
-    "ponytail@ponytail": true
   }
 }
