@@ -1,0 +1,41 @@
+[package]
+name = "real-run-kit"
+workspace = "../.."
+description = "実機の試験の窓口をワークスペースで唯一定義するテスト専用のクレート（spec: areka-P0-real-run-mcp-kit）: 子の areka を立てる・MCP のツールを呼ぶ・閉じる・落ちた回の証拠を残す"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false # テストだけが使う道具
+repository.workspace = true
+
+# 窓口自身の試験が使う偽の子（手順の環境変数 1 つで振る舞いを選ぶ）。
+[[bin]]
+name = "real-run-fake-areka"
+path = "src/bin/real-run-fake-areka.rs"
+
+# 依存は設計の Allowed Dependencies のとおり。どれも Cargo.lock に既にある版で、
+# 新しい外部のクレートは 0 個（要件 10.4）。根の [workspace.dependencies] は変えない。
+# [[bin]] は [dependencies] しか使えないので、偽の子が使うものもここに置く。
+[dependencies]
+# 検体を名前で引く（見張り sample_path_guard_test の例外 1 件＝D-2）。
+sample-ghost-kit = { path = "../sample-ghost-kit" }
+# 回の置き場（target の下）。
+temp-path-kit = { path = "../temp-path-kit" }
+# 待受の観測（scan）と既定の時間（config::Timeouts）を中継と同じ定義から読む。
+areka-mcp-bridge = { path = "../areka-mcp-bridge" }
+# 偽の子だけが使う本物の受け口（start・ToolRegistry など）。
+areka-mcp = { path = "../areka-mcp" }
+# 落ちた回の写しの複写（copy_tree_atomic＝D-6）。
+areka-user-data = { path = "../areka-user-data" }
+# MCP の公式 SDK。版は areka-mcp と同じ = で固定する。呼び手の側だけを使う。
+rmcp = { version = "=3.5.0", default-features = false, features = ["client"] }
+# 呼ぶ間だけ回す current_thread の器・time::timeout・select!。
+tokio = { version = "1", features = ["rt", "time", "macros"] }
+# 引数の JSON の文を Map へ読む。
+serde_json = "1"
+# 偽の子の最上位の窓（CreateWindowExW・GetMessageW）。
+windows = { workspace = true }
+tracing = { workspace = true }
+# 偽の子の記録の据え付け（機能はワークスペースの指定のまま・ここに綴らない）。
+tracing-subscriber = { workspace = true }

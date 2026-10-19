@@ -209,7 +209,7 @@ pub(crate) fn drain_readme_requests(world: &mut World) {
 }
 
 // OS の境界（areka-P0-open-external-tags task 1.2）。
-mod os_port;
+pub(crate) mod os_port;
 
 // 行き先の規則（task 2.1）。台本の受け口と台本からの取り出しが同じ関数を呼ぶ。
 pub(crate) mod destination;

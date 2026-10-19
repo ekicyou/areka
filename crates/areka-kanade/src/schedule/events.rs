@@ -780,6 +780,38 @@ pub fn on_translate(expanded: &str, source: &SourceEvent, status: ExecutionStatu
     }
 }
 
+/// SSTP SEND の台本の `OnTranslate` の Ref1（出所＝SSTP SEND・送り手が台本を持つ）。
+pub const REF1_SSTP_SEND_OWNED: &str = "sstp-send,owned";
+
+/// 外から頼まれた任意の名前の GET（`EventId::Sstp`・渡された Reference をそのまま）。
+///
+/// 許可表に在る名前でも Reference を補わない（0 個なら 0 個・要件 2.1・2.2）。
+/// 本関数は `EventId::Sstp` を構成する唯一点である。
+pub fn sstp_notify(
+    id: String,
+    references: Vec<String>,
+    snapshot: &ExecutionSnapshot,
+) -> ShioriCall {
+    ShioriCall::Get {
+        id: EventId::Sstp(id),
+        references,
+        status: ExecutionStatus::derive(snapshot),
+    }
+}
+
+/// SSTP SEND の台本の `OnTranslate`（GET・Ref0＝展開済み・Ref1＝[`REF1_SSTP_SEND_OWNED`]・
+/// Ref2 以降なし）。
+///
+/// Ref2・3 の欠番は列を Ref1 で止めて表す（要件 4.4）。イベントへの応答の翻訳は
+/// [`on_translate`] のまま（要件 4.6）。
+pub fn on_translate_sstp(expanded: &str, status: ExecutionStatus) -> ShioriCall {
+    ShioriCall::Get {
+        id: EventId::Static("OnTranslate"),
+        references: vec![expanded.to_string(), REF1_SSTP_SEND_OWNED.to_string()],
+        status,
+    }
+}
+
 /// `OnChoiceTimeout`（GET・Ref0=タイムアウトした選択肢を含むトークの起動スクリプト）。
 ///
 /// Reference は常に 1 個。`script` は選択肢を含むトークの起動スクリプト（`ActiveTalk.script`・

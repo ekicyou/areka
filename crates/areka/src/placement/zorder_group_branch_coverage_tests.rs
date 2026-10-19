@@ -63,7 +63,7 @@ const BRANCHES: [&str; 11] = [
 ///
 /// 3 つ目の欄は「このテストファイルが本当にコンパイルされるか」を見るためのもので、
 /// `#[path = "…"]` 宣言を持っている本番ファイルの中身を入れる。
-const TEST_FILES: [(&str, &str, &str); 7] = [
+const TEST_FILES: [(&str, &str, &str); 8] = [
     (
         "placement/zorder_group_ledger_tests.rs",
         include_str!("zorder_group_ledger_tests.rs"),
@@ -72,6 +72,11 @@ const TEST_FILES: [(&str, &str, &str); 7] = [
     (
         "placement/zorder_group_ledger_state_tests.rs",
         include_str!("zorder_group_ledger_state_tests.rs"),
+        include_str!("zorder_group_ledger.rs"),
+    ),
+    (
+        "placement/zorder_group_ledger_written_order_tests.rs",
+        include_str!("zorder_group_ledger_written_order_tests.rs"),
         include_str!("zorder_group_ledger.rs"),
     ),
     (
@@ -214,25 +219,27 @@ const COVERAGE: [(&str, &str, &str); 50] = [
         "t_zdb06_short_and_empty_settings_are_rejected_with_a_reason",
     ),
     // ── スコープ内隣接との矛盾の調停（要件 2.4）
+    // `areka-P0-zorder-scope-inversion` が調停の答えを「書かれた順を採る」へ覆した。
+    // 分岐そのもの（逆転・非隣接・隣り合いの見分け）は残るので、新しい解釈の檻へ指し直す。
     (
         "スコープ内隣接との矛盾の調停",
-        "placement/zorder_group_ledger_tests.rs",
-        "t_zgp15_inverted_scope_pair_is_folded_into_balloon_then_char",
+        "placement/zorder_group_ledger_written_order_tests.rs",
+        "t_zwo03_adjacent_inversion_is_kept",
     ),
     (
         "スコープ内隣接との矛盾の調停",
-        "placement/zorder_group_ledger_tests.rs",
-        "t_zgp16_non_adjacent_scope_pair_is_folded_at_first_appearance",
+        "placement/zorder_group_ledger_written_order_tests.rs",
+        "t_zwo02_split_order_is_kept_verbatim_and_classified",
     ),
     (
         "スコープ内隣接との矛盾の調停",
-        "placement/zorder_group_ledger_tests.rs",
-        "t_zgp17_already_adjacent_block_is_recorded_as_not_reordered",
+        "placement/zorder_group_ledger_written_order_tests.rs",
+        "t_zwo04_balloon_then_char_stays_adjacent",
     ),
     (
         "スコープ内隣接との矛盾の調停",
-        "placement/zorder_group_ledger_tests.rs",
-        "t_zgp21_every_scope_is_adjacent_with_balloon_first_after_normalization",
+        "placement/zorder_group_ledger_written_order_tests.rs",
+        "t_zwo01_pasta_inversion_keeps_written_order_and_fills_b1_before_s1",
     ),
     // 片方の窓だけが指名された形も同じ調停の一部である（相棒窓の畳み込み・要件 2.6）。
     (
@@ -248,7 +255,7 @@ const COVERAGE: [(&str, &str, &str); 50] = [
     (
         "スコープ内隣接との矛盾の調停",
         "emo2_boot/frame/zorder_drain_tests.rs",
-        "t_zdr04_normalization_is_surfaced_only_when_the_author_order_was_adjusted",
+        "t_zdr04_the_written_order_shape_is_surfaced_only_for_the_explicit_mode",
     ),
     (
         "スコープ内隣接との矛盾の調停",
@@ -258,7 +265,7 @@ const COVERAGE: [(&str, &str, &str); 50] = [
     (
         "スコープ内隣接との矛盾の調停",
         "emo2_boot/frame/zorder_descript_tests.rs",
-        "t_zdb04_an_inverted_setting_is_normalized_and_the_adjustment_is_recorded",
+        "t_zdb04_an_inverted_setting_is_seated_in_written_order_and_recorded",
     ),
     (
         "スコープ内隣接との矛盾の調停",

@@ -37,19 +37,23 @@
 //! よって語彙の保全（要件 9.5）は割れない。2 つの住処が実際に分かれていることは
 //! 兄弟テストが捕捉した行の出力先で固定している。
 //!
-//! # `dead_code` 許可は 1 つも残っていない
+//! # `dead_code` 許可は 1 つも無い
 //!
 //! 適用系（[`zorder_chain_apply`](super::zorder_chain_apply)）が着地したことで、差分の
 //! 純判断・後押しの選定・記録の出口には本番の呼び手が付いた。段階的実装のために
-//! モジュール全体を覆っていた許可は撤去してある。
+//! モジュール全体を覆っていた許可は撤去してある。`areka-P0-zorder-scope-inversion` が
+//! 足した組の外し・結び直しの判定と操作列（`pair_released_by_chain`・`plan_pair_ops`）、
+//! 外し損ねの巡の輪の確かめ（`check_owner_loop`）、記録の出口（`log_chain_pair_released`・
+//! `log_chain_pair_restored`・`log_chain_link_refused`）にも鎖の適用系の呼び手が付いている。
 
 use bevy_ecs::prelude::*;
 use tracing::{debug, error};
 use windows::Win32::Foundation::HWND;
 
 use super::zorder_chain_diag::{
-    ChainSegment, ChainSkipReason, DetachReason, absent_line, link_failed_line, linked_line,
-    settled_line, skipped_line, unlink_failed_line, unlinked_line,
+    ChainSegment, ChainSkipReason, DetachReason, LinkRefusedReason, absent_line, link_failed_line,
+    link_refused_line, linked_line, pair_released_line, pair_restored_line, settled_line,
+    skipped_line, unlink_failed_line, unlinked_line,
 };
 use super::{SetWindowPosCommand, WindowPos, ZOrder};
 
@@ -82,6 +86,12 @@ pub struct CrossEdge {
 ///
 /// `members` はグループの連結（登記順・先に登記されたほど手前）＋未指定スコープの
 /// 後方配置（スコープ ID 昇順・要件 15）を、**実在する窓だけへ射影した**列である。
+///
+/// # 組の結び目との受け持ちの分け方
+///
+/// `members` は全窓を手前から並べた列であり、（バルーン, その `KeepDirectlyAbove` の相手）が
+/// 連続する組は組の結び目が受け持つ（`cross_edges` に載らない）。連続しない組（逆転・
+/// 非隣接）は、この計画が有効な間、鎖の適用系が結び目を外す（[`pair_released_by_chain`]）。
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct ChainPlan {
     /// 手前から奥へ並べた、実在する窓の Entity 列（射影後）。末尾が鎖の根。
@@ -237,6 +247,129 @@ pub(crate) fn plan_chain_ops(
     }));
 
     ops
+}
+
+// ============================================================================
+// 組の結び目の外しと結び直し——望む鎖が組の 2 枚を連続させない間だけ外す
+// ============================================================================
+
+/// 組の結び目を鎖のために外している印（バルーン窓＝`KeepDirectlyAbove` を持つ窓へ付く）。
+///
+/// 値を持たない——「外している」という事実だけを記録する。付ける・外すのは鎖の適用系だけ。
+/// 公開到達性は鎖の適用系の引数に現れるためだけ（`OwnerEstablishFailed` と同じ）。
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PairReleased;
+
+/// 望む鎖がこの組の結び目を外させるか（純関数・判定の唯一の所在）。
+///
+/// 真になるのは、鎖が在り、バルーンとキャラクターの両方が `members` に居て、キャラクターが
+/// バルーンのすぐ奥（次の要素）に居ないときだけ。組の系（確立・維持・沈降の観測）と鎖の
+/// 適用系はすべてこれを呼ぶ——判定を 2 箇所に持つと、片方が外した組を片方が張り直す往復が
+/// 生まれる。
+pub(crate) fn pair_released_by_chain(
+    chain: Option<&ChainPlan>,
+    balloon: Entity,
+    peer: Entity,
+) -> bool {
+    let Some(chain) = chain else {
+        return false;
+    };
+    let Some(at) = chain.members.iter().position(|e| *e == balloon) else {
+        return false;
+    };
+    chain.members.contains(&peer) && chain.members.get(at + 1) != Some(&peer)
+}
+
+/// 組 1 つの現況（鎖の適用系が World から集める）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct PairState {
+    /// バルーン（`KeepDirectlyAbove` を持つ窓）。
+    pub balloon: Entity,
+    /// その相手のキャラクター。
+    pub peer: Entity,
+    /// [`PairReleased`] が付いているか。
+    pub released: bool,
+}
+
+/// 組へ出すべき操作 1 つ。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PairOp {
+    /// 結び目を外し、印を付ける（結び目が張られていなければ印だけ）。
+    Release { balloon: Entity, peer: Entity },
+    /// 印を外し、結び目を張り直す（張れなければ印だけ外す）。
+    Restore { balloon: Entity, peer: Entity },
+}
+
+/// 組の現況と望む鎖から操作列を導く（純関数）。
+///
+/// 全部の [`PairOp::Release`] が先・全部の [`PairOp::Restore`] が後で、各群の中はバルーンの
+/// `Entity` の昇順（決定論）。印の有無が望み（[`pair_released_by_chain`]）と一致する組には
+/// 操作を出さない。鎖が `None` なら外す組は 0 で、印の付いた組は全部結び直す。
+pub(crate) fn plan_pair_ops(chain: Option<&ChainPlan>, pairs: &[PairState]) -> Vec<PairOp> {
+    let mut release: Vec<&PairState> = Vec::new();
+    let mut restore: Vec<&PairState> = Vec::new();
+    for pair in pairs {
+        match (
+            pair_released_by_chain(chain, pair.balloon, pair.peer),
+            pair.released,
+        ) {
+            (true, false) => release.push(pair),
+            (false, true) => restore.push(pair),
+            _ => {}
+        }
+    }
+    release.sort_by_key(|p| p.balloon);
+    restore.sort_by_key(|p| p.balloon);
+    release
+        .into_iter()
+        .map(|p| PairOp::Release {
+            balloon: p.balloon,
+            peer: p.peer,
+        })
+        .chain(restore.into_iter().map(|p| PairOp::Restore {
+            balloon: p.balloon,
+            peer: p.peer,
+        }))
+        .collect()
+}
+
+/// 持ち主を辿る回数の上限。これで着かなければ輪とみなす（読みが返す関係が途中で
+/// 書き換わっても、辿りが終わらない形にしない）。
+pub(crate) const OWNER_WALK_LIMIT: usize = 64;
+
+/// 付与が持ち主の輪を作るかの確かめの答え。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum OwnerLoopCheck {
+    /// 持ち主の無い窓に着いた（張ってよい）。
+    Clear,
+    /// 所有側に出会った、または上限を超えた（張ると輪になる）。
+    Loop,
+    /// 辿る途中で持ち主が読めなかった。
+    Unreadable,
+}
+
+/// 付与 `owned ← owner` が持ち主の輪を作らないか（純関数・読む口は引数）。
+///
+/// `owner` から持ち主を辿り、`owned` に出会えば `Loop`、持ち主の無い窓（null）に着けば
+/// `Clear`、読めなければ `Unreadable`。読むのは上限 [`OWNER_WALK_LIMIT`] 回までで、
+/// それで着かなければ `Loop`。
+pub(crate) fn check_owner_loop(
+    owned: HWND,
+    owner: HWND,
+    read_owner: &mut dyn FnMut(HWND) -> windows::core::Result<HWND>,
+) -> OwnerLoopCheck {
+    let mut at = owner;
+    for _ in 0..OWNER_WALK_LIMIT {
+        if at == owned {
+            return OwnerLoopCheck::Loop;
+        }
+        match read_owner(at) {
+            Err(_) => return OwnerLoopCheck::Unreadable,
+            Ok(next) if next.0.is_null() => return OwnerLoopCheck::Clear,
+            Ok(next) => at = next,
+        }
+    }
+    OwnerLoopCheck::Loop
 }
 
 // ============================================================================
@@ -445,6 +578,54 @@ pub(crate) fn log_chain_unlink_failed(owned_hwnd: Option<HWND>, error: &windows:
     error!("{}", unlink_failed_line(owned_hwnd, error));
 }
 
+// 組の受け渡しの 3 語（`pair-released`／`pair-restored`／`link-refused`）も、出力先を
+// 本モジュールの 1 本に保つためここから撃つ。行の組立は同じく `zorder_chain_diag`。
+
+/// 組の結び目を外した事実を記録する（debug・要件 1.1／2.1／7.2）。
+pub(crate) fn log_chain_pair_released(
+    entity: Entity,
+    peer: Entity,
+    owned_hwnd: Option<HWND>,
+    owner_hwnd: Option<HWND>,
+    unlinked: bool,
+) {
+    debug!(
+        "{}",
+        pair_released_line(entity, peer, owned_hwnd, owner_hwnd, unlinked)
+    );
+}
+
+/// 外していた組の結び目を張り直した事実を記録する（debug・要件 4.5／6.4）。
+pub(crate) fn log_chain_pair_restored(
+    entity: Entity,
+    peer: Entity,
+    owned_hwnd: Option<HWND>,
+    owner_hwnd: Option<HWND>,
+) {
+    debug!(
+        "{}",
+        pair_restored_line(entity, peer, owned_hwnd, owner_hwnd)
+    );
+}
+
+/// 持ち主の輪を作る付与を見送った事実を記録する（error・要件 7.1／7.2）。
+pub(crate) fn log_chain_link_refused(
+    owned: Entity,
+    owner: Entity,
+    owned_hwnd: Option<HWND>,
+    owner_hwnd: Option<HWND>,
+    reason: LinkRefusedReason,
+) {
+    error!(
+        "{}",
+        link_refused_line(owned, owner, owned_hwnd, owner_hwnd, reason)
+    );
+}
+
 #[cfg(test)]
 #[path = "zorder_chain_tests.rs"]
 mod zorder_chain_tests;
+
+#[cfg(test)]
+#[path = "zorder_chain_release_tests.rs"]
+mod zorder_chain_release_tests;

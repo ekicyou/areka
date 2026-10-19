@@ -293,6 +293,7 @@ impl SwitchRig {
                     // 結線ありの腕を通す形では、fallback に落ちると記録が残らず判定が赤になる。WiringFail／BalloonMissing はわざと倒れ、倒れた先の SHIORI はこの helper で接続に失敗する。
                     helper_exe: PathBuf::from("ghost_switch_test_support/使わない/helper.exe"),
                     kanade_stop: notice_tx.clone(),
+                    modules: crate::cli::ModulePolicy::Load,
                 }
             },
         )));

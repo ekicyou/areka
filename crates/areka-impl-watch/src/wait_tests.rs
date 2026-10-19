@@ -1,13 +1,13 @@
 //! 待ちの終わりの判定の決定論テスト。状態を組み立てて渡すだけで、ファイルも時計も触らない。
 //!
-//! 組み立てる参加者の名前と負荷テストの内容は日本語（端末へ出てはならない値）。終わりの 1 行は
+//! 組み立てる参加者の名前と机の申し込みの内容は日本語（端末へ出てはならない値）。終わりの 1 行は
 //! [`judged`] が毎回「ASCII だけ・1 行」を確かめる。
 
-use super::test_support::{T0, load, merge, resume, watch};
+use super::test_support::{T0, merge, request, resume, watch};
 use super::{WaitEnd, WaitSpec, judge};
 use crate::state::{
-    LastMerge, LoadHolder, LoadRequest, MergeDesk, MergeHolder, MergeRequest, Participant,
-    ParticipantStatus, State, StopReason,
+    DeskRequest, DeskSet, LastMerge, MergeDesk, MergeHolder, MergeRequest, Participant,
+    ParticipantStatus, SoleHolder, State, StopReason, TestHolder,
 };
 
 const WORKING: ParticipantStatus = ParticipantStatus::Working;
@@ -95,23 +95,35 @@ fn last_merge() -> Option<LastMerge> {
     })
 }
 
-fn load_request(id: &str) -> LoadRequest {
-    LoadRequest {
+fn desk_request(id: &str, desks: DeskSet) -> DeskRequest {
+    DeskRequest {
         id: id.to_owned(),
+        desks,
         purpose: "負荷の計測 5 回".to_owned(),
         requested: T0 + 20,
     }
 }
 
-fn load_holder(id: &str, stopped: &[&str]) -> Option<LoadHolder> {
-    Some(LoadHolder {
+/// 排他テストの机の持ち主にする。
+fn hold_test(state: &mut State, id: &str) {
+    state.test = Some(TestHolder {
+        id: id.to_owned(),
+        purpose: "全体テスト".to_owned(),
+        requested: T0 + 20,
+        granted: T0 + 30,
+    });
+}
+
+/// ひとり占めの持ち主にする（番が来たときに止まっていた識別つき）。
+fn hold_sole(state: &mut State, id: &str, stopped: &[&str]) {
+    state.sole = Some(SoleHolder {
         id: id.to_owned(),
         purpose: "負荷の計測 5 回".to_owned(),
         requested: T0 + 20,
         granted: T0 + 30,
         running: false,
         stopped: stopped.iter().map(|id| (*id).to_owned()).collect(),
-    })
+    });
 }
 
 // ---- 見張り ----
@@ -123,10 +135,11 @@ fn watch_keeps_waiting_while_working() {
 
     // 机を持っていても・並んでいても、見張りは終わらない（要件 5.3）。
     state.merge.entry("areka".to_owned()).or_default().holder = merge_holder("A");
-    state.load.queue.push(load_request("A"));
+    state.requests.push(desk_request("A", DeskSet::Test));
     assert_eq!(judged(&watch("A"), &state), None);
-    state.load.queue.clear();
-    state.load.holder = load_holder("A", &["B"]);
+    state.requests.clear();
+    hold_test(&mut state, "A");
+    hold_sole(&mut state, "A", &["B"]);
     assert_eq!(judged(&watch("A"), &state), None);
 }
 
@@ -135,7 +148,7 @@ fn watch_ends_with_who_asked_when_a_stop_is_requested() {
     let mut state = state_with(&[("B", STOP_REQUESTED), ("C", WORKING), ("D", WORKING)]);
     // 停止要請の理由は出したときのまま（いまの候補が D に替わっていても C のまま）。
     stop_reason(&mut state, "B", "C");
-    state.load.queue.push(load_request("D"));
+    state.requests.push(desk_request("D", DeskSet::TestSole));
 
     assert_eq!(judged(&watch("B"), &state), done("stop requested by C"));
 }
@@ -287,73 +300,97 @@ fn merge_is_gone_when_the_participant_record_is_missing() {
     assert_eq!(judged(&merge("A", "areka"), &state), gone("request gone"));
 }
 
-// ---- 負荷テストの待ち ----
+// ---- 机の申し込みの待ち ----
 
 #[test]
-fn load_keeps_waiting_while_queued() {
+fn request_keeps_waiting_while_queued() {
     let mut state = state_with(&[
         ("A", STOPPED),
         ("B", STOPPED),
         ("C", WORKING),
         ("D", WORKING),
     ]);
-    state.load.holder = load_holder("D", &["A", "B"]);
-    state.load.queue.push(load_request("C"));
+    hold_test(&mut state, "D");
+    hold_sole(&mut state, "D", &["A", "B"]);
+    state.requests.push(desk_request("C", DeskSet::Test));
 
-    assert_eq!(judged(&load("C"), &state), None);
+    assert_eq!(judged(&request("C"), &state), None);
 
-    state.load.holder = None;
-    assert_eq!(judged(&load("C"), &state), None);
+    state.test = None;
+    state.sole = None;
+    assert_eq!(judged(&request("C"), &state), None);
 }
 
 #[test]
-fn load_is_granted_with_the_stopped_ids_on_the_line() {
+fn request_is_granted_test_without_a_stopped_list() {
+    let mut state = state_with(&[("A", STOPPED), ("C", WORKING), ("D", WORKING)]);
+    hold_test(&mut state, "C");
+    state.requests.push(desk_request("D", DeskSet::Test));
+    assert_eq!(judged(&request("C"), &state), done("granted test"));
+
+    // ほかの識別のひとり占めの止まった一覧は、排他テストの机だけの番の行に載らない。
+    hold_sole(&mut state, "D", &["A"]);
+    state.requests.clear();
+    assert_eq!(judged(&request("C"), &state), done("granted test"));
+}
+
+#[test]
+fn request_is_granted_test_sole_with_the_stopped_ids_on_the_line() {
     let mut state = state_with(&[
         ("A", STOPPED),
         ("B", STOPPED),
         ("C", WORKING),
         ("D", WORKING),
     ]);
-    state.load.holder = load_holder("C", &["A", "B"]);
-    state.load.queue.push(load_request("D"));
+    hold_test(&mut state, "C");
+    hold_sole(&mut state, "C", &["A", "B"]);
+    state.requests.push(desk_request("D", DeskSet::Test));
 
     assert_eq!(
-        judged(&load("C"), &state),
-        done("granted load; stopped: A, B")
+        judged(&request("C"), &state),
+        done("granted test,sole; stopped: A, B")
     );
 }
 
 #[test]
-fn load_is_granted_with_stopped_none_when_nobody_had_to_stop() {
+fn request_is_granted_sole_with_stopped_none_when_nobody_had_to_stop() {
     let mut state = state_with(&[("C", WORKING)]);
-    state.load.holder = load_holder("C", &[]);
-
+    hold_sole(&mut state, "C", &[]);
     assert_eq!(
-        judged(&load("C"), &state),
-        done("granted load; stopped: none")
+        judged(&request("C"), &state),
+        done("granted sole; stopped: none")
+    );
+
+    hold_test(&mut state, "C");
+    assert_eq!(
+        judged(&request("C"), &state),
+        done("granted test,sole; stopped: none")
     );
 }
 
 #[test]
-fn load_is_gone_when_neither_queued_nor_holding() {
+fn request_is_gone_when_neither_queued_nor_holding() {
     let mut state = state_with(&[("A", WORKING), ("C", WORKING), ("D", WORKING)]);
-    assert_eq!(judged(&load("C"), &state), gone("request gone"));
+    assert_eq!(judged(&request("C"), &state), gone("request gone"));
 
-    // 机には他人だけが居る。
-    state.load.holder = load_holder("D", &["C"]);
-    state.load.queue.push(load_request("A"));
-    assert_eq!(judged(&load("C"), &state), gone("request gone"));
+    // 机には他人だけが居る・マージの机を持っていても机の申し込みの番ではない。
+    hold_test(&mut state, "D");
+    hold_sole(&mut state, "D", &["C"]);
+    state.requests.push(desk_request("A", DeskSet::Test));
+    state.merge.entry("areka".to_owned()).or_default().holder = merge_holder("C");
+    assert_eq!(judged(&request("C"), &state), gone("request gone"));
 }
 
 #[test]
-fn load_is_gone_when_the_participant_record_is_missing() {
+fn request_is_gone_when_the_participant_record_is_missing() {
     let mut state = state_with(&[("A", WORKING)]);
-    state.load.queue.push(load_request("C"));
-    assert_eq!(judged(&load("C"), &state), gone("request gone"));
+    state.requests.push(desk_request("C", DeskSet::Test));
+    assert_eq!(judged(&request("C"), &state), gone("request gone"));
 
-    state.load.queue.clear();
-    state.load.holder = load_holder("C", &["A"]);
-    assert_eq!(judged(&load("C"), &state), gone("request gone"));
+    state.requests.clear();
+    hold_test(&mut state, "C");
+    hold_sole(&mut state, "C", &["A"]);
+    assert_eq!(judged(&request("C"), &state), gone("request gone"));
 }
 
 // ---- 再開の待ち ----
@@ -372,7 +409,7 @@ fn resume_ends_with_who_asked_when_the_stop_is_requested_again() {
     let mut state = state_with(&[("B", STOP_REQUESTED), ("C", WORKING), ("D", WORKING)]);
     // 誰のものかは、記録された停止要請の理由から取る（いまの候補が D に替わっていても C のまま）。
     stop_reason(&mut state, "B", "C");
-    state.load.queue.push(load_request("D"));
+    state.requests.push(desk_request("D", DeskSet::TestSole));
 
     assert_eq!(
         judged(&resume("B"), &state),
@@ -412,7 +449,7 @@ fn resume_is_gone_when_the_participant_record_is_missing() {
 fn every_kind_is_gone_when_there_is_no_state_file() {
     assert_eq!(judge(&watch("A"), None), gone("removed"));
     assert_eq!(judge(&merge("A", "areka"), None), gone("request gone"));
-    assert_eq!(judge(&load("A"), None), gone("request gone"));
+    assert_eq!(judge(&request("A"), None), gone("request gone"));
     assert_eq!(judge(&resume("A"), None), gone("removed"));
 }
 
@@ -445,9 +482,10 @@ fn lines_stay_ascii_when_hand_edited_values_are_not_ascii() {
         done("granted merge repo=\\u{5009}; last: PR#281 414d43eb \\u{4fc2} 2026-10-10T01:00:00Z")
     );
 
-    state.load.holder = load_holder("A", &["係", "B"]);
+    hold_test(&mut state, "A");
+    hold_sole(&mut state, "A", &["係", "B"]);
     assert_eq!(
-        judged(&load("A"), &state),
-        done("granted load; stopped: \\u{4fc2}, B")
+        judged(&request("A"), &state),
+        done("granted test,sole; stopped: \\u{4fc2}, B")
     );
 }

@@ -271,11 +271,13 @@ fn has_invalid_chars(item: &str) -> bool {
         .any(|c| c < ' ' || matches!(c, '<' | '>' | '"' | '?' | '*'))
 }
 
-/// 並びを記憶の値へ。実行ファイルのフォルダと同じ根は `<exe>`、ほかは絶対パスの綴り（要件 1.10・6.8）。純粋。
+/// 並びを記憶の値へ。実行ファイルのフォルダと同じ根は `<exe>`、ほかは絶対パスの綴り（要件 1.10・6.8）。
+/// 一時の置き場は書かない（areka-P0-startup-options-core 要件 3.4）。純粋。
 pub(crate) fn encode_memory(roots: &BasewareRoots, exe_dir: Option<&Path>) -> String {
     roots
         .roots()
         .iter()
+        .filter(|r| !r.is_temporary())
         .map(|r| match exe_dir {
             Some(exe) if same_root(r.dir(), exe) => EXE_TOKEN.to_string(),
             _ => r.dir().to_string_lossy().into_owned(),

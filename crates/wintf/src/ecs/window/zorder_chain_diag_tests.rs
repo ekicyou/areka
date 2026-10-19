@@ -23,8 +23,8 @@ use windows::core::HRESULT;
 use super::{
     ChainSegment, ChainSkipReason, DetachReason, UNKNOWN, absent_line, applied_line,
     chain_record_tags, link_failed_line, linked_line, log_group_applied, log_group_rejected,
-    preserved_group_tags, rejected_line, settled_line, skipped_line, unlink_failed_line,
-    unlinked_line,
+    pair_handover_tags, preserved_group_tags, rejected_line, settled_line, skipped_line,
+    unlink_failed_line, unlinked_line,
 };
 use crate::ecs::test_support::capture_under_filter;
 
@@ -144,6 +144,10 @@ fn the_two_preserved_group_tags_kept_their_exact_spelling_through_the_move() {
 /// 直上の 2 つは「登録されているものが正しい」ことしか言わない——**それ以外に無い**は
 /// 名簿を読むだけでは決して言えず、余分な定数とそれを使う行組立を足しても名簿は沈黙する。
 /// 数えるのはコード本文に現れる文字列リテラルである。
+///
+/// 鎖の冠を持つ名簿は 2 本ある——既存の 7 語（[`chain_record_tags`]・変えない）と、
+/// `areka-P0-zorder-scope-inversion` が足した組の受け渡しの 3 語（[`pair_handover_tags`]）。
+/// 数は 2 本の和と突き合わせる。
 #[test]
 fn no_extra_tag_hides_outside_the_two_rosters() {
     let code = code_only(include_str!("zorder_chain_diag.rs"));
@@ -151,7 +155,7 @@ fn no_extra_tag_hides_outside_the_two_rosters() {
     let chain_literals = code.matches("\"[zorder-chain] ").count();
     assert_eq!(
         chain_literals,
-        chain_record_tags().len(),
+        chain_record_tags().len() + pair_handover_tags().len(),
         "モジュール本体の鎖タグ文字列が名簿と数で合わない"
     );
     let group_literals = code.matches("\"[zorder-group] ").count();
@@ -162,10 +166,11 @@ fn no_extra_tag_hides_outside_the_two_rosters() {
     );
 
     // 対照: 数える針が本当に当たっている（0 を数えて緑になる走査ではない）
-    assert_eq!(chain_literals, 7, "鎖タグの走査そのものが空振りしている");
+    assert_eq!(chain_literals, 10, "鎖タグの走査そのものが空振りしている");
     assert_eq!(group_literals, 2, "保全タグの走査そのものが空振りしている");
     for tag in chain_record_tags()
         .iter()
+        .chain(pair_handover_tags().iter())
         .chain(preserved_group_tags().iter())
     {
         assert!(

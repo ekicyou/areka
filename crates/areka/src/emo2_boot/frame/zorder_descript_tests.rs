@@ -203,9 +203,9 @@ fn t_zdb02_no_setting_leaves_the_ledger_and_the_log_untouched() {
 /// 「別解釈器を新設していない」を主張するためである。手書きの期待値だと、こちらに
 /// 2 つ目の解釈器が生えても両方を同じに直せば緑のまま通ってしまう。
 ///
-/// 入力に**正規化を要する並び**（`s1,b1,s0,b0`＝同一スコープ内が反転している）を 1 本
-/// 混ぜてあるのは、この錨を自足させるためである。既に正規化済みの並びだけを与えると
-/// 「`parse_zorder_tokens` は通すが正規化だけ省く」型の第 2 解釈器が素通りする。
+/// 入力に**逆転の並び**（`s1,b1,s0,b0`＝同一スコープ内でキャラ窓が手前）を 1 本
+/// 混ぜてあるのは、この錨を自足させるためである。隣り合いの並びだけを与えると
+/// 「バルーン先頭へ寄せ直す」型の第 2 解釈器が素通りする。
 #[test]
 fn t_zdb03_the_setting_is_read_by_the_very_function_the_tag_uses() {
     for raw in [
@@ -230,10 +230,10 @@ fn t_zdb03_the_setting_is_read_by_the_very_function_the_tag_uses() {
     }
 }
 
-/// 同一スコープ内の反転も、タグと同じ規則で隣接ブロックへ寄り、寄せた事実が記録に載る
-/// （要件 2.4 の調整記録が起動の経路でも失われない）。
+/// 同一スコープ内の逆転も、タグと同じ解釈で書かれた順のまま据わり、逆転が記録に載る
+/// （`areka-P0-zorder-scope-inversion` 要件 1.3・1.4 が起動の経路でも成り立つ）。
 #[test]
-fn t_zdb04_an_inverted_setting_is_normalized_and_the_adjustment_is_recorded() {
+fn t_zdb04_an_inverted_setting_is_seated_in_written_order_and_recorded() {
     let mut ledger = ZOrderGroupLedger::default();
 
     let logs = capture_logs(|| apply_descript_base(&mut ledger, Some("s1,b1,s0,b0")));
@@ -241,15 +241,15 @@ fn t_zdb04_an_inverted_setting_is_normalized_and_the_adjustment_is_recorded() {
     let base = base_of(&ledger).expect("基底が据わっていない");
     assert_eq!(
         members_text(&base.members),
-        "b1,s1,b0,s0",
-        "同一スコープの 2 窓が [バルーン, キャラ] の隣接ブロックへ寄っていない"
+        "s1,b1,s0,b0",
+        "書かれた順のまま据わっていない（バルーン先頭へ寄せ直している）"
     );
 
     let applied = lines_with(&logs, "[zorder-group] applied");
     assert_eq!(applied.len(), 1, "受理の記録が 1 本ではない: {logs:?}");
     assert!(
-        applied[0].contains("normalized=1:true,0:true"),
-        "書かれた順をそのまま採らなかったことが記録に載っていない（黙って組み替えている）: {}",
+        applied[0].contains("normalized=1:inverted,0:inverted"),
+        "逆転のまま採ったことが記録に載っていない: {}",
         applied[0]
     );
 }

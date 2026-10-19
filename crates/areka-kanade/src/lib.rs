@@ -26,6 +26,10 @@ pub mod anchor_input;
 pub mod change;
 // 殻で答える複数件のリソース照会（`KanadeMsg::ResourceQuery`）。`actor.rs` を薄く保つための分室。
 mod actor_resources;
+// 殻の SSTP の 2 つの入口の返事（返事の控え・最初の往復の写し・返事の送り）。
+mod actor_sstp;
+// 殻の停止と通知の手 4 つ（`actor.rs` を薄く保つための分室・殻は同じ名前で使う）。
+mod actor_stop;
 // 殻が翻訳の依頼（`Action::Translate`）を実行する 1 関数（呼び手は `actor` の `execute_batch` の腕）。
 mod actor_translate;
 pub mod msg;
@@ -36,6 +40,8 @@ pub mod online;
 #[allow(dead_code)]
 pub(crate) mod schedule;
 pub mod shiori;
+// SSTP の入口の外向けの型と検査（MCP の側と送出の檻が使う正本・std だけ）。
+pub mod sstp;
 pub mod status;
 pub mod talk;
 pub mod translate;
@@ -94,5 +100,15 @@ pub mod resources {
     pub use crate::schedule::resources::{
         ALLOWED_RESOURCE_IDS, ResourceOutcome, ResourceSink, is_allowed_resource_id, resource_get,
         resource_username,
+    };
+}
+
+/// script 種別のログの公開ファサード（[`events`] と同じ露出規律）。
+///
+/// 運行表の出口が出す記録の target・表示の語・1 件を出す手を、MCP の側（`areka` の `get_log` の
+/// 読み口のテスト）が同じ正本で使うための唯一の経路。
+pub mod script_log {
+    pub use crate::schedule::script_log::{
+        PLAIN_LABEL, SSTP_SEND_LABEL, TARGET, emit, event_label,
     };
 }

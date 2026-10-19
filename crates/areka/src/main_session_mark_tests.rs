@@ -311,7 +311,7 @@ fn install_puts_context_and_one_production_source() {
     let ctx = world_with(&tmp, decision(GhostRoute::Memory, Some("A")), None, None)
         .remove_resource::<BootContext>()
         .expect("文脈");
-    install_boot_context(&mut world, ctx, tx);
+    install_boot_context(&mut world, ctx, tx, crate::cli::ModulePolicy::Load);
 
     let has_context = world.contains_resource::<BootContext>();
     let has_source = world.contains_non_send::<GhostBootInputsSource>();

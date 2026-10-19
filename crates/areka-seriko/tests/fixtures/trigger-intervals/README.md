@@ -61,5 +61,5 @@ element定義の並びは 体 → 目 → 眉 → 髪飾り → 口（element4�
 
 1. `cargo run -p sample-ghost-kit --bin nar-sample-path emo2` で emo2 を展開し、ワークツリーの `target\` の下に写しを作る（同梱の検体そのものと `target\` の外は書き替えない）。
 2. 写しの `shell\master\surfaces.txt` の末尾へ、この `surfaces.txt` を丸ごと書き足す（1 行目の `charset,UTF-8` は残してよい。読み手は読み飛ばす）。
-3. 有界の自動終了・走行ごとのプロファイル・`RUST_LOG=info,areka_seriko=debug,areka_emo_text=debug` で起こし、`\s[9100]` と台詞、`\s[9101]`、`\s[9103]`、`\s[9104]` ほかを流す。areka の MCP の `sakurascript` はまだ中身が無いので、写しの `scripts\pasta\shiori\event\boot.lua` の `OnBoot`／`OnFirstBoot` が生の台本 1 本を返すようにして流す（面の切り替えの時刻は台本の `\_w[ms]` で決める）。面の写しは MCP の `dump_surface` で繰り返し撮る。
+3. 有界の自動終了・走行ごとのプロファイル・`RUST_LOG=info,areka_seriko=debug,areka_emo_text=debug` で起こし、`\s[9100]` と台詞、`\s[9101]`、`\s[9103]`、`\s[9104]` ほかを、areka の MCP の `sakurascript` で台本として送って流す（面の切り替えの時刻は台本の `\_w[ms]` で決める）。面の写しは MCP の `dump_surface` で繰り返し撮る。
 4. 記録を検索して、上の表の件数と、`runonce`・`periodic`・`talk` の開始の時刻を判定する。

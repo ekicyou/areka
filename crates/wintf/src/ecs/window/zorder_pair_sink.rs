@@ -35,6 +35,7 @@
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::HWND;
 
+use super::zorder_chain::{ChainPlan, pair_released_by_chain};
 use super::zorder_pair::{
     FrontScan, PairFixDecision, SkipReason, log_orphan_sink_mark_dropped, log_sink_observed,
     measure_window_below, measure_windows_in_front, record_decision,
@@ -146,11 +147,15 @@ pub(crate) fn is_behind_foreground(
 /// 測れない巡（相手が消えた・ハンドルが未付与）は理由つきの見送りとして記録する
 /// （要件 6.3・黙って諦めない）。相手の消滅は正常系であり error にはしない（要件 1.5）。
 ///
+/// 鎖が結び目を外している組（`chain` で `pair_released_by_chain` が真）は、測らずに
+/// 目印を外して `ReleasedByChain` を記録する（要件 5.1・5.4）。
+///
 /// 読み取りだけを行う——指令を積まず、重なりにも位置にも書き込まない。
 pub(crate) fn observe_marked_pair_sinks(
     commands: &mut Commands,
     marks: &SinkMarkQuery,
     handles: &HandleQuery,
+    chain: Option<&ChainPlan>,
 ) {
     for (entity, declaration) in marks.iter() {
         commands.entity(entity).remove::<SinkObservationPending>();
@@ -161,6 +166,14 @@ pub(crate) fn observe_marked_pair_sinks(
             continue;
         };
         let peer = declaration.peer;
+        if pair_released_by_chain(chain, entity, peer) {
+            record_decision(
+                entity,
+                peer,
+                PairFixDecision::Skip(SkipReason::ReleasedByChain),
+            );
+            continue;
+        }
 
         let above_hwnd = handles.get(entity).ok().flatten().map(|h| h.hwnd);
         let Ok(peer_handle) = handles.get(peer) else {

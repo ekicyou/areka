@@ -141,6 +141,12 @@ mod exit_wait;
 /// ベースウェアの根の並びの決め方（areka-P0-baseware-root-list）。
 mod roots;
 
+/// 自動 close の仕掛け（`AREKA_APP_SMOKE_EXIT_MS`・CI smoke）。
+mod smoke_exit;
+
+/// 起動オプションの読み方（areka-P0-startup-options-core）。
+mod cli;
+
 // ---------------------------------------------------------------------------
 // Entry Point
 // ---------------------------------------------------------------------------
@@ -152,6 +158,19 @@ fn main() -> Result<()> {
     // 外部入力の扱い（A1-V）: RUST_LOG が未設定・非UTF-8・不正な構文の場合は
     // try_from_default_env() が Err を返し "info" へフォールバックする（panic 経路なし）。
     log_history::init();
+
+    // 起動オプションを 1 度だけ読む（記録はここで出る）。`--help` は起動の解決・書けるかの確かめ・
+    // MCP・アプリの窓のどれよりも前に説明書を開いて戻る（開けなければ 0 でない終了・要件 9.1〜9.3）。
+    let opts = cli::read();
+    if opts.help {
+        return cli::help::run();
+    }
+    if opts.modules == cli::ModulePolicy::Skip {
+        tracing::info!(
+            event = "shiori_skipped",
+            "[main] --option dontloadmodule により、SHIORI を読まずに起動する"
+        );
+    }
 
     // アクタースレッドの役割宣言フックを導入する（draw-load-parity 要件 2.3）。
     // 以後 `spawn_actor` で起きるスレッド（ticker／loop-ticker／各アクター）は走り始めに
@@ -168,19 +187,18 @@ fn main() -> Result<()> {
     // 根 → ゴースト → バルーン → 構成入力。決まらなければ告知して終了コード 1 で終える
     // （要件 1.4・4.7・4.8・5.8・6.3）。`warn!` で起動を続ける経路は作らない（要件 6.6）。
     // 決まった経路とフォルダは boot の分岐まで持ち越す（boot 成功直後の記憶の書き込みに使う）。
-    let args: Vec<String> = std::env::args().collect();
     // 4 つ目は起動中の印の値＝前回きれいに終わらなかったゴーストの名前（読むだけで消さない）。
     // 初回の起動の由来になる（要件 12.4）。
-    let (cfg, ghost_decision, balloon_decision, halted, resolved_roots) = match resolve_boot(&args)
-    {
-        Ok(resolved) => resolved,
-        Err(scene) => {
-            alert::raise(&scene, alert::suppressed());
-            return Err(windows::core::Error::from_hresult(
-                windows::Win32::Foundation::E_FAIL,
-            ));
-        }
-    };
+    let (cfg, ghost_decision, balloon_decision, halted, resolved_roots) =
+        match resolve_boot(&opts.boot) {
+            Ok(resolved) => resolved,
+            Err(scene) => {
+                alert::raise(&scene, alert::suppressed());
+                return Err(windows::core::Error::from_hresult(
+                    windows::Win32::Foundation::E_FAIL,
+                ));
+            }
+        };
     // 書けるかの確かめ（argv の起動も同じ道・写しの後の置き場を見る・write-failure-notice 要件 2.1）。
     write_failure::check_boot_dirs(&cfg, &default_app_profile_dir())
         .map_err(write_failure::stop_boot)?;
@@ -188,13 +206,14 @@ fn main() -> Result<()> {
     // MCP の待受（areka-P0-mcp-server-core 設計判断 B-3）。畳むのは取っ手の `Drop` で、`down?` の
     // 早い戻りを含む `main` のどの出口でも閉じる。`app` より先に宣言する＝`app` の後に落ちる。
     // 待受の失敗は `error!` に残すだけで終了コードには響かない（`start` は `Result` を返さない）。
+    // 待受の候補は `--sstp-listen` の指定で決まる（無ければ今どおり・要件 8.1・8.8）。
     // SSP と同じ 10 本＋独自のツールの登録表と受け口（受け口は `register_systems` の後で World へ置く・
     // mcp-tool-entrances・mcp-author-tools）。
     // 3 つ目は help の Claude Desktop の設定例に載せる中継の置き場＝起動した exe の本当の場所の隣
     // （補助 exe と同じ決まり。場所が取れなければ「なし」・areka-P0-mcp-stdio-bridge 設計判断 D-14）。
     let (mcp_tools, mcp_inbox) = areka_mcp::tools::all_entrances(areka_mcp::tools::REPLY_WAIT);
-    let _mcp = areka_mcp::start(
-        &areka_mcp::read_port_candidates(),
+    let _mcp = cli::listen::start_mcp(
+        &opts.listen,
         mcp_tools,
         boot_config::exe_location().map(|exe| exe.with_file_name(areka_mcp::BRIDGE_EXE_FILE_NAME)),
     );
@@ -234,6 +253,7 @@ fn main() -> Result<()> {
             },
         },
         kanade_stop_tx.clone(),
+        opts.modules,
     );
 
     // tick の門の既定を起動時に一度だけ上書きする（`AREKA_TICK_GATE=1|0`・A/B と安全弁）。
@@ -272,37 +292,7 @@ fn main() -> Result<()> {
         }
     };
 
-    // env ゲート付き自動 close 機構（CI smoke・task 2.3・R4.1）。
-    // `AREKA_APP_SMOKE_EXIT_MS` が有効なミリ秒値のときだけ、VSync relay と同じ
-    // `wintf::executor::spawn_local`＋world `Weak` 作法で **一発の** async タスクを投入する
-    // （ECS システムではない）。投入は 1 度目の窓の準備が通ったとき（ここ）だけ
-    // （areka-P0-ghost-restart-unit 要件 3.5）。env 未設定・不正なら
-    // 発火せず、ゴースト窓はメニューの「終了」か OS の閉鎖要求を待ち続ける。
-    if let Some(ms) = smoke_exit_ms() {
-        // WinApp が strong 所有者を保持するため、この Weak は shutdown まで upgrade 可能。
-        let world_weak = std::rc::Rc::downgrade(&app.world());
-        tracing::info!(
-            env = SMOKE_EXIT_ENV,
-            delay_ms = ms,
-            "smoke 自動 close ゲート有効 — ゴースト窓を指定 ms 後に despawn します"
-        );
-        wintf::executor::spawn_local(async move {
-            // 指定 ms を async スリープ（async-io は既存依存・tokio 不要）。
-            async_io::Timer::after(std::time::Duration::from_millis(ms)).await;
-            // shutdown 済みなら strong 所有者は消えており upgrade は None ＝ no-op。
-            let Some(world) = world_weak.upgrade() else {
-                tracing::debug!("smoke 自動 close: world 既に drop 済み（shutdown）— no-op");
-                return;
-            };
-            // await を跨いで borrow を保持しない TIGHT スコープで全窓を閉じ、終了を指示する。
-            {
-                let mut ecs = world.borrow_mut();
-                let w = ecs.world_mut();
-                let count = app_exit::quit_app(w, app_exit::ExitOrigin::Smoke);
-                tracing::info!(count, "smoke 自動 close: ゴースト窓を despawn しました");
-            }
-        });
-    }
+    smoke_exit::arm(&app);
 
     // ゴーストごとの結線（areka-P0-ghost-restart-unit・`ghost_session::boot_ghost`）: 実 sink 結線を
     // 試み、成立しなければ `LogSink`×2 の fallback へ倒す。3 ハンドル（ゴースト実行系・seriko・
@@ -437,6 +427,7 @@ fn install_boot_context(
     world: &mut World,
     ctx: boot_config::BootContext,
     kanade_stop: std::sync::mpsc::Sender<areka_kanade::KanadeNotice>,
+    modules: cli::ModulePolicy,
 ) {
     let helper_exe = ctx.helper_exe.clone();
     // 記憶の置き場は文脈のもの（本番は `default_app_profile_dir()` と同じ値・要件 10.6）。
@@ -450,6 +441,7 @@ fn install_boot_context(
                 kanade_stop.clone(),
                 origin,
                 Some(app_profile_dir.clone()),
+                modules,
             )
         },
     )));
@@ -901,40 +893,9 @@ fn boot_monitor_snapshot(
     placement::follow::MonitorSources::from_monitors(monitors)
 }
 
-/// 自動 close ゲートを有効化する環境変数名（`AREKA_` 冠規約・記憶 areka-runtime-env-naming）。
-const SMOKE_EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
-
-/// 与えられた値から自動 close の遅延ミリ秒を解釈する純粋ヘルパ（env アクセスなし・単体テスト可能）。
-///
-/// - `None`／空／空白のみ／非数値／負値／`u64` 溢れ → `None`（ゲート OFF＝タスク不投入）。
-/// - 周辺空白をトリムした非負整数 → `Some(ms)`（`"0"` は 0ms＝即時発火として受理）。
-///
-/// `u64::from_str` は負号・小数点・非数字を弾き、範囲外を `Err` にするため、負値・溢れは
-/// 自然に `None` へ落ちる（不正入力はゲート OFF に倒す）。
-fn smoke_exit_ms_from(value: Option<&str>) -> Option<u64> {
-    let trimmed = value.map(str::trim)?;
-    if trimmed.is_empty() {
-        return None;
-    }
-    trimmed.parse::<u64>().ok()
-}
-
-/// 環境変数 [`SMOKE_EXIT_ENV`] から自動 close の遅延ミリ秒を読む。
-fn smoke_exit_ms() -> Option<u64> {
-    smoke_exit_ms_from(std::env::var(SMOKE_EXIT_ENV).ok().as_deref())
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-
-/// smoke の自動終了ゲート（task 2.3）の headless 単体テスト。
-///
-/// ランタイム結線（`fn main` の自動終了の仕掛け）は生きた `WinApp` を要し headless では駆動できないため、
-/// 判断を持つ `smoke_exit_ms_from` だけを純粋・env 非依存で検証する（結線は実プロセス smoke が担う）。
-#[cfg(test)]
-#[path = "main_startup_window_tests.rs"]
-mod startup_window_tests;
 
 #[cfg(test)]
 #[path = "main_config_input_tests.rs"]
@@ -991,6 +952,10 @@ mod monitor_snapshot_seam_tests;
 #[path = "main_finish_after_run_tests.rs"]
 mod finish_after_run_tests;
 
+/// SHIORI の読み方の指定から結線を決める口と倒れ先の表（startup-options-core 4.2・要件 7.1・11.4）。
+#[cfg(test)]
+#[path = "main_module_policy_tests.rs"]
+mod module_policy_tests;
 /// 据え付けと `run()` の後・起動中の印（task 8.5・11.1・要件 8.1・8.2・12.1〜12.5・12.12）のテスト。
 #[cfg(test)]
 #[path = "main_session_mark_tests.rs"]

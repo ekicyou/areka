@@ -117,6 +117,10 @@ fn input_variants_are_existing_eight_plus_choice_two() {
             Input::BalloonTimeout { .. } => "BalloonTimeout",
             // anchor-tag-canon でアンカーの選択（`Anchor`）の腕を足した。
             Input::Anchor(_) => "Anchor",
+            // mcp-kanade-tools で外からの台本（`SstpSend`）の腕を足した。
+            Input::SstpSend { .. } => "SstpSend",
+            // mcp-kanade-tools で外から頼まれたイベント（`SstpNotify`）の腕を足した。
+            Input::SstpNotify { .. } => "SstpNotify",
         }
     }
     assert_eq!(tag(&Input::Boot), "Boot");
