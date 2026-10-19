@@ -117,7 +117,7 @@
   - 終わった状態: 上の結果（コマンドと終了コード）が `research.md` に記録されている
   - _Requirements: 1.6, 2.6, 5.3, 5.6_
 
-- [ ] 9. ゲートの後: 全体テストの入口に取り寄せの段をつなぐ
+- [x] 9. ゲートの後: 全体テストの入口に取り寄せの段をつなぐ
   - **`areka-P0-impl-watch-test-desk` が `main` へ squash マージされたことを確かめ、その `main` をこの枝へ取り込んでから着手する**。着地していなければ着手せずに待つ（`tools/test-all.ps1` を変えない）
   - 取り込んだ後の `tools/test-all.ps1` を読み直し、段 `sample fetch` を `cargo test` を回す最初の段より前に置く。失敗したら `sample fetch` を FAIL として載せ、`cargo test` を回す段だけを `skipped (sample fetch failed)` として回さず、通信も検体も要らない段は今のまま回す（全体の終了コードは 0 でない）
   - 段 `sample fetch check`（`-SelfTest`）をほかの自分の検査の段と並べ、`.SYNOPSIS`／`.DESCRIPTION` の段の一覧に 2 つを足す

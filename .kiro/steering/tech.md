@@ -82,7 +82,8 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **i686 でしか走らないテストがある**: in-process で i686 DLL を読むテストは x64 では理由付き `ignore`。`--target i686-pc-windows-msvc` で host-32 系（`-helper`・`-ipc`）を別に回す
 - **判定は終了コードで行う**: `| Select-String` で絞ると終了コードが失われ赤でも通って見える。`--no-fail-fast` で最初の赤いバイナリの後ろも回し、段ごとの合否を最後に一覧する
 - **重いビルドを同時に走らせない**: `-j 4`（ページング不足 os error 1455 の回避）。`cargo deny`／`cargo about` はテストと並べると rustc がメモリ不足で落ちるので最後に直列
-- 実物の SHIORI・実機サインオフ用のテストは環境変数（`AREKA_EMO2_REAL_RUN`・`HOST32_PASTA_DLL` など）が無ければ飛ばす＝フルテストの対象外。ネットへ出るテストは常時テストに入れない
+- 実物の SHIORI・実機サインオフ用のテストは環境変数（`AREKA_EMO2_REAL_RUN`・`HOST32_PASTA_DLL` など）が無ければ飛ばす＝フルテストの対象外。ネットへ出るテストは常時テストに入れない（通信するのはテストの前の段 `sample fetch` だけで、テストは通信しない）
+- **URL の行の検体は先に取り寄せる**（2026-10-19 `areka-P0-sample-url-fetch`）: 最初の段 `sample fetch`（`tools/sample-fetch.ps1`）が URL の行の書庫を置き場へ取り寄せる。失敗したら `sample fetch` を FAIL として載せ、`cargo test` を回す段（`x64 workspace tests`・`i686 tests (host-32)`）を `skipped (sample fetch failed)` として回さず、ほかの段は回して終了コード 1 で終わる。段 `sample fetch check`（`tools/sample-fetch.ps1 -SelfTest`・ネットを使わない）はほかの道具の自分の検査と並ぶ
 
 #### テストの待ちと、負荷の下で許す赤（申し開き・2026-10-09 `areka-P0-ghost-session-test-load-flake`）
 
