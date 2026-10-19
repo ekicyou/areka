@@ -173,7 +173,7 @@ fn every_fetched_row_has_a_well_formed_url_and_name() {
     }
 }
 
-/// URL の行の書庫はリポジトリに置かず、今の行の書庫は置いてある（要件 5.3・6.1）。
+/// URL の行の書庫はリポジトリに置かず、今の行の書庫は置いてある（要件 1.3・1.4・5.3）。
 #[test]
 fn only_vendored_rows_have_a_nar_in_the_repository() {
     let rows = fetched_rows();
