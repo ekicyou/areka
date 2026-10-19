@@ -135,3 +135,4 @@
 - 3.3: `fetched::checksum_url` の一時の dead_code の許しは 5（`--fetch-list`）で外す。`verified_nar_in` の許しは 3.4 で外す。両方の書庫が無いときは、ハッシュのファイルのパスで Missing を返す（読む順のとおり）。
 - 4: ぱすたの行を足した後は、置き場（`target\nar-samples\fetched\`）に書庫とハッシュのファイルが無いと `cargo test -p sample-ghost-kit` の全部の行の判定 2 本が赤になる（要件 6.1 どおり）。5 以降のタスクは置き場が埋まっている前提で回す。
 - 6.2: 主の行の回しは `Invoke-FetchRows -Rows -ExitCode ([ref]) [-AnyScheme]`。`-AnyScheme`（https の決まりを飛ばす）は `-SelfTest` の塊の中だけが付ける。
+- 最後の検証（2026-10-19・GO）: `/kiro-complete` の文書の手当てでは design.md の 4 項目に加えて、`roadmap.md` の `pasta-in-windows-verification` の行（「コミット `e1e0559` の書庫」「URL とハッシュで登記」）と `.kiro/specs/areka-P0-pasta-in-windows-verification/brief.md` の固定の URL を、GitHub Pages の公開 URL＋`.sha256` で最新を追う形（裁定 2）へ直す。
