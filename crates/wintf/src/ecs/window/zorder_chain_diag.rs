@@ -27,11 +27,18 @@
 //! 無い」の区別が事後に付かなくなる。よってすべての欄は必ず `field=value` の形で現れ、
 //! 値が無いときは [`UNKNOWN`] になる（既存ペア機構と同じ字面）。
 //!
-//! # `dead_code` 許可は 1 つも残っていない
+//! # `dead_code` 許可は 1 つも無い
 //!
 //! 適用系（[`zorder_chain_apply`](super::zorder_chain_apply)）の着地と、望む鎖へ区間の
 //! 帰属を載せる工事によって、本モジュールの全項目に本番の呼び手が付いた。段階的実装の
-//! ためにモジュール全体を覆っていた許可は撤去してある。
+//! ためにモジュール全体を覆っていた許可は撤去してある。`areka-P0-zorder-scope-inversion` が
+//! 足した [`LinkRefusedReason`] も、外し損ねの巡の鎖の適用系が作る。
+//!
+//! # 組の受け渡しの 3 語
+//!
+//! `pair-released`／`pair-restored`／`link-refused` は、逆転・非隣接の組の結び目を鎖のために
+//! 外す・結び直す・輪になる付与を見送る記録である。行の組立はここ、マクロ呼出は既存の 7 語と
+//! 同じく `zorder_chain` 側に置く。名簿は既存の 7 語の一覧と分けて持つ（`pair_handover_tags`・試験用）。
 
 use bevy_ecs::prelude::*;
 use tracing::{debug, warn};
@@ -56,6 +63,12 @@ const SKIPPED_TAG: &str = "[zorder-chain] skipped";
 const LINK_FAILED_TAG: &str = "[zorder-chain] link-failed";
 /// 外し失敗の記録タグ（error 水準・要件 8.2）。
 const UNLINK_FAILED_TAG: &str = "[zorder-chain] unlink-failed";
+/// 組の結び目を鎖のために外した事実の記録タグ（debug 水準・要件 1.1／2.1／7.2）。
+const PAIR_RELEASED_TAG: &str = "[zorder-chain] pair-released";
+/// 外していた組の結び目を張り直した事実の記録タグ（debug 水準・要件 4.5／6.4）。
+const PAIR_RESTORED_TAG: &str = "[zorder-chain] pair-restored";
+/// 外し損ねの巡に、持ち主の輪を作る付与を見送った事実の記録タグ（error 水準・要件 7.1）。
+const LINK_REFUSED_TAG: &str = "[zorder-chain] link-refused";
 
 /// 受理の記録タグ（**退役した `zorder_group_diag` からの移設・字面は 1 字も変えない**）。
 const APPLIED_TAG: &str = "[zorder-group] applied";
@@ -74,6 +87,15 @@ pub(crate) fn chain_record_tags() -> [&'static str; 7] {
         LINK_FAILED_TAG,
         UNLINK_FAILED_TAG,
     ]
+}
+
+/// 組の受け渡しの記録タグ 3 種（逆転・非隣接の組の外しと結び直し・輪の見送り）。
+///
+/// 既存の 7 語の一覧 [`chain_record_tags`] は隣接の spec と実機の確かめの道具が読む名簿
+/// なので変えない（要件 7.4）。新しい語はこの別の一覧に置く。
+#[cfg(test)]
+pub(crate) fn pair_handover_tags() -> [&'static str; 3] {
+    [PAIR_RELEASED_TAG, PAIR_RESTORED_TAG, LINK_REFUSED_TAG]
 }
 
 /// 移設してきた保全語彙 2 種の一覧（要件 9.5 の逐語固定に使う）。
@@ -120,6 +142,15 @@ pub(crate) enum ChainSkipReason {
     NoChange,
     /// 窓ハンドルがまだ取れていない。
     HandleMissing,
+}
+
+/// 付与を見送った理由（`link-refused` の `reason=` 欄・要件 7.1）。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum LinkRefusedReason {
+    /// 張ると持ち主の輪になる（辿りの上限を超えた場合も含む）。
+    Loop,
+    /// 持ち主を辿る途中で読めなかった。
+    Unreadable,
 }
 
 impl std::fmt::Display for ChainSegment {
@@ -327,6 +358,60 @@ pub(crate) fn unlink_failed_line(owned_hwnd: Option<HWND>, error: &windows::core
         "{UNLINK_FAILED_TAG} owned_hwnd={owned_h} error={code:?}",
         owned_h = hwnd_field(owned_hwnd),
         code = error.code(),
+    )
+}
+
+/// 組の結び目を外した行（純関数・debug 水準で出す・要件 1.1／2.1／7.2）。
+///
+/// `entity` はバルーン（`KeepDirectlyAbove` を持つ窓）、`peer` はそのキャラクター。
+/// `unlinked=false` は、結び目が張られていなかった・今の持ち主が帳簿と食い違った・
+/// 読めなかったために OS の関係へは触れず、印だけを付けたことを表す。
+pub(crate) fn pair_released_line(
+    entity: Entity,
+    peer: Entity,
+    owned_hwnd: Option<HWND>,
+    owner_hwnd: Option<HWND>,
+    unlinked: bool,
+) -> String {
+    format!(
+        "{PAIR_RELEASED_TAG} entity={entity:?} peer={peer:?} \
+         owned_hwnd={owned_h} owner_hwnd={owner_h} unlinked={unlinked}",
+        owned_h = hwnd_field(owned_hwnd),
+        owner_h = hwnd_field(owner_hwnd),
+    )
+}
+
+/// 外していた組の結び目を張り直した行（純関数・debug 水準で出す・要件 4.5／6.4）。
+pub(crate) fn pair_restored_line(
+    entity: Entity,
+    peer: Entity,
+    owned_hwnd: Option<HWND>,
+    owner_hwnd: Option<HWND>,
+) -> String {
+    format!(
+        "{PAIR_RESTORED_TAG} entity={entity:?} peer={peer:?} \
+         owned_hwnd={owned_h} owner_hwnd={owner_h}",
+        owned_h = hwnd_field(owned_hwnd),
+        owner_h = hwnd_field(owner_hwnd),
+    )
+}
+
+/// 持ち主の輪を作る付与を見送った行（純関数・error 水準で出す・要件 7.1／7.2）。
+///
+/// 見送った付与 1 本ごとに 1 行。残りの付与は張るので、この行は「どの対を張らなかったか」を
+/// 単独で読めなければならない。
+pub(crate) fn link_refused_line(
+    owned: Entity,
+    owner: Entity,
+    owned_hwnd: Option<HWND>,
+    owner_hwnd: Option<HWND>,
+    reason: LinkRefusedReason,
+) -> String {
+    format!(
+        "{LINK_REFUSED_TAG} owned={owned:?} owner={owner:?} \
+         owned_hwnd={owned_h} owner_hwnd={owner_h} reason={reason:?}",
+        owned_h = hwnd_field(owned_hwnd),
+        owner_h = hwnd_field(owner_hwnd),
     )
 }
 

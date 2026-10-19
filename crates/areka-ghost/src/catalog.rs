@@ -35,6 +35,8 @@ pub enum RootMark {
     Plain,
     /// 書ける根（`from_env`＝`AREKA_USER_ROOT` で決まった）。付けるのは `resolve_roots_from` だけ。
     UserRoot { from_env: bool },
+    /// この起動のあいだだけの、ゴーストだけの置き場（`--ghost` の絶対パスの親）。
+    Temporary,
 }
 
 /// ベースウェアの根（直下に ghost/ と balloon/）。値型・パスの解釈と印だけを持つ。
@@ -61,6 +63,14 @@ impl BasewareRoot {
         }
     }
 
+    /// 一時の置き場。`dir` はゴーストのフォルダを並べたフォルダそのもの。
+    pub fn temporary(dir: PathBuf) -> Self {
+        Self {
+            dir,
+            mark: RootMark::Temporary,
+        }
+    }
+
     pub fn mark(&self) -> RootMark {
         self.mark
     }
@@ -69,9 +79,17 @@ impl BasewareRoot {
         &self.dir
     }
 
-    /// `<根>/ghost`
+    /// `<根>/ghost`。一時の置き場はフォルダそのもの。
     pub fn ghost_store(&self) -> PathBuf {
-        self.dir.join("ghost")
+        match self.mark {
+            RootMark::Temporary => self.dir.clone(),
+            _ => self.dir.join("ghost"),
+        }
+    }
+
+    /// 一時の置き場か（バルーンを探さず、入れ先にもしない）。
+    pub fn is_temporary(&self) -> bool {
+        self.mark == RootMark::Temporary
     }
 
     /// `<根>/balloon`
@@ -189,6 +207,10 @@ fn scan_shells(ghost_dir: &Path, include_hidden: bool) -> Vec<ShellEntry> {
 /// `<根>/balloon/` の直下で descript.txt を持ち、`type` が無いか `balloon` のフォルダ。
 /// `type` が他の値なら `warn!`＋除外（要件 2.3）。
 pub(crate) fn scan_balloons(root: &BasewareRoot) -> Vec<BalloonEntry> {
+    // 一時の置き場はゴーストだけの置き場なので `balloon\` を探さない。
+    if root.is_temporary() {
+        return Vec::new();
+    }
     subdirs(&root.balloon_store())
         .into_iter()
         .filter_map(|(folder, dir)| {

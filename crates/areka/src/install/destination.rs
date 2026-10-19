@@ -6,15 +6,18 @@
 
 use std::path::{Path, PathBuf};
 
-use areka_ghost::BasewareRoots;
 use areka_ghost::catalog_roots::{
     StoreKind, find_balloon, find_ghost, install_root, same_folder_name, same_root,
 };
+use areka_ghost::{BasewareRoot, BasewareRoots};
 use areka_nar::{InstallOutcome, InstallRequest, IoPhase, NarArchive, NarError};
 
 /// 並びの写しで `InstallRoots` に答える。見つかる根が 1 つも無ければ作れない。
 pub(crate) struct CatalogDestinations {
+    /// 並びの写しから一時の置き場を除いたもの（一時の置き場は入れ先にしない・要件 3.5）。
     roots: BasewareRoots,
+    /// 除いた一時の置き場（起動中のゴーストがそこにいるかを見る）。
+    temporary: Vec<PathBuf>,
     /// 作ったときの見つかるいちばん上の根（答えが出ないときに答える）。
     first: PathBuf,
     /// 起動中のゴーストの場所（`<根>\ghost\<フォルダ>`・根の下のゴーストのときだけ）。
@@ -25,10 +28,18 @@ pub(crate) struct CatalogDestinations {
 
 impl CatalogDestinations {
     /// 見つかる根が無ければ `None`（呼び手が error `install_no_root` を残して今の失敗の経路へ倒す）。
+    /// 一時の置き場は並びから除く（同じフォルダ名の相手・控えの根・記録の根に使わない・要件 3.5・3.9）。
     pub(crate) fn new(roots: BasewareRoots) -> Option<Self> {
+        let (temporary, kept): (Vec<_>, Vec<_>) = roots
+            .roots()
+            .iter()
+            .cloned()
+            .partition(BasewareRoot::is_temporary);
+        let roots = BasewareRoots::new(kept);
         let first = roots.present().next()?.dir().to_path_buf();
         Some(Self {
             roots,
+            temporary: temporary.iter().map(|r| r.dir().to_path_buf()).collect(),
             first,
             running: None,
             exe_dir: crate::roots::user_root::exe_dir(),
@@ -42,8 +53,13 @@ impl CatalogDestinations {
     }
 
     /// 起動中のゴーストの場所を渡す（要件 8.7: 起動中のゴーストへの上書きはその根へ書く）。
+    /// 一時の置き場にいるゴーストは渡さなかったことにする（`<一時の置き場>\<フォルダ>` の 2 つ上は
+    /// 置き場の外なので、入れ先は並びの答え＝覚える置き場に任せる・要件 3.5）。
     pub(crate) fn with_running(mut self, running: Option<PathBuf>) -> Self {
-        self.running = running;
+        self.running = running.filter(|dir| {
+            !dir.parent()
+                .is_some_and(|p| self.temporary.iter().any(|t| same_root(t, p)))
+        });
         self
     }
 
@@ -163,11 +179,12 @@ pub(crate) fn install_into(
     for element in &outcome.installed {
         // 答えは並びの写しの綴りなので、置いたパスはどれかの根の綴りで始まる（並びから外れた
         // 起動中のゴーストの根へ入れたときだけ、その場所から導いた根）。
-        let root = roots
+        let root = dest
+            .roots
             .roots()
             .iter()
             .map(|r| r.dir())
-            .chain(running.and_then(|d| d.parent()?.parent()))
+            .chain(dest.running.as_deref().and_then(|d| d.parent()?.parent()))
             .find(|dir| element.path.starts_with(dir));
         tracing::info!(
             event = "install_placed",
@@ -192,3 +209,7 @@ fn log_head_skipped(head: &Path, root: &Path) {
 #[cfg(test)]
 #[path = "destination_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "destination_temporary_tests.rs"]
+mod temporary_tests;

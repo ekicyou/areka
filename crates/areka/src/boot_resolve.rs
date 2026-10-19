@@ -37,6 +37,8 @@ pub(crate) const DEFAULT_BALLOON_FOLDER: &str = "StayseeBalloon";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum GhostRoute {
     Argv,
+    /// `--ghost` の指し先で決まった（記憶・印の書き込みは他の経路と同じ・areka-P0-startup-options-core 要件 3.9）。
+    Pointed,
     Memory,
     Only,
     Default,
@@ -92,6 +94,10 @@ pub(crate) struct NoBalloon {
 pub(crate) struct GhostInputs<'a> {
     /// argv[1]
     pub argv: Option<&'a Path>,
+    /// `--ghost` の指し先（場所・フォルダ名）。在れば記憶・列挙は読まない。
+    pub pointed: Option<(&'a Path, &'a str)>,
+    /// `--random`（記憶・唯一・既定の段を飛ばして列挙から無作為に選ぶ）。
+    pub random: bool,
     /// App スコープ `areka.last.ghost`
     pub memory: Option<&'a str>,
     /// 和の `list_ghosts`（フォルダ名の昇順）
@@ -153,7 +159,8 @@ fn find_balloon_by_name<'a>(listed: &'a [BalloonEntry], name: &str) -> Option<&'
 /// descript の段で鍵ごとに使う突き合わせ（[`find_balloon`] か [`find_balloon_by_name`]）。
 type FindBalloon = for<'l> fn(&'l [BalloonEntry], &str) -> Option<&'l BalloonEntry>;
 
-/// 段 1〜5＋0 体（要件 4.1〜4.7）。`pick` は「候補数 n（≥ 2）→ 0..n の添字」。純粋。
+/// 段 1〜5＋0 体（要件 4.1〜4.7）に、areka-P0-startup-options-core の段 1b（指し先）と
+/// `--random` の段を足した並び。`pick` は「候補数 n（≥ 2）→ 0..n の添字」。純粋。
 pub(crate) fn resolve_ghost(
     inputs: &GhostInputs<'_>,
     pick: impl FnOnce(usize) -> usize,
@@ -166,6 +173,14 @@ pub(crate) fn resolve_ghost(
             folder: None,
         });
     }
+    // 段 1b: `--ghost` の指し先（記憶・印・列挙に関わらず・要件 3.1・4.3）。
+    if let Some((dir, folder)) = inputs.pointed {
+        return Ok(GhostDecision {
+            route: GhostRoute::Pointed,
+            dir: dir.to_path_buf(),
+            folder: Some(folder.to_owned()),
+        });
+    }
     let listed = inputs.listed;
     // 当たった和の項目の場所とフォルダ名をそのまま使う（根から組み直さない）。
     let at = |route, entry: &GhostEntry| GhostDecision {
@@ -173,6 +188,25 @@ pub(crate) fn resolve_ghost(
         dir: entry.dir.clone(),
         folder: Some(entry.identity.folder.clone()),
     };
+    // `--random`: 記憶・唯一・既定を飛ばして列挙から選ぶ（要件 5.1・5.2・5.4）。
+    if inputs.random {
+        let entry = match listed {
+            [] => {
+                return Err(NoGhost {
+                    ghost_stores: inputs.stores.to_vec(),
+                });
+            }
+            [only] => only,
+            _ => &listed[pick(listed.len())],
+        };
+        tracing::info!(
+            event = "ghost_random_requested",
+            folder = entry.identity.folder.as_str(),
+            candidates = listed.len(),
+            "[boot_resolve] --random なので置き場のゴーストから無作為に選びました"
+        );
+        return Ok(at(GhostRoute::Random, entry));
+    }
     // 段 2: 記憶（列挙に在れば）。在らねば黙って読み替えず warn して次へ（要件 4.6）。
     if let Some(memory) = inputs.memory {
         match find(listed, memory) {
@@ -666,6 +700,10 @@ fn remembered<'a>(
 #[cfg(test)]
 #[path = "boot_resolve_tests.rs"]
 mod boot_resolve_tests;
+
+#[cfg(test)]
+#[path = "boot_resolve_option_tests.rs"]
+mod boot_resolve_option_tests;
 
 #[cfg(test)]
 #[path = "boot_resolve_balloon_tests.rs"]

@@ -17,12 +17,12 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use temp_path_kit::TempPath;
 
-use super::test_support::{T0, load, merge, resume, watch};
+use super::test_support::{T0, merge, request, resume, watch};
 use super::{WaitEnd, WaitPort, WaitSpec, run};
 use crate::error::{Damage, WatchError};
 use crate::plan::{Applied, Command, Presence, apply};
 use crate::presence::{Held, hold};
-use crate::state::{ParticipantStatus, State, WaitKind, WaitRecord};
+use crate::state::{DeskSet, ParticipantStatus, State, WaitKind, WaitRecord};
 
 /// 待ちのプロセスの番号（偽の口が答える）。
 const OWN_PID: u32 = 4321;
@@ -245,11 +245,13 @@ fn merged(id: &str) -> Command {
     }
 }
 
-fn asks_load(id: &str) -> Command {
-    Command::LoadTest {
+/// 負荷テストのための排他テストの机とひとり占め（`test,sole`）の申し込み。
+fn asks_test_and_sole(id: &str) -> Command {
+    Command::Request {
         id: id.to_owned(),
         name: None,
         repo: "areka".to_owned(),
+        desks: DeskSet::TestSole,
         purpose: "負荷の計測 5 回".to_owned(),
     }
 }
@@ -264,12 +266,12 @@ fn b_queued_behind_a() -> FakePort {
     port
 }
 
-/// A と C が見張りつきで参加し、C が負荷テストを申し込んだ（A は「停止要請中」・C は待ち行列）。
-fn c_asked_for_a_load_test() -> FakePort {
+/// A と C が見張りつきで参加し、C が `test,sole` を申し込んだ（A は「停止要請中」・C は待ち行列）。
+fn c_asked_for_test_and_sole() -> FakePort {
     let port = FakePort::new();
     port.does("A", watching("A"));
     port.does("C", watching("C"));
-    port.does("C", asks_load("C"));
+    port.does("C", asks_test_and_sole("C"));
     port
 }
 
@@ -612,7 +614,7 @@ fn a_failed_unregister_does_not_change_the_answer() {
 fn a_watch_registers_by_starting_the_watch() {
     let port = FakePort::new();
     port.at(1, Step::Call("C", watching("C")));
-    port.at(2, Step::Call("C", asks_load("C")));
+    port.at(2, Step::Call("C", asks_test_and_sole("C")));
     let spec = WaitSpec::Watch {
         id: "A".to_owned(),
         repo: "pasta".to_owned(),
@@ -644,7 +646,7 @@ fn a_watch_registers_by_starting_the_watch() {
 /// 立て直した見張りは、すでに停止要請が出ていれば眠らずに終わる（要件 5.4）。
 #[test]
 fn a_restarted_watch_ends_without_sleeping_when_a_stop_is_already_requested() {
-    let port = c_asked_for_a_load_test();
+    let port = c_asked_for_test_and_sole();
 
     let end = port.run(&watch("A")).expect("終わる");
 
@@ -670,19 +672,19 @@ fn a_merge_wait_registers_a_wait_record_with_its_repo() {
 }
 
 #[test]
-fn a_load_wait_registers_a_wait_record_and_ends_when_everyone_has_stopped() {
-    let port = c_asked_for_a_load_test();
+fn a_request_wait_registers_a_wait_record_and_ends_when_everyone_has_stopped() {
+    let port = c_asked_for_test_and_sole();
     let stopped = Command::Stopped { id: "A".to_owned() };
     port.at(2, Step::Call("A", stopped));
 
-    let end = port.run(&load("C")).expect("終わる");
+    let end = port.run(&request("C")).expect("終わる");
 
-    assert_eq!(end, done("granted load; stopped: A"));
+    assert_eq!(end, done("granted test,sole; stopped: A"));
     assert_eq!(
         *port.changes.borrow(),
         [
-            register("C", WaitKind::Load, None),
-            unregister("C", WaitKind::Load)
+            register("C", WaitKind::Request, None),
+            unregister("C", WaitKind::Request)
         ]
     );
     assert_eq!(port.waits_of("C"), [WaitKind::Watch]);
@@ -690,10 +692,13 @@ fn a_load_wait_registers_a_wait_record_and_ends_when_everyone_has_stopped() {
 
 #[test]
 fn a_resume_wait_registers_a_wait_record_and_ends_when_back_to_work() {
-    let port = c_asked_for_a_load_test();
+    let port = c_asked_for_test_and_sole();
     port.does("A", Command::Stopped { id: "A".to_owned() });
-    let load_done = Command::LoadDone { id: "C".to_owned() };
-    port.at(2, Step::Call("C", load_done));
+    let give_back = Command::Return {
+        id: "C".to_owned(),
+        desks: None,
+    };
+    port.at(2, Step::Call("C", give_back));
 
     let end = port.run(&resume("A")).expect("終わる");
 
@@ -712,7 +717,7 @@ fn a_resume_wait_registers_a_wait_record_and_ends_when_back_to_work() {
 /// 記録を消す（知らせなければ、見張りの終わっている A の 2 度目の「止まった」を誰も促さない）。
 #[test]
 fn a_resume_wait_ends_when_the_stop_request_is_issued_again_after_an_unstop() {
-    let port = c_asked_for_a_load_test();
+    let port = c_asked_for_test_and_sole();
     // D がまだ止まっていないので、C は待ち行列に並んだまま（走っている印も無い）。
     port.does("D", watching("D"));
     port.does("A", Command::Stopped { id: "A".to_owned() });

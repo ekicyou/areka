@@ -6,9 +6,15 @@
 
 use crate::error::Damage;
 use crate::state::{
-    LastMerge, LoadHolder, LoadRequest, MergeHolder, MergeRequest, Participant, ParticipantStatus,
-    Recent, RecentKind, State, StopReason, WaitKind, WaitRecord, WatchInfo,
+    DeskSet, LastMerge, MergeRequest, Participant, ParticipantStatus, Recent, RecentKind, State,
+    WaitKind, WaitRecord, WatchInfo,
 };
+
+#[path = "plan_turns.rs"]
+mod turns;
+
+use turns::{free_test, replan};
+pub use turns::{held, merge_order, request_order};
 
 /// 回収の訳。出来事の `why` と「最近の出来事」の `detail` に同じ綴りで載せる。
 const WATCH_ABSENT: &str = "watch absent";
@@ -42,24 +48,27 @@ pub enum Command {
     },
     /// マージが済んだ: 持っている机を空け、直前のマージを記録し、参加を終える。
     Merged { id: String, pr: String, sha: String },
-    /// 負荷テストの机の申し込み。参加を兼ねる。すでに待っている・持っているなら二重に並べず、
-    /// 元の申し込みのままにする。申し込んだ者の状態（作業中・停止要請中・止まった）は変えない。
-    LoadTest {
+    /// 排他テストの机・ひとり占めの申し込み。参加を兼ねる。同じ組で待っている・持っているなら
+    /// 二重に並べず、元の申し込みのままにする。申し込んだ者の状態（作業中・停止要請中・止まった）は
+    /// 変えない。
+    Request {
         id: String,
         name: Option<String>,
         repo: String,
+        desks: DeskSet,
         purpose: String,
     },
-    /// 「すでに走っている負荷テスト」の記録。参加を兼ねる。机に持ち主が居なければ、停止要請を
-    /// 出さずに持ち主にして走っている印を付ける。持ち主が居れば何も変えない（参加もさせない）。
+    /// 返す。`None` はマージの机のほかの全部。
+    Return { id: String, desks: Option<DeskSet> },
+    /// 「すでに走っている負荷テスト」の記録。参加を兼ねる。排他テストの机とひとり占めのどちらにも
+    /// 持ち主が居なければ、停止要請を出さずに両方の持ち主にして走っている印を付ける。持ち主が
+    /// 居れば何も変えない（参加もさせない）。
     LoadRunning {
         id: String,
         name: Option<String>,
         repo: String,
         purpose: String,
     },
-    /// 負荷テストが済んだ: 持っている机を空ける。
-    LoadDone { id: String },
     /// 「止まった」の報告。当てはまるのは「停止要請中」の参加者だけ。
     Stopped { id: String },
     /// 停止要請の取り消し: 「停止要請中」「止まった」の参加者を「作業中」へ戻す。`None` は全員。
@@ -121,22 +130,31 @@ pub enum Event {
         pr: String,
         sha: String,
     },
-    LoadRequested {
+    DeskRequested {
         id: String,
+        desks: DeskSet,
     },
-    /// 負荷テストの番が来た。`stopped` はそのとき止まっていた識別。
-    LoadGranted {
+    /// 机の番が来た。`stopped` はひとり占めを含むときだけ中身が在る（そのとき止まっていた識別）。
+    DeskGranted {
         id: String,
+        desks: DeskSet,
         stopped: Vec<String>,
     },
-    /// 「すでに走っている負荷テスト」が持ち主として記録された。
+    DeskReturned {
+        id: String,
+        desks: DeskSet,
+    },
+    /// 排他テストの机が空いた。`why` は `returned`・`stopped`・`reclaimed`・`cancelled`・`left`・
+    /// `merged`。
+    TestFreed {
+        id: String,
+        why: &'static str,
+    },
+    /// 「すでに走っている負荷テスト」が排他テストの机とひとり占めの持ち主として記録された。
     LoadRunning {
         id: String,
     },
-    LoadDone {
-        id: String,
-    },
-    /// 停止要請が出た。`by` は負荷テストの候補（机の持ち主か、待ち行列の先頭）。
+    /// 停止要請が出た。`by` はひとり占めの候補（持ち主か、ひとり占めを含む最も早い申し込み）。
     StopRequested {
         id: String,
         by: String,
@@ -234,7 +252,18 @@ pub fn apply(
             repo,
             spec,
             bug,
-        } => {
+        } => 'merge: {
+            // 排他テストの机かひとり占めを持つ者は、返してから申し込む（要件 4.7）。断るときは
+            // 状態を変えない（参加もさせない）ので、見るのは `join` より先。
+            if held(state, id).is_some() {
+                break 'merge Verdict::NotApplied("return the test and sole desks before merge");
+            }
+            // 机の申し込みを待つ者もマージの待ち行列に入れない（要件 2.8。2026-10-18 の裁定）。
+            if state.requests.iter().any(|request| request.id == *id) {
+                break 'merge Verdict::NotApplied(
+                    "a desk request is waiting; merge after it is granted and returned",
+                );
+            }
             join(state, id, name.as_deref(), repo, now, &mut events);
             // 二重の判定はリポジトリごと（別のリポジトリの机は独立に申し込める）。
             let desk = state.merge.entry(repo.clone()).or_default();
@@ -276,84 +305,50 @@ pub fn apply(
             }
             if held {
                 // 完了した spec のセッションは参加を終える。
-                depart(state, id, "merged", &mut events);
+                depart(state, id, "merged", "merged", now, &mut events);
                 Verdict::Applied
             } else {
                 Verdict::NotApplied("not the merge holder")
             }
         }
-        Command::LoadTest {
+        Command::Request {
             id,
             name,
             repo,
+            desks,
             purpose,
-        } => {
-            // 申し込んだ者の状態は変えない。「停止要請中」「止まった」のまま並び、番を受けたときに
-            // 「作業中」へ戻る（ここで戻すと、見張りの終わっている参加者が誰にも知らされずに
-            // 「停止要請中」へ落ち、候補の番を止め続ける）。
-            join(state, id, name.as_deref(), repo, now, &mut events);
-            let desk = &mut state.load;
-            let holds = desk.holder.as_ref().is_some_and(|holder| holder.id == *id);
-            if !holds && !desk.queue.iter().any(|request| request.id == *id) {
-                desk.queue.push(LoadRequest {
-                    id: id.clone(),
-                    purpose: purpose.clone(),
-                    requested: now,
-                });
-                events.push(Event::LoadRequested { id: id.clone() });
-            }
-            Verdict::Applied
-        }
+        } => turns::request(
+            state,
+            id,
+            name.as_deref(),
+            repo,
+            *desks,
+            purpose,
+            now,
+            &mut events,
+        ),
+        Command::Return { id, desks } => turns::give_back(state, id, *desks, now, &mut events),
         Command::LoadRunning {
             id,
             name,
             repo,
             purpose,
-        } => {
-            // 断るときは状態を変えない（参加もさせない）ので、机を見るのは `join` より先。
-            if state.load.holder.is_some() {
-                Verdict::NotApplied("the load-test desk already has a holder")
-            } else {
-                let participant = join(state, id, name.as_deref(), repo, now, &mut events);
-                events.push(Event::LoadRunning { id: id.clone() });
-                // 止まっていた者も、自分の負荷テストのために「作業中」へ戻る（番を受けた持ち主と同じ）。
-                resume(participant, "load-running", now, &mut events);
-                drop_where(&mut state.load.queue, |request| request.id == *id);
-                state.load.holder = Some(LoadHolder {
-                    id: id.clone(),
-                    purpose: purpose.clone(),
-                    requested: now,
-                    granted: now,
-                    running: true,
-                    stopped: Vec::new(),
-                });
-                Verdict::Applied
-            }
-        }
-        Command::LoadDone { id } => {
-            if state
-                .load
-                .holder
-                .take_if(|holder| holder.id == *id)
-                .is_some()
-            {
-                events.push(Event::LoadDone { id: id.clone() });
-                Verdict::Applied
-            } else {
-                Verdict::NotApplied("not the load-test holder")
-            }
-        }
+        } => turns::load_running(state, id, name.as_deref(), repo, purpose, now, &mut events),
         Command::Stopped { id } => match state.participants.get_mut(id) {
             Some(participant) if participant.status == ParticipantStatus::StopRequested => {
                 participant.status = ParticipantStatus::Stopped;
                 participant.since = now;
                 events.push(Event::Stopped { id: id.clone() });
+                // 止まった者は排他テストの机を持ち続けない（要件 6.2）。
+                if state.test.as_ref().is_some_and(|holder| holder.id == *id) {
+                    free_test(state, "stopped", now, &mut events);
+                }
                 Verdict::Applied
             }
             _ => Verdict::NotApplied("not asked to stop"),
         },
         Command::Unstop { id } => {
-            // 走っている印の無い負荷テストがまだ持たれ・待たれていれば、この後の番の決め直しが
+            // 走っている印の無いひとり占めがまだ持たれ・待たれていれば、この後の番の決め直しが
             // 停止要請を出し直す。
             let mut any = false;
             for participant in state.participants.values_mut() {
@@ -372,13 +367,13 @@ pub fn apply(
             }
         }
         Command::Cancel { id } => {
-            if remove_from(state, id) {
+            if remove_from(state, id, "cancelled", now, &mut events) {
                 events.push(Event::Cancelled { id: id.clone() });
             }
             Verdict::Applied
         }
         Command::Leave { id } => {
-            depart(state, id, "leave", &mut events);
+            depart(state, id, "leave", "left", now, &mut events);
             Verdict::Applied
         }
         Command::RegisterWait { record } => {
@@ -416,7 +411,7 @@ pub fn apply(
                 .map(|(id, _)| id.clone())
                 .collect();
             for id in ids {
-                depart(state, &id, "leave", &mut events);
+                depart(state, &id, "leave", "left", now, &mut events);
                 state.push_recent(Recent {
                     at: now,
                     kind: RecentKind::Cleared,
@@ -472,7 +467,7 @@ fn reclaim(
         }
     }
     for id in gone {
-        erase(state, &id);
+        erase(state, &id, "reclaimed", now, events);
         state.push_recent(Recent {
             at: now,
             kind: RecentKind::Reclaimed,
@@ -499,129 +494,17 @@ fn reclaim(
     });
 }
 
-/// 番を決め直す（元のスクリプトの `Invoke-Plan` の写し）: 停止要請の発行 → 負荷テストの番 →
-/// 再開 → マージの番。何度呼んでも同じ結果になる。
-fn replan(state: &mut State, now: u64, events: &mut Vec<Event>) {
-    // 負荷テストが持たれている・待たれている間は、誰も再開せず、どのリポジトリのマージの番も出ない。
-    if plan_load(state, now, events) {
-        return;
-    }
-    for participant in state.participants.values_mut() {
-        resume(participant, "no-load", now, events);
-    }
-    // マージの番: 持ち主の居ないリポジトリごとに、バグ優先 → 申し込みの時刻が早い順で
-    // 1 人を持ち主にする。リポジトリ同士は独立。
-    for (repo, desk) in &mut state.merge {
-        if desk.holder.is_some() {
-            continue;
-        }
-        let Some(&first) = merge_order(&desk.queue).first() else {
-            continue;
-        };
-        let request = desk.queue.remove(first);
-        events.push(Event::MergeGranted {
-            repo: repo.clone(),
-            id: request.id.clone(),
-        });
-        desk.holder = Some(MergeHolder {
-            id: request.id,
-            spec: request.spec,
-            bug: request.bug,
-            requested: request.requested,
-            granted: now,
-        });
-    }
-}
-
-/// 負荷テストの段: 停止要請の発行 → 負荷テストの番。負荷テストが持たれても待たれてもいなければ
-/// 何もせずに偽を返す。
-fn plan_load(state: &mut State, now: u64, events: &mut Vec<Event>) -> bool {
-    let load = &state.load;
-    // 待ち行列の先頭＝番の来る順の先頭。
-    let first = load_order(&load.queue)
-        .first()
-        .map(|&index| (index, &load.queue[index]));
-    // 候補＝机の持ち主か、居なければ待ち行列の先頭。
-    let (candidate, purpose, running) = match (&load.holder, first) {
-        (Some(holder), _) => (holder.id.clone(), holder.purpose.clone(), holder.running),
-        (None, Some((_, request))) => (request.id.clone(), request.purpose.clone(), false),
-        (None, None) => return false,
-    };
-    let first = first.map(|(index, _)| index);
-
-    // 止まる必要のある参加者: 候補・マージの持ち主・マージ待ち（どのリポジトリでも）を除く全員。
-    // そのうち「作業中」の者に停止要請を出す。すでに走っている負荷テスト（走っている印）は出さない。
-    let in_merge = |id: &str| {
-        state.merge.values().any(|desk| {
-            desk.holder.as_ref().is_some_and(|holder| holder.id == id)
-                || desk.queue.iter().any(|request| request.id == id)
-        })
-    };
-    let mut need_stop = Vec::new();
-    let mut all_stopped = true;
-    for (id, participant) in &mut state.participants {
-        if *id == candidate || in_merge(id) {
-            continue;
-        }
-        if participant.status == ParticipantStatus::Working && !running {
-            participant.status = ParticipantStatus::StopRequested;
-            participant.since = now;
-            participant.stop_reason = Some(StopReason {
-                by: candidate.clone(),
-                purpose: purpose.clone(),
-            });
-            events.push(Event::StopRequested {
-                id: id.clone(),
-                by: candidate.clone(),
-            });
-        }
-        all_stopped &= participant.status == ParticipantStatus::Stopped;
-        need_stop.push(id.clone());
-    }
-
-    // 負荷テストの番: 持ち主なし・どのリポジトリにもマージの持ち主なし・止まる必要のある全員が
-    // 「止まった」で、先頭を持ち主にする。
-    let merging = state.merge.values().any(|desk| desk.holder.is_some());
-    if let Some(first) = first.filter(|_| state.load.holder.is_none() && !merging && all_stopped) {
-        let request = state.load.queue.remove(first);
-        events.push(Event::LoadGranted {
-            id: request.id.clone(),
-            stopped: need_stop.clone(),
-        });
-        // 止まっていた者が番を受けたら、自分の負荷テストのために「作業中」へ戻る。
-        if let Some(participant) = state.participants.get_mut(&request.id) {
-            resume(participant, "load-granted", now, events);
-        }
-        state.load.holder = Some(LoadHolder {
-            id: request.id,
-            purpose: request.purpose,
-            requested: request.requested,
-            granted: now,
-            running: false,
-            stopped: need_stop,
-        });
-    }
-    true
-}
-
-/// マージの待ち行列の、番の来る順の添字: バグ優先 → 申し込みの早い順・同点は行列の前。
-/// 番を選ぶ鍵はここにしか書かない（読み物と `pos=` も同じ順で並べる）。
-pub fn merge_order(queue: &[MergeRequest]) -> Vec<usize> {
-    let mut order: Vec<usize> = (0..queue.len()).collect();
-    order.sort_by_key(|&index| (!queue[index].bug, queue[index].requested));
-    order
-}
-
-/// 負荷テストの待ち行列の、番の来る順の添字: 申し込みの早い順・同点は行列の前。
-pub fn load_order(queue: &[LoadRequest]) -> Vec<usize> {
-    let mut order: Vec<usize> = (0..queue.len()).collect();
-    order.sort_by_key(|&index| queue[index].requested);
-    order
-}
-
-/// 参加を終える: [`erase`] で消し、何か消えたら出来事を 1 件。
-fn depart(state: &mut State, id: &str, why: &'static str, events: &mut Vec<Event>) {
-    if erase(state, id) {
+/// 参加を終える: [`erase`] で消し、何か消えたら出来事を 1 件。`freed` は排他テストの机を
+/// 空けた訳。
+fn depart(
+    state: &mut State,
+    id: &str,
+    why: &'static str,
+    freed: &'static str,
+    now: u64,
+    events: &mut Vec<Event>,
+) {
+    if erase(state, id, freed, now, events) {
         events.push(Event::Left {
             id: id.to_owned(),
             why,
@@ -631,8 +514,14 @@ fn depart(state: &mut State, id: &str, why: &'static str, events: &mut Vec<Event
 
 /// その識別の申し込み・机・待ちの記録を外し、参加者の記録を消す。何か消えたら真。
 /// 待ちの記録が消えることが、その識別の見張りと待ちが「記録が消えた」で終わる根拠。
-fn erase(state: &mut State, id: &str) -> bool {
-    let mut gone = remove_from(state, id);
+fn erase(
+    state: &mut State,
+    id: &str,
+    freed: &'static str,
+    now: u64,
+    events: &mut Vec<Event>,
+) -> bool {
+    let mut gone = remove_from(state, id, freed, now, events);
     gone |= drop_where(&mut state.waits, |wait| wait.id == id);
     gone |= state.participants.remove(id).is_some();
     gone
@@ -706,19 +595,28 @@ fn put_wait(state: &mut State, record: WaitRecord, events: &mut Vec<Event>) {
     }
 }
 
-/// その識別の申し込みと机を、マージ（全部のリポジトリ）と負荷テストから外す。外したら真。
-fn remove_from(state: &mut State, id: &str) -> bool {
+/// その識別の申し込みと机を、マージの机（全部のリポジトリ）・机の申し込み・排他テストの机・
+/// ひとり占めから外す唯一の場所。外したら真。排他テストの机は [`free_test`] を通して訳 `freed`
+/// を残す（取り下げ `cancelled`・離脱と `clear --repo` は `left`・マージ済み `merged`・
+/// 回収 `reclaimed`）。
+fn remove_from(
+    state: &mut State,
+    id: &str,
+    freed: &'static str,
+    now: u64,
+    events: &mut Vec<Event>,
+) -> bool {
     let mut removed = false;
     for desk in state.merge.values_mut() {
         removed |= drop_where(&mut desk.queue, |request| request.id == id);
         removed |= desk.holder.take_if(|holder| holder.id == id).is_some();
     }
-    removed |= drop_where(&mut state.load.queue, |request| request.id == id);
-    removed |= state
-        .load
-        .holder
-        .take_if(|holder| holder.id == id)
-        .is_some();
+    removed |= drop_where(&mut state.requests, |request| request.id == id);
+    removed |= state.sole.take_if(|holder| holder.id == id).is_some();
+    if state.test.as_ref().is_some_and(|holder| holder.id == id) {
+        free_test(state, freed, now, events);
+        removed = true;
+    }
     removed
 }
 

@@ -5,24 +5,21 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
-use super::{ParticipantStatus, RECENT_MAX, Recent, RecentKind, State, VERSION, WaitKind};
+use super::{DeskSet, ParticipantStatus, RECENT_MAX, Recent, RecentKind, State, VERSION, WaitKind};
 
-/// 設計「Data Models / 状態ファイル `state.json`（版 1）」の見本そのまま。
+/// 設計「Data Models / 状態ファイル `state.json`（版 2）」の見本そのまま。
 const SAMPLE: &str = r#"{
-  "version": 1,
-  "participants": {
-    "A": { "id": "A", "name": "A", "repo": "areka", "status": "working", "since": 1791000000,
-           "stop_reason": null, "watch": { "pid": 1234, "since": 1791000000 }, "awaiting_watch_since": null }
-  },
-  "merge": {
-    "areka": { "holder": { "id": "A", "spec": "x", "bug": false, "requested": 1791000010, "granted": 1791000011 },
-               "queue": [], "last": { "pr": "281", "sha": "414d43eb", "spec": "y", "at": 1790999000 } }
-  },
-  "load": { "holder": null, "queue": [ { "id": "C", "purpose": "load-flake 5 回", "requested": 1791000020 } ] },
-  "waits": [ { "id": "A", "kind": "watch", "repo": "areka", "pid": 1234, "since": 1791000000 } ],
-  "recent": [ { "at": 1791000005, "kind": "reclaimed", "id": "Z", "detail": "watch absent" } ]
+  "version": 2,
+  "participants": { "a": { "id": "a", "name": "spec-x", "repo": "areka", "status": "working", "since": 0,
+                           "stop_reason": null, "watch": { "pid": 1, "since": 0 }, "awaiting_watch_since": null } },
+  "merge": { "areka": { "holder": { "id": "a", "spec": "spec-x", "bug": false, "requested": 0, "granted": 0 },
+                        "queue": [], "last": null } },
+  "test": { "id": "a", "purpose": "kiro-complete full test", "requested": 0, "granted": 0 },
+  "sole": null,
+  "requests": [ { "id": "b", "desks": "test,sole", "purpose": "...", "requested": 0 } ],
+  "waits": [ { "id": "b", "kind": "request", "repo": null, "pid": 2, "since": 0 } ],
+  "recent": [ { "at": 0, "kind": "test-freed", "id": "c", "detail": "stopped" } ]
 }"#;
-
 fn read(text: &str) -> State {
     serde_json::from_str(text).expect("状態として読める")
 }
@@ -48,9 +45,11 @@ fn design_sample_reads_and_writes_back_the_same() {
     assert_eq!(read(&written), state);
 
     assert_eq!(state.version, VERSION);
-    assert_eq!(state.participants["A"].status, ParticipantStatus::Working);
-    assert_eq!(state.waits[0].kind, WaitKind::Watch);
-    assert_eq!(state.recent[0].kind, RecentKind::Reclaimed);
+    assert_eq!(state.participants["a"].status, ParticipantStatus::Working);
+    assert_eq!(state.test.as_ref().map(|t| t.id.as_str()), Some("a"));
+    assert_eq!(state.requests[0].desks, DeskSet::TestSole);
+    assert_eq!(state.waits[0].kind, WaitKind::Request);
+    assert_eq!(state.recent[0].kind, RecentKind::TestFreed);
 }
 
 #[test]
@@ -69,7 +68,7 @@ fn enums_are_spelled_in_lowercase_kebab() {
     let waits = [
         (WaitKind::Watch, "watch"),
         (WaitKind::Merge, "merge"),
-        (WaitKind::Load, "load"),
+        (WaitKind::Request, "request"),
         (WaitKind::Resume, "resume"),
     ];
     for (value, text) in waits {
@@ -81,23 +80,35 @@ fn enums_are_spelled_in_lowercase_kebab() {
         (RecentKind::Reclaimed, "reclaimed"),
         (RecentKind::Recovered, "recovered"),
         (RecentKind::Cleared, "cleared"),
+        (RecentKind::TestFreed, "test-freed"),
     ];
     for (value, text) in recents {
+        assert_eq!(spelled(json!(value)), text);
+        assert_eq!(value.as_str(), text);
+    }
+    let desks = [
+        (DeskSet::Test, "test"),
+        (DeskSet::Sole, "sole"),
+        (DeskSet::TestSole, "test,sole"),
+    ];
+    for (value, text) in desks {
         assert_eq!(spelled(json!(value)), text);
         assert_eq!(value.as_str(), text);
     }
 }
 
 #[test]
-fn empty_state_is_written_with_version_1() {
-    assert_eq!(VERSION, 1);
+fn empty_state_is_written_with_version_2() {
+    assert_eq!(VERSION, 2);
     assert_eq!(
         json!(State::empty()),
         json!({
-            "version": 1,
+            "version": 2,
             "participants": {},
             "merge": {},
-            "load": { "holder": null, "queue": [] },
+            "test": null,
+            "sole": null,
+            "requests": [],
             "waits": [],
             "recent": []
         })
@@ -106,36 +117,42 @@ fn empty_state_is_written_with_version_1() {
 
 #[test]
 fn missing_fields_of_the_same_version_still_read() {
-    assert_eq!(read(r#"{ "version": 1 }"#), State::empty());
+    assert_eq!(read(r#"{ "version": 2 }"#), State::empty());
 
     // 項目の欠けた記録と、この実行ファイルの知らない項目（同じ版の中で後から増えたもの）。
     let state = read(
-        r#"{ "version": 1, "added_later": true,
+        r#"{ "version": 2, "added_later": true,
              "participants": { "A": { "id": "A" } },
              "merge": { "areka": {} },
-             "load": { "holder": { "id": "C" } },
+             "test": { "id": "C" },
+             "sole": { "id": "C" },
+             "requests": [ { "desks": "sole" } ],
              "recent": [ { "kind": "cleared" } ] }"#,
     );
     let a = &state.participants["A"];
     assert_eq!(a.status, ParticipantStatus::Working);
     assert_eq!((a.watch.as_ref(), a.awaiting_watch_since), (None, None));
     assert_eq!(state.merge["areka"], Default::default());
-    let holder = state.load.holder.as_ref().expect("持ち主が居る");
-    assert!(!holder.running && holder.stopped.is_empty());
+    assert_eq!(state.test.as_ref().map(|t| t.granted), Some(0));
+    let sole = state.sole.as_ref().expect("持ち主が居る");
+    assert!(!sole.running && sole.stopped.is_empty());
+    assert_eq!(state.requests[0].id, "");
     assert_eq!(state.recent[0].id, None);
 }
 
 #[test]
-fn a_file_without_version_does_not_read_as_version_1() {
+fn a_file_without_version_does_not_read_as_the_current_version() {
     assert_ne!(read("{}").version, VERSION);
 }
 
 #[test]
 fn a_record_without_its_kind_does_not_read() {
-    // 種類は欠けたときに入れる中立の値が無いので、形の合わないファイルとして断る。
+    // 種類と机の組は欠けたときに入れる中立の値が無いので、形の合わないファイルとして断る。
     for text in [
-        r#"{ "version": 1, "waits": [ { "id": "A" } ] }"#,
-        r#"{ "version": 1, "recent": [ { "at": 1 } ] }"#,
+        r#"{ "version": 2, "waits": [ { "id": "A" } ] }"#,
+        r#"{ "version": 2, "recent": [ { "at": 1 } ] }"#,
+        r#"{ "version": 2, "requests": [ { "id": "A" } ] }"#,
+        r#"{ "version": 2, "requests": [ { "id": "A", "desks": "merge" } ] }"#,
     ] {
         assert!(serde_json::from_str::<State>(text).is_err(), "{text}");
     }

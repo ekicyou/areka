@@ -41,6 +41,8 @@ pub(crate) enum RemoveVerdict {
     EnvLocked,
     /// 並びに無い（メニューを出した後に並びが変わった・warn・変えない）。
     Stale,
+    /// 一時の置き場だけに一致した（areka-P0-startup-options-core 要件 3.6・warn・変えない）。
+    Temporary,
 }
 
 /// 先頭へ動かすの判断（areka-P0-user-data-root 要件 3.7）。
@@ -54,17 +56,41 @@ pub(crate) enum FrontVerdict {
     EnvLocked,
     /// 並びに無い（メニューを出した後に並びが変わった・warn）。
     Stale,
+    /// 一時の置き場だけに一致した（areka-P0-startup-options-core 要件 3.6・warn・変えない）。
+    Temporary,
 }
 
-/// 追加: 末尾に足す（要件 6.4）。実行ファイルのフォルダも絶対パスのまま入る（記憶へは
+/// 一時の置き場か（3 つの判断は一時の項目を探す相手にしない）。
+fn is_temp(root: &BasewareRoot) -> bool {
+    root.is_temporary()
+}
+
+/// 覚える置き場（一時でない項目）のうち `dir` と同じ根の位置（並び全体での位置）。
+fn remembered_position(roots: &BasewareRoots, dir: &Path) -> Option<usize> {
+    roots
+        .roots()
+        .iter()
+        .position(|r| !is_temp(r) && same_root(r.dir(), dir))
+}
+
+/// 覚える置き場には無く、一時の置き場だけに一致するか。
+fn only_temporary(roots: &BasewareRoots, dir: &Path) -> bool {
+    roots
+        .roots()
+        .iter()
+        .any(|r| is_temp(r) && same_root(r.dir(), dir))
+}
+
+/// 追加: 末尾に足す（要件 6.4）。一時の置き場は重なりに数えない＝同じフォルダは普通の置き場として足す
+/// （areka-P0-startup-options-core 要件 3.7）。実行ファイルのフォルダも絶対パスのまま入る（記憶へは
 /// `encode_memory` が `<exe>` で書く＝要件 6.8）。
 pub(crate) fn decide_add(roots: &BasewareRoots, origin: RootsOrigin, picked: &Path) -> AddVerdict {
     if origin == RootsOrigin::EnvVar {
         return AddVerdict::EnvLocked;
     }
-    if let Some(existing) = roots.roots().iter().find(|r| same_root(r.dir(), picked)) {
+    if let Some(index) = remembered_position(roots, picked) {
         return AddVerdict::AlreadyListed {
-            existing: existing.dir().to_path_buf(),
+            existing: roots.roots()[index].dir().to_path_buf(),
         };
     }
     let added = BasewareRoot::new(picked.to_path_buf());
@@ -78,6 +104,7 @@ pub(crate) fn decide_add(roots: &BasewareRoots, origin: RootsOrigin, picked: &Pa
 }
 
 /// 外す: メニューに出した根の絶対パスで受け、並びの値から外すだけ（要件 7.2・7.3・8.6）。
+/// 一時の置き場は外さず、「最後の 1 つ」は覚える置き場で数える（areka-P0-startup-options-core 要件 3.6）。
 pub(crate) fn decide_remove(
     roots: &BasewareRoots,
     origin: RootsOrigin,
@@ -86,10 +113,13 @@ pub(crate) fn decide_remove(
     if origin == RootsOrigin::EnvVar {
         return RemoveVerdict::EnvLocked;
     }
-    let Some(index) = roots.roots().iter().position(|r| same_root(r.dir(), dir)) else {
+    let Some(index) = remembered_position(roots, dir) else {
+        if only_temporary(roots, dir) {
+            return RemoveVerdict::Temporary;
+        }
         return RemoveVerdict::Stale;
     };
-    if roots.roots().len() == 1 {
+    if roots.roots().iter().filter(|r| !is_temp(r)).count() == 1 {
         return RemoveVerdict::LastOne;
     }
     let mut list = roots.roots().to_vec();
@@ -100,18 +130,21 @@ pub(crate) fn decide_remove(
     }
 }
 
-/// 先頭へ動かす: 項目を複写して動かす（書ける根の印は残る）。
+/// 先頭へ動かす: 項目を複写して動かす（書ける根の印は残る）。動かす先は覚える置き場の先頭＝一時の項目の直後で、
+/// 一時の置き場は並びの先頭のまま・一時の置き場は動かさない（areka-P0-startup-options-core 要件 3.6・3.9）。
 pub(crate) fn decide_front(roots: &BasewareRoots, origin: RootsOrigin, dir: &Path) -> FrontVerdict {
     if origin == RootsOrigin::EnvVar {
         return FrontVerdict::EnvLocked;
     }
-    match roots.roots().iter().position(|r| same_root(r.dir(), dir)) {
+    let front = roots.roots().iter().take_while(|r| is_temp(r)).count();
+    match remembered_position(roots, dir) {
+        None if only_temporary(roots, dir) => FrontVerdict::Temporary,
         None => FrontVerdict::Stale,
-        Some(0) => FrontVerdict::AlreadyFront,
+        Some(index) if index == front => FrontVerdict::AlreadyFront,
         Some(index) => {
             let mut list = roots.roots().to_vec();
             let picked = list.remove(index);
-            list.insert(0, picked);
+            list.insert(front, picked);
             FrontVerdict::Moved {
                 roots: BasewareRoots::new(list),
             }
@@ -141,6 +174,7 @@ pub(crate) fn move_to_front(world: &mut World, dir: PathBuf) {
         FrontVerdict::AlreadyFront => "already_front",
         FrontVerdict::EnvLocked => "env_var",
         FrontVerdict::Stale => "stale",
+        FrontVerdict::Temporary => "temporary",
     };
     tracing::warn!(
         event = "roots_front_refused",
@@ -201,6 +235,7 @@ pub(crate) fn remove_root(world: &mut World, dir: PathBuf) {
         RemoveVerdict::LastOne => "last_one",
         RemoveVerdict::EnvLocked => "env_var",
         RemoveVerdict::Stale => "stale",
+        RemoveVerdict::Temporary => "temporary",
     };
     tracing::warn!(
         event = "roots_remove_refused",
@@ -282,6 +317,10 @@ fn apply(world: &mut World, roots: BasewareRoots, exe_dir: Option<PathBuf>) {
 #[cfg(test)]
 #[path = "edit_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "edit_temporary_tests.rs"]
+mod temporary_tests;
 
 #[cfg(test)]
 #[path = "edit_write_failure_tests.rs"]

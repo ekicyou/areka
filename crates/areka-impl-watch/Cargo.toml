@@ -1,7 +1,7 @@
 [package]
 name = "areka-impl-watch"
 workspace = "../.."
-description = "並んで走る実装セッションに「マージの机」と「負荷テストの机」を 1 度に 1 人へ貸し出すコンソールアプリ（spec: areka-P0-impl-watch）。実行ファイル 1 つで動き、areka の実行時コードからは参照されない leaf crate"
+description = "並んで走る実装セッションに 3 つの机（実装の机・排他テストの机・マージの机）を貸し出すコンソールアプリ（spec: areka-P0-impl-watch・areka-P0-impl-watch-test-desk）。実行ファイル 1 つで動き、areka の実行時コードからは参照されない leaf crate"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

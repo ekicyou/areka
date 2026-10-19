@@ -316,7 +316,7 @@ fn broken_files() -> [(&'static str, Damage); 3] {
         ("not json", Damage::NotJson { line: 1, column: 2 }),
         // JSON で版も 1 だが、2 行目の欄の型が違う。位置は元のバイト列を読み直して取る。
         (
-            "{ \"version\": 1,
+            "{ \"version\": 2,
   \"participants\": [] }",
             Damage::WrongShape {
                 line: 2,
@@ -385,13 +385,13 @@ fn a_change_sets_each_broken_file_aside_and_its_damage_reaches_the_log_port() {
 fn read_only_fails_on_an_unknown_version_and_leaves_the_file() {
     let root = TempPath::under_target("impl-watch-store");
     let home = home_in(&root);
-    let text = r#"{ "version": 2, "participants": "new shape" }"#;
+    let text = r#"{ "version": 1, "participants": "new shape" }"#;
     fs::write(home.state_path(), text).expect("置ける");
 
     let got = store_in(&root).read_only();
 
     assert!(
-        matches!(got, Err(WatchError::VersionMismatch { found: 2, known: 1 })),
+        matches!(got, Err(WatchError::VersionMismatch { found: 1, known: 2 })),
         "{got:?}"
     );
     assert_eq!(fs::read_to_string(home.state_path()).expect("読める"), text);
@@ -488,7 +488,7 @@ fn clear_without_a_state_file_still_writes_the_empty_state_and_returns_none() {
 #[test]
 fn clear_does_not_read_the_old_file_so_it_works_over_an_unknown_version_and_a_broken_file() {
     let unreadable = [
-        r#"{ "version": 2, "participants": "new shape" }"#,
+        r#"{ "version": 1, "participants": "new shape" }"#,
         "not json",
     ];
     for text in unreadable {

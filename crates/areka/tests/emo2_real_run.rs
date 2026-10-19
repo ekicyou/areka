@@ -12,14 +12,16 @@
 //! 常設スイートでの観測可能な完了条件であり、実走そのものは DoD の前提にしない（人間 opt-in の追験）。
 //!
 //! ## 実走（env セット時・R9.1）
-//! `CARGO_BIN_EXE_areka`（Cargo が統合テスト用に先ビルドして渡す**実バイナリ**のパス）を、
-//! emo2 fixture を位置引数に子プロセス起動する（smoke ドナー `tests/smoke_boot_loop_exit.rs` と同型・
-//! 純 std `std::process::Command`＋番犬・**新規依存を追加しない**・R10.5）:
-//! - argv[1] = ghost_root（`検体 emo2`）
-//! - argv[2] = balloon_root（同 fixture 下 `emo2/emo2-kakukaku`）
-//! - env `AREKA_APP_SMOKE_EXIT_MS` = [`SMOKE_EXIT_MS`]（自動 close で exit 0 を無人観測可能にする）
-//! - env `RUST_LOG` = `info,kanade=trace`（wire 成立／attach 完了マーカー・折返し ON 解決の証跡は
+//! 実機の試験の窓口 `real-run-kit` で、`CARGO_BIN_EXE_areka`（Cargo が統合テスト用に先ビルドして渡す
+//! **実バイナリ**のパス）を emo2 の検体で立てる（areka-P0-real-run-mcp-kit 要件 7.1〜7.3・7.6・7.7）:
+//! - 起動の指定 `Launch::Sample { emo2, emo2-kakukaku }`（写しのゴーストとバルーンのフォルダを位置の引数で渡す）
+//! - 保険の自動終了 [`SAFETY_EXIT`]（自動 close で exit 0 を無人観測可能にする）・締切 [`DEADLINE`]
+//! - `RUST_LOG` = `info,kanade=trace`（wire 成立／attach 完了マーカー・折返し ON 解決の証跡は
 //!   いずれも `info!` ゆえ確実に捕捉する。design.md「実機確認セット」Trigger 手順に一致させる）
+//!
+//! 子の起こし方・締切までの見張り・告知のメッセージボックスの抑え・i686 の仲介の揃え方は窓口に任せ、
+//! 子が自分で終わるのを待つ（`wait_exit`）。子は開発者の `AREKA_ROOT`・`AREKA_PROFILE_DIR` を受け継がず、
+//! 回の空の根・回の記憶の置き場（`target\` の下）・空いた MCP の番号で立つ（D-14）。
 //!
 //! 折返しモードの実機証跡について: balloon descript 基層 fixture
 //! `検体 emo2 の同梱バルーン emo2-kakukaku の descript.txt` に
@@ -33,11 +35,9 @@
 //!
 //! ## 実走の前提（人間が opt-in 時に用意する・既定 OFF 経路は非依存）
 //! - **実 pasta helper**: `default_helper_exe_path()`（`crates/areka/src/main.rs`）は
-//!   `current_exe()` 隣の `shiori-host32-helper.exe` を解決する。実バイナリは
-//!   `target/<profile>/areka.exe` ゆえ、**`target/<profile>/shiori-host32-helper.exe` に実 helper を
-//!   配置**しておく必要がある（i686 host-32 成果物を
-//!   `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` で先にビルドし、実バイナリ
-//!   隣へコピーする）。boot は actor spawn で完了し SHIORI 接続の成否を待たない（実測でも helper LOAD
+//!   `current_exe()` 隣の `shiori-host32-helper.exe` を解決する。窓口が i686 の成果物を実バイナリ
+//!   隣へ揃えるので、先に `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` で
+//!   建てておく。boot は actor spawn で完了し SHIORI 接続の成否を待たない（実測でも helper LOAD
 //!   失敗より前に wire 成立へ到達する）ため、helper 不在でも wire 成立マーカー自体は出るが、実発話・
 //!   実 typewriter の**目視サインオフ**には実 helper が要る。
 //! - **実表示・実 DPI（≠96）**: attach 完了マーカーは `GhostWindows`＋GPU 資源ゲート成立フレームで
@@ -45,30 +45,21 @@
 //!   終了コード 1 で終わり attach 完了マーカーが出ない（＝本テストは headless では成立しない）。これは env-gate
 //!   opt-in の設計意図どおりであり、実表示のある実機でのみ緑になる。
 
-use sample_ghost_kit::SampleRoot;
-use std::process::{Command, ExitStatus, Stdio};
-use std::sync::LazyLock;
-use std::time::{Duration, Instant};
+use real_run_kit::{Launch, RealRun};
+use std::time::Duration;
 
 /// 実走を有効化する opt-in 環境変数（未設定／空なら即 skip・R9.2・DoD 非前提）。
 const REAL_RUN_ENV: &str = "AREKA_EMO2_REAL_RUN";
 
-/// 子プロセスへ渡す自動 close 遅延（ms）。実表示・実 GPU の初期化と初回 attach フレーム到達、
+/// 保険の自動終了。実表示・実 GPU の初期化と初回 attach フレーム到達、
 /// OnBoot トークが流れてテキスト供給面が予約スロットへ装着され折返し解決 info!（`wrap=…`）が出るまでを
-/// 無人でも観測できる程度に、smoke ドナー（500ms）より寛大に取る。番犬（[`WATCHDOG_DEADLINE`]＝120s）
+/// 無人でも観測できる程度に、smoke（500ms）より寛大に取る。締切（[`DEADLINE`]＝120s）
 /// より十分小さく保つ（人間目視サインオフ用の寛大な `180000` は本テストでなく直接起動時に付ける・上部 doc 参照）。
-const SMOKE_EXIT_MS: &str = "3000";
+const SAFETY_EXIT: Duration = Duration::from_secs(3);
 
-/// タイムアウト番犬の締切。実 pasta helper の LOAD・実表示初期化・OnClose 握手（再生完了待ち）を
-/// 含むため smoke ドナー（60s）より寛大に取る。これを超えて終了しなければハング＝テスト失敗と判定する。
-const WATCHDOG_DEADLINE: Duration = Duration::from_secs(120);
-
-/// `try_wait()` のポーリング周期（smoke ドナーと同一）。
-const POLL_INTERVAL: Duration = Duration::from_millis(50);
-
-/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
-static EMO2: LazyLock<SampleRoot> =
-    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
+/// 締切。実 pasta helper の LOAD・実表示初期化・OnClose 握手（再生完了待ち）を
+/// 含むため窓口の既定より寛大に取る。これを超えて終了しなければハング＝テスト失敗と窓口が判定する。
+const DEADLINE: Duration = Duration::from_secs(120);
 
 // ===========================================================================
 // 実 DPI 人間サインオフ手順（R9.3）
@@ -102,7 +93,7 @@ static EMO2: LazyLock<SampleRoot> =
 // ## サインオフ実行の実際
 // - 上記 1〜4（＋折返しの目視）のうち **2（typewriter）・3（ドラッグ）・4（OnClose 経由の終了）は、
 //   窓が開いたまま人間が観察・操作する必要がある**。目視のための時間を確保するには、自動 assert 用の
-//   短い `AREKA_APP_SMOKE_EXIT_MS`（本テストの [`SMOKE_EXIT_MS`]）ではなく、**寛大な有界自動終了**
+//   短い `AREKA_APP_SMOKE_EXIT_MS`（本テストの [`SAFETY_EXIT`]）ではなく、**寛大な有界自動終了**
 //   （design.md「実機確認セット」推奨 `180000`＝3 分）を付けて実バイナリを直接起動する:
 //
 //       $env:RUST_LOG="info,kanade=trace"; $env:AREKA_APP_SMOKE_EXIT_MS="180000"; `
@@ -112,9 +103,9 @@ static EMO2: LazyLock<SampleRoot> =
 //     `cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2` が刷る
 //     `folder=`／`balloon.emo2-kakukaku=` の行から得る）。3 分の間に 1〜4＋折返しを目視し、観察後に窓を
 //     閉じて 4（OnClose 経由の静かな終了）を確認する。close せず放置しても 3 分で自動終了する。
-//   ※ `180000` は**この人間 opt-in の直接起動専用**であり、番犬（[`WATCHDOG_DEADLINE`]＝120s）を持たない。
-//     本ファイルの `#[test]` の自動 close（[`SMOKE_EXIT_MS`]）は番犬締切より十分小さく保つこと
-//     （さもなくば番犬がハング判定で先に発火する）。両者を混同しない。
+//   ※ `180000` は**この人間 opt-in の直接起動専用**であり、締切（[`DEADLINE`]＝120s）を持たない。
+//     本ファイルの `#[test]` の保険の自動終了（[`SAFETY_EXIT`]）は締切より十分小さく保つこと
+//     （さもなくば締切がハング判定で先に発火する）。両者を混同しない。
 // - 本ファイルの `#[test]`（`AREKA_EMO2_REAL_RUN=1` で起動）は、これと独立に**自動 close→exit 0＋
 //   マーカー（wire／attach／`wrap=BudouxWordWrap`）**の機械可読部を押さえる。両者（自動部＋人間目視部）
 //   が揃ってサインオフ成立とする。
@@ -139,77 +130,24 @@ fn emo2_real_run_boots_talks_and_exits_zero() {
         }
     }
 
-    // --- 実走（R9.1）: emo2 fixture を位置引数に実バイナリを起動する ---
-    let ghost_root = EMO2.folder();
-    let balloon_root = EMO2.balloon("emo2-kakukaku").expect("emo2 の同梱バルーン");
-    assert!(
-        ghost_root.join("ghost/master/descript.txt").exists(),
-        "emo2 fixture が見つかりません（in-repo 前提）: {}",
-        ghost_root.display()
-    );
-
-    let bin = env!("CARGO_BIN_EXE_areka");
-    let mut child = Command::new(bin)
-        .arg(ghost_root.to_str().expect("fixture パスは UTF-8"))
-        .arg(balloon_root.to_str().expect("fixture パスは UTF-8"))
-        // 自動 close（無人で exit 0 を観測可能にする・R6.4/R9.1）。
-        .env("AREKA_APP_SMOKE_EXIT_MS", SMOKE_EXIT_MS)
-        // 告知のメッセージボックスを抑える（モニタ 0 台で「起動窓を開けない」の告知がモーダルのまま
-        // 番犬の締切まで止まらないように）。argv 起動の見え方は変わらない（baseware-root-layout 要件 7.1）。
-        .env("AREKA_NO_ALERT", "1")
+    // --- 実走（R9.1）: emo2 の検体で立て、子が自分で終わるのを待つ（要件 7.6） ---
+    let mut run = RealRun::new(env!("CARGO_BIN_EXE_areka"))
+        .launch(Launch::Sample {
+            name: "emo2".into(),
+            balloon: Some("emo2-kakukaku".into()),
+        })
         // wire 成立／attach 完了マーカー、および折返し ON 解決の証跡（`wrap=BudouxWordWrap`）は
         // いずれも info! ゆえ RUST_LOG を明示し確実に捕捉する（人間の shell の RUST_LOG が warn 等でも
         // 取りこぼさない）。design.md「実機確認セット」Trigger 手順に合わせ `kanade=trace` も併せて有効化する
         // （折返し解決の info! 自体は info レベルゆえ `info` だけでも捕捉されるが、手順の再現性のため一致させる）。
-        .env("RUST_LOG", "info,kanade=trace")
-        // 開発者の書ける根の指定を受け継がない（user-data-root 要件 10.6）。
-        .env_remove("AREKA_USER_ROOT")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap_or_else(|e| panic!("areka 実バイナリの起動に失敗しました（{bin}）: {e}"));
-
-    // タイムアウト番犬: try_wait() を短周期でポーリングし、締切内の終了を待つ（純 std・新規依存なし）。
-    let start = Instant::now();
-    let status: ExitStatus = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) => {
-                if start.elapsed() >= WATCHDOG_DEADLINE {
-                    // ハング: 子を kill して回収しつつ捕捉出力を診断へ回し、明示的に失敗する（マスクしない）。
-                    let _ = child.kill();
-                    let (out, err) = child
-                        .wait_with_output()
-                        .map(|o| {
-                            (
-                                String::from_utf8_lossy(&o.stdout).into_owned(),
-                                String::from_utf8_lossy(&o.stderr).into_owned(),
-                            )
-                        })
-                        .unwrap_or_default();
-                    panic!(
-                        "実走プロセスが番犬締切（{WATCHDOG_DEADLINE:?}）内に終了しませんでした（ハング）。\
-                         boot→talk→close の欠陥、または実 helper／実表示の欠落の疑い。\
-                         \n--- child stdout ---\n{out}\n--- child stderr ---\n{err}"
-                    );
-                }
-                std::thread::sleep(POLL_INTERVAL);
-            }
-            Err(e) => panic!("子プロセスの状態取得（try_wait）に失敗しました: {e}"),
-        }
-    };
-
-    // 終了済み: 診断・マーカー assert のため出力を回収する。
-    let (out, err) = child
-        .wait_with_output()
-        .map(|o| {
-            (
-                String::from_utf8_lossy(&o.stdout).into_owned(),
-                String::from_utf8_lossy(&o.stderr).into_owned(),
-            )
-        })
-        .unwrap_or_default();
-    let all = format!("{out}\n{err}");
+        .rust_log("info,kanade=trace")
+        // 自動 close（無人で exit 0 を観測可能にする・R6.4/R9.1）。
+        .safety_exit(SAFETY_EXIT)
+        .deadline(DEADLINE)
+        .spawn();
+    let status = run.wait_exit().status;
+    let (out, err) = (run.stdout(), run.stderr());
+    let all = run.output();
 
     // (1) exit 0: 自動 close→空遷移→run() 復帰→終了握手（shutdown＋seriko join）まで正常終了（R6.3/R6.4/R9.1）。
     assert!(

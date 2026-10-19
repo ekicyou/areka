@@ -18,7 +18,7 @@ use crate::actor::round_trip_request;
 use crate::msg::{EventId, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome};
 use crate::schedule::events::SourceEvent;
 use crate::schedule::log_capture::{CapturedEvent, capture};
-use crate::schedule::translate::{TranslateRequest, TranslateResult};
+use crate::schedule::translate::{ScriptSource, TranslateRequest, TranslateResult};
 use crate::shiori::real::ABSENT_REFERENCE;
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use crate::translate::TranslateSeams;
@@ -77,14 +77,22 @@ struct Observed {
 /// 台詞 `%usernameさん`・元のイベント `OnMouseDoubleClick`（`source_refs`）の依頼を、`reply` を返す
 /// 偽の SHIORI へ向けて実行する。
 fn run(reply: ShioriOutcome, source_refs: &[&str]) -> Observed {
+    run_from(
+        reply,
+        ScriptSource::Event(SourceEvent {
+            id: EventId::Static(SOURCE_ID),
+            references: source_refs.iter().map(|s| s.to_string()).collect(),
+        }),
+    )
+}
+
+/// 台詞 `%usernameさん`・出どころ `source` の依頼を、`reply` を返す偽の SHIORI へ向けて実行する。
+fn run_from(reply: ShioriOutcome, source: ScriptSource) -> Observed {
     let (shiori_tx, helper) = fake_shiori(reply);
     let (seams, calls) = spy_seams();
     let request = TranslateRequest {
         script: "%usernameさん".to_string(),
-        source: SourceEvent {
-            id: EventId::Static(SOURCE_ID),
-            references: source_refs.iter().map(|s| s.to_string()).collect(),
-        },
+        source,
         status: talking_status(),
     };
     let mut result = None;
@@ -280,5 +288,36 @@ fn absent_marker_from_outside_is_replaced_on_existing_send_path() {
     assert_eq!(
         replaced[0].fields.get("index").map(String::as_str),
         Some("0")
+    );
+}
+
+/// 外からの台本（SSTP SEND）の依頼は `on_translate_sstp` で組み立てる: Reference0＝展開の後の台詞・
+/// Reference1＝`sstp-send,owned`・Reference2 以降なし。MAKOTO の口の 2 つ目は空文字、記録の欄は
+/// `sstp-send`（要件 4.4）。イベントの出どころの依頼は上のテストのとおり今日のまま（要件 4.6）。
+#[test]
+fn sstp_send_source_uses_sstp_send_owned_reference1() {
+    let observed = run_from(
+        ShioriOutcome::Value("翻訳後".to_string()),
+        ScriptSource::SstpSend,
+    );
+    let (id, references, status) = received_get(observed.received);
+    assert_eq!(id, "OnTranslate");
+    assert_eq!(
+        references,
+        vec!["太郎さん".to_string(), "sstp-send,owned".to_string()],
+        "Reference1 は sstp-send,owned・2 と 3 は欠番（列を Reference1 で止める）"
+    );
+    assert_eq!(status, talking_status(), "Status は依頼に載った値");
+    assert_eq!(observed.result.ok().as_deref(), Some("翻訳後#makoto"));
+    assert_eq!(
+        observed.makoto,
+        vec![("翻訳後".to_string(), String::new())],
+        "MAKOTO の口の 2 つ目は空文字"
+    );
+    let hits = records(&observed.events, Level::INFO, "translate_reply");
+    assert_eq!(hits.len(), 1);
+    assert_eq!(
+        hits[0].fields.get("source").map(String::as_str),
+        Some("sstp-send")
     );
 }

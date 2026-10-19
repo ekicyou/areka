@@ -73,6 +73,8 @@ fn ghost(
         .collect();
     let inputs = GhostInputs {
         argv,
+        pointed: None,
+        random: false,
         memory,
         listed: &listed,
         stores: &[root.ghost_store()],

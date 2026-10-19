@@ -355,6 +355,8 @@ pub(crate) struct GhostBootInputs {
     pub helper_exe: PathBuf,
     /// 停止通知の送出端の写し（結線あり・fallback の両方の起動へ渡る・`shiori-fault-notice`）。
     pub kanade_stop: Sender<KanadeNotice>,
+    /// SHIORI の読み方の指定（結線ありの起動・倒れ先の両方がこの値で SHIORI を決める・要件 7.1）。
+    pub modules: crate::cli::ModulePolicy,
 }
 
 impl GhostBootInputs {
@@ -367,20 +369,20 @@ impl GhostBootInputs {
         kanade_stop: Sender<KanadeNotice>,
         boot_origin: BootOrigin,
         app_profile_dir: Option<PathBuf>,
+        modules: crate::cli::ModulePolicy,
     ) -> Self {
         Self {
             wiring: emo2_boot::Emo2BootInputs {
                 ghost_root: cfg.ghost_root.clone(),
                 balloon_root: cfg.balloon_root.clone(),
-                shiori: areka_ghost::ShioriWiring::Helper {
-                    helper_exe: helper_exe.clone(),
-                },
+                shiori: crate::boot_config::shiori_wiring_for(modules, helper_exe.clone()),
                 ticker: areka_ghost::TickerMode::Real(Default::default()),
                 app_profile_dir,
                 boot_origin,
             },
             helper_exe,
             kanade_stop,
+            modules,
         }
     }
 }
@@ -649,6 +651,7 @@ pub(crate) fn boot_ghost(
         wiring,
         helper_exe,
         kanade_stop,
+        modules,
     } = inputs;
     // fallback の腕が使う根と App スコープの置き場（結線の入力は `boot_wired` へ move するので先に写す）。
     // 置き場は本番では `GhostBootInputs::production` へ渡る起動の文脈の置き場（`default_app_profile_dir()`
@@ -677,7 +680,8 @@ pub(crate) fn boot_ghost(
     // 確かめているので、ここでの `MountError::StartPointMissing` は解決後の消失（起動中の削除等）
     // に限られ、`warn!` の上で `None` として骨格起動を継続する（要件 8.2）。それ以外の予期しない
     // 失敗（読取不能・shell 不在等）は `error!`（`is_benign_boot_error` の分類は不変・R7.4）。
-    let ghost_options = ghost_boot_options(ghost_root.clone(), helper_exe, app_profile_dir);
+    let ghost_options =
+        ghost_boot_options(ghost_root.clone(), helper_exe, app_profile_dir, modules);
     // 停止通知の送出端つきで起動する（SHIORI の失敗で kanade が止まったら終了相へ届く・要件 6.4）。
     // 倒れ先も起動のシェルでマウントする（areka-P0-shell-balloon-switch 要件 6.4）。
     let runtime = match areka_ghost::boot_with_origin(
@@ -741,6 +745,7 @@ pub(crate) fn boot_ghost_strict(
         wiring,
         helper_exe: _,
         kanade_stop,
+        modules: _,
     } = inputs;
     let shell = take_boot_shell(world, &wiring.ghost_root);
     boot_wired(

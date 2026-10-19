@@ -146,6 +146,32 @@ fn exe_root_not_listed_or_unknown_is_as_is() {
     );
 }
 
+/// `--ghost <exe>\<フォルダ>` で実行ファイルのフォルダと同じ綴りの一時の置き場が先頭に足されても、
+/// 実行ファイルの隣の根は一時の置き場でない項目で探す（要件 3.9: ほかの決まりは変えない）。
+#[test]
+fn temporary_root_at_exe_dir_does_not_hide_exe_root() {
+    let f = fixture("ur-plan-temp-exe");
+    let roots = BasewareRoots::new(vec![
+        BasewareRoot::temporary(f.exe.clone()),
+        BasewareRoot::user_root(f.user.clone(), false),
+        BasewareRoot::new(f.exe.clone()),
+    ]);
+    let ghost = f.exe.join("ghost").join("emo2");
+    assert_eq!(
+        plan_copy(&roots, Some(&f.exe), StoreKind::Ghost, &ghost),
+        CopyPlan::Copy {
+            from: ghost.clone(),
+            to: f.user.join("ghost").join("emo2"),
+        }
+    );
+    // 一時の置き場のゴースト（`<exe>\<フォルダ>`）そのものは写さない。
+    let temp_ghost = f.exe.join("loose");
+    assert_eq!(
+        plan_copy(&roots, Some(&f.exe), StoreKind::Ghost, &temp_ghost),
+        CopyPlan::AsIs
+    );
+}
+
 // ---- copy_for_write ----
 
 #[test]

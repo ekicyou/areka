@@ -8,12 +8,14 @@
 //! # 檻の並び
 //!
 //! - 受理 3 形と拒否 4 分岐＋拒否どうしの優先順・入力の前処理（`t_zgp1`〜`t_zgp14`）
-//! - スコープブロック正規化（`t_zgp15`〜`t_zgp22`）——同一スコープの 2 窓を
-//!   `[Balloon, Char]` の隣接ブロックへ寄せる調停（要件 2.4）と、それが既存の不変条件
-//!   「バルーン窓はキャラ窓の直上」（要件 6.3）を破らないことを押さえる。
-//! - 相棒窓の畳み込み（`t_zgp23`〜`t_zgp29`）——片方の窓だけを指名されたスコープへ
-//!   相棒を補う（要件 2.6）。補う向き・記録の欄・要素数の判定との順序・数値モードの
-//!   不関与・既存の拒否分岐の不動を押さえる。
+//! - 相棒窓の補いと、補いがスコープどうしの並びに触れないこと（`t_zgp18`〜`t_zgp20`・
+//!   `t_zgp22`〜`t_zgp28`）——片方の窓だけを指名されたスコープへ相棒を補う
+//!   （`areka-P0-zorder-scope-inversion` 要件 3）。補う向き・記録の欄・要素数の判定との順序・
+//!   数値モードの不関与・既存の拒否分岐の不動を押さえる。
+//!
+//! 同じスコープの 2 窓を隣り合いへ寄せる調停（完了 spec の要件 2.4）は
+//! `areka-P0-zorder-scope-inversion` が覆した。書かれた順のまま採る解釈と並びの形の記録は
+//! `zorder_group_ledger_written_order_tests.rs` が押さえる。
 //!
 //! # 拒否の檻が示すこと
 //!
@@ -21,14 +23,9 @@
 //! 要素列を添えて落ちるので、「拒否時に要素列を一切返さない」（要件 8.1 の部分適用
 //! 禁止）が檻の構造そのもので示される。
 //!
-//! # 正規化の檻が示すこと
+//! # 補いの檻が示すこと
 //!
-//! 正規化の檻はすべて [`assert_every_scope_forms_a_balloon_first_block`] を通す。
-//! 明示モードで現れた**どのスコープ**についても `char_at == balloon_at + 1` を全数で
-//! 見るので、「隣接している」と「バルーンが手前」を 1 本の式で同時に押さえる
-//! （要件 2.4／2.6／6.3）。
-//!
-//! 加えて、正規化が**動かしてはならないもの**——スコープどうしの相対順（初出の位置）
+//! 補いが**動かしてはならないもの**——スコープどうしの相対順（書かれた位置）
 //! ——を `t_zgp20`（補うブロックが後ろ）・`t_zgp22`（補うブロックが前）・
 //! `t_zgp28`（補うブロックが前後のペアに挟まれる）の 3 方向から挟む。片側だけの入力は
 //! 「まとめて端へ回す」実装と区別が付かない（初版 1.2 の教訓）。
@@ -333,42 +330,14 @@ fn t_zgp14_no_upper_bound_on_element_count() {
 }
 
 // ---------------------------------------------------------------------------
-// スコープブロック正規化（要件 2.4・research R6）
+// 相棒窓の補い（`areka-P0-zorder-scope-inversion` 要件 3）
 // ---------------------------------------------------------------------------
 
-/// 正規化後の要素列で、**現れるすべてのスコープ**が「バルーンが先の隣接ブロック」に
-/// なっていることを確かめる（要件 2.4／2.6／6.3）。
-///
-/// `si == bi + 1` の 1 本で「隣接している」と「バルーンが先である」の両方を見る。
-/// 畳み込み（要件 2.6）の導入で「2 窓そろっていないスコープ」は正規化後に存在
-/// しなくなったので、片方が見つからないこと自体を赤とする——除外条件を残すと、
-/// 畳み込みを経路から外した実装がこの道具を素通りしてしまう。
-fn assert_every_scope_forms_a_balloon_first_block(elements: &[GroupElement]) {
-    for element in elements {
-        let scope = element.scope;
-        let (Some(balloon_at), Some(char_at)) = (
-            elements.iter().position(|other| *other == b(scope)),
-            elements.iter().position(|other| *other == s(scope)),
-        ) else {
-            panic!(
-                "スコープ {scope} の窓が片方しか残っていない（相棒が畳み込まれていない）: \
-                 {elements:?}"
-            );
-        };
-
-        assert_eq!(
-            char_at,
-            balloon_at + 1,
-            "スコープ {scope} の 2 窓がバルーン先頭の隣接ブロックになっていない: {elements:?}"
-        );
-    }
-}
-
-/// 2 窓そろって書かれたスコープの調停記録（相棒の補いは無い）。
-fn adjusted(scope: u32, reordered: bool) -> Normalization {
+/// 2 窓そろって書かれたスコープの記録——`order` は書かれた並びの形。
+fn written(scope: u32, order: WrittenOrder) -> Normalization {
     Normalization {
         scope,
-        reordered,
+        order,
         implied_partner: None,
     }
 }
@@ -377,75 +346,9 @@ fn adjusted(scope: u32, reordered: bool) -> Normalization {
 fn implied(scope: u32, partner: GroupWindowKind) -> Normalization {
     Normalization {
         scope,
-        reordered: false,
+        order: WrittenOrder::Adjacent,
         implied_partner: Some(partner),
     }
-}
-
-/// 反転指定: 同一スコープのキャラ窓がバルーン窓より手前に並ぶ指定は、既存の不変条件
-/// （バルーンはキャラ窓の直上）を優先して `[Balloon, Char]` へ寄せる（要件 2.4）。
-/// 寄せ先はそのスコープの要素が最初に現れた位置である。
-#[test]
-fn t_zgp15_inverted_scope_pair_is_folded_into_balloon_then_char() {
-    let (elements, normalizations) = expect_accept(&["s1", "b1"]);
-
-    assert_eq!(
-        elements,
-        vec![b(1), s(1)],
-        "キャラ窓を手前に置く要求は採用しない"
-    );
-    assert_eq!(
-        normalizations,
-        vec![adjusted(1, true)],
-        "指定順を採用しなかったことが記録される"
-    );
-    assert_every_scope_forms_a_balloon_first_block(&elements);
-
-    // 寄せ先は「最初に現れた要素の位置」であって「バルーン窓が書かれた位置」ではない。
-    // 反転していると両者は食い違うので、間に他スコープを挟んで違いを見えるようにする。
-    let (with_neighbour, neighbour_records) = expect_accept(&["s1", "b2", "b1"]);
-    assert_eq!(
-        with_neighbour,
-        vec![b(1), s(1), b(2), s(2)],
-        "スコープ 1 のブロックは s1 が書かれた先頭位置に立ち、b2 のブロックはその後ろに残る"
-    );
-    assert_eq!(
-        neighbour_records,
-        vec![adjusted(1, true), implied(2, GroupWindowKind::Char)],
-        "b2 は片方だけの指名なので相棒 s2 が補われる（要件 2.6）"
-    );
-}
-
-/// 非隣接指定: 同一スコープの 2 窓の間に他スコープが挟まる指定も、反転と同じ規則で
-/// 「先に現れた位置の隣接ブロック」へ寄せる（要件 2.4・research R6 の一元処理）。
-#[test]
-fn t_zgp16_non_adjacent_scope_pair_is_folded_at_first_appearance() {
-    let (elements, normalizations) = expect_accept(&["b1", "s0", "s1", "b0"]);
-
-    assert_eq!(
-        elements,
-        vec![b(1), s(1), b(0), s(0)],
-        "スコープ 1 は位置 0 へ、スコープ 0 は位置 1（=s0 が書かれた位置）へ寄る"
-    );
-    assert_eq!(
-        normalizations,
-        vec![adjusted(1, true), adjusted(0, true)],
-        "記録はスコープが最初に現れた順に並ぶ"
-    );
-    assert_every_scope_forms_a_balloon_first_block(&elements);
-}
-
-/// 指定どおりで既に `[Balloon, Char]` の隣接ブロックだったスコープは組み替えない。
-/// 調停の対象であったことは記録に残し、`reordered: false` で「指定どおり採用した」
-/// ことを区別する（要件 2.4 の記録は「採用しなかった旨」を読み取れる形で返す）。
-#[test]
-fn t_zgp17_already_adjacent_block_is_recorded_as_not_reordered() {
-    let (elements, normalizations) =
-        expect_accept(&["balloon1", "surface1", "balloon0", "surface0"]);
-
-    assert_eq!(elements, vec![b(1), s(1), b(0), s(0)], "要素列は指定のまま");
-    assert_eq!(normalizations, vec![adjusted(1, false), adjusted(0, false)]);
-    assert_every_scope_forms_a_balloon_first_block(&elements);
 }
 
 /// 数値モードでは正規化が何もしない。展開（⑷）が必ず `[Balloon, Char]` の隣接
@@ -454,13 +357,12 @@ fn t_zgp17_already_adjacent_block_is_recorded_as_not_reordered() {
 #[test]
 fn t_zgp18_numeric_mode_normalization_is_a_no_op() {
     for tokens in [["1", "0"].as_slice(), ["2", "0", "1"].as_slice()] {
-        let (elements, normalizations) = expect_accept(tokens);
+        let (_, normalizations) = expect_accept(tokens);
 
         assert!(
             normalizations.is_empty(),
             "tokens={tokens:?} normalizations={normalizations:?}"
         );
-        assert_every_scope_forms_a_balloon_first_block(&elements);
     }
 
     let (elements, _) = expect_accept(&["2", "0", "1"]);
@@ -471,7 +373,8 @@ fn t_zgp18_numeric_mode_normalization_is_a_no_op() {
     );
 }
 
-/// 片方の窓だけが書かれたスコープは、相棒窓を補って隣接ブロックにする（要件 2.6）。
+/// 片方の窓だけが書かれたスコープは、相棒窓を補って隣り合いにする（要件 2.6・
+/// `areka-P0-zorder-scope-inversion` 要件 3.1・3.2）。
 /// 補ったことは記録に残る——どちらの窓を補ったかまで読み取れる形である。
 #[test]
 fn t_zgp19_single_window_scope_is_completed_with_its_implied_partner() {
@@ -489,79 +392,43 @@ fn t_zgp19_single_window_scope_is_completed_with_its_implied_partner() {
         ],
         "補った窓の種別が記録から読み取れない"
     );
-    assert_every_scope_forms_a_balloon_first_block(&elements);
 
-    // 2 窓そろったスコープと 1 枚だけのスコープが同居する場合。調停の記録と
+    // 2 窓そろったスコープと 1 枚だけのスコープが同居する場合。並びの形の記録と
     // 補いの記録が同じ列に並び、どちらが起きたかを欄で弁別できる。
     let (mixed, mixed_records) = expect_accept(&["b1", "s0", "s1"]);
     assert_eq!(
         mixed,
-        vec![b(1), s(1), b(0), s(0)],
-        "スコープ 1 は先頭へ寄り、スコープ 0 は s0 が書かれた位置でブロックになる"
+        vec![b(1), b(0), s(0), s(1)],
+        "スコープ 1 は書かれた順のまま・s0 のすぐ手前に b0 が補われる"
     );
     assert_eq!(
         mixed_records,
-        vec![adjusted(1, true), implied(0, GroupWindowKind::Balloon)]
+        vec![
+            written(1, WrittenOrder::Split),
+            implied(0, GroupWindowKind::Balloon)
+        ]
     );
-    assert_every_scope_forms_a_balloon_first_block(&mixed);
 }
 
-/// 正規化が動かすのはスコープのブロックの中身だけであり、スコープどうしの相対順は
-/// **初めて現れた位置**のまま保たれる（要件 2.5 の「属さない窓を動かさない」を
-/// グループの内側にも効かせる）。
+/// 補いが足すのは相棒 1 枚だけであり、書かれた窓どうしの相対順は書かれたまま保たれる
+/// （要件 2.5 の「属さない窓を動かさない」をグループの内側にも効かせる）。
 #[test]
 fn t_zgp20_other_scopes_keep_their_relative_order() {
     let (elements, normalizations) = expect_accept(&["b0", "b2", "s3", "s0"]);
 
     assert_eq!(
         elements,
-        vec![b(0), s(0), b(2), s(2), b(3), s(3)],
-        "b2 と s3 は片方だけの指名＝相棒を補ってもブロックの前後は書かれた順のまま"
+        vec![b(0), b(2), s(2), b(3), s(3), s(0)],
+        "b2 と s3 は片方だけの指名＝相棒を補っても書かれた窓の前後は書かれた順のまま"
     );
     assert_eq!(
         normalizations,
         vec![
-            adjusted(0, true),
+            written(0, WrittenOrder::Split),
             implied(2, GroupWindowKind::Char),
             implied(3, GroupWindowKind::Balloon)
         ]
     );
-    assert_every_scope_forms_a_balloon_first_block(&elements);
-}
-
-/// 完了状態の総取り: 反転・非隣接・片方だけの指名・両者の混在・数値モードのいずれを
-/// 与えても、正規化後の要素列では**どのスコープも**バルーンが先の隣接ブロックになる。
-#[test]
-fn t_zgp21_every_scope_is_adjacent_with_balloon_first_after_normalization() {
-    for (tokens, expected_len) in [
-        (["s1", "b1"].as_slice(), 2),
-        (["b1", "s0", "s1", "b0"].as_slice(), 4),
-        (["s0", "b2", "b0", "s2"].as_slice(), 4),
-        (["b1", "s2", "s1", "b3", "s3", "b2"].as_slice(), 6),
-        (["surface0", "b1", "balloon0", "s1"].as_slice(), 4),
-        (["3", "1", "2"].as_slice(), 6),
-        // 片方だけの指名（畳み込みで窓が増える形・要件 2.6）
-        (["b1", "s0"].as_slice(), 4),
-        (["s3", "b0", "b2", "s0"].as_slice(), 6),
-        (["b0", "b1", "b2"].as_slice(), 6),
-    ] {
-        let (elements, _) = expect_accept(tokens);
-
-        assert_every_scope_forms_a_balloon_first_block(&elements);
-        assert_eq!(
-            elements.len(),
-            expected_len,
-            "正規化後の窓の枚数が合わない（補いすぎ・補い漏れ）: tokens={tokens:?} \
-             elements={elements:?}"
-        );
-
-        let unique: std::collections::HashSet<GroupElement> = elements.iter().copied().collect();
-        assert_eq!(
-            unique.len(),
-            elements.len(),
-            "正規化は窓を複製しない: tokens={tokens:?} elements={elements:?}"
-        );
-    }
 }
 
 /// 片方だけ指名されたスコープのブロックは、**ペアブロックより前に書かれていれば
@@ -578,29 +445,30 @@ fn t_zgp22_single_window_scope_written_before_a_block_stays_before_it() {
 
     assert_eq!(
         elements,
-        vec![b(3), s(3), b(0), s(0), b(2), s(2)],
-        "s3 のブロックは先頭のまま・スコープ 0 のブロックは b0 の位置・b2 はその後ろ"
+        vec![b(3), s(3), b(0), b(2), s(2), s(0)],
+        "s3 のブロックは先頭のまま・b2 の相棒は b2 のすぐ奥・s0 は書かれた末尾のまま"
     );
     assert_eq!(
         normalizations,
         vec![
             implied(3, GroupWindowKind::Balloon),
-            adjusted(0, true),
+            written(0, WrittenOrder::Split),
             implied(2, GroupWindowKind::Char)
         ],
-        "スコープ 0 は非隣接（間に b2）だったので指定順を採用していない"
+        "スコープ 0 は非隣接（間に b2・s2）として記録される"
     );
-    assert_every_scope_forms_a_balloon_first_block(&elements);
 
     // 最小形: ペアが既に隣接ブロックでも、前に書かれた片方だけの指名は前のまま。
     let (minimal, minimal_records) = expect_accept(&["s3", "b0", "s0"]);
     assert_eq!(minimal, vec![b(3), s(3), b(0), s(0)]);
     assert_eq!(
         minimal_records,
-        vec![implied(3, GroupWindowKind::Balloon), adjusted(0, false)],
-        "指定どおりに採用できた場合も調停の対象であったことは記録に残る"
+        vec![
+            implied(3, GroupWindowKind::Balloon),
+            written(0, WrittenOrder::Adjacent)
+        ],
+        "隣り合いで書かれたスコープも記録に残る"
     );
-    assert_every_scope_forms_a_balloon_first_block(&minimal);
 }
 
 // ---------------------------------------------------------------------------
@@ -627,7 +495,6 @@ fn t_zgp23_balloon_only_scope_gains_its_char_window_right_below() {
         ],
         "補ったのはキャラ窓である、と記録から読み取れない"
     );
-    assert_every_scope_forms_a_balloon_first_block(&elements);
 }
 
 /// `sN` だけが書かれたら、相棒のバルーン窓 `bN` を**直前**へ補う（要件 2.6）。
@@ -651,7 +518,6 @@ fn t_zgp24_char_only_scope_gains_its_balloon_window_right_above() {
         ],
         "補ったのはバルーン窓である、と記録から読み取れない"
     );
-    assert_every_scope_forms_a_balloon_first_block(&elements);
 
     // ブロックの位置は「指名された窓が書かれた位置」＝他スコープとの前後は動かない。
     let (with_pair, _) = expect_accept(&["b0", "s0", "s9"]);
@@ -704,7 +570,6 @@ fn t_zgp26_numeric_mode_never_implies_a_partner() {
             "数値モードの展開が窓を増やしすぎている（畳み込みが二重に走っている）: \
              tokens={tokens:?} elements={elements:?}"
         );
-        assert_every_scope_forms_a_balloon_first_block(&elements);
     }
 }
 
@@ -769,56 +634,15 @@ fn t_zgp28_an_implied_block_is_squeezed_from_both_sides() {
     assert_eq!(
         normalizations,
         vec![
-            adjusted(0, false),
+            written(0, WrittenOrder::Adjacent),
             implied(5, GroupWindowKind::Balloon),
-            adjusted(1, false)
+            written(1, WrittenOrder::Adjacent)
         ],
         "記録もスコープの初出順に並ぶ"
     );
-    assert_every_scope_forms_a_balloon_first_block(&elements);
 
     // 対照: 補いが起きない同形の指定。ブロックの並びは同じである＝上の並びは
     // 「畳み込みが起きたから」動いたのではない、と読める。
     let (control, _) = expect_accept(&["b0", "s0", "b5", "s5", "b1", "s1"]);
     assert_eq!(control, elements, "補いの有無で並びが変わってはならない");
-}
-
-/// 記録の 2 欄は同時に立たない——片方しか書かれていないスコープには並べ替える
-/// 2 窓が無く、2 窓そろったスコープには補うものが無いからである。
-///
-/// あわせて「明示モードで現れたスコープはすべて記録に 1 度ずつ載る」ことを見る。
-/// 記録を落とすと、呼び手（受理の記録行）が調整を黙って捨てることになる（要件 8.3）。
-#[test]
-fn t_zgp29_each_explicit_scope_is_recorded_once_with_exactly_one_kind_of_adjustment() {
-    for tokens in [
-        ["b1", "s1"].as_slice(),
-        ["s1", "b1"].as_slice(),
-        ["b1", "s0"].as_slice(),
-        ["s3", "b0", "b2", "s0"].as_slice(),
-        ["b1", "s2", "s1", "b3", "s3", "b2"].as_slice(),
-        ["b0", "b1", "b2"].as_slice(),
-        ["s0", "s1", "s2"].as_slice(),
-    ] {
-        let (elements, normalizations) = expect_accept(tokens);
-
-        for record in &normalizations {
-            assert!(
-                !(record.reordered && record.implied_partner.is_some()),
-                "並べ替えと補いが同時に立っている: tokens={tokens:?} record={record:?}"
-            );
-        }
-
-        let recorded: Vec<u32> = normalizations.iter().map(|n| n.scope).collect();
-        let mut expected_scopes: Vec<u32> = Vec::new();
-        for element in &elements {
-            if !expected_scopes.contains(&element.scope) {
-                expected_scopes.push(element.scope);
-            }
-        }
-        assert_eq!(
-            recorded, expected_scopes,
-            "記録がスコープの初出順に 1 度ずつ並んでいない: tokens={tokens:?} \
-             normalizations={normalizations:?}"
-        );
-    }
 }
