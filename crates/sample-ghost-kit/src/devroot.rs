@@ -89,7 +89,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use areka_nar::{InstallRequest, NarArchive, SingleRoot};
 
-use crate::SampleError;
+use crate::{Sample, SampleError, SampleSource};
 
 /// ビルド成果物の置き場の下に掘る、本仕様専用の名前空間（要件 7.1）。
 const NAMESPACE: &str = "nar-samples";
@@ -136,7 +136,7 @@ fn find_target_dir(configured: Option<&str>, exe: &Path) -> Result<PathBuf, Samp
 }
 
 /// 本仕様専用の名前空間の絶対パス。
-fn namespace_dir() -> Result<PathBuf, SampleError> {
+pub(crate) fn namespace_dir() -> Result<PathBuf, SampleError> {
     let exe = std::env::current_exe().map_err(|source| SampleError::Io {
         what: "実行ファイルの場所の取得",
         path: PathBuf::new(),
@@ -280,6 +280,34 @@ pub(crate) fn nar_dir() -> PathBuf {
     ))
 }
 
+/// 登記の行から、展開に使う書庫のパスを決める唯一の式（spec: `areka-P0-sample-url-fetch`
+/// 要件 1.4・3.1・3.2・3.4・3.8・3.9）。
+///
+/// リポジトリに置く行は今と同じ `vendors/sample_ghost/<name>.nar`（置き場を見ない）。URL の行は
+/// 置き場のハッシュのファイルと SHA-256 が合った置き場の書庫（[`crate::fetched::verified_nar_in`]）。
+/// 窓口の 3 つの入口は取得のたびにここを通るので、照合も取得のたびに行われ、落ちた書庫は
+/// 原本の作り（[`cached_root_in`]）へ渡らない。
+///
+/// # Errors
+///
+/// 未登録の名前なら [`SampleError::UnknownSample`]。URL の行の照合の失敗は
+/// [`crate::fetched::verified_nar_in`] と同じ。
+pub(crate) fn sample_nar(name: &str) -> Result<PathBuf, SampleError> {
+    sample_nar_for(crate::registered(name)?, namespace_dir)
+}
+
+/// [`sample_nar`] の本体。名前空間は URL の行のときだけ求める（テストは私有の名前空間と
+/// 固定入力の行を渡す）。
+fn sample_nar_for(
+    sample: &'static Sample,
+    namespace: impl FnOnce() -> Result<PathBuf, SampleError>,
+) -> Result<PathBuf, SampleError> {
+    match sample.source {
+        SampleSource::Vendored => Ok(nar_dir().join(format!("{}.nar", sample.name))),
+        SampleSource::Fetched { .. } => crate::fetched::verified_nar_in(&namespace()?, sample.name),
+    }
+}
+
 /// `.nar` 1 本の刻印＝**丸ごとの長さ**と **CRC-32**（要件 7.3）。
 ///
 /// 長さだけでは同じ大きさの差し替えを見逃し、CRC だけでは長さの違いを 1/2^32 で
@@ -323,11 +351,7 @@ fn split_stamp(entry: &str) -> Option<(&str, &str)> {
 /// （標準エラーへ出して取得を続ける＝要件 7.3）。
 #[cfg(test)]
 pub(crate) fn cached_root(name: &str) -> Result<PathBuf, SampleError> {
-    cached_root_in(
-        &namespace_dir()?,
-        name,
-        &nar_dir().join(format!("{name}.nar")),
-    )
+    cached_root_in(&namespace_dir()?, name, &sample_nar(name)?)
 }
 
 /// 名前空間と `.nar` を明示して原本を用意する。
@@ -546,11 +570,7 @@ fn sweep(namespace: &Path) {
 /// 原本を用意できないとき [`cached_root`] と同じ失敗、複写できないとき
 /// [`SampleError::Io`]。掃除の失敗は**失敗にしない**（人の読める形に出して続ける）。
 pub(crate) fn fresh_root(name: &str) -> Result<WorkDir, SampleError> {
-    fresh_root_in(
-        &namespace_dir()?,
-        name,
-        &nar_dir().join(format!("{name}.nar")),
-    )
+    fresh_root_in(&namespace_dir()?, name, &sample_nar(name)?)
 }
 
 /// 検体 1 つの**手で使う根**（`manual/<検体>/`）を配り直して、その絶対パスを返す
@@ -567,11 +587,7 @@ pub(crate) fn fresh_root(name: &str) -> Result<WorkDir, SampleError> {
 /// とき [`SampleError::Io`]。**消せない木を黙って配り直さない**——前回の起動記録が残った
 /// 根を「新品」として印字するのは、この窓口が唯一避けたい事故である。
 pub(crate) fn manual_root(name: &str) -> Result<PathBuf, SampleError> {
-    manual_root_in(
-        &namespace_dir()?,
-        name,
-        &nar_dir().join(format!("{name}.nar")),
-    )
+    manual_root_in(&namespace_dir()?, name, &sample_nar(name)?)
 }
 
 /// 名前空間と `.nar` を明示して手で使う根を配り直す（テストが私有の名前空間を渡す）。
@@ -694,3 +710,9 @@ mod cache_tests;
 #[cfg(test)]
 #[path = "devroot_sweep_tests.rs"]
 mod sweep_tests;
+
+/// 行から書庫のパスを決める解決（`sample_nar`）の兄弟テスト。URL の行は固定入力の行と私有の
+/// 名前空間で作る。
+#[cfg(test)]
+#[path = "devroot_fetched_tests.rs"]
+mod fetched_tests;
