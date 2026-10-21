@@ -72,3 +72,9 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## 2026-10-21 の書き足し（`wintf-visual-tree` の起票）
+
+- 開発者（2026-10-21・`/kiro-discovery`）が、`crates/wintf/src/ecs/visual/`（作りかけの描画の木・外からの参照 0）を v0.2.0 で本番の描画層へ上げると決めた（spec `wintf-visual-tree`・`wintf-visual-damage-redraw`）。
+- **未使用を理由に消さない**: `crates/wintf/src/ecs/visual/` の全部と、そこからだけ使われる `crates/wintf/src/numerics/` の働き（`Transform2D`・`Aabb`・`Matrix3x2Ext` ほか）は、「Constraints」の直さずに残す 2 つ目（わざと置いた先送りの印）に当たる。audit が「使われていない」「`allow(dead_code)`」と指したら、消さずに `wintf-visual-tree` へ申し送る（要件の討議で開発者へ確かめる）。
+- **それ以外の指摘は直してよい**が、`wintf-visual-tree` の brief の「直すべき傷」1〜8 と重なる直しは、その旨をこの spec の記録に残す（あちらのギャップ分析が二重に数えないように）。
