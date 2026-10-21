@@ -3,7 +3,7 @@
 //!
 //! 置き場のゴーストは kanade の送出端と seriko の送り手だけを持つテスト用の組み立て（実行系が無いので
 //! 今のシェルは分からず、シェルの段は始められない）。差し替えの相の合図（`skin_applied`・
-//! `skin_phase_ended`）はここから直に呼ぶ（呼び手の `frame/switch.rs` は 7.4）。名前と readme と
+//! `skin_phase_ended`）はここから直に呼ぶ（本番の呼び手は `frame/switch.rs`）。名前と readme と
 //! シェルの段の実物は、偽の SHIORI で起こしたゴースト（`ghost_switch_test_support`）で突き合わせる。
 //! 判定は集めてから 1 回。
 

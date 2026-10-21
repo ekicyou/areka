@@ -301,7 +301,8 @@ fn canonical_builds_without_duplicate() {
          (open,mailer)／運搬名 \\j／(enter,nouserbreakmode)／(leave,nouserbreakmode)／\
          (change,ghost)／(change,shell)／(change,balloon)／(execute,install)／(execute,resetwindowpos)／\
          updatebymyself／update／updateother／(set,choicetimeout)／\
-         areka.prop.set／(set,balloontimeout)／(reload,ghost)／(reload,shiori)／(reload,shell)／\n         (reload,balloon)／(reload,descript)／reloadsurface）——増減させたら本檻と doc の 2 か所を編集すること"
+         areka.prop.set／(set,balloontimeout)／(reload,ghost)／(reload,shiori)／(reload,shell)／\
+         (reload,balloon)／(reload,descript)／reloadsurface）——増減させたら本檻と doc の 2 か所を編集すること"
     );
     // 待ち時間の指定は受け口 LifecycleSink に結び付く（areka-P0-balloon-lifecycle-events 要件 9.10）。
     assert_eq!(
