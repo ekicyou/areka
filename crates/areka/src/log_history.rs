@@ -306,9 +306,7 @@ pub(crate) fn record(at: Stamp, draft: Draft) -> u64 {
     lock(&STORE).push(at, draft)
 }
 
-/// いま最後に振った通し番号（1 件も無ければ 0）。`mcp-strict-errors` が読む口。
-// 呼び手は `mcp-strict-errors`（番号を読んでから `since_id` で絞る処理）。生えるまで未使用の警告を抑える。
-#[allow(dead_code)]
+/// いま最後に振った通し番号（1 件も無ければ 0）。MCP の読み直しの受理が返事に添える。
 pub(crate) fn last_id() -> u64 {
     lock(&STORE).last_id()
 }
