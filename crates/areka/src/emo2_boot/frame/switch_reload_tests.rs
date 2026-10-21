@@ -73,7 +73,7 @@ fn reload_mark_skips_memory_and_events_and_ends_done() {
         let route = rig
             .world
             .get_resource::<BootContext>()
-            .map(|c| c.current.balloon.route.clone());
+            .map(|c| c.current.balloon.route);
         let seen = (
             ends(&events),
             count(&events, "skin_switch_done", Level::INFO),
