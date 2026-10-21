@@ -98,3 +98,9 @@ areka の値の持ち方が、置き場によってばらばらである。覚�
   - SQLite の Windows の層はパスを 260 文字（MAX_PATH）までに制限する。深いゴーストのフォルダで当たりうるので、当たったときの扱い（記録と知らせ・ビルドの旗 `SQLITE_WIN32_MAX_PATH_CHARS`）を決める。Unicode として正しくない Windows のパスは開けない（`InvalidPath`）。
   - 確かめていないこと: ARM64 での実行・複数プロセスの書き込みの負荷試験・ネットワークの共有フォルダ・260 文字を超えるパス。
 - 規模の見立て: 18〜24 タスク（口と表 4〜5・sqlite の住み場所と形 4〜5・取り込み 3・直の読み書きの移し替え 3〜4・知らせと書かない継ぎ目 2・速い層 2〜3・実機 1）。20 を超えても、これ以上は削らない。
+
+## 追記（2026-10-22 `areka-P0-mcp-reload` の完了の棚卸）
+
+- **件 1: 平らな名前を消す口が無い**。sylphya の `PublishStatic`（`crates/areka-sylphya/src/actor.rs`）は上書きだけで、名前を消す効果を持たない。descript の読み直し（`\![reload,descript]`・MCP の `reload`）で `sakura.name`・`sakura.name2`・`kero.name` の行を消すと、前の `selfname`・`selfname2`・`keroname` が残る（書き換え・追加は正しく替わる）。読み直しの道は `areka-ghost/src/sylphya_wiring.rs` の名前の段。
+  - 起票の理由: 直すには sylphya に消す口（書き換えの電文に「無い」を表す形）が要り、本 spec が作り直す KVS の口と重なる。読み直しの側は消す口ができれば名前の段から「無い」を渡すだけ。
+  - 確かめ方: descript の 3 行を消して読み直し、`get_property` が 3 つとも値なしを返すこと。

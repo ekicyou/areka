@@ -194,8 +194,7 @@
 - 2.6: テストの道筋は `runtime::names_tests::…`（`cargo test -p areka-ghost names_tests` で回る）。`set_names` は投函だけで barrier を待たない。6.4 の Names の段で要るなら呼び手が barrier を打つ。
 - 3.1: `reload_args.rs` は呼び手が揃うまでモジュール全体に `#![allow(dead_code)]`。7.5 の後に外す。design.md 158 行の `ScriptReload::parse`・`DescriptParams::parse` は同じ文書のコードの塊（`parse_script`・`parse_descript_params`）と食い違う。完了のときに文書を直す。
 - 3.2: design.md 431 行の `ReloadRaw { target, notes }` は `reload_args::ScriptReload` で代えた（欄は同じ）。完了のときに文書を直す。受信端 `ReloadRx`（`try_iter()` 付き）と `wire_reload_rx` は `reload_cue.rs` にある。`reload_cue.rs` の `#![allow(dead_code)]` は 4.1（受け口の登録と据え付け）と 6.1（取り出し）で呼び手が付いたら外す。
-- 3.3: 網羅台帳の owner を本 spec へ直すと `ukadoc-survey` の整合が赤になるので、開発者の裁定（10-19）で要件 13.1 の外の `roadmap-draft.md`（本 spec の行・件数の直し・説明の段落）・`check_script_judge_tests.rs` のテスト 1 本・`report/*.md` の作り直しを本 spec で触った。束は多い方の「切替」（切替 3・開発者機能 2）、段 B、ウェーブ C9-④。`consumer_ledger_tests.rs:304` の assert の文言に `
-` と空白が混じる（判定には響かない）。
+- 3.3: 網羅台帳の owner を本 spec へ直すと `ukadoc-survey` の整合が赤になるので、開発者の裁定（10-19）で要件 13.1 の外の `roadmap-draft.md`（本 spec の行・件数の直し・説明の段落）・`check_script_judge_tests.rs` のテスト 1 本・`report/*.md` の作り直しを本 spec で触った。束は多い方の「切替」（切替 3・開発者機能 2）、段 B、ウェーブ C9-④。`consumer_ledger_tests.rs:304` の assert の文言に `\n` と空白が混じる（判定には響かない）。
 - 4.1: 起動の失敗の記録は `boot_runtime` の中で 1 度だけ残す（既存の warn!/error! の分け方のまま）。7.2 の呼び手は記録し直さない。design.md 543 行（分類と記録は呼び手）は 289・655 行と食い違う。完了のときに文書を直す。166 行の `RuntimeBootInputs` は実際には `Emo2BootInputs`。
 - 4.1: `reload_cue.rs` のモジュール全体の allow は外し、`ReloadRx::try_iter` だけに 6.1 までの allow を付けた。`Emo2BootOutcome.sources` の欄の allow は 4.2 で外す。既存の字面の檻 `zorder_wiring_tests.rs` の t_zwi05 は、sink の組み立てを移したので `runtime_boot.rs` を見るように直した。
 - 4.2: `emo2_boot::runtime_boot` は `pub(crate)`。GhostSession の 4 つの口の allow は 7.2（split・attach・sink_sources）と 6.4（set_names）で外す。ghost_session.rs は 907 行（7.2 で本体を ghost_session_runtime.rs に置く）。
@@ -218,3 +217,13 @@
 - 8.3（差し戻し・2026-10-19）: 着せ替えは「静的な既定＋動的」を合わせた集合を表示層の最後の `Show` から控え、読み直しの前の既定（`Emo2Wiring.static_binds`）との差（台本で着た・脱いだ分）だけを、読み直したシェルの既定の上に名前の合図で送る（2 度目の差し戻しで、新しい既定との差から改めた: そうしないと descript の既定の書き換えを読み直しが打ち消す）。合図は着せ替えを面より先に送る（面の出ていないスコープの着せ替えは seriko で状態だけが変わり、最初の `Show` からもう着せ替えた姿＝既定の姿のフレームが出ない）。`Emo2Wiring.static_binds` はシェルの差し替えを seriko へ頼めた時点（`frame/switch.rs` の `commit`）で置き直す。同じ着せ替えかは bindgroup の番号で見る（番号が変わって名前が同じ着せ替えは別物として落ちる）。隠したまま着せ替えたスコープは、隠してからの着せ替えが控えに入らない（表示層は最後の `Show` の集合しか持たない・正本は seriko）。気になれば seriko へ問い合わせの電文を足して正本から控える。
 - 8.3: `frame/switch_reload_tests.rs:76` に clippy の `clone_on_copy`（`BalloonRoute`）が 1 件残っている（7.4 の分・振る舞いには響かない）。
 - 8.2（完了の棚卸で起票の候補）: ⑴ `reload_started` に読むフォルダのパスを添える（同梱の根から起こすと 2 回目から写しを読む）。⑵ MCP の返事の「get_status が答えるまで待つ」は areka では読み直しの終わりの合図にならない（要件 8.1・8.3 どおり・終わりは get_log の reload_done／reload_failed）。⑶ pasta のデバッグ待受 127.0.0.1:9276 がぶつかり、pasta のゴーストを入れた areka は同時に 2 つ動かせない（ぱすた側の持ち物）。
+- 完了時にその場で解決（2026-10-22・`/kiro-complete` の棚卸）:
+  - (a) design.md の文言の食い違い（3.1・3.2・4.1・5.2・6.3・6.4・7.2・7.5 の各注）を直した: `parse_script`・`parse_descript_params` の名前、`reload_args::ScriptReload`、起動の失敗の記録は `boot_runtime` の中で 1 度だけ・`Emo2BootInputs`、`info!(skin_switch_requested)` は入口に残す、shiori で送れなければ `reload_failed(kanade_gone)`（`NoContext` は受理の前の文脈の欠けだけ）、`skin_is_reload`／`skin_phase_ended` は `(world, kind, dir)`、`rebuild_runtime_in_place` は `-> RuntimeRebuild { Rebuilt, BootFailed, WriteFailed(PersistFailure) }`、`last_id` の説明。
+  - (b) requirements.md 13.1 に、一覧の外に触ったファイル（8.1・8.3 の注と design.md「要件 13.1 の一覧の補正」の表・完了時の直し）を日付つきの注で足した（要件の意味は変えない）。
+  - (c) `log_history::last_id` の古い `#[allow(dead_code)]` と「mcp-strict-errors が読む口」の説明を外した（`19d2fbf8`）。
+  - (d) `frame/switch_reload_tests.rs` の clippy `clone_on_copy` を直した（`58383bf2`）。
+  - (e) `consumer_ledger_tests.rs` の assert の文言に混じった `\n` と、`reload_skin_tests.rs` 冒頭の古い説明（「呼び手は 7.4」）を直した（`976fe7c5`）。
+  - (f) 8.2 ⑴: `reload_started` に `dir`（読むゴーストのフォルダ）を添えた（`bd9c3e3d`・テスト `accepted_leaves_one_started_record`）。
+  - (g) 8.2 ⑵: 要件 8.1・8.3 どおりで欠陥ではないので、直しも起票もしない。
+  - (h) 10.4: `.kiro/specs/areka-P0-makoto-reload-directives/brief.md` の末尾に「`mcp-reload` からの申し送り（areka-P0-mcp-reload 完了時・2026-10-22）」を足した（縮退の口の場所・書き換えるテスト・入口 `request_reload`）。
+- 完了の棚卸の件数（2026-10-22）: その場で解決 8 件（上の (a)〜(h)）。起票 2 件・新しい spec は 0 本（どちらも既存の brief へ「件 1」として足した）: 2.6 の sylphya の消す口 → `areka-P0-sylphya-sqlite-kvs`（他 spec の作り直す KVS の口と重なる）／8.2 ⑶ ぱすたのデバッグ待受 9276 のぶつかり → `areka-P0-pasta-in-windows-verification`（直す場所がこのリポジトリの外）。8.3 の「隠したまま着せ替えたスコープ」は設計の割り切りとして記録どおり残す（起票しない）。

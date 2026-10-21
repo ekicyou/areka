@@ -102,7 +102,7 @@ shiori の読み直しは SHIORI の結線を作り口 `GhostBootInputsSource` �
 - **実行系と窓の境は既に半分ある**: `GhostSession` は実行系（`GhostRuntime`）・seriko・loop ticker・seriko の送り手を 1 つの単位として持ち、降ろす順（① ticker と送り手 → ② 実行系 → ③ seriko の join）が決まっている。`GhostRuntime` は kanade・dispatcher・shiori・relay 2 本・ticker・sylphya を持ち、`boot_with_origin` で何度でも作れる。窓・seriko・アトラス・文字の層（`Emo2Wiring`）は World に残る。
 - **実行系に結びつく窓側の状態**（実行系を替えたら差し替えが要るもの）: `MouseWiring`（kanade の送出端）・`MenuWiring`（同）・`UserBreakWiring`（同＋受信端）・`ChoiceForwarder`（dispatcher の送出端）・`PersistWiring`（sylphya の書き手）・`ReadmeWiring`／`ChangeRx`／`SwitchRx`（受信端・送出端は dispatcher の sink の中）・置換語の載せ直し（`install::names::reseed`）・`LastInstallNames`。`BalloonWiring`／`ChoiceSelectionInbox` は窓の側（窓のハンドラが使う）。
 - **台詞の切れ目の口** `KanadeMsg::AwaitTalkGap { raise: Option<GapRaise>, reply }` は、切れ目に達してから印のイベントを送って返事する。印は許可表 `ALLOWED_EVENT_IDS` を通り、NOTIFY なら `Reached { marked: NoTalk }` で返る。
-- **MCP の返事**: `mcp::later` は要らない（裁定 6＝すぐ答える）。`log_history::last_id()` が既にあり（`#[allow(dead_code)]`・本 spec が最初の呼び手）、`get_log` の `since_id` は「その番号より大きい」で絞る。
+- **MCP の返事**: `mcp::later` は要らない（裁定 6＝すぐ答える）。`log_history::last_id()` が既にあり（本 spec が最初の呼び手。残っていた `#[allow(dead_code)]` と「`mcp-strict-errors` が読む口」の説明は完了のときに外した・2026-10-22）、`get_log` の `since_id` は「その番号より大きい」で絞る。
 - **エラーログの取り決め**: `tracing::error!(target: TARGET_ERROR, ghost = %名, …)` で記録の名前がゴーストになる（先例 `readme/opener.rs`）。既存の切替の失敗の記録は `[SYSTEM]` のまま変えない。
 
 ### Architecture Pattern & Boundary Map
@@ -162,7 +162,7 @@ graph TB
 
 ```
 emo2_boot/
-├── reload_args.rs              # 純粋: McpTarget::parse（6 語・ASCII 大小無視）・ScriptReload::parse（綴り→対象）・DescriptParams::parse（語の仕分け）
+├── reload_args.rs              # 純粋: McpTarget::parse（6 語・ASCII 大小無視）・parse_script（綴り→対象）・parse_descript_params（語の仕分け）
 ├── reload_args_tests.rs        # 12.1 ⑴⑵⑸
 ├── reload_cue.rs               # ReloadCueSink（\![reload,…]・\![reloadsurface] の受け口）・ReloadRx・wire_reload_rx
 ├── reload_cue_tests.rs
@@ -170,7 +170,7 @@ emo2_boot/
 │                               #   ghost_switch/frame/switch からの合図（on_switch_end・skin_applied・skin_phase_ended）・終わりの記録
 ├── reload_tests.rs             # 12.1 ⑶⑹・記録
 ├── reload_skin_tests.rs        # shell/balloon/descript の列の進み方
-├── runtime_boot.rs             # 実行系の側: CueSinkSources・RuntimeBootInputs・boot_runtime（sink の束→boot_with_origin→受信端の据え付け）
+├── runtime_boot.rs             # 実行系の側: CueSinkSources・boot_runtime（入力は既存の Emo2BootInputs）（sink の束→boot_with_origin→受信端の据え付け）
 ├── runtime_boot_tests.rs
 ├── special_name.rs             # ghost_switch.rs から純移動: resolve_special_name・NameResolution・UnresolvedReason・LastInstalledGhost（行数の確保）
 ├── consumer_ledger_tests.rs    # consumer_ledger.rs の中のテストの塊を純移動（最初のタスク）
@@ -195,7 +195,7 @@ emo2_boot/
 | `emo2_boot/frame/switch.rs` | `finish_shell`／`finish_balloon` に読み直しの分かれ目（記憶・イベント・`BalloonRoute::Memory` の書き換えを飛ばし `reload::skin_applied` を呼ぶ）、`run_switch_phase` の末尾に `reload::skin_phase_ended`（印が消えたときだけ） | 5.3・6.3・8.4 |
 | `emo2_boot/consumer_ledger.rs`・`consumer_ledger_agreement_tests.rs` | テストの塊を兄弟へ出す → `("reload", Some(ghost\|shiori\|shell\|balloon\|descript))` 5 行＋`("reloadsurface", None)`・`bind` の名前を `areka_seriko::BIND_COMMAND` から引く・一致のテストに見本 | 11.1〜11.3・13.5 |
 | `crates/areka/src/ghost_session.rs` | `GhostSession` に `sinks: Option<CueSinkSources>` を足し、`shutdown` の ① で落とす。`split_runtime(&mut self) -> Option<GhostRuntime>`・`attach_runtime(&mut self, GhostRuntime)`・`sink_sources`・`set_names`（`impl GhostSession` の中）。`boot_wired` の boot 後の塊は `ghost_session_runtime::rewire_runtime_consumers` へ純移動して呼ぶ。`register_systems` に `reload::register`。触る所は `GhostSession` の定義・`impl`・`shutdown_impl`・`boot_wired` の 4 か所（`GhostBootInputs`・`boot_ghost`・`boot_ghost_strict` は触らない＝`startup-options-core` の触る所と重ならない） | 4・7.3 |
-| `crates/areka/src/ghost_session_runtime.rs`（新・私有 mod） | `rewire_runtime_consumers(world, &runtime, ghost, balloon)`（純移動＋`ChoiceForwarder`）・`rebuild_runtime_in_place(world, target_name) -> bool`（shiori だけの読み直しの本体）。兄弟 `ghost_session_runtime_tests.rs` | 4 |
+| `crates/areka/src/ghost_session_runtime.rs`（新・私有 mod） | `rewire_runtime_consumers(world, &runtime, ghost, balloon)`（純移動＋`ChoiceForwarder`）・`rebuild_runtime_in_place(world, target_name) -> RuntimeRebuild`（shiori だけの読み直しの本体・`Rebuilt`／`BootFailed`／`WriteFailed(PersistFailure)`）。兄弟 `ghost_session_runtime_tests.rs` | 4 |
 | `crates/areka-ghost/src/runtime.rs` | `GhostRuntime::set_names(&mut self, names: GhostNames)`（`mount.names` の差し替え＋`publish_ghost_statics` の呼び直し・`set_shell_dir` と同じ形） | 7.3 |
 | `crates/areka-kanade/src/change.rs` | `BootOrigin::Reloaded { scope: ReloadScope }`・`pub enum ReloadScope { Ghost, Shiori }` | 3.3・4.3 |
 | `crates/areka-kanade/src/schedule/boot.rs` | `boot_start(state, config)`: `Reloaded{Shiori}` なら `OnInitialize` を Ref0＝`reload` で（`events::raise("OnInitialize", vec!["reload"], Notify, …)`）。`on_prefetch_reply`: `Reloaded{..}` なら `boot_root` を見ずに `to_baseware_version(state, None, config)` へ直行（`info!(boot_reload_silent)`）。`boot_root` の `match` に `Reloaded { .. } => None` の腕（網羅のため・到達しない） | 3.3・3.4・4.3・12.2・12.3 |
@@ -215,7 +215,7 @@ sequenceDiagram
     participant M as mcp reload handle
     participant A as reload_args
     participant D as reload desk
-    S->>A: ScriptReload::parse(name, params)
+    S->>A: parse_script(name, params)
     A-->>S: Some(ReloadTarget) or None (not ours)
     S->>D: ReloadRx (Input drain)
     M->>A: McpTarget::parse(target)
@@ -228,7 +228,7 @@ sequenceDiagram
 ```
 
 - 窓口の判定の順（要件 2.1・2.2・12.1 ⑶）: 終了の途中（門 `is_closing`）→ 別の読み直し（`ReloadInFlight`）→ ゴースト切替（`SwitchInFlight`）→ シェル／バルーン切替（`SkinSwitchInFlight`）→ ネットワーク更新（`update::desk::is_busy`）→ インストール（`install::desk::is_busy`）→ 文脈（`GhostSlot`・`BootContext`・kanade の送出端）。断りはどれも `warn!(event = "reload_refused", reason, target, origin, ghost)` を 1 件。
-- 受理したら `info!(event = "reload_started", target, origin, ghost)`（要件 1.6）→ 対象ごとの始め方（Flow 2〜4）→ `ReloadInFlight` を置く。
+- 受理したら `info!(event = "reload_started", target, origin, ghost, dir)`（`dir`＝読むゴーストのフォルダ・2026-10-22 完了時に追加）（要件 1.6）→ 対象ごとの始め方（Flow 2〜4）→ `ReloadInFlight` を置く。
 
 ### Flow 2: ghost の読み直し（既存のゴースト切替の道・由来だけ上書き）
 
@@ -339,7 +339,7 @@ sequenceDiagram
 | 1.1 | MCP と台本で同じ操作 | McpReload・ReloadCueSink・ReloadDesk | `request_reload` | 1 |
 | 1.2 | `target` は ASCII 大小無視・空白は削らない | ReloadArgs | `McpTarget::parse` | 1 |
 | 1.3 | 知らない `target` は `NG:Unknown target (…)` | ReloadArgs・McpReload | `McpTarget::Unknown` | 1 |
-| 1.4 | 台本の 7 綴り → 同じ操作 | ReloadArgs・ReloadCueSink | `ScriptReload::parse` | 1 |
+| 1.4 | 台本の 7 綴り → 同じ操作 | ReloadArgs・ReloadCueSink | `parse_script` | 1 |
 | 1.5 | ほかの第 1 引数は拾わない | ReloadCueSink | `parse` が `None` | 1 |
 | 1.6 | 始めの `info!` | ReloadDesk | `reload_started` | 1 |
 | 2.1 | 重なりで断り `warn!` | ReloadDesk | 判定の順 6 つ・`install::desk::is_busy` | 1 |
@@ -358,7 +358,7 @@ sequenceDiagram
 | 4.1 | `OnDestroy(reload)` → unload → load | ReloadDesk（切れ目の印）・GhostSwitch・RuntimeBoot | `GapRaise{OnDestroy, Notify}`・`ALLOWED_EVENT_IDS` | 3 |
 | 4.2 | 窓とシェル・バルーンを残す | GhostSession split/attach・RuntimeBoot | `split_runtime`・`attach_runtime`・`CueSinkSources` | 3 |
 | 4.3 | GET 0・情報の通知・`OnInitialize(reload)` | KanadeBootOrigin | `Reloaded{Shiori}`・`boot_start` | 3 |
-| 4.4 | load し直しの失敗は既定へ | GhostSwitch `switch_to` の腕 | `rebuild_runtime_in_place` 偽 → `switch_to_default` | 3 |
+| 4.4 | load し直しの失敗は既定へ | GhostSwitch `switch_to` の腕 | `rebuild_runtime_in_place` が `BootFailed` → `switch_to_default` | 3 |
 | 5.1 | 同じシェルを読み直して差し替え | ReloadDesk→`accept_skin` | `SkinCandidate` from current | 4 |
 | 5.2 | SHIORI と状態を保つ | 既存の差し替え | — | 4 |
 | 5.3 | `OnShellChang*`・`LastShell` なし | SwitchPhase の分かれ目 | `reload::skin_is_reload` | 4 |
@@ -368,7 +368,7 @@ sequenceDiagram
 | 6.3 | `OnBalloonChange`・`LastBalloon`・決め方なし | SwitchPhase の分かれ目 | `finish_balloon` | 4 |
 | 6.4 | 組めなければ保つ・`error!` | 同 5.4 | — | 4 |
 | 7.1 | 全部の descript を読み直す | ReloadDesk の列 `[Names, Shell, Balloon]` | `DescriptParams` | 4 |
-| 7.2 | パラメータの語だけ・重複 1 度・第 3 引数以降は見ない | ReloadArgs | `DescriptParams::parse` | 4 |
+| 7.2 | パラメータの語だけ・重複 1 度・第 3 引数以降は見ない | ReloadArgs | `parse_descript_params` | 4 |
 | 7.3 | 動作中の値を 1 つ残らず替える | 「descript の読み直しで替える値」の表・`set_names`・`readme::set_path`・Shell／Balloon の後始末 | `GhostSession::set_names` | 4 |
 | 7.4 | areka に無い種類は `warn!` して飛ばす | ReloadArgs・ReloadDesk | `DescriptParams.unsupported` | 4 |
 | 7.5 | 知らない語・語なしは `warn!` | 同上 | `DescriptParams.unknown`・空 | 4 |
@@ -447,7 +447,7 @@ pub(crate) fn parse_descript_params(param: &str) -> (DescriptParts, DescriptNote
 
 ### ReloadCueSink（`emo2_boot/reload_cue.rs`）
 
-`change_cue.rs` と同型。`CueSink::emit` で `parse_script` が `Some` のときだけ `ReloadRaw { target, notes }` を `Sender` へ送る（送れなければ `warn!`・ゴーストが居ない場面）。受信端 `ReloadRx`（NonSend・ゴーストごとに新品）は `wire_reload_rx(world, rx)` で据え、`reload::drain` が毎フレーム取り出して `request_reload(origin: Script)` へ渡す。台帳の行は `("reload", Some("ghost"|"shiori"|"shell"|"balloon"|"descript"))` と `("reloadsurface", None)` で、`CommandConsumer::ReloadSink`（新しい変種）。
+`change_cue.rs` と同型。`CueSink::emit` で `parse_script` が `Some` のときだけ `reload_args::ScriptReload`（欄は `target`・`notes`）を `Sender` へ送る（送れなければ `warn!`・ゴーストが居ない場面）。受信端 `ReloadRx`（NonSend・ゴーストごとに新品）は `wire_reload_rx(world, rx)` で据え、`reload::drain` が毎フレーム取り出して `request_reload(origin: Script)` へ渡す。台帳の行は `("reload", Some("ghost"|"shiori"|"shell"|"balloon"|"descript"))` と `("reloadsurface", None)` で、`CommandConsumer::ReloadSink`（新しい変種）。
 
 ### ReloadDesk（`emo2_boot/reload.rs`）
 
@@ -494,16 +494,17 @@ pub(crate) fn boot_origin_override(world: &World) -> Option<BootOrigin>;
 pub(crate) fn wants_runtime_only(world: &World) -> bool;
 /// 差し替えの相から: 印が `Skins { reserved: Some((kind, dir)) }` で、進行中の `SkinSwitchInFlight` の
 /// `kind`・`target.dir` がそれと一致するときだけ真。印があっても他人の予約（利用者の `\![change,shell,…]` など）なら偽。
-pub(crate) fn skin_is_reload(world: &World) -> bool;
+/// 相の鍵（`kind`・`dir`）は引数で受ける: `run_switch_phase` が `SkinSwitchInFlight` を World から外してから `finish_*` を呼ぶため。
+pub(crate) fn skin_is_reload(world: &World, kind: SkinKind, dir: &Path) -> bool;
 pub(crate) fn skin_applied(world: &mut World);
-pub(crate) fn skin_phase_ended(world: &mut World);
+pub(crate) fn skin_phase_ended(world: &mut World, kind: SkinKind, dir: &Path);
 ```
 
 - **述語の契約（印は「在る」だけでは効かない）**: 既存の入口（`request_ghost_switch_with`・`request_skin_switch_with`）は `ReloadInFlight` を見ないので、`AwaitingDestroy` の間や skin の段と段の間には本物の切替が通りうる。そのとき 3 つの述語が「印が在る」だけで真を返すと、利用者の切替が `OnShellChanged`／`LastShell`（`OnBalloonChange`／`LastBalloon`）無しで済んでしまう。だから窓口は受理の直後に自分が立てた予約の鍵を印へ控え（`Switching { reserved }`・`Skins { reserved }`）、述語は進行中の予約とその鍵を照合する。鍵が合わなければ偽＝既存の道がそのまま動き、印は `skin_phase_ended`（相の終わり）／`on_switch_end` で「他人の切替に追い越された」として `reload_failed(reason = overtaken)` を残して下りる。
 
 - **状態の遷移**: `Accepted` → （shiori）`AwaitingDestroy` → `Reached` で `accept_switch` → `Switching` → `on_switch_end` で終わり。（ghost）`accept_switch` → `Switching` → 終わり。（skins）`Names`（同期）→ `accept_skin(Shell)` → `skin_applied`／`skin_phase_ended` → 次の段 → 列が空で終わり。どの経路も終わりで印を下ろし、記録を 1 件残す。
 - **終わりの記録**（要件 8.4・9.2）: 成功 `info!(event = "reload_done", target, origin, ghost)`。失敗 `error!(target: TARGET_ERROR, ghost = %ghost, event = "reload_failed", target, origin, reason)`。`reason` の語彙: `fell_back_to_default`・`cancelled`・`not_accepted`・`target_quit`・`fatal`・`gap_cancelled`・`gap_left`・`gap_not_sent`・`kanade_gone`・`skin_failed`・`names_failed`・`overtaken`（他人の切替に追い越された）・`exit`。
-- **shiori の始め方**: `kanade.send(AwaitTalkGap { raise: Some(GapRaise { id: "OnDestroy", references: vec!["reload"], method: Notify }), reply })`。送れなければ `NoContext`。`drain` が毎フレーム `try_recv` し、`Reached` なら `accept_switch`（`Accepted` でなければ失敗の記録・印を下ろす）。
+- **shiori の始め方**: `kanade.send(AwaitTalkGap { raise: Some(GapRaise { id: "OnDestroy", references: vec!["reload"], method: Notify }), reply })`。送れなければ（受理の後なので断りでなく）`reload_started` の後に印を置かずに `reload_failed(kanade_gone)`。窓口の判定の `NoContext` は受理の前の文脈の欠け（`GhostSlot`・kanade の送出端・`BootContext`）だけ。`drain` が毎フレーム `try_recv` し、`Reached` なら `accept_switch`（`Accepted` でなければ失敗の記録・印を下ろす）。
 - **Names の段**（descript の `ghost`）: `resolve_with_shell(ghost_root, Ansi, Some(current_shell))` → `GhostSession::set_names(mount.names)`・`readme::set_path(resolve_path(root, mount.readme))`。失敗は `error!(reload_descript_read_failed, file, reason)` で値を保ち（要件 7.6）、列の残りは続ける（画像・配置の読み直しとは独立）。`BootContext.current.ghost` は dir だけなので変えない。
 - **`notes` の記録**（要件 7.4・7.5）: 受理の前に、`unsupported` の語ごとに `warn!(event = "reload_descript_unsupported", word)`、`unknown` の語ごとに `warn!(event = "reload_descript_unknown", word)`、`empty` なら `warn!(event = "reload_descript_no_words")` で `Refused(NoWords)`。
 - **終了の門**: `register_gate("reload", WorkGate, discard_for_exit)`。`discard_for_exit` は印があれば `info!(reload_dropped, reason = "exit")` で下ろす。`request_reload` は最初に門の `is_closing` を見て `Closing` を返す（MCP は返事を落とす・台本は `debug!`）。
@@ -521,8 +522,8 @@ pub(crate) enum SwitchEnd { Steady { attempt: WelcomeAttempt }, Cancelled, NotAc
 fn end_switch(world: &mut World, end: SwitchEnd);
 ```
 
-- `switch_to` の変更点は 3 つ: ⑴ **`take_down` の手前**（`switch_copy::boot_dir` の直後・実物の `switch_to` は `boot_dir` → `take_down` → `write_switch_drop` → `close_windows_for_restart` → `boot_into` の順）に `if reload::wants_runtime_only(world) { if rebuild_runtime_in_place(world, &target) { set_stage(Target) } else if default { fatal } else { switch_to_default } return; }`。`take_down` は `GhostSlot` の単位を丸ごと降ろす（seriko の join・loop ticker の Close・`seriko_sink` の drop）ので、その後ろに置くと窓の側まで降り、不変条件 ⑶ と Flow 3 に反する。⑵ 由来 `let origin = reload::boot_origin_override(world).unwrap_or_else(|| 既存の match)`。⑶ それ以外は不変。
-- `rebuild_runtime_in_place`（`ghost_session_runtime.rs` に置く・`pub(crate)`）の中の順: `GhostSlot` の単位から `split_runtime` → 古い実行系を `shutdown(System)`（所要 ms を `info!(ghost_switch_down_ms)` と同じ形で）→ **`write_switch_drop`**（実行系が 1 つも動いていない間の記憶・既存の `switch_to` と同じ引数・失敗の扱いも同じ）→ `GhostBootInputsSource` で `inputs(cfg = ctx.current.cfg, Reloaded{Shiori})`（SHIORI の結線 `ShioriWiring` は作り口が決める＝`dontloadmodule` などの起動時の指定が読み直しでも効く）→ `runtime_boot::boot_runtime(world, inputs, &sources, shell)` → 成功なら `attach_runtime`・`rewire_runtime_consumers`・真。失敗なら実行系の無い単位を置き場に戻して偽（`switch_to_default` → `take_down` は `ghost: None` を扱える＝`shutdown_impl` ② が `if let Some`）。`take_down`・`close_windows_for_restart`・`run_overwrite_between` は呼ばない。
+- `switch_to` の変更点は 3 つ: ⑴ **`take_down` の手前**（`switch_copy::boot_dir` の直後・実物の `switch_to` は `boot_dir` → `take_down` → `write_switch_drop` → `close_windows_for_restart` → `boot_into` の順）に `if reload::wants_runtime_only(world) { match rebuild_runtime_in_place(world, &target) { Rebuilt => set_stage(Target), WriteFailed(f) => { end_switch(WriteFailure); write_failure::fatal(f) }, BootFailed if default => fatal, BootFailed => switch_to_default } return; }`。`take_down` は `GhostSlot` の単位を丸ごと降ろす（seriko の join・loop ticker の Close・`seriko_sink` の drop）ので、その後ろに置くと窓の側まで降り、不変条件 ⑶ と Flow 3 に反する。⑵ 由来 `let origin = reload::boot_origin_override(world).unwrap_or_else(|| 既存の match)`。⑶ それ以外は不変。
+- `rebuild_runtime_in_place`（`ghost_session_runtime.rs` に置く・`pub(crate)`）の中の順: `GhostSlot` の単位から `split_runtime` → 古い実行系を `shutdown(System)`（所要 ms を `info!(ghost_switch_down_ms)` と同じ形で）→ **`write_switch_drop`**（実行系が 1 つも動いていない間の記憶・既存の `switch_to` と同じ引数・失敗の扱いも同じ）→ `GhostBootInputsSource` で `inputs(cfg = ctx.current.cfg, Reloaded{Shiori})`（SHIORI の結線 `ShioriWiring` は作り口が決める＝`dontloadmodule` などの起動時の指定が読み直しでも効く）→ `runtime_boot::boot_runtime(world, inputs, &sources, shell)` → 成功なら `attach_runtime`・`rewire_runtime_consumers`・`Rebuilt`。記憶を書けなければ `WriteFailed(PersistFailure)`。起こせなければ実行系の無い単位を置き場に戻して `BootFailed`（起動の失敗の記録は `boot_runtime` が 1 度だけ残し、ここでは記録し直さない・`switch_to_default` → `take_down` は `ghost: None` を扱える＝`shutdown_impl` ② が `if let Some`）。`take_down`・`close_windows_for_restart`・`run_overwrite_between` は呼ばない。
 - `session_end.rs` が予約を下ろす 1 か所（OS のセッションの終了）はそのまま（印は終了の門 `discard_for_exit` が下ろす）。
 
 ### ShellCarry（`emo2_boot/shell_carry.rs`・2026-10-19 追加・要件 3.8）
@@ -546,13 +547,14 @@ pub(crate) fn replay(world: &World, shows: &[(u32, CarriedShow)], binds: &[(u32,
 ### SkinSwitch の口（`emo2_boot/shell_balloon_switch.rs`・`frame/switch.rs`）
 
 ```rust
-/// 受理の後半（純移動）: `info!(skin_switch_requested)` → `spawn_switch_build` → `AwaitTalkGap{raise}` → `SkinSwitchInFlight`。
+/// 受理の後半（純移動）: `spawn_switch_build` → `AwaitTalkGap{raise}` → `SkinSwitchInFlight`。
 pub(crate) fn accept_skin(world: &mut World, ctx: &SwitchContext, kind: SkinKind, target: SkinCandidate, raise: Option<GapRaise>) -> SkinVerdict;
-pub(super) struct SwitchContext { … }   // 既存・`read` を pub(super) に
+pub(crate) struct SwitchContext { … }   // 既存・欄と `read` は pub(super)
+// `info!(skin_switch_requested)` は origin を持つので accept_skin の外（入口）に残す。読み直しの道は `reload_started` だけを残す。
 ```
 
 - 読み直しは `SwitchContext::read` → `SkinCandidate` を今のフォルダから組む → `accept_skin(.., raise: None)`。既存の入口の判定の順・文言・`resolve_skin_target` は変わらない。
-- `frame/switch.rs`: `finish_shell`／`finish_balloon` の末尾 3 手（記憶・決め方・イベント）を `if reload::skin_is_reload(world) { reload::skin_applied(world) } else { 既存 }` で分け、`run_switch_phase` の末尾で `if keep.is_none() { reload::skin_phase_ended(world) }`。`commit` の「ゴースト切替が進んでいれば取りやめ」はそのまま（読み直しの ghost と skin は窓口が重ねない）。
+- `frame/switch.rs`: `finish_shell`／`finish_balloon` の末尾 3 手（記憶・決め方・イベント）を `if reload::skin_is_reload(world, kind, &target.dir) { reload::skin_applied(world) } else { 既存 }` で分け、`run_switch_phase` の末尾で `if keep.is_none() { reload::skin_phase_ended(world, kind, &dir) }`（`kind`・`dir` は match の前に控えた `(flight.kind, flight.target.dir)`）。`commit` の「ゴースト切替が進んでいれば取りやめ」はそのまま（読み直しの ghost と skin は窓口が重ねない）。
 
 ### RuntimeBoot と CueSinkSources（`emo2_boot/runtime_boot.rs`）
 
@@ -577,7 +579,7 @@ pub(crate) fn boot_runtime(
     kanade_stop: Sender<KanadeNotice>,
     shell: Option<&str>,
 ) -> Result<GhostRuntime, RuntimeBootError>;
-pub(crate) enum RuntimeBootError { Boot(GhostBootError) }   // 分類と記録は呼び手（既存 is_benign_boot_error）
+pub(crate) enum RuntimeBootError { Boot(GhostBootError) }   // 分類と記録は boot_runtime の中で 1 度だけ（既存の warn!/error! の分け方）・呼び手は記録し直さない
 ```
 
 - `wire_emo2_boot` は手順 1〜4（資産・presenter・文字の層・seriko・loop ticker の前半）を行って `CueSinkSources` を組み、`boot_runtime` を呼び、成立したら `Emo2Wiring` を据えて（手順 6）`Emo2BootOutcome { ghost, seriko, loop_ticker, seriko_sink, sources: Some(sources), wired: true }` を返す。sink の並び（旗の順序の保証）は今の 11 本の順のまま、12 本目に `ReloadCueSink` を足す。
@@ -603,7 +605,8 @@ impl GhostSession {
 /// `wire_balloon_choice`（窓の側）は含めない。
 pub(crate) fn rewire_runtime_consumers(world: &mut World, runtime: &GhostRuntime, ghost: &GhostDecision, balloon: &BalloonDecision);
 /// shiori だけの読み直しの本体（`switch_to` から）。
-pub(crate) fn rebuild_runtime_in_place(world: &mut World, target_name: &str) -> bool;
+pub(crate) fn rebuild_runtime_in_place(world: &mut World, target_name: &str) -> RuntimeRebuild;
+pub(crate) enum RuntimeRebuild { Rebuilt, BootFailed, WriteFailed(PersistFailure) }
 ```
 
 - `shutdown_impl` の ① で `sinks` を落とす（`seriko_sink` と同じ理由＝seriko の join が全送出端の drop を待つ）。
@@ -717,7 +720,7 @@ stateDiagram-v2
 - `reload_skin_tests.rs`: 列の組み立て（`descript` 全部＝`[Names, Shell, Balloon]`・`descript,ghost`＝`[Names, Shell]`・重複）／`skin_applied` → 次の段／`skin_phase_ended` が `applied` 無し → 失敗の記録と列の停止／Names の段の失敗で列が続く／**印があっても他人の予約なら偽**: `Skins { reserved: Some((Shell, dir_a)) }` と `target.dir == dir_b` の `SkinSwitchInFlight` で `skin_is_reload` が偽、`skin_phase_ended` で `reload_failed(overtaken)`。
 - `ghost_switch_reload_tests.rs`（`SwitchRig`）: 印があるとき `switch_to` が `Reloaded{Ghost}` で起こす（偽 SHIORI の受けた要求に `OnBoot`・`OnGhostChanged` が無く `OnInitialize`・`username`・`basewareversion` がある）／印が無ければ今までどおり `ChangedFrom`（既存のテストが固定）／**shiori だけ**: `wants_runtime_only` のとき `close_windows_for_restart` が呼ばれない（`WindowsEpoch` 不変・窓の実体が残る）、古い SHIORI に `OnDestroy(reload)` → unload、新しい SHIORI に load → `OnInitialize(reload)`、GET 0、`GhostSlot` の単位の seriko・ticker が同じもの（12.5）／組み直しの失敗で `switch_to_default` へ。
 - `frame/switch_reload_tests.rs`: 読み直しの印の下で `finish_shell` が `OnShellChanged` を送らず `LastShell` を書かない、`finish_balloon` が `OnBalloonChange` を送らず `LastBalloon` と `BootContext.current.balloon.route` を変えない（印が無ければ既存のテストが今までどおりを固定）。
-- `runtime_boot_tests.rs`: 束から 12 本の sink が組まれ、受信端が成立後にだけ据わる／失敗で World 不変。`ghost_session_reload_tests.rs`: `split_runtime`／`attach_runtime`、`shutdown` が束を ① で落とす（join が戻る）。`ghost_session_runtime_tests.rs`: `rebuild_runtime_in_place` の失敗で実行系の無い単位が `GhostSlot` に戻り偽。
+- `runtime_boot_tests.rs`: 束から 12 本の sink が組まれ、受信端が成立後にだけ据わる／失敗で World 不変。`ghost_session_reload_tests.rs`: `split_runtime`／`attach_runtime`、`shutdown` が束を ① で落とす（join が戻る）。`ghost_session_runtime_tests.rs`: `rebuild_runtime_in_place` の失敗で実行系の無い単位が `GhostSlot` に戻り `BootFailed`。
 - `mcp/reload_tests.rs`（書き換え・12.6）: 空の World で `Unknown` → `NG:Unknown target (…)`／`makoto` → `NG:Reloading makoto…`＋`warn!`（12.1 ⑷）／受理 → `OK:reload requested…since_id=<N>`（`N`＝`last_id()`）がその場で返り印が立つ／断り → `NG:Cannot reload now (…)`（12.1 ⑹）。
 - `consumer_ledger_agreement_tests.rs`: `\![reload,ghost]`…`\![reloadsurface]` の見本と `\![reload,makoto]`・`\![reload,aigraph]` が「誰も拾わない」（11.1・11.3）。`consumer_ledger_tests.rs`: 行数の更新。
 - 要件 3.8（2026-10-19 追加）: `shell_carry_tests.rs`（面の決め方の 3 枝・控えの組み方・着せ替えの決め方（着る・名前の無いものを落とす・違いなし・脱ぐ／排他で送らない・scope 2 以降）・結線が無いときの `warn!`・seriko に届く面と着せ替えの `Show`）、`reload_tests.rs`（`carries_shell_state` は自分の予約の ghost でだけ真）、`ghost_switch_reload_tests.rs`（読み直しは新しい結線へ控えを渡し、印の無い自分自身への切替は渡さない）、`frame_attach_carry_tests.rs`（実 GPU で装着の相が在る面はそのまま・無い面は既定で出し、着せ替えは名前の在るものを着せ直し無いものを落とし、控えが無ければ 1 つも出さない）・`ghost_switch_reload_tests.rs`（起こし直しに失敗して既定へ戻ったときは既定のゴーストの結線へ控えを渡さない）。

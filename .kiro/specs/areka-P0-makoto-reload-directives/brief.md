@@ -84,3 +84,19 @@
 - 要件定義のモデル: Opus。
 - 分割の案: なし（一度切り出した spec）。
 - 見つけた穴・古くなった記述: 棚卸㉒の行数（859・883）は古い。
+
+## `mcp-reload` からの申し送り（areka-P0-mcp-reload 完了時・2026-10-22）
+
+`mcp-reload`（要件 10.4）は makoto を縮退の口だけ置いて終えた。つなぐときの手がかりを残す。
+
+- ⑴ 縮退の口の場所:
+  - MCP: `crates/areka/src/mcp/reload.rs` の `answer` の `McpTarget::Makoto` の腕。今は `warn!(target: TARGET_ERROR, event = "reload_makoto_unsupported")` を 1 件残して `NG:Reloading makoto is not supported yet`（定数 `MAKOTO_UNSUPPORTED`）を返すだけで、窓口へは渡さない。`target` の照合は `crates/areka/src/emo2_boot/reload_args.rs` の `McpTarget::parse`（6 語・ASCII の大小を区別しない・`makoto` は `McpTarget::Makoto`）。
+  - 台本: `reload_args.rs` の `parse_script` が `reload` の第 1 引数 `makoto` に `None` を返す（受け口 `emo2_boot/reload_cue.rs` の `ReloadCueSink` は拾わない・警告もしない）。
+  - 台帳: `emo2_boot/consumer_ledger.rs` の `ConsumerLedger::canonical` は `("reload", Some(ghost|shiori|shell|balloon|descript))` と `("reloadsurface", None)` を `CommandConsumer::ReloadSink` で登記し、`("reload", Some("makoto"))` は空けてある（要件 11.2）。台帳の中のテストは兄弟 `consumer_ledger_tests.rs` へ出してあり、`consumer_ledger.rs` は 472 行（棚卸㉓の「先に出ている必要」は済み）。網羅台帳 `sakura-script.toml` の `reload,makoto` の行は変えていない。
+- ⑵ 口をつなぐときに書き換えるテスト:
+  - `crates/areka/src/mcp/reload_tests.rs` の `makoto_answers_not_supported_yet_with_one_warn`（NG の文と `warn!` 1 件を固定）。
+  - `crates/areka/src/emo2_boot/reload_args_tests.rs` の `mcp_target_six_words`・`mcp_target_ignores_ascii_case`（`Makoto` への振り分け自体は残る）と `script_not_ours`（`reload,makoto` が `None`）。
+  - `crates/areka/src/emo2_boot/reload_cue_tests.rs` の `not_ours_is_benign_skip_without_warning`（`("reload", ["makoto"])` を担当外として送らない）。
+  - `crates/areka/src/emo2_boot/consumer_ledger_tests.rs` の `canonical_registers_reload_rows_and_leaves_makoto_open`（`(reload,makoto)` が空いていて後から `try_register` できる）と `consumer_ledger_agreement_tests.rs` の `reload_makoto_and_aigraph_reach_no_sink`（誰も拾わない）。
+- ⑶ 読み直しの操作の入口: `crates/areka/src/emo2_boot/reload.rs` の `request_reload(world, ReloadRequest { target, origin, notes }) -> ReloadVerdict`（唯一の入口・`ReloadOrigin::{Script, Mcp}`）。判定の順は 終了の途中（`Closing`）→ 別の読み直し（`ReloadInFlight`）→ ゴースト切替 → シェル／バルーン切替 → ネットワーク更新 → インストール → 文脈（`NoContext`）で、断りは `warn!(reload_refused, reason)` 1 件・受理は `info!(reload_started, target, origin, ghost, dir)` 1 件・終わりは `reload_done`／`reload_failed(reason)`。makoto も `ReloadTarget`（`reload_args.rs`）に変種を足し、`start` の対象ごとの腕を 1 つ足せば同じ入口・同じ重なりの判定に載る。MCP 側は `answer` の `Makoto` の腕を `Target` の腕と同じ `request` の呼び出しにまとめれば、返事（`OK:reload requested…since_id=<N>`・`NG:Cannot reload now (…)`）も揃う。
+- 注意: `mcp-reload` は `emo2_boot/mod.rs`（787 行）・`shell_balloon_switch.rs`（456 行）・`mcp/reload.rs`（74 行）にも触った。棚卸㉓の行数は古い。
