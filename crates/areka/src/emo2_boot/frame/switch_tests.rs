@@ -750,3 +750,50 @@ fn recheck_send_failure_drops_with_one_error() {
         "((記録, 印, 置き場), 差し替え)"
     );
 }
+
+/// シェルの差し替えを seriko へ頼んだら、結線の静的な着せ替えの写しも新しいシェルの既定へ置き直す
+/// （ghost の読み直しで控える着せ替えの基準・areka-P0-mcp-reload 要件 3.8）。バルーンの差し替えは変えない。
+///
+/// # 非空虚性
+/// 置き直さないと、シェルの側が前の既定 {7} のままで赤。バルーンでも置き直すと（取り違え）バルーンの側が
+/// {100} で赤。
+#[test]
+fn a_shell_replace_moves_the_wiring_static_binds_but_a_balloon_replace_does_not() {
+    let mut got = Vec::new();
+    for (kind, built) in [
+        (SkinKind::Shell, shell_built()),
+        (SkinKind::Balloon, balloon_built()),
+    ] {
+        let mut rig = rig(kind);
+        rig.wiring.static_binds = BindSet::from_ids([7]);
+        let built = match built {
+            SwapBuilt::Shell {
+                mut assets,
+                source,
+                balloon,
+                restored,
+            } => {
+                assets.static_binds = BindSet::from_ids([100]);
+                SwapBuilt::Shell {
+                    assets,
+                    source,
+                    balloon,
+                    restored,
+                }
+            }
+            other => other,
+        };
+        deliver(&mut rig, Ok(built));
+        frame(&mut rig);
+        reply(
+            &mut rig,
+            TalkGap::Reached {
+                marked: Some(MarkedEnd::Completed),
+            },
+        );
+        frame(&mut rig);
+        got.push(rig.wiring.static_binds.ids().to_vec());
+        replaces(rig);
+    }
+    assert_eq!(got, vec![vec![100], vec![7]]);
+}

@@ -1,0 +1,229 @@
+# Implementation Plan
+
+> 入力: requirements.md（13 要件）・design.md（議題は確定）・research.md。判断の分岐は決定論テストで固定し、テストは実装と同じディレクトリの兄弟ファイルに置く。既存の切替・終了・更新のテストは 1 本も変えない（12.4）。kanade の `msg.rs`・`actor.rs`・`schedule/mod.rs`・`schedule/change.rs`、`crates/areka-mcp/**`、`mcp/mod.rs`・`mcp/resolve.rs` には触らない（13.3）。
+
+- [x] 1. 行数の確保（純移動・振る舞いは変えない）
+- [x] 1.1 (P) 受け取り手の台帳のテストの塊を兄弟ファイルへ出す
+  - `consumer_ledger.rs` の中のテストを `consumer_ledger_tests.rs` へそのまま移し、本体を約 450 行にする
+  - 移したテストが移す前と同じ件数で緑になる
+  - _Boundary: Ledger_
+  - _Requirements: 13.4_
+- [x] 1.2 (P) 特別な名前の解決をゴースト切替から別ファイルへ出す
+  - `resolve_special_name`・`NameResolution`・`UnresolvedReason`・`LastInstalledGhost` を `special_name.rs` へ純移動し、`ghost_switch.rs` を約 850 行にする（`emo2_boot/mod.rs` には `mod` の 1 行を足すだけ）
+  - 既存のゴースト切替のテストが 1 本も変わらず緑のまま
+  - _Boundary: GhostSwitch_
+  - _Requirements: 13.4_
+- [x] 1.3 (P) 実行系に結びつく窓側の結線を兄弟ファイルへ出す
+  - `boot_wired` の boot 後の塊（`wire_mouse_input`・`wire_menu`＋7 つの `*_frame::register`・`install::names::reseed`・`on_boot_ok`・`wire_choice_drain`＝`ChoiceForwarder`）を新しいファイル `ghost_session_runtime.rs` の `rewire_runtime_consumers` へ純移動し、`boot_wired` はそれを呼ぶだけにする。窓の側の `wire_balloon_choice` は移さない（readme・change・switch・user_break の受信端は `wire_emo2_boot` の持ち物＝4.1）
+  - モジュールは `ghost_session.rs` から `#[path = "ghost_session_runtime.rs"] mod …` で宣言する（1,000 行ちょうどの `main.rs` には足さない）
+  - `GhostBootInputs`・`boot_ghost`・`boot_ghost_strict` には触らない（`startup-options-core` と重ならない）
+  - 起動と切替の既存テストが 1 本も変わらず緑のまま
+  - _Boundary: GhostSession_
+  - _Requirements: 13.4_
+
+- [x] 2. 下の層の小さな口
+- [x] 2.1 (P) kanade に「知らせを送らない読み直し」の起動の由来を足す
+  - `BootOrigin::Reloaded { scope }` と `ReloadScope { Ghost, Shiori }` を足す
+  - 下書きの返事の後、`Reloaded` なら起動の根を見ずに `basewareversion` へ直行し `boot_reload_silent` を記録する（`first_boot` でも `OnFirstBoot` を送らない）
+  - `Reloaded{Shiori}` のときだけ `OnInitialize` を Reference0＝`reload` の NOTIFY で送る・`Reloaded{Ghost}` は References なし
+  - `boot_reload_tests.rs` で台詞を求める GET が 0 件・`OnInitialize` の References の違いが固定され、既存の `boot_root_tests.rs` が緑のまま
+  - _Boundary: KanadeBootOrigin_
+  - _Requirements: 3.3, 3.4, 4.3, 12.2, 12.3_
+- [x] 2.2 (P) kanade の送出許可表に `OnDestroy` を足す
+  - `ALLOWED_EVENT_IDS` の `"OnClose"` の直後に `"OnDestroy"` を足し、許可表のテストの配列に 1 語足して名前から件数を外す（`allowed_event_ids_are_exactly_the_listed_set_and_exclude_ontalk_onhour`）
+  - 冒頭の表の `OnInitialize` の行と `on_initialize` の doc コメントの「M1 にリロード概念なし」を直す（関数の中身は不変）
+  - `sstp_notify` など `mcp-kanade-tools` が足す場所には触らない
+  - 改名した許可表のテストが `OnDestroy` を含めて緑
+  - _Boundary: KanadeEvents_
+  - _Requirements: 4.1_
+- [x] 2.3 (P) seriko の `bind` の命令名を共有の定数にする
+  - `actor.rs` に `BIND_COMMAND` を置いて比較をそれに替え、`lib.rs` で再輸出する
+  - seriko の既存テストが緑で、外のクレートから `areka_seriko::BIND_COMMAND` が引ける
+  - _Boundary: Seriko_
+  - _Requirements: 13.5_
+- [x] 2.4 (P) インストールの窓口が忙しいかを外から読める口を足す
+  - `install::desk::is_busy`（実行中・待ち行列・上書きの 3 条件）を足す
+  - `install/desk_tests.rs` で 3 条件それぞれが真になり、どれも無ければ偽になる
+  - _Boundary: InstallDesk_
+  - _Requirements: 2.1_
+- [x] 2.5 (P) readme の置き場を動作中に差し替える口を足す
+  - `readme::set_path` が `ReadmeWiring` の置き場だけを差し替える
+  - 兄弟のテストで差し替えの後の readme の取り出しが新しい置き場を開く
+  - _Boundary: Readme_
+  - _Requirements: 7.3_
+- [x] 2.6 (P) 動作中のゴーストの名前を差し替える口を実行系に足す
+  - `GhostRuntime::set_names` が名前を替えて静的プロパティを出し直す（`set_shell_dir` と同じ形）
+  - `runtime_names_tests.rs` で差し替えの後に `selfname` などの静的プロパティが新しい名前で読める
+  - _Boundary: GhostRuntime_
+  - _Requirements: 7.3_
+
+- [x] 3. 振り分けと台本の受け口
+- [x] 3.1 (P) 読み直しの対象の振り分けを純粋関数で作る
+  - MCP の `target` の 6 語を ASCII の大小を区別せず照らし、前後の空白は削らない（空・知らない語は Unknown、makoto は別の答え）
+  - 台本の 7 綴り（`reloadsurface` を含む）から対象へ写し、引数なしの `reload`・`makoto`・`aigraph`・ほかの命令は拾わない
+  - `descript` のパラメータを半角スペースで区切り、ghost／shell／balloon・areka に無い種類・知らない語・語なしに仕分ける（第 3 引数より後ろは見ない・重複は 1 度）
+  - `emo2_boot/mod.rs` には `mod` の 1 行を足すだけ（1.2・3.2 と同じファイルだが足し合わせで済む）
+  - `reload_args_tests.rs` で 12.1 ⑴⑵⑸ の各場合が固定され、どの入力でも panic しない
+  - _Boundary: ReloadArgs_
+  - _Requirements: 1.2, 1.3, 1.4, 1.5, 7.2, 7.4, 7.5, 8.5, 10.3, 12.1_
+- [x] 3.2 台本の `\![reload,…]`・`\![reloadsurface]` の受け口を作る
+  - `change_cue.rs` と同じ型で、拾う綴りのときだけ受信端へ送り、送れなければ `warn!` を残す
+  - `reload_cue_tests.rs` で拾う綴りは送られ、`\![reload,makoto]` などは送られない
+  - _Depends: 3.1_
+  - _Requirements: 1.4, 1.5, 10.3_
+- [x] 3.3 台帳に読み直しの受け取り手を登記する
+  - `("reload", Some(ghost|shiori|shell|balloon|descript))` の 5 行と `("reloadsurface", None)` を新しい受け取り手で登記し、`("reload", Some("makoto"))` は後から足せるよう空けておく
+  - `bind` の行の名前を `areka_seriko::BIND_COMMAND` から引く
+  - 網羅台帳 `sakura-script.toml` の 5 行（と別名の行）の状態と持ち主を更新し、`reload,makoto`・`reload,aigraph` は変えない
+  - 一致のテストで `\![reload,ghost]`…`\![reloadsurface]` は拾われ、`\![reload,makoto]`・`\![reload,aigraph]` は誰も拾わず、`check_script` が知らない命令と言わない
+  - _Depends: 1.1, 2.3, 3.2_
+  - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 13.5_
+
+- [x] 4. 起動の結線の 2 段化（窓の側と実行系の側）
+- [x] 4.1 実行系の側の起動を独立させる
+  - 受け口の送出端の束 `CueSinkSources` を窓の側で 1 度組み、`boot_runtime` が束の複製から 12 本の sink（12 本目は読み直しの受け口）を組んで実行系を起こし、成立したときだけ受信端を World に据える
+  - `wire_emo2_boot` は窓の側の手順の後に `boot_runtime` を呼ぶ結線だけになり、`Emo2BootOutcome` が束を運ぶ（sink の並びは今の順のまま）
+  - `runtime_boot_tests.rs` で失敗のとき World が変わらず、成功で受信端が据わる。既存の起動のテストが緑
+  - _Depends: 3.2_
+  - _Requirements: 4.2, 13.4_
+- [x] 4.2 ゴーストの単位から実行系だけを外して付け直せるようにする
+  - `GhostSession` に束の欄を足して降ろす順の ① で落とし、`split_runtime`・`attach_runtime`・`sink_sources`・`set_names` を足す
+  - `ghost_session_reload_tests.rs` で外した後も seriko・ticker が残り、付け直した実行系の kanade の送出端が写り、降ろすときの join が戻る
+  - _Depends: 2.6, 4.1_
+  - _Requirements: 4.2, 7.3_
+
+- [x] 5. 既存の切替の道の受理の後半を切り出す（純移動・判断は不変）
+- [x] 5.1 (P) ゴースト切替の受理の後半と予約の終わりを 1 口にする
+  - 受理の後半を `accept_switch` に切り出し、`SwitchInFlight` を下ろす 7 か所（記憶の書き込みの失敗と `fatal` を含む）を `pub(crate) fn end_switch(SwitchEnd)` に通す（`session_end.rs` の 1 か所はそのまま）
+  - 7 か所がそれぞれ `SwitchEnd` の 7 つの変種の 1 つに対応し、既存のゴースト切替のテストが 1 本も変わらず緑のまま
+  - _Boundary: GhostSwitch_
+  - _Depends: 1.2_
+  - _Requirements: 3.6, 12.4_
+- [x] 5.2 (P) シェル・バルーン切替の受理の後半を切り出す
+  - 受理の後半を `accept_skin(.., raise)` に切り出し、切替の文脈の読み出しを兄弟から使えるようにする（判定の順・文言は不変）
+  - 既存のシェル・バルーン切替のテストが 1 本も変わらず緑のまま
+  - _Boundary: SkinSwitch_
+  - _Requirements: 12.4_
+
+- [x] 6. 読み直しの窓口
+- [x] 6.1 窓口の判定・断り・始めの記録・終了の門を作る
+  - 判定の順（終了の途中 → 別の読み直し → ゴースト切替 → シェル／バルーン切替 → ネットワーク更新 → インストール → 文脈）で断り、断りごとに `reload_refused` を 1 件残す
+  - 受理で `reload_started`（対象・出どころ・ゴースト）を残し、終了の門 `reload` を登録して終了の途中は `Closing` を返す・印は終了で `reload_dropped` で下りる
+  - descript の語の仕分けの結果を受理の前に語ごとの `warn!`（無い種類・知らない語）で残し、読み直せる語が無ければ `NoWords` で断る
+  - 毎フレームの系 `drain` が台本の受信端を取り出して窓口へ渡し、`emo2_boot/mod.rs` に `pub(crate) mod reload` を宣言して `ghost_session.rs` の `register_systems` に `reload::register` の 1 行を足す（ここから台本の道が生きる）
+  - `reload_tests.rs` で 6 種の重なり・終了の途中・語なしが断られ、記録が 1 件ずつ残る
+  - _Depends: 2.4, 3.2, 4.1, 5.1, 5.2_
+  - _Requirements: 1.1, 1.6, 2.1, 2.2, 7.4, 7.5, 9.1, 9.2, 12.1_
+- [x] 6.2 ghost の読み直しの始め方と終わりの記録を作る
+  - 目録を引かず今のゴーストから切替先を組み、`raise_event: false` で `accept_switch` を呼び、立てた予約の鍵を印に控える
+  - `on_switch_end` が各 `SwitchEnd` を `reload_done`／`reload_failed(reason)`（`TARGET_ERROR`＋`ghost`）に写して印を下ろす
+  - `boot_origin_override`・`wants_runtime_only` が自分の予約のときだけ効き、他人の予約なら偽で `reload_failed(overtaken)` を残す
+  - `reload_tests.rs` で各終わり方の記録と印の消え方、他人の予約での偽が固定される
+  - _Requirements: 2.4, 3.1, 3.2, 3.7, 8.4, 9.2, 9.3, 12.1_
+- [x] 6.3 shiori の読み直しの始め方（台詞の切れ目で `OnDestroy(reload)`）を作る
+  - 台詞の切れ目の待ちに `OnDestroy`（Reference0＝`reload`・NOTIFY）の印を載せて送り、`drain` が返事を覗く
+  - `Reached` なら `accept_switch` へ進み、それ以外（利用者の取りやめ・ほかの切替・許可表の漏れ・kanade の脱落）は記録を残して印を下ろす
+  - `reload_tests.rs` で返事の各場合の記録と印の消え方、`Reached` で `SwitchInFlight` が立つことが固定される
+  - _Depends: 2.2_
+  - _Requirements: 2.4, 4.1, 9.1, 9.3_
+- [x] 6.4 shell・balloon・descript の読み直しの列を作る
+  - 対象から段の列（`[Shell]`・`[Balloon]`・`[Names, Shell, Balloon]`・語の集合から）を組み、今のフォルダから組んだ切替先で `accept_skin(raise: None)` を段ごとに直列に進める
+  - Names の段は descript.txt を読み直して名前と readme の置き場を差し替え、読めなければ値を保って `reload_descript_read_failed` を残し列を続ける
+  - `skin_is_reload` は自分の予約のときだけ真・`skin_applied` で次の段へ・`applied` 無しの相の終わりで `reload_failed(skin_failed)`、他人の予約なら `overtaken`
+  - 列が空になったら `reload_done` を残して印を下ろす
+  - `reload_skin_tests.rs` で列の組み立て・進み方・終わりの記録・失敗の止まり方・他人の予約での偽が固定される
+  - _Depends: 4.2_
+  - _Requirements: 2.5, 5.1, 6.1, 7.1, 7.2, 7.3, 7.6, 8.4, 9.1, 9.2, 9.3_
+
+- [x] 7. 既存の道への分かれ目の結線と入口
+- [x] 7.1 ゴースト切替の起こし方に読み直しの由来を通す
+  - `switch_to` が由来を `boot_origin_override` で上書きし、`end_switch` から `on_switch_end` を呼ぶ
+  - `ghost_switch_reload_tests.rs`（`SwitchRig`）で、印があるとき偽 SHIORI の受けた要求に `OnBoot`・`OnGhostChanged`・`OnGhostChanging`・`OnClose` が無く `OnInitialize`・`username`・`basewareversion` があり、印が無ければ今までどおり
+  - _Depends: 2.1, 6.2_
+  - _Requirements: 3.2, 3.3, 3.4, 3.5, 3.6, 12.2, 12.4_
+- [x] 7.2 窓を残して実行系だけを組み直す本体を作る
+  - `rebuild_runtime_in_place` が置き場の単位から実行系を外して降ろし、降ろした直後の記憶を書き、起動時と同じ SHIORI の結線（`GhostBootInputsSource`）で `Reloaded{Shiori}` の実行系を今のシェルで起こし、付け直して `rewire_runtime_consumers` をやり直す
+  - 答えは 3 つ（組み直した・起こせなかった・記憶を書けなかった）に分け、起こせなかったときは実行系の無い単位を置き場に戻す
+  - `ghost_session_runtime_tests.rs` で起こせなかったとき単位が置き場に戻り、seriko・ticker が残ることが固定される
+  - _Depends: 2.1, 4.2, 5.1_
+  - _Requirements: 4.2, 4.4_
+- [x] 7.3 shiori の読み直しを `switch_to` の分かれ目につなぐ
+  - `switch_to` の `take_down` の手前で `wants_runtime_only` のとき 7.2 を呼び、組み直せたら段を進め、起こせなければ既定のゴーストへ戻し（既定も起きなければ致命）、記憶を書けなければ既存と同じく `end_switch(WriteFailure)`＋致命にする。`take_down`・`close_windows_for_restart`・`run_overwrite_between` は呼ばない
+  - `SwitchRig` の足場を足すなら `ghost_switch_test_support.rs` の末尾に足すだけ（`startup-options-core` との申し合わせ）
+  - `ghost_switch_reload_tests.rs` で窓が閉じられず（`WindowsEpoch` 不変）、古い SHIORI に `OnDestroy(reload)` → unload、新しい SHIORI に load → `OnInitialize(reload)`、GET 0、seriko・ticker が同じもの、組み直しの失敗で既定へ戻ることが固定される
+  - _Depends: 6.3, 7.1_
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 12.5_
+- [x] 7.4 シェル・バルーンの差し替えの後始末に読み直しの分かれ目を通す
+  - `finish_shell` は読み直しのとき `LastShell` の記録と `OnShellChanged` を飛ばし、`finish_balloon` は `LastBalloon`・決め方・`OnBalloonChange` を飛ばして `skin_applied` を呼ぶ。相の終わりで `skin_phase_ended` を呼ぶ
+  - `frame/switch_reload_tests.rs` で印の下では知らせと記憶が出ず、印が無ければ既存のテストが今までどおり
+  - _Depends: 6.4_
+  - _Requirements: 5.2, 5.3, 5.4, 6.2, 6.3, 6.4, 8.4_
+- [x] 7.5 MCP の `reload` を本物にする
+  - 照合 → 窓口 → 返事（受理は `OK:reload requested…since_id=<N>` を `last_id()` で即答・断りは `NG:Cannot reload now (…)`・知らない語は `NG:Unknown target (…)`・makoto は `NG:Reloading makoto is not supported yet`＋`warn!`・終了の途中は返事を落とす）
+  - `mcp/mod.rs` の振り分けは変えない（`handle` は既に `&mut World` を受ける）
+  - `mcp/reload_tests.rs` を新しい振る舞いの期待へ書き換え、各返事がその場で返ることが固定される
+  - _Depends: 6.1_
+  - _Requirements: 1.1, 1.2, 1.3, 2.3, 8.1, 8.2, 8.3, 8.5, 10.1, 10.2, 12.1, 12.6_
+
+- [x] 8. 検証
+- [x] 8.1 回帰と触る範囲を確かめる
+  - 触ったクレートのテストが全部緑で、既存の切替・終了・更新のテストが 1 本も変わっていない
+  - 変更したファイルが要件 13.1 の一覧（補正込み）に収まり、13.3 のファイルの差分が 0 行、どのファイルも 1,000 行以下
+  - _Requirements: 12.4, 13.1, 13.2, 13.3, 13.4_
+- [x] 8.2 実機で 5 つの読み直しを確かめる
+  - emo2（または複製したぱすたさん）を `target\` の下の根から argv で起こし、⑴ 辞書の書き換えが `ghost` で効き挨拶が出ない ⑵ シェルの画像の差し替えが `shell` で見える ⑶ 壊した辞書の `ghost` が `get_log` に出る（出なければ出どころを `verification/` に記す）⑷ `makoto` の縮退 ⑸ `shiori` で窓が閉じず（`hwnd` 同じ）辞書が効き `OnDestroy(reload)`・`OnInitialize(reload)` が送られる
+  - 設計の Risks（同梱の根からの写し・`OnDestroy` と unload の隙間）も併せて記録する
+  - 結果が `verification/` に記録されている
+  - _Requirements: 12.7_
+- [x] 8.3 ghost の読み直しの後もシェルの面を保つ（2026-10-19 の開発者の裁定・8.2 の実機で見つかった件）
+  - 窓口自身の ghost の読み直しのときだけ、`switch_to` が `take_down` の手前で各スコープの表示中の面を控え（`shell_carry::capture_for_reload`）、`boot_into` の成功の後に新しい `Emo2Wiring` へ渡す（`hand_over`）。述語 `reload::carries_shell_state` は `wants_runtime_only` の鏡
+  - 装着の相（`frame/attach.rs`）が、読み直したシェルに面が在ればその面、無ければ既定の面（`initial_surface_id`）、それも無ければ出さないと決め（`shell_carry::decide`）、着せ替えは読み直しの前の既定との差（台本で着た・脱いだ分）を読み直したシェルの既定の上に名前で決め（`decide_binds`・名前の無いものは `warn!` で落とす・descript の既定の書き換えは効く）、置き場のゴーストの seriko へ `\![bind,…]`・`\s[面]` と同じ合図を着せ替えから順に送る（`replay`・最初の `Show` から着せ替えた姿）。シェル側のアニメの進行・バルーンの面は持ち越さない（2026-10-19 の差し戻しで着せ替えは持ち越すに改めた）
+  - `shell_carry_tests.rs`（面の決め方の 3 枝・控えの組み方・着せ替えの決め方 7 本（既定の書き換え 1→0・0→1 は送らない・台本で着た・脱いだ分は既定が変わっても送る を含む）・結線が無いときの `warn!`・seriko の最初の `Show` がもう着せ替えた集合）・`frame/switch_tests.rs`（シェルの差し替えで結線の既定の写しを置き直し、バルーンでは変えない）・`reload_tests.rs`（述語が自分の予約の ghost でだけ真）・`ghost_switch_reload_tests.rs`（読み直しは控えを渡し、印の無い自分自身への切替は渡さない・起こし直しに失敗して既定へ戻ったときは渡さない）・`frame_attach_carry_tests.rs`（実 GPU の装着の相で在る面はそのまま・無い面は既定・着せ替えは名前の在るものを着せ直し無いものを落とす・控えなしは 1 つも出さない）が緑。既存のテストは 1 本も変えていない
+  - 実機で ghost の読み直しの前後に同じ面と着せ替えが出ている（`verification/8.3-shell-carry.md`）
+  - _Boundary: ShellCarry・GhostSwitch・ReloadDesk・frame/attach.rs・frame/wiring.rs・frame/switch.rs（既定の写しの置き直し）・emo2_boot/mod.rs（結線の資産の名前表）・areka-emo-present `snapshot.rs`・areka-seriko `bind.rs`_
+  - _Requirements: 3.5, 3.6, 3.8, 12.1, 12.4_
+
+## 完了の手順に回す要件
+
+- 10.4（`makoto-reload-directives` の brief への申し送り）は `/kiro-complete` の手順で行う（コードの作業でないためタスクにしない）。
+
+## Implementation Notes
+- 2.4: `install::desk::is_busy` に呼び手が来るまでの `#[allow(dead_code)]` を付けた。6.1 で呼び手を足すときに外す。
+- 2.5: `readme::set_path` にも 6.4 までの `#[allow(dead_code)]` を付けた。6.4 で外す。
+- 2.6（範囲外・完了の棚卸しで起票）: sylphya の `PublishStatic` は上書きだけで平らな名前を消す効果が無い。descript の読み直しで `sakura.name`・`sakura.name2`・`kero.name` の項目を消すと、前の `selfname` などが残る（書き換え・追加は正しく替わる）。直すには sylphya に消す口が要る。
+- 2.6: テストの道筋は `runtime::names_tests::…`（`cargo test -p areka-ghost names_tests` で回る）。`set_names` は投函だけで barrier を待たない。6.4 の Names の段で要るなら呼び手が barrier を打つ。
+- 3.1: `reload_args.rs` は呼び手が揃うまでモジュール全体に `#![allow(dead_code)]`。7.5 の後に外す。design.md 158 行の `ScriptReload::parse`・`DescriptParams::parse` は同じ文書のコードの塊（`parse_script`・`parse_descript_params`）と食い違う。完了のときに文書を直す。
+- 3.2: design.md 431 行の `ReloadRaw { target, notes }` は `reload_args::ScriptReload` で代えた（欄は同じ）。完了のときに文書を直す。受信端 `ReloadRx`（`try_iter()` 付き）と `wire_reload_rx` は `reload_cue.rs` にある。`reload_cue.rs` の `#![allow(dead_code)]` は 4.1（受け口の登録と据え付け）と 6.1（取り出し）で呼び手が付いたら外す。
+- 3.3: 網羅台帳の owner を本 spec へ直すと `ukadoc-survey` の整合が赤になるので、開発者の裁定（10-19）で要件 13.1 の外の `roadmap-draft.md`（本 spec の行・件数の直し・説明の段落）・`check_script_judge_tests.rs` のテスト 1 本・`report/*.md` の作り直しを本 spec で触った。束は多い方の「切替」（切替 3・開発者機能 2）、段 B、ウェーブ C9-④。`consumer_ledger_tests.rs:304` の assert の文言に `\n` と空白が混じる（判定には響かない）。
+- 4.1: 起動の失敗の記録は `boot_runtime` の中で 1 度だけ残す（既存の warn!/error! の分け方のまま）。7.2 の呼び手は記録し直さない。design.md 543 行（分類と記録は呼び手）は 289・655 行と食い違う。完了のときに文書を直す。166 行の `RuntimeBootInputs` は実際には `Emo2BootInputs`。
+- 4.1: `reload_cue.rs` のモジュール全体の allow は外し、`ReloadRx::try_iter` だけに 6.1 までの allow を付けた。`Emo2BootOutcome.sources` の欄の allow は 4.2 で外す。既存の字面の檻 `zorder_wiring_tests.rs` の t_zwi05 は、sink の組み立てを移したので `runtime_boot.rs` を見るように直した。
+- 4.2: `emo2_boot::runtime_boot` は `pub(crate)`。GhostSession の 4 つの口の allow は 7.2（split・attach・sink_sources）と 6.4（set_names）で外す。ghost_session.rs は 907 行（7.2 で本体を ghost_session_runtime.rs に置く）。
+- 5.1: `end_switch(world, _end)` は今は予約を下ろすだけ。7.1 で `reload::on_switch_end` を足すときに引数名を `end` に戻す。`accept_switch` は `BootContext` を読み直す（無ければ `NoContext`＋warn!・6.2 の直接の呼び手のための枝）。
+- 5.2: `info!(skin_switch_requested)` は origin を持つので `accept_skin` の外（入口）に残した。読み直しの道は `reload_started` だけを残す。design.md 512 行のコメントは完了のときに直す。`SwitchContext` は `pub(crate)`（欄と `read` は `pub(super)`）。
+- 6.1: 受理の後の `start()` は対象ごとの腕で、今は `error!(reload_failed, reason="not_implemented")` を残して印を置かない。6.2〜6.4 が自分の腕を差し替え、`ReloadInFlight` に `stage: ReloadStage` の欄を足す（テストの `plant_reload` と `accepted_leaves_one_started_record` も直す）。`ReloadOrigin::Mcp` の allow は 7.5 で外す。`drain` はまだ `AwaitingDestroy` を覗かない（6.3）。NoWords は `reload_descript_no_words` の 1 件だけで、`reload_refused` は出さない（要件 7.5）。
+- 6.2: 7.1 は `end_switch` の中で予約を下ろす前に `reload::on_switch_end` を呼ぶこと（鍵を照合するため）。6.3・6.4 で `ReloadStage` に変種を足すとき、`own_switch` の `let ReloadStage::Switching { reserved } = …` は `let … else { return None }` に直す。SwitchEnd の写しは WriteFailure・DefaultFault・Fatal → `fatal`、Steady{Default} → `fell_back_to_default`。
+- 6.3: shiori で kanade へ送れなかったときは（受理の後なので）`reload_started` の後に `reload_failed(kanade_gone)` を残す。design の ReloadDesk 節の「NoContext」の文言は完了のときに揃える。`ReloadInFlight`・`ReloadStage` は `ReplyReceiver` を持つので Debug を外した。
+- 6.4: `skin_is_reload(world, kind, dir)`・`skin_phase_ended(world, kind, dir)` は相の鍵を引数で受ける。`frame/switch.rs::run_switch_phase` が `SkinSwitchInFlight` を World から外してから `finish_*` を呼ぶため。7.4 は `finish_*` が受ける `&target` と、match の前に控えた `(flight.kind, flight.target.dir)` を渡す。`skin_applied(world)` は設計どおり。design.md 478–480・518・680 は完了のときに直す。3 つの関数の allow は 7.4 で外す。
+- 6.4: 自分の予約がゴースト切替の commit で取りやめになると、理由は `overtaken` でなく `skin_failed` になる（design は決めていない・実機で気になれば語を分ける）。
+- 7.2: `rebuild_runtime_in_place(world, target_name) -> RuntimeRebuild { Rebuilt, BootFailed, WriteFailed(PersistFailure) }`（design.md 569 行の `-> bool` は完了のときに直す）。`ghost_session_runtime` は `ghost_session` の私有 mod なので、7.3 で `switch_to` から呼ぶ口（`pub(crate) mod` か再輸出）が要る。関数と型の allow は 7.3 で外す。降ろした時間は既存の `ghost_switch_down_ms`・`ghost_switch_down_failed` を使い回す。7.2 のテストは ChangeGhost を通さないので、古い SHIORI に OnClose が来ないことは 7.3 の通しテストで固定する。
+- 7.4: `frame/switch_reload_tests.rs` は親の土台を使うため `switch_finish_tests.rs` の末尾の mod 宣言（4 行）から読む。request_reload からの通しテストは無い（ヘッドレスの土台に実行系が無い）。実機（8.2 ⑵）で通す。`reload_skin_tests.rs` 冒頭の「呼び手は 7.4」の説明は古い。
+- 7.5: `log_history.rs` は要件 13.1 の外なので触らない。`last_id()` に残る `#[allow(dead_code)]` と「mcp-strict-errors が読む口」のコメントは古い（本 spec が最初の呼び手）。design.md 98 行と一緒に完了のときに申し送る。受理の文は `answer` に偽の窓口を渡して固定した（実行系の無い World では受理まで行かない）。
+- 8.1（完了のときに記録）: `crates/areka-kanade/src/lib.rs` の `pub use change::{…}` に `ReloadScope` を 1 語足した（2.1）。要件 13.1 の一覧にも設計の補正にも無い。`change` の公開型を同じ並びで出す慣例に合わせたもので、振る舞いは変わらない。`/kiro-complete` で 13.1 の補正に足すか裁定として記録する。完了の全体テストの前に、ワークツリーで i686 の `shiori-host32-helper`・`shiori-host32-testdll-loadu` を建てておく（建てないと `tests/mcp_get_log_real_run.rs`・`tests/smoke_boot_loop_exit.rs` が前提の欠けで赤になる）。
+- 8.2（→ 8.3 で解決）: ghost の読み直しの後、キャラクターの窓に面が出なかった件は、開発者の裁定（2026-10-19「本来 ghost 読み直し時はシェルの状態は維持すべき」）で要件 3.8 を足し、8.3 で直した（`descript-window-keys` の brief へは送らない）。ただし `descript-window-keys` の brief の「areka は面 0 を出す」という前提は、ふつうの起動については今も誤り（ふつうの起動・切替は最初の `\s` まで面を出さない＝defect #5 のまま）。
+- 8.3（13.1 の補正・2026-10-19）: 要件 13.1 の一覧の外の `emo2_boot/frame/attach.rs`（装着の相で控えを使う・約 17 行）・`emo2_boot/frame/wiring.rs`（`Emo2Wiring.shell_carry` の欄・5 行）・`emo2_boot/frame_attach_tests.rs`（末尾の `mod` 宣言 4 行）を触った。差し戻し（着せ替えの持ち越し）で `crates/areka-emo-present/src/presenter/snapshot.rs`（`last_binds` の読み取り・9 行）・`crates/areka-seriko/src/bind.rs`（`BindResolver` の `Clone` と逆引き `name_of`・18 行。元から 1,043 行だったので中のテストを兄弟 `bind_tests.rs` へ純移動し 375 行に・seriko のテストは移す前と同じ 416 件で緑）・`emo2_boot/mod.rs` の結線（結線の資産に名前表の写しを持たせる 3 行＝13.4 の「mod の宣言・結線・系の登録だけ」の外）も触った。design.md「要件 13.1 の一覧の補正」の表に足した。`/kiro-complete` で requirements.md 13.1 の一覧へ足すか裁定として記録する。
+- 8.3: main の取り込み（`d2e9343e`）で `GhostBootInputs` に `modules` の欄が増え、本 spec の `ghost_session_reload_tests.rs` の 2 か所がコンパイルできなくなっていた。`modules: crate::cli::ModulePolicy::Load` を足して直した（`ghost_switch_test_support.rs` と同じ値）。
+- 8.3: 控えは表示層の `current_surface_id`（最後に確立した面）から取る。文字の層の「スコープの今の面」（`\b[名前]` の箱の行き先）は次の `\s` まで未設定のまま（ふつうの起動の最初の `\s` の前と同じ）。持ち越しの合図を文字の層へも送ると台詞の始まりの扱いが動くので送らない。
+- 8.3（最終検証の NO-GO・2026-10-19）: `bind.rs` が 1,000 行を下回ったので、要件 13.1 の外の `crates/log-capture-kit/tests/file_length_guard_test.rs` の例外表 `OVER_LIMIT_ALLOWED` から `crates/areka-seriko/src/bind.rs` の項を外し、件数の宣言 `OVER_LIMIT_ALLOWED_COUNT` を 10 → 9 にした（design.md の 13.1 の補正の表に 1 行）。
+- 8.3（差し戻し・2026-10-19）: 着せ替えは「静的な既定＋動的」を合わせた集合を表示層の最後の `Show` から控え、読み直しの前の既定（`Emo2Wiring.static_binds`）との差（台本で着た・脱いだ分）だけを、読み直したシェルの既定の上に名前の合図で送る（2 度目の差し戻しで、新しい既定との差から改めた: そうしないと descript の既定の書き換えを読み直しが打ち消す）。合図は着せ替えを面より先に送る（面の出ていないスコープの着せ替えは seriko で状態だけが変わり、最初の `Show` からもう着せ替えた姿＝既定の姿のフレームが出ない）。`Emo2Wiring.static_binds` はシェルの差し替えを seriko へ頼めた時点（`frame/switch.rs` の `commit`）で置き直す。同じ着せ替えかは bindgroup の番号で見る（番号が変わって名前が同じ着せ替えは別物として落ちる）。隠したまま着せ替えたスコープは、隠してからの着せ替えが控えに入らない（表示層は最後の `Show` の集合しか持たない・正本は seriko）。気になれば seriko へ問い合わせの電文を足して正本から控える。
+- 8.3: `frame/switch_reload_tests.rs:76` に clippy の `clone_on_copy`（`BalloonRoute`）が 1 件残っている（7.4 の分・振る舞いには響かない）。
+- 8.2（完了の棚卸で起票の候補）: ⑴ `reload_started` に読むフォルダのパスを添える（同梱の根から起こすと 2 回目から写しを読む）。⑵ MCP の返事の「get_status が答えるまで待つ」は areka では読み直しの終わりの合図にならない（要件 8.1・8.3 どおり・終わりは get_log の reload_done／reload_failed）。⑶ pasta のデバッグ待受 127.0.0.1:9276 がぶつかり、pasta のゴーストを入れた areka は同時に 2 つ動かせない（ぱすた側の持ち物）。
+- 完了時にその場で解決（2026-10-22・`/kiro-complete` の棚卸）:
+  - (a) design.md の文言の食い違い（3.1・3.2・4.1・5.2・6.3・6.4・7.2・7.5 の各注）を直した: `parse_script`・`parse_descript_params` の名前、`reload_args::ScriptReload`、起動の失敗の記録は `boot_runtime` の中で 1 度だけ・`Emo2BootInputs`、`info!(skin_switch_requested)` は入口に残す、shiori で送れなければ `reload_failed(kanade_gone)`（`NoContext` は受理の前の文脈の欠けだけ）、`skin_is_reload`／`skin_phase_ended` は `(world, kind, dir)`、`rebuild_runtime_in_place` は `-> RuntimeRebuild { Rebuilt, BootFailed, WriteFailed(PersistFailure) }`、`last_id` の説明。
+  - (b) requirements.md 13.1 に、一覧の外に触ったファイル（8.1・8.3 の注と design.md「要件 13.1 の一覧の補正」の表・完了時の直し）を日付つきの注で足した（要件の意味は変えない）。
+  - (c) `log_history::last_id` の古い `#[allow(dead_code)]` と「mcp-strict-errors が読む口」の説明を外した（`19d2fbf8`）。
+  - (d) `frame/switch_reload_tests.rs` の clippy `clone_on_copy` を直した（`58383bf2`）。
+  - (e) `consumer_ledger_tests.rs` の assert の文言に混じった `\n` と、`reload_skin_tests.rs` 冒頭の古い説明（「呼び手は 7.4」）を直した（`976fe7c5`）。
+  - (f) 8.2 ⑴: `reload_started` に `dir`（読むゴーストのフォルダ）を添えた（`bd9c3e3d`・テスト `accepted_leaves_one_started_record`）。
+  - (g) 8.2 ⑵: 要件 8.1・8.3 どおりで欠陥ではないので、直しも起票もしない。
+  - (h) 10.4: `.kiro/specs/areka-P0-makoto-reload-directives/brief.md` の末尾に「`mcp-reload` からの申し送り（areka-P0-mcp-reload 完了時・2026-10-22）」を足した（縮退の口の場所・書き換えるテスト・入口 `request_reload`）。
+- 完了の棚卸の件数（2026-10-22）: その場で解決 8 件（上の (a)〜(h)）。起票 2 件・新しい spec は 0 本（どちらも既存の brief へ「件 1」として足した）: 2.6 の sylphya の消す口 → `areka-P0-sylphya-sqlite-kvs`（他 spec の作り直す KVS の口と重なる）／8.2 ⑶ ぱすたのデバッグ待受 9276 のぶつかり → `areka-P0-pasta-in-windows-verification`（直す場所がこのリポジトリの外）。8.3 の「隠したまま着せ替えたスコープ」は設計の割り切りとして記録どおり残す（起票しない）。

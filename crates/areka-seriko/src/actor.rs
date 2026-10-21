@@ -51,6 +51,10 @@ use crate::resolve::{BalloonResolve, SurfaceResolver, SurfaceTarget, resolve_bal
 use crate::state::{ApplyOutcome, BindApplyOutcome, ScopeStates, Slot, StageNote};
 use crate::table::AnimationTable;
 
+/// seriko が名前自己選別で消費するキャリアの命令名（`\![bind,...]`）。areka の受け取り手の台帳も
+/// これを引き、綴りを 1 か所に保つ（spec: areka-P0-mcp-reload 要件 13.5）。
+pub const BIND_COMMAND: &str = "bind";
+
 /// seriko アクターの inbox メッセージ（areka-actor inbox 規約・投函経路は inbox 一貫）。
 ///
 /// 共有 Close 型は無い規約に従い、`SakuraMsg::Close` を先例に自前 `Close` を持つ（DD3）。
@@ -500,7 +504,7 @@ fn handle_message<O: SurfaceOutput>(
                         // 非正準 params の Custom: 宛名規律（D8④）で severity を峻別する。`Custom{command}`
                         // フィールドは開封失敗でも読めるため宛名で判断する——宛名 `bind`＝自分宛の壊れ物
                         // ゆえ warn!（ワイヤ破損は宛名の担当者が報告）・他人宛/未知名＝担当外ゆえ debug!。
-                        if command == "bind" {
+                        if command == BIND_COMMAND {
                             tracing::warn!(
                                 command = ?cue.command,
                                 "seriko: 自分宛（bind）の非正準 Custom params を読み飛ばす（ワイヤ破損・D8④）"
@@ -523,7 +527,7 @@ fn handle_message<O: SurfaceOutput>(
                 // 正準キャリア（`Custom` の String Array）。名前自己選別で bind のみ消費する。
                 Some((name, tokens)) => {
                     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bbind_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_6570_5024_5d:1
-                    if name != "bind" {
+                    if name != BIND_COMMAND {
                         // 未登記/他担当名（move 等・`bind-noevent` 等も含む）は静かに読み流す
                         // （名前自己選別・R2.5・一意性は areka 消費者台帳が保証・D1/D10）。
                         tracing::debug!(

@@ -50,7 +50,8 @@ pub use actor::{spawn_kanade, spawn_kanade_translating, spawn_kanade_with_stop_s
 pub use anchor_input::AnchorInput;
 pub use change::{
     BootOrigin, CancelReason, ChangeHandoff, ChangeOrigin, ChangeRequest, ChangeTarget,
-    ChangedFrom, GapLeft, GapRaise, KanadeNotice, MarkedEnd, RaiseOutcome, ShioriMethod, TalkGap,
+    ChangedFrom, GapLeft, GapRaise, KanadeNotice, MarkedEnd, RaiseOutcome, ReloadScope,
+    ShioriMethod, TalkGap,
 };
 pub use msg::{
     ChoiceInput, CloseReason, EventId, KanadeConfig, KanadeMsg, KanadeStopCause, KanadeStopped,

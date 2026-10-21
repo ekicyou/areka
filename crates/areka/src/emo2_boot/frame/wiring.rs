@@ -22,6 +22,7 @@ use areka_emo_text::actor::TextLayerRuntime;
 use areka_parsers::balloon::BalloonModel;
 
 use super::super::balloon_visibility::BalloonVisibilityState;
+use super::super::shell_carry::ShellCarry;
 use super::super::switch_assets::SwapPayload;
 use super::super::talk_lifecycle::TalkLifecycleSignal;
 use super::super::zorder_cue::ZOrderDirective;
@@ -160,6 +161,11 @@ pub struct Emo2Wiring {
     /// 書く）。差し替えの相が、置き換えの返信のそろったフレームの `swap_ms` へ足す
     /// （spec: areka-P0-shell-balloon-switch 要件 4.4）。
     pub(super) last_drain: Duration,
+    /// ghost の読み直しの前に控えた表示中の面（装着の相が 1 度だけ使う・areka-P0-mcp-reload 要件 3.8）。
+    pub(in crate::emo2_boot) shell_carry: Option<ShellCarry>,
+    /// 今のシェルの静的な着せ替えの既定（起動の資産から・シェルの差し替えで置き直す）。ghost の読み直しで
+    /// 控える着せ替えを「この既定との差」にするのに使う（areka-P0-mcp-reload 要件 3.8）。
+    pub(in crate::emo2_boot) static_binds: areka_emo_compose::BindSet,
 }
 
 impl Emo2Wiring {
@@ -180,6 +186,7 @@ impl Emo2Wiring {
         clock: TalkClock,
         assets: BootAssets,
     ) -> Self {
+        let static_binds = assets.static_binds.clone();
         Self {
             presenter,
             rx,
@@ -207,6 +214,9 @@ impl Emo2Wiring {
             // 弱い参照へ差し替える。
             swap_slot: Weak::new(),
             last_drain: Duration::ZERO,
+            // 控えは読み直しの起こし直しだけが渡す（ふつうの起動・切替は無し）。
+            shell_carry: None,
+            static_binds,
         }
     }
 

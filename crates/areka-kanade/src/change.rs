@@ -86,6 +86,19 @@ pub enum BootOrigin {
         id: &'static str,
         references: Vec<String>,
     },
+    /// 読み直しで起こし直した。起動の知らせ（台詞を求める GET）を 1 つも送らない
+    /// （`OnFirstBoot` も送らない・情報の通知は送る・areka-P0-mcp-reload 要件 3.3・3.4・4.3）。
+    Reloaded { scope: ReloadScope },
+}
+
+/// 読み直しの対象（[`BootOrigin::Reloaded`] の中身）。`Shiori` のときだけ `OnInitialize` の
+/// Ref0 に `reload` を載せる（areka-P0-mcp-reload 要件 4.3）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReloadScope {
+    /// ゴーストごと読み直した（`OnInitialize` は References なし）。
+    Ghost,
+    /// SHIORI だけ読み直した（`OnInitialize` の Ref0＝`reload`）。
+    Shiori,
 }
 
 /// 直前のゴーストの情報（`OnGhostChanged` の Ref0〜3）。

@@ -28,6 +28,13 @@ pub mod hover_inject;
 mod install_cue;
 pub mod move_cue;
 mod readme_cue;
+/// 読み直しの窓口（areka-P0-mcp-reload）。
+pub(crate) mod reload;
+pub(crate) mod reload_args;
+/// `\![reload,…]`・`\![reloadsurface]` の受け口（areka-P0-mcp-reload）。
+mod reload_cue;
+/// 実行系の側の起動（受け口の送出端の束・areka-P0-mcp-reload）。
+pub(crate) mod runtime_boot;
 /// 同じフォルダ名のゴーストを今のゴーストとして扱う（areka-P0-baseware-root-list）。
 pub(crate) mod same_folder_pin;
 /// シェル・バルーンの切替先の名前の解決とインストールの控え（areka-P0-shell-balloon-switch）。
@@ -36,6 +43,9 @@ pub(crate) mod shell_balloon_resolve;
 pub(crate) mod shell_balloon_switch;
 /// 箱の束（置き場所の表・別名の写し・在るサーフェス番号・フォントの探す場所・areka-P0-shell-balloon）。
 pub(crate) mod shell_box_assets;
+/// ghost の読み直しで表示中の面を作り直した窓へ持ち越す（areka-P0-mcp-reload 要件 3.8）。
+pub(crate) mod shell_carry;
+mod special_name;
 /// シェル・バルーンの差し替えの資産を背景で作る部品と荷物の置き場（areka-P0-shell-balloon-switch）。
 pub(crate) mod switch_assets;
 /// ゴーストの切替で同梱のゴーストを書ける根へ背景で写す（areka-P0-user-data-root）。
@@ -101,13 +111,12 @@ use areka_emo_present::{EmoPresenter, PresentCommand};
 use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::ticker::{LoopTickerConfig, Tick, TickerMsg, spawn_loop_ticker};
-use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode};
+use areka_ghost::{ShioriWiring, TickerMode};
 use areka_kanade::{BootOrigin, KanadeNotice, MonotonicMs};
-use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::MountError;
 use areka_seriko::{
-    AnimationTable, BindResolver, SerikoClock, SerikoLoopConfig, SerikoSink, SurfaceResolver,
-    seeded_rng, spawn_seriko_clocked,
+    AnimationTable, SerikoClock, SerikoLoopConfig, SerikoSink, SurfaceResolver, seeded_rng,
+    spawn_seriko_clocked,
 };
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
@@ -120,18 +129,12 @@ use self::adapter::PresentBridge;
 use self::assets::{
     BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets_with_shell,
 };
-use self::change_cue::ChangeCueSink;
 use self::frame::{Emo2Wiring, KanadeNoticeRx, emo2_frame_system, ghost_quit_system};
-use self::install_cue::InstallCueSink;
-use self::move_cue::{MoveCueSink, PositionCue};
-use self::readme_cue::ReadmeCueSink;
-use self::shell_balloon_switch::SkinRequestRaw;
-use self::switch_cue::SwitchCueSink;
-use self::talk_clock::{ClockedTextSink, TalkClock};
-use self::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
-use self::update_cue::UpdateCueSink;
-use self::user_break_cue::{NoUserBreakCueSink, NoUserBreakSignal};
-use self::zorder_cue::{ZOrderCueSink, ZOrderDirective};
+use self::move_cue::PositionCue;
+use self::runtime_boot::CueSinkSources;
+use self::talk_clock::TalkClock;
+use self::talk_lifecycle::TalkLifecycleSignal;
+use self::zorder_cue::ZOrderDirective;
 
 /// 統合結線の構築時（load-time）失敗を観測可能化する誤り型（log-first・R7.3）。
 ///
@@ -237,6 +240,7 @@ impl From<ShellLoadError> for BootWiringError {
 ///   フォールバックへ倒し、`boot_ghost_strict` は `Err` を返す・R7.3）。
 /// - `loop_ticker`: SERIKO ループ ticker（[`spawn_loop_ticker`]）の停止端（不成立時 `None`）。
 /// - `seriko_sink`: seriko の送り手の複製（不成立時 `None`・持ち主は `GhostSession` だけ）。
+/// - `sources`: 受け口の送出端の束（不成立時 `None`）。
 pub struct Emo2BootOutcome {
     /// boot 成立時の ghost ランタイム（不成立時 `None`）。
     pub ghost: Option<areka_ghost::GhostRuntime>,
@@ -253,6 +257,9 @@ pub struct Emo2BootOutcome {
     /// World に残る置き場（`Emo2Wiring` ほか）に持たせると、seriko の join が戻らない
     /// （areka-P0-shell-balloon-switch 要件 8.5）。
     pub seriko_sink: Option<SerikoSink>,
+    /// 受け口の送出端の束（実行系を組み直すたびに複製して sink を組む・不成立時 `None`・
+    /// areka-P0-mcp-reload 要件 4.2）。持ち主は `GhostSession` で、降ろす最初の段で落とす。
+    pub(crate) sources: Option<CueSinkSources>,
 }
 
 /// `wire_emo2_boot` の入力の束（ゴーストごとに変わる値と、SHIORI の結線の差し替え口）。
@@ -381,8 +388,9 @@ const _: fn() = || {
 ///    **SurfaceResolver 突き合わせ（Task 4.1 申し送り）**: `resolver`（非 Clone）は `spawn_seriko_clocked`
 ///    が値消費し、`static_binds`（Clone）は clone して seriko へ渡す。`Emo2Wiring` が保持する
 ///    `BootAssets` の `resolver` は attach で読まれないため無害なプレースホルダ（空 alias 表）で埋める。
-/// 5. [`areka_ghost::boot`]（`surface_sink`＝[`SerikoSink`] を直渡し・`text_sink`＝`ClockedTextSink`・
-///    `shiori`／`ticker`／`app_profile_dir` は [`Emo2BootInputs`] の値＝本番は `Helper`／`Real`）。`Err` は既存 [`crate::is_benign_boot_error`]（R7.4）で
+/// 5. 受け口の送出端の束（`CueSinkSources`）を組み、実行系の側の起動 `runtime_boot::boot_runtime`
+///    （束の複製から 12 本の sink を組んで `areka_ghost::boot_with_origin`・成立後にだけ受信端を据える）を呼ぶ。
+///    `shiori`／`ticker`／`app_profile_dir` は [`Emo2BootInputs`] の値＝本番は `Helper`／`Real`。`Err` は既存 [`crate::is_benign_boot_error`]（R7.4）で
 ///    分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false`。停止通知の送出端は
 ///    引数 `kanade_stop`（`main` が作った channel の送出端）をそのまま渡す（ここでは channel を
 ///    作らない・受け口の据え付けは [`wire_kanade_stop`]）。
@@ -416,17 +424,9 @@ pub fn wire_emo2_boot(
             wired: false,
             loop_ticker: None,
             seriko_sink: None,
+            sources: None,
         }
     }
-
-    let Emo2BootInputs {
-        ghost_root,
-        balloon_root,
-        shiori,
-        ticker,
-        app_profile_dir,
-        boot_origin,
-    } = inputs;
 
     // 手順1: 構築入力の一括組立（scopes は placement と同じ入力から自前導出・DD-12）。
     // 失敗（fixture 不在等）は分類 warn/error の上 wired=false を呼び手へ返す（R7.3）。
@@ -436,8 +436,13 @@ pub fn wire_emo2_boot(
     // 隣接 u16 2 引数への落とし込みは [`build_boot_assets_for`] 1 箇所に閉じる。
     // シェルは配置の準備が決めた起動のシェル（`ghost_session::BootShellChoice`）。資産と実行系の
     // 起動（手順5）へ同じ値を渡す（要件 6.4）。
-    let assets = match build_boot_assets_for(&ghost_root, &balloon_root, &scopes, author_dpi, shell)
-    {
+    let assets = match build_boot_assets_for(
+        &inputs.ghost_root,
+        &inputs.balloon_root,
+        &scopes,
+        author_dpi,
+        shell,
+    ) {
         Ok(assets) => assets,
         Err(err) => {
             classify_wiring_error(&err);
@@ -459,10 +464,9 @@ pub fn wire_emo2_boot(
         }
     };
 
-    // 手順3: talk 時刻源（dola clock 注入）＋時刻付与テキスト sink（emit ごとに epoch 推定）。
+    // 手順3: talk 時刻源（dola clock 注入）。時刻付与テキスト sink は実行系の側が束から組む。
     let clock_fn: Arc<dyn Fn() -> f64 + Send + Sync> = Arc::new(dola::runtime::clock::now);
     let clock = TalkClock::new(clock_fn);
-    let clocked_text_sink = ClockedTextSink::new(emo_text_sink, clock.clone());
 
     // 手順4: mpsc＋PresentBridge→spawn_seriko_clocked。SurfaceResolver 突き合わせ（!Clone・Task 4.1 申し送り）:
     // resolver（非 Clone）は spawn_seriko_clocked が値消費・static_binds（Clone）は clone して seriko と
@@ -474,62 +478,17 @@ pub fn wire_emo2_boot(
     // 荷物の返信の送り手も消える。seriko の送り手は Emo2Wiring に持たせない）。
     let swap_slot = switch_assets::SwapSlot::default();
     let bridge = PresentBridge::new(tx).with_swap_slot(swap_slot.clone());
-    // move channel（PresentBridge と同型の配線・task 9.1）: talk スレッドの MoveCueSink が送出端、
-    // UI スレッドの Emo2Wiring が受信端（frame 相 drain＝task 9.2 が消費）を保持する。
+    // 受信端が窓の側にある 3 本の線（PresentBridge と同型の配線）: talk スレッドの受け口が送出端、
+    // UI スレッドの Emo2Wiring が受信端を持つ。送出端は束（`CueSinkSources`）に載り、実行系を
+    // 起こすたびに複製されて受け口になる（`runtime_boot::runtime_sinks`）。
+    // - move（task 9.1）: frame 相 drain＝task 9.2 が消費。
+    // - 表示ライフサイクル（task 4.1）: 会話の開始と、待機を含む占有区間の終端が talk 相対秒で
+    //   届き、タイムアウト計測の破棄と起点になる（Requirements 4.1／4.5・design 決定 D4＝α）。
+    // - 重なり（areka-P0-scope-zorder-pinning task 6.2）: 解釈前のトークン列を運び、意味付けは
+    //   台帳の状態を要するので取り出しの相（run_zorder_drain_phase）が行う。
     let (move_tx, move_rx) = std::sync::mpsc::channel::<PositionCue>();
-    let move_sink = MoveCueSink::new(move_tx);
-    // 表示ライフサイクル channel（move channel と同型の配線・task 4.1）: talk スレッドの
-    // BalloonLifecycleSink が送出端、UI スレッドの Emo2Wiring が受信端（バルーン可視性相＝
-    // task 4.4 が全件 drain）を保持する。会話の開始と、待機を含む占有区間の終端が talk 相対秒で
-    // 届き、タイムアウト計測の破棄と起点になる（Requirements 4.1／4.5・design 決定 D4＝α）。
     let (lifecycle_tx, lifecycle_rx) = std::sync::mpsc::channel::<TalkLifecycleSignal>();
-    // 送出端の複製（areka-P0-balloon-break task 3.3）: 中断を受け入れた UI が同じ線へ
-    // 「中断された」を送る。受信端は 1 本のままなので、バルーン可視性相が同じ取り出しで読む。
-    let user_break_lifecycle_tx = lifecycle_tx.clone();
-    let lifecycle_sink = BalloonLifecycleSink::new(lifecycle_tx, clock.clone());
-    // 重なりの channel（move channel と同型の配線・areka-P0-scope-zorder-pinning task 6.2）:
-    // talk スレッドの ZOrderCueSink が送出端、UI スレッドの Emo2Wiring が受信端（frame 相の
-    // 取り出し＝run_zorder_drain_phase が消費）を保持する。運ばれるのは解釈前のトークン列で
-    // あり、意味付け（数値モード／明示モードの読み分け・拒否判定）は台帳の状態を要するので
-    // 取り出しの相が行う。
     let (zorder_tx, zorder_rx) = std::sync::mpsc::channel::<ZOrderDirective>();
-    let zorder_sink = ZOrderCueSink::new(zorder_tx);
-    // 説明書の channel（move channel と同型の配線・areka-P0-popup-menu-minimal task 4.3）:
-    // talk スレッドの ReadmeCueSink が送出端、UI スレッドの `crate::readme::ReadmeWiring` が
-    // 受信端（Input の段の取り出しが消費）を持つ。受け口は boot へ渡すので boot より前に
-    // 組まねばならず、開くファイルは boot が返す `MountModel.readme` を読まないと決まらない——
-    // ゆえに送出端だけ先に配り、受信端は boot 成立後まで手元に置く（下の「説明書の受信端」）。
-    // boot が倒れた経路では受信端をそのまま落とす。ゴーストが居ない以上 `\![open,readme]` は
-    // 届きようがなく、万一届いても送出側が送れなかったことを記録する（要件 8.4）。
-    let (readme_tx, readme_rx) = std::sync::mpsc::channel::<crate::readme::ReadmeRequest>();
-    let readme_sink = ReadmeCueSink::new(readme_tx);
-    // 中断を禁じる旗の channel（説明書の channel と同型の配線・areka-P0-balloon-break task 3.3）:
-    // talk スレッドの NoUserBreakCueSink が送出端、UI スレッドの
-    // `crate::input_events::user_break::UserBreakWiring` が受信端（Input の段の取り出しが消費）を
-    // 持つ。持ち物は運行（kanade）への送出端も要り、それは boot が返すまで手に入らない——
-    // ゆえに送出端だけ先に配り、受信端は boot 成立後まで手元に置く（下の「中断の持ち物」）。
-    // それまでに届いた合図は線が溜めておく（起動の挨拶の `enter` を取りこぼさない）。
-    let (no_user_break_tx, no_user_break_rx) = std::sync::mpsc::channel::<NoUserBreakSignal>();
-    let no_user_break_sink = NoUserBreakCueSink::new(no_user_break_tx);
-    // 切替要求の channel（説明書の channel と同型の配線・areka-P0-ghost-shell-balloon-switch
-    // task 7.2）: talk スレッドの ChangeCueSink が送出端、UI スレッドの `ghost_switch::ChangeRx` が
-    // 受信端（Input の段の取り出しが消費）を持つ。受信端は boot 成立後に World へ据える
-    // （boot が倒れた経路ではそのまま落ちる・送出側が送れなかったことを記録する）。
-    let (change_tx, change_rx) = std::sync::mpsc::channel::<ghost_switch::ChangeRequestRaw>();
-    let change_sink = ChangeCueSink::new(change_tx);
-    // インストールの要求の送出端（areka-P0-ghost-install task 7.1）: talk スレッドの InstallCueSink が
-    // 送出端、UI スレッドの窓口（`install::desk`・プロセスに 1 つ）が受信端を持つ。窓口はゴーストを
-    // 起こし直しても作り直さないので、送出端は窓口から借りるだけ（窓口が無ければ受信端の無い
-    // 送出端＝送った側が送れなかったことを記録する）。
-    let install_sink = InstallCueSink::new(crate::install::desk::raw_sender(world));
-    // 更新の要求の送出端（areka-P0-network-update task 7.1）: インストールと同じ形で、更新の窓口
-    // （`update::desk`・プロセスに 1 つ）から借りるだけ。
-    let update_sink = UpdateCueSink::new(crate::update::desk::raw_sender(world));
-    // シェル・バルーンの切替要求の channel（切替要求の channel と同型の配線・
-    // areka-P0-shell-balloon-switch task 8.1）: talk スレッドの SwitchCueSink が送出端を持ち、
-    // 受信端は結線の成立後に World へ据える（`shell_balloon_switch::wire_switch_rx`・下の手順 6 の後）。
-    let (switch_tx, switch_rx) = std::sync::mpsc::channel::<SkinRequestRaw>();
-    let switch_sink = SwitchCueSink::new(switch_tx);
     let BootAssets {
         shells,
         balloons,
@@ -571,7 +530,7 @@ pub fn wire_emo2_boot(
     };
     // boot は S: dola::cue::CueSink + Clone を要求する。SerikoSink は upstream `areka-seriko` で
     // `CueSink` を実装し `#[derive(Clone)]` 済み（内側 mpsc::Sender は常に Clone・全 clone は単一 inbox
-    // 送信端で配送同一）ゆえ spawn_seriko_clocked の戻り値を直接 surface_sink として boot へ渡す（共有 shim は不要）。
+    // 送信端で配送同一）ゆえ spawn_seriko_clocked の戻り値を直接 surface sink として束へ載せる（共有 shim は不要）。
     // `bind_resolver`（BootAssets・task 7.1 が MountModel の名前転記から構築した実名前解決表）を
     // seriko の起動へ値渡しで配線する。bind cue（`\![bind]`）の着せ替え名解決はこの実表が担う（task 7.2）。
     // `loop_config`（上で組んだ実表＋実 entropy 乱数）を seriko へ値渡しし、SERIKO ループ統括器を起こす。
@@ -581,7 +540,7 @@ pub fn wire_emo2_boot(
     let (surface_sink, seriko_handle) = spawn_seriko_clocked(
         resolver,
         static_binds.clone(),
-        bind_resolver,
+        bind_resolver.clone(),
         loop_config,
         bridge,
         Some(Arc::clone(&seriko_clock)),
@@ -592,8 +551,9 @@ pub fn wire_emo2_boot(
         // attach は resolver を一切読まない（Task 4.1 申し送り）ため無害なプレースホルダ。
         resolver: SurfaceResolver::new(BTreeMap::new()),
         static_binds,
-        // 実 bind_resolver は seriko が値消費済み（attach は bind_resolver を読まない）ため空表プレースホルダ。
-        bind_resolver: BindResolver::empty(),
+        // 実 bind_resolver の写し: attach は ghost の読み直しで持ち越す着せ替えの名前を引くのにだけ使う
+        // （areka-P0-mcp-reload 要件 3.8）。名前の解決そのものは seriko の写しが担う。
+        bind_resolver,
         // 実 loop_tables は loop_config へ移送済み（attach は loop_tables を読まない）ため空表プレースホルダ。
         loop_tables: LoopTables {
             shell: AnimationTable::empty(),
@@ -606,105 +566,40 @@ pub fn wire_emo2_boot(
         boxes,
     };
 
-    // loop ticker 用の tick 送出端: SerikoSink を 1 本 clone して保持する（surface_sink 本体は下の
-    // boot_options が値消費する）。全 clone は単一 seriko inbox への送信端で配送意味は同一（task 9.2）。
-    // boot 失敗時はこの clone が inbox を生かし続けないよう明示 drop する（worker 自然終了・下記）。
+    // loop ticker 用の tick 送出端: SerikoSink を 1 本 clone して保持する。全 clone は単一 seriko
+    // inbox への送信端で配送意味は同一（task 9.2）。boot 失敗時はこの clone が inbox を生かし続けない
+    // よう明示 drop する（worker 自然終了・下記）。
     let tick_sink = surface_sink.clone();
     // セッションへ返す複製（シェル・バルーンの差し替えの口・areka-P0-shell-balloon-switch 要件 8.5）。
     // 持ち主は `GhostSession` だけで、降ろす最初の段で落ちる。boot 失敗時は下で tick_sink と一緒に落とす。
     let session_sink = surface_sink.clone();
-
-    // 手順5: boot（実 sink 注入）。Err は既存 is_benign_boot_error 分類（R7.4）＋wired=false。
-    // sinks は broadcast 登録先で、surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）の
-    // 3 sink を第 1〜3 要素として渡す（task 9.1）。move_sink は `\![move]` を名前選別で消費し、
-    // PositionCue を move channel 経由で UI スレッド（Emo2Wiring の move_rx）へ送出する。
-    // 第 4 要素の lifecycle_sink（task 4.1）は cue を選別せず全件観測して占有区間の終端を集約し、
-    // 会話の開始と表示終了時刻を lifecycle channel 経由で UI スレッド（Emo2Wiring の lifecycle_rx）
-    // へ送出する。上流（ghost／kanade／dola）の署名も既存 3 sink の登録も変えない（決定 D4＝α）。
-    // 順序の制約（draw-load-parity 3.5）: lifecycle_sink は clocked_text_sink より**後**に置く。
-    // lifecycle_sink::send は起床旗 PRESENT を立てるので、文字 cue が先に積まれていないと
-    // 旗だけが先に倒されて文字が心拍待ちになる。
-    // 第 5 要素の zorder_sink（task 6.2）は `\![set,zorder,…]`／`\![reset,zorder]` を「名前＋
-    // 第 1 引数」で選別して消費し、解釈前のトークン列を zorder channel 経由で UI スレッド
-    // （Emo2Wiring の zorder_rx）へ送出する。担当外のコマンドには一切触れない（要件 11.2）ので
-    // 既存 4 sink の消費は 1 つも変わらない。文字 cue に依存しないため末尾で構わない。
-    // 第 6 要素の readme_sink（popup-menu-minimal task 4.3）は `\![open,readme]` を「名前＋
-    // 第 1 引数」で選別して消費し、引数なしの 1 件を説明書の要求として送出する（要件 4.5）。
-    // 担当外へは触れないので既存 5 sink の消費は変わらず、文字 cue にも依存しない。
-    // 第 7 要素の no_user_break_sink（areka-P0-balloon-break task 3.3）は
-    // `\![enter,nouserbreakmode]`／`\![leave,nouserbreakmode]` を「名前＋第 1 引数」で選別して
-    // 消費し、トークの始まりと合わせて 3 値を 1 本の線で送出する（要件 5.1・5.4）。担当外へは
-    // 触れないので既存 6 sink の消費は変わらず、文字 cue にも依存しないため末尾で構わない。
-    // 既存 6 本の並びは変えない（旗の順序の保証がこの並びに依る）。
-    // 第 8 要素の change_sink（areka-P0-ghost-shell-balloon-switch task 7.2）は
-    // `\![change,ghost,…]` を「名前＋第 1 引数」で選別して消費し、名前を無変形で切替要求として
-    // 送出する（要件 1.2・1.3）。担当外へは触れず文字 cue にも依存しないため末尾で構わない。
-    // 第 9 要素の install_sink（areka-P0-ghost-install task 7.1）は `\![execute,install,…]` を
-    // 「名前＋第 1 引数」で選別して消費し、絶対パスを出どころ「台本」の生の要求として窓口へ
-    // 送出する（要件 1.5〜1.7）。担当外へは触れず文字 cue にも依存しないため末尾で構わない。
-    // 第 10 要素の update_sink（areka-P0-network-update task 7.1）は `\![updatebymyself]`・
-    // `\![update,…]`・`\![updateother,…]` を名前で選別して消費し、生の更新の要求を窓口へ送出する
-    // （要件 1.5〜1.8）。担当外へは触れず文字 cue にも依存しないため末尾で構わない。
-    // 第 11 要素の switch_sink（areka-P0-shell-balloon-switch task 8.1）は `\![change,shell,…]`・
-    // `\![change,balloon,…]` を「名前＋第 1 引数」で選別して消費し、名前を無変形で切替要求として
-    // 送出する（要件 1.2〜1.4・1.15）。担当外へは触れず文字 cue にも依存しないため末尾で構わない。
-    let boot_options = GhostBootOptions {
-        ghost_root: ghost_root.clone(),
-        default_encoding: DefaultEncoding::Ansi,
-        shiori,
-        sinks: vec![
-            Box::new(surface_sink),
-            Box::new(clocked_text_sink),
-            Box::new(move_sink),
-            Box::new(lifecycle_sink),
-            Box::new(zorder_sink),
-            Box::new(readme_sink),
-            Box::new(no_user_break_sink),
-            Box::new(change_sink),
-            Box::new(install_sink),
-            Box::new(update_sink),
-            Box::new(switch_sink),
-        ],
-        system_vars: SystemVarWiring::FromSylphya,
-        app_profile_dir,
-        ticker,
+    // 受け口の送出端の束（areka-P0-mcp-reload 要件 4.2）: 窓の側がここで 1 度組み、実行系を
+    // 起こすたびに複製から 12 本の sink を組む。
+    let sources = CueSinkSources {
+        surface: surface_sink,
+        text: emo_text_sink,
+        clock: clock.clone(),
+        move_tx,
+        lifecycle_tx,
+        zorder_tx,
     };
-    // ── 停止通知の送出端（R15.4・design D15 の 3） ──
-    // kanade スレッドが終了系列の完了時に送出端へ 1 件送り、UI スレッドの終了相が World の受け口
-    // （`wire_kanade_stop` が据える）から取り出す。channel は `main` が 1 本作り、ここは受け取った
-    // 送出端を渡すだけ。これが在ることで、終了挨拶を再生し終えてから窓が閉じる——無ければ操作が
-    // 窓を直接閉じるほかなく、挨拶を素通りする（症状 C）。
-    // 起動の由来は kanade の起動の根（`OnBoot`／`OnGhostChanged`）の選択へ渡る（要件 4.1・8.6）。
-    let ghost_runtime = match areka_ghost::boot_with_origin(
-        boot_options,
-        Some(kanade_stop),
-        boot_origin,
-        shell,
-        crate::write_failure::sender(world),
-    ) {
-        Ok(runtime) => runtime,
-        Err(err) => {
-            // R7.4: 既存 main と同一方針で分類（起点不在＝良性 warn・他＝error）。
-            if crate::is_benign_boot_error(&err) {
-                warn!(
-                    error = %err,
-                    "emo2-boot: ghost boot の起点が見つかりません（実 sink 結線は不成立・帰結は呼び手が記録・R7.4）"
-                );
-            } else {
-                error!(
-                    error = %err,
-                    "emo2-boot: ghost boot に失敗（実 sink 結線は不成立・帰結は呼び手が記録・R7.4）"
-                );
-            }
-            // spawn 済み seriko の後始末: surface_sink は boot_options 消費で drop 済み。ただし tick 用
-            // clone（tick_sink）とセッションへ返す複製（session_sink）はまだ生存し inbox を生かし続ける
-            // ため、ここで明示 drop する。全 Sender が消えると inbox 切断→worker 自然終了する。ActorHandle は非 RAII（drop で detach）ゆえ join
-            // せず drop で打ち切る（万一 boot が dispatcher へ move 後に失敗しても hang しない）。
-            drop(tick_sink);
-            drop(session_sink);
-            drop(seriko_handle);
-            return fallback();
-        }
+
+    // 手順5: 実行系の側の起動（`runtime_boot::boot_runtime`）。sink の並び・boot の失敗の分類と記録・
+    // 受信端が窓の側に無い線（readme・中断・ghost の切替・shell/balloon の切替・読み直し）の
+    // 据え付けは向こうが持ち、Err のとき World は変わっていない。停止通知の送出端は引数
+    // `kanade_stop`（`main` が作った channel の送出端）をそのまま渡す（受け口の据え付けは
+    // [`wire_kanade_stop`]）。これが在ることで、終了挨拶を再生し終えてから窓が閉じる。
+    let Ok(ghost_runtime) = runtime_boot::boot_runtime(world, inputs, &sources, kanade_stop, shell)
+    else {
+        // spawn 済み seriko の後始末: tick 用 clone（tick_sink）・セッションへ返す複製（session_sink）・
+        // 束（sources）が inbox を生かし続けるため、ここで明示 drop する。全 Sender が消えると inbox
+        // 切断→worker 自然終了する。ActorHandle は非 RAII（drop で detach）ゆえ join せず drop で
+        // 打ち切る（万一 boot が dispatcher へ move 後に失敗しても hang しない）。
+        drop(tick_sink);
+        drop(session_sink);
+        drop(sources);
+        drop(seriko_handle);
+        return fallback();
     };
 
     // 手順6: Emo2Wiring を NonSend 挿入（emo2_frame_system の登録は [`register_emo2_frame_system`]）。
@@ -728,31 +623,6 @@ pub fn wire_emo2_boot(
     wiring.seed_zorder_descript_base(zorder_descript);
     world.insert_non_send(wiring);
 
-    // 説明書の受信端（popup-menu-minimal task 4.3・要件 4.5）。開くファイルはゴーストの根と
-    // 定義の `readme` キーから**起動時に 1 度だけ**決まる（要求ごとには決めない）ので、
-    // `mount()` を読める最初の場所であるここで決めて受信端と一緒に World へ据える。
-    // `Input` の段への登録は `ghost_session::register_systems` が別に 1 度だけ行う。
-    let readme_path =
-        crate::readme::resolve_path(&ghost_root, ghost_runtime.mount().readme.as_deref());
-    crate::readme::wire_readme(world, readme_path, readme_rx);
-
-    // 切替要求の受信端（ゴーストごとに新品・task 7.2）。取り出しの登録は
-    // `ghost_session::register_systems` が別に 1 度だけ行う。
-    ghost_switch::wire_change_rx(world, change_rx);
-    // シェル・バルーンの切替要求の受信端（ゴーストごとに新品・areka-P0-shell-balloon-switch task 8.3）。
-    // 取り出しの登録は同じく `ghost_session::register_systems` が 1 度だけ行う。
-    shell_balloon_switch::wire_switch_rx(world, switch_rx);
-
-    // 中断の持ち物（areka-P0-balloon-break task 3.3・要件 4.5・5.1）。運行（kanade）への送出端は
-    // boot が返した `GhostRuntime` から複製する（マウスの結線と同じ投函端）。`Input` の段への
-    // 登録は `wire_readme` と同じく `ghost_session::register_systems` が行う。
-    crate::input_events::user_break::wire_user_break(
-        world,
-        no_user_break_rx,
-        user_break_lifecycle_tx,
-        ghost_runtime.kanade().clone(),
-    );
-
     // SERIKO ループ ticker 起動（design「本番は実時間・実 entropy 接続」・R7.4）: 16ms で、seriko と
     // 同じ時計 `seriko_clock`（[`loop_ticker_config`]）で駆動し、各 Tick を tick_sink（SerikoSink クローン）経由で seriko
     // へ届ける。ghost の loop ticker は seriko を一切知らず、クロージャがその継ぎ目（依存方向: areka が
@@ -768,13 +638,14 @@ pub fn wire_emo2_boot(
     // wire 成立マーカー（実 fixture smoke＝task 7.1 がこの info! の存在を assert する・R7.3 観測境界）。
     info!("emo2-boot: 実 sink 結線が成立しました（wire 成立）");
 
-    // 手順7: 実 sink 結線成立。ghost/seriko ハンドル＋loop ticker 停止端を main の終了処理へ返す。
+    // 手順7: 実 sink 結線成立。ghost/seriko ハンドル＋loop ticker 停止端＋束を呼び手へ返す。
     Emo2BootOutcome {
         ghost: Some(ghost_runtime),
         seriko: Some(seriko_handle),
         wired: true,
         loop_ticker: Some(loop_ticker_stop),
         seriko_sink: Some(session_sink),
+        sources: Some(sources),
     }
 }
 

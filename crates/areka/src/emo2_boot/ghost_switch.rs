@@ -20,12 +20,14 @@ use areka_kanade::{
     KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFault, ShioriFaultKind,
 };
 use areka_sylphya::{PersistKey, PersistScope};
-use bevy_ecs::resource::Resource;
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
+#[cfg(test)]
+use super::special_name::UnresolvedReason;
+pub(crate) use super::special_name::{LastInstalledGhost, NameResolution, resolve_special_name};
 use crate::app_exit::{ExitOrigin, WindowsClosed, close_windows_for_restart, quit_app};
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost, resolve_balloon_for_ghost};
 use crate::boot_resolve::{
@@ -33,7 +35,8 @@ use crate::boot_resolve::{
     write_switch_drop,
 };
 use crate::ghost_session::{
-    GhostBootInputsSource, GhostSlot, boot_ghost_strict, commit_ghost_windows, reopen_ghost_windows,
+    GhostBootInputsSource, GhostSlot, RuntimeRebuild, boot_ghost_strict, commit_ghost_windows,
+    rebuild_runtime_in_place, reopen_ghost_windows,
 };
 
 /// 台本の `\![change,ghost,名(,--option=raise-event)]` から届く切替要求（受け口
@@ -167,6 +170,32 @@ pub(crate) struct SwitchInFlight {
     pub copy: super::switch_copy::SwitchCopy,
 }
 
+/// 予約の終わり（[`end_switch`] へ渡す出口の語彙）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SwitchEnd {
+    /// 迎え入れたゴーストが定常に入った。
+    Steady { attempt: WelcomeAttempt },
+    /// 切替は中止された。
+    Cancelled,
+    /// kanade が受理しないまま止まった。
+    NotAccepted,
+    /// 迎え入れたゴーストが失敗以外で止まった。
+    TargetQuit,
+    /// 既定ゴーストの SHIORI が失敗した。
+    DefaultFault,
+    /// 既定ゴーストへ戻せなかった。
+    Fatal,
+    /// 降ろした直後の記憶を書けなかった。
+    WriteFailure,
+}
+
+/// 予約を下ろす唯一の口（OS のセッションの終了の 1 か所 `session_end` を除く）。
+/// 読み直しの窓口へ終わりを告げてから下ろす（窓口は予約の鍵を照合する）。
+pub(crate) fn end_switch(world: &mut World, end: SwitchEnd) {
+    super::reload::on_switch_end(world, end);
+    world.remove_non_send::<SwitchInFlight>();
+}
+
 /// 純粋: 目録の項目と指し方から切替先を決める（要件 1.5・1.8・11.8）。
 ///
 /// 名前は `descript.txt` の `name` と先に突き合わせ、一致が無ければフォルダ名と突き合わせる。
@@ -200,118 +229,6 @@ pub(crate) fn resolve_switch_target(
         sakura_name: None,
     })
 }
-
-/// 特別な名前の解決の結果（areka-P0-ghost-change-name-resolution）。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum NameResolution {
-    /// 特別な名前ではない（今日どおり名指しとして目録と突き合わせる）。
-    Plain,
-    /// 解けた。`position` は `sequential` のときの今のゴーストの位置（記録用・他は `None`）。
-    Resolved {
-        folder: String,
-        position: Option<usize>,
-    },
-    /// 特別な名前だが解けない（理由は記録の語彙）。
-    Unresolved(UnresolvedReason),
-}
-
-/// 解けない理由（`ghost_switch_unknown` の `reason` 欄の語彙）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum UnresolvedReason {
-    RandomEmpty,
-    SequentialEmpty,
-    LastInstalledNone,
-    LastInstalledMissing,
-}
-
-impl UnresolvedReason {
-    /// `reason` 欄の語（`random_empty` など）。
-    pub(crate) fn as_ref_str(self) -> &'static str {
-        match self {
-            Self::RandomEmpty => "random_empty",
-            Self::SequentialEmpty => "sequential_empty",
-            Self::LastInstalledNone => "lastinstalled_none",
-            Self::LastInstalledMissing => "lastinstalled_missing",
-        }
-    }
-
-    /// 人が読む本文（理由ごとに 1 文）。
-    pub(crate) fn describe(self) -> &'static str {
-        match self {
-            Self::RandomEmpty => "目録にゴーストが 1 体も無い——random の切替を無視する",
-            Self::SequentialEmpty => "目録にゴーストが 1 体も無い——sequential の切替を無視する",
-            Self::LastInstalledNone => {
-                "このプロセスでゴーストを入れていない——lastinstalled の切替を無視する"
-            }
-            Self::LastInstalledMissing => {
-                "最後に入れたゴーストが目録に無い——lastinstalled の切替を無視する"
-            }
-        }
-    }
-}
-
-/// 純粋: 特別な名前を目録のフォルダ名へ解く（要件 2〜5・9・design「SpecialNameResolver」）。
-///
-/// 特別な名前は `random`・`sequential`・`lastinstalled` の完全一致だけ（大文字小文字を区別）で、
-/// 目録に同じ名前のゴーストがいても特別な名前として解く。`entries` は `list_ghosts` の並び
-/// （フォルダ名の昇順）のまま渡す。`current`＝今のゴーストのフォルダ名（`None` は目録に無い扱い）、
-/// `last_installed`＝最後に入れたゴーストのフォルダ名の記録（どちらも `same_folder_name` で比べる）。
-/// - `random`: 今のゴーストを除いた候補から `pick(候補数)` で 1 体。候補が 0 体なら今のゴースト
-///   自身（目録に残っているのはそれだけ）。`pick` を呼ぶのは候補が 1 体以上のときだけ。
-/// - `sequential`: 今の位置の次（末尾なら先頭）。今のゴーストが目録に無ければ先頭。
-/// - `lastinstalled`: 記録のフォルダ名で目録を引く（今のゴースト自身でも解ける）。
-///
-/// fs・World・時計は読まない。
-pub(crate) fn resolve_special_name(
-    name: &str,
-    entries: &[GhostEntry],
-    current: Option<&str>,
-    last_installed: Option<&str>,
-    pick: impl FnOnce(usize) -> usize,
-) -> NameResolution {
-    let resolved = |e: &GhostEntry, position| NameResolution::Resolved {
-        folder: e.identity.folder.clone(),
-        position,
-    };
-    let is_current =
-        |e: &&GhostEntry| current.is_some_and(|c| same_folder_name(&e.identity.folder, c));
-    match name {
-        "random" => {
-            let others: Vec<&GhostEntry> = entries.iter().filter(|e| !is_current(e)).collect();
-            match (others.is_empty(), entries.first()) {
-                (false, _) => resolved(others[pick(others.len())], None),
-                (true, Some(itself)) => resolved(itself, None),
-                (true, None) => NameResolution::Unresolved(UnresolvedReason::RandomEmpty),
-            }
-        }
-        "sequential" => {
-            if entries.is_empty() {
-                return NameResolution::Unresolved(UnresolvedReason::SequentialEmpty);
-            }
-            let position = entries.iter().position(|e| is_current(&e));
-            let next = position.map_or(0, |i| (i + 1) % entries.len());
-            resolved(&entries[next], position)
-        }
-        "lastinstalled" => match last_installed {
-            None => NameResolution::Unresolved(UnresolvedReason::LastInstalledNone),
-            Some(want) => entries
-                .iter()
-                .find(|e| same_folder_name(&e.identity.folder, want))
-                .map_or(
-                    NameResolution::Unresolved(UnresolvedReason::LastInstalledMissing),
-                    |e| resolved(e, None),
-                ),
-        },
-        _ => NameResolution::Plain,
-    }
-}
-
-/// 同じプロセスで最後に入れたゴーストのフォルダ名の記録（`lastinstalled` の解決に使う）。
-///
-/// プロセスの中だけ（ファイル・記憶へは書かない）。無ければ「このプロセスで何も入れていない」。
-/// 入口は読むだけで、切替に使っても消さない。
-#[derive(Resource)]
-pub(crate) struct LastInstalledGhost(pub String);
 
 /// 最後に入れたゴーストのフォルダ名を記録する（前の記録は置き換わる＝最後の 1 件だけ残る）。
 pub(crate) fn record_last_installed(world: &mut World, folder: String) {
@@ -401,8 +318,28 @@ pub(crate) fn request_ghost_switch_with(
         );
         return SwitchVerdict::NotFound;
     };
-    let mut target = super::same_folder_pin::pin_to_current(target, &ctx.current.ghost);
+    let target = super::same_folder_pin::pin_to_current(target, &ctx.current.ghost);
+    accept_switch(world, target, req)
+}
 
+/// 受理の後半: 置き場のゴーストと `PrevGhost` → `sakura_name` → `ChangeGhost` 送出 →
+/// [`super::switch_copy::start`] → [`SwitchInFlight`]。[`request_ghost_switch_with`] は目録の解決の後に
+/// これを呼ぶ。文脈・置き場の送出端が無ければ `warn!(ghost_switch_no_context)`、送出に失敗したら
+/// `error!(ghost_switch_send_failed)` で予約は立てない。
+pub(crate) fn accept_switch(
+    world: &mut World,
+    mut target: SwitchTarget,
+    req: SwitchRequest,
+) -> SwitchVerdict {
+    let Some(ctx) = world.get_resource::<BootContext>() else {
+        tracing::warn!(
+            event = "ghost_switch_no_context",
+            reason = "boot_context",
+            "起動の文脈が無いので切替要求を無視する"
+        );
+        return SwitchVerdict::NoContext;
+    };
+    let current_folder = ctx.current.ghost.folder.clone();
     let session = world
         .get_non_send::<GhostSlot>()
         .and_then(|slot| slot.0.as_ref());
@@ -500,7 +437,7 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
                 cause = ?cause,
                 "kanade が切替の要求を受理しないまま止まった（終了要求と競合）——切替をやめて今日どおり終了する"
             );
-            world.remove_non_send::<SwitchInFlight>();
+            end_switch(world, SwitchEnd::NotAccepted);
             quit_app(world, ExitOrigin::KanadeStopped(cause));
         }
         (SwitchStage::Welcoming { attempt }, _) => match (attempt, cause) {
@@ -521,7 +458,7 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
                     reason = %fault.reason,
                     "既定ゴーストの SHIORI が失敗した（戻す試みは済んだ／切替先が既定）——今日の失敗の経路で終了する"
                 );
-                world.remove_non_send::<SwitchInFlight>();
+                end_switch(world, SwitchEnd::DefaultFault);
                 quit_app(
                     world,
                     ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault)),
@@ -534,7 +471,7 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
                     cause = ?cause,
                     "迎え入れたゴーストが失敗以外で止まった——今日どおり終了する"
                 );
-                world.remove_non_send::<SwitchInFlight>();
+                end_switch(world, SwitchEnd::TargetQuit);
                 quit_app(world, ExitOrigin::KanadeStopped(cause));
             }
         },
@@ -553,7 +490,7 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
             match stage {
                 Some(SwitchStage::Welcoming { attempt }) => {
                     record_steady_memory(world);
-                    world.remove_non_send::<SwitchInFlight>();
+                    end_switch(world, SwitchEnd::Steady { attempt });
                     let ghost = world
                         .get_resource::<BootContext>()
                         .and_then(|c| c.current.ghost.folder.clone());
@@ -578,7 +515,8 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
             crate::update::desk::on_steady(world);
         }
         KanadeNotice::ChangeCancelled { reason } => {
-            if world.remove_non_send::<SwitchInFlight>().is_some() {
+            if world.get_non_send::<SwitchInFlight>().is_some() {
+                end_switch(world, SwitchEnd::Cancelled);
                 tracing::info!(
                     event = "ghost_switch_cancelled",
                     reason = ?reason,
@@ -660,6 +598,12 @@ fn record_steady_memory(world: &World) {
 /// 予約の切替先へ: 置き場のゴーストを同期で降ろす → 全窓を閉じる → [`boot_into`]（由来＝切替で
 /// 来た〔予約に起動の知らせが在ればネットワーク更新で読み直した〕・経路＝切替）。成功なら段を「迎え入れ（切替先）」に。同期の失敗は、切替先が既定なら致命、
 /// そうでなければ [`switch_to_default`]（窓は投函していないので壊れた切替先の窓は生えない）。
+///
+/// shiori の読み直し（窓口自身の予約・[`super::reload::wants_runtime_only`]）だけは降ろさず・窓を閉じず・
+/// 起動中のゴーストへ入れる一周も回さずに、[`rebuild_runtime_in_place`] で実行系だけを組み直す
+/// （要件 4.1〜4.4・design Flow 3）。組み直せたら段を「迎え入れ（切替先）」に。降ろした直後の記憶を
+/// 書けなければ予約を下ろして書けない致命へ。起こせなければ、切替先が既定なら致命、そうでなければ
+/// [`switch_to_default`]。
 pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     let Some((target, prev, boot_event)) = world
         .get_non_send::<SwitchInFlight>()
@@ -675,6 +619,29 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     let Some(dir) = super::switch_copy::boot_dir(world, &handoff) else {
         return;
     };
+    // shiori の読み直し（窓口自身の予約）: 窓・seriko・loop ticker を残して実行系だけを組み直す
+    // （要件 4.2・4.4・design Flow 3）。`take_down`・`close_windows_for_restart`・`run_overwrite_between` は呼ばない。
+    if super::reload::wants_runtime_only(world) {
+        match rebuild_runtime_in_place(world, &target.name) {
+            RuntimeRebuild::Rebuilt => set_stage(world, WelcomeAttempt::Target),
+            RuntimeRebuild::WriteFailed(failure) => {
+                end_switch(world, SwitchEnd::WriteFailure);
+                crate::write_failure::fatal(world, failure);
+            }
+            RuntimeRebuild::BootFailed
+                if same_folder_name(&target.folder, DEFAULT_GHOST_FOLDER) =>
+            {
+                fatal(
+                    world,
+                    format!("読み直した既定ゴースト {} を起こせなかった", target.name),
+                )
+            }
+            RuntimeRebuild::BootFailed => switch_to_default(world, &target.name),
+        }
+        return;
+    }
+    // ghost の読み直し（窓口自身の予約）だけは、窓を閉じる前に表示中の面を控える（要件 3.8）。
+    let carry = super::shell_carry::capture_for_reload(world);
     take_down(world);
     // 降ろし終えた直後（前のゴーストの記憶の書き手は処理し切って join 済み＝動いている実行系は 0）に
     // 最後のゴースト＝既定・印＝切替先を 1 回で書く（要件 12.6）。UI スレッドが App スコープへ直接
@@ -687,7 +654,7 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
                 &ctx.app_profile_dir,
                 (!ctx.argv_session).then_some(target.name.as_str()),
             ) {
-                world.remove_non_send::<SwitchInFlight>();
+                end_switch(world, SwitchEnd::WriteFailure);
                 crate::write_failure::fatal(world, failure);
                 return;
             }
@@ -700,8 +667,9 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     let closed = close_windows_for_restart(world);
     // 起動中のゴーストへ入れる一周（預かった宛先への切替のときだけ・降ろした後・起こす前に展開する）。
     crate::install::desk::run_overwrite_between(world);
-    // 起動の知らせが在れば（読み直し）それを根に、無ければ今日どおり「切替で来た」（決めたこと 23）。
-    let origin = match boot_event {
+    // 読み直しの窓口自身の予約なら読み直しの由来（要件 3.2〜3.4）。それ以外は、起動の知らせが在れば
+    // （ネットワーク更新の読み直し）それを根に、無ければ今日どおり「切替で来た」（決めたこと 23・要件 3.6）。
+    let origin = super::reload::boot_origin_override(world).unwrap_or_else(|| match boot_event {
         Some((id, references)) => BootOrigin::Updated { id, references },
         None => BootOrigin::ChangedFrom(ChangedFrom {
             sakura_name: prev.sakura_name.unwrap_or_default(),
@@ -712,13 +680,14 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
                 .display()
                 .to_string(),
         }),
-    };
+    });
     let ghost = GhostDecision {
         route: GhostRoute::Switched,
         dir,
         folder: Some(target.folder.clone()),
     };
     if boot_into(world, closed, ghost, origin) {
+        super::shell_carry::hand_over(world, carry);
         set_stage(world, WelcomeAttempt::Target);
     } else if same_folder_name(&target.folder, DEFAULT_GHOST_FOLDER) {
         fatal(
@@ -904,7 +873,7 @@ fn set_stage(world: &mut World, attempt: WelcomeAttempt) {
 /// 致命: 予約を下ろし、出所「既定ゴーストへ戻せなかった」で終了を指示する（要件 6.4）。
 /// 告知と終了コード 1 は `main` の後始末が今日の SHIORI の失敗の経路で行う。
 fn fatal(world: &mut World, reason: String) {
-    world.remove_non_send::<SwitchInFlight>();
+    end_switch(world, SwitchEnd::Fatal);
     tracing::error!(
         event = "ghost_switch_fatal",
         reason = %reason,
@@ -946,3 +915,7 @@ mod roots_tests;
 #[cfg(test)]
 #[path = "ghost_switch_drop_write_tests.rs"]
 mod drop_write_tests;
+
+#[cfg(test)]
+#[path = "ghost_switch_reload_tests.rs"]
+mod reload_tests;

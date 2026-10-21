@@ -26,11 +26,16 @@ use wintf::ecs::widget::bitmap_source::{BoxedCommand, CommandSender, WintfTaskPo
 use crate::app_exit::{self, WindowsClosed};
 use crate::boot_resolve::{BalloonDecision, GhostDecision};
 use crate::emo2_boot;
+use crate::emo2_boot::runtime_boot::CueSinkSources;
 use crate::input_events;
 use crate::menu;
 use crate::placement;
 use crate::readme;
 use crate::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
+
+#[path = "ghost_session_runtime.rs"]
+mod ghost_session_runtime;
+pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place};
 
 /// 系の登録をプロセスに 1 回・1 か所から行う（要件 2.1・2.2・3.3）。
 ///
@@ -64,6 +69,7 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
     readme::register_readme_drain(world);
     emo2_boot::ghost_switch::register_change_drain(world);
     emo2_boot::shell_balloon_switch::register_switch_drain(world);
+    emo2_boot::reload::register(world);
     input_events::user_break::register_user_break_drain(world);
     menu::register_menu_poll(world);
     input_events::balloon::register_balloon_leave_system(world);
@@ -416,6 +422,9 @@ pub(crate) struct GhostSession {
     /// seriko の送り手の複製（シェル・バルーンの差し替えを seriko へ頼む口）。結線ありの腕だけが
     /// 持ち、テスト用の組み立てと LogSink の腕は `None`。降ろす最初の段で落とす（要件 8.5）。
     seriko_sink: Option<areka_seriko::SerikoSink>,
+    /// 受け口の送出端の束（実行系を組み直すたびに複製して sink を組む・areka-P0-mcp-reload 要件 4.2）。
+    /// 結線ありの腕だけが持つ。束にも seriko の送り手が載るので、降ろす最初の段で落とす。
+    sinks: Option<CueSinkSources>,
     /// kanade への送出端の写し（実行系が無ければ `None`）。実行系から毎回引かずに持つのは、
     /// テストが実行系を起こさずに送出端だけを差せるようにするため（[`GhostSession::for_test`]）。
     kanade: Option<Sender<KanadeMsg>>,
@@ -487,6 +496,42 @@ impl GhostSession {
         }
     }
 
+    /// 実行系だけを外す（窓の側＝seriko・ticker・送り手・束は残る・areka-P0-mcp-reload 要件 4.2）。
+    /// kanade の送出端も外す。実行系が無ければ `None`。
+    pub(crate) fn split_runtime(&mut self) -> Option<areka_ghost::GhostRuntime> {
+        self.kanade = None;
+        self.ghost.take()
+    }
+
+    /// 新しい実行系を付け、kanade の送出端を写す（要件 4.2）。付いていた実行系は降ろさずに
+    /// 落ちるので、先に [`GhostSession::split_runtime`] で外しておくこと（外し忘れは `error!`）。
+    pub(crate) fn attach_runtime(&mut self, runtime: areka_ghost::GhostRuntime) {
+        if self.ghost.is_some() {
+            tracing::error!(
+                ghost_dir = %self.ghost_dir.display(),
+                "実行系を外さずに付け直した（前の実行系は降ろさずに落ちる）"
+            );
+        }
+        self.kanade = Some(runtime.kanade().clone());
+        self.ghost = Some(runtime);
+    }
+
+    /// 受け口の送出端の束（結線ありの腕だけ `Some`・要件 4.2）。
+    pub(crate) fn sink_sources(&self) -> Option<&CueSinkSources> {
+        self.sinks.as_ref()
+    }
+
+    /// ゴーストの名前を替える（実行系へ委ねる・要件 7.3）。実行系が無ければ偽。
+    pub(crate) fn set_names(&mut self, names: GhostNames) -> bool {
+        match self.ghost.as_mut() {
+            Some(runtime) => {
+                runtime.set_names(names);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// テスト用の組み立てに記憶の書き手を持たせる（差し替えの後始末の記憶を観測するため）。
     #[cfg(test)]
     pub(crate) fn with_memory_publisher(
@@ -513,6 +558,7 @@ impl GhostSession {
             seriko: None,
             loop_ticker: None,
             seriko_sink: None,
+            sinks: None,
             kanade,
             ghost_dir,
             logsink_fallback: false,
@@ -533,7 +579,7 @@ impl GhostSession {
         &self.ghost_dir
     }
 
-    /// 降ろす（要件 1.1・1.3・1.5・1.6）: ① loop ticker の停止（seriko の送り手の複製も落とす）
+    /// 降ろす（要件 1.1・1.3・1.5・1.6）: ① loop ticker の停止（seriko の送り手の複製と束も落とす）
     /// → ② ゴースト実行系の終了
     /// （`reason` を渡す）→ ③ seriko の join。無い段は飛ばし、②③ の失敗は `error!` の上で
     /// `Err` を返して以降を飛ばす。perf の最終報告はプロセスに 1 回なので呼び手が後で行う。
@@ -583,6 +629,8 @@ impl GhostSession {
         // セッションが持つ seriko の送り手の複製（差し替えの口）も ① で落とす。残すと self の残りの欄
         // として関数の終わりまで生き、③ の join が「全 Sender drop」を待ち続けて hang する（要件 8.5）。
         drop(self.seriko_sink);
+        // 受け口の送出端の束も同じ理由で ① で落とす（束の seriko の送り手・areka-P0-mcp-reload 要件 4.2）。
+        drop(self.sinks);
 
         // ② 終了握手（task 5.2・design「終了握手（R6）」・DD-10）: boot 済み（`Some`）のときのみ
         // `shutdown` を呼ぶ。終了理由は呼び手が渡す（`fn main` は `CloseReason::User { scope: 0 }`＝
@@ -723,6 +771,7 @@ pub(crate) fn boot_ghost(
         seriko: None,
         loop_ticker: None,
         seriko_sink: None,
+        sinks: None,
         ghost_dir: ghost_root,
         logsink_fallback: true,
         #[cfg(test)]
@@ -791,35 +840,10 @@ fn boot_wired(
         return Err(BootWiringFailed);
     }
     tracing::info!("実 sink 結線で起動しました（emo2-boot wire 成立・SERIKO ループ ticker 稼働）");
-    // マウス配信資源を World へ結線（task 3.1・design「main.rs＋wire_mouse_input」・
-    // DD-IE-9）: kanade Sender クローンで MouseWiring（NonSend・Presenter）を挿入する。
-    // 挿入は wire_emo2_boot 成功後＝Emo2Wiring 挿入済みゆえ presenter 経由の region 解決が
-    // 成立する（Emo2Wiring 挿入と同位置・同型・self-gating）。窓へのハンドラ登録は task 3.2。
+    // 実行系に結びつく窓側の結線（マウス・メニューと枠の登記・置換語・記憶・選択肢の送り）は
+    // [`ghost_session_runtime::rewire_runtime_consumers`] が持つ（areka-P0-mcp-reload 13.4・純移動）。
     if let Some(runtime) = outcome.ghost.as_ref() {
-        let sender = runtime.kanade().clone();
-        input_events::wire_mouse_input(world, sender);
-        // 右クリックメニューの結線（areka-P0-popup-menu-minimal）: 終了の項目が上の入力の結線を使う。
-        menu::wire_menu(world, runtime.kanade().clone());
-        // 「ゴースト」枠の登記（要件 1.12）: `wire_menu` が登記の口を新品にするので、起こすたびにやり直す。
-        menu::ghost_frame::register(world);
-        // 「シェル」「バルーン」枠の登記（shell-balloon-switch 要件 1.5・11.9）: 同じ理由で起こすたびにやり直す。
-        menu::shell_frame::register(world);
-        menu::balloon_frame::register(world);
-        // 「インストール」枠の登記（ghost-install 要件 1.8）: 同じ理由で起こすたびにやり直す。
-        menu::install_frame::register(world);
-        // 「置き場を追加…」「置き場を外す」枠の登記（baseware-root-list 要件 6.1・7.1）: 同じ理由で起こすたびにやり直す。
-        menu::roots_frame::register(world);
-        // 「ネットワーク更新」枠の登記（network-update 要件 1.2）: 同じ理由で起こすたびにやり直す。
-        menu::update_frame::register(world);
-        // 「シェル位置初期化」枠の登記（move-canon 要件 8.1）: 同じ理由で起こすたびにやり直す。
-        menu::reset_pos_frame::register(world);
-        // 置換語 %lastghostname・%lastobjectname の載せ直し（記憶の置き場は起こすたびに新しくなる）。
-        crate::install::names::reseed(world, runtime);
-        // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: wire_mouse_input とは
-        // 別行の additive 挿入。ゴースト窓を保持する同一 World（`wire_mouse_input` と同経路）へ
-        // sylphya publisher clone を持つ PersistWiring（NonSend）を差し、DragEnd→persist_entries の
-        // write-through 導管を確立する。続けて起動成功時の記憶を書く（baseware-root-layout 要件 3）。
-        crate::on_boot_ok(world, runtime, ghost, balloon);
+        ghost_session_runtime::rewire_runtime_consumers(world, runtime, ghost, balloon);
     }
     // バルーン選択肢対話配線を World へ結線（task 6.2・design「main.rs＋wire_balloon_choice」・
     // R4.3/5.5/8.1）: mpsc チャネル生成＋`BalloonWiring`／`ChoiceSelectionInbox`（NonSend）挿入。
@@ -827,21 +851,13 @@ fn boot_wired(
     // spawn 直後（`attach_balloon_pointer_handlers`）が担う。balloon ハンドラは `Emo2Wiring` を
     // self-gate するため wired 経路でのみ意味を持つ（`wire_mouse_input` と同じ gating・DD-IE-9 前例）。
     input_events::balloon::wire_balloon_choice(world);
-    // 選択確定通知の受信結線（areka-P0-choice-select-events task 5・design C1 ChoiceDrain・
-    // Req1.1/1.2/1.5/1.6/3.7）: 直上 `wire_balloon_choice` が挿入した `ChoiceSelectionInbox`
-    // （precondition）を毎フレーム drain し dispatcher の inbox 経由で kanade へ全件転送する系（登録は
-    // [`register_systems`]）の送り口を置く。送り先が dispatcher なのは、押下の選択を再生の
-    // `ChoiceWaiting` と同じ inbox に並べて追い越させないため（areka-P0-balloon-text-bugs 件 1・案 (b)）。
-    // 位置・様式は `wire_mouse_input`（上方の同 boot スロット）と同型——Sender クローンを持つ NonSend 資源挿入。
-    if let Some(runtime) = outcome.ghost.as_ref() {
-        input_events::choice_drain::wire_choice_drain(world, runtime.dispatcher().clone());
-    }
     Ok(GhostSession {
         kanade: outcome.ghost.as_ref().map(|r| r.kanade().clone()),
         ghost: outcome.ghost,
         seriko: outcome.seriko,
         loop_ticker: outcome.loop_ticker,
         seriko_sink: outcome.seriko_sink,
+        sinks: outcome.sources,
         ghost_dir,
         logsink_fallback: false,
         #[cfg(test)]
@@ -888,3 +904,7 @@ mod shell_balloon_switch_session_update_tests;
 #[cfg(test)]
 #[path = "ghost_session_switch_translate_tests.rs"]
 mod switch_translate_tests;
+
+#[cfg(test)]
+#[path = "ghost_session_reload_tests.rs"]
+mod reload_tests;

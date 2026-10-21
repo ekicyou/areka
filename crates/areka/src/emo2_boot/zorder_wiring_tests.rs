@@ -278,11 +278,15 @@ fn t_zwi04_work_placed_after_the_chain_apply_is_one_heartbeat_late() {
 // ---------------------------------------------------------------------------
 
 /// 受け渡し口・入口の登録・受け渡し構造への引き渡しが、本番の結線に在る（task 6.2 の 3 点）。
+///
+/// 受け口と入口の登録は実行系の側の起動（`runtime_boot.rs`・areka-P0-mcp-reload 要件 4.2）へ
+/// 移ったので、そこは `runtime_boot.rs` の字面で押さえる（窓の側の送出端は束で渡る）。
 #[test]
 fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
     let raw = include_str!("mod.rs");
     let code = code_only(raw);
     let squeezed = squeeze(&code);
+    let runtime_squeezed = squeeze(&code_only(include_str!("runtime_boot.rs")));
 
     assert!(
         squeezed.contains(
@@ -291,14 +295,14 @@ fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
         "指令の受け渡し口（チャネル 1 組）が本文に無い: {squeezed}"
     );
     assert!(
-        squeezed.contains("let zorder_sink = ZOrderCueSink::new(zorder_tx);"),
-        "受け口を送出端から組む行が本文に無い"
+        squeezed.contains("zorder_tx, };"),
+        "送出端が受け口の送出端の束（CueSinkSources）へ渡されていない"
     );
     assert!(
-        squeezed.contains(
-            "sinks: vec![ Box::new(surface_sink), Box::new(clocked_text_sink), Box::new(move_sink), Box::new(lifecycle_sink), Box::new(zorder_sink), Box::new(readme_sink), Box::new(no_user_break_sink), Box::new(change_sink), Box::new(install_sink), Box::new(update_sink), Box::new(switch_sink), ],"
+        runtime_squeezed.contains(
+            "vec![ Box::new(surface), Box::new(ClockedTextSink::new(text, clock.clone())), Box::new(MoveCueSink::new(move_tx)), Box::new(BalloonLifecycleSink::new(lifecycle_tx, clock)), Box::new(ZOrderCueSink::new(zorder_tx)), Box::new(ReadmeCueSink::new(readme_tx)), Box::new(NoUserBreakCueSink::new(no_user_break_tx)), Box::new(ChangeCueSink::new(change_tx)), Box::new(InstallCueSink::new(crate::install::desk::raw_sender(world))), Box::new(UpdateCueSink::new(crate::update::desk::raw_sender(world))), Box::new(SwitchCueSink::new(switch_tx)), Box::new(ReloadCueSink::new(reload_tx)), ];"
         ),
-        "入口の登録（配送の sinks）が既存 4 本＋重なりの受け口＋説明書の受け口＋中断を禁じる旗の受け口＋切替の受け口＋インストールの受け口＋更新の受け口＋シェル・バルーンの切替の受け口の形になっていない"
+        "入口の登録（配送の sinks）が既存 4 本＋重なりの受け口＋説明書の受け口＋中断を禁じる旗の受け口＋切替の受け口＋インストールの受け口＋更新の受け口＋シェル・バルーンの切替の受け口＋読み直しの受け口の形になっていない"
     );
     assert!(
         squeezed.contains("lifecycle_rx, zorder_rx,"),

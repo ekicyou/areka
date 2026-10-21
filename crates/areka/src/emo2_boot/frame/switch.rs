@@ -34,6 +34,7 @@ use crate::boot_config::BootContext;
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, record_last_balloon, record_last_shell};
 use crate::emo2_boot::assets::actor_keyed_balloon_tables;
 use crate::emo2_boot::ghost_switch::SwitchInFlight;
+use crate::emo2_boot::reload;
 use crate::emo2_boot::shell_balloon_resolve::SkinCandidate;
 use crate::emo2_boot::shell_balloon_switch::{
     SkinKind, SkinSwitchInFlight, SkinSwitchStage, SwapFinish, skin_ref_name, skin_ref_path,
@@ -57,14 +58,18 @@ pub(super) fn run_switch_phase(wiring: &mut Emo2Wiring, world: &mut World) {
     let Some(mut flight) = world.remove_non_send::<SkinSwitchInFlight>() else {
         return;
     };
+    // 読み直しの窓口へ相の終わりを告げる鍵（相は印を外して進むので、外した印から控える）。
+    let key = (flight.kind, flight.target.dir.clone());
     let keep = match flight.stage {
         SkinSwitchStage::Waiting { .. } => {
             step_waiting(&mut flight, wiring, world).then_some(flight)
         }
         SkinSwitchStage::Committed { .. } => step_committed(flight, wiring, world),
     };
-    if let Some(flight) = keep {
-        world.insert_non_send(flight);
+    match keep {
+        Some(flight) => world.insert_non_send(flight),
+        // 完了・中止・取りやめ・失敗のどれでも、相が終わったら 1 度だけ告げる。
+        None => reload::skin_phase_ended(world, key.0, &key.1),
     }
 }
 
@@ -266,6 +271,12 @@ fn commit(
         return false;
     };
     let (targets, replace, finish) = split(built, epoch);
+    // seriko は差し替えの依頼で静的な着せ替えを新しいシェルの既定へ置き直す。結線の写しも依頼が届いた
+    // 時点で置き直す（ghost の読み直しで控える着せ替えの基準・areka-P0-mcp-reload 要件 3.8）。
+    let new_static = match &replace {
+        SerikoReplace::Shell { static_binds, .. } => Some(static_binds.clone()),
+        SerikoReplace::Balloon { .. } => None,
+    };
     let mut replies = Vec::new();
     let mut receivers = Vec::new();
     for &(scope, ..) in &targets {
@@ -296,6 +307,9 @@ fn commit(
             .unwrap_or_else(PoisonError::into_inner)
             .take();
         return false;
+    }
+    if let Some(new_static) = new_static {
+        wiring.static_binds = new_static;
     }
     flight.stage = SkinSwitchStage::Committed {
         epoch,
@@ -464,6 +478,11 @@ fn finish_shell(
             "実行系が無いので今のシェルを書き換えられない（更新の対象とメニューの印は古いシェルのまま）"
         );
     }
+    // 読み直し（areka-P0-mcp-reload 要件 5.3）は `LastShell` も `OnShellChanged` も出さない。
+    if reload::skin_is_reload(world, SkinKind::Shell, &target.dir) {
+        reload::skin_applied(world);
+        return;
+    }
     record_memory(world, SkinKind::Shell, |p| {
         record_last_shell(p, &target.folder)
     });
@@ -493,6 +512,11 @@ fn finish_balloon(
         runtime.set_balloon_background(actor, background);
         wiring.balloon_models.insert(scope, model);
         wiring.balloon_visibility.forget_scope(scope);
+    }
+    // 読み直し（areka-P0-mcp-reload 要件 6.3）は決め方も `LastBalloon` も `OnBalloonChange` も替えない。
+    if reload::skin_is_reload(world, SkinKind::Balloon, &target.dir) {
+        reload::skin_applied(world);
+        return;
     }
     match world.get_resource_mut::<BootContext>() {
         // 記憶に書くので、これが次の起動の選び方になる（`BalloonRoute` に腕を足さない）。

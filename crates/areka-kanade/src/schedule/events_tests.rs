@@ -211,8 +211,10 @@ fn on_close_notify_is_notify_with_reason_and_derived_status() {
 /// 足した（51→53・いずれも正典固定 ID）。
 /// シェル位置初期化の `OnResetWindowPos` は move-canon 4.1 で同じ前例に倣い足した（53→54・
 /// 正典固定 ID）。
+/// shiori の読み直しの `OnDestroy` は mcp-reload 2.2 で同じ前例に倣い `OnClose` の直後へ足した
+/// （54→55・正典固定 ID・語を足すたびに名前が競合しないようテスト名から件数を外した）。
 #[test]
-fn allowed_event_ids_are_exactly_the_fifty_four_and_exclude_ontalk_onhour() {
+fn allowed_event_ids_are_exactly_the_listed_set_and_exclude_ontalk_onhour() {
     assert_eq!(
         ALLOWED_EVENT_IDS,
         &[
@@ -222,6 +224,7 @@ fn allowed_event_ids_are_exactly_the_fifty_four_and_exclude_ontalk_onhour() {
             "basewareversion",
             "OnSecondChange",
             "OnClose",
+            "OnDestroy",
             "OnMouseMove",
             "OnMouseDoubleClick",
             "OnChoiceSelectEx",

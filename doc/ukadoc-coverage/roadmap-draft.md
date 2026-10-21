@@ -421,6 +421,21 @@ spec 名の案の欄は変えていない。足した行の中身は `stage = "A
 塊を数えた）で、うち束を持つ行が **37 行**・`none = true` の行が **14 行**である（3 つとも数え直した値）。
 `[briefs].count` はこの 51 に合わせ、`snapshot_on` は **2026-10-18** にした。
 
+**2026-10-19 の付け替えと追加（`areka-P0-mcp-reload`）**: `areka-P0-mcp-reload` の行を 1 行足し、
+`areka-P0-balloon-canon-residue` の `owner_count` を 22 から 21 へ直した。`areka-P0-mcp-reload` が MCP の `reload` と同じ
+入口で `\![reload,ghost]`・`\![reload,shell]`・`\![reload,balloon]`・`\![reload,shiori]`・`\![reload,descript,パラメータ]`
+の 5 つを読み直すようにしたので、台帳 `ledger/sakura-script.toml` の 5 項目を実装済みへ移し、宛先をこの spec にした。
+そのうち `\![reload,balloon]`（`ukadoc:list_sakura_script:_5c_21_5breload_2cballoon_5d:1`）は
+`areka-P0-balloon-canon-residue` から移した（残りの 4 項目はそれまで宛先が空だった）。5 項目は `linkage.md` の 2 つの束に
+またがる（「切替」3・「開発者機能」2）ので、束の欄にはいちばん多い「切替」を書いた。段階 B の表の「切替」の行は、
+`areka-P0-balloon-canon-residue`（1 件）を外してこの spec（3 件）を足し、段階 E の表の「開発者機能」の行は
+**0 本**からこの spec の件数付き（2 件）へ替えた。「切替」の束の構成は **32 件**、「開発者機能」は **20 件**
+（`linkage.md` の `members` を数えた）で、3 件・2 件はどちらも ⑴（全数）にも ⑵（過半）にも当たらないので、候補 spec
+名の案の欄は変えていない。足した行の中身は `stage = "B"`・`bundle = "切替"`・`owner_count = 5`・`wave = "C9-④"` で、
+段階は「切替」が順位表で置かれている段階の写し、ウェーブは正本のロードマップの写しである。行数は **52 行**
+（`[[spec]]` の塊を数えた）で、うち束を持つ行が **38 行**・`none = true` の行が **14 行**である（3 つとも数え直した値）。
+`[briefs].count` はこの 52 に合わせ、`snapshot_on` は **2026-10-19** にした。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -455,8 +470,8 @@ spec 名の案の欄は変えていない。足した行の中身は `stage = "A
 
 ```toml
 [briefs]
-count = 51
-snapshot_on = "2026-10-18"
+count = 52
+snapshot_on = "2026-10-19"
 ```
 
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
@@ -545,7 +560,7 @@ wave = "W13"
 name = "areka-P0-balloon-canon-residue"
 stage = "A"
 bundle = "バルーンの付属画像"
-owner_count = 22
+owner_count = 21
 wave = "W14"
 
 [[spec]]
@@ -855,6 +870,13 @@ stage = "A"
 bundle = "窓の配置と重なり"
 owner_count = 6
 wave = "v0.0.3"
+
+[[spec]]
+name = "areka-P0-mcp-reload"
+stage = "B"
+bundle = "切替"
+owner_count = 5
+wave = "C9-④"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -902,7 +924,7 @@ spec 台帳で、この表はそれを写した写真である。
 | ---: | --- | --- | --- | --- |
 | 1 | インストール | `areka-P0-nar-install`（同じ綴りの既存 spec と重なる・裁定待ち） | `areka-P0-nar-install`（A0・11 件）／`areka-P0-ghost-install`（B5-②・12 件） | 第 3 波 |
 | 1 | 更新 | `areka-P0-network-update`（同じ綴りの既存 spec と重なる・裁定待ち） | `areka-P0-network-update`（A4・1 件） | 第 3 波 |
-| 2 | 切替 | `areka-P0-shell-balloon-switch` | `areka-P0-currentghost-property-tree`（W15・4 件）／`areka-P0-sakura-time-directives`（W16・2 件）／`areka-P0-balloon-canon-residue`（W14・1 件）／`areka-P0-kero-balloon`（完了・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・3 件）／`areka-P0-ghost-change-name-resolution`（B4-②・2 件）／`areka-P0-shell-balloon-switch`（B8・5 件） | 第 3 波 |
+| 2 | 切替 | `areka-P0-shell-balloon-switch` | `areka-P0-currentghost-property-tree`（W15・4 件）／`areka-P0-sakura-time-directives`（W16・2 件）／`areka-P0-kero-balloon`（完了・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・3 件）／`areka-P0-ghost-change-name-resolution`（B4-②・2 件）／`areka-P0-shell-balloon-switch`（B8・5 件）／`areka-P0-mcp-reload`（C9-④・3 件） | 第 3 波 |
 | 3 | 消滅 | `areka-P0-vanish-canon` | **0 本** | 第 3 波 |
 | 4 | 投げ込み | `areka-P0-file-drop`（既存 spec が引受先・構成 10 件のうち 2 件） | `areka-P0-file-drop`（B6・2 件） | 第 3 波 |
 | 5 | 休止と復帰 | `areka-P0-shiori-cache-suspend` | **0 本** | 第 3 波 |
@@ -958,7 +980,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 順位 | 束 | 候補 spec 名の案 | 依存する既存 spec | 波の案 |
 | ---: | --- | --- | --- | --- |
 | 1 | 外部アプリ | `areka-P0-external-app-bridge` | `areka-P0-open-external-tags`（C4-⑮・6 件） | 第 6 波 |
-| 2 | 開発者機能 | `areka-P0-developer-tools` | **0 本** | 第 6 波 |
+| 2 | 開発者機能 | `areka-P0-developer-tools` | `areka-P0-mcp-reload`（C9-④・2 件） | 第 6 波 |
 | 3 | ヘッドライン | `areka-P0-headline-host` | `areka-P0-property-catalog-lists`（W16・6 件） | 第 6 波 |
 | 4 | トランスレータ | `areka-P0-translator-canon`（残余） | `areka-P0-makoto-dll-host`（W16・4 件）／`areka-P0-translate-pipeline`（W15・2 件） | 第 6 波 |
 | 5 | 薦める場所 | `areka-P0-recommend-sites` | **0 本** | 第 6 波 |

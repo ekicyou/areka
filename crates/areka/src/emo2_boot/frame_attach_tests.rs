@@ -899,3 +899,7 @@ fn attach_hands_the_box_bundle_and_the_balloon_folder_name_to_the_text_layer() {
         "警告の名前の欄はバルーンのフォルダ名 {balloon_name}: {warned:?}"
     );
 }
+
+// ghost の読み直しで控えた面を装着の相が出し直す檻（areka-P0-mcp-reload 要件 3.8）。
+#[path = "frame_attach_carry_tests.rs"]
+mod carry_tests;

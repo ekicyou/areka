@@ -2677,31 +2677,33 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2cballoon_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = "areka-P0-balloon-canon-residue"
+owner = "areka-P0-mcp-reload"
 priority = "B2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンの定義を読み直せず、書き換えた設定が会話の途中で反映されない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。今のバルーンと同じフォルダのバルーンをディスクから読み直し、選び直さずに台詞の切れ目で差し替える。OnBalloonChange と記憶の書き込みはしない。
+壊れ方: 無い。ReloadCueSink（crates/areka/src/emo2_boot/reload_cue.rs）が名前と第 1 引数の組で自分を選び（綴りの振り分けは reload_args.rs の parse_script）、読み直しの要求を UI 側へ運ぶ。MCP の reload と同じ 1 つの入口で読み直し、ゴーストの切替・シェルとバルーンの切替・読み直し・更新・インストールの最中なら warn! を残して断る。
+ログ: 出る（読み直しの終わりに対象・ゴースト・成否を 1 件残す。失敗は error 種別で get_log から読める。断ったときと送出の失敗は warn!。第 1 引数が担当外の reload は debug!）。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (reload, balloon) を読み直しの受け口（ReloadCueSink）へ登記する。
 [群: バルーンの見た目と切り替え]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![reload。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![reloadsurface の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2cdescript_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-mcp-reload"
 priority = "E2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、descript の設定を読み直せず、書き換えた設定が会話の途中で反映されない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。パラメータを半角スペースで区切った語のうち ghost・shell・balloon に当たるものの descript.txt を読み直し（パラメータが無ければ 3 つとも）、動作中に使う値を差し替える。SHIORI は読み直さず、SHIORI イベントも送らない。第 3 引数より後ろは見ない（SSP の実測と同じ）。areka に無い種類（headline・plugin・language・calendar.skin・calendar.plugin）と知らない語は、その語ごとに warn! を残して飛ばす。
+壊れ方: 無い。ReloadCueSink（crates/areka/src/emo2_boot/reload_cue.rs）が名前と第 1 引数の組で自分を選び（綴りの振り分けは reload_args.rs の parse_script）、読み直しの要求を UI 側へ運ぶ。MCP の reload と同じ 1 つの入口で読み直し、ゴーストの切替・シェルとバルーンの切替・読み直し・更新・インストールの最中なら warn! を残して断る。
+ログ: 出る（読み直しの終わりに対象・ゴースト・成否を 1 件残す。失敗は error 種別で get_log から読める。断ったときと送出の失敗は warn!。第 1 引数が担当外の reload は debug!）。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (reload, descript) を読み直しの受け口（ReloadCueSink）へ登記する。
 [群: 読み込み直しと差し替え]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![reload。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![reloadsurface の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -2718,21 +2720,22 @@ links = [
 ]
 note = """
 [別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び descript が、長い側の descript,パラメータ の先頭と 1 語ずつ一致する]
-[狭さ: パラメータを取らない 1 引数形。areka はこの綴りもキャリアへ載せるだけで、写像先と同じく誰も消費しないので扱いは根と変わらない]
+[狭さ: パラメータを取らない 1 引数形。areka はこの綴りを写像先と同じ ReloadCueSink が (reload, descript) の組で受け、ghost・shell・balloon の 3 つの descript.txt を読み直すので扱いは根と変わらない]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![reload。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![reloadsurface の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2cghost_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-mcp-reload"
 priority = "B2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、ゴースト一式を読み直せず、差し替えたファイルが反映されない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。今のゴーストを同じフォルダのゴーストとして降ろして起こし直し、辞書・descript.txt・シェル・バルーンをディスクから読み直す。起動の知らせ（台詞を求める GET）は送らず、情報の通知はふつうの起動と同じく送る。
+壊れ方: 無い。ReloadCueSink（crates/areka/src/emo2_boot/reload_cue.rs）が名前と第 1 引数の組で自分を選び（綴りの振り分けは reload_args.rs の parse_script）、読み直しの要求を UI 側へ運ぶ。MCP の reload と同じ 1 つの入口で読み直し、ゴーストの切替・シェルとバルーンの切替・読み直し・更新・インストールの最中なら warn! を残して断る。
+ログ: 出る（読み直しの終わりに対象・ゴースト・成否を 1 件残す。失敗は error 種別で get_log から読める。断ったときと送出の失敗は warn!。第 1 引数が担当外の reload は debug!）。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (reload, ghost) を読み直しの受け口（ReloadCueSink）へ登記する。
 [群: 読み込み直しと差し替え]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![reload。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![reloadsurface の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -2753,31 +2756,33 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2cshell_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-mcp-reload"
 priority = "B2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、シェルの定義を読み直せず、差し替えた画像が反映されない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。今のシェルと同じフォルダのシェルをディスクから読み直し、台詞の切れ目で差し替える。OnShellChanged と記憶の書き込みはしない。
+壊れ方: 無い。ReloadCueSink（crates/areka/src/emo2_boot/reload_cue.rs）が名前と第 1 引数の組で自分を選び（綴りの振り分けは reload_args.rs の parse_script）、読み直しの要求を UI 側へ運ぶ。MCP の reload と同じ 1 つの入口で読み直し、ゴーストの切替・シェルとバルーンの切替・読み直し・更新・インストールの最中なら warn! を残して断る。
+ログ: 出る（読み直しの終わりに対象・ゴースト・成否を 1 件残す。失敗は error 種別で get_log から読める。断ったときと送出の失敗は warn!。第 1 引数が担当外の reload は debug!）。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (reload, shell) を読み直しの受け口（ReloadCueSink）へ登記する。
 [群: 読み込み直しと差し替え]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![reload。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![reloadsurface の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2cshiori_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-mcp-reload"
 priority = "E2"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、SHIORI を読み直せず、書き換えた辞書が反映されない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。窓を閉じず、今の SHIORI へ NOTIFY OnDestroy（Reference0＝reload）を送ってから unload し、同じゴーストの SHIORI を load し直す。台詞を求める GET は送らない。
+壊れ方: 無い。ReloadCueSink（crates/areka/src/emo2_boot/reload_cue.rs）が名前と第 1 引数の組で自分を選び（綴りの振り分けは reload_args.rs の parse_script）、読み直しの要求を UI 側へ運ぶ。MCP の reload と同じ 1 つの入口で読み直し、ゴーストの切替・シェルとバルーンの切替・読み直し・更新・インストールの最中なら warn! を残して断る。
+ログ: 出る（読み直しの終わりに対象・ゴースト・成否を 1 件残す。失敗は error 種別で get_log から読める。断ったときと送出の失敗は warn!。第 1 引数が担当外の reload は debug!）。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (reload, shiori) を読み直しの受け口（ReloadCueSink）へ登記する。
 [群: 読み込み直しと差し替え]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![reload。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![reloadsurface の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -2794,7 +2799,7 @@ links = [
 ]
 note = """
 [別名の根拠: 正典本文の注記の逐語「[旧仕様]サーフェスをリロードする。SSPでは\\![reload,shell]と同じ。」。置き換え先が本文に名指しされているので規則 4 の順 1 で決まる]
-[狭さ: 引数を取らない旧い綴り。areka はこの綴りもキャリアへ載せるだけで、写像先と同じく誰も消費しないので扱いは根と変わらない]
+[狭さ: 引数を取らない旧い綴り。areka はこの綴りを写像先と同じ ReloadCueSink が名前 reloadsurface（選別子なし）で受け、reload,shell と同じ読み直しをするので扱いは根と変わらない]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![reloadsurface。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
 

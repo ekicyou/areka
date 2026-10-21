@@ -288,16 +288,6 @@ pub(crate) fn request_skin_switch_with(
         origin = ?req.origin,
         "シェル・バルーンの切替要求を受けた"
     );
-    let build = spawn_switch_build(match req.kind {
-        SkinKind::Shell => SwitchBuildRequest::Shell {
-            ghost_root: ctx.ghost_dir.clone(),
-            folder: target.folder.clone(),
-            balloon_dir: ctx.balloon_dir.clone(),
-        },
-        SkinKind::Balloon => SwitchBuildRequest::Balloon {
-            dir: target.dir.clone(),
-        },
-    });
     let marked = req.kind == SkinKind::Shell
         && matches!(
             req.origin,
@@ -321,6 +311,30 @@ pub(crate) fn request_skin_switch_with(
             method: ShioriMethod::Get,
         }
     });
+    accept_skin(world, &ctx, req.kind, target, raise)
+}
+
+/// 受理の後半: 背景の資産づくり → kanade へ台詞の切れ目の待ち（`raise` の印つき）→ 進行中の印、の順。
+/// 送れなければ `error!(skin_switch_send_failed)` で印を置かない。判定はしない（呼び手が済ませる）。
+///
+/// 呼び手は入口 [`request_skin_switch_with`] と読み直しの窓口（`reload.rs`・`raise` は無し）。
+pub(crate) fn accept_skin(
+    world: &mut World,
+    ctx: &SwitchContext,
+    kind: SkinKind,
+    target: SkinCandidate,
+    raise: Option<GapRaise>,
+) -> SkinVerdict {
+    let build = spawn_switch_build(match kind {
+        SkinKind::Shell => SwitchBuildRequest::Shell {
+            ghost_root: ctx.ghost_dir.clone(),
+            folder: target.folder.clone(),
+            balloon_dir: ctx.balloon_dir.clone(),
+        },
+        SkinKind::Balloon => SwitchBuildRequest::Balloon {
+            dir: target.dir.clone(),
+        },
+    });
     let (reply, gap) = reply_channel();
     if ctx
         .kanade
@@ -329,14 +343,14 @@ pub(crate) fn request_skin_switch_with(
     {
         tracing::error!(
             event = "skin_switch_send_failed",
-            kind = ?req.kind,
+            kind = ?kind,
             to = %target.folder,
             "kanade へ台詞の切れ目の待ちを頼めなかった（kanade は止まっている）——切替を行わない"
         );
         return SkinVerdict::NoContext;
     }
     world.insert_non_send(SkinSwitchInFlight {
-        kind: req.kind,
+        kind,
         target,
         stage: SkinSwitchStage::Waiting {
             gap: Some(gap),
@@ -349,22 +363,22 @@ pub(crate) fn request_skin_switch_with(
 }
 
 /// 入口が受理に要る文脈（World から借りずに写し取ったもの）。
-struct SwitchContext {
-    roots: areka_ghost::BasewareRoots,
-    ghost_dir: std::path::PathBuf,
-    kanade: std::sync::mpsc::Sender<KanadeMsg>,
+pub(crate) struct SwitchContext {
+    pub(super) roots: areka_ghost::BasewareRoots,
+    pub(super) ghost_dir: std::path::PathBuf,
+    pub(super) kanade: std::sync::mpsc::Sender<KanadeMsg>,
     /// 今のシェルのフォルダ名（実行系のマウントの末尾・実行系が無ければ無し）。
-    current_shell: Option<String>,
+    pub(super) current_shell: Option<String>,
     /// 今のバルーンのフォルダ名（起動の文脈の写し）。
-    current_balloon: Option<String>,
+    pub(super) current_balloon: Option<String>,
     /// 今のバルーンのフォルダ（起動の文脈の写し・シェルの差し替えで配置の値を読む先）。
-    balloon_dir: std::path::PathBuf,
+    pub(super) balloon_dir: std::path::PathBuf,
 }
 
 impl SwitchContext {
     /// 置き場のゴースト・起動の文脈・結線・kanade の送出端・seriko の送り手をそろえる。欠けていれば
     /// `warn!(skin_switch_no_context)` を `reason` つきで 1 件残して `None`。
-    fn read(world: &World) -> Option<Self> {
+    pub(super) fn read(world: &World) -> Option<Self> {
         let missing = |reason: &'static str| {
             tracing::warn!(
                 event = "skin_switch_no_context",

@@ -731,6 +731,36 @@ fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
     }
 }
 
+/// 窓口が忙しいか（mcp-reload 要件 2.1）: 実行中・待ち行列・預かった上書きのどれかで真、どれも無ければ偽。
+#[test]
+fn is_busy_while_running_queued_or_holding_an_overwrite() {
+    assert!(!is_busy(&World::new()), "窓口が無ければ偽");
+    let mut rig = Rig::new();
+    assert!(!is_busy(&rig.world), "どれも無ければ偽");
+
+    rig.world.non_send_mut::<InstallDesk>().busy = true;
+    assert!(is_busy(&rig.world), "実行中");
+    rig.world.non_send_mut::<InstallDesk>().busy = false;
+
+    rig.world
+        .non_send_mut::<InstallDesk>()
+        .queue
+        .push_back(order("C:/a.nar"));
+    assert!(is_busy(&rig.world), "待ち行列");
+    rig.world.non_send_mut::<InstallDesk>().queue.clear();
+    assert!(!is_busy(&rig.world));
+
+    let tmp = TempPath::new("desk-is-busy-overwrite");
+    let root = root_with_ghost(&tmp, "A");
+    rig.world.insert_resource(boot_context(&root, "A"));
+    let _kanade = rig.put_ghost(root.ghost_dir("A"));
+    let _answer = rig.ask_overwrite(ghost_archive(&tmp, "A"));
+    rig.drain();
+    let desk = rig.world.non_send::<InstallDesk>();
+    assert!(!desk.busy && desk.queue.is_empty() && desk.overwrite.is_some());
+    assert!(is_busy(&rig.world), "預かった上書き");
+}
+
 /// 終了の後始末での窓口の片付け（task 9・要件 8.2・8.5・8.6・11.8）。
 #[path = "desk_exit_tests.rs"]
 mod exit_tests;
