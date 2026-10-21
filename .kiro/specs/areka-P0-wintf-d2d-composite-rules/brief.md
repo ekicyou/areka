@@ -112,3 +112,10 @@
 2. **ブレンドの口**: `ID2D1DeviceContext6::BlendImage`（1903 以降が要る）か、ブレンドの効果（`CLSID_D2D1Blend`）か。areka が支える Windows の下限で決まる。
 3. **クリックの透過の置き換え**: 1 ピクセルの読み戻しで今の CPU の α マスクを置き換えるか、併せ持つか。マウスが動くたびの同期の待ちの長さを測ってから決める。
 4. **WARP の答えのずれ**: 許容差 ±1 にするか、見本の画像を作り直す手順を持つか。
+
+## 2026-10-21 の書き足し（`wintf-visual-tree` の起票）
+
+- **議題 1 は決まった**: 開発者（2026-10-21・`/kiro-discovery`）「`crates\wintf\src\ecs\visual` 層のコード群は実装準備されているが採用されていない。これらを新しいビジュアル層・描画層として取り込んでほしい。D2D合成の多様化に必要と考える」＝作りかけの描画の木（`ecs/visual/draw/`・`VisualDrawContent`）を本番に上げる。上げるのは先行の `wintf-visual-tree`（描画面の下に木を置き、節ごとに重ね方・補間・変形・切り抜きを描く）。
+- **この spec の前提が変わる**: Upstream に `wintf-visual-tree` を足す（Dependencies: none → `wintf-visual-tree`）。合成の規則の型は `VisualDrawContent` の側に置く。重ね方（`D2D1_COMPOSITE_MODE`）・補間・変形・元の矩形の切り抜きの描き分けは `wintf-visual-tree` が先に描く。この spec に残るのは、ブレンド（`D2D1_BLEND_MODE`）・不透明度（`VisualFlags` の予約 `OPACITY_GROUP` を使うかは設計で）・自前の合成の入れ物と描画面への写し・1 ピクセルの読み戻し・残りの議題 2〜4。
+- **WARP の足場は `wintf-visual-tree` が作る**（Approach 5 の足場はあちらで作り、ここは使う）。議題 4（WARP の答えのずれ）も、先に着手するあちらの要件で決める。
+- **下流が 1 本増えた**: `wintf-visual-damage-redraw`（変わった範囲だけ描き直す）は、WUC の描画面が部分の `BeginDraw` を断るので、この spec の自前の合成の入れ物を描き先に使う。入れ物の形（大きさ・形式・写し方）は、部分の描き直しに使える形にする。
