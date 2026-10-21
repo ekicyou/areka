@@ -22,8 +22,14 @@
 //! # 使い方
 //!
 //! [`SampleRoot::acquire`] に検体名を渡し、**得た値を束縛したまま**パスを借りる。取得の
-//! たびに `vendors/sample_ghost/<名>.nar` を展開した原本の**使い捨ての複製**が配られ、
-//! 値を捨てた時点でその複製は消える（起動記録の無い新品で始まる＝要件 7.4）。
+//! たびに検体の書庫を展開した原本の**使い捨ての複製**が配られ、値を捨てた時点でその複製は
+//! 消える（起動記録の無い新品で始まる＝要件 7.4）。書庫の在処は登記の行の形で決まる
+//! （下の「検体を足すとき」）。
+//!
+//! URL の行の検体（`pasta-in-windows` など）は、先に取り寄せの段
+//! `pwsh -NoProfile -File <ワークツリー>\tools\sample-fetch.ps1` を 1 回回して置き場へ
+//! 書庫を取っておく（ワークツリーごとに 1 回・手順は `vendors/sample_ghost/README.md`）。
+//! 窓口は通信しない。
 //!
 //! ```rust,no_run
 //! use sample_ghost_kit::SampleRoot;
@@ -52,8 +58,19 @@
 //!
 //! # 検体を足すとき
 //!
-//! 2 手で終わる（要件 1.5）——`vendors/sample_ghost/<名>.nar` を 1 つ置き、[`SAMPLES`] に
-//! 1 行足す。検体ごとの専用関数は増やさない。
+//! 登記の行は 2 つの形のどちらかで、どちらも 2 手で終わる（要件 1.5）。検体ごとの専用関数は
+//! 増やさない。
+//!
+//! - **今の行**（[`SampleSource::Vendored`]）: `vendors/sample_ghost/<名>.nar` を 1 つ置き、
+//!   [`SAMPLES`] に 1 行足す。
+//! - **URL の行**（[`SampleSource::Fetched`]）: 書庫をリポジトリへ入れず、[`SAMPLES`] に URL を
+//!   持つ 1 行を足す。取り寄せ先は開発者が管理するもので、書庫の隣に sha256sum の形の
+//!   `<URL>.sha256` を公開していること（登記は URL だけを持ち、ハッシュも大きさも持たない）。
+//!   取り寄せの段 `tools/sample-fetch.ps1` が書庫とハッシュのファイルを置き場
+//!   `<target>\nar-samples\fetched\<名>.nar`・`<名>.nar.sha256` へ取り、いつも最新の版に
+//!   追従する。窓口は通信せず、置き場の書庫が置き場のハッシュのファイルと合うときだけ使う
+//!   （無ければ [`SampleError::FetchedNarMissing`]、合わなければ
+//!   [`SampleError::FetchedNarMismatch`]）。
 //!
 //! # 返す位置
 //!
@@ -93,6 +110,21 @@ pub struct Sample {
     pub kind: SampleKind,
     /// 同時にインストールされるバルーンの `directory` 名。
     pub balloons: &'static [&'static str],
+    /// 書庫の出どころ。
+    pub source: SampleSource,
+}
+
+/// 検体の書庫の出どころ。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SampleSource {
+    /// 書庫をリポジトリの `vendors/sample_ghost/<name>.nar` に置く行（今の行）。
+    Vendored,
+    /// 書庫を取り寄せの段が取り寄せる行（URL の行）。
+    Fetched {
+        /// 取り寄せる URL（`https://`・ログインなしに取れるもの）。隣に `<url>.sha256`（sha256sum の形）が
+        /// 公開されていること。中身が差し替わっても登記は直さない（取り寄せの段がいつも最新を取る）。
+        url: &'static str,
+    },
 }
 
 /// 検体の登記表。**検体を足す作業はここに 1 行**（要件 1.5）。
@@ -101,42 +133,59 @@ pub const SAMPLES: &[Sample] = &[
         name: "emo2",
         kind: SampleKind::Ghost,
         balloons: &["emo2-kakukaku"],
+        source: SampleSource::Vendored,
     },
     Sample {
         name: "R_POST_and_KOMAINU",
         kind: SampleKind::Ghost,
         balloons: &[],
+        source: SampleSource::Vendored,
     },
     Sample {
         name: "emo2-kakukaku-offsetdpi",
         kind: SampleKind::Balloon,
         balloons: &[],
+        source: SampleSource::Vendored,
     },
     Sample {
         name: "emo2-kakukaku-wplimit",
         kind: SampleKind::Balloon,
         balloons: &[],
+        source: SampleSource::Vendored,
     },
     Sample {
         name: "konnoyayame",
         kind: SampleKind::Ghost,
         balloons: &[],
+        source: SampleSource::Vendored,
     },
     Sample {
         name: "StayseeBalloon",
         kind: SampleKind::Balloon,
         balloons: &[],
+        source: SampleSource::Vendored,
     },
     Sample {
         name: "claudia",
         kind: SampleKind::Ghost,
         balloons: &["claudia", "claudia_vertical"],
+        source: SampleSource::Vendored,
     },
     // 同梱を名乗るが取り出し元が書庫に無い。`areka-nar` が飛ばすので同梱は 0。
     Sample {
         name: "emily4",
         kind: SampleKind::Ghost,
         balloons: &[],
+        source: SampleSource::Vendored,
+    },
+    // 窓際のぱすたさん。書庫は取り寄せの段が置き場へ取る（`tools/sample-fetch.ps1`）。
+    Sample {
+        name: "pasta-in-windows",
+        kind: SampleKind::Ghost,
+        balloons: &[],
+        source: SampleSource::Fetched {
+            url: "https://ekicyou.github.io/ghost_dev/pasta-in-windows/pasta-in-windows.nar",
+        },
     },
 ];
 
@@ -157,13 +206,18 @@ pub struct SampleRoot {
 impl SampleRoot {
     /// 検体名から検体を取得する（要件 1.1）。
     ///
-    /// `vendors/sample_ghost/<名>.nar` を展開した原本から**使い捨ての複製**を作って配る。
+    /// 検体の書庫を展開した原本から**使い捨ての複製**を作って配る。書庫は、今の行なら
+    /// `vendors/sample_ghost/<名>.nar`、URL の行なら取り寄せの段が置いた
+    /// `<target>\nar-samples\fetched\<名>.nar`（置き場の `<名>.nar.sha256` と合うものだけ）。
     ///
     /// # Errors
     ///
     /// 未登録の名前なら [`SampleError::UnknownSample`]（既知の名前の一覧を含む・要件 1.4）。
-    /// 展開結果が登記と食い違えば [`SampleError::RegistryMismatch`]。`.nar` の取り回しの
-    /// 失敗は [`SampleError::Nar`]・[`SampleError::Io`]・[`SampleError::TargetDirNotFound`]。
+    /// 展開結果が登記と食い違えば [`SampleError::RegistryMismatch`]。URL の行で置き場の
+    /// 書庫かハッシュのファイルが無ければ [`SampleError::FetchedNarMissing`]、ハッシュの
+    /// ファイルの形が違えば [`SampleError::FetchedChecksumInvalid`]、合わなければ
+    /// [`SampleError::FetchedNarMismatch`]。`.nar` の取り回しの失敗は [`SampleError::Nar`]・
+    /// [`SampleError::Io`]・[`SampleError::TargetDirNotFound`]。
     pub fn acquire(name: &str) -> Result<SampleRoot, SampleError> {
         let sample = registered(name)?;
         SampleRoot::from_copy(sample, devroot::fresh_root(sample.name)?)
@@ -366,6 +420,37 @@ fn named_descript(bytes: &[u8], name: &str) -> Vec<u8> {
     out
 }
 
+/// URL の行の書庫を置く場所（`<名前空間>\fetched\<name>.nar`）。`nar-sample-path --fetch-list` が使う。
+///
+/// 今の行（Vendored）には置き場が無いので `Ok(None)`。
+///
+/// # Errors
+///
+/// 名前空間（ビルド成果物の置き場の下）が決まらなければ [`SampleError::TargetDirNotFound`]
+/// か [`SampleError::Io`]。
+pub fn fetched_archive_path(sample: &Sample) -> Result<Option<PathBuf>, SampleError> {
+    on_shelf(sample, fetched::fetched_path_in)
+}
+
+/// 同じく、置き場のハッシュのファイル（`<名前空間>\fetched\<name>.nar.sha256`）。
+///
+/// # Errors
+///
+/// [`fetched_archive_path`] と同じ。
+pub fn fetched_checksum_path(sample: &Sample) -> Result<Option<PathBuf>, SampleError> {
+    on_shelf(sample, fetched::fetched_checksum_path_in)
+}
+
+fn on_shelf(
+    sample: &Sample,
+    position: fn(&Path, &str) -> PathBuf,
+) -> Result<Option<PathBuf>, SampleError> {
+    match sample.source {
+        SampleSource::Vendored => Ok(None),
+        SampleSource::Fetched { .. } => Ok(Some(position(&devroot::namespace_dir()?, sample.name))),
+    }
+}
+
 /// 検体名を登記の 1 行に引き当てる（要件 1.1・1.4）。
 ///
 /// 未登録の名前を受けたら既知の名前の一覧を添えて断る。窓口も下の [`manual_paths`] も
@@ -535,13 +620,51 @@ pub enum SampleError {
         #[source]
         source: std::io::Error,
     },
+    /// URL の行の書庫か、置き場のハッシュのファイルが無い（spec `areka-P0-sample-url-fetch`
+    /// 要件 3.5）。
+    #[error("{}", fetched::missing_text(sample, path))]
+    FetchedNarMissing {
+        /// 検体名。
+        sample: &'static str,
+        /// 無かった方のファイル（書庫かハッシュのファイル）。
+        path: PathBuf,
+    },
+    /// 置き場のハッシュのファイルが sha256sum の形でない（spec `areka-P0-sample-url-fetch`
+    /// 要件 3.6）。
+    #[error("{}", fetched::invalid_text(sample, path))]
+    FetchedChecksumInvalid {
+        /// 検体名。
+        sample: &'static str,
+        /// ハッシュのファイルのパス。
+        path: PathBuf,
+    },
+    /// 置き場の書庫の SHA-256 が、置き場のハッシュのファイルと合わない
+    /// （spec `areka-P0-sample-url-fetch` 要件 3.6）。
+    #[error(
+        "{}",
+        fetched::mismatch_text(sample, path, expected_sha256, actual_sha256)
+    )]
+    FetchedNarMismatch {
+        /// 検体名。
+        sample: &'static str,
+        /// 置き場の書庫のパス。
+        path: PathBuf,
+        /// ハッシュのファイルの値（小文字へ揃えたもの）。
+        expected_sha256: String,
+        /// 得た SHA-256。
+        actual_sha256: String,
+    },
 }
 
 mod devroot;
+mod fetched;
 pub use devroot::WorkDir;
+pub use fetched::checksum_url;
 
 mod nar_writer;
 pub use nar_writer::{Corrupt, Damage, EntryBuilder, NarBuilder, fold_tree, install_txt};
+
+mod sha256;
 
 #[cfg(test)]
 #[path = "lib_tests.rs"]

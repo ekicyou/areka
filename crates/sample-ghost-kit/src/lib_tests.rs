@@ -4,7 +4,7 @@
 //!
 //! 窓口は `vendors/sample_ghost/<名>.nar` を展開した原本から**使い捨ての複製**を作って配る。
 //! だから主張は 8 本——登記した検体が登記どおりの位置（`<根>/ghost/<名>`・
-//! `<根>/balloon/<名>`）に実在し、値を捨てると複製ごと消える／未登録名は既知の 8 つを
+//! `<根>/balloon/<名>`）に実在し、値を捨てると複製ごと消える／未登録名は既知の 9 つを
 //! 含む失敗になる／同梱していないバルーン名は既知の一覧を含む失敗になる／展開結果が
 //! 登記と食い違えば理由付きの失敗になる／種別と同梱バルーンが登記されている／登記した
 //! 各 `.nar` を空の根へ展開すると要素が登記の 1 行とちょうど一致する（登記の往復）／
@@ -32,6 +32,7 @@ const GHOST_WITH_BALLOON: Sample = Sample {
     name: "probe-window",
     kind: SampleKind::Ghost,
     balloons: &[PROBE_BALLOON],
+    source: SampleSource::Vendored,
 };
 
 /// 食い違いの検査で使う登記の行（同梱バルーンを持たないゴースト）。
@@ -39,6 +40,7 @@ const GHOST_ALONE: Sample = Sample {
     name: "probe-window",
     kind: SampleKind::Ghost,
     balloons: &[],
+    source: SampleSource::Vendored,
 };
 
 /// 固定入力の同梱バルーンの `directory`。
@@ -116,16 +118,94 @@ fn refused(
     (shown, expected, installed)
 }
 
-/// 登記した 8 つの検体は、登記の行から導いた位置に実在し、値を捨てると複製ごと消える
-/// （要件 1.1・1.2・1.3・7.4）。
+/// 登記表の URL の行の `(名前, URL)`。
+fn fetched_rows() -> Vec<(&'static str, &'static str)> {
+    SAMPLES
+        .iter()
+        .filter_map(|s| match s.source {
+            SampleSource::Fetched { url } => Some((s.name, url)),
+            SampleSource::Vendored => None,
+        })
+        .collect()
+}
+
+/// 書庫をリポジトリに置く今の 8 行は `Vendored`、ほかは URL の行
+/// （spec `areka-P0-sample-url-fetch` 要件 1.1・1.4・5.2）。
+#[test]
+fn current_rows_are_registered_as_vendored() {
+    let vendored: Vec<&str> = SAMPLES
+        .iter()
+        .filter(|s| s.source == SampleSource::Vendored)
+        .map(|s| s.name)
+        .collect();
+    assert_eq!(
+        vendored,
+        [
+            "emo2",
+            "R_POST_and_KOMAINU",
+            "emo2-kakukaku-offsetdpi",
+            "emo2-kakukaku-wplimit",
+            "konnoyayame",
+            "StayseeBalloon",
+            "claudia",
+            "emily4",
+        ],
+        "今の 8 行は Vendored のまま"
+    );
+    assert_eq!(
+        fetched_rows(),
+        [(
+            "pasta-in-windows",
+            "https://ekicyou.github.io/ghost_dev/pasta-in-windows/pasta-in-windows.nar"
+        )],
+        "URL の行はぱすた 1 行"
+    );
+}
+
+/// 登記表の全部の URL の行が欄の形の判定を通る（要件 1.5・5.2）。
+/// 母数 0 で緑にしない較正: URL の行が 1 つ以上在る。
+#[test]
+fn every_fetched_row_has_a_well_formed_url_and_name() {
+    let rows = fetched_rows();
+    assert!(!rows.is_empty(), "較正: URL の行が 1 つ以上在る");
+    for (name, url) in rows {
+        fetched::fetched_row_form(name, url).unwrap_or_else(|err| panic!("{err}"));
+    }
+}
+
+/// URL の行の書庫はリポジトリに置かず、今の行の書庫は置いてある（要件 1.3・1.4・5.3）。
+#[test]
+fn only_vendored_rows_have_a_nar_in_the_repository() {
+    let rows = fetched_rows();
+    assert!(!rows.is_empty(), "較正: URL の行が 1 つ以上在る");
+    for (name, _) in rows {
+        let nar = devroot::nar_dir().join(format!("{name}.nar"));
+        assert!(
+            !nar.exists(),
+            "URL の行の書庫がリポジトリに在る: {}",
+            nar.display()
+        );
+    }
+    for sample in SAMPLES
+        .iter()
+        .filter(|s| s.source == SampleSource::Vendored)
+    {
+        let nar = devroot::nar_dir().join(format!("{}.nar", sample.name));
+        assert!(nar.is_file(), "今の行の書庫が無い: {}", nar.display());
+    }
+}
+
+/// 登記した 9 つの検体は、登記の行から導いた位置に実在し、値を捨てると複製ごと消える
+/// （要件 1.1・1.2・1.3・7.4。URL の行は spec `areka-P0-sample-url-fetch` 要件 5.4・5.6）。
 ///
 /// 位置は `<根>/<格納先>/<名>` の等式で判定する。検体ごとの第 2 の表や専用関数があれば
-/// この等式は破れる（要件 1.5）。
+/// この等式は破れる（要件 1.5）。置き場に URL の行の書庫が無ければ、その失敗の文
+/// （名前・探した場所・取り寄せの段のコマンド）で落ちる。
 #[test]
 fn every_registered_sample_lands_where_its_registry_row_says() {
-    assert_eq!(SAMPLES.len(), 8, "登記は検体 8 つ");
+    assert_eq!(SAMPLES.len(), 9, "登記は検体 9 つ");
     for sample in SAMPLES {
-        let acquired = SampleRoot::acquire(sample.name).expect("登記済みの名前は取得できるはず");
+        let acquired = SampleRoot::acquire(sample.name).unwrap_or_else(|err| panic!("{err}"));
 
         let root = acquired.root().to_path_buf();
         assert!(
@@ -177,9 +257,9 @@ fn every_registered_sample_lands_where_its_registry_row_says() {
     }
 }
 
-/// 未登録の検体名は、既知の名前 8 つを含む理由付きの失敗になる（要件 1.4）。
+/// 未登録の検体名は、既知の名前 9 つを含む理由付きの失敗になる（要件 1.4）。
 #[test]
-fn unknown_sample_fails_with_all_eight_known_names() {
+fn unknown_sample_fails_with_all_nine_known_names() {
     let err = SampleRoot::acquire("no-such-ghost").expect_err("未登録名は失敗するはず");
     let SampleError::UnknownSample { requested, known } = &err else {
         panic!("未登録名の失敗は UnknownSample であるはず: {err:?}");
@@ -196,6 +276,7 @@ fn unknown_sample_fails_with_all_eight_known_names() {
             "StayseeBalloon",
             "claudia",
             "emily4",
+            "pasta-in-windows",
         ]
     );
     let shown = err.to_string();
@@ -207,6 +288,7 @@ fn unknown_sample_fails_with_all_eight_known_names() {
         "konnoyayame",
         "StayseeBalloon",
         "emily4",
+        "pasta-in-windows",
     ] {
         assert!(shown.contains(name), "失敗の表示に {name} が無い: {shown}");
     }
@@ -412,17 +494,13 @@ fn declared_elements_with_kind(sample: &Sample) -> Vec<String> {
 fn every_sample_nar_installs_exactly_the_elements_its_registry_row_declares() {
     assert_eq!(
         SAMPLES.len(),
-        8,
-        "登記は検体 8 つ（母数 0 で緑にならない較正）"
+        9,
+        "登記は検体 9 つ（母数 0 で緑にならない較正）"
     );
     for sample in SAMPLES {
         let root = WorkDir::new().expect("空の根は取れるはず");
-        let nar = devroot::nar_dir().join(format!("{}.nar", sample.name));
-        assert!(
-            nar.is_file(),
-            "登記した検体の .nar が置かれていない: {}",
-            nar.display()
-        );
+        // URL の行は置き場の照合を通った書庫。落ちたら失敗の文（取り寄せの段のコマンド）で止まる。
+        let nar = devroot::sample_nar(sample.name).unwrap_or_else(|err| panic!("{err}"));
 
         let archive = areka_nar::NarArchive::open(&nar)
             .unwrap_or_else(|err| panic!("検体 {} の .nar は受理されるはず: {err}", sample.name));

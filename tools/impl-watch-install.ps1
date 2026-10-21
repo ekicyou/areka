@@ -17,10 +17,11 @@
       .new.exe を areka-impl-watch.exe へ改名する。2 つ目の改名に失敗したら古いものを元へ戻し、.new.exe を消す。
     5 areka-impl-watch.old*.exe（前の形の .old.exe も）を消してみる。走っていて消せなければ残す。
     6 置いたものの --help を呼んで確かめる。
+    7 置いたものの status を呼ぶ。状態ファイルの版が合わない（標準エラーが state file version mismatch で
+      始まる）ときだけ、置いたもので clear を 1 回呼ぶ。版が合っていれば状態には触らない。
 
-  触るのは置き場所の areka-impl-watch.exe・areka-impl-watch.new.exe・areka-impl-watch.old*.exe だけ。
-  state.json・ロック・居る印・ログ・status.md・退避のファイルに触らず、clear を呼ばない。
-  状態ファイルの版が上がる更新で clear が要るかは手順書（doc/impl-watch.md 3 節）を見る。
+  自分で触るのは置き場所の areka-impl-watch.exe・areka-impl-watch.new.exe・areka-impl-watch.old*.exe だけ。
+  state.json・ロック・居る印・ログ・status.md・退避のファイルは手 7 の clear（exe が行う）でだけ変わる。
 
   出る行（ASCII だけ・端末の文字コードは読みも書きもしない）:
     FAIL home: AREKA_IMPL_WATCH_HOME is not set
@@ -35,8 +36,10 @@
     KEEP <名前> (in use; run again later)
     OK check: --help exit 0
     FAIL check: --help exit <n>
+    OK clear: state version changed; cleared; backup: <退避したファイル>
+    FAIL clear: exit <n>                             （exe のエラーの行はその前にそのまま出る）
 
-  終了コード: 0 置けて --help が 0 で終わった／1 FAIL の行を出した
+  終了コード: 0 置けて --help が 0 で終わり、版の合わない状態ファイルを残さなかった／1 FAIL の行を出した
 #>
 #Requires -Version 7
 
@@ -132,4 +135,16 @@ if ($c.Code -ne 0) {
     exit 1
 }
 'OK check: --help exit 0'
+
+# 7 a state file of another version blocks every command; the new exe clears it once (no migration exists)
+$s = Invoke-Utf8Child $exe @('status')
+if ($s.Code -ne 0 -and ($s.ErrLines -match '^state file version mismatch')) {
+    $k = Invoke-Utf8Child $exe @('clear')
+    if ($k.Code -ne 0) {
+        foreach ($l in $k.ErrLines) { $l }
+        "FAIL clear: exit $($k.Code)"
+        exit 1
+    }
+    "OK clear: state version changed; $($k.Out.Trim())"
+}
 exit 0
