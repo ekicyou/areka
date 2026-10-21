@@ -345,7 +345,7 @@ fn descript_words_warn_per_word_and_no_words_refuses() {
     );
 }
 
-/// 受理: `reload_started` が対象・出どころ・ゴースト名つきで 1 件。ここの置き場（結線も seriko の送り手も
+/// 受理: `reload_started` が対象・出どころ・ゴースト名・読むフォルダつきで 1 件。ここの置き場（結線も seriko の送り手も
 /// 無い）では descript の列のシェルの段が始められず、印を下ろして `reload_failed`（no_context）を
 /// `TARGET_ERROR` で残す（要件 1.6・9.3・列の本体は `reload_skin_tests.rs`）。
 #[test]
@@ -368,9 +368,15 @@ fn accepted_leaves_one_started_record() {
                 e.level,
                 e.field("origin").map(str::to_owned),
                 e.field("ghost").map(str::to_owned),
+                e.field("dir").map(str::to_owned),
             )
         })
         .collect::<Vec<_>>();
+    let dir = rig
+        .world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .map(|session| session.ghost_dir().display().to_string());
     assert_eq!(
         (
             verdict,
@@ -391,7 +397,8 @@ fn accepted_leaves_one_started_record() {
             vec![(
                 Level::INFO,
                 Some("Script".to_owned()),
-                Some(rig.ghost.clone())
+                Some(rig.ghost.clone()),
+                dir
             )],
             1,
             vec![(

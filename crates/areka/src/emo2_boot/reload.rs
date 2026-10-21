@@ -281,6 +281,7 @@ pub(crate) fn request_reload(world: &mut World, req: ReloadRequest) -> ReloadVer
         target = ?req.target,
         origin = ?req.origin,
         ghost = %ghost,
+        dir = %ghost_dir(world),
         "読み直しを始める"
     );
     start(world, req.target, req.origin, ghost);
@@ -754,6 +755,15 @@ fn ghost_name(world: &World) -> String {
                 .to_owned()
         }
     }
+}
+
+/// 読むゴーストのフォルダ（同梱の根から起こすと 2 回目からは写しを読むので、どこを読んだかを記録に残す）。
+fn ghost_dir(world: &World) -> String {
+    world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .map(|session| session.ghost_dir().display().to_string())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
