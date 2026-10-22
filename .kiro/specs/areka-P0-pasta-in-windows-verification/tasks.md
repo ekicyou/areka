@@ -50,7 +50,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.5_
 
 - [ ] 4. areka でのぱすたの最初の走行
-- [ ] 4.1 本走行で 7 段を回す
+- [x] 4.1 本走行で 7 段を回す
   - 開発者が SSP のぱすたを閉じたのを確かめ、SendInput の許可を得て、排他テストの机を取る。区切りが済んだらすぐ返す
   - 設計の環境変数の表で `--ghost` に絶対パスを渡して起こし、プロセスの番号を控える。止めるのは自分が起こした番号だけ
   - 7 段を順に回し、段ごとに areka の MCP と道具で撮る。段 1・2 で重なりの順を撮る。areka が止まったら起こし直して次の段から続け、止まった時刻と記録の最後の行を控える。回せない段は飛ばして続ける
@@ -135,3 +135,5 @@
 - 1.2: 置き場の書庫の同定は `ad473d5dd1f142c168092e71b436419270b1cd16331ce19cc24f92a0c04a43a6  pasta-in-windows.nar`（`ghost/master/pasta.toml` の `version = "1.0.0"`。descript に版の行は無い）。較正: 判定を「根から再帰して最初の `pasta_tategaki/descript.txt`」へ緩めると `a_vertical_balloon_outside_the_ghost_folder_is_rejected ... FAILED`（`1 passed; 1 failed`）、元に戻して緑。3.2 で検証の記録へ載せる
 - 1.2: 固定入力の `install.txt` には設計の 2 行に `name,` を足さないと `NarArchive::open` が `MissingRequiredKey { key: "name" }` で断る
 - 3.1 のレビューの宿題（8.1 の清書で手順へ戻す）: 机の命令の `<識別>`・`<リポジトリ>`（ここでは `areka-p0-pasta-windows-d4ed7a`・`areka`）を `git rev-parse` から求める 1 行に替え、`request` の前に `watch` を立てる旨を添える。段 1 の「SSP は `OnBoot`」は測りの記録 段 1 の値で置き換える。段 5 の SSP の基準の要点は 2.2 の後に埋める
+- 2.1: SSP は 2.9.23（手順・要件は 2.9.18）。このぱすたには `ssp_shiori_log.txt` が無く、起動イベントはぱすた自身の `ghost\master\profile\pasta\logs\pasta.log` で読む。測りのためにゴーストを替えて起こし直したので、SSP の最後のゴーストはぱすたのまま（前はクローディア）。8.1 で手順へ戻す
+- 4.1: 手順 4 節の `Start-Process` に `-WindowStyle Hidden` が無く、空のコンソールの窓がぱすたの手前に出た（4.2 の走りでも足し、8.1 で手順へ戻す）。areka の MCP の `get_property` は `currentghost.scope(n).rect`・`currentghost.balloon.scope(0).rect` に NG で答えるので、位置は撮影と記録の `bounds=` で読む
