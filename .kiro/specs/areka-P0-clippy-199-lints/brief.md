@@ -137,3 +137,19 @@ lint ごとに clippy の提案どおりの機械的な直しを当てる（`col
 - 要件定義のモデル: Opus。
 - 分割の案: 段 1（`dola` の 3 フォルダ・`shiori-host32-host/tests/` の 2 本・3〜5 タスク）を別の 1 本に切ると、今の版のどのウェーブの空き席にも入れられる。切らなければ、今の版の 2 本が着地してから 1 本で出す。切るかは開発者が決める（20 を超えるからではなく、席に入れるための切り方）。
 - 見つけた穴・古くなった記述: 起票のときの「`areka` 約 19」は棚卸㉓のとおり古い（実数は数倍の見込み）。棚卸㉓が段 2 の重なる相手に挙げた名前（`extent-element-offset`・`mcp-kanade-tools` ほか）は v0.1.0 の spec で、今の版のウェーブでは相手にならない。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+`cargo clippy` は走らせていない（共通の決まり）。git の履歴と brief の突き合わせからの数え。
+- 前提の変化: 段 1 のファイル（`crates/dola/src/` の `validate/`・`runtime/`・`compile/`、`crates/shiori-host32-host/tests/` の `lifecycle_cyclic_e2e.rs`・`lifecycle_kill_e2e.rs`、`crates/shiori-abi/src/ergonomic.rs`）は 10-16 の後も 1 行も動いていない＝段 1 の指摘は前のまま（`dola` 23 か所・`shiori-host32-host` のテスト 6 か所・`shiori-abi` 1 か所）。段 2 は、10-16 の後の着地（kanade を割った `mcp-kanade-tools`・`cli/` を作った `startup-options-core`・`mcp-reload` ほか約 12 本）で増えた見込み。
+- 段 1 だけを取るなら: 触るファイル＝上の `dola` の 3 フォルダと `shiori-host32-host/tests/` の 2 本（`shiori-abi` は `shiori4-api`〔いつか〕と分け合う＝入れるなら行を照らす）。規模 3〜5 タスク。新しい依存なし・1 本だけの席は取らない。
+- 丸ごと 1 本なら: 8 クレート・12〜18 タスク（変わらず。最初のタスクで測り直す）。
+- v0.1.0 との重なり: 段 1 は 0（v0.1.0 の brief に `dola`・`shiori-host32-host/tests/`・`shiori-abi` を書くものは無い）。段 2 は重なる: kanade（`mcp-strict-errors`・`script-security-level`・`mouse-click-wheel-events`）・`areka-parsers` の台本の読み手 `sakura/decode.rs`（`stay-on-top-directives`・`script-small-tags`。新しい指摘がそこに出れば）・`areka`（ほぼ全部）。＝v0.1.0 の間に取れるのは段 1 だけ。
+- 人の待ち・机: 要らない。clippy はビルドだけ（1 回数分）。振る舞いを変えない直しなので、全体テストは最後に 1 回で、前後の比べは要らない。静かな机も要らない。
+- 版の席: 段 1 だけなら上限 5 で、v0.1.0 のウェーブの空き席に入れられる見込み。丸ごと 1 本のままでは v0.1.0 の間は入らない。
+- 先に要るもの: 無し。
+- 優先度の区分: C（バグでない持ち越し・振る舞いを変えない）。
+- 要件定義のモデル: Opus。
+- 分割の案: 棚卸㉖のまま。段 1（`dola` の 3 フォルダ・`shiori-host32-host/tests/` の 2 本・3〜5 タスク）を別の 1 本に切れば、v0.1.0 のうちに空き席で取れる。段 2 は v0.1.0 の後。切るかは開発者が決める（20 を超えるからでなく、席に入れるための切り方）。
+- 見つけた穴・古くなった記述:
+  - v0.1.0 の後に取る見直しの spec が同じファイルを持つ（段 1 は `audit-dola`・`audit-shiori-host32`、段 2 は `audit-kanade`・`audit-parsers-sakura`・`audit-areka-*` ほか）。見直しは指摘を全部直すので、clippy の直しを先に済ませれば見直しの差分が小さくなる。後に回すなら見直しの着地を待つ（同じファイル）。
+  - 本文の「`areka` 約 19」は古い（棚卸㉓のとおり、実数は数倍の見込み）。

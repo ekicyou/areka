@@ -124,3 +124,18 @@
 
 - **件 1: ぱすたを入れた areka は同時に 2 つ動かせない**。`pasta.dll` がデバッグの待受を 127.0.0.1:9276 に開くので、2 つ目の areka（または SSP）でぱすたを起こすと待受がぶつかる（`mcp-reload` の 8.2 の実機で見た）。areka の側の欠けではなく、ぱすたの持ち物（ポートの決め方は「ぱすた開発」セッションに相談する）。
   - 起票の理由: 直す場所がこのリポジトリの外（ぱすた）で、ぱすたの実機の確かめを持つ本 spec が窓口になる。実機の手順で 2 つ並べて動かすときは片方ずつにする。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 登記と取り寄せは ✅ `sample-url-fetch`（10-19）が済ませた。登記表の全部の行を空の根へ展開して「登記どおりの要素だけが入る」ことを見る自動テスト（`crates/sample-ghost-kit/src/lib_tests.rs` の `every_sample_nar_installs_exactly_the_elements_its_registry_row_declares`）が、ぱすたの行の「ゴースト 1 つ・同梱のバルーン 0」をもう見ている＝この spec が足す自動テストは「縦書きのバルーンがゴーストのフォルダの中に入る」の 1 点に縮む。実機の走行の道具 ✅ `real-run-mcp-kit`（`crates/real-run-kit/`）・起動オプション ✅ `startup-options-core`（`--ghost` に絶対パス）・机 ✅ `impl-watch-test-desk` も着地した＝実機の手順が軽くなる。✅ `mcp-reload` の完了で件 1（ぱすたのデバッグの待受 9276 がぶつかる）が足された（上の追記・この spec は窓口として申し送るだけ）。
+- 触るファイル: 中身の自動テストは `crates/sample-ghost-kit/tests/` の下の新しいファイル（新）に置く＝登記表の `src/lib.rs`・`src/lib_tests.rs`（`dot-sakura-specimen`・`default-balloon-selfmade` が触る）と重ならない。α のしきい値は 3 か所＝`crates/wintf/src/ecs/widget/bitmap_source/alpha_mask.rs`（448 行・7 行目の定数）と、当たり判定の `crates/wintf/src/ecs/layout/hit_test/mod.rs`（632 行・311 行目と 413 行目に同じ値の定数が 2 つ）。記録はこの spec のフォルダの中（新）。網羅台帳はぱすたが使う行だけ。
+- 規模: 10〜14 タスク（中身のテストが 1 点に縮む分で下へ）。
+- 先に要るもの: なし。最後の確かめは兄弟の 10 本の着地の後（この spec の外）。ファイルの重なり: テストを `tests/` に置けば v0.1.0 の中では 0。α を下げると `hit_test/mod.rs` で `hit-id-pass`（v0.2.0）・`balloon-element-order`（版に縛らない）と、`alpha_mask.rs` で `compose-f16-precision`・`hit-id-pass`・`wintf-d2d-composite-rules`（どれも v0.2.0）と重なる＝v0.1.0 のウェーブでは 0。依存を足さない（1 本だけの席は取らない）。
+- 待ち: 最初の段は開発者の機械の SSP 2.9.18 を MCP で動かす（ぱすたを入れて起こしてもらう・読み直しは毎回許可を取る）。実機の走行は排他テストの机と画面の操作（右クリックの送り込みは開発者の許可）、目視の判定は開発者。α のしきい値は全部のゴーストに効くので開発者の決めを待つ。静かな机・前後の全体テストの比べは要らない。
+- 優先度の区分: A（開発者の指示「ゴースト「ぱすた」がSSPと同じレベルで動くこと」）。
+- 要件定義のモデル: Opus（先例＝完了 `emily-ghost-verification`。先例の無い境目・並行や時刻の新しい保証・骨格の分かれ目のどれにも当たらない）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述:
+  - 本文 Scope と棚卸㉗の節の「ゴースト 1 つ・同梱のバルーン 0 の自動テストを足す」は、上のとおり大半が済んでいる。
+  - 本文 Boundary の「α のしきい値（wintf の当たりの 1 か所）」は 3 か所（上）。描く側と当たる側の判定がずれないよう、1 つの値にまとめるかを要件で決める。
+  - 議題 1 の測り（バルーンの見つけ方・`\1\v`・`\![*]`・`OnShellScaling`・`balloon.dontmove`）は、兄弟の brief にもそれぞれ「SSP で測る」がある（`ghost-inner-balloon` 議題 0・`stay-on-top-directives` 議題 1・`script-small-tags` 議題 1・`descript-window-keys` 議題 1・`dpi-realign-remembered-chain`・`window-link-directives`）。決めないと二重に測る。案: 各項目は持ち主が自分の要件の段で測り、この spec は持ち主の居ない α の項目と全体の通しだけを測る（兄弟はこの spec を待たない）。
+  - 本文 Adjacent の「`real-run-mcp-kit`・`startup-options-core`（どちらもこの棚卸の新しい brief）」は着地済み。

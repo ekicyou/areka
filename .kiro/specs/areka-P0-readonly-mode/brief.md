@@ -91,3 +91,17 @@
   3. インストールと更新を断ったとき、ゴーストへ何を知らせるか（`OnInstallFailure` などの理由の語・何も知らせない）。SSP で測る（readonly の SSP へ NAR を投げ込む・`\![updatebymyself]` を流す）。
   4. 書かなかった保存を `write-failure-notice` の判定で「成功」と返すか、判定の手前で道を分けるか（どちらでも利用者には何も出ないが、記録の行が変わる）。
   5. ゴーストのフォルダの中へ areka が書くもの（シェルの `profile` など）が残っていないかの数え直し（13 種の表の外）。要件の段で 1 度数える。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化（`startup-options-core`・10-19 着地）: 待ちは解けた。`--option readonly` は今「受けて、まだ扱わないと記録して無視する」語（`crates/areka/src/cli/parse.rs` 263 行目）。`StartupOptions`（`cli/mod.rs`）に欄を足して印を立てる。先例: 同じ spec は SHIORI を読まない指定（`ModulePolicy`）を値として起動の文脈へ渡し、切り替えの倒れ先のためにだけ `boot_config.rs` にプロセスに 1 つの写しを置いた。readonly の印の渡し方をこれにそろえるかを設計で決める。
+- 前提の変化（一時の置き場）: 同じ spec は `--ghost <フォルダ>` の親を「この起動のあいだだけの置き場」（`crates/areka-ghost/src/catalog.rs` の `RootMark::Temporary`）にし、置き場の並びの記憶へ書かない・インストールの宛先にしない守りを 5 か所に入れた（`roots/edit.rs`・`menu/roots_frame.rs`・`roots/resolve.rs`・`catalog_roots.rs` の `install_root`・`install/destination.rs`）。「書かない」の守りの先例として読む。
+- 前提の変化（`mcp-reload`・10-22 着地）: `update/desk.rs`（704 行）には触っていない。`install/desk.rs` に窓口が忙しいかを答える `is_busy`（150 行目）が足され、読み直しの入口がこれと `update::desk::is_busy` を見て断る＝readonly でインストールと更新を断るときは、窓口を「忙しい」のまま残さない（残すと読み直しが断られ続ける）。ゴーストの読み直しは自分への切り替えを通るので、記憶の書き込みは今までどおり保存の口 `save_scope`（`crates/areka-sylphya/src/persist/mod.rs` 276 行目）1 か所で止まる。
+- 前提の変化（`real-run-mcp-kit`・10-19 着地）: 実機の試験は窓口 `crates/real-run-kit/` の起動（`launch.rs` 200〜211 行目）が毎回 `target\` の下の空の根と記憶の置き場を渡す形になった＝「逃がす環境変数の組を試験ごとに書き足す」問題は試験の側では解けた。本 spec の効き目は、手で起こす areka・AI のエージェントが試しに起こす areka・利用者の使い道と、SSP と同じ起動の書き方。
+- 書く場所の数え直し: 10-18 から、書く所のファイル（`write_failure.rs`・`write_failure_sites_tests.rs` の 13 種・`persist/`・`areka-user-data`・`install/fetch_url.rs`・`update/`）は 1 つも変わっていない。
+- 触るファイル: `cli/mod.rs`・`cli/parse.rs`・`cli/parse_tests.rs`（679 行＝足す分は新しい兄弟のファイルへ）・新 印の小さなモジュール・`crates/areka-sylphya/src/persist/io.rs`（301）・`persist/mod.rs`（451）・`crates/areka/src/write_failure.rs`（230）・`write_failure_sites_tests.rs`（401）・`boot_resolve.rs`（714）・`boot_config.rs`（610）・`roots/user_root.rs`（171）・`roots/edit.rs`（327）・`crates/areka-user-data/src/establish.rs`（240）・`install/desk.rs`（540）・`install/fetch_url.rs`（239）・`update/desk.rs`（704）・`dist/README.txt`（「■ 起動オプション」の 59 行目の文）。
+- 規模: 12〜16 のまま。上限 20 の内。
+- 先に要るもの: 働きの上では無い＝先頭。同じウェーブに置かない相手: `offline-surface-dump`（`cli/`・説明書の同じ文）・`startup-install-option`（同じ＋`install/desk.rs`）・`ghost-inner-balloon`（`boot_resolve.rs`・`boot_config.rs`・`update/desk.rs`）・`default-balloon-selfmade`（`boot_resolve.rs`）・`property-name-case-fold`（保存の読み戻しまで畳む案のときだけ `persist/`）・版に縛らない `dev-folder-alias`・余力の枠の `multi-ghost-runtime`。依存は足さない・emo-text に触らない。静かな机・全体テストの比べは要らない。議題 3 は readonly の SSP へ NAR を投げ込んで測る（SSP をもう 1 つ起こすので開発者に一言断る）。
+- 優先度の区分: A のまま。
+- 要件定義のモデル: Opus のまま（止める所は今ある保存の口 1 か所・書く所の数え上げは 13 種の表が先例）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: Upstream/Downstream の「`real-run-mcp-kit`（環境変数で逃がす代わりに `--option readonly` で起こせる）」は、向こうが逃がし方を窓口へまとめて着地したので古い。棚卸㉗の節の「`mcp-reload` と同じウェーブに置かない」は向こうの着地で解けた。`boot_resolve.rs`（676→714）・`boot_config.rs`（467→610）は `startup-options-core` で増えた。

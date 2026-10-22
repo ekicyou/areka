@@ -80,3 +80,15 @@
   1. **`\![*]` を SSP で測る**: マーカーの画像を持たないバルーン（ぱすたの縦書きのバルーンは `marker.png` を持たない）で何を描くか。何も描かないなら記録の行だけで済む。描くなら（SSP の既定の絵など）、描く仕事をこの spec に入れるか、`marker.filename` の持ち主 `balloon-canon-residue` へ渡すか。
   2. **`\_u` の出せない番号**: 0・制御の文字・サロゲートの片割れ・範囲の外。SSP で測るか、「捨てて記録」に倒すか。
   3. **`OnDressupChanged` を誰が持つか**: 今は送っていないので `bind-noevent` との違いが見えない。この spec で起票だけするか。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 触る所の中身は棚卸㉗から変わらない。✅ `mcp-reload`（10-22）が受け手の表 `crates/areka/src/emo2_boot/consumer_ledger.rs` を 472 行に減らし（テストを兄弟へ）、着せ替えの読み取りのテストを `crates/areka-seriko/src/bind_tests.rs` へ出した。着せ替えの受け手 `crates/areka-seriko/src/actor.rs`（780）の名前の選別は 492 行目あたり（名前の定数 `BIND_COMMAND` は 56 行目）。同じ spec の持ち越し（`crates/areka/src/emo2_boot/shell_carry.rs`）は、ゴーストの読み直しの後に着せ替えを `\![bind,…]` と同じ合図で流し直す＝後で `OnDressupChanged` を送るようになると、読み直しのたびにイベントが飛ぶ。この spec の「イベントを起こさない」目印は、その流し直しにも使える。
+- 触るファイル: `crates/areka-parsers/src/sakura/decode.rs`（502）と兄弟のテスト・`actor.rs`（780）と兄弟のテスト（新）・`consumer_ledger.rs`（472・1 行）・網羅台帳 `sakura-script.toml` の 4 行（`\![bind-noevent]` は 709 行目）。字句の読み手 `lexer.rs`（426）は今も読めるので触らない見込み。
+- 規模: 4〜6 タスクのまま。
+- 先に要るもの: なし。同じウェーブに置けない v0.1.0 の相手: `stay-on-top-directives`（`decode.rs`・受け手の表）・受け手の表に行を足す `window-link-directives`・`descript-window-keys`・`mcp-strict-errors`（案 2）・`script-security-level`（1 本ずつ）。後の版: `decode.rs` を触る 10 本（`range-choice-tag` ほか）・`actor.rs` を触る `animated-image-import`・`seriko-script-triggers`・`balloon-canon-residue`・`shell-hover-animation`・`talk-anchor-interrupt-ticks`。依存を足さない。机・静かな机・前後の全体テストの比べは要らない。議題 1（`\![*]`）の測りは開発者の機械の SSP。
+- 優先度の区分: A（開発者の指示＝v0.1.0 のゴール・ぱすた）。
+- 要件定義のモデル: Opus（先例＝裸の `\+` の写し・`\![*]` の畳み・着せ替えの名前の選別）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述:
+  - 本文 Current State と Constraints の「`consumer_ledger.rs`（960 行）」は古い（472 行）。「488 行あたり」は今 492 行目。
+  - 議題 3（`OnDressupChanged` を誰が持つか）に、読み直しの持ち越しが `bind` で流し直すこと（上）を足す。送る spec を起票するなら、流し直しを「イベントを起こさない」側に寄せることも書く。

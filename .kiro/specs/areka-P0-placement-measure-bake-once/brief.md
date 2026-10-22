@@ -114,3 +114,17 @@
 - 優先度の区分: C のまま（性能の持ち越し）。ただし v0.1.0 では試験の速さとぱすたの起動の速さに効く項目として扱う。
 - 要件定義のモデル: Opus のまま。分割の案: なし。
 - 見つけた穴・古くなった記述: Problem の「今は踏まない」はぱすたで外れた（上）。行数（902・873・911）は古い。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 2 か所が別々に焼く形は変わらない（採寸 `crates/areka/src/placement/measure.rs` 450 の `measure_native_scope_sizes`・155 行目／起動の資産組み立て `crates/areka/src/emo2_boot/assets.rs` 547 の `build_boot_assets`・260 行目）。行数: `crates/areka/src/ghost_session.rs` 885→**910**（上限が近い）・`emo2_boot/mod.rs` 916→**787**（✅ `mcp-reload` が中身を外へ出した）・`placement/mod.rs` 915。✅ `mcp-reload` のゴーストの読み直しも、切り替えと同じ起動の道（`ghost_session.rs` の `boot_ghost`）を通る＝案 A は起動・切り替え・読み直しを一緒に直し、読み直しの返事の上限 10 秒にも効く。✅ `sample-url-fetch` でぱすた（面 1000 に動く WebP 3 つ）を取り寄せられる＝測り直しに使える。✅ `user-data-root` は着地した。
+- 触るファイル: 案 A＝`placement/{mod,measure}.rs`・`ghost_session.rs`・`emo2_boot/{mod,assets}.rs` と兄弟のテスト（`ghost_session.rs`・`placement/mod.rs` には足さず新しいファイルへ）。案 B＝`placement/measure.rs`・`crates/areka-emo-present/src/shell_target.rs`（757）・要れば `crates/areka-emo-present/src/balloon.rs`（701）・試験の支え `crates/areka/src/mcp/dump_surface_gpu_test_support.rs`（461）。
+- 規模: 案 A 10〜14・案 B 5〜8 タスクのまま。
+- 先に要るもの: 働きの上ではなし。**案ごとの重なり（今）**: 案 A＝v0.1.0 の `descript-window-keys`（`measure.rs`・`assets.rs`）・`startup-install-option`（`ghost_session.rs`）。余力の枠の `multi-ghost-runtime`（`placement/mod.rs`・`ghost_session.rs`・`emo2_boot/mod.rs`）。`emo2_boot/mod.rs` は後の版の多くも触るが、v0.1.0 の中では `descript-window-keys` だけ。案 B＝v0.1.0 の `descript-window-keys`（`measure.rs`）・`shell-mouse-cursor`（`shell_target.rs`）・`offline-surface-dump`（`load_shell_target` の口を変えるときだけ）。ウェーブの外の `areka-test-binary-stability`（試験の支え）。後の版の `balloon-webp-names`・`balloon-canon-residue`（`balloon.rs`）。どちらの案でも `descript-window-keys` とは直列、`dpi-realign-remembered-chain` とは 0。依存を足さない。
+- 待ち: 焼く時間の測り直し（前後の比べ・release）は静かな机で 1 本ずつ。窓の配置の確かめは本物のゴーストと 96 以外の拡大率。
+- 優先度の区分: C（性能の持ち越し）。v0.1.0 では試験の速さとぱすたの起動の速さに効く項目として扱う。
+- 要件定義のモデル: Opus のまま（案 A も 1 本の道の中の順の入れ替えで、並行の新しい設計ではない）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述:
+  - 棚卸㉗の節の `emo2_boot/mod.rs`「916」は 787、`ghost_session.rs`「885」は 910。棚卸㉗の節の「案 A は `mcp-reload`（`emo2_boot/mod.rs`）と重なる」は着地で済んだ。
+  - roadmap の棚卸㉕の行「案 A なら `multi-ghost-runtime`・`user-data-root` と重なる」の `user-data-root` は済んだ話。今の案 A の v0.1.0 の相手は上の 2 本。
+  - 案 B は v0.1.0 の `shell-mouse-cursor`（`shell_target.rs`）とも重なる（これまでの節に無かった）。

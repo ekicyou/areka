@@ -106,3 +106,14 @@ SSP はプロパティの名前の英字の大小を区別しない（`BASEWARE.
 - 同じウェーブに置けない相手: 名前の解釈と書き込みの仕分け（`key.rs`・`actor.rs`・`reader.rs`）だけなら v0.1.0 のどれとも 0（`readonly-mode` は `persist/io.rs`・`persist/mod.rs` を触るが `actor.rs` の保存の流し込みは呼び手として読むだけの見込み＝設計で照合）。**保存された名前の読み戻しまで畳む（`persist/`）と**、`readonly-mode`（`persist/{io,mod}.rs`）・後回しの段の `multi-ghost-runtime`・`dev-folder-alias`・`ghost-inner-balloon`（`persist/` を挙げる）と重なる。推しは棚卸㉕のまま（読み戻しは畳まない）。
 - 優先度の区分: C のまま（v0.1.0 では守りの穴として扱う）。要件定義のモデル: Opus のまま。分割の案: なし。
 - 見つけた穴・古くなった記述: 棚卸㉓・㉕の行数（`actor.rs` 754・`persist/mod.rs` 403・`format.rs` 533）は古い。`doc/ssp-mcp/survey.md` 121 行目（7.3 節の 6）は今も偽のまま。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 10-18 から `crates/areka-sylphya/` は 1 行も変わっていない（`key.rs` 411・`reader.rs` 584・`actor.rs` 799〔書き込みの仕分け `classify_set` は 140 行目・正準語彙の判定 `is_canonical_vocab` は 154 行目〕・`persist/mod.rs` 451・`persist/format.rs` 566・`persist/io.rs` 301）。大文字で書くと「書けない名前」をすり抜けて保存へ落ちる穴もそのまま。MCP の `sakurascript` が本物になった（10-19）ので、台本の `\![set,property]` に書く道が開けば、MCP からもこの穴へ届く。
+- 新しく起票された相手: v0.2.0 の `sylphya-sqlite-kvs`（10-21）が sylphya の読み書きと保存の口（`actor.rs`・`reader.rs`・`mirror.rs`・`persist/`）を作り直す。その brief は本 spec を「隣」に挙げ、大小を区別しない読みを範囲の外に置く＝本 spec が先（v0.1.0）に着地し、向こうの設計が畳む所を引き継ぐ形。見直しの `audit-sylphya-actor` は `crates/areka-sylphya/` 全部を持つが、v0.1.0 の版の門の後にしかウェーブに入らない＝今は重ならない。
+- 触るファイル: 棚卸㉓のとおり（名前の解釈と書き込みの仕分け＝`key.rs`・`actor.rs`・`reader.rs` と兄弟のテスト・大文字の名前を足すなら `crates/areka/src/mcp/get_property_tests.rs`・`doc/ssp-mcp/survey.md` 7.3 節・`doc/COMPAT_ARCHITECTURE.md` §8）。1,000 行に近いファイルは無い。
+- 規模: S〜M（5〜9）のまま。
+- 先に要るもの: なし。同じウェーブに置けない相手（v0.1.0）: 名前の解釈と書き込みの仕分けだけなら 0（sylphya を挙げる v0.1.0 の brief のうち `readonly-mode` は `persist/{io,mod}.rs`、`ghost-inner-balloon` は `persist/` の記憶の形、`window-link-directives` は語彙表を読むだけ）。保存された名前の読み戻しまで畳むと `readonly-mode`・`ghost-inner-balloon` と重なる＝推しは前のまま（読み戻しは畳まない）。1 本だけの席は取らない。静かな机・人の待ち・前後の比べは要らない。
+- 優先度の区分: C のまま（SSP に合わせる持ち越し・ukadoc は黙っている。v0.1.0 では守りの穴として扱う）。
+- 要件定義のモデル: Opus のまま（畳む範囲は `mcp-ghost-name-match` の決まりが手本）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: `doc/ssp-mcp/survey.md` 121 行目（7.3 節の 6「宛先の解決は名前を完全一致で比べ、空文字を省略と同じに扱う」）は今も偽のまま＝すぐ直せる。`sylphya-sqlite-kvs` の brief の上流に本 spec が無い（隣にだけ載る）＝向こうの要件の段で「畳む所を作り直しで落とさない」を 1 行足すとよい。

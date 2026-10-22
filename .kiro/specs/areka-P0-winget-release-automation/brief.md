@@ -226,3 +226,14 @@ PR に直しを求める印 `Needs-Author-Feedback` が付いたら、**10 日�
 - 見つけた穴・古くなった記述:
   - 申し送り 6 の「`user-data-root` の着地まで説明書に winget の行を載せない」は解けた。PR 450070 の取り込みを待つ分は残る。
   - 議題 4（新）: v0.1.0 を出す時までに取り込みが来なかったら、この spec を待つか、v0.1.0 から外して次の版へ送るか。待つと版の門が人の承認で止まる。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 2026-10-22 に `gh pr view 450070 --repo microsoft/winget-pkgs --json state,mergedAt` で読んだ（読むだけ）: `state` は OPEN・`mergedAt` は空・印は `Azure-Pipeline-Passed`・`Validation-Completed`・`New-Package` の 3 つのまま・最後の更新は 2026-10-11＝**まだ取り込まれていない**（提出の 10-10 から 12 日・最後の動きから 11 日）。
+- 触るファイル: `.github/workflows/winget.yml`（新規・`.github/workflows/` は今も `release.yml`・`crates-io.yml` の 2 本）・根の `README.md` の「## 入手と起動」（52 行目・変わらず）・`dist/README.txt` の「■ 入手のしかた」（今は 231 行目）と「■ 既知の制限」（今は 270 行目）・注意書きを外すなら `dist/winget/0.0.2/`（今も在る・ほかの版のフォルダは無い）。
+- リリースの手順: `.claude/skills/release/procedure.md` の段 6.2 の winget の行は今は 318・322 行目（`impl-watch-test-desk` が 10-19 に机の段を足して動いた）。この spec は触らない見込み。
+- 規模: 3〜5 タスク（変わらず）。
+- 先に要るもの: PR 450070 の取り込み（外の人の承認）・開発者の PAT の登録。働きの依存はほかに無い。ファイルの重なり: `dist/README.txt` は `offline-surface-dump`・`readonly-mode`・`startup-install-option`・`bridge-store-user-root`・`ghost-inner-balloon` も触るが節が別（許す重なり）。「■ 既知の制限」は `release-code-signing`（いつか）と同じ節。依存は足さない。静かな机・全体テストの比べは要らない。
+- 優先度の区分: A のまま。
+- 要件定義のモデル: Opus のまま。
+- 分割の案: 切らない。
+- 見つけた穴・古くなった記述: 棚卸㉗の節の行番号（`dist/README.txt` の 178・217 行・`procedure.md` の 204・208 行）は上のとおり動いた。議題 4（v0.1.0 を出すまでに取り込みが来ないときに待つか、次の版へ送るか）は、11 日動きが無いので次の棚卸で開発者に問う値打ちが上がった。

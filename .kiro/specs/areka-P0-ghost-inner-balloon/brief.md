@@ -138,3 +138,16 @@
 - 優先度の区分: A のまま。要件定義のモデル: Fable のまま（ukadoc に無い独自の拡張・探し方と記憶と優先の骨格の分かれ目）。SSP の実測で探し方が決まれば Opus に下げてよい。
 - 議題を足す（本文の 6 つの前に）: 0. **SSP で測る**（最初）: ぱすたを SSP 2.9.18 に入れたとき、`pasta_tategaki` をどう見つけるか（使っているバルーンの名前・置き場のプロパティ）・ゴーストの直下の他のフォルダも探すのか・バルーンのメニューに出るか・ほかのゴーストから見えるか。
 - 古くなった記述: 本文 Desired Outcome の例の置き場（`<ゴースト>/balloon/<名>`）に、ぱすたの形（ゴーストの直下の名前の違うフォルダ）を足す。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 鎖で前に居た ✅ `startup-options-core`（10-19）が着地した。根の印（`crates/areka-ghost/src/catalog.rs` の `RootMark`）に「この起動のあいだだけの置き場」（`Temporary`）が足され、`boot_resolve.rs`・`boot_config.rs` も触られた＝置き場の印に種類を足す先例が 2 つ（書ける根・一時の置き場）になった。✅ `mcp-reload`（10-22）は、使っているバルーンを場所で控えて読み直す道（`crates/areka/src/emo2_boot/reload.rs` の `current_skin`）を足した＝場所で持つので、ゴーストの中のバルーンでも読み直せる見込み（要件の段で確かめる）。ゴーストの中は今も見ない。
+- 触るファイル（行数は今）: `crates/areka-ghost/src/catalog.rs`（475）・`catalog_roots.rs`（270）・`crates/areka/src/boot_resolve.rs`（714）・`boot_config.rs`（610）・`emo2_boot/shell_balloon_resolve.rs`（222）・`menu/balloon_frame.rs`（45）・`update/desk.rs`（704）・`install/procedure.rs`（515・入れた後に `find_balloon` で引く）・`readme/opener.rs`（406・バルーンは自前の `balloon_candidates` で引く）・確かめに `emo2_boot/reload.rs`（775）・記憶の形を変えるなら `crates/areka-sylphya/src/persist/`・`doc/COMPAT_ARCHITECTURE.md` §8・`dist/README.txt`。
+- 規模: 14〜20 タスクのまま。
+- 先に要るもの: 働きの上ではなし。同じファイルを触る未完了（同じウェーブに置けない）: v0.1.0＝`default-balloon-selfmade`（`boot_resolve.rs`）・`readonly-mode`（`boot_resolve.rs` の書く関数・`update/desk.rs`・sylphya の `persist/`）・`startup-install-option`（`boot_config.rs`）・`property-name-case-fold`（sylphya の `persist/` を畳むときだけ）。版に縛らない・後の版＝`dev-folder-alias`・`shell-companion-balloon`・`config-parse-diagnostics`・`install-live-target-hazards`・`clippy-199-lints`・`multi-ghost-runtime`（余力の枠）。依存を足さない（1 本だけの席は取らない）。静かな机・前後の全体テストの比べは要らない。議題 0（SSP で測る）は開発者の機械の SSP が要る。
+- 優先度の区分: A（開発者「shell フォルダがあるんだから balloon フォルダがあっても良い」「別 spec に」）。
+- 要件定義のモデル: **Opus に下げる**（厳しく付け直した）。置き場の印は先例（書ける根・一時の置き場）に種類を 1 つ足す形で、新しい境目にならない。並行や時刻の保証も無い。骨格の分かれ目（ゴーストの中をどう探すか）は議題 0 の SSP の実測で決まり、同じ名前のときの優先と記憶はシェル（`<ゴースト>/shell/`）の先例に倣える。測った結果が先例の無い形（ほかのゴーストからも見える・ゴーストの直下を全部探す、など）なら、そこで考え直す。
+- 分割の案: なし（20 を超えるときの案は棚卸㉗のまま・本文 Constraints と食い違うので開発者が決める）。
+- 見つけた穴・古くなった記述:
+  - 本文 Constraints の「Fable 推奨」と棚卸㉓〜㉗の節の「Fable」は古い（上）。
+  - 棚卸㉗の節の重なりの `startup-options-core` は着地済み。本文 Upstream の `ghost-standard-balloon` は着地済み、`shell-companion-balloon` は後ろ（前に居ると読める書き方は古い）。
+  - バルーンの読み直し（`\![reload,balloon]`・MCP の `reload`）でゴーストの中のバルーンが保たれることを、確かめる項目に足す。

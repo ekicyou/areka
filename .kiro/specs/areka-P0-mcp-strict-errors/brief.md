@@ -166,3 +166,17 @@ AI が書いた台本は、存在しない surface 番号や綴りを誤った�
 - 分割の案: なし。
 - 自動の試験のための注記: `real-run-mcp-kit` の窓口が着地していれば、strict の記録の実機の確かめ（台本を流す → `get_log(error, since_id)`）をその窓口の 1 本の試験で書ける。
 - 見つけた穴・古くなった記述: 10-08 の申し送りの「6 類」の表に `unpaired_tag` の行が無い・文面の定数と文書の一致をテストで見ていない（㉔・㉕のまま）。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 先に要る 3 本（`mcp-kanade-tools`・`mcp-reload`・`mcp-receiver-bugs`）は全部着地した＝今すぐ着手できる。MCP の 10 本のうち `NG:not implemented yet` を返すものは 0 本（`reload` は 10-22、`sakurascript`・`raise_event` は 10-19 に中身が入った）。strict の値は、kanade が「始めたトークの番号と結んで控える」形で既に運ばれている（kanade の `schedule/sstp.rs` の `StrictNote`・運行状態 `State::sstp_strict`・今は記録の欄とテストだけが読む）＝案 ⑴（入口で診る）も案 ⑵（再生まで運ぶ）もこの控えから始められる。`\!` の受け取り手の台帳 `crates/areka/src/emo2_boot/consumer_ledger.rs` は `mcp-reload` が中のテストを兄弟へ出して 960→472 行になった。
+- 触るファイル: 案 ⑴＝`crates/areka/src/mcp/{sakurascript,raise_event}.rs`（112・95 行）と兄弟のテスト・`crates/areka-mcp/src/handler.rs`（178・案内文は 39 行目の定数）・`doc/ssp-mcp/areka-tools.md`・文面を分け合うなら `crates/areka/src/mcp/check_script_judge.rs`（218）・控えを読む口を足すなら kanade の `schedule/sstp.rs`。案 ⑵＝さらに `crates/areka-talk/src/lib.rs`・`crates/areka-sakura/src/drive.rs`（574）・`crates/areka-seriko/src/{actor,resolve}.rs`・`crates/areka-emo-present/src/presenter/show.rs`・`consumer_ledger.rs`（472）・kanade の `schedule/translate.rs`（300）と、検出点の表と一致の検査（新）。
+- 規模: 案 ⑴ 6〜10・案 ⑵ 12〜18（変わらず）。
+- 先に要るもの: 働きの上では無し。同じウェーブに置けない相手（v0.1.0）: 案 ⑴ は 0。案 ⑵ は `script-security-level`（`areka-talk`・`drive.rs`・`translate.rs`）と、`consumer_ledger.rs` に行を足す `stay-on-top-directives`・`script-small-tags`・`descript-window-keys`・`window-link-directives`。1 本だけの席（依存を足す・emo-text の新しいファイル）は取らない。静かな机・前後の全体テストの比べ・人の待ちは要らない（実機の確かめは `real-run-kit` の試験 1 本で書ける）。
+- 優先度の区分: A のまま（開発者「ssp mcp tool の完全移植のための spec 群を立ち上げて」）。
+- 要件定義のモデル: Opus のまま（案 ⑴ は `check_script` の判定が先例・案 ⑵ の「トークの番号で拾う」形は `StrictNote` が先例＝先例の無い骨格の分かれ目に当たらない）。
+- 分割の案: なし（案 ⑵ で 20 を超えたら棚卸㉑の切り方）。
+- 見つけた穴・古くなった記述: 案内文の最後の 1 文（「まだ作っていないツールは `NG:not implemented yet` で始まる答えを返す」）は、当てはまるツールがもう無い＝`crates/areka-mcp/src/handler.rs` 39 行目から今すぐ消せる（文を逐語で見るテストは無く、`server_protocol_tests.rs` と中継の `service_tests.rs` は定数を読むだけ）。roadmap はこの 1 文を本 spec が消す約束にしている＝先に消すかは棚卸の決め。roadmap の「`consumer_ledger.rs`（960 行）」は 472 行に読み替える。10-08 の申し送りの表に `unpaired_tag` の行が無い・文面の定数と文書の一致をテストで見ていないのは前のまま。
+
+## 2026-10-22 棚卸㉘の申し送り（main 52b014de）
+
+- 件を 1 つ足す（持ち主が居なかった残り物・完了 `mcp-receiver-bugs` の research.md 9 節と要件の「範囲外」）: `params` が入れ物（オブジェクト）でない要求（`7`・`[1]`・`"x"`）に、受け口は 415 の素の文で答え、中継は -32600 を返す＝-32602（引数の誤り）にならない。誤りの答えを正典どおりにそろえるこの spec で一緒に直す。research が勧めた `doc/ssp-mcp/transport-diff-areka.md` への行の追記も一緒に。

@@ -80,3 +80,14 @@
   2. **steering の「オーナードローを持たない」**（2026-09-19 の方針）を改めてよいか（開発者の決め）。
   3. **着衣の写し**: メニューを組む時点で seriko の部品の着衣を、areka の側でどう読むか（写しを持つか・聞きに行くか）。
   4. **SSP で測る**: 着せ替えのメニューの並び（カテゴリの順・仕切り・`mustselect` の印）と、選んだときに `OnDressupChanged` が来るか。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 10-18 から触るファイルは動いていない（`crates/areka/src/menu/plan.rs` 135・`menu/mod.rs` 368〔枠は 11 種のまま・着せ替えの枠は無い〕・`menu/win32.rs` 137・wintf の `crates/wintf/src/ecs/window_proc/mod.rs` 380〔`WM_MEASUREITEM`・`WM_DRAWITEM` の腕は今も無い〕・着衣を持つ `crates/areka-seriko/src/state.rs` 728・`crates/areka-parsers/src/package/resolve_shell.rs` 127）。生きている決まり 6（オーナードローと着せ替えメニューは予約）を解くかの開発者の裁定はまだ出ていない＝ウェーブの外のまま。
+- 新しく起票された相手: v0.4.0 の `menu-thumbnail-preview`（10-20）が同じ `menu/{mod,win32,plan}.rs` と `window_proc/mod.rs` を挙げる（向こうはメニューとは別の小さな窓で出すと決め、決まり 6 を待たない）＝同じウェーブに置かない相手が 1 本増えた（版が違うので当面は並ばない）。
+- 触るファイル: 棚卸㉗の見立てのとおり。
+- 規模: 14〜18 のまま。
+- 先に要るもの: 開発者の裁定（決まり 6 を解くか・右クリックメニューを後で WinUI3 へ移すか）。同じウェーブに置けない相手: `popup-menu-residue`（`menu/win32.rs`・版に縛らない）。v0.1.0 の他とは 0（`ghost-inner-balloon` は `menu/balloon_frame.rs` で別のファイル・`mouse-click-wheel-events` が触りうるのは `menu/trigger.rs` で本 spec の外）。1 本だけの席は取らない。実機の確かめ（メニューを開いて撮る）は、クリックを通す窓へ入力を送る許し＝人の待ちになりうる。議題 4 は SSP で測る。
+- 優先度の区分: A のまま（開発者の指示＝v0.1.0 のゴール・ぱすたの `menu.*` と `sakura.menu,auto`）。
+- 要件定義のモデル: Fable のまま（オーナードローの側だけ。基準＝先例の無い境目の約束: wintf の窓の手続きが OS のメニューの待ちの中で同期して描画の知らせを areka へ渡し、その中で World を借りない決まりを新しく引く。場所は `window_proc/mod.rs` と `menu/win32.rs`。今ある `WM_SETCURSOR` の口は wintf の中で閉じた診断で、先例にならない）。着せ替えのメニューだけなら Opus（先例＝ゴースト・シェル・バルーンのサブメニュー）。
+- 分割の案: 前のまま（オーナードローの見た目／着せ替えのメニュー）。裁定が「WinUI3 へ移す」なら、v0.1.0 には着せ替えのメニューだけ（6〜8・Opus・wintf に触らない）を残し、オーナードローの側は別の 1 本として後へ回す。
+- 見つけた穴・古くなった記述: `popup-menu-residue` の件 11（メニューを開いている間の黒い四角）・件 12（メニューが見えずに閉じる）とどちらが先に直すかは未決のまま。

@@ -126,3 +126,19 @@ areka の検体は、pasta（`emo2`）・里々（`R_POST_and_KOMAINU`）・YAYA
   - 根の `README.md` の検体の表に `emily4` が無い（えみりの着地で足されなかった）。同じ表に 1 行足すとき、並べて足すかを要件の段で決める。
   - `pasta-in-windows-verification` の見立ては「8 を 9 へ」と書く＝上の順なら向こうは 10→11 になる（後から着地する方が数を合わせる）。
   - 議題 4（新）: `sample-url-fetch` が同じ v0.1.0 に入ったので、書庫をリポジトリに入れる（10-10 の決め）か、URL の行で足すかを開発者に聞き直す。答えで登記表の順と、この spec の作業（書庫を置く・置かない）が変わる。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: `sample-url-fetch` が着地し（10-19）、検体の登記表（`crates/sample-ghost-kit/src/lib.rs` の `SAMPLES`・671 行）は 9 行になった。9 行目の `pasta-in-windows` は書庫を置かず URL で引く行（`SampleSource::Fetched`）。登記の書き方は 2 通りになり、どちらも 1 行で足せる（同じファイルの冒頭の説明「検体を足すとき」）。`dot_sakura.nar` はまだ無い。
+- 議題 4（書庫を置くか、URL の行か）を測り直した: URL の行には、書庫の隣に `<URL>.sha256` が公開されていることが要る。取り寄せ先 `https://ekicyou.github.io/old/dot-sakura/download/nar/dot_sakura.nar` は今も取れる（1,425,534 バイト）が、隣の `dot_sakura.nar.sha256` は無い（10-22 に確かめて 404）。＝URL の行にするなら、開発者がサイトにハッシュのファイルを置く手が先に要る（人の待ち）。書庫を置く形（10-10 の決め）なら待ちは無い。
+- 触るファイル: 書庫を置くなら `vendors/sample_ghost/dot_sakura.nar`（新）。どちらの形でも、登記表 `lib.rs`（1 行）・数のテスト `lib_tests.rs`（726 行・数の直書き `9` が 206・497 行、説明の「9」が 7・198・260 行ほか＝**9 を 10 に**）・`vendors/sample_ghost/README.md`（224 行・表は形ごとに 2 つ）・根の `README.md`（136 行・検体の表は 36〜44 行）・steering。
+- 規模: 4〜6 タスク（変わらず。URL の行なら書庫の扱いが減って 4〜5）。
+- 先に要るもの: 働きの上では無し。`pasta-in-windows-verification` への働きの依存も無い（あちらは登記表に行を足さない）。ただし、あちらは中身の自動テストを `crates/sample-ghost-kit/src/` の兄弟のファイルに足すと書く＝`lib.rs` の末尾に `mod` の 1 行を足すなら同じファイルになる。あちらがテストを `tests/` に置くか、同じウェーブに並べない。
+- 同じウェーブに置けない相手: `default-balloon-selfmade`（登記表・数のテスト・検体の README）・`pasta-in-windows-verification`（上の `lib.rs` の 1 行）・`winget-release-automation`（根の `README.md`）。1 本だけの席は取らない（依存の追加なし・emo-text に触らない）。
+- 人の待ち・机: 実機で 1 回起こす（32 ビットの載せ台で華和梨・短い自動終了つき・AI が回せる）。静かな机・前後の全体テストの比べは要らない。シェルの絵を文書に貼るかは開発者に聞く（変わらず）。URL の行を選ぶなら、上のハッシュのファイルを置く手。
+- 優先度の区分: A（開発者「ゴースト検体に『どっとさくら』を追加」）。
+- 要件定義のモデル: Opus（新しい境目・並行や順の新しい保証・骨格の分かれ目のどれにも当たらない。登記の形は `sample-url-fetch` が決め済み）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述:
+  - 本文の「登記は 7 行」「8 行で緑」と、棚卸㉗の「8 を 9 に」は古い＝今は **9 → 10**。
+  - 根の `README.md` の検体の表に `emily4` と `pasta-in-windows` が無い（2 本の着地で足されなかった）。この spec で並べて足すかを要件の段で決める。
+  - 見張りの語（`bottle`・`dot_sakura`）は、今のソース（`crates/`・`tools/` の `.rs`・`.toml`・`.ps1`）で 0 件のまま。

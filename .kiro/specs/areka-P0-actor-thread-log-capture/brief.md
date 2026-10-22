@@ -89,3 +89,13 @@
 - 要件定義のモデル: Opus に改める（棚卸㉓は Fable）。呼んだスレッドの受け手を取って子のスレッドで既定にするのは記録の部品の決まった使い方で、新しい並行や順の保証を設計するのではない。窓が閉じた後の記録の扱いも、受け手の寿命の決めで足りる。
 - 分割の案: なし。素のスレッドまで広げる部分は、要るなら今の版の後に別の 1 本で足す。
 - 見つけた穴・古くなった記述: 棚卸㉓の「素のスレッドは 7 か所」は 8 か所になった（上の `roots/desk.rs`）。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: アクターの起こし方 `crates/areka-actor/src/spawn.rs`（360）・兄弟の `spawn_hook_tests.rs`（60）・捕捉の `crates/log-capture-kit/src/capture.rs`（107）は 10-16 から変わらない。log-capture-kit で動いたのはテストの番人 2 本だけ（`tests/sample_path_guard_test.rs`＝`real-run-mcp-kit`・`tests/file_length_guard_test.rs`＝`mcp-reload`）で、本 spec の触る所ではない。`spawn_actor` の本番の呼び手は 11 ファイルのまま。素のスレッドで起こす本番の所は 8→11 か所（`crates/areka/src/emo2_boot/switch_copy.rs`・`emo2_boot/spine_wait.rs`・`perf_thread_report.rs` が増えた・ほかに sylphya の `mirror.rs`）。対照の `crates/areka/src/install/desk_overwrite_tests.rs` は 688 行。
+- 触るファイル（アクターだけに絞る形）: `crates/areka-actor/src/spawn.rs` と兄弟の新しいテスト 1 本（`spawn_hook_tests.rs` へ足してもよい）・要るときだけ `capture.rs`。
+- 規模: アクターだけ 3〜5／素のスレッドまで 8〜12（棚卸㉖のまま）。
+- 先に要るもの: なし（先頭）。v0.1.0 との重なり: アクターだけ・対照を自分のクレートの中で示す形なら 0（`areka-actor` と `log-capture-kit/src/` を挙げる v0.1.0 の brief は無い。`pasta-in-windows-verification`・`dot-sakura-specimen` は log-capture-kit の `tests/sample_path_guard_test.rs` を触るが別のファイル）。依存は足さない＝1 本だけの席は取らない。静かな机・人の待ち・前後の全体テストの比べは要らない（最後の全体テスト 1 回で、「記録が無いこと」を見る既存のテストが赤に変わらないかを洗う）。版に縛らない列として隙間に入れるなら、この形（上限 5）に限る。
+- 優先度の区分: C のまま（テストの道具の改善・本番の記録は変えない）。
+- 要件定義のモデル: Opus のまま（呼んだスレッドの受け手を子のスレッドで既定にするのは記録の部品の決まった使い方＝新しい並行や順の保証を設計するのではない）。
+- 分割の案: なし（素のスレッドまで広げる分は、要るなら後で別の 1 本）。
+- 見つけた穴・古くなった記述: 棚卸㉖の「素のスレッドは 8 か所」は 11 か所。

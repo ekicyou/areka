@@ -101,3 +101,17 @@
 - **要件定義のモデル**: Opus のまま（新しい境目も並行の決めごとも無い）。
 - **分割の案**: 切らない。
 - **見つけた穴・古くなった記述**: 上の棚卸㉔の行数（`actor_present.rs` 411・`actor.rs` 663）は古い。`actor.rs` を「検査用の読み口」として触る前提は要らない見込み。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 10-16 の後、`crates/areka-emo-text/src/` への変更は 0。`actor_present.rs` の `present_actor` の並び（行の割り当て → 行の帯 → 強調の描画 → 描き替えがあったときだけ当たりの行）と、検査の側で同じ 3 つを並べ直す 2 か所（`actor_lookahead_shapes_tests.rs`・`choice_anchor_tests.rs` の補助の関数）はそのまま。
+- 触るファイル（行数）: `crates/areka-emo-text/src/actor_present.rs`（435）・`choice.rs`（748・まとめた関数をここに置くなら）・検査 `actor_lookahead_shapes_tests.rs`（421）・`choice_anchor_tests.rs`（273）。`actor.rs`（768）は触らない見込み。新しいファイルは足さない。
+- 規模: 3〜5 タスク。
+- 先に要るもの: 無し。
+- v0.1.0 との重なり: 0。v0.1.0 の brief に emo-text の `actor_present.rs`・`choice.rs` を触ると書くものは無い（`mouse-click-wheel-events` の `choice.rs` は kanade の `schedule/choice.rs`＝別のファイル。`emo2-real-run-stability` は `actor_present.rs` の記録を読むだけで触らない）。
+- 1 本だけの席: 取らない（emo-text の `lib.rs` の一覧に触らない・依存の追加なし）。
+- 人の待ち・机: 要らない（見た目と当たりを変えない直しで、決定論の検査だけで確かめる）。静かな机・前後の全体テストの比べも要らない。
+- 版の席: 版に縛らない列。上限 5＝v0.1.0 のウェーブの空き席に入れられる見込み。`real-run-log-noise` とも重なり 0＝同じウェーブに並べられる。
+- 優先度の区分: C（バグではない。検査が本番の並びを見張れない穴）。
+- 要件定義のモデル: Opus。
+- 分割の案: 切らない。
+- 見つけた穴・古くなった記述: v0.1.0 の後の見直し `audit-emo-text-state-actor` が `actor*`・`choice*` を持つ＝この spec を v0.1.0 の間に取れば先に済む。後に回すなら同じウェーブに置かない。

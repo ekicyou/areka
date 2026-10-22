@@ -103,3 +103,19 @@
   - 同じ `TextRegion::resolve` の中に、毎フレーム出うる `debug!` がほかに 2 つある（`region.rs` の `resolve_or` の「未指定座標成分を既定辺へ縮退する」＝validrect を書いていないとき、`resolve_origin_component` の「宣言された origin 成分が文字を描いてよい範囲の外にある」）。実測の記録に出ていないのは同梱のバルーンが書いているから。同じ形の洪水になるので、一緒に扱うかを要件で決める。
   - 上の棚卸㉔の行数（486・251）は古い。
   - `crates/areka-emo-atlas/src/lib.rs` の 164〜166 行目と 167〜169 行目に、同じ 3 行の説明が 2 回続いている（その場で直せる）。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 10-16 の後、触るファイルに変更は 0（`crates/areka-emo-text/src/region.rs` 495 行・`actor_attach.rs` 310 行・`actor_decoration.rs` 208 行は同じ。`crates/areka-emo-atlas/src/lib.rs` は 686 → 683 行）。毎フレームの `debug!` 2 種類（`region.rs` 479 行の「未指定の origin 成分を書字開始角へ寄せる」・`actor_attach.rs` 274 行の「文字層の再追従 … 同値のため」）と、焼き込みの全透明の警告（emo-atlas の `lib.rs` 184 行）はそのまま在る。
+- 触るファイル: 上の 3〜4 つと、記録の文言を固定している検査 `crates/areka-emo-text/tests/attach_wiring_test.rs`（788 行・749 行が「文字層の再追従」の記録を**ちょうど 1 回**と数える＝出し方を変えたら直す）・`region_tests.rs`・`actor_region_warn_tests.rs`。記録の文言は道具（`tools/`）と `doc/` には使われていない（引いて 0 件）。
+- 規模: 3〜5 タスク（`trace!` へ下げるだけなら 2〜3）。
+- 先に要るもの: 無し。
+- v0.1.0 との重なり: 0。v0.1.0 の brief に `region.rs`・`actor_attach.rs`・emo-atlas の `lib.rs` を触ると書くものは無い（`placement-measure-bake-once` は焼き込みの中身を範囲の外に置く・`offline-surface-dump` が触るのは emo-atlas の `decode/wic_arm.rs`）。`emo2-real-run-stability` が待つ記録 `wrap=BudouxWordWrap` は `actor_present.rs` の `info!` で、この spec が変える `debug!` とは別。
+- 1 本だけの席: 取らない（今ある検査へ足せば emo-text の `lib.rs` の一覧に触らない・依存の追加なし）。
+- 人の待ち・机: 要らない。直した後の数え直しは、有界の自動終了つきの短い実走（約 50 秒）を AI が回す。静かな机・前後の全体テストの比べ・長い負荷の走行は要らない。
+- 版の席: 版に縛らない列。上限 5 は小さく、v0.1.0 のウェーブの空き席に入れられる見込み（そのウェーブの v0.1.0 の一番大きい spec の下限が 5 以上なら）。`choice-ranges-one-function` とも重なり 0。
+- 優先度の区分: C（バグでない持ち越し）。
+- 要件定義のモデル: Opus。
+- 分割の案: 切らない。
+- 見つけた穴・古くなった記述:
+  - 棚卸㉖の「emo-atlas の `lib.rs` の 164〜166 行目と 167〜169 行目に同じ説明が 2 回」は、もう直っている（今は 164〜166 行目に 1 回だけ）。
+  - v0.1.0 の後に取る見直しの spec（`audit-emo-text-layout-draw` が `region*`、`audit-emo-text-state-actor` が `actor*`、`audit-emo-atlas` が emo-atlas の全部を持つ）と同じファイル＝この spec を v0.1.0 の間に取れば先に済む。後に回すなら同じウェーブに置かない。

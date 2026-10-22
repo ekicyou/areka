@@ -74,3 +74,14 @@
 ## 優先度の区分
 
 C（バグでない持ち越し。今の既定〔門は切〕では遅れは出ず、門を入れる前に片づけておくもの）。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: tick の門（`crates/wintf/src/ecs/world/tick_gate.rs` 222 行・心拍 30 コマは 53 行目・慣らし 600 コマは 58 行目）・旗の表（`crates/wintf/src/ecs/world/tick_wake.rs` 374）・旗の見張り（`crates/areka/src/tick_gate_config_producers_tests.rs` の `AREKA_PRODUCERS` 7 行）は起票から変わらない。門は今も既定で切＝今の既定では遅れは出ない。起票の 3 つ（`emo2_boot/switch_copy.rs` 115・`switch_assets.rs` 253・`change_cue.rs` 119）も変わらない。
+- 旗を立てない背景の結果が 2 つ増えた: ⑴ `mcp-reload`（10-22）の読み直しの知らせ（`crates/areka/src/emo2_boot/reload_cue.rs` の受け口と `reload.rs` の待ち）。⑵ MCP の頼みの受け口（`crates/areka/src/mcp/mod.rs` の `drain`・MCP の受け手のスレッドから届く頼みを刻みで拾う・旗を立てる所は areka-mcp にも無い）＝門を入れた形では MCP の 1 回の答えが最大で心拍 1 回ぶん（約 0.5 秒）遅れうる。v0.1.0 の自動の試験は MCP を何度も呼ぶので、門を入れる前に効く。
+- 触るファイル: 一覧で対象と決めた送る側（`emo2_boot/{switch_copy,switch_assets,change_cue,switch_cue,reload_cue}.rs` のうち）・MCP の受け口（`crates/areka-mcp/src/server.rs` か `crates/areka/src/mcp/mod.rs`）・`tick_gate_config_producers_tests.rs`・旗の種類を足すなら `tick_wake.rs`。
+- 規模: 6〜10（候補が 2 つ増えた分）。
+- 先に要るもの: なし。同じウェーブに置けない相手（v0.1.0）: `descript-window-keys`（`switch_assets.rs`）・余力の枠の `multi-ghost-runtime`（切り替えの結線）。`placement-measure-bake-once` は `switch_assets.rs` を範囲の外と決めた＝0。MCP の受け口の 2 ファイルを挙げる v0.1.0 の brief は無い。依存は足さない＝1 本だけの席は取らない。静かな机・人の待ち・前後の比べは要らない（門を入れた形の決定論のテスト）。版に縛らない列として隙間に入れるなら、`descript-window-keys` と別のウェーブで、上限 10 がそのウェーブの v0.1.0 の一番大きい spec の下限以下のとき。
+- 優先度の区分: C のまま（バグでない持ち越し・門を入れる前に片づけるもの）。
+- 要件定義のモデル: Opus のまま。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: 本文の「ほかの候補」に MCP の受け口と読み直しの知らせが無い（上の 2 つ）。

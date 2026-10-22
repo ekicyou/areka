@@ -126,3 +126,22 @@
 ## 申し送り（2026-10-17・`areka-P0-move-canon` の要件ディスカッションから）
 
 - `move-canon` の `\![move]` は、基準に他のゴーストの名前（ukadoc: sakura 名か \0 名とスコープ ID）が書かれると、今はスコープ 0 に置き換えて動かし、置き換えたことを記録する（SSP 2.9.18 の実測で、知らない名前はスコープ 0 扱い）。複数のゴーストが同時に動くようになったら、名前を走っているゴーストの窓へ解決することを本 spec の要件の段で引き取る。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 版の段で「v0.1.0 の余力の枠」（v0.1.0 の残りが人や外の待ちで止まったときだけ取る）。10-16 の後に `user-data-root`・`write-failure-notice`・`move-canon`・`mcp-kanade-tools`・`startup-options-core`・`mcp-reload` が、この spec の触るファイルを先に触って着地した。
+  - `crates/areka/src/main.rs` は 1,000 行ちょうど → **965 行**（`startup-options-core` が起動オプションを `cli/` へ出した）。最初のタスクで中身を外へ出す必要は弱まったが、余りは 35 行。
+  - kanade の `msg.rs` は 930 → **539**、`schedule/mod.rs` は 969 → **664**、`emo2_boot/consumer_ledger.rs` は 943 → **472**（`mcp-kanade-tools`・`mcp-reload` が割った）。
+  - いま上限に近いのは `emo2_boot/ghost_switch.rs` 921・`placement/mod.rs` 915・`ghost_session.rs` 910 行。ほかに `emo2_boot/mod.rs` 787・`placement/spawn.rs` 776・`boot_resolve.rs` 714。
+- ゴーストの箱 `GhostSlot` を読む本番のファイルは 22 → **28**。増えたのは `emo2_boot/reload.rs`・`emo2_boot/shell_carry.rs`（`mcp-reload`＝読み直しでシェルの状態を持ち越す道も、席ごとに分ける対象になった）・`mcp/sakurascript.rs`（`mcp-kanade-tools`）・`menu/reset_pos_frame.rs`（`move-canon`）・`roots/edit.rs`・`ghost_session_runtime.rs`。`quit_app` を呼ぶファイルは 8 → **10**（`smoke_exit.rs`・`write_failure.rs` ほか）。窓の印と `GhostWindows` に触る本番のファイルは 41。止まりの知らせの受け口は今も 1 本（`emo2_boot/frame.rs` 173 行の `KanadeNoticeRx`）。
+- 触るファイル: 本文と棚卸㉕のとおり＋上の新しい読み手。
+- 規模: 24〜30 タスク（読み手が 6 増えた分を含めて上限のまま）。
+- 先に要るもの: 働きの上では無し。ファイルの上では `dpi-realign-remembered-chain`（`placement/`）を先に着地させる（roadmap の決めのまま）。
+- v0.1.0 との重なり（ほぼ全部）: `boot_resolve.rs`・`boot_config.rs`（`readonly-mode`・`ghost-inner-balloon`・`startup-install-option`・`default-balloon-selfmade`）・`ghost_session.rs`（`placement-measure-bake-once`・`startup-install-option`・`dpi-realign-remembered-chain`）・kanade の `msg.rs`（`mcp-strict-errors`・`script-security-level`・`mouse-click-wheel-events`）・`input_events/mod.rs`（`mouse-click-wheel-events`・`shell-mouse-cursor`）・`menu/mod.rs`（`popup-menu-shell-look`）・`main.rs`（`offline-surface-dump`・`readonly-mode`・`startup-install-option`）・sylphya の `persist/` と `mcp/resolve.rs`（`property-name-case-fold`・`readonly-mode`）。＝余力の枠で取るときも、ほぼ単独で走る。
+- 1 本だけの席: 取らない見込み（依存の追加なし・emo-text に触らない）。人の待ち: 2 体を並べた実機の確かめ（AI が回せる）。静かな机・前後の全体テストの比べは要らない（終わり方を作り直すので、赤が出たテストに絞って回し直す）。
+- 優先度の区分: A（開発者「複数ゴーストの同時起動→アプリ設計として可能だが、まだ出来ていない」）。
+- 要件定義のモデル: **Fable**（厳しく見直しても当たる）。当たる基準＝並行と順の保証を新しく設計する。止まりの知らせは 1 本の受け口に届く順と「ゴーストが 1 体」に頼って読まれ（`emo2_boot/frame.rs` の `KanadeNoticeRx`・`run_ghost_quit_phase`）、アプリの範囲の記憶は「読んで重ねて書く」ので複数の書き手が同時に書くと片方が消えうる（`boot_resolve.rs` の印の関数の説明）。今の作りに乗るだけでは済まず、届く順と書き手を 1 つにする決まりを新しく作る。
+- 分割の案: 棚卸㉕のまま（要件で 25 を超えたら、前＝「席と区別」、後＝「止まり方と記憶」。`ghost-call` は後を待つ）。読み直しの道（`reload.rs`・`shell_carry.rs`）を席ごとにするのは前に入れる。
+- 見つけた穴・古くなった記述:
+  - 本文の「上限の近いファイル」の行数（`main.rs` 956・`consumer_ledger.rs` 943・`msg.rs` 930 ほか）は古い（上の今の数）。`consumer_ledger.rs` はこの spec の重さに効かなくなった。
+  - roadmap の「`main.rs` は 1,000 行ちょうど」の記述（直列の列の 2 か所）も古い。
+  - この brief の最後の申し送りの節の 4 行だけ、行末の形がほかの行と違う（その場で直せる）。

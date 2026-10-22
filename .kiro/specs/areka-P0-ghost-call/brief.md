@@ -89,3 +89,18 @@
 - 要件定義のモデル: Opus。イベントと Reference の並びは ukadoc が決め、名前の解決は完了 `ghost-change-name-resolution` を使い回す。議題 2（送る順）は ukadoc の「同じとき」の 2 通りの並べ方で、骨格の分かれ目ではない。
 - 分割の案: 切らない。
 - 見つけた穴・古くなった記述: 本文に kanade の `src/change.rs`・`schedule/boot.rs`（`OnGhostCalled` から `OnBoot` への落ち方）が無い＝`mcp-reload` と直列になることが書かれていない。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 版の段で「v0.1.0 の余力の枠」の 2 本目（`multi-ghost-runtime` の後）。`mcp-reload` が着地した（10-22）＝棚卸㉕の「`mcp-reload` と直列」は解けた。
+  - あちらは kanade の起動の出どころ `BootOrigin`（`crates/areka-kanade/src/change.rs`・188 行）に読み直しの 1 種 `Reloaded` を足した。この spec は同じ型に「呼ばれた」を 1 種足す＝前例の形に沿って足すだけ。
+  - `emo2_boot/consumer_ledger.rs` は 943 → **472 行**に割られた（テストは兄弟の `consumer_ledger_tests.rs` 555 行・`consumer_ledger_agreement_tests.rs` 385 行）。本文の Constraints の「足す前に中のテストを兄弟へ出す」は済んでいる。
+  - `\![call,ghost]` の行は今も無い。`OnGhostCalling`・`OnGhostCalled`・`OnGhostCallComplete`・`OnOtherGhostClosed`・`OnOtherGhostChanged` は本番のコードに 0 件、`OnOtherGhostBooted` は `crates/areka/src/reference_brain.rs`（515 行）の検査の文字列 1 か所だけ（変わらず）。
+- 触るファイル: `consumer_ledger.rs`（行 1 つ）と `consumer_ledger_agreement_tests.rs`（見本 1 つ）・受け取り手（`emo2_boot/change_cue.rs` 119 行か新しいファイル）・`menu/mod.rs`（368）と `menu/ghost_frame.rs`（75）と新しい枠・kanade の `change.rs` と `schedule/boot.rs`（379）・周りへ送る所（`multi-ghost-runtime` が作る席の集まり）・網羅台帳 `sakura-script.toml` と `shiori.toml` の行・`doc/COMPAT_ARCHITECTURE.md` §8。
+- 規模: 10〜14 タスク（変わらず）。
+- 先に要るもの: `multi-ghost-runtime`（働き・未完了）。
+- 同じウェーブに置けない相手（v0.1.0）: `consumer_ledger.rs` を触る `mcp-strict-errors`・`script-security-level`・`stay-on-top-directives`・`window-link-directives`・`script-small-tags`・`descript-window-keys`（表の別の行でも同じファイル）／kanade の `change.rs`・`schedule/boot.rs` を触る `script-security-level`・`mouse-click-wheel-events`／`menu/mod.rs` を触る `popup-menu-shell-look`。網羅台帳は別の行なら並べてよいが、行の状態を動かすときは `briefing.md` の数を同じ時に書き換える相手と照らす。
+- 1 本だけの席: 取らない。人の待ち・静かな机・前後の全体テストの比べ: 要らない（実機で 2 体目を呼ぶ確かめは AI が回せる）。
+- 優先度の区分: A（開発者「複数ゴーストの同時起動→アプリ設計として可能だが、まだ出来ていない」）。
+- 要件定義のモデル: Opus（イベントと Reference の並びは ukadoc が決め、名前の解決は完了 `ghost-change-name-resolution` を使い回し、起動の出どころへの 1 種の追加は `Reloaded` の前例に沿う。送る順の議題 2 は ukadoc の「同じとき」の並べ方の選びで、骨格の分かれ目ではない）。
+- 分割の案: 切らない。
+- 見つけた穴・古くなった記述: 本文の「Current State」の `consumer_ledger.rs`（943 行）と Constraints の「テストを兄弟へ出す」は古い（済んだ）。本文の Adjacent の `mcp-reload` は着地済み。

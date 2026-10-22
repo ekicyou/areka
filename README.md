@@ -42,6 +42,7 @@
 | `R_POST_and_KOMAINU` | 里々 | 標準テンプレート |
 | 紺野ややめ（`konnoyayame`） | YAYA | 標準テンプレート。シェルが CC BY-NC-ND のため開発用の検体としてだけ使い、配布物には入れません |
 | 悪役令嬢クローディア（`claudia`） | YAYA | 同梱バルーンを 2 つ持つ検体 |
+| えみり（`emily4`） | YAYA | SSP に同梱のゴーストから作った検体。CC BY-NC 4.0 のため開発用の検体としてだけ使い、配布物には入れません |
 
 既定のバルーンは CC0 の [StayseeBalloon](https://github.com/ponapalt/StayseeBalloon) です。
 

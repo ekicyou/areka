@@ -107,3 +107,13 @@ kanade のマウスの出来事に「クリック」と「ホイール」を足�
 - 優先度の区分: **A に改める**（C から。開発者の指示＝v0.1.0 のゴール・ぱすた）。要件定義のモデル: **Opus に改める**（棚卸㉔までは Fable。10-15 の基準で、`OnMouseUp` → `OnMouseClick` の 2 段は選択肢・アンカーの前例があり、先例の無い骨格に当たらない）。分割の案: なし。
 - 議題を 1 つ足す: 5. `OnMouseEnterAll`／`OnMouseLeaveAll`（窓に入った・出た）も入れるか（ぱすたは使わない）。SSP で測る: 当たり判定から当たり判定へ直に移ったときの Leave と Enter の順・窓の外へ出たときの Leave。
 - 古くなった記述: 本文 Out の「`OnMouseEnter`／`Leave`／`Hover`」は「`OnMouseHover`」だけになる。Downstream に `shell-mouse-cursor`・`shell-tooltip`・`pasta-in-windows-verification` を足す。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: `mcp-kanade-tools`（10-19）が kanade の `msg.rs`（930→539 行）と `schedule/mod.rs`（969→664 行）を割った＝割った後の形に足せる。`schedule/events.rs` は 850→886 行（MCP の `raise_event` の許可の表の迂回が入った・残り 114）。`schedule/steady.rs` は 957 行のまま（残り 43）。単発のクリック・ホイール・当たり判定の出入りは今も送らない（kanade のマウスの出来事 `MouseEventKind`〔`msg.rs` 125 行目〕は移動・ダブルクリック・ドラッグの開始と終了の 4 つのまま）。入力の側（`crates/areka/src/input_events/mod.rs` 575・`throttle.rs` 276・`crates/areka/src/menu/trigger.rs` 573）は 10-18 から変わらない。当たり判定の追跡のファイルはまだ無い。
+- 触るファイル: kanade の `msg.rs`（539）・`schedule/events.rs`（886）・`schedule/steady.rs`（957・案 A の応答の腕の入口の数行だけ・判断は新しいファイル）・`schedule/mod.rs`（案 A の状態の欄 1 つ）・`crates/areka/src/input_events/mod.rs`（575）・新しい `input_events/hover_region.rs`（印: 新・`shell-mouse-cursor` と共有）・ホイールの間引き（`throttle.rs` か新しいファイル）・議題 3 で右クリックの順を変えるときだけ `menu/trigger.rs`・各兄弟のテスト・台帳 `shiori.toml` の 5〜9 行・`doc/COMPAT_ARCHITECTURE.md` §8。roadmap の「棚卸㉗で列に足したこと」は `schedule/boot.rs` も挙げるが、brief の本文に理由が無い＝設計で照合（`boot.rs` は `mcp-reload` が 10-22 に触って着地済み）。
+- 規模: 10〜16 のまま（議題 1 が案 B なら 10〜13・案 A なら 13〜16）。
+- 先に要るもの: 働きの上で無し。roadmap の kanade の列は `script-security-level` の後に置くが、2 本の間は同じファイル（`msg.rs`・`schedule/events.rs`・`schedule/steady.rs`）だけの直列で、働きの前後は無い＝どちらを先にしてもよい（ぱすたのゴールに直に効くのは本 spec）。同じウェーブに置けない相手（v0.1.0）: `script-security-level`・`shell-mouse-cursor`（`input_events/`）・議題 3 で `menu/trigger.rs` を触るなら `popup-menu-residue`（版に縛らない）。1 本だけの席は取らない。実機の確かめは画面のロックを外した机で入力を送る＝人の在席が要る。議題 5 の SSP の測り（当たり判定どうしを移ったときの Leave と Enter の順）は SSP の机。
+- 優先度の区分: A のまま（開発者の指示＝v0.1.0 のゴール・ぱすたの × の印とボールのクリック）。
+- 要件定義のモデル: Opus のまま（`OnMouseUp` → `OnMouseClick` の 2 段は選択肢とアンカーの前例どおり）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: 本文 Constraints の行数（`msg.rs` 926・`schedule/steady.rs` 950）は上の数に読み替える。本文 Out の「`OnMouseEnter`／`Leave`／`Hover`」は棚卸㉗で `OnMouseHover` だけになったが、本文は直っていない（要件の段で読み替える）。

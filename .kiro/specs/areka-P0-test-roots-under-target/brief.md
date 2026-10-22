@@ -75,3 +75,16 @@
 - 要件定義のモデル: Opus。
 - 分割の案: なし。
 - 見つけた穴・古くなった記述: brief 本文の「呼ぶのは 80 ファイル・240 か所」「`under_target` を使うのは 2 ファイル」は上のとおり古い。例外表のうち `shiori-host32-host/src/process_host.rs` は `dev-helper-x64-clobber` が 10-16 に触った（例外の行はそのまま）。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 入口の部品 `crates/temp-path-kit/src/lib.rs`（148 行・`new` 101 行目・`under_target` 115 行目）・`lib_tests.rs`（165 行）・見張り `crates/log-capture-kit/tests/temp_path_guard_test.rs`（783 行）は 10-16 から変わっていない。OS の一時フォルダに根を作る `TempPath::new` は 81 ファイル・237 か所→**82 ファイル・238 か所**（`areka` 46・`areka-ghost` 23・`areka-emo-present` 5・`areka-parsers` 3・`temp-path-kit` 2・`areka-sylphya` 1・`areka-impl-watch` 1・`log-capture-kit` 1）。`target\` の下に作る `under_target` を使うのは 29→**62 ファイル**（実機の試験の窓口 `real-run-kit` 6・`areka-impl-watch` 11・中継 4・`areka-user-data` 2 などが増えた）。
+- 触るファイル（入口の中身だけ替える案）: `crates/temp-path-kit/src/lib.rs`・`lib_tests.rs`・`crates/log-capture-kit/tests/temp_path_guard_test.rs` の 3 本。238 か所は一度に動き、書き換えは要らない。例外表の 19 ファイルまで直すなら、棚卸㉖の節のとおり足される。
+- 規模: 入口を替える案で 4〜7（例外表まで入れると 8〜11）のまま。
+- 先に要るもの: 無い＝先頭。
+- v0.1.0 の spec との重なり（隙間に入れられるか）: 入口を替える案の 3 本は、版の段の v0.1.0 の行の 23 本のどの brief にも挙がっていない＝重なり 0（`pasta-in-windows-verification`・`dot-sakura-specimen` が挙げる `log-capture-kit` のファイルは別の `sample_path_guard_test.rs`）。1 本だけの席（依存の追加・emo-text の純粋なファイルの表）も取らない。人や外の待ち・静かな机・前後の全体テストの比べも要らない（棚卸㉖の改めのまま）＝**v0.1.0 の間の隙間の候補になる**。条件: そのウェーブで一番大きい v0.1.0 の spec の下限が 7 以上（例外表まで入れるなら 11 以上）。`areka-test-binary-stability` を静かな机で測っている間は着地させない（全部のテストの一時の根の置き場が動き、測りの基準が変わる）。
+- 例外表まで入れる案のときの重なり: `shiori-host32-host/tests/` の 2 本が版に縛らない `clippy-199-lints` の段 1 と重なる。v0.1.0 とは 0 のまま。
+- 気をつけること: パスが長くなる（棚卸㉖の節のとおり）。実物の `pasta.dll` を読む `crates/areka-ghost/tests/ghost/real_pasta_test.rs` は今も `TempPath::new`（108 行目）＝入口を替えると `target\test-roots\` の下へ移る。先に長さを確かめる。
+- 優先度の区分: C のまま。
+- 要件定義のモデル: Opus のまま。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: 棚卸㉖の節の数（81 ファイル・237 か所・`under_target` 29 ファイル）は上のとおり古い。見直しの `audit-test-kits`（v0.1.0 の後）が `temp-path-kit` を受け持つ＝本 spec が先に着地すれば、見直しは新しい形を読む（順は困らない）。
