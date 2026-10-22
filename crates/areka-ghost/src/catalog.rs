@@ -1,6 +1,6 @@
 //! ベースウェアの根の目録（design.md「areka-ghost: catalog」）。
 //!
-//! 根の直下 `ghost/`・`balloon/` と、ゴーストの `shell/` を**直下 1 段だけ**走査し、
+//! 根の直下 `ghost/`・`balloon/` と、ゴーストの `shell/`・`balloon/` を**直下 1 段だけ**走査し、
 //! ゴースト・シェル・バルーンを素性（要件 2.4 の 7 項目）付きで返す。同梱バルーン名
 //! （`install.txt` の同梱の最初の 1 個＝無印 → `balloon0` の `*.directory`）・ゴーストの descript の
 //! 標準のバルーンの指定（`default.balloon.path`・`balloon`）と「そのフォルダはゴーストか」の判定も持つ。
@@ -12,8 +12,9 @@
 //! - 記憶・解決順・既定の定数は知らない（`areka-sylphya`・`areka-nar` に依存しない）。
 //! - 失敗は縮退（`warn!`＋除外）で、列挙は `Result` を返さない。格納フォルダが無いのは 0 件。
 //! - 並びはフォルダ名のバイト順（`String::cmp`）。`recommended.*` は使わない（要件 2.5）。
-//! - 1 根の走査（`scan_ghosts`・`scan_balloons`）は crate の中だけ。外から一覧と引き当てを得る口は
-//!   和の部品（`catalog_roots`）だけ（areka-P0-baseware-root-list 要件 2.6）。
+//! - 1 根の走査（`scan_ghosts`・`scan_balloons`）とゴーストの中の走査（`scan_ghost_balloons`）は
+//!   crate の中だけ。外から一覧と引き当てを得る口は和の部品（`catalog_roots`）だけ
+//!   （areka-P0-baseware-root-list 要件 2.6）。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -153,7 +154,7 @@ pub struct ShellEntry {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BalloonEntry {
     pub dir: PathBuf,
-    /// 走査した根（要件 3.4: 項目からどの根の下にあるかを引く）。
+    /// 走査した基のフォルダ（根の項目は根・ゴーストの中の項目はそのゴーストのフォルダ）。
     pub root: PathBuf,
     pub identity: Identity,
 }
@@ -211,7 +212,22 @@ pub(crate) fn scan_balloons(root: &BasewareRoot) -> Vec<BalloonEntry> {
     if root.is_temporary() {
         return Vec::new();
     }
-    subdirs(&root.balloon_store())
+    scan_balloon_store(&root.balloon_store(), root.dir())
+}
+
+/// `<ゴースト>/balloon/` の直下を根の `balloon/` と同じ判定で走査する（areka-P0-ghost-inner-balloon
+/// 要件 1.1〜1.3）。項目の `root` はそのゴーストのフォルダ。一時の置き場の印は見ない。
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "呼び手 `balloons_for` は次のタスク（1.2）で足す")
+)]
+pub(crate) fn scan_ghost_balloons(ghost_dir: &Path) -> Vec<BalloonEntry> {
+    scan_balloon_store(&ghost_dir.join("balloon"), ghost_dir)
+}
+
+/// バルーンの格納フォルダ `store` の直下 1 段の走査の本体。項目の `root` は `base`。
+fn scan_balloon_store(store: &Path, base: &Path) -> Vec<BalloonEntry> {
+    subdirs(store)
         .into_iter()
         .filter_map(|(folder, dir)| {
             let descript = read_descript(&dir.join(DESCRIPT_FILE))?;
@@ -228,7 +244,7 @@ pub(crate) fn scan_balloons(root: &BasewareRoot) -> Vec<BalloonEntry> {
             let identity = identity(folder, &dir, &descript);
             Some(BalloonEntry {
                 dir,
-                root: root.dir().to_path_buf(),
+                root: base.to_path_buf(),
                 identity,
             })
         })

@@ -263,6 +263,9 @@ fn root_key(p: &Path) -> String {
 }
 
 #[cfg(test)]
+#[path = "catalog_roots_ghost_balloon_tests.rs"]
+mod ghost_balloon_tests;
+#[cfg(test)]
 #[path = "catalog_roots_temporary_tests.rs"]
 mod temporary_tests;
 #[cfg(test)]

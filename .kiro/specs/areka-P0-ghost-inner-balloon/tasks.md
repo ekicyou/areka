@@ -14,7 +14,7 @@
 ## Tasks
 
 - [ ] 1. 目録: ゴーストの中のバルーンの走査と、根の和との合わせ方（`areka-ghost`）
-- [ ] 1.1 ゴーストの中の `balloon\` を、根と同じ判定で走査する
+- [x] 1.1 ゴーストの中の `balloon\` を、根と同じ判定で走査する
   - 根の 1 根の走査の本体を「置き場と基のフォルダを受ける 1 つの関数」へ切り出し、根の走査はそれを呼ぶだけにする（一時の置き場の印で 0 件にする扱いは根の側に残す）。根の走査の答えは 1 つも変えない
   - ゴーストのフォルダを受けて `<ゴースト>\balloon\` の直下 1 段だけを同じ関数で走査する口を足す。作る項目の `root` はそのゴーストのフォルダ、`dir` は `<ゴースト>\balloon\<フォルダ名>`。一時の置き場の印は見ない（`--ghost` で渡したゴーストでも数える）
   - 判定・素性の作り方・記録（`catalog_type_not_balloon`・`subdirs` の読めない警告・descript.txt が無いものは黙って除く）を根と同じ経路に通し、記録の無い失敗の道を作らない
@@ -146,3 +146,8 @@
   - 足したテストの検体と一時フォルダが `target\` の下だけに作られていることを確かめる
   - `cargo test -p areka-ghost -p areka-nar -p areka-update -p areka` と整形の検査が緑
   - _Requirements: 6.1, 10.1, 10.2_
+
+## Implementation Notes
+
+- 1.1: `scan_ghost_balloons` は呼び手が来るまで `#[cfg_attr(not(test), expect(dead_code, ...))]` を付けてある。1.2 で `balloons_for` から呼ぶときに外す（外し忘れは unfulfilled_lint_expectations の警告になる）。
+- 範囲外: `cargo clippy -p areka-ghost --all-targets -- -D warnings` は依存の `dola` の既存の lint（`resolve.rs`・`conflict_resolver.rs` など）で止まり、このクレートまで届かない（完了の棚卸で扱う）。
