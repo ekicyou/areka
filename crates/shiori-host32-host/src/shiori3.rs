@@ -107,7 +107,7 @@ pub fn build_request(req: &ShioriRequest) -> EncodedRequest {
     out.push_str("\r\n");
     // 追加のヘッダは `Status`・`ID` より前に、この順で値を解釈せず verbatim に書く
     // （areka-P0-script-security-level 要件 2.1・DD-IT-6）。
-    // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#SecurityLevel_20_5bSSP_62e1_5f35_5d:1
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#SecurityLevel:1
     out.push_str("SecurityLevel: ");
     out.push_str(req.headers.security_level);
     out.push_str("\r\n");
@@ -193,6 +193,11 @@ pub struct ParsedResponse {
     ///
     /// 置換があっても解析は続行する。警告ログは呼び手（`note_response`）が担う。
     pub decode_had_errors: bool,
+    /// 応答の `SecurityLevel` ヘッダの生の値（前後空白を落とした値・無ければ `None`）。
+    ///
+    /// 解釈しない（`local`／`external` の判定と読めない値の warn は kanade・
+    /// areka-P0-script-security-level 要件 3.5）。
+    pub security_level: Option<String>,
 }
 
 /// 復号より先に、応答の `Charset` ヘッダの生の値をバイト列から走査する（要件 4.1）。
@@ -255,6 +260,7 @@ fn scan_charset_header(bytes: &[u8]) -> Option<String> {
 /// - ヘッダ行: `名前: 値`。名前・値は前後空白をトリム。ヘッダ名の一致は
 ///   大文字小文字を無視（donor 準拠の堅牢性）。
 /// - `Value` → `value`（要件 2.1）。`ErrorLevel`/`ErrorDescription` → 各 `Option`（要件 2.5）。
+///   `SecurityLevel` → `security_level`（生の値・areka-P0-script-security-level 要件 3.5）。
 /// - 未知ヘッダ（`Reference0`/`Marker`/任意）は無視し parse を失敗させない（要件 2.8）。
 /// - `Charset` ヘッダ省略時は方針の中の文字コード（＝要求に用いた文字コード）を継承（要件 2.6）。
 ///
@@ -286,6 +292,7 @@ pub fn parse_response(bytes: &[u8], policy: CharsetPolicy) -> Result<ParsedRespo
     let mut value = None;
     let mut error_level = None;
     let mut error_description = None;
+    let mut security_level = None;
 
     for line in lines {
         // ヘッダ以外（空行・終端）は素通し。`名前: 値` のみ処理。
@@ -304,6 +311,9 @@ pub fn parse_response(bytes: &[u8], policy: CharsetPolicy) -> Result<ParsedRespo
         } else if name.eq_ignore_ascii_case("ErrorDescription") {
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#ErrorDescription_20_5bSSP_62e1_5f35_5d:1
             error_description = Some(val.to_string());
+        } else if name.eq_ignore_ascii_case("SecurityLevel") {
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#SecurityLevel_20_5bSSP_62e1_5f35_5d:1
+            security_level = Some(val.to_string());
         }
         // Reference0 / Marker / 未知ヘッダ等は読み飛ばす（要件 2.8）。`Charset` は復号前に
         // `scan_charset_header` が拾い終えているので、ここでは腕を持たない（要件 4.1）。
@@ -316,6 +326,7 @@ pub fn parse_response(bytes: &[u8], policy: CharsetPolicy) -> Result<ParsedRespo
         error_description,
         charset_header,
         decode_had_errors,
+        security_level,
     })
 }
 
@@ -357,6 +368,7 @@ mod tests {
                 error_description: None,
                 charset_header: Some("UTF-8".to_string()),
                 decode_had_errors: false,
+                security_level: None,
             }
         );
     }

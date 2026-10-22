@@ -46,7 +46,7 @@ pub use parent_window::{ParentMessageWindow, SendError, WindowCreationError};
 pub use process_host::{
     ExitKind, HelperHandle, PARENT_HWND_ENV, REQUEST_TIMEOUT, poll_exit, poll_exit_kind, spawn,
 };
-pub use request_headers::RequestHeaders;
+pub use request_headers::{RequestHeaders, ValueReply, request_of};
 pub use shiori3::{
     EncodedRequest, Method, ParsedResponse, ShioriRequest, build_request, parse_response,
 };

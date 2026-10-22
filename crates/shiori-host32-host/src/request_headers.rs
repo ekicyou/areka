@@ -4,6 +4,9 @@
 //! 解釈しない文字列として運ぶ（DD-IT-6）。出どころの語彙は kanade が持ち、本クレートは
 //! 書くだけ。後続の spec は欄を足す（例 `X-MCP-PassThru-*`）。
 
+use crate::charset::Charset;
+use crate::shiori3::{Method, ShioriRequest};
+
 /// 追加のヘッダの入れ物（wire 値・解釈しない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RequestHeaders<'a> {
@@ -28,6 +31,37 @@ impl<'a> RequestHeaders<'a> {
             sender,
             sender_type: "internal",
         }
+    }
+}
+
+/// GET の Value つき応答（値と、応答の `SecurityLevel` の生の値・無ければ `None`）。
+///
+/// レベルは解釈しない（`local`／`external` の判定は kanade・要件 3.5）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValueReply {
+    /// `Value` ヘッダの値。
+    pub value: String,
+    /// 応答の `SecurityLevel` ヘッダの生の値（前後の空白を落とした値）。
+    pub security_level: Option<String>,
+}
+
+/// 32bit の仲介と同じプロセスの 2 つの経路が共に使う要求の組み立て（要件 2.8 を構造で満たす）。
+#[must_use]
+pub fn request_of<'a>(
+    method: Method,
+    id: &'a str,
+    references: &'a [String],
+    status: Option<&'a str>,
+    headers: RequestHeaders<'a>,
+    charset: Charset,
+) -> ShioriRequest<'a> {
+    ShioriRequest {
+        method,
+        id,
+        references,
+        headers,
+        status,
+        charset,
     }
 }
 
