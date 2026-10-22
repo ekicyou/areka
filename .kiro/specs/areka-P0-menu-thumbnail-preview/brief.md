@@ -59,7 +59,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: なし（新しい境目）。
-- **Adjacent**: `popup-menu-shell-look`（同じ `window_proc/mod.rs`・`menu/{mod,win32,plan}.rs` を触る＝同じウェーブに置かない）・`popup-menu-residue`（`menu/` を触る・相乗りが安い）・`ghost-call`（呼び出しの段を足す）・`property-catalog-lists`（プロパティ `thumbnail`）・`audit-areka-input-menu`・`audit-ghost-catalog`（v0.1.1 で同じ所を直す＝先に着地する）。
+- **Adjacent**: `popup-menu-shell-look`（同じ `window_proc/mod.rs`・`menu/{mod,win32,plan}.rs` を触る＝同じウェーブに置かない）・`popup-menu-residue`（`menu/` を触る・相乗りが安い）・`ghost-call`（呼び出しの段を足す）・`property-catalog-lists`（プロパティ `thumbnail`）・`audit-areka-input-menu`・`audit-ghost-catalog`（v0.1.0 の後の隙間の見直しで同じ所を直す＝先に着地する見込み）。
 
 ## Constraints
 

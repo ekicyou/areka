@@ -76,7 +76,7 @@ areka の値の持ち方が、置き場によってばらばらである。覚�
 
 ## Upstream / Downstream
 
-- **Upstream**: `audit-sylphya-actor`（v0.1.1・同じ crate を見直して直す＝その着地の後に着手）・`readonly-mode`（v0.1.0・「書かない」の継ぎ目）・`multi-ghost-runtime`（v0.1.0 の余力の枠・着地していればアプリ層の書きの集め方に合わせる）・`property-name-case-fold`（v0.1.0・鍵の綴りの扱い）。
+- **Upstream**: `audit-sylphya-actor`（見直し・v0.2.0 と重なる分＝本 spec より先に取る・同じ crate を見直して直す＝その着地の後に着手）・`readonly-mode`（v0.1.0・「書かない」の継ぎ目）・`multi-ghost-runtime`（v0.1.0 の余力の枠・着地していればアプリ層の書きの集め方に合わせる）・`property-name-case-fold`（v0.1.0・鍵の綴りの扱い）。
 - **Downstream**: `mcp-set-property`（本 spec の名前での set の上に乗る）・`shell-balloon-scale-setting`（v0.4.0・表示倍率を鍵の表に 1 行足し、重ね読みで「全体の既定＋ゴーストごと」を引く）・`currentghost-property-tree` ほかの property の値の spec（速い層とメモリーの層へ値を流す）・予約「設定画面と設定ファイル」。
 
 ## Existing Spec Touchpoints
