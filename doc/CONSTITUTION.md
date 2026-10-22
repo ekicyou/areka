@@ -67,7 +67,7 @@ Model Context Protocol (MCP) によるゴーストのAI連携を設計に組み�
 
 この分離により、頭脳・シェル・バルーンは独立して配布・交換可能です。
 
-> 原典: [.kiro/specs/ukagaka-desktop-mascot/requirements.md](../.kiro/specs/completed/ukagaka-desktop-mascot/requirements.md) — 責務境界（プラットフォーム憲法）
+> 原典: [.kiro/specs/completed/ukagaka-desktop-mascot/requirements.md](../.kiro/specs/completed/ukagaka-desktop-mascot/requirements.md) — 責務境界（プラットフォーム憲法）
 
 ---
 
@@ -120,4 +120,4 @@ areka はプラットフォーム（サーバー）とゴースト（クライ�
 
 > **注記**: プラットフォーム提供UI（設定画面等）の国際化は別途対応予定。
 
-> 原典: [.kiro/specs/ukagaka-desktop-mascot/requirements.md](../.kiro/specs/completed/ukagaka-desktop-mascot/requirements.md) — スコープ外事項
+> 原典: [.kiro/specs/completed/ukagaka-desktop-mascot/requirements.md](../.kiro/specs/completed/ukagaka-desktop-mascot/requirements.md) — スコープ外事項

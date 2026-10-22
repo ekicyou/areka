@@ -81,3 +81,16 @@ ukadoc の窓の位置の台本の指令のうち、窓どうしをつなぐも�
 ## 2026-10-18 棚卸㉗の申し送り（持ち主が居なかった残り物）
 
 - 完了 `move-canon` の tasks.md の Implementation Notes 2.2: 既定の位置の基準（`DefaultPlacementBasis`）が、起動のときとシェルの切り替えのときで違う設定を持つ。`\![execute,resetballoonpos]`（本 spec の範囲）でバルーンの位置をこの基準から出すなら、先に 2 つをそろえること（そろえないと、起動の直後とシェルを替えた後で並べ直しの結果が変わる）。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 触る所の中身は棚卸㉗から変わらない（`--option=ignore-sticky-window` は `crates/areka/src/emo2_boot/move_cue.rs` 64 行目の欄に入るだけで、台本の移動の適用 `move_cue_place.rs` は 103 行目の注記どおり読まない。シェルの `seriko.sticky-window` は `placement/config.rs` 107・135 行目で生のまま写すだけ）。✅ `mcp-reload`（10-22）で受け手の表 `emo2_boot/consumer_ledger.rs` が 472 行になった。同じ spec で、ゴーストの読み直しは窓を閉じて作り直すようになった＝台本でつないだ組と吸着が、読み直しの後に残るかを決める必要が出た。
+- 触るファイル: `emo2_boot/move_cue_place.rs`（206）・`move_cue.rs`（308）・`placement/config.rs`（687）・`placement/follow/drag_follow.rs`（937・足す分は兄弟へ）・`placement/follow/anchor.rs`（181）・`consumer_ledger.rs`（472）・新しい組の持ち主のファイル（新）・バルーン位置初期化を足すなら `menu/reset_pos_frame.rs`（139）・詰め直しで組を外す側を持つなら `placement/chain_realign.rs`（245）・網羅台帳 `sakura-script.toml` の 4 行（2821・2939・2955・3273 行目）・`doc/COMPAT_ARCHITECTURE.md` §8。`placement/follow/window_move.rs`（1,221・行数の番人の例外）は触らずに済ませたい。
+- 規模: 10〜14 タスクのまま。
+- 先に要るもの: 働きの上ではなし。同じウェーブに置けない v0.1.0 の相手: `descript-window-keys`（`config.rs`・`drag_follow.rs`）・`dpi-realign-remembered-chain`（`chain_realign.rs` をこちらが持つ場合・働きでもこちらが先）・受け手の表に行を足す `stay-on-top-directives`・`script-small-tags`・`mcp-strict-errors`（案 2）・`script-security-level`（1 本ずつ）。後の版: `window-snap`・`extra-character-windows`・`shell-balloon-scale-setting`（`move_cue*.rs`）・`check-script-arg-checks`・`element-animation-easing`・`surfaces-basepos`（`move_cue.rs`）・`resident-ghost-rotation`（`reset_pos_frame.rs`）。依存を足さない。実機（ぱすたの 2 つの窓を一緒にドラッグ）は排他テストの机。静かな机・前後の全体テストの比べは要らない。SSP の測りは開発者の機械。
+- 優先度の区分: A（開発者が起票・v0.1.0）。
+- 要件定義のモデル: Opus（先例＝`move-canon` の参照点・`Anchored`・今のドラッグの道に乗る＝新しい境目や並行の保証は無い）。
+- 分割の案: 20 を超えそうなら「吸着の指令」と「組」に分ける（変わらず）。今の見立て 10〜14 では分けない。
+- 見つけた穴・古くなった記述:
+  - 本文 Current State の網羅台帳の行番号（3151・3266・2948）と「`consumer_ledger.rs`（943 行）」は古い（上）。Constraints の「1,000 行に近い」も今は当たらない（受け手の中身を兄弟に置くのは変わらない）。
+  - ゴーストの読み直しの後に、台本でつないだ組・台本で変えた吸着を保つか descript の値へ戻すかを議題に足す（正典は「ゴースト終了まで有効」・読み直しは終了ではない）。
+  - `dpi-realign-remembered-chain` が要る「組の窓は詰め直しから外す」の目印を、この spec の組の持ち主に持たせるかを要件で決める（持たせれば、向こうは `chain_realign.rs` の判定だけで済み、このファイルの重なりも消える）。

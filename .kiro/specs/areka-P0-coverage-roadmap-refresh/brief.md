@@ -233,3 +233,19 @@ ukadoc 網羅調査の文書（`doc/ukadoc-coverage/roadmap-draft.md`・`briefin
 - 要件定義のモデル: Opus に改める（棚卸㉓は Fable）。決めることは台帳の行と文書の扱いで、開発者の決めごとは多いが、新しい境目・並行の保証・先例の無い骨格の分かれ目のどれにも当たらない。
 - 分割の案: 要件の段で 20 を超えたら、「数を道具の出力にする（`ukadoc-survey` の道具と見張り）」と「台帳の行と文書の撮り直し」の 2 本に分ける。超えなければ 1 本のまま。
 - 見つけた穴・古くなった記述: 上の「波」の欄。`briefing-property.md` は 1,047 行（文書なので 1,000 行の見張りの外だが、撮り直しで足すなら別の文書へ）。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 10-16 の後に網羅の文書と台帳（`doc/ukadoc-coverage/`）を動かしたのは 4 本（`emily-ghost-verification`・`move-canon`・`zorder-scope-inversion`・`mcp-reload`）。見張りの道具 `crates/ukadoc-survey/` への変更は 0。
+- 数え直し（main 52b014de）:
+  - 持ち主の spec が完了したのに完了の表（`briefing.md` の `[[owner_completed]]`・14 本のまま）に居ない＝26 本・157 行 → **28 本・168 行**。
+  - `roadmap-draft.md` の spec の表は 50 → **52 行**。持ち主が空の行は 1,212 → **1,203**。一度も起票されなかった仕様名を引く項目は 107 のまま（`assets.toml` 105・`shiori.toml` 2）。
+  - 台帳 `shiori.toml` の「名前を書いた場合だけは別」は 210 → 209 行。裁定の候補 W-2 と、`doc/ukadoc-coverage/README.md` の申し送り先が完了済みの `ukadoc-coverage-roadmap` のまま（280・310 行ほか）なのも残る。
+- 触るファイル: 棚卸㉖のまま（`doc/ukadoc-coverage/` の `briefing*.md`・`roadmap-draft.md`・`README.md`・台帳 3 本・作り直す報告、`crates/ukadoc-survey/tests/consistency/` の `spec_checks.rs` 660・`documents.rs` 392・`documents_non_vacuity.rs` 770 行）。`linkage_checks.rs` 944・`documents_checks.rs` 773 行には足さない。
+- 規模: 16〜20 タスク（変わらず）。
+- 先に要るもの: 無し。
+- v0.1.0 との重なり: 大きい。v0.1.0 の brief のうち 9 本（`script-security-level`・`pasta-in-windows-verification`・`stay-on-top-directives`・`window-link-directives`・`script-small-tags`・`descript-window-keys`・`mouse-click-wheel-events`・`shell-mouse-cursor`・`popup-menu-shell-look`）が台帳の行を動かすと書く。台帳の別の行なら許すが、行の状態を動かす spec は `briefing.md`・`briefing-*.md`・`roadmap-draft.md` の手書きの数を同じ時に書き換える（許す重なりの外）。＝v0.1.0 の間は、この 9 本のどれも走らないウェーブにしか入らず、上限 20 も大きい。v0.1.0 の後に回すのが素直。
+- 1 本だけの席: 取らない。人の待ち・静かな机・前後の全体テストの比べ: 要らない（開発者に決めてもらう議題はある）。
+- 優先度の区分: C（網羅台帳の番・製品は壊れない）。
+- 要件定義のモデル: Opus（棚卸㉖のまま）。
+- 分割の案: 棚卸㉖のまま（要件で 20 を超えたら「数を道具の出力にする」と「台帳の行と文書の撮り直し」に分ける）。
+- 見つけた穴・古くなった記述: v0.1.0 の後の見直し `audit-ukadoc-survey` が `crates/ukadoc-survey/` の全部を持つ＝同じウェーブに置かない。この spec が見張りを足すので、見直しは後のほうが二度手間が無い（どちらを先にするかは、見直しを並べる棚卸で決める）。

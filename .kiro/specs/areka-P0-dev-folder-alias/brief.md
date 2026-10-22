@@ -116,3 +116,15 @@
 - 人の手: 要らない（作業ツリーを `target\` の下に置いて確かめられる）。静かな机も全体テストの比べも要らない。依存も足さず、emo-text にも触らない。
 - 優先度の区分: A（開発者「特定のディレクトリを、特定 ID のゴースト・シェル・バルーンとしてエイリアス出来たら便利」）。要件定義のモデル: Opus（`baseware-root-list` の口の上に段を 1 枚足すだけ）。
 - 古くなった記述: 本文 15 行目の「着地の後は…前提」は今は事実。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化（`startup-options-core`・10-19 着地）: `--ghost <フォルダのパス>` で起こすと、そのフォルダの親を「この起動のあいだだけの置き場」として置き場の並びの先頭に足すようになった（`crates/areka/src/boot_config.rs` 256〜279 行目・印は `crates/areka-ghost/src/catalog.rs` 33 行目の `RootMark::Temporary`）。先頭なので、上から探す決まりで同じ名前の入ったゴーストより先に見つかる。一方で、置き場の並びの記憶へ書かない・インストールの宛先にしない守りが 5 か所に入った（`roots/edit.rs`・`menu/roots_frame.rs`・`roots/resolve.rs`・`catalog_roots.rs` の `install_root`・`install/destination.rs`）。
+- これで本文 Problem の 2 つ目（「起動の引数にパスを渡すと目録の外」）は古い。ゴーストについては「1 回の起動のあいだだけ・親のフォルダごと」の形で近いことが既にできる。本 spec に残る値打ちは ⑴ 名前で覚えて起動のたびに効く ⑵ シェルとバルーンにも効く ⑶ 更新を断る、の 3 つ。エイリアスの印は `Temporary` と同じ守りの 5 か所に足す形が先例になる（要件の段で、`Temporary` と並ぶ印にするかを決める）。
+- 触るファイル: `crates/areka-ghost/src/catalog_roots.rs`（270 行・和を組む `union` は 189 行目）・`catalog.rs`（475 行・`scan_shells` 192 行目）・`crates/areka/src/roots/mod.rs`（54 行）と新しい読み手・`crates/areka-sylphya/src/persist/{mod,format}.rs`（451・566 行）・`crates/areka/src/install/destination.rs`（215 行・`running_root` 68 行目）・`update/desk.rs`（704 行・書き込みを断る）・シェルの場所を組む 3 か所（`catalog.rs` の `scan_shells`・`boot_resolve.rs` の `decide_boot_shell` 400 行目・`crates/areka-parsers/src/package/resolve_shell.rs` 28 行目の `SHELL_ROOT`）・印を足すなら `Temporary` の守りの 5 か所・`dist/README.txt`（自分の行）。
+- 規模: 10〜14 タスクのまま（守りの先例がある分、下の側に寄る見込み）。
+- 先に要るもの: 働きの上では無い＝先頭。人の手・静かな机・全体テストの比べは要らない。依存は足さない・emo-text に触らない。
+- v0.1.0 の spec との重なり（隙間に入れられるか）: 版の段の v0.1.0 の行の 23 本のうち 5 本と重なる＝`ghost-inner-balloon`（`catalog.rs`・`catalog_roots.rs`・`boot_resolve.rs`・`update/desk.rs`）・`readonly-mode`（`roots/`・`persist/`・`update/desk.rs`・`boot_resolve.rs`）・`default-balloon-selfmade`（`catalog.rs`・`boot_resolve.rs`）・`property-name-case-fold`（`persist/` を畳む案のとき）・`popup-menu-shell-look`（`resolve_shell.rs`）。余力の枠の `multi-ghost-runtime` とも `persist/mod.rs`・`boot_resolve.rs` で重なる。見立ての上限 14 も v0.1.0 のたいていの spec の下限を超える＝**v0.1.0 の間は隙間に入れない**のが既定（入れるなら、この 5 本がどれも同じウェーブに居ず、そのウェーブで一番大きい v0.1.0 の spec の下限が 14 以上のときだけ）。
+- 優先度の区分: A のまま。
+- 要件定義のモデル: Opus のまま（今ある口の手前に段を 1 枚・書かない守りの先例も在る）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: 本文 Problem の 2 つ目は上のとおり古い。棚卸㉖の節の `decide_boot_shell`（364〜382 行）は 400 行目へ、`running_root`（41〜63 行）は 68 行目へ動いた。見直しの spec（v0.1.0 の後）がこれらのファイルを 1 本ずつ受け持つ＝v0.1.0 の後は、見直しとの順も棚卸で照らす。

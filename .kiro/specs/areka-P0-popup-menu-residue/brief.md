@@ -185,3 +185,14 @@
 - 重なり: `popup-menu-shell-look`（`menu/win32.rs`・`menu/mod.rs`・`menu/plan.rs`）と同じウェーブに置かない。件 11（メニューを開いている間の黒い四角）と件 12（メニューが見えずに閉じる）は、オーナードローの描画と同じ「メニューを出す所」の話＝向こうの要件の段で、どちらが先に直すかを決める。件 12 は `pasta-in-windows-verification` の実機の手順（右クリックメニューを押す）にも効く。
 - 版: 版に縛らない列のまま。
 - 優先度の区分: C のまま（件 11・12 は B）。要件定義のモデル: Opus のまま。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 10-18 から `menu/` に入ったのは `startup-options-core` の `menu/roots_frame.rs` だけ（一時の置き場の扱い）＝件の場所は動いていない。件ごとの今: 件 4＝`crates/areka/src/menu/trigger.rs` 487 行と `menu/trigger_show_tests.rs` 263・439 行。件 5＝`crates/areka/src/emo2_boot/readme_cue.rs` の「`ReadmeCueSink:`」7 か所。件 6＝`crates/areka-kanade/src/actor.rs` の 742・752・761 行（行がずれた）。件 9＝`menu/captions.rs` 82 行。件 3・8・11・12 は手つかず。
+- 件 7 が再び古くなった: `crates/areka/src/emo2_boot/spine.rs` 752 行の注記は 10-16 に「現在は 11 本＝`mod.rs` の `sinks`」へ直ったが、`mcp-reload`（10-22）が読み直しの受け口を足して本番の受け口は 12 本になり、組み立ての場所も `crates/areka/src/emo2_boot/runtime_boot.rs` の `runtime_sinks`（`mod.rs` ではない）に移っている。
+- 触るファイル: `menu/{trigger,win32,captions}.rs`・`menu/trigger_show_tests.rs`・`emo2_boot/readme_cue.rs`（140）・`emo2_boot/spine.rs`（940・注記だけ）・`crates/areka-kanade/src/actor.rs`（837・文言だけで増えない）・揃えるなら `actor_resources.rs`（107）・新しいテスト 1〜2 本。
+- 規模: 6〜9（件 3〜9 の 4〜6 に件 11・12 の再現と直し）。
+- 先に要るもの: なし。同じウェーブに置けない相手（v0.1.0）: `popup-menu-shell-look`（`menu/win32.rs`）・`mouse-click-wheel-events`（議題 3 で `menu/trigger.rs` を触るとき）・`script-security-level`（kanade の `actor.rs` の SHIORI の往復の所に手を入れるとき）・`areka-test-binary-stability`（`spine.rs`）。後の版: `menu-thumbnail-preview`（v0.4.0・`menu/`）。1 本だけの席は取らない。版に縛らない列として v0.1.0 の隙間に入れるなら、件 11・12 の実機の再現は人の待ち（クリックを通す窓へ入力を送る許し）になる＝件 3〜9 だけの形（4〜6・人の待ち無し・静かな机も前後の比べも要らない）に限る。
+- 優先度の区分: C のまま（件 11・12 は B）。
+- 要件定義のモデル: Opus のまま。
+- 分割の案: 新しくは切らない。隙間に入れるときは、棚卸㉖のとおり件 11・12 を後へ回す。
+- 見つけた穴・古くなった記述: 件 7 の `spine.rs` 752 行の注記（「現在は 11 本＝`mod.rs` の `sinks`」→ 12 本・`runtime_boot.rs` の `runtime_sinks`）は spec を待たずに直せる。

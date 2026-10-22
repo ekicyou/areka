@@ -105,3 +105,23 @@
 - 版の席: 今の版の 2 本とは、記録を出す所を `runtime.rs` にしなければ重なり 0。1 本だけの席は取らない（`areka-parsers` は記録の部品に依存済み・emo-text に触らない）。人の待ち・静かな机・全体テストの比べも要らない。ただ見立ての上限 13 が `user-data-root` の下限 11 を超える＝今の版の隙間には入らない。
 - 優先度の区分: C（作者の調べものを助ける改良・利用者から見える不具合ではない）。要件定義のモデル: Opus。
 - 古くなった記述: 本文の「Adjacent」の `seriko-trigger-intervals`・`anchor-tag-canon` は着地済み。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: `mcp-reload` が着地した（10-22）＝作者が MCP の `reload` の直後に `get_log` で確かめる道が在る（本文の Upstream の「未完了」は古い）。`emily-ghost-verification`（10-18）が `areka-parsers` の `shell/model.rs` ほかを少し触り、`shell/decode.rs` は 594 → 597 行。ほかの読み手は同じ（`kv/parse.rs` 43・`shell/parse.rs` 28・`shell/lexer.rs` 222・`balloon/parse.rs` 252 行）。
+- 触るファイル: 上の読み手 5 つと各兄弟のテスト・記録を出す所 1 つ（`crates/areka-ghost/src/runtime.rs` 815 行か `crates/areka-parsers/src/package/` のどちらかを設計で選ぶ）。
+- 規模: 9〜13 タスク（変わらず）。
+- 先に要るもの: 無し。
+- v0.1.0 との重なり:
+  - `shell-mouse-cursor`: 触るファイルの一覧は新しい `shell/cursor.rs` と `shell/mod.rs` だが、知らない見出しのブレスを捨てる所が `shell/decode.rs` の `dispatch_block` なので、転記をつなぐときに `decode.rs` に触る見込み＝重なる。
+  - `offline-surface-dump`: 触るファイルに `shell/decode.rs` を挙げる（面の番号の拡張の書き方を使い回せるかを見る）＝触る形を選べば重なる。
+  - `popup-menu-shell-look`: 着せ替えの descript の読み取り `package/resolve_shell.rs` を候補に挙げる＝記録を出す所を `package/` にすると重なりうる。
+  - ほかの v0.1.0 とは 0。
+- 1 本だけの席: 取らない（`areka-parsers` は記録の部品に依存済み・依存の追加なし）。
+- 人の待ち・机: 要らない。静かな机・前後の全体テストの比べも要らない（正しい設定ファイルで記録が増えないことは決定論の検査で固める）。
+- 版の席: 上限 13 は大きめ＝v0.1.0 のウェーブでは、そのウェーブの v0.1.0 の一番大きい spec の下限が 13 以上で、上の 3 本が走らないときだけ入る。
+- 優先度の区分: C（作者の調べものを助ける改良・利用者から見える不具合ではない）。
+- 要件定義のモデル: Opus。
+- 分割の案: 切らない。
+- 見つけた穴・古くなった記述:
+  - 本文の Upstream の「`mcp-reload`（未完了）」は古い（着地済み）。
+  - v0.1.0 の後の見直し `audit-parsers-sakura` が `crates/areka-parsers/` の全部を持つ＝同じウェーブに置かない。

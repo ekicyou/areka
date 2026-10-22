@@ -87,3 +87,15 @@
   3. CSV の「レベル」への当てはめ: areka の記録は WARN／ERROR の 2 段。SSP の Notice・Critical・System をどう当てるか（推し: WARN→Warning・ERROR→Error・Critical と System は使わない）。終了コード 3 は出ないことになる。
   4. 「ゴーストの読み込みそのものに失敗した」（descript が読めない）ときの終了コード: SSP は 0（記録なし）。areka も 0 にするか（試験の道具としては非 0 が便利だが SSP と違う）。
   5. CSV の「内容」の形: SSP 2.8.94 の `[SERIKO] shell\master\surfaces.txt:Line=12:Surface=10 …` に合わせるのは `config-parse-diagnostics` の後か、本 spec で行番号を付けるか。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 先に要る `startup-options-core` が 10-19 に着地した＝待ちは解けた。起動オプションを読む口は `crates/areka/src/cli/`（`mod.rs` 63 行の `StartupOptions`・`parse.rs` 459 行の名前の表・`help.rs`・`listen.rs`）に在る。`--offline-dump` は表に「受けて、まだ扱わない」行として既に在り（`parse.rs` 65 行目）、`--dump-` で始まる名前もまとめて読み飛ばしている（`lookup_long`・値は省ける 1 つ）。本 spec はその行を「効かせる」へ替え、`StartupOptions` に欄を足せばよい。
+- 前提の変化（`main.rs`）: 今は 965 行（上限まで 35 行）。`--help` で早く終わる分岐（164〜167 行目）と同じ形で「オフラインなら走らせて、その終了コードで終わる」を数行足せる。MCP の待受（215 行目）と窓のアプリより前に返せる。入口は記録の初期化（`log_history::init`）と `cli::read` の後になる。
+- 前提の変化（部品）: 場所は 10-18 から変わっていない（シェルを読む `load_shell_target`＝`crates/areka-emo-present/src/shell_target.rs` 267 行目・合成 `Composer::compose`＝`crates/areka-emo-compose/src/lib.rs` 165 行目・既定の着せ替え `build_static_bindset`＝`crates/areka-seriko/src/bind.rs` 18 行目・PNG にする所＝`crates/areka/src/mcp/dump_surface_image.rs` 80 行・`png_base64` は `mcp` の中だけで見える）。記録の履歴（`crates/areka/src/log_history.rs`）は `mcp-reload` が 4 行触った。
+- 触るファイル: 新 `crates/areka/src/offline_dump/`（`mod.rs`・`run.rs`・`csv.rs`・兄弟のテスト）・`cli/mod.rs`（欄）・`cli/parse.rs`（表の行）・`cli/parse_tests.rs`（679 行＝足す分は新しい兄弟のテストのファイルへ）・`main.rs`（入口の数行）・`mcp/dump_surface_image.rs` と `dump_surface_image_tests.rs`・共有の置き場（新）・`dist/README.txt` の「■ 起動オプション」の節（59 行目の「まだ扱わない」の文から外す）。読むだけ: 上の部品。
+- 規模: 13〜17 タスク（名前を読む所が済んでいる分 1 つ減る）。上限 20 の内。
+- 先に要るもの: 働きの上では無い＝先頭。同じウェーブに置かない相手: `readonly-mode`・`startup-install-option`（`cli/` と `dist/README.txt` の同じ文）・`main.rs` を触る `tasktray-icon`（reactor 待ち）・`multi-ghost-runtime`（余力の枠）。`placement-measure-bake-once` は `load_shell_target` を読むだけなら重ならない。依存は足さない・emo-text にも触らない。静かな机・前後の全体テストの比べ・人の待ちは要らない（議題 1・2 は要件の段で SSP の `--offline-dump` を回して測る）。
+- 優先度の区分: A のまま（開発者の指示「SSP並みの自動試験」）。
+- 要件定義のモデル: Opus のまま（今ある部品を窓なしで呼ぶだけ・CSV の形と終了コードは正典が決める・新しい境界も並行の設計も無い）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: 本文の「起動オプションを読む口は無い」「`main.rs` は 1,000 行の上限ちょうど」「足すのは入口の 1 行だけ」は古い（口は在る・965 行・数行足せる）。走りの間の WARN 以上は記録の履歴にも残る＝CSV を履歴から作れるかは設計で決める（Approach の「記録の履歴の型を使い回せるか」と同じ問い）。

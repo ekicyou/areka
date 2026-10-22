@@ -163,3 +163,13 @@ areka はこの「出どころ」を運ばない。そのため、ゴースト�
 - 要件定義のモデル: **Fable** のまま（先例の無い公開の契約を新しく引く＝出どころの型を kanade → `areka-talk` → `areka-sakura` → `emo2_boot` の受け取り手まで運ぶ・公開の `ShioriBackend` へ追加のヘッダの入れ物を足す。棚卸㉕の基準のとおり）。
 - 分割の案: 上の条件つきの 1 つだけ。
 - 見つけた穴・古くなった記述: なし。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: `mcp-kanade-tools`（10-19）が kanade の `msg.rs` を 930→539 行、`schedule/mod.rs` を 969→664 行に割った＝割った後の形に足せる。同じ spec で MCP の `sakurascript`・`raise_event` が本物になり、外から流した台本が実際に再生されるようになった＝守りの無い期間が始まっている。トークごとの値を kanade が持つ所が 2 つできた: 再生中のトークの記録用の名札 `ActiveTalk::origin`（`schedule/types.rs` 158 行目・文字列）と strict の控え `StrictNote`（`schedule/sstp.rs`）。`mcp-reload`（10-22）は `schedule/boot.rs` と kanade の `src/change.rs` を触って着地した。`SecurityLevel: local` は今も `crates/shiori-host32-host/src/shiori3.rs` 137 行目が直に書く。
+- 触るファイル: 棚卸㉓のとおり＋外からの台本の出どころを付ける kanade の `schedule/sstp.rs`・`schedule/types.rs`。行数: `msg.rs` 539・`actor.rs` 837・`schedule/mod.rs` 664・`schedule/steady.rs` 957（残り 43＝新しい処理は新しいファイルへ）・`schedule/events.rs` 886・`shiori3.rs` 821・`client.rs` 775・`crates/areka-ghost/src/shiori_inproc.rs` 619・`dispatcher.rs` 484・`crates/areka-sakura/src/drive.rs` 574。トークを始める所は 11 か所（`boot.rs` 2・`change.rs` 2・`close.rs` 2・`steady.rs` 4・外からの台本と選択肢の台本が通る共通の `schedule/mod.rs` の `start_talk` 1）。
+- 規模: L（16〜22）のまま。
+- 先に要るもの: 働きの上で無し。ファイルの上の前提（`mcp-kanade-tools` の後）は済んだ。同じウェーブに置けない相手（v0.1.0）: `mouse-click-wheel-events`（`msg.rs`・`schedule/events.rs`・`schedule/steady.rs`）・`mcp-strict-errors` の案 ⑵（`areka-talk`・`drive.rs`・`translate.rs`）。ほかの v0.1.0 とは 0（`shiori3.rs`・`client.rs`・`shiori_inproc.rs`・`areka-talk` を挙げる v0.1.0 の brief は無い）。1 本だけの席は取らない。静かな机・前後の比べは要らない。MCP の台本の出どころの値を SSP で測るなら SSP を起こした机が要る。
+- 優先度の区分: A のまま（開発者「セキュリティレベルで実行できるさくらスクリプトに制約が出る。areka に実装されていないと思う。ukadoc で調べてみては」）。
+- 要件定義のモデル: **Opus に改める**（Fable から）。3 つの基準のどれにも当たらない: ⑴ SHIORI の呼び出しの口 `ShioriBackend` には、既定の実装を持つメソッドを足した先例が既に 2 つある（`on_idle`・`unblock_handle`＝`crates/areka-kanade/src/shiori/real.rs` 93・97 行目）＝追加のヘッダの入れ物はこの型に倣える。⑵ 台本の起動の約束 `StartTalk`（`crates/areka-talk/src/lib.rs`）に欄を足すのは `epilogue` の先例（`StartTalk::new` で呼び手を据え置く）があり、今ある約束へ足すだけ。⑶ トークごとの値を kanade が控える形は `ActiveTalk::origin`・`StrictNote` が先例。新しい並行や順の保証も無い。`SenderType` の語の当てはめと止めるタグの全件は ukadoc を読む仕事で、骨格は変えない。
+- 分割の案: 棚卸㉒のまま（20 を超えたら ⒜ SHIORI へのヘッダと応答の読み取り → ⒝ 台本の出どころの印とタグの止め）。
+- 見つけた穴・古くなった記述: `ShioriBackend` の実装は約 22 か所（棚卸㉓〜㉗の 20 から増えた）。トークを始める所の内訳は上のとおり（`steady_choice_script.rs` の 1 か所は共通の `start_talk` を通る形になった）。roadmap の「`consumer_ledger.rs` に行を足す spec は 1 本ずつ」の列に本 spec が載っているが、brief の触るファイルは止めるタグの受け手 `crates/areka/src/emo2_boot/user_break_cue.rs` だけ＝台帳に行を足すかを設計で照合する。

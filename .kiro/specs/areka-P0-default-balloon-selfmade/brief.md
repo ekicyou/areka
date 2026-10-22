@@ -191,3 +191,19 @@ communicatebox.x,8     communicatebox.y,21  communicatebox.width,385  communicat
 - 見つけた穴・古くなった記述:
   - 議題 3 の答えが版に効くようになった: `.webp` を選ぶと `balloon-webp-names` が働きの前提として v0.1.0 へ戻る。α 付きの PNG なら v0.1.0 の中で閉じる。要件の段の最初に決める。
   - `ghost-inner-balloon` が `resolve_balloon` に名前で探す段を足す見込み＝段 6（既定）の前後の並びが変われば、既定の名前を期待するテストを読み直す。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: `startup-options-core`（10-19）と `sample-url-fetch`（10-19）が着地した。既定のバルーンの名前の定数は今も `crates/areka/src/boot_resolve.rs`（714 行）の 34 行目 `DEFAULT_BALLOON_FOLDER` で、使うのは `resolve_balloon` の段 6（325〜326 行）だけ。起動オプションの読み取りは新しい `crates/areka/src/cli/` に移ったが、`cli/` に既定のバルーンの名前は無い。
+- 登記表の順: `sample-url-fetch` が先に着地したので、今の数は 9 → `dot-sakura-specimen` で 10 → この spec で **10 → 11**（棚卸㉗の「9→10」は古い）。既定のバルーンは製品の資産なので、書庫を置く行のまま足す（本文の「リポジトリが持つ」のとおり・URL の行にはしない）。配布の道具 `tools/package.ps1`（752 行）が既定のバルーンを引く 4 か所は 467・496・504・570 行。
+- 触るファイル: 定数 1 行と、既定の名前を期待するテスト 4 本（`boot_resolve_tests.rs` 853 行・15 か所／`boot_resolve_balloon_tests.rs` 579 行・6 か所／`boot_config_balloon_tests.rs` 238 行・3 か所／`main_config_input_tests.rs` 459 行・4 か所）・`tools/package.ps1`・登記表 `crates/sample-ghost-kit/src/{lib.rs,lib_tests.rs}`・`vendors/sample_ghost/`（新しい書庫）と README・`dist/README.txt`（380 行）・根の `README.md`・steering・絵を描く道具と中身を固定するテスト（新しいファイル）。
+- 規模: 8〜12 タスク（変わらず）。
+- 先に要るもの: `dot-sakura-specimen`（働き＝どっとさくらに被せる確かめ・ファイル＝登記表）。議題 3 で `.webp` を選べば `balloon-webp-names`（今は「v0.1.0 から外した 5 本」）が働きの前提になり、v0.1.0 へ戻る。
+- 同じウェーブに置けない相手（v0.1.0）: `dot-sakura-specimen`・`pasta-in-windows-verification`（`sample-ghost-kit` の `lib.rs` に `mod` を足すなら）・`ghost-inner-balloon`（`resolve_balloon` を作り直す・`boot_resolve.rs` と `boot_config.rs`）・`readonly-mode`（`boot_resolve.rs` の書く側の関数＝別の関数だが同じファイル）・`winget-release-automation`（根の `README.md`・`dist/README.txt` の別の節）。`startup-options-core` とのテストのファイルの重なりは着地で消えた。1 本だけの席は取らない（新しい依存なし）。
+- 人の待ち・机: 要件の段で開発者が名前・絵柄・形式を選ぶ往復（人の待ち）。実機で emo2 とどっとさくらに被せた見え方を確かめる（AI が回せる）。静かな机・前後の全体テストの比べは要らない。
+- 優先度の区分: A（開発者「これに含まれるバルーンを参考に、デフォルトバルーンを作ってほしい」）。
+- 要件定義のモデル: Opus（議題 9 つは開発者に聞く選びで、新しい境目・並行や順の新しい保証・骨格の分かれ目のどれにも当たらない）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述:
+  - 棚卸㉕の `tools/package.ps1` の行番号（466・495・503・564）はずれた（今は 467・496・504・570）。`boot_resolve.rs` の段 6 の行（棚卸㉗の 291〜292 行）も今は 325〜326 行。
+  - 棚卸㉗の「`sample-url-fetch` との間はファイルの順」は解けた（あちらは着地済み）。
+  - `ghost-inner-balloon` が名前で探す段を `resolve_balloon` に足すと、段 6 の前の並びが変わる＝差し替えのタスクの前に main を取り込み、既定の名前を期待するテストを読み直す（変わらず）。

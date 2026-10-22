@@ -99,3 +99,16 @@
 - 優先度の区分: B のまま（重ねた組の分は開発者の指示＝A の範囲）。要件定義のモデル: Opus のまま。分割の案: なし。
 - 見つけた穴:
   - SSP で測る: 拡大率の違う画面へドラッグしたときに `OnShellScaling` が来るか。来るなら、areka で送る持ち主をこの spec か `shell-balloon-scale-setting`（v0.4.0）かで要件の段に決める（ぱすたの付け直しの合図になる）。重ねた 2 つの窓を SSP がどう並べるか。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 触る所は棚卸㉗から変わらない（`crates/areka/src/placement/chain_realign.rs` 245・`chain_finalize.rs` 320・`spawn.rs` 776・`persist.rs` 642・`emo2_boot/frame/dpi.rs` 508・`frame/drain_resnap.rs` 546・`emo2_boot/frame.rs` 580）。✅ `zorder-scope-inversion` は `spawn.rs` を 8 行触っただけ（行数は同じ）。✅ `mcp-reload` は `emo2_boot/frame/` の `attach.rs`・`switch.rs`・`wiring.rs` を触り、この spec の `dpi.rs`・`drain_resnap.rs` には触れていない。
+- 触るファイル: 上の 7 本と兄弟のテスト（`placement/persist_restore_tests.rs` 939・`emo2_boot/frame_test_support.rs` 902 は上限の近く＝足すなら新しいファイル）・`doc/COMPAT_ARCHITECTURE.md` §8。`placement/transition_judge.rs`（996）と `placement/follow/window_move.rs`（1,221）には触らない。
+- 規模: 6〜10 タスクのまま。
+- 先に要るもの: 働きの上で `window-link-directives`（組の持ち主＝重ねた組を詰め直しから外す目印）。同じウェーブに置けない v0.1.0 の相手: `stay-on-top-directives`（`placement/spawn.rs`）・`window-link-directives`（向こうが `chain_realign.rs` を持つ場合）。後の版: `multi-ghost-runtime`・`extra-character-windows`・`clippy-199-lints`・`elevated-drop-filter`・`tasktray-minimize`（`spawn.rs`）・`install-live-target-hazards`（`drain_resnap.rs`）・`dpi-transition-two-tick-bounce`・`shell-balloon-scale-setting`（`frame/dpi.rs`）・`sylphya-sqlite-kvs`（v0.2.0・`persist.rs`）。依存を足さない。実機は拡大率の違う 2 つの画面のある机（主の画面は 200%）で、排他テストの机を持って回す。静かな机・前後の全体テストの比べは要らない。
+- 優先度の区分: B（直っていた動きの後退・開発者「受け入れず、別の spec として起票」。重ねた組の分は開発者の指示＝v0.1.0 のゴール）。
+- 要件定義のモデル: Opus（2 案の分かれ目は、拡大率への追従の基本設計と位置の記憶の 3 つの決まりで決まる）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述:
+  - `placement/chain_realign.rs` 28〜30 行目の説明「誰も触っていないスコープは対象に残る」は 2 回目の起動から成り立たない（変わらず・この spec が判定と一緒に直す）。
+  - `OnShellScaling` を SSP で測る項目は `pasta-in-windows-verification` の議題 1 にもある＝こちらで測ってあちらへ渡す形にそろえる。
+  - ゴーストの読み直し（✅ `mcp-reload`）は窓を作り直して位置を記憶から戻す＝詰め直しの判定は起動と同じ扱いでよいかを、確かめる項目に足す。

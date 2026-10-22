@@ -85,3 +85,16 @@
 - wintf の鎖と組の形が変わった。鎖が組の 2 枚（バルーンとキャラクター）を連続させない間は、鎖の適用系がその組の結び目を外し、印 `PairReleased`（値なし）を付ける。解除や鎖の変化で連続に戻れば結び直して印を外す。外すかどうかの判定は `zorder_chain.rs` の `pair_released_by_chain` 1 本だけで、組の系（確立・維持・沈降の観測）は同じフレームに公開済みの計画をこの判定で読み、外している組には触れない（見送りの理由 `ReleasedByChain`）。
 - 鎖の適用系の 1 巡の順は「去る窓の切離し → 鎖の撤去 → 組の外し → 組の結び直し → 鎖の付与 → 後押し → 直後の実測」。外し損ねがあった巡だけ、付与と結び直しの直前に持ち主の輪を確かめる（`link-refused`）。帯へ上げる処理をこの 1 巡に足すなら、この順と `PairReleased` の組（結び目の無い組）を前提にすること。持ち主の鎖の根だけを帯へ上げる案では、結び目を外している組の窓が鎖の外れ方によって付いてこない場合がある。
 - 触るファイルの行数（完了時）: `zorder_chain_apply.rs` 930・`zorder_pair.rs` 892・`zorder_chain.rs` 631（上限 1,000）。`zorder_chain_apply.rs` は余地が 70 行しか無いので、足すなら先に外へ出す。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 待っていた ✅ `zorder-scope-inversion`（10-19）が着地した（申し送りは上の節）＝こちら側の待ちは無い。✅ `mcp-reload`（10-22）が受け手の表 `crates/areka/src/emo2_boot/consumer_ledger.rs` の中のテストを兄弟のファイルへ出し、960 行から 472 行になった（受け手の中身を新しいファイルに置くのは変わらない）。ゴーストの読み直しは窓を閉じて作り直す（`emo2_boot/reload.rs`）。
+- 触るファイル: `crates/areka-parsers/src/sakura/decode.rs`（502・`decode_bare` に 1 腕）と兄弟のテスト・`consumer_ledger.rs`（472・1 行）・新しい受け手のファイル（新・`emo2_boot/` の下）・wintf の `crates/wintf/src/ecs/window/zorder_pair.rs`（892・帯を避ける判断は 368 行目）・`zorder_pair_maintain.rs`（557・帯の中かを見る所は 488 行目）・`zorder_chain_apply.rs`（930・余地 70 行＝足すなら先に外へ出す）・`window_pos/mod.rs`（454・帯へ上げ下げする指令の口）・後から出る窓の作り `crates/areka/src/placement/spawn.rs`（776）・網羅台帳 `sakura-script.toml` の 3 行（3352・3385 行目ほか）・`doc/COMPAT_ARCHITECTURE.md` §8。
+- 規模: 6〜9 タスクのまま（`zorder_chain_apply.rs` を外へ出すなら 1 つ増える）。
+- 先に要るもの: 働きの上ではなし。同じウェーブに置けない v0.1.0 の相手: `script-small-tags`（`decode.rs`）・受け手の表に行を足す `window-link-directives`・`script-small-tags`・`descript-window-keys`・`mcp-strict-errors`（案 2）・`script-security-level`（1 本ずつ）・`dpi-realign-remembered-chain`（`placement/spawn.rs`）。後の版: `zorder-chain-residue`・`zorder-property`・`multi-ghost-runtime`・`tasktray-minimize`・`elevated-drop-filter`（`spawn.rs`）。依存を足さない。実機の確かめは画面のロックを外した排他テストの机で、ほかのアプリを前に出して見る。静かな机・前後の全体テストの比べは要らない。議題 1 の測りは開発者の機械の SSP。
+- 優先度の区分: A（開発者の指示＝v0.1.0 のゴール・ぱすた）。
+- 要件定義のモデル: Opus（`zorder-scope-inversion` が鎖の 1 巡の順を決めた後で、帯へ上げる処理はその順に乗る＝時刻や順番の新しい保証を作らない。先例＝`ghost-window-zorder` の要件 8.2）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述:
+  - 本文と Constraints の「`consumer_ledger.rs`（960 行）」は古い（472 行）。
+  - 本文 Current State の「帯を避ける判断（`zorder_pair.rs` の `measure_window_is_always_on_top`）」: 測る関数は `zorder_pair.rs` に残るが、呼ぶのは組を保つ系の `zorder_pair_maintain.rs`。条件をつけるなら両方を見る。
+  - ゴーストの読み直し（`\![reload,ghost]`・MCP の `reload`）で窓が作り直されたとき、「常に手前」を保つか戻すかを決める。正典は「ゴースト終了まで有効」で、読み直しは終了ではない。SSP で測る項目（議題 1）に足す。

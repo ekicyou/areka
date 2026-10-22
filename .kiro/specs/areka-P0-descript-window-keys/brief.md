@@ -77,3 +77,16 @@
   1. **ゴーストの `balloon.dontmove` の意味**: ukadoc はゴーストの側を「バルーン位置調整の標準設定を OFF にする」と書き、シェルの側の既定がこれを指す。ドラッグを禁止する値と読んでよいか。SSP で測る（ぱすたのバルーンを SSP でドラッグして動かないか）。
   2. **既定の面が無いとき**: descript の番号の面がシェルに無いときに、今の決め打ち（0・10）へ落とすか、その番号のまま空の窓にするか。SSP で測る。
   3. **`char*.seriko.defaultsurface` の既定**: ukadoc は 10 と書く（相方と同じ）。3 人目からの窓が無い今は読むだけ。`extra-character-windows` へ値を渡す形だけ作るか。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: ✅ `mcp-reload`（10-22）の着地で、最初の面の値の使われ方が分かった。シェルは最初の `\s` まで窓に出さない決まり（`crates/areka/src/emo2_boot/frame/attach.rs` の「defect #5」の注記）なので、起動の直後に面 0 の絵が見えることは今は無い。最初の面の値（`emo2_boot/assets.rs` 411 行目の決め打ち）が効くのは 2 つ＝⑴ 窓の大きさの測り（`placement/measure.rs` 43・190〜205 行目）＝面 0 の大きさで窓が置かれる ⑵ ゴーストの読み直しで控えた面が読み直したシェルに無いときの戻り先（`emo2_boot/shell_carry.rs` の `decide`・`frame/attach.rs` 285 行目）。読み直しの後は前の面が持ち越される（`mcp-reload` 要件 3.8）。受け手の表 `emo2_boot/consumer_ledger.rs` は 472 行、`emo2_boot/mod.rs` は 787 行に減った。
+- 触るファイル: `crates/areka/src/placement/config.rs`（687）・`emo2_boot/assets.rs`（547）・`placement/measure.rs`（450）・`emo2_boot/switch_assets.rs`（253）・`placement/follow/drag_follow.rs`（937・入口の数行・足す分は兄弟へ）・`consumer_ledger.rs`（472・lock の 1 行）・新しい受け手と決まりのファイル（新）・網羅台帳 `assets.toml`・`sakura-script.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
+- 規模: 6〜9 タスクのまま。
+- 先に要るもの: 働きの上ではなし。同じウェーブに置けない v0.1.0 の相手: `window-link-directives`（`config.rs`・`drag_follow.rs`）・`placement-measure-bake-once`（`measure.rs`。案 A なら `assets.rs` も）・受け手の表に行を足す `stay-on-top-directives`・`script-small-tags`・`mcp-strict-errors`（案 2）・`script-security-level`（1 本ずつ）。後の版: `extra-character-windows`・`balloon-canon-residue`（`config.rs`）・`window-snap`（`drag_follow.rs`）・`multi-ghost-runtime`・`shell-companion-balloon`（`switch_assets.rs`）。依存を足さない。静かな机・前後の全体テストの比べは要らない。議題 1・2 の測りは開発者の機械の SSP、実機のドラッグは排他テストの机。
+- 優先度の区分: A（開発者の指示＝v0.1.0 のゴール・ぱすた）。
+- 要件定義のモデル: Opus（先例＝配置の設定の descript の段の優先・バルーンのドラッグの入口）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述:
+  - 本文 Problem の「areka は面 0 を出す＝起動の一瞬がずれて見える」は古い（上）。崩れの本体は、窓の大きさと置き場所が面 0 の絵で決まること（ぱすたの面 0 は「ずれた小さい絵」）。
+  - 本文 Desired Outcome の「リロードの後に既定の面で出る」は、ゴーストの読み直しでは前の面の持ち越しが先で、既定の面は戻り先だけ、と書き直す。本文 Downstream の `mcp-reload` は着地済み＝この spec は戻り先の値を descript から渡すだけになった。
+  - 本文 Constraints の `emo2_boot/mod.rs`（916 行）は 787 行、`consumer_ledger.rs`（960 行）は 472 行。

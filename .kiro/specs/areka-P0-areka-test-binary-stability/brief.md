@@ -252,3 +252,15 @@
 - 要件定義のモデル: **Fable**（本文のまま・新しく並行の保証を決める＝原因の分からないスレッドの競り合い〔件 1〕。件 2 の項目 2 は開発者の裁定の分かれ目）。件 2 だけを切り出すなら、その 1 本は Opus で足りる。
 - 分割の案: 上の条件つきの 1 つだけ。
 - 見つけた穴・古くなった記述: 本 brief には棚卸㉕・㉖の節が無い（v0.1.0 の外だった）。棚卸㉓の節の「`main.rs` は 950 行」は今 1,000 行（上限ちょうど・落ちたスレッドの名前を残す仕掛けは新しいファイルへ置く方針は変わらない）。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 待っていた `impl-watch-test-desk` が 10-19 に着地した（机は排他テストの机・マージの机・実装の机のひとり占めの 3 つ＝`doc/impl-watch.md`）＝静かな机で測る用意は整った。ただし開発機に据えた `areka-impl-watch.exe` が古いと新しい呼び方（`request`／`return`）が通らない＝測る前に入れ直しと 1 度の `clear` が済んでいるかを確かめる。
+- 数え直し: `crates/areka/src/` の下の `#[test]` は約 3,156→約 3,352。目印の無い `spin_wait_until` の直接の呼び出しは 15 か所のまま（spine の族のテスト 5 ファイル・`spine_wait.rs`・`ghost_session_restart_tests.rs`・`mcp/dump_surface.rs`・`session_end_deadline_tests.rs`）。`join_bounded` の写しは 3 つのまま（`emo2_boot/spine_wait.rs` 385 行目・`install/desk_pick_tests.rs`・`install/fetch_url_tests.rs`）。GPU の装置の許可の待ち（`spine_wait.rs` 420 行目の `take`）は今も上限なし。
+- 上限の近いファイル: `emo2_boot/assets_tests.rs` 979・`spine_conformance_support_tests.rs` 959・`spine_conformance_lap_tests.rs` 912・`crates/areka/src/shell_balloon_switch_session_lap_tests.rs` 792・`ghost_switch_test_support.rs` 676・`crates/areka-nar/src/install_commit_tests.rs` 802→832。`spine_wait.rs` は 462 のまま。10-18 から足場で書き換わったのは `ghost_session_restart_tests.rs`（`startup-options-core` が 1 行）だけ。
+- 触るファイル: 本文と件 1・件 2 の棚卸㉓の節のとおり（どれもテストと足場・本番のファイルは `#[cfg(test)]` の部分だけ）。
+- 規模: 13〜20 のまま。20 を超える見込みになったら件 2 を切り出す（本文のまま）。
+- 先に要るもの: 働きの前提は無い。測ることが本体＝ウェーブに並べず、静かな机で 1 本だけ。負荷つきの全体（1 回 約 50 分）は最後に 1 度・回す前に所要時間を伝える。測る間に、同じテストのファイルを書き換える spec を着地させない: `install-live-target-hazards`（`session_end_deadline_tests.rs`）・`test-roots-under-target`（全部のテストの一時の根の置き場が動く）・同じ足場を挙げる版に縛らない `actor-thread-log-capture`・`background-result-tick-wake`・`balloon-element-order`・`mcp-user-response`・`zorder-chain-residue`。実機の窓が出る試験（`emo2-real-run-stability`・`pasta-in-windows-verification`）とも同じ時間に回さない。依存は足さない・emo-text に触らない。
+- 優先度の区分: B のまま。
+- 要件定義のモデル: **Opus に改める**（2026-10-15 の線）。件 1 は原因の分からない落ちの切り分け（原因を探すことだけでは当たらない）、件 2 は今ある待ちの部品と steering の線にそろえる仕事（今ある仕組みに乗る）で、新しく並行の保証を決める所は今は見えない。件 1 の原因が「スレッドに縛られる資源の新しい決まり」を作る形と分かったときだけ、設計の段を Fable にする。
+- 分割の案: 上の条件つきの 1 つだけ（本文のまま）。
+- 見つけた穴・古くなった記述: 本文と棚卸㉓の節の `shell_balloon_switch_session_lap_tests.rs` と `shell_balloon_switch_session_abort_tests.rs` は `emo2_boot/` でなく `crates/areka/src/` の直下に在る。roadmap の「ウェーブの外」の行はこの spec を **Fable** と書く＝上の改めを採るなら直す。

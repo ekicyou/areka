@@ -92,3 +92,16 @@
   2. ゴーストが 1 体も無いとき（初めての起動・空の置き場）の `--install`: SSP は「何とかして下さい」の画面の代わりに入れてから起動を続ける。areka はインストールの窓口が窓のアプリの中にあるので、起動の解決の前に入れるには窓口の外から手続きを呼ぶ道が要る（3〜4 タスク増）。入れるか、「ゴーストが居るときだけ」に絞るか。
   3. `initial_install.nar` の確認なしの上書き: 今のインストールの手続きに利用者へ確かめる段（`crates/areka/src/install/terms.rs`・`overwrite.rs` の起動中のゴーストへ入れる一周）がどこにあるかを要件の段で確かめ、あればその段を飛ばす印を足すか。
   4. 起動の引数のインストールが終わるまで、ゴーストのトークを待たせるか（SSP は「インストール処理を行った後起動を続行する」）。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化（`startup-options-core`・10-19 着地）: `--install`（短い形 `/i`）は「値を空白区切りで何本も取る・まだ扱わない」行として読まれ（`crates/areka/src/cli/parse.rs` 61 行目）、`callghost`・`deletesource` も「まだ扱わない語」として記録して無視される（263 行目）。本 spec はその行と語を効かせる側へ替える。`readonly-mode` はまだ着手されていない＝readonly の印はまだ無い。
+- 前提の変化（定常に着いた所）: インストールの窓口に「定常に着いた」知らせの受け口 `install::desk::on_steady`（`crates/areka/src/install/desk.rs` 127 行目・ゴーストの切り替えの `emo2_boot/ghost_switch.rs` 513 行目から呼ばれる）が既に在る。起動の引数の依頼はここから出せる見込み＝`ghost_session.rs`（910 行＝上限の近く・10-18 の 885 から増えた）に触らずに済む。最初の起動の定常でもここが呼ばれるかは設計で確かめる。
+- 前提の変化（`mcp-reload`・10-22 着地）: `install/desk.rs` に窓口が忙しいかを答える `is_busy`（150 行目）が足され、読み直しの入口がこれを見て断る＝起動の引数で並べた書庫を扱う間は読み直しが断られる（試験の手順に書く）。`install/desk.rs` は 524→540 行。依頼の出どころの語 `InstallOrigin`（`install/mod.rs` 40 行目・`Menu`・`Script`・`WindowDrop`）は変わっていない。
+- 前提の変化（`real-run-mcp-kit`・10-19 着地）: 実機の試験の窓口（`crates/real-run-kit/`）は起動の引数を渡せる（`launch.rs` の `arg`）＝「入れる → 起こす → MCP で確かめる」の実機の確かめはこの窓口の上で書ける。
+- 触るファイル: `cli/mod.rs`・`cli/parse.rs`・新しい兄弟のテスト（`cli/install_args.rs` を分けるかは設計）・`install/mod.rs`（出どころの語 1 つ）・`install/desk.rs`（依頼と結果を受ける所・`on_steady`）・`install/judge.rs` か `procedure.rs`（成功を受けて NAR を消す）・`initial_install.nar` を探す所（`boot_config.rs` 145 行目の `exe_location` を呼ぶだけ）・`dist/README.txt`（「■ 起動オプション」の 59 行目の文）。
+- 規模: 6〜9（議題 2 を入れると 9〜12）のまま。
+- 先に要るもの: `readonly-mode`（readonly の印と `install/desk.rs` の守り）。同じウェーブに置かない相手: `readonly-mode`・`offline-surface-dump`（`cli/` と説明書の同じ文）・`install-live-target-hazards`（測ることが本体・インストールの道）。依存は足さない・emo-text に触らない。静かな机・全体テストの比べは要らない。議題 1 は開発者の裁定（2026-09-28）に触れる＝要件の段で開発者の答えを待つ。`callghost` の振る舞いは SSP で測る。
+- 優先度の区分: A のまま。
+- 要件定義のモデル: Opus のまま（今ある窓口へ並びを渡すだけ・`callghost` の扱いは開発者が答える議題）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: 棚卸㉗の節の「定常に着いた所の結線（`ghost_session.rs` 885 行＝上限の近く）」は、今は 910 行で、`install::desk::on_steady` を使えば触らない見込み。`install/desk.rs` の行数は 540。Downstream の `real-run-mcp-kit` は 10-19 に着地済み（足場として使う側になった）。

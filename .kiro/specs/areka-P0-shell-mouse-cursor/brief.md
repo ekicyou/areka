@@ -77,3 +77,13 @@
   1. **既定の形を全部のゴーストに効かせるか**: 正典の既定は「当たり判定の上は `system:finger`」。カーソルの定義を書いていないゴーストでも、当たり判定の上で指の形になる＝今の全部のゴーストの見え方が変わる。推し: 正典どおり既定も効かせる。SSP で測る（定義の無いゴーストで指になるか）。
   2. **`mousehover*` と `mousewheel*`**: 「しばらく動かさない」の時間と、ホイールの後いつ戻すか。SSP で測る。ホイールの送出は `mouse-click-wheel-events`。
   3. **ドラッグ中の形**: `bust` の押下の `system:grip` を、ドラッグのあいだ保つか。
+
+## 2026-10-22 棚卸㉘の再測定（main 52b014de）
+- 前提の変化: 10-18 から触るファイルは動いていない（wintf の `crates/wintf/src/ecs/window_proc/mouse_move.rs` 602 行〔`WM_SETCURSOR` は今も診断の十字だけ〕・シェルを運ぶ `crates/areka-emo-present/src/shell_target.rs` 757・シェルの読み手 `crates/areka-parsers/src/shell/decode.rs` 597〔知らない見出しのブレスは今も記録なしに捨てる〕・当たり判定を引く `crates/areka/src/emo2_boot/hit_region.rs` 167・`crates/areka/src/input_events/mod.rs` 575）。当たり判定の追跡のファイル `input_events/hover_region.rs` はまだ無い。
+- 触るファイル: 棚卸㉗の見立てのとおり（新しい転記 `crates/areka-parsers/src/shell/cursor.rs`〔新〕と `shell/mod.rs` 72・`shell_target.rs`・追跡の `input_events/hover_region.rs`〔新・`mouse-click-wheel-events` と共有〕と `input_events/mod.rs` の数行・`mouse_move.rs` の数行と新しいカーソルの口のファイル〔新〕・ゴーストの descript の読み取り・台帳 `assets.toml`）。
+- 規模: 6〜9 のまま。
+- 先に要るもの: 働きの上で無し。ファイルの上で `mouse-click-wheel-events` の後（追跡を先に作る側・ぱすたの × に効く）。同じウェーブに置けない相手（v0.1.0）: `mouse-click-wheel-events`（`input_events/`）・`placement-measure-bake-once` が案 B（`shell_target.rs` の読み込みの口を変える）を選んだとき。`offline-surface-dump` は `shell_target.rs` の `load_shell_target` を呼ぶだけ＝0。1 本だけの席は取らない。実機の確かめ（カーソルの形を見る）は画面のロックを外した机で、議題 1・2 は SSP で測る。
+- 優先度の区分: A のまま（開発者の指示＝v0.1.0 のゴール・ぱすたの体の当たり判定で手の形）。
+- 要件定義のモデル: Opus のまま（先例＝wintf の `WM_SETCURSOR` の診断の口・`shell/boxes.rs` の 2 つ目の転記）。
+- 分割の案: なし。
+- 見つけた穴・古くなった記述: なし。
