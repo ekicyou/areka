@@ -48,7 +48,8 @@ pub use actor::{
 };
 pub use bind::{
     BindChoicePolicy, BindDirective, BindNamespace, BindOptionDecls, BindResolver, DefaultBinds,
-    accumulate, build_static_bindset, parse_bind_directive, scope_namespace,
+    NamedBindResult, accumulate, apply_named_bind, build_static_bindset, parse_bind_directive,
+    scope_namespace,
 };
 pub use looper::SerikoLoopConfig;
 pub use output::{DisplayCommand, MockSurfaceOutput, RebaseKind, RebasedShow, SurfaceOutput};

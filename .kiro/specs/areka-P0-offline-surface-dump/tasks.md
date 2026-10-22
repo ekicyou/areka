@@ -52,7 +52,7 @@
   - _Depends: 1.2_
   - _Requirements: 5.2, 5.9, 14.1, 14.2, 14.3_
 
-- [ ] 2.4 名前で 1 パーツを当てる決め方を 1 か所にまとめる
+- [x] 2.4 名前で 1 パーツを当てる決め方を 1 か所にまとめる
   - 名前の解決 → 方針 → 当てる（排他・multiple・mustselect の OFF は外さない）を 1 つの公開の関数にし、結果を「当てた」「名前の空間が無い」「見つからない」「mustselect で外さなかった」の 4 つで返す（記録は出さない）
   - 画面の `\![bind]` の処理をこの関数経由に組み替える（記録の文は今のまま）
   - 4 つの結果の試験を足し、今の `\![bind]` の試験が期待を変えずに緑
@@ -265,3 +265,4 @@
 - 1.2: `char*` の欄は `BindGroupDefaults` の pub の BTreeMap 4 本（`char_default_on`・`char_names`・`char_mustselect`・`char_multiple`）。スコープごとの名前を引く `names()` は private なので、2.3 は `char_names` を直に読み、名前・既定・option のどれかを持つスコープを拾うには 4 本の鍵を合わせて見る。`Char(0)`／`Char(1)` は空を返す
 - 2.1/2.2: `DefaultBinds`（`areka-seriko/src/bind.rs`）は `uniform`・`single`・`Default`・`for_scope`。試験 3 か所（assets_tests:150・switch_tests:795・frame_attach_carry_tests:123）は `.ids()` を `for_scope("0")` で読む＝2.3／5.1 で既定がスコープごとになったら見直す。`cargo test -p areka` の real-run 統合試験（mcp_get_log_real_run・smoke_boot_loop_exit）は i686 の helper を先に建てないと赤（`tools/test-all.ps1` は先に建てる）。単体は `cargo test -p areka --bins`
 - 2.3: 画面は 5.1 までスコープ 2 の `\![bind]` を error（名前を解決できない）で読み飛ばす＝5.1 で `assets.rs` を `BindResolver::from_groups` へ替えて閉じる。`BindGroupName` は areka-parsers の外から名指せないので `from_groups` は pub の欄を `decls!` マクロで開く
+- 2.4: `apply_named_bind` の結果は design の形と違い `Applied { id, outcome }`・`MustSelectKept { id }` と id を持つ（画面の記録「bind 適用」「mustselect カテゴリの脱衣指示を無視」が欄 `id` を出すため）。7.3 は id を使わなくてよい

@@ -499,6 +499,51 @@ pub fn parse_bind_directive(tokens: &[&str]) -> BindDirective {
     }
 }
 
+/// [`apply_named_bind`] の結果（記録は呼び手が出す・spec: areka-P0-offline-surface-dump 要件 5.1・5.3・5.4）。
+#[derive(Clone, Debug, PartialEq)]
+pub enum NamedBindResult {
+    /// 名前を解決して当てた（`id` は解決した着せ替え ID）。
+    Applied {
+        id: u32,
+        outcome: crate::state::BindApplyOutcome,
+    },
+    /// scope に名前の空間が無い（数でない scope・D7）。
+    NoNamespace,
+    /// (カテゴリ, パーツ) が宣言に無い（R3.7）。
+    NotFound,
+    /// mustselect のカテゴリの脱衣は外さない（正典・解除不可・bindopt 3.2）。
+    MustSelectKept { id: u32 },
+}
+
+/// 名前で 1 パーツを当てる決め方（名前の解決 → 方針 → 当てる）。画面の `\![bind]` と
+/// `--dump-bind` が共有する（要件 14.2）。複数可でないカテゴリの着衣は排他置換（bindopt 2.1/3.1）、
+/// 複数可の着衣は加算・mustselect 以外の脱衣は除去（bindopt 2.2/3.3）、mustselect の脱衣は外さない。
+pub fn apply_named_bind(
+    states: &mut crate::state::ScopeStates,
+    resolver: &BindResolver,
+    scope: &ActorKey,
+    category: &str,
+    part: &str,
+    on: bool,
+) -> NamedBindResult {
+    let Some(ns) = scope_namespace(scope) else {
+        return NamedBindResult::NoNamespace;
+    };
+    let Some(id) = resolver.resolve(ns, category, part) else {
+        return NamedBindResult::NotFound;
+    };
+    let policy = resolver.policy(ns, category);
+    if !on && policy == BindChoicePolicy::MustSelect {
+        return NamedBindResult::MustSelectKept { id };
+    }
+    let outcome = if on && policy != BindChoicePolicy::Multiple {
+        states.apply_bind_exclusive(scope, &resolver.category_ids(ns, category), id)
+    } else {
+        states.apply_bind(scope, id, on)
+    };
+    NamedBindResult::Applied { id, outcome }
+}
+
 /// on/off 積算（純関数・[`BindSet`] は昇順 dedup ゆえ集合同値が冪等判定・D9・design 行 322）。
 ///
 /// 現在の着せ替え集合 `current` に対し、対象 animation ID `id` を `on` に従って積算した
@@ -532,3 +577,7 @@ pub fn accumulate(
 #[cfg(test)]
 #[path = "bind_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "bind_named_tests.rs"]
+mod named_tests;
