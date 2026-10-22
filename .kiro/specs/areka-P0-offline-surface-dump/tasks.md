@@ -67,7 +67,7 @@
   - _Requirements: 4.1, 4.7, 4.9, 12.2_
 
 - [ ] 3. areka-emo-compose・areka-emo-present: シェル全体の外形・形の誤りを 1 度だけ・面の表を 1 度だけ渡す
-- [ ] 3.1 (P) シェル全体の外形を返す読むだけの口
+- [x] 3.1 (P) シェル全体の外形を返す読むだけの口
   - 今の面ごとの外形の辿り方（入れ子・循環の避け方）を写し、座標を符号つきで持って、すべての面の土台・element・element定義が置くサーフェス・すべての animation（`never`・`runonce` を含む）の描く pattern を土台の原点に重ねた外形を返す（負の番号・描かないメソッドは数えない・記録を出さない・(0,0) を必ず含む）
   - 今の面ごとの外形の関数は変えない
   - 試験: 負の座標の element・`never` の pattern・runonce の pattern・入れ子・はみ出しの無いシェルは土台のまま、research.md §10.6 と同じ形の検体で 18×14・12×14 になる
@@ -266,3 +266,4 @@
 - 2.1/2.2: `DefaultBinds`（`areka-seriko/src/bind.rs`）は `uniform`・`single`・`Default`・`for_scope`。試験 3 か所（assets_tests:150・switch_tests:795・frame_attach_carry_tests:123）は `.ids()` を `for_scope("0")` で読む＝2.3／5.1 で既定がスコープごとになったら見直す。`cargo test -p areka` の real-run 統合試験（mcp_get_log_real_run・smoke_boot_loop_exit）は i686 の helper を先に建てないと赤（`tools/test-all.ps1` は先に建てる）。単体は `cargo test -p areka --bins`
 - 2.3: 画面は 5.1 までスコープ 2 の `\![bind]` を error（名前を解決できない）で読み飛ばす＝5.1 で `assets.rs` を `BindResolver::from_groups` へ替えて閉じる。`BindGroupName` は areka-parsers の外から名指せないので `from_groups` は pub の欄を `decls!` マクロで開く
 - 2.4: `apply_named_bind` の結果は design の形と違い `Applied { id, outcome }`・`MustSelectKept { id }` と id を持つ（画面の記録「bind 適用」「mustselect カテゴリの脱衣指示を無視」が欄 `id` を出すため）。7.3 は id を使わなくてよい
+- 3.1: `shell_bounds` は右下に面ごとの `compute_extent` も重ねる（非 overlay のメソッドの pattern も合成の絵を広げるため）。`tracing::subscriber::with_default` は本番で使えない（`log-capture-kit` の `with_default_guard_test` が見張る）。bind／always の pattern が循環するシェルでは `compute_extent`（`plan_extent.rs:78`）が warn を出す＝3.2 で debug に下げ、循環する bind の検体で `shell_bounds` が黙ることも 3.2 で確かめる

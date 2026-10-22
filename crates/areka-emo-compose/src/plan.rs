@@ -679,7 +679,7 @@ fn is_bind_animation(master: &SurfaceMaster, animation_id: u32) -> bool {
 /// `world()` アクセサ経由で読むため、公開 API を広げない。
 ///
 /// [`push_static_element_ops`]／[`derive_ops`] 経由で使う本 module 内補助。
-fn surface_and_binding(
+pub(crate) fn surface_and_binding(
     world: &EmoWorld,
     surface_id: u32,
 ) -> Option<(&SurfaceMaster, &AtlasBinding)> {
