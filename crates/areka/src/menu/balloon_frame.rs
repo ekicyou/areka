@@ -1,7 +1,9 @@
 //! 右クリックメニューの「バルーン」枠（areka-P0-shell-balloon-switch・design「ShellFrame／BalloonFrame」）。
 //!
-//! メニューを出すたびに起動の文脈の根の並びの和でバルーンの目録を読み、その並びのまま子項目に並べて今の
-//! バルーン（起動の文脈の `current.balloon.folder`）と同じフォルダ名に印を付ける。1 つだけでも枠は出す（要件 7.2・7.4）。
+//! メニューを出すたびに今のゴースト（起動の文脈の `current.ghost.dir`）の中の `balloon/` と根の並びの和で
+//! バルーンの目録を読み（ゴーストの中が先・同じフォルダ名の根は隠れる＝areka-P0-ghost-inner-balloon 要件 2.1・2.5）、
+//! その並びのまま子項目に並べて今のバルーン（起動の文脈の `current.balloon.folder`）と同じフォルダ名に印を
+//! 付ける。1 つだけでも枠は出す（要件 7.2・7.4）。
 //! 子を選ぶとフォルダ名で指す出どころ＝メニューの要求を切替の入口へ出す（要件 1.5・7.3）。
 //! 子の並べ方と選んだときの動作は「シェル」枠と共有する（[`super::shell_frame::skin_frame`]）。
 
@@ -28,7 +30,8 @@ fn balloon_frame_item(world: &World, _ctx: &MenuContext) -> MenuItem {
         );
         return skin_frame(Frame::Balloon, SkinKind::Balloon, Vec::new(), None);
     };
-    let balloons = areka_ghost::catalog_roots::list_balloons(&ctx.roots)
+    let balloons = areka_ghost::catalog_roots::balloons_for(&ctx.roots, &ctx.current.ghost.dir)
+        .listed
         .into_iter()
         .map(|entry| entry.identity)
         .collect();

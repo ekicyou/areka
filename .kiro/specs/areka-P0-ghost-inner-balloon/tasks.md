@@ -57,7 +57,7 @@
   - _Boundary: RuntimeCallers（切替・開く）_
   - _Depends: 1.2_
 
-- [ ] 3.2 (P) バルーンのメニューにゴーストの中のバルーンを先に並べる
+- [x] 3.2 (P) バルーンのメニューにゴーストの中のバルーンを先に並べる
   - `menu/balloon_frame.rs` の一覧を `balloons_for(&ctx.roots, &ctx.current.ghost.dir).listed` に替え、頭の説明を直す。今のものの印（`current.balloon.folder`）の付け方は変えない
   - `menu/balloon_frame_tests.rs` に、ゴーストの中が先・根が後に 1 つの一覧で並び、ゴーストの中のバルーンを使っているときにそこへ今と同じ印が付く、を足して緑
   - _Requirements: 2.1, 2.4, 2.5, 10.1_
