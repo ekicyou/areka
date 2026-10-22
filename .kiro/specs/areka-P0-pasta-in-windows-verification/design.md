@@ -133,7 +133,7 @@ graph TB
 crates/sample-ghost-kit/tests/
 └── pasta_inner_balloon_test.rs     # 新: 縦書きのバルーンの置き場と balloon/ が 0 件であることの判定・本物の書庫・較正
 tools/
-└── mouse-input.ps1                 # 新: 物理画素の座標で move/click/rightclick/doubleclick/drag を SendInput で送る・矩形を PNG に撮る
+└── mouse-input.ps1                 # 新: 物理画素の座標で move/click/rightclick/drag を SendInput で送る・矩形を PNG に撮る
 doc/
 └── pasta-real-run.md               # 新: 何度でも回せる実機の手順（条件・7 段・SSP の基準・引き取る spec）
 .kiro/specs/areka-P0-pasta-in-windows-verification/
@@ -151,9 +151,9 @@ doc/
 
 - `crates/wintf/src/ecs/widget/bitmap_source/alpha_mask.rs` — 私有の `ALPHA_THRESHOLD: u8 = 128` を `pub(crate) const HIT_ALPHA_MIN: u8 = <測った値>` に替える。中のテストのうち 128 を境に置くもの（α < 128／≧ 128・`test_threshold_boundary_128`）は古くなるので、境に依らない形（α 0 は当たらない・α 255 は当たる）に直すか、境のテストを下の新しいファイルへ移す。
 - `crates/wintf/src/ecs/widget/bitmap_source/mod.rs` — `pub(crate) use alpha_mask::HIT_ALPHA_MIN;` を足す。
-- `crates/wintf/src/ecs/layout/hit_test/mod.rs` — 2 か所の局所の `ALPHA_THRESHOLD: f32 = 128.0 / 255.0` を消し、モジュールの定数 `HIT_ALPHA_MIN_F32: f32 = HIT_ALPHA_MIN as f32 / 255.0` 1 つを使う。テストの宣言（`#[cfg(test)] #[path = ...] mod`）を 1 つ足す。
+- `crates/wintf/src/ecs/layout/hit_test/mod.rs` — 2 か所の局所の `ALPHA_THRESHOLD: f32 = 128.0 / 255.0` を消し、モジュールの定数 `HIT_ALPHA_MIN_F32: f32 = HIT_ALPHA_MIN as f32 / 255.0` 1 つを使う。
 - `crates/wintf/src/ecs/widget/bitmap_source/alpha_mask_threshold_tests.rs` — 新: 画素の α の境のテスト（`alpha_mask.rs` から `#[path]` で宣言）。
-- `crates/wintf/src/ecs/layout/hit_test/hit_test_alpha_threshold_tests.rs` — 新: 不透明度 × 塗りの α の境のテスト。
+- `crates/wintf/src/ecs/layout/hit_test/tests_ex/opacity.rs` — 既存の、不透明度 × 塗りの α の境を 128/255 で固定するテスト（不透明度 0.502 は当たる・0.501 と 0.4 は当たらない）を、新しい値 `T` の前後に書き直す。新しいテストのファイルは作らない。
 - `doc/ukadoc-coverage/ledger/assets.toml` — シェルの `seriko.use_self_alpha` の行の `note` に、当たりの決まり（α ≧ 新しい値）と根拠（測りの記録）を足す（9.3）。
 - `doc/COMPAT_ARCHITECTURE.md` — §8「沈黙ルール対応表」に「α が小さい画素の当たり」の行を 1 つ足す（ukadoc が黙る所の areka の決め）。
 
@@ -342,7 +342,7 @@ const INNER_BALLOON_NAME_LINE: &str = "name,窓際のぱすたさん縦書き";
 - Trigger: `pwsh -NoProfile -File <ワークツリー>\tools\mouse-input.ps1 -Action <動作> -X <整数> -Y <整数> [-X2 <整数> -Y2 <整数>] [-Steps <整数>] [-Out <PNG の絶対パス>]`
 - 動作:
   - `move`: (X, Y) へ動かす。`OnMouseMove` を起こす「撫で」は、`move` を少しずつ違う点へ続けて呼ぶ。
-  - `click`・`rightclick`・`doubleclick`: (X, Y) へ動かして押して離す（押下と離しの間を空ける）。
+  - `click`・`rightclick`: (X, Y) へ動かして押して離す（押下と離しの間を空ける）。
   - `drag`: (X, Y) で押し、(X2, Y2) まで `-Steps`（既定 20）回に分けて動かし、離す。画面をまたぐドラッグもこれで送る。
   - `shot`: (X, Y)〜(X2, Y2) の矩形を `CopyFromScreen` で写し、`-Out` へ PNG で書く。
 - Input / validation: 座標は仮想画面の物理画素。`drag` と `shot` は X2・Y2 が要る。`shot` の `-Out` は絶対パスで、親のフォルダが在ること（ワークツリーの `target\` の下に置くのは呼ぶ側の決まり）。足りない・形が違う引数は終了コード 2 と 1 行の理由。
@@ -383,7 +383,8 @@ const INNER_BALLOON_NAME_LINE: &str = "name,窓際のぱすたさん縦書き";
   2. 測る点を決める: 帯ごとに、まわり 5×5 の画素が同じ α の値を持つ点を選ぶ（拡大と補間で境がにじんでも、その値の当たりを測れるように）。面に現れる α の値ごとに 1 点以上（少なくとも帯ごとに 3 点）。
   3. 座標の対応を決める（較正）: α 255 の点を 2 つ以上 `move` で撫で、来た `OnMouseMove` の Reference0・1 と画面の座標から、ローカル座標と画面の画素の対応（原点と倍率）を求める。
   4. 測る: 点ごとに、窓の外の点へ `move` してから狙いの点へ `move` し、`OnMouseMove` が来たか（来たなら Reference0・1・3・4）を控える。ぱすたは本体の窓の奥に相方の窓（窓の枠）を重ねるので、測る窓と違う Reference3 で来たイベントは「測る窓には当たらなかった（奥へ抜けた）」と数える。点はなるべく奥に別の窓が重ならない所から選ぶ。同じ点を 2 回測り、食い違えば 3 回目で多い方を採り、食い違いも書く。
-- 線の決め方: 「当たった点の α の最小」と「当たらなかった点の α の最大」を並べる。最大 + 1 = 最小なら、SSP の線は 1 つの値（その最小の値以上で当たる）に定まる。間が空く・逆転する・ゴーストや絵で違うときは「定まらない」とし、測りの結果を添えて開発者の決めを仰ぐ（7.2）。
+  5. 詰める: 4 の荒い測りで「当たらなかった α の最大」と「当たった α の最小」の間に、測る絵に在る α の値が残っていれば、その値ごとに 2 と同じ選び方で点を選び、4 と同じやり方で 1 つずつ測って間を詰める（間が無くなるか、間の値が絵に無くなるまで）。
+- 線の決め方: 「当たった点の α の最小」と「当たらなかった点の α の最大」を並べる。最大 + 1 = 最小なら、SSP の線は 1 つの値（その最小の値以上で当たる）に定まる。詰め切っても間が空く（間の α の値が絵に無い）ときは「a〜b の間」と幅で記録する。幅が残る・逆転する・ゴーストや絵で違うときは「定まらない」とし、測りの結果を添えて開発者の決めを仰ぐ（7.2）。
 - 最新の書庫は当たりを測らず、α が 1〜127 の画素がどの絵にいくつあるかだけを書く（1.2）。
 
 **全体の通しの基準（1.3）**
@@ -520,7 +521,7 @@ const HIT_ALPHA_MIN_F32: f32 = HIT_ALPHA_MIN as f32 / 255.0;
 
 **境のテスト（7.5）**
 - `alpha_mask_threshold_tests.rs`: α = `T - 1` の画素は当たらず、α = `T` の画素は当たる（`from_pbgra32` と `regenerate_from_pbgra32` の両方）。期待の値は測った数をそのまま書く（定数を参照しない）。こうすると直す前（128）は赤、直した後は緑になる。
-- `hit_test_alpha_threshold_tests.rs`: 不透明度 1.0・塗りの α が `(T - 1) / 255` のウィジェットは当たらず、`T / 255` は当たる。`T` が 1 のときは「α 0 は当たらない」を下の側に使う。
+- 既存の `hit_test/tests_ex/opacity.rs`: 128/255 の前後に置いた境のテストを、`(T - 1) / 255` は当たらず `T / 255` は当たる形に書き直す（期待の値は測った数をそのまま書く）。`T` が 1 のときは「α 0 は当たらない」を下の側に使う。境に依らない不透明度 0.4 のテストは、`T` が 102 以下だと「当たる」側へ変わるので、境から離れた値（α 0 と 1.0）に直す。
 - `alpha_mask.rs` の中の 128 を境に置く既存のテストは古くなるので、境に依らない形（α 0 は当たらない・α 255 は当たる）に直す。
 
 **Implementation Notes**
@@ -601,7 +602,7 @@ const HIT_ALPHA_MIN_F32: f32 = HIT_ALPHA_MIN as f32 / 255.0;
   - `a_vertical_balloon_outside_the_ghost_folder_is_rejected`: 縦書きのバルーンを `ghost/master/` の下に置いた固定入力で判定が赤（2.7）。
   - 既存の `every_sample_nar_installs_exactly_the_elements_its_registry_row_declares` と `sample_path_guard_test` が緑のまま（2.6）。
   - （条件つき）`alpha_mask_threshold_tests.rs`: α = `T - 1` は当たらず `T` は当たる（新規の作りと作り直しの両方・7.5）。
-  - （条件つき）`hit_test_alpha_threshold_tests.rs`: 不透明度を重ねた α で同じ境（7.4・7.5）。
+  - （条件つき）既存の `hit_test/tests_ex/opacity.rs` を書き直したもの: 不透明度を重ねた α で同じ境（7.4・7.5）。
 - 道具の自己確かめ: `mouse-input.ps1` は動かした後に `GetCursorPos` で確かめる。書いた後に 2 つの画面で 1 度ずつ試す。
 - 実機（手で回す・排他テストの机）:
   - SSP の α の当たりの測り（1.2）と全体の通し（1.3）。
