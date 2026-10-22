@@ -217,10 +217,6 @@ pub(crate) fn scan_balloons(root: &BasewareRoot) -> Vec<BalloonEntry> {
 
 /// `<ゴースト>/balloon/` の直下を根の `balloon/` と同じ判定で走査する（areka-P0-ghost-inner-balloon
 /// 要件 1.1〜1.3）。項目の `root` はそのゴーストのフォルダ。一時の置き場の印は見ない。
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "呼び手 `balloons_for` は次のタスク（1.2）で足す")
-)]
 pub(crate) fn scan_ghost_balloons(ghost_dir: &Path) -> Vec<BalloonEntry> {
     scan_balloon_store(&ghost_dir.join("balloon"), ghost_dir)
 }
