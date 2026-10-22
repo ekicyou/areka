@@ -10,7 +10,7 @@ use crate::schedule::log_capture::{CapturedEvent, assert_not_logged, capture, lo
 use crate::schedule::translate_test_support::pass_translate;
 use crate::schedule::{ActiveTalk, Phase, TermCause, step};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
-use crate::talk::{EpilogueCommand, StartTalk, TalkId};
+use crate::talk::{EpilogueCommand, ScriptOrigin, StartTalk, TalkId};
 use tracing::Level;
 
 fn cfg() -> KanadeConfig {
@@ -339,6 +339,7 @@ fn start_with_epilogue() -> StartTalk {
             name: "boot".to_string(),
             tokens: vec!["記録".to_string()],
         }],
+        origin: ScriptOrigin::GHOST,
     }
 }
 

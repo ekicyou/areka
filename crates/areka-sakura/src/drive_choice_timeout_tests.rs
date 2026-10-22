@@ -1,6 +1,6 @@
 use super::test_support::*;
 use super::*;
-use crate::contract::TalkId;
+use crate::contract::{ScriptOrigin, TalkId};
 use crate::duration::text_playback_duration;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -25,6 +25,7 @@ fn assert_one_step_enters_choice_wait(directive: &str, expected: Option<f64>, ta
             epilogue: Vec::new(),
             script,
             talk_id,
+            origin: ScriptOrigin::GHOST,
         },
         done_tx,
         two_sinks(NoopSink, NoopSink),

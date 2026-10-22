@@ -3,7 +3,7 @@
 
 use super::test_support::{run_bounded, test_system_vars};
 use super::*;
-use areka_sakura::contract::TalkCue;
+use areka_sakura::contract::{ScriptOrigin, TalkCue};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
@@ -88,6 +88,7 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
         epilogue: Vec::new(),
         talk_id: talk_a,
         script: r"\s[1]A\_w[2500]A_END\e".to_string(),
+        origin: ScriptOrigin::GHOST,
     }))
     .expect("send Start(A)");
     tx.send(DispatcherMsg::Tick {
@@ -101,6 +102,7 @@ fn each_talk_start_hands_its_id_to_fresh_clones_and_replaced_clones_drop_first()
         epilogue: Vec::new(),
         talk_id: talk_b,
         script: r"\s[2]B\_w[2500]B_END\e".to_string(),
+        origin: ScriptOrigin::GHOST,
     }))
     .expect("send Start(B)");
     tx.send(DispatcherMsg::Tick {

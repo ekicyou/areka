@@ -12,7 +12,7 @@
   - 再生の層の窓口から同じ型が再輸出され、`areka` のクレートから直接の依存を足さずに使える。
   - _Requirements: 1.8, 2.7, 3.2, 3.3_
 
-- [ ] 1.2 台本の起動の約束に出どころの欄を足す
+- [x] 1.2 台本の起動の約束に出どころの欄を足す
   - 台本 1 つの起動の約束に出どころの欄を足し、既定の作り方はゴースト自身を入れて製品の呼び手の振る舞いを据え置く（`epilogue` の既定と同じ先例）。
   - 再生の層は欄を運ぶだけで解釈しない（分解の追随のみ）。
   - 約束を字面で組むテスト（約 85 か所）を追随させ、ワークスペース全体がビルドでき、既存のテストが緑のままになる。
@@ -150,3 +150,8 @@
   - _Boundary: 網羅台帳・COMPAT_ARCHITECTURE.md_
   - _Requirements: 5.2, 5.3, 5.4_
   - _Depends: 6.4_
+
+## Implementation Notes
+
+- （範囲外・1.2 で発見）`crates/areka-kanade/src/actor_raise_reply_tests.rs:95` に clippy の `never_loop` の誤りが既にあり、kanade の lib test の clippy を落とす。
+- （範囲外・1.2 のレビューで発見）`areka-sakura` の `drive::delivery_tests::same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire_times` が有界の `try_recv`／`yield_now` の空回しで時間に依存し、まれに赤になる。

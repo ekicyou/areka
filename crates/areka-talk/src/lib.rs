@@ -36,20 +36,25 @@ pub struct EpilogueCommand {
 /// `epilogue` は compile 後の CueSheet 末尾（最終 offset・duration 0）へ carrier cue として
 /// 付加される汎用コマンド列。既定は空（従来挙動）。空でない場合のみ末尾へ付く。
 /// スクリプト文字列末尾への追記ではないため、`\e` による End 切詰めでも脱落しない。
+///
+/// `origin` は台本 1 つの出どころと実効のレベル。kanade が送った後は誰も書き換えず、
+/// 再生の層は運ぶだけで解釈しない（areka-P0-script-security-level 1.4）。
 #[derive(Debug, Clone)]
 pub struct StartTalk {
     pub talk_id: TalkId,
     pub script: String,
     pub epilogue: Vec<EpilogueCommand>,
+    pub origin: ScriptOrigin,
 }
 
 impl StartTalk {
-    /// epilogue なしの従来形コンストラクタ（構築点の機械的追随を最小化）。
+    /// epilogue なし・出どころはゴースト自身の従来形コンストラクタ（構築点の機械的追随を最小化）。
     pub fn new(talk_id: TalkId, script: impl Into<String>) -> Self {
         Self {
             talk_id,
             script: script.into(),
             epilogue: Vec::new(),
+            origin: ScriptOrigin::GHOST,
         }
     }
 }

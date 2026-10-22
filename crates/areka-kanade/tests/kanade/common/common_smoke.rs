@@ -9,6 +9,7 @@ use areka_kanade::{
     ExecutionSnapshot, KanadeConfig, KanadeMsg, MouseButton, ShioriMsg, ShioriOutcome, StartTalk,
     TalkEndReason, TalkId, events,
 };
+use areka_talk::ScriptOrigin;
 
 use super::{
     CallMethod, DEFAULT_TIMEOUT, FIXED_BOOT_SCRIPT, Fixture, MouseResponse, QuitPolicy,
@@ -76,6 +77,7 @@ fn mock_sakura_records_and_returns_talkdone() {
             epilogue: Vec::new(),
             talk_id: TalkId(1),
             script: FIXED_BOOT_SCRIPT.to_string(),
+            origin: ScriptOrigin::GHOST,
         }))
         .expect("send TalkCommand::Start to mock sakura");
 

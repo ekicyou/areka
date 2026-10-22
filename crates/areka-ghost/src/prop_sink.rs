@@ -344,8 +344,8 @@ mod tests {
     mod completion_only_records_integration {
         use super::*;
         use areka_sakura::contract::{
-            ChoiceWaiting, CueSink, SakuraMsg, StartTalk, SystemVarSnapshot, TalkCue, TalkDone,
-            TalkEndReason, TalkId,
+            ChoiceWaiting, CueSink, SakuraMsg, ScriptOrigin, StartTalk, SystemVarSnapshot, TalkCue,
+            TalkDone, TalkEndReason, TalkId,
         };
         use areka_sakura::spawn_talk;
         use areka_talk::EpilogueCommand;
@@ -421,6 +421,7 @@ mod tests {
                     name: PROP_SET_CUE_NAME.to_string(),
                     tokens: vec![PersistKey::BootCount.to_canonical_key(), "1".to_string()],
                 }],
+                origin: ScriptOrigin::GHOST,
             }
         }
 
