@@ -36,6 +36,10 @@ mod drag_follow;
 mod keyword_base;
 // バルーン位置オフセットの単位空間契約の定義元（areka-P0-balloon-offset-dpi・design C1）。
 mod offset_space;
+// 窓の組の連れ動き（areka-P0-window-link-directives・設計「sticky_follow」）。
+// shortcut: 本番の消費者（吸着・組の指令の適用とドラッグ）は task 2.1 以降で来る。来たら許可属性を外す。
+#[allow(dead_code)]
+mod sticky_follow;
 mod visibility;
 mod window_move;
 mod work_area;
@@ -186,6 +190,9 @@ mod offset_space_tests;
 #[cfg(test)]
 #[path = "follow_resize_tests.rs"]
 mod resize_tests;
+#[cfg(test)]
+#[path = "follow_sticky_follow_tests.rs"]
+mod sticky_follow_tests;
 #[cfg(test)]
 #[path = "follow_test_support.rs"]
 mod test_support;

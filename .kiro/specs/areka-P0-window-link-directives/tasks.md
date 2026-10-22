@@ -16,7 +16,7 @@
   - 兄弟のテストで、2 つ以上で作る・`1,0` と `0,1` が同じ組・組を 2 つ持てる・descript の組との重なりを含む重なりで何も変わらない・2 未満・重複・数でない・あふれる数の拒否・解除で台本の組だけ消える・取り替えが台本の組を保って重なる descript の組を拒否する、が緑になる
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.7, 3.8, 3.9, 6.5_
 
-- [ ] 1.3 組の相手の位置の計算と、ドラッグで窓を書く書き手の決め方を作る
+- [x] 1.3 組の相手の位置の計算と、ドラッグで窓を書く書き手の決め方を作る
   - `placement/follow/sticky_follow.rs` を新しく置いて `follow.rs` から宣言し、相手の新しい位置を「始めの位置＋量を相手の向きで射影」で出す純関数 `partner_target` を作る
   - 「wintf に窓を動かさせるのは吸着なしで組に入っていない窓だけ」の純関数 `wintf_moves_window` と、すべてのキャラクターの窓の `DragConfig.move_window` を今の `Anchored` と帳簿から付け直す `sync_drag_writer` を作る（帳簿が無ければ組なしとして付ける）
   - 兄弟のテストで、下・上・左・右・なしの相手で吸着した軸に量が乗らないこと、`wintf_moves_window` の 4 通り（吸着の有無×組の有無）、2 つの窓の World で組を据えると両方の `move_window` が偽になり組が無ければ向きどおりに戻ること、が緑になる
@@ -152,3 +152,4 @@
 ## Implementation Notes
 - areka は bin クレート。クレートのテストは `cargo test -p areka --bin areka`（`--lib` は無い）。
 - 1.2: `placement/mod.rs` の `sticky_group_ledger` 宣言に一時の `#[allow(dead_code)]`。2.1 で本番の消費者が来たら外す。`try_add_script_group` は 2 未満を自分で検査しないので、必ず `parse_sticky_tokens` を通してから呼ぶ。
+- 1.3: `placement/follow.rs` の `mod sticky_follow` に一時の `#[allow(dead_code)]`。本番の呼び出しが来たら外す。`follow/` の下のモジュールのテストは `placement/follow_<名>_tests.rs`（`#[path]` で follow.rs から読む）。
