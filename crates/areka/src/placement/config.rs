@@ -103,7 +103,8 @@ pub struct PlacementConfig {
     /// `emo2_boot::frame::wiring::seed_zorder_descript_base` を通って起動時の基底グループになる
     /// （解釈器はタグ入口と共通・`emo2_boot::frame::zorder_descript`）。
     pub zorder_raw: Option<String>,
-    /// shell `seriko.sticky-window` の生転記（実挙動なし・5.2）。
+    /// shell `seriko.sticky-window` の生転記（起動で窓の組の帳簿へ据える・
+    /// areka-P0-window-link-directives 要件 3.8）。
     pub sticky_window_raw: Option<String>,
     /// shell `seriko.dpi` の生転記（96 素通しシーム・DD11）。
     pub shell_dpi_raw: Option<String>,

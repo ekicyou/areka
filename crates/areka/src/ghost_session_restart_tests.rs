@@ -177,6 +177,86 @@ fn close_before_commit_arrives_spawns_no_window() {
     );
 }
 
+/// emo2 の複製のシェルの descript に `seriko.sticky-window` を書き足し、窓を準備して投函し、窓が
+/// 生えるまで `Input` 段を回す。戻り値は窓が生えた後の World と、回したあいだの記録。
+fn boot_windows_with_sticky_line(line: &str) -> (World, Vec<log_capture_kit::CapturedEvent>) {
+    // SAFETY: 資産の採寸（WIC）に要る COM 初期化（既初期化の S_FALSE 等は無視）。
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+    let sample = acquire_emo2();
+    let descript = sample.folder().join("shell/master/descript.txt");
+    let mut text = std::fs::read(&descript).expect("emo2 のシェルの descript を読める");
+    text.extend_from_slice(format!("\r\n{line}\r\n").as_bytes());
+    std::fs::write(&descript, text).expect("emo2 の複製のシェルの descript へ書ける");
+    let cfg = ConfigInputs {
+        ghost_root: sample.folder().to_path_buf(),
+        balloon_root: emo2_balloon(&sample),
+    };
+    let mut world = World::new();
+    world.init_resource::<Schedules>();
+    world.insert_resource(WintfTaskPool::new());
+    world.resource_mut::<Schedules>().add_systems(
+        Input,
+        wintf::ecs::widget::bitmap_source::systems::drain_task_pool_commands,
+    );
+    let (spawned, events) = capture_logs(|| {
+        let prepared = prepare_ghost_windows(&mut world, &cfg).expect("emo2 の窓の準備は通る");
+        commit_ghost_windows(&mut world, prepared);
+        run_input_until(&mut world, |w| ghost_window_count(w) > 0)
+    });
+    assert!(spawned, "窓が生えない: {events:?}");
+    (world, events)
+}
+
+/// 起動で descript の組が帳簿に入る（areka-P0-window-link-directives 要件 3.8・6.1）: 窓を作る閉包が
+/// `GhostWindows` と一緒に帳簿を据え、シェルの `seriko.sticky-window` の組を入れる。
+#[test]
+fn boot_seeds_the_sticky_ledger_with_the_descript_group() {
+    use crate::placement::sticky_group_ledger::{StickyGroupLedger, StickySource};
+
+    let (world, events) = boot_windows_with_sticky_line("seriko.sticky-window,0,1");
+
+    let groups: Vec<(Vec<u32>, StickySource)> = world
+        .get_resource::<StickyGroupLedger>()
+        .map(|ledger| {
+            ledger
+                .groups()
+                .iter()
+                .map(|g| (g.members.iter().copied().collect(), g.source))
+                .collect()
+        })
+        .unwrap_or_default();
+    assert_eq!(
+        (world.contains_resource::<StickyGroupLedger>(), groups),
+        (true, vec![(vec![0, 1], StickySource::Descript)]),
+        "起動で帳簿に descript の組が入っていない: {events:?}"
+    );
+}
+
+/// 捨てる書き方（ID が 1 つ）なら組を作らずに記録し、起動は続く（要件 3.9・窓は 4 枚・帳簿は空で据わる）。
+#[test]
+fn boot_with_a_rejected_sticky_value_logs_and_keeps_booting() {
+    use crate::placement::sticky_group_ledger::StickyGroupLedger;
+
+    let (mut world, events) = boot_windows_with_sticky_line("seriko.sticky-window,0");
+
+    let rejected = events
+        .iter()
+        .filter(|e| {
+            e.field_str("event") == Some("sticky_group_rejected") && e.level == tracing::Level::WARN
+        })
+        .count();
+    let groups = world
+        .get_resource::<StickyGroupLedger>()
+        .map(|ledger| ledger.groups().len());
+    assert_eq!(
+        (rejected, groups, ghost_window_count(&mut world)),
+        (1, Some(0), 4),
+        "(拒否の記録, 帳簿の組の数, 窓の数): {events:?}"
+    );
+}
+
 /// 投函の時点で作業プールが無ければ、閉包を捨てた上で `task_pool_missing` を error で残す
 /// （黙って捨てない・log-first の判断分岐）。
 #[test]

@@ -472,6 +472,61 @@ fn close_windows_for_restart_removes_ghost_windows_resource() {
     );
 }
 
+/// **areka-P0-window-link-directives 要件 6.2**: 起こし直しのために全窓を閉じたら、窓の組の帳簿と
+/// ドラッグの控えも外す（次の一式は起動と同じく descript の組から始まる）。
+#[test]
+fn close_windows_for_restart_removes_sticky_ledger_and_drag_session() {
+    use crate::placement::follow::{CharDragSession, OffsetBase, begin_char_drag};
+    use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+    use crate::placement::source::GhostTitles;
+    use crate::placement::spawn::spawn_ghost_windows;
+    use crate::placement::sticky_group_ledger::{StickyGroupLedger, seed_sticky_descript};
+
+    let placement = ScopePlacement {
+        scope: 0,
+        char_pos: PointPx { x: 100, y: 100 },
+        char_size: SizePx { w: 200, h: 300 },
+        balloon_pos: PointPx { x: 320, y: 100 },
+        balloon_size: SizePx { w: 180, h: 120 },
+        balloon_offset: PointPx { x: 220, y: 0 },
+        balloon_offset_base: OffsetBase::unpinned(PointPx { x: 220, y: 0 }),
+        balloon_limit: false,
+        anchor: Anchor::Bottom,
+        balloon_keyword_base: None,
+    };
+    let mut world = World::new();
+    world.insert_non_send(AppExit::new());
+    let windows = spawn_ghost_windows(
+        &mut world,
+        &[placement],
+        &GhostTitles::from_scope_titles([(0, "scope-0".to_string())]),
+    );
+    seed_sticky_descript(&mut world, Some("0,1"));
+    begin_char_drag(
+        &mut world,
+        windows.char_window(0).expect("scope 0 のキャラ窓"),
+    );
+    assert_eq!(
+        (
+            world.contains_resource::<StickyGroupLedger>(),
+            world.contains_resource::<CharDragSession>(),
+        ),
+        (true, true),
+        "前提: 閉じる前は帳簿と控えが在る"
+    );
+
+    let _closed = close_windows_for_restart(&mut world);
+
+    assert_eq!(
+        (
+            world.contains_resource::<StickyGroupLedger>(),
+            world.contains_resource::<CharDragSession>(),
+        ),
+        (false, false),
+        "(帳簿が在る, ドラッグの控えが在る)"
+    );
+}
+
 /// **areka-P0-ghost-shell-balloon-switch 要件 12.9**: HWND が付いたゴースト窓へ、OS の閉鎖要求の
 /// 受け手と並べて OS のセッションの終了の受け手も差す（系は増やさない）。印の無い窓には差さない。
 #[test]

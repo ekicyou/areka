@@ -135,7 +135,7 @@ pub(crate) use self::sticky_follow::sync_drag_writer;
 // ドラッグの始めの控え。呼び手は `input_events::drag` だけで、`#[path]` で src を取り込む
 // examples には input_events が無いので、そちらのビルドでは未使用に見える。
 #[allow(unused_imports)]
-pub(crate) use self::sticky_follow::begin_char_drag;
+pub(crate) use self::sticky_follow::{CharDragSession, begin_char_drag};
 // `\![move]` の連れ動き。呼び手は `emo2_boot::move_cue_place` だけで、examples には emo2_boot が
 // 無いので、そちらのビルドでは未使用に見える。
 #[allow(unused_imports)]

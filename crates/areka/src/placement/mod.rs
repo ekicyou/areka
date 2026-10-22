@@ -47,7 +47,7 @@ pub(crate) mod script_alignment;
 pub mod source;
 pub mod spawn;
 /// 窓の組（`\![set,sticky-window,...]`・descript の `seriko.sticky-window`）の帳簿と World の側の関数。
-// shortcut: 本番の呼び手（起動の据え付け・シェルの切り替え・取り出しの相）は task 5.1・5.2・6 で来る。来たら許可属性を外す。
+// shortcut: 起動の据え付け（5.1）は来たが、シェルの切り替え（5.2）と取り出しの相（6）の呼び手がまだ無い。両方が来たら許可属性を外す。
 #[allow(dead_code)]
 pub(crate) mod sticky_group_ledger;
 pub mod transition_diag;
@@ -284,6 +284,9 @@ pub struct PreparedPlacement {
     /// 値の解釈は placement では一切行わない（生の転記＝`PlacementConfig::zorder_raw` の
     /// そのまま）。窓の位置も寸法もこの値では 1 mm も動かない。
     pub zorder_raw: Option<String>,
+    /// shell descript の `seriko.sticky-window` の生の値（未指定なら `None`）。`zorder_raw` と同じ
+    /// 搬送の形で、窓を作る閉包が窓の組の帳簿へ据える（areka-P0-window-link-directives 要件 3.8・3.9）。
+    pub sticky_window_raw: Option<String>,
     /// 標準の位置の材料（areka-P0-move-canon 要件 8.6・areka-P0-window-link-directives 要件 7.4）。
     ///
     /// 窓の組を作った後にそのまま置く。読み込んだ descript の値とバルーンの `windowposition`・
@@ -322,6 +325,7 @@ impl PreparedStages {
             author_dpi: self.author_dpi,
             // 解釈せずそのまま搬送する（重なりの基底の出所は 1 つ＝この読取・要件 5.2）。
             zorder_raw: self.cfg.zorder_raw,
+            sticky_window_raw: self.cfg.sticky_window_raw,
             default_basis: self.default_basis,
         }
     }

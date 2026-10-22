@@ -681,6 +681,31 @@ fn prepare_carries_the_shell_zorder_value_verbatim() {
     );
 }
 
+/// shell の `seriko.sticky-window` も Z の順と同じ形で、生の値のまま準備の結果に載る
+/// （areka-P0-window-link-directives 要件 3.8・3.9）。宣言が無ければ `None`。
+#[test]
+fn prepare_carries_the_shell_sticky_window_value_verbatim() {
+    let declared = stages_with_shell(
+        "seriko.sticky-window,1,0
+",
+    )
+    .resolve(WA);
+    let undeclared = stages_with_shell(
+        "seriko.zorder,1,0
+",
+    )
+    .resolve(WA);
+
+    assert_eq!(
+        (
+            declared.sticky_window_raw.as_deref(),
+            undeclared.sticky_window_raw
+        ),
+        (Some("1,0"), None),
+        "seriko.sticky-window が生のまま準備の結果へ運ばれていない（宣言あり, 宣言なし）"
+    );
+}
+
 /// 逆側——宣言が無ければ `None` のまま運ばれる（基底なしで起動する）。
 ///
 /// 片側だけでは「常に `Some` を作る」形と区別が付かない。

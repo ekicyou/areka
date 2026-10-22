@@ -235,6 +235,8 @@ pub(crate) fn prepare_ghost_windows(
     // 重なりの基底の生の値も同じ読取から取り出す（解釈は結線の先＝台帳の層が行う・
     // areka-P0-scope-zorder-pinning 要件 5.2）。`prepared` を分解する前に写す。
     let zorder_raw = prepared.zorder_raw.clone();
+    // 窓の組の descript の値も同じ読取から取り出し、窓を作る閉包で帳簿へ据える（解釈は帳簿の層）。
+    let sticky_window_raw = prepared.sticky_window_raw.clone();
     // 標準の位置の材料（descript の値＋バルーンの配置の値）も同じ読取から取り出し、窓の組と
     // 一緒に置く（areka-P0-move-canon 要件 8.6・areka-P0-window-link-directives 要件 7.4）。
     let default_basis = prepared.default_basis;
@@ -274,6 +276,8 @@ pub(crate) fn prepare_ghost_windows(
         world.insert_resource(sources.dpi_table);
         let windows = placement::spawn::spawn_ghost_windows(world, &placements, &titles);
         world.insert_resource(default_basis);
+        // 窓の組の帳簿も窓の束と一緒に据える（窓が在るので据えた後に書き手が付け直す・要件 3.8・6.1）。
+        placement::sticky_group_ledger::seed_sticky_descript(world, sticky_window_raw.as_deref());
         // 保存位置が復元されたスコープは既定配置ではない（scg 7.3）。台帳の
         // 既定位置を落として連鎖の再解決から常に除外する——さもないと次回起動で
         // 利用者のドラッグ位置が隣接位置へ引き戻される。spawn が Resource として

@@ -87,7 +87,7 @@
   - _Requirements: 4.7, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 9.3, 9.4_
 
 - [ ] 5. 台本で変えた吸着と組の寿命を正典と裁定どおりにする
-- [ ] 5.1 起動で descript の組を据え、ゴーストの窓を閉じるときに帳簿と控えを外す
+- [x] 5.1 起動で descript の組を据え、ゴーストの窓を閉じるときに帳簿と控えを外す
   - シェルの descript の `seriko.sticky-window` の生の値を、Z の順の生の値と同じ形で起動の準備の結果まで運び、`ghost_session.rs` の窓を作る閉包で `GhostWindows` と一緒に帳簿を据える（据えた後に書き手が付け直す）
   - `app_exit.rs` の `close_windows_for_restart` で帳簿とドラッグの控えを外す 2 行を足す。SHIORI だけの読み直しは触らない
   - 兄弟のテストで、起動の準備の結果が生の値を運ぶ・据えた帳簿に descript の組が入り捨てる書き方なら記録して起動が続く・`close_windows_for_restart` で帳簿と控えが外れる・SHIORI だけの読み直しで帳簿と `AnchorSource` が残る、が緑になる
