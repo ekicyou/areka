@@ -277,7 +277,7 @@ fn testdll_loadu_is_called_with_utf8_and_load_is_not() {
 fn testdll_loadu_false_is_load_returned_false_without_falling_back() {
     let (result, text, _) = load_loadu_testdll(true);
     match result {
-        Err(ProxyError::LoadReturnedFalse) => {}
+        Err(ProxyError::LoadReturnedFalse { .. }) => {}
         Err(e) => panic!("expected LoadReturnedFalse, got {e:?}（記録: {text:?}）"),
         Ok(()) => panic!("loadu の偽返却を注入したのに確立が成功した（記録: {text:?}）"),
     }
