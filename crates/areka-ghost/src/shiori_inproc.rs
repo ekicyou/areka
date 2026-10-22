@@ -59,8 +59,8 @@ use areka_parsers::package::ShioriMount;
 use shiori_abi::error::{SHIORI_E_PROPERTY_NOT_FOUND, SHIORI_E_UNKNOWN_TOKEN, SHIORI_S_PENDING};
 use shiori_abi::interface::{IShiori, IShioriFactory, IShioriHost, IShioriHost_Impl};
 use shiori_host32_host::{
-    Charset, CharsetPolicy, ExitKind, HelperStatus, Method, RequestError, ShioriError,
-    ShioriRequest, ShutdownError, build_request, parse_response,
+    Charset, CharsetPolicy, ExitKind, HelperStatus, Method, RequestError, RequestHeaders,
+    ShioriError, ShioriRequest, ShutdownError, build_request, parse_response,
 };
 use tracing::{error, warn};
 use windows::Win32::Foundation::{FreeLibrary, HMODULE};
@@ -400,14 +400,15 @@ fn map_get_outcome(hr: HRESULT, response_bytes: &[u8]) -> Result<Option<String>,
 /// `build_request` は `charset` に渡された文字コードで符号化する（areka-P0-charset-canon
 /// 要件 3.1）。本呼出点は [`Charset::UTF_8`] 固定ゆえ——SHIORI/4 in-proc は文字コード交渉を
 /// 持たない——出力は常に有効な UTF-8 であり、下の `from_utf8_lossy` は逐語一致し panic しない。
-/// `sender` は [`SENDER`]（`"areka"`）固定。`status` は kanade が render 済みの wire 値で、
+/// 追加のヘッダは暫定で [`RequestHeaders::internal`]（`Sender` は [`SENDER`]＝`"areka"`）固定
+/// （要求の出どころから組む共通の手へ移すのは areka-P0-script-security-level タスク 4.1）。`status` は kanade が render 済みの wire 値で、
 /// 解釈せず codec へ verbatim 透過する（DD-IT-1 語彙非漏洩）。
 fn build_input(method: Method, id: &str, references: &[String], status: Option<&str>) -> HSTRING {
     let bytes = build_request(&ShioriRequest {
         method,
         id,
         references,
-        sender: SENDER,
+        headers: RequestHeaders::internal(SENDER),
         status,
         charset: Charset::UTF_8,
     })

@@ -12,11 +12,11 @@
 //! ## 設計原則
 //! - **汎用ビルダ**: `id` と `references` は verbatim に写す。OnBoot 等の特定イベントに
 //!   固有の分岐や既定 Reference を埋め込まない（要件 1.5）。donor `build_onboot`
-//!   （OnBoot 決め打ち）を method/id/references/sender 汎用へ一般化したもの。
+//!   （OnBoot 決め打ち）を method/id/references/headers 汎用へ一般化したもの。
 //! - **文字コードで分岐しない**: 組み立てた全文を `req.charset` の 1 本の経路で符号化し、
 //!   `Charset` ヘッダにはその正規名を書く（綴りと実バイト列が常に一致・要件 3.1〜3.3）。
 //!   UTF-8 を特別扱いする近道は置かない（areka-P0-charset-canon 要件 1.4）。
-//! - **単一差替点**: `Sender` は `ShioriRequest.sender` の値をそのまま書く。ハードコードした
+//! - **単一差替点**: `Sender` は `ShioriRequest.headers.sender` の値をそのまま書く。ハードコードした
 //!   `"SSP"` 等の詐称はしない（呼び手が `"areka"` を渡す・design.md §送出ヘッダ最小集合）。
 
 /// SHIORI/3.0 request の request line 種別（IShiori Get / Notify の wire 表現・要件 1.1/1.2）。
@@ -32,11 +32,12 @@ pub enum Method {
 }
 
 use crate::charset::Charset;
+use crate::request_headers::RequestHeaders;
 
 /// codec への入力（イベント個別知識を持たない汎用ビルダ入力・要件 1.5）。
 ///
 /// `id` はイベント名（`ID` ヘッダ値）、`references` は `Reference0..N`（0 起点連番で
-/// 連番付与）、`sender` は `Sender` ヘッダ値（呼び手が `"areka"` を渡す）。
+/// 連番付与）、`headers` は追加のヘッダ（`SecurityLevel`・`SecurityOrigin`・`Sender`・`SenderType`）。
 pub struct ShioriRequest<'a> {
     /// request line 種別（`GET` / `NOTIFY`・要件 1.1/1.2）。
     pub method: Method,
@@ -44,8 +45,8 @@ pub struct ShioriRequest<'a> {
     pub id: &'a str,
     /// `Reference0..N` に 0 起点連番で写す References（要件 1.4）。空なら Reference 行なし。
     pub references: &'a [String],
-    /// `Sender` ヘッダ値（例 `"areka"`・design.md §送出ヘッダ最小集合）。単一差替点。
-    pub sender: &'a str,
+    /// 追加のヘッダ（解釈しない wire 値・`Sender` を含む単一差替点）。
+    pub headers: RequestHeaders<'a>,
     /// `Status` ヘッダの wire 値。`None` ⇒ ヘッダ行を出さない／`Some(v)` ⇒ `Status: v` を1行。
     /// **値は解釈しない**（汎用 codec・語彙は kanade が所有・DD-IT-6）。
     pub status: Option<&'a str>,
@@ -75,16 +76,15 @@ pub struct EncodedRequest {
 /// # 組立内容（design.md §送出ヘッダ最小集合）
 /// - request line: `GET SHIORI/3.0` / `NOTIFY SHIORI/3.0`（要件 1.1/1.2）
 /// - `Charset: <正規名>`（要求行の直後＝ASCII 範囲外を含み得る行より前・要件 3.2/3.3）
-/// - `Sender: <sender>`（`req.sender` をそのまま・単一差替点）
-/// - `Status: <status>`（`req.status` が `Some` のときのみ・`Sender` の後・`ID` の前・DD-IT-6・要件 2.3）
+/// - `SecurityLevel`・`SecurityOrigin`・`Sender`・`SenderType`（`req.headers` をこの順にそのまま・
+///   解釈しない・`Sender` は単一差替点・areka-P0-script-security-level 要件 2.1）
+/// - `Status: <status>`（`req.status` が `Some` のときのみ・`SenderType` の後・`ID` の前・DD-IT-6・要件 2.3）
 /// - `ID: <id>`（要件 1.4・汎用・特定イベント分岐なし＝要件 1.5）
 /// - `Reference0`・`Reference1`・…（`references` を 0 起点連番で・要件 1.4）。値が
 ///   [`ABSENT_REFERENCE`] の位置は行を出さず番号だけ進める（欠番）
-/// - `SecurityLevel: local`（pasta 実テスト準拠・de-facto）
 ///
 /// 各行は CR+LF（0x0D 0x0A）で区切り、ヘッダ部の終端を空行（連続する CR+LF＝末尾
-/// 二重 CRLF）で示す（要件 1.3）。`SenderType` / `SecurityOrigin` / `X-SSTP-PassThru`
-/// は M1 最小のため送出しない（design.md）。
+/// 二重 CRLF）で示す（要件 1.3）。`X-SSTP-PassThru` は送出しない。
 ///
 /// 組み立ては一旦 `String` で行い、**全文をまとめて** `req.charset` で符号化する
 /// （ISO-2022-JP でも `Encoding::encode` が終端で ASCII 状態へ戻すため 1 回で足りる）。
@@ -105,11 +105,25 @@ pub fn build_request(req: &ShioriRequest) -> EncodedRequest {
     out.push_str("Charset: ");
     out.push_str(req.charset.name());
     out.push_str("\r\n");
+    // 追加のヘッダは `Status`・`ID` より前に、この順で値を解釈せず verbatim に書く
+    // （areka-P0-script-security-level 要件 2.1・DD-IT-6）。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#SecurityLevel_20_5bSSP_62e1_5f35_5d:1
+    out.push_str("SecurityLevel: ");
+    out.push_str(req.headers.security_level);
+    out.push_str("\r\n");
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#SecurityOrigin_20_5bSSP_62e1_5f35_5d:1
+    out.push_str("SecurityOrigin: ");
+    out.push_str(req.headers.security_origin);
+    out.push_str("\r\n");
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#Sender:1
     out.push_str("Sender: ");
-    out.push_str(req.sender);
+    out.push_str(req.headers.sender);
     out.push_str("\r\n");
-    // `Status` は `Sender` の後・`ID` の前（DD-IT-6）。`None` は行ごと省略（要件 2.3）。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#SenderType_20_5bSSP_202.5.05_7e_62e1_5f35_5d:1
+    out.push_str("SenderType: ");
+    out.push_str(req.headers.sender_type);
+    out.push_str("\r\n");
+    // `Status` は `SenderType` の後・`ID` の前（DD-IT-6）。`None` は行ごと省略（要件 2.3）。
     // 値は解釈せず verbatim に転記する（語彙は kanade が所有・DD-IT-6）。
     if let Some(status) = req.status {
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#Status_20_5bSSP_62e1_5f35_5d:1
@@ -134,7 +148,6 @@ pub fn build_request(req: &ShioriRequest) -> EncodedRequest {
         out.push_str(reference);
         out.push_str("\r\n");
     }
-    out.push_str("SecurityLevel: local\r\n");
     // 空行終端（直前ヘッダの CRLF ＋ この空行 CRLF ＝ 末尾 "\r\n\r\n"・要件 1.3）。
     out.push_str("\r\n");
 
@@ -511,7 +524,7 @@ mod tests {
             method: Method::Get,
             id: "OnBoot",
             references: &references,
-            sender: "areka",
+            headers: RequestHeaders::internal("areka"),
             status: None,
             charset: Charset::UTF_8,
         };
@@ -535,7 +548,7 @@ mod tests {
             method: Method::Notify,
             id: "OnSecondChange",
             references: &[],
-            sender: "areka",
+            headers: RequestHeaders::internal("areka"),
             status: None,
             charset: Charset::UTF_8,
         };
@@ -553,7 +566,7 @@ mod tests {
             method: Method::Get,
             id: "OnTest",
             references: &references,
-            sender: "areka",
+            headers: RequestHeaders::internal("areka"),
             status: None,
             charset: Charset::UTF_8,
         };
@@ -576,7 +589,7 @@ mod tests {
             method: Method::Get,
             id: "version",
             references: &[],
-            sender: "areka",
+            headers: RequestHeaders::internal("areka"),
             status: None,
             charset: Charset::UTF_8,
         };
@@ -597,7 +610,7 @@ mod tests {
             method: Method::Get,
             id: "OnTest",
             references: &references,
-            sender: "areka",
+            headers: RequestHeaders::internal("areka"),
             status: None,
             charset: Charset::UTF_8,
         };
@@ -617,7 +630,7 @@ mod tests {
                 method: Method::Get,
                 id,
                 references: &[],
-                sender: "areka",
+                headers: RequestHeaders::internal("areka"),
                 status: None,
                 charset: Charset::UTF_8,
             };
@@ -630,14 +643,14 @@ mod tests {
         }
     }
 
-    /// Sender は `req.sender` をそのまま書く単一差替点（`"SSP"` 等ハードコードしない・design.md）。
+    /// Sender は `req.headers.sender` をそのまま書く単一差替点（`"SSP"` 等ハードコードしない・design.md）。
     #[test]
     fn build_sender_is_verbatim_substitution_point() {
         let req = ShioriRequest {
             method: Method::Get,
             id: "OnBoot",
             references: &[],
-            sender: "custom-baseware",
+            headers: RequestHeaders::internal("custom-baseware"),
             status: None,
             charset: Charset::UTF_8,
         };
@@ -654,7 +667,7 @@ mod tests {
             method: Method::Get,
             id: "OnSecondChange",
             references: &[],
-            sender: "areka",
+            headers: RequestHeaders::internal("areka"),
             status: Some("talking"),
             charset: Charset::UTF_8,
         };
@@ -678,7 +691,7 @@ mod tests {
             method: Method::Get,
             id: "OnSecondChange",
             references: &[],
-            sender: "areka",
+            headers: RequestHeaders::internal("areka"),
             status: None,
             charset: Charset::UTF_8,
         };
@@ -698,7 +711,7 @@ mod tests {
             method: Method::Get,
             id: "OnSecondChange",
             references: &[],
-            sender: "areka",
+            headers: RequestHeaders::internal("areka"),
             status: Some(value),
             charset: Charset::UTF_8,
         };
@@ -726,7 +739,7 @@ mod tests {
             method: Method::Get,
             id: "OnSecondChange",
             references: &references,
-            sender: "areka",
+            headers: RequestHeaders::internal("areka"),
             status: Some("talking,balloon(0=2/1=0)"),
             charset: Charset::UTF_8,
         };
@@ -736,12 +749,14 @@ mod tests {
             s,
             "GET SHIORI/3.0\r\n\
              Charset: UTF-8\r\n\
+             SecurityLevel: local\r\n\
+             SecurityOrigin: null\r\n\
              Sender: areka\r\n\
+             SenderType: internal\r\n\
              Status: talking,balloon(0=2/1=0)\r\n\
              ID: OnSecondChange\r\n\
              Reference0: 0\r\n\
              Reference1: 0\r\n\
-             SecurityLevel: local\r\n\
              \r\n"
         );
     }
@@ -760,7 +775,7 @@ mod tests {
             method: Method::Get,
             id: "OnTranslate",
             references: &references,
-            sender: "areka",
+            headers: RequestHeaders::internal("areka"),
             status: None,
             charset: Charset::UTF_8,
         };
@@ -770,12 +785,14 @@ mod tests {
             s,
             "GET SHIORI/3.0\r\n\
              Charset: UTF-8\r\n\
+             SecurityLevel: local\r\n\
+             SecurityOrigin: null\r\n\
              Sender: areka\r\n\
+             SenderType: internal\r\n\
              ID: OnTranslate\r\n\
              Reference0: 台詞\r\n\
              Reference2: OnBoot\r\n\
              Reference3: master\r\n\
-             SecurityLevel: local\r\n\
              \r\n"
         );
     }
@@ -794,7 +811,7 @@ mod tests {
             method: Method::Get,
             id: "OnTest",
             references: &references,
-            sender: "areka",
+            headers: RequestHeaders::internal("areka"),
             status: None,
             charset: Charset::UTF_8,
         };
@@ -803,13 +820,15 @@ mod tests {
             bytes,
             "GET SHIORI/3.0\r\n\
              Charset: UTF-8\r\n\
+             SecurityLevel: local\r\n\
+             SecurityOrigin: null\r\n\
              Sender: areka\r\n\
+             SenderType: internal\r\n\
              ID: OnTest\r\n\
              Reference0: \r\n\
              Reference1: \u{1}\r\n\
              Reference2: a\u{0}b\r\n\
              Reference3: x\r\n\
-             SecurityLevel: local\r\n\
              \r\n"
                 .as_bytes()
         );

@@ -19,7 +19,7 @@
   - _Requirements: 1.4_
 
 - [ ] 2. SHIORI の線の書き読み（32bit の仲介のクレート）
-- [ ] 2.1 追加のヘッダの入れ物と要求の文の並びを変える
+- [x] 2.1 追加のヘッダの入れ物と要求の文の並びを変える
   - 解釈しない文字列の 4 つの欄（`SecurityLevel`・`SecurityOrigin`・`Sender`・`SenderType`）を持つ入れ物を足し、要求の構造の送り手の欄をこの入れ物に替える。今の既定（`local`・`null`・送り手の名前・`internal`）を作る手を用意する。
   - 要求の文を「要求行・`Charset`・`SecurityLevel`・`SecurityOrigin`・`Sender`・`SenderType`・`Status`（在るとき）・`ID`・`Reference*`」の順に書き、末尾に固定で書いていた `SecurityLevel: local` を消す。`Charset`・`Status`・`ID`・`Reference*`（欠番の印を含む）の書き方は変えない。
   - 同じプロセスの経路の入力の組み立て（`areka-ghost` の `build_input`）も要求の構造を組むので、ここで暫定の `RequestHeaders::internal("areka")` へ直し、2.1 の後もワークスペース全体がビルドできるようにする（共通の組み立ての手へ移すのは 4.1）。
@@ -155,3 +155,4 @@
 
 - （範囲外・1.2 で発見）`crates/areka-kanade/src/actor_raise_reply_tests.rs:95` に clippy の `never_loop` の誤りが既にあり、kanade の lib test の clippy を落とす。
 - （範囲外・1.2 のレビューで発見）`areka-sakura` の `drive::delivery_tests::same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire_times` が有界の `try_recv`／`yield_now` の空回しで時間に依存し、まれに赤になる。
+- `cargo test -p shiori-host32-host` は先に `cargo build -p shiori-host32-testdll -p shiori-host32-helper --target i686-pc-windows-msvc` が要る（無いと統合テスト 1 本が前提不足で赤）。

@@ -43,6 +43,9 @@ const FAMILIES: &[(&str, &str, &[u8])] = &[
 /// ——組み立てた `String` をそのまま `out.into_bytes()` して返す版（`Charset` ヘッダ値は
 /// `header_value()` ＝ `"UTF-8"` 固定）。その組立順に従って書き下したものであり、
 /// **今日の符号化器を 1 度も通していない**（非 ASCII は UTF-8 のバイトを `\x` 表記で直書き）。
+/// ヘッダの並びだけは areka-P0-script-security-level 要件 2.1 で書き換えた（`SecurityLevel`・
+/// `SecurityOrigin`・`Sender`・`SenderType` を `Charset` の直後へ・末尾の `SecurityLevel` は削除）。
+/// `Reference0` のバイト列には手を付けていない。
 ///
 /// 要求の形は emo2 の OnBoot GET と同形にした——`sender` は `Shiori3Client` の既定
 /// `DEFAULT_SENDER`（`client.rs` の既定 sender の定義行）、`Reference0` は
@@ -52,10 +55,12 @@ const FAMILIES: &[(&str, &str, &[u8])] = &[
 /// 「UTF-8 経路のバイト列が 1 バイトも変わらない」を実際に検査できる。
 const PRE_SPEC_EMO2_ONBOOT_GET: &[u8] = b"GET SHIORI/3.0\r\n\
 Charset: UTF-8\r\n\
+SecurityLevel: local\r\n\
+SecurityOrigin: null\r\n\
 Sender: areka\r\n\
+SenderType: internal\r\n\
 ID: OnBoot\r\n\
 Reference0: \xE3\x80\x8C\xE3\x82\xB3\xE3\x83\xB3\xE3\x83\x95\xE3\x82\xA3\xE3\x82\xBA\xE3\x83\xAA\xE3\x83\xBC\xE3\x80\x8D\xEF\xBC\x86\xE3\x80\x8CCity-Pop'n\xE3\x80\x8D\r\n\
-SecurityLevel: local\r\n\
 \r\n";
 
 // ---- 補助 -------------------------------------------------------------------
@@ -84,7 +89,7 @@ fn build_a_get(charset: Charset) -> EncodedRequest {
         method: Method::Get,
         id: "OnTest",
         references: &references,
-        sender: "areka",
+        headers: RequestHeaders::internal("areka"),
         status: None,
         charset,
     })
@@ -167,7 +172,7 @@ fn unmappable_char_becomes_a_numeric_character_reference_in_the_request() {
             method: Method::Get,
             id: "OnTest",
             references: &references,
-            sender: "areka",
+            headers: RequestHeaders::internal("areka"),
             status: None,
             charset: charset(label),
         });
@@ -190,7 +195,7 @@ fn utf8_request_equals_the_pre_spec_byte_stream() {
         method: Method::Get,
         id: "OnBoot",
         references: &references,
-        sender: "areka",
+        headers: RequestHeaders::internal("areka"),
         status: None,
         charset: Charset::UTF_8,
     });

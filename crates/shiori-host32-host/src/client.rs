@@ -50,6 +50,7 @@ use crate::charset::CharsetNegotiator;
 use crate::error::{RequestError, ShioriError};
 use crate::parent_window::{ParentMessageWindow, SendError};
 use crate::process_host::request_timeout_from_env;
+use crate::request_headers::RequestHeaders;
 use crate::shiori3::{Method, ParsedResponse, ShioriRequest, build_request, parse_response};
 
 /// 送出ヘッダ `Sender` の既定値（design.md §送出ヘッダ最小集合）。
@@ -154,7 +155,7 @@ impl<'a> Shiori3Client<'a> {
                 method: Method::Get,
                 id,
                 references,
-                sender: self.sender,
+                headers: RequestHeaders::internal(self.sender),
                 status,
                 charset,
             },
@@ -200,7 +201,7 @@ impl<'a> Shiori3Client<'a> {
                 method: Method::Notify,
                 id,
                 references,
-                sender: self.sender,
+                headers: RequestHeaders::internal(self.sender),
                 status,
                 charset,
             },
@@ -583,7 +584,7 @@ mod tests {
             method,
             id,
             references: &[],
-            sender: DEFAULT_SENDER,
+            headers: RequestHeaders::internal(DEFAULT_SENDER),
             status: None,
             charset,
         }
