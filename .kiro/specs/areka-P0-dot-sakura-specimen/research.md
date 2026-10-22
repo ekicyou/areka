@@ -158,3 +158,44 @@
 ## 8. 次の段
 
 要件の討議で 7 節の議題を決めた後、`/kiro-design areka-P0-dot-sakura-specimen` で設計へ進む。
+
+## 9. 設計の段の調べ（2026-10-22・`/kiro-spec-design -y`）
+
+- **調べの型**: 軽い調べ（既存の仕組みへの追加）。新しい依存・外の道具は 0 なので、外の文書の調べ（WebSearch）は要らなかった。使った決まりは `kiro-spec-design` の `rules/`（`design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）。ほかの技能（画面の設計・使いやすさ）は、画面を作らない spec なので当たらない。
+- **読み直したコード**（HEAD `6270ccc6`）:
+  - `crates/sample-ghost-kit/src/lib.rs` の `SAMPLES`（9 行・`pasta-in-windows` は `emily4` の後に末尾へ足された＝登記表は足した順）。
+  - `crates/sample-ghost-kit/src/lib_tests.rs`: 冒頭の説明の「主張は 8 本」は**主張の数**で、専用テストを足せば 9 本になる。未登録の名前のテストは、`known` と比べる一覧（9）と失敗の表示を見る一覧（8・`claudia` 無し）を 2 つ手で書いている＝1 つの配列にまとめれば抜けが構造的に消える。
+  - `crates/log-capture-kit/tests/sample_path_guard_test.rs`: 窓口の定義 `crates/sample-ghost-kit/src/` は走査から外れるが、`EXCLUSION_FORMS` は ⑵（展開形の検体フォルダ）と ⑷（同梱バルーン名でのパス組み）を `ComposedAtRuntime`（窓口の中にも字面で現れない）と宣言し、現れたら赤にする。**専用テストを `lib_tests.rs` に書くとき、`join("bottle")`・`bottle/`・`/bottle"`・`dot_sakura("bottle")` を綴ると見張りが赤になる**＝同梱の名は登記の行から引いて継ぎ足す。
+  - `crates/areka/src/install/procedure.rs`: 画面からのインストールの警告のダイアログは `InstallOutcome::skipped` が空でないときだけ出る。`areka-nar` の `install` は `warnings`（manifest の行を飛ばした）・`leftovers`・`skipped` を 1 件ずつ `warn!` で出す。
+  - `crates/areka/src/boot_resolve.rs`: 根にゴーストが 1 体なら経路 `Only`。同梱バルーンは既定より先に採る。根に `emo2` を足すと経路が `Default`（`emo2`）に替わる。
+  - `crates/areka/src/cli/parse.rs`: 起動オプション `--install` は `Unsupported`。インストールを画面の操作なしで起こす口は台本の `\![execute,install,path,…]`（`emo2_boot/install_cue.rs`）だが、起動中のゴーストへ入れると切り替えの一周（`install/overwrite.rs`）になる。
+  - `crates/areka/src/alert.rs`: `AREKA_NO_ALERT` で告知のダイアログを抑え、記録には残る。
+  - 記録の的: `ghost-boot`（`areka-ghost` の SHIORI の結線・文字コード）・`shiori-host32`（補助プログラムの向き `helper_not_i686`）・`shiori-charset`・`areka::boot_resolve`・`areka_nar`。`areka-emo-atlas` は抜き色の判断を記録に出さない＝透過は MCP の `dump_surface` を文で説明する。
+  - `areka-P0-seriko-script-triggers` の brief は `alternativestart` などのアニメーションから呼ぶメソッドを範囲の外と書く。`alias.txt`・`sakura.surface.alias` を持つ spec は無い（`areka-P0-makoto-dll-host` の `alias.txt` は `makoto,` の上書きの話で別物）。
+
+### 9.1 まとめ直し（synthesis）
+
+- **一般化**: 無し。検体を足す形はすでに一般化されている（登記の 1 行で全テストが拾う）。検体ごとの関数を足さない。
+- **作るか使うか**: 全部使う。取り寄せは `curl`・`Get-FileHash`・`sha256sum`、根は `nar-sample-path`、補助プログラムは `sync-i686-helper.ps1`、観察は MCP の `areka` の道具、机は `areka-impl-watch`。SHIORI の版を読むための `upx` は入れない（新しい外の道具になる）。
+- **削ったもの**: 実機の試験の窓口（`real-run-kit`）での繰り返せる試験（研究の案 C）・メニューからのインストール・画面の操作（SendInput）・時間で出る話を待つ観察・`registry_records_kind_and_bundled_balloons` への行の追加（往復のテストが同じ事を見る）。
+
+## 10. 設計で決めたこと（7 節の議題への答え）
+
+| 議題 | 決めたこと | 理由 |
+|---|---|---|
+| 1 登記表の行の位置 | 末尾（`pasta-in-windows` の後） | 登記表は足した順に並ぶ（`emily4` の後にぱすたを足した）。書庫の出どころで並べ替える決まりは無い。後に続く `default-balloon-selfmade` も末尾へ足せる |
+| 5 専用の判定テスト | 足す（案 B）。名前 `dot_sakura_nar_installs_the_ghost_and_its_balloon_without_warnings`・`emily4` の専用テストの直後 | 往復のテストは `installed` だけを見て、`skipped`・`warnings`・`leftovers` と最上位の普通のファイルの置き場を見ない。要件 5.7 の 1 項目目（警告と `delete.txt`・`updates.txt` の扱い）の根拠を、メニューからのインストールなしに決定論で持てる。`installed` の一致は往復のテストに任せて繰り返さない |
+| 6 SHIORI の版の根拠 | 実機の記録の行と MCP の `raise_event` の台本。`upx` は使わない | 新しい外の道具を入れない。areka は SHIORI/3.0 だけを送るので、台本が返って再生されれば 3.0 で話せた、応答が 400 やエラーばかりなら 2.x だけの見込み |
+| 7 `RUST_LOG` | `info,areka::boot_resolve=debug,areka_nar=debug,ghost-boot=debug,shiori-host32=debug,shiori-charset=debug` | 判定の分岐（ゴーストとバルーンの決め方・補助プログラムの向き・文字コード）を debug まで開ける。メニューからのインストールをしないので `areka::install` は外す。分岐の行が出ていなければその水準まで開けて回し直す |
+| 8 実機の走り方 | 窓口の根（`nar-sample-path dot_sakura`）から起こすだけ。メニューからのインストールはしない。終わりは MCP の `raise_event`（`OnClose`）。`AREKA_NO_ALERT=1` | 要件 5.1 が窓口の根を決めている。根に `emo2` を足すと起動の経路が替わる。画面からのインストールは `areka-nar` の同じ `install` を呼び、ダイアログは `skipped` だけで決まるので、専用テストで足りる。画面の操作（SendInput）は開発者の許しが要り、人の待ちになる |
+| 9 ネットワーク更新 | 触らない（要件 5.11 で決まり済み） | — |
+| 10 起票先の無い崩れのまとめ方 | 2 本に分ける見込み（`alias.txt` の別名＝シェルの設定の読みと面の番号の解き方／`alternativestart` の族＝SERIKO の動き）。実機で症状を見てから `/kiro-discovery` | 触る場所が違う（開発者の決め 10-11「触る場所が同じなら 1 本」の裏返し）。`seriko-script-triggers` はこの族を範囲の外とするので、そこへ足さない |
+| 11 作業の順 | 書庫 → 登記と専用テストと数（コミットの前にテストで断られたかを決める）→ 見張り → 検体の README と steering 2 本 → 実機 → 記録と起票 → 根の `README.md` | 要件 2.7 の枝は登記をコミットする前に決める。根の `README.md` は実機の結果を書く |
+
+議題 2・3・4 は要件の討議で決まり済み（書庫を置く行の数 8 → 9 を要件 2.3 に含める・項目の数で数える・`claudia` の抜けを直す）。
+
+### 10.1 残る危うさ
+
+- **インストールの 1 項目目の根拠の形**: 実機の 1 回で areka の画面からのインストールを通さないので、「インストールで出た警告」の根拠は、窓口の根の一覧・起動の記録の行（ゴーストとバルーンが見つかった行）と、専用テストの結果の 3 つになる。要件 5.7 の「記録の行の逐語・MCP の文」の形に入らないのは専用テストの部分だけで、開発者の決め（確定の証跡は実機の記録と静的な構造の証跡の二本立て）に乗る。討議で「画面からのインストールも 1 回通す」と決まれば、手順に MCP 経由ではない画面の操作が加わり、開発者の許しが要る。
+- **`raise_event` の `OnClose` で終わるか**: 辞書の `OnClose` が `\-` で終わらなければ終わらない。そのときは自動終了の上限か、控えた番号の停止で終える（記録に書く）。
+- **MCP が答えないとき**: SHIORI を読めないと MCP の道具が使えず、項目の多くが「確かめていない」になる（要件 5.8 のとおり）。
