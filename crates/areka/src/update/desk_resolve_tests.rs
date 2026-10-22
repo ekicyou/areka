@@ -43,7 +43,7 @@ impl Root {
     /// `ghost/emo`（名前・homeurl あり）・`ghost/bare`（名前・homeurl なし）・
     /// `ghost/emo/shell/{master,Hidden}`・`balloon/{kaku,plain}` を置く。
     fn new(label: &str) -> Self {
-        let tmp = TempPath::new(label);
+        let tmp = TempPath::under_target(label);
         let r = tmp.path();
         write(
             &r.join("ghost/emo/ghost/master"),
@@ -264,6 +264,56 @@ fn updateother_does_not_find_a_hidden_shell() {
     let skipped = skipped(&events);
     assert_eq!(skipped.len(), 1, "{events:?}");
     assert_eq!(skipped[0].level, Level::WARN);
+}
+
+/// ゴーストの中のバルーン `ghost/emo/balloon/inner` に根の `kaku` と同じ `name`（Kaku）を置く。
+fn plant_inner_kaku(root: &Root) -> PathBuf {
+    let inner = root.path("ghost/emo/balloon/inner");
+    write(
+        &inner,
+        "charset,UTF-8\r\nname,Kaku\r\nhomeurl,https://inner.example/\r\n",
+    );
+    inner
+}
+
+#[test]
+fn updateother_finds_the_ghost_inner_balloon_first_for_the_same_name() {
+    let root = Root::new("areka-update-resolve-inner-other");
+    let inner = plant_inner_kaku(&root);
+    let raw = RawUpdateRequest::Other(vec![(TargetKind::Balloon, "Kaku".to_owned())]);
+    let (specs, events) = capture(|| resolve(&root.here(), &raw));
+    assert_eq!(
+        specs,
+        vec![spec(
+            TargetKind::Balloon,
+            inner,
+            "Kaku",
+            Some("https://inner.example/")
+        )]
+    );
+    assert!(skipped(&events).is_empty(), "{events:?}");
+}
+
+#[test]
+fn current_balloon_inside_the_ghost_is_the_update_target() {
+    let root = Root::new("areka-update-resolve-inner-current");
+    let inner = plant_inner_kaku(&root);
+    let here = Here {
+        balloon_dir: inner.clone(),
+        ..root.here()
+    };
+    let raw = RawUpdateRequest::Current(vec![TargetKind::Balloon]);
+    let (specs, events) = capture(|| resolve(&here, &raw));
+    assert_eq!(
+        specs,
+        vec![spec(
+            TargetKind::Balloon,
+            inner,
+            "Kaku",
+            Some("https://inner.example/")
+        )]
+    );
+    assert!(skipped(&events).is_empty(), "{events:?}");
 }
 
 /// 窓口を据え、起動の文脈（バルーン `balloon`）と置き場のゴースト `ghost`（kanade の送出端だけ・

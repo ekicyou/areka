@@ -64,7 +64,7 @@
   - _Boundary: RuntimeCallers（メニュー）_
   - _Depends: 1.2_
 
-- [ ] 3.3 (P) その他の更新のバルーンの名前引きを今のゴーストで引く
+- [x] 3.3 (P) その他の更新のバルーンの名前引きを今のゴーストで引く
   - `update/desk.rs` の `updateother` のバルーンの一覧を `balloons_for(&here.roots, &here.ghost_dir).listed` に替え、説明を直す。`find` の引き方は変えない
   - `update/desk_resolve_tests.rs` に、`updateother --balloon=名前` がゴーストの中に当たる（同じ `name` はゴーストの中）・今のバルーンがゴーストの中のものなら今のバルーンの更新の対象がその `<ゴースト>\balloon\<名>` になる、を足して緑
   - _Requirements: 2.1, 3.3, 8.3, 10.1_
