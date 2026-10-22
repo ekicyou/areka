@@ -85,16 +85,26 @@ pwsh -NoProfile -File "$w\tools\sync-i686-helper.ps1"; "sync exit=$LASTEXITCODE"
 └─ ssp\        SSP で測ったときの撮った物（この手順では触らない）
 ```
 
-各画面の位置（物理画素）を読む。`mouse-input.ps1` に渡す座標はこの物理画素で書く。拡大率は Windows の設定の「ディスプレイ」で読む。どちらも記録の「機械の構成」に書く。
+各画面の位置（物理画素）と拡大率を読む。`mouse-input.ps1` に渡す座標はこの物理画素で書く。拡大率は画面ごとの DPI を 96 で割った値（`dpi=192` なら 200%）。どちらも記録の「機械の構成」に書く。
 
 ```powershell
 pwsh -NoProfile -Command {
-    Add-Type -Namespace W -Name U -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(System.IntPtr v);'
+    Add-Type -Namespace W -Name U -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(System.IntPtr v);
+[DllImport("user32.dll")] public static extern System.IntPtr MonitorFromPoint(System.Drawing.Point p, uint f);
+[DllImport("shcore.dll")] public static extern int GetDpiForMonitor(System.IntPtr m, int t, out uint x, out uint y);
+'@ -ReferencedAssemblies System.Drawing.Primitives
     $null = [W.U]::SetProcessDpiAwarenessContext([IntPtr]-4)
     Add-Type -AssemblyName System.Windows.Forms
-    [System.Windows.Forms.Screen]::AllScreens | ForEach-Object { '{0} primary={1} bounds={2}' -f $_.DeviceName, $_.Primary, $_.Bounds }
+    [System.Windows.Forms.Screen]::AllScreens | ForEach-Object {
+        $m = [W.U]::MonitorFromPoint($_.Bounds.Location, 2); $x = 0; $y = 0
+        $null = [W.U]::GetDpiForMonitor($m, 0, [ref]$x, [ref]$y)
+        '{0} primary={1} bounds={2} dpi={3} scale={4}%' -f $_.DeviceName, $_.Primary, $_.Bounds, $x, ($x * 100 / 96)
+    }
 }
 ```
+
+拡大率の違う 2 つの画面が無いときは、走らせる前に記録へ「段 5 は回していない」と書いておく。
 
 ## 4. 起動の命令
 
