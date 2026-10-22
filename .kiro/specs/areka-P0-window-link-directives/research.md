@@ -274,3 +274,8 @@
 - 読む口 `StickyGroupLedger::group_of`／`partners_of` は `areka-P0-dpi-realign-remembered-chain` が詰め直しから組の窓を外すときに使う。形を変えたら向こうが読み直す。
 - `AnchorSource` と記憶の形の規則は `areka-P0-window-snap`（吸着の相手を広げる）の土台になる。
 - `PositionCue` の種類と受け手の表の 5 行は、`move_cue*.rs`・`consumer_ledger.rs` を触る後の spec と同じウェーブに置けない。
+
+### 設計ディスカッション（2026-10-22）
+
+- 設計の検証の問題 1（ドラッグの終わりに wintf の DraggingState が無いと相手の記憶が残らない）は自明な修正として、ドラッグした窓の始めの位置も CharDragSession に控える形にした。
+- 問題 2（2 つとも吸着なしの組のドラッグ中のずれ）は議題 1 として出し、開発者が推奨案 A を承認した: 組に入った窓は吸着なしでも DragConfig.move_window=false にし、ドラッグした窓も相手も areka が同じ回に書く（設計の決め 12）。根拠は記憶「1 フレーム遅らせる解は取らない・状態の持ち方を変えて 0 フレームで解け」。`on_char_drag` の今の分かれ目は `Anchored` が Free かで決めているので、ドラッグの始めに控えた「wintf が動かすか」で分けるように改める。

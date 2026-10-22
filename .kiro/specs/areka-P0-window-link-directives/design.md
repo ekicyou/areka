@@ -177,11 +177,11 @@ crates/wintf/src/ecs/
 - `crates/areka/src/emo2_boot/frame/switch.rs` — `finish_shell` で、`DefaultPlacementBasis` を新しい形（descript の値＋バルーンの材料）で置き、`sticky_group_ledger::replace_sticky_descript` を呼ぶ。
 - `crates/areka/src/placement/follow/anchor.rs` — 部品 `AnchorSource { descript, by_script }` を足す。
 - `crates/areka/src/placement/follow.rs` — `sticky_follow` の宣言と公開・`AnchorSource` の公開・テストの接続。
-- `crates/areka/src/placement/follow/drag_follow.rs` — `on_char_drag`・`on_char_drag_end` が窓の向きを `sticky_follow::drag_anchor` から読み（ドラッグの始めの向き）、書いた後に組の相手を動かす 1 行ずつ。記憶へ書く形を `persist::saved_form_anchor` で決める。数行の足し（937 → 950 行ほど）。
+- `crates/areka/src/placement/follow/drag_follow.rs` — `on_char_drag`・`on_char_drag_end` が窓の向きを `sticky_follow::drag_anchor` から読み（ドラッグの始めの向き）、書いた後に組の相手を動かす 1 行ずつ。「wintf が動かした位置を読む」か「areka が射影して書く」かの分かれ目を、今の「向きが `Free` か」から「このドラッグで wintf が窓を動かすか」（`sticky_follow::drag_wintf_moves`・ドラッグの始めに控えた値）へ改める（組に入った `Free` の窓は areka が書く側へ入る・射影は恒等）。記憶へ書く形を `persist::saved_form_anchor` で決める。数行の足し（937 → 950 行ほど）。
 - `crates/areka/src/input_events/drag.rs` — `on_char_drag_start` で `sticky_follow::begin_char_drag` を呼ぶ 1 行。
 - `crates/areka/src/placement/persist.rs` — `saved_form_anchor(world, window) -> Option<Anchor>`（`AnchorSource.descript`、無ければ `Anchored`）を足し、`persist_unremembered_char_positions` もこれで形を決める。
 - `crates/areka/src/placement/spawn.rs` — キャラクターの窓に `AnchorSource { descript: p.anchor, by_script: false }` を付ける 1 行。
-- `crates/areka/src/placement/reseed.rs` — 解決の流れ（スコープごとに窓の DPI で換算・合流して解く）を `resolve_standard_scopes` として切り出し、`apply_shell_descript` とバルーン位置初期化が共有する（私有の `RunningScope` は `pub(crate)` にする）。`apply_shell_descript` は今 1 回で入れている `Anchored` と `BalloonFollow` を分け、台本の印のあるスコープでは `Anchored` と `DragConfig.move_window` を書かない（`BalloonFollow`・キーワードの素材・バルーンの置き直しは今どおりどのスコープにも行う）。どのスコープでも `AnchorSource.descript` を新しい値にする。
+- `crates/areka/src/placement/reseed.rs` — 解決の流れ（スコープごとに窓の DPI で換算・合流して解く）を `resolve_standard_scopes` として切り出し、`apply_shell_descript` とバルーン位置初期化が共有する（私有の `RunningScope` は `pub(crate)` にする）。`apply_shell_descript` は今 1 回で入れている `Anchored` と `BalloonFollow` を分け、台本の印のあるスコープでは `Anchored` を書かず、`DragConfig.move_window` の直書き（今の 146 行）は `sticky_follow::sync_drag_writer` の 1 回の呼び出しに置き換える（`BalloonFollow`・キーワードの素材・バルーンの置き直しは今どおりどのスコープにも行う）。どのスコープでも `AnchorSource.descript` を新しい値にする。
 - `crates/areka/src/placement/reset_pos.rs` — `DefaultPlacementBasis` を `{ source: DescriptSource, balloon: BalloonPlacementInputs }` に改め、`reset_window_positions` は `build_placement_config(source)` で設定を組む。
 - `crates/areka/src/placement/mod.rs` — 新しいモジュールの宣言。起動の準備で読んだバルーンの `windowposition` と作者の DPI を `PreparedPlacement.default_basis`（新しい形）へ載せる。`seriko.sticky-window` の生の値（`PlacementConfig.sticky_window_raw` に既に在る）を、`zorder_raw` と同じ形で `PreparedPlacement` まで運ぶ。
 - `crates/areka/src/placement/zorder_group_ledger.rs` — `parse_scope_id` を `pub(crate)` にする（1 語）。
@@ -240,7 +240,7 @@ sequenceDiagram
     loop ドラッグの途中
         W->>DF: OnDrag
         DF->>SF: drag_anchor 始めの向きで縛る
-        DF->>DF: 自分の位置を決める（吸着は areka が書く・なしは wintf が書き済み）
+        DF->>DF: 自分の位置を決める（吸着か組に入った窓は areka が書く・組に無いなしの窓は wintf が書き済み）
         DF->>SF: follow_partners_on_drag 自分の位置
         SF->>SF: 量＝自分の位置−始めの位置 相手ごとに射影して経路なしで書く・バルーンも
     end
@@ -402,7 +402,7 @@ pub fn apply_script_alignment(world: &mut World, scope: u32, word: &AlignmentWor
 1. `Missing` → `warn!(event="alignment_skipped", scope, reason="missing_value")` で何も変えない（1.9）。
 2. 窓が無い（`GhostWindows` が無い・`char_window` が無い・`AnchorSource` が無い）→ `warn!(alignment_skipped, reason=…)`（1.8）。
 3. 新しい向きと印を決める: `Anchor(a)` → `(a, 台本)`。`Unknown(w)` → `warn!(event="alignment_unknown_word", scope, word=w)` の後 `(Free, 台本)`（1.7・裁定 3）。`Default` → `(AnchorSource.descript, descript に従う)`（1.3）。
-4. `Anchored(新)` を書き、`DragConfig.move_window = 新.is_free()`（2.4・wintf は次のドラッグの始めに読む）、`AnchorSource.by_script` を印に合わせる。
+4. `Anchored(新)` を書き、`AnchorSource.by_script` を印に合わせ、`sticky_follow::sync_drag_writer(world)` で `DragConfig.move_window` を付け直す（2.4・wintf は次のドラッグの始めに読む・「ドラッグの書き手」の節）。
 5. 今の窓の大きさで `resize_window_to(world, 窓, 大きさ, PlacementRoute::MoveCue)` を呼ぶ。辺の向きなら沿わせ（もう一方の軸は `project_anchor` が保つ）、`Free` なら射影が恒等なので動かない（1.1・1.2）。バルーンは `resize_window_to` の中の `follow_balloon` で付いて動く（1.6）。大きさが読めなければ向きだけ変えて `warn!(alignment_reanchor_skipped)`。
 6. `info!(event="alignment_changed", scope, from, to, source)`（`source` は `script`／`descript`（default のとき））（9.1）。
 
@@ -519,6 +519,8 @@ pub(crate) struct CharDragSession {
     dragged: Entity,
     /// ドラッグした窓の始めの位置（`OnDragStart` のときの `WindowPos`・量の起点）。
     dragged_start: PointPx,
+    /// このドラッグで wintf が窓を動かすか（wintf が `move_window` を控えたのと同じ回に読む）。
+    wintf_moves: bool,
     /// ドラッグを始めたときの向き（wintf が `move_window` を控えたのと同じ回に読む）。
     anchor: Anchor,
     /// 組の相手（窓の無い相手は入れない）とその始めの位置。
@@ -542,6 +544,28 @@ pub fn log_sticky_ignored(world: &World, target_scope: u32);
 - `follow_partners_on_drag`: `delta = pos − CharDragSession.dragged_start`。相手ごとに `partner_target` で位置を出し、`enqueue_window_set_pos(world, 相手, x, y, None, None)`（ドラッグと同じ経路なし）の後 `follow_balloon(world, 相手, 位置, BalloonFollowTrigger::Drag)`（4.4）。途中の 1 回ごとは記録しない（9.3）。控えが無い・控えが別の窓のものなら相手を動かさず、帳簿に組の相手がいるときだけ `warn!(sticky_follow_skipped, reason=no_session／other_window)` を残す（黙って離さない）。`finish_char_drag` も同じ控えから量を取るので、wintf の `DraggingState` がドラッグの終わりに無くても相手の最終位置と記憶は書かれる。
 - `finish_char_drag`: 最終の量で相手を書き、相手ごとに `char_pos_entries(scope, char_pos_to_origin_x(saved_form_anchor(相手), 位置, 大きさ))` を `persist_entries` で書く（4.5）。`info!(event="sticky_follow", trigger="drag", scope, partners=?, dx, dy)` を 1 行（9.3）。控えを外す。控えた向きと今の `Anchored` が違えば（ドラッグ中に台本が向きを変えた）、今の向きで `resize_window_to(…, MoveCue)` を 1 度呼んで当て直す。
 - 書き込みの経路を「経路なし」にする理由: ドラッグした窓自身（吸着している窓）と同じ扱い。可視の見張り・既定の位置の追従・整合待ちの監視のどれも掛けない（利用者の操作の結果）。
+
+**ドラッグの書き手**（設計の検証の問題 2・設計ディスカッションの議題 1 で案 A に確定）:
+
+```rust
+/// このキャラクターの窓のドラッグで、wintf に窓を動かさせるか（純）。吸着なしで、しかも
+/// 組に入っていない窓だけが真。組に入った窓は吸着なしでも areka が書く（相手と同じ回に書いて
+/// ずらさないため）。
+pub fn wintf_moves_window(anchor: Anchor, grouped: bool) -> bool { anchor.is_free() && !grouped }
+
+/// すべてのキャラクターの窓の `DragConfig.move_window` を、今の `Anchored` と帳簿から付け直す。
+pub(crate) fn sync_drag_writer(world: &mut World);
+
+/// 今のドラッグで wintf が窓を動かすか（`begin_char_drag` で控えた値。控えが無ければ今の
+/// `DragConfig.move_window`）。
+pub(crate) fn drag_wintf_moves(world: &World, window: Entity) -> bool;
+```
+
+- 問題: 2 つとも吸着なしの組（ぱすたはこれ）で、ドラッグした窓は wintf がマウスの動きの中ですぐ動かすが、相手は areka が後のフレームで書く。重ねた窓がドラッグ中だけずれて見える（要件 4.1）。
+- 決め: 組に入った窓は `move_window=false` にし、ドラッグした窓も相手も areka が同じ回に書く（今の吸着した窓と同じ道・`Free` の射影は恒等）。1 フレーム遅れを受け入れず、状態の持ち方（誰が書くか）を変えてずれを 0 にする。
+- `sync_drag_writer` を呼ぶ所: 吸着の指令の適用・組を作る／解く／descript の組の据え付けと取り替えの後（`apply_set_sticky`・`apply_reset_sticky`・`seed_sticky_descript`・`replace_sticky_descript`）・シェルの切り替えで `Anchored` を取り替えた後。窓を作るとき（`spawn.rs`）は今どおり `anchor.is_free()` で付け、直後の `seed_sticky_descript` が付け直す。`DragConfig.move_window` を直接書く所は `sync_drag_writer` だけにする（`reseed.rs:146` の直書きもこれに置き換える）。
+- `begin_char_drag` は、wintf が `move_window` を控えるのと同じ回に、その値を `CharDragSession.wintf_moves` に控える。ドラッグ中に組や向きが変わっても、そのドラッグの終わりまで書き手は変わらない（2.4 と同じ考え方）。
+- 利用者から見える変化: 組に入った吸着なしの窓は、カーソルにぴったり付く動きから、吸着した窓と同じ「areka が書く」動きになる。組の窓どうしは常にそろう。
 
 **`\![move]`**:
 - `follow_sticky_move`: 量が 0 なら何もしない。相手ごとに今の位置と大きさから `partner_target` を出し、`move_window_to`（`MoveCue`・バルーンも付いて動く・記憶に書かない）（5.1・5.2・5.4）。時間つきでも動かす窓と同じく即時（5.5）。相手が無ければ何もしない（5.7）。窓の無い相手は `warn!(sticky_member_absent)`。`info!(event="sticky_follow", trigger="move", …)`（9.3）。
@@ -686,7 +710,7 @@ pub(crate) fn attach_shortcut_receivers(world: &mut World);
 ### 結合（World を使う）
 
 - 吸着の指令: 下 → 上・左・右へ変えたとき窓が辺へ沿い、もう一方の軸が残る・`free` で動かない・`default` で descript の向きへ戻る・窓の無いスコープ・`DragConfig.move_window` が切り替わる・バルーンが付いて動き記憶に書かない（1.1〜1.9・2.4）。
-- ドラッグの連れ動き（`Rig` でスコープ 0・1）: 組の片方をドラッグすると相手とそのバルーンが同じ量動く・相手が下に吸着していれば横にだけ動く・ドラッグした窓が吸着で動かなかった軸では相手も動かない・終わりに両方の位置が記憶に書かれる・取り消しで相手も始めの位置へ戻る・ドラッグの終わりに wintf の `DraggingState` が無くても相手の最終位置と記憶が書かれる・ドラッグ中に向きを変えてもそのドラッグは始めの向きで縛られ、終わりに新しい向きで当て直る（2.4・4.1〜4.5）。
+- ドラッグの連れ動き（`Rig` でスコープ 0・1）: 組の片方をドラッグすると相手とそのバルーンが同じ量動く・相手が下に吸着していれば横にだけ動く・ドラッグした窓が吸着で動かなかった軸では相手も動かない・終わりに両方の位置が記憶に書かれる・取り消しで相手も始めの位置へ戻る・ドラッグの終わりに wintf の `DraggingState` が無くても相手の最終位置と記憶が書かれる・ドラッグ中に向きを変えてもそのドラッグは始めの向きで縛られ、終わりに新しい向きで当て直る・2 つとも吸着なしの組をドラッグすると両方が同じ回に areka から書かれ、どの回でも位置の関係が変わらない・組を作る／解く／向きを変えると `DragConfig.move_window` が `wintf_moves_window` どおりに付け直される（2.4・4.1〜4.5）。`wintf_moves_window` は 4 通り（吸着の有無×組の有無）を単体で確かめる。
 - 当て直し・大きさの変化・作業領域の変化・`resetwindowpos` で相手が動かない（4.7・5.6）。バルーンのドラッグで相手が動かない（4.6）。
 - `\![move]`: 組の相手が実際に動いた量だけ動く・相手の吸着の軸は動かない・`ignore-sticky-window` で相手が動かず組が残る・相手を記憶に書かない・時間つきでも即時・組の無い窓は今のまま（5.1〜5.5・5.7）。
 - 受け口と表: 5 組が `MoveSink` に届き、ほかの受け口に届かない・掛け合わせの組（`reset,alignmenttodesktop` など）はどこにも届かない（`consumer_ledger_agreement_tests.rs`）。同じ台本の `set,sticky-window` → `move` が届いた順に当たる（議題 8）。
@@ -698,13 +722,13 @@ pub(crate) fn attach_shortcut_receivers(world: &mut World);
 ### 実機（9.7・9.8）
 
 - 検体 `pasta-in-windows` を `sample fetch` で作業ツリーの `target\` の下へ取り寄せ、根も `target\` の下に置く（9.8）。排他テストの机で `real-run-kit` を使う。確かめの間は拡大率を変えない（拡大率が変わった後の詰め直しが重ねた窓を並べ直す問題は `areka-P0-dpi-realign-remembered-chain` の持ち分・裁定 7）。
-- 確かめること: ①起動して `sticky_groups`（descript_seed・`{0,1}`）が出る。②本体側の窓をドラッグ（入力の送り込みは画面のロックが無いときだけ）すると、相方側の窓とバルーンが同じ量動き、`sticky_follow`（drag）が出る。③辞書の「窓あわせ」（MCP の `raise_event` か `sakurascript`）で `\![move,…,--option=ignore-sticky-window]` が出て、相方側だけが動き `sticky_follow_ignored` が出る。④終了して起動し直すと、2 つの窓が重なったまま出る（窓の矩形の比べ）。
+- 確かめること: ①起動して `sticky_groups`（descript_seed・`{0,1}`）が出る。②本体側の窓をドラッグ（入力の送り込みは画面のロックが無いときだけ）すると、相方側の窓とバルーンが同じ量動き、ドラッグの途中でも 2 つの窓の位置の関係が変わらず（途中で 2 つの矩形を読んで比べる）、`sticky_follow`（drag）が出る。③辞書の「窓あわせ」（MCP の `raise_event` か `sakurascript`）で `\![move,…,--option=ignore-sticky-window]` が出て、相方側だけが動き `sticky_follow_ignored` が出る。④終了して起動し直すと、2 つの窓が重なったまま出る（窓の矩形の比べ）。
 - 起動の連鎖の確定が記憶の無い 2 つの窓を並べた後に辞書の `\![move]` で重ねる流れと、記憶から 2 つを戻すときの作業領域への寄せ直しは、この実機の確かめで見る（研究 1.7 の調べ 5・6）。食い違いが出たら原因をこの spec の中で直すか、持ち主の spec を確かめて起票する。
 - 近道の届き方（F10 が `WM_KEYDOWN` か `WM_SYSKEYDOWN` か・入力先）は、ぱすたの窓をクリックしてから 2 つの近道を押し、`balloon_pos_reset`（trigger=shortcut）と `reset_pos_menu_outcome` が出ることで確かめる。
 
 ## 互換の記録（要件 10）
 
-- COMPAT §8 に足す行: 読めない向きは外す・欠けた値は変えない（裁定 3）／組の捨て方（裁定 4）／連れ動きはドラッグと瞬間の `\![move]` だけ（裁定 6）／ドラッグの相手も記憶に書く・書く形は descript の向き（裁定 5・要件 4.8）／寿命（裁定 1・2・`\![set,zorder]` の組との食い違いを含む）／バルーン位置初期化は記憶に書く・対のイベントなし（裁定 8）／近道はゴーストの窓が入力先のときだけ（裁定 9）／ドラッグ中に向きが変わったときはそのドラッグの終わりまで始めの向き。
+- COMPAT §8 に足す行: 読めない向きは外す・欠けた値は変えない（裁定 3）／組の捨て方（裁定 4）／連れ動きはドラッグと瞬間の `\![move]` だけ（裁定 6）／ドラッグの相手も記憶に書く・書く形は descript の向き（裁定 5・要件 4.8）／寿命（裁定 1・2・`\![set,zorder]` の組との食い違いを含む）／バルーン位置初期化は記憶に書く・対のイベントなし（裁定 8）／近道はゴーストの窓が入力先のときだけ（裁定 9）／ドラッグ中に向きが変わったときはそのドラッグの終わりまで始めの向き／組に入った吸着なしの窓は、ドラッグで areka が書く（相手とずらさないため・設計の決め 12）。
 - 網羅台帳: `sakura-script.toml` の 6 行・`shiori.toml` の `resetballoonpositionbutton.caption`・`assets.toml` の `seriko.sticky-window` と `seriko.alignmenttodesktop` 系を実装済みに改める。`property.toml` の `currentghost.seriko.sticky-window` は変えない（10.5）。
 - 完了の作業で `\![set,zorder]` の食い違いを `/kiro-discovery` で起票する（10.6）。
 
@@ -723,6 +747,7 @@ pub(crate) fn attach_shortcut_receivers(world: &mut World);
 | 9 | キーボードの近道の土台 | wintf に一般の `OnKeyDown`（`WM_KEYDOWN`・`WM_SYSKEYDOWN`）。組み合わせの判定は areka の純関数 | wintf はライブラリなので areka の近道を知らない。両方のメッセージで受けて消費すれば F10 の届き方に依らず、Shift＋F10 の `WM_CONTEXTMENU` とも重ならない |
 | 10 | メニューの枠 | 新しい枠 `ResetBalloonPosition` を「シェル位置初期化」のすぐ後・同じ群へ。選べるのは窓の組と材料が在るとき | 正典どおり並ぶ。答え待ちの灰色はバルーンの側に無い |
 | 11 | ID の上限 | 置かない（`u32` に入る数なら受ける）。窓の無い ID は受けて記録し、連れ動きから外す | 正典は 3 人目以降も書ける。3 人目以降の窓の spec が来たとき、帳簿を変えずに効く |
+| 12 | 吸着なしの窓どうしの組のドラッグ中のずれ（設計の検証の問題 2・2026-10-22 設計ディスカッションで開発者が承認） | 組に入った窓は吸着なしでも `move_window=false` にし、ドラッグした窓も相手も areka が同じ回に書く（`wintf_moves_window`・`sync_drag_writer`） | 1 フレーム遅れを受け入れず、誰が書くかを変えてずれを 0 にする。今の吸着した窓の道をそのまま使うので新しい仕組みが要らない。遅れを受け入れる案は SSP 並みに届かず、wintf に組を教える案はライブラリが areka を知ってしまう |
 
 ## Risks
 
