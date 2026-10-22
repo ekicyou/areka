@@ -15,18 +15,25 @@ use tracing::{info, warn};
 use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::{DPI, WindowPos};
 
-use super::config::PlacementConfig;
+use super::config::build_placement_config;
 use super::follow::move_window_to;
 use super::persist::persist_unremembered_char_positions;
 use super::primary_monitor;
+use super::reseed::BalloonPlacementInputs;
 use super::resolver::{RectPx, ScopeInput, SizePx, resolve_placement};
+use super::source::DescriptSource;
 use super::spawn::GhostWindows;
 
-/// 並べ直しの材料——窓の組の descript から組んだ配置の設定（design ResetPos State Management）。
+/// 標準の位置の材料——窓の組の descript の値と走っているバルーンの配置の値
+/// （design ResetPos State Management・areka-P0-window-link-directives 設計の決め 7）。
 ///
-/// 窓の組ごとに 1 つ。読むのは [`reset_window_positions`] だけ。
-#[derive(Resource, Debug, Clone)]
-pub struct DefaultPlacementBasis(pub PlacementConfig);
+/// 窓の組ごとに 1 つ。起動の準備とシェルの切り替えの後始末が同じ形で置く（要件 7.4）。
+/// 並べ直し（[`reset_window_positions`]）は descript の値から配置の設定を組んで読む。
+#[derive(Resource, Debug, Clone, PartialEq, Eq)]
+pub struct DefaultPlacementBasis {
+    pub(crate) source: DescriptSource,
+    pub(crate) balloon: BalloonPlacementInputs,
+}
 
 /// 全スコープのキャラクターの窓を既定の位置へ並べ直し、記憶へ書く。並べ直した窓が 1 つでも
 /// あれば `true`。
@@ -42,7 +49,10 @@ pub fn reset_window_positions(world: &mut World) -> bool {
         );
         false
     };
-    let Some(DefaultPlacementBasis(cfg)) = world.get_resource::<DefaultPlacementBasis>().cloned()
+    // キャラクターの窓の位置（P1〜P4）はバルーンの欄を読まないので、descript の値だけで組む。
+    let Some(cfg) = world
+        .get_resource::<DefaultPlacementBasis>()
+        .map(|b| build_placement_config(&b.source.ghost_kv, &b.source.shell_kv))
     else {
         return skipped("no_default_basis");
     };

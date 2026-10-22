@@ -33,9 +33,13 @@ pub mod persist;
 /// シェルの差し替えで、新しいシェルの見た目の値を走っている窓の部品へ入れ直す
 /// （areka-P0-shell-balloon-switch 要件 2.7）。
 pub(crate) mod reseed;
+/// バルーン位置初期化（areka-P0-window-link-directives 要件 7.1〜7.4）。
+pub(crate) mod reset_balloon_pos;
 /// 既定の位置への並べ直し（areka-P0-move-canon 要件 8.6・design ResetPos）。
 pub(crate) mod reset_pos;
 pub mod resolver;
+/// 台本からの吸着の向きの変更（areka-P0-window-link-directives 要件 1）。
+pub(crate) mod script_alignment;
 pub mod source;
 pub mod spawn;
 /// 窓の組（`\![set,sticky-window,...]`・descript の `seriko.sticky-window`）の帳簿（純）。
@@ -276,11 +280,11 @@ pub struct PreparedPlacement {
     /// 値の解釈は placement では一切行わない（生の転記＝`PlacementConfig::zorder_raw` の
     /// そのまま）。窓の位置も寸法もこの値では 1 mm も動かない。
     pub zorder_raw: Option<String>,
-    /// 配置を解いた設定そのもの（areka-P0-move-canon 要件 8.6・design ResetPos）。
+    /// 標準の位置の材料（areka-P0-move-canon 要件 8.6・areka-P0-window-link-directives 要件 7.4）。
     ///
-    /// 窓の組を作った後に並べ直しの材料 [`reset_pos::DefaultPlacementBasis`] として置く。
-    /// 起動で解いたのと同じ設定を同じ規則で解き直すための搬送で、spawn は読まない。
-    pub default_basis: PlacementConfig,
+    /// 窓の組を作った後にそのまま置く。読み込んだ descript の値とバルーンの `windowposition`・
+    /// 作者の DPI を運ぶ（ファイルを読み直さない）。シェルの切り替えの後始末と同じ形で、spawn は読まない。
+    pub default_basis: reset_pos::DefaultPlacementBasis,
 }
 
 /// 準備パイプラインの中間結果（load→config→measure まで・work area 非依存部）。
@@ -293,6 +297,8 @@ struct PreparedStages {
     sizes: MeasuredSizes,
     titles: GhostTitles,
     author_dpi: AuthorDpi,
+    /// 標準の位置の材料（読み込んだ値の写し・[`PreparedPlacement::default_basis`]）。
+    default_basis: reset_pos::DefaultPlacementBasis,
     /// 採寸に使った表示 DPI（[`build_measure_scaling`] が k₀ の分子へ採った値）。
     ///
     /// **起動時の主モニタ DPI**であって、窓がいま載っているモニタの DPI ではない
@@ -311,8 +317,8 @@ impl PreparedStages {
             titles: self.titles,
             author_dpi: self.author_dpi,
             // 解釈せずそのまま搬送する（重なりの基底の出所は 1 つ＝この読取・要件 5.2）。
-            zorder_raw: self.cfg.zorder_raw.clone(),
-            default_basis: self.cfg,
+            zorder_raw: self.cfg.zorder_raw,
+            default_basis: self.default_basis,
         }
     }
 }
@@ -449,12 +455,21 @@ fn prepare_stages_for_shell(
     // 要件 3.2/3.3/3.4/3.6・design D1'）。**採寸の後**に scope ごとの定義を権威から取得し、
     // `ScopeConfig.balloon_offset`（P5 が既に加算している欄）へ合流させる供給のみを行う
     // ——配置解決の式 P1〜P5 は無改変であり、永続値優先の復元規約（`persist.rs`）にも触れない。
-    apply_scope_windowpositions(&mut cfg, balloon_root, &scope_ids, scaling.balloon);
+    let windowpositions =
+        apply_scope_windowpositions(&mut cfg, balloon_root, &scope_ids, scaling.balloon);
+    let titles = src.titles.clone();
     Ok(PreparedStages {
         cfg,
         sizes,
-        titles: src.titles,
+        titles,
         author_dpi,
+        default_basis: reset_pos::DefaultPlacementBasis {
+            source: src,
+            balloon: reseed::BalloonPlacementInputs {
+                author_dpi: author_dpi.balloon,
+                windowpositions,
+            },
+        },
         // 採寸 DPI（追従オフセットの基準 DPI・要件 3.1）。両軸に同じ表示 DPI を置く
         // ——k₀ の分子は軸によらず 1 つだからである（軸差は分母＝作者基準 DPI にある）。
         measure_dpi: DPI::from_dpi(measure_dpi as u16, measure_dpi as u16),
@@ -585,12 +600,14 @@ fn warn_if_saturated(scope: usize, axis: &'static str, raw: i32, scaled: follow:
 /// 系列解決・面 0 の不在はいずれも `warn!` のうえ当該 scope の供給を見送る（配置自体は基本位置で
 /// 成立する）。同じ事象は直前の採寸（`measure_scope_sizes`）が既に `error!`＋`Err` で弾いており
 /// ——採寸が成功した後に本関数だけが失敗する経路は実在しない——ここは無言化を防ぐ防波堤である。
+///
+/// 読んだ値は標準の位置の材料として返す（読み直さずに運ぶ）。
 fn apply_scope_windowpositions(
     cfg: &mut PlacementConfig,
     balloon_root: &Path,
     scope_ids: &[usize],
     k: ScaleRatio,
-) {
+) -> ScopeWindowPositions {
     // 読むのは配置表に在る scope だけ（無い scope は下の合流が警告して見送る＝読む意味が無い）。
     let present: Vec<usize> = scope_ids
         .iter()
@@ -599,6 +616,7 @@ fn apply_scope_windowpositions(
         .collect();
     let windowpositions = load_scope_windowpositions(balloon_root, &present);
     merge_scope_windowpositions(cfg, &windowpositions, scope_ids, k);
+    windowpositions
 }
 
 /// scope ごとに読んだバルーンの `windowposition`（数値解釈と生値の対）。読めなかった scope は

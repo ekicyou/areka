@@ -25,11 +25,12 @@ use crate::placement::config::build_placement_config;
 use crate::placement::follow::{Anchored, BalloonFollow, OffsetBase};
 use crate::placement::persist::PersistWiring;
 use crate::placement::prepare_ghost_windows_with_work_area;
+use crate::placement::reseed::BalloonPlacementInputs;
 use crate::placement::resolver::{
     Anchor, PointPx, ScopeInput, ScopePlacement, SizePx, resolve_placement,
 };
 use crate::placement::shared_test_support::{WA, balloon_root, emo2_root, with_com_initialized};
-use crate::placement::source::GhostTitles;
+use crate::placement::source::{DescriptSource, GhostTitles};
 use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
 use crate::placement::test_support::{LogEvent, capture_logs};
 
@@ -124,10 +125,18 @@ impl Rig {
         world.insert_non_send(PersistWiring {
             publisher: parts.publisher.clone(),
         });
-        world.insert_resource(DefaultPlacementBasis(build_placement_config(
-            &Default::default(),
-            &Default::default(),
-        )));
+        world.insert_resource(DefaultPlacementBasis {
+            source: DescriptSource {
+                ghost_kv: Default::default(),
+                shell_kv: Default::default(),
+                shell_dir: PathBuf::new(),
+                titles: GhostTitles::from_scope_titles(std::iter::empty()),
+            },
+            balloon: BalloonPlacementInputs {
+                author_dpi: 96,
+                windowpositions: Default::default(),
+            },
+        });
         Rig {
             world,
             shared,
@@ -358,8 +367,9 @@ fn scope_without_size_is_left_out_and_rest_is_solved() {
     rig.finish();
 }
 
-/// 起動の準備の結果は並べ直しの材料（配置の設定）を運ぶ（design ResetPos State Management (1)）:
-/// 運んだ設定を準備と同じ窓の大きさ・作業領域・DPI で解き直すと、準備が解いた配置と同じになる。
+/// 起動の準備の結果は並べ直しの材料（descript の値）を運ぶ（design ResetPos State Management (1)）:
+/// 運んだ値から並べ直しと同じく設定を組み、準備と同じ窓の大きさ・作業領域・DPI で解き直すと、
+/// キャラクターの窓の位置（並べ直しが書くもの）は準備が解いた配置と同じになる。
 #[test]
 fn boot_prepare_carries_the_default_placement_basis() {
     with_com_initialized(|| {
@@ -374,16 +384,24 @@ fn boot_prepare_carries_the_default_placement_basis() {
                 balloon_size: s.balloon_size,
             })
             .collect();
+        let src = &p.default_basis.source;
+        let cfg = build_placement_config(&src.ghost_kv, &src.shell_kv);
+        let char_pos = |placements: Vec<ScopePlacement>| -> Vec<_> {
+            placements
+                .iter()
+                .map(|s| (s.scope, s.char_pos, s.anchor))
+                .collect()
+        };
         assert_eq!(
-            resolve_placement(
-                &p.default_basis,
+            char_pos(resolve_placement(
+                &cfg,
                 WA,
                 &inputs,
                 wintf::ecs::DPI::from_dpi(96, 96)
-            ),
-            p.placements,
-            "運んだ設定で解き直すと準備の配置と同じ"
+            )),
+            char_pos(p.placements.clone()),
+            "運んだ値で解き直すとキャラクターの窓の位置は準備の配置と同じ"
         );
-        assert_eq!(p.default_basis.zorder_raw, p.zorder_raw, "同じ読取の設定");
+        assert_eq!(cfg.zorder_raw, p.zorder_raw, "同じ読取の値");
     });
 }

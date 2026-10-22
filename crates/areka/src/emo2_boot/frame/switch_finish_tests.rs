@@ -42,7 +42,6 @@ use crate::emo2_boot::shell_balloon_switch::{
 use crate::emo2_boot::shell_box_assets::ShellBoxAssets;
 use crate::emo2_boot::switch_assets::{SwapPayload, SwapSlot};
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::placement::config::build_placement_config;
 use crate::placement::reseed::BalloonPlacementInputs;
 use crate::placement::reseed::tests as reseed_tests;
 use crate::placement::reset_pos::DefaultPlacementBasis;
@@ -635,29 +634,36 @@ fn shell_finish_moves_char_windows_to_the_new_alignment() {
     );
 }
 
-/// 並べ直しの材料は新しいシェルの descript から組んだ設定へ替わる（areka-P0-move-canon 要件 8.6・
-/// design ResetPos State Management (2)）: 起動のシェルの設定（重なりの宣言なし）が、後始末の後は
-/// 新しいシェルの設定（`seriko.zorder` は `1,0`）になる。
+/// 並べ直しの材料は新しいシェルの descript の値へ替わる（areka-P0-move-canon 要件 8.6・
+/// design ResetPos State Management (2)）: 起動のシェルの値（重なりの宣言なし）が、後始末の後は
+/// 新しいシェルの値（`seriko.zorder` は `1,0`）と走っているバルーンの配置の値になる
+/// （起動の準備と同じ形・areka-P0-window-link-directives 要件 7.4）。
 #[test]
 fn shell_finish_replaces_the_default_placement_basis() {
     let mut rig = rig(SkinKind::Shell, false);
-    let old = build_placement_config(&BTreeMap::new(), &BTreeMap::new());
-    rig.world
-        .insert_resource(DefaultPlacementBasis(old.clone()));
+    let SwapFinish::Shell {
+        source, balloon, ..
+    } = shell_finish()
+    else {
+        unreachable!("shell_finish はシェルの後始末")
+    };
+    let old = DefaultPlacementBasis {
+        source: DescriptSource {
+            shell_kv: BTreeMap::new(),
+            ..source.clone()
+        },
+        balloon: balloon.clone(),
+    };
+    rig.world.insert_resource(old.clone());
     answer(&mut rig, 0, Ok(()));
     answer(&mut rig, 1, Ok(()));
     frame(&mut rig);
-    let SwapFinish::Shell { source, .. } = shell_finish() else {
-        unreachable!("shell_finish はシェルの後始末")
-    };
-    let new = build_placement_config(&source.ghost_kv, &source.shell_kv);
-    assert_ne!(new, old, "前提: 新旧の設定は違う");
+    let new = DefaultPlacementBasis { source, balloon };
+    assert_ne!(new, old, "前提: 新旧の材料は違う");
     assert_eq!(
-        rig.world
-            .get_resource::<DefaultPlacementBasis>()
-            .map(|b| &b.0),
+        rig.world.get_resource::<DefaultPlacementBasis>(),
         Some(&new),
-        "材料は新しいシェルの設定"
+        "材料は新しいシェルの値"
     );
 }
 

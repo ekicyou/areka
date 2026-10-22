@@ -639,14 +639,24 @@ fn prepare_emo2_carries_author_dpi_read_once_for_attach() {
 /// 採寸結果を空にしてあるのは、搬送の主張が寸法にも配置にも一切依らないからである
 /// （この値は窓を 1 mm も動かさない）。
 fn stages_with_shell(shell_kv_text: &str) -> PreparedStages {
+    let source = source::DescriptSource {
+        ghost_kv: areka_parsers::kv::parse_kv(""),
+        shell_kv: areka_parsers::kv::parse_kv(shell_kv_text),
+        shell_dir: std::path::PathBuf::new(),
+        titles: GhostTitles::from_scope_titles(Vec::new()),
+    };
     PreparedStages {
-        cfg: config::build_placement_config(
-            &areka_parsers::kv::parse_kv(""),
-            &areka_parsers::kv::parse_kv(shell_kv_text),
-        ),
+        cfg: config::build_placement_config(&source.ghost_kv, &source.shell_kv),
         sizes: MeasuredSizes { scopes: Vec::new() },
         titles: GhostTitles::from_scope_titles(Vec::new()),
         author_dpi: AuthorDpi::DEFAULT,
+        default_basis: reset_pos::DefaultPlacementBasis {
+            source,
+            balloon: reseed::BalloonPlacementInputs {
+                author_dpi: 96,
+                windowpositions: Default::default(),
+            },
+        },
         // 採寸 DPI は既定の 96（この助手は寸法にも配置にも依らないので値は判定に効かない）。
         measure_dpi: DPI::from_dpi(96, 96),
     }

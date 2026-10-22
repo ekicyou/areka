@@ -459,11 +459,14 @@ fn finish_shell(
             "reseed: 窓の正本が無いので見た目の値を入れ直さない（古い値のまま）"
         ),
     }
-    // 新しいシェルの設定は 1 度だけ組み、重なりの基底と並べ直しの材料の両方へ配る
-    // （材料は areka-P0-move-canon 要件 8.6・読むのは並べ直しだけ）。
+    // 重なりの基底は新しいシェルの設定から置き直す。標準の位置の材料は起動の準備と同じ形
+    // （descript の値＋走っているバルーンの配置の値）で置き直す（areka-P0-window-link-directives 要件 7.4）。
     let placement_cfg = build_placement_config(&source.ghost_kv, &source.shell_kv);
     wiring.reseed_zorder_descript_base(placement_cfg.zorder_raw.as_deref());
-    world.insert_resource(DefaultPlacementBasis(placement_cfg));
+    world.insert_resource(DefaultPlacementBasis {
+        source: source.clone(),
+        balloon: balloon.clone(),
+    });
     let replaced = world
         .get_non_send_mut::<GhostSlot>()
         .is_some_and(|mut slot| {

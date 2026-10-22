@@ -30,7 +30,7 @@ use super::follow::{
     resize_window_to, work_area_for_window,
 };
 use super::persist::apply_restored_placements;
-use super::resolver::{RectPx, ScopeInput, SizePx, resolve_placement};
+use super::resolver::{RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement};
 use super::source::DescriptSource;
 use super::spawn::{BalloonKeywordBase, GhostWindows};
 use super::{ScopeWindowPositions, apply_author_balloon_offset_scale, merge_scope_windowpositions};
@@ -39,7 +39,7 @@ use super::{ScopeWindowPositions, apply_author_balloon_offset_scale, merge_scope
 ///
 /// シェルを替えてもバルーンは替わらないが、配置の設定は新しいシェルから組み直すので、
 /// 起動の準備と同じくバルーン側の値をもう一度合流させる必要がある（要件 2.7）。
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct BalloonPlacementInputs {
     /// バルーンの作者の DPI（`dpi`）。`windowposition` の換算の分母。
     pub author_dpi: u16,
@@ -49,7 +49,7 @@ pub(crate) struct BalloonPlacementInputs {
 
 /// 新しいシェルの見た目の値を走っている窓の部品へ入れ直し、バルーン窓を 1 度置き直す。
 ///
-/// - 新しい設定に在って走っている窓に無いスコープは `debug!` で読み飛ばす（窓を作らない）。
+/// - 標準の位置は [`resolve_standard_scopes`] で解き、利用者のドラッグの記憶を重ねてから入れる。
 /// - 窓の部品が揃わないスコープは `warn!`（`event = "reseed_skipped"`）を残して読み飛ばし、
 ///   残りのスコープは続ける（差し替えは済んでいるので、配置の値だけが古いまま残る）。
 pub(crate) fn apply_shell_descript(
@@ -59,6 +59,69 @@ pub(crate) fn apply_shell_descript(
     balloon: &BalloonPlacementInputs,
     restored: &[(PersistKey, String)],
 ) {
+    let snapshot = monitor_snapshot(world);
+    for StandardScope { running, placement } in
+        resolve_standard_scopes(world, windows, src, balloon)
+    {
+        let scope = running.input.scope;
+        // 1 件を入れて 1 件を返す（`apply_restored_placements` の事後条件）。破れたら黙って進めない。
+        let Some(p) = apply_restored_placements(vec![placement], restored, &snapshot).pop() else {
+            warn!(
+                event = "reseed_skipped",
+                scope,
+                reason = "resolve_empty",
+                "reseed: 配置の解決が空を返した（見た目の値を入れ直さない）"
+            );
+            continue;
+        };
+
+        let c = running.char_window;
+        world.entity_mut(c).insert((
+            Anchored(p.anchor),
+            BalloonFollow::new(running.balloon_window, p.balloon_offset_base),
+        ));
+        // ドラッグの単一ライターは揃え方から導く（spawn と同じ規則）。
+        if let Some(mut drag) = world.get_mut::<DragConfig>(c) {
+            drag.move_window = p.anchor.is_free();
+        }
+        match p.balloon_keyword_base {
+            Some((mode, adjust)) => {
+                world
+                    .entity_mut(c)
+                    .insert(BalloonKeywordBase { mode, adjust });
+            }
+            None => {
+                world.entity_mut(c).remove::<BalloonKeywordBase>();
+            }
+        }
+        // 置き直しは記憶の復元と同じ明示の配置として扱う（可視性の遷移ガードは掛けない）。
+        follow_balloon(
+            world,
+            c,
+            running.char_pos,
+            BalloonFollowTrigger::Placement(PlacementRoute::Restore),
+        );
+    }
+}
+
+/// [`resolve_standard_scopes`] の 1 スコープぶんの結果（記憶は重ねていない標準の位置）。
+pub(crate) struct StandardScope {
+    pub running: RunningScope,
+    pub placement: ScopePlacement,
+}
+
+/// 走っているスコープごとに、その窓の DPI で作者の空間のずらしを換算し、バルーンの
+/// `windowposition` を合流し、全スコープを昇順で 1 度に解いて自分の要素を取る（記憶は重ねない）。
+///
+/// - 新しい設定に在って走っている窓に無いスコープは `debug!` で読み飛ばす（窓を作らない）。
+/// - 窓の部品が揃わないスコープ・解決が空のスコープは `warn!`（`event = "reseed_skipped"`）を
+///   残して結果から外す。
+pub(crate) fn resolve_standard_scopes(
+    world: &World,
+    windows: &GhostWindows,
+    src: &DescriptSource,
+    balloon: &BalloonPlacementInputs,
+) -> Vec<StandardScope> {
     let mut cfg = build_placement_config(&src.ghost_kv, &src.shell_kv);
     for &scope in cfg.scopes.keys() {
         if windows.char_window(scope).is_none() {
@@ -68,12 +131,7 @@ pub(crate) fn apply_shell_descript(
             );
         }
     }
-    let snapshot = world
-        .get_resource::<MonitorSnapshot>()
-        .cloned()
-        .unwrap_or(MonitorSnapshot {
-            work_areas: Vec::new(),
-        });
+    let snapshot = monitor_snapshot(world);
     let shell_author_dpi = src.shell_author_dpi();
 
     // 1 周目: 走っているスコープの窓の部品を集め、スコープごとの構成へその窓の DPI で換算と
@@ -116,17 +174,17 @@ pub(crate) fn apply_shell_descript(
     let inputs: Vec<ScopeInput> = running_scopes.iter().map(|r| r.input).collect();
 
     // 2 周目: スコープごとにその窓の作業領域と DPI で解き、自分の要素だけを取る。
-    for running in &running_scopes {
+    let mut resolved = Vec::new();
+    for running in running_scopes {
         let scope = running.input.scope;
         // 引けなければ窓の矩形で代える（架空の矩形は作らない）。
         let work_area =
             work_area_for_window(&snapshot, running.char_rect).unwrap_or(running.char_rect);
-        let own: Vec<_> = resolve_placement(&cfg, work_area, &inputs, running.dpi)
-            .into_iter()
-            .filter(|p| p.scope == scope)
-            .collect();
         // 自分の要素はちょうど 1 件（resolver・merge の事後条件）。破れたら黙って進めない。
-        let Some(p) = apply_restored_placements(own, restored, &snapshot).pop() else {
+        let Some(placement) = resolve_placement(&cfg, work_area, &inputs, running.dpi)
+            .into_iter()
+            .rfind(|p| p.scope == scope)
+        else {
             warn!(
                 event = "reseed_skipped",
                 scope,
@@ -135,34 +193,19 @@ pub(crate) fn apply_shell_descript(
             );
             continue;
         };
-
-        let c = running.char_window;
-        world.entity_mut(c).insert((
-            Anchored(p.anchor),
-            BalloonFollow::new(running.balloon_window, p.balloon_offset_base),
-        ));
-        // ドラッグの単一ライターは揃え方から導く（spawn と同じ規則）。
-        if let Some(mut drag) = world.get_mut::<DragConfig>(c) {
-            drag.move_window = p.anchor.is_free();
-        }
-        match p.balloon_keyword_base {
-            Some((mode, adjust)) => {
-                world
-                    .entity_mut(c)
-                    .insert(BalloonKeywordBase { mode, adjust });
-            }
-            None => {
-                world.entity_mut(c).remove::<BalloonKeywordBase>();
-            }
-        }
-        // 置き直しは記憶の復元と同じ明示の配置として扱う（可視性の遷移ガードは掛けない）。
-        follow_balloon(
-            world,
-            c,
-            running.char_pos,
-            BalloonFollowTrigger::Placement(PlacementRoute::Restore),
-        );
+        resolved.push(StandardScope { running, placement });
     }
+    resolved
+}
+
+/// 作業領域の写し（無ければ空＝窓の矩形で代える側へ落ちる）。
+fn monitor_snapshot(world: &World) -> MonitorSnapshot {
+    world
+        .get_resource::<MonitorSnapshot>()
+        .cloned()
+        .unwrap_or(MonitorSnapshot {
+            work_areas: Vec::new(),
+        })
 }
 
 /// 入れ直した揃え方（`Anchored`）でキャラ窓を今の窓寸のまま置き直す（要件 2.7「揃え方は新しい
@@ -198,13 +241,13 @@ pub(crate) fn reanchor_char_windows(world: &mut World, windows: &GhostWindows) {
 }
 
 /// 走っている 1 スコープの窓から読んだ解決の入力。
-struct RunningScope {
-    char_window: Entity,
-    balloon_window: Entity,
-    char_pos: Point,
-    char_rect: RectPx,
-    input: ScopeInput,
-    dpi: DPI,
+pub(crate) struct RunningScope {
+    pub char_window: Entity,
+    pub balloon_window: Entity,
+    pub char_pos: Point,
+    pub char_rect: RectPx,
+    pub input: ScopeInput,
+    pub dpi: DPI,
 }
 
 /// スコープの窓の部品を読む。揃わなければその理由を返す。

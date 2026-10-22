@@ -22,7 +22,7 @@
   - 兄弟のテストで、下・上・左・右・なしの相手で吸着した軸に量が乗らないこと、`wintf_moves_window` の 4 通り（吸着の有無×組の有無）、2 つの窓の World で組を据えると両方の `move_window` が偽になり組が無ければ向きどおりに戻ること、が緑になる
   - _Requirements: 2.4, 4.2, 5.2_
 
-- [ ] 1.4 標準の位置を解く流れを切り出し、初期化の材料を起動とシェルの切り替えで同じ形にする
+- [x] 1.4 標準の位置を解く流れを切り出し、初期化の材料を起動とシェルの切り替えで同じ形にする
   - `reseed.rs` の「走っているスコープごとに窓の DPI で作者の空間のずらしを換算し、バルーンの `windowposition` を合流し、昇順で 1 度に解く」流れを `resolve_standard_scopes` として切り出し（私有の `RunningScope` を crate の中へ開ける）、`apply_shell_descript` はその結果へ記憶を重ねてから部品を入れる（振る舞いは今のまま）
   - `DefaultPlacementBasis` を「descript の値＋バルーンの材料」の形に改め、`reset_window_positions` は descript の値から配置の設定を組む。起動の準備（`placement/mod.rs`）は読み込んだ descript の値とバルーンの `windowposition`・作者の DPI を運んで同じ形で置き（ファイルを読み直さない）、シェルの切り替えの後始末（`frame/switch.rs`）も同じ形で置き直す
   - 2.2・2.3 が並んで同じ所を触らないよう、`placement/mod.rs` に `script_alignment` と `reset_balloon_pos` のモジュールの宣言と空のファイル（兄弟のテストの接続を含む）をこのタスクで先に置く
@@ -153,3 +153,4 @@
 - areka は bin クレート。クレートのテストは `cargo test -p areka --bin areka`（`--lib` は無い）。
 - 1.2: `placement/mod.rs` の `sticky_group_ledger` 宣言に一時の `#[allow(dead_code)]`。2.1 で本番の消費者が来たら外す。`try_add_script_group` は 2 未満を自分で検査しないので、必ず `parse_sticky_tokens` を通してから呼ぶ。
 - 1.3: `placement/follow.rs` の `mod sticky_follow` に一時の `#[allow(dead_code)]`。本番の呼び出しが来たら外す。`follow/` の下のモジュールのテストは `placement/follow_<名>_tests.rs`（`#[path]` で follow.rs から読む）。
+- 1.4: `DefaultPlacementBasis` は `{ source: DescriptSource, balloon: BalloonPlacementInputs }`。`placement/spawn.rs:183` の注記は「設定ごと置く」のままで古い。触るついでに直す。
