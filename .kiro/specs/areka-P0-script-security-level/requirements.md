@@ -126,3 +126,4 @@
 1. The areka shall 再生した台本の記録の種別の表示（ゴースト自身の台本は `Ghost`、MCP の SEND の台本は `SSTP(Local,Auth)` など）を、この spec の前と同じ文字で出す。
 2. When この spec が完了する, the areka shall 網羅台帳 `doc/ukadoc-coverage/ledger/shiori.toml` の要求の `SecurityLevel`・`SenderType`・`SecurityOrigin` と応答の `SecurityLevel` の行を、実装の状態と持ち主（この spec）に合わせて書き換える。
 3. When この spec が完了する, the areka shall 網羅台帳のさくらスクリプトの `\![enter,nouserbreakmode]` と `\m[…]` の行の注記に、出どころによる制限の扱いを書く。
+4. When この spec が完了する, the areka shall 正典が沈黙していて areka が決めた扱い（`Sender: areka`・選択肢の ID とアンカーのイベントを「ゴースト自身」とすること・応答の `SecurityLevel` でレベルを上げないこと）を、`doc/COMPAT_ARCHITECTURE.md` §8 の沈黙ルール対応表に登記する。
