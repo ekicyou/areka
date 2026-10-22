@@ -12,11 +12,12 @@
 //! テスト専用の注入 env（本番の helper は読まない・9.2）:
 //! - `HOST32_TESTDLL_LOADU_RECORD`: 記録ファイルのパス。未設定なら書かない。
 //!   1 呼出 1 行を追記: `<入口名>\t<受け取ったバイト列の小文字 16 進>\n`。
-//! - `HOST32_TESTDLL_LOADU_FAIL`: `"1"` のとき `loadu` が `0` を返す。
+//! - `HOST32_TESTDLL_LOADU_FAIL`: `"1"` のとき `loadu` が `0` を返す。記録を書いた後・`0` を返す直前に
+//!   最後のエラーへアクセス拒否（5）を置く（仲介が失敗の型へ写すことの確かめ・areka-P0-emo2-real-run-stability 要件 5.5）。
 
 use std::io::Write;
 
-use windows::Win32::Foundation::{GlobalFree, HGLOBAL};
+use windows::Win32::Foundation::{ERROR_ACCESS_DENIED, GlobalFree, HGLOBAL, SetLastError};
 use windows::Win32::System::Memory::{GLOBAL_ALLOC_FLAGS, GlobalAlloc};
 
 /// `GlobalAlloc` の `GMEM_FIXED`（=0）。ハンドル＝先頭ポインタゆえ `h.0 as *mut u8` で直接書ける。
@@ -71,6 +72,8 @@ pub unsafe extern "C" fn loadu(hdir: HGLOBAL, len: usize) -> i32 {
     // SAFETY: 呼出側の契約（上記）をそのまま引き継ぐ。
     unsafe { take_and_record("loadu", hdir, len) };
     if std::env::var(ENV_FAIL).as_deref() == Ok("1") {
+        // SAFETY: 呼んだスレッドの最後のエラーを置くだけ。env の読みで上書きされないよう 0 を返す直前に置く。
+        unsafe { SetLastError(ERROR_ACCESS_DENIED) };
         0
     } else {
         1
