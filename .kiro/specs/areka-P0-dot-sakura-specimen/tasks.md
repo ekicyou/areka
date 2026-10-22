@@ -20,7 +20,7 @@
   - _Requirements: 1.3, 1.4, 1.5_
 
 - [ ] 2. 検体 `dot_sakura` を登記し、登記のテストを 10 行・書庫を置く行 9 行に合わせる
-- [ ] 2.1 登記表に `dot_sakura` の 1 行を足し、数と名前の一覧を直す
+- [x] 2.1 登記表に `dot_sakura` の 1 行を足し、数と名前の一覧を直す
   - 登記表の末尾（`pasta-in-windows` の後）に、書庫を置く形・ゴースト・同梱バルーン `bottle` の行と、その上の 1 行の注記を足す。窓口のほかのコードは触らない
   - 登記のテストの数（10 行・書庫を置く行 9 行）・説明文・名前の一覧を設計の「数と名前の直し」の表のとおりに直す。未登録の名前のテストは名前を 10 個の 1 つの配列にまとめ、既知の名前との比べと失敗の表示の確かめの両方に使う（`claudia` の抜けを消す）
   - 取り寄せ形の検体のテストの注記の「今の 8 本」を「今の 9 本」に直す
@@ -94,3 +94,6 @@
 
 - 控え 1.1: 2026-10-22T23:08:02+09:00 に `target\dot-sakura-fetch\dot_sakura.nar` へ取り寄せ。大きさ 1,425,534 バイト・SHA-256 `0c602c6a431dcbec48c02d934d98e342337d2db9628095e0a6f90d3e83b7a472`（brief と一致）。
 - 控え 1.2: 書庫は `5dc6288e` で書庫だけをコミット。`git check-attr text` は `unset`。Git Bash の `git cat-file -p HEAD:vendors/sample_ghost/dot_sakura.nar | sha256sum` は `0c602c6a…b7a472`（1.1 と一致・1,425,534 バイト）。`grep -rn dot_sakura tools/` は 0 件（`package.ps1` が検体から取るのは `emo2` と `StayseeBalloon` だけ）。
+- 控え 2.1: `grep -rnE "9 つ|9 本|nine|8 行|8 本" crates/sample-ghost-kit/src/` で検体の数として残る所は 0 か所（当たりは `devroot_fetched_tests.rs:67` の「今の 9 本」・`devroot_sweep_tests.rs` のスレッドの「8 本」・`lib_tests.rs:6` の主張の「8 本」だけ）。冒頭の「主張は 8 本」・主張の列挙・参照する spec は 2.2 の専用テストと一緒に直す。
+- 2.1: ワークツリーで `sample-ghost-kit` の取り寄せ形のテストを緑にするには `pwsh -NoProfile -File tools/sample-fetch.ps1` を 1 回回す要がある（`pasta-in-windows` の書庫が `target
+ar-samplesetched\` に無かった・本 spec と無関係の準備）。
