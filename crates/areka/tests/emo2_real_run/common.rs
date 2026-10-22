@@ -3,7 +3,8 @@
 //! 印の綴り・保険の自動終了と締切の値・`RUST_LOG`・LOAD の失敗の綴り・時間の 1 行・失敗の分けの規則は
 //! このファイルだけが持つ。純粋な関数の試験は `common_tests.rs`。
 
-use std::time::Duration;
+use real_run_kit::{Ended, EndedBy, Launch, McpError, RealRun, Run, ToolReply};
+use std::time::{Duration, Instant};
 
 /// 保険の自動終了。印までの最大（混んだ時間 6.82 秒）＋別れの台詞（約 22 秒）＝約 29 秒に余りを足した値（1.5）。
 pub const SAFETY_EXIT: Duration = Duration::from_secs(45);
@@ -139,6 +140,124 @@ fn line_micros(line: &str) -> Option<i64> {
 /// 落ちた回の出力が「LOAD の失敗」か（`LOAD_RETURNED_FALSE` を含むか）。
 pub fn is_load_returned_false(output: &str) -> bool {
     output.contains(LOAD_RETURNED_FALSE)
+}
+
+/// 待つ間の MCP の呼び出しの間隔。
+const MCP_GAP: Duration = Duration::from_millis(500);
+
+/// 新しい写しで emo2 を起こす（`Launch::Sample { emo2, emo2-kakukaku }`・`SAFETY_EXIT`・`DEADLINE`・`RUST_LOG`）。
+/// `COMPAT_LAYER_ENV` が空でなければ子にだけ `__COMPAT_LAYER` を渡す。`wait_after_copy` があれば
+/// `before_spawn` の中でその時間だけ眠る。返す `Instant` は起こした直後。
+pub fn spawn_emo2(wait_after_copy: Option<Duration>) -> (Run, Instant) {
+    let mut kit = RealRun::new(env!("CARGO_BIN_EXE_areka"))
+        .launch(Launch::Sample {
+            name: "emo2".into(),
+            balloon: Some("emo2-kakukaku".into()),
+        })
+        .rust_log(RUST_LOG)
+        .safety_exit(SAFETY_EXIT)
+        .deadline(DEADLINE);
+    if let Ok(v) = std::env::var(COMPAT_LAYER_ENV)
+        && !v.trim().is_empty()
+    {
+        kit = kit.env("__COMPAT_LAYER", v.trim());
+    }
+    if let Some(wait) = wait_after_copy {
+        kit = kit.before_spawn(move |_| std::thread::sleep(wait));
+    }
+    let run = kit.spawn();
+    (run, Instant::now())
+}
+
+/// 印を順に待ち、利用者と同じ閉じ方で閉じ、終わり方と終了コードを確かめる。`run` はこの中で捨てる
+/// （panic の途中で捨てられれば、窓口が証拠を残す）。
+/// `mcp_while_waiting` が真なら、`WRAP` が見えるまで `dump_surface`・`dump_balloon` を呼び続ける。
+///
+/// # Panics
+/// 印の前に子が終わった（終了コードと終わり方）・締切（窓口の文）・終わり方が利用者と同じ閉じ方でない
+/// （保険の自動終了ならその旨）・終了コードが 0 でない・MCP の呼び出しが `ListenFailed`／`Unreachable` で失敗した
+/// （`NG:` の答えは失敗にしない）。
+pub fn boot_and_close(mut run: Run, started: Instant, mcp_while_waiting: bool) -> Times {
+    if mcp_while_waiting {
+        call_mcp_until_wrap(&mut run, started);
+    }
+    let mut seen = [Duration::ZERO; 3];
+    for (at, needle) in seen.iter_mut().zip([WIRE, ATTACH, WRAP]) {
+        if run.wait_for(needle).is_err() {
+            let ended = run.wait_exit();
+            panic!(
+                "印 {needle:?} の前に子が終わった（終了コード {:?}・終わり方 {:?}）\n--- child output ---\n{}",
+                ended.status.code(),
+                ended.by,
+                run.output()
+            );
+        }
+        *at = started.elapsed();
+    }
+    let close_at = Instant::now();
+    let ended = run.close();
+    let close = close_at.elapsed();
+    let output = run.output();
+    if let Some(why) = ending_failure(&ended) {
+        panic!("{why}\n--- child output ---\n{output}");
+    }
+    Times {
+        wire: seen[0],
+        attach: seen[1],
+        wrap: seen[2],
+        close,
+        talk_to_wrap: log_gap_ms(&output, BOOT_TALK, WRAP)
+            .and_then(|ms| u64::try_from(ms).ok())
+            .map(Duration::from_millis),
+        attach_to_talk_ms: log_gap_ms(&output, ATTACH, BOOT_TALK),
+        primary_dpi: primary_dpi(&output),
+    }
+}
+
+/// `WRAP` が見える・子が終わる・締切を過ぎるまで、面とバルーンを引数なしで呼び続ける（取り合いの相手としての負荷）。
+fn call_mcp_until_wrap(run: &mut Run, started: Instant) {
+    while started.elapsed() < DEADLINE && !run.output().contains(WRAP) {
+        for tool in ["dump_surface", "dump_balloon"] {
+            match keep_calling(run.call(tool, "{}")) {
+                Ok(true) => {}
+                // 子が終わった: 後の待ちが終わり方を報告する。
+                Ok(false) => return,
+                Err(e) => panic!(
+                    "{tool} を呼べませんでした: {e}\n--- child output ---\n{}",
+                    run.output()
+                ),
+            }
+        }
+        std::thread::sleep(MCP_GAP);
+    }
+}
+
+/// 待つ間の呼び出しの答えの扱い。答えが返れば（`NG:` の答えも）続ける＝`Ok(true)`、子が終わったら抜ける＝`Ok(false)`、
+/// 届かないときだけ `Err`。
+fn keep_calling(reply: Result<ToolReply, McpError>) -> Result<bool, McpError> {
+    match reply {
+        Ok(_) => Ok(true),
+        Err(McpError::ChildExited(_)) => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
+/// 終わり方が利用者と同じ閉じ方で、終了コードが 0 なら None。そうでなければ理由の文。
+fn ending_failure(ended: &Ended) -> Option<String> {
+    let code = ended.status.code();
+    match &ended.by {
+        EndedBy::UserClose if ended.status.success() => None,
+        EndedBy::UserClose => Some(format!(
+            "利用者と同じ閉じ方で終わったが終了コードが 0 でない（終了コード {code:?}）"
+        )),
+        EndedBy::SafetyExit => Some(format!(
+            "閉じ方が働かず、保険の自動終了（{} 秒）で終わった（終了コード {code:?}）",
+            SAFETY_EXIT.as_secs()
+        )),
+        other => Some(format!(
+            "利用者と同じ閉じ方で終わらなかった（終わり方 {other:?}・終了コード {code:?}）"
+        )),
+    }
 }
 
 #[cfg(test)]

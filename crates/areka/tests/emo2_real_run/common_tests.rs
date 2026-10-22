@@ -109,3 +109,59 @@ fn times_line_writes_none_for_every_missing_value() {
             .ends_with("talk_to_wrap_ms=none attach_to_talk_ms=none primary_dpi=96")
     );
 }
+
+fn status(code: u32) -> std::process::ExitStatus {
+    use std::os::windows::process::ExitStatusExt;
+    std::process::ExitStatus::from_raw(code)
+}
+
+#[test]
+fn keep_calling_continues_on_any_reply_including_ng() {
+    let ng = ToolReply {
+        text: "NG:not ready".into(),
+        is_error: true,
+    };
+    assert!(keep_calling(Ok(ng)).unwrap());
+}
+
+#[test]
+fn keep_calling_stops_when_the_child_exited() {
+    let exited = McpError::ChildExited(real_run_kit::ChildExited { status: status(1) });
+    assert!(!keep_calling(Err(exited)).unwrap());
+}
+
+#[test]
+fn keep_calling_fails_only_when_unreachable_or_not_listening() {
+    let unreachable = McpError::Unreachable {
+        target: "127.0.0.1:9821".into(),
+        reason: "refused".into(),
+    };
+    assert!(keep_calling(Err(unreachable)).is_err());
+    let listen = McpError::ListenFailed {
+        port: 9821,
+        line: "MCP: どの候補のポートも束ねられなかった（待ち受けない）".into(),
+    };
+    assert!(keep_calling(Err(listen)).is_err());
+}
+
+#[test]
+fn ending_is_ok_only_for_user_close_with_exit_zero() {
+    let ended = |code, by| Ended {
+        status: status(code),
+        by,
+    };
+    assert_eq!(ending_failure(&ended(0, EndedBy::UserClose)), None);
+    assert!(
+        ending_failure(&ended(1, EndedBy::UserClose))
+            .unwrap()
+            .contains("終了コード Some(1)")
+    );
+    // 保険の自動終了は終了コード 0 でも赤で、その旨を書く。
+    assert!(
+        ending_failure(&ended(0, EndedBy::SafetyExit))
+            .unwrap()
+            .contains("保険の自動終了（45 秒）")
+    );
+    assert!(ending_failure(&ended(0, EndedBy::Unlogged)).is_some());
+    assert!(ending_failure(&ended(0, EndedBy::Other("Smoke2".into()))).is_some());
+}
