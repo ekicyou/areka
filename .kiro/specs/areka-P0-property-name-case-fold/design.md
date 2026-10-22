@@ -53,6 +53,7 @@
 - **語彙の表に大文字を含む綴りを足す**: `parse_dotted` が畳んだ名前と一致しなくなる。本 spec の語彙の不変テストが赤になる。
 - **保存の名前（`PersistKey::to_canonical_key`）に大文字を含む綴りを足す**: 既存の往復テスト `canonical_key_round_trips_with_to_canonical_string`（`persist/persist_tests.rs`）が赤になる。
 - **`shiori.変数名` に値を足す spec が変数名の部分の大小を区別すると決める**: `parse_seg` の畳みに例外を足すことになる（`PropPath` は元の綴りを持たないので、元の綴りが要るなら読む口から受けた生の文字列を使う）。
+- **括弧の中の名前で一覧から選ぶ spec（`property-catalog-lists`）・`activeghostlist(…).ext.*`／`pluginlist(…).ext.*` の下の枝を先へ渡す spec**: 括弧の中の名前は畳まれて届く（`ghostlist(Emily)` → `emily`）。ゴーストの名前などと比べるときは `eq_ignore_ascii_case` で比べるか、読む口から受けた生の文字列を使う。畳んだ名前をそのまま先へ渡さない。
 - **`RuntimeCommandSink` を配線する spec**: sink が受ける `key` は書かれた綴り（`MENU` もありうる）。名前で振り分けるなら大小を区別せずに比べるか、受ける前に `SET_EFFECTIVE` の綴りへ直す。
 - **新しい読む口・書く口を開く spec（`property-query-channels` など）**: 名前を `resolve_dotted_str`／`publisher.set`（`classify_set`）へ渡す限り追加の作業は無い。自前で鏡像を引く・自前で比べる形にするなら、本 spec の決まりをその口で守り直す。
 - **sylphya の作り直し（v0.2.0 `sylphya-sqlite-kvs`）**: 名前 → 鍵の 1 か所の畳みと、仕分けの 1 段目の大小を区別しない比べを引き継ぐ。
