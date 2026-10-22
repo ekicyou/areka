@@ -264,3 +264,140 @@
 
 - この分析は要件の討議（`/kiro-requirements-discussion areka-P0-ghost-inner-balloon`）の材料になる。7.1 の 1・2・5・6・7・8 は要件の書き方に響くので、要件の討議で答えを出すのがよい。3・4・9・10 は設計の段でも決められる。
 - 要件が決まったら `/kiro-design areka-P0-ghost-inner-balloon` へ進む。
+
+---
+
+# 設計の段の調べと決め（2026-10-22・`/kiro-spec-design -y`）
+
+## Summary
+
+- **Feature**: `areka-P0-ghost-inner-balloon`
+- **Discovery Scope**: Extension（既存の目録・決め方・インストールを広げる）。軽い調べ（`design-discovery-light`）。新しい依存は 0 なので外の調べ物はしていない。
+- **Key Findings**:
+  - 項目の出どころ（根かゴーストの中か）を読む呼び手は、合わせる口の外に 1 つも無い。並び・隠れの控えは合わせる口の中で済み、呼び手は場所 `dir` を使うだけ＝欄は足さなくてよい。
+  - `name` を引く 4 か所はどれも「一覧の並びで最初」なので、並びを「ゴーストの中が先」にするだけで要件 3.3 を満たす。引き方は変えない。
+  - 同梱の宛先をゴーストの中へ移すと、`refresh,1` のゴーストの上書きで巻き戻る危うさ（gap 分析 4.3）は**確かにある**。もう 1 つ、書庫の本体に同梱と同じ名前の `balloon/<dir>/` が在ると、本体の確定の後に宛先が在って同梱の `rename` が失敗する危うさが見つかった。
+  - 今の同梱は `InstallRoots::balloon_root` を尋ね、`areka` の `CatalogDestinations::copied_root` が実行ファイルの隣の根の同じフォルダ名のバルーンを書ける根へ**写す**。同梱が根を尋ねなくなれば、この写しの道が消える（要件 7.3 の助け）。
+  - 入れた後の表示名は根の目録から引いているので、移した後は根の同じフォルダ名（別の版）の `name` を取りうる。ゴーストの中から引く形へ替える。
+
+## Research Log
+
+### `areka-nar` の組み上げと確定（gap 分析 4.3・7.2 の調べ）
+- **調べた所**: `crates/areka-nar/src/plan.rs`（`body_placement` 123 行・`companion_placement` 191 行・`existing_target_ghost` 229 行・`Placement` 47〜71 行）、`install.rs`（`stage_placement` 286〜299 行・`copy_existing` 326〜354 行・`commit_one` 503〜532 行・`unwind` 580〜607 行・`area.retired` 162 行）。
+- **分かったこと**:
+  - `ExistingState` は組み上げのときに `destination.is_dir()` だけで決まる。`Overlay` は古い木を丸ごと（空のフォルダも）写し、`Replace{keep}` は残す名前のファイルだけを写す（ASCII の大文字小文字を区別しない）。
+  - 確定は「在れば宛先 → 退避、組み上げ → 宛先」。退避は `<根>\.nar-work\<pid>-<連番>\old-<k>` で、宛先の隣ではない＝ゴーストの木に漏れない。戻しは逆順で、退避と組み上げは全部の確定の後に 1 回だけ消す。
+  - 本体が `Overlay` なら、本体の新しい木に古い `balloon\<dir>` の写しが入り、同梱の入れ替えはそれを退避して置く＝答えは合う（写しが 2 回になるだけ）。
+  - 本体が `Replace{keep}` なら、本体の確定の後に `balloon\<dir>` がふつうは無く、同梱の `rename(宛先, 退避)` が NotFound で失敗し、全体が巻き戻る（確認）。
+  - 同梱が組み上げで「新しい」でも、書庫の本体に `balloon/<dir>/` の項目が在ると本体の確定の後に宛先が在り、`rename(組み上げ, 宛先)` が失敗して全体が巻き戻る（新しく見つけた）。
+  - シェルの書庫は、同梱の宛先 `ghost\<対象>\balloon\<dir>` が本体 `ghost\<対象>\shell\<名>` の下に無いので入れ子にならない。
+- **影響**: 形 A（本体の下敷きと書庫の本体の項目から置く同梱の宛先を外し、入れ子の同梱は「無い所へ置く」1 手）で両方の危うさが消える。
+
+### 同梱の宛先の問い方と写し
+- **調べた所**: `crates/areka/src/install/destination.rs`（`balloon_root` 94〜107 行・`copied_root` 131〜133 行・`install_into` 180〜196 行）、`areka-nar/src/install.rs` の `InstallRoots`（46〜51 行）。
+- **分かったこと**: `balloon_root` の呼び手は `plan.rs` の 2 か所（バルーンだけの書庫の本体・同梱）だけ。同梱をやめてもバルーンだけの書庫のために残す。`install_placed` の記録は `starts_with` で根を引くので、ゴーストの中の場所でも動く。
+- **影響**: 同梱の `root` は本体の根にする（作業の場所が同じ根になり、`rename` が同じボリュームで済む）。
+
+### 入れた後の表示名とイベント
+- **調べた所**: `install/procedure.rs`（`installed_items` 422〜441 行・`skipped_notice` 444〜478 行・`installed_record` 481 行〜）、`install/judge.rs`（163〜184 行）。
+- **分かったこと**: `InstalledElement.path` は配置の宛先そのもの。`OnInstallCompleteEx` の Reference2 がゴーストの中の場所になる（意図どおり）。`OnInstallComplete`・`skipped_notice`・`installed_record` は場所の変化の影響を受けない。
+- **影響**: 表示名だけを `balloons_for` から引く形へ替える。
+
+### バルーンだけの書庫の後（要件 3.5）
+- **調べた所**: `install/desk.rs` 372〜379 行、`boot_config.rs` の `BootContext`、`emo2_boot/ghost_switch.rs` 844 行（切替で `ctx.current` を替える）。
+- **分かったこと**: その場に `BootContext.roots` と `ctx.current.ghost.dir` が在る。`balloons_for(..).hidden` に入れたフォルダ名が在れば、「入れた場所」と「隠すゴーストの中の場所」がそのまま取れる。
+
+### ネットワーク更新（要件 8・gap 分析 7.2）
+- **調べた所**: `update/worker.rs` `prepare_targets` 257〜268 行、`roots/user_root.rs` `plan_copy` 57〜84 行、`emo2_boot/switch_copy.rs` 45 行、`crates/areka-update/src/manifest.rs` `invalid_path` 121 行。
+- **分かったこと**: 書ける根への写しは、場所の親が `<実行ファイルの隣>\balloon` のときだけ。`<実行ファイルの隣>\ghost\<g>\balloon\<b>` は写さずにそのまま書く。ただし起こすゴーストは前もって書ける根へ写されるので、ふつうは写しの中を書く。写されずに動くゴーストは、ゴーストそのものもそのまま書く決まりなので、扱いは揃っている。
+- **影響**: コードの変更は 0。確かめるテストを足す。（起動のときのゴーストも `switch_copy` を通るかは読み切っていない＝下の Risks）
+
+### `--ghost` の一時の置き場（gap 分析 7.2）
+- 一時の置き場の印は根の走査（`scan_balloons`）だけが見る。ゴーストの中の走査はゴーストのフォルダを直接受けるので、`--ghost` で渡したゴーストでも数える（要件 1.4）。
+
+### 項目の欄の読み手
+- `BalloonEntry` を作る所は `catalog.rs` の `scan_balloons` とテスト 4 ファイル（`catalog_tests.rs`・`boot_resolve_tests.rs`・`boot_resolve_balloon_tests.rs` ほか）だけ。`areka` の中で `BalloonEntry.root` を読む所は 0 か所（`install_root` の中だけが根の一覧の `root` を読む）。
+
+## Architecture Pattern Evaluation
+
+| 案 | 中身 | 良いところ | 気になるところ | 結論 |
+|---|---|---|---|---|
+| A 今の部品を広げる | `catalog_roots.rs` に合わせる口・`BalloonEntry` に出どころの欄 | 新しいファイル 0 | 欄の追加が根の項目とテストに波及 | 欄は足さない形で C に吸収 |
+| B 別の部品 | `ghost_balloons.rs` を新しく置く | 根の部品に触らない | 合わせ方の決まりが 2 か所に | 取らない |
+| C 組み合わせ | 走査は `catalog.rs` で本体を共有・合わせる口は `catalog_roots.rs` | 決まりの書き場所が 1 か所・根の口は不変 | 2 ファイルが少し太る | **取る** |
+
+インストールの形:
+
+| 形 | 中身 | 結論 |
+|---|---|---|
+| A | 本体から同梱の宛先を外し、同梱は「無い所へ置く」 | **取る**（欄 2 つ・分かれ 2 つ） |
+| B | 同梱を本体の木に混ぜる | 取らない（木の一部ごとの `refresh` と在る・無い・入れた物の数え方の変更・シェルは別の道が残る） |
+| C | 確定の直前に在る・無いを見直す | 取らない（組み上げと確定の間に作られた木を消さない約束とぶつかる） |
+
+## Design Decisions
+
+### Decision: 項目の出どころの持ち方（gap 分析 7.1 の 3）
+- **Context**: 項目が根かゴーストの中かを、どこに持つか。
+- **Alternatives Considered**:
+  1. `BalloonEntry` に出どころの欄を足す
+  2. `RootMark` に種類を足す
+  3. 欄を足さず、`root` 欄にゴーストのフォルダを入れる
+- **Selected Approach**: 3。`root` の説明を「走査した基のフォルダ」に直す。
+- **Rationale**: 出どころを読む呼び手が無い（並び・隠れの控えは合わせる口の中で済む）。読まない欄は足さない。ゴーストの中は根ではないので `RootMark` も合わない。
+- **Trade-offs**: 将来 `root` を「根」として読む呼び手を足すときは確かめ直しが要る（design の Revalidation Triggers）。
+
+### Decision: 組み方（gap 分析 7.1 の 4）
+- **Selected Approach**: 案 C。`catalog.rs` の `scan_balloon_store(store, base)` を根とゴーストの中で共有し、`catalog_roots.rs` の `balloons_for(roots, ghost_dir) -> GhostBalloons { listed, hidden }` を 1 つの口にする。根の口は変えない。
+- **Rationale**: 判定と記録が 1 つの関数を通るので、片方だけ直す事故が起きない。根の答え（要件 6）が 1 行も変わらない。
+
+### Decision: 名前の同着（要件 3.3）
+- **Selected Approach**: 並びを「ゴーストの中が先」にするだけ。`find_balloon_by_name`・`resolve_skin_target`・`skin_by_name`・`updateother` は変えない。
+- **Rationale**: 4 か所はどれも「並びで最初」。要件の討議の決め 2 と同じ答えを、変更 0 行で 4 か所に揃えられる。
+
+### Decision: 「ゴーストの中が根を隠した」記録の時と回数（gap 分析 7.1 の 5）
+- **Alternatives Considered**: 一覧を作るたび／起動と切替だけ／起動時の `survey` に混ぜる。
+- **Selected Approach**: 起動とゴースト切替（読み直しの自分への切替を含む）で `resolve_balloon_for_ghost` が 1 件ごとに info `ghost_balloon_hides_root` を残す。合わせる口は記録を残さず `hidden` を返すだけ。根どうしの `root_hidden_item` とは名前を分ける（`roots_hidden_count` の件数に混ぜない）。
+- **Rationale**: メニューを出すたびに同じ行が増えない。根どうしの隠れの記録（起動時・並びの変更時）と同じ「場面で 1 回」の先例に揃う。`survey` はゴーストを知らないので混ぜられない。
+
+### Decision: `balloon_store` 欄と `NoBalloon` の告知（gap 分析 7.1 の 6）
+- **Selected Approach**: 今どおり根の置き場の列だけを載せる。記録の文の「根に見つからない」は「根にもゴーストの中にも見つからない」へ直す（事象名と欄は変えない）。
+- **Rationale**: 要件 4.7「今と同じ形」を欄の綴りまで守る。ゴーストの中の置き場はゴーストのフォルダから一意に決まり、起動と切替の記録に出る。告知は利用者向けで、利用者がバルーンを置く先は根の置き場（バルーンだけの書庫も根へ入る）。
+
+### Decision: 本体の `refresh` と同梱の `balloon.refresh`（gap 分析 7.1 の 8）
+- **Selected Approach**: 名指しされない `<ゴースト>\balloon\<名>\` は本体の `refresh` で替わる。名指しされた同梱は、本体の `refresh` に関わらず自分の `balloon.refresh`・`balloon.refreshundeletemask` で替わる。
+- **Rationale**: 同梱の替わり方を決める鍵は ukadoc の `balloon.refresh` で、要件 7.2 はその意味を変えないと決めている。要件 8.1 の「ゴーストのフォルダの他のファイルと同じ決まり」は「ゴーストの書庫の入れ方（`install.txt` の鍵）で替わり、別の道を作らない」と読む。
+- **Trade-offs**: 本体だけ `refresh,1` で同梱に `balloon.refresh` が無いと、同梱の古いファイルが残る。SSP で根に入れていたときと同じ振る舞いなので、作者の書き方で選べる。設計の討議で確かめてもらう点として残す。
+
+### Decision: インストールの入れ替えの順（gap 分析 7.1 の 9）
+- **Selected Approach**: 形 A。`Placement` に `carve_out: Vec<String>`（本体の下敷きから外す相対のフォルダ）と `within_body: bool`（確定で「無い所へ置く」1 手）を足す。ゴーストの書庫の本体の項目のうち、置く同梱の `balloon/<dir>/` の下も除き、除いたら warn `companion_overrides_archive_folder` を 1 件。
+- **Rationale**: 2 つの危うさ（`refresh,1` の巻き戻り・書庫の同名のフォルダ）を、今の戻しの順を変えずに消せる最小の形。
+- **Follow-up**: `lib_tests.rs` の「2 つ目の根で失敗したら 1 つ目を戻す」（TwoRoots）は、同梱が別の根へ行かなくなるので入れ子の戻しのテストへ置き換える。
+
+### Decision: シェルの書庫の同梱（要件 7.8）
+- **Selected Approach**: 宛先は `existing_target_ghost` が確かめた対象のゴーストの `balloon\<dir>`。入れ子にならないので、確定は今の手のまま。
+
+### Decision: 古い記述の直し（gap 分析 7.1 の 10）
+- **Selected Approach**: 本 spec で直す（要件 9.2）。§8 の 370 行の「区別する完全一致」と無いテスト名 `descript_match_is_case_sensitive`、`shell_balloon_resolve.rs` の頭の説明の「フォルダ名（大文字小文字を区別）」。あわせて §8 の 343 行の飛ばした同梱の置き場の綴りも直す。
+
+## Synthesis（一般化・作るか使うか・削る）
+
+- **一般化**: 「今のゴーストの候補の一覧」は 6 か所の呼び手の同じ問いなので、1 つの口（`balloons_for`）にした。`resolve_balloon` の段や `name` の引き方は一般化せず、一覧の並びだけで答えを揃えた。
+- **作るか使うか**: 走査は既存の判定（`scan_balloons` の本体）・比べ方（`fold_key`）・隠れの型（`Hidden`）・テストの一時フォルダ（`TempPath::under_target`）をそのまま使う。インストールは既存の `rename` と逆順の戻しを使う。新しい依存は 0。
+- **削ったもの**: 出どころの欄・`RootMark` の種類・`find_balloon_for`・ゴーストの中用の別の型・`balloon_store` 欄の追加・`NoBalloon` の文面の変更・記録の場面の設定。
+
+## Risks & Mitigations
+
+- `areka-nar` の比べ方は ASCII の大文字小文字だけを区別しないので、古いフォルダ名と `balloon.directory` が ASCII の外の字の大文字小文字だけ違うと下敷きから外せない — そのときは同梱の `rename` が失敗し、全体が今どおり巻き戻って記録が残る（壊れた木は残らない）。
+- `install-live-target-hazards` と `plan.rs`・`install.rs` が重なる — 同じウェーブに置かない。後の方が `within_body` の確定の手を前提に組む。
+- 起動のときのゴーストが `switch_copy` を通るかは読み切っていない — 通らなくても、ゴーストそのものと同じ「そのまま書く」決まりなので、ゴーストの中のバルーンだけが違う扱いにはならない。実装の段でネットワーク更新のテストを書くときに確かめる。
+- 名前の同着がメニューの並びに依る — 並びを変える後の変更は要件 3.3 を壊す。`catalog_roots_ghost_balloon_tests.rs` で並びを固める。
+
+## タスク数の見立て
+
+13〜15（20 を超えない）: 走査と合わせる口／起動と切替の差し替えと記録／切替・読み直しのテスト／実行中の 4 か所／インストールの後の記録と表示名／`plan.rs` の宛先と除外／`install.rs` の入れ子の確定／`areka-nar` のテストの書き直し／`areka` のインストールのテスト（根に触らない・表示名・バルーンだけの書庫）／ネットワーク更新の確かめ／§8／README／通しの確かめ。
+
+## 使った決まり・手引き
+
+- `.claude/skills/kiro-spec-design/rules/design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`・`design-principles.md`、`.kiro/settings/templates/specs/design.md`・`research.md`。
+- steering の `logging.md`（事象名の形）・`structure.md`（兄弟テスト）。
+- 調べの一部（`areka-nar` の組み上げと確定・インストールの側・ネットワーク更新）はサブエージェントに読ませ、要点だけを上に写した。
